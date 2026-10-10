@@ -41,7 +41,7 @@
 | ориентировка | розыскная сводка с приметами | описательный | wanted bulletin (APB) | boletín de búsqueda | alerta de procurado (com descrição física) |
 | фоторобот | композитный портрет | функциональный | identikit / composite sketch | retrato hablado | retrato falado |
 | следственный эксперимент | | описательный | crime scene reconstruction (with the suspect) | reconstrucción de los hechos | reconstituição do crime |
-| ОРМ | оперативно-розыскные мероприятия | описательный | surveillance operations | operaciones de vigilancia | operações de vigilância |
+| ОРМ | оперативно-розыскные мероприятия | описательный | operational search activities (ORM) | actividades operativas de investigación (ORM) | atividades operacionais de investigação (ORM) |
 | засада | | прямой | stakeout / ambush | emboscada / vigilancia | tocaia / campana |
 | вышка / исключительная мера | смертная казнь | описательный | death penalty («the exceptional measure») | pena de muerte («la medida excepcional») | pena de morte (“a medida excepcional”) |
 | пожизненное | пожизненное лишение свободы | прямой | life sentence | cadena perpetua | prisão perpétua |
@@ -55,6 +55,9 @@
 | пейджер | | прямой | pager | buscapersonas (bíper) | pager (bip) |
 | видеосалон | | описательный | video parlour | sala de video (proyección de películas de pago) | sala de vídeo (exibição paga de filmes em fita) |
 
-Правила имён: единая таблица транслитерации (упрощённая BGN/PCGN) для en; es/pt используют ту же
-латинскую форму без адаптации, ударения в es ставятся только там, где это облегчает чтение
-(Grómov, Andréi); прозвища переводятся по смыслу и фиксируются здесь.
+Правила имён: единая таблица транслитерации (упрощённая BGN/PCGN) для en; es и pt адаптируют
+написание под чтение носителя: es ставит ударения (Grómov, Andréi, Serguéi, Kúntsevo) и пишет Presnia;
+pt-BR использует адаптированные формы (Serguei, Zoia, Presnia). Отчества сохраняются (Pavlovna);
+прозвища переводятся по смыслу и фиксируются здесь. Выбор между «apartamento» и «departamento» (es)
+зависит от целевого рынка (Колумбия/Карибы vs Мексика/Аргентина/Чили); по умолчанию — «apartamento».
+В инструкциях мини-игр (es) выдержано «usted», как в русском «вы» и сухом тоне рассказчика.

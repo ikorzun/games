@@ -43,8 +43,8 @@
     "status": {
       "ru": "source",
       "en": "draft",
-      "es": "machine",
-      "pt": "machine"
+      "es": "draft",
+      "pt": "draft"
     },
     "glossary": "docs/localization/glossary.md"
   },
