@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "evidence_board config",
+  "description": "Доска улик: узлы и «верёвки»; нужно провести обязательные связи, не превысив лимит ложных.",
+  "type": "object", "additionalProperties": false,
+  "required": ["nodes", "required_links", "max_wrong_links"],
+  "properties": {
+    "nodes": { "type": "array", "minItems": 3, "maxItems": 16, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" } },
+    "required_links": { "type": "array", "minItems": 1, "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } } },
+    "decoy_links": { "type": "array", "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } } },
+    "max_wrong_links": { "type": "integer", "minimum": 0 },
+    "partial_threshold": { "type": "integer", "minimum": 1, "description": "Сколько верных связей достаточно для partial." }
+  }
+}

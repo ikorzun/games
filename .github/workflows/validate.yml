@@ -1,0 +1,35 @@
+name: validate-content
+
+on:
+  push:
+    paths:
+      - "episodes/**"
+      - "locales/**"
+      - "schemas/**"
+      - "tools/**"
+      - ".github/workflows/validate.yml"
+  pull_request:
+
+jobs:
+  lint-episodes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install jsonschema
+      - name: Validate schema files parse
+        run: python3 -c "import json,glob; [json.load(open(p, encoding='utf-8')) for p in glob.glob('schemas/**/*.json', recursive=True)]; print('schemas ok')"
+      - name: Lint every episode
+        run: |
+          set -e
+          found=0
+          for f in $(find episodes -name '*.json' -not -name '_*' -not -name 'globals.json'); do
+            found=1
+            echo "== $f"
+            python3 tools/validate_episode.py "$f"
+          done
+          if [ "$found" = "0" ]; then echo "no episodes yet"; fi
+      - name: Expression grammar self-test
+        run: python3 tools/vnexpr_test.py

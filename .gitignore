@@ -1,0 +1,25 @@
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Node / web builds
+node_modules/
+dist/
+build/
+.cache/
+
+# Python / Ren'Py
+__pycache__/
+*.pyc
+*.rpyc
+*.rpyb
+*.rpymc
+game/cache/
+game/saves/
+
+# Local env
+.env
+.env.*

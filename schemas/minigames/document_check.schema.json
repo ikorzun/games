@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "document_check config",
+  "description": "Сверка документов: игрок отмечает поля, которые не сходятся между документами (Papers, Please).",
+  "type": "object", "additionalProperties": false,
+  "required": ["documents", "discrepancies", "required", "max_mistakes"],
+  "properties": {
+    "documents": { "type": "array", "minItems": 1, "maxItems": 4, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" } },
+    "discrepancies": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["doc", "field", "hint_key"],
+        "properties": {
+          "doc": { "type": "string" },
+          "field": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "hint_key": { "type": "string" }
+        }
+      }
+    },
+    "decoys": { "type": "integer", "minimum": 0, "maximum": 10, "description": "Сколько полей-ловушек подсвечивать как кликабельные." },
+    "required": { "type": "integer", "minimum": 1 },
+    "max_mistakes": { "type": "integer", "minimum": 1 }
+  }
+}

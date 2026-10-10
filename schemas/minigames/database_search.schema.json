@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "database_search config",
+  "description": "Картотека/архив: фильтрация записей по полям и отбор тех, что соответствуют паттерну (Her Story, БТИ).",
+  "type": "object", "additionalProperties": false,
+  "required": ["fields", "records", "pattern", "target_count"],
+  "properties": {
+    "fields": { "type": "array", "minItems": 2, "maxItems": 6, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" } },
+    "records": { "type": "integer", "minimum": 6, "maximum": 200, "description": "Сколько карточек генерируется (целевые + шум). Значения берутся из локализованных списков имён/адресов." },
+    "pattern": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string" }, "description": "Поле -> значение-идентификатор, которое повторяется у целевых записей." },
+    "target_count": { "type": "integer", "minimum": 1 },
+    "min_for_partial": { "type": "integer", "minimum": 1 },
+    "seed": { "type": "integer" }
+  }
+}

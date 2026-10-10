@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "interrogation_press config",
+  "description": "Допрос: утверждения подозреваемого и улики, которые их опровергают (Ace Attorney). Улика доступна, только если переменная requires истинна.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "statements",
+    "evidence",
+    "full_threshold",
+    "partial_threshold",
+    "max_mistakes"
+  ],
+  "properties": {
+    "statements": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "text_key",
+          "contradicted_by"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "text_key": {
+            "type": "string"
+          },
+          "contradicted_by": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                }
+              }
+            ],
+            "description": "Одна или 2–3 эквивалентные улики, опровергающие утверждение (урок L.A. Noire: единственный «правильный» ответ раздражает)."
+          },
+          "requires": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "Переменная эпизода, без которой улика недоступна."
+          },
+          "press_key": {
+            "type": "string",
+            "description": "Реплика при «надавить» без улики (опционально)."
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      }
+    },
+    "full_threshold": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "partial_threshold": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "max_mistakes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "pressure_gauge": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}
