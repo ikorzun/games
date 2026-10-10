@@ -167,24 +167,25 @@ runtime/
 
 ## Ассеты: графика и звук
 
-Картинки и звук лежат в `../assets/` (в репозитории пока только `ep01/manifest.json` и журнал генераций — самих
-файлов нет, игра идёт на плейсхолдерах). Пути берёт `episode.assets.*[].path` (`assets/ep01/bg/yard_summer.webp`),
-перекодирования рантайм не делает: в dev и в сборке файл отдаётся как есть.
+Картинки и звук лежат в `../assets/` (эпизод 1 — 78 файлов, 17,5 МБ: их скачивает по `assets/<ep>/manifest.json`
+workflow `fetch-assets` на раннере GitHub и коммитит в ветку; без файлов игра идёт на плейсхолдерах). Пути берёт
+`episode.assets.*[].path` (`assets/ep01/bg/yard_summer.webp`), перекодирования рантайм не делает: в dev и в сборке файл
+отдаётся как есть.
 
 | Что | Откуда | Формат |
 |---|---|---|
 | фоны, CG, бланки документов | `assets.backgrounds`, `cg`, `documents` | webp (допустимы png, jpg) |
-| спрайты | `assets.sprites[].base` — папка набора: `<папка>/<выражение>.webp`, `neutral.webp`, `silhouette.webp`, `base.png` | webp, базовый кадр png |
+| спрайты | `assets.sprites[].base` — базовый кадр набора (в ep01 — `…/neutral.webp`); рядом `<выражение>.webp`, `silhouette.webp` | webp (png допустим) |
 | музыка | `assets.music` | m4a (AAC) |
 | эмбиент, эффекты | `assets.ambient`, `assets.sfx` | mp3 |
-| главное меню и заставка | `assets/common/ui/menu_video_salon.webp`, `assets/common/ui/title_plate.webp` (вне `episode.assets`) | webp |
+| главное меню и заставка | `assets/common/ui/menu_video_salon.webp`, `assets/common/ui/title_plate.webp` — красная полоса по центру кадра (66 % × 44 % картинки), название эпизода и титры глав ложатся в неё (вне `episode.assets`) | webp |
 
 - **Плагин сборки** `scripts/assets_plugin.mjs`: dev-сервер отдаёт `/assets/**` из `../assets` (HTTP Range и HEAD — Safari
   не играет аудио без Range; нет файла → настоящий 404, а не index.html), `npm run build` копирует файлы в `dist/assets/**`.
   Берутся `.webp .png .jpg .jpeg .mp3 .m4a .ogg`; файлы и папки на `_` и `.`, `manifest.json` и `*.md` в сборку не попадают.
   Другой каталог: `VN_ASSETS_DIR=/путь/к/assets npm run build` (проверка «с файлами» без правки репозитория).
 - **Цепочка спрайта** — рендерер берёт первый существующий файл: `silhouette.webp` (если спрайт — силуэт) → `<выражение>.webp` →
-  `neutral.webp` → `base.png`. Нет силуэта — рендерер делает его из найденного кадра (`brightness(0)`, непрозрачность 85 %);
+  `neutral.webp` → `base`. Нет силуэта — рендерер делает его из найденного кадра (`brightness(0)`, непрозрачность 85 %);
   собеседники вне речи затемняются тинтом. Нет ни одного файла — плейсхолдер и **одно** предупреждение на цепочку:
   `[assets] нет файла спрайта (… → …): плейсхолдер`. Так же — для фона, CG и бланка: один `console.warn` на файл.
 - **Чёрный кадр**: `bg_black` (`assets/common/bg/black.png`) — сплошной цвет; файла нет и быть не должно, его не запрашивают,

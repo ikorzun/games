@@ -431,8 +431,13 @@ body {
   background: #000;
   text-shadow: 0 0 0.45em rgb(201 54 47 / 0.6);
 }
+/* Титр главы на плашке: полоса — 66 % × 44 % картинки шириной не больше 52rem, текст умещается в полосу. */
 .vn-cap--chapter.has-plate {
-  background: var(--title-plate) center / contain no-repeat, #000;
+  --plate-w: min(100%, 52rem);
+  padding: 8% calc((100% - var(--plate-w) * 0.62) / 2);
+  font-size: clamp(14px, 4vmin, 40px);
+  line-height: 1.05;
+  background: var(--title-plate) center / var(--plate-w) auto no-repeat, #000;
 }
 .vn-cap--chapter.has-plate::after { display: none; }
 .vn-cap--chapter::after {
@@ -622,6 +627,7 @@ body {
   display: grid;
   place-items: center;
   width: min(100%, 30rem);
+  container-type: inline-size;
 }
 .vn-menu__plate {
   grid-area: 1 / 1;
@@ -630,10 +636,14 @@ body {
   height: auto;
   pointer-events: none;
 }
+/* Красная полоса занимает 66 % ширины и 44 % высоты плашки (title_plate.webp обрезан по ней): текст — внутри полосы,
+   размер от ширины плашки (cqw; без container queries — прежний vmin). */
 .vn-menu__brand .vn-menu__title {
   grid-area: 1 / 1;
-  padding: 0 14%;
+  padding: 0 18%;
   font-size: clamp(22px, 6.2vmin, 50px);
+  font-size: clamp(14px, 6cqw, 28px);
+  line-height: 1.02;
   text-shadow: 0 2px 6px rgb(0 0 0 / 0.8);
 }
 .vn-menu__brand .vn-menu__title::after { display: none; }

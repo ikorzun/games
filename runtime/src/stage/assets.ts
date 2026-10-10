@@ -5,7 +5,7 @@
  * Правила (решение владельца, docs/architecture/06 §6):
  *  - фоны, CG, документы — файл по `path` из episode.assets;
  *  - спрайт: каталог = dirname(sprite.base); файл выражения `<dir>/<expression>.webp`;
- *    цепочка запасных: выражение → `<dir>/neutral.webp` → base (png);
+ *    цепочка запасных: выражение → `<dir>/neutral.webp` → base (базовый кадр набора; в ep01 это тот же neutral.webp, png допустим);
  *    силуэт: `<dir>/silhouette.webp`, а если файла нет — тёмный силуэт из того же кадра (рисует рендерер);
  *  - файла нет → плейсхолдер (рендерер) и ровно одно console.warn на файл (AssetStore.warn);
  *  - пути — относительные (`./assets/…` от корня сборки): dev-сервер и vite build отдают ../assets/**.

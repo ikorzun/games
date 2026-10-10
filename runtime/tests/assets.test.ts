@@ -480,7 +480,7 @@ describe.skipIf(!hasRepoContent())('эпизод 1: все ассеты разр
     expect(sil.length).toBeGreaterThan(0);
     for (const c of sil) {
       expect(c.urls[0]).toMatch(/\/murashov\/silhouette\.webp$/);
-      expect(c.urls.at(-1)).toMatch(/\/murashov\/base\.png$/);
+      expect(c.urls.at(-1)).toMatch(/\/murashov\/neutral\.webp$/); // base набора в ep01 — тот же neutral.webp
     }
     expect(cat.bgChain('bg_black')?.solid).toBe('#000000');
   });

@@ -410,7 +410,8 @@
   "kind": "ui",
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181750_ab4dc524-e015-4a36-b254-3e748f1a5467.png",
   "target": "assets/common/ui/title_plate.webp",
-  "job": "ab4dc524-e015-4a36-b254-3e748f1a5467"
+  "job": "ab4dc524-e015-4a36-b254-3e748f1a5467",
+  "post": "crop 49,335,1240,672 из 1920×1080 — красная полоса по центру; после --force повторить (см. generation-log.md)"
  },
  {
   "id": "ui_menu_video_salon",

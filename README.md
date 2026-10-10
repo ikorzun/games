@@ -77,9 +77,10 @@ python3 tools/vnexpr_test.py                                            # сам
   документальный UI, сейвы, адаптеры web-plain и Playgama Bridge, **пять настоящих мини-игр**;
   927 тестов, smoke в Chromium (web 40, Playgama 47, матрица 5 размеров × ru/en 60 проверок).
   Визуальный стиль — фотореалистичный кинокадр (`docs/production/prompts/style-bible.md` §1);
-  **все ассеты эпизода 1 сгенерированы** (14 фонов, 34 кадра персонажей, 5 CG, 5 документов,
-  2 UI, 18 звуков — `assets/ep01/manifest.json`), скачивание в репозиторий —
-  `python3 tools/fetch_assets.py assets/ep01/manifest.json` (нужен доступ к CDN Higgsfield).
-  Публикация сборки: GitHub Pages (`.github/workflows/pages.yml`, нужно включить Pages в настройках).
-- Дальше: скачать ассеты в репозиторий → калибровка зон осмотра и плашки по реальному арту → прогон на телефоне → песочница Playgama → заморозка русского текста → перевод en/es/pt
+  **все ассеты эпизода 1 сгенерированы и лежат в репозитории** (`assets/`: 14 фонов, 34 кадра персонажей,
+  5 CG, 5 документов, 2 UI, 18 звуков — 78 файлов, 17,5 МБ; манифест `assets/ep01/manifest.json`, скачивает и
+  коммитит workflow `fetch-assets` на раннере GitHub, локально — `python3 tools/fetch_assets.py …`).
+  Зоны осмотра квартиры и плашка заголовка откалиброваны по реальному арту; smoke `--require-assets` зелёный.
+  Публикация сборки: GitHub Pages (`.github/workflows/pages.yml`; Pages включается сам, если репозиторий публичный).
+- Дальше: прогон на телефоне → песочница Playgama → заморозка русского текста → перевод en/es/pt
   (`docs/production/roadmap.md`). Русский — первоисточник всего контента.
