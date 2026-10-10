@@ -11,7 +11,7 @@
  *
  * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en,es,pt (для матрицы), --no-shots.
  * Браузер: переменная CHROMIUM_PATH (свой Chromium) или управляемый Playwright
- * (`npx playwright install chromium`). Доп. флаги запуска — CHROMIUM_ARGS (через пробел).
+ * (`npx playwright-core install chromium`). Доп. флаги запуска — CHROMIUM_ARGS (через пробел).
  * Выход: 0 — все проверки прошли, 1 — есть провалы.
  */
 import { mkdirSync } from 'node:fs';
@@ -81,7 +81,7 @@ async function launchBrowser() {
       args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', ...extra],
     });
   } catch (e) {
-    console.error(`Не удалось запустить Chromium: ${e.message}\nУкажите CHROMIUM_PATH или выполните: npx playwright install chromium`);
+    console.error(`Не удалось запустить Chromium: ${e.message}\nУкажите CHROMIUM_PATH или выполните: npx playwright-core install chromium`);
     process.exit(2);
   }
 }
