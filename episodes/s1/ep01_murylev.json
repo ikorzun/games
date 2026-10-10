@@ -7275,6 +7275,10 @@
         ],
         "required_links": [
           [
+            "zoya",
+            "deal_1"
+          ],
+          [
             "deal_1",
             "notary"
           ],
