@@ -1,0 +1,83 @@
+name: fetch-assets
+
+# Скачивает сгенерированные ассеты по манифесту (tools/fetch_assets.py) на раннере GitHub — у него открыт
+# интернет — конвертирует их в форматы рантайма и коммитит в ту же ветку. Нужен, когда из рабочей среды
+# CDN генератора недоступен. Запуск: Actions → fetch-assets → Run workflow (или через API workflow_dispatch).
+# Коммит делается токеном workflow, поэтому validate/pages от него сами не запускаются — их запустит
+# следующий обычный push в ветку (или ручной запуск).
+on:
+  workflow_dispatch:
+    inputs:
+      manifest:
+        description: "Манифест ассетов (assets/<ep>/manifest.json)"
+        default: "assets/ep01/manifest.json"
+        required: true
+      only:
+        description: "Только эти kind через запятую: bg,cg,doc,sprite,ui,music,ambient,sfx (пусто — все)"
+        default: ""
+      force:
+        description: "Перекачать и перезаписать уже существующие файлы"
+        type: boolean
+        default: false
+      message:
+        description: "Сообщение коммита"
+        default: "Ассеты: скачаны по манифесту (fetch-assets)"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-assets-${{ github.ref }}
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet pillow requests
+      - name: ffmpeg (нужен, только если формат аудио в манифесте не совпадает с целевым)
+        run: sudo apt-get update -qq >/dev/null && sudo apt-get install -y -qq ffmpeg >/dev/null
+      - name: Download and convert
+        id: fetch
+        continue-on-error: true
+        env:
+          MANIFEST: ${{ inputs.manifest }}
+          ONLY: ${{ inputs.only }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          args=("$MANIFEST")
+          [ -n "$ONLY" ] && args+=(--only "$ONLY")
+          [ "$FORCE" = "true" ] && args+=(--force)
+          python3 tools/fetch_assets.py "${args[@]}"
+      - name: Listing
+        run: |
+          echo "Файлов ассетов: $(find assets -type f \( -name '*.webp' -o -name '*.png' -o -name '*.mp3' -o -name '*.m4a' -o -name '*.ogg' \) | wc -l)"
+          du -sh assets/*/ 2>/dev/null || true
+          git status --short assets | head -100
+      - name: Commit and push
+        env:
+          MESSAGE: ${{ inputs.message }}
+        run: |
+          git add -A assets
+          if git diff --cached --quiet; then
+            echo "::notice::Новых или изменённых файлов ассетов нет — коммит не нужен"
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -q -F - <<< "$MESSAGE"
+          for attempt in 1 2 3; do
+            if git pull --rebase -q origin "$GITHUB_REF_NAME" && git push -q origin "HEAD:$GITHUB_REF_NAME"; then
+              echo "Запушено в $GITHUB_REF_NAME: $(git rev-parse --short HEAD)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Не удалось запушить ассеты в $GITHUB_REF_NAME"
+          exit 1
+      - name: Fail if some downloads failed
+        if: steps.fetch.outcome == 'failure'
+        run: |
+          echo "::error::Часть ассетов не скачалась (см. шаг «Download and convert»); то, что скачалось, закоммичено"
+          exit 1

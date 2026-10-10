@@ -1,7 +1,8 @@
 name: pages
 
 # Публикация сборки рантайма (web-plain) на GitHub Pages: https://ikorzun.github.io/games/
-# Требует один раз включить Pages в настройках репозитория: Settings → Pages → Source: GitHub Actions.
+# Pages включается сам при первом запуске (если репозиторий публичный или план позволяет); иначе — один раз
+# вручную: Settings → Pages → Source: GitHub Actions.
 on:
   push:
     branches: [main, claude/magical-thompson-ore6eh]
@@ -32,16 +33,19 @@ jobs:
       pages_enabled: ${{ steps.pages.outputs.enabled }}
     steps:
       - uses: actions/checkout@v4
-      - name: Is GitHub Pages enabled for this repository?
+      - name: Is GitHub Pages enabled? (if not — try to enable it with Source = GitHub Actions)
         id: pages
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh api "repos/${GITHUB_REPOSITORY}/pages" >/dev/null 2>&1; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
+          elif gh api -X POST "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow >/dev/null 2>&1; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages включён автоматически (Source: GitHub Actions)"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::GitHub Pages не включён (Settings → Pages → Source: GitHub Actions) — шаг публикации пропущен"
+            echo "::notice::GitHub Pages не включён, и включить его отсюда не удалось (приватный репозиторий на бесплатном плане?). Settings → Pages → Source: GitHub Actions — шаг публикации пропущен"
           fi
       - uses: actions/setup-node@v4
         with:
