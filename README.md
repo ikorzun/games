@@ -24,23 +24,25 @@
 | `docs/production/season-1-slate.md` | предложение состава первого сезона (8 эпизодов) с уровнем риска |
 | `docs/production/ethics-and-legal.md` | бренд и права, нормы РФ/ЕС/Бразилии, правила фикционализации, дисклеймер, площадки и рейтинги |
 | `docs/localization/glossary.md` | стартовый глоссарий реалий 90-х (ru → en / es / pt-BR) |
+| `docs/season1/bible.md`, `docs/season1/ep01-outline.md` | библия сезона 1 (мир, сквозные персонажи, рамка, глобальные переменные) и поэпизодный аутлайн пилота для сценаристов |
 | `docs/research/` | исследовательские отчёты с источниками: практики VN и движки; передача «Криминальная Россия»; детективные механики, рынок, этика и право |
 | `schemas/episode.schema.json` | модель эпизода: блоки → сцены → шаги, мини-игры, концовки, архив, ассеты |
 | `schemas/minigames/*.schema.json` | схемы конфигов типов мини-игр |
-| `episodes/examples/ep01_murylev.json` | эпизод-пример «Смерть за квартиры»: 14 блоков, 25 сцен, 5 мини-игр, 3 концовки |
+| `episodes/s1/ep01_murylev.json` | эпизод-пример «Смерть за квартиры»: 14 блоков, 25 сцен, 5 мини-игр, 3 концовки |
 | `locales/{ru,en,es,pt}/ep01_murylev.json` | локали примера (ru — источник, en — черновик, es/pt — машинный черновик) |
 | `tools/validate_episode.py` | линтер: схема, ссылки, достижимость, условия, ассеты, локали, длины строк |
 | `tools/loc_sync.py` | локали: `skeleton` / `export` (CSV для переводчиков) / `import` / `stats` |
 | `tools/vnexpr.py` | грамматика условий `when` (парсер + вычислитель, без eval) |
+| `tools/merge_drafts.py`, `tools/export_script.py` | слияние черновиков сцен от агентов (с режимом самопроверки `--check`) и экспорт читаемого режиссёрского сценария |
 | `.github/workflows/validate.yml` | CI: схемы, линтер всех эпизодов, самотест грамматики |
 
 ## Быстрый старт
 
 ```bash
 pip install jsonschema
-python3 tools/validate_episode.py episodes/examples/ep01_murylev.json   # линтер эпизода
-python3 tools/loc_sync.py stats episodes/examples/ep01_murylev.json     # прогресс локализации
-python3 tools/loc_sync.py export episodes/examples/ep01_murylev.json    # CSV для переводчиков
+python3 tools/validate_episode.py episodes/s1/ep01_murylev.json   # линтер эпизода
+python3 tools/loc_sync.py stats episodes/s1/ep01_murylev.json     # прогресс локализации
+python3 tools/loc_sync.py export episodes/s1/ep01_murylev.json    # CSV для переводчиков
 python3 tools/vnexpr_test.py                                            # самотест грамматики условий
 ```
 

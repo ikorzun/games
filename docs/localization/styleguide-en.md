@@ -82,7 +82,7 @@
 10. К сдаче — список спорных ключей «ключ — вопрос»; сомнения по ru уходят сценаристу, а не решаются догадкой.
 
 ```bash
-# пример пути: episodes/examples/ep01_murylev.json
+# пример пути: episodes/s1/ep01_murylev.json
 python3 tools/validate_episode.py episodes/<путь>.json   # ожидаем: ошибок 0, предупреждений 0
 python3 tools/loc_sync.py stats episodes/<путь>.json     # ожидаем: 100 % по вашему языку (только полнота, не качество)
 ```

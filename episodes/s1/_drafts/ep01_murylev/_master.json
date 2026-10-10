@@ -1,0 +1,1297 @@
+{
+  "schema_version": 1,
+  "id": "ep01_murylev",
+  "season": 1,
+  "order": 1,
+  "title_key": "ep01.title",
+  "logline_key": "ep01.logline",
+  "archetype": "real_estate_murders",
+  "template": "real_estate_murders_v1",
+  "based_on": {
+    "case_name": "Дело Мурылёва (Москва, 1993)",
+    "tv_episode": "Дело Мурылёва. Смерть за квартиры (НТВ, 24.06.1995)",
+    "years": [
+      1993,
+      1994
+    ],
+    "city": "Москва",
+    "sources": [
+      "https://www.ntv.ru/peredacha/krimrussia/m100800/o750076",
+      "https://lenta.ru/articles/2025/02/09/delo/"
+    ],
+    "fictionalization": {
+      "level": "dramatized",
+      "names_changed": true,
+      "notes": "Канва дела сохранена (приватизация как мотив, цепочка сделок через одного нотариуса и одного доверенного, арест осенью 1993). Имена преступника, подручного, нотариуса, жертв и покупателей изменены; следственная группа вымышлена и сквозная для сезона. Прямая цитата «Я — санитар Ельцина» заменена парафразом. Слой «редакция передачи» в пилоте отключён (editorial_layer=false): он вводится со 2-го эпизода, когда появится сквозная линия редакции."
+    }
+  },
+  "frame": {
+    "pov": "investigator",
+    "narrator": "voiceover",
+    "player_character": "sledak",
+    "editorial_layer": false
+  },
+  "content_warnings": [
+    "murder",
+    "violence"
+  ],
+  "age_rating": "18+",
+  "estimated_minutes": 50,
+  "localization": {
+    "source_lang": "ru",
+    "status": {
+      "ru": "source",
+      "en": "none",
+      "es": "none",
+      "pt": "none"
+    },
+    "glossary": "docs/localization/glossary.md"
+  },
+  "cast": [
+    {
+      "id": "sledak",
+      "name_key": "ep01.cast.sledak",
+      "short_name_key": "ep01.cast.sledak_short",
+      "role": "player",
+      "sprite_set": "sledak",
+      "name_color": "#d8d2c4"
+    },
+    {
+      "id": "sledak_old",
+      "name_key": "ep01.cast.sledak_old",
+      "role": "investigator",
+      "sprite_set": "sledak_old",
+      "name_color": "#d8d2c4"
+    },
+    {
+      "id": "oper",
+      "name_key": "ep01.cast.oper",
+      "short_name_key": "ep01.cast.oper_short",
+      "role": "operative",
+      "sprite_set": "oper",
+      "name_color": "#c9a86a"
+    },
+    {
+      "id": "expert",
+      "name_key": "ep01.cast.expert",
+      "role": "expert",
+      "sprite_set": "expert",
+      "name_color": "#9fb7c9"
+    },
+    {
+      "id": "murashov",
+      "name_key": "ep01.cast.murashov",
+      "role": "criminal",
+      "real_person": false,
+      "sprite_set": "murashov",
+      "name_color": "#b84a3a"
+    },
+    {
+      "id": "notary",
+      "name_key": "ep01.cast.notary",
+      "role": "suspect",
+      "sprite_set": "notary",
+      "name_color": "#a89f8c"
+    },
+    {
+      "id": "zoya",
+      "name_key": "ep01.cast.zoya",
+      "role": "victim",
+      "sprite_set": "zoya",
+      "name_color": "#cbb9a2"
+    },
+    {
+      "id": "neighbor",
+      "name_key": "ep01.cast.neighbor",
+      "role": "witness",
+      "sprite_set": "neighbor",
+      "name_color": "#b7b1a6"
+    },
+    {
+      "id": "buyer",
+      "name_key": "ep01.cast.buyer",
+      "role": "witness",
+      "sprite_set": "buyer",
+      "name_color": "#b7b1a6"
+    },
+    {
+      "id": "boss",
+      "name_key": "ep01.cast.boss",
+      "short_name_key": "ep01.cast.boss_short",
+      "role": "official",
+      "sprite_set": "boss",
+      "name_color": "#a89f8c"
+    },
+    {
+      "id": "accomplice",
+      "name_key": "ep01.cast.accomplice",
+      "short_name_key": "ep01.cast.accomplice_short",
+      "role": "criminal",
+      "sprite_set": "accomplice",
+      "name_color": "#b84a3a"
+    },
+    {
+      "id": "lapin_wife",
+      "name_key": "ep01.cast.lapin_wife",
+      "short_name_key": "ep01.cast.lapin_wife_short",
+      "role": "relative",
+      "sprite_set": "lapin_wife",
+      "name_color": "#b7b1a6"
+    },
+    {
+      "id": "clerk",
+      "name_key": "ep01.cast.clerk",
+      "role": "extra",
+      "sprite_set": "clerk",
+      "name_color": "#b7b1a6"
+    }
+  ],
+  "variables": {
+    "trust_oper": {
+      "type": "int",
+      "default": 0,
+      "min": 0,
+      "max": 5,
+      "scope": "global",
+      "doc": "Доверие опера Сайко к игроку; сквозная для сезона."
+    },
+    "docs_first": {
+      "type": "bool",
+      "default": false,
+      "doc": "Игрок начал с документов, а не с осмотра."
+    },
+    "found_photo": {
+      "type": "bool",
+      "default": false,
+      "doc": "На осмотре найдены очки/лекарства/фото внука."
+    },
+    "docs_flaw": {
+      "type": "bool",
+      "default": false,
+      "doc": "Найдено исправление даты в доверенности."
+    },
+    "wrong_suspect": {
+      "type": "bool",
+      "default": false
+    },
+    "notary_pressed": {
+      "type": "bool",
+      "default": false
+    },
+    "buyer_detained": {
+      "type": "bool",
+      "default": false,
+      "doc": "Лапин задержан на трое суток (моральный выбор)."
+    },
+    "witness_safe": {
+      "type": "bool",
+      "default": false
+    },
+    "found_chain": {
+      "type": "bool",
+      "default": false,
+      "doc": "В БТИ найдена цепочка из шести сделок."
+    },
+    "board_done": {
+      "type": "bool",
+      "default": false
+    },
+    "hasty": {
+      "type": "bool",
+      "default": false,
+      "doc": "Решение брать обоих сразу."
+    },
+    "oper_wounded": {
+      "type": "bool",
+      "default": false,
+      "scope": "global"
+    },
+    "accomplice_talks": {
+      "type": "bool",
+      "default": false
+    },
+    "confession": {
+      "type": "string",
+      "default": "none",
+      "doc": "none | partial | full"
+    },
+    "route": {
+      "type": "string",
+      "default": "none",
+      "doc": "none | notary | murashov | accomplice — версия операции (s33)."
+    },
+    "kovrigin_broken": {
+      "type": "bool",
+      "default": false,
+      "doc": "Ковригин дал показания (s29)."
+    },
+    "boss_pressure": {
+      "type": "bool",
+      "default": false,
+      "doc": "Громов уступил начальнику (s19)."
+    },
+    "keys_found": {
+      "type": "bool",
+      "default": false,
+      "doc": "Связка ключей жертв найдена при обыске (s37)."
+    },
+    "galina_trust": {
+      "type": "bool",
+      "default": false,
+      "doc": "Соседка доверилась следствию (s15)."
+    },
+    "lapin_wife_met": {
+      "type": "bool",
+      "default": false
+    },
+    "case_strength": {
+      "type": "int",
+      "default": 0,
+      "min": 0,
+      "max": 8,
+      "doc": "Сила дела: растёт только через effects мини-игр и ключевых сцен."
+    },
+    "boss_favor": {
+      "type": "int",
+      "default": 0,
+      "min": -2,
+      "max": 2,
+      "scope": "global",
+      "doc": "Отношение начальника отдела."
+    },
+    "gromov_rep": {
+      "type": "int",
+      "default": 0,
+      "min": 0,
+      "max": 5,
+      "scope": "global",
+      "doc": "Репутация «неудобного» следователя."
+    }
+  },
+  "blocks": [
+    {
+      "id": "b01_cold_open",
+      "type": "cold_open",
+      "presentation": "reconstruction",
+      "entry_scene": "s01",
+      "scenes": [
+        "s01",
+        "s02",
+        "s03"
+      ],
+      "act": 1,
+      "timeline": "aftermath",
+      "date_caption_key": "ep01.s01.cap",
+      "music": "m_tension"
+    },
+    {
+      "id": "b02_title",
+      "type": "title_card",
+      "presentation": "title",
+      "entry_scene": "s04",
+      "scenes": [
+        "s04"
+      ],
+      "act": 1,
+      "ad_break_allowed": true
+    },
+    {
+      "id": "b03_chronicle",
+      "type": "chronicle",
+      "presentation": "chronicle",
+      "entry_scene": "s05",
+      "scenes": [
+        "s05",
+        "s06"
+      ],
+      "act": 1,
+      "timeline": "crime",
+      "title_key": "ep01.b03.title",
+      "music": "m_chronicle"
+    },
+    {
+      "id": "b04_crime",
+      "type": "crime",
+      "presentation": "reconstruction",
+      "entry_scene": "s07",
+      "scenes": [
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "act": 1,
+      "timeline": "crime",
+      "date_caption_key": "ep01.s07.cap",
+      "music": "m_tension"
+    },
+    {
+      "id": "b05_discovery",
+      "type": "discovery",
+      "presentation": "procedural",
+      "entry_scene": "s11",
+      "scenes": [
+        "s11",
+        "s12",
+        "s13",
+        "s14",
+        "s15"
+      ],
+      "act": 1,
+      "timeline": "investigation",
+      "title_key": "ep01.b05.title",
+      "music": "m_investigation"
+    },
+    {
+      "id": "b06_investigation_1",
+      "type": "investigation",
+      "presentation": "procedural",
+      "entry_scene": "s16",
+      "scenes": [
+        "s16",
+        "s17",
+        "s18",
+        "s19"
+      ],
+      "act": 2,
+      "timeline": "investigation",
+      "title_key": "ep01.b06.title",
+      "music": "m_investigation"
+    },
+    {
+      "id": "b07_dead_end",
+      "type": "dead_end",
+      "presentation": "procedural",
+      "entry_scene": "s20",
+      "scenes": [
+        "s20",
+        "s21",
+        "s22",
+        "s23"
+      ],
+      "act": 2,
+      "optional": true,
+      "when": "wrong_suspect",
+      "timeline": "investigation"
+    },
+    {
+      "id": "b08_investigation_2",
+      "type": "investigation",
+      "presentation": "procedural",
+      "entry_scene": "s24",
+      "scenes": [
+        "s24",
+        "s25",
+        "s26",
+        "s27",
+        "s28",
+        "s29"
+      ],
+      "act": 2,
+      "timeline": "investigation",
+      "title_key": "ep01.b08.title",
+      "music": "m_investigation"
+    },
+    {
+      "id": "b09_interlude",
+      "type": "interlude",
+      "presentation": "talking_head",
+      "entry_scene": "s30",
+      "scenes": [
+        "s30"
+      ],
+      "act": 2,
+      "optional": true,
+      "ad_break_allowed": true,
+      "timeline": "aftermath"
+    },
+    {
+      "id": "b10_breakthrough",
+      "type": "breakthrough",
+      "presentation": "procedural",
+      "entry_scene": "s31",
+      "scenes": [
+        "s31",
+        "s32",
+        "s33"
+      ],
+      "act": 2,
+      "timeline": "investigation",
+      "title_key": "ep01.b10.title"
+    },
+    {
+      "id": "b11_pursuit",
+      "type": "pursuit",
+      "presentation": "reconstruction",
+      "entry_scene": "s34",
+      "scenes": [
+        "s34",
+        "s35",
+        "s36",
+        "s36a",
+        "s36b",
+        "s37"
+      ],
+      "act": 3,
+      "timeline": "investigation",
+      "date_caption_key": "ep01.s34.cap",
+      "music": "m_tension"
+    },
+    {
+      "id": "b12_confrontation",
+      "type": "confrontation",
+      "presentation": "procedural",
+      "entry_scene": "s38",
+      "scenes": [
+        "s38",
+        "s39",
+        "s40",
+        "s41",
+        "s42"
+      ],
+      "act": 3,
+      "timeline": "investigation",
+      "title_key": "ep01.b12.title",
+      "music": "m_tension"
+    },
+    {
+      "id": "b13_trial",
+      "type": "trial",
+      "presentation": "courtroom",
+      "entry_scene": "s43",
+      "scenes": [
+        "s43",
+        "s44"
+      ],
+      "act": 3,
+      "timeline": "aftermath",
+      "music": "m_chronicle"
+    },
+    {
+      "id": "b14_epilogue",
+      "type": "epilogue",
+      "presentation": "montage",
+      "entry_scene": "s45",
+      "scenes": [
+        "s45",
+        "s46",
+        "s47",
+        "s48",
+        "s49",
+        "s50",
+        "s51"
+      ],
+      "act": 3,
+      "timeline": "aftermath",
+      "ad_break_allowed": true,
+      "music": "m_epilogue"
+    }
+  ],
+  "scenes": {},
+  "minigames": {
+    "mg_scene": {
+      "id": "mg_scene",
+      "type": "crime_scene_search",
+      "beat": "crime_scene",
+      "title_key": "ep01.mg_scene.title",
+      "brief_key": "ep01.mg_scene.brief",
+      "config": {
+        "scene_bg": "bg_apartment_zoya",
+        "hotspots": [
+          {
+            "id": "glasses",
+            "rect": [
+              0.62,
+              0.55,
+              0.08,
+              0.06
+            ],
+            "label_key": "ep01.mg_scene.hs.glasses",
+            "required": true
+          },
+          {
+            "id": "pills",
+            "rect": [
+              0.3,
+              0.48,
+              0.07,
+              0.07
+            ],
+            "label_key": "ep01.mg_scene.hs.pills",
+            "required": true
+          },
+          {
+            "id": "photo",
+            "rect": [
+              0.48,
+              0.3,
+              0.06,
+              0.08
+            ],
+            "label_key": "ep01.mg_scene.hs.photo",
+            "required": true
+          },
+          {
+            "id": "slippers",
+            "rect": [
+              0.15,
+              0.8,
+              0.09,
+              0.05
+            ],
+            "label_key": "ep01.mg_scene.hs.slippers",
+            "required": false
+          }
+        ],
+        "max_misses": 6,
+        "time_limit_ms": 0
+      },
+      "difficulty": "easy",
+      "skip": {
+        "allowed": true,
+        "after_fails": 1,
+        "skip_counts_as": "partial"
+      },
+      "outcomes": {
+        "success": {
+          "goto": "s14",
+          "effects": [
+            {
+              "var": "found_photo",
+              "op": "set",
+              "value": true
+            },
+            {
+              "var": "case_strength",
+              "op": "add",
+              "value": 1
+            }
+          ],
+          "archive_unlock": "arc_photo_grandson"
+        },
+        "partial": {
+          "goto": "s14",
+          "effects": [
+            {
+              "var": "found_photo",
+              "op": "set",
+              "value": true
+            }
+          ]
+        },
+        "fail": {
+          "goto": "s14"
+        }
+      },
+      "assets": [
+        "bg_apartment_zoya"
+      ],
+      "touch_ready": true
+    },
+    "mg_docs": {
+      "id": "mg_docs",
+      "type": "document_check",
+      "beat": "investigation",
+      "title_key": "ep01.mg_docs.title",
+      "brief_key": "ep01.mg_docs.brief",
+      "config": {
+        "documents": [
+          "doc_power_of_attorney",
+          "doc_contract_sale"
+        ],
+        "discrepancies": [
+          {
+            "doc": "doc_power_of_attorney",
+            "field": "date",
+            "hint_key": "ep01.mg_docs.hint.date"
+          },
+          {
+            "doc": "doc_contract_sale",
+            "field": "signature",
+            "hint_key": "ep01.mg_docs.hint.signature"
+          }
+        ],
+        "decoys": 3,
+        "required": 2,
+        "max_mistakes": 3
+      },
+      "difficulty": "normal",
+      "skip": {
+        "allowed": true,
+        "after_fails": 2,
+        "skip_counts_as": "fail",
+        "hint_rewarded_ad": true
+      },
+      "outcomes": {
+        "success": {
+          "goto": "s18",
+          "effects": [
+            {
+              "var": "docs_flaw",
+              "op": "set",
+              "value": true
+            },
+            {
+              "var": "case_strength",
+              "op": "add",
+              "value": 1
+            }
+          ]
+        },
+        "fail": {
+          "goto": "s18"
+        }
+      },
+      "assets": [
+        "doc_power_of_attorney",
+        "doc_contract_sale"
+      ],
+      "localized_assets": []
+    },
+    "mg_db": {
+      "id": "mg_db",
+      "type": "database_search",
+      "beat": "investigation",
+      "title_key": "ep01.mg_db.title",
+      "brief_key": "ep01.mg_db.brief",
+      "config": {
+        "fields": [
+          "address",
+          "notary",
+          "attorney",
+          "buyer",
+          "date"
+        ],
+        "records": 24,
+        "pattern": {
+          "notary": "kovrigin",
+          "attorney": "murashov_sv"
+        },
+        "target_count": 6,
+        "min_for_partial": 3
+      },
+      "difficulty": "normal",
+      "skip": {
+        "allowed": true,
+        "after_fails": 2,
+        "skip_counts_as": "partial"
+      },
+      "outcomes": {
+        "success": {
+          "goto": "s26",
+          "effects": [
+            {
+              "var": "found_chain",
+              "op": "set",
+              "value": true
+            },
+            {
+              "var": "case_strength",
+              "op": "add",
+              "value": 1
+            }
+          ],
+          "archive_unlock": "arc_bti"
+        },
+        "partial": {
+          "goto": "s26",
+          "effects": [
+            {
+              "var": "found_chain",
+              "op": "set",
+              "value": true
+            }
+          ]
+        },
+        "fail": {
+          "goto": "s26"
+        }
+      }
+    },
+    "mg_board": {
+      "id": "mg_board",
+      "type": "evidence_board",
+      "beat": "deduction",
+      "title_key": "ep01.mg_board.title",
+      "brief_key": "ep01.mg_board.brief",
+      "config": {
+        "nodes": [
+          "zoya",
+          "deal_1",
+          "deal_2",
+          "deal_3",
+          "notary",
+          "attorney",
+          "buyer",
+          "volga_car"
+        ],
+        "required_links": [
+          [
+            "deal_1",
+            "notary"
+          ],
+          [
+            "deal_2",
+            "notary"
+          ],
+          [
+            "deal_3",
+            "notary"
+          ],
+          [
+            "notary",
+            "attorney"
+          ],
+          [
+            "attorney",
+            "volga_car"
+          ]
+        ],
+        "decoy_links": [
+          [
+            "buyer",
+            "attorney"
+          ]
+        ],
+        "max_wrong_links": 4
+      },
+      "difficulty": "normal",
+      "skip": {
+        "allowed": true,
+        "after_fails": 2,
+        "skip_counts_as": "partial"
+      },
+      "outcomes": {
+        "success": {
+          "goto": "s33",
+          "effects": [
+            {
+              "var": "board_done",
+              "op": "set",
+              "value": true
+            },
+            {
+              "var": "case_strength",
+              "op": "add",
+              "value": 1
+            }
+          ]
+        },
+        "partial": {
+          "goto": "s33",
+          "effects": [
+            {
+              "var": "board_done",
+              "op": "set",
+              "value": true
+            }
+          ]
+        },
+        "fail": {
+          "goto": "s33"
+        }
+      }
+    },
+    "mg_interrogation": {
+      "id": "mg_interrogation",
+      "type": "interrogation_press",
+      "beat": "confrontation",
+      "title_key": "ep01.mg_interrogation.title",
+      "brief_key": "ep01.mg_interrogation.brief",
+      "config": {
+        "statements": [
+          {
+            "id": "st_dates",
+            "text_key": "ep01.mg_interrogation.st.dates",
+            "contradicted_by": "ev_docs_flaw",
+            "requires": "docs_flaw"
+          },
+          {
+            "id": "st_alone",
+            "text_key": "ep01.mg_interrogation.st.alone",
+            "contradicted_by": "ev_accomplice",
+            "requires": "accomplice_talks"
+          },
+          {
+            "id": "st_once",
+            "text_key": "ep01.mg_interrogation.st.once",
+            "contradicted_by": "ev_chain",
+            "requires": "found_chain"
+          },
+          {
+            "id": "st_south",
+            "text_key": "ep01.mg_interrogation.st.south",
+            "contradicted_by": "ev_photo",
+            "requires": "found_photo"
+          },
+          {
+            "id": "st_keys",
+            "text_key": "ep01.mg_interrogation.st.keys",
+            "contradicted_by": [
+              "ev_keys",
+              "ev_accomplice"
+            ],
+            "requires": "keys_found"
+          }
+        ],
+        "evidence": [
+          "ev_docs_flaw",
+          "ev_accomplice",
+          "ev_chain",
+          "ev_photo",
+          "ev_keys"
+        ],
+        "full_threshold": 3,
+        "partial_threshold": 1,
+        "max_mistakes": 3
+      },
+      "difficulty": "hard",
+      "skip": {
+        "allowed": true,
+        "after_fails": 2,
+        "skip_counts_as": "partial"
+      },
+      "outcomes": {
+        "success": {
+          "goto": "s40",
+          "effects": [
+            {
+              "var": "confession",
+              "op": "set",
+              "value": "full"
+            },
+            {
+              "var": "case_strength",
+              "op": "add",
+              "value": 1
+            }
+          ]
+        },
+        "partial": {
+          "goto": "s40",
+          "effects": [
+            {
+              "var": "confession",
+              "op": "set",
+              "value": "partial"
+            }
+          ]
+        },
+        "fail": {
+          "goto": "s40",
+          "effects": [
+            {
+              "var": "confession",
+              "op": "set",
+              "value": "none"
+            }
+          ]
+        }
+      },
+      "notes": "Улики доступны только если игрок добыл их раньше — это главный стимул проходить мини-игры следствия честно."
+    }
+  },
+  "endings": [
+    {
+      "id": "e_canon",
+      "title_key": "ep01.end.canon",
+      "kind": "canonical",
+      "epilogue_scene": "s51",
+      "unlocks": [
+        "arc_newspaper"
+      ]
+    },
+    {
+      "id": "e_variant",
+      "title_key": "ep01.end.variant",
+      "kind": "variant",
+      "epilogue_scene": "s50"
+    },
+    {
+      "id": "e_early",
+      "title_key": "ep01.end.early",
+      "kind": "early",
+      "epilogue_scene": "s49",
+      "counts_toward_completion": false
+    }
+  ],
+  "archive_items": [
+    {
+      "id": "arc_fact_privatization",
+      "kind": "fact",
+      "title_key": "ep01.arc.privatization.title",
+      "text_key": "ep01.arc.privatization.text",
+      "real_fact": true
+    },
+    {
+      "id": "arc_power_of_attorney",
+      "kind": "document",
+      "title_key": "ep01.arc.poa.title",
+      "text_key": "ep01.doc.power_of_attorney",
+      "asset": "doc_power_of_attorney"
+    },
+    {
+      "id": "arc_photo_grandson",
+      "kind": "photo",
+      "title_key": "ep01.arc.photo.title",
+      "text_key": "ep01.arc.photo.text"
+    },
+    {
+      "id": "arc_bti",
+      "kind": "document",
+      "title_key": "ep01.arc.bti.title",
+      "text_key": "ep01.doc.bti_card",
+      "asset": "doc_bti_card"
+    },
+    {
+      "id": "arc_newspaper",
+      "kind": "newspaper",
+      "title_key": "ep01.arc.newspaper.title",
+      "text_key": "ep01.doc.newspaper",
+      "asset": "doc_newspaper_1994"
+    },
+    {
+      "id": "arc_keys",
+      "kind": "object",
+      "title_key": "ep01.arc.keys.title",
+      "text_key": "ep01.arc.keys.text",
+      "asset": "cg_keys"
+    },
+    {
+      "id": "arc_registration",
+      "kind": "document",
+      "title_key": "ep01.arc.registration.title",
+      "text_key": "ep01.doc.registration",
+      "asset": "doc_registration"
+    }
+  ],
+  "assets": {
+    "backgrounds": [
+      {
+        "id": "bg_black",
+        "path": "assets/common/bg/black.png"
+      },
+      {
+        "id": "bg_yard_summer",
+        "path": "assets/ep01/bg/yard_summer.webp",
+        "notes": "двор панельного дома, Кунцево, вечер"
+      },
+      {
+        "id": "bg_apartment_zoya",
+        "path": "assets/ep01/bg/apartment_zoya.webp",
+        "notes": "однокомнатная квартира пенсионерки: сервант, ковёр, тюль"
+      },
+      {
+        "id": "bg_moscow_1993",
+        "path": "assets/ep01/bg/moscow_1993.webp",
+        "notes": "панорама Москвы, 1993, стиль архивного фото"
+      },
+      {
+        "id": "bg_office_prosecutor",
+        "path": "assets/ep01/bg/office_prosecutor.webp",
+        "notes": "кабинет следователя: сейф, лампа, пишущая машинка"
+      },
+      {
+        "id": "bg_interrogation",
+        "path": "assets/common/bg/interrogation.webp",
+        "notes": "допросная, общая для сезона"
+      },
+      {
+        "id": "bg_bti_archive",
+        "path": "assets/ep01/bg/bti_archive.webp",
+        "notes": "архив БТИ: стеллажи с карточками"
+      },
+      {
+        "id": "bg_street_night",
+        "path": "assets/ep01/bg/presnya_night.webp",
+        "notes": "улица у нотариальной конторы, ночь, дождь"
+      },
+      {
+        "id": "bg_courtroom",
+        "path": "assets/common/bg/courtroom.webp",
+        "notes": "зал суда с клеткой, общий для сезона"
+      },
+      {
+        "id": "bg_office_now",
+        "path": "assets/common/bg/office_now.webp",
+        "notes": "кабинет «спустя годы» для интервью"
+      },
+      {
+        "id": "bg_stairwell",
+        "path": "assets/ep01/bg/stairwell.webp",
+        "notes": "подъезд панельного дома: почтовые ящики, лифт, лампочка"
+      },
+      {
+        "id": "bg_notary_office",
+        "path": "assets/ep01/bg/notary_office.webp",
+        "notes": "нотариальная контора на Пресне: стол, печати, очередь за дверью"
+      },
+      {
+        "id": "bg_zhek",
+        "path": "assets/ep01/bg/zhek.webp",
+        "notes": "коридор ЖЭКа с очередью, доска объявлений, окошко"
+      },
+      {
+        "id": "bg_street_day",
+        "path": "assets/ep01/bg/presnya_day.webp",
+        "notes": "Пресня днём из окна «девятки»: контора, «Волга», прохожие"
+      },
+      {
+        "id": "bg_murashov_flat",
+        "path": "assets/ep01/bg/murashov_flat.webp",
+        "notes": "квартира Мурашова: три телефона, папки, окно на «Волгу»"
+      }
+    ],
+    "sprites": [
+      {
+        "id": "sledak",
+        "base": "assets/common/sprites/sledak/base.png",
+        "poses": [
+          "stand"
+        ],
+        "expressions": [
+          "neutral",
+          "tense",
+          "tired",
+          "firm"
+        ]
+      },
+      {
+        "id": "sledak_old",
+        "base": "assets/common/sprites/sledak_old/base.png",
+        "expressions": [
+          "neutral",
+          "sad"
+        ]
+      },
+      {
+        "id": "oper",
+        "base": "assets/common/sprites/oper/base.png",
+        "poses": [
+          "stand"
+        ],
+        "expressions": [
+          "neutral",
+          "grin",
+          "angry",
+          "hurt"
+        ]
+      },
+      {
+        "id": "expert",
+        "base": "assets/common/sprites/expert/base.png",
+        "expressions": [
+          "neutral",
+          "focused"
+        ]
+      },
+      {
+        "id": "murashov",
+        "base": "assets/ep01/sprites/murashov/base.png",
+        "expressions": [
+          "neutral",
+          "smile",
+          "cold",
+          "cornered"
+        ],
+        "silhouette": true
+      },
+      {
+        "id": "notary",
+        "base": "assets/ep01/sprites/notary/base.png",
+        "expressions": [
+          "neutral",
+          "nervous"
+        ]
+      },
+      {
+        "id": "zoya",
+        "base": "assets/ep01/sprites/zoya/base.png",
+        "expressions": [
+          "neutral",
+          "warm",
+          "worried"
+        ]
+      },
+      {
+        "id": "neighbor",
+        "base": "assets/ep01/sprites/neighbor/base.png",
+        "expressions": [
+          "neutral",
+          "worried"
+        ]
+      },
+      {
+        "id": "buyer",
+        "base": "assets/ep01/sprites/buyer/base.png",
+        "expressions": [
+          "neutral",
+          "scared"
+        ]
+      },
+      {
+        "id": "boss",
+        "base": "assets/common/sprites/boss/base.png",
+        "expressions": [
+          "neutral",
+          "stern",
+          "tired"
+        ]
+      },
+      {
+        "id": "accomplice",
+        "base": "assets/ep01/sprites/accomplice/base.png",
+        "expressions": [
+          "neutral",
+          "scared"
+        ]
+      },
+      {
+        "id": "lapin_wife",
+        "base": "assets/ep01/sprites/lapin_wife/base.png",
+        "expressions": [
+          "neutral",
+          "worried",
+          "angry"
+        ]
+      },
+      {
+        "id": "clerk",
+        "base": "assets/ep01/sprites/clerk/base.png",
+        "expressions": [
+          "neutral"
+        ]
+      }
+    ],
+    "cg": [
+      {
+        "id": "cg_door_sealed",
+        "path": "assets/ep01/cg/door_sealed.webp"
+      },
+      {
+        "id": "cg_arrest_night",
+        "path": "assets/ep01/cg/arrest_night.webp"
+      },
+      {
+        "id": "cg_verdict",
+        "path": "assets/ep01/cg/verdict.webp"
+      },
+      {
+        "id": "cg_zoya_last",
+        "path": "assets/ep01/cg/zoya_last.webp"
+      },
+      {
+        "id": "cg_keys",
+        "path": "assets/ep01/cg/keys.webp"
+      }
+    ],
+    "documents": [
+      {
+        "id": "doc_power_of_attorney",
+        "path": "assets/ep01/docs/power_of_attorney.webp",
+        "localized": false,
+        "notes": "бланк без текста; текст — слой из локали"
+      },
+      {
+        "id": "doc_contract_sale",
+        "path": "assets/ep01/docs/contract_sale.webp",
+        "localized": false
+      },
+      {
+        "id": "doc_bti_card",
+        "path": "assets/ep01/docs/bti_card.webp",
+        "localized": false
+      },
+      {
+        "id": "doc_newspaper_1994",
+        "path": "assets/ep01/docs/newspaper_1994.webp",
+        "localized": false
+      },
+      {
+        "id": "doc_registration",
+        "path": "assets/ep01/docs/registration.webp",
+        "localized": false
+      }
+    ],
+    "music": [
+      {
+        "id": "m_theme_main",
+        "path": "assets/common/music/theme_main.ogg",
+        "license": "original"
+      },
+      {
+        "id": "m_chronicle",
+        "path": "assets/common/music/chronicle.ogg",
+        "license": "original"
+      },
+      {
+        "id": "m_investigation",
+        "path": "assets/common/music/investigation.ogg",
+        "license": "original"
+      },
+      {
+        "id": "m_tension",
+        "path": "assets/common/music/tension.ogg",
+        "license": "original"
+      },
+      {
+        "id": "m_epilogue",
+        "path": "assets/common/music/epilogue.ogg",
+        "license": "original"
+      }
+    ],
+    "sfx": [
+      {
+        "id": "sfx_vhs",
+        "path": "assets/common/sfx/vhs_glitch.ogg"
+      },
+      {
+        "id": "sfx_door",
+        "path": "assets/common/sfx/door_apartment.ogg"
+      },
+      {
+        "id": "sfx_shot",
+        "path": "assets/common/sfx/shot_distant.ogg"
+      },
+      {
+        "id": "sfx_phone",
+        "path": "assets/common/sfx/phone_dial.ogg"
+      },
+      {
+        "id": "sfx_typewriter",
+        "path": "assets/common/sfx/typewriter.ogg"
+      },
+      {
+        "id": "sfx_rain",
+        "path": "assets/common/sfx/rain_window.ogg"
+      }
+    ],
+    "ambient": [
+      {
+        "id": "amb_yard",
+        "path": "assets/common/amb/yard_summer.ogg"
+      },
+      {
+        "id": "amb_office",
+        "path": "assets/common/amb/office_typewriter.ogg"
+      },
+      {
+        "id": "amb_street_night",
+        "path": "assets/common/amb/street_rain_night.ogg"
+      },
+      {
+        "id": "amb_archive",
+        "path": "assets/common/amb/archive_fluorescent.ogg"
+      },
+      {
+        "id": "amb_street_day",
+        "path": "assets/common/amb/street_day_car.ogg"
+      },
+      {
+        "id": "amb_stairwell",
+        "path": "assets/common/amb/stairwell.ogg"
+      }
+    ],
+    "budget_mb": 30
+  }
+}

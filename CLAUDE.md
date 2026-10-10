@@ -11,6 +11,9 @@ pip install jsonschema
 python3 tools/validate_episode.py episodes/<path>.json   # линтер эпизода (должен быть зелёным перед коммитом)
 python3 tools/loc_sync.py skeleton|export|import|stats …  # локали
 python3 tools/vnexpr_test.py                              # самотест грамматики условий
+python3 tools/merge_drafts.py episodes/s1/<ep>.json --check --part act1   # самопроверка черновика сценариста
+python3 tools/merge_drafts.py episodes/s1/<ep>.json --master              # слить черновики в эпизод по мастер-скелету
+python3 tools/export_script.py episodes/s1/<ep>.json --out docs/production/<ep>-shooting-script.md
 ```
 
 ## Конвенции
@@ -43,7 +46,7 @@ python3 tools/vnexpr_test.py                              # самотест г�
 |---|---|---|
 | Веб-исследование по списку вопросов, сбор источников, выжимки | `researcher` | sonnet |
 | Черновой перевод и редактура en/es/pt по глоссарию и стайлгайду | `translator` | sonnet |
-| Черновик сцен JSON по аутлайну и шаблону блоков | `episode-drafter` | sonnet |
+| Черновик сцен JSON по аутлайну (`docs/season1/<ep>-outline.md`) в `episodes/<season>/_drafts/<ep>/<part>.json` с самопроверкой `merge_drafts --check` | `episode-drafter` | sonnet |
 | Проверка локалей: длины, плейсхолдеры, пустые строки, статистика | `loc-qa` | haiku |
 | Прогон линтера, тривиальные правки (каркас ключей, опечатки id), отчёт | `content-linter` | haiku |
 | Механические правки по чёткому ТЗ (переименования, таблицы, списки ассетов, конвертация форматов) | `content-linter` / `loc-qa` | haiku |

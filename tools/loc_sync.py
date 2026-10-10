@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """Синхронизация локалей эпизода.
 
-  python3 tools/loc_sync.py skeleton episodes/examples/ep01_murylev.json
+  python3 tools/loc_sync.py skeleton episodes/s1/ep01_murylev.json
       — создаёт/дополняет locales/{ru,en,es,pt}/<ep>.json всеми ключами из эпизода
         (новые ключи получают "" ; существующие строки не трогаются; порядок ключей — как в эпизоде).
 
-  python3 tools/loc_sync.py export episodes/examples/ep01_murylev.json [--out locales/_export]
+  python3 tools/loc_sync.py export episodes/s1/ep01_murylev.json [--out locales/_export]
       — пишет CSV для переводчиков/Crowdin: key, context, ru, en, es, pt.
         context = тип шага и говорящий (чтобы переводчик видел, кто и в какой ситуации говорит).
 
   python3 tools/loc_sync.py import locales/_export/ep01_murylev.csv
       — вливает колонки en/es/pt обратно в locales/<lang>/<ep>.json (пустые ячейки пропускаются).
 
-  python3 tools/loc_sync.py stats episodes/examples/ep01_murylev.json
+  python3 tools/loc_sync.py stats episodes/s1/ep01_murylev.json
       — доля переведённых ключей по языкам, объём слов источника (для оценки стоимости перевода).
 """
 from __future__ import annotations

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Экспорт эпизода в читаемый режиссёрский сценарий (Markdown).
 
-  python3 tools/export_script.py episodes/examples/ep01_murylev.json [--lang ru] [--out docs/production/ep01-shooting-script.md]
+  python3 tools/export_script.py episodes/s1/ep01_murylev.json [--lang ru] [--out docs/production/ep01-shooting-script.md]
 
 Для каждой сцены: блок и режим показа, кадр (фон, фильтр, время суток, погода, музыка, эмбиент),
 затем шаги в порядке исполнения: титры, реплики, показ персонажей, эффекты, выборы, мини-игры, переходы.

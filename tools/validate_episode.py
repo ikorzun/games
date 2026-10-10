@@ -2,7 +2,7 @@
 """Линтер эпизодов: schema + ссылочная целостность + достижимость + локализация + ассеты.
 
 Использование:
-  python3 tools/validate_episode.py episodes/examples/ep01_murylev.json [--locales locales] [--strict]
+  python3 tools/validate_episode.py episodes/s1/ep01_murylev.json [--locales locales] [--strict]
 
 Коды выхода: 0 — ок (возможны warnings), 1 — есть ошибки (или warnings при --strict).
 """
@@ -387,7 +387,9 @@ def localization(ep: dict, locales_dir: str, rep: Report) -> None:
         empty = sorted(k for k, v in data.items() if not str(v).strip())
         if missing:
             msg = f"локализация {lang}: нет {len(missing)} ключей, напр. {missing[:5]}"
-            (rep.err if lang in ("ru", "en") else rep.warn)(msg)
+            status = ep.get("localization", {}).get("status", {}).get(lang, "none")
+            strict = lang == "ru" or status in ("edited", "lqa", "final")
+            (rep.err if strict else rep.warn)(msg)
         if extra:
             rep.warn(f"локализация {lang}: {len(extra)} неиспользуемых ключей, напр. {extra[:5]}")
         if empty:

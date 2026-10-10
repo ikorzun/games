@@ -4,7 +4,7 @@
 `real_estate_murders`). Ниже — только SUBJECT / COMPOSITION / LIGHT / MOOD. Модель по умолчанию —
 Nano Banana Pro (2k, 16:9 для фонов и CG, 3:4 для документов), персонажи — Soul Cast.
 Варианты: 3 на фон, 2 на CG, 1 база + выражения на персонажа. Id совпадают с `assets` в
-`episodes/examples/ep01_murylev.json`.
+`episodes/s1/ep01_murylev.json`.
 
 ## Фоны
 
