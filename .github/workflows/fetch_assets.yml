@@ -1,17 +1,22 @@
 name: fetch-assets
 
-# Скачивает сгенерированные ассеты по манифесту (tools/fetch_assets.py) на раннере GitHub — у него открыт
-# интернет — конвертирует их в форматы рантайма и коммитит в ту же ветку. Нужен, когда из рабочей среды
-# CDN генератора недоступен. Запуск: Actions → fetch-assets → Run workflow (или через API workflow_dispatch).
+# Скачивает сгенерированные ассеты по манифестам assets/*/manifest.json (tools/fetch_assets.py) на раннере
+# GitHub — у него открыт интернет — конвертирует их в форматы рантайма и коммитит в ту же ветку. Нужен,
+# когда из рабочей среды CDN генератора недоступен.
+# Запускается сам при push, меняющем манифест или этот файл (уже скачанные файлы скрипт пропускает),
+# и вручную: Actions → fetch-assets → Run workflow.
 # Коммит делается токеном workflow, поэтому validate/pages от него сами не запускаются — их запустит
 # следующий обычный push в ветку (или ручной запуск).
 on:
+  push:
+    paths:
+      - "assets/*/manifest.json"
+      - ".github/workflows/fetch_assets.yml"
   workflow_dispatch:
     inputs:
       manifest:
-        description: "Манифест ассетов (assets/<ep>/manifest.json)"
-        default: "assets/ep01/manifest.json"
-        required: true
+        description: "Манифест (assets/<ep>/manifest.json); пусто — все манифесты"
+        default: ""
       only:
         description: "Только эти kind через запятую: bg,cg,doc,sprite,ui,music,ambient,sfx (пусто — все)"
         default: ""
@@ -20,8 +25,8 @@ on:
         type: boolean
         default: false
       message:
-        description: "Сообщение коммита"
-        default: "Ассеты: скачаны по манифесту (fetch-assets)"
+        description: "Сообщение коммита (пусто — стандартное)"
+        default: ""
 
 permissions:
   contents: write
@@ -48,10 +53,16 @@ jobs:
           ONLY: ${{ inputs.only }}
           FORCE: ${{ inputs.force }}
         run: |
-          args=("$MANIFEST")
-          [ -n "$ONLY" ] && args+=(--only "$ONLY")
-          [ "$FORCE" = "true" ] && args+=(--force)
-          python3 tools/fetch_assets.py "${args[@]}"
+          if [ -n "$MANIFEST" ]; then manifests="$MANIFEST"; else manifests=$(ls assets/*/manifest.json); fi
+          rc=0
+          for m in $manifests; do
+            echo "== $m"
+            args=("$m")
+            [ -n "$ONLY" ] && args+=(--only "$ONLY")
+            [ "$FORCE" = "true" ] && args+=(--force)
+            python3 tools/fetch_assets.py "${args[@]}" || rc=1
+          done
+          exit $rc
       - name: Listing
         run: |
           echo "Файлов ассетов: $(find assets -type f \( -name '*.webp' -o -name '*.png' -o -name '*.mp3' -o -name '*.m4a' -o -name '*.ogg' \) | wc -l)"
@@ -59,14 +70,18 @@ jobs:
           git status --short assets | head -100
       - name: Commit and push
         env:
-          MESSAGE: ${{ inputs.message }}
+          INPUT_MESSAGE: ${{ inputs.message }}
         run: |
           git add -A assets
           if git diff --cached --quiet; then
             echo "::notice::Новых или изменённых файлов ассетов нет — коммит не нужен"
             exit 0
           fi
-          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -q -F - <<< "$MESSAGE"
+          message="${INPUT_MESSAGE:-Ассеты: скачаны по манифесту (fetch-assets)}"
+          # Трейлеры коммита-триггера (соавторство, ссылка на сессию) наследуются коммитом ассетов.
+          trailers=$(git log -1 --format='%(trailers:only,unfold)' "$GITHUB_SHA" 2>/dev/null || true)
+          if [ -n "$trailers" ]; then message="$message"$'\n\n'"$trailers"; fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -q -F - <<< "$message"
           for attempt in 1 2 3; do
             if git pull --rebase -q origin "$GITHUB_REF_NAME" && git push -q origin "HEAD:$GITHUB_REF_NAME"; then
               echo "Запушено в $GITHUB_REF_NAME: $(git rev-parse --short HEAD)"
