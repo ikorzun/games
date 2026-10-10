@@ -319,8 +319,21 @@ async function scenarioMatrix(browser, baseUrl) {
       const shot = async (screen) => {
         if (wantShots) await page.screenshot({ path: join(OUT, `${name}_${lang}_${screen}.png`) });
       };
+      // Экран считается готовым, когда видны его элементы (а не просто сменилось ожидание сессии):
+      // иначе проверка попадает на середину перехода сцены, когда окно текста ещё скрыто.
+      const READY = {
+        menu: '.vn-menu__nav button',
+        warning: '.vn-warning.is-in .vn-btn',
+        dialogue: '.vn-textbox.is-complete:not([hidden]) .vn-textbox__shown',
+        choice: '.vn-choices:not([hidden]) .vn-choice',
+        minigame: '.mg-gb .mg-btn',
+        settings: '.vn-settings.is-in .vn-range',
+        log: '.vn-log.is-in .vn-log__item',
+        ending: '.vn-ending.is-in .vn-ending__title',
+      };
       const probe = async (screen) => {
-        await sleep(350);
+        await page.waitForSelector(READY[screen], { state: 'visible', timeout: 15000 });
+        await sleep(450);
         found[screen] = await page.evaluate(layoutProbe);
         await shot(screen);
       };

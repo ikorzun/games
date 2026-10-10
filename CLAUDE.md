@@ -14,6 +14,9 @@ python3 tools/vnexpr_test.py                              # самотест г�
 python3 tools/merge_drafts.py episodes/s1/<ep>.json --check --part act1   # самопроверка черновика сценариста
 python3 tools/merge_drafts.py episodes/s1/<ep>.json --master              # слить черновики в эпизод по мастер-скелету
 python3 tools/export_script.py episodes/s1/<ep>.json --out docs/production/<ep>-shooting-script.md
+
+cd runtime && npm install && npm run typecheck && npm test && npm run build   # рантайм (см. runtime/README.md)
+npm run dev      # dev-сервер с контентом из ../episodes и ../locales;  npm run smoke — Chromium-смоук сборки
 ```
 
 ## Конвенции

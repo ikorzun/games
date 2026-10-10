@@ -1,4 +1,4 @@
-name: validate-content
+name: validate
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
       - "locales/**"
       - "schemas/**"
       - "tools/**"
+      - "runtime/**"
       - ".github/workflows/validate.yml"
   pull_request:
 
@@ -33,3 +34,34 @@ jobs:
           if [ "$found" = "0" ]; then echo "no episodes yet"; fi
       - name: Expression grammar self-test
         run: python3 tools/vnexpr_test.py
+
+  runtime:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: runtime
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: runtime/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Build (web-plain) + dist checks
+        run: npm run build
+      - name: Build (Playgama) + dist checks
+        run: npm run build:playgama
+      - name: Install Chromium for smoke
+        run: npx playwright-core install --with-deps chromium
+      - name: Smoke (web-plain build)
+        run: npm run smoke
+      - name: Smoke (Playgama build, mock platform)
+        run: npm run smoke -- --dist dist-playgama
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-playgama
+          path: runtime/dist-playgama
+          retention-days: 14
