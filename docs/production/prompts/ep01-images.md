@@ -1,10 +1,12 @@
 # Промпты картинок: эпизод 1 «Смерть за квартиры»
 
-Каждый промпт начинается со строки стиля и палитры из `style-bible.md` (§1–2, архетип
-`real_estate_murders`). Ниже — только SUBJECT / COMPOSITION / LIGHT / MOOD. Модель по умолчанию —
-Nano Banana Pro (2k, 16:9 для фонов и CG, 3:4 для документов), персонажи — Soul Cast.
-Варианты: 3 на фон, 2 на CG, 1 база + выражения на персонажа. Id совпадают с `assets` в
-`episodes/s1/ep01_murylev.json`.
+Каждый промпт = **базовый промпт** из `style-bible.md` §1 целиком, где последняя строка
+`SCENE TO DEPICT:` заменяется строкой из таблиц ниже (SUBJECT / COMPOSITION / LIGHT / MOOD
+читаются моделью как описание сцены; для фонов под спрайты добавляется «empty room, no people»).
+Модель по умолчанию — GPT Image 2.5 (16:9 для фонов и CG, 3:4 для документов), варианты по
+референсу — Nano Banana Pro. Варианты: 2 на фон, 2 на CG, 1 база + выражения на персонажа.
+Id совпадают с `assets` в `episodes/s1/ep01_murylev.json`. Стилевые эффекты (`vhs`,
+`archive_photo`, `noir`) накладывает рантайм — в картинке их быть не должно.
 
 ## Фоны
 
@@ -12,9 +14,9 @@ Nano Banana Pro (2k, 16:9 для фонов и CG, 3:4 для документо
 |---|---|
 | `bg_yard_summer` | SUBJECT: courtyard of a nine-storey Soviet panel apartment block in Moscow, July evening; a wooden bench, a rusty children's climbing frame, poplar trees, a parked cherry-red Lada 2109, a row of windows where most are lit; one third-floor window is lit too, but behind unfamiliar bright new curtains. COMPOSITION: wide shot from the courtyard path, building facade filling the upper half, empty foreground path. LIGHT: dusk, warm windows against blue-grey sky, one street lamp. MOOD: uneasy. |
 | `bg_apartment_zoya` | SUBJECT: one-room apartment of an elderly Moscow pensioner, 1993: a dark polished sideboard with glass doors and a framed photo behind the glass, a carpet on the wall, lace curtains, a small TV on a stool, medicine bottles on a bedside table, folded glasses. COMPOSITION: eye-level medium-wide shot from the doorway, sideboard centre-left, empty centre for characters. LIGHT: overcast daylight through tulle curtains. MOOD: abandoned. |
-| `bg_moscow_1993` | SUBJECT: Moscow street in 1993: a line of commercial kiosks with closed shutters, people in coats at a bus stop, a trolleybus, a Soviet apartment block facade, slush on the pavement. COMPOSITION: wide establishing shot, slightly high angle; styled as a faded archival photograph (this background gets the archive_photo filter in runtime). LIGHT: flat grey winter daylight. MOOD: documentary. |
+| `bg_moscow_1993` | SUBJECT: Moscow street in 1993: a line of commercial kiosks with closed shutters, people in coats at a bus stop, a trolleybus, a Soviet apartment block facade, slush on the pavement. COMPOSITION: wide establishing shot, slightly high angle; a clean photographic frame (the archive_photo look is added by the runtime filter). LIGHT: flat grey winter daylight. MOOD: documentary. |
 | `bg_office_prosecutor` | SUBJECT: investigator's office in a district prosecutor's building, 1993: a heavy desk with a green-shaded lamp, a mechanical typewriter, stacks of cardboard case folders tied with string, a grey metal safe, a wall calendar, a window with a radiator. COMPOSITION: medium-wide, desk in the lower third but uncluttered, empty centre for two characters. LIGHT: afternoon window light plus warm desk lamp. MOOD: procedural. |
-| `bg_interrogation` | SUBJECT: small interrogation room in a Moscow militia station, 1993: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up. COMPOSITION: symmetrical frontal shot, table centred low, empty wall behind for a character. LIGHT: one hard lamp, deep shadows (runtime adds the noir filter). MOOD: pressure. |
+| `bg_interrogation` | SUBJECT: small interrogation room in a Moscow militia station, 1993: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up. COMPOSITION: symmetrical frontal shot, table centred low, empty wall behind for a character. LIGHT: one desk lamp plus cold daylight from the small window, realistic shadows (the noir look is added by the runtime filter). MOOD: pressure. |
 | `bg_stairwell` | SUBJECT: stairwell landing of a Soviet panel apartment block in Moscow, 1993: a row of dented metal mailboxes, an old lift door, a padded apartment door with a new brass lock, concrete steps with a worn railing, a window with a cracked pane. COMPOSITION: eye-level shot of the landing, the apartment door centre-right, empty centre for one or two characters. LIGHT: a bare bulb overhead plus grey daylight from the window. MOOD: watchful. |
 | `bg_bti_archive` | SUBJECT: municipal technical inventory bureau archive: long rows of grey metal filing cabinets and wooden card drawers, a reading table with a green lamp, boxes of index cards. COMPOSITION: corridor perspective between cabinets, table in the lower right, centre free. LIGHT: fluorescent tubes, dusty air. MOOD: patient. |
 | `bg_street_night` | SUBJECT: narrow Moscow street at night in October rain outside a notary office on the ground floor of an old building, wet asphalt reflections, a Volga sedan parked, a dim doorway. COMPOSITION: wide shot from across the street, doorway centre-right, empty left side. LIGHT: one sodium street lamp, warm office window. MOOD: stakeout. |
@@ -33,7 +35,7 @@ Nano Banana Pro (2k, 16:9 для фонов и CG, 3:4 для документо
 | `cg_arrest_night` | SUBJECT: night street in rain, a militia UAZ with its roof light on, two silhouettes of men in leather jackets leading a third man in a coat toward the car, faces hidden by rain and distance. COMPOSITION: wide, figures small in the centre, reflections dominate. LIGHT: flashing blue, sodium lamp. MOOD: relief and dread. |
 | `cg_verdict` | SUBJECT: view from the public benches of a courtroom: the back of a man's head behind cage bars, a judge's silhouette far away, a woman's hand clutching a folded handkerchief in the foreground. COMPOSITION: shallow focus on the hand, cage soft in the middle. LIGHT: cold daylight. MOOD: quiet. |
 
-## Персонажи (Soul Cast, затем выражения)
+## Персонажи (базовый кадр по §4 стайл-библии, затем выражения)
 
 | id | CHARACTER | Выражения |
 |---|---|---|
