@@ -72,9 +72,10 @@
 с реальными людьми случайно. Игра не является официальным документом и не претендует на точное
 воспроизведение событий.»
 
-**EN:** "Based on a real criminal case. Dialogue, certain characters and events have been dramatised
+**EN:** "Based on a real criminal case. Dialogue, certain characters and events have been dramatized
 or invented; some names have been changed. Any resemblance of fictional characters to real persons
-is coincidental."
+is coincidental. This game is not an official document and does not claim to reproduce the events
+exactly."
 
 Никогда: «This is a true story» / «Это правдивая история». Показывать: на экране запуска, перед каждым
 эпизодом (вместе с контент-предупреждением), в описании на площадках. В игре — ссылка на «архивную

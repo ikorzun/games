@@ -337,13 +337,22 @@ def collect_loc_keys(ep: dict) -> set[str]:
 
 
 LENGTH_LIMITS = {  # роль строки -> максимум символов (любой язык); см. docs/architecture/05-localization.md §4
-    "option": 60, "date_stamp": 32, "location": 56, "lower_third": 48, "chapter": 40, "fact": 120, "say": 220, "narrate": 240,
+    "option": 60, "date_stamp": 32, "location": 56, "lower_third": 48, "chapter": 40, "title": 40, "fact": 120, "say": 220, "narrate": 240,
 }
 
 
 def key_roles(ep: dict) -> dict[str, str]:
     """Ключ -> роль строки (для проверки длины)."""
     roles: dict[str, str] = {}
+    for b in ep.get("blocks", []):
+        if b.get("title_key"):
+            roles[b["title_key"]] = "title"
+    for mg in ep.get("minigames", {}).values():
+        roles[mg["title_key"]] = "title"
+    for e in ep.get("endings", []):
+        roles[e["title_key"]] = "title"
+    for a in ep.get("archive_items", []):
+        roles[a["title_key"]] = "title"
     for scene in ep.get("scenes", {}).values():
         for st in scene.get("steps", []):
             do = st.get("do")
@@ -402,6 +411,39 @@ def localization(ep: dict, locales_dir: str, rep: Report) -> None:
                         rep.err(f"локализация {lang}: плейсхолдеры в {k} не совпадают с ru")
 
 
+UI_LABEL_PREFIXES = ("ui.menu.", "ui.quick.", "ui.common.", "ui.settings.", "ui.minigame.", "ui.save.", "ui.episode.", "ui.end.", "ui.archive.", "ui.lang.")
+
+
+def ui_check(locales_dir: str, rep: Report) -> None:
+    """locales/<lang>/ui.json: одинаковые ключи, подписи ≤ 24, заголовки ≤ 40."""
+    data = {}
+    for lang in LANGS:
+        path = os.path.join(locales_dir, lang, "ui.json")
+        if os.path.exists(path):
+            data[lang] = load_json(path)
+    if not data:
+        return
+    keysets = {lang: set(d) for lang, d in data.items()}
+    base = keysets.get("ru") or next(iter(keysets.values()))
+    for lang, ks in keysets.items():
+        if ks != base:
+            rep.err(f"ui.json {lang}: набор ключей отличается ({len(ks ^ base)} расхождений)")
+    for lang, d in data.items():
+        for k, v in d.items():
+            if not str(v).strip():
+                continue
+            if k.endswith(".title"):
+                lim = 40
+            elif ".body" in k or "confirm" in k or k.endswith(".details"):
+                lim = None
+            elif k.startswith(UI_LABEL_PREFIXES):
+                lim = 24
+            else:
+                lim = 40
+            if lim and len(str(v)) > lim:
+                rep.warn(f"ui.json {lang}: {k} {len(str(v))} символов > {lim}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("episode")
@@ -417,6 +459,7 @@ def main() -> int:
         integrity(ep, rep)
         if not a.no_loc:
             localization(ep, a.locales, rep)
+            ui_check(a.locales, rep)
 
     for w in rep.warnings:
         print(f"WARN  {w}")
