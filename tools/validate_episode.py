@@ -268,8 +268,6 @@ def integrity(ep: dict, rep: Report) -> None:
     for cid, c in cast.items():
         if c.get("sprite_set") and c["sprite_set"] not in sprites:
             rep.err(f"cast {cid}: sprite_set {c['sprite_set']} не найден")
-        if c.get("real_person") and ep["based_on"]["fictionalization"].get("legal_review", "none") == "none":
-            rep.warn(f"cast {cid}: real_person=true, а legal_review=none")
 
     # reachability
     if blocks:

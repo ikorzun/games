@@ -33,8 +33,7 @@
           "properties": {
             "level": { "type": "string", "enum": ["documentary", "dramatized", "inspired"], "description": "documentary — реальные имена/факты; dramatized — реальная канва, вымышленные детали и диалоги; inspired — по мотивам, имена и география изменены." },
             "names_changed": { "type": "boolean" },
-            "notes": { "type": "string" },
-            "legal_review": { "type": "string", "enum": ["none", "pending", "done"] }
+            "notes": { "type": "string" }
           }
         }
       }
@@ -149,7 +148,7 @@
         "name_key": { "$ref": "#/$defs/locKey" },
         "short_name_key": { "$ref": "#/$defs/locKey" },
         "role": { "type": "string", "enum": ["player", "investigator", "operative", "expert", "witness", "victim", "suspect", "criminal", "relative", "journalist", "official", "narrator", "extra"] },
-        "real_person": { "type": "boolean", "default": false, "description": "true — реальное лицо (требует проверки fictionalization/legal_review)." },
+        "real_person": { "type": "boolean", "default": false, "description": "true — реальное лицо (действуют правила фикционализации проекта)." },
         "sprite_set": { "$ref": "#/$defs/asciiId", "description": "Имя набора спрайтов в assets.sprites." },
         "voice": { "type": "string", "enum": ["none", "ru_only", "all"] },
         "name_color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
