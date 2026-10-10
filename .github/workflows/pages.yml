@@ -44,6 +44,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    # Пока Pages не включён в настройках репозитория (или план GitHub не даёт Pages приватному
+    # репозиторию), шаг деплоя падает по внешней причине и не должен красить PR.
+    continue-on-error: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
