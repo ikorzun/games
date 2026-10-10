@@ -63,8 +63,11 @@ export class ScreenHost {
     const [entry] = this.stack.splice(i, 1);
     screen.el.remove();
     screen.onClose?.();
-    if (i === this.stack.length && entry?.returnFocus instanceof HTMLElement && document.contains(entry.returnFocus)) {
-      entry.returnFocus.focus({ preventScroll: true });
+    const back = entry?.returnFocus;
+    if (i === this.stack.length && back instanceof HTMLElement && document.contains(back)) {
+      // Кнопки быстрого меню фокус не получают обратно: иначе Space повторил бы их действие.
+      if (back.closest('.vn-quick')) back.blur();
+      else back.focus({ preventScroll: true });
     }
     this.emit();
   }

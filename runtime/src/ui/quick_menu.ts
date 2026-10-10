@@ -29,6 +29,8 @@ export class QuickMenu {
           click: (e) => {
             e.stopPropagation();
             this.onAction(action);
+            // Фокус не должен «залипать» на кнопке: Space/Enter продвигают сюжет, а не повторяют действие.
+            (e.currentTarget as HTMLElement).blur();
           },
         },
       });
