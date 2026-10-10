@@ -7594,85 +7594,85 @@
     "music": [
       {
         "id": "m_theme_main",
-        "path": "assets/common/music/theme_main.ogg",
+        "path": "assets/common/music/theme_main.mp3",
         "license": "original"
       },
       {
         "id": "m_chronicle",
-        "path": "assets/common/music/chronicle.ogg",
+        "path": "assets/common/music/chronicle.mp3",
         "license": "original"
       },
       {
         "id": "m_investigation",
-        "path": "assets/common/music/investigation.ogg",
+        "path": "assets/common/music/investigation.mp3",
         "license": "original"
       },
       {
         "id": "m_tension",
-        "path": "assets/common/music/tension.ogg",
+        "path": "assets/common/music/tension.mp3",
         "license": "original"
       },
       {
         "id": "m_epilogue",
-        "path": "assets/common/music/epilogue.ogg",
+        "path": "assets/common/music/epilogue.mp3",
         "license": "original"
       }
     ],
     "sfx": [
       {
         "id": "sfx_vhs",
-        "path": "assets/common/sfx/vhs_glitch.ogg"
+        "path": "assets/common/sfx/vhs_glitch.mp3"
       },
       {
         "id": "sfx_door",
-        "path": "assets/common/sfx/door_apartment.ogg"
+        "path": "assets/common/sfx/door_apartment.mp3"
       },
       {
         "id": "sfx_shot",
-        "path": "assets/common/sfx/shot_distant.ogg"
+        "path": "assets/common/sfx/shot_distant.mp3"
       },
       {
         "id": "sfx_phone",
-        "path": "assets/common/sfx/phone_dial.ogg"
+        "path": "assets/common/sfx/phone_dial.mp3"
       },
       {
         "id": "sfx_typewriter",
-        "path": "assets/common/sfx/typewriter.ogg"
+        "path": "assets/common/sfx/typewriter.mp3"
       },
       {
         "id": "sfx_rain",
-        "path": "assets/common/sfx/rain_window.ogg"
+        "path": "assets/common/sfx/rain_window.mp3"
       },
       {
         "id": "sfx_phone_ring",
-        "path": "assets/common/sfx/phone_ring.ogg",
+        "path": "assets/common/sfx/phone_ring.mp3",
         "notes": "входящий звонок, дисковый аппарат 1980-х"
       }
     ],
     "ambient": [
       {
         "id": "amb_yard",
-        "path": "assets/common/amb/yard_summer.ogg"
+        "path": "assets/common/amb/yard_summer.mp3"
       },
       {
         "id": "amb_office",
-        "path": "assets/common/amb/office_typewriter.ogg"
+        "path": "assets/common/amb/office_typewriter.mp3"
       },
       {
         "id": "amb_street_night",
-        "path": "assets/common/amb/street_rain_night.ogg"
+        "path": "assets/common/amb/street_rain_night.mp3"
       },
       {
         "id": "amb_archive",
-        "path": "assets/common/amb/archive_fluorescent.ogg"
+        "path": "assets/common/amb/archive_fluorescent.mp3"
       },
       {
         "id": "amb_street_day",
-        "path": "assets/common/amb/street_day_car.ogg"
+        "path": "assets/common/amb/street_day_car.mp3"
       },
       {
         "id": "amb_stairwell",
-        "path": "assets/common/amb/stairwell.ogg"
+        "path": "assets/common/amb/stairwell.mp3"
       }
     ],
     "budget_mb": 30
