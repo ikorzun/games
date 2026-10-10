@@ -84,6 +84,34 @@ export const DEFAULT_FX_MS: Readonly<Record<FxKind, number>> = {
 /** Предохранитель от бесконечных неблокирующих циклов (например, jump сам в себя). */
 const MAX_NONBLOCKING_STEPS = 5000;
 
+/**
+ * Кадр сцены «с нуля»: фон/фильтр/letterbox из scene.stage, без спрайтов и CG, музыка и эмбиент
+ * сцены (или блока). Нужен при загрузке сейва без снимка кадра и как база для входа в сцену.
+ */
+export function defaultViewFor(episode: Episode, sceneId: string): ViewState {
+  const scene = episode.scenes[sceneId];
+  if (!scene) throw new EngineError(`неизвестная сцена: ${sceneId}`);
+  const block = episode.blocks.find((b) => b.id === scene.block);
+  if (!block) throw new EngineError(`сцена ${sceneId}: неизвестный блок ${scene.block}`);
+  const st = scene.stage;
+  return {
+    scene: scene.id,
+    block: block.id,
+    presentation: block.presentation,
+    bg: st.bg,
+    filter: st.filter ?? null,
+    time_of_day: st.time_of_day ?? null,
+    weather: st.weather ?? null,
+    letterbox: st.letterbox ?? false,
+    sprites: [],
+    cg: null,
+    cg_hide_after: true,
+    music: scene.music ?? block.music ?? null,
+    ambient: scene.ambient ?? null,
+    speaker: null,
+  };
+}
+
 export interface InterpreterOptions {
   /** Глобальные переменные сезона, перенесённые из предыдущих эпизодов. */
   carriedGlobals?: Readonly<Record<string, Value>>;
@@ -179,11 +207,14 @@ export class Interpreter {
 
   // ───────────────────────────── жизненный цикл ─────────────────────────────
 
-  /** Новая партия с первой сцены первого блока. */
-  start(): void {
+  /**
+   * Новая партия с первой сцены первого блока. `carried` — глобальные переменные сезона из
+   * предыдущих эпизодов (иначе берутся из опций конструктора).
+   */
+  start(carried?: Readonly<Record<string, Value>>): void {
     const first = this.blockList[0];
     if (!first) throw new EngineError('в эпизоде нет блоков');
-    this._state = createInitialState(this.episode, first.entry_scene, this.carriedGlobals);
+    this._state = createInitialState(this.episode, first.entry_scene, carried ?? this.carriedGlobals);
     this._view = null;
     this.queue = [];
     this.current = null;
@@ -246,8 +277,7 @@ export class Interpreter {
         return this.stop(ad);
       }
       const step = this.currentStep();
-      const guardExpr = (step as { when?: string }).when;
-      if (guardExpr !== undefined && !this.testAt(guardExpr, step)) {
+      if (step.when !== undefined && !this.testAt(step.when, step)) {
         this.state.step_index += 1;
         continue;
       }
@@ -411,24 +441,15 @@ export class Interpreter {
       }
     }
 
-    const st = scene.stage;
     const view: ViewState = {
-      scene: scene.id,
-      block: block.id,
-      presentation: block.presentation,
-      bg: st.bg,
-      filter: st.filter ?? null,
-      time_of_day: st.time_of_day ?? null,
-      weather: st.weather ?? null,
-      letterbox: st.letterbox ?? false,
-      sprites: [],
+      ...defaultViewFor(this.episode, sceneId),
       // CG переживает смену сцены внутри блока (кадр задержания держится поверх s16 → s16a/b),
       // но не выходит за границу блока.
       cg: prev && !newBlock ? prev.cg : null,
       cg_hide_after: prev && !newBlock ? prev.cg_hide_after : true,
+      // Без явного указания музыка и эмбиент продолжают играть.
       music: prev?.music ?? null,
       ambient: prev?.ambient ?? null,
-      speaker: null,
     };
 
     if (prev?.cg && newBlock) this.emit({ t: 'cg_hide', transition: 'fade' });

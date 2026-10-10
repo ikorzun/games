@@ -1,0 +1,359 @@
+/* ───────────── Сцена: фильтры, переходы, эффекты (CSS-классы на контейнере .vn-stage) ───────────── */
+
+.vn-stage {
+  --grain: 0;
+  --scan: 0;
+  --vig: 0;
+  --tint: 0;
+  position: relative;
+  overflow: hidden;
+  background: #000;
+  isolation: isolate;
+  contain: layout paint;
+  /* Шум для зерна и static_tv — встроенный SVG, никаких внешних ресурсов. */
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 1.5 0 0 0 -.45'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.vn-stage__scene,
+.vn-stage__cam,
+.vn-stage__host {
+  position: absolute;
+  inset: 0;
+}
+.vn-stage__scene {
+  transition: filter 0.4s ease;
+}
+.vn-stage__host canvas,
+.vn-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── фильтры сцены (stage.filter / умолчание пресета показа) ── */
+
+.vn-stage.filter-vhs { --grain: 0.1; --scan: 0.55; --vig: 0.35; }
+.vn-stage.filter-vhs .vn-stage__scene { filter: contrast(1.06) saturate(0.88) brightness(0.97) blur(0.35px); }
+
+.vn-stage.filter-vhs_heavy { --grain: 0.24; --scan: 0.85; --vig: 0.5; }
+.vn-stage.filter-vhs_heavy .vn-stage__scene {
+  filter: contrast(1.14) saturate(0.76) brightness(0.92) blur(0.7px);
+  animation: vhs-jitter 2.6s steps(1, end) infinite;
+}
+
+.vn-stage.filter-archive_photo { --grain: 0.2; --vig: 0.7; }
+.vn-stage.filter-archive_photo .vn-stage__scene { filter: sepia(0.7) contrast(1.05) brightness(0.92) saturate(0.8); }
+
+.vn-stage.filter-night { --grain: 0.06; --vig: 0.45; --tint: 1; }
+.vn-stage.filter-night .vn-stage__scene { filter: brightness(0.72) contrast(1.1) saturate(0.85); }
+
+.vn-stage.filter-sepia { --vig: 0.3; }
+.vn-stage.filter-sepia .vn-stage__scene { filter: sepia(0.85) contrast(1.02) brightness(0.98); }
+
+.vn-stage.filter-desaturated { --vig: 0.2; }
+.vn-stage.filter-desaturated .vn-stage__scene { filter: saturate(0.6) contrast(1.02); }
+
+.vn-stage.filter-noir { --vig: 0.9; --grain: 0.08; }
+.vn-stage.filter-noir .vn-stage__scene { filter: grayscale(0.92) contrast(1.35) brightness(0.88); }
+
+/* ── наложения ── */
+
+.vn-stage__layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.vn-stage__grain {
+  background-image: var(--noise);
+  background-size: 160px 160px;
+  mix-blend-mode: overlay;
+  opacity: var(--grain);
+  animation: grain-shift 0.5s steps(5) infinite;
+}
+.vn-stage__scan {
+  background: repeating-linear-gradient(to bottom, rgb(0 0 0 / 0.22) 0 1px, transparent 1px 3px);
+  opacity: var(--scan);
+}
+.vn-stage__vignette {
+  background: radial-gradient(ellipse at 50% 42%, transparent 42%, rgb(0 0 0 / 0.92) 100%);
+  opacity: var(--vig);
+  transition: opacity 0.4s ease;
+}
+.vn-stage__tint {
+  background: rgb(26 52 128 / 0.62);
+  mix-blend-mode: multiply;
+  opacity: var(--tint);
+  transition: opacity 0.4s ease;
+}
+.vn-stage[data-weather='rain'] .vn-stage__weather {
+  background-image: linear-gradient(104deg, transparent 0 47%, rgb(200 214 236 / 0.55) 48.5% 50%, transparent 51.5% 100%);
+  background-size: 22px 110px;
+  opacity: 0.32;
+  animation: rain-fall 0.32s linear infinite;
+}
+.vn-stage[data-weather='snow'] .vn-stage__weather {
+  background-image: radial-gradient(circle, rgb(255 255 255 / 0.85) 0 1.6px, transparent 2.2px);
+  background-size: 46px 46px;
+  opacity: 0.4;
+  animation: snow-fall 4s linear infinite;
+}
+.vn-stage[data-weather='fog'] .vn-stage__weather {
+  background: linear-gradient(to top, rgb(210 214 220 / 0.38), rgb(210 214 220 / 0.05) 70%);
+}
+
+/* ── камера пресета показа ── */
+
+.vn-stage__cam {
+  transform-origin: 50% 50%;
+}
+.vn-stage__cam.camera-ken_burns {
+  animation: ken-burns 30s ease-in-out infinite alternate;
+}
+.vn-stage__cam.fx-zoom {
+  transform: scale(var(--fx-zoom, 1.12));
+  transition: transform var(--fx-ms, 1s) ease-out;
+}
+
+/* ── letterbox ── */
+
+.vn-stage__letterbox {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  background: #000;
+  transition: height 0.45s ease;
+  pointer-events: none;
+}
+.vn-stage__letterbox--top { top: 0; }
+.vn-stage__letterbox--bottom { bottom: 0; }
+.vn-stage.has-letterbox .vn-stage__letterbox { height: 10%; }
+
+.vn-stage__captions {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ── слои эффектов и переходов ── */
+
+.vn-stage__black,
+.vn-stage__flash,
+.vn-stage__tr,
+.vn-stage__hold {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.vn-stage__black,
+.vn-stage__hold { background: #000; }
+.vn-stage__flash { background: #fff; }
+.vn-stage__tr { background: var(--tr-color, #000); }
+
+.vn-stage__tr.tr-in { animation: tr-in var(--tr-ms, 240ms) ease-in forwards; }
+.vn-stage__tr.tr-out { animation: tr-out var(--tr-ms, 280ms) ease-out forwards; }
+.vn-stage__tr.tr-wipe-in { opacity: 1; animation: tr-wipe-in var(--tr-ms, 280ms) ease-in forwards; }
+.vn-stage__tr.tr-wipe-out { opacity: 1; animation: tr-wipe-out var(--tr-ms, 280ms) ease-out forwards; }
+
+.vn-stage__scene.tr-glitch { animation: glitch var(--tr-ms, 460ms) steps(1, end) 1; }
+.vn-stage__scene.fx-glitch { animation: glitch var(--fx-ms, 500ms) steps(1, end) 1; }
+.vn-stage__scene.fx-shake { animation: shake var(--fx-ms, 500ms) linear 1; }
+
+.vn-stage__noise {
+  position: absolute;
+  inset: -12%;
+  background-image: var(--noise);
+  background-size: 160px 160px;
+  opacity: 0;
+  pointer-events: none;
+  animation: noise-shift 0.14s steps(4) infinite;
+}
+.vn-stage__noise.is-on { opacity: 0.38; }
+.vn-stage__noise.is-strong { opacity: 0.95; background-color: rgb(30 30 34 / 0.85); }
+
+.vn-stage__band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -20%;
+  height: 18%;
+  background: linear-gradient(to bottom, transparent, rgb(255 255 255 / 0.25) 45%, rgb(0 0 0 / 0.45) 55%, transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+.vn-stage__band.is-on { opacity: 1; }
+.vn-stage__band.fx-sweep { animation: band-sweep var(--fx-ms, 900ms) linear 1; }
+.vn-stage__band.is-rewind.fx-sweep { animation-direction: reverse; }
+
+.vn-stage.fx-freeze .vn-stage__scene {
+  filter: grayscale(1) contrast(1.4) brightness(0.9);
+  animation-play-state: paused;
+}
+.vn-stage.fx-freeze .vn-stage__cam { animation-play-state: paused; }
+.vn-stage.fx-freeze::after {
+  content: '';
+  position: absolute;
+  inset: 5%;
+  border: 2px solid rgb(255 255 255 / 0.55);
+  pointer-events: none;
+  z-index: 3;
+}
+.vn-stage.fx-slowmo .vn-stage__scene { filter: blur(1.4px) saturate(0.85) brightness(1.06); }
+
+/* мини-игра поверх сцены: фон приглушается */
+.vn-stage.is-minigame .vn-stage__scene { filter: brightness(0.55) saturate(0.7) blur(1px); }
+.vn-stage.is-minigame .vn-stage__captions { display: none; }
+
+@keyframes tr-in { from { opacity: 0; } to { opacity: var(--tr-peak, 1); } }
+@keyframes tr-out { from { opacity: var(--tr-peak, 1); } to { opacity: 0; } }
+@keyframes tr-wipe-in { from { transform: translateX(-101%); } to { transform: translateX(0); } }
+@keyframes tr-wipe-out { from { transform: translateX(0); } to { transform: translateX(101%); } }
+@keyframes ken-burns {
+  from { transform: scale(1) translate(0, 0); }
+  to { transform: scale(1.09) translate(-1.2%, -0.8%); }
+}
+@keyframes vhs-jitter {
+  0%, 92% { transform: translate(0, 0); }
+  93% { transform: translate(-3px, 1px); }
+  95% { transform: translate(4px, -1px); }
+  97% { transform: translate(-2px, 0); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes grain-shift {
+  0% { background-position: 0 0; }
+  20% { background-position: -37px 21px; }
+  40% { background-position: 52px -64px; }
+  60% { background-position: -81px -12px; }
+  80% { background-position: 17px 78px; }
+  100% { background-position: 0 0; }
+}
+@keyframes noise-shift {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-6%, 4%); }
+  50% { transform: translate(5%, -7%); }
+  75% { transform: translate(-3%, -5%); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes glitch {
+  0% { transform: none; }
+  12% { transform: translate(-7px, 2px) skewX(3deg); filter: hue-rotate(60deg) saturate(2.2) contrast(1.4); }
+  24% { transform: translate(9px, -3px); filter: contrast(1.7) brightness(1.2); }
+  38% { transform: translate(-4px, 4px) skewX(-4deg); filter: hue-rotate(-50deg) saturate(1.8); }
+  52% { transform: translate(6px, 0); filter: invert(0.15) contrast(1.5); }
+  68% { transform: translate(-8px, -2px) skewX(2deg); filter: hue-rotate(120deg) saturate(2); }
+  84% { transform: translate(3px, 1px); filter: contrast(1.3); }
+  100% { transform: none; }
+}
+@keyframes shake {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(calc(var(--fx-amp, 8px) * -1), calc(var(--fx-amp, 8px) * 0.5)); }
+  25% { transform: translate(calc(var(--fx-amp, 8px) * 0.9), calc(var(--fx-amp, 8px) * -0.7)); }
+  40% { transform: translate(calc(var(--fx-amp, 8px) * -0.7), calc(var(--fx-amp, 8px) * -0.4)); }
+  55% { transform: translate(calc(var(--fx-amp, 8px) * 0.6), calc(var(--fx-amp, 8px) * 0.8)); }
+  70% { transform: translate(calc(var(--fx-amp, 8px) * -0.4), calc(var(--fx-amp, 8px) * 0.3)); }
+  85% { transform: translate(calc(var(--fx-amp, 8px) * 0.25), calc(var(--fx-amp, 8px) * -0.2)); }
+}
+@keyframes band-sweep {
+  from { transform: translateY(0); }
+  to { transform: translateY(640%); }
+}
+@keyframes rain-fall {
+  from { background-position: 0 0; }
+  to { background-position: -11px 110px; }
+}
+@keyframes snow-fall {
+  from { background-position: 0 0; }
+  to { background-position: 18px 46px; }
+}
+
+/* ───────────── Плейсхолдеры DOM-рендерера (резерв без WebGL) ───────────── */
+
+.ph-scene { position: absolute; inset: 0; overflow: hidden; }
+.ph-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35em;
+  padding-top: 11%;
+  text-align: center;
+  color: rgb(255 255 255 / 0.55);
+  font: 700 clamp(14px, 4.4vmin, 38px) / 1.2 var(--font-body, sans-serif);
+  text-shadow: 0 1px 3px #000;
+}
+.ph-bg::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 26%;
+  background: rgb(0 0 0 / 0.22);
+}
+.ph-tag { font-size: 0.45em; font-weight: 400; opacity: 0.7; }
+.ph-sprites { position: absolute; inset: 0; }
+.ph-sprite {
+  --x: 0.5;
+  position: absolute;
+  bottom: 0;
+  left: calc(var(--x) * 100%);
+  height: 82%;
+  aspect-ratio: 0.52;
+  max-width: 30%;
+  transform: translateX(-50%);
+  border: 2px solid rgb(255 255 255 / 0.35);
+  border-radius: 10px;
+  padding-top: 26%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2em;
+  text-align: center;
+  color: #fff;
+  font: 700 clamp(11px, 2.4vmin, 22px) / 1.15 var(--font-body, sans-serif);
+  text-shadow: 0 1px 3px #000;
+  opacity: 1;
+  transition: opacity 0.28s ease, filter 0.2s ease;
+}
+.ph-sprite[data-pos='left'] { --x: 0.22; }
+.ph-sprite[data-pos='center'] { --x: 0.5; }
+.ph-sprite[data-pos='right'] { --x: 0.78; }
+.ph-sprite[data-pos='offscreen_left'] { --x: -0.3; }
+.ph-sprite[data-pos='offscreen_right'] { --x: 1.3; }
+.ph-sprite .ph-name { font-weight: 700; }
+.ph-sprite .ph-expr { font-weight: 400; font-style: normal; font-size: 0.78em; color: #e6e0d2; }
+.ph-sprite.is-silhouette { background: #07070a !important; border-color: rgb(255 255 255 / 0.12); }
+.ph-sprite.is-entering,
+.ph-sprite.is-leaving { opacity: 0; }
+.ph-sprite.is-dim { filter: brightness(0.62); }
+.ph-cg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8%;
+  text-align: center;
+  color: #fff;
+  font: 700 clamp(14px, 4vmin, 34px) / 1.2 var(--font-body, sans-serif);
+  text-shadow: 0 1px 3px #000;
+}
+.ph-cg::before {
+  content: '';
+  position: absolute;
+  inset: 6% 4%;
+  border: 2px solid rgb(255 255 255 / 0.3);
+}
+.ph-cg.is-schematic { background: #0b0b0d !important; }
+.ph-cg[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .vn-stage__cam.camera-ken_burns,
+  .vn-stage__grain,
+  .vn-stage__noise,
+  .vn-stage.filter-vhs_heavy .vn-stage__scene { animation: none; }
+}

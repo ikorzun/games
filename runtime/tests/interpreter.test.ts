@@ -91,6 +91,56 @@ describe('линейное исполнение', () => {
   });
 });
 
+describe('условие when на любом шаге (schema: у каждого шага может быть when)', () => {
+  const ep = miniEpisode(
+    {
+      s1: {
+        steps: [
+          { do: 'set', effects: [{ var: 'n', op: 'add', value: 1 }], when: 'flag' },
+          { do: 'show', who: 'a', when: '!flag' },
+          { do: 'cg', cg: 'cg_a', when: 'flag' },
+          { do: 'caption', key: 'k.cap', style: 'location', when: 'flag' },
+          { do: 'fx', fx: 'flash', when: 'flag' },
+          { do: 'archive_unlock', item: 'arc_x', when: 'flag' },
+          { do: 'jump', scene: 's2', when: 'flag' },
+          { do: 'jump', scene: 's3' },
+        ],
+      },
+      s2: { steps: [{ do: 'end', ending: 'e_main' }] },
+      s3: { steps: [{ do: 'end', ending: 'e_alt' }] },
+    },
+    { variables: { n: INT, flag: BOOL } },
+  );
+
+  it('ложное условие пропускает шаг любого вида, в том числе terminal jump', () => {
+    const { interp } = make(ep);
+    const { events, pending } = interp.pump();
+    expect(interp.state.vars.n).toBe(0);
+    // cg, caption, fx, archive_unlock и первый jump пропущены; show (when: !flag) выполнен.
+    // Единственный archive — от ending e_alt (unlocks), а не от пропущенного archive_unlock.
+    expect(events.map((e) => e.t)).toEqual(['scene', 'checkpoint', 'show', 'scene', 'archive']);
+    expect(events.find((e) => e.t === 'archive')).toEqual({ t: 'archive', item: 'arc_x', toast: false });
+    expect(pending).toMatchObject({ kind: 'end', ending: { id: 'e_alt' } });
+    expect(interp.view.cg).toBeNull();
+  });
+
+  it('истинное условие выполняет шаги', () => {
+    const { interp } = make(ep);
+    interp.setVar('flag', true);
+    const first = interp.pump();
+    expect(first.events.map((e) => e.t)).toEqual(['scene', 'checkpoint', 'cg', 'caption']);
+    expect(interp.view.cg).toBe('cg_a');
+    expect(interp.view.sprites).toEqual([]); // show с when: !flag пропущен
+    expect(first.pending).toMatchObject({ kind: 'hold', reason: 'fx', fx: { fx: 'flash' } });
+    interp.continue();
+    const end = interp.pump();
+    expect(end.events.map((e) => e.t)).toEqual(['archive', 'scene']);
+    expect(end.events[0]).toEqual({ t: 'archive', item: 'arc_x', toast: true });
+    expect(end.pending).toMatchObject({ kind: 'end', ending: { id: 'e_main' } });
+    expect(interp.state.vars.n).toBe(1);
+  });
+});
+
 describe('переменные и эффекты', () => {
   const ep = miniEpisode(
     {
@@ -472,6 +522,38 @@ describe('сцена: спрайты, CG, звук', () => {
     interp.continue();
     interp.pump();
     expect(interp.view.sprites.map((s) => s.who)).toEqual(['b']);
+  });
+
+  it('say с position offscreen_*: запись остаётся в view.sprites, speaker выставлен, реплика показывается как обычно', () => {
+    // Голос за кадром (раненый герой звонит из больницы): рендерер такой спрайт не рисует,
+    // но имя говорящего и текст реплики интерфейс показывает обычным образом.
+    const ep = miniEpisode({
+      s1: {
+        steps: [
+          { do: 'show', who: 'a', expression: 'calm', position: 'left' },
+          { do: 'say', who: 'b', key: 'k.call', expression: 'hurt', position: 'offscreen_right' },
+          { do: 'say', who: 'b', key: 'k.call2', position: 'offscreen_left' },
+          { do: 'end', ending: 'e_main' },
+        ],
+      },
+    });
+    const { interp } = make(ep);
+    const first = until(interp, (p) => p.kind === 'line');
+    expect(first.pending).toMatchObject({ kind: 'line', style: 'say', who: 'b', key: 'k.call', expression: 'hurt' });
+    expect(interp.view.speaker).toBe('b');
+    expect(interp.view.sprites).toEqual([
+      { who: 'a', expression: 'calm', pose: null, position: 'left', silhouette: false },
+      { who: 'b', expression: 'hurt', pose: null, position: 'offscreen_right', silhouette: false },
+    ]);
+    expect(first.events.filter((e) => e.t === 'show')).toHaveLength(2);
+    expect(first.events.at(-1)).toEqual({ t: 'speaker', who: 'b' });
+    // Повторная реплика с другой offscreen-позицией обновляет запись, а не плодит новую.
+    interp.continue();
+    interp.pump();
+    expect(interp.view.sprites.filter((s) => s.who === 'b')).toEqual([
+      { who: 'b', expression: 'hurt', pose: null, position: 'offscreen_left', silhouette: false },
+    ]);
+    expect(interp.view.speaker).toBe('b');
   });
 
   it('смена сцены очищает спрайты; музыка переключается только если id другой', () => {

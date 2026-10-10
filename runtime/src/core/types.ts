@@ -147,7 +147,12 @@ export interface Effect {
   value?: Value;
 }
 
-export interface SayStep {
+/** У любого шага может быть условие `when`: ложное — шаг пропускается (schemas/episode.schema.json). */
+export interface StepBase {
+  when?: string;
+}
+
+export interface SayStep extends StepBase {
   do: 'say';
   who: string;
   key: string;
@@ -155,22 +160,20 @@ export interface SayStep {
   pose?: string;
   position?: Position;
   voice?: string;
-  when?: string;
 }
-export interface NarrateStep {
+export interface NarrateStep extends StepBase {
   do: 'narrate';
   key: string;
   style?: NarrateStyle;
   voice?: string;
-  when?: string;
 }
-export interface CaptionStep {
+export interface CaptionStep extends StepBase {
   do: 'caption';
   key: string;
   style: CaptionStyle;
   hold_ms?: number;
 }
-export interface ShowStep {
+export interface ShowStep extends StepBase {
   do: 'show';
   who: string;
   expression?: string;
@@ -179,38 +182,38 @@ export interface ShowStep {
   transition?: TransitionKind;
   silhouette?: boolean;
 }
-export interface HideStep {
+export interface HideStep extends StepBase {
   do: 'hide';
   who: string;
   transition?: TransitionKind;
 }
-export interface BgStep {
+export interface BgStep extends StepBase {
   do: 'bg';
   bg: string;
   filter?: string;
   transition?: TransitionKind;
 }
-export interface CgStep {
+export interface CgStep extends StepBase {
   do: 'cg';
   cg: string;
   transition?: TransitionKind;
   hide_after?: boolean;
 }
-export interface DocumentStep {
+export interface DocumentStep extends StepBase {
   do: 'document';
   doc: string;
   text_key?: string;
   zoomable?: boolean;
   adds_to_archive?: string;
 }
-export interface AudioStep {
+export interface AudioStep extends StepBase {
   do: 'music' | 'sfx' | 'ambient' | 'stop_music' | 'stop_ambient';
   id?: string;
   fade_ms?: number;
   loop?: boolean;
   volume?: number;
 }
-export interface FxStep {
+export interface FxStep extends StepBase {
   do: 'fx';
   fx: FxKind;
   ms?: number;
@@ -224,7 +227,7 @@ export interface ChoiceOption {
   effects?: Effect[];
   goto: string;
 }
-export interface ChoiceStep {
+export interface ChoiceStep extends StepBase {
   do: 'choice';
   id: string;
   prompt_key?: string;
@@ -234,31 +237,31 @@ export interface ChoiceStep {
   remember?: boolean;
   options: ChoiceOption[];
 }
-export interface SetStep {
+export interface SetStep extends StepBase {
   do: 'set';
   effects: Effect[];
 }
-export interface BranchStep {
+export interface BranchStep extends StepBase {
   do: 'branch';
   cases: Array<{ when: string; goto: string }>;
   default: string;
 }
-export interface JumpStep {
+export interface JumpStep extends StepBase {
   do: 'jump';
   scene: string;
   transition?: TransitionKind;
 }
-export interface MinigameStep {
+export interface MinigameStep extends StepBase {
   do: 'minigame';
   minigame: string;
   intro_key?: string;
 }
-export interface ArchiveStep {
+export interface ArchiveStep extends StepBase {
   do: 'archive_unlock';
   item: string;
   toast?: boolean;
 }
-export interface EndStep {
+export interface EndStep extends StepBase {
   do: 'end';
   ending: string;
 }

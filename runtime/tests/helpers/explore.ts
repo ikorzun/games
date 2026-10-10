@@ -96,6 +96,7 @@ export function exploreAll(episode: Episode, options: ExploreOptions = {}): Expl
           }
           for (const o of enabled) {
             interp.restore(snap);
+            interp.pump(); // повторно подняли то же ожидание выбора
             interp.choose(o.id);
             walk([...decisions, `${p.id}=${o.id}`], [...scenes], new Set(seen), pauses);
           }
@@ -106,6 +107,7 @@ export function exploreAll(episode: Episode, options: ExploreOptions = {}): Expl
           for (const r of results) {
             if (r === 'skipped' && !p.def.skip.allowed) continue;
             interp.restore(snap);
+            interp.pump(); // повторно подняли то же ожидание мини-игры
             interp.finishMinigame(r);
             walk([...decisions, `${p.def.id}:${r}`], [...scenes], new Set(seen), pauses);
           }

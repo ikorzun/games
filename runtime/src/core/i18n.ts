@@ -12,10 +12,15 @@ import type { Lang } from './types';
 
 export type Params = Readonly<Record<string, string | number>>;
 
-/** Поддерживаемый код языка из произвольной строки (`ru-RU`, `pt_BR`, …); всё остальное → `en`. */
-export function normalizeLang(raw: string | null | undefined): Lang {
+/** Поддерживаемый язык из произвольного кода (`ru-RU`, `pt_BR`, …) или null, если язык не поддержан. */
+export function parseSupportedLang(raw: string | null | undefined): Lang | null {
   const code = (raw ?? '').trim().toLowerCase().replace('_', '-').split('-')[0] ?? '';
-  return (LANGS as readonly string[]).includes(code) ? (code as Lang) : 'en';
+  return (LANGS as readonly string[]).includes(code) ? (code as Lang) : null;
+}
+
+/** Поддерживаемый код языка из произвольной строки; всё остальное → `en` (требование Playgama). */
+export function normalizeLang(raw: string | null | undefined): Lang {
+  return parseSupportedLang(raw) ?? 'en';
 }
 
 /** Цепочка подстановки для языка: сам язык, затем en, затем ru (без повторов). */
