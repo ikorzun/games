@@ -28,8 +28,21 @@ jobs:
     defaults:
       run:
         working-directory: runtime
+    outputs:
+      pages_enabled: ${{ steps.pages.outputs.enabled }}
     steps:
       - uses: actions/checkout@v4
+      - name: Is GitHub Pages enabled for this repository?
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/pages" >/dev/null 2>&1; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages не включён (Settings → Pages → Source: GitHub Actions) — шаг публикации пропущен"
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -43,10 +56,10 @@ jobs:
 
   deploy:
     needs: build
+    # Публикуем только когда Pages включён в настройках репозитория: иначе деплой падает по внешней
+    # причине (404 «Ensure GitHub Pages has been enabled») и красил бы PR.
+    if: needs.build.outputs.pages_enabled == 'true'
     runs-on: ubuntu-latest
-    # Пока Pages не включён в настройках репозитория (или план GitHub не даёт Pages приватному
-    # репозиторию), шаг деплоя падает по внешней причине и не должен красить PR.
-    continue-on-error: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
