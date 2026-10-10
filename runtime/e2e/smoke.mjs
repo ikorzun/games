@@ -264,8 +264,12 @@ async function scenarioCamera(browser, baseUrl) {
     samples.push((await cam()).transform);
     await sleep(170);
   }
-  const nums = (t) => (t.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
-  const frames = samples.map(nums);
+  // translate3d(0.29%, -0.47%, 0px) rotate(0.33deg) scale(1.0197) → [tx, ty, rot, scale]
+  const parse = (t) => {
+    const m = /translate3d\((-?[\d.]+)%,\s*(-?[\d.]+)%.*rotate\((-?[\d.]+)deg\)\s*scale\(([\d.]+)\)/.exec(t);
+    return m ? m.slice(1).map(Number) : [NaN, NaN, NaN, NaN];
+  };
+  const frames = samples.map(parse);
   check('кадр дышит: трансформ ручной камеры меняется со временем', new Set(samples).size >= 3, samples.slice(0, 3).join(' | '));
   // Устойчивая тряска ≤ 1,2 % / 0,5° / 1,03; поправки оператора на короткое время выходят за эти рамки — допуск шире.
   check('…и остаётся малым (сдвиг, поворот, масштаб в разумных пределах)', frames.every(([tx, ty, rot, sc]) => Math.abs(tx) < 5 && Math.abs(ty) < 5 && Math.abs(rot) < 2.6 && sc >= 1 && sc < 1.15), JSON.stringify(frames.slice(0, 2)));
@@ -280,12 +284,12 @@ async function scenarioCamera(browser, baseUrl) {
   });
   check('помехи и зерно рисуются на маленьком холсте (~256 пкс по ширине), а не во весь экран', !!fxCanvas && fxCanvas.w <= 320 && fxCanvas.h <= 360, JSON.stringify(fxCanvas));
 
-  // Помеха по требованию: класс появляется и гаснет сам за полсекунды.
+  // Помеха по требованию: класс появляется и гаснет сам (длительность 150–500 мс по часам камкордера;
+  // без GPU кадры редкие, а часы внутри не бегут быстрее 100 мс за кадр, поэтому ждём с запасом).
   await page.evaluate(() => window.__vn.camera('burst'));
-  await sleep(60);
-  const burstOn = /cam-burst/.test(await stageClass());
-  await sleep(900);
-  check('всплеск помех включается и сам заканчивается (150–500 мс)', burstOn && !/cam-burst/.test(await stageClass()));
+  const burstOn = await page.waitForFunction(() => document.querySelector('.vn-stage')?.classList.contains('cam-burst'), null, { polling: 'raf', timeout: 3000 }).then(() => true, () => false);
+  const burstOff = await page.waitForFunction(() => !document.querySelector('.vn-stage')?.classList.contains('cam-burst'), null, { polling: 100, timeout: 8000 }).then(() => true, () => false);
+  check('всплеск помех включается и сам заканчивается', burstOn && burstOff, `включился=${burstOn} закончился=${burstOff}`);
 
   // Выключатель.
   await page.evaluate(() => window.__vn.settings({ cameraFx: 'off' }));
@@ -314,10 +318,10 @@ async function scenarioCamera(browser, baseUrl) {
   // Не-реконструкция: HUD только в реконструкции.
   await page.evaluate(() => window.__vn.goto('s12'));
   await advanceUntil(page, (p) => p.kind === 'line' && p.style === 'say');
-  await sleep(500);
+  const procReady = await page.waitForFunction(() => window.__vn.view()?.presentation === 'procedural' && !window.__vn.camera().rec, null, { polling: 100, timeout: 8000 }).then(() => true, () => false);
   const proc = await cam();
   const procHud = await page.evaluate(() => getComputedStyle(document.querySelector('.vn-stage__hud')).display);
-  check('процедурная сцена: камера работает, но HUD записи скрыт', (await page.evaluate(() => window.__vn.view()?.presentation)) === 'procedural' && proc.effective === 'low' && !proc.rec && procHud === 'none', JSON.stringify(proc));
+  check('процедурная сцена: камера работает, но HUD записи скрыт', procReady && proc.effective === 'low' && proc.running && !proc.rec && procHud === 'none', JSON.stringify(proc));
 
   // Весь эпизод с работающей камерой: ни одной ошибки на всех пресетах показа.
   const report = await page.evaluate(() => window.__vn.autoplay('default'));
@@ -325,6 +329,7 @@ async function scenarioCamera(browser, baseUrl) {
   check('камкордер не породил ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
 
   // Ассеты: либо файлы на месте, либо плейсхолдеры и ровно одно предупреждение на отсутствующий файл.
+  await page.waitForFunction(() => window.__vn.assets().then((x) => x.pending === 0), null, { polling: 200, timeout: 10000 }).catch(() => undefined);
   const a = await page.evaluate(() => window.__vn.assets(true));
   const present = a.verify?.present ?? [];
   const missing = a.verify?.missing ?? [];
