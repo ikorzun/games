@@ -19,11 +19,18 @@
 import type { EngineEvent, PumpResult, TransitionKind, ViewState } from '../core/types';
 import type { IAudioSink, ICaptionSink, IStage, IToastSink } from './types';
 
+/** Порт предзагрузки ассетов: вход в блок ждёт картинки блока (но не дольше таймаута), следующие блоки греются в фоне. */
+export interface IBlockLoader {
+  enterBlock(blockId: string): Promise<void>;
+}
+
 export interface DirectorSinks {
   stage: IStage;
   audio: IAudioSink;
   captions: ICaptionSink;
   toasts: IToastSink;
+  /** Предзагрузка ассетов по блокам (без неё сцена просто показывает то, что успело загрузиться). */
+  loader?: IBlockLoader;
   /** checkpoint-события интерпретатора: границы блоков и решения. */
   checkpoint: (reason: 'block' | 'choice' | 'minigame') => void;
   /** Новый архивный материал открыт (для общего архива профиля), независимо от тоста. */
@@ -41,6 +48,8 @@ interface HeldScene {
   view: ViewState;
   transition: TransitionKind;
   deferred: EngineEvent[];
+  /** Подготовка ассетов нового блока, запущенная на время рекламы. */
+  prep: Promise<void>;
 }
 
 /** События, меняющие картинку: при удержании чёрного кадра промежуточные из них не нужны. */
@@ -82,11 +91,13 @@ export class Director {
         if (i < adScene && isVisual(ev)) continue;
         if (i === adScene && ev.t === 'scene') {
           this.sinks.captions.clear();
+          // Пока экран гаснет и идёт реклама, картинки нового блока грузятся.
+          const prep = this.prepare(ev.view.block);
           await this.sinks.stage.fadeToBlackAndHold(ev.transition, instant);
           if (opts.cancelled?.()) return;
           const rest = events.slice(i + 1);
           for (const r of rest) if (r.t === 'checkpoint') this.sinks.checkpoint(r.reason);
-          this.held = { view: ev.view, transition: ev.transition, deferred: rest.filter((r) => r.t !== 'checkpoint') };
+          this.held = { view: ev.view, transition: ev.transition, deferred: rest.filter((r) => r.t !== 'checkpoint'), prep };
           return;
         }
       }
@@ -100,6 +111,8 @@ export class Director {
     if (!held) return;
     this.held = null;
     const instant = opts.instant === true;
+    await held.prep;
+    if (opts.cancelled?.()) return;
     await this.sinks.stage.revealFromBlack(held.view, held.transition, instant);
     for (const ev of held.deferred) {
       if (opts.cancelled?.()) return;
@@ -112,9 +125,17 @@ export class Director {
     this.held = null;
     this.sinks.captions.clear();
     if (view) {
+      void this.prepare(view.block); // догрузка картинок блока; рендерер показывает их по мере готовности
       this.sinks.stage.setView(view);
       this.sinks.audio.sync(view.music, view.ambient);
     }
+  }
+
+  /** Подготовка блока (никогда не отклоняется: сбой загрузки — не повод ронять показ). */
+  private prepare(blockId: string): Promise<void> {
+    const loader = this.sinks.loader;
+    if (!loader) return Promise.resolve();
+    return loader.enterBlock(blockId).catch(() => undefined);
   }
 
   private async apply(ev: EngineEvent, instant: boolean): Promise<void> {
@@ -122,6 +143,7 @@ export class Director {
     switch (ev.t) {
       case 'scene':
         captions.clear();
+        if (ev.newBlock) await this.prepare(ev.view.block);
         await stage.changeScene(ev.view, ev.transition, instant);
         break;
       case 'caption':
