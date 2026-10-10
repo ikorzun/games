@@ -1,6 +1,7 @@
 /**
- * Рендерер плейсхолдеров сцены. Две реализации: PixiJS (основная, WebGL) и DOM
- * (резерв, если WebGL недоступен). Оболочка Stage (stage.ts) не зависит от того, чем рисуется кадр.
+ * Рендерер кадра сцены: настоящие картинки из ассетов эпизода, а при отсутствии файла — плейсхолдер.
+ * Две реализации: PixiJS (основная, WebGL) и DOM (резерв, если WebGL недоступен). Оболочка Stage
+ * (stage.ts) не зависит от того, чем рисуется кадр.
  */
 import type { ViolenceMode } from '../core/settings';
 import type { SpriteView, TransitionKind, ViewState } from '../core/types';
@@ -22,6 +23,15 @@ export interface ISceneRenderer {
   setMinigameActive?(active: boolean): void;
   destroy(): void;
 }
+
+/**
+ * Размер настоящих спрайтов: рост ≈ высота сцены (доля высоты кадра), но не шире этой доли ширины
+ * (на узком портретном кадре три персонажа не вылезают за края). Плейсхолдеры остаются меньше.
+ */
+export const SPRITE_FIT = 0.96;
+export const SPRITE_MAX_WIDTH = 0.46;
+/** Прозрачность силуэта, который рантайм делает из обычного кадра (brightness(0) + opacity). */
+export const SILHOUETTE_ALPHA = 0.85;
 
 /** Доли ширины сцены, на которых стоят центры спрайтов (для offscreen-позиций не используется). */
 export const POSITION_X: Readonly<Record<SpriteView['position'], number>> = {

@@ -1,59 +1,126 @@
 /**
- * DOM-рендерер плейсхолдеров: резерв на случай, если WebGL недоступен (старые WebView,
- * headless без GPU). Рисует то же самое, что Pixi-рендерер, обычными div'ами.
+ * DOM-рендерер кадра: резерв на случай, если WebGL недоступен (старые WebView, headless без GPU).
+ * Рисует то же самое, что Pixi-рендерер, обычными div и img: настоящие картинки из ассетов эпизода,
+ * а при отсутствии файла — плейсхолдер. Состояние слота (data-state): `loading` (картинка грузится:
+ * остаётся прежняя, у нового спрайта — пустота) → `image` или `placeholder` (файла нет).
  */
 import type { ViolenceMode } from '../core/settings';
 import type { SpriteView, TransitionKind, ViewState } from '../core/types';
 import { h } from '../ui/dom';
+import { NO_ASSETS } from './assets';
+import type { ImageChain, ImageHandle, SceneAssets } from './assets';
 import { hslToCss, placeholderHsl, placeholderLabel } from './placeholders';
-import { isOffscreen } from './renderer';
+import { isOffscreen, SPRITE_FIT, SPRITE_MAX_WIDTH } from './renderer';
 import type { ISceneRenderer } from './renderer';
+
+type State = 'none' | 'loading' | 'image' | 'placeholder';
+
+interface SpriteEntry {
+  view: SpriteView;
+  el: HTMLElement;
+  img: HTMLImageElement;
+  state: State;
+  derivedSilhouette: boolean;
+  natural: { w: number; h: number } | null;
+  token: number;
+}
 
 export class DomSceneRenderer implements ISceneRenderer {
   readonly kind = 'dom' as const;
 
   private root!: HTMLElement;
   private bgEl!: HTMLElement;
+  private bgImg!: HTMLImageElement;
   private bgLabel!: HTMLElement;
   private spritesEl!: HTMLElement;
   private cgEl!: HTMLElement;
+  private cgImg!: HTMLImageElement;
   private cgLabel!: HTMLElement;
-  private readonly nodes = new Map<string, HTMLElement>();
+  private readonly nodes = new Map<string, SpriteEntry>();
   private violence: ViolenceMode = 'full';
   private cgId: string | null = null;
   private speaker: string | null = null;
+  private bgToken = 0;
+  private cgToken = 0;
+  private observer: ResizeObserver | null = null;
+  private destroyed = false;
+
+  constructor(private readonly assets: SceneAssets = NO_ASSETS) {}
 
   async mount(host: HTMLElement): Promise<void> {
+    this.bgImg = h('img', { class: 'ph-img' });
+    this.bgImg.alt = '';
+    this.bgImg.draggable = false;
     this.bgLabel = h('span', { class: 'ph-label' });
-    this.bgEl = h('div', { class: 'ph-bg' }, this.bgLabel, h('span', { class: 'ph-tag', text: 'placeholder' }));
+    this.bgEl = h('div', { class: 'ph-bg', data: { state: 'none' } }, this.bgImg, this.bgLabel, h('span', { class: 'ph-tag', text: 'placeholder' }));
     this.spritesEl = h('div', { class: 'ph-sprites' });
+    this.cgImg = h('img', { class: 'ph-img' });
+    this.cgImg.alt = '';
+    this.cgImg.draggable = false;
     this.cgLabel = h('span', { class: 'ph-label' });
-    this.cgEl = h('div', { class: 'ph-cg', hidden: true }, this.cgLabel);
+    this.cgEl = h('div', { class: 'ph-cg', hidden: true, data: { state: 'none' } }, this.cgImg, this.cgLabel);
     this.root = h('div', { class: 'ph-scene' }, this.bgEl, this.spritesEl, this.cgEl);
     host.appendChild(this.root);
+    if (typeof ResizeObserver !== 'undefined') {
+      this.observer = new ResizeObserver(() => this.layoutSprites());
+      this.observer.observe(this.root);
+    }
   }
 
   setView(view: ViewState): void {
-    this.setBackground(view.bg);
-    for (const node of this.nodes.values()) node.remove();
+    for (const e of this.nodes.values()) e.el.remove();
     this.nodes.clear();
+    this.speaker = view.speaker;
+    this.setBackground(view.bg);
     for (const sp of view.sprites) this.showSprite(sp, false, 'cut');
     this.setCg(view.cg);
     this.setSpeaker(view.speaker);
   }
 
   setBackground(bg: string): void {
-    this.bgEl.style.background = hslToCss(placeholderHsl(bg, 'bg'));
     this.bgLabel.textContent = placeholderLabel(bg);
+    this.bgEl.style.setProperty('--ph-bg', hslToCss(placeholderHsl(bg, 'bg')));
+    this.bgToken += 1;
+    this.resolveSlot(this.bgEl, this.bgImg, this.assets.bgChain(bg), this.bgToken, () => this.bgToken);
   }
 
   setCg(cg: string | null): void {
     this.cgId = cg;
+    this.cgToken += 1;
     this.cgEl.hidden = cg === null;
-    if (cg === null) return;
-    this.cgEl.style.background = hslToCss(placeholderHsl(cg, 'cg'));
+    if (cg === null) {
+      this.cgEl.dataset.state = 'none';
+      return;
+    }
+    this.cgEl.style.setProperty('--ph-bg', hslToCss(placeholderHsl(cg, 'cg')));
     this.cgEl.classList.toggle('is-schematic', this.violence === 'schematic');
     this.cgLabel.textContent = `CG · ${placeholderLabel(cg)}${this.violence === 'schematic' ? ' · schematic' : ''}`;
+    this.resolveSlot(this.cgEl, this.cgImg, this.assets.cgChain(cg), this.cgToken, () => this.cgToken);
+  }
+
+  /** Фон / CG: готовая картинка, загрузка (пока прежняя) или плейсхолдер, если файла нет. */
+  private resolveSlot(el: HTMLElement, img: HTMLImageElement, chain: ImageChain | null, token: number, current: () => number): void {
+    const apply = (handle: ImageHandle | null): void => {
+      if (handle) {
+        img.src = handle.url;
+        el.dataset.state = 'image';
+      } else {
+        el.dataset.state = 'placeholder';
+      }
+    };
+    if (!chain) {
+      apply(null);
+      return;
+    }
+    const got = this.assets.peek(chain.urls);
+    if (got !== undefined) {
+      apply(got ? got.handle : null);
+      return;
+    }
+    void this.assets.load(chain.urls).then((res) => {
+      if (this.destroyed || current() !== token) return;
+      apply(res ? res.handle : null);
+    });
   }
 
   showSprite(sprite: SpriteView, existing: boolean, transition: TransitionKind): void {
@@ -62,17 +129,23 @@ export class DomSceneRenderer implements ISceneRenderer {
       this.hideSprite(sprite.who, 'cut');
       return;
     }
-    let node = this.nodes.get(sprite.who);
-    const created = !node;
-    if (!node) {
-      node = h('div', { class: 'ph-sprite' }, h('b', { class: 'ph-name' }), h('i', { class: 'ph-expr' }));
-      this.nodes.set(sprite.who, node);
-      this.spritesEl.appendChild(node);
+    let entry = this.nodes.get(sprite.who);
+    const created = !entry;
+    if (!entry) {
+      const img = h('img', { class: 'ph-img' });
+      img.alt = '';
+      img.draggable = false;
+      const el = h('div', { class: 'ph-sprite', data: { state: 'none' } }, img, h('b', { class: 'ph-name' }), h('i', { class: 'ph-expr' }));
+      entry = { view: sprite, el, img, state: 'none', derivedSilhouette: false, natural: null, token: 0 };
+      this.nodes.set(sprite.who, entry);
+      this.spritesEl.appendChild(el);
     }
+    const node = entry.el;
+    entry.view = sprite;
     node.dataset.pos = sprite.position;
     node.dataset.who = sprite.who;
     node.classList.toggle('is-silhouette', sprite.silhouette);
-    node.style.background = sprite.silhouette ? '' : hslToCss(placeholderHsl(sprite.who, 'sprite'));
+    node.style.setProperty('--ph-bg', sprite.silhouette ? '#07070a' : hslToCss(placeholderHsl(sprite.who, 'sprite')));
     const name = node.querySelector('.ph-name');
     const expr = node.querySelector('.ph-expr');
     if (name) name.textContent = sprite.silhouette ? '?' : placeholderLabel(sprite.who);
@@ -80,14 +153,81 @@ export class DomSceneRenderer implements ISceneRenderer {
     node.classList.toggle('is-dim', this.dimmed(sprite.who));
     if (created && !existing && transition !== 'cut') {
       node.classList.add('is-entering');
-      requestAnimationFrame(() => requestAnimationFrame(() => node?.classList.remove('is-entering')));
+      requestAnimationFrame(() => requestAnimationFrame(() => node.classList.remove('is-entering')));
     }
+    this.resolveSprite(entry);
+  }
+
+  private resolveSprite(entry: SpriteEntry): void {
+    entry.token += 1;
+    const token = entry.token;
+    const chain = this.assets.spriteChain(entry.view);
+    const apply = (res: { handle: ImageHandle; index: number } | null): void => {
+      if (res) {
+        entry.img.src = res.handle.url;
+        entry.natural = { w: res.handle.width, h: res.handle.height };
+        entry.derivedSilhouette = (chain?.silhouetteFirst ?? false) && res.index > 0;
+        entry.state = 'image';
+      } else {
+        entry.natural = null;
+        entry.derivedSilhouette = false;
+        entry.state = 'placeholder';
+      }
+      this.paintSprite(entry);
+    };
+    if (!chain) {
+      apply(null);
+      return;
+    }
+    const got = this.assets.peek(chain.urls);
+    if (got !== undefined) {
+      apply(got);
+      return;
+    }
+    if (entry.state === 'none') {
+      entry.state = 'loading';
+      this.paintSprite(entry);
+    }
+    void this.assets.load(chain.urls).then((res) => {
+      if (this.destroyed || entry.token !== token) return;
+      apply(res);
+    });
+  }
+
+  private paintSprite(entry: SpriteEntry): void {
+    const { el } = entry;
+    el.dataset.state = entry.state;
+    el.classList.toggle('has-image', entry.state === 'image');
+    el.classList.toggle('is-derived-silhouette', entry.derivedSilhouette);
+    this.layoutSprite(entry);
+  }
+
+  /** Размер настоящего спрайта: рост ≈ высота сцены, но не шире SPRITE_MAX_WIDTH ширины. */
+  private layoutSprite(entry: SpriteEntry): void {
+    const { el, natural } = entry;
+    if (entry.state !== 'image' || !natural || !this.root) {
+      el.style.removeProperty('width');
+      el.style.removeProperty('height');
+      return;
+    }
+    const W = this.root.clientWidth;
+    const H = this.root.clientHeight;
+    if (W <= 0 || H <= 0) return;
+    const s = Math.min((H * SPRITE_FIT) / natural.h, (W * SPRITE_MAX_WIDTH) / natural.w);
+    el.style.width = `${(natural.w * s).toFixed(1)}px`;
+    el.style.height = `${(natural.h * s).toFixed(1)}px`;
+  }
+
+  private layoutSprites(): void {
+    for (const e of this.nodes.values()) this.layoutSprite(e);
   }
 
   hideSprite(who: string, transition: TransitionKind): void {
-    const node = this.nodes.get(who);
-    if (!node) return;
+    const entry = this.nodes.get(who);
+    if (!entry) return;
     this.nodes.delete(who);
+    entry.token += 1;
+    const node = entry.el;
     if (transition === 'cut') {
       node.remove();
       return;
@@ -98,7 +238,7 @@ export class DomSceneRenderer implements ISceneRenderer {
 
   setSpeaker(who: string | null): void {
     this.speaker = who;
-    for (const [id, node] of this.nodes) node.classList.toggle('is-dim', this.dimmed(id));
+    for (const [id, entry] of this.nodes) entry.el.classList.toggle('is-dim', this.dimmed(id));
   }
 
   /** Затемняем остальных, только если говорящий сам стоит на сцене. */
@@ -112,6 +252,8 @@ export class DomSceneRenderer implements ISceneRenderer {
   }
 
   destroy(): void {
+    this.destroyed = true;
+    this.observer?.disconnect();
     this.root.remove();
     this.nodes.clear();
   }

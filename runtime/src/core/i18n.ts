@@ -41,8 +41,6 @@ type Listener = (lang: Lang) => void;
 
 export class I18n {
   private readonly bundles = new Map<Lang, Map<string, string>>();
-  /** Встроенные строки рантайма (src/core/ui_builtin.ts): слой НИЖЕ файлов локалей, не влияет на hasLang(). */
-  private readonly defaults = new Map<Lang, Map<string, string>>();
   private readonly listeners = new Set<Listener>();
   private current: Lang = 'en';
   private pseudo = false;
@@ -59,21 +57,6 @@ export class I18n {
     if (!bundle) {
       bundle = new Map();
       this.bundles.set(lang, bundle);
-    }
-    for (const [k, v] of Object.entries(strings)) {
-      if (typeof v === 'string') bundle.set(k, v);
-    }
-  }
-
-  /**
-   * Добавить встроенные строки языка. Они подставляются, только если ключа нет (или он пуст)
-   * в загруженных файлах локали того же языка: правка в locales/<lang>/ui.json всегда главнее.
-   */
-  addDefaults(lang: Lang, strings: Readonly<Record<string, unknown>>): void {
-    let bundle = this.defaults.get(lang);
-    if (!bundle) {
-      bundle = new Map();
-      this.defaults.set(lang, bundle);
     }
     for (const [k, v] of Object.entries(strings)) {
       if (typeof v === 'string') bundle.set(k, v);
@@ -109,9 +92,7 @@ export class I18n {
   /** Перевод строго на заданный язык, без фолбэка; undefined — если пусто/нет. */
   raw(lang: Lang, key: string): string | undefined {
     const v = this.bundles.get(lang)?.get(key);
-    if (v !== undefined && v.trim() !== '') return v;
-    const d = this.defaults.get(lang)?.get(key);
-    return d !== undefined && d.trim() !== '' ? d : undefined;
+    return v !== undefined && v.trim() !== '' ? v : undefined;
   }
 
   has(key: string): boolean {
