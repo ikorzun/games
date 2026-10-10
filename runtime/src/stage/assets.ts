@@ -427,8 +427,8 @@ export class AssetStore {
     this.pinned.add(url);
   }
 
-  stats(): { loaded: string[]; missing: string[]; pending: number } {
-    return { loaded: [...this.images.keys()], missing: [...this.missing], pending: this.inflight.size };
+  stats(): { loaded: string[]; missing: string[]; pending: number; inflight: string[] } {
+    return { loaded: [...this.images.keys()], missing: [...this.missing], pending: this.inflight.size, inflight: [...this.inflight.keys()] };
   }
 
   private bump(url: string, prio: LoadPriority): void {

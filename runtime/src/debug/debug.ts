@@ -48,7 +48,7 @@ export interface VnDebugApi {
    * Ассеты: что загружено, чего нет (по запросам игры). С `true` — ещё и проверка всех файлов из
    * episode.assets HEAD-запросами: { present, missing } (для QA после загрузки графики и звука).
    */
-  assets(verify?: boolean): Promise<{ loaded: string[]; missing: string[]; pending: number; verify?: { present: string[]; missing: string[] } }>;
+  assets(verify?: boolean): Promise<{ loaded: string[]; missing: string[]; pending: number; inflight: string[]; verify?: { present: string[]; missing: string[] } }>;
   /**
    * Камкордер: уровень эффектов, идёт ли цикл, последний кадр дрожания, HUD записи.
    * `camera('burst' | 'glitch' | 'reframe' | 'angle')` — вызвать помеху / разрыв кадра / поправку сейчас (QA).
@@ -116,7 +116,7 @@ export function installDebug(app: App): VnDebugApi {
     renderer: () => app.stage.renderer.kind,
     assets: async (verify) => {
       const a = app.assets;
-      if (!a) return { loaded: [], missing: [], pending: 0 };
+      if (!a) return { loaded: [], missing: [], pending: 0, inflight: [] };
       const stats = a.store.stats();
       return verify ? { ...stats, verify: await a.verify() } : stats;
     },

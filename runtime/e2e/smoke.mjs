@@ -10,6 +10,7 @@
  *   npm run smoke:matrix                            # + проверка раскладки, скриншоты в e2e/out/
  *
  * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en,es,pt (для матрицы), --no-shots,
+ * --only play,camera,bridge,matrix (часть сценариев),
  * --require-assets (все файлы из episode.assets обязаны быть на месте; без флага отсутствующие файлы допустимы:
  * игра показывает плейсхолдеры и пишет по одному предупреждению на файл).
  *
@@ -41,6 +42,9 @@ const remoteUrl = opt('url', null);
 const wantMatrix = flag('matrix');
 const wantShots = !flag('no-shots');
 const requireAssets = flag('require-assets');
+/** --only play,camera,bridge,matrix — запустить часть сценариев (для разработки). */
+const only = opt('only', null)?.split(',').map((x) => x.trim());
+const wants = (name) => !only || only.includes(name);
 const matrixLangs = opt('langs', 'ru,en').split(',').map((s) => s.trim()).filter(Boolean);
 
 // ───────────────────────────── результаты ─────────────────────────────
@@ -335,7 +339,7 @@ async function scenarioCamera(browser, baseUrl) {
   const missing = a.verify?.missing ?? [];
   const withFiles = present.length > 0;
   console.log(`  (ассеты: на месте ${present.length}, нет ${missing.length} из ${present.length + missing.length}; загружено игрой ${a.loaded.length}; режим: ${withFiles ? 'с файлами' : 'без файлов — плейсхолдеры'})`);
-  check('загрузка ассетов завершена: очередь пуста', a.pending === 0);
+  check('загрузка ассетов завершена: очередь пуста', a.pending === 0, `в работе ${a.pending}: ${(a.inflight ?? []).join(', ')}`);
   const warned = log.warnings.filter((w) => /^\[assets\] нет файла/.test(w));
   check('каждый отсутствующий файл упомянут в консоли один раз (без шквала предупреждений)', new Set(warned).size === warned.length, warned.slice(0, 3).join(' | '));
   if (withFiles) {
@@ -516,10 +520,10 @@ const server = await startServer();
 const browser = await launchBrowser();
 try {
   console.log(`Смоук-тест: ${server.url}${remoteUrl ? '' : ` (сборка ${distDir})`}`);
-  await scenarioPlay(browser, server.url);
-  await scenarioCamera(browser, server.url);
-  await scenarioBridgeSdk(browser, server.url);
-  if (wantMatrix) await scenarioMatrix(browser, server.url);
+  if (wants('play')) await scenarioPlay(browser, server.url);
+  if (wants('camera')) await scenarioCamera(browser, server.url);
+  if (wants('bridge')) await scenarioBridgeSdk(browser, server.url);
+  if (wantMatrix && wants('matrix')) await scenarioMatrix(browser, server.url);
 } catch (e) {
   failures.push(`исключение: ${e.message}`);
   console.error(e);
