@@ -75,3 +75,110 @@
 Итого 14 кредитов + 0,25 за тест. Следующий шаг после утверждения: конвертация в webp q80 1920×1080
 по путям из `assets.backgrounds` эпизода; отклонённые — перегенерация 2 вариантами (при необходимости
 quality `high`, 2,75 кредита). Дальше: 5 CG (16:9) и 9 персонажей (базовый кадр + выражения).
+
+## Спрайты, CG, документы, UI и звук — 2026-10-10
+
+Все записи — в `assets/ep01/manifest.json` (id → URL → целевой путь); скачивание и конвертация —
+`python3 tools/fetch_assets.py assets/ep01/manifest.json` (нужен доступ к CDN Higgsfield). Лимит
+одновременных задач: 4 у gpt_image_2_5, ~10 у mirelo. Расход на этот раздел ≈ 34 + 5 + 5 + 2 кредита
+за картинки и ≈ 19 + 28 + 6 за звук.
+
+### Спрайты персонажей (gpt_image_2_5, 9:16, medium/2k, фон transparent; выражения — правка базового кадра по image_references)
+
+| id | Job id | Цель |
+|---|---|---|
+| `sledak.neutral` | `9ee77775-ae3e-45cb-b7e1-c24aa2de6b1b` | `assets/common/sprites/sledak/neutral.webp` |
+| `sledak.tense` | `6575432e-466f-43d6-bb68-3c7b4b12144d` | `assets/common/sprites/sledak/tense.webp` |
+| `sledak.tired` | `a2b66838-5372-4757-a4af-f36f93a7870a` | `assets/common/sprites/sledak/tired.webp` |
+| `sledak.firm` | `a8ad8c4d-91fd-4817-a958-06e5a25cf540` | `assets/common/sprites/sledak/firm.webp` |
+| `oper.neutral` | `f5871734-18ef-4863-a39b-abae54d7c081` | `assets/common/sprites/oper/neutral.webp` |
+| `oper.grin` | `af63d5cc-8317-4ac8-a540-d1c82acf45d1` | `assets/common/sprites/oper/grin.webp` |
+| `oper.angry` | `75865562-e3a0-48ab-8552-dd0bd4095668` | `assets/common/sprites/oper/angry.webp` |
+| `oper.hurt` | `d5d48f85-d87f-4972-90a4-209ba3d44766` | `assets/common/sprites/oper/hurt.webp` |
+| `expert.neutral` | `70344d43-c9e6-4f53-bcd3-32be05baf7a1` | `assets/common/sprites/expert/neutral.webp` |
+| `expert.focused` | `8179a272-e445-4459-8412-3e7dcfc5f980` | `assets/common/sprites/expert/focused.webp` |
+| `murashov.neutral` | `3caada8f-17f1-4158-9434-e4bb4c4d654d` | `assets/ep01/sprites/murashov/neutral.webp` |
+| `murashov.smile` | `2b19a2d8-0573-4c3e-9c5d-0dc81007955a` | `assets/ep01/sprites/murashov/smile.webp` |
+| `murashov.cold` | `8690f145-fd2f-4278-bc25-6078a76120ad` | `assets/ep01/sprites/murashov/cold.webp` |
+| `murashov.cornered` | `4cf6d470-3f69-45a0-9848-291fc491235d` | `assets/ep01/sprites/murashov/cornered.webp` |
+| `notary.neutral` | `79c2cf4c-e15a-4ab7-bf64-ea1998cb548a` | `assets/ep01/sprites/notary/neutral.webp` |
+| `notary.nervous` | `4d275ebd-6630-4e8b-b926-183d77afe42c` | `assets/ep01/sprites/notary/nervous.webp` |
+| `zoya.neutral` | `74ee59a5-9561-419f-a37d-ab982d222627` | `assets/ep01/sprites/zoya/neutral.webp` |
+| `zoya.warm` | `51cccea6-f083-462d-8024-077bdaa5bec3` | `assets/ep01/sprites/zoya/warm.webp` |
+| `zoya.worried` | `990a06d2-4e93-4d83-9527-1d4c130d736c` | `assets/ep01/sprites/zoya/worried.webp` |
+| `neighbor.neutral` | `4e81409a-6fdd-4ddd-ad89-13f12180a2fa` | `assets/ep01/sprites/neighbor/neutral.webp` |
+| `neighbor.worried` | `35e5af48-46d0-4fc5-8ca8-987ee7cd5225` | `assets/ep01/sprites/neighbor/worried.webp` |
+| `buyer.neutral` | `acbabd68-c3b3-44b7-9642-fb4fdd9cc0d4` | `assets/ep01/sprites/buyer/neutral.webp` |
+| `buyer.scared` | `acb645d4-ede7-4cdf-aab1-a816f38fe088` | `assets/ep01/sprites/buyer/scared.webp` |
+| `boss.neutral` | `0f4648bc-9246-4dc2-b8a6-db2f0062426b` | `assets/common/sprites/boss/neutral.webp` |
+| `boss.stern` | `915c7547-ab1b-4419-b7a6-5f6d16406e9f` | `assets/common/sprites/boss/stern.webp` |
+| `boss.tired` | `3a3e867b-7fc0-4bd8-9920-67376ab1628e` | `assets/common/sprites/boss/tired.webp` |
+| `accomplice.neutral` | `a6676966-33b1-4161-8643-941c3c8c1e22` | `assets/ep01/sprites/accomplice/neutral.webp` |
+| `accomplice.scared` | `0c1937fc-e66b-435f-a4c5-e0df8048f511` | `assets/ep01/sprites/accomplice/scared.webp` |
+| `lapin_wife.neutral` | `eb27408e-7adc-469f-8eda-3c193619ad34` | `assets/ep01/sprites/lapin_wife/neutral.webp` |
+| `lapin_wife.worried` | `baa32b8f-bb17-4896-83a6-b7c874b8aa35` | `assets/ep01/sprites/lapin_wife/worried.webp` |
+| `lapin_wife.angry` | `7f9367ba-31f0-447e-9196-1238bea4e6a1` | `assets/ep01/sprites/lapin_wife/angry.webp` |
+| `clerk.neutral` | `67fb3438-5c9a-4e1d-833d-6583937e4f01` | `assets/ep01/sprites/clerk/neutral.webp` |
+| `sledak_old.neutral` | `15414c9f-f023-441f-939c-f473f0caa0ca` | `assets/common/sprites/sledak_old/neutral.webp` |
+| `sledak_old.sad` | `206ec7b3-ca2a-41e1-b744-7bea38140882` | `assets/common/sprites/sledak_old/sad.webp` |
+
+### CG (gpt_image_2_5, 16:9, medium/2k)
+
+| id | Job id | Цель |
+|---|---|---|
+| `cg_door_sealed` | `dbe95fc1-7cc1-4974-ba62-e8cfb18b0629` | `assets/ep01/cg/door_sealed.webp` |
+| `cg_zoya_last` | `308a34ff-d076-4fec-8a4f-9d837cf1e558` | `assets/ep01/cg/zoya_last.webp` |
+| `cg_arrest_night` | `a5fa6d2e-3c03-4d66-9e45-b55ea5f9c3aa` | `assets/ep01/cg/arrest_night.webp` |
+| `cg_keys` | `4d01c322-7665-4259-94fe-cb200d591ecd` | `assets/ep01/cg/keys.webp` |
+| `cg_verdict` | `3e736ba0-bfcb-4824-8ae8-6790e6fe59f5` | `assets/ep01/cg/verdict.webp` |
+
+### Документы без текста (gpt_image_2_5, 3:4, medium/2k)
+
+| id | Job id | Цель |
+|---|---|---|
+| `doc_power_of_attorney` | `906f888a-4b9d-4ff6-ac75-787a858cc3de` | `assets/ep01/docs/power_of_attorney.webp` |
+| `doc_contract_sale` | `f1e1fce2-b6c8-4bea-8f0f-5c8239e684af` | `assets/ep01/docs/contract_sale.webp` |
+| `doc_bti_card` | `c6f0b8f7-e165-4d15-bd3d-2ed4e2aaa21a` | `assets/ep01/docs/bti_card.webp` |
+| `doc_newspaper_1994` | `c1feebff-972c-4076-b1cd-afd95b43a6ac` | `assets/ep01/docs/newspaper_1994.webp` |
+| `doc_registration` | `91028193-2a73-4806-96ab-225385df3be6` | `assets/ep01/docs/registration.webp` |
+
+### UI (gpt_image_2_5, 16:9)
+
+| id | Job id | Цель |
+|---|---|---|
+| `ui_title_plate` | `ab4dc524-e015-4a36-b254-3e748f1a5467` | `assets/common/ui/title_plate.webp` |
+| `ui_menu_video_salon` | `d66c596c-3f3c-4ff8-aa89-485eeed3cfa2` | `assets/common/ui/menu_video_salon.webp` |
+
+### Музыка (sonilo_music, 60 с, 3,75 кредита за луп, формат m4a)
+
+| id | Job id | Цель |
+|---|---|---|
+| `m_theme_main` | `0c7cde77-3cfa-44f0-8942-912aead82c29` | `assets/common/music/theme_main.m4a` |
+| `m_chronicle` | `a6600862-4be5-47fc-a8ca-82bdd99c66ad` | `assets/common/music/chronicle.m4a` |
+| `m_investigation` | `2f3fa7ae-a88a-40e1-b3cb-218eeb63f4c6` | `assets/common/music/investigation.m4a` |
+| `m_tension` | `0e637e2f-4a73-4580-94e7-e48b90406c4c` | `assets/common/music/tension.m4a` |
+| `m_epilogue` | `455878da-bbb0-4c0c-91ef-d94996e2acf3` | `assets/common/music/epilogue.m4a` |
+
+### Эмбиент (mirelo_text_to_audio, 16 с, 4 кредита, mp3)
+
+| id | Job id | Цель |
+|---|---|---|
+| `amb_yard` | `21631c82-220b-4b60-9b27-d6705f7e74fb` | `assets/common/amb/yard_summer.mp3` |
+| `amb_office` | `e4f4049c-0f87-44cd-8b52-4f2f5b66be57` | `assets/common/amb/office_typewriter.mp3` |
+| `amb_street_day` | `0c6b8854-ec77-406f-b7d5-4eb3324d4ea8` | `assets/common/amb/street_day_car.mp3` |
+| `amb_stairwell` | `9b739f39-8679-4fa4-bb90-9a3dfe64f39a` | `assets/common/amb/stairwell.mp3` |
+| `amb_archive` | `7f94f4b7-5d4e-450c-b4b9-0f8fbca8fa93` | `assets/common/amb/archive_fluorescent.mp3` |
+| `amb_street_night` | `f8610442-844b-4f05-86c1-591c46832c41` | `assets/common/amb/street_rain_night.mp3` |
+
+### SFX (mirelo_text_to_audio, 2–6 с, mp3)
+
+| id | Job id | Цель |
+|---|---|---|
+| `sfx_door` | `243c4baf-3ae5-4733-bc68-43fff79496d9` | `assets/common/sfx/door_apartment.mp3` |
+| `sfx_shot` | `1b4bb050-c468-4d0e-8509-d61589fe73ad` | `assets/common/sfx/shot_distant.mp3` |
+| `sfx_phone` | `54e8df4f-253e-4fa7-9803-803b8f096545` | `assets/common/sfx/phone_dial.mp3` |
+| `sfx_typewriter` | `51a06895-99d0-4079-aa14-35347eb1a3d7` | `assets/common/sfx/typewriter.mp3` |
+| `sfx_rain` | `f340ebb8-46dc-459d-859f-c61fa0bf385e` | `assets/common/sfx/rain_window.mp3` |
+| `sfx_vhs` | `62dbf6dd-9b81-4bb3-992c-7707b23f41e0` | `assets/common/sfx/vhs_glitch.mp3` |
+| `sfx_phone_ring` | `bd5c886d-f2e7-46eb-9d23-d5a8874347c6` | `assets/common/sfx/phone_ring.mp3` |
+

@@ -7594,27 +7594,27 @@
     "music": [
       {
         "id": "m_theme_main",
-        "path": "assets/common/music/theme_main.mp3",
+        "path": "assets/common/music/theme_main.m4a",
         "license": "original"
       },
       {
         "id": "m_chronicle",
-        "path": "assets/common/music/chronicle.mp3",
+        "path": "assets/common/music/chronicle.m4a",
         "license": "original"
       },
       {
         "id": "m_investigation",
-        "path": "assets/common/music/investigation.mp3",
+        "path": "assets/common/music/investigation.m4a",
         "license": "original"
       },
       {
         "id": "m_tension",
-        "path": "assets/common/music/tension.mp3",
+        "path": "assets/common/music/tension.m4a",
         "license": "original"
       },
       {
         "id": "m_epilogue",
-        "path": "assets/common/music/epilogue.mp3",
+        "path": "assets/common/music/epilogue.m4a",
         "license": "original"
       }
     ],
