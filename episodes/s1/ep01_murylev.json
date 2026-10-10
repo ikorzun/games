@@ -4666,7 +4666,7 @@
       },
       "music": "m_tension",
       "ambient": "amb_street_night",
-      "notes": "bg_street_night — улица у конторы Ковригина; для маршрута accomplice (двор Шмелёва) отдельного фона нет. Вступление и первая реплика Сайко — по route; при route == 'none' (отладочный вход) остаются только общие реплики.",
+      "notes": "bg_street_night — улица у конторы Ковригина; для маршрута accomplice (двор Шмелёва) отдельного фона нет. Вступление и первая реплика Сайко — по route; при route == 'none' (отладочный вход) остаются только общие реплики. Обращение Сайко («Андрей» / «Громов») — по trust_oper >= 2, как в s33.",
       "steps": [
         {
           "do": "caption",
@@ -4745,18 +4745,20 @@
           "do": "say",
           "who": "oper",
           "key": "ep01.s34.l010",
-          "expression": "grin"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s34.l011",
-          "style": "inner"
+          "expression": "grin",
+          "when": "trust_oper >= 2"
         },
         {
           "do": "say",
           "who": "oper",
+          "key": "ep01.s34.l011",
+          "expression": "grin",
+          "when": "trust_oper < 2"
+        },
+        {
+          "do": "narrate",
           "key": "ep01.s34.l012",
-          "expression": "neutral"
+          "style": "inner"
         },
         {
           "do": "say",
@@ -4771,38 +4773,64 @@
           "expression": "neutral"
         },
         {
-          "do": "narrate",
-          "key": "ep01.s34.l015",
-          "style": "inner"
-        },
-        {
           "do": "say",
           "who": "oper",
-          "key": "ep01.s34.l016",
+          "key": "ep01.s34.l015",
           "expression": "grin"
         },
         {
           "do": "say",
           "who": "sledak",
+          "key": "ep01.s34.l016",
+          "expression": "tense"
+        },
+        {
+          "do": "say",
+          "who": "oper",
           "key": "ep01.s34.l017",
+          "expression": "neutral"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s34.l018",
+          "style": "inner"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s34.l019",
+          "expression": "grin"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s34.l020",
           "expression": "neutral"
         },
         {
           "do": "say",
           "who": "oper",
-          "key": "ep01.s34.l018",
+          "key": "ep01.s34.l021",
           "expression": "grin"
         },
         {
           "do": "narrate",
-          "key": "ep01.s34.l019",
+          "key": "ep01.s34.l022",
           "style": "voiceover"
         },
         {
           "do": "say",
           "who": "oper",
-          "key": "ep01.s34.l020",
-          "expression": "angry"
+          "key": "ep01.s34.l023",
+          "expression": "angry",
+          "when": "trust_oper >= 2"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s34.l024",
+          "expression": "angry",
+          "when": "trust_oper < 2"
         },
         {
           "do": "jump",
@@ -4863,7 +4891,15 @@
           "do": "say",
           "who": "oper",
           "key": "ep01.s35.l005",
-          "expression": "angry"
+          "expression": "angry",
+          "when": "trust_oper >= 2"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s35.l006",
+          "expression": "angry",
+          "when": "trust_oper < 2"
         },
         {
           "do": "choice",
@@ -4922,11 +4958,6 @@
         {
           "do": "narrate",
           "key": "ep01.s36.l001",
-          "style": "voiceover"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s36.l002",
           "style": "voiceover"
         },
         {
@@ -4998,9 +5029,10 @@
           "expression": "hurt"
         },
         {
-          "do": "narrate",
+          "do": "say",
+          "who": "sledak",
           "key": "ep01.s36a.l004",
-          "style": "voiceover"
+          "expression": "firm"
         },
         {
           "do": "say",
@@ -5011,16 +5043,32 @@
         {
           "do": "narrate",
           "key": "ep01.s36a.l006",
-          "style": "inner"
+          "style": "voiceover"
         },
         {
-          "do": "narrate",
+          "do": "say",
+          "who": "oper",
           "key": "ep01.s36a.l007",
-          "style": "voiceover"
+          "expression": "hurt"
+        },
+        {
+          "do": "fx",
+          "fx": "zoom_in",
+          "ms": 700
         },
         {
           "do": "narrate",
           "key": "ep01.s36a.l008",
+          "style": "inner"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s36a.l009",
+          "style": "voiceover"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s36a.l010",
           "style": "voiceover"
         },
         {
@@ -5087,18 +5135,26 @@
           "do": "say",
           "who": "oper",
           "key": "ep01.s36b.l003",
-          "expression": "grin"
+          "expression": "grin",
+          "when": "trust_oper >= 2"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s36b.l004",
+          "expression": "grin",
+          "when": "trust_oper < 2"
         },
         {
           "do": "say",
           "who": "sledak",
-          "key": "ep01.s36b.l004",
+          "key": "ep01.s36b.l005",
           "expression": "firm"
         },
         {
           "do": "say",
           "who": "accomplice",
-          "key": "ep01.s36b.l005",
+          "key": "ep01.s36b.l006",
           "expression": "scared"
         },
         {
@@ -5107,13 +5163,38 @@
         },
         {
           "do": "narrate",
-          "key": "ep01.s36b.l006",
+          "key": "ep01.s36b.l007",
           "style": "voiceover"
         },
         {
           "do": "narrate",
-          "key": "ep01.s36b.l007",
+          "key": "ep01.s36b.l008",
           "style": "inner"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s36b.l009",
+          "expression": "neutral",
+          "when": "trust_oper >= 2"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s36b.l010",
+          "expression": "neutral",
+          "when": "trust_oper < 2"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s36b.l011",
+          "style": "inner"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s36b.l012",
+          "expression": "grin"
         },
         {
           "do": "set",
@@ -5147,7 +5228,7 @@
         "letterbox": true
       },
       "music": "m_tension",
-      "notes": "ТРЕБУЕТ РЕШЕНИЯ: cg_keys и archive_unlock arc_keys для варианта «ключи» не поставлены — cg/archive_unlock в схеме не имеют `when` (рантайм `when` на любом шаге поддерживает), а у опций choice нет полей cg/archive. Сейчас итог поиска передан условной репликой в начале s38 (keys_found). Варианты: (1) разрешить `when` у всех шагов и вставить в начало s38 cg cg_keys + archive_unlock arc_keys с when: keys_found; (2) добавить в b11 сцену результата обыска.",
+      "notes": "Итог выбора c_search показывается в начале s38: при keys_found там идут cg cg_keys и archive_unlock arc_keys (choice — терминальный шаг сцены).",
       "steps": [
         {
           "do": "stop_ambient",
@@ -5200,15 +5281,15 @@
         },
         {
           "do": "say",
-          "who": "sledak",
+          "who": "expert",
           "key": "ep01.s37.l007",
-          "expression": "neutral"
+          "expression": "focused"
         },
         {
           "do": "say",
-          "who": "expert",
+          "who": "sledak",
           "key": "ep01.s37.l008",
-          "expression": "focused"
+          "expression": "neutral"
         },
         {
           "do": "narrate",
@@ -5222,15 +5303,33 @@
           "expression": "focused"
         },
         {
-          "do": "say",
-          "who": "sledak",
+          "do": "narrate",
           "key": "ep01.s37.l011",
-          "expression": "tense"
+          "style": "inner"
         },
         {
           "do": "say",
           "who": "expert",
           "key": "ep01.s37.l012",
+          "expression": "focused"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s37.l013",
+          "expression": "neutral",
+          "when": "accomplice_talks"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s37.l014",
+          "expression": "tense"
+        },
+        {
+          "do": "say",
+          "who": "expert",
+          "key": "ep01.s37.l015",
           "expression": "focused"
         },
         {
@@ -5273,25 +5372,23 @@
         "filter": "noir"
       },
       "music": "m_tension",
-      "notes": "Сайко в кадре только при !oper_wounded (say с position). При keys_found — CG ключей с бирками и архивная запись arc_keys; CG уходит после первой реплики.",
+      "notes": "Начало сцены — итог обыска из s37: при keys_found CG ключей с бирками и архивная запись arc_keys (CG уходит после первой реплики). Сайко в кадре только при !oper_wounded (show и реплики с when). Звонок — дежурный сообщает, что нотариус доставлен (в обеих ветках).",
       "steps": [
-        {
-          "do": "narrate",
-          "key": "ep01.s38.l001",
-          "style": "voiceover",
-          "when": "keys_found"
-        },
         {
           "do": "cg",
           "cg": "cg_keys",
           "transition": "fade",
-          "hide_after": true,
           "when": "keys_found"
         },
         {
           "do": "archive_unlock",
           "item": "arc_keys",
-          "toast": true,
+          "when": "keys_found"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s38.l001",
+          "style": "voiceover",
           "when": "keys_found"
         },
         {
@@ -5313,6 +5410,13 @@
           "position": "center"
         },
         {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "right",
+          "when": "!oper_wounded"
+        },
+        {
           "do": "say",
           "who": "murashov",
           "key": "ep01.s38.l003",
@@ -5328,7 +5432,6 @@
           "who": "oper",
           "key": "ep01.s38.l005",
           "expression": "angry",
-          "position": "right",
           "when": "!oper_wounded"
         },
         {
@@ -5339,15 +5442,15 @@
         },
         {
           "do": "say",
-          "who": "sledak",
+          "who": "murashov",
           "key": "ep01.s38.l007",
           "expression": "neutral"
         },
         {
           "do": "say",
-          "who": "murashov",
+          "who": "sledak",
           "key": "ep01.s38.l008",
-          "expression": "neutral"
+          "expression": "tense"
         },
         {
           "do": "say",
@@ -5361,10 +5464,6 @@
           "style": "inner"
         },
         {
-          "do": "sfx",
-          "id": "sfx_phone_ring"
-        },
-        {
           "do": "say",
           "who": "sledak",
           "key": "ep01.s38.l011",
@@ -5374,6 +5473,64 @@
           "do": "say",
           "who": "murashov",
           "key": "ep01.s38.l012",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "murashov",
+          "key": "ep01.s38.l013",
+          "expression": "neutral"
+        },
+        {
+          "do": "fx",
+          "fx": "zoom_in",
+          "ms": 800
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s38.l014",
+          "style": "inner"
+        },
+        {
+          "do": "say",
+          "who": "murashov",
+          "key": "ep01.s38.l015",
+          "expression": "cold",
+          "when": "route == 'murashov'"
+        },
+        {
+          "do": "say",
+          "who": "murashov",
+          "key": "ep01.s38.l016",
+          "expression": "cold",
+          "when": "route == 'accomplice'"
+        },
+        {
+          "do": "say",
+          "who": "murashov",
+          "key": "ep01.s38.l017",
+          "expression": "cold",
+          "when": "route == 'notary'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s38.l018",
+          "style": "inner"
+        },
+        {
+          "do": "sfx",
+          "id": "sfx_phone_ring"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s38.l019",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "murashov",
+          "key": "ep01.s38.l020",
           "expression": "neutral"
         },
         {
@@ -5441,8 +5598,37 @@
           "expression": "neutral"
         },
         {
-          "do": "narrate",
+          "do": "say",
+          "who": "sledak",
           "key": "ep01.s39.l007",
+          "expression": "firm"
+        },
+        {
+          "do": "say",
+          "who": "murashov",
+          "key": "ep01.s39.l008",
+          "expression": "smile"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s39.l009",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "murashov",
+          "key": "ep01.s39.l010",
+          "expression": "neutral"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s39.l011",
+          "style": "inner"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s39.l012",
           "style": "inner"
         },
         {
@@ -5477,6 +5663,14 @@
           "transition": "cut"
         },
         {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "right",
+          "transition": "cut",
+          "when": "!oper_wounded"
+        },
+        {
           "do": "say",
           "who": "sledak",
           "key": "ep01.s40.l001",
@@ -5497,22 +5691,23 @@
         },
         {
           "do": "say",
-          "who": "sledak",
+          "who": "oper",
           "key": "ep01.s40.l004",
-          "expression": "firm",
-          "when": "confession == 'full'"
+          "expression": "angry",
+          "when": "trust_oper >= 2 && confession == 'full' && !oper_wounded"
         },
         {
           "do": "say",
-          "who": "murashov",
+          "who": "oper",
           "key": "ep01.s40.l005",
-          "expression": "neutral",
-          "when": "confession == 'full'"
+          "expression": "angry",
+          "when": "trust_oper < 2 && confession == 'full' && !oper_wounded"
         },
         {
-          "do": "narrate",
+          "do": "say",
+          "who": "sledak",
           "key": "ep01.s40.l006",
-          "style": "inner",
+          "expression": "firm",
           "when": "confession == 'full'"
         },
         {
@@ -5520,20 +5715,19 @@
           "who": "murashov",
           "key": "ep01.s40.l007",
           "expression": "neutral",
-          "when": "confession == 'partial'"
+          "when": "confession == 'full'"
         },
         {
           "do": "narrate",
           "key": "ep01.s40.l008",
           "style": "inner",
-          "when": "confession == 'partial'"
+          "when": "confession == 'full'"
         },
         {
-          "do": "say",
-          "who": "sledak",
+          "do": "narrate",
           "key": "ep01.s40.l009",
-          "expression": "firm",
-          "when": "confession == 'partial'"
+          "style": "inner",
+          "when": "confession == 'full'"
         },
         {
           "do": "say",
@@ -5550,29 +5744,68 @@
         },
         {
           "do": "say",
-          "who": "murashov",
+          "who": "sledak",
           "key": "ep01.s40.l012",
+          "expression": "firm",
+          "when": "confession == 'partial'"
+        },
+        {
+          "do": "say",
+          "who": "murashov",
+          "key": "ep01.s40.l013",
+          "expression": "neutral",
+          "when": "confession == 'partial'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s40.l014",
+          "style": "inner",
+          "when": "confession == 'partial'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s40.l015",
+          "style": "inner",
+          "when": "confession == 'partial'"
+        },
+        {
+          "do": "say",
+          "who": "murashov",
+          "key": "ep01.s40.l016",
           "expression": "cold",
           "when": "confession == 'none'"
         },
         {
           "do": "narrate",
-          "key": "ep01.s40.l013",
+          "key": "ep01.s40.l017",
           "style": "inner",
           "when": "confession == 'none'"
         },
         {
           "do": "say",
+          "who": "oper",
+          "key": "ep01.s40.l018",
+          "expression": "neutral",
+          "when": "confession == 'none' && !oper_wounded"
+        },
+        {
+          "do": "say",
           "who": "sledak",
-          "key": "ep01.s40.l014",
+          "key": "ep01.s40.l019",
           "expression": "firm",
           "when": "confession == 'none'"
         },
         {
           "do": "say",
           "who": "murashov",
-          "key": "ep01.s40.l015",
+          "key": "ep01.s40.l020",
           "expression": "cold",
+          "when": "confession == 'none'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s40.l021",
+          "style": "inner",
           "when": "confession == 'none'"
         },
         {
@@ -5595,6 +5828,7 @@
         "filter": "noir"
       },
       "music": "m_tension",
+      "notes": "Очная ставка использует добытые улики: docs_flaw (зачёркнутая цифра в дате), found_photo (очки остались дома — Зоя Павловна не прочла доверенность; см. s09), kovrigin_broken.",
       "steps": [
         {
           "do": "show",
@@ -5629,75 +5863,139 @@
           "when": "!kovrigin_broken"
         },
         {
+          "do": "fx",
+          "fx": "zoom_in",
+          "ms": 900
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s41.l003",
+          "style": "inner",
+          "when": "!oper_wounded"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s41.l004",
+          "style": "inner",
+          "when": "oper_wounded"
+        },
+        {
           "do": "say",
           "who": "sledak",
-          "key": "ep01.s41.l003",
+          "key": "ep01.s41.l005",
           "expression": "firm"
         },
         {
           "do": "say",
           "who": "notary",
-          "key": "ep01.s41.l004",
+          "key": "ep01.s41.l006",
           "expression": "nervous",
           "when": "kovrigin_broken"
         },
         {
           "do": "say",
           "who": "murashov",
-          "key": "ep01.s41.l005",
-          "expression": "cold",
+          "key": "ep01.s41.l007",
+          "expression": "neutral",
           "when": "kovrigin_broken"
         },
         {
           "do": "say",
           "who": "sledak",
-          "key": "ep01.s41.l006",
-          "expression": "firm",
-          "when": "kovrigin_broken"
-        },
-        {
-          "do": "say",
-          "who": "notary",
-          "key": "ep01.s41.l007",
-          "expression": "nervous",
-          "when": "kovrigin_broken"
-        },
-        {
-          "do": "narrate",
           "key": "ep01.s41.l008",
-          "style": "inner",
-          "when": "kovrigin_broken"
+          "expression": "tense",
+          "when": "kovrigin_broken && docs_flaw"
         },
         {
           "do": "say",
           "who": "notary",
           "key": "ep01.s41.l009",
           "expression": "nervous",
-          "when": "!kovrigin_broken"
+          "when": "kovrigin_broken && docs_flaw"
+        },
+        {
+          "do": "fx",
+          "fx": "zoom_in",
+          "ms": 900,
+          "when": "found_photo"
         },
         {
           "do": "say",
           "who": "sledak",
           "key": "ep01.s41.l010",
-          "expression": "firm",
-          "when": "!kovrigin_broken"
+          "expression": "tense",
+          "when": "kovrigin_broken && found_photo"
         },
         {
           "do": "say",
           "who": "notary",
           "key": "ep01.s41.l011",
           "expression": "nervous",
-          "when": "!kovrigin_broken"
+          "when": "kovrigin_broken && found_photo"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s41.l012",
+          "expression": "neutral",
+          "when": "kovrigin_broken"
         },
         {
           "do": "narrate",
-          "key": "ep01.s41.l012",
+          "key": "ep01.s41.l013",
+          "style": "inner",
+          "when": "kovrigin_broken"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s41.l014",
+          "expression": "nervous",
+          "when": "!kovrigin_broken"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s41.l015",
+          "expression": "tense",
+          "when": "!kovrigin_broken"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s41.l016",
+          "expression": "nervous",
+          "when": "!kovrigin_broken"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s41.l017",
+          "expression": "tense",
+          "when": "!kovrigin_broken && found_photo"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s41.l018",
+          "expression": "neutral",
+          "when": "!kovrigin_broken && found_photo"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s41.l019",
+          "style": "inner",
+          "when": "!kovrigin_broken && found_photo"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s41.l020",
           "style": "inner",
           "when": "!kovrigin_broken"
         },
         {
           "do": "narrate",
-          "key": "ep01.s41.l013",
+          "key": "ep01.s41.l021",
           "style": "inner"
         },
         {
@@ -5744,13 +6042,20 @@
       },
       "music": "m_investigation",
       "ambient": "amb_office",
-      "notes": "Сайко: !oper_wounded — в кадре справа (say с position right); oper_wounded — голос за кадром (offscreen_right), 'телефон из больницы'. Реплики-дубли используют один ключ, ветки разведены по when. sfx_phone звучит в обеих ветках (звонок жены / звонок из больницы).",
+      "notes": "Сайко: !oper_wounded — в кадре справа (show с when); oper_wounded — голос за кадром (offscreen_right), 'телефон из больницы'. Реплики-дубли используют один ключ, ветки разведены по when. Звонок (sfx_phone_ring) звучит в обеих ветках: жена / больница.",
       "steps": [
         {
           "do": "show",
           "who": "sledak",
           "expression": "tired",
           "position": "left"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "right",
+          "when": "!oper_wounded"
         },
         {
           "do": "narrate",
@@ -5766,7 +6071,6 @@
           "who": "oper",
           "key": "ep01.s42.l002",
           "expression": "grin",
-          "position": "right",
           "when": "!oper_wounded"
         },
         {
@@ -5774,7 +6078,6 @@
           "who": "oper",
           "key": "ep01.s42.l003",
           "expression": "neutral",
-          "position": "right",
           "when": "!oper_wounded"
         },
         {
@@ -5801,7 +6104,6 @@
           "who": "oper",
           "key": "ep01.s42.l007",
           "expression": "neutral",
-          "position": "right",
           "when": "!oper_wounded"
         },
         {
@@ -5815,15 +6117,14 @@
           "do": "say",
           "who": "sledak",
           "key": "ep01.s42.l008",
-          "expression": "tired",
+          "expression": "tense",
           "when": "confession == 'full'"
         },
         {
           "do": "say",
           "who": "oper",
           "key": "ep01.s42.l009",
-          "expression": "neutral",
-          "position": "right",
+          "expression": "angry",
           "when": "!oper_wounded && confession == 'full'"
         },
         {
@@ -5838,7 +6139,6 @@
           "who": "oper",
           "key": "ep01.s42.l010",
           "expression": "grin",
-          "position": "right",
           "when": "!oper_wounded"
         },
         {
@@ -5852,128 +6152,209 @@
           "do": "say",
           "who": "sledak",
           "key": "ep01.s42.l012",
+          "expression": "firm",
+          "when": "wrong_suspect"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s42.l013",
+          "expression": "neutral",
+          "when": "!oper_wounded && wrong_suspect"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s42.l013",
+          "position": "offscreen_right",
+          "when": "oper_wounded && wrong_suspect"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s42.l014",
+          "expression": "firm",
+          "when": "notary_pressed"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s42.l015",
+          "expression": "neutral",
+          "when": "!oper_wounded && notary_pressed"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s42.l015",
+          "position": "offscreen_right",
+          "when": "oper_wounded && notary_pressed"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s42.l016",
           "expression": "tired",
           "when": "found_photo"
         },
         {
           "do": "say",
           "who": "oper",
-          "key": "ep01.s42.l013",
+          "key": "ep01.s42.l017",
           "expression": "neutral",
-          "position": "right",
           "when": "!oper_wounded && found_photo"
         },
         {
           "do": "say",
           "who": "oper",
-          "key": "ep01.s42.l013",
+          "key": "ep01.s42.l017",
           "position": "offscreen_right",
           "when": "oper_wounded && found_photo"
         },
         {
           "do": "say",
           "who": "sledak",
-          "key": "ep01.s42.l014",
-          "expression": "tired"
+          "key": "ep01.s42.l018",
+          "expression": "neutral"
         },
         {
           "do": "say",
           "who": "oper",
-          "key": "ep01.s42.l015",
-          "expression": "neutral",
-          "position": "right",
+          "key": "ep01.s42.l019",
+          "expression": "angry",
           "when": "!oper_wounded"
         },
         {
           "do": "say",
           "who": "oper",
-          "key": "ep01.s42.l015",
+          "key": "ep01.s42.l019",
           "position": "offscreen_right",
           "when": "oper_wounded"
         },
         {
           "do": "say",
           "who": "sledak",
-          "key": "ep01.s42.l016",
+          "key": "ep01.s42.l020",
+          "expression": "firm"
+        },
+        {
+          "do": "fx",
+          "fx": "zoom_in",
+          "ms": 900
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s42.l021",
+          "expression": "tired"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s42.l022",
+          "expression": "grin",
+          "when": "!oper_wounded"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s42.l022",
+          "position": "offscreen_right",
+          "when": "oper_wounded"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s42.l023",
           "expression": "neutral"
         },
         {
           "do": "say",
           "who": "oper",
-          "key": "ep01.s42.l017",
+          "key": "ep01.s42.l024",
           "expression": "grin",
-          "position": "right",
+          "when": "!oper_wounded"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s42.l024",
+          "position": "offscreen_right",
+          "when": "oper_wounded"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s42.l025",
+          "expression": "grin",
           "when": "!oper_wounded && trust_oper >= 2"
         },
         {
           "do": "say",
           "who": "oper",
-          "key": "ep01.s42.l017",
+          "key": "ep01.s42.l025",
           "position": "offscreen_right",
           "when": "oper_wounded && trust_oper >= 2"
         },
         {
           "do": "say",
           "who": "sledak",
-          "key": "ep01.s42.l018",
+          "key": "ep01.s42.l026",
           "expression": "neutral",
           "when": "trust_oper >= 2"
         },
         {
           "do": "say",
           "who": "oper",
-          "key": "ep01.s42.l019",
+          "key": "ep01.s42.l027",
           "expression": "neutral",
-          "position": "right",
           "when": "!oper_wounded && trust_oper >= 2"
         },
         {
           "do": "say",
           "who": "oper",
-          "key": "ep01.s42.l019",
+          "key": "ep01.s42.l027",
           "position": "offscreen_right",
           "when": "oper_wounded && trust_oper >= 2"
         },
         {
           "do": "say",
           "who": "oper",
-          "key": "ep01.s42.l020",
+          "key": "ep01.s42.l028",
           "expression": "neutral",
-          "position": "right",
           "when": "!oper_wounded && trust_oper < 2"
         },
         {
           "do": "say",
           "who": "oper",
-          "key": "ep01.s42.l020",
+          "key": "ep01.s42.l028",
           "position": "offscreen_right",
           "when": "oper_wounded && trust_oper < 2"
         },
         {
           "do": "say",
           "who": "sledak",
-          "key": "ep01.s42.l021",
+          "key": "ep01.s42.l029",
           "expression": "firm",
           "when": "trust_oper < 2"
         },
         {
           "do": "say",
           "who": "oper",
-          "key": "ep01.s42.l022",
+          "key": "ep01.s42.l030",
           "expression": "neutral",
-          "position": "right",
           "when": "!oper_wounded && trust_oper < 2"
         },
         {
           "do": "say",
           "who": "oper",
-          "key": "ep01.s42.l022",
+          "key": "ep01.s42.l030",
           "position": "offscreen_right",
           "when": "oper_wounded && trust_oper < 2"
         },
         {
           "do": "narrate",
-          "key": "ep01.s42.l023",
+          "key": "ep01.s42.l031",
           "style": "inner"
         },
         {
@@ -6003,12 +6384,6 @@
           "style": "location"
         },
         {
-          "do": "cg",
-          "cg": "cg_verdict",
-          "transition": "fade",
-          "hide_after": false
-        },
-        {
           "do": "narrate",
           "key": "ep01.s43.l001",
           "style": "voiceover"
@@ -6016,6 +6391,29 @@
         {
           "do": "narrate",
           "key": "ep01.s43.l002",
+          "style": "voiceover",
+          "when": "docs_flaw"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s43.l003",
+          "style": "voiceover",
+          "when": "keys_found"
+        },
+        {
+          "do": "cg",
+          "cg": "cg_verdict",
+          "transition": "fade",
+          "hide_after": false
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s43.l004",
+          "style": "voiceover"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s43.l005",
           "style": "voiceover"
         },
         {
@@ -6026,7 +6424,7 @@
         },
         {
           "do": "narrate",
-          "key": "ep01.s43.l003",
+          "key": "ep01.s43.l006",
           "style": "voiceover"
         },
         {
@@ -6054,17 +6452,23 @@
           "do": "narrate",
           "key": "ep01.s44.l002",
           "style": "voiceover",
-          "when": "confession == 'none'"
+          "when": "accomplice_talks"
         },
         {
           "do": "narrate",
           "key": "ep01.s44.l003",
           "style": "voiceover",
-          "when": "confession == 'partial'"
+          "when": "confession == 'none'"
         },
         {
           "do": "narrate",
           "key": "ep01.s44.l004",
+          "style": "voiceover",
+          "when": "confession == 'partial'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s44.l005",
           "style": "voiceover",
           "when": "confession == 'full'"
         },
@@ -6076,7 +6480,17 @@
         },
         {
           "do": "narrate",
-          "key": "ep01.s44.l005",
+          "key": "ep01.s44.l006",
+          "style": "voiceover"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s44.l007",
+          "style": "voiceover"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s44.l008",
           "style": "voiceover"
         },
         {
@@ -6169,6 +6583,35 @@
           "key": "ep01.s46.l004",
           "style": "voiceover",
           "when": "!galina_trust"
+        },
+        {
+          "do": "caption",
+          "key": "ep01.s46.cap",
+          "style": "date_stamp"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s46.l005",
+          "style": "voiceover",
+          "when": "boss_favor == 0 && gromov_rep < 1"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s46.l006",
+          "style": "voiceover",
+          "when": "boss_favor >= 1"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s46.l007",
+          "style": "voiceover",
+          "when": "boss_favor <= -1"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s46.l008",
+          "style": "voiceover",
+          "when": "gromov_rep >= 1"
         },
         {
           "do": "jump",
@@ -6311,6 +6754,11 @@
           "style": "voiceover"
         },
         {
+          "do": "narrate",
+          "key": "ep01.s49.l005",
+          "style": "voiceover"
+        },
+        {
           "do": "fx",
           "fx": "black_hold",
           "ms": 1500
@@ -6329,7 +6777,6 @@
         "filter": "archive_photo"
       },
       "music": "m_epilogue",
-      "notes": "document.adds_to_archive и archive_unlock дублируют друг друга (рантайм дедуплицирует); один из двух можно убрать.",
       "steps": [
         {
           "do": "narrate",
@@ -6346,7 +6793,7 @@
           "do": "narrate",
           "key": "ep01.s50.l003",
           "style": "voiceover",
-          "when": "!oper_wounded && buyer_detained"
+          "when": "buyer_detained"
         },
         {
           "do": "narrate",
@@ -6384,7 +6831,7 @@
         "filter": "archive_photo"
       },
       "music": "m_epilogue",
-      "notes": "Последняя реплика — по правилу 7 (приговор + дата + одна строка последствий).",
+      "notes": "Последняя реплика — по правилу 7 (приговор + дата + одна строка последствий). Перечень шести — из s31.",
       "steps": [
         {
           "do": "narrate",
