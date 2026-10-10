@@ -1,0 +1,230 @@
+/*
+ * Общая оболочка мини-игр следствия (mg_shell.ts): заголовок, строка прогресса, таймер, итог и кнопки.
+ * Тёмный «документальный» стиль под текстовое окно игры; цвета и шрифты берутся из переменных
+ * ui/styles.css (запасные значения — на случай, если стили игры не загружены).
+ * Стили самих игр — crime_scene_search.css, document_check.css, database_search.css.
+ */
+
+.mg-shell {
+  --mg-ink: var(--c-text, #ecebe6);
+  --mg-muted: var(--c-muted, #a8a398);
+  --mg-line: var(--c-line, rgb(255 255 255 / 0.16));
+  --mg-accent: var(--c-accent, #c9362f);
+  --mg-gold: var(--c-accent-soft, #e8d9b5);
+  --mg-ok: #7fb577;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.85rem 0.95rem 0;
+  color: var(--mg-ink);
+  background: rgb(19 19 22 / 0.97);
+  border: 1px solid var(--mg-line);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.6);
+  font: 400 1em / 1.35 var(--font-body, system-ui, sans-serif);
+  text-align: left;
+}
+.mg-shell [hidden] {
+  display: none !important;
+}
+.mg-shell.is-paused {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* ───────────── Заголовок ───────────── */
+
+.mg-shell__head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.mg-shell__title {
+  margin: 0;
+  font: 700 1.5em / 1.1 var(--font-title, 'Arial Narrow', system-ui, sans-serif);
+  letter-spacing: 0.01em;
+}
+.mg-shell__intro {
+  margin: 0;
+  padding-left: 0.65rem;
+  color: #e2ddd0;
+  font-style: italic;
+  border-left: 3px solid var(--mg-gold);
+}
+.mg-shell__brief {
+  margin: 0;
+  color: var(--mg-muted);
+  font-size: 0.9em;
+}
+@media (max-width: 599px) {
+  /* Узкий экран: бриф — две строки, тап раскрывает целиком. */
+  .mg-shell__brief {
+    cursor: pointer;
+  }
+  .mg-shell__brief:not(.is-open) {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+}
+
+/* ───────────── Строка состояния ───────────── */
+
+.mg-shell__hud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  font: 0.82em / 1.2 var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  color: var(--mg-gold);
+}
+.mg-shell__fails {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--mg-muted);
+}
+.mg-shell__pips {
+  display: inline-flex;
+  gap: 3px;
+}
+.mg-shell__pip {
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--mg-muted);
+  border-radius: 2px;
+}
+.mg-shell__pip.is-used {
+  background: var(--mg-accent);
+  border-color: var(--mg-accent);
+}
+.mg-shell__timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  color: var(--mg-ink);
+}
+.mg-shell__timer-track {
+  width: 4.5rem;
+  height: 5px;
+  overflow: hidden;
+  background: rgb(255 255 255 / 0.12);
+  border-radius: 3px;
+}
+.mg-shell__timer-bar {
+  display: block;
+  height: 100%;
+  background: var(--mg-gold);
+}
+.mg-shell__timer.is-low .mg-shell__timer-bar {
+  background: var(--mg-accent);
+}
+.mg-shell__timer.is-low .mg-shell__timer-text {
+  color: #ff9a92;
+}
+
+.mg-shell__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mg-shell__status {
+  min-height: 1.35em;
+  margin: 0;
+  color: var(--mg-gold);
+  font-size: 0.92em;
+}
+
+/* ───────────── Кнопки и итог ───────────── */
+
+.mg-shell__foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  margin: 0 -0.95rem;
+  padding: 0.55rem 0.95rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(rgb(19 19 22 / 0), rgb(19 19 22 / 0.97) 0.8rem);
+  border-radius: 0 0 14px 14px;
+}
+.mg-shell__actions,
+.mg-shell__result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mg-shell .mg-shell__btn {
+  flex: 1 1 9rem;
+  min-height: 48px;
+  padding: 0.5rem 1rem;
+  color: var(--mg-ink);
+  font: inherit;
+  background: #1c1c21;
+  border: 1px solid var(--mg-line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.mg-shell .mg-shell__btn:hover:not(:disabled) {
+  border-color: var(--mg-gold);
+}
+.mg-shell .mg-shell__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.mg-shell .mg-shell__btn.is-hint {
+  border-color: var(--mg-gold);
+}
+.mg-shell .mg-shell__btn.is-skip {
+  border-style: dashed;
+}
+.mg-shell .mg-shell__btn.is-primary {
+  color: #fff;
+  font-weight: 700;
+  background: var(--mg-accent);
+  border-color: var(--mg-accent);
+}
+.mg-shell__result {
+  justify-content: space-between;
+  padding: 0.55rem 0.7rem;
+  background: rgb(255 255 255 / 0.05);
+  border: 1px solid var(--mg-line);
+  border-left: 4px solid var(--mg-gold);
+  border-radius: 10px;
+}
+.mg-shell__result[data-outcome='success'] {
+  border-left-color: var(--mg-ok);
+}
+.mg-shell__result[data-outcome='fail'] {
+  border-left-color: var(--mg-accent);
+}
+.mg-shell__result-text {
+  display: flex;
+  flex: 1 1 10rem;
+  flex-direction: column;
+  min-width: 0;
+}
+.mg-shell__result-title {
+  font: 700 1.15em var(--font-title, 'Arial Narrow', system-ui, sans-serif);
+}
+.mg-shell__result-note {
+  color: var(--mg-muted);
+  font-size: 0.88em;
+}
+.mg-shell__result .mg-shell__btn {
+  flex: 0 1 auto;
+  min-width: 7rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mg-shell *,
+  .mg-shell *::before,
+  .mg-shell *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

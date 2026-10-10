@@ -18,18 +18,27 @@ export interface PresentationPreset {
   camera: CameraMode;
   /** Боковая панель «папка дела» (procedural) — пока не реализована, флаг для будущей панели. */
   casePanel: boolean;
+  /**
+   * Дрожание ручной камеры (камкордер, stage/camcorder.ts): 1 — ручная съёмка реконструкции,
+   * 0 — штатив (хроника, заставка, карта, документ, суд). Решение владельца 2026-10-10.
+   */
+  handheld: number;
+  /** «Оператор поправил кадр» при входе в сцену (быстрый сдвиг, иногда неожиданный ракурс). */
+  reframe: boolean;
+  /** Камкордерный HUD: красная точка и REC в углу кадра (только в реконструкции). */
+  recHud: boolean;
 }
 
 export const PRESETS: Readonly<Record<Presentation, PresentationPreset>> = {
-  title: { filter: 'none', text: 'none', speakerName: false, camera: 'static', casePanel: false },
-  reconstruction: { filter: 'vhs', text: 'window', speakerName: true, camera: 'static', casePanel: false },
-  chronicle: { filter: 'archive_photo', text: 'subtitle', speakerName: false, camera: 'ken_burns', casePanel: false },
-  talking_head: { filter: 'vhs', text: 'window', speakerName: false, camera: 'static', casePanel: false },
-  procedural: { filter: 'none', text: 'window', speakerName: true, camera: 'static', casePanel: true },
-  map: { filter: 'sepia', text: 'window', speakerName: true, camera: 'static', casePanel: false },
-  courtroom: { filter: 'desaturated', text: 'subtitle', speakerName: false, camera: 'static', casePanel: false },
-  montage: { filter: 'archive_photo', text: 'subtitle', speakerName: false, camera: 'static', casePanel: false },
-  document: { filter: 'none', text: 'none', speakerName: false, camera: 'static', casePanel: false },
+  title: { filter: 'none', text: 'none', speakerName: false, camera: 'static', casePanel: false, handheld: 0, reframe: false, recHud: false },
+  reconstruction: { filter: 'vhs', text: 'window', speakerName: true, camera: 'static', casePanel: false, handheld: 1, reframe: true, recHud: true },
+  chronicle: { filter: 'archive_photo', text: 'subtitle', speakerName: false, camera: 'ken_burns', casePanel: false, handheld: 0, reframe: false, recHud: false },
+  talking_head: { filter: 'vhs', text: 'window', speakerName: false, camera: 'static', casePanel: false, handheld: 0.25, reframe: false, recHud: false },
+  procedural: { filter: 'none', text: 'window', speakerName: true, camera: 'static', casePanel: true, handheld: 0.5, reframe: true, recHud: false },
+  map: { filter: 'sepia', text: 'window', speakerName: true, camera: 'static', casePanel: false, handheld: 0, reframe: false, recHud: false },
+  courtroom: { filter: 'desaturated', text: 'subtitle', speakerName: false, camera: 'static', casePanel: false, handheld: 0, reframe: false, recHud: false },
+  montage: { filter: 'archive_photo', text: 'subtitle', speakerName: false, camera: 'static', casePanel: false, handheld: 0.5, reframe: false, recHud: false },
+  document: { filter: 'none', text: 'none', speakerName: false, camera: 'static', casePanel: false, handheld: 0, reframe: false, recHud: false },
 };
 
 export function presetOf(presentation: Presentation): PresentationPreset {
