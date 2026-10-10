@@ -7094,14 +7094,46 @@
       "brief_key": "ep01.mg_board.brief",
       "config": {
         "nodes": [
-          "zoya",
-          "deal_1",
-          "deal_2",
-          "deal_3",
-          "notary",
-          "attorney",
-          "buyer",
-          "volga_car"
+          {
+            "id": "zoya",
+            "label_key": "ep01.mg_board.node.zoya",
+            "kind": "person"
+          },
+          {
+            "id": "deal_1",
+            "label_key": "ep01.mg_board.node.deal_1",
+            "kind": "flat"
+          },
+          {
+            "id": "deal_2",
+            "label_key": "ep01.mg_board.node.deal_2",
+            "kind": "flat"
+          },
+          {
+            "id": "deal_3",
+            "label_key": "ep01.mg_board.node.deal_3",
+            "kind": "flat"
+          },
+          {
+            "id": "notary",
+            "label_key": "ep01.mg_board.node.notary",
+            "kind": "person"
+          },
+          {
+            "id": "attorney",
+            "label_key": "ep01.mg_board.node.attorney",
+            "kind": "person"
+          },
+          {
+            "id": "buyer",
+            "label_key": "ep01.mg_board.node.buyer",
+            "kind": "person"
+          },
+          {
+            "id": "volga_car",
+            "label_key": "ep01.mg_board.node.volga_car",
+            "kind": "property"
+          }
         ],
         "required_links": [
           [
@@ -7177,6 +7209,7 @@
       "title_key": "ep01.mg_interrogation.title",
       "brief_key": "ep01.mg_interrogation.brief",
       "config": {
+        "suspect": "murashov",
         "statements": [
           {
             "id": "st_dates",
@@ -7213,11 +7246,39 @@
           }
         ],
         "evidence": [
-          "ev_docs_flaw",
-          "ev_accomplice",
-          "ev_chain",
-          "ev_photo",
-          "ev_keys"
+          {
+            "id": "ev_docs_flaw",
+            "label_key": "ep01.mg_interrogation.ev.docs_flaw",
+            "requires": "docs_flaw"
+          },
+          {
+            "id": "ev_registration",
+            "label_key": "ep01.mg_interrogation.ev.registration"
+          },
+          {
+            "id": "ev_accomplice",
+            "label_key": "ep01.mg_interrogation.ev.accomplice",
+            "requires": "accomplice_talks"
+          },
+          {
+            "id": "ev_chain",
+            "label_key": "ep01.mg_interrogation.ev.chain",
+            "requires": "found_chain"
+          },
+          {
+            "id": "ev_volga",
+            "label_key": "ep01.mg_interrogation.ev.volga"
+          },
+          {
+            "id": "ev_photo",
+            "label_key": "ep01.mg_interrogation.ev.photo",
+            "requires": "found_photo"
+          },
+          {
+            "id": "ev_keys",
+            "label_key": "ep01.mg_interrogation.ev.keys",
+            "requires": "keys_found"
+          }
         ],
         "full_threshold": 3,
         "partial_threshold": 1,

@@ -290,6 +290,8 @@ export interface BurstFrame {
   chroma: number;
   /** Плотность «снега» в полосе, 0..1. */
   snow: number;
+  /** Дрожание картинки по горизонтали на время всплеска, % ширины (знак меняется с частотой мерцания). */
+  jitter: number;
 }
 
 export function makeBurst(rng: Rng, t0: number, profile: LevelProfile, heavy: boolean): Burst {
@@ -311,15 +313,17 @@ export function burstAt(b: Burst, t: number): BurstFrame | null {
   const p = el / b.dur;
   const envelope = Math.min(1, p / 0.12, (1 - p) / 0.2);
   const e = Math.max(0, envelope);
+  const osc = Math.sin(2 * Math.PI * b.flickerHz * (el / 1000) + b.flickerPhase);
   return {
     progress: p,
     envelope: e,
     strength: b.strength,
     bandY: b.bandY0 + b.bandSpeed * el,
     bandH: b.bandH,
-    flicker: clamp(0.5 * b.strength * Math.sin(2 * Math.PI * b.flickerHz * (el / 1000) + b.flickerPhase) * e, -1, 1),
+    flicker: clamp(0.5 * b.strength * osc * e, -1, 1),
     chroma: 0.004 * b.strength * e,
     snow: clamp(b.strength * e, 0, 1),
+    jitter: 0.22 * b.strength * e * (osc >= 0 ? 1 : -1),
   };
 }
 
@@ -514,6 +518,8 @@ export class CameraScheduler {
     let ty = this.noise.value(1, t) * SHAKE.shiftPct * a;
     let rot = this.noise.value(2, t) * SHAKE.rotDeg * a;
     const breath = (0.5 + 0.5 * this.noise.value(3, t)) * SHAKE.breath * a;
+    // на время всплеска помех картинка слегка «дёргается» по горизонтали
+    if (burstFrame) tx += burstFrame.jitter;
 
     // поправка оператора (пока она идёт, допустимый масштаб больше); время поправки — часы дрожания,
     // поэтому стоп-кадр замораживает и её
@@ -529,7 +535,7 @@ export class CameraScheduler {
     }
 
     let fit: Transform = { tx: 0, ty: 0, rot: 0, scale: 1 };
-    if (a > 0 || this.reframes.length > 0) fit = fitTransform(tx, ty, rot, this.aspect, 1 + breath, maxScale);
+    if (a > 0 || this.reframes.length > 0 || burstFrame) fit = fitTransform(tx, ty, rot, this.aspect, 1 + breath, maxScale);
 
     // разрыв кадра: рывки добавляются как есть (открывшийся край закрывает шумовая полоса оверлея)
     const tear = this.jolts.length > 0 ? tearAt(this.jolts, this.clock) : null;

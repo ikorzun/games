@@ -1,14 +1,31 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "evidence_board config",
-  "description": "Доска улик: узлы и «верёвки»; нужно провести обязательные связи, не превысив лимит ложных.",
+  "description": "Доска улик: узлы и «верёвки»; нужно провести обязательные связи, не превысив лимит ложных. Каждая связь проверяется сразу: пара из required_links верная, любая другая пара (в том числе из decoy_links) — ошибка. Ошибки считаются по уникальным парам и не возвращаются, когда нитку убирают; партия заканчивается, когда ошибок стало больше max_wrong_links.",
   "type": "object", "additionalProperties": false,
   "required": ["nodes", "required_links", "max_wrong_links"],
   "properties": {
-    "nodes": { "type": "array", "minItems": 3, "maxItems": 16, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" } },
-    "required_links": { "type": "array", "minItems": 1, "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } } },
-    "decoy_links": { "type": "array", "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } } },
-    "max_wrong_links": { "type": "integer", "minimum": 0 },
-    "partial_threshold": { "type": "integer", "minimum": 1, "description": "Сколько верных связей достаточно для partial." }
+    "nodes": {
+      "type": "array", "minItems": 3, "maxItems": 16,
+      "description": "Узлы доски: id или объект {id, label_key, kind}. Подпись узла — ключ локализации (label_key, ≤ 40 символов в любом языке); без него в игре виден сам id (заглушка для разработчика). Если у узлов задан kind, люди (person) стоят справа, остальное слева («слева квартиры, справа люди»); иначе узлы идут сеткой в порядке перечисления.",
+      "items": {
+        "oneOf": [
+          { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          {
+            "type": "object", "additionalProperties": false,
+            "required": ["id"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+              "label_key": { "type": "string", "description": "Подпись узла (ключ локализации)." },
+              "kind": { "type": "string", "enum": ["person", "flat", "property", "document"], "description": "Тип узла: значок и сторона доски (person — справа)." }
+            }
+          }
+        ]
+      }
+    },
+    "required_links": { "type": "array", "minItems": 1, "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } }, "description": "Верные связи: пары id узлов (порядок внутри пары не важен)." },
+    "decoy_links": { "type": "array", "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } }, "description": "Правдоподобные ложные связи, на которые игрок заведомо потянется; считаются ошибкой, как любая лишняя пара." },
+    "max_wrong_links": { "type": "integer", "minimum": 0, "description": "Сколько ошибок допустимо; следующая ошибка заканчивает партию (partial или fail)." },
+    "partial_threshold": { "type": "integer", "minimum": 1, "description": "Сколько верных связей достаточно для partial (по умолчанию 1); меньше — fail." }
   }
 }

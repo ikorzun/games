@@ -1,0 +1,345 @@
+/*
+ * Осмотр места (crime_scene_search.ts). Общая рамка — mg_shell.css.
+ * Картинка места: на телефоне шире экрана и листается вбок, на широком экране вписана целиком.
+ * Зоны невидимы, пока не найдены; в режиме заглушки (нет файла картинки) показаны серыми коробками с подписями.
+ */
+
+.mg-scene__wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.mg-scene__viewport {
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  background: #0b0b0d;
+  border: 1px solid var(--mg-line);
+  border-radius: 10px;
+}
+
+.mg-scene__stage {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  aspect-ratio: var(--ar, 16 / 9);
+  background: #2b2b2f;
+  cursor: crosshair;
+  touch-action: manipulation;
+  outline-offset: -3px;
+}
+@media (max-width: 599px) {
+  /* Телефон: картинка в полтора экрана — деталей видно больше, края доступны свайпом. */
+  .mg-scene__stage {
+    width: 150%;
+  }
+}
+
+/* Заглушка вместо картинки: серый прямоугольник с подписями зон. */
+.mg-scene__stage.is-loading,
+.mg-scene__stage.is-placeholder {
+  background: repeating-linear-gradient(135deg, #313135 0 16px, #2a2a2e 16px 32px);
+}
+.mg-scene__ph {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.65rem;
+  color: var(--mg-muted);
+  font: 0.75em / 1.2 var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  letter-spacing: 0.06em;
+  pointer-events: none;
+}
+.mg-scene__stage.has-image .mg-scene__ph {
+  display: none;
+}
+.mg-scene__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+/* Зоны */
+.mg-scene__zone {
+  position: absolute;
+  box-sizing: border-box;
+  min-width: 44px;
+  min-height: 44px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.mg-scene__pin {
+  position: absolute;
+  top: -11px;
+  left: -11px;
+  display: none;
+  width: 22px;
+  height: 22px;
+  color: #1d1b17;
+  font: 700 12px / 22px var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  text-align: center;
+  background: var(--mg-gold);
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.6);
+}
+.mg-scene__tag {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  z-index: 1;
+  display: none;
+  max-width: 15rem;
+  margin-top: 5px;
+  padding: 2px 9px;
+  overflow: hidden;
+  color: var(--mg-gold);
+  font: 0.78em / 1.35 var(--font-body, system-ui, sans-serif);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: rgb(0 0 0 / 0.82);
+  border-radius: 5px;
+  transform: translateX(-50%);
+}
+.mg-scene__zone.is-right .mg-scene__tag {
+  right: 0;
+  left: auto;
+  transform: none;
+}
+.mg-scene__zone.is-left .mg-scene__tag {
+  right: auto;
+  left: 0;
+  transform: none;
+}
+
+/* Заглушка: все зоны видны коробками с подписью внутри. */
+.mg-scene__stage.is-placeholder .mg-scene__zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 5.5rem;
+  min-height: 3rem;
+  background: rgb(255 255 255 / 0.05);
+  border: 2px dashed rgb(255 255 255 / 0.32);
+}
+.mg-scene__stage.is-placeholder .mg-scene__tag {
+  position: static;
+  display: block;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 0.3rem;
+  color: #d8d3c6;
+  white-space: normal;
+  text-align: center;
+  background: none;
+  transform: none;
+}
+
+/* Найдено */
+.mg-scene__zone.is-found {
+  background: rgb(232 217 181 / 0.14);
+  border: 2px solid var(--mg-gold);
+  box-shadow: 0 0 0 2px rgb(0 0 0 / 0.45), 0 0 18px rgb(232 217 181 / 0.45);
+  animation: mg-scene-pop 0.35s ease-out;
+}
+.mg-scene__zone.is-found:not(.is-required) {
+  border-style: dashed;
+}
+.mg-scene__zone.is-found .mg-scene__pin {
+  display: block;
+}
+.mg-scene__zone.is-found .mg-scene__tag {
+  display: block;
+}
+.mg-scene__stage.is-placeholder .mg-scene__zone.is-found .mg-scene__tag {
+  color: var(--mg-gold);
+}
+
+/* Подсказка */
+.mg-scene__zone.is-hinted {
+  border: 2px dotted var(--mg-accent);
+  animation: mg-scene-pulse 1.4s ease-in-out infinite;
+}
+
+/* Отладка раскладки зон: ?debug=1 */
+.mg-scene__stage.is-debug .mg-scene__zone {
+  border: 1px dashed rgb(0 255 160 / 0.8);
+}
+.mg-scene__stage.is-debug .mg-scene__zone::after {
+  content: attr(data-id);
+  position: absolute;
+  top: 0;
+  left: 2px;
+  color: #00ffa0;
+  font: 10px var(--font-mono, monospace);
+}
+
+/* Промах */
+.mg-scene__marks {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.mg-scene__miss {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  color: var(--mg-accent);
+  font: 700 18px / 26px var(--font-body, system-ui, sans-serif);
+  text-align: center;
+  border: 2px solid var(--mg-accent);
+  border-radius: 50%;
+  animation: mg-scene-miss 0.75s ease-out forwards;
+}
+.mg-scene__miss::before {
+  content: '✕';
+}
+
+/* Прицел для клавиатуры */
+.mg-scene__cross {
+  position: absolute;
+  display: none;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border: 2px solid var(--mg-gold);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.6), inset 0 0 0 1px rgb(0 0 0 / 0.4);
+  pointer-events: none;
+}
+.mg-scene__cross::before,
+.mg-scene__cross::after {
+  content: '';
+  position: absolute;
+  background: var(--mg-gold);
+}
+.mg-scene__cross::before {
+  top: 50%;
+  left: -8px;
+  right: -8px;
+  height: 2px;
+  margin-top: -1px;
+}
+.mg-scene__cross::after {
+  left: 50%;
+  top: -8px;
+  bottom: -8px;
+  width: 2px;
+  margin-left: -1px;
+}
+.mg-scene__stage.has-cursor .mg-scene__cross {
+  display: block;
+}
+
+/* Подсказка «листайте» — только на телефоне, пока не листали */
+.mg-scene__swipe {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.4rem;
+  display: none;
+  padding: 1px 8px;
+  color: var(--mg-ink);
+  font: 700 0.9em / 1.4 var(--font-mono, monospace);
+  letter-spacing: 0.2em;
+  background: rgb(0 0 0 / 0.55);
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0.85;
+}
+@media (max-width: 599px) {
+  .mg-scene__swipe {
+    display: block;
+  }
+}
+.mg-scene__swipe.is-moved {
+  display: none;
+}
+
+/* Найденное */
+.mg-scene__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-height: 2.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mg-scene__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.7rem 0.25rem 0.3rem;
+  font-size: 0.9em;
+  background: rgb(232 217 181 / 0.1);
+  border: 1px solid rgb(232 217 181 / 0.4);
+  border-radius: 999px;
+}
+.mg-scene__item.is-extra {
+  border-style: dashed;
+  opacity: 0.85;
+}
+.mg-scene__item.is-hint {
+  padding-left: 0.7rem;
+  background: rgb(201 54 47 / 0.12);
+  border-color: var(--mg-accent);
+}
+.mg-scene__num {
+  display: inline-grid;
+  place-items: center;
+  width: 1.55em;
+  height: 1.55em;
+  color: #1d1b17;
+  font: 700 0.8em var(--font-mono, monospace);
+  background: var(--mg-gold);
+  border-radius: 50%;
+}
+
+/* Описание для скринридера */
+.mg-scene__help {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes mg-scene-pop {
+  from {
+    transform: translate(-50%, -50%) scale(1.25);
+    opacity: 0.2;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+@keyframes mg-scene-pulse {
+  50% {
+    box-shadow: 0 0 0 4px rgb(201 54 47 / 0.35), 0 0 18px rgb(201 54 47 / 0.55);
+  }
+}
+@keyframes mg-scene-miss {
+  from {
+    opacity: 1;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}

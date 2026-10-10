@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "interrogation_press config",
-  "description": "Допрос: утверждения подозреваемого и улики, которые их опровергают (Ace Attorney). Улика доступна, только если переменная requires истинна.",
+  "description": "Допрос: утверждения подозреваемого и улики, которые их опровергают (Ace Attorney). Улика доступна, только если переменная requires истинна. Игрок идёт по утверждениям по очереди: предъявляет улику (верная опровергает утверждение, неверная — ошибка) или оставляет утверждение без ответа. Опровергнуто ≥ full_threshold утверждений — success, ≥ partial_threshold — partial, иначе fail; max_mistakes ошибок заканчивают допрос досрочно (он замолчал).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -12,6 +12,11 @@
     "max_mistakes"
   ],
   "properties": {
+    "suspect": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Персонаж из cast, чьи слова допрашиваются: его имя подписывает реплику. Без него реплика анонимна."
+    },
     "statements": {
       "type": "array",
       "minItems": 2,
@@ -53,7 +58,7 @@
           "requires": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]*$",
-            "description": "Переменная эпизода, без которой улика недоступна."
+            "description": "Переменная эпизода, без которой улика, опровергающая утверждение, недоступна. Относится к улике, заданной строкой: единственной в contradicted_by или первой в списке. У улики-объекта (evidence) свой requires, он главнее."
           },
           "press_key": {
             "type": "string",
@@ -65,9 +70,36 @@
     "evidence": {
       "type": "array",
       "minItems": 1,
+      "description": "Улики-карточки: id или объект {id, label_key, requires}. В списке игрока — улики без requires (приманки: они ничего не опровергают, но гарантируют, что предъявить есть что) и улики, у которых переменная requires истинна. Подпись — ключ локализации (label_key, ≤ 40 символов); без него в игре виден id. Порядок в списке — порядок карточек.",
       "items": {
-        "type": "string",
-        "pattern": "^[a-z][a-z0-9_]*$"
+        "oneOf": [
+          {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "label_key": {
+                "type": "string",
+                "description": "Подпись карточки улики (ключ локализации)."
+              },
+              "requires": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "description": "Переменная эпизода, без которой улика недоступна. Не задана — улика есть всегда (приманка)."
+              }
+            }
+          }
+        ]
       }
     },
     "full_threshold": {
@@ -84,7 +116,8 @@
     },
     "pressure_gauge": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "description": "Зарезервировано: шкала давления пока не показывается."
     }
   }
 }
