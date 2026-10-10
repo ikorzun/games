@@ -140,7 +140,10 @@ describe('реестр типов мини-игр', () => {
     a.mount(null as never, document.createElement('div'), {}, harness(mg('m1')).ctx);
     a.destroy();
     expect(calls).toEqual(['mount', 'destroy']);
-    expect(createMinigame('crime_scene_search')).toBeInstanceOf(GreyBoxMinigame);
+    // Другие типы подмена не затрагивает: их фабрика остаётся встроенной (grey-box или настоящая механика).
+    const other = createMinigame('crime_scene_search');
+    expect(typeof other.mount).toBe('function');
+    expect(other).not.toBe(a);
   });
 });
 
@@ -343,10 +346,11 @@ describe.skipIf(!hasRepoContent())('grey-box на настоящих мини-и
     expect(new Set(defs.map((d) => d.type))).toEqual(new Set(GREY_BOX_TYPES));
   });
 
-  it.each(defs.map((d) => [d.id, d] as const))('%s: рисуется, кнопки исходов соответствуют outcomes и skip.allowed', (_id, def) => {
-    registerBuiltinMinigames();
+  // Grey-box проверяется напрямую: встроенные типы постепенно получают настоящие механики
+  // (свои тесты — tests/minigames.<тип>.test.ts), а grey-box остаётся запасной реализацией.
+  it.each(defs.map((d) => [d.id, d] as const))('%s: grey-box рисуется, кнопки исходов соответствуют outcomes и skip.allowed', (_id, def) => {
     const hs = harness(def, { episode, showRewarded: () => Promise.resolve(true) }, {});
-    const m = createMinigame(def.type);
+    const m = new GreyBoxMinigame(def.type);
     m.onResult = (r) => hs.results.push(r);
     m.mount(null as never, hs.dom, def.config, hs.ctx);
     // Без локалей строки — видимые заглушки [key], но разметка и конфиг рисуются.
