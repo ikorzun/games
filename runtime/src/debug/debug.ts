@@ -9,6 +9,7 @@ import type { AutoplayPolicy, AutoplayReport } from '../core/autoplay';
 import type { Settings } from '../core/settings';
 import { cloneState } from '../core/state';
 import type { GameState, Lang, Pending, Value, ViewState } from '../core/types';
+import type { SlotStates } from '../stage/renderer';
 
 export interface PendingSummary {
   kind: Pending['kind'];
@@ -44,6 +45,8 @@ export interface VnDebugApi {
   settings(patch?: Partial<Settings>): Settings;
   /** Какой рендерер сцены работает: 'pixi' или 'dom'. */
   renderer(): string;
+  /** Что нарисовано в слотах фона, CG и спрайтов (с id фона и CG): image | placeholder | solid | loading | none — QA: картинки действительно показаны. */
+  slots(): SlotStates | null;
   /**
    * Ассеты: что загружено, чего нет (по запросам игры). С `true` — ещё и проверка всех файлов из
    * episode.assets HEAD-запросами: { present, missing } (для QA после загрузки графики и звука).
@@ -114,6 +117,7 @@ export function installDebug(app: App): VnDebugApi {
     skip: (on) => app.ui.setSkip(on),
     settings: (patch) => (patch ? app.updateSettings(patch) : { ...app.settings }),
     renderer: () => app.stage.renderer.kind,
+    slots: () => app.stage.renderer.slotStates?.() ?? null,
     assets: async (verify) => {
       const a = app.assets;
       if (!a) return { loaded: [], missing: [], pending: 0, inflight: [] };

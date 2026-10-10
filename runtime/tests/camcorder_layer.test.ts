@@ -422,6 +422,34 @@ describe('CamcorderLayer: частота обновления кадра дро�
   });
 });
 
+describe('CamcorderLayer: зерно и помехи при обновлении кадра 30 Гц', () => {
+  /** Перерисовок оверлея в секунду при rAF с периодом `period` (и неровностью `jitter`) на настоящем ограничении 30 Гц. */
+  function putsPerSecond(period: number, jitter = 0): number {
+    const r = rig({ stepFps: STEP_FPS });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    r.ctx.puts = 0;
+    let t = 1000;
+    for (let i = 0; t < 11_000; i++) {
+      r.tick(t);
+      t += period + (jitter && i % 2 ? jitter : -jitter);
+    }
+    return r.ctx.puts / 10;
+  }
+
+  it('оверлей рисуется на каждом втором шаге — 15 к/с, а не 10: укладывается в 12–15 на дисплеях 60 Гц, 120 Гц и 30 Гц', () => {
+    for (const [name, period, jitter] of [['60 Гц', 1000 / 60, 0], ['60 Гц с неровным ритмом', 16.7, 1.5], ['120 Гц', 1000 / 120, 0], ['30 Гц', 1000 / 30, 0]] as const) {
+      const fps = putsPerSecond(period, jitter);
+      expect(fps, name).toBeGreaterThanOrEqual(NOISE_FPS - 1);
+      expect(fps, name).toBeLessThanOrEqual(15.2);
+    }
+  });
+
+  it('на медленном браузере (25 к/с) оверлей рисуется не реже 12 раз в секунду', () => {
+    expect(putsPerSecond(40)).toBeGreaterThanOrEqual(12);
+  });
+});
+
 describe('CamcorderLayer: самозащита от слабого устройства', () => {
   /** Крутит цикл с периодом `period` мс от `from` до `to`. */
   const frames = (r: ReturnType<typeof rig>, period: number, from: number, to: number): number => {

@@ -24,7 +24,10 @@ import type { Presentation } from '../core/types';
 
 /** Ширина canvas помех, px. Растягивается CSS на весь кадр. */
 export const OVERLAY_WIDTH = 256;
-/** Частота перерисовки зерна и помех, к/с (12–15). */
+/**
+ * Частота перерисовки зерна и помех, к/с (12–15). Оверлей рисуется в тех же кадрах, что и дрожание, то есть
+ * на шагах STEP_FPS: при 30 Гц это каждый второй шаг — 15 к/с (с допуском STEP_SLACK на неровный ритм).
+ */
 export const NOISE_FPS = 13;
 /** Сколько заранее посчитанных кадров зерна чередуется. */
 const GRAIN_FRAMES = 6;
@@ -100,7 +103,8 @@ export class CamcorderLayer {
   private readonly rng: Rng;
   private readonly raf: (cb: (ts: number) => void) => number;
   private readonly caf: (id: number) => void;
-  private readonly noiseInterval: number;
+  /** Минимум между перерисовками оверлея, мс (с допуском на ритм шагов). */
+  private readonly noiseGap: number;
   private readonly stepGap: number;
   private readonly adaptive: boolean;
   private ctx: Overlay2D | null;
@@ -134,7 +138,7 @@ export class CamcorderLayer {
     this.rng = opts.rng ?? mulberry32((Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0);
     this.raf = opts.raf ?? ((cb) => requestAnimationFrame(cb));
     this.caf = opts.caf ?? ((id) => cancelAnimationFrame(id));
-    this.noiseInterval = 1000 / (opts.noiseFps ?? NOISE_FPS);
+    this.noiseGap = (1000 / (opts.noiseFps ?? NOISE_FPS)) * STEP_SLACK;
     const stepFps = opts.stepFps ?? STEP_FPS;
     this.stepGap = Number.isFinite(stepFps) && stepFps > 0 ? (1000 / stepFps) * STEP_SLACK : 0;
     this.adaptive = opts.adaptive ?? !(typeof navigator !== 'undefined' && navigator.webdriver === true);
@@ -330,7 +334,7 @@ export class CamcorderLayer {
     this.lastFrame = f;
     this.applyTransform(f);
     this.setBurstClass(f.burst !== null);
-    if (ts - this.lastNoise >= this.noiseInterval) {
+    if (ts - this.lastNoise >= this.noiseGap) {
       this.lastNoise = ts;
       this.drawOverlay(f);
     }

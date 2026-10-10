@@ -99,7 +99,7 @@ async function launchBrowser() {
 }
 
 /** Страница с журналом ошибок, неудачных и внешних запросов. */
-async function openPage(browser, baseUrl, query, ctxOpts = {}, seedStorage = null) {
+async function openPage(browser, baseUrl, query, ctxOpts = {}, seedStorage = null, onConsole = null) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: 'en-US', ...ctxOpts });
   if (seedStorage) {
     await context.addInitScript((kv) => {
@@ -134,6 +134,7 @@ async function openPage(browser, baseUrl, query, ctxOpts = {}, seedStorage = nul
     if (u.startsWith('data:') || u.startsWith('blob:') || u.startsWith('about:')) return;
     if (new URL(u).origin !== origin) log.external.push(u);
   });
+  if (onConsole) page.on('console', onConsole); // до перехода: загрузка страницы уже попадает в журнал
   const url = new URL(query, baseUrl).toString();
   await page.goto(url, { waitUntil: 'networkidle' });
   return { page, context, log };
@@ -259,14 +260,61 @@ async function scenarioCamera(browser, baseUrl) {
   await page.waitForFunction(() => window.__vn.pending()?.kind === 'line', null, { timeout: 15000 });
   await sleep(900);
 
+  // Что должно быть нарисовано по файлам, которые реально есть в сборке. Оракул повторяет правила каталога (путь фона из
+  // episode.assets, цепочка спрайта силуэт → выражение → neutral → base) и сверяется с тем, что показал рендерер (__vn.slots()).
+  const slotOracle = () =>
+    page.evaluate(async () => {
+      const idx = await (await fetch('./episodes/index.json')).json();
+      const ep = await (await fetch('./' + idx.episodes[0].path)).json();
+      const { present } = (await window.__vn.assets(true)).verify;
+      const has = (path) => present.some((u) => u.endsWith(path));
+      const view = window.__vn.view();
+      const bgPath = ep.assets.backgrounds.find((b) => b.id === view.bg)?.path ?? null;
+      const bg = !bgPath ? 'placeholder' : /(?:^|\/)black\.(?:png|webp)$/.test(bgPath) ? 'solid' : has(bgPath) ? 'image' : 'placeholder';
+      const sprites = {};
+      for (const sp of view.sprites) {
+        if (sp.position === 'offscreen_left' || sp.position === 'offscreen_right') continue;
+        const setId = (ep.cast ?? []).find((c) => c.id === sp.who)?.sprite_set ?? sp.who;
+        const set = (ep.assets.sprites ?? []).find((x) => x.id === setId);
+        if (!set) {
+          sprites[sp.who] = 'placeholder';
+          continue;
+        }
+        const dir = set.base.slice(0, set.base.lastIndexOf('/'));
+        const files = [sp.silhouette ? `${dir}/silhouette.webp` : null, sp.expression ? `${dir}/${sp.expression}.webp` : null, `${dir}/neutral.webp`, set.base].filter(Boolean);
+        sprites[sp.who] = files.some(has) ? 'image' : 'placeholder';
+      }
+      return { bg, sprites, actual: window.__vn.slots() };
+    });
+  const checkSlots = async (label) => {
+    // Кадр интерпретатора меняется сразу, рендерер — после перехода и загрузки: ждём, пока он догонит (тот же фон, те же спрайты).
+    await page
+      .waitForFunction(() => {
+        const st = window.__vn.slots();
+        const v = window.__vn.view();
+        if (!st || !v || st.bgId !== v.bg || st.bg === 'loading') return false;
+        const want = v.sprites.filter((x) => !x.position.startsWith('offscreen')).map((x) => x.who).sort().join();
+        return Object.keys(st.sprites).sort().join() === want && Object.values(st.sprites).every((x) => x !== 'loading');
+      }, null, { polling: 100, timeout: 10000 })
+      .catch(() => undefined);
+    const o = await slotOracle();
+    const same = !!o.actual && o.actual.bg === o.bg && Object.keys(o.actual.sprites).sort().join() === Object.keys(o.sprites).sort().join() && Object.entries(o.sprites).every(([who, st]) => o.actual.sprites[who] === st);
+    check(`${label}: фон и спрайты нарисованы по наличию файлов (картинка / плейсхолдер / сплошной цвет)`, same, JSON.stringify({ ожидали: { bg: o.bg, sprites: o.sprites }, нарисовано: o.actual }));
+    return o;
+  };
+
   // Пролог — реконструкция: самый заметный уровень ручной камеры и HUD записи.
   const presentation = await page.evaluate(() => window.__vn.view()?.presentation);
   const c0 = await cam();
   check('эффекты камеры по умолчанию «слабо», цикл идёт (пролог — реконструкция)', presentation === 'reconstruction' && c0.setting === 'low' && c0.effective === 'low' && c0.running && !c0.reducedMotion, JSON.stringify(c0));
+  // Кадры идут с частотой браузера; на нагруженной машине без GPU их может быть мало — ждём 4 разных значения до 8 с.
+  const seen = new Set();
   const samples = [];
-  for (let i = 0; i < 6; i++) {
-    samples.push((await cam()).transform);
-    await sleep(170);
+  for (const t0 = Date.now(); seen.size < 4 && Date.now() - t0 < 8000; ) {
+    const t = (await cam()).transform;
+    samples.push(t);
+    seen.add(t);
+    await sleep(150);
   }
   // translate3d(0.29%, -0.47%, 0px) rotate(0.33deg) scale(1.0197) → [tx, ty, rot, scale]
   const parse = (t) => {
@@ -274,9 +322,11 @@ async function scenarioCamera(browser, baseUrl) {
     return m ? m.slice(1).map(Number) : [NaN, NaN, NaN, NaN];
   };
   const frames = samples.map(parse);
-  check('кадр дышит: трансформ ручной камеры меняется со временем', new Set(samples).size >= 3, samples.slice(0, 3).join(' | '));
+  check('кадр дышит: трансформ ручной камеры меняется со временем', seen.size >= 3, [...seen].slice(0, 3).join(' | '));
   // Устойчивая тряска ≤ 1,2 % / 0,5° / 1,03; поправки оператора на короткое время выходят за эти рамки — допуск шире.
   check('…и остаётся малым (сдвиг, поворот, масштаб в разумных пределах)', frames.every(([tx, ty, rot, sc]) => Math.abs(tx) < 5 && Math.abs(ty) < 5 && Math.abs(rot) < 2.6 && sc >= 1 && sc < 1.15), JSON.stringify(frames.slice(0, 2)));
+  const prologue = await checkSlots('пролог');
+  if (prologue.bg === 'image') check('пролог: картинка фона из файла действительно показана рендерером', prologue.actual?.bg === 'image');
   const hud = await page.evaluate(() => {
     const el = document.querySelector('.vn-stage__hud');
     return el ? { display: getComputedStyle(el).display, text: el.textContent } : null;
@@ -326,6 +376,8 @@ async function scenarioCamera(browser, baseUrl) {
   const proc = await cam();
   const procHud = await page.evaluate(() => getComputedStyle(document.querySelector('.vn-stage__hud')).display);
   check('процедурная сцена: камера работает, но HUD записи скрыт', procReady && proc.effective === 'low' && proc.running && !proc.rec && procHud === 'none', JSON.stringify(proc));
+  const withCast = await checkSlots('сцена с персонажами');
+  if (Object.values(withCast.sprites).includes('image')) check('спрайты из файлов действительно показаны рендерером', Object.entries(withCast.sprites).some(([who, st]) => st === 'image' && withCast.actual?.sprites[who] === 'image'));
 
   // Весь эпизод с работающей камерой: ни одной ошибки на всех пресетах показа.
   const report = await page.evaluate(() => window.__vn.autoplay('default'));
@@ -333,13 +385,19 @@ async function scenarioCamera(browser, baseUrl) {
   check('камкордер не породил ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
 
   // Ассеты: либо файлы на месте, либо плейсхолдеры и ровно одно предупреждение на отсутствующий файл.
-  await page.waitForFunction(() => window.__vn.assets().then((x) => x.pending === 0), null, { polling: 200, timeout: 10000 }).catch(() => undefined);
-  const a = await page.evaluate(() => window.__vn.assets(true));
+  // Последний блок запрашивает картинки в самом конце автопилота: ждём, пока очередь не опустеет (и не пополнится снова).
+  let a = await page.evaluate(() => window.__vn.assets());
+  for (let i = 0; i < 50 && a.pending > 0; i++) {
+    await sleep(200);
+    a = await page.evaluate(() => window.__vn.assets());
+  }
+  const queue = a;
+  a = await page.evaluate(() => window.__vn.assets(true));
   const present = a.verify?.present ?? [];
   const missing = a.verify?.missing ?? [];
   const withFiles = present.length > 0;
   console.log(`  (ассеты: на месте ${present.length}, нет ${missing.length} из ${present.length + missing.length}; загружено игрой ${a.loaded.length}; режим: ${withFiles ? 'с файлами' : 'без файлов — плейсхолдеры'})`);
-  check('загрузка ассетов завершена: очередь пуста', a.pending === 0, `в работе ${a.pending}: ${(a.inflight ?? []).join(', ')}`);
+  check('загрузка ассетов завершена: очередь пуста', queue.pending === 0, `в работе ${queue.pending}: ${(queue.inflight ?? []).join(', ')}`);
   const warned = log.warnings.filter((w) => /^\[assets\] нет файла/.test(w));
   check('каждый отсутствующий файл упомянут в консоли один раз (без шквала предупреждений)', new Set(warned).size === warned.length, warned.slice(0, 3).join(' | '));
   if (withFiles) {
@@ -372,23 +430,35 @@ async function scenarioCamera(browser, baseUrl) {
 async function scenarioBridgeSdk(browser, baseUrl) {
   section('Bridge SDK: game_ready, пакетное хранилище, пауза (только сборка с window.bridge)');
   const sdk = [];
-  const { page, context, log } = await openPage(browser, baseUrl, '?debug=1');
+  // Журнал вызовов — собственный debug-лог SDK (включается параметром ?debug=1). Обрабатывается по очереди,
+  // чтобы порядок записей совпадал с порядком вызовов; слушатель ставится до загрузки страницы (одна загрузка,
+  // без перезагрузки: хвост журнала прежней страницы не смешивается с новым).
+  let queue = Promise.resolve();
+  const onConsole = (m) => {
+    if (!m.text().includes('PlaygamaBridge')) return;
+    const handles = m.args().slice(3);
+    const text = m.text().replace(/%c/g, '').replace(/background:[^;]*;[^;]*;[^;]*;[^;]*;?/g, '').trim();
+    queue = queue.then(async () => {
+      const vals = await Promise.all(handles.map((a) => a.jsonValue().catch(() => '?'))).catch(() => []);
+      sdk.push({ text, vals });
+    });
+  };
+  const { page, context, log } = await openPage(browser, baseUrl, '?debug=1', {}, null, onConsole);
   const hasBridge = await page.evaluate(() => !!window.bridge);
   if (!hasBridge) {
     console.log('  (window.bridge нет — раздел пропущен)');
     await context.close();
     return;
   }
-  // Журнал вызовов — собственный debug-лог SDK (включается параметром ?debug=1).
-  page.on('console', async (m) => {
-    if (!m.text().includes('PlaygamaBridge')) return;
-    const vals = await Promise.all(m.args().slice(3).map((a) => a.jsonValue().catch(() => '?'))).catch(() => []);
-    sdk.push({ text: m.text().replace(/%c/g, '').replace(/background:[^;]*;[^;]*;[^;]*;[^;]*;?/g, '').trim(), vals });
-  });
-  await page.reload({ waitUntil: 'networkidle' });
   await page.waitForSelector('.vn-menu__nav button', { state: 'visible' });
-  await sleep(400);
   const calls = (re) => sdk.filter((c) => re.test(c.text));
+  const isReady = (c) => /\[platform\] sendMessage\(\)$/.test(c.text) && c.vals[0] === 'game_ready';
+  for (let i = 0; i < 50 && !sdk.some(isReady); i++) {
+    await sleep(100);
+    await queue;
+  }
+  await sleep(400);
+  await queue;
   check('Bridge инициализирован до старта игры', await page.evaluate(() => window.bridge.isInitialized === true));
   const gets = calls(/\[storage\] get\(\)$/);
   check('хранилище читается одним вызовом со всеми четырьмя ключами', gets.length === 1 && JSON.stringify(gets[0].vals[0]) === JSON.stringify(['profile', 'progress', 'settings', 'archive']), JSON.stringify(gets.map((g) => g.vals[0])));
@@ -399,7 +469,10 @@ async function scenarioBridgeSdk(browser, baseUrl) {
     await sleep(100);
   }
   await sleep(500);
-  const sets = calls(/\[storage\] set\(\)$/);
+  await queue;
+  // Записи самой игры идут после её первого чтения; до него SDK сам пишет служебные ключи своей mock-платформы.
+  const firstGet = sdk.findIndex((c) => /\[storage\] get\(\)$/.test(c.text));
+  const sets = sdk.slice(firstGet + 1).filter((c) => /\[storage\] set\(\)$/.test(c.text));
   check('запись хранилища пакетная (profile/progress/settings/archive за один вызов)', sets.length >= 1 && sets.every((c) => JSON.stringify(c.vals[0]) === JSON.stringify(['profile', 'progress', 'settings', 'archive'])));
   check('localStorage напрямую не используется (ключи krimrussia:*)', !(await page.evaluate(() => Object.keys(localStorage).some((k) => k.startsWith('krimrussia:')))));
   check('level_started отправлен с world/level', calls(/\[platform\] sendMessage\(\)$/).some((c) => c.vals[0] === 'level_started' && c.vals[1]?.world && c.vals[1]?.level));
@@ -465,7 +538,7 @@ async function scenarioMatrix(browser, baseUrl) {
         warning: '.vn-warning.is-in .vn-btn',
         dialogue: '.vn-textbox.is-complete:not([hidden]) .vn-textbox__shown',
         choice: '.vn-choices:not([hidden]) .vn-choice',
-        minigame: '.mg-gb .mg-btn',
+        minigame: '.mg-shell .mg-shell__body, .mg-gb .mg-btn',
         settings: '.vn-settings.is-in .vn-range',
         log: '.vn-log.is-in .vn-log__item',
         ending: '.vn-ending.is-in .vn-ending__title',
@@ -492,6 +565,8 @@ async function scenarioMatrix(browser, baseUrl) {
       await page.keyboard.press('1');
       await advanceUntil(page, (p) => p.kind === 'minigame');
       await probe('minigame');
+      // Настоящий осмотр прячет «Пропустить» до skip.after_fails промахов: один тап мимо зон открывает его.
+      if (await page.$('.mg-scene__stage')) await page.click('.mg-scene__stage', { position: { x: 4, y: 4 } });
       await page.click('.mg-btn.is-skip');
       await sleep(300);
       await page.click('.vn-qbtn--settings');

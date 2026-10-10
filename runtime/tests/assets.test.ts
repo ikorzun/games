@@ -692,6 +692,8 @@ describe('AppAssets: бланки документов, картинки инт�
     expect(res.missing).toContain('./assets/ep01/bg/yard.webp');
     expect(res.missing).toContain('./assets/ep01/sprites/zoya/neutral.webp');
     expect(res.missing).toContain(`./${UI_ASSETS.titlePlate}`);
+    // чёрный кадр — сплошной цвет, а не файл: его нет ни среди найденных, ни среди пропавших
+    expect([...res.present, ...res.missing].some((u) => /black\.png$/.test(u))).toBe(false);
     const err = await assets.verify(async () => {
       throw new Error('сеть');
     });

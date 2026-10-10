@@ -44,6 +44,11 @@ const unique = <T>(items: readonly T[]): T[] => [...new Set(items)];
 /** Файл чёрного кадра: его нет в манифесте ассетов и не должно быть — это сплошной цвет. */
 const BLACK_FILE = /(?:^|\/)black\.(?:png|webp)$/i;
 
+/** Путь из episode.assets — «чёрный кадр» (сплошной цвет): файла может не быть, его не запрашивают и не проверяют. */
+export function isSolidBlackFile(path: string): boolean {
+  return BLACK_FILE.test(path);
+}
+
 // ───────────────────────────── каталог ─────────────────────────────
 
 /**

@@ -4,7 +4,7 @@
  * про файлы в assets/**, собрано здесь; остальные модули получают готовые порты.
  */
 import type { Episode } from '../core/types';
-import { AssetCatalog, AssetStore, StoreSceneAssets, UI_ASSETS, dirnameOf, NEUTRAL_EXPRESSION, SPRITE_FILE_EXT } from './assets';
+import { AssetCatalog, AssetStore, StoreSceneAssets, UI_ASSETS, dirnameOf, isSolidBlackFile, NEUTRAL_EXPRESSION, SPRITE_FILE_EXT } from './assets';
 import { BlockPreloader } from './preload';
 import type { AudioPreloader, PreloadHooks } from './preload';
 
@@ -55,7 +55,8 @@ export function createAppAssets(episode: Episode, base: string, audio: AudioPrel
       const f = fetchFn ?? ((url, init) => fetch(url, init));
       const urls = new Set<string>();
       const a = episode.assets;
-      for (const list of [a.backgrounds, a.cg, a.documents, a.music, a.sfx, a.ambient, a.voice]) for (const e of list ?? []) urls.add(catalog.url(e.path));
+      // black.png — не файл, а сплошной цвет (bg_black): ни запрашивать, ни считать пропавшим его не нужно
+      for (const list of [a.backgrounds, a.cg, a.documents, a.music, a.sfx, a.ambient, a.voice]) for (const e of list ?? []) if (!isSolidBlackFile(e.path)) urls.add(catalog.url(e.path));
       for (const set of a.sprites ?? []) {
         urls.add(catalog.url(set.base));
         const dir = dirnameOf(set.base);

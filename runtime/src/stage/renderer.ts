@@ -6,6 +6,19 @@
 import type { ViolenceMode } from '../core/settings';
 import type { SpriteView, TransitionKind, ViewState } from '../core/types';
 
+/** Что нарисовано в слоте: картинка из файла, плейсхолдер (файла нет), сплошной цвет, идёт загрузка, слот пуст. */
+export type SlotState = 'none' | 'loading' | 'image' | 'placeholder' | 'solid';
+
+export interface SlotStates {
+  bg: SlotState;
+  /** id фона, который показывает слот (то, что передали в setBackground). */
+  bgId: string;
+  cg: SlotState;
+  cgId: string | null;
+  /** who → состояние спрайта (ушедшие и закадровые не входят). */
+  sprites: Record<string, SlotState>;
+}
+
 export interface ISceneRenderer {
   readonly kind: 'pixi' | 'dom';
   mount(host: HTMLElement): Promise<void>;
@@ -17,6 +30,8 @@ export interface ISceneRenderer {
   hideSprite(who: string, transition: TransitionKind): void;
   setSpeaker(who: string | null): void;
   setViolenceMode(mode: ViolenceMode): void;
+  /** Для QA и тестов (`__vn.slots()`): что сейчас нарисовано в слотах фона, CG и спрайтов. */
+  slotStates?(): SlotStates;
   /** Корневой контейнер PixiJS для мини-игр (IMinigame.mount.root); у DOM-рендерера его нет. */
   readonly minigameRoot?: unknown;
   /** Показать/скрыть слой мини-игр. */

@@ -1,7 +1,7 @@
 /**
  * Звук. Менеджер ведёт состояние (что играет, mute игрока, запрет звука платформой) и пишет
  * журнал для отладки; воспроизведение делает IAudioBackend — на странице это HtmlAudioBackend
- * (audio_html.ts: HTMLAudioElement, mp3). Шаги music / sfx / ambient / stop_* интерпретатор
+ * (audio_html.ts: HTMLAudioElement, музыка m4a, эмбиент и эффекты mp3). Шаги music / sfx / ambient / stop_* интерпретатор
  * исполняет полностью; без бэкенда (тесты, отладочный режим) менеджер только записывает состояние.
  */
 import type { AudioEventPayload, IAudioSink } from './types';

@@ -21,7 +21,7 @@ import { NO_ASSETS } from './assets';
 import type { ImageChain, ImageHandle, SceneAssets } from './assets';
 import { hslToInt, placeholderHsl, placeholderLabel } from './placeholders';
 import { isOffscreen, POSITION_X, SILHOUETTE_ALPHA, SPRITE_FIT, SPRITE_MAX_WIDTH } from './renderer';
-import type { ISceneRenderer } from './renderer';
+import type { ISceneRenderer, SlotStates } from './renderer';
 
 const FONT = 'PT Sans, Noto Sans, Arial, sans-serif';
 /** Бюджет текстур в видеопамяти, байт (≈ 14 кадров 1920×1080). Телефоны выдерживают это с запасом. */
@@ -251,6 +251,12 @@ export class PixiSceneRenderer implements ISceneRenderer {
   /** Затемняем остальных, только если говорящий сам стоит на сцене (голос за кадром никого не гасит). */
   private dimFor(id: string): number {
     return this.speaker !== null && this.speaker !== id && this.nodes.has(this.speaker) ? 0.62 : 1;
+  }
+
+  slotStates(): SlotStates {
+    const sprites: Record<string, Mode> = {};
+    for (const [who, node] of this.nodes) sprites[who] = node.mode;
+    return { bg: this.bgSlot.mode, bgId: this.bgId, cg: this.cgSlot.mode, cgId: this.cgId, sprites };
   }
 
   setViolenceMode(mode: ViolenceMode): void {

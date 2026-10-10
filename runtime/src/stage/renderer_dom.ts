@@ -11,7 +11,7 @@ import { NO_ASSETS } from './assets';
 import type { ImageChain, ImageHandle, SceneAssets } from './assets';
 import { hslToCss, placeholderHsl, placeholderLabel } from './placeholders';
 import { isOffscreen, SPRITE_FIT, SPRITE_MAX_WIDTH } from './renderer';
-import type { ISceneRenderer } from './renderer';
+import type { ISceneRenderer, SlotState, SlotStates } from './renderer';
 
 type State = 'none' | 'loading' | 'image' | 'placeholder';
 
@@ -39,6 +39,7 @@ export class DomSceneRenderer implements ISceneRenderer {
   private readonly nodes = new Map<string, SpriteEntry>();
   private violence: ViolenceMode = 'full';
   private cgId: string | null = null;
+  private bgId = '';
   private speaker: string | null = null;
   private bgToken = 0;
   private cgToken = 0;
@@ -78,6 +79,7 @@ export class DomSceneRenderer implements ISceneRenderer {
   }
 
   setBackground(bg: string): void {
+    this.bgId = bg;
     this.bgLabel.textContent = placeholderLabel(bg);
     this.bgEl.style.setProperty('--ph-bg', hslToCss(placeholderHsl(bg, 'bg')));
     this.bgToken += 1;
@@ -249,6 +251,13 @@ export class DomSceneRenderer implements ISceneRenderer {
   /** Затемняем остальных, только если говорящий сам стоит на сцене. */
   private dimmed(id: string): boolean {
     return this.speaker !== null && this.speaker !== id && this.nodes.has(this.speaker);
+  }
+
+  slotStates(): SlotStates {
+    const state = (el: HTMLElement): SlotState => (el.dataset.state as SlotState | undefined) ?? 'none';
+    const sprites: Record<string, SlotState> = {};
+    for (const [who, entry] of this.nodes) sprites[who] = entry.state;
+    return { bg: state(this.bgEl), bgId: this.bgId, cg: this.cgEl.hidden ? 'none' : state(this.cgEl), cgId: this.cgId, sprites };
   }
 
   setViolenceMode(mode: ViolenceMode): void {

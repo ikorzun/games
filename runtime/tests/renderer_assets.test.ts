@@ -348,3 +348,47 @@ describe('DomSceneRenderer: спрайты', () => {
     expect((host.querySelector('.ph-cg') as HTMLElement).dataset.state).toBe('image');
   });
 });
+
+describe('DomSceneRenderer: slotStates() для QA (__vn.slots)', () => {
+  it('до первого кадра слоты пусты; картинка из файла → image, нет файла → placeholder, чёрный фон → solid', async () => {
+    const { r } = await rig(['./assets/ep01/bg/yard.webp']);
+    expect(r.slotStates()).toEqual({ bg: 'none', bgId: '', cg: 'none', cgId: null, sprites: {} });
+    r.setBackground('bg_yard');
+    await flush();
+    expect(r.slotStates()).toMatchObject({ bg: 'image', bgId: 'bg_yard' });
+    r.setBackground('bg_office');
+    await flush();
+    expect(r.slotStates().bg).toBe('placeholder');
+    r.setBackground('bg_black');
+    expect(r.slotStates().bg).toBe('solid');
+  });
+
+  it('пока файл грузится — loading (без вспышки плейсхолдера), после ответа — итог; CG появляется и исчезает вместе со слотом', async () => {
+    const { r, release } = await rig('manual');
+    r.setBackground('bg_yard');
+    r.setCg('cg_door');
+    const st = r.slotStates();
+    expect(st.bg === 'none' || st.bg === 'loading').toBe(true);
+    expect(st.cg === 'none' || st.cg === 'loading').toBe(true);
+    release('./assets/ep01/bg/yard.webp');
+    release('./assets/ep01/cg/door.webp', false);
+    await flush();
+    expect(r.slotStates()).toMatchObject({ bg: 'image', bgId: 'bg_yard', cg: 'placeholder', cgId: 'cg_door' });
+    r.setCg(null);
+    expect(r.slotStates()).toMatchObject({ cg: 'none', cgId: null });
+  });
+
+  it('спрайты по персонажам: файл выражения, цепочка до neutral, нет ни одного файла — placeholder; ушедшие не входят', async () => {
+    const { r } = await rig([`${Z}/worried.webp`, `${M}/neutral.webp`]);
+    r.showSprite(sprite('zoya', 'worried'), false, 'cut');
+    r.showSprite(sprite('murashov', 'smile'), false, 'cut'); // smile нет → neutral
+    r.showSprite(sprite('clerk', null), false, 'cut'); // ни одного файла
+    await flush();
+    expect(r.slotStates().sprites).toEqual({ zoya: 'image', murashov: 'image', clerk: 'placeholder' });
+    r.hideSprite('clerk', 'cut');
+    expect(Object.keys(r.slotStates().sprites).sort()).toEqual(['murashov', 'zoya']);
+    // голос за кадром на сцене не рисуется — слота нет
+    r.showSprite(sprite('zoya', 'worried', { position: 'offscreen_left' }), true, 'cut');
+    expect(Object.keys(r.slotStates().sprites)).toEqual(['murashov']);
+  });
+});
