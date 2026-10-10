@@ -1,128 +1,205 @@
 /**
- * Обход графа ep01 автопилотом по ВСЕМ вариантам выборов и ВСЕМ исходам мини-игр
- * (success / partial / fail / skipped): каждый путь обязан дойти до шага end и не зациклиться.
- * Сверх этого — независимый «оракул» концовок и инварианты состояния на каждом пути.
+ * Обход графа ep01 по ВСЕМ вариантам выборов и ВСЕМ исходам мини-игр (success / partial / fail /
+ * skipped): каждый путь обязан дойти до шага end и не зациклиться.
+ *
+ * Пути не перечисляются по одному (у полного эпизода их сотни тысяч), а считаются по пространству
+ * состояний: детерминированный интерпретатор из одинаковых состояний приходит в одинаковое будущее,
+ * поэтому состояния, отличающиеся только мёртвыми переменными, сливаются (tests/helpers/liveness.ts).
+ * Корректность слияния проверена на синтетическом эпизоде полным перебором без слияния; для ep01 полная
+ * проверка включается переменной окружения VN_FULL_EXPLORE=1. Тесты не зашивают сюжет ep01 — только
+ * свойства, которые обязаны выполняться у любого эпизода.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { runAutoplay } from '../src/core/autoplay';
 import { Interpreter } from '../src/core/interpreter';
-import type { MinigameResult, Value } from '../src/core/types';
+import type { MinigameResult } from '../src/core/types';
 import { EP01_PATH, hasRepoContent, loadEpisode } from './helpers/content';
-import { exploreAll } from './helpers/explore';
+import { exploreAll, policyFromTrail } from './helpers/explore';
 import type { ExploreReport } from './helpers/explore';
+import { mg, miniEpisode } from './helpers/mini';
 
 const run = hasRepoContent() ? describe : describe.skip;
-
-/** Правило ветвления эпилога ep01 (s20.branch), записанное независимо от интерпретатора. */
-function expectedEnding(v: Record<string, Value>): string {
-  if (!v.board_done && v.confession === 'none') return 'e_early';
-  if (v.oper_wounded || v.buyer_detained) return 'e_variant';
-  return 'e_canon';
-}
 
 run('ep01: исчерпывающий обход графа', () => {
   const episode = loadEpisode(EP01_PATH);
   let report: ExploreReport;
-  const t0 = Date.now();
+  let ms = 0;
 
   beforeAll(() => {
+    const t0 = Date.now();
     report = exploreAll(episode);
-  }, 120_000);
+    ms = Date.now() - t0;
+    console.info(
+      `[ep01 paths] путей до end: ${report.paths}, состояний: ${report.states}, рёбер: ${report.edges}, ` +
+        `сцен: ${report.visitedScenes.size}/${Object.keys(episode.scenes).length}, ` +
+        `концовки: ${[...report.byEnding].map(([k, v]) => `${k}=${v}`).join(' ')}, ${ms} мс`,
+    );
+  }, 300_000);
 
-  it('ни одного исключения, цикла или тупика; интерпретатор не выдал замечаний по контенту', () => {
+  it('ни одного исключения, цикла, тупика или нарушения инвариантов; замечаний по контенту нет', () => {
     expect(report.failures).toEqual([]);
     expect(report.warnings).toEqual([]);
   });
 
-  it('путей достаточно много, и каждый кончается объявленной концовкой', () => {
-    // 5 мини-игр × 4 исхода (часть совпадает через skip_counts_as) × 3 выбора с ветвлением по покупателю.
-    console.info(
-      `[ep01 paths] путей до end: ${report.leaves.length}, сцен посещено: ${report.visitedScenes.size}/${Object.keys(episode.scenes).length}, ${Date.now() - t0} мс`,
-    );
-    expect(report.leaves.length).toBeGreaterThan(5000);
+  it('путей много, и каждый кончается объявленной концовкой', () => {
+    expect(report.paths).toBeGreaterThan(1000n);
     const declared = new Set(episode.endings.map((e) => e.id));
-    for (const leaf of report.leaves) expect(declared.has(leaf.ending)).toBe(true);
+    let sum = 0n;
+    for (const [id, n] of report.byEnding) {
+      expect(declared.has(id), id).toBe(true);
+      sum += n;
+    }
+    expect(sum).toBe(report.paths);
   });
 
-  it('достижимы все концовки, включая единственную canonical, и все сцены эпизода', () => {
-    expect([...report.endings].sort()).toEqual(['e_canon', 'e_early', 'e_variant']);
+  it('достижимы все объявленные концовки (ровно одна canonical) и все сцены эпизода', () => {
+    expect([...report.byEnding.keys()].sort()).toEqual(episode.endings.map((e) => e.id).sort());
     expect(episode.endings.filter((e) => e.kind === 'canonical')).toHaveLength(1);
     expect([...report.visitedScenes].sort()).toEqual(Object.keys(episode.scenes).sort());
   });
 
-  it('концовка на каждом пути совпадает с независимым оракулом ветвления эпилога', () => {
-    for (const leaf of report.leaves) {
-      expect(leaf.ending, leaf.decisions.join(' → ')).toBe(expectedEnding(leaf.final.vars));
-    }
-  });
-
-  it('последняя сцена пути — эпилог, объявленный у достигнутой концовки', () => {
+  it('в конечных состояниях открыты материалы концовки, а мини-игры и выборы не оставили лишнего', () => {
     const byId = new Map(episode.endings.map((e) => [e.id, e]));
-    for (const leaf of report.leaves) {
-      expect(leaf.scenes[0]).toBe('s01');
-      expect(leaf.scenes.at(-1), leaf.decisions.join(' → ')).toBe(byId.get(leaf.ending)?.epilogue_scene);
-      expect(leaf.scenes).toContain('s19'); // суд обязателен на любом пути
+    expect(report.ends.length).toBeGreaterThan(0);
+    for (const end of report.ends) {
+      for (const item of byId.get(end.ending)?.unlocks ?? []) expect(end.final.archive, end.ending).toContain(item);
     }
   });
 
-  it('инварианты состояния: журнал, границы глобальных, архив без дублей, ветка покупателя', () => {
-    for (const leaf of report.leaves) {
-      const where = leaf.decisions.join(' → ');
-      const choiceCount = leaf.decisions.filter((d) => d.includes('=')).length;
-      expect(leaf.final.journal, where).toHaveLength(choiceCount);
-      const trust = leaf.final.globals.trust_oper;
-      expect(typeof trust === 'number' && trust >= 0 && trust <= 5, where).toBe(true);
-      expect(new Set(leaf.final.archive).size, where).toBe(leaf.final.archive.length);
-      expect(leaf.final.archive, where).toContain('arc_fact_privatization');
-      const viaBuyer = leaf.decisions.includes('c_who=buyer');
-      expect(leaf.scenes.includes('s09'), where).toBe(viaBuyer);
-      expect(leaf.final.vars.wrong_suspect, where).toBe(viaBuyer);
-    }
-  });
-
-  it('исходы мини-игр: skipped ведёт туда же, куда skip_counts_as', () => {
-    const counts: Record<string, 'success' | 'partial' | 'fail'> = {};
-    for (const [id, mg] of Object.entries(episode.minigames ?? {})) counts[id] = mg.skip.skip_counts_as ?? 'partial';
-    for (const [id, as] of Object.entries(counts)) {
-      const base = [...Object.keys(counts)].reduce<Record<string, MinigameResult>>((acc, k) => ({ ...acc, [k]: 'success' }), {});
-      const a = runAutoplay(new Interpreter(episode), { minigames: { ...base, [id]: 'skipped' }, choices: { c_who: 'notary' } });
-      const b = runAutoplay(new Interpreter(episode), { minigames: { ...base, [id]: as }, choices: { c_who: 'notary' } });
-      expect(a.scenes, id).toEqual(b.scenes);
-      expect(a.ending, id).toBe(b.ending);
-    }
-  });
-
-  it('повтор пути автопилотом по записанным решениям даёт то же состояние (детерминизм, snapshot/restore не искажают)', () => {
-    // Равномерная выборка путей, без зависимости от порядка обхода.
-    const step = Math.max(1, Math.floor(report.leaves.length / 60));
-    for (let i = 0; i < report.leaves.length; i += step) {
-      const leaf = report.leaves[i];
-      if (!leaf) continue;
-      const choices: Record<string, string> = {};
-      const minigames: Record<string, MinigameResult> = {};
-      for (const d of leaf.decisions) {
-        if (d.includes('=')) {
-          const [c, o] = d.split('=');
-          if (c && o) choices[c] = o;
-        } else {
-          const [m, r] = d.split(':');
-          if (m && r) minigames[m] = r as MinigameResult;
-        }
-      }
+  it('автопилот по записанным решениям повторяет путь (детерминизм; snapshot/restore не искажают состояние)', () => {
+    for (const [ending, trail] of report.witness) {
+      const policy = policyFromTrail(trail);
       const interp = new Interpreter(episode);
-      const out = runAutoplay(interp, { choices, minigames });
-      expect(out.ending, leaf.decisions.join(' → ')).toBe(leaf.ending);
-      expect(out.scenes).toEqual(leaf.scenes);
-      expect(interp.state).toEqual(leaf.final);
+      const out = runAutoplay(interp, policy);
+      expect(out.ending, `${ending}: ${trail.join(' → ')}`).toBe(ending);
+      expect(out.truncated).toBe(false);
     }
   });
 
-  it('таймерный выбор c_take: default_option "wait" существует среди опций', () => {
-    const scene = episode.scenes.s15;
-    const choice = scene?.steps.find((s) => s.do === 'choice');
-    expect(choice && choice.do === 'choice' ? choice.timer_ms : null).toBe(12000);
-    expect(choice && choice.do === 'choice' ? choice.options.map((o) => o.id) : []).toContain('wait');
-    const r = runAutoplay(new Interpreter(episode), { choice: 'default' });
-    expect(r.choices.find((c) => c.choice === 'c_take')?.option).toBe('wait');
+  it('случайные прогоны воспроизводимы: решения, записанные автопилотом, дают то же конечное состояние', () => {
+    for (let seed = 1; seed <= 120; seed++) {
+      const a = new Interpreter(episode);
+      const first = runAutoplay(a, { choice: 'random', minigame: 'random', seed });
+      expect(first.ending, `seed ${seed}`).not.toBeNull();
+      const choices: Record<string, string> = {};
+      for (const c of first.choices) choices[c.choice] = c.option;
+      const minigames: Record<string, MinigameResult> = {};
+      for (const m of first.minigames) minigames[m.id] = m.result;
+      const b = new Interpreter(episode);
+      const again = runAutoplay(b, { choices, minigames });
+      expect(again.scenes, `seed ${seed}`).toEqual(first.scenes);
+      expect(b.state).toEqual(a.state);
+    }
+  });
+
+  it('все политики автопилота доходят до end', () => {
+    for (const choice of ['first', 'last', 'default', 'random'] as const) {
+      for (const minigame of ['success', 'partial', 'fail', 'skipped'] as const) {
+        const out = runAutoplay(new Interpreter(episode), { choice, minigame, seed: 3 });
+        expect(out.ending, `${choice}/${minigame}`).not.toBeNull();
+      }
+    }
+  });
+
+  it('skipped ведёт туда же, куда skip_counts_as', () => {
+    const defs = Object.values(episode.minigames ?? {});
+    expect(defs.length).toBeGreaterThan(0);
+    for (const def of defs) {
+      if (!def.skip.allowed) continue;
+      const as = def.skip.skip_counts_as ?? 'partial';
+      const skipped = runAutoplay(new Interpreter(episode), { minigames: { [def.id]: 'skipped' } });
+      const counted = runAutoplay(new Interpreter(episode), { minigames: { [def.id]: as } });
+      expect(skipped.scenes, def.id).toEqual(counted.scenes);
+      expect(skipped.ending, def.id).toBe(counted.ending);
+    }
+  });
+
+  it('любую мини-игру можно пропустить, а таймерные выборы имеют default_option среди опций', () => {
+    for (const def of Object.values(episode.minigames ?? {})) expect(def.skip.allowed, def.id).toBe(true);
+    for (const scene of Object.values(episode.scenes)) {
+      for (const step of scene.steps) {
+        if (step.do !== 'choice' || step.timer_ms === undefined) continue;
+        expect(step.default_option, `${scene.id}/${step.id}`).toBeDefined();
+        expect(step.options.map((o) => o.id)).toContain(step.default_option);
+      }
+    }
+  });
+
+  it('политика default берёт default_option на таймерном выборе', () => {
+    const timed = Object.values(episode.scenes)
+      .flatMap((s) => s.steps)
+      .find((st) => st.do === 'choice' && st.timer_ms !== undefined);
+    if (!timed || timed.do !== 'choice') return;
+    const out = runAutoplay(new Interpreter(episode), { choice: 'default' });
+    const made = out.choices.find((c) => c.choice === timed.id);
+    if (made) expect(made.option).toBe(timed.default_option);
+  });
+
+  it.runIf(process.env.VN_FULL_EXPLORE === '1')(
+    'полная проверка слияния на ep01: без слияния получаются те же числа путей по концовкам',
+    () => {
+      const full = exploreAll(episode, { mergeDead: false, maxStates: 3_000_000 });
+      expect(full.failures).toEqual([]);
+      expect(full.paths).toBe(report.paths);
+      expect([...full.byEnding].sort()).toEqual([...report.byEnding].sort());
+    },
+    900_000,
+  );
+});
+
+describe('исследователь состояний: корректность слияния по живым переменным', () => {
+  // Эпизод с независимыми «шумовыми» флагами и двумя значимыми развилками.
+  const BOOL = { type: 'bool' as const, default: false };
+  const INT = { type: 'int' as const, default: 0, min: 0, max: 4 };
+  const ep = miniEpisode(
+    {
+      s1: {
+        steps: [
+          { do: 'choice', id: 'c1', options: [{ id: 'a', key: 'k.a', effects: [{ var: 'noise1', op: 'set', value: true }, { var: 'score', op: 'add', value: 1 }], goto: 's2' }, { id: 'b', key: 'k.b', effects: [{ var: 'noise2', op: 'set', value: true }], goto: 's2' }, { id: 'c', key: 'k.c', effects: [{ var: 'score', op: 'add', value: 2 }], goto: 's2' }] },
+        ],
+      },
+      s2: { steps: [{ do: 'minigame', minigame: 'm1' }] },
+      s3: { steps: [{ do: 'narrate', key: 'k.3' }, { do: 'choice', id: 'c2', options: [{ id: 'x', key: 'k.x', effects: [{ var: 'noise3', op: 'toggle' }, { var: 'flag', op: 'set', value: true }], goto: 's4' }, { id: 'y', key: 'k.y', goto: 's4' }] }] },
+      s4: { steps: [{ do: 'branch', cases: [{ when: 'flag && score >= 2', goto: 's_win' }], default: 's_lose' }] },
+      s_win: { steps: [{ do: 'end', ending: 'e_main' }] },
+      s_lose: { steps: [{ do: 'end', ending: 'e_alt' }] },
+    },
+    {
+      variables: { noise1: BOOL, noise2: BOOL, noise3: BOOL, flag: BOOL, score: INT },
+      minigames: {
+        m1: mg('m1', {
+          outcomes: { success: { goto: 's3', effects: [{ var: 'score', op: 'add', value: 1 }] }, partial: { goto: 's3' }, fail: { goto: 's3', effects: [{ var: 'flag', op: 'set', value: false }] } },
+          skip: { allowed: true, skip_counts_as: 'partial' },
+        }),
+      },
+    },
+  );
+
+  it('слияние не меняет ни число путей, ни распределение по концовкам, но сокращает число состояний', () => {
+    const merged = exploreAll(ep);
+    const full = exploreAll(ep, { mergeDead: false });
+    expect(merged.failures).toEqual([]);
+    expect(full.failures).toEqual([]);
+    expect(merged.paths).toBe(full.paths);
+    expect([...merged.byEnding].sort()).toEqual([...full.byEnding].sort());
+    expect(merged.states).toBeLessThan(full.states);
+    expect(merged.liveVars).toEqual(['flag', 'score']);
+    // 3 варианта выбора × 4 исхода мини-игры × 2 варианта второго выбора
+    expect(merged.paths).toBe(24n);
+  });
+
+  it('находит цикл, тупик и исключение вместо зависания', () => {
+    const loop = miniEpisode({
+      s1: { steps: [{ do: 'choice', id: 'c', options: [{ id: 'again', key: 'k.a', goto: 's1' }, { id: 'out', key: 'k.o', goto: 's2' }] }] },
+      s2: { steps: [{ do: 'end', ending: 'e_main' }] },
+    });
+    const r = exploreAll(loop);
+    expect(r.failures.some((f) => /цикл/.test(f))).toBe(true);
+
+    const dead = miniEpisode({ s1: { steps: [{ do: 'narrate', key: 'k' }] } });
+    expect(exploreAll(dead).failures.some((f) => /исключение/.test(f))).toBe(true);
+
+    const spin = miniEpisode({ s1: { steps: [{ do: 'narrate', key: 'k' }, { do: 'jump', scene: 's1' }] } });
+    expect(exploreAll(spin).failures.some((f) => /цикл без решений/.test(f))).toBe(true);
   });
 });

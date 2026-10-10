@@ -1,31 +1,47 @@
 /**
  * Session: цикл партии без DOM на настоящем ep01 с заглушками UI/сцены/платформы.
  * Здесь же — порядок «погасить → реклама → continue() → проявить» на реальных границах блоков.
+ * Тесты не зашивают сюжет ep01: путь к канонической концовке берётся из исследователя состояний.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { runAutoplay } from '../src/core/autoplay';
+import { Interpreter } from '../src/core/interpreter';
 import { SaveManager } from '../src/core/saves';
 import type { SaveFile } from '../src/core/saves';
-import type { Episode } from '../src/core/types';
+import type { Episode, MinigameResult } from '../src/core/types';
 import { Session } from '../src/session';
 import { Director } from '../src/stage/director';
 import { EP01_PATH, hasRepoContent, loadEpisode } from './helpers/content';
+import { exploreAll, policyFromTrail } from './helpers/explore';
 import { FakeAudio, FakeCaptions, FakePlatform, FakeStage, FakeToasts, FakeUI } from './helpers/fakes';
 import type { FakeUIOptions, Timeline } from './helpers/fakes';
 
 const run = hasRepoContent() ? describe : describe.skip;
 
-/** Путь канонической концовки ep01: проверять нотариуса, ждать, брать порознь, мини-игры успешно. */
-const CANON: FakeUIOptions = {
-  choose: (p) => (p.id === 'c_who' ? 'notary' : p.id === 'c_take' ? 'wait' : (p.options.find((o) => o.enabled)?.id ?? '')),
-};
+interface CanonPath {
+  trail: string[];
+  choices: Record<string, string>;
+  minigames: Record<string, MinigameResult>;
+}
+
+let canon: CanonPath;
+const episodeOnDisk = (): Episode => loadEpisode(EP01_PATH);
+
+/** Решения, ведущие к канонической концовке: UI тестов повторяет их, на остальном берёт первое доступное. */
+function canonUi(): FakeUIOptions {
+  return {
+    choose: (p) => canon.choices[p.id] ?? p.options.find((o) => o.enabled)?.id ?? '',
+    minigame: (p) => canon.minigames[p.def.id] ?? 'success',
+  };
+}
 
 async function build(opts: { ui?: FakeUIOptions; episode?: Episode; platform?: FakePlatform } = {}) {
-  const episode = opts.episode ?? loadEpisode(EP01_PATH);
+  const episode = opts.episode ?? episodeOnDisk();
   const t: Timeline = [];
   const platform = opts.platform ?? new FakePlatform(t);
   const saves = new SaveManager(platform, { slots: platform.capabilities.manualSlots, debounceMs: 0 });
   await saves.init();
-  const ui = new FakeUI(t, { ...CANON, ...opts.ui });
+  const ui = new FakeUI(t, { ...canonUi(), ...opts.ui });
   const warnings: string[] = [];
   let session!: Session;
   const director = new Director({
@@ -50,41 +66,68 @@ async function build(opts: { ui?: FakeUIOptions; episode?: Episode; platform?: F
   return { episode, t, platform, saves, ui, director, session, warnings, ended };
 }
 
+/** Блоки, в которые игрок входит по пути (смена блока между соседними сценами), в порядке входа. */
+function blockEntries(episode: Episode, scenes: readonly string[]): string[] {
+  const out: string[] = [];
+  let prev: string | null = null;
+  for (const s of scenes) {
+    const block = episode.scenes[s]?.block ?? '';
+    if (block !== prev) out.push(block);
+    prev = block;
+  }
+  return out;
+}
+
+beforeAll(() => {
+  if (!hasRepoContent()) return;
+  const report = exploreAll(episodeOnDisk());
+  const trail = report.witness.get('e_canon');
+  if (!trail) throw new Error('в эпизоде не нашлось пути к e_canon');
+  canon = { trail, ...policyFromTrail(trail) };
+}, 120_000);
+
 run('Session на ep01', () => {
-  it('проходит эпизод до концовки: реплики, выборы, мини-игры, финал, события платформы', async () => {
+  it('проходит эпизод до канонической концовки: реплики, выборы, мини-игры, финал, события платформы', async () => {
     const { session, ui, platform, ended, saves, episode } = await build();
     const outcome = await session.newGame();
-    expect(outcome).toMatchObject({ reason: 'ended', ending: { id: 'e_canon' } });
+    expect(outcome).toMatchObject({ reason: 'ended', ending: { id: 'e_canon', kind: 'canonical' } });
     expect(ended).toEqual(['e_canon']);
     expect(ui.endings).toHaveLength(1);
-    expect(ui.endings[0]?.journal).toBeGreaterThan(0);
-    expect(ui.choices.map((c) => c.id)).toEqual(['c_start', 'c_who', 'c_take']);
-    expect(ui.minigames.map((m) => m.id)).toEqual(['mg_scene', 'mg_docs', 'mg_db', 'mg_board', 'mg_interrogation']);
+
+    const choices = canon.trail.filter((d) => d.includes('='));
+    const minigames = canon.trail.filter((d) => !d.includes('='));
+    expect(ui.choices.map((c) => `${c.id}=${c.option}`)).toEqual(choices);
+    expect(ui.minigames.map((m) => m.id)).toEqual(minigames.map((d) => d.split(':')[0]));
+    expect(ui.endings[0]?.journal).toBe(choices.length); // все выборы эпизода запоминаются
+
     const events = platform.tracked.map((x) => x.event);
     expect(events[0]).toBe('level_started');
-    expect(platform.tracked[0]?.data).toEqual({ world: 's1', level: 'ep01' });
+    expect(platform.tracked[0]?.data).toEqual({ world: `s${episode.season}`, level: 'ep01' });
     expect(events).toContain('level_completed');
     expect(events).toContain('ending_reached');
-    expect(events.filter((e) => e === 'minigame_finish')).toHaveLength(5);
-    // Итоги записаны в профиль, автосейв после финала очищен.
+    const skipped = minigames.filter((d) => d.endsWith(':skipped')).length;
+    expect(events.filter((e) => e === 'minigame_finish')).toHaveLength(minigames.length - skipped);
+    expect(events.filter((e) => e === 'minigame_skip')).toHaveLength(skipped);
+
+    // Итоги записаны в профиль, автосейв после финала очищен, архив открыт.
     expect(saves.profile.endings[episode.id]).toEqual(['e_canon']);
     expect(saves.progress.autosave).toBeNull();
-    expect(saves.archiveOf(episode.id)).toContain('arc_newspaper');
+    expect(saves.archiveOf(episode.id).length).toBeGreaterThan(0);
   });
 
-  it('реклама только на границах блоков с ad_break_allowed: title, interlude, epilogue', async () => {
-    const { session, platform } = await build();
+  it('реклама только на границах блоков с ad_break_allowed — и не перед первым блоком', async () => {
+    const { session, platform, episode } = await build();
     await session.newGame();
-    expect(platform.ads).toBe(3);
-    expect(platform.tracked.filter((x) => x.event === 'ad_break').map((x) => x.data?.block)).toEqual([
-      'b02_title',
-      'b09_interlude',
-      'b14_epilogue',
-    ]);
+    const walked = runAutoplay(new Interpreter(episode), canon);
+    const entries = blockEntries(episode, walked.scenes);
+    const expected = entries.slice(1).filter((b) => episode.blocks.find((x) => x.id === b)?.ad_break_allowed === true);
+    expect(expected.length).toBeGreaterThan(0);
+    expect(platform.tracked.filter((x) => x.event === 'ad_break').map((x) => x.data?.block)).toEqual(expected);
+    expect(platform.ads).toBe(expected.length);
   });
 
   it('на каждой рекламной границе: гашение → реклама → continue() → проявление; новая сцена до рекламы не показывается', async () => {
-    const { session, t } = await build();
+    const { session, t, platform } = await build();
     // Следим за continue() интерпретатора, чтобы доказать, что проявление идёт после него.
     const original = session.interp.continue.bind(session.interp);
     vi.spyOn(session.interp, 'continue').mockImplementation(() => {
@@ -93,25 +136,23 @@ run('Session на ep01', () => {
     });
     await session.newGame();
 
-    const boundaries: Array<[scene: string, hold: string, reveal: string]> = [
-      ['s02', 'stage:fadeToBlackAndHold:vhs_glitch', 'stage:revealFromBlack:s02:vhs_glitch'],
-      ['s13', 'stage:fadeToBlackAndHold:fade', 'stage:revealFromBlack:s13:fade'],
-      ['s20', 'stage:fadeToBlackAndHold:slow_fade', 'stage:revealFromBlack:s20:slow_fade'],
-    ];
-    for (const [scene, hold, reveal] of boundaries) {
-      const iHold = t.indexOf(hold);
+    const holds = t.flatMap((e, i) => (e.startsWith('stage:fadeToBlackAndHold:') ? [i] : []));
+    expect(holds.length).toBe(platform.ads);
+    expect(holds.length).toBeGreaterThan(0);
+    for (const iHold of holds) {
       const iAdStart = t.indexOf('ad:start', iHold);
       const iAdEnd = t.indexOf('ad:end', iAdStart);
       const iContinue = t.indexOf('interp:continue', iAdEnd);
-      const iReveal = t.indexOf(reveal);
-      expect(iHold, `${scene}: гашение`).toBeGreaterThanOrEqual(0);
+      const iReveal = t.findIndex((e, i) => i > iHold && e.startsWith('stage:revealFromBlack:'));
+      const reveal = t[iReveal] ?? '';
+      const scene = reveal.split(':')[2] ?? '';
       expect(iAdStart, `${scene}: старт рекламы после гашения`).toBeGreaterThan(iHold);
       expect(iAdEnd).toBeGreaterThan(iAdStart);
       expect(iContinue, `${scene}: continue() после рекламы`).toBeGreaterThan(iAdEnd);
       expect(iReveal, `${scene}: проявление только после continue()`).toBeGreaterThan(iContinue);
       expect(t.some((e) => e.startsWith(`stage:changeScene:${scene}:`)), `${scene}: обычного перехода нет`).toBe(false);
       // Между гашением и проявлением на сцену ничего не рисуется.
-      const between = t.slice(iHold + 1, iReveal).filter((e) => e.startsWith('stage:') && !e.startsWith('stage:fadeToBlackAndHold'));
+      const between = t.slice(iHold + 1, iReveal).filter((e) => e.startsWith('stage:'));
       expect(between, `${scene}: сцена молчит во время рекламы`).toEqual([]);
     }
   });
@@ -122,10 +163,12 @@ run('Session на ep01', () => {
     const { session } = await build({ platform });
     const outcome = await session.newGame();
     expect(outcome.reason).toBe('ended');
-    expect(platform.tracked.filter((x) => x.event === 'ad_break').every((x) => x.data?.shown === false)).toBe(true);
+    const breaks = platform.tracked.filter((x) => x.event === 'ad_break');
+    expect(breaks.length).toBeGreaterThan(0);
+    expect(breaks.every((x) => x.data?.shown === false)).toBe(true);
   });
 
-  it('автосейвы на границах блоков и после выборов; каждый из них возобновляется до той же концовки', async () => {
+  it('автосейвы на границах блоков, после выборов и мини-игр; каждый из них возобновляется до той же концовки', async () => {
     const first = await build();
     const files: SaveFile[] = [];
     const spy = vi.spyOn(first.saves, 'writeAutosave').mockImplementation((f) => {
@@ -135,25 +178,24 @@ run('Session на ep01', () => {
     expect(baseline).toMatchObject({ reason: 'ended', ending: { id: 'e_canon' } });
     spy.mockRestore();
 
-    // 14 блоков (часть пропущена веткой) + 3 выбора + 5 мини-игр.
-    expect(files.length).toBeGreaterThanOrEqual(14);
+    const walked = runAutoplay(new Interpreter(first.episode), canon);
+    const blocksEntered = blockEntries(first.episode, walked.scenes).filter((b) => first.episode.blocks.find((x) => x.id === b)?.autosave !== false);
+    expect(files.length).toBe(blocksEntered.length + walked.choices.length + walked.minigames.length);
     for (const f of files) {
       expect(f.schema_version).toBe(1);
       expect(f.content_version).toBe('test@1');
-      expect(f.state.episode_id).toBe('ep01_murylev');
+      expect(f.state.episode_id).toBe(first.episode.id);
       expect(f.view?.scene).toBe(f.state.scene_id);
     }
 
-    // Загрузка любого из автосейвов и прохождение теми же политиками даёт ту же концовку и тот же журнал.
+    // Загрузка любого из автосейвов и прохождение теми же решениями даёт ту же концовку и тот же журнал.
     for (const f of files) {
       const again = await build();
       const outcome = await again.session.loadSave(f);
       expect(outcome, `сейв в сцене ${f.state.scene_id}`).toMatchObject({ reason: 'ended', ending: { id: 'e_canon' } });
-      expect(again.ui.endings[0]?.state.journal.map((j) => j.option)).toEqual(
-        first.ui.endings[0]?.state.journal.map((j) => j.option),
-      );
+      expect(again.ui.endings[0]?.state.journal.map((j) => j.option)).toEqual(first.ui.endings[0]?.state.journal.map((j) => j.option));
     }
-  });
+  }, 60_000);
 
   it('загрузка не дублирует рекламу и не вызывает level_started', async () => {
     const first = await build();
@@ -162,10 +204,10 @@ run('Session на ep01', () => {
       files.push(JSON.parse(JSON.stringify(f)) as SaveFile);
     });
     await first.session.newGame();
-    const late = files.find((f) => f.state.scene_id === 's20') ?? files[files.length - 1];
-    expect(late).toBeDefined();
+    const last = files[files.length - 1];
+    expect(last).toBeDefined();
     const again = await build();
-    await again.session.loadSave(late as SaveFile);
+    await again.session.loadSave(last as SaveFile);
     expect(again.platform.tracked.some((x) => x.event === 'level_started')).toBe(false);
     expect(again.platform.ads).toBe(0);
   });
@@ -175,30 +217,35 @@ run('Session на ep01', () => {
     await session.newGame();
     expect(ui.lines.every((l) => !l.read)).toBe(true);
     const count = ui.lines.length;
+    expect(count).toBeGreaterThan(50);
     await session.newGame();
-    expect(ui.lines.slice(count).every((l) => l.read)).toBe(true);
     expect(ui.lines.length).toBe(count * 2);
+    expect(ui.lines.slice(count).every((l) => l.read)).toBe(true);
   });
 
-  it('журнал реплик (backlog) копится по порядку показа', async () => {
-    const { session } = await build();
+  it('журнал реплик (backlog) копится по порядку показа и совпадает с тем, что видел игрок', async () => {
+    const { session, ui } = await build();
     await session.newGame();
-    expect(session.log[0]).toMatchObject({ kind: 'narrate', key: 'ep01.s01.l001', who: null });
-    expect(session.log[1]).toMatchObject({ kind: 'say', key: 'ep01.s01.l002', who: 'neighbor' });
-    expect(session.log.length).toBeGreaterThan(30);
+    expect(session.log.map((l) => l.key)).toEqual(ui.lines.map((l) => l.p.key));
+    expect(session.log.map((l) => l.who)).toEqual(ui.lines.map((l) => l.p.who));
+    expect(session.log.map((l) => l.kind)).toEqual(ui.lines.map((l) => l.p.style));
+    expect(session.log.some((l) => l.kind === 'narrate')).toBe(true);
+    expect(session.log.some((l) => l.kind === 'say')).toBe(true);
   });
 
-  it('политики UI: выбор и исход мини-игры проходят до интерпретатора', async () => {
-    const { session, ui } = await build({
+  it('политики UI: выбор и исход мини-игры доходят до интерпретатора', async () => {
+    const policy = { choice: 'last' as const, minigame: 'fail' as const };
+    const { session, ui, episode } = await build({
       ui: {
-        choose: (p) => (p.id === 'c_who' ? 'buyer' : (p.options.find((o) => o.enabled)?.id ?? '')),
+        choose: (p) => p.options.filter((o) => o.enabled).at(-1)?.id ?? '',
         minigame: () => 'fail',
       },
     });
     const outcome = await session.newGame();
+    const expected = runAutoplay(new Interpreter(episode), policy);
     expect(outcome.reason).toBe('ended');
-    expect(ui.choices.map((c) => `${c.id}=${c.option}`)).toContain('c_who=buyer');
-    expect(ui.choices.map((c) => c.id)).toContain('c_buyer'); // ветка с покупателем
+    expect(ui.endings[0]?.ending).toBe(expected.ending);
+    expect(ui.choices.map((c) => `${c.id}=${c.option}`)).toEqual(expected.choices.map((c) => `${c.choice}=${c.option}`));
   });
 });
 
@@ -305,31 +352,31 @@ run('Session: откат, отмена, пауза, загрузка', () => {
   });
 
   it('сейв внутри мини-игры несёт её состояние, а при загрузке оно передаётся обратно', async () => {
-    const t: Timeline = [];
     const first = await build();
-    // Остановимся на мини-игре mg_docs: UI мини-игры «висит», пока тест не завершит её.
-    let finishMg: ((r: 'success') => void) | null = null;
+    const mgId = canon.trail.find((d) => !d.includes('='))?.split(':')[0] as string;
+    const mgScene = Object.values(first.episode.scenes).find((s) => s.steps.some((st) => st.do === 'minigame' && st.minigame === mgId));
+    expect(mgScene).toBeDefined();
+    // Остановимся на первой мини-игре пути: UI мини-игры «висит», пока тест не завершит её.
+    let hang = false;
     first.ui.runMinigame = (p, ctx) => {
       first.ui.minigames.push({ id: p.def.id, restore: ctx.restore });
-      if (p.def.id !== 'mg_docs') return Promise.resolve('success');
-      first.ui.activeMinigame = { id: 'mg_docs', state: { marked: ['date'] } };
+      first.ui.activeMinigame = { id: p.def.id, state: { marked: ['date'] } };
       ctx.autosave();
-      return new Promise((resolve) => {
-        finishMg = resolve;
-      });
+      hang = true;
+      return new Promise(() => undefined);
     };
     void first.session.newGame();
-    for (let i = 0; i < 200 && !finishMg; i++) await new Promise((r) => setTimeout(r, 0));
+    for (let i = 0; i < 400 && !hang; i++) await new Promise((r) => setTimeout(r, 0));
+    expect(hang).toBe(true);
     const file = first.saves.autosave;
-    expect(file?.mg).toEqual({ id: 'mg_docs', state: { marked: ['date'] } });
-    expect(file?.state.scene_id).toBe('s07');
+    expect(file?.mg).toEqual({ id: mgId, state: { marked: ['date'] } });
+    expect(file?.state.scene_id).toBe(mgScene?.id);
     first.session.cancel();
 
     const again = await build();
     const outcome = await again.session.loadSave(file as SaveFile);
     expect(outcome.reason).toBe('ended');
-    expect(again.ui.minigames[0]).toEqual({ id: 'mg_docs', restore: { marked: ['date'] } });
-    void t;
+    expect(again.ui.minigames[0]).toEqual({ id: mgId, restore: { marked: ['date'] } });
   });
 });
 
@@ -339,7 +386,7 @@ run('Session: автопилот', () => {
     const report = await session.autoplay({ choice: 'last', minigame: 'fail' });
     expect(report.ending).not.toBeNull();
     expect(report.truncated).toBe(false);
-    expect(report.minigames).toHaveLength(5);
+    expect(report.minigames.length).toBeGreaterThan(0);
     // Цикл возобновляется на ожидании end — экран финала показывается.
     for (let i = 0; i < 100 && ui.endings.length === 0; i++) await new Promise((r) => setTimeout(r, 0));
     expect(ui.endings).toHaveLength(1);

@@ -397,9 +397,10 @@ export class Session {
     this.d.saves.writeQuicksave(this.makeSaveFile());
   }
 
+  /** Ручное сохранение в слот n (на платформе без слотов, как Playgama, это единственный слот 1). */
   async saveToSlot(n: number): Promise<void> {
     if (!this.interp.started || this.interp.isEnded) return;
-    await this.d.saves.writeSlot(n, this.makeSaveFile());
+    await this.d.saves.writeManual(n, this.makeSaveFile());
   }
 
   /** Пауза платформы/вкладки: останавливает таймеры интерфейса и сохраняет прогресс. */

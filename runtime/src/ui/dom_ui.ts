@@ -45,8 +45,6 @@ export interface DomUIDeps {
   settings: () => Settings;
   view: () => ViewState | null;
   env: () => Readonly<Record<string, Value>>;
-  /** Игрок закрыл экран финала. */
-  onEndingMenu: () => void;
   onOpenArchive: () => void;
   /** Быстрое меню / горячие клавиши, которыми управляет App. */
   onAction: (action: QuickAction) => void;
