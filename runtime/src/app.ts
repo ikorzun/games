@@ -326,6 +326,11 @@ export class App {
 
   // ───────────────────────────── настройки и язык ─────────────────────────────
 
+  /** Текущие настройки игрока (только чтение). */
+  get settings(): Readonly<Settings> {
+    return this.d.saves.settings;
+  }
+
   updateSettings(patch: Partial<Settings>): Settings {
     const s = this.d.saves.updateSettings(patch);
     this.applySettings(s);

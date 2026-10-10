@@ -7,6 +7,7 @@
  * Рантайм никогда не кэширует готовые строки в состоянии — только ключи, поэтому язык
  * можно сменить на лету, перерисовав текущий шаг.
  */
+import { pseudoloc } from './pseudo';
 import { LANGS } from './types';
 import type { Lang } from './types';
 
@@ -42,6 +43,7 @@ export class I18n {
   private readonly bundles = new Map<Lang, Map<string, string>>();
   private readonly listeners = new Set<Listener>();
   private current: Lang = 'en';
+  private pseudo = false;
   /** Ключи, которые не нашлись ни в одном языке цепочки (для отладки/QA). */
   readonly missing = new Set<string>();
 
@@ -71,6 +73,17 @@ export class I18n {
     for (const cb of [...this.listeners]) cb(lang);
   }
 
+  get pseudoEnabled(): boolean {
+    return this.pseudo;
+  }
+
+  /** Псевдолокализация: +35 % длины и диакритика на всех найденных строках (для проверки вёрстки). */
+  setPseudo(on: boolean): void {
+    if (on === this.pseudo) return;
+    this.pseudo = on;
+    for (const cb of [...this.listeners]) cb(this.current);
+  }
+
   onChange(cb: Listener): () => void {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
@@ -89,7 +102,10 @@ export class I18n {
   t(key: string, params?: Params): string {
     for (const lang of fallbackChain(this.current)) {
       const v = this.raw(lang, key);
-      if (v !== undefined) return interpolate(v, params);
+      if (v !== undefined) {
+        // Псевдолокализуем шаблон до подстановки: значения {name} остаются настоящими.
+        return interpolate(this.pseudo ? pseudoloc(v) : v, params);
+      }
     }
     this.missing.add(key);
     return `[${key}]`;

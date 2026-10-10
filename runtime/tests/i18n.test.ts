@@ -216,3 +216,37 @@ real('i18n: настоящие локали ep01', () => {
     expect(vi.isMockFunction(i.t)).toBe(false);
   });
 });
+
+describe('i18n: псевдолокализация', () => {
+  it('удлиняет строку на ~35 %, добавляет диакритику и сохраняет плейсхолдеры', async () => {
+    const { pseudoloc } = await import('../src/core/pseudo');
+    const out = pseudoloc('Save game: {n} min');
+    expect(out.startsWith('[!!! ')).toBe(true);
+    expect(out.endsWith(' !!!]')).toBe(true);
+    expect(out).toContain('{n}');
+    expect(out).toContain('Šáṽé'); // S→Š, a→á, v→ṽ, e→é
+    expect(Array.from(out).length).toBeGreaterThan(Array.from('Save game: {n} min').length * 1.35);
+    expect(out).toMatch(/ ~~~/); // добавка из «слов»: строка переносится по пробелам
+  });
+
+  it('i18n.setPseudo применяется к найденным строкам, не к заглушкам [key]; выключается обратно', () => {
+    const i = new I18n();
+    i.addStrings('en', { 'a.k': 'Hello {name}' });
+    i.setLang('en');
+    const seen: Lang[] = [];
+    i.onChange((l) => seen.push(l));
+    i.setPseudo(true);
+    expect(i.t('a.k', { name: 'Ann' })).toMatch(/^\[!!! Ĥéļļó Ann (~~~ ?)+ !!!\]$/);
+    expect(i.t('a.none')).toBe('[a.none]');
+    i.setPseudo(false);
+    expect(i.t('a.k', { name: 'Ann' })).toBe('Hello Ann');
+    expect(seen).toEqual(['en', 'en']); // перерисовка интерфейса при включении и выключении
+  });
+
+  it('кириллица (строки, которых нет на en) не ломается, но тоже удлиняется', async () => {
+    const { pseudoloc } = await import('../src/core/pseudo');
+    const out = pseudoloc('Осмотреть квартиру');
+    expect(out).toContain('Осмотреть квартиру');
+    expect(Array.from(out).length).toBeGreaterThan(Array.from('Осмотреть квартиру').length * 1.35);
+  });
+});

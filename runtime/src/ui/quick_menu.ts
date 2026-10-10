@@ -11,7 +11,8 @@ export interface QuickState {
 }
 
 const ORDER: readonly QuickAction[] = ['auto', 'skip', 'log', 'save', 'load', 'mute', 'settings', 'hide'];
-const TOGGLES: ReadonlySet<QuickAction> = new Set(['auto', 'skip', 'mute']);
+/** Кнопки-переключатели и поле состояния, которое каждая из них показывает. */
+const TOGGLE_KEY: Readonly<Partial<Record<QuickAction, keyof QuickState>>> = { auto: 'auto', skip: 'skip', mute: 'muted' };
 
 export class QuickMenu {
   readonly el: HTMLElement;
@@ -62,8 +63,9 @@ export class QuickMenu {
 
   private applyState(): void {
     for (const [action, btn] of this.buttons) {
-      if (!TOGGLES.has(action)) continue;
-      const on = this.state[action as keyof QuickState];
+      const key = TOGGLE_KEY[action];
+      if (!key) continue;
+      const on = this.state[key];
       btn.classList.toggle('is-on', on);
       btn.setAttribute('aria-pressed', String(on));
     }

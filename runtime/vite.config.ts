@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import playgamaBridge from '@playgama/bridge/vite';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
@@ -113,23 +114,46 @@ function contentPlugin(): Plugin {
   };
 }
 
-export default defineConfig({
-  // Относительные пути: index.html в корне архива, работает из любой подпапки (Playgama).
-  base: './',
-  plugins: [contentPlugin()],
-  build: {
-    outDir: 'dist',
-    emptyOutDir: true,
-    target: 'es2020',
-    sourcemap: false,
-    // PixiJS выносится в отдельный чанк (ленивый import) и заведомо больше 500 КБ.
-    chunkSizeWarningLimit: 1600,
-  },
-  server: { host: true, port: 5173 },
-  preview: { host: true, port: 4173 },
-  test: {
-    environment: 'node',
-    include: ['tests/**/*.test.ts'],
-    reporters: ['default'],
-  },
+/**
+ * Сборка для Playgama: `npm run build:playgama` (= `vite build --mode playgama`) → dist-playgama/.
+ *   - официальный плагин @playgama/bridge/vite в режиме `local`: runtime Bridge SDK копируется в корень
+ *     архива (playgama-bridge.js), тег <script> вставляется в <head> раньше кода игры — window.bridge
+ *     появляется до старта рантайма, внешних запросов за SDK нет (режим `cdn` тянул бы его с CDN);
+ *   - минимальный playgama-bridge-config.json рядом с index.html (SDK запрашивает его при initialize();
+ *     без файла работает, но пишет ошибку в консоль). Настоящий конфиг (реклама, платежи, таски)
+ *     собирается в редакторе конфигов Playgama и заменяет этот файл.
+ * Обычная сборка (`npm run build` → dist/) Bridge не содержит: платформа выбирается по window.bridge,
+ * без него работает web-plain.
+ */
+function bridgeConfigPlugin(): Plugin {
+  return {
+    name: 'vn-playgama-config',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'playgama-bridge-config.json', source: '{}\n' });
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  const playgama = mode === 'playgama';
+  return {
+    // Относительные пути: index.html в корне архива, работает из любой подпапки (Playgama).
+    base: './',
+    plugins: [contentPlugin(), ...(playgama ? [playgamaBridge({ mode: 'local' }), bridgeConfigPlugin()] : [])],
+    build: {
+      outDir: playgama ? 'dist-playgama' : 'dist',
+      emptyOutDir: true,
+      target: 'es2020',
+      sourcemap: false,
+      // PixiJS выносится в отдельный чанк (ленивый import) и заведомо больше 500 КБ.
+      chunkSizeWarningLimit: 1600,
+    },
+    server: { host: true, port: 5173 },
+    preview: { host: true, port: 4173 },
+    test: {
+      environment: 'node',
+      include: ['tests/**/*.test.ts'],
+      reporters: ['default'],
+    },
+  };
 });

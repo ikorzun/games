@@ -1,0 +1,4 @@
+# Сборка для Playgama (npm run build:playgama); dist/ и node_modules/ игнорируются корневым .gitignore
+dist-playgama/
+# Скриншоты смоук-теста (npm run smoke:matrix)
+e2e/out/

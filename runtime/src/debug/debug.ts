@@ -6,6 +6,7 @@
  */
 import type { App } from '../app';
 import type { AutoplayPolicy, AutoplayReport } from '../core/autoplay';
+import type { Settings } from '../core/settings';
 import { cloneState } from '../core/state';
 import type { GameState, Lang, Pending, Value, ViewState } from '../core/types';
 
@@ -39,6 +40,8 @@ export interface VnDebugApi {
   lang(lang?: Lang): Promise<Lang>;
   /** Режим Skip. */
   skip(on: boolean): void;
+  /** Настройки игрока: без аргумента — текущие, с патчем — применить (очистка как у экрана настроек). Не зависит от платформы хранения. */
+  settings(patch?: Partial<Settings>): Settings;
   /** Какой рендерер сцены работает: 'pixi' или 'dom'. */
   renderer(): string;
 }
@@ -87,6 +90,7 @@ export function installDebug(app: App): VnDebugApi {
       return i18n.lang;
     },
     skip: (on) => app.ui.setSkip(on),
+    settings: (patch) => (patch ? app.updateSettings(patch) : { ...app.settings }),
     renderer: () => app.stage.renderer.kind,
   };
   window.__vn = api;

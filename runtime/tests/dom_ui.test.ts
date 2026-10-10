@@ -1,0 +1,730 @@
+// @vitest-environment jsdom
+/**
+ * DomUI: порт SessionUI на DOM. Ввод (клик, тап, Space/Enter, Esc, цифры, колесо), авто-режим,
+ * Skip прочитанного, выборы с таймером, паузы титров, документ, мини-игра, финал, смена языка.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { i18n } from '../src/core/i18n';
+import { defaultViewFor } from '../src/core/interpreter';
+import { DEFAULT_SETTINGS } from '../src/core/settings';
+import type { Settings } from '../src/core/settings';
+import type { ChoicePending, Ending, GameState, LinePending, MinigamePending, Presentation, ViewState, Value } from '../src/core/types';
+import { createInitialState } from '../src/core/state';
+import { registerBuiltinMinigames } from '../src/minigames/registry';
+import type { BaseContext, HoldContext, LineContext, MinigameContext } from '../src/session';
+import type { Stage } from '../src/stage/stage';
+import { CaptionLayer } from '../src/ui/captions';
+import { DomUI } from '../src/ui/dom_ui';
+import { UiKit } from '../src/ui/kit';
+import type { QuickAction } from '../src/ui/quick_menu';
+import { FakePlatform } from './helpers/fakes';
+import { mg, miniEpisode } from './helpers/mini';
+
+const FAKE = ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date', 'performance', 'requestAnimationFrame', 'cancelAnimationFrame'] as const;
+
+const episode = miniEpisode({ s1: { steps: [{ do: 'end', ending: 'e_main' }] } });
+
+interface Rig {
+  ui: DomUI;
+  kit: UiKit;
+  root: HTMLElement;
+  captionsHost: HTMLElement;
+  settings: Settings;
+  vars: Record<string, Value>;
+  view: { current: ViewState | null };
+  actions: QuickAction[];
+  rollbacks: { n: number };
+  archiveOpens: { n: number };
+  fx: Array<{ fx: string; ms: number; intensity: number; instant: boolean }>;
+  mgActive: boolean[];
+  platform: FakePlatform;
+}
+
+const rigs: Rig[] = [];
+
+function makeRig(over: Partial<Settings> = {}, presentation: Presentation = 'procedural'): Rig {
+  const root = document.createElement('div');
+  document.body.appendChild(root);
+  const actions: QuickAction[] = [];
+  const kit = new UiKit(root, (a) => actions.push(a), () => null);
+  const captionsHost = document.createElement('div');
+  kit.main.appendChild(captionsHost);
+  const captions = new CaptionLayer(captionsHost);
+  const fx: Rig['fx'] = [];
+  const mgActive: boolean[] = [];
+  const stage = {
+    minigameRoot: {},
+    playFx: (f: string, ms: number, intensity: number, instant: boolean): Promise<void> => {
+      fx.push({ fx: f, ms, intensity, instant });
+      return new Promise((r) => setTimeout(r, ms));
+    },
+    setMinigameActive: (a: boolean): void => {
+      mgActive.push(a);
+    },
+  } as unknown as Stage;
+  const settings: Settings = { ...DEFAULT_SETTINGS, ...over };
+  const vars: Record<string, Value> = {};
+  const view = { current: { ...defaultViewFor(episode, 's1'), presentation } as ViewState | null };
+  const rollbacks = { n: 0 };
+  const archiveOpens = { n: 0 };
+  const platform = new FakePlatform();
+  const ui = new DomUI({
+    episode,
+    kit,
+    stage,
+    captions,
+    platform,
+    settings: () => settings,
+    view: () => view.current,
+    env: () => vars,
+    onOpenArchive: () => void (archiveOpens.n += 1),
+    onAction: (a) => void actions.push(a),
+    onRollback: () => void (rollbacks.n += 1),
+  });
+  const rig: Rig = { ui, kit, root, captionsHost, settings, vars, view, actions, rollbacks, archiveOpens, fx, mgActive, platform };
+  rigs.push(rig);
+  return rig;
+}
+
+const lineP = (key: string, over: Partial<LinePending> = {}): LinePending => ({
+  kind: 'line',
+  style: 'say',
+  who: 'a',
+  key,
+  expression: null,
+  narrate_style: null,
+  voice: null,
+  scene: 's1',
+  index: 0,
+  ...over,
+});
+
+const ctl = (): AbortController => new AbortController();
+const lineCtx = (c: AbortController, read = false): LineContext => ({ signal: c.signal, read });
+const baseCtx = (c: AbortController): BaseContext => ({ signal: c.signal });
+const flush = async (ms = 0): Promise<void> => {
+  await vi.advanceTimersByTimeAsync(ms);
+};
+
+/** Промис → флаг «уже выполнен». */
+function track<T>(p: Promise<T>): { done: boolean; value: T | undefined } {
+  const t: { done: boolean; value: T | undefined } = { done: false, value: undefined };
+  void p.then((v) => {
+    t.done = true;
+    t.value = v;
+  });
+  return t;
+}
+
+const key = (k: string, init: KeyboardEventInit = {}, target: EventTarget = document.body): KeyboardEvent => {
+  const ev = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...init });
+  target.dispatchEvent(ev);
+  return ev;
+};
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: [...FAKE] });
+  registerBuiltinMinigames();
+  i18n.addStrings('ru', {
+    'l.1': 'Первая реплика',
+    'l.2': 'Ещё одна',
+    'l.short': 'Коротко',
+    'l.long': 'Это достаточно длинная реплика, чтобы печататься заметное время',
+    'mini.cast.a': 'Следователь',
+    'mini.cast.b': 'Свидетель',
+    'c.a': 'Первый',
+    'c.b': 'Второй',
+    'c.prompt': 'Что делаем?',
+    'cap.chapter': 'Глава первая',
+    'doc.text': 'Текст документа',
+    'ui.common.ok': 'Понятно',
+    'ui.common.back': 'Назад',
+    'ui.end.title': 'Финал',
+    'ui.end.decisions': 'Ваши решения',
+    'ui.end.back_to_menu': 'В меню',
+    'ui.menu.archive': 'Архив',
+    'ui.archive.new_item': 'Новый материал',
+    'ui.minigame.success': 'Успех',
+    'ui.minigame.partial': 'Частично',
+    'ui.minigame.fail': 'Провал',
+    'ui.minigame.skip': 'Пропустить',
+    'mini.end.main': 'Каноническая концовка',
+    'mini.m1.title': 'Игра',
+    'mini.m1.brief': 'Задача',
+  });
+  i18n.addStrings('en', { 'l.1': 'First line', 'mini.cast.a': 'Investigator' });
+  i18n.setLang('ru');
+});
+
+afterEach(() => {
+  for (const r of rigs.splice(0)) r.ui.dispose();
+  vi.useRealTimers();
+  document.body.replaceChildren();
+  i18n.setLang('ru');
+});
+
+describe('DomUI: реплики и продвижение сюжета', () => {
+  it('показывает реплику с именем и цветом из cast.name_color; печатает по символам', () => {
+    const { ui, kit } = makeRig({ textSpeed: 3 });
+    void ui.showLine(lineP('l.long'), lineCtx(ctl()));
+    const name = kit.textbox.el.querySelector<HTMLElement>('.vn-textbox__name');
+    expect(name?.hidden).toBe(false);
+    expect(name?.textContent).toBe('Следователь');
+    expect(name?.style.getPropertyValue('--name-color')).toBe('#ffffff');
+    expect(kit.textbox.typing).toBe(true);
+  });
+
+  it('первое нажатие допечатывает реплику, второе — листает дальше', async () => {
+    const { ui, kit } = makeRig({ textSpeed: 2 });
+    const done = track(ui.showLine(lineP('l.long'), lineCtx(ctl())));
+    ui.advance();
+    await flush();
+    expect(kit.textbox.complete).toBe(true);
+    expect(done.done).toBe(false);
+    ui.advance();
+    await flush();
+    expect(done.done).toBe(true);
+  });
+
+  it('скорость текста 5 — реплика появляется мгновенно, но дальше листает только игрок', async () => {
+    const { ui, kit } = makeRig({ textSpeed: 5 });
+    const done = track(ui.showLine(lineP('l.1'), lineCtx(ctl())));
+    await flush(10_000);
+    expect(kit.textbox.complete).toBe(true);
+    expect(done.done).toBe(false);
+    ui.advance();
+    await flush();
+    expect(done.done).toBe(true);
+  });
+
+  it.each([
+    ['reconstruction', 'window', true],
+    ['talking_head', 'window', false],
+    ['chronicle', 'subtitle', true],
+    ['courtroom', 'subtitle', true],
+  ] as const)('пресет показа %s: раскладка текста %s, имя говорящего видно: %s', (presentation, layout, nameShown) => {
+    const { ui, kit } = makeRig({ textSpeed: 5 }, presentation);
+    void ui.showLine(lineP('l.1'), lineCtx(ctl()));
+    expect(kit.textbox.el.dataset.layout).toBe(layout);
+    expect(kit.textbox.el.querySelector<HTMLElement>('.vn-textbox__name')?.hidden).toBe(!nameShown);
+  });
+
+  it('рассказчик (narrate): имени нет, стиль окна берётся из narrate_style', () => {
+    const { ui, kit } = makeRig({ textSpeed: 5 });
+    void ui.showLine(lineP('l.1', { style: 'narrate', who: null, narrate_style: 'voiceover' }), lineCtx(ctl()));
+    expect(kit.textbox.el.querySelector<HTMLElement>('.vn-textbox__name')?.hidden).toBe(true);
+    expect(kit.textbox.el.dataset.style).toBe('voiceover');
+  });
+
+  it('клик по сцене листает; клик по кнопке быстрого меню, по выборам и при открытом экране — нет', async () => {
+    const { ui, kit, root } = makeRig({ textSpeed: 5 });
+    const done = track(ui.showLine(lineP('l.1'), lineCtx(ctl())));
+    const quickBtn = kit.quick.el.querySelector<HTMLElement>('button');
+    quickBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    kit.choices.el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const dialog = document.createElement('div');
+    kit.screens.open({ el: dialog });
+    kit.main.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    dialog.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flush();
+    expect(done.done).toBe(false);
+    kit.screens.closeAll();
+    kit.main.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 }));
+    await flush();
+    expect(done.done).toBe(true);
+    expect(root.isConnected).toBe(true);
+  });
+
+  it('правая кнопка мыши не листает', async () => {
+    const { ui, kit } = makeRig({ textSpeed: 5 });
+    const done = track(ui.showLine(lineP('l.1'), lineCtx(ctl())));
+    kit.main.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 2 }));
+    await flush();
+    expect(done.done).toBe(false);
+  });
+
+  it.each([' ', 'Enter', 'ArrowRight', 'PageDown'])('клавиша «%s» листает', async (k) => {
+    const { ui } = makeRig({ textSpeed: 5 });
+    const done = track(ui.showLine(lineP('l.1'), lineCtx(ctl())));
+    const ev = key(k);
+    expect(ev.defaultPrevented).toBe(true); // страница не скроллится
+    await flush();
+    expect(done.done).toBe(true);
+  });
+
+  it('Space на сфокусированной кнопке не листает сюжет (кнопка делает своё)', async () => {
+    const { ui, kit } = makeRig({ textSpeed: 5 });
+    const done = track(ui.showLine(lineP('l.1'), lineCtx(ctl())));
+    const btn = kit.quick.el.querySelector<HTMLElement>('button');
+    btn?.focus();
+    key(' ', {}, btn ?? document.body);
+    await flush();
+    expect(done.done).toBe(false);
+  });
+
+  it('сброс партии (AbortSignal) снимает ожидание: повторное нажатие уже ничего не листает', async () => {
+    const { ui } = makeRig({ textSpeed: 5 });
+    const c = ctl();
+    const done = track(ui.showLine(lineP('l.1'), lineCtx(c)));
+    c.abort();
+    ui.advance();
+    await flush(5000);
+    expect(done.done).toBe(false);
+  });
+
+  it('скрытый интерфейс (H): первое нажатие возвращает его, и только потом листает', async () => {
+    const { ui, root } = makeRig({ textSpeed: 5 });
+    const done = track(ui.showLine(lineP('l.1'), lineCtx(ctl())));
+    ui.toggleHidden();
+    expect(root.classList.contains('ui-hidden')).toBe(true);
+    ui.advance();
+    await flush();
+    expect(root.classList.contains('ui-hidden')).toBe(false);
+    expect(done.done).toBe(false);
+    ui.advance();
+    await flush();
+    expect(done.done).toBe(true);
+  });
+});
+
+describe('DomUI: горячие клавиши и колесо', () => {
+  it('A, S, L, H, M передают действия быстрого меню; ← и PageUp — откат; Ctrl/Alt-комбинации игнорируются', () => {
+    const { actions, rollbacks } = makeRig({ textSpeed: 5 });
+    for (const k of ['a', 'S', 'l', 'H', 'm']) key(k);
+    expect(actions).toEqual(['auto', 'skip', 'log', 'hide', 'mute']);
+    key('ArrowLeft');
+    key('PageUp');
+    expect(rollbacks.n).toBe(2);
+    key('a', { ctrlKey: true });
+    key('s', { metaKey: true });
+    expect(actions).toHaveLength(5);
+  });
+
+  it('Esc: сначала закрывает верхний экран, потом снимает скрытие интерфейса, иначе открывает настройки', () => {
+    const { ui, kit, actions } = makeRig();
+    const a = { el: document.createElement('div') };
+    kit.screens.open(a);
+    key('Escape');
+    expect(kit.screens.count).toBe(0);
+    expect(actions).toEqual([]);
+    ui.setUiHidden(true);
+    key('Escape');
+    expect(ui.uiHidden).toBe(false);
+    expect(actions).toEqual([]);
+    key('Escape');
+    expect(actions).toEqual(['settings']);
+  });
+
+  it('Esc не закрывает незакрываемые экраны (финал, мини-игра, документ)', () => {
+    const { kit, actions } = makeRig();
+    kit.screens.open({ el: document.createElement('div'), dismissible: false });
+    key('Escape');
+    expect(kit.screens.count).toBe(1);
+    expect(actions).toEqual(['settings']);
+  });
+
+  it('при открытом экране горячие клавиши сюжета не работают', () => {
+    const { kit, actions, rollbacks } = makeRig();
+    kit.screens.open({ el: document.createElement('div') });
+    key('a');
+    key('ArrowLeft');
+    expect(actions).toEqual([]);
+    expect(rollbacks.n).toBe(0);
+  });
+
+  it('колесо вверх — откат, не чаще раза в 450 мс; вниз и при открытом экране — нет', () => {
+    const { kit, rollbacks } = makeRig();
+    const wheel = (dy: number): void => void kit.root.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, bubbles: true }));
+    vi.setSystemTime(10_000);
+    vi.advanceTimersByTime(1000);
+    wheel(-100);
+    wheel(-100);
+    expect(rollbacks.n).toBe(1);
+    vi.advanceTimersByTime(500);
+    wheel(-100);
+    expect(rollbacks.n).toBe(2);
+    wheel(100);
+    expect(rollbacks.n).toBe(2);
+    kit.screens.open({ el: document.createElement('div') });
+    vi.advanceTimersByTime(500);
+    wheel(-100);
+    expect(rollbacks.n).toBe(2);
+  });
+
+  it('dispose снимает глобальные обработчики', () => {
+    const { ui, actions } = makeRig();
+    ui.dispose();
+    key('a');
+    expect(actions).toEqual([]);
+  });
+});
+
+describe('DomUI: авто-режим', () => {
+  it('после полного вывода ждёт autoDelayMs + 20 мс на символ и листает сам', async () => {
+    const { ui } = makeRig({ textSpeed: 5, autoDelayMs: 1000 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl()))); // 7 символов → 1000 + 140
+    await flush(1100);
+    expect(done.done).toBe(false);
+    await flush(100);
+    expect(done.done).toBe(true);
+  });
+
+  it('пауза за печатью: таймер стартует только когда реплика показана целиком', async () => {
+    const { ui } = makeRig({ textSpeed: 1, autoDelayMs: 500 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.long'), lineCtx(ctl())));
+    await flush(1500); // 18 зн/с → напечатано ещё не всё
+    expect(done.done).toBe(false);
+    await flush(10_000);
+    expect(done.done).toBe(true);
+  });
+
+  it('выключение авто-режима отменяет отложенное листание', async () => {
+    const { ui } = makeRig({ textSpeed: 5, autoDelayMs: 1000 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
+    await flush(500);
+    ui.toggleAuto();
+    await flush(20_000);
+    expect(done.done).toBe(false);
+  });
+
+  it('включение авто-режима на уже показанной реплике запускает отсчёт; кнопка Auto отражает состояние', async () => {
+    const { ui, kit } = makeRig({ textSpeed: 5, autoDelayMs: 500 });
+    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
+    await flush(2000);
+    expect(done.done).toBe(false);
+    ui.toggleAuto();
+    expect(kit.quick.el.querySelector('[data-action="auto"]')?.getAttribute('aria-pressed')).toBe('true');
+    await flush(1000);
+    expect(done.done).toBe(true);
+  });
+
+  it('открытый экран (настройки, журнал) и пауза платформы останавливают авто-режим; после закрытия отсчёт заново', async () => {
+    const { ui, kit } = makeRig({ textSpeed: 5, autoDelayMs: 500 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
+    const dialog = { el: document.createElement('div') };
+    kit.screens.open(dialog);
+    await flush(20_000);
+    expect(done.done).toBe(false);
+    kit.screens.close(dialog);
+    ui.setPaused(true);
+    expect(kit.root.classList.contains('is-paused')).toBe(true);
+    await flush(20_000);
+    expect(done.done).toBe(false);
+    ui.setPaused(false);
+    await flush(1000);
+    expect(done.done).toBe(true);
+  });
+});
+
+describe('DomUI: Skip прочитанного', () => {
+  it('Skip листает прочитанные реплики почти мгновенно', async () => {
+    const { ui } = makeRig({ textSpeed: 1 });
+    ui.setSkip(true);
+    expect(ui.fastForward).toBe(true);
+    const done = track(ui.showLine(lineP('l.long'), lineCtx(ctl(), true)));
+    await flush(100);
+    expect(done.done).toBe(true);
+  });
+
+  it('на непрочитанной реплике Skip выключается сам, и реплика печатается как обычно', async () => {
+    const { ui, kit } = makeRig({ textSpeed: 2 });
+    ui.setSkip(true);
+    const done = track(ui.showLine(lineP('l.long'), lineCtx(ctl(), false)));
+    expect(ui.skipOn).toBe(false);
+    expect(kit.quick.el.querySelector('[data-action="skip"]')?.getAttribute('aria-pressed')).toBe('false');
+    expect(kit.textbox.typing).toBe(true);
+    await flush(1000);
+    expect(done.done).toBe(false);
+  });
+
+  it('настройка «пропускать и непрочитанное» разрешает Skip везде', async () => {
+    const { ui } = makeRig({ textSpeed: 1, skipUnread: true });
+    ui.setSkip(true);
+    const done = track(ui.showLine(lineP('l.long'), lineCtx(ctl(), false)));
+    await flush(100);
+    expect(done.done).toBe(true);
+    expect(ui.skipOn).toBe(true);
+  });
+
+  it('удержание Ctrl работает как временный Skip и отпускается вместе с клавишей', async () => {
+    const { ui } = makeRig({ textSpeed: 1 });
+    expect(ui.fastForward).toBe(false);
+    key('Control', { ctrlKey: true });
+    expect(ui.fastForward).toBe(true);
+    const done = track(ui.showLine(lineP('l.long'), lineCtx(ctl(), true)));
+    await flush(100);
+    expect(done.done).toBe(true);
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control' }));
+    expect(ui.fastForward).toBe(false);
+  });
+
+  it('Skip выключается на выборе, документе и концовке (решения принимает игрок)', async () => {
+    const r = makeRig({ textSpeed: 5 });
+    r.ui.setSkip(true);
+    const choice: ChoicePending = {
+      kind: 'choice', id: 'ch', prompt_key: null, choice_kind: null, timer_ms: null, default_option: null, remember: false,
+      options: [{ id: 'a', key: 'c.a', enabled: true }],
+    };
+    const c = ctl();
+    void r.ui.showChoice(choice, baseCtx(c));
+    expect(r.ui.skipOn).toBe(false);
+    r.ui.setSkip(true);
+    void r.ui.showDocument({ kind: 'document', doc: 'd', text_key: null, zoomable: false, adds_to_archive: null }, baseCtx(c));
+    expect(r.ui.skipOn).toBe(false);
+  });
+});
+
+describe('DomUI: выбор', () => {
+  const pending = (over: Partial<ChoicePending> = {}): ChoicePending => ({
+    kind: 'choice',
+    id: 'ch1',
+    prompt_key: 'c.prompt',
+    choice_kind: null,
+    timer_ms: null,
+    default_option: null,
+    remember: false,
+    options: [
+      { id: 'a', key: 'c.a', enabled: true },
+      { id: 'b', key: 'c.b', enabled: true },
+    ],
+    ...over,
+  });
+
+  it('возвращает выбранный id; цифра с клавиатуры выбирает вариант; Space при выборе не листает', async () => {
+    const { ui, kit } = makeRig();
+    const res = track(ui.showChoice(pending(), baseCtx(ctl())));
+    ui.advance();
+    key(' ');
+    await flush();
+    expect(res.done).toBe(false);
+    expect(key('2').defaultPrevented).toBe(true);
+    await flush();
+    expect(res.value).toBe('b');
+    expect(kit.choices.active).toBe(false);
+  });
+
+  it('таймер включён: по истечении выбирается default_option', async () => {
+    const { ui } = makeRig({ timers: true });
+    const res = track(ui.showChoice(pending({ timer_ms: 4000, default_option: 'b' }), baseCtx(ctl())));
+    await flush(3900);
+    expect(res.done).toBe(false);
+    await flush(200);
+    expect(res.value).toBe('b');
+  });
+
+  it.each([
+    ['таймеры выключены в настройках', { timers: false }],
+    ['режим «только история»', { timers: true, storyOnly: true }],
+  ])('%s: таймера нет, выбор ждёт игрока', async (_name, over) => {
+    const { ui, kit } = makeRig(over);
+    const res = track(ui.showChoice(pending({ timer_ms: 1000, default_option: 'b' }), baseCtx(ctl())));
+    expect(kit.choices.el.querySelector('.vn-choices__timer')).toBeNull();
+    await flush(120_000);
+    expect(res.done).toBe(false);
+  });
+
+  it('пауза платформы замораживает таймер выбора', async () => {
+    const { ui } = makeRig({ timers: true });
+    const res = track(ui.showChoice(pending({ timer_ms: 3000, default_option: 'a' }), baseCtx(ctl())));
+    await flush(1000);
+    ui.setPaused(true);
+    await flush(60_000);
+    expect(res.done).toBe(false);
+    ui.setPaused(false);
+    await flush(2100);
+    expect(res.value).toBe('a');
+  });
+});
+
+describe('DomUI: паузы сценария (титры chapter/fact, эффекты)', () => {
+  it('титр chapter держит паузу ms и убирается; клик завершает паузу досрочно', async () => {
+    const { ui, kit, captionsHost } = makeRig();
+    const hold = { kind: 'hold', reason: 'caption', ms: 2000, caption: { key: 'cap.chapter', style: 'chapter' } } as const;
+    const a = track(ui.hold(hold, { signal: ctl().signal, instant: false }));
+    expect(captionsHost.querySelector('.vn-cap--chapter')?.textContent).toBe('Глава первая');
+    expect(kit.textbox.visible).toBe(false);
+    await flush(1900);
+    expect(a.done).toBe(false);
+    await flush(200);
+    expect(a.done).toBe(true);
+    await flush(500);
+    expect(captionsHost.querySelector('.vn-cap--chapter')).toBeNull();
+
+    const b = track(ui.hold(hold, { signal: ctl().signal, instant: false }));
+    ui.advance();
+    await flush();
+    expect(b.done).toBe(true);
+  });
+
+  it('instant (загрузка, откат) и Skip не ждут', async () => {
+    const { ui } = makeRig();
+    const hold = { kind: 'hold', reason: 'caption', ms: 60_000, caption: { key: 'cap.chapter', style: 'fact' } } as const;
+    const a = track(ui.hold(hold, { signal: ctl().signal, instant: true }));
+    await flush();
+    expect(a.done).toBe(true);
+    ui.setSkip(true);
+    const b = track(ui.hold(hold, { signal: ctl().signal, instant: false }));
+    await flush();
+    expect(b.done).toBe(true);
+  });
+
+  it('fx передаётся сцене с длительностью и силой; пауза не длиннее ms', async () => {
+    const { ui, fx } = makeRig();
+    const a = track(ui.hold({ kind: 'hold', reason: 'fx', ms: 800, fx: { fx: 'flash', intensity: 0.6 } }, { signal: ctl().signal, instant: false }));
+    expect(fx).toEqual([{ fx: 'flash', ms: 800, intensity: 0.6, instant: false }]);
+    await flush(850);
+    expect(a.done).toBe(true);
+  });
+
+  it('отмена партии снимает ожидание паузы', async () => {
+    const { ui } = makeRig();
+    const c = ctl();
+    const a = track(ui.hold({ kind: 'hold', reason: 'caption', ms: 60_000, caption: { key: 'cap.chapter', style: 'chapter' } }, { signal: c.signal, instant: false } as HoldContext));
+    c.abort();
+    await flush();
+    expect(a.done).toBe(true);
+  });
+});
+
+describe('DomUI: документ, мини-игра, финал', () => {
+  it('документ открывается модальным экраном, не закрывается Esc и листание под ним не работает; «Понятно» закрывает', async () => {
+    const { ui, kit } = makeRig();
+    const res = track(ui.showDocument({ kind: 'document', doc: 'doc_x', text_key: 'doc.text', zoomable: false, adds_to_archive: null }, baseCtx(ctl())));
+    expect(kit.screens.el.querySelector('.vn-document__text')?.textContent).toBe('Текст документа');
+    key('Escape');
+    expect(kit.screens.count).toBe(1);
+    ui.advance();
+    kit.screens.el.querySelector<HTMLButtonElement>('.vn-actions .vn-btn')?.click();
+    await flush();
+    expect(res.done).toBe(true);
+    expect(kit.screens.count).toBe(0);
+  });
+
+  const mgPending = (over: Partial<MinigamePending['def']> = {}): MinigamePending => ({ kind: 'minigame', def: mg('m1', over), intro_key: null });
+  const mgCtx = (c: AbortController, restore: unknown = undefined): MinigameContext => ({ signal: c.signal, restore, autosave: () => undefined });
+
+  it('мини-игра открывается на экране, результат кнопки возвращается, экран и сцена приводятся в порядок', async () => {
+    const { ui, kit, mgActive } = makeRig();
+    const res = track(ui.runMinigame(mgPending(), mgCtx(ctl())));
+    await flush();
+    expect(mgActive).toEqual([true]);
+    expect(kit.screens.el.querySelector('.mg-gb__title')?.textContent).toBe('Игра');
+    expect(ui.minigameState()).toEqual({ id: 'm1', state: { hintsShown: 0 } });
+    kit.screens.el.querySelector<HTMLButtonElement>('.mg-btn.is-partial')?.click();
+    await flush();
+    expect(res.value).toBe('partial');
+    expect(mgActive).toEqual([true, false]);
+    expect(kit.screens.count).toBe(0);
+    expect(ui.minigameState()).toBeNull();
+  });
+
+  it('пропуск доступен только если skip.allowed', async () => {
+    const { ui, kit } = makeRig();
+    void ui.runMinigame(mgPending({ skip: { allowed: false } }), mgCtx(ctl()));
+    await flush();
+    expect(kit.screens.el.querySelector('.is-skip')).toBeNull();
+  });
+
+  it('состояние мини-игры из сейва восстанавливается, пауза платформы доходит до неё', async () => {
+    const { ui, kit } = makeRig();
+    const def = { skip: { allowed: true, hint_rewarded_ad: true } };
+    const pend = { ...mgPending(def), def: { ...mgPending(def).def, type: 'document_check' as const, config: { discrepancies: [{ hint_key: 'c.a' }, { hint_key: 'c.b' }] } } };
+    const res = track(ui.runMinigame(pend, mgCtx(ctl(), { hintsShown: 2 })));
+    await flush();
+    expect(kit.screens.el.querySelectorAll('.mg-gb__hints li')).toHaveLength(2);
+    ui.setPaused(true);
+    expect(kit.screens.el.querySelector('.mg-gb.is-paused')).not.toBeNull();
+    kit.screens.el.querySelector<HTMLButtonElement>('.mg-btn.is-success')?.click();
+    await flush();
+    expect(res.done).toBe(false); // на паузе результат не засчитывается
+    ui.setPaused(false);
+    kit.screens.el.querySelector<HTMLButtonElement>('.mg-btn.is-success')?.click();
+    await flush();
+    expect(res.value).toBe('success');
+  });
+
+  it('отмена партии во время мини-игры уничтожает её и закрывает экран', async () => {
+    const { ui, kit, mgActive } = makeRig();
+    const c = ctl();
+    const res = track(ui.runMinigame(mgPending(), mgCtx(c)));
+    await flush();
+    expect(kit.screens.count).toBe(1);
+    c.abort();
+    await flush();
+    expect(kit.screens.count).toBe(0);
+    expect(mgActive).toEqual([true, false]);
+    expect(res.done).toBe(false);
+    expect(ui.minigameState()).toBeNull();
+  });
+
+  const ending: Ending = { id: 'e_main', title_key: 'mini.end.main', kind: 'canonical' };
+  const stateWithJournal = (): GameState => ({
+    ...createInitialState(episode, 's1'),
+    journal: [
+      { choice: 'ch1', option: 'a', scene: 's1', key: 'c.a', prompt_key: 'c.prompt', kind: 'moral' },
+      { choice: 'ch2', option: 'b', scene: 's1', key: 'c.b' },
+    ],
+  });
+
+  it('финал: название концовки и журнал решений, кнопки «Архив» и «В меню»', async () => {
+    const { ui, kit, archiveOpens } = makeRig();
+    const res = track(ui.showEnding({ kind: 'end', ending }, stateWithJournal(), baseCtx(ctl())));
+    const el = kit.screens.el;
+    expect(el.querySelector('.vn-ending__title')?.textContent).toBe('Каноническая концовка');
+    const entries = [...el.querySelectorAll('.vn-ending__entry')];
+    expect(entries.map((n) => n.querySelector('.vn-ending__choice')?.textContent)).toEqual(['Первый', 'Второй']);
+    expect(entries[0]?.querySelector('.vn-ending__prompt')?.textContent).toBe('Что делаем?');
+    expect(entries[0]?.classList.contains('is-moral')).toBe(true);
+    key('Escape');
+    expect(kit.screens.count).toBe(1); // финал не закрывается случайно
+    el.querySelectorAll<HTMLButtonElement>('.vn-actions .vn-btn')[0]?.click();
+    expect(archiveOpens.n).toBe(1);
+    el.querySelector<HTMLButtonElement>('.vn-btn.is-primary')?.click();
+    await flush();
+    expect(res.done).toBe(true);
+    expect(kit.screens.count).toBe(0);
+  });
+
+  it('финал без запомненных решений показывает прочерк', () => {
+    const { ui, kit } = makeRig();
+    void ui.showEnding({ kind: 'end', ending }, createInitialState(episode, 's1'), baseCtx(ctl()));
+    expect(kit.screens.el.querySelector('.vn-ending__journal')).toBeNull();
+    expect(kit.screens.el.querySelector('.vn-muted')?.textContent).toBe('—');
+  });
+});
+
+describe('DomUI: смена языка на лету и сброс', () => {
+  it('refreshLanguage перерисовывает показанную реплику, имя, кнопки быстрого меню и открытые экраны; сцена не трогается', async () => {
+    const { ui, kit } = makeRig({ textSpeed: 5 });
+    void ui.showLine(lineP('l.1'), lineCtx(ctl()));
+    const dialog = { el: document.createElement('div'), render: vi.fn() };
+    kit.screens.open(dialog);
+    expect(kit.textbox.el.querySelector('.vn-textbox__shown')?.textContent).toBe('Первая реплика');
+    i18n.setLang('en');
+    ui.refreshLanguage();
+    expect(kit.textbox.el.querySelector('.vn-textbox__shown')?.textContent).toBe('First line');
+    expect(kit.textbox.el.querySelector('.vn-textbox__name')?.textContent).toBe('Investigator');
+    expect(document.documentElement.lang).toBe('en');
+    expect(dialog.render).toHaveBeenCalledTimes(2);
+    await flush();
+  });
+
+  it('reset закрывает окна, выборы и экраны игры, скрывает текст и выключает Skip', async () => {
+    const { ui, kit, mgActive } = makeRig({ textSpeed: 5 });
+    void ui.showLine(lineP('l.1'), lineCtx(ctl()));
+    void ui.showChoice({ kind: 'choice', id: 'c', prompt_key: null, choice_kind: null, timer_ms: null, default_option: null, remember: false, options: [{ id: 'a', key: 'c.a', enabled: true }] }, baseCtx(ctl()));
+    void ui.runMinigame({ kind: 'minigame', def: mg('m1'), intro_key: null }, { signal: ctl().signal, restore: undefined, autosave: () => undefined });
+    await flush();
+    ui.setSkip(true);
+    ui.reset();
+    expect(kit.textbox.visible).toBe(false);
+    expect(kit.choices.active).toBe(false);
+    expect(kit.screens.count).toBe(0);
+    expect(ui.skipOn).toBe(false);
+    expect(mgActive.at(-1)).toBe(false);
+  });
+});

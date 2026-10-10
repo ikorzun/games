@@ -92,13 +92,19 @@ function isStateShape(s: unknown): s is GameState {
   );
 }
 
-/** Сырые данные из хранилища → SaveFile текущей версии, либо null (мусор, сейв из более новой сборки). */
-export function migrateSave(raw: unknown): SaveFile | null {
+/**
+ * Сырые данные из хранилища → SaveFile текущей версии, либо null (мусор, сейв из более новой сборки,
+ * разрыв в цепочке миграций). `target` — версия, до которой мигрируем (в приложении всегда текущая;
+ * параметр нужен тестам цепочки и будущим форматам).
+ */
+export function migrateSave(raw: unknown, target: number = SAVE_SCHEMA_VERSION): SaveFile | null {
   if (!isRecord(raw)) return null;
   let cur: Record<string, unknown> = raw;
   let version = typeof cur.schema_version === 'number' ? cur.schema_version : NaN;
-  if (!Number.isInteger(version) || version < 1 || version > SAVE_SCHEMA_VERSION) return null;
-  while (version < SAVE_SCHEMA_VERSION) {
+  if (!Number.isInteger(version) || version < 1 || version > target) return null;
+  // Миграции не должны менять объект, лежащий в хранилище/кэше платформы.
+  if (version < target) cur = cloneJson(cur);
+  while (version < target) {
     const step = MIGRATIONS.get(version);
     if (!step) return null;
     cur = step(cur);

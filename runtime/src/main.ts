@@ -77,6 +77,7 @@ async function boot(): Promise<void> {
     const lang: Lang = parseSupportedLang(params.get('lang')) ?? saves.settings.lang ?? platform.language();
     await ensureLangs(i18n, base, episode.id, [lang]);
     i18n.setLang(lang);
+    if (params.get('pseudo') === '1') i18n.setPseudo(true);
 
     registerBuiltinMinigames();
     await loadFonts();
