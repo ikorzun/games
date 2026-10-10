@@ -361,17 +361,18 @@ export class App {
 
   updateSettings(patch: Partial<Settings>): Settings {
     const s = this.d.saves.updateSettings(patch);
-    this.applySettings(s);
+    // явный выбор уровня камеры (даже прежнего) снимает самозащиту от слабого устройства
+    this.applySettings(s, patch.cameraFx !== undefined);
     return s;
   }
 
-  private applySettings(s: Settings): void {
+  private applySettings(s: Settings, retryCamera = false): void {
     this.kit.setFontScale(s.fontScale);
     this.d.audio.setMuted(s.muted);
     this.d.audio.setVolumes({ music: s.music, sfx: s.sfx, voice: s.voice });
     this.kit.quick.setState({ muted: s.muted });
     this.stage.setViolenceMode(s.violenceMode);
-    this.stage.setCameraFx(s.cameraFx);
+    this.stage.setCameraFx(s.cameraFx, retryCamera);
   }
 
   /** Смена языка на лету: догрузить строки, перерисовать текущий шаг, не трогая сцену и состояние. */

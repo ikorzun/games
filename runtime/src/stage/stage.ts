@@ -148,8 +148,8 @@ export class Stage implements IStage {
   }
 
   /** Настройка «Эффекты камеры» (prefers-reduced-motion выключает их независимо от выбора). */
-  setCameraFx(level: CameraFx): void {
-    this.camcorder.setLevel(level);
+  setCameraFx(level: CameraFx, retry = false): void {
+    this.camcorder.setLevel(level, retry);
   }
 
   /** Пауза платформы / вкладки в фоне: камкордер останавливает цикл. */

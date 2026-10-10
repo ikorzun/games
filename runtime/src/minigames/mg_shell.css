@@ -8,7 +8,7 @@
 .mg-shell {
   --mg-ink: var(--c-text, #ecebe6);
   --mg-muted: var(--c-muted, #a8a398);
-  --mg-line: var(--c-line, rgb(255 255 255 / 0.16));
+  --mg-line: var(--panel-line, var(--c-line, rgb(255 255 255 / 0.28)));
   --mg-accent: var(--c-accent, #c9362f);
   --mg-gold: var(--c-accent-soft, #e8d9b5);
   --mg-ok: #7fb577;
@@ -19,7 +19,7 @@
   width: 100%;
   padding: 0.8rem 0.9rem 0;
   color: var(--mg-ink);
-  background: rgb(19 19 22 / 0.97);
+  background: var(--c-card, #131316);
   border: 1px solid var(--mg-line);
   border-radius: 14px;
   box-shadow: 0 12px 40px rgb(0 0 0 / 0.6);
@@ -164,7 +164,7 @@
   z-index: 3;
   margin: 0 -0.9rem;
   padding: 0.55rem 0.9rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
-  background: #131316;
+  background: var(--c-card, #131316);
   border-top: 1px solid var(--mg-line);
   border-radius: 0 0 14px 14px;
 }
@@ -183,7 +183,7 @@
   font: inherit;
   background: #1c1c21;
   border: 1px solid var(--mg-line);
-  border-radius: 10px;
+  border-radius: var(--radius, 8px);
   cursor: pointer;
 }
 .mg-shell .mg-shell__btn:hover:not(:disabled) {

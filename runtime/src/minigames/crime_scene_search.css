@@ -65,8 +65,7 @@
   min-height: 44px;
   border: 2px solid transparent;
   border-radius: 10px;
-  /* Центр зоны — в её центре; сдвиг отдельным свойством, чтобы анимации могли пользоваться transform. */
-  translate: -50% -50%;
+  transform: translate(-50%, -50%);
   pointer-events: none;
 }
 .mg-scene__pin {
@@ -135,10 +134,10 @@
   border: 2px dashed rgb(255 255 255 / 0.32);
 }
 .mg-scene__stage.is-placeholder .mg-scene__zone.is-left {
-  translate: -22% -50%;
+  transform: translate(-22%, -50%);
 }
 .mg-scene__stage.is-placeholder .mg-scene__zone.is-right {
-  translate: -78% -50%;
+  transform: translate(-78%, -50%);
 }
 .mg-scene__stage.is-placeholder .mg-scene__tag {
   position: static;
@@ -326,12 +325,8 @@
 
 @keyframes mg-scene-pop {
   from {
-    transform: scale(1.25);
     opacity: 0.2;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
+    box-shadow: 0 0 0 10px rgb(232 217 181 / 0.55), 0 0 30px rgb(232 217 181 / 0.8);
   }
 }
 @keyframes mg-scene-pulse {

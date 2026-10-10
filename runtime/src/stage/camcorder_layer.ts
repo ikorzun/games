@@ -6,7 +6,11 @@
  *    12–15 кадров/с; под слоем титров, так что подписи остаются чистыми;
  *  - всё работает одинаково для Pixi- и DOM-рендерера (они лежат внутри обёртки);
  *  - requestAnimationFrame, пауза при скрытой вкладке и при паузе платформы; при уровне «выкл»
- *    (в том числе prefers-reduced-motion) цикл не запускается вообще.
+ *    (в том числе prefers-reduced-motion) цикл не запускается вообще;
+ *  - кадр дрожания обновляется не чаще STEP_FPS (30) раз в секунду: камкордер снимает 25–30 к/с, а каждое
+ *    обновление — это композитинг всего кадра; вдвое реже — вдвое дешевле для слабых телефонов и батареи;
+ *  - самозащита (PERF): если браузер стабильно не успевает ≈ 20 к/с, эффекты выключаются до конца сессии
+ *    (играть в тормозящую игру хуже, чем без плёнки); выбор игрока в настройках при этом не меняется.
  *
  * Время, ГСЧ, requestAnimationFrame и matchMedia приходят параметрами — слой проверяется
  * в jsdom без настоящих часов (tests/camcorder_layer.test.ts).
@@ -24,6 +28,24 @@ export const OVERLAY_WIDTH = 256;
 export const NOISE_FPS = 13;
 /** Сколько заранее посчитанных кадров зерна чередуется. */
 const GRAIN_FRAMES = 6;
+/** Частота обновления кадра дрожания и помех, к/с (камкордер снимает 25–30 к/с; 60 Гц тут не нужны). */
+export const STEP_FPS = 30;
+/** Допуск на неровный ритм rAF: кадр пропускается, только если с прошлого обновления прошло меньше этой доли периода. */
+const STEP_SLACK = 0.85;
+
+/**
+ * Самозащита от слабого устройства. Меряется интервал между кадрами браузера (rAF), пока цикл идёт.
+ * Первые warmupMs после запуска цикла не учитываются (прогрев, загрузка текстур); дальше окно windowMs:
+ * если средний интервал дольше slowMs (≈ меньше 20 к/с), эффекты выключаются до конца сессии.
+ * Один длинный кадр (сон вкладки, сборка мусора) весит не больше hitchMs.
+ */
+export const PERF = { warmupMs: 2500, windowMs: 4000, slowMs: 50, hitchMs: 250 } as const;
+
+export interface DegradeInfo {
+  /** Средний интервал между кадрами в окне, мс. */
+  avgMs: number;
+  fps: number;
+}
 
 /** Минимум 2D-контекста, который нужен оверлею (реальный CanvasRenderingContext2D подходит). */
 export interface Overlay2D {
@@ -50,6 +72,15 @@ export interface CamcorderLayerOptions {
   onReducedMotionChange?: (cb: () => void) => () => void;
   isHidden?: () => boolean;
   noiseFps?: number;
+  /** Частота обновления кадра дрожания, к/с (по умолчанию STEP_FPS; Infinity — каждый кадр rAF). */
+  stepFps?: number;
+  /**
+   * Самозащита от слабого устройства (PERF). По умолчанию включена, кроме браузера под управлением
+   * автоматизации (navigator.webdriver): там нет GPU и тесты должны видеть эффекты, а не защиту.
+   */
+  adaptive?: boolean;
+  /** Сработала самозащита (по умолчанию — одна строка console.info). */
+  onDegrade?: (info: DegradeInfo) => void;
   /** Подмена 2D-контекста (тесты). */
   context?: Overlay2D | null;
 }
@@ -70,6 +101,8 @@ export class CamcorderLayer {
   private readonly raf: (cb: (ts: number) => void) => number;
   private readonly caf: (id: number) => void;
   private readonly noiseInterval: number;
+  private readonly stepGap: number;
+  private readonly adaptive: boolean;
   private ctx: Overlay2D | null;
   private grain: ImageData[] = [];
   private grainIdx = 0;
@@ -80,6 +113,13 @@ export class CamcorderLayer {
   private suspended = false;
   private rafId: number | null = null;
   private lastNoise = -1e9;
+  private lastStep = -1e9;
+  /** Самозащита сработала: эффекты выключены до смены уровня игроком. */
+  private degraded = false;
+  private perfLast: number | null = null;
+  private perfStart = 0;
+  private perfSum = 0;
+  private perfN = 0;
   private lastTransform = '';
   private burstOn = false;
   private cw = 0;
@@ -95,6 +135,9 @@ export class CamcorderLayer {
     this.raf = opts.raf ?? ((cb) => requestAnimationFrame(cb));
     this.caf = opts.caf ?? ((id) => cancelAnimationFrame(id));
     this.noiseInterval = 1000 / (opts.noiseFps ?? NOISE_FPS);
+    const stepFps = opts.stepFps ?? STEP_FPS;
+    this.stepGap = Number.isFinite(stepFps) && stepFps > 0 ? (1000 / stepFps) * STEP_SLACK : 0;
+    this.adaptive = opts.adaptive ?? !(typeof navigator !== 'undefined' && navigator.webdriver === true);
     this.scheduler = new CameraScheduler({ rng: this.rng, level: 'low' });
     this.ctx = opts.context !== undefined ? opts.context : this.openContext();
     this.sizeOverlay(OVERLAY_WIDTH, Math.round((OVERLAY_WIDTH * 9) / 16));
@@ -135,16 +178,25 @@ export class CamcorderLayer {
 
   // ───────────────────────────── состояние ─────────────────────────────
 
-  /** Выбор игрока (настройка «Эффекты камеры»). */
-  setLevel(level: CameraFx): void {
+  /**
+   * Выбор игрока (настройка «Эффекты камеры»). Самозащита снимается, когда уровень сменился или игрок
+   * выбрал его явно (`retry`): настройки применяются при любой правке, и обычный вызов её не трогает.
+   */
+  setLevel(level: CameraFx, retry = false): void {
+    if (retry || level !== this.setting) this.degraded = false;
     this.setting = level;
     this.applyLevel();
   }
 
-  /** Уровень с учётом prefers-reduced-motion (он принудительно выключает эффекты). */
+  /** Уровень с учётом prefers-reduced-motion и самозащиты (они принудительно выключают эффекты). */
   get effectiveLevel(): CameraFx {
     const reduced = (this.o.reducedMotion ?? defaultReducedMotion)();
-    return reduced ? 'off' : this.setting;
+    return reduced || this.degraded ? 'off' : this.setting;
+  }
+
+  /** Самозащита выключила эффекты: устройство не тянет ≈ 20 к/с. */
+  get degradedByPerformance(): boolean {
+    return this.degraded;
   }
 
   /** prefers-reduced-motion включён: эффекты камеры выключены принудительно. */
@@ -249,6 +301,10 @@ export class CamcorderLayer {
 
   private start(): void {
     if (this.rafId !== null) return;
+    this.lastStep = -1e9;
+    this.perfLast = null;
+    this.perfSum = 0;
+    this.perfN = 0;
     this.rafId = this.raf(this.tick);
   }
 
@@ -266,6 +322,10 @@ export class CamcorderLayer {
 
   private readonly tick = (ts: number): void => {
     this.rafId = this.raf(this.tick);
+    if (this.adaptive && this.watchFrameTime(ts)) return;
+    // кадр дрожания и помех обновляется не чаще STEP_FPS: лишние кадры браузера пропускаем
+    if (ts - this.lastStep < this.stepGap) return;
+    this.lastStep = ts;
     const f = this.scheduler.step(ts);
     this.lastFrame = f;
     this.applyTransform(f);
@@ -275,6 +335,33 @@ export class CamcorderLayer {
       this.drawOverlay(f);
     }
   };
+
+  /**
+   * Самозащита: учесть интервал между кадрами rAF. true — устройство не успевает, эффекты выключены
+   * (цикл остановлен, трансформация снята) и продолжать кадр не нужно.
+   */
+  private watchFrameTime(ts: number): boolean {
+    const prev = this.perfLast;
+    this.perfLast = ts;
+    if (prev === null) {
+      this.perfStart = ts; // первый кадр после запуска цикла
+      return false;
+    }
+    if (ts - this.perfStart < PERF.warmupMs) return false;
+    this.perfSum += Math.min(Math.max(ts - prev, 0), PERF.hitchMs);
+    this.perfN += 1;
+    if (this.perfSum < PERF.windowMs) return false;
+    const avg = this.perfSum / this.perfN;
+    this.perfSum = 0;
+    this.perfN = 0;
+    if (avg <= PERF.slowMs) return false;
+    this.degraded = true;
+    const info: DegradeInfo = { avgMs: avg, fps: 1000 / avg };
+    if (this.o.onDegrade) this.o.onDegrade(info);
+    else console.info(`[camcorder] ${info.fps.toFixed(0)} к/с: эффекты камеры выключены до конца сессии (устройство не успевает)`);
+    this.applyLevel();
+    return true;
+  }
 
   /** Один шаг без rAF (тесты и отладка). */
   stepOnce(ts: number): CamFrame {

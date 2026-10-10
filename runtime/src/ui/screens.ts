@@ -248,6 +248,11 @@ export interface SettingsHandlers {
   settings: () => Settings;
   /** prefers-reduced-motion: эффекты камеры выключены принудительно (кнопки недоступны). */
   reducedMotion?: () => boolean;
+  /**
+   * Уровень камеры, который действует сейчас: «Выкл», если эффекты выключила самозащита от слабого
+   * устройства (камкордер.ts), даже когда в настройках стоит другой; выбор уровня снимает защиту.
+   */
+  effectiveCameraFx?: () => CameraFx;
   onChange: (patch: Partial<Settings>) => void;
   onLanguage: (lang: Lang) => void;
   onClose: () => void;
@@ -319,7 +324,7 @@ export class SettingsScreen extends BaseScreen {
     const pct = (v: number): string => `${Math.round(v * 100)}%`;
     // «Эффекты камеры»: выкл / слабо / сильно. Кнопки-сегменты, а не radio — как переключатель языка.
     const reduced = hd.reducedMotion?.() ?? false;
-    const camLevel = reduced ? 'off' : s.cameraFx;
+    const camLevel: CameraFx = hd.effectiveCameraFx?.() ?? (reduced ? 'off' : s.cameraFx);
     const cameraFx = h(
       'div',
       { class: 'vn-settings__group' },
