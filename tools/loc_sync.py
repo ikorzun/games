@@ -113,13 +113,17 @@ def cmd_skeleton(a):
         p = loc_path(ep["id"], lang)
         data = load(p) if os.path.exists(p) else {}
         new = {k: data.get(k, "") for k, _ in keys}
-        # сохраняем лишние (возможно, устаревшие) ключи в конце, чтобы ничего не потерять
+        dropped = 0
+        # лишние (устаревшие) ключи: по умолчанию сохраняем в конце, с --prune удаляем
         for k, v in data.items():
             if k not in new:
-                new[k] = v
+                if a.prune:
+                    dropped += 1
+                else:
+                    new[k] = v
         added = sum(1 for k, _ in keys if k not in data)
         dump(p, new)
-        print(f"{lang}: {p} — ключей {len(new)}, добавлено {added}")
+        print(f"{lang}: {p} — ключей {len(new)}, добавлено {added}" + (f", удалено устаревших {dropped}" if a.prune else ""))
 
 
 def cmd_export(a):
@@ -174,7 +178,7 @@ def cmd_stats(a):
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("skeleton"); s.add_argument("episode"); s.set_defaults(fn=cmd_skeleton)
+    s = sub.add_parser("skeleton"); s.add_argument("episode"); s.add_argument("--prune", action="store_true", help="удалить ключи, которых нет в эпизоде"); s.set_defaults(fn=cmd_skeleton)
     s = sub.add_parser("export"); s.add_argument("episode"); s.add_argument("--out"); s.set_defaults(fn=cmd_export)
     s = sub.add_parser("import"); s.add_argument("csv"); s.add_argument("--overwrite-source", action="store_true"); s.set_defaults(fn=cmd_import)
     s = sub.add_parser("stats"); s.add_argument("episode"); s.set_defaults(fn=cmd_stats)
