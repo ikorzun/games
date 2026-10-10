@@ -41,6 +41,9 @@ export function dirnameOf(path: string): string {
 
 const unique = <T>(items: readonly T[]): T[] => [...new Set(items)];
 
+/** Файл чёрного кадра: его нет в манифесте ассетов и не должно быть — это сплошной цвет. */
+const BLACK_FILE = /(?:^|\/)black\.(?:png|webp)$/i;
+
 // ───────────────────────────── каталог ─────────────────────────────
 
 /**
@@ -51,6 +54,11 @@ const unique = <T>(items: readonly T[]): T[] => [...new Set(items)];
 export interface ImageChain {
   readonly urls: readonly string[];
   readonly silhouetteFirst: boolean;
+  /**
+   * Сплошной цвет вместо картинки (чёрный кадр `bg_black`): файл не запрашивается, предупреждения
+   * и плейсхолдера нет — чёрный экран рисует сам рендерер.
+   */
+  readonly solid?: string;
 }
 
 export class AssetCatalog {
@@ -106,8 +114,11 @@ export class AssetCatalog {
   }
 
   bgChain(id: string): ImageChain | null {
-    const u = this.bgUrl(id);
-    return u ? { urls: [u], silhouetteFirst: false } : null;
+    const path = this.bg.get(id);
+    if (!path) return null;
+    // Чёрный фон (assets/common/bg/black.png) — не картинка: рисуется сплошным цветом.
+    if (BLACK_FILE.test(path)) return { urls: [], silhouetteFirst: false, solid: '#000000' };
+    return { urls: [this.url(path)], silhouetteFirst: false };
   }
 
   cgChain(id: string): ImageChain | null {
@@ -155,7 +166,7 @@ export function collectBlockAssets(episode: Episode, catalog: AssetCatalog, bloc
   const images = new Map<string, ImageChain>();
   const audio = new Set<string>();
   const addChain = (chain: ImageChain | null): void => {
-    if (chain) images.set(chain.urls.join('|'), chain);
+    if (chain && chain.urls.length > 0) images.set(chain.urls.join('|'), chain);
   };
   const addAudio = (id: string | undefined): void => {
     const u = id ? catalog.audioUrl(id) : null;

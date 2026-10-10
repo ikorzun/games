@@ -315,6 +315,171 @@ def check_effect(eff: dict, variables: set[str], ep: dict, where: str, rep: Repo
             rep.err(f"{where}: set {v}={val!r} не соответствует типу {vt}")
 
 
+def doc_text_keys(ep: dict) -> dict[str, str]:
+    """id документа -> ключ его текста: шаги document, затем archive_items[asset] (так же ищет рантайм)."""
+    out: dict[str, str] = {}
+    for _sid, _i, st in iter_steps(ep):
+        if st.get("do") == "document" and st.get("text_key"):
+            out.setdefault(st["doc"], st["text_key"])
+    for a in ep.get("archive_items", []):
+        if a.get("asset") and a.get("text_key"):
+            out.setdefault(a["asset"], a["text_key"])
+    return out
+
+
+def minigame_integrity(ep: dict, ru: dict | None, rep: Report) -> None:
+    """Перекрёстные ссылки внутри config настоящих мини-игр (JSON Schema их не видит).
+    Ошибка здесь = рантайм не соберёт механику и покажет grey-box вместо игры."""
+    backgrounds = {b["id"] for b in ep.get("assets", {}).get("backgrounds", [])}
+    texts = doc_text_keys(ep)
+    for mid, mg in ep.get("minigames", {}).items():
+        cfg = mg.get("config", {})
+        where = f"minigame {mid}"
+        kind = mg.get("type")
+        if kind == "crime_scene_search":
+            zones = cfg.get("hotspots", [])
+            ids = [z.get("id") for z in zones]
+            for dup in sorted({i for i in ids if ids.count(i) > 1}):
+                rep.err(f"{where}: повтор id зоны {dup}")
+            if zones and not any(z.get("required") for z in zones):
+                rep.warn(f"{where}: нет обязательных зон — рантайм сочтёт обязательными все")
+            for z in zones:
+                x, y, w, h = z.get("rect", [0, 0, 0, 0])
+                if w <= 0 or h <= 0:
+                    rep.err(f"{where}: зона {z.get('id')} с нулевым размером")
+                elif x + w > 1.0001 or y + h > 1.0001:
+                    rep.warn(f"{where}: зона {z.get('id')} выходит за границы картинки")
+            if cfg.get("scene_bg") and cfg["scene_bg"] not in backgrounds:
+                rep.warn(f"{where}: scene_bg {cfg['scene_bg']} не объявлен в assets.backgrounds — будет серая заглушка")
+        elif kind == "document_check":
+            docs = cfg.get("documents", [])
+            fields = cfg.get("fields", [])
+            seen: set[tuple[str, str]] = set()
+            for f in fields:
+                key = (f.get("doc"), f.get("field"))
+                if key in seen:
+                    rep.err(f"{where}: повтор поля {key[0]}/{key[1]} в fields")
+                seen.add(key)
+                if f.get("doc") not in docs:
+                    rep.err(f"{where}: fields: документ {f.get('doc')} не входит в documents")
+            discrepancies = cfg.get("discrepancies", [])
+            for d in discrepancies:
+                if d.get("doc") not in docs:
+                    rep.err(f"{where}: discrepancies: документ {d.get('doc')} не входит в documents")
+                if (d.get("doc"), d.get("field")) not in seen:
+                    rep.err(f"{where}: несоответствие {d.get('doc')}/{d.get('field')} не описано в fields — по нему нельзя нажать")
+            if cfg.get("required", 0) > len(discrepancies):
+                rep.err(f"{where}: required {cfg['required']} больше числа несоответствий {len(discrepancies)}")
+            decoy_fields = max(0, len(seen) - len({(d.get("doc"), d.get("field")) for d in discrepancies}))
+            if cfg.get("decoys", 0) > decoy_fields:
+                rep.warn(f"{where}: decoys {cfg['decoys']}, а полей-ловушек в fields только {decoy_fields}")
+            for doc in docs:
+                if doc not in texts:
+                    rep.warn(f"{where}: у документа {doc} нет текста (шаг document / archive_items) — фрагменты пойдут отдельными строками")
+            if ru:
+                for f in fields:
+                    full = ru.get(texts.get(f.get("doc"), ""), "")
+                    snippet = ru.get(f.get("text_key"), "")
+                    if full and snippet and snippet not in full:
+                        rep.warn(f"{where}: фрагмент {f['text_key']} не входит дословно в текст {texts[f['doc']]} (ru)")
+        elif kind == "database_search":
+            fields = cfg.get("fields", [])
+            values = {v.get("field"): v for v in cfg.get("values", [])}
+            for name in values:
+                if name not in fields:
+                    rep.err(f"{where}: values: поле {name} не входит в fields")
+            for name in fields:
+                entry = values.get(name)
+                if entry is None:
+                    rep.err(f"{where}: для поля {name} нет записи в values (подпись и значения)")
+                elif name != "date" and not entry.get("options"):
+                    rep.err(f"{where}: у поля {name} нет options (значения генерируются только для date)")
+            for name, option in cfg.get("pattern", {}).items():
+                if name not in fields:
+                    rep.err(f"{where}: pattern: поле {name} не входит в fields")
+                elif option not in {o["id"] for o in values.get(name, {}).get("options", [])}:
+                    rep.err(f"{where}: pattern: значение {option} не среди options поля {name}")
+            for name, entry in values.items():
+                oids = [o["id"] for o in entry.get("options", [])]
+                if len(oids) != len(set(oids)):
+                    rep.err(f"{where}: повтор id среди options поля {name}")
+            if cfg.get("target_count", 0) > cfg.get("records", 0):
+                rep.err(f"{where}: target_count {cfg['target_count']} больше records {cfg['records']}")
+            if cfg.get("min_for_partial", 0) > cfg.get("target_count", 0):
+                rep.err(f"{where}: min_for_partial {cfg['min_for_partial']} больше target_count {cfg['target_count']}")
+        elif kind == "evidence_board":
+            nodes = [n if isinstance(n, dict) else {"id": n} for n in cfg.get("nodes", [])]
+            ids = [n.get("id") for n in nodes]
+            for dup in sorted({i for i in ids if ids.count(i) > 1}):
+                rep.err(f"{where}: повтор id узла {dup}")
+            for n in nodes:
+                if not n.get("label_key"):
+                    rep.warn(f"{where}: у узла {n.get('id')} нет label_key — в игре будет виден id")
+            first_seen: dict[tuple[str, str], str] = {}
+            for name in ("required_links", "decoy_links"):
+                for pair in cfg.get(name, []):
+                    a, b = pair[0], pair[1]
+                    for end in (a, b):
+                        if end not in ids:
+                            rep.err(f"{where}: {name}: узел {end} не объявлен в nodes")
+                    if a == b:
+                        rep.err(f"{where}: {name}: связь узла {a} с самим собой")
+                    key = (min(a, b), max(a, b))
+                    if key in first_seen:
+                        rep.warn(f"{where}: связь {a}—{b} повторяется ({first_seen[key]} и {name}); рантайм учитывает её один раз, верная главнее приманки")
+                    else:
+                        first_seen[key] = name
+            required_n = len({(min(p[0], p[1]), max(p[0], p[1])) for p in cfg.get("required_links", []) if p[0] != p[1]})
+            if cfg.get("partial_threshold", 0) > required_n:
+                rep.warn(f"{where}: partial_threshold {cfg['partial_threshold']} больше числа верных связей {required_n} (рантайм зажмёт)")
+        elif kind == "interrogation_press":
+            variables = ep.get("variables", {})
+            cast = {c["id"] for c in ep.get("cast", [])}
+            statements = cfg.get("statements", [])
+            raw_ev = cfg.get("evidence", [])
+            evidence = [e if isinstance(e, dict) else {"id": e} for e in raw_ev]
+            st_ids = [st.get("id") for st in statements]
+            ev_ids = [e.get("id") for e in evidence]
+            for dup in sorted({i for i in st_ids if st_ids.count(i) > 1}):
+                rep.err(f"{where}: повтор id утверждения {dup}")
+            for dup in sorted({i for i in ev_ids if ev_ids.count(i) > 1}):
+                rep.err(f"{where}: повтор id улики {dup}")
+            if cfg.get("suspect") and cfg["suspect"] not in cast:
+                rep.err(f"{where}: suspect {cfg['suspect']} не найден в cast")
+
+            def check_requires(owner: str, var: str | None) -> None:
+                if not var:
+                    return
+                if var not in variables:
+                    rep.err(f"{where}: {owner}: requires {var} — необъявленная переменная")
+                elif variables[var].get("type") != "bool":
+                    rep.warn(f"{where}: {owner}: requires {var} — не bool ({variables[var].get('type')}); улика считается доступной при «истинном» значении")
+
+            gated_by_statement: set[str] = set()
+            for st in statements:
+                by = st.get("contradicted_by")
+                by = [by] if isinstance(by, str) else list(by or [])
+                for e in by:
+                    if e not in ev_ids:
+                        rep.err(f"{where}: утверждение {st.get('id')}: улика {e} не входит в evidence — опровергнуть нечем")
+                check_requires(f"утверждение {st.get('id')}", st.get("requires"))
+                if st.get("requires"):
+                    gated_by_statement.update(by)
+            for raw, e in zip(raw_ev, evidence):
+                check_requires(f"улика {e.get('id')}", e.get("requires"))
+            ungated = [
+                e.get("id")
+                for raw, e in zip(raw_ev, evidence)
+                if (not e.get("requires") if isinstance(raw, dict) else e.get("id") not in gated_by_statement)
+            ]
+            if not ungated:
+                rep.warn(f"{where}: нет приманок (улик без requires) — игрок, не добывший ни одной улики, увидит пустой список")
+            if cfg.get("full_threshold", 0) > len(statements):
+                rep.warn(f"{where}: full_threshold {cfg['full_threshold']} больше числа утверждений {len(statements)} (рантайм зажмёт)")
+            if cfg.get("partial_threshold", 0) > cfg.get("full_threshold", 0):
+                rep.warn(f"{where}: partial_threshold {cfg['partial_threshold']} больше full_threshold {cfg['full_threshold']} (рантайм зажмёт)")
+
+
 def collect_loc_keys(ep: dict) -> set[str]:
     keys: set[str] = set()
 
@@ -407,7 +572,8 @@ def localization(ep: dict, locales_dir: str, rep: Report) -> None:
                 import re
                 ph = re.compile(r"\{[a-z_]+\}")
                 for k, v in data.items():
-                    if k in ru and set(ph.findall(str(ru[k]))) != set(ph.findall(str(v))):
+                    # Пустая строка — ещё не переведено (каркас loc_sync skeleton): плейсхолдеры сверяем только у заполненных.
+                    if k in ru and str(v).strip() and set(ph.findall(str(ru[k]))) != set(ph.findall(str(v))):
                         rep.err(f"локализация {lang}: плейсхолдеры в {k} не совпадают с ru")
 
 
@@ -457,6 +623,9 @@ def main() -> int:
     schema_check(ep, rep)
     if not rep.errors:
         integrity(ep, rep)
+        ru_path = os.path.join(a.locales, "ru", f"{ep['id']}.json")
+        ru = load_json(ru_path) if not a.no_loc and os.path.exists(ru_path) else None
+        minigame_integrity(ep, ru, rep)
         if not a.no_loc:
             localization(ep, a.locales, rep)
             ui_check(a.locales, rep)

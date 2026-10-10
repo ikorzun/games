@@ -31,7 +31,8 @@
 import type { Container } from 'pixi.js';
 import type { MinigameOutcomeKind, MinigameResult } from '../core/types';
 import { fill, h } from '../ui/dom';
-import { Countdown } from './mg_timer';
+import { GreyBoxMinigame } from './grey_box';
+import { Countdown, formatTime } from './mg_timer';
 import type { GameContext, IMinigame, MinigameConfig } from './types';
 import './evidence_board.css';
 
@@ -168,8 +169,15 @@ export function edgePoint(r: Rect, tx: number, ty: number): Pt {
 
 const rnd = (n: number): number => Math.round(n * 10) / 10;
 
-/** Провисающая нитка между двумя точками: путь (квадратичная кривая) и точка посередине для значка. */
-export function threadPath(a: Pt, b: Pt): { d: string; mid: Pt } {
+export interface Thread {
+  /** Путь SVG (квадратичная кривая). */
+  d: string;
+  /** Точка на нитке при параметре t ∈ [0, 1] (0.5 — середина). */
+  at(t: number): Pt;
+}
+
+/** Провисающая нитка между двумя точками. */
+export function threadPath(a: Pt, b: Pt): Thread {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const len = Math.hypot(dx, dy) || 1;
@@ -182,8 +190,54 @@ export function threadPath(a: Pt, b: Pt): { d: string; mid: Pt } {
   const sag = Math.min(14, len * 0.07);
   const cx = (a.x + b.x) / 2 + nx * sag * 2;
   const cy = (a.y + b.y) / 2 + ny * sag * 2;
-  const mid = { x: 0.25 * a.x + 0.5 * cx + 0.25 * b.x, y: 0.25 * a.y + 0.5 * cy + 0.25 * b.y };
-  return { d: `M${rnd(a.x)} ${rnd(a.y)} Q${rnd(cx)} ${rnd(cy)} ${rnd(b.x)} ${rnd(b.y)}`, mid };
+  const at = (t: number): Pt => {
+    const u = 1 - t;
+    return { x: u * u * a.x + 2 * u * t * cx + t * t * b.x, y: u * u * a.y + 2 * u * t * cy + t * t * b.y };
+  };
+  return { d: `M${rnd(a.x)} ${rnd(a.y)} Q${rnd(cx)} ${rnd(cy)} ${rnd(b.x)} ${rnd(b.y)}`, at };
+}
+
+const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+
+/**
+ * Где повесить значки верно/неверно: у каждой нитки — середина; если значки двух ниток
+ * налезают друг на друга (нитки перекрещиваются и середины совпадают), их по очереди
+ * раздвигают вдоль собственных ниток, пока расстояние не станет не меньше minGap
+ * (или пока нитки не кончатся: значок не уходит дальше 20–80 % длины).
+ */
+export function placeBadges(threads: readonly Thread[], minGap: number): Pt[] {
+  const ts = threads.map(() => 0.5);
+  const points = (): Pt[] => threads.map((th, i) => th.at(ts[i] ?? 0.5));
+  for (let pass = 0; pass < 14; pass++) {
+    const p = points();
+    let moved = false;
+    for (let i = 0; i < threads.length; i++) {
+      const th = threads[i];
+      const pi = p[i];
+      if (!th || !pi) continue;
+      for (let j = 0; j < threads.length; j++) {
+        const pj = p[j];
+        if (i === j || !pj) continue;
+        const dx = pi.x - pj.x;
+        const dy = pi.y - pj.y;
+        if (Math.hypot(dx, dy) >= minGap) continue;
+        // Двигаем вдоль касательной от соседа; совпавшие значки расходятся по номеру.
+        const t0 = ts[i] ?? 0.5;
+        const a = th.at(Math.max(0, t0 - 0.01));
+        const b = th.at(Math.min(1, t0 + 0.01));
+        const away = dx * (b.x - a.x) + dy * (b.y - a.y);
+        const sign = Math.hypot(dx, dy) < 1e-6 ? (i < j ? -1 : 1) : away >= 0 ? 1 : -1;
+        const next = clamp(t0 + sign * 0.05, 0.2, 0.8);
+        if (next !== t0) {
+          ts[i] = next;
+          moved = true;
+        }
+        break;
+      }
+    }
+    if (!moved) break;
+  }
+  return points();
 }
 
 const humanize = (id: string): string => {
@@ -268,6 +322,8 @@ class EvidenceBoard implements IMinigame {
 
   private ctx!: GameContext;
   private spec: BoardSpec = { nodes: [], required: [], decoys: new Set(), maxWrong: 3, partialAt: 1 };
+  /** Запасной grey-box: config непригоден для настоящей механики, эпизод остаётся проходимым. */
+  private fallback: GreyBoxMinigame | null = null;
   private host: HTMLElement | null = null;
   private view: HTMLElement | null = null;
   private els: Els | null = null;
@@ -283,6 +339,8 @@ class EvidenceBoard implements IMinigame {
   private tried = new Set<string>();
   private hints: string[] = [];
   private outcome: MinigameOutcomeKind | null = null;
+  /** Партия закончилась по времени (а не по ошибкам или победе). */
+  private timedOut = false;
   // Временное состояние.
   private selected: string | null = null;
   private status: Status = { k: 'idle' };
@@ -295,9 +353,17 @@ class EvidenceBoard implements IMinigame {
 
   // ───────────── IMinigame ─────────────
 
-  mount(_root: Container, dom: HTMLElement, cfg: MinigameConfig, ctx: GameContext): void {
+  mount(root: Container, dom: HTMLElement, cfg: MinigameConfig, ctx: GameContext): void {
     this.ctx = ctx;
     this.spec = parseBoard(cfg);
+    if (this.spec.nodes.length < 2 || this.spec.required.length === 0) {
+      console.warn(`[minigame] ${ctx.def.id}: config непригоден для ${TYPE} — показан grey-box`);
+      const gb = new GreyBoxMinigame(TYPE);
+      gb.onResult = (r) => this.onResult(r);
+      this.fallback = gb;
+      gb.mount(root, dom, cfg, ctx);
+      return;
+    }
     this.cells = layoutCells(this.spec.nodes).cells;
     this.host = dom;
     dom.classList.add('mg-host-eb');
@@ -320,22 +386,24 @@ class EvidenceBoard implements IMinigame {
     this.view?.focus({ preventScroll: true });
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => this.paintThreads());
     if (typeof document !== 'undefined' && 'fonts' in document) void document.fonts.ready.then(() => this.paintThreads());
-    if (this.spec.required.length === 0) this.conclude('success'); // играть не во что: не держим игрока
   }
 
   pause(): void {
+    if (this.fallback) return this.fallback.pause();
     this.paused = true;
     this.timer?.pause();
     this.view?.classList.add('is-paused');
   }
 
   resume(): void {
+    if (this.fallback) return this.fallback.resume();
     this.paused = false;
     this.view?.classList.remove('is-paused');
     if (this.outcome === null) this.timer?.start();
   }
 
   serialize(): unknown {
+    if (this.fallback) return this.fallback.serialize();
     return {
       v: 1,
       links: [...this.links],
@@ -343,15 +411,17 @@ class EvidenceBoard implements IMinigame {
       hints: [...this.hints],
       left: this.timer ? Math.round(this.timer.remainingMs) : null,
       result: this.outcome,
+      timeout: this.timedOut,
     };
   }
 
   restore(state: unknown): void {
+    if (this.fallback) return this.fallback.restore(state);
     if (this.destroyed || !isRec(state)) return;
     const known = (k: unknown): k is string => {
       if (typeof k !== 'string') return false;
       const [a, b] = splitKey(k);
-      return this.nodeEls.has(a) && this.nodeEls.has(b) && pairKey(a, b) === k;
+      return a !== b && this.nodeEls.has(a) && this.nodeEls.has(b) && pairKey(a, b) === k;
     };
     const uniq = (xs: string[]): string[] => [...new Set(xs)];
     if (Array.isArray(state.links)) this.links = uniq((state.links as unknown[]).filter(known));
@@ -366,6 +436,7 @@ class EvidenceBoard implements IMinigame {
     const r = state.result;
     if (r === 'success' || r === 'partial' || r === 'fail') {
       this.outcome = r;
+      this.timedOut = state.timeout === true;
       this.timer?.stop();
     }
     this.selected = null;
@@ -375,6 +446,10 @@ class EvidenceBoard implements IMinigame {
   }
 
   destroy(): void {
+    if (this.fallback) {
+      this.fallback.destroy();
+      return;
+    }
     if (this.destroyed) return;
     this.destroyed = true;
     this.timer?.stop();
@@ -451,6 +526,7 @@ class EvidenceBoard implements IMinigame {
 
   private onTimeUp(): void {
     if (this.destroyed || this.outcome !== null) return;
+    this.timedOut = true;
     this.conclude(boardOutcome(this.foundCount(), this.spec.required.length, this.spec.partialAt));
     this.ctx.autosave();
   }
@@ -530,20 +606,14 @@ class EvidenceBoard implements IMinigame {
     const brief = h('p', { class: 'mg-eb__brief' });
     const howtoSummary = hasIntro ? h('summary', { class: 'mg-eb__howto-sum' }) : null;
     const howto = howtoSummary ? h('details', { class: 'mg-eb__howto' }, howtoSummary, brief) : null;
-    const head = h('header', { class: 'mg-eb__head' }, title, intro, howto ?? brief);
-
     const progress = h('p', { class: 'mg-eb__progress' });
+    const head = h('header', { class: 'mg-eb__head' }, h('div', { class: 'mg-eb__bar' }, title, progress), intro, howto ?? brief);
+
     const zbtn = (name: 'minus' | 'fit' | 'plus', step: -1 | 0 | 1): HTMLButtonElement =>
       h('button', { class: 'mg-eb__zbtn', type: 'button', on: { click: () => this.zoomBy(step) } }, icon(name, 'mg-eb__zicon'));
     const zoomOut = zbtn('minus', -1);
     const zoomFit = zbtn('fit', 0);
     const zoomIn = zbtn('plus', 1);
-    const tools = h(
-      'div',
-      { class: 'mg-eb__tools' },
-      progress,
-      h('div', { class: 'mg-eb__zoom', role: 'group' }, zoomOut, zoomFit, zoomIn),
-    );
 
     const { sided } = layoutCells(this.spec.nodes);
     for (const n of this.spec.nodes) {
@@ -578,15 +648,16 @@ class EvidenceBoard implements IMinigame {
     this.bindZoomGestures(viewport);
 
     const meter = h('div', { class: 'mg-eb__meter' });
+    const zoom = h('div', { class: 'mg-eb__zoom', role: 'group' }, zoomOut, zoomFit, zoomIn);
     const status = h('p', { class: 'mg-eb__status', role: 'status' });
     const actions = h('div', { class: 'mg-actions mg-eb__actions' });
     const result = h('div', { class: 'mg-eb__result', role: 'status', hidden: true });
-    const foot = h('div', { class: 'mg-eb__foot' }, meter, status, actions, result);
+    const foot = h('div', { class: 'mg-eb__foot' }, h('div', { class: 'mg-eb__row' }, meter, zoom), status, actions, result);
 
     const timeBar = h('span', { class: 'mg-eb__time-bar' });
     const time = this.timeTotal > 0 ? h('div', { class: 'mg-eb__time', role: 'progressbar' }, timeBar) : null;
 
-    this.view = h('div', { class: 'mg-eb', role: 'group', tabindex: -1 }, time, head, tools, viewport, foot);
+    this.view = h('div', { class: 'mg-eb', role: 'group', tabindex: -1 }, time, head, viewport, foot);
     this.view.addEventListener('keydown', (e) => {
       // Esc снимает выбор узла и не доходит до глобального «открыть настройки».
       if (e.key === 'Escape' && this.selected !== null && this.canAct()) {
@@ -679,7 +750,7 @@ class EvidenceBoard implements IMinigame {
       case 'idle':
         return t('ui.minigame.board.pick_first');
       case 'first':
-        return t('ui.minigame.board.pick_second', { name: this.labelOf(s.id) });
+        return t('ui.minigame.board.body.pick_second', { name: this.labelOf(s.id) });
       case 'ok':
         return t('ui.minigame.board.link_ok', { a: this.labelOf(s.a), b: this.labelOf(s.b) });
       case 'bad':
@@ -694,10 +765,14 @@ class EvidenceBoard implements IMinigame {
   private paintTime(left: number): void {
     const e = this.els;
     if (!e?.time || !e.timeBar || this.timeTotal <= 0) return;
-    e.time.setAttribute('aria-valuemin', '0');
-    e.time.setAttribute('aria-valuemax', String(this.timeTotal));
-    e.time.setAttribute('aria-valuenow', String(Math.round(left)));
-    e.time.setAttribute('aria-label', this.ctx.t('ui.minigame.time_left'));
+    const text = this.ctx.t('ui.minigame.time_left', { time: formatTime(left) });
+    if (e.time.getAttribute('aria-valuetext') !== text) {
+      e.time.setAttribute('aria-valuemin', '0');
+      e.time.setAttribute('aria-valuemax', String(this.timeTotal));
+      e.time.setAttribute('aria-valuenow', String(Math.round(left)));
+      e.time.setAttribute('aria-valuetext', text);
+      e.time.setAttribute('aria-label', text);
+    }
     e.timeBar.style.transform = `scaleX(${Math.max(0, Math.min(1, left / this.timeTotal))})`;
   }
 
@@ -715,7 +790,7 @@ class EvidenceBoard implements IMinigame {
     if (e.intro && this.ctx.introKey) e.intro.textContent = t(this.ctx.introKey);
     e.brief.textContent = t(def.brief_key);
     if (e.howtoSummary) e.howtoSummary.textContent = t('ui.minigame.howto');
-    e.progress.textContent = t('ui.minigame.board.progress', { found: this.foundCount(), total });
+    e.progress.textContent = t('ui.minigame.board.progress', { n: this.foundCount(), total });
     e.sheet.setAttribute('aria-label', t('ui.minigame.board.label'));
     e.sheet.style.setProperty('--mg-eb-zoom', String(ZOOMS[this.zoomIdx]));
 
@@ -762,13 +837,14 @@ class EvidenceBoard implements IMinigame {
     const max = this.spec.maxWrong;
     const used = this.mistakes;
     const dots = max > 0 && max <= 8 ? Array.from({ length: max }, (_, i) => h('span', { class: `mg-eb__dot${i < used ? ' is-used' : ''}` })) : [];
-    const mistakesText = t('ui.minigame.mistakes', { used, max });
+    const mistakesText = t('ui.minigame.mistakes', { n: used, max });
     fill(
       e.meter,
       dots.length > 0 ? h('span', { class: 'mg-eb__dots', role: 'img', aria: { label: mistakesText } }, ...dots) : null,
       h('span', { class: 'mg-eb__mtext', text: mistakesText }),
     );
-    e.status.textContent = this.statusText();
+    const statusText = this.statusText();
+    if (e.status.textContent !== statusText) e.status.textContent = statusText;
 
     const keepFocus = e.actions.contains(document.activeElement) ? document.activeElement?.getAttribute('data-focus') : null;
     fill(
@@ -801,9 +877,10 @@ class EvidenceBoard implements IMinigame {
       fill(
         e.result,
         h('h3', { class: `mg-eb__verdict is-${out}`, text: heading }),
+        this.timedOut ? h('p', { class: 'mg-eb__why', text: t('ui.minigame.time_up') }) : null,
         h('p', {
           class: 'mg-eb__summary',
-          text: t('ui.minigame.board.body.result', { found: this.foundCount(), total: this.spec.required.length, wrong: this.mistakes }),
+          text: t('ui.minigame.board.body.result', { n: this.foundCount(), total: this.spec.required.length, wrong: this.mistakes }),
         }),
         h(
           'div',
@@ -864,14 +941,15 @@ class EvidenceBoard implements IMinigame {
     const e = this.els;
     if (!e || this.destroyed) return;
     const rects = this.measure();
-    const w = e.sheet.offsetWidth || e.sheet.getBoundingClientRect().width;
-    const hgt = e.sheet.offsetHeight || e.sheet.getBoundingClientRect().height;
-    if (w > 0 && hgt > 0) {
-      e.threads.setAttribute('width', String(Math.round(w)));
-      e.threads.setAttribute('height', String(Math.round(hgt)));
+    interface Item {
+      key: string;
+      a: string;
+      b: string;
+      pa: Pt;
+      pb: Pt;
+      thread: Thread;
     }
-    const lines: SVGElement[] = [];
-    const badges: HTMLElement[] = [];
+    const items: Item[] = [];
     for (const key of this.links) {
       const [a, b] = splitKey(key);
       const ra = rects.get(a);
@@ -879,20 +957,31 @@ class EvidenceBoard implements IMinigame {
       if (!ra || !rb) continue;
       const pa = edgePoint(ra, rb.x + rb.w / 2, rb.y + rb.h / 2);
       const pb = edgePoint(rb, ra.x + ra.w / 2, ra.y + ra.h / 2);
-      const { d, mid } = threadPath(pa, pb);
-      const ok = this.isRequired(key);
-      const fresh = this.lastAdded === key;
+      items.push({ key, a, b, pa, pb, thread: threadPath(pa, pb) });
+    }
+    // Значки не должны налезать друг на друга: расстояние — два шрифта листа (он уже учитывает масштаб).
+    const fontPx = parseFloat(getComputedStyle(e.sheet).fontSize);
+    const spots = placeBadges(
+      items.map((i) => i.thread),
+      (Number.isFinite(fontPx) && fontPx > 0 ? fontPx : 15) * 2,
+    );
+    const lines: SVGElement[] = [];
+    const badges: HTMLElement[] = [];
+    items.forEach((it, n) => {
+      const mid = spots[n] ?? it.thread.at(0.5);
+      const ok = this.isRequired(it.key);
+      const fresh = this.lastAdded === it.key;
       lines.push(
         svg(
           'g',
-          { class: `mg-eb__thread ${ok ? 'is-ok' : 'is-bad'}${fresh ? ' is-new' : ''}`, 'data-link': key },
-          svg('path', { class: 'mg-eb__thread-hit', d }),
-          svg('path', { class: 'mg-eb__thread-line', d }),
-          svg('circle', { class: 'mg-eb__pin', cx: rnd(pa.x), cy: rnd(pa.y), r: 4 }),
-          svg('circle', { class: 'mg-eb__pin', cx: rnd(pb.x), cy: rnd(pb.y), r: 4 }),
+          { class: `mg-eb__thread ${ok ? 'is-ok' : 'is-bad'}${fresh ? ' is-new' : ''}`, 'data-link': it.key },
+          svg('path', { class: 'mg-eb__thread-hit', d: it.thread.d }),
+          svg('path', { class: 'mg-eb__thread-line', d: it.thread.d }),
+          svg('circle', { class: 'mg-eb__pin', cx: rnd(it.pa.x), cy: rnd(it.pa.y), r: 4 }),
+          svg('circle', { class: 'mg-eb__pin', cx: rnd(it.pb.x), cy: rnd(it.pb.y), r: 4 }),
         ),
       );
-      const label = this.ctx.t('ui.minigame.board.remove_link', { a: this.labelOf(a), b: this.labelOf(b) });
+      const label = this.ctx.t('ui.minigame.board.remove_link', { a: this.labelOf(it.a), b: this.labelOf(it.b) });
       badges.push(
         h(
           'button',
@@ -901,13 +990,13 @@ class EvidenceBoard implements IMinigame {
             type: 'button',
             title: label,
             aria: { label },
-            data: { link: key },
+            data: { link: it.key },
             style: { left: `${rnd(mid.x)}px`, top: `${rnd(mid.y)}px` },
           },
-          icon(ok ? 'ok' : 'bad', 'mg-eb__bicon'),
+          h('span', { class: 'mg-eb__bdot' }, icon(ok ? 'ok' : 'bad', 'mg-eb__bicon')),
         ),
       );
-    }
+    });
     this.lastAdded = null;
     fill(e.threads, ...lines);
     fill(e.badges, ...badges);

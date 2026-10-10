@@ -20,7 +20,7 @@ import type { Params } from '../core/i18n';
 import type { MinigameOutcomeKind, MinigameResult } from '../core/types';
 import { h } from '../ui/dom';
 import { GreyBoxMinigame } from './grey_box';
-import { Countdown } from './mg_timer';
+import { Countdown, formatTime } from './mg_timer';
 import type { GameContext, IMinigame, MinigameConfig } from './types';
 import './mg_shell.css';
 
@@ -38,12 +38,6 @@ export function asStr(v: unknown): string | null {
 /** Конечное число (целая часть) не меньше `min`, иначе null. */
 export function asInt(v: unknown, min = Number.MIN_SAFE_INTEGER): number | null {
   return typeof v === 'number' && Number.isFinite(v) && Math.floor(v) >= min ? Math.floor(v) : null;
-}
-
-/** m:ss, секунды округляются вверх (0:01 — последняя секунда). */
-export function formatClock(ms: number): string {
-  const s = Math.max(0, Math.ceil(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 /** FNV-1a, 32 бита: стабильное зерно из строки (id мини-игры). */
@@ -66,6 +60,15 @@ export function mulberry32(seed: number): () => number {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+const warnedAssets = new Set<string>();
+
+/** Нет файла картинки: одно предупреждение на файл (как AssetStore.warnMissing), игра продолжается с плейсхолдером. */
+export function warnMissingAsset(url: string): void {
+  if (warnedAssets.has(url)) return;
+  warnedAssets.add(url);
+  console.warn(`[assets] нет файла ${url} — мини-игра показывает плейсхолдер`);
 }
 
 /** Сказать «в живую область» и на экране: строка пересобирается при смене языка. */
@@ -96,6 +99,7 @@ interface Chrome {
   timerText: HTMLElement;
   timerBar: HTMLElement;
   status: HTMLElement;
+  foot: HTMLElement;
   actions: HTMLElement;
   hint: HTMLButtonElement;
   skip: HTMLButtonElement;
@@ -166,6 +170,14 @@ export abstract class MinigameShell implements IMinigame {
   protected freeHintReady(): boolean {
     return false;
   }
+  /** Свои кнопки игры в строке действий (перед подсказкой и пропуском); создаются в build(). */
+  protected extraActions(): HTMLElement[] {
+    return [];
+  }
+  /** Показывать ли строку действий ради собственных кнопок, даже если подсказки и пропуска нет. */
+  protected extraActionsVisible(): boolean {
+    return false;
+  }
 
   // ───────────────────────────── помощники для игры ─────────────────────────────
 
@@ -227,7 +239,6 @@ export abstract class MinigameShell implements IMinigame {
     // Конец партии: вместо кнопок — итог и «Далее».
     const over = this.over;
     u.result.hidden = over === null;
-    u.actions.hidden = over !== null;
     u.root.classList.toggle('is-over', over !== null);
     if (over) {
       u.result.dataset.outcome = over;
@@ -241,10 +252,13 @@ export abstract class MinigameShell implements IMinigame {
     u.hint.hidden = mode === null;
     u.hint.textContent = t(mode === 'ad' ? 'ui.minigame.hint_ad' : 'ui.minigame.hint');
     u.hint.disabled = this.busyHint;
-    const skipVisible = this.skipVisible();
-    u.skip.hidden = !skipVisible;
+    u.skip.hidden = !this.skipVisible();
     u.skip.textContent = t('ui.minigame.skip');
     u.skip.classList.toggle('is-primary', ctx.settings.storyOnly);
+    u.actions.hidden = over !== null || (u.hint.hidden && u.skip.hidden && !this.extraActionsVisible());
+    // Пустой подвал не занимает места.
+    u.foot.hidden = u.actions.hidden && u.result.hidden;
+    u.root.classList.toggle('no-foot', u.foot.hidden);
 
     this.paintStatus();
     this.paint();
@@ -455,7 +469,7 @@ export abstract class MinigameShell implements IMinigame {
         },
       },
     });
-    const actions = h('div', { class: 'mg-shell__actions' }, hint, skip);
+    const actions = h('div', { class: 'mg-shell__actions' }, ...this.extraActions(), hint, skip);
 
     const resultTitle = h('strong', { class: 'mg-shell__result-title' });
     const resultNote = h('span', { class: 'mg-shell__result-note' });
@@ -470,6 +484,8 @@ export abstract class MinigameShell implements IMinigame {
     });
     const result = h('div', { class: 'mg-shell__result', hidden: true }, h('div', { class: 'mg-shell__result-text' }, resultTitle, resultNote), next);
 
+    const foot = h('footer', { class: 'mg-shell__foot' }, actions, result);
+
     // Заголовок на узких экранах сжат: бриф — две строки, по тапу раскрывается целиком.
     brief.addEventListener('click', () => brief.classList.toggle('is-open'));
 
@@ -478,11 +494,12 @@ export abstract class MinigameShell implements IMinigame {
       { class: `mg-shell ${this.cls}`, role: 'group' },
       h('header', { class: 'mg-shell__head' }, title, intro, brief),
       h('div', { class: 'mg-shell__hud' }, progress, fails, timer),
-      h('div', { class: 'mg-shell__body' }, body),
+      // Сообщение о ходе — сразу под строкой состояния: на телефоне поле игры ниже, а ответ на тап нужен на виду.
       status,
-      h('footer', { class: 'mg-shell__foot' }, actions, result),
+      h('div', { class: 'mg-shell__body' }, body),
+      foot,
     );
-    return { root, title, brief, intro, progress, fails, failsText, pips, timer, timerText, timerBar, status, actions, hint, skip, result, resultTitle, resultNote, next };
+    return { root, title, brief, intro, progress, fails, failsText, pips, timer, timerText, timerBar, status, foot, actions, hint, skip, result, resultTitle, resultNote, next };
   }
 
   private paintPips(limit: number): void {
@@ -502,8 +519,8 @@ export abstract class MinigameShell implements IMinigame {
   private paintTimer(leftMs: number): void {
     const u = this.ui;
     if (!u || !this.countdown) return;
-    u.timerText.textContent = formatClock(leftMs);
-    u.timer.setAttribute('aria-label', this.ctx.t('ui.minigame.time_left', { time: formatClock(leftMs) }));
+    u.timerText.textContent = formatTime(leftMs);
+    u.timer.setAttribute('aria-label', this.ctx.t('ui.minigame.time_left', { time: formatTime(leftMs) }));
     u.timerBar.style.width = `${Math.max(0, Math.min(100, (leftMs / this.limitMs) * 100))}%`;
     u.timer.classList.toggle('is-low', leftMs <= 10000);
   }

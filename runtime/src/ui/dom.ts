@@ -69,6 +69,20 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
+/**
+ * `url("…")` для CSS-переменных. Относительный адрес внутри custom property разрешается от таблицы
+ * стилей (в сборке — dist/assets/*.css), а не от страницы, поэтому адрес делаем абсолютным.
+ */
+export function cssUrl(u: string): string {
+  let abs = u;
+  try {
+    abs = new URL(u, document.baseURI).href;
+  } catch {
+    /* оставляем как есть */
+  }
+  return `url("${abs}")`;
+}
+
 export function clear(el: Element): void {
   while (el.firstChild) el.removeChild(el.firstChild);
 }

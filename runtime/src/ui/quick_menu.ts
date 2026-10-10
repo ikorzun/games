@@ -1,6 +1,11 @@
-/** Быстрое меню: Auto, Skip (прочитанное), Log, Save, Load, Mute, Settings (+ скрыть интерфейс). */
+/**
+ * Быстрое меню: Auto, Skip (прочитанное), Log, Save, Load, Mute, Settings (+ скрыть интерфейс).
+ * Кнопки — иконки (icons.ts); подпись остаётся в разметке скрытым текстом и в title: так кнопку
+ * читает скринридер, а смена языка обновляет подсказки.
+ */
 import { t } from '../core/i18n';
 import { h } from './dom';
+import { icon } from './icons';
 
 export type QuickAction = 'auto' | 'skip' | 'log' | 'save' | 'load' | 'mute' | 'settings' | 'hide';
 
@@ -17,25 +22,33 @@ const TOGGLE_KEY: Readonly<Partial<Record<QuickAction, keyof QuickState>>> = { a
 export class QuickMenu {
   readonly el: HTMLElement;
   private readonly buttons = new Map<QuickAction, HTMLButtonElement>();
+  private readonly labels = new Map<QuickAction, HTMLElement>();
   private state: QuickState = { auto: false, skip: false, muted: false };
 
   constructor(private readonly onAction: (action: QuickAction) => void) {
     this.el = h('div', { class: 'vn-quick', role: 'toolbar' });
     for (const action of ORDER) {
-      const btn = h('button', {
-        class: `vn-qbtn vn-qbtn--${action}`,
-        type: 'button',
-        data: { action },
-        on: {
-          click: (e) => {
-            e.stopPropagation();
-            this.onAction(action);
-            // Фокус не должен «залипать» на кнопке: Space/Enter продвигают сюжет, а не повторяют действие.
-            (e.currentTarget as HTMLElement).blur();
+      const label = h('span', { class: 'vn-sr vn-qbtn__label' });
+      const btn = h(
+        'button',
+        {
+          class: `vn-qbtn vn-qbtn--${action}`,
+          type: 'button',
+          data: { action },
+          on: {
+            click: (e) => {
+              e.stopPropagation();
+              this.onAction(action);
+              // Фокус не должен «залипать» на кнопке: Space/Enter продвигают сюжет, а не повторяют действие.
+              (e.currentTarget as HTMLElement).blur();
+            },
           },
         },
-      });
+        icon(action),
+        label,
+      );
       this.buttons.set(action, btn);
+      this.labels.set(action, label);
       this.el.appendChild(btn);
     }
     this.refresh();
@@ -54,8 +67,10 @@ export class QuickMenu {
   /** Подписи заново (смена языка). */
   refresh(): void {
     for (const [action, btn] of this.buttons) {
-      btn.textContent = t(`ui.quick.${action}`);
-      btn.title = t(`ui.quick.${action}`);
+      const text = t(`ui.quick.${action}`);
+      const label = this.labels.get(action);
+      if (label) label.textContent = text;
+      btn.title = text;
     }
     this.el.setAttribute('aria-label', t('ui.menu.settings'));
     this.applyState();

@@ -147,6 +147,11 @@ export class CamcorderLayer {
     return reduced ? 'off' : this.setting;
   }
 
+  /** prefers-reduced-motion включён: эффекты камеры выключены принудительно. */
+  get reducedMotion(): boolean {
+    return (this.o.reducedMotion ?? defaultReducedMotion)();
+  }
+
   get running(): boolean {
     return this.rafId !== null;
   }
@@ -193,6 +198,13 @@ export class CamcorderLayer {
 
   freeze(on: boolean): void {
     this.scheduler.setFrozen(on);
+  }
+
+  /** QA: вызвать эффект сейчас (отладочная панель, window.__vn.camera). */
+  force(what: 'burst' | 'glitch' | 'reframe' | 'angle'): void {
+    if (what === 'burst') this.scheduler.burstNow();
+    else if (what === 'glitch') this.scheduler.glitch(600);
+    else this.scheduler.reframeNow(what === 'angle');
   }
 
   destroy(): void {

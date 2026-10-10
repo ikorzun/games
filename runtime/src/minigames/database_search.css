@@ -1,0 +1,302 @@
+/*
+ * Поиск по картотеке (database_search.ts). Общая рамка — mg_shell.css.
+ * Фильтры — чипы (на узком экране строка листается вбок), карточки — крупные строки-чекбоксы;
+ * отмеченные, подтверждённые и отвергнутые отличаются значком и рамкой, не только цветом.
+ */
+
+.mg-db__wrap {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+/* Фильтры: на узком экране — полоса полей и чипы выбранного поля, на широком — все строки сразу. */
+.mg-db__filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.mg-db__ftabs {
+  display: flex;
+  gap: 6px;
+}
+.mg-db .mg-db__ftab {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0.25rem 0.5rem;
+  color: var(--mg-ink);
+  font: inherit;
+  text-align: left;
+  background: #1a1a1f;
+  border: 1px solid var(--mg-line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.mg-db .mg-db__ftab.is-open {
+  border-color: var(--mg-gold);
+  box-shadow: inset 0 -3px 0 var(--mg-gold);
+}
+.mg-db__ftab-label {
+  overflow: hidden;
+  color: var(--mg-muted);
+  font-size: 0.74em;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mg-db__ftab-value {
+  overflow: hidden;
+  color: var(--mg-gold);
+  font-size: 0.86em;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mg-db__ftab-value:empty {
+  display: none;
+}
+.mg-db__filter {
+  display: none;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.mg-db__filter.is-open {
+  display: block;
+}
+.mg-db__flabel {
+  display: none;
+  flex: 0 0 7em;
+  color: var(--mg-muted);
+  font-size: 0.8em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.mg-db__chips {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 2px 1px;
+}
+.mg-db .mg-db__chip {
+  flex: none;
+  max-width: 100%;
+  min-height: 40px;
+  padding: 0 0.9rem;
+  color: var(--mg-ink);
+  font: inherit;
+  font-size: 0.92em;
+  background: #1a1a1f;
+  border: 1px solid var(--mg-line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.mg-db .mg-db__chip:hover {
+  border-color: var(--mg-gold);
+}
+.mg-db .mg-db__chip.is-on {
+  color: #1d1b17;
+  font-weight: 700;
+  background: var(--mg-gold);
+  border-color: var(--mg-gold);
+}
+@container (min-width: 560px) {
+  /* Широкий экран: полосы полей нет, все строки на виду, подпись слева от чипов. */
+  .mg-db__ftabs {
+    display: none;
+  }
+  .mg-db__filter {
+    display: flex;
+  }
+  .mg-db__flabel {
+    display: block;
+  }
+}
+
+/* Служебная строка */
+.mg-db__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 1rem;
+  color: var(--mg-muted);
+  font: 0.8em / 1.4 var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+}
+.mg-db__empty {
+  margin: 0;
+  padding: 1rem 0;
+  color: var(--mg-muted);
+  text-align: center;
+}
+
+/* Карточки */
+.mg-db__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@container (min-width: 560px) {
+  .mg-db__list {
+    max-height: 38vh;
+    padding-right: 2px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+.mg-db__item {
+  margin: 0;
+}
+.mg-db .mg-db__card {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  column-gap: 0.7rem;
+  align-items: start;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 56px;
+  padding: 0.5rem 0.7rem;
+  color: var(--mg-ink);
+  font: inherit;
+  text-align: left;
+  background: #1b1b20;
+  border: 1px solid var(--mg-line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.mg-db .mg-db__card:hover {
+  border-color: rgb(232 217 181 / 0.6);
+}
+.mg-db__box {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
+  color: #1d1b17;
+  font: 700 15px / 1 var(--font-body, system-ui, sans-serif);
+  border: 2px solid var(--mg-muted);
+  border-radius: 6px;
+}
+.mg-db__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.mg-db__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.7rem;
+}
+.mg-db__cell.is-title {
+  font-weight: 700;
+}
+.mg-db__cell.is-date {
+  margin-left: auto;
+  color: var(--mg-muted);
+  font: 0.85em var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+}
+.mg-db__cell.is-title .mg-db__k,
+.mg-db__cell.is-date .mg-db__k {
+  display: none;
+}
+.mg-db__badge:not(:empty) {
+  font: 700 0.76em / 1.3 var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+@container (max-width: 559px) {
+  /* Узкий экран: состояние показывают значок, рамка и фон; подпись остаётся для скринридера. */
+  .mg-db__badge:not(:empty) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+.mg-db__cells {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.9rem;
+  font-size: 0.84em;
+  line-height: 1.35;
+}
+.mg-db__k {
+  margin-right: 0.35em;
+  color: var(--mg-muted);
+  font-size: 0.82em;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.mg-db__v.is-hit {
+  color: var(--mg-gold);
+  font-weight: 700;
+}
+
+/* Состояния карточки */
+.mg-db .mg-db__card.is-picked {
+  background: rgb(232 217 181 / 0.1);
+  border-color: var(--mg-gold);
+}
+.mg-db__card.is-picked .mg-db__box {
+  background: var(--mg-gold);
+  border-color: var(--mg-gold);
+}
+.mg-db__card.is-picked .mg-db__box::after {
+  content: '✓';
+}
+.mg-db .mg-db__card.is-found {
+  background: rgb(127 181 119 / 0.13);
+  border-color: var(--mg-ok);
+  cursor: default;
+}
+.mg-db__card.is-found .mg-db__box {
+  background: var(--mg-ok);
+  border-color: var(--mg-ok);
+}
+.mg-db__card.is-found .mg-db__box::after {
+  content: '✓';
+}
+.mg-db__card.is-found .mg-db__badge {
+  color: var(--mg-ok);
+}
+.mg-db .mg-db__card.is-rejected {
+  background: rgb(201 54 47 / 0.08);
+  border-color: rgb(201 54 47 / 0.55);
+  cursor: default;
+}
+.mg-db__card.is-rejected .mg-db__body {
+  opacity: 0.6;
+}
+.mg-db__card.is-rejected .mg-db__box {
+  color: #fff;
+  background: var(--mg-accent);
+  border-color: var(--mg-accent);
+}
+.mg-db__card.is-rejected .mg-db__box::after {
+  content: '✕';
+}
+.mg-db__card.is-rejected .mg-db__badge {
+  color: #ff9a92;
+}
+
+/* Кнопка «Проверить» живёт в строке действий оболочки и занимает больше места */
+.mg-shell .mg-shell__btn.is-check {
+  flex: 2 1 9rem;
+}

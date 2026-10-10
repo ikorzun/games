@@ -26,7 +26,8 @@
 import type { Container } from 'pixi.js';
 import type { MinigameOutcomeKind, MinigameResult, Value } from '../core/types';
 import { fill, h } from '../ui/dom';
-import { Countdown } from './mg_timer';
+import { GreyBoxMinigame } from './grey_box';
+import { Countdown, formatTime } from './mg_timer';
 import type { GameContext, IMinigame, MinigameConfig } from './types';
 import './interrogation_press.css';
 
@@ -184,6 +185,8 @@ class InterrogationPress implements IMinigame {
   private spec: InterrogationSpec = { suspect: null, statements: [], evidence: [], full: 1, partial: 1, maxMistakes: 3 };
   /** Карточки, доступные игроку (фиксируются при mount по переменным эпизода). */
   private cards: Evidence[] = [];
+  /** Запасной grey-box: config непригоден для настоящей механики, эпизод остаётся проходимым. */
+  private fallback: GreyBoxMinigame | null = null;
   private host: HTMLElement | null = null;
   private view: HTMLElement | null = null;
   private els: Els | null = null;
@@ -199,6 +202,8 @@ class InterrogationPress implements IMinigame {
   private pressed = new Set<string>();
   private hinted = new Set<string>();
   private outcome: MinigameOutcomeKind | null = null;
+  /** Допрос закончился по времени. */
+  private timedOut = false;
   // Временное состояние.
   private note: Note = { k: 'none' };
   private fx: 'shake' | 'stamp' | null = null;
@@ -209,9 +214,17 @@ class InterrogationPress implements IMinigame {
 
   // ───────────── IMinigame ─────────────
 
-  mount(_root: Container, dom: HTMLElement, cfg: MinigameConfig, ctx: GameContext): void {
+  mount(root: Container, dom: HTMLElement, cfg: MinigameConfig, ctx: GameContext): void {
     this.ctx = ctx;
     this.spec = parseInterrogation(cfg);
+    if (this.spec.statements.length === 0) {
+      console.warn(`[minigame] ${ctx.def.id}: config непригоден для ${TYPE} — показан grey-box`);
+      const gb = new GreyBoxMinigame(TYPE);
+      gb.onResult = (r) => this.onResult(r);
+      this.fallback = gb;
+      gb.mount(root, dom, cfg, ctx);
+      return;
+    }
     const vars = ctx.vars();
     this.cards = this.spec.evidence.filter((e) => e.requires === null || truthy(vars[e.requires]));
     this.host = dom;
@@ -232,22 +245,24 @@ class InterrogationPress implements IMinigame {
     }
     this.render();
     this.view?.focus({ preventScroll: true });
-    if (this.spec.statements.length === 0) this.conclude(); // допрашивать нечего: не держим игрока
   }
 
   pause(): void {
+    if (this.fallback) return this.fallback.pause();
     this.paused = true;
     this.timer?.pause();
     this.view?.classList.add('is-paused');
   }
 
   resume(): void {
+    if (this.fallback) return this.fallback.resume();
     this.paused = false;
     this.view?.classList.remove('is-paused');
     if (this.outcome === null) this.timer?.start();
   }
 
   serialize(): unknown {
+    if (this.fallback) return this.fallback.serialize();
     return {
       v: 1,
       index: this.index,
@@ -258,10 +273,12 @@ class InterrogationPress implements IMinigame {
       hinted: [...this.hinted],
       left: this.timer ? Math.round(this.timer.remainingMs) : null,
       result: this.outcome,
+      timeout: this.timedOut,
     };
   }
 
   restore(state: unknown): void {
+    if (this.fallback) return this.fallback.restore(state);
     if (this.destroyed || !isRec(state)) return;
     const stIds = new Set(this.spec.statements.map((s) => s.id));
     const evIds = new Set(this.spec.evidence.map((e) => e.id));
@@ -297,6 +314,7 @@ class InterrogationPress implements IMinigame {
     const r = state.result;
     if (r === 'success' || r === 'partial' || r === 'fail') {
       this.outcome = r;
+      this.timedOut = state.timeout === true;
       this.timer?.stop();
     }
     this.note = { k: 'none' };
@@ -306,6 +324,10 @@ class InterrogationPress implements IMinigame {
   }
 
   destroy(): void {
+    if (this.fallback) {
+      this.fallback.destroy();
+      return;
+    }
     if (this.destroyed) return;
     this.destroyed = true;
     this.timer?.stop();
@@ -365,7 +387,7 @@ class InterrogationPress implements IMinigame {
 
   private press(): void {
     const st = this.current();
-    if (!this.canAct() || !st?.pressKey || this.kindOf(st) !== 'open') return;
+    if (!this.canAct() || !st?.pressKey || this.kindOf(st) !== 'open' || this.pressed.has(st.id)) return;
     this.pressed.add(st.id);
     this.note = { k: 'none' };
     this.step();
@@ -401,6 +423,7 @@ class InterrogationPress implements IMinigame {
 
   private onTimeUp(): void {
     if (this.destroyed || this.outcome !== null) return;
+    this.timedOut = true;
     this.conclude();
     this.ctx.autosave();
   }
@@ -497,7 +520,7 @@ class InterrogationPress implements IMinigame {
     const head = h(
       'header',
       { class: 'mg-ip__head' },
-      h('div', { class: 'mg-ip__bar' }, kicker, count, lives),
+      h('div', { class: 'mg-ip__bar' }, kicker, lives),
       intro,
       howto ?? brief,
       pips,
@@ -507,7 +530,7 @@ class InterrogationPress implements IMinigame {
     const bubbleBody = h('div', { class: 'mg-ip__bubble-body' });
     const bubble = h('blockquote', { class: 'mg-ip__bubble' }, bubbleBody);
     const feedback = h('p', { class: 'mg-ip__feedback', role: 'status' });
-    const scene = h('section', { class: 'mg-ip__scene' }, speaker, bubble, feedback);
+    const scene = h('section', { class: 'mg-ip__scene' }, h('div', { class: 'mg-ip__who' }, speaker, count), bubble, feedback);
 
     const cardsTitle = h('h3', { class: 'mg-ip__cards-title' });
     const grid = h('div', { class: 'mg-ip__grid' });
@@ -540,10 +563,14 @@ class InterrogationPress implements IMinigame {
   private paintTime(left: number): void {
     const e = this.els;
     if (!e?.time || !e.timeBar || this.timeTotal <= 0) return;
-    e.time.setAttribute('aria-valuemin', '0');
-    e.time.setAttribute('aria-valuemax', String(this.timeTotal));
-    e.time.setAttribute('aria-valuenow', String(Math.round(left)));
-    e.time.setAttribute('aria-label', this.ctx.t('ui.minigame.time_left'));
+    const text = this.ctx.t('ui.minigame.time_left', { time: formatTime(left) });
+    if (e.time.getAttribute('aria-valuetext') !== text) {
+      e.time.setAttribute('aria-valuemin', '0');
+      e.time.setAttribute('aria-valuemax', String(this.timeTotal));
+      e.time.setAttribute('aria-valuenow', String(Math.round(left)));
+      e.time.setAttribute('aria-valuetext', text);
+      e.time.setAttribute('aria-label', text);
+    }
     e.timeBar.style.transform = `scaleX(${Math.max(0, Math.min(1, left / this.timeTotal))})`;
   }
 
@@ -586,7 +613,7 @@ class InterrogationPress implements IMinigame {
     // Ошибки: точки по числу max_mistakes (если их немного), иначе число.
     const max = this.spec.maxMistakes;
     const used = this.mistakes;
-    const mistakesText = t('ui.minigame.mistakes', { used, max });
+    const mistakesText = t('ui.minigame.mistakes', { n: used, max });
     fill(
       e.lives,
       ...(max <= 8
@@ -637,7 +664,8 @@ class InterrogationPress implements IMinigame {
       e.bubble.classList.remove('is-shake');
     }
     this.fx = null;
-    e.feedback.textContent = this.noteText();
+    const note = this.noteText();
+    if (e.feedback.textContent !== note) e.feedback.textContent = note;
 
     this.renderCards(st, kind);
     this.renderFoot(st, kind);
@@ -706,7 +734,7 @@ class InterrogationPress implements IMinigame {
       h('button', { class: `mg-btn ${cls}`, type: 'button', disabled, text, data: { focus }, on: { click: onClick } });
     fill(
       e.actions,
-      st?.pressKey && kind === 'open' ? btn('is-press', t('ui.minigame.interrogation.press'), 'press', () => this.press()) : null,
+      st?.pressKey && kind === 'open' && !this.pressed.has(st.id) ? btn('is-press', t('ui.minigame.interrogation.press'), 'press', () => this.press()) : null,
       st
         ? kind === 'open'
           ? btn('is-pass', t('ui.minigame.interrogation.pass'), 'advance', () => this.advance())
@@ -725,6 +753,7 @@ class InterrogationPress implements IMinigame {
           class: `mg-ip__verdict is-${out}`,
           text: t(out === 'success' ? 'ui.minigame.success' : out === 'partial' ? 'ui.minigame.partial' : 'ui.minigame.fail'),
         }),
+        this.timedOut ? h('p', { class: 'mg-ip__why', text: t('ui.minigame.time_up') }) : null,
         h('p', {
           class: 'mg-ip__summary',
           text: t('ui.minigame.interrogation.body.result', {

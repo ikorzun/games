@@ -37,7 +37,7 @@ interface Tween {
   done?: () => void;
 }
 
-type Mode = 'none' | 'loading' | 'image' | 'placeholder';
+type Mode = 'none' | 'loading' | 'image' | 'placeholder' | 'solid';
 
 interface SpriteNode {
   view: SpriteView;
@@ -60,6 +60,8 @@ interface Slot {
   mode: Mode;
   url: string | null;
   token: number;
+  /** Сплошной цвет (режим solid), 0xRRGGBB. */
+  color: number;
 }
 
 function makeText(size: number, weight: '400' | '700', fill = 0xffffff): Text {
@@ -137,8 +139,8 @@ export class PixiSceneRenderer implements ISceneRenderer {
   private readonly cgPic = new Sprite();
   private readonly nodes = new Map<string, SpriteNode>();
   private readonly textures = new TextureCache();
-  private readonly bgSlot: Slot = { mode: 'none', url: null, token: 0 };
-  private readonly cgSlot: Slot = { mode: 'none', url: null, token: 0 };
+  private readonly bgSlot: Slot = { mode: 'none', url: null, token: 0, color: 0 };
+  private readonly cgSlot: Slot = { mode: 'none', url: null, token: 0, color: 0 };
   private bgId = '';
   private cgId: string | null = null;
   private speaker: string | null = null;
@@ -308,6 +310,12 @@ export class PixiSceneRenderer implements ISceneRenderer {
       slot.url = null;
       return;
     }
+    if (chain.solid) {
+      slot.mode = 'solid';
+      slot.url = null;
+      slot.color = parseInt(chain.solid.slice(1), 16);
+      return;
+    }
     const got = this.assets.peek(chain.urls);
     if (got) {
       this.applySlotImage(slot, got.handle);
@@ -447,8 +455,10 @@ export class PixiSceneRenderer implements ISceneRenderer {
     // фон
     const bgMode = this.bgSlot.mode;
     const bgPlaceholder = bgMode === 'placeholder';
-    this.bgG.visible = this.bgLabel.visible = this.bgTag.visible = bgPlaceholder;
+    this.bgG.visible = bgPlaceholder || bgMode === 'solid';
+    this.bgLabel.visible = this.bgTag.visible = bgPlaceholder;
     this.bgPic.visible = bgMode === 'image';
+    if (bgMode === 'solid') this.bgG.clear().rect(0, 0, W, H).fill({ color: this.bgSlot.color });
     if (bgPlaceholder) {
       const bg = hslToInt(placeholderHsl(this.bgId || 'none', 'bg'));
       this.bgG.clear().rect(0, 0, W, H).fill({ color: bg });

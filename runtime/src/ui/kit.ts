@@ -22,6 +22,8 @@ export class UiKit {
   readonly quick: QuickMenu;
   readonly screens = new ScreenHost();
   readonly toasts: ToastLayer;
+  /** Индикатор загрузки ассетов блока (появляется, только если загрузка затянулась). */
+  readonly loading: HTMLElement;
 
   constructor(root: HTMLElement, onQuick: (a: QuickAction) => void, titleKeyOf: (item: string) => string | null) {
     this.root = root;
@@ -29,8 +31,9 @@ export class UiKit {
     this.toasts = new ToastLayer(titleKeyOf);
     this.ui = h('div', { class: 'vn-ui' }, this.quick.el, this.textbox.el, this.choices.el);
     this.main = h('div', { class: 'vn-main' }, this.ui);
+    this.loading = h('div', { class: 'vn-loading', aria: { hidden: true } }, h('i'), h('i'), h('i'));
     root.classList.add('vn-root');
-    root.replaceChildren(this.main, this.screens.el, this.toasts.el);
+    root.replaceChildren(this.main, this.screens.el, this.toasts.el, this.loading);
     // Долгий тап и правая кнопка не открывают контекстное меню браузера.
     root.addEventListener('contextmenu', (e) => e.preventDefault());
     root.addEventListener('dragstart', (e) => e.preventDefault());
@@ -39,6 +42,10 @@ export class UiKit {
   /** Сцена занимает область .vn-main под слоем интерфейса. */
   mountStage(stageEl: HTMLElement): void {
     this.main.insertBefore(stageEl, this.ui);
+  }
+
+  setLoading(on: boolean): void {
+    this.loading.classList.toggle('is-on', on);
   }
 
   setUiHidden(hidden: boolean): void {

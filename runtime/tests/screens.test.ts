@@ -14,6 +14,7 @@ import type { LogEntry } from '../src/session';
 import { ScreenHost } from '../src/ui/screen_host';
 import {
   ArchiveScreen,
+  DocumentScreen,
   ErrorScreen,
   LogScreen,
   MenuScreen,
@@ -74,6 +75,12 @@ beforeEach(() => {
     'ui.settings.violence_mode': 'Показ насилия',
     'ui.settings.violence_full': 'Полностью',
     'ui.settings.violence_schematic': 'Схематично',
+    'ui.settings.camera_fx': 'Эффекты камеры',
+    'ui.settings.camera_fx_off': 'Выкл',
+    'ui.settings.camera_fx_low': 'Слабо',
+    'ui.settings.camera_fx_high': 'Сильно',
+    'ui.archive.new_item': 'Новый материал',
+    'mini.doc.text': 'Текст бланка',
     'ui.quick.log': 'Журнал',
     'ui.quick.save': 'Сохранить',
     'ui.quick.load': 'Загрузить',
@@ -153,6 +160,60 @@ describe('MenuScreen', () => {
     s.render();
     expect(texts(s.el, '.vn-menu__nav button')[0]).toBe('New game');
     expect(s.el.querySelector('.vn-chip.is-on')?.getAttribute('data-lang')).toBe('en');
+  });
+});
+
+describe('MenuScreen: картинки интерфейса (видеосалон и плашка)', () => {
+  const handlers = (art?: { background: string | null; plate: string | null }) => ({
+    hasContinue: () => false,
+    completed: () => false,
+    onContinue: vi.fn(),
+    onNew: vi.fn(),
+    onArchive: vi.fn(),
+    onSettings: vi.fn(),
+    onLanguage: vi.fn(),
+    ...(art ? { art } : {}),
+  });
+  const abs = (u: string): string => `url("${new URL(u, document.baseURI).href}")`;
+
+  it('без картинок прежнее оформление: ни has-bg, ни --menu-bg, ни плашки; название — обычный заголовок', () => {
+    const s = open(new MenuScreen(episode, handlers()));
+    expect(s.el.classList.contains('has-bg')).toBe(false);
+    expect(s.el.style.getPropertyValue('--menu-bg')).toBe('');
+    expect(s.el.querySelector('.vn-menu__brand')).toBeNull();
+    expect(s.el.querySelector('.vn-menu__plate')).toBeNull();
+    expect(s.el.querySelector('.vn-menu__title')?.textContent).toBe('Смерть за квартиры');
+  });
+
+  it('фон видеосалона: класс has-bg и --menu-bg с абсолютным адресом (в сборке css лежит в dist/assets/)', () => {
+    const s = open(new MenuScreen(episode, handlers({ background: './assets/common/ui/menu_video_salon.webp', plate: null })));
+    expect(s.el.classList.contains('has-bg')).toBe(true);
+    expect(s.el.style.getPropertyValue('--menu-bg')).toBe(abs('./assets/common/ui/menu_video_salon.webp'));
+    expect(s.el.style.getPropertyValue('--menu-bg')).toMatch(/^url\("https?:\/\//); // не относительный
+    expect(s.el.querySelector('.vn-menu__plate')).toBeNull(); // плашки нет — нет и обёртки
+  });
+
+  it('плашка заставки: название остаётся текстом из локали (h1) и лежит на картинке; перерисовка без картинок всё снимает', () => {
+    const art = { background: './assets/common/ui/menu_video_salon.webp', plate: './assets/common/ui/title_plate.webp' };
+    const hd = handlers(art);
+    const s = open(new MenuScreen(episode, hd));
+    const brand = s.el.querySelector('.vn-menu__brand');
+    expect(brand?.classList.contains('has-plate')).toBe(true);
+    const img = brand?.querySelector<HTMLImageElement>('img.vn-menu__plate');
+    expect(img?.getAttribute('src')).toBe(art.plate);
+    expect(img?.getAttribute('alt') ?? '').toBe(''); // декоративная картинка: название читается из h1
+    expect(brand?.querySelector('h1.vn-menu__title')?.textContent).toBe('Смерть за квартиры');
+    // язык меняется — текст на плашке обновляется (в картинке текста нет)
+    i18n.addStrings('en', { 'mini.title': 'Death for apartments' });
+    i18n.setLang('en');
+    s.render();
+    expect(s.el.querySelector('.vn-menu__brand h1')?.textContent).toBe('Death for apartments');
+    // файла больше нет (art -> null): возврат к прежнему виду
+    hd.art = { background: null, plate: null };
+    s.render();
+    expect(s.el.classList.contains('has-bg')).toBe(false);
+    expect(s.el.style.getPropertyValue('--menu-bg')).toBe('');
+    expect(s.el.querySelector('.vn-menu__brand')).toBeNull();
   });
 });
 
@@ -284,6 +345,60 @@ describe('SettingsScreen', () => {
     expect(range(s.el, 'Скорость текста').value).toBe('4');
     expect([...s.el.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].map((b) => b.checked)).toEqual([false, true]);
     expect([...s.el.querySelectorAll<HTMLInputElement>('input[type="radio"]')].map((r) => r.checked)).toEqual([false, true]);
+  });
+});
+
+describe('SettingsScreen: эффекты камеры', () => {
+  const make = (over: Partial<Settings> = {}, reduced = false) => {
+    const settings: Settings = { ...DEFAULT_SETTINGS, ...over };
+    const hd = {
+      settings: () => settings,
+      reducedMotion: () => reduced,
+      onChange: vi.fn((patch: Partial<Settings>) => void Object.assign(settings, patch)),
+      onLanguage: vi.fn(),
+      onClose: vi.fn(),
+    };
+    return { s: open(new SettingsScreen(hd)), hd, settings };
+  };
+  const chips = (el: HTMLElement): HTMLButtonElement[] => [...el.querySelectorAll<HTMLButtonElement>('.vn-camfx .vn-chip')];
+  const on = (el: HTMLElement): string[] => chips(el).filter((c) => c.getAttribute('aria-pressed') === 'true').map((c) => c.dataset.cameraFx ?? '');
+
+  it('три сегмента Выкл / Слабо / Сильно с названием группы; по умолчанию включено «Слабо»', () => {
+    const { s } = make();
+    expect(chips(s.el).map((c) => c.dataset.cameraFx)).toEqual(['off', 'low', 'high']);
+    expect(chips(s.el).map((c) => c.textContent)).toEqual(['Выкл', 'Слабо', 'Сильно']);
+    expect(s.el.querySelector('.vn-camfx')?.getAttribute('aria-label')).toBe('Эффекты камеры');
+    expect(on(s.el)).toEqual(['low']);
+    expect(chips(s.el).every((c) => !c.disabled)).toBe(true);
+    // группа стоит рядом с языком, до ползунков звука и текста
+    const groups = [...s.el.querySelectorAll('.vn-settings__legend')].map((n) => n.textContent);
+    expect(groups.indexOf('Эффекты камеры')).toBe(groups.indexOf('Язык') + 1);
+  });
+
+  it('выбор уровня отдаёт патч {cameraFx} и сразу перерисовывает отметку', () => {
+    const { s, hd, settings } = make();
+    chips(s.el)[2]!.click();
+    expect(hd.onChange).toHaveBeenLastCalledWith({ cameraFx: 'high' });
+    expect(settings.cameraFx).toBe('high');
+    expect(on(s.el)).toEqual(['high']);
+    chips(s.el)[0]!.click();
+    expect(hd.onChange).toHaveBeenLastCalledWith({ cameraFx: 'off' });
+    expect(on(s.el)).toEqual(['off']);
+    expect(hd.onChange).toHaveBeenCalledTimes(2);
+  });
+
+  it('сохранённое значение показывается: отмечен ровно один сегмент', () => {
+    expect(on(make({ cameraFx: 'off' }).s.el)).toEqual(['off']);
+    expect(on(make({ cameraFx: 'high' }).s.el)).toEqual(['high']);
+  });
+
+  it('prefers-reduced-motion: все сегменты недоступны, отмечено «Выкл», выбор настроек не меняется', () => {
+    const { s, hd, settings } = make({ cameraFx: 'high' }, true);
+    expect(chips(s.el).every((c) => c.disabled)).toBe(true);
+    expect(on(s.el)).toEqual(['off']); // показываем фактическое состояние
+    chips(s.el)[1]!.click(); // disabled-кнопка клика не принимает
+    expect(hd.onChange).not.toHaveBeenCalled();
+    expect(settings.cameraFx).toBe('high'); // выбор пользователя сохранён и вернётся, когда reduced-motion снимут
   });
 });
 
@@ -427,5 +542,52 @@ describe('ArchiveScreen и ErrorScreen', () => {
     expect(s.el.querySelector('.vn-error__msg')?.textContent).toBe('что-то сломалось');
     s.el.querySelector<HTMLButtonElement>('.vn-btn')?.click();
     expect(onDone).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DocumentScreen: бланк с картинкой', () => {
+  const abs = (u: string): string => `url("${new URL(u, document.baseURI).href}")`;
+  const make = (image: string | null = null, textKey: string | null = 'mini.doc.text', archiveItem: string | null = null) => {
+    const onDone = vi.fn();
+    const s = open(new DocumentScreen(episode, 'doc_x', textKey, archiveItem, onDone, image));
+    return { s, onDone };
+  };
+  const paper = (el: HTMLElement): HTMLElement => el.querySelector<HTMLElement>('.vn-document__paper')!;
+
+  it('без картинки бланк — обычный лист; текст берётся из локали', () => {
+    const { s } = make();
+    expect(paper(s.el).classList.contains('has-image')).toBe(false);
+    expect(paper(s.el).style.getPropertyValue('--doc-img')).toBe('');
+    expect(paper(s.el).dataset.doc).toBe('doc_x');
+    expect(s.el.querySelector('.vn-document__text')?.textContent).toBe('Текст бланка');
+  });
+
+  it('картинка бланка без текста: класс has-image и абсолютный --doc-img; текст накладывается слоем из локали', () => {
+    const { s } = make('./assets/ep01/documents/doc_x.webp');
+    expect(paper(s.el).classList.contains('has-image')).toBe(true);
+    expect(paper(s.el).style.getPropertyValue('--doc-img')).toBe(abs('./assets/ep01/documents/doc_x.webp'));
+    expect(s.el.querySelector('.vn-document__text')?.textContent).toBe('Текст бланка');
+  });
+
+  it('картинка пришла позже: setImage включает её на уже открытом экране, null — убирает; перерисовка сохраняет выбор', () => {
+    const { s } = make();
+    s.setImage('./assets/ep01/documents/doc_x.webp');
+    expect(paper(s.el).classList.contains('has-image')).toBe(true);
+    expect(paper(s.el).style.getPropertyValue('--doc-img')).toBe(abs('./assets/ep01/documents/doc_x.webp'));
+    s.render(); // например, смена языка
+    expect(paper(s.el).classList.contains('has-image')).toBe(true);
+    s.setImage(null);
+    expect(paper(s.el).classList.contains('has-image')).toBe(false);
+    expect(paper(s.el).style.getPropertyValue('--doc-img')).toBe('');
+  });
+
+  it('setImage до отрисовки ничего не ломает; «Понятно» закрывает; новый материал архива помечается', () => {
+    const onDone = vi.fn();
+    const fresh = new DocumentScreen(episode, 'doc_x', null, null, onDone);
+    expect(() => fresh.setImage('./a.webp')).not.toThrow();
+    const { s, onDone: done } = make(null, 'mini.doc.text', 'arc_x');
+    expect(s.el.querySelector('.vn-badge')?.textContent).toBe('Новый материал');
+    s.el.querySelector<HTMLButtonElement>('.vn-actions .vn-btn')?.click();
+    expect(done).toHaveBeenCalledTimes(1);
   });
 });

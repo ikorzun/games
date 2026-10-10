@@ -9,7 +9,12 @@
  *   npm run smoke -- --url https://…                # опубликованная ссылка (чеклист Playgama, п. 36)
  *   npm run smoke:matrix                            # + проверка раскладки, скриншоты в e2e/out/
  *
- * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en,es,pt (для матрицы), --no-shots.
+ * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en,es,pt (для матрицы), --no-shots,
+ * --require-assets (все файлы из episode.assets обязаны быть на месте; без флага отсутствующие файлы допустимы:
+ * игра показывает плейсхолдеры и пишет по одному предупреждению на файл).
+ *
+ * Сборка может быть без картинок и звука (в репозитории их пока нет) или с ними (`VN_ASSETS_DIR=<каталог> npm run build`):
+ * сценарий «Камкордер и графика» сам определяет режим по ответу `__vn.assets(true)` и проверяет оба.
  * Браузер: переменная CHROMIUM_PATH (свой Chromium) или управляемый Playwright
  * (`npx playwright-core install chromium`). Доп. флаги запуска — CHROMIUM_ARGS (через пробел).
  * Выход: 0 — все проверки прошли, 1 — есть провалы.
@@ -35,6 +40,7 @@ const distDir = resolve(ROOT, opt('dist', 'dist'));
 const remoteUrl = opt('url', null);
 const wantMatrix = flag('matrix');
 const wantShots = !flag('no-shots');
+const requireAssets = flag('require-assets');
 const matrixLangs = opt('langs', 'ru,en').split(',').map((s) => s.trim()).filter(Boolean);
 
 // ───────────────────────────── результаты ─────────────────────────────
@@ -54,6 +60,8 @@ const section = (title) => console.log(`\n# ${title}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ───────────────────────────── браузер и сервер ─────────────────────────────
+
+const AUDIO_URL = /\/assets\/[^?#]+\.(?:mp3|m4a|ogg|wav)(?:[?#]|$)/i;
 
 async function startServer() {
   if (remoteUrl) return { url: remoteUrl, close: async () => undefined };
@@ -101,13 +109,19 @@ async function openPage(browser, baseUrl, query, ctxOpts = {}, seedStorage = nul
   }
   const page = await context.newPage();
   const origin = new URL(baseUrl).origin;
-  const log = { errors: [], external: [], failed: [] };
+  const log = { errors: [], warnings: [], external: [], failed: [] };
   page.on('console', (m) => {
     // Журнал самого Bridge SDK пишет ошибки в консоль только при настоящих проблемах.
     if (m.type() === 'error') log.errors.push(m.text());
+    else if (m.type() === 'warning') log.warnings.push(m.text());
   });
   page.on('pageerror', (e) => log.errors.push(`pageerror: ${e.message}`));
-  page.on('requestfailed', (r) => log.failed.push(`${r.url()} ${r.failure()?.errorText ?? ''}`));
+  page.on('requestfailed', (r) => {
+    const why = r.failure()?.errorText ?? '';
+    // Браузер сам обрывает загрузку аудио, когда элементу меняют src (смена трека), и при перезагрузке страницы.
+    if (why.includes('ERR_ABORTED') && AUDIO_URL.test(r.url())) return;
+    log.failed.push(`${r.url()} ${why}`);
+  });
   page.on('response', (r) => {
     if (r.status() >= 400 && !r.url().endsWith('favicon.ico')) log.failed.push(`HTTP ${r.status()} ${r.url()}`);
   });
@@ -228,6 +242,122 @@ async function scenarioPlay(browser, baseUrl) {
   check('нет ошибок в консоли и неудачных запросов', log.errors.length === 0 && log.failed.length === 0, [...log.errors, ...log.failed].join(' | ').slice(0, 400));
   if (!remoteUrl && !isBridge) check('нет внешних запросов', log.external.length === 0, log.external.join(', '));
   await context.close();
+}
+
+async function scenarioCamera(browser, baseUrl) {
+  section('Камкордер и графика: «слабо» по умолчанию, HUD, выключатель, reduced-motion, учёт ассетов');
+  const { page, context, log } = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU' });
+  await page.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+  const cam = () => page.evaluate(() => window.__vn.camera());
+  const stageClass = () => page.evaluate(() => document.querySelector('.vn-stage')?.className ?? '');
+  await page.evaluate(() => window.__vn.settings({ textSpeed: 5, skipUnread: true }));
+  await page.evaluate(() => window.__vn.start());
+  await page.waitForFunction(() => window.__vn.pending()?.kind === 'line', null, { timeout: 15000 });
+  await sleep(900);
+
+  // Пролог — реконструкция: самый заметный уровень ручной камеры и HUD записи.
+  const presentation = await page.evaluate(() => window.__vn.view()?.presentation);
+  const c0 = await cam();
+  check('эффекты камеры по умолчанию «слабо», цикл идёт (пролог — реконструкция)', presentation === 'reconstruction' && c0.setting === 'low' && c0.effective === 'low' && c0.running && !c0.reducedMotion, JSON.stringify(c0));
+  const samples = [];
+  for (let i = 0; i < 6; i++) {
+    samples.push((await cam()).transform);
+    await sleep(170);
+  }
+  const nums = (t) => (t.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
+  const frames = samples.map(nums);
+  check('кадр дышит: трансформ ручной камеры меняется со временем', new Set(samples).size >= 3, samples.slice(0, 3).join(' | '));
+  // Устойчивая тряска ≤ 1,2 % / 0,5° / 1,03; поправки оператора на короткое время выходят за эти рамки — допуск шире.
+  check('…и остаётся малым (сдвиг, поворот, масштаб в разумных пределах)', frames.every(([tx, ty, rot, sc]) => Math.abs(tx) < 5 && Math.abs(ty) < 5 && Math.abs(rot) < 2.6 && sc >= 1 && sc < 1.15), JSON.stringify(frames.slice(0, 2)));
+  const hud = await page.evaluate(() => {
+    const el = document.querySelector('.vn-stage__hud');
+    return el ? { display: getComputedStyle(el).display, text: el.textContent } : null;
+  });
+  check('реконструкция: HUD записи (точка и REC) показан внутри картинки', c0.rec && hud?.display !== 'none' && hud?.text === 'REC', JSON.stringify(hud));
+  const fxCanvas = await page.evaluate(() => {
+    const c = document.querySelector('canvas.vn-stage__camfx');
+    return c ? { w: c.width, h: c.height } : null;
+  });
+  check('помехи и зерно рисуются на маленьком холсте (~256 пкс по ширине), а не во весь экран', !!fxCanvas && fxCanvas.w <= 320 && fxCanvas.h <= 360, JSON.stringify(fxCanvas));
+
+  // Помеха по требованию: класс появляется и гаснет сам за полсекунды.
+  await page.evaluate(() => window.__vn.camera('burst'));
+  await sleep(60);
+  const burstOn = /cam-burst/.test(await stageClass());
+  await sleep(900);
+  check('всплеск помех включается и сам заканчивается (150–500 мс)', burstOn && !/cam-burst/.test(await stageClass()));
+
+  // Выключатель.
+  await page.evaluate(() => window.__vn.settings({ cameraFx: 'off' }));
+  await sleep(150);
+  const off = await cam();
+  check('«Выкл»: цикл остановлен, трансформ и HUD сняты', off.setting === 'off' && off.effective === 'off' && !off.running && off.transform === '' && !off.rec, JSON.stringify(off));
+  check('«Выкл»: на сцене нет классов камкордера', !/cam-on|cam-rec|cam-burst/.test(await stageClass()));
+  await page.evaluate(() => window.__vn.settings({ cameraFx: 'high' }));
+  await sleep(300);
+  const high = await cam();
+  check('«Сильно»: уровень применяется на лету, цикл снова идёт', high.effective === 'high' && high.running && /cam-on/.test(await stageClass()), JSON.stringify(high));
+  await page.evaluate(() => window.__vn.settings({ cameraFx: 'low' }));
+
+  // Экран настроек: сегменты, выбор мышью.
+  await page.click('.vn-qbtn--settings');
+  await page.waitForSelector('.vn-settings .vn-camfx');
+  const chips = await page.$$eval('.vn-settings .vn-camfx .vn-chip', (els) => els.map((e) => ({ v: e.dataset.cameraFx, on: e.getAttribute('aria-pressed') === 'true', off: e.disabled })));
+  check('настройки: «Эффекты камеры» — Выкл / Слабо / Сильно, отмечено «Слабо»', chips.map((c) => c.v).join() === 'off,low,high' && chips.find((c) => c.on)?.v === 'low' && chips.every((c) => !c.off), JSON.stringify(chips));
+  await page.click('.vn-settings .vn-camfx [data-camera-fx="off"]');
+  await sleep(200);
+  check('выбор «Выкл» в настройках выключает камеру и сохраняется в настройках', (await cam()).effective === 'off' && (await page.evaluate(() => window.__vn.settings().cameraFx)) === 'off');
+  await page.click('.vn-settings .vn-camfx [data-camera-fx="low"]');
+  await page.keyboard.press('Escape');
+  await sleep(200);
+
+  // Не-реконструкция: HUD только в реконструкции.
+  await page.evaluate(() => window.__vn.goto('s12'));
+  await advanceUntil(page, (p) => p.kind === 'line' && p.style === 'say');
+  await sleep(500);
+  const proc = await cam();
+  const procHud = await page.evaluate(() => getComputedStyle(document.querySelector('.vn-stage__hud')).display);
+  check('процедурная сцена: камера работает, но HUD записи скрыт', (await page.evaluate(() => window.__vn.view()?.presentation)) === 'procedural' && proc.effective === 'low' && !proc.rec && procHud === 'none', JSON.stringify(proc));
+
+  // Весь эпизод с работающей камерой: ни одной ошибки на всех пресетах показа.
+  const report = await page.evaluate(() => window.__vn.autoplay('default'));
+  check('эпизод проходится целиком с включённой камерой', typeof report?.ending === 'string' && report.ending.length > 0);
+  check('камкордер не породил ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+
+  // Ассеты: либо файлы на месте, либо плейсхолдеры и ровно одно предупреждение на отсутствующий файл.
+  const a = await page.evaluate(() => window.__vn.assets(true));
+  const present = a.verify?.present ?? [];
+  const missing = a.verify?.missing ?? [];
+  const withFiles = present.length > 0;
+  console.log(`  (ассеты: на месте ${present.length}, нет ${missing.length} из ${present.length + missing.length}; загружено игрой ${a.loaded.length}; режим: ${withFiles ? 'с файлами' : 'без файлов — плейсхолдеры'})`);
+  check('загрузка ассетов завершена: очередь пуста', a.pending === 0);
+  const warned = log.warnings.filter((w) => /^\[assets\] нет файла/.test(w));
+  check('каждый отсутствующий файл упомянут в консоли один раз (без шквала предупреждений)', new Set(warned).size === warned.length, warned.slice(0, 3).join(' | '));
+  if (withFiles) {
+    check('картинки реально загружены и показаны (loaded > 0)', a.loaded.length > 0, JSON.stringify(a.loaded.slice(0, 3)));
+    if (requireAssets) check('все файлы из episode.assets на месте (--require-assets)', missing.length === 0, missing.slice(0, 5).join(', '));
+    else if (missing.length > 0) console.log(`  (нет ${missing.length} файлов — игра показывает плейсхолдеры: ${missing.slice(0, 4).join(', ')}${missing.length > 4 ? ', …' : ''})`);
+  } else {
+    check('без файлов игра не падает: ни одна картинка не помечена загруженной, плейсхолдеры показаны', a.loaded.length === 0 && a.missing.length > 0, JSON.stringify(a.missing.slice(0, 3)));
+    if (requireAssets) check('все файлы из episode.assets на месте (--require-assets)', false, `в сборке нет ни одного из ${missing.length} файлов`);
+  }
+  check('нет неудачных запросов, кроме отсутствующих ассетов', log.failed.filter((f) => !/\/assets\/(?:common|ep\d+)\//.test(f)).length === 0, log.failed.slice(0, 3).join(' | '));
+  await context.close();
+
+  // prefers-reduced-motion: эффекты выключены принудительно, переключатель недоступен.
+  const rm = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU', reducedMotion: 'reduce' });
+  await rm.page.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+  await rm.page.evaluate(() => window.__vn.start());
+  await rm.page.waitForFunction(() => window.__vn.pending()?.kind === 'line', null, { timeout: 15000 });
+  await sleep(600);
+  const r = await rm.page.evaluate(() => window.__vn.camera());
+  check('prefers-reduced-motion: эффекты камеры выключены, несмотря на «Слабо» в настройках', r.reducedMotion && r.setting === 'low' && r.effective === 'off' && !r.running && r.transform === '' && !r.rec, JSON.stringify(r));
+  await rm.page.click('.vn-qbtn--settings');
+  await rm.page.waitForSelector('.vn-settings .vn-camfx');
+  const rmChips = await rm.page.$$eval('.vn-settings .vn-camfx .vn-chip', (els) => els.map((e) => ({ v: e.dataset.cameraFx, on: e.getAttribute('aria-pressed') === 'true', off: e.disabled })));
+  check('…в настройках отмечено «Выкл», сегменты недоступны', rmChips.every((c) => c.off) && rmChips.find((c) => c.on)?.v === 'off', JSON.stringify(rmChips));
+  check('reduced-motion: нет ошибок в консоли', rm.log.errors.length === 0, rm.log.errors.join(' | ').slice(0, 200));
+  await rm.context.close();
 }
 
 async function scenarioBridgeSdk(browser, baseUrl) {
@@ -382,6 +512,7 @@ const browser = await launchBrowser();
 try {
   console.log(`Смоук-тест: ${server.url}${remoteUrl ? '' : ` (сборка ${distDir})`}`);
   await scenarioPlay(browser, server.url);
+  await scenarioCamera(browser, server.url);
   await scenarioBridgeSdk(browser, server.url);
   if (wantMatrix) await scenarioMatrix(browser, server.url);
 } catch (e) {

@@ -1,0 +1,370 @@
+// @vitest-environment jsdom
+/**
+ * Камкордер, DOM-часть (src/stage/camcorder_layer.ts): цикл rAF, одна CSS-трансформация обёртки кадра,
+ * один canvas зерна и помех (12–15 к/с), классы HUD, пауза, скрытая вкладка, prefers-reduced-motion.
+ * Время, rAF, ГСЧ и 2D-контекст подменены — браузер не нужен.
+ */
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { grainAlphaMax, mulberry32 } from '../src/stage/camcorder';
+import type { CameraFx } from '../src/stage/camcorder';
+import { CamcorderLayer, NOISE_FPS, OVERLAY_WIDTH } from '../src/stage/camcorder_layer';
+import type { Overlay2D } from '../src/stage/camcorder_layer';
+
+class FakeCtx implements Overlay2D {
+  fillStyle: string | CanvasGradient | CanvasPattern = '';
+  globalCompositeOperation: GlobalCompositeOperation = 'source-over';
+  readonly fills: Array<{ style: string; x: number; y: number; w: number; h: number }> = [];
+  readonly images: ImageData[] = [];
+  puts = 0;
+  clears = 0;
+  fillRect(x: number, y: number, w: number, h: number): void {
+    this.fills.push({ style: String(this.fillStyle), x, y, w, h });
+  }
+  clearRect(): void {
+    this.clears += 1;
+  }
+  putImageData(): void {
+    this.puts += 1;
+  }
+  createImageData(w: number, h: number): ImageData {
+    const img = { data: new Uint8ClampedArray(w * h * 4), width: w, height: h } as ImageData;
+    this.images.push(img);
+    return img;
+  }
+}
+
+const rigs: CamcorderLayer[] = [];
+
+function rig(init: { level?: CameraFx; reduced?: boolean } = {}) {
+  const stage = document.createElement('div');
+  stage.className = 'vn-stage';
+  const hand = document.createElement('div');
+  const canvas = document.createElement('canvas');
+  stage.append(hand, canvas);
+  document.body.appendChild(stage);
+  let next = 1;
+  let pending: Array<{ id: number; cb: (ts: number) => void }> = [];
+  const state = { reduced: init.reduced ?? false, hidden: false };
+  const listeners: Array<() => void> = [];
+  const ctx = new FakeCtx();
+  const layer = new CamcorderLayer({
+    stage,
+    hand,
+    canvas,
+    rng: mulberry32(5),
+    raf: (cb) => {
+      const id = next++;
+      pending.push({ id, cb });
+      return id;
+    },
+    caf: (id) => {
+      pending = pending.filter((p) => p.id !== id);
+    },
+    reducedMotion: () => state.reduced,
+    onReducedMotionChange: (cb) => {
+      listeners.push(cb);
+      return () => undefined;
+    },
+    isHidden: () => state.hidden,
+    context: ctx,
+  });
+  rigs.push(layer);
+  if (init.level) layer.setLevel(init.level);
+  /** Выполнить кадры анимации: время ts, мс. */
+  const tick = (ts: number): void => {
+    const batch = pending;
+    pending = [];
+    for (const p of batch) p.cb(ts);
+  };
+  /** Прогнать `ms` модельных мс шагом 16. */
+  const run = (ms: number, from = 0): void => {
+    for (let t = from; t <= from + ms; t += 16) tick(t);
+  };
+  return { layer, stage, hand, canvas, ctx, state, listeners, tick, run, queued: () => pending.length };
+}
+
+afterEach(() => {
+  for (const l of rigs.splice(0)) l.destroy();
+  document.body.replaceChildren();
+});
+
+describe('CamcorderLayer: цикл', () => {
+  it('без сцены цикл не идёт; когда сцена на экране и эффекты включены — идёт, а трансформация ложится на обёртку кадра', () => {
+    const r = rig();
+    expect(r.layer.running).toBe(false);
+    expect(r.queued()).toBe(0);
+    r.layer.setContext('reconstruction', 'vhs');
+    expect(r.layer.running).toBe(false); // сцены ещё нет
+    r.layer.setActive(true);
+    expect(r.layer.running).toBe(true);
+    expect(r.queued()).toBe(1);
+    r.run(500);
+    expect(r.hand.style.transform).toMatch(/^translate3d\(-?[\d.]+%, -?[\d.]+%, 0\) rotate\(-?[\d.]+deg\) scale\(1\.\d+\)$/);
+    expect(r.queued()).toBe(1); // следующий кадр уже запрошен
+    expect(r.layer.lastFrame?.on).toBe(true);
+  });
+
+  it('трансформация только на обёртке: ни сцена, ни холст помех не получают transform; в режиме «штатив» — единичная', () => {
+    const r = rig();
+    r.layer.setContext('chronicle', 'archive_photo'); // хроника: штатив
+    r.layer.setActive(true);
+    r.run(300);
+    expect(r.hand.style.transform).toMatch(/translate3d\(0.000%, 0.000%, 0\) rotate\(0.000deg\) scale\(1.0000\)/);
+    expect(r.stage.style.transform).toBe('');
+    expect(r.canvas.style.transform).toBe('');
+  });
+
+  it('«выкл»: цикл не запускается вообще, класс cam-on снят, трансформации и оверлея нет', () => {
+    const r = rig({ level: 'off' });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    expect(r.layer.running).toBe(false);
+    expect(r.queued()).toBe(0);
+    expect(r.stage.classList.contains('cam-on')).toBe(false);
+    expect(r.stage.classList.contains('cam-rec')).toBe(false);
+    expect(r.stage.dataset.cam).toBe('off');
+    expect(r.hand.style.transform).toBe('');
+  });
+
+  it('выключение посреди игры снимает цикл и очищает трансформацию; включение возвращает', () => {
+    const r = rig();
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    r.run(200);
+    expect(r.hand.style.transform).not.toBe('');
+    r.layer.setLevel('off');
+    expect(r.layer.running).toBe(false);
+    expect(r.hand.style.transform).toBe('');
+    r.layer.setLevel('high');
+    expect(r.layer.running).toBe(true);
+    expect(r.stage.dataset.cam).toBe('high');
+  });
+
+  it('prefers-reduced-motion принудительно выключает эффекты, даже если выбрано «сильно»; смена настройки ОС подхватывается', () => {
+    const r = rig({ level: 'high', reduced: true });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    expect(r.layer.effectiveLevel).toBe('off');
+    expect(r.layer.reducedMotion).toBe(true);
+    expect(r.layer.running).toBe(false);
+    expect(r.stage.classList.contains('cam-on')).toBe(false);
+    // игрок убрал «уменьшение движения» в системе
+    r.state.reduced = false;
+    for (const cb of r.listeners) cb();
+    expect(r.layer.effectiveLevel).toBe('high');
+    expect(r.layer.running).toBe(true);
+  });
+
+  it('пауза платформы и скрытая вкладка останавливают цикл, возврат — запускает; кадр не сбрасывается', () => {
+    const r = rig();
+    r.layer.setContext('procedural', 'none');
+    r.layer.setActive(true);
+    r.run(300);
+    const before = r.hand.style.transform;
+    r.layer.setPaused(true);
+    expect(r.layer.running).toBe(false);
+    expect(r.queued()).toBe(0);
+    expect(r.hand.style.transform).toBe(before); // «замер» на месте
+    r.layer.setPaused(false);
+    expect(r.layer.running).toBe(true);
+    r.state.hidden = true;
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(r.layer.running).toBe(false);
+    r.state.hidden = false;
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(r.layer.running).toBe(true);
+  });
+
+  it('мини-игра (setSuspended): цикл стоит, обёртка без трансформации — интерфейс не трясётся; после неё всё возвращается', () => {
+    const r = rig();
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    r.run(300);
+    expect(r.hand.style.transform).not.toBe('');
+    r.layer.setSuspended(true);
+    expect(r.layer.running).toBe(false);
+    expect(r.hand.style.transform).toBe('');
+    r.layer.setSuspended(false);
+    expect(r.layer.running).toBe(true);
+  });
+
+  it('destroy снимает цикл и трансформацию', () => {
+    const r = rig();
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    r.run(100);
+    r.layer.destroy();
+    expect(r.layer.running).toBe(false);
+    expect(r.hand.style.transform).toBe('');
+  });
+});
+
+describe('CamcorderLayer: HUD записи', () => {
+  it('cam-rec (REC и точка) только в reconstruction при включённых эффектах', () => {
+    const r = rig();
+    r.layer.setActive(true);
+    for (const [p, filter, rec] of [
+      ['reconstruction', 'vhs', true],
+      ['procedural', 'none', false],
+      ['chronicle', 'archive_photo', false],
+      ['talking_head', 'vhs', false],
+      ['courtroom', 'desaturated', false],
+      ['reconstruction', 'vhs_heavy', true],
+    ] as const) {
+      r.layer.setContext(p, filter);
+      expect(r.stage.classList.contains('cam-rec'), `${p}/${filter}`).toBe(rec);
+    }
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setLevel('off');
+    expect(r.stage.classList.contains('cam-rec')).toBe(false);
+    r.layer.setLevel('low');
+    expect(r.stage.classList.contains('cam-rec')).toBe(true);
+  });
+
+  it('виньетка и интерлейс настраиваются CSS-переменными уровня', () => {
+    const r = rig();
+    expect(r.stage.style.getPropertyValue('--cam-vignette')).toBe('0.28');
+    expect(Number(r.stage.style.getPropertyValue('--cam-interlace'))).toBeGreaterThan(0);
+    r.layer.setLevel('off');
+    expect(r.stage.style.getPropertyValue('--cam-vignette')).toBe('0');
+    expect(r.stage.style.getPropertyValue('--cam-interlace')).toBe('0');
+  });
+});
+
+describe('CamcorderLayer: canvas зерна и помех', () => {
+  it('размер оверлея низкий (≈ 256 px по ширине) и подстраивается под пропорции кадра', () => {
+    const r = rig();
+    expect(OVERLAY_WIDTH).toBe(256);
+    expect(r.canvas.width).toBe(256);
+    expect(r.canvas.height).toBe(144);
+  });
+
+  it('оверлей перерисовывается 12–15 раз в секунду, а не на каждый кадр анимации', () => {
+    expect(NOISE_FPS).toBeGreaterThanOrEqual(12);
+    expect(NOISE_FPS).toBeLessThanOrEqual(15);
+    const r = rig();
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    r.ctx.puts = 0;
+    r.run(1000, 1000); // 1 с при 60 к/с
+    expect(r.ctx.puts).toBeGreaterThanOrEqual(11);
+    expect(r.ctx.puts).toBeLessThanOrEqual(15);
+  });
+
+  it('зерно: непрозрачность каждого пикселя ≤ 5 % (alpha ≤ 13/255) при «слабо»; «сильно» — больше; «выкл» — зерна нет', () => {
+    const r = rig();
+    const maxAlpha = (imgs: ImageData[]): number => {
+      let m = 0;
+      for (const img of imgs) for (let k = 3; k < img.data.length; k += 4) m = Math.max(m, img.data[k]!);
+      return m;
+    };
+    const low = maxAlpha(r.ctx.images);
+    expect(r.ctx.images.length).toBeGreaterThanOrEqual(4); // несколько заранее посчитанных кадров зерна
+    expect(low).toBeLessThanOrEqual(13);
+    expect(low).toBeLessThanOrEqual(grainAlphaMax('low'));
+    r.ctx.images.length = 0;
+    r.layer.setLevel('high');
+    expect(maxAlpha(r.ctx.images)).toBeGreaterThan(low);
+    r.ctx.images.length = 0;
+    r.layer.setLevel('off');
+    expect(r.ctx.images).toHaveLength(0);
+  });
+
+  it('всплеск помех рисуется на оверлее: полоса трекинга, мерцание, хроматические штрихи; класс cam-burst на время всплеска', () => {
+    const r = rig();
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    r.run(200);
+    r.ctx.fills.length = 0;
+    r.layer.force('burst');
+    r.run(120, 216);
+    expect(r.stage.classList.contains('cam-burst')).toBe(true);
+    const styles = r.ctx.fills.map((f) => f.style);
+    expect(styles.some((s) => s.startsWith('rgba(255,255,255,'))).toBe(true); // кромка полосы
+    expect(styles.some((s) => s.startsWith('rgba(255,40,70,'))).toBe(true); // красный штрих
+    expect(styles.some((s) => s.startsWith('rgba(40,210,255,'))).toBe(true); // голубой штрих
+    expect(r.ctx.fills.some((f) => f.w === OVERLAY_WIDTH && f.h <= 40 && f.h >= 3)).toBe(true); // полоса на всю ширину
+    r.run(800, 400); // всплеск (≤ 500 мс) закончился
+    expect(r.stage.classList.contains('cam-burst')).toBe(false);
+  });
+
+  it('в спокойные кадры помех на оверлее нет (только зерно)', () => {
+    const r = rig();
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    r.run(500);
+    r.ctx.fills.length = 0;
+    r.run(300, 516);
+    expect(r.ctx.fills).toHaveLength(0);
+  });
+
+  it('разрыв кадра: рисует Камкордер (true), шумовые полосы на шве и открывшемся крае; при выключенных эффектах — false (нужен CSS)', () => {
+    const off = rig({ level: 'off' });
+    expect(off.layer.glitch(500)).toBe(false);
+    const r = rig();
+    expect(r.layer.glitch(500)).toBe(false); // цикл ещё не идёт
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    r.run(100);
+    expect(r.layer.glitch(500)).toBe(true);
+    r.ctx.fills.length = 0;
+    r.run(700, 116);
+    expect(r.ctx.fills.some((f) => f.style.startsWith('rgba(0,0,0,0.85') && f.w === OVERLAY_WIDTH)).toBe(true); // чёрная полоса открывшегося края
+    expect(r.ctx.fills.length).toBeGreaterThan(20); // шум на шве
+  });
+
+  it('стоп-кадр: трансформация не меняется, пока заморожено', () => {
+    const r = rig();
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    r.run(400);
+    r.layer.freeze(true);
+    r.run(60, 416);
+    const t = r.hand.style.transform;
+    r.run(1500, 480);
+    expect(r.hand.style.transform).toBe(t);
+    r.layer.freeze(false);
+    r.run(1500, 2000);
+    expect(r.hand.style.transform).not.toBe(t);
+  });
+
+  it('поправка оператора при входе в сцену заметно смещает кадр, затем кадр оседает', () => {
+    const r = rig();
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    r.run(500);
+    r.layer.enterScene();
+    r.tick(532);
+    const kicked = r.layer.lastFrame!;
+    expect(Math.max(Math.abs(kicked.tx), Math.abs(kicked.ty), Math.abs(kicked.rot))).toBeGreaterThan(1);
+    r.run(3500, 548);
+    const settled = r.layer.lastFrame!;
+    expect(Math.abs(settled.tx)).toBeLessThanOrEqual(1.2 + 1e-9);
+    expect(settled.scale).toBeLessThanOrEqual(1.03 + 1e-9);
+  });
+});
+
+describe('CamcorderLayer: без 2D-контекста', () => {
+  it('нет контекста (старый WebView): помех и зерна нет, но дрожание кадра работает и ошибок нет', () => {
+    const stage = document.createElement('div');
+    const hand = document.createElement('div');
+    const canvas = document.createElement('canvas');
+    const loop: { cb: ((ts: number) => void) | null } = { cb: null };
+    const layer = new CamcorderLayer({ stage, hand, canvas, rng: mulberry32(1), raf: (f) => ((loop.cb = f), 1), caf: () => undefined, reducedMotion: () => false, isHidden: () => false, context: null });
+    layer.setContext('reconstruction', 'vhs');
+    layer.setActive(true);
+    for (let t = 0; t < 400; t += 16) loop.cb?.(t);
+    expect(hand.style.transform).not.toBe('');
+    layer.force('burst');
+    expect(() => loop.cb?.(500)).not.toThrow();
+    layer.destroy();
+  });
+
+  it('getContext бросает исключение — слой просто работает без оверлея', () => {
+    const canvas = document.createElement('canvas');
+    vi.spyOn(canvas, 'getContext').mockImplementation(() => {
+      throw new Error('нет 2d');
+    });
+    expect(() => new CamcorderLayer({ stage: document.createElement('div'), hand: document.createElement('div'), canvas, rng: mulberry32(1), raf: () => 1, caf: () => undefined, reducedMotion: () => false, isHidden: () => false })).not.toThrow();
+  });
+});

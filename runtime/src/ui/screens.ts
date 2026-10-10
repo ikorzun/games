@@ -5,12 +5,12 @@
  */
 import { i18n, t } from '../core/i18n';
 import type { SaveFile } from '../core/saves';
-import { AUTO_DELAY_RANGE, FONT_SCALE_RANGE } from '../core/settings';
+import { AUTO_DELAY_RANGE, CAMERA_FX_LEVELS, FONT_SCALE_RANGE } from '../core/settings';
 import type { Settings } from '../core/settings';
 import { LANGS } from '../core/types';
 import type { ArchiveItem, Episode, GameState, Ending, Lang } from '../core/types';
 import type { LogEntry } from '../session';
-import { fill, h } from './dom';
+import { cssUrl, fill, h } from './dom';
 import type { Screen } from './screen_host';
 
 // ───────────────────────────── общие кусочки ─────────────────────────────
@@ -59,7 +59,15 @@ abstract class BaseScreen implements Screen {
 
 // ───────────────────────────── главное меню ─────────────────────────────
 
+/** Картинки интерфейса (адреса уже загруженных файлов); null — файла нет, остаётся прежнее оформление. */
+export interface MenuArt {
+  background: string | null;
+  plate: string | null;
+}
+
 export interface MenuHandlers {
+  /** assets/common/ui/menu_video_salon.webp и title_plate.webp, если они есть. */
+  art?: MenuArt;
   hasContinue: () => boolean;
   completed: () => boolean;
   onContinue: () => void;
@@ -86,12 +94,23 @@ export class MenuScreen extends BaseScreen {
     ].filter(Boolean);
     const btn = (label: string, onClick: () => void, cls = ''): HTMLButtonElement =>
       h('button', { class: `vn-btn ${cls}`.trim(), type: 'button', text: label, on: { click: onClick } });
+    const art = hd.art;
+    // Фон главного меню — видеосалон; нет файла — прежний тёмный градиент.
+    this.el.classList.toggle('has-bg', !!art?.background);
+    if (art?.background) this.el.style.setProperty('--menu-bg', cssUrl(art.background));
+    else this.el.style.removeProperty('--menu-bg');
+    const title = h('h1', { class: 'vn-menu__title', text: t(ep.title_key) });
+    // Заставка: название эпизода лежит на плашке title_plate.webp (текст — из локали, не в картинке).
+    const brand = art?.plate
+      ? h('div', { class: 'vn-menu__brand has-plate' }, h('img', { class: 'vn-menu__plate' }), title)
+      : title;
+    if (art?.plate) (brand.querySelector('.vn-menu__plate') as HTMLImageElement).src = art.plate;
     fill(
       this.el,
       h(
         'div',
         { class: 'vn-menu__inner' },
-        h('h1', { class: 'vn-menu__title', text: t(ep.title_key) }),
+        brand,
         ep.logline_key ? h('p', { class: 'vn-menu__logline', text: t(ep.logline_key) }) : null,
         h('p', { class: 'vn-menu__meta', text: meta.join(' · ') }),
         h(
@@ -227,6 +246,8 @@ export class WarningScreen extends BaseScreen {
 
 export interface SettingsHandlers {
   settings: () => Settings;
+  /** prefers-reduced-motion: эффекты камеры выключены принудительно (кнопки недоступны). */
+  reducedMotion?: () => boolean;
   onChange: (patch: Partial<Settings>) => void;
   onLanguage: (lang: Lang) => void;
   onClose: () => void;
@@ -296,12 +317,41 @@ export class SettingsScreen extends BaseScreen {
         h('span', { text: label }),
       );
     const pct = (v: number): string => `${Math.round(v * 100)}%`;
+    // «Эффекты камеры»: выкл / слабо / сильно. Кнопки-сегменты, а не radio — как переключатель языка.
+    const reduced = hd.reducedMotion?.() ?? false;
+    const camLevel = reduced ? 'off' : s.cameraFx;
+    const cameraFx = h(
+      'div',
+      { class: 'vn-settings__group' },
+      h('span', { class: 'vn-settings__legend', text: t('ui.settings.camera_fx') }),
+      h(
+        'div',
+        { class: 'vn-langs vn-camfx', role: 'group', aria: { label: t('ui.settings.camera_fx') } },
+        ...CAMERA_FX_LEVELS.map((level) =>
+          h('button', {
+            class: `vn-chip${camLevel === level ? ' is-on' : ''}`,
+            type: 'button',
+            disabled: reduced,
+            text: t(`ui.settings.camera_fx_${level}`),
+            data: { cameraFx: level },
+            aria: { pressed: camLevel === level },
+            on: {
+              click: () => {
+                hd.onChange({ cameraFx: level });
+                this.render();
+              },
+            },
+          }),
+        ),
+      ),
+    );
     fill(
       this.el,
       card(
         'vn-settings__card',
         h('h2', { class: 'vn-card__title', text: t('ui.menu.settings') }),
         h('div', { class: 'vn-settings__group' }, h('span', { class: 'vn-settings__legend', text: t('ui.settings.language') }), languageChips(hd.onLanguage)),
+        cameraFx,
         range(t('ui.settings.font_size'), 'fontScale', FONT_SCALE_RANGE.min, FONT_SCALE_RANGE.max, FONT_SCALE_RANGE.step, pct),
         range(t('ui.settings.text_speed'), 'textSpeed', 1, 5, 1, (v) => `${v}/5`),
         range(t('ui.settings.auto_delay'), 'autoDelayMs', AUTO_DELAY_RANGE.min, AUTO_DELAY_RANGE.max, AUTO_DELAY_RANGE.step, (v) => `${(v / 1000).toFixed(1)} s`),
@@ -550,8 +600,20 @@ export class DocumentScreen extends BaseScreen {
     private readonly textKey: string | null,
     private readonly archiveItem: string | null,
     private readonly onDone: () => void,
+    /** Изображение бланка без текста (assets.documents); текст накладывается слоем из локали. */
+    private imageUrl: string | null = null,
   ) {
     super('vn-document', false);
+  }
+
+  /** Картинка бланка пришла позже, чем открыли экран. */
+  setImage(url: string | null): void {
+    this.imageUrl = url;
+    const paper = this.el.querySelector<HTMLElement>('.vn-document__paper');
+    if (!paper) return;
+    paper.classList.toggle('has-image', url !== null);
+    if (url) paper.style.setProperty('--doc-img', cssUrl(url));
+    else paper.style.removeProperty('--doc-img');
   }
 
   render(): void {
@@ -564,7 +626,11 @@ export class DocumentScreen extends BaseScreen {
         item ? h('span', { class: 'vn-badge', text: t('ui.archive.new_item') }) : null,
         h(
           'div',
-          { class: 'vn-document__paper', data: { doc: this.doc } },
+          {
+            class: `vn-document__paper${this.imageUrl ? ' has-image' : ''}`,
+            data: { doc: this.doc },
+            ...(this.imageUrl ? { style: { '--doc-img': cssUrl(this.imageUrl) } } : {}),
+          },
           this.textKey ? h('p', { class: 'vn-document__text', text: t(this.textKey) }) : h('p', { class: 'vn-muted', text: this.doc }),
         ),
         h('div', { class: 'vn-actions' }, backButton(this.onDone, 'ui.common.ok')),

@@ -466,6 +466,26 @@ export class CameraScheduler {
     this.jolts = makeTear(this.rng, this.clock, ms, Math.min(1.4, p.burstStrength));
   }
 
+  /** QA / тесты: начать всплеск помех прямо сейчас (параметры — из ГСЧ). */
+  burstNow(): void {
+    const p = levelProfile(this.level);
+    if (!p || this.burst) return;
+    const heavy = this.ctx.filter === 'vhs_heavy';
+    this.burst = makeBurst(this.rng, this.clock, p, heavy);
+    this.burstLog.push(this.burst.t0);
+    this.scheduleBurst(this.clock);
+  }
+
+  /** QA / тесты: «оператор поправил кадр» немедленно; angle — принудительно «неожиданный ракурс». */
+  reframeNow(angle = false): void {
+    const p = levelProfile(this.level);
+    if (!p) return;
+    let r = makeReframe(this.rng, this.shakeClock, p.reframe);
+    // «неожиданный ракурс» выбирается долей ANGLE_SHARE; здесь выбор принудительный
+    for (let i = 0; i < 200 && r.angle !== angle; i++) r = makeReframe(this.rng, this.shakeClock, p.reframe);
+    this.reframes = [r];
+  }
+
   setFrozen(frozen: boolean): void {
     this.frozen = frozen;
   }

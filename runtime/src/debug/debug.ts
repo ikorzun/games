@@ -44,6 +44,26 @@ export interface VnDebugApi {
   settings(patch?: Partial<Settings>): Settings;
   /** Какой рендерер сцены работает: 'pixi' или 'dom'. */
   renderer(): string;
+  /**
+   * Ассеты: что загружено, чего нет (по запросам игры). С `true` — ещё и проверка всех файлов из
+   * episode.assets HEAD-запросами: { present, missing } (для QA после загрузки графики и звука).
+   */
+  assets(verify?: boolean): Promise<{ loaded: string[]; missing: string[]; pending: number; verify?: { present: string[]; missing: string[] } }>;
+  /**
+   * Камкордер: уровень эффектов, идёт ли цикл, последний кадр дрожания, HUD записи.
+   * `camera('burst' | 'glitch' | 'reframe' | 'angle')` — вызвать помеху / разрыв кадра / поправку сейчас (QA).
+   */
+  camera(force?: 'burst' | 'glitch' | 'reframe' | 'angle'): {
+    setting: string;
+    effective: string;
+    reducedMotion: boolean;
+    running: boolean;
+    rec: boolean;
+    transform: string;
+    bursts: number[];
+  };
+  /** Звук: что играет, сколько файлов отмечено отсутствующими. */
+  audio(): { music: string | null; ambient: string | null; audible: boolean; log: string[] };
 }
 
 declare global {
@@ -92,6 +112,27 @@ export function installDebug(app: App): VnDebugApi {
     skip: (on) => app.ui.setSkip(on),
     settings: (patch) => (patch ? app.updateSettings(patch) : { ...app.settings }),
     renderer: () => app.stage.renderer.kind,
+    assets: async (verify) => {
+      const a = app.assets;
+      if (!a) return { loaded: [], missing: [], pending: 0 };
+      const stats = a.store.stats();
+      return verify ? { ...stats, verify: await a.verify() } : stats;
+    },
+    camera: (force) => {
+      const c = app.stage.camcorder;
+      if (force) c.force(force);
+      const hand = app.stage.el.querySelector<HTMLElement>('.vn-stage__hand');
+      return {
+        setting: app.settings.cameraFx,
+        effective: c.effectiveLevel,
+        reducedMotion: c.reducedMotion,
+        running: c.running,
+        rec: app.stage.el.classList.contains('cam-rec'),
+        transform: hand?.style.transform ?? '',
+        bursts: [...c.scheduler.burstLog],
+      };
+    },
+    audio: () => ({ music: app.audio.music, ambient: app.audio.ambient, audible: app.audio.audible, log: [...app.audio.log] }),
   };
   window.__vn = api;
   return api;

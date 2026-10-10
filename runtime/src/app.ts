@@ -10,6 +10,8 @@ import type { Episode, Lang, Value } from './core/types';
 import type { IPlatform } from './platform/types';
 import { Session } from './session';
 import type { RunOutcome } from './session';
+import type { AppAssets } from './stage/app_assets';
+import { NO_ASSETS } from './stage/assets';
 import type { AudioManager } from './stage/audio';
 import { Director } from './stage/director';
 import { createStage } from './stage/stage_factory';
@@ -38,6 +40,8 @@ export interface AppInit {
   episode: Episode;
   contentVersion: string;
   audio: AudioManager;
+  /** Ассеты эпизода (картинки, предзагрузка по блокам, картинки интерфейса); без них игра рисует плейсхолдеры. */
+  assets?: AppAssets;
   /** Догрузить строки языка (и цепочку его фолбэков), если их ещё нет. */
   loadLang: (lang: Lang) => Promise<void>;
   renderer?: RendererChoice;
@@ -66,7 +70,7 @@ export class App {
       (a) => app?.onAction(a),
       (item) => ep.archive_items?.find((x) => x.id === item)?.title_key ?? null,
     );
-    const stage = await createStage(kit.main, init.renderer ?? 'auto');
+    const stage = await createStage(kit.main, init.renderer ?? 'auto', init.assets?.scene ?? NO_ASSETS);
     app = new App(init, kit, stage);
     return app;
   }
@@ -80,6 +84,7 @@ export class App {
     this.kit = kit;
     this.stage = stage;
     this.captions = new CaptionLayer(stage.captionsEl);
+    this.captions.setPlate(d.assets?.art.plate ?? null);
 
     // Титры и текстовое окно принадлежат сцене: при смене сцены очищаются вместе.
     const captionSink: ICaptionSink = {
@@ -92,6 +97,7 @@ export class App {
     this.director = new Director({
       stage,
       audio: d.audio,
+      ...(d.assets ? { loader: d.assets.preloader } : {}),
       captions: captionSink,
       toasts: kit.toasts,
       checkpoint: (reason) => this.session.autosave(reason),
@@ -109,6 +115,7 @@ export class App {
       onOpenArchive: () => this.openArchive(),
       onAction: (a) => this.onAction(a),
       onRollback: () => this.rollback(1),
+      ...(d.assets ? { documentArt: (id: string) => d.assets!.document(id) } : {}),
     });
     this.session = new Session({
       episode: ep,
@@ -126,8 +133,18 @@ export class App {
     document.documentElement.lang = i18n.lang;
     document.title = t(ep.title_key);
 
+    // Индикатор загрузки блока и телеметрия платформы (in_game_loading_started / stopped).
+    if (d.assets) {
+      d.assets.hooks.onLoading = (on) => kit.setLoading(on);
+      d.assets.hooks.track = (event) => d.platform.track(event);
+    }
+
     // Платформа: пауза (реклама, вкладка в фоне) и разрешение звука.
-    d.platform.onPause((paused) => this.session.setPaused(paused));
+    d.platform.onPause((paused) => {
+      this.session.setPaused(paused);
+      this.stage.setPaused(paused);
+      d.audio.setPaused(paused);
+    });
     d.platform.onAudio((enabled) => d.audio.setPlatformEnabled(enabled));
     window.addEventListener('pagehide', () => this.persist());
     document.addEventListener('visibilitychange', () => {
@@ -156,6 +173,7 @@ export class App {
     const ep = this.d.episode;
     const saves = this.d.saves;
     const menu = new MenuScreen(ep, {
+      ...(this.d.assets ? { art: this.d.assets.art } : {}),
       hasContinue: () => this.continuable() !== null,
       completed: () => (saves.profile.endings[ep.id]?.length ?? 0) > 0,
       onContinue: () => this.continueGame(),
@@ -263,6 +281,7 @@ export class App {
     if (this.settingsScreen && this.kit.screens.has(this.settingsScreen)) return;
     const screen: SettingsScreen = new SettingsScreen({
       settings: () => this.d.saves.settings,
+      reducedMotion: () => this.stage.camcorder.reducedMotion,
       onChange: (patch) => this.updateSettings(patch),
       onLanguage: (lang) => void this.setLanguage(lang),
       onClose: () => this.kit.screens.close(screen),
@@ -326,6 +345,15 @@ export class App {
 
   // ───────────────────────────── настройки и язык ─────────────────────────────
 
+  /** Ассеты эпизода (для отладки и QA). */
+  get assets(): AppAssets | null {
+    return this.d.assets ?? null;
+  }
+
+  get audio(): AudioManager {
+    return this.d.audio;
+  }
+
   /** Текущие настройки игрока (только чтение). */
   get settings(): Readonly<Settings> {
     return this.d.saves.settings;
@@ -343,6 +371,7 @@ export class App {
     this.d.audio.setVolumes({ music: s.music, sfx: s.sfx, voice: s.voice });
     this.kit.quick.setState({ muted: s.muted });
     this.stage.setViolenceMode(s.violenceMode);
+    this.stage.setCameraFx(s.cameraFx);
   }
 
   /** Смена языка на лету: догрузить строки, перерисовать текущий шаг, не трогая сцену и состояние. */

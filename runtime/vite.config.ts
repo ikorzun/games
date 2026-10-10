@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import playgamaBridge from '@playgama/bridge/vite';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
+import { assetsPlugin } from './scripts/assets_plugin.mjs';
 
 /**
  * Контент (эпизоды и локали) лежит вне runtime/ и рантаймом не владеет:
@@ -19,6 +20,8 @@ const REPO_ROOT = resolve(HERE, '..');
 const EPISODES_DIR = join(REPO_ROOT, 'episodes');
 const LOCALES_DIR = join(REPO_ROOT, 'locales');
 const LANGS = ['ru', 'en', 'es', 'pt'] as const;
+/** Графика и звук (webp, png, mp3): ../assets → /assets/** в dev и dist/assets/** в сборке; scripts/assets_plugin.mjs. */
+const ASSETS_DIR = process.env.VN_ASSETS_DIR ? resolve(process.env.VN_ASSETS_DIR) : join(REPO_ROOT, 'assets');
 
 interface ContentFile {
   /** Путь в сборке и в dev-сервере, без ведущего «/». */
@@ -139,7 +142,7 @@ export default defineConfig(({ mode }) => {
   return {
     // Относительные пути: index.html в корне архива, работает из любой подпапки (Playgama).
     base: './',
-    plugins: [contentPlugin(), ...(playgama ? [playgamaBridge({ mode: 'local' }), bridgeConfigPlugin()] : [])],
+    plugins: [contentPlugin(), assetsPlugin({ dir: ASSETS_DIR }), ...(playgama ? [playgamaBridge({ mode: 'local' }), bridgeConfigPlugin()] : [])],
     build: {
       outDir: playgama ? 'dist-playgama' : 'dist',
       emptyOutDir: true,

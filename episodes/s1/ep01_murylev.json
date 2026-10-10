@@ -6989,6 +6989,33 @@
             "hint_key": "ep01.mg_docs.hint.signature"
           }
         ],
+        "fields": [
+          {
+            "doc": "doc_power_of_attorney",
+            "field": "principal",
+            "text_key": "ep01.mg_docs.f.poa_principal"
+          },
+          {
+            "doc": "doc_power_of_attorney",
+            "field": "date",
+            "text_key": "ep01.mg_docs.f.poa_date"
+          },
+          {
+            "doc": "doc_power_of_attorney",
+            "field": "notary",
+            "text_key": "ep01.mg_docs.f.poa_notary"
+          },
+          {
+            "doc": "doc_contract_sale",
+            "field": "poa_ref",
+            "text_key": "ep01.mg_docs.f.contract_poa_ref"
+          },
+          {
+            "doc": "doc_contract_sale",
+            "field": "signature",
+            "text_key": "ep01.mg_docs.f.contract_signature"
+          }
+        ],
         "decoys": 3,
         "required": 2,
         "max_mistakes": 3
@@ -7039,6 +7066,117 @@
           "attorney",
           "buyer",
           "date"
+        ],
+        "values": [
+          {
+            "field": "address",
+            "label_key": "ep01.mg_db.f.address",
+            "filter": false,
+            "options": [
+              {
+                "id": "molodogvardeyskaya",
+                "text_key": "ep01.mg_db.v.address.molodogvardeyskaya"
+              },
+              {
+                "id": "yartsevskaya",
+                "text_key": "ep01.mg_db.v.address.yartsevskaya"
+              },
+              {
+                "id": "partizanskaya",
+                "text_key": "ep01.mg_db.v.address.partizanskaya"
+              },
+              {
+                "id": "nezhinskaya",
+                "text_key": "ep01.mg_db.v.address.nezhinskaya"
+              },
+              {
+                "id": "mozhayskoe",
+                "text_key": "ep01.mg_db.v.address.mozhayskoe"
+              },
+              {
+                "id": "rublevskoe",
+                "text_key": "ep01.mg_db.v.address.rublevskoe"
+              }
+            ]
+          },
+          {
+            "field": "notary",
+            "label_key": "ep01.mg_db.f.notary",
+            "options": [
+              {
+                "id": "kovrigin",
+                "text_key": "ep01.mg_db.v.notary.kovrigin"
+              },
+              {
+                "id": "lebedeva",
+                "text_key": "ep01.mg_db.v.notary.lebedeva"
+              },
+              {
+                "id": "ostrovsky",
+                "text_key": "ep01.mg_db.v.notary.ostrovsky"
+              },
+              {
+                "id": "shats",
+                "text_key": "ep01.mg_db.v.notary.shats"
+              }
+            ]
+          },
+          {
+            "field": "attorney",
+            "label_key": "ep01.mg_db.f.attorney",
+            "options": [
+              {
+                "id": "murashov_sv",
+                "text_key": "ep01.mg_db.v.attorney.murashov_sv"
+              },
+              {
+                "id": "gavrilov",
+                "text_key": "ep01.mg_db.v.attorney.gavrilov"
+              },
+              {
+                "id": "tikhonova",
+                "text_key": "ep01.mg_db.v.attorney.tikhonova"
+              },
+              {
+                "id": "zuev",
+                "text_key": "ep01.mg_db.v.attorney.zuev"
+              }
+            ]
+          },
+          {
+            "field": "buyer",
+            "label_key": "ep01.mg_db.f.buyer",
+            "options": [
+              {
+                "id": "lapin",
+                "text_key": "ep01.mg_db.v.buyer.lapin"
+              },
+              {
+                "id": "sokolov",
+                "text_key": "ep01.mg_db.v.buyer.sokolov"
+              },
+              {
+                "id": "belyaev",
+                "text_key": "ep01.mg_db.v.buyer.belyaev"
+              },
+              {
+                "id": "fedorova",
+                "text_key": "ep01.mg_db.v.buyer.fedorova"
+              },
+              {
+                "id": "nikitin",
+                "text_key": "ep01.mg_db.v.buyer.nikitin"
+              },
+              {
+                "id": "romanova",
+                "text_key": "ep01.mg_db.v.buyer.romanova"
+              }
+            ]
+          },
+          {
+            "field": "date",
+            "label_key": "ep01.mg_db.f.date"
+          }
         ],
         "records": 24,
         "pattern": {

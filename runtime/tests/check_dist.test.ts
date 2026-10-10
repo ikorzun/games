@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ARCHIVE_BUDGET_BYTES, checkDist, CORE_BUDGET_BYTES } from '../scripts/check_dist.mjs';
+import { ARCHIVE_BUDGET_BYTES, ASSETS_WARN_BYTES, checkDist, CORE_BUDGET_BYTES } from '../scripts/check_dist.mjs';
 
 const dirs: string[] = [];
 function dist(files: Record<string, string | number>): string {
@@ -78,6 +78,53 @@ describe('check_dist', () => {
   it('бюджеты по умолчанию: ядро 5 МБ, архив 300 МБ', () => {
     expect(CORE_BUDGET_BYTES).toBe(5 * 1024 * 1024);
     expect(ARCHIVE_BUDGET_BYTES).toBe(300 * 1024 * 1024);
+  });
+
+  it('игровые ассеты (assets/<папка>/…) считаются отдельной строкой и в бюджет ядра не входят; бандл Vite (assets/index-*.js, плоско) — ядро', () => {
+    const root = dist({
+      'index.html': GOOD_HTML,
+      'assets/index-ab12.js': 1000, // бандл — ядро
+      'assets/index-ab12.css': 'body{}',
+      'assets/pt-sans-latin-400-normal-Cwy9XeGQ.woff2': 500, // шрифт бандла — ядро
+      'assets/ep01/bg/yard.webp': 4000,
+      'assets/ep01/sprites/zoya/neutral.webp': 2000,
+      'assets/common/music/theme.m4a': 3000,
+      'episodes/s1/ep01.json': 700,
+      'locales/ru/ui.json': 300,
+    });
+    const { problems, stats } = checkDist(root);
+    expect(problems).toEqual([]);
+    expect(stats.assetBytes).toBe(9000);
+    expect(stats.assetFiles).toBe(3);
+    expect(stats.contentBytes).toBe(1000);
+    expect(stats.coreBytes).toBe(stats.totalBytes - 9000 - 1000);
+    expect(stats.coreBytes).toBe(1000 + 'body{}'.length + 500 + GOOD_HTML.length);
+    // тяжёлые ассеты бюджет ядра не нарушают
+    expect(checkDist(root, { coreBudget: 20_000 }).problems).toEqual([]);
+    expect(checkDist(root, { coreBudget: 1_000 }).problems.some((p) => p.startsWith('ядро'))).toBe(true);
+  });
+
+  it('ассеты тяжелее порога (по умолчанию 40 МБ) — предупреждение, но не ошибка; общий лимит архива 300 МБ — жёсткий', () => {
+    expect(ASSETS_WARN_BYTES).toBe(40 * 1024 * 1024);
+    const heavy = dist({ 'index.html': GOOD_HTML, 'assets/ep01/bg/a.webp': 3000 });
+    const warned = checkDist(heavy, { assetsWarn: 2048 });
+    expect(warned.problems).toEqual([]);
+    expect(warned.warnings).toHaveLength(1);
+    expect(warned.warnings[0]).toContain('ассеты');
+    // в пределах порога — без предупреждений
+    expect(checkDist(heavy, { assetsWarn: 4096 }).warnings).toEqual([]);
+    // с порогом по умолчанию 3 КБ ассетов — тоже тихо
+    expect(checkDist(heavy).warnings).toEqual([]);
+    // жёсткий лимит: ассеты считаются в общий размер архива
+    const over = checkDist(heavy, { archiveBudget: 2048, assetsWarn: 1 << 30 });
+    expect(over.problems.some((p) => p.startsWith('архив'))).toBe(true);
+  });
+
+  it('ассеты проверяются на латиницу в именах, как и всё остальное', () => {
+    const root = dist({ 'index.html': GOOD_HTML, 'assets/ep01/bg/Двор.webp': 10, 'assets/ep01/bg/yard.webp': 10 });
+    const bad = checkDist(root).problems.filter((p) => p.startsWith('имя файла'));
+    expect(bad).toHaveLength(1);
+    expect(bad[0]).toContain('Двор.webp');
   });
 
   it('несуществующий каталог — понятная ошибка, а не исключение', () => {

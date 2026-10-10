@@ -27,7 +27,10 @@ import type { Lang } from './core/types';
 import { installDebug } from './debug/debug';
 import { registerBuiltinMinigames } from './minigames/registry';
 import { createPlatform } from './platform';
+import { createAppAssets, loadUiArt } from './stage/app_assets';
+import type { AppAssets } from './stage/app_assets';
 import { AudioManager } from './stage/audio';
+import { HtmlAudioBackend } from './stage/audio_html';
 import type { RendererChoice } from './stage/stage_factory';
 
 /** Дождаться шрифтов, но не дольше таймаута: без них игра всё равно играбельна. */
@@ -82,7 +85,14 @@ async function boot(): Promise<void> {
     registerBuiltinMinigames();
     await loadFonts();
 
-    const audio = new AudioManager();
+    // Ассеты: каталог путей эпизода, хранилище картинок, предзагрузка по блокам, звук на HTMLAudioElement.
+    let assets: AppAssets | null = null;
+    const backend = new HtmlAudioBackend((id) => assets?.catalog.audioUrl(id) ?? null);
+    backend.installUnlock(); // iOS: звук разблокируется первым касанием
+    assets = createAppAssets(episode, base, backend);
+    const audio = new AudioManager(backend);
+    // Картинки меню и заставки грузим до первого показа меню (но не дольше пары секунд).
+    await loadUiArt(assets);
     const renderer = params.get('renderer');
     const app = await App.create({
       root,
@@ -91,6 +101,7 @@ async function boot(): Promise<void> {
       episode,
       contentVersion,
       audio,
+      assets,
       loadLang: (l) => ensureLangs(i18n, base, episode.id, [l]),
       renderer: renderer === 'dom' || renderer === 'pixi' ? (renderer as RendererChoice) : 'auto',
       debug: params.get('debug') === '1' || import.meta.env.DEV,

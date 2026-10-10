@@ -7,6 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { i18n } from '../src/core/i18n';
 import type { ChoicePending } from '../src/core/types';
 import { CaptionLayer } from '../src/ui/captions';
+import { cssUrl } from '../src/ui/dom';
+import { icon } from '../src/ui/icons';
+import type { IconName } from '../src/ui/icons';
 import { ChoiceMenu } from '../src/ui/choices';
 import { UiKit } from '../src/ui/kit';
 import { QuickMenu } from '../src/ui/quick_menu';
@@ -39,7 +42,7 @@ beforeEach(() => {
     'ui.menu.settings': 'Настройки',
     'ui.archive.new_item': 'Новый материал',
   });
-  i18n.addStrings('en', { 'c.a': 'First', 'c.b': 'Second', 'cap.k': 'Moscow, 1993', 'ui.quick.auto': 'Auto' });
+  i18n.addStrings('en', { 'c.a': 'First', 'c.b': 'Second', 'cap.k': 'Moscow, 1993', 'ui.quick.auto': 'Auto', 'ui.quick.mute': 'Mute', 'ui.quick.hide': 'Hide UI' });
   i18n.setLang('ru');
 });
 
@@ -365,6 +368,48 @@ describe('CaptionLayer', () => {
   });
 });
 
+describe('CaptionLayer: плашка заставки', () => {
+  const abs = (u: string): string => `url("${new URL(u, document.baseURI).href}")`;
+
+  it('без плашки титры прежние: has-plate нет, переменной нет', () => {
+    const host = document.createElement('div');
+    const caps = new CaptionLayer(host);
+    caps.hold('cap.k', 'chapter');
+    expect(host.style.getPropertyValue('--title-plate')).toBe('');
+    expect(host.querySelector('.vn-cap--chapter')?.classList.contains('has-plate')).toBe(false);
+  });
+
+  it('setPlate кладёт абсолютный адрес в --title-plate; has-plate получают только титры chapter', () => {
+    const host = document.createElement('div');
+    const caps = new CaptionLayer(host);
+    caps.setPlate('./assets/common/ui/title_plate.webp');
+    expect(host.style.getPropertyValue('--title-plate')).toBe(abs('./assets/common/ui/title_plate.webp'));
+    caps.hold('cap.k', 'chapter');
+    caps.show({ t: 'caption', key: 'cap.k', style: 'location', hold_ms: 5000 });
+    caps.show({ t: 'caption', key: 'cap.f', style: 'date_stamp', hold_ms: 5000 });
+    caps.hold('cap.f', 'fact');
+    expect(host.querySelector('.vn-cap--chapter')?.classList.contains('has-plate')).toBe(true);
+    for (const style of ['location', 'date_stamp', 'fact']) {
+      expect(host.querySelector(`.vn-cap--${style}`)?.classList.contains('has-plate'), style).toBe(false);
+    }
+    // текст титра по-прежнему обычный текст из локали: на плашке, а не в картинке
+    expect(host.querySelector('.vn-cap--chapter')?.textContent).toBe('Москва, 1993');
+  });
+
+  it('setPlate(null) возвращает прежний вид для новых титров; уже показанные не трогает', () => {
+    const host = document.createElement('div');
+    const caps = new CaptionLayer(host);
+    caps.setPlate('./p.webp');
+    caps.hold('cap.k', 'chapter');
+    caps.setPlate(null);
+    expect(host.style.getPropertyValue('--title-plate')).toBe('');
+    expect(host.querySelector('.vn-cap--chapter')?.classList.contains('has-plate')).toBe(true);
+    caps.clear();
+    caps.hold('cap.k', 'chapter');
+    expect(host.querySelector('.vn-cap--chapter')?.classList.contains('has-plate')).toBe(false);
+  });
+});
+
 describe('QuickMenu', () => {
   it('восемь кнопок в фиксированном порядке: Auto, Skip, Log, Save, Load, Mute, Settings, Hide', () => {
     const qm = new QuickMenu(() => undefined);
@@ -406,6 +451,69 @@ describe('QuickMenu', () => {
     expect(qm.el.querySelector('[data-action="auto"]')?.textContent).toBe('Auto');
     qm.setDisabled('save', true);
     expect(qm.el.querySelector<HTMLButtonElement>('[data-action="save"]')?.disabled).toBe(true);
+  });
+});
+
+describe('QuickMenu: кнопки-иконки', () => {
+  const ACTIONS: QuickAction[] = ['auto', 'skip', 'log', 'save', 'load', 'mute', 'settings', 'hide'];
+  const btn = (qm: QuickMenu, a: string): HTMLButtonElement => qm.el.querySelector<HTMLButtonElement>(`[data-action="${a}"]`)!;
+
+  it('у каждой кнопки встроенная SVG-иконка (декоративная) и подпись скрытым текстом; title совпадает с подписью', () => {
+    const qm = new QuickMenu(() => undefined);
+    for (const a of ACTIONS) {
+      const b = btn(qm, a);
+      const svg = b.querySelector('svg.vn-ico');
+      expect(svg, a).not.toBeNull();
+      expect(svg?.classList.contains(`vn-ico--${a}`), a).toBe(true);
+      expect(svg?.getAttribute('aria-hidden'), a).toBe('true'); // иконку скринридер не читает
+      expect(svg?.getAttribute('viewBox')).toBe('0 0 24 24');
+      expect(svg?.querySelectorAll('path, circle, rect').length, a).toBeGreaterThan(0);
+      const label = b.querySelector('.vn-qbtn__label');
+      expect(label?.classList.contains('vn-sr')).toBe(true);
+      expect(label?.textContent, a).toBe(b.title);
+      expect(label?.textContent?.length ?? 0, a).toBeGreaterThan(0);
+    }
+    expect(btn(qm, 'auto').textContent).toBe('Авто'); // скрытый текст остаётся в разметке (innerText/textContent для QA и ридера)
+    expect(btn(qm, 'hide').title).toBe('Скрыть'); // подпись приходит из локали, а не зашита в иконку
+  });
+
+  it('refresh меняет подписи и title на язык интерфейса, иконки остаются теми же узлами', () => {
+    const qm = new QuickMenu(() => undefined);
+    const before = btn(qm, 'mute').querySelector('svg');
+    i18n.setLang('en');
+    qm.refresh();
+    expect(btn(qm, 'mute').querySelector('.vn-qbtn__label')?.textContent).toBe('Mute');
+    expect(btn(qm, 'mute').title).toBe('Mute');
+    expect(btn(qm, 'hide').title).toBe('Hide UI');
+    expect(btn(qm, 'mute').querySelector('svg')).toBe(before);
+    expect(qm.el.getAttribute('aria-label')).toBeTruthy();
+  });
+
+  it('Mute: состояние «звук выключен» ставит is-on и aria-pressed (CSS по нему зачёркивает значок); refresh состояние не сбрасывает', () => {
+    const qm = new QuickMenu(() => undefined);
+    const mute = btn(qm, 'mute');
+    expect(mute.classList.contains('is-on')).toBe(false);
+    expect(mute.querySelector('.vn-ico__on')).not.toBeNull(); // дуги динамика
+    expect(mute.querySelector('.vn-ico__off')).not.toBeNull(); // перечёркивание
+    qm.setState({ muted: true });
+    expect(mute.classList.contains('is-on')).toBe(true);
+    expect(mute.getAttribute('aria-pressed')).toBe('true');
+    qm.refresh();
+    expect(mute.classList.contains('is-on')).toBe(true);
+    qm.setState({ muted: false });
+    expect(mute.getAttribute('aria-pressed')).toBe('false');
+    expect(btn(qm, 'log').classList.contains('is-on')).toBe(false); // не переключатель
+  });
+
+  it('icon(name): новый элемент на каждый вызов, имя в классе; все имена из быстрого меню существуют', () => {
+    const names: IconName[] = ['auto', 'skip', 'log', 'save', 'load', 'mute', 'settings', 'hide'];
+    for (const n of names) {
+      const a = icon(n);
+      const b = icon(n);
+      expect(a).not.toBe(b);
+      expect(a.getAttribute('class')).toBe(`vn-ico vn-ico--${n}`);
+      expect(a.getAttribute('focusable')).toBe('false');
+    }
   });
 });
 
@@ -574,5 +682,50 @@ describe('UiKit: каркас', () => {
     expect(root.classList.contains('ui-hidden')).toBe(true);
     kit.setFontScale(1.3);
     expect(root.style.getPropertyValue('--font-scale')).toBe('1.3');
+  });
+});
+
+describe('UiKit: индикатор загрузки', () => {
+  it('индикатор есть в корне, скрыт от скринридера и по умолчанию выключен; setLoading переключает is-on', () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const kit = new UiKit(root, () => undefined, () => null);
+    expect(root.contains(kit.loading)).toBe(true);
+    expect(kit.loading.classList.contains('vn-loading')).toBe(true);
+    expect(kit.loading.getAttribute('aria-hidden')).toBe('true');
+    expect(kit.loading.classList.contains('is-on')).toBe(false);
+    expect(kit.loading.querySelectorAll('i')).toHaveLength(3);
+    kit.setLoading(true);
+    expect(kit.loading.classList.contains('is-on')).toBe(true);
+    kit.setLoading(true); // повтор не ломает
+    expect(kit.loading.classList.contains('is-on')).toBe(true);
+    kit.setLoading(false);
+    expect(kit.loading.classList.contains('is-on')).toBe(false);
+  });
+
+  it('индикатор не перехватывает касания: он последний ребёнок корня и не входит в слой интерфейса', () => {
+    const root = document.createElement('div');
+    const kit = new UiKit(root, () => undefined, () => null);
+    expect(root.lastElementChild).toBe(kit.loading);
+    expect(kit.ui.contains(kit.loading)).toBe(false);
+  });
+});
+
+describe('cssUrl', () => {
+  it('относительный адрес становится абсолютным от адреса страницы и берётся в кавычки', () => {
+    const u = cssUrl('./assets/common/ui/title_plate.webp');
+    expect(u).toBe(`url("${new URL('./assets/common/ui/title_plate.webp', document.baseURI).href}")`);
+    expect(u).toMatch(/^url\("https?:\/\/[^"]+\/assets\/common\/ui\/title_plate\.webp"\)$/);
+  });
+
+  it('абсолютные адреса и data: остаются как есть', () => {
+    expect(cssUrl('https://cdn.example.com/a.webp')).toBe('url("https://cdn.example.com/a.webp")');
+    expect(cssUrl('data:image/png;base64,AAAA')).toBe('url("data:image/png;base64,AAAA")');
+  });
+
+  it('значение годится как custom property: jsdom его принимает и возвращает без изменений', () => {
+    const el = document.createElement('div');
+    el.style.setProperty('--menu-bg', cssUrl('./a.webp'));
+    expect(el.style.getPropertyValue('--menu-bg')).toBe(cssUrl('./a.webp'));
   });
 });

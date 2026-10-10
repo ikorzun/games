@@ -46,6 +46,8 @@ export interface DomUIDeps {
   view: () => ViewState | null;
   env: () => Readonly<Record<string, Value>>;
   onOpenArchive: () => void;
+  /** Изображение бланка документа (assets.documents): адрес сразу, если уже загружен, и промис на позже. */
+  documentArt?: (docId: string) => { url: string | null; ready: Promise<string | null> };
   /** Быстрое меню / горячие клавиши, которыми управляет App. */
   onAction: (action: QuickAction) => void;
   onRollback: () => void;
@@ -170,11 +172,23 @@ export class DomUI implements SessionUI {
     this.setSkip(false);
     this.clearTimer();
     return new Promise<void>((resolve) => {
-      const screen = new DocumentScreen(this.d.episode, p.doc, p.text_key, p.adds_to_archive, () => {
-        this.closeGameScreen(screen);
-        resolve();
-      });
+      const art = this.d.documentArt?.(p.doc);
+      const screen = new DocumentScreen(
+        this.d.episode,
+        p.doc,
+        p.text_key,
+        p.adds_to_archive,
+        () => {
+          this.closeGameScreen(screen);
+          resolve();
+        },
+        art?.url ?? null,
+      );
       this.openGameScreen(screen);
+      // Бланк мог ещё грузиться: покажем, как только придёт.
+      void art?.ready.then((url) => {
+        if (url && this.gameScreens.has(screen)) screen.setImage(url);
+      });
       ctx.signal.addEventListener('abort', () => this.closeGameScreen(screen), { once: true });
     });
   }

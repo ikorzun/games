@@ -81,3 +81,9 @@ export class Countdown {
     this.onExpire();
   }
 }
+
+/** «м:сс» для подписи оставшегося времени (округление вверх: 0:00 только когда время вышло). */
+export function formatTime(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}

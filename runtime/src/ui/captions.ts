@@ -6,7 +6,7 @@
 import { t } from '../core/i18n';
 import type { CaptionStyle } from '../core/types';
 import type { CaptionEventPayload, ICaptionSink } from '../stage/types';
-import { h } from './dom';
+import { cssUrl, h } from './dom';
 
 interface Entry {
   key: string;
@@ -21,6 +21,12 @@ export class CaptionLayer implements ICaptionSink {
 
   constructor(host: HTMLElement) {
     this.el = host;
+  }
+
+  /** Плашка заставки (assets/common/ui/title_plate.webp): подложка титров chapter. null — прежний вид. */
+  setPlate(url: string | null): void {
+    if (url) this.el.style.setProperty('--title-plate', cssUrl(url));
+    else this.el.style.removeProperty('--title-plate');
   }
 
   /** Неблокирующий титр с автоскрытием через hold_ms. Новый титр того же стиля заменяет прежний. */
@@ -46,7 +52,8 @@ export class CaptionLayer implements ICaptionSink {
 
   private add(key: string, style: CaptionStyle): Entry {
     for (const e of [...this.entries]) if (e.style === style) this.remove(e, true);
-    const el = h('div', { class: `vn-cap vn-cap--${style}`, role: style === 'chapter' ? 'heading' : 'status' });
+    const plated = style === 'chapter' && this.el.style.getPropertyValue('--title-plate') !== '';
+    const el = h('div', { class: `vn-cap vn-cap--${style}${plated ? ' has-plate' : ''}`, role: style === 'chapter' ? 'heading' : 'status' });
     const entry: Entry = { key, style, el, timer: null };
     this.fill(entry);
     this.entries.add(entry);

@@ -1,8 +1,8 @@
 /**
- * Звук. Пока в репозитории нет аудиоассетов, менеджер только ведёт состояние
- * (что играет, mute пользователя, запрет звука платформой) и пишет журнал для отладки;
- * воспроизведение подключается через IAudioBackend, когда появится build_assets (ogg).
- * Шаги music / sfx / ambient / stop_* интерпретатор уже исполняет полностью.
+ * Звук. Менеджер ведёт состояние (что играет, mute игрока, запрет звука платформой) и пишет
+ * журнал для отладки; воспроизведение делает IAudioBackend — на странице это HtmlAudioBackend
+ * (audio_html.ts: HTMLAudioElement, mp3). Шаги music / sfx / ambient / stop_* интерпретатор
+ * исполняет полностью; без бэкенда (тесты, отладочный режим) менеджер только записывает состояние.
  */
 import type { AudioEventPayload, IAudioSink } from './types';
 
@@ -11,6 +11,8 @@ export interface IAudioBackend {
   stop(kind: 'music' | 'ambient', fadeMs: number): void;
   /** Итоговая громкость каналов (0 — тишина, учитывает mute и запрет платформы). */
   setGain(channel: 'music' | 'ambient' | 'sfx' | 'voice', gain: number): void;
+  /** Пауза платформы / вкладки в фоне: всё играющее встаёт и потом продолжается. */
+  setPaused?(paused: boolean): void;
 }
 
 export interface AudioVolumes {
@@ -85,6 +87,11 @@ export class AudioManager implements IAudioSink {
   setMuted(muted: boolean): void {
     this.muted = muted;
     this.applyGain();
+  }
+
+  /** Пауза платформы (реклама, вкладка в фоне): звук встаёт и продолжается с того же места. */
+  setPaused(paused: boolean): void {
+    this.backend?.setPaused?.(paused);
   }
 
   /** Разрешение звука от платформы (Playgama AUDIO_STATE_CHANGED). */

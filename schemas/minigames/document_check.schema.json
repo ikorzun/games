@@ -3,7 +3,7 @@
   "title": "document_check config",
   "description": "Сверка документов: игрок отмечает поля, которые не сходятся между документами (Papers, Please).",
   "type": "object", "additionalProperties": false,
-  "required": ["documents", "discrepancies", "required", "max_mistakes"],
+  "required": ["documents", "discrepancies", "fields", "required", "max_mistakes"],
   "properties": {
     "documents": { "type": "array", "minItems": 1, "maxItems": 4, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" } },
     "discrepancies": {
@@ -18,7 +18,20 @@
         }
       }
     },
-    "decoys": { "type": "integer", "minimum": 0, "maximum": 10, "description": "Сколько полей-ловушек подсвечивать как кликабельные." },
+    "fields": {
+      "type": "array", "minItems": 1,
+      "description": "Кликабельные фрагменты документов (Papers, Please: «поле»). text_key — строка локали, которая ДОСЛОВНО входит в текст документа (text_key шага document или archive_items[asset = doc]); рантайм находит её в тексте и делает нажимаемой (≥ 44 px). Фрагмент, который есть в discrepancies, — настоящее несоответствие, остальные — ловушки. При переводе фрагмент должен остаться дословной частью переведённого текста документа, иначе он показывается отдельной строкой под текстом.",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["doc", "field", "text_key"],
+        "properties": {
+          "doc": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "field": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "text_key": { "type": "string" }
+        }
+      }
+    },
+    "decoys": { "type": "integer", "minimum": 0, "maximum": 10, "description": "Сколько полей-ловушек подсвечивать как кликабельные: первые N фрагментов из fields, не вошедших в discrepancies (порядок — как в fields). Не задано — все." },
     "required": { "type": "integer", "minimum": 1 },
     "max_mistakes": { "type": "integer", "minimum": 1 }
   }

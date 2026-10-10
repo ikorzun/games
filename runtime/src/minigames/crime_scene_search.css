@@ -1,7 +1,7 @@
 /*
  * Осмотр места (crime_scene_search.ts). Общая рамка — mg_shell.css.
- * Картинка места: на телефоне шире экрана и листается вбок, на широком экране вписана целиком.
- * Зоны невидимы, пока не найдены; в режиме заглушки (нет файла картинки) показаны серыми коробками с подписями.
+ * Картинка места вписана в ширину карточки целиком. Зоны невидимы, пока не найдены; в режиме заглушки
+ * (нет файла картинки) показаны серыми коробками с подписями.
  */
 
 .mg-scene__wrap {
@@ -13,10 +13,8 @@
 
 .mg-scene__viewport {
   position: relative;
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  scrollbar-width: thin;
+  container-type: inline-size;
+  overflow: hidden;
   background: #0b0b0d;
   border: 1px solid var(--mg-line);
   border-radius: 10px;
@@ -32,13 +30,6 @@
   touch-action: manipulation;
   outline-offset: -3px;
 }
-@media (max-width: 599px) {
-  /* Телефон: картинка в полтора экрана — деталей видно больше, края доступны свайпом. */
-  .mg-scene__stage {
-    width: 150%;
-  }
-}
-
 /* Заглушка вместо картинки: серый прямоугольник с подписями зон. */
 .mg-scene__stage.is-loading,
 .mg-scene__stage.is-placeholder {
@@ -74,7 +65,8 @@
   min-height: 44px;
   border: 2px solid transparent;
   border-radius: 10px;
-  transform: translate(-50%, -50%);
+  /* Центр зоны — в её центре; сдвиг отдельным свойством, чтобы анимации могли пользоваться transform. */
+  translate: -50% -50%;
   pointer-events: none;
 }
 .mg-scene__pin {
@@ -120,27 +112,56 @@
   transform: none;
 }
 
-/* Заглушка: все зоны видны коробками с подписью внутри. */
+/* Заглушка: все зоны видны коробками с подписью внутри; размер — по подписи, чтобы текст не обрезался. */
+.mg-scene__stage.is-placeholder {
+  aspect-ratio: var(--ar-ph, 16 / 9);
+}
+@media (max-width: 599px) {
+  .mg-scene__stage.is-placeholder {
+    --ar-ph: 4 / 3;
+  }
+}
 .mg-scene__stage.is-placeholder .mg-scene__zone {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 5.5rem;
-  min-height: 3rem;
+  width: auto !important;
+  height: auto !important;
+  min-width: 4.8rem;
+  max-width: 9rem;
+  min-height: 2.8rem;
+  padding: 0.15rem 0.2rem;
   background: rgb(255 255 255 / 0.05);
   border: 2px dashed rgb(255 255 255 / 0.32);
+}
+.mg-scene__stage.is-placeholder .mg-scene__zone.is-left {
+  translate: -22% -50%;
+}
+.mg-scene__stage.is-placeholder .mg-scene__zone.is-right {
+  translate: -78% -50%;
 }
 .mg-scene__stage.is-placeholder .mg-scene__tag {
   position: static;
   display: block;
   max-width: 100%;
   margin: 0;
-  padding: 0 0.3rem;
+  padding: 0;
+  overflow: visible;
   color: #d8d3c6;
+  font-size: 0.72em;
+  line-height: 1.25;
   white-space: normal;
   text-align: center;
+  text-overflow: clip;
   background: none;
   transform: none;
+}
+
+/* Узкая картинка (телефон): подписи — в списке под ней, на самой картинке остаются кольцо и номер. */
+@container (max-width: 519px) {
+  .mg-scene__stage:not(.is-placeholder) .mg-scene__tag {
+    display: none !important;
+  }
 }
 
 /* Найдено */
@@ -241,30 +262,6 @@
   display: block;
 }
 
-/* Подсказка «листайте» — только на телефоне, пока не листали */
-.mg-scene__swipe {
-  position: absolute;
-  right: 0.5rem;
-  bottom: 0.4rem;
-  display: none;
-  padding: 1px 8px;
-  color: var(--mg-ink);
-  font: 700 0.9em / 1.4 var(--font-mono, monospace);
-  letter-spacing: 0.2em;
-  background: rgb(0 0 0 / 0.55);
-  border-radius: 999px;
-  pointer-events: none;
-  opacity: 0.85;
-}
-@media (max-width: 599px) {
-  .mg-scene__swipe {
-    display: block;
-  }
-}
-.mg-scene__swipe.is-moved {
-  display: none;
-}
-
 /* Найденное */
 .mg-scene__list {
   display: flex;
@@ -279,8 +276,10 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  min-width: 0;
+  max-width: 100%;
   padding: 0.25rem 0.7rem 0.25rem 0.3rem;
-  font-size: 0.9em;
+  font-size: 0.88em;
   background: rgb(232 217 181 / 0.1);
   border: 1px solid rgb(232 217 181 / 0.4);
   border-radius: 999px;
@@ -294,7 +293,14 @@
   background: rgb(201 54 47 / 0.12);
   border-color: var(--mg-accent);
 }
+.mg-scene__name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .mg-scene__num {
+  flex: none;
   display: inline-grid;
   place-items: center;
   width: 1.55em;
@@ -320,11 +326,11 @@
 
 @keyframes mg-scene-pop {
   from {
-    transform: translate(-50%, -50%) scale(1.25);
+    transform: scale(1.25);
     opacity: 0.2;
   }
   to {
-    transform: translate(-50%, -50%) scale(1);
+    transform: scale(1);
     opacity: 1;
   }
 }
@@ -341,5 +347,20 @@
   to {
     opacity: 0;
     transform: scale(1.5);
+  }
+}
+
+/* Короткий ландшафт (телефон на боку): картинка слева на всю высоту, остальное — справа. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .mg-shell:has(.mg-scene__wrap) {
+    grid-template-areas:
+      'body head'
+      'body hud'
+      'body status'
+      'body foot';
+  }
+  .mg-scene__stage {
+    width: min(100%, calc((100vh - 8rem) * 1.7778));
+    margin: 0 auto;
   }
 }

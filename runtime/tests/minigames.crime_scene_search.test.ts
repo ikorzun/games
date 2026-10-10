@@ -212,13 +212,16 @@ describe('разметка и картинка места', () => {
     expect(stage.style.getPropertyValue('--ar')).toBe('1920 / 1080');
   });
 
-  it('картинка не загрузилась — заглушка вместо неё, игра продолжается', () => {
+  it('картинка не загрузилась — заглушка вместо неё, одно предупреждение на файл, игра продолжается', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const r = rig(defOf(TYPE, CFG), { episode: withBg(), strings: STRINGS });
     mountGame(createCrimeSceneSearch(), r, CFG);
     const stage = q(r.dom, '.mg-scene__stage');
     q(stage, 'img').dispatchEvent(new Event('error'));
     expect(stage.querySelector('img')).toBeNull();
     expect(stage.classList.contains('is-placeholder')).toBe(true);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain('assets/ep01/bg/x.webp');
   });
 });
 

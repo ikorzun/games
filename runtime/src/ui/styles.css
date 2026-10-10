@@ -14,8 +14,12 @@
   --c-muted: #a8a398;
   --c-accent: #c9362f;
   --c-accent-soft: #e8d9b5;
-  --radius: 10px;
+  --radius: 8px;
   --lt-bottom: 30%;
+  /* Документальная эстетика: тёмные полупрозрачные панели с тонкой светлой рамкой. */
+  --panel: rgb(0 0 0 / 0.72);
+  --panel-solid: rgb(6 6 8 / 0.94);
+  --panel-line: rgb(255 255 255 / 0.28);
   color-scheme: dark;
 }
 @media (min-width: 900px) and (min-height: 540px) {
@@ -103,7 +107,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  padding: 0 5% max(2.2%, env(safe-area-inset-bottom));
+  padding: 0 max(5%, env(safe-area-inset-right)) max(2.2%, env(safe-area-inset-bottom)) max(5%, env(safe-area-inset-left));
 }
 .vn-ui > * { pointer-events: auto; }
 
@@ -121,9 +125,9 @@ body {
     grid-area: 2 / 1;
     justify-content: flex-start;
     gap: 8px;
-    padding: 6px 10px max(10px, env(safe-area-inset-bottom));
-    background: linear-gradient(#0d0d10, #050506);
-    border-top: 1px solid var(--c-line);
+    padding: 8px max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+    background: linear-gradient(#0b0b0d, #040405);
+    border-top: 1px solid var(--panel-line);
   }
 }
 
@@ -147,11 +151,11 @@ body {
   padding: 0.85em 1.2em 1em;
   font-size: var(--text-size);
   line-height: 1.42;
-  background: linear-gradient(rgb(10 10 12 / 0.72), rgb(8 8 10 / 0.9));
-  border: 1px solid var(--c-line);
-  border-radius: var(--radius);
+  font-family: var(--font-body);
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  border-radius: 4px;
   text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
-  backdrop-filter: blur(3px);
 }
 .vn-textbox[hidden] { display: none; }
 .vn-textbox__text {
@@ -161,17 +165,20 @@ body {
   hyphens: auto;
 }
 .vn-textbox__rest { visibility: hidden; }
+/* Имя говорящего — маленькая плашка на верхней кромке окна (PT Sans, цвет персонажа). */
 .vn-textbox__name {
   position: absolute;
-  left: 0.9em;
-  top: -1.2em;
-  padding: 0.05em 0.75em;
-  font: 700 0.86em / 1.4 var(--font-title);
+  left: 0.8em;
+  top: -1.3em;
+  padding: 0.04em 0.7em 0.06em;
+  font: 700 0.8em / 1.4 var(--font-body);
   letter-spacing: 0.02em;
   color: var(--name-color, #d8d2c4);
-  background: #0b0b0e;
-  border: 1px solid var(--name-color, var(--c-line));
-  border-radius: 6px 6px 0 0;
+  background: rgb(0 0 0 / 0.88);
+  border: 1px solid var(--panel-line);
+  border-bottom: 0;
+  border-radius: 3px 3px 0 0;
+  text-shadow: none;
 }
 .vn-textbox__more {
   position: absolute;
@@ -201,7 +208,6 @@ body {
 .vn-textbox[data-layout='subtitle'] {
   background: none;
   border: 0;
-  backdrop-filter: none;
   text-align: center;
   text-shadow: 0 2px 6px #000, 0 0 3px #000, 0 0 12px rgb(0 0 0 / 0.8);
 }
@@ -224,7 +230,7 @@ body {
     overflow: auto;
     overscroll-behavior: contain;
     align-self: stretch;
-    background: rgb(20 20 24 / 0.7);
+    background: var(--panel);
   }
   .vn-textbox[data-layout='subtitle'] { background: none; }
   /* Плашка с именем внутри окна: снаружи её обрезал бы overflow. */
@@ -236,11 +242,12 @@ body {
   }
 }
 
-/* ───────────── Быстрое меню ───────────── */
+/* ───────────── Быстрое меню (иконки) ───────────── */
 
+/* Ландшафт: правый верхний угол кадра, ниже таймкода камеры (там появляется date_stamp). */
 .vn-quick {
   position: absolute;
-  top: max(8px, env(safe-area-inset-top));
+  top: calc(max(10px, env(safe-area-inset-top)) + 30px);
   right: max(8px, env(safe-area-inset-right));
   max-width: 75%;
   display: flex;
@@ -250,26 +257,45 @@ body {
   z-index: 7;
 }
 .vn-qbtn {
-  min-height: 38px;
-  padding: 0 0.85em;
-  font-size: 14px;
-  white-space: nowrap;
-  background: rgb(10 10 12 / 0.74);
-  border: 1px solid var(--c-line);
-  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  color: #ece9df;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  border-radius: 6px;
   cursor: pointer;
-  backdrop-filter: blur(2px);
 }
 .vn-qbtn:hover { border-color: var(--c-accent-soft); }
 .vn-qbtn:disabled { opacity: 0.4; cursor: default; }
 .vn-qbtn.is-on { background: var(--c-accent); border-color: var(--c-accent); color: #fff; }
+.vn-ico {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+/* Mute: «волны» видны при включённом звуке, крестик — когда звук выключен игроком. */
+.vn-qbtn--mute .vn-ico__off { display: none; }
+.vn-qbtn--mute.is-on .vn-ico__on { display: none; }
+.vn-qbtn--mute.is-on .vn-ico__off { display: inline; }
 @media (orientation: portrait) {
   .vn-quick {
     position: static;
     order: 3;
     max-width: none;
-    justify-content: flex-start;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 4px;
   }
+  .vn-qbtn { flex: 1 1 0; width: auto; max-width: 52px; min-width: 34px; height: 44px; }
 }
 
 /* ───────────── Выбор ───────────── */
@@ -283,10 +309,10 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.6em;
-  padding: 4% 5%;
+  gap: 0.65em;
+  padding: 4% max(5%, env(safe-area-inset-right)) 4% max(5%, env(safe-area-inset-left));
   overflow: auto;
-  background: rgb(0 0 0 / 0.46);
+  background: rgb(0 0 0 / 0.5);
 }
 .vn-choices[hidden] { display: none; }
 .vn-choices__prompt {
@@ -295,25 +321,26 @@ body {
   font: 700 calc(var(--fs) * var(--font-scale) * 1.15) / 1.25 var(--font-title);
   text-shadow: 0 1px 3px #000;
 }
+/* Крупные кнопки: не ниже 52 px, на всю ширину колонки — удобно большим пальцем. */
 .vn-choice {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.7em;
   box-sizing: border-box;
   width: min(100%, 38em);
-  min-height: 48px;
-  padding: 0.7em 1em;
+  min-height: 52px;
+  padding: 0.75em 1em;
   font-size: calc(var(--fs) * var(--font-scale));
   line-height: 1.3;
   text-align: left;
-  background: rgb(14 14 17 / 0.95);
-  border: 1px solid rgb(255 255 255 / 0.28);
-  border-radius: var(--radius);
+  background: var(--panel-solid);
+  border: 1px solid var(--panel-line);
+  border-radius: 4px;
   cursor: pointer;
 }
 .vn-choice:hover,
 .vn-choice:focus-visible {
-  background: #1c1c21;
+  background: #14141a;
   border-color: var(--c-accent-soft);
 }
 .vn-choice__n {
@@ -359,24 +386,20 @@ body {
 }
 .vn-cap.is-in { opacity: 1; }
 .vn-cap.is-out { opacity: 0; }
+/* date_stamp — таймкод камеры: мелкий моноширинный (PT Mono) в правом верхнем углу картинки. */
 .vn-cap--date_stamp {
-  left: 5%;
-  top: 7%;
-  font: 400 clamp(14px, 2.7vmin, 26px) / 1.2 var(--font-mono);
-  letter-spacing: 0.04em;
+  right: var(--hud-right, max(3.2%, env(safe-area-inset-right)));
+  top: var(--hud-top, max(10px, env(safe-area-inset-top)));
+  font: 400 clamp(11px, 1.9vmin, 15px) / 1.2 var(--font-mono);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
   color: #f4f4f0;
-  text-shadow: 0 0 6px rgb(255 255 255 / 0.35), 1px 1px 0 #000;
-}
-.vn-cap--date_stamp::before {
-  content: '●';
-  margin-right: 0.5em;
-  color: var(--c-accent);
-  animation: rec 1.2s steps(2) infinite;
+  text-shadow: 0 0 4px rgb(255 255 255 / 0.25), 1px 1px 0 #000;
 }
 .vn-cap--location {
-  left: 5%;
-  top: 7%;
+  left: var(--hud-left, max(3.2%, env(safe-area-inset-left)));
+  top: calc(var(--hud-top, max(10px, env(safe-area-inset-top))) + 2.2em);
   max-width: 80%;
   padding: 0.15em 0.65em;
   font: 700 clamp(13px, 2.4vmin, 22px) / 1.25 var(--font-title);
@@ -384,7 +407,6 @@ body {
   background: rgb(0 0 0 / 0.55);
   border-left: 3px solid var(--c-accent);
 }
-.vn-stage__captions:has(.vn-cap--date_stamp) .vn-cap--location { top: calc(7% + 2.6em); }
 .vn-cap--lower_third {
   left: 0;
   bottom: var(--lt-bottom);
@@ -409,6 +431,10 @@ body {
   background: #000;
   text-shadow: 0 0 0.45em rgb(201 54 47 / 0.6);
 }
+.vn-cap--chapter.has-plate {
+  background: var(--title-plate) center / contain no-repeat, #000;
+}
+.vn-cap--chapter.has-plate::after { display: none; }
 .vn-cap--chapter::after {
   content: '';
   width: 2.6em;
@@ -429,9 +455,9 @@ body {
 }
 .vn-cap__bar { flex: none; width: 0.9em; background: var(--c-accent); }
 .vn-cap__text { padding: 0.5em 1em 0.55em 0.9em; }
-@keyframes rec {
-  50% { opacity: 0.2; }
-}
+/* «Скрыть интерфейс»: вместе с UI прячутся и экранные надписи камеры (REC, таймкод). */
+.vn-root.ui-hidden .vn-cap--date_stamp,
+.vn-root.ui-hidden .vn-stage__hud { visibility: hidden; }
 
 /* ───────────── Экраны ───────────── */
 
@@ -551,6 +577,20 @@ body {
   pointer-events: none;
   background: repeating-linear-gradient(to bottom, rgb(255 255 255 / 0.035) 0 1px, transparent 1px 3px);
 }
+/* Видеосалон: фон — assets/common/ui/menu_video_salon.webp (если файла нет, остаётся градиент выше). */
+.vn-menu.has-bg {
+  background:
+    linear-gradient(rgb(0 0 0 / 0.4), rgb(0 0 0 / 0.78)),
+    var(--menu-bg) center / cover no-repeat,
+    #070709;
+}
+.vn-menu.has-bg::before { display: none; }
+.vn-menu.has-bg .vn-menu__inner {
+  padding: 1.3rem 1.1rem;
+  background: rgb(0 0 0 / 0.62);
+  border: 1px solid var(--panel-line);
+  border-radius: 6px;
+}
 .vn-menu__inner {
   position: relative;
   display: flex;
@@ -576,6 +616,27 @@ body {
   margin: 0.25em auto 0;
   background: var(--c-accent);
 }
+/* Заставка: название на плашке assets/common/ui/title_plate.webp. */
+.vn-menu__brand {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(100%, 30rem);
+}
+.vn-menu__plate {
+  grid-area: 1 / 1;
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+.vn-menu__brand .vn-menu__title {
+  grid-area: 1 / 1;
+  padding: 0 14%;
+  font-size: clamp(22px, 6.2vmin, 50px);
+  text-shadow: 0 2px 6px rgb(0 0 0 / 0.8);
+}
+.vn-menu__brand .vn-menu__title::after { display: none; }
 .vn-menu__logline { margin: 0; max-width: 30rem; font-size: 0.95em; color: var(--c-muted); }
 .vn-menu__meta { margin: 0; font: 0.85em var(--font-mono); color: var(--c-accent-soft); }
 .vn-menu__nav {
@@ -612,6 +673,8 @@ body {
 
 /* Настройки */
 .vn-settings__group { margin: 0 0 0.9rem; padding: 0; border: 0; }
+.vn-camfx { justify-content: flex-start; }
+.vn-chip:disabled { opacity: 0.55; cursor: default; }
 .vn-settings__legend { display: block; margin-bottom: 0.4rem; color: var(--c-muted); font-size: 0.9em; }
 .vn-range {
   display: grid;
@@ -708,6 +771,9 @@ body {
   font-family: var(--font-mono);
   line-height: 1.5;
 }
+.vn-document__paper.has-image {
+  background: var(--doc-img) center top / cover no-repeat, #e9e2cf;
+}
 .vn-document__text { margin: 0; white-space: pre-wrap; }
 
 /* Финал */
@@ -774,6 +840,39 @@ body {
 .mg-btn.is-fail { border-color: #8a3a35; }
 .mg-btn.is-skip { border-style: dashed; }
 .mg-btn.is-primary { background: var(--c-accent); border-color: var(--c-accent); color: #fff; font-weight: 700; }
+
+/* ───────────── Индикатор загрузки ассетов блока ───────────── */
+
+.vn-loading {
+  position: absolute;
+  z-index: 25;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  border-radius: 999px;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.vn-loading.is-on { opacity: 1; }
+.vn-loading i {
+  width: 0.55rem;
+  height: 0.55rem;
+  background: var(--c-accent);
+  border-radius: 50%;
+  animation: load-dot 1s ease-in-out infinite;
+}
+.vn-loading i:nth-child(2) { animation-delay: 0.15s; }
+.vn-loading i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes load-dot {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
 
 /* ───────────── Тосты и отладка ───────────── */
 

@@ -8,14 +8,15 @@
  * Никакого пиксель-хантинга: зона для попадания не меньше MIN_HIT_PX с запасом SLOP_PX со всех сторон
  * (на телефоне это ≈ палец), ближайший центр побеждает; двойной тап по одному месту — один промах;
  * подсказка (по `hint_after_misses` или за rewarded-рекламу) подсвечивает следующую обязательную зону.
- * На узком экране картинка шире экрана и листается вбок, с клавиатуры — прицел: стрелки двигают, Enter осматривает.
+ * С клавиатуры — прицел: стрелки двигают, Enter осматривает.
  *
  * Итог: найдены все обязательные зоны → success; хотя бы одна → partial; ни одной → fail.
  * Игра заканчивается, когда найдено всё обязательное, промахов стало max_misses или вышло время.
  */
 import type { MinigameOutcomeKind } from '../core/types';
 import { fill, h } from '../ui/dom';
-import { asInt, asStr, isRecord, MinigameShell } from './mg_shell';
+import { joinUrl } from '../stage/assets';
+import { asInt, asStr, isRecord, MinigameShell, warnMissingAsset } from './mg_shell';
 import type { IMinigame, MinigameConfig } from './types';
 import './crime_scene_search.css';
 
@@ -206,22 +207,8 @@ class CrimeSceneSearch extends MinigameShell {
     if (path) this.loadImage(path);
     else this.stage.classList.replace('is-loading', 'is-placeholder');
 
-    const swipe = h('span', { class: 'mg-scene__swipe', aria: { hidden: true }, text: '‹ ›' });
-    this.viewport = h('div', { class: 'mg-scene__viewport' }, this.stage, swipe);
-    this.viewport.addEventListener(
-      'scroll',
-      () => swipe.classList.add('is-moved'),
-      { passive: true },
-    );
+    this.viewport = h('div', { class: 'mg-scene__viewport' }, this.stage);
     this.list = h('ul', { class: 'mg-scene__list' });
-
-    // Панорама на узком экране начинается с середины картинки (когда раскладка уже посчитана).
-    const centering = setTimeout(() => {
-      this.timeouts.delete(centering);
-      const vp = this.viewport;
-      if (vp.isConnected) vp.scrollLeft = Math.max(0, (vp.scrollWidth - vp.clientWidth) / 2);
-    }, 0);
-    this.timeouts.add(centering);
     return h('div', { class: 'mg-scene__wrap' }, this.viewport, this.list, this.help);
   }
 
@@ -240,8 +227,9 @@ class CrimeSceneSearch extends MinigameShell {
       img.remove();
       this.stage.classList.remove('is-loading', 'has-image');
       this.stage.classList.add('is-placeholder');
+      warnMissingAsset(img.src);
     });
-    img.src = path;
+    img.src = joinUrl(import.meta.env.BASE_URL, path);
     this.stage.prepend(img);
   }
 
@@ -263,12 +251,19 @@ class CrimeSceneSearch extends MinigameShell {
       ...found.map((id, i) => {
         const hs = this.byId.get(id);
         return hs
-          ? h('li', { class: `mg-scene__item${hs.required ? '' : ' is-extra'}` }, h('span', { class: 'mg-scene__num', text: String(i + 1) }), this.label(hs))
+          ? h(
+              'li',
+              { class: `mg-scene__item${hs.required ? '' : ' is-extra'}` },
+              h('span', { class: 'mg-scene__num', text: String(i + 1) }),
+              h('span', { class: 'mg-scene__name', text: this.label(hs) }),
+            )
           : null;
       }),
       ...hinted.filter((id) => !found.includes(id)).map((id) => {
         const hs = this.byId.get(id);
-        return hs ? h('li', { class: 'mg-scene__item is-hint', text: `${this.t('ui.minigame.hint')}: ${this.label(hs)}` }) : null;
+        return hs
+          ? h('li', { class: 'mg-scene__item is-hint' }, h('span', { class: 'mg-scene__name', text: `${this.t('ui.minigame.hint')}: ${this.label(hs)}` }))
+          : null;
       }),
     );
   }

@@ -15,6 +15,7 @@ import type { BaseContext, HoldContext, LineContext, MinigameContext } from '../
 import type { Stage } from '../src/stage/stage';
 import { CaptionLayer } from '../src/ui/captions';
 import { DomUI } from '../src/ui/dom_ui';
+import type { DomUIDeps } from '../src/ui/dom_ui';
 import { UiKit } from '../src/ui/kit';
 import type { QuickAction } from '../src/ui/quick_menu';
 import { FakePlatform } from './helpers/fakes';
@@ -42,7 +43,7 @@ interface Rig {
 
 const rigs: Rig[] = [];
 
-function makeRig(over: Partial<Settings> = {}, presentation: Presentation = 'procedural'): Rig {
+function makeRig(over: Partial<Settings> = {}, presentation: Presentation = 'procedural', extra: Partial<DomUIDeps> = {}): Rig {
   const root = document.createElement('div');
   document.body.appendChild(root);
   const actions: QuickAction[] = [];
@@ -80,6 +81,7 @@ function makeRig(over: Partial<Settings> = {}, presentation: Presentation = 'pro
     onOpenArchive: () => void (archiveOpens.n += 1),
     onAction: (a) => void actions.push(a),
     onRollback: () => void (rollbacks.n += 1),
+    ...extra,
   });
   const rig: Rig = { ui, kit, root, captionsHost, settings, vars, view, actions, rollbacks, archiveOpens, fx, mgActive, platform };
   rigs.push(rig);
@@ -591,6 +593,54 @@ describe('DomUI: паузы сценария (титры chapter/fact, эффе�
 });
 
 describe('DomUI: документ, мини-игра, финал', () => {
+  it('бланк документа: картинка уже загружена — показывается сразу; текст остаётся слоем из локали', async () => {
+    const asked: string[] = [];
+    const { ui, kit } = makeRig({}, 'procedural', {
+      documentArt: (id) => (asked.push(id), { url: './assets/ep01/documents/doc_x.webp', ready: Promise.resolve('./assets/ep01/documents/doc_x.webp') }),
+    });
+    const res = track(ui.showDocument({ kind: 'document', doc: 'doc_x', text_key: 'doc.text', zoomable: false, adds_to_archive: null }, baseCtx(ctl())));
+    const paper = kit.screens.el.querySelector<HTMLElement>('.vn-document__paper');
+    expect(asked).toEqual(['doc_x']);
+    expect(paper?.classList.contains('has-image')).toBe(true);
+    expect(paper?.style.getPropertyValue('--doc-img')).toContain('/assets/ep01/documents/doc_x.webp');
+    expect(kit.screens.el.querySelector('.vn-document__text')?.textContent).toBe('Текст документа');
+    await flush();
+    kit.screens.el.querySelector<HTMLButtonElement>('.vn-actions .vn-btn')?.click();
+    await flush();
+    expect(res.done).toBe(true);
+  });
+
+  it('бланк ещё грузится: экран открывается сразу без картинки, картинка проявляется, когда придёт', async () => {
+    let resolve!: (u: string | null) => void;
+    const ready = new Promise<string | null>((r) => void (resolve = r));
+    const { ui, kit } = makeRig({}, 'procedural', { documentArt: () => ({ url: null, ready }) });
+    void ui.showDocument({ kind: 'document', doc: 'doc_x', text_key: 'doc.text', zoomable: false, adds_to_archive: null }, baseCtx(ctl()));
+    const paper = (): HTMLElement | null => kit.screens.el.querySelector<HTMLElement>('.vn-document__paper');
+    expect(paper()?.classList.contains('has-image')).toBe(false);
+    expect(kit.screens.el.querySelector('.vn-document__text')?.textContent).toBe('Текст документа'); // читать можно сразу
+    resolve('./assets/ep01/documents/doc_x.webp');
+    await flush();
+    expect(paper()?.classList.contains('has-image')).toBe(true);
+  });
+
+  it('файла бланка нет (null): обычный лист; поздняя картинка после закрытия экрана ничего не делает', async () => {
+    let resolve!: (u: string | null) => void;
+    const ready = new Promise<string | null>((r) => void (resolve = r));
+    const missing = makeRig({}, 'procedural', { documentArt: () => ({ url: null, ready: Promise.resolve(null) }) });
+    void missing.ui.showDocument({ kind: 'document', doc: 'doc_x', text_key: 'doc.text', zoomable: false, adds_to_archive: null }, baseCtx(ctl()));
+    await flush();
+    expect(missing.kit.screens.el.querySelector('.vn-document__paper')?.classList.contains('has-image')).toBe(false);
+
+    const { ui, kit } = makeRig({}, 'procedural', { documentArt: () => ({ url: null, ready }) });
+    const res = track(ui.showDocument({ kind: 'document', doc: 'doc_x', text_key: 'doc.text', zoomable: false, adds_to_archive: null }, baseCtx(ctl())));
+    kit.screens.el.querySelector<HTMLButtonElement>('.vn-actions .vn-btn')?.click();
+    await flush();
+    expect(res.done).toBe(true);
+    expect(() => resolve('./late.webp')).not.toThrow();
+    await flush();
+    expect(kit.screens.count).toBe(0);
+  });
+
   it('документ открывается модальным экраном, не закрывается Esc и листание под ним не работает; «Понятно» закрывает', async () => {
     const { ui, kit } = makeRig();
     const res = track(ui.showDocument({ kind: 'document', doc: 'doc_x', text_key: 'doc.text', zoomable: false, adds_to_archive: null }, baseCtx(ctl())));

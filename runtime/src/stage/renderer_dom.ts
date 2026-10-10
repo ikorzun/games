@@ -112,6 +112,11 @@ export class DomSceneRenderer implements ISceneRenderer {
       apply(null);
       return;
     }
+    if (chain.solid) {
+      el.style.setProperty('--solid', chain.solid);
+      el.dataset.state = 'solid';
+      return;
+    }
     const got = this.assets.peek(chain.urls);
     if (got !== undefined) {
       apply(got ? got.handle : null);
