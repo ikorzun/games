@@ -6,6 +6,14 @@ import type { Lang } from './types';
 
 export type ViolenceMode = 'full' | 'schematic';
 
+/**
+ * Эффекты камеры («камкордер»: дрожание кадра, помехи, зерно, HUD записи).
+ * `off` — чистая картинка; `low` — по умолчанию; `high` — заметнее и чаще (src/stage/camcorder.ts).
+ * prefers-reduced-motion принудительно выключает эффекты независимо от выбора.
+ */
+export type CameraFx = 'off' | 'low' | 'high';
+export const CAMERA_FX_LEVELS: readonly CameraFx[] = ['off', 'low', 'high'];
+
 export interface Settings {
   /** Выбранный язык; null — определять автоматически (платформа / браузер). */
   lang: Lang | null;
@@ -26,6 +34,8 @@ export interface Settings {
   violenceMode: ViolenceMode;
   /** Пропускать (Skip) и непрочитанный текст. */
   skipUnread: boolean;
+  /** Эффекты камеры: выкл / слабо (по умолчанию) / сильно. */
+  cameraFx: CameraFx;
 }
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
@@ -41,6 +51,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   storyOnly: false,
   violenceMode: 'full',
   skipUnread: false,
+  cameraFx: 'low',
 };
 
 export const FONT_SCALE_RANGE = { min: 0.85, max: 1.6, step: 0.05 } as const;
@@ -74,5 +85,6 @@ export function sanitizeSettings(raw: unknown): Settings {
     storyOnly: typeof r.storyOnly === 'boolean' ? r.storyOnly : d.storyOnly,
     violenceMode: r.violenceMode === 'schematic' ? 'schematic' : 'full',
     skipUnread: typeof r.skipUnread === 'boolean' ? r.skipUnread : d.skipUnread,
+    cameraFx: (CAMERA_FX_LEVELS as readonly unknown[]).includes(r.cameraFx) ? (r.cameraFx as CameraFx) : d.cameraFx,
   };
 }
