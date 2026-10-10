@@ -349,11 +349,12 @@ describe('SettingsScreen', () => {
 });
 
 describe('SettingsScreen: эффекты камеры', () => {
-  const make = (over: Partial<Settings> = {}, reduced = false) => {
+  const make = (over: Partial<Settings> = {}, reduced = false, effective?: Settings['cameraFx']) => {
     const settings: Settings = { ...DEFAULT_SETTINGS, ...over };
     const hd = {
       settings: () => settings,
       reducedMotion: () => reduced,
+      ...(effective ? { effectiveCameraFx: () => effective } : {}),
       onChange: vi.fn((patch: Partial<Settings>) => void Object.assign(settings, patch)),
       onLanguage: vi.fn(),
       onClose: vi.fn(),
@@ -390,6 +391,14 @@ describe('SettingsScreen: эффекты камеры', () => {
   it('сохранённое значение показывается: отмечен ровно один сегмент', () => {
     expect(on(make({ cameraFx: 'off' }).s.el)).toEqual(['off']);
     expect(on(make({ cameraFx: 'high' }).s.el)).toEqual(['high']);
+  });
+
+  it('самозащита от слабого устройства: в настройках «Слабо», но действует «Выкл» — отмечено действующее, сегменты доступны; выбор уровня уходит в onChange', () => {
+    const { s, hd } = make({ cameraFx: 'low' }, false, 'off');
+    expect(on(s.el)).toEqual(['off']);
+    expect(chips(s.el).every((c) => !c.disabled)).toBe(true);
+    chips(s.el)[1]!.click(); // «Слабо» ещё раз: в настройках уровень прежний, но это явный выбор
+    expect(hd.onChange).toHaveBeenLastCalledWith({ cameraFx: 'low' });
   });
 
   it('prefers-reduced-motion: все сегменты недоступны, отмечено «Выкл», выбор настроек не меняется', () => {

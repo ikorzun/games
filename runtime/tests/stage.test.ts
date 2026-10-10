@@ -46,6 +46,8 @@ interface Rig {
   ctx: FakeCtx;
   /** Кадры анимации камкордера. */
   frames: (ms: number, from?: number) => void;
+  /** Один кадр rAF в момент ts. */
+  tick: (ts: number) => void;
   hand: HTMLElement;
   cam: HTMLElement;
   scene: HTMLElement;
@@ -82,6 +84,11 @@ async function rig(opts: { loader?: ImageLoader; reduced?: boolean } = {}): Prom
     stage,
     ctx,
     state,
+    tick: (ts) => {
+      const batch = pending;
+      pending = [];
+      for (const cb of batch) cb(ts);
+    },
     frames: (ms, from = 0) => {
       for (let t = from; t <= from + ms; t += 16) {
         const batch = pending;
@@ -183,6 +190,29 @@ describe('Stage: HUD записи и эффекты камеры', () => {
     expect(hud.querySelector('.vn-rec__text')?.textContent).toBe('REC');
     expect(hud.querySelector('.vn-rec__dot')).not.toBeNull();
     expect(hud.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('самозащита: слабое устройство — эффекты выключены, пока игрок явно не выберет уровень; обычная правка настроек их не возвращает', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    try {
+      const { stage, tick } = await rig();
+      stage.setView(view('reconstruction'));
+      for (let t = 0; t <= 9000; t += 100) tick(t); // ≈ 10 к/с
+      expect(stage.camcorder.degradedByPerformance).toBe(true);
+      expect(stage.camcorder.effectiveLevel).toBe('off');
+      expect(stage.camcorder.running).toBe(false);
+      expect(stage.el.classList.contains('cam-on')).toBe(false);
+      expect(stage.el.classList.contains('cam-rec')).toBe(false);
+      expect(info).toHaveBeenCalledTimes(1);
+      stage.setCameraFx('low'); // App.applySettings при любой правке настроек
+      expect(stage.camcorder.effectiveLevel).toBe('off');
+      stage.setCameraFx('low', true); // игрок нажал «Слабо»
+      expect(stage.camcorder.effectiveLevel).toBe('low');
+      expect(stage.el.classList.contains('cam-rec')).toBe(true);
+      expect(stage.camcorder.running).toBe(true);
+    } finally {
+      info.mockRestore();
+    }
   });
 
   it('prefers-reduced-motion выключает эффекты принудительно', async () => {
