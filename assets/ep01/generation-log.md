@@ -46,3 +46,32 @@
   Higgsfield недоступна («Requires basic plan or higher»).
 - `nano_banana_pro` — 2 кредита за кадр, доступна; 14 фонов эпизода = 28 кредитов за один вариант.
 - Баланс на момент записи: 1 кредит. Стиль-тест не запущен.
+
+## Фоны, фотореализм — партия 2, 2026-10-10 (план Lite, 251 кредит на старте)
+
+Модель `gpt_image_2_5` (OpenAI GPT Image 2.5, вариант flare), 16:9, quality `medium`, resolution `2k`,
+1 кредит за кадр; промпт = базовый промпт `style-bible.md` §1 + SCENE TO DEPICT из таблицы
+`docs/production/prompts/ep01-images.md` с пометкой «empty room, no people» для фонов под спрайты.
+Стиль-тест кабинета на quality `low`/1k (0,25 кредита): job `c31bd25d-0605-4422-8456-0437cb7a1453`.
+Лимит одновременных задач модели — 4 (пятая и дальше получают 429); отправляли четвёрками.
+
+| id | Job id | Файл результата (CDN) | Статус |
+|---|---|---|---|
+| `bg_yard_summer` | `5ef998f9-61fd-442b-9f3c-43f9a71199c5` | https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175444_5ef998f9-61fd-442b-9f3c-43f9a71199c5.png | сгенерирован, на утверждение владельцем |
+| `bg_apartment_zoya` | `6f2de885-05e5-4980-8f4f-fe00f4735b41` | https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175444_6f2de885-05e5-4980-8f4f-fe00f4735b41.png | сгенерирован, на утверждение владельцем |
+| `bg_moscow_1993` | `75524648-8227-43d5-b071-deeda09d9d84` | https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175444_75524648-8227-43d5-b071-deeda09d9d84.png | сгенерирован, на утверждение владельцем |
+| `bg_office_prosecutor` | `e72bb70f-73bb-4e90-a2d5-078f2f7b8c6b` | https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175443_e72bb70f-73bb-4e90-a2d5-078f2f7b8c6b.png | сгенерирован, на утверждение владельцем |
+| `bg_interrogation` | `60dc2ae6-f754-43d5-a045-5b602f88dbc1` | https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175607_60dc2ae6-f754-43d5-a045-5b602f88dbc1.png | сгенерирован, на утверждение владельцем |
+| `bg_bti_archive` | `00f06b70-1242-4942-b694-35cee853c14a` | https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175607_00f06b70-1242-4942-b694-35cee853c14a.png | сгенерирован, на утверждение владельцем |
+| `bg_street_night` | `dc36bcb7-08c6-4f2d-a24b-0b036fcd039e` | https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175608_dc36bcb7-08c6-4f2d-a24b-0b036fcd039e.png | сгенерирован, на утверждение владельцем |
+| `bg_courtroom` | `76f4338d-ff57-467d-90b0-6f8e5abdf9d4` | https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175608_76f4338d-ff57-467d-90b0-6f8e5abdf9d4.png | сгенерирован, на утверждение владельцем |
+| `bg_office_now` | `a51a359f-26a0-4c80-b805-e49751eb9224` | https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175719_a51a359f-26a0-4c80-b805-e49751eb9224.png | сгенерирован, на утверждение владельцем |
+| `bg_stairwell` | `64969bdd-a1b4-4296-815d-6987b5010aa7` | https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175718_64969bdd-a1b4-4296-815d-6987b5010aa7.png | сгенерирован, на утверждение владельцем |
+| `bg_notary_office` | `a73221be-7326-4dc5-b8ef-16fbdc83000e` | https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175718_a73221be-7326-4dc5-b8ef-16fbdc83000e.png | сгенерирован, на утверждение владельцем |
+| `bg_zhek` | `16313ee9-1a71-499f-93f8-71f9544a620d` | https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175827_16313ee9-1a71-499f-93f8-71f9544a620d.png | сгенерирован, на утверждение владельцем |
+| `bg_street_day` | `8602f470-a138-4fdb-9e47-7941f832509d` | https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175827_8602f470-a138-4fdb-9e47-7941f832509d.png | сгенерирован, на утверждение владельцем |
+| `bg_murashov_flat` | `6fd9f454-b7e5-41cc-88f7-1b5c6f9576be` | https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175827_6fd9f454-b7e5-41cc-88f7-1b5c6f9576be.png | сгенерирован, на утверждение владельцем |
+
+Итого 14 кредитов + 0,25 за тест. Следующий шаг после утверждения: конвертация в webp q80 1920×1080
+по путям из `assets.backgrounds` эпизода; отклонённые — перегенерация 2 вариантами (при необходимости
+quality `high`, 2,75 кредита). Дальше: 5 CG (16:9) и 9 персонажей (базовый кадр + выражения).
