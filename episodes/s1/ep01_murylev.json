@@ -3040,13 +3040,13 @@
         {
           "do": "narrate",
           "key": "ep01.s24.l001",
-          "style": "voiceover"
+          "style": "voiceover",
+          "when": "notary_pressed"
         },
         {
           "do": "narrate",
           "key": "ep01.s24.l002",
-          "style": "voiceover",
-          "when": "notary_pressed"
+          "style": "voiceover"
         },
         {
           "do": "show",
@@ -3157,6 +3157,20 @@
           "do": "say",
           "who": "expert",
           "key": "ep01.s24.l017",
+          "expression": "neutral",
+          "when": "docs_first"
+        },
+        {
+          "do": "say",
+          "who": "expert",
+          "key": "ep01.s24.l018",
+          "expression": "neutral",
+          "when": "!docs_first"
+        },
+        {
+          "do": "say",
+          "who": "expert",
+          "key": "ep01.s24.l019",
           "expression": "neutral"
         },
         {
@@ -4362,31 +4376,37 @@
         },
         {
           "do": "say",
-          "who": "oper",
+          "who": "sledak",
           "key": "ep01.s32.l006",
+          "expression": "firm"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s32.l007",
           "expression": "neutral"
         },
         {
           "do": "say",
           "who": "expert",
-          "key": "ep01.s32.l007",
+          "key": "ep01.s32.l008",
           "expression": "focused"
         },
         {
           "do": "say",
           "who": "sledak",
-          "key": "ep01.s32.l008",
+          "key": "ep01.s32.l009",
           "expression": "firm"
         },
         {
           "do": "narrate",
-          "key": "ep01.s32.l009",
+          "key": "ep01.s32.l010",
           "style": "inner",
           "when": "buyer_detained"
         },
         {
           "do": "narrate",
-          "key": "ep01.s32.l010",
+          "key": "ep01.s32.l011",
           "style": "inner",
           "when": "witness_safe"
         },
