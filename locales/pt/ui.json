@@ -66,5 +66,9 @@
   "ui.common.ok": "",
   "ui.common.cancel": "",
   "ui.common.back": "",
-  "ui.common.next": ""
+  "ui.common.next": "",
+  "ui.settings.camera_fx": "Efeitos de câmera",
+  "ui.settings.camera_fx_off": "Desligado",
+  "ui.settings.camera_fx_low": "Leve",
+  "ui.settings.camera_fx_high": "Forte"
 }

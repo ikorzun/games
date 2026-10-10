@@ -66,5 +66,9 @@
   "ui.common.ok": "ОК",
   "ui.common.cancel": "Отмена",
   "ui.common.back": "Назад",
-  "ui.common.next": "Далее"
+  "ui.common.next": "Далее",
+  "ui.settings.camera_fx": "Эффекты камеры",
+  "ui.settings.camera_fx_off": "Выкл",
+  "ui.settings.camera_fx_low": "Слабо",
+  "ui.settings.camera_fx_high": "Сильно"
 }
