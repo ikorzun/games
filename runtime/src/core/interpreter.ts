@@ -1,0 +1,720 @@
+/**
+ * Интерпретатор шагов эпизода (docs/architecture/06-engine-and-pipeline.md §5).
+ *
+ * Один `switch` по `step.do`; сцена исполняется до терминального шага; переходы между
+ * сценами — только через jump / branch / choice / minigame.outcomes / end.
+ * Условия `when` вычисляются грамматикой expr.ts (порт tools/vnexpr.py).
+ *
+ * Интерпретатор — «тянущий» и детерминированный, без таймеров, DOM и промисов:
+ *
+ *   const { events, pending } = interp.pump();   // выполнить неблокирующие шаги до ожидания
+ *   … показать events, затем pending …
+ *   interp.continue() | interp.choose(id) | interp.finishMinigame(result);
+ *
+ * Поэтому один и тот же код ведёт игру в браузере, автопилот `window.__vn.autoplay` и
+ * тесты, которые обходят весь граф эпизода. Всё, что видно на сцене, хранится в `view`
+ * (сериализуемый снимок), а не в графике: так работают сейвы и откат.
+ */
+import { evalCondition } from './expr';
+import { applyEffects, cloneJson, createInitialState, envOf, setVariable } from './state';
+import { STAGE_FILTERS } from './types';
+import type {
+  AdBreakPending,
+  Block,
+  CaptionStyle,
+  Character,
+  ChoicePending,
+  DocumentPending,
+  Ending,
+  EngineEvent,
+  Episode,
+  FxKind,
+  GameState,
+  HoldPending,
+  LinePending,
+  MinigameDef,
+  MinigameOutcomeKind,
+  MinigameResult,
+  Outcome,
+  Pending,
+  PumpResult,
+  Scene,
+  Snapshot,
+  SpriteView,
+  StageFilter,
+  Step,
+  TransitionKind,
+  Value,
+  ViewState,
+} from './types';
+
+export class EngineError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'EngineError';
+  }
+}
+
+/** Титры, которые висят поверх сцены и не останавливают сценарий. */
+const OVERLAY_CAPTIONS: ReadonlySet<CaptionStyle> = new Set<CaptionStyle>(['date_stamp', 'location', 'lower_third']);
+
+export const DEFAULT_CAPTION_HOLD_MS: Readonly<Record<CaptionStyle, number>> = {
+  date_stamp: 3500,
+  location: 3500,
+  lower_third: 4500,
+  chapter: 3500,
+  fact: 4000,
+};
+
+export const DEFAULT_FX_MS: Readonly<Record<FxKind, number>> = {
+  fade_out: 700,
+  fade_in: 700,
+  flash: 250,
+  shake: 500,
+  vhs_glitch: 500,
+  tracking_noise: 900,
+  freeze_frame: 1200,
+  zoom_in: 1200,
+  slow_motion: 1500,
+  black_hold: 1000,
+  static_tv: 800,
+  rewind: 900,
+};
+
+/** Предохранитель от бесконечных неблокирующих циклов (например, jump сам в себя). */
+const MAX_NONBLOCKING_STEPS = 5000;
+
+export interface InterpreterOptions {
+  /** Глобальные переменные сезона, перенесённые из предыдущих эпизодов. */
+  carriedGlobals?: Readonly<Record<string, Value>>;
+  /** Приёмник некритичных замечаний о контенте (по умолчанию — console.warn). */
+  warn?: (message: string) => void;
+}
+
+export interface MinigameResolution {
+  /** Что сообщила мини-игра. */
+  result: MinigameResult;
+  /** Во что результат превратился после skip_counts_as и запасных исходов. */
+  counted: MinigameOutcomeKind;
+  goto: string;
+}
+
+export class Interpreter {
+  readonly episode: Episode;
+
+  private readonly warn: (message: string) => void;
+  private readonly carriedGlobals: Readonly<Record<string, Value>>;
+  private readonly scenes: Readonly<Record<string, Scene>>;
+  private readonly blocks = new Map<string, Block>();
+  private readonly blockList: readonly Block[];
+  private readonly cast = new Map<string, Character>();
+  private readonly minigames: Readonly<Record<string, MinigameDef>>;
+  private readonly endings = new Map<string, Ending>();
+  private readonly archiveIds = new Set<string>();
+
+  private _state: GameState | null = null;
+  private _view: ViewState | null = null;
+  private queue: EngineEvent[] = [];
+  private current: Pending | null = null;
+  private adBlock: string | null = null;
+  private ended = false;
+
+  constructor(episode: Episode, options: InterpreterOptions = {}) {
+    this.episode = episode;
+    this.carriedGlobals = options.carriedGlobals ?? {};
+    this.warn = options.warn ?? ((m) => console.warn(`[engine] ${m}`));
+    this.scenes = episode.scenes;
+    this.blockList = episode.blocks;
+    for (const b of episode.blocks) this.blocks.set(b.id, b);
+    for (const c of episode.cast) this.cast.set(c.id, c);
+    this.minigames = episode.minigames ?? {};
+    for (const e of episode.endings) this.endings.set(e.id, e);
+    for (const a of episode.archive_items ?? []) this.archiveIds.add(a.id);
+  }
+
+  // ───────────────────────────── доступ к состоянию ─────────────────────────────
+
+  get state(): GameState {
+    if (!this._state) throw new EngineError('интерпретатор не запущен: вызовите start() или restore()');
+    return this._state;
+  }
+
+  get view(): ViewState {
+    if (!this._view) throw new EngineError('интерпретатор не запущен: вызовите start() или restore()');
+    return this._view;
+  }
+
+  get started(): boolean {
+    return this._state !== null;
+  }
+
+  get isEnded(): boolean {
+    return this.ended;
+  }
+
+  get pending(): Pending | null {
+    return this.current;
+  }
+
+  character(id: string): Character | undefined {
+    return this.cast.get(id);
+  }
+
+  scene(id: string): Scene | undefined {
+    return this.scenes[id];
+  }
+
+  block(id: string): Block | undefined {
+    return this.blocks.get(id);
+  }
+
+  /** Переменные эпизода + глобальные для вычисления условий (мини-игры, UI). */
+  env(): Record<string, Value> {
+    return envOf(this.state);
+  }
+
+  test(expr: string): boolean {
+    return evalCondition(expr, envOf(this.state));
+  }
+
+  // ───────────────────────────── жизненный цикл ─────────────────────────────
+
+  /** Новая партия с первой сцены первого блока. */
+  start(): void {
+    const first = this.blockList[0];
+    if (!first) throw new EngineError('в эпизоде нет блоков');
+    this._state = createInitialState(this.episode, first.entry_scene, this.carriedGlobals);
+    this._view = null;
+    this.queue = [];
+    this.current = null;
+    this.adBlock = null;
+    this.ended = false;
+    this.enterScene(first.entry_scene, { reason: 'start' });
+  }
+
+  snapshot(): Snapshot {
+    return { state: cloneJson(this.state), view: cloneJson(this.view) };
+  }
+
+  /** Восстановить партию из снимка (загрузка сейва, откат). События и ожидания сбрасываются. */
+  restore(snap: Snapshot): void {
+    if (snap.state.episode_id !== this.episode.id) {
+      throw new EngineError(`снимок от другого эпизода: ${snap.state.episode_id}`);
+    }
+    const scene = this.scenes[snap.state.scene_id];
+    if (!scene) throw new EngineError(`в снимке неизвестная сцена: ${snap.state.scene_id}`);
+    if (snap.state.step_index < 0 || snap.state.step_index >= scene.steps.length) {
+      throw new EngineError(`в снимке шаг ${snap.state.step_index} вне сцены ${scene.id}`);
+    }
+    this._state = cloneJson(snap.state);
+    this._view = cloneJson(snap.view);
+    this.queue = [];
+    this.current = null;
+    this.adBlock = null;
+    this.ended = false;
+  }
+
+  /** Отладка: принудительный переход в сцену без проверок блока, рекламы и автосейва. */
+  jumpTo(sceneId: string): void {
+    if (!this._state) this.start();
+    this.current = null;
+    this.adBlock = null;
+    this.ended = false;
+    this.enterScene(sceneId, { reason: 'debug' });
+  }
+
+  /** Отладка: записать переменную (с проверкой типа и границ). */
+  setVar(name: string, value: Value): void {
+    setVariable(this.state, this.episode, name, value);
+  }
+
+  // ───────────────────────────── основной цикл ─────────────────────────────
+
+  /**
+   * Выполнить неблокирующие шаги и вернуть накопленные события вместе с ожиданием, на которое
+   * должен ответить интерфейс. Повторный вызов без ответа возвращает то же ожидание
+   * (удобно для перерисовки после смены языка).
+   */
+  pump(): PumpResult {
+    if (!this._state) throw new EngineError('интерпретатор не запущен: вызовите start() или restore()');
+    if (this.current) return { events: this.flush(), pending: this.current };
+
+    for (let guard = 0; guard < MAX_NONBLOCKING_STEPS; guard++) {
+      if (this.adBlock !== null) {
+        const ad: AdBreakPending = { kind: 'ad_break', block: this.adBlock };
+        this.adBlock = null;
+        return this.stop(ad);
+      }
+      const step = this.currentStep();
+      const guardExpr = (step as { when?: string }).when;
+      if (guardExpr !== undefined && !this.testAt(guardExpr, step)) {
+        this.state.step_index += 1;
+        continue;
+      }
+      const pending = this.exec(step);
+      if (pending) return this.stop(pending);
+    }
+    throw new EngineError(
+      `сцена ${this.state.scene_id}: более ${MAX_NONBLOCKING_STEPS} неблокирующих шагов подряд — вероятно, бесконечный цикл`,
+    );
+  }
+
+  /** Ответ на ожидания line / hold / document / ad_break. */
+  continue(): void {
+    const p = this.current;
+    if (!p) throw new EngineError('continue(): нет ожидающего шага');
+    switch (p.kind) {
+      case 'line':
+        this.state.step_index += 1;
+        this.afterLine();
+        break;
+      case 'hold':
+      case 'document':
+        this.state.step_index += 1;
+        break;
+      case 'ad_break':
+        break;
+      default:
+        throw new EngineError(`continue() неприменим к ожиданию «${p.kind}»`);
+    }
+    this.current = null;
+  }
+
+  /** Ответ на ожидание choice. */
+  choose(optionId: string): void {
+    const p = this.current;
+    if (!p || p.kind !== 'choice') throw new EngineError('choose(): сейчас нет выбора');
+    const shown = p.options.find((o) => o.id === optionId);
+    if (!shown) throw new EngineError(`выбор ${p.id}: нет опции ${optionId}`);
+    if (!shown.enabled) throw new EngineError(`выбор ${p.id}: опция ${optionId} недоступна`);
+    const step = this.currentStep();
+    if (step.do !== 'choice') throw new EngineError('choose(): текущий шаг не choice');
+    const option = step.options.find((o) => o.id === optionId);
+    if (!option) throw new EngineError(`выбор ${p.id}: нет опции ${optionId}`);
+
+    applyEffects(this.state, this.episode, option.effects);
+    if (p.remember) {
+      this.state.journal.push({
+        choice: p.id,
+        option: option.id,
+        scene: this.state.scene_id,
+        ...(step.kind ? { kind: step.kind } : {}),
+        ...(step.prompt_key ? { prompt_key: step.prompt_key } : {}),
+        key: option.key,
+      });
+    }
+    this.current = null;
+    this.enterScene(option.goto, { reason: 'goto' });
+    this.queue.push({ t: 'checkpoint', reason: 'choice' });
+  }
+
+  /** Ответ на ожидание minigame. `skipped` маппится в `skip.skip_counts_as` (по умолчанию partial). */
+  finishMinigame(result: MinigameResult): MinigameResolution {
+    const p = this.current;
+    if (!p || p.kind !== 'minigame') throw new EngineError('finishMinigame(): сейчас нет мини-игры');
+    const def = p.def;
+    if (result === 'skipped' && !def.skip.allowed) {
+      throw new EngineError(`мини-игра ${def.id}: пропуск запрещён (skip.allowed=false)`);
+    }
+    const counted: MinigameOutcomeKind = result === 'skipped' ? (def.skip.skip_counts_as ?? 'partial') : result;
+    // partial в outcomes необязателен; без него частичный результат считается неудачей.
+    const outcome: Outcome = def.outcomes[counted] ?? def.outcomes.fail;
+    applyEffects(this.state, this.episode, outcome.effects);
+    if (outcome.archive_unlock) this.unlock(outcome.archive_unlock, true);
+    this.current = null;
+    this.enterScene(outcome.goto, { reason: 'goto' });
+    this.queue.push({ t: 'checkpoint', reason: 'minigame' });
+    return { result, counted, goto: outcome.goto };
+  }
+
+  // ───────────────────────────── внутренности ─────────────────────────────
+
+  private flush(): EngineEvent[] {
+    const out = this.queue;
+    this.queue = [];
+    return out;
+  }
+
+  private stop(pending: Pending): PumpResult {
+    this.current = pending;
+    return { events: this.flush(), pending };
+  }
+
+  private currentScene(): Scene {
+    const scene = this.scenes[this.state.scene_id];
+    if (!scene) throw new EngineError(`неизвестная сцена: ${this.state.scene_id}`);
+    return scene;
+  }
+
+  private currentStep(): Step {
+    const scene = this.currentScene();
+    const step = scene.steps[this.state.step_index];
+    if (!step) {
+      throw new EngineError(
+        `сцена ${scene.id}: шаги закончились без перехода (шаг ${this.state.step_index}); сцена должна заканчиваться jump/branch/choice/minigame/end`,
+      );
+    }
+    return step;
+  }
+
+  private testAt(expr: string, step: Step): boolean {
+    try {
+      return evalCondition(expr, envOf(this.state));
+    } catch (e) {
+      throw new EngineError(
+        `сцена ${this.state.scene_id}, шаг ${this.state.step_index} (${step.do}): условие «${expr}»: ${(e as Error).message}`,
+      );
+    }
+  }
+
+  private emit(ev: EngineEvent): void {
+    this.queue.push(ev);
+  }
+
+  private afterLine(): void {
+    const view = this.view;
+    if (view.cg !== null && view.cg_hide_after) {
+      view.cg = null;
+      this.emit({ t: 'cg_hide', transition: 'fade' });
+    }
+  }
+
+  private nextEnabledBlock(after: Block): Block | undefined {
+    const i = this.blockList.findIndex((b) => b.id === after.id);
+    for (let k = i + 1; k < this.blockList.length; k++) {
+      const b = this.blockList[k];
+      if (b && (b.when === undefined || this.test(b.when))) return b;
+    }
+    return undefined;
+  }
+
+  private enterScene(
+    sceneId: string,
+    opts: { reason: 'start' | 'goto' | 'debug'; transition?: TransitionKind },
+  ): void {
+    const scene = this.scenes[sceneId];
+    if (!scene) throw new EngineError(`переход на несуществующую сцену: ${sceneId}`);
+    const block = this.blocks.get(scene.block);
+    if (!block) throw new EngineError(`сцена ${sceneId}: неизвестный блок ${scene.block}`);
+    const prev = this._view;
+    const newBlock = prev === null || prev.block !== block.id;
+
+    // Структурное ветвление: блок с `when` включается, только если условие истинно.
+    // Проверяется при входе в его первую сцену из другого блока; выключенный блок пропускается.
+    if (newBlock && opts.reason === 'goto' && sceneId === block.entry_scene && block.when !== undefined) {
+      if (!this.test(block.when)) {
+        const next = this.nextEnabledBlock(block);
+        if (!next) throw new EngineError(`блок ${block.id} выключен условием «${block.when}», а следующего включённого блока нет`);
+        this.warn(`блок ${block.id} пропущен (when: ${block.when}); продолжаем с блока ${next.id}`);
+        this.enterScene(next.entry_scene, opts);
+        return;
+      }
+    }
+
+    const st = scene.stage;
+    const view: ViewState = {
+      scene: scene.id,
+      block: block.id,
+      presentation: block.presentation,
+      bg: st.bg,
+      filter: st.filter ?? null,
+      time_of_day: st.time_of_day ?? null,
+      weather: st.weather ?? null,
+      letterbox: st.letterbox ?? false,
+      sprites: [],
+      // CG переживает смену сцены внутри блока (кадр задержания держится поверх s16 → s16a/b),
+      // но не выходит за границу блока.
+      cg: prev && !newBlock ? prev.cg : null,
+      cg_hide_after: prev && !newBlock ? prev.cg_hide_after : true,
+      music: prev?.music ?? null,
+      ambient: prev?.ambient ?? null,
+      speaker: null,
+    };
+
+    if (prev?.cg && newBlock) this.emit({ t: 'cg_hide', transition: 'fade' });
+
+    let transition: TransitionKind;
+    if (opts.transition) transition = opts.transition;
+    else if (prev === null || newBlock) transition = 'fade';
+    else transition = prev.bg !== view.bg ? 'dissolve' : 'cut';
+    if (prev && transition === 'cut' && prev.presentation !== view.presentation) transition = 'fade';
+
+    // Музыка/эмбиент сцены (или блока при входе в него) включаются при входе; без указания — продолжают играть.
+    const music = scene.music ?? (newBlock ? block.music : undefined);
+    const startMusic = music !== undefined && music !== view.music ? music : null;
+    if (startMusic !== null) view.music = startMusic;
+    const startAmbient = scene.ambient !== undefined && scene.ambient !== view.ambient ? scene.ambient : null;
+    if (startAmbient !== null) view.ambient = startAmbient;
+
+    const state = this.state;
+    state.scene_id = scene.id;
+    state.step_index = 0;
+    this._view = view;
+    this.emit({ t: 'scene', view: cloneJson(view), transition, newBlock, first: prev === null });
+    if (startMusic !== null) {
+      this.emit({ t: 'audio', kind: 'music', id: startMusic, fade_ms: 800, loop: true, volume: 1 });
+    }
+    if (startAmbient !== null) {
+      this.emit({ t: 'audio', kind: 'ambient', id: startAmbient, fade_ms: 800, loop: true, volume: 1 });
+    }
+
+    if (newBlock && opts.reason !== 'debug') {
+      if (block.autosave !== false) this.emit({ t: 'checkpoint', reason: 'block' });
+      // Реклама — только интерпретатором и только на блоках с ad_break_allowed; не перед первым блоком.
+      if (block.ad_break_allowed && opts.reason !== 'start') this.adBlock = block.id;
+    }
+  }
+
+  private unlock(item: string, toast: boolean): void {
+    if (!this.archiveIds.has(item)) this.warn(`archive item ${item} не объявлен в archive_items`);
+    const archive = this.state.archive;
+    if (archive.includes(item)) return;
+    archive.push(item);
+    this.emit({ t: 'archive', item, toast });
+  }
+
+  private asFilter(value: string): StageFilter | undefined {
+    if ((STAGE_FILTERS as readonly string[]).includes(value)) return value as StageFilter;
+    this.warn(`неизвестный фильтр «${value}» в шаге bg — игнорируется`);
+    return undefined;
+  }
+
+  private sprite(who: string): SpriteView | undefined {
+    return this.view.sprites.find((s) => s.who === who);
+  }
+
+  /** Выполнить один шаг. Возвращает ожидание для блокирующих шагов, иначе null. */
+  private exec(step: Step): Pending | null {
+    const state = this.state;
+    const view = this.view;
+    switch (step.do) {
+      case 'say': {
+        this.applySayToSprite(step.who, step.expression, step.pose, step.position);
+        view.speaker = step.who;
+        this.emit({ t: 'speaker', who: step.who });
+        const p: LinePending = {
+          kind: 'line',
+          style: 'say',
+          who: step.who,
+          key: step.key,
+          expression: step.expression ?? this.sprite(step.who)?.expression ?? null,
+          narrate_style: null,
+          voice: step.voice ?? null,
+          scene: state.scene_id,
+          index: state.step_index,
+        };
+        return p;
+      }
+      case 'narrate': {
+        view.speaker = null;
+        this.emit({ t: 'speaker', who: null });
+        const p: LinePending = {
+          kind: 'line',
+          style: 'narrate',
+          who: null,
+          key: step.key,
+          expression: null,
+          narrate_style: step.style ?? 'voiceover',
+          voice: step.voice ?? null,
+          scene: state.scene_id,
+          index: state.step_index,
+        };
+        return p;
+      }
+      case 'caption': {
+        const hold = step.hold_ms ?? DEFAULT_CAPTION_HOLD_MS[step.style];
+        if (OVERLAY_CAPTIONS.has(step.style)) {
+          this.emit({ t: 'caption', key: step.key, style: step.style, hold_ms: hold });
+          state.step_index += 1;
+          return null;
+        }
+        // chapter / fact держат паузу: иначе следующий jump/end сразу перекроет титр.
+        const p: HoldPending = { kind: 'hold', reason: 'caption', ms: hold, caption: { key: step.key, style: step.style } };
+        return p;
+      }
+      case 'show': {
+        const prev = this.sprite(step.who);
+        const sprite: SpriteView = {
+          who: step.who,
+          expression: step.expression ?? prev?.expression ?? null,
+          pose: step.pose ?? prev?.pose ?? null,
+          position: step.position ?? prev?.position ?? 'center',
+          silhouette: step.silhouette ?? false,
+        };
+        if (prev) view.sprites[view.sprites.indexOf(prev)] = sprite;
+        else view.sprites.push(sprite);
+        this.emit({ t: 'show', sprite: { ...sprite }, existing: prev !== undefined, transition: step.transition ?? 'dissolve' });
+        state.step_index += 1;
+        return null;
+      }
+      case 'hide': {
+        view.sprites = view.sprites.filter((s) => s.who !== step.who);
+        if (view.speaker === step.who) view.speaker = null;
+        this.emit({ t: 'hide', who: step.who, transition: step.transition ?? 'dissolve' });
+        state.step_index += 1;
+        return null;
+      }
+      case 'bg': {
+        if (view.cg !== null) {
+          view.cg = null;
+          this.emit({ t: 'cg_hide', transition: 'fade' });
+        }
+        view.bg = step.bg;
+        if (step.filter !== undefined) {
+          const f = this.asFilter(step.filter);
+          if (f !== undefined) view.filter = f;
+        }
+        this.emit({ t: 'bg', bg: step.bg, filter: view.filter, transition: step.transition ?? 'fade' });
+        state.step_index += 1;
+        return null;
+      }
+      case 'cg': {
+        view.cg = step.cg;
+        view.cg_hide_after = step.hide_after ?? true;
+        this.emit({ t: 'cg', cg: step.cg, transition: step.transition ?? 'fade' });
+        state.step_index += 1;
+        return null;
+      }
+      case 'document': {
+        if (step.adds_to_archive) this.unlock(step.adds_to_archive, true);
+        const p: DocumentPending = {
+          kind: 'document',
+          doc: step.doc,
+          text_key: step.text_key ?? null,
+          zoomable: step.zoomable ?? true,
+          adds_to_archive: step.adds_to_archive ?? null,
+        };
+        return p;
+      }
+      case 'music':
+      case 'ambient':
+      case 'sfx': {
+        if (!step.id) {
+          this.warn(`сцена ${state.scene_id}: шаг ${step.do} без id — пропущен`);
+        } else {
+          if (step.do === 'music') view.music = step.id;
+          if (step.do === 'ambient') view.ambient = step.id;
+          this.emit({
+            t: 'audio',
+            kind: step.do,
+            id: step.id,
+            fade_ms: step.fade_ms ?? (step.do === 'sfx' ? 0 : 600),
+            loop: step.loop ?? step.do !== 'sfx',
+            volume: step.volume ?? 1,
+          });
+        }
+        state.step_index += 1;
+        return null;
+      }
+      case 'stop_music':
+      case 'stop_ambient': {
+        if (step.do === 'stop_music') view.music = null;
+        else view.ambient = null;
+        this.emit({ t: 'audio', kind: step.do, id: null, fade_ms: step.fade_ms ?? 600, loop: false, volume: 1 });
+        state.step_index += 1;
+        return null;
+      }
+      case 'fx': {
+        const p: HoldPending = {
+          kind: 'hold',
+          reason: 'fx',
+          ms: step.ms ?? DEFAULT_FX_MS[step.fx],
+          fx: { fx: step.fx, intensity: step.intensity ?? 1 },
+        };
+        return p;
+      }
+      case 'choice': {
+        let options = step.options.map((o) => ({
+          id: o.id,
+          key: o.key,
+          enabled: o.when === undefined ? true : this.testAt(o.when, step),
+          hidden: o.hidden_when_false === true,
+        }));
+        options = options.filter((o) => o.enabled || !o.hidden);
+        if (options.length === 0 || options.every((o) => !o.enabled)) {
+          // Ни одной доступной опции — ошибка контента; не оставляем игрока в тупике.
+          this.warn(`выбор ${step.id}: нет доступных опций — показываем все`);
+          options = step.options.map((o) => ({ id: o.id, key: o.key, enabled: true, hidden: false }));
+        }
+        const p: ChoicePending = {
+          kind: 'choice',
+          id: step.id,
+          prompt_key: step.prompt_key ?? null,
+          choice_kind: step.kind ?? null,
+          timer_ms: step.timer_ms ?? null,
+          default_option: step.default_option ?? null,
+          remember: step.remember ?? true,
+          options: options.map(({ id, key, enabled }) => ({ id, key, enabled })),
+        };
+        return p;
+      }
+      case 'set': {
+        applyEffects(state, this.episode, step.effects);
+        state.step_index += 1;
+        return null;
+      }
+      case 'branch': {
+        let target = step.default;
+        for (const c of step.cases) {
+          if (this.testAt(c.when, step)) {
+            target = c.goto;
+            break;
+          }
+        }
+        this.enterScene(target, { reason: 'goto' });
+        return null;
+      }
+      case 'jump': {
+        this.enterScene(step.scene, { reason: 'goto', ...(step.transition ? { transition: step.transition } : {}) });
+        return null;
+      }
+      case 'minigame': {
+        const def = this.minigames[step.minigame];
+        if (!def) throw new EngineError(`сцена ${state.scene_id}: мини-игра ${step.minigame} не объявлена`);
+        return { kind: 'minigame', def, intro_key: step.intro_key ?? null };
+      }
+      case 'archive_unlock': {
+        this.unlock(step.item, step.toast ?? true);
+        state.step_index += 1;
+        return null;
+      }
+      case 'end': {
+        const ending = this.endings.get(step.ending);
+        if (!ending) throw new EngineError(`сцена ${state.scene_id}: концовка ${step.ending} не объявлена`);
+        for (const id of ending.unlocks ?? []) this.unlock(id, false);
+        this.ended = true;
+        return { kind: 'end', ending };
+      }
+    }
+  }
+
+  /** `say` может заодно сменить выражение/позу/позицию спрайта говорящего. */
+  private applySayToSprite(who: string, expression?: string, pose?: string, position?: SpriteView['position']): void {
+    if (expression === undefined && pose === undefined && position === undefined) return;
+    const view = this.view;
+    const prev = this.sprite(who);
+    if (!prev) {
+      // Говорящего нет на сцене: показываем, только если сценарист явно указал позицию.
+      if (position === undefined) return;
+      const sprite: SpriteView = {
+        who,
+        expression: expression ?? null,
+        pose: pose ?? null,
+        position,
+        silhouette: false,
+      };
+      view.sprites.push(sprite);
+      this.emit({ t: 'show', sprite: { ...sprite }, existing: false, transition: 'dissolve' });
+      return;
+    }
+    const next: SpriteView = {
+      ...prev,
+      expression: expression ?? prev.expression,
+      pose: pose ?? prev.pose,
+      position: position ?? prev.position,
+    };
+    if (next.expression === prev.expression && next.pose === prev.pose && next.position === prev.position) return;
+    view.sprites[view.sprites.indexOf(prev)] = next;
+    this.emit({ t: 'show', sprite: { ...next }, existing: true, transition: 'cut' });
+  }
+}
