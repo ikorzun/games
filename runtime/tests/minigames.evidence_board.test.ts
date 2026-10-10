@@ -1127,17 +1127,17 @@ describe.skipIf(!hasRepoContent())('mg_board из ep01 на настоящих �
     expect(text(dom, '.mg-eb__intro')).toBe(ru['ep01.mg_board.intro']);
   });
 
-  it('все пять верных связей из конфига → success; приманка buyer–attorney и связь с Зоей — ошибки', () => {
+  it('все шесть верных связей из конфига → success; приманка buyer–attorney и лишняя связь Зои — ошибки', () => {
     const { dom, hs } = mountReal();
     const cfg = def.config as { required_links: string[][]; decoy_links: string[][]; max_wrong_links: number };
-    expect(cfg.required_links).toHaveLength(5);
+    expect(cfg.required_links).toHaveLength(6);
     link(dom, 'buyer', 'attorney'); // приманка
-    link(dom, 'zoya', 'deal_1'); // у узла «Зоя» нет ни одной верной связи
+    link(dom, 'zoya', 'deal_2'); // Зоя связана только со своей сделкой № 1
     expect(used(dom)).toBe(2);
     expect(cfg.max_wrong_links).toBeGreaterThanOrEqual(2);
     for (const [a, b] of cfg.required_links) link(dom, a as string, b as string);
     expect(text(dom, '.mg-eb__verdict')).toBe(ru['ui.minigame.success']);
-    expect(text(dom, '.mg-eb__summary')).toBe('Верных связей: 5 из 5. Ошибок: 2.');
+    expect(text(dom, '.mg-eb__summary')).toBe('Верных связей: 6 из 6. Ошибок: 2.');
     done(dom);
     expect(hs.results).toEqual(['success']);
   });
@@ -1145,12 +1145,12 @@ describe.skipIf(!hasRepoContent())('mg_board из ep01 на настоящих �
   it('частичный исход (3 верных связи, затем лимит ошибок) → partial; без верных связей → fail', () => {
     const cfg = def.config as { required_links: string[][]; max_wrong_links: number };
     const wrongPairs: Array<[string, string]> = [
-      ['zoya', 'deal_1'],
       ['zoya', 'deal_2'],
       ['zoya', 'deal_3'],
       ['zoya', 'volga_car'],
       ['zoya', 'buyer'],
       ['zoya', 'attorney'],
+      ['buyer', 'notary'],
     ];
     const partial = mountReal();
     for (const [a, b] of cfg.required_links.slice(0, 3)) link(partial.dom, a as string, b as string);
@@ -1170,9 +1170,9 @@ describe.skipIf(!hasRepoContent())('mg_board из ep01 на настоящих �
     const after = def.skip.after_fails ?? 0;
     expect(after).toBeGreaterThan(0);
     const wrong: Array<[string, string]> = [
-      ['zoya', 'deal_1'],
       ['zoya', 'deal_2'],
       ['zoya', 'deal_3'],
+      ['zoya', 'volga_car'],
     ];
     for (let i = 0; i < after; i++) {
       expect(dom.querySelector('.is-skip')).toBeNull();
