@@ -282,6 +282,7 @@ export class App {
     const screen: SettingsScreen = new SettingsScreen({
       settings: () => this.d.saves.settings,
       reducedMotion: () => this.stage.camcorder.reducedMotion,
+      effectiveCameraFx: () => this.stage.camcorder.effectiveLevel,
       onChange: (patch) => this.updateSettings(patch),
       onLanguage: (lang) => void this.setLanguage(lang),
       onClose: () => this.kit.screens.close(screen),

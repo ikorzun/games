@@ -57,6 +57,8 @@ export interface VnDebugApi {
     setting: string;
     effective: string;
     reducedMotion: boolean;
+    /** Самозащита от слабого устройства выключила эффекты (меньше ≈ 20 к/с). */
+    degraded: boolean;
     running: boolean;
     rec: boolean;
     transform: string;
@@ -126,6 +128,7 @@ export function installDebug(app: App): VnDebugApi {
         setting: app.settings.cameraFx,
         effective: c.effectiveLevel,
         reducedMotion: c.reducedMotion,
+        degraded: c.degradedByPerformance,
         running: c.running,
         rec: app.stage.el.classList.contains('cam-rec'),
         transform: hand?.style.transform ?? '',

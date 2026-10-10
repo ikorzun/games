@@ -7,8 +7,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { grainAlphaMax, mulberry32 } from '../src/stage/camcorder';
 import type { CameraFx } from '../src/stage/camcorder';
-import { CamcorderLayer, NOISE_FPS, OVERLAY_WIDTH } from '../src/stage/camcorder_layer';
-import type { Overlay2D } from '../src/stage/camcorder_layer';
+import { CamcorderLayer, NOISE_FPS, OVERLAY_WIDTH, PERF, STEP_FPS } from '../src/stage/camcorder_layer';
+import type { DegradeInfo, Overlay2D } from '../src/stage/camcorder_layer';
 
 class FakeCtx implements Overlay2D {
   fillStyle: string | CanvasGradient | CanvasPattern = '';
@@ -35,7 +35,17 @@ class FakeCtx implements Overlay2D {
 
 const rigs: CamcorderLayer[] = [];
 
-function rig(init: { level?: CameraFx; reduced?: boolean } = {}) {
+interface RigInit {
+  level?: CameraFx;
+  reduced?: boolean;
+  /** По умолчанию в тестах кадр дрожания обновляется на каждый кадр rAF (без ограничения 30 Гц). */
+  stepFps?: number;
+  /** По умолчанию самозащита выключена: тесты крутят цикл на нереальных частотах. */
+  adaptive?: boolean;
+  onDegrade?: (i: DegradeInfo) => void;
+}
+
+function rig(init: RigInit = {}) {
   const stage = document.createElement('div');
   stage.className = 'vn-stage';
   const hand = document.createElement('div');
@@ -67,6 +77,9 @@ function rig(init: { level?: CameraFx; reduced?: boolean } = {}) {
     },
     isHidden: () => state.hidden,
     context: ctx,
+    stepFps: init.stepFps ?? Number.POSITIVE_INFINITY,
+    adaptive: init.adaptive ?? false,
+    ...(init.onDegrade ? { onDegrade: init.onDegrade } : {}),
   });
   rigs.push(layer);
   if (init.level) layer.setLevel(init.level);
@@ -341,6 +354,261 @@ describe('CamcorderLayer: canvas зерна и помех', () => {
     const settled = r.layer.lastFrame!;
     expect(Math.abs(settled.tx)).toBeLessThanOrEqual(1.2 + 1e-9);
     expect(settled.scale).toBeLessThanOrEqual(1.03 + 1e-9);
+  });
+});
+
+describe('CamcorderLayer: частота обновления кадра дрожания (30 Гц)', () => {
+  /** Сколько раз за `ms` модельных мс планировщик сделал шаг при rAF с периодом `period`. */
+  function stepsOver(period: number, ms: number, jitter = 0): number {
+    const r = rig({ stepFps: STEP_FPS });
+    const spy = vi.spyOn(r.layer.scheduler, 'step');
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    let t = 100;
+    for (let i = 0; t < 100 + ms; i++) {
+      r.tick(t);
+      t += period + (jitter && i % 2 ? jitter : -jitter);
+    }
+    return spy.mock.calls.length;
+  }
+
+  it('константа — 30 к/с: камкордер снимает 25–30 к/с, а не 60', () => {
+    expect(STEP_FPS).toBe(30);
+  });
+
+  it('на дисплее 60 Гц обновляется каждый второй кадр (≈ 30 в секунду), на 120 Гц — каждый четвёртый', () => {
+    expect(stepsOver(1000 / 60, 2000)).toBeGreaterThanOrEqual(58);
+    expect(stepsOver(1000 / 60, 2000)).toBeLessThanOrEqual(62);
+    expect(stepsOver(1000 / 120, 2000)).toBeGreaterThanOrEqual(58);
+    expect(stepsOver(1000 / 120, 2000)).toBeLessThanOrEqual(62);
+  });
+
+  it('неровный ритм rAF (16 / 17,4 мс) ритм обновлений не ломает: шаги идут через кадр, без «двойных» и пропущенных', () => {
+    const n = stepsOver(16.7, 3000, 0.7);
+    expect(n).toBeGreaterThanOrEqual(88);
+    expect(n).toBeLessThanOrEqual(92);
+  });
+
+  it('если браузер и так медленнее 30 к/с (20 или 24 к/с), шаг делается на каждом кадре — ничего не теряется', () => {
+    expect(stepsOver(50, 2000)).toBeGreaterThanOrEqual(39);
+    expect(stepsOver(1000 / 24, 2000)).toBeGreaterThanOrEqual(47);
+  });
+
+  it('первый кадр после запуска цикла рисуется сразу; трансформация и оверлей обновляются на одних и тех же кадрах', () => {
+    const r = rig({ stepFps: STEP_FPS });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    r.tick(1000);
+    expect(r.layer.lastFrame).not.toBeNull();
+    expect(r.hand.style.transform).not.toBe('');
+    const puts = r.ctx.puts;
+    r.tick(1016); // пропущенный кадр: ничего не меняется
+    expect(r.ctx.puts).toBe(puts);
+    const f = r.layer.lastFrame;
+    r.tick(1033);
+    expect(r.layer.lastFrame).not.toBe(f);
+  });
+
+  it('после паузы и возобновления цикла первый кадр тоже рисуется сразу', () => {
+    const r = rig({ stepFps: STEP_FPS });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    r.tick(1000);
+    r.layer.setPaused(true);
+    r.layer.setPaused(false);
+    const f = r.layer.lastFrame;
+    r.tick(1005); // всего 5 мс после предыдущего шага, но цикл новый
+    expect(r.layer.lastFrame).not.toBe(f);
+  });
+});
+
+describe('CamcorderLayer: самозащита от слабого устройства', () => {
+  /** Крутит цикл с периодом `period` мс от `from` до `to`. */
+  const frames = (r: ReturnType<typeof rig>, period: number, from: number, to: number): number => {
+    let t = from;
+    for (; t <= to; t += period) r.tick(t);
+    return t;
+  };
+
+  it('пороги: прогрев 2,5 с, окно 4 с, медленным считается интервал дольше 50 мс (< 20 к/с)', () => {
+    expect(PERF.warmupMs).toBe(2500);
+    expect(PERF.windowMs).toBe(4000);
+    expect(PERF.slowMs).toBe(50);
+    expect(1000 / PERF.slowMs).toBe(20);
+  });
+
+  it('стабильные 60 к/с, 30 к/с и «плохие» 25 к/с (40 мс) эффекты не выключают', () => {
+    for (const period of [16.7, 33.3, 40]) {
+      const r = rig({ adaptive: true, stepFps: STEP_FPS });
+      r.layer.setContext('reconstruction', 'vhs');
+      r.layer.setActive(true);
+      frames(r, period, 0, 30_000);
+      expect(r.layer.degradedByPerformance, `${period} мс`).toBe(false);
+      expect(r.layer.effectiveLevel).toBe('low');
+      expect(r.layer.running).toBe(true);
+    }
+  });
+
+  it('стабильно ≈ 12 к/с (80 мс): после прогрева и окна эффекты выключаются, цикл стоит, кадр без трансформации, об этом сообщается один раз', () => {
+    const seen: DegradeInfo[] = [];
+    const r = rig({ adaptive: true, onDegrade: (i) => seen.push(i) });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    frames(r, 80, 0, PERF.warmupMs + PERF.windowMs - 200);
+    expect(r.layer.degradedByPerformance).toBe(false); // окно ещё не набралось
+    frames(r, 80, PERF.warmupMs + PERF.windowMs - 200, PERF.warmupMs + PERF.windowMs + 800);
+    expect(r.layer.degradedByPerformance).toBe(true);
+    expect(r.layer.effectiveLevel).toBe('off');
+    expect(r.layer.running).toBe(false);
+    expect(r.queued()).toBe(0);
+    expect(r.hand.style.transform).toBe('');
+    expect(r.stage.classList.contains('cam-on')).toBe(false);
+    expect(r.stage.classList.contains('cam-rec')).toBe(false);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.fps).toBeGreaterThan(11);
+    expect(seen[0]!.fps).toBeLessThan(14);
+    expect(seen[0]!.avgMs).toBeGreaterThan(75);
+  });
+
+  it('по умолчанию сообщение — одна строка console.info (не warn и не error)', () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const r = rig({ adaptive: true });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    frames(r, 90, 0, 9000);
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(String(info.mock.calls[0]![0])).toMatch(/^\[camcorder\] \d+ к\/с: эффекты камеры выключены/);
+    expect(warn).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    info.mockRestore();
+    warn.mockRestore();
+    error.mockRestore();
+  });
+
+  it('прогрев: медленные кадры в первые 2,5 с (загрузка текстур) не считаются', () => {
+    const r = rig({ adaptive: true });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    const t = frames(r, 120, 0, PERF.warmupMs - 100); // тормозит только при входе
+    frames(r, 16.7, t, t + 20_000);
+    expect(r.layer.degradedByPerformance).toBe(false);
+  });
+
+  it('разовый длинный кадр (сборка мусора, сон вкладки) весит не больше hitchMs и защиту не включает', () => {
+    const r = rig({ adaptive: true });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    let t = frames(r, 16.7, 0, 6000);
+    for (let i = 0; i < 5; i++) {
+      t += 2500; // кадр вне вкладки
+      r.tick(t);
+      t = frames(r, 16.7, t + 16.7, t + 8000);
+    }
+    expect(r.layer.degradedByPerformance).toBe(false);
+  });
+
+  it('скрытая вкладка: после возврата измерение начинается заново (огромный интервал не засчитывается)', () => {
+    const r = rig({ adaptive: true });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    const t = frames(r, 16.7, 0, 8000);
+    r.state.hidden = true;
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(r.layer.running).toBe(false);
+    r.state.hidden = false;
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(r.layer.running).toBe(true);
+    frames(r, 16.7, t + 600_000, t + 600_000 + 12_000);
+    expect(r.layer.degradedByPerformance).toBe(false);
+  });
+
+  it('adaptive: false (автоматизация, тесты) — защита не срабатывает даже на 5 к/с', () => {
+    const r = rig({ adaptive: false });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    frames(r, 200, 0, 30_000);
+    expect(r.layer.degradedByPerformance).toBe(false);
+    expect(r.layer.running).toBe(true);
+  });
+
+  it('по умолчанию (опция не задана) защита включена, а под navigator.webdriver — выключена', () => {
+    const build = (): CamcorderLayer => {
+      const stage = document.createElement('div');
+      const hand = document.createElement('div');
+      const canvas = document.createElement('canvas');
+      let pending: Array<(ts: number) => void> = [];
+      const layer = new CamcorderLayer({
+        stage,
+        hand,
+        canvas,
+        rng: mulberry32(1),
+        raf: (cb) => (pending.push(cb), pending.length),
+        caf: () => undefined,
+        reducedMotion: () => false,
+        isHidden: () => false,
+        context: new FakeCtx(),
+        onDegrade: () => undefined,
+      });
+      rigs.push(layer);
+      layer.setContext('reconstruction', 'vhs');
+      layer.setActive(true);
+      for (let t = 0; t < 10_000; t += 100) {
+        const batch = pending;
+        pending = [];
+        for (const cb of batch) cb(t);
+      }
+      return layer;
+    };
+    expect(build().degradedByPerformance).toBe(true);
+    Object.defineProperty(navigator, 'webdriver', { configurable: true, get: () => true });
+    try {
+      expect(build().degradedByPerformance).toBe(false);
+    } finally {
+      delete (navigator as unknown as Record<string, unknown>).webdriver;
+    }
+  });
+
+  it('выбор игрока не теряется: пока защита держит «выкл», setLevel с прежним уровнем её не снимает, смена уровня или явный выбор — снимает', () => {
+    const r = rig({ adaptive: true, onDegrade: () => undefined });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    frames(r, 100, 0, 9000);
+    expect(r.layer.degradedByPerformance).toBe(true);
+    r.layer.setLevel('low'); // любая правка настроек вызывает это повторно
+    expect(r.layer.degradedByPerformance).toBe(true);
+    expect(r.layer.running).toBe(false);
+    r.layer.setLevel('low', true); // игрок сам нажал «Слабо»
+    expect(r.layer.degradedByPerformance).toBe(false);
+    expect(r.layer.effectiveLevel).toBe('low');
+    expect(r.layer.running).toBe(true);
+    // и снова защита, потом другой уровень
+    frames(r, 100, 20_000, 29_000);
+    expect(r.layer.degradedByPerformance).toBe(true);
+    r.layer.setLevel('high');
+    expect(r.layer.degradedByPerformance).toBe(false);
+    expect(r.layer.effectiveLevel).toBe('high');
+  });
+
+  it('после снятия защиты измерение идёт заново: прогрев и окно отсчитываются от нового запуска цикла', () => {
+    const r = rig({ adaptive: true, onDegrade: () => undefined });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    frames(r, 100, 0, 9000);
+    expect(r.layer.degradedByPerformance).toBe(true);
+    r.layer.setLevel('low', true);
+    // всё то же устройство, но кадры теперь быстрые
+    frames(r, 16.7, 100_000, 130_000);
+    expect(r.layer.degradedByPerformance).toBe(false);
+  });
+
+  it('prefers-reduced-motion имеет приоритет и не зависит от защиты: цикл не запускается вовсе', () => {
+    const r = rig({ adaptive: true, reduced: true });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    expect(r.layer.running).toBe(false);
+    expect(r.layer.degradedByPerformance).toBe(false);
   });
 });
 

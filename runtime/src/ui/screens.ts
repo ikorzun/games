@@ -6,7 +6,7 @@
 import { i18n, t } from '../core/i18n';
 import type { SaveFile } from '../core/saves';
 import { AUTO_DELAY_RANGE, CAMERA_FX_LEVELS, FONT_SCALE_RANGE } from '../core/settings';
-import type { Settings } from '../core/settings';
+import type { CameraFx, Settings } from '../core/settings';
 import { LANGS } from '../core/types';
 import type { ArchiveItem, Episode, GameState, Ending, Lang } from '../core/types';
 import type { LogEntry } from '../session';
