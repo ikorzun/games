@@ -42,6 +42,7 @@ const remoteUrl = opt('url', null);
 const wantMatrix = flag('matrix');
 const wantShots = !flag('no-shots');
 const requireAssets = flag('require-assets');
+const CPU_THROTTLE = Number(process.env.SMOKE_CPU_THROTTLE ?? '1') || 1;
 /** --only play,camera,bridge,matrix — запустить часть сценариев (для разработки). */
 const only = opt('only', null)?.split(',').map((x) => x.trim());
 const wants = (name) => !only || only.includes(name);
@@ -112,6 +113,8 @@ async function openPage(browser, baseUrl, query, ctxOpts = {}, seedStorage = nul
     }, seedStorage);
   }
   const page = await context.newPage();
+  // SMOKE_CPU_THROTTLE=6 — замедлить процессор страницы в N раз (как слабый раннер CI или старый телефон): проверка таймингов.
+  if (CPU_THROTTLE > 1) await (await context.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLE });
   const origin = new URL(baseUrl).origin;
   const log = { errors: [], warnings: [], external: [], failed: [] };
   page.on('console', (m) => {
@@ -258,7 +261,10 @@ async function scenarioCamera(browser, baseUrl) {
   await page.evaluate(() => window.__vn.settings({ textSpeed: 5, skipUnread: true }));
   await page.evaluate(() => window.__vn.start());
   await page.waitForFunction(() => window.__vn.pending()?.kind === 'line', null, { timeout: 15000 });
-  await sleep(900);
+  // Камкордер включается, когда показан первый кадр: Director сначала ждёт картинки блока и проводит переход.
+  // На раннере CI без GPU с настоящими 1920×1080 это дольше секунды — ждём сам цикл, а не фиксированную паузу.
+  await page.waitForFunction(() => window.__vn.camera().running, null, { polling: 100, timeout: 20000 }).catch(() => undefined);
+  await sleep(400);
 
   // Что должно быть нарисовано по файлам, которые реально есть в сборке. Оракул повторяет правила каталога (путь фона из
   // episode.assets, цепочка спрайта силуэт → выражение → neutral → base) и сверяется с тем, что показал рендерер (__vn.slots()).
