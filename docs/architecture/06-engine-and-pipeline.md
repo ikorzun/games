@@ -99,7 +99,8 @@ games/
 
 - **Интерпретатор шагов.** Один `switch` по `step.do`; каждая сцена исполняется до терминального
   шага; переходы между сценами — только через `jump/branch/choice/minigame.outcomes/end`.
-  Условия `when` вычисляются той же грамматикой, что в `tools/vnexpr.py`.
+  Условия `when` вычисляются той же грамматикой, что в `tools/vnexpr.py`. Поле `when` допустимо
+  на любом шаге (не только `say`/`narrate`): при ложном значении шаг пропускается целиком.
 - **Состояние** = `{ episode_id, scene_id, step_index, vars, globals, archive[], journal[] }`.
   Сейв — этот объект + `schema_version` + `content_version`; при загрузке — миграция по версии.
   На Playgama — `bridge.storage.set(['profile','progress','settings','archive'], [...])` одним вызовом.

@@ -214,7 +214,7 @@ def integrity(ep: dict, rep: Report) -> None:
             for c in step["cases"]:
                 for m in vnexpr.check(c["when"], variables):
                     rep.err(f"{where}.when: {m}")
-        if do in ("say", "narrate") and step.get("when"):
+        if step.get("when"):  # условие допустимо на любом шаге: ложное — шаг пропускается
             for m in vnexpr.check(step["when"], variables):
                 rep.err(f"{where}.when: {m}")
         for t in collect_targets(step):
