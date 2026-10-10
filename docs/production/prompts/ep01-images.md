@@ -1,0 +1,60 @@
+# Промпты картинок: эпизод 1 «Смерть за квартиры»
+
+Каждый промпт начинается со строки стиля и палитры из `style-bible.md` (§1–2, архетип
+`real_estate_murders`). Ниже — только SUBJECT / COMPOSITION / LIGHT / MOOD. Модель по умолчанию —
+Nano Banana Pro (2k, 16:9 для фонов и CG, 3:4 для документов), персонажи — Soul Cast.
+Варианты: 3 на фон, 2 на CG, 1 база + выражения на персонажа. Id совпадают с `assets` в
+`episodes/examples/ep01_murylev.json`.
+
+## Фоны
+
+| id | Промпт (после строки стиля) |
+|---|---|
+| `bg_yard_summer` | SUBJECT: courtyard of a nine-storey Soviet panel apartment block in Moscow, July evening; a wooden bench, a rusty children's climbing frame, poplar trees, a parked cherry-red Lada 2109, a row of windows where most are lit and one third-floor window stays dark. COMPOSITION: wide shot from the courtyard path, building facade filling the upper half, empty foreground path. LIGHT: dusk, warm windows against blue-grey sky, one street lamp. MOOD: uneasy. |
+| `bg_apartment_zoya` | SUBJECT: one-room apartment of an elderly Moscow pensioner, 1993: a dark polished sideboard with glass doors and a framed photo behind the glass, a carpet on the wall, lace curtains, a small TV on a stool, medicine bottles on a bedside table, folded glasses. COMPOSITION: eye-level medium-wide shot from the doorway, sideboard centre-left, empty centre for characters. LIGHT: overcast daylight through tulle curtains. MOOD: abandoned. |
+| `bg_moscow_1993` | SUBJECT: Moscow street in 1993: a line of commercial kiosks with closed shutters, people in coats at a bus stop, a trolleybus, a Soviet apartment block facade, slush on the pavement. COMPOSITION: wide establishing shot, slightly high angle; styled as a faded archival photograph (this background gets the archive_photo filter in runtime). LIGHT: flat grey winter daylight. MOOD: documentary. |
+| `bg_office_prosecutor` | SUBJECT: investigator's office in a district prosecutor's building, 1993: a heavy desk with a green-shaded lamp, a mechanical typewriter, stacks of cardboard case folders tied with string, a grey metal safe, a wall calendar, a window with a radiator. COMPOSITION: medium-wide, desk in the lower third but uncluttered, empty centre for two characters. LIGHT: afternoon window light plus warm desk lamp. MOOD: procedural. |
+| `bg_interrogation` | SUBJECT: small interrogation room in a Moscow militia station, 1993: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up. COMPOSITION: symmetrical frontal shot, table centred low, empty wall behind for a character. LIGHT: one hard lamp, deep shadows (runtime adds the noir filter). MOOD: pressure. |
+| `bg_bti_archive` | SUBJECT: municipal technical inventory bureau archive: long rows of grey metal filing cabinets and wooden card drawers, a reading table with a green lamp, boxes of index cards. COMPOSITION: corridor perspective between cabinets, table in the lower right, centre free. LIGHT: fluorescent tubes, dusty air. MOOD: patient. |
+| `bg_street_night` | SUBJECT: narrow Moscow street at night in October rain outside a notary office on the ground floor of an old building, wet asphalt reflections, a Volga sedan parked, a dim doorway. COMPOSITION: wide shot from across the street, doorway centre-right, empty left side. LIGHT: one sodium street lamp, warm office window. MOOD: stakeout. |
+| `bg_courtroom` | SUBJECT: Russian city courtroom, mid-1990s: wooden judge's bench with a coat-of-arms silhouette left blank, a metal defendant's cage at the side, rows of benches, tall windows. COMPOSITION: wide frontal shot, bench centred, cage on the left. LIGHT: cold daylight. MOOD: verdict. |
+| `bg_office_now` | SUBJECT: the same investigator's office in 2004: a beige computer monitor, a cordless phone, the same safe and folders, blinds instead of curtains. COMPOSITION: medium shot, chair centred for a talking-head interview. LIGHT: soft window light. MOOD: retrospective. |
+
+## CG
+
+| id | Промпт |
+|---|---|
+| `cg_door_sealed` | SUBJECT: close-up of an apartment door on a Soviet stairwell landing, a fresh paper seal with a blurred stamp across the door frame, a new brass lock, a worn doormat, mailbox row in the background. COMPOSITION: tight shot, door filling the frame, seal in the centre. LIGHT: stairwell bulb, cold. MOOD: finality. |
+| `cg_arrest_night` | SUBJECT: night street in rain, a militia UAZ with its roof light on, two silhouettes of men in leather jackets leading a third man in a coat toward the car, faces hidden by rain and distance. COMPOSITION: wide, figures small in the centre, reflections dominate. LIGHT: flashing blue, sodium lamp. MOOD: relief and dread. |
+| `cg_verdict` | SUBJECT: view from the public benches of a courtroom: the back of a man's head behind cage bars, a judge's silhouette far away, a woman's hand clutching a folded handkerchief in the foreground. COMPOSITION: shallow focus on the hand, cage soft in the middle. LIGHT: cold daylight. MOOD: quiet. |
+
+## Персонажи (Soul Cast, затем выражения)
+
+| id | CHARACTER | Выражения |
+|---|---|---|
+| `sledak` | man, 29, lean, tired grey eyes, short dark hair, a day of stubble; grey wool coat over a dark sweater, folder under his arm; prosecutor's investigator, 1993 Moscow | neutral, tense, tired, firm |
+| `sledak_old` | the same man at 40: heavier, grey at the temples, lines around the eyes; dark blazer, open collar, seated for an interview | neutral, sad |
+| `oper` | man, 34, stocky, broken nose, close-cropped hair; black leather jacket, knitted sweater, jeans; criminal police detective | neutral, grin, angry, hurt |
+| `expert` | woman, 45, sharp features, glasses on a chain, hair in a bun; white lab coat over a cardigan; forensic expert | neutral, focused |
+| `murashov` | man, 38, tall, neat, pleasant forgettable face, well-groomed moustache; good grey suit slightly too new, briefcase; former journalist turned apartment dealer; deliberately ordinary, not charismatic | neutral, smile, cold, cornered (also rendered as a silhouette by runtime) |
+| `notary` | man, 55, soft, balding, sweating; brown suit, tie askew; notary | neutral, nervous |
+| `zoya` | woman, 74, small, kind face, white hair under a knitted beret; Sunday coat with a fur collar, handbag; pensioner | neutral, warm, worried |
+| `neighbor` | woman, 60, sturdy, flowered housecoat and cardigan, glass milk bottle in hand; neighbour | neutral, worried |
+| `buyer` | man, 40, thin, anxious, cheap suit jacket over a sweater; family man who bought the apartment | neutral, scared |
+
+## Документы (без текста, 3:4)
+
+| id | Промпт |
+|---|---|
+| `doc_power_of_attorney` | blank Soviet notarial power-of-attorney form on yellowed paper, typewriter rules, two blurred purple round stamps, a signature line, no readable text |
+| `doc_contract_sale` | blank two-page sale contract form, stapled, dotted lines for names and amounts, one blurred stamp, no readable text |
+| `doc_bti_card` | blank technical inventory index card, grey cardboard, table grid, a hole punched at the top, pencil marks, no readable text |
+| `doc_newspaper_1994` | front page of a Moscow evening newspaper, 1994: masthead as a black bar without letters, columns as grey text blocks, one photo as a grey rectangle, no readable text |
+
+## UI
+
+| id | Промпт |
+|---|---|
+| `ui_title_plate` | black background, a single horizontal crimson-red plate slightly off-centre, faint CRT scanlines and static noise, no text (16:9) |
+| `ui_menu_video_salon` | 1993 video rental corner: a CRT television on a shelf, rows of VHS cassettes in plastic cases with blank labels, a cheap armchair, a curtain; no text (16:9) |
+| `ui_case_folder` | top-down texture of a grey cardboard case folder tied with white string, worn corners, no text (16:9) |
