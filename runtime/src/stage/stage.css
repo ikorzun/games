@@ -1,20 +1,29 @@
-/* ───────────── Сцена: фильтры, переходы, эффекты (CSS-классы на контейнере .vn-stage) ───────────── */
+/* ───────────── Сцена: слои, цветокоррекция, переходы, эффекты (CSS-классы на контейнере .vn-stage) ───────────── */
 
 .vn-stage {
-  --grain: 0;
   --scan: 0;
   --vig: 0;
   --tint: 0;
+  /* Камкордер (camcorder_layer.ts выставляет при включённых эффектах камеры). */
+  --cam-vignette: 0;
+  --cam-interlace: 0;
   position: relative;
   overflow: hidden;
   background: #000;
   isolation: isolate;
   contain: layout paint;
-  /* Шум для зерна и static_tv — встроенный SVG, никаких внешних ресурсов. */
+  /* Шум для static_tv и перехода vhs_glitch в запасном режиме — встроенный SVG, никаких внешних ресурсов. */
   --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 1.5 0 0 0 -.45'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
+/*
+ * Слои кадра изнутри наружу: host → cam → grade → hand → scene. Дрожание камкордера двигает ТОЛЬКО
+ * .vn-stage__hand (одна трансформация из JS); цветокоррекция сидит на неподвижном .vn-stage__grade,
+ * поэтому фильтр не пересчитывается на каждом кадре дрожания. Текста и интерфейса внутри этих слоёв нет.
+ */
 .vn-stage__scene,
+.vn-stage__hand,
+.vn-stage__grade,
 .vn-stage__cam,
 .vn-stage__host {
   position: absolute;
@@ -22,6 +31,10 @@
 }
 .vn-stage__scene {
   transition: filter 0.4s ease;
+}
+.vn-stage__hand {
+  transform-origin: 50% 50%;
+  will-change: transform;
 }
 .vn-stage__host canvas,
 .vn-canvas {
@@ -32,31 +45,31 @@
   height: 100%;
 }
 
-/* ── фильтры сцены (stage.filter / умолчание пресета показа) ── */
+/* ── цветокоррекция (stage.filter / умолчание пресета показа): сдержанная, десатурация ≤ 35 % ──
+   Камкордер (дрожание, зерно, помехи, виньетка) — отдельный слой и от фильтра не зависит. */
 
-.vn-stage.filter-vhs { --grain: 0.1; --scan: 0.55; --vig: 0.35; }
-.vn-stage.filter-vhs .vn-stage__scene { filter: contrast(1.06) saturate(0.88) brightness(0.97) blur(0.35px); }
+.vn-stage.filter-vhs { --vig: 0.12; }
+.vn-stage.filter-vhs .vn-stage__grade { filter: contrast(1.04) saturate(0.94); }
 
-.vn-stage.filter-vhs_heavy { --grain: 0.24; --scan: 0.85; --vig: 0.5; }
-.vn-stage.filter-vhs_heavy .vn-stage__scene {
-  filter: contrast(1.14) saturate(0.76) brightness(0.92) blur(0.7px);
-  animation: vhs-jitter 2.6s steps(1, end) infinite;
-}
+/* vhs_heavy: помехи чаще и чуть сильнее (camcorder.ts) + еле заметные строки интерлейса. */
+.vn-stage.filter-vhs_heavy { --vig: 0.2; }
+.vn-stage.filter-vhs_heavy .vn-stage__grade { filter: contrast(1.08) saturate(0.88) brightness(0.97); }
+.vn-stage.cam-on.filter-vhs_heavy .vn-stage__scan { --scan: var(--cam-interlace); }
 
-.vn-stage.filter-archive_photo { --grain: 0.2; --vig: 0.7; }
-.vn-stage.filter-archive_photo .vn-stage__scene { filter: sepia(0.7) contrast(1.05) brightness(0.92) saturate(0.8); }
+.vn-stage.filter-archive_photo { --vig: 0.5; }
+.vn-stage.filter-archive_photo .vn-stage__grade { filter: sepia(0.22) saturate(0.84) contrast(1.04) brightness(0.96); }
 
-.vn-stage.filter-night { --grain: 0.06; --vig: 0.45; --tint: 1; }
-.vn-stage.filter-night .vn-stage__scene { filter: brightness(0.72) contrast(1.1) saturate(0.85); }
+.vn-stage.filter-night { --vig: 0.32; --tint: 0.5; }
+.vn-stage.filter-night .vn-stage__grade { filter: brightness(0.78) contrast(1.08) saturate(0.9); }
 
-.vn-stage.filter-sepia { --vig: 0.3; }
-.vn-stage.filter-sepia .vn-stage__scene { filter: sepia(0.85) contrast(1.02) brightness(0.98); }
+.vn-stage.filter-sepia { --vig: 0.2; }
+.vn-stage.filter-sepia .vn-stage__grade { filter: sepia(0.3) saturate(0.92) contrast(1.02) brightness(0.98); }
 
-.vn-stage.filter-desaturated { --vig: 0.2; }
-.vn-stage.filter-desaturated .vn-stage__scene { filter: saturate(0.6) contrast(1.02); }
+.vn-stage.filter-desaturated { --vig: 0.14; }
+.vn-stage.filter-desaturated .vn-stage__grade { filter: saturate(0.68) contrast(1.03); }
 
-.vn-stage.filter-noir { --vig: 0.9; --grain: 0.08; }
-.vn-stage.filter-noir .vn-stage__scene { filter: grayscale(0.92) contrast(1.35) brightness(0.88); }
+.vn-stage.filter-noir { --vig: 0.6; }
+.vn-stage.filter-noir .vn-stage__grade { filter: saturate(0.7) contrast(1.22) brightness(0.9); }
 
 /* ── наложения ── */
 
@@ -65,20 +78,25 @@
   inset: 0;
   pointer-events: none;
 }
-.vn-stage__grain {
-  background-image: var(--noise);
-  background-size: 160px 160px;
-  mix-blend-mode: overlay;
-  opacity: var(--grain);
-  animation: grain-shift 0.5s steps(5) infinite;
+/* Зерно и помехи камкордера: один canvas низкого разрешения, растянутый на кадр (camcorder_layer.ts). */
+.vn-stage__camfx {
+  position: absolute;
+  inset: 0;
+  display: none;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
+.vn-stage.cam-on .vn-stage__camfx { display: block; }
+/* Строки интерлейса: только vhs_heavy и только при включённых эффектах камеры. */
 .vn-stage__scan {
-  background: repeating-linear-gradient(to bottom, rgb(0 0 0 / 0.22) 0 1px, transparent 1px 3px);
+  background: repeating-linear-gradient(to bottom, rgb(0 0 0 / 0.5) 0 1px, transparent 1px 3px);
   opacity: var(--scan);
 }
 .vn-stage__vignette {
-  background: radial-gradient(ellipse at 50% 42%, transparent 42%, rgb(0 0 0 / 0.92) 100%);
-  opacity: var(--vig);
+  background: radial-gradient(ellipse at 50% 46%, transparent 48%, rgb(0 0 0 / 0.9) 100%);
+  /* два независимых затемнения краёв: от фильтра и от камкордера (1 − (1 − a)(1 − b)) */
+  opacity: calc(var(--vig) + var(--cam-vignette) * (1 - var(--vig)));
   transition: opacity 0.4s ease;
 }
 .vn-stage__tint {

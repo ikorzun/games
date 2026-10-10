@@ -77,6 +77,7 @@ export class CamcorderLayer {
   private presentation: Presentation = 'title';
   private active = false;
   private paused = false;
+  private suspended = false;
   private rafId: number | null = null;
   private lastNoise = -1e9;
   private lastTransform = '';
@@ -169,6 +170,15 @@ export class CamcorderLayer {
     this.sync();
   }
 
+  /**
+   * Приостановить камкордер целиком: цикл стоит, трансформации нет, оверлей чист. Нужно, пока открыта
+   * мини-игра: она живёт в слое рендерера, а интерфейс трясти нельзя.
+   */
+  setSuspended(suspended: boolean): void {
+    this.suspended = suspended;
+    this.sync();
+  }
+
   /** Оператор поправляет кадр: вызывается при входе в сцену (не при загрузке и откате). */
   enterScene(): void {
     this.scheduler.enterScene();
@@ -220,7 +230,7 @@ export class CamcorderLayer {
 
   /** Запустить или остановить цикл по текущим условиям. */
   private sync(): void {
-    const should = this.active && !this.paused && !this.hidden() && this.effectiveLevel !== 'off';
+    const should = this.active && !this.paused && !this.suspended && !this.hidden() && this.effectiveLevel !== 'off';
     if (should) this.start();
     else this.stop();
   }
@@ -235,7 +245,7 @@ export class CamcorderLayer {
       this.caf(this.rafId);
       this.rafId = null;
     }
-    if (this.effectiveLevel === 'off' || !this.active) {
+    if (this.effectiveLevel === 'off' || !this.active || this.suspended) {
       this.setTransform('');
       this.setBurstClass(false);
       this.clearOverlay();

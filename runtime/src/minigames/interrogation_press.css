@@ -1,0 +1,494 @@
+/*
+ * Допрос (interrogation_press). Диалоговая подача: сверху реплика подозреваемого, снизу крупные
+ * карточки улик, счётчик ошибок — точки. Тёмная панель «протокола», карточки-улики — бумага.
+ * Карточки не ниже 56 px; на 360×640 — две колонки, на широком экране — столько, сколько влезет.
+ */
+
+/* Контейнер экрана мини-игры занимает всю высоту; прокручивается только середина (реплика и улики). */
+.vn-mg__body.mg-host-ip {
+  width: min(100%, 48rem);
+  height: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mg-ip {
+  --ip-paper: #e9e2cf;
+  --ip-paper-edge: #a99f86;
+  --ip-ink: #1d1b17;
+  --ip-ok: #2f6b3b;
+  --ip-ok-soft: #8fd19a;
+  --ip-bad: #a3302a;
+  --ip-name: #d8d2c4;
+  position: relative;
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  font-size: calc(0.95em * var(--font-scale, 1));
+  line-height: 1.3;
+  color: var(--c-text);
+  background:
+    radial-gradient(ellipse 90% 50% at 50% 0%, rgb(232 217 181 / 0.07), transparent 70%),
+    rgb(15 15 17 / 0.97);
+  border: 1px solid var(--c-line);
+  border-radius: 14px;
+  outline: none;
+}
+.mg-ip.is-paused {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.mg-ip .is-stroke {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Время (если есть лимит и таймеры включены). */
+.mg-ip__time {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 0;
+  height: 4px;
+  overflow: hidden;
+  background: rgb(255 255 255 / 0.12);
+  border-radius: 0 0 3px 3px;
+}
+.mg-ip__time-bar {
+  display: block;
+  height: 100%;
+  background: var(--c-accent);
+  transform-origin: left center;
+  transition: transform 0.25s linear;
+}
+
+/* Шапка: название, номер утверждения, ошибки, бриф, полоска утверждений. */
+.mg-ip__head {
+  flex: none;
+  min-width: 0;
+}
+.mg-ip__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  min-width: 0;
+}
+.mg-ip__kicker {
+  margin: 0;
+  min-width: 0;
+  font: 700 1.35em / 1.1 var(--font-title);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #f2efe6;
+}
+.mg-ip__count {
+  font: 700 0.95em / 1.2 var(--font-title);
+  letter-spacing: 0.03em;
+  color: var(--c-accent-soft);
+  white-space: nowrap;
+}
+.mg-ip__lives {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.mg-ip__dot {
+  position: relative;
+  box-sizing: border-box;
+  width: 1.2em;
+  height: 1.2em;
+  border: 2px solid var(--c-muted);
+  border-radius: 50%;
+}
+.mg-ip__dot.is-used {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+}
+.mg-ip__dot.is-used::before,
+.mg-ip__dot.is-used::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 70%;
+  height: 2px;
+  background: #fff;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.mg-ip__dot.is-used::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+.mg-ip__mtext {
+  font-size: 0.9em;
+  color: var(--c-muted);
+}
+.mg-ip__intro {
+  margin: 0.35em 0 0;
+  padding-left: 0.7em;
+  color: #d4d0c6;
+  border-left: 3px solid var(--c-accent-soft);
+}
+.mg-ip__brief {
+  margin: 0.35em 0 0;
+  font-size: 0.92em;
+  color: var(--c-muted);
+}
+.mg-ip__howto {
+  margin-top: 0.2em;
+}
+.mg-ip__howto-sum {
+  padding: 0.3em 0;
+  color: var(--c-accent-soft);
+  cursor: pointer;
+}
+.mg-ip__pips {
+  display: flex;
+  gap: 4px;
+  margin: 0.55em 0 0;
+  padding: 0;
+  list-style: none;
+}
+.mg-ip__pip {
+  flex: 1 1 0;
+  height: 6px;
+  box-sizing: border-box;
+  border: 1px solid rgb(255 255 255 / 0.35);
+  border-radius: 3px;
+}
+.mg-ip__pip.is-broken {
+  background: var(--ip-ok-soft);
+  border-color: var(--ip-ok-soft);
+}
+.mg-ip__pip.is-passed {
+  background: repeating-linear-gradient(45deg, rgb(255 255 255 / 0.4) 0 2px, transparent 2px 4px);
+}
+.mg-ip__pip.is-current {
+  height: 9px;
+  margin-top: -1.5px;
+  border-color: var(--c-accent-soft);
+  border-width: 2px;
+}
+
+/* Середина: реплика и улики; если не помещается — прокручивается. */
+.mg-ip__main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.mg-ip__scene {
+  flex: none;
+}
+.mg-ip__speaker {
+  margin: 0 0 4px 2px;
+  font: 700 0.95em / 1.2 var(--font-title);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ip-name);
+}
+.mg-ip__bubble {
+  position: relative;
+  margin: 0;
+  padding: 0.8em 1em;
+  background: #1c1c21;
+  border: 1px solid rgb(255 255 255 / 0.22);
+  border-left: 4px solid var(--c-accent);
+  border-radius: 4px 12px 12px 12px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.5);
+}
+.mg-ip__bubble.is-broken {
+  border-left-color: var(--ip-ok-soft);
+}
+.mg-ip__bubble.is-broken .mg-ip__statement {
+  opacity: 0.72;
+}
+.mg-ip__bubble.is-shake {
+  animation: ip-shake 0.4s ease-in-out;
+}
+.mg-ip__statement {
+  margin: 0;
+  font-size: 1.2em;
+  line-height: 1.35;
+  color: #f2efe6;
+}
+.mg-ip__press {
+  margin: 0.6em 0 0;
+  padding-left: 0.7em;
+  font-style: italic;
+  color: #cfd2d8;
+  border-left: 3px solid var(--c-muted);
+}
+.mg-ip__stamp {
+  display: inline-block;
+  margin-top: 0.7em;
+  padding: 0.1em 0.6em;
+  font: 700 1.05em / 1.3 var(--font-title);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ip-ok-soft);
+  border: 2px solid var(--ip-ok-soft);
+  border-radius: 4px;
+  transform: rotate(-3deg);
+}
+.mg-ip__stamp.is-fresh {
+  animation: ip-stamp 0.45s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+.mg-ip__tag {
+  display: inline-block;
+  margin-top: 0.6em;
+  font-size: 0.9em;
+  color: var(--c-muted);
+}
+.mg-ip__feedback {
+  margin: 6px 2px 0;
+  min-height: 1.3em;
+  font-size: 0.95em;
+  color: #d8d3c5;
+}
+
+/* Улики. */
+.mg-ip__cards {
+  flex: none;
+}
+.mg-ip__cards-title {
+  margin: 0 0 6px 2px;
+  font: 700 0.95em / 1.2 var(--font-title);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+.mg-ip__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10em, 1fr));
+  gap: 8px;
+}
+.mg-ip__empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--c-muted);
+}
+.mg-ip__card {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  min-width: 0;
+  min-height: 56px;
+  padding: 0.55em 0.7em;
+  text-align: left;
+  color: var(--ip-ink);
+  background: var(--ip-paper);
+  border: 1px solid var(--ip-paper-edge);
+  border-radius: 4px;
+  box-shadow:
+    0 2px 0 rgb(0 0 0 / 0.25),
+    0 5px 8px rgb(0 0 0 / 0.35);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.1s ease;
+}
+.mg-ip__card:hover:not([aria-disabled='true']) {
+  box-shadow:
+    0 0 0 2px var(--c-accent-soft),
+    0 5px 8px rgb(0 0 0 / 0.35);
+}
+.mg-ip__card:active:not([aria-disabled='true']) {
+  transform: translateY(1px);
+}
+.mg-ip__card:focus-visible {
+  outline: 3px solid var(--c-accent-soft);
+  outline-offset: 2px;
+}
+.mg-ip__card[aria-disabled='true'] {
+  cursor: default;
+}
+.mg-ip__card.is-locked {
+  opacity: 0.6;
+}
+.mg-ip__card.is-wrong {
+  background: #c9c0aa;
+  opacity: 0.7;
+}
+.mg-ip__card.is-wrong .mg-ip__label {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+.mg-ip__card.is-used {
+  box-shadow:
+    0 0 0 3px var(--ip-ok),
+    0 5px 8px rgb(0 0 0 / 0.35);
+}
+.mg-ip__card.is-hint {
+  animation: ip-hint 1.2s ease-in-out infinite;
+}
+.mg-ip__icon {
+  flex: none;
+  width: 1.4em;
+  height: 1.4em;
+  fill: currentColor;
+  opacity: 0.7;
+}
+.mg-ip__label {
+  min-width: 0;
+  font: 700 1em / 1.15 var(--font-title);
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+.mg-ip__mark {
+  flex: none;
+  width: 1.5em;
+  height: 1.5em;
+  margin-left: auto;
+  color: var(--ip-bad);
+}
+.mg-ip__mark.is-ok {
+  color: var(--ip-ok);
+}
+.mg-ip__num {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  font: 700 0.7em / 1 var(--font-mono);
+  opacity: 0.5;
+}
+@media (hover: none) {
+  .mg-ip__num {
+    display: none;
+  }
+}
+
+/* Нижняя панель: действия или итог. */
+.mg-ip__foot {
+  flex: none;
+  min-width: 0;
+}
+.mg-ip__foot .mg-actions {
+  margin-top: 0;
+}
+.mg-ip__foot .mg-btn {
+  flex: 1 1 9rem;
+}
+.mg-ip__foot .mg-btn.is-pass {
+  background: transparent;
+  border-style: dashed;
+}
+.mg-ip__foot .mg-btn.is-hint {
+  border-color: var(--c-accent-soft);
+}
+.mg-ip__result {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mg-ip__verdict {
+  margin: 0;
+  font: 700 1.3em / 1.1 var(--font-title);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.mg-ip__verdict.is-success {
+  color: var(--ip-ok-soft);
+}
+.mg-ip__verdict.is-partial {
+  color: var(--c-accent-soft);
+}
+.mg-ip__verdict.is-fail {
+  color: #ff9b93;
+}
+.mg-ip__summary {
+  margin: 0;
+  color: #d8d3c5;
+}
+
+/* Низкий горизонтальный экран (телефон в ландшафте): слева шапка и реплика, справа улики и действия. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .mg-ip {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'head cards'
+      'scene cards'
+      'scene foot';
+    gap: 8px 12px;
+  }
+  .mg-ip__main {
+    display: contents;
+  }
+  .mg-ip__head {
+    grid-area: head;
+  }
+  .mg-ip__scene {
+    grid-area: scene;
+    min-height: 0;
+    overflow: auto;
+  }
+  .mg-ip__cards {
+    grid-area: cards;
+    min-height: 0;
+    overflow: auto;
+  }
+  .mg-ip__foot {
+    grid-area: foot;
+  }
+  .mg-ip__grid {
+    grid-template-columns: repeat(auto-fit, minmax(8.5em, 1fr));
+  }
+}
+
+@keyframes ip-shake {
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+@keyframes ip-stamp {
+  0% {
+    opacity: 0;
+    transform: rotate(-3deg) scale(2.2);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-3deg) scale(1);
+  }
+}
+@keyframes ip-hint {
+  50% {
+    box-shadow:
+      0 0 0 4px var(--c-accent),
+      0 5px 8px rgb(0 0 0 / 0.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mg-ip *,
+  .mg-ip *::before,
+  .mg-ip *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

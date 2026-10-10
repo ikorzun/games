@@ -1,19 +1,34 @@
 /**
  * Оболочка сцены (DOM): фильтры, letterbox, переходы и эффекты fx — это CSS-классы и CSS-анимации
- * на контейнере; сам кадр (плейсхолдеры фона, спрайтов и CG) рисует сменный рендерер
+ * на контейнере; сам кадр (картинки фона, спрайтов и CG или плейсхолдеры) рисует сменный рендерер
  * (PixiJS или DOM, см. renderer.ts). Реализует IStage — порт, через который работает Director.
+ *
+ * Слои кадра (изнутри наружу): host (canvas рендерера) → cam (Ken Burns, моторный зум) →
+ * grade (цветокоррекция stage.filter) → hand (дрожание камкордера, одна CSS-трансформация) →
+ * scene (эффекты shake / glitch). Текст и интерфейс в эти слои НЕ входят: титры лежат рядом со
+ * сценой, окно текста — в слое UI, поэтому дрожание и помехи их не касаются.
+ *
+ * Камкордер (camcorder.ts + camcorder_layer.ts): ручная камера, «оператор поправил кадр» при входе
+ * в сцену, редкие помехи, зерно, HUD записи (только reconstruction). fx zoom_in — моторный зум
+ * с перелётом и «поиском фокуса», freeze_frame — стоп-кадр с затемнением, vhs_glitch — разрыв кадра.
  *
  * Переходы и рекламная пауза:
  *  - changeScene(): гашение → смена кадра → проявление (fade / slow_fade / dissolve / flash /
- *    wipe — «провал» через цветной слой, vhs_glitch — помехи на самой сцене).
+ *    wipe — «провал» через цветной слой, vhs_glitch — разрыв кадра). Перед гашением ждём картинки
+ *    сцены (prepareView): смена кадра не показывает пустоту.
  *  - fadeToBlackAndHold() / revealFromBlack(): две половины того же перехода, разнесённые
  *    во времени ради рекламы на границе блока. Между ними чёрный кадр ДЕРЖИТСЯ (слой
  *    `vn-stage__hold`), новая сцена выставляется под ним и проявляется только в revealFromBlack().
  *    Кто и когда их вызывает — правило в stage/director.ts.
  */
-import type { ViolenceMode } from '../core/settings';
+import type { CameraFx, ViolenceMode } from '../core/settings';
 import type { FxKind, SpriteView, StageFilter, TransitionKind, ViewState } from '../core/types';
 import { h, sleep } from '../ui/dom';
+import { NO_ASSETS, prepareView } from './assets';
+import type { SceneAssets } from './assets';
+import { ZOOM_AMOUNT, zoomKeyframes } from './camcorder';
+import { CamcorderLayer } from './camcorder_layer';
+import type { CamcorderLayerOptions } from './camcorder_layer';
 import { effectiveFilter, presetOf } from './presets';
 import type { ISceneRenderer } from './renderer';
 import type { IStage } from './types';
@@ -22,13 +37,23 @@ const FILTERS: readonly StageFilter[] = ['vhs', 'vhs_heavy', 'archive_photo', 'n
 
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 
+export interface StageOptions {
+  /** Картинки эпизода для prepareView (должны быть теми же, что у рендерера). */
+  assets?: SceneAssets;
+  /** Подмены для тестов камкордера (ГСЧ, rAF, prefers-reduced-motion, контекст canvas). */
+  camcorder?: Omit<Partial<CamcorderLayerOptions>, 'stage' | 'hand' | 'canvas'>;
+}
+
 export class Stage implements IStage {
   readonly el: HTMLElement;
   /** Сюда UI кладёт слой титров: он живёт внутри сцены, под текстовым окном. */
   readonly captionsEl: HTMLElement;
   readonly renderer: ISceneRenderer;
+  readonly camcorder: CamcorderLayer;
 
   private readonly sceneEl: HTMLElement;
+  private readonly handEl: HTMLElement;
+  private readonly gradeEl: HTMLElement;
   private readonly camEl: HTMLElement;
   private readonly hostEl: HTMLElement;
   private readonly blackEl: HTMLElement;
@@ -37,18 +62,25 @@ export class Stage implements IStage {
   private readonly bandEl: HTMLElement;
   private readonly trEl: HTMLElement;
   private readonly holdEl: HTMLElement;
+  private readonly assets: SceneAssets;
 
   private view: ViewState | null = null;
   /** Счётчик «поколений»: setView() отменяет незавершённые переходы. */
   private gen = 0;
   private blackPersisted = false;
   private holding = false;
+  private zoomAnim: Animation | null = null;
+  private platformPaused = false;
+  private minigameActive = false;
 
-  constructor(renderer: ISceneRenderer) {
+  constructor(renderer: ISceneRenderer, opts: StageOptions = {}) {
     this.renderer = renderer;
+    this.assets = opts.assets ?? NO_ASSETS;
     this.hostEl = h('div', { class: 'vn-stage__host' });
     this.camEl = h('div', { class: 'vn-stage__cam' }, this.hostEl);
-    this.sceneEl = h('div', { class: 'vn-stage__scene' }, this.camEl);
+    this.gradeEl = h('div', { class: 'vn-stage__grade' }, this.camEl);
+    this.handEl = h('div', { class: 'vn-stage__hand' }, this.gradeEl);
+    this.sceneEl = h('div', { class: 'vn-stage__scene' }, this.handEl);
     this.captionsEl = h('div', { class: 'vn-stage__captions' });
     this.blackEl = h('div', { class: 'vn-stage__black' });
     this.flashEl = h('div', { class: 'vn-stage__flash' });
@@ -56,17 +88,20 @@ export class Stage implements IStage {
     this.bandEl = h('div', { class: 'vn-stage__band' });
     this.trEl = h('div', { class: 'vn-stage__tr' });
     this.holdEl = h('div', { class: 'vn-stage__hold' });
+    const fxCanvas = h('canvas', { class: 'vn-stage__camfx', aria: { hidden: true } });
     this.el = h(
       'div',
       { class: 'vn-stage', data: { presentation: 'title' } },
       this.sceneEl,
-      h('div', { class: 'vn-stage__layer vn-stage__grain' }),
+      fxCanvas,
       h('div', { class: 'vn-stage__layer vn-stage__scan' }),
       h('div', { class: 'vn-stage__layer vn-stage__vignette' }),
       h('div', { class: 'vn-stage__layer vn-stage__tint' }),
       h('div', { class: 'vn-stage__layer vn-stage__weather' }),
       h('div', { class: 'vn-stage__letterbox vn-stage__letterbox--top' }),
       h('div', { class: 'vn-stage__letterbox vn-stage__letterbox--bottom' }),
+      // HUD записи: поверх картинки, но не внутри дрожащей обёртки (экранная индикация не трясётся)
+      h('div', { class: 'vn-stage__hud', aria: { hidden: true } }, h('span', { class: 'vn-rec' }, h('i', { class: 'vn-rec__dot' }), h('b', { class: 'vn-rec__text', text: 'REC' }))),
       this.captionsEl,
       this.noiseEl,
       this.bandEl,
@@ -75,6 +110,7 @@ export class Stage implements IStage {
       this.trEl,
       this.holdEl,
     );
+    this.camcorder = new CamcorderLayer({ ...opts.camcorder, stage: this.el, hand: this.handEl, canvas: fxCanvas });
   }
 
   /** Вставить сцену в родителя и поднять рендерер. При ошибке рендерера вызывающий делает destroy(). */
@@ -85,6 +121,7 @@ export class Stage implements IStage {
 
   destroy(): void {
     this.gen += 1;
+    this.camcorder.destroy();
     try {
       this.renderer.destroy();
     } catch {
@@ -99,12 +136,34 @@ export class Stage implements IStage {
   }
 
   setMinigameActive(active: boolean): void {
+    this.minigameActive = active;
     this.el.classList.toggle('is-minigame', active);
     this.renderer.setMinigameActive?.(active);
+    // Мини-игра живёт в слое рендерера: пока она открыта, камкордер стоит и кадр без трансформации.
+    this.camcorder.setSuspended(active);
   }
 
   setViolenceMode(mode: ViolenceMode): void {
     this.renderer.setViolenceMode(mode);
+  }
+
+  /** Настройка «Эффекты камеры» (prefers-reduced-motion выключает их независимо от выбора). */
+  setCameraFx(level: CameraFx): void {
+    this.camcorder.setLevel(level);
+  }
+
+  /** Пауза платформы / вкладки в фоне: камкордер останавливает цикл. */
+  setPaused(paused: boolean): void {
+    this.platformPaused = paused;
+    this.camcorder.setPaused(paused);
+  }
+
+  get paused(): boolean {
+    return this.platformPaused;
+  }
+
+  get minigameOpen(): boolean {
+    return this.minigameActive;
   }
 
   get currentView(): ViewState | null {
@@ -121,10 +180,14 @@ export class Stage implements IStage {
   }
 
   async changeScene(view: ViewState, transition: TransitionKind, instant: boolean): Promise<void> {
+    const gen = this.gen;
+    await prepareView(this.assets, view);
+    if (gen !== this.gen) return;
     const swap = (): void => {
       this.applyFrame(view);
       this.renderer.setView(view);
       this.releasePersistedBlack();
+      if (!instant) this.camcorder.enterScene();
     };
     if (this.view === null && !instant) {
       // Первая сцена партии: проявление из чёрного.
@@ -154,10 +217,13 @@ export class Stage implements IStage {
 
   async revealFromBlack(view: ViewState, transition: TransitionKind, instant: boolean): Promise<void> {
     const gen = this.gen;
-    // Под непрозрачным чёрным слоем выставляем новую сцену…
+    // Под непрозрачным чёрным слоем выставляем новую сцену (картинки к этому моменту уже ждём)…
+    await prepareView(this.assets, view);
+    if (gen !== this.gen) return;
     this.applyFrame(view);
     this.renderer.setView(view);
     this.releasePersistedBlack(true);
+    if (!instant) this.camcorder.enterScene();
     // …и только теперь проявляем её.
     const ms = instant ? 0 : transition === 'slow_fade' ? 800 : 420;
     this.holdEl.style.transition = ms > 0 ? `opacity ${ms}ms ease-out` : 'none';
@@ -186,10 +252,15 @@ export class Stage implements IStage {
   }
 
   async changeBackground(bg: string, filter: StageFilter | null, transition: TransitionKind, instant: boolean): Promise<void> {
+    const gen = this.gen;
+    await prepareView(this.assets, { bg, cg: null, sprites: [] });
+    if (gen !== this.gen) return;
     const swap = (): void => {
       if (this.view) {
         this.view = { ...this.view, bg, filter, cg: null };
-        this.setFilterClass(effectiveFilter(this.view));
+        const f = effectiveFilter(this.view);
+        this.setFilterClass(f);
+        this.camcorder.setContext(this.view.presentation, f);
       }
       this.renderer.setBackground(bg);
       this.renderer.setCg(null);
@@ -199,6 +270,9 @@ export class Stage implements IStage {
   }
 
   async showCg(cg: string, transition: TransitionKind, instant: boolean): Promise<void> {
+    const gen = this.gen;
+    await prepareView(this.assets, { bg: '', cg, sprites: [] });
+    if (gen !== this.gen) return;
     const swap = (): void => {
       if (this.view) this.view = { ...this.view, cg };
       this.renderer.setCg(cg);
@@ -231,13 +305,16 @@ export class Stage implements IStage {
     this.el.dataset.tod = view.time_of_day ?? '';
     this.el.dataset.weather = view.weather ?? '';
     this.el.classList.toggle('has-letterbox', view.letterbox);
-    this.setFilterClass(effectiveFilter(view));
+    const filter = effectiveFilter(view);
+    this.setFilterClass(filter);
     const camera = presetOf(view.presentation).camera;
-    this.camEl.classList.remove('camera-static', 'camera-ken_burns', 'fx-zoom');
-    this.camEl.style.removeProperty('--fx-zoom');
+    this.cancelZoom(true);
+    this.camEl.classList.remove('camera-static', 'camera-ken_burns');
     if (sceneChanged || !this.camEl.dataset.camera) void this.camEl.offsetWidth; // перезапуск Ken Burns
     this.camEl.classList.add(`camera-${camera}`);
     this.camEl.dataset.camera = camera;
+    this.camcorder.setContext(view.presentation, filter);
+    this.camcorder.setActive(true);
   }
 
   private setFilterClass(filter: StageFilter): void {
@@ -309,9 +386,12 @@ export class Stage implements IStage {
           swapped = true;
           swap();
         };
-        this.noiseEl.classList.add('is-on');
+        // Камкордер рисует разрыв кадра сам; при выключенных эффектах — запасной вариант на CSS.
+        const native = this.camcorder.glitch(ms);
+        if (!native) this.noiseEl.classList.add('is-on');
         const timer = setTimeout(doSwap, ms * 0.48);
-        await this.cssAnim(this.sceneEl, 'tr-glitch', ms);
+        if (native) await this.wait(ms);
+        else await this.cssAnim(this.sceneEl, 'tr-glitch', ms);
         clearTimeout(timer);
         doSwap(); // если таймер задержала фоновая вкладка
         this.sceneEl.classList.remove('tr-glitch');
@@ -343,6 +423,7 @@ export class Stage implements IStage {
     this.trEl.className = 'vn-stage__tr';
     this.sceneEl.classList.remove('tr-glitch', 'fx-shake', 'fx-glitch');
     this.el.classList.remove('fx-freeze', 'fx-slowmo');
+    this.camcorder.freeze(false);
     this.noiseEl.className = 'vn-stage__noise';
     this.bandEl.className = 'vn-stage__band';
     this.blackEl.style.transition = 'none';
@@ -370,6 +451,56 @@ export class Stage implements IStage {
     for (const k of Object.keys(vars)) el.style.removeProperty(k);
   }
 
+  /** Сбросить моторный зум (и устойчивое состояние «наезда»). */
+  private cancelZoom(clearStyle: boolean): void {
+    if (this.zoomAnim) {
+      try {
+        this.zoomAnim.cancel();
+      } catch {
+        /* анимация уже снята */
+      }
+      this.zoomAnim = null;
+    }
+    if (clearStyle) {
+      this.camEl.style.transform = '';
+      this.camEl.style.filter = '';
+      this.camEl.style.transition = '';
+    }
+  }
+
+  /**
+   * Моторный зум камкордера: 1,00 → 1,12 за ms с небольшим перелётом и коротким «поиском фокуса»
+   * (размытие 0 → 1 px → 0). После окончания «наезд» остаётся до конца сцены. При выключенных
+   * эффектах камеры — гладкий зум без перелёта и размытия.
+   */
+  private async zoomMotor(ms: number, k: number, instant: boolean): Promise<void> {
+    const gen = this.gen;
+    const target = 1 + ZOOM_AMOUNT * k;
+    const el = this.camEl;
+    el.classList.remove('camera-ken_burns'); // иначе анимация Ken Burns перебила бы transform
+    this.cancelZoom(true);
+    if (instant || ms <= 0) {
+      el.style.transform = `scale(${target.toFixed(4)})`;
+      return;
+    }
+    const fancy = this.camcorder.effectiveLevel !== 'off';
+    if (typeof el.animate === 'function') {
+      const anim = el.animate(
+        zoomKeyframes(target, fancy).map((f) => ({ offset: f.offset, transform: f.transform, filter: f.filter })),
+        { duration: ms, easing: 'linear', fill: 'forwards' },
+      );
+      this.zoomAnim = anim;
+      await Promise.race([anim.finished.then(() => undefined, () => undefined), this.wait(ms + 120)]);
+      if (gen !== this.gen) return;
+      el.style.transform = `scale(${target.toFixed(4)})`;
+      this.cancelZoom(false);
+      return;
+    }
+    el.style.transition = `transform ${ms}ms ease-out`;
+    el.style.transform = `scale(${target.toFixed(4)})`;
+    await this.wait(ms);
+  }
+
   async playFx(fx: FxKind, ms: number, intensity: number, instant: boolean): Promise<void> {
     const k = clamp01(intensity);
     if (instant) {
@@ -381,9 +512,7 @@ export class Stage implements IStage {
         this.blackPersisted = false;
         await this.fadeBlack(0, 0);
       } else if (fx === 'zoom_in') {
-        this.camEl.style.setProperty('--fx-zoom', String(1 + 0.14 * k));
-        this.camEl.style.setProperty('--fx-ms', '0ms');
-        this.camEl.classList.add('fx-zoom');
+        await this.zoomMotor(0, k, true);
       }
       return;
     }
@@ -415,9 +544,13 @@ export class Stage implements IStage {
         await this.timedClass(this.sceneEl, 'fx-shake', ms, { '--fx-amp': `${(5 + 12 * k).toFixed(1)}px` });
         break;
       case 'vhs_glitch':
-        this.noiseEl.classList.add('is-on');
-        await this.timedClass(this.sceneEl, 'fx-glitch', ms);
-        this.noiseEl.classList.remove('is-on');
+        if (this.camcorder.glitch(ms)) {
+          await this.wait(ms);
+        } else {
+          this.noiseEl.classList.add('is-on');
+          await this.timedClass(this.sceneEl, 'fx-glitch', ms);
+          this.noiseEl.classList.remove('is-on');
+        }
         break;
       case 'tracking_noise':
         this.bandEl.classList.add('is-on');
@@ -425,13 +558,13 @@ export class Stage implements IStage {
         this.bandEl.classList.remove('is-on');
         break;
       case 'freeze_frame':
+        // Стоп-кадр: дрожание замирает, кадр слегка темнеет.
+        this.camcorder.freeze(true);
         await this.timedClass(this.el, 'fx-freeze', ms);
+        if (gen === this.gen) this.camcorder.freeze(false);
         break;
       case 'zoom_in':
-        this.camEl.style.setProperty('--fx-zoom', String(1 + 0.14 * k));
-        this.camEl.style.setProperty('--fx-ms', `${ms}ms`);
-        this.camEl.classList.add('fx-zoom');
-        await this.wait(ms);
+        await this.zoomMotor(ms, k, false);
         break;
       case 'slow_motion':
         await this.timedClass(this.el, 'fx-slowmo', ms);
