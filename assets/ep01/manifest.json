@@ -1553,5 +1553,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_170045_3fa6da6a-302d-4280-9945-c12810c2f7b3.png",
   "target": "assets/ep01/shots/apartment_zoya/angle_foreground.webp",
   "job": "3fa6da6a-302d-4280-9945-c12810c2f7b3"
+ },
+ {
+  "id": "sh_notary_wide_1",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_170354_78f1db08-39f9-46b8-8724-3c47b75057a4.png",
+  "target": "assets/ep01/shots/notary/wide_1.webp",
+  "job": "78f1db08-39f9-46b8-8724-3c47b75057a4"
+ },
+ {
+  "id": "sh_notary_wide_2",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_170355_b6f9dd85-2578-410f-aecd-6b8940228fec.png",
+  "target": "assets/ep01/shots/notary/wide_2.webp",
+  "job": "b6f9dd85-2578-410f-aecd-6b8940228fec"
+ },
+ {
+  "id": "sh_notary_close_notary_nervous",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_170355_d8c6452b-8b8a-496d-8c34-8046b3cc5dcb.png",
+  "target": "assets/ep01/shots/notary/close_notary_nervous.webp",
+  "job": "d8c6452b-8b8a-496d-8c34-8046b3cc5dcb"
+ },
+ {
+  "id": "sh_notary_close_oper_grin",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_170354_44e32214-306d-45f4-81b5-3f997c75e036.png",
+  "target": "assets/ep01/shots/notary/close_oper_grin.webp",
+  "job": "44e32214-306d-45f4-81b5-3f997c75e036"
  }
 ]
