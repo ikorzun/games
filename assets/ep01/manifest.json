@@ -2484,5 +2484,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_200349_713f5c55-3f9c-41ff-b245-42c7c52b24df.png",
   "target": "assets/ep01/shots/street_day/close_sledak_firm.webp",
   "job": "713f5c55-3f9c-41ff-b245-42c7c52b24df"
+ },
+ {
+  "id": "sh_street_day_medium_1",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_200640_3fba7d70-463f-4cbb-94a6-827e1541b230.png",
+  "target": "assets/ep01/shots/street_day/medium_1.webp",
+  "job": "3fba7d70-463f-4cbb-94a6-827e1541b230"
+ },
+ {
+  "id": "sh_street_day_angle_low",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_200640_0314ac3d-f1fe-46fb-971c-c7e4ad81d7fd.png",
+  "target": "assets/ep01/shots/street_day/angle_low.webp",
+  "job": "0314ac3d-f1fe-46fb-971c-c7e4ad81d7fd"
+ },
+ {
+  "id": "sh_street_day_angle_high",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_200641_fa036614-d967-4aa1-890c-f80f0b033dc4.png",
+  "target": "assets/ep01/shots/street_day/angle_high.webp",
+  "job": "fa036614-d967-4aa1-890c-f80f0b033dc4"
+ },
+ {
+  "id": "sh_street_day_angle_foreground",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_200639_3e02e53a-7744-4e67-bb13-0b03f0d6c0ff.png",
+  "target": "assets/ep01/shots/street_day/angle_foreground.webp",
+  "job": "3e02e53a-7744-4e67-bb13-0b03f0d6c0ff"
  }
 ]
