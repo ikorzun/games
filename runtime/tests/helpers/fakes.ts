@@ -59,6 +59,10 @@ export class FakeStage implements IStage {
     await Promise.resolve();
     this.t.push(`stage:cgHide:${transition}`);
   }
+  async showShot(shot: string | null, transition: TransitionKind): Promise<void> {
+    await Promise.resolve();
+    this.t.push(`stage:shot:${shot ?? '-'}:${transition}`);
+  }
   setSpeaker(who: string | null): void {
     this.t.push(`stage:speaker:${who ?? '-'}`);
   }

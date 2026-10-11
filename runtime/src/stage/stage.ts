@@ -33,6 +33,9 @@ import { effectiveFilter, presetOf } from './presets';
 import type { ISceneRenderer } from './renderer';
 import type { IStage } from './types';
 
+/** Сколько ждать картинку кадра покрытия перед склейкой (дольше — показываем реплику, кадр догрузится). */
+export const SHOT_WAIT_MS = 2000;
+
 const FILTERS: readonly StageFilter[] = ['vhs', 'vhs_heavy', 'archive_photo', 'night', 'sepia', 'desaturated', 'noir'];
 
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
@@ -276,6 +279,22 @@ export class Stage implements IStage {
     const swap = (): void => {
       if (this.view) this.view = { ...this.view, cg };
       this.renderer.setCg(cg);
+    };
+    if (instant || transition === 'cut') swap();
+    else await this.transition(transition, swap);
+  }
+
+  /**
+   * Кадр покрытия (монтажёр, core/editor.ts). Внутри сета — склейка: ждём картинку недолго
+   * (SHOT_WAIT_MS), остальное дорисует рендерер, который до загрузки держит прежний кадр.
+   */
+  async showShot(shot: string | null, transition: TransitionKind, instant: boolean): Promise<void> {
+    const gen = this.gen;
+    if (shot !== null) await prepareView(this.assets, { bg: '', cg: null, sprites: [], shot }, SHOT_WAIT_MS);
+    if (gen !== this.gen) return;
+    const swap = (): void => {
+      if (this.view) this.view = { ...this.view, shot };
+      this.renderer.setShot(shot);
     };
     if (instant || transition === 'cut') swap();
     else await this.transition(transition, swap);

@@ -231,6 +231,7 @@
         "stage": { "$ref": "#/$defs/stage" },
         "music": { "$ref": "#/$defs/asciiId" },
         "ambient": { "$ref": "#/$defs/asciiId" },
+        "coverage": { "$ref": "#/$defs/asciiId", "description": "Сет кадров покрытия (assets.shots[].set): монтажёр рантайма берёт из него кадры по грамматике docs/architecture/08-shot-grammar.md §4. Без coverage сцена показывается фоном и спрайтами." },
         "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/step" } },
         "notes": { "type": "string", "description": "Заметки сценариста/режиссёра, не попадают в сборку." }
       }
@@ -288,6 +289,8 @@
         "pose": { "$ref": "#/$defs/asciiId" },
         "position": { "$ref": "#/$defs/position" },
         "voice": { "$ref": "#/$defs/asciiId", "description": "id аудиофайла озвучки (если есть)." },
+        "beat": { "$ref": "#/$defs/beat" },
+        "shot": { "$ref": "#/$defs/asciiId", "description": "Явный кадр покрытия (assets.shots[].id того же сета, что coverage сцены); монтажёр подчиняется." },
         "when": { "$ref": "#/$defs/expr" }
       }
     },
@@ -299,6 +302,8 @@
         "key": { "$ref": "#/$defs/locKey" },
         "style": { "type": "string", "enum": ["voiceover", "inner", "report"], "default": "voiceover", "description": "voiceover — закадровый рассказчик; inner — мысли персонажа игрока; report — сухой протокольный текст." },
         "voice": { "$ref": "#/$defs/asciiId" },
+        "beat": { "$ref": "#/$defs/beat" },
+        "shot": { "$ref": "#/$defs/asciiId", "description": "Явный кадр покрытия (assets.shots[].id того же сета, что coverage сцены)." },
         "when": { "$ref": "#/$defs/expr" }
       }
     },
@@ -324,7 +329,8 @@
         "pose": { "$ref": "#/$defs/asciiId" },
         "position": { "$ref": "#/$defs/position", "default": "center" },
         "transition": { "$ref": "#/$defs/transition", "default": "dissolve" },
-        "silhouette": { "type": "boolean", "default": false, "description": "Показать как силуэт (неизвестный преступник до раскрытия)." }
+        "silhouette": { "type": "boolean", "default": false, "description": "Показать как силуэт (неизвестный преступник до раскрытия)." },
+        "shot": { "$ref": "#/$defs/asciiId", "description": "Явный кадр покрытия после появления персонажа (assets.shots[].id того же сета, что coverage сцены)." }
       }
     },
     "stepHide": {
@@ -626,6 +632,34 @@
         "facing": { "type": "string", "enum": ["left", "right", "front"], "default": "front", "description": "Куда персонаж повёрнут на кадрах набора (сторона зрителя). При двух и более персонажах на сцене рантайм зеркалит спрайт так, чтобы он смотрел к центру — к собеседнику; front не зеркалится." }
       }
     },
+    "beat": { "type": "string", "enum": ["calm", "tense", "climax"], "description": "Напряжение момента для монтажёра (08 §3.2): calm — ots/medium, tense — крупный план, climax — крупный план с редкой перебивкой angle. По умолчанию calm; tense, если выражение говорящего напряжённое." },
+    "shotCast": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["who"],
+      "properties": {
+        "who": { "$ref": "#/$defs/asciiId" },
+        "expression": { "$ref": "#/$defs/asciiId", "description": "Выражение персонажа в кадре (из набора спрайтов)." },
+        "mask": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$", "description": "Маска персонажа для подсветки говорящего в wide/medium (необязательно)." }
+      }
+    },
+    "shot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "set", "bg", "kind", "cast", "file"],
+      "properties": {
+        "id": { "$ref": "#/$defs/asciiId" },
+        "set": { "$ref": "#/$defs/asciiId", "description": "Сет: локация × освещение (office_day, street_night…); сцена ссылается на него через coverage." },
+        "bg": { "$ref": "#/$defs/asciiId", "description": "Фон, в котором снят сет (assets.backgrounds[].id)." },
+        "kind": { "type": "string", "enum": ["wide", "medium", "ots", "close", "reaction", "insert", "angle"] },
+        "angle": { "type": "string", "enum": ["eye", "low", "high", "doorway", "reflection", "foreground"], "default": "eye" },
+        "cast": { "type": "array", "items": { "$ref": "#/$defs/shotCast" }, "description": "Кто в кадре (пусто — insert или пустая комната)." },
+        "from": { "$ref": "#/$defs/asciiId", "description": "ots: через чьё плечо снято." },
+        "focus": { "$ref": "#/$defs/asciiId", "description": "О ком кадр: говорящий (close/ots) или слушающий (reaction)." },
+        "file": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$", "description": "assets/<ep>/shots/<set>/<name>.webp, 1920×1080." },
+        "notes": { "type": "string" }
+      }
+    },
     "assets": {
       "type": "object",
       "additionalProperties": false,
@@ -633,6 +667,7 @@
         "backgrounds": { "type": "array", "items": { "$ref": "#/$defs/assetEntry" } },
         "sprites": { "type": "array", "items": { "$ref": "#/$defs/spriteSet" } },
         "cg": { "type": "array", "items": { "$ref": "#/$defs/assetEntry" } },
+        "shots": { "type": "array", "items": { "$ref": "#/$defs/shot" }, "description": "Кадры покрытия по сетам (docs/architecture/08-shot-grammar.md §3.1)." },
         "documents": { "type": "array", "items": { "$ref": "#/$defs/assetEntry" } },
         "music": { "type": "array", "items": { "$ref": "#/$defs/assetEntry" } },
         "sfx": { "type": "array", "items": { "$ref": "#/$defs/assetEntry" } },

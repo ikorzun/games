@@ -26,6 +26,8 @@ export interface IStage {
   changeBackground(bg: string, filter: StageFilter | null, transition: TransitionKind, instant: boolean): Promise<void>;
   showCg(cg: string, transition: TransitionKind, instant: boolean): Promise<void>;
   hideCg(transition: TransitionKind, instant: boolean): Promise<void>;
+  /** Кадр покрытия поверх фона и спрайтов (null — убрать, остаются фон и спрайты). */
+  showShot(shot: string | null, transition: TransitionKind, instant: boolean): Promise<void>;
   setSpeaker(who: string | null): void;
   /** Эффект fx на ms миллисекунд; резолвится по окончании. */
   playFx(fx: FxKind, ms: number, intensity: number, instant: boolean): Promise<void>;

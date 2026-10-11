@@ -36,13 +36,18 @@ export class DomSceneRenderer implements ISceneRenderer {
   private cgEl!: HTMLElement;
   private cgImg!: HTMLImageElement;
   private cgLabel!: HTMLElement;
+  private shotEl!: HTMLElement;
+  private shotImg!: HTMLImageElement;
+  private shotLabel!: HTMLElement;
   private readonly nodes = new Map<string, SpriteEntry>();
   private violence: ViolenceMode = 'full';
   private cgId: string | null = null;
+  private shotId: string | null = null;
   private bgId = '';
   private speaker: string | null = null;
   private bgToken = 0;
   private cgToken = 0;
+  private shotToken = 0;
   private observer: ResizeObserver | null = null;
   private destroyed = false;
 
@@ -60,7 +65,12 @@ export class DomSceneRenderer implements ISceneRenderer {
     this.cgImg.draggable = false;
     this.cgLabel = h('span', { class: 'ph-label' });
     this.cgEl = h('div', { class: 'ph-cg', hidden: true, data: { state: 'none' } }, this.cgImg, this.cgLabel);
-    this.root = h('div', { class: 'ph-scene' }, this.bgEl, this.spritesEl, this.cgEl);
+    this.shotImg = h('img', { class: 'ph-img' });
+    this.shotImg.alt = '';
+    this.shotImg.draggable = false;
+    this.shotLabel = h('span', { class: 'ph-label' });
+    this.shotEl = h('div', { class: 'ph-shot', hidden: true, data: { state: 'none' } }, this.shotImg, this.shotLabel);
+    this.root = h('div', { class: 'ph-scene' }, this.bgEl, this.spritesEl, this.shotEl, this.cgEl);
     host.appendChild(this.root);
     if (typeof ResizeObserver !== 'undefined') {
       this.observer = new ResizeObserver(() => this.layoutSprites());
@@ -74,8 +84,32 @@ export class DomSceneRenderer implements ISceneRenderer {
     this.speaker = view.speaker;
     this.setBackground(view.bg);
     for (const sp of view.sprites) this.showSprite(sp, false, 'cut');
+    this.setShot(view.shot ?? null);
     this.setCg(view.cg);
     this.setSpeaker(view.speaker);
+  }
+
+  /**
+   * Кадр покрытия: поверх фона вместо спрайтов (класс has-shot прячет слой спрайтов), под CG. Пока новый
+   * кадр грузится, виден прежний; если файла нет — плейсхолдер не рисуется, остаются спрайты.
+   */
+  setShot(shot: string | null): void {
+    this.shotId = shot;
+    this.shotToken += 1;
+    this.shotEl.hidden = shot === null;
+    if (shot === null) {
+      this.shotEl.dataset.state = 'none';
+      this.updateShotVisibility();
+      return;
+    }
+    this.shotLabel.textContent = `shot · ${placeholderLabel(shot)}`;
+    if (this.shotEl.dataset.state !== 'image') this.shotEl.dataset.state = 'loading';
+    this.resolveSlot(this.shotEl, this.shotImg, this.assets.shotChain?.(shot) ?? null, this.shotToken, () => this.shotToken, () => this.updateShotVisibility());
+    this.updateShotVisibility();
+  }
+
+  private updateShotVisibility(): void {
+    this.root.classList.toggle('has-shot', !this.shotEl.hidden && this.shotEl.dataset.state === 'image');
   }
 
   setBackground(bg: string): void {
@@ -101,7 +135,7 @@ export class DomSceneRenderer implements ISceneRenderer {
   }
 
   /** Фон / CG: готовая картинка, загрузка (пока прежняя) или плейсхолдер, если файла нет. */
-  private resolveSlot(el: HTMLElement, img: HTMLImageElement, chain: ImageChain | null, token: number, current: () => number): void {
+  private resolveSlot(el: HTMLElement, img: HTMLImageElement, chain: ImageChain | null, token: number, current: () => number, after?: () => void): void {
     const apply = (handle: ImageHandle | null): void => {
       if (handle) {
         img.src = handle.url;
@@ -109,6 +143,7 @@ export class DomSceneRenderer implements ISceneRenderer {
       } else {
         el.dataset.state = 'placeholder';
       }
+      after?.();
     };
     if (!chain) {
       apply(null);
@@ -267,7 +302,15 @@ export class DomSceneRenderer implements ISceneRenderer {
     const state = (el: HTMLElement): SlotState => (el.dataset.state as SlotState | undefined) ?? 'none';
     const sprites: Record<string, SlotState> = {};
     for (const [who, entry] of this.nodes) sprites[who] = entry.state;
-    return { bg: state(this.bgEl), bgId: this.bgId, cg: this.cgEl.hidden ? 'none' : state(this.cgEl), cgId: this.cgId, sprites };
+    return {
+      bg: state(this.bgEl),
+      bgId: this.bgId,
+      cg: this.cgEl.hidden ? 'none' : state(this.cgEl),
+      cgId: this.cgId,
+      shot: this.shotEl.hidden ? 'none' : state(this.shotEl),
+      shotId: this.shotId,
+      sprites,
+    };
   }
 
   setViolenceMode(mode: ViolenceMode): void {

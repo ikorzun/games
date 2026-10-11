@@ -206,3 +206,14 @@ describe('Director: реклама на границе блока', () => {
     expect(director.holdingBlack).toBe(false);
   });
 });
+
+describe('Director: кадры покрытия', () => {
+  it('событие shot идёт в сцену как склейка; перед рекламой промежуточные кадры не показываются', async () => {
+    const { t, director } = setup();
+    await director.present({ events: [{ t: 'shot', shot: 'sh_1', transition: 'cut' }, { t: 'shot', shot: null, transition: 'cut' }], pending: LINE });
+    expect(t).toEqual(['stage:shot:sh_1:cut', 'stage:shot:-:cut']);
+    const t2 = setup();
+    await t2.director.present({ events: [{ t: 'shot', shot: 'sh_1', transition: 'cut' }, sceneEv('s_new', 'fade')], pending: AD });
+    expect(t2.t.some((x) => x.startsWith('stage:shot'))).toBe(false);
+  });
+});

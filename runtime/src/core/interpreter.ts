@@ -15,6 +15,8 @@
  * тесты, которые обходят весь граф эпизода. Всё, что видно на сцене, хранится в `view`
  * (сериализуемый снимок), а не в графике: так работают сейвы и откат.
  */
+import { EMPTY_CTX, LONG_LINE_CHARS, ShotIndex, afterHide, beatOf, choiceShot, entryShot, explicitShot, lineShot, listenerOf } from './editor';
+import type { ShotPick } from './editor';
 import { evalCondition } from './expr';
 import { applyEffects, cloneJson, createInitialState, envOf, setVariable } from './state';
 import { STAGE_FILTERS } from './types';
@@ -35,9 +37,12 @@ import type {
   MinigameDef,
   MinigameOutcomeKind,
   MinigameResult,
+  NarrateStep,
+  NarrateStyle,
   Outcome,
   Pending,
   PumpResult,
+  SayStep,
   Scene,
   Snapshot,
   SpriteView,
@@ -47,6 +52,10 @@ import type {
   Value,
   ViewState,
 } from './types';
+
+function isOffscreenPos(position: SpriteView['position'] | undefined): boolean {
+  return position === 'offscreen_left' || position === 'offscreen_right';
+}
 
 export class EngineError extends Error {
   constructor(message: string) {
@@ -106,6 +115,9 @@ export function defaultViewFor(episode: Episode, sceneId: string): ViewState {
     sprites: [],
     cg: null,
     cg_hide_after: true,
+    coverage: scene.coverage ?? null,
+    shot: null,
+    shot_ctx: null,
     music: scene.music ?? block.music ?? null,
     ambient: scene.ambient ?? null,
     speaker: null,
@@ -117,6 +129,11 @@ export interface InterpreterOptions {
   carriedGlobals?: Readonly<Record<string, Value>>;
   /** Приёмник некритичных замечаний о контенте (по умолчанию — console.warn). */
   warn?: (message: string) => void;
+  /**
+   * Длина текста реплики (знаков) на текущем языке — для правила «длинная реплика → реакция слушающего»
+   * монтажёра (core/editor.ts). Без неё длинных реплик нет.
+   */
+  lineLength?: (key: string) => number;
 }
 
 export interface MinigameResolution {
@@ -139,6 +156,11 @@ export class Interpreter {
   private readonly minigames: Readonly<Record<string, MinigameDef>>;
   private readonly endings = new Map<string, Ending>();
   private readonly archiveIds = new Set<string>();
+  /** Кадры покрытия и монтажёр (docs/architecture/08-shot-grammar.md). */
+  private readonly shots: ShotIndex;
+  private readonly pov: string | null;
+  private readonly lineLength: (key: string) => number;
+  private readonly sceneCasts = new Map<string, string[]>();
 
   private _state: GameState | null = null;
   private _view: ViewState | null = null;
@@ -158,6 +180,9 @@ export class Interpreter {
     this.minigames = episode.minigames ?? {};
     for (const e of episode.endings) this.endings.set(e.id, e);
     for (const a of episode.archive_items ?? []) this.archiveIds.add(a.id);
+    this.shots = new ShotIndex(episode.assets?.shots ?? []);
+    this.pov = episode.frame.player_character ?? null;
+    this.lineLength = options.lineLength ?? (() => 0);
   }
 
   // ───────────────────────────── доступ к состоянию ─────────────────────────────
@@ -239,6 +264,10 @@ export class Interpreter {
     }
     this._state = cloneJson(snap.state);
     this._view = cloneJson(snap.view);
+    // Сейвы до появления покрытия: кадра нет, сцена идёт спрайтами до следующего входа в сцену.
+    this._view.coverage ??= null;
+    this._view.shot ??= null;
+    this._view.shot_ctx ??= null;
     this.queue = [];
     this.current = null;
     this.adBlock = null;
@@ -452,6 +481,14 @@ export class Interpreter {
       ambient: prev?.ambient ?? null,
     };
 
+    // Покрытие: вход в сцену — общий план сета с составом сцены (08 §4.1); кадров нет — спрайты.
+    if (view.coverage !== null && this.shots.hasSet(view.coverage)) {
+      view.shot = entryShot(this.shots, view.coverage, this.sceneCast(scene))?.id ?? null;
+      view.shot_ctx = { ...EMPTY_CTX };
+    } else {
+      view.coverage = null;
+    }
+
     if (prev?.cg && newBlock) this.emit({ t: 'cg_hide', transition: 'fade' });
 
     let transition: TransitionKind;
@@ -504,6 +541,77 @@ export class Interpreter {
     return this.view.sprites.find((s) => s.who === who);
   }
 
+  // ───────────────────────────── кадры покрытия (монтажёр) ─────────────────────────────
+
+  /** Кто сейчас на сцене (видимые спрайты) — состав для подбора кадра. */
+  private stageCast(): string[] {
+    return this.view.sprites.filter((s) => !isOffscreenPos(s.position)).map((s) => s.who);
+  }
+
+  /** Состав сцены по её шагам — для общего плана при входе, когда спрайтов ещё нет. */
+  private sceneCast(scene: Scene): string[] {
+    let cast = this.sceneCasts.get(scene.id);
+    if (!cast) {
+      const on = new Set<string>();
+      const off = new Set<string>();
+      const spoke = new Set<string>();
+      for (const step of scene.steps) {
+        if (step.do === 'show') (isOffscreenPos(step.position) ? off : on).add(step.who);
+        else if (step.do === 'say') {
+          if (step.position !== undefined) (isOffscreenPos(step.position) ? off : on).add(step.who);
+          else spoke.add(step.who);
+        }
+      }
+      for (const who of spoke) if (!off.has(who)) on.add(who);
+      cast = [...on];
+      this.sceneCasts.set(scene.id, cast);
+    }
+    return cast;
+  }
+
+  private shotEvent(pick: ShotPick): EngineEvent | null {
+    const view = this.view;
+    view.shot_ctx = pick.ctx;
+    if (pick.shot === view.shot) return null;
+    view.shot = pick.shot;
+    return { t: 'shot', shot: pick.shot, transition: 'cut' };
+  }
+
+  /** Кадр для реплики: явный `shot` сценариста или выбор монтажёра; null — кадр не меняется. */
+  private lineShotEvent(step: SayStep | NarrateStep, who: string | null, expression: string | null, narrate: NarrateStyle | null): EngineEvent | null {
+    const view = this.view;
+    if (view.coverage === null) return null;
+    const ctx = view.shot_ctx ?? { ...EMPTY_CTX };
+    if (step.shot !== undefined) return this.explicitShotEvent(step.shot, who);
+    return this.shotEvent(
+      lineShot(this.shots, {
+        set: view.coverage,
+        who,
+        expression,
+        beat: beatOf(step.beat, expression),
+        narrate,
+        longLine: this.lineLength(step.key) > LONG_LINE_CHARS,
+        cast: this.stageCast(),
+        pov: this.pov,
+        current: view.shot,
+        ctx,
+        seed: `${this.state.scene_id}:${this.state.step_index}`,
+      }),
+    );
+  }
+
+  private explicitShotEvent(id: string, who: string | null): EngineEvent | null {
+    const view = this.view;
+    if (view.coverage === null) return null;
+    const shot = this.shots.get(id);
+    if (!shot) {
+      this.warn(`сцена ${this.state.scene_id}: кадр ${id} не объявлен в assets.shots — оставлен текущий`);
+      return null;
+    }
+    if (shot.set !== view.coverage) this.warn(`сцена ${this.state.scene_id}: кадр ${id} из сета ${shot.set}, а сцена покрыта сетом ${view.coverage}`);
+    return this.shotEvent(explicitShot(this.shots, id, view.shot, view.shot_ctx ?? { ...EMPTY_CTX }, who));
+  }
+
   /** Выполнить один шаг. Возвращает ожидание для блокирующих шагов, иначе null. */
   private exec(step: Step): Pending | null {
     const state = this.state;
@@ -512,13 +620,16 @@ export class Interpreter {
       case 'say': {
         this.applySayToSprite(step.who, step.expression, step.pose, step.position);
         view.speaker = step.who;
+        const expression = step.expression ?? this.sprite(step.who)?.expression ?? null;
+        const shotEv = this.lineShotEvent(step, step.who, expression, null);
+        if (shotEv) this.emit(shotEv);
         this.emit({ t: 'speaker', who: step.who });
         const p: LinePending = {
           kind: 'line',
           style: 'say',
           who: step.who,
           key: step.key,
-          expression: step.expression ?? this.sprite(step.who)?.expression ?? null,
+          expression,
           narrate_style: null,
           voice: step.voice ?? null,
           scene: state.scene_id,
@@ -528,6 +639,8 @@ export class Interpreter {
       }
       case 'narrate': {
         view.speaker = null;
+        const shotEv = this.lineShotEvent(step, null, null, step.style ?? 'voiceover');
+        if (shotEv) this.emit(shotEv);
         this.emit({ t: 'speaker', who: null });
         const p: LinePending = {
           kind: 'line',
@@ -565,12 +678,24 @@ export class Interpreter {
         if (prev) view.sprites[view.sprites.indexOf(prev)] = sprite;
         else view.sprites.push(sprite);
         this.emit({ t: 'show', sprite: { ...sprite }, existing: prev !== undefined, transition: step.transition ?? 'dissolve' });
+        if (step.shot !== undefined) {
+          const shotEv = this.explicitShotEvent(step.shot, step.who);
+          if (shotEv) this.emit(shotEv);
+        }
         state.step_index += 1;
         return null;
       }
       case 'hide': {
         view.sprites = view.sprites.filter((s) => s.who !== step.who);
         if (view.speaker === step.who) view.speaker = null;
+        if (view.coverage !== null) {
+          // Кадр с ушедшим не годится: общий план оставшихся или спрайты (08 §4.9).
+          const next = afterHide(this.shots, view.coverage, this.stageCast(), view.shot, step.who);
+          if (next !== view.shot) {
+            view.shot = next;
+            this.emit({ t: 'shot', shot: next, transition: 'cut' });
+          }
+        }
         this.emit({ t: 'hide', who: step.who, transition: step.transition ?? 'dissolve' });
         state.step_index += 1;
         return null;
@@ -579,6 +704,15 @@ export class Interpreter {
         if (view.cg !== null) {
           view.cg = null;
           this.emit({ t: 'cg_hide', transition: 'fade' });
+        }
+        if (view.coverage !== null && this.shots.set(view.coverage)[0]?.bg !== step.bg) {
+          // Другая локация — кадры сета больше не про эту сцену: до следующей сцены идём спрайтами.
+          view.coverage = null;
+          view.shot_ctx = null;
+          if (view.shot !== null) {
+            view.shot = null;
+            this.emit({ t: 'shot', shot: null, transition: 'cut' });
+          }
         }
         view.bg = step.bg;
         if (step.filter !== undefined) {
@@ -645,6 +779,17 @@ export class Interpreter {
         return p;
       }
       case 'choice': {
+        if (view.coverage !== null) {
+          // §4.6: medium с персонажем игрока или wide; выбор с таймером — крупный план оппонента.
+          const ctx = view.shot_ctx ?? { ...EMPTY_CTX };
+          const opponent = listenerOf(ctx, this.pov);
+          const next = choiceShot(this.shots, view.coverage, this.stageCast(), this.pov, step.timer_ms !== undefined, opponent)?.id ?? view.shot;
+          if (next !== view.shot) {
+            view.shot = next;
+            view.shot_ctx = { ...ctx, held: 1, closes: 0 };
+            this.emit({ t: 'shot', shot: next, transition: 'cut' });
+          }
+        }
         let options = step.options.map((o) => ({
           id: o.id,
           key: o.key,

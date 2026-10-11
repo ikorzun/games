@@ -155,3 +155,45 @@ describe('DomSceneRenderer: поворот к собеседнику (решен
     expect(flipped()).toEqual([]); // снова одна
   });
 });
+
+describe('DomSceneRenderer: кадр покрытия (shot)', () => {
+  const handle = (url: string) => ({ url, image: new Image(), width: 1920, height: 1080 });
+  const assets = (files: Record<string, boolean>) => ({
+    ...NO_ASSETS,
+    shotChain: (id: string) => (id in files ? { urls: [`/shots/${id}.webp`], silhouetteFirst: false } : null),
+    peek: (urls: readonly string[]) => (files[urls[0]?.replace('/shots/', '').replace('.webp', '') ?? ''] ? { handle: handle(urls[0] ?? ''), index: 0 } : null),
+  });
+
+  it('кадр показан вместо спрайтов (has-shot), null убирает его; слоты в slotStates', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const r = new DomSceneRenderer(assets({ sh_a: true }));
+    await r.mount(host);
+    r.showSprite(sprite('a', 'left'), false, 'cut');
+    r.setShot('sh_a');
+    const scene = host.querySelector('.ph-scene') as HTMLElement;
+    expect(scene.classList.contains('has-shot')).toBe(true);
+    expect(r.slotStates()).toMatchObject({ shot: 'image', shotId: 'sh_a' });
+    expect(drawn(host)).toEqual(['a']); // спрайт остаётся в DOM (откат), только скрыт стилем
+    r.setShot(null);
+    expect(scene.classList.contains('has-shot')).toBe(false);
+    expect(r.slotStates()).toMatchObject({ shot: 'none', shotId: null });
+  });
+
+  it('файла нет — плейсхолдера нет, спрайты видны (запасной вариант); setView ставит кадр из view', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const r = new DomSceneRenderer(assets({ sh_a: true, sh_missing: false }));
+    await r.mount(host);
+    r.setShot('sh_missing');
+    const scene = host.querySelector('.ph-scene') as HTMLElement;
+    expect(scene.classList.contains('has-shot')).toBe(false);
+    expect(r.slotStates()).toMatchObject({ shot: 'placeholder', shotId: 'sh_missing' });
+    r.setShot('sh_unknown');
+    expect(r.slotStates().shot).toBe('placeholder');
+    r.setView({ ...defaultViewFor(episode, 's1'), shot: 'sh_a' });
+    expect(scene.classList.contains('has-shot')).toBe(true);
+    r.setView(defaultViewFor(episode, 's1'));
+    expect(scene.classList.contains('has-shot')).toBe(false);
+  });
+});

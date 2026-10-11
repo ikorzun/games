@@ -111,12 +111,16 @@ export class BlockPreloader {
       }
     }
 
+    // Остальные кадры покрытия текущего блока — в фоне, раньше следующих блоков: они понадобятся на первых же репликах.
+    for (const c of plan.idle) void store.loadFirst(c.urls, 'idle');
+
     // Озвучка текущего блока — после картинок: небольшой очередью, не мешая им (адреса считает LineVoice по языку и индексу).
     voice?.warm(plan.lines, 'now');
 
     // Следующие блоки — в фоне, не мешая игре.
     for (const p of nextPlans) {
       for (const c of p.images) void store.loadFirst(c.urls, 'idle');
+      for (const c of p.idle) void store.loadFirst(c.urls, 'idle');
       if (audio && p.audio.length > 0) void audio.preload(p.audio).catch(() => undefined);
       voice?.warm(p.lines.slice(0, NEXT_BLOCK_VOICE_LINES), 'idle');
     }

@@ -15,6 +15,9 @@ export interface SlotStates {
   bgId: string;
   cg: SlotState;
   cgId: string | null;
+  /** Кадр покрытия: image — показан вместо спрайтов; placeholder — файла нет, видны спрайты (запасной вариант). */
+  shot: SlotState;
+  shotId: string | null;
   /** who → состояние спрайта (ушедшие и закадровые не входят). */
   sprites: Record<string, SlotState>;
 }
@@ -26,6 +29,11 @@ export interface ISceneRenderer {
   setView(view: ViewState): void;
   setBackground(bg: string): void;
   setCg(cg: string | null): void;
+  /**
+   * Кадр покрытия (assets.shots): показывается поверх фона вместо спрайтов, под CG. Пока картинка грузится —
+   * прежний кадр; если файла нет — спрайты (запасной вариант 08 §4.9). null — убрать.
+   */
+  setShot(shot: string | null): void;
   showSprite(sprite: SpriteView, existing: boolean, transition: TransitionKind): void;
   hideSprite(who: string, transition: TransitionKind): void;
   setSpeaker(who: string | null): void;

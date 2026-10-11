@@ -168,6 +168,79 @@ def seasons(ep: dict, ru: dict | None, rep: Report) -> None:
                         rep.err(f"scene {sid}: титр «{text}» про {cs}, а сезон сцены — {eff}")
 
 
+SHOT_KINDS = ("wide", "medium", "ots", "close", "reaction", "insert", "angle")
+
+
+def shots_check(ep: dict, rep: Report) -> None:
+    """Кадры покрытия (08 §3): сеты, состав, выражения, файлы; coverage сцен и явные shot шагов."""
+    assets = ep.get("assets", {})
+    shots = assets.get("shots", [])
+    if not shots and not any(sc.get("coverage") for sc in ep.get("scenes", {}).values()):
+        return
+    cast = {c["id"]: c for c in ep.get("cast", [])}
+    sprites = {s["id"]: s for s in assets.get("sprites", [])}
+    bgs = {a["id"] for a in assets.get("backgrounds", [])}
+    by_id: dict[str, dict] = {}
+    sets: dict[str, list[dict]] = {}
+    for sh in shots:
+        where = f"shot {sh['id']}"
+        if sh["id"] in by_id:
+            rep.err(f"{where}: дублирующийся id")
+        by_id[sh["id"]] = sh
+        sets.setdefault(sh["set"], []).append(sh)
+        if sh["bg"] not in bgs:
+            rep.err(f"{where}: фон {sh['bg']} отсутствует в assets.backgrounds")
+        who_in = [c["who"] for c in sh.get("cast", [])]
+        for c in sh.get("cast", []):
+            who = c["who"]
+            if who not in cast:
+                rep.err(f"{where}: персонаж {who} не в cast")
+                continue
+            expr = c.get("expression")
+            ss = cast[who].get("sprite_set")
+            if expr and ss and ss in sprites and expr not in sprites[ss]["expressions"]:
+                rep.err(f"{where}: expression {expr} нет в наборе {ss}")
+        for key in ("from", "focus"):
+            if sh.get(key) and sh[key] not in who_in:
+                rep.err(f"{where}: {key} {sh[key]} не входит в cast кадра")
+        if sh["kind"] in ("close", "reaction") and not sh.get("focus"):
+            rep.err(f"{where}: у {sh['kind']} должен быть focus")
+        if sh["kind"] == "ots" and (not sh.get("from") or not sh.get("focus")):
+            rep.err(f"{where}: у ots должны быть from и focus")
+        if sh["kind"] == "insert" and who_in:
+            rep.warn(f"{where}: insert с персонажами в cast — монтажёр считает его кадром без лиц")
+        if not os.path.exists(os.path.join(ROOT, sh["file"])):
+            rep.warn(f"{where}: файла {sh['file']} нет в репозитории (рантайм покажет спрайты)")
+    for name, lst in sets.items():
+        bg_set = {sh["bg"] for sh in lst}
+        if len(bg_set) > 1:
+            rep.err(f"set {name}: кадры из разных фонов {sorted(bg_set)} — сет привязан к одному фону")
+        if not any(sh["kind"] == "wide" for sh in lst):
+            rep.warn(f"set {name}: нет ни одного wide — при входе в сцену монтажёр покажет спрайты")
+    for sid, scene in ep.get("scenes", {}).items():
+        cov = scene.get("coverage")
+        if not cov:
+            continue
+        if cov not in sets:
+            rep.err(f"scene {sid}: coverage {cov} — такого сета нет в assets.shots")
+            continue
+        set_bg = sets[cov][0]["bg"]
+        if scene.get("stage", {}).get("bg") != set_bg:
+            rep.err(f"scene {sid}: coverage {cov} снят в фоне {set_bg}, а сцена — в {scene.get('stage', {}).get('bg')}")
+        for i, step in enumerate(scene.get("steps", [])):
+            ref = step.get("shot")
+            if not ref:
+                continue
+            where = f"scene {sid} step {i} ({step.get('do')})"
+            if ref not in by_id:
+                rep.err(f"{where}: shot {ref} не объявлен в assets.shots")
+            elif by_id[ref]["set"] != cov:
+                rep.err(f"{where}: shot {ref} из сета {by_id[ref]['set']}, а сцена покрыта сетом {cov}")
+    for sid, i, step in iter_steps(ep):
+        if step.get("shot") and not ep["scenes"][sid].get("coverage"):
+            rep.warn(f"scene {sid} step {i}: shot {step['shot']} в сцене без coverage — кадр не покажется")
+
+
 def integrity(ep: dict, rep: Report) -> None:
     scenes = ep.get("scenes", {})
     blocks = ep.get("blocks", [])
@@ -703,6 +776,7 @@ def main() -> int:
     if not rep.errors:
         integrity(ep, rep)
         unique_choice_ids(ep, rep)
+        shots_check(ep, rep)
         ru_path = os.path.join(a.locales, "ru", f"{ep['id']}.json")
         ru = load_json(ru_path) if not a.no_loc and os.path.exists(ru_path) else None
         seasons(ep, ru, rep)

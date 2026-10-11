@@ -160,12 +160,18 @@ export interface SayStep extends StepBase {
   pose?: string;
   position?: Position;
   voice?: string;
+  /** Напряжение момента для монтажёра (08 §3.2); по умолчанию calm, а при напряжённом выражении — tense. */
+  beat?: Beat;
+  /** Явный кадр покрытия (assets.shots[].id сета сцены): монтажёр подчиняется. */
+  shot?: string;
 }
 export interface NarrateStep extends StepBase {
   do: 'narrate';
   key: string;
   style?: NarrateStyle;
   voice?: string;
+  beat?: Beat;
+  shot?: string;
 }
 export interface CaptionStep extends StepBase {
   do: 'caption';
@@ -181,6 +187,8 @@ export interface ShowStep extends StepBase {
   position?: Position;
   transition?: TransitionKind;
   silhouette?: boolean;
+  /** Явный кадр покрытия после появления персонажа. */
+  shot?: string;
 }
 export interface HideStep extends StepBase {
   do: 'hide';
@@ -291,6 +299,8 @@ export interface Scene {
   stage: StageSpec;
   music?: string;
   ambient?: string;
+  /** Сет кадров покрытия (assets.shots[].set); без него сцена идёт фоном и спрайтами. */
+  coverage?: string;
   steps: Step[];
   notes?: string;
 }
@@ -364,10 +374,41 @@ export interface SpriteSet {
   /** Куда персонаж повёрнут на исходных кадрах (сторона зрителя); по умолчанию front — не зеркалится. */
   facing?: SpriteFacing;
 }
+
+// ───────────────────────────── кадры покрытия (docs/architecture/08-shot-grammar.md) ─────────────────────────────
+
+export type ShotKind = 'wide' | 'medium' | 'ots' | 'close' | 'reaction' | 'insert' | 'angle';
+export type ShotAngle = 'eye' | 'low' | 'high' | 'doorway' | 'reflection' | 'foreground';
+/** Напряжение момента: calm → ots/medium, tense → крупный план, climax → крупный план с редкой перебивкой. */
+export type Beat = 'calm' | 'tense' | 'climax';
+
+export interface ShotCast {
+  who: string;
+  expression?: string;
+  mask?: string;
+}
+
+/** Кадр покрытия: сет (локация × свет), крупность, ракурс, кто в кадре, о ком он и файл 1920×1080. */
+export interface Shot {
+  id: string;
+  set: string;
+  bg: string;
+  kind: ShotKind;
+  angle?: ShotAngle;
+  cast: ShotCast[];
+  /** ots: через чьё плечо. */
+  from?: string;
+  /** О ком кадр: говорящий (close/ots) или слушающий (reaction). */
+  focus?: string;
+  file: string;
+  notes?: string;
+}
+
 export interface Assets {
   backgrounds?: AssetEntry[];
   sprites?: SpriteSet[];
   cg?: AssetEntry[];
+  shots?: Shot[];
   documents?: AssetEntry[];
   music?: AssetEntry[];
   sfx?: AssetEntry[];
@@ -476,9 +517,35 @@ export interface ViewState {
   cg: string | null;
   /** Скрыть CG после ближайшей реплики (cg.hide_after). */
   cg_hide_after: boolean;
+  /** Активный сет покрытия (scene.coverage); null — сцена идёт фоном и спрайтами. */
+  coverage: string | null;
+  /** Текущий кадр покрытия (assets.shots[].id) поверх фона и спрайтов; null — кадра нет. */
+  shot: string | null;
+  /** Память монтажёра внутри сцены; вместе с кадром попадает в сейв, чтобы загрузка и откат показали тот же кадр. */
+  shot_ctx: ShotCtx | null;
   music: string | null;
   ambient: string | null;
   speaker: string | null;
+}
+
+/** Состояние монтажёра (core/editor.ts): всё, что нужно, чтобы следующий выбор кадра был детерминированным. */
+export interface ShotCtx {
+  /** Сколько реплик подряд держится текущий кадр. */
+  held: number;
+  /** Сколько крупных планов (close / ots / reaction) подряд. */
+  closes: number;
+  /** Номер реплики сцены, на которой последний раз стояла перебивка angle (-1 — не было). */
+  last_angle: number;
+  /** Длинных реплик с последней реакции слушающего. */
+  long_lines: number;
+  /** Кто говорил в предыдущей реплике. */
+  speaker: string | null;
+  /** Последний собеседник, отличный от говорящего, — для ots «от него к говорящему» и реакции слушающего. */
+  prev_speaker: string | null;
+  /** Порядковый номер реплики в сцене (с нуля). */
+  line: number;
+  /** Чередование wide / insert у рассказчика. */
+  narr: number;
 }
 
 export interface Snapshot {
@@ -499,6 +566,7 @@ export type EngineEvent =
   | { t: 'bg'; bg: string; filter: StageFilter | null; transition: TransitionKind }
   | { t: 'cg'; cg: string; transition: TransitionKind }
   | { t: 'cg_hide'; transition: TransitionKind }
+  | { t: 'shot'; shot: string | null; transition: TransitionKind }
   | { t: 'speaker'; who: string | null }
   | { t: 'audio'; kind: AudioKind; id: string | null; fade_ms: number; loop: boolean; volume: number }
   | { t: 'archive'; item: string; toast: boolean }

@@ -1,11 +1,13 @@
 /** Конструктор миниатюрных эпизодов для юнит-тестов интерпретатора. */
-import type { Block, Episode, MinigameDef, Scene, StageSpec, Step, VariableDef } from '../../src/core/types';
+import type { Block, Episode, MinigameDef, Scene, Shot, StageSpec, Step, VariableDef } from '../../src/core/types';
 
 export interface MiniScene {
   block?: string;
   stage?: StageSpec;
   music?: string;
   ambient?: string;
+  /** Сет кадров покрытия (монтажёр). */
+  coverage?: string;
   steps: Step[];
 }
 
@@ -14,6 +16,10 @@ export interface MiniOptions {
   variables?: Record<string, VariableDef>;
   minigames?: Record<string, MinigameDef>;
   archive?: string[];
+  /** Кадры покрытия (assets.shots). */
+  shots?: Shot[];
+  /** Персонаж игрока (frame.player_character). */
+  pov?: string;
 }
 
 export function miniEpisode(scenes: Record<string, MiniScene>, opts: MiniOptions = {}): Episode {
@@ -25,6 +31,7 @@ export function miniEpisode(scenes: Record<string, MiniScene>, opts: MiniOptions
       stage: sc.stage ?? { bg: 'bg_a' },
       ...(sc.music ? { music: sc.music } : {}),
       ...(sc.ambient ? { ambient: sc.ambient } : {}),
+      ...(sc.coverage ? { coverage: sc.coverage } : {}),
       steps: sc.steps,
     };
   }
@@ -42,7 +49,7 @@ export function miniEpisode(scenes: Record<string, MiniScene>, opts: MiniOptions
     title_key: 'mini.title',
     archetype: 'fraud',
     based_on: { case_name: 'x', years: [1993], city: 'x', fictionalization: { level: 'inspired', names_changed: true } },
-    frame: { pov: 'investigator', narrator: 'voiceover' },
+    frame: { pov: 'investigator', narrator: 'voiceover', ...(opts.pov ? { player_character: opts.pov } : {}) },
     cast: [
       { id: 'a', name_key: 'mini.cast.a', role: 'investigator', name_color: '#ffffff' },
       { id: 'b', name_key: 'mini.cast.b', role: 'witness' },
@@ -56,7 +63,7 @@ export function miniEpisode(scenes: Record<string, MiniScene>, opts: MiniOptions
       { id: 'e_alt', title_key: 'mini.end.alt', kind: 'variant', unlocks: ['arc_x'] },
     ],
     archive_items: (opts.archive ?? ['arc_x', 'arc_y']).map((id) => ({ id, kind: 'fact' as const, title_key: `mini.${id}` })),
-    assets: {},
+    assets: opts.shots ? { shots: opts.shots } : {},
   };
 }
 

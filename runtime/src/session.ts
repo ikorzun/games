@@ -6,6 +6,7 @@
  */
 import { runAutoplay } from './core/autoplay';
 import type { AutoplayPolicy, AutoplayReport } from './core/autoplay';
+import { t } from './core/i18n';
 import { Interpreter } from './core/interpreter';
 import { prepareLoad, SAVE_SCHEMA_VERSION } from './core/saves';
 import type { SaveFile, SaveManager } from './core/saves';
@@ -139,7 +140,8 @@ export class Session {
 
   constructor(deps: SessionDeps) {
     this.d = deps;
-    this.interp = new Interpreter(deps.episode, deps.warn ? { warn: deps.warn } : {});
+    // Длина реплики на текущем языке — монтажёру для реакции слушающего на длинной реплике (core/editor.ts).
+    this.interp = new Interpreter(deps.episode, { ...(deps.warn ? { warn: deps.warn } : {}), lineLength: (key) => t(key).length });
   }
 
   get episode(): Episode {

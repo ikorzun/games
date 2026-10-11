@@ -338,6 +338,9 @@ describe('DomSceneRenderer: спрайты', () => {
       sprites: [sprite('zoya', 'neutral')],
       cg: 'cg_door',
       cg_hide_after: true,
+      coverage: null,
+      shot: null,
+      shot_ctx: null,
       music: null,
       ambient: null,
       speaker: 'zoya',
@@ -352,7 +355,7 @@ describe('DomSceneRenderer: спрайты', () => {
 describe('DomSceneRenderer: slotStates() для QA (__vn.slots)', () => {
   it('до первого кадра слоты пусты; картинка из файла → image, нет файла → placeholder, чёрный фон → solid', async () => {
     const { r } = await rig(['./assets/ep01/bg/yard.webp']);
-    expect(r.slotStates()).toEqual({ bg: 'none', bgId: '', cg: 'none', cgId: null, sprites: {} });
+    expect(r.slotStates()).toEqual({ bg: 'none', bgId: '', cg: 'none', cgId: null, shot: 'none', shotId: null, sprites: {} });
     r.setBackground('bg_yard');
     await flush();
     expect(r.slotStates()).toMatchObject({ bg: 'image', bgId: 'bg_yard' });

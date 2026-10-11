@@ -13,7 +13,7 @@
  * Ядро (каталог, план, очередь) не трогает DOM и тестируется в node; браузерные части
  * (загрузка <img>) подменяются через опции AssetStore.
  */
-import type { Episode, SpriteFacing, SpriteSet, SpriteView, ViewState } from '../core/types';
+import type { Episode, Shot, SpriteFacing, SpriteSet, SpriteView, ViewState } from '../core/types';
 import type { VoiceLineRef } from '../core/voice';
 
 // ───────────────────────────── пути ─────────────────────────────
@@ -76,6 +76,8 @@ export class AssetCatalog {
   private readonly audio = new Map<string, string>();
   private readonly sets = new Map<string, SpriteSet>();
   private readonly setOfChar = new Map<string, string>();
+  private readonly shots = new Map<string, Shot>();
+  private readonly shotSets = new Map<string, Shot[]>();
 
   constructor(
     episode: Pick<Episode, 'assets' | 'cast'>,
@@ -89,6 +91,26 @@ export class AssetCatalog {
     for (const list of [a.music, a.ambient, a.sfx, a.voice]) for (const e of list ?? []) this.audio.set(e.id, e.path);
     for (const s of a.sprites ?? []) this.sets.set(s.id, s);
     for (const c of episode.cast ?? []) if (c.sprite_set) this.setOfChar.set(c.id, c.sprite_set);
+    for (const s of a.shots ?? []) {
+      this.shots.set(s.id, s);
+      const list = this.shotSets.get(s.set);
+      if (list) list.push(s);
+      else this.shotSets.set(s.set, [s]);
+    }
+  }
+
+  shot(id: string): Shot | null {
+    return this.shots.get(id) ?? null;
+  }
+
+  /** Кадры сета в порядке assets.shots. */
+  shotsOfSet(set: string): readonly Shot[] {
+    return this.shotSets.get(set) ?? [];
+  }
+
+  shotChain(id: string): ImageChain | null {
+    const s = this.shots.get(id);
+    return s ? { urls: [this.url(s.file)], silhouetteFirst: false } : null;
   }
 
   url(path: string): string {
@@ -154,8 +176,10 @@ export class AssetCatalog {
 // ───────────────────────────── план предзагрузки ─────────────────────────────
 
 export interface BlockAssets {
-  /** Цепочки картинок (фон, CG, документ, спрайты): из каждой нужен первый существующий файл. */
+  /** Цепочки картинок (фон, CG, документ, спрайты, общие планы покрытия): из каждой нужен первый существующий файл. */
   images: ImageChain[];
+  /** Остальные кадры покрытия сетов блока: грузятся в фоне после images, вход в блок их не ждёт. */
+  idle: ImageChain[];
   /** mp3: музыка, эмбиент, sfx. */
   audio: string[];
   /**
@@ -177,11 +201,16 @@ function blockSceneIds(episode: Episode, blockId: string): string[] {
 /** Ассеты всех сцен блока. Неизвестные id (нет записи в episode.assets) молча пропускаются: это забота линтера. */
 export function collectBlockAssets(episode: Episode, catalog: AssetCatalog, blockId: string): BlockAssets {
   const images = new Map<string, ImageChain>();
+  const idle = new Map<string, ImageChain>();
   const audio = new Set<string>();
   const lines: VoiceLineRef[] = [];
   const addChain = (chain: ImageChain | null): void => {
     if (chain && chain.urls.length > 0) images.set(chain.urls.join('|'), chain);
   };
+  const addIdle = (chain: ImageChain | null): void => {
+    if (chain && chain.urls.length > 0 && !images.has(chain.urls.join('|'))) idle.set(chain.urls.join('|'), chain);
+  };
+  const coveredSets = new Set<string>();
   const addAudio = (id: string | undefined): void => {
     const u = id ? catalog.audioUrl(id) : null;
     if (u) audio.add(u);
@@ -197,6 +226,11 @@ export function collectBlockAssets(episode: Episode, catalog: AssetCatalog, bloc
     addChain(catalog.bgChain(scene.stage.bg));
     addAudio(scene.music);
     addAudio(scene.ambient);
+    if (scene.coverage && !coveredSets.has(scene.coverage)) {
+      // Кадры покрытия: общие планы (вход в сцену) ждём вместе с фоном, остальные греем в фоне.
+      coveredSets.add(scene.coverage);
+      for (const s of catalog.shotsOfSet(scene.coverage)) (s.kind === 'wide' ? addChain : addIdle)(catalog.shotChain(s.id));
+    }
     for (const step of scene.steps) {
       switch (step.do) {
         case 'bg':
@@ -232,9 +266,11 @@ export function collectBlockAssets(episode: Episode, catalog: AssetCatalog, bloc
       }
     }
   }
+  for (const key of images.keys()) idle.delete(key);
   const all = new Set<string>(audio);
   for (const c of images.values()) for (const u of c.urls) all.add(u);
-  return { images: [...images.values()], audio: [...audio], lines, all };
+  for (const c of idle.values()) for (const u of c.urls) all.add(u);
+  return { images: [...images.values()], idle: [...idle.values()], audio: [...audio], lines, all };
 }
 
 /** Куда ведут выходы блока (jump / branch / choice / исходы мини-игр), без самого блока; иначе — следующий по списку. */
@@ -478,6 +514,8 @@ export interface SceneAssets {
   spriteChain(sprite: Pick<SpriteView, 'who' | 'expression' | 'silhouette'>): ImageChain | null;
   /** Поворот персонажа на исходных кадрах (SpriteSet.facing); нет данных — front, зеркалить нельзя. */
   spriteFacing?(who: string): SpriteFacing;
+  /** Кадр покрытия (assets.shots[].id); нет метода или записи — кадра нет, рендерер показывает спрайты. */
+  shotChain?(id: string): ImageChain | null;
   /** Готовый результат по цепочке: найден / файлов нет (null) / пока неизвестно (undefined). */
   peek(urls: readonly string[]): { handle: ImageHandle; index: number } | null | undefined;
   load(urls: readonly string[], prio?: LoadPriority): Promise<{ handle: ImageHandle; index: number } | null>;
@@ -509,6 +547,9 @@ export class StoreSceneAssets implements SceneAssets {
   spriteFacing(who: string): SpriteFacing {
     return this.catalog.spriteSetOf(who)?.facing ?? 'front';
   }
+  shotChain(id: string): ImageChain | null {
+    return this.catalog.shotChain(id);
+  }
   peek(urls: readonly string[]): { handle: ImageHandle; index: number } | null | undefined {
     return this.store.peekFirst(urls);
   }
@@ -517,13 +558,18 @@ export class StoreSceneAssets implements SceneAssets {
   }
 }
 
-/** Все цепочки кадра: фон, CG и спрайты на сцене (голос за кадром не рисуется). */
-export function viewChains(assets: SceneAssets, view: Pick<ViewState, 'bg' | 'cg' | 'sprites'>): ImageChain[] {
+/** Кадр для подбора картинок: фон, CG, спрайты и (если есть) кадр покрытия. */
+export type ViewImages = Pick<ViewState, 'bg' | 'cg' | 'sprites'> & { shot?: string | null };
+
+/** Все цепочки кадра: фон, CG, кадр покрытия и спрайты на сцене (голос за кадром не рисуется). */
+export function viewChains(assets: SceneAssets, view: ViewImages): ImageChain[] {
   const out: ImageChain[] = [];
   const bg = assets.bgChain(view.bg);
   if (bg) out.push(bg);
   const cg = view.cg ? assets.cgChain(view.cg) : null;
   if (cg) out.push(cg);
+  const shot = view.shot ? (assets.shotChain?.(view.shot) ?? null) : null;
+  if (shot) out.push(shot);
   for (const s of view.sprites) {
     if (s.position === 'offscreen_left' || s.position === 'offscreen_right') continue;
     const c = assets.spriteChain(s);
@@ -533,7 +579,7 @@ export function viewChains(assets: SceneAssets, view: Pick<ViewState, 'bg' | 'cg
 }
 
 /** Дождаться картинок кадра (не дольше timeoutMs): после этого смена сцены не покажет «пустоту». */
-export async function prepareView(assets: SceneAssets, view: Pick<ViewState, 'bg' | 'cg' | 'sprites'>, timeoutMs = 6000): Promise<void> {
+export async function prepareView(assets: SceneAssets, view: ViewImages, timeoutMs = 6000): Promise<void> {
   const chains = viewChains(assets, view).filter((c) => assets.peek(c.urls) === undefined);
   if (chains.length === 0) return;
   let timer: ReturnType<typeof setTimeout> | undefined;

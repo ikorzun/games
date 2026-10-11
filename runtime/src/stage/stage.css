@@ -339,6 +339,7 @@
   background: rgb(0 0 0 / 0.22);
 }
 .ph-bg[data-state='image'] .ph-img,
+.ph-shot[data-state='image'] .ph-img,
 .ph-cg[data-state='image'] .ph-img {
   display: block;
   position: absolute;
@@ -422,6 +423,13 @@
 .ph-cg.is-schematic { background: #0b0b0d; }
 .ph-cg.is-schematic .ph-img { visibility: hidden; }
 .ph-cg[hidden] { display: none; }
+
+/* Кадр покрытия (монтажёр): вместо спрайтов, под CG. Грузится — виден прежний кадр; файла нет — спрайты. */
+.ph-shot { position: absolute; inset: 0; background: #000; }
+.ph-shot:not([data-state='image']) { visibility: hidden; }
+.ph-shot .ph-label { display: none; }
+.ph-shot[hidden] { display: none; }
+.ph-scene.has-shot .ph-sprites { visibility: hidden; }
 
 @media (prefers-reduced-motion: reduce) {
   .vn-stage__cam.camera-ken_burns,

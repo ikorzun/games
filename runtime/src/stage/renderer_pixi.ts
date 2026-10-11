@@ -131,6 +131,9 @@ export class PixiSceneRenderer implements ISceneRenderer {
   private observer: ResizeObserver | null = null;
   private readonly bgLayer = new Container();
   private readonly spriteLayer = new Container();
+  /** Кадр покрытия: между спрайтами и CG; когда показан, слой спрайтов выключен. */
+  private readonly shotLayer = new Container();
+  private readonly shotPic = new Sprite();
   private readonly cgLayer = new Container();
   private readonly bgG = new Graphics();
   private readonly bgLabel = makeText(28, '700');
@@ -143,8 +146,10 @@ export class PixiSceneRenderer implements ISceneRenderer {
   private readonly textures = new TextureCache();
   private readonly bgSlot: Slot = { mode: 'none', url: null, token: 0, color: 0 };
   private readonly cgSlot: Slot = { mode: 'none', url: null, token: 0, color: 0 };
+  private readonly shotSlot: Slot = { mode: 'none', url: null, token: 0, color: 0 };
   private bgId = '';
   private cgId: string | null = null;
+  private shotId: string | null = null;
   private speaker: string | null = null;
   private violence: ViolenceMode = 'full';
   /** Спрайты, уходящие со сцены: их уже нет в nodes, но анимация исчезновения доигрывается. */
@@ -176,13 +181,17 @@ export class PixiSceneRenderer implements ISceneRenderer {
 
     this.bgPic.anchor.set(0.5);
     this.cgPic.anchor.set(0.5);
+    this.shotPic.anchor.set(0.5);
     this.bgPic.visible = false;
     this.cgPic.visible = false;
+    this.shotPic.visible = false;
     this.bgLayer.addChild(this.bgG, this.bgLabel, this.bgTag, this.bgPic);
+    this.shotLayer.addChild(this.shotPic);
+    this.shotLayer.visible = false;
     this.cgLayer.addChild(this.cgG, this.cgLabel, this.cgPic);
     this.cgLayer.visible = false;
     this.minigameRoot.visible = false;
-    app.stage.addChild(this.bgLayer, this.spriteLayer, this.cgLayer, this.minigameRoot);
+    app.stage.addChild(this.bgLayer, this.spriteLayer, this.shotLayer, this.cgLayer, this.minigameRoot);
 
     // Кадр по требованию: штатный рендер по тикеру заменяем условным.
     app.ticker.remove(app.render, app);
@@ -206,10 +215,23 @@ export class PixiSceneRenderer implements ISceneRenderer {
     this.updateFacing();
     this.bgId = view.bg;
     this.resolveSlot(this.bgSlot, this.assets.bgChain(view.bg));
+    this.shotId = view.shot ?? null;
+    this.resolveSlot(this.shotSlot, this.shotChain(this.shotId));
     this.cgId = view.cg;
     this.cgFade = 1;
     this.resolveSlot(this.cgSlot, view.cg ? this.assets.cgChain(view.cg) : null);
     this.layout();
+  }
+
+  /** Кадр покрытия: вместо спрайтов, под CG; грузится — виден прежний, файла нет — спрайты (08 §4.9). */
+  setShot(shot: string | null): void {
+    this.shotId = shot;
+    this.resolveSlot(this.shotSlot, this.shotChain(shot));
+    this.layout();
+  }
+
+  private shotChain(shot: string | null): ImageChain | null {
+    return shot !== null ? (this.assets.shotChain?.(shot) ?? null) : null;
   }
 
   setBackground(bg: string): void {
@@ -261,7 +283,7 @@ export class PixiSceneRenderer implements ISceneRenderer {
   slotStates(): SlotStates {
     const sprites: Record<string, Mode> = {};
     for (const [who, node] of this.nodes) sprites[who] = node.mode;
-    return { bg: this.bgSlot.mode, bgId: this.bgId, cg: this.cgSlot.mode, cgId: this.cgId, sprites };
+    return { bg: this.bgSlot.mode, bgId: this.bgId, cg: this.cgSlot.mode, cgId: this.cgId, shot: this.shotSlot.mode, shotId: this.shotId, sprites };
   }
 
   setViolenceMode(mode: ViolenceMode): void {
@@ -303,6 +325,7 @@ export class PixiSceneRenderer implements ISceneRenderer {
     const s = new Set<string>();
     if (this.bgSlot.url) s.add(this.bgSlot.url);
     if (this.cgSlot.url) s.add(this.cgSlot.url);
+    if (this.shotSlot.url) s.add(this.shotSlot.url);
     for (const n of [...this.nodes.values(), ...this.leaving]) if (n.url) s.add(n.url);
     return s;
   }
@@ -317,7 +340,8 @@ export class PixiSceneRenderer implements ISceneRenderer {
     const token = slot.token;
     if (!chain) {
       // нет записи в assets (или ассетов нет вовсе) → плейсхолдер, если слот вообще нужен
-      slot.mode = slot === this.cgSlot && this.cgId === null ? 'none' : 'placeholder';
+      const unused = (slot === this.cgSlot && this.cgId === null) || (slot === this.shotSlot && this.shotId === null);
+      slot.mode = unused ? 'none' : 'placeholder';
       slot.url = null;
       return;
     }
@@ -348,7 +372,7 @@ export class PixiSceneRenderer implements ISceneRenderer {
   }
 
   private applySlotImage(slot: Slot, handle: ImageHandle): void {
-    const pic = slot === this.bgSlot ? this.bgPic : this.cgPic;
+    const pic = slot === this.bgSlot ? this.bgPic : slot === this.shotSlot ? this.shotPic : this.cgPic;
     pic.texture = this.texture(handle);
     slot.mode = 'image';
     slot.url = handle.url;
@@ -494,6 +518,13 @@ export class PixiSceneRenderer implements ISceneRenderer {
 
     // спрайты
     for (const node of [...this.nodes.values(), ...this.leaving]) this.layoutSprite(node, W, H);
+
+    // кадр покрытия: вместо спрайтов, под CG; нет файла — спрайты (запасной вариант)
+    const shotOn = this.shotId !== null && this.shotSlot.mode === 'image';
+    this.shotLayer.visible = shotOn;
+    this.shotPic.visible = shotOn;
+    this.spriteLayer.visible = !shotOn;
+    if (shotOn) this.coverFit(this.shotPic, W, H);
 
     // CG
     const cgMode = this.cgSlot.mode;

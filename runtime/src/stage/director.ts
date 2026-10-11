@@ -54,7 +54,7 @@ interface HeldScene {
 
 /** События, меняющие картинку: при удержании чёрного кадра промежуточные из них не нужны. */
 function isVisual(ev: EngineEvent): boolean {
-  return ev.t === 'scene' || ev.t === 'show' || ev.t === 'hide' || ev.t === 'bg' || ev.t === 'cg' || ev.t === 'cg_hide' || ev.t === 'speaker';
+  return ev.t === 'scene' || ev.t === 'show' || ev.t === 'hide' || ev.t === 'bg' || ev.t === 'cg' || ev.t === 'cg_hide' || ev.t === 'shot' || ev.t === 'speaker';
 }
 
 export class Director {
@@ -163,6 +163,9 @@ export class Director {
         break;
       case 'cg_hide':
         await stage.hideCg(ev.transition, instant);
+        break;
+      case 'shot':
+        await stage.showShot(ev.shot, ev.transition, instant);
         break;
       case 'speaker':
         stage.setSpeaker(ev.who);
