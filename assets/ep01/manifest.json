@@ -423,9 +423,10 @@
  {
   "id": "m_theme_main",
   "kind": "music",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181752_0c7cde77-3cfa-44f0-8942-912aead82c29.m4a",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_115622_db77ddcc-b389-45b9-a6a0-29c08d1dfe93.m4a",
   "target": "assets/common/music/theme_main.m4a",
-  "job": "0c7cde77-3cfa-44f0-8942-912aead82c29"
+  "job": "db77ddcc-b389-45b9-a6a0-29c08d1dfe93",
+  "note": "ДНК главной темы (2026-10-11); прежний луп — журнал генераций, партия 2"
  },
  {
   "id": "m_chronicle",
@@ -437,16 +438,26 @@
  {
   "id": "m_investigation",
   "kind": "music",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181752_2f3fa7ae-a88a-40e1-b3cb-218eeb63f4c6.m4a",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_115622_e1dd771a-c286-4a1f-9726-ad9fcc4a1a53.m4a",
   "target": "assets/common/music/investigation.m4a",
-  "job": "2f3fa7ae-a88a-40e1-b3cb-218eeb63f4c6"
+  "job": "e1dd771a-c286-4a1f-9726-ad9fcc4a1a53",
+  "note": "ДНК главной темы (2026-10-11); прежний луп — журнал генераций, партия 2"
  },
  {
   "id": "m_tension",
   "kind": "music",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181752_0e637e2f-4a73-4580-94e7-e48b90406c4c.m4a",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_115622_797233a5-9150-4986-9697-23fdfcfc25d7.m4a",
   "target": "assets/common/music/tension.m4a",
-  "job": "0e637e2f-4a73-4580-94e7-e48b90406c4c"
+  "job": "797233a5-9150-4986-9697-23fdfcfc25d7",
+  "note": "ДНК главной темы (2026-10-11); прежний луп — журнал генераций, партия 2"
+ },
+ {
+  "id": "m_calm",
+  "kind": "music",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_115736_4c73a844-5ddf-4435-a9c2-a0609358dd96.m4a",
+  "target": "assets/common/music/calm.m4a",
+  "job": "4c73a844-5ddf-4435-a9c2-a0609358dd96",
+  "note": "ДНК главной темы (2026-10-11): спокойный кабинетный андерскор"
  },
  {
   "id": "m_epilogue",

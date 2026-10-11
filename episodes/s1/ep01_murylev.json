@@ -432,7 +432,7 @@
       "act": 2,
       "timeline": "investigation",
       "title_key": "ep01.b06.title",
-      "music": "m_investigation"
+      "music": "m_calm"
     },
     {
       "id": "b07_dead_end",
@@ -2002,7 +2002,7 @@
         "filter": "desaturated",
         "time_of_day": "day"
       },
-      "music": "m_investigation",
+      "music": "m_calm",
       "ambient": "amb_office",
       "notes": "Допущение: в s09 (act1) Ковригин правит число в дате доверенности (14 июня 1993) без оговорки «исправленному верить»; здесь Сайко замечает свежую печать на втором экземпляре из дела нотариуса, в s17–s18 находится исправление даты.",
       "steps": [
@@ -2131,7 +2131,7 @@
         "filter": "desaturated",
         "time_of_day": "evening"
       },
-      "music": "m_investigation",
+      "music": "m_calm",
       "ambient": "amb_office",
       "steps": [
         {
@@ -2252,7 +2252,7 @@
         "filter": "desaturated",
         "time_of_day": "day"
       },
-      "music": "m_investigation",
+      "music": "m_calm",
       "ambient": "amb_office",
       "steps": [
         {
@@ -2414,7 +2414,7 @@
         "filter": "desaturated",
         "time_of_day": "day"
       },
-      "music": "m_investigation",
+      "music": "m_calm",
       "ambient": "amb_office",
       "steps": [
         {
@@ -11326,6 +11326,11 @@
       {
         "id": "m_tension",
         "path": "assets/common/music/tension.m4a",
+        "license": "original"
+      },
+      {
+        "id": "m_calm",
+        "path": "assets/common/music/calm.m4a",
         "license": "original"
       },
       {
