@@ -310,6 +310,9 @@ REF_SHOTS = {
                   "medium_solo": "media:66b20696-cb0a-4481-b5a0-7d22fd2f52f5"},
     # Пилот (волна 68): wide ×2 приняты, крупные планы отбракованы (вторая «Волга» за окном — см. CLOSE_SUBJECT);
     # кроп wide_1 («Волга», подъезд, окно) — для средних и ракурсов.
+    # Пилот bti (волна 86): wide_1 по фону и три крупных плана без референса комнаты приняты; комната для ots и
+    # вставок — wide_1, средние и ракурсы — кроп wide_1 (`refs/bti_medium.jpg`, media id после импорта по URL).
+    "bti": {"room": "sh_bti_wide_1", "close": "sh_bti_close_sledak_tense", "reaction": "sh_bti_close_sledak_tense"},
     "street_night": {"medium": "media:5ac38ac0-c807-44a4-a268-f35164a2438f", "angle": "media:5ac38ac0-c807-44a4-a268-f35164a2438f",
                      "close": "sh_street_night_close_oper_neutral", "reaction": "sh_street_night_close_oper_neutral"},
 }
