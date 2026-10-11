@@ -127,6 +127,35 @@ SCENE TO DEPICT:
 - Кадры генерируются по **сетам** (локация × освещение × состав), а не по сценам: крупный план
   Громова за своим столом переиспользуется во всех сценах кабинета.
 
+Усиление кинематографичности и реализма (решение владельца, 2026-10-11): к базовому промпту для кадров
+раскадровки добавляются блоки PHOTOGRAPHIC REALISM и CONTINUITY (ниже), а каждый результат просматривается
+и бракуется при нейронных дефектах — лишние или сросшиеся пальцы, вторая рука, «плавающие» предметы, двоящиеся
+лампы и ручки, искривлённые прямые (рамы, дверные коробки, край стола), пластиковая кожа, текстуры без
+структуры, читаемый псевдотекст, изменившиеся лицо, причёска или одежда персонажа. Бракованный кадр
+перегенерируется тем же промптом (при повторном браке — с уточнением проблемного места), в репозиторий
+попадает только принятый.
+
+```
+PHOTOGRAPHIC REALISM (mandatory)
+- The frame is a still from a 1990s motion picture shot on 35mm colour negative film with vintage spherical
+  lenses: gentle highlight roll-off, soft micro-contrast, fine organic grain, slight halation around the desk
+  lamp and the window; no digital sharpening, no HDR, no plastic smoothness.
+- Physically correct optics for the stated lens: consistent depth of field, straight lines stay straight,
+  no fisheye or warped geometry on frames, doors, table edges or window bars.
+- Anatomy and props are exactly right: five fingers on each hand, hands grip objects naturally, two eyes
+  looking in one direction, normal teeth, glasses with two lenses; every object appears once (one lamp, one
+  typewriter, one glass); nothing floats, melts or merges; fabric shows weave and wrinkles, skin shows pores,
+  hair has individual strands.
+- Any writing on papers, stamps, signs or calendars is out of focus or too small to read; no invented letters.
+- Period accuracy, Moscow 1993: no modern phones, cars, LED lights or plastic windows.
+
+CONTINUITY (mandatory)
+- The room is exactly the referenced background: same furniture, window, wallpaper and props in the same
+  places; only the camera moved.
+- Each person is exactly the referenced character: same face, age, hair, build and the same clothes in every
+  shot of this set; expressions change, clothing never does.
+```
+
 Шаблон блока CAMERA для кадра раскадровки:
 
 ```

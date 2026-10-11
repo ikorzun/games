@@ -2,9 +2,9 @@
 """Скачивает сгенерированные ассеты по манифесту и конвертирует их в форматы рантайма.
 
 Манифест: assets/<ep>/manifest.json — список записей
-  {"id": "bg_yard_summer", "kind": "bg|cg|doc|sprite|ui|music|ambient|sfx",
+  {"id": "bg_yard_summer", "kind": "bg|cg|shot|doc|sprite|ui|music|ambient|sfx",
    "url": "https://…png", "target": "assets/ep01/bg/yard_summer.webp", "job": "<job id>"}
-Картинки: bg/cg/ui → webp q82, вписать в 1920×1080 (кроп по центру до 16:9); doc → webp q85, высота ≤ 1600;
+Картинки: bg/cg/shot/ui → webp q82, вписать в 1920×1080 (кроп по центру до 16:9); doc → webp q85, высота ≤ 1600;
 sprite → webp с альфой q88, высота 1400 (альфа сохраняется; если PNG без альфы — предупреждение).
 Аудио: сохраняется как есть (mp3/wav → mp3 через ffmpeg, если он установлен и нужен).
 
@@ -42,7 +42,7 @@ def to_webp(data: bytes, target: Path, kind: str) -> str:
         if im.height > 1600:
             im = im.resize((round(im.width * 1600 / im.height), 1600), Image.LANCZOS)
         im.save(target, "WEBP", quality=85, method=6)
-    else:  # bg / cg / ui — 16:9, 1920×1080
+    else:  # bg / cg / shot / ui — 16:9, 1920×1080
         im = im.convert("RGB")
         tw, th = 1920, 1080
         scale = max(tw / im.width, th / im.height)

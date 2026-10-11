@@ -557,5 +557,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_182035_bd5c886d-f2e7-46eb-9d23-d5a8874347c6.mp3",
   "target": "assets/common/sfx/phone_ring.mp3",
   "job": "bd5c886d-f2e7-46eb-9d23-d5a8874347c6"
+ },
+ {
+  "id": "sh_office_day_wide_1",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_135629_b936685d-4633-4e49-8ffd-9337781ad797.png",
+  "target": "assets/ep01/shots/office_day/wide_1.webp",
+  "job": "b936685d-4633-4e49-8ffd-9337781ad797"
+ },
+ {
+  "id": "sh_office_day_ots_sledak_oper",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_135629_871f7c3f-d486-4864-89bf-dae7c30fb72b.png",
+  "target": "assets/ep01/shots/office_day/ots_sledak_oper.webp",
+  "job": "871f7c3f-d486-4864-89bf-dae7c30fb72b"
+ },
+ {
+  "id": "sh_office_day_close_sledak_tense",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_135630_074b9efe-b269-4928-aeee-fee445ec2e63.png",
+  "target": "assets/ep01/shots/office_day/close_sledak_tense.webp",
+  "job": "074b9efe-b269-4928-aeee-fee445ec2e63"
+ },
+ {
+  "id": "sh_office_day_insert_1",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_135629_7dfe33a0-263c-4b3d-99a5-f7b907e1033c.png",
+  "target": "assets/ep01/shots/office_day/insert_1.webp",
+  "job": "7dfe33a0-263c-4b3d-99a5-f7b907e1033c"
  }
 ]

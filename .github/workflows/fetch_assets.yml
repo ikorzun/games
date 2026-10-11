@@ -18,7 +18,7 @@ on:
         description: "Манифест (assets/<ep>/manifest.json); пусто — все манифесты"
         default: ""
       only:
-        description: "Только эти kind через запятую: bg,cg,doc,sprite,ui,music,ambient,sfx (пусто — все)"
+        description: "Только эти kind через запятую: bg,cg,shot,doc,sprite,ui,music,ambient,sfx (пусто — все)"
         default: ""
       force:
         description: "Перекачать и перезаписать уже существующие файлы"
