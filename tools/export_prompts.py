@@ -54,18 +54,108 @@ PSYCHO = {
 
 FACE_FRAME = "Square composition 1:1, one frame, without borders."
 
-# Облик для портрета и спрайта там, где базовое описание из таблицы персонажей повторяет имя или задаёт позу
-# (следователь 2004 года в таблице «сидит на интервью» — портрет и спрайт снимаются стоя).
-FACE_LOOK = {
-    "sledak_old": "the same man at 40: heavier, grey at the temples, lines around the eyes; dark blazer, open collar",
+# Характерный портрет-референс (не «паспорт у стены»): у каждого своё место, момент, взгляд, свет и один-два предмета.
+# Лицо целиком в кадре и в фокусе — файл идёт первым референсом спрайтов и кадров; характер — в моменте и взгляде.
+PORTRAITS = {
+    "sledak": {
+        "where": "Moscow, October 1993, late afternoon. The investigator's desk by the window of a modest prosecutor's office: a typewriter, stacks of case folders, a glass of cold tea.",
+        "moment": "He has just looked up from a page at someone who came in, the pen still in his hand, and is already listening: tired attention in the eyes, the brows drawn a little, a faint apologetic half-smile that does not reach the mouth, the eyes to the lens as to the visitor.",
+        "camera": "A television camera at the visitor's eye level, three-quarter view from the side of the door, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the typewriter and the window soft behind.",
+        "light": "overcast daylight from the window on one side of the face and a desk lamp already on; no separate face lighting.",
+        "objects": "the typewriter, the case folder under his hand.",
+    },
+    "sledak_old": {
+        "where": "Moscow, 2004, daytime. A small modern office with vertical blinds, where the former investigator is interviewed for television.",
+        "moment": "A pause after a question he did not expect: he looks straight into the lens, the mouth closed, the jaw set, quiet grief without self-pity and the half-smile of a man who knows how the story ends.",
+        "camera": "A television interview camera slightly below his eye level, almost frontal, an 85 mm-equivalent field of view, a medium close-up: head and shoulders, the blinds softly striped behind.",
+        "light": "soft daylight through the blinds on one side and a small interview lamp on the other; nothing dramatic.",
+        "objects": "the vertical blinds, the edge of the interview chair.",
+    },
+    "oper": {
+        "where": "Moscow, October 1993, daytime. The corridor of a district police station by a hot radiator and a notice board with pinned sheets.",
+        "moment": "He has just said something funny and waits for the reaction, chin slightly up, a cigarette behind his ear: a teasing half-smile held back at one corner of the mouth, the small eyes narrowed with amusement, straight into the lens.",
+        "camera": "A television camera at his eye level, three-quarter view, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the radiator and the notice board soft behind.",
+        "light": "a bare ceiling bulb and grey daylight from a corridor window at the end; ordinary, slightly blunt shadows.",
+        "objects": "the cigarette behind his ear, the notice board.",
+    },
+    "expert": {
+        "where": "Moscow, October 1993, evening. The forensic laboratory: a desk lamp, a microscope, labelled jars on a shelf, a report in her hand.",
+        "moment": "She has lowered the report and looks at the person over her glasses: dry irony, one eyebrow slightly raised, the thin mouth about to say something exact, the eyes to the lens over the rims.",
+        "camera": "A television camera at her eye level, almost frontal, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the microscope and the jars soft behind.",
+        "light": "the desk lamp from the side and cool fluorescent ceiling light; no separate face lighting.",
+        "objects": "the glasses on their chain, the report in her hand, the microscope.",
+    },
+    "murashov": {
+        "where": "Moscow, November 1993, daytime. The interrogation room: a bare table, a chair, a pale wall.",
+        "moment": "He has folded his hands on the table and waits politely, the face relaxed: a courteous half-smile, the eyes attentive, completely calm and empty, to the lens as to an interviewer; the ordinariness itself is unsettling.",
+        "camera": "A television camera at his eye level, frontal, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the pale wall behind.",
+        "light": "flat daylight from a high window and a fluorescent tube; even, unflattering.",
+        "objects": "the folded hands on the table edge, the tie pin.",
+    },
+    "notary": {
+        "where": "Moscow, August 1993, daytime. The notary's office: a desk with a stamp and an ink pad, a desk lamp, a window with net curtains.",
+        "moment": "He dabs his damp forehead with a handkerchief and has stopped mid-gesture, the small eyes sliding away from the lens to the side: wet fright hidden under the dignity of office, the mouth pressed into a polite line.",
+        "camera": "A television camera slightly above his eye level, three-quarter view across the desk, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the lamp and the curtains soft behind.",
+        "light": "diffused daylight through the net curtains and the warm desk lamp; a shine on the damp skin.",
+        "objects": "the handkerchief in his hand, the stamp on the desk.",
+    },
+    "zoya": {
+        "where": "Moscow, August 1993, daytime. The kitchen of an old Moscow apartment: a window with a geranium, a tea glass in a metal holder, a framed photograph on the sill.",
+        "moment": "She has just said her grandson's name and her face lights up: trusting kindness, a shy readiness to apologize for taking someone's time, the bright pale eyes to the lens, the handbag held on her lap with both hands.",
+        "camera": "A television camera at her eye level, slightly three-quarter, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the window and the geranium soft behind.",
+        "light": "soft daylight from the kitchen window on one side; the rest of the room a little darker.",
+        "objects": "the tea glass in its holder, the framed photograph on the sill.",
+    },
+    "neighbor": {
+        "where": "Moscow, August 1993, evening. The landing of an old stairwell: her door with a peephole and a door chain, a dim bulb, a mailbox.",
+        "moment": "She has leaned out through the gap of the chained door to see who is asking, the milk bottle in her hand: pushy curiosity with a shadow of fear of being involved, the small sharp eyes measuring the visitor, straight into the lens.",
+        "camera": "A television camera at her eye level, three-quarter view from the stairs, a 40 mm-equivalent field of view, a medium close-up: head and shoulders in the door gap, the dark hallway behind her.",
+        "light": "the dim stairwell bulb above and warmer light from inside her apartment behind her.",
+        "objects": "the door chain, the glass milk bottle.",
+    },
+    "buyer": {
+        "where": "Moscow, October 1993, daytime. The interrogation room: a bare table with his plastic folder of documents in front of him.",
+        "moment": "He has just understood that his papers mean nothing and tries to smile politely: polite confusion turning into panic, the eyebrows up, the mouth half open, the large eyes behind the glasses to the lens.",
+        "camera": "A television camera at his eye level, frontal, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the pale wall behind.",
+        "light": "flat daylight from a high window and a fluorescent tube; even, unflattering.",
+        "objects": "the plastic folder of documents under his hands, the too-tight tie.",
+    },
+    "boss": {
+        "where": "Moscow, October 1993, daytime. The office of the head of the investigative department: a big desk, a telephone with several lines, a map of the city on the wall.",
+        "moment": "He has taken off his glasses and rubs the bridge of his nose, looking at the visitor: fatherly fatigue, the hooded eyes of a man who has made many compromises and keeps the place afloat, to the lens.",
+        "camera": "A television camera slightly below his eye level, three-quarter view across the desk, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the map soft behind.",
+        "light": "grey daylight from a large window behind the camera and a green-shaded desk lamp; no separate face lighting.",
+        "objects": "the glasses in his hand, the multi-line telephone.",
+    },
+    "lapin_wife": {
+        "where": "Moscow, October 1993, evening. The hallway of the disputed apartment: moving boxes along the wall, a child's coat on a hook, a bare bulb.",
+        "moment": "She stands with her arms crossed, holding herself together: a mother defending her home, the jaw set, the eyes wet but not crying, a challenge in the look straight into the lens.",
+        "camera": "A television camera at her eye level, frontal, a 40 mm-equivalent field of view, a medium close-up: head and shoulders, the boxes and the child's coat soft behind.",
+        "light": "the bare hallway bulb above and cold light from the kitchen doorway on one side.",
+        "objects": "the child's coat on the hook, a moving box.",
+    },
+    "accomplice": {
+        "where": "Moscow, November 1993, daytime. A bench in the corridor of the district police station, a grille on the window, a radiator.",
+        "moment": "He has been asked a question he does not understand and looks for help: scared and uncomprehending, the mouth slightly open, the brows drawn together over the small deep-set eyes, the look to the lens.",
+        "camera": "A television camera at his eye level, frontal, a 40 mm-equivalent field of view, a medium close-up: head and shoulders, the grille and the wall soft behind.",
+        "light": "grey daylight through the barred window and a fluorescent tube; ordinary blunt shadows.",
+        "objects": "the gold chain at the collar of the tracksuit, the window grille.",
+    },
+    "clerk": {
+        "where": "Moscow, September 1993, daytime. The BTI archive: card-index cabinets with brass handles on both sides, a green-shaded lamp, a counter.",
+        "moment": "She has put the box of index cards on the counter and looks over her glasses at someone who came without a request form: strictness as a form of care, a mocking half-smile, the eyebrows up, the eyes to the lens.",
+        "camera": "A television camera at her eye level, three-quarter view across the counter, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the cabinets soft behind.",
+        "light": "the green-shaded lamp from below the shoulder and dusty daylight from a high window; no separate face lighting.",
+        "objects": "the box of index cards on the counter, the pencil behind her ear.",
+    },
 }
-
-
-def face_name_look(cast_id: str, name: str, look: str) -> tuple[str, str]:
-    """Имя и облик для портрета/спрайта: без повтора скобки из имени и без позы интервью."""
-    if cast_id in FACE_LOOK:
-        return re.sub(r"\s*\([^)]*\)\s*$", "", name), FACE_LOOK[cast_id]
-    return name, look
+PORTRAIT_DEFAULT = {
+    "where": "Moscow, autumn 1993, daytime. The person's own everyday place in the story.",
+    "moment": "A small pause inside a conversation, the face turned to the camera as to the other person, the expression true to the character.",
+    "camera": "A television camera at the eye level of the person, three-quarter view, a 50 mm-equivalent field of view, a medium close-up: head and shoulders.",
+    "light": "the actual light of the place: a window or a plain fixture; no separate face lighting.",
+    "objects": "one everyday object of the place.",
+}
 
 
 def parse_tables(md: str) -> dict[str, list[tuple[str, list[str]]]]:
@@ -92,22 +182,30 @@ def split_fields(text: str) -> dict[str, str]:
     return out
 
 
+def face_name_look(cast_id: str, name: str, look: str) -> tuple[str, str]:
+    """Имя и облик для портрета/спрайта: без повтора скобки имени, если облик сам начинается с «the same man»."""
+    if look.startswith("the same"):
+        return re.sub(r"\s*\([^)]*\)\s*$", "", name), look
+    return name, look
+
+
 def face_scene(cast_id: str, name: str, look: str) -> str:
-    """Блок SCENE портрета-референса лица (одно лицо на все картинки персонажа)."""
+    """Блок SCENE характерного портрета-референса: своё место, момент, взгляд и гардероб у каждого (не «паспорт у стены»)."""
     psycho = PSYCHO.get(cast_id, "an ordinary face of the period")
     psycho = psycho[0].upper() + psycho[1:]
+    p = PORTRAITS.get(cast_id, PORTRAIT_DEFAULT)
     return "\n".join([
         "SCENE",
         "",
-        "Location and time: Moscow, autumn 1993, daytime. An identity portrait made by the television crew for continuity: "
-        "the person stands against a plain, evenly lit beige wall of an ordinary office corridor; nothing else is in the frame.",
-        f"People and action: {name} ({look}), alone. {psycho}. The face is straight to the camera, neutral, mouth closed, "
-        "eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. "
-        "Exactly one person, head and shoulders.",
-        "Camera position: A television camera at the eye level of the person, a 50 mm-equivalent field of view, a medium "
-        "close-up: the head and shoulders fill the frame with a little headroom, the horizon straight, the wall in focus behind.",
-        "Light sources: soft overcast window light from the front-left and a plain ceiling fixture; no separate face lighting.",
-        "Essential objects: none: the plain wall only.",
+        f"Location and time: {p['where']}",
+        f"People and action: {name} ({look}), alone. {psycho}. {p['moment']} The face is fully visible, in focus and "
+        "turned to the camera, not covered by hands or objects: this is the casting reference for the face. A specific, "
+        "imperfect face of a non-professional actor in a 1990s Russian television series, instantly different from every "
+        "other character of the story; the clothes exactly as described, in their own colours and materials. Exactly one "
+        "person, head and shoulders, nobody else in the picture.",
+        f"Camera position: {p['camera']}",
+        f"Light sources: {p['light']}",
+        f"Essential objects: {p['objects']}",
     ])
 
 
@@ -257,8 +355,8 @@ def main() -> int:
         name, desc = face_name_look(cid, names(cid), desc)
         L.append(f"### `{cid}` — {ru_name(cid)}")
         L.append("")
-        L.append("FACE (портрет-референс, 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на "
-                 f"«{FACE_FRAME}»):")
+        L.append("FACE (характерный портрет-референс: своё место, момент и взгляд, лицо целиком в фокусе; 1:1, без референсов; "
+                 f"в базовом промпте строка про 16:9 заменяется на «{FACE_FRAME}»):")
         L.append("")
         L.append("```")
         L.append(face_scene(cid, name, desc))

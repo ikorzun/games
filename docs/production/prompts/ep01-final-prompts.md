@@ -105,32 +105,32 @@ CONTINUITY AND INTEGRITY (mandatory)
 
 | id | Имя | Описание (CHARACTER, во все промты персонажа) | Психотип в портрете | Файл лица | Выражения спрайта |
 |---|---|---|---|---|---|
-| `sledak` | Андрей Громов | man, 29, lean, tired grey eyes, short dark hair, a day of stubble; grey wool coat over a dark sweater, folder under his arm; prosecutor's investigator, 1993 Moscow | an introvert who trusts paperwork and patience and is ashamed of pressing people; tired grey eyes, a face that listens more than it speaks | `assets/ep01/faces/sledak.webp` | neutral, tense, tired, firm |
-| `sledak_old` | Андрей Громов, 2004 год | the same man at 40: heavier, grey at the temples, lines around the eyes; dark blazer, open collar, seated for an interview | the same man as Investigator Andrei Gromov eleven years later: heavier, grey at the temples, lines around the eyes, quiet grief without self-pity | `assets/ep01/faces/sledak_old.webp` | neutral, sad |
-| `oper` | Виктор Сайко | man, 34, stocky, broken nose, close-cropped hair; black leather jacket, knitted sweater, jeans; criminal police detective | an extrovert street detective who can talk to anyone; a teasing half-smile held back, a face that has been hit and did not mind | `assets/ep01/faces/oper.webp` | neutral, grin, angry, hurt |
-| `expert` | Нина Левина | woman, 45, sharp features, glasses on a chain, hair in a bun; white lab coat over a cardigan; forensic expert | a rational observer with dry irony, tired of expert reports being read only after verdicts; sharp attentive eyes behind glasses on a chain | `assets/ep01/faces/expert.webp` | neutral, focused |
-| `murashov` | Сергей Мурашов | man, 38, tall, neat, pleasant forgettable face, well-groomed moustache; good grey suit slightly too new, briefcase; former journalist turned apartment dealer; deliberately ordinary, not charismatic | a narcissistic rationalizer who calls himself an orderly; polite, calm, with an editor's composure; a pleasant, instantly forgettable face | `assets/ep01/faces/murashov.webp` | neutral, smile, cold, cornered (also rendered as a silhouette by runtime) |
-| `notary` | Нотариус Ковригин | man, 55, soft, balding, sweating; brown suit, tie askew; notary | a cowardly accomplice hiding behind the law; soft, balding, sweating, eyes that avoid contact | `assets/ep01/faces/notary.webp` | neutral, nervous |
-| `zoya` | Зоя Павловна | woman, 74, small, kind face, white hair under a knitted beret; Sunday coat with a fur collar, handbag; pensioner | trusting and kind, shy of being a burden, lonely; a small bright face that lights up at the thought of her grandson | `assets/ep01/faces/zoya.webp` | neutral, warm, worried |
-| `neighbor` | Галина, соседка | woman, 60, sturdy, flowered housecoat and cardigan, glass milk bottle in hand; neighbour | observant and pushy until it concerns herself, then afraid of being involved; a sturdy face used to talking in stairwells | `assets/ep01/faces/neighbor.webp` | neutral, worried |
-| `buyer` | Лапин | man, 40, thin, anxious, cheap suit jacket over a sweater; family man who bought the apartment | an honest man under a steamroller: polite confusion turning into panic; thin, anxious, early lines on the face | `assets/ep01/faces/buyer.webp` | neutral, scared |
-| `boss` | Валентин Павлович | man, 55, heavy, jowly face, grey hair combed back; dark navy suit, white shirt, patterned tie; head of the investigative department | not a villain: a department head who keeps the place afloat, fatherly and tired; heavy jowls, eyes that have made many compromises | `assets/ep01/faces/boss.webp` | neutral, stern, tired |
-| `lapin_wife` | Ирина Лапина | woman, 40, thin, pale, tired eyes, hair pulled back in a low bun; beige cardigan over a plain dark grey dress; wife of a missing man | a mother defending her home: she holds longer than her husband and breaks deeper; pale, tired eyes, hair pulled back | `assets/ep01/faces/lapin_wife.webp` | neutral, worried, angry |
-| `accomplice` | Дмитрий Шмелёв («Шмель») | man, 30, thick neck, boxer's build, short dark hair; black padded jacket over a navy tracksuit with white stripes, worn trainers; hired muscle | an empty executor who only drove and believed he was helping people move; thick neck, boxer's build, a scared, uncomprehending look | `assets/ep01/faces/accomplice.webp` | neutral, scared |
-| `clerk` | Раиса Львовна, архив БТИ | woman, 60, short grey hair, glasses, stern mouth; grey cardigan over a floral blouse, brown skirt, a cardboard box of index cards in her arms; archive clerk | the mistress of the archive: strictness as a form of care, a mocking mouth; short grey hair, glasses | `assets/ep01/faces/clerk.webp` | neutral |
+| `sledak` | Андрей Громов | man, 29, lean and a little stooped from desk work, a long pale face with hollow cheeks, grey eyes with dark circles under them, heavy straight brows, a thin nose with a slight bump, short dark-brown hair that will not lie flat at the crown, a day of stubble; a grey herringbone wool coat with a worn velvet collar over a navy roll-neck sweater, a cardboard case folder under his arm, a cheap wristwatch on a cracked strap; prosecutor's investigator, 1993 Moscow | an introvert who trusts paperwork and patience and is ashamed of pressing people; tired grey eyes, a face that listens more than it speaks | `assets/ep01/faces/sledak.webp` | neutral, tense, tired, firm |
+| `sledak_old` | Андрей Громов, 2004 год | the same man at 40: the face heavier and broader, grey at the temples and in the stubble, deep lines from the nose to the mouth, the same grey eyes and heavy brows; a charcoal blazer over a black open-collar shirt, no tie, a wedding ring; interviewed for television in 2004 | the same man as Investigator Andrei Gromov eleven years later: heavier, grey at the temples, lines around the eyes, quiet grief without self-pity | `assets/ep01/faces/sledak_old.webp` | neutral, sad |
+| `oper` | Виктор Сайко | man, 34, stocky and broad-shouldered, a round wind-burnt face, a nose broken and set crooked, small lively grey-green eyes, pale eyebrows, close-cropped fair hair, a chipped front tooth; a scuffed black leather jacket with a broken zip over a burgundy knitted sweater with a stretched collar, faded blue jeans; criminal police detective | an extrovert street detective who can talk to anyone; a teasing half-smile held back, a face that has been hit and did not mind | `assets/ep01/faces/oper.webp` | neutral, grin, angry, hurt |
+| `expert` | Нина Левина | woman, 45, a sharp angular face with high cheekbones, a long straight nose, a thin ironic mouth, dark attentive eyes behind rimless glasses on a thin chain, dark hair with the first grey pulled into a tight bun, no makeup; a white lab coat with a ballpoint stain on the breast pocket over a mustard-yellow cardigan, amber beads at the throat; forensic expert | a rational observer with dry irony, tired of expert reports being read only after verdicts; sharp attentive eyes behind glasses on a chain | `assets/ep01/faces/expert.webp` | neutral, focused |
+| `murashov` | Сергей Мурашов | man, 38, tall and neat, a smooth oval face with soft features that are hard to remember, pale blue calm eyes, a well-groomed dark moustache, dark hair parted on the left and combed flat with water, a clean-shaven jaw, good skin; a double-breasted dove-grey suit slightly too new, a pale blue shirt, a silk tie with a small pattern and a tie pin, a leather briefcase; former journalist turned apartment dealer, deliberately ordinary, not charismatic | a narcissistic rationalizer who calls himself an orderly; polite, calm, with an editor's composure; a pleasant, instantly forgettable face | `assets/ep01/faces/murashov.webp` | neutral, smile, cold, cornered (also rendered as a silhouette by runtime) |
+| `notary` | Нотариус Ковригин | man, 55, soft and heavy, a round face with a double chin, pouches under small wary brown eyes, a bulbous nose with broken capillaries, thinning hair combed over a bald crown, a damp forehead; a brown three-piece suit shiny at the elbows with the waistcoat straining at its buttons, a cream shirt with a wilted collar, a loosened striped tie askew, a signet ring; notary | a cowardly accomplice hiding behind the law; soft, balding, sweating, eyes that avoid contact | `assets/ep01/faces/notary.webp` | neutral, nervous |
+| `zoya` | Зоя Павловна | woman, 74, small and slight, a round wrinkled face with bright pale-blue eyes, soft cheeks, a small nose, thin lips with a trace of pink lipstick, white hair in soft waves under a lilac knitted beret; a dark cherry-red Sunday coat with a fox-fur collar, a small enamel brooch on the lapel, a wool scarf, a black patent handbag held with both hands; pensioner | trusting and kind, shy of being a burden, lonely; a small bright face that lights up at the thought of her grandson | `assets/ep01/faces/zoya.webp` | neutral, warm, worried |
+| `neighbor` | Галина, соседка | woman, 60, sturdy and broad, a square face with a heavy chin, small sharp dark eyes, thick eyebrows, a wide mouth with a gold tooth at the side, dyed chestnut hair under a kerchief tied at the back of the neck; a flowered housecoat in blue and white under a moss-green cardigan with pilled sleeves, a glass milk bottle in her hand; neighbour | observant and pushy until it concerns herself, then afraid of being involved; a sturdy face used to talking in stairwells | `assets/ep01/faces/neighbor.webp` | neutral, worried |
+| `buyer` | Лапин | man, 40, thin and narrow-shouldered, a long anxious face with early lines across the forehead, large grey eyes behind thin-rimmed glasses, a receding hairline with soft light-brown hair, a weak chin; a cheap grey-blue mottled sports jacket a size too big over a red-and-grey striped acrylic sweater, a tie knotted too tightly, a plastic folder of documents; family man who bought the apartment | an honest man under a steamroller: polite confusion turning into panic; thin, anxious, early lines on the face | `assets/ep01/faces/buyer.webp` | neutral, scared |
+| `boss` | Валентин Павлович | man, 55, heavy and tall, a broad jowly face with a strong nose, tired hooded eyes with heavy lids, thick grey hair combed straight back, a small old scar on the chin; a dark navy suit with a tiny enamel lapel pin, a white shirt tight at the collar, a maroon patterned tie, a heavy steel watch; head of the investigative department | not a villain: a department head who keeps the place afloat, fatherly and tired; heavy jowls, eyes that have made many compromises | `assets/ep01/faces/boss.webp` | neutral, stern, tired |
+| `lapin_wife` | Ирина Лапина | woman, 40, thin and pale, a narrow face with sharp cheekbones, large tired grey-blue eyes with reddened lids, a straight nose, a clenched mouth, dark-blond hair pulled back into a low bun with strands escaping; a beige cardigan buttoned wrong over a plain dark-green dress, a thin chain with a small cross, a cheap wedding ring; wife of a missing man | a mother defending her home: she holds longer than her husband and breaks deeper; pale, tired eyes, hair pulled back | `assets/ep01/faces/lapin_wife.webp` | neutral, worried, angry |
+| `accomplice` | Дмитрий Шмелёв («Шмель») | man, 30, a thick neck, a boxer's build and a flattened boxer's nose, small deep-set eyes, a low forehead, a cauliflower ear, short dark hair with a razor fade, a scar through one eyebrow; a black padded jacket open over a navy tracksuit top with three white stripes, a thin gold chain, worn white trainers; hired muscle | an empty executor who only drove and believed he was helping people move; thick neck, boxer's build, a scared, uncomprehending look | `assets/ep01/faces/accomplice.webp` | neutral, scared |
+| `clerk` | Раиса Львовна, архив БТИ | woman, 60, a small sharp face with a pointed chin, lively dark eyes behind large plastic-framed glasses on a cord, a mocking stern mouth with thin lips, short grey hair cut straight, a pencil behind her ear; a grey hand-knitted cardigan with a cameo brooch over a floral blouse in brown and orange, a brown skirt, a cardboard box of index cards in her arms; archive clerk | the mistress of the archive: strictness as a form of care, a mocking mouth; short grey hair, glasses | `assets/ep01/faces/clerk.webp` | neutral |
 
 ### `sledak` — Андрей Громов
 
-FACE (портрет-референс, 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
+FACE (характерный портрет-референс: своё место, момент и взгляд, лицо целиком в фокусе; 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
 
 ```
 SCENE
 
-Location and time: Moscow, autumn 1993, daytime. An identity portrait made by the television crew for continuity: the person stands against a plain, evenly lit beige wall of an ordinary office corridor; nothing else is in the frame.
-People and action: Investigator Andrei Gromov (man, 29, lean, tired grey eyes, short dark hair, a day of stubble; grey wool coat over a dark sweater, folder under his arm; prosecutor's investigator, 1993 Moscow), alone. An introvert who trusts paperwork and patience and is ashamed of pressing people; tired grey eyes, a face that listens more than it speaks. The face is straight to the camera, neutral, mouth closed, eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. Exactly one person, head and shoulders.
-Camera position: A television camera at the eye level of the person, a 50 mm-equivalent field of view, a medium close-up: the head and shoulders fill the frame with a little headroom, the horizon straight, the wall in focus behind.
-Light sources: soft overcast window light from the front-left and a plain ceiling fixture; no separate face lighting.
-Essential objects: none: the plain wall only.
+Location and time: Moscow, October 1993, late afternoon. The investigator's desk by the window of a modest prosecutor's office: a typewriter, stacks of case folders, a glass of cold tea.
+People and action: Investigator Andrei Gromov (man, 29, lean and a little stooped from desk work, a long pale face with hollow cheeks, grey eyes with dark circles under them, heavy straight brows, a thin nose with a slight bump, short dark-brown hair that will not lie flat at the crown, a day of stubble; a grey herringbone wool coat with a worn velvet collar over a navy roll-neck sweater, a cardboard case folder under his arm, a cheap wristwatch on a cracked strap; prosecutor's investigator, 1993 Moscow), alone. An introvert who trusts paperwork and patience and is ashamed of pressing people; tired grey eyes, a face that listens more than it speaks. He has just looked up from a page at someone who came in, the pen still in his hand, and is already listening: tired attention in the eyes, the brows drawn a little, a faint apologetic half-smile that does not reach the mouth, the eyes to the lens as to the visitor. The face is fully visible, in focus and turned to the camera, not covered by hands or objects: this is the casting reference for the face. A specific, imperfect face of a non-professional actor in a 1990s Russian television series, instantly different from every other character of the story; the clothes exactly as described, in their own colours and materials. Exactly one person, head and shoulders, nobody else in the picture.
+Camera position: A television camera at the visitor's eye level, three-quarter view from the side of the door, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the typewriter and the window soft behind.
+Light sources: overcast daylight from the window on one side of the face and a desk lamp already on; no separate face lighting.
+Essential objects: the typewriter, the case folder under his hand.
 ```
 
 SPRITE (база для выражений; Reference 1 — файл лица):
@@ -142,7 +142,7 @@ Reference 1 is the face of Investigator Andrei Gromov: keep this exact face, hai
 SCENE
 
 Location and time: Moscow, 1993; a plain, evenly lit mid-grey wall with no objects (the figure will be cut out).
-People and action: Full-body portrait for a visual novel character sprite: Investigator Andrei Gromov (man, 29, lean, tired grey eyes, short dark hair, a day of stubble; grey wool coat over a dark sweater, folder under his arm; prosecutor's investigator, 1993 Moscow). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
+People and action: Full-body portrait for a visual novel character sprite: Investigator Andrei Gromov (man, 29, lean and a little stooped from desk work, a long pale face with hollow cheeks, grey eyes with dark circles under them, heavy straight brows, a thin nose with a slight bump, short dark-brown hair that will not lie flat at the crown, a day of stubble; a grey herringbone wool coat with a worn velvet collar over a navy roll-neck sweater, a cardboard case folder under his arm, a cheap wristwatch on a cracked strap; prosecutor's investigator, 1993 Moscow). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
 Camera position: a television camera at chest height, a 40 mm-equivalent field of view, the whole figure in frame with headroom.
 Light sources: soft overcast window light from the front-left.
 Essential objects: none.
@@ -150,16 +150,16 @@ Essential objects: none.
 
 ### `sledak_old` — Андрей Громов, 2004 год
 
-FACE (портрет-референс, 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
+FACE (характерный портрет-референс: своё место, момент и взгляд, лицо целиком в фокусе; 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
 
 ```
 SCENE
 
-Location and time: Moscow, autumn 1993, daytime. An identity portrait made by the television crew for continuity: the person stands against a plain, evenly lit beige wall of an ordinary office corridor; nothing else is in the frame.
-People and action: Andrei Gromov in 2004 (the same man at 40: heavier, grey at the temples, lines around the eyes; dark blazer, open collar), alone. The same man as Investigator Andrei Gromov eleven years later: heavier, grey at the temples, lines around the eyes, quiet grief without self-pity. The face is straight to the camera, neutral, mouth closed, eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. Exactly one person, head and shoulders.
-Camera position: A television camera at the eye level of the person, a 50 mm-equivalent field of view, a medium close-up: the head and shoulders fill the frame with a little headroom, the horizon straight, the wall in focus behind.
-Light sources: soft overcast window light from the front-left and a plain ceiling fixture; no separate face lighting.
-Essential objects: none: the plain wall only.
+Location and time: Moscow, 2004, daytime. A small modern office with vertical blinds, where the former investigator is interviewed for television.
+People and action: Andrei Gromov in 2004 (the same man at 40: the face heavier and broader, grey at the temples and in the stubble, deep lines from the nose to the mouth, the same grey eyes and heavy brows; a charcoal blazer over a black open-collar shirt, no tie, a wedding ring; interviewed for television in 2004), alone. The same man as Investigator Andrei Gromov eleven years later: heavier, grey at the temples, lines around the eyes, quiet grief without self-pity. A pause after a question he did not expect: he looks straight into the lens, the mouth closed, the jaw set, quiet grief without self-pity and the half-smile of a man who knows how the story ends. The face is fully visible, in focus and turned to the camera, not covered by hands or objects: this is the casting reference for the face. A specific, imperfect face of a non-professional actor in a 1990s Russian television series, instantly different from every other character of the story; the clothes exactly as described, in their own colours and materials. Exactly one person, head and shoulders, nobody else in the picture.
+Camera position: A television interview camera slightly below his eye level, almost frontal, an 85 mm-equivalent field of view, a medium close-up: head and shoulders, the blinds softly striped behind.
+Light sources: soft daylight through the blinds on one side and a small interview lamp on the other; nothing dramatic.
+Essential objects: the vertical blinds, the edge of the interview chair.
 ```
 
 SPRITE (база для выражений; Reference 1 — файл лица):
@@ -171,7 +171,7 @@ Reference 1 is the face of Andrei Gromov in 2004: keep this exact face, hair and
 SCENE
 
 Location and time: Moscow, 1993; a plain, evenly lit mid-grey wall with no objects (the figure will be cut out).
-People and action: Full-body portrait for a visual novel character sprite: Andrei Gromov in 2004 (the same man at 40: heavier, grey at the temples, lines around the eyes; dark blazer, open collar). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
+People and action: Full-body portrait for a visual novel character sprite: Andrei Gromov in 2004 (the same man at 40: the face heavier and broader, grey at the temples and in the stubble, deep lines from the nose to the mouth, the same grey eyes and heavy brows; a charcoal blazer over a black open-collar shirt, no tie, a wedding ring; interviewed for television in 2004). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
 Camera position: a television camera at chest height, a 40 mm-equivalent field of view, the whole figure in frame with headroom.
 Light sources: soft overcast window light from the front-left.
 Essential objects: none.
@@ -179,16 +179,16 @@ Essential objects: none.
 
 ### `oper` — Виктор Сайко
 
-FACE (портрет-референс, 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
+FACE (характерный портрет-референс: своё место, момент и взгляд, лицо целиком в фокусе; 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
 
 ```
 SCENE
 
-Location and time: Moscow, autumn 1993, daytime. An identity portrait made by the television crew for continuity: the person stands against a plain, evenly lit beige wall of an ordinary office corridor; nothing else is in the frame.
-People and action: Detective Viktor Sayko (man, 34, stocky, broken nose, close-cropped hair; black leather jacket, knitted sweater, jeans; criminal police detective), alone. An extrovert street detective who can talk to anyone; a teasing half-smile held back, a face that has been hit and did not mind. The face is straight to the camera, neutral, mouth closed, eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. Exactly one person, head and shoulders.
-Camera position: A television camera at the eye level of the person, a 50 mm-equivalent field of view, a medium close-up: the head and shoulders fill the frame with a little headroom, the horizon straight, the wall in focus behind.
-Light sources: soft overcast window light from the front-left and a plain ceiling fixture; no separate face lighting.
-Essential objects: none: the plain wall only.
+Location and time: Moscow, October 1993, daytime. The corridor of a district police station by a hot radiator and a notice board with pinned sheets.
+People and action: Detective Viktor Sayko (man, 34, stocky and broad-shouldered, a round wind-burnt face, a nose broken and set crooked, small lively grey-green eyes, pale eyebrows, close-cropped fair hair, a chipped front tooth; a scuffed black leather jacket with a broken zip over a burgundy knitted sweater with a stretched collar, faded blue jeans; criminal police detective), alone. An extrovert street detective who can talk to anyone; a teasing half-smile held back, a face that has been hit and did not mind. He has just said something funny and waits for the reaction, chin slightly up, a cigarette behind his ear: a teasing half-smile held back at one corner of the mouth, the small eyes narrowed with amusement, straight into the lens. The face is fully visible, in focus and turned to the camera, not covered by hands or objects: this is the casting reference for the face. A specific, imperfect face of a non-professional actor in a 1990s Russian television series, instantly different from every other character of the story; the clothes exactly as described, in their own colours and materials. Exactly one person, head and shoulders, nobody else in the picture.
+Camera position: A television camera at his eye level, three-quarter view, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the radiator and the notice board soft behind.
+Light sources: a bare ceiling bulb and grey daylight from a corridor window at the end; ordinary, slightly blunt shadows.
+Essential objects: the cigarette behind his ear, the notice board.
 ```
 
 SPRITE (база для выражений; Reference 1 — файл лица):
@@ -200,7 +200,7 @@ Reference 1 is the face of Detective Viktor Sayko: keep this exact face, hair an
 SCENE
 
 Location and time: Moscow, 1993; a plain, evenly lit mid-grey wall with no objects (the figure will be cut out).
-People and action: Full-body portrait for a visual novel character sprite: Detective Viktor Sayko (man, 34, stocky, broken nose, close-cropped hair; black leather jacket, knitted sweater, jeans; criminal police detective). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
+People and action: Full-body portrait for a visual novel character sprite: Detective Viktor Sayko (man, 34, stocky and broad-shouldered, a round wind-burnt face, a nose broken and set crooked, small lively grey-green eyes, pale eyebrows, close-cropped fair hair, a chipped front tooth; a scuffed black leather jacket with a broken zip over a burgundy knitted sweater with a stretched collar, faded blue jeans; criminal police detective). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
 Camera position: a television camera at chest height, a 40 mm-equivalent field of view, the whole figure in frame with headroom.
 Light sources: soft overcast window light from the front-left.
 Essential objects: none.
@@ -208,16 +208,16 @@ Essential objects: none.
 
 ### `expert` — Нина Левина
 
-FACE (портрет-референс, 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
+FACE (характерный портрет-референс: своё место, момент и взгляд, лицо целиком в фокусе; 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
 
 ```
 SCENE
 
-Location and time: Moscow, autumn 1993, daytime. An identity portrait made by the television crew for continuity: the person stands against a plain, evenly lit beige wall of an ordinary office corridor; nothing else is in the frame.
-People and action: forensic expert Nina Levina (woman, 45, sharp features, glasses on a chain, hair in a bun; white lab coat over a cardigan; forensic expert), alone. A rational observer with dry irony, tired of expert reports being read only after verdicts; sharp attentive eyes behind glasses on a chain. The face is straight to the camera, neutral, mouth closed, eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. Exactly one person, head and shoulders.
-Camera position: A television camera at the eye level of the person, a 50 mm-equivalent field of view, a medium close-up: the head and shoulders fill the frame with a little headroom, the horizon straight, the wall in focus behind.
-Light sources: soft overcast window light from the front-left and a plain ceiling fixture; no separate face lighting.
-Essential objects: none: the plain wall only.
+Location and time: Moscow, October 1993, evening. The forensic laboratory: a desk lamp, a microscope, labelled jars on a shelf, a report in her hand.
+People and action: forensic expert Nina Levina (woman, 45, a sharp angular face with high cheekbones, a long straight nose, a thin ironic mouth, dark attentive eyes behind rimless glasses on a thin chain, dark hair with the first grey pulled into a tight bun, no makeup; a white lab coat with a ballpoint stain on the breast pocket over a mustard-yellow cardigan, amber beads at the throat; forensic expert), alone. A rational observer with dry irony, tired of expert reports being read only after verdicts; sharp attentive eyes behind glasses on a chain. She has lowered the report and looks at the person over her glasses: dry irony, one eyebrow slightly raised, the thin mouth about to say something exact, the eyes to the lens over the rims. The face is fully visible, in focus and turned to the camera, not covered by hands or objects: this is the casting reference for the face. A specific, imperfect face of a non-professional actor in a 1990s Russian television series, instantly different from every other character of the story; the clothes exactly as described, in their own colours and materials. Exactly one person, head and shoulders, nobody else in the picture.
+Camera position: A television camera at her eye level, almost frontal, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the microscope and the jars soft behind.
+Light sources: the desk lamp from the side and cool fluorescent ceiling light; no separate face lighting.
+Essential objects: the glasses on their chain, the report in her hand, the microscope.
 ```
 
 SPRITE (база для выражений; Reference 1 — файл лица):
@@ -229,7 +229,7 @@ Reference 1 is the face of forensic expert Nina Levina: keep this exact face, ha
 SCENE
 
 Location and time: Moscow, 1993; a plain, evenly lit mid-grey wall with no objects (the figure will be cut out).
-People and action: Full-body portrait for a visual novel character sprite: forensic expert Nina Levina (woman, 45, sharp features, glasses on a chain, hair in a bun; white lab coat over a cardigan; forensic expert). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
+People and action: Full-body portrait for a visual novel character sprite: forensic expert Nina Levina (woman, 45, a sharp angular face with high cheekbones, a long straight nose, a thin ironic mouth, dark attentive eyes behind rimless glasses on a thin chain, dark hair with the first grey pulled into a tight bun, no makeup; a white lab coat with a ballpoint stain on the breast pocket over a mustard-yellow cardigan, amber beads at the throat; forensic expert). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
 Camera position: a television camera at chest height, a 40 mm-equivalent field of view, the whole figure in frame with headroom.
 Light sources: soft overcast window light from the front-left.
 Essential objects: none.
@@ -237,16 +237,16 @@ Essential objects: none.
 
 ### `murashov` — Сергей Мурашов
 
-FACE (портрет-референс, 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
+FACE (характерный портрет-референс: своё место, момент и взгляд, лицо целиком в фокусе; 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
 
 ```
 SCENE
 
-Location and time: Moscow, autumn 1993, daytime. An identity portrait made by the television crew for continuity: the person stands against a plain, evenly lit beige wall of an ordinary office corridor; nothing else is in the frame.
-People and action: Sergei Murashov (man, 38, tall, neat, pleasant forgettable face, well-groomed moustache; good grey suit slightly too new, briefcase; former journalist turned apartment dealer; deliberately ordinary, not charismatic), alone. A narcissistic rationalizer who calls himself an orderly; polite, calm, with an editor's composure; a pleasant, instantly forgettable face. The face is straight to the camera, neutral, mouth closed, eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. Exactly one person, head and shoulders.
-Camera position: A television camera at the eye level of the person, a 50 mm-equivalent field of view, a medium close-up: the head and shoulders fill the frame with a little headroom, the horizon straight, the wall in focus behind.
-Light sources: soft overcast window light from the front-left and a plain ceiling fixture; no separate face lighting.
-Essential objects: none: the plain wall only.
+Location and time: Moscow, November 1993, daytime. The interrogation room: a bare table, a chair, a pale wall.
+People and action: Sergei Murashov (man, 38, tall and neat, a smooth oval face with soft features that are hard to remember, pale blue calm eyes, a well-groomed dark moustache, dark hair parted on the left and combed flat with water, a clean-shaven jaw, good skin; a double-breasted dove-grey suit slightly too new, a pale blue shirt, a silk tie with a small pattern and a tie pin, a leather briefcase; former journalist turned apartment dealer, deliberately ordinary, not charismatic), alone. A narcissistic rationalizer who calls himself an orderly; polite, calm, with an editor's composure; a pleasant, instantly forgettable face. He has folded his hands on the table and waits politely, the face relaxed: a courteous half-smile, the eyes attentive, completely calm and empty, to the lens as to an interviewer; the ordinariness itself is unsettling. The face is fully visible, in focus and turned to the camera, not covered by hands or objects: this is the casting reference for the face. A specific, imperfect face of a non-professional actor in a 1990s Russian television series, instantly different from every other character of the story; the clothes exactly as described, in their own colours and materials. Exactly one person, head and shoulders, nobody else in the picture.
+Camera position: A television camera at his eye level, frontal, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the pale wall behind.
+Light sources: flat daylight from a high window and a fluorescent tube; even, unflattering.
+Essential objects: the folded hands on the table edge, the tie pin.
 ```
 
 SPRITE (база для выражений; Reference 1 — файл лица):
@@ -258,7 +258,7 @@ Reference 1 is the face of Sergei Murashov: keep this exact face, hair and build
 SCENE
 
 Location and time: Moscow, 1993; a plain, evenly lit mid-grey wall with no objects (the figure will be cut out).
-People and action: Full-body portrait for a visual novel character sprite: Sergei Murashov (man, 38, tall, neat, pleasant forgettable face, well-groomed moustache; good grey suit slightly too new, briefcase; former journalist turned apartment dealer; deliberately ordinary, not charismatic). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
+People and action: Full-body portrait for a visual novel character sprite: Sergei Murashov (man, 38, tall and neat, a smooth oval face with soft features that are hard to remember, pale blue calm eyes, a well-groomed dark moustache, dark hair parted on the left and combed flat with water, a clean-shaven jaw, good skin; a double-breasted dove-grey suit slightly too new, a pale blue shirt, a silk tie with a small pattern and a tie pin, a leather briefcase; former journalist turned apartment dealer, deliberately ordinary, not charismatic). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
 Camera position: a television camera at chest height, a 40 mm-equivalent field of view, the whole figure in frame with headroom.
 Light sources: soft overcast window light from the front-left.
 Essential objects: none.
@@ -266,16 +266,16 @@ Essential objects: none.
 
 ### `notary` — Нотариус Ковригин
 
-FACE (портрет-референс, 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
+FACE (характерный портрет-референс: своё место, момент и взгляд, лицо целиком в фокусе; 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
 
 ```
 SCENE
 
-Location and time: Moscow, autumn 1993, daytime. An identity portrait made by the television crew for continuity: the person stands against a plain, evenly lit beige wall of an ordinary office corridor; nothing else is in the frame.
-People and action: notary Kovrigin (man, 55, soft, balding, sweating; brown suit, tie askew; notary), alone. A cowardly accomplice hiding behind the law; soft, balding, sweating, eyes that avoid contact. The face is straight to the camera, neutral, mouth closed, eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. Exactly one person, head and shoulders.
-Camera position: A television camera at the eye level of the person, a 50 mm-equivalent field of view, a medium close-up: the head and shoulders fill the frame with a little headroom, the horizon straight, the wall in focus behind.
-Light sources: soft overcast window light from the front-left and a plain ceiling fixture; no separate face lighting.
-Essential objects: none: the plain wall only.
+Location and time: Moscow, August 1993, daytime. The notary's office: a desk with a stamp and an ink pad, a desk lamp, a window with net curtains.
+People and action: notary Kovrigin (man, 55, soft and heavy, a round face with a double chin, pouches under small wary brown eyes, a bulbous nose with broken capillaries, thinning hair combed over a bald crown, a damp forehead; a brown three-piece suit shiny at the elbows with the waistcoat straining at its buttons, a cream shirt with a wilted collar, a loosened striped tie askew, a signet ring; notary), alone. A cowardly accomplice hiding behind the law; soft, balding, sweating, eyes that avoid contact. He dabs his damp forehead with a handkerchief and has stopped mid-gesture, the small eyes sliding away from the lens to the side: wet fright hidden under the dignity of office, the mouth pressed into a polite line. The face is fully visible, in focus and turned to the camera, not covered by hands or objects: this is the casting reference for the face. A specific, imperfect face of a non-professional actor in a 1990s Russian television series, instantly different from every other character of the story; the clothes exactly as described, in their own colours and materials. Exactly one person, head and shoulders, nobody else in the picture.
+Camera position: A television camera slightly above his eye level, three-quarter view across the desk, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the lamp and the curtains soft behind.
+Light sources: diffused daylight through the net curtains and the warm desk lamp; a shine on the damp skin.
+Essential objects: the handkerchief in his hand, the stamp on the desk.
 ```
 
 SPRITE (база для выражений; Reference 1 — файл лица):
@@ -287,7 +287,7 @@ Reference 1 is the face of notary Kovrigin: keep this exact face, hair and build
 SCENE
 
 Location and time: Moscow, 1993; a plain, evenly lit mid-grey wall with no objects (the figure will be cut out).
-People and action: Full-body portrait for a visual novel character sprite: notary Kovrigin (man, 55, soft, balding, sweating; brown suit, tie askew; notary). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
+People and action: Full-body portrait for a visual novel character sprite: notary Kovrigin (man, 55, soft and heavy, a round face with a double chin, pouches under small wary brown eyes, a bulbous nose with broken capillaries, thinning hair combed over a bald crown, a damp forehead; a brown three-piece suit shiny at the elbows with the waistcoat straining at its buttons, a cream shirt with a wilted collar, a loosened striped tie askew, a signet ring; notary). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
 Camera position: a television camera at chest height, a 40 mm-equivalent field of view, the whole figure in frame with headroom.
 Light sources: soft overcast window light from the front-left.
 Essential objects: none.
@@ -295,16 +295,16 @@ Essential objects: none.
 
 ### `zoya` — Зоя Павловна
 
-FACE (портрет-референс, 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
+FACE (характерный портрет-референс: своё место, момент и взгляд, лицо целиком в фокусе; 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
 
 ```
 SCENE
 
-Location and time: Moscow, autumn 1993, daytime. An identity portrait made by the television crew for continuity: the person stands against a plain, evenly lit beige wall of an ordinary office corridor; nothing else is in the frame.
-People and action: Zoya Pavlovna, an elderly pensioner (woman, 74, small, kind face, white hair under a knitted beret; Sunday coat with a fur collar, handbag; pensioner), alone. Trusting and kind, shy of being a burden, lonely; a small bright face that lights up at the thought of her grandson. The face is straight to the camera, neutral, mouth closed, eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. Exactly one person, head and shoulders.
-Camera position: A television camera at the eye level of the person, a 50 mm-equivalent field of view, a medium close-up: the head and shoulders fill the frame with a little headroom, the horizon straight, the wall in focus behind.
-Light sources: soft overcast window light from the front-left and a plain ceiling fixture; no separate face lighting.
-Essential objects: none: the plain wall only.
+Location and time: Moscow, August 1993, daytime. The kitchen of an old Moscow apartment: a window with a geranium, a tea glass in a metal holder, a framed photograph on the sill.
+People and action: Zoya Pavlovna, an elderly pensioner (woman, 74, small and slight, a round wrinkled face with bright pale-blue eyes, soft cheeks, a small nose, thin lips with a trace of pink lipstick, white hair in soft waves under a lilac knitted beret; a dark cherry-red Sunday coat with a fox-fur collar, a small enamel brooch on the lapel, a wool scarf, a black patent handbag held with both hands; pensioner), alone. Trusting and kind, shy of being a burden, lonely; a small bright face that lights up at the thought of her grandson. She has just said her grandson's name and her face lights up: trusting kindness, a shy readiness to apologize for taking someone's time, the bright pale eyes to the lens, the handbag held on her lap with both hands. The face is fully visible, in focus and turned to the camera, not covered by hands or objects: this is the casting reference for the face. A specific, imperfect face of a non-professional actor in a 1990s Russian television series, instantly different from every other character of the story; the clothes exactly as described, in their own colours and materials. Exactly one person, head and shoulders, nobody else in the picture.
+Camera position: A television camera at her eye level, slightly three-quarter, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the window and the geranium soft behind.
+Light sources: soft daylight from the kitchen window on one side; the rest of the room a little darker.
+Essential objects: the tea glass in its holder, the framed photograph on the sill.
 ```
 
 SPRITE (база для выражений; Reference 1 — файл лица):
@@ -316,7 +316,7 @@ Reference 1 is the face of Zoya Pavlovna, an elderly pensioner: keep this exact 
 SCENE
 
 Location and time: Moscow, 1993; a plain, evenly lit mid-grey wall with no objects (the figure will be cut out).
-People and action: Full-body portrait for a visual novel character sprite: Zoya Pavlovna, an elderly pensioner (woman, 74, small, kind face, white hair under a knitted beret; Sunday coat with a fur collar, handbag; pensioner). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
+People and action: Full-body portrait for a visual novel character sprite: Zoya Pavlovna, an elderly pensioner (woman, 74, small and slight, a round wrinkled face with bright pale-blue eyes, soft cheeks, a small nose, thin lips with a trace of pink lipstick, white hair in soft waves under a lilac knitted beret; a dark cherry-red Sunday coat with a fox-fur collar, a small enamel brooch on the lapel, a wool scarf, a black patent handbag held with both hands; pensioner). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
 Camera position: a television camera at chest height, a 40 mm-equivalent field of view, the whole figure in frame with headroom.
 Light sources: soft overcast window light from the front-left.
 Essential objects: none.
@@ -324,16 +324,16 @@ Essential objects: none.
 
 ### `neighbor` — Галина, соседка
 
-FACE (портрет-референс, 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
+FACE (характерный портрет-референс: своё место, момент и взгляд, лицо целиком в фокусе; 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
 
 ```
 SCENE
 
-Location and time: Moscow, autumn 1993, daytime. An identity portrait made by the television crew for continuity: the person stands against a plain, evenly lit beige wall of an ordinary office corridor; nothing else is in the frame.
-People and action: Galina, the neighbour (woman, 60, sturdy, flowered housecoat and cardigan, glass milk bottle in hand; neighbour), alone. Observant and pushy until it concerns herself, then afraid of being involved; a sturdy face used to talking in stairwells. The face is straight to the camera, neutral, mouth closed, eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. Exactly one person, head and shoulders.
-Camera position: A television camera at the eye level of the person, a 50 mm-equivalent field of view, a medium close-up: the head and shoulders fill the frame with a little headroom, the horizon straight, the wall in focus behind.
-Light sources: soft overcast window light from the front-left and a plain ceiling fixture; no separate face lighting.
-Essential objects: none: the plain wall only.
+Location and time: Moscow, August 1993, evening. The landing of an old stairwell: her door with a peephole and a door chain, a dim bulb, a mailbox.
+People and action: Galina, the neighbour (woman, 60, sturdy and broad, a square face with a heavy chin, small sharp dark eyes, thick eyebrows, a wide mouth with a gold tooth at the side, dyed chestnut hair under a kerchief tied at the back of the neck; a flowered housecoat in blue and white under a moss-green cardigan with pilled sleeves, a glass milk bottle in her hand; neighbour), alone. Observant and pushy until it concerns herself, then afraid of being involved; a sturdy face used to talking in stairwells. She has leaned out through the gap of the chained door to see who is asking, the milk bottle in her hand: pushy curiosity with a shadow of fear of being involved, the small sharp eyes measuring the visitor, straight into the lens. The face is fully visible, in focus and turned to the camera, not covered by hands or objects: this is the casting reference for the face. A specific, imperfect face of a non-professional actor in a 1990s Russian television series, instantly different from every other character of the story; the clothes exactly as described, in their own colours and materials. Exactly one person, head and shoulders, nobody else in the picture.
+Camera position: A television camera at her eye level, three-quarter view from the stairs, a 40 mm-equivalent field of view, a medium close-up: head and shoulders in the door gap, the dark hallway behind her.
+Light sources: the dim stairwell bulb above and warmer light from inside her apartment behind her.
+Essential objects: the door chain, the glass milk bottle.
 ```
 
 SPRITE (база для выражений; Reference 1 — файл лица):
@@ -345,7 +345,7 @@ Reference 1 is the face of Galina, the neighbour: keep this exact face, hair and
 SCENE
 
 Location and time: Moscow, 1993; a plain, evenly lit mid-grey wall with no objects (the figure will be cut out).
-People and action: Full-body portrait for a visual novel character sprite: Galina, the neighbour (woman, 60, sturdy, flowered housecoat and cardigan, glass milk bottle in hand; neighbour). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
+People and action: Full-body portrait for a visual novel character sprite: Galina, the neighbour (woman, 60, sturdy and broad, a square face with a heavy chin, small sharp dark eyes, thick eyebrows, a wide mouth with a gold tooth at the side, dyed chestnut hair under a kerchief tied at the back of the neck; a flowered housecoat in blue and white under a moss-green cardigan with pilled sleeves, a glass milk bottle in her hand; neighbour). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
 Camera position: a television camera at chest height, a 40 mm-equivalent field of view, the whole figure in frame with headroom.
 Light sources: soft overcast window light from the front-left.
 Essential objects: none.
@@ -353,16 +353,16 @@ Essential objects: none.
 
 ### `buyer` — Лапин
 
-FACE (портрет-референс, 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
+FACE (характерный портрет-референс: своё место, момент и взгляд, лицо целиком в фокусе; 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
 
 ```
 SCENE
 
-Location and time: Moscow, autumn 1993, daytime. An identity portrait made by the television crew for continuity: the person stands against a plain, evenly lit beige wall of an ordinary office corridor; nothing else is in the frame.
-People and action: Lapin, the new tenant (man, 40, thin, anxious, cheap suit jacket over a sweater; family man who bought the apartment), alone. An honest man under a steamroller: polite confusion turning into panic; thin, anxious, early lines on the face. The face is straight to the camera, neutral, mouth closed, eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. Exactly one person, head and shoulders.
-Camera position: A television camera at the eye level of the person, a 50 mm-equivalent field of view, a medium close-up: the head and shoulders fill the frame with a little headroom, the horizon straight, the wall in focus behind.
-Light sources: soft overcast window light from the front-left and a plain ceiling fixture; no separate face lighting.
-Essential objects: none: the plain wall only.
+Location and time: Moscow, October 1993, daytime. The interrogation room: a bare table with his plastic folder of documents in front of him.
+People and action: Lapin, the new tenant (man, 40, thin and narrow-shouldered, a long anxious face with early lines across the forehead, large grey eyes behind thin-rimmed glasses, a receding hairline with soft light-brown hair, a weak chin; a cheap grey-blue mottled sports jacket a size too big over a red-and-grey striped acrylic sweater, a tie knotted too tightly, a plastic folder of documents; family man who bought the apartment), alone. An honest man under a steamroller: polite confusion turning into panic; thin, anxious, early lines on the face. He has just understood that his papers mean nothing and tries to smile politely: polite confusion turning into panic, the eyebrows up, the mouth half open, the large eyes behind the glasses to the lens. The face is fully visible, in focus and turned to the camera, not covered by hands or objects: this is the casting reference for the face. A specific, imperfect face of a non-professional actor in a 1990s Russian television series, instantly different from every other character of the story; the clothes exactly as described, in their own colours and materials. Exactly one person, head and shoulders, nobody else in the picture.
+Camera position: A television camera at his eye level, frontal, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the pale wall behind.
+Light sources: flat daylight from a high window and a fluorescent tube; even, unflattering.
+Essential objects: the plastic folder of documents under his hands, the too-tight tie.
 ```
 
 SPRITE (база для выражений; Reference 1 — файл лица):
@@ -374,7 +374,7 @@ Reference 1 is the face of Lapin, the new tenant: keep this exact face, hair and
 SCENE
 
 Location and time: Moscow, 1993; a plain, evenly lit mid-grey wall with no objects (the figure will be cut out).
-People and action: Full-body portrait for a visual novel character sprite: Lapin, the new tenant (man, 40, thin, anxious, cheap suit jacket over a sweater; family man who bought the apartment). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
+People and action: Full-body portrait for a visual novel character sprite: Lapin, the new tenant (man, 40, thin and narrow-shouldered, a long anxious face with early lines across the forehead, large grey eyes behind thin-rimmed glasses, a receding hairline with soft light-brown hair, a weak chin; a cheap grey-blue mottled sports jacket a size too big over a red-and-grey striped acrylic sweater, a tie knotted too tightly, a plastic folder of documents; family man who bought the apartment). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
 Camera position: a television camera at chest height, a 40 mm-equivalent field of view, the whole figure in frame with headroom.
 Light sources: soft overcast window light from the front-left.
 Essential objects: none.
@@ -382,16 +382,16 @@ Essential objects: none.
 
 ### `boss` — Валентин Павлович
 
-FACE (портрет-референс, 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
+FACE (характерный портрет-референс: своё место, момент и взгляд, лицо целиком в фокусе; 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
 
 ```
 SCENE
 
-Location and time: Moscow, autumn 1993, daytime. An identity portrait made by the television crew for continuity: the person stands against a plain, evenly lit beige wall of an ordinary office corridor; nothing else is in the frame.
-People and action: Valentin Pavlovich, head of the investigative department (man, 55, heavy, jowly face, grey hair combed back; dark navy suit, white shirt, patterned tie; head of the investigative department), alone. Not a villain: a department head who keeps the place afloat, fatherly and tired; heavy jowls, eyes that have made many compromises. The face is straight to the camera, neutral, mouth closed, eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. Exactly one person, head and shoulders.
-Camera position: A television camera at the eye level of the person, a 50 mm-equivalent field of view, a medium close-up: the head and shoulders fill the frame with a little headroom, the horizon straight, the wall in focus behind.
-Light sources: soft overcast window light from the front-left and a plain ceiling fixture; no separate face lighting.
-Essential objects: none: the plain wall only.
+Location and time: Moscow, October 1993, daytime. The office of the head of the investigative department: a big desk, a telephone with several lines, a map of the city on the wall.
+People and action: Valentin Pavlovich, head of the investigative department (man, 55, heavy and tall, a broad jowly face with a strong nose, tired hooded eyes with heavy lids, thick grey hair combed straight back, a small old scar on the chin; a dark navy suit with a tiny enamel lapel pin, a white shirt tight at the collar, a maroon patterned tie, a heavy steel watch; head of the investigative department), alone. Not a villain: a department head who keeps the place afloat, fatherly and tired; heavy jowls, eyes that have made many compromises. He has taken off his glasses and rubs the bridge of his nose, looking at the visitor: fatherly fatigue, the hooded eyes of a man who has made many compromises and keeps the place afloat, to the lens. The face is fully visible, in focus and turned to the camera, not covered by hands or objects: this is the casting reference for the face. A specific, imperfect face of a non-professional actor in a 1990s Russian television series, instantly different from every other character of the story; the clothes exactly as described, in their own colours and materials. Exactly one person, head and shoulders, nobody else in the picture.
+Camera position: A television camera slightly below his eye level, three-quarter view across the desk, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the map soft behind.
+Light sources: grey daylight from a large window behind the camera and a green-shaded desk lamp; no separate face lighting.
+Essential objects: the glasses in his hand, the multi-line telephone.
 ```
 
 SPRITE (база для выражений; Reference 1 — файл лица):
@@ -403,7 +403,7 @@ Reference 1 is the face of Valentin Pavlovich, head of the investigative departm
 SCENE
 
 Location and time: Moscow, 1993; a plain, evenly lit mid-grey wall with no objects (the figure will be cut out).
-People and action: Full-body portrait for a visual novel character sprite: Valentin Pavlovich, head of the investigative department (man, 55, heavy, jowly face, grey hair combed back; dark navy suit, white shirt, patterned tie; head of the investigative department). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
+People and action: Full-body portrait for a visual novel character sprite: Valentin Pavlovich, head of the investigative department (man, 55, heavy and tall, a broad jowly face with a strong nose, tired hooded eyes with heavy lids, thick grey hair combed straight back, a small old scar on the chin; a dark navy suit with a tiny enamel lapel pin, a white shirt tight at the collar, a maroon patterned tie, a heavy steel watch; head of the investigative department). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
 Camera position: a television camera at chest height, a 40 mm-equivalent field of view, the whole figure in frame with headroom.
 Light sources: soft overcast window light from the front-left.
 Essential objects: none.
@@ -411,16 +411,16 @@ Essential objects: none.
 
 ### `lapin_wife` — Ирина Лапина
 
-FACE (портрет-референс, 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
+FACE (характерный портрет-референс: своё место, момент и взгляд, лицо целиком в фокусе; 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
 
 ```
 SCENE
 
-Location and time: Moscow, autumn 1993, daytime. An identity portrait made by the television crew for continuity: the person stands against a plain, evenly lit beige wall of an ordinary office corridor; nothing else is in the frame.
-People and action: Irina Lapina (woman, 40, thin, pale, tired eyes, hair pulled back in a low bun; beige cardigan over a plain dark grey dress; wife of a missing man), alone. A mother defending her home: she holds longer than her husband and breaks deeper; pale, tired eyes, hair pulled back. The face is straight to the camera, neutral, mouth closed, eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. Exactly one person, head and shoulders.
-Camera position: A television camera at the eye level of the person, a 50 mm-equivalent field of view, a medium close-up: the head and shoulders fill the frame with a little headroom, the horizon straight, the wall in focus behind.
-Light sources: soft overcast window light from the front-left and a plain ceiling fixture; no separate face lighting.
-Essential objects: none: the plain wall only.
+Location and time: Moscow, October 1993, evening. The hallway of the disputed apartment: moving boxes along the wall, a child's coat on a hook, a bare bulb.
+People and action: Irina Lapina (woman, 40, thin and pale, a narrow face with sharp cheekbones, large tired grey-blue eyes with reddened lids, a straight nose, a clenched mouth, dark-blond hair pulled back into a low bun with strands escaping; a beige cardigan buttoned wrong over a plain dark-green dress, a thin chain with a small cross, a cheap wedding ring; wife of a missing man), alone. A mother defending her home: she holds longer than her husband and breaks deeper; pale, tired eyes, hair pulled back. She stands with her arms crossed, holding herself together: a mother defending her home, the jaw set, the eyes wet but not crying, a challenge in the look straight into the lens. The face is fully visible, in focus and turned to the camera, not covered by hands or objects: this is the casting reference for the face. A specific, imperfect face of a non-professional actor in a 1990s Russian television series, instantly different from every other character of the story; the clothes exactly as described, in their own colours and materials. Exactly one person, head and shoulders, nobody else in the picture.
+Camera position: A television camera at her eye level, frontal, a 40 mm-equivalent field of view, a medium close-up: head and shoulders, the boxes and the child's coat soft behind.
+Light sources: the bare hallway bulb above and cold light from the kitchen doorway on one side.
+Essential objects: the child's coat on the hook, a moving box.
 ```
 
 SPRITE (база для выражений; Reference 1 — файл лица):
@@ -432,7 +432,7 @@ Reference 1 is the face of Irina Lapina: keep this exact face, hair and build.
 SCENE
 
 Location and time: Moscow, 1993; a plain, evenly lit mid-grey wall with no objects (the figure will be cut out).
-People and action: Full-body portrait for a visual novel character sprite: Irina Lapina (woman, 40, thin, pale, tired eyes, hair pulled back in a low bun; beige cardigan over a plain dark grey dress; wife of a missing man). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
+People and action: Full-body portrait for a visual novel character sprite: Irina Lapina (woman, 40, thin and pale, a narrow face with sharp cheekbones, large tired grey-blue eyes with reddened lids, a straight nose, a clenched mouth, dark-blond hair pulled back into a low bun with strands escaping; a beige cardigan buttoned wrong over a plain dark-green dress, a thin chain with a small cross, a cheap wedding ring; wife of a missing man). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
 Camera position: a television camera at chest height, a 40 mm-equivalent field of view, the whole figure in frame with headroom.
 Light sources: soft overcast window light from the front-left.
 Essential objects: none.
@@ -440,16 +440,16 @@ Essential objects: none.
 
 ### `accomplice` — Дмитрий Шмелёв («Шмель»)
 
-FACE (портрет-референс, 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
+FACE (характерный портрет-референс: своё место, момент и взгляд, лицо целиком в фокусе; 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
 
 ```
 SCENE
 
-Location and time: Moscow, autumn 1993, daytime. An identity portrait made by the television crew for continuity: the person stands against a plain, evenly lit beige wall of an ordinary office corridor; nothing else is in the frame.
-People and action: Dmitry Shmelyov (Shmel), the accomplice (man, 30, thick neck, boxer's build, short dark hair; black padded jacket over a navy tracksuit with white stripes, worn trainers; hired muscle), alone. An empty executor who only drove and believed he was helping people move; thick neck, boxer's build, a scared, uncomprehending look. The face is straight to the camera, neutral, mouth closed, eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. Exactly one person, head and shoulders.
-Camera position: A television camera at the eye level of the person, a 50 mm-equivalent field of view, a medium close-up: the head and shoulders fill the frame with a little headroom, the horizon straight, the wall in focus behind.
-Light sources: soft overcast window light from the front-left and a plain ceiling fixture; no separate face lighting.
-Essential objects: none: the plain wall only.
+Location and time: Moscow, November 1993, daytime. A bench in the corridor of the district police station, a grille on the window, a radiator.
+People and action: Dmitry Shmelyov (Shmel), the accomplice (man, 30, a thick neck, a boxer's build and a flattened boxer's nose, small deep-set eyes, a low forehead, a cauliflower ear, short dark hair with a razor fade, a scar through one eyebrow; a black padded jacket open over a navy tracksuit top with three white stripes, a thin gold chain, worn white trainers; hired muscle), alone. An empty executor who only drove and believed he was helping people move; thick neck, boxer's build, a scared, uncomprehending look. He has been asked a question he does not understand and looks for help: scared and uncomprehending, the mouth slightly open, the brows drawn together over the small deep-set eyes, the look to the lens. The face is fully visible, in focus and turned to the camera, not covered by hands or objects: this is the casting reference for the face. A specific, imperfect face of a non-professional actor in a 1990s Russian television series, instantly different from every other character of the story; the clothes exactly as described, in their own colours and materials. Exactly one person, head and shoulders, nobody else in the picture.
+Camera position: A television camera at his eye level, frontal, a 40 mm-equivalent field of view, a medium close-up: head and shoulders, the grille and the wall soft behind.
+Light sources: grey daylight through the barred window and a fluorescent tube; ordinary blunt shadows.
+Essential objects: the gold chain at the collar of the tracksuit, the window grille.
 ```
 
 SPRITE (база для выражений; Reference 1 — файл лица):
@@ -461,7 +461,7 @@ Reference 1 is the face of Dmitry Shmelyov (Shmel), the accomplice: keep this ex
 SCENE
 
 Location and time: Moscow, 1993; a plain, evenly lit mid-grey wall with no objects (the figure will be cut out).
-People and action: Full-body portrait for a visual novel character sprite: Dmitry Shmelyov (Shmel), the accomplice (man, 30, thick neck, boxer's build, short dark hair; black padded jacket over a navy tracksuit with white stripes, worn trainers; hired muscle). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
+People and action: Full-body portrait for a visual novel character sprite: Dmitry Shmelyov (Shmel), the accomplice (man, 30, a thick neck, a boxer's build and a flattened boxer's nose, small deep-set eyes, a low forehead, a cauliflower ear, short dark hair with a razor fade, a scar through one eyebrow; a black padded jacket open over a navy tracksuit top with three white stripes, a thin gold chain, worn white trainers; hired muscle). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
 Camera position: a television camera at chest height, a 40 mm-equivalent field of view, the whole figure in frame with headroom.
 Light sources: soft overcast window light from the front-left.
 Essential objects: none.
@@ -469,16 +469,16 @@ Essential objects: none.
 
 ### `clerk` — Раиса Львовна, архив БТИ
 
-FACE (портрет-референс, 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
+FACE (характерный портрет-референс: своё место, момент и взгляд, лицо целиком в фокусе; 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на «Square composition 1:1, one frame, without borders.»):
 
 ```
 SCENE
 
-Location and time: Moscow, autumn 1993, daytime. An identity portrait made by the television crew for continuity: the person stands against a plain, evenly lit beige wall of an ordinary office corridor; nothing else is in the frame.
-People and action: Raisa Lvovna, the BTI archive clerk (woman, 60, short grey hair, glasses, stern mouth; grey cardigan over a floral blouse, brown skirt, a cardboard box of index cards in her arms; archive clerk), alone. The mistress of the archive: strictness as a form of care, a mocking mouth; short grey hair, glasses. The face is straight to the camera, neutral, mouth closed, eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. Exactly one person, head and shoulders.
-Camera position: A television camera at the eye level of the person, a 50 mm-equivalent field of view, a medium close-up: the head and shoulders fill the frame with a little headroom, the horizon straight, the wall in focus behind.
-Light sources: soft overcast window light from the front-left and a plain ceiling fixture; no separate face lighting.
-Essential objects: none: the plain wall only.
+Location and time: Moscow, September 1993, daytime. The BTI archive: card-index cabinets with brass handles on both sides, a green-shaded lamp, a counter.
+People and action: Raisa Lvovna, the BTI archive clerk (woman, 60, a small sharp face with a pointed chin, lively dark eyes behind large plastic-framed glasses on a cord, a mocking stern mouth with thin lips, short grey hair cut straight, a pencil behind her ear; a grey hand-knitted cardigan with a cameo brooch over a floral blouse in brown and orange, a brown skirt, a cardboard box of index cards in her arms; archive clerk), alone. The mistress of the archive: strictness as a form of care, a mocking mouth; short grey hair, glasses. She has put the box of index cards on the counter and looks over her glasses at someone who came without a request form: strictness as a form of care, a mocking half-smile, the eyebrows up, the eyes to the lens. The face is fully visible, in focus and turned to the camera, not covered by hands or objects: this is the casting reference for the face. A specific, imperfect face of a non-professional actor in a 1990s Russian television series, instantly different from every other character of the story; the clothes exactly as described, in their own colours and materials. Exactly one person, head and shoulders, nobody else in the picture.
+Camera position: A television camera at her eye level, three-quarter view across the counter, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the cabinets soft behind.
+Light sources: the green-shaded lamp from below the shoulder and dusty daylight from a high window; no separate face lighting.
+Essential objects: the box of index cards on the counter, the pencil behind her ear.
 ```
 
 SPRITE (база для выражений; Reference 1 — файл лица):
@@ -490,7 +490,7 @@ Reference 1 is the face of Raisa Lvovna, the BTI archive clerk: keep this exact 
 SCENE
 
 Location and time: Moscow, 1993; a plain, evenly lit mid-grey wall with no objects (the figure will be cut out).
-People and action: Full-body portrait for a visual novel character sprite: Raisa Lvovna, the BTI archive clerk (woman, 60, short grey hair, glasses, stern mouth; grey cardigan over a floral blouse, brown skirt, a cardboard box of index cards in her arms; archive clerk). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
+People and action: Full-body portrait for a visual novel character sprite: Raisa Lvovna, the BTI archive clerk (woman, 60, a small sharp face with a pointed chin, lively dark eyes behind large plastic-framed glasses on a cord, a mocking stern mouth with thin lips, short grey hair cut straight, a pencil behind her ear; a grey hand-knitted cardigan with a cameo brooch over a floral blouse in brown and orange, a brown skirt, a cardboard box of index cards in her arms; archive clerk). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
 Camera position: a television camera at chest height, a 40 mm-equivalent field of view, the whole figure in frame with headroom.
 Light sources: soft overcast window light from the front-left.
 Essential objects: none.
