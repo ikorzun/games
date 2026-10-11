@@ -6,100 +6,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AudioManager } from '../src/stage/audio';
 import type { IAudioBackend } from '../src/stage/audio';
-import { FADE_STEP_MS, HtmlAudioBackend, SFX_POOL, SILENT_WAV } from '../src/stage/audio_html';
-import type { AudioElementLike } from '../src/stage/audio_html';
-
-type Handler = (ev?: unknown) => void;
-
-class FakeEl implements AudioElementLike {
-  loop = false;
-  muted = false;
-  currentTime = 0;
-  preload = '';
-  paused = true;
-  plays = 0;
-  pauses = 0;
-  readonly srcHistory: string[] = [];
-  /** Как отвечает play(): ok / blocked (автозапуск запрещён) / unsupported (файла нет). */
-  mode: 'ok' | 'blocked' | 'unsupported' = 'ok';
-  private _src = '';
-  private _volume = 1;
-  private readonly handlers = new Map<string, Set<Handler>>();
-
-  constructor(private readonly lockedVolume = false) {}
-
-  get src(): string {
-    return this._src;
-  }
-  set src(v: string) {
-    this._src = v;
-    this.srcHistory.push(v);
-  }
-  get volume(): number {
-    return this._volume;
-  }
-  set volume(v: number) {
-    if (!this.lockedVolume) this._volume = v; // iPhone: громкость элемента не меняется
-  }
-  play(): Promise<void> {
-    this.plays += 1;
-    if (this.mode === 'blocked') return Promise.reject(Object.assign(new Error('blocked'), { name: 'NotAllowedError' }));
-    if (this.mode === 'unsupported') return Promise.reject(Object.assign(new Error('unsupported'), { name: 'NotSupportedError' }));
-    this.paused = false;
-    return Promise.resolve();
-  }
-  pause(): void {
-    this.paused = true;
-    this.pauses += 1;
-  }
-  load(): void {
-    /* ничего */
-  }
-  removeAttribute(name: string): void {
-    if (name === 'src') this._src = '';
-  }
-  addEventListener(type: string, cb: Handler): void {
-    let set = this.handlers.get(type);
-    if (!set) this.handlers.set(type, (set = new Set()));
-    set.add(cb);
-  }
-  removeEventListener(type: string, cb: Handler): void {
-    this.handlers.get(type)?.delete(cb);
-  }
-  fire(type: string): void {
-    for (const cb of [...(this.handlers.get(type) ?? [])]) cb();
-  }
-  listeners(type: string): number {
-    return this.handlers.get(type)?.size ?? 0;
-  }
-}
-
-/** Ручные часы: таймеры срабатывают по порядку при advance(). */
-class Clock {
-  t = 0;
-  private id = 0;
-  private timers: Array<{ id: number; at: number; cb: () => void }> = [];
-  now = (): number => this.t;
-  setTimer = (cb: () => void, ms: number): number => {
-    const id = ++this.id;
-    this.timers.push({ id, at: this.t + ms, cb });
-    return id;
-  };
-  clearTimer = (h: unknown): void => {
-    this.timers = this.timers.filter((x) => x.id !== h);
-  };
-  advance(ms: number): void {
-    const end = this.t + ms;
-    for (;;) {
-      const due = this.timers.filter((x) => x.at <= end).sort((a, b) => a.at - b.at)[0];
-      if (!due) break;
-      this.timers = this.timers.filter((x) => x !== due);
-      this.t = due.at;
-      due.cb();
-    }
-    this.t = end;
-  }
-}
+import { FADE_STEP_MS, HtmlAudioBackend, SFX_POOL, SILENT_WAV, VOICE_WARM_CONCURRENCY, VOICE_WARM_TIMEOUT_MS } from '../src/stage/audio_html';
+import { Clock, FakeEl } from './helpers/audio_fakes';
 
 const URLS: Record<string, string> = {
   m_a: './assets/common/music/a.m4a',
@@ -132,11 +40,12 @@ function make(opts: { ios?: boolean } = {}) {
     clearTimer: clock.clearTimer,
     warn: (m) => warns.push(m),
   });
-  // порядок создания в конструкторе: музыка ×2, эмбиент ×2, sfx ×SFX_POOL
+  // порядок создания в конструкторе: музыка ×2, эмбиент ×2, sfx ×SFX_POOL, озвучка ×1
   const music = els.slice(0, 2);
   const ambient = els.slice(2, 4);
   const sfx = els.slice(4, 4 + SFX_POOL);
-  return { backend, clock, els, music, ambient, sfx, warns };
+  const voice = els[4 + SFX_POOL]!;
+  return { backend, clock, els, music, ambient, sfx, voice, warns };
 }
 
 const play = (b: HtmlAudioBackend, kind: 'music' | 'ambient' | 'sfx', id: string, o: Partial<{ loop: boolean; volume: number; fadeMs: number }> = {}): void =>
@@ -597,5 +506,357 @@ describe('AudioManager: события сценария → бэкенд', () =>
     expect(audio.music).toBe('m_a');
     expect(audio.lastSfx).toBe('s0');
     expect(() => audio.setPaused(true)).not.toThrow();
+  });
+});
+
+// ───────────────────────────── озвучка реплик ─────────────────────────────
+
+const V1 = './assets/ep01/voice/ru/ep01.s01.l001.mp3';
+const V2 = './assets/ep01/voice/ru/ep01.s01.l002.mp3';
+const V3 = './assets/ep01/voice/ru/ep01.s01.l003.mp3';
+
+describe('HtmlAudioBackend: озвучка реплик', () => {
+  it('клип стартует на своём элементе: src, без loop, play(); пока идёт — playing, по ended — ended, элемент освобождён', () => {
+    const { backend, voice } = make();
+    const ends: string[] = [];
+    const clip = backend.playVoice(V1)!;
+    clip.onEnd((how) => ends.push(how));
+    expect(clip.url).toBe(V1);
+    expect(clip.state).toBe('playing');
+    expect(voice.src).toBe(V1);
+    expect(voice.loop).toBe(false);
+    expect(voice.plays).toBe(1);
+    expect(voice.paused).toBe(false);
+    expect(backend.state().voice).toBe(V1);
+    voice.fire('ended');
+    expect(clip.state).toBe('ended');
+    expect(ends).toEqual(['ended']);
+    expect(voice.paused).toBe(true);
+    expect(voice.src).toBe(''); // загрузка отпущена
+    expect(backend.state().voice).toBeNull();
+    expect(voice.listeners('ended')).toBe(0);
+    expect(voice.listeners('error')).toBe(0);
+  });
+
+  it('stop() обрывает клип: подписчики получают stopped, элемент молчит, недогруженный клип больше не качается; повтор безопасен', () => {
+    const { backend, voice } = make();
+    const ends: string[] = [];
+    const clip = backend.playVoice(V1)!;
+    clip.onEnd((how) => ends.push(how));
+    clip.stop();
+    expect(clip.state).toBe('stopped');
+    expect(ends).toEqual(['stopped']);
+    expect(voice.paused).toBe(true);
+    expect(voice.src).toBe('');
+    clip.stop();
+    backend.stopVoice();
+    expect(ends).toEqual(['stopped']);
+    expect(voice.listeners('ended')).toBe(0);
+  });
+
+  it('новый клип обрывает прежний: тот же элемент, прежний получает stopped, позднее ended старого не влияет на новый', () => {
+    const { backend, voice } = make();
+    const first = backend.playVoice(V1)!;
+    const ends: string[] = [];
+    first.onEnd((how) => ends.push(`1:${how}`));
+    const second = backend.playVoice(V2)!;
+    second.onEnd((how) => ends.push(`2:${how}`));
+    expect(ends).toEqual(['1:stopped']);
+    expect(voice.src).toBe(V2);
+    expect(voice.srcHistory).toEqual([V1, V2]); // один элемент на все клипы
+    expect(second.state).toBe('playing');
+    voice.fire('ended');
+    expect(ends).toEqual(['1:stopped', '2:ended']);
+    expect(first.state).toBe('stopped'); // не «воскрес»
+  });
+
+  it('onEnd у уже закончившегося клипа вызывается сразу; отписка не даёт вызова', () => {
+    const { backend, voice } = make();
+    const clip = backend.playVoice(V1)!;
+    const seen: string[] = [];
+    const off = clip.onEnd((how) => seen.push(`a:${how}`));
+    off();
+    voice.fire('ended');
+    expect(seen).toEqual([]);
+    clip.onEnd((how) => seen.push(`b:${how}`));
+    expect(seen).toEqual(['b:ended']);
+  });
+
+  it('громкость: канал voice; нулевой gain — тишина, но клип идёт; на iPhone — вкл/выкл через muted', () => {
+    const { backend, voice } = make();
+    backend.setGain('voice', 0.6);
+    backend.playVoice(V1);
+    expect(voice.volume).toBeCloseTo(0.6, 9);
+    backend.setGain('voice', 0);
+    expect(voice.volume).toBe(0);
+    expect(voice.paused).toBe(false);
+    backend.setGain('voice', 0.9);
+    expect(voice.volume).toBeCloseTo(0.9, 9);
+
+    const ios = make({ ios: true });
+    expect(ios.backend.volumeSettable).toBe(false);
+    ios.backend.setGain('voice', 0.9);
+    ios.backend.playVoice(V1);
+    expect(ios.voice.muted).toBe(false);
+    ios.backend.setGain('voice', 0);
+    expect(ios.voice.muted).toBe(true);
+  });
+
+  it('файл из индекса не читается (error): один warn, клип failed; повторная просьба молча даёт null', () => {
+    const { backend, voice, warns } = make();
+    const ends: string[] = [];
+    const clip = backend.playVoice(V1)!;
+    clip.onEnd((how) => ends.push(how));
+    voice.fire('error');
+    expect(ends).toEqual(['failed']);
+    expect(warns).toHaveLength(1);
+    expect(warns[0]).toContain(V1);
+    expect(backend.state().missing).toContain(V1);
+    expect(backend.playVoice(V1)).toBeNull();
+    expect(warns).toHaveLength(1);
+    expect(backend.playVoice(V2)).not.toBeNull(); // другие клипы не затронуты
+  });
+
+  it('play() отклонён: автозапуск запрещён — failed без шума; формат/файл не поддержан — failed и один warn', async () => {
+    const blocked = make();
+    blocked.voice.mode = 'blocked';
+    const a = blocked.backend.playVoice(V1)!;
+    await flush();
+    expect(a.state).toBe('failed');
+    expect(blocked.warns).toEqual([]);
+    expect(blocked.backend.state().missing).toEqual([]); // файл исправен — просто ждёт жеста
+
+    const bad = make();
+    bad.voice.mode = 'unsupported';
+    const b = bad.backend.playVoice(V1)!;
+    await flush();
+    expect(b.state).toBe('failed');
+    expect(bad.warns).toHaveLength(1);
+    expect(bad.backend.playVoice(V1)).toBeNull();
+    expect(bad.warns).toHaveLength(1);
+  });
+
+  it('отказ play() у уже остановленного клипа ничего не портит (AbortError после смены src)', async () => {
+    const { backend, voice } = make();
+    voice.mode = 'unsupported';
+    const first = backend.playVoice(V1)!;
+    voice.mode = 'ok';
+    backend.stopVoice();
+    await flush(); // отказ от первого play() приходит позже остановки
+    expect(first.state).toBe('stopped');
+    const second = backend.playVoice(V2)!;
+    await flush();
+    expect(second.state).toBe('playing');
+  });
+
+  it('пауза платформы: клип встаёт и продолжается с того же места; во время паузы новый не стартует (а прежний обрывается)', () => {
+    const { backend, voice } = make();
+    const clip = backend.playVoice(V1)!;
+    backend.setPaused(true);
+    expect(voice.paused).toBe(true);
+    expect(clip.state).toBe('playing');
+    expect(backend.playVoice(V2)).toBeNull();
+    expect(clip.state).toBe('stopped');
+    backend.setPaused(false);
+    const again = backend.playVoice(V1)!;
+    backend.setPaused(true);
+    backend.setPaused(false);
+    expect(voice.paused).toBe(false);
+    expect(voice.src).toBe(V1);
+    expect(again.state).toBe('playing');
+    voice.fire('ended');
+    expect(again.state).toBe('ended');
+  });
+
+  it('разблокировка iOS не трогает идущий клип; свободный элемент озвучки «отыгрывает» тишину вместе с остальными', async () => {
+    const idle = make();
+    idle.backend.unlock();
+    await flush();
+    expect(idle.voice.src).toBe(SILENT_WAV);
+    expect(idle.voice.plays).toBe(1);
+    expect(idle.voice.paused).toBe(true);
+
+    const busy = make();
+    const clip = busy.backend.playVoice(V1)!;
+    busy.backend.unlock();
+    await flush();
+    expect(busy.voice.src).toBe(V1);
+    expect(busy.voice.paused).toBe(false);
+    expect(clip.state).toBe('playing');
+    // после разблокировки этому же элементу можно играть без жеста
+    busy.backend.playVoice(V2);
+    expect(busy.voice.src).toBe(V2);
+  });
+
+  it('dispose обрывает клип', () => {
+    const { backend } = make();
+    const clip = backend.playVoice(V1)!;
+    backend.dispose();
+    expect(clip.state).toBe('stopped');
+  });
+});
+
+describe('AudioManager: озвучка реплик', () => {
+  function rig() {
+    const m = make();
+    const audio = new AudioManager(m.backend);
+    audio.setVolumes({ music: 0.7, sfx: 0.8, voice: 0.9 });
+    return { ...m, audio };
+  }
+
+  it('громкость — из настроек и множится на «общий мастер» (Mute игрока, запрет звука платформой)', () => {
+    const { audio, voice } = rig();
+    const clip = audio.playVoice(V1)!;
+    expect(clip.state).toBe('playing');
+    expect(voice.volume).toBeCloseTo(0.9, 9);
+    expect(audio.voicePlaying).toBe(V1);
+    audio.setVolumes({ music: 0.7, sfx: 0.8, voice: 0.5 });
+    expect(voice.volume).toBeCloseTo(0.5, 9);
+    audio.setMuted(true);
+    expect(voice.volume).toBe(0);
+    audio.setMuted(false);
+    expect(voice.volume).toBeCloseTo(0.5, 9);
+    audio.setPlatformEnabled(false);
+    expect(voice.volume).toBe(0);
+    audio.setPlatformEnabled(true);
+    expect(voice.volume).toBeCloseTo(0.5, 9);
+    expect(clip.state).toBe('playing'); // клип идёт беззвучно и слышен снова после включения звука
+  });
+
+  it('озвучка выключена в настройках — клип не запускается вовсе; выключение на ходу обрывает идущий', () => {
+    const { audio, voice, backend } = rig();
+    audio.setVoiceEnabled(false);
+    expect(audio.voiceEnabled).toBe(false);
+    expect(audio.voiceAudible).toBe(false);
+    expect(audio.playVoice(V1)).toBeNull();
+    expect(voice.plays).toBe(0);
+    audio.setVoiceEnabled(true);
+    const clip = audio.playVoice(V1)!;
+    expect(clip.state).toBe('playing');
+    audio.setVoiceEnabled(false);
+    expect(clip.state).toBe('stopped');
+    expect(audio.voicePlaying).toBeNull();
+    expect(backend.state().voice).toBeNull();
+    audio.setVoiceEnabled(true);
+    expect(audio.playVoice(V2)).not.toBeNull(); // включили обратно — играет
+  });
+
+  it('Mute, запрет платформы и нулевая громкость озвучки: новые клипы не стартуют (реплика немая, авто-режим считает по тексту)', () => {
+    const { audio, voice } = rig();
+    audio.setMuted(true);
+    expect(audio.playVoice(V1)).toBeNull();
+    audio.setMuted(false);
+    audio.setPlatformEnabled(false);
+    expect(audio.playVoice(V1)).toBeNull();
+    audio.setPlatformEnabled(true);
+    audio.setVolumes({ music: 0.7, sfx: 0.8, voice: 0 });
+    expect(audio.playVoice(V1)).toBeNull();
+    expect(voice.plays).toBe(0);
+    audio.setVolumes({ music: 0.7, sfx: 0.8, voice: 0.4 });
+    expect(audio.playVoice(V1)).not.toBeNull();
+  });
+
+  it('новая просьба обрывает прежний клип, даже когда новый не стартует (Mute, озвучка выключена)', () => {
+    const { audio } = rig();
+    const clip = audio.playVoice(V1)!;
+    audio.setMuted(true);
+    expect(clip.state).toBe('playing'); // идёт беззвучно
+    expect(audio.playVoice(V2)).toBeNull();
+    expect(clip.state).toBe('stopped');
+    expect(audio.voicePlaying).toBeNull();
+  });
+
+  it('sync (загрузка сейва, откат) и stopVoice обрывают клип; запись в журнале для QA', () => {
+    const { audio } = rig();
+    const clip = audio.playVoice(V1)!;
+    expect(audio.log.some((l) => l === `voice ${V1}`)).toBe(true);
+    audio.sync(null, null);
+    expect(clip.state).toBe('stopped');
+    const next = audio.playVoice(V2)!;
+    audio.stopVoice();
+    expect(next.state).toBe('stopped');
+    expect(audio.voicePlaying).toBeNull();
+  });
+
+  it('без бэкенда (или бэкенд без озвучки) менеджер молчит и не падает', () => {
+    const none = new AudioManager();
+    expect(none.playVoice(V1)).toBeNull();
+    expect(() => none.stopVoice()).not.toThrow();
+    expect(() => none.preloadVoice([V1], 'now')).not.toThrow();
+    const noVoice = new AudioManager({ play: () => undefined, stop: () => undefined, setGain: () => undefined });
+    expect(noVoice.playVoice(V1)).toBeNull();
+  });
+
+  it('выключенная озвучка не прогревает клипы', () => {
+    const { audio, els } = rig();
+    const before = els.length;
+    audio.setVoiceEnabled(false);
+    audio.preloadVoice([V1, V2], 'now');
+    expect(els).toHaveLength(before);
+    audio.setVoiceEnabled(true);
+    audio.preloadVoice([V1], 'now');
+    expect(els.length).toBe(before + 1);
+  });
+});
+
+describe('HtmlAudioBackend: прогрев клипов озвучки', () => {
+  // у готового зонда src сбрасывается, поэтому порядок запуска читаем по первому присвоенному адресу
+  const started = (els: FakeEl[], from: number): Array<string | undefined> => els.slice(from).map((e) => e.srcHistory[0]);
+
+  it('не больше VOICE_WARM_CONCURRENCY загрузок одновременно; следующий стартует, когда предыдущий готов', async () => {
+    const { backend, els } = make();
+    const before = els.length;
+    backend.preloadVoice([V1, V2, V3], 'idle');
+    expect(VOICE_WARM_CONCURRENCY).toBe(2);
+    expect(started(els, before)).toEqual([V1, V2]);
+    els[before]!.fire('canplaythrough');
+    await flush();
+    expect(started(els, before)).toEqual([V1, V2, V3]);
+  });
+
+  it('текущий блок (now) обгоняет следующие (idle), даже если пришёл позже', async () => {
+    const { backend, els } = make();
+    const before = els.length;
+    const idle = ['i0', 'i1', 'i2', 'i3'].map((n) => `./assets/ep01/voice/ru/${n}.mp3`);
+    const now = './assets/ep01/voice/ru/n0.mp3';
+    backend.preloadVoice(idle, 'idle'); // i0 и i1 уже грузятся, i2 и i3 ждут
+    backend.preloadVoice([now], 'now');
+    expect(started(els, before)).toEqual([idle[0], idle[1]]);
+    els[before]!.fire('canplaythrough');
+    await flush();
+    expect(started(els, before)).toEqual([idle[0], idle[1], now]);
+    els[before + 1]!.fire('canplaythrough');
+    await flush();
+    els[before + 2]!.fire('canplaythrough');
+    await flush();
+    expect(started(els, before)).toEqual([idle[0], idle[1], now, idle[2], idle[3]]);
+  });
+
+  it('повторы и уже прогретые клипы не греются дважды', async () => {
+    const { backend, els } = make();
+    const before = els.length;
+    backend.preloadVoice([V1, V1, V2], 'now');
+    expect(started(els, before)).toEqual([V1, V2]);
+    els[before]!.fire('canplaythrough');
+    els[before + 1]!.fire('canplaythrough');
+    await flush();
+    backend.preloadVoice([V2, V1], 'idle');
+    expect(started(els, before)).toEqual([V1, V2]);
+  });
+
+  it('клип не читается — warn и пометка отсутствующим, очередь идёт дальше; зависшая загрузка не держит очередь', async () => {
+    const { backend, els, warns, clock } = make();
+    const before = els.length;
+    backend.preloadVoice([V1, V2, V3], 'idle');
+    els[before]!.fire('error');
+    await flush();
+    expect(warns).toHaveLength(1);
+    expect(warns[0]).toContain(V1);
+    expect(backend.state().missing).toContain(V1);
+    expect(started(els, before)).toEqual([V1, V2, V3]); // V3 встал на освободившееся место
+    clock.advance(VOICE_WARM_TIMEOUT_MS + 100); // V2 и V3 так и не ответили
+    await flush();
+    expect(warns).toHaveLength(1); // таймаут — не ошибка
+    expect(backend.playVoice(V1)).toBeNull(); // известный битый клип не запрашивается
   });
 });

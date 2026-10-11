@@ -297,14 +297,21 @@ export class SettingsScreen extends BaseScreen {
         out,
       );
     };
-    const toggle = (label: string, key: 'timers' | 'storyOnly' | 'skipUnread'): HTMLElement =>
+    const toggle = (label: string, key: 'timers' | 'storyOnly' | 'skipUnread' | 'voiceEnabled', onToggle?: (on: boolean) => void): HTMLElement =>
       h(
         'label',
         { class: 'vn-check' },
         h('input', {
           type: 'checkbox',
           checked: s[key],
-          on: { change: (e) => hd.onChange({ [key]: (e.target as HTMLInputElement).checked } as Partial<Settings>) },
+          data: { setting: key },
+          on: {
+            change: (e) => {
+              const on = (e.target as HTMLInputElement).checked;
+              onToggle?.(on);
+              hd.onChange({ [key]: on } as Partial<Settings>);
+            },
+          },
         }),
         h('span', { text: label }),
       );
@@ -350,6 +357,19 @@ export class SettingsScreen extends BaseScreen {
         ),
       ),
     );
+    // «Озвучка»: переключатель и громкость; пока озвучка выключена, ползунок недоступен (без перерисовки — фокус остаётся на флажке).
+    const voiceVolume = range(t('ui.settings.voice_volume'), 'voice', 0, 1, 0.05, pct);
+    const voiceSlider = voiceVolume.querySelector('input');
+    if (voiceSlider) voiceSlider.disabled = !s.voiceEnabled;
+    const voice = h(
+      'div',
+      { class: 'vn-settings__group vn-voice' },
+      h('span', { class: 'vn-settings__legend', text: t('ui.settings.voice') }),
+      toggle(t('ui.settings.voice_on'), 'voiceEnabled', (on) => {
+        if (voiceSlider) voiceSlider.disabled = !on;
+      }),
+      voiceVolume,
+    );
     fill(
       this.el,
       card(
@@ -362,7 +382,7 @@ export class SettingsScreen extends BaseScreen {
         range(t('ui.settings.auto_delay'), 'autoDelayMs', AUTO_DELAY_RANGE.min, AUTO_DELAY_RANGE.max, AUTO_DELAY_RANGE.step, (v) => `${(v / 1000).toFixed(1)} s`),
         range(t('ui.settings.music'), 'music', 0, 1, 0.05, pct),
         range(t('ui.settings.sfx'), 'sfx', 0, 1, 0.05, pct),
-        range(t('ui.settings.voice'), 'voice', 0, 1, 0.05, pct),
+        voice,
         toggle(t('ui.settings.timers'), 'timers'),
         toggle(t('ui.settings.story_only'), 'storyOnly'),
         h(

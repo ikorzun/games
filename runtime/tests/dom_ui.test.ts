@@ -11,10 +11,12 @@ import type { Settings } from '../src/core/settings';
 import type { ChoicePending, Ending, GameState, LinePending, MinigamePending, Presentation, ViewState, Value } from '../src/core/types';
 import { createInitialState } from '../src/core/state';
 import { registerBuiltinMinigames } from '../src/minigames/registry';
+import { VoiceClip } from '../src/stage/audio';
+import type { ILineVoice } from '../src/stage/voice';
 import type { BaseContext, HoldContext, LineContext, MinigameContext } from '../src/session';
 import type { Stage } from '../src/stage/stage';
 import { CaptionLayer } from '../src/ui/captions';
-import { DomUI } from '../src/ui/dom_ui';
+import { AUTO_VOICE_MAX_WAIT_MS, AUTO_VOICE_TAIL_MS, DomUI } from '../src/ui/dom_ui';
 import type { DomUIDeps } from '../src/ui/dom_ui';
 import { UiKit } from '../src/ui/kit';
 import type { QuickAction } from '../src/ui/quick_menu';
@@ -776,5 +778,301 @@ describe('DomUI: смена языка на лету и сброс', () => {
     expect(kit.screens.count).toBe(0);
     expect(ui.skipOn).toBe(false);
     expect(mgActive.at(-1)).toBe(false);
+  });
+});
+
+// ───────────────────────────── озвучка реплик ─────────────────────────────
+
+/** Озвучка-заглушка: клипом управляет тест (finish), журнал показывает, что и когда просили. */
+class FakeVoice implements ILineVoice {
+  readonly started: string[] = [];
+  readonly clips: VoiceClip[] = [];
+  stops = 0;
+  /** false — клипа нет (нет в индексе, озвучка выключена, звук недоступен). */
+  hasClip = true;
+  start(line: { key: string }): VoiceClip | null {
+    this.started.push(line.key);
+    if (!this.hasClip) return null;
+    const clip = new VoiceClip(`clip:${line.key}`);
+    this.clips.push(clip);
+    return clip;
+  }
+  stop(): void {
+    this.stops += 1;
+  }
+  get last(): VoiceClip {
+    return this.clips[this.clips.length - 1]!;
+  }
+}
+
+describe('DomUI: озвучка реплик', () => {
+  const rigWithVoice = (over: Partial<Settings> = {}) => {
+    const voice = new FakeVoice();
+    return { voice, ...makeRig(over, 'procedural', { voice }) };
+  };
+
+  it('клип стартует вместе с показом реплики (по её ключу) и больше нигде', async () => {
+    const { ui, voice } = rigWithVoice({ textSpeed: 5 });
+    void ui.showLine(lineP('l.1'), lineCtx(ctl()));
+    expect(voice.started).toEqual(['l.1']);
+    await flush(10_000);
+    expect(voice.started).toEqual(['l.1']); // пока реплика на экране, повторных стартов нет
+    expect(voice.last.state).toBe('playing');
+  });
+
+  it('авто-режим ждёт конец клипа + 300 мс, а не паузу по длине текста', async () => {
+    const { ui, voice } = rigWithVoice({ textSpeed: 5, autoDelayMs: 1000 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl()))); // по тексту: 1000 + 7 × 20 = 1140 мс
+    await flush(4000);
+    expect(done.done).toBe(false); // по тексту реплика давно «прочитана», но клип ещё звучит
+    await flush(1000);
+    voice.last.finish('ended'); // t = 5000: клип доиграл
+    expect(AUTO_VOICE_TAIL_MS).toBe(300);
+    await flush(AUTO_VOICE_TAIL_MS - 1);
+    expect(done.done).toBe(false);
+    await flush(1);
+    expect(done.done).toBe(true);
+  });
+
+  it('клип доиграл раньше, чем допечатался текст: листаем через 300 мс после полного вывода, а не через паузу по тексту', async () => {
+    const { ui, voice, kit } = rigWithVoice({ textSpeed: 1, autoDelayMs: 5000 }); // 18 зн/с; по тексту пауза ≥ 5 с
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.long'), lineCtx(ctl())));
+    await flush(500);
+    voice.last.finish('ended');
+    await flush(1000);
+    expect(kit.textbox.complete).toBe(false); // текст ещё печатается — листать нельзя
+    expect(done.done).toBe(false);
+    for (let i = 0; i < 200 && !kit.textbox.complete; i++) await flush(50);
+    expect(kit.textbox.complete).toBe(true);
+    expect(done.done).toBe(false); // 300 мс после полного вывода ещё не прошли
+    await flush(AUTO_VOICE_TAIL_MS);
+    expect(done.done).toBe(true); // пауза по тексту (5 с + 20 мс на символ) здесь не при чём
+  });
+
+  it('клипа нет (озвучка выключена, файла нет в индексе, звук выключен) — авто-режим как раньше, по длине текста', async () => {
+    const { ui, voice } = rigWithVoice({ textSpeed: 5, autoDelayMs: 1000 });
+    voice.hasClip = false;
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
+    await flush(1100);
+    expect(done.done).toBe(false);
+    await flush(100);
+    expect(done.done).toBe(true);
+    expect(voice.started).toEqual(['l.short']);
+  });
+
+  it('без озвучки вообще (порт не подключён) всё прежнее', async () => {
+    const { ui } = makeRig({ textSpeed: 5, autoDelayMs: 1000 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
+    await flush(1140);
+    expect(done.done).toBe(true);
+  });
+
+  it.each(['failed', 'stopped'] as const)('клип закончился как «%s» (файл не читается, автозапуск запрещён, озвучку выключили) — авто-режим считает паузу по тексту от этого момента', async (how) => {
+    const { ui, voice } = rigWithVoice({ textSpeed: 5, autoDelayMs: 1000 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
+    await flush(2000);
+    expect(done.done).toBe(false);
+    voice.last.finish(how);
+    await flush(1100);
+    expect(done.done).toBe(false);
+    await flush(100);
+    expect(done.done).toBe(true);
+  });
+
+  it('страховка: клип завис и не кончается — авто-режим не ждёт вечно, а листает через AUTO_VOICE_MAX_WAIT_MS', async () => {
+    const { ui, voice } = rigWithVoice({ textSpeed: 5, autoDelayMs: 500 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
+    await flush(AUTO_VOICE_MAX_WAIT_MS - 1);
+    expect(done.done).toBe(false);
+    expect(voice.last.state).toBe('playing');
+    await flush(1);
+    expect(done.done).toBe(true);
+    expect(voice.last.state).toBe('stopped'); // зависший клип снят вместе с репликой
+  });
+
+  it('клип кончился вовремя — страховочный таймер снят, а не сработает позже', async () => {
+    const { ui, voice } = rigWithVoice({ textSpeed: 5, autoDelayMs: 500 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
+    await flush(2000);
+    voice.last.finish('ended');
+    await flush(AUTO_VOICE_TAIL_MS);
+    expect(done.done).toBe(true);
+    const next = track(ui.showLine(lineP('l.2'), lineCtx(ctl())));
+    voice.last.finish('failed'); // новая реплика: клип сорвался сразу — идёт пауза по тексту, прежний страховочный таймер не мешает
+    await flush(AUTO_VOICE_MAX_WAIT_MS);
+    expect(next.done).toBe(true);
+  });
+
+  it('клип уже сорвался к моменту полного вывода — сразу обычная пауза по тексту', async () => {
+    const { ui, voice } = rigWithVoice({ textSpeed: 1, autoDelayMs: 500 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.long'), lineCtx(ctl())));
+    voice.last.finish('failed');
+    await flush(10_000);
+    expect(done.done).toBe(true);
+  });
+
+  it('листание игроком обрывает клип; первое нажатие только допечатывает текст — клип звучит дальше', async () => {
+    const { ui, voice } = rigWithVoice({ textSpeed: 2 });
+    const done = track(ui.showLine(lineP('l.long'), lineCtx(ctl())));
+    const clip = voice.last;
+    ui.advance(); // допечатать
+    await flush();
+    expect(clip.state).toBe('playing');
+    expect(done.done).toBe(false);
+    ui.advance(); // листнуть
+    await flush();
+    expect(done.done).toBe(true);
+    expect(clip.state).toBe('stopped');
+  });
+
+  it('следующая реплика: клип прежней остановлен, свой клип стартует заново', async () => {
+    const { ui, voice } = rigWithVoice({ textSpeed: 5 });
+    void ui.showLine(lineP('l.1'), lineCtx(ctl()));
+    const first = voice.last;
+    ui.advance();
+    await flush();
+    expect(first.state).toBe('stopped');
+    void ui.showLine(lineP('l.2'), lineCtx(ctl()));
+    expect(voice.started).toEqual(['l.1', 'l.2']);
+    expect(voice.last).not.toBe(first);
+    expect(voice.last.state).toBe('playing');
+  });
+
+  it('отмена партии (откат, загрузка сейва, выход в меню) обрывает клип, и авто-режим больше ничего не ждёт', async () => {
+    const { ui, voice, kit } = rigWithVoice({ textSpeed: 5 });
+    ui.toggleAuto();
+    const c = ctl();
+    const done = track(ui.showLine(lineP('l.1'), lineCtx(c)));
+    const clip = voice.last;
+    c.abort();
+    expect(clip.state).toBe('stopped');
+    clip.finish('ended'); // поздний конец ничего не заводит
+    await flush(20_000);
+    expect(done.done).toBe(false); // промис отменённой реплики разрешает Session (RunCancelled), не интерфейс
+    expect(kit.textbox.visible).toBe(true);
+  });
+
+  it('reset() (Session.cancel) останавливает клип и просит озвучку замолчать', async () => {
+    const { ui, voice } = rigWithVoice({ textSpeed: 5 });
+    void ui.showLine(lineP('l.1'), lineCtx(ctl()));
+    const clip = voice.last;
+    ui.reset();
+    expect(clip.state).toBe('stopped');
+    expect(voice.stops).toBeGreaterThanOrEqual(1);
+  });
+
+  it('Skip прочитанного: клип не запускается; Ctrl тоже; прочитанные реплики мелькают без звука', async () => {
+    const { ui, voice } = rigWithVoice({ textSpeed: 1 });
+    ui.setSkip(true);
+    const done = track(ui.showLine(lineP('l.long'), lineCtx(ctl(), true)));
+    await flush(100);
+    expect(done.done).toBe(true);
+    expect(voice.started).toEqual([]);
+    key('Control');
+    const done2 = track(ui.showLine(lineP('l.2'), lineCtx(ctl(), true)));
+    await flush(100);
+    expect(done2.done).toBe(true);
+    expect(voice.started).toEqual([]);
+  });
+
+  it('Skip включили, когда идёт клип прочитанной реплики: реплика пролистывается, клип обрывается', async () => {
+    const { ui, voice } = rigWithVoice({ textSpeed: 1 });
+    const done = track(ui.showLine(lineP('l.long'), lineCtx(ctl(), true)));
+    const clip = voice.last;
+    ui.toggleSkip();
+    await flush(100);
+    expect(done.done).toBe(true);
+    expect(clip.state).toBe('stopped');
+  });
+
+  it('Skip дошёл до непрочитанной реплики: Skip выключается, реплика идёт на обычной скорости и с озвучкой', async () => {
+    const { ui, voice } = rigWithVoice({ textSpeed: 5, skipUnread: false });
+    ui.setSkip(true);
+    void ui.showLine(lineP('l.2'), lineCtx(ctl(), false));
+    expect(ui.skipOn).toBe(false);
+    expect(voice.started).toEqual(['l.2']);
+  });
+
+  it('открытый экран (настройки, журнал) ставит ожидание авто-режима на паузу; клип доиграл за это время — после закрытия ещё 300 мс', async () => {
+    const { ui, voice, kit } = rigWithVoice({ textSpeed: 5, autoDelayMs: 500 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
+    const dialog = { el: document.createElement('div') };
+    kit.screens.open(dialog);
+    voice.last.finish('ended');
+    await flush(20_000);
+    expect(done.done).toBe(false);
+    kit.screens.close(dialog);
+    await flush(AUTO_VOICE_TAIL_MS - 1);
+    expect(done.done).toBe(false);
+    await flush(1);
+    expect(done.done).toBe(true);
+  });
+
+  it('экран открыт, клип ещё идёт: после закрытия авто-режим снова ждёт его конец', async () => {
+    const { ui, voice, kit } = rigWithVoice({ textSpeed: 5, autoDelayMs: 500 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
+    const dialog = { el: document.createElement('div') };
+    kit.screens.open(dialog);
+    await flush(1000);
+    kit.screens.close(dialog);
+    await flush(20_000); // по тексту уже давно пора, но клип звучит
+    expect(done.done).toBe(false);
+    voice.last.finish('ended');
+    await flush(AUTO_VOICE_TAIL_MS);
+    expect(done.done).toBe(true);
+  });
+
+  it('пауза платформы снимает ожидание; после неё авто-режим всё ещё ждёт конец клипа', async () => {
+    const { ui, voice } = rigWithVoice({ textSpeed: 5, autoDelayMs: 500 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
+    ui.setPaused(true);
+    await flush(20_000);
+    expect(done.done).toBe(false);
+    ui.setPaused(false);
+    await flush(20_000);
+    expect(done.done).toBe(false); // клип идёт
+    voice.last.finish('ended');
+    await flush(AUTO_VOICE_TAIL_MS);
+    expect(done.done).toBe(true);
+  });
+
+  it('выключили Auto, пока клип идёт: клип звучит, сама реплика ждёт игрока', async () => {
+    const { ui, voice } = rigWithVoice({ textSpeed: 5, autoDelayMs: 500 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
+    await flush(100);
+    ui.toggleAuto();
+    voice.last.finish('ended');
+    await flush(20_000);
+    expect(done.done).toBe(false);
+    ui.advance();
+    await flush();
+    expect(done.done).toBe(true);
+  });
+
+  it('смена языка обрывает клип прежнего языка; авто-режим переходит на паузу по тексту, когда экран настроек закрыт', async () => {
+    const { ui, voice, kit } = rigWithVoice({ textSpeed: 5, autoDelayMs: 500 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
+    const settings = { el: document.createElement('div') };
+    kit.screens.open(settings);
+    const clip = voice.last;
+    i18n.setLang('en');
+    ui.refreshLanguage();
+    expect(clip.state).toBe('stopped');
+    kit.screens.close(settings);
+    await flush(1000);
+    expect(done.done).toBe(true); // 500 + 20 × символы
   });
 });

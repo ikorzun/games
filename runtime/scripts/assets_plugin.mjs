@@ -10,6 +10,10 @@
  * Каталог можно подменить переменной окружения VN_ASSETS_DIR (проверка «с файлами» без правки репозитория).
  * В сборку попадают только известные медиа-расширения; файлы и папки на «_» и «.» (черновики,
  * manifest.json, generation-log.md) — нет.
+ *
+ * Озвучка реплик: клипы лежат в <папка эпизода>/voice/<язык>/<ключ реплики>.mp3 (src/core/voice.ts), а плагин
+ * строит их индекс — voice-index.json в корне сборки (рядом с episodes/index.json; в dev отдаётся на лету).
+ * Рантайм просит только те клипы, что есть в индексе: ни лишних запросов, ни 404 в консоли, даже когда клипов нет.
  */
 import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
@@ -26,6 +30,61 @@ export const MIME = {
   '.m4a': 'audio/mp4',
   '.ogg': 'audio/ogg',
 };
+
+/** Индекс клипов озвучки в корне сборки. */
+export const VOICE_INDEX_FILE = 'voice-index.json';
+
+/** Имя клипа по соглашению: ключ локализации или id (`[a-z0-9_.]`) + mp3 / m4a / ogg. */
+const VOICE_FILE_RE = /^[a-z0-9_]+(?:\.[a-z0-9_]+)*\.(?:mp3|m4a|ogg)$/;
+
+/**
+ * Индекс клипов озвучки: { version: 1, episodes: { <папка>: { <язык>: [файлы…] } } } по
+ * <dir>/<папка>/voice/<язык>/*.{mp3,m4a,ogg}. Порядок — по имени, папки без клипов не попадают.
+ * @returns {{ index: { version: 1, episodes: Record<string, Record<string, string[]>> }, skipped: string[], count: number }}
+ *   skipped — аудиофайлы в папках озвучки с именем не по соглашению (регистр, пробелы): в индекс не попадают.
+ */
+export function collectVoiceIndex(dir) {
+  const episodes = {};
+  const skipped = [];
+  let count = 0;
+  // Как и collectAssets / copyAssets, идём по символьным ссылкам (папка озвучки может лежать на отдельном диске).
+  const list = (d) => {
+    if (!existsSync(d)) return [];
+    const out = [];
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      if (e.name.startsWith('_') || e.name.startsWith('.')) continue;
+      let dirLike = e.isDirectory();
+      let fileLike = e.isFile();
+      if (e.isSymbolicLink()) {
+        try {
+          const st = statSync(join(d, e.name));
+          dirLike = st.isDirectory();
+          fileLike = st.isFile();
+        } catch {
+          /* битая ссылка — пропускаем */
+        }
+      }
+      out.push({ name: e.name, isDirectory: () => dirLike, isFile: () => fileLike });
+    }
+    return out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  };
+  for (const folder of list(dir)) {
+    if (!folder.isDirectory()) continue;
+    for (const lang of list(join(dir, folder.name, 'voice'))) {
+      if (!lang.isDirectory()) continue;
+      const files = [];
+      for (const f of list(join(dir, folder.name, 'voice', lang.name))) {
+        if (!f.isFile()) continue;
+        if (VOICE_FILE_RE.test(f.name)) files.push(f.name);
+        else if (ASSET_EXTENSIONS.includes(extname(f.name).toLowerCase())) skipped.push(`${folder.name}/voice/${lang.name}/${f.name}`);
+      }
+      if (files.length === 0) continue;
+      (episodes[folder.name] ??= {})[lang.name] = files;
+      count += files.length;
+    }
+  }
+  return { index: { version: 1, episodes }, skipped, count };
+}
 
 /** Все файлы ассетов каталога: { rel: 'ep01/bg/x.webp', abs, size }. Порядок — по имени. */
 export function collectAssets(dir) {
@@ -114,8 +173,17 @@ export function assetsPlugin(options) {
       server.middlewares.use((req, res, next) => {
         const raw = (req.url ?? '').split('?')[0] ?? '';
         const url = raw.replace(/^\/+/, '');
-        if (!url.startsWith('assets/')) return next();
         if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+        if (url === VOICE_INDEX_FILE) {
+          // Индекс клипов озвучки строится на каждый запрос: положили клип — перезагрузили страницу.
+          const body = JSON.stringify(collectVoiceIndex(dir).index) + '\n';
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          res.setHeader('Content-Length', String(Buffer.byteLength(body)));
+          res.end(req.method === 'HEAD' ? undefined : body);
+          return;
+        }
+        if (!url.startsWith('assets/')) return next();
         const abs = resolveAsset(dir, url.slice('assets/'.length));
         if (!abs || !existsSync(abs) || !statSync(abs).isFile()) {
           res.statusCode = 404;
@@ -146,6 +214,16 @@ export function assetsPlugin(options) {
         if (req.method === 'HEAD') return void res.end();
         createReadStream(abs).pipe(res);
       });
+    },
+
+    generateBundle() {
+      const { index, skipped, count } = collectVoiceIndex(dir);
+      for (const f of skipped) console.warn(`[vn-assets] озвучка: ${f} — имя не по соглашению ([a-z0-9_.] и .mp3 / .m4a / .ogg), клип пропущен`);
+      if (count > 0) {
+        const perLang = Object.values(index.episodes).flatMap((langs) => Object.entries(langs).map(([l, files]) => `${l} ${files.length}`));
+        console.log(`[vn-assets] озвучка: ${count} клипов (${perLang.join(', ')}) → ${VOICE_INDEX_FILE}`);
+      }
+      this.emitFile({ type: 'asset', fileName: VOICE_INDEX_FILE, source: JSON.stringify(index) + '\n' });
     },
 
     closeBundle() {

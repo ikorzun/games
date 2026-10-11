@@ -67,8 +67,17 @@ export interface VnDebugApi {
     transform: string;
     bursts: number[];
   };
-  /** Звук: что играет, сколько файлов отмечено отсутствующими. */
-  audio(): { music: string | null; ambient: string | null; audible: boolean; log: string[] };
+  /**
+   * Звук: что играет и последние события. `voice` — озвучка реплик: включена ли, громкость, адрес играющего клипа
+   * и сколько клипов этого эпизода на текущем языке есть в индексе (0 — озвучка молчит).
+   */
+  audio(): {
+    music: string | null;
+    ambient: string | null;
+    audible: boolean;
+    log: string[];
+    voice: { enabled: boolean; volume: number; playing: string | null; clips: number };
+  };
 }
 
 declare global {
@@ -139,7 +148,13 @@ export function installDebug(app: App): VnDebugApi {
         bursts: [...c.scheduler.burstLog],
       };
     },
-    audio: () => ({ music: app.audio.music, ambient: app.audio.ambient, audible: app.audio.audible, log: [...app.audio.log] }),
+    audio: () => ({
+      music: app.audio.music,
+      ambient: app.audio.ambient,
+      audible: app.audio.audible,
+      log: [...app.audio.log],
+      voice: { enabled: app.audio.voiceEnabled, volume: app.settings.voice, playing: app.audio.voicePlaying, clips: app.voice?.clips ?? 0 },
+    }),
   };
   window.__vn = api;
   return api;

@@ -14,6 +14,7 @@
  * (загрузка <img>) подменяются через опции AssetStore.
  */
 import type { Episode, SpriteSet, SpriteView, ViewState } from '../core/types';
+import type { VoiceLineRef } from '../core/voice';
 
 // ───────────────────────────── пути ─────────────────────────────
 
@@ -155,6 +156,11 @@ export interface BlockAssets {
   images: ImageChain[];
   /** mp3: музыка, эмбиент, sfx. */
   audio: string[];
+  /**
+   * Реплики блока (say / narrate) по порядку шагов: по ним находятся клипы озвучки. Адреса не считаются заранее — они зависят
+   * от языка и от индекса клипов (stage/voice.ts), а язык меняется на лету.
+   */
+  lines: VoiceLineRef[];
   /** Все URL картинок и аудио плана — «набор удержания» хранилища. */
   all: Set<string>;
 }
@@ -170,6 +176,7 @@ function blockSceneIds(episode: Episode, blockId: string): string[] {
 export function collectBlockAssets(episode: Episode, catalog: AssetCatalog, blockId: string): BlockAssets {
   const images = new Map<string, ImageChain>();
   const audio = new Set<string>();
+  const lines: VoiceLineRef[] = [];
   const addChain = (chain: ImageChain | null): void => {
     if (chain && chain.urls.length > 0) images.set(chain.urls.join('|'), chain);
   };
@@ -206,8 +213,12 @@ export function collectBlockAssets(episode: Episode, catalog: AssetCatalog, bloc
           addSprite(step.who, step.expression, step.silhouette === true);
           break;
         case 'say':
+          lines.push({ key: step.key, voice: step.voice ?? null, who: step.who });
           // Реплика с выражением может сама вывести персонажа на сцену или сменить его выражение.
           if (step.expression !== undefined) addSprite(step.who, step.expression, false);
+          break;
+        case 'narrate':
+          lines.push({ key: step.key, voice: step.voice ?? null, who: null });
           break;
         case 'music':
         case 'sfx':
@@ -221,7 +232,7 @@ export function collectBlockAssets(episode: Episode, catalog: AssetCatalog, bloc
   }
   const all = new Set<string>(audio);
   for (const c of images.values()) for (const u of c.urls) all.add(u);
-  return { images: [...images.values()], audio: [...audio], all };
+  return { images: [...images.values()], audio: [...audio], lines, all };
 }
 
 /** Куда ведут выходы блока (jump / branch / choice / исходы мини-игр), без самого блока; иначе — следующий по списку. */

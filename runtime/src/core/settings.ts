@@ -25,7 +25,10 @@ export interface Settings {
   autoDelayMs: number;
   music: number;
   sfx: number;
+  /** Громкость озвучки реплик, 0..1 (множится на «общий мастер»: Mute игрока и запрет звука платформой). */
   voice: number;
+  /** Озвучка реплик включена. Клипов может не быть — тогда включённая озвучка просто молчит. */
+  voiceEnabled: boolean;
   muted: boolean;
   /** Таймеры на выборах (timer_ms). Выключенные — выбор ждёт игрока. */
   timers: boolean;
@@ -45,7 +48,8 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   autoDelayMs: 1800,
   music: 0.7,
   sfx: 0.8,
-  voice: 1,
+  voice: 0.9,
+  voiceEnabled: true,
   muted: false,
   timers: true,
   storyOnly: false,
@@ -80,6 +84,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     music: num(r.music, 0, 1, d.music),
     sfx: num(r.sfx, 0, 1, d.sfx),
     voice: num(r.voice, 0, 1, d.voice),
+    voiceEnabled: typeof r.voiceEnabled === 'boolean' ? r.voiceEnabled : d.voiceEnabled,
     muted: typeof r.muted === 'boolean' ? r.muted : d.muted,
     timers: typeof r.timers === 'boolean' ? r.timers : d.timers,
     storyOnly: typeof r.storyOnly === 'boolean' ? r.storyOnly : d.storyOnly,

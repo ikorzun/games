@@ -6,6 +6,7 @@
 import type { I18n } from './i18n';
 import { fallbackChain } from './i18n';
 import type { Episode, Lang } from './types';
+import { VOICE_INDEX_FILE, VoiceIndex } from './voice';
 
 export interface ManifestEntry {
   id: string;
@@ -149,4 +150,27 @@ export async function ensureLangs(
   const needed = [...new Set(langs.flatMap((l) => fallbackChain(l)))].filter((l) => !i18n.hasLang(l));
   const loaded = await Promise.all(needed.map(async (l) => [l, await loadStrings(base, l, episodeId, f)] as const));
   for (const [l, strings] of loaded) i18n.addStrings(l, strings);
+}
+
+/**
+ * Индекс клипов озвучки (voice-index.json в корне сборки, его строит плагин ассетов). Никогда не бросает и не шумит:
+ * нет файла, ответ не JSON (SPA-фолбэк сервера), сбой сети или таймаут — индекс пуст, озвучка молчит, игра грузится
+ * как раньше. Запрос уходит параллельно загрузке эпизода и шрифтов, поэтому старт не замедляет.
+ */
+export async function loadVoiceIndex(base: string, f: FetchLike = defaultFetch, timeoutMs = 2500): Promise<VoiceIndex> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const load = (async (): Promise<VoiceIndex> => {
+      const res = await f(`${base}${VOICE_INDEX_FILE}`);
+      return res.ok ? VoiceIndex.parse(JSON.parse(await res.text())) : VoiceIndex.empty();
+    })();
+    const timeout = new Promise<VoiceIndex>((resolve) => {
+      timer = setTimeout(() => resolve(VoiceIndex.empty()), timeoutMs);
+    });
+    return await Promise.race([load, timeout]);
+  } catch {
+    return VoiceIndex.empty();
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }

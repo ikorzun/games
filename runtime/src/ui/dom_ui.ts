@@ -24,8 +24,10 @@ import { createMinigame } from '../minigames/registry';
 import type { GameContext, IMinigame } from '../minigames/types';
 import type { IPlatform } from '../platform/types';
 import type { BaseContext, HoldContext, LineContext, MinigameContext, SessionUI } from '../session';
+import type { VoicePlayback } from '../stage/audio';
 import { presetOf } from '../stage/presets';
 import type { Stage } from '../stage/stage';
+import type { ILineVoice } from '../stage/voice';
 import type { CaptionLayer } from './captions';
 import type { UiKit } from './kit';
 import type { QuickAction } from './quick_menu';
@@ -35,6 +37,10 @@ import type { LineView, TextLayout } from './textbox';
 
 /** Пауза между репликами при Skip. */
 const SKIP_DELAY_MS = 35;
+/** Авто-режим с озвучкой: после конца клипа (и полного вывода текста) ждём ещё столько, потом листаем. */
+export const AUTO_VOICE_TAIL_MS = 300;
+/** Страховка авто-режима: клип завис (оборвалась сеть, play() не отвечает) — дольше этого реплику не держим. */
+export const AUTO_VOICE_MAX_WAIT_MS = 120_000;
 
 export interface DomUIDeps {
   episode: Episode;
@@ -51,6 +57,8 @@ export interface DomUIDeps {
   /** Быстрое меню / горячие клавиши, которыми управляет App. */
   onAction: (action: QuickAction) => void;
   onRollback: () => void;
+  /** Озвучка реплик (stage/voice.ts); без неё реплики немые. */
+  voice?: ILineVoice;
 }
 
 interface Waiter {
@@ -69,6 +77,9 @@ export class DomUI implements SessionUI {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private currentLine: LinePending | null = null;
   private lineRead = false;
+  /** Клип озвучки показанной реплики и отписка авто-режима от его конца. */
+  private clip: VoicePlayback | null = null;
+  private clipOff: (() => void) | null = null;
   private activeMg: { id: string; mg: IMinigame } | null = null;
   private readonly gameScreens = new Set<Screen>();
   private dummyRoot: unknown = null;
@@ -99,6 +110,10 @@ export class DomUI implements SessionUI {
     const mayFast = this.fastForward && (ctx.read || settings.skipUnread);
     // Skip «только прочитанное»: дошли до непрочитанной реплики — останавливаемся.
     if (this.skipOn && !mayFast) this.setSkip(false);
+    // Озвучка: клип стартует вместе с показом реплики. При Skip прочитанного (реплика мелькает на 35 мс) тишина;
+    // клипа нет в индексе, озвучка выключена или звука нет — реплика немая, всё как раньше.
+    this.stopClip();
+    if (!mayFast && !ctx.signal.aborted) this.clip = this.d.voice?.start(p) ?? null;
     kit.textbox.show(this.lineView(p), mayFast ? Number.POSITIVE_INFINITY : charsPerSecond(settings.textSpeed));
 
     return new Promise<void>((resolve) => {
@@ -109,6 +124,7 @@ export class DomUI implements SessionUI {
         this.clearTimer();
         off();
         this.waiter = null;
+        this.stopClip(); // следующая реплика, Skip, откат — клип обрывается
         resolve();
       };
       const arrange = (): void => {
@@ -117,7 +133,7 @@ export class DomUI implements SessionUI {
         if (this.fastForward && (this.lineRead || this.d.settings().skipUnread)) {
           this.timer = setTimeout(finish, SKIP_DELAY_MS);
         } else if (this.autoOn) {
-          this.timer = setTimeout(finish, this.autoDelay(p));
+          this.armAuto(p, finish, arrange);
         }
       };
       const off = kit.textbox.onComplete(arrange);
@@ -135,6 +151,7 @@ export class DomUI implements SessionUI {
           this.clearTimer();
           off();
           this.waiter = null;
+          this.stopClip(); // партию отменили (загрузка, откат, меню): клип не должен доигрывать
         },
         { once: true },
       );
@@ -279,6 +296,8 @@ export class DomUI implements SessionUI {
     this.clearTimer();
     this.waiter = null;
     this.currentLine = null;
+    this.stopClip();
+    this.d.voice?.stop();
     this.d.kit.textbox.hide();
     this.d.kit.choices.close();
     for (const s of [...this.gameScreens]) this.closeGameScreen(s);
@@ -349,6 +368,11 @@ export class DomUI implements SessionUI {
     captions.refresh();
     kit.screens.refresh();
     if (this.currentLine && kit.textbox.visible) kit.textbox.rerender(this.lineView(this.currentLine));
+    // Клип прежнего языка обрывается; авто-режим считает паузу по тексту (отсчёт возобновится, когда закроют экран).
+    if (this.clip) {
+      this.stopClip();
+      this.waiter?.rearrange?.();
+    }
   }
 
   private pokeSkip(): void {
@@ -481,6 +505,40 @@ export class DomUI implements SessionUI {
   private clearTimer(): void {
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
+    this.clipOff?.();
+    this.clipOff = null;
+  }
+
+  /**
+   * Авто-режим. С озвучкой реплика длится, пока играет клип: ждём его конец (и полный вывод текста — сюда попадаем
+   * после него) плюс AUTO_VOICE_TAIL_MS. Клип сорвался (файл не читается, автозапуск запрещён) или его остановили
+   * (озвучку выключили, сменили язык) — снова считаем паузу по длине текста, как для реплики без клипа.
+   */
+  private armAuto(p: LinePending, finish: () => void, rearm: () => void): void {
+    const clip = this.clip;
+    if (clip?.state === 'playing') {
+      this.timer = setTimeout(finish, AUTO_VOICE_MAX_WAIT_MS);
+      this.clipOff = clip.onEnd((how) => {
+        this.clipOff = null;
+        if (this.timer !== null) clearTimeout(this.timer);
+        this.timer = null;
+        if (how === 'ended') this.timer = setTimeout(finish, AUTO_VOICE_TAIL_MS);
+        else rearm();
+      });
+    } else if (clip?.state === 'ended') {
+      this.timer = setTimeout(finish, AUTO_VOICE_TAIL_MS);
+    } else {
+      this.timer = setTimeout(finish, this.autoDelay(p));
+    }
+  }
+
+  /** Оборвать клип озвучки показанной реплики и отписаться от его конца. */
+  private stopClip(): void {
+    const clip = this.clip;
+    this.clip = null;
+    this.clipOff?.();
+    this.clipOff = null;
+    clip?.stop();
   }
 
   /** Пауза сценария на ms (титры chapter/fact, эффекты fx): завершается по таймеру, клику или в режиме Skip. */

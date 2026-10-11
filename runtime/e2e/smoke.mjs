@@ -187,8 +187,12 @@ async function scenarioPlay(browser, baseUrl) {
   const choice = await pending(page);
   check('Skip довёл игрока до первого выбора и остановился на нём', choice.kind === 'choice' && choice.options.length >= 2 && (await page.locator('.vn-qbtn--skip').getAttribute('aria-pressed')) === 'false', JSON.stringify(choice));
   await page.keyboard.press('1');
-  await page.waitForFunction((id) => window.__vn.state().journal.some((e) => e.choice === id), choice.id);
-  check('цифра 1 выбрала вариант, решение попало в журнал', (await stateOf(page)).journal.at(-1).choice === choice.id);
+  // Выбор сделан, когда ожидание сменилось (в журнал попадают только remember-выборы, первый — косметический).
+  await page.waitForFunction((id) => {
+    const p = window.__vn.pending();
+    return !(p && p.kind === 'choice' && p.id === id);
+  }, choice.id);
+  check('цифра 1 выбрала первый вариант (last_choice = его id)', (await stateOf(page)).vars.last_choice === choice.options[0].id, JSON.stringify((await stateOf(page)).vars.last_choice));
 
   // сейв / лоад
   await advanceUntil(page, (p) => p.kind === 'line');
@@ -368,6 +372,14 @@ async function scenarioCamera(browser, baseUrl) {
   await page.waitForSelector('.vn-settings .vn-camfx');
   const chips = await page.$$eval('.vn-settings .vn-camfx .vn-chip', (els) => els.map((e) => ({ v: e.dataset.cameraFx, on: e.getAttribute('aria-pressed') === 'true', off: e.disabled })));
   check('настройки: «Эффекты камеры» — Выкл / Слабо / Сильно, отмечено «Слабо»', chips.map((c) => c.v).join() === 'off,low,high' && chips.find((c) => c.on)?.v === 'low' && chips.every((c) => !c.off), JSON.stringify(chips));
+  // Озвучка: пункт в настройках; клипов в сборке может не быть — тогда озвучка молчит (индекс прочитан, к клипам никто не обращается).
+  const voiceUi = await page.evaluate(() => {
+    const g = document.querySelector('.vn-settings .vn-voice');
+    return g && { box: g.querySelector('input[type=checkbox]')?.checked, slider: g.querySelector('input[type=range]')?.value, disabled: g.querySelector('input[type=range]')?.disabled };
+  });
+  check('настройки: пункт «Озвучка» — переключатель включён, громкость 0,9', voiceUi?.box === true && voiceUi.slider === '0.9' && voiceUi.disabled === false, JSON.stringify(voiceUi));
+  const voiceNow = await page.evaluate(() => window.__vn.audio().voice);
+  check('озвучка: индекс клипов прочитан; нет клипов — молчит', typeof voiceNow.clips === 'number' && voiceNow.enabled === true && (voiceNow.clips > 0 || voiceNow.playing === null), JSON.stringify(voiceNow));
   await page.click('.vn-settings .vn-camfx [data-camera-fx="off"]');
   await sleep(200);
   check('выбор «Выкл» в настройках выключает камеру и сохраняется в настройках', (await cam()).effective === 'off' && (await page.evaluate(() => window.__vn.settings().cameraFx)) === 'off');

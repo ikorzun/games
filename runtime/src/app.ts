@@ -18,6 +18,7 @@ import { createStage } from './stage/stage_factory';
 import type { RendererChoice } from './stage/stage_factory';
 import type { Stage } from './stage/stage';
 import type { ICaptionSink } from './stage/types';
+import type { LineVoice } from './stage/voice';
 import { CaptionLayer } from './ui/captions';
 import { DomUI } from './ui/dom_ui';
 import { Hud } from './ui/hud';
@@ -40,6 +41,8 @@ export interface AppInit {
   episode: Episode;
   contentVersion: string;
   audio: AudioManager;
+  /** Озвучка реплик (клипы по индексу voice-index.json); без неё реплики немые. */
+  voice?: LineVoice;
   /** Ассеты эпизода (картинки, предзагрузка по блокам, картинки интерфейса); без них игра рисует плейсхолдеры. */
   assets?: AppAssets;
   /** Догрузить строки языка (и цепочку его фолбэков), если их ещё нет. */
@@ -116,6 +119,7 @@ export class App {
       onAction: (a) => this.onAction(a),
       onRollback: () => this.rollback(1),
       ...(d.assets ? { documentArt: (id: string) => d.assets!.document(id) } : {}),
+      ...(d.voice ? { voice: d.voice } : {}),
     });
     this.session = new Session({
       episode: ep,
@@ -355,6 +359,11 @@ export class App {
     return this.d.audio;
   }
 
+  /** Озвучка реплик (для отладки и QA); null — не подключена. */
+  get voice(): LineVoice | null {
+    return this.d.voice ?? null;
+  }
+
   /** Текущие настройки игрока (только чтение). */
   get settings(): Readonly<Settings> {
     return this.d.saves.settings;
@@ -370,6 +379,7 @@ export class App {
   private applySettings(s: Settings, retryCamera = false): void {
     this.kit.setFontScale(s.fontScale);
     this.d.audio.setMuted(s.muted);
+    this.d.audio.setVoiceEnabled(s.voiceEnabled);
     this.d.audio.setVolumes({ music: s.music, sfx: s.sfx, voice: s.voice });
     this.kit.quick.setState({ muted: s.muted });
     this.stage.setViolenceMode(s.violenceMode);

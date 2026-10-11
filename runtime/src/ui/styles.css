@@ -694,6 +694,7 @@ body {
   min-height: 40px;
 }
 .vn-range input { width: 100%; height: 28px; accent-color: var(--c-accent); }
+.vn-range input:disabled { opacity: 0.45; }
 .vn-range__out { text-align: right; font: 0.9em var(--font-mono); color: var(--c-muted); }
 @media (max-width: 420px) {
   .vn-range { grid-template-columns: 1fr 3.6rem; }

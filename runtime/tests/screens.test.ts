@@ -69,7 +69,9 @@ beforeEach(() => {
     'ui.settings.auto_delay': 'Пауза авто',
     'ui.settings.music': 'Музыка',
     'ui.settings.sfx': 'Звуки',
-    'ui.settings.voice': 'Голос',
+    'ui.settings.voice': 'Озвучка',
+    'ui.settings.voice_on': 'Озвучивать реплики',
+    'ui.settings.voice_volume': 'Громкость озвучки',
     'ui.settings.timers': 'Таймеры выборов',
     'ui.settings.story_only': 'Только история',
     'ui.settings.violence_mode': 'Показ насилия',
@@ -302,7 +304,7 @@ describe('SettingsScreen', () => {
     const delay = range(s.el, 'Пауза авто');
     expect([Number(delay.min), Number(delay.max)]).toEqual([AUTO_DELAY_RANGE.min, AUTO_DELAY_RANGE.max]);
     expect([Number(range(s.el, 'Скорость текста').min), Number(range(s.el, 'Скорость текста').max)]).toEqual([1, 5]);
-    for (const label of ['Музыка', 'Звуки', 'Голос']) expect(Number(range(s.el, label).max)).toBe(1);
+    for (const label of ['Музыка', 'Звуки', 'Громкость озвучки']) expect(Number(range(s.el, label).max)).toBe(1);
   });
 
   it('движение ползунков отдаёт точечный патч настроек и обновляет подпись значения', () => {
@@ -318,13 +320,13 @@ describe('SettingsScreen', () => {
 
   it('таймеры выборов и «только история» — флажки; режим насилия — переключатель', () => {
     const { s, hd } = make({ timers: true, storyOnly: false });
-    const boxes = [...s.el.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
-    expect(boxes.map((b) => b.checked)).toEqual([true, false]);
-    boxes[0]!.checked = false;
-    boxes[0]!.dispatchEvent(new Event('change', { bubbles: true }));
+    const box = (name: string): HTMLInputElement => s.el.querySelector<HTMLInputElement>(`input[type="checkbox"][data-setting="${name}"]`)!;
+    expect([box('timers').checked, box('storyOnly').checked]).toEqual([true, false]);
+    box('timers').checked = false;
+    box('timers').dispatchEvent(new Event('change', { bubbles: true }));
     expect(hd.onChange).toHaveBeenLastCalledWith({ timers: false });
-    boxes[1]!.checked = true;
-    boxes[1]!.dispatchEvent(new Event('change', { bubbles: true }));
+    box('storyOnly').checked = true;
+    box('storyOnly').dispatchEvent(new Event('change', { bubbles: true }));
     expect(hd.onChange).toHaveBeenLastCalledWith({ storyOnly: true });
     const radios = [...s.el.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
     radios[1]?.dispatchEvent(new Event('change', { bubbles: true }));
@@ -343,8 +345,66 @@ describe('SettingsScreen', () => {
     const { s } = make({ fontScale: 1.45, textSpeed: 4, timers: false, storyOnly: true, violenceMode: 'schematic' });
     expect(range(s.el, 'Размер шрифта').value).toBe('1.45');
     expect(range(s.el, 'Скорость текста').value).toBe('4');
-    expect([...s.el.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].map((b) => b.checked)).toEqual([false, true]);
+    const box = (name: string): boolean => s.el.querySelector<HTMLInputElement>(`input[type="checkbox"][data-setting="${name}"]`)!.checked;
+    expect([box('timers'), box('storyOnly')]).toEqual([false, true]);
     expect([...s.el.querySelectorAll<HTMLInputElement>('input[type="radio"]')].map((r) => r.checked)).toEqual([false, true]);
+  });
+});
+
+describe('SettingsScreen: озвучка', () => {
+  const make = (over: Partial<Settings> = {}) => {
+    const settings: Settings = { ...DEFAULT_SETTINGS, ...over };
+    const hd = {
+      settings: () => settings,
+      onChange: vi.fn((patch: Partial<Settings>) => void Object.assign(settings, patch)),
+      onLanguage: vi.fn(),
+      onClose: vi.fn(),
+    };
+    return { s: open(new SettingsScreen(hd)), hd, settings };
+  };
+  const box = (el: HTMLElement): HTMLInputElement => el.querySelector<HTMLInputElement>('input[type="checkbox"][data-setting="voiceEnabled"]')!;
+  const slider = (el: HTMLElement): HTMLInputElement => el.querySelector<HTMLInputElement>('.vn-voice input[type="range"]')!;
+
+  it('пункт «Озвучка»: название группы, переключатель и ползунок громкости 0–100 % в одной группе; по умолчанию включено, 90 %', () => {
+    const { s } = make();
+    const group = s.el.querySelector<HTMLElement>('.vn-voice')!;
+    expect(group.querySelector('.vn-settings__legend')?.textContent).toBe('Озвучка');
+    expect(group.textContent).toContain('Озвучивать реплики');
+    expect(box(s.el).checked).toBe(true);
+    expect([slider(s.el).min, slider(s.el).max, slider(s.el).value]).toEqual(['0', '1', '0.9']);
+    expect(slider(s.el).getAttribute('aria-label')).toBe('Громкость озвучки');
+    expect(group.querySelector('.vn-range__out')?.textContent).toBe('90%');
+    expect(slider(s.el).disabled).toBe(false);
+  });
+
+  it('переключатель отдаёт патч {voiceEnabled}, не перерисовывая экран; пока озвучка выключена, ползунок недоступен', () => {
+    const { s, hd, settings } = make();
+    const before = box(s.el);
+    box(s.el).checked = false;
+    box(s.el).dispatchEvent(new Event('change', { bubbles: true }));
+    expect(hd.onChange).toHaveBeenLastCalledWith({ voiceEnabled: false });
+    expect(settings.voiceEnabled).toBe(false);
+    expect(slider(s.el).disabled).toBe(true);
+    expect(box(s.el)).toBe(before); // тот же элемент: фокус клавиатуры не теряется
+    box(s.el).checked = true;
+    box(s.el).dispatchEvent(new Event('change', { bubbles: true }));
+    expect(hd.onChange).toHaveBeenLastCalledWith({ voiceEnabled: true });
+    expect(slider(s.el).disabled).toBe(false);
+  });
+
+  it('ползунок отдаёт патч {voice} (громкость озвучки) и обновляет подпись', () => {
+    const { s, hd } = make();
+    slider(s.el).value = '0.4';
+    slider(s.el).dispatchEvent(new Event('input', { bubbles: true }));
+    expect(hd.onChange).toHaveBeenLastCalledWith({ voice: 0.4 });
+    expect(s.el.querySelector('.vn-voice .vn-range__out')?.textContent).toBe('40%');
+  });
+
+  it('сохранённые значения показываются: выключенная озвучка — флажок снят, ползунок недоступен и стоит на своём месте', () => {
+    const { s } = make({ voiceEnabled: false, voice: 0.35 });
+    expect(box(s.el).checked).toBe(false);
+    expect(slider(s.el).disabled).toBe(true);
+    expect(slider(s.el).value).toBe('0.35');
   });
 });
 

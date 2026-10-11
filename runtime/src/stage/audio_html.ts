@@ -9,7 +9,11 @@
  *  - громкости каналов и mute приходят от AudioManager через setGain (mute и запрет платформой —
  *    нулевой gain: музыка продолжает идти беззвучно, поэтому при включении звука не «перематывается»);
  *  - отсутствующий файл тихо пропускается: один console.warn на файл, игра не падает;
- *  - предзагрузка по блокам: preload(urls) прогревает кеш браузера и сразу отмечает отсутствующие файлы.
+ *  - предзагрузка по блокам: preload(urls) прогревает кеш браузера и сразу отмечает отсутствующие файлы;
+ *  - озвучка реплик: отдельный канал из одного элемента (клип за раз, mp3); playVoice возвращает VoicePlayback — по нему
+ *    DomUI узнаёт о конце клипа (авто-режим) и обрывает его; громкость — канал `voice`, как у остальных (mute и запрет
+ *    платформой — нулевой gain); клипы блока прогреваются в фоне небольшой очередью (preloadVoice), чтобы не мешать картинкам.
+ *    Файл, который по индексу есть, но не читается, — один warn и тишина; запрет автозапуска — тишина без warn.
  *
  * iOS. (1) Автозапуск звука разрешён только внутри жеста: фиксированный набор элементов (по два на
  * музыку и эмбиент, пул sfx) «разблокируется» при первом касании (unlock) — дальше им можно менять src
@@ -20,7 +24,8 @@
  * Время, таймеры и создание элементов передаются снаружи (HtmlAudioEnv), поэтому все переходы
  * проверяются тестами без браузера (tests/audio_html.test.ts).
  */
-import type { IAudioBackend } from './audio';
+import { VoiceClip } from './audio';
+import type { IAudioBackend, VoicePlayback } from './audio';
 
 /**
  * Тишина: 1 мс, 8 кГц, 8 бит, моно — корректный WAV для разблокировки элементов (годится Chromium и Safari;
@@ -29,6 +34,10 @@ import type { IAudioBackend } from './audio';
 export const SILENT_WAV = 'data:audio/wav;base64,UklGRiwAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQgAAACAgICAgICAgA==';
 
 export const SFX_POOL = 6;
+/** Клипов озвучки, которые прогреваются одновременно (картинки блока грузятся параллельно — не толкаемся). */
+export const VOICE_WARM_CONCURRENCY = 2;
+/** Сколько ждать прогрева одного клипа, мс. */
+export const VOICE_WARM_TIMEOUT_MS = 8000;
 /** Шаг затухания, мс. */
 export const FADE_STEP_MS = 33;
 
@@ -124,6 +133,12 @@ export class HtmlAudioBackend implements IAudioBackend {
   private pausedAt = 0;
   private unlocked = false;
   private resumeList: AudioElementLike[] = [];
+  /** Элемент канала озвучки (создаётся последним и входит в разблокировку iOS) и клип, который на нём играет. */
+  private readonly voiceEl: AudioElementLike;
+  private voiceClip: VoiceClip | null = null;
+  private readonly warmQueue: Record<'now' | 'idle', string[]> = { now: [], idle: [] };
+  private readonly warmed = new Set<string>();
+  private warmActive = 0;
 
   constructor(
     /** id ассета → URL файла (AssetCatalog.audioUrl); null — такого id нет в episode.assets. */
@@ -141,6 +156,7 @@ export class HtmlAudioBackend implements IAudioBackend {
       ambient: { kind: 'ambient', els: [make(), make()], current: null, outgoing: [] },
     };
     this.sfx = Array.from({ length: SFX_POOL }, () => ({ el: make(), busy: false, startedAt: 0, url: '' }));
+    this.voiceEl = make();
     for (const slot of this.sfx) {
       // Один обработчик на слот (не по одному на каждое проигрывание): ошибка относится к эффекту,
       // который играет сейчас; пока слот свободен (разблокировка, пауза), ошибки игнорируются.
@@ -198,6 +214,8 @@ export class HtmlAudioBackend implements IAudioBackend {
     if (channel === 'music' || channel === 'ambient') {
       const ch = this.channels[channel];
       for (const t of [ch.current, ...ch.outgoing]) if (t) this.apply(t);
+    } else if (channel === 'voice') {
+      this.applyVoice();
     }
   }
 
@@ -247,6 +265,7 @@ export class HtmlAudioBackend implements IAudioBackend {
     const busy = new Set<AudioElementLike>([
       ...this.allTracks().map((t) => t.el),
       ...this.sfx.filter((s) => s.busy).map((s) => s.el),
+      ...(this.voiceClip ? [this.voiceEl] : []),
     ]);
     for (const el of this.allElements()) {
       if (busy.has(el)) continue;
@@ -255,7 +274,7 @@ export class HtmlAudioBackend implements IAudioBackend {
         const r = el.play();
         const done = (): void => {
           // элемент мог за это время получить настоящий трек — не трогаем его
-          if (!busy.has(el) && !this.allTracks().some((t) => t.el === el) && !this.sfx.some((s) => s.el === el && s.busy)) {
+          if (!busy.has(el) && !this.allTracks().some((t) => t.el === el) && !this.sfx.some((s) => s.el === el && s.busy) && !(el === this.voiceEl && this.voiceClip)) {
             el.pause();
           }
         };
@@ -285,6 +304,7 @@ export class HtmlAudioBackend implements IAudioBackend {
   dispose(): void {
     if (this.timer !== null) this.env.clearTimer(this.timer);
     this.timer = null;
+    this.stopVoice();
     for (const el of this.allElements()) {
       el.pause();
       el.removeAttribute('src');
@@ -292,13 +312,14 @@ export class HtmlAudioBackend implements IAudioBackend {
   }
 
   /** Для отладочной панели и тестов. */
-  state(): { music: string | null; ambient: string | null; fading: number; sfxBusy: number; missing: string[] } {
+  state(): { music: string | null; ambient: string | null; fading: number; sfxBusy: number; missing: string[]; voice: string | null } {
     return {
       music: this.channels.music.current?.id ?? null,
       ambient: this.channels.ambient.current?.id ?? null,
       fading: this.allTracks().filter((t) => t.fade).length,
       sfxBusy: this.sfx.filter((s) => s.busy).length,
       missing: [...this.missing],
+      voice: this.voiceClip?.url ?? null,
     };
   }
 
@@ -451,7 +472,7 @@ export class HtmlAudioBackend implements IAudioBackend {
   }
 
   private allElements(): AudioElementLike[] {
-    return [...this.channels.music.els, ...this.channels.ambient.els, ...this.sfx.map((s) => s.el)];
+    return [...this.channels.music.els, ...this.channels.ambient.els, ...this.sfx.map((s) => s.el), this.voiceEl];
   }
 
   // ───────────────────────────── sfx ─────────────────────────────
@@ -489,6 +510,123 @@ export class HtmlAudioBackend implements IAudioBackend {
     );
   }
 
+  // ───────────────────────────── озвучка реплик ─────────────────────────────
+
+  /**
+   * Начать клип озвучки; прежний обрывается. null — играть нечем: файл уже известен как отсутствующий или идёт пауза
+   * платформы (реплики в это время не листаются).
+   */
+  playVoice(url: string): VoicePlayback | null {
+    this.stopVoice(); // новая просьба делает прежний клип ненужным, даже если новый не стартует
+    if (this.missing.has(url) || this.paused) return null;
+    const el = this.voiceEl;
+    const clip = new VoiceClip(url);
+    const onEnded = (): void => clip.finish('ended');
+    const onError = (): void => this.voiceUnreadable(clip);
+    el.addEventListener('ended', onEnded);
+    el.addEventListener('error', onError);
+    // Подписка бэкенда первая: когда подписчики клипа (авто-режим) узнают о конце, элемент уже освобождён.
+    clip.onEnd(() => {
+      el.removeEventListener('ended', onEnded);
+      el.removeEventListener('error', onError);
+      this.releaseVoice(clip);
+    });
+    this.voiceClip = clip;
+    el.loop = false;
+    el.src = url;
+    try {
+      el.currentTime = 0;
+    } catch {
+      /* метаданные ещё не загружены — клип и так начнётся с нуля */
+    }
+    this.applyVoice();
+    let r: Promise<void> | void;
+    try {
+      r = el.play();
+    } catch (e) {
+      this.voicePlayFailed(e, clip);
+      return clip;
+    }
+    if (r && typeof r.then === 'function') r.then(() => undefined, (e: unknown) => this.voicePlayFailed(e, clip));
+    return clip;
+  }
+
+  stopVoice(): void {
+    this.voiceClip?.finish('stopped');
+  }
+
+  /**
+   * Прогрев клипов озвучки в фоне: не больше VOICE_WARM_CONCURRENCY одновременно, 'now' (текущий блок) обгоняет
+   * 'idle' (следующие). Один и тот же адрес дважды не греется.
+   */
+  preloadVoice(urls: readonly string[], priority: 'now' | 'idle' = 'idle'): void {
+    for (const u of urls) {
+      if (this.warmed.has(u) || this.missing.has(u)) continue;
+      this.warmed.add(u);
+      this.warmQueue[priority].push(u);
+    }
+    this.pumpWarm();
+  }
+
+  private pumpWarm(): void {
+    while (this.warmActive < VOICE_WARM_CONCURRENCY) {
+      const url = this.warmQueue.now.shift() ?? this.warmQueue.idle.shift();
+      if (url === undefined) return;
+      this.warmActive += 1;
+      void this.probe(url, ['canplaythrough'], VOICE_WARM_TIMEOUT_MS).then(() => {
+        this.warmActive -= 1;
+        this.pumpWarm();
+      });
+    }
+  }
+
+  private applyVoice(): void {
+    const v = this.gains.voice;
+    if (this.volumeSettable) {
+      this.voiceEl.volume = v;
+      this.voiceEl.muted = false;
+    } else {
+      this.voiceEl.muted = v < 0.05;
+    }
+  }
+
+  /** Клип закончился любым способом: элемент замолкает и отпускает загрузку (недогруженный клип не качается зря). */
+  private releaseVoice(clip: VoiceClip): void {
+    if (this.voiceClip !== clip) return;
+    this.voiceClip = null;
+    const el = this.voiceEl;
+    try {
+      el.pause();
+    } catch {
+      /* уже остановлен */
+    }
+    el.removeAttribute('src');
+    try {
+      el.load();
+    } catch {
+      /* элемент без load() — не страшно */
+    }
+  }
+
+  /** Файл из индекса не читается (повреждён, нет на сервере): один warn на файл, дальше клип молча пропускается. */
+  private voiceUnreadable(clip: VoiceClip): void {
+    if (clip.state !== 'playing') return;
+    this.missing.add(clip.url);
+    this.warnOnce(`file:${clip.url}`, `[audio] нет файла ${clip.url}: озвучка пропущена`);
+    clip.finish('failed');
+  }
+
+  private voicePlayFailed(e: unknown, clip: VoiceClip): void {
+    if (clip.state !== 'playing') return;
+    const name = (e as { name?: string } | null)?.name ?? '';
+    if (name === 'AbortError') return; // src сменили или поставили на паузу — клип завершит тот, кто это сделал
+    if (name === 'NotAllowedError') {
+      clip.finish('failed'); // автозапуск запрещён (iOS до первого касания): без звука, без шума
+      return;
+    }
+    this.voiceUnreadable(clip);
+  }
+
   // ───────────────────────────── запуск и ошибки ─────────────────────────────
 
   /** play() с разбором отказа: автозапуск запрещён → ждём жеста; файл не читается → пропуск. */
@@ -509,6 +647,10 @@ export class HtmlAudioBackend implements IAudioBackend {
   }
 
   private playFailed(e: unknown, el: AudioElementLike, track: Track | null, onFail?: () => void, logicalUrl?: string): void {
+    if (el === this.voiceEl && this.voiceClip) {
+      this.voicePlayFailed(e, this.voiceClip); // возобновление клипа после паузы платформы не удалось
+      return;
+    }
     const name = (e as { name?: string } | null)?.name ?? '';
     if (name === 'AbortError') return; // src сменили на лету — нормальный ход вещей
     if (name === 'NotAllowedError') {
@@ -537,7 +679,7 @@ export class HtmlAudioBackend implements IAudioBackend {
 
   // ───────────────────────────── предзагрузка ─────────────────────────────
 
-  private probe(url: string): Promise<void> {
+  private probe(url: string, okEvents: readonly string[] = ['loadedmetadata', 'canplay', 'canplaythrough'], timeoutMs = 4000): Promise<void> {
     return new Promise<void>((resolve) => {
       const el = this.env.createElement();
       let done = false;
@@ -545,7 +687,7 @@ export class HtmlAudioBackend implements IAudioBackend {
         if (done) return;
         done = true;
         this.env.clearTimer(timer);
-        for (const ev of ['loadedmetadata', 'canplay', 'canplaythrough']) el.removeEventListener(ev, onOk);
+        for (const ev of okEvents) el.removeEventListener(ev, onOk);
         el.removeEventListener('error', onBad);
         if (!ok) {
           this.missing.add(url);
@@ -557,8 +699,8 @@ export class HtmlAudioBackend implements IAudioBackend {
       const onOk = (): void => finish(true);
       const onBad = (): void => finish(false);
       // iOS не предзагружает аудио без жеста — события не придут: по таймеру считаем «неизвестно, но не отсутствует»
-      const timer = this.env.setTimer(() => finish(true), 4000);
-      for (const ev of ['loadedmetadata', 'canplay', 'canplaythrough']) el.addEventListener(ev, onOk);
+      const timer = this.env.setTimer(() => finish(true), timeoutMs);
+      for (const ev of okEvents) el.addEventListener(ev, onOk);
       el.addEventListener('error', onBad);
       el.preload = 'auto';
       el.src = url;

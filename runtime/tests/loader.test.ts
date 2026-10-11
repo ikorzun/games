@@ -11,6 +11,7 @@ import {
   loadEpisode,
   loadManifest,
   loadStrings,
+  loadVoiceIndex,
 } from '../src/core/loader';
 import type { FetchedResponse, FetchLike } from '../src/core/loader';
 import { EP01_PATH, hasRepoContent, REPO_ROOT } from './helpers/content';
@@ -165,5 +166,45 @@ describe.skipIf(!hasRepoContent())('загрузчик на настоящем �
   it('manifest-независимая проверка: имя файла эпизода из репозитория проходит assertEpisode', () => {
     const json: unknown = JSON.parse(readFileSync(EP01_PATH, 'utf8'));
     expect(() => assertEpisode(json, EP01_PATH)).not.toThrow();
+  });
+});
+
+describe('loadVoiceIndex: индекс клипов озвучки', () => {
+  const INDEX = JSON.stringify({ version: 1, episodes: { ep01: { ru: ['ep01.s01.l001.mp3'], en: ['ep01.s01.l001.mp3'] } } });
+
+  it('читает voice-index.json рядом с episodes/index.json (относительно базового пути)', async () => {
+    const f = fakeFetch({ './voice-index.json': INDEX });
+    const idx = await loadVoiceIndex('./', f);
+    expect(f.calls).toEqual(['./voice-index.json']);
+    expect(idx.size).toBe(2);
+    expect(idx.find('ep01_murylev', 'ru', 'ep01.s01.l001')?.path).toBe('assets/ep01/voice/ru/ep01.s01.l001.mp3');
+  });
+
+  it('нет файла, HTTP-ошибка, сетевой сбой, не JSON (SPA-фолбэк отдал HTML), мусор — пустой индекс без исключения', async () => {
+    for (const route of [{ status: 404 }, { status: 500 }, { throws: 'offline' }, '<!doctype html><title>spa</title>', '{oops', '[]', 'null', '{"version":3}'] as const) {
+      const idx = await loadVoiceIndex('./', fakeFetch({ './voice-index.json': route }));
+      expect(idx.size, JSON.stringify(route)).toBe(0);
+    }
+    expect((await loadVoiceIndex('./', fakeFetch({}))).size).toBe(0); // маршрута нет вовсе → 404
+  });
+
+  it('зависший запрос не задерживает старт: по таймауту — пустой индекс', async () => {
+    vi.useFakeTimers();
+    try {
+      const hang: FetchLike = () => new Promise<FetchedResponse>(() => undefined);
+      const p = loadVoiceIndex('./', hang, 2500);
+      let done = false;
+      void p.then(() => (done = true));
+      await vi.advanceTimersByTimeAsync(2400);
+      expect(done).toBe(false);
+      await vi.advanceTimersByTimeAsync(200);
+      expect(done).toBe(true);
+      expect((await p).size).toBe(0);
+      // быстрый ответ таймер не оставляет
+      expect((await loadVoiceIndex('./', fakeFetch({ './voice-index.json': INDEX }), 2500)).size).toBe(2);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

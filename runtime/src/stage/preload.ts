@@ -10,11 +10,15 @@
 import type { Episode } from '../core/types';
 import { collectBlockAssets, nextBlocks } from './assets';
 import type { AssetCatalog, AssetStore, BlockAssets } from './assets';
+import type { IVoiceWarmer } from './voice';
 
 /** Прогрев аудио (реализует звуковой бэкенд). */
 export interface AudioPreloader {
   preload(urls: readonly string[]): Promise<void>;
 }
+
+/** Сколько первых реплик следующего блока прогреваем заранее (остальное — когда блок станет текущим): озвучка тяжёлая, ветки не все пройдут. */
+export const NEXT_BLOCK_VOICE_LINES = 6;
 
 export interface PreloadHooks {
   /** Блокирующая загрузка затянулась — показать/убрать индикатор. */
@@ -27,6 +31,8 @@ export interface BlockPreloaderOptions {
   catalog: AssetCatalog;
   store: AssetStore;
   audio?: AudioPreloader | null;
+  /** Озвучка реплик: клипы блока греются в фоне после картинок (никогда не задерживают показ). */
+  voice?: IVoiceWarmer | null;
   hooks?: PreloadHooks;
   /** Дольше этого вход в блок не ждёт картинки. */
   timeoutMs?: number;
@@ -69,7 +75,7 @@ export class BlockPreloader {
   }
 
   private async run(blockId: string): Promise<void> {
-    const { store, audio, hooks } = this.o;
+    const { store, audio, voice, hooks } = this.o;
     const plan = this.plan(blockId);
     const nextIds = nextBlocks(this.o.episode, blockId);
     const nextPlans = nextIds.map((id) => this.plan(id));
@@ -105,10 +111,14 @@ export class BlockPreloader {
       }
     }
 
+    // Озвучка текущего блока — после картинок: небольшой очередью, не мешая им (адреса считает LineVoice по языку и индексу).
+    voice?.warm(plan.lines, 'now');
+
     // Следующие блоки — в фоне, не мешая игре.
     for (const p of nextPlans) {
       for (const c of p.images) void store.loadFirst(c.urls, 'idle');
       if (audio && p.audio.length > 0) void audio.preload(p.audio).catch(() => undefined);
+      voice?.warm(p.lines.slice(0, NEXT_BLOCK_VOICE_LINES), 'idle');
     }
   }
 }

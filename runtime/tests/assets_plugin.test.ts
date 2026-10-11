@@ -4,11 +4,11 @@
  */
 import { createServer, request } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { ASSET_EXTENSIONS, assetsPlugin, collectAssets, copyAssets, MIME, parseRange, resolveAsset } from '../scripts/assets_plugin.mjs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ASSET_EXTENSIONS, assetsPlugin, collectAssets, collectVoiceIndex, copyAssets, MIME, parseRange, resolveAsset, VOICE_INDEX_FILE } from '../scripts/assets_plugin.mjs';
 
 const dirs: string[] = [];
 function tree(files: Record<string, string | number>): string {
@@ -210,6 +210,176 @@ describe('dev-сервер: /assets/**', () => {
     try {
       expect((await fetch(`${s.base}/episodes/index.json`)).status).toBe(299);
       expect((await fetch(`${s.base}/assets/ep01/bg/yard.webp`, { method: 'POST' })).status).toBe(299);
+    } finally {
+      await s.close();
+    }
+  });
+});
+
+// ───────────────────────────── озвучка реплик: индекс клипов ─────────────────────────────
+
+const VOICE_ASSETS = {
+  'ep01/bg/yard.webp': 100,
+  'ep01/voice/ru/ep01.s01.l002.mp3': 30,
+  'ep01/voice/ru/ep01.s01.l001.mp3': 30,
+  'ep01/voice/ru/alt_take.m4a': 30,
+  'ep01/voice/en/ep01.s01.l001.mp3': 30,
+  'ep01/voice/pt/readme.txt': 'не клип', // не аудио — молча мимо
+  'ep01/voice/ru/Bad Name.mp3': 30, // аудио, но имя не по соглашению
+  'ep01/voice/ru/_draft.mp3': 30, // «_» — черновик
+  'ep01/voice/_old/ru.mp3': 30,
+  'ep01/voice/es/empty_marker.txt': 'x',
+  'ep02/voice/ru/ep02.s01.l001.ogg': 30,
+  'common/voice/ru/jingle.mp3': 30,
+  '_drafts/voice/ru/ep09.s01.l001.mp3': 30,
+};
+
+describe('collectVoiceIndex: voice-index.json', () => {
+  it('папка эпизода → язык → файлы клипов по имени; папки без клипов, «_»-черновики и чужие файлы не попадают', () => {
+    const { index, count } = collectVoiceIndex(tree(VOICE_ASSETS));
+    expect(index).toEqual({
+      version: 1,
+      episodes: {
+        common: { ru: ['jingle.mp3'] },
+        ep01: { en: ['ep01.s01.l001.mp3'], ru: ['alt_take.m4a', 'ep01.s01.l001.mp3', 'ep01.s01.l002.mp3'] },
+        ep02: { ru: ['ep02.s01.l001.ogg'] },
+      },
+    });
+    expect(count).toBe(6);
+  });
+
+  it('аудиофайлы с именем не по соглашению перечисляются отдельно (в индекс не идут) — сборка предупредит', () => {
+    const { skipped } = collectVoiceIndex(tree(VOICE_ASSETS));
+    expect(skipped).toEqual(['ep01/voice/ru/Bad Name.mp3']);
+  });
+
+  it('нет каталога ассетов или нет озвучки вовсе — пустой индекс, а не ошибка', () => {
+    expect(collectVoiceIndex(join(tmpdir(), 'vn-no-such-assets'))).toEqual({ index: { version: 1, episodes: {} }, skipped: [], count: 0 });
+    expect(collectVoiceIndex(tree(ASSETS)).index).toEqual({ version: 1, episodes: {} });
+  });
+
+  it('символьные ссылки (папка озвучки на другом диске) читаются так же, как их копирует copyAssets; битая ссылка пропускается', () => {
+    const real = tree({ 'ru/ep01.s01.l001.mp3': 5, 'ru/ep01.s01.l002.mp3': 5 });
+    const dir = tree({ 'ep01/bg/yard.webp': 5 });
+    mkdirSync(join(dir, 'ep01', 'voice'), { recursive: true });
+    try {
+      symlinkSync(join(real, 'ru'), join(dir, 'ep01', 'voice', 'ru'), 'dir');
+      symlinkSync(join(real, 'no-such'), join(dir, 'ep01', 'voice', 'en'), 'dir');
+    } catch {
+      return; // файловая система без символьных ссылок — проверять нечего
+    }
+    expect(collectVoiceIndex(dir).index.episodes).toEqual({ ep01: { ru: ['ep01.s01.l001.mp3', 'ep01.s01.l002.mp3'] } });
+  });
+
+  it('порядок не зависит от файловой системы: всё отсортировано по имени', () => {
+    const a = collectVoiceIndex(tree({ 'ep01/voice/ru/b.mp3': 1, 'ep01/voice/ru/a.mp3': 1, 'ep01/voice/en/z.mp3': 1 })).index;
+    expect(Object.keys(a.episodes.ep01)).toEqual(['en', 'ru']);
+    expect(a.episodes.ep01.ru).toEqual(['a.mp3', 'b.mp3']);
+  });
+});
+
+describe('плагин: индекс клипов в сборке и в dev', () => {
+  type Plugin = {
+    configResolved(c: unknown): void;
+    generateBundle(this: unknown): void;
+    closeBundle(): void;
+    configureServer(s: { middlewares: { use(f: (req: unknown, res: unknown, next: () => void) => void): void } }): void;
+  };
+
+  it('сборка кладёт voice-index.json в корень архива; клипы копируются вместе с остальными ассетами', () => {
+    const src = tree(VOICE_ASSETS);
+    const out = tree({});
+    const emitted: Array<{ type: string; fileName: string; source: string }> = [];
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const p = assetsPlugin({ dir: src }) as unknown as Plugin;
+      p.configResolved({ root: '/', build: { outDir: out } });
+      p.generateBundle.call({ emitFile: (f: { type: string; fileName: string; source: string }) => void emitted.push(f) });
+      p.closeBundle();
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0]).toMatchObject({ type: 'asset', fileName: VOICE_INDEX_FILE });
+      expect(VOICE_INDEX_FILE).toBe('voice-index.json');
+      const index = JSON.parse(emitted[0]!.source) as { version: number; episodes: Record<string, Record<string, string[]>> };
+      expect(index.version).toBe(1);
+      expect(index.episodes.ep01!.ru).toEqual(['alt_take.m4a', 'ep01.s01.l001.mp3', 'ep01.s01.l002.mp3']);
+      // каждый клип из индекса лежит в сборке по пути assets/<папка>/voice/<язык>/<файл>
+      for (const [folder, langs] of Object.entries(index.episodes)) {
+        for (const [lang, files] of Object.entries(langs)) for (const f of files) expect(existsSync(join(out, 'assets', folder, 'voice', lang, f)), `${folder}/${lang}/${f}`).toBe(true);
+      }
+      expect(warn.mock.calls.flat().join('\n')).toContain('Bad Name.mp3'); // предупреждение об имени не по соглашению
+      expect(log.mock.calls.flat().join('\n')).toContain('озвучка: 6 клипов');
+    } finally {
+      log.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
+  it('без клипов индекс всё равно есть (пустой): рантайм не получает 404 на старте', () => {
+    const emitted: Array<{ fileName: string; source: string }> = [];
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      const p = assetsPlugin({ dir: tree(ASSETS) }) as unknown as Plugin;
+      p.generateBundle.call({ emitFile: (f: { fileName: string; source: string }) => void emitted.push(f) });
+      expect(emitted.map((e) => e.fileName)).toEqual([VOICE_INDEX_FILE]);
+      expect(JSON.parse(emitted[0]!.source)).toEqual({ version: 1, episodes: {} });
+      expect(log).not.toHaveBeenCalled(); // тихо
+      const none = assetsPlugin({ dir: join(tmpdir(), 'vn-no-such-assets') }) as unknown as Plugin;
+      none.generateBundle.call({ emitFile: (f: { fileName: string; source: string }) => void emitted.push(f) });
+      expect(JSON.parse(emitted[1]!.source)).toEqual({ version: 1, episodes: {} });
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  async function serve(dir: string): Promise<{ base: string; close: () => Promise<void> }> {
+    let mw: ((req: unknown, res: unknown, next: () => void) => void) | null = null;
+    const plugin = assetsPlugin({ dir }) as unknown as Plugin;
+    plugin.configureServer({ middlewares: { use: (f) => void (mw = f) } });
+    const server = createServer((req, res) => {
+      mw!(req, res, () => {
+        res.statusCode = 299;
+        res.end('next');
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const port = (server.address() as AddressInfo).port;
+    return { base: `http://127.0.0.1:${port}`, close: () => new Promise<void>((r) => server.close(() => r())) };
+  }
+
+  it('dev-сервер отдаёт /voice-index.json на лету: положили клип — он в индексе при следующем запросе; без кеша', async () => {
+    const dir = tree({ 'ep01/voice/ru/ep01.s01.l001.mp3': 10 });
+    const s = await serve(dir);
+    try {
+      const r = await fetch(`${s.base}/${VOICE_INDEX_FILE}`);
+      expect(r.status).toBe(200);
+      expect(r.headers.get('content-type')).toContain('application/json');
+      expect(r.headers.get('cache-control')).toBe('no-store');
+      expect(await r.json()).toEqual({ version: 1, episodes: { ep01: { ru: ['ep01.s01.l001.mp3'] } } });
+      writeFileSync(join(dir, 'ep01', 'voice', 'ru', 'ep01.s01.l002.mp3'), 'x');
+      const again = (await (await fetch(`${s.base}/${VOICE_INDEX_FILE}?t=2`)).json()) as { episodes: { ep01: { ru: string[] } } };
+      expect(again.episodes.ep01.ru).toEqual(['ep01.s01.l001.mp3', 'ep01.s01.l002.mp3']);
+      const head = await fetch(`${s.base}/${VOICE_INDEX_FILE}`, { method: 'HEAD' });
+      expect(head.status).toBe(200);
+      expect(await head.text()).toBe('');
+      // сам клип отдаётся как обычный аудиоассет (mp3 с Range)
+      const clip = await fetch(`${s.base}/assets/ep01/voice/ru/ep01.s01.l001.mp3`, { headers: { Range: 'bytes=0-3' } });
+      expect(clip.status).toBe(206);
+      expect(clip.headers.get('content-type')).toBe('audio/mpeg');
+      // клипа нет — честный 404 (рантайм до него не доходит: его нет в индексе)
+      expect((await fetch(`${s.base}/assets/ep01/voice/ru/ep01.s01.l999.mp3`)).status).toBe(404);
+    } finally {
+      await s.close();
+    }
+  });
+
+  it('dev-сервер без клипов отдаёт пустой индекс (а не 404 и не index.html)', async () => {
+    const s = await serve(tree(ASSETS));
+    try {
+      const r = await fetch(`${s.base}/${VOICE_INDEX_FILE}`);
+      expect(r.status).toBe(200);
+      expect(await r.json()).toEqual({ version: 1, episodes: {} });
+      expect((await fetch(`${s.base}/${VOICE_INDEX_FILE}`, { method: 'POST' })).status).toBe(299); // чужой метод — дальше по цепочке
     } finally {
       await s.close();
     }

@@ -7,6 +7,7 @@ import type { Episode } from '../core/types';
 import { AssetCatalog, AssetStore, StoreSceneAssets, UI_ASSETS, dirnameOf, isSolidBlackFile, NEUTRAL_EXPRESSION, SPRITE_FILE_EXT } from './assets';
 import { BlockPreloader } from './preload';
 import type { AudioPreloader, PreloadHooks } from './preload';
+import type { IVoiceWarmer } from './voice';
 
 /** Адреса уже загруженных картинок интерфейса; null — файла нет, остаётся прежнее оформление. */
 export interface UiArt {
@@ -28,10 +29,16 @@ export interface AppAssets {
   verify(fetchFn?: (url: string, init?: { method: string }) => Promise<{ ok: boolean; headers: { get(name: string): string | null } }>): Promise<{ present: string[]; missing: string[] }>;
 }
 
-export function createAppAssets(episode: Episode, base: string, audio: AudioPreloader | null, store: AssetStore = new AssetStore()): AppAssets {
+export function createAppAssets(
+  episode: Episode,
+  base: string,
+  audio: AudioPreloader | null,
+  store: AssetStore = new AssetStore(),
+  voice: IVoiceWarmer | null = null,
+): AppAssets {
   const catalog = new AssetCatalog(episode, base);
   const hooks: PreloadHooks = {};
-  const preloader = new BlockPreloader({ episode, catalog, store, audio, hooks });
+  const preloader = new BlockPreloader({ episode, catalog, store, audio, voice, hooks });
   const scene = new StoreSceneAssets(catalog, store);
 
   const out: AppAssets = {

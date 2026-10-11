@@ -21,7 +21,7 @@ import './ui/styles.css';
 
 import { App } from './app';
 import { i18n, parseSupportedLang } from './core/i18n';
-import { ensureLangs, loadEpisode, loadManifest } from './core/loader';
+import { ensureLangs, loadEpisode, loadManifest, loadVoiceIndex } from './core/loader';
 import { SaveManager } from './core/saves';
 import type { Lang } from './core/types';
 import { installDebug } from './debug/debug';
@@ -29,9 +29,11 @@ import { registerBuiltinMinigames } from './minigames/registry';
 import { createPlatform } from './platform';
 import { createAppAssets, loadUiArt } from './stage/app_assets';
 import type { AppAssets } from './stage/app_assets';
+import { joinUrl } from './stage/assets';
 import { AudioManager } from './stage/audio';
 import { HtmlAudioBackend } from './stage/audio_html';
 import type { RendererChoice } from './stage/stage_factory';
+import { LineVoice } from './stage/voice';
 
 /** Дождаться шрифтов, но не дольше таймаута: без них игра всё равно играбельна. */
 async function loadFonts(timeoutMs = 2500): Promise<void> {
@@ -70,6 +72,7 @@ async function boot(): Promise<void> {
     await saves.init();
 
     const base = import.meta.env.BASE_URL;
+    const voiceIndexLoad = loadVoiceIndex(base); // индекс клипов озвучки: параллельно манифесту и эпизоду, ошибок не бросает
     const manifest = await loadManifest(base);
     const wanted = params.get('episode');
     const entry = manifest.find((m) => m.id === wanted) ?? manifest[0];
@@ -89,8 +92,10 @@ async function boot(): Promise<void> {
     let assets: AppAssets | null = null;
     const backend = new HtmlAudioBackend((id) => assets?.catalog.audioUrl(id) ?? null);
     backend.installUnlock(); // iOS: звук разблокируется первым касанием
-    assets = createAppAssets(episode, base, backend);
     const audio = new AudioManager(backend);
+    // Озвучка реплик: клип берётся только если он есть в индексе (нет клипов — реплики немые, без запросов и предупреждений).
+    const voice = new LineVoice({ episode, index: await voiceIndexLoad, url: (path) => joinUrl(base, path), lang: () => i18n.lang, output: audio });
+    assets = createAppAssets(episode, base, backend, undefined, voice);
     // Картинки меню и заставки грузим до первого показа меню (но не дольше пары секунд).
     await loadUiArt(assets);
     const renderer = params.get('renderer');
@@ -101,6 +106,7 @@ async function boot(): Promise<void> {
       episode,
       contentVersion,
       audio,
+      voice,
       assets,
       loadLang: (l) => ensureLangs(i18n, base, episode.id, [l]),
       renderer: renderer === 'dom' || renderer === 'pixi' ? (renderer as RendererChoice) : 'auto',

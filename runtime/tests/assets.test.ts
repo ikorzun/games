@@ -20,7 +20,9 @@ import {
   viewChains,
 } from '../src/stage/assets';
 import type { ImageHandle, ImageLoader } from '../src/stage/assets';
-import { BlockPreloader } from '../src/stage/preload';
+import { BlockPreloader, NEXT_BLOCK_VOICE_LINES } from '../src/stage/preload';
+import type { IVoiceWarmer } from '../src/stage/voice';
+import type { VoiceLineRef } from '../src/core/voice';
 import { ASSET_EXTENSIONS } from '../scripts/assets_plugin.mjs';
 import { defaultViewFor } from '../src/core/interpreter';
 import { EP01_PATH, hasRepoContent, loadEpisode } from './helpers/content';
@@ -698,6 +700,108 @@ describe('AppAssets: бланки документов, картинки инт�
       throw new Error('сеть');
     });
     expect(err.present).toEqual([]);
+  });
+});
+
+describe('озвучка в плане блока и в предзагрузке', () => {
+  /** b1: пять реплик (say / narrate, одна с явным voice) и мимо них шаги другого рода; b2: восемь реплик. */
+  function voiceEpisode(): Episode {
+    const ep = assetEpisode();
+    ep.scenes.s1!.steps = [
+      { do: 'narrate', key: 'k.n1' },
+      { do: 'show', who: 'zoya', expression: 'warm', position: 'left' },
+      { do: 'say', who: 'zoya', key: 'k.s1', expression: 'warm' },
+      { do: 'say', who: 'murashov', key: 'k.s2', voice: 'take_two' },
+      { do: 'caption', key: 'k.cap', style: 'location' },
+      { do: 'jump', scene: 's2' },
+    ];
+    ep.scenes.s2!.steps = [
+      { do: 'narrate', key: 'k.n2', style: 'inner' },
+      { do: 'narrate', key: 'k.n3', voice: 'v_n3' },
+      { do: 'jump', scene: 's3' },
+    ];
+    ep.scenes.s3!.steps = [
+      ...Array.from({ length: 8 }, (_, i) => ({ do: 'narrate' as const, key: `k.b2.${i}` })),
+      { do: 'end', ending: 'e_main' },
+    ];
+    ep.blocks = [
+      { id: 'b1', type: 'investigation', presentation: 'procedural', entry_scene: 's1' },
+      { id: 'b2', type: 'investigation', presentation: 'procedural', entry_scene: 's3' },
+    ];
+    return ep;
+  }
+
+  it('план блока: реплики say / narrate по порядку шагов — ключ, явное voice, говорящий (рассказчик — null); остальные шаги мимо', () => {
+    const ep = voiceEpisode();
+    const plan = collectBlockAssets(ep, new AssetCatalog(ep, BASE), 'b1');
+    expect(plan.lines).toEqual([
+      { key: 'k.n1', voice: null, who: null },
+      { key: 'k.s1', voice: null, who: 'zoya' },
+      { key: 'k.s2', voice: 'take_two', who: 'murashov' },
+      { key: 'k.n2', voice: null, who: null },
+      { key: 'k.n3', voice: 'v_n3', who: null },
+    ]);
+    expect(collectBlockAssets(ep, new AssetCatalog(ep, BASE), 'b_none').lines).toEqual([]);
+    // реплики не попадают ни в картинки, ни в звук плана: клипы зависят от языка и индекса и считаются при прогреве
+    expect(plan.audio.every((u) => !u.includes('voice'))).toBe(true);
+  });
+
+  function withWarmer(existing: string[] = []) {
+    const ep = voiceEpisode();
+    const cat = new AssetCatalog(ep, BASE);
+    const store = new AssetStore({ loadImage: loaderOf(existing).loadImage, warn: () => undefined });
+    const calls: Array<{ prio: string; keys: string[]; afterImages: boolean }> = [];
+    const warmer: IVoiceWarmer = {
+      warm: (lines: readonly VoiceLineRef[], prio) =>
+        void calls.push({ prio, keys: lines.map((l) => l.key), afterImages: store.peek('./assets/ep01/bg/yard.webp') !== undefined }),
+    };
+    return { pre: new BlockPreloader({ episode: ep, catalog: cat, store, voice: warmer }), calls, store };
+  }
+
+  it('вход в блок: клипы блока греются сразу после картинок (приоритет now), первые реплики следующих блоков — в фоне (idle)', async () => {
+    const { pre, calls } = withWarmer(['./assets/ep01/bg/yard.webp', './assets/ep01/sprites/zoya/warm.webp', './assets/common/bg/office.webp']);
+    await pre.enterBlock('b1');
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toEqual({ prio: 'now', keys: ['k.n1', 'k.s1', 'k.s2', 'k.n2', 'k.n3'], afterImages: true });
+    // следующий блок b2: только первые NEXT_BLOCK_VOICE_LINES реплик — озвучка тяжёлая, ветки пройдут не все
+    expect(NEXT_BLOCK_VOICE_LINES).toBe(6);
+    expect(calls[1]).toEqual({ prio: 'idle', keys: Array.from({ length: NEXT_BLOCK_VOICE_LINES }, (_, i) => `k.b2.${i}`), afterImages: true });
+  });
+
+  it('озвучка не задерживает показ: пока картинки блока грузятся, клипы не греются; без картинок игра идёт как раньше', async () => {
+    vi.useFakeTimers();
+    try {
+      const ep = voiceEpisode();
+      const m = manualLoader();
+      const store = new AssetStore({ loadImage: m.loadImage, warn: () => undefined });
+      const calls: string[] = [];
+      const pre = new BlockPreloader({ episode: ep, catalog: new AssetCatalog(ep, BASE), store, voice: { warm: (_l, prio) => void calls.push(prio) }, timeoutMs: 3000 });
+      let done = false;
+      void pre.enterBlock('b1').then(() => (done = true));
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(done).toBe(false);
+      expect(calls).toEqual([]); // картинки ещё грузятся — озвучку не трогаем
+      await vi.advanceTimersByTimeAsync(2100); // вышло время ожидания картинок
+      expect(done).toBe(true);
+      expect(calls).toEqual(['now', 'idle']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('без прогревателя озвучки (нет клипов, озвучка не подключена) предзагрузка работает как прежде', async () => {
+    const ep = voiceEpisode();
+    const store = new AssetStore({ loadImage: loaderOf([]).loadImage, warn: () => undefined });
+    const pre = new BlockPreloader({ episode: ep, catalog: new AssetCatalog(ep, BASE), store });
+    await expect(pre.enterBlock('b1')).resolves.toBeUndefined();
+  });
+
+  it('createAppAssets пробрасывает прогреватель в предзагрузчик', async () => {
+    const ep = voiceEpisode();
+    const calls: string[] = [];
+    const assets = createAppAssets(ep, BASE, null, new AssetStore({ loadImage: loaderOf([]).loadImage, warn: () => undefined }), { warm: (_l, prio) => void calls.push(prio) });
+    await assets.preloader.enterBlock('b1');
+    expect(calls).toEqual(['now', 'idle']);
   });
 });
 
