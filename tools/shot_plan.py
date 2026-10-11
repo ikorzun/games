@@ -94,6 +94,10 @@ LIGHTING = {
 # «улица с припаркованной «Волгой»» модель рисовала вторую «Волгу» за окном машины, в которой сидят герои
 # (street_night, волна 68). Ключ — id фона; остальные сеты используют SUBJECT фона.
 CLOSE_SUBJECT = {
+    "bg_street_day": ("SUBJECT: inside the parked Lada 2109 by day on Presnya street: the people sit in this car in its "
+                      "front seats; beyond the windscreen and the side windows the grey overcast street, the notary office "
+                      "opposite with its heavy dark door and the black Volga parked at its kerb blur softly; the camera is "
+                      "inside this car and no other car is in the foreground."),
     "bg_street_night": ("SUBJECT: inside the parked dark Volga at night in October rain: the people sit in this car; "
                         "rain streaks the windscreen and the side windows, and beyond the glass only the sodium street "
                         "lamp, the wet asphalt and the warm lit office window with its dim doorway blur softly; no other "
@@ -104,12 +108,22 @@ CLOSE_SUBJECT = {
 # изнутри — по SUBJECT крупных планов, без LAYOUT улицы и без референса комнаты. С фоном «улица из-за дороги»
 # модель ставила обоих на тротуар рядом с пустой «Волгой» (волна 70).
 INSIDE_PAIRS = {
+    "bg_street_day": {frozenset({"oper", "sledak"})},
     "bg_street_night": {frozenset({"oper", "sledak"})},
 }
 # Кто в этом сете сидит внутри (крупные планы и реакции по SUBJECT салона и салонному референсу); остальные —
 # снаружи, по SUBJECT фона и без референса комнаты (салонный референс посадил бы их в машину).
 INSIDE_PEOPLE = {
+    "bg_street_day": {"oper", "sledak"},
     "bg_street_night": {"oper", "sledak"},
+}
+# SUBJECT для крупных планов и реакций тех, кто в сете снаружи, когда сам фон — вид изнутри машины
+# (street_day: через лобовое стекло «Лады»): иначе Мурашова у двери конторы модель снимала бы сквозь стекло.
+OUTSIDE_SUBJECT = {
+    "bg_street_day": ("SUBJECT: Presnya street in Moscow by day, 1993, on the pavement outside the ground-floor notary "
+                      "office with a brass plate and a heavy dark double door, a black Volga sedan parked at the kerb, a "
+                      "newspaper kiosk, bare trees, slush and yellow leaves at the kerb; the camera stands on the pavement, "
+                      "not inside any car."),
 }
 # Дополнение к тексту ots снаружи (для сета с машиной): иначе модель сажает в «Волгу» лишние лица.
 OTS_EXTRA = {
@@ -136,7 +150,7 @@ LIGHTING_BY_BG = {
     "bg_street_night": {"night": "night in October rain: one sodium street lamp, the warm lit office window, wet asphalt "
                                  "reflecting both"},
     "bg_bti_archive": {"day": "fluorescent tubes overhead, dusty air, the green reading lamp on"},
-    "bg_street_day": {"day": "flat overcast daylight, seen through the windscreen"},
+    "bg_street_day": {"day": "flat overcast daylight"},  # «через лобовое стекло» задаёт SUBJECT, не свет
     "bg_murashov_flat": {"night": "night: the window is dark over the street lamps below, the desk lamp and the ceiling "
                                   "light on"},
     "bg_zhek": {"day": "a fluorescent tube on the ceiling plus grey daylight from the window"},
@@ -432,6 +446,17 @@ ANGLES = {
                        "railing in the near foreground, out of focus, along the landing toward the lift and the apartment "
                        "door; the people beyond are in focus"),
     ],
+    "bg_street_day": [
+        ("low", "the camera is down on the dashboard at the base of the windscreen, tilted up at the two faces in the "
+                "front seats: the roof lining and the rear-view mirror in the upper part of the frame, the grey street only "
+                "in the side windows; the camera is inside the car"),
+        ("high", "the camera is up under the roof lining at the back of the cabin, tilted down over the two front seats: "
+                 "the heads and shoulders from above, the dashboard and the windscreen with the notary office across the "
+                 "street in the lower half of the frame"),
+        ("foreground", "the camera is on the back seat, looking past the two headrests and the thermos on the seat in the "
+                       "near foreground, out of focus, at the windscreen and the notary office door across the street, in "
+                       "focus; the two people are seen from behind and in profile"),
+    ],
     "bg_street_night": [
         ("low", "the camera is at kerb height on the wet asphalt across the street, tilted up: the reflections of the "
                 "street lamp in the puddles fill the lower third, the parked Volga and the facade rise above, rain crosses "
@@ -575,6 +600,16 @@ def key_garment(look: str) -> str:
     return ""
 
 
+def scene_subject(shot: dict, bg_id: str, bg_subject: str) -> str:
+    """SUBJECT сцены: салон для тех, кто внутри; улица с тротуара — для крупных планов тех, кто снаружи, если сам
+    фон снят изнутри машины; иначе SUBJECT фона."""
+    if shot.get("inside"):
+        return CLOSE_SUBJECT.get(bg_id, bg_subject)
+    if bg_id in INSIDE_PEOPLE and shot["kind"] in ("close", "reaction"):
+        return OUTSIDE_SUBJECT.get(bg_id, bg_subject)
+    return bg_subject
+
+
 def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str, bg_id: str, names, present: list[str]) -> str:
     """Собрать промпт кадра: база §1 с заменённым CAMERA + реализм + референсы + сцена."""
     cam = camera_block(shot["kind"], shot["angle"], shot["cast"], shot.get("focus"), shot.get("from"), names)
@@ -639,7 +674,7 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
     layout = LAYOUT.get(bg_id, "") if shot["kind"] in ("wide", "medium", "ots", "angle") and not shot.get("inside") else ""
     scene = (
         "SCENE TO DEPICT:\n"
-        f"Moscow, 1993. {CLOSE_SUBJECT.get(bg_id, bg_subject) if shot.get('inside') else bg_subject} LIGHT NOW: {light_now(bg_id, tod)}. "
+        f"Moscow, 1993. {scene_subject(shot, bg_id, bg_subject)} LIGHT NOW: {light_now(bg_id, tod)}. "
         f"{layout + ' ' if layout else ''}"
         f"{people_txt} {action}".strip()
     )
