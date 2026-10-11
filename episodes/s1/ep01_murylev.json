@@ -3435,7 +3435,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "bti"
     },
     "s25": {
       "id": "s25",
@@ -3513,7 +3514,8 @@
           "minigame": "mg_db",
           "intro_key": "ep01.mg_db.intro"
         }
-      ]
+      ],
+      "coverage": "bti"
     },
     "s26": {
       "id": "s26",
@@ -8570,7 +8572,8 @@
           "do": "jump",
           "scene": "s25"
         }
-      ]
+      ],
+      "coverage": "bti"
     },
     "s26b": {
       "id": "s26b",
@@ -15690,6 +15693,374 @@
           }
         ],
         "file": "assets/ep01/shots/office_evening/angle_foreground.webp"
+      },
+      {
+        "id": "sh_bti_wide_1",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "clerk",
+            "expression": "neutral"
+          },
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/wide_1.webp"
+      },
+      {
+        "id": "sh_bti_medium_1",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "clerk",
+            "expression": "neutral"
+          },
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/medium_1.webp"
+      },
+      {
+        "id": "sh_bti_ots_clerk_expert",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "clerk",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/ots_clerk_expert.webp",
+        "from": "clerk",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_bti_ots_expert_clerk",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "clerk",
+            "expression": "neutral"
+          },
+          {
+            "who": "expert",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/ots_expert_clerk.webp",
+        "from": "expert",
+        "focus": "clerk"
+      },
+      {
+        "id": "sh_bti_ots_expert_sledak",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "expert",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/ots_expert_sledak.webp",
+        "from": "expert",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_bti_ots_sledak_expert",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/ots_sledak_expert.webp",
+        "from": "sledak",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_bti_ots_sledak_clerk",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "clerk",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/ots_sledak_clerk.webp",
+        "from": "sledak",
+        "focus": "clerk"
+      },
+      {
+        "id": "sh_bti_ots_clerk_sledak",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "clerk",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/ots_clerk_sledak.webp",
+        "from": "clerk",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_bti_close_expert_neutral",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/close_expert_neutral.webp",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_bti_close_clerk_neutral",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "clerk",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/close_clerk_neutral.webp",
+        "focus": "clerk"
+      },
+      {
+        "id": "sh_bti_close_expert_focused",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "focused"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/close_expert_focused.webp",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_bti_close_sledak_tense",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "tense"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/close_sledak_tense.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_bti_close_sledak_neutral",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/close_sledak_neutral.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_bti_reaction_clerk",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "clerk",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/reaction_clerk.webp",
+        "focus": "clerk"
+      },
+      {
+        "id": "sh_bti_reaction_expert",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/reaction_expert.webp",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_bti_reaction_sledak",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/reaction_sledak.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_bti_insert_1",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/bti/insert_1.webp"
+      },
+      {
+        "id": "sh_bti_insert_2",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/bti/insert_2.webp"
+      },
+      {
+        "id": "sh_bti_angle_low",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "angle",
+        "angle": "low",
+        "cast": [
+          {
+            "who": "clerk",
+            "expression": "neutral"
+          },
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/angle_low.webp"
+      },
+      {
+        "id": "sh_bti_angle_high",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "angle",
+        "angle": "high",
+        "cast": [
+          {
+            "who": "clerk",
+            "expression": "neutral"
+          },
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/angle_high.webp"
+      },
+      {
+        "id": "sh_bti_angle_foreground",
+        "set": "bti",
+        "bg": "bg_bti_archive",
+        "kind": "angle",
+        "angle": "foreground",
+        "cast": [
+          {
+            "who": "clerk",
+            "expression": "neutral"
+          },
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/bti/angle_foreground.webp"
       }
     ]
   }
