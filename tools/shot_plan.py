@@ -609,7 +609,8 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
         # плане и так размыта, её задаёт текст SUBJECT. Принятый крупный план затем становится REF_SHOTS[set].
         if not ref_shot and kind in ("close", "reaction"):
             out = []
-        for c in cast:
+        # Порядок спрайтов — как в тексте REFERENCE IMAGES: слева направо по ORDER.
+        for c in sorted(cast, key=lambda c: ORDER.get(bg, {}).get(c["who"], 1)):
             ss = sprite_set_of(c["who"])
             expr = c.get("expression") or "neutral"
             out.append(jobs.get(f"{ss}.{expr}") or jobs.get(f"{ss}.neutral"))
