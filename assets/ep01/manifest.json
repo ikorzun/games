@@ -1837,9 +1837,9 @@
  {
   "id": "sh_stairwell_medium_3",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_175441_355ab721-9e88-4e15-adbe-714cf91bf1fc.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_180133_af7428a7-fa93-4d12-b0e9-bb2d8936d6e5.png",
   "target": "assets/ep01/shots/stairwell/medium_3.webp",
-  "job": "355ab721-9e88-4e15-adbe-714cf91bf1fc"
+  "job": "af7428a7-fa93-4d12-b0e9-bb2d8936d6e5"
  },
  {
   "id": "sh_stairwell_close_oper_neutral",
@@ -1907,16 +1907,16 @@
  {
   "id": "sh_stairwell_insert_1",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_175222_ff88008d-8a39-457c-b281-7af0459aaea0.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_180133_2576a32f-987d-4346-ba01-4185eea0d430.png",
   "target": "assets/ep01/shots/stairwell/insert_1.webp",
-  "job": "ff88008d-8a39-457c-b281-7af0459aaea0"
+  "job": "2576a32f-987d-4346-ba01-4185eea0d430"
  },
  {
   "id": "sh_stairwell_insert_2",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_175220_56f51573-4532-432a-b0a7-c9717ee99edd.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_180133_02f730dc-efeb-4789-bf4a-9267b80fb3a6.png",
   "target": "assets/ep01/shots/stairwell/insert_2.webp",
-  "job": "56f51573-4532-432a-b0a7-c9717ee99edd"
+  "job": "02f730dc-efeb-4789-bf4a-9267b80fb3a6"
  },
  {
   "id": "sh_stairwell_angle_low",
