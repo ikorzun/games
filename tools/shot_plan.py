@@ -694,7 +694,8 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
         add("ots", f"ots_{a}_{b}", cast, **{"from": a, "focus": b},
             action=(f"The camera stands just behind {names(a)}: the back of {names(a)}'s head and shoulder fill the near "
                     f"foreground out of focus, and {names(a)} is not seen from the front. {far} Do not swap the two "
-                    f"people.{side_txt}"))
+                    f"people. Exactly two people are in the frame and each of them appears once: {names(a)} is only "
+                    f"the shoulder in the foreground, not also somewhere in the room.{side_txt}"))
     for (who, expr), _ in d["closes"].most_common(SHOT_LIMITS["close"]):
         if who in HIDDEN_FACE:
             continue
