@@ -138,7 +138,7 @@ STAGING = {
         "expert": "crouched by the bedside table, examining medicine bottles",
         "oper": "by the window, looking down at the yard",
         "buyer": "by the window, uneasy",
-        "lapin_wife": "sitting on the edge of the bed, coat still on",
+        "lapin_wife": "sitting on the edge of the bed, handbag on her lap",  # в LOOKS у неё кардиган, пальто нет
     },
     "bg_notary_office": {
         "notary": "behind his desk with the stamp and ink pad",
@@ -685,10 +685,16 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
         sides = screen_sides(bg, a, b)
         side_txt = (f" In the frame, {names(a)}'s shoulder is at the {sides[0]} edge and {names(b)} is on the {sides[1]}, "
                     f"exactly as they stand left-to-right in the wide view from the door." if sides else "")
+        # Дальний человек с «лицом, которого не показывают» (силуэт Мурашова): не «лицом к объективу», а лицо
+        # спрятано — опущено и отвёрнуто, в тени дверного проёма.
+        far = (f"{names(b)} is the person farther from the camera, turned toward {names(a)}, but his face is never shown: "
+               f"the head is bowed and turned away, lost in shadow, speaking to {names(a)}."
+               if b in HIDDEN_FACE else
+               f"{names(b)} is the person farther from the camera, face to the lens, speaking to {names(a)}.")
         add("ots", f"ots_{a}_{b}", cast, **{"from": a, "focus": b},
             action=(f"The camera stands just behind {names(a)}: the back of {names(a)}'s head and shoulder fill the near "
-                    f"foreground out of focus, and {names(a)} is not seen from the front. {names(b)} is the person farther "
-                    f"from the camera, face to the lens, speaking to {names(a)}. Do not swap the two people.{side_txt}"))
+                    f"foreground out of focus, and {names(a)} is not seen from the front. {far} Do not swap the two "
+                    f"people.{side_txt}"))
     for (who, expr), _ in d["closes"].most_common(SHOT_LIMITS["close"]):
         if who in HIDDEN_FACE:
             continue
