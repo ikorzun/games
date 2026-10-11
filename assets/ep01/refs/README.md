@@ -12,3 +12,4 @@
 | `stairwell_medium.jpg` | `shots/stairwell/wide_1.webp`, кроп по колени (следователь у ящиков, лифт, соседка у двери) | средние планы и ракурсы сета stairwell |
 | `stairwell_medium_solo.jpg` | `shots/stairwell/wide_3.webp`, тот же кроп (соседка одна у двери) | одиночные средние планы stairwell: с кропом wide_1 модель дважды дорисовала следователя из референса |
 | `street_night_medium.jpg` | `shots/street_night/wide_1.webp`, кроп: «Волга» у тротуара, подъезд с козырьком, светящееся окно конторы | средние планы и ракурсы сета street_night |
+| `office_evening_medium_solo.jpg` | кроп `shots/office_evening/wide_3.webp` (бокс 100,200,1240,841 → 1920×1080): следователь один за столом — референс одиночного среднего плана (`medium_solo`) сета office_evening |
