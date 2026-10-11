@@ -2421,5 +2421,12 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_192015_191d90ff-7621-4f3d-9401-e8361273fd92.png",
   "target": "assets/ep01/shots/bti/angle_high.webp",
   "job": "191d90ff-7621-4f3d-9401-e8361273fd92"
+ },
+ {
+  "id": "sh_bti_angle_foreground",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_192159_c55a7292-c618-41b2-bc31-3f8d87279daa.png",
+  "target": "assets/ep01/shots/bti/angle_foreground.webp",
+  "job": "c55a7292-c618-41b2-bc31-3f8d87279daa"
  }
 ]
