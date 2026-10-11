@@ -1305,9 +1305,9 @@
  {
   "id": "sh_interrogation_angle_foreground",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_162402_474d6dbb-f950-446f-8316-811deeefe79f.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_163524_f4868193-7546-4ab3-b83a-bd1c66e9b745.png",
   "target": "assets/ep01/shots/interrogation/angle_foreground.webp",
-  "job": "474d6dbb-f950-446f-8316-811deeefe79f"
+  "job": "f4868193-7546-4ab3-b83a-bd1c66e9b745"
  },
  {
   "id": "sh_apartment_zoya_wide_1",
@@ -1338,22 +1338,6 @@
   "job": "358b8e6c-f62c-4d3d-b9f1-935ce9e40c66"
  },
  {
-  "id": "sh_interrogation_angle_foreground_v3",
-  "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_163035_11b207a8-f007-4844-b9d9-541002a89304.png",
-  "target": "assets/ep01/shots/interrogation/angle_foreground_v3.webp",
-  "job": "11b207a8-f007-4844-b9d9-541002a89304",
-  "note": "третий вариант переднепланового ракурса (пепельница и стакан на переднем плане); после отбора один из двух файлов удаляется"
- },
- {
-  "id": "sh_interrogation_angle_foreground_v4",
-  "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_163524_f4868193-7546-4ab3-b83a-bd1c66e9b745.png",
-  "target": "assets/ep01/shots/interrogation/angle_foreground_v4.webp",
-  "job": "f4868193-7546-4ab3-b83a-bd1c66e9b745",
-  "note": "четвёртый вариант переднепланового ракурса (из-за спинки стула подозреваемого); после отбора лишние файлы удаляются"
- },
- {
   "id": "sh_apartment_zoya_medium_2",
   "kind": "shot",
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_163741_81d25f50-06da-4ef7-a77d-50fb0830e5ce.png",
@@ -1366,5 +1350,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_163741_bc0b0538-b499-4550-bc06-0e07a5de4794.png",
   "target": "assets/ep01/shots/apartment_zoya/medium_3.webp",
   "job": "bc0b0538-b499-4550-bc06-0e07a5de4794"
+ },
+ {
+  "id": "sh_apartment_zoya_medium_4",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_164027_57747bee-0343-45ec-b57f-e591052874a1.png",
+  "target": "assets/ep01/shots/apartment_zoya/medium_4.webp",
+  "job": "57747bee-0343-45ec-b57f-e591052874a1"
+ },
+ {
+  "id": "sh_apartment_zoya_close_lapin_wife_worried",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_164026_dba24790-cc3d-4f5c-b5c6-e7d64ea7b442.png",
+  "target": "assets/ep01/shots/apartment_zoya/close_lapin_wife_worried.webp",
+  "job": "dba24790-cc3d-4f5c-b5c6-e7d64ea7b442"
+ },
+ {
+  "id": "sh_apartment_zoya_close_buyer_neutral",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_164027_42b76506-354a-4153-b399-47cde0d79853.png",
+  "target": "assets/ep01/shots/apartment_zoya/close_buyer_neutral.webp",
+  "job": "42b76506-354a-4153-b399-47cde0d79853"
+ },
+ {
+  "id": "sh_apartment_zoya_close_expert_focused",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_164027_8944ac87-24ac-486e-8585-8759c933a8bf.png",
+  "target": "assets/ep01/shots/apartment_zoya/close_expert_focused.webp",
+  "job": "8944ac87-24ac-486e-8585-8759c933a8bf"
  }
 ]
