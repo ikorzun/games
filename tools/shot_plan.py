@@ -339,6 +339,11 @@ REF_SHOTS = {
             "medium": "media:ed4e6075-2e97-4f32-bf4a-e27b6dd57db3", "angle": "media:ed4e6075-2e97-4f32-bf4a-e27b6dd57db3"},
     "street_night": {"medium": "media:5ac38ac0-c807-44a4-a268-f35164a2438f", "angle": "media:5ac38ac0-c807-44a4-a268-f35164a2438f",
                      "close": "sh_street_night_close_oper_neutral", "reaction": "sh_street_night_close_oper_neutral"},
+    # Первый сет по новому базовому промпту владельца (волна 92): пилот принят целиком. Комната для ots, вставок и
+    # ракурсов — wide_1 (вид с заднего сиденья); крупные планы и реакции внутри — по close_sledak_tense; средние и
+    # ракурсы — кроп wide_1 без приборной панели (`refs/street_day_medium.jpg`, media id после импорта по URL).
+    "street_day": {"room": "sh_street_day_wide_1", "close": "sh_street_day_close_sledak_tense",
+                   "reaction": "sh_street_day_close_sledak_tense"},
 }
 # Для ракурсов (angle) референс — принятый средний план, а не общий: с общим планом модель дважды
 # меняла людей местами (office_day, волна 18), со средним оба ракурса вышли с первого раза.
