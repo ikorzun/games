@@ -1326,9 +1326,9 @@
  {
   "id": "sh_apartment_zoya_medium_1",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_162913_1c810660-5206-41df-b3f6-2f28b9ef596e.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_163741_982b1c83-4d38-4cd4-898f-a2353521077e.png",
   "target": "assets/ep01/shots/apartment_zoya/medium_1.webp",
-  "job": "1c810660-5206-41df-b3f6-2f28b9ef596e"
+  "job": "982b1c83-4d38-4cd4-898f-a2353521077e"
  },
  {
   "id": "sh_apartment_zoya_close_zoya_warm",
@@ -1352,5 +1352,19 @@
   "target": "assets/ep01/shots/interrogation/angle_foreground_v4.webp",
   "job": "f4868193-7546-4ab3-b83a-bd1c66e9b745",
   "note": "четвёртый вариант переднепланового ракурса (из-за спинки стула подозреваемого); после отбора лишние файлы удаляются"
+ },
+ {
+  "id": "sh_apartment_zoya_medium_2",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_163741_81d25f50-06da-4ef7-a77d-50fb0830e5ce.png",
+  "target": "assets/ep01/shots/apartment_zoya/medium_2.webp",
+  "job": "81d25f50-06da-4ef7-a77d-50fb0830e5ce"
+ },
+ {
+  "id": "sh_apartment_zoya_medium_3",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_163741_bc0b0538-b499-4550-bc06-0e07a5de4794.png",
+  "target": "assets/ep01/shots/apartment_zoya/medium_3.webp",
+  "job": "bc0b0538-b499-4550-bc06-0e07a5de4794"
  }
 ]
