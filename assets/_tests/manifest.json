@@ -1,0 +1,18 @@
+[
+ {
+  "id": "test_composite_office_v1",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_100430_515cfd63-c588-433e-bf0d-2b1aae3c7893.png",
+  "target": "assets/_tests/composite_office_v1.webp",
+  "job": "515cfd63-c588-433e-bf0d-2b1aae3c7893",
+  "note": "тест: следователь и опер, вписанные в кабинет (GPT Image 2.5, референсы: фон + 2 спрайта)"
+ },
+ {
+  "id": "test_composite_office_v2",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_100431_35b573a2-c0ad-430e-9d96-539d4c359c7b.png",
+  "target": "assets/_tests/composite_office_v2.webp",
+  "job": "35b573a2-c0ad-430e-9d96-539d4c359c7b",
+  "note": "тот же промпт, второй вариант"
+ }
+]
