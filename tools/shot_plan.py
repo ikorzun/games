@@ -106,6 +106,11 @@ CLOSE_SUBJECT = {
 INSIDE_PAIRS = {
     "bg_street_night": {frozenset({"oper", "sledak"})},
 }
+# Кто в этом сете сидит внутри (крупные планы и реакции по SUBJECT салона и салонному референсу); остальные —
+# снаружи, по SUBJECT фона и без референса комнаты (салонный референс посадил бы их в машину).
+INSIDE_PEOPLE = {
+    "bg_street_night": {"oper", "sledak"},
+}
 # Дополнение к тексту ots снаружи (для сета с машиной): иначе модель сажает в «Волгу» лишние лица.
 OTS_EXTRA = {
     "bg_street_night": " The parked Volga behind them is empty: nobody sits inside it.",
@@ -288,7 +293,8 @@ REF_SHOTS = {
                   "medium_solo": "media:66b20696-cb0a-4481-b5a0-7d22fd2f52f5"},
     # Пилот (волна 68): wide ×2 приняты, крупные планы отбракованы (вторая «Волга» за окном — см. CLOSE_SUBJECT);
     # кроп wide_1 («Волга», подъезд, окно) — для средних и ракурсов.
-    "street_night": {"medium": "media:5ac38ac0-c807-44a4-a268-f35164a2438f", "angle": "media:5ac38ac0-c807-44a4-a268-f35164a2438f"},
+    "street_night": {"medium": "media:5ac38ac0-c807-44a4-a268-f35164a2438f", "angle": "media:5ac38ac0-c807-44a4-a268-f35164a2438f",
+                     "close": "sh_street_night_close_oper_neutral", "reaction": "sh_street_night_close_oper_neutral"},
 }
 # Для ракурсов (angle) референс — принятый средний план, а не общий: с общим планом модель дважды
 # меняла людей местами (office_day, волна 18), со средним оба ракурса вышли с первого раза.
@@ -571,7 +577,7 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
                 "at least as close as Reference 1.")
     else:
         ref1 = "Reference 1 is the room itself: keep its furniture, window, lamps and props exactly where they are."
-    room_ref = (bool(closer) or shot["kind"] not in ("close", "reaction")) and not shot.get("inside")
+    room_ref = shot.get("has_room", bool(closer) or shot["kind"] not in ("close", "reaction"))
     if not room_ref:
         ref1 = None
     refs = [ref1] if ref1 else []
@@ -612,7 +618,7 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
     layout = LAYOUT.get(bg_id, "") if shot["kind"] in ("wide", "medium", "ots", "angle") and not shot.get("inside") else ""
     scene = (
         "SCENE TO DEPICT:\n"
-        f"Moscow, 1993. {CLOSE_SUBJECT.get(bg_id, bg_subject) if shot['kind'] in ('close', 'reaction') or shot.get('inside') else bg_subject} LIGHT NOW: {light_now(bg_id, tod)}. "
+        f"Moscow, 1993. {CLOSE_SUBJECT.get(bg_id, bg_subject) if shot.get('inside') else bg_subject} LIGHT NOW: {light_now(bg_id, tod)}. "
         f"{layout + ' ' if layout else ''}"
         f"{people_txt} {action}".strip()
     )
@@ -692,19 +698,25 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
         # Крупный план и реакция в сете без принятого близкого кадра: без референса комнаты вовсе — с общим
         # планом первым референсом модель повторяет его кадрирование (office_day: 11 из 12); комната в крупном
         # плане и так размыта, её задаёт текст SUBJECT. Принятый крупный план затем становится REF_SHOTS[set].
-        if (not ref_shot and kind in ("close", "reaction")) or inside:
+        has_room = True
+        if kind in ("close", "reaction"):
+            if not ref_shot or (bg in INSIDE_PEOPLE and not inside):
+                has_room = False
+        elif inside:
+            has_room = False
+        if not has_room:
             out = []
         # Порядок спрайтов — как в тексте REFERENCE IMAGES: слева направо по ORDER.
         for c in sorted(cast, key=lambda c: ORDER.get(bg, {}).get(c["who"], 1)):
             ss = sprite_set_of(c["who"])
             expr = c.get("expression") or "neutral"
             out.append(jobs.get(f"{ss}.{expr}") or jobs.get(f"{ss}.neutral"))
-        return [m for m in out if m]
+        return [m for m in out if m], has_room
 
     def add(kind: str, name: str, cast: list[dict], **extra) -> None:
         shot = {"id": f"sh_{set_name}_{name}", "set": set_name, "bg": bg, "kind": kind, "angle": extra.pop("angle", "eye"), "cast": cast, "file": f"assets/ep01/shots/{set_name}/{name}.webp"}
         shot.update(extra)
-        shot["medias"] = ref_media(cast, kind, bool(shot.get("inside")))
+        shot["medias"], shot["has_room"] = ref_media(cast, kind, bool(shot.get("inside")))
         shot["_sets"] = {c["who"]: sprite_set_of(c["who"]) for c in cast}
         shot["prompt"] = build_prompt(base, realism, shot, subject, tod, bg, names, [c["who"] for c in cast])
         del shot["_sets"]
@@ -736,7 +748,8 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
                f"{names(b)} is the person farther from the camera, face to the lens, speaking to {names(a)}.")
         inside = frozenset({a, b}) in INSIDE_PAIRS.get(bg, set())
         inside_txt = (f" Both of them sit inside the car and the camera is inside the car with them, on the back seat "
-                      f"just behind {names(a)}'s shoulder; the street is only a wet blur beyond the windows." if inside
+                      f"just behind {names(a)}'s shoulder; the street is only a wet blur beyond the windows. It is a "
+                      f"left-hand-drive car: the steering wheel is in front of the driver on the left." if inside
                       else OTS_EXTRA.get(bg, ""))
         add("ots", f"ots_{a}_{b}", cast, **{"from": a, "focus": b, "inside": inside},
             action=(f"The camera stands just behind {names(a)}: the back of {names(a)}'s head and shoulder fill the near "
@@ -747,12 +760,14 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
         if who in HIDDEN_FACE:
             continue
         add("close", f"close_{who}_{expr}", [{"who": who, "expression": expr}], focus=who,
+            inside=who in INSIDE_PEOPLE.get(bg, set()),
             action=(f"{names(who)} is speaking; {EXPRESSIONS.get(expr, '')}. The camera is right in front of {names(who)} at arm's "
                     f"length: only the face and shoulders fill the frame, the room is a soft blur behind; no full figure, no furniture in focus."))
     for who, _ in d["present"].most_common(SHOT_LIMITS["reaction"]):
         if who in HIDDEN_FACE:
             continue
         add("reaction", f"reaction_{who}", [{"who": who, "expression": "neutral"}], focus=who,
+            inside=who in INSIDE_PEOPLE.get(bg, set()),
             action=(f"{names(who)} is listening to someone off frame, silent. The camera is close: head and shoulders fill the "
                     f"frame, a soft edge of the speaker's shoulder at the frame's side, the room a blur behind."))
     for i, detail in enumerate(INSERTS.get(bg, [])[: SHOT_LIMITS["insert"]], start=1):
