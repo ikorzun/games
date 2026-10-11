@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import re
@@ -228,6 +229,24 @@ def load_bg_subjects() -> dict[str, str]:
     return out
 
 
+def load_cast_looks() -> dict[str, str]:
+    """Словесные приметы персонажей (таблицы «| `id` | CHARACTER | выражения |» в docs/production/prompts/*.md):
+    дублируют референс словами, чтобы модель не меняла людей местами и не путала одежду."""
+    out: dict[str, str] = {}
+    for path in sorted(glob.glob(os.path.join(ROOT, "docs/production/prompts/*.md"))):
+        for line in open(path, encoding="utf-8").read().splitlines():
+            m = re.match(r"\| `([a-z0-9_]+)` \| ((?:man|woman|the same)[^|]*?) \| [^|]*\|\s*$", line)
+            if m and m.group(1) not in out:
+                desc = m.group(2).strip()
+                # приметы: до третьей точки с запятой (возраст, внешность; одежда), без роли
+                parts = [x.strip() for x in desc.split(";")]
+                out[m.group(1)] = "; ".join(parts[:2])
+    return out
+
+
+LOOKS: dict[str, str] = {}
+
+
 def ref_jobs(manifest: list[dict]) -> dict[str, str]:
     return {it["id"]: it["job"] for it in manifest if it.get("job") and it["kind"] in ("bg", "sprite")}
 
@@ -298,7 +317,9 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
     for i, c in enumerate(shot["cast"], start=2):
         who = c["who"]
         tail = "; this person's face is never shown clearly: back to the camera, turned away or in shadow" if who in HIDDEN_FACE else ""
-        refs.append(f"Reference {i} is {names(who)}: keep the exact face, hair, build and clothing{tail}.")
+        look = LOOKS.get(who) or LOOKS.get(shot.get("_sets", {}).get(who, ""), "")
+        desc = f" ({look})" if look else ""
+        refs.append(f"Reference {i} is {names(who)}{desc}: keep this exact face, hair, build and clothing{tail}.")
     ref_block = "REFERENCE IMAGES\n" + " ".join(refs)
     staging = STAGING.get(bg_id, {})
     people = []
@@ -386,7 +407,9 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
         shot = {"id": f"sh_{set_name}_{name}", "set": set_name, "bg": bg, "kind": kind, "angle": extra.pop("angle", "eye"), "cast": cast, "file": f"assets/ep01/shots/{set_name}/{name}.webp"}
         shot.update(extra)
         shot["medias"] = ref_media(cast)
+        shot["_sets"] = {c["who"]: sprite_set_of(c["who"]) for c in cast}
         shot["prompt"] = build_prompt(base, realism, shot, subject, tod, bg, names, [c["who"] for c in cast])
+        del shot["_sets"]
         shots.append(shot)
 
     comps = [c for c, _ in d["comps"].most_common(SHOT_LIMITS["wide"]) if c]
@@ -398,7 +421,10 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
         add("medium", f"medium_{i}", cast, action="They are mid-conversation; one has just stopped talking.")
     for (a, b), _ in d["pairs"].most_common(SHOT_LIMITS["ots"]):
         cast = [{"who": b, "expression": "neutral"}, {"who": a, "expression": "neutral"}]
-        add("ots", f"ots_{a}_{b}", cast, **{"from": a, "focus": b}, action=f"{names(b)} is speaking to {names(a)}.")
+        add("ots", f"ots_{a}_{b}", cast, **{"from": a, "focus": b},
+            action=(f"The camera stands just behind {names(a)}: the back of {names(a)}'s head and shoulder fill the near "
+                    f"foreground out of focus, and {names(a)} is not seen from the front. {names(b)} is the person farther "
+                    f"from the camera, face to the lens, speaking to {names(a)}. Do not swap the two people."))
     for (who, expr), _ in d["closes"].most_common(SHOT_LIMITS["close"]):
         if who in HIDDEN_FACE:
             continue
@@ -500,6 +526,10 @@ def main() -> int:
 
     jobs = ref_jobs(load_json(a.manifest))
     base, realism = load_prompt_parts()
+    LOOKS.update(load_cast_looks())
+    missing = sorted({c["id"] for c in ep["cast"] if c.get("sprite_set")} - set(LOOKS) - {c["id"] for c in ep["cast"] if LOOKS.get(c.get("sprite_set") or "")})
+    if missing:
+        print("без словесных примет (нет строки в docs/production/prompts):", ", ".join(missing), file=sys.stderr)
     subjects = load_bg_subjects()
     sets = analyse_sets(ep)
     chosen = [d for d in sets.values() if d["lines"] > 0 and (not a.set or d["set"] == a.set)]

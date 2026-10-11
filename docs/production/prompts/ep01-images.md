@@ -53,6 +53,10 @@ Id совпадают с `assets` в `episodes/s1/ep01_murylev.json`. Стиле
 | `zoya` | woman, 74, small, kind face, white hair under a knitted beret; Sunday coat with a fur collar, handbag; pensioner | neutral, warm, worried |
 | `neighbor` | woman, 60, sturdy, flowered housecoat and cardigan, glass milk bottle in hand; neighbour | neutral, worried |
 | `buyer` | man, 40, thin, anxious, cheap suit jacket over a sweater; family man who bought the apartment | neutral, scared |
+| `boss` | man, 55, heavy, jowly face, grey hair combed back; dark navy suit, white shirt, patterned tie; head of the investigative department | neutral, stern, tired |
+| `lapin_wife` | woman, 40, thin, pale, tired eyes, hair pulled back in a low bun; beige cardigan over a plain dark grey dress; wife of a missing man | neutral, worried, angry |
+| `accomplice` | man, 30, thick neck, boxer's build, short dark hair; black padded jacket over a navy tracksuit with white stripes, worn trainers; hired muscle | neutral, scared |
+| `clerk` | woman, 60, short grey hair, glasses, stern mouth; grey cardigan over a floral blouse, brown skirt, a cardboard box of index cards in her arms; archive clerk | neutral |
 
 ## Документы (без текста, 3:4)
 

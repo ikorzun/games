@@ -154,6 +154,8 @@ CONTINUITY (mandatory)
   places; only the camera moved.
 - Each person is exactly the referenced character: same face, age, hair, build and the same clothes in every
   shot of this set; expressions change, clothing never does.
+- People are never swapped: the person named for Reference 2 has Reference 2's face and clothes, and so on;
+  who is near the camera and who is far is exactly as the scene text says.
 ```
 
 Шаблон блока CAMERA для кадра раскадровки:
