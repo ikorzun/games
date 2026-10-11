@@ -162,6 +162,21 @@ LAYOUT = {
                              "with a sheet of paper in it, exactly as in the reference."),
 }
 
+# Порядок мест слева направо с точки зрения камеры у двери (как снят фон): явные стороны экрана в ots/medium,
+# чтобы кадры не пересекали линию действия. Ключ — фон, значение — who → позиция (меньше — левее).
+ORDER = {
+    "bg_office_prosecutor": {"sledak": 0, "boss": 0.4, "oper": 1, "expert": 2, "lapin_wife": 2.2},
+}
+
+
+def screen_sides(bg: str, a: str, b: str) -> tuple[str, str] | None:
+    """Стороны экрана для пары: (сторона a, сторона b) или None, если порядок не задан."""
+    o = ORDER.get(bg, {})
+    if a not in o or b not in o or o[a] == o[b]:
+        return None
+    return ("LEFT", "RIGHT") if o[a] < o[b] else ("RIGHT", "LEFT")
+
+
 # Референс комнаты для medium / close / reaction: принятый кадр того же сета, снятый ближе. Если референс — общий
 # план фона, модель повторяет его кадрирование и «крупный план» выходит общим; с близким референсом она держит
 # крупность. Ключ — сет, значение — id кадра из манифеста (его job id подставляется первым референсом).
@@ -449,13 +464,19 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
         add("wide", f"wide_{i}", cast, action="Nobody speaks; a pause in the room.")
     for i, comp in enumerate(comps[: SHOT_LIMITS["medium"]], start=1):
         cast = [{"who": w, "expression": "neutral"} for w in comp]
-        add("medium", f"medium_{i}", cast, action="They are mid-conversation; one has just stopped talking.")
+        o = ORDER.get(bg, {})
+        ordered = sorted((c["who"] for c in cast), key=lambda w: o.get(w, 1))
+        order_txt = (" Left to right in the frame: " + ", ".join(names(w) for w in ordered) + ".") if len(cast) > 1 and all(w in o for w in ordered) else ""
+        add("medium", f"medium_{i}", cast, action="They are mid-conversation; one has just stopped talking." + order_txt)
     for (a, b), _ in d["pairs"].most_common(SHOT_LIMITS["ots"]):
         cast = [{"who": b, "expression": "neutral"}, {"who": a, "expression": "neutral"}]
+        sides = screen_sides(bg, a, b)
+        side_txt = (f" In the frame, {names(a)}'s shoulder is at the {sides[0]} edge and {names(b)} is on the {sides[1]}, "
+                    f"exactly as they stand left-to-right in the wide view from the door." if sides else "")
         add("ots", f"ots_{a}_{b}", cast, **{"from": a, "focus": b},
             action=(f"The camera stands just behind {names(a)}: the back of {names(a)}'s head and shoulder fill the near "
                     f"foreground out of focus, and {names(a)} is not seen from the front. {names(b)} is the person farther "
-                    f"from the camera, face to the lens, speaking to {names(a)}. Do not swap the two people."))
+                    f"from the camera, face to the lens, speaking to {names(a)}. Do not swap the two people.{side_txt}"))
     for (who, expr), _ in d["closes"].most_common(SHOT_LIMITS["close"]):
         if who in HIDDEN_FACE:
             continue
