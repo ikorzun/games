@@ -2264,7 +2264,8 @@
           "minigame": "mg_docs",
           "intro_key": "ep01.mg_docs.intro"
         }
-      ]
+      ],
+      "coverage": "office_evening"
     },
     "s18": {
       "id": "s18",
@@ -3713,7 +3714,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "office_evening"
     },
     "s27": {
       "id": "s27",
@@ -8619,7 +8621,8 @@
           "do": "jump",
           "scene": "s27"
         }
-      ]
+      ],
+      "coverage": "office_evening"
     },
     "s27b": {
       "id": "s27b",
@@ -15285,6 +15288,408 @@
           }
         ],
         "file": "assets/ep01/shots/street_night/angle_foreground.webp"
+      },
+      {
+        "id": "sh_office_evening_wide_1",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/wide_1.webp"
+      },
+      {
+        "id": "sh_office_evening_wide_2",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/wide_2.webp"
+      },
+      {
+        "id": "sh_office_evening_wide_3",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/wide_3.webp"
+      },
+      {
+        "id": "sh_office_evening_medium_1",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/medium_1.webp"
+      },
+      {
+        "id": "sh_office_evening_medium_2",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/medium_2.webp"
+      },
+      {
+        "id": "sh_office_evening_medium_3",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/medium_3.webp"
+      },
+      {
+        "id": "sh_office_evening_ots_sledak_expert",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/ots_sledak_expert.webp",
+        "from": "sledak",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_office_evening_ots_sledak_oper",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/ots_sledak_oper.webp",
+        "from": "sledak",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_office_evening_ots_expert_sledak",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "expert",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/ots_expert_sledak.webp",
+        "from": "expert",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_office_evening_ots_oper_sledak",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/ots_oper_sledak.webp",
+        "from": "oper",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_office_evening_close_oper_neutral",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/close_oper_neutral.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_office_evening_close_expert_focused",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "focused"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/close_expert_focused.webp",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_office_evening_close_sledak_tense",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "tense"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/close_sledak_tense.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_office_evening_close_oper_grin",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "grin"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/close_oper_grin.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_office_evening_close_sledak_firm",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "firm"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/close_sledak_firm.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_office_evening_close_sledak_tired",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "tired"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/close_sledak_tired.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_office_evening_close_expert_neutral",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/close_expert_neutral.webp",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_office_evening_reaction_sledak",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/reaction_sledak.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_office_evening_reaction_oper",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/reaction_oper.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_office_evening_reaction_expert",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/reaction_expert.webp",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_office_evening_insert_1",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/office_evening/insert_1.webp"
+      },
+      {
+        "id": "sh_office_evening_insert_2",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/office_evening/insert_2.webp"
+      },
+      {
+        "id": "sh_office_evening_angle_low",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "angle",
+        "angle": "low",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/angle_low.webp"
+      },
+      {
+        "id": "sh_office_evening_angle_high",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "angle",
+        "angle": "high",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/angle_high.webp"
+      },
+      {
+        "id": "sh_office_evening_angle_foreground",
+        "set": "office_evening",
+        "bg": "bg_office_prosecutor",
+        "kind": "angle",
+        "angle": "foreground",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_evening/angle_foreground.webp"
       }
     ]
   }
