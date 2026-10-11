@@ -478,14 +478,20 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
                 "at least as close as Reference 1.")
     else:
         ref1 = "Reference 1 is the room itself: keep its furniture, window, lamps and props exactly where they are."
-    refs = [ref1]
-    for i, c in enumerate(shot["cast"], start=2):
+    room_ref = bool(closer) or shot["kind"] not in ("close", "reaction")
+    if not room_ref:
+        ref1 = None
+    refs = [ref1] if ref1 else []
+    for i, c in enumerate(shot["cast"], start=2 if room_ref else 1):
         who = c["who"]
         tail = "; this person's face is never shown clearly: back to the camera, turned away or in shadow" if who in HIDDEN_FACE else ""
         look = LOOKS.get(who) or LOOKS.get(shot.get("_sets", {}).get(who, ""), "")
         desc = f" ({look})" if look else ""
         refs.append(f"Reference {i} is {names(who)}{desc}: keep this exact face, hair, build and clothing{tail}.")
     ref_block = "REFERENCE IMAGES\n" + " ".join(refs)
+    if not room_ref:
+        ref_block += (" There is no reference image of the room: build the blurred background from the scene text "
+                      "(SUBJECT and LIGHT NOW) alone.")
     staging = STAGING.get(bg_id, {})
     people = []
     for c in shot["cast"]:
@@ -572,6 +578,11 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
         if not out[0]:
             room = REF_SHOTS.get(set_name, {}).get("room")
             out = [jobs.get(room) or jobs.get(bg)]
+        # Крупный план и реакция в сете без принятого близкого кадра: без референса комнаты вовсе — с общим
+        # планом первым референсом модель повторяет его кадрирование (office_day: 11 из 12); комната в крупном
+        # плане и так размыта, её задаёт текст SUBJECT. Принятый крупный план затем становится REF_SHOTS[set].
+        if not ref_shot and kind in ("close", "reaction"):
+            out = []
         for c in cast:
             ss = sprite_set_of(c["who"])
             expr = c.get("expression") or "neutral"

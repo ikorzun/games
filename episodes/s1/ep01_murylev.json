@@ -1355,7 +1355,8 @@
           "remember": false
         }
       ],
-      "notes": "Знакомство игрока с Громовым и Сайко. Внутренний голос — две реплики о себе."
+      "notes": "Знакомство игрока с Громовым и Сайко. Внутренний голос — две реплики о себе.",
+      "coverage": "office_day"
     },
     "s12": {
       "id": "s12",
@@ -1529,7 +1530,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "office_day"
     },
     "s13": {
       "id": "s13",
@@ -2416,7 +2418,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "office_day"
     },
     "s19": {
       "id": "s19",
@@ -2608,7 +2611,8 @@
           ],
           "remember": true
         }
-      ]
+      ],
+      "coverage": "office_day"
     },
     "s20": {
       "id": "s20",
@@ -3095,7 +3099,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "office_day"
     },
     "s23": {
       "id": "s23",
@@ -3278,7 +3283,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "office_day"
     },
     "s24": {
       "id": "s24",
@@ -3898,7 +3904,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "office_day"
     },
     "s28": {
       "id": "s28",
@@ -7527,7 +7534,8 @@
           "transition": "fade"
         }
       ],
-      "notes": "Продолжение s12 после c_levina (investigative, remember). Опция grandson ставит asked_grandson (отголосок в s18b)."
+      "notes": "Продолжение s12 после c_levina (investigative, remember). Опция grandson ставит asked_grandson (отголосок в s18b).",
+      "coverage": "office_day"
     },
     "s13b": {
       "id": "s13b",
@@ -8129,7 +8137,8 @@
           "remember": false
         }
       ],
-      "notes": "Продолжение s18 после c_fifth (dialogue): реакция Сайко по last_choice, затем l012–l017 и c_who без изменений. Отголосок asked_grandson после l012."
+      "notes": "Продолжение s18 после c_fifth (dialogue): реакция Сайко по last_choice, затем l012–l017 и c_who без изменений. Отголосок asked_grandson после l012.",
+      "coverage": "office_day"
     },
     "s20b": {
       "id": "s20b",
@@ -8278,7 +8287,8 @@
           "scene": "s23",
           "transition": "slow_fade"
         }
-      ]
+      ],
+      "coverage": "office_day"
     },
     "s23b": {
       "id": "s23b",
@@ -8385,7 +8395,8 @@
           "scene": "s24",
           "transition": "fade"
         }
-      ]
+      ],
+      "coverage": "office_day"
     },
     "s24b": {
       "id": "s24b",
@@ -8675,7 +8686,8 @@
           "scene": "s28",
           "transition": "fade"
         }
-      ]
+      ],
+      "coverage": "office_day"
     },
     "s28b": {
       "id": "s28b",
@@ -11448,6 +11460,692 @@
         "path": "assets/common/amb/stairwell.mp3"
       }
     ],
-    "budget_mb": 30
+    "budget_mb": 30,
+    "shots": [
+      {
+        "id": "sh_office_day_wide_1",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/wide_1.webp"
+      },
+      {
+        "id": "sh_office_day_wide_2",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/wide_2.webp"
+      },
+      {
+        "id": "sh_office_day_wide_3",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "boss",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/wide_3.webp"
+      },
+      {
+        "id": "sh_office_day_wide_4",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "lapin_wife",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/wide_4.webp"
+      },
+      {
+        "id": "sh_office_day_medium_1",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/medium_1.webp"
+      },
+      {
+        "id": "sh_office_day_medium_2",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/medium_2.webp"
+      },
+      {
+        "id": "sh_office_day_medium_3",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "boss",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/medium_3.webp"
+      },
+      {
+        "id": "sh_office_day_medium_4",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "lapin_wife",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/medium_4.webp"
+      },
+      {
+        "id": "sh_office_day_ots_oper_sledak",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/ots_oper_sledak.webp",
+        "from": "oper",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_office_day_ots_sledak_oper",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/ots_sledak_oper.webp",
+        "from": "sledak",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_office_day_ots_expert_oper",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "expert",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/ots_expert_oper.webp",
+        "from": "expert",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_office_day_ots_oper_expert",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/ots_oper_expert.webp",
+        "from": "oper",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_office_day_ots_lapin_wife_sledak",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "lapin_wife",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/ots_lapin_wife_sledak.webp",
+        "from": "lapin_wife",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_office_day_ots_boss_sledak",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "boss",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/ots_boss_sledak.webp",
+        "from": "boss",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_office_day_ots_sledak_boss",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "boss",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/ots_sledak_boss.webp",
+        "from": "sledak",
+        "focus": "boss"
+      },
+      {
+        "id": "sh_office_day_ots_sledak_lapin_wife",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "lapin_wife",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/ots_sledak_lapin_wife.webp",
+        "from": "sledak",
+        "focus": "lapin_wife"
+      },
+      {
+        "id": "sh_office_day_close_oper_neutral",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/close_oper_neutral.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_office_day_close_oper_grin",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "grin"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/close_oper_grin.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_office_day_close_expert_focused",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "focused"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/close_expert_focused.webp",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_office_day_close_sledak_tense",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "tense"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/close_sledak_tense.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_office_day_close_sledak_firm",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "firm"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/close_sledak_firm.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_office_day_close_sledak_neutral",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/close_sledak_neutral.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_office_day_close_lapin_wife_worried",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "lapin_wife",
+            "expression": "worried"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/close_lapin_wife_worried.webp",
+        "focus": "lapin_wife"
+      },
+      {
+        "id": "sh_office_day_close_expert_neutral",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/close_expert_neutral.webp",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_office_day_close_boss_stern",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "boss",
+            "expression": "stern"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/close_boss_stern.webp",
+        "focus": "boss"
+      },
+      {
+        "id": "sh_office_day_close_sledak_tired",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "tired"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/close_sledak_tired.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_office_day_close_boss_tired",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "boss",
+            "expression": "tired"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/close_boss_tired.webp",
+        "focus": "boss"
+      },
+      {
+        "id": "sh_office_day_close_lapin_wife_angry",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "lapin_wife",
+            "expression": "angry"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/close_lapin_wife_angry.webp",
+        "focus": "lapin_wife"
+      },
+      {
+        "id": "sh_office_day_close_oper_angry",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "angry"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/close_oper_angry.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_office_day_close_boss_neutral",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "boss",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/close_boss_neutral.webp",
+        "focus": "boss"
+      },
+      {
+        "id": "sh_office_day_close_lapin_wife_neutral",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "lapin_wife",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/close_lapin_wife_neutral.webp",
+        "focus": "lapin_wife"
+      },
+      {
+        "id": "sh_office_day_reaction_sledak",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/reaction_sledak.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_office_day_reaction_oper",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/reaction_oper.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_office_day_reaction_expert",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/reaction_expert.webp",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_office_day_reaction_boss",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "boss",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/reaction_boss.webp",
+        "focus": "boss"
+      },
+      {
+        "id": "sh_office_day_reaction_lapin_wife",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "lapin_wife",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/reaction_lapin_wife.webp",
+        "focus": "lapin_wife"
+      },
+      {
+        "id": "sh_office_day_insert_1",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/office_day/insert_1.webp"
+      },
+      {
+        "id": "sh_office_day_insert_2",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/office_day/insert_2.webp"
+      },
+      {
+        "id": "sh_office_day_angle_low",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "angle",
+        "angle": "low",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/angle_low.webp"
+      },
+      {
+        "id": "sh_office_day_angle_high",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "angle",
+        "angle": "high",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/angle_high.webp"
+      },
+      {
+        "id": "sh_office_day_angle_foreground",
+        "set": "office_day",
+        "bg": "bg_office_prosecutor",
+        "kind": "angle",
+        "angle": "foreground",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_day/angle_foreground.webp"
+      }
+    ]
   }
 }
