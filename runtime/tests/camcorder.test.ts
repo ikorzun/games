@@ -29,6 +29,7 @@ import {
   ZOOM_HUNT_PX,
   zoomCurve,
   zoomKeyframes,
+  UNREST_RAMP,
 } from '../src/stage/camcorder';
 import type { CamFrame, CameraContext, CameraFx } from '../src/stage/camcorder';
 import { PRESETS } from '../src/stage/presets';
@@ -120,6 +121,56 @@ describe('кроп стабилизатора', () => {
     // небольшое движение не трогаем
     const small = fitTransform(0.3, -0.2, 0.1, 16 / 9, 1, 1.03);
     expect([small.tx, small.ty, small.rot]).toEqual([0.3, -0.2, 0.1]);
+  });
+});
+
+describe('дрожание не постоянное: эпизоды «беспокойства» оператора', () => {
+  it('слабо: в покое ≤ 15 % предела, эпизоды раз в 14–32 с по 1,2–2,6 с (+ вход и выход по 1,2 с); сильно — чаще и дольше', () => {
+    expect(LEVELS.low.restAmp).toBe(0.15);
+    expect(LEVELS.low.unrestGap).toEqual([14_000, 32_000]);
+    expect(LEVELS.low.unrestMs).toEqual([1_200, 2_600]);
+    expect(LEVELS.high.restAmp).toBe(0.35);
+    expect(LEVELS.high.unrestGap).toEqual([6_000, 14_000]);
+    expect(LEVELS.high.unrestMs).toEqual([2_000, 4_000]);
+    expect(UNREST_RAMP).toBe(1200);
+    for (const seed of [2, 11, 23]) {
+      const s = make(seed);
+      const frames = run(s, 10 * MIN, 33);
+      // число эпизодов за 10 минут — из интервалов 14–32 с плюс сам эпизод ≤ 5 с
+      expect(s.unrestLog.length).toBeGreaterThanOrEqual(10 * MIN / (32_000 + 5_000) - 1);
+      expect(s.unrestLog.length).toBeLessThanOrEqual(10 * MIN / 14_000 + 1);
+      // вне эпизодов (с запасом на вход и выход) кадр почти неподвижен: ≤ 15 % предела дрожания
+      const calmLimit = SHAKE.shiftPct * LEVELS.low.restAmp + 1e-6;
+      let calm = 0;
+      let seen = 0;
+      frames.forEach((f, i) => {
+        const t = i * 33;
+        const inside = s.unrestLog.some((t0) => t >= t0 - 40 && t <= t0 + 2 * UNREST_RAMP + LEVELS.low.unrestMs[1] + 40);
+        if (f.burst || inside) return;
+        seen++;
+        if (Math.abs(f.tx) <= calmLimit && Math.abs(f.ty) <= calmLimit) calm++;
+      });
+      expect(seen).toBeGreaterThan(frames.length * 0.6); // покой — большую часть времени
+      expect(calm).toBe(seen);
+      // а в эпизодах дрожание доходит до полной амплитуды
+      const peak = Math.max(...frames.filter((f) => !f.burst).map((f) => Math.abs(f.tx)));
+      expect(peak).toBeGreaterThan(SHAKE.shiftPct * 0.5);
+    }
+    const strong = make(2, RECON, 'high');
+    run(strong, 10 * MIN, 33);
+    expect(strong.unrestLog.length).toBeGreaterThan(make(2).unrestLog.length);
+  });
+
+  it('огибающая входит и выходит плавно: между соседними кадрами нет скачков и при «сильно»', () => {
+    const s = make(9, RECON, 'high');
+    const frames = run(s, 3 * MIN, 16);
+    let jump = 0;
+    for (let i = 1; i < frames.length; i++) {
+      if (frames[i]!.burst || frames[i - 1]!.burst) continue;
+      jump = Math.max(jump, Math.abs(frames[i]!.tx - frames[i - 1]!.tx), Math.abs(frames[i]!.ty - frames[i - 1]!.ty));
+    }
+    expect(s.unrestLog.length).toBeGreaterThan(5);
+    expect(jump).toBeLessThan(0.08); // % кадра за 16 мс (амплитуда ×1,6)
   });
 });
 

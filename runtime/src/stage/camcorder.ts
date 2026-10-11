@@ -64,6 +64,13 @@ export const SHAKE = {
 /** Масштаб, который допустим на время «оператор поправил кадр» (кроп стабилизатора). */
 export const REFRAME_SCALE_MAX = 1.12;
 
+/**
+ * Дрожание не постоянное. Оператор в основном держит камеру ровно (остаётся доля амплитуды `restAmp`), а время
+ * от времени «беспокоится» — переступает, перехватывает камеру, глубже дышит: эпизод полной амплитуды длиной
+ * `unrestMs` с плавным входом и выходом по UNREST_RAMP мс. Интервалы `unrestGap` — от конца эпизода до следующего.
+ */
+export const UNREST_RAMP = 1200;
+
 /** Предел шага часов, мс: длинные паузы между вызовами step() «схлопываются». */
 export const MAX_DT = 100;
 
@@ -90,6 +97,12 @@ export interface LevelProfile {
   vignette: number;
   /** Непрозрачность строк интерлейса в vhs_heavy. */
   interlace: number;
+  /** Доля амплитуды дрожания в покое — между эпизодами «беспокойства» оператора. */
+  restAmp: number;
+  /** Пауза между эпизодами «беспокойства», мс [мин, макс] (от конца предыдущего). */
+  unrestGap: readonly [number, number];
+  /** Длительность эпизода на полной амплитуде, мс [мин, макс] (без входа и выхода по UNREST_RAMP). */
+  unrestMs: readonly [number, number];
 }
 
 /** «Слабо» (по умолчанию) — числа владельца; «сильно» — заметнее и чаще. «Выкл» профиля не имеет. */
@@ -105,6 +118,9 @@ export const LEVELS: Readonly<Record<Exclude<CameraFx, 'off'>, LevelProfile>> = 
     grain: 0.045,
     vignette: 0.28,
     interlace: 0.07,
+    restAmp: 0.15,
+    unrestGap: [14_000, 32_000],
+    unrestMs: [1_200, 2_600],
   },
   high: {
     amp: 1.6,
@@ -117,6 +133,9 @@ export const LEVELS: Readonly<Record<Exclude<CameraFx, 'off'>, LevelProfile>> = 
     grain: 0.065,
     vignette: 0.36,
     interlace: 0.11,
+    restAmp: 0.35,
+    unrestGap: [6_000, 14_000],
+    unrestMs: [2_000, 4_000],
   },
 };
 
@@ -420,6 +439,11 @@ export class CameraScheduler {
   private nextBurstAt = Number.POSITIVE_INFINITY;
   /** Начала всплесков (для тестов и отладки). */
   readonly burstLog: number[] = [];
+  /** Текущий эпизод «беспокойства» оператора (часы дрожания) и момент следующего. */
+  private unrest: { t0: number; dur: number } | null = null;
+  private nextUnrestAt = Number.POSITIVE_INFINITY;
+  /** Начала эпизодов «беспокойства» (для тестов и отладки). */
+  readonly unrestLog: number[] = [];
 
   constructor(opts: SchedulerOptions) {
     this.rng = opts.rng;
@@ -427,6 +451,12 @@ export class CameraScheduler {
     this.aspect = opts.aspect ?? 16 / 9;
     this.level = opts.level ?? 'low';
     this.scheduleBurst(this.clock);
+    this.scheduleUnrest(this.shakeClock);
+  }
+
+  /** Идёт ли сейчас эпизод «беспокойства» (QA). */
+  get unrestActive(): boolean {
+    return this.unrest !== null;
   }
 
   get currentLevel(): CameraFx {
@@ -443,7 +473,9 @@ export class CameraScheduler {
     this.reframes = [];
     this.jolts = [];
     this.burst = null;
+    this.unrest = null;
     this.scheduleBurst(this.clock);
+    this.scheduleUnrest(this.shakeClock);
   }
 
   setContext(ctx: CameraContext): void {
@@ -509,6 +541,36 @@ export class CameraScheduler {
     this.nextBurstAt = from + between(this.rng, gap[0], gap[1]);
   }
 
+  private scheduleUnrest(from: number): void {
+    const p = levelProfile(this.level);
+    this.nextUnrestAt = p ? from + between(this.rng, p.unrestGap[0], p.unrestGap[1]) : Number.POSITIVE_INFINITY;
+  }
+
+  /**
+   * Огибающая «беспокойства» по часам дрожания: restAmp в покое, плавный подъём до 1 за UNREST_RAMP, полная
+   * амплитуда на время эпизода, плавный спад. Эпизоды начинаются по расписанию и планируют следующий от своего конца.
+   */
+  private unrestEnvelope(p: LevelProfile): number {
+    const t = this.shakeClock;
+    if (this.unrest === null && t >= this.nextUnrestAt) {
+      this.unrest = { t0: this.nextUnrestAt, dur: between(this.rng, p.unrestMs[0], p.unrestMs[1]) };
+      this.unrestLog.push(this.unrest.t0);
+    }
+    if (this.unrest === null) return p.restAmp;
+    const el = t - this.unrest.t0;
+    const total = this.unrest.dur + 2 * UNREST_RAMP;
+    if (el >= total) {
+      this.scheduleUnrest(this.unrest.t0 + total);
+      this.unrest = null;
+      return p.restAmp;
+    }
+    let w: number;
+    if (el < UNREST_RAMP) w = 0.5 - 0.5 * Math.cos((Math.PI * el) / UNREST_RAMP);
+    else if (el < UNREST_RAMP + this.unrest.dur) w = 1;
+    else w = 0.5 + 0.5 * Math.cos((Math.PI * (el - UNREST_RAMP - this.unrest.dur)) / UNREST_RAMP);
+    return p.restAmp + (1 - p.restAmp) * w;
+  }
+
   /** Продвинуть часы до `now` (мс, любой монотонный источник) и вычислить кадр. */
   step(now: number): CamFrame {
     const dt = this.last === null ? 0 : clamp(now - this.last, 0, MAX_DT);
@@ -531,8 +593,8 @@ export class CameraScheduler {
       if (!burstFrame && this.clock >= this.burst.t0 + this.burst.dur) this.burst = null;
     }
 
-    // ручная камера
-    const a = this.ctx.handheld * p.amp;
+    // ручная камера: амплитуда × огибающая «беспокойства» (в покое — малая доля, эпизодами — полная)
+    const a = this.ctx.handheld * p.amp * this.unrestEnvelope(p);
     const t = this.shakeClock / 1000;
     let tx = this.noise.value(0, t) * SHAKE.shiftPct * a;
     let ty = this.noise.value(1, t) * SHAKE.shiftPct * a;

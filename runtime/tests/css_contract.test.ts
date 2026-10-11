@@ -1,7 +1,8 @@
 /**
  * Договорённости по внешнему виду, записанные в CSS (решения владельца 2026-10-10): сдержанная
  * цветокоррекция (десатурация ≤ 35 %), картинки без размытия в цветокоррекции, HUD камкордера мигает 1 Гц,
- * текстовое окно ≈ rgba(0,0,0,.72) с тонкой светлой рамкой, кнопки выбора ≥ 48 px, таймкод в правом верхнем углу.
+ * текстовое окно ≈ rgba(0,0,0,.72) без рамки, имя без обводки, кнопки меню на 8 % белого без контура,
+ * кнопки выбора ≥ 48 px, таймкод в правом верхнем углу.
  * Тест читает стили как текст и считает матрицы CSS-фильтров по спецификации Filter Effects.
  */
 import { readFileSync } from 'node:fs';
@@ -149,21 +150,28 @@ describe('слои камкордера в CSS', () => {
 });
 
 describe('интерфейс: документальная эстетика, mobile-first', () => {
-  it('текстовое окно: тёмное полупрозрачное ≈ rgba(0,0,0,.72) с тонкой светлой рамкой, PT Sans, без backdrop-filter (дорого на телефоне)', () => {
+  it('текстовое окно: тёмное полупрозрачное ≈ rgba(0,0,0,.72) без рамки (решение владельца 2026-10-11), PT Sans, без backdrop-filter (дорого на телефоне)', () => {
     expect(uiCss).toMatch(/--panel:\s*rgb\(0 0 0 \/ 0\.72\)/);
     expect(uiCss).toMatch(/--panel-line:\s*rgb\(255 255 255 \/ 0\.28\)/);
     const box = /\n\.vn-textbox\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(box).toMatch(/background:\s*var\(--panel\)/);
-    expect(box).toMatch(/border:\s*1px solid var\(--panel-line\)/);
+    expect(box).toMatch(/border:\s*0;/);
     expect(box).toMatch(/font-family:\s*var\(--font-body\)/);
     expect(uiCss).toMatch(/--font-body:\s*'PT Sans'/);
     expect(uiCss).not.toMatch(/backdrop-filter/);
   });
 
-  it('имя говорящего — маленькая плашка PT Sans', () => {
+  it('имя говорящего — маленькая плашка PT Sans без обводки', () => {
     const name = /\.vn-textbox__name\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(name).toMatch(/font:\s*700\s+0\.8em\s*\/\s*1\.4\s+var\(--font-body\)/);
-    expect(name).toMatch(/border:\s*1px solid var\(--panel-line\)/);
+    expect(name).toMatch(/border:\s*0;/);
+  });
+
+  it('кнопки быстрого меню — полупрозрачная подложка 8 % белого без контура, фокус с клавиатуры виден', () => {
+    const q = /\n\.vn-qbtn\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(q).toMatch(/background:\s*rgb\(255 255 255 \/ 0\.08\)/);
+    expect(q).toMatch(/border:\s*0;/);
+    expect(uiCss).toMatch(/\.vn-qbtn:focus-visible\s*\{[^}]*outline:/);
   });
 
   it('кнопки выбора — крупные: не ниже 48 px (у нас 52); кнопки быстрого меню — иконки не меньше 40 px', () => {
