@@ -339,6 +339,8 @@ body {
     height: 46px;
     padding: 0 10px;
   }
+  .vn-qbtn .vn-ico { flex: none; }
+  /* Длинные подписи («Пропуск прочитанного», «Скрыть интерфейс») переносятся на две строки, иконка остаётся. */
   .vn-qbtn .vn-qbtn__label {
     position: static;
     width: auto;
@@ -346,9 +348,11 @@ body {
     margin: 0;
     overflow: visible;
     clip: auto;
-    white-space: nowrap;
-    font: 500 0.82em / 1 var(--font-body);
-    letter-spacing: 0.04em;
+    white-space: normal;
+    max-width: 9.5em;
+    font: 500 0.78em / 1.1 var(--font-body);
+    letter-spacing: 0.03em;
+    text-align: left;
   }
 }
 
