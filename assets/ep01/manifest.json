@@ -1396,9 +1396,9 @@
  {
   "id": "sh_apartment_zoya_ots_expert_sledak",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_164449_0ea5d494-f89c-41d0-b3da-d78f1b949dd3.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_165558_b442abe2-9e43-48bf-9ee0-206d63ff1a48.png",
   "target": "assets/ep01/shots/apartment_zoya/ots_expert_sledak.webp",
-  "job": "0ea5d494-f89c-41d0-b3da-d78f1b949dd3"
+  "job": "b442abe2-9e43-48bf-9ee0-206d63ff1a48"
  },
  {
   "id": "sh_apartment_zoya_ots_sledak_expert",
@@ -1490,5 +1490,26 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_165325_2ebe3e8f-e90d-496b-833a-e3e603678d8c.png",
   "target": "assets/ep01/shots/apartment_zoya/ots_lapin_wife_buyer.webp",
   "job": "2ebe3e8f-e90d-496b-833a-e3e603678d8c"
+ },
+ {
+  "id": "sh_apartment_zoya_reaction_sledak",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_165556_bbdb5a48-9657-438a-8cf7-a368417a663e.png",
+  "target": "assets/ep01/shots/apartment_zoya/reaction_sledak.webp",
+  "job": "bbdb5a48-9657-438a-8cf7-a368417a663e"
+ },
+ {
+  "id": "sh_apartment_zoya_reaction_lapin_wife",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_165556_0b29bfd6-77b3-4065-81cd-8591878f84f3.png",
+  "target": "assets/ep01/shots/apartment_zoya/reaction_lapin_wife.webp",
+  "job": "0b29bfd6-77b3-4065-81cd-8591878f84f3"
+ },
+ {
+  "id": "sh_apartment_zoya_reaction_zoya",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_165556_b809fdea-71b2-423f-a177-4a80b3054491.png",
+  "target": "assets/ep01/shots/apartment_zoya/reaction_zoya.webp",
+  "job": "b809fdea-71b2-423f-a177-4a80b3054491"
  }
 ]
