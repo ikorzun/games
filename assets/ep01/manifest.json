@@ -2190,5 +2190,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_184900_563a2218-9587-42e1-bddb-6007983824c7.png",
   "target": "assets/ep01/shots/office_evening/close_expert_focused.webp",
   "job": "563a2218-9587-42e1-bddb-6007983824c7"
+ },
+ {
+  "id": "sh_office_evening_close_oper_grin",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_185219_06c65468-f4a3-44a9-9ae0-367a10f585d4.png",
+  "target": "assets/ep01/shots/office_evening/close_oper_grin.webp",
+  "job": "06c65468-f4a3-44a9-9ae0-367a10f585d4"
+ },
+ {
+  "id": "sh_office_evening_close_sledak_firm",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_185219_b0b91bf3-93cd-40b1-8e09-b6393f97c02d.png",
+  "target": "assets/ep01/shots/office_evening/close_sledak_firm.webp",
+  "job": "b0b91bf3-93cd-40b1-8e09-b6393f97c02d"
+ },
+ {
+  "id": "sh_office_evening_close_sledak_tired",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_185220_de83bf53-0b2a-4e71-9e29-2ef56b0ca997.png",
+  "target": "assets/ep01/shots/office_evening/close_sledak_tired.webp",
+  "job": "de83bf53-0b2a-4e71-9e29-2ef56b0ca997"
+ },
+ {
+  "id": "sh_office_evening_close_expert_neutral",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_185219_8ac6cca7-27d9-4e73-81b3-89514092a157.png",
+  "target": "assets/ep01/shots/office_evening/close_expert_neutral.webp",
+  "job": "8ac6cca7-27d9-4e73-81b3-89514092a157"
  }
 ]

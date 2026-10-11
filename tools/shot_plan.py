@@ -279,7 +279,8 @@ REF_SHOTS = {
     # ночной сет, ссылается на свои принятые кадры (wide_1 как комната: закатное окно и включённая лампа).
     "office_evening": {"room": "sh_office_evening_wide_1", "medium": "sh_office_evening_medium_1",
                        "close": "sh_office_evening_close_sledak_tense", "reaction": "sh_office_evening_close_sledak_tense",
-                       "angle": "sh_office_evening_medium_1"},
+                       "angle": "sh_office_evening_medium_1",
+                       "medium_solo": "media:c788bc53-1cec-4b42-9e45-98520a8c42c5"},  # кроп wide_3, следователь один
     # Первый принятый крупный план сета сделан без референса комнаты (волна 26); средние — пока по фону.
     "interrogation": {"close": "sh_interrogation_close_sledak_firm", "reaction": "sh_interrogation_close_sledak_firm",
                       "medium": "sh_interrogation_medium_1", "angle": "sh_interrogation_medium_1"},
