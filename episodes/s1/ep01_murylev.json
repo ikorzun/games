@@ -4015,7 +4015,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "street_day"
     },
     "s29": {
       "id": "s29",
@@ -8801,7 +8802,8 @@
           "scene": "s29",
           "transition": "fade"
         }
-      ]
+      ],
+      "coverage": "street_day"
     },
     "s29b": {
       "id": "s29b",
@@ -16967,6 +16969,296 @@
           }
         ],
         "file": "assets/ep01/shots/bti/angle_foreground.webp"
+      },
+      {
+        "id": "sh_street_day_wide_1",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/wide_1.webp"
+      },
+      {
+        "id": "sh_street_day_wide_2",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "accomplice",
+            "expression": "neutral"
+          },
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/wide_2.webp"
+      },
+      {
+        "id": "sh_street_day_medium_1",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/medium_1.webp"
+      },
+      {
+        "id": "sh_street_day_ots_oper_sledak",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/ots_oper_sledak.webp",
+        "from": "oper",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_street_day_ots_sledak_oper",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/ots_sledak_oper.webp",
+        "from": "sledak",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_street_day_close_oper_neutral",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/close_oper_neutral.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_street_day_close_oper_grin",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "grin"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/close_oper_grin.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_street_day_close_sledak_tense",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "tense"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/close_sledak_tense.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_street_day_close_sledak_firm",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "firm"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/close_sledak_firm.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_street_day_reaction_oper",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/reaction_oper.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_street_day_reaction_sledak",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/reaction_sledak.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_street_day_reaction_accomplice",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "accomplice",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/reaction_accomplice.webp",
+        "focus": "accomplice"
+      },
+      {
+        "id": "sh_street_day_reaction_murashov",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/reaction_murashov.webp",
+        "focus": "murashov"
+      },
+      {
+        "id": "sh_street_day_insert_1",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/street_day/insert_1.webp"
+      },
+      {
+        "id": "sh_street_day_insert_2",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/street_day/insert_2.webp"
+      },
+      {
+        "id": "sh_street_day_angle_low",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "angle",
+        "angle": "low",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/angle_low.webp"
+      },
+      {
+        "id": "sh_street_day_angle_high",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "angle",
+        "angle": "high",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/angle_high.webp"
+      },
+      {
+        "id": "sh_street_day_angle_foreground",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "angle",
+        "angle": "foreground",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/angle_foreground.webp"
       }
     ]
   }

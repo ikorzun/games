@@ -116,10 +116,21 @@ def main() -> int:
                     out.append(f"- эффект `{step['fx']}`" + (f" {step['ms']} мс" if step.get("ms") else ""))
                 elif do == "choice":
                     timer = f", таймер {step['timer_ms']//1000} с" if step.get("timer_ms") else ""
-                    out.append(f"- ВЫБОР [{step.get('kind', '')}{timer}]: {t(step.get('prompt_key'))}")
+                    ded = ""
+                    if step.get("kind") == "deduction":
+                        pen = ", ".join(f"{e['var']} {e['op']} {e.get('value', '')}".strip() for e in step.get("penalty", []))
+                        ded = f" _(дедукция: подсказка после {step.get('hint_after', 2)} ошибок; цена ошибки: {pen or 'нет'})_"
+                    out.append(f"- ВЫБОР [{step.get('kind', '')}{timer}]: {t(step.get('prompt_key'))}{ded}")
                     for o in step["options"]:
                         eff = ", ".join(f"{e['var']} {e['op']} {e.get('value', '')}".strip() for e in o.get("effects", []))
-                        out.append(f"  - «{t(o['key'])}» → {o['goto']}" + (f" _({eff})_" if eff else ""))
+                        mark = ""
+                        if step.get("kind") == "deduction":
+                            mark = " ✗ ошибка" if o.get("verdict") == "wrong" else " ✓ верно"
+                        if o.get("item"):
+                            mark += f" [улика `{o['item']}`]"
+                        if o.get("when"):
+                            mark += f" _(если `{o['when']}`{', скрыта' if o.get('hidden_when_false') else ''})_"
+                        out.append(f"  - «{t(o['key'])}»{mark} → {o['goto']}" + (f" _({eff})_" if eff else ""))
                 elif do == "set":
                     out.append("- переменные: " + ", ".join(f"{e['var']} {e['op']} {e.get('value', '')}".strip() for e in step["effects"]))
                 elif do == "branch":

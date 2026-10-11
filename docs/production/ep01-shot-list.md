@@ -1,6 +1,6 @@
 # Шот-лист эпизода 1 по сетам
 
-Всего кадров по плану: 331; по кредиту за кадр (gpt_image_2_5 medium/2k).
+Всего кадров по плану: 333; по кредиту за кадр (gpt_image_2_5 medium/2k).
 Сгенерировано `tools/shot_plan.py` по эпизоду: сет = фон × время суток; состав, пары собеседников и выражения —
 из сцен. Промпты — `assets/ep01/shots/plan.json` (базовый промпт владельца, стайл-библия §1: телевизионная драма
 конца 1990-х, аналоговое ТВ; блок SCENE из пяти полей по §3, камера кадра — поле «Camera position» по §1a;
@@ -20,7 +20,7 @@ REFERENCE IMAGES и CONTINUITY — референсы комнаты и спра
 | `sh_yard_angle_high` | angle | high | neighbor (neutral) | — |
 | `sh_yard_angle_foreground` | angle | foreground | neighbor (neutral) | — |
 
-## stairwell — `bg_stairwell`, evening: сцены s02, s03, s15; реплик 22; кадров 26
+## stairwell — `bg_stairwell`, evening: сцены s02, s03, s15, s15_q, s15_w1, s15_w2, s15_r; реплик 29; кадров 28
 
 | id | kind | angle | состав (выражение) | from → focus |
 |---|---|---|---|---|
@@ -32,15 +32,17 @@ REFERENCE IMAGES и CONTINUITY — референсы комнаты и спра
 | `sh_stairwell_medium_3` | medium | eye | neighbor (neutral) | — |
 | `sh_stairwell_ots_neighbor_buyer_unknown` | ots | eye | buyer_unknown (neutral), neighbor (neutral) | neighbor → buyer_unknown |
 | `sh_stairwell_ots_buyer_unknown_neighbor` | ots | eye | neighbor (neutral), buyer_unknown (neutral) | buyer_unknown → neighbor |
-| `sh_stairwell_ots_neighbor_sledak` | ots | eye | sledak (neutral), neighbor (neutral) | neighbor → sledak |
 | `sh_stairwell_ots_sledak_neighbor` | ots | eye | neighbor (neutral), sledak (neutral) | sledak → neighbor |
-| `sh_stairwell_ots_oper_neighbor` | ots | eye | neighbor (neutral), oper (neutral) | oper → neighbor |
 | `sh_stairwell_ots_neighbor_oper` | ots | eye | oper (neutral), neighbor (neutral) | neighbor → oper |
+| `sh_stairwell_ots_neighbor_sledak` | ots | eye | sledak (neutral), neighbor (neutral) | neighbor → sledak |
+| `sh_stairwell_ots_oper_neighbor` | ots | eye | neighbor (neutral), oper (neutral) | oper → neighbor |
+| `sh_stairwell_ots_oper_sledak` | ots | eye | sledak (neutral), oper (neutral) | oper → sledak |
 | `sh_stairwell_close_neighbor_worried` | close | eye | neighbor (worried) | — → neighbor |
-| `sh_stairwell_close_buyer_unknown_neutral` | close | eye | buyer_unknown (neutral) | — → buyer_unknown |
-| `sh_stairwell_close_oper_neutral` | close | eye | oper (neutral) | — → oper |
 | `sh_stairwell_close_neighbor_neutral` | close | eye | neighbor (neutral) | — → neighbor |
+| `sh_stairwell_close_oper_neutral` | close | eye | oper (neutral) | — → oper |
+| `sh_stairwell_close_buyer_unknown_neutral` | close | eye | buyer_unknown (neutral) | — → buyer_unknown |
 | `sh_stairwell_close_sledak_neutral` | close | eye | sledak (neutral) | — → sledak |
+| `sh_stairwell_close_oper_grin` | close | eye | oper (grin) | — → oper |
 | `sh_stairwell_reaction_neighbor` | reaction | eye | neighbor (neutral) | — → neighbor |
 | `sh_stairwell_reaction_oper` | reaction | eye | oper (neutral) | — → oper |
 | `sh_stairwell_reaction_sledak` | reaction | eye | sledak (neutral) | — → sledak |
@@ -110,7 +112,7 @@ REFERENCE IMAGES и CONTINUITY — референсы комнаты и спра
 | `sh_apartment_zoya_angle_high` | angle | high | murashov_sil (neutral), zoya (neutral) | — |
 | `sh_apartment_zoya_angle_foreground` | angle | foreground | murashov_sil (neutral), zoya (neutral) | — |
 
-## notary — `bg_notary_office`, day: сцены s09, s16, s29, s09b, s16b, s16c, s29b; реплик 55; кадров 29
+## notary — `bg_notary_office`, day: сцены s09, s16, s29, s09b, s16b, s16c, s29b, s16b_q, s16b_w1, s16b_w2, s16b_r; реплик 62; кадров 29
 
 | id | kind | angle | состав (выражение) | from → focus |
 |---|---|---|---|---|
@@ -144,7 +146,7 @@ REFERENCE IMAGES и CONTINUITY — референсы комнаты и спра
 | `sh_notary_angle_high` | angle | high | notary (neutral), oper (neutral), sledak (neutral) | — |
 | `sh_notary_angle_foreground` | angle | foreground | notary (neutral), oper (neutral), sledak (neutral) | — |
 
-## office_day — `bg_office_prosecutor`, day: сцены s11, s12, s18, s19, s22, s23, s27, s12b, s18b, s22b, s23b, s27b; реплик 118; кадров 41
+## office_day — `bg_office_prosecutor`, day: сцены s11, s12, s18, s19, s22, s23, s27, s12b, s18b, s22b, s23b, s27b; реплик 120; кадров 41
 
 | id | kind | angle | состав (выражение) | from → focus |
 |---|---|---|---|---|
@@ -220,7 +222,7 @@ REFERENCE IMAGES и CONTINUITY — референсы комнаты и спра
 | `sh_office_evening_angle_high` | angle | high | oper (neutral), sledak (neutral) | — |
 | `sh_office_evening_angle_foreground` | angle | foreground | oper (neutral), sledak (neutral) | — |
 
-## interrogation — `bg_interrogation`, day: сцены s20, s21, s38, s39, s40, s41, s20b, s38b, s38c, s40b, s40c, s41b; реплик 81; кадров 39
+## interrogation — `bg_interrogation`, day: сцены s20, s21, s38, s39, s40, s41, s20b, s38b, s38c, s40b, s40c, s41b, s20b_q, s20b_w1, s20b_w2, s20b_r; реплик 87; кадров 39
 
 | id | kind | angle | состав (выражение) | from → focus |
 |---|---|---|---|---|
@@ -234,19 +236,19 @@ REFERENCE IMAGES и CONTINUITY — референсы комнаты и спра
 | `sh_interrogation_medium_4` | medium | eye | murashov (neutral), sledak (neutral) | — |
 | `sh_interrogation_ots_sledak_murashov` | ots | eye | murashov (neutral), sledak (neutral) | sledak → murashov |
 | `sh_interrogation_ots_murashov_sledak` | ots | eye | sledak (neutral), murashov (neutral) | murashov → sledak |
-| `sh_interrogation_ots_oper_sledak` | ots | eye | sledak (neutral), oper (neutral) | oper → sledak |
 | `sh_interrogation_ots_buyer_oper` | ots | eye | oper (neutral), buyer (neutral) | buyer → oper |
+| `sh_interrogation_ots_oper_sledak` | ots | eye | sledak (neutral), oper (neutral) | oper → sledak |
+| `sh_interrogation_ots_oper_buyer` | ots | eye | buyer (neutral), oper (neutral) | oper → buyer |
 | `sh_interrogation_ots_sledak_oper` | ots | eye | oper (neutral), sledak (neutral) | sledak → oper |
 | `sh_interrogation_ots_sledak_notary` | ots | eye | notary (neutral), sledak (neutral) | sledak → notary |
-| `sh_interrogation_ots_oper_buyer` | ots | eye | buyer (neutral), oper (neutral) | oper → buyer |
 | `sh_interrogation_ots_murashov_oper` | ots | eye | oper (neutral), murashov (neutral) | murashov → oper |
 | `sh_interrogation_close_murashov_neutral` | close | eye | murashov (neutral) | — → murashov |
-| `sh_interrogation_close_sledak_firm` | close | eye | sledak (firm) | — → sledak |
-| `sh_interrogation_close_sledak_tense` | close | eye | sledak (tense) | — → sledak |
-| `sh_interrogation_close_oper_angry` | close | eye | oper (angry) | — → oper |
 | `sh_interrogation_close_buyer_scared` | close | eye | buyer (scared) | — → buyer |
-| `sh_interrogation_close_notary_nervous` | close | eye | notary (nervous) | — → notary |
+| `sh_interrogation_close_sledak_firm` | close | eye | sledak (firm) | — → sledak |
+| `sh_interrogation_close_oper_angry` | close | eye | oper (angry) | — → oper |
+| `sh_interrogation_close_sledak_tense` | close | eye | sledak (tense) | — → sledak |
 | `sh_interrogation_close_oper_neutral` | close | eye | oper (neutral) | — → oper |
+| `sh_interrogation_close_notary_nervous` | close | eye | notary (nervous) | — → notary |
 | `sh_interrogation_close_murashov_cold` | close | eye | murashov (cold) | — → murashov |
 | `sh_interrogation_close_sledak_neutral` | close | eye | sledak (neutral) | — → sledak |
 | `sh_interrogation_close_notary_neutral` | close | eye | notary (neutral) | — → notary |
