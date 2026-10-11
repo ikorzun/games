@@ -182,8 +182,25 @@ def screen_sides(bg: str, a: str, b: str) -> tuple[str, str] | None:
 # крупность. Ключ — сет, значение — id кадра из манифеста (его job id подставляется первым референсом).
 REF_SHOTS = {
     "office_day": {"medium": "sh_office_day_medium_2", "close": "sh_office_day_close_sledak_tense",
-                   "reaction": "sh_office_day_close_sledak_tense"},
+                   "reaction": "sh_office_day_close_sledak_tense", "angle": "sh_office_day_medium_2"},
+    # Ночной сет той же комнаты: пока нет принятого ночного близкого кадра, референс — дневной; промпт
+    # говорит, что свет теперь другой (LIGHT NOW). После первого принятого ночного кадра — заменить.
+    "office_night": {"medium": "sh_office_day_medium_2", "close": "sh_office_day_close_sledak_tense",
+                     "reaction": "sh_office_day_close_sledak_tense", "angle": "sh_office_day_medium_2"},
 }
+# Для ракурсов (angle) референс — принятый средний план, а не общий: с общим планом модель дважды
+# меняла людей местами (office_day, волна 18), со средним оба ракурса вышли с первого раза.
+
+# Время суток каждого сета (заполняется в analyse_sets) — чтобы сказать модели, что референс снят при другом свете.
+SET_TOD: dict[str, str] = {}
+
+
+def ref_shot_tod(shot_id: str) -> str | None:
+    """Время суток сета, которому принадлежит референс-кадр (по префиксу id)."""
+    for name, tod in SET_TOD.items():
+        if shot_id.startswith(f"sh_{name}_"):
+            return tod
+    return None
 
 INSERTS = {
     "bg_office_prosecutor": [
@@ -369,10 +386,23 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
     body = re.sub(r"CAMERA\n(?:- [^\n]*\n)+", cam + "\n", base, count=1)
     body = body.replace("IMPORTANT RESTRICTIONS", realism.rstrip("\n") + "\n\nIMPORTANT RESTRICTIONS", 1)
     # референсы
-    closer = shot["kind"] in ("medium", "close", "reaction") and REF_SHOTS.get(shot["set"], {}).get(shot["kind"])
-    refs = [("Reference 1 is the same room seen from closer: keep its furniture, light and colours; frame this shot "
-             "at least as close as Reference 1." if closer else
-             "Reference 1 is the room itself: keep its furniture, window, lamps and props exactly where they are.")]
+    closer = shot["kind"] in ("medium", "close", "reaction", "angle") and REF_SHOTS.get(shot["set"], {}).get(shot["kind"])
+    ref_tod = ref_shot_tod(closer) if closer else None
+    if closer and shot["kind"] == "angle":
+        ref1 = ("Reference 1 is the same room seen from closer: keep its furniture, light and colours and who sits "
+                "where, but do not copy its framing: the camera of this shot stands where the scene text says.")
+        if ref_tod and ref_tod != tod:
+            ref1 = ref1[:-1] + f"; it was photographed by {ref_tod}, and the light is now as LIGHT NOW in the scene text says."
+    elif closer and ref_tod and ref_tod != tod:
+        ref1 = (f"Reference 1 is the same room seen from closer, photographed by {ref_tod}: keep its furniture and "
+                "colours and stand the camera at least as close, but the light is now different, exactly as LIGHT NOW "
+                "in the scene text says.")
+    elif closer:
+        ref1 = ("Reference 1 is the same room seen from closer: keep its furniture, light and colours; frame this shot "
+                "at least as close as Reference 1.")
+    else:
+        ref1 = "Reference 1 is the room itself: keep its furniture, window, lamps and props exactly where they are."
+    refs = [ref1]
     for i, c in enumerate(shot["cast"], start=2):
         who = c["who"]
         tail = "; this person's face is never shown clearly: back to the camera, turned away or in shadow" if who in HIDDEN_FACE else ""
@@ -416,6 +446,7 @@ def analyse_sets(ep: dict) -> "OrderedDict[str, dict]":
         if not bg or bg == "bg_black":
             continue
         d = sets.setdefault(name, {"set": name, "bg": bg, "tod": tod, "scenes": [], "comps": Counter(), "pairs": Counter(), "closes": Counter(), "present": Counter(), "lines": 0})
+        SET_TOD[name] = tod
         d["scenes"].append(sid)
         onstage: OrderedDict[str, str] = OrderedDict()
         prev_speaker = None

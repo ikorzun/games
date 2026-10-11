@@ -834,31 +834,45 @@
  {
   "id": "sh_office_day_angle_low",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_151420_5a6374b7-8c0d-47ca-8f35-056c088216ca.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_151420_f43380b9-c0c3-407b-ad6c-11411b0c3f5e.png",
   "target": "assets/ep01/shots/office_day/angle_low.webp",
-  "job": "5a6374b7-8c0d-47ca-8f35-056c088216ca"
+  "job": "f43380b9-c0c3-407b-ad6c-11411b0c3f5e",
+  "note": "референс комнаты — принятый средний план того же сета (с общим планом люди менялись местами)"
  },
  {
   "id": "sh_office_day_angle_foreground",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_151422_5e7ddf05-dfb9-4812-8b4b-fdee4d531dc5.png",
-  "target": "assets/ep01/shots/office_day/angle_foreground.webp",
-  "job": "5e7ddf05-dfb9-4812-8b4b-fdee4d531dc5"
- },
- {
-  "id": "sh_office_day_angle_low__medref",
-  "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_151420_f43380b9-c0c3-407b-ad6c-11411b0c3f5e.png",
-  "target": "assets/ep01/shots/office_day/angle_low_medref.webp",
-  "job": "f43380b9-c0c3-407b-ad6c-11411b0c3f5e",
-  "note": "вариант для сравнения: референс комнаты — средний план"
- },
- {
-  "id": "sh_office_day_angle_foreground__medref",
-  "kind": "shot",
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_151420_f29b926a-019c-4829-b151-627c6caecda8.png",
-  "target": "assets/ep01/shots/office_day/angle_foreground_medref.webp",
+  "target": "assets/ep01/shots/office_day/angle_foreground.webp",
   "job": "f29b926a-019c-4829-b151-627c6caecda8",
-  "note": "вариант для сравнения: референс комнаты — средний план"
+  "note": "референс комнаты — принятый средний план того же сета (с общим планом люди менялись местами)"
+ },
+ {
+  "id": "sh_office_night_wide_1",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_151935_ec8cb7da-dea7-4f63-bae7-1aebd406cd1b.png",
+  "target": "assets/ep01/shots/office_night/wide_1.webp",
+  "job": "ec8cb7da-dea7-4f63-bae7-1aebd406cd1b"
+ },
+ {
+  "id": "sh_office_night_wide_2",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_151935_3ce26917-e2bd-4cf5-bc47-f9a9cb727d29.png",
+  "target": "assets/ep01/shots/office_night/wide_2.webp",
+  "job": "3ce26917-e2bd-4cf5-bc47-f9a9cb727d29"
+ },
+ {
+  "id": "sh_office_night_close_sledak_tense",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_151935_7a2b32f5-0c4e-4013-8fbf-fe6bc853d9e4.png",
+  "target": "assets/ep01/shots/office_night/close_sledak_tense.webp",
+  "job": "7a2b32f5-0c4e-4013-8fbf-fe6bc853d9e4"
+ },
+ {
+  "id": "sh_office_night_medium_1",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_151936_3d0e5e39-5222-4f9b-ab7f-c2b95ffb4d56.png",
+  "target": "assets/ep01/shots/office_night/medium_1.webp",
+  "job": "3d0e5e39-5222-4f9b-ab7f-c2b95ffb4d56"
  }
 ]
