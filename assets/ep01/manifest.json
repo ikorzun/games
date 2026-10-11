@@ -1791,5 +1791,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_173657_e1163090-bff2-48d5-8587-999a1921f1ed.png",
   "target": "assets/ep01/shots/stairwell/close_buyer_unknown_neutral.webp",
   "job": "e1163090-bff2-48d5-8587-999a1921f1ed"
+ },
+ {
+  "id": "sh_stairwell_ots_neighbor_buyer_unknown",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_174040_f2d9ecc2-4965-4a7a-88ab-5dbd8d53a38a.png",
+  "target": "assets/ep01/shots/stairwell/ots_neighbor_buyer_unknown.webp",
+  "job": "f2d9ecc2-4965-4a7a-88ab-5dbd8d53a38a"
+ },
+ {
+  "id": "sh_stairwell_ots_buyer_unknown_neighbor",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_174040_f931931a-0af5-49d2-94a4-e6ba9b9bc5a4.png",
+  "target": "assets/ep01/shots/stairwell/ots_buyer_unknown_neighbor.webp",
+  "job": "f931931a-0af5-49d2-94a4-e6ba9b9bc5a4"
+ },
+ {
+  "id": "sh_stairwell_ots_neighbor_sledak",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_174040_b773c569-ac51-4250-94a6-e0a71c39c42a.png",
+  "target": "assets/ep01/shots/stairwell/ots_neighbor_sledak.webp",
+  "job": "b773c569-ac51-4250-94a6-e0a71c39c42a"
+ },
+ {
+  "id": "sh_stairwell_ots_sledak_neighbor",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_174040_6a8e19ea-61d6-4fe1-84b6-764acdc9891d.png",
+  "target": "assets/ep01/shots/stairwell/ots_sledak_neighbor.webp",
+  "job": "6a8e19ea-61d6-4fe1-84b6-764acdc9891d"
  }
 ]

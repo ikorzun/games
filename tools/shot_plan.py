@@ -258,6 +258,10 @@ REF_SHOTS = {
     # для средних и ракурсов (media id добавляется после импорта по URL).
     "notary": {"close": "sh_notary_close_notary_nervous", "reaction": "sh_notary_close_notary_nervous",
                "medium": "media:8baf6d62-ebed-4954-bc99-7e35b599ec3c", "angle": "media:8baf6d62-ebed-4954-bc99-7e35b599ec3c"},
+    # Пилот (волны 60–61): wide ×3 по фону и крупные планы без референса комнаты приняты; кроп wide_1 по колени
+    # (`assets/ep01/refs/stairwell_medium.jpg`) — для средних и ракурсов.
+    "stairwell": {"close": "sh_stairwell_close_neighbor_worried", "reaction": "sh_stairwell_close_neighbor_worried",
+                  "medium": "media:b86a8159-36a5-48f5-9ffd-34ddf0393b36", "angle": "media:b86a8159-36a5-48f5-9ffd-34ddf0393b36"},
 }
 # Для ракурсов (angle) референс — принятый средний план, а не общий: с общим планом модель дважды
 # меняла людей местами (office_day, волна 18), со средним оба ракурса вышли с первого раза.
