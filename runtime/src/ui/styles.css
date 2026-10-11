@@ -153,7 +153,7 @@ body {
   line-height: 1.42;
   font-family: var(--font-body);
   background: var(--panel);
-  border: 1px solid var(--panel-line);
+  border: 0;
   border-radius: 4px;
   text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
 }
@@ -175,8 +175,7 @@ body {
   letter-spacing: 0.02em;
   color: var(--name-color, #d8d2c4);
   background: rgb(0 0 0 / 0.88);
-  border: 1px solid var(--panel-line);
-  border-bottom: 0;
+  border: 0;
   border-radius: 3px 3px 0 0;
   text-shadow: none;
 }
@@ -264,14 +263,15 @@ body {
   height: 42px;
   padding: 0;
   color: #ece9df;
-  background: var(--panel);
-  border: 1px solid var(--panel-line);
+  background: rgb(255 255 255 / 0.08);
+  border: 0;
   border-radius: 6px;
   cursor: pointer;
 }
-.vn-qbtn:hover { border-color: var(--c-accent-soft); }
+.vn-qbtn:hover { background: rgb(255 255 255 / 0.14); }
+.vn-qbtn:focus-visible { outline: 2px solid var(--c-accent-soft); outline-offset: 1px; }
 .vn-qbtn:disabled { opacity: 0.4; cursor: default; }
-.vn-qbtn.is-on { background: var(--c-accent); border-color: var(--c-accent); color: #fff; }
+.vn-qbtn.is-on { background: var(--c-accent); color: #fff; }
 .vn-ico {
   width: 22px;
   height: 22px;
