@@ -120,5 +120,9 @@
   "ui.quick.unmute": "",
   "ui.skip.read_only": "",
   "ui.settings.quick": "",
-  "ui.settings.skip_unread": ""
+  "ui.settings.skip_unread": "",
+  "ui.choice.meter": "Serenidad",
+  "ui.choice.meter_aria": "Serenidad: {value} de {max}",
+  "ui.choice.tried": "ya probado",
+  "ui.choice.hint": "Pista: la jugada correcta está resaltada"
 }

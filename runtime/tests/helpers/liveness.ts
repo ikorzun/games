@@ -64,7 +64,11 @@ export function analyzeLiveness(episode: Episode): Liveness {
         goto(step.default);
         break;
       case 'choice':
-        for (const o of step.options) goto(o.goto, o.effects);
+        for (const o of step.options) {
+          // Неверный ход дедуктивной развилки: сначала цена (penalty), затем эффекты опции.
+          const wrong = step.kind === 'deduction' && o.verdict === 'wrong';
+          goto(o.goto, wrong ? [...(step.penalty ?? []), ...(o.effects ?? [])] : o.effects);
+        }
         break;
       case 'minigame': {
         const mg = episode.minigames?.[step.minigame];

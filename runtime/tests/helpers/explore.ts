@@ -8,6 +8,11 @@
  * сливаются. Это равносильно проверке всех путей: если из каждого достижимого состояния есть
  * путь до `end`, нет циклов и исключений, то каждый путь доходит до end. Число полных путей
  * считается динамическим программированием по DAG состояний (BigInt).
+ *
+ * Дедуктивные развилки (kind=deduction) перебираются целиком, вместе с неверными ходами: неверный ход ведёт
+ * в сцену-реакцию и обратно к вопросу, где испробованная опция уже погашена. Чтобы такая петля не выглядела
+ * циклом и не сливалась с первым заходом, в подпись состояния входят счётчики развилки и материалы её
+ * опций-улик — но только пока из текущей сцены вопрос ещё достижим (deductionSpots).
  */
 import { runAutoplay } from '../../src/core/autoplay';
 import { Interpreter } from '../../src/core/interpreter';
@@ -88,18 +93,32 @@ export function exploreAll(episode: Episode, options: ExploreOptions = {}): Expl
   // всё, что выше наибольшей константы сравнений + 1, ведёт себя одинаково во всех будущих условиях —
   // такие значения сливаются в одно. Без этого эпизод 1 с точками выбора даёт миллионы состояний.
   const caps = keepAll ? new Map<string, number>() : monotoneCaps(episode);
-  /** Подпись состояния: только переменные, живые в этой точке программы. */
+  const spots = deductionSpots(episode);
+  /** Состояние дедуктивных развилок, к вопросу которых ещё можно вернуться (в «слепом» режиме — всех). */
+  const deductionKey = (s: GameState): string => {
+    let out = '';
+    for (const d of spots) {
+      if (!keepAll && !d.reachFrom.has(s.scene_id)) continue;
+      const rec = s.deductions[d.id];
+      out += `|${d.id}:${rec ? `${rec.fails}/${[...rec.tried].sort().join('+')}` : '-'}`;
+      for (const item of d.items) out += `|${item}=${s.archive.includes(item) ? 1 : 0}`;
+    }
+    return out;
+  };
+  /** Подпись состояния: только переменные, живые в этой точке программы (+ живые дедуктивные развилки). */
   const liveKey = (s: GameState): string => {
     const env = { ...s.globals, ...s.vars };
     const names = keepAll ? allVars : [...analysis.liveAt(s.scene_id, s.step_index)].sort();
-    return names
-      .map((v) => {
-        let val = env[v];
-        const cap = caps.get(v);
-        if (cap !== undefined && typeof val === 'number' && val > cap) val = cap;
-        return `${v}=${String(val)}`;
-      })
-      .join(',');
+    return (
+      names
+        .map((v) => {
+          let val = env[v];
+          const cap = caps.get(v);
+          if (cap !== undefined && typeof val === 'number' && val > cap) val = cap;
+          return `${v}=${String(val)}`;
+        })
+        .join(',') + deductionKey(s)
+    );
   };
 
   const fail = (msg: string): Node => {
@@ -122,6 +141,7 @@ export function exploreAll(episode: Episode, options: ExploreOptions = {}): Expl
       }
     }
     if (new Set(s.archive).size !== s.archive.length) fail(`${where}: дубли в архиве`);
+    for (const m of deductionProblems(episode, s)) fail(`${where}: ${m}`);
   };
 
   // Начало отрезка — всегда (сцена, шаг 0) после решения: если такое состояние уже разобрано,
@@ -181,7 +201,10 @@ export function exploreAll(episode: Episode, options: ExploreOptions = {}): Expl
             const enabled = p.options.filter((o) => o.enabled);
             if (enabled.length === 0) fail(`выбор ${p.id}: нет доступных опций (${trail.join(' → ')})`);
             // В журнал решений попадают только выборы с remember (по умолчанию true): считаем их, а не все.
-            for (const o of enabled) branches.push({ label: `${p.id}=${o.id}`, choice: p.remember, apply: () => interp.choose(o.id) });
+            // Неверный ход дедуктивной развилки в журнал не пишется.
+            for (const o of enabled) {
+              branches.push({ label: `${p.id}=${o.id}`, choice: p.remember && o.verdict !== 'wrong', apply: () => interp.choose(o.id) });
+            }
           } else {
             for (const r of results) {
               if (r === 'skipped' && !p.def.skip.allowed) continue;
@@ -225,17 +248,20 @@ export function exploreAll(episode: Episode, options: ExploreOptions = {}): Expl
   return report;
 }
 
-/** Решения свидетельского пути → политики автопилота (явные ответы на выборы и мини-игры). */
+/**
+ * Решения свидетельского пути → политики автопилота: явные ответы на выборы (списком по порядку — дедуктивная
+ * развилка спрашивает снова после неверного хода) и результаты мини-игр.
+ */
 export function policyFromTrail(trail: readonly string[]): {
-  choices: Record<string, string>;
+  choices: Record<string, string[]>;
   minigames: Record<string, MinigameResult>;
 } {
-  const choices: Record<string, string> = {};
+  const choices: Record<string, string[]> = {};
   const minigames: Record<string, MinigameResult> = {};
   for (const d of trail) {
     if (d.includes('=')) {
       const [c, o] = d.split('=');
-      if (c && o) choices[c] = o;
+      if (c && o) (choices[c] ??= []).push(o);
     } else {
       const [m, r] = d.split(':');
       if (m && r) minigames[m] = r as MinigameResult;
@@ -282,6 +308,7 @@ export function monotoneCaps(episode: Episode): Map<string, number> {
       const step = st as unknown as Record<string, unknown>;
       noteCond(step.when as string | undefined);
       noteEffects(step.effects as EffectLike[] | undefined);
+      noteEffects(step.penalty as EffectLike[] | undefined); // цена неверного хода дедуктивной развилки
       for (const o of (step.options as Array<{ when?: string; effects?: EffectLike[] }> | undefined) ?? []) {
         noteCond(o.when);
         noteEffects(o.effects);
@@ -324,8 +351,9 @@ export interface SampleReport {
  * (выборы и исходы мини-игр случайны) плюс детерминированные политики first/last/default × все исходы.
  * Полный перебор состояний (exploreAll) на эпизоде 1 с точками выбора и эпилогом, читающим два десятка
  * переменных, не умещается ни в какой разумный предел; выборка проверяет те же инварианты на каждом
- * прогоне: нет исключений, обрывов и зацикливаний, журнал решений совпадает с числом remember-выборов,
- * переменные в границах, в архиве нет дублей.
+ * прогоне: нет исключений, обрывов и зацикливаний, журнал решений совпадает с числом remember-выборов
+ * (неверные ходы дедуктивных развилок не в счёт), переменные в границах, в архиве нет дублей, счётчики развилок
+ * согласованы.
  */
 export function sampleEpisode(episode: Episode, options: { runs?: number; seed?: number } = {}): SampleReport {
   const runs = options.runs ?? 1200;
@@ -370,7 +398,7 @@ export function sampleEpisode(episode: Episode, options: { runs?: number; seed?:
       continue;
     }
     const s = interp.state;
-    const remembered = out.choices.filter((c) => remember.get(c.choice) !== false).length;
+    const remembered = out.choices.filter((c) => remember.get(c.choice) !== false && c.verdict !== 'wrong').length;
     report.edges += out.choices.length + out.minigames.length;
     if (s.journal.length !== remembered) fail(`${label}: журнал решений ${s.journal.length} ≠ remember-выборов ${remembered}`);
     for (const [name, def] of Object.entries(episode.variables)) {
@@ -384,6 +412,7 @@ export function sampleEpisode(episode: Episode, options: { runs?: number; seed?:
       }
     }
     if (new Set(s.archive).size !== s.archive.length) fail(`${label}: дубли в архиве`);
+    for (const m of deductionProblems(episode, s)) fail(`${label}: ${m}`);
     report.byEnding.set(out.ending, (report.byEnding.get(out.ending) ?? 0) + 1);
     report.ends.push({ ending: out.ending, endingKind: out.endingKind ?? '', final: s });
     if (!report.witness.has(out.ending)) {
@@ -391,4 +420,87 @@ export function sampleEpisode(episode: Episode, options: { runs?: number; seed?:
     }
   }
   return report;
+}
+
+export interface DeductionSpot {
+  /** id выбора kind=deduction. */
+  id: string;
+  /** Сцена вопроса. */
+  scene: string;
+  /** Материалы опций-улик (`item`): доступность опции зависит от архива. */
+  items: string[];
+  /** Сцены, из которых сцена вопроса достижима (включая её саму). */
+  reachFrom: Set<string>;
+}
+
+/**
+ * Дедуктивные развилки эпизода и сцены, из которых к их вопросу можно вернуться. Граф переходов — по сценам,
+ * со всеми целями jump / branch / choice / исходов мини-игр и с обходом выключенных блоков (как в liveness.ts),
+ * то есть с запасом: лишняя сцена в reachFrom лишь мельчит слияние состояний, но не делает его неверным.
+ */
+export function deductionSpots(episode: Episode): DeductionSpot[] {
+  const pred = new Map<string, Set<string>>();
+  const edge = (from: string, to: string): void => {
+    let set = pred.get(to);
+    if (!set) pred.set(to, (set = new Set()));
+    set.add(from);
+  };
+  for (const [sid, sc] of Object.entries(episode.scenes)) {
+    for (const st of sc.steps) {
+      if (st.do === 'jump') edge(sid, st.scene);
+      else if (st.do === 'branch') {
+        for (const c of st.cases) edge(sid, c.goto);
+        edge(sid, st.default);
+      } else if (st.do === 'choice') for (const o of st.options) edge(sid, o.goto);
+      else if (st.do === 'minigame') {
+        for (const oc of Object.values(episode.minigames?.[st.minigame]?.outcomes ?? {})) if (oc) edge(sid, oc.goto);
+      }
+    }
+  }
+  episode.blocks.forEach((b, bi) => {
+    if (b.when === undefined) return;
+    for (let k = bi + 1; k < episode.blocks.length; k++) {
+      const nb = episode.blocks[k];
+      if (!nb) break;
+      edge(b.entry_scene, nb.entry_scene);
+      if (nb.when === undefined) break;
+    }
+  });
+  const spots: DeductionSpot[] = [];
+  for (const [sid, sc] of Object.entries(episode.scenes)) {
+    for (const st of sc.steps) {
+      if (st.do !== 'choice' || st.kind !== 'deduction') continue;
+      const reachFrom = new Set<string>([sid]);
+      const queue = [sid];
+      for (let cur = queue.pop(); cur !== undefined; cur = queue.pop()) {
+        for (const from of pred.get(cur) ?? []) {
+          if (reachFrom.has(from)) continue;
+          reachFrom.add(from);
+          queue.push(from);
+        }
+      }
+      const items = [...new Set(st.options.flatMap((o) => (o.item ? [o.item] : [])))];
+      spots.push({ id: st.id, scene: sid, items, reachFrom });
+    }
+  }
+  return spots;
+}
+
+/** Инварианты счётчиков дедуктивных развилок: испробованы только неверные опции, без повторов, ошибок не меньше. */
+export function deductionProblems(episode: Episode, s: GameState): string[] {
+  const wrong = new Map<string, Set<string>>();
+  for (const sc of Object.values(episode.scenes)) {
+    for (const st of sc.steps) {
+      if (st.do === 'choice' && st.kind === 'deduction') wrong.set(st.id, new Set(st.options.filter((o) => o.verdict === 'wrong').map((o) => o.id)));
+    }
+  }
+  const out: string[] = [];
+  for (const [id, rec] of Object.entries(s.deductions)) {
+    const w = wrong.get(id);
+    if (!w) out.push(`счётчики у ${id}, а это не дедуктивная развилка`);
+    else if (rec.tried.some((o) => !w.has(o))) out.push(`${id}: испробована не неверная опция (${rec.tried.join(', ')})`);
+    if (new Set(rec.tried).size !== rec.tried.length) out.push(`${id}: повтор в испробованных`);
+    if (rec.fails < rec.tried.length) out.push(`${id}: ошибок ${rec.fails} меньше испробованных ${rec.tried.length}`);
+  }
+  return out;
 }

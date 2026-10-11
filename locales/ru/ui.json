@@ -120,5 +120,9 @@
   "ui.quick.unmute": "Звук вкл.",
   "ui.skip.read_only": "Пропуск работает только для уже прочитанного текста. Пропуск непрочитанного включается в настройках",
   "ui.settings.quick": "Партия",
-  "ui.settings.skip_unread": "Пропускать непрочитанное"
+  "ui.settings.skip_unread": "Пропускать непрочитанное",
+  "ui.choice.meter": "Самообладание",
+  "ui.choice.meter_aria": "Самообладание: {value} из {max}",
+  "ui.choice.tried": "уже пробовали",
+  "ui.choice.hint": "Подсказка: верный ход подсвечен"
 }

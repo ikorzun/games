@@ -12,11 +12,11 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { runAutoplay } from '../src/core/autoplay';
 import { Interpreter } from '../src/core/interpreter';
-import type { MinigameResult } from '../src/core/types';
+import type { ChoiceStep, MinigameResult } from '../src/core/types';
 import { EP01_PATH, hasRepoContent, loadEpisode } from './helpers/content';
-import { exploreAll, policyFromTrail, sampleEpisode } from './helpers/explore';
+import { deductionSpots, exploreAll, monotoneCaps, policyFromTrail, sampleEpisode } from './helpers/explore';
 import type { SampleReport } from './helpers/explore';
-import { mg, miniEpisode } from './helpers/mini';
+import { deductionEpisode, mg, miniEpisode } from './helpers/mini';
 
 const run = hasRepoContent() ? describe : describe.skip;
 
@@ -81,8 +81,9 @@ run('ep01: выборочный обход графа', () => {
       const a = new Interpreter(episode);
       const first = runAutoplay(a, { choice: 'random', minigame: 'random', seed });
       expect(first.ending, `seed ${seed}`).not.toBeNull();
-      const choices: Record<string, string> = {};
-      for (const c of first.choices) choices[c.choice] = c.option;
+      // Ответы по порядку: дедуктивная развилка после неверного хода задаёт вопрос снова.
+      const choices: Record<string, string[]> = {};
+      for (const c of first.choices) (choices[c.choice] ??= []).push(c.option);
       const minigames: Record<string, MinigameResult> = {};
       for (const m of first.minigames) minigames[m.id] = m.result;
       const b = new Interpreter(episode);
@@ -201,5 +202,56 @@ describe('исследователь состояний: корректност�
 
     const spin = miniEpisode({ s1: { steps: [{ do: 'narrate', key: 'k' }, { do: 'jump', scene: 's1' }] } });
     expect(exploreAll(spin).failures.some((f) => /цикл без решений/.test(f))).toBe(true);
+  });
+});
+
+describe('дедуктивная развилка: перебор путей и выборка', () => {
+  const ep = deductionEpisode();
+
+  it('перебор идёт и по неверным ходам: петля «вопрос → реакция → вопрос» не цикл; пути посчитаны точно; слияние их не меняет', () => {
+    const merged = exploreAll(ep);
+    const full = exploreAll(ep, { mergeDead: false });
+    expect(merged.failures).toEqual([]);
+    expect(full.failures).toEqual([]);
+    expect(merged.warnings).toEqual([]);
+    expect([...merged.visitedScenes].sort()).toEqual(Object.keys(ep.scenes).sort());
+    // Из вопроса с W неиспробованными неверными и R верными: R + W · (пути после ошибки).
+    // skip (R = 1): 1 + 2·(1 + 1·1) = 5; look (улика, R = 2): 2 + 2·(2 + 1·2) = 10.
+    expect(merged.paths).toBe(15n);
+    expect(full.paths).toBe(15n);
+    // ≤ 1 ошибки — e_main: 3 + 6; две ошибки (nerves 3) — e_alt: 2 + 4.
+    expect(Object.fromEntries(merged.byEnding)).toEqual({ e_main: 9n, e_alt: 6n });
+    expect([...full.byEnding].sort()).toEqual([...merged.byEnding].sort());
+    // pushed никто не читает; после ответа счётчики развилки мертвы — состояния сливаются.
+    expect(merged.liveVars).toEqual(['has_card', 'nerves']);
+    expect(merged.states).toBeLessThan(full.states);
+  });
+
+  it('счётчики развилки входят в подпись состояния, только пока вопрос достижим', () => {
+    const [spot, ...rest] = deductionSpots(ep);
+    expect(rest).toEqual([]);
+    expect(spot).toMatchObject({ id: 'd1', scene: 's_q', items: ['arc_card'] });
+    expect([...(spot?.reachFrom ?? [])].sort()).toEqual(['s0', 's1', 's_q', 's_w1', 's_w2']);
+  });
+
+  it('цена ошибки (penalty) — не «монотонный счётчик»: nerves не обрезается при слиянии', () => {
+    const grow = deductionEpisode();
+    // Верный ход ещё и прибавляет: без учёта penalty nerves выглядел бы счётчиком «только add».
+    (grow.scenes.s_q!.steps[2] as ChoiceStep).options[3]!.effects = [{ var: 'nerves', op: 'add', value: 1 }];
+    expect(monotoneCaps(grow).has('nerves')).toBe(false);
+  });
+
+  it('выборка автопилотом: неверные ходы в журнал не идут, счётчики согласованы, сцены-реакции посещены; путь воспроизводится', () => {
+    const r = sampleEpisode(ep, { runs: 200 });
+    expect(r.failures).toEqual([]);
+    expect(r.warnings).toEqual([]);
+    expect([...r.visitedScenes].sort()).toEqual(Object.keys(ep.scenes).sort());
+    expect([...r.byEnding.keys()].sort()).toEqual(['e_alt', 'e_main']);
+    for (const [ending, trail] of r.witness) {
+      const out = runAutoplay(new Interpreter(ep), policyFromTrail(trail));
+      expect(out.ending, trail.join(' → ')).toBe(ending);
+      expect([...out.choices.map((c) => `${c.choice}=${c.option}`), ...out.minigames.map((m) => `${m.id}:${m.result}`)]).toEqual(trail);
+    }
+    expect(r.witness.get('e_alt')?.filter((d) => d.startsWith('d1=w'))).toHaveLength(2);
   });
 });

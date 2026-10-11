@@ -120,5 +120,9 @@
   "ui.quick.unmute": "Sound on",
   "ui.skip.read_only": "Skip only fast-forwards text you have already read. Skipping unread text can be enabled in Settings",
   "ui.settings.quick": "Game",
-  "ui.settings.skip_unread": "Skip unread text"
+  "ui.settings.skip_unread": "Skip unread text",
+  "ui.choice.meter": "Composure",
+  "ui.choice.meter_aria": "Composure: {value} of {max}",
+  "ui.choice.tried": "already tried",
+  "ui.choice.hint": "Hint: the right move is highlighted"
 }

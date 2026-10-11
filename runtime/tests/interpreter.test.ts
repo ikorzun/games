@@ -1,10 +1,11 @@
 /** Юнит-тесты интерпретатора на миниатюрных эпизодах. Полный обход ep01 — в interpreter.paths.test.ts. */
 import { describe, expect, it } from 'vitest';
 import { runAutoplay } from '../src/core/autoplay';
+import type { AutoplayReport } from '../src/core/autoplay';
 import { EngineError, Interpreter } from '../src/core/interpreter';
-import { StateError } from '../src/core/state';
-import type { EngineEvent, Pending, VariableDef } from '../src/core/types';
-import { mg, miniEpisode } from './helpers/mini';
+import { cloneState, StateError } from '../src/core/state';
+import type { ChoicePending, ChoiceStep, EngineEvent, GameState, Pending, Snapshot, VariableDef } from '../src/core/types';
+import { deductionEpisode, mg, miniEpisode } from './helpers/mini';
 
 const INT: VariableDef = { type: 'int', default: 0, min: 0, max: 3 };
 const BOOL: VariableDef = { type: 'bool', default: false };
@@ -288,12 +289,15 @@ describe('выборы', () => {
       default_option: 'two',
       remember: true,
       prompt_key: 'k.prompt',
+      deduction: null,
     });
     if (pending.kind !== 'choice') throw new Error();
+    // Обычный выбор: полей дедукции нет (verdict/item — null, tried/hinted — false).
+    const plain = { verdict: null, tried: false, hinted: false, item: null };
     expect(pending.options).toEqual([
-      { id: 'one', key: 'k.one', enabled: true },
-      { id: 'two', key: 'k.two', enabled: true },
-      { id: 'locked', key: 'k.locked', enabled: false },
+      { id: 'one', key: 'k.one', enabled: true, ...plain },
+      { id: 'two', key: 'k.two', enabled: true, ...plain },
+      { id: 'locked', key: 'k.locked', enabled: false, ...plain },
     ]);
   });
 
@@ -358,6 +362,232 @@ describe('выборы', () => {
     if (pending.kind !== 'choice') throw new Error();
     expect(pending.options.map((o) => o.enabled)).toEqual([true, true]);
     expect(warnings.join('\n')).toMatch(/нет доступных опций/);
+  });
+});
+
+describe('дедуктивная развилка (kind=deduction)', () => {
+  /** Дойти до ближайшего выбора (реплики пролистываются). */
+  function question(interp: Interpreter): ChoicePending {
+    const { pending } = until(interp, (p) => p.kind === 'choice');
+    if (pending.kind !== 'choice') throw new Error('ждали выбор');
+    return pending;
+  }
+  /** Новая партия: c0 (look — открыть улику arc_card) и вопрос d1. */
+  function atQuestion(card = false, episode = deductionEpisode()) {
+    const made = make(episode);
+    expect(question(made.interp)).toMatchObject({ id: 'c0', deduction: null });
+    made.interp.choose(card ? 'look' : 'skip');
+    return { ...made, p: question(made.interp) };
+  }
+  const opt = (p: ChoicePending, id: string) => p.options.find((o) => o.id === id);
+
+  it('вопрос: у опций вердикты; опции-улики без материала в архиве нет вовсе; шкала — первый эффект penalty (nerves 5 из 5)', () => {
+    const { p, warnings } = atQuestion();
+    expect(p).toMatchObject({
+      id: 'd1',
+      choice_kind: 'deduction',
+      prompt_key: 'k.q',
+      timer_ms: null,
+      remember: true,
+      deduction: { fails: 0, hint_after: 2, meter: { var: 'nerves', value: 5, max: 5 } },
+    });
+    const none = { tried: false, hinted: false, item: null };
+    expect(p.options).toEqual([
+      { id: 'w1', key: 'k.w1', enabled: true, verdict: 'wrong', ...none },
+      { id: 'w2', key: 'k.w2', enabled: true, verdict: 'wrong', ...none },
+      { id: 'r', key: 'k.r', enabled: true, verdict: 'right', ...none },
+    ]);
+    expect(warnings).toEqual([]);
+  });
+
+  it('неверный ход: fails=1, penalty (nerves 5→4), опция в tried, журнал пуст; реакция, jump назад — вопрос снова, опция погашена', () => {
+    const { interp } = atQuestion();
+    interp.choose('w1');
+    expect(interp.state.deductions).toEqual({ d1: { fails: 1, tried: ['w1'] } });
+    expect(interp.state.vars.nerves).toBe(4);
+    expect(interp.state.journal).toEqual([]);
+    const react = interp.pump();
+    expect(react.events).toContainEqual({ t: 'checkpoint', reason: 'choice' }); // автосейв как после любого выбора
+    expect(react.pending).toMatchObject({ kind: 'line', key: 'k.no1' });
+    expect(interp.state.scene_id).toBe('s_w1');
+    interp.continue();
+    const again = question(interp);
+    expect(interp.state.scene_id).toBe('s_q');
+    expect(again.id).toBe('d1');
+    expect(opt(again, 'w1')).toMatchObject({ enabled: false, tried: true, hinted: false, verdict: 'wrong' });
+    expect(opt(again, 'w2')).toMatchObject({ enabled: true, tried: false });
+    expect(again.deduction).toEqual({ fails: 1, hint_after: 2, meter: { var: 'nerves', value: 4, max: 5 } });
+    expect(() => interp.choose('w1')).toThrow(/недоступна/);
+  });
+
+  it('второй неверный ход: fails=2 и подсказка у верной; верный ход пишет журнал с fails: 2, счётчики остаются', () => {
+    const { interp } = atQuestion();
+    interp.choose('w1');
+    question(interp);
+    interp.choose('w2');
+    expect(interp.state.vars).toMatchObject({ nerves: 3, pushed: true }); // penalty и эффекты опции
+    const p = question(interp);
+    expect(p.deduction).toMatchObject({ fails: 2, hint_after: 2, meter: { value: 3 } });
+    expect(p.options.map((o) => [o.id, o.enabled, o.tried, o.hinted])).toEqual([
+      ['w1', false, true, false],
+      ['w2', false, true, false],
+      ['r', true, false, true],
+    ]);
+    interp.choose('r');
+    expect(interp.state.journal).toEqual([{ choice: 'd1', option: 'r', scene: 's_q', kind: 'deduction', prompt_key: 'k.q', key: 'k.r', fails: 2 }]);
+    expect(interp.state.deductions).toEqual({ d1: { fails: 2, tried: ['w1', 'w2'] } });
+    // nerves 3 < 4: дальше ветка «сбит с толку»
+    expect(until(interp, (x) => x.kind === 'end').pending).toMatchObject({ ending: { id: 'e_alt' } });
+  });
+
+  it('penalty применяется до эффектов неверной опции', () => {
+    const ep = deductionEpisode();
+    const step = ep.scenes.s_q!.steps[2] as ChoiceStep;
+    step.options[0]!.effects = [{ var: 'nerves', op: 'set', value: 2 }];
+    const { interp } = atQuestion(false, ep);
+    interp.choose('w1');
+    expect(interp.state.vars.nerves).toBe(2); // 5 → 4 (penalty) → 2 (set опции), а не 2 → 1
+  });
+
+  it('верный ход сразу: журнал с fails: 0, счётчиков нет; hint_after шага (1) включает подсказку после первой ошибки', () => {
+    const a = atQuestion();
+    a.interp.choose('r');
+    expect(a.interp.state.journal).toEqual([{ choice: 'd1', option: 'r', scene: 's_q', kind: 'deduction', prompt_key: 'k.q', key: 'k.r', fails: 0 }]);
+    expect(a.interp.state.deductions).toEqual({});
+
+    const b = atQuestion(false, deductionEpisode({ hint_after: 1 }));
+    expect(b.p.options.some((o) => o.hinted)).toBe(false);
+    b.interp.choose('w2');
+    const p = question(b.interp);
+    expect(p.deduction?.hint_after).toBe(1);
+    expect(p.options.filter((o) => o.hinted).map((o) => o.id)).toEqual(['r']);
+  });
+
+  it('опция-улика появляется после archive_unlock: карточка с видом и названием материала, верная по умолчанию, тоже подсвечивается', () => {
+    const { interp, p } = atQuestion(true);
+    expect(interp.state.archive).toContain('arc_card');
+    expect(p.options.map((o) => o.id)).toEqual(['w1', 'w2', 'ev', 'r']);
+    expect(opt(p, 'ev')).toEqual({
+      id: 'ev',
+      key: 'k.ev',
+      enabled: true,
+      verdict: 'right',
+      tried: false,
+      hinted: false,
+      item: { id: 'arc_card', kind: 'photo', title_key: 'mini.arc_card' },
+    });
+    interp.choose('w1');
+    question(interp);
+    interp.choose('w2');
+    expect(question(interp).options.filter((o) => o.hinted).map((o) => o.id)).toEqual(['ev', 'r']);
+    interp.choose('ev');
+    expect(interp.state.journal).toEqual([expect.objectContaining({ choice: 'd1', option: 'ev', fails: 2 })]);
+  });
+
+  it('снимки: счётчики переживают restore и откат; снимок до ошибки возвращает опцию; старый снимок без поля — {}; cloneState глубокий', () => {
+    const { interp } = atQuestion();
+    const before = interp.snapshot();
+    interp.choose('w1');
+    interp.pump(); // реакция
+    const after = interp.snapshot();
+    expect(after.state.deductions).toEqual({ d1: { fails: 1, tried: ['w1'] } });
+    const copy = cloneState(interp.state);
+    copy.deductions.d1!.tried.push('w2');
+    copy.deductions.d1!.fails = 9;
+    expect(interp.state.deductions).toEqual({ d1: { fails: 1, tried: ['w1'] } });
+
+    const other = new Interpreter(deductionEpisode());
+    other.restore(JSON.parse(JSON.stringify(after)) as Snapshot);
+    expect(other.state.deductions).toEqual({ d1: { fails: 1, tried: ['w1'] } });
+    expect(opt(question(other), 'w1')).toMatchObject({ enabled: false, tried: true });
+
+    other.restore(before);
+    expect(other.state.deductions).toEqual({});
+    expect(other.state.vars.nerves).toBe(5);
+    expect(opt(question(other), 'w1')).toMatchObject({ enabled: true, tried: false });
+
+    const legacy = JSON.parse(JSON.stringify(before)) as Snapshot;
+    delete (legacy.state as Partial<GameState>).deductions;
+    other.restore(legacy);
+    expect(other.state.deductions).toEqual({});
+    expect(question(other).deduction?.fails).toBe(0);
+  });
+
+  it('ошибка контента — верной опции нет (when ложно, скрыта): после всех неверных ходов показываются все опции и предупреждение', () => {
+    const ep = deductionEpisode();
+    const step = ep.scenes.s_q!.steps[2] as ChoiceStep;
+    step.options = step.options.map((o) => (o.id === 'r' ? { ...o, when: 'has_card', hidden_when_false: true } : o));
+    const { interp, warnings } = atQuestion(false, ep);
+    interp.choose('w1');
+    question(interp);
+    interp.choose('w2');
+    const p = question(interp);
+    expect(warnings.join('\n')).toMatch(/нет доступных опций/);
+    expect(p.options.map((o) => [o.id, o.enabled, o.tried])).toEqual([
+      ['w1', true, false],
+      ['w2', true, false],
+      ['ev', true, false],
+      ['r', true, false],
+    ]);
+    interp.choose('r');
+    expect(interp.state.journal).toEqual([expect.objectContaining({ option: 'r', fails: 2 })]);
+  });
+});
+
+describe('автопилот на дедуктивной развилке', () => {
+  const ep = deductionEpisode();
+  const picks = (r: AutoplayReport) => r.choices.filter((c) => c.choice === 'd1');
+
+  it('first и default сразу берут первую доступную ВЕРНУЮ опцию (с уликой — её карточку): неверных ходов нет', () => {
+    for (const policy of ['first', 'default'] as const) {
+      const r = runAutoplay(new Interpreter(ep), policy);
+      expect(r.choices, policy).toEqual([
+        { choice: 'c0', option: 'look' },
+        { choice: 'd1', option: 'ev', verdict: 'right' },
+      ]);
+      expect(r.scenes).not.toContain('s_w1');
+      expect(r).toMatchObject({ ending: 'e_main', truncated: false });
+    }
+    const noCard = runAutoplay(new Interpreter(ep), { choices: { c0: 'skip' } });
+    expect(picks(noCard)).toEqual([{ choice: 'd1', option: 'r', verdict: 'right' }]);
+  });
+
+  it('random и last: петля конечна — испробованные гаснут, последний ход верный, неверные без повторов', () => {
+    let wrongSeen = false;
+    for (let seed = 1; seed <= 80; seed++) {
+      const r = runAutoplay(new Interpreter(ep), { choice: 'random', seed });
+      expect(r.truncated, `seed ${seed}`).toBe(false);
+      expect(r.ending, `seed ${seed}`).not.toBeNull();
+      const d = picks(r);
+      expect(d.at(-1)?.verdict).toBe('right');
+      expect(d.slice(0, -1).every((c) => c.verdict === 'wrong')).toBe(true);
+      expect(new Set(d.map((c) => c.option)).size).toBe(d.length);
+      if (d.length > 1) wrongSeen = true;
+    }
+    expect(wrongSeen).toBe(true);
+    // last на развилке, где последней стоит неверная: перебирает неверные с конца, пока не останется верная
+    const reversed = deductionEpisode();
+    (reversed.scenes.s_q!.steps[2] as ChoiceStep).options.reverse();
+    const last = runAutoplay(new Interpreter(reversed), { choice: 'last' });
+    expect(last.choices.map((c) => c.option)).toEqual(['skip', 'w1', 'w2', 'r']);
+    expect(last).toMatchObject({ ending: 'e_alt', truncated: false });
+  });
+
+  it('явные ответы: список — по порядку на повторные заходы; одиночный неверный ответ не зацикливает (дальше решает политика)', () => {
+    const seq = runAutoplay(new Interpreter(ep), { choices: { c0: 'skip', d1: ['w2', 'w1', 'r'] } });
+    expect(picks(seq)).toEqual([
+      { choice: 'd1', option: 'w2', verdict: 'wrong' },
+      { choice: 'd1', option: 'w1', verdict: 'wrong' },
+      { choice: 'd1', option: 'r', verdict: 'right' },
+    ]);
+    expect(seq.scenes.filter((s) => s === 's_q')).toHaveLength(3);
+    expect(seq.ending).toBe('e_alt');
+    const single = runAutoplay(new Interpreter(ep), { choices: { c0: 'skip', d1: 'w1' } });
+    expect(picks(single).map((c) => c.option)).toEqual(['w1', 'r']);
+    expect(single.ending).toBe('e_main');
+    // ответ из списка, которого нет среди доступных, пропускается
+    const skipped = runAutoplay(new Interpreter(ep), { choices: { c0: 'skip', d1: ['ev', 'w1'] } });
+    expect(picks(skipped).map((c) => c.option)).toEqual(['w1', 'r']);
   });
 });
 
@@ -823,6 +1053,8 @@ describe('автопилот', () => {
   });
 
   it('random детерминирован по seed; maxSteps обрывает прогон', () => {
+    const r = runAutoplay(new Interpreter(ep), { choice: 'random', seed: 7 });
+    expect(r.choices.every((c) => c.verdict === undefined)).toBe(true); // вердикт — только у дедуктивных развилок
     const a = runAutoplay(new Interpreter(ep), { choice: 'random', minigame: 'random', seed: 7 });
     const b = runAutoplay(new Interpreter(ep), { choice: 'random', minigame: 'random', seed: 7 });
     expect(a).toEqual(b);

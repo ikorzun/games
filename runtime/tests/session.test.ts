@@ -14,23 +14,33 @@ import { Director } from '../src/stage/director';
 import { EP01_PATH, hasRepoContent, loadEpisode } from './helpers/content';
 import { policyFromTrail, sampleEpisode } from './helpers/explore';
 import { FakeAudio, FakeCaptions, FakePlatform, FakeStage, FakeToasts, FakeUI } from './helpers/fakes';
+import { deductionEpisode } from './helpers/mini';
 import type { FakeUIOptions, Timeline } from './helpers/fakes';
 
 const run = hasRepoContent() ? describe : describe.skip;
 
 interface CanonPath {
   trail: string[];
-  choices: Record<string, string>;
+  /** Ответы по порядку: дедуктивная развилка после неверного хода спрашивает снова. */
+  choices: Record<string, string[]>;
   minigames: Record<string, MinigameResult>;
 }
 
 let canon: CanonPath;
 const episodeOnDisk = (): Episode => loadEpisode(EP01_PATH);
 
-/** Решения, ведущие к канонической концовке: UI тестов повторяет их, на остальном берёт первое доступное. */
+/**
+ * Решения, ведущие к канонической концовке: UI тестов берёт первый ответ из записанных, который сейчас доступен.
+ * Без счётчика: тот же UI проходит эпизод дважды, а после загрузки сейва партия идёт с середины. У дедуктивной
+ * развилки испробованный неверный ход погашен, поэтому ответы сами идут по порядку. Нет ответа — первое
+ * доступное (у дедуктивной развилки — первое верное).
+ */
 function canonUi(): FakeUIOptions {
   return {
-    choose: (p) => canon.choices[p.id] ?? p.options.find((o) => o.enabled)?.id ?? '',
+    choose: (p) => {
+      const answer = (canon.choices[p.id] ?? []).find((id) => p.options.some((o) => o.id === id && o.enabled));
+      return answer ?? p.options.find((o) => o.enabled && o.verdict !== 'wrong')?.id ?? p.options.find((o) => o.enabled)?.id ?? '';
+    },
     minigame: (p) => canon.minigames[p.def.id] ?? 'success',
   };
 }
@@ -74,6 +84,16 @@ function rememberedChoice(episode: Episode, id: string): boolean {
   return true;
 }
 
+/** Неверный ход дедуктивной развилки: в журнал решений не пишется. */
+function wrongMove(episode: Episode, id: string, option: string): boolean {
+  for (const sc of Object.values(episode.scenes)) {
+    for (const st of sc.steps) {
+      if (st.do === 'choice' && st.id === id) return st.kind === 'deduction' && st.options.some((o) => o.id === option && o.verdict === 'wrong');
+    }
+  }
+  return false;
+}
+
 /** Блоки, в которые игрок входит по пути (смена блока между соседними сценами), в порядке входа. */
 function blockEntries(episode: Episode, scenes: readonly string[]): string[] {
   const out: string[] = [];
@@ -106,8 +126,12 @@ run('Session на ep01', () => {
     const minigames = canon.trail.filter((d) => !d.includes('='));
     expect(ui.choices.map((c) => `${c.id}=${c.option}`)).toEqual(choices);
     expect(ui.minigames.map((m) => m.id)).toEqual(minigames.map((d) => d.split(':')[0]));
-    // В журнал попадают только выборы с remember (по умолчанию true); dialogue/cosmetic его не пишут.
-    const remembered = choices.filter((d) => rememberedChoice(episode, d.split('=')[0] ?? '')).length;
+    // В журнал попадают только выборы с remember (по умолчанию true); dialogue/cosmetic его не пишут,
+    // неверные ходы дедуктивных развилок — тоже.
+    const remembered = choices.filter((d) => {
+      const [id = '', option = ''] = d.split('=');
+      return rememberedChoice(episode, id) && !wrongMove(episode, id, option);
+    }).length;
     expect(ui.endings[0]?.journal).toBe(remembered);
 
     const events = platform.tracked.map((x) => x.event);
@@ -342,7 +366,7 @@ run('Session: откат, отмена, пауза, загрузка', () => {
       schema_version: 1,
       content_version: 'x',
       saved_at: '2026-01-01T00:00:00Z',
-      state: { episode_id: 'other', scene_id: 's01', step_index: 0, vars: {}, globals: {}, archive: [], journal: [] },
+      state: { episode_id: 'other', scene_id: 's01', step_index: 0, vars: {}, globals: {}, archive: [], journal: [], deductions: {} },
     };
     expect(await session.loadSave(bad)).toEqual({ reason: 'rejected', detail: 'episode_mismatch' });
   });
@@ -401,5 +425,52 @@ run('Session: автопилот', () => {
     for (let i = 0; i < 100 && ui.endings.length === 0; i++) await new Promise((r) => setTimeout(r, 0));
     expect(ui.endings).toHaveLength(1);
     expect(ui.endings[0]?.ending).toBe(report.ending);
+  });
+});
+
+describe('Session: дедуктивная развилка', () => {
+  it('неверный ход: автосейв со счётчиками, телеметрия с вердиктом и числом ошибок; откат в реакцию их сохраняет; журнал с fails', async () => {
+    const answers: Record<string, string[]> = { c0: ['skip'], d1: ['w1', 'r'] };
+    const { session, ui, platform, saves } = await build({
+      episode: deductionEpisode(),
+      ui: {
+        manualLines: true,
+        // Первый ответ, доступный сейчас: испробованный w1 после возврата к вопросу погашен — дальше r.
+        choose: (p) => (answers[p.id] ?? []).find((id) => p.options.some((o) => o.id === id && o.enabled)) ?? '',
+      },
+    });
+    const done = session.newGame();
+    await ui.untilLines(1);
+    expect(ui.lines[0]?.p.key).toBe('k.q_intro');
+    ui.releaseLatest();
+    await ui.untilLines(2); // w1 → сцена-реакция
+    expect(ui.lines[1]?.p.key).toBe('k.no1');
+    expect(session.interp.state.deductions).toEqual({ d1: { fails: 1, tried: ['w1'] } });
+    expect(saves.autosave?.state.deductions).toEqual({ d1: { fails: 1, tried: ['w1'] } });
+    expect(saves.autosave?.state.scene_id).toBe('s_w1');
+    expect(platform.tracked.filter((x) => x.event === 'choice').map((x) => x.data)).toEqual([
+      { id: 'c0', option: 'skip' },
+      { id: 'd1', option: 'w1', verdict: 'wrong', fails: 1 },
+    ]);
+    ui.releaseLatest();
+    await ui.untilLines(3); // jump обратно к вопросу
+
+    const rolled = session.rollback(); // на реплику назад — в реакцию: счётчики и nerves те же
+    expect(rolled).not.toBeNull();
+    expect(await done).toEqual({ reason: 'cancelled' });
+    await ui.untilLines(4);
+    expect(ui.lines[3]?.p.key).toBe('k.no1');
+    expect(session.interp.state.deductions).toEqual({ d1: { fails: 1, tried: ['w1'] } });
+    expect(session.interp.state.vars.nerves).toBe(4);
+    ui.releaseLatest();
+    await ui.untilLines(5);
+    ui.releaseLatest(); // вопрос: w1 погашена — UI берёт r
+    await ui.untilLines(6);
+    expect(ui.lines[5]?.p.key).toBe('k.ok');
+    ui.releaseLatest();
+    expect(await rolled).toMatchObject({ reason: 'ended', ending: { id: 'e_main' } });
+    expect(ui.choices.map((c) => `${c.id}=${c.option}`)).toEqual(['c0=skip', 'd1=w1', 'd1=r']);
+    expect(ui.endings[0]?.state.journal).toEqual([{ choice: 'd1', option: 'r', scene: 's_q', kind: 'deduction', prompt_key: 'k.q', key: 'k.r', fails: 1 }]);
+    expect(platform.tracked.filter((x) => x.event === 'choice').at(-1)?.data).toEqual({ id: 'd1', option: 'r', verdict: 'right', fails: 1 });
   });
 });

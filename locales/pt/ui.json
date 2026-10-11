@@ -120,5 +120,9 @@
   "ui.quick.unmute": "",
   "ui.skip.read_only": "",
   "ui.settings.quick": "",
-  "ui.settings.skip_unread": ""
+  "ui.settings.skip_unread": "",
+  "ui.choice.meter": "Serenidade",
+  "ui.choice.meter_aria": "Serenidade: {value} de {max}",
+  "ui.choice.tried": "já tentado",
+  "ui.choice.hint": "Dica: a jogada certa está destacada"
 }

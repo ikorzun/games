@@ -79,3 +79,68 @@ export function mg(id: string, over: Partial<MinigameDef> = {}): MinigameDef {
     ...over,
   };
 }
+
+/**
+ * Дедуктивная развилка в миниатюре (02-narrative-blocks §5a). s0: обычный выбор c0 (remember: false) — «look»
+ * открывает улику arc_card (фото), «skip» — нет. Вопрос s_q: show + реплика + choice d1 последним шагом; два
+ * неверных хода ведут в сцены-реакции s_w1 / s_w2, которые jump'ом возвращаются к вопросу; опция-улика ev
+ * (верная, только при arc_card в архиве) и всегда доступная верная r. Цена ошибки — nerves −1 (5..0); после
+ * развилки nerves читает branch: ≤ 1 ошибки — e_main, 2 — e_alt.
+ */
+export function deductionEpisode(over: { hint_after?: number } = {}): Episode {
+  const ep = miniEpisode(
+    {
+      s0: {
+        steps: [
+          {
+            do: 'choice',
+            id: 'c0',
+            remember: false,
+            options: [
+              { id: 'look', key: 'k.look', effects: [{ var: 'has_card', op: 'set', value: true }], goto: 's1' },
+              { id: 'skip', key: 'k.skip', goto: 's1' },
+            ],
+          },
+        ],
+      },
+      s1: { steps: [{ do: 'archive_unlock', item: 'arc_card', when: 'has_card' }, { do: 'jump', scene: 's_q' }] },
+      s_q: {
+        steps: [
+          { do: 'show', who: 'b', position: 'right' },
+          { do: 'say', who: 'b', key: 'k.q_intro' },
+          {
+            do: 'choice',
+            id: 'd1',
+            kind: 'deduction',
+            prompt_key: 'k.q',
+            ...(over.hint_after !== undefined ? { hint_after: over.hint_after } : {}),
+            penalty: [{ var: 'nerves', op: 'sub', value: 1 }],
+            options: [
+              { id: 'w1', key: 'k.w1', verdict: 'wrong', goto: 's_w1' },
+              { id: 'w2', key: 'k.w2', verdict: 'wrong', effects: [{ var: 'pushed', op: 'set', value: true }], goto: 's_w2' },
+              { id: 'ev', key: 'k.ev', item: 'arc_card', goto: 's_r' },
+              { id: 'r', key: 'k.r', verdict: 'right', goto: 's_r' },
+            ],
+          },
+        ],
+      },
+      s_w1: { steps: [{ do: 'say', who: 'b', key: 'k.no1' }, { do: 'jump', scene: 's_q' }] },
+      s_w2: { steps: [{ do: 'say', who: 'b', key: 'k.no2' }, { do: 'jump', scene: 's_q' }] },
+      s_r: { steps: [{ do: 'say', who: 'a', key: 'k.ok' }, { do: 'branch', cases: [{ when: 'nerves >= 4', goto: 's_calm' }], default: 's_shaken' }] },
+      s_calm: { steps: [{ do: 'end', ending: 'e_main' }] },
+      s_shaken: { steps: [{ do: 'end', ending: 'e_alt' }] },
+    },
+    {
+      variables: {
+        nerves: { type: 'int', default: 5, min: 0, max: 5 },
+        has_card: { type: 'bool', default: false },
+        pushed: { type: 'bool', default: false },
+      },
+    },
+  );
+  ep.archive_items = [
+    { id: 'arc_card', kind: 'photo', title_key: 'mini.arc_card' },
+    { id: 'arc_x', kind: 'fact', title_key: 'mini.arc_x' },
+  ];
+  return ep;
+}

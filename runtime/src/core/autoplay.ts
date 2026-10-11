@@ -86,7 +86,10 @@ export function runAutoplay(
     if (typeof answer === 'string') return enabled.find((o) => o.id === answer);
     let i = cursor.get(id) ?? 0;
     let pick: ChoiceOptionView | undefined;
-    while (!pick && i < answer.length) pick = enabled.find((o) => o.id === answer[i++]);
+    while (!pick && i < answer.length) {
+      const want = answer[i++];
+      pick = enabled.find((o) => o.id === want);
+    }
     cursor.set(id, i);
     return pick;
   };

@@ -8,7 +8,7 @@ import { i18n, t } from '../src/core/i18n';
 import { defaultViewFor } from '../src/core/interpreter';
 import { DEFAULT_SETTINGS } from '../src/core/settings';
 import type { Settings } from '../src/core/settings';
-import type { ChoicePending, Ending, GameState, LinePending, MinigamePending, Presentation, ViewState, Value } from '../src/core/types';
+import type { ChoiceOptionView, ChoicePending, Ending, GameState, LinePending, MinigamePending, Presentation, ViewState, Value } from '../src/core/types';
 import { createInitialState } from '../src/core/state';
 import { registerBuiltinMinigames } from '../src/minigames/registry';
 import { VoiceClip } from '../src/stage/audio';
@@ -26,6 +26,8 @@ import { mg, miniEpisode } from './helpers/mini';
 const FAKE = ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date', 'performance', 'requestAnimationFrame', 'cancelAnimationFrame'] as const;
 
 const episode = miniEpisode({ s1: { steps: [{ do: 'end', ending: 'e_main' }] } });
+/** Вариант обычного (не дедуктивного) выбора. */
+const optView = (id: string, key: string): ChoiceOptionView => ({ id, key, enabled: true, verdict: null, tried: false, hinted: false, item: null });
 
 interface Rig {
   ui: DomUI;
@@ -471,7 +473,7 @@ describe('DomUI: Skip прочитанного', () => {
     r.ui.setSkip(true);
     const choice: ChoicePending = {
       kind: 'choice', id: 'ch', prompt_key: null, choice_kind: null, timer_ms: null, default_option: null, remember: false,
-      options: [{ id: 'a', key: 'c.a', enabled: true }],
+      options: [optView('a', 'c.a')], deduction: null,
     };
     const c = ctl();
     void r.ui.showChoice(choice, baseCtx(c));
@@ -491,10 +493,8 @@ describe('DomUI: выбор', () => {
     timer_ms: null,
     default_option: null,
     remember: false,
-    options: [
-      { id: 'a', key: 'c.a', enabled: true },
-      { id: 'b', key: 'c.b', enabled: true },
-    ],
+    options: [optView('a', 'c.a'), optView('b', 'c.b')],
+    deduction: null,
     ...over,
   });
 
@@ -768,7 +768,7 @@ describe('DomUI: смена языка на лету и сброс', () => {
   it('reset закрывает окна, выборы и экраны игры, скрывает текст и выключает Skip', async () => {
     const { ui, kit, mgActive } = makeRig({ textSpeed: 5 });
     void ui.showLine(lineP('l.1'), lineCtx(ctl()));
-    void ui.showChoice({ kind: 'choice', id: 'c', prompt_key: null, choice_kind: null, timer_ms: null, default_option: null, remember: false, options: [{ id: 'a', key: 'c.a', enabled: true }] }, baseCtx(ctl()));
+    void ui.showChoice({ kind: 'choice', id: 'c', prompt_key: null, choice_kind: null, timer_ms: null, default_option: null, remember: false, options: [optView('a', 'c.a')], deduction: null }, baseCtx(ctl()));
     void ui.runMinigame({ kind: 'minigame', def: mg('m1'), intro_key: null }, { signal: ctl().signal, restore: undefined, autosave: () => undefined });
     await flush();
     ui.setSkip(true);

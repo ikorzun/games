@@ -5,7 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { i18n } from '../src/core/i18n';
-import type { ChoicePending } from '../src/core/types';
+import type { ChoiceOptionView, ChoicePending } from '../src/core/types';
 import { CaptionLayer } from '../src/ui/captions';
 import { cssUrl } from '../src/ui/dom';
 import { icon } from '../src/ui/icons';
@@ -181,6 +181,18 @@ describe('TextBox: typewriter', () => {
   });
 });
 
+/** Вариант выбора; по умолчанию — обычный (не дедуктивный) и доступный. */
+const opt = (id: string, key: string, over: Partial<ChoiceOptionView> = {}): ChoiceOptionView => ({
+  id,
+  key,
+  enabled: true,
+  verdict: null,
+  tried: false,
+  hinted: false,
+  item: null,
+  ...over,
+});
+
 const choice = (over: Partial<ChoicePending> = {}): ChoicePending => ({
   kind: 'choice',
   id: 'ch1',
@@ -189,11 +201,8 @@ const choice = (over: Partial<ChoicePending> = {}): ChoicePending => ({
   timer_ms: null,
   default_option: null,
   remember: false,
-  options: [
-    { id: 'a', key: 'c.a', enabled: true },
-    { id: 'b', key: 'c.b', enabled: false },
-    { id: 'c', key: 'c.c', enabled: true },
-  ],
+  options: [opt('a', 'c.a'), opt('b', 'c.b', { enabled: false }), opt('c', 'c.c')],
+  deduction: null,
   ...over,
 });
 
