@@ -6,7 +6,10 @@
   "part": "act1",
   "scenes": { "<scene_id>": { ...сцена по schemas/episode.schema.json... } },
   "locale_ru": { "<ключ>": "текст" },
-  "assets_needed": { "backgrounds": [{"id": "...", "notes": "..."}], "sprites": [...] }   (опционально)
+  "assets_needed": { "backgrounds": [{"id": "...", "notes": "..."}], "sprites": [...] },  (опционально)
+  "block_scenes": { "<block_id>": ["s11", "s12", "s12b", "s13"] },   (опционально: новый порядок сцен блока —
+                                                                       надмножество старого, старые сцены в прежнем порядке)
+  "variables": { "<var>": {"type": "int", "default": 0, "doc": "..."} }   (опционально: новые переменные эпизода)
 }
 
   python3 tools/merge_drafts.py episodes/s1/ep01_murylev.json            # слить все черновики
@@ -24,6 +27,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -125,6 +129,53 @@ def check_drafts(ep: dict, ru: dict) -> list[str]:
                         errs.append(f"{w}: кнопка {o.get('id')} длиннее 60")
     return errs
 
+ID_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+VAR_TYPES = {"bool": bool, "int": int, "string": str}
+
+
+def apply_block_scenes(ep: dict, block_scenes: dict, new_lists: dict, part: str) -> list[str]:
+    """Расширить списки сцен блоков по черновику (новые сцены-вставки). Старые сцены остаются все и в прежнем порядке."""
+    errs: list[str] = []
+    for blk, lst in new_lists.items():
+        if blk not in block_scenes:
+            errs.append(f"{part}: block_scenes: неизвестный блок {blk}")
+            continue
+        if not isinstance(lst, list) or len(set(lst)) != len(lst):
+            errs.append(f"{part}: block_scenes[{blk}]: нужен список id без повторов")
+            continue
+        block = next(b for b in ep["blocks"] if b["id"] == blk)
+        old = list(block.get("scenes", []))
+        if [sid for sid in lst if sid in old] != old:
+            errs.append(f"{part}: block_scenes[{blk}]: старые сцены должны остаться все и в прежнем порядке")
+            continue
+        others = {sid for b in ep["blocks"] if b["id"] != blk for sid in b.get("scenes", [])}
+        bad = [sid for sid in lst if sid not in old and (not ID_RE.match(sid) or sid in others)]
+        if bad:
+            errs.append(f"{part}: block_scenes[{blk}]: недопустимые или чужие id сцен {bad}")
+            continue
+        block["scenes"] = list(lst)
+        block_scenes[blk] = set(lst)
+    return errs
+
+
+def apply_variables(ep: dict, new_vars: dict, part: str) -> list[str]:
+    """Добавить переменные из черновика; уже объявленную переменную нельзя переопределить иначе."""
+    errs: list[str] = []
+    for name, spec in new_vars.items():
+        if not ID_RE.match(name):
+            errs.append(f"{part}: variables: недопустимое имя {name}")
+            continue
+        t = spec.get("type") if isinstance(spec, dict) else None
+        if t not in VAR_TYPES or not isinstance(spec.get("default"), VAR_TYPES[t]) or isinstance(spec.get("default"), bool) and t != "bool":
+            errs.append(f"{part}: variables: {name}: нужны type (bool|int|string) и default того же типа")
+            continue
+        cur = ep["variables"].get(name)
+        if cur is not None and cur != spec:
+            errs.append(f"{part}: variables: {name} уже объявлена иначе: {cur}")
+            continue
+        ep["variables"][name] = spec
+    return errs
+
 
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -156,6 +207,8 @@ def main() -> int:
     for f in files:
         d = load(f)
         part = d.get("part", os.path.basename(f))
+        errors += apply_block_scenes(ep, block_scenes, d.get("block_scenes", {}), part)
+        errors += apply_variables(ep, d.get("variables", {}), part)
         for sid, sc in d.get("scenes", {}).items():
             if sid in seen:
                 errors.append(f"{part}: сцена {sid} уже пришла из {seen[sid]}")
@@ -178,6 +231,10 @@ def main() -> int:
             for it in items:
                 print(f"  [{part}] нужен ассет {kind}: {it.get('id')} — {it.get('notes', '')}")
     if a.check:
+        for blk, ids in block_scenes.items():
+            for sid in sorted(ids):
+                if sid not in ep["scenes"]:
+                    errors.append(f"сцена {sid} числится в blocks[{blk}].scenes, но её нет ни в мастере, ни в черновиках")
         errors += check_drafts(ep, ru)
     if errors:
         for e in errors:
