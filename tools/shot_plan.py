@@ -287,7 +287,7 @@ INSERTS = {
         "medicine bottles and a cup on the bedside table, a key ring beside them",
     ],
     "bg_notary_office": [
-        "the notary's hand pressing a round stamp onto a document, the ink pad open",
+        "the notary's hand in the sleeve of his brown tweed suit pressing a round stamp onto a document, the ink pad open",
         "a signature page and an elderly hand holding a pen uncertainly",
     ],
     "bg_stairwell": [

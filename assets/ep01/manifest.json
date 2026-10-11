@@ -1725,9 +1725,9 @@
  {
   "id": "sh_notary_insert_1",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_172845_d7bacf03-a640-4426-8b25-5043a8a8a5d4.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_173502_e5039f95-eb60-42fd-ad05-3940520bed58.png",
   "target": "assets/ep01/shots/notary/insert_1.webp",
-  "job": "d7bacf03-a640-4426-8b25-5043a8a8a5d4"
+  "job": "e5039f95-eb60-42fd-ad05-3940520bed58"
  },
  {
   "id": "sh_notary_insert_2",
@@ -1756,5 +1756,26 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_173033_9780ff8e-2189-463c-bde5-905bc32f5780.png",
   "target": "assets/ep01/shots/notary/angle_foreground.webp",
   "job": "9780ff8e-2189-463c-bde5-905bc32f5780"
+ },
+ {
+  "id": "sh_stairwell_wide_1",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_173501_549b5b7a-fb8c-4dd1-93d9-57250c3f59c8.png",
+  "target": "assets/ep01/shots/stairwell/wide_1.webp",
+  "job": "549b5b7a-fb8c-4dd1-93d9-57250c3f59c8"
+ },
+ {
+  "id": "sh_stairwell_wide_2",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_173501_a819d399-107f-4032-8bf8-45a3b19e59bf.png",
+  "target": "assets/ep01/shots/stairwell/wide_2.webp",
+  "job": "a819d399-107f-4032-8bf8-45a3b19e59bf"
+ },
+ {
+  "id": "sh_stairwell_wide_3",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_173500_84dba0a1-733c-4ab1-b1ee-4e74c1b91fe2.png",
+  "target": "assets/ep01/shots/stairwell/wide_3.webp",
+  "job": "84dba0a1-733c-4ab1-b1ee-4e74c1b91fe2"
  }
 ]
