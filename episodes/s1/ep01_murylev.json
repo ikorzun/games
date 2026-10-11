@@ -2794,7 +2794,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "interrogation"
     },
     "s21": {
       "id": "s21",
@@ -2907,7 +2908,8 @@
           ],
           "remember": true
         }
-      ]
+      ],
+      "coverage": "interrogation"
     },
     "s22": {
       "id": "s22",
@@ -5522,7 +5524,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "interrogation"
     },
     "s39": {
       "id": "s39",
@@ -5621,7 +5624,8 @@
           "minigame": "mg_interrogation",
           "intro_key": "ep01.mg_interrogation.intro"
         }
-      ]
+      ],
+      "coverage": "interrogation"
     },
     "s40": {
       "id": "s40",
@@ -5739,7 +5743,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "interrogation"
     },
     "s41": {
       "id": "s41",
@@ -5861,7 +5866,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "interrogation"
     },
     "s42": {
       "id": "s42",
@@ -8228,7 +8234,8 @@
           "scene": "s21",
           "transition": "cut"
         }
-      ]
+      ],
+      "coverage": "interrogation"
     },
     "s22b": {
       "id": "s22b",
@@ -9270,7 +9277,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "interrogation"
     },
     "s38c": {
       "id": "s38c",
@@ -9386,7 +9394,8 @@
           "do": "jump",
           "scene": "s39"
         }
-      ]
+      ],
+      "coverage": "interrogation"
     },
     "s40b": {
       "id": "s40b",
@@ -9622,7 +9631,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "interrogation"
     },
     "s40c": {
       "id": "s40c",
@@ -9723,7 +9733,8 @@
           "scene": "s41",
           "transition": "slow_fade"
         }
-      ]
+      ],
+      "coverage": "interrogation"
     },
     "s41b": {
       "id": "s41b",
@@ -9921,7 +9932,8 @@
           ],
           "remember": true
         }
-      ]
+      ],
+      "coverage": "interrogation"
     },
     "s42b": {
       "id": "s42b",
@@ -12618,6 +12630,688 @@
           }
         ],
         "file": "assets/ep01/shots/office_night/angle_foreground.webp"
+      },
+      {
+        "id": "sh_interrogation_wide_1",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/wide_1.webp"
+      },
+      {
+        "id": "sh_interrogation_wide_2",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "buyer",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/wide_2.webp"
+      },
+      {
+        "id": "sh_interrogation_wide_3",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          },
+          {
+            "who": "notary",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/wide_3.webp"
+      },
+      {
+        "id": "sh_interrogation_wide_4",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/wide_4.webp"
+      },
+      {
+        "id": "sh_interrogation_medium_1",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/medium_1.webp"
+      },
+      {
+        "id": "sh_interrogation_medium_2",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "buyer",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/medium_2.webp"
+      },
+      {
+        "id": "sh_interrogation_medium_3",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          },
+          {
+            "who": "notary",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/medium_3.webp"
+      },
+      {
+        "id": "sh_interrogation_medium_4",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/medium_4.webp"
+      },
+      {
+        "id": "sh_interrogation_ots_sledak_murashov",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/ots_sledak_murashov.webp",
+        "from": "sledak",
+        "focus": "murashov"
+      },
+      {
+        "id": "sh_interrogation_ots_murashov_sledak",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/ots_murashov_sledak.webp",
+        "from": "murashov",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_interrogation_ots_oper_sledak",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/ots_oper_sledak.webp",
+        "from": "oper",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_interrogation_ots_buyer_oper",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "buyer",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/ots_buyer_oper.webp",
+        "from": "buyer",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_interrogation_ots_sledak_oper",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/ots_sledak_oper.webp",
+        "from": "sledak",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_interrogation_ots_sledak_notary",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "notary",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/ots_sledak_notary.webp",
+        "from": "sledak",
+        "focus": "notary"
+      },
+      {
+        "id": "sh_interrogation_ots_oper_buyer",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "buyer",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/ots_oper_buyer.webp",
+        "from": "oper",
+        "focus": "buyer"
+      },
+      {
+        "id": "sh_interrogation_ots_murashov_oper",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/ots_murashov_oper.webp",
+        "from": "murashov",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_interrogation_close_murashov_neutral",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/close_murashov_neutral.webp",
+        "focus": "murashov"
+      },
+      {
+        "id": "sh_interrogation_close_sledak_firm",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "firm"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/close_sledak_firm.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_interrogation_close_sledak_tense",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "tense"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/close_sledak_tense.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_interrogation_close_oper_angry",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "angry"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/close_oper_angry.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_interrogation_close_buyer_scared",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "buyer",
+            "expression": "scared"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/close_buyer_scared.webp",
+        "focus": "buyer"
+      },
+      {
+        "id": "sh_interrogation_close_notary_nervous",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "notary",
+            "expression": "nervous"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/close_notary_nervous.webp",
+        "focus": "notary"
+      },
+      {
+        "id": "sh_interrogation_close_oper_neutral",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/close_oper_neutral.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_interrogation_close_murashov_cold",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "cold"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/close_murashov_cold.webp",
+        "focus": "murashov"
+      },
+      {
+        "id": "sh_interrogation_close_sledak_neutral",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/close_sledak_neutral.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_interrogation_close_notary_neutral",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "notary",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/close_notary_neutral.webp",
+        "focus": "notary"
+      },
+      {
+        "id": "sh_interrogation_close_murashov_smile",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "smile"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/close_murashov_smile.webp",
+        "focus": "murashov"
+      },
+      {
+        "id": "sh_interrogation_close_murashov_cornered",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "cornered"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/close_murashov_cornered.webp",
+        "focus": "murashov"
+      },
+      {
+        "id": "sh_interrogation_close_oper_grin",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "grin"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/close_oper_grin.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_interrogation_reaction_sledak",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/reaction_sledak.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_interrogation_reaction_oper",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/reaction_oper.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_interrogation_reaction_murashov",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/reaction_murashov.webp",
+        "focus": "murashov"
+      },
+      {
+        "id": "sh_interrogation_reaction_buyer",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "buyer",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/reaction_buyer.webp",
+        "focus": "buyer"
+      },
+      {
+        "id": "sh_interrogation_reaction_notary",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "notary",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/reaction_notary.webp",
+        "focus": "notary"
+      },
+      {
+        "id": "sh_interrogation_insert_1",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/interrogation/insert_1.webp"
+      },
+      {
+        "id": "sh_interrogation_insert_2",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/interrogation/insert_2.webp"
+      },
+      {
+        "id": "sh_interrogation_angle_low",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "angle",
+        "angle": "low",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/angle_low.webp"
+      },
+      {
+        "id": "sh_interrogation_angle_high",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "angle",
+        "angle": "high",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/angle_high.webp"
+      },
+      {
+        "id": "sh_interrogation_angle_foreground",
+        "set": "interrogation",
+        "bg": "bg_interrogation",
+        "kind": "angle",
+        "angle": "foreground",
+        "cast": [
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/interrogation/angle_foreground.webp"
       }
     ]
   }

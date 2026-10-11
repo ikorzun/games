@@ -1511,5 +1511,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_165556_b809fdea-71b2-423f-a177-4a80b3054491.png",
   "target": "assets/ep01/shots/apartment_zoya/reaction_zoya.webp",
   "job": "b809fdea-71b2-423f-a177-4a80b3054491"
+ },
+ {
+  "id": "sh_apartment_zoya_reaction_expert",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_165839_bc04d56e-21ab-41c9-a6c9-56be62a5ce1c.png",
+  "target": "assets/ep01/shots/apartment_zoya/reaction_expert.webp",
+  "job": "bc04d56e-21ab-41c9-a6c9-56be62a5ce1c"
+ },
+ {
+  "id": "sh_apartment_zoya_insert_1",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_165839_6fdec356-531f-4bf6-b4b2-56df2c071c50.png",
+  "target": "assets/ep01/shots/apartment_zoya/insert_1.webp",
+  "job": "6fdec356-531f-4bf6-b4b2-56df2c071c50"
+ },
+ {
+  "id": "sh_apartment_zoya_insert_2",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_165839_2d6f0b77-57c3-4a15-805e-5668cf8a41ba.png",
+  "target": "assets/ep01/shots/apartment_zoya/insert_2.webp",
+  "job": "2d6f0b77-57c3-4a15-805e-5668cf8a41ba"
+ },
+ {
+  "id": "sh_apartment_zoya_angle_low",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_165840_bfd1123a-da55-403e-ba8d-4fdc2eab4b7f.png",
+  "target": "assets/ep01/shots/apartment_zoya/angle_low.webp",
+  "job": "bfd1123a-da55-403e-ba8d-4fdc2eab4b7f"
  }
 ]
