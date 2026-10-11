@@ -329,6 +329,11 @@ export class DomUI implements SessionUI {
   }
 
   toggleSkip(): void {
+    if (!this.skipOn && this.currentLine && !(this.lineRead || this.d.settings().skipUnread)) {
+      // Пропускать можно только прочитанное: объясняем подсказкой, иначе кнопка выглядит сломанной.
+      this.d.kit.toasts.push(t('ui.skip.read_only'));
+      return;
+    }
     this.setSkip(!this.skipOn);
     if (this.skipOn) this.pokeSkip();
   }
@@ -503,6 +508,7 @@ export class DomUI implements SessionUI {
   }
 
   private clearTimer(): void {
+    this.d.kit.autobar.stop();
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
     this.clipOff?.();
@@ -516,19 +522,27 @@ export class DomUI implements SessionUI {
    */
   private armAuto(p: LinePending, finish: () => void, rearm: () => void): void {
     const clip = this.clip;
+    const bar = this.d.kit.autobar;
     if (clip?.state === 'playing') {
+      // Длительность клипа заранее неизвестна: полоса отсчёта показывается только для паузы по тексту.
+      bar.stop();
       this.timer = setTimeout(finish, AUTO_VOICE_MAX_WAIT_MS);
       this.clipOff = clip.onEnd((how) => {
         this.clipOff = null;
         if (this.timer !== null) clearTimeout(this.timer);
         this.timer = null;
-        if (how === 'ended') this.timer = setTimeout(finish, AUTO_VOICE_TAIL_MS);
-        else rearm();
+        if (how === 'ended') {
+          this.timer = setTimeout(finish, AUTO_VOICE_TAIL_MS);
+          bar.start(AUTO_VOICE_TAIL_MS);
+        } else rearm();
       });
     } else if (clip?.state === 'ended') {
       this.timer = setTimeout(finish, AUTO_VOICE_TAIL_MS);
+      bar.start(AUTO_VOICE_TAIL_MS);
     } else {
-      this.timer = setTimeout(finish, this.autoDelay(p));
+      const ms = this.autoDelay(p);
+      this.timer = setTimeout(finish, ms);
+      bar.start(ms);
     }
   }
 

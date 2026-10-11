@@ -4,7 +4,7 @@
  * Skip прочитанного, выборы с таймером, паузы титров, документ, мини-игра, финал, смена языка.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { i18n } from '../src/core/i18n';
+import { i18n, t } from '../src/core/i18n';
 import { defaultViewFor } from '../src/core/interpreter';
 import { DEFAULT_SETTINGS } from '../src/core/settings';
 import type { Settings } from '../src/core/settings';
@@ -1074,5 +1074,55 @@ describe('DomUI: озвучка реплик', () => {
     kit.screens.close(settings);
     await flush(1000);
     expect(done.done).toBe(true); // 500 + 20 × символы
+  });
+});
+
+describe('DomUI: полоса авто-режима и подсказка пропуска (решение владельца 2026-10-11)', () => {
+  it('в авто-режиме после допечатки реплики полоса включается на время задержки и гаснет при переходе', async () => {
+    const { ui, kit } = makeRig({ textSpeed: 5, autoDelayMs: 1800 });
+    ui.toggleAuto();
+    const done = track(ui.showLine(lineP('l.1'), lineCtx(ctl())));
+    await flush();
+    expect(kit.autobar.el.classList.contains('is-on')).toBe(true);
+    expect(kit.autobar.ms).toBeGreaterThanOrEqual(1800);
+    expect(kit.autobar.el.style.getPropertyValue('--autobar-ms')).toBe(`${kit.autobar.ms}ms`);
+    await flush(kit.autobar.ms + 10);
+    expect(done.done).toBe(true);
+    expect(kit.autobar.el.classList.contains('is-on')).toBe(false);
+  });
+
+  it('полоса длиннее у длинной реплики (зависит от числа символов); без авто-режима её нет, выключение гасит', async () => {
+    const { ui, kit } = makeRig({ textSpeed: 5, autoDelayMs: 1800 });
+    void track(ui.showLine(lineP('l.1'), lineCtx(ctl())));
+    await flush();
+    expect(kit.autobar.el.classList.contains('is-on')).toBe(false);
+    ui.toggleAuto();
+    await flush();
+    expect(kit.autobar.el.classList.contains('is-on')).toBe(true);
+    const short = kit.autobar.ms;
+    ui.toggleAuto();
+    expect(kit.autobar.el.classList.contains('is-on')).toBe(false);
+    ui.advance();
+    await flush();
+    i18n.addStrings('ru', { 'l.long': 'Очень длинная реплика, которую игрок читает заметно дольше короткой — поэтому и ждать нужно дольше.' });
+    ui.toggleAuto();
+    void track(ui.showLine(lineP('l.long'), lineCtx(ctl())));
+    await flush();
+    expect(kit.autobar.ms).toBeGreaterThan(short);
+  });
+
+  it('«Пропуск» на непрочитанной реплике не включается и объясняет подсказкой; на прочитанной — включается', async () => {
+    const { ui, kit } = makeRig({ textSpeed: 5 });
+    void track(ui.showLine(lineP('l.1'), lineCtx(ctl(), false)));
+    await flush();
+    ui.toggleSkip();
+    expect(ui.skipOn).toBe(false);
+    expect(kit.toasts.el.querySelector('.vn-toast')?.textContent).toBe(t('ui.skip.read_only'));
+    ui.advance();
+    await flush();
+    void track(ui.showLine(lineP('l.1'), lineCtx(ctl(), true)));
+    await flush();
+    ui.toggleSkip();
+    expect(ui.skipOn).toBe(true);
   });
 });

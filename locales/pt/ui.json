@@ -116,5 +116,10 @@
   "ui.minigame.selected": "Marcadas: {n}",
   "ui.minigame.no_cards": "Nenhuma ficha confere",
   "ui.minigame.match": "Confere",
-  "ui.minigame.no_match": "Não confere"
+  "ui.minigame.no_match": "Não confere",
+  "ui.quick.unmute": "",
+  "ui.skip.read_only": "",
+  "ui.splash.tap": "",
+  "ui.settings.quick": "",
+  "ui.settings.skip_unread": ""
 }

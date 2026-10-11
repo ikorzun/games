@@ -68,6 +68,34 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const AUDIO_URL = /\/assets\/[^?#]+\.(?:mp3|m4a|ogg|wav)(?:[?#]|$)/i;
 
+/** Заставка (логотип, «коснитесь, чтобы начать») стоит перед меню: тапаем её, если она есть, и ждём меню. */
+/** Сохранение и загрузка живут в настройках (решение владельца 2026-10-11): панель быстрых кнопок над группами. */
+async function openSaveLoad(page, mode) {
+  await page.click('.vn-qbtn--settings');
+  await page.waitForSelector('.vn-settings');
+  const quick = await page.$$eval('.vn-settings__quick .vn-settings__qbtn', (els) => els.map((e) => e.dataset.action));
+  check('в настройках во время игры есть кнопки сохранить/загрузить/звук, а в быстром меню их нет', quick.join(',') === 'save,load,mute' && (await page.$('.vn-qbtn--save')) === null && (await page.$('.vn-qbtn--load')) === null && (await page.$('.vn-qbtn--mute')) === null, quick.join(','));
+  await page.click(`.vn-settings__qbtn[data-action="${mode}"]`);
+  await page.waitForSelector('.vn-saveload .vn-slot');
+}
+
+/** Закрыть список слотов и настройки под ним (Escape закрывает по одному экрану). */
+async function closeSaveLoad(page) {
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.vn-saveload'));
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.vn-settings'));
+}
+
+async function toMenu(p) {
+  try {
+    await p.click('.vn-splash__hit', { timeout: 8000 });
+  } catch {
+    /* заставки нет (например, после перезагрузки с autostart) — идём сразу к меню */
+  }
+  await p.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+}
+
 async function startServer() {
   if (remoteUrl) return { url: remoteUrl, close: async () => undefined };
   const server = await preview({
@@ -165,7 +193,7 @@ const PLACEHOLDER = /\[(?:ui|common|ep\d+)\.[a-z0-9_.]+\]/;
 async function scenarioPlay(browser, baseUrl) {
   section('Игра: загрузка → предупреждение → первый выбор → сейв/лоад → язык');
   const { page, context, log } = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU' }, null);
-  await page.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+  await toMenu(page);
   // Настройки через отладочный хук — одинаково для web-plain и Playgama (там localStorage не используется).
   await page.evaluate(() => window.__vn.settings({ textSpeed: 5, skipUnread: true, lang: 'ru' }));
   check('меню показано, window.__vn установлен', await page.evaluate(() => typeof window.__vn?.goto === 'function'));
@@ -199,32 +227,30 @@ async function scenarioPlay(browser, baseUrl) {
   const saved = await stateOf(page);
   if (isBridge) {
     // Playgama: один ручной слот — «быстрый» (progress.quick), а «Продолжить» возвращает автосейв.
-    await page.click('.vn-qbtn--save');
-    await page.waitForSelector('.vn-saveload .vn-slot');
+    await openSaveLoad(page, 'save');
     await page.click('.vn-saveload .vn-slot');
     await sleep(300);
-    await page.keyboard.press('Escape');
+    await closeSaveLoad(page);
   } else {
-    await page.click('.vn-qbtn--save');
-    await page.waitForSelector('.vn-saveload .vn-slot');
+    await openSaveLoad(page, 'save');
     await page.click('.vn-saveload [data-slot="2"]');
     await sleep(300);
     check('слот 2 записан в localStorage (web-plain)', await page.evaluate(() => !!localStorage.getItem('krimrussia:slot_2')));
-    await page.keyboard.press('Escape');
+    await closeSaveLoad(page);
   }
   for (let i = 0; i < 6; i++) {
     await page.keyboard.press('Space');
     await sleep(120);
   }
   await page.reload({ waitUntil: 'networkidle' });
-  await page.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+  await toMenu(page);
   check('после перезагрузки в меню есть «Продолжить» (прогресс сохранён)', (await page.locator('.vn-menu__nav button').count()) === 4);
   await page.click('.vn-menu__nav .is-primary'); // Продолжить
   await page.waitForFunction(() => window.__vn.pending()?.kind === 'line', null, { timeout: 15000 });
-  await page.click('.vn-qbtn--load');
-  await page.waitForSelector('.vn-saveload .vn-slot');
+  await openSaveLoad(page, 'load');
   await page.click(isBridge ? '.vn-saveload .vn-slot:last-of-type' : '.vn-saveload [data-slot="2"]');
-  await page.waitForFunction(() => !document.querySelector('.vn-saveload'));
+  // Загрузка закрывает все экраны (и настройки под списком слотов).
+  await page.waitForFunction(() => !document.querySelector('.vn-saveload') && !document.querySelector('.vn-settings'));
   const loaded = await stateOf(page);
   check('загрузка слота возвращает сохранённую позицию и переменные', loaded.scene_id === saved.scene_id && loaded.step_index === saved.step_index && JSON.stringify(loaded.vars) === JSON.stringify(saved.vars), `${saved.scene_id}:${saved.step_index} → ${loaded.scene_id}:${loaded.step_index}`);
 
@@ -259,7 +285,7 @@ async function scenarioPlay(browser, baseUrl) {
 async function scenarioCamera(browser, baseUrl) {
   section('Камкордер и графика: «слабо» по умолчанию, HUD, выключатель, reduced-motion, учёт ассетов');
   const { page, context, log } = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU' });
-  await page.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+  await toMenu(page);
   const cam = () => page.evaluate(() => window.__vn.camera());
   const stageClass = () => page.evaluate(() => document.querySelector('.vn-stage')?.className ?? '');
   await page.evaluate(() => window.__vn.settings({ textSpeed: 5, skipUnread: true }));
@@ -431,7 +457,7 @@ async function scenarioCamera(browser, baseUrl) {
 
   // prefers-reduced-motion: эффекты выключены принудительно, переключатель недоступен.
   const rm = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU', reducedMotion: 'reduce' });
-  await rm.page.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+  await toMenu(rm.page);
   await rm.page.evaluate(() => window.__vn.start());
   await rm.page.waitForFunction(() => window.__vn.pending()?.kind === 'line', null, { timeout: 15000 });
   await sleep(600);
@@ -468,7 +494,7 @@ async function scenarioBridgeSdk(browser, baseUrl) {
     await context.close();
     return;
   }
-  await page.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+  await toMenu(page);
   const calls = (re) => sdk.filter((c) => re.test(c.text));
   const isReady = (c) => /\[platform\] sendMessage\(\)$/.test(c.text) && c.vals[0] === 'game_ready';
   for (let i = 0; i < 50 && !sdk.some(isReady); i++) {
@@ -567,7 +593,7 @@ async function scenarioMatrix(browser, baseUrl) {
         found[screen] = await page.evaluate(layoutProbe);
         await shot(screen);
       };
-      await page.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+      await toMenu(page);
       await probe('menu');
       await page.click('.vn-menu__nav .is-primary');
       await page.waitForSelector('.vn-warning', { state: 'visible' });

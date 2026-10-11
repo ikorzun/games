@@ -11,7 +11,7 @@
   "ui.menu.language": "Language",
   "ui.menu.quit": "Quit",
   "ui.quick.auto": "Auto",
-  "ui.quick.skip": "Skip",
+  "ui.quick.skip": "Skip read text",
   "ui.quick.log": "Log",
   "ui.quick.save": "Save",
   "ui.quick.load": "Load",
@@ -116,5 +116,10 @@
   "ui.minigame.selected": "Marked: {n}",
   "ui.minigame.no_cards": "No matching cards",
   "ui.minigame.match": "Matches",
-  "ui.minigame.no_match": "Doesn't match"
+  "ui.minigame.no_match": "Doesn't match",
+  "ui.quick.unmute": "Sound on",
+  "ui.skip.read_only": "Skip only fast-forwards text you have already read. Skipping unread text can be enabled in Settings",
+  "ui.splash.tap": "Tap to start",
+  "ui.settings.quick": "Game",
+  "ui.settings.skip_unread": "Skip unread text"
 }

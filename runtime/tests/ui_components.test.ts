@@ -42,7 +42,7 @@ beforeEach(() => {
     'ui.menu.settings': 'Настройки',
     'ui.archive.new_item': 'Новый материал',
   });
-  i18n.addStrings('en', { 'c.a': 'First', 'c.b': 'Second', 'cap.k': 'Moscow, 1993', 'ui.quick.auto': 'Auto', 'ui.quick.mute': 'Mute', 'ui.quick.hide': 'Hide UI' });
+  i18n.addStrings('en', { 'c.a': 'First', 'c.b': 'Second', 'cap.k': 'Moscow, 1993', 'ui.quick.auto': 'Auto', 'ui.quick.mute': 'Mute', 'ui.quick.log': 'Log', 'ui.quick.hide': 'Hide UI' });
   i18n.setLang('ru');
 });
 
@@ -411,10 +411,10 @@ describe('CaptionLayer: плашка заставки', () => {
 });
 
 describe('QuickMenu', () => {
-  it('восемь кнопок в фиксированном порядке: Auto, Skip, Log, Save, Load, Mute, Settings, Hide', () => {
+  it('пять кнопок в фиксированном порядке: Auto, Skip, Log, Settings, Hide (сохранение, загрузка и звук — в настройках)', () => {
     const qm = new QuickMenu(() => undefined);
     const actions = [...qm.el.querySelectorAll<HTMLElement>('button')].map((b) => b.dataset.action);
-    expect(actions).toEqual(['auto', 'skip', 'log', 'save', 'load', 'mute', 'settings', 'hide']);
+    expect(actions).toEqual(['auto', 'skip', 'log', 'settings', 'hide']);
     expect(qm.el.querySelector('[data-action="auto"]')?.textContent).toBe('Авто');
   });
 
@@ -434,13 +434,13 @@ describe('QuickMenu', () => {
     expect(document.activeElement).not.toBe(btn); // Space потом продвигает сюжет, а не повторяет «Журнал»
   });
 
-  it('переключатели Auto / Skip / Mute отражают состояние классом и aria-pressed', () => {
+  it('переключатели Auto / Skip отражают состояние классом и aria-pressed', () => {
     const qm = new QuickMenu(() => undefined);
     const pressed = (a: string): string | null | undefined => qm.el.querySelector(`[data-action="${a}"]`)?.getAttribute('aria-pressed');
-    expect([pressed('auto'), pressed('skip'), pressed('mute')]).toEqual(['false', 'false', 'false']);
+    expect([pressed('auto'), pressed('skip')]).toEqual(['false', 'false']);
     expect(pressed('log')).toBeNull(); // не переключатель
     qm.setState({ auto: true, muted: true });
-    expect([pressed('auto'), pressed('skip'), pressed('mute')]).toEqual(['true', 'false', 'true']);
+    expect([pressed('auto'), pressed('skip')]).toEqual(['true', 'false']);
     expect(qm.el.querySelector('[data-action="auto"]')?.classList.contains('is-on')).toBe(true);
   });
 
@@ -449,13 +449,13 @@ describe('QuickMenu', () => {
     i18n.setLang('en');
     qm.refresh();
     expect(qm.el.querySelector('[data-action="auto"]')?.textContent).toBe('Auto');
-    qm.setDisabled('save', true);
-    expect(qm.el.querySelector<HTMLButtonElement>('[data-action="save"]')?.disabled).toBe(true);
+    qm.setDisabled('log', true);
+    expect(qm.el.querySelector<HTMLButtonElement>('[data-action="log"]')?.disabled).toBe(true);
   });
 });
 
 describe('QuickMenu: кнопки-иконки', () => {
-  const ACTIONS: QuickAction[] = ['auto', 'skip', 'log', 'save', 'load', 'mute', 'settings', 'hide'];
+  const ACTIONS: QuickAction[] = ['auto', 'skip', 'log', 'settings', 'hide'];
   const btn = (qm: QuickMenu, a: string): HTMLButtonElement => qm.el.querySelector<HTMLButtonElement>(`[data-action="${a}"]`)!;
 
   it('у каждой кнопки встроенная SVG-иконка (декоративная) и подпись скрытым текстом; title совпадает с подписью', () => {
@@ -479,30 +479,20 @@ describe('QuickMenu: кнопки-иконки', () => {
 
   it('refresh меняет подписи и title на язык интерфейса, иконки остаются теми же узлами', () => {
     const qm = new QuickMenu(() => undefined);
-    const before = btn(qm, 'mute').querySelector('svg');
+    const before = btn(qm, 'log').querySelector('svg');
     i18n.setLang('en');
     qm.refresh();
-    expect(btn(qm, 'mute').querySelector('.vn-qbtn__label')?.textContent).toBe('Mute');
-    expect(btn(qm, 'mute').title).toBe('Mute');
+    expect(btn(qm, 'log').querySelector('.vn-qbtn__label')?.textContent).toBe('Log');
+    expect(btn(qm, 'log').title).toBe('Log');
     expect(btn(qm, 'hide').title).toBe('Hide UI');
-    expect(btn(qm, 'mute').querySelector('svg')).toBe(before);
+    expect(btn(qm, 'log').querySelector('svg')).toBe(before);
     expect(qm.el.getAttribute('aria-label')).toBeTruthy();
   });
 
-  it('Mute: состояние «звук выключен» ставит is-on и aria-pressed (CSS по нему зачёркивает значок); refresh состояние не сбрасывает', () => {
+  it('журнал — иконка папки (решение владельца 2026-10-11)', () => {
     const qm = new QuickMenu(() => undefined);
-    const mute = btn(qm, 'mute');
-    expect(mute.classList.contains('is-on')).toBe(false);
-    expect(mute.querySelector('.vn-ico__on')).not.toBeNull(); // дуги динамика
-    expect(mute.querySelector('.vn-ico__off')).not.toBeNull(); // перечёркивание
-    qm.setState({ muted: true });
-    expect(mute.classList.contains('is-on')).toBe(true);
-    expect(mute.getAttribute('aria-pressed')).toBe('true');
-    qm.refresh();
-    expect(mute.classList.contains('is-on')).toBe(true);
-    qm.setState({ muted: false });
-    expect(mute.getAttribute('aria-pressed')).toBe('false');
-    expect(btn(qm, 'log').classList.contains('is-on')).toBe(false); // не переключатель
+    expect(btn(qm, 'log').querySelector('svg')?.classList.contains('vn-ico--log')).toBe(true);
+    expect(btn(qm, 'log').querySelector('path')?.getAttribute('d')).toContain('M3.5 7.5h6l2 2h9v9.5h-17z');
   });
 
   it('icon(name): новый элемент на каждый вызов, имя в классе; все имена из быстрого меню существуют', () => {

@@ -649,24 +649,26 @@ describe('AppAssets: бланки документов, картинки инт�
     expect(warns.filter((w) => w.includes('paper.webp'))).toHaveLength(1);
   });
 
-  it('loadUiArt: меню и плашка заставки — адреса, если файлы есть; иначе null (прежний фон) и по одному warn', async () => {
+  it('loadUiArt: меню, плашка и логотип — адреса, если файлы есть; иначе null (прежний вид) и по одному warn', async () => {
     const ep = assetEpisode();
     const bg = `./${UI_ASSETS.menuBackground}`;
     const plate = `./${UI_ASSETS.titlePlate}`;
+    const logo = `./${UI_ASSETS.logo}`;
     const warns: string[] = [];
-    const full = createAppAssets(ep, BASE, null, new AssetStore({ loadImage: loaderOf([bg, plate]).loadImage, warn: (m) => warns.push(m) }));
-    expect(await loadUiArt(full)).toEqual({ background: bg, plate });
-    expect(full.art).toEqual({ background: bg, plate });
+    const full = createAppAssets(ep, BASE, null, new AssetStore({ loadImage: loaderOf([bg, plate, logo]).loadImage, warn: (m) => warns.push(m) }));
+    expect(await loadUiArt(full)).toEqual({ background: bg, plate, logo });
+    expect(full.art).toEqual({ background: bg, plate, logo });
     expect(warns).toEqual([]);
     const empty = createAppAssets(ep, BASE, null, new AssetStore({ loadImage: loaderOf([]).loadImage, warn: (m) => warns.push(m) }));
-    expect(await loadUiArt(empty)).toEqual({ background: null, plate: null });
+    expect(await loadUiArt(empty)).toEqual({ background: null, plate: null, logo: null });
     await loadUiArt(empty);
-    expect(warns).toHaveLength(2);
+    expect(warns).toHaveLength(3);
     expect(warns.some((w) => w.includes('menu_video_salon.webp'))).toBe(true);
     expect(warns.some((w) => w.includes('title_plate.webp'))).toBe(true);
-    // одна картинка есть, другой нет
+    expect(warns.some((w) => w.includes('logo_kr.webp'))).toBe(true);
+    // одна картинка есть, других нет
     const half = createAppAssets(ep, BASE, null, new AssetStore({ loadImage: loaderOf([plate]).loadImage, warn: () => undefined }));
-    expect(await loadUiArt(half)).toEqual({ background: null, plate });
+    expect(await loadUiArt(half)).toEqual({ background: null, plate, logo: null });
   });
 
   it('loadUiArt не ждёт дольше таймаута', async () => {
@@ -676,7 +678,7 @@ describe('AppAssets: бланки документов, картинки инт�
       const assets = createAppAssets(assetEpisode(), BASE, null, new AssetStore({ loadImage: m.loadImage, warn: () => undefined }));
       const p = loadUiArt(assets, 1500);
       await vi.advanceTimersByTimeAsync(1600);
-      expect(await p).toEqual({ background: null, plate: null });
+      expect(await p).toEqual({ background: null, plate: null, logo: null });
     } finally {
       vi.useRealTimers();
     }
