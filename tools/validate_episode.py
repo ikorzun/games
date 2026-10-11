@@ -92,6 +92,19 @@ def collect_targets(step: dict) -> list[str]:
     return []
 
 
+def unique_choice_ids(ep: dict, rep: Report) -> None:
+    """id выборов уникальны на весь эпизод: по ним пишутся журнал решений, автосейвы и телеметрия."""
+    seen: dict[str, str] = {}
+    for sid, scene in ep.get("scenes", {}).items():
+        for st in scene.get("steps", []):
+            if st.get("do") == "choice":
+                cid = st.get("id", "")
+                if cid in seen:
+                    rep.err(f"{sid}: id выбора {cid} уже используется в сцене {seen[cid]}")
+                else:
+                    seen[cid] = sid
+
+
 def integrity(ep: dict, rep: Report) -> None:
     scenes = ep.get("scenes", {})
     blocks = ep.get("blocks", [])
@@ -623,6 +636,7 @@ def main() -> int:
     schema_check(ep, rep)
     if not rep.errors:
         integrity(ep, rep)
+        unique_choice_ids(ep, rep)
         ru_path = os.path.join(a.locales, "ru", f"{ep['id']}.json")
         ru = load_json(ru_path) if not a.no_loc and os.path.exists(ru_path) else None
         minigame_integrity(ep, ru, rep)

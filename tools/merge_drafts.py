@@ -63,6 +63,15 @@ def check_drafts(ep: dict, ru: dict) -> list[str]:
     archive = {x["id"] for x in ep.get("archive_items", [])}
     sys.path.insert(0, os.path.join(ROOT, "tools"))
     import vnexpr
+    seen_choice: dict[str, str] = {}
+    for sid, sc in ep["scenes"].items():
+        for st in sc.get("steps", []):
+            if st.get("do") == "choice":
+                cid = st.get("id", "")
+                if cid in seen_choice:
+                    errs.append(f"{sid}: id выбора {cid} уже есть в сцене {seen_choice[cid]} (id выборов уникальны на эпизод)")
+                else:
+                    seen_choice[cid] = sid
     for sid, sc in ep["scenes"].items():
         for e in v.iter_errors(sc):
             path = "/".join(str(p) for p in e.absolute_path)

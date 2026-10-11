@@ -320,6 +320,16 @@
       "type": "bool",
       "default": false,
       "doc": "Ковригин описал «доверенное лицо» теми же словами, что соседка Галина (s16b, c_press). Отголосок: реплика Громова в s18."
+    },
+    "promised_irina": {
+      "type": "bool",
+      "default": false,
+      "doc": "Громов пообещал Ирине Лапиной, что семью не выселят (s22, c_irina). Отголосок: s23b; задел для s42 и эпилога (судьба Лапиных)."
+    },
+    "stopped_saiko": {
+      "type": "bool",
+      "default": false,
+      "doc": "Громов остановил допрос Лапина, одёрнув Сайко (s20, c_press). Отголосок: реплика Сайко в s23b при buyer_detained."
     }
   },
   "blocks": [
@@ -426,9 +436,12 @@
       "entry_scene": "s20",
       "scenes": [
         "s20",
+        "s20b",
         "s21",
         "s22",
-        "s23"
+        "s22b",
+        "s23",
+        "s23b"
       ],
       "act": 2,
       "optional": true,
@@ -442,11 +455,16 @@
       "entry_scene": "s24",
       "scenes": [
         "s24",
+        "s24b",
         "s25",
         "s26",
+        "s26b",
         "s27",
+        "s27b",
         "s28",
-        "s29"
+        "s28b",
+        "s29",
+        "s29b"
       ],
       "act": 2,
       "timeline": "investigation",
@@ -2682,14 +2700,71 @@
           "style": "inner"
         },
         {
-          "do": "narrate",
-          "key": "ep01.s20.l013",
-          "style": "voiceover"
-        },
-        {
-          "do": "jump",
-          "scene": "s21",
-          "transition": "cut"
+          "do": "choice",
+          "id": "c_lapin_press",
+          "kind": "dialogue",
+          "prompt_key": "ep01.s20.c_lapin_press.prompt",
+          "timer_ms": 12000,
+          "default_option": "silent",
+          "remember": false,
+          "options": [
+            {
+              "id": "step_in",
+              "key": "ep01.s20.c_lapin_press.step_in",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "step_in"
+                },
+                {
+                  "var": "style_soft",
+                  "op": "add",
+                  "value": 1
+                },
+                {
+                  "var": "trust_oper",
+                  "op": "sub",
+                  "value": 1
+                },
+                {
+                  "var": "stopped_saiko",
+                  "op": "set",
+                  "value": true
+                }
+              ],
+              "goto": "s20b"
+            },
+            {
+              "id": "silent",
+              "key": "ep01.s20.c_lapin_press.silent",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "silent"
+                }
+              ],
+              "goto": "s20b"
+            },
+            {
+              "id": "redirect",
+              "key": "ep01.s20.c_lapin_press.redirect",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "redirect"
+                },
+                {
+                  "var": "trust_oper",
+                  "op": "add",
+                  "value": 1
+                }
+              ],
+              "goto": "s20b"
+            }
+          ]
         }
       ]
     },
@@ -2937,9 +3012,64 @@
           "when": "!buyer_detained"
         },
         {
-          "do": "jump",
-          "scene": "s23",
-          "transition": "slow_fade"
+          "do": "choice",
+          "id": "c_irina_corridor",
+          "kind": "dialogue",
+          "prompt_key": "ep01.s22.c_irina_corridor.prompt",
+          "remember": false,
+          "options": [
+            {
+              "id": "help",
+              "key": "ep01.s22.c_irina_corridor.help",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "help"
+                },
+                {
+                  "var": "style_soft",
+                  "op": "add",
+                  "value": 1
+                }
+              ],
+              "goto": "s22b"
+            },
+            {
+              "id": "formal",
+              "key": "ep01.s22.c_irina_corridor.formal",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "formal"
+                },
+                {
+                  "var": "style_hard",
+                  "op": "add",
+                  "value": 1
+                }
+              ],
+              "goto": "s22b"
+            },
+            {
+              "id": "promise",
+              "key": "ep01.s22.c_irina_corridor.promise",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "promise"
+                },
+                {
+                  "var": "promised_irina",
+                  "op": "set",
+                  "value": true
+                }
+              ],
+              "goto": "s22b"
+            }
+          ]
         }
       ]
     },
@@ -3060,51 +3190,69 @@
           "when": "!buyer_detained"
         },
         {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s23.l014",
-          "expression": "neutral"
-        },
-        {
-          "do": "sfx",
-          "id": "sfx_door"
-        },
-        {
-          "do": "show",
-          "who": "boss",
-          "expression": "tired",
-          "position": "center"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s23.l016",
-          "style": "inner"
-        },
-        {
-          "do": "hide",
-          "who": "boss"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s23.l017",
-          "style": "inner"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s23.l018",
-          "expression": "grin"
-        },
-        {
-          "do": "say",
-          "who": "sledak",
-          "key": "ep01.s23.l019",
-          "expression": "firm"
-        },
-        {
-          "do": "jump",
-          "scene": "s24",
-          "transition": "fade"
+          "do": "choice",
+          "id": "c_blame",
+          "kind": "moral",
+          "prompt_key": "ep01.s23.c_blame.prompt",
+          "remember": true,
+          "options": [
+            {
+              "id": "own",
+              "key": "ep01.s23.c_blame.own",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "own"
+                },
+                {
+                  "var": "style_soft",
+                  "op": "add",
+                  "value": 1
+                },
+                {
+                  "var": "trust_oper",
+                  "op": "add",
+                  "value": 1
+                }
+              ],
+              "goto": "s23b"
+            },
+            {
+              "id": "sharp",
+              "key": "ep01.s23.c_blame.sharp",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "sharp"
+                },
+                {
+                  "var": "style_hard",
+                  "op": "add",
+                  "value": 1
+                },
+                {
+                  "var": "trust_oper",
+                  "op": "sub",
+                  "value": 1
+                }
+              ],
+              "goto": "s23b"
+            },
+            {
+              "id": "drop",
+              "key": "ep01.s23.c_blame.drop",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "drop"
+                }
+              ],
+              "goto": "s23b"
+            }
+          ]
         }
       ]
     },
@@ -3191,79 +3339,60 @@
           "style": "inner"
         },
         {
-          "do": "fx",
-          "fx": "zoom_in",
-          "ms": 900
-        },
-        {
-          "do": "say",
-          "who": "clerk",
-          "key": "ep01.s24.l009",
-          "expression": "neutral"
-        },
-        {
-          "do": "say",
-          "who": "expert",
-          "key": "ep01.s24.l010",
-          "expression": "focused"
-        },
-        {
-          "do": "say",
-          "who": "clerk",
-          "key": "ep01.s24.l011",
-          "expression": "neutral"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s24.l012",
-          "style": "voiceover"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s24.l013",
-          "style": "voiceover"
-        },
-        {
-          "do": "say",
-          "who": "expert",
-          "key": "ep01.s24.l014",
-          "expression": "focused"
-        },
-        {
-          "do": "say",
-          "who": "expert",
-          "key": "ep01.s24.l015",
-          "expression": "focused"
-        },
-        {
-          "do": "say",
-          "who": "sledak",
-          "key": "ep01.s24.l016",
-          "expression": "neutral"
-        },
-        {
-          "do": "say",
-          "who": "expert",
-          "key": "ep01.s24.l017",
-          "expression": "neutral",
-          "when": "docs_first"
-        },
-        {
-          "do": "say",
-          "who": "expert",
-          "key": "ep01.s24.l018",
-          "expression": "neutral",
-          "when": "!docs_first"
-        },
-        {
-          "do": "say",
-          "who": "expert",
-          "key": "ep01.s24.l019",
-          "expression": "neutral"
-        },
-        {
-          "do": "jump",
-          "scene": "s25"
+          "do": "choice",
+          "id": "c_archive",
+          "kind": "dialogue",
+          "prompt_key": "ep01.s24.c_archive.prompt",
+          "remember": false,
+          "options": [
+            {
+              "id": "arch_form",
+              "key": "ep01.s24.c_archive.arch_form",
+              "when": "docs_first || wrong_suspect",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "arch_form"
+                },
+                {
+                  "var": "style_hard",
+                  "op": "add",
+                  "value": 1
+                }
+              ],
+              "goto": "s24b"
+            },
+            {
+              "id": "arch_plain",
+              "key": "ep01.s24.c_archive.arch_plain",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "arch_plain"
+                },
+                {
+                  "var": "style_soft",
+                  "op": "add",
+                  "value": 1
+                }
+              ],
+              "goto": "s24b"
+            },
+            {
+              "id": "arch_levina",
+              "key": "ep01.s24.c_archive.arch_levina",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "arch_levina"
+                }
+              ],
+              "goto": "s24b"
+            }
+          ]
         }
       ]
     },
@@ -3490,8 +3619,59 @@
           "expression": "neutral"
         },
         {
-          "do": "jump",
-          "scene": "s27"
+          "do": "choice",
+          "id": "c_call",
+          "kind": "dialogue",
+          "prompt_key": "ep01.s26.c_call.prompt",
+          "remember": false,
+          "options": [
+            {
+              "id": "call_soft",
+              "key": "ep01.s26.c_call.call_soft",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "call_soft"
+                },
+                {
+                  "var": "style_soft",
+                  "op": "add",
+                  "value": 1
+                }
+              ],
+              "goto": "s26b"
+            },
+            {
+              "id": "call_hard",
+              "key": "ep01.s26.c_call.call_hard",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "call_hard"
+                },
+                {
+                  "var": "style_hard",
+                  "op": "add",
+                  "value": 1
+                }
+              ],
+              "goto": "s26b"
+            },
+            {
+              "id": "call_listen",
+              "key": "ep01.s26.c_call.call_listen",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "call_listen"
+                }
+              ],
+              "goto": "s26b"
+            }
+          ]
         }
       ]
     },
@@ -3650,32 +3830,49 @@
           "expression": "neutral"
         },
         {
-          "do": "say",
-          "who": "sledak",
-          "key": "ep01.s27.l020",
-          "expression": "firm"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s27.l021",
-          "style": "inner"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s27.l022",
-          "expression": "neutral"
-        },
-        {
-          "do": "say",
-          "who": "sledak",
-          "key": "ep01.s27.l023",
-          "expression": "firm"
-        },
-        {
-          "do": "jump",
-          "scene": "s28",
-          "transition": "fade"
+          "do": "choice",
+          "id": "c_link",
+          "kind": "investigative",
+          "prompt_key": "ep01.s27.c_link.prompt",
+          "remember": false,
+          "options": [
+            {
+              "id": "link_papers",
+              "key": "ep01.s27.c_link.link_papers",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "link_papers"
+                }
+              ],
+              "goto": "s27b"
+            },
+            {
+              "id": "link_people",
+              "key": "ep01.s27.c_link.link_people",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "link_people"
+                }
+              ],
+              "goto": "s27b"
+            },
+            {
+              "id": "link_notary",
+              "key": "ep01.s27.c_link.link_notary",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "link_notary"
+                }
+              ],
+              "goto": "s27b"
+            }
+          ]
         }
       ]
     },
@@ -3763,119 +3960,55 @@
           "style": "inner"
         },
         {
-          "do": "fx",
-          "fx": "zoom_in",
-          "ms": 900
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s28.l010",
-          "expression": "neutral"
-        },
-        {
-          "do": "fx",
-          "fx": "freeze_frame",
-          "ms": 1200
-        },
-        {
-          "do": "show",
-          "who": "murashov",
-          "expression": "neutral",
-          "position": "right"
-        },
-        {
-          "do": "hide",
-          "who": "sledak"
-        },
-        {
-          "do": "show",
-          "who": "accomplice",
-          "expression": "neutral",
-          "position": "center"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s28.l011",
-          "style": "voiceover"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s28.l012",
-          "style": "voiceover"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s28.l013",
-          "style": "inner"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s28.l014",
-          "expression": "neutral"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s28.l015",
-          "expression": "grin"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s28.l016",
-          "expression": "neutral"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s28.l017",
-          "expression": "neutral",
-          "when": "galina_trust"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s28.l018",
-          "expression": "neutral",
-          "when": "!galina_trust"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s28.l019",
-          "style": "inner"
-        },
-        {
-          "do": "hide",
-          "who": "murashov"
-        },
-        {
-          "do": "hide",
-          "who": "accomplice"
-        },
-        {
-          "do": "show",
-          "who": "sledak",
-          "expression": "firm",
-          "position": "center"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s28.l020",
-          "expression": "neutral"
-        },
-        {
-          "do": "say",
-          "who": "sledak",
-          "key": "ep01.s28.l021",
-          "expression": "firm"
-        },
-        {
-          "do": "jump",
-          "scene": "s29",
-          "transition": "fade"
+          "do": "choice",
+          "id": "c_wait",
+          "kind": "dialogue",
+          "prompt_key": "ep01.s28.c_wait.prompt",
+          "remember": false,
+          "options": [
+            {
+              "id": "wait_alive",
+              "key": "ep01.s28.c_wait.wait_alive",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "wait_alive"
+                },
+                {
+                  "var": "style_soft",
+                  "op": "add",
+                  "value": 1
+                }
+              ],
+              "goto": "s28b"
+            },
+            {
+              "id": "wait_reports",
+              "key": "ep01.s28.c_wait.wait_reports",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "wait_reports"
+                }
+              ],
+              "goto": "s28b"
+            },
+            {
+              "id": "wait_galina",
+              "key": "ep01.s28.c_wait.wait_galina",
+              "when": "galina_trust",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "wait_galina"
+                }
+              ],
+              "goto": "s28b"
+            }
+          ]
         }
       ]
     },
@@ -3919,195 +4052,61 @@
           "position": "right"
         },
         {
-          "do": "say",
-          "who": "sledak",
-          "key": "ep01.s29.l002",
-          "expression": "firm"
-        },
-        {
-          "do": "document",
-          "doc": "doc_power_of_attorney",
-          "text_key": "ep01.doc.power_of_attorney"
-        },
-        {
-          "do": "say",
-          "who": "notary",
-          "key": "ep01.s29.l003",
-          "expression": "neutral"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s29.l004",
-          "expression": "grin"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s29.l005",
-          "expression": "neutral",
-          "when": "wrong_suspect"
-        },
-        {
-          "do": "say",
-          "who": "notary",
-          "key": "ep01.s29.l006",
-          "expression": "neutral",
-          "when": "notary_pressed"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s29.l007",
-          "expression": "grin",
-          "when": "notary_pressed"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s29.l008",
-          "expression": "grin"
-        },
-        {
-          "do": "say",
-          "who": "notary",
-          "key": "ep01.s29.l009",
-          "expression": "nervous"
-        },
-        {
-          "do": "say",
-          "who": "sledak",
-          "key": "ep01.s29.l010",
-          "expression": "firm"
-        },
-        {
-          "do": "say",
-          "who": "notary",
-          "key": "ep01.s29.l011",
-          "expression": "nervous"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s29.l012",
-          "expression": "neutral"
-        },
-        {
-          "do": "say",
-          "who": "sledak",
-          "key": "ep01.s29.l013",
-          "expression": "firm"
-        },
-        {
-          "do": "say",
-          "who": "notary",
-          "key": "ep01.s29.l014",
-          "expression": "nervous"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s29.l015",
-          "style": "inner",
-          "when": "found_chain"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s29.l016",
-          "style": "inner",
-          "when": "docs_flaw"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s29.l017",
-          "style": "inner",
-          "when": "!docs_flaw && !found_chain"
-        },
-        {
-          "do": "say",
-          "who": "notary",
-          "key": "ep01.s29.l018",
-          "expression": "nervous",
-          "when": "docs_flaw || found_chain"
-        },
-        {
-          "do": "say",
-          "who": "notary",
-          "key": "ep01.s29.l019",
-          "expression": "neutral",
-          "when": "!docs_flaw && !found_chain"
-        },
-        {
-          "do": "set",
-          "when": "docs_flaw || found_chain",
-          "effects": [
-            {
-              "var": "kovrigin_broken",
-              "op": "set",
-              "value": true
-            },
-            {
-              "var": "case_strength",
-              "op": "add",
-              "value": 1
-            }
-          ]
-        },
-        {
-          "do": "sfx",
-          "id": "sfx_phone_ring"
-        },
-        {
-          "do": "fx",
-          "fx": "zoom_in",
-          "ms": 800
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s29.l020",
-          "style": "inner"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s29.l021",
-          "style": "inner",
-          "when": "docs_flaw || found_chain"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s29.l022",
-          "expression": "neutral"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s29.l023",
-          "style": "inner"
-        },
-        {
           "do": "choice",
-          "id": "c_notary",
+          "id": "c_visit",
           "kind": "dialogue",
-          "prompt_key": "ep01.s29.c_notary.prompt",
+          "prompt_key": "ep01.s29.c_visit.prompt",
+          "timer_ms": 10000,
+          "default_option": "visit_hold",
+          "remember": false,
           "options": [
             {
-              "id": "show",
-              "key": "ep01.s29.c_notary.show",
-              "goto": "s30"
-            },
-            {
-              "id": "bluff",
-              "key": "ep01.s29.c_notary.bluff",
+              "id": "visit_hold",
+              "key": "ep01.s29.c_visit.visit_hold",
               "effects": [
                 {
-                  "var": "trust_oper",
-                  "op": "sub",
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "visit_hold"
+                }
+              ],
+              "goto": "s29b"
+            },
+            {
+              "id": "visit_greet",
+              "key": "ep01.s29.c_visit.visit_greet",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "visit_greet"
+                },
+                {
+                  "var": "style_soft",
+                  "op": "add",
                   "value": 1
                 }
               ],
-              "goto": "s30"
+              "goto": "s29b"
+            },
+            {
+              "id": "visit_formal",
+              "key": "ep01.s29.c_visit.visit_formal",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "visit_formal"
+                },
+                {
+                  "var": "style_hard",
+                  "op": "add",
+                  "value": 1
+                }
+              ],
+              "goto": "s29b"
             }
-          ],
-          "remember": false
+          ]
         }
       ]
     },
@@ -8463,6 +8462,970 @@
         }
       ],
       "notes": "Продолжение s18 после c_fifth (dialogue): реакция Сайко по last_choice, затем l012–l017 и c_who без изменений. Отголосок asked_grandson после l012."
+    },
+    "s20b": {
+      "id": "s20b",
+      "block": "b07_dead_end",
+      "stage": {
+        "bg": "bg_interrogation",
+        "filter": "noir"
+      },
+      "notes": "Продолжение s20 после выбора c_press (часть B). Реакции по last_choice; дальше прежние шаги s20 без изменений.",
+      "steps": [
+        {
+          "do": "show",
+          "who": "buyer",
+          "expression": "scared",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "angry",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "tense",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s20b.l001",
+          "expression": "firm",
+          "when": "last_choice == 'step_in'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s20b.l002",
+          "expression": "angry",
+          "when": "last_choice == 'step_in'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s20b.l003",
+          "style": "inner",
+          "when": "last_choice == 'silent'"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s20b.l004",
+          "expression": "tense",
+          "when": "last_choice == 'redirect'"
+        },
+        {
+          "do": "say",
+          "who": "buyer",
+          "key": "ep01.s20b.l005",
+          "expression": "scared",
+          "when": "last_choice == 'redirect'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s20b.l006",
+          "expression": "neutral",
+          "when": "last_choice == 'redirect'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s20.l013",
+          "style": "voiceover"
+        },
+        {
+          "do": "jump",
+          "scene": "s21",
+          "transition": "cut"
+        }
+      ]
+    },
+    "s22b": {
+      "id": "s22b",
+      "block": "b07_dead_end",
+      "stage": {
+        "bg": "bg_office_prosecutor",
+        "filter": "desaturated",
+        "time_of_day": "day"
+      },
+      "notes": "Продолжение s22 после выбора c_irina (разрез в самом конце сцены, перед прежним jump в s23). Спрайт Ирины — по buyer_detained (angry / worried), как в конце s22; в ветках buyer_detained / !buyer_detained реплика «help» разная.",
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "tired",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "lapin_wife",
+          "expression": "worried",
+          "position": "center",
+          "transition": "cut",
+          "when": "!buyer_detained"
+        },
+        {
+          "do": "say",
+          "who": "lapin_wife",
+          "key": "ep01.s22b.l001",
+          "expression": "worried",
+          "when": "last_choice == 'help' && buyer_detained"
+        },
+        {
+          "do": "say",
+          "who": "lapin_wife",
+          "key": "ep01.s22b.l002",
+          "expression": "worried",
+          "when": "last_choice == 'help' && !buyer_detained"
+        },
+        {
+          "do": "say",
+          "who": "lapin_wife",
+          "key": "ep01.s22b.l003",
+          "expression": "angry",
+          "when": "last_choice == 'formal'"
+        },
+        {
+          "do": "say",
+          "who": "lapin_wife",
+          "key": "ep01.s22b.l004",
+          "expression": "worried",
+          "when": "last_choice == 'promise'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s22b.l005",
+          "style": "inner",
+          "when": "last_choice == 'promise'"
+        },
+        {
+          "do": "jump",
+          "scene": "s23",
+          "transition": "slow_fade"
+        }
+      ]
+    },
+    "s23b": {
+      "id": "s23b",
+      "block": "b07_dead_end",
+      "stage": {
+        "bg": "bg_office_prosecutor",
+        "filter": "desaturated",
+        "time_of_day": "day"
+      },
+      "notes": "Продолжение s23 после выбора c_blame; остальные шаги бывшей s23 (визит начальника, запрос в БТИ) без изменений, см. notes в s23. Отголоски: stopped_saiko (s20), promised_irina (s22).",
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "neutral",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s23b.l001",
+          "expression": "neutral",
+          "when": "last_choice == 'own'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s23b.l002",
+          "expression": "angry",
+          "when": "last_choice == 'sharp'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s23b.l003",
+          "expression": "grin",
+          "when": "last_choice == 'drop'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s23b.l004",
+          "expression": "neutral",
+          "when": "stopped_saiko && buyer_detained && last_choice != 'drop'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s23b.l005",
+          "style": "inner",
+          "when": "promised_irina"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s23.l014",
+          "expression": "neutral"
+        },
+        {
+          "do": "sfx",
+          "id": "sfx_door"
+        },
+        {
+          "do": "show",
+          "who": "boss",
+          "expression": "tired",
+          "position": "center"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s23.l016",
+          "style": "inner"
+        },
+        {
+          "do": "hide",
+          "who": "boss"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s23.l017",
+          "style": "inner"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s23.l018",
+          "expression": "grin"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s23.l019",
+          "expression": "firm"
+        },
+        {
+          "do": "jump",
+          "scene": "s24",
+          "transition": "fade"
+        }
+      ]
+    },
+    "s24b": {
+      "id": "s24b",
+      "block": "b08_investigation_2",
+      "stage": {
+        "bg": "bg_bti_archive",
+        "filter": "sepia",
+        "time_of_day": "day"
+      },
+      "notes": "Продолжение s24 после выбора c_archive; реплика Раисы Львовны «Помощь — другое дело» (ep01.s24.l009) читается как ответ на любую из реакций.",
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "tense",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "expert",
+          "expression": "neutral",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "clerk",
+          "expression": "neutral",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s24b.l001",
+          "expression": "neutral",
+          "when": "last_choice == 'arch_form'"
+        },
+        {
+          "do": "say",
+          "who": "clerk",
+          "key": "ep01.s24b.l002",
+          "expression": "neutral",
+          "when": "last_choice == 'arch_form'"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s24b.l003",
+          "expression": "tense",
+          "when": "last_choice == 'arch_plain'"
+        },
+        {
+          "do": "say",
+          "who": "expert",
+          "key": "ep01.s24b.l004",
+          "expression": "neutral",
+          "when": "last_choice == 'arch_levina'"
+        },
+        {
+          "do": "fx",
+          "fx": "zoom_in",
+          "ms": 900
+        },
+        {
+          "do": "say",
+          "who": "clerk",
+          "key": "ep01.s24.l009",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "expert",
+          "key": "ep01.s24.l010",
+          "expression": "focused"
+        },
+        {
+          "do": "say",
+          "who": "clerk",
+          "key": "ep01.s24.l011",
+          "expression": "neutral"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s24.l012",
+          "style": "voiceover"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s24.l013",
+          "style": "voiceover"
+        },
+        {
+          "do": "say",
+          "who": "expert",
+          "key": "ep01.s24.l014",
+          "expression": "focused"
+        },
+        {
+          "do": "say",
+          "who": "expert",
+          "key": "ep01.s24.l015",
+          "expression": "focused"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s24.l016",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "expert",
+          "key": "ep01.s24.l017",
+          "expression": "neutral",
+          "when": "docs_first"
+        },
+        {
+          "do": "say",
+          "who": "expert",
+          "key": "ep01.s24.l018",
+          "expression": "neutral",
+          "when": "!docs_first"
+        },
+        {
+          "do": "say",
+          "who": "expert",
+          "key": "ep01.s24.l019",
+          "expression": "neutral"
+        },
+        {
+          "do": "jump",
+          "scene": "s25"
+        }
+      ]
+    },
+    "s26b": {
+      "id": "s26b",
+      "block": "b08_investigation_2",
+      "stage": {
+        "bg": "bg_office_prosecutor",
+        "filter": "desaturated",
+        "time_of_day": "evening"
+      },
+      "notes": "Продолжение s26 после выбора c_call; дальше прежний jump в s27 (там Сайко звонит в паспортный стол).",
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "firm",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s26b.l001",
+          "expression": "grin",
+          "when": "last_choice == 'call_soft'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s26b.l002",
+          "expression": "neutral",
+          "when": "last_choice == 'call_hard'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s26b.l003",
+          "expression": "grin",
+          "when": "last_choice == 'call_listen'"
+        },
+        {
+          "do": "jump",
+          "scene": "s27"
+        }
+      ]
+    },
+    "s27b": {
+      "id": "s27b",
+      "block": "b08_investigation_2",
+      "stage": {
+        "bg": "bg_office_prosecutor",
+        "filter": "desaturated",
+        "time_of_day": "day"
+      },
+      "notes": "Продолжение s27 после выбора c_link. Каждая реакция готовит следующую сцену: people → помощница Ковригина (s28.l003), notary → визит в s29, papers → «две недели» между доверенностью и договором (s31.l007).",
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "tense",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "expert",
+          "expression": "neutral",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "expert",
+          "key": "ep01.s27b.l001",
+          "expression": "focused",
+          "when": "last_choice == 'link_papers'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s27b.l002",
+          "expression": "neutral",
+          "when": "last_choice == 'link_papers'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s27b.l003",
+          "expression": "grin",
+          "when": "last_choice == 'link_people'"
+        },
+        {
+          "do": "say",
+          "who": "expert",
+          "key": "ep01.s27b.l004",
+          "expression": "neutral",
+          "when": "last_choice == 'link_people'"
+        },
+        {
+          "do": "say",
+          "who": "expert",
+          "key": "ep01.s27b.l005",
+          "expression": "focused",
+          "when": "last_choice == 'link_notary'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s27b.l006",
+          "expression": "grin",
+          "when": "last_choice == 'link_notary'"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s27.l020",
+          "expression": "firm"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s27.l021",
+          "style": "inner"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s27.l022",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s27.l023",
+          "expression": "firm"
+        },
+        {
+          "do": "jump",
+          "scene": "s28",
+          "transition": "fade"
+        }
+      ]
+    },
+    "s28b": {
+      "id": "s28b",
+      "block": "b08_investigation_2",
+      "stage": {
+        "bg": "bg_street_day",
+        "filter": "desaturated",
+        "time_of_day": "day"
+      },
+      "notes": "Продолжение s28 после выбора c_wait; шаги раскрытия Мурашова (fx freeze_frame → show murashov → hide sledak → show accomplice) без изменений, см. notes в s28. Опция wait_galina доступна при galina_trust.",
+      "steps": [
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "tense",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s28b.l001",
+          "expression": "neutral",
+          "when": "last_choice == 'wait_alive'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s28b.l002",
+          "style": "inner",
+          "when": "last_choice == 'wait_alive' && found_photo"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s28b.l003",
+          "style": "inner",
+          "when": "last_choice == 'wait_alive'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s28b.l004",
+          "expression": "neutral",
+          "when": "last_choice == 'wait_reports'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s28b.l005",
+          "expression": "neutral",
+          "when": "last_choice == 'wait_galina'"
+        },
+        {
+          "do": "fx",
+          "fx": "zoom_in",
+          "ms": 900
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s28.l010",
+          "expression": "neutral"
+        },
+        {
+          "do": "fx",
+          "fx": "freeze_frame",
+          "ms": 1200
+        },
+        {
+          "do": "show",
+          "who": "murashov",
+          "expression": "neutral",
+          "position": "right"
+        },
+        {
+          "do": "hide",
+          "who": "sledak"
+        },
+        {
+          "do": "show",
+          "who": "accomplice",
+          "expression": "neutral",
+          "position": "center"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s28.l011",
+          "style": "voiceover"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s28.l012",
+          "style": "voiceover"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s28.l013",
+          "style": "inner"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s28.l014",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s28.l015",
+          "expression": "grin"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s28.l016",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s28.l017",
+          "expression": "neutral",
+          "when": "galina_trust"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s28.l018",
+          "expression": "neutral",
+          "when": "!galina_trust"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s28.l019",
+          "style": "inner"
+        },
+        {
+          "do": "hide",
+          "who": "murashov"
+        },
+        {
+          "do": "hide",
+          "who": "accomplice"
+        },
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "firm",
+          "position": "center"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s28.l020",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s28.l021",
+          "expression": "firm"
+        },
+        {
+          "do": "jump",
+          "scene": "s29",
+          "transition": "fade"
+        }
+      ]
+    },
+    "s29b": {
+      "id": "s29b",
+      "block": "b08_investigation_2",
+      "stage": {
+        "bg": "bg_notary_office",
+        "filter": "desaturated",
+        "time_of_day": "day"
+      },
+      "notes": "Продолжение s29 после выбора c_visit (разрез до l002); ломка Ковригина и терминальный c_notary — прежние, см. notes в s29.",
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "firm",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "notary",
+          "expression": "neutral",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s29b.l001",
+          "style": "inner",
+          "when": "last_choice == 'visit_hold'"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s29b.l002",
+          "expression": "nervous",
+          "when": "last_choice == 'visit_greet'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s29b.l003",
+          "expression": "grin",
+          "when": "last_choice == 'visit_formal'"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s29.l002",
+          "expression": "firm"
+        },
+        {
+          "do": "document",
+          "doc": "doc_power_of_attorney",
+          "text_key": "ep01.doc.power_of_attorney"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s29.l003",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s29.l004",
+          "expression": "grin"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s29.l005",
+          "expression": "neutral",
+          "when": "wrong_suspect"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s29.l006",
+          "expression": "neutral",
+          "when": "notary_pressed"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s29.l007",
+          "expression": "grin",
+          "when": "notary_pressed"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s29.l008",
+          "expression": "grin"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s29.l009",
+          "expression": "nervous"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s29.l010",
+          "expression": "firm"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s29.l011",
+          "expression": "nervous"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s29.l012",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s29.l013",
+          "expression": "firm"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s29.l014",
+          "expression": "nervous"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s29.l015",
+          "style": "inner",
+          "when": "found_chain"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s29.l016",
+          "style": "inner",
+          "when": "docs_flaw"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s29.l017",
+          "style": "inner",
+          "when": "!docs_flaw && !found_chain"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s29.l018",
+          "expression": "nervous",
+          "when": "docs_flaw || found_chain"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s29.l019",
+          "expression": "neutral",
+          "when": "!docs_flaw && !found_chain"
+        },
+        {
+          "do": "set",
+          "when": "docs_flaw || found_chain",
+          "effects": [
+            {
+              "var": "kovrigin_broken",
+              "op": "set",
+              "value": true
+            },
+            {
+              "var": "case_strength",
+              "op": "add",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "do": "sfx",
+          "id": "sfx_phone_ring"
+        },
+        {
+          "do": "fx",
+          "fx": "zoom_in",
+          "ms": 800
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s29.l020",
+          "style": "inner"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s29.l021",
+          "style": "inner",
+          "when": "docs_flaw || found_chain"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s29.l022",
+          "expression": "neutral"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s29.l023",
+          "style": "inner"
+        },
+        {
+          "do": "choice",
+          "id": "c_notary",
+          "kind": "dialogue",
+          "prompt_key": "ep01.s29.c_notary.prompt",
+          "options": [
+            {
+              "id": "show",
+              "key": "ep01.s29.c_notary.show",
+              "goto": "s30"
+            },
+            {
+              "id": "bluff",
+              "key": "ep01.s29.c_notary.bluff",
+              "effects": [
+                {
+                  "var": "trust_oper",
+                  "op": "sub",
+                  "value": 1
+                }
+              ],
+              "goto": "s30"
+            }
+          ],
+          "remember": false
+        }
+      ]
     }
   },
   "minigames": {
