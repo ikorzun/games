@@ -101,7 +101,12 @@ STAGING = {
         "oper": "standing apart from the table by the grey steel door at the right wall, arms folded",
         "buyer": "on the chair under the lamp, hands on the table",
         "murashov": "on the chair under the lamp, hands folded on the table",
-        "notary": "at the LEFT end of the table beside the suspect's chair, wiping his forehead with a handkerchief",
+        # Словарь по выражению: платок в работе только у «нервного» нотариуса, иначе нейтральный крупный план
+        # получает нервное действие (interrogation, волна 34).
+        "notary": {
+            "*": "at the LEFT end of the table beside the suspect's chair, a folded handkerchief in his hand",
+            "nervous": "at the LEFT end of the table beside the suspect's chair, wiping his forehead with a handkerchief",
+        },
     },
     "bg_apartment_zoya": {
         "zoya": "by the sideboard, touching the framed photo",
@@ -297,8 +302,14 @@ ANGLES = {
                 "the dark-green wall, and the barred window and the grey ceiling fill the upper half of the frame"),
         ("high", "the camera is high in the corner above the door, tilted down: the table with the lamp, the two chairs, "
                  "the heads of the people and the dark floor around them"),
-        ("foreground", "the camera is at the door, looking past the edge of the grey steel door in the near foreground, out "
-                       "of focus, at the table and the people in the lamp light beyond, in focus"),
+        # «Из-за края двери» модель дорисовала вторую дверь (волна 36): камера теперь снаружи, за стеклом той же двери.
+        ("foreground", "the camera is outside in the corridor, looking into the room through the small wired-glass window "
+                       "of the grey steel door: the window's steel frame and the wire mesh in the glass make a dark, soft "
+                       "border around the picture; beyond it, in focus, the table seen along its length from the "
+                       "investigator's end, his back and shoulder nearest the camera, the suspect facing the camera at "
+                       "the far end under the lamp; Detective Sayko stands just inside the door beside the camera, so only "
+                       "his black leather shoulder shows at the edge of the frame, out of focus; this is the only door "
+                       "of the room"),
     ],
     "bg_apartment_zoya": [
         ("low", "the camera is on the floor just inside the door, tilted up: the dark sideboard towers on the left, the "
@@ -521,6 +532,8 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
         who = c["who"]
         expr = EXPRESSIONS.get(c.get("expression") or "neutral", "calm face")
         place = staging.get(who, "in the room")
+        if isinstance(place, dict):  # мизансцена зависит от выражения: ключ выражения или "*"
+            place = place.get(c.get("expression") or "neutral", place.get("*", "in the room"))
         look = LOOKS.get(who) or LOOKS.get(shot.get("_sets", {}).get(who, ""), "")
         garment = key_garment(look)
         tag = f" (the one in the {garment})" if garment else ""

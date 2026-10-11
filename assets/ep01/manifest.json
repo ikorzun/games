@@ -1242,9 +1242,9 @@
  {
   "id": "sh_interrogation_close_notary_neutral",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_160858_67248172-9c0a-4a55-bd82-af9fcdf148d5.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_162110_33e8a014-5aa8-441d-91a3-d76bf63868b3.png",
   "target": "assets/ep01/shots/interrogation/close_notary_neutral.webp",
-  "job": "67248172-9c0a-4a55-bd82-af9fcdf148d5"
+  "job": "33e8a014-5aa8-441d-91a3-d76bf63868b3"
  },
  {
   "id": "sh_interrogation_reaction_oper",
@@ -1270,9 +1270,9 @@
  {
   "id": "sh_interrogation_reaction_notary",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_161144_13172994-4c63-4092-9b28-dd297b11154e.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_162110_beafdac4-ed55-4450-a078-6b532e5f54a8.png",
   "target": "assets/ep01/shots/interrogation/reaction_notary.webp",
-  "job": "13172994-4c63-4092-9b28-dd297b11154e"
+  "job": "beafdac4-ed55-4450-a078-6b532e5f54a8"
  },
  {
   "id": "sh_interrogation_insert_1",
@@ -1305,8 +1305,8 @@
  {
   "id": "sh_interrogation_angle_foreground",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_161831_1cbe386a-d7ab-4b53-b3d6-45d7bfec7b86.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_162402_474d6dbb-f950-446f-8316-811deeefe79f.png",
   "target": "assets/ep01/shots/interrogation/angle_foreground.webp",
-  "job": "1cbe386a-d7ab-4b53-b3d6-45d7bfec7b86"
+  "job": "474d6dbb-f950-446f-8316-811deeefe79f"
  }
 ]
