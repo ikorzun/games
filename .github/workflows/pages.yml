@@ -1,8 +1,9 @@
 name: pages
 
 # Публикация сборки рантайма (web-plain) на GitHub Pages: https://ikorzun.github.io/games/
-# Pages включается сам при первом запуске (если репозиторий публичный или план позволяет); иначе — один раз
-# вручную: Settings → Pages → Source: GitHub Actions.
+# Pages нужно один раз включить вручную: Settings → Pages → Source: GitHub Actions (токен workflow не может
+# создать сайт — не хватает прав администратора; попытка всё равно делается и причина отказа печатается в лог).
+# Дальше публикация идёт при каждом push в ветку.
 on:
   push:
     branches: [main, claude/magical-thompson-ore6eh]
@@ -40,12 +41,13 @@ jobs:
         run: |
           if gh api "repos/${GITHUB_REPOSITORY}/pages" >/dev/null 2>&1; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
-          elif gh api -X POST "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow >/dev/null 2>&1; then
+          elif out=$(gh api -X POST "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow 2>&1); then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
             echo "::notice::GitHub Pages включён автоматически (Source: GitHub Actions)"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::GitHub Pages не включён, и включить его отсюда не удалось (приватный репозиторий на бесплатном плане?). Settings → Pages → Source: GitHub Actions — шаг публикации пропущен"
+            echo "Ответ API на попытку включить Pages: ${out}"
+            echo "::notice::GitHub Pages не включён, а включить его отсюда нельзя: токену workflow не хватает прав администратора репозитория. Один раз вручную: Settings → Pages → Source: GitHub Actions — шаг публикации пропущен"
           fi
       - uses: actions/setup-node@v4
         with:
