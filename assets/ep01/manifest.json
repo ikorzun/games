@@ -1966,5 +1966,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_175742_3d29e3d5-2d0b-4d85-843f-732669724d74.png",
   "target": "assets/ep01/shots/street_night/close_sledak_tense.webp",
   "job": "3d29e3d5-2d0b-4d85-843f-732669724d74"
+ },
+ {
+  "id": "sh_street_night_ots_oper_sledak",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_180429_bc698493-cf32-4420-9a3a-028d22cabf7a.png",
+  "target": "assets/ep01/shots/street_night/ots_oper_sledak.webp",
+  "job": "bc698493-cf32-4420-9a3a-028d22cabf7a"
+ },
+ {
+  "id": "sh_street_night_ots_sledak_oper",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_180429_3f60e006-20bd-4147-9459-32b58f73f09c.png",
+  "target": "assets/ep01/shots/street_night/ots_sledak_oper.webp",
+  "job": "3f60e006-20bd-4147-9459-32b58f73f09c"
+ },
+ {
+  "id": "sh_street_night_ots_accomplice_oper",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_180430_53bc7b29-8ada-4781-9ebc-a69a077c8de8.png",
+  "target": "assets/ep01/shots/street_night/ots_accomplice_oper.webp",
+  "job": "53bc7b29-8ada-4781-9ebc-a69a077c8de8"
+ },
+ {
+  "id": "sh_street_night_ots_sledak_accomplice",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_180430_047f5f7d-9510-4723-8f28-523111fe663f.png",
+  "target": "assets/ep01/shots/street_night/ots_sledak_accomplice.webp",
+  "job": "047f5f7d-9510-4723-8f28-523111fe663f"
  }
 ]
