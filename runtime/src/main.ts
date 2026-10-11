@@ -47,6 +47,22 @@ function fatal(root: HTMLElement, e: unknown): void {
   root.replaceChildren(pre);
 }
 
+/** `?vars=a:true,b:3,c:full` → пары имя/значение; значения как в эффектах: true/false, целое число, иначе строка. */
+export function parseVarsParam(raw: string | null): Array<[string, boolean | number | string]> {
+  const out: Array<[string, boolean | number | string]> = [];
+  for (const part of (raw ?? '').split(',')) {
+    const i = part.indexOf(':');
+    if (i <= 0) continue;
+    const name = part.slice(0, i).trim();
+    const v = part.slice(i + 1).trim();
+    if (!/^[a-z][a-z0-9_]*$/.test(name)) continue;
+    if (v === 'true' || v === 'false') out.push([name, v === 'true']);
+    else if (/^-?\d+$/.test(v)) out.push([name, Number(v)]);
+    else out.push([name, v]);
+  }
+  return out;
+}
+
 async function boot(): Promise<void> {
   const root = document.getElementById('app');
   if (!root) throw new Error('нет контейнера #app');
@@ -101,7 +117,14 @@ async function boot(): Promise<void> {
     });
     installDebug(app);
 
-    if (params.get('autostart') === '1') await app.startNewGame({ skipWarning: true });
+    // Быстрая проверка геймплея: ?scene=s15_q&vars=found_photo:true,nerves:3 — новая партия минуя меню,
+    // переменные как у эффектов сценария (true/false, целое, строка), переход сразу к сцене.
+    const testScene = params.get('scene');
+    if (testScene) {
+      await app.startNewGame({ skipWarning: true });
+      for (const [name, value] of parseVarsParam(params.get('vars'))) app.debugSet(name, value);
+      app.debugGoto(testScene);
+    } else if (params.get('autostart') === '1') await app.startNewGame({ skipWarning: true });
     else app.showMenu(); // меню сразу; главная тема стартует при показе (или при первом жесте, если автозапуск запрещён)
 
     // Первый играбельный кадр (меню отрисовано, шрифты загружены) → game_ready.
