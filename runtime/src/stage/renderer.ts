@@ -4,7 +4,7 @@
  * (stage.ts) не зависит от того, чем рисуется кадр.
  */
 import type { ViolenceMode } from '../core/settings';
-import type { SpriteView, TransitionKind, ViewState } from '../core/types';
+import type { SpriteView, TransitionKind, ViewState, SpriteFacing } from '../core/types';
 
 /** Что нарисовано в слоте: картинка из файла, плейсхолдер (файла нет), сплошной цвет, идёт загрузка, слот пуст. */
 export type SlotState = 'none' | 'loading' | 'image' | 'placeholder' | 'solid';
@@ -66,4 +66,15 @@ export const POSITION_X: Readonly<Record<SpriteView['position'], number>> = {
  */
 export function isOffscreen(position: SpriteView['position']): boolean {
   return position === 'offscreen_left' || position === 'offscreen_right';
+}
+
+/**
+ * Поворот к собеседнику (решение владельца 2026-10-11): когда на сцене двое и больше, стоящий слева смотрит
+ * вправо, стоящий справа — влево (к центру); один персонаж остаётся как нарисован — к игроку. Спрайт
+ * зеркалится, если его исходный поворот (`facing` набора) не совпадает с нужным; `front` не зеркалится.
+ */
+export function wantFlip(position: SpriteView['position'], facing: SpriteFacing, visibleCount: number): boolean {
+  if (visibleCount < 2 || facing === 'front') return false;
+  const toward = position === 'left' ? 'right' : position === 'right' ? 'left' : null;
+  return toward !== null && toward !== facing;
 }

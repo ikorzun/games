@@ -13,7 +13,7 @@
  * Ядро (каталог, план, очередь) не трогает DOM и тестируется в node; браузерные части
  * (загрузка <img>) подменяются через опции AssetStore.
  */
-import type { Episode, SpriteSet, SpriteView, ViewState } from '../core/types';
+import type { Episode, SpriteFacing, SpriteSet, SpriteView, ViewState } from '../core/types';
 import type { VoiceLineRef } from '../core/voice';
 
 // ───────────────────────────── пути ─────────────────────────────
@@ -476,6 +476,8 @@ export interface SceneAssets {
   bgChain(id: string): ImageChain | null;
   cgChain(id: string): ImageChain | null;
   spriteChain(sprite: Pick<SpriteView, 'who' | 'expression' | 'silhouette'>): ImageChain | null;
+  /** Поворот персонажа на исходных кадрах (SpriteSet.facing); нет данных — front, зеркалить нельзя. */
+  spriteFacing?(who: string): SpriteFacing;
   /** Готовый результат по цепочке: найден / файлов нет (null) / пока неизвестно (undefined). */
   peek(urls: readonly string[]): { handle: ImageHandle; index: number } | null | undefined;
   load(urls: readonly string[], prio?: LoadPriority): Promise<{ handle: ImageHandle; index: number } | null>;
@@ -503,6 +505,9 @@ export class StoreSceneAssets implements SceneAssets {
   }
   spriteChain(sprite: Pick<SpriteView, 'who' | 'expression' | 'silhouette'>): ImageChain | null {
     return this.catalog.spriteChain(sprite);
+  }
+  spriteFacing(who: string): SpriteFacing {
+    return this.catalog.spriteSetOf(who)?.facing ?? 'front';
   }
   peek(urls: readonly string[]): { handle: ImageHandle; index: number } | null | undefined {
     return this.store.peekFirst(urls);

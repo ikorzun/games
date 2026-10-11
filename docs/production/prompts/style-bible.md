@@ -181,7 +181,7 @@ SCENE TO DEPICT:
 SCENE TO DEPICT:
 Full-body portrait for a visual novel character sprite, Moscow 1993. <CHARACTER: пол, возраст,
 телосложение, лицо, причёска, одежда эпохи, 2–3 детали.> The person stands in a three-quarter
-view in natural, unposed posture against a plain, evenly lit mid-grey wall with no objects
+view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture against a plain, evenly lit mid-grey wall with no objects
 (the figure will be cut out), soft overcast window light from the front-left, whole body in
 frame including shoes, subtle expression: neutral, mouth closed. Ordinary face, not model-like.
 ```

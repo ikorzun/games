@@ -352,12 +352,17 @@ export interface AssetEntry {
   localized?: boolean;
   notes?: string;
 }
+/** Поворот персонажа на кадрах набора: влево, вправо (сторона зрителя) или анфас. */
+export type SpriteFacing = 'left' | 'right' | 'front';
+
 export interface SpriteSet {
   id: string;
   base: string;
   poses?: string[];
   expressions: string[];
   silhouette?: boolean;
+  /** Куда персонаж повёрнут на исходных кадрах (сторона зрителя); по умолчанию front — не зеркалится. */
+  facing?: SpriteFacing;
 }
 export interface Assets {
   backgrounds?: AssetEntry[];

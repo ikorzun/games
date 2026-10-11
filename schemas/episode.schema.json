@@ -622,7 +622,8 @@
         "base": { "type": "string", "description": "Путь к базовому слою (тело/поза)." },
         "poses": { "type": "array", "items": { "$ref": "#/$defs/asciiId" } },
         "expressions": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/asciiId" } },
-        "silhouette": { "type": "boolean", "default": false }
+        "silhouette": { "type": "boolean", "default": false },
+        "facing": { "type": "string", "enum": ["left", "right", "front"], "default": "front", "description": "Куда персонаж повёрнут на кадрах набора (сторона зрителя). При двух и более персонажах на сцене рантайм зеркалит спрайт так, чтобы он смотрел к центру — к собеседнику; front не зеркалится." }
       }
     },
     "assets": {

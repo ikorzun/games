@@ -20,7 +20,7 @@ import type { SpriteView, TransitionKind, ViewState } from '../core/types';
 import { NO_ASSETS } from './assets';
 import type { ImageChain, ImageHandle, SceneAssets } from './assets';
 import { hslToInt, placeholderHsl, placeholderLabel } from './placeholders';
-import { isOffscreen, POSITION_X, SILHOUETTE_ALPHA, SPRITE_FIT, SPRITE_MAX_WIDTH } from './renderer';
+import { isOffscreen, POSITION_X, SILHOUETTE_ALPHA, SPRITE_FIT, SPRITE_MAX_WIDTH, wantFlip } from './renderer';
 import type { ISceneRenderer, SlotStates } from './renderer';
 
 const FONT = 'PT Sans, Noto Sans, Arial, sans-serif';
@@ -54,6 +54,8 @@ interface SpriteNode {
   dim: number;
   tween: Tween | null;
   token: number;
+  /** Зеркалить по горизонтали — поворот к собеседнику (renderer.ts, wantFlip). */
+  flip: boolean;
 }
 
 interface Slot {
@@ -201,6 +203,7 @@ export class PixiSceneRenderer implements ISceneRenderer {
     this.spriteLayer.removeChildren();
     this.speaker = view.speaker;
     for (const sp of view.sprites) this.addSprite(sp, false, 'cut');
+    this.updateFacing();
     this.bgId = view.bg;
     this.resolveSlot(this.bgSlot, this.assets.bgChain(view.bg));
     this.cgId = view.cg;
@@ -224,6 +227,7 @@ export class PixiSceneRenderer implements ISceneRenderer {
 
   showSprite(sprite: SpriteView, existing: boolean, transition: TransitionKind): void {
     this.addSprite(sprite, existing, transition);
+    this.updateFacing();
     this.layout();
   }
 
@@ -231,6 +235,7 @@ export class PixiSceneRenderer implements ISceneRenderer {
     const node = this.nodes.get(who);
     if (!node) return;
     this.nodes.delete(who);
+    this.updateFacing();
     node.token += 1; // запоздавшая загрузка не должна ничего менять
     if (transition === 'cut') {
       node.box.destroy({ children: true });
@@ -349,6 +354,12 @@ export class PixiSceneRenderer implements ISceneRenderer {
     slot.url = handle.url;
   }
 
+  /** Поворот к собеседнику: пересчитывается при каждом появлении и уходе спрайта (см. wantFlip). */
+  private updateFacing(): void {
+    const n = this.nodes.size;
+    for (const [who, node] of this.nodes) node.flip = wantFlip(node.view.position, this.assets.spriteFacing?.(who) ?? 'front', n);
+  }
+
   private addSprite(sp: SpriteView, existing: boolean, transition: TransitionKind): void {
     if (isOffscreen(sp.position)) {
       // Голос за кадром: на сцене не рисуется (контракт в renderer.ts), прежний спрайт убираем.
@@ -366,7 +377,7 @@ export class PixiSceneRenderer implements ISceneRenderer {
       pic.anchor.set(0.5, 1);
       box.addChild(body, name, expr, pic);
       this.spriteLayer.addChild(box);
-      node = { view: sp, box, body, name, expr, pic, mode: 'none', derivedSilhouette: false, url: null, fade: 1, dim: 1, tween: null, token: 0 };
+      node = { view: sp, box, body, name, expr, pic, mode: 'none', derivedSilhouette: false, url: null, fade: 1, dim: 1, tween: null, token: 0, flip: false };
       this.nodes.set(sp.who, node);
     }
     node.view = sp;
@@ -535,7 +546,7 @@ export class PixiSceneRenderer implements ISceneRenderer {
       const iw = tex.width || 1;
       const ih = tex.height || 1;
       const s = Math.min((H * SPRITE_FIT) / ih, (W * SPRITE_MAX_WIDTH) / iw);
-      node.pic.scale.set(s);
+      node.pic.scale.set(node.flip ? -s : s, s);
       node.box.position.set(cx, H);
       node.pic.position.set(0, 0);
       this.paintNode(node);

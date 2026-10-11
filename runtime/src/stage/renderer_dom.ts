@@ -10,7 +10,7 @@ import { h } from '../ui/dom';
 import { NO_ASSETS } from './assets';
 import type { ImageChain, ImageHandle, SceneAssets } from './assets';
 import { hslToCss, placeholderHsl, placeholderLabel } from './placeholders';
-import { isOffscreen, SPRITE_FIT, SPRITE_MAX_WIDTH } from './renderer';
+import { isOffscreen, SPRITE_FIT, SPRITE_MAX_WIDTH, wantFlip } from './renderer';
 import type { ISceneRenderer, SlotState, SlotStates } from './renderer';
 
 type State = 'none' | 'loading' | 'image' | 'placeholder';
@@ -163,6 +163,15 @@ export class DomSceneRenderer implements ISceneRenderer {
       requestAnimationFrame(() => requestAnimationFrame(() => node.classList.remove('is-entering')));
     }
     this.resolveSprite(entry);
+    this.updateFacing();
+  }
+
+  /** Поворот к собеседнику: пересчитывается при каждом появлении и уходе спрайта (см. wantFlip). */
+  private updateFacing(): void {
+    const n = this.nodes.size;
+    for (const [who, e] of this.nodes) {
+      e.el.classList.toggle('is-flipped', wantFlip(e.view.position, this.assets.spriteFacing?.(who) ?? 'front', n));
+    }
   }
 
   private resolveSprite(entry: SpriteEntry): void {
@@ -233,6 +242,7 @@ export class DomSceneRenderer implements ISceneRenderer {
     const entry = this.nodes.get(who);
     if (!entry) return;
     this.nodes.delete(who);
+    this.updateFacing();
     entry.token += 1;
     const node = entry.el;
     if (transition === 'cut') {

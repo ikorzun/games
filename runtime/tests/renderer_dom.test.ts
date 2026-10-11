@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { defaultViewFor } from '../src/core/interpreter';
 import type { SpriteView, ViewState } from '../src/core/types';
 import { hash32, hslToCss, hslToInt, hslToRgb, placeholderHsl } from '../src/stage/placeholders';
-import { isOffscreen } from '../src/stage/renderer';
+import { NO_ASSETS } from '../src/stage/assets';
+import { isOffscreen, wantFlip } from '../src/stage/renderer';
 import { DomSceneRenderer } from '../src/stage/renderer_dom';
 import { miniEpisode } from './helpers/mini';
 
@@ -116,5 +117,41 @@ describe('плейсхолдеры: цвет — детерминированн�
     expect(hslToRgb({ h: 120, s: 100, l: 50 })).toEqual([0, 255, 0]);
     expect(hslToRgb({ h: 240, s: 100, l: 50 })).toEqual([0, 0, 255]);
     expect(hslToInt({ h: 0, s: 0, l: 100 })).toBe(0xffffff);
+  });
+});
+
+describe('DomSceneRenderer: поворот к собеседнику (решение владельца 2026-10-11)', () => {
+  it('wantFlip: при двоих стоящий слева смотрит вправо, справа — влево; один и front — без зеркала', () => {
+    expect(wantFlip('left', 'left', 2)).toBe(true);
+    expect(wantFlip('left', 'right', 2)).toBe(false);
+    expect(wantFlip('right', 'left', 2)).toBe(false);
+    expect(wantFlip('right', 'right', 2)).toBe(true);
+    expect(wantFlip('center', 'left', 3)).toBe(false);
+    expect(wantFlip('left', 'front', 2)).toBe(false);
+    expect(wantFlip('left', 'left', 1)).toBe(false);
+  });
+
+  it('зеркало появляется, когда на сцену выходит второй, и снимается, когда он уходит', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const facing = (who: string): 'left' | 'right' | 'front' => (who === 'm' ? 'right' : who === 'c' ? 'front' : 'left');
+    const r = new DomSceneRenderer({ ...NO_ASSETS, spriteFacing: facing });
+    await r.mount(host);
+    const flipped = (): string[] => [...host.querySelectorAll<HTMLElement>('.ph-sprite.is-flipped')].map((n) => n.dataset.who ?? '');
+    r.showSprite(sprite('a', 'left'), false, 'cut');
+    expect(flipped()).toEqual([]); // одна — смотрит на игрока как нарисована
+    r.showSprite(sprite('b', 'right'), false, 'cut');
+    expect(flipped()).toEqual(['a']); // a слева повёрнута влево → зеркалим к центру; b справа смотрит влево — как надо
+    r.showSprite(sprite('m', 'center'), false, 'cut');
+    expect(flipped()).toEqual(['a']); // в центре не зеркалим
+    r.hideSprite('m', 'cut');
+    r.showSprite(sprite('m', 'right'), false, 'cut');
+    expect(flipped().sort()).toEqual(['a', 'm']); // m нарисован вправо, стоит справа → к центру через зеркало
+    r.showSprite(sprite('c', 'left'), false, 'cut');
+    expect(flipped().sort()).toEqual(['a', 'm']); // анфас никогда не зеркалится
+    r.hideSprite('b', 'cut');
+    r.hideSprite('m', 'cut');
+    r.hideSprite('c', 'cut');
+    expect(flipped()).toEqual([]); // снова одна
   });
 });

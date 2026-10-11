@@ -180,6 +180,9 @@ def integrity(ep: dict, rep: Report) -> None:
     asset_ids = {k: {a["id"] for a in assets.get(k, [])} for k in
                  ("backgrounds", "cg", "documents", "music", "sfx", "ambient", "voice")}
     sprites = {s["id"]: s for s in assets.get("sprites", [])}
+    for ss in sprites.values():
+        if not ss.get("facing"):
+            rep.warn(f"sprite_set {ss['id']}: не указан facing (left/right/front) — персонаж не повернётся к собеседнику")
 
     # scene.id == key
     for sid, scene in scenes.items():

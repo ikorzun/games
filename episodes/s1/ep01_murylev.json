@@ -11181,7 +11181,8 @@
           "tense",
           "tired",
           "firm"
-        ]
+        ],
+        "facing": "left"
       },
       {
         "id": "sledak_old",
@@ -11189,7 +11190,8 @@
         "expressions": [
           "neutral",
           "sad"
-        ]
+        ],
+        "facing": "left"
       },
       {
         "id": "oper",
@@ -11202,7 +11204,8 @@
           "grin",
           "angry",
           "hurt"
-        ]
+        ],
+        "facing": "left"
       },
       {
         "id": "expert",
@@ -11210,7 +11213,8 @@
         "expressions": [
           "neutral",
           "focused"
-        ]
+        ],
+        "facing": "left"
       },
       {
         "id": "murashov",
@@ -11221,7 +11225,8 @@
           "cold",
           "cornered"
         ],
-        "silhouette": true
+        "silhouette": true,
+        "facing": "right"
       },
       {
         "id": "notary",
@@ -11229,7 +11234,8 @@
         "expressions": [
           "neutral",
           "nervous"
-        ]
+        ],
+        "facing": "left"
       },
       {
         "id": "zoya",
@@ -11238,7 +11244,8 @@
           "neutral",
           "warm",
           "worried"
-        ]
+        ],
+        "facing": "left"
       },
       {
         "id": "neighbor",
@@ -11246,7 +11253,8 @@
         "expressions": [
           "neutral",
           "worried"
-        ]
+        ],
+        "facing": "left"
       },
       {
         "id": "buyer",
@@ -11254,7 +11262,8 @@
         "expressions": [
           "neutral",
           "scared"
-        ]
+        ],
+        "facing": "left"
       },
       {
         "id": "boss",
@@ -11263,7 +11272,8 @@
           "neutral",
           "stern",
           "tired"
-        ]
+        ],
+        "facing": "left"
       },
       {
         "id": "accomplice",
@@ -11271,7 +11281,8 @@
         "expressions": [
           "neutral",
           "scared"
-        ]
+        ],
+        "facing": "left"
       },
       {
         "id": "lapin_wife",
@@ -11280,14 +11291,16 @@
           "neutral",
           "worried",
           "angry"
-        ]
+        ],
+        "facing": "left"
       },
       {
         "id": "clerk",
         "base": "assets/ep01/sprites/clerk/neutral.webp",
         "expressions": [
           "neutral"
-        ]
+        ],
+        "facing": "front"
       }
     ],
     "cg": [

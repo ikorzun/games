@@ -391,6 +391,8 @@
 .ph-sprite[data-state='image'] .ph-img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: 50% 100%; }
 /* силуэт без своего файла: чёрный кадр с прозрачностью .85 */
 .ph-sprite.is-derived-silhouette .ph-img { filter: brightness(0); opacity: 0.85; }
+/* Поворот к собеседнику: зеркало по горизонтали (renderer.ts, wantFlip). */
+.ph-sprite.is-flipped .ph-img { transform: scaleX(-1); }
 .ph-sprite.is-silhouette[data-state='placeholder'] { background: #07070a; border-color: rgb(255 255 255 / 0.12); }
 .ph-sprite.is-entering,
 .ph-sprite.is-leaving { opacity: 0; }
