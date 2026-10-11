@@ -408,10 +408,12 @@
         "do": { "const": "choice" },
         "id": { "$ref": "#/$defs/asciiId" },
         "prompt_key": { "$ref": "#/$defs/locKey" },
-        "kind": { "type": "string", "enum": ["investigative", "moral", "tactical", "dialogue", "cosmetic"], "description": "investigative — куда направить следствие; moral — нравственный выбор (влияет на концовку/персонажей); tactical — риск в операции; dialogue — тон; cosmetic — без последствий." },
+        "kind": { "type": "string", "enum": ["investigative", "moral", "tactical", "dialogue", "cosmetic", "deduction"], "description": "investigative — куда направить следствие; moral — нравственный выбор (влияет на концовку/персонажей); tactical — риск в операции; dialogue — тон; cosmetic — без последствий; deduction — дедуктивная развилка в духе Ace Attorney (02-narrative-blocks.md §5a): у опций verdict right/wrong, неверная ведёт в сцену-реакцию и обратно к вопросу, верная продолжает историю; после hint_after ошибок верные опции подсвечиваются." },
         "timer_ms": { "type": "integer", "minimum": 3000, "maximum": 30000, "description": "Таймер только для tactical/dialogue; при истечении — default_option. Отключаем в настройках доступности." },
         "default_option": { "$ref": "#/$defs/asciiId" },
         "remember": { "type": "boolean", "default": true, "description": "Записать выбор в журнал решений (для эпилога)." },
+        "hint_after": { "type": "integer", "minimum": 1, "maximum": 5, "default": 2, "description": "Только kind=deduction: после скольких неверных ответов подсветить верные опции (верный ход всегда достижим — история не ломается)." },
+        "penalty": { "type": "array", "items": { "$ref": "#/$defs/effect" }, "description": "Только kind=deduction: эффекты за каждый неверный ответ (обычно nerves sub 1). Переменная первого эффекта показывается шкалой во время выбора." },
         "options": {
           "type": "array", "minItems": 2, "maxItems": 4,
           "items": {
@@ -422,6 +424,8 @@
               "key": { "$ref": "#/$defs/locKey" },
               "when": { "$ref": "#/$defs/expr" },
               "hidden_when_false": { "type": "boolean", "default": false, "description": "false — показать опцию неактивной (игрок видит, что что-то упустил)." },
+              "verdict": { "type": "string", "enum": ["right", "wrong"], "default": "right", "description": "Только kind=deduction: wrong — ошибка (penalty, счётчик, опция гаснет после попытки), её goto — короткая сцена-реакция с jump обратно в сцену вопроса; right — продолжение истории." },
+              "item": { "$ref": "#/$defs/asciiId", "description": "Материал из archive_items: опция «предъявить улику» рисуется карточкой и показывается только когда материал открыт у игрока (иначе скрыта)." },
               "effects": { "type": "array", "items": { "$ref": "#/$defs/effect" } },
               "goto": { "$ref": "#/$defs/asciiId" }
             }

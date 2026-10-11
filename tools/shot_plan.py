@@ -104,6 +104,15 @@ CLOSE_SUBJECT = {
                         "car anywhere in the picture."),
 }
 
+# Сеты, где сам фон снят изнутри машины: камера общих, средних планов, ракурсов и вставок — в салоне (CAMERA в салоне,
+# предметы салона в Essential objects); референс комнаты у них остаётся (фон или кроп принятого общего плана).
+CAR_SETS = {"bg_street_day"}
+# Что видно за стёклами в ots изнутри машины (по времени суток сета).
+INSIDE_STREET = {
+    "bg_street_night": "the street is only a wet blur beyond the windows",
+    "bg_street_day": "the grey overcast street beyond the windows is pale and soft, brighter than the cabin",
+}
+
 # Пары собеседников, которые сидят внутри описанного в фоне предмета (машина на street_night): их ots снимаются
 # изнутри — по SUBJECT крупных планов, без LAYOUT улицы и без референса комнаты. С фоном «улица из-за дороги»
 # модель ставила обоих на тротуар рядом с пустой «Волгой» (волна 70).
@@ -483,12 +492,12 @@ def fenced_blocks(md: str) -> list[str]:
 
 
 def load_prompt_parts() -> tuple[str, str]:
-    """Базовый промпт (§1) и блок реализма/непрерывности из стайл-библии."""
+    """Базовый промпт владельца (§1, телевизионная драма конца 1990-х) и блок CONTINUITY (§1a) из стайл-библии."""
     md = open(os.path.join(ROOT, "docs/production/prompts/style-bible.md"), encoding="utf-8").read()
     blocks = fenced_blocks(md)
-    base = next(b for b in blocks if b.startswith("Create a photorealistic cinematic still"))
-    realism = next(b for b in blocks if b.startswith("PHOTOGRAPHIC REALISM"))
-    return base, realism
+    base = next(b for b in blocks if b.startswith("Create one original fictional live-action television drama still"))
+    continuity = next(b for b in blocks if b.startswith("CONTINUITY"))
+    return base, continuity
 
 
 def load_bg_subjects() -> dict[str, str]:
@@ -497,8 +506,8 @@ def load_bg_subjects() -> dict[str, str]:
     for line in md.splitlines():
         m = re.match(r"\| `(bg_[a-z0-9_]+)` \| (SUBJECT: .*?)\s*\|\s*$", line)
         if m:
-            # COMPOSITION и LIGHT фона описывают кадр фона; у кадра покрытия своя камера и свой свет
-            subj = re.sub(r"\s*(?:COMPOSITION|LIGHT): .*?(?=\s[A-Z]{3,}: |$)", "", m.group(2))
+            # COMPOSITION, LIGHT и MOOD фона описывают кадр фона; у кадра покрытия своя камера, свет и действие
+            subj = re.sub(r"\s*(?:COMPOSITION|LIGHT|MOOD): .*?(?=\s[A-Z]{3,}: |$)", "", m.group(2))
             subj = re.sub(r"\s*СЕЗОН: .*$", "", subj)
             out[m.group(1)] = subj.strip()
     return out
@@ -526,64 +535,72 @@ def ref_jobs(manifest: list[dict]) -> dict[str, str]:
     return {it["id"]: it["job"] for it in manifest if it.get("job") and it["kind"] in ("bg", "sprite", "shot")}
 
 
-def camera_block(kind: str, angle: str, cast: list[dict], focus: str | None, from_who: str | None, names) -> str:
-    """Блок CAMERA (this shot) по стайл-библии §1a."""
+def camera_block(kind: str, angle: str, cast: list[dict], focus: str | None, from_who: str | None, names,
+                 inside: bool = False, bg_id: str | None = None) -> str:
+    """Поле «Camera position» блока SCENE (стайл-библия §1a): практическая точка съёмки, уровень глаз участника,
+    32–45 мм, задний план узнаваем с умеренной мягкостью — язык базового промпта владельца. `inside` — люди сидят
+    в машине (CLOSE_SUBJECT): камера тоже в салоне, «комната» — салон и улица за стёклами."""
+    if inside and kind == "wide":
+        n_in = sum(1 for c in cast if c["who"] in INSIDE_PEOPLE.get(bg_id or "", set()))
+        n_out = len(cast) - n_in
+        seats = ("the people in the front seats seen from behind and in profile" if n_in > 1 else
+                 "one person in a front seat seen from behind and in profile" if n_in == 1 else "the empty front seats")
+        far = (", and beyond the windscreen, small and pale, the people across the street at the notary office door and "
+               "by the kiosk" if n_out else "")
+        return (f"The camera is on the back seat of the parked car at the eye level of a seated person, a 32 mm-equivalent "
+                f"field of view: {seats}, the windscreen with the street and the notary office door beyond{far}, the "
+                f"dashboard and the wipers in the lower part of the frame; the cabin darker than the overcast street outside")
+    if inside and kind == "medium":
+        return (f"The camera is inside the car, at the eye level of a seated person, a 40 mm-equivalent field of view: "
+                f"{len(cast)} people in the front seats from the chest up, the door pillar or a headrest overlapping the edge "
+                f"of the frame, the grey street readable through the windows behind them")
+    if inside and kind == "ots":
+        return (f"The camera is on the back seat just behind {names(from_who)}'s shoulder, a 45 mm-equivalent field of view: "
+                f"the back of {names(from_who)}'s head and shoulder overlap the near edge of the frame, {names(focus)} in the "
+                f"other front seat is turned toward the camera, readable, the side window and the street behind with modest "
+                f"softness. It is a left-hand-drive car: the steering wheel is in front of the driver on the left")
+    if inside and kind in ("close", "reaction"):
+        verb = "speaking" if kind == "close" else "listening, not speaking"
+        return (f"The camera is inside the car, in the other front seat at the eye level of {names(focus)}, a 45 mm-equivalent "
+                f"field of view: a medium close-up of {names(focus)} {verb}, head and shoulders, the door pillar or the "
+                f"window frame overlapping the edge, the overcast street through the side window behind, brighter than the "
+                f"cabin, with modest softness")
+    if inside and kind == "insert":
+        return ("The camera is inside the car at the eye level of a seated person, a 45 mm-equivalent field of view at arm's "
+                "length: the detail fills the frame, no faces, the street beyond the glass pale and soft")
     if kind == "wide":
-        size = "wide establishing shot, the whole room, people small inside the space"
-        lens = "35mm, deep focus"
-        comp = "everyone visible in full, lower third of the frame kept free of faces (the text box lives there), headroom above the tallest person"
-        feel = "the viewer should feel the room is bigger than the people in it"
-    elif kind == "medium":
-        size = (f"medium shot, waist up, {len(cast)} people; the camera has moved INTO the room close to them: this is NOT "
-                f"the wide view of Reference 1, which is only the source of the room's furniture and light")
-        lens = "40mm, moderate depth of field"
-        comp = ("framed from the waist up: the bottom edge of the frame cuts at the desk top or the waist, each head is about "
-                "one fifth of the frame height, little floor and ceiling in frame; people keep the same left-to-right order "
-                "as seen from the door")
-        feel = "a conversation in progress, nothing staged"
-    elif kind == "ots":
-        size = f"over-the-shoulder shot: the back of {names(from_who)}'s head and shoulder in the near foreground, {names(focus)} facing the camera beyond"
-        lens = "50mm, shallow depth of field, the foreground shoulder soft"
-        comp = (f"{names(focus)} framed in the right or left two thirds with looking room toward the foreground shoulder; "
-                f"the 180-degree axis of the conversation is kept: people stay on the same sides as seen from the door")
-        feel = "we listen from one side of the conversation"
-    elif kind == "close":
-        size = f"close-up of {names(focus)}, face and shoulders; the head is about a third of the frame height"
-        lens = "85mm portrait, very shallow depth of field, background softly blurred"
-        comp = "the face in the upper two thirds of the frame, eyes on the upper third line, little headroom"
-        feel = "every flicker of expression counts"
-    elif kind == "reaction":
-        size = f"reaction shot: {names(focus)} listening, not speaking, medium close-up"
-        lens = "85mm, shallow depth of field"
-        comp = "the listener slightly off-centre, a soft edge of the speaker's shoulder in the near foreground"
-        feel = "the listener's face tells the truth the speaker will not"
-    elif kind == "insert":
-        size = "insert, extreme close-up of a detail"
-        lens = "85mm macro-like, very shallow depth of field"
-        comp = "the detail fills the whole frame at arm's length: no full room, no floor, no ceiling, no faces"
-        feel = "a pause on the evidence"
-    else:  # angle
-        size = ("cutaway from an unexpected vantage point: the camera stands where it never stood in the wide view, "
-                "so the framing is clearly different from Reference 1; most of the room stays visible")
-        lens = "28mm, deep focus, no fisheye distortion"
-        comp = "people inside the space, unusual vantage point"
-        feel = "pressure, surveillance: the system is bigger than the people"
-    a = {
-        "eye": "eye level",
-        "low": "low angle: the camera is near the floor or on a table top, tilted up; part of the ceiling in frame",
-        "high": "high angle: the camera is above head height, tilted down",
-        "doorway": "from the corridor through the half-open door",
-        "reflection": "reflection in the window glass",
-        "foreground": "eye level or lower, looking past objects in the near foreground that partly cover the frame",
-    }[angle]
-    return (
-        "CAMERA (this shot)\n"
-        f"- Shot size: {size}.\n"
-        f"- Angle and height: {a}.\n"
-        f"- Lens: {lens}.\n"
-        f"- Composition: {comp}.\n"
-        f"- Framing is motivated by the moment: {feel}."
-    )
+        return ("The camera stands at the door end of the room at the eye level of a standing person, a 32 mm-equivalent "
+                "field of view: the whole room with everyone in it, people small inside the space, surroundings in focus; "
+                "the lower third of the frame is kept free of faces (the text box lives there), headroom above the tallest "
+                "person. The viewer should feel the room is bigger than the people in it")
+    if kind == "medium":
+        return (f"The camera is inside the room, a few steps from the people, at the eye level of a seated participant, a "
+                f"40 mm-equivalent field of view: {len(cast)} people from the waist up, the nearest shoulder or the desk edge "
+                f"overlapping the frame, each head about one fifth of the frame height, little floor and ceiling; people keep "
+                f"the same left-to-right order as seen from the door. This is NOT the wide view of Reference 1, which is only "
+                f"the source of the room's furniture and light. A conversation in progress, nothing staged")
+    if kind == "ots":
+        return (f"The camera is just behind {names(from_who)}'s shoulder at that person's eye level, a 45 mm-equivalent field "
+                f"of view: the back of {names(from_who)}'s head and shoulder overlap the near edge of the frame, {names(focus)} "
+                f"faces the camera beyond, both readable, the background recognizable with modest optical softness; the "
+                f"180-degree axis of the conversation is kept, people stay on the same sides as seen from the door. We listen "
+                f"from one side of the conversation")
+    if kind == "close":
+        return (f"The camera is two or three steps in front of {names(focus)} at that person's eye level, a 45 mm-equivalent "
+                f"field of view: a medium close-up, head and shoulders filling the frame, eyes on the upper third line, the "
+                f"surroundings recognizable behind with modest optical softness, no very shallow depth of field. Every "
+                f"flicker of expression counts")
+    if kind == "reaction":
+        return (f"The camera is at the eye level of {names(focus)}, a 45 mm-equivalent field of view: a medium close-up of "
+                f"{names(focus)} listening, not speaking, slightly off-centre, the edge of the speaker's shoulder overlapping "
+                f"the side of the frame, the surroundings recognizable behind with modest softness. The listener's face "
+                f"tells the truth the speaker will not")
+    if kind == "insert":
+        return ("The camera looks down at the detail from the eye level of a seated participant, a 45 mm-equivalent field of "
+                "view at arm's length: the detail fills the frame, no full room, no floor, no ceiling, no faces. A pause on "
+                "the evidence")
+    # angle: ракурс описан физически конкретно в тексте действия (ANGLES), build_prompt дописывает его сюда.
+    return "A cutaway from an unexpected but physically available vantage point, where the camera never stood in the wide view"
 
 
 GARMENT_WORDS = ("coat", "jacket", "suit", "cardigan", "dress", "sweater", "shirt", "blouse", "uniform", "overalls",
@@ -610,12 +627,56 @@ def scene_subject(shot: dict, bg_id: str, bg_subject: str) -> str:
     return bg_subject
 
 
-def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str, bg_id: str, names, present: list[str]) -> str:
-    """Собрать промпт кадра: база §1 с заменённым CAMERA + реализм + референсы + сцена."""
-    cam = camera_block(shot["kind"], shot["angle"], shot["cast"], shot.get("focus"), shot.get("from"), names)
-    # заменить блок CAMERA базового промпта
-    body = re.sub(r"CAMERA\n(?:- [^\n]*\n)+", cam + "\n", base, count=1)
-    body = body.replace("IMPORTANT RESTRICTIONS", realism.rstrip("\n") + "\n\nIMPORTANT RESTRICTIONS", 1)
+# Подстановки в базовый промпт владельца (стайл-библия §1, пометки): город и период эпизода вместо стилевой
+# отсылки к Петербургу; формат кадра игры вместо «approximately 5:3».
+PERIOD_SOURCE = "St Petersburg in the late 1990s."
+PERIOD_EPISODE = "Moscow in the early 1990s."
+FRAME_SOURCE = "Landscape composition approximately 5:3, one frame, without borders."
+FRAME_EPISODE = "Landscape composition 16:9, the frame of the game, one frame, without borders."
+SCENE_TEMPLATE_RE = re.compile(r"SCENE\n\nLocation and time: \[.*\Z", re.S)
+TOD_WORDS = {"day": "daytime", "evening": "evening", "night": "night"}
+# Время действия сета для поля «Location and time» (титры-даты сцен эпизода); по умолчанию — осень 1993.
+WHEN_BY_SET = {
+    "yard": "Moscow, July 1993, hot summer dusk",
+    "apartment_zoya": "Moscow, August 1993, daytime",
+    "notary": "Moscow, August 1993, daytime",
+    "stairwell": "Moscow, August 1993, evening",
+    "office_now": "Moscow, 2004, daytime",
+}
+
+
+# Предметы сцены для сетов, где SUBJECT не делится на «место: предметы» (салон машины и тротуар): ключ — (фон, inside).
+ESSENTIAL_OBJECTS = {
+    ("bg_street_day", True): ("the Lada's dashboard and steering wheel on the left, the rear-view mirror, a thermos on the "
+                              "passenger side, the wipers; beyond the glass the notary office's heavy dark door with a brass "
+                              "plate and the black Volga at the kerb"),
+    ("bg_street_day", False): ("the notary office's heavy dark double door with a brass plate, the black Volga sedan at the "
+                               "kerb, a newspaper kiosk, bare trees, slush and yellow leaves at the kerb"),
+    ("bg_street_night", True): ("the Volga's dashboard and steering wheel on the left, rain on the windscreen and the side "
+                                "windows; beyond the glass the sodium street lamp, the wet asphalt and the warm lit office "
+                                "window with its dim doorway"),
+    ("bg_street_night", False): ("the lit doorway with its small canopy, the warm office window, the parked dark Volga at the "
+                                 "kerb, wet asphalt reflecting the sodium lamp, the bare tree"),
+}
+
+
+def essential_objects(subject: str) -> str:
+    """Список предметов из SUBJECT фона: всё после первого двоеточия (описания фонов построены как «место, год: предметы»)."""
+    body = re.sub(r"^SUBJECT:\s*", "", subject).strip()
+    if ": " in body:
+        body = body.split(": ", 1)[1]
+    body = body.rstrip(".")
+    return body[0].lower() + body[1:] if body else "only the objects named in the location"
+
+
+def build_prompt(base: str, continuity: str, shot: dict, bg_subject: str, tod: str, bg_id: str, names, present: list[str]) -> str:
+    """Собрать промпт кадра: базовый промпт владельца (§1) с подстановками периода и формата + REFERENCE IMAGES +
+    CONTINUITY + блок SCENE из пяти полей (§3), где «Camera position» описывает конкретный кадр."""
+    # Камера в салоне: все кадры сетов, где сам фон снят изнутри машины (CAR_SETS), и кадры людей внутри (inside).
+    cam_inside = bool(shot.get("inside")) or (bg_id in CAR_SETS and shot["kind"] in ("wide", "medium", "angle", "insert"))
+    cam = camera_block(shot["kind"], shot["angle"], shot["cast"], shot.get("focus"), shot.get("from"), names,
+                       inside=cam_inside, bg_id=bg_id)
+    body = base.replace(PERIOD_SOURCE, PERIOD_EPISODE, 1).replace(FRAME_SOURCE, FRAME_EPISODE, 1)
     # референсы
     closer = shot["kind"] in ("medium", "close", "reaction", "angle") and REF_SHOTS.get(shot["set"], {}).get(shot["kind"])
     ref_tod = ref_shot_tod(closer) if closer else None
@@ -672,13 +733,28 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
         people_txt = "People in frame: " + "; ".join(people) + "." if people else "The room is empty."
         action = shot.get("action", "")
     layout = LAYOUT.get(bg_id, "") if shot["kind"] in ("wide", "medium", "ots", "angle") and not shot.get("inside") else ""
-    scene = (
-        "SCENE TO DEPICT:\n"
-        f"Moscow, 1993. {scene_subject(shot, bg_id, bg_subject)} LIGHT NOW: {light_now(bg_id, tod)}. "
-        f"{layout + ' ' if layout else ''}"
-        f"{people_txt} {action}".strip()
-    )
-    body = body.replace("SCENE TO DEPICT:\n[insert specific scene description here]", ref_block + "\n\n" + scene)
+    subject = scene_subject(shot, bg_id, bg_subject)
+    when = WHEN_BY_SET.get(shot["set"], f"Moscow, autumn 1993, {TOD_WORDS.get(tod, tod)}")
+    place = re.sub(r"^SUBJECT:\s*", "", subject).strip()
+    place = place[0].upper() + place[1:] if place else place
+    if shot["kind"] == "angle":
+        cam = (f"{cam}: {action[0].lower() + action[1:].rstrip('.')}; the framing is clearly different from Reference 1, a "
+               f"32 mm-equivalent field of view without fisheye distortion, the horizon straight, most of the space still "
+               f"visible, people inside it. Pressure, surveillance: the system is bigger than the people")
+        action = ""
+    objects = ESSENTIAL_OBJECTS.get((bg_id, cam_inside)) or essential_objects(subject)
+    scene_lines = [
+        "SCENE",
+        "",
+        f"Location and time: {when}. {place}{' ' + layout if layout else ''}",
+        f"People and action: {(people_txt + ' ' + action).strip()}",
+        f"Camera position: {cam}.",
+        f"Light sources: {light_now(bg_id, tod)}.",
+        f"Essential objects: {objects}; nothing added that is not in the room reference.",
+    ]
+    scene = "\n".join(scene_lines)
+    assert SCENE_TEMPLATE_RE.search(body), "базовый промпт без блока SCENE (стайл-библия §1)"
+    body = SCENE_TEMPLATE_RE.sub(lambda _m: ref_block + "\n\n" + continuity.rstrip("\n") + "\n\n" + scene + "\n", body)
     return body
 
 
@@ -804,14 +880,14 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
                f"{names(b)} is the person farther from the camera, face to the lens, speaking to {names(a)}.")
         inside = frozenset({a, b}) in INSIDE_PAIRS.get(bg, set())
         inside_txt = (f" Both of them sit inside the car and the camera is inside the car with them, on the back seat "
-                      f"just behind {names(a)}'s shoulder; the street is only a wet blur beyond the windows. It is a "
-                      f"left-hand-drive car: the steering wheel is in front of the driver on the left." if inside
+                      f"just behind {names(a)}'s shoulder; {INSIDE_STREET.get(bg, 'the street is only a soft blur beyond the windows')}. "
+                      f"It is a left-hand-drive car: the steering wheel is in front of the driver on the left." if inside
                       else OTS_EXTRA.get(bg, ""))
         add("ots", f"ots_{a}_{b}", cast, **{"from": a, "focus": b, "inside": inside},
-            action=(f"The camera stands just behind {names(a)}: the back of {names(a)}'s head and shoulder fill the near "
-                    f"foreground out of focus, and {names(a)} is not seen from the front. {far} Do not swap the two "
-                    f"people. Exactly two people are in the frame and each of them appears once: {names(a)} is only "
-                    f"the shoulder in the foreground, not also somewhere in the room.{side_txt}{inside_txt}"))
+            action=(f"{names(a)} is seen only from behind: the back of the head and the shoulder overlap the near edge of "
+                    f"the frame, {names(a)} is not seen from the front. {far} Do not swap the two people. Exactly two "
+                    f"people are in the frame and each of them appears once: {names(a)} is only the shoulder in the "
+                    f"foreground, not also somewhere in the room.{side_txt}{inside_txt}"))
     def outside_extra(who: str) -> str:
         """Крупный план/реакция человека, который в этом сете снаружи (не в INSIDE_PEOPLE): см. CLOSE_EXTRA."""
         if who in INSIDE_PEOPLE.get(bg, set()):
@@ -823,16 +899,16 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
             continue
         add("close", f"close_{who}_{expr}", [{"who": who, "expression": expr}], focus=who,
             inside=who in INSIDE_PEOPLE.get(bg, set()),
-            action=(f"{names(who)} is speaking; {EXPRESSIONS.get(expr, '')}. The camera is right in front of {names(who)} at arm's "
-                    f"length: only the face and shoulders fill the frame, the room is a soft blur behind; no full figure, no furniture in focus."
-                    + outside_extra(who)))
+            action=(f"{names(who)} is speaking to someone just off frame; {EXPRESSIONS.get(expr, '')}. Exactly one person in "
+                    f"the frame, head and shoulders; no full figure." + outside_extra(who)))
     for who, _ in d["present"].most_common(SHOT_LIMITS["reaction"]):
         if who in HIDDEN_FACE:
             continue
         add("reaction", f"reaction_{who}", [{"who": who, "expression": "neutral"}], focus=who,
             inside=who in INSIDE_PEOPLE.get(bg, set()),
-            action=(f"{names(who)} is listening to someone off frame, silent. The camera is close: head and shoulders fill the "
-                    f"frame, a soft edge of the speaker's shoulder at the frame's side, the room a blur behind." + outside_extra(who)))
+            action=(f"{names(who)} is listening to someone off frame, silent, a small pause before answering. Exactly one "
+                    f"person in the frame, head and shoulders; the edge of the speaker's shoulder may overlap the side of "
+                    f"the frame." + outside_extra(who)))
     for i, detail in enumerate(INSERTS.get(bg, [])[: SHOT_LIMITS["insert"]], start=1):
         # Вставки в сете с SUBJECT салона (машина): деталь внутри машины — без референса улицы, по SUBJECT салона.
         add("insert", f"insert_{i}", [], detail=detail, inside=bg in CLOSE_SUBJECT)
@@ -846,8 +922,10 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
 def write_md(path: str, sets: list[dict], plans: dict[str, list[dict]]) -> None:
     lines = ["# Шот-лист эпизода 1 по сетам", "",
              "Сгенерировано `tools/shot_plan.py` по эпизоду: сет = фон × время суток; состав, пары собеседников и выражения —",
-             "из сцен. Промпты — `assets/ep01/shots/plan.json` (база стайл-библии §1 с блоком CAMERA §1a, PHOTOGRAPHIC REALISM,",
-             "CONTINUITY и референсами фона и спрайтов). Каждый кадр после генерации просматривается; брак перегенерируется.", ""]
+             "из сцен. Промпты — `assets/ep01/shots/plan.json` (базовый промпт владельца, стайл-библия §1: телевизионная драма",
+             "конца 1990-х, аналоговое ТВ; блок SCENE из пяти полей по §3, камера кадра — поле «Camera position» по §1a;",
+             "REFERENCE IMAGES и CONTINUITY — референсы комнаты и спрайтов). Каждый кадр после генерации просматривается;",
+             "брак перегенерируется.", ""]
     total = 0
     for d in sets:
         shots = plans.get(d["set"], [])

@@ -359,6 +359,14 @@ def integrity(ep: dict, rep: Report) -> None:
                         rep.err(f"{where} option {o['id']}.when: {m}")
                 for eff in o.get("effects", []):
                     check_effect(eff, variables, ep, f"{where} option {o['id']}", rep)
+                if o.get("item") and o["item"] not in archive:
+                    rep.err(f"{where} option {o['id']}: item {o['item']} не в archive_items")
+                if o.get("verdict") and step.get("kind") != "deduction":
+                    rep.warn(f"{where} option {o['id']}: verdict только у выборов kind=deduction")
+            if step.get("kind") == "deduction":
+                deduction_check(ep, sid, step, variables, rep)
+            elif step.get("hint_after") or step.get("penalty"):
+                rep.warn(f"{where}: hint_after/penalty только у выборов kind=deduction")
         if do == "set":
             for eff in step["effects"]:
                 check_effect(eff, variables, ep, where, rep)
@@ -444,6 +452,51 @@ def integrity(ep: dict, rep: Report) -> None:
     # content warnings
     if ep["archetype"] in ("serial_killer", "cannibal", "family_murder") and not ep.get("content_warnings"):
         rep.warn("content_warnings пусты для тяжёлого архетипа")
+
+
+def deduction_check(ep: dict, sid: str, step: dict, variables: set[str], rep: Report) -> None:
+    """Дедуктивная развилка (02-narrative-blocks.md §8): история не ломается — верный ход всегда достижим,
+    неверный ведёт в короткую сцену-реакцию и возвращается к вопросу."""
+    scenes = ep.get("scenes", {})
+    where = f"scene {sid} deduction {step.get('id')}"
+    opts = step.get("options", [])
+    rights = [o for o in opts if o.get("verdict", "right") == "right"]
+    wrongs = [o for o in opts if o.get("verdict") == "wrong"]
+    if not rights:
+        rep.err(f"{where}: нет ни одной опции verdict=right — история ломается")
+    if not wrongs:
+        rep.warn(f"{where}: нет опций verdict=wrong — это не дедукция, а обычный выбор")
+    if not any(not o.get("when") and not o.get("item") for o in rights):
+        rep.err(f"{where}: нужна хотя бы одна верная опция без when и без item (всегда доступная)")
+    if step.get("timer_ms"):
+        rep.err(f"{where}: таймер на дедуктивной развилке запрещён (игрок думает)")
+    if not step.get("penalty"):
+        rep.warn(f"{where}: нет penalty — ошибки ничего не стоят")
+    for eff in step.get("penalty", []):
+        check_effect(eff, variables, ep, f"{where}.penalty", rep)
+    for o in wrongs:
+        # Сцена-реакция должна вернуться к вопросу не дальше чем через 2 перехода jump.
+        target = o.get("goto")
+        seen = []
+        cur = target
+        back = False
+        for _ in range(3):
+            sc = scenes.get(cur)
+            if not sc:
+                break
+            seen.append(cur)
+            last = sc.get("steps", [{}])[-1]
+            if last.get("do") == "jump" and last.get("scene") == sid:
+                back = True
+                break
+            cur = last.get("scene") if last.get("do") == "jump" else None
+            if not cur:
+                break
+        if not back:
+            rep.err(f"{where} option {o['id']}: неверный ответ ведёт в {target}, а оттуда нет jump обратно в {sid} "
+                    f"(не больше двух переходов; пройдено {seen})")
+        if o.get("remember"):
+            rep.warn(f"{where} option {o['id']}: remember у неверной опции не нужен")
 
 
 def check_effect(eff: dict, variables: set[str], ep: dict, where: str, rep: Report) -> None:
