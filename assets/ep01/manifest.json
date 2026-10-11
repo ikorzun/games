@@ -2456,5 +2456,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_195800_2836710a-dedb-41cb-b55d-d24f53305315.png",
   "target": "assets/ep01/shots/street_day/close_oper_neutral.webp",
   "job": "2836710a-dedb-41cb-b55d-d24f53305315"
+ },
+ {
+  "id": "sh_street_day_ots_oper_sledak",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_200348_cb15ef33-9fcb-4022-9ba6-4a537950e96a.png",
+  "target": "assets/ep01/shots/street_day/ots_oper_sledak.webp",
+  "job": "cb15ef33-9fcb-4022-9ba6-4a537950e96a"
+ },
+ {
+  "id": "sh_street_day_ots_sledak_oper",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_200349_bd9f290e-f040-41e9-ba66-f4488d113900.png",
+  "target": "assets/ep01/shots/street_day/ots_sledak_oper.webp",
+  "job": "bd9f290e-f040-41e9-ba66-f4488d113900"
+ },
+ {
+  "id": "sh_street_day_close_oper_grin",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_200349_e772a326-f033-4ae0-9943-8f6cff023c31.png",
+  "target": "assets/ep01/shots/street_day/close_oper_grin.webp",
+  "job": "e772a326-f033-4ae0-9943-8f6cff023c31"
+ },
+ {
+  "id": "sh_street_day_close_sledak_firm",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_200349_713f5c55-3f9c-41ff-b245-42c7c52b24df.png",
+  "target": "assets/ep01/shots/street_day/close_sledak_firm.webp",
+  "job": "713f5c55-3f9c-41ff-b245-42c7c52b24df"
  }
 ]

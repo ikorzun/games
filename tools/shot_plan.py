@@ -343,7 +343,8 @@ REF_SHOTS = {
     # ракурсов — wide_1 (вид с заднего сиденья); крупные планы и реакции внутри — по close_sledak_tense; средние и
     # ракурсы — кроп wide_1 без приборной панели (`refs/street_day_medium.jpg`, media id после импорта по URL).
     "street_day": {"room": "sh_street_day_wide_1", "close": "sh_street_day_close_sledak_tense",
-                   "reaction": "sh_street_day_close_sledak_tense"},
+                   "reaction": "sh_street_day_close_sledak_tense",
+                   "medium": "media:aea785fc-78b6-459e-97ad-36dfd3965407", "angle": "media:aea785fc-78b6-459e-97ad-36dfd3965407"},
 }
 # Для ракурсов (angle) референс — принятый средний план, а не общий: с общим планом модель дважды
 # меняла людей местами (office_day, волна 18), со средним оба ракурса вышли с первого раза.

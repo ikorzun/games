@@ -3,16 +3,24 @@
  * window.__vn.autoplay (headless-прогон в CI) и тестами.
  */
 import type { Interpreter } from './interpreter';
-import type { EngineEvent, MinigameOutcomeKind, MinigameResult } from './types';
+import type { ChoiceOptionView, EngineEvent, MinigameOutcomeKind, MinigameResult, Verdict } from './types';
 
 export type ChoicePolicy = 'first' | 'last' | 'random' | 'default';
 export type MinigamePolicy = MinigameResult | 'random';
 
 export interface AutoplayOptions {
-  /** Политика для выборов без явного ответа. По умолчанию `first`. */
+  /**
+   * Политика для выборов без явного ответа. По умолчанию `first`. На дедуктивной развилке `first` и запасной
+   * вариант `default` берут первую доступную ВЕРНУЮ опцию (иначе прогон собирал бы все неверные ходы);
+   * `last` и `random` выбирают среди всех доступных — испробованные гаснут, верная остаётся, петля конечна.
+   */
   choice?: ChoicePolicy;
-  /** Явные ответы: id выбора → id опции. */
-  choices?: Readonly<Record<string, string>>;
+  /**
+   * Явные ответы: id выбора → id опции либо список ответов по порядку на повторные заходы в тот же выбор
+   * (дедуктивная развилка после неверного хода задаёт вопрос снова). Недоступный ответ (в том числе уже
+   * испробованный) пропускается; когда ответа нет — решает политика.
+   */
+  choices?: Readonly<Record<string, string | readonly string[]>>;
   /** Результат для мини-игр без явного ответа. По умолчанию `success`. */
   minigame?: MinigamePolicy;
   /** Явные результаты: id мини-игры → результат. */
@@ -33,7 +41,8 @@ export interface AutoplayReport {
   steps: number;
   /** Посещённые сцены по порядку (с повторами). */
   scenes: string[];
-  choices: Array<{ choice: string; option: string }>;
+  /** Сделанные выборы по порядку; у дедуктивной развилки — с вердиктом (неверные ходы в журнал не попадают). */
+  choices: Array<{ choice: string; option: string; verdict?: Verdict }>;
   minigames: Array<{ id: string; result: MinigameResult; counted: MinigameOutcomeKind }>;
   truncated: boolean;
 }
@@ -54,6 +63,11 @@ export function normalizePolicy(policy: AutoplayPolicy | undefined): AutoplayOpt
   return typeof policy === 'string' ? { choice: policy } : policy;
 }
 
+/** «Первая» опция: у дедуктивной развилки — первая доступная верная; у остальных выборов — просто первая. */
+function firstOf(enabled: readonly ChoiceOptionView[]): ChoiceOptionView | undefined {
+  return enabled.find((o) => o.verdict !== 'wrong') ?? enabled[0];
+}
+
 export function runAutoplay(
   interp: Interpreter,
   policy: AutoplayPolicy = 'first',
@@ -63,6 +77,19 @@ export function runAutoplay(
   const rand = mulberry32(opts.seed ?? 1);
   const maxSteps = opts.maxSteps ?? 20000;
   if (!interp.started) interp.start();
+
+  /** Сколько ответов из явного списка уже израсходовано, по id выбора. */
+  const cursor = new Map<string, number>();
+  const explicitPick = (id: string, enabled: readonly ChoiceOptionView[]): ChoiceOptionView | undefined => {
+    const answer = opts.choices?.[id];
+    if (answer === undefined) return undefined;
+    if (typeof answer === 'string') return enabled.find((o) => o.id === answer);
+    let i = cursor.get(id) ?? 0;
+    let pick: ChoiceOptionView | undefined;
+    while (!pick && i < answer.length) pick = enabled.find((o) => o.id === answer[i++]);
+    cursor.set(id, i);
+    return pick;
+  };
 
   const report: AutoplayReport = {
     ending: null,
@@ -89,8 +116,7 @@ export function runAutoplay(
         break;
       case 'choice': {
         const enabled = pending.options.filter((o) => o.enabled);
-        const explicit = opts.choices?.[pending.id];
-        let pick = explicit !== undefined ? enabled.find((o) => o.id === explicit) : undefined;
+        let pick = explicitPick(pending.id, enabled);
         if (!pick) {
           switch (opts.choice ?? 'first') {
             case 'last':
@@ -100,14 +126,14 @@ export function runAutoplay(
               pick = enabled[Math.floor(rand() * enabled.length)];
               break;
             case 'default':
-              pick = enabled.find((o) => o.id === pending.default_option) ?? enabled[0];
+              pick = enabled.find((o) => o.id === pending.default_option) ?? firstOf(enabled);
               break;
             default:
-              pick = enabled[0];
+              pick = firstOf(enabled);
           }
         }
         if (!pick) throw new Error(`autoplay: в выборе ${pending.id} нет доступных опций`);
-        report.choices.push({ choice: pending.id, option: pick.id });
+        report.choices.push({ choice: pending.id, option: pick.id, ...(pick.verdict !== null ? { verdict: pick.verdict } : {}) });
         interp.choose(pick.id);
         break;
       }

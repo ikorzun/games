@@ -2,7 +2,7 @@
  * Состояние партии и операции над ним (эффекты, начальные значения, нормализация при загрузке).
  * Состояние — чистый JSON без ссылок на объекты движка, поэтому сериализуется как есть.
  */
-import type { Effect, Episode, GameState, Value, VariableDef } from './types';
+import type { DeductionState, Effect, Episode, GameState, Value, VariableDef } from './types';
 
 export class StateError extends Error {
   constructor(message: string) {
@@ -47,6 +47,7 @@ export function createInitialState(
     globals,
     archive: [],
     journal: [],
+    deductions: {},
   };
 }
 
@@ -160,5 +161,41 @@ export function reconcileState(episode: Episode, saved: GameState): { state: Gam
   state.globals = globals;
   state.archive = Array.isArray(saved.archive) ? saved.archive.filter((x) => typeof x === 'string') : [];
   state.journal = Array.isArray(saved.journal) ? saved.journal : [];
+  state.deductions = reconcileDeductions(episode, (saved as Partial<GameState>).deductions, notes);
   return { state, notes };
+}
+
+/** id дедуктивных развилок эпизода (choice kind=deduction) → id их неверных опций. */
+function deductionChoices(episode: Episode): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const scene of Object.values(episode.scenes)) {
+    for (const step of scene.steps) {
+      if (step.do !== 'choice' || step.kind !== 'deduction') continue;
+      out.set(step.id, new Set(step.options.filter((o) => o.verdict === 'wrong').map((o) => o.id)));
+    }
+  }
+  return out;
+}
+
+/**
+ * Счётчики дедуктивных развилок из сейва. В сейвах до появления развилок поля нет — {}; мусор отбрасывается;
+ * развилки, которой больше нет в эпизоде, счётчики удаляются; испробованными остаются только опции, которые и
+ * сейчас неверные (иначе правка контента навсегда погасила бы ставшую верной опцию).
+ */
+function reconcileDeductions(episode: Episode, raw: unknown, notes: string[]): Record<string, DeductionState> {
+  const out: Record<string, DeductionState> = {};
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return out;
+  const known = deductionChoices(episode);
+  for (const [id, rec] of Object.entries(raw as Record<string, unknown>)) {
+    const wrong = known.get(id);
+    if (!wrong) {
+      notes.push(`дедуктивной развилки ${id} больше нет в эпизоде — её счётчики сброшены`);
+      continue;
+    }
+    const r = (typeof rec === 'object' && rec !== null ? rec : {}) as { fails?: unknown; tried?: unknown };
+    const tried = Array.isArray(r.tried) ? [...new Set(r.tried.filter((x): x is string => typeof x === 'string' && wrong.has(x)))] : [];
+    const fails = typeof r.fails === 'number' && Number.isInteger(r.fails) && r.fails > 0 ? r.fails : 0;
+    out[id] = { fails: Math.max(fails, tried.length), tried };
+  }
+  return out;
 }

@@ -313,7 +313,13 @@ export class Session {
             const optionId = await abortable(ui.showChoice(p, { signal }), signal);
             if (!alive()) return cancelled;
             this.interp.choose(optionId);
-            platform.track('choice', { id: p.id, option: optionId });
+            // Дедуктивная развилка: вердикт хода и число ошибок в ней (у неверного — с учётом этого хода).
+            const verdict = p.deduction ? p.options.find((o) => o.id === optionId)?.verdict : null;
+            platform.track('choice', {
+              id: p.id,
+              option: optionId,
+              ...(verdict ? { verdict, fails: this.interp.state.deductions[p.id]?.fails ?? 0 } : {}),
+            });
             break;
           }
           case 'minigame': {

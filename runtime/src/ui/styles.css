@@ -413,6 +413,55 @@ body {
   opacity: 0.7;
 }
 .vn-choice.is-disabled { opacity: 0.42; cursor: not-allowed; }
+/* Дедуктивная развилка (kind=deduction): шкала самообладания над кнопками, карточки-улики, испробованные
+   и подсвеченные ходы. Смысл несёт не только цвет: точки полные/пустые, ✕ и зачёркивание, значок подсказки. */
+.vn-choices__meter {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  box-sizing: border-box;
+  width: min(100%, 38em);
+  margin: -0.15em 0 0.1em;
+  font-size: calc(var(--fs) * var(--font-scale) * 0.78);
+  line-height: 1.2;
+  color: var(--c-muted);
+  text-shadow: 0 1px 3px #000;
+}
+.vn-choices__meter-label { letter-spacing: 0.06em; text-transform: uppercase; }
+.vn-choices__dots { display: inline-flex; gap: 0.45em; }
+.vn-choices__dot {
+  box-sizing: border-box;
+  width: 0.85em;
+  height: 0.85em;
+  border: 2px solid var(--c-muted);
+  border-radius: 50%;
+}
+.vn-choices__dot.is-on { background: var(--c-accent-soft); border-color: var(--c-accent-soft); }
+.vn-choice__item {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2em;
+  height: 2em;
+  color: #1b1a17;
+  background: var(--c-accent-soft);
+  border-radius: 3px;
+}
+.vn-choice__item .vn-ico { width: 1.3em; height: 1.3em; stroke-width: 1.8; }
+.vn-choice .vn-choice__mark { flex: none; width: 1.15em; height: 1.15em; margin-left: auto; }
+.vn-choice.is-tried .vn-choice__label { text-decoration: line-through; text-decoration-thickness: 1px; }
+.vn-choice.is-hint { border-color: var(--c-accent-soft); background: rgb(232 217 181 / 0.1); }
+.vn-choice.is-hint:hover,
+.vn-choice.is-hint:focus-visible { background: rgb(232 217 181 / 0.17); }
+.vn-choice.is-hint .vn-choice__mark { color: var(--c-accent-soft); }
+.vn-choices__hint {
+  box-sizing: border-box;
+  width: min(100%, 38em);
+  margin: 0.1em 0 0;
+  font-size: calc(var(--fs) * var(--font-scale) * 0.82);
+  color: var(--c-accent-soft);
+  text-shadow: 0 1px 3px #000;
+}
 .vn-choices__timer {
   width: min(100%, 38em);
   height: 4px;
@@ -1126,4 +1175,7 @@ body {
   .mg-btn.is-success { background: rgb(79 125 74 / 0.35); }
   .mg-btn.is-fail { background: rgb(138 58 53 / 0.35); }
   .vn-textbox[data-style='inner'] .vn-textbox__text { padding-left: 0; }
+  /* Дедукция без обводок: подсказка — тёплая подложка и значок, пустые точки шкалы — тусклая заливка, а не кольцо. */
+  .vn-choice.is-hint { background: rgb(232 217 181 / 0.16); }
+  .vn-choices__dot { border: 0; background: rgb(255 255 255 / 0.22); }
 }

@@ -70,7 +70,9 @@ export type FxKind =
   | 'black_hold'
   | 'static_tv'
   | 'rewind';
-export type ChoiceKind = 'investigative' | 'moral' | 'tactical' | 'dialogue' | 'cosmetic';
+export type ChoiceKind = 'investigative' | 'moral' | 'tactical' | 'dialogue' | 'cosmetic' | 'deduction';
+/** Вердикт опции дедуктивной развилки (kind=deduction); по умолчанию right. */
+export type Verdict = 'right' | 'wrong';
 
 export type BlockType =
   | 'cold_open'
@@ -234,6 +236,10 @@ export interface ChoiceOption {
   hidden_when_false?: boolean;
   effects?: Effect[];
   goto: string;
+  /** Только у kind=deduction: неверный ход ведёт в сцену-реакцию, которая возвращается к вопросу. */
+  verdict?: Verdict;
+  /** Только у kind=deduction: «предъявить улику» — id из archive_items; без материала в архиве опции нет. */
+  item?: string;
 }
 export interface ChoiceStep extends StepBase {
   do: 'choice';
@@ -244,6 +250,10 @@ export interface ChoiceStep extends StepBase {
   default_option?: string;
   remember?: boolean;
   options: ChoiceOption[];
+  /** kind=deduction: после стольких неверных ходов верные опции подсвечиваются (по умолчанию 2). */
+  hint_after?: number;
+  /** kind=deduction: эффекты за каждый неверный ход (обычно nerves sub 1). */
+  penalty?: Effect[];
 }
 export interface SetStep extends StepBase {
   do: 'set';
@@ -478,6 +488,14 @@ export interface JournalEntry {
   prompt_key?: string;
   /** Ключ локализации выбранной опции. */
   key: string;
+  /** Дедуктивная развилка: сколько неверных ходов было до верного. */
+  fails?: number;
+}
+
+/** Счётчики дедуктивной развилки: неверные ходы и испробованные (погашенные) опции. */
+export interface DeductionState {
+  fails: number;
+  tried: string[];
 }
 
 /** Состояние партии: ровно то, что описано в docs/architecture/06-engine-and-pipeline.md §5. */
@@ -489,6 +507,8 @@ export interface GameState {
   globals: Record<string, Value>;
   archive: string[];
   journal: JournalEntry[];
+  /** Дедуктивные развилки по id выбора (kind=deduction); в сейвах до них поля нет — читается как {}. */
+  deductions: Record<string, DeductionState>;
 }
 
 export interface SpriteView {
@@ -605,6 +625,21 @@ export interface ChoiceOptionView {
   id: string;
   key: string;
   enabled: boolean;
+  /** Вердикт опции дедуктивной развилки; у остальных выборов null. */
+  verdict: Verdict | null;
+  /** Уже испробована неверно в этой развилке: показывается неактивной со значком ✕. */
+  tried: boolean;
+  /** Подсказка: после hint_after неверных ходов подсвечены доступные верные опции. */
+  hinted: boolean;
+  /** Опция-улика (kind=deduction, `item`): материал архива для карточки с иконкой по виду. */
+  item: { id: string; kind: string; title_key: string } | null;
+}
+
+/** Шкала цены ошибок (первый эффект penalty, если это int-переменная с max): «Самообладание: 3 из 5». */
+export interface DeductionMeter {
+  var: string;
+  value: number;
+  max: number;
 }
 
 export interface ChoicePending {
@@ -616,6 +651,8 @@ export interface ChoicePending {
   default_option: string | null;
   remember: boolean;
   options: ChoiceOptionView[];
+  /** Дедуктивная развилка (kind=deduction): счётчик ошибок, порог подсказки, шкала; у остальных выборов null. */
+  deduction: { fails: number; hint_after: number; meter: DeductionMeter | null } | null;
 }
 
 export interface MinigamePending {

@@ -18,14 +18,19 @@
 import { EMPTY_CTX, LONG_LINE_CHARS, ShotIndex, afterHide, beatOf, choiceShot, entryShot, explicitShot, lineShot, listenerOf } from './editor';
 import type { ShotPick } from './editor';
 import { evalCondition } from './expr';
-import { applyEffects, cloneJson, createInitialState, envOf, setVariable } from './state';
+import { applyEffects, cloneJson, createInitialState, envOf, getVariable, setVariable } from './state';
 import { STAGE_FILTERS } from './types';
 import type {
   AdBreakPending,
+  ArchiveItem,
   Block,
   CaptionStyle,
   Character,
+  ChoiceOption,
+  ChoiceOptionView,
   ChoicePending,
+  ChoiceStep,
+  DeductionMeter,
   DocumentPending,
   Ending,
   EngineEvent,
@@ -93,6 +98,9 @@ export const DEFAULT_FX_MS: Readonly<Record<FxKind, number>> = {
 /** Предохранитель от бесконечных неблокирующих циклов (например, jump сам в себя). */
 const MAX_NONBLOCKING_STEPS = 5000;
 
+/** Дедуктивная развилка: после стольких неверных ходов верные опции подсвечиваются (schema: hint_after). */
+export const DEFAULT_HINT_AFTER = 2;
+
 /**
  * Кадр сцены «с нуля»: фон/фильтр/letterbox из scene.stage, без спрайтов и CG, музыка и эмбиент
  * сцены (или блока). Нужен при загрузке сейва без снимка кадра и как база для входа в сцену.
@@ -156,6 +164,7 @@ export class Interpreter {
   private readonly minigames: Readonly<Record<string, MinigameDef>>;
   private readonly endings = new Map<string, Ending>();
   private readonly archiveIds = new Set<string>();
+  private readonly archiveItems = new Map<string, ArchiveItem>();
   /** Кадры покрытия и монтажёр (docs/architecture/08-shot-grammar.md). */
   private readonly shots: ShotIndex;
   private readonly pov: string | null;
@@ -179,7 +188,10 @@ export class Interpreter {
     for (const c of episode.cast) this.cast.set(c.id, c);
     this.minigames = episode.minigames ?? {};
     for (const e of episode.endings) this.endings.set(e.id, e);
-    for (const a of episode.archive_items ?? []) this.archiveIds.add(a.id);
+    for (const a of episode.archive_items ?? []) {
+      this.archiveIds.add(a.id);
+      this.archiveItems.set(a.id, a);
+    }
     this.shots = new ShotIndex(episode.assets?.shots ?? []);
     this.pov = episode.frame.player_character ?? null;
     this.lineLength = options.lineLength ?? (() => 0);
@@ -264,6 +276,8 @@ export class Interpreter {
     }
     this._state = cloneJson(snap.state);
     this._view = cloneJson(snap.view);
+    // Снимки до появления дедуктивных развилок: счётчиков нет — ни одна опция ещё не испробована.
+    this._state.deductions ??= {};
     // Сейвы до появления покрытия: кадра нет, сцена идёт спрайтами до следующего входа в сцену.
     this._view.coverage ??= null;
     this._view.shot ??= null;
@@ -351,16 +365,28 @@ export class Interpreter {
     const option = step.options.find((o) => o.id === optionId);
     if (!option) throw new EngineError(`выбор ${p.id}: нет опции ${optionId}`);
 
-    applyEffects(this.state, this.episode, option.effects);
-    if (p.remember) {
-      this.state.journal.push({
-        choice: p.id,
-        option: option.id,
-        scene: this.state.scene_id,
-        ...(step.kind ? { kind: step.kind } : {}),
-        ...(step.prompt_key ? { prompt_key: step.prompt_key } : {}),
-        key: option.key,
-      });
+    const deduction = step.kind === 'deduction';
+    if (deduction && option.verdict === 'wrong') {
+      // Неверный ход: цена (penalty), затем эффекты опции; опция гаснет до конца развилки, в журнал не пишется.
+      // Сцена-реакция по goto сама вернётся jump'ом к вопросу — особой логики переходов нет.
+      applyEffects(this.state, this.episode, step.penalty);
+      applyEffects(this.state, this.episode, option.effects);
+      const rec = (this.state.deductions[step.id] ??= { fails: 0, tried: [] });
+      rec.fails += 1;
+      if (!rec.tried.includes(option.id)) rec.tried.push(option.id);
+    } else {
+      applyEffects(this.state, this.episode, option.effects);
+      if (p.remember) {
+        this.state.journal.push({
+          choice: p.id,
+          option: option.id,
+          scene: this.state.scene_id,
+          ...(step.kind ? { kind: step.kind } : {}),
+          ...(step.prompt_key ? { prompt_key: step.prompt_key } : {}),
+          key: option.key,
+          ...(deduction ? { fails: this.state.deductions[step.id]?.fails ?? 0 } : {}),
+        });
+      }
     }
     this.current = null;
     this.enterScene(option.goto, { reason: 'goto' });
@@ -790,29 +816,7 @@ export class Interpreter {
             this.emit({ t: 'shot', shot: next, transition: 'cut' });
           }
         }
-        let options = step.options.map((o) => ({
-          id: o.id,
-          key: o.key,
-          enabled: o.when === undefined ? true : this.testAt(o.when, step),
-          hidden: o.hidden_when_false === true,
-        }));
-        options = options.filter((o) => o.enabled || !o.hidden);
-        if (options.length === 0 || options.every((o) => !o.enabled)) {
-          // Ни одной доступной опции — ошибка контента; не оставляем игрока в тупике.
-          this.warn(`выбор ${step.id}: нет доступных опций — показываем все`);
-          options = step.options.map((o) => ({ id: o.id, key: o.key, enabled: true, hidden: false }));
-        }
-        const p: ChoicePending = {
-          kind: 'choice',
-          id: step.id,
-          prompt_key: step.prompt_key ?? null,
-          choice_kind: step.kind ?? null,
-          timer_ms: step.timer_ms ?? null,
-          default_option: step.default_option ?? null,
-          remember: step.remember ?? true,
-          options: options.map(({ id, key, enabled }) => ({ id, key, enabled })),
-        };
-        return p;
+        return this.choicePending(step);
       }
       case 'set': {
         applyEffects(state, this.episode, step.effects);
@@ -852,6 +856,76 @@ export class Interpreter {
         return { kind: 'end', ending };
       }
     }
+  }
+
+  /**
+   * Ожидание выбора: какие опции видны и доступны. Дедуктивная развилка (kind=deduction, 02-narrative-blocks §5a)
+   * сверх того: опция-улика видна, только если материал уже в архиве (иначе она подсказала бы ответ); испробованная
+   * неверно — видна, но погашена; после hint_after ошибок доступные верные опции подсвечены; шкала цены ошибок.
+   */
+  private choicePending(step: ChoiceStep): ChoicePending {
+    const deduction = step.kind === 'deduction';
+    const record = deduction ? this.state.deductions[step.id] : undefined;
+    const fails = record?.fails ?? 0;
+    const hintAfter = step.hint_after ?? DEFAULT_HINT_AFTER;
+    const hintOn = deduction && fails >= hintAfter;
+    const tried = new Set(record?.tried ?? []);
+
+    let rows: Array<{ option: ChoiceOption; enabled: boolean; tried: boolean }> = [];
+    for (const o of step.options) {
+      if (deduction && o.item !== undefined && !this.state.archive.includes(o.item)) continue;
+      const ok = o.when === undefined ? true : this.testAt(o.when, step);
+      if (!ok && o.hidden_when_false === true) continue;
+      const wasTried = deduction && tried.has(o.id);
+      rows.push({ option: o, enabled: ok && !wasTried, tried: wasTried });
+    }
+    if (rows.length === 0 || rows.every((r) => !r.enabled)) {
+      // Ни одной доступной опции — ошибка контента (у дедукции линтер требует всегда доступную верную);
+      // не оставляем игрока в тупике.
+      this.warn(`выбор ${step.id}: нет доступных опций — показываем все`);
+      rows = step.options.map((o) => ({ option: o, enabled: true, tried: false }));
+    }
+
+    const options = rows.map(({ option: o, enabled, tried: wasTried }): ChoiceOptionView => {
+      const verdict = deduction ? (o.verdict ?? 'right') : null;
+      return {
+        id: o.id,
+        key: o.key,
+        enabled,
+        verdict,
+        tried: wasTried,
+        // Подсвечиваем только то, что можно выбрать: погашенная «верная» опция подсказкой не является.
+        hinted: hintOn && enabled && verdict !== 'wrong',
+        item: deduction && o.item !== undefined ? this.itemView(o.item, o.key) : null,
+      };
+    });
+    return {
+      kind: 'choice',
+      id: step.id,
+      prompt_key: step.prompt_key ?? null,
+      choice_kind: step.kind ?? null,
+      timer_ms: step.timer_ms ?? null,
+      default_option: step.default_option ?? null,
+      remember: step.remember ?? true,
+      options,
+      deduction: deduction ? { fails, hint_after: hintAfter, meter: this.deductionMeter(step) } : null,
+    };
+  }
+
+  /** Материал архива для карточки «предъявить»; необъявленный (о нём уже предупредил unlock) — как документ. */
+  private itemView(id: string, fallbackKey: string): NonNullable<ChoiceOptionView['item']> {
+    const a = this.archiveItems.get(id);
+    return a ? { id, kind: a.kind, title_key: a.title_key } : { id, kind: 'document', title_key: fallbackKey };
+  }
+
+  /** Шкала дедукции: переменная первого эффекта penalty, если это int-переменная эпизода с max. */
+  private deductionMeter(step: ChoiceStep): DeductionMeter | null {
+    const name = step.penalty?.[0]?.var;
+    if (name === undefined) return null;
+    const def = this.episode.variables[name];
+    const value = getVariable(this.state, name);
+    if (!def || def.type !== 'int' || def.max === undefined || typeof value !== 'number') return null;
+    return { var: name, value, max: def.max };
   }
 
   /** `say` может заодно сменить выражение/позу/позицию спрайта говорящего. */
