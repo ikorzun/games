@@ -756,7 +756,8 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
             action=(f"{names(who)} is listening to someone off frame, silent. The camera is close: head and shoulders fill the "
                     f"frame, a soft edge of the speaker's shoulder at the frame's side, the room a blur behind."))
     for i, detail in enumerate(INSERTS.get(bg, [])[: SHOT_LIMITS["insert"]], start=1):
-        add("insert", f"insert_{i}", [], detail=detail)
+        # Вставки в сете с SUBJECT салона (машина): деталь внутри машины — без референса улицы, по SUBJECT салона.
+        add("insert", f"insert_{i}", [], detail=detail, inside=bg in CLOSE_SUBJECT)
     main_comp = comps[0] if comps else ()
     for ang, desc in ANGLES.get(bg, ANGLES_DEFAULT)[: SHOT_LIMITS["angle"]]:
         cast = [{"who": w, "expression": "neutral"} for w in main_comp]
