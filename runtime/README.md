@@ -399,3 +399,7 @@ npm run smoke:matrix -- --langs ru,en,es,pt
   играет — рантайм считает это «файла нет» (плейсхолдер и одно предупреждение), `__vn.assets(true)` тоже. Dev-сервер и плагин ассетов
   отвечают честным 404. Chromium при этом сообщает `net::ERR_ABORTED` по оборванным запросам аудио (смена трека, перезагрузка) —
   это не ошибка игры, смоук такие обрывы игнорирует.
+
+## Публикация
+
+Опубликованная сборка web-plain: https://ikorzun.github.io/games/ — workflow `.github/workflows/pages.yml` собирает `npm run build` и выкладывает `dist/` на GitHub Pages при каждом push в ветку (при выключенном Pages включает его сам).

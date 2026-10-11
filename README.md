@@ -81,6 +81,6 @@ python3 tools/vnexpr_test.py                                            # сам
   5 CG, 5 документов, 2 UI, 18 звуков — 78 файлов, 17,5 МБ; манифест `assets/ep01/manifest.json`, скачивает и
   коммитит workflow `fetch-assets` на раннере GitHub, локально — `python3 tools/fetch_assets.py …`).
   Зоны осмотра квартиры и плашка заголовка откалиброваны по реальному арту; smoke `--require-assets` зелёный.
-  Публикация сборки: GitHub Pages (`.github/workflows/pages.yml`; Pages включается сам, если репозиторий публичный).
+  Публикация сборки: GitHub Pages, https://ikorzun.github.io/games/ (`.github/workflows/pages.yml`, деплой при каждом push в ветку).
 - Дальше: прогон на телефоне → песочница Playgama → заморозка русского текста → перевод en/es/pt
   (`docs/production/roadmap.md`). Русский — первоисточник всего контента.
