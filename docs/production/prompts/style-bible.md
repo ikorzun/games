@@ -156,6 +156,8 @@ CONTINUITY (mandatory)
   shot of this set; expressions change, clothing never does.
 - People are never swapped: the person named for Reference 2 has Reference 2's face and clothes, and so on;
   who is near the camera and who is far is exactly as the scene text says.
+- Props are exactly as in the room reference: nothing added (no dust covers, extra chairs, cups or papers),
+  nothing removed; the left-to-right order of people and furniture is the same as in the wide view.
 ```
 
 Шаблон блока CAMERA для кадра раскадровки:

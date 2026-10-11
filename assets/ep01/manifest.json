@@ -645,16 +645,16 @@
  {
   "id": "sh_office_day_ots_expert_oper",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_142321_0182203f-b958-40b3-81a3-c6ef9dcb1a98.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_144236_6c140f52-1697-4626-9c1e-f9438b1c5c66.png",
   "target": "assets/ep01/shots/office_day/ots_expert_oper.webp",
-  "job": "0182203f-b958-40b3-81a3-c6ef9dcb1a98"
+  "job": "6c140f52-1697-4626-9c1e-f9438b1c5c66"
  },
  {
   "id": "sh_office_day_ots_oper_expert",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_142321_e8b8545c-b220-4c51-8ed8-d3f1959a2752.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_144236_0b7d00b4-6428-4bd0-83a9-b2d7d1e83bf1.png",
   "target": "assets/ep01/shots/office_day/ots_oper_expert.webp",
-  "job": "e8b8545c-b220-4c51-8ed8-d3f1959a2752"
+  "job": "0b7d00b4-6428-4bd0-83a9-b2d7d1e83bf1"
  },
  {
   "id": "sh_office_day_ots_lapin_wife_sledak",
@@ -666,9 +666,9 @@
  {
   "id": "sh_office_day_ots_boss_sledak",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_142921_8092eb9f-b41c-4eef-b851-6837ec705441.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_144236_a6ff2f5f-39a2-48f3-91fd-71829ee99707.png",
   "target": "assets/ep01/shots/office_day/ots_boss_sledak.webp",
-  "job": "8092eb9f-b41c-4eef-b851-6837ec705441"
+  "job": "a6ff2f5f-39a2-48f3-91fd-71829ee99707"
  },
  {
   "id": "sh_office_day_ots_sledak_boss",
@@ -687,9 +687,9 @@
  {
   "id": "sh_office_day_close_oper_neutral",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_142921_8f24a928-9b6d-45d6-9be6-be8f7e855474.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_144235_368584b1-12c5-4e71-a9bf-c0b5b504bcbf.png",
   "target": "assets/ep01/shots/office_day/close_oper_neutral.webp",
-  "job": "8f24a928-9b6d-45d6-9be6-be8f7e855474"
+  "job": "368584b1-12c5-4e71-a9bf-c0b5b504bcbf"
  },
  {
   "id": "sh_office_day_close_oper_grin",
@@ -718,5 +718,61 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_143644_d667d4ee-b1a0-4e2e-9e43-0dc2dd10858d.png",
   "target": "assets/ep01/shots/office_day/close_sledak_neutral.webp",
   "job": "d667d4ee-b1a0-4e2e-9e43-0dc2dd10858d"
+ },
+ {
+  "id": "sh_office_day_close_lapin_wife_worried",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_143911_d2de6470-fa4e-41b6-b2f6-af592f18a0d9.png",
+  "target": "assets/ep01/shots/office_day/close_lapin_wife_worried.webp",
+  "job": "d2de6470-fa4e-41b6-b2f6-af592f18a0d9"
+ },
+ {
+  "id": "sh_office_day_close_expert_neutral",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_143910_20a1e5a1-9d60-4c6c-a6ef-a28424373929.png",
+  "target": "assets/ep01/shots/office_day/close_expert_neutral.webp",
+  "job": "20a1e5a1-9d60-4c6c-a6ef-a28424373929"
+ },
+ {
+  "id": "sh_office_day_close_boss_stern",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_143911_290d7e3f-a893-4ceb-8532-fcc6de01e085.png",
+  "target": "assets/ep01/shots/office_day/close_boss_stern.webp",
+  "job": "290d7e3f-a893-4ceb-8532-fcc6de01e085"
+ },
+ {
+  "id": "sh_office_day_close_sledak_tired",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_143911_ba40ab79-959b-4df1-9f5b-4e5e9164f588.png",
+  "target": "assets/ep01/shots/office_day/close_sledak_tired.webp",
+  "job": "ba40ab79-959b-4df1-9f5b-4e5e9164f588"
+ },
+ {
+  "id": "sh_office_day_close_boss_tired",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_144502_6861b278-e054-428a-86e5-808b16294d07.png",
+  "target": "assets/ep01/shots/office_day/close_boss_tired.webp",
+  "job": "6861b278-e054-428a-86e5-808b16294d07"
+ },
+ {
+  "id": "sh_office_day_close_lapin_wife_angry",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_144503_ec095ec5-fdab-4404-b195-f8a417c53100.png",
+  "target": "assets/ep01/shots/office_day/close_lapin_wife_angry.webp",
+  "job": "ec095ec5-fdab-4404-b195-f8a417c53100"
+ },
+ {
+  "id": "sh_office_day_close_oper_angry",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_144503_9732cd1f-c815-443b-87ca-4d610e5a2423.png",
+  "target": "assets/ep01/shots/office_day/close_oper_angry.webp",
+  "job": "9732cd1f-c815-443b-87ca-4d610e5a2423"
+ },
+ {
+  "id": "sh_office_day_close_boss_neutral",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_144502_2bd5d976-b0b6-48a3-823f-34af4c90c2db.png",
+  "target": "assets/ep01/shots/office_day/close_boss_neutral.webp",
+  "job": "2bd5d976-b0b6-48a3-823f-34af4c90c2db"
  }
 ]

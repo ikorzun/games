@@ -158,7 +158,16 @@ STAGING = {
 LAYOUT = {
     "bg_office_prosecutor": ("Seen from the door: the investigator's desk with the green lamp and the chair behind it on the LEFT, "
                              "the grey safe behind the desk, the window with the radiator in the CENTRE, the visitor's chair and the "
-                             "coat rack on the RIGHT. The camera never crosses to the window side."),
+                             "coat rack on the RIGHT. The camera never crosses to the window side. The typewriter stands uncovered "
+                             "with a sheet of paper in it, exactly as in the reference."),
+}
+
+# Референс комнаты для medium / close / reaction: принятый кадр того же сета, снятый ближе. Если референс — общий
+# план фона, модель повторяет его кадрирование и «крупный план» выходит общим; с близким референсом она держит
+# крупность. Ключ — сет, значение — id кадра из манифеста (его job id подставляется первым референсом).
+REF_SHOTS = {
+    "office_day": {"medium": "sh_office_day_medium_2", "close": "sh_office_day_close_sledak_tense",
+                   "reaction": "sh_office_day_close_sledak_tense"},
 }
 
 INSERTS = {
@@ -255,7 +264,7 @@ LOOKS: dict[str, str] = {}
 
 
 def ref_jobs(manifest: list[dict]) -> dict[str, str]:
-    return {it["id"]: it["job"] for it in manifest if it.get("job") and it["kind"] in ("bg", "sprite")}
+    return {it["id"]: it["job"] for it in manifest if it.get("job") and it["kind"] in ("bg", "sprite", "shot")}
 
 
 def camera_block(kind: str, angle: str, cast: list[dict], focus: str | None, from_who: str | None, names) -> str:
@@ -324,7 +333,10 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
     body = re.sub(r"CAMERA\n(?:- [^\n]*\n)+", cam + "\n", base, count=1)
     body = body.replace("IMPORTANT RESTRICTIONS", realism.rstrip("\n") + "\n\nIMPORTANT RESTRICTIONS", 1)
     # референсы
-    refs = ["Reference 1 is the room itself: keep its furniture, window, lamps and props exactly where they are."]
+    closer = shot["kind"] in ("medium", "close", "reaction") and REF_SHOTS.get(shot["set"], {}).get(shot["kind"])
+    refs = [("Reference 1 is the same room seen from closer: keep its furniture, light and colours; frame this shot "
+             "at least as close as Reference 1." if closer else
+             "Reference 1 is the room itself: keep its furniture, window, lamps and props exactly where they are.")]
     for i, c in enumerate(shot["cast"], start=2):
         who = c["who"]
         tail = "; this person's face is never shown clearly: back to the camera, turned away or in shadow" if who in HIDDEN_FACE else ""
@@ -345,11 +357,11 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
     else:
         people_txt = "People in frame: " + "; ".join(people) + "." if people else "The room is empty."
         action = shot.get("action", "")
-    layout = LAYOUT.get(bg_id, "")
+    layout = LAYOUT.get(bg_id, "") if shot["kind"] in ("wide", "medium", "ots", "angle") else ""
     scene = (
         "SCENE TO DEPICT:\n"
         f"Moscow, 1993. {bg_subject} LIGHT NOW: {LIGHTING.get(tod, LIGHTING['day'])}. "
-        f"{layout + ' ' if layout and shot['kind'] != 'insert' else ''}"
+        f"{layout + ' ' if layout else ''}"
         f"{people_txt} {action}".strip()
     )
     body = body.replace("SCENE TO DEPICT:\n[insert specific scene description here]", ref_block + "\n\n" + scene)
@@ -408,8 +420,14 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
     subject = bg_subjects.get(bg, "")
     shots: list[dict] = []
 
-    def ref_media(cast: list[dict]) -> list[str]:
-        out = [jobs.get(bg)]
+    def ref_media(cast: list[dict], kind: str) -> list[str]:
+        ref_shot = REF_SHOTS.get(set_name, {}).get(kind)
+        out = [jobs.get(ref_shot) if ref_shot else None]
+        if ref_shot and not jobs.get(ref_shot):
+            print(f"нет job id у референс-кадра {ref_shot} в манифесте — взят фон", file=sys.stderr)
+            out = [jobs.get(bg)]
+        if not out[0]:
+            out = [jobs.get(bg)]
         for c in cast:
             ss = sprite_set_of(c["who"])
             expr = c.get("expression") or "neutral"
@@ -419,7 +437,7 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
     def add(kind: str, name: str, cast: list[dict], **extra) -> None:
         shot = {"id": f"sh_{set_name}_{name}", "set": set_name, "bg": bg, "kind": kind, "angle": extra.pop("angle", "eye"), "cast": cast, "file": f"assets/ep01/shots/{set_name}/{name}.webp"}
         shot.update(extra)
-        shot["medias"] = ref_media(cast)
+        shot["medias"] = ref_media(cast, kind)
         shot["_sets"] = {c["who"]: sprite_set_of(c["who"]) for c in cast}
         shot["prompt"] = build_prompt(base, realism, shot, subject, tod, bg, names, [c["who"] for c in cast])
         del shot["_sets"]
@@ -441,11 +459,15 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
     for (who, expr), _ in d["closes"].most_common(SHOT_LIMITS["close"]):
         if who in HIDDEN_FACE:
             continue
-        add("close", f"close_{who}_{expr}", [{"who": who, "expression": expr}], focus=who, action=f"{names(who)} is speaking; {EXPRESSIONS.get(expr, '')}.")
+        add("close", f"close_{who}_{expr}", [{"who": who, "expression": expr}], focus=who,
+            action=(f"{names(who)} is speaking; {EXPRESSIONS.get(expr, '')}. The camera is right in front of {names(who)} at arm's "
+                    f"length: only the face and shoulders fill the frame, the room is a soft blur behind; no full figure, no furniture in focus."))
     for who, _ in d["present"].most_common(SHOT_LIMITS["reaction"]):
         if who in HIDDEN_FACE:
             continue
-        add("reaction", f"reaction_{who}", [{"who": who, "expression": "neutral"}], focus=who, action=f"{names(who)} is listening to someone off frame, silent.")
+        add("reaction", f"reaction_{who}", [{"who": who, "expression": "neutral"}], focus=who,
+            action=(f"{names(who)} is listening to someone off frame, silent. The camera is close: head and shoulders fill the "
+                    f"frame, a soft edge of the speaker's shoulder at the frame's side, the room a blur behind."))
     for i, detail in enumerate(INSERTS.get(bg, [])[: SHOT_LIMITS["insert"]], start=1):
         add("insert", f"insert_{i}", [], detail=detail)
     main_comp = comps[0] if comps else ()
