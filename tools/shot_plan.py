@@ -87,6 +87,29 @@ LIGHTING = {
     "night": "night: the window is black, the room lit only by the desk lamp and a bare ceiling bulb",
 }
 
+# Свет по фонам: общий словарь LIGHTING написан для кабинета (окно плюс настольная лампа); у других фонов свои
+# источники — иначе модель дорисовывает лампу, которой в комнате нет (apartment_zoya, пилот). Тексты — из столбца
+# LIGHT таблицы фонов `docs/production/prompts/ep01-images.md`, для ночных сетов переписаны под время суток.
+LIGHTING_BY_BG = {
+    "bg_apartment_zoya": {"day": "flat overcast daylight through the tulle curtains; no lamp is on"},
+    "bg_notary_office": {"day": "the warm green-shaded desk lamp against grey daylight from the window"},
+    "bg_stairwell": {"evening": "a bare bulb overhead plus grey dusk light from the stairwell window"},
+    "bg_street_night": {"night": "night in October rain: one sodium street lamp, the warm lit office window, wet asphalt "
+                                 "reflecting both"},
+    "bg_bti_archive": {"day": "fluorescent tubes overhead, dusty air, the green reading lamp on"},
+    "bg_street_day": {"day": "flat overcast daylight, seen through the windscreen"},
+    "bg_murashov_flat": {"night": "night: the window is dark over the street lamps below, the desk lamp and the ceiling "
+                                  "light on"},
+    "bg_zhek": {"day": "a fluorescent tube on the ceiling plus grey daylight from the window"},
+    "bg_yard_summer": {"evening": "July dusk: warm lit windows against a blue-grey sky, one street lamp just on"},
+    "bg_office_now": {"day": "soft daylight through the blinds"},
+}
+
+
+def light_now(bg_id: str, tod: str) -> str:
+    return LIGHTING_BY_BG.get(bg_id, {}).get(tod) or LIGHTING.get(tod, LIGHTING["day"])
+
+
 # Где кто стоит в сете (мизансцена по умолчанию).
 STAGING = {
     "bg_office_prosecutor": {
@@ -224,6 +247,12 @@ REF_SHOTS = {
     # Первый принятый крупный план сета сделан без референса комнаты (волна 26); средние — пока по фону.
     "interrogation": {"close": "sh_interrogation_close_sledak_firm", "reaction": "sh_interrogation_close_sledak_firm",
                       "medium": "sh_interrogation_medium_1", "angle": "sh_interrogation_medium_1"},
+    # Пилот (волна 39): wide ×2 и крупный план приняты, medium_1 по фону вышел общим планом. Для средних и ракурсов
+    # референс — кроп принятого wide_1 по пояс (`assets/ep01/refs/apartment_zoya_medium.jpg`), загруженный в
+    # Higgsfield по публичному URL: значение `media:<id>` — готовый media id, а не кадр из манифеста.
+    "apartment_zoya": {"close": "sh_apartment_zoya_close_zoya_warm", "reaction": "sh_apartment_zoya_close_zoya_warm",
+                       "medium": "media:bd6b1bbb-f06d-43df-9aa0-d9a706ededdb",
+                       "angle": "media:bd6b1bbb-f06d-43df-9aa0-d9a706ededdb"},
 }
 # Для ракурсов (angle) референс — принятый средний план, а не общий: с общим планом модель дважды
 # меняла людей местами (office_day, волна 18), со средним оба ракурса вышли с первого раза.
@@ -302,14 +331,14 @@ ANGLES = {
                 "the dark-green wall, and the barred window and the grey ceiling fill the upper half of the frame"),
         ("high", "the camera is high in the corner above the door, tilted down: the table with the lamp, the two chairs, "
                  "the heads of the people and the dark floor around them"),
-        # «Из-за края двери» модель дорисовала вторую дверь (волна 36): камера теперь снаружи, за стеклом той же двери.
-        ("foreground", "the camera is outside in the corridor, looking into the room through the small wired-glass window "
-                       "of the grey steel door: the window's steel frame and the wire mesh in the glass make a dark, soft "
-                       "border around the picture; beyond it, in focus, the table seen along its length from the "
-                       "investigator's end, his back and shoulder nearest the camera, the suspect facing the camera at "
-                       "the far end under the lamp; Detective Sayko stands just inside the door beside the camera, so only "
-                       "his black leather shoulder shows at the edge of the frame, out of focus; this is the only door "
-                       "of the room"),
+        # «Из-за края двери» (волна 36), «через окошко двери из коридора» (38) и «пепельница на переднем плане» (40):
+        # модель дорисовала вторую дверь, вторую дверь и второй стол. Четвёртый вариант — передний план из того, что
+        # в комнате точно есть: спинка стула подозреваемого и его плечо.
+        ("foreground", "the camera is low behind the suspect's chair at the LEFT end of the table, at the height of the "
+                       "chair's back: the back of his chair and his shoulder fill the near foreground at the left, out of "
+                       "focus; beyond them, in focus, the length of the table with the lamp, the investigator facing the "
+                       "camera at the far end and Detective Sayko standing by the door at the right wall; one table, two "
+                       "chairs, nothing else added"),
     ],
     "bg_apartment_zoya": [
         ("low", "the camera is on the floor just inside the door, tilted up: the dark sideboard towers on the left, the "
@@ -547,7 +576,7 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
     layout = LAYOUT.get(bg_id, "") if shot["kind"] in ("wide", "medium", "ots", "angle") else ""
     scene = (
         "SCENE TO DEPICT:\n"
-        f"Moscow, 1993. {bg_subject} LIGHT NOW: {LIGHTING.get(tod, LIGHTING['day'])}. "
+        f"Moscow, 1993. {bg_subject} LIGHT NOW: {light_now(bg_id, tod)}. "
         f"{layout + ' ' if layout else ''}"
         f"{people_txt} {action}".strip()
     )
@@ -610,10 +639,13 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
 
     def ref_media(cast: list[dict], kind: str) -> list[str]:
         ref_shot = REF_SHOTS.get(set_name, {}).get(kind)
-        out = [jobs.get(ref_shot) if ref_shot else None]
-        if ref_shot and not jobs.get(ref_shot):
-            print(f"нет job id у референс-кадра {ref_shot} в манифесте — взят фон", file=sys.stderr)
-            out = [jobs.get(bg)]
+        if ref_shot and ref_shot.startswith("media:"):  # загруженный кроп (assets/ep01/refs), не кадр из манифеста
+            out = [ref_shot[len("media:"):]]
+        else:
+            out = [jobs.get(ref_shot) if ref_shot else None]
+            if ref_shot and not jobs.get(ref_shot):
+                print(f"нет job id у референс-кадра {ref_shot} в манифесте — взят фон", file=sys.stderr)
+                out = [jobs.get(bg)]
         if not out[0]:
             room = REF_SHOTS.get(set_name, {}).get("room")
             out = [jobs.get(room) or jobs.get(bg)]
