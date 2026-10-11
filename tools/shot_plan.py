@@ -256,7 +256,8 @@ REF_SHOTS = {
                        "angle": "media:bd6b1bbb-f06d-43df-9aa0-d9a706ededdb"},
     # Пилот (волна 51): wide ×2 и крупный план нотариуса без референса комнаты приняты; кроп wide_1 по пояс —
     # для средних и ракурсов (media id добавляется после импорта по URL).
-    "notary": {"close": "sh_notary_close_notary_nervous", "reaction": "sh_notary_close_notary_nervous"},
+    "notary": {"close": "sh_notary_close_notary_nervous", "reaction": "sh_notary_close_notary_nervous",
+               "medium": "media:8baf6d62-ebed-4954-bc99-7e35b599ec3c", "angle": "media:8baf6d62-ebed-4954-bc99-7e35b599ec3c"},
 }
 # Для ракурсов (angle) референс — принятый средний план, а не общий: с общим планом модель дважды
 # меняла людей местами (office_day, волна 18), со средним оба ракурса вышли с первого раза.
