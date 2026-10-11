@@ -351,7 +351,8 @@
       "act": 1,
       "timeline": "aftermath",
       "date_caption_key": "ep01.s01.cap",
-      "music": "m_tension"
+      "music": "m_tension",
+      "season": "summer"
     },
     {
       "id": "b02_title",
@@ -376,7 +377,8 @@
       "act": 1,
       "timeline": "crime",
       "title_key": "ep01.b03.title",
-      "music": "m_chronicle"
+      "music": "m_chronicle",
+      "season": "summer"
     },
     {
       "id": "b04_crime",
@@ -393,7 +395,8 @@
       "act": 1,
       "timeline": "crime",
       "date_caption_key": "ep01.s07.cap",
-      "music": "m_tension"
+      "music": "m_tension",
+      "season": "summer"
     },
     {
       "id": "b05_discovery",
@@ -413,7 +416,8 @@
       "act": 1,
       "timeline": "investigation",
       "title_key": "ep01.b05.title",
-      "music": "m_investigation"
+      "music": "m_investigation",
+      "season": "summer"
     },
     {
       "id": "b06_investigation_1",
@@ -432,7 +436,8 @@
       "act": 2,
       "timeline": "investigation",
       "title_key": "ep01.b06.title",
-      "music": "m_calm"
+      "music": "m_calm",
+      "season": "summer"
     },
     {
       "id": "b07_dead_end",
@@ -451,7 +456,8 @@
       "act": 2,
       "optional": true,
       "when": "wrong_suspect",
-      "timeline": "investigation"
+      "timeline": "investigation",
+      "season": "autumn"
     },
     {
       "id": "b08_investigation_2",
@@ -474,7 +480,8 @@
       "act": 2,
       "timeline": "investigation",
       "title_key": "ep01.b08.title",
-      "music": "m_investigation"
+      "music": "m_investigation",
+      "season": "autumn"
     },
     {
       "id": "b09_interlude",
@@ -504,7 +511,8 @@
       ],
       "act": 2,
       "timeline": "investigation",
-      "title_key": "ep01.b10.title"
+      "title_key": "ep01.b10.title",
+      "season": "autumn"
     },
     {
       "id": "b11_pursuit",
@@ -525,7 +533,8 @@
       "act": 3,
       "timeline": "investigation",
       "date_caption_key": "ep01.s34.cap",
-      "music": "m_tension"
+      "music": "m_tension",
+      "season": "autumn"
     },
     {
       "id": "b12_confrontation",
@@ -549,7 +558,8 @@
       "act": 3,
       "timeline": "investigation",
       "title_key": "ep01.b12.title",
-      "music": "m_tension"
+      "music": "m_tension",
+      "season": "autumn"
     },
     {
       "id": "b13_trial",
@@ -562,7 +572,8 @@
       ],
       "act": 3,
       "timeline": "aftermath",
-      "music": "m_chronicle"
+      "music": "m_chronicle",
+      "season": "winter"
     },
     {
       "id": "b14_epilogue",
@@ -581,7 +592,8 @@
       "act": 3,
       "timeline": "aftermath",
       "ad_break_allowed": true,
-      "music": "m_epilogue"
+      "music": "m_epilogue",
+      "season": "winter"
     }
   ],
   "scenes": {
@@ -6094,7 +6106,7 @@
         },
         {
           "do": "bg",
-          "bg": "bg_moscow_1993",
+          "bg": "bg_moscow_1994",
           "filter": "archive_photo",
           "transition": "fade"
         },
@@ -6124,7 +6136,7 @@
       "id": "s45",
       "block": "b14_epilogue",
       "stage": {
-        "bg": "bg_moscow_1993",
+        "bg": "bg_moscow_1994",
         "filter": "archive_photo"
       },
       "music": "m_epilogue",
@@ -6175,7 +6187,7 @@
       "id": "s46",
       "block": "b14_epilogue",
       "stage": {
-        "bg": "bg_moscow_1993",
+        "bg": "bg_moscow_1994",
         "filter": "archive_photo"
       },
       "music": "m_epilogue",
@@ -6262,7 +6274,7 @@
       "id": "s47",
       "block": "b14_epilogue",
       "stage": {
-        "bg": "bg_moscow_1993",
+        "bg": "bg_moscow_1994",
         "filter": "archive_photo"
       },
       "music": "m_epilogue",
@@ -6423,7 +6435,7 @@
       "id": "s50",
       "block": "b14_epilogue",
       "stage": {
-        "bg": "bg_moscow_1993",
+        "bg": "bg_moscow_1994",
         "filter": "archive_photo"
       },
       "music": "m_epilogue",
@@ -6477,7 +6489,7 @@
       "id": "s51",
       "block": "b14_epilogue",
       "stage": {
-        "bg": "bg_moscow_1993",
+        "bg": "bg_moscow_1994",
         "filter": "archive_photo"
       },
       "music": "m_epilogue",
@@ -11063,77 +11075,98 @@
     "backgrounds": [
       {
         "id": "bg_black",
-        "path": "assets/common/bg/black.png"
+        "path": "assets/common/bg/black.png",
+        "season": "any"
       },
       {
         "id": "bg_yard_summer",
         "path": "assets/ep01/bg/yard_summer.webp",
-        "notes": "двор панельного дома, Кунцево, вечер"
+        "notes": "двор панельного дома, Кунцево, вечер",
+        "season": "summer"
       },
       {
         "id": "bg_apartment_zoya",
         "path": "assets/ep01/bg/apartment_zoya.webp",
-        "notes": "однокомнатная квартира пенсионерки: сервант, ковёр, тюль"
+        "notes": "однокомнатная квартира пенсионерки: сервант, ковёр, тюль",
+        "season": "indoor"
       },
       {
         "id": "bg_moscow_1993",
         "path": "assets/ep01/bg/moscow_1993.webp",
-        "notes": "панорама Москвы, 1993, стиль архивного фото"
+        "notes": "панорама Москвы, лето 1993, стиль архивного фото (хроника b03)",
+        "season": "summer"
+      },
+      {
+        "id": "bg_moscow_1994",
+        "path": "assets/ep01/bg/moscow_1994.webp",
+        "notes": "панорама Москвы, зима 1994 (прежний зимний кадр партии 2): суд и эпилог",
+        "season": "winter"
       },
       {
         "id": "bg_office_prosecutor",
         "path": "assets/ep01/bg/office_prosecutor.webp",
-        "notes": "кабинет следователя: сейф, лампа, пишущая машинка"
+        "notes": "кабинет следователя: сейф, лампа, пишущая машинка",
+        "season": "indoor"
       },
       {
         "id": "bg_interrogation",
         "path": "assets/common/bg/interrogation.webp",
-        "notes": "допросная, общая для сезона"
+        "notes": "допросная, общая для сезона",
+        "season": "indoor"
       },
       {
         "id": "bg_bti_archive",
         "path": "assets/ep01/bg/bti_archive.webp",
-        "notes": "архив БТИ: стеллажи с карточками"
+        "notes": "архив БТИ: стеллажи с карточками",
+        "season": "indoor"
       },
       {
         "id": "bg_street_night",
         "path": "assets/ep01/bg/presnya_night.webp",
-        "notes": "улица у нотариальной конторы, ночь, дождь"
+        "notes": "улица у нотариальной конторы, ночь, дождь",
+        "season": "autumn"
       },
       {
         "id": "bg_courtroom",
         "path": "assets/common/bg/courtroom.webp",
-        "notes": "зал суда с клеткой, общий для сезона"
+        "notes": "зал суда с клеткой, общий для сезона",
+        "season": "indoor"
       },
       {
         "id": "bg_office_now",
         "path": "assets/common/bg/office_now.webp",
-        "notes": "кабинет «спустя годы» для интервью"
+        "notes": "кабинет «спустя годы» для интервью",
+        "season": "indoor"
       },
       {
         "id": "bg_stairwell",
         "path": "assets/ep01/bg/stairwell.webp",
-        "notes": "подъезд панельного дома: почтовые ящики, лифт, лампочка"
+        "notes": "подъезд панельного дома: почтовые ящики, лифт, лампочка",
+        "season": "indoor"
       },
       {
         "id": "bg_notary_office",
         "path": "assets/ep01/bg/notary_office.webp",
-        "notes": "нотариальная контора на Пресне: стол, печати, очередь за дверью"
+        "notes": "нотариальная контора на Пресне: стол, печати, очередь за дверью",
+        "season": "indoor"
       },
       {
         "id": "bg_zhek",
         "path": "assets/ep01/bg/zhek.webp",
-        "notes": "коридор ЖЭКа с очередью, доска объявлений, окошко"
+        "notes": "коридор ЖЭКа с очередью, доска объявлений, окошко",
+        "season": "indoor"
       },
       {
         "id": "bg_street_day",
         "path": "assets/ep01/bg/presnya_day.webp",
-        "notes": "Пресня днём из окна «девятки»: контора, «Волга», прохожие"
+        "notes": "Пресня днём из окна «девятки»: контора, «Волга», прохожие",
+        "season": "autumn"
       },
       {
         "id": "bg_murashov_flat",
         "path": "assets/ep01/bg/murashov_flat.webp",
-        "notes": "квартира Мурашова: три телефона, папки, окно на «Волгу»"
+        "notes": "квартира Мурашова: три телефона, папки, окно на «Волгу»",
+        "season": "indoor"
       }
     ],
     "sprites": [
@@ -11260,23 +11293,28 @@
     "cg": [
       {
         "id": "cg_door_sealed",
-        "path": "assets/ep01/cg/door_sealed.webp"
+        "path": "assets/ep01/cg/door_sealed.webp",
+        "season": "indoor"
       },
       {
         "id": "cg_arrest_night",
-        "path": "assets/ep01/cg/arrest_night.webp"
+        "path": "assets/ep01/cg/arrest_night.webp",
+        "season": "autumn"
       },
       {
         "id": "cg_verdict",
-        "path": "assets/ep01/cg/verdict.webp"
+        "path": "assets/ep01/cg/verdict.webp",
+        "season": "indoor"
       },
       {
         "id": "cg_zoya_last",
-        "path": "assets/ep01/cg/zoya_last.webp"
+        "path": "assets/ep01/cg/zoya_last.webp",
+        "season": "summer"
       },
       {
         "id": "cg_keys",
-        "path": "assets/ep01/cg/keys.webp"
+        "path": "assets/ep01/cg/keys.webp",
+        "season": "indoor"
       }
     ],
     "documents": [

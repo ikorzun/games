@@ -327,6 +327,30 @@ body {
   }
   .vn-qbtn { flex: 1 1 0; width: auto; max-width: 52px; min-width: 34px; height: 44px; }
 }
+/* Широкий экран в портретной раскладке (планшет, высокое окно): кнопки на всю ширину ряда и с подписями
+   (решение владельца 2026-10-11); на телефоне остаются иконки. */
+@media (orientation: portrait) and (min-width: 600px) {
+  .vn-qbtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    max-width: none;
+    height: 46px;
+    padding: 0 10px;
+  }
+  .vn-qbtn .vn-qbtn__label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: nowrap;
+    font: 500 0.82em / 1 var(--font-body);
+    letter-spacing: 0.04em;
+  }
+}
 
 /* ───────────── Выбор ───────────── */
 

@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import json
 import os
 import sys
@@ -103,6 +104,68 @@ def unique_choice_ids(ep: dict, rep: Report) -> None:
                     rep.err(f"{sid}: id выбора {cid} уже используется в сцене {seen[cid]}")
                 else:
                     seen[cid] = sid
+
+
+SEASONS = ("spring", "summer", "autumn", "winter")
+SEASON_WORDS = {
+    "summer": r"июн|июл|август|\bлет[оа]м?\b|\bлетн",
+    "autumn": r"сентябр|октябр|ноябр|\bосен",
+    "winter": r"декабр|январ|феврал|\bзим[аыуеой]",
+    "spring": r"\bмарт|апрел|\bма[яй]\b|\bвесн",
+}
+
+
+def caption_season(text: str) -> str | None:
+    """Сезон по русскому тексту титра-даты («Июль 1993», «лето 1993», «26 октября 1993»); None — не назван."""
+    low = text.lower()
+    for season, pat in SEASON_WORDS.items():
+        if re.search(pat, low):
+            return season
+    return None
+
+
+def seasons(ep: dict, ru: dict | None, rep: Report) -> None:
+    """Сезон на картинке должен совпадать с сезоном сцены (stage.season, иначе block.season) и с титром-датой:
+    зимняя улица под титром «лето 1993» — ошибка (решение владельца 2026-10-11)."""
+    assets = ep.get("assets", {})
+    bg_season = {a["id"]: a.get("season") for a in assets.get("backgrounds", [])}
+    cg_season = {a["id"]: a.get("season") for a in assets.get("cg", [])}
+    blocks = {b["id"]: b for b in ep.get("blocks", [])}
+    warned: set[str] = set()
+    for sid, scene in ep.get("scenes", {}).items():
+        block = blocks.get(scene.get("block"), {})
+        eff = scene.get("stage", {}).get("season") or block.get("season")
+        used: list[tuple[str, str, str | None]] = []
+        if scene.get("stage", {}).get("bg"):
+            used.append(("фон", scene["stage"]["bg"], bg_season.get(scene["stage"]["bg"])))
+        for st in scene.get("steps", []):
+            if st.get("do") == "bg":
+                used.append(("фон", st["bg"], bg_season.get(st["bg"])))
+            elif st.get("do") == "cg":
+                used.append(("cg", st["cg"], cg_season.get(st["cg"])))
+        for kind, aid, season in used:
+            if season is None:
+                if aid not in warned:
+                    warned.add(aid)
+                    rep.warn(f"{kind} {aid}: не указан season (indoor / any / spring / summer / autumn / winter) — сезон не проверяется")
+                continue
+            if season in ("indoor", "any"):
+                continue
+            if eff is None:
+                rep.warn(f"scene {sid}: уличный {kind} {aid} ({season}), а сезон сцены или блока не задан")
+            elif season != eff:
+                rep.err(f"scene {sid}: {kind} {aid} — {season}, а сцена — {eff} (блок {scene.get('block')})")
+        if ru:
+            for st in scene.get("steps", []):
+                if st.get("do") == "caption" and st.get("style") == "date_stamp":
+                    text = ru.get(st.get("key", ""), "")
+                    cs = caption_season(text) if isinstance(text, str) else None
+                    if not cs:
+                        continue
+                    if eff is None:
+                        rep.warn(f"scene {sid}: титр «{text}» про {cs}, а сезон сцены или блока не задан")
+                    elif cs != eff:
+                        rep.err(f"scene {sid}: титр «{text}» про {cs}, а сезон сцены — {eff}")
 
 
 def integrity(ep: dict, rep: Report) -> None:
@@ -639,6 +702,7 @@ def main() -> int:
         unique_choice_ids(ep, rep)
         ru_path = os.path.join(a.locales, "ru", f"{ep['id']}.json")
         ru = load_json(ru_path) if not a.no_loc and os.path.exists(ru_path) else None
+        seasons(ep, ru, rep)
         minigame_integrity(ep, ru, rep)
         if not a.no_loc:
             localization(ep, a.locales, rep)

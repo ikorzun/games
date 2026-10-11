@@ -215,6 +215,7 @@
         "ad_break_allowed": { "type": "boolean", "default": false, "description": "Можно ли показать interstitial ПЕРЕД этим блоком (только title_card, границы актов, epilogue)." },
         "autosave": { "type": "boolean", "default": true },
         "timeline": { "type": "string", "enum": ["crime", "investigation", "aftermath"], "description": "Какую временную линию показывает блок (двойная хронология)." },
+        "season": { "type": "string", "enum": ["spring", "summer", "autumn", "winter"], "description": "Сезон блока: уличные фоны, CG и титры-даты его сцен должны ему соответствовать (линтер)." },
         "date_caption_key": { "$ref": "#/$defs/locKey", "description": "Титр даты/места в стиле передачи: «Тольятти, весна 1994»." },
         "music": { "$ref": "#/$defs/asciiId" }
       }
@@ -244,6 +245,7 @@
         "filter": { "type": "string", "enum": ["none", "vhs", "vhs_heavy", "archive_photo", "night", "sepia", "desaturated", "noir"], "default": "none" },
         "time_of_day": { "type": "string", "enum": ["day", "evening", "night", "dawn"] },
         "weather": { "type": "string", "enum": ["clear", "rain", "snow", "fog"] },
+        "season": { "type": "string", "enum": ["spring", "summer", "autumn", "winter"], "description": "Сезон сцены; по умолчанию — season блока. Линтер сверяет его с season фона/CG и с титром-датой." },
         "letterbox": { "type": "boolean", "default": false, "description": "Киношные полосы для реконструкций." }
       }
     },
@@ -607,6 +609,7 @@
         "path": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$", "description": "Относительный путь; только латиница." },
         "license": { "type": "string" },
         "localized": { "type": "boolean", "default": false },
+        "season": { "type": "string", "enum": ["spring", "summer", "autumn", "winter", "indoor", "any"], "description": "Для фонов и CG: сезон на картинке; indoor — интерьер, any — нейтральная картинка." },
         "notes": { "type": "string" }
       }
     },

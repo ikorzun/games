@@ -16,9 +16,18 @@
  {
   "id": "bg_moscow_1993",
   "kind": "bg",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175444_75524648-8227-43d5-b071-deeda09d9d84.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_133226_64a5cfcc-d457-4527-a98a-92dc71932802.png",
   "target": "assets/ep01/bg/moscow_1993.webp",
-  "job": "75524648-8227-43d5-b071-deeda09d9d84"
+  "job": "64a5cfcc-d457-4527-a98a-92dc71932802",
+  "note": "летняя панорама, июль 1993 (замена зимней под титр «лето 1993», 2026-10-11)"
+ },
+ {
+  "id": "bg_moscow_1994",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_175444_75524648-8227-43d5-b071-deeda09d9d84.png",
+  "target": "assets/ep01/bg/moscow_1994.webp",
+  "job": "75524648-8227-43d5-b071-deeda09d9d84",
+  "note": "зимняя панорама партии 2 переименована: суд и эпилог (1994)"
  },
  {
   "id": "bg_office_prosecutor",
