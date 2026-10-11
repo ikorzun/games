@@ -254,6 +254,9 @@ REF_SHOTS = {
     "apartment_zoya": {"close": "sh_apartment_zoya_close_zoya_warm", "reaction": "sh_apartment_zoya_close_zoya_warm",
                        "medium": "media:bd6b1bbb-f06d-43df-9aa0-d9a706ededdb",
                        "angle": "media:bd6b1bbb-f06d-43df-9aa0-d9a706ededdb"},
+    # Пилот (волна 51): wide ×2 и крупный план нотариуса без референса комнаты приняты; кроп wide_1 по пояс —
+    # для средних и ракурсов (media id добавляется после импорта по URL).
+    "notary": {"close": "sh_notary_close_notary_nervous", "reaction": "sh_notary_close_notary_nervous"},
 }
 # Для ракурсов (angle) референс — принятый средний план, а не общий: с общим планом модель дважды
 # меняла людей местами (office_day, волна 18), со средним оба ракурса вышли с первого раза.
