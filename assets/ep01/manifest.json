@@ -1462,5 +1462,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_164953_e05dba1a-45a9-43e3-af37-adcd61c5ea8e.png",
   "target": "assets/ep01/shots/apartment_zoya/close_sledak_firm.webp",
   "job": "e05dba1a-45a9-43e3-af37-adcd61c5ea8e"
+ },
+ {
+  "id": "sh_apartment_zoya_ots_buyer_lapin_wife",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_165324_1c1b34c6-c174-44e6-b7bd-3b844cd0c941.png",
+  "target": "assets/ep01/shots/apartment_zoya/ots_buyer_lapin_wife.webp",
+  "job": "1c1b34c6-c174-44e6-b7bd-3b844cd0c941"
+ },
+ {
+  "id": "sh_apartment_zoya_ots_lapin_wife_sledak",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_165325_4d563447-6bdd-4add-90a9-166d3ca80f6c.png",
+  "target": "assets/ep01/shots/apartment_zoya/ots_lapin_wife_sledak.webp",
+  "job": "4d563447-6bdd-4add-90a9-166d3ca80f6c"
+ },
+ {
+  "id": "sh_apartment_zoya_ots_sledak_lapin_wife",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_165324_6c5983db-b603-4b7c-91b3-00544392beb2.png",
+  "target": "assets/ep01/shots/apartment_zoya/ots_sledak_lapin_wife.webp",
+  "job": "6c5983db-b603-4b7c-91b3-00544392beb2"
+ },
+ {
+  "id": "sh_apartment_zoya_ots_lapin_wife_buyer",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_165325_2ebe3e8f-e90d-496b-833a-e3e603678d8c.png",
+  "target": "assets/ep01/shots/apartment_zoya/ots_lapin_wife_buyer.webp",
+  "job": "2ebe3e8f-e90d-496b-833a-e3e603678d8c"
  }
 ]
