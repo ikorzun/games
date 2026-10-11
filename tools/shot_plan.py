@@ -156,6 +156,25 @@ STAGING = {
 
 # Расположение в кадре с точки зрения камеры у двери (как снят фон): чтобы кадры не пересекали линию действия.
 LAYOUT = {
+    "bg_interrogation": ("Seen from the door end of the room: the bare table in the CENTRE under the small barred window, "
+                         "the lamp at the table's LEFT end, one chair at the LEFT end and one at the RIGHT end of the table, "
+                         "the dark-green half-wall and the radiator behind the table, the grey steel door on the RIGHT. "
+                         "The camera never crosses to the window side."),
+    "bg_apartment_zoya": ("Seen from the entrance door: the dark sideboard with glass doors and the framed photo on the LEFT, "
+                          "the wall carpet behind it and a chair beside it, the window with lace curtains and the radiator in "
+                          "the CENTRE, the small TV on a stool to the right of the window, the bedside table with the medicine "
+                          "bottles and the bed on the RIGHT. The camera never crosses to the window side."),
+    "bg_notary_office": ("Seen from the visitors' side: the window on the LEFT, the notary's desk with the green lamp, the "
+                         "round stamp and the stacks of papers across the lower LEFT and CENTRE with the notary's chair behind "
+                         "it, the glass-fronted bookcase behind the desk, the coat rack to its right, and the open door to the "
+                         "corridor with the waiting queue on the RIGHT. The camera never crosses behind the desk."),
+    "bg_stairwell": ("Seen from the apartment doors' end of the landing: the window with the radiator and the stairs going "
+                     "down behind the railing on the LEFT, the row of dented metal mailboxes on the wall LEFT of CENTRE, the "
+                     "lift door in the CENTRE, the padded apartment door with the new brass lock on the RIGHT, a bare bulb on "
+                     "the ceiling. The camera never goes down the stairs."),
+    "bg_street_night": ("Seen from across the street: the street lamp and the bare tree on the LEFT, the parked dark Volga "
+                        "sedan at the kerb in the CENTRE, the doorway with its small canopy and the lit office window to its "
+                        "RIGHT, more parked cars at both edges. The camera stays on the far pavement."),
     "bg_office_prosecutor": ("Seen from the door: the investigator's desk with the green lamp and the chair behind it on the LEFT, "
                              "the grey safe behind the desk, the window with the radiator in the CENTRE, the visitor's chair and the "
                              "coat rack on the RIGHT. The camera never crosses to the window side. The typewriter stands uncovered "
@@ -166,6 +185,11 @@ LAYOUT = {
 # чтобы кадры не пересекали линию действия. Ключ — фон, значение — who → позиция (меньше — левее).
 ORDER = {
     "bg_office_prosecutor": {"sledak": 0, "boss": 0.4, "oper": 1, "expert": 2, "lapin_wife": 2.2},
+    "bg_interrogation": {"buyer": 0, "murashov": 0, "notary": 0, "sledak": 1, "oper": 2},
+    "bg_apartment_zoya": {"murashov_sil": 0, "zoya": 0.3, "sledak": 1, "oper": 1.4, "buyer": 1.5, "expert": 2, "lapin_wife": 2.3},
+    "bg_notary_office": {"notary": 0, "zoya": 1, "murashov_sil": 1.2, "sledak": 1.5, "oper": 2},
+    "bg_stairwell": {"oper": 0, "sledak": 0.5, "buyer_unknown": 1, "buyer": 1, "neighbor": 2},
+    "bg_street_night": {"sledak": 0.8, "oper": 1.2, "accomplice": 2},
 }
 
 
@@ -185,8 +209,13 @@ REF_SHOTS = {
                    "reaction": "sh_office_day_close_sledak_tense", "angle": "sh_office_day_medium_2"},
     # Ночной сет той же комнаты: пока нет принятого ночного близкого кадра, референс — дневной; промпт
     # говорит, что свет теперь другой (LIGHT NOW). После первого принятого ночного кадра — заменить.
-    "office_night": {"medium": "sh_office_day_medium_2", "close": "sh_office_day_close_sledak_tense",
-                     "reaction": "sh_office_day_close_sledak_tense", "angle": "sh_office_day_medium_2"},
+    # "room" — принятый общий план сета вместо фона как референс комнаты (wide, ots, insert): для ночного
+    # сета это даёт чёрное окно и включённые лампы без оговорок.
+    "office_night": {"room": "sh_office_night_wide_1", "medium": "sh_office_night_medium_1",
+                     "close": "sh_office_night_close_sledak_tense", "reaction": "sh_office_night_close_sledak_tense",
+                     "angle": "sh_office_night_medium_1"},
+    "office_evening": {"medium": "sh_office_day_medium_2", "close": "sh_office_day_close_sledak_tense",
+                       "reaction": "sh_office_day_close_sledak_tense", "angle": "sh_office_day_medium_2"},
 }
 # Для ракурсов (angle) референс — принятый средний план, а не общий: с общим планом модель дважды
 # меняла людей местами (office_day, волна 18), со средним оба ракурса вышли с первого раза.
@@ -258,6 +287,53 @@ ANGLES = {
                        "toward the window: the stacks of tied case folders and the green lamp shade stand in the near "
                        "foreground, out of focus, covering the lower left of the frame; beyond them, in focus, the "
                        "people at the desk and by the window; the door is behind the camera"),
+    ],
+    "bg_interrogation": [
+        ("low", "the camera is on the table top at its near end, at the height of the wood, tilted up: the lamp's metal "
+                "shade at the left looms in the near foreground, the person across the table is seen from below against "
+                "the dark-green wall, and the barred window and the grey ceiling fill the upper half of the frame"),
+        ("high", "the camera is high in the corner above the door, tilted down: the table with the lamp, the two chairs, "
+                 "the heads of the people and the dark floor around them"),
+        ("foreground", "the camera is at the door, looking past the edge of the grey steel door in the near foreground, out "
+                       "of focus, at the table and the people in the lamp light beyond, in focus"),
+    ],
+    "bg_apartment_zoya": [
+        ("low", "the camera is on the floor just inside the door, tilted up: the dark sideboard towers on the left, the "
+                "lace curtain glows in the centre, the plain ceiling fills the upper third, the people are seen from below"),
+        ("high", "the camera is high in the corner above the door, tilted down at the room: the top of the sideboard on "
+                 "the left, the bed on the right, the people and the floor between them"),
+        ("foreground", "the camera is low at the foot of the bed, looking past the green bedspread and the bedside table "
+                       "with the medicine bottles in the near foreground, out of focus, toward the sideboard and the "
+                       "window; the people beyond are in focus"),
+    ],
+    "bg_notary_office": [
+        ("low", "the camera lies on the desktop among the papers beside the round stamp, tilted up: the green lamp shade "
+                "looms in the near foreground, the person behind the desk is seen from below with the bookcase behind, "
+                "the ceiling fills the upper third"),
+        ("high", "the camera is above the bookcase in the corner, tilted down at the desk with the lamp, the heads of the "
+                 "people and the floor toward the open door"),
+        ("foreground", "the camera is in the corridor at the open door, looking past the door's edge and the shoulders of "
+                       "the waiting queue in the near foreground, out of focus, into the office: the desk with the lamp "
+                       "and the people beyond, in focus"),
+    ],
+    "bg_stairwell": [
+        ("low", "the camera is on the stairs two steps below the landing, at the level of the top step, tilted up through "
+                "the railing bars that cross the lower foreground: the people on the landing are seen from below, the "
+                "bare bulb and the ceiling fill the upper third"),
+        ("high", "the camera is on the flight above, at the turn of the stairs, tilted down at the landing: the heads of "
+                 "the people, the mailboxes, the lift door and the terrazzo floor"),
+        ("foreground", "the camera is at the window end of the landing, looking past the radiator and the end post of the "
+                       "railing in the near foreground, out of focus, along the landing toward the lift and the apartment "
+                       "door; the people beyond are in focus"),
+    ],
+    "bg_street_night": [
+        ("low", "the camera is at kerb height on the wet asphalt across the street, tilted up: the reflections of the "
+                "street lamp in the puddles fill the lower third, the parked Volga and the facade rise above, rain crosses "
+                "the lamp light"),
+        ("high", "the camera is at a second-floor window across the street, tilted down at the roof of the Volga, the wet "
+                 "asphalt and the lit doorway"),
+        ("foreground", "the camera is low beside the next parked car, looking past its wet wing and rain-streaked side "
+                       "window in the near foreground, out of focus, at the Volga and the lit doorway beyond, in focus"),
     ],
 }
 
@@ -494,7 +570,8 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
             print(f"нет job id у референс-кадра {ref_shot} в манифесте — взят фон", file=sys.stderr)
             out = [jobs.get(bg)]
         if not out[0]:
-            out = [jobs.get(bg)]
+            room = REF_SHOTS.get(set_name, {}).get("room")
+            out = [jobs.get(room) or jobs.get(bg)]
         for c in cast:
             ss = sprite_set_of(c["who"])
             expr = c.get("expression") or "neutral"
