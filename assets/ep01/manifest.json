@@ -2036,5 +2036,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_181730_44888b7a-2e8b-4f39-a366-5e88ba05bd0c.png",
   "target": "assets/ep01/shots/street_night/angle_high.webp",
   "job": "44888b7a-2e8b-4f39-a366-5e88ba05bd0c"
+ },
+ {
+  "id": "sh_street_night_ots_oper_sledak_v2",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_182121_fff47812-33c0-4ab6-975f-95e9d99be7a4.png",
+  "target": "assets/ep01/shots/street_night/ots_oper_sledak_v2.webp",
+  "job": "fff47812-33c0-4ab6-975f-95e9d99be7a4"
+ },
+ {
+  "id": "sh_street_night_close_oper_grin",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_182121_aeddcba2-91e8-40df-9e16-0ad991b86231.png",
+  "target": "assets/ep01/shots/street_night/close_oper_grin.webp",
+  "job": "aeddcba2-91e8-40df-9e16-0ad991b86231"
+ },
+ {
+  "id": "sh_street_night_close_oper_hurt",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_182121_b9f82381-d4af-4dbb-9f9c-7994697d3004.png",
+  "target": "assets/ep01/shots/street_night/close_oper_hurt.webp",
+  "job": "b9f82381-d4af-4dbb-9f9c-7994697d3004"
+ },
+ {
+  "id": "sh_street_night_close_oper_angry",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_182120_76d55b6e-8efd-4a12-9ec7-9970efcd37ad.png",
+  "target": "assets/ep01/shots/street_night/close_oper_angry.webp",
+  "job": "76d55b6e-8efd-4a12-9ec7-9970efcd37ad"
  }
 ]
