@@ -44,7 +44,7 @@ PSYCHO = {
     "boss": "not a villain: a department head who keeps the place afloat, fatherly and tired; heavy jowls, eyes that have made many compromises",
     "murashov": "a narcissistic rationalizer who calls himself an orderly; polite, calm, with an editor's composure; a pleasant, instantly forgettable face",
     "notary": "a cowardly accomplice hiding behind the law; soft, balding, sweating, eyes that avoid contact",
-    "zoya": "trusting and kind, shy of being a burden, lonely; a small bright face that lights up at the thought of her grandson",
+    "zoya": "trusting but worn down by years of living alone, shy of being a burden, used to not being listened to; a small faded face that becomes younger for a moment at the thought of her grandson and then tired again, nothing picture-book or sweet about it",
     "neighbor": "observant and pushy until it concerns herself, then afraid of being involved; a sturdy face used to talking in stairwells",
     "buyer": "an honest man under a steamroller: polite confusion turning into panic; thin, anxious, early lines on the face",
     "lapin_wife": "a mother defending her home: she holds longer than her husband and breaks deeper; pale, tired eyes, hair pulled back",
@@ -101,7 +101,7 @@ PORTRAITS = {
     },
     "zoya": {
         "where": "Moscow, August 1993, daytime. The kitchen of an old Moscow apartment: a window with a geranium, a tea glass in a metal holder, a framed photograph on the sill.",
-        "moment": "She has just said her grandson's name and her face lights up: trusting kindness, a shy readiness to apologize for taking someone's time, the bright pale eyes to the lens, the handbag held on her lap with both hands.",
+        "moment": "She has mentioned her grandson and waits to see whether the visitor is really listening: a shy, uncertain half-smile that is already fading, the faded eyes watchful and tired, the hands holding the handbag on her lap a little too tightly; a lonely old woman who has learned not to expect much, with no rosy cheeks, no lipstick and no beaming kindness, the skin pale and papery.",
         "camera": "A television camera at her eye level, slightly three-quarter, a 50 mm-equivalent field of view, a medium close-up: head and shoulders, the window and the geranium soft behind.",
         "light": "soft daylight from the kitchen window on one side; the rest of the room a little darker.",
         "objects": "the tea glass in its holder, the framed photograph on the sill.",
