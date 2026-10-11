@@ -1539,5 +1539,19 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_165840_bfd1123a-da55-403e-ba8d-4fdc2eab4b7f.png",
   "target": "assets/ep01/shots/apartment_zoya/angle_low.webp",
   "job": "bfd1123a-da55-403e-ba8d-4fdc2eab4b7f"
+ },
+ {
+  "id": "sh_apartment_zoya_angle_high",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_170045_9ab60b8e-7e50-42c2-8e44-d54a69e952a4.png",
+  "target": "assets/ep01/shots/apartment_zoya/angle_high.webp",
+  "job": "9ab60b8e-7e50-42c2-8e44-d54a69e952a4"
+ },
+ {
+  "id": "sh_apartment_zoya_angle_foreground",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_170045_3fa6da6a-302d-4280-9945-c12810c2f7b3.png",
+  "target": "assets/ep01/shots/apartment_zoya/angle_foreground.webp",
+  "job": "3fa6da6a-302d-4280-9945-c12810c2f7b3"
  }
 ]
