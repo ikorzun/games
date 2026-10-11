@@ -113,7 +113,7 @@ INSIDE_PEOPLE = {
 }
 # Дополнение к тексту ots снаружи (для сета с машиной): иначе модель сажает в «Волгу» лишние лица.
 OTS_EXTRA = {
-    "bg_street_night": " The parked Volga behind them is empty: nobody sits inside it.",
+    "bg_street_night": " The parked Volga behind them is empty: its windows are dark, with no face and no silhouette inside it.",
 }
 
 LIGHTING_BY_BG = {
