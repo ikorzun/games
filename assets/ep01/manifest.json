@@ -2512,5 +2512,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_200639_3e02e53a-7744-4e67-bb13-0b03f0d6c0ff.png",
   "target": "assets/ep01/shots/street_day/angle_foreground.webp",
   "job": "3e02e53a-7744-4e67-bb13-0b03f0d6c0ff"
+ },
+ {
+  "id": "sh_street_day_reaction_oper",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_200951_3c2b7eae-13f3-4df8-a09c-a973902b3aae.png",
+  "target": "assets/ep01/shots/street_day/reaction_oper.webp",
+  "job": "3c2b7eae-13f3-4df8-a09c-a973902b3aae"
+ },
+ {
+  "id": "sh_street_day_reaction_sledak",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_200951_672db0c7-4b46-498e-87b2-f8e1a33f981d.png",
+  "target": "assets/ep01/shots/street_day/reaction_sledak.webp",
+  "job": "672db0c7-4b46-498e-87b2-f8e1a33f981d"
+ },
+ {
+  "id": "sh_street_day_insert_1",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_200951_39733426-ee77-48f3-94bc-291a4b6ceedc.png",
+  "target": "assets/ep01/shots/street_day/insert_1.webp",
+  "job": "39733426-ee77-48f3-94bc-291a4b6ceedc"
+ },
+ {
+  "id": "sh_street_day_insert_2",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_200951_818dc1ca-709a-4382-8cbc-e941d74c3691.png",
+  "target": "assets/ep01/shots/street_day/insert_2.webp",
+  "job": "818dc1ca-709a-4382-8cbc-e941d74c3691"
  }
 ]
