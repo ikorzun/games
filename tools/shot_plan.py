@@ -537,8 +537,32 @@ def load_cast_looks() -> dict[str, str]:
 LOOKS: dict[str, str] = {}
 
 
+REGEN = False  # --regen: кадры по новым лицам — старые кадры (прежние лица и стиль) референсом не идут
+# Референсы пересъёмки по новым лицам (волны 100+): "room" — принятый новый общий план (для ots/insert/angle),
+# "medium"/"angle"/"insert"/"medium_solo" — загруженные кропы этого плана (media:<id>, assets/ep01/refs/*_v2.jpg),
+# "close"/"reaction" — принятый новый крупный план. Общие планы (wide) всегда снимаются по фону без людей.
+REGEN_REFS: dict[str, dict[str, str]] = {
+    "stairwell": {"room": "sh_stairwell_wide_1", "medium": "media:cf6026f7-41b1-48a1-bd0b-5e8d43ebdfaf",
+                  "angle": "media:cf6026f7-41b1-48a1-bd0b-5e8d43ebdfaf", "insert": "media:cf6026f7-41b1-48a1-bd0b-5e8d43ebdfaf",
+                  "medium_solo": "media:c710dca4-599d-4153-914e-7fdf00dfcac3"},
+    "apartment_zoya": {"room": "sh_apartment_zoya_wide_1", "medium": "media:364e4400-8bfd-4a62-890b-85c09e7ab770",
+                       "angle": "media:364e4400-8bfd-4a62-890b-85c09e7ab770", "insert": "media:364e4400-8bfd-4a62-890b-85c09e7ab770",
+                       "medium_solo": "media:f2b7b3ac-4120-4d2f-9501-dd407a5aab1b"},
+}
+NEW_IDS: set[str] = set()  # записи манифеста с "v": 2 — кадры, принятые уже по новым лицам
+
+
 def ref_jobs(manifest: list[dict]) -> dict[str, str]:
-    return {it["id"]: it["job"] for it in manifest if it.get("job") and it["kind"] in ("bg", "sprite", "shot")}
+    """job id референсов по id манифеста: фоны, спрайты, кадры и файлы лиц (kind doc, id face_<who>)."""
+    out: dict[str, str] = {}
+    for it in manifest:
+        if not it.get("job"):
+            continue
+        if it["kind"] in ("bg", "sprite", "shot") or (it["kind"] == "doc" and it["id"].startswith("face_")):
+            out[it["id"]] = it["job"]
+            if it.get("v") == 2:
+                NEW_IDS.add(it["id"])
+    return out
 
 
 def camera_block(kind: str, angle: str, cast: list[dict], focus: str | None, from_who: str | None, names,
@@ -581,7 +605,7 @@ def camera_block(kind: str, angle: str, cast: list[dict], focus: str | None, fro
                 "person. The viewer should feel the room is bigger than the people in it")
     if kind == "medium":
         return (f"The camera is inside the room, a few steps from the people, at the eye level of a seated participant, a "
-                f"40 mm-equivalent field of view: {len(cast)} people from the waist up, the nearest shoulder or the desk edge "
+                f"40 mm-equivalent field of view: {len(cast)} {'person' if len(cast) == 1 else 'people'} from the waist up, the nearest shoulder or the desk edge "
                 f"overlapping the frame, each head about one fifth of the frame height, little floor and ceiling; people keep "
                 f"the same left-to-right order as seen from the door. This is NOT the wide view of Reference 1, which is only "
                 f"the source of the room's furniture and light. A conversation in progress, nothing staged")
@@ -684,7 +708,8 @@ def build_prompt(base: str, continuity: str, shot: dict, bg_subject: str, tod: s
                        inside=cam_inside, bg_id=bg_id)
     body = base.replace(PERIOD_SOURCE, PERIOD_EPISODE, 1).replace(FRAME_SOURCE, FRAME_EPISODE, 1)
     # референсы
-    closer = shot["kind"] in ("medium", "close", "reaction", "angle") and REF_SHOTS.get(shot["set"], {}).get(shot["kind"])
+    closer = shot["kind"] in ("medium", "close", "reaction", "angle") and (
+        shot["ref_shot"] if "ref_shot" in shot else REF_SHOTS.get(shot["set"], {}).get(shot["kind"]))
     ref_tod = ref_shot_tod(closer) if closer else None
     if closer and shot["kind"] == "angle":
         ref1 = ("Reference 1 is the same room seen from closer: keep its furniture, light and colours and who sits "
@@ -712,7 +737,9 @@ def build_prompt(base: str, continuity: str, shot: dict, bg_subject: str, tod: s
         tail = "; this person's face is never shown clearly: back to the camera, turned away or in shadow" if who in HIDDEN_FACE else ""
         look = LOOKS.get(who) or LOOKS.get(shot.get("_sets", {}).get(who, ""), "")
         desc = f" ({look})" if look else ""
-        refs.append(f"Reference {i} is {names(who)}{desc}: keep this exact face, hair, build and clothing{tail}.")
+        person = ("; take only the person from this reference, not the room, light or objects around them"
+                  if REGEN else "")
+        refs.append(f"Reference {i} is {names(who)}{desc}: keep this exact face, hair, build and clothing{tail}{person}.")
     ref_block = "REFERENCE IMAGES\n" + " ".join(refs)
     if not room_ref:
         ref_block += (" There is no reference image of the room: build the softly rendered background from the scene "
@@ -730,6 +757,7 @@ def build_prompt(base: str, continuity: str, shot: dict, bg_subject: str, tod: s
             place = place.get(c.get("expression") or "neutral", place.get("*", "in the room"))
         look = LOOKS.get(who) or LOOKS.get(shot.get("_sets", {}).get(who, ""), "")
         garment = key_garment(look)
+        garment = re.sub(r"^(a|an|the)\s+", "", garment or "")  # «the one in the a coat» → «the one in the coat»
         tag = f" (the one in the {garment})" if garment else ""
         people.append(f"{names(who)}{tag} {place}, {expr}{CHAR_ALWAYS.get(who, '')}")
     if shot["kind"] == "insert":
@@ -823,6 +851,14 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
         if kind == "medium" and len(cast) == 1 and REF_SHOTS.get(set_name, {}).get("medium_solo"):
             kind = "medium_solo"
         ref_shot = REF_SHOTS.get(set_name, {}).get(kind)
+        if REGEN:
+            rr = REGEN_REFS.get(set_name, {})
+            if kind == "wide":
+                ref_shot = None  # общий план — по фону без людей
+            elif rr.get(kind):
+                ref_shot = rr[kind]
+            elif ref_shot and (ref_shot.startswith("media:") or ref_shot not in NEW_IDS):
+                ref_shot = None  # кадр прежней редакции: другие лица — комнатой идёт новый общий план или фон
         if ref_shot and ref_shot.startswith("media:"):  # загруженный кроп (assets/ep01/refs), не кадр из манифеста
             out = [ref_shot[len("media:"):]]
         else:
@@ -832,6 +868,10 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
                 out = [jobs.get(bg)]
         if not out[0]:
             room = REF_SHOTS.get(set_name, {}).get("room")
+            if REGEN:
+                room = None if kind == "wide" else REGEN_REFS.get(set_name, {}).get("room")
+                if room and room not in NEW_IDS:
+                    room = None
             out = [jobs.get(room) or jobs.get(bg)]
         # Крупный план и реакция в сете без принятого близкого кадра: без референса комнаты вовсе — с общим
         # планом первым референсом модель повторяет его кадрирование (office_day: 11 из 12); комната в крупном
@@ -848,13 +888,15 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
         for c in sorted(cast, key=lambda c: ORDER.get(bg, {}).get(c["who"], 1)):
             ss = sprite_set_of(c["who"])
             expr = c.get("expression") or "neutral"
-            out.append(jobs.get(f"{ss}.{expr}") or jobs.get(f"{ss}.neutral"))
-        return [m for m in out if m], has_room
+            # Файл лица (характерный портрет, волна 98) — первый выбор; спрайт выражения — если лица нет.
+            face = jobs.get(f"face_{c['who']}") or jobs.get(f"face_{ss}")
+            out.append(face or jobs.get(f"{ss}.{expr}") or jobs.get(f"{ss}.neutral"))
+        return [m for m in out if m], has_room, ref_shot
 
     def add(kind: str, name: str, cast: list[dict], **extra) -> None:
         shot = {"id": f"sh_{set_name}_{name}", "set": set_name, "bg": bg, "kind": kind, "angle": extra.pop("angle", "eye"), "cast": cast, "file": f"assets/ep01/shots/{set_name}/{name}.webp"}
         shot.update(extra)
-        shot["medias"], shot["has_room"] = ref_media(cast, kind, bool(shot.get("inside")))
+        shot["medias"], shot["has_room"], shot["ref_shot"] = ref_media(cast, kind, bool(shot.get("inside")))
         shot["_sets"] = {c["who"]: sprite_set_of(c["who"]) for c in cast}
         shot["prompt"] = build_prompt(base, realism, shot, subject, tod, bg, names, [c["who"] for c in cast])
         del shot["_sets"]
@@ -1007,7 +1049,10 @@ def main() -> int:
     ap.add_argument("--set", default="", help="только этот сет (для печати и плана)")
     ap.add_argument("--apply", default="", help="plan.json: записать assets.shots и coverage в эпизод")
     ap.add_argument("--sets", default="", help="для --apply: сеты через запятую")
+    ap.add_argument("--regen", action="store_true", help="пересъёмка по новым лицам: референс людей — файл лица, старые кадры комнатой не идут")
     a = ap.parse_args()
+    global REGEN
+    REGEN = bool(a.regen)
 
     ep = load_json(a.episode)
     if a.apply:
