@@ -1970,9 +1970,9 @@
  {
   "id": "sh_street_night_ots_oper_sledak",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_181155_52060e25-02b3-4aea-984c-b6d1436fee1b.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_182121_fff47812-33c0-4ab6-975f-95e9d99be7a4.png",
   "target": "assets/ep01/shots/street_night/ots_oper_sledak.webp",
-  "job": "52060e25-02b3-4aea-984c-b6d1436fee1b"
+  "job": "fff47812-33c0-4ab6-975f-95e9d99be7a4"
  },
  {
   "id": "sh_street_night_ots_sledak_oper",
@@ -1991,9 +1991,9 @@
  {
   "id": "sh_street_night_ots_sledak_accomplice",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_181410_2b631074-6643-4036-80e5-35ed2dd50299.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_182711_9b9c7189-cb66-4f24-93bd-b75fa570f1a5.png",
   "target": "assets/ep01/shots/street_night/ots_sledak_accomplice.webp",
-  "job": "2b631074-6643-4036-80e5-35ed2dd50299"
+  "job": "9b9c7189-cb66-4f24-93bd-b75fa570f1a5"
  },
  {
   "id": "sh_street_night_medium_1",
@@ -2036,13 +2036,6 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_181730_44888b7a-2e8b-4f39-a366-5e88ba05bd0c.png",
   "target": "assets/ep01/shots/street_night/angle_high.webp",
   "job": "44888b7a-2e8b-4f39-a366-5e88ba05bd0c"
- },
- {
-  "id": "sh_street_night_ots_oper_sledak_v2",
-  "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_182121_fff47812-33c0-4ab6-975f-95e9d99be7a4.png",
-  "target": "assets/ep01/shots/street_night/ots_oper_sledak_v2.webp",
-  "job": "fff47812-33c0-4ab6-975f-95e9d99be7a4"
  },
  {
   "id": "sh_street_night_close_oper_grin",
@@ -2092,5 +2085,26 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_182404_87a66242-37eb-4acd-aa08-225a7be11988.png",
   "target": "assets/ep01/shots/street_night/reaction_sledak.webp",
   "job": "87a66242-37eb-4acd-aa08-225a7be11988"
+ },
+ {
+  "id": "sh_street_night_close_accomplice_scared",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_182712_3d166f7d-37cc-463a-ae65-1d2e92afdd9d.png",
+  "target": "assets/ep01/shots/street_night/close_accomplice_scared.webp",
+  "job": "3d166f7d-37cc-463a-ae65-1d2e92afdd9d"
+ },
+ {
+  "id": "sh_street_night_reaction_accomplice",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_182711_066fd4d5-31af-4df4-b1d2-c830ef1d92cc.png",
+  "target": "assets/ep01/shots/street_night/reaction_accomplice.webp",
+  "job": "066fd4d5-31af-4df4-b1d2-c830ef1d92cc"
+ },
+ {
+  "id": "sh_street_night_angle_foreground",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_182712_3b0d11b0-ec83-4d77-8cba-af514c3e3841.png",
+  "target": "assets/ep01/shots/street_night/angle_foreground.webp",
+  "job": "3b0d11b0-ec83-4d77-8cba-af514c3e3841"
  }
 ]
