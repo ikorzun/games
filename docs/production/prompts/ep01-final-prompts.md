@@ -736,10 +736,10 @@ Essential objects: the back of a man's head behind cage bars, a judge's silhouet
 | stairwell | `bg_stairwell` | evening | s02, s03, s15, s15_q, s15_w1, s15_w2, s15_r | 28 | `ep01-final-prompts-shots-stairwell.md` |
 | zhek | `bg_zhek` | day | s07 | 14 | `ep01-final-prompts-shots-zhek.md` |
 | apartment_zoya | `bg_apartment_zoya` | day | s08, s13, s14, s13b, s14b | 35 | `ep01-final-prompts-shots-apartment_zoya.md` |
-| notary | `bg_notary_office` | day | s09, s16, s29, s09b, s16b, s16c, s29b, s16b_q, s16b_w1, s16b_w2, s16b_r | 29 | `ep01-final-prompts-shots-notary.md` |
+| notary | `bg_notary_office` | day | s09, s16, s29, s09b, s16b, s16c, s29b, s16b_q, s16b_w1, s16b_w2, s16b_r, s29b_q, s29b_w1, s29b_r | 29 | `ep01-final-prompts-shots-notary.md` |
 | office_day | `bg_office_prosecutor` | day | s11, s12, s18, s19, s22, s23, s27, s12b, s18b, s22b, s23b, s27b | 41 | `ep01-final-prompts-shots-office_day.md` |
 | office_evening | `bg_office_prosecutor` | evening | s17, s26, s26b | 25 | `ep01-final-prompts-shots-office_evening.md` |
-| interrogation | `bg_interrogation` | day | s20, s21, s38, s39, s40, s41, s20b, s38b, s38c, s40b, s40c, s41b, s20b_q, s20b_w1, s20b_w2, s20b_r | 39 | `ep01-final-prompts-shots-interrogation.md` |
+| interrogation | `bg_interrogation` | day | s20, s21, s38, s39, s40, s41, s20b, s38b, s38c, s40b, s40c, s41b, s20b_q, s20b_w1, s20b_w2, s20b_r, s41b_q, s41b_w1, s41b_r | 39 | `ep01-final-prompts-shots-interrogation.md` |
 | bti | `bg_bti_archive` | day | s24, s25, s24b | 21 | `ep01-final-prompts-shots-bti.md` |
 | street_day | `bg_street_day` | day | s28, s28b | 19 | `ep01-final-prompts-shots-street_day.md` |
 | office_now | `bg_office_now` | day | s30 | 9 | `ep01-final-prompts-shots-office_now.md` |

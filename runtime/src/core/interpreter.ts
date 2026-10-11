@@ -549,6 +549,11 @@ export class Interpreter {
     }
   }
 
+  /** Отладка (?items=, __vn.unlock): выдать материал архива как по шагу unlock, без тоста. */
+  unlockItem(item: string): void {
+    this.unlock(item, false);
+  }
+
   private unlock(item: string, toast: boolean): void {
     if (!this.archiveIds.has(item)) this.warn(`archive item ${item} не объявлен в archive_items`);
     const archive = this.state.archive;

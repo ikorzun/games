@@ -514,7 +514,10 @@
         "s28",
         "s28b",
         "s29",
-        "s29b"
+        "s29b",
+        "s29b_q",
+        "s29b_w1",
+        "s29b_r"
       ],
       "act": 2,
       "timeline": "investigation",
@@ -590,6 +593,9 @@
         "s40c",
         "s41",
         "s41b",
+        "s41b_q",
+        "s41b_w1",
+        "s41b_r",
         "s42",
         "s42b",
         "s42c"
@@ -6260,6 +6266,18 @@
           "when": "style_hard <= 1 && style_soft <= 1"
         },
         {
+          "do": "narrate",
+          "key": "ep01.s46.l012",
+          "style": "voiceover",
+          "when": "nerves <= 1"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s46.l013",
+          "style": "voiceover",
+          "when": "nerves >= 4"
+        },
+        {
           "do": "jump",
           "scene": "s47",
           "transition": "dissolve"
@@ -8813,7 +8831,7 @@
         "filter": "desaturated",
         "time_of_day": "day"
       },
-      "notes": "Продолжение s29 после выбора c_visit (разрез до l002); ломка Ковригина и терминальный c_notary — прежние, см. notes в s29.",
+      "notes": "Продолжение s29 после выбора c_visit (разрез до l002); ломка Ковригина и терминальный c_notary — прежние, см. notes в s29. Дедукция d_kovrigin2 (deduction_b): разрез после условных реплик о содержимом папки (l015–l017); вопрос — s29b_q, остаток сцены — s29b_r без изменений.",
       "steps": [
         {
           "do": "show",
@@ -8961,91 +8979,9 @@
           "when": "!docs_flaw && !found_chain"
         },
         {
-          "do": "say",
-          "who": "notary",
-          "key": "ep01.s29.l018",
-          "expression": "nervous",
-          "when": "docs_flaw || found_chain"
-        },
-        {
-          "do": "say",
-          "who": "notary",
-          "key": "ep01.s29.l019",
-          "expression": "neutral",
-          "when": "!docs_flaw && !found_chain"
-        },
-        {
-          "do": "set",
-          "when": "docs_flaw || found_chain",
-          "effects": [
-            {
-              "var": "kovrigin_broken",
-              "op": "set",
-              "value": true
-            },
-            {
-              "var": "case_strength",
-              "op": "add",
-              "value": 1
-            }
-          ]
-        },
-        {
-          "do": "sfx",
-          "id": "sfx_phone_ring"
-        },
-        {
-          "do": "fx",
-          "fx": "zoom_in",
-          "ms": 800
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s29.l020",
-          "style": "inner"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s29.l021",
-          "style": "inner",
-          "when": "docs_flaw || found_chain"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s29.l022",
-          "expression": "neutral"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s29.l023",
-          "style": "inner"
-        },
-        {
-          "do": "choice",
-          "id": "c_notary",
-          "kind": "dialogue",
-          "prompt_key": "ep01.s29.c_notary.prompt",
-          "options": [
-            {
-              "id": "show",
-              "key": "ep01.s29.c_notary.show",
-              "goto": "s30"
-            },
-            {
-              "id": "bluff",
-              "key": "ep01.s29.c_notary.bluff",
-              "effects": [
-                {
-                  "var": "trust_oper",
-                  "op": "sub",
-                  "value": 1
-                }
-              ],
-              "goto": "s30"
-            }
-          ],
-          "remember": false
+          "do": "jump",
+          "scene": "s29b_q",
+          "transition": "cut"
         }
       ],
       "coverage": "notary"
@@ -9672,7 +9608,7 @@
         "bg": "bg_interrogation",
         "filter": "noir"
       },
-      "notes": "Продолжение s41 после c_notary_tone: реакции Ковригина, затем прежний остаток сцены (ответы по kovrigin_broken) и существующий выбор c_press_notary без изменений.",
+      "notes": "Продолжение s41 после c_notary_tone: реакции Ковригина, затем прежний остаток сцены (ответы по kovrigin_broken) и существующий выбор c_press_notary без изменений. Дедукция d_confront (deduction_b): разрез перед l021 («Он знал. Печать он ставил сам…»); вопрос — s41b_q, остаток сцены — s41b_r без изменений.",
       "steps": [
         {
           "do": "show",
@@ -9824,42 +9760,9 @@
           "when": "!kovrigin_broken"
         },
         {
-          "do": "narrate",
-          "key": "ep01.s41.l021",
-          "style": "inner"
-        },
-        {
-          "do": "choice",
-          "id": "c_press_notary",
-          "kind": "moral",
-          "prompt_key": "ep01.s41.c_press_notary.prompt",
-          "options": [
-            {
-              "id": "press",
-              "key": "ep01.s41.c_press_notary.press",
-              "effects": [
-                {
-                  "var": "gromov_rep",
-                  "op": "add",
-                  "value": 1
-                }
-              ],
-              "goto": "s42"
-            },
-            {
-              "id": "spare",
-              "key": "ep01.s41.c_press_notary.spare",
-              "effects": [
-                {
-                  "var": "boss_favor",
-                  "op": "add",
-                  "value": 1
-                }
-              ],
-              "goto": "s42"
-            }
-          ],
-          "remember": true
+          "do": "jump",
+          "scene": "s41b_q",
+          "transition": "cut"
         }
       ],
       "coverage": "interrogation"
@@ -10170,7 +10073,7 @@
         "filter": "desaturated",
         "time_of_day": "night"
       },
-      "notes": "Продолжение s42 после c_journalist: реакции; отголоски style_hard/style_soft (Сайко) — до прежнего блока по trust_oper (l025…l030); затем прежний финал сцены.",
+      "notes": "Продолжение s42 после c_journalist: реакции; отголоски style_hard/style_soft (Сайко) — до прежнего блока по trust_oper (l025…l030); затем прежний финал сцены. Отголоски nerves (deduction_b): l008 (nerves <= 2), l009/l010 (nerves >= 5, форма обращения по trust_oper) — после отголосков стиля, до блока по trust_oper.",
       "steps": [
         {
           "do": "show",
@@ -10268,6 +10171,48 @@
           "key": "ep01.s42c.l007",
           "position": "offscreen_right",
           "when": "oper_wounded && trust_oper < 2 && style_hard <= 1 && style_soft <= 1"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s42c.l008",
+          "expression": "grin",
+          "when": "!oper_wounded && nerves <= 2"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s42c.l008",
+          "position": "offscreen_right",
+          "when": "oper_wounded && nerves <= 2"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s42c.l009",
+          "expression": "neutral",
+          "when": "!oper_wounded && nerves >= 5 && trust_oper >= 2"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s42c.l009",
+          "position": "offscreen_right",
+          "when": "oper_wounded && nerves >= 5 && trust_oper >= 2"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s42c.l010",
+          "expression": "neutral",
+          "when": "!oper_wounded && nerves >= 5 && trust_oper < 2"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s42c.l010",
+          "position": "offscreen_right",
+          "when": "oper_wounded && nerves >= 5 && trust_oper < 2"
         },
         {
           "do": "say",
@@ -11359,6 +11304,658 @@
       ],
       "coverage": "interrogation",
       "notes": "Продолжение s20b после верного хода d_lapin; дальше l013 (четыре часа допроса) и jump в s21 без изменений. Реплика Сайко про вырезку не требует, чтобы Лапин пришёл сам: в s21 возможно задержание на трое суток."
+    },
+    "s29b_q": {
+      "id": "s29b_q",
+      "block": "b08_investigation_2",
+      "stage": {
+        "bg": "bg_notary_office",
+        "filter": "desaturated",
+        "time_of_day": "day"
+      },
+      "notes": "Сцена вопроса дедуктивной развилки d_kovrigin2 (Ковригин, второй визит). Реплика внутреннего голоса — только при первом входе (после неверной опции вопрос задаётся без неё).",
+      "coverage": "notary",
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "firm",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "notary",
+          "expression": "nervous",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s29b_q.l001",
+          "style": "inner",
+          "when": "last_choice != 'registration'"
+        },
+        {
+          "do": "choice",
+          "id": "d_kovrigin2",
+          "kind": "deduction",
+          "prompt_key": "ep01.s29b_q.d_kovrigin2.prompt",
+          "hint_after": 2,
+          "remember": true,
+          "penalty": [
+            {
+              "var": "nerves",
+              "op": "sub",
+              "value": 1
+            }
+          ],
+          "options": [
+            {
+              "id": "bti",
+              "key": "ep01.s29b_q.d_kovrigin2.bti",
+              "item": "arc_bti",
+              "when": "found_chain",
+              "hidden_when_false": true,
+              "verdict": "right",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "bti"
+                }
+              ],
+              "goto": "s29b_r"
+            },
+            {
+              "id": "poa",
+              "key": "ep01.s29b_q.d_kovrigin2.poa",
+              "item": "arc_power_of_attorney",
+              "when": "docs_flaw",
+              "hidden_when_false": true,
+              "verdict": "right",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "poa"
+                }
+              ],
+              "goto": "s29b_r"
+            },
+            {
+              "id": "press_twenty",
+              "key": "ep01.s29b_q.d_kovrigin2.press_twenty",
+              "verdict": "right",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "press_twenty"
+                }
+              ],
+              "goto": "s29b_r"
+            },
+            {
+              "id": "registration",
+              "key": "ep01.s29b_q.d_kovrigin2.registration",
+              "item": "arc_registration",
+              "verdict": "wrong",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "registration"
+                }
+              ],
+              "goto": "s29b_w1"
+            }
+          ]
+        }
+      ]
+    },
+    "s29b_w1": {
+      "id": "s29b_w1",
+      "block": "b08_investigation_2",
+      "stage": {
+        "bg": "bg_notary_office",
+        "filter": "desaturated",
+        "time_of_day": "day"
+      },
+      "notes": "Реакция на неверный ход registration; возврат к вопросу s29b_q.",
+      "coverage": "notary",
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "firm",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "notary",
+          "expression": "nervous",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s29b_w1.l001",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s29b_w1.l002",
+          "expression": "neutral",
+          "when": "trust_oper >= 2"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s29b_w1.l003",
+          "expression": "neutral",
+          "when": "trust_oper < 2"
+        },
+        {
+          "do": "jump",
+          "scene": "s29b_q",
+          "transition": "cut"
+        }
+      ]
+    },
+    "s29b_r": {
+      "id": "s29b_r",
+      "block": "b08_investigation_2",
+      "stage": {
+        "bg": "bg_notary_office",
+        "filter": "desaturated",
+        "time_of_day": "day"
+      },
+      "notes": "Продолжение s29b после d_kovrigin2: реакции на верные ходы (bti / poa / press_twenty), отголоски notary_slip и money_at_notary (Громов), затем прежний остаток s29b без изменений (ломка Ковригина по docs_flaw || found_chain, терминальный c_notary → s30).",
+      "coverage": "notary",
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "firm",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "notary",
+          "expression": "nervous",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s29b_r.l001",
+          "expression": "nervous",
+          "when": "last_choice == 'bti'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s29b_r.l002",
+          "expression": "grin",
+          "when": "last_choice == 'bti'"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s29b_r.l003",
+          "expression": "nervous",
+          "when": "last_choice == 'poa'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s29b_r.l004",
+          "style": "inner",
+          "when": "last_choice == 'poa'"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s29b_r.l005",
+          "expression": "nervous",
+          "when": "last_choice == 'press_twenty'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s29b_r.l006",
+          "style": "inner",
+          "when": "last_choice == 'press_twenty'"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s29b_r.l007",
+          "expression": "firm",
+          "when": "notary_slip"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s29b_r.l008",
+          "expression": "firm",
+          "when": "money_at_notary"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s29.l018",
+          "expression": "nervous",
+          "when": "docs_flaw || found_chain"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s29.l019",
+          "expression": "neutral",
+          "when": "!docs_flaw && !found_chain"
+        },
+        {
+          "do": "set",
+          "when": "docs_flaw || found_chain",
+          "effects": [
+            {
+              "var": "kovrigin_broken",
+              "op": "set",
+              "value": true
+            },
+            {
+              "var": "case_strength",
+              "op": "add",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "do": "sfx",
+          "id": "sfx_phone_ring"
+        },
+        {
+          "do": "fx",
+          "fx": "zoom_in",
+          "ms": 800
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s29.l020",
+          "style": "inner"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s29.l021",
+          "style": "inner",
+          "when": "docs_flaw || found_chain"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s29.l022",
+          "expression": "neutral"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s29.l023",
+          "style": "inner"
+        },
+        {
+          "do": "choice",
+          "id": "c_notary",
+          "kind": "dialogue",
+          "prompt_key": "ep01.s29.c_notary.prompt",
+          "options": [
+            {
+              "id": "show",
+              "key": "ep01.s29.c_notary.show",
+              "goto": "s30"
+            },
+            {
+              "id": "bluff",
+              "key": "ep01.s29.c_notary.bluff",
+              "effects": [
+                {
+                  "var": "trust_oper",
+                  "op": "sub",
+                  "value": 1
+                }
+              ],
+              "goto": "s30"
+            }
+          ],
+          "remember": false
+        }
+      ]
+    },
+    "s41b_q": {
+      "id": "s41b_q",
+      "block": "b12_confrontation",
+      "stage": {
+        "bg": "bg_interrogation",
+        "filter": "noir"
+      },
+      "notes": "Сцена вопроса дедуктивной развилки d_confront (очная ставка). Реплика внутреннего голоса — только при первом входе.",
+      "coverage": "interrogation",
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "firm",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "murashov",
+          "expression": "cold",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "notary",
+          "expression": "nervous",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s41b_q.l001",
+          "style": "inner",
+          "when": "last_choice != 'registration'"
+        },
+        {
+          "do": "choice",
+          "id": "d_confront",
+          "kind": "deduction",
+          "prompt_key": "ep01.s41b_q.d_confront.prompt",
+          "hint_after": 2,
+          "remember": true,
+          "penalty": [
+            {
+              "var": "nerves",
+              "op": "sub",
+              "value": 1
+            }
+          ],
+          "options": [
+            {
+              "id": "keys",
+              "key": "ep01.s41b_q.d_confront.keys",
+              "item": "arc_keys",
+              "when": "keys_found",
+              "hidden_when_false": true,
+              "verdict": "right",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "keys"
+                }
+              ],
+              "goto": "s41b_r"
+            },
+            {
+              "id": "poa",
+              "key": "ep01.s41b_q.d_confront.poa",
+              "item": "arc_power_of_attorney",
+              "when": "docs_flaw",
+              "hidden_when_false": true,
+              "verdict": "right",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "poa"
+                }
+              ],
+              "goto": "s41b_r"
+            },
+            {
+              "id": "murashov_words",
+              "key": "ep01.s41b_q.d_confront.murashov_words",
+              "verdict": "right",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "murashov_words"
+                }
+              ],
+              "goto": "s41b_r"
+            },
+            {
+              "id": "registration",
+              "key": "ep01.s41b_q.d_confront.registration",
+              "item": "arc_registration",
+              "verdict": "wrong",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "registration"
+                }
+              ],
+              "goto": "s41b_w1"
+            }
+          ]
+        }
+      ]
+    },
+    "s41b_w1": {
+      "id": "s41b_w1",
+      "block": "b12_confrontation",
+      "stage": {
+        "bg": "bg_interrogation",
+        "filter": "noir"
+      },
+      "notes": "Реакция на неверный ход registration; возврат к вопросу s41b_q.",
+      "coverage": "interrogation",
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "firm",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "murashov",
+          "expression": "cold",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "notary",
+          "expression": "nervous",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "murashov",
+          "key": "ep01.s41b_w1.l001",
+          "expression": "neutral"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s41b_w1.l002",
+          "style": "inner"
+        },
+        {
+          "do": "jump",
+          "scene": "s41b_q",
+          "transition": "cut"
+        }
+      ]
+    },
+    "s41b_r": {
+      "id": "s41b_r",
+      "block": "b12_confrontation",
+      "stage": {
+        "bg": "bg_interrogation",
+        "filter": "noir"
+      },
+      "notes": "Продолжение s41b после d_confront: реакции на верные ходы (keys / poa / murashov_words), затем прежний остаток s41b без изменений («Он знал. Печать он ставил сам…» и moral-выбор c_press_notary → s42).",
+      "coverage": "interrogation",
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "firm",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "murashov",
+          "expression": "cold",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "notary",
+          "expression": "nervous",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s41b_r.l001",
+          "expression": "firm",
+          "when": "last_choice == 'keys'"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s41b_r.l002",
+          "expression": "nervous",
+          "when": "last_choice == 'keys'"
+        },
+        {
+          "do": "say",
+          "who": "murashov",
+          "key": "ep01.s41b_r.l003",
+          "expression": "cold",
+          "when": "last_choice == 'keys'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s41b_r.l004",
+          "style": "inner",
+          "when": "last_choice == 'keys'"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s41b_r.l005",
+          "expression": "nervous",
+          "when": "last_choice == 'poa'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s41b_r.l006",
+          "style": "inner",
+          "when": "last_choice == 'poa'"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s41b_r.l007",
+          "expression": "nervous",
+          "when": "last_choice == 'murashov_words'"
+        },
+        {
+          "do": "say",
+          "who": "murashov",
+          "key": "ep01.s41b_r.l008",
+          "expression": "neutral",
+          "when": "last_choice == 'murashov_words'"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s41b_r.l009",
+          "expression": "nervous",
+          "when": "last_choice == 'murashov_words'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s41b_r.l010",
+          "style": "inner",
+          "when": "last_choice == 'murashov_words'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s41.l021",
+          "style": "inner"
+        },
+        {
+          "do": "choice",
+          "id": "c_press_notary",
+          "kind": "moral",
+          "prompt_key": "ep01.s41.c_press_notary.prompt",
+          "options": [
+            {
+              "id": "press",
+              "key": "ep01.s41.c_press_notary.press",
+              "effects": [
+                {
+                  "var": "gromov_rep",
+                  "op": "add",
+                  "value": 1
+                }
+              ],
+              "goto": "s42"
+            },
+            {
+              "id": "spare",
+              "key": "ep01.s41.c_press_notary.spare",
+              "effects": [
+                {
+                  "var": "boss_favor",
+                  "op": "add",
+                  "value": 1
+                }
+              ],
+              "goto": "s42"
+            }
+          ],
+          "remember": true
+        }
+      ]
     }
   },
   "minigames": {

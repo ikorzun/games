@@ -112,7 +112,7 @@ REFERENCE IMAGES и CONTINUITY — референсы комнаты и спра
 | `sh_apartment_zoya_angle_high` | angle | high | murashov_sil (neutral), zoya (neutral) | — |
 | `sh_apartment_zoya_angle_foreground` | angle | foreground | murashov_sil (neutral), zoya (neutral) | — |
 
-## notary — `bg_notary_office`, day: сцены s09, s16, s29, s09b, s16b, s16c, s29b, s16b_q, s16b_w1, s16b_w2, s16b_r; реплик 62; кадров 29
+## notary — `bg_notary_office`, day: сцены s09, s16, s29, s09b, s16b, s16c, s29b, s16b_q, s16b_w1, s16b_w2, s16b_r, s29b_q, s29b_w1, s29b_r; реплик 71; кадров 29
 
 | id | kind | angle | состав (выражение) | from → focus |
 |---|---|---|---|---|
@@ -222,7 +222,7 @@ REFERENCE IMAGES и CONTINUITY — референсы комнаты и спра
 | `sh_office_evening_angle_high` | angle | high | oper (neutral), sledak (neutral) | — |
 | `sh_office_evening_angle_foreground` | angle | foreground | oper (neutral), sledak (neutral) | — |
 
-## interrogation — `bg_interrogation`, day: сцены s20, s21, s38, s39, s40, s41, s20b, s38b, s38c, s40b, s40c, s41b, s20b_q, s20b_w1, s20b_w2, s20b_r; реплик 87; кадров 39
+## interrogation — `bg_interrogation`, day: сцены s20, s21, s38, s39, s40, s41, s20b, s38b, s38c, s40b, s40c, s41b, s20b_q, s20b_w1, s20b_w2, s20b_r, s41b_q, s41b_w1, s41b_r; реплик 95; кадров 39
 
 | id | kind | angle | состав (выражение) | from → focus |
 |---|---|---|---|---|
@@ -238,17 +238,17 @@ REFERENCE IMAGES и CONTINUITY — референсы комнаты и спра
 | `sh_interrogation_ots_murashov_sledak` | ots | eye | sledak (neutral), murashov (neutral) | murashov → sledak |
 | `sh_interrogation_ots_buyer_oper` | ots | eye | oper (neutral), buyer (neutral) | buyer → oper |
 | `sh_interrogation_ots_oper_sledak` | ots | eye | sledak (neutral), oper (neutral) | oper → sledak |
+| `sh_interrogation_ots_sledak_notary` | ots | eye | notary (neutral), sledak (neutral) | sledak → notary |
 | `sh_interrogation_ots_oper_buyer` | ots | eye | buyer (neutral), oper (neutral) | oper → buyer |
 | `sh_interrogation_ots_sledak_oper` | ots | eye | oper (neutral), sledak (neutral) | sledak → oper |
-| `sh_interrogation_ots_sledak_notary` | ots | eye | notary (neutral), sledak (neutral) | sledak → notary |
 | `sh_interrogation_ots_murashov_oper` | ots | eye | oper (neutral), murashov (neutral) | murashov → oper |
 | `sh_interrogation_close_murashov_neutral` | close | eye | murashov (neutral) | — → murashov |
-| `sh_interrogation_close_buyer_scared` | close | eye | buyer (scared) | — → buyer |
 | `sh_interrogation_close_sledak_firm` | close | eye | sledak (firm) | — → sledak |
+| `sh_interrogation_close_buyer_scared` | close | eye | buyer (scared) | — → buyer |
+| `sh_interrogation_close_notary_nervous` | close | eye | notary (nervous) | — → notary |
 | `sh_interrogation_close_oper_angry` | close | eye | oper (angry) | — → oper |
 | `sh_interrogation_close_sledak_tense` | close | eye | sledak (tense) | — → sledak |
 | `sh_interrogation_close_oper_neutral` | close | eye | oper (neutral) | — → oper |
-| `sh_interrogation_close_notary_nervous` | close | eye | notary (nervous) | — → notary |
 | `sh_interrogation_close_murashov_cold` | close | eye | murashov (cold) | — → murashov |
 | `sh_interrogation_close_sledak_neutral` | close | eye | sledak (neutral) | — → sledak |
 | `sh_interrogation_close_notary_neutral` | close | eye | notary (neutral) | — → notary |
@@ -256,8 +256,8 @@ REFERENCE IMAGES и CONTINUITY — референсы комнаты и спра
 | `sh_interrogation_close_murashov_cornered` | close | eye | murashov (cornered) | — → murashov |
 | `sh_interrogation_close_oper_grin` | close | eye | oper (grin) | — → oper |
 | `sh_interrogation_reaction_sledak` | reaction | eye | sledak (neutral) | — → sledak |
-| `sh_interrogation_reaction_oper` | reaction | eye | oper (neutral) | — → oper |
 | `sh_interrogation_reaction_murashov` | reaction | eye | murashov (neutral) | — → murashov |
+| `sh_interrogation_reaction_oper` | reaction | eye | oper (neutral) | — → oper |
 | `sh_interrogation_reaction_buyer` | reaction | eye | buyer (neutral) | — → buyer |
 | `sh_interrogation_reaction_notary` | reaction | eye | notary (neutral) | — → notary |
 | `sh_interrogation_insert_1` | insert | eye | — | — |
@@ -330,7 +330,7 @@ REFERENCE IMAGES и CONTINUITY — референсы комнаты и спра
 | `sh_office_now_angle_high` | angle | high | sledak_old (neutral) | — |
 | `sh_office_now_angle_foreground` | angle | foreground | sledak_old (neutral) | — |
 
-## office_night — `bg_office_prosecutor`, night: сцены s31, s32, s33, s42, s31b, s31c, s33b, s42b, s42c; реплик 112; кадров 27
+## office_night — `bg_office_prosecutor`, night: сцены s31, s32, s33, s42, s31b, s31c, s33b, s42b, s42c; реплик 118; кадров 27
 
 | id | kind | angle | состав (выражение) | from → focus |
 |---|---|---|---|---|

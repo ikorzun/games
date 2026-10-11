@@ -47,6 +47,11 @@ function fatal(root: HTMLElement, e: unknown): void {
   root.replaceChildren(pre);
 }
 
+/** `?items=arc_keys,arc_registration` → id материалов архива (только `[a-z0-9_]`). */
+export function parseItemsParam(raw: string | null): string[] {
+  return (raw ?? '').split(',').map((s) => s.trim()).filter((s) => /^[a-z][a-z0-9_]*$/.test(s));
+}
+
 /** `?vars=a:true,b:3,c:full` → пары имя/значение; значения как в эффектах: true/false, целое число, иначе строка. */
 export function parseVarsParam(raw: string | null): Array<[string, boolean | number | string]> {
   const out: Array<[string, boolean | number | string]> = [];
@@ -117,12 +122,14 @@ async function boot(): Promise<void> {
     });
     installDebug(app);
 
-    // Быстрая проверка геймплея: ?scene=s15_q&vars=found_photo:true,nerves:3 — новая партия минуя меню,
-    // переменные как у эффектов сценария (true/false, целое, строка), переход сразу к сцене.
+    // Быстрая проверка геймплея: ?scene=s41b_q&vars=keys_found:true&items=arc_keys,arc_registration — новая партия
+    // минуя меню, переменные как у эффектов сценария (true/false, целое, строка), материалы архива (улики
+    // дедуктивных развилок), переход сразу к сцене.
     const testScene = params.get('scene');
     if (testScene) {
       await app.startNewGame({ skipWarning: true });
       for (const [name, value] of parseVarsParam(params.get('vars'))) app.debugSet(name, value);
+      for (const item of parseItemsParam(params.get('items'))) app.debugUnlock(item);
       app.debugGoto(testScene);
     } else if (params.get('autostart') === '1') await app.startNewGame({ skipWarning: true });
     else app.showMenu(); // меню сразу; главная тема стартует при показе (или при первом жесте, если автозапуск запрещён)

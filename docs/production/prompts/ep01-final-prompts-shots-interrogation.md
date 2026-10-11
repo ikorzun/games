@@ -1,4 +1,4 @@
-# Кадры покрытия — сет `interrogation` (`bg_interrogation`, day; сцены s20, s21, s38, s39, s40, s41, s20b, s38b, s38c, s40b, s40c, s41b, s20b_q, s20b_w1, s20b_w2, s20b_r)
+# Кадры покрытия — сет `interrogation` (`bg_interrogation`, day; сцены s20, s21, s38, s39, s40, s41, s20b, s38b, s38c, s40b, s40c, s41b, s20b_q, s20b_w1, s20b_w2, s20b_r, s41b_q, s41b_w1, s41b_r)
 
 Промт каждого кадра = базовый промпт (`ep01-final-prompts.md` §1) + блок ниже; между REFERENCE IMAGES и SCENE вставляется блок CONTINUITY (§1). Референсы: «the room» — фон сета или принятый wide_1 / его кроп; персонаж — файл лица из §2 (или принятый спрайт). Порядок медиа — как перечислены референсы.
 
@@ -182,6 +182,21 @@ Light sources: flat overcast daylight from the window plus the warm desk lamp.
 Essential objects: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up; nothing added that is not in the room reference.
 ```
 
+## `sh_interrogation_ots_sledak_notary` — ots / eye — notary (neutral), sledak (neutral) → `assets/ep01/shots/interrogation/ots_sledak_notary.webp`
+
+```
+REFERENCE IMAGES
+Reference 1 is the room itself: keep its furniture, window, lamps and props exactly where they are. Reference 2 is notary Kovrigin (man, 55, soft, balding, sweating; brown suit, tie askew): keep this exact face, hair, build and clothing. Reference 3 is Investigator Andrei Gromov (man, 29, lean, tired grey eyes, short dark hair, a day of stubble; grey wool coat over a dark sweater, folder under his arm): keep this exact face, hair, build and clothing.
+
+SCENE
+
+Location and time: Moscow, autumn 1993, daytime. Small interrogation room in a Moscow militia station, 1993: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up. Seen from the door end of the room: the bare table in the CENTRE under the small barred window, the lamp at the table's LEFT end, one chair at the LEFT end and one at the RIGHT end of the table, the dark-green half-wall and the radiator behind the table, the grey steel door on the RIGHT. The camera never crosses to the window side.
+People and action: People in frame: notary Kovrigin (the one in the brown suit) at the LEFT end of the table beside the suspect's chair, a folded handkerchief in his hand, calm face, mouth closed; Investigator Andrei Gromov (the one in the grey wool coat over a dark sweater) seated on the chair at the RIGHT end of the table, facing the suspect across it, a folder in front of him, calm face, mouth closed. Investigator Andrei Gromov is seen only from behind: the back of the head and the shoulder overlap the near edge of the frame, Investigator Andrei Gromov is not seen from the front. notary Kovrigin is the person farther from the camera, face to the lens, speaking to Investigator Andrei Gromov. Do not swap the two people. Exactly two people are in the frame and each of them appears once: Investigator Andrei Gromov is only the shoulder in the foreground, not also somewhere in the room. In the frame, Investigator Andrei Gromov's shoulder is at the RIGHT edge and notary Kovrigin is on the LEFT, exactly as they stand left-to-right in the wide view from the door.
+Camera position: The camera is just behind Investigator Andrei Gromov's shoulder at that person's eye level, a 45 mm-equivalent field of view: the back of Investigator Andrei Gromov's head and shoulder overlap the near edge of the frame, notary Kovrigin faces the camera beyond, both readable, the background recognizable with modest optical softness; the 180-degree axis of the conversation is kept, people stay on the same sides as seen from the door. We listen from one side of the conversation.
+Light sources: flat overcast daylight from the window plus the warm desk lamp.
+Essential objects: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up; nothing added that is not in the room reference.
+```
+
 ## `sh_interrogation_ots_oper_buyer` — ots / eye — buyer (neutral), oper (neutral) → `assets/ep01/shots/interrogation/ots_oper_buyer.webp`
 
 ```
@@ -208,21 +223,6 @@ SCENE
 Location and time: Moscow, autumn 1993, daytime. Small interrogation room in a Moscow militia station, 1993: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up. Seen from the door end of the room: the bare table in the CENTRE under the small barred window, the lamp at the table's LEFT end, one chair at the LEFT end and one at the RIGHT end of the table, the dark-green half-wall and the radiator behind the table, the grey steel door on the RIGHT. The camera never crosses to the window side.
 People and action: People in frame: Investigator Andrei Gromov (the one in the grey wool coat over a dark sweater) seated on the chair at the RIGHT end of the table, facing the suspect across it, a folder in front of him, calm face, mouth closed; Detective Viktor Sayko (the one in the black leather jacket) standing apart from the table by the grey steel door at the right wall, arms folded, calm face, mouth closed. Investigator Andrei Gromov is seen only from behind: the back of the head and the shoulder overlap the near edge of the frame, Investigator Andrei Gromov is not seen from the front. Detective Viktor Sayko is the person farther from the camera, face to the lens, speaking to Investigator Andrei Gromov. Do not swap the two people. Exactly two people are in the frame and each of them appears once: Investigator Andrei Gromov is only the shoulder in the foreground, not also somewhere in the room. In the frame, Investigator Andrei Gromov's shoulder is at the LEFT edge and Detective Viktor Sayko is on the RIGHT, exactly as they stand left-to-right in the wide view from the door.
 Camera position: The camera is just behind Investigator Andrei Gromov's shoulder at that person's eye level, a 45 mm-equivalent field of view: the back of Investigator Andrei Gromov's head and shoulder overlap the near edge of the frame, Detective Viktor Sayko faces the camera beyond, both readable, the background recognizable with modest optical softness; the 180-degree axis of the conversation is kept, people stay on the same sides as seen from the door. We listen from one side of the conversation.
-Light sources: flat overcast daylight from the window plus the warm desk lamp.
-Essential objects: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up; nothing added that is not in the room reference.
-```
-
-## `sh_interrogation_ots_sledak_notary` — ots / eye — notary (neutral), sledak (neutral) → `assets/ep01/shots/interrogation/ots_sledak_notary.webp`
-
-```
-REFERENCE IMAGES
-Reference 1 is the room itself: keep its furniture, window, lamps and props exactly where they are. Reference 2 is notary Kovrigin (man, 55, soft, balding, sweating; brown suit, tie askew): keep this exact face, hair, build and clothing. Reference 3 is Investigator Andrei Gromov (man, 29, lean, tired grey eyes, short dark hair, a day of stubble; grey wool coat over a dark sweater, folder under his arm): keep this exact face, hair, build and clothing.
-
-SCENE
-
-Location and time: Moscow, autumn 1993, daytime. Small interrogation room in a Moscow militia station, 1993: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up. Seen from the door end of the room: the bare table in the CENTRE under the small barred window, the lamp at the table's LEFT end, one chair at the LEFT end and one at the RIGHT end of the table, the dark-green half-wall and the radiator behind the table, the grey steel door on the RIGHT. The camera never crosses to the window side.
-People and action: People in frame: notary Kovrigin (the one in the brown suit) at the LEFT end of the table beside the suspect's chair, a folded handkerchief in his hand, calm face, mouth closed; Investigator Andrei Gromov (the one in the grey wool coat over a dark sweater) seated on the chair at the RIGHT end of the table, facing the suspect across it, a folder in front of him, calm face, mouth closed. Investigator Andrei Gromov is seen only from behind: the back of the head and the shoulder overlap the near edge of the frame, Investigator Andrei Gromov is not seen from the front. notary Kovrigin is the person farther from the camera, face to the lens, speaking to Investigator Andrei Gromov. Do not swap the two people. Exactly two people are in the frame and each of them appears once: Investigator Andrei Gromov is only the shoulder in the foreground, not also somewhere in the room. In the frame, Investigator Andrei Gromov's shoulder is at the RIGHT edge and notary Kovrigin is on the LEFT, exactly as they stand left-to-right in the wide view from the door.
-Camera position: The camera is just behind Investigator Andrei Gromov's shoulder at that person's eye level, a 45 mm-equivalent field of view: the back of Investigator Andrei Gromov's head and shoulder overlap the near edge of the frame, notary Kovrigin faces the camera beyond, both readable, the background recognizable with modest optical softness; the 180-degree axis of the conversation is kept, people stay on the same sides as seen from the door. We listen from one side of the conversation.
 Light sources: flat overcast daylight from the window plus the warm desk lamp.
 Essential objects: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up; nothing added that is not in the room reference.
 ```
@@ -257,6 +257,21 @@ Light sources: flat overcast daylight from the window plus the warm desk lamp.
 Essential objects: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up; nothing added that is not in the room reference.
 ```
 
+## `sh_interrogation_close_sledak_firm` — close / eye — sledak (firm) → `assets/ep01/shots/interrogation/close_sledak_firm.webp`
+
+```
+REFERENCE IMAGES
+Reference 1 is the same room seen from closer: keep its furniture, light and colours; frame this shot at least as close as Reference 1. Reference 2 is Investigator Andrei Gromov (man, 29, lean, tired grey eyes, short dark hair, a day of stubble; grey wool coat over a dark sweater, folder under his arm): keep this exact face, hair, build and clothing.
+
+SCENE
+
+Location and time: Moscow, autumn 1993, daytime. Small interrogation room in a Moscow militia station, 1993: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up.
+People and action: People in frame: Investigator Andrei Gromov (the one in the grey wool coat over a dark sweater) seated on the chair at the RIGHT end of the table, facing the suspect across it, a folder in front of him, steady hard stare, chin down. Investigator Andrei Gromov is speaking to someone just off frame; steady hard stare, chin down. Exactly one person in the frame, head and shoulders; no full figure.
+Camera position: The camera is two or three steps in front of Investigator Andrei Gromov at that person's eye level, a 45 mm-equivalent field of view: a medium close-up, head and shoulders filling the frame, eyes on the upper third line, the surroundings recognizable behind with modest optical softness, no very shallow depth of field. Every flicker of expression counts.
+Light sources: flat overcast daylight from the window plus the warm desk lamp.
+Essential objects: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up; nothing added that is not in the room reference.
+```
+
 ## `sh_interrogation_close_buyer_scared` — close / eye — buyer (scared) → `assets/ep01/shots/interrogation/close_buyer_scared.webp`
 
 ```
@@ -272,17 +287,17 @@ Light sources: flat overcast daylight from the window plus the warm desk lamp.
 Essential objects: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up; nothing added that is not in the room reference.
 ```
 
-## `sh_interrogation_close_sledak_firm` — close / eye — sledak (firm) → `assets/ep01/shots/interrogation/close_sledak_firm.webp`
+## `sh_interrogation_close_notary_nervous` — close / eye — notary (nervous) → `assets/ep01/shots/interrogation/close_notary_nervous.webp`
 
 ```
 REFERENCE IMAGES
-Reference 1 is the same room seen from closer: keep its furniture, light and colours; frame this shot at least as close as Reference 1. Reference 2 is Investigator Andrei Gromov (man, 29, lean, tired grey eyes, short dark hair, a day of stubble; grey wool coat over a dark sweater, folder under his arm): keep this exact face, hair, build and clothing.
+Reference 1 is the same room seen from closer: keep its furniture, light and colours; frame this shot at least as close as Reference 1. Reference 2 is notary Kovrigin (man, 55, soft, balding, sweating; brown suit, tie askew): keep this exact face, hair, build and clothing.
 
 SCENE
 
 Location and time: Moscow, autumn 1993, daytime. Small interrogation room in a Moscow militia station, 1993: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up.
-People and action: People in frame: Investigator Andrei Gromov (the one in the grey wool coat over a dark sweater) seated on the chair at the RIGHT end of the table, facing the suspect across it, a folder in front of him, steady hard stare, chin down. Investigator Andrei Gromov is speaking to someone just off frame; steady hard stare, chin down. Exactly one person in the frame, head and shoulders; no full figure.
-Camera position: The camera is two or three steps in front of Investigator Andrei Gromov at that person's eye level, a 45 mm-equivalent field of view: a medium close-up, head and shoulders filling the frame, eyes on the upper third line, the surroundings recognizable behind with modest optical softness, no very shallow depth of field. Every flicker of expression counts.
+People and action: People in frame: notary Kovrigin (the one in the brown suit) at the LEFT end of the table beside the suspect's chair, wiping his forehead with a handkerchief, fidgeting, sweating, avoiding eye contact. notary Kovrigin is speaking to someone just off frame; fidgeting, sweating, avoiding eye contact. Exactly one person in the frame, head and shoulders; no full figure.
+Camera position: The camera is two or three steps in front of notary Kovrigin at that person's eye level, a 45 mm-equivalent field of view: a medium close-up, head and shoulders filling the frame, eyes on the upper third line, the surroundings recognizable behind with modest optical softness, no very shallow depth of field. Every flicker of expression counts.
 Light sources: flat overcast daylight from the window plus the warm desk lamp.
 Essential objects: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up; nothing added that is not in the room reference.
 ```
@@ -328,21 +343,6 @@ SCENE
 Location and time: Moscow, autumn 1993, daytime. Small interrogation room in a Moscow militia station, 1993: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up.
 People and action: People in frame: Detective Viktor Sayko (the one in the black leather jacket) standing apart from the table by the grey steel door at the right wall, arms folded, calm face, mouth closed. Detective Viktor Sayko is speaking to someone just off frame; calm face, mouth closed. Exactly one person in the frame, head and shoulders; no full figure.
 Camera position: The camera is two or three steps in front of Detective Viktor Sayko at that person's eye level, a 45 mm-equivalent field of view: a medium close-up, head and shoulders filling the frame, eyes on the upper third line, the surroundings recognizable behind with modest optical softness, no very shallow depth of field. Every flicker of expression counts.
-Light sources: flat overcast daylight from the window plus the warm desk lamp.
-Essential objects: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up; nothing added that is not in the room reference.
-```
-
-## `sh_interrogation_close_notary_nervous` — close / eye — notary (nervous) → `assets/ep01/shots/interrogation/close_notary_nervous.webp`
-
-```
-REFERENCE IMAGES
-Reference 1 is the same room seen from closer: keep its furniture, light and colours; frame this shot at least as close as Reference 1. Reference 2 is notary Kovrigin (man, 55, soft, balding, sweating; brown suit, tie askew): keep this exact face, hair, build and clothing.
-
-SCENE
-
-Location and time: Moscow, autumn 1993, daytime. Small interrogation room in a Moscow militia station, 1993: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up.
-People and action: People in frame: notary Kovrigin (the one in the brown suit) at the LEFT end of the table beside the suspect's chair, wiping his forehead with a handkerchief, fidgeting, sweating, avoiding eye contact. notary Kovrigin is speaking to someone just off frame; fidgeting, sweating, avoiding eye contact. Exactly one person in the frame, head and shoulders; no full figure.
-Camera position: The camera is two or three steps in front of notary Kovrigin at that person's eye level, a 45 mm-equivalent field of view: a medium close-up, head and shoulders filling the frame, eyes on the upper third line, the surroundings recognizable behind with modest optical softness, no very shallow depth of field. Every flicker of expression counts.
 Light sources: flat overcast daylight from the window plus the warm desk lamp.
 Essential objects: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up; nothing added that is not in the room reference.
 ```
@@ -452,21 +452,6 @@ Light sources: flat overcast daylight from the window plus the warm desk lamp.
 Essential objects: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up; nothing added that is not in the room reference.
 ```
 
-## `sh_interrogation_reaction_oper` — reaction / eye — oper (neutral) → `assets/ep01/shots/interrogation/reaction_oper.webp`
-
-```
-REFERENCE IMAGES
-Reference 1 is the same room seen from closer: keep its furniture, light and colours; frame this shot at least as close as Reference 1. Reference 2 is Detective Viktor Sayko (man, 34, stocky, broken nose, close-cropped hair; black leather jacket, knitted sweater, jeans): keep this exact face, hair, build and clothing.
-
-SCENE
-
-Location and time: Moscow, autumn 1993, daytime. Small interrogation room in a Moscow militia station, 1993: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up.
-People and action: People in frame: Detective Viktor Sayko (the one in the black leather jacket) standing apart from the table by the grey steel door at the right wall, arms folded, calm face, mouth closed. Detective Viktor Sayko is listening to someone off frame, silent, a small pause before answering. Exactly one person in the frame, head and shoulders; the edge of the speaker's shoulder may overlap the side of the frame.
-Camera position: The camera is at the eye level of Detective Viktor Sayko, a 45 mm-equivalent field of view: a medium close-up of Detective Viktor Sayko listening, not speaking, slightly off-centre, the edge of the speaker's shoulder overlapping the side of the frame, the surroundings recognizable behind with modest softness. The listener's face tells the truth the speaker will not.
-Light sources: flat overcast daylight from the window plus the warm desk lamp.
-Essential objects: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up; nothing added that is not in the room reference.
-```
-
 ## `sh_interrogation_reaction_murashov` — reaction / eye — murashov (neutral) → `assets/ep01/shots/interrogation/reaction_murashov.webp`
 
 ```
@@ -478,6 +463,21 @@ SCENE
 Location and time: Moscow, autumn 1993, daytime. Small interrogation room in a Moscow militia station, 1993: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up.
 People and action: People in frame: Sergei Murashov (the one in the good grey suit slightly too new) on the chair under the lamp, hands folded on the table, calm face, mouth closed. Sergei Murashov is listening to someone off frame, silent, a small pause before answering. Exactly one person in the frame, head and shoulders; the edge of the speaker's shoulder may overlap the side of the frame.
 Camera position: The camera is at the eye level of Sergei Murashov, a 45 mm-equivalent field of view: a medium close-up of Sergei Murashov listening, not speaking, slightly off-centre, the edge of the speaker's shoulder overlapping the side of the frame, the surroundings recognizable behind with modest softness. The listener's face tells the truth the speaker will not.
+Light sources: flat overcast daylight from the window plus the warm desk lamp.
+Essential objects: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up; nothing added that is not in the room reference.
+```
+
+## `sh_interrogation_reaction_oper` — reaction / eye — oper (neutral) → `assets/ep01/shots/interrogation/reaction_oper.webp`
+
+```
+REFERENCE IMAGES
+Reference 1 is the same room seen from closer: keep its furniture, light and colours; frame this shot at least as close as Reference 1. Reference 2 is Detective Viktor Sayko (man, 34, stocky, broken nose, close-cropped hair; black leather jacket, knitted sweater, jeans): keep this exact face, hair, build and clothing.
+
+SCENE
+
+Location and time: Moscow, autumn 1993, daytime. Small interrogation room in a Moscow militia station, 1993: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up.
+People and action: People in frame: Detective Viktor Sayko (the one in the black leather jacket) standing apart from the table by the grey steel door at the right wall, arms folded, calm face, mouth closed. Detective Viktor Sayko is listening to someone off frame, silent, a small pause before answering. Exactly one person in the frame, head and shoulders; the edge of the speaker's shoulder may overlap the side of the frame.
+Camera position: The camera is at the eye level of Detective Viktor Sayko, a 45 mm-equivalent field of view: a medium close-up of Detective Viktor Sayko listening, not speaking, slightly off-centre, the edge of the speaker's shoulder overlapping the side of the frame, the surroundings recognizable behind with modest softness. The listener's face tells the truth the speaker will not.
 Light sources: flat overcast daylight from the window plus the warm desk lamp.
 Essential objects: bare table, two chairs, a single lamp, painted half-wall in dark green, barred window high up; nothing added that is not in the room reference.
 ```

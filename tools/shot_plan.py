@@ -861,6 +861,21 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
         shots.append(shot)
 
     comps = [c for c, _ in d["comps"].most_common(SHOT_LIMITS["wide"]) if c]
+    # Устойчивость к правкам текста: если сет уже применён к эпизоду, номера wide_N/medium_N (и ракурсы по comps[0])
+    # сохраняют состав принятых кадров — иначе новая реплика меняет порядок составов по числу реплик, и имена
+    # кадров разъезжаются с файлами в репозитории (office_night после отголосков nerves в s42c).
+    applied = {}
+    for s in ep.get("assets", {}).get("shots", []):
+        if s.get("set") == set_name and s.get("kind") == "wide" and s["id"].rsplit("_", 1)[-1].isdigit():
+            applied[tuple(sorted(c["who"] for c in s["cast"]))] = int(s["id"].rsplit("_", 1)[-1])
+    if applied:
+        all_comps = [c for c, _ in d["comps"].most_common() if c]
+        slots: list = [None] * max(max(applied.values()), SHOT_LIMITS["wide"])
+        for comp, n in applied.items():
+            if comp in all_comps:
+                slots[n - 1] = comp
+        rest = iter(c for c in all_comps if c not in applied)
+        comps = [c for c in (slot if slot is not None else next(rest, None) for slot in slots) if c is not None][: SHOT_LIMITS["wide"]]
     for i, comp in enumerate(comps, start=1):
         cast = [{"who": w, "expression": "neutral"} for w in comp]
         add("wide", f"wide_{i}", cast, action="Nobody speaks; a pause in the room.")

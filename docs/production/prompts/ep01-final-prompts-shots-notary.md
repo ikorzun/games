@@ -1,4 +1,4 @@
-# Кадры покрытия — сет `notary` (`bg_notary_office`, day; сцены s09, s16, s29, s09b, s16b, s16c, s29b, s16b_q, s16b_w1, s16b_w2, s16b_r)
+# Кадры покрытия — сет `notary` (`bg_notary_office`, day; сцены s09, s16, s29, s09b, s16b, s16c, s29b, s16b_q, s16b_w1, s16b_w2, s16b_r, s29b_q, s29b_w1, s29b_r)
 
 Промт каждого кадра = базовый промпт (`ep01-final-prompts.md` §1) + блок ниже; между REFERENCE IMAGES и SCENE вставляется блок CONTINUITY (§1). Референсы: «the room» — фон сета или принятый wide_1 / его кроп; персонаж — файл лица из §2 (или принятый спрайт). Порядок медиа — как перечислены референсы.
 

@@ -23,6 +23,8 @@ export interface VnDebugApi {
   goto(sceneId: string): void;
   /** Записать переменную (тип и границы проверяются как у эффектов сценария). */
   set(name: string, value: Value): void;
+  /** Выдать материал архива в текущую партию (улика для дедуктивной развилки), без тоста. */
+  unlock(item: string): void;
   /** Копия состояния партии или null, если партия не запущена. */
   state(): GameState | null;
   /**
@@ -110,6 +112,7 @@ export function installDebug(app: App): VnDebugApi {
     version: 1,
     goto: (sceneId) => app.debugGoto(sceneId),
     set: (name, value) => app.debugSet(name, value),
+    unlock: (item) => app.debugUnlock(item),
     state: () => (app.session.interp.started ? cloneState(app.session.interp.state) : null),
     autoplay: (policy) => app.debugAutoplay(policy),
     start: () => app.debugStart(),

@@ -451,6 +451,12 @@ export class App {
     this.session.interp.setVar(name, value);
   }
 
+  /** window.__vn.unlock(item): материал архива в партию (улика для дедуктивной развилки), без тоста. */
+  debugUnlock(item: string): void {
+    if (!this.session.interp.started) throw new Error('партия не запущена: сначала __vn.start()');
+    this.session.interp.unlockItem(item);
+  }
+
   async debugAutoplay(policy?: AutoplayPolicy): Promise<AutoplayReport> {
     this.kit.screens.closeAll();
     this.kit.root.classList.add('in-game');

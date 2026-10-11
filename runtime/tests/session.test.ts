@@ -249,7 +249,13 @@ run('Session на ep01', () => {
   it('прочитанное запоминается: на втором проходе реплики приходят с read=true', async () => {
     const { session, ui } = await build();
     await session.newGame();
-    expect(ui.lines.every((l) => !l.read)).toBe(true);
+    // Первый проход: реплика приходит read=true только если её ключ уже показывали в этой же партии
+    // (дедуктивная развилка после неверного хода задаёт вопрос снова, и её реплики повторяются).
+    const seen = new Set<string>();
+    for (const l of ui.lines) {
+      expect(l.read, l.p.key).toBe(seen.has(l.p.key));
+      seen.add(l.p.key);
+    }
     const count = ui.lines.length;
     expect(count).toBeGreaterThan(50);
     await session.newGame();
