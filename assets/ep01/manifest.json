@@ -1336,5 +1336,13 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_162911_358b8e6c-f62c-4d3d-b9f1-935ce9e40c66.png",
   "target": "assets/ep01/shots/apartment_zoya/close_zoya_warm.webp",
   "job": "358b8e6c-f62c-4d3d-b9f1-935ce9e40c66"
+ },
+ {
+  "id": "sh_interrogation_angle_foreground_v3",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_163035_11b207a8-f007-4844-b9d9-541002a89304.png",
+  "target": "assets/ep01/shots/interrogation/angle_foreground_v3.webp",
+  "job": "11b207a8-f007-4844-b9d9-541002a89304",
+  "note": "третий вариант переднепланового ракурса (пепельница и стакан на переднем плане); после отбора один из двух файлов удаляется"
  }
 ]
