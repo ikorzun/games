@@ -115,6 +115,13 @@ INSIDE_PEOPLE = {
 OTS_EXTRA = {
     "bg_street_night": " The parked Volga behind them is empty: its windows are dark, with no face and no silhouette inside it.",
 }
+# Постоянная примета персонажа в тексте сцены (ключ — id персонажа): словесные приметы в REFERENCE IMAGES
+# модель читает не всегда — в close_expert_neutral (office_evening, волна 81) эксперт вышла без очков при цепочке
+# на шее, хотя во всех остальных кадрах сета она в очках. Добавляется после выражения лица в «People in frame».
+CHAR_ALWAYS = {
+    "expert": ", her glasses on her nose with the chain hanging from the temples",
+}
+
 # Дополнение к крупным планам и реакциям снаружи (для сета с машиной): по описанию «в освещённом дверном проёме»
 # модель ставила героя на тротуар, а в проём за его спиной — лишнего человека (волна 76). `{who}` — имя героя.
 CLOSE_EXTRA = {
@@ -618,7 +625,7 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
         look = LOOKS.get(who) or LOOKS.get(shot.get("_sets", {}).get(who, ""), "")
         garment = key_garment(look)
         tag = f" (the one in the {garment})" if garment else ""
-        people.append(f"{names(who)}{tag} {place}, {expr}")
+        people.append(f"{names(who)}{tag} {place}, {expr}{CHAR_ALWAYS.get(who, '')}")
     if shot["kind"] == "insert":
         action = shot["detail"]
         people_txt = "No faces in frame."
