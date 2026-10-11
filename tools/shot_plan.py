@@ -154,6 +154,13 @@ STAGING = {
     "bg_office_now": {"sledak_old": "in the office chair facing the camera, blinds behind him"},
 }
 
+# Расположение в кадре с точки зрения камеры у двери (как снят фон): чтобы кадры не пересекали линию действия.
+LAYOUT = {
+    "bg_office_prosecutor": ("Seen from the door: the investigator's desk with the green lamp and the chair behind it on the LEFT, "
+                             "the grey safe behind the desk, the window with the radiator in the CENTRE, the visitor's chair and the "
+                             "coat rack on the RIGHT. The camera never crosses to the window side."),
+}
+
 INSERTS = {
     "bg_office_prosecutor": [
         "hands on the desk: a document with a round violet stamp, a glass of tea in a metal holder, a cigarette",
@@ -259,17 +266,21 @@ def camera_block(kind: str, angle: str, cast: list[dict], focus: str | None, fro
         comp = "everyone visible in full, lower third of the frame kept free of faces (the text box lives there), headroom above the tallest person"
         feel = "the viewer should feel the room is bigger than the people in it"
     elif kind == "medium":
-        size = f"medium shot, waist up, {len(cast)} people"
+        size = (f"medium shot, waist up, {len(cast)} people; the camera has moved INTO the room close to them: this is NOT "
+                f"the wide view of Reference 1, which is only the source of the room's furniture and light")
         lens = "40mm, moderate depth of field"
-        comp = "people share the frame at a natural distance from each other, faces in the upper two thirds"
+        comp = ("framed from the waist up: the bottom edge of the frame cuts at the desk top or the waist, each head is about "
+                "one fifth of the frame height, little floor and ceiling in frame; people keep the same left-to-right order "
+                "as seen from the door")
         feel = "a conversation in progress, nothing staged"
     elif kind == "ots":
         size = f"over-the-shoulder shot: the back of {names(from_who)}'s head and shoulder in the near foreground, {names(focus)} facing the camera beyond"
         lens = "50mm, shallow depth of field, the foreground shoulder soft"
-        comp = f"{names(focus)} framed in the right or left two thirds with looking room toward the foreground shoulder; the 180-degree axis of the conversation is kept"
+        comp = (f"{names(focus)} framed in the right or left two thirds with looking room toward the foreground shoulder; "
+                f"the 180-degree axis of the conversation is kept: people stay on the same sides as seen from the door")
         feel = "we listen from one side of the conversation"
     elif kind == "close":
-        size = f"close-up of {names(focus)}, face and shoulders"
+        size = f"close-up of {names(focus)}, face and shoulders; the head is about a third of the frame height"
         lens = "85mm portrait, very shallow depth of field, background softly blurred"
         comp = "the face in the upper two thirds of the frame, eyes on the upper third line, little headroom"
         feel = "every flicker of expression counts"
@@ -334,9 +345,11 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
     else:
         people_txt = "People in frame: " + "; ".join(people) + "." if people else "The room is empty."
         action = shot.get("action", "")
+    layout = LAYOUT.get(bg_id, "")
     scene = (
         "SCENE TO DEPICT:\n"
         f"Moscow, 1993. {bg_subject} LIGHT NOW: {LIGHTING.get(tod, LIGHTING['day'])}. "
+        f"{layout + ' ' if layout and shot['kind'] != 'insert' else ''}"
         f"{people_txt} {action}".strip()
     )
     body = body.replace("SCENE TO DEPICT:\n[insert specific scene description here]", ref_block + "\n\n" + scene)
