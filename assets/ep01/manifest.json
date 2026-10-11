@@ -426,7 +426,7 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_115622_db77ddcc-b389-45b9-a6a0-29c08d1dfe93.m4a",
   "target": "assets/common/music/theme_main.m4a",
   "job": "db77ddcc-b389-45b9-a6a0-29c08d1dfe93",
-  "note": "ДНК главной темы (2026-10-11); прежний луп — журнал генераций, партия 2"
+  "note": "ДНК главной темы (2026-10-11); прежний файл удалён из репозитория, чтобы fetch-assets скачал новый (workflow_dispatch недоступен приложению); прежний луп — журнал генераций, партия 2"
  },
  {
   "id": "m_chronicle",
@@ -441,7 +441,7 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_115622_e1dd771a-c286-4a1f-9726-ad9fcc4a1a53.m4a",
   "target": "assets/common/music/investigation.m4a",
   "job": "e1dd771a-c286-4a1f-9726-ad9fcc4a1a53",
-  "note": "ДНК главной темы (2026-10-11); прежний луп — журнал генераций, партия 2"
+  "note": "ДНК главной темы (2026-10-11); прежний файл удалён из репозитория, чтобы fetch-assets скачал новый (workflow_dispatch недоступен приложению); прежний луп — журнал генераций, партия 2"
  },
  {
   "id": "m_tension",
@@ -449,7 +449,7 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_115622_797233a5-9150-4986-9697-23fdfcfc25d7.m4a",
   "target": "assets/common/music/tension.m4a",
   "job": "797233a5-9150-4986-9697-23fdfcfc25d7",
-  "note": "ДНК главной темы (2026-10-11); прежний луп — журнал генераций, партия 2"
+  "note": "ДНК главной темы (2026-10-11); прежний файл удалён из репозитория, чтобы fetch-assets скачал новый (workflow_dispatch недоступен приложению); прежний луп — журнал генераций, партия 2"
  },
  {
   "id": "m_calm",
