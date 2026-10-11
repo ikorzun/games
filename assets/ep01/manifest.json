@@ -2540,5 +2540,19 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_200951_818dc1ca-709a-4382-8cbc-e941d74c3691.png",
   "target": "assets/ep01/shots/street_day/insert_2.webp",
   "job": "818dc1ca-709a-4382-8cbc-e941d74c3691"
+ },
+ {
+  "id": "sh_street_day_reaction_murashov",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_201231_3ce5d8e9-708d-47c0-9377-f8ef08042fea.png",
+  "target": "assets/ep01/shots/street_day/reaction_murashov.webp",
+  "job": "3ce5d8e9-708d-47c0-9377-f8ef08042fea"
+ },
+ {
+  "id": "sh_street_day_reaction_accomplice",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_201231_0ee4ec6e-7d90-413c-992c-d30354a7ce89.png",
+  "target": "assets/ep01/shots/street_day/reaction_accomplice.webp",
+  "job": "0ee4ec6e-7d90-413c-992c-d30354a7ce89"
  }
 ]

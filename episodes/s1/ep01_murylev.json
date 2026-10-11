@@ -351,7 +351,7 @@
     "notary_slip": {
       "type": "bool",
       "default": false,
-      "doc": "Ковригин проговорился при первом визите: платило доверенное лицо / читал только первую строку (s16c, дедукция d_kovrigin1); отголосок в s29b."
+      "doc": "Ковригин проговорился при первом визите: платило доверенное лицо / читал только первую строку (s16b, дедукция d_kovrigin1); отголосок в s29b."
     },
     "ad_clipping": {
       "type": "bool",
@@ -438,7 +438,11 @@
         "s13b",
         "s14",
         "s14b",
-        "s15"
+        "s15",
+        "s15_q",
+        "s15_w1",
+        "s15_w2",
+        "s15_r"
       ],
       "act": 1,
       "timeline": "investigation",
@@ -454,6 +458,10 @@
       "scenes": [
         "s16",
         "s16b",
+        "s16b_q",
+        "s16b_w1",
+        "s16b_w2",
+        "s16b_r",
         "s16c",
         "s17",
         "s18",
@@ -474,6 +482,10 @@
       "scenes": [
         "s20",
         "s20b",
+        "s20b_q",
+        "s20b_w1",
+        "s20b_w2",
+        "s20b_r",
         "s21",
         "s22",
         "s22b",
@@ -1940,106 +1952,12 @@
           "expression": "neutral"
         },
         {
-          "do": "say",
-          "who": "sledak",
-          "key": "ep01.s15.l006",
-          "expression": "neutral"
-        },
-        {
-          "do": "show",
-          "who": "neighbor",
-          "expression": "worried",
-          "position": "right"
-        },
-        {
-          "do": "say",
-          "who": "neighbor",
-          "key": "ep01.s15.l007",
-          "expression": "worried"
-        },
-        {
-          "do": "say",
-          "who": "sledak",
-          "key": "ep01.s15.l008",
-          "expression": "neutral"
-        },
-        {
-          "do": "say",
-          "who": "neighbor",
-          "key": "ep01.s15.l009",
-          "expression": "worried"
-        },
-        {
-          "do": "say",
-          "who": "neighbor",
-          "key": "ep01.s15.l010",
-          "expression": "worried"
-        },
-        {
-          "do": "say",
-          "who": "neighbor",
-          "key": "ep01.s15.l011",
-          "expression": "worried"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s15.l012",
-          "expression": "neutral",
-          "when": "trust_oper >= 1"
-        },
-        {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s15.l013",
-          "expression": "neutral",
-          "when": "trust_oper < 1"
-        },
-        {
-          "do": "narrate",
-          "key": "ep01.s15.l014",
-          "style": "inner"
-        },
-        {
-          "do": "choice",
-          "id": "c_galina",
-          "kind": "dialogue",
-          "prompt_key": "ep01.s15.c_galina.prompt",
-          "options": [
-            {
-              "id": "promise",
-              "key": "ep01.s15.c_galina.promise",
-              "effects": [
-                {
-                  "var": "galina_trust",
-                  "op": "set",
-                  "value": true
-                }
-              ],
-              "goto": "s16"
-            },
-            {
-              "id": "warn",
-              "key": "ep01.s15.c_galina.warn",
-              "effects": [
-                {
-                  "var": "galina_trust",
-                  "op": "set",
-                  "value": false
-                },
-                {
-                  "var": "trust_oper",
-                  "op": "sub",
-                  "value": 1
-                }
-              ],
-              "goto": "s16"
-            }
-          ],
-          "remember": false
+          "do": "jump",
+          "scene": "s15_q",
+          "transition": "cut"
         }
       ],
-      "notes": "Реакция Сайко (морщится) на вариант «warn» в этой сцене невозможна — после choice шагов нет; её показывают следующие сцены по условию !galina_trust. Обращение Сайко («Андрей»/«Громов») зависит от trust_oper.",
+      "notes": "Реакция Сайко (морщится) на вариант «warn» в этой сцене невозможна — после choice шагов нет; её показывают следующие сцены по условию !galina_trust. Обращение Сайко («Андрей»/«Громов») зависит от trust_oper. Разрез после l005 (часть deduction_a): дедуктивная развилка d_galina в s15_q, остаток сцены (l006…c_galina) без изменений — в s15_r.",
       "coverage": "stairwell"
     },
     "s16": {
@@ -3817,6 +3735,13 @@
         {
           "do": "say",
           "who": "oper",
+          "key": "ep01.s27.l025",
+          "expression": "neutral",
+          "when": "ad_clipping"
+        },
+        {
+          "do": "say",
+          "who": "oper",
           "key": "ep01.s27.l007",
           "expression": "neutral"
         },
@@ -3835,6 +3760,13 @@
           "who": "oper",
           "key": "ep01.s27.l009",
           "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s27.l024",
+          "expression": "neutral",
+          "when": "volga_seen"
         },
         {
           "do": "say",
@@ -3946,7 +3878,8 @@
           ]
         }
       ],
-      "coverage": "office_day"
+      "coverage": "office_day",
+      "notes": "Отголоски дедукций (часть deduction_a): l025 после справки паспортного стола — ad_clipping (s20b, d_lapin); l024 после реплики про ГАИ — volga_seen (s15, d_galina). Остальное без изменений."
     },
     "s28": {
       "id": "s28",
@@ -7923,69 +7856,12 @@
           "expression": "nervous"
         },
         {
-          "do": "say",
-          "who": "oper",
-          "key": "ep01.s16.l022",
-          "expression": "grin"
-        },
-        {
-          "do": "say",
-          "who": "notary",
-          "key": "ep01.s16.l023",
-          "expression": "nervous"
-        },
-        {
-          "do": "choice",
-          "id": "c_press",
-          "kind": "investigative",
-          "prompt_key": "ep01.s16b.c_press.prompt",
-          "remember": false,
-          "options": [
-            {
-              "id": "passport",
-              "key": "ep01.s16b.c_press.passport",
-              "effects": [
-                {
-                  "var": "last_choice",
-                  "op": "set",
-                  "value": "passport"
-                }
-              ],
-              "goto": "s16c"
-            },
-            {
-              "id": "proxy",
-              "key": "ep01.s16b.c_press.proxy",
-              "effects": [
-                {
-                  "var": "last_choice",
-                  "op": "set",
-                  "value": "proxy"
-                },
-                {
-                  "var": "proxy_described",
-                  "op": "set",
-                  "value": true
-                }
-              ],
-              "goto": "s16c"
-            },
-            {
-              "id": "count",
-              "key": "ep01.s16b.c_press.count",
-              "effects": [
-                {
-                  "var": "last_choice",
-                  "op": "set",
-                  "value": "count"
-                }
-              ],
-              "goto": "s16c"
-            }
-          ]
+          "do": "jump",
+          "scene": "s16b_q",
+          "transition": "cut"
         }
       ],
-      "notes": "Продолжение s16 после c_lead. Реакции, затем шаги бывшей s16 (l007–l023) без изменений и investigative-выбор c_press («последний вопрос» перед копиями).",
+      "notes": "Продолжение s16 после c_lead. Реакции, затем шаги бывшей s16 (l007–l023) без изменений и investigative-выбор c_press («последний вопрос» перед копиями). Разрез после l021 «про подушку» (часть deduction_a): дедуктивная развилка d_kovrigin1 в s16b_q; l022, l023 и c_press без изменений — в s16b_r.",
       "coverage": "notary"
     },
     "s16c": {
@@ -8213,7 +8089,7 @@
         "bg": "bg_interrogation",
         "filter": "noir"
       },
-      "notes": "Продолжение s20 после выбора c_press (часть B). Реакции по last_choice; дальше прежние шаги s20 без изменений.",
+      "notes": "Продолжение s20 после выбора c_press (часть B). Реакции по last_choice; дальше прежние шаги s20 без изменений. Разрез после реакций на c_lapin_press, до l013 (часть deduction_a): дедуктивная развилка d_lapin в s20b_q; l013 и переход в s21 — в s20b_r.",
       "steps": [
         {
           "do": "show",
@@ -8278,13 +8154,8 @@
           "when": "last_choice == 'redirect'"
         },
         {
-          "do": "narrate",
-          "key": "ep01.s20.l013",
-          "style": "voiceover"
-        },
-        {
           "do": "jump",
-          "scene": "s21",
+          "scene": "s20b_q",
           "transition": "cut"
         }
       ],
@@ -10478,6 +10349,1014 @@
         }
       ],
       "coverage": "office_night"
+    },
+    "s15_q": {
+      "id": "s15_q",
+      "block": "b05_discovery",
+      "stage": {
+        "bg": "bg_stairwell",
+        "filter": "desaturated",
+        "time_of_day": "evening"
+      },
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "neutral",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "neighbor",
+          "expression": "neutral",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s15_q.l001",
+          "style": "inner"
+        },
+        {
+          "do": "choice",
+          "id": "d_galina",
+          "kind": "deduction",
+          "prompt_key": "ep01.s15_q.d_galina.prompt",
+          "hint_after": 2,
+          "remember": true,
+          "penalty": [
+            {
+              "var": "nerves",
+              "op": "sub",
+              "value": 1
+            }
+          ],
+          "options": [
+            {
+              "id": "paper",
+              "key": "ep01.s15_q.d_galina.paper",
+              "verdict": "wrong",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "paper"
+                }
+              ],
+              "goto": "s15_w1"
+            },
+            {
+              "id": "volga",
+              "key": "ep01.s15_q.d_galina.volga",
+              "verdict": "right",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "volga"
+                },
+                {
+                  "var": "volga_seen",
+                  "op": "set",
+                  "value": true
+                }
+              ],
+              "goto": "s15_r"
+            },
+            {
+              "id": "money",
+              "key": "ep01.s15_q.d_galina.money",
+              "verdict": "wrong",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "money"
+                }
+              ],
+              "goto": "s15_w2"
+            }
+          ]
+        }
+      ],
+      "coverage": "stairwell",
+      "notes": "Дедуктивная развилка d_galina: в рассказе Галины своими глазами видено только «на «Волге» приезжал»; «из газеты» и «денег не берёт» — пересказ слов Зои Павловны. Верный ход ставит volga_seen (отголосок — s27, ep01.s27.l024)."
+    },
+    "s15_w1": {
+      "id": "s15_w1",
+      "block": "b05_discovery",
+      "stage": {
+        "bg": "bg_stairwell",
+        "filter": "desaturated",
+        "time_of_day": "evening"
+      },
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "neutral",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "neighbor",
+          "expression": "neutral",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "neighbor",
+          "key": "ep01.s15_w1.l001",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s15_w1.l002",
+          "expression": "neutral",
+          "when": "trust_oper >= 1"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s15_w1.l003",
+          "expression": "neutral",
+          "when": "trust_oper < 1"
+        },
+        {
+          "do": "jump",
+          "scene": "s15_q",
+          "transition": "cut"
+        }
+      ],
+      "coverage": "stairwell",
+      "notes": "Реакция на неверный ход «из газеты»; обращение Сайко по trust_oper, как в s15 (l012/l013)."
+    },
+    "s15_w2": {
+      "id": "s15_w2",
+      "block": "b05_discovery",
+      "stage": {
+        "bg": "bg_stairwell",
+        "filter": "desaturated",
+        "time_of_day": "evening"
+      },
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "neutral",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "neighbor",
+          "expression": "neutral",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "neighbor",
+          "key": "ep01.s15_w2.l001",
+          "expression": "neutral"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s15_w2.l002",
+          "style": "inner"
+        },
+        {
+          "do": "jump",
+          "scene": "s15_q",
+          "transition": "cut"
+        }
+      ],
+      "coverage": "stairwell",
+      "notes": "Реакция на неверный ход «денег не берёт»."
+    },
+    "s15_r": {
+      "id": "s15_r",
+      "block": "b05_discovery",
+      "stage": {
+        "bg": "bg_stairwell",
+        "filter": "desaturated",
+        "time_of_day": "evening"
+      },
+      "steps": [
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "neutral",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "neighbor",
+          "expression": "neutral",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "neighbor",
+          "key": "ep01.s15_r.l001",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "neighbor",
+          "key": "ep01.s15_r.l002",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s15_r.l003",
+          "expression": "grin"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s15.l006",
+          "expression": "neutral"
+        },
+        {
+          "do": "show",
+          "who": "neighbor",
+          "expression": "worried",
+          "position": "right"
+        },
+        {
+          "do": "say",
+          "who": "neighbor",
+          "key": "ep01.s15.l007",
+          "expression": "worried"
+        },
+        {
+          "do": "say",
+          "who": "sledak",
+          "key": "ep01.s15.l008",
+          "expression": "neutral"
+        },
+        {
+          "do": "say",
+          "who": "neighbor",
+          "key": "ep01.s15.l009",
+          "expression": "worried"
+        },
+        {
+          "do": "say",
+          "who": "neighbor",
+          "key": "ep01.s15.l010",
+          "expression": "worried"
+        },
+        {
+          "do": "say",
+          "who": "neighbor",
+          "key": "ep01.s15.l011",
+          "expression": "worried"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s15.l012",
+          "expression": "neutral",
+          "when": "trust_oper >= 1"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s15.l013",
+          "expression": "neutral",
+          "when": "trust_oper < 1"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s15.l014",
+          "style": "inner"
+        },
+        {
+          "do": "choice",
+          "id": "c_galina",
+          "kind": "dialogue",
+          "prompt_key": "ep01.s15.c_galina.prompt",
+          "options": [
+            {
+              "id": "promise",
+              "key": "ep01.s15.c_galina.promise",
+              "effects": [
+                {
+                  "var": "galina_trust",
+                  "op": "set",
+                  "value": true
+                }
+              ],
+              "goto": "s16"
+            },
+            {
+              "id": "warn",
+              "key": "ep01.s15.c_galina.warn",
+              "effects": [
+                {
+                  "var": "galina_trust",
+                  "op": "set",
+                  "value": false
+                },
+                {
+                  "var": "trust_oper",
+                  "op": "sub",
+                  "value": 1
+                }
+              ],
+              "goto": "s16"
+            }
+          ],
+          "remember": false
+        }
+      ],
+      "coverage": "stairwell",
+      "notes": "Продолжение s15 после верного хода d_galina (volga): реакция, затем шаги бывшей s15 (l006…l014) и выбор c_galina без изменений."
+    },
+    "s16b_q": {
+      "id": "s16b_q",
+      "block": "b06_investigation_1",
+      "stage": {
+        "bg": "bg_notary_office",
+        "filter": "desaturated",
+        "time_of_day": "day"
+      },
+      "steps": [
+        {
+          "do": "show",
+          "who": "notary",
+          "expression": "nervous",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "firm",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "grin",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s16b_q.l001",
+          "style": "inner"
+        },
+        {
+          "do": "choice",
+          "id": "d_kovrigin1",
+          "kind": "deduction",
+          "prompt_key": "ep01.s16b_q.d_kovrigin1.prompt",
+          "hint_after": 2,
+          "remember": true,
+          "penalty": [
+            {
+              "var": "nerves",
+              "op": "sub",
+              "value": 1
+            }
+          ],
+          "options": [
+            {
+              "id": "pad",
+              "key": "ep01.s16b_q.d_kovrigin1.pad",
+              "verdict": "wrong",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "pad"
+                }
+              ],
+              "goto": "s16b_w1"
+            },
+            {
+              "id": "paid",
+              "key": "ep01.s16b_q.d_kovrigin1.paid",
+              "verdict": "right",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "paid"
+                },
+                {
+                  "var": "notary_slip",
+                  "op": "set",
+                  "value": true
+                }
+              ],
+              "goto": "s16b_r"
+            },
+            {
+              "id": "glasses",
+              "key": "ep01.s16b_q.d_kovrigin1.glasses",
+              "verdict": "right",
+              "when": "found_photo",
+              "hidden_when_false": true,
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "glasses"
+                },
+                {
+                  "var": "notary_slip",
+                  "op": "set",
+                  "value": true
+                }
+              ],
+              "goto": "s16b_r"
+            },
+            {
+              "id": "capacity",
+              "key": "ep01.s16b_q.d_kovrigin1.capacity",
+              "verdict": "wrong",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "capacity"
+                }
+              ],
+              "goto": "s16b_w2"
+            }
+          ]
+        }
+      ],
+      "coverage": "notary",
+      "notes": "Дедуктивная развилка d_kovrigin1. Щели показаны раньше: «вне очереди… с доплатой» (s16.l012–l013, s09.l007–l008), очки (s08–s09, мини-игра mg_scene → found_photo). Обе верные опции ставят notary_slip (отголосок в s29b); glasses — только при found_photo."
+    },
+    "s16b_w1": {
+      "id": "s16b_w1",
+      "block": "b06_investigation_1",
+      "stage": {
+        "bg": "bg_notary_office",
+        "filter": "desaturated",
+        "time_of_day": "day"
+      },
+      "steps": [
+        {
+          "do": "show",
+          "who": "notary",
+          "expression": "nervous",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "firm",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "grin",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s16b_w1.l001",
+          "expression": "nervous"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s16b_w1.l002",
+          "expression": "grin"
+        },
+        {
+          "do": "jump",
+          "scene": "s16b_q",
+          "transition": "cut"
+        }
+      ],
+      "coverage": "notary",
+      "notes": "Реакция на неверный ход «двадцать человек в день». В сценах s16 Сайко не зовёт Громова по имени (вариантов по trust_oper нет) — «юрист», как в s16b.l003."
+    },
+    "s16b_w2": {
+      "id": "s16b_w2",
+      "block": "b06_investigation_1",
+      "stage": {
+        "bg": "bg_notary_office",
+        "filter": "desaturated",
+        "time_of_day": "day"
+      },
+      "steps": [
+        {
+          "do": "show",
+          "who": "notary",
+          "expression": "nervous",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "firm",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "grin",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s16b_w2.l001",
+          "expression": "neutral"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s16b_w2.l002",
+          "style": "inner"
+        },
+        {
+          "do": "jump",
+          "scene": "s16b_q",
+          "transition": "cut"
+        }
+      ],
+      "coverage": "notary",
+      "notes": "Реакция на неверный ход «дееспособность — вы врач?»."
+    },
+    "s16b_r": {
+      "id": "s16b_r",
+      "block": "b06_investigation_1",
+      "stage": {
+        "bg": "bg_notary_office",
+        "filter": "desaturated",
+        "time_of_day": "day"
+      },
+      "steps": [
+        {
+          "do": "show",
+          "who": "notary",
+          "expression": "nervous",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "firm",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "grin",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s16b_r.l001",
+          "expression": "nervous",
+          "when": "last_choice == 'paid'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s16b_r.l002",
+          "style": "inner",
+          "when": "last_choice == 'paid'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s16b_r.l003",
+          "expression": "grin",
+          "when": "last_choice == 'paid'"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s16b_r.l004",
+          "expression": "nervous",
+          "when": "last_choice == 'glasses'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s16b_r.l005",
+          "style": "inner",
+          "when": "last_choice == 'glasses'"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s16b_r.l006",
+          "expression": "nervous"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s16.l022",
+          "expression": "grin"
+        },
+        {
+          "do": "say",
+          "who": "notary",
+          "key": "ep01.s16.l023",
+          "expression": "nervous"
+        },
+        {
+          "do": "choice",
+          "id": "c_press",
+          "kind": "investigative",
+          "prompt_key": "ep01.s16b.c_press.prompt",
+          "remember": false,
+          "options": [
+            {
+              "id": "passport",
+              "key": "ep01.s16b.c_press.passport",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "passport"
+                }
+              ],
+              "goto": "s16c"
+            },
+            {
+              "id": "proxy",
+              "key": "ep01.s16b.c_press.proxy",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "proxy"
+                },
+                {
+                  "var": "proxy_described",
+                  "op": "set",
+                  "value": true
+                }
+              ],
+              "goto": "s16c"
+            },
+            {
+              "id": "count",
+              "key": "ep01.s16b.c_press.count",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "count"
+                }
+              ],
+              "goto": "s16c"
+            }
+          ]
+        }
+      ],
+      "coverage": "notary",
+      "notes": "Продолжение s16b после верного хода d_kovrigin1. l006 — реплика-мостик: s16.l022 («Конечно, не значит…») по-прежнему отвечает на «не значит». Дальше l022, l023 и c_press без изменений (→ s16c → s17)."
+    },
+    "s20b_q": {
+      "id": "s20b_q",
+      "block": "b07_dead_end",
+      "stage": {
+        "bg": "bg_interrogation",
+        "filter": "noir"
+      },
+      "steps": [
+        {
+          "do": "show",
+          "who": "buyer",
+          "expression": "scared",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "tense",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s20b_q.l001",
+          "style": "inner"
+        },
+        {
+          "do": "choice",
+          "id": "d_lapin",
+          "kind": "deduction",
+          "prompt_key": "ep01.s20b_q.d_lapin.prompt",
+          "hint_after": 2,
+          "remember": true,
+          "penalty": [
+            {
+              "var": "nerves",
+              "op": "sub",
+              "value": 1
+            }
+          ],
+          "options": [
+            {
+              "id": "mother_in_law",
+              "key": "ep01.s20b_q.d_lapin.mother_in_law",
+              "verdict": "wrong",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "mother_in_law"
+                }
+              ],
+              "goto": "s20b_w1"
+            },
+            {
+              "id": "ad",
+              "key": "ep01.s20b_q.d_lapin.ad",
+              "verdict": "right",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "ad"
+                },
+                {
+                  "var": "ad_clipping",
+                  "op": "set",
+                  "value": true
+                }
+              ],
+              "goto": "s20b_r"
+            },
+            {
+              "id": "why_not_check",
+              "key": "ep01.s20b_q.d_lapin.why_not_check",
+              "verdict": "wrong",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "why_not_check"
+                }
+              ],
+              "goto": "s20b_w2"
+            },
+            {
+              "id": "where",
+              "key": "ep01.s20b_q.d_lapin.where",
+              "verdict": "right",
+              "effects": [
+                {
+                  "var": "last_choice",
+                  "op": "set",
+                  "value": "where"
+                },
+                {
+                  "var": "money_at_notary",
+                  "op": "set",
+                  "value": true
+                }
+              ],
+              "goto": "s20b_r"
+            }
+          ]
+        }
+      ],
+      "coverage": "interrogation",
+      "notes": "Дедуктивная развилка d_lapin; обе верные опции без when. Щели показаны раньше: объявление (s20.l003), деньги посреднику (s20.l007) и «Расчёт произведён полностью» в договоре (doc_contract_sale). ad ставит ad_clipping, where — money_at_notary (отголоски: s27, s29b)."
+    },
+    "s20b_w1": {
+      "id": "s20b_w1",
+      "block": "b07_dead_end",
+      "stage": {
+        "bg": "bg_interrogation",
+        "filter": "noir"
+      },
+      "steps": [
+        {
+          "do": "show",
+          "who": "buyer",
+          "expression": "scared",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "tense",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "buyer",
+          "key": "ep01.s20b_w1.l001",
+          "expression": "scared"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s20b_w1.l002",
+          "expression": "angry"
+        },
+        {
+          "do": "jump",
+          "scene": "s20b_q",
+          "transition": "cut"
+        }
+      ],
+      "coverage": "interrogation",
+      "notes": "Реакция на неверный ход «десять лет у тёщи». В s20/s21 Сайко зовёт Громова по имени без условий (s21.l003 «Андрей», s20b.l006 «Громов»)."
+    },
+    "s20b_w2": {
+      "id": "s20b_w2",
+      "block": "b07_dead_end",
+      "stage": {
+        "bg": "bg_interrogation",
+        "filter": "noir"
+      },
+      "steps": [
+        {
+          "do": "show",
+          "who": "buyer",
+          "expression": "scared",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "tense",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "buyer",
+          "key": "ep01.s20b_w2.l001",
+          "expression": "scared"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s20b_w2.l002",
+          "style": "inner"
+        },
+        {
+          "do": "jump",
+          "scene": "s20b_q",
+          "transition": "cut"
+        }
+      ],
+      "coverage": "interrogation",
+      "notes": "Реакция на неверный ход «почему не проверили нотариуса» (повтор s20.l005)."
+    },
+    "s20b_r": {
+      "id": "s20b_r",
+      "block": "b07_dead_end",
+      "stage": {
+        "bg": "bg_interrogation",
+        "filter": "noir"
+      },
+      "steps": [
+        {
+          "do": "show",
+          "who": "buyer",
+          "expression": "scared",
+          "position": "center",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "oper",
+          "expression": "neutral",
+          "position": "right",
+          "transition": "cut"
+        },
+        {
+          "do": "show",
+          "who": "sledak",
+          "expression": "tense",
+          "position": "left",
+          "transition": "cut"
+        },
+        {
+          "do": "say",
+          "who": "buyer",
+          "key": "ep01.s20b_r.l001",
+          "expression": "scared",
+          "when": "last_choice == 'ad'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s20b_r.l002",
+          "style": "inner",
+          "when": "last_choice == 'ad'"
+        },
+        {
+          "do": "say",
+          "who": "oper",
+          "key": "ep01.s20b_r.l003",
+          "expression": "neutral",
+          "when": "last_choice == 'ad'"
+        },
+        {
+          "do": "say",
+          "who": "buyer",
+          "key": "ep01.s20b_r.l004",
+          "expression": "scared",
+          "when": "last_choice == 'where'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s20b_r.l005",
+          "style": "inner",
+          "when": "last_choice == 'where'"
+        },
+        {
+          "do": "narrate",
+          "key": "ep01.s20.l013",
+          "style": "voiceover"
+        },
+        {
+          "do": "jump",
+          "scene": "s21",
+          "transition": "cut"
+        }
+      ],
+      "coverage": "interrogation",
+      "notes": "Продолжение s20b после верного хода d_lapin; дальше l013 (четыре часа допроса) и jump в s21 без изменений. Реплика Сайко про вырезку не требует, чтобы Лапин пришёл сам: в s21 возможно задержание на трое суток."
     }
   },
   "minigames": {
