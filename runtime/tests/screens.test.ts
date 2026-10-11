@@ -153,7 +153,9 @@ describe('MenuScreen', () => {
   it('переключатель языка: все четыре языка названы на самих языках, текущий отмечен, выбор вызывает обработчик', () => {
     const hd = handlers();
     const s = open(new MenuScreen(episode, hd));
-    expect(texts(s.el, '.vn-langs button')).toEqual(['Русский', 'English', 'Español', 'Português']);
+    expect(texts(s.el, '.vn-langs button')).toEqual(['RU', 'EN', 'ES', 'PT']); // коды; полное имя — в title и aria-label
+    expect([...s.el.querySelectorAll('.vn-langs button')].map((b) => b.getAttribute('aria-label'))).toEqual(['Русский', 'English', 'Español', 'Português']);
+    expect(s.el.querySelector('.vn-langs button[data-lang="es"]')?.getAttribute('title')).toBe('Español');
     expect(s.el.querySelector('.vn-chip.is-on')?.getAttribute('data-lang')).toBe('ru');
     expect([...s.el.querySelectorAll('.vn-langs button')].map((b) => b.getAttribute('lang'))).toEqual(['ru', 'en', 'es', 'pt']);
     s.el.querySelector<HTMLButtonElement>('[data-lang="es"]')?.click();

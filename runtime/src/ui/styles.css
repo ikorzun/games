@@ -577,6 +577,12 @@ body {
   justify-content: center;
   gap: 0.5rem;
 }
+/* Языки — кодами (RU, EN, ES, PT); полное название — в подсказке и для скринридера. */
+.vn-langs .vn-chip {
+  min-width: 3.6em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
 .vn-badge {
   display: inline-block;
   padding: 0.05rem 0.55rem;
@@ -615,16 +621,16 @@ body {
 /* Видеосалон: фон — assets/common/ui/menu_video_salon.webp (если файла нет, остаётся градиент выше). */
 .vn-menu.has-bg {
   background:
-    linear-gradient(rgb(0 0 0 / 0.4), rgb(0 0 0 / 0.78)),
+    radial-gradient(ellipse 60% 70% at 50% 55%, rgb(0 0 0 / 0.5), transparent 100%),
+    linear-gradient(rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.8)),
     var(--menu-bg) center / cover no-repeat,
     #070709;
 }
 .vn-menu.has-bg::before { display: none; }
+/* Без подложки под блоком меню (решение владельца 2026-10-11): текст лежит прямо на затемнённом видеосалоне. */
 .vn-menu.has-bg .vn-menu__inner {
   padding: 1.3rem 1.1rem;
-  background: rgb(0 0 0 / 0.62);
-  border: 1px solid var(--panel-line);
-  border-radius: 6px;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.8), 0 0 18px rgb(0 0 0 / 0.7);
 }
 .vn-menu__inner {
   position: relative;

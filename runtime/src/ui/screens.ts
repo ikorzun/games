@@ -145,9 +145,10 @@ export function languageChips(onPick: (lang: Lang) => void): HTMLElement {
         class: `vn-chip${i18n.lang === lang ? ' is-on' : ''}`,
         type: 'button',
         lang,
-        text: t(`ui.lang.${lang}`),
+        text: lang.toUpperCase(), // коды RU / EN / ES / PT (решение владельца 2026-10-11); полное имя — подсказка и скринридер
+        title: t(`ui.lang.${lang}`),
         data: { lang },
-        aria: { pressed: i18n.lang === lang },
+        aria: { label: t(`ui.lang.${lang}`), pressed: i18n.lang === lang },
         on: { click: () => onPick(lang) },
       }),
     ),
