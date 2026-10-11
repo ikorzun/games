@@ -920,7 +920,8 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
         comps = [c for c in (slot if slot is not None else next(rest, None) for slot in slots) if c is not None][: SHOT_LIMITS["wide"]]
     for i, comp in enumerate(comps, start=1):
         cast = [{"who": w, "expression": "neutral"} for w in comp]
-        add("wide", f"wide_{i}", cast, action="Nobody speaks; a pause in the room.")
+        add("wide", f"wide_{i}", cast, action="Nobody speaks; a pause in the room. Each person looks at someone or something in "
+            "the room (another person, papers, the window), not into the lens: this is not a group photo.")
     for i, comp in enumerate(comps[: SHOT_LIMITS["medium"]], start=1):
         cast = [{"who": w, "expression": "neutral"} for w in comp]
         o = ORDER.get(bg, {})
@@ -978,7 +979,8 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
     main_comp = comps[0] if comps else ()
     for ang, desc in ANGLES.get(bg, ANGLES_DEFAULT)[: SHOT_LIMITS["angle"]]:
         cast = [{"who": w, "expression": "neutral"} for w in main_comp]
-        add("angle", f"angle_{ang}", cast, angle=ang, action=desc[0].upper() + desc[1:] + ".")
+        add("angle", f"angle_{ang}", cast, angle=ang,
+            action=desc[0].upper() + desc[1:] + ". The camera watches them unnoticed: nobody looks into the lens.")
     return shots
 
 

@@ -17856,6 +17856,41 @@
           }
         ],
         "file": "assets/ep01/shots/street_day/angle_foreground.webp"
+      },
+      {
+        "id": "sh_stairwell_ots_oper_sledak",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/ots_oper_sledak.webp",
+        "from": "oper",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_stairwell_close_oper_grin",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "grin"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/close_oper_grin.webp",
+        "focus": "oper"
       }
     ]
   }
