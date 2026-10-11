@@ -1742,5 +1742,19 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_172845_9c211f0a-0ec5-44bd-b5f4-e700c87bd1f3.png",
   "target": "assets/ep01/shots/notary/angle_low.webp",
   "job": "9c211f0a-0ec5-44bd-b5f4-e700c87bd1f3"
+ },
+ {
+  "id": "sh_notary_angle_high",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_173033_3085085e-5393-45f2-8242-5035e647aad8.png",
+  "target": "assets/ep01/shots/notary/angle_high.webp",
+  "job": "3085085e-5393-45f2-8242-5035e647aad8"
+ },
+ {
+  "id": "sh_notary_angle_foreground",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_173033_9780ff8e-2189-463c-bde5-905bc32f5780.png",
+  "target": "assets/ep01/shots/notary/angle_foreground.webp",
+  "job": "9780ff8e-2189-463c-bde5-905bc32f5780"
  }
 ]
