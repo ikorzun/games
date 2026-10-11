@@ -191,7 +191,8 @@ LAYOUT = {
     "bg_apartment_zoya": ("Seen from the entrance door: the dark sideboard with glass doors and the framed photo on the LEFT, "
                           "the wall carpet behind it and a chair beside it, the window with lace curtains and the radiator in "
                           "the CENTRE, the small TV on a stool to the right of the window, the bedside table with the medicine "
-                          "bottles and the bed on the RIGHT. The camera never crosses to the window side."),
+                          "bottles and the bed under an olive-green chenille bedspread on the RIGHT. The camera never "
+                          "crosses to the window side."),  # цвет покрывала закреплён: в angle_high модель нарисовала другое
     "bg_notary_office": ("Seen from the visitors' side: the window on the LEFT, the notary's desk with the green lamp, the "
                          "round stamp and the stacks of papers across the lower LEFT and CENTRE with the notary's chair behind "
                          "it, the glass-fronted bookcase behind the desk, the coat rack to its right, and the open door to the "
