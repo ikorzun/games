@@ -9,6 +9,7 @@
  * путь до `end`, нет циклов и исключений, то каждый путь доходит до end. Число полных путей
  * считается динамическим программированием по DAG состояний (BigInt).
  */
+import { runAutoplay } from '../../src/core/autoplay';
 import { Interpreter } from '../../src/core/interpreter';
 import type { Episode, GameState, MinigameResult, Snapshot } from '../../src/core/types';
 import { analyzeLiveness } from './liveness';
@@ -83,11 +84,22 @@ export function exploreAll(episode: Episode, options: ExploreOptions = {}): Expl
   const onStack = new Set<string>();
   const dead: Node = { paths: 0n, endings: new Map() };
 
+  // Монотонные счётчики (только `add` положительных чисел, например style_hard/style_soft/case_strength):
+  // всё, что выше наибольшей константы сравнений + 1, ведёт себя одинаково во всех будущих условиях —
+  // такие значения сливаются в одно. Без этого эпизод 1 с точками выбора даёт миллионы состояний.
+  const caps = keepAll ? new Map<string, number>() : monotoneCaps(episode);
   /** Подпись состояния: только переменные, живые в этой точке программы. */
   const liveKey = (s: GameState): string => {
     const env = { ...s.globals, ...s.vars };
     const names = keepAll ? allVars : [...analysis.liveAt(s.scene_id, s.step_index)].sort();
-    return names.map((v) => `${v}=${String(env[v])}`).join(',');
+    return names
+      .map((v) => {
+        let val = env[v];
+        const cap = caps.get(v);
+        if (cap !== undefined && typeof val === 'number' && val > cap) val = cap;
+        return `${v}=${String(val)}`;
+      })
+      .join(',');
   };
 
   const fail = (msg: string): Node => {
@@ -230,4 +242,153 @@ export function policyFromTrail(trail: readonly string[]): {
     }
   }
   return { choices, minigames };
+}
+
+interface EffectLike {
+  var: string;
+  op: string;
+  value?: unknown;
+}
+
+/**
+ * Для каждой int-переменной, которую меняют только `add` положительных констант, — потолок
+ * (наибольшая константа из сравнений с ней + 1): значения выше него неразличимы ни одним условием
+ * эпизода и остаются неразличимыми после любых дальнейших прибавлений.
+ */
+export function monotoneCaps(episode: Episode): Map<string, number> {
+  const ops = new Map<string, Set<string>>();
+  const consts = new Map<string, number>();
+  const noteEffects = (effs: readonly EffectLike[] | undefined): void => {
+    for (const e of effs ?? []) {
+      const set = ops.get(e.var) ?? new Set<string>();
+      set.add(e.op === 'add' && typeof e.value === 'number' && e.value > 0 ? 'add+' : e.op);
+      ops.set(e.var, set);
+    }
+  };
+  const noteCond = (expr: string | undefined): void => {
+    if (!expr) return;
+    for (const m of expr.matchAll(/([a-z][a-z0-9_]*)\s*(==|!=|<=|>=|<|>)\s*(-?\d+)/g)) {
+      const v = m[1] ?? '';
+      consts.set(v, Math.max(consts.get(v) ?? Number.NEGATIVE_INFINITY, Number(m[3])));
+    }
+    for (const m of expr.matchAll(/(-?\d+)\s*(==|!=|<=|>=|<|>)\s*([a-z][a-z0-9_]*)/g)) {
+      const v = m[3] ?? '';
+      consts.set(v, Math.max(consts.get(v) ?? Number.NEGATIVE_INFINITY, Number(m[1])));
+    }
+  };
+  for (const b of episode.blocks) noteCond(b.when);
+  for (const sc of Object.values(episode.scenes)) {
+    for (const st of sc.steps) {
+      const step = st as unknown as Record<string, unknown>;
+      noteCond(step.when as string | undefined);
+      noteEffects(step.effects as EffectLike[] | undefined);
+      for (const o of (step.options as Array<{ when?: string; effects?: EffectLike[] }> | undefined) ?? []) {
+        noteCond(o.when);
+        noteEffects(o.effects);
+      }
+      for (const c of (step.cases as Array<{ when: string }> | undefined) ?? []) noteCond(c.when);
+    }
+  }
+  for (const mg of Object.values(episode.minigames ?? {})) {
+    for (const oc of Object.values((mg as unknown as { outcomes?: Record<string, { effects?: EffectLike[] }> }).outcomes ?? {})) noteEffects(oc.effects);
+  }
+  for (const e of episode.endings ?? []) noteCond((e as unknown as { when?: string }).when);
+  const caps = new Map<string, number>();
+  for (const [name, def] of Object.entries(episode.variables)) {
+    if (def.type !== 'int') continue;
+    const used = ops.get(name);
+    const c = consts.get(name);
+    if (!used || c === undefined || !Number.isFinite(c)) continue;
+    if ([...used].every((o) => o === 'add+')) caps.set(name, c + 1);
+  }
+  return caps;
+}
+
+export interface SampleReport {
+  runs: number;
+  failures: string[];
+  warnings: string[];
+  visitedScenes: Set<string>;
+  /** Сколько прогонов закончилось каждой концовкой. */
+  byEnding: Map<string, number>;
+  /** Конечные состояния всех прогонов. */
+  ends: EndState[];
+  /** Первый найденный путь (решения «выбор=опция» / «мини-игра:результат») к каждой концовке. */
+  witness: Map<string, string[]>;
+  /** Сколько решений (выборов и мини-игр) прошли проверку инвариантов. */
+  edges: number;
+}
+
+/**
+ * Выборочная проверка большого эпизода: много случайных прогонов автопилота с разными зёрнами
+ * (выборы и исходы мини-игр случайны) плюс детерминированные политики first/last/default × все исходы.
+ * Полный перебор состояний (exploreAll) на эпизоде 1 с точками выбора и эпилогом, читающим два десятка
+ * переменных, не умещается ни в какой разумный предел; выборка проверяет те же инварианты на каждом
+ * прогоне: нет исключений, обрывов и зацикливаний, журнал решений совпадает с числом remember-выборов,
+ * переменные в границах, в архиве нет дублей.
+ */
+export function sampleEpisode(episode: Episode, options: { runs?: number; seed?: number } = {}): SampleReport {
+  const runs = options.runs ?? 1200;
+  const seed0 = options.seed ?? 1;
+  const remember = new Map<string, boolean>();
+  for (const sc of Object.values(episode.scenes)) {
+    for (const st of sc.steps) if (st.do === 'choice') remember.set(st.id, st.remember !== false);
+  }
+  const report: SampleReport = {
+    runs: 0,
+    failures: [],
+    warnings: [],
+    visitedScenes: new Set(),
+    byEnding: new Map(),
+    ends: [],
+    witness: new Map(),
+    edges: 0,
+  };
+  const fail = (msg: string): void => {
+    if (report.failures.length < 20) report.failures.push(msg);
+  };
+  const policies: Array<Parameters<typeof runAutoplay>[1]> = [];
+  for (let i = 0; i < runs; i++) policies.push({ choice: 'random', minigame: 'random', seed: seed0 + i });
+  for (const choice of ['first', 'last', 'default'] as const) {
+    for (const minigame of ['success', 'partial', 'fail', 'skipped'] as const) policies.push({ choice, minigame, seed: seed0 });
+  }
+  for (const policy of policies) {
+    const label = JSON.stringify(policy);
+    const interp = new Interpreter(episode, { warn: (m) => report.warnings.push(m) });
+    let out;
+    try {
+      out = runAutoplay(interp, policy);
+    } catch (e) {
+      fail(`исключение (${label}): ${(e as Error).message}`);
+      continue;
+    }
+    report.runs += 1;
+    for (const sid of out.scenes) report.visitedScenes.add(sid);
+    if (out.truncated) fail(`обрыв по пределу шагов — зацикливание? (${label})`);
+    if (out.ending === null) {
+      fail(`прогон не дошёл до end (${label})`);
+      continue;
+    }
+    const s = interp.state;
+    const remembered = out.choices.filter((c) => remember.get(c.choice) !== false).length;
+    report.edges += out.choices.length + out.minigames.length;
+    if (s.journal.length !== remembered) fail(`${label}: журнал решений ${s.journal.length} ≠ remember-выборов ${remembered}`);
+    for (const [name, def] of Object.entries(episode.variables)) {
+      const v = (def.scope === 'global' ? s.globals : s.vars)[name];
+      if (v === undefined) {
+        fail(`${label}: переменная ${name} потеряна`);
+        continue;
+      }
+      if (def.type === 'int' && typeof v === 'number') {
+        if ((def.min !== undefined && v < def.min) || (def.max !== undefined && v > def.max)) fail(`${label}: ${name}=${v} вне границ`);
+      }
+    }
+    if (new Set(s.archive).size !== s.archive.length) fail(`${label}: дубли в архиве`);
+    report.byEnding.set(out.ending, (report.byEnding.get(out.ending) ?? 0) + 1);
+    report.ends.push({ ending: out.ending, endingKind: out.endingKind ?? '', final: s });
+    if (!report.witness.has(out.ending)) {
+      report.witness.set(out.ending, [...out.choices.map((c) => `${c.choice}=${c.option}`), ...out.minigames.map((m) => `${m.id}:${m.result}`)]);
+    }
+  }
+  return report;
 }

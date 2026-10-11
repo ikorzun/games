@@ -12,7 +12,7 @@ import type { Episode, MinigameResult } from '../src/core/types';
 import { Session } from '../src/session';
 import { Director } from '../src/stage/director';
 import { EP01_PATH, hasRepoContent, loadEpisode } from './helpers/content';
-import { exploreAll, policyFromTrail } from './helpers/explore';
+import { policyFromTrail, sampleEpisode } from './helpers/explore';
 import { FakeAudio, FakeCaptions, FakePlatform, FakeStage, FakeToasts, FakeUI } from './helpers/fakes';
 import type { FakeUIOptions, Timeline } from './helpers/fakes';
 
@@ -88,7 +88,7 @@ function blockEntries(episode: Episode, scenes: readonly string[]): string[] {
 
 beforeAll(() => {
   if (!hasRepoContent()) return;
-  const report = exploreAll(episodeOnDisk());
+  const report = sampleEpisode(episodeOnDisk(), { runs: 300 });
   const trail = report.witness.get('e_canon');
   if (!trail) throw new Error('в эпизоде не нашлось пути к e_canon');
   canon = { trail, ...policyFromTrail(trail) };

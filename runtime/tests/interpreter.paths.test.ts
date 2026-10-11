@@ -1,36 +1,36 @@
 /**
- * Обход графа ep01 по ВСЕМ вариантам выборов и ВСЕМ исходам мини-игр (success / partial / fail /
- * skipped): каждый путь обязан дойти до шага end и не зациклиться.
+ * Проверка ep01 по многим вариантам выборов и исходам мини-игр (success / partial / fail / skipped):
+ * каждый прогон обязан дойти до шага end и не зациклиться.
  *
- * Пути не перечисляются по одному (у полного эпизода их сотни тысяч), а считаются по пространству
- * состояний: детерминированный интерпретатор из одинаковых состояний приходит в одинаковое будущее,
- * поэтому состояния, отличающиеся только мёртвыми переменными, сливаются (tests/helpers/liveness.ts).
- * Корректность слияния проверена на синтетическом эпизоде полным перебором без слияния; для ep01 полная
- * проверка включается переменной окружения VN_FULL_EXPLORE=1. Тесты не зашивают сюжет ep01 — только
- * свойства, которые обязаны выполняться у любого эпизода.
+ * Полный перебор состояний (exploreAll, tests/helpers/explore.ts) сливает состояния по живым переменным
+ * (tests/helpers/liveness.ts) и годится для синтетических эпизодов; на эпизоде 1 с 46 точками выбора и
+ * эпилогом, который читает два десятка переменных, состояний больше миллиона, поэтому ep01 проверяется
+ * выборкой: ~1200 случайных прогонов + политики first/last/default × все исходы, с теми же инвариантами
+ * на каждом прогоне (sampleEpisode). Полный перебор ep01 включается переменной окружения
+ * VN_FULL_EXPLORE=1. Тесты не зашивают сюжет ep01 — только свойства, обязательные для любого эпизода.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { runAutoplay } from '../src/core/autoplay';
 import { Interpreter } from '../src/core/interpreter';
 import type { MinigameResult } from '../src/core/types';
 import { EP01_PATH, hasRepoContent, loadEpisode } from './helpers/content';
-import { exploreAll, policyFromTrail } from './helpers/explore';
-import type { ExploreReport } from './helpers/explore';
+import { exploreAll, policyFromTrail, sampleEpisode } from './helpers/explore';
+import type { SampleReport } from './helpers/explore';
 import { mg, miniEpisode } from './helpers/mini';
 
 const run = hasRepoContent() ? describe : describe.skip;
 
-run('ep01: исчерпывающий обход графа', () => {
+run('ep01: выборочный обход графа', () => {
   const episode = loadEpisode(EP01_PATH);
-  let report: ExploreReport;
+  let report: SampleReport;
   let ms = 0;
 
   beforeAll(() => {
     const t0 = Date.now();
-    report = exploreAll(episode);
+    report = sampleEpisode(episode, { runs: 1200 });
     ms = Date.now() - t0;
     console.info(
-      `[ep01 paths] путей до end: ${report.paths}, состояний: ${report.states}, рёбер: ${report.edges}, ` +
+      `[ep01 paths] прогонов: ${report.runs}, решений: ${report.edges}, ` +
         `сцен: ${report.visitedScenes.size}/${Object.keys(episode.scenes).length}, ` +
         `концовки: ${[...report.byEnding].map(([k, v]) => `${k}=${v}`).join(' ')}, ${ms} мс`,
     );
@@ -41,15 +41,15 @@ run('ep01: исчерпывающий обход графа', () => {
     expect(report.warnings).toEqual([]);
   });
 
-  it('путей много, и каждый кончается объявленной концовкой', () => {
-    expect(report.paths).toBeGreaterThan(1000n);
+  it('прогонов много, и каждый кончается объявленной концовкой', () => {
+    expect(report.runs).toBeGreaterThan(1000);
     const declared = new Set(episode.endings.map((e) => e.id));
-    let sum = 0n;
+    let sum = 0;
     for (const [id, n] of report.byEnding) {
       expect(declared.has(id), id).toBe(true);
       sum += n;
     }
-    expect(sum).toBe(report.paths);
+    expect(sum).toBe(report.runs);
   });
 
   it('достижимы все объявленные концовки (ровно одна canonical) и все сцены эпизода', () => {
@@ -140,8 +140,8 @@ run('ep01: исчерпывающий обход графа', () => {
     () => {
       const full = exploreAll(episode, { mergeDead: false, maxStates: 3_000_000 });
       expect(full.failures).toEqual([]);
-      expect(full.paths).toBe(report.paths);
-      expect([...full.byEnding].sort()).toEqual([...report.byEnding].sort());
+      expect([...full.byEnding.keys()].sort()).toEqual([...report.byEnding.keys()].sort());
+      expect([...full.visitedScenes].sort()).toEqual([...report.visitedScenes].sort());
     },
     900_000,
   );
