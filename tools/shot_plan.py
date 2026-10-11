@@ -312,7 +312,8 @@ REF_SHOTS = {
     # кроп wide_1 («Волга», подъезд, окно) — для средних и ракурсов.
     # Пилот bti (волна 86): wide_1 по фону и три крупных плана без референса комнаты приняты; комната для ots и
     # вставок — wide_1, средние и ракурсы — кроп wide_1 (`refs/bti_medium.jpg`, media id после импорта по URL).
-    "bti": {"room": "sh_bti_wide_1", "close": "sh_bti_close_sledak_tense", "reaction": "sh_bti_close_sledak_tense"},
+    "bti": {"room": "sh_bti_wide_1", "close": "sh_bti_close_sledak_tense", "reaction": "sh_bti_close_sledak_tense",
+            "medium": "media:ed4e6075-2e97-4f32-bf4a-e27b6dd57db3", "angle": "media:ed4e6075-2e97-4f32-bf4a-e27b6dd57db3"},
     "street_night": {"medium": "media:5ac38ac0-c807-44a4-a268-f35164a2438f", "angle": "media:5ac38ac0-c807-44a4-a268-f35164a2438f",
                      "close": "sh_street_night_close_oper_neutral", "reaction": "sh_street_night_close_oper_neutral"},
 }
