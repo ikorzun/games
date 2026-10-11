@@ -4851,7 +4851,8 @@
           ]
         }
       ],
-      "notes": "bg_street_night — улица у конторы Ковригина; для маршрута accomplice (двор Шмелёва) отдельного фона нет. Вступление и первая реплика Сайко — по route; при route == 'none' (отладочный вход) остаются только общие реплики. Обращение Сайко («Андрей» / «Громов») — по trust_oper >= 2, как в s33."
+      "notes": "bg_street_night — улица у конторы Ковригина; для маршрута accomplice (двор Шмелёва) отдельного фона нет. Вступление и первая реплика Сайко — по route; при route == 'none' (отладочный вход) остаются только общие реплики. Обращение Сайко («Андрей» / «Громов») — по trust_oper >= 2, как в s33.",
+      "coverage": "street_night"
     },
     "s35": {
       "id": "s35",
@@ -4951,7 +4952,8 @@
           ],
           "remember": true
         }
-      ]
+      ],
+      "coverage": "street_night"
     },
     "s36": {
       "id": "s36",
@@ -4986,7 +4988,8 @@
           ],
           "default": "s36b"
         }
-      ]
+      ],
+      "coverage": "street_night"
     },
     "s36a": {
       "id": "s36a",
@@ -5145,7 +5148,8 @@
           ]
         }
       ],
-      "notes": "Выстрел — только звук и black_hold. stop_music: после выстрела остаётся шум дождя; музыку возвращает s37."
+      "notes": "Выстрел — только звук и black_hold. stop_music: после выстрела остаётся шум дождя; музыку возвращает s37.",
+      "coverage": "street_night"
     },
     "s36b": {
       "id": "s36b",
@@ -5253,7 +5257,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "street_night"
     },
     "s37": {
       "id": "s37",
@@ -7167,7 +7172,8 @@
           "scene": "s35"
         }
       ],
-      "notes": "Продолжение s34 после c_watch (tactical, таймер 10 с, default hold); реакции last_choice: closer / hold / send. Флаг scouted (closer, send) нужен только для реплик (ep01.s36a2.l005, ep01.s36b.l013): исход операции по-прежнему решает hasty в s35. Спрайты на разрезе: sledak tense/left, oper neutral/right. Музыка и эмбиент продолжают играть."
+      "notes": "Продолжение s34 после c_watch (tactical, таймер 10 с, default hold); реакции last_choice: closer / hold / send. Флаг scouted (closer, send) нужен только для реплик (ep01.s36a2.l005, ep01.s36b.l013): исход операции по-прежнему решает hasty в s35. Спрайты на разрезе: sledak tense/left, oper neutral/right. Музыка и эмбиент продолжают играть.",
+      "coverage": "street_night"
     },
     "s36a2": {
       "id": "s36a2",
@@ -7264,7 +7270,8 @@
           "transition": "fade"
         }
       ],
-      "notes": "Продолжение s36a после c_wound (реакции last_choice: as_is / calm / name / scarf; name доступна при trust_oper >= 2, scarf — нейтральная опция без эффектов); далее прежние шаги s36a. Отголосок scouted (из c_watch, s34) — после inner «Это я сказал «сейчас»»; парное эхо — ep01.s36b.l013. Спрайты: sledak firm/left, oper hurt/right. Music/ambient не заданы (остановлены в s36a)."
+      "notes": "Продолжение s36a после c_wound (реакции last_choice: as_is / calm / name / scarf; name доступна при trust_oper >= 2, scarf — нейтральная опция без эффектов); далее прежние шаги s36a. Отголосок scouted (из c_watch, s34) — после inner «Это я сказал «сейчас»»; парное эхо — ep01.s36b.l013. Спрайты: sledak firm/left, oper hurt/right. Music/ambient не заданы (остановлены в s36a).",
+      "coverage": "street_night"
     },
     "s36b2": {
       "id": "s36b2",
@@ -7405,7 +7412,8 @@
           "transition": "fade"
         }
       ],
-      "notes": "Продолжение s36b после c_shmel (dialogue, таймер 12 с, default quiet); реакции last_choice: where / steady / quiet, затем прежние шаги s36b (Сайко «До Садового…», «Пишу. Дословно.»). Спрайты: sledak firm/left, accomplice scared/center, oper grin/right."
+      "notes": "Продолжение s36b после c_shmel (dialogue, таймер 12 с, default quiet); реакции last_choice: where / steady / quiet, затем прежние шаги s36b (Сайко «До Садового…», «Пишу. Дословно.»). Спрайты: sledak firm/left, accomplice scared/center, oper grin/right.",
+      "coverage": "street_night"
     },
     "s09b": {
       "id": "s09b",
@@ -14880,6 +14888,403 @@
           }
         ],
         "file": "assets/ep01/shots/stairwell/angle_foreground.webp"
+      },
+      {
+        "id": "sh_street_night_wide_1",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/wide_1.webp"
+      },
+      {
+        "id": "sh_street_night_wide_2",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "accomplice",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/wide_2.webp"
+      },
+      {
+        "id": "sh_street_night_medium_1",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/medium_1.webp"
+      },
+      {
+        "id": "sh_street_night_medium_2",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "accomplice",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/medium_2.webp"
+      },
+      {
+        "id": "sh_street_night_ots_oper_sledak",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/ots_oper_sledak.webp",
+        "from": "oper",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_street_night_ots_sledak_oper",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/ots_sledak_oper.webp",
+        "from": "sledak",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_street_night_ots_accomplice_oper",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "accomplice",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/ots_accomplice_oper.webp",
+        "from": "accomplice",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_street_night_ots_sledak_accomplice",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "accomplice",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/ots_sledak_accomplice.webp",
+        "from": "sledak",
+        "focus": "accomplice"
+      },
+      {
+        "id": "sh_street_night_close_oper_neutral",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/close_oper_neutral.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_street_night_close_oper_grin",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "grin"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/close_oper_grin.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_street_night_close_oper_hurt",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "hurt"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/close_oper_hurt.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_street_night_close_accomplice_scared",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "accomplice",
+            "expression": "scared"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/close_accomplice_scared.webp",
+        "focus": "accomplice"
+      },
+      {
+        "id": "sh_street_night_close_sledak_tense",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "tense"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/close_sledak_tense.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_street_night_close_oper_angry",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "angry"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/close_oper_angry.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_street_night_close_sledak_firm",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "firm"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/close_sledak_firm.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_street_night_close_sledak_neutral",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/close_sledak_neutral.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_street_night_reaction_oper",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/reaction_oper.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_street_night_reaction_sledak",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/reaction_sledak.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_street_night_reaction_accomplice",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "accomplice",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/reaction_accomplice.webp",
+        "focus": "accomplice"
+      },
+      {
+        "id": "sh_street_night_insert_1",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/street_night/insert_1.webp"
+      },
+      {
+        "id": "sh_street_night_insert_2",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/street_night/insert_2.webp"
+      },
+      {
+        "id": "sh_street_night_angle_low",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "angle",
+        "angle": "low",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/angle_low.webp"
+      },
+      {
+        "id": "sh_street_night_angle_high",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "angle",
+        "angle": "high",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/angle_high.webp"
+      },
+      {
+        "id": "sh_street_night_angle_foreground",
+        "set": "street_night",
+        "bg": "bg_street_night",
+        "kind": "angle",
+        "angle": "foreground",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_night/angle_foreground.webp"
       }
     ]
   }
