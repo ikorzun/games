@@ -2281,5 +2281,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_190050_fd4ce3d2-946a-4373-b0f5-e7c478d33c46.png",
   "target": "assets/ep01/shots/office_evening/angle_foreground.webp",
   "job": "fd4ce3d2-946a-4373-b0f5-e7c478d33c46"
+ },
+ {
+  "id": "sh_bti_wide_1",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_190659_c48f9e8b-c7b0-4b26-a13a-db84f5d3bd52.png",
+  "target": "assets/ep01/shots/bti/wide_1.webp",
+  "job": "c48f9e8b-c7b0-4b26-a13a-db84f5d3bd52"
+ },
+ {
+  "id": "sh_bti_close_expert_neutral",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_190659_cee5553b-38a9-4cf5-a5c0-1eceefc47890.png",
+  "target": "assets/ep01/shots/bti/close_expert_neutral.webp",
+  "job": "cee5553b-38a9-4cf5-a5c0-1eceefc47890"
+ },
+ {
+  "id": "sh_bti_close_clerk_neutral",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_190659_f60fe17e-1387-4e77-b9e4-b712a2359b9b.png",
+  "target": "assets/ep01/shots/bti/close_clerk_neutral.webp",
+  "job": "f60fe17e-1387-4e77-b9e4-b712a2359b9b"
+ },
+ {
+  "id": "sh_bti_close_sledak_tense",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_190659_2054b033-9650-4597-933f-b2f87216240e.png",
+  "target": "assets/ep01/shots/bti/close_sledak_tense.webp",
+  "job": "2054b033-9650-4597-933f-b2f87216240e"
  }
 ]
