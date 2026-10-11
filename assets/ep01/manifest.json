@@ -1602,5 +1602,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_170938_9b79b840-68c0-41a8-8bf8-663809904813.png",
   "target": "assets/ep01/shots/notary/close_sledak_firm.webp",
   "job": "9b79b840-68c0-41a8-8bf8-663809904813"
+ },
+ {
+  "id": "sh_notary_medium_1",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_171223_bc5a83fc-a359-40ab-827e-da11e507340c.png",
+  "target": "assets/ep01/shots/notary/medium_1.webp",
+  "job": "bc5a83fc-a359-40ab-827e-da11e507340c"
+ },
+ {
+  "id": "sh_notary_medium_2",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_171223_928a9131-2a19-496f-9ae4-5c03451f2920.png",
+  "target": "assets/ep01/shots/notary/medium_2.webp",
+  "job": "928a9131-2a19-496f-9ae4-5c03451f2920"
+ },
+ {
+  "id": "sh_notary_ots_notary_oper",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_171222_94f318c5-da6c-449f-b5ec-895b81afbbc3.png",
+  "target": "assets/ep01/shots/notary/ots_notary_oper.webp",
+  "job": "94f318c5-da6c-449f-b5ec-895b81afbbc3"
+ },
+ {
+  "id": "sh_notary_ots_oper_notary",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_171222_752b9408-e448-4f48-88f7-14c339b16311.png",
+  "target": "assets/ep01/shots/notary/ots_oper_notary.webp",
+  "job": "752b9408-e448-4f48-88f7-14c339b16311"
  }
 ]
