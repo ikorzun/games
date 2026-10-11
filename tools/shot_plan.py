@@ -709,8 +709,8 @@ def build_prompt(base: str, continuity: str, shot: dict, bg_subject: str, tod: s
         refs.append(f"Reference {i} is {names(who)}{desc}: keep this exact face, hair, build and clothing{tail}.")
     ref_block = "REFERENCE IMAGES\n" + " ".join(refs)
     if not room_ref:
-        ref_block += (" There is no reference image of the room: build the blurred background from the scene text "
-                      "(SUBJECT and LIGHT NOW) alone.")
+        ref_block += (" There is no reference image of the room: build the softly rendered background from the scene "
+                      "text (Location and time, Light sources, Essential objects) alone.")
     staging = STAGING.get(bg_id, {})
     people = []
     # Люди перечисляются слева направо по ORDER: модель читает порядок списка как порядок на экране
