@@ -260,8 +260,11 @@ REF_SHOTS = {
                "medium": "media:8baf6d62-ebed-4954-bc99-7e35b599ec3c", "angle": "media:8baf6d62-ebed-4954-bc99-7e35b599ec3c"},
     # Пилот (волны 60–61): wide ×3 по фону и крупные планы без референса комнаты приняты; кроп wide_1 по колени
     # (`assets/ep01/refs/stairwell_medium.jpg`) — для средних и ракурсов.
+    # Вставки — тоже по кропу: с фоном первым референсом обе вышли общими планами площадки (волна 66).
     "stairwell": {"close": "sh_stairwell_close_neighbor_worried", "reaction": "sh_stairwell_close_neighbor_worried",
-                  "medium": "media:b86a8159-36a5-48f5-9ffd-34ddf0393b36", "angle": "media:b86a8159-36a5-48f5-9ffd-34ddf0393b36"},
+                  "medium": "media:b86a8159-36a5-48f5-9ffd-34ddf0393b36", "angle": "media:b86a8159-36a5-48f5-9ffd-34ddf0393b36",
+                  "insert": "media:b86a8159-36a5-48f5-9ffd-34ddf0393b36",
+                  "medium_solo": "media:66b20696-cb0a-4481-b5a0-7d22fd2f52f5"},
 }
 # Для ракурсов (angle) референс — принятый средний план, а не общий: с общим планом модель дважды
 # меняла людей местами (office_day, волна 18), со средним оба ракурса вышли с первого раза.
@@ -295,8 +298,8 @@ INSERTS = {
         "a signature page and an elderly hand holding a pen uncertainly",
     ],
     "bg_stairwell": [
-        "a padded apartment door with a new brass lock and a paper seal across the frame",
-        "dented metal mailboxes, one stuffed with unopened newspapers",
+        "the new brass lock of the padded apartment door and a paper seal with an ink stamp glued across the door frame beside it; the lock and the seal fill the frame",
+        "the row of dented metal mailboxes fills the frame, one of them stuffed with unopened newspapers",
     ],
     "bg_street_night": [
         "a wristwatch on a sleeve in the dim car, rain on the windscreen beyond",
@@ -481,7 +484,7 @@ def camera_block(kind: str, angle: str, cast: list[dict], focus: str | None, fro
     elif kind == "insert":
         size = "insert, extreme close-up of a detail"
         lens = "85mm macro-like, very shallow depth of field"
-        comp = "the detail fills the frame, no faces"
+        comp = "the detail fills the whole frame at arm's length: no full room, no floor, no ceiling, no faces"
         feel = "a pause on the evidence"
     else:  # angle
         size = ("cutaway from an unexpected vantage point: the camera stands where it never stood in the wide view, "
@@ -647,6 +650,10 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
     shots: list[dict] = []
 
     def ref_media(cast: list[dict], kind: str) -> list[str]:
+        # Средний план с одним человеком: кроп общего плана с другими людьми тянет их в кадр (stairwell medium_3
+        # дважды), поэтому для одиночных средних планов — отдельный референс без людей рядом, если он задан.
+        if kind == "medium" and len(cast) == 1 and REF_SHOTS.get(set_name, {}).get("medium_solo"):
+            kind = "medium_solo"
         ref_shot = REF_SHOTS.get(set_name, {}).get(kind)
         if ref_shot and ref_shot.startswith("media:"):  # загруженный кроп (assets/ep01/refs), не кадр из манифеста
             out = [ref_shot[len("media:"):]]
