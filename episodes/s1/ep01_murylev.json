@@ -1067,7 +1067,8 @@
           "transition": "dissolve"
         }
       ],
-      "notes": "Фотография внука за стеклом серванта — улика s13: наезд камеры на сервант перед репликой о внуке. Очки Зоя Павловна так и не находит."
+      "notes": "Фотография внука за стеклом серванта — улика s13: наезд камеры на сервант перед репликой о внуке. Очки Зоя Павловна так и не находит.",
+      "coverage": "apartment_zoya"
     },
     "s09": {
       "id": "s09",
@@ -1669,7 +1670,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "apartment_zoya"
     },
     "s14": {
       "id": "s14",
@@ -1846,7 +1848,8 @@
             }
           ]
         }
-      ]
+      ],
+      "coverage": "apartment_zoya"
     },
     "s15": {
       "id": "s15",
@@ -7638,7 +7641,8 @@
           "intro_key": "ep01.mg_scene.intro"
         }
       ],
-      "notes": "Продолжение s13 после c_lapins; дальше без изменений — осмотр и мини-игра mg_scene."
+      "notes": "Продолжение s13 после c_lapins; дальше без изменений — осмотр и мини-игра mg_scene.",
+      "coverage": "apartment_zoya"
     },
     "s14b": {
       "id": "s14b",
@@ -7707,7 +7711,8 @@
           "transition": "fade"
         }
       ],
-      "notes": "Продолжение s14 после c_irina (таймер 10 с, по умолчанию quiet). Любая реакция Ирины подводит к существующему ответу Громова l013."
+      "notes": "Продолжение s14 после c_irina (таймер 10 с, по умолчанию quiet). Любая реакция Ирины подводит к существующему ответу Громова l013.",
+      "coverage": "apartment_zoya"
     },
     "s16b": {
       "id": "s16b",
@@ -13312,6 +13317,600 @@
           }
         ],
         "file": "assets/ep01/shots/interrogation/angle_foreground.webp"
+      },
+      {
+        "id": "sh_apartment_zoya_wide_1",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov_sil",
+            "expression": "neutral"
+          },
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/wide_1.webp"
+      },
+      {
+        "id": "sh_apartment_zoya_wide_2",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/wide_2.webp"
+      },
+      {
+        "id": "sh_apartment_zoya_wide_3",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "lapin_wife",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/wide_3.webp"
+      },
+      {
+        "id": "sh_apartment_zoya_wide_4",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "buyer",
+            "expression": "neutral"
+          },
+          {
+            "who": "lapin_wife",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/wide_4.webp"
+      },
+      {
+        "id": "sh_apartment_zoya_medium_1",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov_sil",
+            "expression": "neutral"
+          },
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/medium_1.webp"
+      },
+      {
+        "id": "sh_apartment_zoya_medium_2",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/medium_2.webp"
+      },
+      {
+        "id": "sh_apartment_zoya_medium_3",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "lapin_wife",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/medium_3.webp"
+      },
+      {
+        "id": "sh_apartment_zoya_medium_4",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "buyer",
+            "expression": "neutral"
+          },
+          {
+            "who": "lapin_wife",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/medium_4.webp"
+      },
+      {
+        "id": "sh_apartment_zoya_ots_zoya_murashov_sil",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov_sil",
+            "expression": "neutral"
+          },
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/ots_zoya_murashov_sil.webp",
+        "from": "zoya",
+        "focus": "murashov_sil"
+      },
+      {
+        "id": "sh_apartment_zoya_ots_murashov_sil_zoya",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          },
+          {
+            "who": "murashov_sil",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/ots_murashov_sil_zoya.webp",
+        "from": "murashov_sil",
+        "focus": "zoya"
+      },
+      {
+        "id": "sh_apartment_zoya_ots_expert_sledak",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "expert",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/ots_expert_sledak.webp",
+        "from": "expert",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_apartment_zoya_ots_sledak_expert",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/ots_sledak_expert.webp",
+        "from": "sledak",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_apartment_zoya_ots_buyer_lapin_wife",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "lapin_wife",
+            "expression": "neutral"
+          },
+          {
+            "who": "buyer",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/ots_buyer_lapin_wife.webp",
+        "from": "buyer",
+        "focus": "lapin_wife"
+      },
+      {
+        "id": "sh_apartment_zoya_ots_lapin_wife_sledak",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "lapin_wife",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/ots_lapin_wife_sledak.webp",
+        "from": "lapin_wife",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_apartment_zoya_ots_sledak_lapin_wife",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "lapin_wife",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/ots_sledak_lapin_wife.webp",
+        "from": "sledak",
+        "focus": "lapin_wife"
+      },
+      {
+        "id": "sh_apartment_zoya_ots_lapin_wife_buyer",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "buyer",
+            "expression": "neutral"
+          },
+          {
+            "who": "lapin_wife",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/ots_lapin_wife_buyer.webp",
+        "from": "lapin_wife",
+        "focus": "buyer"
+      },
+      {
+        "id": "sh_apartment_zoya_close_lapin_wife_worried",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "lapin_wife",
+            "expression": "worried"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/close_lapin_wife_worried.webp",
+        "focus": "lapin_wife"
+      },
+      {
+        "id": "sh_apartment_zoya_close_buyer_neutral",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "buyer",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/close_buyer_neutral.webp",
+        "focus": "buyer"
+      },
+      {
+        "id": "sh_apartment_zoya_close_expert_focused",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "focused"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/close_expert_focused.webp",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_apartment_zoya_close_zoya_warm",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "zoya",
+            "expression": "warm"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/close_zoya_warm.webp",
+        "focus": "zoya"
+      },
+      {
+        "id": "sh_apartment_zoya_close_expert_neutral",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/close_expert_neutral.webp",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_apartment_zoya_close_zoya_worried",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "zoya",
+            "expression": "worried"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/close_zoya_worried.webp",
+        "focus": "zoya"
+      },
+      {
+        "id": "sh_apartment_zoya_close_sledak_tired",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "tired"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/close_sledak_tired.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_apartment_zoya_close_sledak_tense",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "tense"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/close_sledak_tense.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_apartment_zoya_close_sledak_neutral",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/close_sledak_neutral.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_apartment_zoya_close_sledak_firm",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "firm"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/close_sledak_firm.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_apartment_zoya_reaction_sledak",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/reaction_sledak.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_apartment_zoya_reaction_lapin_wife",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "lapin_wife",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/reaction_lapin_wife.webp",
+        "focus": "lapin_wife"
+      },
+      {
+        "id": "sh_apartment_zoya_reaction_zoya",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/reaction_zoya.webp",
+        "focus": "zoya"
+      },
+      {
+        "id": "sh_apartment_zoya_reaction_expert",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/reaction_expert.webp",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_apartment_zoya_insert_1",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/apartment_zoya/insert_1.webp"
+      },
+      {
+        "id": "sh_apartment_zoya_insert_2",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/apartment_zoya/insert_2.webp"
+      },
+      {
+        "id": "sh_apartment_zoya_angle_low",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "angle",
+        "angle": "low",
+        "cast": [
+          {
+            "who": "murashov_sil",
+            "expression": "neutral"
+          },
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/angle_low.webp"
+      },
+      {
+        "id": "sh_apartment_zoya_angle_high",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "angle",
+        "angle": "high",
+        "cast": [
+          {
+            "who": "murashov_sil",
+            "expression": "neutral"
+          },
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/angle_high.webp"
+      },
+      {
+        "id": "sh_apartment_zoya_angle_foreground",
+        "set": "apartment_zoya",
+        "bg": "bg_apartment_zoya",
+        "kind": "angle",
+        "angle": "foreground",
+        "cast": [
+          {
+            "who": "murashov_sil",
+            "expression": "neutral"
+          },
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/apartment_zoya/angle_foreground.webp"
       }
     ]
   }
