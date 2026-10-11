@@ -2,20 +2,6 @@
  * Точка входа: платформа → сейвы и настройки → эпизод и локали → шрифты → сцена и интерфейс →
  * меню → `game_ready`. Никаких внешних ресурсов: шрифты, стили и контент лежат в сборке.
  */
-import '@fontsource/pt-mono/cyrillic-400.css';
-import '@fontsource/pt-mono/latin-400.css';
-import '@fontsource/pt-mono/latin-ext-400.css';
-import '@fontsource/pt-sans-narrow/cyrillic-700.css';
-import '@fontsource/pt-sans-narrow/latin-700.css';
-import '@fontsource/pt-sans-narrow/latin-ext-700.css';
-import '@fontsource/pt-sans/cyrillic-400-italic.css';
-import '@fontsource/pt-sans/cyrillic-400.css';
-import '@fontsource/pt-sans/cyrillic-700.css';
-import '@fontsource/pt-sans/latin-400-italic.css';
-import '@fontsource/pt-sans/latin-400.css';
-import '@fontsource/pt-sans/latin-700.css';
-import '@fontsource/pt-sans/latin-ext-400.css';
-import '@fontsource/pt-sans/latin-ext-700.css';
 import './stage/stage.css';
 import './ui/styles.css';
 
