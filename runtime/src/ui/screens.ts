@@ -59,54 +59,6 @@ abstract class BaseScreen implements Screen {
   abstract render(): void;
 }
 
-// ───────────────────────────── заставка ─────────────────────────────
-
-export interface SplashHandlers {
-  /** Адрес загруженного логотипа; null — текстовая заставка. */
-  logo: string | null;
-  title: string;
-  onStart: () => void;
-}
-
-/**
- * Заставка при запуске: логотип передачи на чёрном (не меньше пятой части экрана), касание или клавиша
- * начинают игру — и заодно разблокируют звук, так что тема стартует сразу (решение владельца 2026-10-11).
- */
-export class SplashScreen extends BaseScreen {
-  constructor(private readonly handlers: SplashHandlers) {
-    super('vn-splash', false);
-  }
-
-  render(): void {
-    const hd = this.handlers;
-    let started = false;
-    const start = (): void => {
-      if (started) return;
-      started = true;
-      hd.onStart();
-    };
-    let brand: HTMLElement;
-    if (hd.logo) {
-      const img = h('img', { class: 'vn-splash__logo' }) as HTMLImageElement;
-      img.src = hd.logo;
-      img.alt = hd.title;
-      img.draggable = false;
-      brand = img;
-    } else {
-      brand = h('div', { class: 'vn-splash__text', text: hd.title });
-    }
-    fill(
-      this.el,
-      h(
-        'button',
-        { class: 'vn-splash__hit', type: 'button', aria: { label: t('ui.splash.tap') }, on: { click: start } },
-        brand,
-        h('span', { class: 'vn-splash__tap', text: t('ui.splash.tap') }),
-      ),
-    );
-  }
-}
-
 // ───────────────────────────── главное меню ─────────────────────────────
 
 /** Картинки интерфейса (адреса уже загруженных файлов); null — файла нет, остаётся прежнее оформление. */

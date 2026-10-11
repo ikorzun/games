@@ -11310,8 +11310,9 @@
     "music": [
       {
         "id": "m_theme_main",
-        "path": "assets/common/music/theme_main.m4a",
-        "license": "original"
+        "path": "assets/common/music/theme_main.mp3",
+        "license": "licensed",
+        "notes": "Главная тема передачи «Криминальная Россия» (Игорь Назарук, 1995): запись владельца по лицензии, 63 с, mp3 192 кбит/с"
       },
       {
         "id": "m_chronicle",

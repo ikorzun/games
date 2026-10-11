@@ -20,7 +20,6 @@ import {
   MenuScreen,
   SaveLoadScreen,
   SettingsScreen,
-  SplashScreen,
   WarningScreen,
 } from '../src/ui/screens';
 import { miniEpisode } from './helpers/mini';
@@ -88,7 +87,6 @@ beforeEach(() => {
     'ui.quick.load': 'Загрузить',
     'ui.quick.mute': 'Звук выкл.',
     'ui.quick.unmute': 'Звук вкл.',
-    'ui.splash.tap': 'Коснитесь, чтобы начать',
     'ui.archive.new_item': 'Новый материал',
     'mini.doc.text': 'Текст бланка',
     'ui.quick.log': 'Журнал',
@@ -279,23 +277,6 @@ describe('WarningScreen: перед эпизодом', () => {
     s.el.querySelector<HTMLButtonElement>('.vn-actions .vn-btn:not(.is-primary)')?.click();
     expect(hd.onBack).toHaveBeenCalledTimes(1);
     expect(s.dismissible).toBe(false);
-  });
-});
-
-describe('SplashScreen', () => {
-  it('логотип на кнопке во весь экран; касание вызывает onStart один раз; без логотипа — название текстом', () => {
-    const onStart = vi.fn();
-    const s = open(new SplashScreen({ logo: './assets/common/ui/logo_kr.webp', title: 'Смерть за квартиры', onStart }));
-    expect(s.el.querySelector<HTMLImageElement>('img.vn-splash__logo')?.getAttribute('src')).toBe('./assets/common/ui/logo_kr.webp');
-    expect(s.el.querySelector('.vn-splash__tap')?.textContent).toBe('Коснитесь, чтобы начать');
-    const hit = s.el.querySelector<HTMLButtonElement>('button.vn-splash__hit');
-    expect(hit?.getAttribute('aria-label')).toBe('Коснитесь, чтобы начать');
-    hit?.click();
-    hit?.click();
-    expect(onStart).toHaveBeenCalledTimes(1);
-    const s2 = open(new SplashScreen({ logo: null, title: 'Смерть за квартиры', onStart: vi.fn() }));
-    expect(s2.el.querySelector('.vn-splash__text')?.textContent).toBe('Смерть за квартиры');
-    expect(s2.el.querySelector('img')).toBeNull();
   });
 });
 

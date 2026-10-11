@@ -421,14 +421,6 @@
   "job": "d66c596c-3f3c-4ff8-aa89-485eeed3cfa2"
  },
  {
-  "id": "m_theme_main",
-  "kind": "music",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_115622_db77ddcc-b389-45b9-a6a0-29c08d1dfe93.m4a",
-  "target": "assets/common/music/theme_main.m4a",
-  "job": "db77ddcc-b389-45b9-a6a0-29c08d1dfe93",
-  "note": "ДНК главной темы (2026-10-11); прежний файл удалён из репозитория, чтобы fetch-assets скачал новый (workflow_dispatch недоступен приложению); прежний луп — журнал генераций, партия 2"
- },
- {
   "id": "m_chronicle",
   "kind": "music",
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181753_a6600862-4be5-47fc-a8ca-82bdd99c66ad.m4a",

@@ -988,53 +988,6 @@ body {
   }
 }
 
-
-/* ───────────── Заставка: логотип передачи на чёрном ───────────── */
-
-.vn-splash {
-  background: #000;
-  display: grid;
-  place-items: center;
-}
-.vn-splash__hit {
-  display: grid;
-  place-items: center;
-  gap: 6vh;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  color: var(--c-muted);
-  background: none;
-  border: 0;
-  cursor: pointer;
-}
-/* Логотип: не меньше 20 % высоты экрана, не шире 86 % ширины. */
-.vn-splash__logo {
-  display: block;
-  width: min(86vw, 60vh);
-  min-height: 20vh;
-  max-height: 36vh;
-  object-fit: contain;
-  filter: drop-shadow(0 0 32px rgb(201 54 47 / 0.35));
-  animation: splash-in 1.1s ease-out both;
-}
-.vn-splash__text {
-  padding: 0 6vw;
-  font: 500 clamp(22px, 6vmin, 54px) / 1.1 var(--font-title);
-  text-transform: uppercase;
-  color: #f2efe6;
-}
-.vn-splash__tap {
-  font: 400 0.85em / 1.4 var(--font-body);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  animation: more-blink 1.6s steps(2) infinite;
-}
-@keyframes splash-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: none; }
-}
-
 /* ───────────── Полоса авто-режима: отсчёт до следующей реплики ───────────── */
 
 .vn-autobar {

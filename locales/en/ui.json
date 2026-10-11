@@ -119,7 +119,6 @@
   "ui.minigame.no_match": "Doesn't match",
   "ui.quick.unmute": "Sound on",
   "ui.skip.read_only": "Skip only fast-forwards text you have already read. Skipping unread text can be enabled in Settings",
-  "ui.splash.tap": "Tap to start",
   "ui.settings.quick": "Game",
   "ui.settings.skip_unread": "Skip unread text"
 }

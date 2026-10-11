@@ -102,7 +102,7 @@ async function boot(): Promise<void> {
     installDebug(app);
 
     if (params.get('autostart') === '1') await app.startNewGame({ skipWarning: true });
-    else app.showSplash();
+    else app.showMenu(); // меню сразу; главная тема стартует при показе (или при первом жесте, если автозапуск запрещён)
 
     // Первый играбельный кадр (меню отрисовано, шрифты загружены) → game_ready.
     await nextFrame();

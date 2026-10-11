@@ -88,11 +88,6 @@ async function closeSaveLoad(page) {
 }
 
 async function toMenu(p) {
-  try {
-    await p.click('.vn-splash__hit', { timeout: 8000 });
-  } catch {
-    /* заставки нет (например, после перезагрузки с autostart) — идём сразу к меню */
-  }
   await p.waitForSelector('.vn-menu__nav button', { state: 'visible' });
 }
 
@@ -194,6 +189,10 @@ async function scenarioPlay(browser, baseUrl) {
   section('Игра: загрузка → предупреждение → первый выбор → сейв/лоад → язык');
   const { page, context, log } = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU' }, null);
   await toMenu(page);
+  // Игра открывается сразу главным меню (без заставки), и при его показе стартует главная тема передачи
+  // (в смоуке автозапуск разрешён флагом Chromium; в браузере без жеста трек ждёт первого касания или клика).
+  const theme = await page.evaluate(() => window.__vn.audio());
+  check('игра открывается главным меню, и на нём играет главная тема (m_theme_main)', (await page.$('.vn-splash')) === null && theme.music === 'm_theme_main' && theme.audible === true, JSON.stringify({ music: theme.music, audible: theme.audible, log: theme.log.slice(-3) }));
   // Настройки через отладочный хук — одинаково для web-plain и Playgama (там localStorage не используется).
   await page.evaluate(() => window.__vn.settings({ textSpeed: 5, skipUnread: true, lang: 'ru' }));
   check('меню показано, window.__vn установлен', await page.evaluate(() => typeof window.__vn?.goto === 'function'));

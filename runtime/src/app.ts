@@ -29,7 +29,6 @@ import {
   ErrorScreen,
   LogScreen,
   MenuScreen,
-  SplashScreen,
   SaveLoadScreen,
   SettingsScreen,
   WarningScreen,
@@ -170,28 +169,18 @@ export class App {
 
   // ───────────────────────────── вход в игру ─────────────────────────────
 
-  /** Заставка при запуске: логотип передачи; касание включает тему и открывает меню. */
-  showSplash(): void {
-    this.session.cancel();
-    this.kit.screens.closeAll();
-    this.kit.root.classList.remove('in-game');
-    const ep = this.d.episode;
-    const splash = new SplashScreen({
-      logo: this.d.assets?.art.logo ?? null,
-      title: t(ep.title_key),
-      onStart: () => this.showMenu(),
-    });
-    this.kit.screens.open(splash);
-  }
-
-  /** Главная тема передачи в меню и заставке (m_theme_main из общих ассетов); в партии музыкой управляет сценарий. */
+  /**
+   * Главная тема передачи в главном меню (m_theme_main из общих ассетов); в партии музыкой управляет сценарий.
+   * Если браузер запрещает автозапуск звука без жеста, бэкенд помечает трек заблокированным и включает его при
+   * первом касании, клике или клавише на странице (HtmlAudioBackend.installUnlock).
+   */
   private playTheme(): void {
     const has = (this.d.episode.assets.music ?? []).some((m) => m.id === THEME_MUSIC);
     if (!has || this.d.audio.music === THEME_MUSIC) return;
     this.d.audio.handle({ t: 'audio', kind: 'music', id: THEME_MUSIC, fade_ms: 600, loop: true, volume: 1 });
   }
 
-  /** Показать главное меню (после заставки, после финала). */
+  /** Показать главное меню (при запуске, после финала). */
   showMenu(): void {
     this.session.cancel();
     this.kit.screens.closeAll();
