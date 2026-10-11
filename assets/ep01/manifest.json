@@ -1065,13 +1065,6 @@
   "job": "3d70489c-441d-4c43-b1de-92025179eaab"
  },
  {
-  "id": "sh_interrogation_wide_1",
-  "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_155108_44ebe8e4-5490-4893-8e51-087ee2ead293.png",
-  "target": "assets/ep01/shots/interrogation/wide_1.webp",
-  "job": "44ebe8e4-5490-4893-8e51-087ee2ead293"
- },
- {
   "id": "sh_interrogation_medium_1",
   "kind": "shot",
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_155107_98985bea-979a-44b9-9b29-db182a69ed42.png",
@@ -1119,5 +1112,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_155322_582eecd5-1ff1-4e30-b2f7-49aeaeb3f989.png",
   "target": "assets/ep01/shots/interrogation/close_notary_nervous.webp",
   "job": "582eecd5-1ff1-4e30-b2f7-49aeaeb3f989"
+ },
+ {
+  "id": "sh_interrogation_wide_2",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_155625_5107187a-dc5d-488f-8ed1-fb7692148321.png",
+  "target": "assets/ep01/shots/interrogation/wide_2.webp",
+  "job": "5107187a-dc5d-488f-8ed1-fb7692148321"
+ },
+ {
+  "id": "sh_interrogation_ots_murashov_sledak",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_155626_3b286fde-3f7c-49f9-9b97-ef3a867bc27b.png",
+  "target": "assets/ep01/shots/interrogation/ots_murashov_sledak.webp",
+  "job": "3b286fde-3f7c-49f9-9b97-ef3a867bc27b"
+ },
+ {
+  "id": "sh_interrogation_ots_sledak_notary",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_155624_4fd22d81-8ada-42db-9f2d-65a8576172ea.png",
+  "target": "assets/ep01/shots/interrogation/ots_sledak_notary.webp",
+  "job": "4fd22d81-8ada-42db-9f2d-65a8576172ea"
+ },
+ {
+  "id": "sh_interrogation_ots_oper_buyer",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_155625_04de47de-3587-49da-adf4-f0f0541a553a.png",
+  "target": "assets/ep01/shots/interrogation/ots_oper_buyer.webp",
+  "job": "04de47de-3587-49da-adf4-f0f0541a553a"
  }
 ]

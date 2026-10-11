@@ -101,7 +101,7 @@ STAGING = {
         "oper": "standing apart from the table by the grey steel door at the right wall, arms folded",
         "buyer": "on the chair under the lamp, hands on the table",
         "murashov": "on the chair under the lamp, hands folded on the table",
-        "notary": "on the chair under the lamp, wiping his forehead",
+        "notary": "at the LEFT end of the table beside the suspect's chair, wiping his forehead with a handkerchief",
     },
     "bg_apartment_zoya": {
         "zoya": "by the sideboard, touching the framed photo",
@@ -217,7 +217,8 @@ REF_SHOTS = {
     "office_evening": {"medium": "sh_office_day_medium_2", "close": "sh_office_day_close_sledak_tense",
                        "reaction": "sh_office_day_close_sledak_tense", "angle": "sh_office_day_medium_2"},
     # Первый принятый крупный план сета сделан без референса комнаты (волна 26); средние — пока по фону.
-    "interrogation": {"close": "sh_interrogation_close_sledak_firm", "reaction": "sh_interrogation_close_sledak_firm"},
+    "interrogation": {"close": "sh_interrogation_close_sledak_firm", "reaction": "sh_interrogation_close_sledak_firm",
+                      "medium": "sh_interrogation_medium_1", "angle": "sh_interrogation_medium_1"},
 }
 # Для ракурсов (angle) референс — принятый средний план, а не общий: с общим планом модель дважды
 # меняла людей местами (office_day, волна 18), со средним оба ракурса вышли с первого раза.
@@ -457,6 +458,20 @@ def camera_block(kind: str, angle: str, cast: list[dict], focus: str | None, fro
     )
 
 
+GARMENT_WORDS = ("coat", "jacket", "suit", "cardigan", "dress", "sweater", "shirt", "blouse", "uniform", "overalls",
+                 "robe", "jumper", "raincoat", "anorak", "tracksuit", "housecoat", "shawl", "scarf")
+
+
+def key_garment(look: str) -> str:
+    """Главный предмет одежды из словесной приметы («man, 29, …; grey wool coat over a dark sweater, folder…»)."""
+    for seg in look.split(";"):
+        for chunk in seg.split(","):
+            c = chunk.strip()
+            if any(w in c for w in GARMENT_WORDS):
+                return c
+    return ""
+
+
 def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str, bg_id: str, names, present: list[str]) -> str:
     """Собрать промпт кадра: база §1 с заменённым CAMERA + реализм + референсы + сцена."""
     cam = camera_block(shot["kind"], shot["angle"], shot["cast"], shot.get("focus"), shot.get("from"), names)
@@ -484,7 +499,10 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
     if not room_ref:
         ref1 = None
     refs = [ref1] if ref1 else []
-    for i, c in enumerate(shot["cast"], start=2 if room_ref else 1):
+    # Референсы людей — в том же порядке слева направо, что и список People (interrogation, волна 28: при порядке
+    # референсов «подозреваемый, опер, следователь» модель сажала опера за стол, хотя текст говорил обратное).
+    cast_lr = sorted(shot["cast"], key=lambda c: ORDER.get(bg_id, {}).get(c["who"], 1))
+    for i, c in enumerate(cast_lr, start=2 if room_ref else 1):
         who = c["who"]
         tail = "; this person's face is never shown clearly: back to the camera, turned away or in shadow" if who in HIDDEN_FACE else ""
         look = LOOKS.get(who) or LOOKS.get(shot.get("_sets", {}).get(who, ""), "")
@@ -503,7 +521,10 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
         who = c["who"]
         expr = EXPRESSIONS.get(c.get("expression") or "neutral", "calm face")
         place = staging.get(who, "in the room")
-        people.append(f"{names(who)} {place}, {expr}")
+        look = LOOKS.get(who) or LOOKS.get(shot.get("_sets", {}).get(who, ""), "")
+        garment = key_garment(look)
+        tag = f" (the one in the {garment})" if garment else ""
+        people.append(f"{names(who)}{tag} {place}, {expr}")
     if shot["kind"] == "insert":
         action = shot["detail"]
         people_txt = "No faces in frame."
