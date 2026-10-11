@@ -688,7 +688,10 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
         o = ORDER.get(bg, {})
         ordered = sorted((c["who"] for c in cast), key=lambda w: o.get(w, 1))
         order_txt = (" Left to right in the frame: " + ", ".join(names(w) for w in ordered) + ".") if len(cast) > 1 and all(w in o for w in ordered) else ""
-        add("medium", f"medium_{i}", cast, action="They are mid-conversation; one has just stopped talking." + order_txt)
+        # Один человек в кадре: без «ровно один» модель дорисовывает второго из кроп-референса (stairwell medium_3).
+        solo_txt = (f" {names(cast[0]['who'])} is alone: exactly one person in the frame, nobody else anywhere in the picture."
+                    if len(cast) == 1 else "")
+        add("medium", f"medium_{i}", cast, action="They are mid-conversation; one has just stopped talking." + order_txt + solo_txt)
     for (a, b), _ in d["pairs"].most_common(SHOT_LIMITS["ots"]):
         cast = [{"who": b, "expression": "neutral"}, {"who": a, "expression": "neutral"}]
         sides = screen_sides(bg, a, b)
