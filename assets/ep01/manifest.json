@@ -1630,5 +1630,33 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_171222_752b9408-e448-4f48-88f7-14c339b16311.png",
   "target": "assets/ep01/shots/notary/ots_oper_notary.webp",
   "job": "752b9408-e448-4f48-88f7-14c339b16311"
+ },
+ {
+  "id": "sh_notary_ots_sledak_notary",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_171525_3afdfc69-945f-41e5-85a0-6bd25cfe4daf.png",
+  "target": "assets/ep01/shots/notary/ots_sledak_notary.webp",
+  "job": "3afdfc69-945f-41e5-85a0-6bd25cfe4daf"
+ },
+ {
+  "id": "sh_notary_ots_notary_sledak",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_171525_839b1f21-183b-41f3-9fb0-bbed9d759992.png",
+  "target": "assets/ep01/shots/notary/ots_notary_sledak.webp",
+  "job": "839b1f21-183b-41f3-9fb0-bbed9d759992"
+ },
+ {
+  "id": "sh_notary_ots_zoya_notary",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_171525_37017c2f-eea2-44be-b502-b4d19afb8f8d.png",
+  "target": "assets/ep01/shots/notary/ots_zoya_notary.webp",
+  "job": "37017c2f-eea2-44be-b502-b4d19afb8f8d"
+ },
+ {
+  "id": "sh_notary_ots_oper_sledak",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_171526_1a38b4ba-902a-4023-8549-072b6b4541b2.png",
+  "target": "assets/ep01/shots/notary/ots_oper_sledak.webp",
+  "job": "1a38b4ba-902a-4023-8549-072b6b4541b2"
  }
 ]
