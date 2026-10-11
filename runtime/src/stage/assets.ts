@@ -21,6 +21,8 @@ import type { Episode, SpriteSet, SpriteView, ViewState } from '../core/types';
 export const UI_ASSETS = {
   menuBackground: 'assets/common/ui/menu_video_salon.webp',
   titlePlate: 'assets/common/ui/title_plate.webp',
+  /** Логотип передачи для заставки и меню (решение владельца 2026-10-11). */
+  logo: 'assets/common/ui/logo_kr.webp',
 } as const;
 
 export const SPRITE_FILE_EXT = 'webp';

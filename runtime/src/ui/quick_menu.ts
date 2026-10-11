@@ -1,5 +1,6 @@
 /**
- * Быстрое меню: Auto, Skip (прочитанное), Log, Save, Load, Mute, Settings (+ скрыть интерфейс).
+ * Быстрое меню: Auto, Skip (прочитанное), Log (папка), Settings, Hide. Save/Load/Mute остаются действиями
+ * (клавиши S/L/M не меняются… точнее, горячие клавиши) и кнопками экрана настроек.
  * Кнопки — иконки (icons.ts); подпись остаётся в разметке скрытым текстом и в title: так кнопку
  * читает скринридер, а смена языка обновляет подсказки.
  */
@@ -15,7 +16,8 @@ export interface QuickState {
   muted: boolean;
 }
 
-const ORDER: readonly QuickAction[] = ['auto', 'skip', 'log', 'save', 'load', 'mute', 'settings', 'hide'];
+/** В панели — пять кнопок; сохранение, загрузка и звук живут в настройках (решение владельца 2026-10-11). */
+const ORDER: readonly QuickAction[] = ['auto', 'skip', 'log', 'settings', 'hide'];
 /** Кнопки-переключатели и поле состояния, которое каждая из них показывает. */
 const TOGGLE_KEY: Readonly<Partial<Record<QuickAction, keyof QuickState>>> = { auto: 'auto', skip: 'skip', mute: 'muted' };
 

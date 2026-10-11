@@ -11,6 +11,8 @@ import { LANGS } from '../core/types';
 import type { ArchiveItem, Episode, GameState, Ending, Lang } from '../core/types';
 import type { LogEntry } from '../session';
 import { cssUrl, fill, h } from './dom';
+import { icon } from './icons';
+import type { IconName } from './icons';
 import type { Screen } from './screen_host';
 
 // ───────────────────────────── общие кусочки ─────────────────────────────
@@ -57,12 +59,62 @@ abstract class BaseScreen implements Screen {
   abstract render(): void;
 }
 
+// ───────────────────────────── заставка ─────────────────────────────
+
+export interface SplashHandlers {
+  /** Адрес загруженного логотипа; null — текстовая заставка. */
+  logo: string | null;
+  title: string;
+  onStart: () => void;
+}
+
+/**
+ * Заставка при запуске: логотип передачи на чёрном (не меньше пятой части экрана), касание или клавиша
+ * начинают игру — и заодно разблокируют звук, так что тема стартует сразу (решение владельца 2026-10-11).
+ */
+export class SplashScreen extends BaseScreen {
+  constructor(private readonly handlers: SplashHandlers) {
+    super('vn-splash', false);
+  }
+
+  render(): void {
+    const hd = this.handlers;
+    let started = false;
+    const start = (): void => {
+      if (started) return;
+      started = true;
+      hd.onStart();
+    };
+    let brand: HTMLElement;
+    if (hd.logo) {
+      const img = h('img', { class: 'vn-splash__logo' }) as HTMLImageElement;
+      img.src = hd.logo;
+      img.alt = hd.title;
+      img.draggable = false;
+      brand = img;
+    } else {
+      brand = h('div', { class: 'vn-splash__text', text: hd.title });
+    }
+    fill(
+      this.el,
+      h(
+        'button',
+        { class: 'vn-splash__hit', type: 'button', aria: { label: t('ui.splash.tap') }, on: { click: start } },
+        brand,
+        h('span', { class: 'vn-splash__tap', text: t('ui.splash.tap') }),
+      ),
+    );
+  }
+}
+
 // ───────────────────────────── главное меню ─────────────────────────────
 
 /** Картинки интерфейса (адреса уже загруженных файлов); null — файла нет, остаётся прежнее оформление. */
 export interface MenuArt {
   background: string | null;
   plate: string | null;
+  /** Логотип передачи: в меню занимает не меньше пятой части экрана. */
+  logo: string | null;
 }
 
 export interface MenuHandlers {
@@ -100,11 +152,15 @@ export class MenuScreen extends BaseScreen {
     if (art?.background) this.el.style.setProperty('--menu-bg', cssUrl(art.background));
     else this.el.style.removeProperty('--menu-bg');
     const title = h('h1', { class: 'vn-menu__title', text: t(ep.title_key) });
-    // Заставка: название эпизода лежит на плашке title_plate.webp (текст — из локали, не в картинке).
-    const brand = art?.plate
-      ? h('div', { class: 'vn-menu__brand has-plate' }, h('img', { class: 'vn-menu__plate' }), title)
-      : title;
-    if (art?.plate) (brand.querySelector('.vn-menu__plate') as HTMLImageElement).src = art.plate;
+    // Бренд: логотип передачи (assets/common/ui/logo_kr.webp, ≥ 20 % высоты экрана), под ним — название эпизода.
+    let brand: HTMLElement = title;
+    if (art?.logo) {
+      const logo = h('img', { class: 'vn-menu__logo' }) as HTMLImageElement;
+      logo.src = art.logo;
+      logo.alt = '';
+      logo.draggable = false;
+      brand = h('div', { class: 'vn-menu__brand has-logo' }, logo, title);
+    }
     fill(
       this.el,
       h(
@@ -256,6 +312,12 @@ export interface SettingsHandlers {
   onChange: (patch: Partial<Settings>) => void;
   onLanguage: (lang: Lang) => void;
   onClose: () => void;
+  /** Сохранить / загрузить (только в партии) и звук — переехали сюда из панели кнопок (решение владельца 2026-10-11). */
+  inGame?: () => boolean;
+  muted?: () => boolean;
+  onSave?: () => void;
+  onLoad?: () => void;
+  onMute?: () => void;
 }
 
 export class SettingsScreen extends BaseScreen {
@@ -350,11 +412,41 @@ export class SettingsScreen extends BaseScreen {
         ),
       ),
     );
+    const qbtn = (ic: IconName, label: string, onClick: () => void, on = false): HTMLElement =>
+      h(
+        'button',
+        { class: `vn-btn vn-settings__qbtn${on ? ' is-on' : ''}`, type: 'button', data: { action: ic }, aria: { pressed: on }, on: { click: onClick } },
+        icon(ic),
+        h('span', { text: label }),
+      );
+    const inGame = hd.inGame?.() ?? false;
+    const muted = hd.muted?.() ?? false;
+    const quick =
+      (inGame && hd.onSave && hd.onLoad) || hd.onMute
+        ? h(
+            'div',
+            { class: 'vn-settings__quick', role: 'group', aria: { label: t('ui.settings.quick') } },
+            inGame && hd.onSave ? qbtn('save', t('ui.quick.save'), hd.onSave) : null,
+            inGame && hd.onLoad ? qbtn('load', t('ui.quick.load'), hd.onLoad) : null,
+            hd.onMute
+              ? qbtn(
+                  'mute',
+                  muted ? t('ui.quick.unmute') : t('ui.quick.mute'),
+                  () => {
+                    hd.onMute?.();
+                    this.render();
+                  },
+                  muted,
+                )
+              : null,
+          )
+        : null;
     fill(
       this.el,
       card(
         'vn-settings__card',
         h('h2', { class: 'vn-card__title', text: t('ui.menu.settings') }),
+        quick,
         h('div', { class: 'vn-settings__group' }, h('span', { class: 'vn-settings__legend', text: t('ui.settings.language') }), languageChips(hd.onLanguage)),
         cameraFx,
         range(t('ui.settings.font_size'), 'fontScale', FONT_SCALE_RANGE.min, FONT_SCALE_RANGE.max, FONT_SCALE_RANGE.step, pct),
@@ -365,6 +457,7 @@ export class SettingsScreen extends BaseScreen {
         range(t('ui.settings.voice'), 'voice', 0, 1, 0.05, pct),
         toggle(t('ui.settings.timers'), 'timers'),
         toggle(t('ui.settings.story_only'), 'storyOnly'),
+        toggle(t('ui.settings.skip_unread'), 'skipUnread'),
         h(
           'fieldset',
           { class: 'vn-settings__group' },

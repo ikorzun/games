@@ -150,18 +150,21 @@ describe('слои камкордера в CSS', () => {
 });
 
 describe('интерфейс: документальная эстетика, mobile-first', () => {
-  it('текстовое окно: тёмное полупрозрачное ≈ rgba(0,0,0,.72) без рамки (решение владельца 2026-10-11), PT Sans, без backdrop-filter (дорого на телефоне)', () => {
+  it('текстовое окно: тёмное полупрозрачное ≈ rgba(0,0,0,.72) без рамки (решение владельца 2026-10-11), DM Mono / JetBrains Mono для кириллицы, без backdrop-filter (дорого на телефоне)', () => {
     expect(uiCss).toMatch(/--panel:\s*rgb\(0 0 0 \/ 0\.72\)/);
     expect(uiCss).toMatch(/--panel-line:\s*rgb\(255 255 255 \/ 0\.28\)/);
     const box = /\n\.vn-textbox\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(box).toMatch(/background:\s*var\(--panel\)/);
     expect(box).toMatch(/border:\s*0;/);
     expect(box).toMatch(/font-family:\s*var\(--font-body\)/);
-    expect(uiCss).toMatch(/--font-body:\s*'PT Sans'/);
+    expect(uiCss).toMatch(/--font-latin:\s*'DM Mono'/);
+    expect(uiCss).toMatch(/--font-cyr:\s*'JetBrains Mono'/);
+    expect(uiCss).toMatch(/html\[lang='ru'\]\s*\{\s*--font-body:\s*var\(--font-cyr\)/);
+    expect((uiCss.match(/@font-face/g) ?? []).length).toBeGreaterThanOrEqual(12); // свои woff2, без Google Fonts в рантайме
     expect(uiCss).not.toMatch(/backdrop-filter/);
   });
 
-  it('имя говорящего — маленькая плашка PT Sans без обводки', () => {
+  it('имя говорящего — маленькая плашка без обводки', () => {
     const name = /\.vn-textbox__name\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(name).toMatch(/font:\s*700\s+0\.8em\s*\/\s*1\.4\s+var\(--font-body\)/);
     expect(name).toMatch(/border:\s*0;/);
@@ -182,12 +185,12 @@ describe('интерфейс: документальная эстетика, mob
     expect(Number(/height:\s*(\d+)px/.exec(q)![1])).toBeGreaterThanOrEqual(40);
   });
 
-  it('таймкод date_stamp — мелкий моноширинный (PT Mono) в правом верхнем углу картинки; REC — слева, ниже выреза', () => {
+  it('таймкод date_stamp — мелкий моноширинный в правом верхнем углу картинки; REC — слева, ниже выреза', () => {
     const stamp = /\.vn-cap--date_stamp\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(stamp).toMatch(/right:/);
     expect(stamp).not.toMatch(/\bleft:/);
     expect(stamp).toMatch(/var\(--font-mono\)/);
-    expect(uiCss).toMatch(/--font-mono:\s*'PT Mono'/);
+    expect(uiCss).toMatch(/--font-mono:\s*var\(--font-body\)/);
     expect(Number(/font:\s*400\s+clamp\((\d+)px/.exec(stamp)![1])).toBeLessThanOrEqual(12); // мелкий
     expect(stamp).toMatch(/env\(safe-area-inset-top\)/);
     expect(stageCss).toMatch(/--hud-top:\s*max\(10px,\s*env\(safe-area-inset-top\)\)/);

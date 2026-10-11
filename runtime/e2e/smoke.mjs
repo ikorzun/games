@@ -68,6 +68,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const AUDIO_URL = /\/assets\/[^?#]+\.(?:mp3|m4a|ogg|wav)(?:[?#]|$)/i;
 
+/** Заставка (логотип, «коснитесь, чтобы начать») стоит перед меню: тапаем её, если она есть, и ждём меню. */
+async function toMenu(p) {
+  try {
+    await p.click('.vn-splash__hit', { timeout: 8000 });
+  } catch {
+    /* заставки нет (например, после перезагрузки с autostart) — идём сразу к меню */
+  }
+  await p.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+}
+
 async function startServer() {
   if (remoteUrl) return { url: remoteUrl, close: async () => undefined };
   const server = await preview({
@@ -165,7 +175,7 @@ const PLACEHOLDER = /\[(?:ui|common|ep\d+)\.[a-z0-9_.]+\]/;
 async function scenarioPlay(browser, baseUrl) {
   section('Игра: загрузка → предупреждение → первый выбор → сейв/лоад → язык');
   const { page, context, log } = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU' }, null);
-  await page.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+  await toMenu(page);
   // Настройки через отладочный хук — одинаково для web-plain и Playgama (там localStorage не используется).
   await page.evaluate(() => window.__vn.settings({ textSpeed: 5, skipUnread: true, lang: 'ru' }));
   check('меню показано, window.__vn установлен', await page.evaluate(() => typeof window.__vn?.goto === 'function'));
@@ -213,7 +223,7 @@ async function scenarioPlay(browser, baseUrl) {
     await sleep(120);
   }
   await page.reload({ waitUntil: 'networkidle' });
-  await page.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+  await toMenu(page);
   check('после перезагрузки в меню есть «Продолжить» (прогресс сохранён)', (await page.locator('.vn-menu__nav button').count()) === 4);
   await page.click('.vn-menu__nav .is-primary'); // Продолжить
   await page.waitForFunction(() => window.__vn.pending()?.kind === 'line', null, { timeout: 15000 });
@@ -255,7 +265,7 @@ async function scenarioPlay(browser, baseUrl) {
 async function scenarioCamera(browser, baseUrl) {
   section('Камкордер и графика: «слабо» по умолчанию, HUD, выключатель, reduced-motion, учёт ассетов');
   const { page, context, log } = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU' });
-  await page.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+  await toMenu(page);
   const cam = () => page.evaluate(() => window.__vn.camera());
   const stageClass = () => page.evaluate(() => document.querySelector('.vn-stage')?.className ?? '');
   await page.evaluate(() => window.__vn.settings({ textSpeed: 5, skipUnread: true }));
@@ -419,7 +429,7 @@ async function scenarioCamera(browser, baseUrl) {
 
   // prefers-reduced-motion: эффекты выключены принудительно, переключатель недоступен.
   const rm = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU', reducedMotion: 'reduce' });
-  await rm.page.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+  await toMenu(rm.page);
   await rm.page.evaluate(() => window.__vn.start());
   await rm.page.waitForFunction(() => window.__vn.pending()?.kind === 'line', null, { timeout: 15000 });
   await sleep(600);
@@ -456,7 +466,7 @@ async function scenarioBridgeSdk(browser, baseUrl) {
     await context.close();
     return;
   }
-  await page.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+  await toMenu(page);
   const calls = (re) => sdk.filter((c) => re.test(c.text));
   const isReady = (c) => /\[platform\] sendMessage\(\)$/.test(c.text) && c.vals[0] === 'game_ready';
   for (let i = 0; i < 50 && !sdk.some(isReady); i++) {
@@ -555,7 +565,7 @@ async function scenarioMatrix(browser, baseUrl) {
         found[screen] = await page.evaluate(layoutProbe);
         await shot(screen);
       };
-      await page.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+      await toMenu(page);
       await probe('menu');
       await page.click('.vn-menu__nav .is-primary');
       await page.waitForSelector('.vn-warning', { state: 'visible' });

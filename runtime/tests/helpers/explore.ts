@@ -168,7 +168,8 @@ export function exploreAll(episode: Episode, options: ExploreOptions = {}): Expl
           if (p.kind === 'choice') {
             const enabled = p.options.filter((o) => o.enabled);
             if (enabled.length === 0) fail(`выбор ${p.id}: нет доступных опций (${trail.join(' → ')})`);
-            for (const o of enabled) branches.push({ label: `${p.id}=${o.id}`, choice: true, apply: () => interp.choose(o.id) });
+            // В журнал решений попадают только выборы с remember (по умолчанию true): считаем их, а не все.
+            for (const o of enabled) branches.push({ label: `${p.id}=${o.id}`, choice: p.remember, apply: () => interp.choose(o.id) });
           } else {
             for (const r of results) {
               if (r === 'skipped' && !p.def.skip.allowed) continue;

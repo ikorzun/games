@@ -15,7 +15,7 @@ const ICONS = {
     ['path', { d: 'M12.5 6.5l7 5.5-7 5.5z', fill: 'currentColor' }],
   ],
   log: [
-    ['path', { d: 'M5 7h14M5 12h14M5 17h9' }],
+    ['path', { d: 'M3.5 7.5h6l2 2h9v9.5h-17z' }],
   ],
   save: [
     ['path', { d: 'M5 4.5h11l3.5 3.5V19.5H5z' }],
@@ -23,6 +23,7 @@ const ICONS = {
   ],
   load: [
     ['path', { d: 'M3.5 7.5h6l2 2h9v9.5h-17z' }],
+    ['path', { d: 'M12 11v6M9.5 14.5l2.5 2.5 2.5-2.5' }],
   ],
   mute: [
     ['path', { d: 'M4.5 9.5v5h3.8l5 3.7V5.8l-5 3.7z', fill: 'currentColor' }],

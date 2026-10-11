@@ -20,6 +20,7 @@ import {
   MenuScreen,
   SaveLoadScreen,
   SettingsScreen,
+  SplashScreen,
   WarningScreen,
 } from '../src/ui/screens';
 import { miniEpisode } from './helpers/mini';
@@ -79,6 +80,13 @@ beforeEach(() => {
     'ui.settings.camera_fx_off': 'Выкл',
     'ui.settings.camera_fx_low': 'Слабо',
     'ui.settings.camera_fx_high': 'Сильно',
+    'ui.settings.skip_unread': 'Пропускать непрочитанное',
+    'ui.settings.quick': 'Партия',
+    'ui.quick.save': 'Сохранить',
+    'ui.quick.load': 'Загрузить',
+    'ui.quick.mute': 'Звук выкл.',
+    'ui.quick.unmute': 'Звук вкл.',
+    'ui.splash.tap': 'Коснитесь, чтобы начать',
     'ui.archive.new_item': 'Новый материал',
     'mini.doc.text': 'Текст бланка',
     'ui.quick.log': 'Журнал',
@@ -164,7 +172,7 @@ describe('MenuScreen', () => {
 });
 
 describe('MenuScreen: картинки интерфейса (видеосалон и плашка)', () => {
-  const handlers = (art?: { background: string | null; plate: string | null }) => ({
+  const handlers = (art?: { background: string | null; plate: string | null; logo: string | null }) => ({
     hasContinue: () => false,
     completed: () => false,
     onContinue: vi.fn(),
@@ -186,30 +194,30 @@ describe('MenuScreen: картинки интерфейса (видеосало�
   });
 
   it('фон видеосалона: класс has-bg и --menu-bg с абсолютным адресом (в сборке css лежит в dist/assets/)', () => {
-    const s = open(new MenuScreen(episode, handlers({ background: './assets/common/ui/menu_video_salon.webp', plate: null })));
+    const s = open(new MenuScreen(episode, handlers({ background: './assets/common/ui/menu_video_salon.webp', plate: null, logo: null })));
     expect(s.el.classList.contains('has-bg')).toBe(true);
     expect(s.el.style.getPropertyValue('--menu-bg')).toBe(abs('./assets/common/ui/menu_video_salon.webp'));
     expect(s.el.style.getPropertyValue('--menu-bg')).toMatch(/^url\("https?:\/\//); // не относительный
     expect(s.el.querySelector('.vn-menu__plate')).toBeNull(); // плашки нет — нет и обёртки
   });
 
-  it('плашка заставки: название остаётся текстом из локали (h1) и лежит на картинке; перерисовка без картинок всё снимает', () => {
-    const art = { background: './assets/common/ui/menu_video_salon.webp', plate: './assets/common/ui/title_plate.webp' };
+  it('логотип передачи в бренде меню (картинка, ≥ 20 % высоты по CSS); название остаётся текстом из локали (h1); без файла — прежний вид', () => {
+    const art = { background: './assets/common/ui/menu_video_salon.webp', plate: null, logo: './assets/common/ui/logo_kr.webp' };
     const hd = handlers(art);
     const s = open(new MenuScreen(episode, hd));
     const brand = s.el.querySelector('.vn-menu__brand');
-    expect(brand?.classList.contains('has-plate')).toBe(true);
-    const img = brand?.querySelector<HTMLImageElement>('img.vn-menu__plate');
-    expect(img?.getAttribute('src')).toBe(art.plate);
+    expect(brand?.classList.contains('has-logo')).toBe(true);
+    const img = brand?.querySelector<HTMLImageElement>('img.vn-menu__logo');
+    expect(img?.getAttribute('src')).toBe(art.logo);
     expect(img?.getAttribute('alt') ?? '').toBe(''); // декоративная картинка: название читается из h1
     expect(brand?.querySelector('h1.vn-menu__title')?.textContent).toBe('Смерть за квартиры');
-    // язык меняется — текст на плашке обновляется (в картинке текста нет)
+    // язык меняется — текст обновляется (в картинке текста эпизода нет)
     i18n.addStrings('en', { 'mini.title': 'Death for apartments' });
     i18n.setLang('en');
     s.render();
     expect(s.el.querySelector('.vn-menu__brand h1')?.textContent).toBe('Death for apartments');
     // файла больше нет (art -> null): возврат к прежнему виду
-    hd.art = { background: null, plate: null };
+    hd.art = { background: null, plate: null, logo: null };
     s.render();
     expect(s.el.classList.contains('has-bg')).toBe(false);
     expect(s.el.style.getPropertyValue('--menu-bg')).toBe('');
@@ -274,6 +282,59 @@ describe('WarningScreen: перед эпизодом', () => {
   });
 });
 
+describe('SplashScreen', () => {
+  it('логотип на кнопке во весь экран; касание вызывает onStart один раз; без логотипа — название текстом', () => {
+    const onStart = vi.fn();
+    const s = open(new SplashScreen({ logo: './assets/common/ui/logo_kr.webp', title: 'Смерть за квартиры', onStart }));
+    expect(s.el.querySelector<HTMLImageElement>('img.vn-splash__logo')?.getAttribute('src')).toBe('./assets/common/ui/logo_kr.webp');
+    expect(s.el.querySelector('.vn-splash__tap')?.textContent).toBe('Коснитесь, чтобы начать');
+    const hit = s.el.querySelector<HTMLButtonElement>('button.vn-splash__hit');
+    expect(hit?.getAttribute('aria-label')).toBe('Коснитесь, чтобы начать');
+    hit?.click();
+    hit?.click();
+    expect(onStart).toHaveBeenCalledTimes(1);
+    const s2 = open(new SplashScreen({ logo: null, title: 'Смерть за квартиры', onStart: vi.fn() }));
+    expect(s2.el.querySelector('.vn-splash__text')?.textContent).toBe('Смерть за квартиры');
+    expect(s2.el.querySelector('img')).toBeNull();
+  });
+});
+
+describe('SettingsScreen: ряд «Партия» (сохранить / загрузить / звук)', () => {
+  it('сохранить и загрузить — только в игре, звук — всегда; кнопка звука переключает состояние и перерисовывается', () => {
+    let inGame = false;
+    let muted = false;
+    const onMute = vi.fn(() => {
+      muted = !muted;
+    });
+    const hd = {
+      settings: () => ({ ...DEFAULT_SETTINGS }),
+      onChange: vi.fn(),
+      onLanguage: vi.fn(),
+      onClose: vi.fn(),
+      inGame: () => inGame,
+      muted: () => muted,
+      onSave: vi.fn(),
+      onLoad: vi.fn(),
+      onMute,
+    };
+    const s = open(new SettingsScreen(hd));
+    const actions = (): string[] => [...s.el.querySelectorAll<HTMLElement>('.vn-settings__qbtn')].map((b) => b.dataset.action ?? '');
+    expect(actions()).toEqual(['mute']);
+    expect(s.el.querySelector('.vn-settings__qbtn[data-action="mute"]')?.textContent).toBe('Звук выкл.');
+    s.el.querySelector<HTMLButtonElement>('.vn-settings__qbtn[data-action="mute"]')?.click();
+    expect(onMute).toHaveBeenCalledTimes(1);
+    expect(s.el.querySelector('.vn-settings__qbtn[data-action="mute"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(s.el.querySelector('.vn-settings__qbtn[data-action="mute"]')?.textContent).toBe('Звук вкл.');
+    inGame = true;
+    s.render();
+    expect(actions()).toEqual(['save', 'load', 'mute']);
+    s.el.querySelector<HTMLButtonElement>('.vn-settings__qbtn[data-action="save"]')?.click();
+    s.el.querySelector<HTMLButtonElement>('.vn-settings__qbtn[data-action="load"]')?.click();
+    expect(hd.onSave).toHaveBeenCalledTimes(1);
+    expect(hd.onLoad).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('SettingsScreen', () => {
   const make = (over: Partial<Settings> = {}) => {
     const settings: Settings = { ...DEFAULT_SETTINGS, ...over };
@@ -319,7 +380,7 @@ describe('SettingsScreen', () => {
   it('таймеры выборов и «только история» — флажки; режим насилия — переключатель', () => {
     const { s, hd } = make({ timers: true, storyOnly: false });
     const boxes = [...s.el.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
-    expect(boxes.map((b) => b.checked)).toEqual([true, false]);
+    expect(boxes.map((b) => b.checked)).toEqual([true, false, false]); // таймеры, «только история», пропуск непрочитанного
     boxes[0]!.checked = false;
     boxes[0]!.dispatchEvent(new Event('change', { bubbles: true }));
     expect(hd.onChange).toHaveBeenLastCalledWith({ timers: false });
@@ -343,7 +404,7 @@ describe('SettingsScreen', () => {
     const { s } = make({ fontScale: 1.45, textSpeed: 4, timers: false, storyOnly: true, violenceMode: 'schematic' });
     expect(range(s.el, 'Размер шрифта').value).toBe('1.45');
     expect(range(s.el, 'Скорость текста').value).toBe('4');
-    expect([...s.el.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].map((b) => b.checked)).toEqual([false, true]);
+    expect([...s.el.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].map((b) => b.checked)).toEqual([false, true, false]);
     expect([...s.el.querySelectorAll<HTMLInputElement>('input[type="radio"]')].map((r) => r.checked)).toEqual([false, true]);
   });
 });

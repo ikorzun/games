@@ -117,7 +117,9 @@ export class DomUI implements SessionUI {
         if (this.fastForward && (this.lineRead || this.d.settings().skipUnread)) {
           this.timer = setTimeout(finish, SKIP_DELAY_MS);
         } else if (this.autoOn) {
-          this.timer = setTimeout(finish, this.autoDelay(p));
+          const ms = this.autoDelay(p);
+          this.timer = setTimeout(finish, ms);
+          kit.autobar.start(ms);
         }
       };
       const off = kit.textbox.onComplete(arrange);
@@ -310,6 +312,11 @@ export class DomUI implements SessionUI {
   }
 
   toggleSkip(): void {
+    if (!this.skipOn && this.currentLine && !(this.lineRead || this.d.settings().skipUnread)) {
+      // Пропускать можно только прочитанное: объясняем подсказкой, иначе кнопка выглядит сломанной.
+      this.d.kit.toasts.push(t('ui.skip.read_only'));
+      return;
+    }
     this.setSkip(!this.skipOn);
     if (this.skipOn) this.pokeSkip();
   }
@@ -479,6 +486,7 @@ export class DomUI implements SessionUI {
   }
 
   private clearTimer(): void {
+    this.d.kit.autobar.stop();
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
   }

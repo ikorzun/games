@@ -23,7 +23,9 @@
   "ui.settings.font_size": "",
   "ui.settings.music": "",
   "ui.settings.sfx": "",
-  "ui.settings.voice": "",
+  "ui.settings.voice": "Vozes",
+  "ui.settings.voice_on": "Reproduzir vozes",
+  "ui.settings.voice_volume": "Volume das vozes",
   "ui.settings.timers": "",
   "ui.settings.story_only": "",
   "ui.settings.violence_mode": "",
@@ -114,5 +116,10 @@
   "ui.minigame.selected": "Marcadas: {n}",
   "ui.minigame.no_cards": "Nenhuma ficha confere",
   "ui.minigame.match": "Confere",
-  "ui.minigame.no_match": "Não confere"
+  "ui.minigame.no_match": "Não confere",
+  "ui.quick.unmute": "",
+  "ui.skip.read_only": "",
+  "ui.splash.tap": "",
+  "ui.settings.quick": "",
+  "ui.settings.skip_unread": ""
 }

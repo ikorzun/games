@@ -12,6 +12,8 @@ import type { AudioPreloader, PreloadHooks } from './preload';
 export interface UiArt {
   background: string | null;
   plate: string | null;
+  /** Логотип передачи (заставка и меню). */
+  logo: string | null;
 }
 
 export interface AppAssets {
@@ -40,7 +42,7 @@ export function createAppAssets(episode: Episode, base: string, audio: AudioPrel
     scene,
     preloader,
     hooks,
-    art: { background: null, plate: null },
+    art: { background: null, plate: null, logo: null },
     document(docId) {
       const url = catalog.docUrl(docId);
       if (!url) return { url: null, ready: Promise.resolve(null) };
@@ -85,25 +87,24 @@ export function createAppAssets(episode: Episode, base: string, audio: AudioPrel
   return out;
 }
 
-/** Картинки интерфейса: меню и плашка заставки. Ждём не дольше timeoutMs; нет файла — предупреждение и прежний вид. */
+/** Картинки интерфейса: меню, плашка титров, логотип. Ждём не дольше timeoutMs; нет файла — предупреждение и прежний вид. */
 export async function loadUiArt(assets: AppAssets, timeoutMs = 2000): Promise<UiArt> {
   const { catalog, store } = assets;
-  const bgUrl = catalog.url(UI_ASSETS.menuBackground);
-  const plateUrl = catalog.url(UI_ASSETS.titlePlate);
-  store.pin(bgUrl);
-  store.pin(plateUrl);
+  const urls = { background: catalog.url(UI_ASSETS.menuBackground), plate: catalog.url(UI_ASSETS.titlePlate), logo: catalog.url(UI_ASSETS.logo) };
+  for (const u of Object.values(urls)) store.pin(u);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<'timeout'>((resolve) => {
     timer = setTimeout(() => resolve('timeout'), timeoutMs);
   });
-  const both = Promise.all([store.load(bgUrl, 'now'), store.load(plateUrl, 'now')]);
-  const res = await Promise.race([both, timeout]);
+  const all = Promise.all([store.load(urls.background, 'now'), store.load(urls.plate, 'now'), store.load(urls.logo, 'now')]);
+  const res = await Promise.race([all, timeout]);
   if (timer !== undefined) clearTimeout(timer);
-  if (res === 'timeout') return { background: null, plate: null };
-  const [bg, plate] = res;
-  if (!bg) store.warnMissing([bgUrl]);
-  if (!plate) store.warnMissing([plateUrl]);
-  const art = { background: bg ? bg.url : null, plate: plate ? plate.url : null };
+  if (res === 'timeout') return { background: null, plate: null, logo: null };
+  const [bg, plate, logo] = res;
+  if (!bg) store.warnMissing([urls.background]);
+  if (!plate) store.warnMissing([urls.plate]);
+  if (!logo) store.warnMissing([urls.logo]);
+  const art = { background: bg ? bg.url : null, plate: plate ? plate.url : null, logo: logo ? logo.url : null };
   assets.art = art;
   return art;
 }

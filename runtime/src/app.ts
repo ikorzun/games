@@ -28,6 +28,7 @@ import {
   ErrorScreen,
   LogScreen,
   MenuScreen,
+  SplashScreen,
   SaveLoadScreen,
   SettingsScreen,
   WarningScreen,
@@ -47,6 +48,9 @@ export interface AppInit {
   renderer?: RendererChoice;
   debug?: boolean;
 }
+
+/** id главной темы передачи в assets.music (общие ассеты). */
+const THEME_MUSIC = 'm_theme_main';
 
 export class App {
   readonly kit: UiKit;
@@ -162,7 +166,28 @@ export class App {
 
   // ───────────────────────────── вход в игру ─────────────────────────────
 
-  /** Показать главное меню (после загрузки, после финала). */
+  /** Заставка при запуске: логотип передачи; касание включает тему и открывает меню. */
+  showSplash(): void {
+    this.session.cancel();
+    this.kit.screens.closeAll();
+    this.kit.root.classList.remove('in-game');
+    const ep = this.d.episode;
+    const splash = new SplashScreen({
+      logo: this.d.assets?.art.logo ?? null,
+      title: t(ep.title_key),
+      onStart: () => this.showMenu(),
+    });
+    this.kit.screens.open(splash);
+  }
+
+  /** Главная тема передачи в меню и заставке (m_theme_main из общих ассетов); в партии музыкой управляет сценарий. */
+  private playTheme(): void {
+    const has = (this.d.episode.assets.music ?? []).some((m) => m.id === THEME_MUSIC);
+    if (!has || this.d.audio.music === THEME_MUSIC) return;
+    this.d.audio.handle({ t: 'audio', kind: 'music', id: THEME_MUSIC, fade_ms: 600, loop: true, volume: 1 });
+  }
+
+  /** Показать главное меню (после заставки, после финала). */
   showMenu(): void {
     this.session.cancel();
     this.kit.screens.closeAll();
@@ -170,6 +195,7 @@ export class App {
     this.ui.setSkip(false);
     if (this.ui.autoOn) this.ui.toggleAuto();
     this.ui.setUiHidden(false);
+    this.playTheme();
     const ep = this.d.episode;
     const saves = this.d.saves;
     const menu = new MenuScreen(ep, {
@@ -213,6 +239,8 @@ export class App {
   }
 
   private beginGame(start: () => Promise<RunOutcome>): void {
+    // Тема меню уступает место музыке сценария (первая сцена включит свою, если она задана).
+    if (this.d.audio.music === THEME_MUSIC) this.d.audio.handle({ t: 'audio', kind: 'stop_music', id: null, fade_ms: 600, loop: false, volume: 0 });
     this.kit.screens.closeAll();
     this.kit.root.classList.add('in-game');
     void start().then((outcome) => {
@@ -286,6 +314,11 @@ export class App {
       onChange: (patch) => this.updateSettings(patch),
       onLanguage: (lang) => void this.setLanguage(lang),
       onClose: () => this.kit.screens.close(screen),
+      inGame: () => this.inGame,
+      muted: () => this.d.saves.settings.muted,
+      onSave: () => this.openSaveLoad('save'),
+      onLoad: () => this.openSaveLoad('load'),
+      onMute: () => this.updateSettings({ muted: !this.d.saves.settings.muted }),
     });
     this.settingsScreen = screen;
     this.kit.screens.open(screen);

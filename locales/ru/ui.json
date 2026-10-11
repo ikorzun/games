@@ -11,7 +11,7 @@
   "ui.menu.language": "Язык",
   "ui.menu.quit": "Выход",
   "ui.quick.auto": "Авто",
-  "ui.quick.skip": "Пропуск",
+  "ui.quick.skip": "Пропуск прочитанного",
   "ui.quick.log": "Журнал",
   "ui.quick.save": "Сохранить",
   "ui.quick.load": "Загрузить",
@@ -23,7 +23,9 @@
   "ui.settings.font_size": "Размер шрифта",
   "ui.settings.music": "Музыка",
   "ui.settings.sfx": "Звуки",
-  "ui.settings.voice": "Голос",
+  "ui.settings.voice": "Озвучка",
+  "ui.settings.voice_on": "Озвучивать реплики",
+  "ui.settings.voice_volume": "Громкость озвучки",
   "ui.settings.timers": "Таймеры выборов",
   "ui.settings.story_only": "Только история",
   "ui.settings.violence_mode": "Показ насилия",
@@ -114,5 +116,10 @@
   "ui.minigame.selected": "Отмечено: {n}",
   "ui.minigame.no_cards": "Таких карточек нет",
   "ui.minigame.match": "Подходит",
-  "ui.minigame.no_match": "Не подходит"
+  "ui.minigame.no_match": "Не подходит",
+  "ui.quick.unmute": "Звук вкл.",
+  "ui.skip.read_only": "Пропуск работает только для уже прочитанного текста. Пропуск непрочитанного включается в настройках",
+  "ui.splash.tap": "Коснитесь, чтобы начать",
+  "ui.settings.quick": "Партия",
+  "ui.settings.skip_unread": "Пропускать непрочитанное"
 }
