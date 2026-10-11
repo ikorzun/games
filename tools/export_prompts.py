@@ -54,6 +54,19 @@ PSYCHO = {
 
 FACE_FRAME = "Square composition 1:1, one frame, without borders."
 
+# Облик для портрета и спрайта там, где базовое описание из таблицы персонажей повторяет имя или задаёт позу
+# (следователь 2004 года в таблице «сидит на интервью» — портрет и спрайт снимаются стоя).
+FACE_LOOK = {
+    "sledak_old": "the same man at 40: heavier, grey at the temples, lines around the eyes; dark blazer, open collar",
+}
+
+
+def face_name_look(cast_id: str, name: str, look: str) -> tuple[str, str]:
+    """Имя и облик для портрета/спрайта: без повтора скобки из имени и без позы интервью."""
+    if cast_id in FACE_LOOK:
+        return re.sub(r"\s*\([^)]*\)\s*$", "", name), FACE_LOOK[cast_id]
+    return name, look
+
 
 def parse_tables(md: str) -> dict[str, list[tuple[str, list[str]]]]:
     """Таблицы «| `id` | … |» по разделам файла промптов картинок."""
@@ -241,7 +254,7 @@ def main() -> int:
         L.append(f"| `{cid}` | {ru_name(cid)} | {desc} | {PSYCHO.get(cid, '—')} | `assets/ep01/faces/{cid}.webp` | {char_expr.get(cid, '')} |")
     L.append("")
     for cid, desc in char_desc.items():
-        name = names(cid)
+        name, desc = face_name_look(cid, names(cid), desc)
         L.append(f"### `{cid}` — {ru_name(cid)}")
         L.append("")
         L.append("FACE (портрет-референс, 1:1, без референсов; в базовом промпте строка про 16:9 заменяется на "

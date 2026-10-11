@@ -156,7 +156,7 @@ FACE (портрет-референс, 1:1, без референсов; в ба
 SCENE
 
 Location and time: Moscow, autumn 1993, daytime. An identity portrait made by the television crew for continuity: the person stands against a plain, evenly lit beige wall of an ordinary office corridor; nothing else is in the frame.
-People and action: Andrei Gromov in 2004 (the same man at 40) (the same man at 40: heavier, grey at the temples, lines around the eyes; dark blazer, open collar, seated for an interview), alone. The same man as Investigator Andrei Gromov eleven years later: heavier, grey at the temples, lines around the eyes, quiet grief without self-pity. The face is straight to the camera, neutral, mouth closed, eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. Exactly one person, head and shoulders.
+People and action: Andrei Gromov in 2004 (the same man at 40: heavier, grey at the temples, lines around the eyes; dark blazer, open collar), alone. The same man as Investigator Andrei Gromov eleven years later: heavier, grey at the temples, lines around the eyes, quiet grief without self-pity. The face is straight to the camera, neutral, mouth closed, eyes to the lens, hair and clothing exactly as described; a real, ordinary, slightly asymmetrical face, not a model's. Exactly one person, head and shoulders.
 Camera position: A television camera at the eye level of the person, a 50 mm-equivalent field of view, a medium close-up: the head and shoulders fill the frame with a little headroom, the horizon straight, the wall in focus behind.
 Light sources: soft overcast window light from the front-left and a plain ceiling fixture; no separate face lighting.
 Essential objects: none: the plain wall only.
@@ -166,12 +166,12 @@ SPRITE (база для выражений; Reference 1 — файл лица):
 
 ```
 REFERENCE IMAGES
-Reference 1 is the face of Andrei Gromov in 2004 (the same man at 40): keep this exact face, hair and build.
+Reference 1 is the face of Andrei Gromov in 2004: keep this exact face, hair and build.
 
 SCENE
 
 Location and time: Moscow, 1993; a plain, evenly lit mid-grey wall with no objects (the figure will be cut out).
-People and action: Full-body portrait for a visual novel character sprite: Andrei Gromov in 2004 (the same man at 40) (the same man at 40: heavier, grey at the temples, lines around the eyes; dark blazer, open collar, seated for an interview). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
+People and action: Full-body portrait for a visual novel character sprite: Andrei Gromov in 2004 (the same man at 40: heavier, grey at the temples, lines around the eyes; dark blazer, open collar). The person stands in a three-quarter view turned slightly toward camera-left (all sprites face the same way: the runtime mirrors them to face a partner), in natural, unposed posture, whole body in frame including shoes, neutral expression, mouth closed. The face is exactly the face of the reference portrait.
 Camera position: a television camera at chest height, a 40 mm-equivalent field of view, the whole figure in frame with headroom.
 Light sources: soft overcast window light from the front-left.
 Essential objects: none.
