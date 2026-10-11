@@ -275,8 +275,11 @@ REF_SHOTS = {
     "office_night": {"room": "sh_office_night_wide_1", "medium": "sh_office_night_medium_1",
                      "close": "sh_office_night_close_sledak_tense", "reaction": "sh_office_night_close_sledak_tense",
                      "angle": "sh_office_night_medium_1"},
-    "office_evening": {"medium": "sh_office_day_medium_2", "close": "sh_office_day_close_sledak_tense",
-                       "reaction": "sh_office_day_close_sledak_tense", "angle": "sh_office_day_medium_2"},
+    # Вечерний сет: пилот (волна 78) по дневным референсам с оговоркой о свете принят целиком; дальше, как и
+    # ночной сет, ссылается на свои принятые кадры (wide_1 как комната: закатное окно и включённая лампа).
+    "office_evening": {"room": "sh_office_evening_wide_1", "medium": "sh_office_evening_medium_1",
+                       "close": "sh_office_evening_close_sledak_tense", "reaction": "sh_office_evening_close_sledak_tense",
+                       "angle": "sh_office_evening_medium_1"},
     # Первый принятый крупный план сета сделан без референса комнаты (волна 26); средние — пока по фону.
     "interrogation": {"close": "sh_interrogation_close_sledak_firm", "reaction": "sh_interrogation_close_sledak_firm",
                       "medium": "sh_interrogation_medium_1", "angle": "sh_interrogation_medium_1"},
