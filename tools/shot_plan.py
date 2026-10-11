@@ -97,8 +97,8 @@ STAGING = {
         "lapin_wife": "on the visitor's chair by the door, handbag on her lap",
     },
     "bg_interrogation": {
-        "sledak": "seated across the table with his back to the barred window",
-        "oper": "standing by the door with arms folded",
+        "sledak": "seated on the chair at the RIGHT end of the table, facing the suspect across it, a folder in front of him",
+        "oper": "standing apart from the table by the grey steel door at the right wall, arms folded",
         "buyer": "on the chair under the lamp, hands on the table",
         "murashov": "on the chair under the lamp, hands folded on the table",
         "notary": "on the chair under the lamp, wiping his forehead",
@@ -216,6 +216,8 @@ REF_SHOTS = {
                      "angle": "sh_office_night_medium_1"},
     "office_evening": {"medium": "sh_office_day_medium_2", "close": "sh_office_day_close_sledak_tense",
                        "reaction": "sh_office_day_close_sledak_tense", "angle": "sh_office_day_medium_2"},
+    # Первый принятый крупный план сета сделан без референса комнаты (волна 26); средние — пока по фону.
+    "interrogation": {"close": "sh_interrogation_close_sledak_firm", "reaction": "sh_interrogation_close_sledak_firm"},
 }
 # Для ракурсов (angle) референс — принятый средний план, а не общий: с общим планом модель дважды
 # меняла людей местами (office_day, волна 18), со средним оба ракурса вышли с первого раза.
@@ -494,7 +496,10 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
                       "(SUBJECT and LIGHT NOW) alone.")
     staging = STAGING.get(bg_id, {})
     people = []
-    for c in shot["cast"]:
+    # Люди перечисляются слева направо по ORDER: модель читает порядок списка как порядок на экране
+    # (interrogation, волна 26: при списке «подозреваемый, опер, следователь» опер сел за стол, следователь встал к двери).
+    order = ORDER.get(bg_id, {})
+    for c in sorted(shot["cast"], key=lambda c: order.get(c["who"], 1)):
         who = c["who"]
         expr = EXPRESSIONS.get(c.get("expression") or "neutral", "calm face")
         place = staging.get(who, "in the room")
