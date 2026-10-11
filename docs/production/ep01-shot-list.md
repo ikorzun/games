@@ -16,7 +16,7 @@ CONTINUITY и референсами фона и спрайтов). Каждый
 | `sh_yard_insert_1` | insert | eye | — | — |
 | `sh_yard_angle_low` | angle | low | neighbor (neutral) | — |
 | `sh_yard_angle_high` | angle | high | neighbor (neutral) | — |
-| `sh_yard_angle_doorway` | angle | doorway | neighbor (neutral) | — |
+| `sh_yard_angle_foreground` | angle | foreground | neighbor (neutral) | — |
 
 ## stairwell — `bg_stairwell`, evening: сцены s02, s03, s15; реплик 22; кадров 26
 
@@ -47,7 +47,7 @@ CONTINUITY и референсами фона и спрайтов). Каждый
 | `sh_stairwell_insert_2` | insert | eye | — | — |
 | `sh_stairwell_angle_low` | angle | low | neighbor (neutral), oper (neutral), sledak (neutral) | — |
 | `sh_stairwell_angle_high` | angle | high | neighbor (neutral), oper (neutral), sledak (neutral) | — |
-| `sh_stairwell_angle_doorway` | angle | doorway | neighbor (neutral), oper (neutral), sledak (neutral) | — |
+| `sh_stairwell_angle_foreground` | angle | foreground | neighbor (neutral), oper (neutral), sledak (neutral) | — |
 
 ## zhek — `bg_zhek`, day: сцены s07; реплик 7; кадров 14
 
@@ -66,7 +66,7 @@ CONTINUITY и референсами фона и спрайтов). Каждый
 | `sh_zhek_insert_2` | insert | eye | — | — |
 | `sh_zhek_angle_low` | angle | low | murashov_sil (neutral), zoya (neutral) | — |
 | `sh_zhek_angle_high` | angle | high | murashov_sil (neutral), zoya (neutral) | — |
-| `sh_zhek_angle_doorway` | angle | doorway | murashov_sil (neutral), zoya (neutral) | — |
+| `sh_zhek_angle_foreground` | angle | foreground | murashov_sil (neutral), zoya (neutral) | — |
 
 ## apartment_zoya — `bg_apartment_zoya`, day: сцены s08, s13, s14, s13b, s14b; реплик 35; кадров 35
 
@@ -106,7 +106,7 @@ CONTINUITY и референсами фона и спрайтов). Каждый
 | `sh_apartment_zoya_insert_2` | insert | eye | — | — |
 | `sh_apartment_zoya_angle_low` | angle | low | murashov_sil (neutral), zoya (neutral) | — |
 | `sh_apartment_zoya_angle_high` | angle | high | murashov_sil (neutral), zoya (neutral) | — |
-| `sh_apartment_zoya_angle_doorway` | angle | doorway | murashov_sil (neutral), zoya (neutral) | — |
+| `sh_apartment_zoya_angle_foreground` | angle | foreground | murashov_sil (neutral), zoya (neutral) | — |
 
 ## notary — `bg_notary_office`, day: сцены s09, s16, s29, s09b, s16b, s16c, s29b; реплик 55; кадров 29
 
@@ -140,7 +140,7 @@ CONTINUITY и референсами фона и спрайтов). Каждый
 | `sh_notary_insert_2` | insert | eye | — | — |
 | `sh_notary_angle_low` | angle | low | notary (neutral), oper (neutral), sledak (neutral) | — |
 | `sh_notary_angle_high` | angle | high | notary (neutral), oper (neutral), sledak (neutral) | — |
-| `sh_notary_angle_doorway` | angle | doorway | notary (neutral), oper (neutral), sledak (neutral) | — |
+| `sh_notary_angle_foreground` | angle | foreground | notary (neutral), oper (neutral), sledak (neutral) | — |
 
 ## office_day — `bg_office_prosecutor`, day: сцены s11, s12, s18, s19, s22, s23, s27, s12b, s18b, s22b, s23b, s27b; реплик 118; кадров 41
 
@@ -186,7 +186,7 @@ CONTINUITY и референсами фона и спрайтов). Каждый
 | `sh_office_day_insert_2` | insert | eye | — | — |
 | `sh_office_day_angle_low` | angle | low | oper (neutral), sledak (neutral) | — |
 | `sh_office_day_angle_high` | angle | high | oper (neutral), sledak (neutral) | — |
-| `sh_office_day_angle_doorway` | angle | doorway | oper (neutral), sledak (neutral) | — |
+| `sh_office_day_angle_foreground` | angle | foreground | oper (neutral), sledak (neutral) | — |
 
 ## office_evening — `bg_office_prosecutor`, evening: сцены s17, s26, s26b; реплик 26; кадров 25
 
@@ -216,7 +216,7 @@ CONTINUITY и референсами фона и спрайтов). Каждый
 | `sh_office_evening_insert_2` | insert | eye | — | — |
 | `sh_office_evening_angle_low` | angle | low | oper (neutral), sledak (neutral) | — |
 | `sh_office_evening_angle_high` | angle | high | oper (neutral), sledak (neutral) | — |
-| `sh_office_evening_angle_doorway` | angle | doorway | oper (neutral), sledak (neutral) | — |
+| `sh_office_evening_angle_foreground` | angle | foreground | oper (neutral), sledak (neutral) | — |
 
 ## interrogation — `bg_interrogation`, day: сцены s20, s21, s38, s39, s40, s41, s20b, s38b, s38c, s40b, s40c, s41b; реплик 81; кадров 39
 
@@ -260,7 +260,7 @@ CONTINUITY и референсами фона и спрайтов). Каждый
 | `sh_interrogation_insert_2` | insert | eye | — | — |
 | `sh_interrogation_angle_low` | angle | low | murashov (neutral), oper (neutral), sledak (neutral) | — |
 | `sh_interrogation_angle_high` | angle | high | murashov (neutral), oper (neutral), sledak (neutral) | — |
-| `sh_interrogation_angle_doorway` | angle | doorway | murashov (neutral), oper (neutral), sledak (neutral) | — |
+| `sh_interrogation_angle_foreground` | angle | foreground | murashov (neutral), oper (neutral), sledak (neutral) | — |
 
 ## bti — `bg_bti_archive`, day: сцены s24, s25, s24b; реплик 22; кадров 21
 
@@ -286,7 +286,7 @@ CONTINUITY и референсами фона и спрайтов). Каждый
 | `sh_bti_insert_2` | insert | eye | — | — |
 | `sh_bti_angle_low` | angle | low | clerk (neutral), expert (neutral), sledak (neutral) | — |
 | `sh_bti_angle_high` | angle | high | clerk (neutral), expert (neutral), sledak (neutral) | — |
-| `sh_bti_angle_doorway` | angle | doorway | clerk (neutral), expert (neutral), sledak (neutral) | — |
+| `sh_bti_angle_foreground` | angle | foreground | clerk (neutral), expert (neutral), sledak (neutral) | — |
 
 ## street_day — `bg_street_day`, day: сцены s28, s28b; реплик 18; кадров 19
 
@@ -310,7 +310,7 @@ CONTINUITY и референсами фона и спрайтов). Каждый
 | `sh_street_day_insert_2` | insert | eye | — | — |
 | `sh_street_day_angle_low` | angle | low | oper (neutral), sledak (neutral) | — |
 | `sh_street_day_angle_high` | angle | high | oper (neutral), sledak (neutral) | — |
-| `sh_street_day_angle_doorway` | angle | doorway | oper (neutral), sledak (neutral) | — |
+| `sh_street_day_angle_foreground` | angle | foreground | oper (neutral), sledak (neutral) | — |
 
 ## office_now — `bg_office_now`, day: сцены s30; реплик 5; кадров 9
 
@@ -324,7 +324,7 @@ CONTINUITY и референсами фона и спрайтов). Каждый
 | `sh_office_now_insert_1` | insert | eye | — | — |
 | `sh_office_now_angle_low` | angle | low | sledak_old (neutral) | — |
 | `sh_office_now_angle_high` | angle | high | sledak_old (neutral) | — |
-| `sh_office_now_angle_doorway` | angle | doorway | sledak_old (neutral) | — |
+| `sh_office_now_angle_foreground` | angle | foreground | sledak_old (neutral) | — |
 
 ## office_night — `bg_office_prosecutor`, night: сцены s31, s32, s33, s42, s31b, s31c, s33b, s42b, s42c; реплик 112; кадров 27
 
@@ -356,7 +356,7 @@ CONTINUITY и референсами фона и спрайтов). Каждый
 | `sh_office_night_insert_2` | insert | eye | — | — |
 | `sh_office_night_angle_low` | angle | low | expert (neutral), oper (neutral), sledak (neutral) | — |
 | `sh_office_night_angle_high` | angle | high | expert (neutral), oper (neutral), sledak (neutral) | — |
-| `sh_office_night_angle_doorway` | angle | doorway | expert (neutral), oper (neutral), sledak (neutral) | — |
+| `sh_office_night_angle_foreground` | angle | foreground | expert (neutral), oper (neutral), sledak (neutral) | — |
 
 ## street_night — `bg_street_night`, night: сцены s34, s35, s36, s36a, s36b, s34b, s36a2, s36b2; реплик 44; кадров 24
 
@@ -385,7 +385,7 @@ CONTINUITY и референсами фона и спрайтов). Каждый
 | `sh_street_night_insert_2` | insert | eye | — | — |
 | `sh_street_night_angle_low` | angle | low | oper (neutral), sledak (neutral) | — |
 | `sh_street_night_angle_high` | angle | high | oper (neutral), sledak (neutral) | — |
-| `sh_street_night_angle_doorway` | angle | doorway | oper (neutral), sledak (neutral) | — |
+| `sh_street_night_angle_foreground` | angle | foreground | oper (neutral), sledak (neutral) | — |
 
 ## murashov_flat — `bg_murashov_flat`, night: сцены s37; реплик 8; кадров 14
 
@@ -404,5 +404,5 @@ CONTINUITY и референсами фона и спрайтов). Каждый
 | `sh_murashov_flat_insert_2` | insert | eye | — | — |
 | `sh_murashov_flat_angle_low` | angle | low | expert (neutral), sledak (neutral) | — |
 | `sh_murashov_flat_angle_high` | angle | high | expert (neutral), sledak (neutral) | — |
-| `sh_murashov_flat_angle_doorway` | angle | doorway | expert (neutral), sledak (neutral) | — |
+| `sh_murashov_flat_angle_foreground` | angle | foreground | expert (neutral), sledak (neutral) | — |
 

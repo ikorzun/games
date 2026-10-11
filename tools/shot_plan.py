@@ -218,11 +218,31 @@ INSERTS = {
     "bg_office_now": ["an old case folder on the desk next to a beige computer keyboard"],
 }
 
-ANGLES = [
-    ("low", "low angle from the height of the desk, the ceiling and the top of the safe in frame"),
-    ("high", "high angle from the top of the cabinet, looking down at the people in the room"),
-    ("doorway", "from the corridor through the half-open door, the door frame as a frame within the frame"),
+# Неожиданные ракурсы (08 §2). Описание должно быть физически конкретным: где стоит камера, куда наклонена и
+# что закрывает передний план. С общими словами («низкий ракурс», «из дверного проёма») модель повторяет
+# общий план референса (office_day: angle_low и angle_doorway отбракованы как копии wide). Для фона без своей
+# записи берутся ANGLES_DEFAULT; для каждого нового сета ракурсы описываются по картинке фона, как LAYOUT.
+ANGLES_DEFAULT = [
+    ("low", "the camera is near the floor at knee height, tilted up: the people are seen from below, the ceiling or "
+            "the sky takes the upper third of the frame, the floor is not visible"),
+    ("high", "the camera is above head height in a corner of the space, tilted down at the people and the floor "
+             "between them"),
+    ("foreground", "the camera looks past an object in the near foreground, out of focus, that covers the lower third "
+                   "of the frame; the people beyond it are in focus"),
 ]
+ANGLES = {
+    "bg_office_prosecutor": [
+        ("low", "the camera lies on the desktop at the height of the papers, beside the typewriter, tilted up: the "
+                "underside of the green lamp shade and the typewriter carriage loom in the near foreground, the person "
+                "at the desk is seen from below, chin first, and the cracked plaster ceiling with the top of the grey "
+                "safe fill the upper half of the frame; the floor is not visible"),
+        ("high", "high angle from the top of the cabinet, looking down at the people in the room"),
+        ("foreground", "the camera is at the door end of the desk, at the height of the desktop, looking along the desk "
+                       "toward the window: the stacks of tied case folders and the green lamp shade stand in the near "
+                       "foreground, out of focus, covering the lower left of the frame; beyond them, in focus, the "
+                       "people at the desk and by the window; the door is behind the camera"),
+    ],
+}
 
 SHOT_LIMITS = {"wide": 4, "medium": 4, "ots": 8, "close": 16, "reaction": 5, "insert": 2, "angle": 3}
 
@@ -319,17 +339,18 @@ def camera_block(kind: str, angle: str, cast: list[dict], focus: str | None, fro
         comp = "the detail fills the frame, no faces"
         feel = "a pause on the evidence"
     else:  # angle
-        size = "cutaway from an unexpected angle, the whole room"
+        size = ("cutaway from an unexpected vantage point: the camera stands where it never stood in the wide view, "
+                "so the framing is clearly different from Reference 1; most of the room stays visible")
         lens = "28mm, deep focus, no fisheye distortion"
         comp = "people inside the space, unusual vantage point"
         feel = "pressure, surveillance: the system is bigger than the people"
     a = {
         "eye": "eye level",
-        "low": "low angle from desk height, part of the ceiling in frame",
-        "high": "high angle from the top of the cabinet",
+        "low": "low angle: the camera is near the floor or on a table top, tilted up; part of the ceiling in frame",
+        "high": "high angle: the camera is above head height, tilted down",
         "doorway": "from the corridor through the half-open door",
         "reflection": "reflection in the window glass",
-        "foreground": "with objects on the near foreground partly covering the frame",
+        "foreground": "eye level or lower, looking past objects in the near foreground that partly cover the frame",
     }[angle]
     return (
         "CAMERA (this shot)\n"
@@ -492,9 +513,9 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
     for i, detail in enumerate(INSERTS.get(bg, [])[: SHOT_LIMITS["insert"]], start=1):
         add("insert", f"insert_{i}", [], detail=detail)
     main_comp = comps[0] if comps else ()
-    for ang, desc in ANGLES[: SHOT_LIMITS["angle"]]:
+    for ang, desc in ANGLES.get(bg, ANGLES_DEFAULT)[: SHOT_LIMITS["angle"]]:
         cast = [{"who": w, "expression": "neutral"} for w in main_comp]
-        add("angle", f"angle_{ang}", cast, angle=ang, action=desc + ".")
+        add("angle", f"angle_{ang}", cast, angle=ang, action=desc[0].upper() + desc[1:] + ".")
     return shots
 
 
