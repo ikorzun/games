@@ -1956,30 +1956,30 @@
  {
   "id": "sh_street_night_close_oper_neutral",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_175741_4073b2f7-cfaf-43fd-91c5-967118b3f11e.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_181154_822ccf9c-68ac-4500-83ca-408ea1bdfec1.png",
   "target": "assets/ep01/shots/street_night/close_oper_neutral.webp",
-  "job": "4073b2f7-cfaf-43fd-91c5-967118b3f11e"
+  "job": "822ccf9c-68ac-4500-83ca-408ea1bdfec1"
  },
  {
   "id": "sh_street_night_close_sledak_tense",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_175742_3d29e3d5-2d0b-4d85-843f-732669724d74.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_181154_9baf103c-2fed-44ac-9dce-3a17d09dbffa.png",
   "target": "assets/ep01/shots/street_night/close_sledak_tense.webp",
-  "job": "3d29e3d5-2d0b-4d85-843f-732669724d74"
+  "job": "9baf103c-2fed-44ac-9dce-3a17d09dbffa"
  },
  {
   "id": "sh_street_night_ots_oper_sledak",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_180429_bc698493-cf32-4420-9a3a-028d22cabf7a.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_181155_52060e25-02b3-4aea-984c-b6d1436fee1b.png",
   "target": "assets/ep01/shots/street_night/ots_oper_sledak.webp",
-  "job": "bc698493-cf32-4420-9a3a-028d22cabf7a"
+  "job": "52060e25-02b3-4aea-984c-b6d1436fee1b"
  },
  {
   "id": "sh_street_night_ots_sledak_oper",
   "kind": "shot",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_180429_3f60e006-20bd-4147-9459-32b58f73f09c.png",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_181155_defe0177-88e5-4443-a5bb-220292b754ba.png",
   "target": "assets/ep01/shots/street_night/ots_sledak_oper.webp",
-  "job": "3f60e006-20bd-4147-9459-32b58f73f09c"
+  "job": "defe0177-88e5-4443-a5bb-220292b754ba"
  },
  {
   "id": "sh_street_night_ots_accomplice_oper",
