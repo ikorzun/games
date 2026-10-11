@@ -1777,5 +1777,19 @@
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_173500_84dba0a1-733c-4ab1-b1ee-4e74c1b91fe2.png",
   "target": "assets/ep01/shots/stairwell/wide_3.webp",
   "job": "84dba0a1-733c-4ab1-b1ee-4e74c1b91fe2"
+ },
+ {
+  "id": "sh_stairwell_close_neighbor_worried",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_173657_f448a574-0959-44ae-a859-e6f32acd5074.png",
+  "target": "assets/ep01/shots/stairwell/close_neighbor_worried.webp",
+  "job": "f448a574-0959-44ae-a859-e6f32acd5074"
+ },
+ {
+  "id": "sh_stairwell_close_buyer_unknown_neutral",
+  "kind": "shot",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_173657_e1163090-bff2-48d5-8587-999a1921f1ed.png",
+  "target": "assets/ep01/shots/stairwell/close_buyer_unknown_neutral.webp",
+  "job": "e1163090-bff2-48d5-8587-999a1921f1ed"
  }
 ]

@@ -9,3 +9,4 @@
 |---|---|---|
 | `apartment_zoya_medium.jpg` | `shots/apartment_zoya/wide_1.webp`, кроп по пояс (Мурашов спиной, Зоя у серванта) | средние планы и ракурсы сета apartment_zoya |
 | `notary_medium.jpg` | `shots/notary/wide_1.webp`, кроп по пояс (нотариус за столом, следователь с папкой) | средние планы и ракурсы сета notary |
+| `stairwell_medium.jpg` | `shots/stairwell/wide_1.webp`, кроп по колени (следователь у ящиков, лифт, соседка у двери) | средние планы и ракурсы сета stairwell |
