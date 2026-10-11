@@ -740,7 +740,8 @@
           "transition": "dissolve"
         }
       ],
-      "notes": "Лапин здесь без имени для зрителя: вежлив, растерян, повторяет то, что ему сказали. Рассказчика в сцене нет."
+      "notes": "Лапин здесь без имени для зрителя: вежлив, растерян, повторяет то, что ему сказали. Рассказчика в сцене нет.",
+      "coverage": "stairwell"
     },
     "s03": {
       "id": "s03",
@@ -777,7 +778,8 @@
           "transition": "vhs_glitch"
         }
       ],
-      "notes": "CG cg_door_sealed: не опечатанная дверь, а новая дверь с новым замком; на косяке и в руке нового хозяина — ордер и связка ключей."
+      "notes": "CG cg_door_sealed: не опечатанная дверь, а новая дверь с новым замком; на косяке и в руке нового хозяина — ордер и связка ключей.",
+      "coverage": "stairwell"
     },
     "s04": {
       "id": "s04",
@@ -2010,7 +2012,8 @@
           "remember": false
         }
       ],
-      "notes": "Реакция Сайко (морщится) на вариант «warn» в этой сцене невозможна — после choice шагов нет; её показывают следующие сцены по условию !galina_trust. Обращение Сайко («Андрей»/«Громов») зависит от trust_oper."
+      "notes": "Реакция Сайко (морщится) на вариант «warn» в этой сцене невозможна — после choice шагов нет; её показывают следующие сцены по условию !galina_trust. Обращение Сайко («Андрей»/«Громов») зависит от trust_oper.",
+      "coverage": "stairwell"
     },
     "s16": {
       "id": "s16",
@@ -14430,6 +14433,453 @@
           }
         ],
         "file": "assets/ep01/shots/notary/angle_foreground.webp"
+      },
+      {
+        "id": "sh_stairwell_wide_1",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/wide_1.webp"
+      },
+      {
+        "id": "sh_stairwell_wide_2",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "buyer_unknown",
+            "expression": "neutral"
+          },
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/wide_2.webp"
+      },
+      {
+        "id": "sh_stairwell_wide_3",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/wide_3.webp"
+      },
+      {
+        "id": "sh_stairwell_medium_1",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/medium_1.webp"
+      },
+      {
+        "id": "sh_stairwell_medium_2",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "buyer_unknown",
+            "expression": "neutral"
+          },
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/medium_2.webp"
+      },
+      {
+        "id": "sh_stairwell_medium_3",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/medium_3.webp"
+      },
+      {
+        "id": "sh_stairwell_ots_neighbor_buyer_unknown",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "buyer_unknown",
+            "expression": "neutral"
+          },
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/ots_neighbor_buyer_unknown.webp",
+        "from": "neighbor",
+        "focus": "buyer_unknown"
+      },
+      {
+        "id": "sh_stairwell_ots_buyer_unknown_neighbor",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          },
+          {
+            "who": "buyer_unknown",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/ots_buyer_unknown_neighbor.webp",
+        "from": "buyer_unknown",
+        "focus": "neighbor"
+      },
+      {
+        "id": "sh_stairwell_ots_neighbor_sledak",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/ots_neighbor_sledak.webp",
+        "from": "neighbor",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_stairwell_ots_sledak_neighbor",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/ots_sledak_neighbor.webp",
+        "from": "sledak",
+        "focus": "neighbor"
+      },
+      {
+        "id": "sh_stairwell_ots_oper_neighbor",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/ots_oper_neighbor.webp",
+        "from": "oper",
+        "focus": "neighbor"
+      },
+      {
+        "id": "sh_stairwell_ots_neighbor_oper",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/ots_neighbor_oper.webp",
+        "from": "neighbor",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_stairwell_close_neighbor_worried",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "worried"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/close_neighbor_worried.webp",
+        "focus": "neighbor"
+      },
+      {
+        "id": "sh_stairwell_close_buyer_unknown_neutral",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "buyer_unknown",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/close_buyer_unknown_neutral.webp",
+        "focus": "buyer_unknown"
+      },
+      {
+        "id": "sh_stairwell_close_oper_neutral",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/close_oper_neutral.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_stairwell_close_neighbor_neutral",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/close_neighbor_neutral.webp",
+        "focus": "neighbor"
+      },
+      {
+        "id": "sh_stairwell_close_sledak_neutral",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/close_sledak_neutral.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_stairwell_reaction_neighbor",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/reaction_neighbor.webp",
+        "focus": "neighbor"
+      },
+      {
+        "id": "sh_stairwell_reaction_oper",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/reaction_oper.webp",
+        "focus": "oper"
+      },
+      {
+        "id": "sh_stairwell_reaction_sledak",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/reaction_sledak.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_stairwell_reaction_buyer_unknown",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "buyer_unknown",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/reaction_buyer_unknown.webp",
+        "focus": "buyer_unknown"
+      },
+      {
+        "id": "sh_stairwell_insert_1",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/stairwell/insert_1.webp"
+      },
+      {
+        "id": "sh_stairwell_insert_2",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/stairwell/insert_2.webp"
+      },
+      {
+        "id": "sh_stairwell_angle_low",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "angle",
+        "angle": "low",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/angle_low.webp"
+      },
+      {
+        "id": "sh_stairwell_angle_high",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "angle",
+        "angle": "high",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/angle_high.webp"
+      },
+      {
+        "id": "sh_stairwell_angle_foreground",
+        "set": "stairwell",
+        "bg": "bg_stairwell",
+        "kind": "angle",
+        "angle": "foreground",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/stairwell/angle_foreground.webp"
       }
     ]
   }
