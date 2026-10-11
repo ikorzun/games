@@ -90,6 +90,27 @@ LIGHTING = {
 # Свет по фонам: общий словарь LIGHTING написан для кабинета (окно плюс настольная лампа); у других фонов свои
 # источники — иначе модель дорисовывает лампу, которой в комнате нет (apartment_zoya, пилот). Тексты — из столбца
 # LIGHT таблицы фонов `docs/production/prompts/ep01-images.md`, для ночных сетов переписаны под время суток.
+# SUBJECT для крупных планов и реакций там, где люди сидят внутри описанного в фоне предмета: по общему SUBJECT
+# «улица с припаркованной «Волгой»» модель рисовала вторую «Волгу» за окном машины, в которой сидят герои
+# (street_night, волна 68). Ключ — id фона; остальные сеты используют SUBJECT фона.
+CLOSE_SUBJECT = {
+    "bg_street_night": ("SUBJECT: inside the parked dark Volga at night in October rain: the people sit in this car; "
+                        "rain streaks the windscreen and the side windows, and beyond the glass only the sodium street "
+                        "lamp, the wet asphalt and the warm lit office window with its dim doorway blur softly; no other "
+                        "car anywhere in the picture."),
+}
+
+# Пары собеседников, которые сидят внутри описанного в фоне предмета (машина на street_night): их ots снимаются
+# изнутри — по SUBJECT крупных планов, без LAYOUT улицы и без референса комнаты. С фоном «улица из-за дороги»
+# модель ставила обоих на тротуар рядом с пустой «Волгой» (волна 70).
+INSIDE_PAIRS = {
+    "bg_street_night": {frozenset({"oper", "sledak"})},
+}
+# Дополнение к тексту ots снаружи (для сета с машиной): иначе модель сажает в «Волгу» лишние лица.
+OTS_EXTRA = {
+    "bg_street_night": " The parked Volga behind them is empty: nobody sits inside it.",
+}
+
 LIGHTING_BY_BG = {
     "bg_apartment_zoya": {"day": "flat overcast daylight through the tulle curtains; no lamp is on"},
     "bg_notary_office": {"day": "the warm green-shaded desk lamp against grey daylight from the window"},
@@ -265,6 +286,9 @@ REF_SHOTS = {
                   "medium": "media:b86a8159-36a5-48f5-9ffd-34ddf0393b36", "angle": "media:b86a8159-36a5-48f5-9ffd-34ddf0393b36",
                   "insert": "media:b86a8159-36a5-48f5-9ffd-34ddf0393b36",
                   "medium_solo": "media:66b20696-cb0a-4481-b5a0-7d22fd2f52f5"},
+    # Пилот (волна 68): wide ×2 приняты, крупные планы отбракованы (вторая «Волга» за окном — см. CLOSE_SUBJECT);
+    # кроп wide_1 («Волга», подъезд, окно) — для средних и ракурсов.
+    "street_night": {"medium": "media:5ac38ac0-c807-44a4-a268-f35164a2438f", "angle": "media:5ac38ac0-c807-44a4-a268-f35164a2438f"},
 }
 # Для ракурсов (angle) референс — принятый средний план, а не общий: с общим планом модель дважды
 # меняла людей местами (office_day, волна 18), со средним оба ракурса вышли с первого раза.
@@ -547,7 +571,7 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
                 "at least as close as Reference 1.")
     else:
         ref1 = "Reference 1 is the room itself: keep its furniture, window, lamps and props exactly where they are."
-    room_ref = bool(closer) or shot["kind"] not in ("close", "reaction")
+    room_ref = (bool(closer) or shot["kind"] not in ("close", "reaction")) and not shot.get("inside")
     if not room_ref:
         ref1 = None
     refs = [ref1] if ref1 else []
@@ -585,10 +609,10 @@ def build_prompt(base: str, realism: str, shot: dict, bg_subject: str, tod: str,
     else:
         people_txt = "People in frame: " + "; ".join(people) + "." if people else "The room is empty."
         action = shot.get("action", "")
-    layout = LAYOUT.get(bg_id, "") if shot["kind"] in ("wide", "medium", "ots", "angle") else ""
+    layout = LAYOUT.get(bg_id, "") if shot["kind"] in ("wide", "medium", "ots", "angle") and not shot.get("inside") else ""
     scene = (
         "SCENE TO DEPICT:\n"
-        f"Moscow, 1993. {bg_subject} LIGHT NOW: {light_now(bg_id, tod)}. "
+        f"Moscow, 1993. {CLOSE_SUBJECT.get(bg_id, bg_subject) if shot['kind'] in ('close', 'reaction') or shot.get('inside') else bg_subject} LIGHT NOW: {light_now(bg_id, tod)}. "
         f"{layout + ' ' if layout else ''}"
         f"{people_txt} {action}".strip()
     )
@@ -649,7 +673,7 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
     subject = bg_subjects.get(bg, "")
     shots: list[dict] = []
 
-    def ref_media(cast: list[dict], kind: str) -> list[str]:
+    def ref_media(cast: list[dict], kind: str, inside: bool = False) -> list[str]:
         # Средний план с одним человеком: кроп общего плана с другими людьми тянет их в кадр (stairwell medium_3
         # дважды), поэтому для одиночных средних планов — отдельный референс без людей рядом, если он задан.
         if kind == "medium" and len(cast) == 1 and REF_SHOTS.get(set_name, {}).get("medium_solo"):
@@ -668,7 +692,7 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
         # Крупный план и реакция в сете без принятого близкого кадра: без референса комнаты вовсе — с общим
         # планом первым референсом модель повторяет его кадрирование (office_day: 11 из 12); комната в крупном
         # плане и так размыта, её задаёт текст SUBJECT. Принятый крупный план затем становится REF_SHOTS[set].
-        if not ref_shot and kind in ("close", "reaction"):
+        if (not ref_shot and kind in ("close", "reaction")) or inside:
             out = []
         # Порядок спрайтов — как в тексте REFERENCE IMAGES: слева направо по ORDER.
         for c in sorted(cast, key=lambda c: ORDER.get(bg, {}).get(c["who"], 1)):
@@ -680,7 +704,7 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
     def add(kind: str, name: str, cast: list[dict], **extra) -> None:
         shot = {"id": f"sh_{set_name}_{name}", "set": set_name, "bg": bg, "kind": kind, "angle": extra.pop("angle", "eye"), "cast": cast, "file": f"assets/ep01/shots/{set_name}/{name}.webp"}
         shot.update(extra)
-        shot["medias"] = ref_media(cast, kind)
+        shot["medias"] = ref_media(cast, kind, bool(shot.get("inside")))
         shot["_sets"] = {c["who"]: sprite_set_of(c["who"]) for c in cast}
         shot["prompt"] = build_prompt(base, realism, shot, subject, tod, bg, names, [c["who"] for c in cast])
         del shot["_sets"]
@@ -710,11 +734,15 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
                f"the head is bowed and turned away, lost in shadow, speaking to {names(a)}."
                if b in HIDDEN_FACE else
                f"{names(b)} is the person farther from the camera, face to the lens, speaking to {names(a)}.")
-        add("ots", f"ots_{a}_{b}", cast, **{"from": a, "focus": b},
+        inside = frozenset({a, b}) in INSIDE_PAIRS.get(bg, set())
+        inside_txt = (f" Both of them sit inside the car and the camera is inside the car with them, on the back seat "
+                      f"just behind {names(a)}'s shoulder; the street is only a wet blur beyond the windows." if inside
+                      else OTS_EXTRA.get(bg, ""))
+        add("ots", f"ots_{a}_{b}", cast, **{"from": a, "focus": b, "inside": inside},
             action=(f"The camera stands just behind {names(a)}: the back of {names(a)}'s head and shoulder fill the near "
                     f"foreground out of focus, and {names(a)} is not seen from the front. {far} Do not swap the two "
                     f"people. Exactly two people are in the frame and each of them appears once: {names(a)} is only "
-                    f"the shoulder in the foreground, not also somewhere in the room.{side_txt}"))
+                    f"the shoulder in the foreground, not also somewhere in the room.{side_txt}{inside_txt}"))
     for (who, expr), _ in d["closes"].most_common(SHOT_LIMITS["close"]):
         if who in HIDDEN_FACE:
             continue
