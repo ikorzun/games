@@ -66,6 +66,14 @@ async function build(opts: { ui?: FakeUIOptions; episode?: Episode; platform?: F
   return { episode, t, platform, saves, ui, director, session, warnings, ended };
 }
 
+/** remember выбора по id (по умолчанию true). */
+function rememberedChoice(episode: Episode, id: string): boolean {
+  for (const sc of Object.values(episode.scenes)) {
+    for (const st of sc.steps) if (st.do === 'choice' && st.id === id) return st.remember !== false;
+  }
+  return true;
+}
+
 /** Блоки, в которые игрок входит по пути (смена блока между соседними сценами), в порядке входа. */
 function blockEntries(episode: Episode, scenes: readonly string[]): string[] {
   const out: string[] = [];
@@ -98,7 +106,9 @@ run('Session на ep01', () => {
     const minigames = canon.trail.filter((d) => !d.includes('='));
     expect(ui.choices.map((c) => `${c.id}=${c.option}`)).toEqual(choices);
     expect(ui.minigames.map((m) => m.id)).toEqual(minigames.map((d) => d.split(':')[0]));
-    expect(ui.endings[0]?.journal).toBe(choices.length); // все выборы эпизода запоминаются
+    // В журнал попадают только выборы с remember (по умолчанию true); dialogue/cosmetic его не пишут.
+    const remembered = choices.filter((d) => rememberedChoice(episode, d.split('=')[0] ?? '')).length;
+    expect(ui.endings[0]?.journal).toBe(remembered);
 
     const events = platform.tracked.map((x) => x.event);
     expect(events[0]).toBe('level_started');
