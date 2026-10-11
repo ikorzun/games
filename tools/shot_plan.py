@@ -115,6 +115,12 @@ INSIDE_PEOPLE = {
 OTS_EXTRA = {
     "bg_street_night": " The parked Volga behind them is empty: its windows are dark, with no face and no silhouette inside it.",
 }
+# Дополнение к крупным планам и реакциям снаружи (для сета с машиной): по описанию «в освещённом дверном проёме»
+# модель ставила героя на тротуар, а в проём за его спиной — лишнего человека (волна 76). `{who}` — имя героя.
+CLOSE_EXTRA = {
+    "bg_street_night": (" {who} is the only person in the picture: the lit doorway and the pavement behind are empty, "
+                        "nobody stands in the doorway, and the parked Volga's windows are dark."),
+}
 
 LIGHTING_BY_BG = {
     "bg_apartment_zoya": {"day": "flat overcast daylight through the tulle curtains; no lamp is on"},
@@ -756,20 +762,27 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
                     f"foreground out of focus, and {names(a)} is not seen from the front. {far} Do not swap the two "
                     f"people. Exactly two people are in the frame and each of them appears once: {names(a)} is only "
                     f"the shoulder in the foreground, not also somewhere in the room.{side_txt}{inside_txt}"))
+    def outside_extra(who: str) -> str:
+        """Крупный план/реакция человека, который в этом сете снаружи (не в INSIDE_PEOPLE): см. CLOSE_EXTRA."""
+        if who in INSIDE_PEOPLE.get(bg, set()):
+            return ""
+        return CLOSE_EXTRA.get(bg, "").format(who=names(who))
+
     for (who, expr), _ in d["closes"].most_common(SHOT_LIMITS["close"]):
         if who in HIDDEN_FACE:
             continue
         add("close", f"close_{who}_{expr}", [{"who": who, "expression": expr}], focus=who,
             inside=who in INSIDE_PEOPLE.get(bg, set()),
             action=(f"{names(who)} is speaking; {EXPRESSIONS.get(expr, '')}. The camera is right in front of {names(who)} at arm's "
-                    f"length: only the face and shoulders fill the frame, the room is a soft blur behind; no full figure, no furniture in focus."))
+                    f"length: only the face and shoulders fill the frame, the room is a soft blur behind; no full figure, no furniture in focus."
+                    + outside_extra(who)))
     for who, _ in d["present"].most_common(SHOT_LIMITS["reaction"]):
         if who in HIDDEN_FACE:
             continue
         add("reaction", f"reaction_{who}", [{"who": who, "expression": "neutral"}], focus=who,
             inside=who in INSIDE_PEOPLE.get(bg, set()),
             action=(f"{names(who)} is listening to someone off frame, silent. The camera is close: head and shoulders fill the "
-                    f"frame, a soft edge of the speaker's shoulder at the frame's side, the room a blur behind."))
+                    f"frame, a soft edge of the speaker's shoulder at the frame's side, the room a blur behind." + outside_extra(who)))
     for i, detail in enumerate(INSERTS.get(bg, [])[: SHOT_LIMITS["insert"]], start=1):
         # Вставки в сете с SUBJECT салона (машина): деталь внутри машины — без референса улицы, по SUBJECT салона.
         add("insert", f"insert_{i}", [], detail=detail, inside=bg in CLOSE_SUBJECT)
