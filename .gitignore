@@ -23,3 +23,8 @@ game/saves/
 # Local env
 .env
 .env.*
+
+# Рабочие файлы пересъёмки (план и волны пересобираются скриптами)
+assets/ep01/regen/*
+!assets/ep01/regen/README.md
+!assets/ep01/regen/registry.json
