@@ -8,7 +8,7 @@
 | Сет | Кадров | Принято по новым лицам | Применено к эпизоду |
 |---|---|---|---|
 | stairwell | 28 | 28 | да |
-| apartment_zoya | 35 | 34 (всё, кроме angle_foreground); в манифест  пока записаны только wide_1–4 и medium_1–3 | нет — старые файлы сета ещё на месте |
+| apartment_zoya | 35 | 34 (всё, кроме angle_foreground); в манифест (`v: 2`) пока записаны только wide_1–4 и medium_1–3 | нет — старые файлы сета ещё на месте |
 | notary, office_day, office_evening, interrogation, bti, street_day, office_night, street_night, yard, zhek, office_now, murashov_flat | 270 | 0 | нет |
 
 Баланс Higgsfield после 35 принятых кадров: 81,05 кредита. Остаток работы ≈ 298 кадров × 0,25 ≈ 75 кредитов
