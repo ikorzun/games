@@ -543,9 +543,9 @@ REGEN = False  # --regen: кадры по новым лицам — старые
 # "medium"/"angle"/"insert"/"medium_solo" — загруженные кропы этого плана (media:<id>, assets/ep01/refs/*_v2.jpg),
 # "close"/"reaction" — принятый новый крупный план. Общие планы (wide) всегда снимаются по фону без людей.
 REGEN_REFS: dict[str, dict[str, str]] = {
-    "stairwell": {"room": "sh_stairwell_wide_1", "medium": "media:cf6026f7-41b1-48a1-bd0b-5e8d43ebdfaf",
-                  "angle": "media:cf6026f7-41b1-48a1-bd0b-5e8d43ebdfaf", "insert": "media:cf6026f7-41b1-48a1-bd0b-5e8d43ebdfaf",
-                  "medium_solo": "media:c710dca4-599d-4153-914e-7fdf00dfcac3"},
+    "stairwell": {"room": "sh_stairwell_wide_1", "medium": "file:assets/ep01/refs/stairwell_medium_v2.jpg",
+                  "angle": "file:assets/ep01/refs/stairwell_medium_v2.jpg", "insert": "file:assets/ep01/refs/stairwell_medium_v2.jpg",
+                  "medium_solo": "file:assets/ep01/refs/stairwell_medium_solo_v2.jpg"},
     "apartment_zoya": {"room": "sh_apartment_zoya_wide_1", "medium": "file:assets/ep01/refs/apartment_zoya_medium_v2.jpg",
                        "angle": "file:assets/ep01/refs/apartment_zoya_medium_v2.jpg", "insert": "file:assets/ep01/refs/apartment_zoya_medium_v2.jpg",
                        "medium_solo": "media:f2b7b3ac-4120-4d2f-9501-dd407a5aab1b"},
