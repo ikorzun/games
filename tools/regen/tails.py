@@ -1,7 +1,7 @@
 """tails.py <wave> <ids...>: собрать волну и напечатать только различающиеся части (REFERENCE, People, Camera, а Location/Light/Essential — если отличаются от первого кадра)."""
 import json, sys, subprocess
 import os
-SP=os.environ.get('REGEN_DIR','assets/ep01/regen')
+SP=os.environ.get('REGEN_DIR','assets/ep01/_regen')
 name, ids = sys.argv[1], sys.argv[2:]
 subprocess.run(['python3', 'tools/regen/wave_build.py', name, *ids], check=True, capture_output=True)
 w = json.load(open(f'{SP}/{name}.json'))

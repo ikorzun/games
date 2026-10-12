@@ -1,6 +1,6 @@
 """Добавить/обновить в манифесте записи kind=shot по реестру job'ов (scratchpad/registry.json) и плану."""
 import json, os, sys
-SP = os.environ.get('REGEN_DIR', 'assets/ep01/regen')
+SP = os.environ.get('REGEN_DIR', 'assets/ep01/_regen')
 MAN = 'assets/ep01/manifest.json'
 plan = {s['id']: s for s in json.load(open(f'{SP}/plan.json'))}
 reg = json.load(open(f'{SP}/registry.json'))

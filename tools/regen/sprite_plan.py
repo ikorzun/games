@@ -5,7 +5,7 @@ import json, os, sys
 sys.path.insert(0, 'tools')
 import export_prompts as ep  # noqa: E402
 import shot_plan as sp  # noqa: E402
-SP = os.environ.get('REGEN_DIR', 'assets/ep01/regen')
+SP = os.environ.get('REGEN_DIR', 'assets/ep01/_regen')
 SPRITE_FRAME = "Portrait composition 9:16, one full-length figure, one frame, without borders."
 EXPR = {
     "tense": "brows drawn together, the jaw set, the lips pressed",

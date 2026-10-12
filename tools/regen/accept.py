@@ -8,7 +8,7 @@ import json, os, subprocess, sys
 from pathlib import Path
 sys.path.insert(0, 'tools')
 from fetch_assets import to_webp  # noqa: E402
-SP = os.environ.get('REGEN_DIR', 'assets/ep01/regen')
+SP = os.environ.get('REGEN_DIR', 'assets/ep01/_regen')
 MAN = 'assets/ep01/manifest.json'
 args = sys.argv[1:]
 i = args.index('--src'); src = args[i + 1]; del args[i:i + 2]

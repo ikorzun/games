@@ -315,7 +315,7 @@ REF_SHOTS = {
     "interrogation": {"close": "sh_interrogation_close_sledak_firm", "reaction": "sh_interrogation_close_sledak_firm",
                       "medium": "sh_interrogation_medium_1", "angle": "sh_interrogation_medium_1"},
     # Пилот (волна 39): wide ×2 и крупный план приняты, medium_1 по фону вышел общим планом. Для средних и ракурсов
-    # референс — кроп принятого wide_1 по пояс (`assets/ep01/refs/apartment_zoya_medium.jpg`), загруженный в
+    # референс — кроп принятого wide_1 по пояс (`assets/ep01/_refs/apartment_zoya_medium.jpg`), загруженный в
     # Higgsfield по публичному URL: значение `media:<id>` — готовый media id, а не кадр из манифеста.
     "apartment_zoya": {"close": "sh_apartment_zoya_close_zoya_warm", "reaction": "sh_apartment_zoya_close_zoya_warm",
                        "medium": "media:bd6b1bbb-f06d-43df-9aa0-d9a706ededdb",
@@ -325,7 +325,7 @@ REF_SHOTS = {
     "notary": {"close": "sh_notary_close_notary_nervous", "reaction": "sh_notary_close_notary_nervous",
                "medium": "media:8baf6d62-ebed-4954-bc99-7e35b599ec3c", "angle": "media:8baf6d62-ebed-4954-bc99-7e35b599ec3c"},
     # Пилот (волны 60–61): wide ×3 по фону и крупные планы без референса комнаты приняты; кроп wide_1 по колени
-    # (`assets/ep01/refs/stairwell_medium.jpg`) — для средних и ракурсов.
+    # (`assets/ep01/_refs/stairwell_medium.jpg`) — для средних и ракурсов.
     # Вставки — тоже по кропу: с фоном первым референсом обе вышли общими планами площадки (волна 66).
     "stairwell": {"close": "sh_stairwell_close_neighbor_worried", "reaction": "sh_stairwell_close_neighbor_worried",
                   "medium": "media:b86a8159-36a5-48f5-9ffd-34ddf0393b36", "angle": "media:b86a8159-36a5-48f5-9ffd-34ddf0393b36",
@@ -542,42 +542,42 @@ LOOKS: dict[str, str] = {}
 
 REGEN = False  # --regen: кадры по новым лицам — старые кадры (прежние лица и стиль) референсом не идут
 # Референсы пересъёмки по новым лицам (волны 100+): "room" — принятый новый общий план (для ots/insert/angle),
-# "medium"/"angle"/"insert"/"medium_solo" — загруженные кропы этого плана (media:<id>, assets/ep01/refs/*_v2.jpg),
+# "medium"/"angle"/"insert"/"medium_solo" — загруженные кропы этого плана (media:<id>, assets/ep01/_refs/*_v2.jpg),
 # "close"/"reaction" — принятый новый крупный план. Общие планы (wide) всегда снимаются по фону без людей.
 REGEN_REFS: dict[str, dict[str, str]] = {
-    "stairwell": {"room": "sh_stairwell_wide_1", "medium": "file:assets/ep01/refs/stairwell_medium_v2.jpg",
-                  "angle": "file:assets/ep01/refs/stairwell_medium_v2.jpg", "insert": "file:assets/ep01/refs/stairwell_medium_v2.jpg",
-                  "medium_solo": "file:assets/ep01/refs/stairwell_medium_solo_v2.jpg"},
-    "apartment_zoya": {"room": "sh_apartment_zoya_wide_1", "medium": "file:assets/ep01/refs/apartment_zoya_medium_v2.jpg",
-                       "angle": "file:assets/ep01/refs/apartment_zoya_medium_v2.jpg", "insert": "file:assets/ep01/refs/apartment_zoya_medium_v2.jpg",
+    "stairwell": {"room": "sh_stairwell_wide_1", "medium": "file:assets/ep01/_refs/stairwell_medium_v2.jpg",
+                  "angle": "file:assets/ep01/_refs/stairwell_medium_v2.jpg", "insert": "file:assets/ep01/_refs/stairwell_medium_v2.jpg",
+                  "medium_solo": "file:assets/ep01/_refs/stairwell_medium_solo_v2.jpg"},
+    "apartment_zoya": {"room": "sh_apartment_zoya_wide_1", "medium": "file:assets/ep01/_refs/apartment_zoya_medium_v2.jpg",
+                       "angle": "file:assets/ep01/_refs/apartment_zoya_medium_v2.jpg", "insert": "file:assets/ep01/_refs/apartment_zoya_medium_v2.jpg",
                        "medium_solo": "media:f2b7b3ac-4120-4d2f-9501-dd407a5aab1b"},
-    "notary": {"room": "sh_notary_wide_1", "medium": "file:assets/ep01/refs/notary_medium_v2.jpg",
-               "angle": "file:assets/ep01/refs/notary_medium_v2.jpg", "insert": "file:assets/ep01/refs/notary_medium_v2.jpg"},
-    "office_day": {"room": "sh_office_day_wide_1", "medium": "file:assets/ep01/refs/office_day_medium_v2.jpg",
-                   "angle": "file:assets/ep01/refs/office_day_medium_v2.jpg", "insert": "file:assets/ep01/refs/office_day_medium_v2.jpg"},
-    "office_evening": {"room": "sh_office_evening_wide_1", "medium": "file:assets/ep01/refs/office_evening_medium_v2.jpg",
-                       "angle": "file:assets/ep01/refs/office_evening_medium_v2.jpg",
-                       "insert": "file:assets/ep01/refs/office_evening_medium_v2.jpg",
-                       "medium_solo": "file:assets/ep01/refs/office_evening_medium_solo_v2.jpg"},
-    "interrogation": {"room": "sh_interrogation_wide_1", "medium": "file:assets/ep01/refs/interrogation_medium_v2.jpg",
-                      "angle": "file:assets/ep01/refs/interrogation_medium_v2.jpg",
-                      "insert": "file:assets/ep01/refs/interrogation_medium_v2.jpg"},
-    "bti": {"room": "sh_bti_wide_1", "medium": "file:assets/ep01/refs/bti_medium_v2.jpg",
-           "angle": "file:assets/ep01/refs/bti_medium_v2.jpg", "insert": "file:assets/ep01/refs/bti_medium_v2.jpg"},
-    "street_day": {"room": "sh_street_day_wide_1", "medium": "file:assets/ep01/refs/street_day_medium_v2.jpg",
-                  "angle": "file:assets/ep01/refs/street_day_medium_v2.jpg", "insert": "file:assets/ep01/refs/street_day_medium_v2.jpg"},
-    "office_night": {"room": "sh_office_night_wide_1", "medium": "file:assets/ep01/refs/office_night_medium_v2.jpg",
-                    "angle": "file:assets/ep01/refs/office_night_medium_v2.jpg", "insert": "file:assets/ep01/refs/office_night_medium_v2.jpg"},
-    "street_night": {"room": "sh_street_night_wide_1", "medium": "file:assets/ep01/refs/street_night_medium_v2.jpg",
-                    "angle": "file:assets/ep01/refs/street_night_medium_v2.jpg", "insert": "file:assets/ep01/refs/street_night_medium_v2.jpg"},
-    "yard": {"room": "sh_yard_wide_1", "medium": "file:assets/ep01/refs/yard_medium_v2.jpg",
-            "angle": "file:assets/ep01/refs/yard_medium_v2.jpg", "insert": "file:assets/ep01/refs/yard_medium_v2.jpg"},
-    "zhek": {"room": "sh_zhek_wide_1", "medium": "file:assets/ep01/refs/zhek_medium_v2.jpg",
-            "angle": "file:assets/ep01/refs/zhek_medium_v2.jpg", "insert": "file:assets/ep01/refs/zhek_medium_v2.jpg", "medium_solo": "file:assets/ep01/refs/zhek_medium_solo_v2.jpg"},
-    "office_now": {"room": "sh_office_now_wide_1", "medium": "file:assets/ep01/refs/office_now_medium_v2.jpg",
-                  "angle": "file:assets/ep01/refs/office_now_medium_v2.jpg", "insert": "file:assets/ep01/refs/office_now_medium_v2.jpg"},
-    "murashov_flat": {"room": "sh_murashov_flat_wide_1", "medium": "file:assets/ep01/refs/murashov_flat_medium_v2.jpg",
-                     "angle": "file:assets/ep01/refs/murashov_flat_medium_v2.jpg", "insert": "file:assets/ep01/refs/murashov_flat_medium_v2.jpg"},
+    "notary": {"room": "sh_notary_wide_1", "medium": "file:assets/ep01/_refs/notary_medium_v2.jpg",
+               "angle": "file:assets/ep01/_refs/notary_medium_v2.jpg", "insert": "file:assets/ep01/_refs/notary_medium_v2.jpg"},
+    "office_day": {"room": "sh_office_day_wide_1", "medium": "file:assets/ep01/_refs/office_day_medium_v2.jpg",
+                   "angle": "file:assets/ep01/_refs/office_day_medium_v2.jpg", "insert": "file:assets/ep01/_refs/office_day_medium_v2.jpg"},
+    "office_evening": {"room": "sh_office_evening_wide_1", "medium": "file:assets/ep01/_refs/office_evening_medium_v2.jpg",
+                       "angle": "file:assets/ep01/_refs/office_evening_medium_v2.jpg",
+                       "insert": "file:assets/ep01/_refs/office_evening_medium_v2.jpg",
+                       "medium_solo": "file:assets/ep01/_refs/office_evening_medium_solo_v2.jpg"},
+    "interrogation": {"room": "sh_interrogation_wide_1", "medium": "file:assets/ep01/_refs/interrogation_medium_v2.jpg",
+                      "angle": "file:assets/ep01/_refs/interrogation_medium_v2.jpg",
+                      "insert": "file:assets/ep01/_refs/interrogation_medium_v2.jpg"},
+    "bti": {"room": "sh_bti_wide_1", "medium": "file:assets/ep01/_refs/bti_medium_v2.jpg",
+           "angle": "file:assets/ep01/_refs/bti_medium_v2.jpg", "insert": "file:assets/ep01/_refs/bti_medium_v2.jpg"},
+    "street_day": {"room": "sh_street_day_wide_1", "medium": "file:assets/ep01/_refs/street_day_medium_v2.jpg",
+                  "angle": "file:assets/ep01/_refs/street_day_medium_v2.jpg", "insert": "file:assets/ep01/_refs/street_day_medium_v2.jpg"},
+    "office_night": {"room": "sh_office_night_wide_1", "medium": "file:assets/ep01/_refs/office_night_medium_v2.jpg",
+                    "angle": "file:assets/ep01/_refs/office_night_medium_v2.jpg", "insert": "file:assets/ep01/_refs/office_night_medium_v2.jpg"},
+    "street_night": {"room": "sh_street_night_wide_1", "medium": "file:assets/ep01/_refs/street_night_medium_v2.jpg",
+                    "angle": "file:assets/ep01/_refs/street_night_medium_v2.jpg", "insert": "file:assets/ep01/_refs/street_night_medium_v2.jpg"},
+    "yard": {"room": "sh_yard_wide_1", "medium": "file:assets/ep01/_refs/yard_medium_v2.jpg",
+            "angle": "file:assets/ep01/_refs/yard_medium_v2.jpg", "insert": "file:assets/ep01/_refs/yard_medium_v2.jpg"},
+    "zhek": {"room": "sh_zhek_wide_1", "medium": "file:assets/ep01/_refs/zhek_medium_v2.jpg",
+            "angle": "file:assets/ep01/_refs/zhek_medium_v2.jpg", "insert": "file:assets/ep01/_refs/zhek_medium_v2.jpg", "medium_solo": "file:assets/ep01/_refs/zhek_medium_solo_v2.jpg"},
+    "office_now": {"room": "sh_office_now_wide_1", "medium": "file:assets/ep01/_refs/office_now_medium_v2.jpg",
+                  "angle": "file:assets/ep01/_refs/office_now_medium_v2.jpg", "insert": "file:assets/ep01/_refs/office_now_medium_v2.jpg"},
+    "murashov_flat": {"room": "sh_murashov_flat_wide_1", "medium": "file:assets/ep01/_refs/murashov_flat_medium_v2.jpg",
+                     "angle": "file:assets/ep01/_refs/murashov_flat_medium_v2.jpg", "insert": "file:assets/ep01/_refs/murashov_flat_medium_v2.jpg"},
 }
 NEW_IDS: set[str] = set()  # записи манифеста с "v": 2 — кадры, принятые уже по новым лицам
 
@@ -915,7 +915,7 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
                 own = sorted(i for i in NEW_IDS if i.startswith(pre) and "_" not in i[len(pre):])
                 if own:
                     ref_shot = own[0]
-        if ref_shot and ref_shot.startswith(("media:", "file:")):  # кроп (assets/ep01/refs): загруженный в Higgsfield или локальный файл для gpt-image
+        if ref_shot and ref_shot.startswith(("media:", "file:")):  # кроп (assets/ep01/_refs): загруженный в Higgsfield или локальный файл для gpt-image
             out = [ref_shot.removeprefix("media:")]
         else:
             out = [jobs.get(ref_shot) if ref_shot else None]

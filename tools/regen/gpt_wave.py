@@ -2,13 +2,13 @@
 плана ($PLAN, по умолчанию plan.json) скиллом gpt-image (OpenAI GPT Image 2.5) — по 4 параллельно, в $SP/out/<id>.png (+ <id>.json с usage).
 
 Референсы плана (`medias`) — в порядке плана, «Reference 1/2/3» в промпте позиционные:
-  file:<путь>   — локальный файл (кроп из assets/ep01/refs или кадр, снятый gpt-image);
+  file:<путь>   — локальный файл (кроп из assets/ep01/_refs или кадр, снятый gpt-image);
   <job id>      — запись манифеста с этим job: кадр Higgsfield качается по url в $SP/cache (локальный файл
                   сета до закрытия может быть ещё старой редакции), лицо/фон/спрайт — локальный target.
 """
 import json, os, subprocess, sys, urllib.request
 from concurrent.futures import ThreadPoolExecutor
-SP = os.environ.get('REGEN_DIR', 'assets/ep01/regen')
+SP = os.environ.get('REGEN_DIR', 'assets/ep01/_regen')
 GPT = os.path.expanduser('~/.claude/skills/gpt-image/scripts/gpt_image.py')
 os.environ.setdefault('SSL_CERT_FILE', '/etc/ssl/cert.pem')  # у Python с python.org нет своих корневых сертификатов
 args = sys.argv[1:]

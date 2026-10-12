@@ -6,7 +6,7 @@ import json, os, sys
 sys.path.insert(0, 'tools')
 import export_prompts as ep  # noqa: E402
 import shot_plan as sp  # noqa: E402
-SP = os.environ.get('REGEN_DIR', 'assets/ep01/regen')
+SP = os.environ.get('REGEN_DIR', 'assets/ep01/_regen')
 md = open('docs/production/prompts/ep01-images.md', encoding='utf-8').read()
 cells = {cid: c[0] for cid, c in ep.parse_tables(md)['CG']}
 # cg_zoya_last в таблице не было (снят 2026-10-10 без записи промпта): s10 — «в последний раз видели во дворе,

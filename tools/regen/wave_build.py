@@ -1,7 +1,7 @@
 """wave_build.py <name> <shot id>... [--q low|medium|high] [--res 1k|2k]: собрать $SP/<name>.json ({ids, requests}) из плана ($PLAN, по умолчанию plan.json;
 спрайты — sprite_plan.json). По решению владельца 2026-10-12 по умолчанию high/2k."""
 import json, os, sys
-SP = os.environ.get('REGEN_DIR', 'assets/ep01/regen')
+SP = os.environ.get('REGEN_DIR', 'assets/ep01/_regen')
 args = sys.argv[1:]
 q = 'high'; res = '2k'
 if '--q' in args: i = args.index('--q'); q = args[i+1]; del args[i:i+2]

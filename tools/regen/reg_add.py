@@ -1,6 +1,6 @@
 """reg_add.py <wave.json> <jobs_wait result json string>: записать job/url в registry.json по индексам волны."""
 import json, os, sys
-SP = os.environ.get('REGEN_DIR', 'assets/ep01/regen')
+SP = os.environ.get('REGEN_DIR', 'assets/ep01/_regen')
 wave = json.load(open(sys.argv[1]))
 res = json.loads(sys.argv[2])
 reg = json.load(open(f'{SP}/registry.json'))

@@ -25,7 +25,7 @@
 
 ## Инструменты
 
-- `tools/shot_plan.py … --regen --plan assets/ep01/regen/plan.json` — план кадров (детерминирован, в git не хранится).
+- `tools/shot_plan.py … --regen --plan assets/ep01/_regen/plan.json` — план кадров (детерминирован, в git не хранится).
 - `tools/regen/sprite_plan.py` — план спрайтов `sprite_plan.json`: база по файлу лица, выражение — правка принятой
   базы (в план попадает, когда база принята на high).
 - Higgsfield: `PLAN=… tools/regen/wave_build.py wNNN <id>…` (по умолчанию high/2k; формат и прозрачный фон — из плана)
@@ -36,8 +36,8 @@
   792×1400), registry.json (`"q"` — качество), манифест с `"v": 2` (hf — с url и job; api — без url, `job:
   "file:<target>"`). Файлы коммитятся вместе с манифестом; бот fetch-assets записи без url и существующие файлы
   пропускает. CDN Higgsfield иногда не отвечает за 120 с — повторить.
-- Кропы-референсы для средних планов — локальные `refs/<set>_medium_v2.jpg` из принятого `wide_1`, в `REGEN_REFS` как
-  `file:…`. Старые `refs/<set>_medium.jpg` — из кадров со старыми лицами, не брать.
+- Кропы-референсы для средних планов — локальные `_refs/<set>_medium_v2.jpg` из принятого `wide_1`, в `REGEN_REFS` как
+  `file:…`. Старые `_refs/<set>_medium.jpg` — из кадров со старыми лицами, не брать.
 - У Python с python.org нет корневых сертификатов: скрипты ставят `SSL_CERT_FILE=/etc/ssl/cert.pem`.
 
 ## Порядок работы
@@ -45,12 +45,12 @@
 1. ~~Спрайты~~ — готовы (34 из 34).
 2. Кадры покрытия по сетам в порядке истории: stairwell → apartment_zoya → notary → office_day → office_evening →
    interrogation → bti → street_day → office_night → street_night → yard → zhek → office_now → murashov_flat.
-   В каждом сете: `wide_1` → `accept` → кропы «средний» (доли 0.15, 0.12, 0.85, 0.82) и «соло» (правая часть) в `refs/`
+   В каждом сете: `wide_1` → `accept` → кропы «средний» (доли 0.15, 0.12, 0.85, 0.82) и «соло» (правая часть) в `_refs/`
    → `REGEN_REFS["<set>"]` → пересобрать план → остальные кадры пачками.
 3. Каждый кадр — глазами (960 px и фрагмент 1:1): лицо против портрета, руки и пальцы, предметы без дублей, надписи
    нечитаемы (на high бумаги, вывески и фото в рамках прорисовываются чётче — смотреть строже), эпоха, никто не
    смотрит в объектив на общих.
-4. Сет закрыт → строка в `generation-log.md` → `shot_plan.py … --regen --apply assets/ep01/regen/plan.json --sets <set>`
+4. Сет закрыт → строка в `generation-log.md` → `shot_plan.py … --regen --apply assets/ep01/_regen/plan.json --sets <set>`
    → линтер эпизода и `npm --prefix runtime test` → коммит и пуш.
 5. В конце — CG и документы на high.
 
