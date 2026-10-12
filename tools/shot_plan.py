@@ -370,7 +370,8 @@ INSERTS = {
         "an ashtray, a pack of cigarettes and a glass of water on the table edge",
     ],
     "bg_apartment_zoya": [
-        "the framed photo behind the sideboard glass and a hand in a glove lifting a folded pair of glasses",
+        "the framed black-and-white photo of a young soldier in a peaked cap behind the sideboard glass and the forensic expert's hand in a thin rubber glove, the cuff of her "
+        "white lab coat at the wrist, lifting a folded pair of glasses",  # чья рука — явно: иначе модель дала перчатку рукаву Зои
         "medicine bottles and a cup on the bedside table, a key ring beside them",
     ],
     "bg_notary_office": [
