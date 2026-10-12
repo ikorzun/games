@@ -1150,5 +1150,239 @@
   "model": "gpt-image-2.5-flare",
   "q": "high",
   "v2": true
+ },
+ "sh_interrogation_wide_1": {
+  "file": "assets/ep01/regen/out/sh_interrogation_wide_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_wide_2": {
+  "file": "assets/ep01/regen/out/sh_interrogation_wide_2.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_wide_3": {
+  "file": "assets/ep01/regen/out/sh_interrogation_wide_3.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_wide_4": {
+  "file": "assets/ep01/regen/out/sh_interrogation_wide_4.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_close_sledak_firm": {
+  "file": "assets/ep01/regen/out/sh_interrogation_close_sledak_firm.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_medium_1": {
+  "file": "assets/ep01/regen/out/sh_interrogation_medium_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_medium_2": {
+  "file": "assets/ep01/regen/out/sh_interrogation_medium_2.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_medium_3": {
+  "file": "assets/ep01/regen/out/sh_interrogation_medium_3.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_medium_4": {
+  "file": "assets/ep01/regen/out/sh_interrogation_medium_4.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_ots_sledak_murashov": {
+  "file": "assets/ep01/regen/out/sh_interrogation_ots_sledak_murashov.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_ots_murashov_sledak": {
+  "file": "assets/ep01/regen/out/sh_interrogation_ots_murashov_sledak.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_ots_buyer_oper": {
+  "file": "assets/ep01/regen/out/sh_interrogation_ots_buyer_oper.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_ots_oper_sledak": {
+  "file": "assets/ep01/regen/out/sh_interrogation_ots_oper_sledak.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_ots_sledak_notary": {
+  "file": "assets/ep01/regen/out/sh_interrogation_ots_sledak_notary.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_ots_oper_buyer": {
+  "file": "assets/ep01/regen/out/sh_interrogation_ots_oper_buyer.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_ots_sledak_oper": {
+  "file": "assets/ep01/regen/out/sh_interrogation_ots_sledak_oper.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_ots_murashov_oper": {
+  "file": "assets/ep01/regen/out/sh_interrogation_ots_murashov_oper.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_close_murashov_neutral": {
+  "file": "assets/ep01/regen/out/sh_interrogation_close_murashov_neutral.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_close_buyer_scared": {
+  "file": "assets/ep01/regen/out/sh_interrogation_close_buyer_scared.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_close_notary_nervous": {
+  "file": "assets/ep01/regen/out/sh_interrogation_close_notary_nervous.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_close_oper_angry": {
+  "file": "assets/ep01/regen/out/sh_interrogation_close_oper_angry.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_close_sledak_tense": {
+  "file": "assets/ep01/regen/out/sh_interrogation_close_sledak_tense.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_close_oper_neutral": {
+  "file": "assets/ep01/regen/out/sh_interrogation_close_oper_neutral.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_close_murashov_cold": {
+  "file": "assets/ep01/regen/out/sh_interrogation_close_murashov_cold.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_close_sledak_neutral": {
+  "file": "assets/ep01/regen/out/sh_interrogation_close_sledak_neutral.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_close_notary_neutral": {
+  "file": "assets/ep01/regen/out/sh_interrogation_close_notary_neutral.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_close_murashov_smile": {
+  "file": "assets/ep01/regen/out/sh_interrogation_close_murashov_smile.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_close_murashov_cornered": {
+  "file": "assets/ep01/regen/out/sh_interrogation_close_murashov_cornered.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_close_oper_grin": {
+  "file": "assets/ep01/regen/out/sh_interrogation_close_oper_grin.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_reaction_sledak": {
+  "file": "assets/ep01/regen/out/sh_interrogation_reaction_sledak.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_reaction_murashov": {
+  "file": "assets/ep01/regen/out/sh_interrogation_reaction_murashov.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_reaction_oper": {
+  "file": "assets/ep01/regen/out/sh_interrogation_reaction_oper.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_reaction_buyer": {
+  "file": "assets/ep01/regen/out/sh_interrogation_reaction_buyer.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_reaction_notary": {
+  "file": "assets/ep01/regen/out/sh_interrogation_reaction_notary.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_insert_1": {
+  "file": "assets/ep01/regen/out/sh_interrogation_insert_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_insert_2": {
+  "file": "assets/ep01/regen/out/sh_interrogation_insert_2.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_angle_low": {
+  "file": "assets/ep01/regen/out/sh_interrogation_angle_low.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_angle_high": {
+  "file": "assets/ep01/regen/out/sh_interrogation_angle_high.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_interrogation_angle_foreground": {
+  "file": "assets/ep01/regen/out/sh_interrogation_angle_foreground.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
  }
 }

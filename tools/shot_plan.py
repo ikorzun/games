@@ -559,6 +559,9 @@ REGEN_REFS: dict[str, dict[str, str]] = {
                        "angle": "file:assets/ep01/refs/office_evening_medium_v2.jpg",
                        "insert": "file:assets/ep01/refs/office_evening_medium_v2.jpg",
                        "medium_solo": "file:assets/ep01/refs/office_evening_medium_solo_v2.jpg"},
+    "interrogation": {"room": "sh_interrogation_wide_1", "medium": "file:assets/ep01/refs/interrogation_medium_v2.jpg",
+                      "angle": "file:assets/ep01/refs/interrogation_medium_v2.jpg",
+                      "insert": "file:assets/ep01/refs/interrogation_medium_v2.jpg"},
 }
 NEW_IDS: set[str] = set()  # записи манифеста с "v": 2 — кадры, принятые уже по новым лицам
 
