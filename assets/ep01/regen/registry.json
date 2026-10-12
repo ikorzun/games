@@ -580,5 +580,179 @@
   "model": "gpt-image-2.5-flare",
   "q": "high",
   "v2": true
+ },
+ "sh_notary_wide_1": {
+  "file": "assets/ep01/regen/out/sh_notary_wide_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_wide_2": {
+  "file": "assets/ep01/regen/out/sh_notary_wide_2.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_close_notary_nervous": {
+  "file": "assets/ep01/regen/out/sh_notary_close_notary_nervous.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_medium_1": {
+  "file": "assets/ep01/regen/out/sh_notary_medium_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_medium_2": {
+  "file": "assets/ep01/regen/out/sh_notary_medium_2.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_ots_notary_oper": {
+  "file": "assets/ep01/regen/out/sh_notary_ots_notary_oper.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_ots_oper_notary": {
+  "file": "assets/ep01/regen/out/sh_notary_ots_oper_notary.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_ots_sledak_notary": {
+  "file": "assets/ep01/regen/out/sh_notary_ots_sledak_notary.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_ots_notary_sledak": {
+  "file": "assets/ep01/regen/out/sh_notary_ots_notary_sledak.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_ots_zoya_notary": {
+  "file": "assets/ep01/regen/out/sh_notary_ots_zoya_notary.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_ots_oper_sledak": {
+  "file": "assets/ep01/regen/out/sh_notary_ots_oper_sledak.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_ots_notary_zoya": {
+  "file": "assets/ep01/regen/out/sh_notary_ots_notary_zoya.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_ots_notary_murashov_sil": {
+  "file": "assets/ep01/regen/out/sh_notary_ots_notary_murashov_sil.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_close_oper_grin": {
+  "file": "assets/ep01/regen/out/sh_notary_close_oper_grin.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_close_notary_neutral": {
+  "file": "assets/ep01/regen/out/sh_notary_close_notary_neutral.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_close_oper_neutral": {
+  "file": "assets/ep01/regen/out/sh_notary_close_oper_neutral.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_close_sledak_firm": {
+  "file": "assets/ep01/regen/out/sh_notary_close_sledak_firm.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_close_zoya_worried": {
+  "file": "assets/ep01/regen/out/sh_notary_close_zoya_worried.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_close_sledak_neutral": {
+  "file": "assets/ep01/regen/out/sh_notary_close_sledak_neutral.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_close_zoya_warm": {
+  "file": "assets/ep01/regen/out/sh_notary_close_zoya_warm.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_reaction_notary": {
+  "file": "assets/ep01/regen/out/sh_notary_reaction_notary.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_reaction_oper": {
+  "file": "assets/ep01/regen/out/sh_notary_reaction_oper.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_reaction_sledak": {
+  "file": "assets/ep01/regen/out/sh_notary_reaction_sledak.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_reaction_zoya": {
+  "file": "assets/ep01/regen/out/sh_notary_reaction_zoya.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_insert_1": {
+  "file": "assets/ep01/regen/out/sh_notary_insert_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_insert_2": {
+  "file": "assets/ep01/regen/out/sh_notary_insert_2.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_angle_low": {
+  "file": "assets/ep01/regen/out/sh_notary_angle_low.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_angle_high": {
+  "file": "assets/ep01/regen/out/sh_notary_angle_high.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_notary_angle_foreground": {
+  "file": "assets/ep01/regen/out/sh_notary_angle_foreground.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
  }
 }

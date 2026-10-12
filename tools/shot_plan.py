@@ -451,7 +451,8 @@ ANGLES = {
                  "people and the floor toward the open door"),
         ("foreground", "the camera is in the corridor at the open door, looking past the door's edge and the shoulders of "
                        "the waiting queue in the near foreground, out of focus, into the office: the desk with the lamp "
-                       "and the people beyond, in focus"),
+                       "and the people beyond, in focus; the queue are strangers in plain dark coats and caps, none of "
+                       "them dressed like a character of the story (no grey knitted beret, no dark-cherry coat)"),
     ],
     "bg_stairwell": [
         ("low", "the camera is on the stairs two steps below the landing, at the level of the top step, tilted up through "
@@ -550,6 +551,8 @@ REGEN_REFS: dict[str, dict[str, str]] = {
     "apartment_zoya": {"room": "sh_apartment_zoya_wide_1", "medium": "file:assets/ep01/refs/apartment_zoya_medium_v2.jpg",
                        "angle": "file:assets/ep01/refs/apartment_zoya_medium_v2.jpg", "insert": "file:assets/ep01/refs/apartment_zoya_medium_v2.jpg",
                        "medium_solo": "media:f2b7b3ac-4120-4d2f-9501-dd407a5aab1b"},
+    "notary": {"room": "sh_notary_wide_1", "medium": "file:assets/ep01/refs/notary_medium_v2.jpg",
+               "angle": "file:assets/ep01/refs/notary_medium_v2.jpg", "insert": "file:assets/ep01/refs/notary_medium_v2.jpg"},
 }
 NEW_IDS: set[str] = set()  # записи манифеста с "v": 2 — кадры, принятые уже по новым лицам
 
