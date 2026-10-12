@@ -553,6 +553,8 @@ REGEN_REFS: dict[str, dict[str, str]] = {
                        "medium_solo": "media:f2b7b3ac-4120-4d2f-9501-dd407a5aab1b"},
     "notary": {"room": "sh_notary_wide_1", "medium": "file:assets/ep01/refs/notary_medium_v2.jpg",
                "angle": "file:assets/ep01/refs/notary_medium_v2.jpg", "insert": "file:assets/ep01/refs/notary_medium_v2.jpg"},
+    "office_day": {"room": "sh_office_day_wide_1", "medium": "file:assets/ep01/refs/office_day_medium_v2.jpg",
+                   "angle": "file:assets/ep01/refs/office_day_medium_v2.jpg", "insert": "file:assets/ep01/refs/office_day_medium_v2.jpg"},
 }
 NEW_IDS: set[str] = set()  # записи манифеста с "v": 2 — кадры, принятые уже по новым лицам
 
