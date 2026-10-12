@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Главный экран — макет</title>
+<!-- Макет на согласование (концепт А «Эфир» + кинескоп): стартовый экран = выбор эпизода; язык, архив и настройки —
+     иконками в правом верхнем углу. Только CSS, которое работает во всех движках: border-radius, box-shadow inset,
+     radial/linear/repeating-gradient, SVG-шум фоном. Иконки — монолиния 24×24, как runtime/src/ui/icons.ts. -->
+<style>
+@font-face { font-family: 'JBM'; font-weight: 300; src: url('../../../../runtime/src/ui/fonts/JetBrainsMono-300-cyrillic.woff2') format('woff2'); unicode-range: U+0400-045F, U+2116; }
+@font-face { font-family: 'JBM'; font-weight: 300; src: url('../../../../runtime/src/ui/fonts/JetBrainsMono-300-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+2000-206F; }
+@font-face { font-family: 'JBM'; font-weight: 500; src: url('../../../../runtime/src/ui/fonts/JetBrainsMono-500-cyrillic.woff2') format('woff2'); unicode-range: U+0400-045F, U+2116; }
+@font-face { font-family: 'JBM'; font-weight: 500; src: url('../../../../runtime/src/ui/fonts/JetBrainsMono-500-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+2000-206F; }
+:root { --red: #d8231f; --ink: #efe9df; --dim: #9a958d; --bezel: 3.2vmin; }
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; background: #050505; color: var(--ink); font-family: 'JBM', ui-monospace, monospace; }
+body { display: grid; place-items: center; overflow: hidden; }
+
+/* корпус телевизора: тёмная пластмасса с фаской, кинескоп утоплен */
+.tv { width: 100vw; height: 100vh; padding: var(--bezel); background:
+  radial-gradient(120% 140% at 50% 0%, #26241f 0%, #121110 55%, #070707 100%); }
+.tv-in { width: 100%; height: 100%; padding: 1.1vmin; border-radius: 6.4vmin / 8vmin;
+  background: linear-gradient(#050505, #0b0b0b); box-shadow: inset 0 0.5vmin 1.2vmin rgb(0 0 0 / .9), 0 0.15vmin 0 rgb(255 255 255 / .06); }
+/* кинескоп: «подушка» — сильно скруглённые углы, края уходят в темноту, центр светится люминофором */
+.screen { position: relative; width: 100%; height: 100%; overflow: hidden;
+  border-radius: 5.6vmin / 7.2vmin;
+  background: radial-gradient(ellipse 62% 60% at 50% 46%, #26262b 0%, #141417 48%, #08080a 80%, #020203 100%);
+  box-shadow: inset 0 0 14vmin 5vmin rgb(0 0 0 / .92), inset 0 0 2.4vmin 0.6vmin rgb(0 0 0 / .95); }
+/* шум эфира */
+.screen::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .07; mix-blend-mode: screen; z-index: 2;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+/* поверх всего: блик выпуклого стекла, виньетка к краям трубки, строки развёртки, маска люминофора (RGB-полосы) */
+.screen::after { content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; z-index: 3;
+  background:
+    radial-gradient(ellipse 55% 38% at 26% 14%, rgb(255 255 255 / .085) 0%, rgb(255 255 255 / .02) 45%, transparent 70%),
+    radial-gradient(ellipse 75% 70% at 50% 50%, transparent 52%, rgb(0 0 0 / .45) 82%, rgb(0 0 0 / .85) 100%),
+    repeating-linear-gradient(to bottom, rgb(0 0 0 / .38) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(to right, rgb(255 40 40 / .035) 0 1px, rgb(40 255 80 / .035) 1px 2px, rgb(60 90 255 / .035) 2px 3px); }
+.ui { position: relative; z-index: 1; text-shadow: 0 0 .6vmin rgb(255 240 220 / .35); height: 100%; display: flex; flex-direction: column; align-items: center;
+  padding: 6vh 6vw 7vh; }
+.icons { position: absolute; top: 4.2vh; right: 4.2vw; display: flex; gap: 1.1vw; }
+.ico { width: 3.4vmin; height: 3.4vmin; min-width: 30px; min-height: 30px; padding: .55vmin; border-radius: 50%;
+  color: var(--ink); opacity: .82; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+  background: rgb(255 255 255 / .06); box-shadow: 0 0 0 1px rgb(255 255 255 / .14); }
+.lang { font-size: 1.5vmin; letter-spacing: .1em; align-self: center; color: var(--dim); margin-right: -.5vw; }
+
+.logo { height: 26vh; margin-top: 4vh; filter: drop-shadow(0.1vmin 0 0 rgb(255 0 40 / .4)) drop-shadow(-0.1vmin 0 0 rgb(0 200 255 / .25)) drop-shadow(0 0 2vmin rgb(216 35 31 / .45)); }
+.tag { margin-top: 2.4vh; font-weight: 300; font-size: 1.6vmin; letter-spacing: .32em; color: var(--dim); }
+
+.shelf { margin-top: auto; display: grid; grid-template-columns: repeat(5, 1fr); gap: 1.6vw; width: 100%; max-width: 150vh; }
+.ep { position: relative; display: flex; flex-direction: column; gap: 1vh; }
+.thumb { position: relative; aspect-ratio: 16 / 9; border-radius: .6vmin; overflow: hidden; background: #0e0e10 center / cover;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / .12); }
+.ep.is-open .thumb { box-shadow: 0 0 0 .32vmin var(--red), 0 0 2.4vmin rgb(216 35 31 / .45); }
+.ep.is-locked .thumb { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='90'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='1'/><feColorMatrix values='0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 .6 0'/></filter><rect width='100%' height='100%' fill='%23101012'/><rect width='100%' height='100%' filter='url(%23n)' opacity='.35'/></svg>"); }
+.lock { position: absolute; inset: 0; display: grid; place-items: center; }
+.lock svg { width: 4vmin; height: 4vmin; fill: none; stroke: var(--dim); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.badge { position: absolute; left: .8vmin; top: .8vmin; font-size: 1.2vmin; letter-spacing: .14em; padding: .25vmin .7vmin;
+  background: var(--red); color: #fff; }
+.num { font-size: 1.25vmin; letter-spacing: .2em; color: var(--dim); }
+.name { font-size: 1.85vmin; font-weight: 500; letter-spacing: .04em; }
+.ep.is-locked .name { color: #6d6964; }
+.cta { margin-top: .6vh; align-self: flex-start; font: 500 1.5vmin 'JBM', monospace; letter-spacing: .12em; color: #fff;
+  background: var(--red); border: 0; padding: .9vmin 1.6vmin; }
+.cta.ghost { background: transparent; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .35); margin-left: .6vmin; }
+/* телефон в портрете: эпизоды — горизонтальная лента, логотип меньше, иконки там же */
+@media (orientation: portrait) {
+  :root { --bezel: 2.4vmin; }
+  .ui { padding: 9vh 6vw 6vh; }
+  .logo { height: auto; width: 84vw; max-height: 18vh; object-fit: contain; margin-top: 7vh; }
+  .shelf { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 4vw; padding-bottom: 1vh; }
+  .ep { flex: 0 0 62vw; scroll-snap-align: start; }
+  .num { font-size: 2.6vmin; } .name { font-size: 4vmin; } .cta { font-size: 3.4vmin; padding: 2vmin 3.6vmin; }
+  .ico { width: 8vmin; height: 8vmin; padding: 1.3vmin; } .lang { font-size: 3vmin; }
+  .tag { font-size: 2.6vmin; letter-spacing: .2em; text-align: center; }
+}
+</style>
+</head>
+<body>
+<div class="tv"><div class="tv-in"><div class="screen"><div class="ui">
+
+  <div class="icons" aria-label="Меню">
+    <span class="lang">RU</span>
+    <!-- язык: глобус -->
+    <svg class="ico" viewBox="0 0 24 24" aria-label="Язык"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.4 3.8 5.3 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.3-3.8-8.5s1.2-6.1 3.8-8.5z"/></svg>
+    <!-- архив: папка, как «Журнал» в игре -->
+    <svg class="ico" viewBox="0 0 24 24" aria-label="Архив"><path d="M3.5 7.5h6l2 2h9v9.5h-17z"/></svg>
+    <!-- настройки: как в быстром меню -->
+    <svg class="ico" viewBox="0 0 24 24" aria-label="Настройки"><path d="M4 7.5h9M17.5 7.5H20M4 16.5h2.5M11 16.5h9"/><circle cx="15.2" cy="7.5" r="2.2"/><circle cx="8.8" cy="16.5" r="2.2"/></svg>
+  </div>
+
+  <img class="logo" src="logo_kr_fixed.webp" alt="Криминальная Россия">
+  <p class="tag">СЕЗОН 1 · СОВРЕМЕННЫЕ ХРОНИКИ · <span style="white-space:nowrap">1993–1997</span></p>
+
+  <div class="shelf">
+    <div class="ep is-open">
+      <div class="thumb" style="background-image:url('../../../../assets/ep01/shots/apartment_zoya/wide_1.webp')"><span class="badge">НОВЫЙ</span></div>
+      <span class="num">ЭПИЗОД 1 · 1993</span>
+      <span class="name">Смерть за квартиры</span>
+      <div><button class="cta">СМОТРЕТЬ</button></div>
+    </div>
+    <div class="ep is-locked"><div class="thumb"><span class="lock"><svg viewBox="0 0 24 24"><rect x="5.5" y="10.5" width="13" height="9.5" rx="1"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg></span></div>
+      <span class="num">ЭПИЗОД 2 · 1994</span><span class="name">Скоро</span></div>
+    <div class="ep is-locked"><div class="thumb"><span class="lock"><svg viewBox="0 0 24 24"><rect x="5.5" y="10.5" width="13" height="9.5" rx="1"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg></span></div>
+      <span class="num">ЭПИЗОД 3 · 1995</span><span class="name">Скоро</span></div>
+    <div class="ep is-locked"><div class="thumb"><span class="lock"><svg viewBox="0 0 24 24"><rect x="5.5" y="10.5" width="13" height="9.5" rx="1"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg></span></div>
+      <span class="num">ЭПИЗОД 4 · 1996</span><span class="name">Скоро</span></div>
+    <div class="ep is-locked"><div class="thumb"><span class="lock"><svg viewBox="0 0 24 24"><rect x="5.5" y="10.5" width="13" height="9.5" rx="1"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg></span></div>
+      <span class="num">ЭПИЗОД 5 · 1997</span><span class="name">Скоро</span></div>
+  </div>
+
+</div></div></div></div>
+</body>
+</html>
