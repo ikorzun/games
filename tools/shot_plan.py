@@ -545,8 +545,8 @@ REGEN_REFS: dict[str, dict[str, str]] = {
     "stairwell": {"room": "sh_stairwell_wide_1", "medium": "media:cf6026f7-41b1-48a1-bd0b-5e8d43ebdfaf",
                   "angle": "media:cf6026f7-41b1-48a1-bd0b-5e8d43ebdfaf", "insert": "media:cf6026f7-41b1-48a1-bd0b-5e8d43ebdfaf",
                   "medium_solo": "media:c710dca4-599d-4153-914e-7fdf00dfcac3"},
-    "apartment_zoya": {"room": "sh_apartment_zoya_wide_1", "medium": "media:364e4400-8bfd-4a62-890b-85c09e7ab770",
-                       "angle": "media:364e4400-8bfd-4a62-890b-85c09e7ab770", "insert": "media:364e4400-8bfd-4a62-890b-85c09e7ab770",
+    "apartment_zoya": {"room": "sh_apartment_zoya_wide_1", "medium": "file:assets/ep01/refs/apartment_zoya_medium_v2.jpg",
+                       "angle": "file:assets/ep01/refs/apartment_zoya_medium_v2.jpg", "insert": "file:assets/ep01/refs/apartment_zoya_medium_v2.jpg",
                        "medium_solo": "media:f2b7b3ac-4120-4d2f-9501-dd407a5aab1b"},
 }
 NEW_IDS: set[str] = set()  # записи манифеста с "v": 2 — кадры, принятые уже по новым лицам
@@ -862,8 +862,8 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
                 ref_shot = rr[kind]
             elif ref_shot and (ref_shot.startswith("media:") or ref_shot not in NEW_IDS):
                 ref_shot = None  # кадр прежней редакции: другие лица — комнатой идёт новый общий план или фон
-        if ref_shot and ref_shot.startswith("media:"):  # загруженный кроп (assets/ep01/refs), не кадр из манифеста
-            out = [ref_shot[len("media:"):]]
+        if ref_shot and ref_shot.startswith(("media:", "file:")):  # кроп (assets/ep01/refs): загруженный в Higgsfield или локальный файл для gpt-image
+            out = [ref_shot.removeprefix("media:")]
         else:
             out = [jobs.get(ref_shot) if ref_shot else None]
             if ref_shot and not jobs.get(ref_shot):

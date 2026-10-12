@@ -81,6 +81,9 @@ def main() -> int:
         if only and it["kind"] not in only:
             continue
         target = ROOT / it["target"]
+        if not it.get("url"):  # сгенерирован локально (gpt-image) и закоммичен файлом — качать нечего
+            skipped += 1
+            continue
         if target.exists() and not args.force:
             skipped += 1
             continue

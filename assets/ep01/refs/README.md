@@ -8,6 +8,7 @@
 | Файл | Из кадра | Для чего |
 |---|---|---|
 | `apartment_zoya_medium.jpg` | `shots/apartment_zoya/wide_1.webp`, кроп по пояс (Мурашов спиной, Зоя у серванта) | средние планы и ракурсы сета apartment_zoya |
+| `apartment_zoya_medium_v2.jpg` | кроп нового `wide_1` сета apartment_zoya (пересъёмка по новым лицам, доли 0.15, 0.12, 0.85, 0.82 → 1920×1080) | средние планы, ракурсы и вставки сета apartment_zoya при съёмке через gpt-image (`REGEN_REFS`, `file:`) |
 | `notary_medium.jpg` | `shots/notary/wide_1.webp`, кроп по пояс (нотариус за столом, следователь с папкой) | средние планы и ракурсы сета notary |
 | `stairwell_medium.jpg` | `shots/stairwell/wide_1.webp`, кроп по колени (следователь у ящиков, лифт, соседка у двери) | средние планы и ракурсы сета stairwell |
 | `stairwell_medium_solo.jpg` | `shots/stairwell/wide_3.webp`, тот же кроп (соседка одна у двери) | одиночные средние планы stairwell: с кропом wide_1 модель дважды дорисовала следователя из референса |
