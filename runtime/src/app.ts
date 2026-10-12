@@ -374,7 +374,9 @@ export class App {
       onChange: (patch) => this.updateSettings(patch),
       onLanguage: (lang) => void this.setLanguage(lang),
       onClose: () => this.kit.screens.close(screen),
-      inGame: () => this.inGame,
+      // Сохранение и загрузка — только в партии новеллы: у разговора дела своего сейва нет, а загрузка запустила бы
+      // вторую партию поверх него.
+      inGame: () => this.inGame && this.session.interp.started,
       muted: () => this.d.saves.settings.muted,
       onSave: () => this.openSaveLoad('save'),
       onLoad: () => this.openSaveLoad('load'),
@@ -399,6 +401,7 @@ export class App {
 
   openSaveLoad(mode: 'save' | 'load'): void {
     if (mode === 'save' && (!this.session.interp.started || this.session.interp.isEnded)) return;
+    if (mode === 'load' && this.inGame && !this.session.interp.started) return; // идёт разговор дела
     const saves = this.d.saves;
     const screen: SaveLoadScreen = new SaveLoadScreen(this.d.episode, {
       mode,

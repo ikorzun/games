@@ -17,7 +17,6 @@ from collections import deque
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import vnexpr  # noqa: E402
-import validate_case  # noqa: E402
 
 try:
     from jsonschema import Draft202012Validator
@@ -25,6 +24,8 @@ try:
 except ImportError:  # pragma: no cover
     print("нужен пакет jsonschema: pip install jsonschema", file=sys.stderr)
     sys.exit(2)
+
+import validate_case  # noqa: E402  (сам импортирует jsonschema — после проверки выше)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA_PATH = os.path.join(ROOT, "schemas", "episode.schema.json")

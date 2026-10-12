@@ -700,6 +700,12 @@ async function scenarioCase(browser, baseUrl) {
   await page.click('[data-id="talk_lapin"] .vn-case__task-btn');
   await page.waitForSelector('.vn-textbox:not([hidden]) .vn-textbox__shown', { state: 'visible' });
   check('разговор с Лапиным идёт движком новеллы', (await page.locator('.vn-textbox__name').innerText()).length > 0);
+  await page.click('.vn-qbtn--settings');
+  await page.waitForSelector('.vn-settings');
+  const caseQuick = await page.$$eval('.vn-settings__quick .vn-settings__qbtn', (els) => els.map((e) => e.dataset.action));
+  check('в настройках во время разговора дела нет «Сохранить / Загрузить» (сейвы — у новеллы)', !caseQuick.includes('save') && !caseQuick.includes('load'), caseQuick.join(','));
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.vn-settings', { state: 'detached' });
   check('…и заканчивается папкой', await talkToFolder(page));
   check('после разговора: Лапин в подозреваемых с портретом, копия договора в уликах, ★ 2', (await caseText(page, '.vn-case__name')).includes('Лапин') && (await page.locator('.vn-case__face:not(.is-unknown)').count()) === 1 && (await page.locator('.vn-case__star-n').innerText()) === '2');
 
