@@ -1,0 +1,1394 @@
+{
+ "part": "deduction_b",
+ "block_scenes": {
+  "b08_investigation_2": [
+   "s24",
+   "s24b",
+   "s25",
+   "s26",
+   "s26b",
+   "s27",
+   "s27b",
+   "s28",
+   "s28b",
+   "s29",
+   "s29b",
+   "s29b_q",
+   "s29b_w1",
+   "s29b_r"
+  ],
+  "b12_confrontation": [
+   "s38",
+   "s38b",
+   "s38c",
+   "s39",
+   "s40",
+   "s40b",
+   "s40c",
+   "s41",
+   "s41b",
+   "s41b_q",
+   "s41b_w1",
+   "s41b_r",
+   "s42",
+   "s42b",
+   "s42c"
+  ]
+ },
+ "scenes": {
+  "s29b": {
+   "id": "s29b",
+   "block": "b08_investigation_2",
+   "stage": {
+    "bg": "bg_notary_office",
+    "filter": "desaturated",
+    "time_of_day": "day"
+   },
+   "notes": "Продолжение s29 после выбора c_visit (разрез до l002); ломка Ковригина и терминальный c_notary — прежние, см. notes в s29. Дедукция d_kovrigin2 (deduction_b): разрез после условных реплик о содержимом папки (l015–l017); вопрос — s29b_q, остаток сцены — s29b_r без изменений.",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "expression": "firm",
+     "position": "left",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "expression": "neutral",
+     "position": "center",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "expression": "neutral",
+     "position": "right",
+     "transition": "cut"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s29b.l001",
+     "style": "inner",
+     "when": "last_choice == 'visit_hold'"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s29b.l002",
+     "expression": "nervous",
+     "when": "last_choice == 'visit_greet'"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s29b.l003",
+     "expression": "grin",
+     "when": "last_choice == 'visit_formal'"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.s29.l002",
+     "expression": "firm"
+    },
+    {
+     "do": "document",
+     "doc": "doc_power_of_attorney",
+     "text_key": "ep01.doc.power_of_attorney"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s29.l003",
+     "expression": "neutral"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s29.l004",
+     "expression": "grin"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s29.l005",
+     "expression": "neutral",
+     "when": "wrong_suspect"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s29.l006",
+     "expression": "neutral",
+     "when": "notary_pressed"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s29.l007",
+     "expression": "grin",
+     "when": "notary_pressed"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s29.l008",
+     "expression": "grin"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s29.l009",
+     "expression": "nervous"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.s29.l010",
+     "expression": "firm"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s29.l011",
+     "expression": "nervous"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s29.l012",
+     "expression": "neutral"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.s29.l013",
+     "expression": "firm"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s29.l014",
+     "expression": "nervous"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s29.l015",
+     "style": "inner",
+     "when": "found_chain"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s29.l016",
+     "style": "inner",
+     "when": "docs_flaw"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s29.l017",
+     "style": "inner",
+     "when": "!docs_flaw && !found_chain"
+    },
+    {
+     "do": "jump",
+     "scene": "s29b_q",
+     "transition": "cut"
+    }
+   ],
+   "coverage": "notary"
+  },
+  "s29b_q": {
+   "id": "s29b_q",
+   "block": "b08_investigation_2",
+   "stage": {
+    "bg": "bg_notary_office",
+    "filter": "desaturated",
+    "time_of_day": "day"
+   },
+   "notes": "Сцена вопроса дедуктивной развилки d_kovrigin2 (Ковригин, второй визит). Реплика внутреннего голоса — только при первом входе (после неверной опции вопрос задаётся без неё).",
+   "coverage": "notary",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "expression": "firm",
+     "position": "left",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "expression": "neutral",
+     "position": "center",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "expression": "nervous",
+     "position": "right",
+     "transition": "cut"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s29b_q.l001",
+     "style": "inner",
+     "when": "last_choice != 'registration'"
+    },
+    {
+     "do": "choice",
+     "id": "d_kovrigin2",
+     "kind": "deduction",
+     "prompt_key": "ep01.s29b_q.d_kovrigin2.prompt",
+     "hint_after": 2,
+     "remember": true,
+     "penalty": [
+      {
+       "var": "nerves",
+       "op": "sub",
+       "value": 1
+      }
+     ],
+     "options": [
+      {
+       "id": "bti",
+       "key": "ep01.s29b_q.d_kovrigin2.bti",
+       "item": "arc_bti",
+       "when": "found_chain",
+       "hidden_when_false": true,
+       "verdict": "right",
+       "effects": [
+        {
+         "var": "last_choice",
+         "op": "set",
+         "value": "bti"
+        }
+       ],
+       "goto": "s29b_r"
+      },
+      {
+       "id": "poa",
+       "key": "ep01.s29b_q.d_kovrigin2.poa",
+       "item": "arc_power_of_attorney",
+       "when": "docs_flaw",
+       "hidden_when_false": true,
+       "verdict": "right",
+       "effects": [
+        {
+         "var": "last_choice",
+         "op": "set",
+         "value": "poa"
+        }
+       ],
+       "goto": "s29b_r"
+      },
+      {
+       "id": "press_twenty",
+       "key": "ep01.s29b_q.d_kovrigin2.press_twenty",
+       "verdict": "right",
+       "effects": [
+        {
+         "var": "last_choice",
+         "op": "set",
+         "value": "press_twenty"
+        }
+       ],
+       "goto": "s29b_r"
+      },
+      {
+       "id": "registration",
+       "key": "ep01.s29b_q.d_kovrigin2.registration",
+       "item": "arc_registration",
+       "verdict": "wrong",
+       "effects": [
+        {
+         "var": "last_choice",
+         "op": "set",
+         "value": "registration"
+        }
+       ],
+       "goto": "s29b_w1"
+      }
+     ]
+    }
+   ]
+  },
+  "s29b_w1": {
+   "id": "s29b_w1",
+   "block": "b08_investigation_2",
+   "stage": {
+    "bg": "bg_notary_office",
+    "filter": "desaturated",
+    "time_of_day": "day"
+   },
+   "notes": "Реакция на неверный ход registration; возврат к вопросу s29b_q.",
+   "coverage": "notary",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "expression": "firm",
+     "position": "left",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "expression": "neutral",
+     "position": "center",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "expression": "nervous",
+     "position": "right",
+     "transition": "cut"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s29b_w1.l001",
+     "expression": "neutral"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s29b_w1.l002",
+     "expression": "neutral",
+     "when": "trust_oper >= 2"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s29b_w1.l003",
+     "expression": "neutral",
+     "when": "trust_oper < 2"
+    },
+    {
+     "do": "jump",
+     "scene": "s29b_q",
+     "transition": "cut"
+    }
+   ]
+  },
+  "s29b_r": {
+   "id": "s29b_r",
+   "block": "b08_investigation_2",
+   "stage": {
+    "bg": "bg_notary_office",
+    "filter": "desaturated",
+    "time_of_day": "day"
+   },
+   "notes": "Продолжение s29b после d_kovrigin2: реакции на верные ходы (bti / poa / press_twenty), отголоски notary_slip и money_at_notary (Громов), затем прежний остаток s29b без изменений (ломка Ковригина по docs_flaw || found_chain, терминальный c_notary → s30).",
+   "coverage": "notary",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "expression": "firm",
+     "position": "left",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "expression": "neutral",
+     "position": "center",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "expression": "nervous",
+     "position": "right",
+     "transition": "cut"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s29b_r.l001",
+     "expression": "nervous",
+     "when": "last_choice == 'bti'"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s29b_r.l002",
+     "expression": "grin",
+     "when": "last_choice == 'bti'"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s29b_r.l003",
+     "expression": "nervous",
+     "when": "last_choice == 'poa'"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s29b_r.l004",
+     "style": "inner",
+     "when": "last_choice == 'poa'"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s29b_r.l005",
+     "expression": "nervous",
+     "when": "last_choice == 'press_twenty'"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s29b_r.l006",
+     "style": "inner",
+     "when": "last_choice == 'press_twenty'"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.s29b_r.l007",
+     "expression": "firm",
+     "when": "notary_slip"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.s29b_r.l008",
+     "expression": "firm",
+     "when": "money_at_notary"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s29.l018",
+     "expression": "nervous",
+     "when": "docs_flaw || found_chain"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s29.l019",
+     "expression": "neutral",
+     "when": "!docs_flaw && !found_chain"
+    },
+    {
+     "do": "set",
+     "when": "docs_flaw || found_chain",
+     "effects": [
+      {
+       "var": "kovrigin_broken",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "case_strength",
+       "op": "add",
+       "value": 1
+      }
+     ]
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_phone_ring"
+    },
+    {
+     "do": "fx",
+     "fx": "zoom_in",
+     "ms": 800
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s29.l020",
+     "style": "inner"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s29.l021",
+     "style": "inner",
+     "when": "docs_flaw || found_chain"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s29.l022",
+     "expression": "neutral"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s29.l023",
+     "style": "inner"
+    },
+    {
+     "do": "choice",
+     "id": "c_notary",
+     "kind": "dialogue",
+     "prompt_key": "ep01.s29.c_notary.prompt",
+     "options": [
+      {
+       "id": "show",
+       "key": "ep01.s29.c_notary.show",
+       "goto": "s30"
+      },
+      {
+       "id": "bluff",
+       "key": "ep01.s29.c_notary.bluff",
+       "effects": [
+        {
+         "var": "trust_oper",
+         "op": "sub",
+         "value": 1
+        }
+       ],
+       "goto": "s30"
+      }
+     ],
+     "remember": false
+    }
+   ]
+  },
+  "s41b": {
+   "id": "s41b",
+   "block": "b12_confrontation",
+   "stage": {
+    "bg": "bg_interrogation",
+    "filter": "noir"
+   },
+   "notes": "Продолжение s41 после c_notary_tone: реакции Ковригина, затем прежний остаток сцены (ответы по kovrigin_broken) и существующий выбор c_press_notary без изменений. Дедукция d_confront (deduction_b): разрез перед l021 («Он знал. Печать он ставил сам…»); вопрос — s41b_q, остаток сцены — s41b_r без изменений.",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "expression": "firm",
+     "position": "left",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "murashov",
+     "expression": "cold",
+     "position": "center",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "expression": "nervous",
+     "position": "right",
+     "transition": "cut"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s41b.l001",
+     "expression": "nervous",
+     "when": "last_choice == 'law'"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s41b.l002",
+     "style": "inner",
+     "when": "last_choice == 'calm'"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s41b.l003",
+     "expression": "nervous",
+     "when": "last_choice == 'still'"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s41.l006",
+     "expression": "nervous",
+     "when": "kovrigin_broken"
+    },
+    {
+     "do": "say",
+     "who": "murashov",
+     "key": "ep01.s41.l007",
+     "expression": "neutral",
+     "when": "kovrigin_broken"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.s41.l008",
+     "expression": "tense",
+     "when": "kovrigin_broken && docs_flaw"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s41.l009",
+     "expression": "nervous",
+     "when": "kovrigin_broken && docs_flaw"
+    },
+    {
+     "do": "fx",
+     "fx": "zoom_in",
+     "ms": 900,
+     "when": "found_photo"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.s41.l010",
+     "expression": "tense",
+     "when": "kovrigin_broken && found_photo"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s41.l011",
+     "expression": "nervous",
+     "when": "kovrigin_broken && found_photo"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s41.l012",
+     "expression": "neutral",
+     "when": "kovrigin_broken"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s41.l013",
+     "style": "inner",
+     "when": "kovrigin_broken"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s41.l014",
+     "expression": "nervous",
+     "when": "!kovrigin_broken"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.s41.l015",
+     "expression": "tense",
+     "when": "!kovrigin_broken"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s41.l016",
+     "expression": "nervous",
+     "when": "!kovrigin_broken"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.s41.l017",
+     "expression": "tense",
+     "when": "!kovrigin_broken && found_photo"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s41.l018",
+     "expression": "neutral",
+     "when": "!kovrigin_broken && found_photo"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s41.l019",
+     "style": "inner",
+     "when": "!kovrigin_broken && found_photo"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s41.l020",
+     "style": "inner",
+     "when": "!kovrigin_broken"
+    },
+    {
+     "do": "jump",
+     "scene": "s41b_q",
+     "transition": "cut"
+    }
+   ],
+   "coverage": "interrogation"
+  },
+  "s41b_q": {
+   "id": "s41b_q",
+   "block": "b12_confrontation",
+   "stage": {
+    "bg": "bg_interrogation",
+    "filter": "noir"
+   },
+   "notes": "Сцена вопроса дедуктивной развилки d_confront (очная ставка). Реплика внутреннего голоса — только при первом входе.",
+   "coverage": "interrogation",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "expression": "firm",
+     "position": "left",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "murashov",
+     "expression": "cold",
+     "position": "center",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "expression": "nervous",
+     "position": "right",
+     "transition": "cut"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s41b_q.l001",
+     "style": "inner",
+     "when": "last_choice != 'registration'"
+    },
+    {
+     "do": "choice",
+     "id": "d_confront",
+     "kind": "deduction",
+     "prompt_key": "ep01.s41b_q.d_confront.prompt",
+     "hint_after": 2,
+     "remember": true,
+     "penalty": [
+      {
+       "var": "nerves",
+       "op": "sub",
+       "value": 1
+      }
+     ],
+     "options": [
+      {
+       "id": "keys",
+       "key": "ep01.s41b_q.d_confront.keys",
+       "item": "arc_keys",
+       "when": "keys_found",
+       "hidden_when_false": true,
+       "verdict": "right",
+       "effects": [
+        {
+         "var": "last_choice",
+         "op": "set",
+         "value": "keys"
+        }
+       ],
+       "goto": "s41b_r"
+      },
+      {
+       "id": "poa",
+       "key": "ep01.s41b_q.d_confront.poa",
+       "item": "arc_power_of_attorney",
+       "when": "docs_flaw",
+       "hidden_when_false": true,
+       "verdict": "right",
+       "effects": [
+        {
+         "var": "last_choice",
+         "op": "set",
+         "value": "poa"
+        }
+       ],
+       "goto": "s41b_r"
+      },
+      {
+       "id": "murashov_words",
+       "key": "ep01.s41b_q.d_confront.murashov_words",
+       "verdict": "right",
+       "effects": [
+        {
+         "var": "last_choice",
+         "op": "set",
+         "value": "murashov_words"
+        }
+       ],
+       "goto": "s41b_r"
+      },
+      {
+       "id": "registration",
+       "key": "ep01.s41b_q.d_confront.registration",
+       "item": "arc_registration",
+       "verdict": "wrong",
+       "effects": [
+        {
+         "var": "last_choice",
+         "op": "set",
+         "value": "registration"
+        }
+       ],
+       "goto": "s41b_w1"
+      }
+     ]
+    }
+   ]
+  },
+  "s41b_w1": {
+   "id": "s41b_w1",
+   "block": "b12_confrontation",
+   "stage": {
+    "bg": "bg_interrogation",
+    "filter": "noir"
+   },
+   "notes": "Реакция на неверный ход registration; возврат к вопросу s41b_q.",
+   "coverage": "interrogation",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "expression": "firm",
+     "position": "left",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "murashov",
+     "expression": "cold",
+     "position": "center",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "expression": "nervous",
+     "position": "right",
+     "transition": "cut"
+    },
+    {
+     "do": "say",
+     "who": "murashov",
+     "key": "ep01.s41b_w1.l001",
+     "expression": "neutral"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s41b_w1.l002",
+     "style": "inner"
+    },
+    {
+     "do": "jump",
+     "scene": "s41b_q",
+     "transition": "cut"
+    }
+   ]
+  },
+  "s41b_r": {
+   "id": "s41b_r",
+   "block": "b12_confrontation",
+   "stage": {
+    "bg": "bg_interrogation",
+    "filter": "noir"
+   },
+   "notes": "Продолжение s41b после d_confront: реакции на верные ходы (keys / poa / murashov_words), затем прежний остаток s41b без изменений («Он знал. Печать он ставил сам…» и moral-выбор c_press_notary → s42).",
+   "coverage": "interrogation",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "expression": "firm",
+     "position": "left",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "murashov",
+     "expression": "cold",
+     "position": "center",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "expression": "nervous",
+     "position": "right",
+     "transition": "cut"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.s41b_r.l001",
+     "expression": "firm",
+     "when": "last_choice == 'keys'"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s41b_r.l002",
+     "expression": "nervous",
+     "when": "last_choice == 'keys'"
+    },
+    {
+     "do": "say",
+     "who": "murashov",
+     "key": "ep01.s41b_r.l003",
+     "expression": "cold",
+     "when": "last_choice == 'keys'"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s41b_r.l004",
+     "style": "inner",
+     "when": "last_choice == 'keys'"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s41b_r.l005",
+     "expression": "nervous",
+     "when": "last_choice == 'poa'"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s41b_r.l006",
+     "style": "inner",
+     "when": "last_choice == 'poa'"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s41b_r.l007",
+     "expression": "nervous",
+     "when": "last_choice == 'murashov_words'"
+    },
+    {
+     "do": "say",
+     "who": "murashov",
+     "key": "ep01.s41b_r.l008",
+     "expression": "neutral",
+     "when": "last_choice == 'murashov_words'"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.s41b_r.l009",
+     "expression": "nervous",
+     "when": "last_choice == 'murashov_words'"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s41b_r.l010",
+     "style": "inner",
+     "when": "last_choice == 'murashov_words'"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s41.l021",
+     "style": "inner"
+    },
+    {
+     "do": "choice",
+     "id": "c_press_notary",
+     "kind": "moral",
+     "prompt_key": "ep01.s41.c_press_notary.prompt",
+     "options": [
+      {
+       "id": "press",
+       "key": "ep01.s41.c_press_notary.press",
+       "effects": [
+        {
+         "var": "gromov_rep",
+         "op": "add",
+         "value": 1
+        }
+       ],
+       "goto": "s42"
+      },
+      {
+       "id": "spare",
+       "key": "ep01.s41.c_press_notary.spare",
+       "effects": [
+        {
+         "var": "boss_favor",
+         "op": "add",
+         "value": 1
+        }
+       ],
+       "goto": "s42"
+      }
+     ],
+     "remember": true
+    }
+   ]
+  },
+  "s42c": {
+   "id": "s42c",
+   "block": "b12_confrontation",
+   "stage": {
+    "bg": "bg_office_prosecutor",
+    "filter": "desaturated",
+    "time_of_day": "night"
+   },
+   "notes": "Продолжение s42 после c_journalist: реакции; отголоски style_hard/style_soft (Сайко) — до прежнего блока по trust_oper (l025…l030); затем прежний финал сцены. Отголоски nerves (deduction_b): l008 (nerves <= 2), l009/l010 (nerves >= 5, форма обращения по trust_oper) — после отголосков стиля, до блока по trust_oper.",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "expression": "neutral",
+     "position": "left",
+     "transition": "cut"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "expression": "neutral",
+     "position": "right",
+     "transition": "cut",
+     "when": "!oper_wounded"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s42c.l001",
+     "style": "inner",
+     "when": "last_choice == 'call'"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l002",
+     "expression": "grin",
+     "when": "!oper_wounded && last_choice == 'call'"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l002",
+     "position": "offscreen_right",
+     "when": "oper_wounded && last_choice == 'call'"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s42c.l003",
+     "style": "inner",
+     "when": "last_choice == 'drop'"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l004",
+     "expression": "neutral",
+     "when": "!oper_wounded && style_hard >= 3"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l004",
+     "position": "offscreen_right",
+     "when": "oper_wounded && style_hard >= 3"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l005",
+     "expression": "neutral",
+     "when": "!oper_wounded && style_soft >= 3"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l005",
+     "position": "offscreen_right",
+     "when": "oper_wounded && style_soft >= 3"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l006",
+     "expression": "neutral",
+     "when": "!oper_wounded && trust_oper >= 2 && style_hard <= 1 && style_soft <= 1"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l006",
+     "position": "offscreen_right",
+     "when": "oper_wounded && trust_oper >= 2 && style_hard <= 1 && style_soft <= 1"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l007",
+     "expression": "neutral",
+     "when": "!oper_wounded && trust_oper < 2 && style_hard <= 1 && style_soft <= 1"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l007",
+     "position": "offscreen_right",
+     "when": "oper_wounded && trust_oper < 2 && style_hard <= 1 && style_soft <= 1"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l008",
+     "expression": "grin",
+     "when": "!oper_wounded && nerves <= 2"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l008",
+     "position": "offscreen_right",
+     "when": "oper_wounded && nerves <= 2"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l009",
+     "expression": "neutral",
+     "when": "!oper_wounded && nerves >= 5 && trust_oper >= 2"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l009",
+     "position": "offscreen_right",
+     "when": "oper_wounded && nerves >= 5 && trust_oper >= 2"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l010",
+     "expression": "neutral",
+     "when": "!oper_wounded && nerves >= 5 && trust_oper < 2"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42c.l010",
+     "position": "offscreen_right",
+     "when": "oper_wounded && nerves >= 5 && trust_oper < 2"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42.l025",
+     "expression": "grin",
+     "when": "!oper_wounded && trust_oper >= 2"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42.l025",
+     "position": "offscreen_right",
+     "when": "oper_wounded && trust_oper >= 2"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.s42.l026",
+     "expression": "neutral",
+     "when": "trust_oper >= 2"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42.l027",
+     "expression": "neutral",
+     "when": "!oper_wounded && trust_oper >= 2"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42.l027",
+     "position": "offscreen_right",
+     "when": "oper_wounded && trust_oper >= 2"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42.l028",
+     "expression": "neutral",
+     "when": "!oper_wounded && trust_oper < 2"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42.l028",
+     "position": "offscreen_right",
+     "when": "oper_wounded && trust_oper < 2"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.s42.l029",
+     "expression": "firm",
+     "when": "trust_oper < 2"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42.l030",
+     "expression": "neutral",
+     "when": "!oper_wounded && trust_oper < 2"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.s42.l030",
+     "position": "offscreen_right",
+     "when": "oper_wounded && trust_oper < 2"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s42.l031",
+     "style": "inner"
+    },
+    {
+     "do": "jump",
+     "scene": "s43",
+     "transition": "slow_fade"
+    }
+   ],
+   "coverage": "office_night"
+  },
+  "s46": {
+   "id": "s46",
+   "block": "b14_epilogue",
+   "stage": {
+    "bg": "bg_moscow_1994",
+    "filter": "archive_photo"
+   },
+   "music": "m_epilogue",
+   "steps": [
+    {
+     "do": "narrate",
+     "key": "ep01.s46.l001",
+     "style": "voiceover",
+     "when": "oper_wounded"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s46.l002",
+     "style": "voiceover",
+     "when": "!oper_wounded"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s46.l003",
+     "style": "voiceover",
+     "when": "galina_trust"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s46.l004",
+     "style": "voiceover",
+     "when": "!galina_trust"
+    },
+    {
+     "do": "caption",
+     "key": "ep01.s46.cap",
+     "style": "date_stamp"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s46.l005",
+     "style": "voiceover",
+     "when": "boss_favor == 0 && gromov_rep < 1"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s46.l006",
+     "style": "voiceover",
+     "when": "boss_favor >= 1"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s46.l007",
+     "style": "voiceover",
+     "when": "boss_favor <= -1"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s46.l008",
+     "style": "voiceover",
+     "when": "gromov_rep >= 1"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s46.l009",
+     "style": "voiceover",
+     "when": "style_hard >= 3"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s46.l010",
+     "style": "voiceover",
+     "when": "style_soft >= 3"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s46.l011",
+     "style": "voiceover",
+     "when": "style_hard <= 1 && style_soft <= 1"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s46.l012",
+     "style": "voiceover",
+     "when": "nerves <= 1"
+    },
+    {
+     "do": "narrate",
+     "key": "ep01.s46.l013",
+     "style": "voiceover",
+     "when": "nerves >= 4"
+    },
+    {
+     "do": "jump",
+     "scene": "s47",
+     "transition": "dissolve"
+    }
+   ]
+  }
+ },
+ "locale_ru": {
+  "ep01.s29b_q.l001": "Ковригин ждал, какую бумагу я выложу первой, — и уже подбирал слова.",
+  "ep01.s29b_q.d_kovrigin2.bti": "Предъявить: карточки БТИ — шесть сделок",
+  "ep01.s29b_q.d_kovrigin2.poa": "Предъявить: исправленную дату в доверенности",
+  "ep01.s29b_q.d_kovrigin2.press_twenty": "Надавить: „двадцать человек в день“ — одно доверенное лицо",
+  "ep01.s29b_q.d_kovrigin2.registration": "Предъявить: справку о прописке Мурашова",
+  "ep01.s29b_q.d_kovrigin2.prompt": "Что предъявить Ковригину — или на что надавить?",
+  "ep01.s29b_w1.l001": "Прописка вашего Мурашова? Я не милиция.",
+  "ep01.s29b_w1.l002": "Андрей, это ему ни о чём.",
+  "ep01.s29b_w1.l003": "Громов, это ему ни о чём.",
+  "ep01.s29b_r.l001": "Шесть… Это совпадение. Район маленький.",
+  "ep01.s29b_r.l002": "Маленький. Один нотариус, одно доверенное лицо.",
+  "ep01.s29b_r.l003": "Рука дрогнула, я поправил, пока очередь…",
+  "ep01.s29b_r.l004": "Поправил сам, заверил сам. Оговорку об исправлении не вписал — не успел или не захотел.",
+  "ep01.s29b_r.l005": "Одно, да. Он приводил клиентов. Это не запрещено.",
+  "ep01.s29b_r.l006": "Он признал число, а не вину. Но число признал.",
+  "ep01.s29b_r.l007": "В августе вы сказали: платило доверенное лицо. Запишем ещё раз?",
+  "ep01.s29b_r.l008": "Лапин отдал деньги в вашем коридоре. Вы кивнули.",
+  "ep01.s41b_q.l001": "Ковригин молчал. Мурашов ждал — вежливо, как ждут в приёмной. Пора было класть на стол то, что у меня есть.",
+  "ep01.s41b_q.d_confront.keys": "Предъявить: шесть ключей с бирками",
+  "ep01.s41b_q.d_confront.poa": "Предъявить: доверенность с исправленной датой",
+  "ep01.s41b_q.d_confront.murashov_words": "Повторить слова Мурашова: „нотариус — человек нервный“",
+  "ep01.s41b_q.d_confront.registration": "Предъявить: справку о прописке Мурашова",
+  "ep01.s41b_q.d_confront.prompt": "Что положить на стол — или что сказать?",
+  "ep01.s41b_w1.l001": "Прописка в порядке. Как и всё остальное.",
+  "ep01.s41b_w1.l002": "Я проверял, не дрогнет ли он. Он не дрогнул.",
+  "ep01.s41b_r.l001": "Бирки написаны рукой Мурашова. Адреса — шесть сделок, которые вы удостоверили. Все шесть.",
+  "ep01.s41b_r.l002": "Я не знал про ключи… Он говорил: они уезжают сами.",
+  "ep01.s41b_r.l003": "Ковригин, помолчите.",
+  "ep01.s41b_r.l004": "Впервые за два допроса Мурашов сказал что-то не для протокола.",
+  "ep01.s41b_r.l005": "Я же сказал: рука дрогнула, очередь стояла до двери. Оговорку не вписал. Признаю.",
+  "ep01.s41b_r.l006": "Мурашов молчал. В протоколе я записал: «Мурашов молчит». Дословно, как он просил.",
+  "ep01.s41b_r.l007": "Вы так сказали?.. Обо мне, пока я ждал за стеной?",
+  "ep01.s41b_r.l008": "Я сказал — не торопите. Только и всего.",
+  "ep01.s41b_r.l009": "Только и всего… А мне вы говорили: они согласны, они уезжают сами. Вы говорили!",
+  "ep01.s41b_r.l010": "Страх перед Мурашовым оказался меньше страха быть сданным.",
+  "ep01.s42c.l008": "Пальцем в небо поменьше. Особенно при свидетелях. Ковригин, поди, трижды видел, как ты промахиваешься.",
+  "ep01.s42c.l009": "Ни одного лишнего вопроса — от первой страницы до последней. Страшный ты человек, Андрей.",
+  "ep01.s42c.l010": "Ни одного лишнего вопроса — от первой страницы до последней. Страшный ты человек, Громов.",
+  "ep01.s46.l012": "Следствие шло не прямой дорогой: следователь ошибался, спрашивал не то и возвращался. В деле этого нет. В деле записан результат.",
+  "ep01.s46.l013": "Следствие шло без лишних вопросов: каждый, заданный Громовым, оказывался нужным. Так бывает редко. В этом деле было так."
+ }
+}

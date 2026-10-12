@@ -1,0 +1,74 @@
+name: pages
+
+# Публикация сборки рантайма (web-plain) на GitHub Pages: https://ikorzun.github.io/games/
+# Pages нужно один раз включить вручную: Settings → Pages → Source: GitHub Actions (токен workflow не может
+# создать сайт — не хватает прав администратора; попытка всё равно делается и причина отказа печатается в лог).
+# Дальше публикация идёт при каждом push в ветку.
+on:
+  push:
+    branches: [main, claude/magical-thompson-ore6eh]
+    paths:
+      - "runtime/**"
+      - "episodes/**"
+      - "locales/**"
+      - "assets/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: runtime
+    outputs:
+      pages_enabled: ${{ steps.pages.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Is GitHub Pages enabled? (if not — try to enable it with Source = GitHub Actions)
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/pages" >/dev/null 2>&1; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          elif out=$(gh api -X POST "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow 2>&1); then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages включён автоматически (Source: GitHub Actions)"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Ответ API на попытку включить Pages: ${out}"
+            echo "::notice::GitHub Pages не включён, а включить его отсюда нельзя: токену workflow не хватает прав администратора репозитория. Один раз вручную: Settings → Pages → Source: GitHub Actions — шаг публикации пропущен"
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: runtime/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: runtime/dist
+
+  deploy:
+    needs: build
+    # Публикуем только когда Pages включён в настройках репозитория: иначе деплой падает по внешней
+    # причине (404 «Ensure GitHub Pages has been enabled») и красил бы PR.
+    if: needs.build.outputs.pages_enabled == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

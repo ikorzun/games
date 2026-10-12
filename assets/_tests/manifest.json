@@ -1,0 +1,114 @@
+[
+ {
+  "id": "test_composite_office_v1",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_100430_515cfd63-c588-433e-bf0d-2b1aae3c7893.png",
+  "target": "assets/_tests/composite_office_v1.webp",
+  "job": "515cfd63-c588-433e-bf0d-2b1aae3c7893",
+  "note": "тест: следователь и опер, вписанные в кабинет (GPT Image 2.5, референсы: фон + 2 спрайта)"
+ },
+ {
+  "id": "test_composite_office_v2",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_100431_35b573a2-c0ad-430e-9d96-539d4c359c7b.png",
+  "target": "assets/_tests/composite_office_v2.webp",
+  "job": "35b573a2-c0ad-430e-9d96-539d4c359c7b",
+  "note": "тот же промпт, второй вариант"
+ },
+ {
+  "id": "test_shot_office_01_wide",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_105158_5ba07831-5c53-4adc-96dd-ced1709fe62d.png",
+  "target": "assets/_tests/shots/office_01_wide.webp",
+  "job": "5ba07831-5c53-4adc-96dd-ced1709fe62d",
+  "note": "тест раскадровки, сет «кабинет, день», сцена s12: установочный общий, трое в кабинете (GPT Image 2.5 medium/2k, референсы: фон + спрайты)"
+ },
+ {
+  "id": "test_shot_office_02_medium_low",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_105456_0c43fbac-70d1-4615-8184-3112652d67aa.png",
+  "target": "assets/_tests/shots/office_02_medium_low.webp",
+  "job": "0c43fbac-70d1-4615-8184-3112652d67aa",
+  "note": "тест раскадровки, сет «кабинет, день», сцена s12: средний с уровня стола, папки на переднем плане (GPT Image 2.5 medium/2k, референсы: фон + спрайты)"
+ },
+ {
+  "id": "test_shot_office_03_ots_sledak_expert",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_105456_9e330712-613e-4ed2-86af-a2815ef6b971.png",
+  "target": "assets/_tests/shots/office_03_ots_sledak_expert.webp",
+  "job": "9e330712-613e-4ed2-86af-a2815ef6b971",
+  "note": "тест раскадровки, сет «кабинет, день», сцена s12: через плечо Громова на Левину (GPT Image 2.5 medium/2k, референсы: фон + спрайты)"
+ },
+ {
+  "id": "test_shot_office_04_ots_expert_sledak",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_105455_3411997a-3f49-428c-a5b9-f3e162a988ed.png",
+  "target": "assets/_tests/shots/office_04_ots_expert_sledak.webp",
+  "job": "3411997a-3f49-428c-a5b9-f3e162a988ed",
+  "note": "тест раскадровки, сет «кабинет, день», сцена s12: обратный: через плечо Левиной на Громова (GPT Image 2.5 medium/2k, референсы: фон + спрайты)"
+ },
+ {
+  "id": "test_shot_office_05_close_expert_focused",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_105158_2d419ddb-9fe3-4271-888c-f7b0dde06f5a.png",
+  "target": "assets/_tests/shots/office_05_close_expert_focused.webp",
+  "job": "2d419ddb-9fe3-4271-888c-f7b0dde06f5a",
+  "note": "тест раскадровки, сет «кабинет, день», сцена s12: крупный, Левина focused (GPT Image 2.5 medium/2k, референсы: фон + спрайты)"
+ },
+ {
+  "id": "test_shot_office_06_close_oper_grin",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_105157_83eb275c-0175-4441-a63d-2d8ce2a08968.png",
+  "target": "assets/_tests/shots/office_06_close_oper_grin.webp",
+  "job": "83eb275c-0175-4441-a63d-2d8ce2a08968",
+  "note": "тест раскадровки, сет «кабинет, день», сцена s12: крупный, Сайко grin у окна (GPT Image 2.5 medium/2k, референсы: фон + спрайты)"
+ },
+ {
+  "id": "test_shot_office_07_close_sledak_tense",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_105158_602c716b-d13f-4205-9238-e3e182be52ef.png",
+  "target": "assets/_tests/shots/office_07_close_sledak_tense.webp",
+  "job": "602c716b-d13f-4205-9238-e3e182be52ef",
+  "note": "тест раскадровки, сет «кабинет, день», сцена s12: крупный, Громов tense, лампа + окно (GPT Image 2.5 medium/2k, референсы: фон + спрайты)"
+ },
+ {
+  "id": "test_shot_office_08_insert_hands",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_105455_6d6bd9a4-f957-4ac6-bbd8-90574c2263e7.png",
+  "target": "assets/_tests/shots/office_08_insert_hands.webp",
+  "job": "6d6bd9a4-f957-4ac6-bbd8-90574c2263e7",
+  "note": "тест раскадровки, сет «кабинет, день», сцена s12: деталь: руки Левиной, документ с печатью, стакан чая (GPT Image 2.5 medium/2k, референсы: фон + спрайты)"
+ },
+ {
+  "id": "test_shot_office_09_angle_low",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_105550_19ac153e-aefb-4be2-a69f-e8eb348ab848.png",
+  "target": "assets/_tests/shots/office_09_angle_low.webp",
+  "job": "19ac153e-aefb-4be2-a69f-e8eb348ab848",
+  "note": "тест раскадровки, сет «кабинет, день», сцена s12: нижний ракурс с пола, потолок и сейф (GPT Image 2.5 medium/2k, референсы: фон + спрайты)"
+ },
+ {
+  "id": "test_shot_office_10_angle_doorway",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_105653_095be313-5c96-4d46-b443-e72bd2a1be61.png",
+  "target": "assets/_tests/shots/office_10_angle_doorway.webp",
+  "job": "095be313-5c96-4d46-b443-e72bd2a1be61",
+  "note": "тест раскадровки, сет «кабинет, день», сцена s12: из коридора через полуоткрытую дверь (GPT Image 2.5 medium/2k, референсы: фон + спрайты)"
+ },
+ {
+  "id": "test_shot_office_11_angle_high",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_105653_50b1d9b0-758a-48e9-be56-59a0ccaa0df4.png",
+  "target": "assets/_tests/shots/office_11_angle_high.webp",
+  "job": "50b1d9b0-758a-48e9-be56-59a0ccaa0df4",
+  "note": "тест раскадровки, сет «кабинет, день», сцена s12: верхний ракурс со шкафа (GPT Image 2.5 medium/2k, референсы: фон + спрайты)"
+ },
+ {
+  "id": "test_shot_office_12_reaction_oper",
+  "kind": "bg",
+  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261011_105654_63c5e84e-b100-46a1-9633-77f1e61f99f4.png",
+  "target": "assets/_tests/shots/office_12_reaction_oper.webp",
+  "job": "63c5e84e-b100-46a1-9633-77f1e61f99f4",
+  "note": "тест раскадровки, сет «кабинет, день», сцена s12: реакция: Сайко замолкает, профиль Левиной на переднем плане (GPT Image 2.5 medium/2k, референсы: фон + спрайты)"
+ }
+]

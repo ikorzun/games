@@ -1,0 +1,98 @@
+name: fetch-assets
+
+# Скачивает сгенерированные ассеты по манифестам assets/*/manifest.json (tools/fetch_assets.py) на раннере
+# GitHub — у него открыт интернет — конвертирует их в форматы рантайма и коммитит в ту же ветку. Нужен,
+# когда из рабочей среды CDN генератора недоступен.
+# Запускается сам при push, меняющем манифест или этот файл (уже скачанные файлы скрипт пропускает),
+# и вручную: Actions → fetch-assets → Run workflow.
+# Коммит делается токеном workflow, поэтому validate/pages от него сами не запускаются — их запустит
+# следующий обычный push в ветку (или ручной запуск).
+on:
+  push:
+    paths:
+      - "assets/*/manifest.json"
+      - ".github/workflows/fetch_assets.yml"
+  workflow_dispatch:
+    inputs:
+      manifest:
+        description: "Манифест (assets/<ep>/manifest.json); пусто — все манифесты"
+        default: ""
+      only:
+        description: "Только эти kind через запятую: bg,cg,shot,doc,sprite,ui,music,ambient,sfx (пусто — все)"
+        default: ""
+      force:
+        description: "Перекачать и перезаписать уже существующие файлы"
+        type: boolean
+        default: false
+      message:
+        description: "Сообщение коммита (пусто — стандартное)"
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-assets-${{ github.ref }}
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet pillow requests
+      - name: ffmpeg (нужен, только если формат аудио в манифесте не совпадает с целевым)
+        run: sudo apt-get update -qq >/dev/null && sudo apt-get install -y -qq ffmpeg >/dev/null
+      - name: Download and convert
+        id: fetch
+        continue-on-error: true
+        env:
+          MANIFEST: ${{ inputs.manifest }}
+          ONLY: ${{ inputs.only }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          if [ -n "$MANIFEST" ]; then manifests="$MANIFEST"; else manifests=$(ls assets/*/manifest.json); fi
+          rc=0
+          for m in $manifests; do
+            echo "== $m"
+            args=("$m")
+            [ -n "$ONLY" ] && args+=(--only "$ONLY")
+            [ "$FORCE" = "true" ] && args+=(--force)
+            python3 tools/fetch_assets.py "${args[@]}" || rc=1
+          done
+          exit $rc
+      - name: Listing
+        run: |
+          echo "Файлов ассетов: $(find assets -type f \( -name '*.webp' -o -name '*.png' -o -name '*.mp3' -o -name '*.m4a' -o -name '*.ogg' \) | wc -l)"
+          du -sh assets/*/ 2>/dev/null || true
+          git status --short assets | head -100
+      - name: Commit and push
+        env:
+          INPUT_MESSAGE: ${{ inputs.message }}
+        run: |
+          git add -A assets
+          if git diff --cached --quiet; then
+            echo "::notice::Новых или изменённых файлов ассетов нет — коммит не нужен"
+            exit 0
+          fi
+          message="${INPUT_MESSAGE:-Ассеты: скачаны по манифесту (fetch-assets)}"
+          # Трейлеры коммита-триггера (соавторство, ссылка на сессию) наследуются коммитом ассетов.
+          trailers=$(git log -1 --format='%(trailers:only,unfold)' "$GITHUB_SHA" 2>/dev/null || true)
+          if [ -n "$trailers" ]; then message="$message"$'\n\n'"$trailers"; fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -q -F - <<< "$message"
+          for attempt in 1 2 3; do
+            if git pull --rebase -q origin "$GITHUB_REF_NAME" && git push -q origin "HEAD:$GITHUB_REF_NAME"; then
+              echo "Запушено в $GITHUB_REF_NAME: $(git rev-parse --short HEAD)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Не удалось запушить ассеты в $GITHUB_REF_NAME"
+          exit 1
+      - name: Fail if some downloads failed
+        if: steps.fetch.outcome == 'failure'
+        run: |
+          echo "::error::Часть ассетов не скачалась (см. шаг «Download and convert»); то, что скачалось, закоммичено"
+          exit 1

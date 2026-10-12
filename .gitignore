@@ -1,0 +1,34 @@
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Node / web builds
+node_modules/
+dist/
+build/
+.cache/
+
+# Python / Ren'Py
+__pycache__/
+*.pyc
+*.rpyc
+*.rpyb
+*.rpymc
+game/cache/
+game/saves/
+
+# Local env
+.env
+.env.*
+
+# Рабочие файлы пересъёмки (план и волны пересобираются скриптами)
+assets/ep01/_regen/*
+!assets/ep01/_regen/README.md
+!assets/ep01/_regen/registry.json
+!assets/ep01/_regen/pending.json
+
+# Черновики Seedance (tools/seedance_generate.py): рабочие mp4 и job.json с task id, в git не хранятся
+assets/common/video/drafts/

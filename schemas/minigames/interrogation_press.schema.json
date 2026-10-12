@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "interrogation_press config",
+  "description": "Допрос: утверждения подозреваемого и улики, которые их опровергают (Ace Attorney). Улика доступна, только если переменная requires истинна. Игрок идёт по утверждениям по очереди: предъявляет улику (верная опровергает утверждение, неверная — ошибка) или оставляет утверждение без ответа. Опровергнуто ≥ full_threshold утверждений — success, ≥ partial_threshold — partial, иначе fail; max_mistakes ошибок заканчивают допрос досрочно (он замолчал).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "statements",
+    "evidence",
+    "full_threshold",
+    "partial_threshold",
+    "max_mistakes"
+  ],
+  "properties": {
+    "suspect": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Персонаж из cast, чьи слова допрашиваются: его имя подписывает реплику. Без него реплика анонимна."
+    },
+    "statements": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "text_key",
+          "contradicted_by"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "text_key": {
+            "type": "string"
+          },
+          "contradicted_by": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                }
+              }
+            ],
+            "description": "Одна или 2–3 эквивалентные улики, опровергающие утверждение (урок L.A. Noire: единственный «правильный» ответ раздражает)."
+          },
+          "requires": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "Переменная эпизода, без которой улика, опровергающая утверждение, недоступна. Относится к улике, заданной строкой: единственной в contradicted_by, а если их несколько — первой из тех, у кого условия ещё нет. У улики-объекта (evidence) свой requires, он главнее: объект без requires — приманка, условие из утверждения ему не подмешивается."
+          },
+          "press_key": {
+            "type": "string",
+            "description": "Реплика при «надавить» без улики (опционально)."
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Улики-карточки: id или объект {id, label_key, requires}. В списке игрока — улики без requires (приманки: они ничего не опровергают, но гарантируют, что предъявить есть что) и улики, у которых переменная requires истинна. Подпись — ключ локализации (label_key, ≤ 40 символов); без него в игре виден id. Порядок в списке — порядок карточек.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "label_key": {
+                "type": "string",
+                "description": "Подпись карточки улики (ключ локализации)."
+              },
+              "requires": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "description": "Переменная эпизода, без которой улика недоступна. Не задана — улика есть всегда (приманка)."
+              }
+            }
+          }
+        ]
+      }
+    },
+    "full_threshold": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "partial_threshold": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "max_mistakes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "pressure_gauge": {
+      "type": "boolean",
+      "default": false,
+      "description": "Зарезервировано: шкала давления пока не показывается."
+    }
+  }
+}

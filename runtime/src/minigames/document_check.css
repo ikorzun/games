@@ -1,0 +1,219 @@
+/*
+ * Сверка документов (document_check.ts). Общая рамка — mg_shell.css.
+ * Лист — бумага (картинка бланка из assets.documents, если загрузилась) с текстом из локали; фрагменты —
+ * крупные тап-зоны (≥ 44 px). Узкий экран: вкладки; широкий (контейнер ≥ 560 px): листы рядом.
+ */
+
+/* Объяснение найденного — до двух строк на телефоне: резервируем место, чтобы лист не прыгал после тапа. */
+.mg-docs .mg-shell__status {
+  min-height: 2.7em;
+}
+
+.mg-docs__wrap {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+/* Вкладки */
+.mg-docs__tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: -0.45rem;
+}
+.mg-docs__tab {
+  display: -webkit-box;
+  flex: 1 1 0;
+  align-items: center;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.3rem 0.6rem;
+  overflow: hidden;
+  color: var(--mg-ink);
+  font: inherit;
+  font-size: 0.85em;
+  line-height: 1.15;
+  text-align: center;
+  background: #1c1c21;
+  border: 1px solid var(--mg-line);
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  cursor: pointer;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.mg-docs__tab.is-active {
+  color: #1d1b17;
+  font-weight: 400;
+  background: #e9e2cf;
+  border-color: #e9e2cf;
+}
+.mg-docs__tab.has-hint::after {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 0.45em;
+  background: var(--mg-accent);
+  border-radius: 50%;
+}
+
+/* Листы */
+.mg-docs__sheets {
+  display: grid;
+  gap: 0.8rem;
+  touch-action: pan-y;
+}
+.mg-docs__sheet {
+  display: none;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 0.8rem 0.9rem 0.9rem;
+  color: #1d1b17;
+  font: 0.9em / 1.8 var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  background:
+    linear-gradient(rgb(233 226 207 / 0.86), rgb(233 226 207 / 0.86)),
+    var(--doc-scan, linear-gradient(#e9e2cf, #e9e2cf));
+  background-size: cover;
+  background-position: center;
+  border-radius: 3px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.5), inset 0 0 40px rgb(120 90 40 / 0.18);
+}
+.mg-docs__sheet.is-active {
+  display: block;
+}
+.mg-docs__cap {
+  display: none;
+  margin: 0 0 0.3rem;
+  color: #6b5f48;
+  font: 400 0.85em / 1.2 var(--font-title, 'Arial Narrow', system-ui, sans-serif);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.mg-docs__text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mg-docs__orphans {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.4rem 0 0;
+}
+@container (min-width: 560px) {
+  .mg-docs__tabs {
+    display: none;
+  }
+  .mg-docs__sheets {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+  .mg-docs__sheet {
+    display: block;
+  }
+  .mg-docs__cap {
+    display: block;
+  }
+}
+
+/* Фрагменты */
+.mg-docs .mg-docs__frag {
+  display: inline-block;
+  box-sizing: border-box;
+  min-height: 44px;
+  margin: 0 -0.05em;
+  padding: 0.5em 0.5em;
+  color: inherit;
+  font: inherit;
+  line-height: 1.25;
+  text-align: left;
+  vertical-align: middle;
+  background: rgb(201 54 47 / 0.09);
+  border: 0;
+  border-bottom: 2px dotted rgb(120 40 30 / 0.65);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.mg-docs .mg-docs__frag:hover {
+  background: rgb(201 54 47 / 0.18);
+}
+.mg-docs .mg-docs__frag:focus-visible {
+  outline: 3px solid #1d1b17;
+  outline-offset: 2px;
+}
+.mg-docs .mg-docs__frag.is-found {
+  background: rgb(82 140 72 / 0.3);
+  border-bottom: 2px solid #3f7a37;
+  cursor: default;
+}
+.mg-docs .mg-docs__frag.is-found::after {
+  content: ' ✓';
+  font-weight: 400;
+  color: #2f6a28;
+}
+.mg-docs .mg-docs__frag.is-wrong {
+  background: rgb(201 54 47 / 0.2);
+  border-bottom: 2px solid var(--mg-accent);
+  text-decoration: line-through;
+  text-decoration-color: rgb(150 30 24 / 0.8);
+  cursor: default;
+  animation: mg-docs-shake 0.35s ease-in-out;
+}
+.mg-docs .mg-docs__frag.is-wrong::after {
+  content: ' ✕';
+  font-weight: 400;
+  color: #a8281f;
+  text-decoration: none;
+  display: inline-block;
+}
+.mg-docs .mg-docs__frag.is-hinted {
+  animation: mg-docs-pulse 1.4s ease-in-out infinite;
+}
+
+/* Найденное и подсказки */
+.mg-docs__notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 1.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mg-docs__note {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.9em;
+  background: rgb(232 217 181 / 0.1);
+  border: 1px solid rgb(232 217 181 / 0.4);
+  border-radius: 8px;
+}
+.mg-docs__note.is-hint {
+  background: rgb(201 54 47 / 0.12);
+  border-color: var(--mg-accent);
+}
+.mg-docs__mark {
+  flex: none;
+  color: var(--mg-gold);
+  font-weight: 400;
+}
+
+@keyframes mg-docs-pulse {
+  50% {
+    box-shadow: 0 0 0 4px rgb(201 54 47 / 0.35);
+    background: rgb(201 54 47 / 0.28);
+  }
+}
+@keyframes mg-docs-shake {
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}

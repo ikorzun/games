@@ -1,0 +1,12 @@
+{
+  "season": 1,
+  "title_key": "ui.season.s1.title",
+  "years": "1992–1997",
+  "episodes": [
+    { "order": 1, "id": "ep01_murylev", "year": 1993, "cover": "assets/ep01/shots/apartment_zoya/wide_1.webp" },
+    { "order": 2, "year": 1994 },
+    { "order": 3, "year": 1995 },
+    { "order": 4, "year": 1996 },
+    { "order": 5, "year": 1997 }
+  ]
+}

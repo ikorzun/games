@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "database_search config",
+  "description": "Картотека/архив: фильтрация записей по полям и отбор тех, что соответствуют паттерну (Her Story, БТИ).",
+  "type": "object", "additionalProperties": false,
+  "required": ["fields", "records", "pattern", "target_count", "values"],
+  "properties": {
+    "fields": { "type": "array", "minItems": 2, "maxItems": 6, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" } },
+    "records": { "type": "integer", "minimum": 6, "maximum": 200, "description": "Сколько карточек генерируется (целевые + шум). Значения берутся из локализованных списков имён/адресов." },
+    "pattern": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string" }, "description": "Поле -> значение-идентификатор, которое повторяется у целевых записей." },
+    "values": {
+      "type": "array", "minItems": 1,
+      "description": "Локализованные значения полей карточек — по одной записи на поле из fields. options — варианты значений (id + строка локали; в строке допустим плейсхолдер {n} — номер квартиры/дома, его подставляет рантайм). Поле без options рантайм заполняет сам: date — даты дд.мм.гггг. Поле с 2–8 вариантами получает чипы-фильтры (filter: false — не получает).",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["field", "label_key"],
+        "properties": {
+          "field": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "label_key": { "type": "string" },
+          "filter": { "type": "boolean" },
+          "options": {
+            "type": "array", "minItems": 2, "maxItems": 24,
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["id", "text_key"],
+              "properties": {
+                "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+                "text_key": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "target_count": { "type": "integer", "minimum": 1, "description": "Сколько карточек с паттерном в колоде; успех — отобраны все (и ошибок меньше max_mistakes)." },
+    "min_for_partial": { "type": "integer", "minimum": 1, "description": "Сколько карточек с паттерном нужно для частичного результата. Не задано — частичного результата нет (кроме случая «нашёл всё, но слишком много ошибок»)." },
+    "max_mistakes": { "type": "integer", "minimum": 1, "description": "Сколько неверных карточек можно подать на проверку до конца игры (по умолчанию 4). Через skip.after_fails неверных карточек появляется «Пропустить»." },
+    "seed": { "type": "integer", "description": "Зерно колоды; не задано — берётся из id мини-игры. Колода не зависит от языка." }
+  }
+}
