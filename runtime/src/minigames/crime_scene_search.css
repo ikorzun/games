@@ -76,7 +76,7 @@
   width: 22px;
   height: 22px;
   color: #1d1b17;
-  font: 700 12px / 22px var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  font: 400 12px / 22px var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
   text-align: center;
   background: var(--mg-gold);
   border-radius: 50%;
@@ -215,7 +215,7 @@
   height: 30px;
   margin: -15px 0 0 -15px;
   color: var(--mg-accent);
-  font: 700 18px / 26px var(--font-body, system-ui, sans-serif);
+  font: 400 18px / 26px var(--font-body, system-ui, sans-serif);
   text-align: center;
   border: 2px solid var(--mg-accent);
   border-radius: 50%;
@@ -305,7 +305,7 @@
   width: 1.55em;
   height: 1.55em;
   color: #1d1b17;
-  font: 700 0.8em var(--font-mono, monospace);
+  font: 400 0.8em var(--font-mono, monospace);
   background: var(--mg-gold);
   border-radius: 50%;
 }

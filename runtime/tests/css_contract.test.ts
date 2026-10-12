@@ -5,7 +5,7 @@
  * кнопки выбора ≥ 48 px, таймкод в правом верхнем углу.
  * Тест читает стили как текст и считает матрицы CSS-фильтров по спецификации Filter Effects.
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -164,9 +164,18 @@ describe('интерфейс: документальная эстетика, mob
     expect(uiCss).not.toMatch(/backdrop-filter/);
   });
 
+  it('шрифт только 400 или тоньше (решение владельца 2026-10-12): ни жирных начертаний, ни их файлов', () => {
+    const mgDir = join(HERE, '..', 'src', 'minigames');
+    const mgCss = readdirSync(mgDir).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(mgDir, f), 'utf8'));
+    for (const css of [uiCss, ...mgCss]) {
+      expect(css).not.toMatch(/font-weight:\s*(?:[5-9]00|bold)/);
+      expect(css).not.toMatch(/font:\s*(?:[5-9]00|bold)\s/);
+    }
+  });
+
   it('имя говорящего — маленькая плашка без обводки', () => {
     const name = /\.vn-textbox__name\s*\{([^}]*)\}/.exec(uiCss)![1]!;
-    expect(name).toMatch(/font:\s*700\s+0\.8em\s*\/\s*1\.4\s+var\(--font-body\)/);
+    expect(name).toMatch(/font:\s*400\s+0\.8em\s*\/\s*1\.4\s+var\(--font-body\)/);
     expect(name).toMatch(/border:\s*0;/);
   });
 

@@ -96,14 +96,14 @@
 .mg-eb__title {
   margin: 0;
   min-width: 0;
-  font: 700 1.35em / 1.1 var(--font-title);
+  font: 400 1.35em / 1.1 var(--font-title);
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: #f2efe6;
 }
 .mg-eb__progress {
   margin: 0;
-  font: 700 1em / 1.2 var(--font-title);
+  font: 400 1em / 1.2 var(--font-title);
   letter-spacing: 0.03em;
   color: var(--c-accent-soft);
   white-space: nowrap;
@@ -278,7 +278,7 @@
 }
 .mg-eb__label {
   min-width: 0;
-  font: 700 1em / 1.15 var(--font-title);
+  font: 400 1em / 1.15 var(--font-title);
   overflow-wrap: anywhere;
   hyphens: auto;
 }
@@ -490,7 +490,7 @@
 }
 .mg-eb__verdict {
   margin: 0;
-  font: 700 1.3em / 1.1 var(--font-title);
+  font: 400 1.3em / 1.1 var(--font-title);
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -505,7 +505,7 @@
 }
 .mg-eb__why {
   margin: 0;
-  font-weight: 700;
+  font-weight: 400;
   color: #ff9b93;
 }
 .mg-eb__summary {

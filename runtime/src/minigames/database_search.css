@@ -54,7 +54,7 @@
   overflow: hidden;
   color: var(--mg-gold);
   font-size: 0.86em;
-  font-weight: 700;
+  font-weight: 400;
   line-height: 1.25;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -105,7 +105,7 @@
 }
 .mg-db .mg-db__chip.is-on {
   color: #1d1b17;
-  font-weight: 700;
+  font-weight: 400;
   background: var(--mg-gold);
   border-color: var(--mg-gold);
 }
@@ -185,7 +185,7 @@
   height: 24px;
   margin-top: 1px;
   color: #1d1b17;
-  font: 700 15px / 1 var(--font-body, system-ui, sans-serif);
+  font: 400 15px / 1 var(--font-body, system-ui, sans-serif);
   border: 2px solid var(--mg-muted);
   border-radius: 6px;
 }
@@ -202,7 +202,7 @@
   gap: 0 0.7rem;
 }
 .mg-db__cell.is-title {
-  font-weight: 700;
+  font-weight: 400;
 }
 .mg-db__cell.is-date {
   margin-left: auto;
@@ -214,7 +214,7 @@
   display: none;
 }
 .mg-db__badge:not(:empty) {
-  font: 700 0.76em / 1.3 var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  font: 400 0.76em / 1.3 var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -246,7 +246,7 @@
 }
 .mg-db__v.is-hit {
   color: var(--mg-gold);
-  font-weight: 700;
+  font-weight: 400;
 }
 
 /* Состояния карточки */

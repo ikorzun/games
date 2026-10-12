@@ -7,7 +7,7 @@ import './ui/styles.css';
 
 import { App } from './app';
 import { i18n, parseSupportedLang } from './core/i18n';
-import { ensureLangs, loadEpisode, loadManifest, loadVoiceIndex } from './core/loader';
+import { ensureLangs, loadEpisode, loadManifest, loadSeason, loadVoiceIndex } from './core/loader';
 import { SaveManager } from './core/saves';
 import type { Lang } from './core/types';
 import { installDebug } from './debug/debug';
@@ -28,9 +28,9 @@ async function loadFonts(timeoutMs = 2500): Promise<void> {
   const sample = 'Аёбв Ññãçüé ¿¡ 1993';
   const load = Promise.all([
     document.fonts.load('16px "DM Mono"', sample),
-    document.fonts.load('500 16px "DM Mono"', sample),
+    document.fonts.load('300 16px "DM Mono"', sample),
     document.fonts.load('16px "JetBrains Mono"', sample),
-    document.fonts.load('500 16px "JetBrains Mono"', sample),
+    document.fonts.load('300 16px "JetBrains Mono"', sample),
   ]);
   await Promise.race([load, new Promise((r) => setTimeout(r, timeoutMs))]);
 }
@@ -84,6 +84,7 @@ async function boot(): Promise<void> {
     const wanted = params.get('episode');
     const entry = manifest.find((m) => m.id === wanted) ?? manifest[0];
     if (!entry) throw new Error('в манифесте нет эпизодов');
+    const seasonLoad = loadSeason(base, entry.season); // рамка сезона для полки эпизодов меню: ошибок не бросает
     const { episode, contentVersion } = await loadEpisode(base, entry);
 
     // Язык: ?lang= → выбор игрока → язык платформы (bridge.platform.language / браузер) → en.
@@ -117,6 +118,7 @@ async function boot(): Promise<void> {
       voice,
       assets,
       loadLang: (l) => ensureLangs(i18n, base, episode.id, [l]),
+      season: await seasonLoad,
       renderer: renderer === 'dom' || renderer === 'pixi' ? (renderer as RendererChoice) : 'auto',
       debug: params.get('debug') === '1' || import.meta.env.DEV,
     });

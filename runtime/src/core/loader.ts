@@ -96,6 +96,37 @@ export async function loadManifest(base: string, f: FetchLike = defaultFetch): P
   return json.episodes;
 }
 
+/** Место на полке эпизодов главного меню: с id — эпизод из манифеста, без id — закрытый («скоро»). */
+export interface SeasonSlot {
+  order: number;
+  id?: string;
+  year?: number;
+  /** Обложка карточки (путь ассета от корня сборки). */
+  cover?: string;
+}
+
+/** Рамка сезона (episodes/s<N>/season.json): название, годы и полка эпизодов, включая ещё не вышедшие. */
+export interface SeasonInfo {
+  season: number;
+  title_key: string;
+  years?: string;
+  episodes: SeasonSlot[];
+}
+
+/** Рамка сезона для главного меню. Никогда не бросает: нет файла или он кривой — null, меню покажет только эпизод. */
+export async function loadSeason(base: string, season: number, f: FetchLike = defaultFetch): Promise<SeasonInfo | null> {
+  try {
+    const res = await f(`${base}episodes/s${season}/season.json`);
+    if (!res.ok) return null;
+    const json = JSON.parse(await res.text()) as Partial<SeasonInfo>;
+    if (json.season !== season || typeof json.title_key !== 'string' || !Array.isArray(json.episodes)) return null;
+    const episodes = json.episodes.filter((x): x is SeasonSlot => !!x && typeof x.order === 'number');
+    return { season, title_key: json.title_key, ...(typeof json.years === 'string' ? { years: json.years } : {}), episodes };
+  } catch {
+    return null;
+  }
+}
+
 export async function loadEpisode(base: string, entry: Pick<ManifestEntry, 'id' | 'path'>, f: FetchLike = defaultFetch): Promise<LoadedEpisode> {
   const url = `${base}${entry.path}`;
   const text = await fetchText(url, f);

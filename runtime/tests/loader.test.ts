@@ -11,6 +11,7 @@ import {
   loadEpisode,
   loadManifest,
   loadStrings,
+  loadSeason,
   loadVoiceIndex,
 } from '../src/core/loader';
 import type { FetchedResponse, FetchLike } from '../src/core/loader';
@@ -166,6 +167,25 @@ describe.skipIf(!hasRepoContent())('загрузчик на настоящем �
   it('manifest-независимая проверка: имя файла эпизода из репозитория проходит assertEpisode', () => {
     const json: unknown = JSON.parse(readFileSync(EP01_PATH, 'utf8'));
     expect(() => assertEpisode(json, EP01_PATH)).not.toThrow();
+  });
+});
+
+describe('loadSeason: рамка сезона для полки эпизодов', () => {
+  it('файл есть — сезон с полкой; слоты без order отбрасываются', async () => {
+    const f = fakeFetch({ './episodes/s1/season.json': JSON.stringify({ season: 1, title_key: 'ui.season.s1.title', years: '1992–1997', episodes: [{ order: 1, id: 'ep01', year: 1993, cover: 'assets/a.webp' }, { order: 2, year: 1994 }, { year: 1999 }] }) });
+    expect(await loadSeason('./', 1, f)).toEqual({ season: 1, title_key: 'ui.season.s1.title', years: '1992–1997', episodes: [{ order: 1, id: 'ep01', year: 1993, cover: 'assets/a.webp' }, { order: 2, year: 1994 }] });
+  });
+
+  it('нет файла, кривой JSON или чужой сезон — null без исключений', async () => {
+    expect(await loadSeason('./', 1, fakeFetch({ './episodes/s1/season.json': { status: 404 } }))).toBeNull();
+    expect(await loadSeason('./', 1, fakeFetch({ './episodes/s1/season.json': '<html>' }))).toBeNull();
+    expect(await loadSeason('./', 1, fakeFetch({ './episodes/s1/season.json': JSON.stringify({ season: 2, title_key: 'k', episodes: [] }) }))).toBeNull();
+  });
+
+  it.skipIf(!hasRepoContent())('season.json сезона 1 в репозитории: текущий эпизод на полке, у остальных — год', () => {
+    const s = JSON.parse(readFileSync(join(REPO_ROOT, 'episodes', 's1', 'season.json'), 'utf8')) as { episodes: Array<{ id?: string; year?: number }> };
+    expect(s.episodes.some((x) => x.id === 'ep01_murylev')).toBe(true);
+    expect(s.episodes.every((x) => typeof x.year === 'number')).toBe(true);
   });
 });
 

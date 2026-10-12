@@ -467,13 +467,6 @@
   "post": "crop 49,335,1240,672 из 1920×1080 — красная полоса по центру; после --force повторить (см. generation-log.md)"
  },
  {
-  "id": "ui_menu_video_salon",
-  "kind": "ui",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181750_d66c596c-3f3c-4ff8-aa89-485eeed3cfa2.png",
-  "target": "assets/common/ui/menu_video_salon.webp",
-  "job": "d66c596c-3f3c-4ff8-aa89-485eeed3cfa2"
- },
- {
   "id": "m_chronicle",
   "kind": "music",
   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181753_a6600862-4be5-47fc-a8ca-82bdd99c66ad.m4a",

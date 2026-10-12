@@ -18,9 +18,8 @@ import type { VoiceLineRef } from '../core/voice';
 
 // ───────────────────────────── пути ─────────────────────────────
 
-/** Файлы интерфейса вне episode.assets (главное меню, заставка). Нет файла — прежний фон. */
+/** Файлы интерфейса вне episode.assets (главное меню, заставка). Нет файла — прежний вид. */
 export const UI_ASSETS = {
-  menuBackground: 'assets/common/ui/menu_video_salon.webp',
   titlePlate: 'assets/common/ui/title_plate.webp',
   /** Логотип передачи для заставки и меню (решение владельца 2026-10-11). */
   logo: 'assets/common/ui/logo_kr.webp',

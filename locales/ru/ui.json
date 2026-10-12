@@ -124,5 +124,12 @@
   "ui.choice.meter": "Самообладание",
   "ui.choice.meter_aria": "Самообладание: {value} из {max}",
   "ui.choice.tried": "уже пробовали",
-  "ui.choice.hint": "Подсказка: верный ход подсвечен"
+  "ui.choice.hint": "Подсказка: верный ход подсвечен",
+  "ui.menu.season": "Сезон {n}",
+  "ui.season.s1.title": "Современные хроники",
+  "ui.menu.episode_n": "Эпизод {n}",
+  "ui.menu.soon": "Скоро",
+  "ui.menu.badge_new": "Новый",
+  "ui.menu.restart": "Начать заново",
+  "ui.menu.brand": "Криминальная Россия"
 }

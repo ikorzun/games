@@ -124,5 +124,12 @@
   "ui.choice.meter": "Composure",
   "ui.choice.meter_aria": "Composure: {value} of {max}",
   "ui.choice.tried": "already tried",
-  "ui.choice.hint": "Hint: the right move is highlighted"
+  "ui.choice.hint": "Hint: the right move is highlighted",
+  "ui.menu.season": "Season {n}",
+  "ui.season.s1.title": "Modern Chronicles",
+  "ui.menu.episode_n": "Episode {n}",
+  "ui.menu.soon": "Coming soon",
+  "ui.menu.badge_new": "New",
+  "ui.menu.restart": "Start over",
+  "ui.menu.brand": "Criminal Russia"
 }

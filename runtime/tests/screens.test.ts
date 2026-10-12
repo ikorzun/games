@@ -51,6 +51,14 @@ beforeEach(() => {
     'ui.menu.archive': 'Архив',
     'ui.menu.settings': 'Настройки',
     'ui.menu.language': 'Язык',
+    'ui.menu.brand': 'Криминальная Россия',
+    'ui.menu.season': 'Сезон {n}',
+    'ui.menu.episode_n': 'Эпизод {n}',
+    'ui.menu.soon': 'Скоро',
+    'ui.menu.badge_new': 'Новый',
+    'ui.menu.restart': 'Начать заново',
+    'ui.episode.continue': 'Продолжить',
+    'ui.season.s1.title': 'Современные хроники',
     'ui.lang.ru': 'Русский',
     'ui.lang.en': 'English',
     'ui.lang.es': 'Español',
@@ -102,7 +110,7 @@ beforeEach(() => {
     'ui.save.autosave': 'Автосохранение',
     'ui.save.overwrite_confirm': 'Перезаписать?',
   });
-  i18n.addStrings('en', { 'ui.menu.new_game': 'New game', 'ui.warning.title': 'Content warning' });
+  i18n.addStrings('en', { 'ui.menu.new_game': 'New game', 'ui.menu.badge_new': 'New', 'ui.menu.archive': 'Archive', 'ui.warning.title': 'Content warning' });
   i18n.setLang('ru');
 });
 
@@ -129,99 +137,116 @@ describe('MenuScreen', () => {
     onSettings: vi.fn(),
     onLanguage: vi.fn(),
   });
+  const season = {
+    n: 1,
+    titleKey: 'ui.season.s1.title',
+    years: '1992–1997',
+    slots: [
+      { order: 1, year: 1993, current: true, cover: './assets/ep01/shots/apartment_zoya/wide_1.webp' },
+      { order: 2, year: 1994, current: false, cover: null },
+      { order: 3, year: 1995, current: false, cover: null },
+    ],
+  };
 
-  it('название, подзаголовок, длительность и возрастной рейтинг; без сейва — только «Новая игра» (основная)', () => {
-    const hd = handlers();
-    const s = open(new MenuScreen(episode, hd));
-    expect(s.el.querySelector('.vn-menu__title')?.textContent).toBe('Смерть за квартиры');
-    expect(s.el.querySelector('.vn-menu__logline')?.textContent).toBe('Дело о квартирах');
-    expect(s.el.querySelector('.vn-menu__meta')?.textContent).toBe('40 мин · 18+');
-    expect(texts(s.el, '.vn-menu__nav button')).toEqual(['Новая игра', 'Архив', 'Настройки']);
-    expect(s.el.querySelector('.vn-menu__nav .is-primary')?.textContent).toBe('Новая игра');
+  it('кинескоп: шапка с сезоном, полка — текущий эпизод открыт, остальные «скоро»; иконки языка, архива и настроек', () => {
+    const s = open(new MenuScreen(episode, { ...handlers(), season }));
+    expect(s.el.querySelector('.vn-crt .vn-crt__screen')).not.toBeNull();
+    expect(s.el.querySelector('.vn-menu__tag')?.textContent).toBe('Сезон 1 · Современные хроники · 1992–1997');
+    expect(texts(s.el, '.vn-ep.is-open .vn-ep__num')).toEqual(['Эпизод 1 · 1993']);
+    expect(texts(s.el, '.vn-ep.is-open .vn-ep__name')).toEqual(['Смерть за квартиры']);
+    expect(texts(s.el, '.vn-ep.is-locked .vn-ep__name')).toEqual(['Скоро', 'Скоро']);
+    expect(texts(s.el, '.vn-ep.is-locked .vn-ep__num')).toEqual(['Эпизод 2 · 1994', 'Эпизод 3 · 1995']);
+    expect(s.el.querySelector('.vn-ep.is-locked button')).toBeNull(); // закрытые не нажимаются
+    expect(s.el.querySelector<HTMLElement>('.vn-ep.is-open .vn-ep__thumb')?.style.backgroundImage).toMatch(/^url\("https?:\/\/.+wide_1\.webp"\)$/);
+    expect([...s.el.querySelectorAll('.vn-menu__icons button')].map((b) => b.getAttribute('aria-label'))).toEqual(['Язык', 'Архив', 'Настройки']);
   });
 
-  it('при наличии автосейва первой идёт «Продолжить» (основная); пройденный эпизод помечается', () => {
-    const hd = handlers({ hasContinue: true, completed: true });
-    const s = open(new MenuScreen(episode, hd));
-    expect(texts(s.el, '.vn-menu__nav button')).toEqual(['Продолжить', 'Новая игра', 'Архив', 'Настройки']);
-    expect(s.el.querySelector('.vn-menu__nav .is-primary')?.textContent).toBe('Продолжить');
-    expect(s.el.querySelector('.vn-menu__meta')?.textContent).toContain('Пройдено');
-    s.el.querySelector<HTMLButtonElement>('.vn-menu__nav button')?.click();
+  it('без сейва клик по эпизоду — новая партия, значок «Новый», «Начать заново» нет', () => {
+    const hd = handlers();
+    const s = open(new MenuScreen(episode, { ...hd, season }));
+    expect(s.el.querySelector('.vn-ep__badge')?.textContent).toBe('Новый');
+    expect(s.el.querySelector('.vn-ep__restart')).toBeNull();
+    s.el.querySelector<HTMLButtonElement>('.vn-ep__open')?.click();
+    expect(hd.onNew).toHaveBeenCalledTimes(1);
+    expect(hd.onContinue).not.toHaveBeenCalled();
+  });
+
+  it('с автосейвом клик по эпизоду — продолжение; «Начать заново» — новая партия; пройденный помечается', () => {
+    const hd = handlers({ hasContinue: true });
+    const s = open(new MenuScreen(episode, { ...hd, season }));
+    expect(s.el.querySelector('.vn-ep__badge')?.textContent).toBe('Продолжить');
+    s.el.querySelector<HTMLButtonElement>('.vn-ep__open')?.click();
     expect(hd.onContinue).toHaveBeenCalledTimes(1);
+    s.el.querySelector<HTMLButtonElement>('.vn-ep__restart')?.click();
+    expect(hd.onNew).toHaveBeenCalledTimes(1);
+    const done = open(new MenuScreen(episode, { ...handlers({ completed: true }), season }));
+    expect(done.el.querySelector('.vn-ep__badge')?.textContent).toBe('Пройдено');
   });
 
-  it('переключатель языка: все четыре языка названы на самих языках, текущий отмечен, выбор вызывает обработчик', () => {
+  it('без рамки сезона на полке только текущий эпизод, без подписи сезона', () => {
+    const s = open(new MenuScreen(episode, handlers()));
+    expect(s.el.querySelector('.vn-menu__tag')).toBeNull();
+    expect(s.el.querySelectorAll('.vn-ep')).toHaveLength(1);
+    expect(s.el.querySelector('.vn-ep.is-open .vn-ep__name')?.textContent).toBe('Смерть за квартиры');
+  });
+
+  it('язык: глобус раскрывает переключатель — все четыре языка названы на самих языках, выбор вызывает обработчик и закрывает его', () => {
     const hd = handlers();
     const s = open(new MenuScreen(episode, hd));
+    expect(s.el.querySelector('.vn-langs')).toBeNull();
+    s.el.querySelector<HTMLButtonElement>('.vn-menu__icon.is-lang')?.click();
+    expect(s.el.querySelector('.vn-menu__icon.is-lang')?.getAttribute('aria-expanded')).toBe('true');
     expect(texts(s.el, '.vn-langs button')).toEqual(['RU', 'EN', 'ES', 'PT']); // коды; полное имя — в title и aria-label
     expect([...s.el.querySelectorAll('.vn-langs button')].map((b) => b.getAttribute('aria-label'))).toEqual(['Русский', 'English', 'Español', 'Português']);
-    expect(s.el.querySelector('.vn-langs button[data-lang="es"]')?.getAttribute('title')).toBe('Español');
     expect(s.el.querySelector('.vn-chip.is-on')?.getAttribute('data-lang')).toBe('ru');
-    expect([...s.el.querySelectorAll('.vn-langs button')].map((b) => b.getAttribute('lang'))).toEqual(['ru', 'en', 'es', 'pt']);
     s.el.querySelector<HTMLButtonElement>('[data-lang="es"]')?.click();
     expect(hd.onLanguage).toHaveBeenCalledWith('es');
+    expect(s.el.querySelector('.vn-langs')).toBeNull();
+    expect(s.el.querySelector('.vn-menu__lang-code')?.textContent).toBe('RU');
+  });
+
+  it('архив и настройки — иконками', () => {
+    const hd = handlers();
+    const s = open(new MenuScreen(episode, hd));
+    s.el.querySelector<HTMLButtonElement>('.vn-menu__icon.is-archive')?.click();
+    s.el.querySelector<HTMLButtonElement>('.vn-menu__icon.is-settings')?.click();
+    expect(hd.onArchive).toHaveBeenCalledTimes(1);
+    expect(hd.onSettings).toHaveBeenCalledTimes(1);
   });
 
   it('смена языка: render() перерисовывает меню на лету', () => {
-    const s = open(new MenuScreen(episode, handlers()));
-    i18n.setLang('en');
-    s.render();
-    expect(texts(s.el, '.vn-menu__nav button')[0]).toBe('New game');
-    expect(s.el.querySelector('.vn-chip.is-on')?.getAttribute('data-lang')).toBe('en');
-  });
-});
-
-describe('MenuScreen: картинки интерфейса (видеосалон и плашка)', () => {
-  const handlers = (art?: { background: string | null; plate: string | null; logo: string | null }) => ({
-    hasContinue: () => false,
-    completed: () => false,
-    onContinue: vi.fn(),
-    onNew: vi.fn(),
-    onArchive: vi.fn(),
-    onSettings: vi.fn(),
-    onLanguage: vi.fn(),
-    ...(art ? { art } : {}),
-  });
-  const abs = (u: string): string => `url("${new URL(u, document.baseURI).href}")`;
-
-  it('без картинок прежнее оформление: ни has-bg, ни --menu-bg, ни плашки; название — обычный заголовок', () => {
-    const s = open(new MenuScreen(episode, handlers()));
-    expect(s.el.classList.contains('has-bg')).toBe(false);
-    expect(s.el.style.getPropertyValue('--menu-bg')).toBe('');
-    expect(s.el.querySelector('.vn-menu__brand')).toBeNull();
-    expect(s.el.querySelector('.vn-menu__plate')).toBeNull();
-    expect(s.el.querySelector('.vn-menu__title')?.textContent).toBe('Смерть за квартиры');
-  });
-
-  it('фон видеосалона: класс has-bg и --menu-bg с абсолютным адресом (в сборке css лежит в dist/assets/)', () => {
-    const s = open(new MenuScreen(episode, handlers({ background: './assets/common/ui/menu_video_salon.webp', plate: null, logo: null })));
-    expect(s.el.classList.contains('has-bg')).toBe(true);
-    expect(s.el.style.getPropertyValue('--menu-bg')).toBe(abs('./assets/common/ui/menu_video_salon.webp'));
-    expect(s.el.style.getPropertyValue('--menu-bg')).toMatch(/^url\("https?:\/\//); // не относительный
-    expect(s.el.querySelector('.vn-menu__plate')).toBeNull(); // плашки нет — нет и обёртки
-  });
-
-  it('логотип передачи в бренде меню (картинка, ≥ 20 % высоты по CSS); название остаётся текстом из локали (h1); без файла — прежний вид', () => {
-    const art = { background: './assets/common/ui/menu_video_salon.webp', plate: null, logo: './assets/common/ui/logo_kr.webp' };
-    const hd = handlers(art);
-    const s = open(new MenuScreen(episode, hd));
-    const brand = s.el.querySelector('.vn-menu__brand');
-    expect(brand?.classList.contains('has-logo')).toBe(true);
-    const img = brand?.querySelector<HTMLImageElement>('img.vn-menu__logo');
-    expect(img?.getAttribute('src')).toBe(art.logo);
-    expect(img?.getAttribute('alt') ?? '').toBe(''); // декоративная картинка: название читается из h1
-    expect(brand?.querySelector('h1.vn-menu__title')?.textContent).toBe('Смерть за квартиры');
-    // язык меняется — текст обновляется (в картинке текста эпизода нет)
     i18n.addStrings('en', { 'mini.title': 'Death for apartments' });
+    const s = open(new MenuScreen(episode, handlers()));
     i18n.setLang('en');
     s.render();
-    expect(s.el.querySelector('.vn-menu__brand h1')?.textContent).toBe('Death for apartments');
-    // файла больше нет (art -> null): возврат к прежнему виду
-    hd.art = { background: null, plate: null, logo: null };
+    expect(s.el.querySelector('.vn-ep__name')?.textContent).toBe('Death for apartments');
+    expect(s.el.querySelector('.vn-ep__badge')?.textContent).toBe('New');
+    expect(s.el.querySelector('.vn-menu__icon.is-archive')?.getAttribute('aria-label')).toBe('Archive');
+  });
+
+  it('логотип передачи — картинка с названием в alt; без файла — название передачи текстом', () => {
+    const hd: ReturnType<typeof handlers> & { art?: { plate: string | null; logo: string | null } } = {
+      ...handlers(),
+      art: { plate: null, logo: './assets/common/ui/logo_kr.webp' },
+    };
+    const s = open(new MenuScreen(episode, hd));
+    const img = s.el.querySelector<HTMLImageElement>('img.vn-menu__logo');
+    expect(img?.getAttribute('src')).toBe('./assets/common/ui/logo_kr.webp');
+    expect(img?.alt).toBe('Криминальная Россия');
+    hd.art = { plate: null, logo: null };
     s.render();
-    expect(s.el.classList.contains('has-bg')).toBe(false);
-    expect(s.el.style.getPropertyValue('--menu-bg')).toBe('');
-    expect(s.el.querySelector('.vn-menu__brand')).toBeNull();
+    expect(s.el.querySelector('img.vn-menu__logo')).toBeNull();
+    expect(s.el.querySelector('h1.vn-menu__title')?.textContent).toBe('Криминальная Россия');
+  });
+
+  it('прокрутка сжимает шапку: --p растёт до 1 за 140 px, --q включается на последних 40 %', () => {
+    const s = open(new MenuScreen(episode, { ...handlers(), season }));
+    const scroll = s.el.querySelector<HTMLElement>('.vn-menu__scroll')!;
+    for (const [y, p, q] of [[70, '0.500', '0.000'], [112, '0.800', '0.500'], [400, '1.000', '1.000']] as const) {
+      Object.defineProperty(scroll, 'scrollTop', { value: y, configurable: true });
+      scroll.dispatchEvent(new Event('scroll'));
+      expect([scroll.style.getPropertyValue('--p'), scroll.style.getPropertyValue('--q')]).toEqual([p, q]);
+    }
   });
 });
 

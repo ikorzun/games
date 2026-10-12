@@ -88,7 +88,7 @@ async function closeSaveLoad(page) {
 }
 
 async function toMenu(p) {
-  await p.waitForSelector('.vn-menu__nav button', { state: 'visible' });
+  await p.waitForSelector('.vn-ep__open', { state: 'visible' });
 }
 
 async function startServer() {
@@ -200,8 +200,10 @@ async function scenarioPlay(browser, baseUrl) {
   console.log(`  (платформа: ${isBridge ? 'Playgama Bridge' : 'web-plain'}; рендерер сцены: ${await page.evaluate(() => window.__vn.renderer())})`);
   check('язык выбран по браузеру (ru-RU → ru)', (await page.evaluate(() => document.documentElement.lang)) === 'ru');
 
-  // новая игра → контент-предупреждение
-  await page.click('.vn-menu__nav .is-primary');
+  // клик по эпизоду (сейва нет) → новая игра → контент-предупреждение
+  check('на полке открыт текущий эпизод и есть закрытые', (await page.locator('.vn-ep.is-open').count()) === 1 && (await page.locator('.vn-ep.is-locked').count()) > 0);
+  check('язык, архив и настройки — иконками', (await page.locator('.vn-menu__icons button').count()) === 3);
+  await page.click('.vn-ep__open');
   await page.waitForSelector('.vn-warning', { state: 'visible' });
   check('перед эпизодом показано контент-предупреждение и дисклеймер', (await page.locator('.vn-warning__title').innerText()).length > 0 && (await page.locator('.vn-warning__disclaimer h3').count()) === 1);
   await page.click('.vn-warning .vn-btn.is-primary');
@@ -243,8 +245,8 @@ async function scenarioPlay(browser, baseUrl) {
   }
   await page.reload({ waitUntil: 'networkidle' });
   await toMenu(page);
-  check('после перезагрузки в меню есть «Продолжить» (прогресс сохранён)', (await page.locator('.vn-menu__nav button').count()) === 4);
-  await page.click('.vn-menu__nav .is-primary'); // Продолжить
+  check('после перезагрузки у эпизода есть «Начать заново» (прогресс сохранён)', (await page.locator('.vn-ep__restart').count()) === 1);
+  await page.click('.vn-ep__open'); // продолжение
   await page.waitForFunction(() => window.__vn.pending()?.kind === 'line', null, { timeout: 15000 });
   await openSaveLoad(page, 'load');
   await page.click(isBridge ? '.vn-saveload .vn-slot:last-of-type' : '.vn-saveload [data-slot="2"]');
@@ -547,6 +549,7 @@ const layoutProbe = () => {
     if (r.width === 0 || r.height === 0) continue;
     if (el.closest('.vn-stage') && !el.closest('.vn-stage__captions')) continue;
     if (el.closest('.vn-hud')) continue;
+    if (el.closest('.vn-menu__shelf')) continue; // полка эпизодов листается горизонтально: карточки за краем — норма
     const name = el.tagName + '.' + String(el.className).split(' ')[0];
     if (r.left < -1 || r.right > vw + 1) bad.push(`x-out ${name} ${Math.round(r.left)}..${Math.round(r.right)} из ${vw}`);
     if (el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0 && !/auto|scroll|hidden/.test(cs.overflowX) && ['BUTTON', 'LABEL', 'SPAN', 'P', 'H1', 'H2', 'H3', 'DT', 'DD', 'LI', 'B'].includes(el.tagName)) bad.push(`clip-x ${name} ${el.scrollWidth}>${el.clientWidth}`);
@@ -577,7 +580,7 @@ async function scenarioMatrix(browser, baseUrl) {
       // Экран считается готовым, когда видны его элементы (а не просто сменилось ожидание сессии):
       // иначе проверка попадает на середину перехода сцены, когда окно текста ещё скрыто.
       const READY = {
-        menu: '.vn-menu__nav button',
+        menu: '.vn-ep__open',
         warning: '.vn-warning.is-in .vn-btn',
         dialogue: '.vn-textbox.is-complete:not([hidden]) .vn-textbox__shown',
         choice: '.vn-choices:not([hidden]) .vn-choice',
@@ -594,7 +597,7 @@ async function scenarioMatrix(browser, baseUrl) {
       };
       await toMenu(page);
       await probe('menu');
-      await page.click('.vn-menu__nav .is-primary');
+      await page.click('.vn-ep__open');
       await page.waitForSelector('.vn-warning', { state: 'visible' });
       await probe('warning');
       await page.click('.vn-warning .vn-btn.is-primary');

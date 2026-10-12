@@ -46,7 +46,7 @@
 }
 .mg-shell__title {
   margin: 0;
-  font: 700 1.5em / 1.1 var(--font-title, 'Arial Narrow', system-ui, sans-serif);
+  font: 400 1.5em / 1.1 var(--font-title, 'Arial Narrow', system-ui, sans-serif);
   letter-spacing: 0.01em;
 }
 .mg-shell__intro {
@@ -201,7 +201,7 @@
 }
 .mg-shell .mg-shell__btn.is-primary {
   color: #fff;
-  font-weight: 700;
+  font-weight: 400;
   background: var(--mg-accent);
   border-color: var(--mg-accent);
 }
@@ -226,7 +226,7 @@
   min-width: 0;
 }
 .mg-shell__result-title {
-  font: 700 1.15em var(--font-title, 'Arial Narrow', system-ui, sans-serif);
+  font: 400 1.15em var(--font-title, 'Arial Narrow', system-ui, sans-serif);
 }
 .mg-shell__result-note {
   color: var(--mg-muted);

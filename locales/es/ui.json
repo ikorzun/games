@@ -124,5 +124,12 @@
   "ui.choice.meter": "Serenidad",
   "ui.choice.meter_aria": "Serenidad: {value} de {max}",
   "ui.choice.tried": "ya probado",
-  "ui.choice.hint": "Pista: la jugada correcta está resaltada"
+  "ui.choice.hint": "Pista: la jugada correcta está resaltada",
+  "ui.menu.season": "Temporada {n}",
+  "ui.season.s1.title": "Crónicas modernas",
+  "ui.menu.episode_n": "Episodio {n}",
+  "ui.menu.soon": "Próximamente",
+  "ui.menu.badge_new": "Nuevo",
+  "ui.menu.restart": "Empezar de nuevo",
+  "ui.menu.brand": "Rusia criminal"
 }

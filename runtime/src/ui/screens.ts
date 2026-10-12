@@ -63,15 +63,33 @@ abstract class BaseScreen implements Screen {
 
 /** Картинки интерфейса (адреса уже загруженных файлов); null — файла нет, остаётся прежнее оформление. */
 export interface MenuArt {
-  background: string | null;
   plate: string | null;
-  /** Логотип передачи: в меню занимает не меньше пятой части экрана. */
+  /** Логотип передачи в шапке меню; нет файла — название передачи текстом. */
   logo: string | null;
 }
 
+/** Карточка на полке эпизодов: открыт только текущий эпизод, остальные — «скоро». */
+export interface MenuSlot {
+  order: number;
+  year: number | null;
+  current: boolean;
+  /** Обложка (адрес файла) или null — тёмная карточка. */
+  cover: string | null;
+}
+
+/** Сезон в шапке меню и его полка эпизодов (episodes/s<N>/season.json). */
+export interface MenuSeason {
+  n: number;
+  titleKey: string;
+  years: string | null;
+  slots: MenuSlot[];
+}
+
 export interface MenuHandlers {
-  /** assets/common/ui/menu_video_salon.webp и title_plate.webp, если они есть. */
+  /** assets/common/ui/logo_kr.webp и title_plate.webp, если они есть. */
   art?: MenuArt;
+  /** Рамка сезона; нет — на полке только текущий эпизод. */
+  season?: MenuSeason;
   hasContinue: () => boolean;
   completed: () => boolean;
   onContinue: () => void;
@@ -81,7 +99,19 @@ export interface MenuHandlers {
   onLanguage: (lang: Lang) => void;
 }
 
+/** Сжатие шапки на телефоне: 0 — вверху, 1 — после стольких пикселей прокрутки. */
+const MENU_SHRINK_PX = 140;
+
+/**
+ * Главный экран (решение владельца 2026-10-12, docs/production/concepts/main_menu): кинескоп телевизора, логотип
+ * передачи и сезон в шапке, полка эпизодов (текущий открыт, остальные «скоро»); язык, архив и настройки — иконками
+ * в правом верхнем углу. Клик по открытому эпизоду сразу запускает его: продолжение, если есть автосейв, иначе
+ * новая партия; при прогрессе под карточкой — «Начать заново». На телефоне полка вертикальная, шапка липкая и при
+ * прокрутке сжимается (CSS по переменным --p и --q).
+ */
 export class MenuScreen extends BaseScreen {
+  private langOpen = false;
+
   constructor(
     private readonly episode: Episode,
     private readonly handlers: MenuHandlers,
@@ -90,49 +120,105 @@ export class MenuScreen extends BaseScreen {
   }
 
   render(): void {
-    const { episode: ep, handlers: hd } = this;
-    const meta = [
-      ep.estimated_minutes ? t('ui.episode.minutes', { n: ep.estimated_minutes }) : null,
-      ep.age_rating ?? null,
-      hd.completed() ? t('ui.episode.completed') : null,
-    ].filter(Boolean);
-    const btn = (label: string, onClick: () => void, cls = ''): HTMLButtonElement =>
-      h('button', { class: `vn-btn ${cls}`.trim(), type: 'button', text: label, on: { click: onClick } });
-    const art = hd.art;
-    // Фон главного меню — видеосалон; нет файла — прежний тёмный градиент.
-    this.el.classList.toggle('has-bg', !!art?.background);
-    if (art?.background) this.el.style.setProperty('--menu-bg', cssUrl(art.background));
-    else this.el.style.removeProperty('--menu-bg');
-    const title = h('h1', { class: 'vn-menu__title', text: t(ep.title_key) });
-    // Бренд: логотип передачи (assets/common/ui/logo_kr.webp, ≥ 20 % высоты экрана), под ним — название эпизода.
-    let brand: HTMLElement = title;
-    if (art?.logo) {
-      const logo = h('img', { class: 'vn-menu__logo' }) as HTMLImageElement;
-      logo.src = art.logo;
-      logo.alt = '';
-      logo.draggable = false;
-      brand = h('div', { class: 'vn-menu__brand has-logo' }, logo, title);
-    }
-    fill(
-      this.el,
+    const hd = this.handlers;
+    const iconBtn = (name: IconName, label: string, onClick: () => void, cls: string, expanded?: boolean): HTMLButtonElement =>
       h(
-        'div',
-        { class: 'vn-menu__inner' },
-        brand,
-        ep.logline_key ? h('p', { class: 'vn-menu__logline', text: t(ep.logline_key) }) : null,
-        h('p', { class: 'vn-menu__meta', text: meta.join(' · ') }),
-        h(
-          'nav',
-          { class: 'vn-menu__nav' },
-          hd.hasContinue() ? btn(t('ui.menu.continue'), hd.onContinue, 'is-primary') : null,
-          btn(t('ui.menu.new_game'), hd.onNew, hd.hasContinue() ? '' : 'is-primary'),
-          btn(t('ui.menu.archive'), hd.onArchive),
-          btn(t('ui.menu.settings'), hd.onSettings),
-        ),
-        languageChips(hd.onLanguage),
-      ),
+        'button',
+        { class: `vn-menu__icon ${cls}`, type: 'button', title: label, aria: { label, ...(expanded === undefined ? {} : { expanded }) }, on: { click: onClick } },
+        icon(name),
+      );
+    const icons = h(
+      'nav',
+      { class: 'vn-menu__icons' },
+      h('span', { class: 'vn-menu__lang-code', text: i18n.lang.toUpperCase(), aria: { hidden: true } }),
+      iconBtn('globe', t('ui.menu.language'), () => this.toggleLangs(), 'is-lang', this.langOpen),
+      iconBtn('log', t('ui.menu.archive'), hd.onArchive, 'is-archive'),
+      iconBtn('settings', t('ui.menu.settings'), hd.onSettings, 'is-settings'),
+    );
+    const langs = this.langOpen
+      ? h('div', { class: 'vn-menu__langs' }, languageChips((lang) => {
+          this.langOpen = false;
+          this.render(); // закрыть переключатель сразу; при смене языка приложение перерисует меню ещё раз
+          hd.onLanguage(lang);
+        }))
+      : null;
+
+    let brand: HTMLElement;
+    if (hd.art?.logo) {
+      const logo = h('img', { class: 'vn-menu__logo' }) as HTMLImageElement;
+      logo.src = hd.art.logo;
+      logo.alt = t('ui.menu.brand');
+      logo.draggable = false;
+      brand = logo;
+    } else {
+      brand = h('h1', { class: 'vn-menu__title', text: t('ui.menu.brand') });
+    }
+    const s = hd.season;
+    const tag = s
+      ? h(
+          'p',
+          { class: 'vn-menu__tag' },
+          [t('ui.menu.season', { n: s.n }), t(s.titleKey)].join(' · ') + (s.years ? ' · ' : ''),
+          s.years ? h('span', { text: s.years }) : null,
+        )
+      : null;
+
+    const slots: MenuSlot[] = s && s.slots.length > 0 ? s.slots : [{ order: this.episode.order ?? 1, year: null, current: true, cover: null }];
+    const shelf = h('div', { class: 'vn-menu__shelf', role: 'list' }, ...slots.map((sl) => (sl.current ? this.openCard(sl) : lockedCard(sl))));
+    const scroll = h('div', { class: 'vn-menu__scroll' }, h('header', { class: 'vn-menu__head' }, brand, tag), shelf);
+    scroll.addEventListener(
+      'scroll',
+      () => {
+        const p = Math.min(1, scroll.scrollTop / MENU_SHRINK_PX);
+        scroll.style.setProperty('--p', p.toFixed(3));
+        // логотип поднимается в ряд иконок только на последних 40 % сжатия, когда он уже мал
+        scroll.style.setProperty('--q', Math.max(0, (p - 0.6) / 0.4).toFixed(3));
+      },
+      { passive: true },
+    );
+    fill(this.el, h('div', { class: 'vn-crt' }, h('div', { class: 'vn-crt__in' }, h('div', { class: 'vn-crt__screen' }, icons, langs, scroll))));
+  }
+
+  private toggleLangs(): void {
+    this.langOpen = !this.langOpen;
+    this.render();
+  }
+
+  private openCard(sl: MenuSlot): HTMLElement {
+    const hd = this.handlers;
+    const cont = hd.hasContinue();
+    const badge = cont ? t('ui.episode.continue') : hd.completed() ? t('ui.episode.completed') : t('ui.menu.badge_new');
+    const thumb = h('span', { class: 'vn-ep__thumb' }, h('span', { class: 'vn-ep__badge', text: badge }));
+    if (sl.cover) thumb.style.backgroundImage = cssUrl(sl.cover);
+    const name = t(this.episode.title_key);
+    const open = h(
+      'button',
+      { class: 'vn-ep__open', type: 'button', aria: { label: `${slotNumber(sl)}: ${name}. ${badge}` }, on: { click: () => (cont ? hd.onContinue() : hd.onNew()) } },
+      thumb,
+      h('span', { class: 'vn-ep__num', text: slotNumber(sl) }),
+      h('span', { class: 'vn-ep__name', text: name }),
+    );
+    return h(
+      'div',
+      { class: 'vn-ep is-open', role: 'listitem' },
+      open,
+      cont ? h('button', { class: 'vn-ep__restart', type: 'button', text: t('ui.menu.restart'), on: { click: hd.onNew } }) : null,
     );
   }
+}
+
+function slotNumber(sl: MenuSlot): string {
+  return [t('ui.menu.episode_n', { n: sl.order }), sl.year].filter((x) => x !== null).join(' · ');
+}
+
+function lockedCard(sl: MenuSlot): HTMLElement {
+  return h(
+    'div',
+    { class: 'vn-ep is-locked', role: 'listitem', aria: { disabled: true } },
+    h('span', { class: 'vn-ep__thumb' }, h('span', { class: 'vn-ep__lock' }, icon('lock'))),
+    h('span', { class: 'vn-ep__num', text: slotNumber(sl) }),
+    h('span', { class: 'vn-ep__name', text: t('ui.menu.soon') }),
+  );
 }
 
 /** Переключатель языка: названия на самих языках (требование Playgama). */

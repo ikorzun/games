@@ -4,6 +4,7 @@
  */
 import type { AutoplayPolicy, AutoplayReport } from './core/autoplay';
 import { i18n, t } from './core/i18n';
+import type { SeasonInfo } from './core/loader';
 import type { SaveFile, SaveManager } from './core/saves';
 import type { Settings } from './core/settings';
 import type { Episode, Lang, Value } from './core/types';
@@ -33,6 +34,7 @@ import {
   SettingsScreen,
   WarningScreen,
 } from './ui/screens';
+import type { MenuSeason } from './ui/screens';
 
 export interface AppInit {
   root: HTMLElement;
@@ -47,6 +49,8 @@ export interface AppInit {
   assets?: AppAssets;
   /** Догрузить строки языка (и цепочку его фолбэков), если их ещё нет. */
   loadLang: (lang: Lang) => Promise<void>;
+  /** Рамка сезона для полки эпизодов главного меню (episodes/s<N>/season.json); нет — только текущий эпизод. */
+  season?: SeasonInfo | null;
   renderer?: RendererChoice;
   debug?: boolean;
 }
@@ -191,8 +195,10 @@ export class App {
     this.playTheme();
     const ep = this.d.episode;
     const saves = this.d.saves;
+    const season = this.menuSeason();
     const menu = new MenuScreen(ep, {
       ...(this.d.assets ? { art: this.d.assets.art } : {}),
+      ...(season ? { season } : {}),
       hasContinue: () => this.continuable() !== null,
       completed: () => (saves.profile.endings[ep.id]?.length ?? 0) > 0,
       onContinue: () => this.continueGame(),
@@ -202,6 +208,19 @@ export class App {
       onLanguage: (lang) => void this.setLanguage(lang),
     });
     this.kit.screens.open(menu);
+  }
+
+  /** Полка эпизодов: слоты рамки сезона с обложками; открыт текущий эпизод, остальные — «скоро». */
+  private menuSeason(): MenuSeason | null {
+    const s = this.d.season;
+    if (!s) return null;
+    const cover = (p?: string): string | null => (p ? (this.d.assets?.catalog.url(p) ?? p) : null);
+    return {
+      n: s.season,
+      titleKey: s.title_key,
+      years: s.years ?? null,
+      slots: s.episodes.map((x) => ({ order: x.order, year: x.year ?? null, current: x.id === this.d.episode.id, cover: cover(x.cover) })),
+    };
   }
 
   private continuable(): SaveFile | null {
