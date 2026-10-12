@@ -8,6 +8,6 @@ for j in res['jobs']:
     sid = wave['ids'][j['index']]
     if j['status'] != 'completed':
         print('NOT COMPLETED', sid, j); continue
-    reg[sid] = {"job": j["job_id"], "url": j["result_url"], "v2": True}
+    reg[sid] = {"job": j["job_id"], "url": j["result_url"], "v2": True, "q": wave['requests'][j['index']]['params']['quality']}
     print('reg', sid, j['job_id'])
 json.dump(reg, open(f'{SP}/registry.json', 'w'), ensure_ascii=False, indent=1)

@@ -29,3 +29,6 @@ assets/ep01/regen/*
 !assets/ep01/regen/README.md
 !assets/ep01/regen/registry.json
 !assets/ep01/regen/pending.json
+
+# Черновики Seedance (tools/seedance_generate.py): рабочие mp4 и job.json с task id, в git не хранятся
+assets/common/video/drafts/

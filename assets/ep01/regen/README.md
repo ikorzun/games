@@ -1,72 +1,60 @@
-# Пересъёмка кадров покрытия по новым лицам — состояние и как продолжить
+# Пересъёмка по новым лицам, качество high — состояние и как продолжить
 
 Задача владельца: «вобрать все кадры для истории с новыми портретами, качество 1080, проверять, чтобы
 в окружении, портретах и во всей сцене не было нейронных артефактов».
 
-С 2026-10-12 по решению владельца кадры снимаются **скиллом gpt-image** (OpenAI GPT Image 2.5 напрямую,
-`~/.claude/skills/gpt-image`, ключ `OPENAI_API_KEY` в `~/.claude/settings.json`), а не через Higgsfield.
+**Решения владельца 2026-10-12:**
+- всё с людьми (кадры покрытия, спрайты) и всё для мини-игр (документы `doc_*`, CG) снимается на `quality: high`;
+- сначала тратятся кредиты Higgsfield (high/2k, 2,75 кредита за картинку), потом — скилл gpt-image (OpenAI API
+  напрямую, flare high 1920×1088, ≈ $0.075 за кадр);
+- 62 кадра stairwell и apartment_zoya, снятые на low, переснимаются на high;
+- портреты `faces/` НЕ переснимаются: в игре они не показываются (только референсы), high им ничего не даёт, а риск
+  сдвинуть утверждённые лица есть (решение основной модели, владельцу сообщено — может отменить).
 
 ## Состояние (2026-10-12)
 
-| Сет | Кадров | Принято по новым лицам | Применено к эпизоду |
+| Что | Всего | Готово на high | Чем |
 |---|---|---|---|
-| stairwell | 28 | 28 (Higgsfield) | да |
-| apartment_zoya | 35 | 34 (Higgsfield, всё, кроме angle_foreground); в манифест (`v: 2`) пока записаны только wide_1–4 и medium_1–3 | нет — старые файлы сета ещё на месте |
-| notary, office_day, office_evening, interrogation, bti, street_day, office_night, street_night, yard, zhek, office_now, murashov_flat | 270 | 0 | нет |
+| Спрайты — базы `neutral` | 13 | 13 (в манифесте, файлы на месте) | Higgsfield high/2k |
+| Спрайты — выражения | 21 | 0 | Higgsfield, пока хватает кредитов, затем API |
+| Кадры покрытия (все 14 сетов, с stairwell) | 333 | 0 | API (кредитов Higgsfield на них не останется) |
+| CG (5) и документы `doc_*` (5) | 10 | 0 | API |
 
-**Блокер:** у OpenAI-аккаунта кончились кредиты: пилот `sh_apartment_zoya_angle_foreground` получил
-HTTP 429 `credit_balance_exhausted`. Пополняет владелец (platform.openai.com → Billing). Цена кадра ещё не
-измерена: `gpt_wave.py` пишет `usage` каждого кадра в `out/<id>.json`; по пилоту посчитать $ за кадр и
-записать сюда.
+Баланс Higgsfield после баз спрайтов ≈ 38,3 кредита (≈ 13 картинок high/2k). Цены high: 2k — 2,75, 1k — 1,5 кредита
+(`generate_image` с `get_cost: true` даёт точную цену без генерации).
 
-`registry.json` — принятые кадры по новым лицам: у кадров Higgsfield — job и URL, у кадров gpt-image — путь к PNG
-и модель.
+## Инструменты
 
-## Как устроен конвейер gpt-image
-
-- `tools/regen/gpt_wave.py <id>… [--q low|medium] [--model flare|sunburst] [--size 1920x1088] [--dry-run]` —
-  снимает кадры плана по 4 параллельно в `out/<id>.png` (+ `out/<id>.json`: модель, референсы, usage).
-  Референсы идут в порядке плана (в промпте «Reference 1/2/3» позиционные): `file:<путь>` — локальный файл;
-  job id — запись манифеста. Кадр Higgsfield при этом качается по url в `cache/`: локальный файл сета до его
-  закрытия может быть ещё старой редакции. Лицо, фон и спрайт берутся из локального target.
-- `tools/regen/gpt_accept.py <id>…` — принять: PNG → target кадра (webp 1920×1080 рецептом `fetch_assets`),
-  запись в `registry.json` и в манифест: `"v": 2`, **без url**, `"job": "file:<target>"`, по этому полю
-  планировщик берёт кадр референсом. Файл кадра коммитится вместе с манифестом. Бот fetch-assets записи без
-  url пропускает, поэтому `git rm` старых файлов и ожидание бота больше не нужны.
-- Кропы-референсы — локальные файлы `assets/ep01/refs/<set>_medium_v2.jpg` (и `_medium_solo_v2.jpg`), в
-  `REGEN_REFS` в виде `file:assets/ep01/refs/…`. Загрузка в Higgsfield не нужна. Старые `refs/<set>_medium.jpg`
-  вырезаны из кадров со старыми лицами — их не брать.
-- У Python с python.org нет корневых сертификатов: скрипт сам ставит `SSL_CERT_FILE=/etc/ssl/cert.pem`.
+- `tools/shot_plan.py … --regen --plan assets/ep01/regen/plan.json` — план кадров (детерминирован, в git не хранится).
+- `tools/regen/sprite_plan.py` — план спрайтов `sprite_plan.json`: база по файлу лица, выражение — правка принятой
+  базы (в план попадает, когда база принята на high).
+- Higgsfield: `PLAN=… tools/regen/wave_build.py wNNN <id>…` (по умолчанию high/2k; формат и прозрачный фон — из плана)
+  → `generate_image_batch` по 4 (больше — 429) → `jobs_wait` → `reg_add.py wNNN.json '<jobs json>'`.
+- API: `PLAN=… tools/regen/gpt_wave.py <id>…` (по умолчанию flare high; размер и фон — из плана; по 4 параллельно,
+  таймаут 300 с и один повтор) → `out/<id>.png` + `out/<id>.json` с usage.
+- `tools/regen/accept.py --src hf|api <id>…` — принять: файл → target (кадр — webp 1920×1080, спрайт — webp с альфой
+  792×1400), registry.json (`"q"` — качество), манифест с `"v": 2` (hf — с url и job; api — без url, `job:
+  "file:<target>"`). Файлы коммитятся вместе с манифестом; бот fetch-assets записи без url и существующие файлы
+  пропускает. CDN Higgsfield иногда не отвечает за 120 с — повторить.
+- Кропы-референсы для средних планов — локальные `refs/<set>_medium_v2.jpg` из принятого `wide_1`, в `REGEN_REFS` как
+  `file:…`. Старые `refs/<set>_medium.jpg` — из кадров со старыми лицами, не брать.
+- У Python с python.org нет корневых сертификатов: скрипты ставят `SSL_CERT_FILE=/etc/ssl/cert.pem`.
 
 ## Порядок работы
 
-Сеты — в порядке истории: apartment_zoya → notary → office_day → office_evening → interrogation → bti →
-street_day → office_night → street_night → yard → zhek → office_now → murashov_flat.
-
-1. План: `python3 tools/shot_plan.py episodes/s1/ep01_murylev.json --regen --plan assets/ep01/regen/plan.json`
-   (детерминирован; файл большой и в git не хранится).
-2. Общий план `wide_1` сета снимается по фону и лицам из `faces/` (эти референсы у кадра уже есть в плане):
-   `gpt_wave.py sh_<set>_wide_1 --q medium`. Остальные кадры — `--q low`. Размер 1920×1088 («качество 1080»;
-   1080 не кратно 16, при конвертации обрезается до 1920×1080). Модель `flare`; если лица уходят от портрета,
-   один раз сравнить тот же кадр на `sunburst` и выбрать модель.
-3. Принятый `wide_1` → `gpt_accept.py sh_<set>_wide_1`. Из `out/sh_<set>_wide_1.png` вырезать два кропа и
-   сохранить их в `refs/`: «средний» — доли (0.15, 0.12, 0.85, 0.82), «соло» — правая часть кадра (1920×1080,
-   jpg q92). Вписать `REGEN_REFS["<set>"]` (`room`: `sh_<set>_wide_1`; `medium`/`angle`/`insert`/`medium_solo`:
-   `file:…`) и пересобрать план.
-4. Остальные кадры — пачками по 4–8 id через `gpt_wave.py`; при 429 из-за rate limit — подождать и повторить.
-5. Каждый кадр смотреть глазами (960 px): лицо против портрета, руки и пальцы, предметы без дублей,
-   надписи нечитаемы, эпоха, никто не смотрит в объектив на общих. Принятые — `gpt_accept.py`,
-   отбракованные — переснять (`gpt_wave.py` перезапишет PNG).
-6. Сет закрыт → строка в `assets/ep01/generation-log.md`, затем
-   `python3 tools/shot_plan.py episodes/s1/ep01_murylev.json --regen --apply assets/ep01/regen/plan.json --sets <set>`,
-   линтер эпизода и `npm --prefix runtime test`, коммит и пуш (файлы кадров + манифест + эпизод вместе).
-
-## Для apartment_zoya сейчас
-
-1. Снять `sh_apartment_zoya_angle_foreground` (референсы: `refs/apartment_zoya_medium_v2.jpg` — кроп нового
-   wide_1, лица Мурашова и Зои), проверить, `gpt_accept.py`.
-2. Закрыть сет: `python3 tools/regen/manifest_add.py` с id 34 кадров Higgsfield (в `registry.json`) — записи с url.
-   Их файлы скачать локально (CDN доступен), а не ждать бота: `fetch_assets.fetch` + `to_webp(…, 'shot')` для
-   каждой записи сета с url. Затем `--apply`, линтер, тесты, коммит.
+1. Выражения спрайтов (Higgsfield до конца кредитов, затем API), проверка: лицо то же, одежда и поза не изменились,
+   альфа есть, руки.
+2. Кадры покрытия по сетам в порядке истории: stairwell → apartment_zoya → notary → office_day → office_evening →
+   interrogation → bti → street_day → office_night → street_night → yard → zhek → office_now → murashov_flat.
+   В каждом сете: `wide_1` → `accept` → кропы «средний» (доли 0.15, 0.12, 0.85, 0.82) и «соло» (правая часть) в `refs/`
+   → `REGEN_REFS["<set>"]` → пересобрать план → остальные кадры пачками.
+3. Каждый кадр — глазами (960 px и фрагмент 1:1): лицо против портрета, руки и пальцы, предметы без дублей, надписи
+   нечитаемы (на high бумаги, вывески и фото в рамках прорисовываются чётче — смотреть строже), эпоха, никто не
+   смотрит в объектив на общих.
+4. Сет закрыт → строка в `generation-log.md` → `shot_plan.py … --regen --apply assets/ep01/regen/plan.json --sets <set>`
+   → линтер эпизода и `npm --prefix runtime test` → коммит и пуш.
+5. В конце — CG и документы на high.
 
 Правило для лица Мурашова (силуэт) в ots: верхний край кадра режет его по подбородку — уже в планировщике.
+Ракурс `angle_foreground` apartment_zoya: передний план — спинка кровати, тумбочка с лекарствами одна, у изголовья
+(иначе модель рисует её дважды).

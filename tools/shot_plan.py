@@ -437,9 +437,10 @@ ANGLES = {
                 "lace curtain glows in the centre, the plain ceiling fills the upper third, the people are seen from below"),
         ("high", "the camera is high in the corner above the door, tilted down at the room: the top of the sideboard on "
                  "the left, the bed on the right, the people and the floor between them"),
-        ("foreground", "the camera is low at the foot of the bed, looking past the green bedspread and the bedside table "
-                       "with the medicine bottles in the near foreground, out of focus, toward the sideboard and the "
-                       "window; the people beyond are in focus"),
+        ("foreground", "the camera is low at the foot of the bed, looking past the wooden footboard and the green "
+                       "bedspread in the near foreground, out of focus, toward the sideboard and the window; the people "
+                       "beyond are in focus; the one bedside table with the medicine bottles stays far away by the head "
+                       "of the bed near the window"),
     ],
     "bg_notary_office": [
         ("low", "the camera lies on the desktop among the papers beside the round stamp, tilted up: the green lamp shade "
