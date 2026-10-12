@@ -696,7 +696,8 @@
           "transition": "dissolve"
         }
       ],
-      "notes": "Холодное открытие. В окнах третьего этажа снова горит свет, но занавески чужие; Галина стоит у подъезда с бутылкой молока и смотрит вверх."
+      "notes": "Холодное открытие. В окнах третьего этажа снова горит свет, но занавески чужие; Галина стоит у подъезда с бутылкой молока и смотрит вверх.",
+      "coverage": "yard"
     },
     "s02": {
       "id": "s02",
@@ -1015,7 +1016,8 @@
           "transition": "dissolve"
         }
       ],
-      "notes": "Мурашов только силуэтом (лицо — не раньше s28). Говорит ровно, вежливо, без нажима: помощь, а не напор."
+      "notes": "Мурашов только силуэтом (лицо — не раньше s28). Говорит ровно, вежливо, без нажима: помощь, а не напор.",
+      "coverage": "zhek"
     },
     "s08": {
       "id": "s08",
@@ -1299,7 +1301,8 @@
           "transition": "fade"
         }
       ],
-      "notes": "Последний кадр Зои Павловны: со спины, во дворе. Насилие не показывается."
+      "notes": "Последний кадр Зои Павловны: со спины, во дворе. Насилие не показывается.",
+      "coverage": "yard"
     },
     "s11": {
       "id": "s11",
@@ -4194,7 +4197,8 @@
           "scene": "s31",
           "transition": "vhs_glitch"
         }
-      ]
+      ],
+      "coverage": "office_now"
     },
     "s31": {
       "id": "s31",
@@ -5376,7 +5380,8 @@
           ],
           "remember": false
         }
-      ]
+      ],
+      "coverage": "murashov_flat"
     },
     "s38": {
       "id": "s38",
@@ -17913,6 +17918,683 @@
           }
         ],
         "file": "assets/ep01/shots/street_day/medium_2.webp"
+      },
+      {
+        "id": "sh_yard_wide_1",
+        "set": "yard",
+        "bg": "bg_yard_summer",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/yard/wide_1.webp"
+      },
+      {
+        "id": "sh_yard_medium_1",
+        "set": "yard",
+        "bg": "bg_yard_summer",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/yard/medium_1.webp"
+      },
+      {
+        "id": "sh_yard_close_neighbor_worried",
+        "set": "yard",
+        "bg": "bg_yard_summer",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "worried"
+          }
+        ],
+        "file": "assets/ep01/shots/yard/close_neighbor_worried.webp",
+        "focus": "neighbor"
+      },
+      {
+        "id": "sh_yard_reaction_neighbor",
+        "set": "yard",
+        "bg": "bg_yard_summer",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/yard/reaction_neighbor.webp",
+        "focus": "neighbor"
+      },
+      {
+        "id": "sh_yard_insert_1",
+        "set": "yard",
+        "bg": "bg_yard_summer",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/yard/insert_1.webp"
+      },
+      {
+        "id": "sh_yard_angle_low",
+        "set": "yard",
+        "bg": "bg_yard_summer",
+        "kind": "angle",
+        "angle": "low",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/yard/angle_low.webp"
+      },
+      {
+        "id": "sh_yard_angle_high",
+        "set": "yard",
+        "bg": "bg_yard_summer",
+        "kind": "angle",
+        "angle": "high",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/yard/angle_high.webp"
+      },
+      {
+        "id": "sh_yard_angle_foreground",
+        "set": "yard",
+        "bg": "bg_yard_summer",
+        "kind": "angle",
+        "angle": "foreground",
+        "cast": [
+          {
+            "who": "neighbor",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/yard/angle_foreground.webp"
+      },
+      {
+        "id": "sh_zhek_wide_1",
+        "set": "zhek",
+        "bg": "bg_zhek",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov_sil",
+            "expression": "neutral"
+          },
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/zhek/wide_1.webp"
+      },
+      {
+        "id": "sh_zhek_wide_2",
+        "set": "zhek",
+        "bg": "bg_zhek",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/zhek/wide_2.webp"
+      },
+      {
+        "id": "sh_zhek_medium_1",
+        "set": "zhek",
+        "bg": "bg_zhek",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov_sil",
+            "expression": "neutral"
+          },
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/zhek/medium_1.webp"
+      },
+      {
+        "id": "sh_zhek_medium_2",
+        "set": "zhek",
+        "bg": "bg_zhek",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/zhek/medium_2.webp"
+      },
+      {
+        "id": "sh_zhek_ots_zoya_murashov_sil",
+        "set": "zhek",
+        "bg": "bg_zhek",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "murashov_sil",
+            "expression": "neutral"
+          },
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/zhek/ots_zoya_murashov_sil.webp",
+        "from": "zoya",
+        "focus": "murashov_sil"
+      },
+      {
+        "id": "sh_zhek_ots_murashov_sil_zoya",
+        "set": "zhek",
+        "bg": "bg_zhek",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          },
+          {
+            "who": "murashov_sil",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/zhek/ots_murashov_sil_zoya.webp",
+        "from": "murashov_sil",
+        "focus": "zoya"
+      },
+      {
+        "id": "sh_zhek_close_zoya_warm",
+        "set": "zhek",
+        "bg": "bg_zhek",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "zoya",
+            "expression": "warm"
+          }
+        ],
+        "file": "assets/ep01/shots/zhek/close_zoya_warm.webp",
+        "focus": "zoya"
+      },
+      {
+        "id": "sh_zhek_close_zoya_worried",
+        "set": "zhek",
+        "bg": "bg_zhek",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "zoya",
+            "expression": "worried"
+          }
+        ],
+        "file": "assets/ep01/shots/zhek/close_zoya_worried.webp",
+        "focus": "zoya"
+      },
+      {
+        "id": "sh_zhek_reaction_zoya",
+        "set": "zhek",
+        "bg": "bg_zhek",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/zhek/reaction_zoya.webp",
+        "focus": "zoya"
+      },
+      {
+        "id": "sh_zhek_insert_1",
+        "set": "zhek",
+        "bg": "bg_zhek",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/zhek/insert_1.webp"
+      },
+      {
+        "id": "sh_zhek_insert_2",
+        "set": "zhek",
+        "bg": "bg_zhek",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/zhek/insert_2.webp"
+      },
+      {
+        "id": "sh_zhek_angle_low",
+        "set": "zhek",
+        "bg": "bg_zhek",
+        "kind": "angle",
+        "angle": "low",
+        "cast": [
+          {
+            "who": "murashov_sil",
+            "expression": "neutral"
+          },
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/zhek/angle_low.webp"
+      },
+      {
+        "id": "sh_zhek_angle_high",
+        "set": "zhek",
+        "bg": "bg_zhek",
+        "kind": "angle",
+        "angle": "high",
+        "cast": [
+          {
+            "who": "murashov_sil",
+            "expression": "neutral"
+          },
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/zhek/angle_high.webp"
+      },
+      {
+        "id": "sh_zhek_angle_foreground",
+        "set": "zhek",
+        "bg": "bg_zhek",
+        "kind": "angle",
+        "angle": "foreground",
+        "cast": [
+          {
+            "who": "murashov_sil",
+            "expression": "neutral"
+          },
+          {
+            "who": "zoya",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/zhek/angle_foreground.webp"
+      },
+      {
+        "id": "sh_office_now_wide_1",
+        "set": "office_now",
+        "bg": "bg_office_now",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak_old",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_now/wide_1.webp"
+      },
+      {
+        "id": "sh_office_now_medium_1",
+        "set": "office_now",
+        "bg": "bg_office_now",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak_old",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_now/medium_1.webp"
+      },
+      {
+        "id": "sh_office_now_close_sledak_old_neutral",
+        "set": "office_now",
+        "bg": "bg_office_now",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak_old",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_now/close_sledak_old_neutral.webp",
+        "focus": "sledak_old"
+      },
+      {
+        "id": "sh_office_now_close_sledak_old_sad",
+        "set": "office_now",
+        "bg": "bg_office_now",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak_old",
+            "expression": "sad"
+          }
+        ],
+        "file": "assets/ep01/shots/office_now/close_sledak_old_sad.webp",
+        "focus": "sledak_old"
+      },
+      {
+        "id": "sh_office_now_reaction_sledak_old",
+        "set": "office_now",
+        "bg": "bg_office_now",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak_old",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_now/reaction_sledak_old.webp",
+        "focus": "sledak_old"
+      },
+      {
+        "id": "sh_office_now_insert_1",
+        "set": "office_now",
+        "bg": "bg_office_now",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/office_now/insert_1.webp"
+      },
+      {
+        "id": "sh_office_now_angle_low",
+        "set": "office_now",
+        "bg": "bg_office_now",
+        "kind": "angle",
+        "angle": "low",
+        "cast": [
+          {
+            "who": "sledak_old",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_now/angle_low.webp"
+      },
+      {
+        "id": "sh_office_now_angle_high",
+        "set": "office_now",
+        "bg": "bg_office_now",
+        "kind": "angle",
+        "angle": "high",
+        "cast": [
+          {
+            "who": "sledak_old",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_now/angle_high.webp"
+      },
+      {
+        "id": "sh_office_now_angle_foreground",
+        "set": "office_now",
+        "bg": "bg_office_now",
+        "kind": "angle",
+        "angle": "foreground",
+        "cast": [
+          {
+            "who": "sledak_old",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/office_now/angle_foreground.webp"
+      },
+      {
+        "id": "sh_murashov_flat_wide_1",
+        "set": "murashov_flat",
+        "bg": "bg_murashov_flat",
+        "kind": "wide",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/murashov_flat/wide_1.webp"
+      },
+      {
+        "id": "sh_murashov_flat_medium_1",
+        "set": "murashov_flat",
+        "bg": "bg_murashov_flat",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/murashov_flat/medium_1.webp"
+      },
+      {
+        "id": "sh_murashov_flat_ots_expert_sledak",
+        "set": "murashov_flat",
+        "bg": "bg_murashov_flat",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          },
+          {
+            "who": "expert",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/murashov_flat/ots_expert_sledak.webp",
+        "from": "expert",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_murashov_flat_ots_sledak_expert",
+        "set": "murashov_flat",
+        "bg": "bg_murashov_flat",
+        "kind": "ots",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/murashov_flat/ots_sledak_expert.webp",
+        "from": "sledak",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_murashov_flat_close_expert_focused",
+        "set": "murashov_flat",
+        "bg": "bg_murashov_flat",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "focused"
+          }
+        ],
+        "file": "assets/ep01/shots/murashov_flat/close_expert_focused.webp",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_murashov_flat_close_sledak_neutral",
+        "set": "murashov_flat",
+        "bg": "bg_murashov_flat",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/murashov_flat/close_sledak_neutral.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_murashov_flat_close_sledak_tense",
+        "set": "murashov_flat",
+        "bg": "bg_murashov_flat",
+        "kind": "close",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "tense"
+          }
+        ],
+        "file": "assets/ep01/shots/murashov_flat/close_sledak_tense.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_murashov_flat_reaction_expert",
+        "set": "murashov_flat",
+        "bg": "bg_murashov_flat",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/murashov_flat/reaction_expert.webp",
+        "focus": "expert"
+      },
+      {
+        "id": "sh_murashov_flat_reaction_sledak",
+        "set": "murashov_flat",
+        "bg": "bg_murashov_flat",
+        "kind": "reaction",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/murashov_flat/reaction_sledak.webp",
+        "focus": "sledak"
+      },
+      {
+        "id": "sh_murashov_flat_insert_1",
+        "set": "murashov_flat",
+        "bg": "bg_murashov_flat",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/murashov_flat/insert_1.webp"
+      },
+      {
+        "id": "sh_murashov_flat_insert_2",
+        "set": "murashov_flat",
+        "bg": "bg_murashov_flat",
+        "kind": "insert",
+        "angle": "eye",
+        "cast": [],
+        "file": "assets/ep01/shots/murashov_flat/insert_2.webp"
+      },
+      {
+        "id": "sh_murashov_flat_angle_low",
+        "set": "murashov_flat",
+        "bg": "bg_murashov_flat",
+        "kind": "angle",
+        "angle": "low",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/murashov_flat/angle_low.webp"
+      },
+      {
+        "id": "sh_murashov_flat_angle_high",
+        "set": "murashov_flat",
+        "bg": "bg_murashov_flat",
+        "kind": "angle",
+        "angle": "high",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/murashov_flat/angle_high.webp"
+      },
+      {
+        "id": "sh_murashov_flat_angle_foreground",
+        "set": "murashov_flat",
+        "bg": "bg_murashov_flat",
+        "kind": "angle",
+        "angle": "foreground",
+        "cast": [
+          {
+            "who": "expert",
+            "expression": "neutral"
+          },
+          {
+            "who": "sledak",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/murashov_flat/angle_foreground.webp"
       }
     ]
   }

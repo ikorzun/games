@@ -381,23 +381,26 @@
  {
   "id": "cg_door_sealed",
   "kind": "cg",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181516_dbe95fc1-7cc1-4974-ba62-e8cfb18b0629.png",
   "target": "assets/ep01/cg/door_sealed.webp",
-  "job": "dbe95fc1-7cc1-4974-ba62-e8cfb18b0629"
+  "job": "file:assets/ep01/cg/door_sealed.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
  },
  {
   "id": "cg_zoya_last",
   "kind": "cg",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181534_308a34ff-d076-4fec-8a4f-9d837cf1e558.png",
   "target": "assets/ep01/cg/zoya_last.webp",
-  "job": "308a34ff-d076-4fec-8a4f-9d837cf1e558"
+  "job": "file:assets/ep01/cg/zoya_last.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
  },
  {
   "id": "cg_arrest_night",
   "kind": "cg",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181602_a5fa6d2e-3c03-4d66-9e45-b55ea5f9c3aa.png",
   "target": "assets/ep01/cg/arrest_night.webp",
-  "job": "a5fa6d2e-3c03-4d66-9e45-b55ea5f9c3aa"
+  "job": "file:assets/ep01/cg/arrest_night.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
  },
  {
   "id": "cg_keys",
@@ -409,9 +412,10 @@
  {
   "id": "cg_verdict",
   "kind": "cg",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181617_3e736ba0-bfcb-4824-8ae8-6790e6fe59f5.png",
   "target": "assets/ep01/cg/verdict.webp",
-  "job": "3e736ba0-bfcb-4824-8ae8-6790e6fe59f5"
+  "job": "file:assets/ep01/cg/verdict.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
  },
  {
   "id": "doc_power_of_attorney",
@@ -2984,6 +2988,366 @@
   "kind": "shot",
   "target": "assets/ep01/shots/street_day/medium_2.webp",
   "job": "file:assets/ep01/shots/street_day/medium_2.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_yard_wide_1",
+  "kind": "shot",
+  "target": "assets/ep01/shots/yard/wide_1.webp",
+  "job": "file:assets/ep01/shots/yard/wide_1.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_zhek_wide_1",
+  "kind": "shot",
+  "target": "assets/ep01/shots/zhek/wide_1.webp",
+  "job": "file:assets/ep01/shots/zhek/wide_1.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_zhek_wide_2",
+  "kind": "shot",
+  "target": "assets/ep01/shots/zhek/wide_2.webp",
+  "job": "file:assets/ep01/shots/zhek/wide_2.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_office_now_wide_1",
+  "kind": "shot",
+  "target": "assets/ep01/shots/office_now/wide_1.webp",
+  "job": "file:assets/ep01/shots/office_now/wide_1.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_murashov_flat_wide_1",
+  "kind": "shot",
+  "target": "assets/ep01/shots/murashov_flat/wide_1.webp",
+  "job": "file:assets/ep01/shots/murashov_flat/wide_1.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_yard_medium_1",
+  "kind": "shot",
+  "target": "assets/ep01/shots/yard/medium_1.webp",
+  "job": "file:assets/ep01/shots/yard/medium_1.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_yard_close_neighbor_worried",
+  "kind": "shot",
+  "target": "assets/ep01/shots/yard/close_neighbor_worried.webp",
+  "job": "file:assets/ep01/shots/yard/close_neighbor_worried.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_yard_reaction_neighbor",
+  "kind": "shot",
+  "target": "assets/ep01/shots/yard/reaction_neighbor.webp",
+  "job": "file:assets/ep01/shots/yard/reaction_neighbor.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_yard_insert_1",
+  "kind": "shot",
+  "target": "assets/ep01/shots/yard/insert_1.webp",
+  "job": "file:assets/ep01/shots/yard/insert_1.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_yard_angle_low",
+  "kind": "shot",
+  "target": "assets/ep01/shots/yard/angle_low.webp",
+  "job": "file:assets/ep01/shots/yard/angle_low.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_yard_angle_high",
+  "kind": "shot",
+  "target": "assets/ep01/shots/yard/angle_high.webp",
+  "job": "file:assets/ep01/shots/yard/angle_high.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_yard_angle_foreground",
+  "kind": "shot",
+  "target": "assets/ep01/shots/yard/angle_foreground.webp",
+  "job": "file:assets/ep01/shots/yard/angle_foreground.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_zhek_medium_1",
+  "kind": "shot",
+  "target": "assets/ep01/shots/zhek/medium_1.webp",
+  "job": "file:assets/ep01/shots/zhek/medium_1.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_zhek_medium_2",
+  "kind": "shot",
+  "target": "assets/ep01/shots/zhek/medium_2.webp",
+  "job": "file:assets/ep01/shots/zhek/medium_2.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_zhek_ots_zoya_murashov_sil",
+  "kind": "shot",
+  "target": "assets/ep01/shots/zhek/ots_zoya_murashov_sil.webp",
+  "job": "file:assets/ep01/shots/zhek/ots_zoya_murashov_sil.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_zhek_ots_murashov_sil_zoya",
+  "kind": "shot",
+  "target": "assets/ep01/shots/zhek/ots_murashov_sil_zoya.webp",
+  "job": "file:assets/ep01/shots/zhek/ots_murashov_sil_zoya.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_zhek_close_zoya_warm",
+  "kind": "shot",
+  "target": "assets/ep01/shots/zhek/close_zoya_warm.webp",
+  "job": "file:assets/ep01/shots/zhek/close_zoya_warm.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_zhek_close_zoya_worried",
+  "kind": "shot",
+  "target": "assets/ep01/shots/zhek/close_zoya_worried.webp",
+  "job": "file:assets/ep01/shots/zhek/close_zoya_worried.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_zhek_reaction_zoya",
+  "kind": "shot",
+  "target": "assets/ep01/shots/zhek/reaction_zoya.webp",
+  "job": "file:assets/ep01/shots/zhek/reaction_zoya.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_zhek_insert_1",
+  "kind": "shot",
+  "target": "assets/ep01/shots/zhek/insert_1.webp",
+  "job": "file:assets/ep01/shots/zhek/insert_1.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_zhek_insert_2",
+  "kind": "shot",
+  "target": "assets/ep01/shots/zhek/insert_2.webp",
+  "job": "file:assets/ep01/shots/zhek/insert_2.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_zhek_angle_low",
+  "kind": "shot",
+  "target": "assets/ep01/shots/zhek/angle_low.webp",
+  "job": "file:assets/ep01/shots/zhek/angle_low.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_zhek_angle_high",
+  "kind": "shot",
+  "target": "assets/ep01/shots/zhek/angle_high.webp",
+  "job": "file:assets/ep01/shots/zhek/angle_high.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_zhek_angle_foreground",
+  "kind": "shot",
+  "target": "assets/ep01/shots/zhek/angle_foreground.webp",
+  "job": "file:assets/ep01/shots/zhek/angle_foreground.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_office_now_medium_1",
+  "kind": "shot",
+  "target": "assets/ep01/shots/office_now/medium_1.webp",
+  "job": "file:assets/ep01/shots/office_now/medium_1.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_office_now_close_sledak_old_neutral",
+  "kind": "shot",
+  "target": "assets/ep01/shots/office_now/close_sledak_old_neutral.webp",
+  "job": "file:assets/ep01/shots/office_now/close_sledak_old_neutral.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_office_now_close_sledak_old_sad",
+  "kind": "shot",
+  "target": "assets/ep01/shots/office_now/close_sledak_old_sad.webp",
+  "job": "file:assets/ep01/shots/office_now/close_sledak_old_sad.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_office_now_reaction_sledak_old",
+  "kind": "shot",
+  "target": "assets/ep01/shots/office_now/reaction_sledak_old.webp",
+  "job": "file:assets/ep01/shots/office_now/reaction_sledak_old.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_office_now_insert_1",
+  "kind": "shot",
+  "target": "assets/ep01/shots/office_now/insert_1.webp",
+  "job": "file:assets/ep01/shots/office_now/insert_1.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_office_now_angle_low",
+  "kind": "shot",
+  "target": "assets/ep01/shots/office_now/angle_low.webp",
+  "job": "file:assets/ep01/shots/office_now/angle_low.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_office_now_angle_high",
+  "kind": "shot",
+  "target": "assets/ep01/shots/office_now/angle_high.webp",
+  "job": "file:assets/ep01/shots/office_now/angle_high.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_office_now_angle_foreground",
+  "kind": "shot",
+  "target": "assets/ep01/shots/office_now/angle_foreground.webp",
+  "job": "file:assets/ep01/shots/office_now/angle_foreground.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_murashov_flat_medium_1",
+  "kind": "shot",
+  "target": "assets/ep01/shots/murashov_flat/medium_1.webp",
+  "job": "file:assets/ep01/shots/murashov_flat/medium_1.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_murashov_flat_ots_expert_sledak",
+  "kind": "shot",
+  "target": "assets/ep01/shots/murashov_flat/ots_expert_sledak.webp",
+  "job": "file:assets/ep01/shots/murashov_flat/ots_expert_sledak.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_murashov_flat_ots_sledak_expert",
+  "kind": "shot",
+  "target": "assets/ep01/shots/murashov_flat/ots_sledak_expert.webp",
+  "job": "file:assets/ep01/shots/murashov_flat/ots_sledak_expert.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_murashov_flat_close_expert_focused",
+  "kind": "shot",
+  "target": "assets/ep01/shots/murashov_flat/close_expert_focused.webp",
+  "job": "file:assets/ep01/shots/murashov_flat/close_expert_focused.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_murashov_flat_close_sledak_neutral",
+  "kind": "shot",
+  "target": "assets/ep01/shots/murashov_flat/close_sledak_neutral.webp",
+  "job": "file:assets/ep01/shots/murashov_flat/close_sledak_neutral.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_murashov_flat_close_sledak_tense",
+  "kind": "shot",
+  "target": "assets/ep01/shots/murashov_flat/close_sledak_tense.webp",
+  "job": "file:assets/ep01/shots/murashov_flat/close_sledak_tense.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_murashov_flat_reaction_expert",
+  "kind": "shot",
+  "target": "assets/ep01/shots/murashov_flat/reaction_expert.webp",
+  "job": "file:assets/ep01/shots/murashov_flat/reaction_expert.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_murashov_flat_reaction_sledak",
+  "kind": "shot",
+  "target": "assets/ep01/shots/murashov_flat/reaction_sledak.webp",
+  "job": "file:assets/ep01/shots/murashov_flat/reaction_sledak.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_murashov_flat_insert_1",
+  "kind": "shot",
+  "target": "assets/ep01/shots/murashov_flat/insert_1.webp",
+  "job": "file:assets/ep01/shots/murashov_flat/insert_1.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_murashov_flat_insert_2",
+  "kind": "shot",
+  "target": "assets/ep01/shots/murashov_flat/insert_2.webp",
+  "job": "file:assets/ep01/shots/murashov_flat/insert_2.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_murashov_flat_angle_low",
+  "kind": "shot",
+  "target": "assets/ep01/shots/murashov_flat/angle_low.webp",
+  "job": "file:assets/ep01/shots/murashov_flat/angle_low.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_murashov_flat_angle_high",
+  "kind": "shot",
+  "target": "assets/ep01/shots/murashov_flat/angle_high.webp",
+  "job": "file:assets/ep01/shots/murashov_flat/angle_high.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
+ },
+ {
+  "id": "sh_murashov_flat_angle_foreground",
+  "kind": "shot",
+  "target": "assets/ep01/shots/murashov_flat/angle_foreground.webp",
+  "job": "file:assets/ep01/shots/murashov_flat/angle_foreground.webp",
   "v": 2,
   "src": "gpt-image-2.5-flare"
  }

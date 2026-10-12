@@ -570,6 +570,14 @@ REGEN_REFS: dict[str, dict[str, str]] = {
                     "angle": "file:assets/ep01/refs/office_night_medium_v2.jpg", "insert": "file:assets/ep01/refs/office_night_medium_v2.jpg"},
     "street_night": {"room": "sh_street_night_wide_1", "medium": "file:assets/ep01/refs/street_night_medium_v2.jpg",
                     "angle": "file:assets/ep01/refs/street_night_medium_v2.jpg", "insert": "file:assets/ep01/refs/street_night_medium_v2.jpg"},
+    "yard": {"room": "sh_yard_wide_1", "medium": "file:assets/ep01/refs/yard_medium_v2.jpg",
+            "angle": "file:assets/ep01/refs/yard_medium_v2.jpg", "insert": "file:assets/ep01/refs/yard_medium_v2.jpg"},
+    "zhek": {"room": "sh_zhek_wide_1", "medium": "file:assets/ep01/refs/zhek_medium_v2.jpg",
+            "angle": "file:assets/ep01/refs/zhek_medium_v2.jpg", "insert": "file:assets/ep01/refs/zhek_medium_v2.jpg", "medium_solo": "file:assets/ep01/refs/zhek_medium_solo_v2.jpg"},
+    "office_now": {"room": "sh_office_now_wide_1", "medium": "file:assets/ep01/refs/office_now_medium_v2.jpg",
+                  "angle": "file:assets/ep01/refs/office_now_medium_v2.jpg", "insert": "file:assets/ep01/refs/office_now_medium_v2.jpg"},
+    "murashov_flat": {"room": "sh_murashov_flat_wide_1", "medium": "file:assets/ep01/refs/murashov_flat_medium_v2.jpg",
+                     "angle": "file:assets/ep01/refs/murashov_flat_medium_v2.jpg", "insert": "file:assets/ep01/refs/murashov_flat_medium_v2.jpg"},
 }
 NEW_IDS: set[str] = set()  # записи манифеста с "v": 2 — кадры, принятые уже по новым лицам
 
@@ -888,7 +896,8 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
     def ref_media(cast: list[dict], kind: str, inside: bool = False) -> list[str]:
         # Средний план с одним человеком: кроп общего плана с другими людьми тянет их в кадр (stairwell medium_3
         # дважды), поэтому для одиночных средних планов — отдельный референс без людей рядом, если он задан.
-        if kind == "medium" and len(cast) == 1 and REF_SHOTS.get(set_name, {}).get("medium_solo"):
+        if kind == "medium" and len(cast) == 1 and (REF_SHOTS.get(set_name, {}).get("medium_solo")
+                                                    or (REGEN and REGEN_REFS.get(set_name, {}).get("medium_solo"))):
             kind = "medium_solo"
         ref_shot = REF_SHOTS.get(set_name, {}).get(kind)
         if REGEN:

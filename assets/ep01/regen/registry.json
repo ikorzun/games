@@ -1930,5 +1930,299 @@
   "model": "gpt-image-2.5-flare",
   "q": "high",
   "v2": true
+ },
+ "sh_yard_wide_1": {
+  "file": "assets/ep01/regen/out/sh_yard_wide_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_zhek_wide_1": {
+  "file": "assets/ep01/regen/out/sh_zhek_wide_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_zhek_wide_2": {
+  "file": "assets/ep01/regen/out/sh_zhek_wide_2.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_now_wide_1": {
+  "file": "assets/ep01/regen/out/sh_office_now_wide_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_murashov_flat_wide_1": {
+  "file": "assets/ep01/regen/out/sh_murashov_flat_wide_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_yard_medium_1": {
+  "file": "assets/ep01/regen/out/sh_yard_medium_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_yard_close_neighbor_worried": {
+  "file": "assets/ep01/regen/out/sh_yard_close_neighbor_worried.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_yard_reaction_neighbor": {
+  "file": "assets/ep01/regen/out/sh_yard_reaction_neighbor.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_yard_insert_1": {
+  "file": "assets/ep01/regen/out/sh_yard_insert_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_yard_angle_low": {
+  "file": "assets/ep01/regen/out/sh_yard_angle_low.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_yard_angle_high": {
+  "file": "assets/ep01/regen/out/sh_yard_angle_high.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_yard_angle_foreground": {
+  "file": "assets/ep01/regen/out/sh_yard_angle_foreground.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_zhek_medium_1": {
+  "file": "assets/ep01/regen/out/sh_zhek_medium_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_zhek_medium_2": {
+  "file": "assets/ep01/regen/out/sh_zhek_medium_2.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_zhek_ots_zoya_murashov_sil": {
+  "file": "assets/ep01/regen/out/sh_zhek_ots_zoya_murashov_sil.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_zhek_ots_murashov_sil_zoya": {
+  "file": "assets/ep01/regen/out/sh_zhek_ots_murashov_sil_zoya.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_zhek_close_zoya_warm": {
+  "file": "assets/ep01/regen/out/sh_zhek_close_zoya_warm.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_zhek_close_zoya_worried": {
+  "file": "assets/ep01/regen/out/sh_zhek_close_zoya_worried.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_zhek_reaction_zoya": {
+  "file": "assets/ep01/regen/out/sh_zhek_reaction_zoya.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_zhek_insert_1": {
+  "file": "assets/ep01/regen/out/sh_zhek_insert_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_zhek_insert_2": {
+  "file": "assets/ep01/regen/out/sh_zhek_insert_2.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_zhek_angle_low": {
+  "file": "assets/ep01/regen/out/sh_zhek_angle_low.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_zhek_angle_high": {
+  "file": "assets/ep01/regen/out/sh_zhek_angle_high.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_zhek_angle_foreground": {
+  "file": "assets/ep01/regen/out/sh_zhek_angle_foreground.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_now_medium_1": {
+  "file": "assets/ep01/regen/out/sh_office_now_medium_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_now_close_sledak_old_neutral": {
+  "file": "assets/ep01/regen/out/sh_office_now_close_sledak_old_neutral.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_now_close_sledak_old_sad": {
+  "file": "assets/ep01/regen/out/sh_office_now_close_sledak_old_sad.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_now_reaction_sledak_old": {
+  "file": "assets/ep01/regen/out/sh_office_now_reaction_sledak_old.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_now_insert_1": {
+  "file": "assets/ep01/regen/out/sh_office_now_insert_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_now_angle_low": {
+  "file": "assets/ep01/regen/out/sh_office_now_angle_low.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_now_angle_high": {
+  "file": "assets/ep01/regen/out/sh_office_now_angle_high.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_now_angle_foreground": {
+  "file": "assets/ep01/regen/out/sh_office_now_angle_foreground.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_murashov_flat_medium_1": {
+  "file": "assets/ep01/regen/out/sh_murashov_flat_medium_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_murashov_flat_ots_expert_sledak": {
+  "file": "assets/ep01/regen/out/sh_murashov_flat_ots_expert_sledak.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_murashov_flat_ots_sledak_expert": {
+  "file": "assets/ep01/regen/out/sh_murashov_flat_ots_sledak_expert.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_murashov_flat_close_expert_focused": {
+  "file": "assets/ep01/regen/out/sh_murashov_flat_close_expert_focused.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_murashov_flat_close_sledak_neutral": {
+  "file": "assets/ep01/regen/out/sh_murashov_flat_close_sledak_neutral.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_murashov_flat_close_sledak_tense": {
+  "file": "assets/ep01/regen/out/sh_murashov_flat_close_sledak_tense.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_murashov_flat_reaction_expert": {
+  "file": "assets/ep01/regen/out/sh_murashov_flat_reaction_expert.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_murashov_flat_reaction_sledak": {
+  "file": "assets/ep01/regen/out/sh_murashov_flat_reaction_sledak.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_murashov_flat_insert_1": {
+  "file": "assets/ep01/regen/out/sh_murashov_flat_insert_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_murashov_flat_insert_2": {
+  "file": "assets/ep01/regen/out/sh_murashov_flat_insert_2.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_murashov_flat_angle_low": {
+  "file": "assets/ep01/regen/out/sh_murashov_flat_angle_low.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_murashov_flat_angle_high": {
+  "file": "assets/ep01/regen/out/sh_murashov_flat_angle_high.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_murashov_flat_angle_foreground": {
+  "file": "assets/ep01/regen/out/sh_murashov_flat_angle_foreground.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "cg_door_sealed": {
+  "file": "assets/ep01/regen/out/cg_door_sealed.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "cg_zoya_last": {
+  "file": "assets/ep01/regen/out/cg_zoya_last.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "cg_arrest_night": {
+  "file": "assets/ep01/regen/out/cg_arrest_night.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "cg_verdict": {
+  "file": "assets/ep01/regen/out/cg_verdict.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
  }
 }
