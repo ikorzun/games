@@ -4,11 +4,10 @@
 Файл → target рецептом fetch_assets по виду ассета (кадр — webp 1920×1080, спрайт — webp с альфой, 1400 по высоте),
 запись в registry.json и в манифест с "v": 2: у hf — url и job (бот найдёт файл и пропустит), у api — без url и с
 job "file:<target>" (по нему планировщик берёт кадр референсом). Файл коммитится вместе с манифестом."""
-import json, os, sys, urllib.request
+import json, os, subprocess, sys
 from pathlib import Path
 sys.path.insert(0, 'tools')
 from fetch_assets import to_webp  # noqa: E402
-os.environ.setdefault('SSL_CERT_FILE', '/etc/ssl/cert.pem')  # у Python с python.org нет своих корневых сертификатов
 SP = os.environ.get('REGEN_DIR', 'assets/ep01/regen')
 MAN = 'assets/ep01/manifest.json'
 args = sys.argv[1:]
@@ -24,7 +23,8 @@ for sid in args:
     s = plan[sid]; target = s['file']; kind = s.get('asset', 'shot')
     if src == 'hf':
         r = reg[sid]
-        data = urllib.request.urlopen(r['url'], timeout=120).read()
+        # curl с повторами: urllib на CDN Higgsfield дважды обрывался по таймауту чтения
+        data = subprocess.run(['curl', '-sSf', '--retry', '3', '-m', '300', r['url']], capture_output=True, check=True).stdout
         entry = {"id": sid, "kind": kind, "url": r['url'], "target": target, "job": r['job'], "v": 2}
     else:
         meta = json.load(open(f'{SP}/out/{sid}.json'))
