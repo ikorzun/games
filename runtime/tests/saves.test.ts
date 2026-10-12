@@ -125,6 +125,20 @@ describe('SaveManager: пакетная запись (Playgama: один выз�
     }
   });
 
+  it('прогресс режима дела переживает «перезапуск» и пишется копией', async () => {
+    const st = new SpyStorage();
+    const a = new SaveManager(st, { slots: 0, debounceMs: 0 });
+    await a.init();
+    const data = { v: 1, stars: 3, done: ['search_flat'] };
+    a.writeCase('ep_mini', data);
+    data.stars = 99;
+    await a.flush();
+    const b = new SaveManager(st, { slots: 0, debounceMs: 0 });
+    await b.init();
+    expect(b.caseProgress('ep_mini')).toEqual({ v: 1, stars: 3, done: ['search_flat'] });
+    expect(b.caseProgress('other')).toBeNull();
+  });
+
   it('данные переживают «перезапуск»: новый менеджер читает то, что записал прежний', async () => {
     const st = new SpyStorage();
     const a = new SaveManager(st, { slots: 0, debounceMs: 0 });
@@ -423,8 +437,10 @@ describe('очистка данных профиля и настроек', () =>
     });
     expect(sanitizeArchive({ items: { e: ['x', 1] } })).toEqual({ v: 1, items: { e: ['x'] } });
     expect(sanitizeArchive(7)).toEqual({ v: 1, items: {} });
-    expect(sanitizeProgress({ autosave: { a: 1 } })).toEqual({ v: 1, autosave: { a: 1 }, quick: null });
-    expect(sanitizeProgress(null)).toEqual({ v: 1, autosave: null, quick: null });
+    expect(sanitizeProgress({ autosave: { a: 1 } })).toEqual({ v: 1, autosave: { a: 1 }, quick: null, cases: {} });
+    expect(sanitizeProgress(null)).toEqual({ v: 1, autosave: null, quick: null, cases: {} });
+    expect(sanitizeProgress({ cases: { ep: { stars: 2 } } }).cases).toEqual({ ep: { stars: 2 } });
+    expect(sanitizeProgress({ cases: [1, 2] }).cases).toEqual({});
   });
 
   it('sanitizeSettings: неизвестное — к умолчанию, числа зажимаются, язык проверяется по списку', () => {

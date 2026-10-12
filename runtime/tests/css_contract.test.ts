@@ -165,9 +165,12 @@ describe('интерфейс: документальная эстетика, mob
   });
 
   it('шрифт только 400 или тоньше (решение владельца 2026-10-12): ни жирных начертаний, ни их файлов', () => {
-    const mgDir = join(HERE, '..', 'src', 'minigames');
-    const mgCss = readdirSync(mgDir).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(mgDir, f), 'utf8'));
-    for (const css of [uiCss, ...mgCss]) {
+    const cssOf = (dir: string): string[] => {
+      const d = join(HERE, '..', 'src', dir);
+      return readdirSync(d).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(d, f), 'utf8'));
+    };
+    // Мини-игры и режим дела (папка, итог поиска, осмотр фото).
+    for (const css of [uiCss, ...cssOf('minigames'), ...cssOf('case')]) {
       expect(css).not.toMatch(/font-weight:\s*(?:[5-9]00|bold)/);
       expect(css).not.toMatch(/font:\s*(?:[5-9]00|bold)\s/);
     }

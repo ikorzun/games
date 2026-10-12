@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://criminal-russia.local/schemas/case.schema.json",
+  "title": "Дело (режим поиска улик)",
+  "description": "Режим дела в духе Criminal Case (docs/architecture/09-case-mode.md): главы из задач, ★ за поиск, подозреваемые, приметы убийцы, улики. Файл лежит рядом с эпизодом (episodes/s<N>/<id>.case.json) и опирается на него: фоны, актёры, спрайты, документы и мини-игры берутся из эпизода. Шаги разговоров — в формате шагов эпизода (episode.schema.json $defs/step), переход в конце разговора рантайм дописывает сам. Тексты — ключи локали эпизода (<ns>.case.*) и ui.case.*.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "episode", "title_key", "traits", "suspects", "clues", "scenes", "talks", "chapters"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "episode": { "$ref": "#/$defs/id", "description": "id эпизода, на который опирается дело (тот же каталог)." },
+    "title_key": { "$ref": "#/$defs/key" },
+    "traits": {
+      "type": "array", "minItems": 1, "maxItems": 5,
+      "description": "Приметы убийцы: открываются уликами; неоткрытая показана как «?».",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "label_key"],
+        "properties": { "id": { "$ref": "#/$defs/id" }, "label_key": { "$ref": "#/$defs/key" } }
+      }
+    },
+    "suspects": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "name_key", "note_key"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "name_key": { "$ref": "#/$defs/key" },
+          "who": { "$ref": "#/$defs/id", "description": "id актёра эпизода: портрет — его спрайт neutral. Нет — силуэт (лица следствие не знает)." },
+          "note_key": { "$ref": "#/$defs/key", "description": "Кто это для следствия, одна строка." }
+        }
+      }
+    },
+    "clues": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "label_key"],
+        "properties": { "id": { "$ref": "#/$defs/id" }, "label_key": { "$ref": "#/$defs/key" } }
+      }
+    },
+    "facts": {
+      "type": "array",
+      "description": "Записи в папке: к подозреваемому (suspect) или к уликам.",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "text_key"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "suspect": { "$ref": "#/$defs/id" },
+          "text_key": { "$ref": "#/$defs/key" }
+        }
+      }
+    },
+    "scenes": {
+      "type": "object",
+      "description": "Сцены поиска: фон эпизода и предметы на нём. За заход игрок ищет pick предметов по списку; предметы-улики (clue) обязательны, пока улика не найдена, остальные выбираются случайно — повтор даёт новый набор.",
+      "additionalProperties": { "$ref": "#/$defs/scene" }
+    },
+    "talks": {
+      "type": "object",
+      "description": "Короткие разговоры (≤ 4 реплик): играет движок новеллы.",
+      "additionalProperties": { "$ref": "#/$defs/talk" }
+    },
+    "chapters": {
+      "type": "array", "minItems": 1,
+      "items": { "$ref": "#/$defs/chapter" }
+    },
+    "notes": { "type": "string" }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+    "key": { "type": "string", "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)+$" },
+    "ids": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true },
+    "rect": {
+      "type": "array", "minItems": 4, "maxItems": 4,
+      "items": { "type": "number", "minimum": 0, "maximum": 1 },
+      "description": "[x, y, w, h] в долях фона, начало — левый верхний угол; зона попадания рантаймом растягивается до 56 px."
+    },
+    "scene": {
+      "type": "object", "additionalProperties": false,
+      "required": ["bg", "title_key", "brief_key", "pick", "time_limit_ms", "star_time_ms", "star_misses", "items"],
+      "properties": {
+        "bg": { "$ref": "#/$defs/id", "description": "id фона эпизода (assets.backgrounds)." },
+        "title_key": { "$ref": "#/$defs/key" },
+        "brief_key": { "$ref": "#/$defs/key" },
+        "pick": { "type": "integer", "minimum": 3, "maximum": 15, "description": "Сколько предметов в списке за заход." },
+        "time_limit_ms": { "type": "integer", "minimum": 30000 },
+        "star_time_ms": { "type": "integer", "minimum": 10000, "description": "★ за скорость: всё найдено быстрее." },
+        "star_misses": { "type": "integer", "minimum": 0, "description": "★ за точность: промахов не больше." },
+        "items": {
+          "type": "array", "minItems": 3,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "rect", "label_key"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "rect": { "$ref": "#/$defs/rect" },
+              "label_key": { "$ref": "#/$defs/key" },
+              "clue": { "$ref": "#/$defs/id", "description": "Найденный предмет — эта улика (clues[].id); пока улики нет, предмет всегда в списке." }
+            }
+          }
+        }
+      }
+    },
+    "talk": {
+      "type": "object", "additionalProperties": false, "required": ["stage", "steps"],
+      "properties": {
+        "stage": { "type": "object", "description": "Как stage сцены эпизода (bg, filter, time_of_day …)." },
+        "presentation": { "type": "string", "default": "procedural" },
+        "steps": { "type": "array", "minItems": 1, "description": "Шаги в формате эпизода; переходы (jump, branch, choice, minigame, end) не нужны.", "items": { "type": "object" } }
+      }
+    },
+    "gives": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "clues": { "$ref": "#/$defs/ids" },
+        "suspects": { "$ref": "#/$defs/ids" },
+        "traits": { "$ref": "#/$defs/ids" },
+        "facts": { "$ref": "#/$defs/ids" }
+      }
+    },
+    "task": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "title_key", "cost", "requires"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["search", "talk", "photo", "minigame"], "description": "search — сцена поиска (scene); talk — разговор (talk); photo — осмотр предмета сцены с оборотом (scene + item + back_key, затем talk); minigame — мини-игра эпизода (minigame)." },
+        "title_key": { "$ref": "#/$defs/key" },
+        "cost": { "type": "integer", "minimum": 0, "maximum": 3, "description": "★ за задачу; списываются, когда задача выполнена." },
+        "requires": { "$ref": "#/$defs/ids" },
+        "scene": { "$ref": "#/$defs/id" },
+        "item": { "$ref": "#/$defs/id" },
+        "back_key": { "$ref": "#/$defs/key" },
+        "talk": { "$ref": "#/$defs/id" },
+        "minigame": { "$ref": "#/$defs/id" },
+        "gives": { "$ref": "#/$defs/gives" }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "search" } } }, "then": { "required": ["scene"] } },
+        { "if": { "properties": { "kind": { "const": "talk" } } }, "then": { "required": ["talk"] } },
+        { "if": { "properties": { "kind": { "const": "photo" } } }, "then": { "required": ["scene", "item", "back_key"] } },
+        { "if": { "properties": { "kind": { "const": "minigame" } } }, "then": { "required": ["minigame"] } }
+      ]
+    },
+    "chapter": {
+      "type": "object", "additionalProperties": false, "required": ["id", "title_key", "tasks"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title_key": { "$ref": "#/$defs/key" },
+        "locked": { "type": "boolean", "default": false, "description": "Глава ещё не сделана: в папке «скоро»." },
+        "intro": { "$ref": "#/$defs/id", "description": "Разговор при первом входе в главу." },
+        "outro": { "$ref": "#/$defs/id", "description": "Разговор, когда все задачи главы выполнены." },
+        "summary_key": { "$ref": "#/$defs/key" },
+        "tasks": { "type": "array", "items": { "$ref": "#/$defs/task" } }
+      }
+    }
+  }
+}

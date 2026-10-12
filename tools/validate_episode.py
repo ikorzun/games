@@ -17,6 +17,7 @@ from collections import deque
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import vnexpr  # noqa: E402
+import validate_case  # noqa: E402
 
 try:
     from jsonschema import Draft202012Validator
@@ -734,14 +735,16 @@ def key_roles(ep: dict) -> dict[str, str]:
     return roles
 
 
-def localization(ep: dict, locales_dir: str, rep: Report) -> None:
+def localization(ep: dict, locales_dir: str, rep: Report, extra: frozenset[str] = frozenset()) -> None:
     ns = ep["id"].split("_")[0]
+    # extra — ключи дела рядом с эпизодом (<id>.case.json): они живут в той же локали и не «лишние».
     keys = collect_loc_keys(ep)
     roles = key_roles(ep)
     for k in sorted(keys):
         head = k.split(".")[0]
         if head not in (ns, "ui", "common"):
             rep.warn(f"loc key {k}: ожидается пространство имён {ns}.*, ui.* или common.*")
+    keys = keys | extra
     for lang in LANGS:
         path = os.path.join(locales_dir, lang, f"{ep['id']}.json")
         if not os.path.exists(path):
@@ -815,6 +818,19 @@ def ui_check(locales_dir: str, rep: Report) -> None:
                 rep.warn(f"ui.json {lang}: {k} {len(str(v))} символов > {lim}")
 
 
+def case_main(a, rep: Report) -> int:
+    """Файл дела (*.case.json) — свой линтер, tools/validate_case.py."""
+    case = validate_case.lint_case(a.episode, a.locales, rep, load_json)
+    for w in rep.warnings:
+        print(f"WARN  {w}")
+    for e in rep.errors:
+        print(f"ERROR {e}")
+    tasks = sum(len(ch.get("tasks", [])) for ch in case.get("chapters", []))
+    print(f"-- {a.episode}: глав {len(case.get('chapters', []))}, задач {tasks}, сцен поиска {len(case.get('scenes', {}))}, "
+          f"разговоров {len(case.get('talks', {}))}; ошибок {len(rep.errors)}, предупреждений {len(rep.warnings)}")
+    return 1 if rep.errors or (a.strict and rep.warnings) else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("episode")
@@ -824,6 +840,8 @@ def main() -> int:
     a = ap.parse_args()
 
     rep = Report()
+    if a.episode.endswith(".case.json"):
+        return case_main(a, rep)
     ep = load_json(a.episode)
     schema_check(ep, rep)
     if not rep.errors:
@@ -835,7 +853,8 @@ def main() -> int:
         seasons(ep, ru, rep)
         minigame_integrity(ep, ru, rep)
         if not a.no_loc:
-            localization(ep, a.locales, rep)
+            case_path = os.path.join(os.path.dirname(a.episode), f"{ep['id']}.case.json")
+            localization(ep, a.locales, rep, frozenset(validate_case.case_keys(case_path, load_json)))
             ui_check(a.locales, rep)
 
     for w in rep.warnings:

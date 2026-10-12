@@ -217,6 +217,8 @@ export class DomUI implements SessionUI {
     kit.textbox.hide();
     const root = (await this.minigameRoot()) as Container;
     const screen = new MinigameScreen();
+    // Поиск по списку (режим дела) — во весь экран: картинка крупно, список целей колонкой рядом.
+    if (p.def.config.list === true) screen.el.classList.add('is-wide');
     this.openGameScreen(screen);
     stage.setMinigameActive(true);
     const mg = createMinigame(p.def.type);
@@ -251,7 +253,9 @@ export class DomUI implements SessionUI {
       mg.onResult = (r) => {
         if (done) return;
         done = true;
+        const state = ctx.final ? mg.serialize() : undefined;
         cleanup();
+        ctx.final?.(state);
         resolve(r);
       };
       ctx.signal.addEventListener(

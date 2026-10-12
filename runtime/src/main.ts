@@ -7,7 +7,7 @@ import './ui/styles.css';
 
 import { App } from './app';
 import { i18n, parseSupportedLang } from './core/i18n';
-import { ensureLangs, loadEpisode, loadManifest, loadSeason, loadVoiceIndex } from './core/loader';
+import { ensureLangs, loadCase, loadEpisode, loadManifest, loadSeason, loadVoiceIndex } from './core/loader';
 import { SaveManager } from './core/saves';
 import type { Lang } from './core/types';
 import { installDebug } from './debug/debug';
@@ -86,6 +86,8 @@ async function boot(): Promise<void> {
     if (!entry) throw new Error('в манифесте нет эпизодов');
     const seasonLoad = loadSeason(base, entry.season); // рамка сезона для полки эпизодов меню: ошибок не бросает
     const { episode, contentVersion } = await loadEpisode(base, entry);
+    // Режим дела (поиск улик), если рядом с эпизодом есть его дело; ?vn=1 — прежняя новелла.
+    const caseLoad = params.get('vn') === '1' ? Promise.resolve(null) : loadCase(base, entry, episode);
 
     // Язык: ?lang= → выбор игрока → язык платформы (bridge.platform.language / браузер) → en.
     const lang: Lang = parseSupportedLang(params.get('lang')) ?? saves.settings.lang ?? platform.language();
@@ -119,6 +121,7 @@ async function boot(): Promise<void> {
       assets,
       loadLang: (l) => ensureLangs(i18n, base, episode.id, [l]),
       season: await seasonLoad,
+      caseDef: await caseLoad,
       renderer: renderer === 'dom' || renderer === 'pixi' ? (renderer as RendererChoice) : 'auto',
       debug: params.get('debug') === '1' || import.meta.env.DEV,
     });

@@ -2,12 +2,14 @@
  * App — склейка всего: каркас интерфейса, сцена, Session, DomUI, платформа, сейвы, настройки,
  * меню и экраны. Здесь же маршрутизация быстрого меню и смена языка на лету.
  */
+import type { CaseDef } from './case/case_def';
+import { CaseMode } from './case/case_mode';
 import type { AutoplayPolicy, AutoplayReport } from './core/autoplay';
 import { i18n, t } from './core/i18n';
 import type { SeasonInfo } from './core/loader';
 import type { SaveFile, SaveManager } from './core/saves';
 import type { Settings } from './core/settings';
-import type { Episode, Lang, Value } from './core/types';
+import type { Episode, Lang, Value, ViewState } from './core/types';
 import type { IPlatform } from './platform/types';
 import { Session } from './session';
 import type { RunOutcome } from './session';
@@ -51,6 +53,8 @@ export interface AppInit {
   loadLang: (lang: Lang) => Promise<void>;
   /** Рамка сезона для полки эпизодов главного меню (episodes/s<N>/season.json); нет — только текущий эпизод. */
   season?: SeasonInfo | null;
+  /** Дело эпизода (режим поиска улик, docs/architecture/09-case-mode.md); есть — клик по эпизоду открывает папку дела. */
+  caseDef?: CaseDef | null;
   renderer?: RendererChoice;
   debug?: boolean;
 }
@@ -66,7 +70,12 @@ export class App {
   readonly ui: DomUI;
   readonly session: Session;
 
+  /** Режим дела; null — эпизод играется как новелла. */
+  readonly caseMode: CaseMode | null = null;
+
   private hud: Hud | null = null;
+  /** Кадр разговора дела для текстового окна (у разговоров свой интерпретатор). */
+  private talkView: (() => ViewState) | null = null;
   private settingsScreen: SettingsScreen | null = null;
   private settingsOpen = false;
 
@@ -120,7 +129,7 @@ export class App {
       captions: this.captions,
       platform: d.platform,
       settings: () => d.saves.settings,
-      view: () => (this.session.interp.started ? this.session.interp.view : null),
+      view: () => this.talkView?.() ?? (this.session.interp.started ? this.session.interp.view : null),
       env: () => (this.session.interp.started ? this.session.interp.env() : {}),
       onOpenArchive: () => this.openArchive(),
       onAction: (a) => this.onAction(a),
@@ -164,6 +173,24 @@ export class App {
     kit.screens.onChange(() => this.trackSettingsPause());
     i18n.onChange(() => this.ui.refreshLanguage());
 
+    if (d.caseDef) {
+      this.caseMode = new CaseMode({
+        def: d.caseDef,
+        episode: ep,
+        kit,
+        ui: this.ui,
+        // Свой режиссёр: у сцен дела нет блоков эпизода, предзагрузка по блокам им не нужна (картинки грузит сцена).
+        director: new Director({ stage, audio: d.audio, captions: captionSink, toasts: kit.toasts, checkpoint: () => undefined }),
+        saves: d.saves,
+        platform: d.platform,
+        settings: () => d.saves.settings,
+        url: (path) => d.assets?.catalog.url(path) ?? path,
+        setTalkView: (view) => (this.talkView = view),
+        setInGame: (on) => this.kit.root.classList.toggle('in-game', on),
+        onMenu: () => this.showMenu(),
+      });
+    }
+
     if (d.debug) {
       this.hud = new Hud(this.session, stage, d.audio, this.ui);
       kit.root.appendChild(this.hud.el);
@@ -186,6 +213,7 @@ export class App {
 
   /** Показать главное меню (при запуске, после финала). */
   showMenu(): void {
+    this.caseMode?.stop();
     this.session.cancel();
     this.kit.screens.closeAll();
     this.kit.root.classList.remove('in-game');
@@ -196,13 +224,14 @@ export class App {
     const ep = this.d.episode;
     const saves = this.d.saves;
     const season = this.menuSeason();
+    const cm = this.caseMode;
     const menu = new MenuScreen(ep, {
       ...(this.d.assets ? { art: this.d.assets.art } : {}),
       ...(season ? { season } : {}),
-      hasContinue: () => this.continuable() !== null,
-      completed: () => (saves.profile.endings[ep.id]?.length ?? 0) > 0,
-      onContinue: () => this.continueGame(),
-      onNew: () => void this.startNewGame(),
+      hasContinue: () => (cm ? cm.started : this.continuable() !== null),
+      completed: () => (cm ? cm.completed : (saves.profile.endings[ep.id]?.length ?? 0) > 0),
+      onContinue: () => (cm ? this.openCase() : this.continueGame()),
+      onNew: () => (cm ? this.newCase() : void this.startNewGame()),
       onArchive: () => this.openArchive(),
       onSettings: () => this.openSettings(),
       onLanguage: (lang) => void this.setLanguage(lang),
@@ -231,10 +260,29 @@ export class App {
   /** «Новая игра»: сначала контент-предупреждение (если не отключено), затем партия. */
   async startNewGame(opts: { skipWarning?: boolean } = {}): Promise<void> {
     if (!opts.skipWarning && !this.d.saves.profile.warning_dismissed) {
-      this.openWarning();
+      this.openWarning(() => this.beginGame(() => this.session.newGame()));
       return;
     }
     this.beginGame(() => this.session.newGame());
+  }
+
+  /** Дело с начала: контент-предупреждение (если не отключено), прогресс дела сбрасывается, вступление главы. */
+  newCase(opts: { skipWarning?: boolean } = {}): void {
+    const go = (): void => {
+      this.caseMode?.reset();
+      this.openCase();
+    };
+    if (!opts.skipWarning && !this.d.saves.profile.warning_dismissed) this.openWarning(go);
+    else go();
+  }
+
+  /** Папка дела (продолжение с того места, где игрок остановился). */
+  openCase(): void {
+    if (!this.caseMode) return;
+    this.session.cancel();
+    this.kit.screens.closeAll();
+    this.kit.root.classList.remove('in-game');
+    void this.caseMode.enter();
   }
 
   continueGame(): void {
@@ -264,7 +312,7 @@ export class App {
     });
   }
 
-  private openWarning(): void {
+  private openWarning(onGo: () => void): void {
     const saves = this.d.saves;
     const screen: WarningScreen = new WarningScreen(this.d.episode, {
       settings: () => saves.settings,
@@ -274,7 +322,7 @@ export class App {
       },
       onContinue: (dontShowAgain) => {
         if (dontShowAgain) saves.setWarningDismissed(true);
-        this.beginGame(() => this.session.newGame());
+        onGo();
       },
       onBack: () => this.kit.screens.close(screen),
     });

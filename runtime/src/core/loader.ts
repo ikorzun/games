@@ -3,6 +3,8 @@
  * вне рантайма (../episodes, ../locales) и копируются в сборку как статические файлы
  * (vite.config.ts); рантайм грузит только нужный эпизод и нужные языки.
  */
+import { assertCase } from '../case/case_def';
+import type { CaseDef } from '../case/case_def';
 import type { I18n } from './i18n';
 import { fallbackChain } from './i18n';
 import type { Episode, Lang } from './types';
@@ -123,6 +125,24 @@ export async function loadSeason(base: string, season: number, f: FetchLike = de
     const episodes = json.episodes.filter((x): x is SeasonSlot => !!x && typeof x.order === 'number');
     return { season, title_key: json.title_key, ...(typeof json.years === 'string' ? { years: json.years } : {}), episodes };
   } catch {
+    return null;
+  }
+}
+
+/**
+ * Дело эпизода (режим поиска улик): episodes/s<N>/<id>.case.json рядом с эпизодом. Никогда не бросает: нет файла или
+ * он не подходит эпизоду — null (с предупреждением в консоли, если файл есть, но кривой), игра идёт как новелла.
+ */
+export async function loadCase(base: string, entry: Pick<ManifestEntry, 'path'>, episode: Episode, f: FetchLike = defaultFetch): Promise<CaseDef | null> {
+  const url = `${base}${entry.path.replace(/\.json$/, '.case.json')}`;
+  try {
+    const res = await f(url);
+    if (!res.ok) return null;
+    const json = JSON.parse(await res.text()) as unknown;
+    assertCase(json, episode);
+    return json;
+  } catch (e) {
+    console.warn(`[case] ${url}: ${(e as Error).message}`);
     return null;
   }
 }

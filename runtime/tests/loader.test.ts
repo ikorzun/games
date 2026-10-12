@@ -8,6 +8,7 @@ import {
   ContentError,
   contentHash,
   ensureLangs,
+  loadCase,
   loadEpisode,
   loadManifest,
   loadStrings,
@@ -226,5 +227,26 @@ describe('loadVoiceIndex: индекс клипов озвучки', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('loadCase: дело рядом с эпизодом', () => {
+  const ep = miniEpisode({ s1: { steps: [{ do: 'end', ending: 'e_main' }] } });
+  const entry = { path: 'episodes/s1/x.json' };
+  const URL = '/b/episodes/s1/x.case.json';
+  const good = { schema_version: 1, episode: ep.id, title_key: 't', traits: [], suspects: [], clues: [], scenes: {}, talks: {}, chapters: [{ id: 'ch1', title_key: 'c', tasks: [] }] };
+
+  it('читает <эпизод>.case.json и проверяет, что это дело этого эпизода', async () => {
+    await expect(loadCase('/b/', entry, ep, fakeFetch({ [URL]: JSON.stringify(good) }))).resolves.toMatchObject({ episode: ep.id });
+  });
+
+  it('никогда не бросает: нет файла, кривой JSON, чужой эпизод, сбой сети — null', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await expect(loadCase('/b/', entry, ep, fakeFetch({}))).resolves.toBeNull();
+    await expect(loadCase('/b/', entry, ep, fakeFetch({ [URL]: '{нет' }))).resolves.toBeNull();
+    await expect(loadCase('/b/', entry, ep, fakeFetch({ [URL]: JSON.stringify({ ...good, episode: 'other' }) }))).resolves.toBeNull();
+    await expect(loadCase('/b/', entry, ep, fakeFetch({ [URL]: { throws: 'offline' } }))).resolves.toBeNull();
+    expect(warn).toHaveBeenCalledTimes(3); // 404 — штатно и молча
+    warn.mockRestore();
   });
 });

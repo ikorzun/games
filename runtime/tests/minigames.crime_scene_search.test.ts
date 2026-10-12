@@ -839,3 +839,57 @@ describe.skipIf(!hasRepoContent())('настоящая мини-игра ep01 (m
     expect(btn(r.dom, 'is-skip')).not.toBeNull();
   });
 });
+
+describe('режим списка (режим дела)', () => {
+  const POOL = Array.from({ length: 12 }, (_, i) => ({
+    id: `i${i}`,
+    rect: [0.05 + (i % 4) * 0.24, 0.1 + Math.floor(i / 4) * 0.3, 0.06, 0.06],
+    label_key: `hs.i${i}`,
+    required: i === 7,
+  }));
+  const LIST = { scene_bg: 'bg_x', list: true, pick: 5, seed: 0, hotspots: POOL, max_misses: 20 };
+  const ids = (seed: number, id = 'case_flat'): string[] => parseSceneConfig({ ...LIST, seed }, id)?.hotspots.map((h) => h.id) ?? [];
+
+  it('за заход — pick зон; обязательная всегда в списке; все выбранные обязательны', () => {
+    const c = parseSceneConfig(LIST, 'case_flat');
+    expect(c?.list).toBe(true);
+    expect(c?.hotspots).toHaveLength(5);
+    expect(c?.hotspots.map((h) => h.id)).toContain('i7');
+    expect(c?.hotspots.every((h) => h.required)).toBe(true);
+  });
+
+  it('тот же seed — тот же список и порядок; другой seed — другой набор', () => {
+    expect(ids(0)).toEqual(ids(0));
+    const sets = new Set([0, 1, 2, 3, 4].map((s) => [...ids(s)].sort().join(',')));
+    expect(sets.size).toBeGreaterThan(1);
+    for (const s of [0, 1, 2, 3, 4]) expect(ids(s)).toContain('i7');
+  });
+
+  it('pick больше пула — берутся все зоны', () => {
+    expect(parseSceneConfig({ ...LIST, pick: 50 }, 'x')?.hotspots).toHaveLength(12);
+  });
+
+  it('список целей виден сразу; найденная зачёркивается; тап по невыбранной зоне — промах', () => {
+    const g = play({}, LIST);
+    const chosen = parseSceneConfig(LIST, g.r.ctx.def.id)?.hotspots ?? [];
+    expect(texts(g.r.dom, '.mg-scene__list.is-targets .mg-scene__item')).toEqual(chosen.map((h) => `[hs.${h.id}]`));
+    const first = chosen[0];
+    if (!first) throw new Error('пустой список');
+    g.zone(first.id);
+    expect(q(g.r.dom, `.mg-scene__item[data-id="${first.id}"]`).classList.contains('is-found')).toBe(true);
+    const outside = POOL.find((h) => !chosen.some((c) => c.id === h.id));
+    if (!outside) throw new Error('все зоны выбраны');
+    g.zone(outside.id);
+    expect(texts(g.r.dom, '.mg-shell__fails-text')[0]).toMatch(/1/);
+  });
+
+  it('найдено всё из списка — success; итог виден в serialize до onResult', () => {
+    const g = play({}, LIST);
+    for (const h of parseSceneConfig(LIST, g.r.ctx.def.id)?.hotspots ?? []) g.zone(h.id);
+    const s = g.m.serialize() as { over: string; t: { found: string[]; misses: number } };
+    expect(s.over).toBe('success');
+    expect(s.t.found).toHaveLength(5);
+    g.next();
+    expect(g.r.results).toEqual(['success']);
+  });
+});

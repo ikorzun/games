@@ -12,12 +12,17 @@
  *
  * Итог: найдены все обязательные зоны → success; хотя бы одна → partial; ни одной → fail.
  * Игра заканчивается, когда найдено всё обязательное, промахов стало max_misses или вышло время.
+ *
+ * Режим списка (`list: true`, режим дела — docs/architecture/09-case-mode.md): все цели перечислены под картинкой
+ * сразу, найденные зачёркиваются. Из пула зон за заход берётся `pick`: обязательные (required) — всегда, остальные —
+ * случайно по зерну `seed` (номер захода), поэтому повтор сцены даёт новый список. Все выбранные — обязательные,
+ * невыбранные зоны неактивны: тап по ним — промах.
  */
 import type { MinigameOutcomeKind } from '../core/types';
 import { fill, h } from '../ui/dom';
 import { joinUrl } from '../stage/assets';
-import { asInt, asStr, isRecord, MinigameShell, warnMissingAsset } from './mg_shell';
-import type { IMinigame, MinigameConfig } from './types';
+import { asInt, asStr, hashString, isRecord, MinigameShell, mulberry32, warnMissingAsset } from './mg_shell';
+import type { GameContext, IMinigame, MinigameConfig } from './types';
 import './crime_scene_search.css';
 
 export const TYPE = 'crime_scene_search' as const;
@@ -38,6 +43,8 @@ export interface SceneConfig {
   maxMisses: number;
   timeLimitMs: number;
   hintAfterMisses: number;
+  /** Режим списка: цели перечислены сразу (hotspots — уже выбранные на этот заход, в порядке списка). */
+  list: boolean;
 }
 
 /** Наименьшая зона попадания, CSS-пикселей (≈ палец). */
@@ -50,11 +57,21 @@ const DOUBLE_TAP_PX = 24;
 
 const clamp01 = (n: number): number => Math.min(1, Math.max(0, n));
 
-/** Разобрать config; null — непригоден (оболочка покажет grey-box). */
-export function parseSceneConfig(cfg: MinigameConfig): SceneConfig | null {
+/** Перемешать копию массива (Фишер — Йетс) детерминированным генератором. */
+function shuffled<T>(items: readonly T[], rnd: () => number): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [out[i], out[j]] = [out[j] as T, out[i] as T];
+  }
+  return out;
+}
+
+/** Разобрать config; null — непригоден (оболочка покажет grey-box). `id` мини-игры — часть зерна режима списка. */
+export function parseSceneConfig(cfg: MinigameConfig, id = ''): SceneConfig | null {
   const raw = cfg.hotspots;
   if (!Array.isArray(raw) || raw.length === 0) return null;
-  const hotspots: Hotspot[] = [];
+  let hotspots: Hotspot[] = [];
   const seen = new Set<string>();
   for (const item of raw) {
     if (!isRecord(item)) return null;
@@ -67,14 +84,24 @@ export function parseSceneConfig(cfg: MinigameConfig): SceneConfig | null {
     seen.add(id);
     hotspots.push({ id, rect: [x, y, w, hh], labelKey: asStr(item.label_key), required: item.required === true });
   }
-  // Ни одной обязательной зоны — значит, обязательны все (иначе игра выиграна, не начавшись).
-  if (!hotspots.some((x) => x.required)) hotspots.forEach((x) => (x.required = true));
+  const list = cfg.list === true;
+  if (list) {
+    // Заход: обязательные + случайные из остальных до pick; порядок списка тоже случайный, но от того же зерна.
+    const rnd = mulberry32(hashString(`${id}#${asInt(cfg.seed, 0) ?? 0}`));
+    const pick = asInt(cfg.pick, 1) ?? hotspots.length;
+    const forced = hotspots.filter((x) => x.required);
+    const rest = shuffled(hotspots.filter((x) => !x.required), rnd).slice(0, Math.max(0, pick - forced.length));
+    hotspots = shuffled([...forced, ...rest], rnd);
+  }
+  // Ни одной обязательной зоны — значит, обязательны все (иначе игра выиграна, не начавшись); в списке обязательно всё.
+  if (list || !hotspots.some((x) => x.required)) hotspots.forEach((x) => (x.required = true));
   return {
     sceneBg: asStr(cfg.scene_bg),
     hotspots,
     maxMisses: asInt(cfg.max_misses, 1) ?? 6,
     timeLimitMs: asInt(cfg.time_limit_ms, 0) ?? 0,
     hintAfterMisses: asInt(cfg.hint_after_misses, 0) ?? 0,
+    list,
   };
 }
 
@@ -147,8 +174,8 @@ class CrimeSceneSearch extends MinigameShell {
   private help!: HTMLElement;
   private zoneEls = new Map<string, ZoneEls>();
 
-  protected override parse(cfg: MinigameConfig): boolean {
-    const parsed = parseSceneConfig(cfg);
+  protected override parse(cfg: MinigameConfig, ctx: GameContext): boolean {
+    const parsed = parseSceneConfig(cfg, ctx.def.id);
     if (!parsed) return false;
     this.cfg = parsed;
     this.byId = new Map(parsed.hotspots.map((x) => [x.id, x]));
@@ -245,6 +272,21 @@ class CrimeSceneSearch extends MinigameShell {
       z.el.classList.toggle('is-hinted', order < 0 && hinted.includes(hs.id));
       z.pin.textContent = order >= 0 ? String(order + 1) : '';
       z.tag.textContent = this.label(hs);
+    }
+    if (this.cfg.list) {
+      // Список целей: найденные зачёркнуты, подсказанная подсвечена.
+      this.list.classList.add('is-targets');
+      fill(
+        this.list,
+        ...this.cfg.hotspots.map((hs) =>
+          h('li', {
+            class: `mg-scene__item${found.includes(hs.id) ? ' is-found' : hinted.includes(hs.id) ? ' is-hint' : ''}`,
+            data: { id: hs.id },
+            text: this.label(hs),
+          }),
+        ),
+      );
+      return;
     }
     fill(
       this.list,

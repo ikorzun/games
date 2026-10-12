@@ -359,3 +359,73 @@
     margin: 0 auto;
   }
 }
+
+/* Режим списка (режим дела): все цели под картинкой сразу, найденные зачёркнуты. */
+.mg-scene__list.is-targets .mg-scene__item {
+  padding: 0.25rem 0.75rem;
+  color: var(--mg-ink);
+  background: rgb(255 255 255 / 0.04);
+  border-color: rgb(255 255 255 / 0.22);
+}
+.mg-scene__list.is-targets .mg-scene__item.is-found {
+  color: var(--mg-muted);
+  text-decoration: line-through;
+  background: none;
+  border-color: rgb(232 217 181 / 0.2);
+  opacity: 0.6;
+}
+.mg-scene__list.is-targets .mg-scene__item.is-hint {
+  background: rgb(201 54 47 / 0.12);
+  border-color: var(--mg-accent);
+}
+
+/* Режим списка во весь экран (.vn-mg.is-wide — dom_ui.ts): картинка слева по высоте окна, список целей колонкой справа. */
+.vn-mg.is-wide .vn-mg__body {
+  width: min(100%, 86rem);
+}
+@media (min-width: 761px) {
+  .vn-mg.is-wide .mg-scene__wrap {
+    display: grid;
+    grid-template-columns: min(calc(100% - 14.4rem), calc((100vh - 12rem) * 16 / 9)) 13.5rem;
+    justify-content: center;
+    align-items: start;
+    gap: 0.9rem;
+  }
+  .vn-mg.is-wide .mg-scene__list.is-targets {
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+  .vn-mg.is-wide .mg-scene__list.is-targets .mg-scene__item {
+    justify-content: flex-start;
+  }
+}
+
+/* Режим списка, телефон на боку: картинка во всю высоту, список целей — полосой под ней, справа узкая колонка. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .vn-mg.is-wide .mg-shell {
+    grid-template-columns: minmax(0, 1fr) 10.5rem;
+  }
+  .vn-mg.is-wide .mg-shell__brief {
+    display: none;
+  }
+  .vn-mg.is-wide .mg-scene__wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .vn-mg.is-wide .mg-scene__viewport {
+    width: min(100%, calc((100vh - 7.5rem) * 16 / 9));
+  }
+  .vn-mg.is-wide .mg-scene__stage {
+    width: 100%;
+  }
+  .vn-mg.is-wide .mg-scene__list.is-targets {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .vn-mg.is-wide .mg-scene__list.is-targets .mg-scene__item {
+    flex: none;
+  }
+}

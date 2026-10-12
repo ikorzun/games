@@ -51,6 +51,8 @@ export interface ProgressBlob {
   v: 1;
   autosave: unknown;
   quick: unknown;
+  /** Прогресс режима дела по id эпизода; форму проверяет case/state.ts. */
+  cases: Record<string, unknown>;
 }
 
 export interface ArchiveBlob {
@@ -197,7 +199,7 @@ export function sanitizeArchive(raw: unknown): ArchiveBlob {
 
 export function sanitizeProgress(raw: unknown): ProgressBlob {
   const r = isRecord(raw) ? raw : {};
-  return { v: 1, autosave: r.autosave ?? null, quick: r.quick ?? null };
+  return { v: 1, autosave: r.autosave ?? null, quick: r.quick ?? null, cases: isRecord(r.cases) ? { ...r.cases } : {} };
 }
 
 // ───────────────────────────── менеджер ─────────────────────────────
@@ -270,6 +272,17 @@ export class SaveManager {
 
   writeQuicksave(file: SaveFile): void {
     this.progress.quick = cloneJson(file);
+    this.scheduleFlush();
+  }
+
+  // — режим дела —
+
+  caseProgress(episodeId: string): unknown {
+    return this.progress.cases[episodeId] ?? null;
+  }
+
+  writeCase(episodeId: string, data: unknown): void {
+    this.progress.cases[episodeId] = cloneJson(data);
     this.scheduleFlush();
   }
 

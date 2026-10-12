@@ -47,6 +47,8 @@ export interface MinigameContext extends BaseContext {
   restore: unknown;
   /** Запросить автосейв после «хода» внутри мини-игры. */
   autosave: () => void;
+  /** Итоговое состояние мини-игры (IMinigame.serialize) — до destroy; режим дела считает по нему ★. */
+  final?: (state: unknown) => void;
 }
 
 export interface SessionUI {

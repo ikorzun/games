@@ -10,7 +10,7 @@
  *   npm run smoke:matrix                            # + проверка раскладки, скриншоты в e2e/out/
  *
  * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en,es,pt (для матрицы), --no-shots,
- * --only play,camera,bridge,matrix (часть сценариев),
+ * --only play,case,camera,bridge,matrix (часть сценариев),
  * --require-assets (все файлы из episode.assets обязаны быть на месте; без флага отсутствующие файлы допустимы:
  * игра показывает плейсхолдеры и пишет по одному предупреждению на файл).
  *
@@ -43,7 +43,7 @@ const wantMatrix = flag('matrix');
 const wantShots = !flag('no-shots');
 const requireAssets = flag('require-assets');
 const CPU_THROTTLE = Number(process.env.SMOKE_CPU_THROTTLE ?? '1') || 1;
-/** --only play,camera,bridge,matrix — запустить часть сценариев (для разработки). */
+/** --only play,case,camera,bridge,matrix — запустить часть сценариев (для разработки). */
 const only = opt('only', null)?.split(',').map((x) => x.trim());
 const wants = (name) => !only || only.includes(name);
 const matrixLangs = opt('langs', 'ru,en').split(',').map((s) => s.trim()).filter(Boolean);
@@ -186,8 +186,8 @@ const PLACEHOLDER = /\[(?:ui|common|ep\d+)\.[a-z0-9_.]+\]/;
 // ───────────────────────────── сценарии ─────────────────────────────
 
 async function scenarioPlay(browser, baseUrl) {
-  section('Игра: загрузка → предупреждение → первый выбор → сейв/лоад → язык');
-  const { page, context, log } = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU' }, null);
+  section('Игра: загрузка → предупреждение → первый выбор → сейв/лоад → язык (новелла, ?vn=1)');
+  const { page, context, log } = await openPage(browser, baseUrl, '?debug=1&vn=1', { locale: 'ru-RU' }, null);
   await toMenu(page);
   // Игра открывается сразу главным меню (без заставки), и при его показе стартует главная тема передачи
   // (в смоуке автозапуск разрешён флагом Chromium; в браузере без жеста трек ждёт первого касания или клика).
@@ -550,6 +550,7 @@ const layoutProbe = () => {
     if (el.closest('.vn-stage') && !el.closest('.vn-stage__captions')) continue;
     if (el.closest('.vn-hud')) continue;
     if (el.closest('.vn-menu__shelf')) continue; // полка эпизодов листается горизонтально: карточки за краем — норма
+    if (el.parentElement?.closest('.mg-scene__list.is-targets')) continue; // список целей на боку — полоса с прокруткой (сама полоса проверяется)
     const name = el.tagName + '.' + String(el.className).split(' ')[0];
     if (r.left < -1 || r.right > vw + 1) bad.push(`x-out ${name} ${Math.round(r.left)}..${Math.round(r.right)} из ${vw}`);
     if (el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0 && !/auto|scroll|hidden/.test(cs.overflowX) && ['BUTTON', 'LABEL', 'SPAN', 'P', 'H1', 'H2', 'H3', 'DT', 'DD', 'LI', 'B'].includes(el.tagName)) bad.push(`clip-x ${name} ${el.scrollWidth}>${el.clientWidth}`);
@@ -572,7 +573,7 @@ async function scenarioMatrix(browser, baseUrl) {
   if (wantShots) mkdirSync(OUT, { recursive: true });
   for (const lang of matrixLangs) {
     for (const [name, width, height, dpr, mobile] of MATRIX) {
-      const { page, context, log } = await openPage(browser, baseUrl, `?lang=${lang}&pseudo=1&debug=1`, { viewport: { width, height }, deviceScaleFactor: dpr, isMobile: mobile, hasTouch: mobile, locale: lang }, { settings: { v: 1, textSpeed: 5, lang } });
+      const { page, context, log } = await openPage(browser, baseUrl, `?lang=${lang}&pseudo=1&debug=1&vn=1`, { viewport: { width, height }, deviceScaleFactor: dpr, isMobile: mobile, hasTouch: mobile, locale: lang }, { settings: { v: 1, textSpeed: 5, lang } });
       const found = {};
       const shot = async (screen) => {
         if (wantShots) await page.screenshot({ path: join(OUT, `${name}_${lang}_${screen}.png`) });
@@ -635,6 +636,114 @@ async function scenarioMatrix(browser, baseUrl) {
   if (wantShots) console.log(`  скриншоты: ${OUT}`);
 }
 
+// ───────────────────────────── режим дела ─────────────────────────────
+
+/** Пробел, пока не откроется папка дела (разговор дела идёт своим интерпретатором, __vn.pending() его не видит). */
+async function talkToFolder(page, max = 40) {
+  for (let i = 0; i < max; i++) {
+    if (await page.$('.vn-case.is-in')) return true;
+    await page.keyboard.press('Space');
+    await sleep(120);
+  }
+  return !!(await page.$('.vn-case.is-in'));
+}
+
+/** Найти всё из списка поиска: настоящие клики мышью по центрам активных зон. */
+async function solveSearch(page) {
+  await page.waitForSelector('.mg-scene__list.is-targets .mg-scene__item', { state: 'visible' });
+  const centers = await page.evaluate(() => [...document.querySelectorAll('.mg-scene__zone')].map((z) => {
+    const b = z.getBoundingClientRect();
+    return [b.left + b.width / 2, b.top + b.height / 2];
+  }));
+  for (const [x, y] of centers) {
+    await page.mouse.click(x, y);
+    await sleep(60);
+  }
+  return centers.length;
+}
+
+const caseText = (page, sel) => page.evaluate((s) => [...document.querySelectorAll(s)].map((e) => e.textContent.trim()), sel);
+
+async function scenarioCase(browser, baseUrl) {
+  section('Режим дела: меню → предупреждение → вступление → папка → поиск по списку → ★ → разговор → сохранение');
+  const { page, context, log } = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU' });
+  await toMenu(page);
+  await page.evaluate(() => window.__vn.settings({ textSpeed: 5, lang: 'ru' }));
+  await page.click('.vn-ep__open');
+  await page.waitForSelector('.vn-warning', { state: 'visible' });
+  await page.click('.vn-warning .vn-btn.is-primary');
+  await page.waitForSelector('.vn-textbox:not([hidden]) .vn-textbox__shown', { state: 'visible', timeout: 15000 });
+  check('после предупреждения — вступление главы репликой в текстовом окне', (await page.locator('.vn-textbox__shown').innerText()).length > 0);
+  check('вступление пролистывается до папки дела', await talkToFolder(page));
+  await page.keyboard.press('Space');
+  await page.keyboard.press('Space');
+  await sleep(300);
+  check('лишний пробел после разговора не уводит из папки и не прокручивает её', !!(await page.$('.vn-case.is-in')) && (await page.evaluate(() => document.querySelector('.vn-case').scrollTop)) === 0);
+  check('в начале открыта одна задача — осмотр квартиры, ★ 0', (await page.locator('.vn-case__task').count()) === 1 && (await page.locator('.vn-case__star-n').innerText()) === '0');
+  check('папка на 1280×720 держит вёрстку', (await page.evaluate(layoutProbe)).length === 0, (await page.evaluate(layoutProbe)).join('; '));
+
+  await page.click('.vn-case__task.is-open .vn-case__task-btn');
+  await page.waitForSelector('.vn-mg.is-wide .mg-scene__list.is-targets', { state: 'visible' });
+  const targets = await caseText(page, '.mg-scene__list.is-targets .mg-scene__item');
+  check('поиск по списку: 10 предметов, улики (фото, очки, лекарства) в списке первого захода', targets.length === 10 && ['Фото внука', 'Очки', 'Лекарства'].every((x) => targets.includes(x)), targets.join(', '));
+  const stageW = await page.evaluate(() => document.querySelector('.mg-scene__stage').getBoundingClientRect().width);
+  check('картинка поиска крупная (на 1280×720 шире 800 px)', stageW > 800, String(Math.round(stageW)));
+  await solveSearch(page);
+  check('клики по предметам находят всё из списка', (await page.locator('.mg-shell__progress').innerText()).includes('10 из 10'));
+  await page.click('.mg-shell__btn.is-next');
+  await page.waitForSelector('.vn-case-result.is-in', { state: 'visible' });
+  check('итог захода: ★★★ и +3 ★', (await page.locator('.vn-case-result__stars').innerText()) === '★★★' && (await page.locator('.vn-case-result__earned').innerText()).includes('+3'));
+  await page.click('.vn-case-result .vn-btn.is-primary');
+  await page.waitForSelector('.vn-case.is-in', { state: 'visible' });
+  check('папка: ★ 3, три улики, открылись разговор с Лапиным и подъезд', (await page.locator('.vn-case__star-n').innerText()) === '3' && (await page.locator('.vn-case__clue').count()) === 3 && (await page.locator('[data-id="talk_lapin"].is-open, [data-id="search_stairs"].is-open').count()) === 2);
+
+  await page.click('[data-id="talk_lapin"] .vn-case__task-btn');
+  await page.waitForSelector('.vn-textbox:not([hidden]) .vn-textbox__shown', { state: 'visible' });
+  check('разговор с Лапиным идёт движком новеллы', (await page.locator('.vn-textbox__name').innerText()).length > 0);
+  check('…и заканчивается папкой', await talkToFolder(page));
+  check('после разговора: Лапин в подозреваемых с портретом, копия договора в уликах, ★ 2', (await caseText(page, '.vn-case__name')).includes('Лапин') && (await page.locator('.vn-case__face:not(.is-unknown)').count()) === 1 && (await page.locator('.vn-case__star-n').innerText()) === '2');
+
+  await page.reload({ waitUntil: 'networkidle' });
+  await toMenu(page);
+  check('после перезагрузки у эпизода «Начать заново» (прогресс дела сохранён)', (await page.locator('.vn-ep__restart').count()) === 1);
+  await page.click('.vn-ep__open');
+  await page.waitForSelector('.vn-case.is-in', { state: 'visible' });
+  check('продолжение — сразу папка, без вступления: ★ 2, выполнено 2 задачи', (await page.locator('.vn-case__star-n').innerText()) === '2' && (await page.locator('.vn-case__task.is-done').count()) === 2);
+  await page.click('.vn-case__menu');
+  await toMenu(page);
+  check('«В меню» из папки возвращает в главное меню', (await page.locator('.vn-case').count()) === 0);
+  check('нет ошибок в консоли и неудачных запросов', log.errors.length === 0 && log.failed.length === 0, [...log.errors, ...log.failed].join(' | ').slice(0, 400));
+  await context.close();
+
+  // Телефон: папка и поиск без выхода за экран; на боку картинка поиска во всю высоту.
+  for (const [name, width, height] of [['390x844', 390, 844], ['915x412', 915, 412]]) {
+    const ph = await openPage(browser, baseUrl, '?debug=1&lang=ru', { viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'ru-RU' });
+    await toMenu(ph.page);
+    await ph.page.click('.vn-ep__open');
+    await ph.page.click('.vn-warning .vn-btn.is-primary');
+    await ph.page.waitForSelector('.vn-textbox:not([hidden]) .vn-textbox__shown', { state: 'visible', timeout: 15000 });
+    await talkToFolder(ph.page);
+    await sleep(400);
+    const folderBad = await ph.page.evaluate(layoutProbe);
+    if (wantShots) {
+      mkdirSync(OUT, { recursive: true });
+      await ph.page.screenshot({ path: join(OUT, `case_${name}_folder.png`) });
+    }
+    await ph.page.click('.vn-case__task.is-open .vn-case__task-btn');
+    await ph.page.waitForSelector('.mg-scene__list.is-targets .mg-scene__item', { state: 'visible' });
+    await sleep(400);
+    const searchBad = await ph.page.evaluate(layoutProbe);
+    if (wantShots) await ph.page.screenshot({ path: join(OUT, `case_${name}_search.png`) });
+    check(`${name}: папка и поиск держат вёрстку`, folderBad.length === 0 && searchBad.length === 0, [...folderBad, ...searchBad].join('; '));
+    if (width > height) {
+      const h = await ph.page.evaluate(() => document.querySelector('.mg-scene__stage').getBoundingClientRect().height);
+      check(`${name}: на боку картинка поиска выше половины экрана`, h > height / 2, String(Math.round(h)));
+    }
+    check(`${name}: нет ошибок в консоли`, ph.log.errors.length === 0, ph.log.errors.join(' | ').slice(0, 200));
+    await ph.context.close();
+  }
+}
+
 // ───────────────────────────── запуск ─────────────────────────────
 
 const server = await startServer();
@@ -642,6 +751,7 @@ const browser = await launchBrowser();
 try {
   console.log(`Смоук-тест: ${server.url}${remoteUrl ? '' : ` (сборка ${distDir})`}`);
   if (wants('play')) await scenarioPlay(browser, server.url);
+  if (wants('case')) await scenarioCase(browser, server.url);
   if (wants('camera')) await scenarioCamera(browser, server.url);
   if (wants('bridge')) await scenarioBridgeSdk(browser, server.url);
   if (wantMatrix && wants('matrix')) await scenarioMatrix(browser, server.url);
