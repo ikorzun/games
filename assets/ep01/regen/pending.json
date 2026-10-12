@@ -1,11 +1,3 @@
 {
- "note": "сгенерированы, но ещё не просмотрены: проверить на артефакты, принятые — reg_add.py",
- "sh_apartment_zoya_reaction_sledak": "5d6510d9-cdf3-4771-a162-7af0b2954554",
- "sh_apartment_zoya_reaction_lapin_wife": "8c0a588d-e44e-49a1-b1a0-20db7414e3bb",
- "sh_apartment_zoya_reaction_zoya": "5c02d7c8-6403-45bc-afe1-23b0170f02c6",
- "sh_apartment_zoya_reaction_expert": "3073789d-7290-4782-b012-39684b8893b6",
- "sh_apartment_zoya_insert_1": "4193529a-f613-476f-ae86-b649762bce73",
- "sh_apartment_zoya_insert_2": "112db1fa-24d2-4fc4-8d3c-bd4cb4ce9121",
- "sh_apartment_zoya_angle_low": "a3cf006a-f876-499f-8425-10d4b92c1ac5",
- "sh_apartment_zoya_angle_high": "c430e219-db2f-4447-8671-4781ddbc8734"
+ "note": "в работе ничего нет; в apartment_zoya не снят только angle_foreground"
 }
