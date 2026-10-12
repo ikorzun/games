@@ -671,11 +671,11 @@ Essential objects: the ground-floor notary office opposite with a brass plate an
 ```
 SCENE
 
-Location and time: Moscow, October 1993, night. living room of a well-off Moscow operator's apartment, 1993: a desk with three telephones, stacks of cardboard folders, a cordless phone on a charger, an imported TV, new furniture mixed with old, a window overlooking a black Volga in the street below.
+Location and time: Moscow, October 1993, night. living room of a well-off Moscow operator's apartment, 1993: a desk with three telephones, stacks of cardboard folders, a bulky early-1990s cordless phone with a telescopic antenna and no screen on its base, an imported TV, new furniture mixed with old, a window overlooking a black Volga in the street below.
 People and action: The place is empty: no people anywhere in the frame; the centre of the frame is left free for the characters.
 Camera position: medium-wide shot, desk in the lower left, window centre-right, empty centre for two characters; a television camera at the eye level of a standing person, a 32–40 mm-equivalent field of view, the horizon straight, the surroundings in focus, the lower third of the frame free of small details (the text box lives there).
 Light sources: cold daylight from the window, one desk lamp.
-Essential objects: a desk with three telephones, stacks of cardboard folders, a cordless phone on a charger, an imported TV, new furniture mixed with old, a window overlooking a black Volga in the street below; nothing else.
+Essential objects: a desk with three telephones, stacks of cardboard folders, a bulky early-1990s cordless phone with a telescopic antenna and no screen on its base, an imported TV, new furniture mixed with old, a window overlooking a black Volga in the street below; nothing else.
 ```
 
 ## 4. CG (16:9)
