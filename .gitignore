@@ -28,3 +28,4 @@ game/saves/
 assets/ep01/regen/*
 !assets/ep01/regen/README.md
 !assets/ep01/regen/registry.json
+!assets/ep01/regen/pending.json

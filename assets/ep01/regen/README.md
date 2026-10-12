@@ -8,7 +8,7 @@
 | Сет | Кадров | Принято по новым лицам | Применено к эпизоду |
 |---|---|---|---|
 | stairwell | 28 | 28 | да |
-| apartment_zoya | 35 | 7 (wide_1–4, medium_1–3; в манифесте `v: 2`) | нет — старые файлы сета ещё на месте |
+| apartment_zoya | 35 | 26 (общие, средние, все ots, крупные); 8 сгенерированы и ждут просмотра (`pending.json`); angle_foreground не снят | нет — старые файлы сета ещё на месте |
 | notary, office_day, office_evening, interrogation, bti, street_day, office_night, street_night, yard, zhek, office_now, murashov_flat | 270 | 0 | нет |
 
 Баланс Higgsfield после 35 принятых кадров: 81,05 кредита. Остаток работы ≈ 298 кадров × 0,25 ≈ 75 кредитов
@@ -41,6 +41,12 @@ street_day → office_night → street_night → yard → zhek → office_now �
    линтер эпизода и `npm --prefix runtime test`, коммит.
 
 ## Для apartment_zoya сейчас
+
+В `registry.json` принятые кадры; в манифест (`v: 2`) пока записаны только wide_1–4 и medium_1–3 — остальные
+добавить `manifest_add.py` при закрытии сета. Из `pending.json` — посмотреть 8 готовых кадров (job id), принятые
+занести `reg_add.py`. Правило для лица Мурашова (силуэт) в ots: верхний край кадра режет его по подбородку —
+уже в планировщике.
+
 
 `REGEN_REFS["apartment_zoya"]` уже заполнен (кропы принятого wide_1). Следующие волны: восемь `ots_*`,
 затем `medium_4`, крупные планы, реакции, вставки и три ракурса.

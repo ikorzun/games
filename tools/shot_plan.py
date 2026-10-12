@@ -610,9 +610,12 @@ def camera_block(kind: str, angle: str, cast: list[dict], focus: str | None, fro
                 f"the same left-to-right order as seen from the door. This is NOT the wide view of Reference 1, which is only "
                 f"the source of the room's furniture and light. A conversation in progress, nothing staged")
     if kind == "ots":
+        beyond = (f"{names(focus)} stands beyond, turned toward the camera but cut off at the chin by the top edge of the "
+                  f"frame, so only the suit, tie and hands are seen" if focus in HIDDEN_FACE else
+                  f"{names(focus)} faces the camera beyond, both readable")
         return (f"The camera is just behind {names(from_who)}'s shoulder at that person's eye level, a 45 mm-equivalent field "
-                f"of view: the back of {names(from_who)}'s head and shoulder overlap the near edge of the frame, {names(focus)} "
-                f"faces the camera beyond, both readable, the background recognizable with modest optical softness; the "
+                f"of view: the back of {names(from_who)}'s head and shoulder overlap the near edge of the frame, {beyond}, "
+                f"the background recognizable with modest optical softness; the "
                 f"180-degree axis of the conversation is kept, people stay on the same sides as seen from the door. We listen "
                 f"from one side of the conversation")
     if kind == "close":
@@ -938,8 +941,11 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
                     f"exactly as they stand left-to-right in the wide view from the door." if sides else "")
         # Дальний человек с «лицом, которого не показывают» (силуэт Мурашова): не «лицом к объективу», а лицо
         # спрятано — опущено и отвёрнуто, в тени дверного проёма.
-        far = (f"{names(b)} is the person farther from the camera, turned toward {names(a)}, but his face is never shown: "
-               f"the head is bowed and turned away, lost in shadow, speaking to {names(a)}."
+        # Лицо дальнего (силуэт Мурашова) не показывается: верхний край кадра режет его по подбородку (
+        # «голова опущена, в тени» модель всё равно рисовала лицо полностью — apartment_zoya, волна 110).
+        far = (f"{names(b)} is the person farther from the camera, standing close and turned toward {names(a)}; the top edge "
+               f"of the frame cuts {names(b)} off at the chin, so his face is never in the picture: only the suit, the tie "
+               f"with the tie pin and his hands are seen."
                if b in HIDDEN_FACE else
                f"{names(b)} is the person farther from the camera, face to the lens, speaking to {names(a)}.")
         inside = frozenset({a, b}) in INSIDE_PAIRS.get(bg, set())
