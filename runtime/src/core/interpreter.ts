@@ -579,7 +579,11 @@ export class Interpreter {
     return this.view.sprites.filter((s) => !isOffscreenPos(s.position)).map((s) => s.who);
   }
 
-  /** Состав сцены по её шагам — для общего плана при входе, когда спрайтов ещё нет. */
+  /**
+   * Состав на входе в сцену — для общего плана, когда спрайтов ещё нет: кто появился до первой реплики персонажа,
+   * и сам первый говорящий. Кто приходит позже (дверь открылась после реплики), в общий план входа не попадает:
+   * иначе кадр показывал человека, которого ещё нет, и на первой реплике тут же сменялся (s02: Лапин на полсекунды).
+   */
   private sceneCast(scene: Scene): string[] {
     let cast = this.sceneCasts.get(scene.id);
     if (!cast) {
@@ -591,6 +595,7 @@ export class Interpreter {
         else if (step.do === 'say') {
           if (step.position !== undefined) (isOffscreenPos(step.position) ? off : on).add(step.who);
           else spoke.add(step.who);
+          break; // первая реплика персонажа — конец входа
         }
       }
       for (const who of spoke) if (!off.has(who)) on.add(who);

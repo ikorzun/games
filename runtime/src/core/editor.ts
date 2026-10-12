@@ -214,6 +214,12 @@ function choose(shots: readonly Shot[], cur: Shot | null, inp: LineInput): Choic
     return { shot: (odd ? (insert ?? wide) : (wide ?? insert)) ?? cur, reaction: false };
   }
 
+  // §4.1 Общий план входа держится на первой реплике сцены, если говорящий в нём есть: иначе он виден только на время
+  // перехода и мелькает (полсекунды) перед первым крупным планом.
+  if (ctx.line === 0 && cur !== null && cur.kind === 'wide' && fits(cur, cast) && cur.cast.some((c) => c.who === who)) {
+    return { shot: cur, reaction: false };
+  }
+
   const other = listenerOf(ctx, who);
 
   // §4.4 Реакция слушающего: длинная реплика после крупного плана говорящего, не чаще каждой четвёртой.

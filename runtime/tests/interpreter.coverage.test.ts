@@ -69,8 +69,8 @@ describe('сцена с coverage', () => {
     const scene = events.find((e) => e.t === 'scene');
     expect(scene && scene.t === 'scene' ? scene.view.shot : null).toBe('wide_ab');
     expect(scene && scene.t === 'scene' ? scene.view.coverage : null).toBe(SET);
-    // a: medium (ots не от кого); b: ots от a; b tense: крупный план; рассказчик: wide; после ухода b — a один: wide не годится → спрайты; реплика a → крупный план a
-    expect(lineShots).toEqual(['medium_ab', 'ots_a_b', 'close_b_tense', 'wide_ab', 'close_a_neutral']);
+    // a: общий план входа держится на первой реплике; b: ots от a; b tense: крупный план; рассказчик: wide; после ухода b — a один: wide не годится → спрайты; реплика a → крупный план a
+    expect(lineShots).toEqual(['wide_ab', 'ots_a_b', 'close_b_tense', 'wide_ab', 'close_a_neutral']);
     const order = events.map((e) => e.t);
     const iShot = order.indexOf('shot');
     expect(iShot).toBeGreaterThan(-1);
@@ -78,7 +78,26 @@ describe('сцена с coverage', () => {
     // hide b: кадр с b сменился до события hide
     const iHide = order.indexOf('hide');
     expect(order[iHide - 1]).toBe('shot');
-    expect(shotEvents(events)).toEqual(['medium_ab', 'ots_a_b', 'close_b_tense', 'wide_ab', null, 'close_a_neutral']);
+    expect(shotEvents(events)).toEqual(['ots_a_b', 'close_b_tense', 'wide_ab', null, 'close_a_neutral']);
+  });
+
+  it('общий план входа — по составу до первой реплики: пришедший позже не попадает в кадр, кадр держится на первой реплике', () => {
+    const steps: Step[] = [
+      { do: 'show', who: 'a', position: 'left' },
+      { do: 'say', who: 'a', key: 'k.1' },
+      { do: 'show', who: 'b', position: 'right' }, // открыли дверь
+      { do: 'say', who: 'b', key: 'k.2' },
+      { do: 'end', ending: 'e_main' },
+    ];
+    const shots: Shot[] = [...SHOTS, sh('wide_a', 'wide', ['a'])];
+    const episode = miniEpisode({ s1: { coverage: SET, steps } }, { shots, pov: 'a' });
+    const interp = new Interpreter(episode);
+    interp.start();
+    const { events, lineShots } = run(interp);
+    const scene = events.find((e) => e.t === 'scene');
+    expect(scene && scene.t === 'scene' ? scene.view.shot : null).toBe('wide_a'); // не wide_ab: b ещё нет
+    expect(lineShots[0]).toBe('wide_a'); // без мелькания: на первой реплике тот же кадр
+    expect(shotEvents(events)[0]).not.toBe('wide_a');
   });
 
   it('кадр хранится в view и переживает снимок/восстановление; старый снимок без полей нормализуется', () => {
@@ -130,7 +149,7 @@ describe('сцена с coverage', () => {
     ];
     const { interp } = make(steps);
     const { events, lineShots } = run(interp);
-    expect(lineShots).toEqual(['medium_ab', null, null]);
+    expect(lineShots).toEqual(['wide_ab', null, null]);
     const kinds = events.map((e) => (e.t === 'shot' ? `shot:${e.shot ?? '-'}` : e.t));
     expect(kinds.indexOf('shot:-')).toBeLessThan(kinds.indexOf('bg'));
     expect(interp.view.coverage).toBeNull();
@@ -176,7 +195,7 @@ describe('сцена с coverage', () => {
     const interp = new Interpreter(episode, { lineLength: (key) => (key === 'k.long' ? 200 : 10) });
     interp.start();
     const { lineShots } = run(interp);
-    expect(lineShots).toEqual(['medium_ab', 'medium_ab', 'medium_ab', 'close_b_tense', 'reaction_a']);
+    expect(lineShots).toEqual(['wide_ab', 'medium_ab', 'medium_ab', 'close_b_tense', 'reaction_a']); // первая — общий план входа
   });
 
   it('сцена без coverage — кадров нет и событий shot нет; defaultViewFor без coverage', () => {
