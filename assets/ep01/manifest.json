@@ -405,9 +405,10 @@
  {
   "id": "cg_keys",
   "kind": "cg",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181603_4d01c322-7665-4259-94fe-cb200d591ecd.png",
   "target": "assets/ep01/cg/keys.webp",
-  "job": "4d01c322-7665-4259-94fe-cb200d591ecd"
+  "job": "file:assets/ep01/cg/keys.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
  },
  {
   "id": "cg_verdict",
@@ -420,37 +421,42 @@
  {
   "id": "doc_power_of_attorney",
   "kind": "doc",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181654_906f888a-4b9d-4ff6-ac75-787a858cc3de.png",
   "target": "assets/ep01/docs/power_of_attorney.webp",
-  "job": "906f888a-4b9d-4ff6-ac75-787a858cc3de"
+  "job": "file:assets/ep01/docs/power_of_attorney.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
  },
  {
   "id": "doc_contract_sale",
   "kind": "doc",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181654_f1e1fce2-b6c8-4bea-8f0f-5c8239e684af.png",
   "target": "assets/ep01/docs/contract_sale.webp",
-  "job": "f1e1fce2-b6c8-4bea-8f0f-5c8239e684af"
+  "job": "file:assets/ep01/docs/contract_sale.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
  },
  {
   "id": "doc_bti_card",
   "kind": "doc",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181654_c6f0b8f7-e165-4d15-bd3d-2ed4e2aaa21a.png",
   "target": "assets/ep01/docs/bti_card.webp",
-  "job": "c6f0b8f7-e165-4d15-bd3d-2ed4e2aaa21a"
+  "job": "file:assets/ep01/docs/bti_card.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
  },
  {
   "id": "doc_newspaper_1994",
   "kind": "doc",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181710_c1feebff-972c-4076-b1cd-afd95b43a6ac.png",
   "target": "assets/ep01/docs/newspaper_1994.webp",
-  "job": "c1feebff-972c-4076-b1cd-afd95b43a6ac"
+  "job": "file:assets/ep01/docs/newspaper_1994.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
  },
  {
   "id": "doc_registration",
   "kind": "doc",
-  "url": "https://d8j0ntlcm91z4.cloudfront.net/user_310L9D8Y4NaRvux6342dGvDF7W8/hf_20261010_181750_91028193-2a73-4806-96ab-225385df3be6.png",
   "target": "assets/ep01/docs/registration.webp",
-  "job": "91028193-2a73-4806-96ab-225385df3be6"
+  "job": "file:assets/ep01/docs/registration.webp",
+  "v": 2,
+  "src": "gpt-image-2.5-flare"
  },
  {
   "id": "ui_title_plate",

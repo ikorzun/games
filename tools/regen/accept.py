@@ -13,7 +13,7 @@ MAN = 'assets/ep01/manifest.json'
 args = sys.argv[1:]
 i = args.index('--src'); src = args[i + 1]; del args[i:i + 2]
 plan = {}
-for f in ('plan.json', 'sprite_plan.json', 'cg_plan.json'):
+for f in ('plan.json', 'sprite_plan.json', 'cg_plan.json', 'objects_plan.json'):
     if os.path.exists(f'{SP}/{f}'):
         plan.update({s['id']: s for s in json.load(open(f'{SP}/{f}'))})
 reg = json.load(open(f'{SP}/registry.json'))

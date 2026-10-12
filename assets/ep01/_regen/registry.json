@@ -2224,5 +2224,41 @@
   "model": "gpt-image-2.5-flare",
   "q": "high",
   "v2": true
+ },
+ "doc_power_of_attorney": {
+  "file": "assets/ep01/_regen/out/doc_power_of_attorney.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "doc_contract_sale": {
+  "file": "assets/ep01/_regen/out/doc_contract_sale.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "doc_bti_card": {
+  "file": "assets/ep01/_regen/out/doc_bti_card.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "doc_registration": {
+  "file": "assets/ep01/_regen/out/doc_registration.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "cg_keys": {
+  "file": "assets/ep01/_regen/out/cg_keys.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "doc_newspaper_1994": {
+  "file": "assets/ep01/_regen/out/doc_newspaper_1994.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
  }
 }
