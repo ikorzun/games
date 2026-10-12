@@ -1000,5 +1000,155 @@
   "model": "gpt-image-2.5-flare",
   "q": "high",
   "v2": true
+ },
+ "sh_office_evening_wide_1": {
+  "file": "assets/ep01/regen/out/sh_office_evening_wide_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_wide_2": {
+  "file": "assets/ep01/regen/out/sh_office_evening_wide_2.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_wide_3": {
+  "file": "assets/ep01/regen/out/sh_office_evening_wide_3.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_close_sledak_tense": {
+  "file": "assets/ep01/regen/out/sh_office_evening_close_sledak_tense.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_medium_1": {
+  "file": "assets/ep01/regen/out/sh_office_evening_medium_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_medium_2": {
+  "file": "assets/ep01/regen/out/sh_office_evening_medium_2.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_medium_3": {
+  "file": "assets/ep01/regen/out/sh_office_evening_medium_3.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_ots_sledak_expert": {
+  "file": "assets/ep01/regen/out/sh_office_evening_ots_sledak_expert.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_ots_sledak_oper": {
+  "file": "assets/ep01/regen/out/sh_office_evening_ots_sledak_oper.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_ots_expert_sledak": {
+  "file": "assets/ep01/regen/out/sh_office_evening_ots_expert_sledak.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_ots_oper_sledak": {
+  "file": "assets/ep01/regen/out/sh_office_evening_ots_oper_sledak.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_close_oper_neutral": {
+  "file": "assets/ep01/regen/out/sh_office_evening_close_oper_neutral.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_close_expert_focused": {
+  "file": "assets/ep01/regen/out/sh_office_evening_close_expert_focused.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_close_oper_grin": {
+  "file": "assets/ep01/regen/out/sh_office_evening_close_oper_grin.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_close_sledak_firm": {
+  "file": "assets/ep01/regen/out/sh_office_evening_close_sledak_firm.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_close_sledak_tired": {
+  "file": "assets/ep01/regen/out/sh_office_evening_close_sledak_tired.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_reaction_sledak": {
+  "file": "assets/ep01/regen/out/sh_office_evening_reaction_sledak.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_reaction_oper": {
+  "file": "assets/ep01/regen/out/sh_office_evening_reaction_oper.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_reaction_expert": {
+  "file": "assets/ep01/regen/out/sh_office_evening_reaction_expert.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_insert_1": {
+  "file": "assets/ep01/regen/out/sh_office_evening_insert_1.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_insert_2": {
+  "file": "assets/ep01/regen/out/sh_office_evening_insert_2.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_angle_low": {
+  "file": "assets/ep01/regen/out/sh_office_evening_angle_low.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_angle_high": {
+  "file": "assets/ep01/regen/out/sh_office_evening_angle_high.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_angle_foreground": {
+  "file": "assets/ep01/regen/out/sh_office_evening_angle_foreground.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
+ },
+ "sh_office_evening_close_expert_neutral": {
+  "file": "assets/ep01/regen/out/sh_office_evening_close_expert_neutral.png",
+  "model": "gpt-image-2.5-flare",
+  "q": "high",
+  "v2": true
  }
 }

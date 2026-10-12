@@ -555,6 +555,10 @@ REGEN_REFS: dict[str, dict[str, str]] = {
                "angle": "file:assets/ep01/refs/notary_medium_v2.jpg", "insert": "file:assets/ep01/refs/notary_medium_v2.jpg"},
     "office_day": {"room": "sh_office_day_wide_1", "medium": "file:assets/ep01/refs/office_day_medium_v2.jpg",
                    "angle": "file:assets/ep01/refs/office_day_medium_v2.jpg", "insert": "file:assets/ep01/refs/office_day_medium_v2.jpg"},
+    "office_evening": {"room": "sh_office_evening_wide_1", "medium": "file:assets/ep01/refs/office_evening_medium_v2.jpg",
+                       "angle": "file:assets/ep01/refs/office_evening_medium_v2.jpg",
+                       "insert": "file:assets/ep01/refs/office_evening_medium_v2.jpg",
+                       "medium_solo": "file:assets/ep01/refs/office_evening_medium_solo_v2.jpg"},
 }
 NEW_IDS: set[str] = set()  # записи манифеста с "v": 2 — кадры, принятые уже по новым лицам
 
@@ -735,6 +739,11 @@ def build_prompt(base: str, continuity: str, shot: dict, bg_subject: str, tod: s
                 "at least as close as Reference 1.")
     else:
         ref1 = "Reference 1 is the room itself: keep its furniture, window, lamps and props exactly where they are."
+    if closer and shot["kind"] in ("close", "reaction"):
+        # Эталон крупного плана — чужой крупный план: без оговорки модель дважды переносила лицо следователя на
+        # женщину в своей одежде (office_day Лапина, office_evening Левина, пересъёмка high).
+        ref1 += (" The person in Reference 1 may be someone else: take only the room from it, never that person's "
+                 "face, hair or clothes.")
     room_ref = shot.get("has_room", bool(closer) or shot["kind"] not in ("close", "reaction"))
     if not room_ref:
         ref1 = None
@@ -869,6 +878,13 @@ def plan_set(d: dict, ep: dict, bg_subjects, jobs, base, realism, names, sprite_
                 ref_shot = rr[kind]
             elif ref_shot and (ref_shot.startswith("media:") or ref_shot not in NEW_IDS):
                 ref_shot = None  # кадр прежней редакции: другие лица — комнатой идёт новый общий план или фон
+            if kind in ("close", "reaction") and len(cast) == 1 and ref_shot:
+                # Эталон — принятый крупный план того же человека в этом сете, если есть: с чужим крупным планом модель
+                # переносила лицо эталона на героя (пересъёмка high: Лапина в office_day, Левина в office_evening).
+                pre = f"sh_{set_name}_close_{cast[0]['who']}_"
+                own = sorted(i for i in NEW_IDS if i.startswith(pre) and "_" not in i[len(pre):])
+                if own:
+                    ref_shot = own[0]
         if ref_shot and ref_shot.startswith(("media:", "file:")):  # кроп (assets/ep01/refs): загруженный в Higgsfield или локальный файл для gpt-image
             out = [ref_shot.removeprefix("media:")]
         else:
