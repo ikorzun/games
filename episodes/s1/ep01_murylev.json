@@ -17891,6 +17891,28 @@
         ],
         "file": "assets/ep01/shots/stairwell/close_oper_grin.webp",
         "focus": "oper"
+      },
+      {
+        "id": "sh_street_day_medium_2",
+        "set": "street_day",
+        "bg": "bg_street_day",
+        "kind": "medium",
+        "angle": "eye",
+        "cast": [
+          {
+            "who": "accomplice",
+            "expression": "neutral"
+          },
+          {
+            "who": "murashov",
+            "expression": "neutral"
+          },
+          {
+            "who": "oper",
+            "expression": "neutral"
+          }
+        ],
+        "file": "assets/ep01/shots/street_day/medium_2.webp"
       }
     ]
   }

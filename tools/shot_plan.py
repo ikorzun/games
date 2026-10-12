@@ -130,9 +130,9 @@ INSIDE_PEOPLE = {
 # (street_day: через лобовое стекло «Лады»): иначе Мурашова у двери конторы модель снимала бы сквозь стекло.
 OUTSIDE_SUBJECT = {
     "bg_street_day": ("SUBJECT: Presnya street in Moscow by day, 1993, on the pavement outside the ground-floor notary "
-                      "office with a brass plate and a heavy dark double door, a black Volga sedan parked at the kerb, a "
-                      "newspaper kiosk, bare trees, slush and yellow leaves at the kerb; the camera stands on the pavement, "
-                      "not inside any car."),
+                      "office with a small weathered brass plate whose lettering cannot be read and a heavy dark double door, "
+                      "a black Volga sedan parked at the kerb, a newspaper kiosk, bare trees, wet asphalt and yellow leaves "
+                      "at the kerb, no snow; the camera stands on the pavement, not inside any car."),
 }
 # Дополнение к тексту ots снаружи (для сета с машиной): иначе модель сажает в «Волгу» лишние лица.
 OTS_EXTRA = {
@@ -562,6 +562,14 @@ REGEN_REFS: dict[str, dict[str, str]] = {
     "interrogation": {"room": "sh_interrogation_wide_1", "medium": "file:assets/ep01/refs/interrogation_medium_v2.jpg",
                       "angle": "file:assets/ep01/refs/interrogation_medium_v2.jpg",
                       "insert": "file:assets/ep01/refs/interrogation_medium_v2.jpg"},
+    "bti": {"room": "sh_bti_wide_1", "medium": "file:assets/ep01/refs/bti_medium_v2.jpg",
+           "angle": "file:assets/ep01/refs/bti_medium_v2.jpg", "insert": "file:assets/ep01/refs/bti_medium_v2.jpg"},
+    "street_day": {"room": "sh_street_day_wide_1", "medium": "file:assets/ep01/refs/street_day_medium_v2.jpg",
+                  "angle": "file:assets/ep01/refs/street_day_medium_v2.jpg", "insert": "file:assets/ep01/refs/street_day_medium_v2.jpg"},
+    "office_night": {"room": "sh_office_night_wide_1", "medium": "file:assets/ep01/refs/office_night_medium_v2.jpg",
+                    "angle": "file:assets/ep01/refs/office_night_medium_v2.jpg", "insert": "file:assets/ep01/refs/office_night_medium_v2.jpg"},
+    "street_night": {"room": "sh_street_night_wide_1", "medium": "file:assets/ep01/refs/street_night_medium_v2.jpg",
+                    "angle": "file:assets/ep01/refs/street_night_medium_v2.jpg", "insert": "file:assets/ep01/refs/street_night_medium_v2.jpg"},
 }
 NEW_IDS: set[str] = set()  # записи манифеста с "v": 2 — кадры, принятые уже по новым лицам
 
@@ -588,16 +596,26 @@ def camera_block(kind: str, angle: str, cast: list[dict], focus: str | None, fro
         n_in = sum(1 for c in cast if c["who"] in INSIDE_PEOPLE.get(bg_id or "", set()))
         n_out = len(cast) - n_in
         seats = ("the people in the front seats seen from behind and in profile" if n_in > 1 else
-                 "one person in a front seat seen from behind and in profile" if n_in == 1 else "the empty front seats")
+                 # «the other … empty»: без этого модель сажала за руль лишнего человека в тёмной куртке (street_day, high)
+                 "one person in a front seat seen from behind and in profile, the other front seat empty" if n_in == 1
+                 else "the empty front seats")
         far = (", and beyond the windscreen, small and pale, the people across the street at the notary office door and "
                "by the kiosk" if n_out else "")
         return (f"The camera is on the back seat of the parked car at the eye level of a seated person, a 32 mm-equivalent "
                 f"field of view: {seats}, the windscreen with the street and the notary office door beyond{far}, the "
                 f"dashboard and the wipers in the lower part of the frame; the cabin darker than the overcast street outside")
     if inside and kind == "medium":
+        # В салоне — только люди из INSIDE_PEOPLE; остальные состава — снаружи, за лобовым стеклом (с len(cast) модель
+        # посадила Шмеля в машину к Сайко: street_day medium_2, high).
+        n_in = sum(1 for c in cast if c["who"] in INSIDE_PEOPLE.get(bg_id or "", set())) or len(cast)
+        seats = (f"{n_in} people in the front seats from the chest up" if n_in > 1 else
+                 "one person in the passenger seat from the chest up; nobody sits behind the steering wheel, the "
+                 "driver's seat is empty")
+        far = (", and beyond the windscreen, small, the people across the street at the notary office door and by the "
+               "kiosk, outside the car" if n_in < len(cast) else "")
         return (f"The camera is inside the car, at the eye level of a seated person, a 40 mm-equivalent field of view: "
-                f"{len(cast)} people in the front seats from the chest up, the door pillar or a headrest overlapping the edge "
-                f"of the frame, the grey street readable through the windows behind them")
+                f"{seats}, the door pillar or a headrest overlapping the edge of the frame, the grey street readable through "
+                f"the windows behind them{far}")
     if inside and kind == "ots":
         return (f"The camera is on the back seat just behind {names(from_who)}'s shoulder, a 45 mm-equivalent field of view: "
                 f"the back of {names(from_who)}'s head and shoulder overlap the near edge of the frame, {names(focus)} in the "
