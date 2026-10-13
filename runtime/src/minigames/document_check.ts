@@ -206,9 +206,13 @@ class DocumentCheck extends MinigameShell {
     return h('div', { class: 'mg-docs__wrap' }, this.tabs, sheetsBox, this.notes);
   }
 
-  /** Картинка документа (бланк без текста) из assets.documents — подложка листа; нет файла — бумага. */
+  /**
+   * Картинка документа (бланк без текста) из assets.documents — подложка листа; нет файла — бумага. Бумага с текстом
+   * в самой картинке (localized: true) подложкой не годится — текст лёг бы на текст: лист остаётся бумагой.
+   */
   private loadScan(sheet: HTMLElement, doc: string): void {
-    const path = this.ctx.episode.assets?.documents?.find((d) => d.id === doc)?.path;
+    const entry = this.ctx.episode.assets?.documents?.find((d) => d.id === doc);
+    const path = entry && !entry.localized ? entry.path : undefined;
     if (!path) return;
     const url = joinUrl(import.meta.env.BASE_URL, path);
     const img = new Image();

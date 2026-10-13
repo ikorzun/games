@@ -1011,9 +1011,12 @@ episode = {
     'archive_items': ARCHIVE,
     'assets': {
         'backgrounds': BACKGROUNDS, 'sprites': [], 'cg': [], 'shots': SHOTS,
-        'documents': [{'id': 'doc_statement', 'path': 'assets/ep01/hod/docs/statement.webp', 'localized': False,
-                       'notes': 'бланк в линейку без текста; текст заявления — слой из локали'}] +
-                     keep('documents', {'doc_contract_sale', 'doc_bti_card', 'doc_power_of_attorney'}),
+        # Настоящие бумаги лета 1993-го (tools/hod/docs.py): текст впечатан в картинку, пока только по-русски.
+        'documents': [{'id': f'doc_{name}', 'path': f'assets/ep01/hod/docs/ru/{name}.webp', 'localized': True, 'notes': note}
+                      for name, note in (('statement', 'заявление Галины от руки на тетрадном листе, штамп входящей прокуратуры'),
+                                         ('power_of_attorney', 'ксерокопия доверенности; в дате «4» поверх стёртой «1»'),
+                                         ('contract_sale', 'договор купли-продажи, экземпляр Лапиных'),
+                                         ('bti_card', 'учётная карточка БТИ из картотеки'))],
         'music': keep('music', {'m_theme_main', 'm_investigation', 'm_calm', 'm_tension', 'm_chronicle'}),
         'sfx': keep('sfx', {'sfx_phone_ring', 'sfx_vhs'}),
         'ambient': keep('ambient', {'amb_office', 'amb_stairwell', 'amb_street_day', 'amb_archive'}),

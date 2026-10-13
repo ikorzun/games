@@ -651,7 +651,11 @@ describe('AppAssets: бланки документов, картинки инт�
     expect(first.url).toBeNull(); // ещё не загружен
     expect(await first.ready).toBe('./assets/ep01/docs/paper.webp');
     expect(assets.document('doc_paper').url).toBe('./assets/ep01/docs/paper.webp');
-    expect(assets.document('doc_unknown')).toEqual({ url: null, ready: expect.any(Promise) });
+    expect(assets.document('doc_unknown')).toEqual({ url: null, ready: expect.any(Promise), textInImage: false });
+    expect(assets.document('doc_paper').textInImage).toBe(false); // бланк: текст накладывается слоем
+    const baked = assetEpisode();
+    baked.assets.documents = baked.assets.documents!.map((d) => ({ ...d, localized: true }));
+    expect(createAppAssets(baked, BASE, null, store).document('doc_paper').textInImage).toBe(true); // текст в самой картинке
     expect(await assets.document('doc_unknown').ready).toBeNull();
     // файл описан, но не загрузился
     const ep2 = assetEpisode();

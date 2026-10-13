@@ -613,6 +613,25 @@ describe('DomUI: документ, мини-игра, финал', () => {
     expect(res.done).toBe(true);
   });
 
+  it('настоящая бумага (текст в картинке): лист целиком без слоя текста, текст — скринридеру; касание увеличивает', async () => {
+    let resolve!: (u: string | null) => void;
+    const ready = new Promise<string | null>((r) => void (resolve = r));
+    const { ui, kit } = makeRig({}, 'procedural', { documentArt: () => ({ url: null, ready, textInImage: true }) });
+    void ui.showDocument({ kind: 'document', doc: 'doc_x', text_key: 'doc.text', zoomable: false, adds_to_archive: null }, baseCtx(ctl()));
+    // картинка ещё грузится — читать можно сразу: прежний лист с текстом
+    expect(kit.screens.el.querySelector('.vn-document__text')?.textContent).toBe('Текст документа');
+    resolve('./assets/ep01/hod/docs/ru/doc_x.webp');
+    await flush();
+    const sheet = kit.screens.el.querySelector<HTMLElement>('.vn-document__sheet');
+    expect(sheet?.querySelector('img')?.getAttribute('src')).toBe('./assets/ep01/hod/docs/ru/doc_x.webp');
+    expect(kit.screens.el.querySelector('.vn-document__paper')).toBeNull();
+    expect(kit.screens.el.querySelector('.vn-sr')?.textContent).toBe('Текст документа');
+    sheet?.click();
+    expect(sheet?.classList.contains('is-zoomed')).toBe(true);
+    sheet?.click();
+    expect(sheet?.classList.contains('is-zoomed')).toBe(false);
+  });
+
   it('бланк ещё грузится: экран открывается сразу без картинки, картинка проявляется, когда придёт', async () => {
     let resolve!: (u: string | null) => void;
     const ready = new Promise<string | null>((r) => void (resolve = r));

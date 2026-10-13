@@ -5856,25 +5856,27 @@
   "documents": [
    {
     "id": "doc_statement",
-    "path": "assets/ep01/hod/docs/statement.webp",
-    "localized": false,
-    "notes": "бланк в линейку без текста; текст заявления — слой из локали"
+    "path": "assets/ep01/hod/docs/ru/statement.webp",
+    "localized": true,
+    "notes": "заявление Галины от руки на тетрадном листе, штамп входящей прокуратуры"
    },
    {
     "id": "doc_power_of_attorney",
-    "path": "assets/ep01/docs/power_of_attorney.webp",
-    "localized": false,
-    "notes": "бланк без текста; текст — слой из локали"
+    "path": "assets/ep01/hod/docs/ru/power_of_attorney.webp",
+    "localized": true,
+    "notes": "ксерокопия доверенности; в дате «4» поверх стёртой «1»"
    },
    {
     "id": "doc_contract_sale",
-    "path": "assets/ep01/docs/contract_sale.webp",
-    "localized": false
+    "path": "assets/ep01/hod/docs/ru/contract_sale.webp",
+    "localized": true,
+    "notes": "договор купли-продажи, экземпляр Лапиных"
    },
    {
     "id": "doc_bti_card",
-    "path": "assets/ep01/docs/bti_card.webp",
-    "localized": false
+    "path": "assets/ep01/hod/docs/ru/bti_card.webp",
+    "localized": true,
+    "notes": "учётная карточка БТИ из картотеки"
    }
   ],
   "music": [

@@ -24,8 +24,8 @@ export interface AppAssets {
   /** Хуки предзагрузки (индикатор, телеметрия): App заполняет их после сборки интерфейса. */
   readonly hooks: PreloadHooks;
   art: UiArt;
-  /** Бланк документа: адрес сразу (если уже загружен) и промис на случай, если ещё грузится. */
-  document(docId: string): { url: string | null; ready: Promise<string | null> };
+  /** Бланк документа: адрес сразу (если уже загружен), промис на случай, если ещё грузится, и есть ли текст в картинке. */
+  document(docId: string): { url: string | null; ready: Promise<string | null>; textInImage: boolean };
   /** Проверить все файлы, объявленные в episode.assets (HEAD-запросы без загрузки тела) — для QA. */
   verify(fetchFn?: (url: string, init?: { method: string }) => Promise<{ ok: boolean; headers: { get(name: string): string | null } }>): Promise<{ present: string[]; missing: string[] }>;
 }
@@ -51,13 +51,13 @@ export function createAppAssets(
     art: { plate: null, logo: null },
     document(docId) {
       const url = catalog.docUrl(docId);
-      if (!url) return { url: null, ready: Promise.resolve(null) };
+      if (!url) return { url: null, ready: Promise.resolve(null), textInImage: false };
       const have = store.peek(url);
       const ready = store.load(url).then((h) => {
         if (!h) store.warnMissing([url]);
         return h ? h.url : null;
       });
-      return { url: have ? have.url : null, ready };
+      return { url: have ? have.url : null, ready, textInImage: catalog.docHasText(docId) };
     },
     async verify(fetchFn) {
       const f = fetchFn ?? ((url, init) => fetch(url, init));

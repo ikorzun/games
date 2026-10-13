@@ -72,6 +72,8 @@ export class AssetCatalog {
   private readonly bg = new Map<string, string>();
   private readonly cg = new Map<string, string>();
   private readonly docs = new Map<string, string>();
+  /** Бумаги с текстом в самой картинке (localized: true) — текст поверх не накладывается. */
+  private readonly docsWithText = new Set<string>();
   private readonly portraits = new Map<string, string>();
   private readonly audio = new Map<string, string>();
   private readonly sets = new Map<string, SpriteSet>();
@@ -87,6 +89,7 @@ export class AssetCatalog {
     for (const e of a.backgrounds ?? []) this.bg.set(e.id, e.path);
     for (const e of a.cg ?? []) this.cg.set(e.id, e.path);
     for (const e of a.documents ?? []) this.docs.set(e.id, e.path);
+    for (const e of a.documents ?? []) if (e.localized) this.docsWithText.add(e.id);
     // Музыка, эмбиент, sfx и голос делят одно пространство id (id в эпизоде уникальны по префиксам m_/amb_/sfx_).
     for (const list of [a.music, a.ambient, a.sfx, a.voice]) for (const e of list ?? []) this.audio.set(e.id, e.path);
     for (const s of a.sprites ?? []) this.sets.set(s.id, s);
@@ -131,6 +134,11 @@ export class AssetCatalog {
   docUrl(id: string): string | null {
     const p = this.docs.get(id);
     return p ? this.url(p) : null;
+  }
+
+  /** Текст бумаги впечатан в картинку (пока только русский): экран показывает её целиком, без слоя текста. */
+  docHasText(id: string): boolean {
+    return this.docsWithText.has(id);
   }
 
   /** Портрет персонажа для окна реплики (cast.portrait). */

@@ -771,6 +771,8 @@ export class DocumentScreen extends BaseScreen {
     private readonly onDone: () => void,
     /** Изображение бланка без текста (assets.documents); текст накладывается слоем из локали. */
     private imageUrl: string | null = null,
+    /** Текст впечатан в картинку (настоящая бумага, пока по-русски): картинка целиком, касание — увеличить. */
+    private readonly textInImage = false,
   ) {
     super('vn-document', false);
   }
@@ -778,6 +780,10 @@ export class DocumentScreen extends BaseScreen {
   /** Картинка бланка пришла позже, чем открыли экран. */
   setImage(url: string | null): void {
     this.imageUrl = url;
+    if (this.textInImage) {
+      this.render();
+      return;
+    }
     const paper = this.el.querySelector<HTMLElement>('.vn-document__paper');
     if (!paper) return;
     paper.classList.toggle('has-image', url !== null);
@@ -787,6 +793,26 @@ export class DocumentScreen extends BaseScreen {
 
   render(): void {
     const item = this.archiveItem ? this.episode.archive_items?.find((a) => a.id === this.archiveItem) : undefined;
+    if (this.textInImage && this.imageUrl) {
+      const img = h('img', { class: 'vn-document__img' });
+      img.alt = '';
+      img.src = this.imageUrl;
+      const sheet = h('div', { class: 'vn-document__sheet', data: { doc: this.doc }, on: { click: () => sheet.classList.toggle('is-zoomed') } }, img);
+      const text = this.textKey ? t(this.textKey) : '';
+      fill(
+        this.el,
+        card(
+          'vn-document__card',
+          item ? h('h2', { class: 'vn-card__title', text: t(item.title_key) }) : null,
+          item ? h('span', { class: 'vn-badge', text: t('ui.archive.new_item') }) : null,
+          sheet,
+          // Текст бумаги — для скринридера; на других языках — перевод под картинкой (в картинке он русский).
+          text ? h('p', { class: i18n.lang === 'ru' ? 'vn-sr' : 'vn-document__text vn-document__translation', text }) : null,
+          h('div', { class: 'vn-actions' }, backButton(this.onDone, 'ui.common.ok')),
+        ),
+      );
+      return;
+    }
     fill(
       this.el,
       card(

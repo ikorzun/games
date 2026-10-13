@@ -53,7 +53,7 @@ export interface DomUIDeps {
   env: () => Readonly<Record<string, Value>>;
   onOpenArchive: () => void;
   /** Изображение бланка документа (assets.documents): адрес сразу, если уже загружен, и промис на позже. */
-  documentArt?: (docId: string) => { url: string | null; ready: Promise<string | null> };
+  documentArt?: (docId: string) => { url: string | null; ready: Promise<string | null>; textInImage?: boolean };
   /** Портрет персонажа для окна реплики (cast.portrait); нет — null. */
   portraitArt?: (who: string) => string | null;
   /** Быстрое меню / горячие клавиши, которыми управляет App. */
@@ -202,6 +202,7 @@ export class DomUI implements SessionUI {
           resolve();
         },
         art?.url ?? null,
+        art?.textInImage === true,
       );
       this.openGameScreen(screen);
       // Бланк мог ещё грузиться: покажем, как только придёт.

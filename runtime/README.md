@@ -193,7 +193,7 @@ workflow `fetch-assets` на раннере GitHub и коммитит в вет
 
 | Что | Откуда | Формат |
 |---|---|---|
-| фоны, CG, бланки документов | `assets.backgrounds`, `cg`, `documents` | webp (допустимы png, jpg) |
+| фоны, CG, бланки документов | `assets.backgrounds`, `cg`, `documents` | webp (допустимы png, jpg); у бумаги с текстом в картинке `localized: true` — экран документа показывает её целиком (касание — ×2), текст из локали уходит скринридеру, на других языках — перевод под листом; сверка под лупой такой картинкой не подкладывает |
 | спрайты | `assets.sprites[].base` — базовый кадр набора (в ep01 — `…/neutral.webp`); рядом `<выражение>.webp`, `silhouette.webp` | webp (png допустим) |
 | музыка | `assets.music` | m4a (AAC) |
 | эмбиент, эффекты | `assets.ambient`, `assets.sfx` | mp3 |
