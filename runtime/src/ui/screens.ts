@@ -382,6 +382,7 @@ export class SettingsScreen extends BaseScreen {
       fmt: (v: number) => string,
     ): HTMLElement => {
       const out = h('output', { class: 'vn-range__out', text: fmt(s[key]) });
+      const fill = (v: number): string => `${((v - min) / (max - min)) * 100}%`; // заливка дорожки до бегунка
       return h(
         'label',
         { class: 'vn-range' },
@@ -393,9 +394,12 @@ export class SettingsScreen extends BaseScreen {
           step,
           value: s[key],
           aria: { label },
+          style: { '--val': fill(s[key]) },
           on: {
             input: (e) => {
-              const v = Number((e.target as HTMLInputElement).value);
+              const el = e.target as HTMLInputElement;
+              const v = Number(el.value);
+              el.style.setProperty('--val', fill(v));
               out.textContent = fmt(v);
               hd.onChange({ [key]: v } as Partial<Settings>);
             },

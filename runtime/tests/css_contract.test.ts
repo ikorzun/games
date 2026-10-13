@@ -150,14 +150,14 @@ describe('слои камкордера в CSS', () => {
 });
 
 describe('интерфейс: документальная эстетика, mobile-first', () => {
-  it('окно реплики по макету в Figma (решение владельца 2026-10-13): текст на подложке 16 % чёрного без тени, над ней портрет, имя и подпись; шрифт Tinos', () => {
+  it('окно реплики по макету в Figma (решение владельца 2026-10-13): текст на подложке 24 % чёрного без тени, над ней портрет, имя и подпись; шрифт Tinos', () => {
     const box = /\n\.vn-textbox\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(box).not.toMatch(/background/);
     expect(box).not.toMatch(/text-shadow/);
     expect(box).toMatch(/font-family:\s*var\(--font-body\)/);
     expect(box).toMatch(/width:\s*min\(100%,\s*calc\(585em \/ 15\)\)/);
     const plate = /\n\.vn-textbox__box\s*\{([^}]*)\}/.exec(uiCss)![1]!;
-    expect(plate).toMatch(/background:\s*rgb\(0 0 0 \/ 0\.16\)/);
+    expect(plate).toMatch(/background:\s*rgb\(0 0 0 \/ 0\.24\)/);
     expect(plate).toMatch(/padding:\s*calc\(12em \/ 15\)/);
     const avatar = /\n\.vn-textbox__avatar\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(avatar).toMatch(/width:\s*calc\(36em \/ 15\)/);
@@ -184,6 +184,19 @@ describe('интерфейс: документальная эстетика, mob
       expect(css).not.toMatch(/font-weight:\s*(?:[5-9]00|bold)/);
       expect(css).not.toMatch(/font:\s*(?:[5-9]00|bold)\s/);
     }
+  });
+
+  it('без скруглений (решение владельца 2026-10-13): круглые только портрет у имени, экран-кинескоп меню и лампа REC', () => {
+    const cssOf = (dir: string): string[] => {
+      const d = join(HERE, '..', 'src', dir);
+      return readdirSync(d).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(d, f), 'utf8'));
+    };
+    const owners: string[] = [];
+    for (const css of [uiCss, stageCss, ...cssOf('minigames'), ...cssOf('case')]) {
+      for (const m of css.matchAll(/([^{}]+)\{[^}]*border-radius:(?!\s*0;)[^}]*\}/g)) owners.push(m[1]!.trim().split('\n').pop()!.trim());
+    }
+    expect(owners.sort()).toEqual(['.vn-crt__in', '.vn-crt__screen', '.vn-crt__screen::after', '.vn-rec__dot', '.vn-textbox__avatar']);
+    expect(uiCss).not.toMatch(/--radius/);
   });
 
   it('знак «дальше» — красный жирный «>» в конце текста, виден, когда реплика допечатана', () => {

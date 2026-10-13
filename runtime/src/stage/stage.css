@@ -371,7 +371,6 @@
   max-width: 30%;
   background: var(--ph-bg, #333);
   border: 2px solid rgb(255 255 255 / 0.35);
-  border-radius: 10px;
   padding-top: 26%;
   display: flex;
   flex-direction: column;

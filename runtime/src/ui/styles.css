@@ -35,7 +35,6 @@
   --c-muted: #a8a398;
   --c-accent: #c9362f;
   --c-accent-soft: #e8d9b5;
-  --radius: 8px;
   --lt-bottom: 30%;
   /* Документальная эстетика: тёмные полупрозрачные панели с тонкой светлой рамкой. */
   --panel: rgb(0 0 0 / 0.72);
@@ -168,7 +167,7 @@ body {
 /* ───────────── Текстовое окно ───────────── */
 
 /* Макет реплик в Figma (Claude, узел 1230:1541; решение владельца 2026-10-13): над подложкой — портрет, имя и подпись,
-   текст на подложке 16 % чёрного без тени, в конце текста — красный «>». Размеры макета даны для кегля 15 px и
+   текст на подложке без тени (24 % чёрного — после проверки на кадрах, в макете 16 %), в конце текста — красный «>». Размеры макета даны для кегля 15 px и
    пересчитаны в em: кегль у нас свой (--fs, ≥ 16 px на телефоне и ≥ 20 px на десктопе), и всё растёт вместе с ним. */
 .vn-textbox {
   --text-size: calc(var(--fs) * var(--font-scale));
@@ -214,7 +213,7 @@ body {
   box-sizing: border-box;
   min-height: calc(2 * 1.15em + 2 * 12em / 15);
   padding: calc(12em / 15);
-  background: rgb(0 0 0 / 0.16);
+  background: rgb(0 0 0 / 0.24);
 }
 .vn-textbox__text {
   margin: 0;
@@ -292,7 +291,6 @@ body {
   color: #ece9df;
   background: rgb(255 255 255 / 0.08);
   border: 0;
-  border-radius: 6px;
   cursor: pointer;
 }
 .vn-qbtn:hover { background: rgb(255 255 255 / 0.14); }
@@ -394,7 +392,6 @@ body {
   text-align: left;
   background: var(--panel-solid);
   border: 1px solid var(--panel-line);
-  border-radius: 4px;
   cursor: pointer;
 }
 .vn-choice:hover,
@@ -410,7 +407,6 @@ body {
   height: 1.6em;
   font-size: 0.8em;
   border: 1px solid currentColor;
-  border-radius: 50%;
   opacity: 0.7;
 }
 .vn-choice.is-disabled { opacity: 0.42; cursor: not-allowed; }
@@ -435,7 +431,6 @@ body {
   width: 0.85em;
   height: 0.85em;
   border: 2px solid var(--c-muted);
-  border-radius: 50%;
 }
 .vn-choices__dot.is-on { background: var(--c-accent-soft); border-color: var(--c-accent-soft); }
 .vn-choice__item {
@@ -446,7 +441,6 @@ body {
   height: 2em;
   color: #1b1a17;
   background: var(--c-accent-soft);
-  border-radius: 3px;
 }
 .vn-choice__item .vn-ico { width: 1.3em; height: 1.3em; stroke-width: 1.8; }
 .vn-choice .vn-choice__mark { flex: none; width: 1.15em; height: 1.15em; margin-left: auto; }
@@ -468,7 +462,6 @@ body {
   height: 4px;
   overflow: hidden;
   background: rgb(255 255 255 / 0.16);
-  border-radius: 2px;
 }
 .vn-choices__timer-bar {
   display: block;
@@ -605,7 +598,6 @@ body {
   overscroll-behavior: contain;
   background: var(--c-card);
   border: 1px solid var(--c-line);
-  border-radius: 14px;
   box-shadow: 0 12px 40px rgb(0 0 0 / 0.6);
 }
 .vn-card__title,
@@ -626,7 +618,6 @@ body {
   padding: 0.5rem 1.1rem;
   background: #1a1a1f;
   border: 1px solid var(--c-line);
-  border-radius: var(--radius);
   cursor: pointer;
 }
 .vn-btn:hover { border-color: var(--c-accent-soft); }
@@ -645,7 +636,6 @@ body {
   padding: 0 0.95rem;
   background: #1a1a1f;
   border: 1px solid var(--c-line);
-  border-radius: 999px;
   cursor: pointer;
 }
 .vn-chip.is-on { border-color: var(--c-accent); background: rgb(201 54 47 / 0.22); }
@@ -667,7 +657,6 @@ body {
   font-size: 0.8em;
   color: #fff;
   background: var(--c-accent);
-  border-radius: 999px;
 }
 .vn-check,
 .vn-radio {
@@ -677,13 +666,21 @@ body {
   min-height: 40px;
   cursor: pointer;
 }
+/* Флажки и переключатели — квадратные (без скруглений, решение владельца 2026-10-13): свой рисунок вместо системного. */
 .vn-check input,
 .vn-radio input {
   flex: none;
   width: 22px;
   height: 22px;
-  accent-color: var(--c-accent);
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgb(255 255 255 / 0.08);
+  border: 2px solid var(--c-muted);
+  cursor: pointer;
 }
+.vn-check input:checked { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3 3 7-7' fill='none' stroke='%23fff' stroke-width='2.2'/%3E%3C/svg%3E") center / 16px no-repeat var(--c-accent); border-color: var(--c-accent); }
+.vn-radio input:checked { background: linear-gradient(#fff, #fff) center / 8px 8px no-repeat var(--c-accent); border-color: var(--c-accent); }
 
 /* Главное меню: кинескоп телевизора (решение владельца 2026-10-12, docs/production/concepts/main_menu).
    Только средства, одинаковые во всех движках: скругления, inset-тени, градиенты, SVG-шум фоном; размеры — clamp(). */
@@ -768,7 +765,6 @@ body {
   opacity: 0.85;
   background: rgb(255 255 255 / 0.06);
   border: 0;
-  border-radius: 50%;
   box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14);
   cursor: pointer;
 }
@@ -784,7 +780,6 @@ body {
   z-index: 5;
   padding: 10px;
   background: rgb(10 10 12 / 0.92);
-  border-radius: 10px;
   box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 8px 24px rgb(0 0 0 / 0.6);
 }
 /* содержимое: шапка сверху, полка снизу; блоки не сжимаются, при нехватке высоты прокручивается всё */
@@ -845,7 +840,6 @@ body {
   display: block;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border-radius: 6px;
   background: #0e0e10 center / cover no-repeat;
   box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12);
   transition: box-shadow 0.15s, transform 0.15s;
@@ -908,7 +902,6 @@ body {
   margin: 0 0 0.6rem;
   padding: 0.4rem 0.8rem 0.5rem;
   border: 1px solid var(--c-line);
-  border-radius: var(--radius);
 }
 .vn-warning__violence legend { padding: 0 0.4rem; color: var(--c-muted); font-size: 0.9em; }
 .vn-warning__disclaimer {
@@ -918,7 +911,6 @@ body {
   color: #d4d0c6;
   background: rgb(255 255 255 / 0.05);
   border-left: 3px solid var(--c-accent);
-  border-radius: 4px;
 }
 .vn-warning__disclaimer h3 { margin: 0 0 0.3rem; font: 400 1em var(--font-title); color: var(--c-accent-soft); }
 .vn-warning__disclaimer p { margin: 0 0 0.3rem; }
@@ -936,7 +928,13 @@ body {
   gap: 0.6rem;
   min-height: 40px;
 }
-.vn-range input { width: 100%; height: 28px; accent-color: var(--c-accent); }
+/* Ползунок без скруглений: красная заливка до бегунка (--val ставит экран настроек), светлая дорожка, квадратный бегунок. */
+.vn-range input { width: 100%; height: 28px; margin: 0; -webkit-appearance: none; appearance: none; background: none; cursor: pointer; }
+.vn-range input::-webkit-slider-runnable-track { height: 4px; background: linear-gradient(var(--c-accent), var(--c-accent)) 0 0 / var(--val, 0%) 100% no-repeat #e9e6df; }
+.vn-range input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 20px; margin-top: -8px; background: #fff; border: 0; }
+.vn-range input::-moz-range-track { height: 4px; background: #e9e6df; }
+.vn-range input::-moz-range-progress { height: 4px; background: var(--c-accent); }
+.vn-range input::-moz-range-thumb { width: 14px; height: 20px; background: #fff; border: 0; border-radius: 0; }
 .vn-range input:disabled { opacity: 0.45; }
 .vn-range__out { text-align: right; font: 0.9em var(--font-mono); color: var(--c-muted); }
 @media (max-width: 420px) {
@@ -971,7 +969,6 @@ body {
   font-size: 1.1em;
   background: none;
   border: 1px solid var(--c-line);
-  border-radius: 6px;
   cursor: pointer;
 }
 .vn-log__back:hover { border-color: var(--c-accent-soft); }
@@ -988,7 +985,6 @@ body {
   text-align: left;
   background: #1a1a1f;
   border: 1px solid var(--c-line);
-  border-radius: var(--radius);
   cursor: pointer;
 }
 .vn-slot:hover:not(:disabled) { border-color: var(--c-accent-soft); }
@@ -1001,13 +997,12 @@ body {
   padding: 0.6rem 0.9rem;
   background: rgb(201 54 47 / 0.14);
   border: 1px solid var(--c-accent);
-  border-radius: var(--radius);
 }
 .vn-confirm p { margin: 0; }
 
 /* Архив */
 .vn-archive__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.7rem; }
-.vn-archive__item { padding: 0.6rem 0.9rem; background: #1a1a1f; border-left: 3px solid var(--c-accent-soft); border-radius: 4px; }
+.vn-archive__item { padding: 0.6rem 0.9rem; background: #1a1a1f; border-left: 3px solid var(--c-accent-soft); }
 .vn-archive__item h3 { display: inline; margin: 0 0.5rem 0 0; font: 400 1.05em var(--font-title); }
 .vn-archive__item p { margin: 0.3rem 0 0; font-size: 0.95em; color: #d4d0c6; }
 
@@ -1020,7 +1015,6 @@ body {
   overflow: auto;
   color: #1d1b17;
   background: #e9e2cf;
-  border-radius: 3px;
   box-shadow: 0 6px 18px rgb(0 0 0 / 0.5), inset 0 0 40px rgb(120 90 40 / 0.18);
   font-family: var(--font-mono);
   line-height: 1.5;
@@ -1042,7 +1036,7 @@ body {
 }
 .vn-ending__sub { margin: 0.8rem 0 0.4rem; font: 400 1.1em var(--font-title); color: var(--c-accent-soft); }
 .vn-ending__journal { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
-.vn-ending__entry { display: flex; flex-direction: column; padding: 0.4rem 0.8rem; background: #1a1a1f; border-left: 3px solid var(--c-line); border-radius: 4px; }
+.vn-ending__entry { display: flex; flex-direction: column; padding: 0.4rem 0.8rem; background: #1a1a1f; border-left: 3px solid var(--c-line); }
 .vn-ending__entry.is-moral { border-left-color: var(--c-accent); }
 .vn-ending__prompt { font-size: 0.85em; color: var(--c-muted); }
 
@@ -1057,7 +1051,6 @@ body {
   padding: 1.1rem 1.25rem;
   background: rgb(19 19 22 / 0.96);
   border: 1px dashed rgb(255 255 255 / 0.3);
-  border-radius: 14px;
 }
 .mg-gb.is-paused { opacity: 0.6; pointer-events: none; }
 .mg-gb__tag { margin: 0 0 0.3rem; font: 0.75em var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--c-muted); }
@@ -1073,7 +1066,6 @@ body {
   font: 0.8em / 1.4 var(--font-mono);
   color: var(--c-muted);
   background: rgb(255 255 255 / 0.04);
-  border-radius: 6px;
 }
 .mg-gb__cfg dt { color: #cfc9ba; }
 .mg-gb__cfg dd { margin: 0; overflow-wrap: anywhere; }
@@ -1085,7 +1077,6 @@ body {
   padding: 0.5rem 0.9rem;
   background: #1c1c21;
   border: 1px solid var(--c-line);
-  border-radius: var(--radius);
   cursor: pointer;
 }
 .mg-btn:hover:not(:disabled) { border-color: var(--c-accent-soft); }
@@ -1107,7 +1098,6 @@ body {
   padding: 0.5rem 0.85rem;
   background: var(--panel);
   border: 1px solid var(--panel-line);
-  border-radius: 999px;
   opacity: 0;
   transform: translateX(-50%);
   transition: opacity 0.2s ease;
@@ -1118,7 +1108,6 @@ body {
   width: 0.55rem;
   height: 0.55rem;
   background: var(--c-accent);
-  border-radius: 50%;
   animation: load-dot 1s ease-in-out infinite;
 }
 .vn-loading i:nth-child(2) { animation-delay: 0.15s; }
@@ -1148,7 +1137,6 @@ body {
   background: rgb(12 12 14 / 0.95);
   border: 1px solid var(--c-accent-soft);
   border-left: 4px solid var(--c-accent);
-  border-radius: 8px;
   opacity: 0;
   transform: translateY(-8px);
   transition: opacity 0.3s ease, transform 0.3s ease;

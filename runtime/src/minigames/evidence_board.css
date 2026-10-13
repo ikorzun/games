@@ -43,7 +43,6 @@
   color: var(--c-text);
   background: rgb(15 15 17 / 0.97);
   border: 1px solid var(--c-line);
-  border-radius: 14px;
   outline: none;
 }
 .mg-eb.is-paused {
@@ -71,7 +70,6 @@
   height: 4px;
   overflow: hidden;
   background: rgb(255 255 255 / 0.12);
-  border-radius: 0 0 3px 3px;
 }
 .mg-eb__time-bar {
   display: block;
@@ -140,7 +138,6 @@
   overscroll-behavior: contain;
   touch-action: pan-x pan-y;
   border: 1px solid #0d0d0d;
-  border-radius: 8px;
   background:
     radial-gradient(ellipse 80% 60% at 50% 0%, rgb(232 217 181 / 0.17), transparent 72%),
     repeating-linear-gradient(90deg, rgb(255 255 255 / 0.05) 0 2px, transparent 2px 24px),
@@ -196,7 +193,6 @@
   background: var(--eb-card);
   border: 1px solid var(--eb-card-edge);
   border-left-width: 0.35em;
-  border-radius: 3px;
   box-shadow:
     0 2px 0 rgb(0 0 0 / 0.18),
     0 6px 10px rgb(0 0 0 / 0.35);
@@ -264,7 +260,6 @@
   padding: 0.24em;
   fill: #fff;
   background: #555;
-  border-radius: 50%;
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
 }
 .mg-eb .is-person > .mg-eb__icon {
@@ -364,7 +359,6 @@
   height: 1.8em;
   background: var(--eb-ok);
   border: 2px solid #fff;
-  border-radius: 50%;
   box-shadow: 0 2px 6px rgb(0 0 0 / 0.5);
 }
 .mg-eb .mg-eb__badge.is-bad .mg-eb__bdot {
@@ -417,7 +411,6 @@
   height: 1.1em;
   box-sizing: border-box;
   border: 2px solid var(--c-muted);
-  border-radius: 50%;
 }
 .mg-eb__dot.is-used {
   background: var(--c-accent);
@@ -456,7 +449,6 @@
   color: var(--c-text);
   background: #1c1c21;
   border: 1px solid var(--c-line);
-  border-radius: 8px;
   cursor: pointer;
   touch-action: manipulation;
 }

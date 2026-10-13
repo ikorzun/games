@@ -21,7 +21,6 @@
   color: var(--mg-ink);
   background: var(--c-card, #131316);
   border: 1px solid var(--mg-line);
-  border-radius: 14px;
   box-shadow: 0 12px 40px rgb(0 0 0 / 0.6);
   font: 400 1em / 1.35 var(--font-body, system-ui, sans-serif);
   text-align: left;
@@ -111,7 +110,6 @@
   width: 9px;
   height: 9px;
   border: 1px solid var(--mg-muted);
-  border-radius: 2px;
 }
 .mg-shell__pip.is-used {
   background: var(--mg-accent);
@@ -130,7 +128,6 @@
   height: 5px;
   overflow: hidden;
   background: rgb(255 255 255 / 0.12);
-  border-radius: 3px;
 }
 .mg-shell__timer-bar {
   display: block;
@@ -166,7 +163,6 @@
   padding: 0.55rem 0.9rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
   background: var(--c-card, #131316);
   border-top: 1px solid var(--mg-line);
-  border-radius: 0 0 14px 14px;
 }
 .mg-shell__actions,
 .mg-shell__result {
@@ -183,7 +179,6 @@
   font: inherit;
   background: #1c1c21;
   border: 1px solid var(--mg-line);
-  border-radius: var(--radius, 8px);
   cursor: pointer;
 }
 .mg-shell .mg-shell__btn:hover:not(:disabled) {
@@ -211,7 +206,6 @@
   background: rgb(255 255 255 / 0.05);
   border: 1px solid var(--mg-line);
   border-left: 4px solid var(--mg-gold);
-  border-radius: 10px;
 }
 .mg-shell__result[data-outcome='success'] {
   border-left-color: var(--mg-ok);

@@ -52,7 +52,6 @@
   padding: 0.35rem 0.9rem;
   font-size: 1.35em;
   border: 1px solid rgb(232 217 181 / 0.35);
-  border-radius: 999px;
 }
 .vn-case__star {
   color: var(--c-accent-soft);
@@ -106,7 +105,6 @@
   text-align: left;
   background: var(--c-card);
   border: 1px solid var(--c-line);
-  border-radius: var(--radius);
 }
 .vn-case__task-btn {
   cursor: pointer;
@@ -159,7 +157,6 @@
   padding: 0.9rem 1rem;
   background: rgb(232 217 181 / 0.07);
   border: 1px solid rgb(232 217 181 / 0.35);
-  border-radius: var(--radius);
 }
 .vn-case__summary p {
   margin: 0.35rem 0 0;
@@ -180,7 +177,6 @@
   color: var(--c-muted);
   font-size: 0.85em;
   border: 1px solid var(--c-line);
-  border-radius: 999px;
 }
 .vn-case__ch.is-current {
   color: var(--c-text);
@@ -213,13 +209,11 @@
   padding: 0.6rem;
   background: var(--c-card);
   border: 1px solid var(--c-line);
-  border-radius: var(--radius);
 }
 .vn-case__face {
   width: 4.5rem;
   height: 4.5rem;
   background: #24232a var(--face) no-repeat 50% 4% / 300% auto;
-  border-radius: 6px;
 }
 .vn-case__face.is-unknown {
   background: #1b1a20;
@@ -259,7 +253,6 @@
   color: var(--c-muted);
   font-size: 0.9em;
   border: 1px dashed var(--c-line);
-  border-radius: 6px;
 }
 .vn-case__trait.is-known {
   color: var(--c-text);
@@ -271,7 +264,6 @@
   font-size: 0.9em;
   background: var(--c-card);
   border: 1px solid var(--c-line);
-  border-radius: 6px;
 }
 .vn-case__clue.is-fact {
   color: var(--c-muted);
@@ -358,7 +350,6 @@
 .vn-case-photo__front,
 .vn-case-photo__back {
   grid-area: 1 / 1;
-  border-radius: 4px;
   transition: opacity 0.35s ease;
 }
 .vn-case-photo__front {
