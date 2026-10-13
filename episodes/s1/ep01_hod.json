@@ -5143,18 +5143,21 @@
     "id": "bg_hod_flat_inspect",
     "path": "assets/ep01/hod/hod_flat_inspect/flat_inspect.webp",
     "season": "indoor",
+    "memory": "assets/ep01/hod_memory/hod_flat_inspect/flat_inspect.webp",
     "notes": "черновой кадр осмотра (лето 1993-го): фото внука, очки на футляре, таблетки на подоконнике"
    },
    {
     "id": "bg_hod_office_am",
     "path": "assets/ep01/hod/hod_office_am/office_am_wide.webp",
     "season": "indoor",
+    "memory": "assets/ep01/hod_memory/hod_office_am/office_am_wide.webp",
     "notes": "черновой общий план office_am_wide (лето 1993-го)"
    },
    {
     "id": "bg_hod_office_call_am",
     "path": "assets/ep01/hod/hod_office_am/office_am_wide.webp",
     "season": "indoor",
+    "memory": "assets/ep01/hod_memory/hod_office_am/office_am_wide.webp",
     "notes": "черновой общий план office_am_wide (лето 1993-го)"
    },
    {
@@ -5191,12 +5194,14 @@
     "id": "bg_hod_flat",
     "path": "assets/ep01/hod/hod_flat/flat_wide.webp",
     "season": "indoor",
+    "memory": "assets/ep01/hod_memory/hod_flat/flat_wide.webp",
     "notes": "черновой общий план flat_wide (лето 1993-го)"
    },
    {
     "id": "bg_hod_flat_photo",
     "path": "assets/ep01/hod/hod_flat/flat_wide.webp",
     "season": "indoor",
+    "memory": "assets/ep01/hod_memory/hod_flat/flat_wide.webp",
     "notes": "черновой общий план flat_wide (лето 1993-го)"
    },
    {
@@ -5245,6 +5250,7 @@
     "id": "bg_hod_car",
     "path": "assets/ep01/hod/hod_car/car_wide.webp",
     "season": "summer",
+    "memory": "assets/ep01/hod_memory/hod_car/car_wide.webp",
     "notes": "черновой общий план car_wide (лето 1993-го)"
    },
    {
@@ -5279,7 +5285,19 @@
       "mask": "assets/ep01/hod/hod_office_am/office_am_wide.oper.webp"
      }
     ],
-    "file": "assets/ep01/hod/hod_office_am/office_am_wide.webp"
+    "file": "assets/ep01/hod/hod_office_am/office_am_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_office_am/office_am_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_office_am/office_am_wide.square.webp",
+     "masks": {
+      "sledak": "assets/ep01/hod_memory/hod_office_am/office_am_wide.sledak.webp",
+      "oper": "assets/ep01/hod_memory/hod_office_am/office_am_wide.oper.webp"
+     },
+     "square_masks": {
+      "sledak": "assets/ep01/hod_memory/hod_office_am/office_am_wide.square.sledak.webp",
+      "oper": "assets/ep01/hod_memory/hod_office_am/office_am_wide.square.oper.webp"
+     }
+    }
    },
    {
     "id": "sh_office_am_ots_oper",
@@ -5299,7 +5317,19 @@
     ],
     "file": "assets/ep01/hod/hod_office_am/office_am_ots_oper.webp",
     "from": "sledak",
-    "focus": "oper"
+    "focus": "oper",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_office_am/office_am_ots_oper.webp",
+     "square": "assets/ep01/hod_memory/hod_office_am/office_am_ots_oper.square.webp",
+     "masks": {
+      "oper": "assets/ep01/hod_memory/hod_office_am/office_am_ots_oper.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_office_am/office_am_ots_oper.sledak.webp"
+     },
+     "square_masks": {
+      "oper": "assets/ep01/hod_memory/hod_office_am/office_am_ots_oper.square.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_office_am/office_am_ots_oper.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_office_am_phone",
@@ -5315,7 +5345,19 @@
       "who": "oper"
      }
     ],
-    "file": "assets/ep01/hod/hod_office_call_am/office_am_phone.webp"
+    "file": "assets/ep01/hod/hod_office_call_am/office_am_phone.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_office_call_am/office_am_phone.webp",
+     "square": "assets/ep01/hod_memory/hod_office_call_am/office_am_phone.square.webp",
+     "masks": {
+      "sledak": "assets/ep01/hod_memory/hod_office_call_am/office_am_phone.sledak.webp",
+      "oper": "assets/ep01/hod_memory/hod_office_call_am/office_am_phone.oper.webp"
+     },
+     "square_masks": {
+      "sledak": "assets/ep01/hod_memory/hod_office_call_am/office_am_phone.square.sledak.webp",
+      "oper": "assets/ep01/hod_memory/hod_office_call_am/office_am_phone.square.oper.webp"
+     }
+    }
    },
    {
     "id": "sh_office_eve_wide",
@@ -5473,7 +5515,23 @@
       "who": "oper"
      }
     ],
-    "file": "assets/ep01/hod/hod_flat/flat_wide.webp"
+    "file": "assets/ep01/hod/hod_flat/flat_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_flat/flat_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_flat/flat_wide.square.webp",
+     "masks": {
+      "buyer": "assets/ep01/hod_memory/hod_flat/flat_wide.buyer.webp",
+      "lapin_wife": "assets/ep01/hod_memory/hod_flat/flat_wide.lapin_wife.webp",
+      "sledak": "assets/ep01/hod_memory/hod_flat/flat_wide.sledak.webp",
+      "oper": "assets/ep01/hod_memory/hod_flat/flat_wide.oper.webp"
+     },
+     "square_masks": {
+      "buyer": "assets/ep01/hod_memory/hod_flat/flat_wide.square.buyer.webp",
+      "lapin_wife": "assets/ep01/hod_memory/hod_flat/flat_wide.square.lapin_wife.webp",
+      "sledak": "assets/ep01/hod_memory/hod_flat/flat_wide.square.sledak.webp",
+      "oper": "assets/ep01/hod_memory/hod_flat/flat_wide.square.oper.webp"
+     }
+    }
    },
    {
     "id": "sh_flat_ots_buyer",
@@ -5491,7 +5549,19 @@
     ],
     "file": "assets/ep01/hod/hod_flat/flat_ots_buyer.webp",
     "from": "sledak",
-    "focus": "buyer"
+    "focus": "buyer",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_flat/flat_ots_buyer.webp",
+     "square": "assets/ep01/hod_memory/hod_flat/flat_ots_buyer.square.webp",
+     "masks": {
+      "buyer": "assets/ep01/hod_memory/hod_flat/flat_ots_buyer.buyer.webp",
+      "sledak": "assets/ep01/hod_memory/hod_flat/flat_ots_buyer.sledak.webp"
+     },
+     "square_masks": {
+      "buyer": "assets/ep01/hod_memory/hod_flat/flat_ots_buyer.square.buyer.webp",
+      "sledak": "assets/ep01/hod_memory/hod_flat/flat_ots_buyer.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_flat_ots_wife",
@@ -5509,7 +5579,19 @@
     ],
     "file": "assets/ep01/hod/hod_flat/flat_ots_wife.webp",
     "from": "sledak",
-    "focus": "lapin_wife"
+    "focus": "lapin_wife",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_flat/flat_ots_wife.webp",
+     "square": "assets/ep01/hod_memory/hod_flat/flat_ots_wife.square.webp",
+     "masks": {
+      "lapin_wife": "assets/ep01/hod_memory/hod_flat/flat_ots_wife.lapin_wife.webp",
+      "sledak": "assets/ep01/hod_memory/hod_flat/flat_ots_wife.sledak.webp"
+     },
+     "square_masks": {
+      "lapin_wife": "assets/ep01/hod_memory/hod_flat/flat_ots_wife.square.lapin_wife.webp",
+      "sledak": "assets/ep01/hod_memory/hod_flat/flat_ots_wife.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_flat_photo",
@@ -5518,7 +5600,11 @@
     "kind": "wide",
     "angle": "eye",
     "cast": [],
-    "file": "assets/ep01/hod/hod_flat_photo/flat_photo.webp"
+    "file": "assets/ep01/hod/hod_flat_photo/flat_photo.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_flat_photo/flat_photo.webp",
+     "square": "assets/ep01/hod_memory/hod_flat_photo/flat_photo.square.webp"
+    }
    },
    {
     "id": "sh_landing_chain_wide",
@@ -5784,7 +5870,19 @@
       "who": "sledak"
      }
     ],
-    "file": "assets/ep01/hod/hod_car/car_wide.webp"
+    "file": "assets/ep01/hod/hod_car/car_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_car/car_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_car/car_wide.square.webp",
+     "masks": {
+      "oper": "assets/ep01/hod_memory/hod_car/car_wide.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_car/car_wide.sledak.webp"
+     },
+     "square_masks": {
+      "oper": "assets/ep01/hod_memory/hod_car/car_wide.square.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_car/car_wide.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_car_ots_oper",
@@ -5802,7 +5900,19 @@
     ],
     "file": "assets/ep01/hod/hod_car/car_ots_oper.webp",
     "from": "sledak",
-    "focus": "oper"
+    "focus": "oper",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_car/car_ots_oper.webp",
+     "square": "assets/ep01/hod_memory/hod_car/car_ots_oper.square.webp",
+     "masks": {
+      "oper": "assets/ep01/hod_memory/hod_car/car_ots_oper.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_car/car_ots_oper.sledak.webp"
+     },
+     "square_masks": {
+      "oper": "assets/ep01/hod_memory/hod_car/car_ots_oper.square.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_car/car_ots_oper.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_recon_wide",

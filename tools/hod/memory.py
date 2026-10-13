@@ -8,6 +8,8 @@
   python3 tools/hod/memory.py sheets sledak oper buyer lapin_wife   # листы: голова и фигура со всех сторон
   python3 tools/hod/memory.py scene office_am_wide                  # кадр 1920×1088 по кадру «Реализма»
   python3 tools/hod/memory.py square office_am_wide                 # квадрат 1536×1536 из принятого кадра
+  python3 tools/hod/memory.py prompt office_am_ots_oper             # промпт и картинки кадра — проверить до генерации
+  python3 tools/hod/memory.py fix flat_wide 1695,210,1810,330 "…"   # правка по маске: только прямоугольник
   python3 tools/hod/memory.py cost                                  # сколько потрачено
 """
 import json, os, re, subprocess, sys
@@ -138,14 +140,22 @@ def spent() -> float:
     return sum(r['cost'] for r in json.load(open(path))) if os.path.exists(path) else 0.0
 
 
-def gen(name: str, prompt: str, images: list[str], size: str, out_dir: str) -> str:
+def gen(name: str, prompt: str, images: list[str], size: str, out_dir: str, mask: str = '') -> str:
     os.makedirs(out_dir, exist_ok=True)
     env = {**os.environ, 'SSL_CERT_FILE': '/etc/ssl/cert.pem'}
     cmd = [sys.executable, GPT, prompt, '--model', 'sunburst', '--quality', 'high', '--size', size, '--format', 'png',
            '--out', out_dir, '--name', name]
     for im in images:
         cmd += ['--image', im]
-    res = subprocess.run(cmd, check=True, env=env, capture_output=True, text=True)
+    if mask:
+        cmd += ['--mask', mask]
+    for attempt in (1, 2):  # запрос к API изредка виснет до таймаута — один повтор
+        res = subprocess.run(cmd, env=env, capture_output=True, text=True)
+        if res.returncode == 0:
+            break
+        print(f'{name}: попытка {attempt} не удалась: {res.stderr.strip()[-300:]}', file=sys.stderr)
+    else:
+        sys.exit(f'{name}: генерация не удалась')
     data = json.loads(res.stdout[res.stdout.index('{'):])
     cost = ledger_add(name, data.get('usage') or {})
     print(f'{name}: ${cost:.3f}; всего потрачено ${spent():.2f} → {data["files"][0]}')
@@ -181,17 +191,66 @@ CLOTHES = {'sledak': 'pale-blue short-sleeved shirt and a navy tie', 'oper': 'bl
            'buyer': 'thin-rimmed glasses and a beige paint-spattered checked shirt', 'lapin_wife': 'blue-grey print dress and an apron'}
 SCENE_STYLE = ['01', '02', '03', '04', '05', '06', '07', '10', '11', '12', '13']
 SQUARE_STYLE = ['02', '03', '04', '05', '06', '07', '10', '12']
-SQUARE = ('Reframe this illustrated film frame (image 1) into a square 1:1 frame for a phone screen. Keep every person fully '
-          'inside the frame with exactly the same identity, pose, gaze, expression and clothes; keep the same moment, room, light '
-          'and drawing style. Extend the room above and below as needed and bring the framing slightly closer; do not crop any '
-          'person, do not move anyone relative to the others, do not add or remove people or objects.')
+SQUARE = ('Reframe this illustrated film frame (image 1) into a square 1:1 frame for a phone screen. Keep every person who is '
+          'fully visible in image 1 fully inside the square with exactly the same identity, pose, gaze, expression and clothes; '
+          'a person seen only as a shoulder or the back of the head at an edge of image 1 stays at that edge, cut by the frame '
+          'the same way. Keep the same moment, room, light and drawing style. Extend the room above and below as needed and '
+          'bring the framing slightly closer; do not move anyone relative to the others, do not add or remove people or objects.')
+
+# Кто где и куда смотрит — по принятым кадрам «Реализма» (tools/hod/shots.py) и проверке их взглядов 2026-10-13:
+# портреты-развёртки смотрят в объектив, без этих строк модель переносит их взгляд в кадр.
+STAGING = {
+    'office_am_wide': {
+        'sledak': 'sits behind the desk on the LEFT, his face in three-quarter view turned right, his eyes on Sayko',
+        'oper': "sits on the visitor's chair on the RIGHT, turned left, leaning forward with his elbows on his knees, a wry "
+                'half-smile, his eyes on Gromov'},
+    'office_am_ots_oper': {
+        'oper': "sits on the visitor's chair facing the camera, talking, one open hand turned up; his eyes on Gromov, just left "
+                'of the camera',
+        'sledak': 'only the back of his head and his shoulder at the LEFT edge, out of focus'},
+    'office_am_phone': {
+        'sledak': 'sits behind the desk holding the black receiver of the rotary telephone to his right ear, a pencil in his '
+                  "other hand, listening; his eyes turned right toward Sayko's shoulder",
+        'oper': 'only the back of his head and his shoulder at the RIGHT edge in the foreground, out of focus'},
+    'car_wide': {
+        'oper': 'drives on the LEFT, one hand on the wheel, glancing right at Gromov',
+        'sledak': 'sits in the passenger seat on the RIGHT, his eyes down on the papers in the open case folder on his knees'},
+    'car_ots_oper': {
+        'oper': 'drives, in three-quarter view, a crooked grin, one hand on the wheel; his eyes on Gromov, just right of the camera',
+        'sledak': 'only the back of his head and his shoulder at the RIGHT edge'},
+    'flat_wide': {
+        'oper': 'leans on the hallway door frame at the LEFT edge in the foreground, in profile, looking at the glass doors of the '
+                'sideboard',
+        'buyer': 'stands in front of the sideboard LEFT of centre, papers held to his chest, his eyes on Gromov',
+        'sledak': 'stands RIGHT of centre, seen from behind, the case folder under his arm, looking at Lapin',
+        'lapin_wife': 'stands in the kitchen doorway on the RIGHT, drying her hands on a tea towel, watching her husband'},
+    'flat_ots_buyer': {
+        'buyer': 'stands in front of the sideboard facing the camera, papers in both hands, talking fast, defensive; his eyes on '
+                 'Gromov, just right of the camera',
+        'sledak': 'only the back of his head and his shoulder at the RIGHT edge'},
+    'flat_ots_wife': {
+        'lapin_wife': 'stands facing the camera, the tea towel twisted in her hands, worried and tired; her eyes on Gromov, just '
+                      'left of the camera',
+        'sledak': 'only the back of his head and his shoulder at the LEFT edge'},
+    'flat_photo': {
+        'sledak': 'only his head in three-quarter view from behind, his short sleeve and his hand at the RIGHT, holding the '
+                  'half-open glass door of the sideboard; his eyes on the framed photograph'},
+    'flat_inspect': {},
+}
+GAZE = ('Every person keeps the pose, head turn and gaze of image 1: each looks at another person or an object as written, '
+        'never into the lens. The turnaround sheets give only face, hair and clothing — ignore their head poses and their '
+        'gaze toward the viewer.')
+# Общий план места, уже перерисованный, — образец рисунка для остальных кадров сета (одна рука, одна палитра).
+STYLE_REF = {'office_am_ots_oper': 'office_am_wide', 'office_am_phone': 'office_am_wide', 'car_ots_oper': 'car_wide',
+             'flat_ots_buyer': 'flat_wide', 'flat_ots_wife': 'flat_wide', 'flat_photo': 'flat_wide', 'flat_inspect': 'flat_wide'}
 
 
 def shot_info(sid: str) -> tuple[str, str, list[str]]:
+    """Исходный кадр «Реализма», сет и кто виден в кадре (по STAGING: у вставки с фото в эпизоде состава нет, а Громов есть)."""
     if sid in EXTRA:
-        return f'assets/ep01/hod/{EXTRA[sid]}/{sid}.webp', EXTRA[sid], []
+        return f'assets/ep01/hod/{EXTRA[sid]}/{sid}.webp', EXTRA[sid], list(STAGING[sid])
     s = SHOT[sid]
-    return s['file'], s['set'], [c['who'] for c in s['cast']]
+    return s['file'], s['set'], list(STAGING[sid])
 
 
 def people(cast: list[str], first: int) -> tuple[str, list[str]]:
@@ -202,7 +261,8 @@ def people(cast: list[str], first: int) -> tuple[str, list[str]]:
     return text, files
 
 
-def scene(sid: str) -> None:
+def scene_inputs(sid: str) -> tuple[str, list[str]]:
+    """Промпт кадра и картинки к нему: исходный кадр, листы голов, общий план сета в новом стиле (если уже есть)."""
     src, set_, cast = shot_info(sid)
     im = Image.open(os.path.join(ROOT, src)).convert('RGB')
     pad = Image.new('RGB', (1920, 1088))
@@ -213,19 +273,69 @@ def scene(sid: str) -> None:
     src_png = os.path.join(RAW, 'src', f'{sid}.png')
     pad.save(src_png)
     who, sheets = people(cast, 2)
-    refs = (f'IMAGES. Image 1 is the source film frame to redraw: keep its composition, framing and every person and object '
-            f'exactly where they are. ' + (f'The other images are the approved character turnaround sheets in the target style — '
-            f'{who}: draw each person with exactly that face, hair and clothing.' if sheets else 'There are no people in this frame.'))
-    gen(sid, f'{refs}\n\n{style(SCENE_STYLE, header=True)}', [src_png, *sheets], '1920x1088', os.path.join(RAW, 'scenes'))
+    images = [src_png, *sheets]
+    intro = ('IMAGES. Image 1 is the source film frame to redraw: keep its composition, framing and every person and object '
+             'exactly where they are, in the same state.')
+    if sheets:
+        intro += (f' Approved character turnaround sheets in the target style: {who}. Draw each person with exactly that face, '
+                  f'hair and clothing.')
+    wide = os.path.join(RAW, 'scenes', f'{STYLE_REF[sid]}.png') if sid in STYLE_REF else ''
+    if wide and os.path.exists(wide):
+        images.append(wide)
+        intro += (f' Image {len(images)} is the already approved illustrated wide frame of this same place: match its drawing '
+                  f'style, line weight, palette and the way the room and the people are drawn; take nothing else from it — the '
+                  f'composition comes from image 1.')
+    parts = [intro, *where(sid, cast)] if cast else [intro, 'There are no people in this frame.']
+    return '\n\n'.join(parts) + f'\n\n{style(SCENE_STYLE, header=True)}', images
+
+
+def where(sid: str, cast: list[str]) -> list[str]:
+    """Кто где и куда смотрит + правило взгляда (общие для кадра и квадрата)."""
+    return ['WHO IS WHERE (exactly as in image 1): ' + ' '.join(f'{CHARS[w]["name"]}: {STAGING[sid][w]}.' for w in cast), GAZE]
+
+
+def scene(sid: str) -> None:
+    prompt, images = scene_inputs(sid)
+    gen(sid, prompt, images, '1920x1088', os.path.join(RAW, 'scenes'))
 
 
 def square(sid: str) -> None:
     _, _, cast = shot_info(sid)
     base = os.path.join(RAW, 'scenes', f'{sid}.png')
     who, sheets = people(cast, 2)
-    refs = f' The other images are the approved character turnaround sheets — {who}.' if sheets else ''
-    gen(f'{sid}.square', f'{SQUARE}{refs}\n\n{style(SQUARE_STYLE, header=False)}', [base, *sheets], '1536x1536',
+    refs = f' Approved character turnaround sheets for identity: {who}.' if sheets else ''
+    parts = [SQUARE + refs, *(where(sid, cast) if cast else [])]
+    gen(f'{sid}.square', '\n\n'.join(parts) + f'\n\n{style(SQUARE_STYLE, header=False)}', [base, *sheets], '1536x1536',
         os.path.join(RAW, 'squares'))
+
+
+def fix(target: str, box: str, what: str) -> None:
+    """Правка по маске (sunburst): перерисовать только прямоугольник box кадра (<кадр> или <кадр>.square), остальное —
+    пиксель в пиксель; первый вариант кадра сохраняется рядом как .orig.png."""
+    import shutil
+    from PIL import ImageDraw, ImageFilter
+    sid = target.removesuffix('.square')
+    raw = os.path.join(RAW, 'squares' if target.endswith('.square') else 'scenes', f'{target}.png')
+    orig = raw[:-4] + '.orig.png'
+    if not os.path.exists(orig):
+        shutil.copy(raw, orig)
+    x0, y0, x1, y1 = (int(v) for v in box.split(','))
+    src = Image.open(raw).convert('RGB')
+    mask = Image.new('RGBA', src.size, (0, 0, 0, 255))
+    ImageDraw.Draw(mask).rectangle((x0, y0, x1, y1), fill=(0, 0, 0, 0))  # прозрачное — что перерисовать
+    os.makedirs(os.path.join(RAW, 'fix'), exist_ok=True)
+    mpath = os.path.join(RAW, 'fix', f'{target}.mask.png')
+    mask.save(mpath)
+    who, sheets = people(shot_info(sid)[2], 2)
+    prompt = (f'Edit only the transparent masked rectangle of image 1; everything outside it stays exactly as it is. Inside the '
+              f'rectangle: {what} Keep exactly the same drawing style, ink line weight, cel shading, palette and light as the '
+              f'rest of image 1, so the edit is invisible.' + (f' Character turnaround sheets for identity: {who}.' if sheets else ''))
+    out = gen(f'{target}.fix', prompt, [raw, *sheets], f'{src.size[0]}x{src.size[1]}', os.path.join(RAW, 'fix'), mask=mpath)
+    fixed = Image.open(out).convert('RGB').resize(src.size)
+    soft = Image.new('L', src.size, 0)
+    ImageDraw.Draw(soft).rectangle((x0 + 6, y0 + 6, x1 - 6, y1 - 6), fill=255)
+    Image.composite(fixed, src, soft.filter(ImageFilter.GaussianBlur(4))).save(raw)
+    print('исправлено', raw)
 
 
 def accept(sid: str) -> None:
@@ -250,7 +360,13 @@ if __name__ == '__main__':
     elif cmd in ('scene', 'square', 'accept'):
         for sid in args:
             {'scene': scene, 'square': square, 'accept': accept}[cmd](sid)
-    elif cmd == 'prompt':
-        print(sheet_prompt(args[0], args[1]))
+    elif cmd == 'fix':  # fix <кадр>[.square] x0,y0,x1,y1 "что исправить"
+        fix(args[0], args[1], args[2])
+    elif cmd == 'prompt':  # prompt <кадр> — промпт кадра и картинки; prompt <персонаж> head|body — лист
+        if args[0] in STAGING:
+            text, files = scene_inputs(args[0])
+            print(text, '\n\nIMAGES:', *[os.path.relpath(f, ROOT) for f in files], sep='\n')
+        else:
+            print(sheet_prompt(args[0], args[1]))
     elif cmd == 'cost':
         print(f'потрачено ${spent():.2f}')

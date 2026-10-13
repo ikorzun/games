@@ -84,5 +84,7 @@ python3 tools/vnexpr_test.py                                            # сам
   коммитит workflow `fetch-assets` на раннере GitHub, локально — `python3 tools/fetch_assets.py …`).
   Зоны осмотра квартиры и плашка заголовка откалиброваны по реальному арту; smoke `--require-assets` зелёный.
   Публикация сборки: GitHub Pages, https://ikorzun.github.io/games/ (`.github/workflows/pages.yml`, деплой при каждом push в ветку).
+  Графика «Реализм / Воспоминания» (настройки → «Графика», `docs/architecture/03-visual-language.md` §9b): в «Ходе
+  следствия» кабинет, машина и квартира Лапиных нарисованы как графический роман, 16:9 и квадратом для телефона.
 - Дальше: прогон на телефоне → песочница Playgama → заморозка русского текста → перевод en/es/pt
   (`docs/production/roadmap.md`). Русский — первоисточник всего контента.
