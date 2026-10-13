@@ -29,9 +29,10 @@
  * Ctrl+колесо и щипок; при нехватке места доска прокручивается.
  */
 import type { Container } from 'pixi.js';
-import type { MinigameOutcomeKind, MinigameResult } from '../core/types';
+import type { MinigameOutcomeKind, MinigameResult, Value } from '../core/types';
 import { fill, h } from '../ui/dom';
 import { GreyBoxMinigame } from './grey_box';
+import { truthy } from './interrogation_press';
 import { Countdown, formatTime } from './mg_timer';
 import type { GameContext, IMinigame, MinigameConfig } from './types';
 import './evidence_board.css';
@@ -82,8 +83,12 @@ export function splitKey(key: string): [string, string] {
   return [key.slice(0, i), key.slice(i + 1)];
 }
 
-/** Читает config мини-игры; всё лишнее и битое (дубли, связи с неизвестными узлами) тихо отбрасывает. */
-export function parseBoard(cfg: MinigameConfig): BoardSpec {
+/**
+ * Читает config мини-игры; всё лишнее и битое (дубли, связи с неизвестными узлами) тихо отбрасывает. Узел с requires
+ * стоит на доске, только если переменная эпизода истинна (на доске только найденное), а связи с ним без него не
+ * считаются.
+ */
+export function parseBoard(cfg: MinigameConfig, vars: Readonly<Record<string, Value>> = {}): BoardSpec {
   const nodes: BoardNode[] = [];
   const ids = new Set<string>();
   for (const raw of Array.isArray(cfg.nodes) ? (cfg.nodes as unknown[]) : []) {
@@ -96,6 +101,7 @@ export function parseBoard(cfg: MinigameConfig): BoardSpec {
       id = raw.id;
       if (typeof raw.label_key === 'string' && raw.label_key !== '') labelKey = raw.label_key;
       if (typeof raw.kind === 'string' && (KINDS as readonly string[]).includes(raw.kind)) kind = raw.kind as NodeKind;
+      if (typeof raw.requires === 'string' && !truthy(vars[raw.requires])) continue;
     }
     if (!id || id.includes('|') || ids.has(id)) continue;
     ids.add(id);
@@ -355,7 +361,7 @@ class EvidenceBoard implements IMinigame {
 
   mount(root: Container, dom: HTMLElement, cfg: MinigameConfig, ctx: GameContext): void {
     this.ctx = ctx;
-    this.spec = parseBoard(cfg);
+    this.spec = parseBoard(cfg, ctx.vars());
     if (this.spec.nodes.length < 2 || this.spec.required.length === 0) {
       console.warn(`[minigame] ${ctx.def.id}: config непригоден для ${TYPE} — показан grey-box`);
       const gb = new GreyBoxMinigame(TYPE);

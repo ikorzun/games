@@ -659,6 +659,11 @@ def minigame_integrity(ep: dict, ru: dict | None, rep: Report) -> None:
             for n in nodes:
                 if not n.get("label_key"):
                     rep.warn(f"{where}: у узла {n.get('id')} нет label_key — в игре будет виден id")
+                req = n.get("requires")
+                if req and req not in ep.get("variables", {}):
+                    rep.err(f"{where}: узел {n.get('id')}: requires {req} — необъявленная переменная")
+                elif req and ep["variables"][req].get("type") != "bool":
+                    rep.warn(f"{where}: узел {n.get('id')}: requires {req} — не bool; узел стоит на доске при «истинном» значении")
             first_seen: dict[tuple[str, str], str] = {}
             for name in ("required_links", "decoy_links"):
                 for pair in cfg.get(name, []):
