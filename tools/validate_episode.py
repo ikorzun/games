@@ -315,7 +315,7 @@ def integrity(ep: dict, rep: Report) -> None:
         if steps[-1].get("do") not in TERMINAL:
             rep.err(f"scene {sid}: последний шаг должен быть одним из {sorted(TERMINAL)} (явный переход)")
         for i, step in enumerate(steps[:-1]):
-            if step.get("do") in ("jump", "end", "branch"):
+            if step.get("do") in ("jump", "end", "branch") and not (step.get("when") and step["do"] != "branch"):
                 rep.warn(f"scene {sid} step {i}: безусловный {step['do']} не в конце сцены — следующие шаги недостижимы")
 
     # steps
