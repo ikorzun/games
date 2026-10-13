@@ -258,6 +258,9 @@ def integrity(ep: dict, rep: Report) -> None:
     for ss in sprites.values():
         if not ss.get("facing"):
             rep.warn(f"sprite_set {ss['id']}: не указан facing (left/right/front) — персонаж не повернётся к собеседнику")
+    for c in cast.values():
+        if c.get("portrait") and not os.path.exists(os.path.join(ROOT, c["portrait"])):
+            rep.warn(f"cast {c['id']}: файла портрета {c['portrait']} нет в репозитории (реплика без кружка)")
 
     # scene.id == key
     for sid, scene in scenes.items():

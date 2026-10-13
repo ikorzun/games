@@ -150,36 +150,48 @@ describe('слои камкордера в CSS', () => {
 });
 
 describe('интерфейс: документальная эстетика, mobile-first', () => {
-  it('текстовое окно: тёмное полупрозрачное ≈ rgba(0,0,0,.72) без рамки (решение владельца 2026-10-11), DM Mono / JetBrains Mono для кириллицы, без backdrop-filter (дорого на телефоне)', () => {
-    expect(uiCss).toMatch(/--panel:\s*rgb\(0 0 0 \/ 0\.72\)/);
-    expect(uiCss).toMatch(/--panel-line:\s*rgb\(255 255 255 \/ 0\.28\)/);
+  it('окно реплики по макету в Figma (решение владельца 2026-10-13): текст на подложке 16 % чёрного без тени, над ней портрет, имя и подпись; шрифт Tinos', () => {
     const box = /\n\.vn-textbox\s*\{([^}]*)\}/.exec(uiCss)![1]!;
-    expect(box).toMatch(/background:\s*var\(--panel\)/);
-    expect(box).toMatch(/border:\s*0;/);
+    expect(box).not.toMatch(/background/);
+    expect(box).not.toMatch(/text-shadow/);
     expect(box).toMatch(/font-family:\s*var\(--font-body\)/);
-    expect(uiCss).toMatch(/--font-latin:\s*'DM Mono'/);
-    expect(uiCss).toMatch(/--font-cyr:\s*'JetBrains Mono'/);
-    expect(uiCss).toMatch(/html\[lang='ru'\]\s*\{\s*--font-body:\s*var\(--font-cyr\)/);
-    expect((uiCss.match(/@font-face/g) ?? []).length).toBeGreaterThanOrEqual(12); // свои woff2, без Google Fonts в рантайме
+    expect(box).toMatch(/width:\s*min\(100%,\s*calc\(585em \/ 15\)\)/);
+    const plate = /\n\.vn-textbox__box\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(plate).toMatch(/background:\s*rgb\(0 0 0 \/ 0\.16\)/);
+    expect(plate).toMatch(/padding:\s*calc\(12em \/ 15\)/);
+    const avatar = /\n\.vn-textbox__avatar\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(avatar).toMatch(/width:\s*calc\(36em \/ 15\)/);
+    expect(avatar).toMatch(/border-radius:\s*50%/);
+    expect(uiCss).toMatch(/\.vn-textbox__name\s*\{\s*font-size:\s*calc\(14em \/ 15\);\s*\}/);
+    expect(uiCss).toMatch(/\.vn-textbox__title\s*\{\s*font-size:\s*calc\(10em \/ 15\);\s*opacity:\s*0\.5;\s*\}/);
+    expect(uiCss).toMatch(/--font-body:\s*'Tinos'/);
+    expect(uiCss).toMatch(/--panel-line:\s*rgb\(255 255 255 \/ 0\.28\)/);
+    expect((uiCss.match(/@font-face \{ font-family: 'Tinos'/g) ?? []).length).toBe(5); // свои woff2, без Google Fonts в рантайме
     expect(uiCss).not.toMatch(/backdrop-filter/);
   });
 
-  it('шрифт только 400 или тоньше (решение владельца 2026-10-12): ни жирных начертаний, ни их файлов', () => {
+  it('шрифт только 400 или тоньше (решение владельца 2026-10-12): жирный — только знак «дальше» из макета реплик (2026-10-13)', () => {
     const cssOf = (dir: string): string[] => {
       const d = join(HERE, '..', 'src', dir);
       return readdirSync(d).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(d, f), 'utf8'));
     };
     // Мини-игры и режим дела (папка, итог поиска, осмотр фото).
-    for (const css of [uiCss, ...cssOf('minigames'), ...cssOf('case')]) {
+    const more = /\n\.vn-textbox__more\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(more).toMatch(/font-weight:\s*700;/);
+    expect(uiCss.match(/font-weight:\s*700/g)).toHaveLength(2); // @font-face жирной латиницы Tinos и сам знак
+    const rest = uiCss.replace(more, '').replace(/@font-face[^\n]*font-weight: 700[^\n]*/, '');
+    for (const css of [rest, ...cssOf('minigames'), ...cssOf('case')]) {
       expect(css).not.toMatch(/font-weight:\s*(?:[5-9]00|bold)/);
       expect(css).not.toMatch(/font:\s*(?:[5-9]00|bold)\s/);
     }
   });
 
-  it('имя говорящего — маленькая плашка без обводки', () => {
-    const name = /\.vn-textbox__name\s*\{([^}]*)\}/.exec(uiCss)![1]!;
-    expect(name).toMatch(/font:\s*400\s+0\.8em\s*\/\s*1\.4\s+var\(--font-body\)/);
-    expect(name).toMatch(/border:\s*0;/);
+  it('знак «дальше» — красный жирный «>» в конце текста, виден, когда реплика допечатана', () => {
+    const more = /\n\.vn-textbox__more\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(more).toMatch(/color:\s*#d64646/);
+    expect(more).toMatch(/opacity:\s*0;/);
+    expect(more).not.toMatch(/position/);
+    expect(uiCss).toMatch(/\.vn-textbox\.is-complete\s+\.vn-textbox__more\s*\{\s*opacity:\s*1;/);
   });
 
   it('кнопки быстрого меню — полупрозрачная подложка 8 % белого без контура, фокус с клавиатуры виден', () => {
@@ -201,8 +213,12 @@ describe('интерфейс: документальная эстетика, mob
     const stamp = /\.vn-cap--date_stamp\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(stamp).toMatch(/right:/);
     expect(stamp).not.toMatch(/\bleft:/);
-    expect(stamp).toMatch(/var\(--font-mono\)/);
-    expect(uiCss).toMatch(/--font-mono:\s*var\(--font-body\)/);
+    expect(stamp).toMatch(/var\(--font-osd\)/); // индикация камеры осталась моноширинной
+    expect(uiCss).toMatch(/--font-osd:\s*var\(--font-latin\)/);
+    expect(uiCss).toMatch(/--font-latin:\s*'DM Mono'/);
+    expect(uiCss).toMatch(/--font-cyr:\s*'JetBrains Mono'/);
+    expect(uiCss).toMatch(/html\[lang='ru'\]\s*\{\s*--font-osd:\s*var\(--font-cyr\)/);
+    expect(stageCss).toMatch(/var\(--font-osd, monospace\)/);
     expect(Number(/font:\s*400\s+clamp\((\d+)px/.exec(stamp)![1])).toBeLessThanOrEqual(12); // мелкий
     expect(stamp).toMatch(/env\(safe-area-inset-top\)/);
     expect(stageCss).toMatch(/--hud-top:\s*max\(10px,\s*env\(safe-area-inset-top\)\)/);

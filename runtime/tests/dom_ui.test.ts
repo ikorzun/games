@@ -137,6 +137,7 @@ beforeEach(() => {
     'l.short': 'Коротко',
     'l.long': 'Это достаточно длинная реплика, чтобы печататься заметное время',
     'mini.cast.a': 'Следователь',
+    'mini.cast.a_title': 'прокуратура',
     'mini.cast.b': 'Свидетель',
     'c.a': 'Первый',
     'c.b': 'Второй',
@@ -170,13 +171,13 @@ afterEach(() => {
 });
 
 describe('DomUI: реплики и продвижение сюжета', () => {
-  it('показывает реплику с именем и цветом из cast.name_color; печатает по символам', () => {
-    const { ui, kit } = makeRig({ textSpeed: 3 });
+  it('показывает реплику с именем, подписью (cast.title_key) и портретом (cast.portrait); печатает по символам', () => {
+    const { ui, kit } = makeRig({ textSpeed: 3 }, 'procedural', { portraitArt: (who) => (who === 'a' ? './assets/p/a.webp' : null) });
     void ui.showLine(lineP('l.long'), lineCtx(ctl()));
-    const name = kit.textbox.el.querySelector<HTMLElement>('.vn-textbox__name');
-    expect(name?.hidden).toBe(false);
-    expect(name?.textContent).toBe('Следователь');
-    expect(name?.style.getPropertyValue('--name-color')).toBe('#ffffff');
+    expect(kit.textbox.el.querySelector<HTMLElement>('.vn-textbox__who')?.hidden).toBe(false);
+    expect(kit.textbox.el.querySelector('.vn-textbox__name')?.textContent).toBe('Следователь');
+    expect(kit.textbox.el.querySelector('.vn-textbox__title')?.textContent).toBe('прокуратура');
+    expect(kit.textbox.el.querySelector('.vn-textbox__avatar')?.getAttribute('src')).toBe('./assets/p/a.webp');
     expect(kit.textbox.typing).toBe(true);
   });
 
@@ -212,13 +213,13 @@ describe('DomUI: реплики и продвижение сюжета', () => {
     const { ui, kit } = makeRig({ textSpeed: 5 }, presentation);
     void ui.showLine(lineP('l.1'), lineCtx(ctl()));
     expect(kit.textbox.el.dataset.layout).toBe(layout);
-    expect(kit.textbox.el.querySelector<HTMLElement>('.vn-textbox__name')?.hidden).toBe(!nameShown);
+    expect(kit.textbox.el.querySelector<HTMLElement>('.vn-textbox__who')?.hidden).toBe(!nameShown);
   });
 
   it('рассказчик (narrate): имени нет, стиль окна берётся из narrate_style', () => {
     const { ui, kit } = makeRig({ textSpeed: 5 });
     void ui.showLine(lineP('l.1', { style: 'narrate', who: null, narrate_style: 'voiceover' }), lineCtx(ctl()));
-    expect(kit.textbox.el.querySelector<HTMLElement>('.vn-textbox__name')?.hidden).toBe(true);
+    expect(kit.textbox.el.querySelector<HTMLElement>('.vn-textbox__who')?.hidden).toBe(true);
     expect(kit.textbox.el.dataset.style).toBe('voiceover');
   });
 

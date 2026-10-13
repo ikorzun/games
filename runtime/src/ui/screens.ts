@@ -43,6 +43,12 @@ export function nameOf(episode: Episode, who: string | null, short = true): stri
   return t(short && c.short_name_key ? c.short_name_key : c.name_key);
 }
 
+/** Подпись под именем в окне реплики (cast.title_key); нет — null. */
+export function titleOf(episode: Episode, who: string | null): string | null {
+  const key = who ? episode.cast.find((x) => x.id === who)?.title_key : undefined;
+  return key ? t(key) : null;
+}
+
 export function nameColorOf(episode: Episode, who: string | null): string | null {
   return who ? (episode.cast.find((x) => x.id === who)?.name_color ?? null) : null;
 }

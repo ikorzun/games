@@ -54,7 +54,8 @@ afterEach(() => {
 
 const line = (text: string, over: Partial<LineView> = {}): LineView => ({
   name: null,
-  nameColor: null,
+  title: null,
+  portrait: null,
   text,
   style: 'say',
   layout: 'window',
@@ -123,16 +124,38 @@ describe('TextBox: typewriter', () => {
     expect(shown(tb)).toBe('éx');
   });
 
-  it('имя говорящего: цвет из cast.name_color, у рассказчика имя скрыто', () => {
+  it('говорящий над подложкой: портрет, имя и подпись; у рассказчика строки говорящего нет', () => {
     const tb = new TextBox();
-    tb.show(line('Текст', { name: 'Ирина', nameColor: '#ff8800' }), Number.POSITIVE_INFINITY);
-    const name = tb.el.querySelector<HTMLElement>('.vn-textbox__name');
-    expect(name?.hidden).toBe(false);
-    expect(name?.textContent).toBe('Ирина');
-    expect(name?.style.getPropertyValue('--name-color')).toBe('#ff8800');
+    tb.show(line('Текст', { name: 'Ирина Лапина', title: 'покупательница', portrait: './assets/ep01/portraits/lapin_wife.webp' }), Number.POSITIVE_INFINITY);
+    const who = tb.el.querySelector<HTMLElement>('.vn-textbox__who');
+    const avatar = tb.el.querySelector<HTMLImageElement>('.vn-textbox__avatar');
+    const title = tb.el.querySelector<HTMLElement>('.vn-textbox__title');
+    expect(who?.hidden).toBe(false);
+    expect(tb.el.querySelector('.vn-textbox__name')?.textContent).toBe('Ирина Лапина');
+    expect(title?.hidden).toBe(false);
+    expect(title?.textContent).toBe('покупательница');
+    expect(avatar?.hidden).toBe(false);
+    expect(avatar?.getAttribute('src')).toBe('./assets/ep01/portraits/lapin_wife.webp');
+    expect(avatar?.alt).toBe('');
+    expect(who?.nextElementSibling?.classList.contains('vn-textbox__box')).toBe(true);
+    tb.show(line('Без портрета и подписи', { name: 'Паспортистка' }), Number.POSITIVE_INFINITY);
+    expect(avatar?.hidden).toBe(true);
+    expect(avatar?.hasAttribute('src')).toBe(false);
+    expect(title?.hidden).toBe(true);
     tb.show(line('Закадровый', { style: 'voiceover' }), Number.POSITIVE_INFINITY);
-    expect(name?.hidden).toBe(true);
+    expect(who?.hidden).toBe(true);
     expect(tb.el.dataset.style).toBe('voiceover');
+  });
+
+  it('знак «дальше» — в конце текста реплики, после непоказанной части', () => {
+    const tb = new TextBox();
+    tb.show(line('Мы ничего не нарушали.'), 10);
+    const text = tb.el.querySelector('.vn-textbox__text');
+    expect(text?.lastElementChild?.className).toBe('vn-textbox__more');
+    expect(text?.lastElementChild?.textContent).toBe('>');
+    expect(tb.el.classList.contains('is-complete')).toBe(false);
+    tb.finishNow();
+    expect(tb.el.classList.contains('is-complete')).toBe(true);
   });
 
   it('скринридер получает реплику целиком сразу (aria-live), а не по буквам', () => {

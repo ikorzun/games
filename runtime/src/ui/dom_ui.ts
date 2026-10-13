@@ -31,7 +31,7 @@ import type { ILineVoice } from '../stage/voice';
 import type { CaptionLayer } from './captions';
 import type { UiKit } from './kit';
 import type { QuickAction } from './quick_menu';
-import { DocumentScreen, EndingScreen, MinigameScreen, nameColorOf, nameOf } from './screens';
+import { DocumentScreen, EndingScreen, MinigameScreen, nameOf, titleOf } from './screens';
 import type { Screen } from './screen_host';
 import type { LineView, TextLayout } from './textbox';
 
@@ -54,6 +54,8 @@ export interface DomUIDeps {
   onOpenArchive: () => void;
   /** Изображение бланка документа (assets.documents): адрес сразу, если уже загружен, и промис на позже. */
   documentArt?: (docId: string) => { url: string | null; ready: Promise<string | null> };
+  /** Портрет персонажа для окна реплики (cast.portrait); нет — null. */
+  portraitArt?: (who: string) => string | null;
   /** Быстрое меню / горячие клавиши, которыми управляет App. */
   onAction: (action: QuickAction) => void;
   onRollback: () => void;
@@ -502,9 +504,11 @@ export class DomUI implements SessionUI {
     const preset = presetOf(view?.presentation ?? 'reconstruction');
     const layout: TextLayout = preset.text === 'window' ? 'window' : 'subtitle';
     const showName = p.style === 'say' && p.who !== null && (preset.speakerName || layout === 'subtitle');
+    // Окно реплики (макет в Figma): полное имя, подпись под ним и портрет.
     return {
-      name: showName ? nameOf(this.d.episode, p.who) : null,
-      nameColor: showName ? nameColorOf(this.d.episode, p.who) : null,
+      name: showName ? nameOf(this.d.episode, p.who, false) : null,
+      title: showName ? titleOf(this.d.episode, p.who) : null,
+      portrait: showName && p.who ? (this.d.portraitArt?.(p.who) ?? null) : null,
       text: t(p.key),
       style: p.style === 'say' ? 'say' : (p.narrate_style ?? 'voiceover'),
       layout,

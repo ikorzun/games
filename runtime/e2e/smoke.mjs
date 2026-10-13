@@ -897,6 +897,16 @@ async function scenarioHod(browser, baseUrl) {
       notes.layout.push(...(await page.evaluate(layoutProbe)));
       await shot('deduction');
     }
+    // Окно реплики по макету: портрет (файл загружен), имя и подпись над подложкой
+    if (p.kind === 'line' && p.who === 'oper' && !notes.speech) {
+      await page.waitForFunction(() => document.querySelector('.vn-textbox__avatar')?.complete === true, null, { timeout: 5000 }).catch(() => undefined);
+      notes.speech = await page.evaluate(() => ({
+        avatar: document.querySelector('.vn-textbox__avatar')?.naturalWidth ?? 0,
+        name: document.querySelector('.vn-textbox__name')?.textContent,
+        title: document.querySelector('.vn-textbox__title')?.textContent,
+        font: getComputedStyle(document.querySelector('.vn-textbox__text')).fontFamily,
+      }));
+    }
     if (p.kind === 'line' && v?.scene === 'recon' && !notes.recon) {
       notes.recon = v.shot;
       await sleep(300);
@@ -909,6 +919,7 @@ async function scenarioHod(browser, baseUrl) {
   const st = await stateOf(page);
   check('итог: второй день, четыре места, неверный ход в версии стоил самообладания, бумаги показаны', st.vars.day === 2 && ['visited_galina', 'visited_notary', 'visited_flat', 'visited_bti'].every((k) => st.vars[k] === true) && st.vars.visited_zhek === false && st.vars.nerves === 2 && run.docs === 2,
     JSON.stringify({ day: st.vars.day, nerves: st.vars.nerves, docs: run.docs }));
+  check('окно реплики: портрет загружен, имя и подпись над подложкой, шрифт Tinos', notes.speech?.avatar > 0 && notes.speech.name === 'Виктор Сайко' && notes.speech.title === 'оперуполномоченный, МУР' && /^Tinos/.test(notes.speech.font), JSON.stringify(notes.speech));
   check('картотека БТИ — мини-игра: фильтры по нотариусу и представителю, отмечены все шесть сделок', run.minigames.includes('mg_db') && st.vars.bti_six === true && st.archive.includes('n_bti'),
     JSON.stringify({ mg: run.minigames, six: st.vars.bti_six, chain: st.vars.bti_chain }));
   check('осмотр квартиры — мини-игра: найденное открыло свои факты (фото внука, очки) и вопрос нотариусу про очки доступен',

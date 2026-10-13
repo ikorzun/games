@@ -51,7 +51,7 @@ export function miniEpisode(scenes: Record<string, MiniScene>, opts: MiniOptions
     based_on: { case_name: 'x', years: [1993], city: 'x', fictionalization: { level: 'inspired', names_changed: true } },
     frame: { pov: 'investigator', narrator: 'voiceover', ...(opts.pov ? { player_character: opts.pov } : {}) },
     cast: [
-      { id: 'a', name_key: 'mini.cast.a', role: 'investigator', name_color: '#ffffff' },
+      { id: 'a', name_key: 'mini.cast.a', role: 'investigator', name_color: '#ffffff', title_key: 'mini.cast.a_title' },
       { id: 'b', name_key: 'mini.cast.b', role: 'witness' },
     ],
     variables: opts.variables ?? {},

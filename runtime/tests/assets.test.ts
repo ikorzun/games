@@ -139,6 +139,18 @@ describe('AssetCatalog: фоны, CG, документы, звук', () => {
     expect(cat.audioUrl('nope')).toBeNull();
   });
 
+  it('портрет для окна реплики: cast.portrait → адрес; без портрета и для неизвестного — null; say грузит портрет с блоком', () => {
+    const ep = assetEpisode();
+    ep.cast = ep.cast.map((c) => (c.id === 'murashov' ? { ...c, portrait: 'assets/ep01/portraits/murashov.webp' } : c));
+    ep.scenes.s1!.steps = [{ do: 'say', who: 'murashov', key: 'k' }, { do: 'say', who: 'zoya', key: 'k2' }, { do: 'jump', scene: 's2' }];
+    const c = new AssetCatalog(ep, BASE);
+    expect(c.portraitUrl('murashov')).toBe('./assets/ep01/portraits/murashov.webp');
+    expect(c.portraitUrl('zoya')).toBeNull();
+    expect(c.portraitUrl('nobody')).toBeNull();
+    const flat = collectBlockAssets(ep, c, 'b1').images.map((x) => x.urls.join(' > '));
+    expect(flat).toContain('./assets/ep01/portraits/murashov.webp');
+  });
+
   it('bgChain: один файл; неизвестный фон — null (плейсхолдер); чёрный кадр — сплошной цвет без запросов', () => {
     expect(cat.bgChain('bg_yard')).toEqual({ urls: ['./assets/ep01/bg/yard.webp'], silhouetteFirst: false });
     expect(cat.bgChain('bg_none')).toBeNull();

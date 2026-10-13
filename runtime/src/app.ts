@@ -134,7 +134,7 @@ export class App {
       onOpenArchive: () => this.openArchive(),
       onAction: (a) => this.onAction(a),
       onRollback: () => this.rollback(1),
-      ...(d.assets ? { documentArt: (id: string) => d.assets!.document(id) } : {}),
+      ...(d.assets ? { documentArt: (id: string) => d.assets!.document(id), portraitArt: (who: string) => d.assets!.catalog.portraitUrl(who) } : {}),
       ...(d.voice ? { voice: d.voice } : {}),
     });
     this.session = new Session({

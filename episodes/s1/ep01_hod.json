@@ -53,83 +53,109 @@
    "name_key": "ep01.cast.sledak",
    "short_name_key": "ep01.cast.sledak_short",
    "role": "player",
-   "name_color": "#d8d2c4"
+   "name_color": "#d8d2c4",
+   "title_key": "ep01.cast.sledak_title",
+   "portrait": "assets/ep01/portraits/sledak.webp"
   },
   {
    "id": "oper",
    "name_key": "ep01.cast.oper",
    "short_name_key": "ep01.cast.oper_short",
    "role": "operative",
-   "name_color": "#c9a86a"
+   "name_color": "#c9a86a",
+   "title_key": "ep01.cast.oper_title",
+   "portrait": "assets/ep01/portraits/oper.webp"
   },
   {
    "id": "expert",
    "name_key": "ep01.cast.expert",
    "role": "expert",
-   "name_color": "#9fb7c9"
+   "name_color": "#9fb7c9",
+   "title_key": "ep01.cast.expert_title",
+   "portrait": "assets/ep01/portraits/expert.webp"
   },
   {
    "id": "notary",
    "name_key": "ep01.cast.notary",
    "role": "suspect",
-   "name_color": "#a89f8c"
+   "name_color": "#a89f8c",
+   "title_key": "ep01.cast.notary_title",
+   "portrait": "assets/ep01/portraits/notary.webp"
   },
   {
    "id": "zoya",
    "name_key": "ep01.cast.zoya",
    "role": "victim",
-   "name_color": "#cbb9a2"
+   "name_color": "#cbb9a2",
+   "title_key": "ep01.cast.zoya_title",
+   "portrait": "assets/ep01/portraits/zoya.webp"
   },
   {
    "id": "neighbor",
    "name_key": "ep01.cast.neighbor",
    "role": "witness",
-   "name_color": "#b7b1a6"
+   "name_color": "#b7b1a6",
+   "title_key": "ep01.cast.neighbor_title",
+   "portrait": "assets/ep01/portraits/neighbor.webp"
   },
   {
    "id": "buyer",
    "name_key": "ep01.cast.buyer",
    "role": "witness",
-   "name_color": "#b7b1a6"
+   "name_color": "#b7b1a6",
+   "title_key": "ep01.cast.buyer_title",
+   "portrait": "assets/ep01/portraits/buyer.webp"
   },
   {
    "id": "boss",
    "name_key": "ep01.cast.boss",
    "short_name_key": "ep01.cast.boss_short",
    "role": "official",
-   "name_color": "#a89f8c"
+   "name_color": "#a89f8c",
+   "title_key": "ep01.cast.boss_title",
+   "portrait": "assets/ep01/portraits/boss.webp"
   },
   {
    "id": "lapin_wife",
    "name_key": "ep01.cast.lapin_wife",
    "short_name_key": "ep01.cast.lapin_wife_short",
    "role": "relative",
-   "name_color": "#b7b1a6"
+   "name_color": "#b7b1a6",
+   "title_key": "ep01.cast.lapin_wife_title",
+   "portrait": "assets/ep01/portraits/lapin_wife.webp"
   },
   {
    "id": "clerk",
    "name_key": "ep01.cast.clerk",
    "role": "extra",
-   "name_color": "#b7b1a6"
+   "name_color": "#b7b1a6",
+   "title_key": "ep01.cast.clerk_title",
+   "portrait": "assets/ep01/portraits/clerk.webp"
   },
   {
    "id": "murashov_sil",
    "name_key": "ep01.cast.murashov_sil",
    "role": "criminal",
    "real_person": false,
-   "name_color": "#b84a3a"
+   "name_color": "#b84a3a",
+   "title_key": "ep01.cast.murashov_sil_title",
+   "portrait": "assets/ep01/portraits/murashov_sil.webp"
   },
   {
    "id": "assistant",
    "name_key": "ep01.cast.assistant",
    "role": "witness",
-   "name_color": "#b7b1a6"
+   "name_color": "#b7b1a6",
+   "title_key": "ep01.cast.assistant_title",
+   "portrait": "assets/ep01/portraits/assistant.webp"
   },
   {
    "id": "passport_clerk",
    "name_key": "ep01.cast.passport_clerk",
    "role": "extra",
-   "name_color": "#b7b1a6"
+   "name_color": "#b7b1a6",
+   "title_key": "ep01.cast.passport_clerk_title",
+   "portrait": "assets/ep01/portraits/passport_clerk.webp"
   }
  ],
  "variables": {

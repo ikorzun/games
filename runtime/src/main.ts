@@ -24,13 +24,13 @@ import { LineVoice } from './stage/voice';
 /** Дождаться шрифтов, но не дольше таймаута: без них игра всё равно играбельна. */
 async function loadFonts(timeoutMs = 2500): Promise<void> {
   if (!('fonts' in document)) return;
-  // DM Mono (латиница) и JetBrains Mono (кириллица) — свои файлы в src/ui/fonts (@font-face в styles.css).
+  // Tinos (интерфейс и текст), DM Mono и JetBrains Mono (индикация камеры) — свои файлы в src/ui/fonts (@font-face в styles.css).
   const sample = 'Аёбв Ññãçüé ¿¡ 1993';
   const load = Promise.all([
+    document.fonts.load('16px "Tinos"', sample),
+    document.fonts.load('italic 16px "Tinos"', sample),
     document.fonts.load('16px "DM Mono"', sample),
-    document.fonts.load('300 16px "DM Mono"', sample),
     document.fonts.load('16px "JetBrains Mono"', sample),
-    document.fonts.load('300 16px "JetBrains Mono"', sample),
   ]);
   await Promise.race([load, new Promise((r) => setTimeout(r, timeoutMs))]);
 }
@@ -93,7 +93,7 @@ async function boot(): Promise<void> {
     const lang: Lang = parseSupportedLang(params.get('lang')) ?? saves.settings.lang ?? platform.language();
     await ensureLangs(i18n, base, episode.id, [lang]);
     i18n.setLang(lang);
-    document.documentElement.lang = lang; // по языку выбирается шрифт (кириллица — JetBrains Mono)
+    document.documentElement.lang = lang; // по языку выбирается шрифт индикации камеры (кириллица — JetBrains Mono)
     if (params.get('pseudo') === '1') i18n.setPseudo(true);
 
     registerBuiltinMinigames();

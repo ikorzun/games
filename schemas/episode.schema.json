@@ -152,7 +152,9 @@
         "sprite_set": { "$ref": "#/$defs/asciiId", "description": "Имя набора спрайтов в assets.sprites." },
         "voice": { "type": "string", "enum": ["none", "ru_only", "all"] },
         "name_color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-        "bio_key": { "$ref": "#/$defs/locKey" }
+        "bio_key": { "$ref": "#/$defs/locKey" },
+        "title_key": { "$ref": "#/$defs/locKey", "description": "Подпись под именем в окне реплики: роль в истории («покупатель»), без спойлеров." },
+        "portrait": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+\\.(webp|png|jpg)$", "description": "Портрет для круга у имени в окне реплики (квадрат, 128×128), путь от корня репозитория." }
       }
     },
 

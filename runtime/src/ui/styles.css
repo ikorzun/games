@@ -1,27 +1,28 @@
-/* ───────────── Шрифты (решение владельца 2026-10-11): DM Mono; для кириллицы — JetBrains Mono (у DM Mono её нет).
-   Файлы лежат в src/ui/fonts (woff2 с Google Fonts, лицензия OFL — там же), подгружаются по unicode-range. ───────────── */
-@font-face { font-family: 'DM Mono'; font-style: italic; font-weight: 400; font-display: swap; src: url(./fonts/DMMono-400i-latin-ext.woff2) format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
-@font-face { font-family: 'DM Mono'; font-style: italic; font-weight: 400; font-display: swap; src: url(./fonts/DMMono-400i-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: 'DM Mono'; font-style: normal; font-weight: 300; font-display: swap; src: url(./fonts/DMMono-300-latin-ext.woff2) format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
-@font-face { font-family: 'DM Mono'; font-style: normal; font-weight: 300; font-display: swap; src: url(./fonts/DMMono-300-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+/* ───────────── Шрифты (решение владельца 2026-10-13, макет реплик в Figma): весь интерфейс — Tinos (с засечками, есть
+   кириллица); жирный — только знак «дальше» в окне реплики. Моноширинные DM Mono (латиница) и JetBrains Mono (кириллица)
+   остались у экранной индикации камеры: дата, REC, отладочный HUD. Файлы лежат в src/ui/fonts (woff2 с Google Fonts,
+   лицензии OFL — там же), подгружаются по unicode-range. ───────────── */
 @font-face { font-family: 'DM Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url(./fonts/DMMono-400-latin-ext.woff2) format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
 @font-face { font-family: 'DM Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url(./fonts/DMMono-400-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 300; font-display: swap; src: url(./fonts/JetBrainsMono-300-cyrillic-ext.woff2) format('woff2'); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
-@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 300; font-display: swap; src: url(./fonts/JetBrainsMono-300-cyrillic.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 300; font-display: swap; src: url(./fonts/JetBrainsMono-300-latin-ext.woff2) format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
-@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 300; font-display: swap; src: url(./fonts/JetBrainsMono-300-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url(./fonts/JetBrainsMono-400-cyrillic-ext.woff2) format('woff2'); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
 @font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url(./fonts/JetBrainsMono-400-cyrillic.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url(./fonts/JetBrainsMono-400-latin-ext.woff2) format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
 @font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url(./fonts/JetBrainsMono-400-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Tinos'; font-style: normal; font-weight: 400; font-display: swap; src: url(./fonts/Tinos-400-cyrillic.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Tinos'; font-style: normal; font-weight: 400; font-display: swap; src: url(./fonts/Tinos-400-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Tinos'; font-style: italic; font-weight: 400; font-display: swap; src: url(./fonts/Tinos-400i-cyrillic.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Tinos'; font-style: italic; font-weight: 400; font-display: swap; src: url(./fonts/Tinos-400i-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Tinos'; font-style: normal; font-weight: 700; font-display: swap; src: url(./fonts/Tinos-700-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 
 /* ───────────── База ───────────── */
 
 :root {
-  /* Весь текст — моноширинный: DM Mono для латиницы, JetBrains Mono для кириллицы (html[lang=ru] ниже). */
+  /* Весь текст — Tinos; моноширинный — только индикация камеры (--font-osd): DM Mono для латиницы, JetBrains Mono
+     для кириллицы (html[lang=ru] ниже). --font-mono — прежнее имя для «служебного» текста, теперь тоже Tinos. */
   --font-latin: 'DM Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --font-cyr: 'JetBrains Mono', 'DM Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --font-body: var(--font-latin);
+  --font-osd: var(--font-latin);
+  --font-body: 'Tinos', 'Times New Roman', Times, serif;
   --font-title: var(--font-body);
   --font-mono: var(--font-body);
   /* Кегль основного текста: ≥ 16 px на мобильном, ≥ 20 px на десктопе (03-visual-language §8). */
@@ -45,8 +46,8 @@
 @media (min-width: 900px) and (min-height: 540px) {
   :root { --fs: 20px; }
 }
-/* Русский интерфейс и текст: кириллица есть только у JetBrains Mono. */
-html[lang='ru'] { --font-body: var(--font-cyr); }
+/* Индикация камеры по-русски: кириллица есть только у JetBrains Mono. */
+html[lang='ru'] { --font-osd: var(--font-cyr); }
 
 html,
 body {
@@ -166,24 +167,55 @@ body {
 
 /* ───────────── Текстовое окно ───────────── */
 
+/* Макет реплик в Figma (Claude, узел 1230:1541; решение владельца 2026-10-13): над подложкой — портрет, имя и подпись,
+   текст на подложке 16 % чёрного без тени, в конце текста — красный «>». Размеры макета даны для кегля 15 px и
+   пересчитаны в em: кегль у нас свой (--fs, ≥ 16 px на телефоне и ≥ 20 px на десктопе), и всё растёт вместе с ним. */
 .vn-textbox {
   --text-size: calc(var(--fs) * var(--font-scale));
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: calc(8em / 15);
   align-self: center;
   box-sizing: border-box;
-  width: min(100%, calc(62ch + 3.4em));
-  min-height: 4.6em;
-  margin-top: 1.5em;
-  padding: 0.85em 1.2em 1em;
+  width: min(100%, calc(585em / 15));
   font-size: var(--text-size);
-  line-height: 1.42;
+  line-height: normal;
   font-family: var(--font-body);
-  background: var(--panel);
-  border: 0;
-  border-radius: 4px;
-  text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+  color: #fff;
 }
-.vn-textbox[hidden] { display: none; }
+.vn-textbox[hidden],
+.vn-textbox__who[hidden],
+.vn-textbox__avatar[hidden],
+.vn-textbox__title[hidden] { display: none; }
+.vn-textbox__who {
+  display: flex;
+  align-items: center;
+  gap: calc(8em / 15);
+  align-self: flex-start;
+}
+.vn-textbox__avatar {
+  display: block;
+  flex: none;
+  width: calc(36em / 15);
+  height: calc(36em / 15);
+  border-radius: 50%;
+  object-fit: cover;
+}
+.vn-textbox__id {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.vn-textbox__name { font-size: calc(14em / 15); }
+.vn-textbox__title { font-size: calc(10em / 15); opacity: 0.5; }
+/* Подложка текста: не ниже двух строк, чтобы окно не прыгало от короткой реплики к длинной. */
+.vn-textbox__box {
+  box-sizing: border-box;
+  min-height: calc(2 * 1.15em + 2 * 12em / 15);
+  padding: calc(12em / 15);
+  background: rgb(0 0 0 / 0.16);
+}
 .vn-textbox__text {
   margin: 0;
   white-space: pre-wrap;
@@ -191,30 +223,15 @@ body {
   hyphens: auto;
 }
 .vn-textbox__rest { visibility: hidden; }
-/* Имя говорящего — маленькая плашка на верхней кромке окна (PT Sans, цвет персонажа). */
-.vn-textbox__name {
-  position: absolute;
-  left: 0.8em;
-  top: -1.3em;
-  padding: 0.04em 0.7em 0.06em;
-  font: 400 0.8em / 1.4 var(--font-body);
-  letter-spacing: 0.02em;
-  color: var(--name-color, #d8d2c4);
-  background: rgb(0 0 0 / 0.88);
-  border: 0;
-  border-radius: 3px 3px 0 0;
-  text-shadow: none;
-}
+/* «Дальше» — в конце текста; виден, когда реплика допечатана. */
 .vn-textbox__more {
-  position: absolute;
-  right: 0.8em;
-  bottom: 0.35em;
-  font-size: 0.7em;
-  color: var(--c-accent-soft);
+  padding-left: 0.25em;
+  font-weight: 700;
+  color: #d64646;
   opacity: 0;
 }
 .vn-textbox.is-complete .vn-textbox__more {
-  opacity: 0.85;
+  opacity: 1;
   animation: more-blink 1s steps(2) infinite;
 }
 .vn-textbox[data-style='voiceover'] .vn-textbox__text { font-style: italic; color: #e4dfd1; }
@@ -229,19 +246,13 @@ body {
   font-size: 0.92em;
   color: #d3dccb;
 }
-/* Хроника, суд, монтаж: рассказчик — субтитр по центру снизу, без окна. */
+/* Хроника, суд, монтаж: рассказчик — субтитр по центру снизу, без подложки. */
 .vn-textbox[data-layout='subtitle'] {
-  background: none;
-  border: 0;
   text-align: center;
   text-shadow: 0 2px 6px #000, 0 0 3px #000, 0 0 12px rgb(0 0 0 / 0.8);
 }
-.vn-textbox[data-layout='subtitle'] .vn-textbox__name {
-  position: static;
-  display: inline-block;
-  margin-bottom: 0.3em;
-  border-radius: 6px;
-}
+.vn-textbox[data-layout='subtitle'] .vn-textbox__who { align-self: center; }
+.vn-textbox[data-layout='subtitle'] .vn-textbox__box { background: none; }
 @keyframes more-blink {
   50% { opacity: 0.15; }
 }
@@ -251,19 +262,9 @@ body {
     flex: 1 1 auto;
     min-height: 0;
     width: 100%;
-    margin-top: 0;
     overflow: auto;
     overscroll-behavior: contain;
     align-self: stretch;
-    background: var(--panel);
-  }
-  .vn-textbox[data-layout='subtitle'] { background: none; }
-  /* Плашка с именем внутри окна: снаружи её обрезал бы overflow. */
-  .vn-textbox__name {
-    position: static;
-    display: inline-block;
-    margin: 0 0 0.4em;
-    border-radius: 6px;
   }
 }
 
@@ -493,11 +494,11 @@ body {
 }
 .vn-cap.is-in { opacity: 1; }
 .vn-cap.is-out { opacity: 0; }
-/* date_stamp — таймкод камеры: мелкий моноширинный (PT Mono) в правом верхнем углу картинки. */
+/* date_stamp — таймкод камеры: мелкий моноширинный в правом верхнем углу картинки. */
 .vn-cap--date_stamp {
   right: var(--hud-right, max(3.2%, env(safe-area-inset-right)));
   top: var(--hud-top, max(10px, env(safe-area-inset-top)));
-  font: 400 clamp(11px, 1.9vmin, 15px) / 1.2 var(--font-mono);
+  font: 400 clamp(11px, 1.9vmin, 15px) / 1.2 var(--font-osd);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -1167,7 +1168,7 @@ body {
   overflow: hidden;
   margin: 0;
   padding: 4px 6px;
-  font: 11px / 1.3 var(--font-mono);
+  font: 11px / 1.3 var(--font-osd);
   color: #9fe0a0;
   white-space: pre-wrap;
   background: rgb(0 0 0 / 0.7);

@@ -116,6 +116,10 @@ export interface Character {
   voice?: 'none' | 'ru_only' | 'all';
   name_color?: string;
   bio_key?: string;
+  /** Подпись под именем в окне реплики (роль в истории: «покупатель»). */
+  title_key?: string;
+  /** Портрет для круга у имени в окне реплики (путь от корня репозитория, как у ассетов). */
+  portrait?: string;
 }
 
 export interface Block {

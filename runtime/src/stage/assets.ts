@@ -72,6 +72,7 @@ export class AssetCatalog {
   private readonly bg = new Map<string, string>();
   private readonly cg = new Map<string, string>();
   private readonly docs = new Map<string, string>();
+  private readonly portraits = new Map<string, string>();
   private readonly audio = new Map<string, string>();
   private readonly sets = new Map<string, SpriteSet>();
   private readonly setOfChar = new Map<string, string>();
@@ -90,6 +91,7 @@ export class AssetCatalog {
     for (const list of [a.music, a.ambient, a.sfx, a.voice]) for (const e of list ?? []) this.audio.set(e.id, e.path);
     for (const s of a.sprites ?? []) this.sets.set(s.id, s);
     for (const c of episode.cast ?? []) if (c.sprite_set) this.setOfChar.set(c.id, c.sprite_set);
+    for (const c of episode.cast ?? []) if (c.portrait) this.portraits.set(c.id, c.portrait);
     for (const s of a.shots ?? []) {
       this.shots.set(s.id, s);
       const list = this.shotSets.get(s.set);
@@ -128,6 +130,12 @@ export class AssetCatalog {
 
   docUrl(id: string): string | null {
     const p = this.docs.get(id);
+    return p ? this.url(p) : null;
+  }
+
+  /** Портрет персонажа для окна реплики (cast.portrait). */
+  portraitUrl(who: string): string | null {
+    const p = this.portraits.get(who);
     return p ? this.url(p) : null;
   }
 
@@ -249,6 +257,10 @@ export function collectBlockAssets(episode: Episode, catalog: AssetCatalog, bloc
           break;
         case 'say':
           lines.push({ key: step.key, voice: step.voice ?? null, who: step.who });
+          {
+            const u = catalog.portraitUrl(step.who);
+            if (u) addChain({ urls: [u], silhouetteFirst: false });
+          }
           // Реплика с выражением может сама вывести персонажа на сцену или сменить его выражение.
           if (step.expression !== undefined) addSprite(step.who, step.expression, false);
           break;

@@ -3,6 +3,9 @@
  * и скринридер работают средствами браузера. Не показанная часть реплики остаётся в разметке
  * невидимой, поэтому перенос строк не «прыгает» во время печати. Скринридер получает реплику
  * целиком одним сообщением (aria-live), а не по буквам.
+ *
+ * Раскладка — по макету реплик в Figma (Claude, узел 1230:1541): над подложкой строка говорящего —
+ * круглый портрет, имя и подпись под ним; знак «дальше» (>) стоит в конце текста.
  */
 import type { NarrateStyle } from '../core/types';
 import { h } from './dom';
@@ -12,7 +15,10 @@ export type TextLayout = 'window' | 'subtitle';
 export interface LineView {
   /** Имя говорящего; null — рассказчик или имя скрыто пресетом показа. */
   name: string | null;
-  nameColor: string | null;
+  /** Подпись под именем (роль в истории: «покупатель»); null — без подписи. */
+  title: string | null;
+  /** Адрес портрета для круга у имени; null — без портрета. */
+  portrait: string | null;
   text: string;
   style: 'say' | NarrateStyle;
   layout: TextLayout;
@@ -27,7 +33,10 @@ function splitGraphemes(text: string): string[] {
 export class TextBox {
   readonly el: HTMLElement;
 
+  private readonly whoEl: HTMLElement;
+  private readonly avatarEl: HTMLImageElement;
   private readonly nameEl: HTMLElement;
+  private readonly titleEl: HTMLElement;
   private readonly shownEl: HTMLElement;
   private readonly restEl: HTMLElement;
   private readonly srEl: HTMLElement;
@@ -42,17 +51,24 @@ export class TextBox {
   private readonly completeCbs = new Set<() => void>();
 
   constructor() {
-    this.nameEl = h('div', { class: 'vn-textbox__name', hidden: true });
+    this.avatarEl = h('img', { class: 'vn-textbox__avatar', hidden: true });
+    this.avatarEl.alt = ''; // портрет — украшение: имя рядом
+    this.nameEl = h('span', { class: 'vn-textbox__name' });
+    this.titleEl = h('span', { class: 'vn-textbox__title', hidden: true });
+    this.whoEl = h('div', { class: 'vn-textbox__who', hidden: true }, this.avatarEl, h('div', { class: 'vn-textbox__id' }, this.nameEl, this.titleEl));
     this.shownEl = h('span', { class: 'vn-textbox__shown' });
     this.restEl = h('span', { class: 'vn-textbox__rest' });
     this.srEl = h('p', { class: 'vn-sr', aria: { live: 'polite' } });
     this.el = h(
       'div',
       { class: 'vn-textbox', hidden: true, data: { style: 'say', layout: 'window' } },
-      this.nameEl,
-      h('p', { class: 'vn-textbox__text', aria: { hidden: true } }, this.shownEl, this.restEl),
+      this.whoEl,
+      h(
+        'div',
+        { class: 'vn-textbox__box' },
+        h('p', { class: 'vn-textbox__text', aria: { hidden: true } }, this.shownEl, this.restEl, h('span', { class: 'vn-textbox__more', text: '>' })),
+      ),
       this.srEl,
-      h('span', { class: 'vn-textbox__more', aria: { hidden: true }, text: '▼' }),
     );
   }
 
@@ -135,14 +151,14 @@ export class TextBox {
     this.el.hidden = false;
     this.el.dataset.style = line.style;
     this.el.dataset.layout = line.layout;
-    if (line.name) {
-      this.nameEl.hidden = false;
-      this.nameEl.textContent = line.name;
-      this.nameEl.style.setProperty('--name-color', line.nameColor ?? '#d8d2c4');
-    } else {
-      this.nameEl.hidden = true;
-      this.nameEl.textContent = '';
-    }
+    this.whoEl.hidden = !line.name;
+    this.nameEl.textContent = line.name ?? '';
+    this.titleEl.hidden = !line.name || !line.title;
+    this.titleEl.textContent = line.name ? (line.title ?? '') : '';
+    const portrait = line.name ? line.portrait : null;
+    this.avatarEl.hidden = !portrait;
+    if (!portrait) this.avatarEl.removeAttribute('src');
+    else if (this.avatarEl.getAttribute('src') !== portrait) this.avatarEl.src = portrait;
   }
 
   private paint(): void {
