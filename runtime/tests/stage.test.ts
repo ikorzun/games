@@ -12,7 +12,7 @@ import type { ImageHandle, ImageLoader } from '../src/stage/assets';
 import { mulberry32 } from '../src/stage/camcorder';
 import type { Overlay2D } from '../src/stage/camcorder_layer';
 import { DomSceneRenderer } from '../src/stage/renderer_dom';
-import { Stage } from '../src/stage/stage';
+import { DISSOLVE_MS, Stage } from '../src/stage/stage';
 import { miniEpisode } from './helpers/mini';
 
 class FakeCtx implements Overlay2D {
@@ -56,7 +56,7 @@ interface Rig {
 
 const stages: Stage[] = [];
 
-async function rig(opts: { loader?: ImageLoader; reduced?: boolean } = {}): Promise<Rig> {
+async function rig(opts: { loader?: ImageLoader; reduced?: boolean; crossfade?: (ms: number) => boolean } = {}): Promise<Rig> {
   const parent = document.createElement('div');
   document.body.appendChild(parent);
   let pending: Array<(ts: number) => void> = [];
@@ -64,7 +64,10 @@ async function rig(opts: { loader?: ImageLoader; reduced?: boolean } = {}): Prom
   const ctx = new FakeCtx();
   const store = new AssetStore({ loadImage: opts.loader ?? (() => Promise.reject(new Error('404'))), warn: () => undefined });
   const assets = new StoreSceneAssets(new AssetCatalog(episode, './'), store);
-  const stage = new Stage(new DomSceneRenderer(assets), {
+  const renderer = new DomSceneRenderer(assets);
+  // рендерер PixiJS умеет настоящее растворение; здесь — подставной метод на DOM-рендерере
+  if (opts.crossfade) Object.assign(renderer, { crossfade: opts.crossfade });
+  const stage = new Stage(renderer, {
     assets,
     camcorder: {
       rng: mulberry32(4),
@@ -430,5 +433,34 @@ describe('Stage: чёрный кадр перед рекламой (поведе
     await reveal;
     expect(stage.holdingBlack).toBe(false);
     expect(stage.currentView?.scene).toBe('s2');
+  });
+});
+
+describe('Stage: растворение между местами', () => {
+  it('рендерер умеет crossfade: снимок прежнего кадра, сразу новый кадр под ним, без «нырка» в полутень', async () => {
+    const seen: Array<{ ms: number; bg: string | undefined }> = [];
+    const holder: { stage: Stage | null } = { stage: null };
+    const r = await rig({ crossfade: (ms) => (seen.push({ ms, bg: holder.stage?.currentView?.bg }), true) });
+    holder.stage = r.stage;
+    r.stage.setView(view('procedural', { bg: 'bg_a' }));
+    const p = r.stage.changeScene(view('procedural', { scene: 's2', bg: 'bg_b' }), 'dissolve', false);
+    await flush();
+    expect(seen).toEqual([{ ms: DISSOLVE_MS, bg: 'bg_a' }]); // снимок — со старого кадра
+    expect(r.stage.currentView!.bg).toBe('bg_b'); // новый кадр уже под снимком
+    expect(r.stage.el.querySelector('.vn-stage__tr')!.className).not.toMatch(/tr-in|tr-out/);
+    await vi.advanceTimersByTimeAsync(DISSOLVE_MS + 50);
+    await p;
+  });
+
+  it('crossfade не удался или его нет — прежний «нырок» в полутень', async () => {
+    const r = await rig({ crossfade: () => false });
+    r.stage.setView(view('procedural', { bg: 'bg_a' }));
+    const p = r.stage.changeScene(view('procedural', { scene: 's2', bg: 'bg_b' }), 'dissolve', false);
+    await flush();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(r.stage.currentView!.bg).toBe('bg_a'); // смена — в середине «нырка»
+    await vi.advanceTimersByTimeAsync(600);
+    await p;
+    expect(r.stage.currentView!.bg).toBe('bg_b');
   });
 });

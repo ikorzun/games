@@ -41,12 +41,20 @@ run('ep01_hod: маршруты пробы', () => {
     }
   });
 
-  it('оба варианта конторы (с помощницей и без) встречаются, а у тех, кто был у Лапиных в первый день, Люды нет', () => {
+  it('оба варианта конторы (с помощницей и без) встречаются; дорога к каждому месту — своя сцена с целью поездки', () => {
     expect(report.visitedScenes.has('notary')).toBe(true);
     expect(report.visitedScenes.has('notary_alone')).toBe(true);
+    for (const place of ['flat', 'galina', 'notary', 'zhek', 'bti']) expect(report.visitedScenes.has(`go_${place}`), place).toBe(true);
+  });
+
+  it('мини-игры: осмотр, сверка документов и картотека встречаются; находки картотеки — шесть или три сделки', () => {
+    for (const s of ['flat_inspect', 'd1_lens', 'd1_lens_ok', 'd1_lens_fail', 'bti_chain_ok', 'bti_chain_part', 'bti_chain_fail']) {
+      expect(report.visitedScenes.has(s), s).toBe(true);
+    }
     for (const end of report.ends) {
-      const j = end.final.journal.map((x) => `${x.choice}=${x.option}`);
-      if (j.some((x) => x.endsWith('=notary_alone'))) expect(end.final.vars.lyuda_gone).toBe(true);
+      const v = end.final.vars;
+      if (v.bti_six === true) expect(v.bti_chain).toBe(true);
+      if (end.final.archive.includes('n_date')) expect(v.case_opened).toBe(true);
     }
   });
 });

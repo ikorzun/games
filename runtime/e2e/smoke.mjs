@@ -661,6 +661,22 @@ async function talkToFolder(page, max = 40) {
   return !!(await page.$('.vn-case.is-in'));
 }
 
+/** Картотека (database_search): фильтры по полям паттерна, отметить все оставшиеся карточки, «Проверить». */
+async function solveCards(page, pattern) {
+  await page.waitForSelector('.mg-db__card', { state: 'attached', timeout: 20000 });
+  for (const [field, opt] of Object.entries(pattern)) {
+    // узкий экран — вкладки полей; широкий — все строки фильтров сразу, вкладки скрыты
+    const tab = page.locator(`.mg-db__ftab[data-field="${field}"]`);
+    if (await tab.isVisible()) await tab.click();
+    await page.click(`.mg-db__chip[data-field="${field}"][data-opt="${opt}"]`);
+    await sleep(150);
+  }
+  const ids = await page.$$eval('.mg-db__item:not([hidden]) .mg-db__card', (els) => els.map((e) => e.dataset.id));
+  for (const id of ids) await page.click(`.mg-db__card[data-id="${id}"]`);
+  await page.click('.mg-shell__btn.is-check');
+  return ids.length;
+}
+
 /** Осмотр без списка (crime_scene_search): зоны невидимы — клики мышью по их центрам, пока осмотр не закончится. */
 async function solveInspect(page) {
   await page.waitForSelector('.mg-scene__zone', { state: 'attached', timeout: 20000 });
@@ -811,9 +827,11 @@ async function playHod(page, plan, onStep = async () => undefined, max = 1500) {
       continue;
     }
     if (p.kind === 'minigame') {
-      // осмотр: настоящие клики по зонам находок, затем «Далее»
+      // настоящие клики: осмотр — по зонам находок, картотека — фильтры и отметки; затем «Далее»
       seen.minigames.push(p.id);
-      await solveInspect(page);
+      if (p.type === 'crime_scene_search') await solveInspect(page);
+      else if (p.type === 'database_search') await solveCards(page, { notary: 'kovrigin', attorney: 'murashov_sv' });
+      else await page.click('.mg-shell__btn.is-skip');
       await page.waitForSelector('.mg-shell__btn.is-next', { state: 'visible', timeout: 10000 });
       await page.click('.mg-shell__btn.is-next');
       await page.waitForFunction((id) => window.__vn.pending()?.kind !== 'minigame' || window.__vn.pending()?.id !== id, p.id);
@@ -891,6 +909,8 @@ async function scenarioHod(browser, baseUrl) {
   const st = await stateOf(page);
   check('итог: второй день, четыре места, неверный ход в версии стоил самообладания, бумаги показаны', st.vars.day === 2 && ['visited_galina', 'visited_notary', 'visited_flat', 'visited_bti'].every((k) => st.vars[k] === true) && st.vars.visited_zhek === false && st.vars.nerves === 2 && run.docs === 2,
     JSON.stringify({ day: st.vars.day, nerves: st.vars.nerves, docs: run.docs }));
+  check('картотека БТИ — мини-игра: фильтры по нотариусу и представителю, отмечены все шесть сделок', run.minigames.includes('mg_db') && st.vars.bti_six === true && st.archive.includes('n_bti'),
+    JSON.stringify({ mg: run.minigames, six: st.vars.bti_six, chain: st.vars.bti_chain }));
   check('осмотр квартиры — мини-игра: найденное открыло свои факты (фото внука, очки) и вопрос нотариусу про очки доступен',
     run.minigames.includes('mg_flat_inspect') && st.vars.photo_seen === true && st.vars.glasses_found === true && st.archive.includes('n_glasses') && st.archive.includes('n_photo'),
     JSON.stringify({ mg: run.minigames, photo: st.vars.photo_seen, glasses: st.vars.glasses_found, archive: st.archive }));

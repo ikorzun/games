@@ -73,7 +73,7 @@
 }
 .mg-db__flabel {
   display: none;
-  flex: 0 0 7em;
+  flex: 0 0 8.5em;
   color: var(--mg-muted);
   font-size: 0.8em;
   line-height: 1.15;

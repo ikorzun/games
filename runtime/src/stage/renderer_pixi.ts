@@ -146,6 +146,9 @@ export class PixiSceneRenderer implements ISceneRenderer {
   private readonly shotLayer = new Container();
   private readonly shotPic = new Sprite();
   private readonly cgLayer = new Container();
+  /** Растворение: снимок прежнего кадра поверх нового, гаснет (crossfade). */
+  private readonly fadeLayer = new Container();
+  private fade: { pic: Sprite; t0: number; ms: number } | null = null;
   private readonly bgG = new Graphics();
   private readonly bgLabel = makeText(28, '700');
   private readonly bgTag = makeText(14, '400');
@@ -202,7 +205,7 @@ export class PixiSceneRenderer implements ISceneRenderer {
     this.cgLayer.addChild(this.cgG, this.cgLabel, this.cgPic);
     this.cgLayer.visible = false;
     this.minigameRoot.visible = false;
-    app.stage.addChild(this.bgLayer, this.spriteLayer, this.shotLayer, this.cgLayer, this.minigameRoot);
+    app.stage.addChild(this.bgLayer, this.spriteLayer, this.shotLayer, this.cgLayer, this.fadeLayer, this.minigameRoot);
 
     // Кадр по требованию: штатный рендер по тикеру заменяем условным.
     app.ticker.remove(app.render, app);
@@ -336,6 +339,43 @@ export class PixiSceneRenderer implements ISceneRenderer {
     vhs.setFrame({ frame, signal, timeMs, frameNo: this.vhsFrame++, heightPx: this.app.canvas.height, yDown: VHS_Y_DOWN });
     this.invalidate();
     return true;
+  }
+
+  /**
+   * Растворение: текущая картинка застывает поверх и гаснет за ms, а под ней уже рисуется новый кадр (Stage зовёт это
+   * до смены сцены). Снимок — без шейдера камкордера: шейдер лежит на всём кадре и сам пройдёт по смеси.
+   * false — снимок не удался: Stage сделает прежний «нырок» в полутень.
+   */
+  crossfade(ms: number): boolean {
+    if (!this.app || this.destroyed || ms <= 0) return false;
+    const stage = this.app.stage;
+    const W = this.app.screen.width;
+    const H = this.app.screen.height;
+    const filters = stage.filters ? [...stage.filters] : null;
+    this.dropFade();
+    let tex: Texture;
+    try {
+      stage.filters = [];
+      tex = this.app.renderer.generateTexture({ target: stage, frame: new Rectangle(0, 0, W, H) });
+    } catch (e) {
+      console.warn('[stage] снимок для растворения не удался:', e);
+      return false;
+    } finally {
+      stage.filters = filters;
+    }
+    const pic = new Sprite(tex);
+    pic.width = W;
+    pic.height = H;
+    this.fadeLayer.addChild(pic);
+    this.fade = { pic, t0: performance.now(), ms };
+    this.invalidate();
+    return true;
+  }
+
+  private dropFade(): void {
+    if (!this.fade) return;
+    this.fade.pic.destroy({ texture: true, textureSource: true });
+    this.fade = null;
   }
 
   /** Снять камкордер с кадра (уровень «выкл», мини-игра, меню). */
@@ -543,6 +583,12 @@ export class PixiSceneRenderer implements ISceneRenderer {
         this.leaving.delete(node);
       }
       this.paintNode(node);
+    }
+    if (this.fade) {
+      animating = true;
+      const k = Math.min(1, (now - this.fade.t0) / this.fade.ms);
+      this.fade.pic.alpha = 1 - k * k * (3 - 2 * k);
+      if (k >= 1) this.dropFade();
     }
     if (animating || this.dirty || this.continuous) {
       this.dirty = false;

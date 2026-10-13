@@ -621,6 +621,26 @@ def minigame_integrity(ep: dict, ru: dict | None, rep: Report) -> None:
                 rep.err(f"{where}: target_count {cfg['target_count']} больше records {cfg['records']}")
             if cfg.get("min_for_partial", 0) > cfg.get("target_count", 0):
                 rep.err(f"{where}: min_for_partial {cfg['min_for_partial']} больше target_count {cfg['target_count']}")
+            for key in ("dates", "target_dates"):
+                r = cfg.get(key)
+                if r and r.get("from", "") > r.get("to", ""):
+                    rep.err(f"{where}: {key}: from {r.get('from')} позже to {r.get('to')}")
+            fixed_targets = 0
+            for i, card in enumerate(cfg.get("fixed", [])):
+                cv = card.get("values", {})
+                for name in fields:
+                    oids = {o["id"] for o in values.get(name, {}).get("options", [])}
+                    if name == "date" and not oids:
+                        continue
+                    if cv.get(name) not in oids:
+                        rep.err(f"{where}: fixed[{i}]: поле {name} — значение {cv.get(name)!r} не среди options")
+                for name in cv:
+                    if name not in fields:
+                        rep.err(f"{where}: fixed[{i}]: поле {name} не входит в fields")
+                if all(cv.get(k) == v for k, v in cfg.get("pattern", {}).items()):
+                    fixed_targets += 1
+            if fixed_targets > cfg.get("target_count", 0):
+                rep.err(f"{where}: закреплённых карточек с паттерном ({fixed_targets}) больше target_count")
         elif kind == "evidence_board":
             nodes = [n if isinstance(n, dict) else {"id": n} for n in cfg.get("nodes", [])]
             ids = [n.get("id") for n in nodes]

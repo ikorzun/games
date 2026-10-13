@@ -52,6 +52,11 @@ export interface ISceneRenderer {
   camera?(frame: CamFrame, signal: SignalProfile, timeMs: number): boolean;
   /** Снять камкордер с кадра. */
   cameraOff?(): void;
+  /**
+   * Настоящее растворение (PixiJS): снимок текущего кадра гаснет за ms поверх следующего. false — не умеет
+   * (DOM-рендерер): Stage делает «нырок» в полутень.
+   */
+  crossfade?(ms: number): boolean;
   destroy(): void;
 }
 

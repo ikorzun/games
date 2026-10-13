@@ -35,6 +35,8 @@ import type { IStage } from './types';
 
 /** Сколько ждать картинку кадра покрытия перед склейкой (дольше — показываем реплику, кадр догрузится). */
 export const SHOT_WAIT_MS = 2000;
+/** Растворение между местами (настоящий кроссфейд на PixiJS), мс. */
+export const DISSOLVE_MS = 750;
 
 const FILTERS: readonly StageFilter[] = ['vhs', 'vhs_heavy', 'archive_photo', 'night', 'sepia', 'desaturated', 'noir'];
 
@@ -393,6 +395,12 @@ export class Stage implements IStage {
         await dip('#000', 650, 750, 1);
         break;
       case 'dissolve':
+        // Настоящее растворение (PixiJS): прежний кадр гаснет поверх нового — смена места без «нырка» в черноту.
+        if (this.renderer.crossfade?.(DISSOLVE_MS)) {
+          swap();
+          await this.wait(DISSOLVE_MS);
+          break;
+        }
         await dip('#000', 200, 260, 0.62);
         break;
       case 'flash':
