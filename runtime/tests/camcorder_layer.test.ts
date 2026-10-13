@@ -5,7 +5,7 @@
  * Время, rAF, ГСЧ и 2D-контекст подменены — браузер не нужен.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { grainAlphaMax, mulberry32, signalFor } from '../src/stage/camcorder';
+import { grainAlphaMax, LEVELS, mulberry32, SHAKE, signalFor } from '../src/stage/camcorder';
 import type { CamFrame, CameraFx, SignalProfile } from '../src/stage/camcorder';
 import { CamcorderLayer, NOISE_FPS, OVERLAY_WIDTH, PERF, STEP_FPS } from '../src/stage/camcorder_layer';
 import type { CameraSink, DegradeInfo, Overlay2D } from '../src/stage/camcorder_layer';
@@ -253,7 +253,7 @@ describe('CamcorderLayer: HUD записи', () => {
 
   it('виньетка и интерлейс настраиваются CSS-переменными уровня', () => {
     const r = rig();
-    expect(r.stage.style.getPropertyValue('--cam-vignette')).toBe('0.28');
+    expect(r.stage.style.getPropertyValue('--cam-vignette')).toBe('0.14');
     expect(Number(r.stage.style.getPropertyValue('--cam-interlace'))).toBeGreaterThan(0);
     r.layer.setLevel('off');
     expect(r.stage.style.getPropertyValue('--cam-vignette')).toBe('0');
@@ -366,11 +366,12 @@ describe('CamcorderLayer: canvas зерна и помех', () => {
     r.layer.enterScene();
     r.tick(532);
     const kicked = r.layer.lastFrame!;
-    expect(Math.max(Math.abs(kicked.tx), Math.abs(kicked.ty), Math.abs(kicked.rot))).toBeGreaterThan(1);
+    const shake = SHAKE.shiftPct * LEVELS.low.amp; // предел дрожания «Слабо»
+    expect(Math.max(Math.abs(kicked.tx), Math.abs(kicked.ty), Math.abs(kicked.rot))).toBeGreaterThan(shake * 0.8);
     r.run(3500, 548);
     const settled = r.layer.lastFrame!;
-    expect(Math.abs(settled.tx)).toBeLessThanOrEqual(1.2 + 1e-9);
-    expect(settled.scale).toBeLessThanOrEqual(1.03 + 1e-9);
+    expect(Math.abs(settled.tx)).toBeLessThanOrEqual(shake + 1e-9);
+    expect(settled.scale).toBeLessThanOrEqual(LEVELS.low.scaleMax + 1e-9);
   });
 });
 

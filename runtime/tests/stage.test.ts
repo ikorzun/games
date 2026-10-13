@@ -9,7 +9,7 @@ import { defaultViewFor } from '../src/core/interpreter';
 import type { Presentation, ViewState } from '../src/core/types';
 import { AssetCatalog, AssetStore, StoreSceneAssets } from '../src/stage/assets';
 import type { ImageHandle, ImageLoader } from '../src/stage/assets';
-import { mulberry32 } from '../src/stage/camcorder';
+import { LEVELS, mulberry32, SHAKE } from '../src/stage/camcorder';
 import type { Overlay2D } from '../src/stage/camcorder_layer';
 import { DomSceneRenderer } from '../src/stage/renderer_dom';
 import { DISSOLVE_MS, Stage } from '../src/stage/stage';
@@ -255,17 +255,18 @@ describe('Stage: HUD записи и эффекты камеры', () => {
     await stage.changeScene(view('reconstruction', { scene: 's2' }), 'cut', false);
     frames(32, 520);
     const kicked = stage.camcorder.lastFrame!;
-    expect(Math.max(Math.abs(kicked.tx), Math.abs(kicked.ty), Math.abs(kicked.rot))).toBeGreaterThan(1);
+    const shake = SHAKE.shiftPct * LEVELS.low.amp; // предел дрожания «Слабо»
+    expect(Math.max(Math.abs(kicked.tx), Math.abs(kicked.ty), Math.abs(kicked.rot))).toBeGreaterThan(shake * 0.8);
     expect(kicked.scale).toBeGreaterThan(calm.scale);
     // после загрузки сейва (setView) кадр не дёргается
     stage.setView(view('reconstruction', { scene: 's3' }));
     frames(5000, 600);
     const loaded = stage.camcorder.lastFrame!;
-    expect(Math.abs(loaded.tx)).toBeLessThanOrEqual(1.2 + 1e-9);
+    expect(Math.abs(loaded.tx)).toBeLessThanOrEqual(shake + 1e-9);
     // мгновенный режим (Skip): поправки нет
     await stage.changeScene(view('reconstruction', { scene: 's4' }), 'cut', true);
     frames(32, 6000);
-    expect(Math.abs(stage.camcorder.lastFrame!.tx)).toBeLessThanOrEqual(1.2 + 1e-9);
+    expect(Math.abs(stage.camcorder.lastFrame!.tx)).toBeLessThanOrEqual(shake + 1e-9);
   });
 
   it('в хронике (штатив) вход в сцену ничего не двигает', async () => {

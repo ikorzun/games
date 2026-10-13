@@ -162,74 +162,79 @@ export function virtualLines(heightPx: number): number {
   return Math.max(120, Math.min(VIRTUAL_LINES, Math.floor(heightPx / 2)));
 }
 
-/** «Слабо» (по умолчанию) — числа владельца; «сильно» — заметнее и чаще. «Выкл» профиля не имеет. */
+/**
+ * «Слабо» (по умолчанию) — числа владельца; «сильно» — заметнее и чаще. «Выкл» профиля не имеет.
+ * Решение владельца 2026-10-13: оба уровня вдвое слабее прежних — дрожание, кадрирование, поправка кадра, сила
+ * всплесков, зерно, виньетка, строки и все искажения записи ×0,5 (насыщенность — вдвое ближе к норме). Частота и
+ * длительность всплесков и «беспокойства» оператора прежние.
+ */
 export const LEVELS: Readonly<Record<Exclude<CameraFx, 'off'>, LevelProfile>> = {
   low: {
-    amp: 1,
-    scaleMax: SHAKE.scaleMax,
-    reframe: 1,
+    amp: 0.5,
+    scaleMax: 1.015,
+    reframe: 0.5,
     burstGap: [20_000, 45_000],
     heavyGap: [6_000, 12_000],
     burstMs: [150, 500],
-    burstStrength: 1,
-    grain: 0.045,
-    vignette: 0.28,
-    interlace: 0.07,
+    burstStrength: 0.5,
+    grain: 0.0225,
+    vignette: 0.14,
+    interlace: 0.035,
     restAmp: 0.15,
     unrestGap: [14_000, 32_000],
     unrestMs: [1_200, 2_600],
     // «Слабо»: лица читаются; запись видна по строкам, цвету и шуму, а не по мылу.
     signal: {
-      lumaSmear: 0.6,
-      ringing: 0.35,
-      chromaBleed: 2.5,
-      chromaDelay: 1.2,
-      lumaNoise: 0.03,
-      chromaNoise: 0.03,
-      snow: 0.0015,
-      dropout: 0.0015,
-      jitter: 0.35,
-      edgeWave: 0.6,
-      headSwitch: 0.02,
-      chromaPhase: 0.08,
+      lumaSmear: 0.3,
+      ringing: 0.175,
+      chromaBleed: 1.25,
+      chromaDelay: 0.6,
+      lumaNoise: 0.015,
+      chromaNoise: 0.015,
+      snow: 0.00075,
+      dropout: 0.00075,
+      jitter: 0.175,
+      edgeWave: 0.3,
+      headSwitch: 0.01,
+      chromaPhase: 0.04,
       crawl: 0,
-      saturation: 0.92,
+      saturation: 0.96,
       interlace: 0,
-      blackLift: 0.03,
+      blackLift: 0.015,
     },
   },
   high: {
-    amp: 1.6,
-    scaleMax: 1.05,
-    reframe: 1.35,
+    amp: 0.8,
+    scaleMax: 1.025,
+    reframe: 0.675,
     burstGap: [10_000, 24_000],
     heavyGap: [4_000, 8_000],
     burstMs: [200, 600],
-    burstStrength: 1.5,
-    grain: 0.065,
-    vignette: 0.36,
-    interlace: 0.11,
+    burstStrength: 0.75,
+    grain: 0.0325,
+    vignette: 0.18,
+    interlace: 0.055,
     restAmp: 0.35,
     unrestGap: [6_000, 14_000],
     unrestMs: [2_000, 4_000],
     // «Сильно»: ближе к затёртой кассете — зубцы, растекание цвета, снег и выпадения.
     signal: {
-      lumaSmear: 1.2,
-      ringing: 0.6,
-      chromaBleed: 5,
-      chromaDelay: 2.5,
-      lumaNoise: 0.05,
-      chromaNoise: 0.06,
-      snow: 0.005,
-      dropout: 0.004,
-      jitter: 0.9,
-      edgeWave: 1.4,
-      headSwitch: 0.035,
-      chromaPhase: 0.18,
-      crawl: 0.05,
-      saturation: 0.85,
-      interlace: 0.05,
-      blackLift: 0.05,
+      lumaSmear: 0.6,
+      ringing: 0.3,
+      chromaBleed: 2.5,
+      chromaDelay: 1.25,
+      lumaNoise: 0.025,
+      chromaNoise: 0.03,
+      snow: 0.0025,
+      dropout: 0.002,
+      jitter: 0.45,
+      edgeWave: 0.7,
+      headSwitch: 0.0175,
+      chromaPhase: 0.09,
+      crawl: 0.025,
+      saturation: 0.925,
+      interlace: 0.025,
+      blackLift: 0.025,
     },
   },
 };
@@ -366,6 +371,9 @@ export interface Reframe {
 }
 
 /** Параметры «оператор поправил кадр» — выбираются при входе в сцену. */
+/** Наклон поправки — не больше половины базового (оба уровня вдвое слабее прежних, решение владельца 2026-10-13). */
+export const REFRAME_ROT_CAP = 0.5;
+
 export function makeReframe(rng: Rng, t0: number, strength: number): Reframe {
   const angle = rng() < ANGLE_SHARE;
   if (angle) {
@@ -376,7 +384,7 @@ export function makeReframe(rng: Rng, t0: number, strength: number): Reframe {
       dur: between(rng, 2000, 3000),
       dx: Math.cos(dir) * mag,
       dy: Math.sin(dir) * mag * 0.7,
-      drot: sign(rng) * between(rng, 1.2, 2) * Math.min(1, strength),
+      drot: sign(rng) * between(rng, 1.2, 2) * Math.min(REFRAME_ROT_CAP, strength),
       angle: true,
     };
   }
@@ -387,7 +395,7 @@ export function makeReframe(rng: Rng, t0: number, strength: number): Reframe {
     dur: between(rng, 300, 500),
     dx: Math.cos(dir) * mag,
     dy: Math.sin(dir) * mag * 0.7,
-    drot: sign(rng) * between(rng, 0.4, 1) * Math.min(1, strength),
+    drot: sign(rng) * between(rng, 0.4, 1) * Math.min(REFRAME_ROT_CAP, strength),
     angle: false,
   };
 }
