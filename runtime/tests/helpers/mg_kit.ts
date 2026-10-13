@@ -33,6 +33,13 @@ export const UI: Record<string, string> = {
   'ui.minigame.match': 'Подходит',
   'ui.minigame.no_match': 'Не подходит',
   'ui.common.next': 'Далее',
+  'ui.minigame.start_search': 'Начать осмотр',
+  'ui.minigame.move': 'Переместить',
+  'ui.minigame.find_item': 'Найди вещь',
+  'ui.minigame.body_attempts_one': 'У вас всего {n} попытка подметить детали.',
+  'ui.minigame.body_attempts_few': 'У вас всего {n} попытки подметить детали.',
+  'ui.minigame.body_attempts_many': 'У вас всего {n} попыток подметить детали.',
+  'ui.minigame.body_attempts_other': 'У вас всего {n} попытки подметить детали.',
 };
 
 export interface Rig {

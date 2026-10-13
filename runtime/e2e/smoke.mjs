@@ -563,7 +563,7 @@ const layoutProbe = () => {
     if (el.closest('.vn-stage') && !el.closest('.vn-stage__captions')) continue;
     if (el.closest('.vn-hud')) continue;
     if (el.closest('.vn-menu__shelf')) continue; // полка эпизодов листается горизонтально: карточки за краем — норма
-    if (el.parentElement?.closest('.mg-scene__list.is-targets')) continue; // список целей на боку — полоса с прокруткой (сама полоса проверяется)
+    if (el.closest('.mg-scene__viewport')) continue; // картинка осмотра на телефоне во всю высоту и листается: за краем — норма
     const name = el.tagName + '.' + String(el.className).split(' ')[0];
     if (r.left < -1 || r.right > vw + 1) bad.push(`x-out ${name} ${Math.round(r.left)}..${Math.round(r.right)} из ${vw}`);
     if (el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0 && !/auto|scroll|hidden/.test(cs.overflowX) && ['BUTTON', 'LABEL', 'SPAN', 'P', 'H1', 'H2', 'H3', 'DT', 'DD', 'LI', 'B'].includes(el.tagName)) bad.push(`clip-x ${name} ${el.scrollWidth}>${el.clientWidth}`);
@@ -680,6 +680,7 @@ async function solveCards(page, pattern) {
 /** Осмотр без списка (crime_scene_search): зоны невидимы — клики мышью по их центрам, пока осмотр не закончится. */
 async function solveInspect(page) {
   await page.waitForSelector('.mg-scene__zone', { state: 'attached', timeout: 20000 });
+  await page.click('.mg-shell__btn.is-start'); // вступление: «Начать осмотр»
   await sleep(300);
   const centers = await page.evaluate(() => [...document.querySelectorAll('.mg-scene__zone')].map((z) => {
     const b = z.getBoundingClientRect();
@@ -687,21 +688,38 @@ async function solveInspect(page) {
   }));
   for (const [x, y] of centers) {
     if (await page.isVisible('.mg-shell__btn.is-next')) break; // всё обязательное найдено — осмотр закончен
-    await page.mouse.click(x, y);
+    await clickScene(page, x, y);
     await sleep(120);
   }
   return centers.length;
 }
 
+/** Клик мышью по месту картинки; если его закрывает блок осмотра — сперва отодвинуть блок за ручку, как игрок. */
+async function clickScene(page, x, y) {
+  const covered = await page.evaluate(([px, py]) => !!document.elementFromPoint(px, py)?.closest('.mg-stage__dock'), [x, y]);
+  if (covered) {
+    const hb = await page.$eval('.mg-stage__handle', (e) => {
+      const r = e.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    const vw = await page.evaluate(() => innerWidth);
+    await page.mouse.move(hb.x, hb.y);
+    await page.mouse.down();
+    await page.mouse.move(x > vw / 2 ? 120 : vw - 120, 30, { steps: 5 });
+    await page.mouse.up();
+  }
+  await page.mouse.click(x, y);
+}
+
 /** Найти всё из списка поиска: настоящие клики мышью по центрам активных зон. */
 async function solveSearch(page) {
-  await page.waitForSelector('.mg-scene__list.is-targets .mg-scene__item', { state: 'visible' });
+  await page.waitForSelector('.mg-scene__list .mg-scene__item', { state: 'visible' });
   const centers = await page.evaluate(() => [...document.querySelectorAll('.mg-scene__zone')].map((z) => {
     const b = z.getBoundingClientRect();
     return [b.left + b.width / 2, b.top + b.height / 2];
   }));
   for (const [x, y] of centers) {
-    await page.mouse.click(x, y);
+    await clickScene(page, x, y);
     await sleep(60);
   }
   return centers.length;
@@ -728,8 +746,11 @@ async function scenarioCase(browser, baseUrl) {
   check('папка на 1280×720 держит вёрстку', (await page.evaluate(layoutProbe)).length === 0, (await page.evaluate(layoutProbe)).join('; '));
 
   await page.click('.vn-case__task.is-open .vn-case__task-btn');
-  await page.waitForSelector('.vn-mg.is-wide .mg-scene__list.is-targets', { state: 'visible' });
-  const targets = await caseText(page, '.mg-scene__list.is-targets .mg-scene__item');
+  await page.waitForSelector('.mg-stage .mg-shell__btn.is-start', { state: 'visible' });
+  check('осмотр начинается вступлением: вопрос и «Начать осмотр»', (await page.locator('.mg-stage__heading').innerText()).length > 0);
+  await page.click('.mg-shell__btn.is-start');
+  await page.waitForSelector('.mg-scene__list .mg-scene__item', { state: 'visible' });
+  const targets = await caseText(page, '.mg-scene__list .mg-scene__item .mg-scene__name');
   check('поиск по списку: 10 предметов, улики (фото, очки, лекарства) в списке первого захода', targets.length === 10 && ['Фото внука', 'Очки', 'Лекарства'].every((x) => targets.includes(x)), targets.join(', '));
   const stageW = await page.evaluate(() => document.querySelector('.mg-scene__stage').getBoundingClientRect().width);
   check('картинка поиска крупная (на 1280×720 шире 800 px)', stageW > 800, String(Math.round(stageW)));
@@ -781,7 +802,9 @@ async function scenarioCase(browser, baseUrl) {
       await ph.page.screenshot({ path: join(OUT, `case_${name}_folder.png`) });
     }
     await ph.page.click('.vn-case__task.is-open .vn-case__task-btn');
-    await ph.page.waitForSelector('.mg-scene__list.is-targets .mg-scene__item', { state: 'visible' });
+    await ph.page.waitForSelector('.mg-stage .mg-shell__btn.is-start', { state: 'visible' });
+    await ph.page.click('.mg-shell__btn.is-start');
+    await ph.page.waitForSelector('.mg-scene__list .mg-scene__item', { state: 'visible' });
     await sleep(400);
     const searchBad = await ph.page.evaluate(layoutProbe);
     if (wantShots) await ph.page.screenshot({ path: join(OUT, `case_${name}_search.png`) });

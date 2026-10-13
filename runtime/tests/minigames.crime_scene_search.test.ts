@@ -71,6 +71,7 @@ function play(over: Parameters<typeof defOf>[2] = {}, cfg: Record<string, unknow
   const m = mountGame(createCrimeSceneSearch(), r, cfg);
   const stage = q(r.dom, '.mg-scene__stage');
   sizeOf(stage, W, H);
+  click(q(r.dom, 'button.is-start')); // вступление раскладки «сцена»: «Начать осмотр»
   missCounter = 0;
   const rects = new Map((cfg.hotspots as Array<{ id: string; rect: Rect }>).map((x) => [x.id, x.rect]));
   const tap = (u: number, v: number): void => click(stage, { clientX: u * W, clientY: v * H });
@@ -225,6 +226,73 @@ describe('разметка и картинка места', () => {
   });
 });
 
+describe('раскладка «сцена» (макеты 2026-10-13): вступление, блок, перетаскивание', () => {
+  const fresh = (cfg: Record<string, unknown> = CFG) => {
+    const r = rig(defOf(TYPE, cfg), { strings: STRINGS });
+    const m = mountGame(createCrimeSceneSearch(), r, cfg);
+    const stage = q(r.dom, '.mg-scene__stage');
+    sizeOf(stage, W, H);
+    return { r, m, stage };
+  };
+
+  it('до «Начать осмотр» — вступление: вопрос, бриф, сколько попыток; тапы не засчитываются, блока не видно', () => {
+    const { r, stage } = fresh();
+    expect(q(r.dom, '.mg-stage__layer').hidden).toBe(false);
+    expect(q(r.dom, '.mg-stage__heading').textContent).toBe('Осмотр квартиры');
+    expect(q(r.dom, '.mg-stage__attempts').textContent).toBe('У вас всего 3 попытки подметить детали.');
+    expect(q(r.dom, '.mg-stage__dock').hidden).toBe(true);
+    click(stage, { clientX: 0.92 * W, clientY: 0.08 * H });
+    expect(q(r.dom, '.mg-shell__fails-text').textContent).toBe('Промахи: 0 из 3');
+    click(q(r.dom, 'button.is-start'));
+    expect(q(r.dom, '.mg-stage__layer').hidden).toBe(true);
+    expect(q(r.dom, '.mg-stage__dock').hidden).toBe(false);
+    click(stage, { clientX: 0.92 * W, clientY: 0.08 * H });
+    expect(q(r.dom, '.mg-shell__fails-text').textContent).toBe('Промахи: 1 из 3');
+  });
+
+  it('форма слова — по числу попыток: 1 попытка, 4 попытки, 6 попыток', () => {
+    for (const [n, word] of [[1, 'попытка'], [4, 'попытки'], [6, 'попыток']] as const) {
+      const { r } = fresh({ ...CFG, max_misses: n });
+      expect(q(r.dom, '.mg-stage__attempts').textContent).toBe(`У вас всего ${n} ${word} подметить детали.`);
+      document.body.replaceChildren();
+    }
+  });
+
+  it('сейв помнит, что партия начата; в старых сейвах поля нет — партия идёт без вступления', () => {
+    const a = play();
+    expect((a.m.serialize() as { started: boolean }).started).toBe(true);
+    const { r: r1, m: m1 } = fresh();
+    expect((m1.serialize() as { started: boolean }).started).toBe(false);
+    const { started: _drop, ...old } = JSON.parse(JSON.stringify(a.m.serialize())) as Record<string, unknown>;
+    m1.restore(old);
+    expect(q(r1.dom, '.mg-stage__layer').hidden).toBe(true);
+  });
+
+  it('блок двигается за ручку и не выходит за поле', () => {
+    const { r } = fresh();
+    click(q(r.dom, 'button.is-start'));
+    const root = q(r.dom, '.mg-stage');
+    const dock = q(r.dom, '.mg-stage__dock');
+    const handle = q(r.dom, '.mg-stage__handle');
+    sizeOf(root, 1000, 700);
+    sizeOf(dock, 290, 250, 700, 440);
+    Object.defineProperty(dock, 'offsetWidth', { value: 290 });
+    Object.defineProperty(dock, 'offsetHeight', { value: 250 });
+    const ev = (type: string, x: number, y: number): PointerEvent => {
+      const e = new MouseEvent(type, { clientX: x, clientY: y, bubbles: true, cancelable: true }) as PointerEvent;
+      Object.defineProperty(e, 'pointerId', { value: 1 });
+      return e;
+    };
+    handle.dispatchEvent(ev('pointerdown', 900, 450));
+    handle.dispatchEvent(ev('pointermove', 500, 300));
+    expect([dock.style.left, dock.style.top]).toEqual(['300px', '290px']);
+    handle.dispatchEvent(ev('pointermove', -2000, -2000)); // за край — упирается в угол поля
+    expect([dock.style.left, dock.style.top]).toEqual(['0px', '0px']);
+    handle.dispatchEvent(ev('pointerup', 0, 0));
+    expect(dock.classList.contains('is-dragging')).toBe(false);
+  });
+});
+
 describe('ход игры: находки, промахи, исходы по порогам', () => {
   it('находка: зона подсвечивается и подписывается, прогресс растёт, просит автосейв', () => {
     const { r, zone } = play();
@@ -232,7 +300,8 @@ describe('ход игры: находки, промахи, исходы по п�
     const el = q(r.dom, '.mg-scene__zone[data-id="pills"]');
     expect(el.classList.contains('is-found')).toBe(true);
     expect(q(el, '.mg-scene__pin').textContent).toBe('1');
-    expect(texts(r.dom, '.mg-scene__item')).toEqual(['1Лекарства']);
+    // Блок: найденное — номер и название; ненайденные обязательные — безымянные «Найди вещь».
+    expect(texts(r.dom, '.mg-scene__item')).toEqual(['1Лекарства', '2Найди вещь', '3Найди вещь']);
     expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 1 из 3');
     expect(q(r.dom, '.mg-shell__status').textContent).toBe('Лекарства');
     expect(r.autosaves).toBe(1);
@@ -276,7 +345,7 @@ describe('ход игры: находки, промахи, исходы по п�
     zone('glasses');
     expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 1 из 3');
     expect(q(r.dom, '.mg-shell__fails-text').textContent).toBe('Промахи: 0 из 3');
-    expect(r.dom.querySelectorAll('.mg-scene__item')).toHaveLength(1);
+    expect(r.dom.querySelectorAll('.mg-scene__item.is-found')).toHaveLength(1);
   });
 
   it('промах: счётчик растёт, на поле остаётся след, просит автосейв', () => {
@@ -354,6 +423,7 @@ describe('ход игры: находки, промахи, исходы по п�
   it('тап без раскладки (размер 0) не теряется: берётся типовой размер поля', () => {
     const r = rig(defOf(TYPE, CFG), { strings: STRINGS });
     mountGame(createCrimeSceneSearch(), r, CFG);
+    click(q(r.dom, 'button.is-start'));
     const stage = q(r.dom, '.mg-scene__stage');
     sizeOf(stage, 0, 0);
     click(stage, { clientX: 0, clientY: 0 });
@@ -458,7 +528,7 @@ describe('подсказки', () => {
     await vi.waitFor(() => expect(r.dom.querySelectorAll('.mg-scene__zone.is-hinted')).toHaveLength(1));
     expect(q(r.dom, '.mg-scene__zone.is-hinted').dataset.id).toBe('glasses');
     expect(q(r.dom, '.mg-shell__status').textContent).toBe('Подсказка: Очки на тумбочке');
-    expect(texts(r.dom, '.mg-scene__item.is-hint')).toEqual(['Подсказка: Очки на тумбочке']);
+    expect(texts(r.dom, '.mg-scene__item.is-hint .mg-scene__name')).toEqual(['Подсказка: Очки на тумбочке']);
     expect(r.autosaves).toBe(1);
     expect(r.tracked).toContainEqual(['minigame_hint', { id: 'm1', rewarded: true }]);
     expect((m.serialize() as { hints: number }).hints).toBe(1);
@@ -644,7 +714,7 @@ describe('serialize / restore', () => {
 
     const b = play({ skip: { allowed: true, hint_rewarded_ad: true } }, CFG, { showRewarded: () => Promise.resolve(true) });
     b.m.restore(saved);
-    expect(texts(b.r.dom, '.mg-scene__item')).toEqual(['1Лекарства', '2Домашние тапочки']);
+    expect(texts(b.r.dom, '.mg-scene__item.is-found')).toEqual(['1Лекарства', '2Домашние тапочки']);
     expect(q(b.r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 1 из 3');
     expect(q(b.r.dom, '.mg-shell__fails-text').textContent).toBe('Промахи: 1 из 3');
     expect(b.m.serialize()).toEqual(saved);
@@ -659,6 +729,7 @@ describe('serialize / restore', () => {
     const snapshots: unknown[] = [];
     r.ctx.autosave = () => snapshots.push(JSON.parse(JSON.stringify(m.serialize())));
     const m = mountGame(createCrimeSceneSearch(), r, CFG);
+    click(q(r.dom, 'button.is-start'));
     const stage = q(r.dom, '.mg-scene__stage');
     sizeOf(stage, W, H);
     click(stage, { clientX: 0.335 * W, clientY: 0.515 * H });
@@ -725,7 +796,7 @@ describe('смена языка и уничтожение', () => {
     expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Found: 1 of 3');
     expect(q(r.dom, '.mg-shell__fails-text').textContent).toBe('Misses: 1 of 3');
     expect(q(r.dom, '.mg-shell__status').textContent).toBe('Nothing here');
-    expect(texts(r.dom, '.mg-scene__item')).toEqual(['1Pills']);
+    expect(texts(r.dom, '.mg-scene__item.is-found')).toEqual(['1Pills']);
     expect(q(r.dom, '.mg-scene__zone[data-id="pills"] .mg-scene__tag').textContent).toBe('Pills');
     expect(q(r.dom, 'button.is-skip').textContent).toBe('Skip');
   });
@@ -744,6 +815,7 @@ describe('смена языка и уничтожение', () => {
   it('destroy убирает разметку, отписывается от смены языка, гасит таймеры; повторный вызов безопасен', () => {
     vi.useFakeTimers();
     const { r, m, zone } = play({ time_limit_ms: 10000 });
+    vi.advanceTimersByTime(0); // jsdom ставит нулевой таймер выделения при focus() поля после «Начать осмотр»
     expect(r.listenerCount()).toBe(1);
     m.destroy();
     expect(r.dom.querySelector('.mg-shell')).toBeNull();
@@ -817,6 +889,7 @@ describe.skipIf(!hasRepoContent())('настоящая мини-игра ep01 (m
     const cfg = def.config as { hotspots: Array<{ id: string; rect: Rect; required: boolean }> };
     const r = rig(def, { episode, strings: { ...UI, ...strings } });
     const m = mountGame(createCrimeSceneSearch(), r, def.config);
+    click(q(r.dom, 'button.is-start'));
     const stage = q(r.dom, '.mg-scene__stage');
     sizeOf(stage, 360, 202); // телефон без панорамы: самый тесный случай
     expect(btn(r.dom, 'is-skip')).toBeNull();
@@ -833,6 +906,7 @@ describe.skipIf(!hasRepoContent())('настоящая мини-игра ep01 (m
     if (!def) return;
     const r = rig(def, { episode, strings: { ...UI, ...strings } });
     mountGame(createCrimeSceneSearch(), r, def.config);
+    click(q(r.dom, 'button.is-start'));
     const stage = q(r.dom, '.mg-scene__stage');
     sizeOf(stage, 360, 202);
     click(stage, { clientX: 0.95 * 360, clientY: 0.05 * 202 });
@@ -869,10 +943,10 @@ describe('режим списка (режим дела)', () => {
     expect(parseSceneConfig({ ...LIST, pick: 50 }, 'x')?.hotspots).toHaveLength(12);
   });
 
-  it('список целей виден сразу; найденная зачёркивается; тап по невыбранной зоне — промах', () => {
+  it('список целей виден сразу; найденная отмечается; тап по невыбранной зоне — промах', () => {
     const g = play({}, LIST);
     const chosen = parseSceneConfig(LIST, g.r.ctx.def.id)?.hotspots ?? [];
-    expect(texts(g.r.dom, '.mg-scene__list.is-targets .mg-scene__item')).toEqual(chosen.map((h) => `[hs.${h.id}]`));
+    expect(texts(g.r.dom, '.mg-scene__list .mg-scene__item .mg-scene__name')).toEqual(chosen.map((h) => `[hs.${h.id}]`));
     const first = chosen[0];
     if (!first) throw new Error('пустой список');
     g.zone(first.id);

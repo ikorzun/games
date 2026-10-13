@@ -145,7 +145,9 @@ runtime/
     ui/                  DOM-интерфейс: textbox (typewriter), choices (таймер), captions, quick_menu + icons (иконки SVG), screens
                          (меню, предупреждение, настройки, журнал, сейвы, архив, документ, финал), dom_ui (ввод), kit (каркас), styles.css
     minigames/           IMinigame, реестр типов, пять реализаций (crime_scene_search, document_check, database_search,
-                         evidence_board, interrogation_press) с общей оболочкой mg_shell; grey-box — запасной для остальных типов
+                         evidence_board, interrogation_press) с общей оболочкой mg_shell (раскладка «карточка» или «сцена»:
+                         картинка во весь экран, вступление «Начать», перетаскиваемый блок — у осмотра, 04-minigames §7);
+                         grey-box — запасной для остальных типов
     platform/            IPlatform: web-plain (localStorage), playgama (обёртка над window.bridge), выбор по window.bridge
     debug/debug.ts       window.__vn
   tests/                 vitest; tests/helpers — заглушки портов, мини-эпизоды, исследователь графа

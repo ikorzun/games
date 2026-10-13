@@ -189,7 +189,7 @@ describe('интерфейс: документальная эстетика, mob
     }
   });
 
-  it('без скруглений (решение владельца 2026-10-13): круглые только портрет у имени, экран-кинескоп меню, лампа REC, номер варианта и крестик документа (макеты 2026-10-13)', () => {
+  it('без скруглений (решение владельца 2026-10-13): круглые только портрет у имени, экран-кинескоп меню, лампа REC, номер варианта, крестик документа, номера и попытки осмотра (макеты 2026-10-13)', () => {
     const cssOf = (dir: string): string[] => {
       const d = join(HERE, '..', 'src', dir);
       return readdirSync(d).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(d, f), 'utf8'));
@@ -199,6 +199,9 @@ describe('интерфейс: документальная эстетика, mob
       for (const m of css.matchAll(/([^{}]+)\{[^}]*border-radius:(?!\s*0;)[^}]*\}/g)) owners.push(m[1]!.trim().split('\n').pop()!.trim());
     }
     expect(owners.sort()).toEqual([
+      '.mg-scene__num',
+      '.mg-scene__pin',
+      '.mg-stage .mg-shell__pip',
       '.vn-choice__n',
       '.vn-crt__in',
       '.vn-crt__screen',

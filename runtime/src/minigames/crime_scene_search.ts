@@ -13,8 +13,13 @@
  * Итог: найдены все обязательные зоны → success; хотя бы одна → partial; ни одной → fail.
  * Игра заканчивается, когда найдено всё обязательное, промахов стало max_misses или вышло время.
  *
- * Режим списка (`list: true`, режим дела — docs/architecture/09-case-mode.md): все цели перечислены под картинкой
- * сразу, найденные зачёркиваются. Из пула зон за заход берётся `pick`: обязательные (required) — всегда, остальные —
+ * Раскладка «сцена» (макеты Figma «Claude» 2026-10-13): картинка во весь экран, перед партией — вступление с вопросом
+ * и «Начать осмотр», по ходу — перетаскиваемый блок со списком: найденное — номер на белом и название, ненайденное
+ * обязательное — бледное «Найди вещь» (подсказанное — по имени). Мышью картинка видна целиком; пальцем — во всю
+ * высоту, шире экрана листается.
+ *
+ * Режим списка (`list: true`, режим дела — docs/architecture/09-case-mode.md): все цели перечислены в блоке
+ * сразу, найденные отмечаются. Из пула зон за заход берётся `pick`: обязательные (required) — всегда, остальные —
  * случайно по зерну `seed` (номер захода), поэтому повтор сцены даёт новый список. Все выбранные — обязательные,
  * невыбранные зоны неактивны: тап по ним — промах.
  */
@@ -173,6 +178,10 @@ class CrimeSceneSearch extends MinigameShell {
   private list!: HTMLElement;
   private help!: HTMLElement;
   private zoneEls = new Map<string, ZoneEls>();
+  /** Пропорции картинки (по загруженному файлу) и подгонка поля под экран. */
+  private ar = 16 / 9;
+  private resizer: ResizeObserver | null = null;
+  private centered = false;
 
   protected override parse(cfg: MinigameConfig, ctx: GameContext): boolean {
     const parsed = parseSceneConfig(cfg, ctx.def.id);
@@ -185,6 +194,18 @@ class CrimeSceneSearch extends MinigameShell {
 
   protected override cfgTimeLimitMs(): number {
     return this.cfg.timeLimitMs;
+  }
+
+  protected override layout(): 'stage' {
+    return 'stage';
+  }
+
+  protected override panelList(): HTMLElement {
+    return this.list;
+  }
+
+  protected override focusField(): void {
+    this.stage.focus({ preventScroll: true });
   }
 
   // ───────────────────────────── разметка ─────────────────────────────
@@ -237,8 +258,32 @@ class CrimeSceneSearch extends MinigameShell {
     else this.stage.classList.replace('is-loading', 'is-placeholder');
 
     this.viewport = h('div', { class: 'mg-scene__viewport' }, this.stage);
-    this.list = h('ul', { class: 'mg-scene__list' });
-    return h('div', { class: 'mg-scene__wrap' }, this.viewport, this.list, this.help);
+    this.list = h('ol', { class: 'mg-scene__list' });
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizer = new ResizeObserver(() => this.fitStage());
+      this.resizer.observe(this.viewport);
+    }
+    return h('div', { class: 'mg-scene__wrap' }, this.viewport, this.help);
+  }
+
+  /** Поле под экран: мышью картинка целиком (вписана); пальцем — во всю высоту, шире экрана листается, сначала по центру. */
+  private fitStage(): void {
+    const vw = this.viewport.clientWidth;
+    const vh = this.viewport.clientHeight;
+    if (vw <= 0 || vh <= 0) return;
+    const touch = globalThis.matchMedia?.('(pointer: coarse)').matches ?? false;
+    let w = vh * this.ar;
+    let hh = vh;
+    if (!touch && w > vw) {
+      w = vw;
+      hh = vw / this.ar;
+    }
+    this.stage.style.width = `${Math.round(w)}px`;
+    this.stage.style.height = `${Math.round(hh)}px`;
+    if (touch && w > vw && !this.centered) {
+      this.viewport.scrollLeft = (w - vw) / 2;
+      this.centered = true;
+    }
   }
 
   private loadImage(path: string): void {
@@ -248,7 +293,11 @@ class CrimeSceneSearch extends MinigameShell {
     img.decoding = 'async';
     img.draggable = false;
     img.addEventListener('load', () => {
-      if (img.naturalWidth > 0 && img.naturalHeight > 0) this.stage.style.setProperty('--ar', `${img.naturalWidth} / ${img.naturalHeight}`);
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        this.stage.style.setProperty('--ar', `${img.naturalWidth} / ${img.naturalHeight}`);
+        this.ar = img.naturalWidth / img.naturalHeight;
+        this.fitStage();
+      }
       this.stage.classList.remove('is-loading', 'is-placeholder');
       this.stage.classList.add('has-image');
     });
@@ -275,41 +324,36 @@ class CrimeSceneSearch extends MinigameShell {
       z.pin.textContent = order >= 0 ? String(order + 1) : '';
       z.tag.textContent = this.label(hs);
     }
+    // Блок: найденное — номер на белом и название; ненайденное обязательное — бледное «Найди вещь» (в режиме списка —
+    // название цели); подсказанное — по имени, с красной рамкой номера.
+    const row = (n: number, text: string, cls: string, id: string | null): HTMLElement =>
+      h(
+        'li',
+        { class: `mg-scene__item${cls}`, ...(id ? { data: { id } } : {}) },
+        h('span', { class: 'mg-scene__num', text: String(n) }),
+        h('span', { class: 'mg-scene__name', text }),
+      );
     if (this.cfg.list) {
-      // Список целей: найденные зачёркнуты, подсказанная подсвечена.
-      this.list.classList.add('is-targets');
       fill(
         this.list,
-        ...this.cfg.hotspots.map((hs) =>
-          h('li', {
-            class: `mg-scene__item${found.includes(hs.id) ? ' is-found' : hinted.includes(hs.id) ? ' is-hint' : ''}`,
-            data: { id: hs.id },
-            text: this.label(hs),
-          }),
+        ...this.cfg.hotspots.map((hs, i) =>
+          row(i + 1, this.label(hs), found.includes(hs.id) ? ' is-found' : hinted.includes(hs.id) ? ' is-hint' : '', hs.id),
         ),
       );
       return;
     }
-    fill(
-      this.list,
-      ...found.map((id, i) => {
-        const hs = this.byId.get(id);
-        return hs
-          ? h(
-              'li',
-              { class: `mg-scene__item${hs.required ? '' : ' is-extra'}` },
-              h('span', { class: 'mg-scene__num', text: String(i + 1) }),
-              h('span', { class: 'mg-scene__name', text: this.label(hs) }),
-            )
-          : null;
-      }),
-      ...hinted.filter((id) => !found.includes(id)).map((id) => {
-        const hs = this.byId.get(id);
-        return hs
-          ? h('li', { class: 'mg-scene__item is-hint' }, h('span', { class: 'mg-scene__name', text: `${this.t('ui.minigame.hint')}: ${this.label(hs)}` }))
-          : null;
-      }),
-    );
+    const rows: HTMLElement[] = [];
+    found.forEach((id, i) => {
+      const hs = this.byId.get(id);
+      if (hs) rows.push(row(i + 1, this.label(hs), hs.required ? ' is-found' : ' is-found is-extra', id));
+    });
+    const left = this.cfg.hotspots.filter((hs) => hs.required && !found.includes(hs.id));
+    const ordered = [...left.filter((hs) => hinted.includes(hs.id)), ...left.filter((hs) => !hinted.includes(hs.id))];
+    ordered.forEach((hs, j) => {
+      const n = found.length + j + 1;
+      rows.push(hinted.includes(hs.id) ? row(n, `${this.t('ui.minigame.hint')}: ${this.label(hs)}`, ' is-hint', hs.id) : row(n, this.t('ui.minigame.find_item'), '', null));
+    });
+    fill(this.list, ...rows);
   }
 
   private label(hs: Hotspot): string {
@@ -465,6 +509,8 @@ class CrimeSceneSearch extends MinigameShell {
   override destroy(): void {
     for (const t of this.timeouts) clearTimeout(t);
     this.timeouts.clear();
+    this.resizer?.disconnect();
+    this.resizer = null;
     super.destroy();
   }
 }

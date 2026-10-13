@@ -883,8 +883,9 @@ MINIGAMES = {
     'mg_db': MG_DB,
     'mg_flat_inspect': {
         'id': 'mg_flat_inspect', 'type': 'crime_scene_search', 'beat': 'crime_scene',
-        'title_key': key('title', 'Осмотр квартиры'),
-        'brief_key': key('brief', 'Что Зоя Павловна «оставила», уезжая на юг? Лапины смотрят: копаться долго не дадут.'),
+        # Макет мини-игры (Figma 2026-10-13): заголовок — вопрос, под ним бриф и (из max_misses) «У вас всего 4 попытки…».
+        'title_key': key('title', 'Что Зоя Павловна «оставила», уезжая на юг?'),
+        'brief_key': key('brief', 'Лапины смотрят: копаться долго не дадут.'),
         'config': {
             'scene_bg': 'bg_hod_flat_inspect',
             # зоны — по кадру flat_inspect (рамки сверены на картинке); каждая находка открывает свой факт
