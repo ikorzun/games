@@ -24,11 +24,12 @@ import { LineVoice } from './stage/voice';
 /** Дождаться шрифтов, но не дольше таймаута: без них игра всё равно играбельна. */
 async function loadFonts(timeoutMs = 2500): Promise<void> {
   if (!('fonts' in document)) return;
-  // Tinos (интерфейс и текст), DM Mono и JetBrains Mono (индикация камеры) — свои файлы в src/ui/fonts (@font-face в styles.css).
+  // Tenor Sans (заголовки), Cormorant Garamond (текст и кнопки), DM Mono и JetBrains Mono (индикация камеры) — свои файлы
+  // в src/ui/fonts (@font-face в styles.css).
   const sample = 'Аёбв Ññãçüé ¿¡ 1993';
   const load = Promise.all([
-    document.fonts.load('16px "Tinos"', sample),
-    document.fonts.load('italic 16px "Tinos"', sample),
+    document.fonts.load('16px "Tenor Sans"', sample),
+    document.fonts.load('16px "Cormorant Garamond"', sample),
     document.fonts.load('16px "DM Mono"', sample),
     document.fonts.load('16px "JetBrains Mono"', sample),
   ]);

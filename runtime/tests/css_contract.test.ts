@@ -150,7 +150,7 @@ describe('слои камкордера в CSS', () => {
 });
 
 describe('интерфейс: документальная эстетика, mobile-first', () => {
-  it('окно реплики по макету в Figma (узел 1232:3796, 2026-10-13): полоса 40 % чёрного под каждой строкой без тени, над текстом портрет 48 px, имя и подпись; шрифт Tinos', () => {
+  it('окно реплики по макету в Figma (узел 1232:3796, 2026-10-13): полоса 40 % чёрного под каждой строкой без тени, над текстом портрет 48 px, имя и подпись; текст — Cormorant Garamond', () => {
     const box = /\n\.vn-textbox\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(box).not.toMatch(/background/);
     expect(box).not.toMatch(/text-shadow/);
@@ -173,9 +173,13 @@ describe('интерфейс: документальная эстетика, mob
     expect(avatar).toMatch(/border-radius:\s*50%/);
     expect(uiCss).toMatch(/\.vn-textbox__name\s*\{\s*font-size:\s*calc\(14em \/ 15\);\s*\}/);
     expect(uiCss).toMatch(/\.vn-textbox__title\s*\{\s*font-size:\s*calc\(10em \/ 15\);\s*opacity:\s*0\.7;\s*\}/);
-    expect(uiCss).toMatch(/--font-body:\s*'Tinos'/);
+    expect(uiCss).toMatch(/--font-body:\s*'Cormorant Garamond'/); // текст и кнопки (решение владельца 2026-10-13)
+    expect(uiCss).toMatch(/--font-title:\s*'Tenor Sans'/); // заголовки
     expect(uiCss).toMatch(/--panel-line:\s*rgb\(255 255 255 \/ 0\.28\)/);
-    expect((uiCss.match(/@font-face \{ font-family: 'Tinos'/g) ?? []).length).toBe(3); // свои woff2, без Google Fonts в рантайме; курсива нет
+    // свои woff2 (кириллица и латиница), без Google Fonts в рантайме; только 400, без курсива
+    expect((uiCss.match(/@font-face \{ font-family: 'Tenor Sans'; font-style: normal; font-weight: 400;/g) ?? []).length).toBe(2);
+    expect((uiCss.match(/@font-face \{ font-family: 'Cormorant Garamond'; font-style: normal; font-weight: 400;/g) ?? []).length).toBe(2);
+    expect(uiCss).not.toMatch(/fonts\.googleapis|Tinos/);
     // Размытие — только у оверлеев выбора и документа по макетам 2026-10-13 и только при мыши: на телефоне дорого.
     const blur = /@media \(hover: hover\) and \(pointer: fine\) \{\s*\.vn-document,\s*\.vn-choices\s*\{([^}]*)\}\s*\}/.exec(uiCss);
     expect(blur?.[1]).toMatch(/background:\s*rgb\(0 0 0 \/ 0\.6\);[\s\S]*backdrop-filter:\s*blur\(5px\)/);
@@ -188,9 +192,7 @@ describe('интерфейс: документальная эстетика, mob
       return readdirSync(d).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(d, f), 'utf8'));
     };
     // Мини-игры и режим дела (папка, итог поиска, осмотр фото).
-    expect(uiCss.match(/font-weight:\s*700/g)).toHaveLength(1); // только @font-face жирной латиницы Tinos
-    const rest = uiCss.replace(/@font-face[^\n]*font-weight: 700[^\n]*/, '');
-    for (const css of [rest, ...cssOf('minigames'), ...cssOf('case')]) {
+    for (const css of [uiCss, ...cssOf('minigames'), ...cssOf('case')]) {
       expect(css).not.toMatch(/font-weight:\s*(?:[5-9]00|bold)/);
       expect(css).not.toMatch(/font:\s*(?:[5-9]00|bold)\s/);
     }

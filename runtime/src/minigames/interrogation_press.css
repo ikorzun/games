@@ -356,7 +356,7 @@
 }
 .mg-ip__label {
   min-width: 0;
-  font: 400 1em / 1.15 var(--font-title);
+  font: 400 1em / 1.15 var(--font-body);
   overflow-wrap: anywhere;
   hyphens: auto;
 }
