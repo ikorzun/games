@@ -324,19 +324,23 @@ body {
   .vn-qbtn { flex: 1 1 0; width: auto; max-width: 52px; min-width: 34px; height: 44px; }
 }
 /* Широкий экран в портретной раскладке (планшет, высокое окно): кнопки на всю ширину ряда и с подписями
-   (решение владельца 2026-10-11); на телефоне остаются иконки. */
+   (решение владельца 2026-10-11); на телефоне остаются иконки. Иконка — над подписью: шесть кнопок в ряд, и
+   подпись помещается в кнопку при любой ширине от 600 px (длинные — «Пропуск прочитанного», «Скрыть
+   интерфейс» — в две строки). */
 @media (orientation: portrait) and (min-width: 600px) {
   .vn-qbtn {
     display: inline-flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 4px;
+    min-width: 0;
     max-width: none;
-    height: 46px;
-    padding: 0 10px;
+    height: auto;
+    min-height: 54px;
+    padding: 6px 4px;
   }
   .vn-qbtn .vn-ico { flex: none; }
-  /* Длинные подписи («Пропуск прочитанного», «Скрыть интерфейс») переносятся на две строки, иконка остаётся. */
   .vn-qbtn .vn-qbtn__label {
     position: static;
     width: auto;
@@ -345,10 +349,10 @@ body {
     overflow: visible;
     clip: auto;
     white-space: normal;
-    max-width: 9.5em;
-    font: 400 0.78em / 1.1 var(--font-body);
-    letter-spacing: 0.03em;
-    text-align: left;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    font: 400 0.72em / 1.15 var(--font-body);
+    text-align: center;
   }
 }
 
