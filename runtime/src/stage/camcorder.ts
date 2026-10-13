@@ -17,7 +17,9 @@
  *  - помехи: раз в 20–45 с (в `vhs_heavy` — 6–12 с, чуть сильнее) всплеск 150–500 мс: полоса трекинга,
  *    мерцание яркости, хроматический сдвиг;
  *  - короткий «разрыв кадра» для fx vhs_glitch (рывки по вертикали и горизонтали + шумовая полоса);
- *  - стоп-кадр (freeze): движение и помехи замирают.
+ *  - стоп-кадр (freeze): движение и помехи замирают;
+ *  - искажения записи (SignalProfile): аналоговый сигнал бытового камкордера по мотивам ntsc-rs
+ *    (https://ntsc.rs) — их рисует шейдер рендерера PixiJS (vhs_filter.ts) прямо на картинке, а не плёнкой поверх.
  *
  * Время внутри планировщика — собственные «часы»: step(now) прибавляет не больше MAX_DT мс, поэтому
  * после паузы платформы или скрытой вкладки движение продолжается плавно, а помеха не вылетает сразу.
@@ -103,6 +105,61 @@ export interface LevelProfile {
   unrestGap: readonly [number, number];
   /** Длительность эпизода на полной амплитуде, мс [мин, макс] (без входа и выхода по UNREST_RAMP). */
   unrestMs: readonly [number, number];
+  /** Искажения записи (шейдер vhs_filter.ts). */
+  signal: SignalProfile;
+}
+
+/**
+ * Искажения аналоговой записи (по мотивам ntsc-rs: яркость и цвет идут по строке с разной полосой пропускания,
+ * лента добавляет шум, «снег», выпадения, дрожание развёртки и полосу переключения головок внизу кадра).
+ * Длины — в «виртуальных пикселях»: кадр делится на virtualLines(h) строк, пиксели квадратные.
+ * Картинки в игре уже мягкие (аналоговое ТВ «запечено» в генерацию), поэтому размытие яркости малое:
+ * эффект — в звоне на контурах, цвете, строках и шуме, а не в мыле.
+ */
+export interface SignalProfile {
+  /** Размытие яркости вдоль строки, вирт. пикс. */
+  lumaSmear: number;
+  /** «Звон» на контурах: перелёт яркости у резкой границы, доля. */
+  ringing: number;
+  /** Растекание цвета вдоль строки, вирт. пикс. */
+  chromaBleed: number;
+  /** Задержка цвета вправо относительно яркости, вирт. пикс. */
+  chromaDelay: number;
+  /** Шум яркости (полосками вдоль строки), амплитуда 0..1. */
+  lumaNoise: number;
+  /** Шум цвета, амплитуда I/Q. */
+  chromaNoise: number;
+  /** «Снег»: вероятность белого штриха с хвостом на отрезок строки за кадр. */
+  snow: number;
+  /** Выпадения ленты: вероятность длинного белого штриха на строку за кадр. */
+  dropout: number;
+  /** Дрожание развёртки, вирт. пикс.: чётные и нечётные строки расходятся — зубцы на вертикальных краях. */
+  jitter: number;
+  /** Волна строк: медленный изгиб вертикалей, вирт. пикс. */
+  edgeWave: number;
+  /** Полоса переключения головок внизу кадра: сдвиг строк, доля ширины. */
+  headSwitch: number;
+  /** Шум фазы цвета от строки к строке, радианы. */
+  chromaPhase: number;
+  /** Цвет просачивается в яркость («точечная рябь» на цветных краях), доля. */
+  crawl: number;
+  /** Насыщенность после записи (VHS теряет цвет). */
+  saturation: number;
+  /** Чересстрочность: затемнение нечётных строк, доля. */
+  interlace: number;
+  /** Приподнятый уровень чёрного. */
+  blackLift: number;
+}
+
+/** Строк в кадре по стандарту NTSC (видимых ≈ 480): столько строк «записывает» камкордер. */
+export const VIRTUAL_LINES = 480;
+
+/**
+ * Сколько виртуальных строк показать на холсте высотой heightPx (физические пиксели): не тоньше двух
+ * пикселей на строку — иначе строки на телефоне дают муар, — но не меньше 120.
+ */
+export function virtualLines(heightPx: number): number {
+  return Math.max(120, Math.min(VIRTUAL_LINES, Math.floor(heightPx / 2)));
 }
 
 /** «Слабо» (по умолчанию) — числа владельца; «сильно» — заметнее и чаще. «Выкл» профиля не имеет. */
@@ -121,6 +178,25 @@ export const LEVELS: Readonly<Record<Exclude<CameraFx, 'off'>, LevelProfile>> = 
     restAmp: 0.15,
     unrestGap: [14_000, 32_000],
     unrestMs: [1_200, 2_600],
+    // «Слабо»: лица читаются; запись видна по строкам, цвету и шуму, а не по мылу.
+    signal: {
+      lumaSmear: 0.6,
+      ringing: 0.35,
+      chromaBleed: 2.5,
+      chromaDelay: 1.2,
+      lumaNoise: 0.03,
+      chromaNoise: 0.03,
+      snow: 0.0015,
+      dropout: 0.0015,
+      jitter: 0.35,
+      edgeWave: 0.6,
+      headSwitch: 0.02,
+      chromaPhase: 0.08,
+      crawl: 0,
+      saturation: 0.92,
+      interlace: 0,
+      blackLift: 0.03,
+    },
   },
   high: {
     amp: 1.6,
@@ -136,6 +212,25 @@ export const LEVELS: Readonly<Record<Exclude<CameraFx, 'off'>, LevelProfile>> = 
     restAmp: 0.35,
     unrestGap: [6_000, 14_000],
     unrestMs: [2_000, 4_000],
+    // «Сильно»: ближе к затёртой кассете — зубцы, растекание цвета, снег и выпадения.
+    signal: {
+      lumaSmear: 1.2,
+      ringing: 0.6,
+      chromaBleed: 5,
+      chromaDelay: 2.5,
+      lumaNoise: 0.05,
+      chromaNoise: 0.06,
+      snow: 0.005,
+      dropout: 0.004,
+      jitter: 0.9,
+      edgeWave: 1.4,
+      headSwitch: 0.035,
+      chromaPhase: 0.18,
+      crawl: 0.05,
+      saturation: 0.85,
+      interlace: 0.05,
+      blackLift: 0.05,
+    },
   },
 };
 
@@ -144,6 +239,28 @@ export const HEAVY_STRENGTH = 1.3;
 
 export function levelProfile(level: CameraFx): LevelProfile | null {
   return level === 'off' ? null : LEVELS[level];
+}
+
+/**
+ * Искажения записи для уровня и фильтра сцены; null — эффекты выключены. В `vhs_heavy` лента «старше»:
+ * шум, снег, выпадения и дрожание строк × HEAVY_STRENGTH, строки чересстрочности — не слабее профиля уровня.
+ */
+export function signalFor(level: CameraFx, heavy: boolean): SignalProfile | null {
+  const p = levelProfile(level);
+  if (!p) return null;
+  const s = p.signal;
+  if (!heavy) return s;
+  const k = HEAVY_STRENGTH;
+  return {
+    ...s,
+    lumaNoise: s.lumaNoise * k,
+    chromaNoise: s.chromaNoise * k,
+    snow: s.snow * k,
+    dropout: s.dropout * k,
+    jitter: s.jitter * k,
+    edgeWave: s.edgeWave * k,
+    interlace: Math.max(s.interlace, p.interlace),
+  };
 }
 
 /** Максимальный байт альфы зерна (0..255) для уровня: непрозрачность × 255, округление вниз. */
@@ -634,6 +751,43 @@ export class CameraScheduler {
       on: true,
     };
   }
+}
+
+// ───────────────────────────── шейдер записи: униформы кадра ─────────────────────────────
+
+/** Сворачивание номера кадра и времени: шум остаётся «случайным», а числа — малыми для mediump. */
+const FRAME_WRAP = 1009;
+const TIME_WRAP = 600;
+
+export interface VhsInput {
+  frame: CamFrame;
+  signal: SignalProfile;
+  /** Часы камкордера, мс. */
+  timeMs: number;
+  /** Номер кадра записи (растёт на каждом шаге). */
+  frameNo: number;
+  /** Высота холста, физические пиксели (сколько виртуальных строк показать). */
+  heightPx: number;
+  /** y текстуры фильтра идёт вниз (true) или вверх. */
+  yDown: boolean;
+}
+
+/** Значения униформ для кадра — чистая функция (проверяется тестом без видеокарты). */
+export function vhsUniforms(i: VhsInput): Record<'uCam' | 'uClock' | 'uSig1' | 'uSig2' | 'uSig3' | 'uSig4' | 'uBurst' | 'uTear', [number, number, number, number]> {
+  const { frame: f, signal: s } = i;
+  const b = f.burst;
+  const tr = f.tear;
+  return {
+    uCam: [f.tx / 100, f.ty / 100, (f.rot * Math.PI) / 180, f.scale > 0 ? f.scale : 1],
+    uClock: [(i.timeMs / 1000) % TIME_WRAP, i.frameNo % FRAME_WRAP, virtualLines(i.heightPx), i.yDown ? 1 : -1],
+    uSig1: [s.lumaSmear, s.ringing, s.chromaBleed, s.chromaDelay],
+    uSig2: [s.lumaNoise, s.chromaNoise, s.snow, s.dropout],
+    uSig3: [s.jitter, s.edgeWave, s.headSwitch, s.chromaPhase],
+    uSig4: [s.crawl, s.saturation, s.interlace, s.blackLift],
+    uBurst: b ? [b.envelope * b.strength, b.bandY, b.bandH, b.flicker] : [0, 0, 0, 0],
+    // разрыв кадра: сдвиг уже входит в f.tx/f.ty (планировщик прибавляет его к трансформации), здесь — шов
+    uTear: tr ? [0, 0, tr.seamY, tr.seamH] : [0, 0, 0, 0],
+  };
 }
 
 // ───────────────────────────── зерно (пиксели оверлея) ─────────────────────────────

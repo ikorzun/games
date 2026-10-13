@@ -113,7 +113,11 @@ export class Stage implements IStage {
       this.trEl,
       this.holdEl,
     );
-    this.camcorder = new CamcorderLayer({ ...opts.camcorder, stage: this.el, hand: this.handEl, canvas: fxCanvas });
+    // Рендерер PixiJS рисует камкордер шейдером (движение камеры + искажения записи); DOM-рендерер — нет.
+    const sink = renderer.camera && renderer.cameraOff
+      ? { camera: renderer.camera.bind(renderer), cameraOff: renderer.cameraOff.bind(renderer) }
+      : null;
+    this.camcorder = new CamcorderLayer({ ...opts.camcorder, stage: this.el, hand: this.handEl, canvas: fxCanvas, sink });
   }
 
   /** Вставить сцену в родителя и поднять рендерер. При ошибке рендерера вызывающий делает destroy(). */

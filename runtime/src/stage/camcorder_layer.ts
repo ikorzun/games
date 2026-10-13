@@ -1,5 +1,9 @@
 /**
  * Камкордер, DOM-часть: применяет кадры CameraScheduler (camcorder.ts) к странице.
+ *  - основной путь — видеокарта: рендерер PixiJS умеет `camera()` (sink), и движение камеры вместе с
+ *    искажениями записи рисует шейдер на всём кадре (vhs_filter.ts); CSS-трансформации и холста помех нет,
+ *    на сцене класс `cam-gpu`;
+ *  - запасной путь (DOM-рендерер или шейдер не собрался) — как раньше:
  *  - дрожание и «поправки оператора» — ОДНА CSS-трансформация обёртки кадра (`.vn-stage__hand`);
  *    внутри обёртки только картинка (canvas рендерера или DOM-плейсхолдеры), текста и интерфейса там нет;
  *  - зерно и помехи — ОДИН canvas низкого разрешения (≈ 256 px по ширине), растянутый на кадр,
@@ -17,8 +21,8 @@
  */
 import type { CameraFx } from '../core/settings';
 import type { StageFilter } from '../core/types';
-import { CameraScheduler, fillGrain, grainAlphaMax, levelProfile, mulberry32 } from './camcorder';
-import type { BurstFrame, CamFrame, Rng, TearFrame } from './camcorder';
+import { CameraScheduler, fillGrain, grainAlphaMax, levelProfile, mulberry32, signalFor } from './camcorder';
+import type { BurstFrame, CamFrame, Rng, SignalProfile, TearFrame } from './camcorder';
 import { presetOf } from './presets';
 import type { Presentation } from '../core/types';
 
@@ -60,6 +64,17 @@ export interface Overlay2D {
   createImageData(w: number, h: number): ImageData;
 }
 
+/** Камкордер на видеокарте (рендерер PixiJS): false из camera() — не умеет, нужен запасной путь. */
+export interface CameraSink {
+  camera(frame: CamFrame, signal: SignalProfile, timeMs: number): boolean;
+  cameraOff(): void;
+}
+
+/** CSS-трансформация кадра (запасной путь) и та же запись для отладки (__vn.camera().transform). */
+export function cssTransform(f: CamFrame): string {
+  return `translate3d(${f.tx.toFixed(3)}%, ${f.ty.toFixed(3)}%, 0) rotate(${f.rot.toFixed(3)}deg) scale(${f.scale.toFixed(4)})`;
+}
+
 export interface CamcorderLayerOptions {
   /** `.vn-stage`: получает классы cam-on / cam-rec / cam-burst и CSS-переменные. */
   stage: HTMLElement;
@@ -86,6 +101,8 @@ export interface CamcorderLayerOptions {
   onDegrade?: (info: DegradeInfo) => void;
   /** Подмена 2D-контекста (тесты). */
   context?: Overlay2D | null;
+  /** Рендерер, который рисует камкордер шейдером (PixiJS); нет — CSS-трансформация и холст помех. */
+  sink?: CameraSink | null;
 }
 
 function defaultReducedMotion(): boolean {
@@ -126,6 +143,14 @@ export class CamcorderLayer {
   private perfN = 0;
   private lastTransform = '';
   private burstOn = false;
+  /** Кадр рисует видеокарта (sink принял кадр). */
+  private gpu = false;
+  /** Фильтр сцены vhs_heavy: лента «старше». */
+  private heavy = false;
+  /** Трансформация последнего кадра (для отладки — и на видеокарте, где CSS её не несёт). */
+  private transformNow = '';
+  /** Сколько кадров камкордер показал (QA: цикл действительно идёт). */
+  private presented = 0;
   private cw = 0;
   private ch = 0;
   private observer: ResizeObserver | null = null;
@@ -212,11 +237,27 @@ export class CamcorderLayer {
     return this.rafId !== null;
   }
 
+  /** Камкордер рисует видеокарта (шейдер рендерера), а не CSS и холст помех. */
+  get gpuActive(): boolean {
+    return this.gpu;
+  }
+
+  /** Трансформация камеры в последнем кадре в записи CSS ('' — эффектов нет). */
+  get transformText(): string {
+    return this.transformNow;
+  }
+
+  /** Сколько кадров показано с запуска (QA). */
+  get framesPresented(): number {
+    return this.presented;
+  }
+
   /** Режим показа и фильтр новой сцены. */
   setContext(presentation: Presentation, filter: StageFilter): void {
     this.presentation = presentation;
     const preset = presetOf(presentation);
     this.scheduler.setContext({ handheld: preset.handheld, reframe: preset.reframe, filter });
+    this.heavy = filter === 'vhs_heavy';
     this.paintClasses(filter);
   }
 
@@ -318,6 +359,9 @@ export class CamcorderLayer {
       this.rafId = null;
     }
     if (this.effectiveLevel === 'off' || !this.active || this.suspended) {
+      this.o.sink?.cameraOff();
+      this.setGpu(false);
+      this.transformNow = '';
       this.setTransform('');
       this.setBurstClass(false);
       this.clearOverlay();
@@ -331,14 +375,36 @@ export class CamcorderLayer {
     if (ts - this.lastStep < this.stepGap) return;
     this.lastStep = ts;
     const f = this.scheduler.step(ts);
-    this.lastFrame = f;
-    this.applyTransform(f);
-    this.setBurstClass(f.burst !== null);
-    if (ts - this.lastNoise >= this.noiseGap) {
-      this.lastNoise = ts;
-      this.drawOverlay(f);
-    }
+    const noiseDue = ts - this.lastNoise >= this.noiseGap;
+    if (noiseDue) this.lastNoise = ts;
+    this.present(f, noiseDue);
   };
+
+  /** Кадр — видеокарте (шейдер рендерера) или, если она не умеет, CSS-трансформации и холсту помех. */
+  private present(f: CamFrame, noiseDue: boolean): void {
+    this.presented += 1;
+    this.lastFrame = f;
+    this.transformNow = f.on ? cssTransform(f) : '';
+    this.setBurstClass(f.burst !== null);
+    const signal = f.on ? signalFor(this.effectiveLevel, this.heavy) : null;
+    if (signal && this.o.sink && this.o.sink.camera(f, signal, this.scheduler.time)) {
+      this.setGpu(true);
+      return;
+    }
+    this.setGpu(false);
+    this.applyTransform(f);
+    if (noiseDue) this.drawOverlay(f);
+  }
+
+  private setGpu(on: boolean): void {
+    if (on === this.gpu) return;
+    this.gpu = on;
+    this.o.stage.classList.toggle('cam-gpu', on);
+    if (on) {
+      this.setTransform('');
+      this.clearOverlay();
+    }
+  }
 
   /**
    * Самозащита: учесть интервал между кадрами rAF. true — устройство не успевает, эффекты выключены
@@ -370,10 +436,7 @@ export class CamcorderLayer {
   /** Один шаг без rAF (тесты и отладка). */
   stepOnce(ts: number): CamFrame {
     const f = this.scheduler.step(ts);
-    this.lastFrame = f;
-    this.applyTransform(f);
-    this.setBurstClass(f.burst !== null);
-    this.drawOverlay(f);
+    this.present(f, true);
     return f;
   }
 
@@ -382,7 +445,7 @@ export class CamcorderLayer {
       this.setTransform('');
       return;
     }
-    this.setTransform(`translate3d(${f.tx.toFixed(3)}%, ${f.ty.toFixed(3)}%, 0) rotate(${f.rot.toFixed(3)}deg) scale(${f.scale.toFixed(4)})`);
+    this.setTransform(cssTransform(f));
   }
 
   private setTransform(value: string): void {

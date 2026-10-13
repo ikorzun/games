@@ -7,14 +7,16 @@
  * Состояние слота (фон, CG, спрайт): `none` (ничего не просили) → `loading` (картинка грузится:
  * остаётся прежнее, а у нового спрайта — пустота, но не плейсхолдер) → `image` или `placeholder`
  * (файла нет). Кадр рисуется по требованию, а не 60 раз в секунду: в покое WebGL не работает
- * (батарея телефона), а камкордер двигает уже готовый canvas CSS-трансформацией (camcorder.ts).
+ * (батарея телефона). Камкордер (camcorder_layer.ts) присылает кадр записи ~30 раз в секунду: движение камеры
+ * и искажения аналоговой записи рисует шейдер на всём кадре (vhs_filter.ts) — это и есть перерисовка.
  * Исключение — мини-игры: пока слой мини-игр активен, рендер непрерывный.
  *
  * Спрайты: рост ≈ высота сцены (SPRITE_FIT), но не шире SPRITE_MAX_WIDTH ширины; три позиции
  * left / center / right, offscreen_* не рисуются. Говорящего подсвечивают затемнением остальных
  * (tint), силуэт без собственного файла — чёрный кадр с прозрачностью .85.
  */
-import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import { Application, Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
+import type { WebGLRenderer } from 'pixi.js';
 import type { ViolenceMode } from '../core/settings';
 import type { SpriteView, TransitionKind, ViewState } from '../core/types';
 import { NO_ASSETS } from './assets';
@@ -22,8 +24,12 @@ import type { ImageChain, ImageHandle, SceneAssets } from './assets';
 import { hslToInt, placeholderHsl, placeholderLabel } from './placeholders';
 import { isOffscreen, POSITION_X, SILHOUETTE_ALPHA, SPRITE_FIT, SPRITE_MAX_WIDTH, wantFlip } from './renderer';
 import type { ISceneRenderer, SlotStates } from './renderer';
+import type { CamFrame, SignalProfile } from './camcorder';
+import { VHS_FRAGMENT, VhsFilter } from './vhs_filter';
 
 const FONT = 'PT Sans, Noto Sans, Arial, sans-serif';
+/** y текстуры фильтра PixiJS идёт сверху вниз (проверено: полоса головок — внизу кадра). */
+const VHS_Y_DOWN = true;
 /** Бюджет текстур в видеопамяти, байт (≈ 14 кадров 1920×1080). Телефоны выдерживают это с запасом. */
 const TEXTURE_BUDGET = 120 * 1024 * 1024;
 /** Множитель яркости остальных, когда говорит кто-то другой. */
@@ -128,6 +134,11 @@ export class PixiSceneRenderer implements ISceneRenderer {
 
   private app!: Application;
   private host!: HTMLElement;
+  /** Шейдер записи камкордера (создаётся при первом кадре камкордера). */
+  private vhs: VhsFilter | null = null;
+  /** Шейдер проверен: true — работает, false — нет, null — ещё не проверяли. */
+  private vhsOk: boolean | null = null;
+  private vhsFrame = 0;
   private observer: ResizeObserver | null = null;
   private readonly bgLayer = new Container();
   private readonly spriteLayer = new Container();
@@ -308,6 +319,65 @@ export class PixiSceneRenderer implements ISceneRenderer {
 
   private invalidate(): void {
     this.dirty = true;
+  }
+
+  // ───────────────────────────── камкордер на видеокарте ─────────────────────────────
+
+  /**
+   * Кадр камкордера: движение камеры и искажения записи — шейдером на всём кадре. false — шейдер недоступен
+   * (не скомпилировался на этом устройстве): камкордер вернётся к CSS-трансформации и холсту помех.
+   */
+  camera(frame: CamFrame, signal: SignalProfile, timeMs: number): boolean {
+    if (!this.app || this.destroyed || !this.vhsUsable()) return false;
+    const vhs = (this.vhs ??= new VhsFilter());
+    const stage = this.app.stage;
+    if (stage.filters?.[0] !== vhs) stage.filters = [vhs];
+    this.fitFilterArea();
+    vhs.setFrame({ frame, signal, timeMs, frameNo: this.vhsFrame++, heightPx: this.app.canvas.height, yDown: VHS_Y_DOWN });
+    this.invalidate();
+    return true;
+  }
+
+  /** Снять камкордер с кадра (уровень «выкл», мини-игра, меню). */
+  cameraOff(): void {
+    if (!this.app || this.destroyed) return;
+    if (this.app.stage.filters && this.app.stage.filters.length > 0) {
+      this.app.stage.filters = [];
+      this.invalidate();
+    }
+  }
+
+  /**
+   * Шейдер проверяется один раз: компиляция в том же GL-контексте (WebGL2). Ошибку компиляции PixiJS только
+   * пишет в консоль и рисует чёрный кадр — поэтому проверяем заранее и при ошибке не включаем фильтр вовсе.
+   */
+  private vhsUsable(): boolean {
+    if (this.vhsOk !== null) return this.vhsOk;
+    this.vhsOk = false;
+    try {
+      const gl = (this.app.renderer as WebGLRenderer).gl as WebGL2RenderingContext | WebGLRenderingContext | undefined;
+      if (!gl || typeof WebGL2RenderingContext === 'undefined' || !(gl instanceof WebGL2RenderingContext)) return false;
+      const sh = gl.createShader(gl.FRAGMENT_SHADER);
+      if (!sh) return false;
+      gl.shaderSource(sh, `#version 300 es\nprecision highp float;\n${VHS_FRAGMENT}`);
+      gl.compileShader(sh);
+      const ok = gl.getShaderParameter(sh, gl.COMPILE_STATUS) === true;
+      if (!ok) console.warn('[camcorder] шейдер записи не собрался, остаётся CSS-камкордер:', gl.getShaderInfoLog(sh));
+      gl.deleteShader(sh);
+      this.vhsOk = ok;
+    } catch (e) {
+      console.warn('[camcorder] шейдер записи недоступен:', e);
+    }
+    return this.vhsOk;
+  }
+
+  /** Фильтр — ровно на экран: фон и кадр шире экрана (coverFit), и границы сцены с ним не совпадают. */
+  private fitFilterArea(): void {
+    const W = this.app.screen.width;
+    const H = this.app.screen.height;
+    const a = this.app.stage.filterArea;
+    if (a && a.width === W && a.height === H) return;
+    this.app.stage.filterArea = new Rectangle(0, 0, W, H);
   }
 
   private resize(): void {

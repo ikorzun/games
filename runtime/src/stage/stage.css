@@ -88,6 +88,9 @@
   pointer-events: none;
 }
 .vn-stage.cam-on .vn-stage__camfx { display: block; }
+/* Камкордер на видеокарте (vhs_filter.ts): зерно, помехи и строки рисует шейдер на самой картинке. */
+.vn-stage.cam-gpu .vn-stage__camfx { display: none; }
+.vn-stage.cam-gpu .vn-stage__scan { opacity: 0; }
 /* Строки интерлейса: только vhs_heavy и только при включённых эффектах камеры. */
 .vn-stage__scan {
   background: repeating-linear-gradient(to bottom, rgb(0 0 0 / 0.5) 0 1px, transparent 1px 3px);

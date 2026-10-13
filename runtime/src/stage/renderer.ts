@@ -3,6 +3,7 @@
  * Две реализации: PixiJS (основная, WebGL) и DOM (резерв, если WebGL недоступен). Оболочка Stage
  * (stage.ts) не зависит от того, чем рисуется кадр.
  */
+import type { CamFrame, SignalProfile } from './camcorder';
 import type { ViolenceMode } from '../core/settings';
 import type { SpriteView, TransitionKind, ViewState, SpriteFacing } from '../core/types';
 
@@ -44,6 +45,13 @@ export interface ISceneRenderer {
   readonly minigameRoot?: unknown;
   /** Показать/скрыть слой мини-игр. */
   setMinigameActive?(active: boolean): void;
+  /**
+   * Камкордер на видеокарте (PixiJS): движение камеры и искажения записи шейдером на всём кадре. false — не умеет
+   * (DOM-рендерер, шейдер не собрался): камкордер двигает холст CSS-трансформацией и рисует помехи на своём холсте.
+   */
+  camera?(frame: CamFrame, signal: SignalProfile, timeMs: number): boolean;
+  /** Снять камкордер с кадра. */
+  cameraOff?(): void;
   destroy(): void;
 }
 

@@ -297,6 +297,9 @@ async function scenarioCamera(browser, baseUrl) {
   // Камкордер включается, когда показан первый кадр: Director сначала ждёт картинки блока и проводит переход.
   // На раннере CI без GPU с настоящими 1920×1080 это дольше секунды — ждём сам цикл, а не фиксированную паузу.
   await page.waitForFunction(() => window.__vn.camera().running, null, { polling: 100, timeout: 20000 }).catch(() => undefined);
+  // Первый кадр камкордера на видеокарте компилирует шейдер записи: без GPU (SwiftShader в CI) это может занять
+  // секунды, и всё это время страница стоит. Ждём, пока кадры действительно пошли.
+  await page.waitForFunction(() => window.__vn.camera().frames > 3, null, { polling: 100, timeout: 30000 }).catch(() => undefined);
   await sleep(400);
 
   // Что должно быть нарисовано по файлам, которые реально есть в сборке. Оракул повторяет правила каталога (путь фона из
@@ -373,9 +376,17 @@ async function scenarioCamera(browser, baseUrl) {
   check('реконструкция: HUD записи (точка и REC) показан внутри картинки', c0.rec && hud?.display !== 'none' && hud?.text === 'REC', JSON.stringify(hud));
   const fxCanvas = await page.evaluate(() => {
     const c = document.querySelector('canvas.vn-stage__camfx');
-    return c ? { w: c.width, h: c.height } : null;
+    return c ? { w: c.width, h: c.height, display: getComputedStyle(c).display } : null;
   });
-  check('помехи и зерно рисуются на маленьком холсте (~256 пкс по ширине), а не во весь экран', !!fxCanvas && fxCanvas.w <= 320 && fxCanvas.h <= 360, JSON.stringify(fxCanvas));
+  const renderer = await page.evaluate(() => window.__vn.renderer());
+  if (renderer === 'pixi') {
+    // PixiJS: движение камеры и искажения записи — шейдер на самой картинке (vhs_filter.ts); холста помех и
+    // CSS-трансформации нет (от них мелкий шум мылился).
+    const handTf = await page.evaluate(() => document.querySelector('.vn-stage__hand')?.style.transform ?? '');
+    check('PixiJS: камкордер рисует шейдер на картинке (gpu), холст помех скрыт, обёртку кадра CSS не трясёт', c0.gpu === true && fxCanvas?.display === 'none' && handTf === '' && /cam-gpu/.test(await stageClass()), JSON.stringify({ gpu: c0.gpu, fxCanvas, handTf }));
+  } else {
+    check('DOM-рендерер: помехи и зерно рисуются на маленьком холсте (~256 пкс по ширине), а не во весь экран', !!fxCanvas && fxCanvas.w <= 320 && fxCanvas.h <= 360, JSON.stringify(fxCanvas));
+  }
 
   // Помеха по требованию: класс появляется и гаснет сам (длительность 150–500 мс по часам камкордера;
   // без GPU кадры редкие, а часы внутри не бегут быстрее 100 мс за кадр, поэтому ждём с запасом).
@@ -389,7 +400,7 @@ async function scenarioCamera(browser, baseUrl) {
   await sleep(150);
   const off = await cam();
   check('«Выкл»: цикл остановлен, трансформ и HUD сняты', off.setting === 'off' && off.effective === 'off' && !off.running && off.transform === '' && !off.rec, JSON.stringify(off));
-  check('«Выкл»: на сцене нет классов камкордера', !/cam-on|cam-rec|cam-burst/.test(await stageClass()));
+  check('«Выкл»: на сцене нет классов камкордера, шейдер снят', !/cam-on|cam-rec|cam-burst|cam-gpu/.test(await stageClass()) && off.gpu === false);
   await page.evaluate(() => window.__vn.settings({ cameraFx: 'high' }));
   await sleep(300);
   const high = await cam();

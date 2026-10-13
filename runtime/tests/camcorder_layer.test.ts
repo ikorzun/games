@@ -5,10 +5,25 @@
  * Время, rAF, ГСЧ и 2D-контекст подменены — браузер не нужен.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { grainAlphaMax, mulberry32 } from '../src/stage/camcorder';
-import type { CameraFx } from '../src/stage/camcorder';
+import { grainAlphaMax, mulberry32, signalFor } from '../src/stage/camcorder';
+import type { CamFrame, CameraFx, SignalProfile } from '../src/stage/camcorder';
 import { CamcorderLayer, NOISE_FPS, OVERLAY_WIDTH, PERF, STEP_FPS } from '../src/stage/camcorder_layer';
-import type { DegradeInfo, Overlay2D } from '../src/stage/camcorder_layer';
+import type { CameraSink, DegradeInfo, Overlay2D } from '../src/stage/camcorder_layer';
+
+/** Рендерер-«видеокарта»: принимает кадры (или отказывается — шейдер не собрался). */
+class FakeSink implements CameraSink {
+  readonly frames: Array<{ frame: CamFrame; signal: SignalProfile; timeMs: number }> = [];
+  offs = 0;
+  constructor(public accept = true) {}
+  camera(frame: CamFrame, signal: SignalProfile, timeMs: number): boolean {
+    if (!this.accept) return false;
+    this.frames.push({ frame, signal, timeMs });
+    return true;
+  }
+  cameraOff(): void {
+    this.offs += 1;
+  }
+}
 
 class FakeCtx implements Overlay2D {
   fillStyle: string | CanvasGradient | CanvasPattern = '';
@@ -43,6 +58,7 @@ interface RigInit {
   /** По умолчанию самозащита выключена: тесты крутят цикл на нереальных частотах. */
   adaptive?: boolean;
   onDegrade?: (i: DegradeInfo) => void;
+  sink?: CameraSink;
 }
 
 function rig(init: RigInit = {}) {
@@ -80,6 +96,7 @@ function rig(init: RigInit = {}) {
     stepFps: init.stepFps ?? Number.POSITIVE_INFINITY,
     adaptive: init.adaptive ?? false,
     ...(init.onDegrade ? { onDegrade: init.onDegrade } : {}),
+    ...(init.sink ? { sink: init.sink } : {}),
   });
   rigs.push(layer);
   if (init.level) layer.setLevel(init.level);
@@ -662,5 +679,70 @@ describe('CamcorderLayer: без 2D-контекста', () => {
       throw new Error('нет 2d');
     });
     expect(() => new CamcorderLayer({ stage: document.createElement('div'), hand: document.createElement('div'), canvas, rng: mulberry32(1), raf: () => 1, caf: () => undefined, reducedMotion: () => false, isHidden: () => false })).not.toThrow();
+  });
+});
+
+describe('CamcorderLayer: камкордер на видеокарте (шейдер рендерера PixiJS)', () => {
+  it('кадр уходит рендереру: обёртку кадра CSS не трясёт, холст помех не рисуется, на сцене cam-gpu', () => {
+    const sink = new FakeSink();
+    const r = rig({ sink });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    r.run(500);
+    expect(sink.frames.length).toBeGreaterThan(10);
+    expect(r.layer.gpuActive).toBe(true);
+    expect(r.stage.classList.contains('cam-gpu')).toBe(true);
+    expect(r.hand.style.transform).toBe('');
+    expect(r.ctx.puts).toBe(0); // зерно на холсте не рисуется
+    // для отладки трансформация всё равно видна — в той же записи, что у CSS
+    expect(r.layer.transformText).toMatch(/^translate3d\(-?[\d.]+%, -?[\d.]+%, 0\) rotate\(-?[\d.]+deg\) scale\(1\.\d+\)$/);
+    expect(r.layer.framesPresented).toBeGreaterThan(10);
+    // искажения записи — профиль уровня; часы — часы планировщика
+    const last = sink.frames[sink.frames.length - 1]!;
+    expect(last.signal).toEqual(signalFor('low', false));
+    expect(last.timeMs).toBe(r.layer.scheduler.time);
+    expect(last.frame.on).toBe(true);
+  });
+
+  it('vhs_heavy и «сильно» доходят до шейдера: другой профиль сигнала', () => {
+    const sink = new FakeSink();
+    const r = rig({ sink, level: 'high' });
+    r.layer.setContext('reconstruction', 'vhs_heavy');
+    r.layer.setActive(true);
+    r.run(200);
+    expect(sink.frames[sink.frames.length - 1]!.signal).toEqual(signalFor('high', true));
+  });
+
+  it('шейдер отказал (не собрался) — запасной путь: CSS-трансформация и холст помех, без cam-gpu', () => {
+    const sink = new FakeSink(false);
+    const r = rig({ sink });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    r.run(500);
+    expect(r.layer.gpuActive).toBe(false);
+    expect(r.stage.classList.contains('cam-gpu')).toBe(false);
+    expect(r.hand.style.transform).toMatch(/^translate3d/);
+    expect(r.ctx.puts).toBeGreaterThan(0);
+  });
+
+  it('«выкл», мини-игра и уход со сцены снимают шейдер с кадра', () => {
+    const sink = new FakeSink();
+    const r = rig({ sink });
+    r.layer.setContext('reconstruction', 'vhs');
+    r.layer.setActive(true);
+    r.run(200);
+    const offs0 = sink.offs;
+    r.layer.setSuspended(true); // мини-игра
+    expect(sink.offs).toBeGreaterThan(offs0);
+    expect(r.layer.gpuActive).toBe(false);
+    expect(r.stage.classList.contains('cam-gpu')).toBe(false);
+    r.layer.setSuspended(false);
+    r.run(200, 300);
+    expect(r.layer.gpuActive).toBe(true);
+    const offs1 = sink.offs;
+    r.layer.setLevel('off');
+    expect(sink.offs).toBeGreaterThan(offs1);
+    expect(r.layer.transformText).toBe('');
+    expect(r.stage.classList.contains('cam-gpu')).toBe(false);
   });
 });

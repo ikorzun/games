@@ -18,6 +18,10 @@ import {
   LEVELS,
   makeBurst,
   makeReframe,
+  signalFor,
+  VIRTUAL_LINES,
+  vhsUniforms,
+  virtualLines,
   makeTear,
   MAX_DT,
   mulberry32,
@@ -603,5 +607,67 @@ describe('моторный зум (fx zoom_in)', () => {
     expect(kf.some((k) => k.filter.startsWith('blur('))).toBe(true);
     for (let i = 1; i < kf.length; i++) expect(kf[i]!.offset).toBeGreaterThan(kf[i - 1]!.offset);
     expect(zoomKeyframes(target, false).every((k) => k.filter === 'none')).toBe(true);
+  });
+});
+
+describe('камкордер: искажения записи (шейдер vhs_filter.ts)', () => {
+  it('профиль сигнала: «выкл» — нет, «сильно» сильнее «слабо» по всем искажениям', () => {
+    expect(signalFor('off', false)).toBeNull();
+    const low = signalFor('low', false)!;
+    const high = signalFor('high', false)!;
+    for (const k of ['lumaSmear', 'ringing', 'chromaBleed', 'chromaDelay', 'lumaNoise', 'chromaNoise', 'snow', 'dropout', 'jitter', 'edgeWave', 'headSwitch', 'chromaPhase'] as const) {
+      expect(high[k], k).toBeGreaterThan(low[k]);
+    }
+    expect(high.saturation).toBeLessThan(low.saturation); // запись сильнее теряет цвет
+    expect(low.crawl).toBe(0); // на «слабо» цвет в яркость не просачивается
+    expect(low.interlace).toBe(0); // и строк чересстрочности нет (муар на хронике с Ken Burns)
+  });
+
+  it('«слабо» бережёт картинку: яркость почти не размыта, шум и снег редкие', () => {
+    const low = signalFor('low', false)!;
+    expect(low.lumaSmear).toBeLessThanOrEqual(1);
+    expect(low.lumaNoise).toBeLessThanOrEqual(0.04);
+    expect(low.snow).toBeLessThanOrEqual(0.002);
+    expect(low.dropout).toBeLessThanOrEqual(0.002);
+  });
+
+  it('vhs_heavy: лента «старше» — шум, снег, выпадения и дрожание строк × HEAVY_STRENGTH, строки чересстрочности есть', () => {
+    const base = signalFor('low', false)!;
+    const heavy = signalFor('low', true)!;
+    for (const k of ['lumaNoise', 'chromaNoise', 'snow', 'dropout', 'jitter', 'edgeWave'] as const) {
+      expect(heavy[k], k).toBeCloseTo(base[k] * HEAVY_STRENGTH, 9);
+    }
+    expect(heavy.lumaSmear).toBe(base.lumaSmear); // мягче картинка не становится
+    expect(heavy.interlace).toBeGreaterThan(0);
+  });
+
+  it('виртуальные строки: не тоньше двух пикселей (без муара на телефоне), от 120 до 480', () => {
+    expect(virtualLines(1080)).toBe(480);
+    expect(virtualLines(720)).toBe(360);
+    expect(virtualLines(438)).toBe(219); // телефон: картинка 16:9 по ширине, разрешение 2
+    expect(virtualLines(100)).toBe(120);
+    expect(virtualLines(4000)).toBe(VIRTUAL_LINES);
+  });
+
+  it('униформы кадра: камера в долях кадра и радианах, номер кадра и время свёрнуты, помехи и шов — из кадра планировщика', () => {
+    const s = new CameraScheduler({ rng: mulberry32(3), level: 'low' });
+    s.setContext({ handheld: 1, reframe: true, filter: 'vhs' });
+    s.burstNow();
+    const f = s.step(0);
+    const u = vhsUniforms({ frame: { ...f, tx: 1.5, ty: -0.5, rot: 0.5, scale: 1.02 }, signal: signalFor('low', false)!, timeMs: 1_234_567, frameNo: 5000, heightPx: 720, yDown: true });
+    expect(u.uCam[0]).toBeCloseTo(0.015, 9);
+    expect(u.uCam[1]).toBeCloseTo(-0.005, 9);
+    expect(u.uCam[2]).toBeCloseTo((0.5 * Math.PI) / 180, 9);
+    expect(u.uCam[3]).toBeCloseTo(1.02, 9);
+    expect(u.uClock[0]).toBeLessThan(600); // время свёрнуто: mediump не теряет точность за долгую сессию
+    expect(u.uClock[1]).toBeLessThan(1009);
+    expect(u.uClock[2]).toBe(360);
+    expect(u.uClock[3]).toBe(1);
+    expect(u.uBurst[0]).toBeGreaterThanOrEqual(0); // всплеск идёт: сила — огибающая × сила
+    expect(u.uBurst[2]).toBeGreaterThan(0); // высота полосы трекинга
+    const idle = vhsUniforms({ frame: IDLE_FRAME, signal: signalFor('high', false)!, timeMs: 0, frameNo: 0, heightPx: 1080, yDown: false });
+    expect(idle.uBurst).toEqual([0, 0, 0, 0]);
+    expect(idle.uTear).toEqual([0, 0, 0, 0]);
+    expect(idle.uClock[3]).toBe(-1);
   });
 });
