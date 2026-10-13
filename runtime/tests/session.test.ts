@@ -489,4 +489,10 @@ describe('foundOf: находки осмотра из итогового сос�
     expect(foundOf({ found: [1, 2] })).toBeUndefined();
     expect(foundOf({ marks: ['x'] })).toBeUndefined();
   });
+
+  it('сейв оболочки мини-игр: список лежит в t (осмотр, режим дела)', () => {
+    expect(foundOf({ v: 1, over: 'partial', t: { found: ['pills'], misses: 4 } })).toEqual(['pills']);
+    expect(foundOf({ v: 1, t: { found: 'x' } })).toBeUndefined();
+    expect(foundOf({ v: 1, t: null })).toBeUndefined();
+  });
 });

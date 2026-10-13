@@ -18,7 +18,7 @@
 import type { Container } from 'pixi.js';
 import type { Params } from '../core/i18n';
 import type { MinigameOutcomeKind, MinigameResult } from '../core/types';
-import { h } from '../ui/dom';
+import { fill, h } from '../ui/dom';
 import { icon } from '../ui/icons';
 import { GreyBoxMinigame } from './grey_box';
 import { Countdown, formatTime } from './mg_timer';
@@ -126,6 +126,8 @@ interface Chrome {
   result: HTMLElement;
   resultTitle: HTMLElement;
   resultNote: HTMLElement;
+  /** Подробности итога от игры (resultDetails); пусто — скрыто. */
+  resultBody: HTMLElement;
   next: HTMLButtonElement;
   /** Только у раскладки 'stage'. */
   stage?: StageChrome;
@@ -220,6 +222,10 @@ export abstract class MinigameShell implements IMinigame {
   protected focusField(): void {
     /* по умолчанию — никуда */
   }
+  /** Подробности на экране итога (под «Найдено»): например, что найдено и что это меняет в деле. По умолчанию нет. */
+  protected resultDetails(): HTMLElement[] {
+    return [];
+  }
 
   // ───────────────────────────── помощники для игры ─────────────────────────────
 
@@ -299,6 +305,8 @@ export abstract class MinigameShell implements IMinigame {
       u.resultTitle.textContent = t(OUTCOME_KEY[over]);
       const note = t('ui.minigame.found', { n: p.n, total: p.total });
       u.resultNote.textContent = this.overWhy === 'time' ? `${t('ui.minigame.time_up')}. ${note}` : note;
+      fill(u.resultBody, ...this.resultDetails());
+      u.resultBody.hidden = u.resultBody.childElementCount === 0;
       u.next.textContent = t('ui.common.next');
     }
 
@@ -543,6 +551,7 @@ export abstract class MinigameShell implements IMinigame {
 
     const resultTitle = h('strong', { class: 'mg-shell__result-title' });
     const resultNote = h('span', { class: 'mg-shell__result-note' });
+    const resultBody = h('div', { class: 'mg-shell__result-body', hidden: true });
     const next = h('button', {
       class: 'mg-btn mg-shell__btn is-next is-primary',
       type: 'button',
@@ -552,8 +561,8 @@ export abstract class MinigameShell implements IMinigame {
         },
       },
     });
-    const result = h('div', { class: 'mg-shell__result', hidden: true }, h('div', { class: 'mg-shell__result-text' }, resultTitle, resultNote), next);
-    return { title, brief, intro, progress, fails, failsText, pips, timer, timerText, timerBar, status, actions, hint, skip, result, resultTitle, resultNote, next };
+    const result = h('div', { class: 'mg-shell__result', hidden: true }, h('div', { class: 'mg-shell__result-text' }, resultTitle, resultNote, resultBody), next);
+    return { title, brief, intro, progress, fails, failsText, pips, timer, timerText, timerBar, status, actions, hint, skip, result, resultTitle, resultNote, resultBody, next };
   }
 
   private buildChrome(body: HTMLElement): Chrome {

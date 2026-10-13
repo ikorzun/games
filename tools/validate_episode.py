@@ -745,6 +745,7 @@ def collect_loc_keys(ep: dict) -> set[str]:
 
 LENGTH_LIMITS = {  # роль строки -> максимум символов (любой язык); см. docs/architecture/05-localization.md §4
     "option": 60, "date_stamp": 32, "location": 56, "lower_third": 48, "chapter": 40, "title": 40, "fact": 120, "say": 220, "narrate": 240,
+    "why": 160,
 }
 
 
@@ -756,6 +757,9 @@ def key_roles(ep: dict) -> dict[str, str]:
             roles[b["title_key"]] = "title"
     for mg in ep.get("minigames", {}).values():
         roles[mg["title_key"]] = "title"
+        for hs in (mg.get("config") or {}).get("hotspots") or []:
+            if isinstance(hs, dict) and hs.get("why_key"):
+                roles[hs["why_key"]] = "why"  # осмотр: что находка меняет в деле (экран итога)
     for e in ep.get("endings", []):
         roles[e["title_key"]] = "title"
     for a in ep.get("archive_items", []):

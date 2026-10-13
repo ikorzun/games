@@ -19,6 +19,7 @@ import { EP01_PATH, hasRepoContent, loadEpisode, loadStrings } from './helpers/c
 import { btn, click, defOf, mountGame, press, q, rig, sizeOf, texts, UI } from './helpers/mg_kit';
 import type { Rig } from './helpers/mg_kit';
 import { miniEpisode } from './helpers/mini';
+import { foundOf } from '../src/session';
 
 const W = 640;
 const H = 360;
@@ -32,6 +33,8 @@ const STRINGS: Record<string, string> = {
   'hs.pills': 'Лекарства',
   'hs.photo': 'Фотография внука',
   'hs.slippers': 'Домашние тапочки',
+  'why.glasses': 'Без очков она не читает',
+  'why.slippers': 'Из дома без тапочек не уходят',
 };
 
 const CFG = {
@@ -430,6 +433,61 @@ describe('ход игры: находки, промахи, исходы по п�
     expect(q(r.dom, '.mg-shell__fails-text').textContent).toBe('Промахи: 0 из 3'); // клик без раскладки игнорируется
     press(stage, 'Enter'); // прицел в центре: мимо всех зон
     expect(q(r.dom, '.mg-shell__fails-text').textContent).toBe('Промахи: 1 из 3');
+  });
+});
+
+describe('экран итога: что найдено и что это меняет в деле (решение владельца 2026-10-13)', () => {
+  const WHY = { ...CFG, hotspots: CFG.hotspots.map((x) => (x.id === 'glasses' || x.id === 'slippers' ? { ...x, why_key: `why.${x.id}` } : x)) };
+
+  it('найденное по порядку находок: номер, название и строка why_key; без why_key — только название', () => {
+    const { r, zone } = play({}, WHY);
+    zone('slippers');
+    zone('glasses');
+    zone('pills');
+    zone('photo');
+    const body = q(r.dom, '.mg-shell__result-body');
+    expect(body.hidden).toBe(false);
+    expect(texts(body, '.mg-scene__find')).toEqual([
+      '1Домашние тапочкиИз дома без тапочек не уходят',
+      '2Очки на тумбочкеБез очков она не читает',
+      '3Лекарства',
+      '4Фотография внука',
+    ]);
+    expect(body.querySelectorAll('.mg-scene__why')).toHaveLength(2);
+  });
+
+  it('при «частично» и неудаче — тоже: находки срабатывают при любом итоге; ничего не нашёл — списка нет', () => {
+    const part = play({}, WHY);
+    part.zone('glasses');
+    part.miss();
+    part.miss();
+    part.miss();
+    expect(q(part.r.dom, '.mg-shell__result').dataset.outcome).toBe('partial');
+    expect(texts(part.r.dom, '.mg-scene__find')).toEqual(['1Очки на тумбочкеБез очков она не читает']);
+    document.body.replaceChildren();
+    const none = play({}, WHY);
+    none.miss();
+    none.miss();
+    none.miss();
+    expect(q(none.r.dom, '.mg-shell__result').dataset.outcome).toBe('fail');
+    expect(q(none.r.dom, '.mg-shell__result-body').hidden).toBe(true);
+  });
+
+  it('смена языка перерисовывает строки итога', () => {
+    const { r, zone } = play({}, WHY);
+    zone('glasses');
+    zone('pills');
+    zone('photo');
+    r.setStrings({ ...STRINGS, 'hs.glasses': 'Glasses', 'why.glasses': 'She cannot read without them' });
+    r.fireLanguageChange();
+    expect(texts(r.dom, '.mg-scene__find')[0]).toBe('1GlassesShe cannot read without them');
+  });
+
+  it('итоговый сейв отдаёт находки в сюжет: foundOf видит и необязательную', () => {
+    const { m, zone } = play({}, WHY);
+    zone('slippers');
+    zone('glasses');
+    expect(foundOf(m.serialize())).toEqual(['slippers', 'glasses']);
   });
 });
 

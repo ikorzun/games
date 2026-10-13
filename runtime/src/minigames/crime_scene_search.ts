@@ -11,7 +11,8 @@
  * С клавиатуры — прицел: стрелки двигают, Enter осматривает.
  *
  * Итог: найдены все обязательные зоны → success; хотя бы одна → partial; ни одной → fail.
- * Игра заканчивается, когда найдено всё обязательное, промахов стало max_misses или вышло время.
+ * Игра заканчивается, когда найдено всё обязательное, промахов стало max_misses или вышло время. На экране итога —
+ * найденное по порядку и под каждой находкой, что она значит для дела (why_key): находки срабатывают при любом итоге.
  *
  * Раскладка «сцена» (макеты Figma «Claude» 2026-10-13): картинка во весь экран, перед партией — вступление с вопросом
  * и «Начать осмотр», по ходу — перетаскиваемый блок со списком: найденное — номер на белом и название, ненайденное
@@ -39,6 +40,8 @@ export interface Hotspot {
   id: string;
   rect: Rect;
   labelKey: string | null;
+  /** Что находка значит и что меняет в деле — строка экрана итога (why_key); null — только название. */
+  whyKey: string | null;
   required: boolean;
 }
 
@@ -87,7 +90,7 @@ export function parseSceneConfig(cfg: MinigameConfig, id = ''): SceneConfig | nu
     const [x, y, w, hh] = (r as number[]).map(clamp01) as [number, number, number, number];
     if (w <= 0 || hh <= 0) return null;
     seen.add(id);
-    hotspots.push({ id, rect: [x, y, w, hh], labelKey: asStr(item.label_key), required: item.required === true });
+    hotspots.push({ id, rect: [x, y, w, hh], labelKey: asStr(item.label_key), whyKey: asStr(item.why_key), required: item.required === true });
   }
   const list = cfg.list === true;
   if (list) {
@@ -358,6 +361,23 @@ class CrimeSceneSearch extends MinigameShell {
 
   private label(hs: Hotspot): string {
     return hs.labelKey ? this.t(hs.labelKey) : hs.id;
+  }
+
+  /** Экран итога: номер, название и что находка меняет в деле — в порядке находок. */
+  protected override resultDetails(): HTMLElement[] {
+    const rows = this.found.flatMap((id, i) => {
+      const hs = this.byId.get(id);
+      if (!hs) return [];
+      return [
+        h(
+          'li',
+          { class: 'mg-scene__find', data: { id } },
+          h('span', { class: 'mg-scene__num', text: String(i + 1) }),
+          h('div', { class: 'mg-scene__find-text' }, h('span', { class: 'mg-scene__name', text: this.label(hs) }), hs.whyKey ? h('p', { class: 'mg-scene__why', text: this.t(hs.whyKey) }) : null),
+        ),
+      ];
+    });
+    return rows.length > 0 ? [h('ol', { class: 'mg-scene__finds' }, ...rows)] : [];
   }
 
   // ───────────────────────────── ввод ─────────────────────────────

@@ -452,8 +452,13 @@ export class Session {
   }
 }
 
-/** Найденные зоны из итогового состояния мини-игры (`{ found: string[] }`); нет списка — undefined. */
+/**
+ * Найденные зоны из итогового состояния мини-игры: `{ found: string[] }` или сейв оболочки мини-игр, где состояние
+ * игры лежит в `t` (`{ v, over, t: { found } }`); нет списка — undefined.
+ */
 export function foundOf(state: unknown): string[] | undefined {
-  const found = typeof state === 'object' && state !== null ? (state as { found?: unknown }).found : undefined;
+  const rec = (v: unknown): { found?: unknown; t?: unknown } | null => (typeof v === 'object' && v !== null ? v : null);
+  const s = rec(state);
+  const found = s?.found ?? rec(s?.t)?.found;
   return Array.isArray(found) && found.every((x) => typeof x === 'string') ? [...found] : undefined;
 }

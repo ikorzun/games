@@ -304,6 +304,42 @@
   border-color: var(--mg-accent);
 }
 
+/* Экран итога: найденное по порядку — номер на белом, название и что находка меняет в деле. */
+.mg-scene__finds {
+  display: flex;
+  flex-direction: column;
+  gap: calc(16 * var(--u, 1px));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: calc(16 * var(--u, 1px));
+  line-height: 1.2;
+}
+.mg-scene__find {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(13 * var(--u, 1px));
+}
+.mg-scene__find .mg-scene__num {
+  color: #000;
+  background: #fff;
+  border-color: #fff;
+}
+.mg-scene__find-text {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--u, 1px));
+  min-width: 0;
+  padding-top: calc(5 * var(--u, 1px));
+}
+.mg-scene__find .mg-scene__name {
+  color: #fff;
+}
+.mg-scene__why {
+  margin: 0;
+  color: rgb(255 255 255 / 0.72);
+}
+
 /* Описание для скринридера */
 .mg-scene__help {
   position: absolute;

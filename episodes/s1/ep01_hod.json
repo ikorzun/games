@@ -4919,6 +4919,7 @@
        0.1215
       ],
       "label_key": "ep01.h.mg_flat_inspect.hs.photo",
+      "why_key": "ep01.h.mg_flat_inspect.why.photo",
       "required": true,
       "archive_unlock": "n_photo",
       "effects": [
@@ -4938,6 +4939,7 @@
        0.0718
       ],
       "label_key": "ep01.h.mg_flat_inspect.hs.glasses",
+      "why_key": "ep01.h.mg_flat_inspect.why.glasses",
       "required": true,
       "archive_unlock": "n_glasses",
       "effects": [
@@ -4957,6 +4959,7 @@
        0.044
       ],
       "label_key": "ep01.h.mg_flat_inspect.hs.pills",
+      "why_key": "ep01.h.mg_flat_inspect.why.pills",
       "required": false,
       "archive_unlock": "n_pills",
       "effects": [
