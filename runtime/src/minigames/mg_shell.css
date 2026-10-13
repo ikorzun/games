@@ -280,7 +280,8 @@
    выбор и документ); по ходу — перетаскиваемый блок справа внизу. --u — пиксель макета: 16 px макета = кегль игры. */
 
 .mg-stage {
-  --u: calc(var(--fs, 16px) * var(--font-scale, 1) / 16);
+  --u: calc(var(--fs-grid, 16px) * var(--font-scale, 1) / 16);
+  --ut: calc(var(--fs, 18px) * var(--font-scale, 1) / 16); /* основной текст: на 2 px крупнее макета */
   position: absolute;
   inset: 0;
   display: block;
@@ -336,7 +337,7 @@
 }
 .mg-stage__text,
 .mg-stage .mg-shell__result-note {
-  font-size: calc(16 * var(--u));
+  font-size: calc(16 * var(--ut));
   line-height: 1.2;
   color: rgb(255 255 255 / 0.72);
 }
@@ -354,7 +355,7 @@
 }
 .mg-stage .mg-shell__intro {
   margin: 0;
-  font-size: calc(16 * var(--u));
+  font-size: calc(16 * var(--ut));
 }
 .mg-stage .mg-shell__result-text {
   display: flex;
@@ -367,7 +368,7 @@
   min-width: calc(197 * var(--u));
   min-height: 0;
   padding: calc(12 * var(--u));
-  font-size: calc(16 * var(--u));
+  font-size: calc(16 * var(--ut));
   line-height: normal;
   color: #fff;
   background: var(--mg-accent);
@@ -390,7 +391,7 @@
   align-items: center;
   justify-content: flex-end;
   gap: calc(8 * var(--u));
-  font-size: calc(16 * var(--u));
+  font-size: calc(16 * var(--ut));
   line-height: 1;
   color: #fff;
   cursor: grab;
@@ -434,7 +435,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: calc(16 * var(--u));
+  font-size: calc(16 * var(--ut));
   line-height: 0.96;
 }
 .mg-stage .mg-shell__progress {
@@ -470,7 +471,7 @@
 }
 .mg-stage .mg-shell__timer {
   margin-left: auto;
-  font-size: calc(14 * var(--u));
+  font-size: calc(14 * var(--ut));
 }
 .mg-stage .mg-shell__foot {
   position: static;
@@ -483,7 +484,7 @@
   flex: 1 1 auto;
   min-height: 0;
   padding: calc(8 * var(--u)) calc(10 * var(--u));
-  font-size: calc(14 * var(--u));
+  font-size: calc(14 * var(--ut));
   color: #fff;
   background: none;
   border: 0.5px solid rgb(255 255 255 / 0.4);

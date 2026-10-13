@@ -25,8 +25,10 @@
   --font-body: 'Cormorant Garamond', 'Times New Roman', Times, serif;
   --font-title: 'Tenor Sans', 'Helvetica Neue', Arial, sans-serif;
   --font-mono: var(--font-body);
-  /* Кегль основного текста: ≥ 16 px на мобильном, ≥ 20 px на десктопе (03-visual-language §8). */
-  --fs: 16px;
+  /* Кегль основного текста: 18 px на мобильном, 22 px на десктопе (03-visual-language §8) — Cormorant мельче прежнего
+     шрифта, +2 px (решение владельца 2026-10-13). Сетка макетов (--u: отступы, размеры, заголовки) — от прежних 16 / 20. */
+  --fs-grid: 16px;
+  --fs: calc(var(--fs-grid) + 2px);
   --font-scale: 1;
   /* Крупные заголовки макетов (32 px макета) в пикселях макета: на мобильном на 6 меньше (решение владельца 2026-10-13). */
   --h1: 26;
@@ -45,7 +47,7 @@
   color-scheme: dark;
 }
 @media (min-width: 900px) and (min-height: 540px) {
-  :root { --fs: 20px; --h1: 32; }
+  :root { --fs-grid: 20px; --h1: 32; }
 }
 /* Индикация камеры по-русски: кириллица есть только у JetBrains Mono. */
 html[lang='ru'] { --font-osd: var(--font-cyr); }
@@ -73,7 +75,7 @@ body {
   overflow: hidden;
   background: #000;
   color: var(--c-text);
-  font: 16px / 1.4 var(--font-body);
+  font: 18px / 1.4 var(--font-body);
   /* У шрифтов нет начертания 700: не синтезировать жирный, брать ближайшее (500). */
   font-synthesis: none;
   -webkit-tap-highlight-color: transparent;
@@ -172,8 +174,8 @@ body {
 
 /* Макет реплик в Figma (Claude, узел 1232:3796; решение владельца 2026-10-13): над текстом — портрет, имя и подпись;
    под каждой строкой — своя полоса чёрного с запасом 5 px по бокам, без тени (40 %, в макете 24 % — решение владельца
-   2026-10-13); за напечатанным — красная плашка (40 %), в ней белый «>». Размеры макета даны для кегля 15 px и пересчитаны в em: кегль у нас свой (--fs, ≥ 16 px на телефоне и
-   ≥ 20 px на десктопе), и всё растёт вместе с ним. Шаг строк — 20 px макета, как высота полосы: в макете текст набран
+   2026-10-13); за напечатанным — красная плашка (40 %), в ней белый «>». Размеры макета даны для кегля 15 px и пересчитаны в em: кегль у нас свой (--fs: 18 px на телефоне и
+   22 px на десктопе), и всё растёт вместе с ним. Шаг строк — 20 px макета, как высота полосы: в макете текст набран
    с межстрочным «normal» (≈ 17 px), и со второй строки буквы съезжали бы с полос. */
 .vn-textbox {
   --text-size: calc(var(--fs) * var(--font-scale));
@@ -437,7 +439,7 @@ body {
   flex-direction: column;
   gap: calc(5 * var(--u));
   width: var(--col);
-  font-size: calc(19 * var(--u)); /* кнопки наследуют кегль (.vn-root button { font: inherit }) */
+  font-size: calc(19 * var(--ut)); /* кнопки наследуют кегль (.vn-root button { font: inherit }) */
   line-height: 1.2;
   pointer-events: none;
 }
@@ -472,7 +474,7 @@ body {
   box-sizing: border-box;
   width: calc(36 * var(--u));
   height: calc(36 * var(--u));
-  font-size: calc(16 * var(--u));
+  font-size: calc(16 * var(--ut));
   line-height: 1.2;
   border: 1px solid rgb(255 255 255 / 0.3);
   border-radius: 50%;
@@ -657,19 +659,21 @@ body {
   overflow: auto;
   pointer-events: auto;
   background: rgb(0 0 0 / 0.74);
-  font-size: max(16px, calc(var(--fs) * 0.9));
+  font-size: max(18px, calc(var(--fs) * 0.9));
   opacity: 0;
   transition: opacity 0.2s ease;
 }
 .vn-screen.is-in { opacity: 1; }
 /* Предупреждение, выбор и документ (макеты Figma «Claude» 2026-10-13): кадр под ними размыт и затемнён на 60 %. --u —
-   пиксель макета: 16 px макета = кегль игры (--fs, как в окне реплики), размеры растут вместе с настройкой шрифта.
+   пиксель макета для размеров и заголовков (16 px макета = 16 / 20 px), --ut — для основного текста (на 2 px крупнее
+   макета: 16 px макета = кегль игры --fs); всё растёт вместе с настройкой шрифта.
    Размытие — только при мыши: на телефоне размытие поверх живого кадра дорого (решение 2026-10-10), там затемнение
    плотнее (85 %), чтобы прежняя реплика не просвечивала сквозь текст. Предупреждение — на своём чёрном фоне. */
 .vn-warning,
 .vn-document,
 .vn-choices {
-  --u: calc(var(--fs) * var(--font-scale) / 16);
+  --u: calc(var(--fs-grid) * var(--font-scale) / 16);
+  --ut: calc(var(--fs) * var(--font-scale) / 16);
 }
 .vn-document,
 .vn-choices {
@@ -937,8 +941,8 @@ body {
 .vn-ep__lock { position: absolute; inset: 0; display: grid; place-items: center; color: var(--crt-dim); }
 .vn-ep__lock .vn-ico { width: clamp(22px, 2.4vmin, 34px); height: clamp(22px, 2.4vmin, 34px); }
 .vn-ep__badge { position: absolute; left: 8px; top: 8px; padding: 2px 7px; font: 400 clamp(10px, 1vmin, 13px) var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: #fff; background: var(--crt-red); text-shadow: none; }
-.vn-ep__num { font: 300 clamp(11px, 1.1vmin, 17px) var(--font-mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--crt-dim); }
-.vn-ep__name { font: 400 clamp(14px, 1.6vmin, 24px) / 1.3 var(--font-mono); letter-spacing: 0.02em; }
+.vn-ep__num { font: 300 clamp(13px, calc(1.1vmin + 2px), 19px) var(--font-mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--crt-dim); }
+.vn-ep__name { font: 400 clamp(16px, calc(1.6vmin + 2px), 26px) / 1.3 var(--font-mono); letter-spacing: 0.02em; }
 .vn-ep.is-locked .vn-ep__name { font-weight: 300; color: #6d6964; }
 .vn-ep__restart {
   align-self: flex-start;
@@ -973,8 +977,8 @@ body {
   .vn-menu__shelf > :first-child,
   .vn-menu__shelf > :last-child { margin: 0 auto; }
   .vn-ep { flex: 0 0 auto; width: 100%; max-width: 520px; }
-  .vn-ep__num { font-size: 12px; }
-  .vn-ep__name { font-size: 17px; }
+  .vn-ep__num { font-size: 14px; }
+  .vn-ep__name { font-size: 19px; }
   .vn-menu__lang-code { display: none; } /* код языка — в подсказке глобуса; в узкой шапке наезжал на сжатый логотип */
 }
 
@@ -1002,14 +1006,14 @@ body {
   max-height: 100%;
 }
 .vn-warning__title { margin: 0; font: 400 calc(var(--h1) * var(--u)) / 0.96 var(--font-title); color: #fff; }
-.vn-warning__body { font-size: calc(16 * var(--u)); line-height: 1.2; color: rgb(255 255 255 / 0.9); }
+.vn-warning__body { font-size: calc(16 * var(--ut)); line-height: 1.2; color: rgb(255 255 255 / 0.9); }
 .vn-warning__body p { margin: 0; }
 .vn-warning__body p + p { margin-top: 1.2em; }
 .vn-warning__actions { display: flex; gap: calc(7 * var(--u)); }
 .vn-warning__actions .vn-btn {
   min-height: 0;
   padding: calc(12 * var(--u));
-  font-size: calc(16 * var(--u));
+  font-size: calc(16 * var(--ut));
   line-height: normal;
   color: #fff;
   background: none;
@@ -1134,7 +1138,7 @@ body {
 .vn-document__title { margin: 0; font: 400 calc(20 * var(--u)) / normal var(--font-title); color: #fff; }
 .vn-document__tag {
   padding: calc(2 * var(--u)) calc(4 * var(--u));
-  font-size: calc(14 * var(--u));
+  font-size: calc(14 * var(--ut));
   line-height: 1;
   color: #fff;
   text-transform: lowercase;

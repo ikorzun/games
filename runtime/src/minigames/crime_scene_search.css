@@ -75,7 +75,7 @@
   width: calc(28 * var(--u, 1px));
   height: calc(28 * var(--u, 1px));
   color: #000;
-  font: 400 calc(16 * var(--u, 1px)) / calc(28 * var(--u, 1px)) var(--font-body, serif);
+  font: 400 calc(16 * var(--ut, 1px)) / calc(28 * var(--u, 1px)) var(--font-body, serif);
   text-align: center;
   background: #fff;
   border-radius: 50%;
@@ -92,7 +92,7 @@
   padding: 2px 9px;
   overflow: hidden;
   color: #fff;
-  font: calc(14 * var(--u, 1px)) / 1.35 var(--font-body, serif);
+  font: calc(14 * var(--ut, 1px)) / 1.35 var(--font-body, serif);
   white-space: nowrap;
   text-overflow: ellipsis;
   background: rgb(0 0 0 / 0.6);
@@ -270,7 +270,7 @@
   align-items: center;
   gap: calc(13 * var(--u, 1px));
   padding: calc(8 * var(--u, 1px)) calc(8 * var(--u, 1px)) calc(8 * var(--u, 1px)) 0;
-  font-size: calc(16 * var(--u, 1px));
+  font-size: calc(16 * var(--ut, 1px));
   line-height: 1;
   color: rgb(255 255 255 / 0.3);
 }
@@ -312,7 +312,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: calc(16 * var(--u, 1px));
+  font-size: calc(16 * var(--ut, 1px));
   line-height: 1.2;
 }
 .mg-scene__find {
