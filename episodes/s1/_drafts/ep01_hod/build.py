@@ -180,6 +180,10 @@ for p in PLAN:
           'cast': [] if p['kind'] == 'insert' else [{'who': w} for w in p['cast']], 'file': FILE(p['id'], p['set'])}
     if p['id'] in OTS:
         sh['from'], sh['focus'] = OTS[p['id']]
+    for c in sh['cast']:  # маска человека для подсветки того, на ком внимание (tools/hod/masks.py)
+        mask = f'assets/ep01/hod/{p["set"]}/{p["id"]}.{c["who"]}.webp'
+        if os.path.exists(os.path.join(ROOT, mask)):
+            c['mask'] = mask
     SHOTS.append(sh)
 # Контора без помощницы: тот же кадр через плечо на Ковригина (на нём Люды не видно).
 SHOTS.append({'id': 'sh_notary_alone_ots', 'set': 'hod_notary_alone', 'bg': 'bg_hod_notary_alone', 'kind': 'ots', 'angle': 'eye',

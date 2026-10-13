@@ -213,6 +213,9 @@ def shots_check(ep: dict, rep: Report) -> None:
             rep.warn(f"{where}: insert с персонажами в cast — монтажёр считает его кадром без лиц")
         if not os.path.exists(os.path.join(ROOT, sh["file"])):
             rep.warn(f"{where}: файла {sh['file']} нет в репозитории (рантайм покажет спрайты)")
+        for c in sh.get("cast", []):
+            if c.get("mask") and not os.path.exists(os.path.join(ROOT, c["mask"])):
+                rep.warn(f"{where}: маски {c['mask']} нет в репозитории (без подсветки {c['who']})")
     for name, lst in sets.items():
         bg_set = {sh["bg"] for sh in lst}
         if len(bg_set) > 1:

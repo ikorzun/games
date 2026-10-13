@@ -42,6 +42,8 @@ interface Rig {
   archiveOpens: { n: number };
   fx: Array<{ fx: string; ms: number; intensity: number; instant: boolean }>;
   mgActive: boolean[];
+  /** Кого подсветить просили (stage.setFocus). */
+  focus: (string | null)[];
   platform: FakePlatform;
 }
 
@@ -57,6 +59,7 @@ function makeRig(over: Partial<Settings> = {}, presentation: Presentation = 'pro
   const captions = new CaptionLayer(captionsHost);
   const fx: Rig['fx'] = [];
   const mgActive: boolean[] = [];
+  const focus: (string | null)[] = [];
   const stage = {
     minigameRoot: {},
     playFx: (f: string, ms: number, intensity: number, instant: boolean): Promise<void> => {
@@ -65,6 +68,9 @@ function makeRig(over: Partial<Settings> = {}, presentation: Presentation = 'pro
     },
     setMinigameActive: (a: boolean): void => {
       mgActive.push(a);
+    },
+    setFocus: (who: string | null): void => {
+      focus.push(who);
     },
   } as unknown as Stage;
   const settings: Settings = { ...DEFAULT_SETTINGS, ...over };
@@ -87,7 +93,7 @@ function makeRig(over: Partial<Settings> = {}, presentation: Presentation = 'pro
     onRollback: () => void (rollbacks.n += 1),
     ...extra,
   });
-  const rig: Rig = { ui, kit, root, captionsHost, settings, vars, view, actions, rollbacks, archiveOpens, fx, mgActive, platform };
+  const rig: Rig = { ui, kit, root, captionsHost, settings, vars, view, actions, rollbacks, archiveOpens, fx, mgActive, focus, platform };
   rigs.push(rig);
   return rig;
 }
@@ -482,6 +488,21 @@ describe('DomUI: Skip прочитанного', () => {
     r.ui.setSkip(true);
     void r.ui.showDocument({ kind: 'document', doc: 'd', text_key: null, zoomable: false, adds_to_archive: null }, baseCtx(c));
     expect(r.ui.skipOn).toBe(false);
+  });
+});
+
+describe('DomUI: подсветка того, на ком внимание', () => {
+  it('реплика — говорящий; мысли героя и выбор — герой (frame.player_character); рассказчик — никто', () => {
+    const hero = miniEpisode({ s1: { steps: [{ do: 'end', ending: 'e_main' }] } }, { pov: 'a' });
+    const r = makeRig({ textSpeed: 5 }, 'procedural', { episode: hero });
+    void r.ui.showLine(lineP('l.1', { who: 'b' }), lineCtx(ctl()));
+    void r.ui.showLine(lineP('l.1', { style: 'narrate', who: null, narrate_style: 'inner' }), lineCtx(ctl()));
+    void r.ui.showLine(lineP('l.1', { style: 'narrate', who: null, narrate_style: 'voiceover' }), lineCtx(ctl()));
+    void r.ui.showChoice(
+      { kind: 'choice', id: 'ch', prompt_key: null, choice_kind: null, timer_ms: null, default_option: null, remember: false, options: [optView('a', 'c.a')], deduction: null },
+      baseCtx(ctl()),
+    );
+    expect(r.focus).toEqual(['b', 'a', null, 'a']);
   });
 });
 

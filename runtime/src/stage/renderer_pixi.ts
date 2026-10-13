@@ -26,6 +26,8 @@ import { isOffscreen, POSITION_X, SILHOUETTE_ALPHA, SPRITE_FIT, SPRITE_MAX_WIDTH
 import type { ISceneRenderer, SlotStates } from './renderer';
 import type { CamFrame, SignalProfile } from './camcorder';
 import { VHS_FRAGMENT, VhsFilter } from './vhs_filter';
+import { fadeAt, fadeDone, FOCUS_FRAGMENT, FOCUS_MS, FocusFilter } from './focus_filter';
+import type { FocusFade } from './focus_filter';
 
 const FONT = 'PT Sans, Noto Sans, Arial, sans-serif';
 /** y текстуры фильтра PixiJS идёт сверху вниз (проверено: полоса головок — внизу кадра). */
@@ -44,6 +46,13 @@ interface Tween {
 }
 
 type Mode = 'none' | 'loading' | 'image' | 'placeholder' | 'solid';
+
+/** Маска того, на ком внимание, на текущем кадре покрытия: адрес, текстура (null — грузится) и вес во времени. */
+interface FocusSlot {
+  url: string;
+  tex: Texture | null;
+  fade: FocusFade;
+}
 
 interface SpriteNode {
   view: SpriteView;
@@ -165,6 +174,14 @@ export class PixiSceneRenderer implements ISceneRenderer {
   private cgId: string | null = null;
   private shotId: string | null = null;
   private speaker: string | null = null;
+  /** Подсветка того, на ком внимание (focus_filter.ts): прежняя маска гаснет, новая проявляется. */
+  private focusWho: string | null = null;
+  private focusCur: FocusSlot | null = null;
+  private focusPrev: FocusSlot | null = null;
+  private focusFilter: FocusFilter | null = null;
+  private focusOk: boolean | null = null;
+  /** Когда сменился кадр: фокус сразу после склейки переключается без перехода. */
+  private shotCutAt = -Infinity;
   private violence: ViolenceMode = 'full';
   /** Спрайты, уходящие со сцены: их уже нет в nodes, но анимация исчезновения доигрывается. */
   private readonly leaving = new Set<SpriteNode>();
@@ -231,6 +248,7 @@ export class PixiSceneRenderer implements ISceneRenderer {
     this.resolveSlot(this.bgSlot, this.assets.bgChain(view.bg));
     this.shotId = view.shot ?? null;
     this.resolveSlot(this.shotSlot, this.shotChain(this.shotId));
+    this.retargetFocus(false);
     this.cgId = view.cg;
     this.cgFade = 1;
     this.resolveSlot(this.cgSlot, view.cg ? this.assets.cgChain(view.cg) : null);
@@ -240,8 +258,42 @@ export class PixiSceneRenderer implements ISceneRenderer {
   /** Кадр покрытия: вместо спрайтов, под CG; грузится — виден прежний, файла нет — спрайты (08 §4.9). */
   setShot(shot: string | null): void {
     this.shotId = shot;
+    this.shotCutAt = performance.now();
     this.resolveSlot(this.shotSlot, this.shotChain(shot));
+    this.retargetFocus(false);
     this.layout();
+  }
+
+  setFocus(who: string | null): void {
+    if (who === this.focusWho) return;
+    this.focusWho = who;
+    this.retargetFocus(performance.now() - this.shotCutAt > 300);
+  }
+
+  /** Маска того, на ком внимание, на текущем кадре: прежняя гаснет, новая проявляется (animate) или сразу (склейка). */
+  private retargetFocus(animate: boolean): void {
+    const now = performance.now();
+    const ms = animate ? FOCUS_MS : 0;
+    const cur = this.focusCur;
+    this.focusPrev = animate && cur?.tex ? { ...cur, fade: { from: fadeAt(cur.fade, now), to: 0, t0: now, ms } } : null;
+    this.focusCur = null;
+    const chain = this.focusWho !== null && this.shotId !== null ? (this.assets.shotMask?.(this.shotId, this.focusWho) ?? null) : null;
+    const url = chain?.urls[0];
+    if (chain && url) {
+      const slot: FocusSlot = { url, tex: null, fade: { from: 0, to: 1, t0: now, ms } };
+      this.focusCur = slot;
+      const got = this.assets.peek(chain.urls);
+      if (got) slot.tex = this.texture(got.handle);
+      else if (got === undefined) {
+        void this.assets.load(chain.urls).then((res) => {
+          if (this.destroyed || this.focusCur !== slot || !res) return;
+          slot.tex = this.texture(res.handle);
+          slot.fade = { from: 0, to: 1, t0: performance.now(), ms: FOCUS_MS };
+          this.invalidate();
+        });
+      }
+    }
+    this.invalidate();
   }
 
   private shotChain(shot: string | null): ImageChain | null {
@@ -297,7 +349,8 @@ export class PixiSceneRenderer implements ISceneRenderer {
   slotStates(): SlotStates {
     const sprites: Record<string, Mode> = {};
     for (const [who, node] of this.nodes) sprites[who] = node.mode;
-    return { bg: this.bgSlot.mode, bgId: this.bgId, cg: this.cgSlot.mode, cgId: this.cgId, shot: this.shotSlot.mode, shotId: this.shotId, sprites };
+    const focus = { who: this.focusWho, mask: (this.focusCur ? (this.focusCur.tex ? 'image' : 'loading') : 'none') as Mode };
+    return { bg: this.bgSlot.mode, bgId: this.bgId, cg: this.cgSlot.mode, cgId: this.cgId, shot: this.shotSlot.mode, shotId: this.shotId, focus, sprites };
   }
 
   setViolenceMode(mode: ViolenceMode): void {
@@ -391,24 +444,56 @@ export class PixiSceneRenderer implements ISceneRenderer {
    * Шейдер проверяется один раз: компиляция в том же GL-контексте (WebGL2). Ошибку компиляции PixiJS только
    * пишет в консоль и рисует чёрный кадр — поэтому проверяем заранее и при ошибке не включаем фильтр вовсе.
    */
+  /** Подсветка: веса масок по времени, фильтр на слое кадра (нет веса или шейдера — фильтра нет). true — идёт переход. */
+  private applyFocus(now: number): boolean {
+    const prev = this.focusPrev;
+    const cur = this.focusCur;
+    const wA = prev?.tex ? fadeAt(prev.fade, now) : 0;
+    const wB = cur?.tex ? fadeAt(cur.fade, now) : 0;
+    const moving = (prev !== null && !fadeDone(prev.fade, now)) || (cur?.tex != null && !fadeDone(cur.fade, now));
+    if (prev && fadeDone(prev.fade, now)) this.focusPrev = null;
+    if (wA + wB < 0.001 || !this.shotLayer.visible || !this.focusUsable()) {
+      if (this.shotLayer.filters) this.shotLayer.filters = null;
+      return moving;
+    }
+    const f = (this.focusFilter ??= new FocusFilter());
+    if (this.shotLayer.filters?.[0] !== f) this.shotLayer.filters = [f];
+    const W = this.app.screen.width;
+    const H = this.app.screen.height;
+    const area = this.shotLayer.filterArea;
+    if (!area || area.width !== W || area.height !== H) this.shotLayer.filterArea = new Rectangle(0, 0, W, H);
+    const b = this.shotPic.getBounds();
+    f.setFrame({ maskA: prev?.tex ?? null, maskB: cur?.tex ?? null, wA, wB, shot: { x: b.x, y: b.y, width: b.width, height: b.height } });
+    return moving;
+  }
+
+  private focusUsable(): boolean {
+    if (this.focusOk === null) this.focusOk = this.glslOk(FOCUS_FRAGMENT, '[focus] шейдер подсветки не собрался, кадр без подсветки:');
+    return this.focusOk;
+  }
+
   private vhsUsable(): boolean {
-    if (this.vhsOk !== null) return this.vhsOk;
-    this.vhsOk = false;
+    if (this.vhsOk === null) this.vhsOk = this.glslOk(VHS_FRAGMENT, '[camcorder] шейдер записи не собрался, остаётся CSS-камкордер:');
+    return this.vhsOk;
+  }
+
+  /** Фрагментный шейдер собирается на этой видеокарте (WebGL2); нет — warn и false: эффект выключается. */
+  private glslOk(fragment: string, warning: string): boolean {
     try {
       const gl = (this.app.renderer as WebGLRenderer).gl as WebGL2RenderingContext | WebGLRenderingContext | undefined;
       if (!gl || typeof WebGL2RenderingContext === 'undefined' || !(gl instanceof WebGL2RenderingContext)) return false;
       const sh = gl.createShader(gl.FRAGMENT_SHADER);
       if (!sh) return false;
-      gl.shaderSource(sh, `#version 300 es\nprecision highp float;\n${VHS_FRAGMENT}`);
+      gl.shaderSource(sh, `#version 300 es\nprecision highp float;\n${fragment}`);
       gl.compileShader(sh);
       const ok = gl.getShaderParameter(sh, gl.COMPILE_STATUS) === true;
-      if (!ok) console.warn('[camcorder] шейдер записи не собрался, остаётся CSS-камкордер:', gl.getShaderInfoLog(sh));
+      if (!ok) console.warn(warning, gl.getShaderInfoLog(sh));
       gl.deleteShader(sh);
-      this.vhsOk = ok;
+      return ok;
     } catch (e) {
-      console.warn('[camcorder] шейдер записи недоступен:', e);
+      console.warn(warning, e);
+      return false;
     }
-    return this.vhsOk;
   }
 
   /** Фильтр — ровно на экран: фон и кадр шире экрана (coverFit), и границы сцены с ним не совпадают. */
@@ -436,6 +521,8 @@ export class PixiSceneRenderer implements ISceneRenderer {
     if (this.bgSlot.url) s.add(this.bgSlot.url);
     if (this.cgSlot.url) s.add(this.cgSlot.url);
     if (this.shotSlot.url) s.add(this.shotSlot.url);
+    if (this.focusCur) s.add(this.focusCur.url);
+    if (this.focusPrev) s.add(this.focusPrev.url);
     for (const n of [...this.nodes.values(), ...this.leaving]) if (n.url) s.add(n.url);
     return s;
   }
@@ -590,6 +677,7 @@ export class PixiSceneRenderer implements ISceneRenderer {
       this.fade.pic.alpha = 1 - k * k * (3 - 2 * k);
       if (k >= 1) this.dropFade();
     }
+    if (this.applyFocus(now)) animating = true;
     if (animating || this.dirty || this.continuous) {
       this.dirty = false;
       this.app.render();

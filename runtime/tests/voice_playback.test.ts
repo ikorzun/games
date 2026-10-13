@@ -69,7 +69,7 @@ async function makeRig(files: VoiceIndexData['episodes'], over: Partial<Settings
   const kit = new UiKit(root, () => undefined, () => null);
   const captionsHost = document.createElement('div');
   kit.main.appendChild(captionsHost);
-  const stage = { minigameRoot: {}, playFx: () => Promise.resolve(), setMinigameActive: () => undefined } as unknown as Stage;
+  const stage = { minigameRoot: {}, playFx: () => Promise.resolve(), setMinigameActive: () => undefined, setFocus: () => undefined } as unknown as Stage;
   const settings: Settings = { ...DEFAULT_SETTINGS, textSpeed: 5, autoDelayMs: 500, ...over };
 
   const els: FakeEl[] = [];

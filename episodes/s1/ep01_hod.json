@@ -5271,10 +5271,12 @@
     "angle": "eye",
     "cast": [
      {
-      "who": "sledak"
+      "who": "sledak",
+      "mask": "assets/ep01/hod/hod_office_am/office_am_wide.sledak.webp"
      },
      {
-      "who": "oper"
+      "who": "oper",
+      "mask": "assets/ep01/hod/hod_office_am/office_am_wide.oper.webp"
      }
     ],
     "file": "assets/ep01/hod/hod_office_am/office_am_wide.webp"
@@ -5287,10 +5289,12 @@
     "angle": "eye",
     "cast": [
      {
-      "who": "oper"
+      "who": "oper",
+      "mask": "assets/ep01/hod/hod_office_am/office_am_ots_oper.oper.webp"
      },
      {
-      "who": "sledak"
+      "who": "sledak",
+      "mask": "assets/ep01/hod/hod_office_am/office_am_ots_oper.sledak.webp"
      }
     ],
     "file": "assets/ep01/hod/hod_office_am/office_am_ots_oper.webp",

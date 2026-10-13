@@ -19,6 +19,8 @@ export interface SlotStates {
   /** Кадр покрытия: image — показан вместо спрайтов; placeholder — файла нет, видны спрайты (запасной вариант). */
   shot: SlotState;
   shotId: string | null;
+  /** Подсветка: на ком внимание и есть ли у него маска на этом кадре (image) — только у PixiJS. */
+  focus?: { who: string | null; mask: SlotState };
   /** who → состояние спрайта (ушедшие и закадровые не входят). */
   sprites: Record<string, SlotState>;
 }
@@ -57,6 +59,11 @@ export interface ISceneRenderer {
    * (DOM-рендерер): Stage делает «нырок» в полутень.
    */
   crossfade?(ms: number): boolean;
+  /**
+   * На ком внимание (говорит или его ждут): по маске на кадре покрытия окружение гаснет, по краю силуэта — контровой
+   * свет; смена — плавная. null или нет маски — без подсветки. Только PixiJS.
+   */
+  setFocus?(who: string | null): void;
   destroy(): void;
 }
 

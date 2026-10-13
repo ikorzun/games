@@ -321,6 +321,11 @@ export class Stage implements IStage {
     this.renderer.setSpeaker(who);
   }
 
+  /** На ком внимание (подсветка по маске на кадре покрытия): говорящий, а при выборе и мыслях — герой. */
+  setFocus(who: string | null): void {
+    this.renderer.setFocus?.(who);
+  }
+
   // ───────────────────────────── кадр и фильтры ─────────────────────────────
 
   private applyFrame(view: ViewState): void {

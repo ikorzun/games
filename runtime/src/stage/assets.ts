@@ -117,6 +117,12 @@ export class AssetCatalog {
     return s ? { urls: [this.url(s.file)], silhouetteFirst: false } : null;
   }
 
+  /** Маска человека на кадре (shots[].cast[].mask) — для подсветки того, на ком внимание; нет — null. */
+  shotMask(id: string, who: string): ImageChain | null {
+    const mask = this.shots.get(id)?.cast.find((c) => c.who === who)?.mask;
+    return mask ? { urls: [this.url(mask)], silhouetteFirst: false } : null;
+  }
+
   url(path: string): string {
     return joinUrl(this.base, path);
   }
@@ -244,7 +250,10 @@ export function collectBlockAssets(episode: Episode, catalog: AssetCatalog, bloc
     if (scene.coverage && !coveredSets.has(scene.coverage)) {
       // Кадры покрытия: общие планы (вход в сцену) ждём вместе с фоном, остальные греем в фоне.
       coveredSets.add(scene.coverage);
-      for (const s of catalog.shotsOfSet(scene.coverage)) (s.kind === 'wide' ? addChain : addIdle)(catalog.shotChain(s.id));
+      for (const s of catalog.shotsOfSet(scene.coverage)) {
+        (s.kind === 'wide' ? addChain : addIdle)(catalog.shotChain(s.id));
+        for (const c of s.cast) addIdle(catalog.shotMask(s.id, c.who)); // маски подсветки — маленькие, в фоне
+      }
     }
     for (const step of scene.steps) {
       switch (step.do) {
@@ -535,6 +544,8 @@ export interface SceneAssets {
   spriteFacing?(who: string): SpriteFacing;
   /** Кадр покрытия (assets.shots[].id); нет метода или записи — кадра нет, рендерер показывает спрайты. */
   shotChain?(id: string): ImageChain | null;
+  /** Маска человека на кадре для подсветки того, на ком внимание; нет метода или маски — без подсветки. */
+  shotMask?(shot: string, who: string): ImageChain | null;
   /** Готовый результат по цепочке: найден / файлов нет (null) / пока неизвестно (undefined). */
   peek(urls: readonly string[]): { handle: ImageHandle; index: number } | null | undefined;
   load(urls: readonly string[], prio?: LoadPriority): Promise<{ handle: ImageHandle; index: number } | null>;
@@ -568,6 +579,9 @@ export class StoreSceneAssets implements SceneAssets {
   }
   shotChain(id: string): ImageChain | null {
     return this.catalog.shotChain(id);
+  }
+  shotMask(shot: string, who: string): ImageChain | null {
+    return this.catalog.shotMask(shot, who);
   }
   peek(urls: readonly string[]): { handle: ImageHandle; index: number } | null | undefined {
     return this.store.peekFirst(urls);

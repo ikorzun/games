@@ -117,6 +117,8 @@ export class DomUI implements SessionUI {
     this.stopClip();
     if (!mayFast && !ctx.signal.aborted) this.clip = this.d.voice?.start(p) ?? null;
     kit.textbox.show(this.lineView(p), mayFast ? Number.POSITIVE_INFINITY : charsPerSecond(settings.textSpeed));
+    // Подсветка: на ком внимание — говорящий; мысли героя — на нём; рассказчик — ни на ком.
+    this.d.stage.setFocus(p.style === 'say' ? p.who : p.narrate_style === 'inner' ? this.hero() : null);
 
     return new Promise<void>((resolve) => {
       let finished = false;
@@ -164,6 +166,7 @@ export class DomUI implements SessionUI {
   async showChoice(p: ChoicePending, ctx: BaseContext): Promise<string> {
     this.setSkip(false);
     this.clearTimer();
+    this.d.stage.setFocus(this.hero()); // выбор за героем: все ждут его решения
     const s = this.d.settings();
     // Таймеры выборов — только если включены в настройках и не режим «только история».
     return this.d.kit.choices.ask(p, { timers: s.timers && !s.storyOnly, signal: ctx.signal });
@@ -499,6 +502,11 @@ export class DomUI implements SessionUI {
   }
 
   // ───────────────────────────── внутренности ─────────────────────────────
+
+  /** Герой, за которого играет игрок (frame.player_character); его подсвечивают в мыслях и на выборе. */
+  private hero(): string | null {
+    return this.d.episode.frame.player_character ?? null;
+  }
 
   private lineView(p: LinePending): LineView {
     const view = this.d.view();
