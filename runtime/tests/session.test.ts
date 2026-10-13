@@ -13,7 +13,7 @@ import { Session, foundOf } from '../src/session';
 import { Director } from '../src/stage/director';
 import { EP01_PATH, hasRepoContent, loadEpisode } from './helpers/content';
 import { policyFromTrail, sampleEpisode } from './helpers/explore';
-import { FakeAudio, FakeCaptions, FakePlatform, FakeStage, FakeToasts, FakeUI } from './helpers/fakes';
+import { FakeAudio, FakeCaptions, FakePlatform, FakeStage, FakeUI } from './helpers/fakes';
 import { deductionEpisode } from './helpers/mini';
 import type { FakeUIOptions, Timeline } from './helpers/fakes';
 
@@ -58,7 +58,6 @@ async function build(opts: { ui?: FakeUIOptions; episode?: Episode; platform?: F
     stage: new FakeStage(t),
     audio: new FakeAudio(t),
     captions: new FakeCaptions(t),
-    toasts: new FakeToasts(t),
     checkpoint: (r) => session.autosave(r),
     archiveUnlocked: (i) => saves.unlockArchive(episode.id, i),
   });

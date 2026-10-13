@@ -167,8 +167,8 @@ describe('интерфейс: документальная эстетика, mob
     expect(uiCss).toMatch(/--font-body:\s*'Tinos'/);
     expect(uiCss).toMatch(/--panel-line:\s*rgb\(255 255 255 \/ 0\.28\)/);
     expect((uiCss.match(/@font-face \{ font-family: 'Tinos'/g) ?? []).length).toBe(5); // свои woff2, без Google Fonts в рантайме
-    // Размытие — только у трёх экранов-оверлеев по макетам 2026-10-13 и только при мыши: на телефоне дорого.
-    const blur = /@media \(hover: hover\) and \(pointer: fine\) \{\s*\.vn-warning,\s*\.vn-document,\s*\.vn-choices\s*\{([^}]*)\}\s*\}/.exec(uiCss);
+    // Размытие — только у оверлеев выбора и документа по макетам 2026-10-13 и только при мыши: на телефоне дорого.
+    const blur = /@media \(hover: hover\) and \(pointer: fine\) \{\s*\.vn-document,\s*\.vn-choices\s*\{([^}]*)\}\s*\}/.exec(uiCss);
     expect(blur?.[1]).toMatch(/background:\s*rgb\(0 0 0 \/ 0\.6\);[\s\S]*backdrop-filter:\s*blur\(5px\)/);
     expect(uiCss.replace(blur![0], '')).not.toMatch(/backdrop-filter/);
   });

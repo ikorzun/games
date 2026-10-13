@@ -698,7 +698,7 @@ export class PixiSceneRenderer implements ISceneRenderer {
       animating = true;
       const k = Math.min(1, (now - this.fade.t0) / this.fade.ms);
       const e = k * k * (3 - 2 * k);
-      if (this.fade.dither) this.fade.dither.setProgress(e, DITHER_CELL * this.app.renderer.resolution);
+      if (this.fade.dither) this.fade.dither.setProgress(e, DITHER_CELL * this.app.renderer.resolution, this.app.screen.width, this.app.screen.height);
       else this.fade.pic.alpha = 1 - e;
       if (k >= 1) this.dropFade();
     }

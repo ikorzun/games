@@ -376,6 +376,7 @@ body {
   overflow: auto;
 }
 .vn-choices[hidden] { display: none; }
+.vn-choices:focus { outline: none; }
 .vn-choices__prompt {
   box-sizing: border-box;
   width: var(--col);
@@ -406,6 +407,9 @@ body {
 @media (hover: hover) {
   .vn-choices__list:hover > .vn-choice:not(:hover):not(.is-disabled) { opacity: 0.5; }
 }
+/* С клавиатуры — то же, что наведение: номер красный, остальные гаснут; рамки фокуса нет (решение владельца 2026-10-13). */
+.vn-choices__list:focus-within > .vn-choice:not(:focus):not(.is-disabled) { opacity: 0.5; }
+.vn-choice:focus-visible { outline: none; }
 /* Строка не ниже 52 px макета на всю ширину колонки — удобно большим пальцем. */
 .vn-choice {
   display: flex;
@@ -622,15 +626,17 @@ body {
 /* Предупреждение, выбор и документ (макеты Figma «Claude» 2026-10-13): кадр под ними размыт и затемнён на 60 %. --u —
    пиксель макета: 16 px макета = кегль игры (--fs, как в окне реплики), размеры растут вместе с настройкой шрифта.
    Размытие — только при мыши: на телефоне размытие поверх живого кадра дорого (решение 2026-10-10), там затемнение
-   плотнее (85 %), чтобы логотип меню и прежняя реплика не просвечивали сквозь текст. */
+   плотнее (85 %), чтобы прежняя реплика не просвечивала сквозь текст. Предупреждение — на своём чёрном фоне. */
 .vn-warning,
 .vn-document,
 .vn-choices {
   --u: calc(var(--fs) * var(--font-scale) / 16);
+}
+.vn-document,
+.vn-choices {
   background: rgb(0 0 0 / 0.85);
 }
 @media (hover: hover) and (pointer: fine) {
-  .vn-warning,
   .vn-document,
   .vn-choices {
     background: rgb(0 0 0 / 0.6);
@@ -933,7 +939,20 @@ body {
   .vn-menu__lang-code { display: none; } /* код языка — в подсказке глобуса; в узкой шапке наезжал на сжатый логотип */
 }
 
-/* «Основано на реальных событиях» по макету (Figma «Claude», узел 1232:1612): колонка 439 px макета без карточки. */
+/* «Основано на реальных событиях» по макету (Figma «Claude», узел 1232:1612): чёрный фон, к низу — красный; колонка
+   439 px макета без карточки; логотип передачи справа вверху (на низком экране прячется — наехал бы на текст). */
+.vn-warning { background: linear-gradient(180deg, #121212 67.737%, var(--c-accent) 148.86%); }
+.vn-warning__logo {
+  position: absolute;
+  top: calc(28 * var(--u));
+  right: calc(32 * var(--u));
+  width: calc(142 * var(--u));
+  height: auto;
+  pointer-events: none;
+}
+@media (max-height: 500px) {
+  .vn-warning__logo { display: none; }
+}
 .vn-warning__box {
   display: flex;
   flex-direction: column;
@@ -1330,7 +1349,6 @@ body {
 
 @media (pointer: coarse) {
   .vn-main > .vn-ui,
-  .vn-choice__n,
   .vn-card,
   .vn-btn,
   .vn-warning__actions .vn-btn,
@@ -1356,8 +1374,7 @@ body {
   .vn-slot,
   .mg-btn,
   .vn-log__back,
-  .vn-warning__actions .vn-btn,
-  .vn-choice__n {
+  .vn-warning__actions .vn-btn {
     background: rgb(255 255 255 / 0.08);
   }
   .vn-btn:hover,

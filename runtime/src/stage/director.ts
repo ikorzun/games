@@ -17,7 +17,7 @@
  * до рекламы). Если игрок загрузил другой сейв во время удержания — reset() снимает его.
  */
 import type { EngineEvent, PumpResult, TransitionKind, ViewState } from '../core/types';
-import type { IAudioSink, ICaptionSink, IStage, IToastSink } from './types';
+import type { IAudioSink, ICaptionSink, IStage } from './types';
 
 /** Порт предзагрузки ассетов: вход в блок ждёт картинки блока (но не дольше таймаута), следующие блоки греются в фоне. */
 export interface IBlockLoader {
@@ -28,12 +28,11 @@ export interface DirectorSinks {
   stage: IStage;
   audio: IAudioSink;
   captions: ICaptionSink;
-  toasts: IToastSink;
   /** Предзагрузка ассетов по блокам (без неё сцена просто показывает то, что успело загрузиться). */
   loader?: IBlockLoader;
   /** checkpoint-события интерпретатора: границы блоков и решения. */
   checkpoint: (reason: 'block' | 'choice' | 'minigame') => void;
-  /** Новый архивный материал открыт (для общего архива профиля), независимо от тоста. */
+  /** Новый архивный материал открыт (для общего архива профиля). */
   archiveUnlocked?: (item: string) => void;
 }
 
@@ -139,7 +138,7 @@ export class Director {
   }
 
   private async apply(ev: EngineEvent, instant: boolean): Promise<void> {
-    const { stage, audio, captions, toasts } = this.sinks;
+    const { stage, audio, captions } = this.sinks;
     switch (ev.t) {
       case 'scene':
         captions.clear();
@@ -174,8 +173,8 @@ export class Director {
         audio.handle(ev);
         break;
       case 'archive':
+        // Уведомление «Новый материал» не показываем (решение владельца 2026-10-13): метка — в шапке документа.
         this.sinks.archiveUnlocked?.(ev.item);
-        if (ev.toast) toasts.archive(ev.item);
         break;
       case 'checkpoint':
         this.sinks.checkpoint(ev.reason);

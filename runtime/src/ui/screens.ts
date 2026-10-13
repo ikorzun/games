@@ -253,13 +253,16 @@ export interface WarningHandlers {
   settings: () => Settings;
   onContinue: () => void;
   onBack: () => void;
+  /** Логотип передачи (assets/common/ui/logo_kr.webp, адрес загруженного файла) — в правом верхнем углу. */
+  logo?: string | null;
 }
 
 /**
  * Экран перед эпизодом «Основано на реальных событиях» (макет Figma «Claude», узел 1232:1612, решение владельца
- * 2026-10-13): заголовок, предупреждение и дисклеймер одним текстом (ethics-and-legal.md §5), возраст, «Назад /
- * Продолжить» поверх размытого затемнённого кадра. Режим показа насилия — в настройках; в схематичном режиме вместо
- * «Строго 18+» — строка про схематичный показ (16+). Показывается перед каждой новой игрой.
+ * 2026-10-13): на чёрном фоне с красным низом — заголовок, предупреждение и дисклеймер одним текстом
+ * (ethics-and-legal.md §5), возраст, «Назад / Продолжить»; логотип передачи справа вверху. Режим показа насилия — в
+ * настройках; в схематичном режиме вместо «Строго 18+» — строка про схематичный показ (16+). Показывается перед каждой
+ * новой игрой.
  */
 export class WarningScreen extends BaseScreen {
   constructor(
@@ -276,8 +279,16 @@ export class WarningScreen extends BaseScreen {
         ? t('ui.disclaimer.body_age_schematic')
         : t('ui.disclaimer.body_age', { rating: ep.age_rating ?? '18+' });
     const paragraphs = [...t('ui.disclaimer.body').split(/\n\s*\n/), age].filter((p) => p.trim() !== '');
+    let logo: HTMLImageElement | null = null;
+    if (hd.logo) {
+      logo = h('img', { class: 'vn-warning__logo' });
+      logo.src = hd.logo;
+      logo.alt = t('ui.menu.brand');
+      logo.draggable = false;
+    }
     fill(
       this.el,
+      logo,
       h(
         'div',
         { class: 'vn-warning__box' },

@@ -13,7 +13,7 @@ export type ViolenceMode = 'full' | 'schematic';
  */
 export type CameraFx = 'off' | 'low' | 'high';
 export const CAMERA_FX_LEVELS: readonly CameraFx[] = ['off', 'low', 'high'];
-/** Графика: «Реализм» — кадры как есть; «Воспоминания» — кадры в стиле графического романа (где они есть). */
+/** Графика: «Воспоминания» (по умолчанию с 2026-10-13) — кадры в стиле графического романа, где они есть; «Реализм» — как есть. */
 export type Graphics = 'real' | 'memory';
 export const GRAPHICS_MODES: readonly Graphics[] = ['real', 'memory'];
 
@@ -42,8 +42,13 @@ export interface Settings {
   skipUnread: boolean;
   /** Эффекты камеры: выкл / слабо (по умолчанию) / сильно. */
   cameraFx: CameraFx;
-  /** Графика: реализм (по умолчанию) / воспоминания. */
+  /** Графика: воспоминания (по умолчанию) / реализм. */
   graphics: Graphics;
+  /**
+   * Версия настроек. 2 — с 2026-10-13: «Воспоминания» стали умолчанием; в сохранённых раньше настройках «Реализм» был
+   * прежним умолчанием, а не выбором игрока, поэтому при загрузке они получают «Воспоминания».
+   */
+  v: 2;
 }
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
@@ -61,7 +66,8 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   violenceMode: 'full',
   skipUnread: false,
   cameraFx: 'low',
-  graphics: 'real',
+  graphics: 'memory',
+  v: 2,
 };
 
 export const FONT_SCALE_RANGE = { min: 0.85, max: 1.6, step: 0.05 } as const;
@@ -97,6 +103,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     violenceMode: r.violenceMode === 'schematic' ? 'schematic' : 'full',
     skipUnread: typeof r.skipUnread === 'boolean' ? r.skipUnread : d.skipUnread,
     cameraFx: (CAMERA_FX_LEVELS as readonly unknown[]).includes(r.cameraFx) ? (r.cameraFx as CameraFx) : d.cameraFx,
-    graphics: (GRAPHICS_MODES as readonly unknown[]).includes(r.graphics) ? (r.graphics as Graphics) : d.graphics,
+    graphics: r.v === 2 && (GRAPHICS_MODES as readonly unknown[]).includes(r.graphics) ? (r.graphics as Graphics) : d.graphics,
+    v: 2,
   };
 }

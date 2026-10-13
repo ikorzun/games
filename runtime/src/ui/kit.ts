@@ -28,10 +28,10 @@ export class UiKit {
   /** Индикатор загрузки ассетов блока (появляется, только если загрузка затянулась). */
   readonly loading: HTMLElement;
 
-  constructor(root: HTMLElement, onQuick: (a: QuickAction) => void, titleKeyOf: (item: string) => string | null) {
+  constructor(root: HTMLElement, onQuick: (a: QuickAction) => void) {
     this.root = root;
     this.quick = new QuickMenu(onQuick);
-    this.toasts = new ToastLayer(titleKeyOf);
+    this.toasts = new ToastLayer();
     this.ui = h('div', { class: 'vn-ui' }, this.quick.el, this.autobar.el, this.textbox.el, this.choices.el);
     this.main = h('div', { class: 'vn-main' }, this.ui);
     this.loading = h('div', { class: 'vn-loading', aria: { hidden: true } }, h('i'), h('i'), h('i'));

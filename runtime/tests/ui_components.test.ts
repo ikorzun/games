@@ -242,7 +242,7 @@ describe('ChoiceMenu', () => {
     expect(btns.map((b) => b.querySelector('.vn-choice__label')?.textContent)).toEqual(['Первый', 'Второй', 'Третий']);
     expect(btns.map((b) => b.disabled)).toEqual([false, true, false]);
     expect(btns.map((b) => b.querySelector('.vn-choice__n')?.textContent)).toEqual(['1', '2', '3']);
-    expect(document.activeElement).toBe(btns[0]); // фокус на первом доступном
+    expect(document.activeElement).toBe(menu.el); // фокус на группе: ни один вариант не выглядит выбранным заранее
     btns[1]?.click(); // выключенная — игнорируется (disabled-кнопка не кликается)
     btns[2]?.click();
     await expect(result).resolves.toBe('c');
@@ -666,14 +666,12 @@ describe('ScreenHost: стек модальных экранов', () => {
 });
 
 describe('ToastLayer', () => {
-  it('«Новый материал: название» с названием из локали или id, если ключа нет; уведомление гаснет само', () => {
-    i18n.addStrings('ru', { 'arc.t': 'Протокол осмотра' });
-    const toasts = new ToastLayer((item) => (item === 'arc_x' ? 'arc.t' : null));
+  it('служебное уведомление показывается и гаснет само («Новый материал» больше не показываем, 2026-10-13)', () => {
+    const toasts = new ToastLayer();
     document.body.appendChild(toasts.el);
-    toasts.archive('arc_x');
-    toasts.archive('arc_unknown');
+    toasts.push('Только прочитанное');
     const texts = [...toasts.el.querySelectorAll('.vn-toast')].map((n) => n.textContent);
-    expect(texts).toEqual(['Новый материал: Протокол осмотра', 'Новый материал: arc_unknown']);
+    expect(texts).toEqual(['Только прочитанное']);
     expect(toasts.el.getAttribute('aria-live')).toBe('polite');
     vi.advanceTimersByTime(3200 + 400);
     expect(toasts.el.querySelectorAll('.vn-toast')).toHaveLength(0);
@@ -684,7 +682,7 @@ describe('UiKit: каркас', () => {
   it('собирает корень: сцена под слоем UI, экраны и тосты рядом; контекстное меню и drag отключены', () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
-    const kit = new UiKit(root, () => undefined, () => null);
+    const kit = new UiKit(root, () => undefined);
     const stageEl = document.createElement('div');
     stageEl.className = 'vn-stage';
     kit.mountStage(stageEl);
@@ -711,7 +709,7 @@ describe('UiKit: индикатор загрузки', () => {
   it('индикатор есть в корне, скрыт от скринридера и по умолчанию выключен; setLoading переключает is-on', () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
-    const kit = new UiKit(root, () => undefined, () => null);
+    const kit = new UiKit(root, () => undefined);
     expect(root.contains(kit.loading)).toBe(true);
     expect(kit.loading.classList.contains('vn-loading')).toBe(true);
     expect(kit.loading.getAttribute('aria-hidden')).toBe('true');
@@ -727,7 +725,7 @@ describe('UiKit: индикатор загрузки', () => {
 
   it('индикатор не перехватывает касания: он последний ребёнок корня и не входит в слой интерфейса', () => {
     const root = document.createElement('div');
-    const kit = new UiKit(root, () => undefined, () => null);
+    const kit = new UiKit(root, () => undefined);
     expect(root.lastElementChild).toBe(kit.loading);
     expect(kit.ui.contains(kit.loading)).toBe(false);
   });

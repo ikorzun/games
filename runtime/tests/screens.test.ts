@@ -262,6 +262,14 @@ describe('WarningScreen: «Основано на реальных события
     expect(paragraphs(s.el)).toEqual(['Сцены насилия.', 'Имена изменены.', 'Строго 18+.']);
   });
 
+  it('логотип передачи справа вверху — если файл есть; нет файла — без картинки', () => {
+    const settings: Settings = { ...DEFAULT_SETTINGS };
+    const withLogo = open(new WarningScreen(episode, { settings: () => settings, onContinue: vi.fn(), onBack: vi.fn(), logo: './assets/common/ui/logo_kr.webp' }));
+    expect(withLogo.el.querySelector<HTMLImageElement>('img.vn-warning__logo')?.getAttribute('src')).toBe('./assets/common/ui/logo_kr.webp');
+    const { s } = make();
+    expect(s.el.querySelector('img.vn-warning__logo')).toBeNull();
+  });
+
   it('в схематичном режиме (сборка 16+) вместо «Строго 18+» — строка про схематичный показ', () => {
     const { s } = make({ violenceMode: 'schematic' });
     expect(paragraphs(s.el)).toEqual(['Сцены насилия.', 'Имена изменены.', 'Насилие схематично. 16+']);

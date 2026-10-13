@@ -8,7 +8,7 @@ import { defaultViewFor } from '../src/core/interpreter';
 import type { EngineEvent, Pending, TransitionKind } from '../src/core/types';
 import { Director } from '../src/stage/director';
 import type { IBlockLoader } from '../src/stage/director';
-import { FakeAudio, FakeCaptions, FakeStage, FakeToasts } from './helpers/fakes';
+import { FakeAudio, FakeCaptions, FakeStage } from './helpers/fakes';
 import type { Timeline } from './helpers/fakes';
 import { miniEpisode } from './helpers/mini';
 
@@ -36,7 +36,6 @@ function setup(loader: IBlockLoader | undefined, t: Timeline = []) {
     stage: new FakeStage(t),
     audio: new FakeAudio(t),
     captions: new FakeCaptions(t),
-    toasts: new FakeToasts(t),
     ...(loader ? { loader } : {}),
     checkpoint: (r) => void t.push(`checkpoint:${r}`),
   });
@@ -63,7 +62,7 @@ describe('Director: предзагрузка блока перед показо�
     const t: Timeline = [];
     const m = manual(t);
     const { director } = (() => {
-      const d = new Director({ stage: new FakeStage(t), audio: new FakeAudio(t), captions: new FakeCaptions(t), toasts: new FakeToasts(t), loader: m.loader, checkpoint: () => undefined });
+      const d = new Director({ stage: new FakeStage(t), audio: new FakeAudio(t), captions: new FakeCaptions(t), loader: m.loader, checkpoint: () => undefined });
       return { director: d };
     })();
     const p = director.present({ events: [scene('s_new', 'fade', true)], pending: LINE });
@@ -98,7 +97,7 @@ describe('Director: реклама на границе блока и загру�
   it('картинки нового блока грузятся пока экран гаснет и идёт реклама; проявление — только после них', async () => {
     const t: Timeline = [];
     const m = manual(t);
-    const director = new Director({ stage: new FakeStage(t), audio: new FakeAudio(t), captions: new FakeCaptions(t), toasts: new FakeToasts(t), loader: m.loader, checkpoint: (r) => void t.push(`checkpoint:${r}`) });
+    const director = new Director({ stage: new FakeStage(t), audio: new FakeAudio(t), captions: new FakeCaptions(t), loader: m.loader, checkpoint: (r) => void t.push(`checkpoint:${r}`) });
     await director.present({ events: [scene('s_new', 'fade', true), { t: 'checkpoint', reason: 'block' }], pending: AD });
     // загрузка началась сразу (параллельно с гашением), чёрный кадр держится, сцена не показана
     expect(t).toEqual(['caption:clear', 'loader:enter:b_new', 'stage:fadeToBlackAndHold:fade', 'checkpoint:block']);
@@ -123,7 +122,7 @@ describe('Director: загрузка сейва и откат', () => {
   it('reset(view) греет картинки блока кадра и сразу выставляет кадр (без ожидания)', async () => {
     const t: Timeline = [];
     const m = manual(t);
-    const director = new Director({ stage: new FakeStage(t), audio: new FakeAudio(t), captions: new FakeCaptions(t), toasts: new FakeToasts(t), loader: m.loader, checkpoint: () => undefined });
+    const director = new Director({ stage: new FakeStage(t), audio: new FakeAudio(t), captions: new FakeCaptions(t), loader: m.loader, checkpoint: () => undefined });
     director.reset(defaultViewFor(episode, 's_new'));
     expect(t).toEqual(['caption:clear', 'loader:enter:b_new', 'stage:setView:s_new', 'audio:sync:-:-']);
     m.finish();

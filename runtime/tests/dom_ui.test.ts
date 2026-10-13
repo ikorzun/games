@@ -53,7 +53,7 @@ function makeRig(over: Partial<Settings> = {}, presentation: Presentation = 'pro
   const root = document.createElement('div');
   document.body.appendChild(root);
   const actions: QuickAction[] = [];
-  const kit = new UiKit(root, (a) => actions.push(a), () => null);
+  const kit = new UiKit(root, (a) => actions.push(a));
   const captionsHost = document.createElement('div');
   kit.main.appendChild(captionsHost);
   const captions = new CaptionLayer(captionsHost);

@@ -45,6 +45,3 @@ export interface ICaptionSink {
   clear(): void;
 }
 
-export interface IToastSink {
-  archive(item: string): void;
-}

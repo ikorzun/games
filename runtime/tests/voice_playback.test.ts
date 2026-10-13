@@ -24,7 +24,7 @@ import { CaptionLayer } from '../src/ui/captions';
 import { AUTO_VOICE_TAIL_MS, DomUI } from '../src/ui/dom_ui';
 import { UiKit } from '../src/ui/kit';
 import { FakeEl } from './helpers/audio_fakes';
-import { FakeAudio, FakeCaptions, FakePlatform, FakeStage, FakeToasts } from './helpers/fakes';
+import { FakeAudio, FakeCaptions, FakePlatform, FakeStage } from './helpers/fakes';
 import type { Timeline } from './helpers/fakes';
 import { miniEpisode } from './helpers/mini';
 
@@ -66,7 +66,7 @@ async function makeRig(files: VoiceIndexData['episodes'], over: Partial<Settings
   const ep = episode();
   const root = document.createElement('div');
   document.body.appendChild(root);
-  const kit = new UiKit(root, () => undefined, () => null);
+  const kit = new UiKit(root, () => undefined);
   const captionsHost = document.createElement('div');
   kit.main.appendChild(captionsHost);
   const stage = { minigameRoot: {}, playFx: () => Promise.resolve(), setMinigameActive: () => undefined, setFocus: () => undefined } as unknown as Stage;
@@ -111,7 +111,6 @@ async function makeRig(files: VoiceIndexData['episodes'], over: Partial<Settings
     stage: new FakeStage(t),
     audio: new FakeAudio(t),
     captions: new FakeCaptions(t),
-    toasts: new FakeToasts(t),
     checkpoint: () => undefined,
   });
   session = new Session({ episode: ep, contentVersion: 'test@1', platform, saves, ui, director, warn: () => undefined });

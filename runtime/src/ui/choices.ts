@@ -55,7 +55,7 @@ export class ChoiceMenu {
   private readonly hintId = `vn-choices-hint-${++menuSeq}`;
 
   constructor() {
-    this.el = h('div', { class: 'vn-choices', hidden: true, role: 'group' });
+    this.el = h('div', { class: 'vn-choices', hidden: true, role: 'group', tabindex: -1 });
   }
 
   get active(): boolean {
@@ -73,7 +73,9 @@ export class ChoiceMenu {
       opts.signal.addEventListener('abort', () => this.close(), { once: true });
       this.render();
       this.el.hidden = false;
-      this.buttons.find((b) => !b.disabled)?.focus({ preventScroll: true });
+      // Фокус — на группе, а не на первом варианте: иначе после клавиатуры первый вариант сразу выглядит выбранным
+      // (решение владельца 2026-10-13). Tab ведёт к вариантам, цифры 1–9 выбирают.
+      this.el.focus({ preventScroll: true });
       const useTimer = opts.timers && p.timer_ms !== null && p.default_option !== null;
       if (useTimer && p.timer_ms !== null) this.startTimer(p.timer_ms);
     });

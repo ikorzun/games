@@ -10,12 +10,20 @@ import { bayer8, DITHER_FRAGMENT, DITHER_MS } from '../src/stage/dither_filter';
 import { miniEpisode } from './helpers/mini';
 
 describe('настройка «Графика»: реализм / воспоминания', () => {
-  it('по умолчанию «Реализм»; неизвестное и старые сейвы без поля — к умолчанию', () => {
+  it('по умолчанию «Воспоминания» (2026-10-13); выбор игрока в настройках версии 2 сохраняется; неизвестное — к умолчанию', () => {
     expect([...GRAPHICS_MODES]).toEqual(['real', 'memory']);
-    expect(DEFAULT_SETTINGS.graphics).toBe('real');
-    expect(sanitizeSettings({ graphics: 'memory' }).graphics).toBe('memory');
-    for (const bad of ['Memory', 'real ', '', 1, null, {}] as unknown[]) expect(sanitizeSettings({ graphics: bad }).graphics).toBe('real');
-    expect(sanitizeSettings({ fontScale: 1.2 }).graphics).toBe('real');
+    expect(DEFAULT_SETTINGS.graphics).toBe('memory');
+    expect(sanitizeSettings({ v: 2, graphics: 'real' }).graphics).toBe('real');
+    expect(sanitizeSettings({ v: 2, graphics: 'memory' }).graphics).toBe('memory');
+    for (const bad of ['Memory', 'real ', '', 1, null, {}] as unknown[]) expect(sanitizeSettings({ v: 2, graphics: bad }).graphics).toBe('memory');
+    expect(sanitizeSettings({ fontScale: 1.2 }).graphics).toBe('memory');
+  });
+
+  it('сохранённые до версии 2: «Реализм» был прежним умолчанием — получают «Воспоминания»; остальное не трогаем', () => {
+    const old = sanitizeSettings({ graphics: 'real', fontScale: 1.25, cameraFx: 'off' });
+    expect(old).toMatchObject({ graphics: 'memory', fontScale: 1.25, cameraFx: 'off', v: 2 });
+    // Выбор после обновления переживает перезапуск (повторная чистка того, что записали).
+    expect(sanitizeSettings({ ...old, graphics: 'real' }).graphics).toBe('real');
   });
 });
 
@@ -88,8 +96,8 @@ describe('растворение точками: матрица Байера 8×
     expect(DITHER_FRAGMENT).not.toMatch(/<<|>>|\^|ivec|#version/);
   });
 
-  it('длится секунду-две (бриф владельца)', () => {
-    expect(DITHER_MS).toBeGreaterThanOrEqual(1000);
-    expect(DITHER_MS).toBeLessThanOrEqual(2000);
+  it('быстрый: меньше секунды («быстрее и интереснее» — владелец, 2026-10-13)', () => {
+    expect(DITHER_MS).toBeGreaterThanOrEqual(500);
+    expect(DITHER_MS).toBeLessThan(1000);
   });
 });

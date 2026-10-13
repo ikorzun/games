@@ -81,14 +81,9 @@ export class App {
 
   /** Собрать приложение: каркас → сцена (PixiJS или DOM) → всё остальное. */
   static async create(init: AppInit): Promise<App> {
-    const ep = init.episode;
     // Быстрое меню создаётся до App, поэтому обращается к нему через замыкание.
     let app: App | null = null;
-    const kit = new UiKit(
-      init.root,
-      (a) => app?.onAction(a),
-      (item) => ep.archive_items?.find((x) => x.id === item)?.title_key ?? null,
-    );
+    const kit = new UiKit(init.root, (a) => app?.onAction(a));
     const stage = await createStage(kit.main, init.renderer ?? 'auto', init.assets?.scene ?? NO_ASSETS);
     app = new App(init, kit, stage);
     return app;
@@ -118,7 +113,6 @@ export class App {
       audio: d.audio,
       ...(d.assets ? { loader: d.assets.preloader } : {}),
       captions: captionSink,
-      toasts: kit.toasts,
       checkpoint: (reason) => this.session.autosave(reason),
       archiveUnlocked: (item) => d.saves.unlockArchive(ep.id, item),
     });
@@ -180,7 +174,7 @@ export class App {
         kit,
         ui: this.ui,
         // Свой режиссёр: у сцен дела нет блоков эпизода, предзагрузка по блокам им не нужна (картинки грузит сцена).
-        director: new Director({ stage, audio: d.audio, captions: captionSink, toasts: kit.toasts, checkpoint: () => undefined }),
+        director: new Director({ stage, audio: d.audio, captions: captionSink, checkpoint: () => undefined }),
         saves: d.saves,
         platform: d.platform,
         settings: () => d.saves.settings,
@@ -321,6 +315,7 @@ export class App {
       settings: () => saves.settings,
       onContinue: onGo,
       onBack: () => this.kit.screens.close(screen),
+      logo: this.d.assets?.art.logo ?? null,
     });
     this.kit.screens.open(screen);
   }

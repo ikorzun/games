@@ -13,7 +13,7 @@ import { playTalk } from '../src/case/case_talk';
 import { i18n } from '../src/core/i18n';
 import type { ViewState } from '../src/core/types';
 import { Director } from '../src/stage/director';
-import { FakeAudio, FakeCaptions, FakeStage, FakeToasts, FakeUI } from './helpers/fakes';
+import { FakeAudio, FakeCaptions, FakeStage, FakeUI } from './helpers/fakes';
 import type { Timeline } from './helpers/fakes';
 import { miniEpisode } from './helpers/mini';
 
@@ -103,7 +103,7 @@ describe('разговор дела', () => {
   function rigTalk(): { ui: FakeUI; director: Director; t: Timeline; views: Array<(() => ViewState) | null> } {
     const t: Timeline = [];
     const ui = new FakeUI(t, { manualLines: true });
-    const director = new Director({ stage: new FakeStage(t), audio: new FakeAudio(t), captions: new FakeCaptions(t), toasts: new FakeToasts(t), checkpoint: () => t.push('checkpoint') });
+    const director = new Director({ stage: new FakeStage(t), audio: new FakeAudio(t), captions: new FakeCaptions(t), checkpoint: () => t.push('checkpoint') });
     return { ui, director, t, views: [] };
   }
 

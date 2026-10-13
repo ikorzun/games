@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultViewFor } from '../src/core/interpreter';
 import type { EngineEvent, Pending, PumpResult, TransitionKind } from '../src/core/types';
 import { Director } from '../src/stage/director';
-import { FakeAudio, FakeCaptions, FakeStage, FakeToasts } from './helpers/fakes';
+import { FakeAudio, FakeCaptions, FakeStage } from './helpers/fakes';
 import type { Timeline } from './helpers/fakes';
 import { miniEpisode } from './helpers/mini';
 
@@ -21,7 +21,6 @@ function setup() {
     stage: new FakeStage(t),
     audio: new FakeAudio(t),
     captions: new FakeCaptions(t),
-    toasts: new FakeToasts(t),
     checkpoint: (r) => {
       checkpoints.push(r);
       t.push(`checkpoint:${r}`);
@@ -81,11 +80,10 @@ describe('Director: обычный показ', () => {
       'stage:cg:cg_a:flash',
       'stage:cgHide:fade',
       'stage:hide:a:fade',
-      'toast:arc_x',
       'checkpoint:block',
     ]);
     expect(checkpoints).toEqual(['block']);
-    expect(archived).toEqual(['arc_x', 'arc_y']); // профиль узнаёт обо всех, тост — только о toast:true
+    expect(archived).toEqual(['arc_x', 'arc_y']); // профиль узнаёт обо всех; уведомлений «Новый материал» нет (2026-10-13)
     expect(director.holdingBlack).toBe(false);
   });
 
@@ -169,7 +167,7 @@ describe('Director: реклама на границе блока', () => {
       ],
       pending: AD,
     });
-    expect(t).toEqual(['toast:arc_x', 'audio:sfx:sfx_a', 'caption:clear', 'stage:fadeToBlackAndHold:fade']);
+    expect(t).toEqual(['audio:sfx:sfx_a', 'caption:clear', 'stage:fadeToBlackAndHold:fade']);
   });
 
   it('автосейв при удержании выполняется сразу (сейв уже указывает на новую сцену), а не после рекламы', async () => {
