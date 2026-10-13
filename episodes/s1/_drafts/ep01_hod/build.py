@@ -209,7 +209,9 @@ for p in PLAN:
 # Контора без помощницы: тот же кадр через плечо на Ковригина (на нём Люды не видно).
 SHOTS.append({'id': 'sh_notary_alone_ots', 'set': 'hod_notary_alone', 'bg': 'bg_hod_notary_alone', 'kind': 'ots', 'angle': 'eye',
               'cast': [{'who': 'notary'}, {'who': 'sledak'}], 'from': 'sledak', 'focus': 'notary',
-              'file': FILE('notary_ots_notary', 'hod_notary')})
+              'file': FILE('notary_ots_notary', 'hod_notary'),
+              **({'memory': memory_of('notary_ots_notary', 'hod_notary', ['notary', 'sledak'])}
+                 if memory_of('notary_ots_notary', 'hod_notary', ['notary', 'sledak']) else {})})
 # Фон мини-игры «Осмотр квартиры»: стена Зои Павловны крупно, три улики врозь, людей нет.
 BACKGROUNDS.append({'id': 'bg_hod_flat_inspect', 'path': FILE('flat_inspect', 'hod_flat_inspect'), 'season': 'indoor',
                     **({'memory': MEM('flat_inspect', 'hod_flat_inspect')} if HAS(MEM('flat_inspect', 'hod_flat_inspect')) else {}),

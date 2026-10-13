@@ -202,21 +202,32 @@ def sheet_prompt(who: str, kind: str) -> str:
 
 # ───────────────────────────── генерация и расходы ─────────────────────────────
 
+def ledger_lock():
+    """Журнал пишут несколько генераций сразу (кадры идут параллельно) — запись под блокировкой файла."""
+    import fcntl
+    f = open(os.path.join(RAW, 'ledger.lock'), 'w')
+    fcntl.flock(f, fcntl.LOCK_EX)
+    return f
+
+
 def ledger_add(name: str, usage: dict) -> float:
     path = os.path.join(RAW, 'ledger.json')
-    rows = json.load(open(path)) if os.path.exists(path) else []
     det_in = usage.get('input_tokens_details') or {}
     det_out = usage.get('output_tokens_details') or {}
     cost = (det_in.get('text_tokens', 0) * PRICE['text'] + det_in.get('image_tokens', 0) * PRICE['image_in']
             + det_out.get('image_tokens', usage.get('output_tokens', 0)) * PRICE['image_out']) / 1e6
-    rows.append({'name': name, 'usage': usage, 'cost': round(cost, 4)})
-    json.dump(rows, open(path, 'w'), indent=1)
+    with ledger_lock():
+        rows = json.load(open(path)) if os.path.exists(path) else []
+        rows.append({'name': name, 'usage': usage, 'cost': round(cost, 4)})
+        json.dump(rows, open(path + '.tmp', 'w'), indent=1)
+        os.replace(path + '.tmp', path)
     return cost
 
 
 def spent() -> float:
     path = os.path.join(RAW, 'ledger.json')
-    return sum(r['cost'] for r in json.load(open(path))) if os.path.exists(path) else 0.0
+    with ledger_lock():
+        return sum(r['cost'] for r in json.load(open(path))) if os.path.exists(path) else 0.0
 
 
 def gen(name: str, prompt: str, images: list[str], size: str, out_dir: str, mask: str = '') -> str:

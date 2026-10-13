@@ -3,7 +3,8 @@
 Подсветка того, на ком внимание (решение владельца 2026-10-13): игра приглушает окружение и кладёт контровой свет
 по маске человека (assets.shots[].cast[].mask, docs/architecture/08-shot-grammar.md §3.1). Маски считает Apple Vision
 локально (tools/hod/person_masks.swift), без кредитов и без отправки кадров наружу. Кто есть кто — по порядку масок
-слева направо (центр маски), порядок задан в ORDER; число найденных людей должно совпасть.
+слева направо (центр маски), порядок задан в ORDER; число найденных людей должно совпасть. «_» в порядке — человек
+не из состава кадра (массовка на лавке, в очереди): его маска не сохраняется.
 
     python3 tools/hod/masks.py             # все кадры из ORDER
     python3 tools/hod/masks.py office_am_wide
@@ -33,6 +34,30 @@ MEMORY = {
     'flat_wide': ('hod_flat', ['oper', 'buyer', 'sledak', 'lapin_wife']),
     'flat_ots_buyer': ('hod_flat', ['buyer', 'sledak']),
     'flat_ots_wife': ('hod_flat', ['sledak', 'lapin_wife']),
+    # остальные места (2026-10-13); третий элемент — порядок у квадрата, если кадрирование его меняет
+    'office_eve_wide': ('hod_office_eve', ['sledak', 'expert', 'oper']),
+    'office_eve_ots_expert': ('hod_office_eve', ['sledak', 'expert', '_']),  # Сайко у окна на заднем плане
+    'office_eve_lens': ('hod_office_lens', ['sledak', 'expert']),
+    'office_eve_phone': ('hod_office_call_eve', ['sledak', 'expert']),
+    'office_d2_wide': ('hod_office_d2', ['sledak', 'oper', 'boss']),
+    'office_d2_ots_boss': ('hod_office_d2', ['sledak', 'boss']),
+    'office_night_wide': ('hod_office_night', ['sledak', 'expert', 'oper']),
+    'office_night_ots_expert': ('hod_office_night', ['sledak', 'expert']),
+    'landing_chain_wide': ('hod_landing_chain', ['neighbor', 'sledak', 'oper']),
+    'landing_chain_ots': ('hod_landing_chain', ['neighbor', 'sledak']),
+    'landing_open_wide': ('hod_landing_open', ['neighbor', 'sledak', 'oper']),
+    'landing_open_ots': ('hod_landing_open', ['neighbor', 'sledak']),
+    'notary_wide': ('hod_notary', ['assistant', 'notary', 'sledak', 'oper']),
+    'notary_ots_notary': ('hod_notary', ['notary', 'sledak']),
+    'notary_alone_wide': ('hod_notary_alone', ['notary', 'sledak', 'oper']),
+    'stairs_wide': ('hod_notary_stairs', ['sledak', 'assistant', 'oper']),
+    'stairs_ots_assistant': ('hod_notary_stairs', ['assistant', 'oper']),
+    'zhek_wide': ('hod_zhek', ['_', 'oper', 'sledak']),  # лавка слева; паспортистку за окошком Vision не видит
+    'zhek_ots_clerk': ('hod_zhek', ['sledak', 'passport_clerk']),
+    'bti_wide': ('hod_bti', ['clerk', 'sledak']),
+    'bti_ots_clerk': ('hod_bti', ['clerk', 'sledak']),
+    'recon_wide': ('hod_recon', ['_', '_', 'zoya', 'murashov_sil']),  # очередь на лавке
+    'recon_ots_zoya': ('hod_recon', ['_', '_', 'zoya', 'murashov_sil']),
 }
 
 
@@ -80,12 +105,13 @@ def make(shot: str) -> None:
 
 def make_memory(shot: str) -> None:
     """Кадр «Воспоминаний» и его квадрат (что есть) → <кадр>[.square].<кто>.webp рядом с ними."""
-    set_, people = MEMORY[shot]
-    for tail, size in (('', SIZE), ('.square', SQUARE)):
+    set_, people, *square = MEMORY[shot]
+    for tail, size, order in (('', SIZE, people), ('.square', SQUARE, square[0] if square else people)):
         frame = f'assets/ep01/hod_memory/{set_}/{shot}{tail}.webp'
         if os.path.exists(os.path.join(ROOT, frame)):
-            for who, m in people_masks(os.path.join(ROOT, frame), people, shot + tail):
-                save(m, f'assets/ep01/hod_memory/{set_}/{shot}{tail}.{who}.webp', size)
+            for who, m in people_masks(os.path.join(ROOT, frame), order, shot + tail):
+                if who != '_':
+                    save(m, f'assets/ep01/hod_memory/{set_}/{shot}{tail}.{who}.webp', size)
 
 
 if __name__ == '__main__':
