@@ -171,8 +171,8 @@ body {
 /* ───────────── Текстовое окно ───────────── */
 
 /* Макет реплик в Figma (Claude, узел 1232:3796; решение владельца 2026-10-13): над текстом — портрет, имя и подпись;
-   под каждой строкой — своя полоса 24 % чёрного с запасом 5 px по бокам, без тени; за напечатанным — красная плашка,
-   в ней «>». Размеры макета даны для кегля 15 px и пересчитаны в em: кегль у нас свой (--fs, ≥ 16 px на телефоне и
+   под каждой строкой — своя полоса 24 % чёрного с запасом 5 px по бокам, без тени; за напечатанным — красная плашка
+   (40 %), в ней белый «>» (решение владельца 2026-10-13). Размеры макета даны для кегля 15 px и пересчитаны в em: кегль у нас свой (--fs, ≥ 16 px на телефоне и
    ≥ 20 px на десктопе), и всё растёт вместе с ним. Шаг строк — 20 px макета, как высота полосы: в макете текст набран
    с межстрочным «normal» (≈ 17 px), и со второй строки буквы съезжали бы с полос. */
 .vn-textbox {
@@ -256,7 +256,7 @@ body {
   left: calc(5em / 15);
   width: calc(19em / 15);
   height: calc(20em / 15);
-  background: rgb(172 0 0 / 0.2);
+  background: rgb(172 0 0 / 0.4);
   transform: translateY(-50%);
 }
 .vn-textbox__more svg {
@@ -265,7 +265,7 @@ body {
   left: calc(13em / 15);
   width: calc(6em / 15);
   height: calc(8em / 15);
-  fill: var(--c-accent);
+  fill: #fff;
   opacity: 0;
   transform: translateY(-50%);
 }
@@ -1142,19 +1142,22 @@ body {
   text-transform: lowercase;
   background: var(--c-accent);
 }
+/* Крестик — круг 44 × 44 px при любом кегле (решение владельца 2026-10-13), по центру шапки. */
 .vn-document__close {
   flex: none;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  padding: calc(8 * var(--u)) calc(16 * var(--u));
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
   color: #fff;
   background: rgb(0 0 0 / 0.2);
   border: 0;
-  border-radius: 999px;
+  border-radius: 50%;
   cursor: pointer;
 }
-.vn-document__close .vn-ico { width: calc(14 * var(--u)); height: calc(14 * var(--u)); }
+.vn-document__close .vn-ico { width: 14px; height: 14px; }
 .vn-document__paper {
   box-sizing: border-box;
   width: min(100%, calc(465 * var(--u)));

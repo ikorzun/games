@@ -220,16 +220,16 @@ describe('интерфейс: документальная эстетика, mob
     expect(uiCss).not.toMatch(/--radius/);
   });
 
-  it('каретка — плашка 19 × 20 (20 % #ac0000) сразу за полосой, ширины не занимает; «>» акцентного цвета виден, когда реплика допечатана', () => {
+  it('каретка — плашка 19 × 20 (40 % #ac0000) сразу за полосой, ширины не занимает; белый «>» виден, когда реплика допечатана', () => {
     expect(uiCss).toMatch(/\n\.vn-textbox__more\s*\{\s*position:\s*relative;\s*\}/);
     const plate = /\n\.vn-textbox__more::before\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(plate).toMatch(/position:\s*absolute/);
     expect(plate).toMatch(/width:\s*calc\(19em \/ 15\)/);
     expect(plate).toMatch(/height:\s*calc\(20em \/ 15\)/);
-    expect(plate).toMatch(/background:\s*rgb\(172 0 0 \/ 0\.2\)/);
+    expect(plate).toMatch(/background:\s*rgb\(172 0 0 \/ 0\.4\)/);
     const glyph = /\n\.vn-textbox__more svg\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(glyph).toMatch(/position:\s*absolute/);
-    expect(glyph).toMatch(/fill:\s*var\(--c-accent\)/);
+    expect(glyph).toMatch(/fill:\s*#fff/);
     expect(glyph).toMatch(/opacity:\s*0;/);
     expect(uiCss).toMatch(/\.vn-textbox\.is-complete\s+\.vn-textbox__more svg\s*\{\s*opacity:\s*1;/);
   });
