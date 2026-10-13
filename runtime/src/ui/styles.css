@@ -318,10 +318,10 @@ body {
     order: 3;
     max-width: none;
     flex-wrap: nowrap;
-    justify-content: space-between;
-    gap: 4px;
+    gap: 6px;
   }
-  .vn-qbtn { flex: 1 1 0; width: auto; max-width: 52px; min-width: 34px; height: 44px; }
+  /* Кнопки поровну делят всю ширину ряда (и иконками на телефоне, и с подписями на планшете). */
+  .vn-qbtn { flex: 1 1 0; width: auto; min-width: 34px; height: 44px; }
 }
 /* Широкий экран в портретной раскладке (планшет, высокое окно): кнопки на всю ширину ряда и с подписями
    (решение владельца 2026-10-11); на телефоне остаются иконки. Иконка — над подписью: шесть кнопок в ряд, и
