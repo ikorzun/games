@@ -329,12 +329,14 @@ export class Session {
             const restore = this.restoreMg && this.restoreMg.id === def.id ? this.restoreMg.state : undefined;
             this.restoreMg = null;
             platform.track('minigame_start', { id: def.id, type: def.type });
+            // Итоговое состояние мини-игры: найденные зоны осмотра дают свои факты (finishMinigame).
+            let final: unknown;
             const outcome = await abortable(
-              ui.runMinigame(p, { signal, restore, autosave: () => this.autosave('minigame_move') }),
+              ui.runMinigame(p, { signal, restore, autosave: () => this.autosave('minigame_move'), final: (st) => (final = st) }),
               signal,
             );
             if (!alive()) return cancelled;
-            const r = this.interp.finishMinigame(outcome);
+            const r = this.interp.finishMinigame(outcome, foundOf(final));
             platform.track(outcome === 'skipped' ? 'minigame_skip' : 'minigame_finish', {
               id: def.id,
               type: def.type,
@@ -448,4 +450,10 @@ export class Session {
       if (ev.t === 'archive') this.d.saves.unlockArchive(this.d.episode.id, ev.item);
     }
   }
+}
+
+/** Найденные зоны из итогового состояния мини-игры (`{ found: string[] }`); нет списка — undefined. */
+export function foundOf(state: unknown): string[] | undefined {
+  const found = typeof state === 'object' && state !== null ? (state as { found?: unknown }).found : undefined;
+  return Array.isArray(found) && found.every((x) => typeof x === 'string') ? [...found] : undefined;
 }

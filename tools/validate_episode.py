@@ -550,7 +550,14 @@ def minigame_integrity(ep: dict, ru: dict | None, rep: Report) -> None:
                 rep.err(f"{where}: повтор id зоны {dup}")
             if zones and not any(z.get("required") for z in zones):
                 rep.warn(f"{where}: нет обязательных зон — рантайм сочтёт обязательными все")
+            archive = {a["id"] for a in ep.get("archive_items", [])}
+            variables = set(ep.get("variables", {}))
             for z in zones:
+                # находка открывает свой факт (finishMinigame применяет archive_unlock и effects найденных зон)
+                if z.get("archive_unlock") and z["archive_unlock"] not in archive:
+                    rep.err(f"{where}: зона {z.get('id')}: archive item {z['archive_unlock']} не объявлен")
+                for eff in z.get("effects", []):
+                    check_effect(eff, variables, ep, f"{where} зона {z.get('id')}", rep)
                 x, y, w, h = z.get("rect", [0, 0, 0, 0])
                 if w <= 0 or h <= 0:
                     rep.err(f"{where}: зона {z.get('id')} с нулевым размером")

@@ -248,6 +248,27 @@ shot('flat_photo', 'hod_flat_photo', 'insert', 'flat', DAY, SUMMER,
      SUN_DAY, 'one framed photograph, porcelain cups, a crystal vase, the glass door; no writing visible',
      ['shot:flat_wide'])
 
+# Осмотр квартиры (мини-игра crime_scene_search): фон для поиска — три улики крупно и врозь, людей нет.
+shot('flat_inspect', 'hod_flat_inspect', 'search', 'flat', DAY, SUMMER,
+     {},
+     'No people in the frame. The camera stands in the middle of the room at the eye level of a standing person, a '
+     '35 mm-equivalent field of view, facing the LEFT wall with the sideboard and the window corner: Gromov\'s point of view '
+     'while he inspects the room. Three objects are the point of the frame; each is clearly visible, well apart from the '
+     'others and from the frame edges, all in the upper two thirds of the frame: (1) behind the glass door of the dark '
+     'sideboard on the LEFT, on the middle shelf at eye level, one framed black-and-white photograph of a young man in a '
+     'Soviet army uniform, about one tenth of the frame width; (2) on the waist-high wooden top of the sideboard below the '
+     'glass doors, a pair of old horn-rimmed reading glasses lying folded on a worn brown spectacle case, about one tenth '
+     'of the frame width; (3) on the windowsill in the RIGHT half of the frame, a small brown glass medicine bottle with a '
+     'strip of white tablets next to it, about one twelfth of the frame width. Nothing else on the shelves, the sideboard '
+     'top or the windowsill that could be mistaken for a clue.',
+     SUN_DAY, 'the sideboard with porcelain cups and a crystal vase behind the glass, the framed photograph, the reading '
+     'glasses on the spectacle case, the medicine bottle with the tablet strip on the windowsill, the wall rug, newspapers '
+     'pasted over the half-stripped walls; nothing on the floor in the middle of the frame',
+     ['place:flat_wide'],
+     note='Мини-игра «Осмотр квартиры»: фото внука за стеклом серванта (слева, на уровне глаз), очки на футляре на '
+          'столешнице серванта, таблетки на подоконнике справа. Каждая улика ≥ 6 % ширины кадра, врозь, в верхних двух '
+          'третях; людей нет; ничего похожего на улику рядом (ведро, стремянка, игрушка — не в зонах).')
+
 # Площадка третьего этажа: Галина на цепочке → Галина вышла.
 shot('landing_chain_wide', 'hod_landing_chain', 'wide', 'landing', DAY, SUMMER,
      {'neighbor': 'only her face and a strip of her house dress in the gap of her door No. 33, which is open a hand\'s width on a door chain; one suspicious eye on Gromov',
@@ -392,6 +413,7 @@ WAVES = [
      'stairs_wide', 'zhek_ots_clerk', 'bti_ots_clerk', 'car_ots_oper', 'recon_wide'],
     ['office_eve_ots_expert', 'office_eve_lens', 'office_eve_phone', 'office_d2_ots_boss', 'office_night_ots_expert',
      'landing_open_ots', 'stairs_ots_assistant', 'recon_ots_zoya'],
+    ['flat_inspect'],
 ]
 
 CONTINUITY = """CONTINUITY AND INTEGRITY (mandatory)

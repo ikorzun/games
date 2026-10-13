@@ -233,6 +233,16 @@
    "default": false,
    "doc": "Фото оставили до понятых."
   },
+  "glasses_found": {
+   "type": "bool",
+   "default": false,
+   "doc": "При осмотре нашли очки Зои Павловны."
+  },
+  "pills_found": {
+   "type": "bool",
+   "default": false,
+   "doc": "При осмотре нашли её таблетки."
+  },
   "galina_open": {
    "type": "bool",
    "default": false,
@@ -314,8 +324,9 @@
     "flat_formal",
     "flat_truth",
     "flat_look",
-    "flat_photo",
-    "flat_photo_talk",
+    "flat_inspect",
+    "flat_inspect_fail",
+    "flat_inspect_done",
     "flat_later",
     "galina",
     "galina_closed",
@@ -326,12 +337,14 @@
     "notary_insist",
     "notary_retreat",
     "notary_papers",
+    "notary_glasses",
     "notary_reg",
     "notary_reg_ins",
     "notary_reg2",
     "notary_who",
     "notary_alone",
     "notary_alone_papers",
+    "notary_alone_glasses",
     "notary_alone_reg",
     "notary_alone_reg_ins",
     "notary_alone_reg2",
@@ -1150,7 +1163,7 @@
       {
        "id": "open",
        "key": "ep01.h.flat_look.c_flat_photo.open",
-       "goto": "flat_photo"
+       "goto": "flat_inspect"
       },
       {
        "id": "later",
@@ -1168,8 +1181,8 @@
     }
    ]
   },
-  "flat_photo": {
-   "id": "flat_photo",
+  "flat_inspect": {
+   "id": "flat_inspect",
    "block": "bp_places",
    "stage": {
     "bg": "bg_hod_flat_photo",
@@ -1185,30 +1198,56 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.flat_photo.l01"
+     "key": "ep01.h.flat_inspect.l01"
     },
     {
-     "do": "archive_unlock",
-     "item": "n_photo"
-    },
-    {
-     "do": "set",
-     "effects": [
-      {
-       "var": "photo_seen",
-       "op": "set",
-       "value": true
-      }
-     ]
-    },
-    {
-     "do": "jump",
-     "scene": "flat_photo_talk"
+     "do": "minigame",
+     "minigame": "mg_flat_inspect"
     }
    ]
   },
-  "flat_photo_talk": {
-   "id": "flat_photo_talk",
+  "flat_inspect_fail": {
+   "id": "flat_inspect_fail",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_flat",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_flat",
+   "steps": [
+    {
+     "do": "show",
+     "who": "buyer",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "lapin_wife",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "lapin_wife",
+     "key": "ep01.h.flat_inspect_fail.l01"
+    },
+    {
+     "do": "jump",
+     "scene": "flat_inspect_done"
+    }
+   ]
+  },
+  "flat_inspect_done": {
+   "id": "flat_inspect_done",
    "block": "bp_places",
    "stage": {
     "bg": "bg_hod_flat",
@@ -1239,12 +1278,43 @@
     {
      "do": "say",
      "who": "sledak",
-     "key": "ep01.h.flat_photo_talk.l01"
+     "key": "ep01.h.flat_inspect_done.l01",
+     "when": "photo_seen"
     },
     {
      "do": "say",
      "who": "lapin_wife",
-     "key": "ep01.h.flat_photo_talk.l02"
+     "key": "ep01.h.flat_inspect_done.l02",
+     "when": "photo_seen"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.flat_inspect_done.l03",
+     "when": "glasses_found"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.flat_inspect_done.l04",
+     "when": "pills_found"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.flat_inspect_done.l05",
+     "when": "!photo_seen"
+    },
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "photo_later",
+       "op": "set",
+       "value": true
+      }
+     ],
+     "when": "!photo_seen"
     },
     {
      "do": "jump",
@@ -1866,8 +1936,71 @@
        "id": "who",
        "key": "ep01.h.notary_papers.c_notary_ask.who",
        "goto": "notary_who"
+      },
+      {
+       "id": "glasses",
+       "key": "ep01.h.notary_papers.c_notary_ask.glasses",
+       "goto": "notary_glasses",
+       "when": "glasses_found",
+       "hidden_when_false": true,
+       "effects": [
+        {
+         "var": "notary_alarmed",
+         "op": "set",
+         "value": true
+        }
+       ]
       }
      ]
+    }
+   ]
+  },
+  "notary_glasses": {
+   "id": "notary_glasses",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary",
+   "steps": [
+    {
+     "do": "show",
+     "who": "assistant",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.h.notary_glasses.l01"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.notary_glasses.l02"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_read"
+    },
+    {
+     "do": "jump",
+     "scene": "notary_lyuda_q"
     }
    ]
   },
@@ -2157,8 +2290,66 @@
        "id": "who",
        "key": "ep01.h.notary_alone_papers.c_notary_alone_ask.who",
        "goto": "notary_alone_who"
+      },
+      {
+       "id": "glasses",
+       "key": "ep01.h.notary_alone_papers.c_notary_alone_ask.glasses",
+       "goto": "notary_alone_glasses",
+       "when": "glasses_found",
+       "hidden_when_false": true,
+       "effects": [
+        {
+         "var": "notary_alarmed",
+         "op": "set",
+         "value": true
+        }
+       ]
       }
      ]
+    }
+   ]
+  },
+  "notary_alone_glasses": {
+   "id": "notary_alone_glasses",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary_alone",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary_alone",
+   "steps": [
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.h.notary_alone_glasses.l01"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.notary_alone_glasses.l02"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_read"
+    },
+    {
+     "do": "jump",
+     "scene": "route"
     }
    ]
   },
@@ -2958,8 +3149,20 @@
     },
     {
      "do": "say",
-     "who": "oper",
+     "who": "expert",
      "key": "ep01.h.d1_eve_rest.l05",
+     "when": "glasses_found"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d1_eve_rest.l06",
+     "when": "pills_found"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.d1_eve_rest.l07",
      "when": "visited_flat && !lyuda_talked"
     },
     {
@@ -2976,7 +3179,7 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d1_eve_rest.l06",
+     "key": "ep01.h.d1_eve_rest.l08",
      "when": "visited_flat && !lyuda_talked"
     },
     {
@@ -4066,7 +4269,98 @@
    ]
   }
  },
- "minigames": {},
+ "minigames": {
+  "mg_flat_inspect": {
+   "id": "mg_flat_inspect",
+   "type": "crime_scene_search",
+   "beat": "crime_scene",
+   "title_key": "ep01.h.mg_flat_inspect.title",
+   "brief_key": "ep01.h.mg_flat_inspect.brief",
+   "config": {
+    "scene_bg": "bg_hod_flat_inspect",
+    "hotspots": [
+     {
+      "id": "photo",
+      "rect": [
+       0.1087,
+       0.3218,
+       0.0456,
+       0.1215
+      ],
+      "label_key": "ep01.h.mg_flat_inspect.hs.photo",
+      "required": true,
+      "archive_unlock": "n_photo",
+      "effects": [
+       {
+        "var": "photo_seen",
+        "op": "set",
+        "value": true
+       }
+      ]
+     },
+     {
+      "id": "glasses",
+      "rect": [
+       0.0898,
+       0.6169,
+       0.0781,
+       0.0718
+      ],
+      "label_key": "ep01.h.mg_flat_inspect.hs.glasses",
+      "required": true,
+      "archive_unlock": "n_glasses",
+      "effects": [
+       {
+        "var": "glasses_found",
+        "op": "set",
+        "value": true
+       }
+      ]
+     },
+     {
+      "id": "pills",
+      "rect": [
+       0.7676,
+       0.4016,
+       0.0378,
+       0.044
+      ],
+      "label_key": "ep01.h.mg_flat_inspect.hs.pills",
+      "required": false,
+      "archive_unlock": "n_pills",
+      "effects": [
+       {
+        "var": "pills_found",
+        "op": "set",
+        "value": true
+       }
+      ]
+     }
+    ],
+    "max_misses": 4,
+    "hint_after_misses": 2,
+    "time_limit_ms": 0
+   },
+   "difficulty": "easy",
+   "skip": {
+    "allowed": true,
+    "after_fails": 1,
+    "skip_counts_as": "partial"
+   },
+   "outcomes": {
+    "success": {
+     "goto": "flat_inspect_done"
+    },
+    "partial": {
+     "goto": "flat_inspect_done"
+    },
+    "fail": {
+     "goto": "flat_inspect_fail"
+    }
+   },
+   "touch_ready": true
+  }
+ },
  "endings": [
   {
    "id": "e_proto",
@@ -4175,6 +4469,24 @@
    "text_key": "ep01.h.note.n_date.text"
   },
   {
+   "id": "n_glasses",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_glasses.title",
+   "text_key": "ep01.h.note.n_glasses.text"
+  },
+  {
+   "id": "n_pills",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_pills.title",
+   "text_key": "ep01.h.note.n_pills.text"
+  },
+  {
+   "id": "n_read",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_read.title",
+   "text_key": "ep01.h.note.n_read.text"
+  },
+  {
    "id": "n_call",
    "kind": "fact",
    "title_key": "ep01.h.note.n_call.title",
@@ -4183,6 +4495,12 @@
  ],
  "assets": {
   "backgrounds": [
+   {
+    "id": "bg_hod_flat_inspect",
+    "path": "assets/ep01/hod/hod_flat_inspect/flat_inspect.webp",
+    "season": "indoor",
+    "notes": "черновой кадр осмотра (лето 1993-го): фото внука, очки на футляре, таблетки на подоконнике"
+   },
    {
     "id": "bg_hod_office_am",
     "path": "assets/ep01/hod/hod_office_am/office_am_wide.webp",

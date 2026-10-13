@@ -1062,3 +1062,67 @@ describe('автопилот', () => {
     expect(cut).toMatchObject({ ending: null, truncated: true });
   });
 });
+
+describe('Interpreter: находки осмотра (crime_scene_search: hotspots[].archive_unlock / effects)', () => {
+  const BOOL: VariableDef = { type: 'bool', default: false };
+  const ep = miniEpisode(
+    {
+      s1: { steps: [{ do: 'minigame', minigame: 'm_look' }] },
+      s_ok: { steps: [{ do: 'end', ending: 'e_main' }] },
+      s_bad: { steps: [{ do: 'end', ending: 'e_main' }] },
+    },
+    {
+      variables: { photo: BOOL, glasses: BOOL, pills: BOOL },
+      archive: ['arc_photo', 'arc_glasses', 'arc_pills'],
+      minigames: {
+        m_look: mg('m_look', {
+          type: 'crime_scene_search',
+          config: {
+            scene_bg: 'bg_a',
+            max_misses: 3,
+            hotspots: [
+              { id: 'photo', rect: [0.1, 0.1, 0.1, 0.1], label_key: 'k.photo', required: true, archive_unlock: 'arc_photo', effects: [{ var: 'photo', op: 'set', value: true }] },
+              { id: 'glasses', rect: [0.4, 0.1, 0.1, 0.1], label_key: 'k.glasses', required: true, archive_unlock: 'arc_glasses', effects: [{ var: 'glasses', op: 'set', value: true }] },
+              { id: 'pills', rect: [0.7, 0.1, 0.1, 0.1], label_key: 'k.pills', required: false, archive_unlock: 'arc_pills', effects: [{ var: 'pills', op: 'set', value: true }] },
+            ],
+          },
+          outcomes: { success: { goto: 's_ok' }, partial: { goto: 's_ok' }, fail: { goto: 's_bad' } },
+          skip: { allowed: true, skip_counts_as: 'partial' },
+        }),
+      },
+    },
+  );
+  const look = (result: Parameters<Interpreter['finishMinigame']>[0], found?: string[]) => {
+    const interp = new Interpreter(ep);
+    interp.start();
+    expect(interp.pump().pending.kind).toBe('minigame');
+    interp.finishMinigame(result, found);
+    return interp.state;
+  };
+
+  it('что нашёл — то и узнал: каждая найденная зона открывает свой материал и ставит свои переменные', () => {
+    const st = look('partial', ['glasses', 'pills']);
+    expect(st.archive).toEqual(['arc_glasses', 'arc_pills']);
+    expect([st.vars.photo, st.vars.glasses, st.vars.pills]).toEqual([false, true, true]);
+  });
+
+  it('без списка находок (автопилот): успех — все обязательные зоны, частично и неудача — ничего', () => {
+    const ok = look('success');
+    expect(ok.archive).toEqual(['arc_photo', 'arc_glasses']); // необязательная находка не угадывается
+    expect([ok.vars.photo, ok.vars.glasses, ok.vars.pills]).toEqual([true, true, false]);
+    expect(look('partial').archive).toEqual([]);
+    expect(look('fail').archive).toEqual([]);
+  });
+
+  it('пропуск не даёт находок, даже если список пришёл (не смотрел — не видел)', () => {
+    const st = look('skipped', ['photo', 'glasses']);
+    expect(st.archive).toEqual([]);
+    expect(st.vars.photo).toBe(false);
+  });
+
+  it('неудача со списком: найденное до конца времени всё равно найдено', () => {
+    const st = look('fail', ['photo']);
+    expect(st.archive).toEqual(['arc_photo']);
+    expect(st.vars.photo).toBe(true);
+  });
+});

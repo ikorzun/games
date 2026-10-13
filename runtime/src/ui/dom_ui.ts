@@ -218,7 +218,8 @@ export class DomUI implements SessionUI {
     const root = (await this.minigameRoot()) as Container;
     const screen = new MinigameScreen();
     // Поиск по списку (режим дела) — во весь экран: картинка крупно, список целей колонкой рядом.
-    if (p.def.config.list === true) screen.el.classList.add('is-wide');
+    // осмотр места — во весь экран: картинку разглядывают (и в режиме дела со списком целей, и в осмотре новеллы)
+    if (p.def.config.list === true || p.def.type === 'crime_scene_search') screen.el.classList.add('is-wide');
     this.openGameScreen(screen);
     stage.setMinigameActive(true);
     const mg = createMinigame(p.def.type);

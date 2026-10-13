@@ -9,7 +9,7 @@ import { Interpreter } from '../src/core/interpreter';
 import { SaveManager } from '../src/core/saves';
 import type { SaveFile } from '../src/core/saves';
 import type { Episode, MinigameResult } from '../src/core/types';
-import { Session } from '../src/session';
+import { Session, foundOf } from '../src/session';
 import { Director } from '../src/stage/director';
 import { EP01_PATH, hasRepoContent, loadEpisode } from './helpers/content';
 import { policyFromTrail, sampleEpisode } from './helpers/explore';
@@ -478,5 +478,16 @@ describe('Session: дедуктивная развилка', () => {
     expect(ui.choices.map((c) => `${c.id}=${c.option}`)).toEqual(['c0=skip', 'd1=w1', 'd1=r']);
     expect(ui.endings[0]?.state.journal).toEqual([{ choice: 'd1', option: 'r', scene: 's_q', kind: 'deduction', prompt_key: 'k.q', key: 'k.r', fails: 1 }]);
     expect(platform.tracked.filter((x) => x.event === 'choice').at(-1)?.data).toEqual({ id: 'd1', option: 'r', verdict: 'right', fails: 1 });
+  });
+});
+
+describe('foundOf: находки осмотра из итогового состояния мини-игры', () => {
+  it('берёт список строк found, всё остальное — нет списка', () => {
+    expect(foundOf({ found: ['photo', 'glasses'], misses: 1 })).toEqual(['photo', 'glasses']);
+    expect(foundOf({ found: [] })).toEqual([]);
+    expect(foundOf(undefined)).toBeUndefined();
+    expect(foundOf(null)).toBeUndefined();
+    expect(foundOf({ found: [1, 2] })).toBeUndefined();
+    expect(foundOf({ marks: ['x'] })).toBeUndefined();
   });
 });

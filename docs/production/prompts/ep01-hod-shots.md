@@ -161,6 +161,15 @@
 - Предметы: one framed photograph, porcelain cups, a crystal vase, the glass door; no writing visible.
 - Референсы: shot:flat_wide
 
+## `flat_inspect` — search, сет `hod_flat_inspect`
+
+- Время: a sunny August day, 1993, early afternoon. Место: flat.
+- Камера: No people in the frame. The camera stands in the middle of the room at the eye level of a standing person, a 35 mm-equivalent field of view, facing the LEFT wall with the sideboard and the window corner: Gromov's point of view while he inspects the room. Three objects are the point of the frame; each is clearly visible, well apart from the others and from the frame edges, all in the upper two thirds of the frame: (1) behind the glass door of the dark sideboard on the LEFT, on the middle shelf at eye level, one framed black-and-white photograph of a young man in a Soviet army uniform, about one tenth of the frame width; (2) on the waist-high wooden top of the sideboard below the glass doors, a pair of old horn-rimmed reading glasses lying folded on a worn brown spectacle case, about one tenth of the frame width; (3) on the windowsill in the RIGHT half of the frame, a small brown glass medicine bottle with a strip of white tablets next to it, about one twelfth of the frame width. Nothing else on the shelves, the sideboard top or the windowsill that could be mistaken for a clue.
+- Свет: bright summer daylight through the window; the room lit by the window alone.
+- Предметы: the sideboard with porcelain cups and a crystal vase behind the glass, the framed photograph, the reading glasses on the spectacle case, the medicine bottle with the tablet strip on the windowsill, the wall rug, newspapers pasted over the half-stripped walls; nothing on the floor in the middle of the frame.
+- Пометка: Мини-игра «Осмотр квартиры»: фото внука за стеклом серванта (слева, на уровне глаз), очки на футляре на столешнице серванта, таблетки на подоконнике справа. Каждая улика ≥ 6 % ширины кадра, врозь, в верхних двух третях; людей нет; ничего похожего на улику рядом (ведро, стремянка, игрушка — не в зонах).
+- Референсы: place:flat_wide
+
 ## `landing_chain_wide` — wide, сет `hod_landing_chain`
 
 - Время: a sunny August day, 1993, early afternoon. Место: landing.

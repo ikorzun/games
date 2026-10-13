@@ -32,6 +32,7 @@ import type {
   ChoiceStep,
   DeductionMeter,
   DocumentPending,
+  Effect,
   Ending,
   EngineEvent,
   Episode,
@@ -393,8 +394,13 @@ export class Interpreter {
     this.queue.push({ t: 'checkpoint', reason: 'choice' });
   }
 
-  /** Ответ на ожидание minigame. `skipped` маппится в `skip.skip_counts_as` (по умолчанию partial). */
-  finishMinigame(result: MinigameResult): MinigameResolution {
+  /**
+   * Ответ на ожидание minigame. `skipped` маппится в `skip.skip_counts_as` (по умолчанию partial).
+   * `found` — что игрок нашёл в осмотре (id зон config.hotspots): каждая найденная зона применяет свои
+   * archive_unlock и effects (что нашёл — то и узнал). Без списка (автопилот, тесты): успех — найдены все
+   * обязательные зоны, иначе ничего; пропуск — ничего, даже со списком (не смотрел — не видел).
+   */
+  finishMinigame(result: MinigameResult, found?: readonly string[]): MinigameResolution {
     const p = this.current;
     if (!p || p.kind !== 'minigame') throw new EngineError('finishMinigame(): сейчас нет мини-игры');
     const def = p.def;
@@ -406,10 +412,25 @@ export class Interpreter {
     const outcome: Outcome = def.outcomes[counted] ?? def.outcomes.fail;
     applyEffects(this.state, this.episode, outcome.effects);
     if (outcome.archive_unlock) this.unlock(outcome.archive_unlock, true);
+    this.applyFinds(def, counted, result === 'skipped' ? [] : found);
     this.current = null;
     this.enterScene(outcome.goto, { reason: 'goto' });
     this.queue.push({ t: 'checkpoint', reason: 'minigame' });
     return { result, counted, goto: outcome.goto };
+  }
+
+  /** Награды найденных зон осмотра (config.hotspots[].archive_unlock / effects). */
+  private applyFinds(def: MinigameDef, counted: MinigameOutcomeKind, found: readonly string[] | undefined): void {
+    const zones = Array.isArray(def.config.hotspots) ? (def.config.hotspots as unknown[]) : [];
+    const isZone = (z: unknown): z is { id: string; required?: unknown; archive_unlock?: unknown; effects?: unknown } =>
+      typeof z === 'object' && z !== null && typeof (z as { id?: unknown }).id === 'string';
+    const list = zones.filter(isZone);
+    const ids = found ?? (counted === 'success' ? list.filter((z) => z.required === true).map((z) => z.id) : []);
+    for (const z of list) {
+      if (!ids.includes(z.id)) continue;
+      if (Array.isArray(z.effects)) applyEffects(this.state, this.episode, z.effects as Effect[]);
+      if (typeof z.archive_unlock === 'string') this.unlock(z.archive_unlock, true);
+    }
   }
 
   // ───────────────────────────── внутренности ─────────────────────────────

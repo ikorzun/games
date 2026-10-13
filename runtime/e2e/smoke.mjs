@@ -661,6 +661,22 @@ async function talkToFolder(page, max = 40) {
   return !!(await page.$('.vn-case.is-in'));
 }
 
+/** Осмотр без списка (crime_scene_search): зоны невидимы — клики мышью по их центрам, пока осмотр не закончится. */
+async function solveInspect(page) {
+  await page.waitForSelector('.mg-scene__zone', { state: 'attached', timeout: 20000 });
+  await sleep(300);
+  const centers = await page.evaluate(() => [...document.querySelectorAll('.mg-scene__zone')].map((z) => {
+    const b = z.getBoundingClientRect();
+    return [b.left + b.width / 2, b.top + b.height / 2];
+  }));
+  for (const [x, y] of centers) {
+    if (await page.isVisible('.mg-shell__btn.is-next')) break; // всё обязательное найдено — осмотр закончен
+    await page.mouse.click(x, y);
+    await sleep(120);
+  }
+  return centers.length;
+}
+
 /** Найти всё из списка поиска: настоящие клики мышью по центрам активных зон. */
 async function solveSearch(page) {
   await page.waitForSelector('.mg-scene__list.is-targets .mg-scene__item', { state: 'visible' });
@@ -770,7 +786,7 @@ async function scenarioCase(browser, baseUrl) {
  * цифра на выборе. На каждом шаге запоминает кадр монтажёра и зовёт onStep (скриншоты, проверки по ходу).
  */
 async function playHod(page, plan, onStep = async () => undefined, max = 1500) {
-  const seen = { shots: new Set(), choices: [], docs: 0 };
+  const seen = { shots: new Set(), choices: [], docs: 0, minigames: [] };
   const queue = Object.fromEntries(Object.entries(plan).map(([k, v]) => [k, Array.isArray(v) ? [...v] : [v]]));
   for (let i = 0; i < max; i++) {
     const p = await pending(page);
@@ -792,6 +808,15 @@ async function playHod(page, plan, onStep = async () => undefined, max = 1500) {
         const q = window.__vn.pending();
         return !(q && q.kind === 'choice' && q.id === id);
       }, p.id);
+      continue;
+    }
+    if (p.kind === 'minigame') {
+      // осмотр: настоящие клики по зонам находок, затем «Далее»
+      seen.minigames.push(p.id);
+      await solveInspect(page);
+      await page.waitForSelector('.mg-shell__btn.is-next', { state: 'visible', timeout: 10000 });
+      await page.click('.mg-shell__btn.is-next');
+      await page.waitForFunction((id) => window.__vn.pending()?.kind !== 'minigame' || window.__vn.pending()?.id !== id, p.id);
       continue;
     }
     if (p.kind === 'document') {
@@ -866,6 +891,9 @@ async function scenarioHod(browser, baseUrl) {
   const st = await stateOf(page);
   check('итог: второй день, четыре места, неверный ход в версии стоил самообладания, бумаги показаны', st.vars.day === 2 && ['visited_galina', 'visited_notary', 'visited_flat', 'visited_bti'].every((k) => st.vars[k] === true) && st.vars.visited_zhek === false && st.vars.nerves === 2 && run.docs === 2,
     JSON.stringify({ day: st.vars.day, nerves: st.vars.nerves, docs: run.docs }));
+  check('осмотр квартиры — мини-игра: найденное открыло свои факты (фото внука, очки) и вопрос нотариусу про очки доступен',
+    run.minigames.includes('mg_flat_inspect') && st.vars.photo_seen === true && st.vars.glasses_found === true && st.archive.includes('n_glasses') && st.archive.includes('n_photo'),
+    JSON.stringify({ mg: run.minigames, photo: st.vars.photo_seen, glasses: st.vars.glasses_found, archive: st.archive }));
   check('монтаж: кадры сменяются (больше 15 разных за проход), реконструкция в своём кадре', run.shots.size > 15 && /^sh_recon_/.test(notes.recon ?? ''), `${run.shots.size}: ${[...run.shots].join(', ')}`);
   await page.waitForSelector('.vn-ending', { state: 'visible' });
   check('экран концовки: «Версия есть»', (await page.locator('.vn-ending__title').textContent()) === 'Версия есть');

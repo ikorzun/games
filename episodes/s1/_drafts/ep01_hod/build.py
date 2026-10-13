@@ -173,7 +173,7 @@ OTS = {  # кадр через плечо: чьё плечо → на кого
 FILE = lambda sid, set_: f'assets/ep01/hod/{set_}/{sid}.webp'  # noqa: E731
 SHOTS, BACKGROUNDS = [], []
 for p in PLAN:
-    if p['kind'] == 'doc':
+    if p['kind'] in ('doc', 'search'):  # бланк и фон мини-игры осмотра — не кадры покрытия
         continue
     kind = 'wide' if p['set'] in AUX_SETS else p['kind']
     sh = {'id': f'sh_{p["id"]}', 'set': p['set'], 'bg': f'bg_{p["set"]}', 'kind': kind, 'angle': 'eye',
@@ -185,6 +185,9 @@ for p in PLAN:
 SHOTS.append({'id': 'sh_notary_alone_ots', 'set': 'hod_notary_alone', 'bg': 'bg_hod_notary_alone', 'kind': 'ots', 'angle': 'eye',
               'cast': [{'who': 'notary'}, {'who': 'sledak'}], 'from': 'sledak', 'focus': 'notary',
               'file': FILE('notary_ots_notary', 'hod_notary')})
+# Фон мини-игры «Осмотр квартиры»: стена Зои Павловны крупно, три улики врозь, людей нет.
+BACKGROUNDS.append({'id': 'bg_hod_flat_inspect', 'path': FILE('flat_inspect', 'hod_flat_inspect'), 'season': 'indoor',
+                    'notes': 'черновой кадр осмотра (лето 1993-го): фото внука, очки на футляре, таблетки на подоконнике'})
 for set_, wide in WIDE_OF.items():
     BG[set_] = f'bg_{set_}'
     wide_set = next(p['set'] for p in PLAN if p['id'] == wide)
@@ -328,20 +331,29 @@ scene('flat_look', 'bp_places', 'hod_flat', lambda: [
     show('buyer', 'left'), show('oper', 'left'), show('sledak', 'center'), show('lapin_wife', 'right'),
     say('oper', 'Юрист. Глянь в сервант. За стеклом.'),
     choice('c_flat_photo', 'Сервант', 'investigative', [
-        opt('open', 'Открыть стекло и посмотреть', 'flat_photo'),
+        opt('open', 'Осмотреть комнату самому', 'flat_inspect'),
         opt('later', 'Не трогать без понятых. Вернёмся с Левиной', 'flat_later', effects=[e('photo_later', 'set', True)]),
     ]),
 ])
-scene('flat_photo', 'bp_places', 'hod_flat_photo', lambda: [
+# Осмотр (мини-игра mg_flat_inspect): что нашёл — то и узнал (находки открывают свои факты в блокноте).
+scene('flat_inspect', 'bp_places', 'hod_flat_photo', lambda: [
     show('sledak', 'center'),
-    inner('Чашки, хрустальная ваза. И фотография: парень в армейской форме. На обороте карандашом: «Бабушке от внука. Самара».'),
-    unlock('n_photo'), setv(e('photo_seen', 'set', True)),
-    jump('flat_photo_talk'),
+    inner('Хозяйка «уехала на юг». Посмотрим, что она взяла с собой — и что оставила.'),
+    {'do': 'minigame', 'minigame': 'mg_flat_inspect'},
 ])
-scene('flat_photo_talk', 'bp_places', 'hod_flat', lambda: [
+scene('flat_inspect_fail', 'bp_places', 'hod_flat', lambda: [
     show('buyer', 'left'), show('oper', 'left'), show('sledak', 'center'), show('lapin_wife', 'right'),
-    say('sledak', 'Родственники на юге, говорите? У неё один внук. В Самаре.'),
-    say('lapin_wife', 'Нам так сказали… Мы же не знали.'),
+    say('lapin_wife', 'Вы долго ещё? У нас ребёнок спит.'),
+    jump('flat_inspect_done'),
+])
+scene('flat_inspect_done', 'bp_places', 'hod_flat', lambda: [
+    show('buyer', 'left'), show('oper', 'left'), show('sledak', 'center'), show('lapin_wife', 'right'),
+    say('sledak', 'Родственники на юге, говорите? У неё один внук. В Самаре.', when='photo_seen'),
+    say('lapin_wife', 'Нам так сказали… Мы же не знали.', when='photo_seen'),
+    inner('Очки на футляре. Без очков она и газету не читала. А доверенность, выходит, подписала не глядя.', when='glasses_found'),
+    inner('Нитроглицерин на подоконнике. Сердечники без него из дома не выходят.', when='pills_found'),
+    inner('Копаться дальше при хозяевах не дадут. Завтра Левина посмотрит по протоколу, с понятыми.', when='!photo_seen'),
+    setv(e('photo_later', 'set', True), when='!photo_seen'),
     jump('route'),
 ])
 scene('flat_later', 'bp_places', 'hod_flat', lambda: [
@@ -448,7 +460,16 @@ def papers(pre, set_, cast, after_talk):
             opt('register', 'Покажите запись в реестре за четырнадцатое июня', f'{pre}_reg',
                 effects=[e('notary_alarmed', 'set', True)]),
             opt('who', 'Кто её к вам привёл?', f'{pre}_who'),
+            opt('glasses', 'Как она прочла доверенность без очков?', f'{pre}_glasses', when='glasses_found',
+                effects=[e('notary_alarmed', 'set', True)]),
         ]),
+    ])
+    scene(f'{pre}_glasses', 'bp_places', set_, lambda: [
+        *cast(),
+        say('notary', 'Очки?.. Да, она была без очков. Текст зачитал доверенный, при мне. По закону так можно.'),
+        inner('Значит, доверенность ей читал сам Мурашов. Что он там прочитал — знает только он.'),
+        unlock('n_read'),
+        jump(after_talk),
     ])
     scene(f'{pre}_reg', 'bp_places', set_, lambda: [
         *cast(),
@@ -580,6 +601,8 @@ scene('d1_eve_rest', 'b2_evening', 'hod_office_eve', lambda: [
     say('expert', '«Сергей» и серая «Волга» — уже кое-что. Но бумаги с изъяном нет, а до пятницы четыре дня.', when='!have_contract && galina_open'),
     say('expert', 'Пустой день — тоже день. Только до пятницы их осталось четыре.', when='!have_contract && !galina_open'),
     say('expert', 'Фото, говоришь, за стеклом? Завтра с утра съезжу с понятыми. По протоколу — значит, в дело.', when='photo_later'),
+    say('expert', 'Очки дома, а подпись в доверенности ровная. Значит, читал ей кто-то другой.', when='glasses_found'),
+    say('expert', 'Нитроглицерин оставила? Такие на юг не уезжают, Громов.', when='pills_found'),
     say('oper', 'Звонил знакомый с Пресни. Ковригин сегодня отпустил помощницу — в отпуск, с завтрашнего дня. Адреса не оставил.', when='visited_flat && !lyuda_talked'),
     setv(e('lyuda_gone', 'set', True), when='visited_flat && !lyuda_talked'),
     inner('Лапины кому-то позвонили, едва мы ушли. Или нотариус сам всё понял.', when='visited_flat && !lyuda_talked'),
@@ -730,6 +753,37 @@ scene('proto_end', 'b4_night', 'hod_office_night', lambda: [
     {'do': 'end', 'ending': 'e_proto'},
 ], time='night')
 
+# ───────────────────────────── мини-игры ─────────────────────────────
+
+_cur['scene'] = 'mg_flat_inspect'
+MINIGAMES = {
+    'mg_flat_inspect': {
+        'id': 'mg_flat_inspect', 'type': 'crime_scene_search', 'beat': 'crime_scene',
+        'title_key': key('title', 'Осмотр квартиры'),
+        'brief_key': key('brief', 'Что Зоя Павловна «оставила», уезжая на юг? Лапины смотрят: копаться долго не дадут.'),
+        'config': {
+            'scene_bg': 'bg_hod_flat_inspect',
+            # зоны — по кадру flat_inspect (рамки сверены на картинке); каждая находка открывает свой факт
+            'hotspots': [
+                {'id': 'photo', 'rect': [0.1087, 0.3218, 0.0456, 0.1215], 'label_key': key('hs.photo', 'Фото внука за стеклом'),
+                 'required': True, 'archive_unlock': 'n_photo', 'effects': [e('photo_seen', 'set', True)]},
+                {'id': 'glasses', 'rect': [0.0898, 0.6169, 0.0781, 0.0718], 'label_key': key('hs.glasses', 'Её очки на футляре'),
+                 'required': True, 'archive_unlock': 'n_glasses', 'effects': [e('glasses_found', 'set', True)]},
+                {'id': 'pills', 'rect': [0.7676, 0.4016, 0.0378, 0.0440], 'label_key': key('hs.pills', 'Таблетки на подоконнике'),
+                 'required': False, 'archive_unlock': 'n_pills', 'effects': [e('pills_found', 'set', True)]},
+            ],
+            'max_misses': 4,
+            'hint_after_misses': 2,
+            'time_limit_ms': 0,
+        },
+        'difficulty': 'easy',
+        'skip': {'allowed': True, 'after_fails': 1, 'skip_counts_as': 'partial'},
+        'outcomes': {'success': {'goto': 'flat_inspect_done'}, 'partial': {'goto': 'flat_inspect_done'},
+                     'fail': {'goto': 'flat_inspect_fail'}},
+        'touch_ready': True,
+    },
+}
+
 # ───────────────────────────── блокнот (архив) ─────────────────────────────
 
 NOTES = [
@@ -749,6 +803,9 @@ NOTES = [
     ('n_card', 'document', 'Карточка БТИ', 'Молодогвардейская, кв. 34. Переход права: договор от 28.06.1993, нотариус Ковригин А. Н. Представитель продавца по доверенности: Мурашов С. В.', 'doc_bti_card'),
     ('n_bti', 'fact', 'Шесть сделок за лето', 'Шесть квартир одиноких стариков. Нотариус везде Ковригин, доверенное лицо везде Мурашов С. В.', None),
     ('n_date', 'fact', 'Дата в доверенности', 'Левина: последняя цифра даты переписана — четвёрка поверх единицы. Оговорки «исправленному верить» нет. Бумага с изъяном.', None),
+    ('n_glasses', 'fact', 'Очки Зои Павловны', 'Остались дома, на серванте, на футляре. Без очков она не читает: доверенность подписывала, не прочитав.', None),
+    ('n_pills', 'fact', 'Таблетки на подоконнике', 'Нитроглицерин. Сердечница без него из дома не выходит — на юг она не уезжала.', None),
+    ('n_read', 'fact', 'Доверенность ей читал Мурашов', 'Ковригин: бабушка была без очков, текст ей зачитал доверенный — сам Мурашов. «По закону можно».', None),
     ('n_call', 'fact', 'Лапины звонили нотариусу', 'Посредник велел Лапиным звонить нотариусу, если придут из милиции. Нотариус и посредник — одна связка.', None),
 ]
 ARCHIVE = []
@@ -803,6 +860,7 @@ for b, doc_ in [('visited_flat', 'Были в квартире у Лапиных
                 ('have_contract', 'Копия договора и доверенности у следователя.'), ('know_name', 'Фамилия доверенного известна.'),
                 ('lapins_told_truth', 'Лапиным сказали, что сделку могут признать недействительной.'),
                 ('photo_seen', 'Фото внука найдено.'), ('photo_later', 'Фото оставили до понятых.'),
+                ('glasses_found', 'При осмотре нашли очки Зои Павловны.'), ('pills_found', 'При осмотре нашли её таблетки.'),
                 ('galina_open', 'Галина рассказала всё.'), ('galina_closed', 'С Галиной заговорили протоколом.'),
                 ('galina_trust', 'Галине обещали, что её имя не прозвучит.'), ('galina_leaving', 'Галина собирается уехать к дочери.'),
                 ('notary_alarmed', 'Нотариус встревожен и жалуется.'),
@@ -829,7 +887,7 @@ episode = {
     'frame': {**OLD['frame'], 'editorial_layer': False},
     'content_warnings': OLD['content_warnings'], 'age_rating': OLD['age_rating'], 'estimated_minutes': 15,
     'localization': OLD['localization'],
-    'cast': cast, 'variables': variables, 'blocks': blocks, 'scenes': SCENES, 'minigames': {},
+    'cast': cast, 'variables': variables, 'blocks': blocks, 'scenes': SCENES, 'minigames': MINIGAMES,
     'endings': [
         {'id': 'e_proto', 'title_key': 'ep01.h.end.proto', 'kind': 'canonical'},
     ],
