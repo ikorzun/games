@@ -217,9 +217,9 @@ describe('интерфейс: документальная эстетика, mob
     expect(uiCss).toMatch(/env\(safe-area-inset-right\)/);
   });
 
-  it('портрет: картинка сверху, текст под ней; HUD внутри сцены (а не в панели текста)', () => {
+  it('портрет: картинка сверху целиком (16:9 по ширине), текст под ней; HUD внутри сцены (а не в панели текста)', () => {
     expect(uiCss).toMatch(/@media \(orientation: portrait\)/);
-    expect(uiCss).toMatch(/grid-template-rows:\s*minmax\(0,\s*56%\)\s*minmax\(0,\s*1fr\)/);
+    expect(uiCss).toMatch(/grid-template-rows:\s*minmax\(0,\s*min\(56%,\s*56\.25vw\)\)\s*minmax\(0,\s*1fr\)/);
     expect(uiCss).toMatch(/\.vn-main > \.vn-ui\s*\{\s*grid-area:\s*2 \/ 1/);
     expect(stageCss).toMatch(/\.vn-stage__hud/);
   });

@@ -5,7 +5,7 @@
 ## `office_am_wide` — wide, сет `hod_office_am`
 
 - Время: a sunny Monday morning, 9 August 1993, about 9 a.m.. Место: office.
-- Investigator Andrei Gromov: sits behind the desk on the LEFT of the frame, three-quarter to the camera, turned right toward Sayko, one hand on an open folder with four handwritten statements, tired and attentive.
+- Investigator Andrei Gromov: sits behind the desk on the LEFT of the frame, his face in three-quarter view turned right toward Sayko, his eyes on Sayko, not toward the camera, one hand on an open folder with four handwritten statements, tired and attentive.
 - Detective Viktor Sayko: sits on the visitor's chair at the RIGHT end of the desk, turned left toward Gromov, leaning forward with his elbows on his knees, a wry half-smile.
 - Камера: The camera stands in the corner by the door at the eye level of a standing person, a 32 mm-equivalent field of view: the whole room with everyone in it, people small inside the space; the lower third of the frame is kept free of faces (the text box lives there), headroom above the tallest person. The desk runs across the left half of the frame, the safe behind it, the window in the centre of the back wall between the two men.
 - Свет: bright morning sunlight through the window: sunny patches on the desk and the parquet, the rest of the room in soft shade.
@@ -38,7 +38,7 @@
 - Время: a warm August evening, 1993, about 7:40 p.m., an hour before sunset. Место: office.
 - Investigator Andrei Gromov: sits behind the desk on the LEFT in the same place as in the morning, reaching for a glass of tea Levina holds out to him.
 - forensic expert Nina Levina: sits on the RIGHT corner of the desk, half-turned toward Gromov, holding out a glass of tea in a metal glass-holder, a second glass beside her.
-- Detective Viktor Sayko: stands at the open window in the centre of the back wall, smoking, half-turned to the room, looking at the two of them.
+- Detective Viktor Sayko: stands at the open window in the centre of the back wall, smoking, half-turned to the room, his eyes on Gromov and Levina at the desk (toward the left of the frame), not toward the camera.
 - Камера: The camera stands in the corner by the door at the eye level of a standing person, a 32 mm-equivalent field of view: the whole room with everyone in it, people small inside the space; the lower third of the frame is kept free of faces (the text box lives there), headroom above the tallest person. The same view as the morning: the desk across the left half, the window in the centre.
 - Свет: low golden evening sunlight through the open window, long warm shadows across the parquet; the green desk lamp is switched on.
 - Предметы: two glasses of tea in metal glass-holders, the green lamp (on), the folders, the open window.
@@ -186,13 +186,13 @@
 ## `landing_open_wide` — wide, сет `hod_landing_open`
 
 - Время: a sunny August day, 1993, early afternoon. Место: landing.
-- Galina, the neighbour: has stepped out onto the landing in front of her open door No. 33, in her house dress, apron and felt slippers, leaning toward Gromov and speaking quietly, glancing sideways at Zoya's new steel door.
+- Galina, the neighbour: stands on the threshold of her wide-open door No. 33, the door chain unhooked and hanging loose down the door edge, in her house dress, apron and felt slippers, leaning toward Gromov and speaking quietly, glancing sideways at Zoya's new steel door.
 - Investigator Andrei Gromov: stands close in front of her, LEFT of centre, seen from behind, listening.
 - Detective Viktor Sayko: leans on the stair railing at the RIGHT edge in the foreground, now looking at Galina.
 - Камера: The same camera as the first view of the landing: from the top step at the eye level of a standing person, 32 mm-equivalent; the lower third of the frame is kept free of faces.
 - Свет: summer daylight from the stairwell window behind the camera.
 - Предметы: both doors, Galina's door wide open with the chain hanging loose, the railing.
-- Референсы: shot:landing_chain_wide, face:neighbor, face:sledak, face:oper
+- Референсы: place:landing_chain_wide, face:neighbor, face:sledak, face:oper
 
 ## `landing_open_ots` — ots, сет `hod_landing_open`
 
@@ -208,7 +208,7 @@
 
 - Время: a sunny August day, 1993, early afternoon. Место: notary.
 - notary Kovrigin: sits behind the desk in the centre, facing the visitors and the camera, dabbing his forehead with a handkerchief, the open register in front of him, a strained polite smile.
-- Lyuda, the notary's assistant: sits at the small typing desk by the window on the LEFT, her hands frozen above the typewriter keys, looking sideways at the visitors.
+- Lyuda, the notary's assistant: sits at the small typing desk by the window on the LEFT, her hands frozen above the typewriter keys, glancing over her right shoulder at Gromov's back (right of centre), not toward the camera.
 - Investigator Andrei Gromov: stands in front of the desk, RIGHT of centre, seen from behind, his case folder in his hand.
 - Detective Viktor Sayko: leans on the frame of the open door on the RIGHT, arms crossed, looking at Lyuda.
 - Камера: The camera stands behind the visitors near the wall opposite the desk, at the eye level of a standing person, a 32 mm-equivalent field of view: the whole office with everyone in it; the lower third of the frame is kept free of faces.

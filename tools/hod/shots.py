@@ -134,7 +134,7 @@ def ots(near, far, edge, extra=''):
 
 # Кабинет Громова, понедельник, утро: Сайко принёс заявления.
 shot('office_am_wide', 'hod_office_am', 'wide', 'office', MORNING, SUMMER,
-     {'sledak': 'sits behind the desk on the LEFT of the frame, three-quarter to the camera, turned right toward Sayko, one hand on an open folder with four handwritten statements, tired and attentive',
+     {'sledak': 'sits behind the desk on the LEFT of the frame, his face in three-quarter view turned right toward Sayko, his eyes on Sayko, not toward the camera, one hand on an open folder with four handwritten statements, tired and attentive',
       'oper': 'sits on the visitor\'s chair at the RIGHT end of the desk, turned left toward Gromov, leaning forward with his elbows on his knees, a wry half-smile'},
      WIDE_DOOR + ' The desk runs across the left half of the frame, the safe behind it, the window in the centre of the back wall between the two men.',
      SUN_AM, 'the desk, the green lamp (switched off), the typewriter, the telephone, the folder of statements, the safe, the window with the net curtain',
@@ -157,7 +157,7 @@ shot('office_am_phone', 'hod_office_call_am', 'medium', 'office', MORNING, SUMME
 shot('office_eve_wide', 'hod_office_eve', 'wide', 'office', EVENING, SUMMER,
      {'sledak': 'sits behind the desk on the LEFT in the same place as in the morning, reaching for a glass of tea Levina holds out to him',
       'expert': 'sits on the RIGHT corner of the desk, half-turned toward Gromov, holding out a glass of tea in a metal glass-holder, a second glass beside her',
-      'oper': 'stands at the open window in the centre of the back wall, smoking, half-turned to the room, looking at the two of them'},
+      'oper': 'stands at the open window in the centre of the back wall, smoking, half-turned to the room, his eyes on Gromov and Levina at the desk (toward the left of the frame), not toward the camera'},
      WIDE_DOOR + ' The same view as the morning: the desk across the left half, the window in the centre.',
      'low golden evening sunlight through the open window, long warm shadows across the parquet; the green desk lamp is switched on',
      'two glasses of tea in metal glass-holders, the green lamp (on), the folders, the open window',
@@ -264,12 +264,12 @@ shot('landing_chain_ots', 'hod_landing_chain', 'ots', 'landing', DAY, SUMMER,
      'summer daylight from behind the camera', 'the door chain, the padded door',
      ['shot:landing_chain_wide', 'face:neighbor', 'face:sledak'])
 shot('landing_open_wide', 'hod_landing_open', 'wide', 'landing', DAY, SUMMER,
-     {'neighbor': 'has stepped out onto the landing in front of her open door No. 33, in her house dress, apron and felt slippers, leaning toward Gromov and speaking quietly, glancing sideways at Zoya\'s new steel door',
+     {'neighbor': 'stands on the threshold of her wide-open door No. 33, the door chain unhooked and hanging loose down the door edge, in her house dress, apron and felt slippers, leaning toward Gromov and speaking quietly, glancing sideways at Zoya\'s new steel door',
       'sledak': 'stands close in front of her, LEFT of centre, seen from behind, listening',
       'oper': 'leans on the stair railing at the RIGHT edge in the foreground, now looking at Galina'},
      'The same camera as the first view of the landing: from the top step at the eye level of a standing person, 32 mm-equivalent; the lower third of the frame is kept free of faces.',
      'summer daylight from the stairwell window behind the camera', 'both doors, Galina\'s door wide open with the chain hanging loose, the railing',
-     ['shot:landing_chain_wide', 'face:neighbor', 'face:sledak', 'face:oper'])
+     ['place:landing_chain_wide', 'face:neighbor', 'face:sledak', 'face:oper'])
 shot('landing_open_ots', 'hod_landing_open', 'ots', 'landing', DAY, SUMMER,
      {'neighbor': 'stands on the landing facing the camera, one hand pressed to her chest, speaking low and frightened, her eyes flicking to the side toward the neighbouring door',
       'sledak': 'seen only from behind at the RIGHT edge'},
@@ -280,7 +280,7 @@ shot('landing_open_ots', 'hod_landing_open', 'ots', 'landing', DAY, SUMMER,
 # Нотариус Ковригин, Пресня.
 shot('notary_wide', 'hod_notary', 'wide', 'notary', DAY, SUMMER,
      {'notary': 'sits behind the desk in the centre, facing the visitors and the camera, dabbing his forehead with a handkerchief, the open register in front of him, a strained polite smile',
-      'assistant': 'sits at the small typing desk by the window on the LEFT, her hands frozen above the typewriter keys, looking sideways at the visitors',
+      'assistant': 'sits at the small typing desk by the window on the LEFT, her hands frozen above the typewriter keys, glancing over her right shoulder at Gromov\'s back (right of centre), not toward the camera',
       'sledak': 'stands in front of the desk, RIGHT of centre, seen from behind, his case folder in his hand',
       'oper': 'leans on the frame of the open door on the RIGHT, arms crossed, looking at Lyuda'},
      'The camera stands behind the visitors near the wall opposite the desk, at the eye level of a standing person, a 32 mm-equivalent field of view: the whole office with everyone in it; the lower third of the frame is kept free of faces.',
@@ -431,8 +431,8 @@ def ref_text(refs: list[str]) -> tuple[str, list[str]]:
             medias.append(f'file:{OUT}/out/{src}.png')
         else:
             look = LOOKS.get(val) or NEW_LOOKS.get(val, '')
-            lines.append(f'Reference {n} is {NAMES[val]} ({look}): keep this exact face, hair and build; ignore the clothes '
-                         f'and the background of the reference.')
+            lines.append(f'Reference {n} is {NAMES[val]} ({look}): keep this exact face, hair and build; ignore the clothes, '
+                         f'the background, the head pose and the direction of the gaze of the reference.')
             medias.append(f'file:{FACES}/{val}.webp')
     return '\n'.join(lines), medias
 
