@@ -171,6 +171,24 @@ OTS = {  # кадр через плечо: чьё плечо → на кого
     'recon_ots_zoya': ('murashov_sil', 'zoya'),
 }
 FILE = lambda sid, set_: f'assets/ep01/hod/{set_}/{sid}.webp'  # noqa: E731
+MEM = lambda sid, set_, tail='': f'assets/ep01/hod_memory/{set_}/{sid}{tail}.webp'  # noqa: E731
+HAS = lambda path: os.path.exists(os.path.join(ROOT, path))  # noqa: E731
+
+
+def memory_of(sid: str, set_: str, cast: list[str]) -> dict | None:
+    """Графика «Воспоминания» (tools/hod/memory.py): кадр 16:9, квадрат для телефона и маски людей — что уже есть."""
+    if not HAS(MEM(sid, set_)):
+        return None
+    m = {'file': MEM(sid, set_)}
+    if HAS(MEM(sid, set_, '.square')):
+        m['square'] = MEM(sid, set_, '.square')
+    for key, tail in (('masks', ''), ('square_masks', '.square')):
+        found = {w: MEM(sid, set_, f'{tail}.{w}') for w in cast if HAS(MEM(sid, set_, f'{tail}.{w}'))}
+        if found:
+            m[key] = found
+    return m
+
+
 SHOTS, BACKGROUNDS = [], []
 for p in PLAN:
     if p['kind'] in ('doc', 'search'):  # бланк и фон мини-игры осмотра — не кадры покрытия
@@ -184,6 +202,9 @@ for p in PLAN:
         mask = f'assets/ep01/hod/{p["set"]}/{p["id"]}.{c["who"]}.webp'
         if os.path.exists(os.path.join(ROOT, mask)):
             c['mask'] = mask
+    mem = memory_of(p['id'], p['set'], [c['who'] for c in sh['cast']])
+    if mem:
+        sh['memory'] = mem
     SHOTS.append(sh)
 # Контора без помощницы: тот же кадр через плечо на Ковригина (на нём Люды не видно).
 SHOTS.append({'id': 'sh_notary_alone_ots', 'set': 'hod_notary_alone', 'bg': 'bg_hod_notary_alone', 'kind': 'ots', 'angle': 'eye',
@@ -191,11 +212,13 @@ SHOTS.append({'id': 'sh_notary_alone_ots', 'set': 'hod_notary_alone', 'bg': 'bg_
               'file': FILE('notary_ots_notary', 'hod_notary')})
 # Фон мини-игры «Осмотр квартиры»: стена Зои Павловны крупно, три улики врозь, людей нет.
 BACKGROUNDS.append({'id': 'bg_hod_flat_inspect', 'path': FILE('flat_inspect', 'hod_flat_inspect'), 'season': 'indoor',
+                    **({'memory': MEM('flat_inspect', 'hod_flat_inspect')} if HAS(MEM('flat_inspect', 'hod_flat_inspect')) else {}),
                     'notes': 'черновой кадр осмотра (лето 1993-го): фото внука, очки на футляре, таблетки на подоконнике'})
 for set_, wide in WIDE_OF.items():
     BG[set_] = f'bg_{set_}'
     wide_set = next(p['set'] for p in PLAN if p['id'] == wide)
     BACKGROUNDS.append({'id': f'bg_{set_}', 'path': FILE(wide, wide_set), 'season': 'summer' if 'car' in set_ else 'indoor',
+                        **({'memory': MEM(wide, wide_set)} if HAS(MEM(wide, wide_set)) else {}),
                         'notes': f'черновой общий план {wide} (лето 1993-го)'})
 
 # ───────────────────────────── блоки ─────────────────────────────

@@ -15,7 +15,7 @@
  * left / center / right, offscreen_* не рисуются. Говорящего подсвечивают затемнением остальных
  * (tint), силуэт без собственного файла — чёрный кадр с прозрачностью .85.
  */
-import { Application, Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
+import { Application, Container, defaultFilterVert, GlProgram, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
 import type { WebGLRenderer } from 'pixi.js';
 import type { ViolenceMode } from '../core/settings';
 import type { SpriteView, TransitionKind, ViewState } from '../core/types';
@@ -26,7 +26,8 @@ import { isOffscreen, POSITION_X, SILHOUETTE_ALPHA, SPRITE_FIT, SPRITE_MAX_WIDTH
 import type { ISceneRenderer, SlotStates } from './renderer';
 import type { CamFrame, SignalProfile } from './camcorder';
 import { VHS_FRAGMENT, VhsFilter } from './vhs_filter';
-import { fadeAt, fadeDone, FOCUS_FRAGMENT, FOCUS_MS, FocusFilter } from './focus_filter';
+import { fadeAt, fadeDone, FOCUS_DIM, FOCUS_DIM_MEMORY, FOCUS_FRAGMENT, FOCUS_MS, FocusFilter } from './focus_filter';
+import { DITHER_CELL, DITHER_FRAGMENT, DitherFilter } from './dither_filter';
 import type { FocusFade } from './focus_filter';
 
 const FONT = 'PT Sans, Noto Sans, Arial, sans-serif';
@@ -157,7 +158,10 @@ export class PixiSceneRenderer implements ISceneRenderer {
   private readonly cgLayer = new Container();
   /** Растворение: снимок прежнего кадра поверх нового, гаснет (crossfade). */
   private readonly fadeLayer = new Container();
-  private fade: { pic: Sprite; t0: number; ms: number } | null = null;
+  private fade: { pic: Sprite; t0: number; ms: number; dither: DitherFilter | null } | null = null;
+  /** Графика: «Воспоминания» — мягче подсветка, растворение точками; шейдер точек проверен (null — ещё нет). */
+  private graphics: 'real' | 'memory' = 'real';
+  private ditherOk: boolean | null = null;
   private readonly bgG = new Graphics();
   private readonly bgLabel = makeText(28, '700');
   private readonly bgTag = makeText(14, '400');
@@ -394,12 +398,18 @@ export class PixiSceneRenderer implements ISceneRenderer {
     return true;
   }
 
+  /** Графика (настройка): «Воспоминания» — мягче подсветка говорящего, растворение точками. */
+  setGraphics(mode: 'real' | 'memory'): void {
+    this.graphics = mode;
+    this.invalidate();
+  }
+
   /**
    * Растворение: текущая картинка застывает поверх и гаснет за ms, а под ней уже рисуется новый кадр (Stage зовёт это
    * до смены сцены). Снимок — без шейдера камкордера: шейдер лежит на всём кадре и сам пройдёт по смеси.
    * false — снимок не удался: Stage сделает прежний «нырок» в полутень.
    */
-  crossfade(ms: number): boolean {
+  crossfade(ms: number, style: 'fade' | 'dither' = 'fade'): boolean {
     if (!this.app || this.destroyed || ms <= 0) return false;
     const stage = this.app.stage;
     const W = this.app.screen.width;
@@ -419,8 +429,11 @@ export class PixiSceneRenderer implements ISceneRenderer {
     const pic = new Sprite(tex);
     pic.width = W;
     pic.height = H;
+    // Точками (графика «Воспоминания»): снимок рассыпается по матрице Байера; шейдер не собрался — обычное растворение.
+    const dither = style === 'dither' && this.ditherUsable() ? new DitherFilter() : null;
+    if (dither) pic.filters = [dither];
     this.fadeLayer.addChild(pic);
-    this.fade = { pic, t0: performance.now(), ms };
+    this.fade = { pic, t0: performance.now(), ms, dither };
     this.invalidate();
     return true;
   }
@@ -428,7 +441,13 @@ export class PixiSceneRenderer implements ISceneRenderer {
   private dropFade(): void {
     if (!this.fade) return;
     this.fade.pic.destroy({ texture: true, textureSource: true });
+    this.fade.dither?.destroy();
     this.fade = null;
+  }
+
+  private ditherUsable(): boolean {
+    if (this.ditherOk === null) this.ditherOk = this.glslOk(DITHER_FRAGMENT, '[stage] шейдер растворения точками не собрался, обычное растворение:');
+    return this.ditherOk;
   }
 
   /** Снять камкордер с кадра (уровень «выкл», мини-игра, меню). */
@@ -440,10 +459,6 @@ export class PixiSceneRenderer implements ISceneRenderer {
     }
   }
 
-  /**
-   * Шейдер проверяется один раз: компиляция в том же GL-контексте (WebGL2). Ошибку компиляции PixiJS только
-   * пишет в консоль и рисует чёрный кадр — поэтому проверяем заранее и при ошибке не включаем фильтр вовсе.
-   */
   /** Подсветка: веса масок по времени, фильтр на слое кадра (нет веса или шейдера — фильтра нет). true — идёт переход. */
   private applyFocus(now: number): boolean {
     const prev = this.focusPrev;
@@ -463,7 +478,8 @@ export class PixiSceneRenderer implements ISceneRenderer {
     const area = this.shotLayer.filterArea;
     if (!area || area.width !== W || area.height !== H) this.shotLayer.filterArea = new Rectangle(0, 0, W, H);
     const b = this.shotPic.getBounds();
-    f.setFrame({ maskA: prev?.tex ?? null, maskB: cur?.tex ?? null, wA, wB, shot: { x: b.x, y: b.y, width: b.width, height: b.height } });
+    const dim = this.graphics === 'memory' ? FOCUS_DIM_MEMORY : FOCUS_DIM;
+    f.setFrame({ maskA: prev?.tex ?? null, maskB: cur?.tex ?? null, wA, wB, shot: { x: b.x, y: b.y, width: b.width, height: b.height }, dim });
     return moving;
   }
 
@@ -472,19 +488,26 @@ export class PixiSceneRenderer implements ISceneRenderer {
     return this.focusOk;
   }
 
+  /**
+   * Шейдер проверяется один раз: компиляция в том же GL-контексте (WebGL2). Ошибку компиляции PixiJS только
+   * пишет в консоль и рисует чёрный кадр — поэтому проверяем заранее и при ошибке не включаем фильтр вовсе.
+   */
   private vhsUsable(): boolean {
     if (this.vhsOk === null) this.vhsOk = this.glslOk(VHS_FRAGMENT, '[camcorder] шейдер записи не собрался, остаётся CSS-камкордер:');
     return this.vhsOk;
   }
 
-  /** Фрагментный шейдер собирается на этой видеокарте (WebGL2); нет — warn и false: эффект выключается. */
+  /**
+   * Фрагментный шейдер собирается на этой видеокарте (WebGL2); нет — warn и false: эффект выключается. Собираем ровно
+   * тот текст, что соберёт Pixi: без «#version 300 es» он переводит шейдер в GLSL ES 1.00 макросами.
+   */
   private glslOk(fragment: string, warning: string): boolean {
     try {
       const gl = (this.app.renderer as WebGLRenderer).gl as WebGL2RenderingContext | WebGLRenderingContext | undefined;
       if (!gl || typeof WebGL2RenderingContext === 'undefined' || !(gl instanceof WebGL2RenderingContext)) return false;
       const sh = gl.createShader(gl.FRAGMENT_SHADER);
       if (!sh) return false;
-      gl.shaderSource(sh, `#version 300 es\nprecision highp float;\n${fragment}`);
+      gl.shaderSource(sh, new GlProgram({ vertex: defaultFilterVert, fragment, preferredFragmentPrecision: 'highp' }).fragment ?? '');
       gl.compileShader(sh);
       const ok = gl.getShaderParameter(sh, gl.COMPILE_STATUS) === true;
       if (!ok) console.warn(warning, gl.getShaderInfoLog(sh));
@@ -674,7 +697,9 @@ export class PixiSceneRenderer implements ISceneRenderer {
     if (this.fade) {
       animating = true;
       const k = Math.min(1, (now - this.fade.t0) / this.fade.ms);
-      this.fade.pic.alpha = 1 - k * k * (3 - 2 * k);
+      const e = k * k * (3 - 2 * k);
+      if (this.fade.dither) this.fade.dither.setProgress(e, DITHER_CELL * this.app.renderer.resolution);
+      else this.fade.pic.alpha = 1 - e;
       if (k >= 1) this.dropFade();
     }
     if (this.applyFocus(now)) animating = true;

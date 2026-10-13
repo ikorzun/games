@@ -13,6 +13,8 @@ import type { TextureSource } from 'pixi.js';
 export const FOCUS_MS = 450;
 /** Насколько гаснет окружение (доля яркости): 25–35 % по брифу. */
 export const FOCUS_DIM = 0.3;
+/** В графике «Воспоминания» — мягче: 10–20 % по промпту владельца (раздел 08). */
+export const FOCUS_DIM_MEMORY = 0.15;
 /** Сила контрового света. */
 export const FOCUS_RIM = 0.32;
 /** Ширина каймы — доля ширины кадра. */
@@ -83,6 +85,8 @@ export interface FocusFrame {
   wB: number;
   /** Кадр на экране, логические пиксели. */
   shot: { x: number; y: number; width: number; height: number };
+  /** Насколько гаснет окружение; по умолчанию FOCUS_DIM. */
+  dim?: number;
 }
 
 /** Плавный переход веса маски: от from к to за ms с t0 (smoothstep). */
@@ -129,7 +133,7 @@ export class FocusFilter extends Filter {
     this.resources.uMaskA = (f.maskA ?? Texture.EMPTY).source as TextureSource;
     this.resources.uMaskB = (f.maskB ?? Texture.EMPTY).source as TextureSource;
     this.u.uShot!.set([f.shot.x, f.shot.y, Math.max(1, f.shot.width), Math.max(1, f.shot.height)]);
-    this.u.uFocus!.set([f.maskA ? f.wA : 0, f.maskB ? f.wB : 0, FOCUS_DIM, FOCUS_RIM]);
+    this.u.uFocus!.set([f.maskA ? f.wA : 0, f.maskB ? f.wB : 0, f.dim ?? FOCUS_DIM, FOCUS_RIM]);
     (this.resources.focusUniforms as UniformGroup).update();
   }
 }

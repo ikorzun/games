@@ -147,6 +147,8 @@ body {
        общего плана пропадали. */
     grid-template-rows: minmax(0, min(56%, 56.25vw)) minmax(0, 1fr);
   }
+  /* «Воспоминания» на телефоне: кадр квадратный (отдельный комплект кадров), тексту — остальное. */
+  .vn-main.is-square { grid-template-rows: minmax(0, min(58%, 100vw)) minmax(0, 1fr); }
   .vn-main > .vn-ui {
     grid-area: 2 / 1;
     justify-content: flex-start;
@@ -918,7 +920,8 @@ body {
 
 /* Настройки */
 .vn-settings__group { margin: 0 0 0.9rem; padding: 0; border: 0; }
-.vn-camfx { justify-content: flex-start; }
+.vn-camfx,
+.vn-graphics { justify-content: flex-start; }
 .vn-chip:disabled { opacity: 0.55; cursor: default; }
 .vn-settings__legend { display: block; margin-bottom: 0.4rem; color: var(--c-muted); font-size: 0.9em; }
 .vn-range {

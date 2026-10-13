@@ -13,6 +13,9 @@ export type ViolenceMode = 'full' | 'schematic';
  */
 export type CameraFx = 'off' | 'low' | 'high';
 export const CAMERA_FX_LEVELS: readonly CameraFx[] = ['off', 'low', 'high'];
+/** Графика: «Реализм» — кадры как есть; «Воспоминания» — кадры в стиле графического романа (где они есть). */
+export type Graphics = 'real' | 'memory';
+export const GRAPHICS_MODES: readonly Graphics[] = ['real', 'memory'];
 
 export interface Settings {
   /** Выбранный язык; null — определять автоматически (платформа / браузер). */
@@ -39,6 +42,8 @@ export interface Settings {
   skipUnread: boolean;
   /** Эффекты камеры: выкл / слабо (по умолчанию) / сильно. */
   cameraFx: CameraFx;
+  /** Графика: реализм (по умолчанию) / воспоминания. */
+  graphics: Graphics;
 }
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
@@ -56,6 +61,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   violenceMode: 'full',
   skipUnread: false,
   cameraFx: 'low',
+  graphics: 'real',
 };
 
 export const FONT_SCALE_RANGE = { min: 0.85, max: 1.6, step: 0.05 } as const;
@@ -91,5 +97,6 @@ export function sanitizeSettings(raw: unknown): Settings {
     violenceMode: r.violenceMode === 'schematic' ? 'schematic' : 'full',
     skipUnread: typeof r.skipUnread === 'boolean' ? r.skipUnread : d.skipUnread,
     cameraFx: (CAMERA_FX_LEVELS as readonly unknown[]).includes(r.cameraFx) ? (r.cameraFx as CameraFx) : d.cameraFx,
+    graphics: (GRAPHICS_MODES as readonly unknown[]).includes(r.graphics) ? (r.graphics as Graphics) : d.graphics,
   };
 }

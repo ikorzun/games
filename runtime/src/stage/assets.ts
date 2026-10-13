@@ -80,6 +80,9 @@ export class AssetCatalog {
   private readonly setOfChar = new Map<string, string>();
   private readonly shots = new Map<string, Shot>();
   private readonly shotSets = new Map<string, Shot[]>();
+  private readonly bgMemory = new Map<string, string>();
+  /** Графика «Воспоминания» и вертикальный экран (квадратные кадры): что отдавать в цепочках. */
+  private graphics = { memory: false, square: false };
 
   constructor(
     episode: Pick<Episode, 'assets' | 'cast'>,
@@ -87,6 +90,7 @@ export class AssetCatalog {
   ) {
     const a = episode.assets ?? {};
     for (const e of a.backgrounds ?? []) this.bg.set(e.id, e.path);
+    for (const e of a.backgrounds ?? []) if (e.memory) this.bgMemory.set(e.id, e.memory);
     for (const e of a.cg ?? []) this.cg.set(e.id, e.path);
     for (const e of a.documents ?? []) this.docs.set(e.id, e.path);
     for (const e of a.documents ?? []) if (e.localized) this.docsWithText.add(e.id);
@@ -112,14 +116,32 @@ export class AssetCatalog {
     return this.shotSets.get(set) ?? [];
   }
 
-  shotChain(id: string): ImageChain | null {
-    const s = this.shots.get(id);
-    return s ? { urls: [this.url(s.file)], silhouetteFirst: false } : null;
+  /**
+   * Графика: «Воспоминания» (memory) отдают кадры и фоны в стиле графического романа, где они есть, а на вертикальном
+   * экране (square) — квадратные кадры; нет файла — прежний кадр «Реализма» вторым в цепочке.
+   */
+  setGraphics(g: { memory: boolean; square: boolean }): void {
+    this.graphics = { ...g };
   }
 
-  /** Маска человека на кадре (shots[].cast[].mask) — для подсветки того, на ком внимание; нет — null. */
+  /** Кадр показывается квадратным (воспоминания, вертикальный экран, у кадра есть квадрат). */
+  shotIsSquare(id: string): boolean {
+    return this.graphics.memory && this.graphics.square && Boolean(this.shots.get(id)?.memory?.square);
+  }
+
+  shotChain(id: string): ImageChain | null {
+    const s = this.shots.get(id);
+    if (!s) return null;
+    const m = this.graphics.memory ? s.memory : undefined;
+    const mem = m ? (this.shotIsSquare(id) ? m.square : m.file) : undefined;
+    return { urls: mem ? [this.url(mem), this.url(s.file)] : [this.url(s.file)], silhouetteFirst: false };
+  }
+
+  /** Маска человека на кадре (shots[].cast[].mask; у «воспоминаний» — свои) — для подсветки того, на ком внимание. */
   shotMask(id: string, who: string): ImageChain | null {
-    const mask = this.shots.get(id)?.cast.find((c) => c.who === who)?.mask;
+    const s = this.shots.get(id);
+    const m = this.graphics.memory ? s?.memory : undefined;
+    const mask = m ? (this.shotIsSquare(id) ? m.square_masks : m.masks)?.[who] : s?.cast.find((c) => c.who === who)?.mask;
     return mask ? { urls: [this.url(mask)], silhouetteFirst: false } : null;
   }
 
@@ -169,7 +191,8 @@ export class AssetCatalog {
     if (!path) return null;
     // Чёрный фон (assets/common/bg/black.png) — не картинка: рисуется сплошным цветом.
     if (BLACK_FILE.test(path)) return { urls: [], silhouetteFirst: false, solid: '#000000' };
-    return { urls: [this.url(path)], silhouetteFirst: false };
+    const mem = this.graphics.memory ? this.bgMemory.get(id) : undefined;
+    return { urls: mem ? [this.url(mem), this.url(path)] : [this.url(path)], silhouetteFirst: false };
   }
 
   cgChain(id: string): ImageChain | null {
@@ -546,6 +569,10 @@ export interface SceneAssets {
   shotChain?(id: string): ImageChain | null;
   /** Маска человека на кадре для подсветки того, на ком внимание; нет метода или маски — без подсветки. */
   shotMask?(shot: string, who: string): ImageChain | null;
+  /** Графика «Воспоминания» / вертикальный экран (квадратные кадры); нет метода — только «Реализм». */
+  setGraphics?(g: { memory: boolean; square: boolean }): void;
+  /** Кадр показывается квадратным. */
+  shotIsSquare?(shot: string): boolean;
   /** Готовый результат по цепочке: найден / файлов нет (null) / пока неизвестно (undefined). */
   peek(urls: readonly string[]): { handle: ImageHandle; index: number } | null | undefined;
   load(urls: readonly string[], prio?: LoadPriority): Promise<{ handle: ImageHandle; index: number } | null>;
@@ -582,6 +609,12 @@ export class StoreSceneAssets implements SceneAssets {
   }
   shotMask(shot: string, who: string): ImageChain | null {
     return this.catalog.shotMask(shot, who);
+  }
+  setGraphics(g: { memory: boolean; square: boolean }): void {
+    this.catalog.setGraphics(g);
+  }
+  shotIsSquare(shot: string): boolean {
+    return this.catalog.shotIsSquare(shot);
   }
   peek(urls: readonly string[]): { handle: ImageHandle; index: number } | null | undefined {
     return this.store.peekFirst(urls);

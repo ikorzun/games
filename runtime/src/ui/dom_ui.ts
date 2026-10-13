@@ -238,7 +238,7 @@ export class DomUI implements SessionUI {
       },
       t: (key, params) => t(key, params),
       vars: () => this.d.env(),
-      settings: { timers: settings.timers && !settings.storyOnly, storyOnly: settings.storyOnly },
+      settings: { timers: settings.timers && !settings.storyOnly, storyOnly: settings.storyOnly, graphics: settings.graphics },
       introKey: p.intro_key,
       ...(platform.capabilities.rewarded ? { showRewarded: () => platform.showRewarded('minigame_hint') } : {}),
       track: (event, data) => platform.track(event, data),

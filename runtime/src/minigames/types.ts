@@ -17,8 +17,8 @@ export interface GameContext {
   t(key: string, params?: Params): string;
   /** Переменные эпизода для `requires` (интерпретатор отдаёт актуальный снимок при каждом вызове). */
   vars(): Readonly<Record<string, Value>>;
-  /** Настройки доступности: таймеры выкл., режим «только история». */
-  settings: { timers: boolean; storyOnly: boolean };
+  /** Настройки доступности: таймеры выкл., режим «только история»; графика — для картинок мини-игры. */
+  settings: { timers: boolean; storyOnly: boolean; graphics?: 'real' | 'memory' };
   /** Бриф шага minigame (intro_key), если задан. */
   introKey: string | null;
   /** Rewarded-реклама ради подсказки (skip.hint_rewarded_ad); undefined — платформа не поддерживает. */

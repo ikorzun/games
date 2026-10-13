@@ -621,6 +621,7 @@
         "path": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$", "description": "Относительный путь; только латиница." },
         "license": { "type": "string" },
         "localized": { "type": "boolean", "default": false },
+        "memory": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$", "description": "Для фонов: та же картинка для графики «Воспоминания»." },
         "season": { "type": "string", "enum": ["spring", "summer", "autumn", "winter", "indoor", "any"], "description": "Для фонов и CG: сезон на картинке; indoor — интерьер, any — нейтральная картинка." },
         "notes": { "type": "string" }
       }
@@ -663,6 +664,18 @@
         "from": { "$ref": "#/$defs/asciiId", "description": "ots: через чьё плечо снято." },
         "focus": { "$ref": "#/$defs/asciiId", "description": "О ком кадр: говорящий (close/ots) или слушающий (reaction)." },
         "file": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$", "description": "assets/<ep>/shots/<set>/<name>.webp, 1920×1080." },
+        "memory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file"],
+          "description": "Тот же кадр для графики «Воспоминания» (стиль графического романа): 16:9, квадрат для вертикального экрана и маски людей к каждому.",
+          "properties": {
+            "file": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" },
+            "square": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" },
+            "masks": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" } },
+            "square_masks": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" } }
+          }
+        },
         "notes": { "type": "string" }
       }
     },

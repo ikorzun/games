@@ -230,7 +230,9 @@ class CrimeSceneSearch extends MinigameShell {
     const caption = h('span', { class: 'mg-scene__ph', lang: 'en', text: cfg.sceneBg ?? '' });
     this.stage.append(caption, ...zones, this.marks, this.cross);
 
-    const path = cfg.sceneBg ? this.ctx.episode.assets?.backgrounds?.find((b) => b.id === cfg.sceneBg)?.path : undefined;
+    const bg = cfg.sceneBg ? this.ctx.episode.assets?.backgrounds?.find((b) => b.id === cfg.sceneBg) : undefined;
+    // Графика «Воспоминания»: та же картинка в стиле графического романа (композиция та же — зоны находок на месте).
+    const path = this.ctx.settings.graphics === 'memory' && bg?.memory ? bg.memory : bg?.path;
     if (path) this.loadImage(path);
     else this.stage.classList.replace('is-loading', 'is-placeholder');
 

@@ -5,7 +5,7 @@
  */
 import { i18n, t } from '../core/i18n';
 import type { SaveFile } from '../core/saves';
-import { AUTO_DELAY_RANGE, CAMERA_FX_LEVELS, FONT_SCALE_RANGE } from '../core/settings';
+import { AUTO_DELAY_RANGE, CAMERA_FX_LEVELS, FONT_SCALE_RANGE, GRAPHICS_MODES } from '../core/settings';
 import type { CameraFx, Settings } from '../core/settings';
 import { LANGS } from '../core/types';
 import type { ArchiveItem, Episode, GameState, Ending, Lang } from '../core/types';
@@ -442,6 +442,31 @@ export class SettingsScreen extends BaseScreen {
     const pct = (v: number): string => `${Math.round(v * 100)}%`;
     // «Эффекты камеры»: выкл / слабо / сильно. Кнопки-сегменты, а не radio — как переключатель языка.
     const reduced = hd.reducedMotion?.() ?? false;
+    // «Графика»: реализм / воспоминания — те же кнопки-сегменты.
+    const graphics = h(
+      'div',
+      { class: 'vn-settings__group' },
+      h('span', { class: 'vn-settings__legend', text: t('ui.settings.graphics') }),
+      h(
+        'div',
+        { class: 'vn-langs vn-graphics', role: 'group', aria: { label: t('ui.settings.graphics') } },
+        ...GRAPHICS_MODES.map((mode) =>
+          h('button', {
+            class: `vn-chip${s.graphics === mode ? ' is-on' : ''}`,
+            type: 'button',
+            text: t(`ui.settings.graphics_${mode}`),
+            data: { graphics: mode },
+            aria: { pressed: s.graphics === mode },
+            on: {
+              click: () => {
+                hd.onChange({ graphics: mode });
+                this.render();
+              },
+            },
+          }),
+        ),
+      ),
+    );
     const camLevel: CameraFx = hd.effectiveCameraFx?.() ?? (reduced ? 'off' : s.cameraFx);
     const cameraFx = h(
       'div',
@@ -518,6 +543,7 @@ export class SettingsScreen extends BaseScreen {
         quick,
         h('div', { class: 'vn-settings__group' }, h('span', { class: 'vn-settings__legend', text: t('ui.settings.language') }), languageChips(hd.onLanguage)),
         cameraFx,
+        graphics,
         range(t('ui.settings.font_size'), 'fontScale', FONT_SCALE_RANGE.min, FONT_SCALE_RANGE.max, FONT_SCALE_RANGE.step, pct),
         range(t('ui.settings.text_speed'), 'textSpeed', 1, 5, 1, (v) => `${v}/5`),
         range(t('ui.settings.auto_delay'), 'autoDelayMs', AUTO_DELAY_RANGE.min, AUTO_DELAY_RANGE.max, AUTO_DELAY_RANGE.step, (v) => `${(v / 1000).toFixed(1)} s`),

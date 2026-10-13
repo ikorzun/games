@@ -216,6 +216,10 @@ def shots_check(ep: dict, rep: Report) -> None:
         for c in sh.get("cast", []):
             if c.get("mask") and not os.path.exists(os.path.join(ROOT, c["mask"])):
                 rep.warn(f"{where}: маски {c['mask']} нет в репозитории (без подсветки {c['who']})")
+        mem = sh.get("memory") or {}
+        for path in [mem.get("file"), mem.get("square"), *(mem.get("masks") or {}).values(), *(mem.get("square_masks") or {}).values()]:
+            if path and not os.path.exists(os.path.join(ROOT, path)):
+                rep.warn(f"{where}: файла «Воспоминаний» {path} нет в репозитории (покажется кадр «Реализма»)")
     for name, lst in sets.items():
         bg_set = {sh["bg"] for sh in lst}
         if len(bg_set) > 1:

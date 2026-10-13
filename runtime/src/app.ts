@@ -483,6 +483,7 @@ export class App {
     this.kit.quick.setState({ muted: s.muted });
     this.stage.setViolenceMode(s.violenceMode);
     this.stage.setCameraFx(s.cameraFx, retryCamera);
+    this.stage.setGraphics(s.graphics);
   }
 
   /** Смена языка на лету: догрузить строки, перерисовать текущий шаг, не трогая сцену и состояние. */

@@ -374,6 +374,8 @@ export interface AssetEntry {
   path: string;
   license?: string;
   localized?: boolean;
+  /** Для фонов: та же картинка для графики «Воспоминания». */
+  memory?: string;
   notes?: string;
 }
 /** Поворот персонажа на кадрах набора: влево, вправо (сторона зрителя) или анфас. */
@@ -415,7 +417,16 @@ export interface Shot {
   /** О ком кадр: говорящий (close/ots) или слушающий (reaction). */
   focus?: string;
   file: string;
+  /** Тот же кадр для графики «Воспоминания»: 16:9, квадрат для вертикального экрана и маски людей к каждому. */
+  memory?: ShotMemory;
   notes?: string;
+}
+
+export interface ShotMemory {
+  file: string;
+  square?: string;
+  masks?: Record<string, string>;
+  square_masks?: Record<string, string>;
 }
 
 export interface Assets {
