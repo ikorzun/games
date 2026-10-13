@@ -456,6 +456,10 @@ export class DomUI implements SessionUI {
         case 'L':
           this.d.onAction('log');
           break;
+        case 'n':
+        case 'N':
+          this.d.onAction('notebook');
+          break;
         case 'h':
         case 'H':
           this.d.onAction('hide');

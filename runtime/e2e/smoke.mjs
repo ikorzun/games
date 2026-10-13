@@ -66,6 +66,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ───────────────────────────── браузер и сервер ─────────────────────────────
 
+/** Прежний эпизод 1 (новелла и режим дела) открывается по адресу; по умолчанию — «Ход следствия» (ep01_hod). */
+const LEGACY = 'ep01_murylev';
 const AUDIO_URL = /\/assets\/[^?#]+\.(?:mp3|m4a|ogg|wav)(?:[?#]|$)/i;
 
 /** Заставка (логотип, «коснитесь, чтобы начать») стоит перед меню: тапаем её, если она есть, и ждём меню. */
@@ -186,8 +188,8 @@ const PLACEHOLDER = /\[(?:ui|common|ep\d+)\.[a-z0-9_.]+\]/;
 // ───────────────────────────── сценарии ─────────────────────────────
 
 async function scenarioPlay(browser, baseUrl) {
-  section('Игра: загрузка → предупреждение → первый выбор → сейв/лоад → язык (новелла, ?vn=1)');
-  const { page, context, log } = await openPage(browser, baseUrl, '?debug=1&vn=1', { locale: 'ru-RU' }, null);
+  section('Игра: загрузка → предупреждение → первый выбор → сейв/лоад → язык (новелла, ?episode=ep01_murylev&vn=1)');
+  const { page, context, log } = await openPage(browser, baseUrl, `?debug=1&vn=1&episode=${LEGACY}`, { locale: 'ru-RU' }, null);
   await toMenu(page);
   // Игра открывается сразу главным меню (без заставки), и при его показе стартует главная тема передачи
   // (в смоуке автозапуск разрешён флагом Chromium; в браузере без жеста трек ждёт первого касания или клика).
@@ -285,7 +287,7 @@ async function scenarioPlay(browser, baseUrl) {
 
 async function scenarioCamera(browser, baseUrl) {
   section('Камкордер и графика: «слабо» по умолчанию, HUD, выключатель, reduced-motion, учёт ассетов');
-  const { page, context, log } = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU' });
+  const { page, context, log } = await openPage(browser, baseUrl, `?debug=1&episode=${LEGACY}`, { locale: 'ru-RU' });
   await toMenu(page);
   const cam = () => page.evaluate(() => window.__vn.camera());
   const stageClass = () => page.evaluate(() => document.querySelector('.vn-stage')?.className ?? '');
@@ -300,9 +302,9 @@ async function scenarioCamera(browser, baseUrl) {
   // Что должно быть нарисовано по файлам, которые реально есть в сборке. Оракул повторяет правила каталога (путь фона из
   // episode.assets, цепочка спрайта силуэт → выражение → neutral → base) и сверяется с тем, что показал рендерер (__vn.slots()).
   const slotOracle = () =>
-    page.evaluate(async () => {
+    page.evaluate(async (id) => {
       const idx = await (await fetch('./episodes/index.json')).json();
-      const ep = await (await fetch('./' + idx.episodes[0].path)).json();
+      const ep = await (await fetch('./' + idx.episodes.find((e) => e.id === id).path)).json();
       const { present } = (await window.__vn.assets(true)).verify;
       const has = (path) => present.some((u) => u.endsWith(path));
       const view = window.__vn.view();
@@ -322,7 +324,7 @@ async function scenarioCamera(browser, baseUrl) {
         sprites[sp.who] = files.some(has) ? 'image' : 'placeholder';
       }
       return { bg, sprites, actual: window.__vn.slots() };
-    });
+    }, LEGACY);
   const checkSlots = async (label) => {
     // Кадр интерпретатора меняется сразу, рендерер — после перехода и загрузки: ждём, пока он догонит (тот же фон, те же спрайты).
     await page
@@ -457,7 +459,7 @@ async function scenarioCamera(browser, baseUrl) {
   await context.close();
 
   // prefers-reduced-motion: эффекты выключены принудительно, переключатель недоступен.
-  const rm = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU', reducedMotion: 'reduce' });
+  const rm = await openPage(browser, baseUrl, `?debug=1&episode=${LEGACY}`, { locale: 'ru-RU', reducedMotion: 'reduce' });
   await toMenu(rm.page);
   await rm.page.evaluate(() => window.__vn.start());
   await rm.page.waitForFunction(() => window.__vn.pending()?.kind === 'line', null, { timeout: 15000 });
@@ -573,7 +575,7 @@ async function scenarioMatrix(browser, baseUrl) {
   if (wantShots) mkdirSync(OUT, { recursive: true });
   for (const lang of matrixLangs) {
     for (const [name, width, height, dpr, mobile] of MATRIX) {
-      const { page, context, log } = await openPage(browser, baseUrl, `?lang=${lang}&pseudo=1&debug=1&vn=1`, { viewport: { width, height }, deviceScaleFactor: dpr, isMobile: mobile, hasTouch: mobile, locale: lang }, { settings: { v: 1, textSpeed: 5, lang } });
+      const { page, context, log } = await openPage(browser, baseUrl, `?lang=${lang}&pseudo=1&debug=1&vn=1&episode=${LEGACY}`, { viewport: { width, height }, deviceScaleFactor: dpr, isMobile: mobile, hasTouch: mobile, locale: lang }, { settings: { v: 1, textSpeed: 5, lang } });
       const found = {};
       const shot = async (screen) => {
         if (wantShots) await page.screenshot({ path: join(OUT, `${name}_${lang}_${screen}.png`) });
@@ -666,7 +668,7 @@ const caseText = (page, sel) => page.evaluate((s) => [...document.querySelectorA
 
 async function scenarioCase(browser, baseUrl) {
   section('Режим дела: меню → предупреждение → вступление → папка → поиск по списку → ★ → разговор → сохранение');
-  const { page, context, log } = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU' });
+  const { page, context, log } = await openPage(browser, baseUrl, `?debug=1&episode=${LEGACY}`, { locale: 'ru-RU' });
   await toMenu(page);
   await page.evaluate(() => window.__vn.settings({ textSpeed: 5, lang: 'ru' }));
   await page.click('.vn-ep__open');
@@ -723,7 +725,7 @@ async function scenarioCase(browser, baseUrl) {
 
   // Телефон: папка и поиск без выхода за экран; на боку картинка поиска во всю высоту.
   for (const [name, width, height] of [['390x844', 390, 844], ['915x412', 915, 412]]) {
-    const ph = await openPage(browser, baseUrl, '?debug=1&lang=ru', { viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'ru-RU' });
+    const ph = await openPage(browser, baseUrl, `?debug=1&lang=ru&episode=${LEGACY}`, { viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'ru-RU' });
     await toMenu(ph.page);
     await ph.page.click('.vn-ep__open');
     await ph.page.click('.vn-warning .vn-btn.is-primary');
@@ -750,12 +752,153 @@ async function scenarioCase(browser, baseUrl) {
   }
 }
 
+// ───────────────────────────── «Ход следствия» ─────────────────────────────
+
+/**
+ * Пройти пробу «Хода следствия» по плану {id выбора → id опции | [опции по очереди]}: пробел на репликах, OK на бумагах,
+ * цифра на выборе. На каждом шаге запоминает кадр монтажёра и зовёт onStep (скриншоты, проверки по ходу).
+ */
+async function playHod(page, plan, onStep = async () => undefined, max = 1500) {
+  const seen = { shots: new Set(), choices: [], docs: 0 };
+  const queue = Object.fromEntries(Object.entries(plan).map(([k, v]) => [k, Array.isArray(v) ? [...v] : [v]]));
+  for (let i = 0; i < max; i++) {
+    const p = await pending(page);
+    const v = await page.evaluate(() => window.__vn.view());
+    if (v?.shot) seen.shots.add(v.shot);
+    if (!p) {
+      await sleep(40);
+      continue;
+    }
+    await onStep(p, v);
+    if (p.kind === 'end') return { ...seen, end: p };
+    if (p.kind === 'choice') {
+      const want = queue[p.id]?.length > 1 ? queue[p.id].shift() : queue[p.id]?.[0];
+      const idx = p.options.findIndex((o) => o.enabled && (!want || o.id === want));
+      if (idx < 0) throw new Error(`playHod: на выборе ${p.id} нет опции ${want}: ${JSON.stringify(p.options)}`);
+      seen.choices.push(`${p.id}=${p.options[idx].id}`);
+      await page.keyboard.press(String(idx + 1));
+      await page.waitForFunction((id) => {
+        const q = window.__vn.pending();
+        return !(q && q.kind === 'choice' && q.id === id);
+      }, p.id);
+      continue;
+    }
+    if (p.kind === 'document') {
+      seen.docs++;
+      await page.waitForSelector('.vn-document .vn-actions .vn-btn', { state: 'visible' });
+      await page.click('.vn-document .vn-actions .vn-btn');
+      await sleep(80);
+      continue;
+    }
+    if (p.kind === 'line') await page.keyboard.press('Space');
+    await sleep(30);
+  }
+  throw new Error(`playHod: не дошли до конца за ${max} шагов; сейчас ${JSON.stringify(await pending(page))}`);
+}
+
+async function scenarioHod(browser, baseUrl) {
+  section('Ход следствия (по умолчанию): меню → предупреждение → день 1 → вечер → день 2 → версия → реконструкция → конец');
+  const { page, context, log } = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU' });
+  await toMenu(page);
+  await page.evaluate(() => window.__vn.settings({ textSpeed: 5, lang: 'ru' }));
+  check('на полке один открытый эпизод', (await page.locator('.vn-ep.is-open').count()) === 1);
+  await page.click('.vn-ep__open');
+  await page.waitForSelector('.vn-warning', { state: 'visible' });
+  await page.click('.vn-warning .vn-btn.is-primary');
+  await page.waitForFunction(() => window.__vn.pending()?.kind === 'line', null, { timeout: 15000 });
+  check('по умолчанию открывается «Ход следствия» (ep01_hod), без папки дела', (await stateOf(page)).episode_id === 'ep01_hod' && (await page.$('.vn-case')) === null);
+  check('квик-меню: шесть кнопок, среди них «Блокнот»', (await page.locator('.vn-quick .vn-qbtn').count()) === 6 && (await page.locator('.vn-qbtn--notebook').count()) === 1);
+  if (wantShots) mkdirSync(OUT, { recursive: true });
+  const shot = async (name) => {
+    if (wantShots) await page.screenshot({ path: join(OUT, `hod_1280_${name}.png`) });
+  };
+
+  const plan = {
+    c_d1_go: 'galina', c_galina: 'human', c_galina_fear: 'promise', c_route_d1: 'notary', c_notary_bare: 'retreat',
+    c_boss: 'push', c_d2_go1: 'flat', c_flat: 'truth', c_flat_photo: 'open', c_route_d2_4: 'bti', c_bti: 'plead',
+    d_who: 'murashov', d_how: ['none', 'notary'], d_where: 'left',
+  };
+  const notes = { checked: false, firstChoice: null, deduction: false, layout: [] };
+  const run = await playHod(page, plan, async (p, v) => {
+    if (p.kind === 'choice' && !notes.firstChoice) {
+      notes.firstChoice = p;
+      notes.layout.push(...(await page.evaluate(layoutProbe)));
+      await shot('choice_d1');
+    }
+    // Блокнот после Галины: факты разговора уже в нём
+    if (!notes.checked && p.kind === 'choice' && p.id === 'c_route_d1') {
+      notes.checked = true;
+      await page.click('.vn-qbtn--notebook');
+      await page.waitForSelector('.vn-archive', { state: 'visible' });
+      const titles = await page.$$eval('.vn-archive__item h3', (els) => els.map((e) => e.textContent));
+      notes.notebook = { title: await page.locator('.vn-archive .vn-card__title').textContent(), titles };
+      await sleep(400); // экран проявляется
+      notes.layout.push(...(await page.evaluate(layoutProbe)));
+      await shot('notebook');
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('.vn-archive', { state: 'detached' });
+    }
+    if (p.kind === 'choice' && p.id === 'd_who' && !notes.deduction) {
+      notes.deduction = true;
+      notes.layout.push(...(await page.evaluate(layoutProbe)));
+      await shot('deduction');
+    }
+    if (p.kind === 'line' && v?.scene === 'recon' && !notes.recon) {
+      notes.recon = v.shot;
+      await sleep(300);
+      await shot('recon');
+    }
+  });
+  check('первый выбор дня — куда ехать: три места', notes.firstChoice?.id === 'c_d1_go' && notes.firstChoice.options.length === 3, JSON.stringify(notes.firstChoice));
+  check('блокнот открывается в игре и держит факты Галины', notes.notebook?.title === 'Блокнот' && notes.notebook.titles.includes('Галина: «Сергей Викторович»'), JSON.stringify(notes.notebook));
+  check('маршрут пройден по плану до конца пробы (концовка e_proto)', run.end.ending === 'e_proto', run.choices.join(' → '));
+  const st = await stateOf(page);
+  check('итог: второй день, четыре места, неверный ход в версии стоил самообладания, бумаги показаны', st.vars.day === 2 && ['visited_galina', 'visited_notary', 'visited_flat', 'visited_bti'].every((k) => st.vars[k] === true) && st.vars.visited_zhek === false && st.vars.nerves === 2 && run.docs === 2,
+    JSON.stringify({ day: st.vars.day, nerves: st.vars.nerves, docs: run.docs }));
+  check('монтаж: кадры сменяются (больше 15 разных за проход), реконструкция в своём кадре', run.shots.size > 15 && /^sh_recon_/.test(notes.recon ?? ''), `${run.shots.size}: ${[...run.shots].join(', ')}`);
+  await page.waitForSelector('.vn-ending', { state: 'visible' });
+  check('экран концовки: «Версия есть»', (await page.locator('.vn-ending__title').textContent()) === 'Версия есть');
+  await sleep(1200);
+  await shot('end');
+  check('вёрстка на 1280×720 цела (первый выбор, блокнот, версия)', notes.layout.length === 0, notes.layout.join('; '));
+  check('нет ошибок в консоли и неудачных запросов', log.errors.length === 0 && log.failed.length === 0, [...log.errors, ...log.failed].join(' | ').slice(0, 400));
+  await context.close();
+
+  // Телефон: первая реплика и первый выбор не выходят за экран.
+  for (const [name, width, height] of [['390x844', 390, 844], ['915x412', 915, 412]]) {
+    const ph = await openPage(browser, baseUrl, '?debug=1&lang=ru', { viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'ru-RU' });
+    await toMenu(ph.page);
+    await ph.page.evaluate(() => window.__vn.settings({ textSpeed: 5, lang: 'ru' }));
+    await ph.page.click('.vn-ep__open');
+    await ph.page.click('.vn-warning .vn-btn.is-primary');
+    await ph.page.waitForFunction(() => window.__vn.pending()?.kind === 'line', null, { timeout: 15000 });
+    await ph.page.waitForSelector('.vn-textbox:not([hidden])', { state: 'visible', timeout: 15000 }); // после плашек даты и места
+    await sleep(400);
+    const lineBad = await ph.page.evaluate(layoutProbe);
+    if (wantShots) await ph.page.screenshot({ path: join(OUT, `hod_${name}_line.png`) });
+    await advanceUntil(ph.page, (p) => p.kind === 'choice' || p.kind === 'document');
+    if ((await pending(ph.page)).kind === 'document') {
+      await sleep(300);
+      if (wantShots) await ph.page.screenshot({ path: join(OUT, `hod_${name}_doc.png`) });
+      await ph.page.click('.vn-document .vn-actions .vn-btn');
+    }
+    await advanceUntil(ph.page, (p) => p.kind === 'choice');
+    await sleep(400);
+    const choiceBad = await ph.page.evaluate(layoutProbe);
+    if (wantShots) await ph.page.screenshot({ path: join(OUT, `hod_${name}_choice.png`) });
+    check(`${name}: реплика, бумага и выбор держат вёрстку`, lineBad.length === 0 && choiceBad.length === 0, [...lineBad, ...choiceBad].join('; '));
+    check(`${name}: нет ошибок в консоли`, ph.log.errors.length === 0, ph.log.errors.join(' | ').slice(0, 200));
+    await ph.context.close();
+  }
+}
+
 // ───────────────────────────── запуск ─────────────────────────────
 
 const server = await startServer();
 const browser = await launchBrowser();
 try {
   console.log(`Смоук-тест: ${server.url}${remoteUrl ? '' : ` (сборка ${distDir})`}`);
+  if (wants('hod')) await scenarioHod(browser, server.url);
   if (wants('play')) await scenarioPlay(browser, server.url);
   if (wants('case')) await scenarioCase(browser, server.url);
   if (wants('camera')) await scenarioCamera(browser, server.url);

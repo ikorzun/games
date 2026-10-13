@@ -715,6 +715,8 @@ export class ArchiveScreen extends BaseScreen {
     private readonly episode: Episode,
     private readonly unlocked: () => readonly string[],
     private readonly onDone: () => void,
+    /** В игре тот же список открывается кнопкой «Блокнот» — с её заголовком. */
+    private readonly titleKey = 'ui.archive.title',
   ) {
     super('vn-archive');
   }
@@ -726,7 +728,7 @@ export class ArchiveScreen extends BaseScreen {
       this.el,
       card(
         'vn-archive__card',
-        h('h2', { class: 'vn-card__title', text: t('ui.archive.title') }),
+        h('h2', { class: 'vn-card__title', text: t(this.titleKey) }),
         items.length === 0
           ? h('p', { class: 'vn-muted', text: t('ui.archive.empty') })
           : h(

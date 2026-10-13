@@ -243,7 +243,9 @@ function choose(shots: readonly Shot[], cur: Shot | null, inp: LineInput): Choic
   const beat: Beat = cur?.kind === 'angle' ? 'calm' : inp.beat;
   let pick: Shot | null;
   if (beat === 'calm') {
-    pick = (other !== null ? otsOf(shots, other, who, cast) : null) ?? mediumWith(shots, who, cast) ?? closeOf(shots, who, inp.expression, cast);
+    // Слушатель неизвестен (первая реплика сцены) или к нему нет кадра через плечо — слушает персонаж игрока.
+    const povOts = inp.pov !== null && inp.pov !== who ? otsOf(shots, inp.pov, who, cast) : null;
+    pick = (other !== null ? otsOf(shots, other, who, cast) : null) ?? povOts ?? mediumWith(shots, who, cast) ?? closeOf(shots, who, inp.expression, cast);
   } else {
     const sinceAngle = ctx.last_angle < 0 ? Infinity : ctx.line - ctx.last_angle;
     if (beat === 'climax' && sinceAngle >= ANGLE_EVERY && hashSeed(inp.seed) % 3 === 0) {

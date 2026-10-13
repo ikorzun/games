@@ -294,16 +294,16 @@ describe('DomUI: реплики и продвижение сюжета', () => {
 });
 
 describe('DomUI: горячие клавиши и колесо', () => {
-  it('A, S, L, H, M передают действия быстрого меню; ← и PageUp — откат; Ctrl/Alt-комбинации игнорируются', () => {
+  it('A, S, L, N, H, M передают действия быстрого меню; ← и PageUp — откат; Ctrl/Alt-комбинации игнорируются', () => {
     const { actions, rollbacks } = makeRig({ textSpeed: 5 });
-    for (const k of ['a', 'S', 'l', 'H', 'm']) key(k);
-    expect(actions).toEqual(['auto', 'skip', 'log', 'hide', 'mute']);
+    for (const k of ['a', 'S', 'l', 'N', 'H', 'm']) key(k);
+    expect(actions).toEqual(['auto', 'skip', 'log', 'notebook', 'hide', 'mute']);
     key('ArrowLeft');
     key('PageUp');
     expect(rollbacks.n).toBe(2);
     key('a', { ctrlKey: true });
     key('s', { metaKey: true });
-    expect(actions).toHaveLength(5);
+    expect(actions).toHaveLength(6);
   });
 
   it('Esc: сначала закрывает верхний экран, потом снимает скрытие интерфейса, иначе открывает настройки', () => {

@@ -185,7 +185,7 @@ describe('loadSeason: рамка сезона для полки эпизодов
 
   it.skipIf(!hasRepoContent())('season.json сезона 1 в репозитории: текущий эпизод на полке, у остальных — год', () => {
     const s = JSON.parse(readFileSync(join(REPO_ROOT, 'episodes', 's1', 'season.json'), 'utf8')) as { episodes: Array<{ id?: string; year?: number }> };
-    expect(s.episodes.some((x) => x.id === 'ep01_murylev')).toBe(true);
+    expect(s.episodes.some((x) => x.id === 'ep01_hod')).toBe(true);
     expect(s.episodes.every((x) => typeof x.year === 'number')).toBe(true);
   });
 });

@@ -1,0 +1,4971 @@
+{
+ "schema_version": 1,
+ "id": "ep01_hod",
+ "season": 1,
+ "order": 1,
+ "title_key": "ep01.title",
+ "logline_key": "ep01.logline",
+ "archetype": "real_estate_murders",
+ "template": "real_estate_murders_v1",
+ "based_on": {
+  "case_name": "Дело Мурылёва (Москва, 1993)",
+  "tv_episode": "Дело Мурылёва. Смерть за квартиры (НТВ, 24.06.1995)",
+  "years": [
+   1993,
+   1994
+  ],
+  "city": "Москва",
+  "sources": [
+   "https://www.ntv.ru/peredacha/krimrussia/m100800/o750076",
+   "https://lenta.ru/articles/2025/02/09/delo/"
+  ],
+  "fictionalization": {
+   "level": "dramatized",
+   "names_changed": true,
+   "notes": "Канва дела сохранена (приватизация как мотив, цепочка сделок через одного нотариуса и одного доверенного, арест осенью 1993). Имена преступника, подручного, нотариуса, жертв и покупателей изменены; следственная группа вымышлена и сквозная для сезона. Прямая цитата «Я — санитар Ельцина» заменена парафразом. Слой «редакция передачи» в пилоте отключён (editorial_layer=false): он вводится со 2-го эпизода, когда появится сквозная линия редакции."
+  }
+ },
+ "frame": {
+  "pov": "investigator",
+  "narrator": "voiceover",
+  "player_character": "sledak",
+  "editorial_layer": false
+ },
+ "content_warnings": [
+  "murder",
+  "violence"
+ ],
+ "age_rating": "18+",
+ "estimated_minutes": 15,
+ "localization": {
+  "source_lang": "ru",
+  "status": {
+   "ru": "source",
+   "en": "none",
+   "es": "none",
+   "pt": "none"
+  },
+  "glossary": "docs/localization/glossary.md"
+ },
+ "cast": [
+  {
+   "id": "sledak",
+   "name_key": "ep01.cast.sledak",
+   "short_name_key": "ep01.cast.sledak_short",
+   "role": "player",
+   "name_color": "#d8d2c4"
+  },
+  {
+   "id": "oper",
+   "name_key": "ep01.cast.oper",
+   "short_name_key": "ep01.cast.oper_short",
+   "role": "operative",
+   "name_color": "#c9a86a"
+  },
+  {
+   "id": "expert",
+   "name_key": "ep01.cast.expert",
+   "role": "expert",
+   "name_color": "#9fb7c9"
+  },
+  {
+   "id": "notary",
+   "name_key": "ep01.cast.notary",
+   "role": "suspect",
+   "name_color": "#a89f8c"
+  },
+  {
+   "id": "zoya",
+   "name_key": "ep01.cast.zoya",
+   "role": "victim",
+   "name_color": "#cbb9a2"
+  },
+  {
+   "id": "neighbor",
+   "name_key": "ep01.cast.neighbor",
+   "role": "witness",
+   "name_color": "#b7b1a6"
+  },
+  {
+   "id": "buyer",
+   "name_key": "ep01.cast.buyer",
+   "role": "witness",
+   "name_color": "#b7b1a6"
+  },
+  {
+   "id": "boss",
+   "name_key": "ep01.cast.boss",
+   "short_name_key": "ep01.cast.boss_short",
+   "role": "official",
+   "name_color": "#a89f8c"
+  },
+  {
+   "id": "lapin_wife",
+   "name_key": "ep01.cast.lapin_wife",
+   "short_name_key": "ep01.cast.lapin_wife_short",
+   "role": "relative",
+   "name_color": "#b7b1a6"
+  },
+  {
+   "id": "clerk",
+   "name_key": "ep01.cast.clerk",
+   "role": "extra",
+   "name_color": "#b7b1a6"
+  },
+  {
+   "id": "murashov_sil",
+   "name_key": "ep01.cast.murashov_sil",
+   "role": "criminal",
+   "real_person": false,
+   "name_color": "#b84a3a"
+  },
+  {
+   "id": "assistant",
+   "name_key": "ep01.cast.assistant",
+   "role": "witness",
+   "name_color": "#b7b1a6"
+  },
+  {
+   "id": "passport_clerk",
+   "name_key": "ep01.cast.passport_clerk",
+   "role": "extra",
+   "name_color": "#b7b1a6"
+  }
+ ],
+ "variables": {
+  "trust_oper": {
+   "type": "int",
+   "default": 0,
+   "min": 0,
+   "max": 5,
+   "scope": "global",
+   "doc": "Доверие опера Сайко к игроку; сквозная для сезона."
+  },
+  "boss_favor": {
+   "type": "int",
+   "default": 0,
+   "min": -2,
+   "max": 2,
+   "scope": "global",
+   "doc": "Отношение начальника отдела."
+  },
+  "gromov_rep": {
+   "type": "int",
+   "default": 0,
+   "min": 0,
+   "max": 5,
+   "scope": "global",
+   "doc": "Репутация «неудобного» следователя."
+  },
+  "day": {
+   "type": "int",
+   "default": 1,
+   "doc": "День следствия.",
+   "min": 1,
+   "max": 6
+  },
+  "slot": {
+   "type": "int",
+   "default": 0,
+   "doc": "Сколько мест отработано за день.",
+   "min": 0,
+   "max": 3
+  },
+  "last_place": {
+   "type": "string",
+   "default": "",
+   "doc": "Где были только что (реплика Сайко в машине)."
+  },
+  "nerves": {
+   "type": "int",
+   "default": 3,
+   "doc": "Самообладание Громова на ночном разборе версии (шкала дедукции): неверный ход — минус один, ниже нуля не падает; меняет реплику Левиной.",
+   "min": 0,
+   "max": 3
+  },
+  "visited_flat": {
+   "type": "bool",
+   "default": false,
+   "doc": "Были в квартире у Лапиных."
+  },
+  "visited_galina": {
+   "type": "bool",
+   "default": false,
+   "doc": "Говорили с Галиной."
+  },
+  "visited_notary": {
+   "type": "bool",
+   "default": false,
+   "doc": "Были у нотариуса."
+  },
+  "visited_zhek": {
+   "type": "bool",
+   "default": false,
+   "doc": "Были в паспортном столе ЖЭКа."
+  },
+  "visited_bti": {
+   "type": "bool",
+   "default": false,
+   "doc": "Были в архиве БТИ."
+  },
+  "have_contract": {
+   "type": "bool",
+   "default": false,
+   "doc": "Копия договора и доверенности у следователя."
+  },
+  "know_name": {
+   "type": "bool",
+   "default": false,
+   "doc": "Фамилия доверенного известна."
+  },
+  "lapins_told_truth": {
+   "type": "bool",
+   "default": false,
+   "doc": "Лапиным сказали, что сделку могут признать недействительной."
+  },
+  "photo_seen": {
+   "type": "bool",
+   "default": false,
+   "doc": "Фото внука найдено."
+  },
+  "photo_later": {
+   "type": "bool",
+   "default": false,
+   "doc": "Фото оставили до понятых."
+  },
+  "galina_open": {
+   "type": "bool",
+   "default": false,
+   "doc": "Галина рассказала всё."
+  },
+  "galina_closed": {
+   "type": "bool",
+   "default": false,
+   "doc": "С Галиной заговорили протоколом."
+  },
+  "galina_trust": {
+   "type": "bool",
+   "default": false,
+   "doc": "Галине обещали, что её имя не прозвучит."
+  },
+  "galina_leaving": {
+   "type": "bool",
+   "default": false,
+   "doc": "Галина собирается уехать к дочери."
+  },
+  "notary_alarmed": {
+   "type": "bool",
+   "default": false,
+   "doc": "Нотариус встревожен и жалуется."
+  },
+  "lyuda_talked": {
+   "type": "bool",
+   "default": false,
+   "doc": "Помощница нотариуса рассказала про Сергея Викторовича."
+  },
+  "lyuda_gone": {
+   "type": "bool",
+   "default": false,
+   "doc": "Помощницу отправили в отпуск."
+  },
+  "case_opened": {
+   "type": "bool",
+   "default": false,
+   "doc": "Уголовное дело возбуждено."
+  },
+  "bti_chain": {
+   "type": "bool",
+   "default": false,
+   "doc": "Найдены шесть сделок."
+  },
+  "version_weak": {
+   "type": "bool",
+   "default": false,
+   "doc": "Версия сложена наполовину догадками."
+  }
+ },
+ "blocks": [
+  {
+   "id": "b1_day1",
+   "type": "investigation",
+   "presentation": "procedural",
+   "entry_scene": "d1_office",
+   "title_key": "ep01.h.block.b1_day1",
+   "music": "m_investigation",
+   "season": "summer",
+   "act": 1,
+   "scenes": [
+    "d1_office",
+    "d1_call",
+    "d1_go"
+   ]
+  },
+  {
+   "id": "bp_places",
+   "type": "investigation",
+   "presentation": "procedural",
+   "entry_scene": "route",
+   "season": "summer",
+   "act": 1,
+   "scenes": [
+    "route",
+    "route_car",
+    "flat",
+    "flat_formal",
+    "flat_truth",
+    "flat_look",
+    "flat_photo",
+    "flat_photo_talk",
+    "flat_later",
+    "galina",
+    "galina_closed",
+    "galina_open",
+    "galina_end",
+    "notary",
+    "notary_bare",
+    "notary_insist",
+    "notary_retreat",
+    "notary_papers",
+    "notary_reg",
+    "notary_reg_ins",
+    "notary_reg2",
+    "notary_who",
+    "notary_alone",
+    "notary_alone_papers",
+    "notary_alone_reg",
+    "notary_alone_reg_ins",
+    "notary_alone_reg2",
+    "notary_alone_who",
+    "notary_lyuda_q",
+    "lyuda",
+    "zhek",
+    "zhek_name",
+    "zhek_seen",
+    "bti",
+    "bti_chain",
+    "bti_formal"
+   ]
+  },
+  {
+   "id": "b2_evening",
+   "type": "investigation",
+   "presentation": "procedural",
+   "entry_scene": "d1_evening",
+   "season": "summer",
+   "act": 1,
+   "scenes": [
+    "d1_evening",
+    "d1_lens",
+    "d1_eve_rest",
+    "d1_eve_call"
+   ]
+  },
+  {
+   "id": "b3_day2",
+   "type": "investigation",
+   "presentation": "procedural",
+   "entry_scene": "d2_office",
+   "title_key": "ep01.h.block.b3_day2",
+   "season": "summer",
+   "act": 2,
+   "ad_break_allowed": true,
+   "scenes": [
+    "d2_office",
+    "d2_push",
+    "d2_route",
+    "d2_calls",
+    "d2_go"
+   ]
+  },
+  {
+   "id": "b4_night",
+   "type": "investigation",
+   "presentation": "procedural",
+   "entry_scene": "d2_night",
+   "title_key": "ep01.h.block.b4_night",
+   "season": "summer",
+   "act": 2,
+   "scenes": [
+    "d2_night",
+    "d_who",
+    "d_who_w1",
+    "d_who_w2",
+    "d_how",
+    "d_how_w1",
+    "d_where",
+    "d_where_w1",
+    "version",
+    "proto_end"
+   ]
+  },
+  {
+   "id": "br_recon",
+   "type": "crime",
+   "presentation": "reconstruction",
+   "entry_scene": "recon",
+   "title_key": "ep01.h.block.br_recon",
+   "season": "summer",
+   "act": 2,
+   "scenes": [
+    "recon"
+   ]
+  }
+ ],
+ "scenes": {
+  "d1_office": {
+   "id": "d1_office",
+   "block": "b1_day1",
+   "stage": {
+    "bg": "bg_hod_office_am",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_am",
+   "steps": [
+    {
+     "do": "caption",
+     "style": "date_stamp",
+     "key": "ep01.h.d1_office.cap01"
+    },
+    {
+     "do": "caption",
+     "style": "location",
+     "key": "ep01.h.d1_office.cap02"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.d1_office.l03"
+    },
+    {
+     "do": "document",
+     "doc": "doc_statement",
+     "text_key": "ep01.h.d1_office.doc_doc_statement",
+     "adds_to_archive": "n_statement"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.d1_office.l04"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.h.d1_office.l05"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.d1_office.l06"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.d1_office.l07"
+    },
+    {
+     "do": "jump",
+     "scene": "d1_call"
+    }
+   ],
+   "music": "m_investigation",
+   "ambient": "amb_office"
+  },
+  "d1_call": {
+   "id": "d1_call",
+   "block": "b1_day1",
+   "stage": {
+    "bg": "bg_hod_office_call_am",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_call_am",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_phone_ring"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.d1_call.l01"
+    },
+    {
+     "do": "say",
+     "who": "boss",
+     "key": "ep01.h.d1_call.l02"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.h.d1_call.l03"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.d1_call.l04"
+    },
+    {
+     "do": "jump",
+     "scene": "d1_go"
+    }
+   ]
+  },
+  "d1_go": {
+   "id": "d1_go",
+   "block": "b1_day1",
+   "stage": {
+    "bg": "bg_hod_office_am",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_am",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.d1_go.l01"
+    },
+    {
+     "do": "choice",
+     "id": "c_d1_go",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.d1_go.c_d1_go.prompt",
+     "options": [
+      {
+       "id": "flat",
+       "key": "ep01.h.d1_go.c_d1_go.flat",
+       "goto": "flat"
+      },
+      {
+       "id": "galina",
+       "key": "ep01.h.d1_go.c_d1_go.galina",
+       "goto": "galina"
+      },
+      {
+       "id": "notary",
+       "key": "ep01.h.d1_go.c_d1_go.notary",
+       "goto": "notary"
+      }
+     ]
+    }
+   ]
+  },
+  "route": {
+   "id": "route",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_car",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_car",
+   "steps": [
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "slot",
+       "op": "add",
+       "value": 1
+      }
+     ]
+    },
+    {
+     "do": "branch",
+     "cases": [
+      {
+       "when": "slot >= 2 && day == 1",
+       "goto": "d1_evening"
+      },
+      {
+       "when": "slot >= 2 && day == 2",
+       "goto": "d2_night"
+      }
+     ],
+     "default": "route_car"
+    }
+   ],
+   "ambient": "amb_street_day"
+  },
+  "route_car": {
+   "id": "route_car",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_car",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_car",
+   "steps": [
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.route_car.l01",
+     "when": "last_place == 'galina' && galina_closed"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.route_car.l02",
+     "when": "last_place == 'galina' && galina_open"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.route_car.l03",
+     "when": "last_place == 'flat' && lapins_told_truth"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.route_car.l04",
+     "when": "last_place == 'flat' && !lapins_told_truth"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.route_car.l05",
+     "when": "last_place == 'notary' && !have_contract && notary_alarmed"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.route_car.l06",
+     "when": "last_place == 'notary' && !have_contract && !notary_alarmed"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.route_car.l07",
+     "when": "last_place == 'notary' && lyuda_talked"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.route_car.l08",
+     "when": "last_place == 'notary' && have_contract && !lyuda_talked"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.route_car.l09",
+     "when": "last_place == 'zhek'"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.h.route_car.l10",
+     "when": "last_place == 'bti' && bti_chain"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.route_car.l11",
+     "when": "last_place == 'bti' && bti_chain"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.h.route_car.l12",
+     "when": "last_place == 'bti' && !bti_chain"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.route_car.l13",
+     "when": "last_place == 'bti' && !bti_chain"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.route_car.l14"
+    },
+    {
+     "do": "choice",
+     "id": "c_route_d1",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.route_car.c_route_d1.prompt",
+     "options": [
+      {
+       "id": "flat",
+       "key": "ep01.h.route_car.c_route_d1.flat",
+       "goto": "flat",
+       "when": "!visited_flat",
+       "hidden_when_false": true
+      },
+      {
+       "id": "galina",
+       "key": "ep01.h.route_car.c_route_d1.galina",
+       "goto": "galina",
+       "when": "!visited_galina",
+       "hidden_when_false": true
+      },
+      {
+       "id": "notary",
+       "key": "ep01.h.route_car.c_route_d1.notary",
+       "goto": "notary",
+       "when": "!visited_notary",
+       "hidden_when_false": true
+      }
+     ],
+     "when": "day == 1"
+    },
+    {
+     "do": "choice",
+     "id": "c_route_d2_1",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.route_car.c_route_d2_1.prompt",
+     "options": [
+      {
+       "id": "flat",
+       "key": "ep01.h.route_car.c_route_d2_1.flat",
+       "goto": "flat",
+       "when": "!visited_flat",
+       "hidden_when_false": true
+      },
+      {
+       "id": "zhek",
+       "key": "ep01.h.route_car.c_route_d2_1.zhek",
+       "goto": "zhek",
+       "when": "!visited_zhek",
+       "hidden_when_false": true
+      },
+      {
+       "id": "bti",
+       "key": "ep01.h.route_car.c_route_d2_1.bti",
+       "goto": "bti",
+       "when": "!visited_bti",
+       "hidden_when_false": true
+      }
+     ],
+     "when": "day == 2 && !visited_flat"
+    },
+    {
+     "do": "choice",
+     "id": "c_route_d2_2",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.route_car.c_route_d2_2.prompt",
+     "options": [
+      {
+       "id": "galina",
+       "key": "ep01.h.route_car.c_route_d2_2.galina",
+       "goto": "galina",
+       "when": "!visited_galina",
+       "hidden_when_false": true
+      },
+      {
+       "id": "zhek",
+       "key": "ep01.h.route_car.c_route_d2_2.zhek",
+       "goto": "zhek",
+       "when": "!visited_zhek",
+       "hidden_when_false": true
+      },
+      {
+       "id": "bti",
+       "key": "ep01.h.route_car.c_route_d2_2.bti",
+       "goto": "bti",
+       "when": "!visited_bti",
+       "hidden_when_false": true
+      }
+     ],
+     "when": "day == 2 && visited_flat && !visited_galina"
+    },
+    {
+     "do": "choice",
+     "id": "c_route_d2_3",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.route_car.c_route_d2_3.prompt",
+     "options": [
+      {
+       "id": "notary",
+       "key": "ep01.h.route_car.c_route_d2_3.notary",
+       "goto": "notary",
+       "when": "!visited_notary && !lyuda_gone",
+       "hidden_when_false": true
+      },
+      {
+       "id": "notary_alone",
+       "key": "ep01.h.route_car.c_route_d2_3.notary_alone",
+       "goto": "notary_alone",
+       "when": "!visited_notary && lyuda_gone",
+       "hidden_when_false": true
+      },
+      {
+       "id": "zhek",
+       "key": "ep01.h.route_car.c_route_d2_3.zhek",
+       "goto": "zhek",
+       "when": "!visited_zhek",
+       "hidden_when_false": true
+      },
+      {
+       "id": "bti",
+       "key": "ep01.h.route_car.c_route_d2_3.bti",
+       "goto": "bti",
+       "when": "!visited_bti",
+       "hidden_when_false": true
+      }
+     ],
+     "when": "day == 2 && visited_flat && visited_galina && !visited_notary"
+    },
+    {
+     "do": "choice",
+     "id": "c_route_d2_4",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.route_car.c_route_d2_4.prompt",
+     "options": [
+      {
+       "id": "zhek",
+       "key": "ep01.h.route_car.c_route_d2_4.zhek",
+       "goto": "zhek",
+       "when": "!visited_zhek",
+       "hidden_when_false": true
+      },
+      {
+       "id": "bti",
+       "key": "ep01.h.route_car.c_route_d2_4.bti",
+       "goto": "bti",
+       "when": "!visited_bti",
+       "hidden_when_false": true
+      }
+     ],
+     "when": "day == 2 && visited_flat && visited_galina && visited_notary"
+    }
+   ]
+  },
+  "flat": {
+   "id": "flat",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_flat",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_flat",
+   "steps": [
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "visited_flat",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "last_place",
+       "op": "set",
+       "value": "flat"
+      }
+     ]
+    },
+    {
+     "do": "caption",
+     "style": "location",
+     "key": "ep01.h.flat.cap01"
+    },
+    {
+     "do": "show",
+     "who": "buyer",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "lapin_wife",
+     "position": "right"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.flat.l02"
+    },
+    {
+     "do": "say",
+     "who": "buyer",
+     "key": "ep01.h.flat.l03"
+    },
+    {
+     "do": "say",
+     "who": "lapin_wife",
+     "key": "ep01.h.flat.l04"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_south"
+    },
+    {
+     "do": "choice",
+     "id": "c_flat",
+     "kind": "dialogue",
+     "prompt_key": "ep01.h.flat.c_flat.prompt",
+     "options": [
+      {
+       "id": "formal",
+       "key": "ep01.h.flat.c_flat.formal",
+       "goto": "flat_formal"
+      },
+      {
+       "id": "truth",
+       "key": "ep01.h.flat.c_flat.truth",
+       "goto": "flat_truth",
+       "effects": [
+        {
+         "var": "lapins_told_truth",
+         "op": "set",
+         "value": true
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "flat_formal": {
+   "id": "flat_formal",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_flat",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_flat",
+   "steps": [
+    {
+     "do": "show",
+     "who": "buyer",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "lapin_wife",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "buyer",
+     "key": "ep01.h.flat_formal.l01"
+    },
+    {
+     "do": "document",
+     "doc": "doc_contract_sale",
+     "text_key": "ep01.h.flat_formal.doc_doc_contract_sale",
+     "adds_to_archive": "n_contract"
+    },
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "have_contract",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "know_name",
+       "op": "set",
+       "value": true
+      }
+     ]
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_name"
+    },
+    {
+     "do": "say",
+     "who": "lapin_wife",
+     "key": "ep01.h.flat_formal.l02"
+    },
+    {
+     "do": "jump",
+     "scene": "flat_look"
+    }
+   ]
+  },
+  "flat_truth": {
+   "id": "flat_truth",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_flat",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_flat",
+   "steps": [
+    {
+     "do": "show",
+     "who": "buyer",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "lapin_wife",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "lapin_wife",
+     "key": "ep01.h.flat_truth.l01"
+    },
+    {
+     "do": "say",
+     "who": "buyer",
+     "key": "ep01.h.flat_truth.l02"
+    },
+    {
+     "do": "document",
+     "doc": "doc_contract_sale",
+     "text_key": "ep01.h.flat_truth.doc_doc_contract_sale",
+     "adds_to_archive": "n_contract"
+    },
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "have_contract",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "know_name",
+       "op": "set",
+       "value": true
+      }
+     ]
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_name"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_cash"
+    },
+    {
+     "do": "jump",
+     "scene": "flat_look"
+    }
+   ]
+  },
+  "flat_look": {
+   "id": "flat_look",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_flat",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_flat",
+   "steps": [
+    {
+     "do": "show",
+     "who": "buyer",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "lapin_wife",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.flat_look.l01"
+    },
+    {
+     "do": "choice",
+     "id": "c_flat_photo",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.flat_look.c_flat_photo.prompt",
+     "options": [
+      {
+       "id": "open",
+       "key": "ep01.h.flat_look.c_flat_photo.open",
+       "goto": "flat_photo"
+      },
+      {
+       "id": "later",
+       "key": "ep01.h.flat_look.c_flat_photo.later",
+       "goto": "flat_later",
+       "effects": [
+        {
+         "var": "photo_later",
+         "op": "set",
+         "value": true
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "flat_photo": {
+   "id": "flat_photo",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_flat_photo",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_flat_photo",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.flat_photo.l01"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_photo"
+    },
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "photo_seen",
+       "op": "set",
+       "value": true
+      }
+     ]
+    },
+    {
+     "do": "jump",
+     "scene": "flat_photo_talk"
+    }
+   ]
+  },
+  "flat_photo_talk": {
+   "id": "flat_photo_talk",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_flat",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_flat",
+   "steps": [
+    {
+     "do": "show",
+     "who": "buyer",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "lapin_wife",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.h.flat_photo_talk.l01"
+    },
+    {
+     "do": "say",
+     "who": "lapin_wife",
+     "key": "ep01.h.flat_photo_talk.l02"
+    },
+    {
+     "do": "jump",
+     "scene": "route"
+    }
+   ]
+  },
+  "flat_later": {
+   "id": "flat_later",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_flat",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_flat",
+   "steps": [
+    {
+     "do": "show",
+     "who": "buyer",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "lapin_wife",
+     "position": "right"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.flat_later.l01"
+    },
+    {
+     "do": "jump",
+     "scene": "route"
+    }
+   ]
+  },
+  "galina": {
+   "id": "galina",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_landing_chain",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_landing_chain",
+   "steps": [
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "visited_galina",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "last_place",
+       "op": "set",
+       "value": "galina"
+      }
+     ]
+    },
+    {
+     "do": "caption",
+     "style": "location",
+     "key": "ep01.h.galina.cap01"
+    },
+    {
+     "do": "show",
+     "who": "neighbor",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.galina.l02"
+    },
+    {
+     "do": "say",
+     "who": "neighbor",
+     "key": "ep01.h.galina.l03"
+    },
+    {
+     "do": "choice",
+     "id": "c_galina",
+     "kind": "dialogue",
+     "prompt_key": "ep01.h.galina.c_galina.prompt",
+     "options": [
+      {
+       "id": "formal",
+       "key": "ep01.h.galina.c_galina.formal",
+       "goto": "galina_closed",
+       "effects": [
+        {
+         "var": "galina_closed",
+         "op": "set",
+         "value": true
+        },
+        {
+         "var": "trust_oper",
+         "op": "sub",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "human",
+       "key": "ep01.h.galina.c_galina.human",
+       "goto": "galina_open",
+       "effects": [
+        {
+         "var": "galina_open",
+         "op": "set",
+         "value": true
+        },
+        {
+         "var": "trust_oper",
+         "op": "add",
+         "value": 1
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "ambient": "amb_stairwell"
+  },
+  "galina_closed": {
+   "id": "galina_closed",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_landing_chain",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_landing_chain",
+   "steps": [
+    {
+     "do": "show",
+     "who": "neighbor",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "neighbor",
+     "key": "ep01.h.galina_closed.l01"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_left"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.galina_closed.l02"
+    },
+    {
+     "do": "jump",
+     "scene": "route"
+    }
+   ]
+  },
+  "galina_open": {
+   "id": "galina_open",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_landing_open",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_landing_open",
+   "steps": [
+    {
+     "do": "show",
+     "who": "neighbor",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.galina_open.l01"
+    },
+    {
+     "do": "say",
+     "who": "neighbor",
+     "key": "ep01.h.galina_open.l02"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.h.galina_open.l03"
+    },
+    {
+     "do": "say",
+     "who": "neighbor",
+     "key": "ep01.h.galina_open.l04"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_sergei"
+    },
+    {
+     "do": "say",
+     "who": "neighbor",
+     "key": "ep01.h.galina_open.l05"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_last_seen"
+    },
+    {
+     "do": "say",
+     "who": "neighbor",
+     "key": "ep01.h.galina_open.l06"
+    },
+    {
+     "do": "choice",
+     "id": "c_galina_fear",
+     "kind": "moral",
+     "prompt_key": "ep01.h.galina_open.c_galina_fear.prompt",
+     "options": [
+      {
+       "id": "promise",
+       "key": "ep01.h.galina_open.c_galina_fear.promise",
+       "goto": "galina_end",
+       "effects": [
+        {
+         "var": "galina_trust",
+         "op": "set",
+         "value": true
+        }
+       ]
+      },
+      {
+       "id": "duty",
+       "key": "ep01.h.galina_open.c_galina_fear.duty",
+       "goto": "galina_end"
+      }
+     ]
+    }
+   ]
+  },
+  "galina_end": {
+   "id": "galina_end",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_landing_open",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_landing_open",
+   "steps": [
+    {
+     "do": "show",
+     "who": "neighbor",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "neighbor",
+     "key": "ep01.h.galina_end.l01",
+     "when": "galina_trust"
+    },
+    {
+     "do": "say",
+     "who": "neighbor",
+     "key": "ep01.h.galina_end.l02",
+     "when": "!galina_trust"
+    },
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "galina_leaving",
+       "op": "set",
+       "value": true
+      }
+     ],
+     "when": "!galina_trust"
+    },
+    {
+     "do": "jump",
+     "scene": "route"
+    }
+   ]
+  },
+  "notary": {
+   "id": "notary",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary",
+   "steps": [
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "visited_notary",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "last_place",
+       "op": "set",
+       "value": "notary"
+      }
+     ]
+    },
+    {
+     "do": "caption",
+     "style": "location",
+     "key": "ep01.h.notary.cap01"
+    },
+    {
+     "do": "show",
+     "who": "assistant",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.notary.l02"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.h.notary.l03"
+    },
+    {
+     "do": "branch",
+     "cases": [
+      {
+       "when": "have_contract",
+       "goto": "notary_papers"
+      }
+     ],
+     "default": "notary_bare"
+    }
+   ],
+   "ambient": "amb_office"
+  },
+  "notary_bare": {
+   "id": "notary_bare",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary",
+   "steps": [
+    {
+     "do": "show",
+     "who": "assistant",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.h.notary_bare.l01"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.h.notary_bare.l02"
+    },
+    {
+     "do": "choice",
+     "id": "c_notary_bare",
+     "kind": "dialogue",
+     "prompt_key": "ep01.h.notary_bare.c_notary_bare.prompt",
+     "options": [
+      {
+       "id": "insist",
+       "key": "ep01.h.notary_bare.c_notary_bare.insist",
+       "goto": "notary_insist",
+       "effects": [
+        {
+         "var": "notary_alarmed",
+         "op": "set",
+         "value": true
+        }
+       ]
+      },
+      {
+       "id": "retreat",
+       "key": "ep01.h.notary_bare.c_notary_bare.retreat",
+       "goto": "notary_retreat"
+      }
+     ]
+    }
+   ]
+  },
+  "notary_insist": {
+   "id": "notary_insist",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary",
+   "steps": [
+    {
+     "do": "show",
+     "who": "assistant",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.h.notary_insist.l01"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.notary_insist.l02"
+    },
+    {
+     "do": "jump",
+     "scene": "route"
+    }
+   ]
+  },
+  "notary_retreat": {
+   "id": "notary_retreat",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary",
+   "steps": [
+    {
+     "do": "show",
+     "who": "assistant",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.h.notary_retreat.l01"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.notary_retreat.l02"
+    },
+    {
+     "do": "jump",
+     "scene": "route"
+    }
+   ]
+  },
+  "notary_papers": {
+   "id": "notary_papers",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary",
+   "steps": [
+    {
+     "do": "show",
+     "who": "assistant",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.h.notary_papers.l01"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.h.notary_papers.l02"
+    },
+    {
+     "do": "choice",
+     "id": "c_notary_ask",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.notary_papers.c_notary_ask.prompt",
+     "options": [
+      {
+       "id": "register",
+       "key": "ep01.h.notary_papers.c_notary_ask.register",
+       "goto": "notary_reg",
+       "effects": [
+        {
+         "var": "notary_alarmed",
+         "op": "set",
+         "value": true
+        }
+       ]
+      },
+      {
+       "id": "who",
+       "key": "ep01.h.notary_papers.c_notary_ask.who",
+       "goto": "notary_who"
+      }
+     ]
+    }
+   ]
+  },
+  "notary_reg": {
+   "id": "notary_reg",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary",
+   "steps": [
+    {
+     "do": "show",
+     "who": "assistant",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.h.notary_reg.l01"
+    },
+    {
+     "do": "jump",
+     "scene": "notary_reg_ins"
+    }
+   ]
+  },
+  "notary_reg_ins": {
+   "id": "notary_reg_ins",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary_register",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary_register",
+   "steps": [
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.notary_reg_ins.l01"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_register"
+    },
+    {
+     "do": "jump",
+     "scene": "notary_reg2"
+    }
+   ]
+  },
+  "notary_reg2": {
+   "id": "notary_reg2",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary",
+   "steps": [
+    {
+     "do": "show",
+     "who": "assistant",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.h.notary_reg2.l01"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.notary_reg2.l02"
+    },
+    {
+     "do": "jump",
+     "scene": "notary_lyuda_q"
+    }
+   ]
+  },
+  "notary_who": {
+   "id": "notary_who",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary",
+   "steps": [
+    {
+     "do": "show",
+     "who": "assistant",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.h.notary_who.l01"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.notary_who.l02"
+    },
+    {
+     "do": "jump",
+     "scene": "notary_lyuda_q"
+    }
+   ]
+  },
+  "notary_alone": {
+   "id": "notary_alone",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary_alone",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary_alone",
+   "steps": [
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "visited_notary",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "last_place",
+       "op": "set",
+       "value": "notary"
+      }
+     ]
+    },
+    {
+     "do": "caption",
+     "style": "location",
+     "key": "ep01.h.notary_alone.cap01"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.notary_alone.l02"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.notary_alone.l03"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.h.notary_alone.l04"
+    },
+    {
+     "do": "jump",
+     "scene": "notary_alone_papers"
+    }
+   ],
+   "ambient": "amb_office"
+  },
+  "notary_alone_papers": {
+   "id": "notary_alone_papers",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary_alone",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary_alone",
+   "steps": [
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.h.notary_alone_papers.l01"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.h.notary_alone_papers.l02"
+    },
+    {
+     "do": "choice",
+     "id": "c_notary_alone_ask",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.notary_alone_papers.c_notary_alone_ask.prompt",
+     "options": [
+      {
+       "id": "register",
+       "key": "ep01.h.notary_alone_papers.c_notary_alone_ask.register",
+       "goto": "notary_alone_reg",
+       "effects": [
+        {
+         "var": "notary_alarmed",
+         "op": "set",
+         "value": true
+        }
+       ]
+      },
+      {
+       "id": "who",
+       "key": "ep01.h.notary_alone_papers.c_notary_alone_ask.who",
+       "goto": "notary_alone_who"
+      }
+     ]
+    }
+   ]
+  },
+  "notary_alone_reg": {
+   "id": "notary_alone_reg",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary_alone",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary_alone",
+   "steps": [
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.h.notary_alone_reg.l01"
+    },
+    {
+     "do": "jump",
+     "scene": "notary_alone_reg_ins"
+    }
+   ]
+  },
+  "notary_alone_reg_ins": {
+   "id": "notary_alone_reg_ins",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary_register",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary_register",
+   "steps": [
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.notary_alone_reg_ins.l01"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_register"
+    },
+    {
+     "do": "jump",
+     "scene": "notary_alone_reg2"
+    }
+   ]
+  },
+  "notary_alone_reg2": {
+   "id": "notary_alone_reg2",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary_alone",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary_alone",
+   "steps": [
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.h.notary_alone_reg2.l01"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.notary_alone_reg2.l02"
+    },
+    {
+     "do": "jump",
+     "scene": "route"
+    }
+   ]
+  },
+  "notary_alone_who": {
+   "id": "notary_alone_who",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary_alone",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary_alone",
+   "steps": [
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "notary",
+     "key": "ep01.h.notary_alone_who.l01"
+    },
+    {
+     "do": "jump",
+     "scene": "route"
+    }
+   ]
+  },
+  "notary_lyuda_q": {
+   "id": "notary_lyuda_q",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary",
+   "steps": [
+    {
+     "do": "show",
+     "who": "assistant",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.notary_lyuda_q.l01"
+    },
+    {
+     "do": "choice",
+     "id": "c_lyuda",
+     "kind": "tactical",
+     "prompt_key": "ep01.h.notary_lyuda_q.c_lyuda.prompt",
+     "options": [
+      {
+       "id": "go",
+       "key": "ep01.h.notary_lyuda_q.c_lyuda.go",
+       "goto": "lyuda"
+      },
+      {
+       "id": "no",
+       "key": "ep01.h.notary_lyuda_q.c_lyuda.no",
+       "goto": "route"
+      }
+     ]
+    }
+   ]
+  },
+  "lyuda": {
+   "id": "lyuda",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_notary_stairs",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_notary_stairs",
+   "steps": [
+    {
+     "do": "caption",
+     "style": "location",
+     "key": "ep01.h.lyuda.cap01"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "assistant",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "assistant",
+     "key": "ep01.h.lyuda.l02"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.lyuda.l03"
+    },
+    {
+     "do": "say",
+     "who": "assistant",
+     "key": "ep01.h.lyuda.l04"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_lyuda"
+    },
+    {
+     "do": "say",
+     "who": "assistant",
+     "key": "ep01.h.lyuda.l05"
+    },
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "lyuda_talked",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "trust_oper",
+       "op": "add",
+       "value": 1
+      }
+     ]
+    },
+    {
+     "do": "jump",
+     "scene": "route"
+    }
+   ],
+   "ambient": "amb_stairwell"
+  },
+  "zhek": {
+   "id": "zhek",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_zhek",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_zhek",
+   "steps": [
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "visited_zhek",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "last_place",
+       "op": "set",
+       "value": "zhek"
+      }
+     ]
+    },
+    {
+     "do": "caption",
+     "style": "location",
+     "key": "ep01.h.zhek.cap01"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "passport_clerk",
+     "position": "right"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.zhek.l02"
+    },
+    {
+     "do": "say",
+     "who": "passport_clerk",
+     "key": "ep01.h.zhek.l03"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.h.zhek.l04"
+    },
+    {
+     "do": "say",
+     "who": "passport_clerk",
+     "key": "ep01.h.zhek.l05"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_vypiska"
+    },
+    {
+     "do": "say",
+     "who": "passport_clerk",
+     "key": "ep01.h.zhek.l06"
+    },
+    {
+     "do": "choice",
+     "id": "c_zhek",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.zhek.c_zhek.prompt",
+     "options": [
+      {
+       "id": "name",
+       "key": "ep01.h.zhek.c_zhek.name",
+       "goto": "zhek_name",
+       "effects": [
+        {
+         "var": "know_name",
+         "op": "set",
+         "value": true
+        }
+       ]
+      },
+      {
+       "id": "seen",
+       "key": "ep01.h.zhek.c_zhek.seen",
+       "goto": "zhek_seen"
+      }
+     ]
+    }
+   ]
+  },
+  "zhek_name": {
+   "id": "zhek_name",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_zhek",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_zhek",
+   "steps": [
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "passport_clerk",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "passport_clerk",
+     "key": "ep01.h.zhek_name.l01"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_name"
+    },
+    {
+     "do": "jump",
+     "scene": "route"
+    }
+   ]
+  },
+  "zhek_seen": {
+   "id": "zhek_seen",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_zhek",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_zhek",
+   "steps": [
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "passport_clerk",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "passport_clerk",
+     "key": "ep01.h.zhek_seen.l01"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_queue"
+    },
+    {
+     "do": "jump",
+     "scene": "route"
+    }
+   ]
+  },
+  "bti": {
+   "id": "bti",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_bti",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_bti",
+   "steps": [
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "visited_bti",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "last_place",
+       "op": "set",
+       "value": "bti"
+      }
+     ]
+    },
+    {
+     "do": "caption",
+     "style": "location",
+     "key": "ep01.h.bti.cap01"
+    },
+    {
+     "do": "show",
+     "who": "clerk",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "right"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.bti.l02"
+    },
+    {
+     "do": "say",
+     "who": "clerk",
+     "key": "ep01.h.bti.l03"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.h.bti.l04"
+    },
+    {
+     "do": "say",
+     "who": "clerk",
+     "key": "ep01.h.bti.l05"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_card"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_name"
+    },
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "know_name",
+       "op": "set",
+       "value": true
+      }
+     ]
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.h.bti.l06"
+    },
+    {
+     "do": "say",
+     "who": "clerk",
+     "key": "ep01.h.bti.l07"
+    },
+    {
+     "do": "choice",
+     "id": "c_bti",
+     "kind": "dialogue",
+     "prompt_key": "ep01.h.bti.c_bti.prompt",
+     "options": [
+      {
+       "id": "plead",
+       "key": "ep01.h.bti.c_bti.plead",
+       "goto": "bti_chain"
+      },
+      {
+       "id": "formal",
+       "key": "ep01.h.bti.c_bti.formal",
+       "goto": "bti_formal"
+      }
+     ]
+    }
+   ],
+   "ambient": "amb_archive"
+  },
+  "bti_chain": {
+   "id": "bti_chain",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_bti",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_bti",
+   "steps": [
+    {
+     "do": "show",
+     "who": "clerk",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "clerk",
+     "key": "ep01.h.bti_chain.l01"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.bti_chain.l02"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_bti"
+    },
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "bti_chain",
+       "op": "set",
+       "value": true
+      }
+     ]
+    },
+    {
+     "do": "jump",
+     "scene": "route"
+    }
+   ]
+  },
+  "bti_formal": {
+   "id": "bti_formal",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_bti",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_bti",
+   "steps": [
+    {
+     "do": "show",
+     "who": "clerk",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "clerk",
+     "key": "ep01.h.bti_formal.l01"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.bti_formal.l02"
+    },
+    {
+     "do": "jump",
+     "scene": "route"
+    }
+   ]
+  },
+  "d1_evening": {
+   "id": "d1_evening",
+   "block": "b2_evening",
+   "stage": {
+    "bg": "bg_hod_office_eve",
+    "time_of_day": "evening"
+   },
+   "coverage": "hod_office_eve",
+   "steps": [
+    {
+     "do": "caption",
+     "style": "date_stamp",
+     "key": "ep01.h.d1_evening.cap01"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "expert",
+     "position": "right"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "center"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.d1_evening.l02"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d1_evening.l03"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d1_evening.l04",
+     "when": "have_contract"
+    },
+    {
+     "do": "branch",
+     "cases": [
+      {
+       "when": "have_contract",
+       "goto": "d1_lens"
+      }
+     ],
+     "default": "d1_eve_rest"
+    }
+   ],
+   "music": "m_calm",
+   "ambient": "amb_office"
+  },
+  "d1_lens": {
+   "id": "d1_lens",
+   "block": "b2_evening",
+   "stage": {
+    "bg": "bg_hod_office_lens",
+    "time_of_day": "evening"
+   },
+   "coverage": "hod_office_lens",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "expert",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d1_lens.l01"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_date"
+    },
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "case_opened",
+       "op": "set",
+       "value": true
+      }
+     ]
+    },
+    {
+     "do": "jump",
+     "scene": "d1_eve_rest"
+    }
+   ]
+  },
+  "d1_eve_rest": {
+   "id": "d1_eve_rest",
+   "block": "b2_evening",
+   "stage": {
+    "bg": "bg_hod_office_eve",
+    "time_of_day": "evening"
+   },
+   "coverage": "hod_office_eve",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "expert",
+     "position": "right"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "center"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d1_eve_rest.l01",
+     "when": "have_contract"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d1_eve_rest.l02",
+     "when": "!have_contract && galina_open"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d1_eve_rest.l03",
+     "when": "!have_contract && !galina_open"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d1_eve_rest.l04",
+     "when": "photo_later"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.d1_eve_rest.l05",
+     "when": "visited_flat && !lyuda_talked"
+    },
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "lyuda_gone",
+       "op": "set",
+       "value": true
+      }
+     ],
+     "when": "visited_flat && !lyuda_talked"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.d1_eve_rest.l06",
+     "when": "visited_flat && !lyuda_talked"
+    },
+    {
+     "do": "jump",
+     "scene": "d1_eve_call"
+    }
+   ]
+  },
+  "d1_eve_call": {
+   "id": "d1_eve_call",
+   "block": "b2_evening",
+   "stage": {
+    "bg": "bg_hod_office_call_eve",
+    "time_of_day": "evening"
+   },
+   "coverage": "hod_office_call_eve",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "expert",
+     "position": "right"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_phone_ring",
+     "when": "notary_alarmed"
+    },
+    {
+     "do": "say",
+     "who": "boss",
+     "key": "ep01.h.d1_eve_call.l01",
+     "when": "notary_alarmed"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.h.d1_eve_call.l02",
+     "when": "notary_alarmed"
+    },
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "boss_favor",
+       "op": "sub",
+       "value": 1
+      }
+     ],
+     "when": "notary_alarmed"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_phone_ring"
+    },
+    {
+     "do": "say",
+     "who": "sledak",
+     "key": "ep01.h.d1_eve_call.l03"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.d1_eve_call.l04"
+    },
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "day",
+       "op": "set",
+       "value": 2
+      },
+      {
+       "var": "slot",
+       "op": "set",
+       "value": 0
+      },
+      {
+       "var": "last_place",
+       "op": "set",
+       "value": ""
+      }
+     ]
+    },
+    {
+     "do": "jump",
+     "scene": "d2_office",
+     "transition": "fade"
+    }
+   ]
+  },
+  "d2_office": {
+   "id": "d2_office",
+   "block": "b3_day2",
+   "stage": {
+    "bg": "bg_hod_office_d2",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_d2",
+   "steps": [
+    {
+     "do": "caption",
+     "style": "date_stamp",
+     "key": "ep01.h.d2_office.cap01"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "boss",
+     "position": "right"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.d2_office.l02"
+    },
+    {
+     "do": "say",
+     "who": "boss",
+     "key": "ep01.h.d2_office.l03",
+     "when": "case_opened"
+    },
+    {
+     "do": "say",
+     "who": "boss",
+     "key": "ep01.h.d2_office.l04",
+     "when": "case_opened"
+    },
+    {
+     "do": "say",
+     "who": "boss",
+     "key": "ep01.h.d2_office.l05",
+     "when": "!case_opened && notary_alarmed"
+    },
+    {
+     "do": "say",
+     "who": "boss",
+     "key": "ep01.h.d2_office.l06",
+     "when": "!case_opened && !notary_alarmed"
+    },
+    {
+     "do": "choice",
+     "id": "c_boss",
+     "kind": "moral",
+     "prompt_key": "ep01.h.d2_office.c_boss.prompt",
+     "options": [
+      {
+       "id": "quiet",
+       "key": "ep01.h.d2_office.c_boss.quiet",
+       "goto": "d2_route",
+       "effects": [
+        {
+         "var": "boss_favor",
+         "op": "add",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "push",
+       "key": "ep01.h.d2_office.c_boss.push",
+       "goto": "d2_push",
+       "effects": [
+        {
+         "var": "gromov_rep",
+         "op": "add",
+         "value": 1
+        },
+        {
+         "var": "trust_oper",
+         "op": "add",
+         "value": 1
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "music": "m_investigation",
+   "ambient": "amb_office"
+  },
+  "d2_push": {
+   "id": "d2_push",
+   "block": "b3_day2",
+   "stage": {
+    "bg": "bg_hod_office_d2",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_d2",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "boss",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "boss",
+     "key": "ep01.h.d2_push.l01"
+    },
+    {
+     "do": "jump",
+     "scene": "d2_route"
+    }
+   ]
+  },
+  "d2_route": {
+   "id": "d2_route",
+   "block": "b3_day2",
+   "stage": {
+    "bg": "bg_hod_office_d2",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_d2",
+   "steps": [
+    {
+     "do": "branch",
+     "cases": [
+      {
+       "when": "photo_later || lapins_told_truth",
+       "goto": "d2_calls"
+      }
+     ],
+     "default": "d2_go"
+    }
+   ]
+  },
+  "d2_calls": {
+   "id": "d2_calls",
+   "block": "b3_day2",
+   "stage": {
+    "bg": "bg_hod_office_call_am",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_call_am",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_phone_ring",
+     "when": "photo_later"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d2_calls.l01",
+     "when": "photo_later"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_photo",
+     "when": "photo_later"
+    },
+    {
+     "do": "set",
+     "effects": [
+      {
+       "var": "photo_seen",
+       "op": "set",
+       "value": true
+      }
+     ],
+     "when": "photo_later"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_phone_ring",
+     "when": "lapins_told_truth"
+    },
+    {
+     "do": "say",
+     "who": "lapin_wife",
+     "key": "ep01.h.d2_calls.l02",
+     "when": "lapins_told_truth"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_call",
+     "when": "lapins_told_truth"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.d2_calls.l03",
+     "when": "lapins_told_truth"
+    },
+    {
+     "do": "jump",
+     "scene": "d2_go"
+    }
+   ]
+  },
+  "d2_go": {
+   "id": "d2_go",
+   "block": "b3_day2",
+   "stage": {
+    "bg": "bg_hod_office_am",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_am",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.d2_go.l01"
+    },
+    {
+     "do": "choice",
+     "id": "c_d2_go1",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.d2_go.c_d2_go1.prompt",
+     "options": [
+      {
+       "id": "flat",
+       "key": "ep01.h.d2_go.c_d2_go1.flat",
+       "goto": "flat",
+       "when": "!visited_flat",
+       "hidden_when_false": true
+      },
+      {
+       "id": "zhek",
+       "key": "ep01.h.d2_go.c_d2_go1.zhek",
+       "goto": "zhek",
+       "when": "!visited_zhek",
+       "hidden_when_false": true
+      },
+      {
+       "id": "bti",
+       "key": "ep01.h.d2_go.c_d2_go1.bti",
+       "goto": "bti",
+       "when": "!visited_bti",
+       "hidden_when_false": true
+      }
+     ],
+     "when": "day == 2 && !visited_flat"
+    },
+    {
+     "do": "choice",
+     "id": "c_d2_go2",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.d2_go.c_d2_go2.prompt",
+     "options": [
+      {
+       "id": "galina",
+       "key": "ep01.h.d2_go.c_d2_go2.galina",
+       "goto": "galina",
+       "when": "!visited_galina",
+       "hidden_when_false": true
+      },
+      {
+       "id": "zhek",
+       "key": "ep01.h.d2_go.c_d2_go2.zhek",
+       "goto": "zhek",
+       "when": "!visited_zhek",
+       "hidden_when_false": true
+      },
+      {
+       "id": "bti",
+       "key": "ep01.h.d2_go.c_d2_go2.bti",
+       "goto": "bti",
+       "when": "!visited_bti",
+       "hidden_when_false": true
+      }
+     ],
+     "when": "day == 2 && visited_flat && !visited_galina"
+    },
+    {
+     "do": "choice",
+     "id": "c_d2_go3",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.d2_go.c_d2_go3.prompt",
+     "options": [
+      {
+       "id": "notary",
+       "key": "ep01.h.d2_go.c_d2_go3.notary",
+       "goto": "notary",
+       "when": "!visited_notary && !lyuda_gone",
+       "hidden_when_false": true
+      },
+      {
+       "id": "notary_alone",
+       "key": "ep01.h.d2_go.c_d2_go3.notary_alone",
+       "goto": "notary_alone",
+       "when": "!visited_notary && lyuda_gone",
+       "hidden_when_false": true
+      },
+      {
+       "id": "zhek",
+       "key": "ep01.h.d2_go.c_d2_go3.zhek",
+       "goto": "zhek",
+       "when": "!visited_zhek",
+       "hidden_when_false": true
+      },
+      {
+       "id": "bti",
+       "key": "ep01.h.d2_go.c_d2_go3.bti",
+       "goto": "bti",
+       "when": "!visited_bti",
+       "hidden_when_false": true
+      }
+     ],
+     "when": "day == 2 && visited_flat && visited_galina && !visited_notary"
+    },
+    {
+     "do": "choice",
+     "id": "c_d2_go4",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.d2_go.c_d2_go4.prompt",
+     "options": [
+      {
+       "id": "zhek",
+       "key": "ep01.h.d2_go.c_d2_go4.zhek",
+       "goto": "zhek",
+       "when": "!visited_zhek",
+       "hidden_when_false": true
+      },
+      {
+       "id": "bti",
+       "key": "ep01.h.d2_go.c_d2_go4.bti",
+       "goto": "bti",
+       "when": "!visited_bti",
+       "hidden_when_false": true
+      }
+     ],
+     "when": "day == 2 && visited_flat && visited_galina && visited_notary"
+    }
+   ]
+  },
+  "d2_night": {
+   "id": "d2_night",
+   "block": "b4_night",
+   "stage": {
+    "bg": "bg_hod_office_night",
+    "time_of_day": "night"
+   },
+   "coverage": "hod_office_night",
+   "steps": [
+    {
+     "do": "caption",
+     "style": "date_stamp",
+     "key": "ep01.h.d2_night.cap01"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "expert",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.d2_night.l02"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.d2_night.l03",
+     "when": "galina_leaving"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d2_night.l04"
+    },
+    {
+     "do": "jump",
+     "scene": "d_who"
+    }
+   ],
+   "music": "m_tension",
+   "ambient": "amb_office"
+  },
+  "d_who": {
+   "id": "d_who",
+   "block": "b4_night",
+   "stage": {
+    "bg": "bg_hod_office_night",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_night",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "expert",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "choice",
+     "id": "d_who",
+     "kind": "deduction",
+     "prompt_key": "ep01.h.d_who.d_who.prompt",
+     "options": [
+      {
+       "id": "lapins",
+       "key": "ep01.h.d_who.d_who.lapins",
+       "goto": "d_who_w1",
+       "verdict": "wrong"
+      },
+      {
+       "id": "notary",
+       "key": "ep01.h.d_who.d_who.notary",
+       "goto": "d_who_w2",
+       "verdict": "wrong"
+      },
+      {
+       "id": "murashov",
+       "key": "ep01.h.d_who.d_who.murashov",
+       "goto": "d_how",
+       "item": "n_name",
+       "verdict": "right"
+      },
+      {
+       "id": "proxy",
+       "key": "ep01.h.d_who.d_who.proxy",
+       "goto": "d_how",
+       "verdict": "right",
+       "effects": [
+        {
+         "var": "version_weak",
+         "op": "set",
+         "value": true
+        }
+       ]
+      }
+     ],
+     "penalty": [
+      {
+       "var": "nerves",
+       "op": "sub",
+       "value": 1
+      }
+     ]
+    }
+   ]
+  },
+  "d_who_w1": {
+   "id": "d_who_w1",
+   "block": "b4_night",
+   "stage": {
+    "bg": "bg_hod_office_night",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_night",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "expert",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d_who_w1.l01"
+    },
+    {
+     "do": "jump",
+     "scene": "d_who"
+    }
+   ]
+  },
+  "d_who_w2": {
+   "id": "d_who_w2",
+   "block": "b4_night",
+   "stage": {
+    "bg": "bg_hod_office_night",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_night",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "expert",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d_who_w2.l01"
+    },
+    {
+     "do": "jump",
+     "scene": "d_who"
+    }
+   ]
+  },
+  "d_how": {
+   "id": "d_how",
+   "block": "b4_night",
+   "stage": {
+    "bg": "bg_hod_office_night",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_night",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "expert",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "choice",
+     "id": "d_how",
+     "kind": "deduction",
+     "prompt_key": "ep01.h.d_how.d_how.prompt",
+     "options": [
+      {
+       "id": "none",
+       "key": "ep01.h.d_how.d_how.none",
+       "goto": "d_how_w1",
+       "verdict": "wrong"
+      },
+      {
+       "id": "date",
+       "key": "ep01.h.d_how.d_how.date",
+       "goto": "d_where",
+       "item": "n_date",
+       "verdict": "right"
+      },
+      {
+       "id": "cash",
+       "key": "ep01.h.d_how.d_how.cash",
+       "goto": "d_where",
+       "item": "n_lyuda",
+       "verdict": "right"
+      },
+      {
+       "id": "notary",
+       "key": "ep01.h.d_how.d_how.notary",
+       "goto": "d_where",
+       "verdict": "right",
+       "effects": [
+        {
+         "var": "version_weak",
+         "op": "set",
+         "value": true
+        }
+       ]
+      }
+     ],
+     "penalty": [
+      {
+       "var": "nerves",
+       "op": "sub",
+       "value": 1
+      }
+     ]
+    }
+   ]
+  },
+  "d_how_w1": {
+   "id": "d_how_w1",
+   "block": "b4_night",
+   "stage": {
+    "bg": "bg_hod_office_night",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_night",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "expert",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d_how_w1.l01"
+    },
+    {
+     "do": "jump",
+     "scene": "d_how"
+    }
+   ]
+  },
+  "d_where": {
+   "id": "d_where",
+   "block": "b4_night",
+   "stage": {
+    "bg": "bg_hod_office_night",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_night",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "expert",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "choice",
+     "id": "d_where",
+     "kind": "deduction",
+     "prompt_key": "ep01.h.d_where.d_where.prompt",
+     "options": [
+      {
+       "id": "south",
+       "key": "ep01.h.d_where.d_where.south",
+       "goto": "d_where_w1",
+       "verdict": "wrong"
+      },
+      {
+       "id": "left",
+       "key": "ep01.h.d_where.d_where.left",
+       "goto": "version",
+       "item": "n_last_seen",
+       "verdict": "right"
+      },
+      {
+       "id": "vypiska",
+       "key": "ep01.h.d_where.d_where.vypiska",
+       "goto": "version",
+       "item": "n_vypiska",
+       "verdict": "right"
+      },
+      {
+       "id": "unknown",
+       "key": "ep01.h.d_where.d_where.unknown",
+       "goto": "version",
+       "verdict": "right",
+       "effects": [
+        {
+         "var": "version_weak",
+         "op": "set",
+         "value": true
+        }
+       ]
+      }
+     ],
+     "penalty": [
+      {
+       "var": "nerves",
+       "op": "sub",
+       "value": 1
+      }
+     ]
+    }
+   ]
+  },
+  "d_where_w1": {
+   "id": "d_where_w1",
+   "block": "b4_night",
+   "stage": {
+    "bg": "bg_hod_office_night",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_night",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "expert",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d_where_w1.l01",
+     "when": "photo_seen"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d_where_w1.l02",
+     "when": "!photo_seen"
+    },
+    {
+     "do": "jump",
+     "scene": "d_where"
+    }
+   ]
+  },
+  "version": {
+   "id": "version",
+   "block": "b4_night",
+   "stage": {
+    "bg": "bg_hod_office_night",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_office_night",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "expert",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.version.l01",
+     "when": "!version_weak"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.version.l02",
+     "when": "version_weak"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.version.l03",
+     "when": "nerves <= 1"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.version.l04"
+    },
+    {
+     "do": "jump",
+     "scene": "recon",
+     "transition": "vhs_glitch"
+    }
+   ]
+  },
+  "recon": {
+   "id": "recon",
+   "block": "br_recon",
+   "stage": {
+    "bg": "bg_hod_recon",
+    "time_of_day": "day"
+   },
+   "coverage": "hod_recon",
+   "steps": [
+    {
+     "do": "caption",
+     "style": "location",
+     "key": "ep01.h.recon.cap01"
+    },
+    {
+     "do": "show",
+     "who": "zoya",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "murashov_sil",
+     "position": "right"
+    },
+    {
+     "do": "narrate",
+     "style": "voiceover",
+     "key": "ep01.h.recon.l02"
+    },
+    {
+     "do": "say",
+     "who": "zoya",
+     "key": "ep01.h.recon.l03"
+    },
+    {
+     "do": "say",
+     "who": "murashov_sil",
+     "key": "ep01.h.recon.l04"
+    },
+    {
+     "do": "say",
+     "who": "zoya",
+     "key": "ep01.h.recon.l05"
+    },
+    {
+     "do": "say",
+     "who": "murashov_sil",
+     "key": "ep01.h.recon.l06"
+    },
+    {
+     "do": "say",
+     "who": "zoya",
+     "key": "ep01.h.recon.l07"
+    },
+    {
+     "do": "say",
+     "who": "murashov_sil",
+     "key": "ep01.h.recon.l08"
+    },
+    {
+     "do": "narrate",
+     "style": "voiceover",
+     "key": "ep01.h.recon.l09"
+    },
+    {
+     "do": "jump",
+     "scene": "proto_end",
+     "transition": "vhs_glitch"
+    }
+   ],
+   "music": "m_chronicle"
+  },
+  "proto_end": {
+   "id": "proto_end",
+   "block": "b4_night",
+   "stage": {
+    "bg": "bg_hod_office_night",
+    "time_of_day": "night"
+   },
+   "coverage": "hod_office_night",
+   "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "expert",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "right"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.proto_end.l01",
+     "when": "trust_oper >= 1"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.proto_end.l02",
+     "when": "trust_oper >= 1 && galina_open"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.proto_end.l03",
+     "when": "trust_oper >= 1 && !galina_open"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.proto_end.l04",
+     "when": "trust_oper == 0"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.proto_end.l05",
+     "when": "trust_oper == 0"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.proto_end.l06"
+    },
+    {
+     "do": "narrate",
+     "style": "voiceover",
+     "key": "ep01.h.proto_end.l07"
+    },
+    {
+     "do": "end",
+     "ending": "e_proto"
+    }
+   ]
+  }
+ },
+ "minigames": {},
+ "endings": [
+  {
+   "id": "e_proto",
+   "title_key": "ep01.h.end.proto",
+   "kind": "canonical"
+  }
+ ],
+ "archive_items": [
+  {
+   "id": "n_statement",
+   "kind": "document",
+   "title_key": "ep01.h.note.n_statement.title",
+   "text_key": "ep01.h.d1_office.doc_doc_statement",
+   "asset": "doc_statement"
+  },
+  {
+   "id": "n_south",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_south.title",
+   "text_key": "ep01.h.note.n_south.text"
+  },
+  {
+   "id": "n_contract",
+   "kind": "document",
+   "title_key": "ep01.h.note.n_contract.title",
+   "text_key": "ep01.h.flat_formal.doc_doc_contract_sale",
+   "asset": "doc_contract_sale"
+  },
+  {
+   "id": "n_name",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_name.title",
+   "text_key": "ep01.h.note.n_name.text"
+  },
+  {
+   "id": "n_cash",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_cash.title",
+   "text_key": "ep01.h.note.n_cash.text"
+  },
+  {
+   "id": "n_photo",
+   "kind": "photo",
+   "title_key": "ep01.h.note.n_photo.title",
+   "text_key": "ep01.h.note.n_photo.text"
+  },
+  {
+   "id": "n_left",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_left.title",
+   "text_key": "ep01.h.note.n_left.text"
+  },
+  {
+   "id": "n_sergei",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_sergei.title",
+   "text_key": "ep01.h.note.n_sergei.text"
+  },
+  {
+   "id": "n_last_seen",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_last_seen.title",
+   "text_key": "ep01.h.note.n_last_seen.text"
+  },
+  {
+   "id": "n_register",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_register.title",
+   "text_key": "ep01.h.note.n_register.text"
+  },
+  {
+   "id": "n_lyuda",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_lyuda.title",
+   "text_key": "ep01.h.note.n_lyuda.text"
+  },
+  {
+   "id": "n_vypiska",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_vypiska.title",
+   "text_key": "ep01.h.note.n_vypiska.text"
+  },
+  {
+   "id": "n_queue",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_queue.title",
+   "text_key": "ep01.h.note.n_queue.text"
+  },
+  {
+   "id": "n_card",
+   "kind": "document",
+   "title_key": "ep01.h.note.n_card.title",
+   "text_key": "ep01.h.note.n_card.text",
+   "asset": "doc_bti_card"
+  },
+  {
+   "id": "n_bti",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_bti.title",
+   "text_key": "ep01.h.note.n_bti.text"
+  },
+  {
+   "id": "n_date",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_date.title",
+   "text_key": "ep01.h.note.n_date.text"
+  },
+  {
+   "id": "n_call",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_call.title",
+   "text_key": "ep01.h.note.n_call.text"
+  }
+ ],
+ "assets": {
+  "backgrounds": [
+   {
+    "id": "bg_hod_office_am",
+    "path": "assets/ep01/hod/hod_office_am/office_am_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план office_am_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_office_call_am",
+    "path": "assets/ep01/hod/hod_office_am/office_am_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план office_am_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_office_eve",
+    "path": "assets/ep01/hod/hod_office_eve/office_eve_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план office_eve_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_office_lens",
+    "path": "assets/ep01/hod/hod_office_eve/office_eve_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план office_eve_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_office_call_eve",
+    "path": "assets/ep01/hod/hod_office_eve/office_eve_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план office_eve_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_office_d2",
+    "path": "assets/ep01/hod/hod_office_d2/office_d2_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план office_d2_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_office_night",
+    "path": "assets/ep01/hod/hod_office_night/office_night_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план office_night_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_flat",
+    "path": "assets/ep01/hod/hod_flat/flat_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план flat_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_flat_photo",
+    "path": "assets/ep01/hod/hod_flat/flat_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план flat_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_landing_chain",
+    "path": "assets/ep01/hod/hod_landing_chain/landing_chain_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план landing_chain_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_landing_open",
+    "path": "assets/ep01/hod/hod_landing_open/landing_open_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план landing_open_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_notary",
+    "path": "assets/ep01/hod/hod_notary/notary_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план notary_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_notary_register",
+    "path": "assets/ep01/hod/hod_notary/notary_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план notary_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_notary_stairs",
+    "path": "assets/ep01/hod/hod_notary_stairs/stairs_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план stairs_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_zhek",
+    "path": "assets/ep01/hod/hod_zhek/zhek_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план zhek_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_bti",
+    "path": "assets/ep01/hod/hod_bti/bti_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план bti_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_car",
+    "path": "assets/ep01/hod/hod_car/car_wide.webp",
+    "season": "summer",
+    "notes": "черновой общий план car_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_recon",
+    "path": "assets/ep01/hod/hod_recon/recon_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план recon_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_notary_alone",
+    "path": "assets/ep01/hod/hod_notary_alone/notary_alone_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план notary_alone_wide (лето 1993-го)"
+   }
+  ],
+  "sprites": [],
+  "cg": [],
+  "shots": [
+   {
+    "id": "sh_office_am_wide",
+    "set": "hod_office_am",
+    "bg": "bg_hod_office_am",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "sledak"
+     },
+     {
+      "who": "oper"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_office_am/office_am_wide.webp"
+   },
+   {
+    "id": "sh_office_am_ots_oper",
+    "set": "hod_office_am",
+    "bg": "bg_hod_office_am",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "oper"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_office_am/office_am_ots_oper.webp",
+    "from": "sledak",
+    "focus": "oper"
+   },
+   {
+    "id": "sh_office_am_phone",
+    "set": "hod_office_call_am",
+    "bg": "bg_hod_office_call_am",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "sledak"
+     },
+     {
+      "who": "oper"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_office_call_am/office_am_phone.webp"
+   },
+   {
+    "id": "sh_office_eve_wide",
+    "set": "hod_office_eve",
+    "bg": "bg_hod_office_eve",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "sledak"
+     },
+     {
+      "who": "expert"
+     },
+     {
+      "who": "oper"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_office_eve/office_eve_wide.webp"
+   },
+   {
+    "id": "sh_office_eve_ots_expert",
+    "set": "hod_office_eve",
+    "bg": "bg_hod_office_eve",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "expert"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_office_eve/office_eve_ots_expert.webp",
+    "from": "sledak",
+    "focus": "expert"
+   },
+   {
+    "id": "sh_office_eve_lens",
+    "set": "hod_office_lens",
+    "bg": "bg_hod_office_lens",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_office_lens/office_eve_lens.webp"
+   },
+   {
+    "id": "sh_office_eve_phone",
+    "set": "hod_office_call_eve",
+    "bg": "bg_hod_office_call_eve",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "sledak"
+     },
+     {
+      "who": "expert"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_office_call_eve/office_eve_phone.webp"
+   },
+   {
+    "id": "sh_office_d2_wide",
+    "set": "hod_office_d2",
+    "bg": "bg_hod_office_d2",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "boss"
+     },
+     {
+      "who": "sledak"
+     },
+     {
+      "who": "oper"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_office_d2/office_d2_wide.webp"
+   },
+   {
+    "id": "sh_office_d2_ots_boss",
+    "set": "hod_office_d2",
+    "bg": "bg_hod_office_d2",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "boss"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_office_d2/office_d2_ots_boss.webp",
+    "from": "sledak",
+    "focus": "boss"
+   },
+   {
+    "id": "sh_office_night_wide",
+    "set": "hod_office_night",
+    "bg": "bg_hod_office_night",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "sledak"
+     },
+     {
+      "who": "expert"
+     },
+     {
+      "who": "oper"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_office_night/office_night_wide.webp"
+   },
+   {
+    "id": "sh_office_night_ots_expert",
+    "set": "hod_office_night",
+    "bg": "bg_hod_office_night",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "expert"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_office_night/office_night_ots_expert.webp",
+    "from": "sledak",
+    "focus": "expert"
+   },
+   {
+    "id": "sh_flat_wide",
+    "set": "hod_flat",
+    "bg": "bg_hod_flat",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "buyer"
+     },
+     {
+      "who": "lapin_wife"
+     },
+     {
+      "who": "sledak"
+     },
+     {
+      "who": "oper"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_flat/flat_wide.webp"
+   },
+   {
+    "id": "sh_flat_ots_buyer",
+    "set": "hod_flat",
+    "bg": "bg_hod_flat",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "buyer"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_flat/flat_ots_buyer.webp",
+    "from": "sledak",
+    "focus": "buyer"
+   },
+   {
+    "id": "sh_flat_ots_wife",
+    "set": "hod_flat",
+    "bg": "bg_hod_flat",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "lapin_wife"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_flat/flat_ots_wife.webp",
+    "from": "sledak",
+    "focus": "lapin_wife"
+   },
+   {
+    "id": "sh_flat_photo",
+    "set": "hod_flat_photo",
+    "bg": "bg_hod_flat_photo",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_flat_photo/flat_photo.webp"
+   },
+   {
+    "id": "sh_landing_chain_wide",
+    "set": "hod_landing_chain",
+    "bg": "bg_hod_landing_chain",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "neighbor"
+     },
+     {
+      "who": "sledak"
+     },
+     {
+      "who": "oper"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_landing_chain/landing_chain_wide.webp"
+   },
+   {
+    "id": "sh_landing_chain_ots",
+    "set": "hod_landing_chain",
+    "bg": "bg_hod_landing_chain",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "neighbor"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_landing_chain/landing_chain_ots.webp",
+    "from": "sledak",
+    "focus": "neighbor"
+   },
+   {
+    "id": "sh_landing_open_wide",
+    "set": "hod_landing_open",
+    "bg": "bg_hod_landing_open",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "neighbor"
+     },
+     {
+      "who": "sledak"
+     },
+     {
+      "who": "oper"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_landing_open/landing_open_wide.webp"
+   },
+   {
+    "id": "sh_landing_open_ots",
+    "set": "hod_landing_open",
+    "bg": "bg_hod_landing_open",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "neighbor"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_landing_open/landing_open_ots.webp",
+    "from": "sledak",
+    "focus": "neighbor"
+   },
+   {
+    "id": "sh_notary_wide",
+    "set": "hod_notary",
+    "bg": "bg_hod_notary",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "notary"
+     },
+     {
+      "who": "assistant"
+     },
+     {
+      "who": "sledak"
+     },
+     {
+      "who": "oper"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_notary/notary_wide.webp"
+   },
+   {
+    "id": "sh_notary_ots_notary",
+    "set": "hod_notary",
+    "bg": "bg_hod_notary",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "notary"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_notary/notary_ots_notary.webp",
+    "from": "sledak",
+    "focus": "notary"
+   },
+   {
+    "id": "sh_notary_register",
+    "set": "hod_notary_register",
+    "bg": "bg_hod_notary_register",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_notary_register/notary_register.webp"
+   },
+   {
+    "id": "sh_notary_alone_wide",
+    "set": "hod_notary_alone",
+    "bg": "bg_hod_notary_alone",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "notary"
+     },
+     {
+      "who": "sledak"
+     },
+     {
+      "who": "oper"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_notary_alone/notary_alone_wide.webp"
+   },
+   {
+    "id": "sh_stairs_wide",
+    "set": "hod_notary_stairs",
+    "bg": "bg_hod_notary_stairs",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "assistant"
+     },
+     {
+      "who": "oper"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_notary_stairs/stairs_wide.webp"
+   },
+   {
+    "id": "sh_stairs_ots_assistant",
+    "set": "hod_notary_stairs",
+    "bg": "bg_hod_notary_stairs",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "assistant"
+     },
+     {
+      "who": "oper"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_notary_stairs/stairs_ots_assistant.webp",
+    "from": "oper",
+    "focus": "assistant"
+   },
+   {
+    "id": "sh_zhek_wide",
+    "set": "hod_zhek",
+    "bg": "bg_hod_zhek",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "passport_clerk"
+     },
+     {
+      "who": "sledak"
+     },
+     {
+      "who": "oper"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_zhek/zhek_wide.webp"
+   },
+   {
+    "id": "sh_zhek_ots_clerk",
+    "set": "hod_zhek",
+    "bg": "bg_hod_zhek",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "passport_clerk"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_zhek/zhek_ots_clerk.webp",
+    "from": "sledak",
+    "focus": "passport_clerk"
+   },
+   {
+    "id": "sh_bti_wide",
+    "set": "hod_bti",
+    "bg": "bg_hod_bti",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "clerk"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_bti/bti_wide.webp"
+   },
+   {
+    "id": "sh_bti_ots_clerk",
+    "set": "hod_bti",
+    "bg": "bg_hod_bti",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "clerk"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_bti/bti_ots_clerk.webp",
+    "from": "sledak",
+    "focus": "clerk"
+   },
+   {
+    "id": "sh_car_wide",
+    "set": "hod_car",
+    "bg": "bg_hod_car",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "oper"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_car/car_wide.webp"
+   },
+   {
+    "id": "sh_car_ots_oper",
+    "set": "hod_car",
+    "bg": "bg_hod_car",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "oper"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_car/car_ots_oper.webp",
+    "from": "sledak",
+    "focus": "oper"
+   },
+   {
+    "id": "sh_recon_wide",
+    "set": "hod_recon",
+    "bg": "bg_hod_recon",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "zoya"
+     },
+     {
+      "who": "murashov_sil"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_recon/recon_wide.webp"
+   },
+   {
+    "id": "sh_recon_ots_zoya",
+    "set": "hod_recon",
+    "bg": "bg_hod_recon",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "zoya"
+     },
+     {
+      "who": "murashov_sil"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_recon/recon_ots_zoya.webp",
+    "from": "murashov_sil",
+    "focus": "zoya"
+   },
+   {
+    "id": "sh_notary_alone_ots",
+    "set": "hod_notary_alone",
+    "bg": "bg_hod_notary_alone",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "notary"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "from": "sledak",
+    "focus": "notary",
+    "file": "assets/ep01/hod/hod_notary/notary_ots_notary.webp"
+   }
+  ],
+  "documents": [
+   {
+    "id": "doc_statement",
+    "path": "assets/ep01/hod/docs/statement.webp",
+    "localized": false,
+    "notes": "бланк в линейку без текста; текст заявления — слой из локали"
+   },
+   {
+    "id": "doc_contract_sale",
+    "path": "assets/ep01/docs/contract_sale.webp",
+    "localized": false
+   },
+   {
+    "id": "doc_bti_card",
+    "path": "assets/ep01/docs/bti_card.webp",
+    "localized": false
+   }
+  ],
+  "music": [
+   {
+    "id": "m_theme_main",
+    "path": "assets/common/music/theme_main.mp3",
+    "license": "licensed",
+    "notes": "Главная тема передачи «Криминальная Россия» (Игорь Назарук, 1995): запись владельца по лицензии, 63 с, mp3 192 кбит/с"
+   },
+   {
+    "id": "m_chronicle",
+    "path": "assets/common/music/chronicle.m4a",
+    "license": "original"
+   },
+   {
+    "id": "m_investigation",
+    "path": "assets/common/music/investigation.m4a",
+    "license": "original"
+   },
+   {
+    "id": "m_tension",
+    "path": "assets/common/music/tension.m4a",
+    "license": "original"
+   },
+   {
+    "id": "m_calm",
+    "path": "assets/common/music/calm.m4a",
+    "license": "original"
+   }
+  ],
+  "sfx": [
+   {
+    "id": "sfx_vhs",
+    "path": "assets/common/sfx/vhs_glitch.mp3"
+   },
+   {
+    "id": "sfx_phone_ring",
+    "path": "assets/common/sfx/phone_ring.mp3",
+    "notes": "входящий звонок, дисковый аппарат 1980-х"
+   }
+  ],
+  "ambient": [
+   {
+    "id": "amb_office",
+    "path": "assets/common/amb/office_typewriter.mp3"
+   },
+   {
+    "id": "amb_archive",
+    "path": "assets/common/amb/archive_fluorescent.mp3"
+   },
+   {
+    "id": "amb_street_day",
+    "path": "assets/common/amb/street_day_car.mp3"
+   },
+   {
+    "id": "amb_stairwell",
+    "path": "assets/common/amb/stairwell.mp3"
+   }
+  ],
+  "budget_mb": 30
+ }
+}

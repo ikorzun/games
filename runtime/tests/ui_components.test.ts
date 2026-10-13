@@ -420,10 +420,10 @@ describe('CaptionLayer: плашка заставки', () => {
 });
 
 describe('QuickMenu', () => {
-  it('пять кнопок в фиксированном порядке: Auto, Skip, Log, Settings, Hide (сохранение, загрузка и звук — в настройках)', () => {
+  it('шесть кнопок в фиксированном порядке: Auto, Skip, Log, Notebook, Settings, Hide (сохранение, загрузка и звук — в настройках)', () => {
     const qm = new QuickMenu(() => undefined);
     const actions = [...qm.el.querySelectorAll<HTMLElement>('button')].map((b) => b.dataset.action);
-    expect(actions).toEqual(['auto', 'skip', 'log', 'settings', 'hide']);
+    expect(actions).toEqual(['auto', 'skip', 'log', 'notebook', 'settings', 'hide']);
     expect(qm.el.querySelector('[data-action="auto"]')?.textContent).toBe('Авто');
   });
 
@@ -464,7 +464,7 @@ describe('QuickMenu', () => {
 });
 
 describe('QuickMenu: кнопки-иконки', () => {
-  const ACTIONS: QuickAction[] = ['auto', 'skip', 'log', 'settings', 'hide'];
+  const ACTIONS: QuickAction[] = ['auto', 'skip', 'log', 'notebook', 'settings', 'hide'];
   const btn = (qm: QuickMenu, a: string): HTMLButtonElement => qm.el.querySelector<HTMLButtonElement>(`[data-action="${a}"]`)!;
 
   it('у каждой кнопки встроенная SVG-иконка (декоративная) и подпись скрытым текстом; title совпадает с подписью', () => {
@@ -505,7 +505,7 @@ describe('QuickMenu: кнопки-иконки', () => {
   });
 
   it('icon(name): новый элемент на каждый вызов, имя в классе; все имена из быстрого меню существуют', () => {
-    const names: IconName[] = ['auto', 'skip', 'log', 'save', 'load', 'mute', 'settings', 'hide'];
+    const names: IconName[] = ['auto', 'skip', 'log', 'notebook', 'save', 'load', 'mute', 'settings', 'hide'];
     for (const n of names) {
       const a = icon(n);
       const b = icon(n);

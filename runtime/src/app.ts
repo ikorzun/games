@@ -239,7 +239,10 @@ export class App {
     this.kit.screens.open(menu);
   }
 
-  /** Полка эпизодов: слоты рамки сезона с обложками; открыт текущий эпизод, остальные — «скоро». */
+  /**
+   * Полка эпизодов: слоты рамки сезона с обложками; открыт слот текущего эпизода, остальные — «скоро». Слот ищется по
+   * номеру: у эпизода 1 есть прежние варианты (новелла и режим дела), их открывают по адресу ?episode=ep01_murylev.
+   */
   private menuSeason(): MenuSeason | null {
     const s = this.d.season;
     if (!s) return null;
@@ -248,7 +251,7 @@ export class App {
       n: s.season,
       titleKey: s.title_key,
       years: s.years ?? null,
-      slots: s.episodes.map((x) => ({ order: x.order, year: x.year ?? null, current: x.id === this.d.episode.id, cover: cover(x.cover) })),
+      slots: s.episodes.map((x) => ({ order: x.order, year: x.year ?? null, current: x.order === this.d.episode.order, cover: cover(x.cover) })),
     };
   }
 
@@ -347,6 +350,9 @@ export class App {
       case 'log':
         this.openLog();
         break;
+      case 'notebook':
+        this.openArchive('ui.quick.notebook');
+        break;
       case 'save':
         this.openSaveLoad('save');
         break;
@@ -414,13 +420,14 @@ export class App {
     this.kit.screens.open(screen);
   }
 
-  openArchive(): void {
+  openArchive(titleKey?: string): void {
     this.d.platform.track('archive_opened');
     const ep = this.d.episode;
     const screen: ArchiveScreen = new ArchiveScreen(
       ep,
       () => [...new Set([...this.d.saves.archiveOf(ep.id), ...(this.session.interp.started ? this.session.interp.state.archive : [])])],
       () => this.kit.screens.close(screen),
+      titleKey,
     );
     this.kit.screens.open(screen);
   }

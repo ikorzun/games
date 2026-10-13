@@ -1,5 +1,5 @@
 /**
- * Быстрое меню: Auto, Skip (прочитанное), Log (папка), Settings, Hide. Save/Load/Mute остаются действиями
+ * Быстрое меню: Auto, Skip (прочитанное), Log (папка), Notebook (блокнот улик), Settings, Hide. Save/Load/Mute остаются действиями
  * (клавиши S/L/M не меняются… точнее, горячие клавиши) и кнопками экрана настроек.
  * Кнопки — иконки (icons.ts); подпись остаётся в разметке скрытым текстом и в title: так кнопку
  * читает скринридер, а смена языка обновляет подсказки.
@@ -8,7 +8,7 @@ import { t } from '../core/i18n';
 import { h } from './dom';
 import { icon } from './icons';
 
-export type QuickAction = 'auto' | 'skip' | 'log' | 'save' | 'load' | 'mute' | 'settings' | 'hide';
+export type QuickAction = 'auto' | 'skip' | 'log' | 'notebook' | 'save' | 'load' | 'mute' | 'settings' | 'hide';
 
 export interface QuickState {
   auto: boolean;
@@ -16,8 +16,11 @@ export interface QuickState {
   muted: boolean;
 }
 
-/** В панели — пять кнопок; сохранение, загрузка и звук живут в настройках (решение владельца 2026-10-11). */
-const ORDER: readonly QuickAction[] = ['auto', 'skip', 'log', 'settings', 'hide'];
+/**
+ * Сохранение, загрузка и звук живут в настройках (решение владельца 2026-10-11). Блокнот — шестая кнопка с пробы
+ * «Хода следствия» (2026-10-13): выводы игрок делает сам по собранным фактам, и они должны быть под рукой.
+ */
+const ORDER: readonly QuickAction[] = ['auto', 'skip', 'log', 'notebook', 'settings', 'hide'];
 /** Кнопки-переключатели и поле состояния, которое каждая из них показывает. */
 const TOGGLE_KEY: Readonly<Partial<Record<QuickAction, keyof QuickState>>> = { auto: 'auto', skip: 'skip', mute: 'muted' };
 

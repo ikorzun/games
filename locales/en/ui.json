@@ -13,6 +13,7 @@
   "ui.quick.auto": "Auto",
   "ui.quick.skip": "Skip read text",
   "ui.quick.log": "Log",
+  "ui.quick.notebook": "Notebook",
   "ui.quick.save": "Save",
   "ui.quick.load": "Load",
   "ui.quick.mute": "Mute",

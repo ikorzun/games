@@ -32,3 +32,5 @@ assets/ep01/_regen/*
 
 # Черновики Seedance (tools/seedance_generate.py): рабочие mp4 и job.json с task id, в git не хранятся
 assets/common/video/drafts/
+# Черновые генерации «Хода следствия»: исходники PNG и план (tools/hod/shots.py); в игру идут webp из assets/ep01/hod/
+assets/ep01/_hod/*

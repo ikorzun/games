@@ -19,6 +19,10 @@ const ICONS = {
   log: [
     ['path', { d: 'M3.5 7.5h6l2 2h9v9.5h-17z' }],
   ],
+  notebook: [
+    ['path', { d: 'M6.5 3.5h12v17h-12z' }],
+    ['path', { d: 'M4.5 7h4M4.5 12h4M4.5 17h4M10.5 8h5M10.5 11.5h5M10.5 15h3' }],
+  ],
   save: [
     ['path', { d: 'M5 4.5h11l3.5 3.5V19.5H5z' }],
     ['path', { d: 'M8 4.5v4.5h7V4.5M8 19.5v-6h8v6' }],
