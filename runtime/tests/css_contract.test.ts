@@ -150,20 +150,29 @@ describe('слои камкордера в CSS', () => {
 });
 
 describe('интерфейс: документальная эстетика, mobile-first', () => {
-  it('окно реплики по макету в Figma (решение владельца 2026-10-13): текст на подложке 24 % чёрного без тени, над ней портрет, имя и подпись; шрифт Tinos', () => {
+  it('окно реплики по макету в Figma (узел 1232:3796, 2026-10-13): полоса 24 % чёрного под каждой строкой без тени, над текстом портрет, имя и подпись; шрифт Tinos', () => {
     const box = /\n\.vn-textbox\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(box).not.toMatch(/background/);
     expect(box).not.toMatch(/text-shadow/);
     expect(box).toMatch(/font-family:\s*var\(--font-body\)/);
     expect(box).toMatch(/width:\s*min\(100%,\s*calc\(585em \/ 15\)\)/);
     const plate = /\n\.vn-textbox__box\s*\{([^}]*)\}/.exec(uiCss)![1]!;
-    expect(plate).toMatch(/background:\s*rgb\(0 0 0 \/ 0\.24\)/);
-    expect(plate).toMatch(/padding:\s*calc\(12em \/ 15\)/);
+    expect(plate).not.toMatch(/background/); // сплошной подложки больше нет — полосы по строкам
+    const text = /\n\.vn-textbox__text\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(text).toMatch(/line-height:\s*calc\(20em \/ 15\)/); // шаг строк = высота полосы
+    expect(text).toMatch(/padding:\s*0 calc\(24em \/ 15\) 0 calc\(5em \/ 15\)/);
+    const bars = /\n\.vn-textbox__bars\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(bars).toMatch(/opacity:\s*0\.24/);
+    expect(bars).toMatch(/color:\s*transparent/);
+    const bar = /\n\.vn-textbox__bar\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(bar).toMatch(/background:\s*#000/);
+    expect(bar).toMatch(/-webkit-box-decoration-break:\s*clone;[\s\S]*\bbox-decoration-break:\s*clone/);
+    expect(bar).toMatch(/box-shadow:\s*calc\(-5em \/ 15\) 0 #000, calc\(5em \/ 15\) 0 #000/);
     const avatar = /\n\.vn-textbox__avatar\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(avatar).toMatch(/width:\s*calc\(36em \/ 15\)/);
     expect(avatar).toMatch(/border-radius:\s*50%/);
     expect(uiCss).toMatch(/\.vn-textbox__name\s*\{\s*font-size:\s*calc\(14em \/ 15\);\s*\}/);
-    expect(uiCss).toMatch(/\.vn-textbox__title\s*\{\s*font-size:\s*calc\(10em \/ 15\);\s*opacity:\s*0\.5;\s*\}/);
+    expect(uiCss).toMatch(/\.vn-textbox__title\s*\{\s*font-size:\s*calc\(10em \/ 15\);\s*opacity:\s*0\.7;\s*\}/);
     expect(uiCss).toMatch(/--font-body:\s*'Tinos'/);
     expect(uiCss).toMatch(/--panel-line:\s*rgb\(255 255 255 \/ 0\.28\)/);
     expect((uiCss.match(/@font-face \{ font-family: 'Tinos'/g) ?? []).length).toBe(5); // свои woff2, без Google Fonts в рантайме
@@ -173,16 +182,14 @@ describe('интерфейс: документальная эстетика, mob
     expect(uiCss.replace(blur![0], '')).not.toMatch(/backdrop-filter/);
   });
 
-  it('шрифт только 400 или тоньше (решение владельца 2026-10-12): жирный — только знак «дальше» из макета реплик (2026-10-13)', () => {
+  it('шрифт только 400 или тоньше (решение владельца 2026-10-12): знак «дальше» — рисунок из макета реплик, не жирная буква', () => {
     const cssOf = (dir: string): string[] => {
       const d = join(HERE, '..', 'src', dir);
       return readdirSync(d).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(d, f), 'utf8'));
     };
     // Мини-игры и режим дела (папка, итог поиска, осмотр фото).
-    const more = /\n\.vn-textbox__more\s*\{([^}]*)\}/.exec(uiCss)![1]!;
-    expect(more).toMatch(/font-weight:\s*700;/);
-    expect(uiCss.match(/font-weight:\s*700/g)).toHaveLength(2); // @font-face жирной латиницы Tinos и сам знак
-    const rest = uiCss.replace(more, '').replace(/@font-face[^\n]*font-weight: 700[^\n]*/, '');
+    expect(uiCss.match(/font-weight:\s*700/g)).toHaveLength(1); // только @font-face жирной латиницы Tinos
+    const rest = uiCss.replace(/@font-face[^\n]*font-weight: 700[^\n]*/, '');
     for (const css of [rest, ...cssOf('minigames'), ...cssOf('case')]) {
       expect(css).not.toMatch(/font-weight:\s*(?:[5-9]00|bold)/);
       expect(css).not.toMatch(/font:\s*(?:[5-9]00|bold)\s/);
@@ -213,12 +220,18 @@ describe('интерфейс: документальная эстетика, mob
     expect(uiCss).not.toMatch(/--radius/);
   });
 
-  it('знак «дальше» — красный жирный «>» в конце текста, виден, когда реплика допечатана', () => {
-    const more = /\n\.vn-textbox__more\s*\{([^}]*)\}/.exec(uiCss)![1]!;
-    expect(more).toMatch(/color:\s*#d64646/);
-    expect(more).toMatch(/opacity:\s*0;/);
-    expect(more).not.toMatch(/position/);
-    expect(uiCss).toMatch(/\.vn-textbox\.is-complete\s+\.vn-textbox__more\s*\{\s*opacity:\s*1;/);
+  it('каретка — плашка 19 × 20 (20 % #ac0000) сразу за полосой, ширины не занимает; «>» акцентного цвета виден, когда реплика допечатана', () => {
+    expect(uiCss).toMatch(/\n\.vn-textbox__more\s*\{\s*position:\s*relative;\s*\}/);
+    const plate = /\n\.vn-textbox__more::before\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(plate).toMatch(/position:\s*absolute/);
+    expect(plate).toMatch(/width:\s*calc\(19em \/ 15\)/);
+    expect(plate).toMatch(/height:\s*calc\(20em \/ 15\)/);
+    expect(plate).toMatch(/background:\s*rgb\(172 0 0 \/ 0\.2\)/);
+    const glyph = /\n\.vn-textbox__more svg\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(glyph).toMatch(/position:\s*absolute/);
+    expect(glyph).toMatch(/fill:\s*var\(--c-accent\)/);
+    expect(glyph).toMatch(/opacity:\s*0;/);
+    expect(uiCss).toMatch(/\.vn-textbox\.is-complete\s+\.vn-textbox__more svg\s*\{\s*opacity:\s*1;/);
   });
 
   it('кнопки быстрого меню — полупрозрачная подложка 8 % белого без контура, фокус с клавиатуры виден', () => {

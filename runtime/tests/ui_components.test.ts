@@ -16,7 +16,7 @@ import { QuickMenu } from '../src/ui/quick_menu';
 import type { QuickAction } from '../src/ui/quick_menu';
 import { ScreenHost } from '../src/ui/screen_host';
 import type { Screen } from '../src/ui/screen_host';
-import { TextBox } from '../src/ui/textbox';
+import { strokeBeat, TextBox } from '../src/ui/textbox';
 import type { LineView } from '../src/ui/textbox';
 import { ToastLayer } from '../src/ui/toasts';
 
@@ -147,15 +147,56 @@ describe('TextBox: typewriter', () => {
     expect(tb.el.dataset.style).toBe('voiceover');
   });
 
-  it('знак «дальше» — в конце текста реплики, после непоказанной части', () => {
+  it('каретка с «>» (макет 1232:3796) — сразу за напечатанным, перед непоказанной частью; «>» виден, когда допечатано', () => {
     const tb = new TextBox();
     tb.show(line('Мы ничего не нарушали.'), 10);
-    const text = tb.el.querySelector('.vn-textbox__text');
-    expect(text?.lastElementChild?.className).toBe('vn-textbox__more');
-    expect(text?.lastElementChild?.textContent).toBe('>');
+    const text = tb.el.querySelector('.vn-textbox__text:not(.vn-textbox__bars)');
+    const more = text?.querySelector('.vn-textbox__more');
+    expect(more?.previousElementSibling?.className).toBe('vn-textbox__shown');
+    expect(more?.nextElementSibling?.className).toBe('vn-textbox__rest');
+    expect(more?.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 6 8');
+    expect(more?.textContent).toBe(''); // ширины в строке не занимает
     expect(tb.el.classList.contains('is-complete')).toBe(false);
     tb.finishNow();
     expect(tb.el.classList.contains('is-complete')).toBe(true);
+  });
+
+  it('слой полос повторяет текст: напечатанное — в полосе, остальное — без неё; оба слоя скрыты от скринридера', () => {
+    const tb = new TextBox();
+    tb.show(line('Купили по договору'), 10);
+    vi.advanceTimersByTime(600);
+    const bars = tb.el.querySelector<HTMLElement>('.vn-textbox__bars');
+    expect(bars?.getAttribute('aria-hidden')).toBe('true');
+    expect(bars?.querySelector('.vn-textbox__bar')?.textContent).toBe(shown(tb));
+    expect(bars?.textContent).toBe('Купили по договору');
+    tb.finishNow();
+    expect(bars?.querySelector('.vn-textbox__bar')?.textContent).toBe('Купили по договору');
+  });
+
+  it('печатная машинка: после точки и запятой рука замирает, ритм одинаков при каждом показе', () => {
+    expect(strokeBeat('.', 5)).toBe(6);
+    expect(strokeBeat('…', 5)).toBe(6);
+    expect(strokeBeat(',', 5)).toBe(3);
+    const beats = Array.from({ length: 200 }, (_, i) => strokeBeat('а', i));
+    expect(Math.min(...beats)).toBeGreaterThanOrEqual(0.75);
+    expect(Math.max(...beats)).toBeLessThanOrEqual(1.25);
+    expect(beats.reduce((a, b) => a + b, 0) / beats.length).toBeCloseTo(1, 1);
+    const run = (): number[] => {
+      const tb = new TextBox();
+      tb.show(line('Да. Нет'), 10);
+      const at: number[] = [];
+      for (let t = 0; t < 3000 && tb.typing; t += 10) {
+        vi.advanceTimersByTime(10);
+        while (shown(tb).length > at.length) at.push(t);
+      }
+      return at;
+    };
+    const a = run();
+    expect(a).toHaveLength(7);
+    const gaps = a.slice(1).map((t, i) => t - a[i]!);
+    // пауза после «.» перед пробелом — самая длинная
+    expect(gaps.indexOf(Math.max(...gaps))).toBe(2);
+    expect(Math.max(...gaps)).toBeGreaterThan(3 * Math.min(...gaps));
   });
 
   it('скринридер получает реплику целиком сразу (aria-live), а не по буквам', () => {

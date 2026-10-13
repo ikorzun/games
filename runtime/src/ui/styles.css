@@ -28,6 +28,8 @@
   /* Кегль основного текста: ≥ 16 px на мобильном, ≥ 20 px на десктопе (03-visual-language §8). */
   --fs: 16px;
   --font-scale: 1;
+  /* Крупные заголовки макетов (32 px макета) в пикселях макета: на мобильном на 6 меньше (решение владельца 2026-10-13). */
+  --h1: 26;
   --c-bg: #08080a;
   --c-card: #131316;
   --c-line: rgb(255 255 255 / 0.16);
@@ -43,7 +45,7 @@
   color-scheme: dark;
 }
 @media (min-width: 900px) and (min-height: 540px) {
-  :root { --fs: 20px; }
+  :root { --fs: 20px; --h1: 32; }
 }
 /* Индикация камеры по-русски: кириллица есть только у JetBrains Mono. */
 html[lang='ru'] { --font-osd: var(--font-cyr); }
@@ -168,9 +170,11 @@ body {
 
 /* ───────────── Текстовое окно ───────────── */
 
-/* Макет реплик в Figma (Claude, узел 1230:1541; решение владельца 2026-10-13): над подложкой — портрет, имя и подпись,
-   текст на подложке без тени (24 % чёрного — после проверки на кадрах, в макете 16 %), в конце текста — красный «>». Размеры макета даны для кегля 15 px и
-   пересчитаны в em: кегль у нас свой (--fs, ≥ 16 px на телефоне и ≥ 20 px на десктопе), и всё растёт вместе с ним. */
+/* Макет реплик в Figma (Claude, узел 1232:3796; решение владельца 2026-10-13): над текстом — портрет, имя и подпись;
+   под каждой строкой — своя полоса 24 % чёрного с запасом 5 px по бокам, без тени; за напечатанным — красная плашка,
+   в ней «>». Размеры макета даны для кегля 15 px и пересчитаны в em: кегль у нас свой (--fs, ≥ 16 px на телефоне и
+   ≥ 20 px на десктопе), и всё растёт вместе с ним. Шаг строк — 20 px макета, как высота полосы: в макете текст набран
+   с межстрочным «normal» (≈ 17 px), и со второй строки буквы съезжали бы с полос. */
 .vn-textbox {
   --text-size: calc(var(--fs) * var(--font-scale));
   display: flex;
@@ -191,7 +195,7 @@ body {
 .vn-textbox__who {
   display: flex;
   align-items: center;
-  gap: calc(8em / 15);
+  gap: calc(6em / 15);
   align-self: flex-start;
 }
 .vn-textbox__avatar {
@@ -205,33 +209,67 @@ body {
 .vn-textbox__id {
   display: flex;
   flex-direction: column;
-  gap: 1px;
   min-width: 0;
 }
 .vn-textbox__name { font-size: calc(14em / 15); }
-.vn-textbox__title { font-size: calc(10em / 15); opacity: 0.5; }
-/* Подложка текста: не ниже двух строк, чтобы окно не прыгало от короткой реплики к длинной. */
+.vn-textbox__title { font-size: calc(10em / 15); opacity: 0.7; }
+/* Текст не ниже двух строк, чтобы имя не прыгало от короткой реплики к длинной. */
 .vn-textbox__box {
-  box-sizing: border-box;
-  min-height: calc(2 * 1.15em + 2 * 12em / 15);
-  padding: calc(12em / 15);
-  background: rgb(0 0 0 / 0.24);
+  position: relative;
+  min-height: calc(2 * 20em / 15);
 }
+/* Справа — место под полосу и плашку «>» (5 + 19 px макета): плашка не вылезает за окно. */
 .vn-textbox__text {
+  position: relative;
   margin: 0;
+  padding: 0 calc(24em / 15) 0 calc(5em / 15);
+  line-height: calc(20em / 15);
   white-space: pre-wrap;
   overflow-wrap: break-word;
   hyphens: auto;
 }
-.vn-textbox__rest { visibility: hidden; }
-/* «Дальше» — в конце текста; виден, когда реплика допечатана. */
-.vn-textbox__more {
-  padding-left: 0.25em;
-  font-weight: 700;
-  color: #d64646;
-  opacity: 0;
+/* Слой полос — под текстом, с той же раскладкой и прозрачными буквами. Полосы в слое непрозрачны и на стыках строк
+   сливаются, 24 % — у слоя целиком: так стыки ровные, без тёмных и светлых волосков. Запас по бокам — тенью: отступы
+   фрагментов строк WebKit не повторяет. */
+.vn-textbox__bars {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: transparent !important;
+  opacity: 0.24;
 }
-.vn-textbox.is-complete .vn-textbox__more {
+.vn-textbox__bar {
+  padding: 0.15em 0;
+  background: #000;
+  box-shadow: calc(-5em / 15) 0 #000, calc(5em / 15) 0 #000;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.vn-textbox__rest { visibility: hidden; }
+/* Каретка — плашка 19 × 20 сразу за полосой напечатанного. Ширины в строке она не занимает, поэтому переносы не
+   прыгают. Когда реплика допечатана, в ней мигает «>». */
+.vn-textbox__more { position: relative; }
+.vn-textbox__more::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: calc(5em / 15);
+  width: calc(19em / 15);
+  height: calc(20em / 15);
+  background: rgb(172 0 0 / 0.2);
+  transform: translateY(-50%);
+}
+.vn-textbox__more svg {
+  position: absolute;
+  top: 50%;
+  left: calc(13em / 15);
+  width: calc(6em / 15);
+  height: calc(8em / 15);
+  fill: var(--c-accent);
+  opacity: 0;
+  transform: translateY(-50%);
+}
+.vn-textbox.is-complete .vn-textbox__more svg {
   opacity: 1;
   animation: more-blink 1s steps(2) infinite;
 }
@@ -247,13 +285,15 @@ body {
   font-size: 0.92em;
   color: #d3dccb;
 }
-/* Хроника, суд, монтаж: рассказчик — субтитр по центру снизу, без подложки. */
+/* Хроника, суд, монтаж: рассказчик — субтитр по центру снизу, без полос и плашки, только «>». */
 .vn-textbox[data-layout='subtitle'] {
   text-align: center;
   text-shadow: 0 2px 6px #000, 0 0 3px #000, 0 0 12px rgb(0 0 0 / 0.8);
 }
 .vn-textbox[data-layout='subtitle'] .vn-textbox__who { align-self: center; }
-.vn-textbox[data-layout='subtitle'] .vn-textbox__box { background: none; }
+.vn-textbox[data-layout='subtitle'] .vn-textbox__text { padding: 0 calc(24em / 15); }
+.vn-textbox[data-layout='subtitle'] .vn-textbox__bars,
+.vn-textbox[data-layout='subtitle'] .vn-textbox__more::before { display: none; }
 @keyframes more-blink {
   50% { opacity: 0.15; }
 }
@@ -381,7 +421,7 @@ body {
   box-sizing: border-box;
   width: var(--col);
   margin: 0;
-  font: 400 calc(32 * var(--u)) / 0.96 var(--font-title);
+  font: 400 calc(var(--h1) * var(--u)) / 0.96 var(--font-title);
   color: #fff;
 }
 .vn-choices__rule {
@@ -962,7 +1002,7 @@ body {
   width: min(100%, calc(439 * var(--u)));
   max-height: 100%;
 }
-.vn-warning__title { margin: 0; font: 400 calc(32 * var(--u)) / 0.96 var(--font-title); color: #fff; }
+.vn-warning__title { margin: 0; font: 400 calc(var(--h1) * var(--u)) / 0.96 var(--font-title); color: #fff; }
 .vn-warning__body { font-size: calc(16 * var(--u)); line-height: 1.2; color: rgb(255 255 255 / 0.9); }
 .vn-warning__body p { margin: 0; }
 .vn-warning__body p + p { margin-top: 1.2em; }
@@ -1389,7 +1429,7 @@ body {
   .vn-chip.is-on { background: rgb(218 24 24 / 0.4); }
   .mg-btn.is-success { background: rgb(79 125 74 / 0.35); }
   .mg-btn.is-fail { background: rgb(138 58 53 / 0.35); }
-  .vn-textbox[data-style='inner'] .vn-textbox__text { padding-left: 0; }
+  .vn-textbox[data-style='inner'] .vn-textbox__text { padding-left: calc(5em / 15); }
   /* Дедукция без обводок: подсказка — тёплая подложка и значок, пустые точки шкалы — тусклая заливка, а не кольцо. */
   .vn-choice.is-hint { background: rgb(232 217 181 / 0.16); }
   .vn-choices__dot { border: 0; background: rgb(255 255 255 / 0.22); }
