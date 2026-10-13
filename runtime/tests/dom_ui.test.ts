@@ -629,7 +629,7 @@ describe('DomUI: документ, мини-игра, финал', () => {
     expect(paper?.style.getPropertyValue('--doc-img')).toContain('/assets/ep01/documents/doc_x.webp');
     expect(kit.screens.el.querySelector('.vn-document__text')?.textContent).toBe('Текст документа');
     await flush();
-    kit.screens.el.querySelector<HTMLButtonElement>('.vn-actions .vn-btn')?.click();
+    kit.screens.el.querySelector<HTMLButtonElement>('.vn-document__close')?.click();
     await flush();
     expect(res.done).toBe(true);
   });
@@ -676,7 +676,7 @@ describe('DomUI: документ, мини-игра, финал', () => {
 
     const { ui, kit } = makeRig({}, 'procedural', { documentArt: () => ({ url: null, ready }) });
     const res = track(ui.showDocument({ kind: 'document', doc: 'doc_x', text_key: 'doc.text', zoomable: false, adds_to_archive: null }, baseCtx(ctl())));
-    kit.screens.el.querySelector<HTMLButtonElement>('.vn-actions .vn-btn')?.click();
+    kit.screens.el.querySelector<HTMLButtonElement>('.vn-document__close')?.click();
     await flush();
     expect(res.done).toBe(true);
     expect(() => resolve('./late.webp')).not.toThrow();
@@ -684,17 +684,28 @@ describe('DomUI: документ, мини-игра, финал', () => {
     expect(kit.screens.count).toBe(0);
   });
 
-  it('документ открывается модальным экраном, не закрывается Esc и листание под ним не работает; «Понятно» закрывает', async () => {
+  it('документ открывается модальным экраном, листание под ним не работает; Esc закрывает, как крестик', async () => {
     const { ui, kit } = makeRig();
     const res = track(ui.showDocument({ kind: 'document', doc: 'doc_x', text_key: 'doc.text', zoomable: false, adds_to_archive: null }, baseCtx(ctl())));
     expect(kit.screens.el.querySelector('.vn-document__text')?.textContent).toBe('Текст документа');
-    key('Escape');
-    expect(kit.screens.count).toBe(1);
     ui.advance();
-    kit.screens.el.querySelector<HTMLButtonElement>('.vn-actions .vn-btn')?.click();
+    await flush();
+    expect(res.done).toBe(false);
+    expect(kit.screens.count).toBe(1);
+    key('Escape');
     await flush();
     expect(res.done).toBe(true);
     expect(kit.screens.count).toBe(0);
+  });
+
+  it('выход из партии закрывает документ, но шаг не продолжает', async () => {
+    const { ui, kit } = makeRig();
+    const c = ctl();
+    const res = track(ui.showDocument({ kind: 'document', doc: 'doc_x', text_key: 'doc.text', zoomable: false, adds_to_archive: null }, baseCtx(c)));
+    c.abort();
+    await flush();
+    expect(kit.screens.count).toBe(0);
+    expect(res.done).toBe(false);
   });
 
   const mgPending = (over: Partial<MinigamePending['def']> = {}): MinigamePending => ({ kind: 'minigame', def: mg('m1', over), intro_key: null });

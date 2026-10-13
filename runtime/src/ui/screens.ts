@@ -251,16 +251,17 @@ export function languageChips(onPick: (lang: Lang) => void): HTMLElement {
 
 export interface WarningHandlers {
   settings: () => Settings;
-  onViolenceMode: (mode: Settings['violenceMode']) => void;
-  onContinue: (dontShowAgain: boolean) => void;
+  onContinue: () => void;
   onBack: () => void;
 }
 
-/** Экран перед эпизодом: предупреждение о содержании + юридический дисклеймер (ethics-and-legal.md §5, §7). */
+/**
+ * Экран перед эпизодом «Основано на реальных событиях» (макет Figma «Claude», узел 1232:1612, решение владельца
+ * 2026-10-13): заголовок, предупреждение и дисклеймер одним текстом (ethics-and-legal.md §5), возраст, «Назад /
+ * Продолжить» поверх размытого затемнённого кадра. Режим показа насилия — в настройках; в схематичном режиме вместо
+ * «Строго 18+» — строка про схематичный показ (16+). Показывается перед каждой новой игрой.
+ */
 export class WarningScreen extends BaseScreen {
-  private dontShow = false;
-  private detailsOpen = true;
-
   constructor(
     private readonly episode: Episode,
     private readonly handlers: WarningHandlers,
@@ -270,73 +271,23 @@ export class WarningScreen extends BaseScreen {
 
   render(): void {
     const { handlers: hd, episode: ep } = this;
-    const mode = hd.settings().violenceMode;
-    const body = mode === 'schematic' ? t('ui.warning.body_schematic') : t('ui.warning.body_generic');
-    const radio = (value: Settings['violenceMode'], label: string): HTMLElement =>
-      h(
-        'label',
-        { class: 'vn-radio' },
-        h('input', {
-          type: 'radio',
-          name: 'violence',
-          value,
-          checked: mode === value,
-          on: { change: () => hd.onViolenceMode(value) },
-        }),
-        h('span', { text: label }),
-      );
+    const age =
+      hd.settings().violenceMode === 'schematic'
+        ? t('ui.disclaimer.body_age_schematic')
+        : t('ui.disclaimer.body_age', { rating: ep.age_rating ?? '18+' });
+    const paragraphs = [...t('ui.disclaimer.body').split(/\n\s*\n/), age].filter((p) => p.trim() !== '');
     fill(
       this.el,
-      card(
-        'vn-warning__card',
-        h('h2', { class: 'vn-warning__title', text: t('ui.warning.title') }),
-        h('p', { class: 'vn-warning__body', text: body }),
-        h(
-          'fieldset',
-          { class: 'vn-warning__violence' },
-          h('legend', { text: t('ui.settings.violence_mode') }),
-          radio('full', t('ui.settings.violence_full')),
-          radio('schematic', t('ui.settings.violence_schematic')),
-        ),
-        h('button', {
-          class: 'vn-linkbtn',
-          type: 'button',
-          text: t('ui.warning.details'),
-          aria: { expanded: this.detailsOpen },
-          on: {
-            click: () => {
-              this.detailsOpen = !this.detailsOpen;
-              this.render();
-            },
-          },
-        }),
-        h(
-          'section',
-          { class: 'vn-warning__disclaimer', hidden: !this.detailsOpen },
-          h('h3', { text: t('ui.disclaimer.title') }),
-          h('p', { text: t('ui.disclaimer.body') }),
-          ep.age_rating ? h('p', { class: 'vn-warning__rating', text: ep.age_rating }) : null,
-        ),
-        h(
-          'label',
-          { class: 'vn-check' },
-          h('input', {
-            type: 'checkbox',
-            checked: this.dontShow,
-            on: { change: (e) => (this.dontShow = (e.target as HTMLInputElement).checked) },
-          }),
-          h('span', { text: t('ui.warning.dont_show') }),
-        ),
+      h(
+        'div',
+        { class: 'vn-warning__box' },
+        h('h2', { class: 'vn-warning__title', text: t('ui.disclaimer.title') }),
+        h('div', { class: 'vn-warning__body' }, ...paragraphs.map((text) => h('p', { text }))),
         h(
           'div',
-          { class: 'vn-actions' },
+          { class: 'vn-warning__actions' },
           backButton(hd.onBack),
-          h('button', {
-            class: 'vn-btn is-primary',
-            type: 'button',
-            text: t('ui.warning.continue'),
-            on: { click: () => hd.onContinue(this.dontShow) },
-          }),
+          h('button', { class: 'vn-btn is-primary', type: 'button', text: t('ui.warning.continue'), on: { click: () => hd.onContinue() } }),
         ),
       ),
     );
@@ -789,6 +740,9 @@ export class ArchiveScreen extends BaseScreen {
 // ───────────────────────────── документ ─────────────────────────────
 
 export class DocumentScreen extends BaseScreen {
+  /** Закрыли не крестиком, а Esc (ScreenHost.closeTop): DomUI продолжает партию так же, как по крестику. */
+  onClose?: () => void;
+
   constructor(
     private readonly episode: Episode,
     private readonly doc: string,
@@ -800,7 +754,7 @@ export class DocumentScreen extends BaseScreen {
     /** Текст впечатан в картинку (настоящая бумага, пока по-русски): картинка целиком, касание — увеличить. */
     private readonly textInImage = false,
   ) {
-    super('vn-document', false);
+    super('vn-document');
   }
 
   /** Картинка бланка пришла позже, чем открыли экран. */
@@ -819,6 +773,22 @@ export class DocumentScreen extends BaseScreen {
 
   render(): void {
     const item = this.archiveItem ? this.episode.archive_items?.find((a) => a.id === this.archiveItem) : undefined;
+    // Шапка по макету (Figma «Claude», узел 1232:1560): название и метка «новый материал» слева, крестик справа.
+    const head = h(
+      'div',
+      { class: 'vn-document__head' },
+      h(
+        'div',
+        { class: 'vn-document__heading' },
+        item ? h('h2', { class: 'vn-document__title', text: t(item.title_key) }) : null,
+        item ? h('span', { class: 'vn-document__tag', text: t('ui.archive.new_item') }) : null,
+      ),
+      h(
+        'button',
+        { class: 'vn-document__close', type: 'button', title: t('ui.common.close'), aria: { label: t('ui.common.close') }, on: { click: this.onDone } },
+        icon('close'),
+      ),
+    );
     if (this.textInImage && this.imageUrl) {
       const img = h('img', { class: 'vn-document__img' });
       img.alt = '';
@@ -827,24 +797,23 @@ export class DocumentScreen extends BaseScreen {
       const text = this.textKey ? t(this.textKey) : '';
       fill(
         this.el,
-        card(
-          'vn-document__card',
-          item ? h('h2', { class: 'vn-card__title', text: t(item.title_key) }) : null,
-          item ? h('span', { class: 'vn-badge', text: t('ui.archive.new_item') }) : null,
+        h(
+          'div',
+          { class: 'vn-document__box' },
+          head,
           sheet,
           // Текст бумаги — для скринридера; на других языках — перевод под картинкой (в картинке он русский).
           text ? h('p', { class: i18n.lang === 'ru' ? 'vn-sr' : 'vn-document__text vn-document__translation', text }) : null,
-          h('div', { class: 'vn-actions' }, backButton(this.onDone, 'ui.common.ok')),
         ),
       );
       return;
     }
     fill(
       this.el,
-      card(
-        'vn-document__card',
-        item ? h('h2', { class: 'vn-card__title', text: t(item.title_key) }) : null,
-        item ? h('span', { class: 'vn-badge', text: t('ui.archive.new_item') }) : null,
+      h(
+        'div',
+        { class: 'vn-document__box' },
+        head,
         h(
           'div',
           {
@@ -854,7 +823,6 @@ export class DocumentScreen extends BaseScreen {
           },
           this.textKey ? h('p', { class: 'vn-document__text', text: t(this.textKey) }) : h('p', { class: 'vn-muted', text: this.doc }),
         ),
-        h('div', { class: 'vn-actions' }, backButton(this.onDone, 'ui.common.ok')),
       ),
     );
   }

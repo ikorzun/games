@@ -256,8 +256,8 @@
 }
 .vn-case__trait.is-known {
   color: var(--c-text);
-  background: rgb(201 54 47 / 0.12);
-  border: 1px solid rgb(201 54 47 / 0.55);
+  background: rgb(218 24 24 / 0.12);
+  border: 1px solid rgb(218 24 24 / 0.55);
 }
 .vn-case__clue {
   padding: 0.45rem 0.7rem;

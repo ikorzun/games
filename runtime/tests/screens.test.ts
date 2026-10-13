@@ -63,14 +63,12 @@ beforeEach(() => {
     'ui.lang.en': 'English',
     'ui.lang.es': 'Español',
     'ui.lang.pt': 'Português',
-    'ui.warning.title': 'Предупреждение',
-    'ui.warning.body_generic': 'Сцены насилия',
-    'ui.warning.body_schematic': 'Насилие схематично',
-    'ui.warning.details': 'Подробнее',
-    'ui.warning.dont_show': 'Больше не показывать',
     'ui.warning.continue': 'Продолжить',
-    'ui.disclaimer.title': 'Дисклеймер',
-    'ui.disclaimer.body': 'Имена изменены',
+    'ui.disclaimer.title': 'Основано на реальных событиях',
+    'ui.disclaimer.body': 'Сцены насилия.\n\nИмена изменены.',
+    'ui.disclaimer.body_age': 'Строго {rating}.',
+    'ui.disclaimer.body_age_schematic': 'Насилие схематично. 16+',
+    'ui.common.close': 'Закрыть',
     'ui.settings.language': 'Язык',
     'ui.settings.font_size': 'Размер шрифта',
     'ui.settings.text_speed': 'Скорость текста',
@@ -110,7 +108,7 @@ beforeEach(() => {
     'ui.save.autosave': 'Автосохранение',
     'ui.save.overwrite_confirm': 'Перезаписать?',
   });
-  i18n.addStrings('en', { 'ui.menu.new_game': 'New game', 'ui.menu.badge_new': 'New', 'ui.menu.archive': 'Archive', 'ui.warning.title': 'Content warning' });
+  i18n.addStrings('en', { 'ui.menu.new_game': 'New game', 'ui.menu.badge_new': 'New', 'ui.menu.archive': 'Archive' });
   i18n.setLang('ru');
 });
 
@@ -250,58 +248,32 @@ describe('MenuScreen', () => {
   });
 });
 
-describe('WarningScreen: перед эпизодом', () => {
+describe('WarningScreen: «Основано на реальных событиях» перед эпизодом', () => {
   const make = (over: Partial<Settings> = {}) => {
     const settings: Settings = { ...DEFAULT_SETTINGS, ...over };
-    const hd = {
-      settings: () => settings,
-      onViolenceMode: vi.fn((m: Settings['violenceMode']) => void (settings.violenceMode = m)),
-      onContinue: vi.fn(),
-      onBack: vi.fn(),
-    };
+    const hd = { settings: () => settings, onContinue: vi.fn(), onBack: vi.fn() };
     return { s: open(new WarningScreen(episode, hd)), hd, settings };
   };
+  const paragraphs = (el: HTMLElement): string[] => [...el.querySelectorAll('.vn-warning__body p')].map((p) => p.textContent ?? '');
 
-  it('показывает заголовок и текст предупреждения (ui.warning.*), дисклеймер (ui.disclaimer.*) и рейтинг', () => {
+  it('заголовок, текст абзацами (пустая строка в локали — новый абзац) и возраст из эпизода', () => {
     const { s } = make();
-    expect(s.el.querySelector('.vn-warning__title')?.textContent).toBe('Предупреждение');
-    expect(s.el.querySelector('.vn-warning__body')?.textContent).toBe('Сцены насилия');
-    expect(s.el.querySelector('.vn-warning__disclaimer h3')?.textContent).toBe('Дисклеймер');
-    expect(s.el.querySelector('.vn-warning__disclaimer p')?.textContent).toBe('Имена изменены');
-    expect(s.el.querySelector('.vn-warning__rating')?.textContent).toBe('18+');
+    expect(s.el.querySelector('.vn-warning__title')?.textContent).toBe('Основано на реальных событиях');
+    expect(paragraphs(s.el)).toEqual(['Сцены насилия.', 'Имена изменены.', 'Строго 18+.']);
   });
 
-  it('режим показа насилия выбирается прямо здесь; текст предупреждения меняется под схематичный режим', () => {
+  it('в схематичном режиме (сборка 16+) вместо «Строго 18+» — строка про схематичный показ', () => {
+    const { s } = make({ violenceMode: 'schematic' });
+    expect(paragraphs(s.el)).toEqual(['Сцены насилия.', 'Имена изменены.', 'Насилие схематично. 16+']);
+  });
+
+  it('по макету только «Назад» и «Продолжить»: ни переключателя режима, ни «Подробнее», ни «Больше не показывать»; Esc экран не закрывает', () => {
     const { s, hd } = make();
-    const radios = [...s.el.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
-    expect(radios.map((r) => [r.value, r.checked])).toEqual([['full', true], ['schematic', false]]);
-    radios[1]?.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(hd.onViolenceMode).toHaveBeenCalledWith('schematic');
-    s.render();
-    expect(s.el.querySelector('.vn-warning__body')?.textContent).toBe('Насилие схематично');
-  });
-
-  it('«Подробнее» сворачивает и разворачивает дисклеймер', () => {
-    const { s } = make();
-    expect(s.el.querySelector<HTMLElement>('.vn-warning__disclaimer')?.hidden).toBe(false);
-    s.el.querySelector<HTMLButtonElement>('.vn-linkbtn')?.click();
-    expect(s.el.querySelector<HTMLElement>('.vn-warning__disclaimer')?.hidden).toBe(true);
-    s.el.querySelector<HTMLButtonElement>('.vn-linkbtn')?.click();
-    expect(s.el.querySelector<HTMLElement>('.vn-warning__disclaimer')?.hidden).toBe(false);
-  });
-
-  it('«Продолжить» передаёт флаг «больше не показывать»; «Назад» возвращает в меню; Esc экран не закрывает', () => {
-    const { s, hd } = make();
-    s.el.querySelector<HTMLButtonElement>('.vn-btn.is-primary')?.click();
-    expect(hd.onContinue).toHaveBeenLastCalledWith(false);
-    const box = s.el.querySelector<HTMLInputElement>('input[type="checkbox"]');
-    if (box) {
-      box.checked = true;
-      box.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    s.el.querySelector<HTMLButtonElement>('.vn-btn.is-primary')?.click();
-    expect(hd.onContinue).toHaveBeenLastCalledWith(true);
-    s.el.querySelector<HTMLButtonElement>('.vn-actions .vn-btn:not(.is-primary)')?.click();
+    expect(s.el.querySelectorAll('input')).toHaveLength(0);
+    expect(s.el.querySelectorAll('button')).toHaveLength(2);
+    s.el.querySelector<HTMLButtonElement>('.vn-warning__actions .vn-btn.is-primary')?.click();
+    expect(hd.onContinue).toHaveBeenCalledTimes(1);
+    s.el.querySelector<HTMLButtonElement>('.vn-warning__actions .vn-btn:not(.is-primary)')?.click();
     expect(hd.onBack).toHaveBeenCalledTimes(1);
     expect(s.dismissible).toBe(false);
   });
@@ -717,13 +689,19 @@ describe('DocumentScreen: бланк с картинкой', () => {
     expect(paper(s.el).style.getPropertyValue('--doc-img')).toBe('');
   });
 
-  it('setImage до отрисовки ничего не ломает; «Понятно» закрывает; новый материал архива помечается', () => {
+  it('setImage до отрисовки ничего не ломает; шапка по макету — название, метка «новый материал», крестик закрывает', () => {
     const onDone = vi.fn();
     const fresh = new DocumentScreen(episode, 'doc_x', null, null, onDone);
     expect(() => fresh.setImage('./a.webp')).not.toThrow();
     const { s, onDone: done } = make(null, 'mini.doc.text', 'arc_x');
-    expect(s.el.querySelector('.vn-badge')?.textContent).toBe('Новый материал');
-    s.el.querySelector<HTMLButtonElement>('.vn-actions .vn-btn')?.click();
+    expect(s.el.querySelector('.vn-document__head .vn-document__tag')?.textContent).toBe('Новый материал');
+    expect(s.el.querySelector('.vn-document__head .vn-document__title')).not.toBeNull();
+    expect(s.el.querySelector('.vn-actions')).toBeNull();
+    const close = s.el.querySelector<HTMLButtonElement>('.vn-document__close');
+    expect(close?.getAttribute('aria-label')).toBe('Закрыть');
+    expect(close?.querySelector('svg.vn-ico--close')).not.toBeNull();
+    close?.click();
     expect(done).toHaveBeenCalledTimes(1);
+    expect(s.dismissible).toBe(true); // Esc закрывает (DomUI продолжает партию через onClose)
   });
 });

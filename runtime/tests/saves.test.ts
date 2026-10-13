@@ -78,7 +78,7 @@ describe('SaveManager: пакетная запись (Playgama: один выз�
     await sm.init();
     expect(st.loadCalls).toEqual([[...STORAGE_KEYS]]);
     expect(sm.settings).toEqual(DEFAULT_SETTINGS);
-    expect(sm.profile).toEqual({ v: 1, warning_dismissed: false, read: {}, endings: {}, globals: {} });
+    expect(sm.profile).toEqual({ v: 1, read: {}, endings: {}, globals: {} });
     expect(sm.archive).toEqual({ v: 1, items: {} });
     expect(sm.autosave).toBeNull();
     expect(sm.quicksave).toBeNull();
@@ -146,7 +146,6 @@ describe('SaveManager: пакетная запись (Playgama: один выз�
     a.markRead('ep_mini', 's1:3');
     a.unlockArchive('ep_mini', 'arc_y');
     a.recordEnding('ep_mini', 'e_alt');
-    a.setWarningDismissed(true);
     a.setGlobals({ season_karma: 3 });
     a.updateSettings({ lang: 'pt', fontScale: 1.25, timers: false });
     await a.flush();
@@ -157,7 +156,6 @@ describe('SaveManager: пакетная запись (Playgama: один выз�
     expect(b.isRead('ep_mini', 's1:4')).toBe(false);
     expect(b.archiveOf('ep_mini')).toEqual(['arc_y']);
     expect(b.profile.endings).toEqual({ ep_mini: ['e_alt'] });
-    expect(b.profile.warning_dismissed).toBe(true);
     expect(b.profile.globals).toEqual({ season_karma: 3 });
     expect(b.settings).toMatchObject({ lang: 'pt', fontScale: 1.25, timers: false });
   });
@@ -420,17 +418,16 @@ describe('prepareLoad: сейв против текущего описания �
 
 describe('очистка данных профиля и настроек', () => {
   it('sanitizeProfile / sanitizeArchive / sanitizeProgress принимают мусор и возвращают валидную форму', () => {
-    expect(sanitizeProfile('мусор')).toEqual({ v: 1, warning_dismissed: false, read: {}, endings: {}, globals: {} });
+    expect(sanitizeProfile('мусор')).toEqual({ v: 1, read: {}, endings: {}, globals: {} });
     expect(
       sanitizeProfile({
-        warning_dismissed: 'yes',
+        warning_dismissed: true, // поле старых профилей («Больше не показывать» убрали 2026-10-13) — отбрасывается
         read: { e: ['a', 3, 'b'], f: 'x' },
         endings: [],
         globals: { ok: 1, flag: true, s: 'x', bad: { a: 1 }, nul: null },
       }),
     ).toEqual({
       v: 1,
-      warning_dismissed: false,
       read: { e: ['a', 'b'], f: [] },
       endings: {},
       globals: { ok: 1, flag: true, s: 'x' },

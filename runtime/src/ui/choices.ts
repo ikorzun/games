@@ -134,9 +134,11 @@ export class ChoiceMenu {
     this.buttons = p.options.map((o, i) => this.option(o, i));
     this.el.setAttribute('aria-label', p.prompt_key ? t(p.prompt_key) : '');
     const kids: Node[] = [];
-    if (this.promptEl) kids.push(this.promptEl);
+    // По макету (Figma «Claude», узел 1232:1660): вопрос, под ним тонкая линия, затем варианты одним списком —
+    // список нужен, чтобы при наведении на вариант остальные гасли (CSS .vn-choices__list:hover).
+    if (this.promptEl) kids.push(this.promptEl, h('hr', { class: 'vn-choices__rule' }));
     if (p.deduction?.meter) kids.push(this.meter(p.deduction.meter));
-    kids.push(...this.buttons);
+    kids.push(h('div', { class: 'vn-choices__list' }, ...this.buttons));
     if (p.options.some((o) => o.hinted)) kids.push(h('p', { class: 'vn-choices__hint', id: this.hintId, text: t('ui.choice.hint') }));
     if (this.timerWrap) kids.push(this.timerWrap);
     this.el.replaceChildren(...kids);

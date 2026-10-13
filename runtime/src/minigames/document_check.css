@@ -129,13 +129,13 @@
   line-height: 1.25;
   text-align: left;
   vertical-align: middle;
-  background: rgb(201 54 47 / 0.09);
+  background: rgb(218 24 24 / 0.09);
   border: 0;
   border-bottom: 2px dotted rgb(120 40 30 / 0.65);
   cursor: pointer;
 }
 .mg-docs .mg-docs__frag:hover {
-  background: rgb(201 54 47 / 0.18);
+  background: rgb(218 24 24 / 0.18);
 }
 .mg-docs .mg-docs__frag:focus-visible {
   outline: 3px solid #1d1b17;
@@ -152,7 +152,7 @@
   color: #2f6a28;
 }
 .mg-docs .mg-docs__frag.is-wrong {
-  background: rgb(201 54 47 / 0.2);
+  background: rgb(218 24 24 / 0.2);
   border-bottom: 2px solid var(--mg-accent);
   text-decoration: line-through;
   text-decoration-color: rgb(150 30 24 / 0.8);
@@ -189,7 +189,7 @@
   border: 1px solid rgb(232 217 181 / 0.4);
 }
 .mg-docs__note.is-hint {
-  background: rgb(201 54 47 / 0.12);
+  background: rgb(218 24 24 / 0.12);
   border-color: var(--mg-accent);
 }
 .mg-docs__mark {
@@ -200,8 +200,8 @@
 
 @keyframes mg-docs-pulse {
   50% {
-    box-shadow: 0 0 0 4px rgb(201 54 47 / 0.35);
-    background: rgb(201 54 47 / 0.28);
+    box-shadow: 0 0 0 4px rgb(218 24 24 / 0.35);
+    background: rgb(218 24 24 / 0.28);
   }
 }
 @keyframes mg-docs-shake {

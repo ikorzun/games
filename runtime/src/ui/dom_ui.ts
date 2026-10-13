@@ -207,6 +207,11 @@ export class DomUI implements SessionUI {
         art?.url ?? null,
         art?.textInImage === true,
       );
+      // Esc закрывает документ, как крестик. Закрытие при выходе из партии (closeGameScreen) шаг не продолжает.
+      screen.onClose = () => {
+        if (!this.gameScreens.delete(screen)) return;
+        resolve();
+      };
       this.openGameScreen(screen);
       // Бланк мог ещё грузиться: покажем, как только придёт.
       void art?.ready.then((url) => {

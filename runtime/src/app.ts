@@ -260,22 +260,22 @@ export class App {
     return f && f.state.episode_id === this.d.episode.id ? f : null;
   }
 
-  /** «Новая игра»: сначала контент-предупреждение (если не отключено), затем партия. */
+  /** «Новая игра»: сначала экран «Основано на реальных событиях», затем партия. */
   async startNewGame(opts: { skipWarning?: boolean } = {}): Promise<void> {
-    if (!opts.skipWarning && !this.d.saves.profile.warning_dismissed) {
+    if (!opts.skipWarning) {
       this.openWarning(() => this.beginGame(() => this.session.newGame()));
       return;
     }
     this.beginGame(() => this.session.newGame());
   }
 
-  /** Дело с начала: контент-предупреждение (если не отключено), прогресс дела сбрасывается, вступление главы. */
+  /** Дело с начала: экран «Основано на реальных событиях», прогресс дела сбрасывается, вступление главы. */
   newCase(opts: { skipWarning?: boolean } = {}): void {
     const go = (): void => {
       this.caseMode?.reset();
       this.openCase();
     };
-    if (!opts.skipWarning && !this.d.saves.profile.warning_dismissed) this.openWarning(go);
+    if (!opts.skipWarning) this.openWarning(go);
     else go();
   }
 
@@ -319,14 +319,7 @@ export class App {
     const saves = this.d.saves;
     const screen: WarningScreen = new WarningScreen(this.d.episode, {
       settings: () => saves.settings,
-      onViolenceMode: (mode) => {
-        this.updateSettings({ violenceMode: mode });
-        screen.render();
-      },
-      onContinue: (dontShowAgain) => {
-        if (dontShowAgain) saves.setWarningDismissed(true);
-        onGo();
-      },
+      onContinue: onGo,
       onBack: () => this.kit.screens.close(screen),
     });
     this.kit.screens.open(screen);

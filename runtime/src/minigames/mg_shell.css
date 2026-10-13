@@ -9,7 +9,7 @@
   --mg-ink: var(--c-text, #ecebe6);
   --mg-muted: var(--c-muted, #a8a398);
   --mg-line: var(--panel-line, var(--c-line, rgb(255 255 255 / 0.28)));
-  --mg-accent: var(--c-accent, #c9362f);
+  --mg-accent: var(--c-accent, #da1818);
   --mg-gold: var(--c-accent-soft, #e8d9b5);
   --mg-ok: #7fb577;
   box-sizing: border-box;

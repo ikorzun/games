@@ -282,7 +282,7 @@
 }
 .mg-scene__item.is-hint {
   padding-left: 0.7rem;
-  background: rgb(201 54 47 / 0.12);
+  background: rgb(218 24 24 / 0.12);
   border-color: var(--mg-accent);
 }
 .mg-scene__name {
@@ -323,7 +323,7 @@
 }
 @keyframes mg-scene-pulse {
   50% {
-    box-shadow: 0 0 0 4px rgb(201 54 47 / 0.35), 0 0 18px rgb(201 54 47 / 0.55);
+    box-shadow: 0 0 0 4px rgb(218 24 24 / 0.35), 0 0 18px rgb(218 24 24 / 0.55);
   }
 }
 @keyframes mg-scene-miss {
@@ -367,7 +367,7 @@
   opacity: 0.6;
 }
 .mg-scene__list.is-targets .mg-scene__item.is-hint {
-  background: rgb(201 54 47 / 0.12);
+  background: rgb(218 24 24 / 0.12);
   border-color: var(--mg-accent);
 }
 

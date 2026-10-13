@@ -167,7 +167,10 @@ describe('интерфейс: документальная эстетика, mob
     expect(uiCss).toMatch(/--font-body:\s*'Tinos'/);
     expect(uiCss).toMatch(/--panel-line:\s*rgb\(255 255 255 \/ 0\.28\)/);
     expect((uiCss.match(/@font-face \{ font-family: 'Tinos'/g) ?? []).length).toBe(5); // свои woff2, без Google Fonts в рантайме
-    expect(uiCss).not.toMatch(/backdrop-filter/);
+    // Размытие — только у трёх экранов-оверлеев по макетам 2026-10-13 и только при мыши: на телефоне дорого.
+    const blur = /@media \(hover: hover\) and \(pointer: fine\) \{\s*\.vn-warning,\s*\.vn-document,\s*\.vn-choices\s*\{([^}]*)\}\s*\}/.exec(uiCss);
+    expect(blur?.[1]).toMatch(/background:\s*rgb\(0 0 0 \/ 0\.6\);[\s\S]*backdrop-filter:\s*blur\(5px\)/);
+    expect(uiCss.replace(blur![0], '')).not.toMatch(/backdrop-filter/);
   });
 
   it('шрифт только 400 или тоньше (решение владельца 2026-10-12): жирный — только знак «дальше» из макета реплик (2026-10-13)', () => {
@@ -186,7 +189,7 @@ describe('интерфейс: документальная эстетика, mob
     }
   });
 
-  it('без скруглений (решение владельца 2026-10-13): круглые только портрет у имени, экран-кинескоп меню и лампа REC', () => {
+  it('без скруглений (решение владельца 2026-10-13): круглые только портрет у имени, экран-кинескоп меню, лампа REC, номер варианта и крестик документа (макеты 2026-10-13)', () => {
     const cssOf = (dir: string): string[] => {
       const d = join(HERE, '..', 'src', dir);
       return readdirSync(d).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(d, f), 'utf8'));
@@ -195,7 +198,15 @@ describe('интерфейс: документальная эстетика, mob
     for (const css of [uiCss, stageCss, ...cssOf('minigames'), ...cssOf('case')]) {
       for (const m of css.matchAll(/([^{}]+)\{[^}]*border-radius:(?!\s*0;)[^}]*\}/g)) owners.push(m[1]!.trim().split('\n').pop()!.trim());
     }
-    expect(owners.sort()).toEqual(['.vn-crt__in', '.vn-crt__screen', '.vn-crt__screen::after', '.vn-rec__dot', '.vn-textbox__avatar']);
+    expect(owners.sort()).toEqual([
+      '.vn-choice__n',
+      '.vn-crt__in',
+      '.vn-crt__screen',
+      '.vn-crt__screen::after',
+      '.vn-document__close',
+      '.vn-rec__dot',
+      '.vn-textbox__avatar',
+    ]);
     expect(uiCss).not.toMatch(/--radius/);
   });
 
@@ -215,8 +226,8 @@ describe('интерфейс: документальная эстетика, mob
   });
 
   it('кнопки выбора — крупные: не ниже 48 px (у нас 52); кнопки быстрого меню — иконки не меньше 40 px', () => {
-    const choice = /\.vn-choice\s*\{([^}]*)\}/.exec(uiCss)![1]!;
-    expect(Number(/min-height:\s*(\d+)px/.exec(choice)![1])).toBeGreaterThanOrEqual(48);
+    const choice = /\n\.vn-choice\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(Number(/min-height:\s*max\((\d+)px/.exec(choice)![1])).toBeGreaterThanOrEqual(48); // и растёт с кеглем
     const q = /\n\.vn-qbtn\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(Number(/width:\s*(\d+)px/.exec(q)![1])).toBeGreaterThanOrEqual(40);
     expect(Number(/height:\s*(\d+)px/.exec(q)![1])).toBeGreaterThanOrEqual(40);

@@ -273,8 +273,8 @@
   color: var(--mg-ok);
 }
 .mg-db .mg-db__card.is-rejected {
-  background: rgb(201 54 47 / 0.08);
-  border-color: rgb(201 54 47 / 0.55);
+  background: rgb(218 24 24 / 0.08);
+  border-color: rgb(218 24 24 / 0.55);
   cursor: default;
 }
 .mg-db__card.is-rejected .mg-db__body {

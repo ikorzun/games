@@ -207,7 +207,7 @@ async function scenarioPlay(browser, baseUrl) {
   check('язык, архив и настройки — иконками', (await page.locator('.vn-menu__icons button').count()) === 3);
   await page.click('.vn-ep__open');
   await page.waitForSelector('.vn-warning', { state: 'visible' });
-  check('перед эпизодом показано контент-предупреждение и дисклеймер', (await page.locator('.vn-warning__title').innerText()).length > 0 && (await page.locator('.vn-warning__disclaimer h3').count()) === 1);
+  check('перед эпизодом показан экран «Основано на реальных событиях»: заголовок и текст абзацами', (await page.locator('.vn-warning__title').innerText()).length > 0 && (await page.locator('.vn-warning__body p').count()) >= 2);
   await page.click('.vn-warning .vn-btn.is-primary');
   await page.waitForFunction(() => window.__vn.pending()?.kind === 'line', null, { timeout: 15000 });
   check('после предупреждения началась партия: первая реплика на экране', (await visibleText(page)).length > 20);
@@ -839,8 +839,8 @@ async function playHod(page, plan, onStep = async () => undefined, max = 1500) {
     }
     if (p.kind === 'document') {
       seen.docs++;
-      await page.waitForSelector('.vn-document .vn-actions .vn-btn', { state: 'visible' });
-      await page.click('.vn-document .vn-actions .vn-btn');
+      await page.waitForSelector('.vn-document .vn-document__close', { state: 'visible' });
+      await page.click('.vn-document .vn-document__close');
       await sleep(80);
       continue;
     }
@@ -953,7 +953,7 @@ async function scenarioHod(browser, baseUrl) {
     if ((await pending(ph.page)).kind === 'document') {
       await sleep(300);
       if (wantShots) await ph.page.screenshot({ path: join(OUT, `hod_${name}_doc.png`) });
-      await ph.page.click('.vn-document .vn-actions .vn-btn');
+      await ph.page.click('.vn-document .vn-document__close');
     }
     await advanceUntil(ph.page, (p) => p.kind === 'choice');
     await sleep(400);

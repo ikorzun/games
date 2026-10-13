@@ -37,8 +37,6 @@ export interface SaveFile {
 
 export interface Profile {
   v: 1;
-  /** «Больше не показывать» на экране контент-предупреждения. */
-  warning_dismissed: boolean;
   /** Прочитанные реплики по эпизодам (для Skip «только прочитанное»). */
   read: Record<string, string[]>;
   /** Достигнутые концовки по эпизодам. */
@@ -186,7 +184,6 @@ export function sanitizeProfile(raw: unknown): Profile {
   }
   return {
     v: 1,
-    warning_dismissed: r.warning_dismissed === true,
     read: strArrayMap(r.read),
     endings: strArrayMap(r.endings),
     globals,
@@ -382,11 +379,6 @@ export class SaveManager {
 
   setGlobals(globals: Readonly<Record<string, Value>>): void {
     this.profile.globals = { ...this.profile.globals, ...globals };
-    this.scheduleFlush();
-  }
-
-  setWarningDismissed(v: boolean): void {
-    this.profile.warning_dismissed = v;
     this.scheduleFlush();
   }
 
