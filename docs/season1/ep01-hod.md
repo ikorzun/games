@@ -95,6 +95,7 @@
 ## Сборка и проверка
 
 ```bash
+python3 tools/hod/shots.py                               # план кадров assets/ep01/_hod/plan.json (вне git) и листы мизансцен
 python3 episodes/s1/_drafts/ep01_hod/build.py            # → episodes/s1/ep01_hod.json и locales/*/ep01_hod.json
 python3 tools/validate_episode.py episodes/s1/ep01_hod.json
 cd runtime && npx vitest run tests/hod.paths.test.ts     # 800 случайных маршрутов: все сцены достижимы, 4 места из 5

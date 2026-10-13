@@ -4,6 +4,7 @@
 помнят), что предъявить; ночью второго дня сам излагает версию картами из блокнота; верная версия открывает
 реконструкцию в формате передачи. Кадры — черновые генерации tools/hod/shots.py (сеты hod_*), без старых спрайтов.
 
+  python3 tools/hod/shots.py   # план кадров assets/ep01/_hod/plan.json (вне git; без генерации, только листы)
   python3 episodes/s1/_drafts/ep01_hod/build.py && python3 tools/validate_episode.py episodes/s1/ep01_hod.json
 """
 import collections, json, os
