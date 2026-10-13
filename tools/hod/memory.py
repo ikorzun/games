@@ -508,11 +508,31 @@ def square(sid: str) -> None:
         os.path.join(RAW, 'squares'))
 
 
-def fix(target: str, box: str, what: str) -> None:
+def keep_mask(raw: str, keep: list[str]) -> Image.Image:
+    """Что правка по маске не трогает: 'people' — все люди на кадре (Apple Vision локально, с запасом 8 px вокруг силуэта),
+    'x0,y0,x1,y1' — прямоугольник (предмет перед правкой: ведро, папка в руке)."""
+    import tempfile
+    from PIL import ImageChops, ImageDraw, ImageFilter
+    size = Image.open(raw).size
+    out = Image.new('L', size, 0)
+    for k in keep:
+        if k == 'people':
+            with tempfile.TemporaryDirectory() as tmp:
+                subprocess.run(['swift', os.path.join(ROOT, 'tools/hod/person_masks.swift'), raw, tmp], check=True, capture_output=True)
+                for name in os.listdir(tmp):
+                    m = Image.open(os.path.join(tmp, name)).convert('L').resize(size)
+                    out = ImageChops.lighter(out, m.point(lambda v: 255 if v > 64 else 0).filter(ImageFilter.MaxFilter(17)))
+        else:
+            ImageDraw.Draw(out).rectangle(tuple(int(v) for v in k.split(',')), fill=255)
+    return out
+
+
+def fix(target: str, box: str, what: str, keep: list[str] = (), ref: str = '') -> None:
     """Правка по маске (sunburst): перерисовать только прямоугольник box кадра (<кадр> или <кадр>.square), остальное —
-    пиксель в пиксель; первый вариант кадра сохраняется рядом как .orig.png."""
+    пиксель в пиксель; первый вариант кадра сохраняется рядом как .orig.png. keep — что внутри прямоугольника не трогать
+    (keep_mask); ref — картинка-образец предмета (тот же предмет в другом кадре сета)."""
     import shutil
-    from PIL import ImageDraw, ImageFilter
+    from PIL import ImageChops, ImageDraw, ImageFilter, ImageOps
     sid = target.removesuffix('.square')
     raw = os.path.join(RAW, 'squares' if target.endswith('.square') else 'scenes', f'{target}.png')
     orig = raw[:-4] + '.orig.png'
@@ -520,20 +540,32 @@ def fix(target: str, box: str, what: str) -> None:
         shutil.copy(raw, orig)
     x0, y0, x1, y1 = (int(v) for v in box.split(','))
     src = Image.open(raw).convert('RGB')
+    kept = keep_mask(raw, list(keep)) if keep else None
     mask = Image.new('RGBA', src.size, (0, 0, 0, 255))
     ImageDraw.Draw(mask).rectangle((x0, y0, x1, y1), fill=(0, 0, 0, 0))  # прозрачное — что перерисовать
+    if kept:
+        mask.paste((0, 0, 0, 255), mask=kept)
     os.makedirs(os.path.join(RAW, 'fix'), exist_ok=True)
     mpath = os.path.join(RAW, 'fix', f'{target}.mask.png')
     mask.save(mpath)
-    who, sheets = people(shot_info(sid)[2], 2)
-    prompt = (f'Edit only the transparent masked rectangle of image 1; everything outside it stays exactly as it is. Inside the '
-              f'rectangle: {what} Keep exactly the same drawing style, ink line weight, cel shading, palette and light as the '
-              f'rest of image 1, so the edit is invisible.' + (f' Character turnaround sheets for identity: {who}.' if sheets else ''))
-    out = gen(f'{target}.fix', prompt, [raw, *sheets], f'{src.size[0]}x{src.size[1]}', os.path.join(RAW, 'fix'), mask=mpath)
+    # Люди под защитой — лица не перерисовываются, листы персонажей не нужны.
+    who, sheets = ('', []) if 'people' in keep else people(shot_info(sid)[2], 2)
+    prompt = (f'Edit only the transparent masked area of image 1; everything outside it stays exactly as it is. Inside the '
+              f'area: {what} Keep exactly the same drawing style, ink line weight, cel shading, palette and light as the '
+              f'rest of image 1, so the edit is invisible.'
+              + (' People and objects that stay outside the area are in front: paint behind them, never over them.' if kept else '')
+              + (' Image 2 shows the same object in this room from another shot: draw it exactly like that, seen from this '
+                 'camera.' if ref else '')
+              + (f' Character turnaround sheets for identity: {who}.' if sheets else ''))
+    out = gen(f'{target}.fix', prompt, [raw, *([ref] if ref else []), *sheets], f'{src.size[0]}x{src.size[1]}',
+              os.path.join(RAW, 'fix'), mask=mpath)
     fixed = Image.open(out).convert('RGB').resize(src.size)
     soft = Image.new('L', src.size, 0)
     ImageDraw.Draw(soft).rectangle((x0 + 6, y0 + 6, x1 - 6, y1 - 6), fill=255)
-    Image.composite(fixed, src, soft.filter(ImageFilter.GaussianBlur(4))).save(raw)
+    soft = soft.filter(ImageFilter.GaussianBlur(4))
+    if kept:
+        soft = ImageChops.multiply(soft, ImageOps.invert(kept.filter(ImageFilter.GaussianBlur(2))))
+    Image.composite(fixed, src, soft).save(raw)
     print('исправлено', raw)
 
 
@@ -559,8 +591,17 @@ if __name__ == '__main__':
     elif cmd in ('scene', 'square', 'accept'):
         for sid in args:
             {'scene': scene, 'square': square, 'accept': accept}[cmd](sid)
-    elif cmd == 'fix':  # fix <кадр>[.square] x0,y0,x1,y1 "что исправить"
-        fix(args[0], args[1], args[2])
+    elif cmd == 'fix':  # fix <кадр>[.square] x0,y0,x1,y1 "что исправить" [--keep people|x0,y0,x1,y1 ...] [--ref картинка]
+        rest, keep, ref = args[3:], [], ''
+        while rest:
+            flag, val, rest = rest[0], rest[1], rest[2:]
+            if flag == '--keep':
+                keep.append(val)
+            elif flag == '--ref':
+                ref = val
+            else:
+                sys.exit(f'fix: непонятный ключ {flag}')
+        fix(args[0], args[1], args[2], keep, ref)
     elif cmd == 'prompt':  # prompt <кадр> — промпт кадра и картинки; prompt <персонаж> head|body — лист
         if args[0] in STAGING:
             text, files = scene_inputs(args[0])

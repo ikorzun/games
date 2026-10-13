@@ -400,8 +400,8 @@ assets/<папка эпизода>/voice/<язык>/<id клипа>.<ext>       
 
 ## Сборка, бюджет, Playgama
 
-- `npm run build` → `dist/`: `index.html` в корне, относительные пути, латиница в именах, шрифты (Tinos — обычный и курсив, кириллица и
-  латиница, жирная латиница для «>»; DM Mono и JetBrains Mono 400 для индикации камеры; woff2 с `unicode-range` из `src/ui/fonts`,
+- `npm run build` → `dist/`: `index.html` в корне, относительные пути, латиница в именах, шрифты (Tinos — обычный, кириллица и
+  латиница, и жирная латиница; DM Mono и JetBrains Mono 400 для индикации камеры; woff2 с `unicode-range` из `src/ui/fonts`,
   лицензии OFL рядом) внутри сборки. Эпизод и локали копируются как статические файлы
   (`episodes/s1/ep01_murylev.json`, `locales/<lang>/*.json`) плюс сгенерированный `episodes/index.json`. Файлы и
   папки, начинающиеся с `_` или `.`, в сборку не попадают. Картинки и звук из `../assets` копируются в `dist/assets/<папка>/…`

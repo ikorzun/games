@@ -52,7 +52,6 @@
   margin: 0;
   padding-left: 0.65rem;
   color: #e2ddd0;
-  font-style: italic;
   border-left: 3px solid var(--mg-gold);
 }
 .mg-shell__brief {

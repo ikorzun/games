@@ -175,7 +175,7 @@ describe('интерфейс: документальная эстетика, mob
     expect(uiCss).toMatch(/\.vn-textbox__title\s*\{\s*font-size:\s*calc\(10em \/ 15\);\s*opacity:\s*0\.7;\s*\}/);
     expect(uiCss).toMatch(/--font-body:\s*'Tinos'/);
     expect(uiCss).toMatch(/--panel-line:\s*rgb\(255 255 255 \/ 0\.28\)/);
-    expect((uiCss.match(/@font-face \{ font-family: 'Tinos'/g) ?? []).length).toBe(5); // свои woff2, без Google Fonts в рантайме
+    expect((uiCss.match(/@font-face \{ font-family: 'Tinos'/g) ?? []).length).toBe(3); // свои woff2, без Google Fonts в рантайме; курсива нет
     // Размытие — только у оверлеев выбора и документа по макетам 2026-10-13 и только при мыши: на телефоне дорого.
     const blur = /@media \(hover: hover\) and \(pointer: fine\) \{\s*\.vn-document,\s*\.vn-choices\s*\{([^}]*)\}\s*\}/.exec(uiCss);
     expect(blur?.[1]).toMatch(/background:\s*rgb\(0 0 0 \/ 0\.6\);[\s\S]*backdrop-filter:\s*blur\(5px\)/);
@@ -194,6 +194,16 @@ describe('интерфейс: документальная эстетика, mob
       expect(css).not.toMatch(/font-weight:\s*(?:[5-9]00|bold)/);
       expect(css).not.toMatch(/font:\s*(?:[5-9]00|bold)\s/);
     }
+  });
+
+  it('курсива нет нигде (решение владельца 2026-10-13): мысли и закадровый голос — своим цветом, у мыслей нет черты слева', () => {
+    const cssOf = (dir: string): string[] => {
+      const d = join(HERE, '..', 'src', dir);
+      return readdirSync(d).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(d, f), 'utf8'));
+    };
+    for (const css of [uiCss, stageCss, ...cssOf('minigames'), ...cssOf('case')]) expect(css).not.toMatch(/italic|oblique/);
+    expect(uiCss).toMatch(/\.vn-textbox\[data-style='inner'\] \.vn-textbox__text \{ color: #cfd2d8; \}/);
+    expect(uiCss).toMatch(/\.vn-textbox\[data-style='voiceover'\] \.vn-textbox__text \{ color: #e4dfd1; \}/);
   });
 
   it('без скруглений (решение владельца 2026-10-13): круглые только портрет у имени, экран-кинескоп меню, лампа REC, номер варианта, крестик документа, номера и попытки осмотра (макеты 2026-10-13)', () => {
