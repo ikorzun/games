@@ -92,11 +92,90 @@ CHARS = {
         'refs': [('assets/ep01/faces/lapin_wife.webp', None), (H + 'hod_flat/flat_ots_wife.webp', (1100, 0, 1720, 820)),
                  (H + 'hod_flat/flat_wide.webp', (1630, 210, 1870, 680))],
     },
+    # Остальные места (решение владельца 2026-10-13: «все сцены в стиле воспоминания»). Внешность и костюм — как у
+    # реалистичных кадров (tools/hod/shots.py); вырезки — по маскам Vision на принятых кадрах «Реализма».
+    'expert': {
+        'name': 'forensic expert Nina Levina',
+        'look': 'woman, 45, a sharp angular face with high cheekbones, a long straight nose, a thin ironic mouth, dark attentive eyes '
+                'behind rimless glasses on a thin chain, dark hair with the first grey pulled into a tight bun, no makeup',
+        'costume': 'a beige short-sleeved summer dress with a small print under an unbuttoned white lab coat, glasses on a chain',
+        'refs': [('assets/ep01/faces/expert.webp', None), (H + 'hod_office_eve/office_eve_ots_expert.webp', (566, 125, 1493, 1079)),
+                 (H + 'hod_office_night/office_night_wide.webp', (983, 125, 1396, 1056))],
+    },
+    'boss': {
+        'name': 'Valentin Pavlovich, head of the investigation department',
+        'look': 'man, 55, heavy and tall, a broad jowly face with a strong nose, tired hooded eyes with heavy lids, thick grey hair '
+                'combed straight back, a small old scar on the chin',
+        'costume': 'a white short-sleeved shirt with a dark tie, dark suit trousers, black shoes; no jacket',
+        'refs': [('assets/ep01/faces/boss.webp', None), (H + 'hod_office_d2/office_d2_ots_boss.webp', (747, 58, 1561, 1079)),
+                 (H + 'hod_office_d2/office_d2_wide.webp', (1419, 119, 1733, 980))],
+    },
+    'neighbor': {
+        'name': 'Galina, the neighbour',
+        'look': 'woman, 60, sturdy and broad, a square face with a heavy chin, small sharp dark eyes, thick eyebrows, a wide mouth '
+                'with a gold tooth at the side, dyed chestnut hair under a kerchief tied at the back of the neck',
+        'costume': 'a faded flowered blue-and-white cotton house dress with short sleeves, a kitchen apron, felt slippers, hair under '
+                   'a light cotton kerchief tied at the back of the neck; no cardigan',
+        'refs': [('assets/ep01/faces/neighbor.webp', None), (H + 'hod_landing_open/landing_open_ots.webp', (359, 99, 1176, 1079)),
+                 (H + 'hod_landing_open/landing_open_wide.webp', (227, 149, 413, 901))],
+    },
+    'notary': {
+        'name': 'notary Kovrigin',
+        'look': 'man, 55, soft and heavy, a round face with a double chin, pouches under small wary brown eyes, a bulbous nose with '
+                'broken capillaries, thinning hair combed over a bald crown, a damp forehead',
+        'costume': 'a rumpled light-grey summer suit, a white shirt, a loosened tie, a gold signet ring',
+        'refs': [('assets/ep01/faces/notary.webp', None), (H + 'hod_notary/notary_ots_notary.webp', (347, 276, 1273, 1051)),
+                 (H + 'hod_notary/notary_wide.webp', (568, 387, 1010, 792))],
+    },
+    'assistant': {
+        'name': "Lyuda, the notary's assistant",
+        'look': 'woman, 23, slim, a pale oval face with light freckles, light-brown hair in a low ponytail, thin plucked eyebrows, '
+                'nervous grey eyes',
+        'costume': 'a white short-sleeved blouse, a dark straight skirt, a thin chain necklace',
+        'refs': [(H + 'hod_notary_stairs/stairs_ots_assistant.webp', (273, 88, 1012, 1079)),
+                 (H + 'hod_notary_stairs/stairs_wide.webp', (875, 120, 1125, 845))],
+    },
+    'passport_clerk': {
+        'name': 'the passport clerk of the housing office',
+        'look': 'woman, 52, plump, a round face, a tight perm of reddish-dyed hair, coral lipstick, heavy reading glasses on a cord',
+        'costume': 'a short-sleeved floral blouse',
+        'refs': [(H + 'hod_zhek/zhek_ots_clerk.webp', (649, 73, 1612, 928))],
+    },
+    'clerk': {
+        'name': 'Raisa Lvovna, the archivist',
+        'look': 'woman, 60, a small sharp face with a pointed chin, lively dark eyes behind large plastic-framed glasses on a cord, '
+                'a mocking stern mouth with thin lips, short grey hair cut straight, a pencil behind her ear',
+        'costume': 'a light short-sleeved blouse with a brooch, a thin grey knitted cardigan over her shoulders, glasses on a cord',
+        'refs': [('assets/ep01/faces/clerk.webp', None), (H + 'hod_bti/bti_ots_clerk.webp', (212, 59, 1148, 1079)),
+                 (H + 'hod_bti/bti_wide.webp', (78, 158, 685, 1079))],
+    },
+    'zoya': {
+        'name': 'Zoya Pavlovna',
+        'look': 'woman, 74, small and slight with a slight stoop, a thin lined face with sunken cheeks and a small sharp chin, faded '
+                'watery pale-blue eyes with heavy lids, a small nose, a thin pale mouth without lipstick, sparse white hair',
+        'costume': 'a light floral summer dress with a beige knitted cardigan, a light cotton kerchief over her hair, a cloth '
+                   'handbag on her arm',
+        'refs': [('assets/ep01/faces/zoya.webp', None), (H + 'hod_recon/recon_ots_zoya.webp', (399, 125, 1172, 1079)),
+                 (H + 'hod_recon/recon_wide.webp', (650, 294, 932, 1079))],
+    },
+    # Лица в кадре нет никогда — листа нет, рисунок держит исходный кадр.
+    'murashov_sil': {
+        'name': 'the polite man',
+        'look': 'a neat man of about 38 seen only from behind: medium height, narrow shoulders, short tidy dark hair with a straight '
+                'parting',
+        'costume': 'a light beige summer jacket, light trousers, a brown leather briefcase',
+        'refs': [],
+        'sheet': False,
+    },
 }
 
-REF_TEXT = ('Reference 1 is an identity portrait: take only the face, age and hair from it and ignore its winter clothing, head '
-            'pose and gaze. Reference 2 shows the same person in a summer film frame: face, hair, clothing and build. '
-            'Reference 3 shows the full figure in the same summer clothing.')
+def ref_text(who: str) -> str:
+    """Что взять с каждого референса: портрет из faces — только лицо (одежда там зимняя); кадры — лицо, одежда, фигура."""
+    return ' '.join(
+        f'Reference {i} is an identity portrait: take only the face, age and hair from it and ignore its clothing, head pose '
+        f'and gaze.' if '/faces/' in path else
+        f'Reference {i} shows the same person in a summer film frame: face, hair, clothing and build.'
+        for i, (path, _) in enumerate(CHARS[who]['refs'], 1))
 
 SHEETS = {
     'head': ('CHARACTER HEAD TURNAROUND SHEET — {name}. One and the same person drawn six times as a model sheet for an illustrated '
@@ -116,9 +195,9 @@ SHEET_STYLE = ['02', '03', '04', '05', '10', '12']
 
 def sheet_prompt(who: str, kind: str) -> str:
     c = CHARS[who]
-    return (f'{SHEETS[kind].format(name=c["name"])}\n\nWho: {c["look"]}. Clothing (summer, August 1993): {c["costume"]}. '
-            f'{REF_TEXT} All views must show exactly the same person: the same face, age, proportions, hairstyle and clothes '
-            f'as in the references.\n\n{style(SHEET_STYLE, header=False)}')
+    return (f'{SHEETS[kind].format(name=c["name"])}\n\nWho: {c["look"]}. Clothing (summer 1993): {c["costume"]}. '
+            f'{ref_text(who)} All views must show exactly the same person: the same face, age, proportions, hairstyle and '
+            f'clothes as in the references.\n\n{style(SHEET_STYLE, header=False)}')
 
 
 # ───────────────────────────── генерация и расходы ─────────────────────────────
@@ -188,7 +267,11 @@ EP = json.load(open(os.path.join(ROOT, 'episodes/s1/ep01_hod.json'), encoding='u
 SHOT = {s['id'][3:]: s for s in EP['assets']['shots']}
 EXTRA = {'flat_inspect': 'hod_flat_inspect'}  # фон мини-игры осмотра: только 16:9 (квадрат сдвинул бы зоны находок)
 CLOTHES = {'sledak': 'pale-blue short-sleeved shirt and a navy tie', 'oper': 'blue-grey checked shirt over a grey T-shirt',
-           'buyer': 'thin-rimmed glasses and a beige paint-spattered checked shirt', 'lapin_wife': 'blue-grey print dress and an apron'}
+           'buyer': 'thin-rimmed glasses and a beige paint-spattered checked shirt', 'lapin_wife': 'blue-grey print dress and an apron',
+           'expert': 'white lab coat over a beige dress, glasses on a chain', 'boss': 'white short-sleeved shirt and a dark tie',
+           'neighbor': 'flowered house dress, apron and kerchief', 'notary': 'rumpled light-grey suit and a loosened tie',
+           'assistant': 'white blouse and a dark skirt', 'passport_clerk': 'floral blouse and reading glasses on a cord',
+           'clerk': 'light blouse with a brooch and a grey cardigan', 'zoya': 'floral summer dress, beige cardigan and a kerchief'}
 SCENE_STYLE = ['01', '02', '03', '04', '05', '06', '07', '10', '11', '12', '13']
 SQUARE_STYLE = ['02', '03', '04', '05', '06', '07', '10', '12']
 SQUARE = ('Reframe this illustrated film frame (image 1) into a square 1:1 frame for a phone screen. Keep every person who is '
@@ -236,13 +319,129 @@ STAGING = {
         'sledak': 'only his head in three-quarter view from behind, his short sleeve and his hand at the RIGHT, holding the '
                   'half-open glass door of the sideboard; his eyes on the framed photograph'},
     'flat_inspect': {},
+    # Остальные места — по описаниям принятых кадров «Реализма» (tools/hod/shots.py), взгляд — как на них.
+    'office_eve_wide': {
+        'sledak': 'sits behind the desk on the LEFT, reaching for a glass of tea Levina holds out to him; his eyes on Levina',
+        'oper': 'stands at the open window in the centre of the back wall, smoking, half-turned to the room; his eyes on Gromov and '
+                'Levina at the desk',
+        'expert': 'sits on the RIGHT corner of the desk, half-turned toward Gromov, holding out a glass of tea in a metal '
+                  'glass-holder; her eyes on Gromov'},
+    'office_eve_ots_expert': {
+        'expert': 'sits on the desk corner facing the camera, a glass of tea in one hand, a cigarette in the other, dry and calm; '
+                  'her eyes on Gromov over her glasses, just left of the camera',
+        'sledak': 'only the back of his head and his shoulder at the LEFT edge'},
+    'office_eve_lens': {
+        'expert': 'bends over a typed document under the green desk lamp, a round magnifying glass in her hand, pointing with the '
+                  'tip of a pencil at the date line; her eyes on the paper',
+        'sledak': 'leans in from the left, his eyes on the same spot on the paper'},
+    'office_eve_phone': {
+        'sledak': 'sits behind the desk with the telephone receiver at his ear, rubbing his eyes with his other hand, tired',
+        'expert': 'only her white lab-coat shoulder at the RIGHT edge in the foreground, out of focus'},
+    'office_d2_wide': {
+        'sledak': 'has stood up behind his desk on the LEFT, seen three-quarter from behind, facing the boss',
+        'oper': "sits on the visitor's chair between them, turned toward the door; his eyes on the boss",
+        'boss': 'stands in the open doorway on the RIGHT, one hand on the door handle; his eyes on Gromov, heavy disapproval'},
+    'office_d2_ots_boss': {
+        'boss': 'stands in the doorway facing the camera, a hand at his collar, speaking firmly; his eyes on Gromov, just left of '
+                'the camera',
+        'sledak': 'only the back of his head and his shoulder at the LEFT edge, standing'},
+    'office_night_wide': {
+        'sledak': 'sits behind the desk on the LEFT under the green lamp, papers spread out in front of him; his eyes up on Levina',
+        'expert': 'stands at the open window in the centre of the back wall, smoking, half-turned toward Gromov',
+        'oper': "sits on the visitor's chair at the RIGHT end of the desk, tired, elbows on his knees; his eyes on Gromov"},
+    'office_night_ots_expert': {
+        'expert': 'stands at the open dark window facing the camera, a cigarette in her fingers, asking a question, eyes narrowed; '
+                  'her eyes on Gromov, just left of the camera',
+        'sledak': 'only the back of his head and his shoulder at the LEFT edge, in the lamp light'},
+    'landing_chain_wide': {
+        'neighbor': "only her face and a strip of her house dress in the gap of her door No. 33, open a hand's width on a door "
+                    'chain; one suspicious eye on Gromov',
+        'sledak': "stands in front of Galina's door, LEFT of centre, seen from behind, his case folder in his hand",
+        'oper': "leans on the stair railing at the RIGHT edge in the foreground; his eyes on Zoya's steel door No. 34"},
+    'landing_chain_ots': {
+        'neighbor': 'her face in the gap of the door behind the stretched chain, distrustful; her eyes on Gromov, just right of '
+                    'the camera',
+        'sledak': 'only the back of his head and his shoulder at the RIGHT edge'},
+    'landing_open_wide': {
+        'neighbor': 'stands on the threshold of her wide-open door No. 33, the chain hanging loose, in her house dress, apron and '
+                    'slippers, leaning toward Gromov and speaking quietly; her eyes on Gromov',
+        'sledak': 'stands close in front of her, LEFT of centre, seen from behind, listening',
+        'oper': 'leans on the stair railing at the RIGHT edge in the foreground; his eyes on Galina'},
+    'landing_open_ots': {
+        'neighbor': 'stands on the landing facing the camera, one hand pressed to her chest, speaking low and frightened; her eyes '
+                    'flick to the side toward the neighbouring door',
+        'sledak': 'only the back of his head and his shoulder at the RIGHT edge'},
+    'notary_wide': {
+        'assistant': "sits at the small typing desk by the window on the LEFT, her hands frozen above the typewriter keys; her "
+                     "eyes over her shoulder on Gromov's back",
+        'notary': 'sits behind the desk in the centre, dabbing his forehead with a handkerchief, the open register in front of '
+                  'him, a strained polite smile; his eyes on Gromov',
+        'sledak': 'stands in front of the desk, RIGHT of centre, seen from behind, his case folder in his hand',
+        'oper': 'leans on the frame of the open door on the RIGHT, arms crossed; his eyes on Lyuda'},
+    'notary_ots_notary': {
+        'notary': 'sits behind the desk facing the camera, his hand flat on the open register, sweating, a polite strained smile; '
+                  'his eyes up on Gromov, just right of the camera',
+        'sledak': 'only the back of his head and his shoulder at the RIGHT edge, standing'},
+    'notary_register': {
+        'notary': 'only his plump hand with the gold signet ring resting at the edge of the page'},
+    'notary_alone_wide': {
+        'notary': 'sits behind the desk in the centre, a handkerchief in his hand, the open register in front of him, a cautious '
+                  'polite smile; his eyes on Gromov',
+        'sledak': 'stands in front of the desk, RIGHT of centre, seen from behind, his case folder in his hand',
+        'oper': 'leans on the frame of the open door on the RIGHT, arms crossed; his eyes on the empty typing desk'},
+    'stairs_wide': {
+        'sledak': 'stands three steps below in the foreground on the LEFT, seen from behind, looking up at them',
+        'assistant': 'stands at the window on the landing, arms crossed, a cigarette between two fingers; her eyes down on the '
+                     'floor, frightened',
+        'oper': 'leans on the windowsill next to her, relaxed, holding out his lighter; his eyes on her, kindly'},
+    'stairs_ots_assistant': {
+        'assistant': 'stands by the sunlit window facing the camera, speaking quickly and quietly, the cigarette trembling in her '
+                     'fingers; her eyes on Sayko, just right of the camera',
+        'oper': 'only the back of his head and his shoulder at the RIGHT edge'},
+    'zhek_wide': {
+        'oper': 'stands by the bench on the LEFT, hands in his pockets; his eyes on the clerk',
+        'sledak': 'stands at the service window, leaning slightly toward it, seen from the side and behind',
+        'passport_clerk': 'sits behind the open service window in the RIGHT wall, reading glasses on, a pile of house registers '
+                          'in front of her; her eyes up on Gromov'},
+    'zhek_ots_clerk': {
+        'passport_clerk': 'inside the service window facing the camera, glasses on her nose, a finger on an open house register, '
+                          'answering curtly; her eyes on Gromov, just left of the camera',
+        'sledak': 'only the back of his head and his shoulder at the LEFT edge'},
+    'bti_wide': {
+        'clerk': 'stands at an open card-index drawer on the LEFT, holding a record card up to the light; her eyes over her '
+                 'glasses on Gromov',
+        'sledak': 'stands at the reading desk on the RIGHT, turned toward her, his folder open on the desk; his eyes on Raisa '
+                  'Lvovna'},
+    'bti_ots_clerk': {
+        'clerk': 'stands at the card drawers facing the camera, a record card in her hand, speaking; her eyes over her glasses on '
+                 'Gromov, just right of the camera',
+        'sledak': 'only the back of his head and his shoulder at the RIGHT edge'},
+    'recon_wide': {
+        'zoya': 'stands near the service window, LEFT of centre, holding a cardboard folder of papers to her chest; her eyes up on '
+                'the polite man, cautious gratitude',
+        'murashov_sil': 'stands RIGHT of centre with his back to the camera, leaning slightly toward Zoya Pavlovna, pointing at '
+                        'the papers in her folder; his face is never visible'},
+    'recon_ots_zoya': {
+        'zoya': 'faces the camera, looking up at the polite man with a shy grateful smile, the cardboard folder held to her chest; '
+                'her eyes on him, just right of the camera',
+        'murashov_sil': 'only the back of his neat dark head and the shoulder of his light beige jacket at the RIGHT edge; his '
+                        'face is never visible'},
 }
 GAZE = ('Every person keeps the pose, head turn and gaze of image 1: each looks at another person or an object as written, '
         'never into the lens. The turnaround sheets give only face, hair and clothing — ignore their head poses and their '
         'gaze toward the viewer.')
 # Общий план места, уже перерисованный, — образец рисунка для остальных кадров сета (одна рука, одна палитра).
 STYLE_REF = {'office_am_ots_oper': 'office_am_wide', 'office_am_phone': 'office_am_wide', 'car_ots_oper': 'car_wide',
-             'flat_ots_buyer': 'flat_wide', 'flat_ots_wife': 'flat_wide', 'flat_photo': 'flat_wide', 'flat_inspect': 'flat_wide'}
+             'flat_ots_buyer': 'flat_wide', 'flat_ots_wife': 'flat_wide', 'flat_photo': 'flat_wide', 'flat_inspect': 'flat_wide',
+             # кабинет вечером, утром второго дня и ночью — тот же кабинет, рисунок держит утренний общий план
+             'office_eve_wide': 'office_am_wide', 'office_eve_ots_expert': 'office_eve_wide', 'office_eve_lens': 'office_eve_wide',
+             'office_eve_phone': 'office_eve_wide', 'office_d2_wide': 'office_am_wide', 'office_d2_ots_boss': 'office_d2_wide',
+             'office_night_wide': 'office_am_wide', 'office_night_ots_expert': 'office_night_wide',
+             'landing_chain_ots': 'landing_chain_wide', 'landing_open_wide': 'landing_chain_wide', 'landing_open_ots': 'landing_open_wide',
+             'notary_ots_notary': 'notary_wide', 'notary_register': 'notary_wide', 'notary_alone_wide': 'notary_wide',
+             'stairs_ots_assistant': 'stairs_wide', 'zhek_ots_clerk': 'zhek_wide', 'bti_ots_clerk': 'bti_wide',
+             # реконструкция — тот же коридор ЖЭКа в июне
+             'recon_wide': 'zhek_wide', 'recon_ots_zoya': 'recon_wide'}
 
 
 def shot_info(sid: str) -> tuple[str, str, list[str]]:
@@ -255,7 +454,7 @@ def shot_info(sid: str) -> tuple[str, str, list[str]]:
 
 def people(cast: list[str], first: int) -> tuple[str, list[str]]:
     """Листы голов тех, кто в кадре (утверждённые развёртки), и как сказать модели, кто есть кто."""
-    who = [w for w in cast if w in CHARS]
+    who = [w for w in cast if w in CHARS and CHARS[w].get('sheet', True)]
     files = [os.path.join(RAW, 'sheets', f'{w}_head.png') for w in who]
     text = '; '.join(f'image {first + i} — {CHARS[w]["name"]} ({CLOTHES[w]})' for i, w in enumerate(who))
     return text, files
