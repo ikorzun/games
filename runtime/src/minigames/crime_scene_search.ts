@@ -15,8 +15,8 @@
  * найденное по порядку и под каждой находкой, что она значит для дела (why_key): находки срабатывают при любом итоге.
  *
  * Раскладка «сцена» (макеты Figma «Claude» 2026-10-13): картинка во весь экран, перед партией — вступление с вопросом
- * и «Начать осмотр», по ходу — перетаскиваемый блок со списком: найденное — номер на белом и название, ненайденное
- * обязательное — бледное «Найди вещь» (подсказанное — по имени). Мышью картинка видна целиком; пальцем — во всю
+ * и «Начать осмотр», по ходу — перетаскиваемый блок со списком: найденное — номер на белом и название, ненайденное —
+ * бледное «Найди вещь» (подсказанное — по имени); «Найдено: n из N» считает все вещи, и необязательные. Мышью картинка видна целиком; пальцем — во всю
  * высоту, шире экрана листается.
  *
  * Режим списка (`list: true`, режим дела — docs/architecture/09-case-mode.md): все цели перечислены в блоке
@@ -327,8 +327,8 @@ class CrimeSceneSearch extends MinigameShell {
       z.pin.textContent = order >= 0 ? String(order + 1) : '';
       z.tag.textContent = this.label(hs);
     }
-    // Блок: найденное — номер на белом и название; ненайденное обязательное — бледное «Найди вещь» (в режиме списка —
-    // название цели); подсказанное — по имени, с красной рамкой номера.
+    // Блок: найденное — номер на белом и название; ненайденное — бледное «Найди вещь» (в режиме списка — название
+    // цели), строк столько, сколько вещей на месте; подсказанное — по имени, с красной рамкой номера.
     const row = (n: number, text: string, cls: string, id: string | null): HTMLElement =>
       h(
         'li',
@@ -350,7 +350,7 @@ class CrimeSceneSearch extends MinigameShell {
       const hs = this.byId.get(id);
       if (hs) rows.push(row(i + 1, this.label(hs), hs.required ? ' is-found' : ' is-found is-extra', id));
     });
-    const left = this.cfg.hotspots.filter((hs) => hs.required && !found.includes(hs.id));
+    const left = this.cfg.hotspots.filter((hs) => !found.includes(hs.id));
     const ordered = [...left.filter((hs) => hinted.includes(hs.id)), ...left.filter((hs) => !hinted.includes(hs.id))];
     ordered.forEach((hs, j) => {
       const n = found.length + j + 1;
@@ -479,8 +479,9 @@ class CrimeSceneSearch extends MinigameShell {
     return 'ui.minigame.misses';
   }
 
+  /** «Найдено: n из N» — все вещи места, и необязательные тоже: нашёл 2 из 3 — так и пишем (решение владельца 2026-10-13). */
   protected override progress(): { n: number; total: number } {
-    return { n: this.foundRequired(), total: this.requiredTotal };
+    return { n: this.found.length, total: this.cfg.hotspots.length };
   }
 
   protected override isComplete(): boolean {

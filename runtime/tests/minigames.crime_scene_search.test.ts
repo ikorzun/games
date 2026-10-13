@@ -173,7 +173,7 @@ describe('разметка и картинка места', () => {
     expect(q(r.dom, '.mg-shell__title').textContent).toBe('Осмотр квартиры');
     expect(q(r.dom, '.mg-shell__brief').textContent).toBe('Найдите три предмета');
     expect(q(r.dom, '.mg-shell__intro').textContent).toBe('Осмотрите комнату');
-    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 0 из 3');
+    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 0 из 4');
     expect(q(r.dom, '.mg-shell__fails-text').textContent).toBe('Промахи: 0 из 3');
     expect(r.dom.querySelectorAll('.mg-shell__pip')).toHaveLength(3);
     expect(r.dom.querySelectorAll('.mg-scene__zone')).toHaveLength(4);
@@ -304,8 +304,9 @@ describe('ход игры: находки, промахи, исходы по п�
     expect(el.classList.contains('is-found')).toBe(true);
     expect(q(el, '.mg-scene__pin').textContent).toBe('1');
     // Блок: найденное — номер и название; ненайденные обязательные — безымянные «Найди вещь».
-    expect(texts(r.dom, '.mg-scene__item')).toEqual(['1Лекарства', '2Найди вещь', '3Найди вещь']);
-    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 1 из 3');
+    // строк столько, сколько вещей на месте (и необязательная тоже)
+    expect(texts(r.dom, '.mg-scene__item')).toEqual(['1Лекарства', '2Найди вещь', '3Найди вещь', '4Найди вещь']);
+    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 1 из 4');
     expect(q(r.dom, '.mg-shell__status').textContent).toBe('Лекарства');
     expect(r.autosaves).toBe(1);
     expect(r.results).toEqual([]);
@@ -321,7 +322,7 @@ describe('ход игры: находки, промахи, исходы по п�
     expect(banner.hidden).toBe(false);
     expect(banner.dataset.outcome).toBe('success');
     expect(q(banner, '.mg-shell__result-title').textContent).toBe('Успех');
-    expect(q(banner, '.mg-shell__result-note').textContent).toBe('Найдено: 3 из 3');
+    expect(q(banner, '.mg-shell__result-note').textContent).toBe('Найдено: 3 из 4');
     expect(q(r.dom, '.mg-shell__actions').hidden).toBe(true);
     expect(r.results).toEqual([]);
     next();
@@ -330,11 +331,11 @@ describe('ход игры: находки, промахи, исходы по п�
     expect(r.results).toEqual(['success']);
   });
 
-  it('необязательная зона находится без промаха и не идёт в зачёт', () => {
+  it('необязательная зона находится без промаха, считается в «Найдено: n из N» (все вещи), но не нужна для успеха', () => {
     const { r, zone } = play();
     zone('slippers');
     expect(q(r.dom, '.mg-scene__item').classList.contains('is-extra')).toBe(true);
-    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 0 из 3');
+    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 1 из 4');
     expect(q(r.dom, '.mg-shell__fails-text').textContent).toBe('Промахи: 0 из 3');
     zone('glasses');
     zone('pills');
@@ -346,7 +347,7 @@ describe('ход игры: находки, промахи, исходы по п�
     const { r, zone } = play();
     zone('glasses');
     zone('glasses');
-    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 1 из 3');
+    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 1 из 4');
     expect(q(r.dom, '.mg-shell__fails-text').textContent).toBe('Промахи: 0 из 3');
     expect(r.dom.querySelectorAll('.mg-scene__item.is-found')).toHaveLength(1);
   });
@@ -379,7 +380,7 @@ describe('ход игры: находки, промахи, исходы по п�
     miss();
     expect(q(r.dom, '.mg-shell__result').dataset.outcome).toBe('partial');
     expect(q(r.dom, '.mg-shell__result-title').textContent).toBe('Частично');
-    expect(q(r.dom, '.mg-shell__result-note').textContent).toBe('Найдено: 1 из 3');
+    expect(q(r.dom, '.mg-shell__result-note').textContent).toBe('Найдено: 1 из 4');
     next();
     expect(r.results).toEqual(['partial']);
   });
@@ -402,7 +403,7 @@ describe('ход игры: находки, промахи, исходы по п�
     miss();
     zone('glasses');
     miss();
-    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 0 из 3');
+    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 0 из 4');
     expect(q(r.dom, '.mg-shell__fails-text').textContent).toBe('Промахи: 3 из 3');
   });
 
@@ -672,7 +673,7 @@ describe('таймер', () => {
     const banner = q(r.dom, '.mg-shell__result');
     expect(banner.hidden).toBe(false);
     expect(banner.dataset.outcome).toBe('partial');
-    expect(q(banner, '.mg-shell__result-note').textContent).toBe('Время вышло. Найдено: 1 из 3');
+    expect(q(banner, '.mg-shell__result-note').textContent).toBe('Время вышло. Найдено: 1 из 4');
     expect(r.results).toEqual([]);
     click(btn(r.dom, 'is-next'));
     expect(r.results).toEqual(['partial']);
@@ -726,7 +727,7 @@ describe('таймер', () => {
     zone('photo');
     vi.advanceTimersByTime(60000);
     expect(q(r.dom, '.mg-shell__result').dataset.outcome).toBe('success');
-    expect(q(r.dom, '.mg-shell__result-note').textContent).toBe('Найдено: 3 из 3');
+    expect(q(r.dom, '.mg-shell__result-note').textContent).toBe('Найдено: 3 из 4');
   });
 });
 
@@ -737,13 +738,13 @@ describe('пауза', () => {
     expect(q(r.dom, '.mg-shell').classList.contains('is-paused')).toBe(true);
     zone('glasses');
     miss();
-    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 0 из 3');
+    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 0 из 4');
     click(btn(r.dom, 'is-skip'));
     expect(r.results).toEqual([]);
     m.resume();
     expect(q(r.dom, '.mg-shell').classList.contains('is-paused')).toBe(false);
     zone('glasses');
-    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 1 из 3');
+    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 1 из 4');
     click(btn(r.dom, 'is-skip'));
     expect(r.results).toEqual(['skipped']);
   });
@@ -773,7 +774,7 @@ describe('serialize / restore', () => {
     const b = play({ skip: { allowed: true, hint_rewarded_ad: true } }, CFG, { showRewarded: () => Promise.resolve(true) });
     b.m.restore(saved);
     expect(texts(b.r.dom, '.mg-scene__item.is-found')).toEqual(['1Лекарства', '2Домашние тапочки']);
-    expect(q(b.r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 1 из 3');
+    expect(q(b.r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 2 из 4');
     expect(q(b.r.dom, '.mg-shell__fails-text').textContent).toBe('Промахи: 1 из 3');
     expect(b.m.serialize()).toEqual(saved);
     // игра продолжается с того же места
@@ -829,7 +830,7 @@ describe('serialize / restore', () => {
     expect(m.serialize()).toMatchObject({ over: null, hints: 0, t: { found: [], misses: 0, hinted: [] } });
     m.restore({ hints: 2, t: { found: ['pills', 'pills', 'ghost', 7], misses: 99, hinted: ['photo', 'pills'] } });
     expect(m.serialize()).toMatchObject({ hints: 2, t: { found: ['pills'], misses: 3, hinted: ['photo'] } });
-    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 1 из 3');
+    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 1 из 4');
   });
 });
 
@@ -851,7 +852,7 @@ describe('смена языка и уничтожение', () => {
     r.fireLanguageChange();
     expect(q(r.dom, '.mg-shell__title').textContent).toBe('Scene search');
     expect(q(r.dom, '.mg-shell__intro').textContent).toBe('Search the room');
-    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Found: 1 of 3');
+    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Found: 1 of 4');
     expect(q(r.dom, '.mg-shell__fails-text').textContent).toBe('Misses: 1 of 3');
     expect(q(r.dom, '.mg-shell__status').textContent).toBe('Nothing here');
     expect(texts(r.dom, '.mg-scene__item.is-found')).toEqual(['1Pills']);
@@ -939,7 +940,7 @@ describe.skipIf(!hasRepoContent())('настоящая мини-игра ep01 (m
     expect(q(r.dom, '.mg-shell__title').textContent).toBe('Осмотр квартиры');
     expect(q(r.dom, '.mg-shell__intro').textContent).toContain('Осмотрите квартиру');
     expect(texts(r.dom, '.mg-scene__tag')).toEqual(['Очки на тумбочке', 'Лекарства, разложенные по часам', 'Фотография внука', 'Домашние тапочки у двери']);
-    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 0 из 3');
+    expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 0 из 4');
   });
 
   it('все три обязательные зоны находятся тапом по центру → success; пропуск ждёт первого промаха (after_fails: 1)', () => {
