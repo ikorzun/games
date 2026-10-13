@@ -712,4 +712,48 @@ describe('DocumentScreen: бланк с картинкой', () => {
     expect(done).toHaveBeenCalledTimes(1);
     expect(s.dismissible).toBe(true); // Esc закрывает (DomUI продолжает партию через onClose)
   });
+
+  it('настоящая бумага: увеличенный лист двигается мышью с зажатой кнопкой; перетаскивание не меняет масштаб, палец — прокрутка браузера', () => {
+    const s = open(new DocumentScreen(episode, 'doc_x', 'mini.doc.text', null, vi.fn(), './a.webp', true));
+    const sheet = s.el.querySelector<HTMLElement>('.vn-document__sheet')!;
+    const scroll = { left: 0, top: 0 };
+    Object.defineProperty(sheet, 'scrollLeft', { get: () => scroll.left, set: (v: number) => void (scroll.left = v), configurable: true });
+    Object.defineProperty(sheet, 'scrollTop', { get: () => scroll.top, set: (v: number) => void (scroll.top = v), configurable: true });
+    const ev = (type: string, x: number, y: number, pointerType = 'mouse'): PointerEvent => {
+      const e = new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true, cancelable: true }) as PointerEvent;
+      Object.defineProperty(e, 'pointerId', { value: 1 });
+      Object.defineProperty(e, 'pointerType', { value: pointerType });
+      return e;
+    };
+    // не увеличен — перетаскивания нет, клик увеличивает
+    sheet.dispatchEvent(ev('pointerdown', 100, 100));
+    sheet.dispatchEvent(ev('pointermove', 50, 40));
+    expect(scroll).toEqual({ left: 0, top: 0 });
+    sheet.dispatchEvent(ev('pointerup', 50, 40));
+    sheet.click();
+    expect(sheet.classList.contains('is-zoomed')).toBe(true);
+    // увеличен — тянем мышью: лист едет за рукой
+    scroll.left = 200;
+    scroll.top = 100;
+    sheet.dispatchEvent(ev('pointerdown', 300, 300));
+    sheet.dispatchEvent(ev('pointermove', 260, 250));
+    expect(sheet.classList.contains('is-dragging')).toBe(true);
+    expect(scroll).toEqual({ left: 240, top: 150 });
+    sheet.dispatchEvent(ev('pointerup', 260, 250));
+    sheet.click(); // клик после перетаскивания — не клик
+    expect(sheet.classList.contains('is-zoomed')).toBe(true);
+    expect(sheet.classList.contains('is-dragging')).toBe(false);
+    // дрожь руки меньше 4 px — это клик: масштаб назад
+    sheet.dispatchEvent(ev('pointerdown', 300, 300));
+    sheet.dispatchEvent(ev('pointermove', 302, 301));
+    sheet.dispatchEvent(ev('pointerup', 302, 301));
+    expect(scroll).toEqual({ left: 240, top: 150 });
+    sheet.click();
+    expect(sheet.classList.contains('is-zoomed')).toBe(false);
+    // палец: скрипт не двигает, листает сам браузер (overflow: auto)
+    sheet.click();
+    sheet.dispatchEvent(ev('pointerdown', 300, 300, 'touch'));
+    sheet.dispatchEvent(ev('pointermove', 200, 200, 'touch'));
+    expect(scroll).toEqual({ left: 240, top: 150 });
+  });
 });

@@ -750,6 +750,44 @@ export class ArchiveScreen extends BaseScreen {
 
 // ───────────────────────────── документ ─────────────────────────────
 
+/**
+ * Лист настоящей бумаги: клик или касание — вдвое крупнее, ещё раз — назад. Увеличенный лист двигают мышью с зажатой
+ * кнопкой (решение владельца 2026-10-13); пальцем — прокруткой браузера, с инерцией. Перетаскивание — не клик: масштаб
+ * от него не меняется.
+ */
+function zoomableSheet(sheet: HTMLElement): HTMLElement {
+  let drag: { x: number; y: number; left: number; top: number; moved: boolean } | null = null;
+  let dragged = false;
+  sheet.addEventListener('pointerdown', (e) => {
+    dragged = false;
+    if (e.pointerType !== 'mouse' || e.button !== 0 || !sheet.classList.contains('is-zoomed')) return;
+    drag = { x: e.clientX, y: e.clientY, left: sheet.scrollLeft, top: sheet.scrollTop, moved: false };
+    sheet.setPointerCapture?.(e.pointerId);
+  });
+  sheet.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 4) return; // дрожь руки при клике — ещё клик
+    drag.moved = true;
+    sheet.classList.add('is-dragging');
+    sheet.scrollLeft = drag.left - dx;
+    sheet.scrollTop = drag.top - dy;
+  });
+  const end = (): void => {
+    dragged = drag?.moved ?? false;
+    drag = null;
+    sheet.classList.remove('is-dragging');
+  };
+  sheet.addEventListener('pointerup', end);
+  sheet.addEventListener('pointercancel', end);
+  sheet.addEventListener('click', () => {
+    if (dragged) dragged = false;
+    else sheet.classList.toggle('is-zoomed');
+  });
+  return sheet;
+}
+
 export class DocumentScreen extends BaseScreen {
   /** Закрыли не крестиком, а Esc (ScreenHost.closeTop): DomUI продолжает партию так же, как по крестику. */
   onClose?: () => void;
@@ -804,7 +842,7 @@ export class DocumentScreen extends BaseScreen {
       const img = h('img', { class: 'vn-document__img' });
       img.alt = '';
       img.src = this.imageUrl;
-      const sheet = h('div', { class: 'vn-document__sheet', data: { doc: this.doc }, on: { click: () => sheet.classList.toggle('is-zoomed') } }, img);
+      const sheet = zoomableSheet(h('div', { class: 'vn-document__sheet', data: { doc: this.doc } }, img));
       const text = this.textKey ? t(this.textKey) : '';
       fill(
         this.el,

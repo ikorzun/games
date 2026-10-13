@@ -150,7 +150,7 @@ describe('слои камкордера в CSS', () => {
 });
 
 describe('интерфейс: документальная эстетика, mobile-first', () => {
-  it('окно реплики по макету в Figma (узел 1232:3796, 2026-10-13): полоса 24 % чёрного под каждой строкой без тени, над текстом портрет, имя и подпись; шрифт Tinos', () => {
+  it('окно реплики по макету в Figma (узел 1232:3796, 2026-10-13): полоса 40 % чёрного под каждой строкой без тени, над текстом портрет 48 px, имя и подпись; шрифт Tinos', () => {
     const box = /\n\.vn-textbox\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(box).not.toMatch(/background/);
     expect(box).not.toMatch(/text-shadow/);
@@ -162,14 +162,14 @@ describe('интерфейс: документальная эстетика, mob
     expect(text).toMatch(/line-height:\s*calc\(20em \/ 15\)/); // шаг строк = высота полосы
     expect(text).toMatch(/padding:\s*0 calc\(24em \/ 15\) 0 calc\(5em \/ 15\)/);
     const bars = /\n\.vn-textbox__bars\s*\{([^}]*)\}/.exec(uiCss)![1]!;
-    expect(bars).toMatch(/opacity:\s*0\.24/);
+    expect(bars).toMatch(/opacity:\s*0\.4;/);
     expect(bars).toMatch(/color:\s*transparent/);
     const bar = /\n\.vn-textbox__bar\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(bar).toMatch(/background:\s*#000/);
     expect(bar).toMatch(/-webkit-box-decoration-break:\s*clone;[\s\S]*\bbox-decoration-break:\s*clone/);
     expect(bar).toMatch(/box-shadow:\s*calc\(-5em \/ 15\) 0 #000, calc\(5em \/ 15\) 0 #000/);
     const avatar = /\n\.vn-textbox__avatar\s*\{([^}]*)\}/.exec(uiCss)![1]!;
-    expect(avatar).toMatch(/width:\s*calc\(36em \/ 15\)/);
+    expect(avatar).toMatch(/width:\s*48px;[\s\S]*height:\s*48px;/);
     expect(avatar).toMatch(/border-radius:\s*50%/);
     expect(uiCss).toMatch(/\.vn-textbox__name\s*\{\s*font-size:\s*calc\(14em \/ 15\);\s*\}/);
     expect(uiCss).toMatch(/\.vn-textbox__title\s*\{\s*font-size:\s*calc\(10em \/ 15\);\s*opacity:\s*0\.7;\s*\}/);

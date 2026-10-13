@@ -171,8 +171,8 @@ body {
 /* ───────────── Текстовое окно ───────────── */
 
 /* Макет реплик в Figma (Claude, узел 1232:3796; решение владельца 2026-10-13): над текстом — портрет, имя и подпись;
-   под каждой строкой — своя полоса 24 % чёрного с запасом 5 px по бокам, без тени; за напечатанным — красная плашка
-   (40 %), в ней белый «>» (решение владельца 2026-10-13). Размеры макета даны для кегля 15 px и пересчитаны в em: кегль у нас свой (--fs, ≥ 16 px на телефоне и
+   под каждой строкой — своя полоса чёрного с запасом 5 px по бокам, без тени (40 %, в макете 24 % — решение владельца
+   2026-10-13); за напечатанным — красная плашка (40 %), в ней белый «>». Размеры макета даны для кегля 15 px и пересчитаны в em: кегль у нас свой (--fs, ≥ 16 px на телефоне и
    ≥ 20 px на десктопе), и всё растёт вместе с ним. Шаг строк — 20 px макета, как высота полосы: в макете текст набран
    с межстрочным «normal» (≈ 17 px), и со второй строки буквы съезжали бы с полос. */
 .vn-textbox {
@@ -198,11 +198,12 @@ body {
   gap: calc(6em / 15);
   align-self: flex-start;
 }
+/* Портрет — 48 × 48 px при любом кегле (решение владельца 2026-10-13; в макете 36 при кегле 15). */
 .vn-textbox__avatar {
   display: block;
   flex: none;
-  width: calc(36em / 15);
-  height: calc(36em / 15);
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   object-fit: cover;
 }
@@ -229,14 +230,14 @@ body {
   hyphens: auto;
 }
 /* Слой полос — под текстом, с той же раскладкой и прозрачными буквами. Полосы в слое непрозрачны и на стыках строк
-   сливаются, 24 % — у слоя целиком: так стыки ровные, без тёмных и светлых волосков. Запас по бокам — тенью: отступы
+   сливаются, 40 % — у слоя целиком: так стыки ровные, без тёмных и светлых волосков. Запас по бокам — тенью: отступы
    фрагментов строк WebKit не повторяет. */
 .vn-textbox__bars {
   position: absolute;
   inset: 0;
   overflow: hidden;
   color: transparent !important;
-  opacity: 0.24;
+  opacity: 0.4;
 }
 .vn-textbox__bar {
   padding: 0.15em 0;
@@ -1174,7 +1175,8 @@ body {
   background: var(--doc-img) center top / cover no-repeat, #e9e2cf;
 }
 .vn-document__text { margin: 0; white-space: pre-wrap; }
-/* Настоящая бумага (текст в картинке): лист целиком по высоте; касание — вдвое крупнее с прокруткой, ещё раз — назад. */
+/* Настоящая бумага (текст в картинке): лист целиком по высоте; касание — вдвое крупнее, ещё раз — назад. Увеличенный
+   лист двигают мышью с зажатой кнопкой или пальцем (zoomableSheet в screens.ts). */
 .vn-document__sheet {
   max-height: 74vh;
   overflow: auto;
@@ -1183,7 +1185,8 @@ body {
   box-shadow: 0 4px 24px rgb(0 0 0 / 0.25);
 }
 .vn-document__img { display: block; max-width: 100%; max-height: 74vh; margin: 0 auto; }
-.vn-document__sheet.is-zoomed { cursor: zoom-out; }
+.vn-document__sheet.is-zoomed { cursor: grab; }
+.vn-document__sheet.is-dragging { cursor: grabbing; }
 .vn-document__sheet.is-zoomed .vn-document__img { max-width: none; max-height: none; width: 200%; }
 .vn-document__translation { width: 0; min-width: 100%; font-size: 0.95em; color: var(--c-muted); }
 
