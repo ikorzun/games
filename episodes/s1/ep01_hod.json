@@ -580,6 +580,7 @@
    "act": 1,
    "scenes": [
     "route",
+    "route_home",
     "route_car",
     "go_flat",
     "go_galina",
@@ -1006,14 +1007,6 @@
      "do": "branch",
      "cases": [
       {
-       "when": "slot >= 2 && day == 1",
-       "goto": "d1_evening"
-      },
-      {
-       "when": "slot >= 2 && day == 2",
-       "goto": "d2_night"
-      },
-      {
        "when": "slot >= 2 && day == 3",
        "goto": "d3_evening"
       },
@@ -1027,6 +1020,27 @@
    ],
    "coverage": "hod_car",
    "ambient": "amb_street_day"
+  },
+  "route_home": {
+   "id": "route_home",
+   "block": "bp_places",
+   "stage": {
+    "bg": "bg_hod_car",
+    "time_of_day": "day"
+   },
+   "steps": [
+    {
+     "do": "branch",
+     "cases": [
+      {
+       "when": "day == 1",
+       "goto": "d1_evening"
+      }
+     ],
+     "default": "d2_night"
+    }
+   ],
+   "coverage": "hod_car"
   },
   "route_car": {
    "id": "route_car",
@@ -1158,7 +1172,7 @@
        "hidden_when_false": true
       }
      ],
-     "when": "day == 1"
+     "when": "day == 1 && slot < 2"
     },
     {
      "do": "choice",
@@ -1188,7 +1202,7 @@
        "hidden_when_false": true
       }
      ],
-     "when": "day == 2 && !visited_flat"
+     "when": "day == 2 && !visited_flat && slot < 2"
     },
     {
      "do": "choice",
@@ -1218,7 +1232,7 @@
        "hidden_when_false": true
       }
      ],
-     "when": "day == 2 && visited_flat && !visited_galina"
+     "when": "day == 2 && visited_flat && !visited_galina && slot < 2"
     },
     {
      "do": "choice",
@@ -1248,7 +1262,7 @@
        "hidden_when_false": true
       }
      ],
-     "when": "day == 2 && visited_flat && visited_galina && !visited_notary"
+     "when": "day == 2 && visited_flat && visited_galina && !visited_notary && slot < 2"
     },
     {
      "do": "choice",
@@ -1271,7 +1285,22 @@
        "hidden_when_false": true
       }
      ],
-     "when": "day == 2 && visited_flat && visited_galina && visited_notary"
+     "when": "day == 2 && visited_flat && visited_galina && visited_notary && slot < 2"
+    },
+    {
+     "do": "choice",
+     "id": "c_route_home",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.route_car.c_route_home.prompt",
+     "options": [
+      {
+       "id": "office",
+       "key": "ep01.h.route_car.c_route_home.office",
+       "goto": "route_home"
+      }
+     ],
+     "when": "slot >= 2",
+     "remember": false
     }
    ],
    "coverage": "hod_car"
@@ -1916,6 +1945,39 @@
      "when": "!photo_seen"
     },
     {
+     "do": "choice",
+     "id": "c_landing_f1",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.flat_inspect_done.c_landing_f1.prompt",
+     "options": [
+      {
+       "id": "galina",
+       "key": "ep01.h.flat_inspect_done.c_landing_f1.galina",
+       "goto": "galina",
+       "effects": [
+        {
+         "var": "slot",
+         "op": "add",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "notary",
+       "key": "ep01.h.flat_inspect_done.c_landing_f1.notary",
+       "goto": "go_notary",
+       "effects": [
+        {
+         "var": "slot",
+         "op": "add",
+         "value": 1
+        }
+       ]
+      }
+     ],
+     "when": "day == 1 && slot == 0 && !visited_galina"
+    },
+    {
      "do": "jump",
      "scene": "route"
     }
@@ -1954,6 +2016,39 @@
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.flat_later.l01"
+    },
+    {
+     "do": "choice",
+     "id": "c_landing_f2",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.flat_later.c_landing_f2.prompt",
+     "options": [
+      {
+       "id": "galina",
+       "key": "ep01.h.flat_later.c_landing_f2.galina",
+       "goto": "galina",
+       "effects": [
+        {
+         "var": "slot",
+         "op": "add",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "notary",
+       "key": "ep01.h.flat_later.c_landing_f2.notary",
+       "goto": "go_notary",
+       "effects": [
+        {
+         "var": "slot",
+         "op": "add",
+         "value": 1
+        }
+       ]
+      }
+     ],
+     "when": "day == 1 && slot == 0 && !visited_galina"
     },
     {
      "do": "jump",
@@ -2109,6 +2204,39 @@
      "key": "ep01.h.galina_closed.l02"
     },
     {
+     "do": "choice",
+     "id": "c_landing_g1",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.galina_closed.c_landing_g1.prompt",
+     "options": [
+      {
+       "id": "flat",
+       "key": "ep01.h.galina_closed.c_landing_g1.flat",
+       "goto": "flat",
+       "effects": [
+        {
+         "var": "slot",
+         "op": "add",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "notary",
+       "key": "ep01.h.galina_closed.c_landing_g1.notary",
+       "goto": "go_notary",
+       "effects": [
+        {
+         "var": "slot",
+         "op": "add",
+         "value": 1
+        }
+       ]
+      }
+     ],
+     "when": "day == 1 && slot == 0 && !visited_flat"
+    },
+    {
      "do": "jump",
      "scene": "route"
     }
@@ -2249,6 +2377,39 @@
       }
      ],
      "when": "!galina_trust"
+    },
+    {
+     "do": "choice",
+     "id": "c_landing_g2",
+     "kind": "investigative",
+     "prompt_key": "ep01.h.galina_end.c_landing_g2.prompt",
+     "options": [
+      {
+       "id": "flat",
+       "key": "ep01.h.galina_end.c_landing_g2.flat",
+       "goto": "flat",
+       "effects": [
+        {
+         "var": "slot",
+         "op": "add",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "notary",
+       "key": "ep01.h.galina_end.c_landing_g2.notary",
+       "goto": "go_notary",
+       "effects": [
+        {
+         "var": "slot",
+         "op": "add",
+         "value": 1
+        }
+       ]
+      }
+     ],
+     "when": "day == 1 && slot == 0 && !visited_flat"
     },
     {
      "do": "jump",
@@ -5375,14 +5536,14 @@
      "who": "lapin_wife",
      "key": "ep01.h.d3_office.l11",
      "when": "lapins_told_truth",
-     "shot": "sh_office_d2_ots_boss"
+     "shot": "sh_office_am_phone"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d3_office.l12",
      "when": "lapins_told_truth",
-     "shot": "sh_office_d2_ots_boss"
+     "shot": "sh_office_am_phone"
     },
     {
      "do": "archive_unlock",
@@ -5410,7 +5571,7 @@
      "who": "expert",
      "key": "ep01.h.d3_office.l13",
      "when": "photo_later && !photo_seen && !lens_d3",
-     "shot": "sh_office_d2_ots_boss"
+     "shot": "sh_office_am_phone"
     },
     {
      "do": "say",
@@ -8487,14 +8648,14 @@
      "who": "lapin_wife",
      "key": "ep01.h.d4_office.l02",
      "when": "irina_call_d4",
-     "shot": "sh_office_d2_ots_boss"
+     "shot": "sh_office_am_phone"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d4_office.l03",
      "when": "irina_call_d4",
-     "shot": "sh_office_d2_ots_boss"
+     "shot": "sh_office_am_phone"
     },
     {
      "do": "archive_unlock",
@@ -9976,14 +10137,14 @@
      "who": "oper",
      "key": "ep01.h.d5_boss.l05",
      "when": "oper_wounded",
-     "shot": "sh_office_d2_ots_boss"
+     "shot": "sh_office_eve_phone"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d5_boss.l06",
      "when": "oper_wounded",
-     "shot": "sh_office_d2_ots_boss"
+     "shot": "sh_office_eve_phone"
     },
     {
      "do": "jump",

@@ -417,7 +417,7 @@
         "hint_after": { "type": "integer", "minimum": 1, "maximum": 5, "default": 2, "description": "Только kind=deduction: после скольких неверных ответов подсветить верные опции (верный ход всегда достижим — история не ломается)." },
         "penalty": { "type": "array", "items": { "$ref": "#/$defs/effect" }, "description": "Только kind=deduction: эффекты за каждый неверный ответ (обычно nerves sub 1). Переменная первого эффекта показывается шкалой во время выбора." },
         "options": {
-          "type": "array", "minItems": 2, "maxItems": 4,
+          "type": "array", "minItems": 1, "maxItems": 4, "description": "Одна опция — «выбор из одного» там, где идти больше некуда (владелец 2026-10-14: в машине — «Пора в отдел»).",
           "items": {
             "type": "object", "additionalProperties": false,
             "required": ["id", "key", "goto"],

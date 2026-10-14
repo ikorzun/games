@@ -312,19 +312,30 @@ DAY2_GO = [  # выбор второго дня: оставшееся место
 ]
 
 
-def day2_choices(cid, prompt):
+def day2_choices(cid, prompt, extra=''):
     out = []
     for n, (cond, place, text) in enumerate(DAY2_GO, 1):
         out.append(choice(f'{cid}{n}', prompt, 'investigative', [
             opt(place, text, f'go_{place}', when=f'!visited_{place}'),
             opt('zhek', 'В ЖЭК, в паспортный стол', 'go_zhek', when='!visited_zhek'),
             opt('bti', 'В архив БТИ', 'go_bti', when='!visited_bti'),
-        ], when=cond))
+        ], when=cond + extra))
     out.append(choice(f'{cid}4', prompt, 'investigative', [
         opt('zhek', 'В ЖЭК, в паспортный стол', 'go_zhek', when='!visited_zhek'),
         opt('bti', 'В архив БТИ', 'go_bti', when='!visited_bti'),
-    ], when='day == 2 && visited_flat && visited_galina && visited_notary'))
+    ], when='day == 2 && visited_flat && visited_galina && visited_notary' + extra))
     return out
+
+
+def landing_choice(cid, neighbor):
+    """Первый визит дня 1 в доме на Молодогвардейской: квартира 34 и Галина — на одной площадке, поэтому «куда дальше»
+    спрашиваем здесь же, а не в машине (владелец 2026-10-14: «логичная зона выбора — площадка»). К соседке — пешком,
+    к нотариусу — машиной. Счёт мест дня (slot) — как у route."""
+    other = {'galina': ('galina', 'Зайти к Галине, соседке'), 'flat': ('flat', 'Зайти к Лапиным, в тридцать четвёртую')}[neighbor]
+    return choice(cid, 'Дальше куда?', 'investigative', [
+        opt(other[0], other[1], other[0], effects=[e('slot', 'add', 1)]),
+        opt('notary', 'Ехать на Пресню, к нотариусу', 'go_notary', effects=[e('slot', 'add', 1)]),
+    ], when=f'day == 1 && slot == 0 && !visited_{neighbor}')
 
 
 # ── День 1, утро ──
@@ -367,9 +378,13 @@ scene('d1_go', 'b1_day1', 'hod_office_am', lambda: [
 # ── Дорога: после каждого места ──
 scene('route', 'bp_places', 'hod_car', lambda: [
     setv(e('slot', 'add', 1)),
-    branch([('slot >= 2 && day == 1', 'd1_evening'), ('slot >= 2 && day == 2', 'd2_night'),
-            ('slot >= 2 && day == 3', 'd3_evening'), ('day == 3', 'd3_route_car')], 'route_car'),
+    # конец дня 1–2 — тоже машина: реплика Сайко и выбор из одного «Пора в отдел» (владелец 2026-10-14: «менты на
+    # секунду в авто, а потом автоматом в отделе — странно»)
+    branch([('slot >= 2 && day == 3', 'd3_evening'), ('day == 3', 'd3_route_car')], 'route_car'),
 ], ambient='amb_street_day')
+scene('route_home', 'bp_places', 'hod_car', lambda: [
+    branch([('day == 1', 'd1_evening')], 'd2_night'),
+])
 
 scene('route_car', 'bp_places', 'hod_car', lambda: [
     show('oper', 'left'), show('sledak', 'right'),
@@ -391,8 +406,11 @@ scene('route_car', 'bp_places', 'hod_car', lambda: [
         opt('flat', 'На Молодогвардейскую, к Лапиным', 'go_flat', when='!visited_flat'),
         opt('galina', 'К Галине, соседке', 'go_galina', when='!visited_galina'),
         opt('notary', 'На Пресню, к нотариусу', 'go_notary', when='!visited_notary'),
-    ], when='day == 1'),
-    *day2_choices('c_route_d2_', 'Дальше куда?'),
+    ], when='day == 1 && slot < 2'),
+    *day2_choices('c_route_d2_', 'Дальше куда?', ' && slot < 2'),
+    {**choice('c_route_home', 'Дальше куда?', 'investigative', [
+        opt('office', 'Пора в отдел', 'route_home'),
+    ], when='slot >= 2'), 'remember': False},
 ])
 
 # ── Дорога: машина Сайко, Громов вспоминает, зачем едем; место — растворением (переход между сетами) ──
@@ -493,11 +511,13 @@ scene('flat_inspect_done', 'bp_places', 'hod_flat', lambda: [
     say('lapin_wife', 'Нам так сказали… Мы же не знали.', when='photo_seen'),
     inner('Копаться дальше при хозяевах не дадут. Левина посмотрит по протоколу, с понятыми.', when='!photo_seen'),
     setv(e('photo_later', 'set', True), when='!photo_seen'),
+    landing_choice('c_landing_f1', 'galina'),
     jump('route'),
 ])
 scene('flat_later', 'bp_places', 'hod_flat', lambda: [
     show('buyer', 'left'), show('oper', 'left'), show('sledak', 'center'), show('lapin_wife', 'right'),
     inner('Без понятых это не улика, а сувенир. Фото за стеклом Левина изымет по протоколу.'),
+    landing_choice('c_landing_f2', 'galina'),
     jump('route'),
 ])
 
@@ -520,6 +540,7 @@ scene('galina_closed', 'bp_places', 'hod_landing_chain', lambda: [
     say('neighbor', 'Протоколом… Ничего я не видела. В конце июня ушла она с сумкой — и всё. Пишите что хотите.'),
     unlock('n_left'),
     inner('Цепочка так и не снялась.'),
+    landing_choice('c_landing_g1', 'flat'),
     jump('route'),
 ])
 scene('galina_open', 'bp_places', 'hod_landing_open', lambda: [
@@ -542,6 +563,7 @@ scene('galina_end', 'bp_places', 'hod_landing_open', lambda: [
     say('neighbor', 'Ну, смотрите. Я вам поверила.', when='galina_trust'),
     say('neighbor', 'Долг… Я своё отдолжала. Дочка у меня в Туле — к ней поеду, пока вы его ловите.', when='!galina_trust'),
     setv(e('galina_leaving', 'set', True), when='!galina_trust'),
+    landing_choice('c_landing_g2', 'flat'),
     jump('route'),
 ])
 
@@ -978,12 +1000,12 @@ scene('d3_office', 'b5_day3', 'hod_office_d2', lambda: [
     inner('Сайко нет. На моём столе его записка: «Я в МУРе». Мурашова пробиваю сам, через адресное бюро. Прописан в Чертанове.', when='!oper_with'),
     unlock('n_address'),
     sfx('sfx_phone_ring', when='lapins_told_truth'),
-    say('lapin_wife', 'Это Ирина Лапина. Вчера вечером звонил Сергей Викторович. Велел молчать, обещал вернуть деньги, если всё будет тихо.', when='lapins_told_truth'),
-    inner('Он знает, что его ищут.', when='lapins_told_truth'),
+    say('lapin_wife', 'Это Ирина Лапина. Вчера вечером звонил Сергей Викторович. Велел молчать, обещал вернуть деньги, если всё будет тихо.', when='lapins_told_truth', shot='office_am_phone'),
+    inner('Он знает, что его ищут.', when='lapins_told_truth', shot='office_am_phone'),
     unlock('n_irina', when='lapins_told_truth'),
     setv(e('lens_d3', 'set', True), when='!case_opened && have_contract'),
     sfx('sfx_phone_ring', when='photo_later && !photo_seen && !lens_d3'),
-    say('expert', 'Громов, это Левина. Фото внука изъяла, понятые расписались. На обороте — «Бабушке от внука. Самара».', when='photo_later && !photo_seen && !lens_d3'),
+    say('expert', 'Громов, это Левина. Фото внука изъяла, понятые расписались. На обороте — «Бабушке от внука. Самара».', when='photo_later && !photo_seen && !lens_d3', shot='office_am_phone'),
     *seized('photo_later && !photo_seen && !lens_d3'),
     jump('d3_lens', when='lens_d3'),
     inner('Договор у Лапиных — я к ним так и не доехал. Привезу сегодня — вечером Левина посмотрит его под лампой.', when="!case_opened && third == 'flat'"),
@@ -1292,8 +1314,8 @@ scene('d4_office', 'b7_op', 'hod_office_d2', lambda: [
     cap('day', 'Четверг, 12 августа'),
     show('sledak', 'left'), show('oper', 'center', when='oper_with'), show('boss', 'right'),
     sfx('sfx_phone_ring', when='irina_call_d4'),
-    say('lapin_wife', 'Это Ирина Лапина. Ночью звонил Сергей Викторович — спрашивал, кто к нам приходил и что мы сказали.', when='irina_call_d4'),
-    inner('Он знает, что его ищут.', when='irina_call_d4'),
+    say('lapin_wife', 'Это Ирина Лапина. Ночью звонил Сергей Викторович — спрашивал, кто к нам приходил и что мы сказали.', when='irina_call_d4', shot='office_am_phone'),
+    inner('Он знает, что его ищут.', when='irina_call_d4', shot='office_am_phone'),
     unlock('n_irina', when='irina_call_d4'),
     say('sledak', 'Валентин Павлович, мне нужна санкция на арест. Сегодня.'),
     say('boss', 'На кого?'),
@@ -1504,8 +1526,8 @@ scene('d5_boss', 'b8_friday', 'hod_office_d2', lambda: [
     say('boss', 'Дело забирает город. Не обижайся: у них люди и сроки, а у тебя — бумаги и нервы.', when='case_transferred'),
     say('oper', 'Ну что, юрист. Пятница.', when='oper_with && !oper_wounded'),
     sfx('sfx_phone_ring', when='oper_wounded'),
-    say('oper', 'Громов? Из Боткинской звоню. Рука на месте, врач говорит — повезло.', when='oper_wounded'),
-    inner('В трубке слышно, как жена говорит ему: «Дай сюда. Сколько можно».', when='oper_wounded'),
+    say('oper', 'Громов? Из Боткинской звоню. Рука на месте, врач говорит — повезло.', when='oper_wounded', shot='office_eve_phone'),
+    inner('В трубке слышно, как жена говорит ему: «Дай сюда. Сколько можно».', when='oper_wounded', shot='office_eve_phone'),
     jump('fin_zoya', 'slow_fade'),
 ], time='evening', ambient='amb_office', pin='office_d2_ots_boss')
 scene('d5_gone', 'b8_friday', 'hod_agency_closed', lambda: [

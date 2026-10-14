@@ -30,7 +30,7 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 | # | Блок | Тип | Режим показа | Акт | Сцены |
 |---|---|---|---|---|---|
 | 1 | День первый | `investigation` | процедурный | 1 | d1_office, d1_call, d1_go |
-| 2 | Следствие | `investigation` | процедурный | 1 | route, route_car, go_flat, go_galina, go_notary, go_zhek, go_bti, flat, flat_formal, flat_truth, flat_look, flat_inspect, flat_inspect_fail, flat_inspect_done, flat_later, galina, galina_closed, galina_open, galina_end, notary, notary_bare, notary_insist, notary_retreat, notary_papers, notary_glasses, notary_reg, notary_reg_ins, notary_reg2, notary_who, notary_alone, notary_alone_papers, notary_alone_glasses, notary_alone_reg, notary_alone_reg_ins, notary_alone_reg2, notary_alone_who, notary_lyuda_q, lyuda, zhek, zhek_name, zhek_seen, bti, bti_chain, bti_chain_ok, bti_chain_part, bti_chain_fail, bti_formal |
+| 2 | Следствие | `investigation` | процедурный | 1 | route, route_home, route_car, go_flat, go_galina, go_notary, go_zhek, go_bti, flat, flat_formal, flat_truth, flat_look, flat_inspect, flat_inspect_fail, flat_inspect_done, flat_later, galina, galina_closed, galina_open, galina_end, notary, notary_bare, notary_insist, notary_retreat, notary_papers, notary_glasses, notary_reg, notary_reg_ins, notary_reg2, notary_who, notary_alone, notary_alone_papers, notary_alone_glasses, notary_alone_reg, notary_alone_reg_ins, notary_alone_reg2, notary_alone_who, notary_lyuda_q, lyuda, zhek, zhek_name, zhek_seen, bti, bti_chain, bti_chain_ok, bti_chain_part, bti_chain_fail, bti_formal |
 | 3 | Следствие | `investigation` | процедурный | 1 | d1_evening, d1_lens, d1_lens_ok, d1_lens_fail, d1_eve_rest, d1_eve_call |
 | 4 | День второй | `investigation` | процедурный | 2 | d2_office, d2_push, d2_route, d2_calls, d2_go |
 | 5 | Версия | `investigation` | процедурный | 2 | d2_night, d_who, d_who_w1, d_who_w2, d_how, d_how_w1, d_where, d_where_w1, version, d2_late |
@@ -47,7 +47,7 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 
 **Кадр:** фон `bg_hod_office_am` — черновой общий план office_am_wide (лето 1993-го); day; музыка `m_investigation`; эмбиент `amb_office`
 
-- ТИТР [date_stamp]: «Понедельник, 9 августа 1993 года»
+- ТИТР [day]: «Понедельник, 9 августа 1993 года»
 - ТИТР [location]: «Прокуратура Кунцевского района»
 - показ: Громов,  left
 - показ: Сайко,  right
@@ -95,7 +95,13 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 **Кадр:** фон `bg_hod_car` — черновой общий план car_wide (лето 1993-го); day; эмбиент `amb_street_day`
 
 - переменные: slot add 1
-- ВЕТВЛЕНИЕ: `slot >= 2 && day == 1` → d1_evening; `slot >= 2 && day == 2` → d2_night; `slot >= 2 && day == 3` → d3_evening; `day == 3` → d3_route_car; иначе → route_car
+- ВЕТВЛЕНИЕ: `slot >= 2 && day == 3` → d3_evening; `day == 3` → d3_route_car; иначе → route_car
+
+### route_home · Следствие (процедурный)
+
+**Кадр:** фон `bg_hod_car` — черновой общий план car_wide (лето 1993-го); day
+
+- ВЕТВЛЕНИЕ: `day == 1` → d1_evening; иначе → d2_night
 
 ### route_car · Следствие (процедурный)
 
@@ -136,6 +142,8 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 - ВЫБОР [investigative]: Дальше куда?
   - «В ЖЭК, в паспортный стол» _(если `!visited_zhek`, скрыта)_ → go_zhek
   - «В архив БТИ» _(если `!visited_bti`, скрыта)_ → go_bti
+- ВЫБОР [investigative]: Дальше куда?
+  - «Пора в отдел» → route_home
 
 ### go_flat · Следствие (процедурный)
 
@@ -283,6 +291,9 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 - **ИРИНА:** Нам так сказали… Мы же не знали. _(если `photo_seen`)_
 - **ВНУТРЕННИЙ ГОЛОС:** Копаться дальше при хозяевах не дадут. Левина посмотрит по протоколу, с понятыми. _(если `!photo_seen`)_
 - переменные: photo_later set True
+- ВЫБОР [investigative]: Дальше куда?
+  - «Зайти к Галине, соседке» → galina _(slot add 1)_
+  - «Ехать на Пресню, к нотариусу» → go_notary _(slot add 1)_
 - → route
 
 ### flat_later · Следствие (процедурный)
@@ -294,6 +305,9 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 - показ: Громов,  center
 - показ: Ирина,  right
 - **ВНУТРЕННИЙ ГОЛОС:** Без понятых это не улика, а сувенир. Фото за стеклом Левина изымет по протоколу.
+- ВЫБОР [investigative]: Дальше куда?
+  - «Зайти к Галине, соседке» → galina _(slot add 1)_
+  - «Ехать на Пресню, к нотариусу» → go_notary _(slot add 1)_
 - → route
 
 ### galina · Следствие (процедурный)
@@ -321,6 +335,9 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 - **ГАЛИНА:** Протоколом… Ничего я не видела. В конце июня ушла она с сумкой — и всё. Пишите что хотите.
 - архив: открыт материал `n_left`
 - **ВНУТРЕННИЙ ГОЛОС:** Цепочка так и не снялась.
+- ВЫБОР [investigative]: Дальше куда?
+  - «Зайти к Лапиным, в тридцать четвёртую» → flat _(slot add 1)_
+  - «Ехать на Пресню, к нотариусу» → go_notary _(slot add 1)_
 - → route
 
 ### galina_open · Следствие (процедурный)
@@ -352,6 +369,9 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 - **ГАЛИНА:** Ну, смотрите. Я вам поверила. _(если `galina_trust`)_
 - **ГАЛИНА:** Долг… Я своё отдолжала. Дочка у меня в Туле — к ней поеду, пока вы его ловите. _(если `!galina_trust`)_
 - переменные: galina_leaving set True
+- ВЫБОР [investigative]: Дальше куда?
+  - «Зайти к Лапиным, в тридцать четвёртую» → flat _(slot add 1)_
+  - «Ехать на Пресню, к нотариусу» → go_notary _(slot add 1)_
 - → route
 
 ### notary · Следствие (процедурный)
@@ -789,7 +809,7 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 
 **Кадр:** фон `bg_hod_office_d2` — черновой общий план office_d2_wide (лето 1993-го); day; музыка `m_investigation`; эмбиент `amb_office`
 
-- ТИТР [date_stamp]: «Вторник, 10 августа»
+- ТИТР [day]: «Вторник, 10 августа»
 - показ: Громов,  left
 - показ: Сайко,  center
 - показ: Валентин Павлович,  right
@@ -1007,7 +1027,7 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 
 **Кадр:** фон `bg_hod_office_d2` — черновой общий план office_d2_wide (лето 1993-го); day; музыка `m_investigation`; эмбиент `amb_office`
 
-- ТИТР [date_stamp]: «Среда, 11 августа»
+- ТИТР [day]: «Среда, 11 августа»
 - переменные: third set second
 - переменные: third set flat
 - переменные: third set galina
@@ -1617,7 +1637,7 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 
 **Кадр:** фон `bg_hod_office_d2` — черновой общий план office_d2_wide (лето 1993-го); day; музыка `m_tension`; эмбиент `amb_office`
 
-- ТИТР [date_stamp]: «Четверг, 12 августа»
+- ТИТР [day]: «Четверг, 12 августа»
 - показ: Громов,  left
 - показ: Сайко,  center
 - показ: Валентин Павлович,  right
@@ -1807,7 +1827,7 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 
 **Кадр:** фон `bg_hod_t_street` — чёрный: переходы-развилки и титр пятницы; dawn
 
-- ТИТР [date_stamp]: «Пятница, 13 августа»
+- ТИТР [day]: «Пятница, 13 августа»
 - переменные: day set 5
 - ВЕТВЛЕНИЕ: `accomplice_talks` → d5_field; иначе → d5_interrog
 
@@ -1925,8 +1945,8 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 
 **Кадр:** фон `bg_hod_agency_closed` — черновой общий план agency_closed (лето 1993-го); day; эмбиент `amb_street_day`
 
+- ТИТР [day]: «Пятница, 13 августа»
 - показ: Громов,  center
-- ТИТР [date_stamp]: «Пятница, 13 августа»
 - переменные: day set 5
 - ТИТР [location]: «Пресня, у агентства»
 - **ВНУТРЕННИЙ ГОЛОС:** Агентство закрыто. На двери — «Ремонт». «Волги» у входа нет.
@@ -1950,9 +1970,9 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 
 **Кадр:** фон `bg_hod_court` — черновой общий план court_wide (лето 1993-го); day
 
+- ТИТР [day]: «Москва, 1994 год»
+- ТИТР [day]: «Москва, 1995 год»
 - показ: Сергей Мурашов,  left
-- ТИТР [date_stamp]: «Москва, 1994 год»
-- ТИТР [date_stamp]: «Москва, 1995 год»
 - **РАССКАЗЧИК:** Московский городской суд признал Мурашова виновным в убийствах, совершённых из корыстных побуждений, и приговорил его к исключительной мере наказания.
 - **РАССКАЗЧИК:** В приговоре — шесть эпизодов. _(если `bti_six || field_seen`)_
 - **РАССКАЗЧИК:** В приговоре — те эпизоды, что успели доказать. _(если `!bti_six && !field_seen`)_
@@ -1968,7 +1988,7 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 
 **Кадр:** фон `bg_hod_t_moscow` — временно: Москва зимой 1994-го (эпилог); фильтр `archive_photo`; day
 
-- ТИТР [date_stamp]: «Москва, 1994–1997 годы»
+- ТИТР [day]: «Москва, 1994–1997 годы»
 - **РАССКАЗЧИК:** Квартиру на Молодогвардейской по суду вернули внуку из Самары.
 - **РАССКАЗЧИК:** Фотографию из серванта отдали ему вместе с ключами. _(если `photo_seen`)_
 - **РАССКАЗЧИК:** Лапины дали показания, и по суду им вернули часть денег. _(если `lapins_told_truth`)_

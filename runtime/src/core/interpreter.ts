@@ -703,7 +703,11 @@ export class Interpreter {
       this.warn(`сцена ${this.state.scene_id}: кадр ${id} не объявлен в assets.shots — оставлен текущий`);
       return null;
     }
-    if (shot.set !== view.coverage) this.warn(`сцена ${this.state.scene_id}: кадр ${id} из сета ${shot.set}, а сцена покрыта сетом ${view.coverage}`);
+    // Кадр другого сета того же места (звонок в кабинете — Громов у телефона) — штатно; другого места — ошибка сценария.
+    const place = (bg: string): string => this.placeOf.get(bg) ?? bg;
+    if (shot.set !== view.coverage && place(shot.bg) !== place(view.bg)) {
+      this.warn(`сцена ${this.state.scene_id}: кадр ${id} из сета ${shot.set} (другое место), а сцена покрыта сетом ${view.coverage}`);
+    }
     return this.shotEvent(explicitShot(this.shots, id, view.shot, view.shot_ctx ?? { ...EMPTY_CTX }, who));
   }
 

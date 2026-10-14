@@ -913,7 +913,7 @@ async function scenarioHod(browser, baseUrl) {
   };
 
   const plan = {
-    c_d1_go: 'galina', c_galina: 'human', c_galina_fear: 'promise', c_route_d1: 'notary', c_notary_bare: 'retreat',
+    c_d1_go: 'galina', c_galina: 'human', c_galina_fear: 'promise', c_landing_g2: 'notary', c_notary_bare: 'retreat',
     c_boss: 'push', c_d2_go1: 'flat', c_flat: 'truth', c_flat_photo: 'open', c_route_d2_4: 'bti', c_bti: 'plead',
     d_who: 'murashov', d_how: ['none', 'notary'], d_where: 'left',
     // среда: с Сайко, в БТИ нашли шесть — третье место вторая квартира; затем Ковригин за обещание
@@ -930,7 +930,8 @@ async function scenarioHod(browser, baseUrl) {
       await shot('choice_d1');
     }
     // Блокнот после Галины: факты разговора уже в нём
-    if (!notes.checked && p.kind === 'choice' && p.id === 'c_route_d1') {
+    // выбор «куда дальше» после Галины — на площадке (c_landing_g2), а не в машине
+    if (!notes.checked && p.kind === 'choice' && p.id === 'c_landing_g2') {
       notes.checked = true;
       const badge = await page.$eval('.vn-qbtn--notebook', (b) => b.classList.contains('has-new'));
       await page.click('.vn-qbtn--notebook');

@@ -226,6 +226,7 @@ def shots_check(ep: dict, rep: Report) -> None:
             rep.err(f"set {name}: кадры из разных фонов {sorted(bg_set)} — сет привязан к одному фону")
         if not any(sh["kind"] == "wide" for sh in lst):
             rep.warn(f"set {name}: нет ни одного wide — при входе в сцену монтажёр покажет спрайты")
+    place_of = {b["id"]: b.get("place", b["id"]) for b in ep.get("assets", {}).get("backgrounds", [])}
     for sid, scene in ep.get("scenes", {}).items():
         cov = scene.get("coverage")
         if not cov:
@@ -243,8 +244,9 @@ def shots_check(ep: dict, rep: Report) -> None:
             where = f"scene {sid} step {i} ({step.get('do')})"
             if ref not in by_id:
                 rep.err(f"{where}: shot {ref} не объявлен в assets.shots")
-            elif by_id[ref]["set"] != cov:
-                rep.err(f"{where}: shot {ref} из сета {by_id[ref]['set']}, а сцена покрыта сетом {cov}")
+            elif by_id[ref]["set"] != cov and place_of.get(by_id[ref]["bg"], by_id[ref]["bg"]) != place_of.get(set_bg, set_bg):
+                # кадр другого сета — только того же места (звонок в кабинете: Громов у телефона)
+                rep.err(f"{where}: shot {ref} из сета {by_id[ref]['set']} (другое место), а сцена покрыта сетом {cov}")
     for sid, i, step in iter_steps(ep):
         if step.get("shot") and not ep["scenes"][sid].get("coverage"):
             rep.warn(f"scene {sid} step {i}: shot {step['shot']} в сцене без coverage — кадр не покажется")
