@@ -584,10 +584,10 @@
 
 - Время: Moscow, 1994, a grey daytime. Место: court.
 - Sergei Murashov, the apartment dealer: stands INSIDE a closed defendants' cage on the LEFT, fully behind its front bars, hands folded in front of him, neat and expressionless, looking toward the judges' bench, not at the camera.
-- Камера: The camera stands among the public benches at seated eye level, a 32 mm-equivalent field of view: the cage on the LEFT is a closed box of vertical steel bars on every visible side — front, side and top rail — with a closed barred door; the bars run unbroken in front of Murashov's whole body; no opening, gap or missing bars anywhere. Two militiamen stand OUTSIDE the cage beside it. The judges' bench far away out of focus, the backs of a few people on the benches in the foreground; the lower third of the frame is kept free of faces.
+- Камера: The camera stands among the public benches at seated eye level, a 32 mm-equivalent field of view: the cage on the LEFT is a closed box of vertical steel bars on every visible side — front, side and top rail — with a closed barred door; the bars run unbroken in front of Murashov's whole body; no opening, gap or missing bars anywhere. Two militiamen stand OUTSIDE the cage beside it. Far away, out of focus, behind the judges' bench: the presiding judge in a black robe reads the verdict from a sheet of paper, a people's assessor in a dark suit on either side of her or him; a plain black gooseneck microphone (one curved stem, no crossbar) on the clerk's desk. The backs of a few people on the benches in the foreground; the lower third of the frame is kept free of faces.
 - Свет: flat grey daylight from the tall windows.
 - Предметы: the cage, the bench, the curtains, the wood panelling.
-- Пометка: Суд 1994-го: только Мурашов в клетке; судья вдали, не в фокусе.
+- Пометка: Суд 1994-го: Мурашов в клетке; судья и два народных заседателя вдали, не в фокусе, — приговор оглашают (2026-10-14: были пустые кресла и микрофон-крест).
 - Референсы: face:murashov
 
 ## `bio_zoya` — insert, сет `hod_bio`

@@ -543,7 +543,8 @@ STAGING = {
     'court_wide': {'murashov': "stands INSIDE a closed defendants' cage on the LEFT, fully behind its front bars, hands folded, "
                                "in a dark grey suit; the vertical steel bars run unbroken in front of his whole body, the cage "
                                "has no opening and no missing bars; the two militiamen stand OUTSIDE the cage; his eyes toward "
-                               "the judges' bench"},
+                               "the judges' bench, where the presiding judge in a black robe reads the verdict between two people's "
+                               "assessors in dark suits"},
     'field_find': {},
     'agency_closed': {'sledak': 'stands at the closed agency door RIGHT of centre, small in the frame, seen from the side; his eyes on the paper sign on the glass'},
     'gromov_2004': {'sledak_old': 'sits in a leather office chair, turned three-quarter to the RIGHT; his eyes on an unseen interviewer off-camera on the right, never into the lens'},
