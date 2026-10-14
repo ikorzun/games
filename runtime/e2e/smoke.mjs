@@ -824,7 +824,7 @@ async function scenarioCase(browser, baseUrl) {
  * Пройти пробу «Хода следствия» по плану {id выбора → id опции | [опции по очереди]}: пробел на репликах, OK на бумагах,
  * цифра на выборе. На каждом шаге запоминает кадр монтажёра и зовёт onStep (скриншоты, проверки по ходу).
  */
-async function playHod(page, plan, onStep = async () => undefined, max = 1500) {
+async function playHod(page, plan, onStep = async () => undefined, max = 8000) {
   const seen = { shots: new Set(), choices: [], docs: 0, minigames: [] };
   const queue = Object.fromEntries(Object.entries(plan).map(([k, v]) => [k, Array.isArray(v) ? [...v] : [v]]));
   for (let i = 0; i < max; i++) {
@@ -854,9 +854,10 @@ async function playHod(page, plan, onStep = async () => undefined, max = 1500) {
       seen.minigames.push(p.id);
       if (p.type === 'crime_scene_search') await solveInspect(page);
       else if (p.type === 'database_search') await solveCards(page, { notary: 'kovrigin', attorney: 'murashov_sv' });
-      else await page.click('.mg-shell__btn.is-skip');
-      await page.waitForSelector('.mg-shell__btn.is-next', { state: 'visible', timeout: 10000 });
-      await page.click('.mg-shell__btn.is-next');
+      else await page.locator('.is-skip:visible').first().click(); // «только история»: «Пропустить» виден сразу
+      // у оболочки итог ждёт «Далее»; доска и допрос при пропуске отдают результат сразу
+      const next = await page.waitForSelector('.mg-shell__btn.is-next', { state: 'visible', timeout: 3000 }).catch(() => null);
+      if (next) await next.click();
       await page.waitForFunction((id) => window.__vn.pending()?.kind !== 'minigame' || window.__vn.pending()?.id !== id, p.id);
       continue;
     }
@@ -874,10 +875,11 @@ async function playHod(page, plan, onStep = async () => undefined, max = 1500) {
 }
 
 async function scenarioHod(browser, baseUrl) {
-  section('Ход следствия (по умолчанию): меню → предупреждение → день 1 → вечер → день 2 → версия → реконструкция → конец');
+  section('Ход следствия (по умолчанию): меню → день 1 → день 2 → версия → реконструкция → среда → доска → четверг → пятница → развязка');
   const { page, context, log } = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU' });
   await toMenu(page);
-  await page.evaluate(() => window.__vn.settings({ textSpeed: 5, lang: 'ru' }));
+  // «только история»: у доски, сверки и допроса «Пропустить» виден сразу (осмотр и картотеку смоук решает кликами)
+  await page.evaluate(() => window.__vn.settings({ textSpeed: 5, lang: 'ru', storyOnly: true }));
   check('на полке один открытый эпизод', (await page.locator('.vn-ep.is-open').count()) === 1);
   await page.click('.vn-ep__open');
   await page.waitForSelector('.vn-warning', { state: 'visible' });
@@ -894,6 +896,11 @@ async function scenarioHod(browser, baseUrl) {
     c_d1_go: 'galina', c_galina: 'human', c_galina_fear: 'promise', c_route_d1: 'notary', c_notary_bare: 'retreat',
     c_boss: 'push', c_d2_go1: 'flat', c_flat: 'truth', c_flat_photo: 'open', c_route_d2_4: 'bti', c_bti: 'plead',
     d_who: 'murashov', d_how: ['none', 'notary'], d_where: 'left',
+    // среда: с Сайко, в БТИ нашли шесть — третье место вторая квартира; затем Ковригин за обещание
+    c_d3_go_car_second: 'second', c_klava: 'statement', c_d3_route_car_two: 'kovrigin', c_kovrigin: 'deal',
+    d3_where: ['relatives', 'dead'],
+    // четверг: Лапиным сказали правду — опознаёт Ирина, Мурашов спугнут, брать сразу; обыск — ключи
+    c_search: 'keys', c_confront: 'calm',
   };
   const notes = { checked: false, firstChoice: null, deduction: false, layout: [] };
   const run = await playHod(page, plan, async (p, v) => {
@@ -937,13 +944,36 @@ async function scenarioHod(browser, baseUrl) {
       await sleep(300);
       await shot('recon');
     }
+    // доска Левиной и допрос — новые экраны среды и пятницы: вёрстка и что на них есть
+    if (p.kind === 'minigame' && (p.type === 'evidence_board' || p.type === 'interrogation_press')) {
+      await sleep(600);
+      notes.layout.push(...(await page.evaluate(layoutProbe)));
+      notes[p.type] = await page.evaluate(() => ({
+        nodes: document.querySelectorAll('.mg-eb__node').length,
+        cards: document.querySelectorAll('.mg-ip__card').length,
+      }));
+      await shot(p.type === 'evidence_board' ? 'board' : 'interrogation');
+    }
+    if (p.kind === 'line' && v?.scene === 'fin_zoya' && !notes.zoya) {
+      notes.zoya = true;
+      await sleep(300);
+      await shot('zoya');
+    }
   });
   check('первый выбор дня — куда ехать: три места', notes.firstChoice?.id === 'c_d1_go' && notes.firstChoice.options.length === 3, JSON.stringify(notes.firstChoice));
   check('блокнот открывается в игре и держит факты Галины', notes.notebook?.title === 'Блокнот' && notes.notebook.titles.includes('Галина: «Сергей Викторович»'), JSON.stringify(notes.notebook));
-  check('маршрут пройден по плану до конца пробы (концовка e_proto)', run.end.ending === 'e_proto', run.choices.join(' → '));
+  check('маршрут пройден по плану до конца (Сайко ранен при спешке — концовка e_variant)', run.end.ending === 'e_variant', run.choices.join(' → '));
   const st = await stateOf(page);
-  check('итог: второй день, четыре места, неверный ход в версии стоил самообладания, бумаги показаны', st.vars.day === 2 && ['visited_galina', 'visited_notary', 'visited_flat', 'visited_bti'].every((k) => st.vars[k] === true) && st.vars.visited_zhek === false && st.vars.nerves === 2 && run.docs === 2,
+  check('итог: пятница, четыре места пробы, неверные ходы в версии и на доске стоили самообладания, бумаги показаны', st.vars.day === 5 && ['visited_galina', 'visited_notary', 'visited_flat', 'visited_bti'].every((k) => st.vars[k] === true) && st.vars.visited_zhek === false && st.vars.nerves === 1 && run.docs === 2,
     JSON.stringify({ day: st.vars.day, nerves: st.vars.nerves, docs: run.docs }));
+  check('среда: вторая квартира с заявлением и Ковригин за обещание; лупа во второй раз возбудила дело',
+    st.vars.second_victim === true && st.vars.klava_statement === true && st.vars.kovrigin_deal === true && st.vars.case_opened === true && run.minigames.includes('mg_docs_d3'),
+    JSON.stringify({ mg: run.minigames, v: { second: st.vars.second_victim, klava: st.vars.klava_statement, kov: st.vars.kovrigin_deal, opened: st.vars.case_opened } }));
+  check('доска: на ней только найденное (вторая квартира и водитель есть, всего 11 узлов); допрос: карточки только найденных улик и приманки',
+    notes.evidence_board?.nodes === 11 && notes.interrogation_press?.cards > 2, JSON.stringify({ board: notes.evidence_board, ip: notes.interrogation_press }));
+  check('четверг и пятница: опознала Ирина, Сайко ранен, Шмелёв показал место, ключи найдены; сила дела 7 из 8',
+    st.vars.identified === true && st.vars.oper_wounded === true && st.vars.field_seen === true && st.vars.keys_found === true && st.vars.case_strength === 7,
+    JSON.stringify({ id: st.vars.identified, wounded: st.vars.oper_wounded, field: st.vars.field_seen, keys: st.vars.keys_found, strength: st.vars.case_strength, confession: st.vars.confession }));
   check('окно реплики: портрет загружен, имя и подпись над текстом, шрифт Cormorant Garamond', notes.speech?.avatar > 0 && notes.speech.name === 'Виктор Сайко' && notes.speech.title === 'оперуполномоченный, МУР' && /^"?Cormorant Garamond/.test(notes.speech.font), JSON.stringify(notes.speech));
   check('подсветка: на говорящем Сайко маска кадра, окружение приглушено (PixiJS)', notes.speech?.focus?.who === 'oper' && notes.speech.focus.mask === 'image', JSON.stringify(notes.speech?.focus));
   check('картотека БТИ — мини-игра: фильтры по нотариусу и представителю, отмечены все шесть сделок', run.minigames.includes('mg_db') && st.vars.bti_six === true && st.archive.includes('n_bti'),
@@ -953,10 +983,10 @@ async function scenarioHod(browser, baseUrl) {
     JSON.stringify({ mg: run.minigames, photo: st.vars.photo_seen, glasses: st.vars.glasses_found, archive: st.archive }));
   check('монтаж: кадры сменяются (больше 15 разных за проход), реконструкция в своём кадре', run.shots.size > 15 && /^sh_recon_/.test(notes.recon ?? ''), `${run.shots.size}: ${[...run.shots].join(', ')}`);
   await page.waitForSelector('.vn-ending', { state: 'visible' });
-  check('экран концовки: «Версия есть»', (await page.locator('.vn-ending__title').textContent()) === 'Версия есть');
+  check('экран концовки: «Цена вопроса»', (await page.locator('.vn-ending__title').textContent()) === 'Цена вопроса');
   await sleep(1200);
   await shot('end');
-  check('вёрстка на 1280×720 цела (первый выбор, блокнот, версия)', notes.layout.length === 0, notes.layout.join('; '));
+  check('вёрстка на 1280×720 цела (первый выбор, блокнот, версия, доска, допрос)', notes.layout.length === 0, notes.layout.join('; '));
   check('нет ошибок в консоли и неудачных запросов', log.errors.length === 0 && log.failed.length === 0, [...log.errors, ...log.failed].join(' | ').slice(0, 400));
   await context.close();
 
