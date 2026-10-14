@@ -55,7 +55,10 @@ def _tls() -> ssl.SSLContext:
 TLS = _tls()
 
 # Только для запроса к синтезу (субтитры не меняются): аббревиатуры, которые модель читает буквами неверно.
-SAY = [('БТИ', 'Бэ-Тэ-И'), ('№', 'номер '), ('С. В.', 'Эс Вэ'), ('А. Н.', 'А Эн'), ('МУРе', 'МУРе'), ('…', '...')]
+SAY = [('БТИ', 'Бэ-Тэ-И'), ('№', 'номер '), ('С. В.', 'Эс Вэ'), ('А. Н.', 'А Эн'), ('МУРе', 'МУРе'), ('…', '...'),
+       # экран жертв: инициал фамилии и годы жизни — словами (иначе «С.» читается как предлог, годы — как числа)
+       ('Павловна С. 1919–1993', 'Павловна Эс. Тысяча девятьсот девятнадцатый — тысяча девятьсот девяносто третий'),
+       ('Ильич Р. 1914–1993', 'Ильич Эр. Тысяча девятьсот четырнадцатый — тысяча девятьсот девяносто третий')]
 
 
 KEYCHAIN = 'elevenlabs'  # служба в связке ключей macOS
@@ -134,16 +137,19 @@ def tts(who: str, text: str, prev: str = '', nxt: str = '') -> bytes:
 
 
 def normalize(src: str, dst: str) -> None:
-    """Громкость речи — к LOUD (EBU R128, два прохода loudnorm, линейно: без «качания» на коротких репликах)."""
-    target = f"I={LOUD['I']}:TP={LOUD['TP']}:LRA={LOUD['LRA']}"
-    m = subprocess.run(['ffmpeg', '-hide_banner', '-nostats', '-i', src, '-af', f'loudnorm={target}:print_format=json', '-f', 'null', '-'],
+    """Громкость речи — к LOUD (EBU R128): усиление до цели и лимитер по пику. loudnorm в линейном режиме на коротких
+    репликах (1–3 с) упирался в пик и оставлял их на 4–8 дБ тише, а динамический «качает» — поэтому так."""
+    m = subprocess.run(['ffmpeg', '-hide_banner', '-nostats', '-i', src, '-af',
+                        f"loudnorm=I={LOUD['I']}:TP={LOUD['TP']}:LRA={LOUD['LRA']}:print_format=json", '-f', 'null', '-'],
                        capture_output=True, text=True).stderr
     j = json.loads(m[m.rindex('{'):m.rindex('}') + 1])
-    af = (f"loudnorm={target}:measured_I={j['input_i']}:measured_TP={j['input_tp']}:measured_LRA={j['input_lra']}:"
-          f"measured_thresh={j['input_thresh']}:offset={j['target_offset']}:linear=true")
+    gain = LOUD['I'] - float(j['input_i'])
+    limit = 10 ** (LOUD['TP'] / 20)
+    af = f'volume={gain:.2f}dB,alimiter=limit={limit:.3f}:attack=2:release=60:level=false'
     tmp = dst + '.tmp.mp3'
-    subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', src, '-af', af, '-ar', '44100', '-ac', '1',
-                    '-c:a', 'libmp3lame', '-b:a', '64k', tmp], check=True)
+    # в игру — моно 48 кбит/с, 32 кГц (runtime/README.md, «Озвучка»: речь 32–48 кбит/с): эпизод ≈ 35 минут ≈ 12,5 МБ
+    subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', src, '-af', af, '-ar', '32000', '-ac', '1',
+                    '-c:a', 'libmp3lame', '-b:a', '48k', tmp], check=True)
     os.replace(tmp, dst)
 
 

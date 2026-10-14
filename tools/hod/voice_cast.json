@@ -10,7 +10,7 @@
   },
   "roles": {
     "_narrator": {
-      "voice_id": "a2cWmGM4AUuNsHwInFjF",
+      "voice_id": "0dwsel39QMtMvcvFY2l4",
       "brief": "мужской 45–55, низкий ровный баритон документальной передачи, медленно, бесстрастно",
       "settings": {
         "stability": 0.7,
@@ -53,7 +53,7 @@
       }
     },
     "oper": {
-      "voice_id": "sRk0zCqhS2Cmv0bzx5wA",
+      "voice_id": "Gioo1E6icZwEwY1D96Kw",
       "brief": "мужской 32–38, хрипловатый тёплый «с улицы», быстро, с усмешкой, короткими фразами",
       "settings": {
         "stability": 0.4,
@@ -69,7 +69,7 @@
       }
     },
     "expert": {
-      "voice_id": "ELWVgJ5Mo9lF5Tha9ahW",
+      "voice_id": "8Gh18PeTnODoaVuw5rCd",
       "brief": "женский 42–50, низкий прокуренный альт, ровно, экономно, без эмоций",
       "settings": {
         "stability": 0.6,
@@ -119,7 +119,7 @@
       }
     },
     "notary": {
-      "voice_id": "6A9D8WSMm4rFsg2DWFeE",
+      "voice_id": "FWyYCNAu0V4GWrKTrLoJ",
       "brief": "мужской 52–60, высоковатый тенор с одышкой, быстро и сбивчиво, оправдываясь",
       "settings": {
         "stability": 0.35,
@@ -195,7 +195,7 @@
       }
     },
     "clerk": {
-      "voice_id": "mlxoKP6a3YjbuGwFAc2C",
+      "voice_id": "iRSTFaExRP2rd6ynK0AW",
       "brief": "женский 58–65, низкий прокуренный, неторопливо, насмешливо, по-хозяйски",
       "settings": {
         "stability": 0.55,
