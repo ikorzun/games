@@ -26,6 +26,12 @@ CROPS = {  # персонаж: (файл, центр x, центр y, сторо
     'passport_clerk': (H+'hod_zhek/zhek_ots_clerk.webp', 1133, 365, 330),
     'zoya': (H+'hod_recon/recon_ots_zoya.webp', 730, 292, 330),
     'murashov_sil': ('assets/ep01/faces/murashov.webp', 800, 520, 640),
+    # дни 3–5
+    'murashov': (H+'hod_agency/agency_ots_murashov.webp', 1345, 300, 380),
+    'accomplice': (H+'hod_op/op_metro.webp', 505, 550, 300),
+    'klava': (H+'hod_second/second_ots_klava.webp', 1065, 280, 360),
+    'landlady': (H+'hod_chertanovo/chertanovo_wide.webp', 1150, 292, 230),
+    'sledak_old': (H+'hod_2004/gromov_2004.webp', 760, 375, 400),
 }
 
 

@@ -62,7 +62,8 @@
    "name_key": "ep01.cast.sledak_old",
    "role": "investigator",
    "name_color": "#d8d2c4",
-   "title_key": "ep01.cast.sledak_old_title"
+   "title_key": "ep01.cast.sledak_old_title",
+   "portrait": "assets/ep01/portraits/sledak_old.webp"
   },
   {
    "id": "oper",
@@ -87,7 +88,8 @@
    "role": "criminal",
    "real_person": false,
    "name_color": "#b84a3a",
-   "title_key": "ep01.cast.murashov_title"
+   "title_key": "ep01.cast.murashov_title",
+   "portrait": "assets/ep01/portraits/murashov.webp"
   },
   {
    "id": "notary",
@@ -136,7 +138,8 @@
    "short_name_key": "ep01.cast.accomplice_short",
    "role": "criminal",
    "name_color": "#b84a3a",
-   "title_key": "ep01.cast.accomplice_title"
+   "title_key": "ep01.cast.accomplice_title",
+   "portrait": "assets/ep01/portraits/accomplice.webp"
   },
   {
    "id": "lapin_wife",
@@ -185,14 +188,16 @@
    "name_key": "ep01.cast.klava",
    "role": "witness",
    "name_color": "#b7b1a6",
-   "title_key": "ep01.cast.klava_title"
+   "title_key": "ep01.cast.klava_title",
+   "portrait": "assets/ep01/portraits/klava.webp"
   },
   {
    "id": "landlady",
    "name_key": "ep01.cast.landlady",
    "role": "extra",
    "name_color": "#b7b1a6",
-   "title_key": "ep01.cast.landlady_title"
+   "title_key": "ep01.cast.landlady_title",
+   "portrait": "assets/ep01/portraits/landlady.webp"
   }
  ],
  "variables": {
@@ -5669,10 +5674,15 @@
    "id": "d3_go_walk",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_t_street",
+    "bg": "bg_hod_walk",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
     {
      "do": "narrate",
      "style": "inner",
@@ -5883,6 +5893,7 @@
      "default": "g3_kovrigin"
     }
    ],
+   "coverage": "hod_walk",
    "ambient": "amb_street_day"
   },
   "d3_next": {
@@ -6196,10 +6207,15 @@
    "id": "d3_route_walk",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_t_street",
+    "bg": "bg_hod_walk",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
     {
      "do": "narrate",
      "style": "inner",
@@ -6441,6 +6457,7 @@
      "default": "g3_kovrigin"
     }
    ],
+   "coverage": "hod_walk",
    "ambient": "amb_street_day"
   },
   "g3_second": {
@@ -6498,10 +6515,15 @@
    "id": "g3w_second",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_t_street",
+    "bg": "bg_hod_walk",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
     {
      "do": "narrate",
      "style": "inner",
@@ -6512,6 +6534,7 @@
      "scene": "second"
     }
    ],
+   "coverage": "hod_walk",
    "ambient": "amb_street_day"
   },
   "g3_address": {
@@ -6569,10 +6592,15 @@
    "id": "g3w_address",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_t_street",
+    "bg": "bg_hod_walk",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
     {
      "do": "narrate",
      "style": "inner",
@@ -6583,6 +6611,7 @@
      "scene": "address"
     }
    ],
+   "coverage": "hod_walk",
    "ambient": "amb_street_day"
   },
   "g3_kovrigin": {
@@ -6640,10 +6669,15 @@
    "id": "g3w_kovrigin",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_t_street",
+    "bg": "bg_hod_walk",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
     {
      "do": "narrate",
      "style": "inner",
@@ -6654,16 +6688,27 @@
      "scene": "kovrigin"
     }
    ],
+   "coverage": "hod_walk",
    "ambient": "amb_street_day"
   },
   "second": {
    "id": "second",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_t_stairs",
+    "bg": "bg_hod_second",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "klava",
+     "position": "right"
+    },
     {
      "do": "set",
      "effects": [
@@ -6687,21 +6732,22 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.second.l02"
+     "key": "ep01.h.second.l02",
+     "when": "oper_with"
     },
     {
-     "do": "say",
-     "who": "klava",
+     "do": "narrate",
+     "style": "inner",
      "key": "ep01.h.second.l03"
     },
     {
      "do": "say",
-     "who": "sledak",
+     "who": "klava",
      "key": "ep01.h.second.l04"
     },
     {
      "do": "say",
-     "who": "klava",
+     "who": "sledak",
      "key": "ep01.h.second.l05"
     },
     {
@@ -6710,18 +6756,23 @@
      "key": "ep01.h.second.l06"
     },
     {
+     "do": "say",
+     "who": "klava",
+     "key": "ep01.h.second.l07"
+    },
+    {
      "do": "archive_unlock",
      "item": "n_pyotr"
     },
     {
      "do": "say",
      "who": "klava",
-     "key": "ep01.h.second.l07"
+     "key": "ep01.h.second.l08"
     },
     {
      "do": "say",
      "who": "klava",
-     "key": "ep01.h.second.l08"
+     "key": "ep01.h.second.l09"
     },
     {
      "do": "archive_unlock",
@@ -6761,16 +6812,27 @@
      ]
     }
    ],
+   "coverage": "hod_second",
    "ambient": "amb_stairwell"
   },
   "second_statement": {
    "id": "second_statement",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_t_stairs",
+    "bg": "bg_hod_second",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "klava",
+     "position": "right"
+    },
     {
      "do": "say",
      "who": "klava",
@@ -6809,16 +6871,27 @@
      "do": "jump",
      "scene": "d3_next"
     }
-   ]
+   ],
+   "coverage": "hod_second"
   },
   "second_talk": {
    "id": "second_talk",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_t_stairs",
+    "bg": "bg_hod_second",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "klava",
+     "position": "right"
+    },
     {
      "do": "say",
      "who": "klava",
@@ -6833,16 +6906,27 @@
      "do": "jump",
      "scene": "d3_next"
     }
-   ]
+   ],
+   "coverage": "hod_second"
   },
   "address": {
    "id": "address",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_t_stairs",
+    "bg": "bg_hod_chertanovo",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "landlady",
+     "position": "right"
+    },
     {
      "do": "set",
      "effects": [
@@ -6866,12 +6950,18 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.address.l02"
+     "key": "ep01.h.address.l02",
+     "when": "oper_with"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.address.l03"
     },
     {
      "do": "say",
      "who": "landlady",
-     "key": "ep01.h.address.l03"
+     "key": "ep01.h.address.l04"
     },
     {
      "do": "archive_unlock",
@@ -6890,12 +6980,12 @@
     {
      "do": "say",
      "who": "landlady",
-     "key": "ep01.h.address.l04"
+     "key": "ep01.h.address.l05"
     },
     {
      "do": "say",
      "who": "sledak",
-     "key": "ep01.h.address.l05"
+     "key": "ep01.h.address.l06"
     },
     {
      "do": "jump",
@@ -6903,16 +6993,22 @@
      "transition": "dissolve"
     }
    ],
+   "coverage": "hod_chertanovo",
    "ambient": "amb_stairwell"
   },
   "address_office": {
    "id": "address_office",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_t_street",
+    "bg": "bg_hod_agency_street",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
     {
      "do": "caption",
      "style": "location",
@@ -6961,16 +7057,27 @@
      ]
     }
    ],
+   "coverage": "hod_agency_street",
    "ambient": "amb_street_day"
   },
   "address_buyer": {
    "id": "address_buyer",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_t_street",
+    "bg": "bg_hod_agency",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "murashov",
+     "position": "right"
+    },
     {
      "do": "narrate",
      "style": "inner",
@@ -7025,16 +7132,27 @@
      "scene": "d3_next"
     }
    ],
+   "coverage": "hod_agency",
    "ambient": "amb_street_day"
   },
   "address_watch": {
    "id": "address_watch",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_t_street",
+    "bg": "bg_hod_watch",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "right"
+    },
     {
      "do": "narrate",
      "style": "inner",
@@ -7079,16 +7197,22 @@
      "scene": "d3_next"
     }
    ],
+   "coverage": "hod_watch",
    "ambient": "amb_street_day"
   },
   "address_leave": {
    "id": "address_leave",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_t_street",
+    "bg": "bg_hod_agency_street",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
     {
      "do": "narrate",
      "style": "inner",
@@ -7104,6 +7228,7 @@
      "scene": "d3_next"
     }
    ],
+   "coverage": "hod_agency_street",
    "ambient": "amb_street_day"
   },
   "kovrigin": {
@@ -8222,10 +8347,15 @@
    "id": "d4_op",
    "block": "b7_op",
    "stage": {
-    "bg": "bg_hod_t_street",
+    "bg": "bg_hod_op",
     "time_of_day": "night"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
     {
      "do": "caption",
      "style": "date_stamp",
@@ -8240,12 +8370,14 @@
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d4_op.l03",
-     "when": "galina_trust && !identified"
+     "when": "galina_trust && !identified",
+     "shot": "sh_op_wide"
     },
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d4_op.l04"
+     "key": "ep01.h.d4_op.l04",
+     "shot": "sh_op_wide"
     },
     {
      "do": "branch",
@@ -8258,6 +8390,7 @@
      "default": "d4_op_now"
     }
    ],
+   "coverage": "hod_op",
    "music": "m_tension",
    "ambient": "amb_street_night"
   },
@@ -8265,19 +8398,26 @@
    "id": "d4_op_choice",
    "block": "b7_op",
    "stage": {
-    "bg": "bg_hod_t_street",
+    "bg": "bg_hod_op",
     "time_of_day": "night"
    },
    "steps": [
     {
-     "do": "say",
-     "who": "oper",
-     "key": "ep01.h.d4_op_choice.l01"
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
     },
     {
      "do": "say",
      "who": "oper",
-     "key": "ep01.h.d4_op_choice.l02"
+     "key": "ep01.h.d4_op_choice.l01",
+     "shot": "sh_op_wide"
+    },
+    {
+     "do": "say",
+     "who": "oper",
+     "key": "ep01.h.d4_op_choice.l02",
+     "shot": "sh_op_wide"
     },
     {
      "do": "choice",
@@ -8299,38 +8439,54 @@
      "timer_ms": 12000,
      "default_option": "wait"
     }
-   ]
+   ],
+   "coverage": "hod_op"
   },
   "d4_op_now": {
    "id": "d4_op_now",
    "block": "b7_op",
    "stage": {
-    "bg": "bg_hod_t_street",
+    "bg": "bg_hod_op",
     "time_of_day": "night"
    },
    "steps": [
     {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "left",
+     "when": "oper_with"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d4_op_now.l01",
-     "when": "murashov_spooked"
+     "when": "murashov_spooked",
+     "shot": "sh_op_wide"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d4_op_now.l02",
-     "when": "!oper_with"
+     "when": "!oper_with",
+     "shot": "sh_op_wide"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d4_op_now.l03",
-     "when": "oper_with && !office_watched && !murashov_spooked"
+     "when": "oper_with && !office_watched && !murashov_spooked",
+     "shot": "sh_op_wide"
     },
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d4_op_now.l04"
+     "key": "ep01.h.d4_op_now.l04",
+     "shot": "sh_op_wide"
     },
     {
      "do": "sfx",
@@ -8344,13 +8500,15 @@
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d4_op_now.l05",
-     "when": "oper_with"
+     "when": "oper_with",
+     "shot": "sh_op_wounded"
     },
     {
      "do": "say",
      "who": "oper",
      "key": "ep01.h.d4_op_now.l06",
-     "when": "oper_with"
+     "when": "oper_with",
+     "shot": "sh_op_wounded"
     },
     {
      "do": "set",
@@ -8372,7 +8530,8 @@
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d4_op_now.l07",
-     "when": "!oper_with"
+     "when": "!oper_with",
+     "shot": "sh_op_wide"
     },
     {
      "do": "set",
@@ -8386,25 +8545,47 @@
      "when": "!oper_with"
     },
     {
+     "do": "show",
+     "who": "murashov",
+     "position": "right"
+    },
+    {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d4_op_now.l08"
+     "key": "ep01.h.d4_op_now.l08",
+     "shot": "sh_op_stairs"
     },
     {
      "do": "jump",
      "scene": "d4_search",
      "transition": "fade"
     }
-   ]
+   ],
+   "coverage": "hod_op"
   },
   "d4_op_wait": {
    "id": "d4_op_wait",
    "block": "b7_op",
    "stage": {
-    "bg": "bg_hod_t_street",
+    "bg": "bg_hod_op",
     "time_of_day": "night"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "accomplice",
+     "position": "right"
+    },
     {
      "do": "set",
      "effects": [
@@ -8418,27 +8599,32 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d4_op_wait.l01"
+     "key": "ep01.h.d4_op_wait.l01",
+     "shot": "sh_op_wide"
     },
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d4_op_wait.l02"
+     "key": "ep01.h.d4_op_wait.l02",
+     "shot": "sh_op_metro"
     },
     {
      "do": "say",
      "who": "accomplice",
-     "key": "ep01.h.d4_op_wait.l03"
+     "key": "ep01.h.d4_op_wait.l03",
+     "shot": "sh_op_metro"
     },
     {
      "do": "say",
      "who": "accomplice",
-     "key": "ep01.h.d4_op_wait.l04"
+     "key": "ep01.h.d4_op_wait.l04",
+     "shot": "sh_op_metro"
     },
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d4_op_wait.l05"
+     "key": "ep01.h.d4_op_wait.l05",
+     "shot": "sh_op_metro"
     },
     {
      "do": "set",
@@ -8455,45 +8641,52 @@
      "item": "n_shmel_talks"
     },
     {
-     "do": "narrate",
-     "style": "inner",
-     "key": "ep01.h.d4_op_wait.l06"
-    },
-    {
      "do": "jump",
      "scene": "d4_search",
      "transition": "fade"
     }
-   ]
+   ],
+   "coverage": "hod_op"
   },
   "d4_search": {
    "id": "d4_search",
    "block": "b7_op",
    "stage": {
-    "bg": "bg_hod_t_search",
+    "bg": "bg_hod_search",
     "time_of_day": "night"
    },
    "steps": [
     {
-     "do": "caption",
-     "style": "location",
-     "key": "ep01.h.d4_search.cap01"
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
     },
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d4_search.l02"
+     "key": "ep01.h.d4_search.l01",
+     "when": "op_waited"
+    },
+    {
+     "do": "caption",
+     "style": "location",
+     "key": "ep01.h.d4_search.cap02"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.d4_search.l03"
     },
     {
      "do": "say",
      "who": "oper",
-     "key": "ep01.h.d4_search.l03",
+     "key": "ep01.h.d4_search.l04",
      "when": "oper_with && !oper_wounded"
     },
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d4_search.l04",
+     "key": "ep01.h.d4_search.l05",
      "when": "!oper_with || oper_wounded"
     },
     {
@@ -8514,20 +8707,27 @@
       }
      ]
     }
-   ]
+   ],
+   "coverage": "hod_search"
   },
   "d4_search_papers": {
    "id": "d4_search_papers",
    "block": "b7_op",
    "stage": {
-    "bg": "bg_hod_t_search",
+    "bg": "bg_hod_search",
     "time_of_day": "night"
    },
    "steps": [
     {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d4_search_papers.l01"
+     "key": "ep01.h.d4_search_papers.l01",
+     "shot": "sh_search_papers"
     },
     {
      "do": "narrate",
@@ -8571,37 +8771,47 @@
      "scene": "d5_morning",
      "transition": "fade"
     }
-   ]
+   ],
+   "coverage": "hod_search"
   },
   "d4_search_keys": {
    "id": "d4_search_keys",
    "block": "b7_op",
    "stage": {
-    "bg": "bg_hod_t_search",
+    "bg": "bg_hod_search",
     "time_of_day": "night"
    },
    "steps": [
     {
-     "do": "narrate",
-     "style": "inner",
-     "key": "ep01.h.d4_search_keys.l01"
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
     },
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d4_search_keys.l02"
+     "key": "ep01.h.d4_search_keys.l01",
+     "shot": "sh_search_keys"
+    },
+    {
+     "do": "narrate",
+     "style": "inner",
+     "key": "ep01.h.d4_search_keys.l02",
+     "shot": "sh_search_keys"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d4_search_keys.l03",
-     "when": "galina_open"
+     "when": "galina_open",
+     "shot": "sh_search_keys"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d4_search_keys.l04",
-     "when": "!galina_open"
+     "when": "!galina_open",
+     "shot": "sh_search_keys"
     },
     {
      "do": "set",
@@ -8622,7 +8832,8 @@
      "scene": "d5_morning",
      "transition": "fade"
     }
-   ]
+   ],
+   "coverage": "hod_search"
   },
   "d5_morning": {
    "id": "d5_morning",
@@ -8663,10 +8874,26 @@
    "id": "d5_field",
    "block": "b8_friday",
    "stage": {
-    "bg": "bg_hod_t_street",
+    "bg": "bg_hod_field",
     "time_of_day": "dawn"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "right"
+    },
+    {
+     "do": "show",
+     "who": "expert",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "oper",
+     "position": "center",
+     "when": "!oper_wounded"
+    },
     {
      "do": "caption",
      "style": "location",
@@ -8675,7 +8902,8 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d5_field.l02"
+     "key": "ep01.h.d5_field.l02",
+     "shot": "sh_field_wide"
     },
     {
      "do": "archive_unlock",
@@ -8684,36 +8912,42 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d5_field.l03"
+     "key": "ep01.h.d5_field.l03",
+     "shot": "sh_field_wide"
     },
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d5_field.l04"
+     "key": "ep01.h.d5_field.l04",
+     "shot": "sh_field_wide"
     },
     {
      "do": "say",
      "who": "expert",
      "key": "ep01.h.d5_field.l05",
-     "when": "bti_six"
+     "when": "bti_six",
+     "shot": "sh_field_ots_expert"
     },
     {
      "do": "say",
      "who": "expert",
      "key": "ep01.h.d5_field.l06",
-     "when": "!bti_six"
+     "when": "!bti_six",
+     "shot": "sh_field_ots_expert"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d5_field.l07",
-     "when": "oper_wounded"
+     "when": "oper_wounded",
+     "shot": "sh_field_wide"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d5_field.l08",
-     "when": "!oper_wounded"
+     "when": "!oper_wounded",
+     "shot": "sh_field_oper"
     },
     {
      "do": "set",
@@ -8734,16 +8968,27 @@
      "scene": "d5_interrog",
      "transition": "fade"
     }
-   ]
+   ],
+   "coverage": "hod_field"
   },
   "d5_interrog": {
    "id": "d5_interrog",
    "block": "b8_friday",
    "stage": {
-    "bg": "bg_hod_t_interrog",
+    "bg": "bg_hod_interrog",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "murashov",
+     "position": "right"
+    },
     {
      "do": "caption",
      "style": "location",
@@ -8769,16 +9014,27 @@
      "minigame": "mg_interrogation_hod"
     }
    ],
+   "coverage": "hod_interrog",
    "music": "m_tension"
   },
   "d5_after": {
    "id": "d5_after",
    "block": "b8_friday",
    "stage": {
-    "bg": "bg_hod_t_interrog",
+    "bg": "bg_hod_interrog",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "murashov",
+     "position": "right"
+    },
     {
      "do": "say",
      "who": "murashov",
@@ -8819,16 +9075,32 @@
      ],
      "default": "d5_boss"
     }
-   ]
+   ],
+   "coverage": "hod_interrog"
   },
   "d5_confront": {
    "id": "d5_confront",
    "block": "b8_friday",
    "stage": {
-    "bg": "bg_hod_t_interrog",
+    "bg": "bg_hod_interrog",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "murashov",
+     "position": "right"
+    },
     {
      "do": "narrate",
      "style": "inner",
@@ -8857,16 +9129,32 @@
       }
      ]
     }
-   ]
+   ],
+   "coverage": "hod_interrog"
   },
   "d5_confront_press": {
    "id": "d5_confront_press",
    "block": "b8_friday",
    "stage": {
-    "bg": "bg_hod_t_interrog",
+    "bg": "bg_hod_interrog",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "murashov",
+     "position": "right"
+    },
     {
      "do": "say",
      "who": "notary",
@@ -8897,16 +9185,32 @@
      "scene": "d5_boss",
      "transition": "fade"
     }
-   ]
+   ],
+   "coverage": "hod_interrog"
   },
   "d5_confront_calm": {
    "id": "d5_confront_calm",
    "block": "b8_friday",
    "stage": {
-    "bg": "bg_hod_t_interrog",
+    "bg": "bg_hod_interrog",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "notary",
+     "position": "left"
+    },
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
+    {
+     "do": "show",
+     "who": "murashov",
+     "position": "right"
+    },
     {
      "do": "say",
      "who": "notary",
@@ -8932,7 +9236,8 @@
      "scene": "d5_boss",
      "transition": "fade"
     }
-   ]
+   ],
+   "coverage": "hod_interrog"
   },
   "d5_boss": {
    "id": "d5_boss",
@@ -9115,10 +9420,15 @@
    "id": "d5_gone",
    "block": "b8_friday",
    "stage": {
-    "bg": "bg_hod_t_street",
+    "bg": "bg_hod_agency_closed",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak",
+     "position": "center"
+    },
     {
      "do": "caption",
      "style": "date_stamp",
@@ -9167,41 +9477,47 @@
      "transition": "slow_fade"
     }
    ],
+   "coverage": "hod_agency_closed",
    "ambient": "amb_street_day"
   },
   "fin_zoya": {
    "id": "fin_zoya",
    "block": "b9_end",
    "stage": {
-    "bg": "bg_hod_flat_photo",
+    "bg": "bg_hod_bio",
     "time_of_day": "day"
    },
    "steps": [
     {
      "do": "narrate",
      "style": "voiceover",
-     "key": "ep01.h.fin_zoya.l01"
+     "key": "ep01.h.fin_zoya.l01",
+     "shot": "sh_bio_zoya"
     },
     {
      "do": "narrate",
      "style": "voiceover",
-     "key": "ep01.h.fin_zoya.l02"
+     "key": "ep01.h.fin_zoya.l02",
+     "shot": "sh_bio_zoya"
     },
     {
      "do": "narrate",
      "style": "voiceover",
-     "key": "ep01.h.fin_zoya.l03"
+     "key": "ep01.h.fin_zoya.l03",
+     "shot": "sh_bio_zoya"
     },
     {
      "do": "narrate",
      "style": "voiceover",
-     "key": "ep01.h.fin_zoya.l04"
+     "key": "ep01.h.fin_zoya.l04",
+     "shot": "sh_bio_zoya"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_zoya.l05",
-     "when": "second_victim"
+     "when": "second_victim",
+     "shot": "sh_bio_pyotr"
     },
     {
      "do": "jump",
@@ -9209,17 +9525,22 @@
      "transition": "slow_fade"
     }
    ],
-   "coverage": "hod_flat_photo",
+   "coverage": "hod_bio",
    "music": "m_epilogue"
   },
   "fin_court": {
    "id": "fin_court",
    "block": "b9_end",
    "stage": {
-    "bg": "bg_hod_t_court",
+    "bg": "bg_hod_court",
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "murashov",
+     "position": "left"
+    },
     {
      "do": "caption",
      "style": "date_stamp",
@@ -9281,7 +9602,8 @@
      "scene": "fin_epilogue",
      "transition": "slow_fade"
     }
-   ]
+   ],
+   "coverage": "hod_court"
   },
   "fin_epilogue": {
    "id": "fin_epilogue",
@@ -9504,11 +9826,16 @@
    "id": "fin_2004",
    "block": "b9_end",
    "stage": {
-    "bg": "bg_hod_t_2004",
+    "bg": "bg_hod_2004",
     "time_of_day": "day",
     "filter": "vhs"
    },
    "steps": [
+    {
+     "do": "show",
+     "who": "sledak_old",
+     "position": "center"
+    },
     {
      "do": "caption",
      "style": "lower_third",
@@ -9533,7 +9860,8 @@
      "do": "end",
      "ending": "e_canon"
     }
-   ]
+   ],
+   "coverage": "hod_2004"
   }
  },
  "minigames": {
@@ -10647,46 +10975,100 @@
     "notes": "черновой общий план notary_alone_wide (лето 1993-го)"
    },
    {
-    "id": "bg_hod_t_stairs",
-    "path": "assets/ep01/bg/stairwell.webp",
+    "id": "bg_hod_walk",
+    "path": "assets/ep01/hod/hod_walk/walk_wide.webp",
+    "season": "summer",
+    "notes": "черновой общий план walk_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_second",
+    "path": "assets/ep01/hod/hod_second/second_wide.webp",
     "season": "indoor",
-    "notes": "временно: подъезд прежнего эпизода (Хорошёвка, Чертаново)"
+    "notes": "черновой общий план second_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_chertanovo",
+    "path": "assets/ep01/hod/hod_chertanovo/chertanovo_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план chertanovo_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_agency_street",
+    "path": "assets/ep01/hod/hod_agency_street/agency_street_wide.webp",
+    "season": "summer",
+    "notes": "черновой общий план agency_street_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_agency",
+    "path": "assets/ep01/hod/hod_agency/agency_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план agency_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_watch",
+    "path": "assets/ep01/hod/hod_watch/watch_wide.webp",
+    "season": "summer",
+    "notes": "черновой общий план watch_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_op",
+    "path": "assets/ep01/hod/hod_op/op_wide.webp",
+    "season": "summer",
+    "notes": "черновой общий план op_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_search",
+    "path": "assets/ep01/hod/hod_search/search_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план search_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_field",
+    "path": "assets/ep01/hod/hod_field/field_wide.webp",
+    "season": "summer",
+    "notes": "черновой общий план field_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_interrog",
+    "path": "assets/ep01/hod/hod_interrog/interrog_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план interrog_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_court",
+    "path": "assets/ep01/hod/hod_court/court_wide.webp",
+    "season": "indoor",
+    "notes": "черновой общий план court_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_bio",
+    "path": "assets/ep01/hod/hod_bio/bio_zoya.webp",
+    "season": "indoor",
+    "notes": "черновой общий план bio_zoya (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_2004",
+    "path": "assets/ep01/hod/hod_2004/gromov_2004.webp",
+    "season": "indoor",
+    "notes": "черновой общий план gromov_2004 (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_agency_closed",
+    "path": "assets/ep01/hod/hod_agency_closed/agency_closed.webp",
+    "season": "summer",
+    "notes": "черновой общий план agency_closed (лето 1993-го)"
    },
    {
     "id": "bg_hod_t_street",
     "path": "assets/common/bg/black.png",
     "season": "any",
-    "notes": "заглушка: улица у агентства, дорога без Сайко, лесополоса"
-   },
-   {
-    "id": "bg_hod_t_search",
-    "path": "assets/ep01/bg/murashov_flat.webp",
-    "season": "indoor",
-    "notes": "временно: квартира Мурашова прежнего эпизода (обыск)"
-   },
-   {
-    "id": "bg_hod_t_interrog",
-    "path": "assets/common/bg/interrogation.webp",
-    "season": "indoor",
-    "notes": "временно: допросная, общая для сезона"
-   },
-   {
-    "id": "bg_hod_t_court",
-    "path": "assets/common/bg/courtroom.webp",
-    "season": "indoor",
-    "notes": "временно: зал суда, общий для сезона"
+    "notes": "чёрный: переходы-развилки и титр пятницы"
    },
    {
     "id": "bg_hod_t_moscow",
     "path": "assets/ep01/bg/moscow_1994.webp",
     "season": "winter",
     "notes": "временно: Москва зимой 1994-го (эпилог)"
-   },
-   {
-    "id": "bg_hod_t_2004",
-    "path": "assets/common/bg/office_now.webp",
-    "season": "indoor",
-    "notes": "временно: кабинет «спустя годы» (запись 2004 года)"
    }
   ],
   "sprites": [],
@@ -11660,6 +12042,377 @@
       "murashov_sil": "assets/ep01/hod_memory/hod_recon/recon_ots_zoya.square.murashov_sil.webp"
      }
     }
+   },
+   {
+    "id": "sh_walk_wide",
+    "set": "hod_walk",
+    "bg": "bg_hod_walk",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_walk/walk_wide.webp"
+   },
+   {
+    "id": "sh_second_wide",
+    "set": "hod_second",
+    "bg": "bg_hod_second",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "klava"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_second/second_wide.webp"
+   },
+   {
+    "id": "sh_second_ots_klava",
+    "set": "hod_second",
+    "bg": "bg_hod_second",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "klava"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_second/second_ots_klava.webp",
+    "from": "sledak",
+    "focus": "klava"
+   },
+   {
+    "id": "sh_chertanovo_wide",
+    "set": "hod_chertanovo",
+    "bg": "bg_hod_chertanovo",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "landlady"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_chertanovo/chertanovo_wide.webp"
+   },
+   {
+    "id": "sh_agency_street_wide",
+    "set": "hod_agency_street",
+    "bg": "bg_hod_agency_street",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_agency_street/agency_street_wide.webp"
+   },
+   {
+    "id": "sh_agency_wide",
+    "set": "hod_agency",
+    "bg": "bg_hod_agency",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "murashov"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_agency/agency_wide.webp"
+   },
+   {
+    "id": "sh_agency_ots_murashov",
+    "set": "hod_agency",
+    "bg": "bg_hod_agency",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "murashov"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_agency/agency_ots_murashov.webp",
+    "from": "sledak",
+    "focus": "murashov"
+   },
+   {
+    "id": "sh_watch_wide",
+    "set": "hod_watch",
+    "bg": "bg_hod_watch",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "oper"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_watch/watch_wide.webp"
+   },
+   {
+    "id": "sh_op_wide",
+    "set": "hod_op",
+    "bg": "bg_hod_op",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_op/op_wide.webp"
+   },
+   {
+    "id": "sh_op_wounded",
+    "set": "hod_op",
+    "bg": "bg_hod_op",
+    "kind": "medium",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "oper"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_op/op_wounded.webp"
+   },
+   {
+    "id": "sh_op_stairs",
+    "set": "hod_op",
+    "bg": "bg_hod_op",
+    "kind": "medium",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "murashov"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_op/op_stairs.webp"
+   },
+   {
+    "id": "sh_op_metro",
+    "set": "hod_op",
+    "bg": "bg_hod_op",
+    "kind": "medium",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "accomplice"
+     },
+     {
+      "who": "oper"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_op/op_metro.webp"
+   },
+   {
+    "id": "sh_search_wide",
+    "set": "hod_search",
+    "bg": "bg_hod_search",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_search/search_wide.webp"
+   },
+   {
+    "id": "sh_search_keys",
+    "set": "hod_search",
+    "bg": "bg_hod_search",
+    "kind": "insert",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_search/search_keys.webp"
+   },
+   {
+    "id": "sh_search_papers",
+    "set": "hod_search",
+    "bg": "bg_hod_search",
+    "kind": "insert",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_search/search_papers.webp"
+   },
+   {
+    "id": "sh_field_wide",
+    "set": "hod_field",
+    "bg": "bg_hod_field",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "expert"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_field/field_wide.webp"
+   },
+   {
+    "id": "sh_field_ots_expert",
+    "set": "hod_field",
+    "bg": "bg_hod_field",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "expert"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_field/field_ots_expert.webp",
+    "from": "sledak",
+    "focus": "expert"
+   },
+   {
+    "id": "sh_field_oper",
+    "set": "hod_field",
+    "bg": "bg_hod_field",
+    "kind": "medium",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "oper"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_field/field_oper.webp"
+   },
+   {
+    "id": "sh_interrog_wide",
+    "set": "hod_interrog",
+    "bg": "bg_hod_interrog",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "murashov"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_interrog/interrog_wide.webp"
+   },
+   {
+    "id": "sh_interrog_ots_murashov",
+    "set": "hod_interrog",
+    "bg": "bg_hod_interrog",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "murashov"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_interrog/interrog_ots_murashov.webp",
+    "from": "sledak",
+    "focus": "murashov"
+   },
+   {
+    "id": "sh_confront_wide",
+    "set": "hod_interrog",
+    "bg": "bg_hod_interrog",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "murashov"
+     },
+     {
+      "who": "notary"
+     },
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_interrog/confront_wide.webp"
+   },
+   {
+    "id": "sh_court_wide",
+    "set": "hod_court",
+    "bg": "bg_hod_court",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "murashov"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_court/court_wide.webp"
+   },
+   {
+    "id": "sh_bio_zoya",
+    "set": "hod_bio",
+    "bg": "bg_hod_bio",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_bio/bio_zoya.webp"
+   },
+   {
+    "id": "sh_bio_pyotr",
+    "set": "hod_bio",
+    "bg": "bg_hod_bio",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_bio/bio_pyotr.webp"
+   },
+   {
+    "id": "sh_gromov_2004",
+    "set": "hod_2004",
+    "bg": "bg_hod_2004",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "sledak_old"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_2004/gromov_2004.webp"
+   },
+   {
+    "id": "sh_agency_closed",
+    "set": "hod_agency_closed",
+    "bg": "bg_hod_agency_closed",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "sledak"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_agency_closed/agency_closed.webp"
    },
    {
     "id": "sh_notary_alone_ots",

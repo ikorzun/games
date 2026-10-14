@@ -1,4 +1,4 @@
-"""shots.py: листы мизансцен «Хода следствия» (дни 1–2) → план генерации и лист для проверки.
+"""shots.py: листы мизансцен «Хода следствия» (дни 1–5) → план генерации и лист для проверки.
 
 Черновые кадры под сцены docs/season1/ep01-hod.md. Каждый кадр описан тем, что проверяет владелец: кто где стоит,
 куда смотрит, что держит, во что одет (лето 1993-го, не пальто со старых портретов), откуда свет и какое время суток.
@@ -35,11 +35,20 @@ NAMES = {
     'buyer': 'Lapin, the new owner of the flat', 'lapin_wife': 'Irina Lapina, his wife', 'notary': 'notary Kovrigin',
     'assistant': "Lyuda, the notary's assistant", 'passport_clerk': 'the passport clerk of the housing office',
     'clerk': 'Raisa Lvovna, the archivist', 'zoya': 'Zoya Pavlovna', 'murashov_sil': 'the polite man',
+    # дни 3–5 и развязка
+    'murashov': 'Sergei Murashov, the apartment dealer', 'accomplice': 'Dmitry Shmelyov (Shmel), his driver',
+    'klava': 'Klavdia Semyonovna, the neighbour of the missing old man', 'landlady': 'the landlady',
+    'sledak_old': 'Andrei Gromov in 2004, eleven years later', 'pyotr': 'Pyotr Ilyich, a lathe operator',
+    'grandson': "Zoya Pavlovna's grandson",
 }
 NEW_LOOKS = {  # новые лица без портрета: описание достаточно точное, дальше лицо держит принятый общий план
     'assistant': 'woman, 23, slim, a pale oval face with light freckles, light-brown hair in a low ponytail, thin plucked eyebrows, nervous grey eyes',
     'passport_clerk': 'woman, 52, plump, a round face, a tight perm of reddish-dyed hair, coral lipstick, heavy reading glasses on a cord',
     'murashov_sil': 'a neat man of about 38 seen only from behind: medium height, narrow shoulders, short tidy dark hair with a straight parting',
+    'klava': 'woman, 74, small and lean, a sharp wrinkled face, bright watchful dark eyes behind big old-fashioned glasses with thick lenses, thin grey hair pinned in a bun, a mole on her left cheek',
+    'landlady': 'woman, 58, stout, a broad tired face with plump cheeks, short dyed chestnut hair with grey roots, small gold earrings',
+    'pyotr': 'man, about 60, a lean strong face with deep lines, a short grey crew cut, big work-worn hands, a calm concentrated look',
+    'grandson': 'a boy of about 13, thin, a short fringe of light-brown hair, a wide grin',
 }
 COSTUME = {
     'sledak': 'a pale-blue short-sleeved cotton shirt, a narrow dark-navy tie loosened at the collar, grey suit trousers, a cheap wristwatch on a cracked strap; no jacket, no coat, no sweater',
@@ -55,6 +64,14 @@ COSTUME = {
     'clerk': 'a light short-sleeved blouse with a brooch, a thin grey knitted cardigan over her shoulders, glasses',
     'zoya': 'a light floral summer dress with a beige knitted cardigan, a cotton kerchief, a cloth handbag on her arm',
     'murashov_sil': 'a light beige summer jacket, light trousers, a brown leather briefcase in his hand',
+    # дни 3–5: Мурашов в том же летнем, что и в реконструкции; Шмелёв — без зимней куртки с портрета
+    'murashov': 'a light beige summer jacket over a pale-blue shirt, a narrow patterned tie with a tie pin, light trousers, polished brown shoes',
+    'accomplice': 'a navy tracksuit top with three white stripes, unzipped over a white T-shirt, a thin gold chain, dark trousers, worn white trainers; no padded jacket',
+    'klava': 'a brown short-sleeved house dress with a small white check and a white collar, felt slippers',
+    'landlady': 'a sleeveless floral summer house dress, a kitchen towel over her shoulder, rubber slippers',
+    'sledak_old': 'a charcoal blazer over a black open-collar shirt, no tie, a wedding ring',
+    'pyotr': 'a dark work smock over a checked shirt, a flat cap pushed back on his head',
+    'grandson': 'a white short-sleeved shirt and dark shorts',
 }
 
 SUMMER = ('It is summer, August 1993: warm weather, green leafy trees outside, everyone in light summer clothes; '
@@ -108,9 +125,9 @@ LOC = {
 S = []
 
 
-def shot(id, set, kind, loc, time, season, people, camera, light, objects, refs, size='1536x864', note=''):
+def shot(id, set, kind, loc, time, season, people, camera, light, objects, refs, size='1536x864', note='', costume=None):
     S.append(dict(id=id, set=set, kind=kind, loc=loc, time=time, season=season, people=people, camera=camera,
-                  light=light, objects=objects, refs=refs, size=size, note=note))
+                  light=light, objects=objects, refs=refs, size=size, note=note, costume=costume or {}))
 
 
 MORNING = 'a sunny Monday morning, 9 August 1993, about 9 a.m.'
@@ -406,6 +423,244 @@ shot('recon_ots_zoya', 'hod_recon', 'ots', 'zhek', 'a sunny June day, 1993, morn
      'June daylight', 'the cardboard folder, her cloth handbag',
      ['shot:recon_wide', 'face:zoya'])
 
+
+# ───────────────────────────── дни 3–5 и развязка (docs/season1/ep01-hod-finale.md) ─────────────────────────────
+# Сайко в эпизоде может не быть (не пробил «Волгу») или он ранен: в новых местах его нет на общих планах, а где он
+# говорит — у него свой кадр. Людей, которых по тексту сцены нет, в кадре нет.
+
+LOC.update({
+    'street_walk': ("A sunny street of panel apartment blocks in western Moscow: a trolleybus stop in the shade of a big lime "
+                    "tree, a round blue sign on a pole, a bench, an old ZiU trolleybus approaching along the wires, a kvass "
+                    "barrel-cart on the far pavement, people in light summer clothes at a distance."),
+    'khoroshevka': ("The third-floor landing of a five-storey brick block of flats on Khoroshevskoye Shosse, Moscow: walls painted "
+                    "light blue to shoulder height and whitewashed above, a worn tiled floor; in the back wall, LEFT, the door of "
+                    "the missing old man's flat — new, faced with brown-painted steel sheet with a shiny new lock, exactly like "
+                    "the one in the first case; RIGHT, the neighbour's old wooden door painted brown, with a peephole; a window "
+                    "on the half-landing with an aloe in a pot on the sill; the stair railing on the RIGHT edge."),
+    'chertanovo': ("The landing of a sixteen-storey 1980s tower block in Chertanovo, Moscow: beige-painted walls, brown floor "
+                   "tiles, the closed doors of a lift in the back wall, two flat doors with padded leatherette and numbers, a "
+                   "rubbish chute hatch, a window at the end of the landing with daylight and green trees far below."),
+    'presnya_street': ("A quiet street on Presnya, Moscow: across the road a three-storey pre-revolutionary building with tall "
+                       "windows and peeling ochre plaster; by its entrance a fresh signboard of a real-estate agency, and old "
+                       "letters still visible on the glass of the door (all writing too small and soft to read); old lime trees "
+                       "along the pavement."),
+    'agency': ("A room in the former newspaper office on Presnya, now a small real-estate agency: a high ceiling with old plaster "
+               "moulding, two tall windows with half-open venetian blinds, old wooden shelves with neat rows of ring binders and "
+               "cardboard folders, a big desk with three telephones (two grey, one red), a glass water decanter with a glass, "
+               "a desk fan, a framed yellowed newspaper front page on the wall (unreadable), a visitor's chair facing the desk."),
+    'presnya_night': ("The same quiet street on Presnya at night: across the road the three-storey pre-revolutionary building, all "
+                      "windows dark except ONE lit window on the second floor; a single street lamp; old lime trees."),
+    'stairwell_old': ("The staircase of the same old building on Presnya at night: worn stone steps, a cast-iron railing with a "
+                      "wooden handrail, a dim bare bulb on the landing, peeling ochre walls, the half-open street door below."),
+    'metro': ("The forecourt of the 'Ulitsa 1905 Goda' metro station, Moscow, at night: the lit red letter M on a pole, the "
+              "station's glass doors glowing, a kiosk with its shutter down, wet asphalt after a short summer rain."),
+    'dacha': ("A room in a tidy two-storey country house near Moscow: a desk under the window with three telephones (two grey, one "
+              "red), shelves of ring binders and folders labelled by year (unreadable), a ficus in a pot on the windowsill, a "
+              "wardrobe with a mirror, a rug on a painted wooden floor, a door to the hall on the RIGHT."),
+    'field': ("A strip of birch trees between a mown field and a dirt country road near Aprelevka, outside Moscow: red-and-white "
+              "striped tape stretched between the birch trunks; two spades leaning against a birch at the tape; beyond the tape "
+              "only tall grass, low mist and the backs of three militiamen in short-sleeved grey-blue uniform shirts; a blue-and-"
+              "white militia UAZ van parked on the road in the foreground. Nothing on the ground beyond the tape is visible."),
+    'interrog': ("An interrogation room of the district militia temporary detention unit, Moscow: walls painted grey-green to "
+                 "shoulder height, a barred window with frosted lower panes and summer daylight in the upper panes, a bare metal "
+                 "table bolted to the floor, three wooden chairs, a protocol form, a pen and a plain glass ashtray on the table, a "
+                 "steel door with a peephole on the RIGHT."),
+    'court': ("A hall of the Moscow City Court, 1994: tall windows with heavy curtains, wood-panelled walls, the judges' bench with "
+              "three high-backed chairs at the far end (out of focus), the metal defendants' cage on the LEFT, wooden benches for "
+              "the public with a few people seen from behind."),
+    'office2004': ("A small office in Moscow, 2004: vertical office blinds on the window behind with a grey city outside, a beige "
+                   "computer with a CRT monitor on the desk, a leather office chair, a bookcase with binders."),
+    'photo': 'An old photograph.',
+})
+
+WED = 'a sunny Wednesday, 11 August 1993'
+THU_NIGHT = 'a warm August night, Thursday 12 August 1993, about 11:40 p.m.'
+DAWN = 'the first light of a summer dawn, Friday 13 August 1993, about 5:30 a.m.'
+FIELD_AM = 'early morning, Friday 13 August 1993, about 7:20 a.m.: a low sun through the birches, mist over the field, dew'
+FRIDAY = 'a sunny Friday, 13 August 1993, late morning'
+
+# Среда, без Сайко: Громов один, на троллейбусе.
+shot('walk_wide', 'hod_walk', 'wide', 'street_walk', f'{WED}, late morning', SUMMER,
+     {'sledak': 'stands alone at the trolleybus stop LEFT of centre, his case folder under his arm, reading an address written on a slip of paper in his hand, not looking at the camera'},
+     'The camera stands on the other side of the pavement at the eye level of a standing person, a 35 mm-equivalent field of view: Gromov full-figure and small in the frame, the street and the approaching trolleybus behind him; the lower third of the frame is kept free of faces.',
+     'bright summer daylight, the stop in the patchy shade of the lime tree', 'the stop sign, the bench, the trolleybus, the lime tree, the slip of paper',
+     ['face:sledak'], note='Сайко нет: Громов в среду один (без доверия Сайко).')
+
+# А. Хорошёвка: соседка Петра Ильича. Сайко ждёт внизу в машине — на площадке двое.
+shot('second_wide', 'hod_second', 'wide', 'khoroshevka', f'{WED}, early afternoon', SUMMER,
+     {'klava': 'stands in her open doorway on the RIGHT, one hand on the door frame, the other pointing across at the steel door of the missing neighbour, her eyes on Gromov',
+      'sledak': 'stands on the landing LEFT of centre between the two doors, seen three-quarter from behind, turned toward the old woman, listening'},
+     'The camera stands on the top step of the stairs at the eye level of a standing person, a 32 mm-equivalent field of view: both doors in the back wall, the window of the half-landing out of frame behind the camera; the lower third of the frame is kept free of faces.',
+     'summer daylight from the stairwell window behind the camera', 'the brown steel door with the shiny lock on the LEFT, her old wooden door open on the RIGHT, the railing',
+     ['face:sledak'], note='Сайко остался в машине. Дверь Петра Ильича — железная, новая, как у Зои Павловны; у соседки старая деревянная.')
+shot('second_ots_klava', 'hod_second', 'ots', 'khoroshevka', f'{WED}, early afternoon', SUMMER,
+     {'klava': 'stands in her doorway facing the camera, speaking with bitter certainty, one hand lifted slightly as if showing a little wave of the hand, her eyes on Gromov',
+      'sledak': 'seen only from behind at the LEFT edge'},
+     ots('sledak', 'klava', 'LEFT', 'The dim hallway of her flat with a coat rack (summer things only) behind her.'),
+     'summer daylight from behind the camera', 'her open wooden door, the door frame',
+     ['shot:second_wide', 'face:sledak'])
+
+# Б. Чертаново: квартира по прописке сдана, хозяйка поднялась с нижнего этажа. Сайко внизу.
+shot('chertanovo_wide', 'hod_chertanovo', 'wide', 'chertanovo', f'{WED}, early afternoon', SUMMER,
+     {'landlady': 'stands by the closed lift doors RIGHT of centre, arms folded over her house dress, talking readily, her eyes on Gromov',
+      'sledak': 'stands LEFT of centre facing her, seen three-quarter from behind, his folder in his hand'},
+     'The camera stands at the end of the landing by the window at the eye level of a standing person, a 32 mm-equivalent field of view; the lower third of the frame is kept free of faces.',
+     'flat summer daylight from the window behind the camera and a fluorescent tube', 'the lift doors, the two padded flat doors, the rubbish chute hatch',
+     ['face:sledak'], note='Жильцы открыли и ушли в квартиру; на площадке только хозяйка и Громов.')
+
+# Б. Пресня: агентство в бывшей редакции. Водитель — спиной (лицо Громов видит позже).
+shot('agency_street_wide', 'hod_agency_street', 'wide', 'presnya_street', f'{WED}, afternoon', SUMMER,
+     {'sledak': 'stands on the near pavement in the LEFT foreground, seen from behind and slightly from the side, looking across the road at the agency entrance'},
+     'The camera stands behind Gromov on the near pavement at the eye level of a standing person, a 32 mm-equivalent field of view: across the road the building and its entrance; parked at the entrance a grey GAZ-24 Volga, and leaning on its wing a big crew-cut man in a navy tracksuit top, smoking, his back to the camera (an extra: his face is never visible).',
+     'bright afternoon sunlight, the building facade in sun, Gromov\'s side of the street in the shade of the lime trees',
+     'the grey Volga at the entrance, the signboard and the door glass with old letters (unreadable), the lime trees',
+     ['face:sledak'], note='Водитель только со спины; «Волга» серая ГАЗ-24 — та же во всех кадрах.')
+shot('agency_wide', 'hod_agency', 'wide', 'agency', f'{WED}, afternoon', SUMMER,
+     {'murashov': 'sits behind the big desk on the RIGHT, upright, hands folded on the desk, a polite attentive half-smile, his calm pale eyes on Gromov',
+      'sledak': 'sits on the visitor\'s chair facing the desk on the LEFT, seen three-quarter from behind, playing an ordinary buyer, his folder on his knees'},
+     'The camera stands by the door at the eye level of a standing person, a 32 mm-equivalent field of view: the room with its high ceiling, the windows behind the desk; the lower third of the frame is kept free of faces.',
+     'afternoon sunlight through the half-open blinds in warm stripes across the desk and the shelves',
+     'the three telephones, the glass decanter, the desk fan, the binders, the framed old newspaper page',
+     ['face:murashov', 'face:sledak'], note='Мурашов впервые в лицо: вежливый, бесцветный, без харизмы; смотрит на Громова, не в объектив.')
+shot('agency_ots_murashov', 'hod_agency', 'ots', 'agency', f'{WED}, afternoon', SUMMER,
+     {'murashov': 'sits behind the desk facing the camera, a pen held lightly in his fingers, smiling politely, his pale calm eyes resting on Gromov a moment too long',
+      'sledak': 'seen only from behind at the LEFT edge'},
+     ots('sledak', 'murashov', 'LEFT', 'The shelves of binders and the striped light of the blinds behind him.'),
+     'warm stripes of afternoon light from the blinds', 'the telephones, the decanter, the pen',
+     ['shot:agency_wide', 'face:murashov'])
+# Б, с Сайко: три часа в машине через дорогу.
+shot('watch_wide', 'hod_watch', 'wide', 'car', f'{WED}, about 5:50 p.m.', SUMMER,
+     {'oper': 'sits in the driver\'s seat on the LEFT, slumped back, one wrist on the top of the wheel, watching the agency entrance through the windscreen',
+      'sledak': 'sits in the passenger seat on the RIGHT, the folder closed on his knees, his eyes on the agency entrance across the road, not on the papers'},
+     'The camera is on the back seat between the front seats, at the eye level of a seated passenger, a 32 mm-equivalent field of view: both men from behind and slightly from the side; through the windscreen, across the road, exactly the building of Reference 2 — the same ochre facade, the same blue signboard over the same entrance with steps, the same grey GAZ-24 Volga parked to the right of the entrance — and a big crew-cut man in a navy tracksuit top leaning on the Volga, small in the distance.',
+     'low evening sun on the building across the road; the car interior in shade',
+     'the dashboard, the mirror with the paper icon and the pine air freshener, the windows rolled down, the Volga across the road',
+     ['place:car_wide', 'place:agency_street_wide', 'face:oper', 'face:sledak'],
+     note='Та же машина Сайко, что в днях 1–2; через дорогу — то же здание и та же «Волга», что на общем плане агентства.')
+
+# Четверг, ночь: операция. Общий план — из тёмной машины, людей в ней не видно (годится и с Сайко, и без него).
+shot('op_wide', 'hod_op', 'wide', 'presnya_night', THU_NIGHT, SUMMER,
+     {},
+     'The camera is inside a dark parked car across the road, low, over the dashboard: the dark windscreen frame and the silhouette of the dashboard in the foreground, nobody visible inside the car; across the road the building with the ONE lit window on the second floor, the grey GAZ-24 Volga at the entrance under the street lamp, and a big man leaning on it, a glowing cigarette, his face lost in shadow.',
+     'night: the street lamp, the one lit window, the glow of the cigarette; everything else dark blue', 'the lit window, the Volga, the street lamp, the dashboard silhouette',
+     ['place:agency_street_wide'], note='Людей в машине не видно: кадр общий для ветки с Сайко и без него.')
+shot('op_wounded', 'hod_op', 'medium', 'presnya_night', THU_NIGHT, SUMMER,
+     {'oper': 'sits on the asphalt facing the camera, leaning back against the rear wheel of the grey Volga; the wound is in his RIGHT shoulder, which is on the LEFT side of the frame: his left hand crosses his chest and presses that shoulder, a dark patch on the checked sleeve under his fingers; his other shoulder, on the RIGHT side of the frame, is unhurt; he grimaces into a crooked grin, looking up at Gromov',
+      'sledak': 'crouches beside him on the RIGHT of the frame, seen in profile, his hand resting on Sayko\'s unhurt shoulder on the RIGHT side of the frame (never on the wound), looking at the wound'},
+     'The camera is low at the level of a crouching person, a 40 mm-equivalent field of view; the two men fill the middle of the frame, their faces in the upper half.',
+     'night: the street lamp from above and the blue flashing light of a militia car falling across them', 'the Volga\'s rear wheel and door, the wet asphalt',
+     ['face:oper', 'face:sledak'], note='Ранение — последствием: рука на плече, тёмное пятно на рукаве; без крови крупно.')
+shot('op_stairs', 'hod_op', 'medium', 'stairwell_old', THU_NIGHT, SUMMER,
+     {'murashov': 'stands two steps above Gromov with both feet on the step, holding out both EMPTY hands toward him, wrists together, ready for the handcuffs — calm and tidy, the way one holds out a passport at a counter; nothing in his hands, no papers; his eyes on Gromov\'s hands',
+      'sledak': 'stands below on the LEFT, seen three-quarter from behind, handcuffs in his hand'},
+     'The camera stands on the stairs below Gromov at eye level, a 40 mm-equivalent field of view; Murashov\'s face in the upper half of the frame.',
+     'the dim bare bulb on the landing above, deep shadows', 'the handcuffs, the railing, the stone steps',
+     ['face:murashov', 'face:sledak'], note='Мурашов не бежит и не спрашивает: протягивает руки, «как в очереди за справкой».')
+shot('op_metro', 'hod_op', 'medium', 'metro', 'a warm August night, Friday 13 August 1993, about 1:30 a.m.', SUMMER,
+     {'accomplice': 'is bent over the bonnet of the grey Volga, his right hand still jammed in the pocket of his tracksuit top, his face turned sideways on the bonnet, scared and uncomprehending',
+      'oper': 'stands behind him on the RIGHT, twisting Shmel\'s left arm behind his back, his eyes on Shmel\'s pocket'},
+     'The camera stands at the kerb at eye level, a 40 mm-equivalent field of view; both men in the middle of the frame, the lit metro sign behind them out of focus.',
+     'night: the red glow of the metro letter and the glass doors, a street lamp, reflections on the wet asphalt', 'the grey Volga with its door open, the metro sign',
+     ['face:accomplice', 'face:oper'], note='Ветка «ждать»: Шмелёва берут у метро, руку из кармана он вынуть не успевает.')
+
+# Обыск в доме Мурашова за городом, рассвет. Сайко на общем плане нет (ранен или в машине).
+shot('search_wide', 'hod_search', 'wide', 'dacha', DAWN, SUMMER,
+     {'sledak': 'stands at the desk in the centre, pulling open a drawer, looking down into it'},
+     'The camera stands by the door at the eye level of a standing person, a 32 mm-equivalent field of view; in the doorway on the RIGHT edge two attesting witnesses — an elderly man and woman, neighbours in summer clothes — and a young militiaman in a short-sleeved uniform shirt, all looking at the desk; the lower third of the frame is kept free of faces.',
+     'the first grey-pink light of dawn through the window and a ceiling lamp on', 'the three telephones, the binders, the ficus, the wardrobe',
+     ['face:sledak'], note='Понятые и милиционер — массовка; Мурашова здесь нет (он в отделе).')
+shot('search_keys', 'hod_search', 'insert', 'dacha', DAWN, SUMMER,
+     {'sledak': 'only his hand and the short pale-blue sleeve: he lifts a bunch of keys out of the open drawer'},
+     'Close insert from above at standing eye level: the open desk drawer; a bunch of door keys, each with a small cardboard tag tied on with string (handwriting too small to read); beneath them several Soviet passports in dark red covers and a woman\'s worn cloth handbag.',
+     'dawn light and the ceiling lamp', 'the keys with tags, the passports, the cloth handbag; no readable writing',
+     ['shot:search_wide'])
+shot('search_papers', 'hod_search', 'insert', 'dacha', DAWN, SUMMER,
+     {'sledak': 'only his hands: he turns the pages of an open folder'},
+     'Close insert from above at standing eye level: cardboard folders with cloth ties open on the desk, typed powers of attorney with round violet notary stamps and signatures (all too small and soft to read).',
+     'dawn light and the ceiling lamp', 'the folders, the typed documents, the stamps; no readable writing',
+     ['shot:search_wide'])
+
+# Пятница, утро: лесополоса. Последствие, без тел (этика §4): лента, лопаты, милиция спиной, Левина в сапогах.
+shot('field_wide', 'hod_field', 'wide', 'field', FIELD_AM, SUMMER,
+     {'expert': 'walks slowly along the tape in the middle distance, LEFT of centre, in rubber boots and a light raincoat over her dress, looking down at the grass, a notebook in her hand',
+      'sledak': 'stands in the RIGHT foreground by the militia van, seen from the side, his hands in his pockets, looking toward the tape'},
+     'The camera stands on the dirt road at the eye level of a standing person, a 32 mm-equivalent field of view: the birches with the tape across the middle of the frame, the field and the mist beyond; the lower third of the frame is kept free of faces.',
+     'low morning sun through the birch trunks, long shadows, mist, dew', 'the tape between the birches, the two spades leaning on a birch, the militia van, three militiamen beyond the tape seen from behind',
+     ['face:expert', 'face:sledak'], costume={'expert': 'a light beige raincoat over her summer dress, black rubber boots, glasses on a chain'},
+     note='Никаких тел и ям: за лентой трава, туман и спины милиционеров.')
+shot('field_ots_expert', 'hod_field', 'ots', 'field', FIELD_AM, SUMMER,
+     {'expert': 'stands at the tape facing the camera, her notebook closed against her chest, speaking quietly and flatly, her eyes on Gromov',
+      'sledak': 'seen only from behind at the RIGHT edge'},
+     ots('sledak', 'expert', 'RIGHT', 'The birches with the tape and the mist behind her; nothing on the ground is visible.'),
+     'low morning sun from the side, mist', 'the tape, the birches',
+     ['shot:field_wide', 'face:expert'], costume={'expert': 'a light beige raincoat over her summer dress, black rubber boots, glasses on a chain'})
+shot('field_oper', 'hod_field', 'medium', 'field', FIELD_AM, SUMMER,
+     {'oper': 'leans on the bonnet of the militia van, smoking, looking away toward the birches, unsmiling, his shoulders hunched'},
+     'The camera stands on the road at eye level, a 40 mm-equivalent field of view: Sayko alone, the birches and the tape soft behind him.',
+     'low morning sun from the side, mist', 'the van bonnet, the cigarette',
+     ['shot:field_wide', 'face:oper'], note='Только если Сайко цел.')
+
+# Пятница: допрос и очная ставка.
+shot('interrog_wide', 'hod_interrog', 'wide', 'interrog', FRIDAY, SUMMER,
+     {'murashov': 'sits on the chair at the far side of the table facing Gromov, straight-backed, adjusting a shirt cuff, calm and polite, his eyes on Gromov\'s writing hand',
+      'sledak': 'sits at the near LEFT end of the table, seen three-quarter from behind, writing the protocol by hand'},
+     'The camera stands in the corner by the door at the eye level of a standing person, a 32 mm-equivalent field of view: the table across the middle of the frame, the barred window behind Murashov; the lower third of the frame is kept free of faces.',
+     'summer daylight through the upper panes of the barred window, a dim ceiling lamp', 'the metal table, the protocol, the pen, the ashtray, the steel door',
+     ['face:murashov', 'face:sledak'],
+     costume={'murashov': 'the same light beige summer jacket and pale-blue shirt, now without a tie and without a belt (taken at the detention), light trousers'},
+     note='После задержания: без галстука и ремня. Харизмы нет — протокольная вежливость.')
+shot('interrog_ots_murashov', 'hod_interrog', 'ots', 'interrog', FRIDAY, SUMMER,
+     {'murashov': 'faces the camera across the table, calm, a faint polite smile, his eyes lowered to the protocol under Gromov\'s hand, not to the lens',
+      'sledak': 'seen only from behind at the LEFT edge, writing'},
+     ots('sledak', 'murashov', 'LEFT', 'The barred window and the grey-green wall behind him.'),
+     'daylight from the barred window behind him, the dim ceiling lamp', 'the protocol, the pen, the ashtray',
+     ['shot:interrog_wide', 'face:murashov'],
+     costume={'murashov': 'the same light beige summer jacket and pale-blue shirt, now without a tie, light trousers'})
+shot('confront_wide', 'hod_interrog', 'wide', 'interrog', f'{FRIDAY}, about 1 p.m.', SUMMER,
+     {'murashov': 'sits on the RIGHT side of the table, turned toward Kovrigin, looking at him calmly and expectantly',
+      'notary': 'sits on the LEFT side of the table facing Murashov, but staring down at the table, sweating, a damp handkerchief in his fist',
+      'sledak': 'sits at the far end of the table between them, facing the camera, writing, glancing up at Kovrigin'},
+     'The camera stands by the door at the eye level of a standing person, a 32 mm-equivalent field of view: the table lengthwise into the frame, the barred window behind Gromov; the lower third of the frame is kept free of faces.',
+     'summer daylight through the barred window, the dim ceiling lamp', 'the metal table, the protocol, the ashtray, the steel door',
+     ['place:interrog_wide', 'face:murashov', 'face:notary', 'face:sledak'],
+     costume={'murashov': 'the same light beige summer jacket and pale-blue shirt, now without a tie, light trousers'},
+     note='Очная ставка: Ковригин смотрит в стол, Мурашов — на Ковригина.')
+
+# Развязка.
+shot('court_wide', 'hod_court', 'wide', 'court', 'Moscow, 1994, a grey daytime', 'Indoors; the season is not visible: the tall windows show only a pale grey sky.',
+     {'murashov': 'stands inside the metal defendants\' cage on the LEFT, hands folded in front of him, neat and expressionless, looking toward the judges\' bench, not at the camera'},
+     'The camera stands among the public benches at seated eye level, a 32 mm-equivalent field of view: the cage on the LEFT, the judges\' bench far away out of focus, two militiamen beside the cage, the backs of a few people on the benches in the foreground; the lower third of the frame is kept free of faces.',
+     'flat grey daylight from the tall windows', 'the cage, the bench, the curtains, the wood panelling',
+     ['face:murashov'], costume={'murashov': 'a dark grey suit, a white shirt, no tie'}, note='Суд 1994-го: только Мурашов в клетке; судья вдали, не в фокусе.')
+shot('bio_zoya', 'hod_bio', 'insert', 'photo', 'a summer day, about 1985', 'Summer in the photograph: leafy trees.',
+     {'zoya': 'about 66, in a light summer dress and a cardigan, sits on a courtyard bench with her arm around her grandson, laughing at something he says, looking at him',
+      'grandson': 'sits beside her, grinning up at her'},
+     'A black-and-white amateur photograph from about 1985, slightly faded, with a narrow white border and soft focus, filling the frame: an ordinary family snapshot in a Moscow courtyard, the two of them on a bench, lilac bushes and a panel block behind.',
+     'soft summer daylight in the photograph', 'the bench, the lilac bushes, the white border of the print; no writing',
+     ['face:zoya'], note='Экран Зои Павловны (этика §4.2): кто она была, без подробностей смерти; смотрят друг на друга, не в объектив.')
+shot('bio_pyotr', 'hod_bio', 'insert', 'photo', 'a working day, about 1975', 'Indoors, a factory workshop.',
+     {'pyotr': 'stands at his lathe, measuring a freshly turned steel part with a caliper, absorbed in the work, not looking at the camera'},
+     'A black-and-white factory photograph from about 1975, slightly faded, with a narrow white border, filling the frame: the man at his lathe in a big workshop, other machines soft behind him.',
+     'daylight from the tall factory windows in the photograph', 'the lathe, the caliper, the steel part; no writing',
+     [], note='Пётр Ильич — только на этом фото; одна деталь жизни: токарь.')
+shot('gromov_2004', 'hod_2004', 'medium', 'office2004', 'an overcast day, 2004', 'Indoors; a grey city outside the blinds.',
+     {'sledak_old': 'sits in the leather office chair, turned three-quarter to the RIGHT, talking to an unseen interviewer off-camera on the right, his eyes on the interviewer, not on the lens; quiet, tired, restrained'},
+     'A television interview frame: the camera at seated eye level, a 50 mm-equivalent field of view, a medium shot from the chest up, his face in the upper half of the frame; the lower third is kept free (a name caption is overlaid there).',
+     'soft grey daylight through the vertical blinds and a warm desk lamp', 'the blinds, the CRT monitor, the bookcase',
+     ['face:sledak_old'], note='«Говорящая голова» 2004 года; одна реплика в финале.')
+shot('agency_closed', 'hod_agency_closed', 'wide', 'presnya_street', FRIDAY, SUMMER,
+     {'sledak': 'stands at the closed door of the agency RIGHT of centre, seen from the side, looking at a handwritten paper sign taped to the glass'},
+     'The camera stands on the same side of the road a few steps away, at the eye level of a standing person, a 32 mm-equivalent field of view: the entrance of the building, the dark windows of the agency on the second floor, the empty kerb with no car; the lower third of the frame is kept free of faces.',
+     'bright late-morning sun on the facade', 'the closed door with the paper sign (unreadable), the dark windows, the empty kerb, the lime trees',
+     ['place:agency_street_wide', 'face:sledak'], note='Ветка без санкции: агентство закрыто, «Волги» нет.')
+
+WAVES_D345 = [  # первая волна — без ссылок на новые кадры; вторая — через плечо и вставки по принятым общим планам
+    ['walk_wide', 'second_wide', 'chertanovo_wide', 'agency_street_wide', 'agency_wide', 'watch_wide', 'search_wide',
+     'field_wide', 'interrog_wide', 'court_wide', 'bio_zoya', 'bio_pyotr', 'gromov_2004', 'op_wounded', 'op_stairs', 'op_metro'],
+    ['second_ots_klava', 'agency_ots_murashov', 'op_wide', 'search_keys', 'search_papers', 'field_ots_expert', 'field_oper',
+     'interrog_ots_murashov', 'confront_wide', 'agency_closed'],
+]
+
 WAVES = [
     ['office_am_wide', 'flat_wide', 'landing_chain_wide', 'notary_wide', 'zhek_wide', 'bti_wide', 'car_wide'],
     ['office_am_ots_oper', 'office_am_phone', 'office_eve_wide', 'office_d2_wide', 'office_night_wide', 'flat_ots_buyer',
@@ -459,15 +714,15 @@ def ref_text(refs: list[str]) -> tuple[str, list[str]]:
     return '\n'.join(lines), medias
 
 
-def people_text(p: dict) -> str:
+def people_text(p: dict, costume: dict) -> str:
     out = []
     for who, act in p.items():
         look = f' ({NEW_LOOKS[who]})' if who in NEW_LOOKS else ''
-        out.append(f'{NAMES[who]}{look}, wearing {COSTUME[who]}: {act}.')
+        out.append(f'{NAMES[who]}{look}, wearing {costume.get(who, COSTUME[who])}: {act}.')
     return ' '.join(out)
 
 
-plan, sheet = [], ['# Черновые кадры «Хода следствия» (дни 1–2): листы мизансцен', '',
+plan, sheet = [], ['# Черновые кадры «Хода следствия» (дни 1–5): листы мизансцен', '',
                    'Сгенерировано `tools/hod/shots.py`. Проверка каждого кадра: кто где стоит, куда смотрит, что держит, '
                    'одежда по сезону (лето 1993-го), время суток и свет, одинаковость предметов в кадрах одной сцены.', '']
 for s in S:
@@ -476,7 +731,7 @@ for s in S:
         'SCENE', '',
         f"Location and time: Moscow, {s['time']}. {LOC[s['loc']]}",
         f"Season: {s['season']}",
-        f"People and action: {people_text(s['people'])}",
+        f"People and action: {people_text(s['people'], s['costume']) or 'nobody in the frame.'}",
         f"Camera position: {s['camera']}",
         f"Light sources: {s['light']}.",
         f"Essential objects: {s['objects']}; nothing added that is not described.",
@@ -504,4 +759,4 @@ plan.append({'id': 'doc_statement', 'set': '', 'kind': 'doc', 'cast': [], 'api_s
 os.makedirs(os.path.join(ROOT, OUT, 'out'), exist_ok=True)
 json.dump(plan, open(os.path.join(ROOT, OUT, 'plan.json'), 'w'), ensure_ascii=False, indent=1)
 open(os.path.join(ROOT, 'docs/production/prompts/ep01-hod-shots.md'), 'w', encoding='utf-8').write('\n'.join(sheet) + '\n')
-print(f'plan: {len(plan)} кадров; волны: {[len(w) for w in WAVES]} + doc_statement')
+print(f'plan: {len(plan)} кадров; волны: {[len(w) for w in WAVES]} + doc_statement; дни 3–5: {[len(w) for w in WAVES_D345]}')

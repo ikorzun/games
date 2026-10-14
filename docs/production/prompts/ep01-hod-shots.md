@@ -1,4 +1,4 @@
-# Черновые кадры «Хода следствия» (дни 1–2): листы мизансцен
+# Черновые кадры «Хода следствия» (дни 1–5): листы мизансцен
 
 Сгенерировано `tools/hod/shots.py`. Проверка каждого кадра: кто где стоит, куда смотрит, что держит, одежда по сезону (лето 1993-го), время суток и свет, одинаковость предметов в кадрах одной сцены.
 
@@ -361,4 +361,273 @@
 - Свет: June daylight.
 - Предметы: the cardboard folder, her cloth handbag.
 - Референсы: shot:recon_wide, face:zoya
+
+## `walk_wide` — wide, сет `hod_walk`
+
+- Время: a sunny Wednesday, 11 August 1993, late morning. Место: street_walk.
+- Investigator Andrei Gromov: stands alone at the trolleybus stop LEFT of centre, his case folder under his arm, reading an address written on a slip of paper in his hand, not looking at the camera.
+- Камера: The camera stands on the other side of the pavement at the eye level of a standing person, a 35 mm-equivalent field of view: Gromov full-figure and small in the frame, the street and the approaching trolleybus behind him; the lower third of the frame is kept free of faces.
+- Свет: bright summer daylight, the stop in the patchy shade of the lime tree.
+- Предметы: the stop sign, the bench, the trolleybus, the lime tree, the slip of paper.
+- Пометка: Сайко нет: Громов в среду один (без доверия Сайко).
+- Референсы: face:sledak
+
+## `second_wide` — wide, сет `hod_second`
+
+- Время: a sunny Wednesday, 11 August 1993, early afternoon. Место: khoroshevka.
+- Klavdia Semyonovna, the neighbour of the missing old man: stands in her open doorway on the RIGHT, one hand on the door frame, the other pointing across at the steel door of the missing neighbour, her eyes on Gromov.
+- Investigator Andrei Gromov: stands on the landing LEFT of centre between the two doors, seen three-quarter from behind, turned toward the old woman, listening.
+- Камера: The camera stands on the top step of the stairs at the eye level of a standing person, a 32 mm-equivalent field of view: both doors in the back wall, the window of the half-landing out of frame behind the camera; the lower third of the frame is kept free of faces.
+- Свет: summer daylight from the stairwell window behind the camera.
+- Предметы: the brown steel door with the shiny lock on the LEFT, her old wooden door open on the RIGHT, the railing.
+- Пометка: Сайко остался в машине. Дверь Петра Ильича — железная, новая, как у Зои Павловны; у соседки старая деревянная.
+- Референсы: face:sledak
+
+## `second_ots_klava` — ots, сет `hod_second`
+
+- Время: a sunny Wednesday, 11 August 1993, early afternoon. Место: khoroshevka.
+- Klavdia Semyonovna, the neighbour of the missing old man: stands in her doorway facing the camera, speaking with bitter certainty, one hand lifted slightly as if showing a little wave of the hand, her eyes on Gromov.
+- Investigator Andrei Gromov: seen only from behind at the LEFT edge.
+- Камера: The camera is just behind Investigator Andrei Gromov's shoulder at eye level, a 45 mm-equivalent field of view: the back of Investigator Andrei Gromov's head and shoulder overlap the near LEFT edge of the frame, out of focus; Klavdia Semyonovna, the neighbour of the missing old man faces the camera beyond, their face in the upper half of the frame (the text box covers the lower third); the background recognizable with modest optical softness; the 180-degree axis of the conversation is kept. The dim hallway of her flat with a coat rack (summer things only) behind her.
+- Свет: summer daylight from behind the camera.
+- Предметы: her open wooden door, the door frame.
+- Референсы: shot:second_wide, face:sledak
+
+## `chertanovo_wide` — wide, сет `hod_chertanovo`
+
+- Время: a sunny Wednesday, 11 August 1993, early afternoon. Место: chertanovo.
+- the landlady: stands by the closed lift doors RIGHT of centre, arms folded over her house dress, talking readily, her eyes on Gromov.
+- Investigator Andrei Gromov: stands LEFT of centre facing her, seen three-quarter from behind, his folder in his hand.
+- Камера: The camera stands at the end of the landing by the window at the eye level of a standing person, a 32 mm-equivalent field of view; the lower third of the frame is kept free of faces.
+- Свет: flat summer daylight from the window behind the camera and a fluorescent tube.
+- Предметы: the lift doors, the two padded flat doors, the rubbish chute hatch.
+- Пометка: Жильцы открыли и ушли в квартиру; на площадке только хозяйка и Громов.
+- Референсы: face:sledak
+
+## `agency_street_wide` — wide, сет `hod_agency_street`
+
+- Время: a sunny Wednesday, 11 August 1993, afternoon. Место: presnya_street.
+- Investigator Andrei Gromov: stands on the near pavement in the LEFT foreground, seen from behind and slightly from the side, looking across the road at the agency entrance.
+- Камера: The camera stands behind Gromov on the near pavement at the eye level of a standing person, a 32 mm-equivalent field of view: across the road the building and its entrance; parked at the entrance a grey GAZ-24 Volga, and leaning on its wing a big crew-cut man in a navy tracksuit top, smoking, his back to the camera (an extra: his face is never visible).
+- Свет: bright afternoon sunlight, the building facade in sun, Gromov's side of the street in the shade of the lime trees.
+- Предметы: the grey Volga at the entrance, the signboard and the door glass with old letters (unreadable), the lime trees.
+- Пометка: Водитель только со спины; «Волга» серая ГАЗ-24 — та же во всех кадрах.
+- Референсы: face:sledak
+
+## `agency_wide` — wide, сет `hod_agency`
+
+- Время: a sunny Wednesday, 11 August 1993, afternoon. Место: agency.
+- Sergei Murashov, the apartment dealer: sits behind the big desk on the RIGHT, upright, hands folded on the desk, a polite attentive half-smile, his calm pale eyes on Gromov.
+- Investigator Andrei Gromov: sits on the visitor's chair facing the desk on the LEFT, seen three-quarter from behind, playing an ordinary buyer, his folder on his knees.
+- Камера: The camera stands by the door at the eye level of a standing person, a 32 mm-equivalent field of view: the room with its high ceiling, the windows behind the desk; the lower third of the frame is kept free of faces.
+- Свет: afternoon sunlight through the half-open blinds in warm stripes across the desk and the shelves.
+- Предметы: the three telephones, the glass decanter, the desk fan, the binders, the framed old newspaper page.
+- Пометка: Мурашов впервые в лицо: вежливый, бесцветный, без харизмы; смотрит на Громова, не в объектив.
+- Референсы: face:murashov, face:sledak
+
+## `agency_ots_murashov` — ots, сет `hod_agency`
+
+- Время: a sunny Wednesday, 11 August 1993, afternoon. Место: agency.
+- Sergei Murashov, the apartment dealer: sits behind the desk facing the camera, a pen held lightly in his fingers, smiling politely, his pale calm eyes resting on Gromov a moment too long.
+- Investigator Andrei Gromov: seen only from behind at the LEFT edge.
+- Камера: The camera is just behind Investigator Andrei Gromov's shoulder at eye level, a 45 mm-equivalent field of view: the back of Investigator Andrei Gromov's head and shoulder overlap the near LEFT edge of the frame, out of focus; Sergei Murashov, the apartment dealer faces the camera beyond, their face in the upper half of the frame (the text box covers the lower third); the background recognizable with modest optical softness; the 180-degree axis of the conversation is kept. The shelves of binders and the striped light of the blinds behind him.
+- Свет: warm stripes of afternoon light from the blinds.
+- Предметы: the telephones, the decanter, the pen.
+- Референсы: shot:agency_wide, face:murashov
+
+## `watch_wide` — wide, сет `hod_watch`
+
+- Время: a sunny Wednesday, 11 August 1993, about 5:50 p.m.. Место: car.
+- Detective Viktor Sayko: sits in the driver's seat on the LEFT, slumped back, one wrist on the top of the wheel, watching the agency entrance through the windscreen.
+- Investigator Andrei Gromov: sits in the passenger seat on the RIGHT, the folder closed on his knees, his eyes on the agency entrance across the road, not on the papers.
+- Камера: The camera is on the back seat between the front seats, at the eye level of a seated passenger, a 32 mm-equivalent field of view: both men from behind and slightly from the side; through the windscreen, across the road, exactly the building of Reference 2 — the same ochre facade, the same blue signboard over the same entrance with steps, the same grey GAZ-24 Volga parked to the right of the entrance — and a big crew-cut man in a navy tracksuit top leaning on the Volga, small in the distance.
+- Свет: low evening sun on the building across the road; the car interior in shade.
+- Предметы: the dashboard, the mirror with the paper icon and the pine air freshener, the windows rolled down, the Volga across the road.
+- Пометка: Та же машина Сайко, что в днях 1–2; через дорогу — то же здание и та же «Волга», что на общем плане агентства.
+- Референсы: place:car_wide, place:agency_street_wide, face:oper, face:sledak
+
+## `op_wide` — wide, сет `hod_op`
+
+- Время: a warm August night, Thursday 12 August 1993, about 11:40 p.m.. Место: presnya_night.
+- Камера: The camera is inside a dark parked car across the road, low, over the dashboard: the dark windscreen frame and the silhouette of the dashboard in the foreground, nobody visible inside the car; across the road the building with the ONE lit window on the second floor, the grey GAZ-24 Volga at the entrance under the street lamp, and a big man leaning on it, a glowing cigarette, his face lost in shadow.
+- Свет: night: the street lamp, the one lit window, the glow of the cigarette; everything else dark blue.
+- Предметы: the lit window, the Volga, the street lamp, the dashboard silhouette.
+- Пометка: Людей в машине не видно: кадр общий для ветки с Сайко и без него.
+- Референсы: place:agency_street_wide
+
+## `op_wounded` — medium, сет `hod_op`
+
+- Время: a warm August night, Thursday 12 August 1993, about 11:40 p.m.. Место: presnya_night.
+- Detective Viktor Sayko: sits on the asphalt facing the camera, leaning back against the rear wheel of the grey Volga; the wound is in his RIGHT shoulder, which is on the LEFT side of the frame: his left hand crosses his chest and presses that shoulder, a dark patch on the checked sleeve under his fingers; his other shoulder, on the RIGHT side of the frame, is unhurt; he grimaces into a crooked grin, looking up at Gromov.
+- Investigator Andrei Gromov: crouches beside him on the RIGHT of the frame, seen in profile, his hand resting on Sayko's unhurt shoulder on the RIGHT side of the frame (never on the wound), looking at the wound.
+- Камера: The camera is low at the level of a crouching person, a 40 mm-equivalent field of view; the two men fill the middle of the frame, their faces in the upper half.
+- Свет: night: the street lamp from above and the blue flashing light of a militia car falling across them.
+- Предметы: the Volga's rear wheel and door, the wet asphalt.
+- Пометка: Ранение — последствием: рука на плече, тёмное пятно на рукаве; без крови крупно.
+- Референсы: face:oper, face:sledak
+
+## `op_stairs` — medium, сет `hod_op`
+
+- Время: a warm August night, Thursday 12 August 1993, about 11:40 p.m.. Место: stairwell_old.
+- Sergei Murashov, the apartment dealer: stands two steps above Gromov with both feet on the step, holding out both EMPTY hands toward him, wrists together, ready for the handcuffs — calm and tidy, the way one holds out a passport at a counter; nothing in his hands, no papers; his eyes on Gromov's hands.
+- Investigator Andrei Gromov: stands below on the LEFT, seen three-quarter from behind, handcuffs in his hand.
+- Камера: The camera stands on the stairs below Gromov at eye level, a 40 mm-equivalent field of view; Murashov's face in the upper half of the frame.
+- Свет: the dim bare bulb on the landing above, deep shadows.
+- Предметы: the handcuffs, the railing, the stone steps.
+- Пометка: Мурашов не бежит и не спрашивает: протягивает руки, «как в очереди за справкой».
+- Референсы: face:murashov, face:sledak
+
+## `op_metro` — medium, сет `hod_op`
+
+- Время: a warm August night, Friday 13 August 1993, about 1:30 a.m.. Место: metro.
+- Dmitry Shmelyov (Shmel), his driver: is bent over the bonnet of the grey Volga, his right hand still jammed in the pocket of his tracksuit top, his face turned sideways on the bonnet, scared and uncomprehending.
+- Detective Viktor Sayko: stands behind him on the RIGHT, twisting Shmel's left arm behind his back, his eyes on Shmel's pocket.
+- Камера: The camera stands at the kerb at eye level, a 40 mm-equivalent field of view; both men in the middle of the frame, the lit metro sign behind them out of focus.
+- Свет: night: the red glow of the metro letter and the glass doors, a street lamp, reflections on the wet asphalt.
+- Предметы: the grey Volga with its door open, the metro sign.
+- Пометка: Ветка «ждать»: Шмелёва берут у метро, руку из кармана он вынуть не успевает.
+- Референсы: face:accomplice, face:oper
+
+## `search_wide` — wide, сет `hod_search`
+
+- Время: the first light of a summer dawn, Friday 13 August 1993, about 5:30 a.m.. Место: dacha.
+- Investigator Andrei Gromov: stands at the desk in the centre, pulling open a drawer, looking down into it.
+- Камера: The camera stands by the door at the eye level of a standing person, a 32 mm-equivalent field of view; in the doorway on the RIGHT edge two attesting witnesses — an elderly man and woman, neighbours in summer clothes — and a young militiaman in a short-sleeved uniform shirt, all looking at the desk; the lower third of the frame is kept free of faces.
+- Свет: the first grey-pink light of dawn through the window and a ceiling lamp on.
+- Предметы: the three telephones, the binders, the ficus, the wardrobe.
+- Пометка: Понятые и милиционер — массовка; Мурашова здесь нет (он в отделе).
+- Референсы: face:sledak
+
+## `search_keys` — insert, сет `hod_search`
+
+- Время: the first light of a summer dawn, Friday 13 August 1993, about 5:30 a.m.. Место: dacha.
+- Investigator Andrei Gromov: only his hand and the short pale-blue sleeve: he lifts a bunch of keys out of the open drawer.
+- Камера: Close insert from above at standing eye level: the open desk drawer; a bunch of door keys, each with a small cardboard tag tied on with string (handwriting too small to read); beneath them several Soviet passports in dark red covers and a woman's worn cloth handbag.
+- Свет: dawn light and the ceiling lamp.
+- Предметы: the keys with tags, the passports, the cloth handbag; no readable writing.
+- Референсы: shot:search_wide
+
+## `search_papers` — insert, сет `hod_search`
+
+- Время: the first light of a summer dawn, Friday 13 August 1993, about 5:30 a.m.. Место: dacha.
+- Investigator Andrei Gromov: only his hands: he turns the pages of an open folder.
+- Камера: Close insert from above at standing eye level: cardboard folders with cloth ties open on the desk, typed powers of attorney with round violet notary stamps and signatures (all too small and soft to read).
+- Свет: dawn light and the ceiling lamp.
+- Предметы: the folders, the typed documents, the stamps; no readable writing.
+- Референсы: shot:search_wide
+
+## `field_wide` — wide, сет `hod_field`
+
+- Время: early morning, Friday 13 August 1993, about 7:20 a.m.: a low sun through the birches, mist over the field, dew. Место: field.
+- forensic expert Nina Levina: walks slowly along the tape in the middle distance, LEFT of centre, in rubber boots and a light raincoat over her dress, looking down at the grass, a notebook in her hand.
+- Investigator Andrei Gromov: stands in the RIGHT foreground by the militia van, seen from the side, his hands in his pockets, looking toward the tape.
+- Камера: The camera stands on the dirt road at the eye level of a standing person, a 32 mm-equivalent field of view: the birches with the tape across the middle of the frame, the field and the mist beyond; the lower third of the frame is kept free of faces.
+- Свет: low morning sun through the birch trunks, long shadows, mist, dew.
+- Предметы: the tape between the birches, the two spades leaning on a birch, the militia van, three militiamen beyond the tape seen from behind.
+- Пометка: Никаких тел и ям: за лентой трава, туман и спины милиционеров.
+- Референсы: face:expert, face:sledak
+
+## `field_ots_expert` — ots, сет `hod_field`
+
+- Время: early morning, Friday 13 August 1993, about 7:20 a.m.: a low sun through the birches, mist over the field, dew. Место: field.
+- forensic expert Nina Levina: stands at the tape facing the camera, her notebook closed against her chest, speaking quietly and flatly, her eyes on Gromov.
+- Investigator Andrei Gromov: seen only from behind at the RIGHT edge.
+- Камера: The camera is just behind Investigator Andrei Gromov's shoulder at eye level, a 45 mm-equivalent field of view: the back of Investigator Andrei Gromov's head and shoulder overlap the near RIGHT edge of the frame, out of focus; forensic expert Nina Levina faces the camera beyond, their face in the upper half of the frame (the text box covers the lower third); the background recognizable with modest optical softness; the 180-degree axis of the conversation is kept. The birches with the tape and the mist behind her; nothing on the ground is visible.
+- Свет: low morning sun from the side, mist.
+- Предметы: the tape, the birches.
+- Референсы: shot:field_wide, face:expert
+
+## `field_oper` — medium, сет `hod_field`
+
+- Время: early morning, Friday 13 August 1993, about 7:20 a.m.: a low sun through the birches, mist over the field, dew. Место: field.
+- Detective Viktor Sayko: leans on the bonnet of the militia van, smoking, looking away toward the birches, unsmiling, his shoulders hunched.
+- Камера: The camera stands on the road at eye level, a 40 mm-equivalent field of view: Sayko alone, the birches and the tape soft behind him.
+- Свет: low morning sun from the side, mist.
+- Предметы: the van bonnet, the cigarette.
+- Пометка: Только если Сайко цел.
+- Референсы: shot:field_wide, face:oper
+
+## `interrog_wide` — wide, сет `hod_interrog`
+
+- Время: a sunny Friday, 13 August 1993, late morning. Место: interrog.
+- Sergei Murashov, the apartment dealer: sits on the chair at the far side of the table facing Gromov, straight-backed, adjusting a shirt cuff, calm and polite, his eyes on Gromov's writing hand.
+- Investigator Andrei Gromov: sits at the near LEFT end of the table, seen three-quarter from behind, writing the protocol by hand.
+- Камера: The camera stands in the corner by the door at the eye level of a standing person, a 32 mm-equivalent field of view: the table across the middle of the frame, the barred window behind Murashov; the lower third of the frame is kept free of faces.
+- Свет: summer daylight through the upper panes of the barred window, a dim ceiling lamp.
+- Предметы: the metal table, the protocol, the pen, the ashtray, the steel door.
+- Пометка: После задержания: без галстука и ремня. Харизмы нет — протокольная вежливость.
+- Референсы: face:murashov, face:sledak
+
+## `interrog_ots_murashov` — ots, сет `hod_interrog`
+
+- Время: a sunny Friday, 13 August 1993, late morning. Место: interrog.
+- Sergei Murashov, the apartment dealer: faces the camera across the table, calm, a faint polite smile, his eyes lowered to the protocol under Gromov's hand, not to the lens.
+- Investigator Andrei Gromov: seen only from behind at the LEFT edge, writing.
+- Камера: The camera is just behind Investigator Andrei Gromov's shoulder at eye level, a 45 mm-equivalent field of view: the back of Investigator Andrei Gromov's head and shoulder overlap the near LEFT edge of the frame, out of focus; Sergei Murashov, the apartment dealer faces the camera beyond, their face in the upper half of the frame (the text box covers the lower third); the background recognizable with modest optical softness; the 180-degree axis of the conversation is kept. The barred window and the grey-green wall behind him.
+- Свет: daylight from the barred window behind him, the dim ceiling lamp.
+- Предметы: the protocol, the pen, the ashtray.
+- Референсы: shot:interrog_wide, face:murashov
+
+## `confront_wide` — wide, сет `hod_interrog`
+
+- Время: a sunny Friday, 13 August 1993, late morning, about 1 p.m.. Место: interrog.
+- Sergei Murashov, the apartment dealer: sits on the RIGHT side of the table, turned toward Kovrigin, looking at him calmly and expectantly.
+- notary Kovrigin: sits on the LEFT side of the table facing Murashov, but staring down at the table, sweating, a damp handkerchief in his fist.
+- Investigator Andrei Gromov: sits at the far end of the table between them, facing the camera, writing, glancing up at Kovrigin.
+- Камера: The camera stands by the door at the eye level of a standing person, a 32 mm-equivalent field of view: the table lengthwise into the frame, the barred window behind Gromov; the lower third of the frame is kept free of faces.
+- Свет: summer daylight through the barred window, the dim ceiling lamp.
+- Предметы: the metal table, the protocol, the ashtray, the steel door.
+- Пометка: Очная ставка: Ковригин смотрит в стол, Мурашов — на Ковригина.
+- Референсы: place:interrog_wide, face:murashov, face:notary, face:sledak
+
+## `court_wide` — wide, сет `hod_court`
+
+- Время: Moscow, 1994, a grey daytime. Место: court.
+- Sergei Murashov, the apartment dealer: stands inside the metal defendants' cage on the LEFT, hands folded in front of him, neat and expressionless, looking toward the judges' bench, not at the camera.
+- Камера: The camera stands among the public benches at seated eye level, a 32 mm-equivalent field of view: the cage on the LEFT, the judges' bench far away out of focus, two militiamen beside the cage, the backs of a few people on the benches in the foreground; the lower third of the frame is kept free of faces.
+- Свет: flat grey daylight from the tall windows.
+- Предметы: the cage, the bench, the curtains, the wood panelling.
+- Пометка: Суд 1994-го: только Мурашов в клетке; судья вдали, не в фокусе.
+- Референсы: face:murashov
+
+## `bio_zoya` — insert, сет `hod_bio`
+
+- Время: a summer day, about 1985. Место: photo.
+- Zoya Pavlovna: about 66, in a light summer dress and a cardigan, sits on a courtyard bench with her arm around her grandson, laughing at something he says, looking at him.
+- Zoya Pavlovna's grandson: sits beside her, grinning up at her.
+- Камера: A black-and-white amateur photograph from about 1985, slightly faded, with a narrow white border and soft focus, filling the frame: an ordinary family snapshot in a Moscow courtyard, the two of them on a bench, lilac bushes and a panel block behind.
+- Свет: soft summer daylight in the photograph.
+- Предметы: the bench, the lilac bushes, the white border of the print; no writing.
+- Пометка: Экран Зои Павловны (этика §4.2): кто она была, без подробностей смерти; смотрят друг на друга, не в объектив.
+- Референсы: face:zoya
+
+## `bio_pyotr` — insert, сет `hod_bio`
+
+- Время: a working day, about 1975. Место: photo.
+- Pyotr Ilyich, a lathe operator: stands at his lathe, measuring a freshly turned steel part with a caliper, absorbed in the work, not looking at the camera.
+- Камера: A black-and-white factory photograph from about 1975, slightly faded, with a narrow white border, filling the frame: the man at his lathe in a big workshop, other machines soft behind him.
+- Свет: daylight from the tall factory windows in the photograph.
+- Предметы: the lathe, the caliper, the steel part; no writing.
+- Пометка: Пётр Ильич — только на этом фото; одна деталь жизни: токарь.
+- Референсы: 
+
+## `gromov_2004` — medium, сет `hod_2004`
+
+- Время: an overcast day, 2004. Место: office2004.
+- Andrei Gromov in 2004, eleven years later: sits in the leather office chair, turned three-quarter to the RIGHT, talking to an unseen interviewer off-camera on the right, his eyes on the interviewer, not on the lens; quiet, tired, restrained.
+- Камера: A television interview frame: the camera at seated eye level, a 50 mm-equivalent field of view, a medium shot from the chest up, his face in the upper half of the frame; the lower third is kept free (a name caption is overlaid there).
+- Свет: soft grey daylight through the vertical blinds and a warm desk lamp.
+- Предметы: the blinds, the CRT monitor, the bookcase.
+- Пометка: «Говорящая голова» 2004 года; одна реплика в финале.
+- Референсы: face:sledak_old
+
+## `agency_closed` — wide, сет `hod_agency_closed`
+
+- Время: a sunny Friday, 13 August 1993, late morning. Место: presnya_street.
+- Investigator Andrei Gromov: stands at the closed door of the agency RIGHT of centre, seen from the side, looking at a handwritten paper sign taped to the glass.
+- Камера: The camera stands on the same side of the road a few steps away, at the eye level of a standing person, a 32 mm-equivalent field of view: the entrance of the building, the dark windows of the agency on the second floor, the empty kerb with no car; the lower third of the frame is kept free of faces.
+- Свет: bright late-morning sun on the facade.
+- Предметы: the closed door with the paper sign (unreadable), the dark windows, the empty kerb, the lime trees.
+- Пометка: Ветка без санкции: агентство закрыто, «Волги» нет.
+- Референсы: place:agency_street_wide, face:sledak
 
