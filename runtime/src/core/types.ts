@@ -55,7 +55,8 @@ export const STAGE_FILTERS: readonly StageFilter[] = [
 
 export type Position = 'left' | 'center' | 'right' | 'offscreen_left' | 'offscreen_right';
 export type TransitionKind = 'cut' | 'fade' | 'dissolve' | 'wipe' | 'vhs_glitch' | 'flash' | 'slow_fade';
-export type CaptionStyle = 'date_stamp' | 'location' | 'lower_third' | 'chapter' | 'fact';
+/** day — отбивка нового дня: экран уходит в чёрное, на нём дата, потом проявляется сцена (владелец 2026-10-14). */
+export type CaptionStyle = 'date_stamp' | 'location' | 'lower_third' | 'chapter' | 'fact' | 'day';
 export type NarrateStyle = 'voiceover' | 'inner' | 'report';
 export type FxKind =
   | 'fade_out'

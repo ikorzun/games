@@ -292,6 +292,9 @@ export class Session {
             await abortable(ui.hold(p, { signal, instant: this.instant }), signal);
             if (!alive()) return cancelled;
             this.interp.continue();
+            // Отбивка дня держала новую сцену под чёрным — проявить её (без удержания — ничего не делает).
+            await director.release({ instant: this.instant, cancelled: () => !alive() });
+            if (!alive()) return cancelled;
             break;
           }
           case 'document': {
@@ -307,7 +310,8 @@ export class Session {
             if (!alive()) return cancelled;
             platform.track('ad_break', { block: p.block, shown });
             this.interp.continue();
-            await director.release({ instant: this.instant, cancelled: () => !alive() });
+            // Сразу за рекламой — отбивка дня: сцену проявим после даты (в case 'hold'), иначе она мелькнёт перед ней.
+            if (!this.dayCardNext()) await director.release({ instant: this.instant, cancelled: () => !alive() });
             if (!alive()) return cancelled;
             break;
           }
@@ -359,6 +363,18 @@ export class Session {
       if (!alive()) return cancelled;
       return this.fail(e);
     }
+  }
+
+  /** Следующие шаги сцены — отбивка дня (титр day, условие которого выполнено), до первого шага не-титра. */
+  private dayCardNext(): boolean {
+    const { scene_id, step_index } = this.interp.state;
+    const steps = this.interp.scene(scene_id)?.steps ?? [];
+    for (let i = step_index; i < steps.length; i++) {
+      const st = steps[i];
+      if (!st || st.do !== 'caption') return false;
+      if (st.style === 'day' && (st.when === undefined || this.interp.test(st.when))) return true;
+    }
+    return false;
   }
 
   private levelData(): { world: string; level: string } {

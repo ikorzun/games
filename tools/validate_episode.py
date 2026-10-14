@@ -159,7 +159,7 @@ def seasons(ep: dict, ru: dict | None, rep: Report) -> None:
                 rep.err(f"scene {sid}: {kind} {aid} — {season}, а сцена — {eff} (блок {scene.get('block')})")
         if ru:
             for st in scene.get("steps", []):
-                if st.get("do") == "caption" and st.get("style") == "date_stamp":
+                if st.get("do") == "caption" and st.get("style") in ("date_stamp", "day"):
                     text = ru.get(st.get("key", ""), "")
                     cs = caption_season(text) if isinstance(text, str) else None
                     if not cs:
@@ -749,7 +749,7 @@ def collect_loc_keys(ep: dict) -> set[str]:
 
 
 LENGTH_LIMITS = {  # роль строки -> максимум символов (любой язык); см. docs/architecture/05-localization.md §4
-    "option": 60, "date_stamp": 32, "location": 56, "lower_third": 48, "chapter": 40, "title": 40, "fact": 120, "say": 220, "narrate": 240,
+    "option": 60, "date_stamp": 32, "day": 40, "location": 56, "lower_third": 48, "chapter": 40, "title": 40, "fact": 120, "say": 220, "narrate": 240,
     "why": 160,
 }
 

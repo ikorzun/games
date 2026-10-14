@@ -79,6 +79,7 @@ export const DEFAULT_CAPTION_HOLD_MS: Readonly<Record<CaptionStyle, number>> = {
   lower_third: 4500,
   chapter: 3500,
   fact: 4000,
+  day: 2600,
 };
 
 export const DEFAULT_FX_MS: Readonly<Record<FxKind, number>> = {

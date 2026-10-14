@@ -182,6 +182,8 @@ export class DomUI implements SessionUI {
       } finally {
         close();
       }
+      // Отбивка дня гаснет на чёрном и только потом проявляется сцена — дата не висит поверх нового кадра.
+      if (p.caption.style === 'day' && !ctx.instant) await new Promise((r) => setTimeout(r, 360));
       return;
     }
     if (p.fx) {

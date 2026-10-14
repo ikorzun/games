@@ -316,7 +316,7 @@
         "when": { "$ref": "#/$defs/expr", "description": "Условие показа шага; ложное — шаг пропускается." },
         "do": { "const": "caption" },
         "key": { "$ref": "#/$defs/locKey" },
-        "style": { "type": "string", "enum": ["date_stamp", "location", "lower_third", "chapter", "fact"], "description": "date_stamp — «Москва, октябрь 1993»; lower_third — подпись «говорящей головы»; chapter — титр части; fact — сухая справка." },
+        "style": { "type": "string", "enum": ["date_stamp", "location", "lower_third", "chapter", "fact", "day"], "description": "date_stamp — «Москва, октябрь 1993»; lower_third — подпись «говорящей головы»; chapter — титр части; fact — сухая справка; day — отбивка нового дня: экран уходит в чёрное, на нём дата, потом проявляется сцена (держит паузу)." },
         "hold_ms": { "type": "integer", "minimum": 500, "maximum": 10000 }
       }
     },

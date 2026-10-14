@@ -53,7 +53,7 @@ export class CaptionLayer implements ICaptionSink {
   private add(key: string, style: CaptionStyle): Entry {
     for (const e of [...this.entries]) if (e.style === style) this.remove(e, true);
     const plated = style === 'chapter' && this.el.style.getPropertyValue('--title-plate') !== '';
-    const el = h('div', { class: `vn-cap vn-cap--${style}${plated ? ' has-plate' : ''}`, role: style === 'chapter' ? 'heading' : 'status' });
+    const el = h('div', { class: `vn-cap vn-cap--${style}${plated ? ' has-plate' : ''}`, role: style === 'chapter' || style === 'day' ? 'heading' : 'status' });
     const entry: Entry = { key, style, el, timer: null };
     this.fill(entry);
     this.entries.add(entry);

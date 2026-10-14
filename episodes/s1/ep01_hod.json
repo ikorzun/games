@@ -828,7 +828,7 @@
    "steps": [
     {
      "do": "caption",
-     "style": "date_stamp",
+     "style": "day",
      "key": "ep01.h.d1_office.cap01"
     },
     {
@@ -4124,7 +4124,7 @@
    "steps": [
     {
      "do": "caption",
-     "style": "date_stamp",
+     "style": "day",
      "key": "ep01.h.d2_office.cap01"
     },
     {
@@ -5193,7 +5193,7 @@
    "steps": [
     {
      "do": "caption",
-     "style": "date_stamp",
+     "style": "day",
      "key": "ep01.h.d3_office.cap01"
     },
     {
@@ -8458,7 +8458,7 @@
    "steps": [
     {
      "do": "caption",
-     "style": "date_stamp",
+     "style": "day",
      "key": "ep01.h.d4_office.cap01"
     },
     {
@@ -9415,7 +9415,7 @@
    "steps": [
     {
      "do": "caption",
-     "style": "date_stamp",
+     "style": "day",
      "key": "ep01.h.d5_morning.cap01"
     },
     {
@@ -10003,14 +10003,14 @@
    },
    "steps": [
     {
+     "do": "caption",
+     "style": "day",
+     "key": "ep01.h.d5_gone.cap01"
+    },
+    {
      "do": "show",
      "who": "sledak",
      "position": "center"
-    },
-    {
-     "do": "caption",
-     "style": "date_stamp",
-     "key": "ep01.h.d5_gone.cap01"
     },
     {
      "do": "set",
@@ -10115,21 +10115,21 @@
    },
    "steps": [
     {
-     "do": "show",
-     "who": "murashov",
-     "position": "left"
-    },
-    {
      "do": "caption",
-     "style": "date_stamp",
+     "style": "day",
      "key": "ep01.h.fin_court.cap01",
      "when": "sanction"
     },
     {
      "do": "caption",
-     "style": "date_stamp",
+     "style": "day",
      "key": "ep01.h.fin_court.cap02",
      "when": "!sanction"
+    },
+    {
+     "do": "show",
+     "who": "murashov",
+     "position": "left"
     },
     {
      "do": "narrate",
@@ -10201,7 +10201,7 @@
    "steps": [
     {
      "do": "caption",
-     "style": "date_stamp",
+     "style": "day",
      "key": "ep01.h.fin_epilogue.cap01"
     },
     {

@@ -329,7 +329,7 @@ def day2_choices(cid, prompt):
 
 # ── День 1, утро ──
 scene('d1_office', 'b1_day1', 'hod_office_am', lambda: [
-    cap('date_stamp', 'Понедельник, 9 августа 1993 года'),
+    cap('day', 'Понедельник, 9 августа 1993 года'),
     cap('location', 'Прокуратура Кунцевского района'),
     show('sledak', 'left'), show('oper', 'right'),
     inner('Четыре заявления. Четыре квартиры, в которых живут чужие люди. И ни одного трупа.'),
@@ -796,7 +796,7 @@ scene('d1_eve_call', 'b2_evening', 'hod_office_call_eve', lambda: [
 
 # ── День 2, утро ──
 scene('d2_office', 'b3_day2', 'hod_office_d2', lambda: [
-    cap('date_stamp', 'Вторник, 10 августа'),
+    cap('day', 'Вторник, 10 августа'),
     show('sledak', 'left'), show('oper', 'center'), show('boss', 'right'),
     inner('Палыч пришёл сам. Это хуже звонка.'),
     say('boss', 'Возбудил? Ну смотри. Дело теперь твоё — и спрашивать буду с тебя, а не с МУРа.', when='case_opened'),
@@ -959,7 +959,7 @@ def d3_choices(cid, prompt):
 
 
 scene('d3_office', 'b5_day3', 'hod_office_d2', lambda: [
-    cap('date_stamp', 'Среда, 11 августа'),
+    cap('day', 'Среда, 11 августа'),
     setv(e('third', 'set', 'second'), when='bti_chain'),
     *[setv(e('third', 'set', p), when=f'!bti_chain && oper_with && !visited_{p}') for p in ('flat', 'galina', 'zhek', 'bti')],
     setv(e('murashov_spooked', 'set', True), when='lapins_told_truth'),
@@ -1289,7 +1289,7 @@ scene('d3_night', 'b6_board', 'hod_office_night', lambda: [
 
 # ── День 4, четверг: санкция, опознание, операция, обыск (§4) ──
 scene('d4_office', 'b7_op', 'hod_office_d2', lambda: [
-    cap('date_stamp', 'Четверг, 12 августа'),
+    cap('day', 'Четверг, 12 августа'),
     show('sledak', 'left'), show('oper', 'center', when='oper_with'), show('boss', 'right'),
     sfx('sfx_phone_ring', when='irina_call_d4'),
     say('lapin_wife', 'Это Ирина Лапина. Ночью звонил Сергей Викторович — спрашивал, кто к нам приходил и что мы сказали.', when='irina_call_d4'),
@@ -1430,7 +1430,7 @@ scene('d4_search_keys', 'b7_op', 'hod_search', lambda: [
 
 # ── День 5, пятница: лесополоса, допрос, очная ставка, решение Палыча (§4–§5) ──
 scene('d5_morning', 'b8_friday', 'hod_t_street', lambda: [
-    cap('date_stamp', 'Пятница, 13 августа'),
+    cap('day', 'Пятница, 13 августа'),
     setv(e('day', 'set', 5)),
     branch([('accomplice_talks', 'd5_field')], 'd5_interrog'),
 ], time='dawn')
@@ -1509,8 +1509,8 @@ scene('d5_boss', 'b8_friday', 'hod_office_d2', lambda: [
     jump('fin_zoya', 'slow_fade'),
 ], time='evening', ambient='amb_office', pin='office_d2_ots_boss')
 scene('d5_gone', 'b8_friday', 'hod_agency_closed', lambda: [
+    cap('day', 'Пятница, 13 августа'),
     show('sledak', 'center'),
-    cap('date_stamp', 'Пятница, 13 августа'),
     setv(e('day', 'set', 5)),
     cap('location', 'Пресня, у агентства'),
     inner('Агентство закрыто. На двери — «Ремонт». «Волги» у входа нет.'),
@@ -1531,9 +1531,9 @@ scene('fin_zoya', 'b9_end', 'hod_bio', lambda: [
     jump('fin_court', 'slow_fade'),
 ], music='m_epilogue', pin='bio_zoya')
 scene('fin_court', 'b9_end', 'hod_court', lambda: [
+    cap('day', 'Москва, 1994 год', when='sanction'),
+    cap('day', 'Москва, 1995 год', when='!sanction'),
     show('murashov', 'left'),
-    cap('date_stamp', 'Москва, 1994 год', when='sanction'),
-    cap('date_stamp', 'Москва, 1995 год', when='!sanction'),
     vo('Московский городской суд признал Мурашова виновным в убийствах, совершённых из корыстных побуждений, и приговорил его к исключительной мере наказания.'),
     vo('В приговоре — шесть эпизодов.', when='bti_six || field_seen'),
     vo('В приговоре — те эпизоды, что успели доказать.', when='!bti_six && !field_seen'),
@@ -1546,7 +1546,7 @@ scene('fin_court', 'b9_end', 'hod_court', lambda: [
     jump('fin_epilogue', 'slow_fade'),
 ])
 scene('fin_epilogue', 'b9_end', 'hod_t_moscow', lambda: [
-    cap('date_stamp', 'Москва, 1994–1997 годы'),
+    cap('day', 'Москва, 1994–1997 годы'),
     vo('Квартиру на Молодогвардейской по суду вернули внуку из Самары.'),
     vo('Фотографию из серванта отдали ему вместе с ключами.', when='photo_seen'),
     vo('Лапины дали показания, и по суду им вернули часть денег.', when='lapins_told_truth'),

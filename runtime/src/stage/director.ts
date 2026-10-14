@@ -70,9 +70,10 @@ export class Director {
     const instant = opts.instant === true;
     const { events, pending } = result;
 
-    // Индекс последнего события scene — именно оно вводит блок, перед которым стоит реклама.
+    // Индекс последнего события scene — именно оно вводит блок, перед которым стоит реклама, или день под отбивкой
+    // (титр day): экран гаснет и держится чёрным, пока идёт реклама или висит дата; новый кадр проявляется после.
     let adScene = -1;
-    if (pending.kind === 'ad_break') {
+    if (pending.kind === 'ad_break' || (pending.kind === 'hold' && pending.caption?.style === 'day')) {
       for (let i = events.length - 1; i >= 0; i--) {
         if (events[i]?.t === 'scene') {
           adScene = i;

@@ -146,6 +146,22 @@ describe('Director: реклама на границе блока', () => {
     });
   }
 
+  it('отбивка дня (титр day): новая сцена держится под чёрным, пока висит дата, и проявляется после release()', async () => {
+    const { t, director } = setup();
+    const day: Pending = { kind: 'hold', reason: 'caption', ms: 2600, caption: { key: 'k.day', style: 'day' } };
+    await director.present({ ...adBatch('fade'), pending: day });
+    expect(t).toEqual(['caption:clear', 'stage:fadeToBlackAndHold:fade', 'checkpoint:block']);
+    expect(director.holdingBlack).toBe(true);
+    t.push('day:shown'); // здесь UI показывает дату на чёрном, затем interp.continue()
+    await director.release();
+    expect(t.slice(-3)).toEqual(['day:shown', 'stage:revealFromBlack:s_new:fade', 'audio:music:m_new']);
+    // обычный титр-пауза (chapter) сцену не задерживает
+    const other = setup();
+    await other.director.present({ ...adBatch('fade'), pending: { ...day, caption: { key: 'k.ch', style: 'chapter' } } });
+    expect(other.director.holdingBlack).toBe(false);
+    expect(other.t).toContain('stage:changeScene:s_new:fade');
+  });
+
   it('любой другой переход (vhs_glitch, dissolve, cut, flash, wipe) тоже гасится в чёрный: сцена не попадает на экран до рекламы', async () => {
     for (const tr of ['vhs_glitch', 'dissolve', 'cut', 'flash', 'wipe'] as const) {
       const { t, director } = setup();

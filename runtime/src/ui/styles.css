@@ -644,6 +644,29 @@ body {
   margin-top: 0.4em;
   background: var(--c-accent);
 }
+/* day — отбивка нового дня (владелец 2026-10-14): чёрный экран, дата по центру, тонкая красная черта; кадр под ней
+   держится чёрным и проявляется после (Director). Слой — поверх чёрного удержания сцены. */
+.vn-cap--day {
+  z-index: 1;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8%;
+  text-align: center;
+  font: 400 clamp(19px, calc(5vmin - 3px), 45px) / 1.15 var(--font-title);
+  letter-spacing: 0.04em;
+  color: #f2efe6;
+  background: #000;
+}
+.vn-cap--day::after {
+  content: '';
+  width: 2.2em;
+  height: 1px;
+  margin-top: 0.6em;
+  background: var(--c-accent);
+}
 .vn-cap--fact {
   left: 0;
   right: 0;
