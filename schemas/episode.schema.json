@@ -388,7 +388,8 @@
         "id": { "$ref": "#/$defs/asciiId" },
         "fade_ms": { "type": "integer", "minimum": 0, "maximum": 10000 },
         "loop": { "type": "boolean" },
-        "volume": { "type": "number", "minimum": 0, "maximum": 1 }
+        "volume": { "type": "number", "minimum": 0, "maximum": 1 },
+        "hold_ms": { "type": "integer", "minimum": 0, "maximum": 8000, "description": "Только sfx: сценарий ждёт столько мс от начала звука, чтобы следующая реплика пришлась на конец события (два звонка и щелчок трубки — потом голос). Окно реплики на это время скрыто; тап ускоряет." }
       }
     },
     "stepFx": {

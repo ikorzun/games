@@ -227,6 +227,8 @@ export interface AudioStep extends StepBase {
   fade_ms?: number;
   loop?: boolean;
   volume?: number;
+  /** Только sfx: сценарий ждёт столько мс от начала звука — следующая реплика приходится на конец события. */
+  hold_ms?: number;
 }
 export interface FxStep extends StepBase {
   do: 'fx';
@@ -627,7 +629,8 @@ export interface LinePending {
 
 export interface HoldPending {
   kind: 'hold';
-  reason: 'caption' | 'fx';
+  /** sound — пауза на звук события (sfx с hold_ms): звонок отзвенел, трубку сняли — тогда реплика. */
+  reason: 'caption' | 'fx' | 'sound';
   ms: number;
   caption?: { key: string; style: CaptionStyle };
   fx?: { fx: FxKind; intensity: number };

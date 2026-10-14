@@ -907,7 +907,8 @@
     },
     {
      "do": "sfx",
-     "id": "sfx_phone_ring"
+     "id": "sfx_phone_ring",
+     "hold_ms": 3300
     },
     {
      "do": "narrate",
@@ -1324,6 +1325,10 @@
      "position": "right"
     },
     {
+     "do": "sfx",
+     "id": "sfx_car_go"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.go_flat.l01"
@@ -1361,6 +1366,10 @@
      "position": "right"
     },
     {
+     "do": "sfx",
+     "id": "sfx_car_go"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.go_galina.l01"
@@ -1396,6 +1405,10 @@
      "do": "show",
      "who": "sledak",
      "position": "right"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_car_go"
     },
     {
      "do": "narrate",
@@ -1448,6 +1461,10 @@
      "position": "right"
     },
     {
+     "do": "sfx",
+     "id": "sfx_car_go"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.go_zhek.l01"
@@ -1477,6 +1494,10 @@
      "do": "show",
      "who": "sledak",
      "position": "right"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_car_go"
     },
     {
      "do": "narrate",
@@ -1591,7 +1612,8 @@
      ]
     }
    ],
-   "coverage": "hod_flat"
+   "coverage": "hod_flat",
+   "ambient": "amb_yard"
   },
   "flat_formal": {
    "id": "flat_formal",
@@ -2101,6 +2123,15 @@
      "position": "right"
     },
     {
+     "do": "sfx",
+     "id": "sfx_doorbell",
+     "hold_ms": 2700
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_door_chain_open"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.galina.l02"
@@ -2199,6 +2230,10 @@
      "item": "n_left"
     },
     {
+     "do": "sfx",
+     "id": "sfx_door_close"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.galina_closed.l02"
@@ -2265,6 +2300,10 @@
      "do": "show",
      "who": "oper",
      "position": "right"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_door_chain_off"
     },
     {
      "do": "narrate",
@@ -2765,6 +2804,10 @@
      "key": "ep01.h.notary_glasses.l02"
     },
     {
+     "do": "sfx",
+     "id": "sfx_pen_drop"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.notary_glasses.l03"
@@ -2898,6 +2941,10 @@
      "key": "ep01.h.notary_reg2.l01"
     },
     {
+     "do": "sfx",
+     "id": "sfx_pen_drop"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.notary_reg2.l02"
@@ -2941,6 +2988,10 @@
      "do": "say",
      "who": "notary",
      "key": "ep01.h.notary_who.l01"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_pen_drop"
     },
     {
      "do": "narrate",
@@ -3812,6 +3863,10 @@
      "position": "right"
     },
     {
+     "do": "sfx",
+     "id": "sfx_drawer_close"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.bti_chain_part.l01"
@@ -3936,9 +3991,17 @@
      "position": "center"
     },
     {
+     "do": "sfx",
+     "id": "sfx_tea"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d1_evening.l02"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_match"
     },
     {
      "do": "say",
@@ -3964,7 +4027,7 @@
    ],
    "coverage": "hod_office_eve",
    "music": "m_calm",
-   "ambient": "amb_office"
+   "ambient": "amb_night_room"
   },
   "d1_lens": {
    "id": "d1_lens",
@@ -4196,6 +4259,7 @@
     {
      "do": "sfx",
      "id": "sfx_phone_ring",
+     "hold_ms": 3300,
      "when": "notary_alarmed"
     },
     {
@@ -4228,7 +4292,8 @@
     },
     {
      "do": "sfx",
-     "id": "sfx_phone_ring"
+     "id": "sfx_phone_ring",
+     "hold_ms": 3300
     },
     {
      "do": "say",
@@ -4302,6 +4367,10 @@
      "do": "show",
      "who": "boss",
      "position": "right"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_office_door"
     },
     {
      "do": "narrate",
@@ -4456,6 +4525,7 @@
     {
      "do": "sfx",
      "id": "sfx_phone_ring",
+     "hold_ms": 3300,
      "when": "photo_later"
     },
     {
@@ -4521,6 +4591,7 @@
     {
      "do": "sfx",
      "id": "sfx_phone_ring",
+     "hold_ms": 3300,
      "when": "lapins_told_truth"
     },
     {
@@ -4737,7 +4808,7 @@
    ],
    "coverage": "hod_office_night",
    "music": "m_tension",
-   "ambient": "amb_office"
+   "ambient": "amb_night_room"
   },
   "d_who": {
    "id": "d_who",
@@ -5260,6 +5331,12 @@
      "position": "right"
     },
     {
+     "do": "sfx",
+     "id": "sfx_phone_dial",
+     "hold_ms": 3000,
+     "when": "oper_points >= 1"
+    },
+    {
      "do": "say",
      "who": "oper",
      "key": "ep01.h.d2_late.l01",
@@ -5440,11 +5517,21 @@
      "position": "right"
     },
     {
+     "do": "sfx",
+     "id": "sfx_office_door",
+     "when": "notary_alarmed"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d3_office.l02",
      "when": "notary_alarmed",
      "shot": "sh_office_d2_ots_boss"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_office_door",
+     "when": "!notary_alarmed"
     },
     {
      "do": "narrate",
@@ -5529,6 +5616,7 @@
     {
      "do": "sfx",
      "id": "sfx_phone_ring",
+     "hold_ms": 3300,
      "when": "lapins_told_truth"
     },
     {
@@ -5564,6 +5652,7 @@
     {
      "do": "sfx",
      "id": "sfx_phone_ring",
+     "hold_ms": 3300,
      "when": "photo_later && !photo_seen && !lens_d3"
     },
     {
@@ -7187,6 +7276,10 @@
      "when": "oper_with"
     },
     {
+     "do": "sfx",
+     "id": "sfx_doorbell"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.second.l03"
@@ -7405,9 +7498,18 @@
      "when": "oper_with"
     },
     {
+     "do": "sfx",
+     "id": "sfx_doorbell",
+     "hold_ms": 2700
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.address.l03"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_stairs_up"
     },
     {
      "do": "say",
@@ -8007,6 +8109,10 @@
      ]
     },
     {
+     "do": "sfx",
+     "id": "sfx_phone_dial"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.kovrigin_press.l03",
@@ -8067,7 +8173,7 @@
    ],
    "coverage": "hod_office_eve",
    "music": "m_calm",
-   "ambient": "amb_office"
+   "ambient": "amb_night_room"
   },
   "d3_lens_eve": {
    "id": "d3_lens_eve",
@@ -8551,7 +8657,8 @@
     },
     {
      "do": "sfx",
-     "id": "sfx_phone_ring"
+     "id": "sfx_phone_ring",
+     "hold_ms": 3300
     },
     {
      "do": "say",
@@ -8607,7 +8714,7 @@
     }
    ],
    "coverage": "hod_office_night",
-   "ambient": "amb_office"
+   "ambient": "amb_night_room"
   },
   "d4_office": {
    "id": "d4_office",
@@ -8641,6 +8748,7 @@
     {
      "do": "sfx",
      "id": "sfx_phone_ring",
+     "hold_ms": 3300,
      "when": "irina_call_d4"
     },
     {
@@ -8920,6 +9028,11 @@
      "when": "oper_with"
     },
     {
+     "do": "sfx",
+     "id": "sfx_doorbell",
+     "hold_ms": 2700
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d4_ident_galina.l01",
@@ -8948,6 +9061,10 @@
      "who": "neighbor",
      "key": "ep01.h.d4_ident_galina.l05",
      "shot": "sh_landing_open_ots"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_door_close"
     },
     {
      "do": "set",
@@ -9028,6 +9145,10 @@
        "value": true
       }
      ]
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_stamp"
     },
     {
      "do": "narrate",
@@ -9162,6 +9283,11 @@
      "when": "oper_with"
     },
     {
+     "do": "sfx",
+     "id": "sfx_car_trunk",
+     "when": "murashov_spooked"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d4_op_now.l01",
@@ -9252,6 +9378,11 @@
      "when": "oper_with"
     },
     {
+     "do": "sfx",
+     "id": "sfx_stairs_run",
+     "when": "!oper_with"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d4_op_now.l09",
@@ -9273,6 +9404,10 @@
      "do": "show",
      "who": "murashov",
      "position": "right"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_handcuffs"
     },
     {
      "do": "narrate",
@@ -9320,6 +9455,10 @@
        "value": true
       }
      ]
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_car_go"
     },
     {
      "do": "narrate",
@@ -9433,7 +9572,8 @@
      ]
     }
    ],
-   "coverage": "hod_search"
+   "coverage": "hod_search",
+   "ambient": "amb_night_room"
   },
   "d4_search_papers": {
    "id": "d4_search_papers",
@@ -9517,6 +9657,10 @@
      "do": "show",
      "who": "sledak",
      "position": "center"
+    },
+    {
+     "do": "sfx",
+     "id": "sfx_drawer_keys"
     },
     {
      "do": "narrate",
@@ -9649,6 +9793,10 @@
      "item": "n_shmel_talks"
     },
     {
+     "do": "sfx",
+     "id": "sfx_shovels"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d5_field.l04",
@@ -9682,6 +9830,11 @@
      "shot": "sh_field_wide"
     },
     {
+     "do": "sfx",
+     "id": "sfx_match",
+     "when": "!oper_wounded"
+    },
+    {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d5_field.l09",
@@ -9708,7 +9861,8 @@
      "transition": "fade"
     }
    ],
-   "coverage": "hod_field"
+   "coverage": "hod_field",
+   "ambient": "amb_forest_dawn"
   },
   "d5_interrog": {
    "id": "d5_interrog",
@@ -9754,7 +9908,8 @@
     }
    ],
    "coverage": "hod_interrog",
-   "music": "m_tension"
+   "music": "m_tension",
+   "ambient": "amb_archive"
   },
   "d5_after": {
    "id": "d5_after",
@@ -10130,6 +10285,7 @@
     {
      "do": "sfx",
      "id": "sfx_phone_ring",
+     "hold_ms": 3300,
      "when": "oper_wounded"
     },
     {
@@ -10153,7 +10309,7 @@
     }
    ],
    "coverage": "hod_office_d2",
-   "ambient": "amb_office"
+   "ambient": "amb_night_room"
   },
   "d5_gone": {
    "id": "d5_gone",
@@ -10227,6 +10383,10 @@
     "time_of_day": "day"
    },
    "steps": [
+    {
+     "do": "stop_ambient",
+     "fade_ms": 1200
+    },
     {
      "do": "narrate",
      "style": "voiceover",
@@ -10348,7 +10508,8 @@
      "transition": "slow_fade"
     }
    ],
-   "coverage": "hod_court"
+   "coverage": "hod_court",
+   "ambient": "amb_court"
   },
   "fin_epilogue": {
    "id": "fin_epilogue",
@@ -10494,7 +10655,8 @@
      "do": "jump",
      "scene": "fin_journal"
     }
-   ]
+   ],
+   "ambient": "amb_winter_street"
   },
   "fin_journal": {
    "id": "fin_journal",
@@ -10600,6 +10762,10 @@
     "filter": "vhs"
    },
    "steps": [
+    {
+     "do": "stop_ambient",
+     "fade_ms": 800
+    },
     {
      "do": "show",
      "who": "sledak_old",
@@ -13696,16 +13862,111 @@
     "path": "assets/common/sfx/vhs_glitch.mp3"
    },
    {
-    "id": "sfx_shot",
-    "path": "assets/common/sfx/shot_distant.mp3"
+    "id": "sfx_phone_ring",
+    "path": "assets/ep01/sfx/phone_ring.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
    },
    {
-    "id": "sfx_phone_ring",
-    "path": "assets/common/sfx/phone_ring.mp3",
-    "notes": "входящий звонок, дисковый аппарат 1980-х"
+    "id": "sfx_phone_dial",
+    "path": "assets/ep01/sfx/phone_dial.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_doorbell",
+    "path": "assets/ep01/sfx/doorbell.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_door_chain_open",
+    "path": "assets/ep01/sfx/door_chain_open.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_door_chain_off",
+    "path": "assets/ep01/sfx/door_chain_off.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_door_close",
+    "path": "assets/ep01/sfx/door_close.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_office_door",
+    "path": "assets/ep01/sfx/office_door.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_stairs_up",
+    "path": "assets/ep01/sfx/stairs_up.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_stairs_run",
+    "path": "assets/ep01/sfx/stairs_run.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_car_go",
+    "path": "assets/ep01/sfx/car_go.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_car_trunk",
+    "path": "assets/ep01/sfx/car_trunk.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_pen_drop",
+    "path": "assets/ep01/sfx/pen_drop.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_stamp",
+    "path": "assets/ep01/sfx/stamp.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_drawer_keys",
+    "path": "assets/ep01/sfx/drawer_keys.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_drawer_close",
+    "path": "assets/ep01/sfx/drawer_close.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_match",
+    "path": "assets/ep01/sfx/match.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_tea",
+    "path": "assets/ep01/sfx/tea_glasses.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_handcuffs",
+    "path": "assets/ep01/sfx/handcuffs.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_shovels",
+    "path": "assets/ep01/sfx/shovels.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_shot",
+    "path": "assets/ep01/sfx/gunshot.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
    }
   ],
   "ambient": [
+   {
+    "id": "amb_yard",
+    "path": "assets/common/amb/yard_summer.mp3"
+   },
    {
     "id": "amb_office",
     "path": "assets/common/amb/office_typewriter.mp3"
@@ -13725,6 +13986,26 @@
    {
     "id": "amb_stairwell",
     "path": "assets/common/amb/stairwell.mp3"
+   },
+   {
+    "id": "amb_forest_dawn",
+    "path": "assets/ep01/amb/forest_dawn.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "amb_night_room",
+    "path": "assets/ep01/amb/night_flat.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "amb_court",
+    "path": "assets/ep01/amb/court_room.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "amb_winter_street",
+    "path": "assets/ep01/amb/winter_street.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
    }
   ],
   "budget_mb": 30

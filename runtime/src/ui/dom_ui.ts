@@ -189,7 +189,10 @@ export class DomUI implements SessionUI {
     if (p.fx) {
       const visual = this.d.stage.playFx(p.fx.fx, p.ms, p.fx.intensity, ctx.instant);
       await Promise.race([visual, this.waitHold(p.ms, ctx)]);
+      return;
     }
+    // Пауза на звук события (звонок телефона, в дверь): кадр без окна реплики, пока звук не отыграет.
+    if (p.reason === 'sound') await this.waitHold(p.ms, ctx);
   }
 
   showDocument(p: DocumentPending, ctx: BaseContext): Promise<void> {

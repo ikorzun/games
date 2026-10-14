@@ -856,6 +856,8 @@ export class Interpreter {
             loop: step.loop ?? step.do !== 'sfx',
             volume: step.volume ?? 1,
           });
+          // Звук события с паузой: следующая реплика — после него (step_index сдвинет continue()).
+          if (step.do === 'sfx' && step.hold_ms) return { kind: 'hold', reason: 'sound', ms: step.hold_ms } satisfies HoldPending;
         }
         state.step_index += 1;
         return null;

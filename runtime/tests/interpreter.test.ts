@@ -825,6 +825,18 @@ describe('сцена: спрайты, CG, звук', () => {
     expect(interp.state.vars.n).toBe(1); // логика сцены выполнена
   });
 
+  it('звук события с hold_ms: сценарий ждёт, реплика — после звука (звонок, звонок, щелчок трубки — потом голос)', () => {
+    const ep = miniEpisode({
+      s1: { steps: [{ do: 'sfx', id: 'sfx_ring', hold_ms: 3300 }, { do: 'say', who: 'a', key: 'k.hello' }, { do: 'end', ending: 'e_main' }] },
+    });
+    const { interp } = make(ep);
+    const r = interp.pump();
+    expect(r.events.filter((e) => e.t === 'audio').map((e) => (e.t === 'audio' ? e.id : ''))).toEqual(['sfx_ring']);
+    expect(r.pending).toEqual({ kind: 'hold', reason: 'sound', ms: 3300 });
+    interp.continue();
+    expect(interp.pump().pending).toMatchObject({ kind: 'line', key: 'k.hello' });
+  });
+
   it('смена сцены очищает спрайты; музыка переключается только если id другой', () => {
     const ep = miniEpisode({
       s1: {
