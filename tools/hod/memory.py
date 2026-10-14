@@ -483,7 +483,9 @@ STAGING = {
                 'her eyes on him, just right of the camera',
         'murashov_sil': 'only the back of his neat dark head and the shoulder of his light beige jacket at the RIGHT edge; his '
                         'face is never visible'},    # дни 3–5 — по принятым кадрам «Реализма» (tools/hod/shots.py); взгляды проверены на кадрах 2026-10-14
-    'walk_wide': {'sledak': 'stands alone at the trolleybus stop LEFT of centre, a brown bag under his arm, reading a slip of paper in his hands; his eyes on the paper'},
+    'walk_wide': {'sledak': 'stands alone at the trolleybus stop LEFT of centre, holding a slip of paper in both hands and reading '
+                            'it; a brown shoulder bag hangs on its long strap from his right shoulder against his hip, no hand '
+                            'on it; exactly two arms and two hands; his eyes on the paper'},
     'second_wide': {
         'sledak': 'stands on the landing LEFT of centre, seen three-quarter from behind, turned toward the old woman; his eyes on her',
         'klava': 'stands in her open doorway on the RIGHT, one hand on the door frame, the other pointing across at the steel door on the LEFT; her eyes on Gromov'},
@@ -511,8 +513,13 @@ STAGING = {
         'sledak': 'stands below on the LEFT, seen three-quarter from behind, handcuffs in his hand; his eyes on Murashov',
         'murashov': 'stands on the steps above, holding out both empty hands, wrists together, palms up; calm; his eyes on Gromov'},
     'op_metro': {
-        'accomplice': "is bent over the bonnet of the grey Volga, his right hand jammed in the pocket of his tracksuit top, his face turned sideways, scared and uncomprehending; his eyes on nothing, off to the side",
-        'oper': "stands behind him on the RIGHT, twisting Shmel's arm behind his back; his eyes on Shmel"},
+        'accomplice': "is pinned face-down on the bonnet of the grey Volga, his cheek pressed to the metal, BOTH hands behind "
+                      "his back at the small of his back with the wrists crossed, neither hand in front of him; scared and "
+                      "uncomprehending; his eyes off to the side, not into the lens",
+        'oper': "leans his whole weight on him from behind on the RIGHT: his left hand clamps Shmel's crossed wrists at the "
+                "small of his back, his right forearm presses between his shoulder blades; his eyes on Shmel. On the LEFT, on "
+                "the far side of the bonnet, a young militia sergeant in a short-sleeved grey-blue uniform shirt and cap "
+                "presses Shmel's left shoulder down with both hands and does not hold his hands; all doors of the Volga are closed"},
     'search_wide': {'sledak': 'stands at the desk in the centre, pulling open a drawer; his eyes down in the drawer'},
     'search_keys': {'sledak': 'only his hand and short pale-blue sleeve, lifting the bunch of tagged keys out of the drawer'},
     'search_papers': {'sledak': 'stands at the desk turning the pages of an open folder; his eyes on the papers'},
@@ -533,7 +540,11 @@ STAGING = {
         'notary': 'sits on the LEFT side of the table, staring down at the table, a damp handkerchief in his fist; his eyes on the table',
         'sledak': 'sits at the far end of the table, writing; his eyes on Kovrigin',
         'murashov': 'sits on the RIGHT side of the table, turned toward Kovrigin, calm and expectant; his eyes on Kovrigin'},
-    'court_wide': {'murashov': "stands inside the metal defendants' cage on the LEFT, hands folded, in a dark grey suit; his eyes toward the judges' bench"},
+    'court_wide': {'murashov': "stands INSIDE a closed defendants' cage on the LEFT, fully behind its front bars, hands folded, "
+                               "in a dark grey suit; the vertical steel bars run unbroken in front of his whole body, the cage "
+                               "has no opening and no missing bars; the two militiamen stand OUTSIDE the cage; his eyes toward "
+                               "the judges' bench"},
+    'field_find': {},
     'agency_closed': {'sledak': 'stands at the closed agency door RIGHT of centre, small in the frame, seen from the side; his eyes on the paper sign on the glass'},
     'gromov_2004': {'sledak_old': 'sits in a leather office chair, turned three-quarter to the RIGHT; his eyes on an unseen interviewer off-camera on the right, never into the lens'},
 }
@@ -642,14 +653,15 @@ def keep_mask(raw: str, keep: list[str]) -> Image.Image:
     return out
 
 
-def fix(target: str, box: str, what: str, keep: list[str] = (), ref: str = '') -> None:
+def fix(target: str, box: str, what: str, keep: list[str] = (), ref: str = '', raw: str = '', realism: bool = False) -> None:
     """Правка по маске (sunburst): перерисовать только прямоугольник box кадра (<кадр> или <кадр>.square), остальное —
     пиксель в пиксель; первый вариант кадра сохраняется рядом как .orig.png. keep — что внутри прямоугольника не трогать
-    (keep_mask); ref — картинка-образец предмета (тот же предмет в другом кадре сета)."""
+    (keep_mask); ref — картинка-образец предмета (тот же предмет в другом кадре сета). raw и realism — правка кадра
+    «Реализма» (rfix): свой файл и фотографический, а не рисованный стиль."""
     import shutil
     from PIL import ImageChops, ImageDraw, ImageFilter, ImageOps
     sid = target.removesuffix('.square')
-    raw = os.path.join(RAW, 'squares' if target.endswith('.square') else 'scenes', f'{target}.png')
+    raw = raw or os.path.join(RAW, 'squares' if target.endswith('.square') else 'scenes', f'{target}.png')
     orig = raw[:-4] + '.orig.png'
     if not os.path.exists(orig):
         shutil.copy(raw, orig)
@@ -665,9 +677,10 @@ def fix(target: str, box: str, what: str, keep: list[str] = (), ref: str = '') -
     mask.save(mpath)
     # Люди под защитой — лица не перерисовываются, листы персонажей не нужны.
     who, sheets = ('', []) if 'people' in keep else people(shot_info(sid)[2], 2)
+    look = ('photographic look — film grain, lens softness, palette and light —' if realism else
+            'drawing style, ink line weight, cel shading, palette and light')
     prompt = (f'Edit only the transparent masked area of image 1; everything outside it stays exactly as it is. Inside the '
-              f'area: {what} Keep exactly the same drawing style, ink line weight, cel shading, palette and light as the '
-              f'rest of image 1, so the edit is invisible.'
+              f'area: {what} Keep exactly the same {look} as the rest of image 1, so the edit is invisible.'
               + (' People and objects that stay outside the area are in front: paint behind them, never over them.' if kept else '')
               + (' Image 2 shows the same object in this room from another shot: draw it exactly like that, seen from this '
                  'camera.' if ref else '')
@@ -717,6 +730,25 @@ if __name__ == '__main__':
             else:
                 sys.exit(f'fix: непонятный ключ {flag}')
         fix(args[0], args[1], args[2], keep, ref)
+    elif cmd == 'rfix':  # rfix <сет>/<кадр> x0,y0,x1,y1 "что исправить" [--keep …] — кадр «Реализма», координаты 1920×1088
+        set_, sid = args[0].split('/')
+        rest, keep = args[3:], ['people']  # людей на кадрах «Реализма» не перерисовываем: их маски подсветки остаются верными
+        while rest:
+            flag, val, rest = rest[0], rest[1], rest[2:]
+            if flag != '--keep':
+                sys.exit(f'rfix: непонятный ключ {flag}')
+            keep.append(val)
+        src = os.path.join(ROOT, f'assets/ep01/hod/{set_}/{sid}.webp')
+        raw = os.path.join(RAW, 'realism', f'{sid}.png')
+        if not os.path.exists(raw):  # API — кратно 16: 1080 → 1088, по 4 px повторённого края сверху и снизу
+            os.makedirs(os.path.dirname(raw), exist_ok=True)
+            im = Image.open(src).convert('RGB')
+            pad = Image.new('RGB', (1920, 1088))
+            pad.paste(im, (0, 4)); pad.paste(im.crop((0, 0, 1920, 4)), (0, 0)); pad.paste(im.crop((0, 1076, 1920, 1080)), (0, 1084))
+            pad.save(raw)
+        fix(f'r_{sid}', args[1], args[2], keep, raw=raw, realism=True)
+        Image.open(raw).convert('RGB').crop((0, 4, 1920, 1084)).save(src, 'WEBP', quality=82, method=6)
+        print('принято', src)
     elif cmd == 'prompt':  # prompt <кадр> — промпт кадра и картинки; prompt <персонаж> head|body — лист
         if args[0] in STAGING:
             text, files = scene_inputs(args[0])

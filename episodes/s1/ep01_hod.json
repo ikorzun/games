@@ -138,8 +138,7 @@
    "short_name_key": "ep01.cast.accomplice_short",
    "role": "criminal",
    "name_color": "#b84a3a",
-   "title_key": "ep01.cast.accomplice_title",
-   "portrait": "assets/ep01/portraits/accomplice.webp"
+   "title_key": "ep01.cast.accomplice_title"
   },
   {
    "id": "lapin_wife",
@@ -4912,7 +4911,8 @@
     {
      "do": "narrate",
      "style": "voiceover",
-     "key": "ep01.h.recon.l02"
+     "key": "ep01.h.recon.l02",
+     "shot": "sh_recon_wide"
     },
     {
      "do": "say",
@@ -4942,12 +4942,14 @@
     {
      "do": "say",
      "who": "murashov_sil",
-     "key": "ep01.h.recon.l08"
+     "key": "ep01.h.recon.l08",
+     "shot": "sh_recon_sil"
     },
     {
      "do": "narrate",
      "style": "voiceover",
-     "key": "ep01.h.recon.l09"
+     "key": "ep01.h.recon.l09",
+     "shot": "sh_recon_wide"
     },
     {
      "do": "jump",
@@ -8612,13 +8614,13 @@
      "do": "say",
      "who": "accomplice",
      "key": "ep01.h.d4_op_wait.l03",
-     "shot": "sh_op_metro"
+     "shot": "sh_op_shmel_sil"
     },
     {
      "do": "say",
      "who": "accomplice",
      "key": "ep01.h.d4_op_wait.l04",
-     "shot": "sh_op_metro"
+     "shot": "sh_op_shmel_sil"
     },
     {
      "do": "narrate",
@@ -8926,14 +8928,14 @@
      "who": "expert",
      "key": "ep01.h.d5_field.l05",
      "when": "bti_six",
-     "shot": "sh_field_ots_expert"
+     "shot": "sh_field_find"
     },
     {
      "do": "say",
      "who": "expert",
      "key": "ep01.h.d5_field.l06",
      "when": "!bti_six",
-     "shot": "sh_field_ots_expert"
+     "shot": "sh_field_find"
     },
     {
      "do": "narrate",
@@ -12646,6 +12648,19 @@
     }
    },
    {
+    "id": "sh_field_find",
+    "set": "hod_field",
+    "bg": "bg_hod_field",
+    "kind": "insert",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_field/field_find.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_field/field_find.webp",
+     "square": "assets/ep01/hod_memory/hod_field/field_find.square.webp"
+    }
+   },
+   {
     "id": "sh_agency_closed",
     "set": "hod_agency_closed",
     "bg": "bg_hod_agency_closed",
@@ -12690,6 +12705,32 @@
       "notary": "assets/ep01/hod_memory/hod_notary/notary_ots_notary.square.notary.webp",
       "sledak": "assets/ep01/hod_memory/hod_notary/notary_ots_notary.square.sledak.webp"
      }
+    }
+   },
+   {
+    "id": "sh_op_shmel_sil",
+    "set": "hod_op",
+    "bg": "bg_hod_op",
+    "kind": "insert",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_op/op_shmel_sil.webp",
+    "memory": {
+     "file": "assets/ep01/hod/hod_op/op_shmel_sil.webp",
+     "square": "assets/ep01/hod/hod_op/op_shmel_sil.square.webp"
+    }
+   },
+   {
+    "id": "sh_recon_sil",
+    "set": "hod_recon",
+    "bg": "bg_hod_recon",
+    "kind": "insert",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_recon/recon_sil.webp",
+    "memory": {
+     "file": "assets/ep01/hod/hod_recon/recon_sil.webp",
+     "square": "assets/ep01/hod/hod_recon/recon_sil.square.webp"
     }
    }
   ],

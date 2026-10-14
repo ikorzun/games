@@ -249,6 +249,11 @@ SHOTS.append({'id': 'sh_notary_alone_ots', 'set': 'hod_notary_alone', 'bg': 'bg_
               'file': FILE('notary_ots_notary', 'hod_notary'),
               **({'memory': memory_of('notary_ots_notary', 'hod_notary', ['notary', 'sledak'])}
                  if memory_of('notary_ots_notary', 'hod_notary', ['notary', 'sledak']) else {})})
+# Страшные кадры (docs/production/prompts/scary-frames.md, tools/hod/scary.py): силуэт признания на красном — одна
+# картинка на обе графики (лица нет — рисовать «Воспоминания» нечего), квадрат — центральная вырезка.
+for sid, set_ in (('op_shmel_sil', 'hod_op'), ('recon_sil', 'hod_recon')):
+    SHOTS.append({'id': f'sh_{sid}', 'set': set_, 'bg': f'bg_{set_}', 'kind': 'insert', 'angle': 'eye', 'cast': [],
+                  'file': FILE(sid, set_), 'memory': {'file': FILE(sid, set_), 'square': FILE(f'{sid}.square', set_)}})
 # Фон мини-игры «Осмотр квартиры»: стена Зои Павловны крупно, три улики врозь, людей нет.
 BACKGROUNDS.append({'id': 'bg_hod_flat_inspect', 'path': FILE('flat_inspect', 'hod_flat_inspect'), 'season': 'indoor',
                     **({'memory': MEM('flat_inspect', 'hod_flat_inspect')} if HAS(MEM('flat_inspect', 'hod_flat_inspect')) else {}),
@@ -870,14 +875,14 @@ scene('version', 'b4_night', 'hod_office_night', lambda: [
 scene('recon', 'br_recon', 'hod_recon', lambda: [
     cap('location', 'Реконструкция. ЖЭК № 7, июнь 1993 года'),
     show('zoya', 'left'), show('murashov_sil', 'right'),
-    vo('Июнь. Чтобы приватизировать квартиру, нужны справки из ЖЭКа, паспортного стола и БТИ. Зоя Павловна собирает их третью неделю.'),
+    vo('Июнь. Чтобы приватизировать квартиру, нужны справки из ЖЭКа, паспортного стола и БТИ. Зоя Павловна собирает их третью неделю.', shot='recon_wide'),
     say('zoya', 'Четвёртый раз сюда прихожу. В одном окошке — не к нам, в другом — приходите завтра.'),
     say('murashov_sil', 'Простите, невольно услышал. Вам не в это окно, а в третье. Давайте папку, я посмотрю.'),
     say('zoya', 'Ой, спасибо. Ничего я в этих бумагах не понимаю. Хочу квартиру на внука оформить.'),
     say('murashov_sil', 'Я из бывших журналистов, привык разбираться в бумагах. Помогаю людям — бесплатно, по-соседски. Сергей Викторович.'),
     say('zoya', 'Бесплатно? Так не бывает, Сергей Викторович.'),
-    say('murashov_sil', 'Бывает, когда человека жалко.'),
-    vo('Через неделю она подпишет доверенность, не надев очков. Ещё через неделю выйдет из дома с сумкой — и больше не вернётся.'),
+    say('murashov_sil', 'Бывает, когда человека жалко.', shot='recon_sil'),  # страшные слова — силуэт на красном
+    vo('Через неделю она подпишет доверенность, не надев очков. Ещё через неделю выйдет из дома с сумкой — и больше не вернётся.', shot='recon_wide'),
     jump('d2_late', 'vhs_glitch'),
 ], time='day', music='m_chronicle')
 scene('d2_late', 'b4_night', 'hod_office_night', lambda: [
@@ -1313,8 +1318,8 @@ scene('d4_op_wait', 'b7_op', 'hod_op', lambda: [
     setv(e('op_waited', 'set', True)),
     inner('Полночь. Мурашов выходит, Шмелёв открывает ему дверцу. «Волга» уходит в сторону области.', shot='op_wide'),
     inner('В половине второго она возвращается — одна. Шмелёва берут у метро: руку из кармана он вынуть не успевает.'),
-    say('accomplice', 'Я только возил.'),
-    say('accomplice', 'Возил в лес.'),
+    say('accomplice', 'Я только возил.', shot='op_shmel_sil'),  # признание — силуэт на красном
+    say('accomplice', 'Возил в лес.', shot='op_shmel_sil'),
     inner('И молчит до самого отдела.'),
     setv(e('accomplice_talks', 'set', True)), unlock('n_shmel_talks'),
     jump('d4_search', 'fade'),
@@ -1365,8 +1370,8 @@ scene('d5_field', 'b8_friday', 'hod_field', lambda: [
     unlock('n_shmel_talks'),
     inner('Лента между берёзами. Лопаты. Левина в резиновых сапогах ходит вдоль ленты и ничего не говорит.'),
     inner('Я стою у машины. Ближе меня не зовут — и я не прошу.'),
-    say('expert', 'Шестеро, Громов. Как в картотеке.', when='bti_six', shot='field_ots_expert'),
-    say('expert', 'Больше, чем ты нашёл, Громов.', when='!bti_six', shot='field_ots_expert'),
+    say('expert', 'Шестеро, Громов. Как в картотеке.', when='bti_six', shot='field_find'),  # находка — красная замена тела
+    say('expert', 'Больше, чем ты нашёл, Громов.', when='!bti_six', shot='field_find'),
     inner('Сайко в Боткинской. Позвонил в шесть: «Шмель показал место». И повесил трубку.', when='oper_wounded'),
     inner('Сайко курит у машины. Не шутит.', when='!oper_wounded', shot='field_oper'),
     setv(e('field_seen', 'set', True)), unlock('n_field'),

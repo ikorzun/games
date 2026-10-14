@@ -365,11 +365,11 @@
 ## `walk_wide` — wide, сет `hod_walk`
 
 - Время: a sunny Wednesday, 11 August 1993, late morning. Место: street_walk.
-- Investigator Andrei Gromov: stands alone at the trolleybus stop LEFT of centre, his case folder under his arm, reading an address written on a slip of paper in his hand, not looking at the camera.
+- Investigator Andrei Gromov: stands alone at the trolleybus stop LEFT of centre, holding a slip of paper with an address in BOTH hands and reading it, not looking at the camera; a brown shoulder bag hangs on its long strap from his right shoulder against his hip with no hand on it; he has exactly two arms and two hands.
 - Камера: The camera stands on the other side of the pavement at the eye level of a standing person, a 35 mm-equivalent field of view: Gromov full-figure and small in the frame, the street and the approaching trolleybus behind him; the lower third of the frame is kept free of faces.
 - Свет: bright summer daylight, the stop in the patchy shade of the lime tree.
 - Предметы: the stop sign, the bench, the trolleybus, the lime tree, the slip of paper.
-- Пометка: Сайко нет: Громов в среду один (без доверия Сайко).
+- Пометка: Сайко нет: Громов в среду один (без доверия Сайко). Две руки: обе на бумажке, сумка на ремне через плечо (2026-10-14: была третья рука).
 - Референсы: face:sledak
 
 ## `second_wide` — wide, сет `hod_second`
@@ -480,12 +480,12 @@
 ## `op_metro` — medium, сет `hod_op`
 
 - Время: a warm August night, Friday 13 August 1993, about 1:30 a.m.. Место: metro.
-- Dmitry Shmelyov (Shmel), his driver: is bent over the bonnet of the grey Volga, his right hand still jammed in the pocket of his tracksuit top, his face turned sideways on the bonnet, scared and uncomprehending.
-- Detective Viktor Sayko: stands behind him on the RIGHT, twisting Shmel's left arm behind his back, his eyes on Shmel's pocket.
-- Камера: The camera stands at the kerb at eye level, a 40 mm-equivalent field of view; both men in the middle of the frame, the lit metro sign behind them out of focus.
+- Dmitry Shmelyov (Shmel), his driver: is pinned face-down on the bonnet of the grey Volga: his cheek pressed flat against the wet metal, his body bent over the front of the car, BOTH of his hands behind his back at the small of his back with the wrists crossed — neither hand is in front of him or on the car; scared and uncomprehending, his eyes off to the side, not into the lens.
+- Detective Viktor Sayko: stands right behind him, RIGHT of centre, and leans in with his whole weight: his left hand clamps both of Shmel's crossed wrists at the small of his back, his right forearm presses down between Shmel's shoulder blades; teeth clenched, his eyes on Shmel.
+- Камера: The camera stands low at the front corner of the car at eye level with the bonnet, a 35 mm-equivalent field of view; the moment of the seizure, full of force and pressure. On the LEFT, on the far side of the bonnet, a young militia sergeant in a short-sleeved grey-blue uniform shirt and cap presses Shmel's left shoulder down onto the bonnet with both hands — he does not hold Shmel's hands. The lit metro sign behind them out of focus.
 - Свет: night: the red glow of the metro letter and the glass doors, a street lamp, reflections on the wet asphalt.
-- Предметы: the grey Volga with its door open, the metro sign.
-- Пометка: Ветка «ждать»: Шмелёва берут у метро, руку из кармана он вынуть не успевает.
+- Предметы: the grey GAZ-24 Volga with ALL its doors closed, the metro sign.
+- Пометка: Ветка «ждать»: Шмелёва берут у метро, руку из кармана он вынуть не успевает. 2026-10-14: руки за спиной, натиск и захват, сержант, двери закрыты.
 - Референсы: face:accomplice, face:oper
 
 ## `search_wide` — wide, сет `hod_search`
@@ -583,8 +583,8 @@
 ## `court_wide` — wide, сет `hod_court`
 
 - Время: Moscow, 1994, a grey daytime. Место: court.
-- Sergei Murashov, the apartment dealer: stands inside the metal defendants' cage on the LEFT, hands folded in front of him, neat and expressionless, looking toward the judges' bench, not at the camera.
-- Камера: The camera stands among the public benches at seated eye level, a 32 mm-equivalent field of view: the cage on the LEFT, the judges' bench far away out of focus, two militiamen beside the cage, the backs of a few people on the benches in the foreground; the lower third of the frame is kept free of faces.
+- Sergei Murashov, the apartment dealer: stands INSIDE a closed defendants' cage on the LEFT, fully behind its front bars, hands folded in front of him, neat and expressionless, looking toward the judges' bench, not at the camera.
+- Камера: The camera stands among the public benches at seated eye level, a 32 mm-equivalent field of view: the cage on the LEFT is a closed box of vertical steel bars on every visible side — front, side and top rail — with a closed barred door; the bars run unbroken in front of Murashov's whole body; no opening, gap or missing bars anywhere. Two militiamen stand OUTSIDE the cage beside it. The judges' bench far away out of focus, the backs of a few people on the benches in the foreground; the lower third of the frame is kept free of faces.
 - Свет: flat grey daylight from the tall windows.
 - Предметы: the cage, the bench, the curtains, the wood panelling.
 - Пометка: Суд 1994-го: только Мурашов в клетке; судья вдали, не в фокусе.
@@ -620,6 +620,15 @@
 - Предметы: the blinds, the CRT monitor, the bookcase.
 - Пометка: «Говорящая голова» 2004 года; одна реплика в финале.
 - Референсы: face:sledak_old
+
+## `field_find` — insert, сет `hod_field`
+
+- Время: early morning, Friday 13 August 1993, about 7:20 a.m.: a low sun through the birches, mist over the field, dew. Место: field.
+- Камера: No living people in the frame. The camera stands at the tape by the road at the eye level of a standing person, a 40 mm-equivalent field of view, looking over the tape into the tall grass between the birches: the red-and-white tape across the frame in the foreground, the two spades leaning on a birch, the field and the mist beyond.
+- Свет: low morning sun through the birch trunks, long shadows, mist, dew; daylight stays visibly present.
+- Предметы: the tape, the birches, the two spades, the tall grass.
+- Пометка: Находка (решение владельца 2026-10-14): тело — красная пиксельная замена, как в передаче; модель рисует только замену.
+- Референсы: place:field_wide
 
 ## `agency_closed` — wide, сет `hod_agency_closed`
 

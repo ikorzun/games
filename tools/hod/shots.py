@@ -125,9 +125,9 @@ LOC = {
 S = []
 
 
-def shot(id, set, kind, loc, time, season, people, camera, light, objects, refs, size='1536x864', note='', costume=None):
+def shot(id, set, kind, loc, time, season, people, camera, light, objects, refs, size='1536x864', note='', costume=None, extra=''):
     S.append(dict(id=id, set=set, kind=kind, loc=loc, time=time, season=season, people=people, camera=camera,
-                  light=light, objects=objects, refs=refs, size=size, note=note, costume=costume or {}))
+                  light=light, objects=objects, refs=refs, size=size, note=note, costume=costume or {}, extra=extra))
 
 
 MORNING = 'a sunny Monday morning, 9 August 1993, about 9 a.m.'
@@ -481,10 +481,10 @@ FRIDAY = 'a sunny Friday, 13 August 1993, late morning'
 
 # Среда, без Сайко: Громов один, на троллейбусе.
 shot('walk_wide', 'hod_walk', 'wide', 'street_walk', f'{WED}, late morning', SUMMER,
-     {'sledak': 'stands alone at the trolleybus stop LEFT of centre, his case folder under his arm, reading an address written on a slip of paper in his hand, not looking at the camera'},
+     {'sledak': 'stands alone at the trolleybus stop LEFT of centre, holding a slip of paper with an address in BOTH hands and reading it, not looking at the camera; a brown shoulder bag hangs on its long strap from his right shoulder against his hip with no hand on it; he has exactly two arms and two hands'},
      'The camera stands on the other side of the pavement at the eye level of a standing person, a 35 mm-equivalent field of view: Gromov full-figure and small in the frame, the street and the approaching trolleybus behind him; the lower third of the frame is kept free of faces.',
      'bright summer daylight, the stop in the patchy shade of the lime tree', 'the stop sign, the bench, the trolleybus, the lime tree, the slip of paper',
-     ['face:sledak'], note='Сайко нет: Громов в среду один (без доверия Сайко).')
+     ['face:sledak'], note='Сайко нет: Громов в среду один (без доверия Сайко). Две руки: обе на бумажке, сумка на ремне через плечо (2026-10-14: была третья рука).')
 
 # А. Хорошёвка: соседка Петра Ильича. Сайко ждёт внизу в машине — на площадке двое.
 shot('second_wide', 'hod_second', 'wide', 'khoroshevka', f'{WED}, early afternoon', SUMMER,
@@ -557,11 +557,12 @@ shot('op_stairs', 'hod_op', 'medium', 'stairwell_old', THU_NIGHT, SUMMER,
      'the dim bare bulb on the landing above, deep shadows', 'the handcuffs, the railing, the stone steps',
      ['face:murashov', 'face:sledak'], note='Мурашов не бежит и не спрашивает: протягивает руки, «как в очереди за справкой».')
 shot('op_metro', 'hod_op', 'medium', 'metro', 'a warm August night, Friday 13 August 1993, about 1:30 a.m.', SUMMER,
-     {'accomplice': 'is bent over the bonnet of the grey Volga, his right hand still jammed in the pocket of his tracksuit top, his face turned sideways on the bonnet, scared and uncomprehending',
-      'oper': 'stands behind him on the RIGHT, twisting Shmel\'s left arm behind his back, his eyes on Shmel\'s pocket'},
-     'The camera stands at the kerb at eye level, a 40 mm-equivalent field of view; both men in the middle of the frame, the lit metro sign behind them out of focus.',
-     'night: the red glow of the metro letter and the glass doors, a street lamp, reflections on the wet asphalt', 'the grey Volga with its door open, the metro sign',
-     ['face:accomplice', 'face:oper'], note='Ветка «ждать»: Шмелёва берут у метро, руку из кармана он вынуть не успевает.')
+     {'accomplice': 'is pinned face-down on the bonnet of the grey Volga: his cheek pressed flat against the wet metal, his body bent over the front of the car, BOTH of his hands behind his back at the small of his back with the wrists crossed — neither hand is in front of him or on the car; scared and uncomprehending, his eyes off to the side, not into the lens',
+      'oper': 'stands right behind him, RIGHT of centre, and leans in with his whole weight: his left hand clamps both of Shmel\'s crossed wrists at the small of his back, his right forearm presses down between Shmel\'s shoulder blades; teeth clenched, his eyes on Shmel'},
+     'The camera stands low at the front corner of the car at eye level with the bonnet, a 35 mm-equivalent field of view; the moment of the seizure, full of force and pressure. On the LEFT, on the far side of the bonnet, a young militia sergeant in a short-sleeved grey-blue uniform shirt and cap presses Shmel\'s left shoulder down onto the bonnet with both hands — he does not hold Shmel\'s hands. The lit metro sign behind them out of focus.',
+     'night: the red glow of the metro letter and the glass doors, a street lamp, reflections on the wet asphalt',
+     'the grey GAZ-24 Volga with ALL its doors closed, the metro sign',
+     ['face:accomplice', 'face:oper'], note='Ветка «ждать»: Шмелёва берут у метро, руку из кармана он вынуть не успевает. 2026-10-14: руки за спиной, натиск и захват, сержант, двери закрыты.')
 
 # Обыск в доме Мурашова за городом, рассвет. Сайко на общем плане нет (ранен или в машине).
 shot('search_wide', 'hod_search', 'wide', 'dacha', DAWN, SUMMER,
@@ -628,8 +629,8 @@ shot('confront_wide', 'hod_interrog', 'wide', 'interrog', f'{FRIDAY}, about 1 p.
 
 # Развязка.
 shot('court_wide', 'hod_court', 'wide', 'court', 'Moscow, 1994, a grey daytime', 'Indoors; the season is not visible: the tall windows show only a pale grey sky.',
-     {'murashov': 'stands inside the metal defendants\' cage on the LEFT, hands folded in front of him, neat and expressionless, looking toward the judges\' bench, not at the camera'},
-     'The camera stands among the public benches at seated eye level, a 32 mm-equivalent field of view: the cage on the LEFT, the judges\' bench far away out of focus, two militiamen beside the cage, the backs of a few people on the benches in the foreground; the lower third of the frame is kept free of faces.',
+     {'murashov': 'stands INSIDE a closed defendants\' cage on the LEFT, fully behind its front bars, hands folded in front of him, neat and expressionless, looking toward the judges\' bench, not at the camera'},
+     'The camera stands among the public benches at seated eye level, a 32 mm-equivalent field of view: the cage on the LEFT is a closed box of vertical steel bars on every visible side — front, side and top rail — with a closed barred door; the bars run unbroken in front of Murashov\'s whole body; no opening, gap or missing bars anywhere. Two militiamen stand OUTSIDE the cage beside it. The judges\' bench far away out of focus, the backs of a few people on the benches in the foreground; the lower third of the frame is kept free of faces.',
      'flat grey daylight from the tall windows', 'the cage, the bench, the curtains, the wood panelling',
      ['face:murashov'], costume={'murashov': 'a dark grey suit, a white shirt, no tie'}, note='Суд 1994-го: только Мурашов в клетке; судья вдали, не в фокусе.')
 shot('bio_zoya', 'hod_bio', 'insert', 'photo', 'a summer day, about 1985', 'Summer in the photograph: leafy trees.',
@@ -648,6 +649,13 @@ shot('gromov_2004', 'hod_2004', 'medium', 'office2004', 'an overcast day, 2004',
      'A television interview frame: the camera at seated eye level, a 50 mm-equivalent field of view, a medium shot from the chest up, his face in the upper half of the frame; the lower third is kept free (a name caption is overlaid there).',
      'soft grey daylight through the vertical blinds and a warm desk lamp', 'the blinds, the CRT monitor, the bookcase',
      ['face:sledak_old'], note='«Говорящая голова» 2004 года; одна реплика в финале.')
+RED_FIGURE = '''THE DECEASED: one adult lying in the grass is shown ONLY as an opaque, coarse-pixelated red silhouette — the television documentary convention. The red silhouette occupies the correct projected footprint of a realistically proportioned adult lying diagonally on the ground at this distance, judged against the birch trunks, the spades and the tape at the same depth; believable foreshortening; the broad relationship of head, torso, arms and legs is readable only through the overall shape. No face, hair, skin, clothing, shoes or fingers anywhere inside or outside the red shape; it is an opaque matte brick-red fill, not a red tint over a person; only two or three neighbouring red tones; no highlights, no internal shadows, no blood, no stains, no glow. The red shape is built from large hard-edged square blocks on one screen-space grid, about 20–30 blocks from head to foot, with pronounced square steps along the whole outline; nothing else in the frame is pixelated. Not a small floor marker, not a giant shape, not a puddle, not a rectangular censorship box.'''
+shot('field_find', 'hod_field', 'insert', 'field', FIELD_AM, SUMMER,
+     {},
+     'No living people in the frame. The camera stands at the tape by the road at the eye level of a standing person, a 40 mm-equivalent field of view, looking over the tape into the tall grass between the birches: the red-and-white tape across the frame in the foreground, the two spades leaning on a birch, the field and the mist beyond.',
+     'low morning sun through the birch trunks, long shadows, mist, dew; daylight stays visibly present', 'the tape, the birches, the two spades, the tall grass',
+     ['place:field_wide'], extra=RED_FIGURE,
+     note='Находка (решение владельца 2026-10-14): тело — красная пиксельная замена, как в передаче; модель рисует только замену.')
 shot('agency_closed', 'hod_agency_closed', 'wide', 'presnya_street', FRIDAY, SUMMER,
      {'sledak': 'stands at the closed door of the agency RIGHT of centre, seen from the side, looking at a handwritten paper sign taped to the glass'},
      'The camera stands on the same side of the road a few steps away, at the eye level of a standing person, a 32 mm-equivalent field of view: the entrance of the building, the dark windows of the agency on the second floor, the empty kerb with no car; the lower third of the frame is kept free of faces.',
@@ -735,6 +743,7 @@ for s in S:
         f"Camera position: {s['camera']}",
         f"Light sources: {s['light']}.",
         f"Essential objects: {s['objects']}; nothing added that is not described.",
+        *([s['extra']] if s.get('extra') else []),
     ])
     prompt = f"{BASE}\n\nREFERENCE IMAGES\n{refs}\n\n{CONTINUITY}\n\n{scene}"
     plan.append({'id': s['id'], 'set': s['set'], 'kind': s['kind'], 'cast': list(s['people']), 'prompt': prompt,

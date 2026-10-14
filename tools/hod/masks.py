@@ -70,7 +70,7 @@ MEMORY = {
     'watch_wide': ('hod_watch', ['oper', 'sledak']),
     'op_wounded': ('hod_op', ['oper', 'sledak']),
     'op_stairs': ('hod_op', ['sledak', 'murashov']),
-    'op_metro': ('hod_op', ['accomplice', 'oper'], ['_']),  # в квадрате Vision сливает двоих в одну фигуру — без масок
+    'op_metro': ('hod_op', ['_', 'accomplice', 'oper'], ['_', '_']),  # сержант слева; в квадрате Vision сливает Шмелёва с Сайко — без масок
     'search_wide': ('hod_search', ['sledak', '_', '_']),  # понятые и милиционер
     'field_wide': ('hod_field', ['sledak'], ['expert', 'sledak']),  # в квадрате Левина крупнее — Vision её видит
     'field_ots_expert': ('hod_field', ['expert', 'sledak']),
