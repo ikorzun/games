@@ -1,0 +1,27 @@
+{
+  "_doc": "Кастинг озвучки «Хода следствия» (tools/hod/voice.py). Профили — docs/season1/ep01-voices.md. voice_id — голос ElevenLabs из аккаунта владельца (python3 tools/hod/voice.py voices / library); voice_of — тот же голос, что у другой роли; settings переопределяют общие. Пустой voice_id — роль ещё не озвучена.",
+  "model": "eleven_multilingual_v2",
+  "settings": {"stability": 0.5, "similarity_boost": 0.75, "style": 0.0, "use_speaker_boost": true, "speed": 1.0},
+  "roles": {
+    "_narrator": {"voice_id": "", "brief": "мужской 45–55, низкий ровный баритон документальной передачи, медленно, бесстрастно", "settings": {"stability": 0.7, "speed": 0.95}},
+    "_inner": {"voice_of": "sledak", "brief": "мысли Громова: тот же голос, тише и ровнее, концы фраз глотаются", "settings": {"stability": 0.65, "style": 0.0}},
+    "sledak": {"voice_id": "", "brief": "мужской 28–32, сдержанный, чуть глуховатый, негромко и чётко, паузы перед важным", "settings": {"stability": 0.55, "style": 0.1}},
+    "sledak_old": {"voice_id": "", "brief": "тот же человек в 40: ниже и плотнее, усталость, длинные паузы", "settings": {"stability": 0.6, "speed": 0.92}},
+    "oper": {"voice_id": "", "brief": "мужской 32–38, хрипловатый тёплый «с улицы», быстро, с усмешкой, короткими фразами", "settings": {"stability": 0.4, "style": 0.35, "speed": 1.06}},
+    "expert": {"voice_id": "", "brief": "женский 42–50, низкий прокуренный альт, ровно, экономно, без эмоций", "settings": {"stability": 0.6, "style": 0.1}},
+    "boss": {"voice_id": "", "brief": "мужской 52–60, плотный баритон руководителя, медленно, негромко, непререкаемо", "settings": {"stability": 0.6, "style": 0.15, "speed": 0.95}},
+    "murashov": {"voice_id": "", "brief": "мужской 36–42, мягкий вежливый «радийный» и бесцветный, неторопливо, без эмоций", "settings": {"stability": 0.75, "style": 0.0, "speed": 0.95}},
+    "murashov_sil": {"voice_of": "murashov", "brief": "тот же, ещё мягче и участливее", "settings": {"stability": 0.7, "style": 0.1, "speed": 0.95}},
+    "notary": {"voice_id": "", "brief": "мужской 52–60, высоковатый тенор с одышкой, быстро и сбивчиво, оправдываясь", "settings": {"stability": 0.35, "style": 0.35, "speed": 1.08}},
+    "zoya": {"voice_id": "", "brief": "женский 70–78, высокий мягкий голос с лёгкой дрожью, медленно, доверчиво", "settings": {"stability": 0.5, "style": 0.2, "speed": 0.9}},
+    "neighbor": {"voice_id": "", "brief": "женский 55–65, грудной «дворовый», быстро, по-соседски; в испуге — тихо", "settings": {"stability": 0.4, "style": 0.3, "speed": 1.05}},
+    "klava": {"voice_id": "", "brief": "женский 70–78, сухой цепкий голос, горечь без слёз, неторопливо", "settings": {"stability": 0.45, "style": 0.25, "speed": 0.97}},
+    "buyer": {"voice_id": "", "brief": "мужской 38–45, напряжённый высоковатый, неровно, оправдываясь, негромко", "settings": {"stability": 0.4, "style": 0.3}},
+    "lapin_wife": {"voice_id": "", "brief": "женский 35–42, усталый тёплый, сдержанно, прямо, без крика", "settings": {"stability": 0.5, "style": 0.2}},
+    "clerk": {"voice_id": "", "brief": "женский 58–65, низкий прокуренный, неторопливо, насмешливо, по-хозяйски", "settings": {"stability": 0.55, "style": 0.25, "speed": 0.97}},
+    "passport_clerk": {"voice_id": "", "brief": "женский 48–55, бойкий конторский, быстро, между делом", "settings": {"stability": 0.45, "style": 0.25, "speed": 1.05}},
+    "assistant": {"voice_id": "", "brief": "женский 20–25, тихий испуганный, торопливо, шёпотом на лестнице", "settings": {"stability": 0.45, "style": 0.3, "speed": 1.03}},
+    "landlady": {"voice_id": "", "brief": "женский 55–60, добродушный разговорчивый, по-домашнему", "settings": {"stability": 0.5, "style": 0.2}},
+    "accomplice": {"voice_id": "", "brief": "мужской 25–32, простой глуховатый, коротко, испуганно, будто через силу", "settings": {"stability": 0.5, "style": 0.2, "speed": 0.95}}
+  }
+}
