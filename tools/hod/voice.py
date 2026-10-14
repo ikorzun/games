@@ -11,7 +11,9 @@ security add-generic-password -a "$USER" -s elevenlabs -w); в чат, в лог
   python3 tools/hod/voice.py library male|female [query]   # библиотека ElevenLabs: русские голоса для кастинга
   python3 tools/hod/voice.py add <роль> <voice_id>      # голос из библиотеки → в аккаунт, id — в кастинг (меняет аккаунт!)
   python3 tools/hod/voice.py remove <voice_id>          # убрать голос из аккаунта (место для следующих; меняет аккаунт!)
-  python3 tools/hod/voice.py design <роль> [seed]       # голос по описанию (кастинг: design): 3 пробы → _hod/voice/design/
+  python3 tools/hod/voice.py design <роль> [seed] [--tag r2]  # голос по описанию (кастинг: design): 3 пробы → _hod/voice/design/
+  python3 tools/hod/voice.py try <роль> <voice_id> [метка]    # проба голоса библиотеки на реплике роли → _hod/voice/audition/
+                                                       # (голос на время пробы добавляется в аккаунт и убирается)
   python3 tools/hod/voice.py design-save <роль> <n>     # сохранить пробу n как голос аккаунта, id — в кастинг (меняет аккаунт!)
   python3 tools/hod/voice.py samples [who ...]         # по одной пробе на персонажа → assets/ep01/_hod/voice/samples/
   python3 tools/hod/voice.py gen [--who sledak,oper] [--force] [--limit N]   # реплики; готовые клипы пропускает;
@@ -210,20 +212,27 @@ def remove(voice_id: str) -> None:
     print(f'{voice_id}: убран из аккаунта (id в кастинге остаётся — для повторного add)')
 
 
-def design(role: str, seed: int | None = None) -> None:
+def sample_line(role: str) -> str:
+    """Характерная реплика роли средней длины (около 120 знаков) — для проб."""
+    own = [ln['text'] for ln in lines() if ln['who'] == role]
+    return min(own, key=lambda t: abs(len(t) - 120)) if own else ''
+
+
+def design(role: str, seed: int | None = None, tag: str = '') -> None:
     """Голос по описанию (Voice Design, eleven_ttv_v3): три пробы на репликах самой роли; в аккаунт ничего не пишется."""
     import base64
     c = cast()
     desc = c['roles'][role]['design']
-    own = [ln['text'] for ln in lines() if ln['who'] == role]
+    first = sample_line(role)
+    own = [first] + [ln['text'] for ln in lines() if ln['who'] == role and ln['text'] != first]
     text = ''
     for t in own:
         text = f'{text} {t}'.strip()
-        if len(text) >= 160:
+        if len(text) >= 200:
             break
     text = text[:1000] if len(text) >= 100 else (text + ' ' + desc.get('extra_text', 'Ну что вы, милый, я же вам всё рассказала, как было. Вы уж разберитесь.'))[:1000]
     before = json.loads(call('GET', '/v1/user/subscription')).get('character_count', 0)
-    body = {'voice_description': desc['description'], 'model_id': 'eleven_ttv_v3', 'text': spoken(text)}
+    body = {'voice_description': desc['description'], 'model_id': desc.get('model', 'eleven_ttv_v3'), 'text': spoken(text)}
     if seed is not None:
         body['seed'] = seed
     res = json.loads(call('POST', '/v1/text-to-voice/design?output_format=' + FORMAT, body))
@@ -232,18 +241,18 @@ def design(role: str, seed: int | None = None) -> None:
     os.makedirs(out, exist_ok=True)
     meta = {'role': role, 'text': res.get('text', text), 'previews': []}
     for i, pv in enumerate(res.get('previews', []), 1):
-        dst = os.path.join(out, f'{role}_{i}.mp3')
+        dst = os.path.join(out, f'{role}{tag}_{i}.mp3')
         open(dst, 'wb').write(base64.b64decode(pv['audio_base_64']))
         meta['previews'].append({'n': i, 'generated_voice_id': pv['generated_voice_id'], 'file': os.path.relpath(dst, ROOT)})
         print(f'{role} проба {i}: {os.path.relpath(dst, ROOT)} ({pv.get("duration_secs", 0):.1f} с)')
-    json.dump(meta, open(os.path.join(out, f'{role}.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    json.dump(meta, open(os.path.join(out, f'{role}{tag}.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     ledger(f'design:{role}', after - before)
     print(f'списано знаков: {after - before}')
 
 
-def design_save(role: str, n: int) -> None:
+def design_save(role: str, n: int, tag: str = '') -> None:
     c = cast()
-    meta = json.load(open(os.path.join(RAW, 'design', f'{role}.json'), encoding='utf-8'))
+    meta = json.load(open(os.path.join(RAW, 'design', f'{role}{tag}.json'), encoding='utf-8'))
     pv = next(p for p in meta['previews'] if p['n'] == n)
     res = json.loads(call('POST', '/v1/text-to-voice', {'voice_name': f'hod {role} (design)',
                                                          'voice_description': c['roles'][role]['design']['description'],
@@ -251,6 +260,31 @@ def design_save(role: str, n: int) -> None:
     c['roles'][role]['voice_id'] = res['voice_id']
     save_cast(c)
     print(f"{role}: проба {n} → голос {res['voice_id']}")
+
+
+def try_voice(role: str, voice_id: str, label: str = '') -> None:
+    """Проба голоса библиотеки на реплике роли (с настройками роли): голос добавляется на время пробы и убирается."""
+    c = cast()
+    found = [v for v in json.loads(call('GET', '/v1/shared-voices?' + urllib.parse.urlencode({'page_size': 100, 'search': voice_id}))).get('voices', [])
+             if v['voice_id'] == voice_id]
+    if not found:
+        sys.exit(f'{voice_id}: в библиотеке не найден')
+    v = found[0]
+    res = json.loads(call('POST', f"/v1/voices/add/{v['public_owner_id']}/{voice_id}", {'new_name': f'hod try {role}'}))
+    vid = res.get('voice_id', voice_id)
+    try:
+        text = sample_line(role)
+        body = {'text': spoken(text), 'model_id': c['model'], 'voice_settings': {**c['settings'], **c['roles'][role].get('settings', {})}}
+        audio = call('POST', f'/v1/text-to-speech/{vid}?output_format={FORMAT}', body, accept='audio/mpeg')
+        out = os.path.join(RAW, 'audition')
+        os.makedirs(out, exist_ok=True)
+        dst = os.path.join(out, f'{role}_{label or v["name"].split(" ")[0]}.mp3')
+        open(dst[:-4] + '.raw.mp3', 'wb').write(audio)
+        normalize(dst[:-4] + '.raw.mp3', dst)
+        ledger(f'try:{role}:{voice_id}', len(text))
+        print(f"{role} · {v['name']}: {len(text)} зн. → {os.path.relpath(dst, ROOT)}")
+    finally:
+        call('DELETE', f'/v1/voices/{vid}')
 
 
 def with_shared(roles: set[str]) -> set[str]:
@@ -337,9 +371,13 @@ if __name__ == '__main__':
     elif cmd == 'remove':
         remove(args[0])
     elif cmd == 'design':
-        design(args[0], int(args[1]) if len(args) > 1 else None)
+        tag = args[args.index('--tag') + 1] if '--tag' in args else ''
+        pos = [a for a in args if a != '--tag' and a != tag]
+        design(pos[0], int(pos[1]) if len(pos) > 1 else None, tag)
     elif cmd == 'design-save':
-        design_save(args[0], int(args[1]))
+        design_save(args[0], int(args[1]), args[2] if len(args) > 2 else '')
+    elif cmd == 'try':
+        try_voice(args[0], args[1], args[2] if len(args) > 2 else '')
     elif cmd == 'samples':
         samples(args)
     elif cmd == 'gen':

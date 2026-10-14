@@ -19,6 +19,9 @@
       "library": {
         "voice_id": "a2cWmGM4AUuNsHwInFjF",
         "name": "Mikhail - Calm & Low"
+      },
+      "design": {
+        "description": "A Russian man of about 55, a native Russian speaker. Weighty, grave, deep bass-baritone of a 1990s Russian TV crime-documentary narrator: slow and measured, deliberate pauses, restrained and serious, a dark low resonance with a slight gravel; calm authority, no theatrics. Clean, close studio voice-over recording with no background noise."
       }
     },
     "_inner": {
@@ -60,6 +63,9 @@
       "library": {
         "voice_id": "sRk0zCqhS2Cmv0bzx5wA",
         "name": "Felix - Calm, Clear and Friendly"
+      },
+      "design": {
+        "description": "A Russian man of about 32, a native Russian speaker from Moscow. Warm, slightly husky baritone of a street-smart police detective: energetic, assertive and quick, confident, with a grin in the voice; short punchy phrases. Clean, close studio recording with no background noise."
       }
     },
     "expert": {
@@ -72,6 +78,9 @@
       "library": {
         "voice_id": "ELWVgJ5Mo9lF5Tha9ahW",
         "name": "Arina "
+      },
+      "design": {
+        "description": "A Russian woman of about 45, a native Russian speaker. Low, dry, slightly smoky alto with an inner steel: firm, authoritative and economical, a forensic expert who has seen everything; calm but uncompromising, never soft or sweet. Clean, close studio recording with no background noise."
       }
     },
     "boss": {
@@ -120,6 +129,9 @@
       "library": {
         "voice_id": "6A9D8WSMm4rFsg2DWFeE",
         "name": "Egor Gadzhiyev - Clear and Commanding"
+      },
+      "design": {
+        "description": "A portly Russian man of about 56, a native Russian speaker. Fussy and flustered: a slightly high, soft tenor with audible short breath and a little wheeze, talks fast and in a hurry, justifying himself, the nervous ingratiating politeness of an old-school notary. Clean, close studio recording with no background noise."
       }
     },
     "zoya": {
@@ -191,6 +203,10 @@
         "speed": 0.97
       },
       "design": {
+        "description": "A Russian woman of about 60, a native Russian speaker. A natural, lived-in low voice with a light smoker's husk, fully human and imperfect, not polished or announcer-like: an archive clerk talking casually across the counter, unhurried, mocking and a little bossy. Clean, close studio recording with no background noise.",
+        "model": "eleven_multilingual_ttv_v2"
+      },
+      "design_v1": {
         "description": "A Russian woman of about 60, a native Russian speaker. Low, smoky, slightly hoarse voice of a seasoned archive clerk; unhurried, ironic and a little bossy. Clean, close studio recording with no background noise."
       }
     },
