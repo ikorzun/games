@@ -716,6 +716,11 @@ export interface ArchiveOptions {
   onOpenDocument?: (item: ArchiveItem) => void;
   /** Запись появилась после того, как блокнот открывали в последний раз: на ней штамп «новый материал». */
   isNew?: (id: string) => boolean;
+  /**
+   * Ход следствия: записи в том порядке, в каком их отдаёт unlocked (порядок находок партии), с номерами и красными
+   * стрелками от каждой к следующей. Нет — порядок эпизода, без номеров и стрелок (архив в меню).
+   */
+  path?: boolean;
 }
 
 /** Наклон бумажки и вид бумаги — от id записи, а не от места в списке: новая запись не перекладывает старые. */
@@ -728,14 +733,67 @@ function noteSeed(id: string): number {
   return s;
 }
 
+interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Точка на краю прямоугольника r в сторону центра s, отступив gap наружу: стрелка не прячется под бумажкой. */
+function edgeToward(r: Box, s: Box, gap: number): [number, number] {
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  const dx = s.x + s.w / 2 - cx;
+  const dy = s.y + s.h / 2 - cy;
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return [cx, cy];
+  const t = Math.min(dx !== 0 ? r.w / 2 / Math.abs(dx) : Infinity, dy !== 0 ? r.h / 2 / Math.abs(dy) : Infinity);
+  return [cx + dx * t + (dx / len) * gap, cy + dy * t + (dy / len) * gap];
+}
+
+/** Красные стрелки от записи к следующей — лёгкой дугой, по очереди в разные стороны, как рукой по бумаге. */
+function drawPath(board: HTMLElement, svg: SVGSVGElement): void {
+  const box = board.getBoundingClientRect();
+  if (box.width === 0 || box.height === 0) return; // экран ещё не выложен (или jsdom)
+  // Концы стрелок — у самой бумаги: у скана это лист под скрепкой, а не вся колонка записи.
+  const rects: Box[] = [...board.querySelectorAll<HTMLElement>('.vn-archive__item')].map((el) => {
+    const r = (el.querySelector('.vn-archive__open') ?? el.querySelector('.vn-archive__paper') ?? el).getBoundingClientRect();
+    return { x: r.left - box.left, y: r.top - box.top, w: r.width, h: r.height };
+  });
+  const paths: string[] = [];
+  for (let i = 1; i < rects.length; i++) {
+    const a = rects[i - 1]!;
+    const b = rects[i]!;
+    const [x1, y1] = edgeToward(a, b, 6);
+    const [x2, y2] = edgeToward(b, a, 12);
+    const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+    const bend = Math.min(36, len * 0.12) * (i % 2 ? 1 : -1);
+    const qx = (x1 + x2) / 2 - ((y2 - y1) / len) * bend;
+    const qy = (y1 + y2) / 2 + ((x2 - x1) / len) * bend;
+    const n = (v: number): string => v.toFixed(1);
+    paths.push(`<path d="M${n(x1)} ${n(y1)}Q${n(qx)} ${n(qy)} ${n(x2)} ${n(y2)}" marker-end="url(#vn-archive-arrow)"/>`);
+  }
+  svg.setAttribute('viewBox', `0 0 ${box.width.toFixed(0)} ${box.height.toFixed(0)}`);
+  svg.setAttribute('width', box.width.toFixed(0));
+  svg.setAttribute('height', box.height.toFixed(0));
+  svg.innerHTML =
+    '<defs><marker id="vn-archive-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="8" markerHeight="8" orient="auto">' +
+    '<path d="M0 1L10 5L0 9z"/></marker></defs>' +
+    paths.join('');
+}
+
 /**
- * Блокнот следователя (в меню — «Архив»): страница общей тетради в клетку, к ней приклеены бумажки — факты на обрывке,
- * карточке или листке; бумаги дела — сканом под скрепкой (касание открывает окно документа). Новое с прошлого раза —
+ * Блокнот следователя (в меню — «Архив»): лист старой бумаги, на нём записи-предметы — карточки и обрывки под скотчем,
+ * жёлтые стикеры, бумаги дела сканом под скрепкой (касание открывает окно документа), фото — отпечатком. В игре записи
+ * идут в порядке находок, с номерами, и от каждой к следующей — красная стрелка: ход следствия. Новое с прошлого раза —
  * под красным штампом.
  */
 export class ArchiveScreen extends BaseScreen {
   /** Esc закрывает блокнот мимо onDone: хозяин узнаёт о закрытии отсюда. */
   onClose?: () => void;
+  /** Стрелки пересчитываются, когда меняются размеры (догрузились сканы, сменилась ширина окна). */
+  private resize: ResizeObserver | null = null;
 
   constructor(
     private readonly episode: Episode,
@@ -749,8 +807,17 @@ export class ArchiveScreen extends BaseScreen {
   }
 
   render(): void {
-    const ids = new Set(this.unlocked());
-    const items: ArchiveItem[] = (this.episode.archive_items ?? []).filter((a) => ids.has(a.id));
+    this.resize?.disconnect();
+    this.resize = null;
+    const all = this.episode.archive_items ?? [];
+    const open = this.unlocked();
+    const items: ArchiveItem[] = this.opts.path
+      ? [...new Set(open)].map((id) => all.find((a) => a.id === id)).filter((a): a is ArchiveItem => a !== undefined)
+      : all.filter((a) => open.includes(a.id));
+    const board =
+      items.length === 0
+        ? null
+        : h('div', { class: 'vn-archive__board' }, h('ul', { class: 'vn-archive__list' }, ...items.map((a, i) => this.note(a, i))));
     fill(
       this.el,
       h(
@@ -767,53 +834,70 @@ export class ArchiveScreen extends BaseScreen {
             icon('close'),
           ),
         ),
-        h(
-          'div',
-          { class: 'vn-archive__cover' },
-          h(
-            'div',
-            { class: 'vn-archive__page' },
-            items.length === 0
-              ? h('p', { class: 'vn-archive__empty', text: t('ui.archive.empty') })
-              : h('ul', { class: 'vn-archive__list' }, ...items.map((a) => this.note(a))),
-          ),
-        ),
+        h('div', { class: 'vn-archive__page' }, board ?? h('p', { class: 'vn-archive__empty', text: t('ui.archive.empty') })),
       ),
     );
+    if (board && this.opts.path && items.length > 1) this.trackPath(board);
   }
 
-  private note(a: ArchiveItem): HTMLElement {
+  private trackPath(board: HTMLElement): void {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'vn-archive__lines');
+    svg.setAttribute('aria-hidden', 'true');
+    board.prepend(svg);
+    const draw = (): void => {
+      if (board.isConnected) drawPath(board, svg);
+      else this.resize?.disconnect();
+    };
+    draw();
+    if (typeof ResizeObserver !== 'function') return;
+    this.resize = new ResizeObserver(draw);
+    this.resize.observe(board);
+    for (const li of board.querySelectorAll('.vn-archive__item')) this.resize.observe(li);
+  }
+
+  private note(a: ArchiveItem, index: number): HTMLElement {
     const seed = noteSeed(a.id);
     const title = t(a.title_key);
     const open = this.opts.onOpenDocument;
-    const art = a.kind === 'document' && a.asset && open ? this.opts.documentArt?.(a.asset) : undefined;
-    let body: HTMLElement[];
-    if (art) {
-      const img = h('img', { class: 'vn-archive__scan' });
+    const scan = a.kind === 'document' && a.asset && open ? this.opts.documentArt?.(a.asset) : undefined;
+    const print = a.kind === 'photo' && a.asset ? this.opts.documentArt?.(a.asset) : undefined;
+    const picture = (cls: string, art: { url: string | null; ready: Promise<string | null> }): HTMLImageElement => {
+      const img = h('img', { class: cls });
       img.alt = '';
       if (art.url) img.src = art.url;
       else
         void art.ready.then((url) => {
           if (url) img.src = url;
         });
-      body = [
-        h('button', { class: 'vn-archive__open', type: 'button', aria: { label: title }, on: { click: () => open?.(a) } }, img, icon('clip')),
-        h('h3', { text: title }),
-      ];
-    } else {
-      body = [
-        h('h3', { text: title }),
-        ...(a.real_fact ? [h('span', { class: 'vn-badge', text: t('ui.archive.real_fact') })] : []),
-        ...(a.text_key ? [h('p', { text: t(a.text_key) })] : []),
-      ];
-    }
+      return img;
+    };
+    const text = [
+      h('h3', { text: title }),
+      ...(a.real_fact ? [h('span', { class: 'vn-badge', text: t('ui.archive.real_fact') })] : []),
+      ...(a.text_key ? [h('p', { text: t(a.text_key) })] : []),
+    ];
+    const body: HTMLElement[] = scan
+      ? [
+          h(
+            'button',
+            { class: 'vn-archive__open', type: 'button', aria: { label: title }, on: { click: () => open?.(a) } },
+            picture('vn-archive__scan', scan),
+            h('span', { class: 'vn-archive__clip', aria: { hidden: true } }),
+          ),
+          h('h3', { text: title }),
+        ]
+      : print
+        ? [picture('vn-archive__print', print), ...text]
+        : text;
     return h(
       'li',
       {
-        class: `vn-archive__item is-${a.kind}${art ? ' has-scan' : ''}`,
+        class: `vn-archive__item is-${a.kind}${scan ? ' has-scan' : ''}${print ? ' has-print' : ''}`,
         data: { paper: seed % 3 },
         style: { '--tilt': `${NOTE_TILTS[(seed >>> 3) % NOTE_TILTS.length]}deg` },
       },
+      this.opts.path ? h('span', { class: 'vn-archive__num', text: String(index + 1) }) : null,
       h('div', { class: 'vn-archive__paper' }, ...body),
       this.opts.isNew?.(a.id) ? h('span', { class: 'vn-archive__stamp', text: t('ui.archive.new_item') }) : null,
     );

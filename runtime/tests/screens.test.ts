@@ -695,7 +695,7 @@ describe('ArchiveScreen и ErrorScreen', () => {
     expect(doc.querySelector('p')).toBeNull();
     const btn = doc.querySelector<HTMLButtonElement>('button.vn-archive__open')!;
     expect(btn.getAttribute('aria-label')).toBe('Справка');
-    expect(btn.querySelector('svg.vn-ico--clip')).not.toBeNull();
+    expect(btn.querySelector('.vn-archive__clip')).not.toBeNull();
     const img = btn.querySelector<HTMLImageElement>('img.vn-archive__scan')!;
     expect(img.getAttribute('src')).toBeNull(); // скан ещё грузится
     loaded('./assets/doc_y.webp');
@@ -706,6 +706,31 @@ describe('ArchiveScreen и ErrorScreen', () => {
     expect(doc.querySelector('.vn-archive__stamp')?.textContent).toBe('Новый материал');
     s.el.querySelector<HTMLButtonElement>('.vn-document__close')?.click();
     expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('ход следствия: в партии записи в порядке находок, с номерами и слоем стрелок; в меню — порядок эпизода, без них', () => {
+    const ep = {
+      ...episode,
+      archive_items: [
+        { id: 'arc_x', kind: 'fact' as const, title_key: 'mini.arc_x' },
+        { id: 'arc_y', kind: 'photo' as const, title_key: 'mini.arc_y', text_key: 'mini.doc.text', asset: 'doc_p' },
+      ],
+    };
+    const art = vi.fn(() => ({ url: './assets/doc_p.webp', ready: Promise.resolve('./assets/doc_p.webp') }));
+    const found = ['arc_y', 'arc_x', 'arc_y']; // порядок находок партии (повтор не дублирует запись)
+    const game = open(new ArchiveScreen(ep, () => found, vi.fn(), 'ui.archive.title', { path: true, documentArt: art }));
+    expect(texts(game.el, '.vn-archive__item h3')).toEqual(['Справка', 'Протокол осмотра']);
+    expect(texts(game.el, '.vn-archive__num')).toEqual(['1', '2']);
+    expect(game.el.querySelector('.vn-archive__board svg.vn-archive__lines')).not.toBeNull();
+    // фото — отпечатком, не кнопкой: окно документа для снимка не нужно
+    const photo = game.el.querySelector<HTMLElement>('.vn-archive__item.is-photo')!;
+    expect(photo.classList.contains('has-print')).toBe(true);
+    expect(photo.querySelector('img.vn-archive__print')?.getAttribute('src')).toBe('./assets/doc_p.webp');
+    expect(photo.querySelector('button')).toBeNull();
+    const menu = open(new ArchiveScreen(ep, () => found, vi.fn()));
+    expect(texts(menu.el, '.vn-archive__item h3')).toEqual(['Протокол осмотра', 'Справка']);
+    expect(menu.el.querySelector('.vn-archive__num')).toBeNull();
+    expect(menu.el.querySelector('.vn-archive__lines')).toBeNull();
   });
 
   it('блокнот: наклон и бумага — от id записи (новая запись не перекладывает старые); без окна документа бумага — текстом', () => {

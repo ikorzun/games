@@ -11354,7 +11354,8 @@
    "id": "n_photo",
    "kind": "photo",
    "title_key": "ep01.h.note.n_photo.title",
-   "text_key": "ep01.h.note.n_photo.text"
+   "text_key": "ep01.h.note.n_photo.text",
+   "asset": "doc_photo_grandson"
   },
   {
    "id": "n_left",
@@ -13468,6 +13469,12 @@
     "path": "assets/ep01/hod/docs/ru/bti_card.webp",
     "localized": true,
     "notes": "учётная карточка БТИ из картотеки"
+   },
+   {
+    "id": "doc_photo_grandson",
+    "path": "assets/ep01/hod/docs/photo_grandson.webp",
+    "localized": false,
+    "notes": "фото внука из серванта — отпечаток в блокноте"
    }
   ],
   "music": [

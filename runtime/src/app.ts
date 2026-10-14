@@ -425,12 +425,17 @@ export class App {
     const assets = this.d.assets;
     // Штампы «новый материал» держатся, пока блокнот открыт; закрыли — всё прочитано, метка с кнопки снята.
     const fresh = new Set(this.freshNotes);
+    // В партии блокнот — эта партия в порядке находок (номера и стрелки — ход следствия); в меню архив — всё, что
+    // профиль когда-либо находил, в порядке эпизода.
+    const interp = this.session.interp;
+    const path = this.inGame && interp.started;
     const screen: ArchiveScreen = new ArchiveScreen(
       ep,
-      () => [...new Set([...this.d.saves.archiveOf(ep.id), ...(this.session.interp.started ? this.session.interp.state.archive : [])])],
+      () => (path ? [...interp.state.archive] : [...new Set([...this.d.saves.archiveOf(ep.id), ...(interp.started ? interp.state.archive : [])])]),
       () => this.kit.screens.close(screen),
       titleKey,
       {
+        path,
         isNew: (id) => fresh.has(id),
         onOpenDocument: (item) => this.openNoteDocument(item),
         ...(assets ? { documentArt: (id: string) => assets.document(id) } : {}),
