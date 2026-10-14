@@ -158,6 +158,49 @@ CHARS = {
         'refs': [('assets/ep01/faces/zoya.webp', None), (H + 'hod_recon/recon_ots_zoya.webp', (399, 125, 1172, 1079)),
                  (H + 'hod_recon/recon_wide.webp', (650, 294, 932, 1079))],
     },
+    # Дни 3–5 (docs/season1/ep01-hod-finale.md): внешность и костюм — как в tools/hod/shots.py, вырезки — по принятым
+    # кадрам «Реализма» (assets/ep01/hod, 1920×1080).
+    'murashov': {
+        'name': 'Sergei Murashov, the apartment dealer',
+        'look': 'man, 38, tall and neat, a smooth oval face with soft features that are hard to remember, pale blue calm eyes, a '
+                'well-groomed dark moustache, dark hair parted on the left and combed flat, a clean-shaven jaw, good skin; '
+                'deliberately ordinary, polite, not charismatic',
+        'costume': 'a light beige summer jacket over a pale-blue shirt, a narrow patterned tie with a tie pin, light trousers, '
+                   'polished brown shoes',
+        'refs': [('assets/ep01/faces/murashov.webp', None), (H + 'hod_agency/agency_ots_murashov.webp', (1180, 60, 1920, 1080)),
+                 (H + 'hod_op/op_stairs.webp', (1040, 150, 1480, 1080))],
+    },
+    'accomplice': {
+        'name': 'Dmitry Shmelyov (Shmel), the driver',
+        'look': 'man, 30, a thick neck, a boxer\'s build and a flattened boxer\'s nose, small deep-set eyes, a low forehead, a '
+                'cauliflower ear, short dark hair with a razor fade, a scar through one eyebrow; a scared, uncomprehending look',
+        'costume': 'a navy tracksuit top with three white stripes unzipped over a white T-shirt, a thin gold chain, dark trousers, '
+                   'worn white trainers; no padded jacket',
+        'refs': [('assets/ep01/faces/accomplice.webp', None), (H + 'hod_op/op_metro.webp', (290, 350, 1125, 1080))],
+    },
+    'klava': {
+        'name': 'Klavdia Semyonovna, the neighbour of the missing old man',
+        'look': 'woman, 74, small and lean, a sharp wrinkled face, bright watchful dark eyes behind big old-fashioned glasses with '
+                'thick lenses, thin grey hair pinned in a bun, a mole on her left cheek',
+        'costume': 'a brown short-sleeved house dress with a small white check and a white collar, felt slippers',
+        'refs': [(H + 'hod_second/second_ots_klava.webp', (650, 100, 1500, 1080)),
+                 (H + 'hod_second/second_wide.webp', (1200, 200, 1575, 1040))],
+    },
+    'landlady': {
+        'name': 'the landlady',
+        'look': 'woman, 58, stout, a broad tired face with plump cheeks, short dyed chestnut hair with grey roots, small gold '
+                'earrings',
+        'costume': 'a sleeveless floral summer house dress, a kitchen towel over her shoulder, rubber slippers',
+        'refs': [(H + 'hod_chertanovo/chertanovo_wide.webp', (960, 200, 1300, 1080))],
+    },
+    'sledak_old': {
+        'name': 'Andrei Gromov in 2004, eleven years later',
+        'look': 'the same man as Investigator Andrei Gromov at 40: the face heavier and broader, grey at the temples and in the '
+                'stubble, deep lines from the nose to the mouth, the same grey eyes and heavy brows; quiet grief without self-pity',
+        'costume': 'a charcoal blazer over a black open-collar shirt, no tie, a wedding ring',
+        'period': '2004',
+        'refs': [('assets/ep01/faces/sledak_old.webp', None), (H + 'hod_2004/gromov_2004.webp', (75, 150, 950, 1080))],
+    },
     # Лица в кадре нет никогда — листа нет, рисунок держит исходный кадр.
     'murashov_sil': {
         'name': 'the polite man',
@@ -195,7 +238,7 @@ SHEET_STYLE = ['02', '03', '04', '05', '10', '12']
 
 def sheet_prompt(who: str, kind: str) -> str:
     c = CHARS[who]
-    return (f'{SHEETS[kind].format(name=c["name"])}\n\nWho: {c["look"]}. Clothing (summer 1993): {c["costume"]}. '
+    return (f'{SHEETS[kind].format(name=c["name"])}\n\nWho: {c["look"]}. Clothing ({c.get("period", "summer 1993")}): {c["costume"]}. '
             f'{ref_text(who)} All views must show exactly the same person: the same face, age, proportions, hairstyle and '
             f'clothes as in the references.\n\n{style(SHEET_STYLE, header=False)}')
 
@@ -282,7 +325,10 @@ CLOTHES = {'sledak': 'pale-blue short-sleeved shirt and a navy tie', 'oper': 'bl
            'expert': 'white lab coat over a beige dress, glasses on a chain', 'boss': 'white short-sleeved shirt and a dark tie',
            'neighbor': 'flowered house dress, apron and kerchief', 'notary': 'rumpled light-grey suit and a loosened tie',
            'assistant': 'white blouse and a dark skirt', 'passport_clerk': 'floral blouse and reading glasses on a cord',
-           'clerk': 'light blouse with a brooch and a grey cardigan', 'zoya': 'floral summer dress, beige cardigan and a kerchief'}
+           'clerk': 'light blouse with a brooch and a grey cardigan', 'zoya': 'floral summer dress, beige cardigan and a kerchief',
+           'murashov': 'light beige summer jacket and a pale-blue shirt', 'accomplice': 'navy tracksuit top with white stripes',
+           'klava': 'brown checked house dress with a white collar, thick glasses', 'landlady': 'sleeveless floral house dress',
+           'sledak_old': 'charcoal blazer over a black shirt'}
 SCENE_STYLE = ['01', '02', '03', '04', '05', '06', '07', '10', '11', '12', '13']
 SQUARE_STYLE = ['02', '03', '04', '05', '06', '07', '10', '12']
 SQUARE = ('Reframe this illustrated film frame (image 1) into a square 1:1 frame for a phone screen. Keep every person who is '
@@ -436,7 +482,60 @@ STAGING = {
         'zoya': 'faces the camera, looking up at the polite man with a shy grateful smile, the cardboard folder held to her chest; '
                 'her eyes on him, just right of the camera',
         'murashov_sil': 'only the back of his neat dark head and the shoulder of his light beige jacket at the RIGHT edge; his '
-                        'face is never visible'},
+                        'face is never visible'},    # дни 3–5 — по принятым кадрам «Реализма» (tools/hod/shots.py); взгляды проверены на кадрах 2026-10-14
+    'walk_wide': {'sledak': 'stands alone at the trolleybus stop LEFT of centre, a brown bag under his arm, reading a slip of paper in his hands; his eyes on the paper'},
+    'second_wide': {
+        'sledak': 'stands on the landing LEFT of centre, seen three-quarter from behind, turned toward the old woman; his eyes on her',
+        'klava': 'stands in her open doorway on the RIGHT, one hand on the door frame, the other pointing across at the steel door on the LEFT; her eyes on Gromov'},
+    'second_ots_klava': {
+        'klava': 'stands in her doorway facing the camera, one hand lifted, speaking with bitter certainty; her eyes on Gromov, just left of the camera',
+        'sledak': 'only the back of his head and his shoulder at the LEFT edge'},
+    'chertanovo_wide': {
+        'sledak': 'stands LEFT of centre, seen three-quarter from behind, a folder in his hand, facing her; his eyes on her',
+        'landlady': 'stands by the closed lift doors RIGHT of centre, arms folded, talking readily; her eyes on Gromov'},
+    'agency_street_wide': {'sledak': 'stands on the near pavement in the LEFT foreground, seen from behind, looking across the road at the agency entrance and the grey Volga'},
+    'agency_wide': {
+        'sledak': "sits on the visitor's chair on the LEFT, seen three-quarter from behind, a folder on his knees; his eyes on Murashov",
+        'murashov': 'sits behind the big desk on the RIGHT, hands folded on the desk, a polite attentive half-smile; his eyes on Gromov'},
+    'agency_ots_murashov': {
+        'murashov': 'sits behind the desk facing the camera, a pen in his fingers, smiling politely; his pale calm eyes on Gromov, just left of the camera',
+        'sledak': 'only the back of his head and his shoulder at the LEFT edge'},
+    'watch_wide': {
+        'oper': "sits in the driver's seat on the LEFT, seen from behind, a hand on the wheel; his eyes on the agency entrance across the road",
+        'sledak': 'sits in the passenger seat on the RIGHT, seen from behind, the folder closed on his knees; his eyes on the agency entrance'},
+    'op_wide': {},
+    'op_wounded': {
+        'oper': "sits on the wet asphalt against the rear wheel of the grey Volga; his left hand crosses his chest and presses his RIGHT shoulder (on the LEFT side of the frame), a dark patch on the sleeve; a crooked grin; his eyes on Gromov",
+        'sledak': "crouches on the RIGHT, seen in profile, his hand on Sayko's unhurt shoulder; his eyes on the wound"},
+    'op_stairs': {
+        'sledak': 'stands below on the LEFT, seen three-quarter from behind, handcuffs in his hand; his eyes on Murashov',
+        'murashov': 'stands on the steps above, holding out both empty hands, wrists together, palms up; calm; his eyes on Gromov'},
+    'op_metro': {
+        'accomplice': "is bent over the bonnet of the grey Volga, his right hand jammed in the pocket of his tracksuit top, his face turned sideways, scared and uncomprehending; his eyes on nothing, off to the side",
+        'oper': "stands behind him on the RIGHT, twisting Shmel's arm behind his back; his eyes on Shmel"},
+    'search_wide': {'sledak': 'stands at the desk in the centre, pulling open a drawer; his eyes down in the drawer'},
+    'search_keys': {'sledak': 'only his hand and short pale-blue sleeve, lifting the bunch of tagged keys out of the drawer'},
+    'search_papers': {'sledak': 'stands at the desk turning the pages of an open folder; his eyes on the papers'},
+    'field_wide': {
+        'expert': 'walks slowly along the tape in the middle distance, LEFT of centre, in rubber boots and a light raincoat, a notebook in her hand; her eyes down on the grass',
+        'sledak': 'stands in the RIGHT foreground by the militia van, seen from the side, hands in his pockets; his eyes on the tape'},
+    'field_ots_expert': {
+        'expert': 'stands at the tape facing the camera, her notebook against her chest, speaking quietly; her eyes on Gromov, just right of the camera',
+        'sledak': 'only the back of his head and his shoulder at the RIGHT edge'},
+    'field_oper': {'oper': 'leans on the bonnet of the militia van, smoking, unsmiling; his eyes away toward the birches'},
+    'interrog_wide': {
+        'sledak': 'sits at the near LEFT end of the table, seen three-quarter from behind, writing the protocol; his eyes on the protocol',
+        'murashov': "sits across the table, adjusting a shirt cuff, no tie; his eyes on Gromov's writing hand"},
+    'interrog_ots_murashov': {
+        'murashov': 'faces the camera across the table, no tie, a faint polite smile; his eyes lowered to the protocol under Gromov\'s hand',
+        'sledak': 'only the back of his head and his shoulder at the LEFT edge, writing'},
+    'confront_wide': {
+        'notary': 'sits on the LEFT side of the table, staring down at the table, a damp handkerchief in his fist; his eyes on the table',
+        'sledak': 'sits at the far end of the table, writing; his eyes on Kovrigin',
+        'murashov': 'sits on the RIGHT side of the table, turned toward Kovrigin, calm and expectant; his eyes on Kovrigin'},
+    'court_wide': {'murashov': "stands inside the metal defendants' cage on the LEFT, hands folded, in a dark grey suit; his eyes toward the judges' bench"},
+    'agency_closed': {'sledak': 'stands at the closed agency door RIGHT of centre, small in the frame, seen from the side; his eyes on the paper sign on the glass'},
+    'gromov_2004': {'sledak_old': 'sits in a leather office chair, turned three-quarter to the RIGHT; his eyes on an unseen interviewer off-camera on the right, never into the lens'},
 }
 GAZE = ('Every person keeps the pose, head turn and gaze of image 1: each looks at another person or an object as written, '
         'never into the lens. The turnaround sheets give only face, hair and clothing — ignore their head poses and their '
@@ -452,7 +551,12 @@ STYLE_REF = {'office_am_ots_oper': 'office_am_wide', 'office_am_phone': 'office_
              'notary_ots_notary': 'notary_wide', 'notary_register': 'notary_wide', 'notary_alone_wide': 'notary_wide',
              'stairs_ots_assistant': 'stairs_wide', 'zhek_ots_clerk': 'zhek_wide', 'bti_ots_clerk': 'bti_wide',
              # реконструкция — тот же коридор ЖЭКа в июне
-             'recon_wide': 'zhek_wide', 'recon_ots_zoya': 'recon_wide'}
+             'recon_wide': 'zhek_wide', 'recon_ots_zoya': 'recon_wide',
+             # дни 3–5
+             'second_ots_klava': 'second_wide', 'agency_ots_murashov': 'agency_wide', 'agency_closed': 'agency_street_wide',
+             'op_wide': 'agency_street_wide', 'watch_wide': 'car_wide', 'search_keys': 'search_wide', 'search_papers': 'search_wide',
+             'field_ots_expert': 'field_wide', 'field_oper': 'field_wide', 'interrog_ots_murashov': 'interrog_wide',
+             'confront_wide': 'interrog_wide'}
 
 
 def shot_info(sid: str) -> tuple[str, str, list[str]]:
