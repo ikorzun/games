@@ -210,16 +210,20 @@ describe('DomUI: реплики и продвижение сюжета', () => {
     expect(done.done).toBe(true);
   });
 
+  // Реплика персонажа — всегда окно с именем, как везде в игре (владелец 2026-10-14: запись 2004 года шла субтитром
+  // по центру); субтитр — только у рассказчика хроники и суда.
   it.each([
-    ['reconstruction', 'window', true],
-    ['talking_head', 'window', false],
-    ['chronicle', 'subtitle', true],
-    ['courtroom', 'subtitle', true],
-  ] as const)('пресет показа %s: раскладка текста %s, имя говорящего видно: %s', (presentation, layout, nameShown) => {
+    ['reconstruction', 'window', true, 'window'],
+    ['talking_head', 'window', false, 'window'],
+    ['chronicle', 'window', true, 'subtitle'],
+    ['courtroom', 'window', true, 'subtitle'],
+  ] as const)('пресет показа %s: реплика в раскладке %s, имя видно: %s; рассказчик — %s', (presentation, layout, nameShown, narrator) => {
     const { ui, kit } = makeRig({ textSpeed: 5 }, presentation);
     void ui.showLine(lineP('l.1'), lineCtx(ctl()));
     expect(kit.textbox.el.dataset.layout).toBe(layout);
     expect(kit.textbox.el.querySelector<HTMLElement>('.vn-textbox__who')?.hidden).toBe(!nameShown);
+    void ui.showLine(lineP('l.1', { style: 'narrate', who: null, narrate_style: 'voiceover' }), lineCtx(ctl()));
+    expect(kit.textbox.el.dataset.layout).toBe(narrator);
   });
 
   it('рассказчик (narrate): имени нет, стиль окна берётся из narrate_style', () => {

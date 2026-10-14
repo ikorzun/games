@@ -332,7 +332,7 @@
 .mg-stage__heading,
 .mg-stage .mg-shell__result-title {
   margin: 0;
-  font: 400 calc(var(--h1, 32) * var(--u)) / 0.96 var(--font-title, serif);
+  font: 400 calc(var(--h1, 32) * var(--u) - 3px) / 0.96 var(--font-title, serif);
   color: #fff;
 }
 .mg-stage__text,
@@ -420,7 +420,7 @@
 }
 .mg-stage .mg-shell__title {
   margin: 0;
-  font: 400 calc(21 * var(--u)) / 1 var(--font-title, serif);
+  font: 400 calc(21 * var(--u) - 3px) / 1 var(--font-title, serif);
   color: #fff;
 }
 .mg-stage__rule {

@@ -437,7 +437,11 @@ export class App {
       {
         path,
         isNew: (id) => fresh.has(id),
-        onOpenDocument: (item) => this.openNoteDocument(item),
+        // Посмотрел бумагу — штамп с неё снят сразу, не дожидаясь закрытия блокнота (владелец 2026-10-14).
+        onOpenDocument: (item) => {
+          fresh.delete(item.id);
+          this.openNoteDocument(item);
+        },
         ...(assets ? { documentArt: (id: string) => assets.document(id) } : {}),
       },
     );

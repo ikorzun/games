@@ -182,7 +182,7 @@
   height: 24px;
   margin-top: 1px;
   color: #1d1b17;
-  font: 400 15px / 1 var(--font-body, system-ui, sans-serif);
+  font: 400 12px / 1 var(--font-body, system-ui, sans-serif);
   border: 2px solid var(--mg-muted);
 }
 .mg-db__body {

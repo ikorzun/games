@@ -4,8 +4,8 @@
  * опции показываются выключенными — игрок видит, что что-то упустил.
  *
  * Дедуктивная развилка (p.deduction, 02-narrative-blocks §5a): над кнопками — шкала цены ошибок
- * (точки, подпись, aria «Самообладание: 3 из 5»); опция-улика — карточка с иконкой по виду материала;
- * испробованная — погашена, со значком ✕ и пометкой «уже пробовали» для скринридера; подсвеченная
+ * (точки, подпись, aria «Самообладание: 3 из 5»); опция-улика — без значка: он выдавал верный ответ (решение
+ * владельца 2026-10-14), вариант просто появляется, когда улика найдена; испробованная — погашена, со значком ✕ и пометкой «уже пробовали» для скринридера; подсвеченная
  * подсказкой — мягкая подсветка и значок, под кнопками одна строка «Подсказка: верный ход подсвечен».
  * Смысл никогда не передаётся одним цветом: значок + класс + текст.
  */
@@ -13,22 +13,6 @@ import { t } from '../core/i18n';
 import type { ChoiceOptionView, ChoicePending, DeductionMeter } from '../core/types';
 import { h } from './dom';
 import { icon } from './icons';
-import type { IconName } from './icons';
-
-/** Иконка карточки-улики по виду материала (archive_items[].kind); неизвестный вид — документ. */
-const ITEM_ICONS: Readonly<Record<string, IconName>> = {
-  document: 'document',
-  photo: 'photo',
-  newspaper: 'newspaper',
-  object: 'object',
-  map: 'map',
-  audio: 'audio',
-  fact: 'fact',
-};
-
-export function itemIcon(kind: string): IconName {
-  return ITEM_ICONS[kind] ?? 'document';
-}
 
 let menuSeq = 0;
 
@@ -172,7 +156,6 @@ export class ChoiceMenu {
         on: { click: () => o.enabled && this.pick?.(o.id) },
       },
       h('span', { class: 'vn-choice__n', text: String(i + 1) }),
-      o.item ? h('span', { class: 'vn-choice__item' }, icon(itemIcon(o.item.kind))) : null,
       h('span', { class: 'vn-choice__label', text: label }),
       mark,
     );

@@ -25,10 +25,12 @@
   --font-body: 'Cormorant Garamond', 'Times New Roman', Times, serif;
   --font-title: 'Tenor Sans', 'Helvetica Neue', Arial, sans-serif;
   --font-mono: var(--font-body);
-  /* Кегль основного текста: 18 px на мобильном, 22 px на десктопе (03-visual-language §8) — Cormorant мельче прежнего
-     шрифта, +2 px (решение владельца 2026-10-13). Сетка макетов (--u: отступы, размеры, заголовки) — от прежних 16 / 20. */
+  /* Кегль основного текста: 15 px на мобильном, 19 px на десктопе (03-visual-language §8): было 18 / 22 (Cormorant
+     мельче прежнего шрифта, +2 px — решение владельца 2026-10-13), затем «весь шрифт везде уменьши на 3 px» (владелец
+     2026-10-14, и на телефоне). Сетка макетов (--u: отступы, размеры) — от прежних 16 / 20 и не меняется; шрифты от
+     --u ниже — с «- 3px», фиксированные кегли — на 3 px меньше прежних. */
   --fs-grid: 16px;
-  --fs: calc(var(--fs-grid) + 2px);
+  --fs: calc(var(--fs-grid) - 1px);
   --font-scale: 1;
   /* Крупные заголовки макетов (32 px макета) в пикселях макета: на мобильном на 6 меньше (решение владельца 2026-10-13). */
   --h1: 26;
@@ -75,7 +77,7 @@ body {
   overflow: hidden;
   background: #000;
   color: var(--c-text);
-  font: 18px / 1.4 var(--font-body);
+  font: 15px / 1.4 var(--font-body);
   /* У шрифтов нет начертания 700: не синтезировать жирный, брать ближайшее (500). */
   font-synthesis: none;
   -webkit-tap-highlight-color: transparent;
@@ -215,7 +217,7 @@ body {
   min-width: 0;
 }
 .vn-textbox__name { font-size: calc(14em / 15); }
-.vn-textbox__title { font-size: calc(10em / 15); opacity: 0.7; }
+.vn-textbox__title { margin-top: -4px; font-size: calc(10em / 15); opacity: 0.7; } /* к имени на 4 px ближе (владелец 2026-10-14) */
 /* Текст не ниже двух строк, чтобы имя не прыгало от короткой реплики к длинной. */
 .vn-textbox__box {
   position: relative;
@@ -450,7 +452,7 @@ body {
   box-sizing: border-box;
   width: var(--col);
   margin: 0;
-  font: 400 calc(var(--h1) * var(--u)) / 0.96 var(--font-title);
+  font: 400 calc(var(--h1) * var(--u) - 3px) / 0.96 var(--font-title);
   color: #fff;
 }
 .vn-choices__rule {
@@ -504,6 +506,7 @@ body {
   height: calc(36 * var(--u));
   font-size: calc(16 * var(--ut));
   line-height: 1.2;
+  font-variant-numeric: lining-nums tabular-nums; /* у Cormorant цифры по умолчанию старинные: 3, 5, 7, 9 ниже строки */
   border: 1px solid rgb(255 255 255 / 0.3);
   border-radius: 50%;
 }
@@ -513,8 +516,8 @@ body {
   border-color: var(--c-accent);
 }
 .vn-choice.is-disabled { opacity: 0.42; }
-/* Дедуктивная развилка (kind=deduction): шкала самообладания над кнопками, карточки-улики, испробованные
-   и подсвеченные ходы. Смысл несёт не только цвет: точки полные/пустые, ✕ и зачёркивание, значок подсказки. */
+/* Дедуктивная развилка (kind=deduction): шкала самообладания над кнопками, испробованные и подсвеченные ходы
+   (у вариантов-улик значка нет — он выдавал ответ, решение владельца 2026-10-14). Смысл несёт не только цвет: точки полные/пустые, ✕ и зачёркивание, значок подсказки. */
 .vn-choices__meter {
   display: flex;
   align-items: center;
@@ -536,16 +539,6 @@ body {
   border: 2px solid var(--c-muted);
 }
 .vn-choices__dot.is-on { background: var(--c-accent-soft); border-color: var(--c-accent-soft); }
-.vn-choice__item {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 2em;
-  height: 2em;
-  color: #1b1a17;
-  background: var(--c-accent-soft);
-}
-.vn-choice__item .vn-ico { width: 1.3em; height: 1.3em; stroke-width: 1.8; }
 .vn-choice .vn-choice__mark { flex: none; width: 1.15em; height: 1.15em; margin-left: auto; }
 .vn-choice.is-tried .vn-choice__label { text-decoration: line-through; text-decoration-thickness: 1px; }
 .vn-choice.is-hint { border-color: var(--c-accent-soft); background: rgb(232 217 181 / 0.1); }
@@ -594,7 +587,7 @@ body {
 .vn-cap--date_stamp {
   right: var(--hud-right, max(3.2%, env(safe-area-inset-right)));
   top: var(--hud-top, max(10px, env(safe-area-inset-top)));
-  font: 400 clamp(11px, 1.9vmin, 15px) / 1.2 var(--font-osd);
+  font: 400 clamp(8px, calc(1.9vmin - 3px), 12px) / 1.2 var(--font-osd);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -606,7 +599,7 @@ body {
   top: calc(var(--hud-top, max(10px, env(safe-area-inset-top))) + 2.2em);
   max-width: 80%;
   padding: 0.15em 0.65em;
-  font: 400 clamp(13px, 2.4vmin, 22px) / 1.25 var(--font-title);
+  font: 400 clamp(10px, calc(2.4vmin - 3px), 19px) / 1.25 var(--font-title);
   color: #fff;
   background: rgb(0 0 0 / 0.55);
   border-left: 3px solid var(--c-accent);
@@ -616,7 +609,7 @@ body {
   bottom: var(--lt-bottom);
   max-width: 88%;
   padding: 0.35em 1.2em 0.35em 5%;
-  font: 400 clamp(15px, 3vmin, 28px) / 1.2 var(--font-title);
+  font: 400 clamp(12px, calc(3vmin - 3px), 25px) / 1.2 var(--font-title);
   color: #fff;
   background: linear-gradient(90deg, var(--c-accent) 0 0.5em, rgb(0 0 0 / 0.8) 0.5em);
 }
@@ -628,7 +621,7 @@ body {
   justify-content: center;
   padding: 8%;
   text-align: center;
-  font: 400 clamp(26px, 8vmin, 72px) / 1.1 var(--font-title);
+  font: 400 clamp(23px, calc(8vmin - 3px), 69px) / 1.1 var(--font-title);
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: #f2efe6;
@@ -639,7 +632,7 @@ body {
 .vn-cap--chapter.has-plate {
   --plate-w: min(100%, 52rem);
   padding: 8% calc((100% - var(--plate-w) * 0.62) / 2);
-  font-size: clamp(14px, 4vmin, 40px);
+  font-size: clamp(11px, calc(4vmin - 3px), 37px);
   line-height: 1.05;
   background: var(--title-plate) center / var(--plate-w) auto no-repeat, #000;
 }
@@ -657,7 +650,7 @@ body {
   bottom: var(--lt-bottom);
   display: flex;
   align-items: stretch;
-  font: 400 clamp(14px, 2.6vmin, 24px) / 1.3 var(--font-body);
+  font: 400 clamp(11px, calc(2.6vmin - 3px), 21px) / 1.3 var(--font-body);
   color: #fff;
   background: rgb(0 0 0 / 0.84);
   border-top: 2px solid var(--c-accent);
@@ -687,7 +680,7 @@ body {
   overflow: auto;
   pointer-events: auto;
   background: rgb(0 0 0 / 0.74);
-  font-size: max(18px, calc(var(--fs) * 0.9));
+  font-size: max(15px, calc(var(--fs) * 0.9));
   opacity: 0;
   transition: opacity 0.2s ease;
   /* Экран — свой слой: z-index внутри (записи блокнота) не поднимается над экраном, открытым позже (документ из
@@ -894,7 +887,7 @@ body {
 .vn-menu__icon:hover,
 .vn-menu__icon:focus-visible,
 .vn-menu__icon[aria-expanded='true'] { opacity: 1; background: rgb(255 255 255 / 0.12); outline: none; }
-.vn-menu__lang-code { margin-right: 2px; font: 300 clamp(11px, 1.2vmin, 15px) var(--font-mono); letter-spacing: 0.12em; color: var(--crt-dim); }
+.vn-menu__lang-code { margin-right: 2px; font: 300 clamp(8px, calc(1.2vmin - 3px), 12px) var(--font-mono); letter-spacing: 0.12em; color: var(--crt-dim); }
 .vn-menu__langs {
   position: absolute;
   top: calc(clamp(14px, 4vh, 48px) + clamp(36px, 3.4vmin, 46px) + 10px);
@@ -936,8 +929,8 @@ body {
   pointer-events: none;
   filter: drop-shadow(0.1vmin 0 0 rgb(255 0 40 / 0.4)) drop-shadow(-0.1vmin 0 0 rgb(0 200 255 / 0.25)) drop-shadow(0 0 2vmin rgb(216 35 31 / 0.45));
 }
-.vn-menu__title { margin: 0; font: 400 clamp(22px, 5vmin, 48px) / 1.1 var(--font-title); letter-spacing: 0.06em; text-transform: uppercase; color: #fff; }
-.vn-menu__tag { margin: 0; font: 300 clamp(11px, 1.35vmin, 17px) var(--font-mono); letter-spacing: 0.26em; text-transform: uppercase; text-align: center; color: var(--crt-dim); }
+.vn-menu__title { margin: 0; font: 400 clamp(19px, calc(5vmin - 3px), 45px) / 1.1 var(--font-title); letter-spacing: 0.06em; text-transform: uppercase; color: #fff; }
+.vn-menu__tag { margin: 0; font: 300 clamp(8px, calc(1.35vmin - 3px), 14px) var(--font-mono); letter-spacing: 0.26em; text-transform: uppercase; text-align: center; color: var(--crt-dim); }
 .vn-menu__tag span { white-space: nowrap; }
 /* полка: карточки фиксированной ширины; центрируется, если помещается (авто-поля у крайних), иначе листается */
 .vn-menu__shelf {
@@ -974,14 +967,14 @@ body {
 }
 .vn-ep__lock { position: absolute; inset: 0; display: grid; place-items: center; color: var(--crt-dim); }
 .vn-ep__lock .vn-ico { width: clamp(22px, 2.4vmin, 34px); height: clamp(22px, 2.4vmin, 34px); }
-.vn-ep__badge { position: absolute; left: 8px; top: 8px; padding: 2px 7px; font: 400 clamp(10px, 1vmin, 13px) var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: #fff; background: var(--crt-red); text-shadow: none; }
-.vn-ep__num { font: 300 clamp(13px, calc(1.1vmin + 2px), 19px) var(--font-mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--crt-dim); }
-.vn-ep__name { font: 400 clamp(16px, calc(1.6vmin + 2px), 26px) / 1.3 var(--font-mono); letter-spacing: 0.02em; }
+.vn-ep__badge { position: absolute; left: 8px; top: 8px; padding: 2px 7px; font: 400 clamp(7px, calc(1vmin - 3px), 10px) var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: #fff; background: var(--crt-red); text-shadow: none; }
+.vn-ep__num { font: 300 clamp(10px, calc(1.1vmin - 1px), 16px) var(--font-mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--crt-dim); }
+.vn-ep__name { font: 400 clamp(13px, calc(1.6vmin - 1px), 23px) / 1.3 var(--font-mono); letter-spacing: 0.02em; }
 .vn-ep.is-locked .vn-ep__name { font-weight: 300; color: #6d6964; }
 .vn-ep__restart {
   align-self: flex-start;
   padding: 2px 0;
-  font: 300 clamp(11px, 1.1vmin, 14px) var(--font-mono);
+  font: 300 clamp(8px, calc(1.1vmin - 3px), 11px) var(--font-mono);
   letter-spacing: 0.08em;
   color: var(--crt-dim);
   background: none;
@@ -1011,8 +1004,8 @@ body {
   .vn-menu__shelf > :first-child,
   .vn-menu__shelf > :last-child { margin: 0 auto; }
   .vn-ep { flex: 0 0 auto; width: 100%; max-width: 520px; }
-  .vn-ep__num { font-size: 14px; }
-  .vn-ep__name { font-size: 19px; }
+  .vn-ep__num { font-size: 11px; }
+  .vn-ep__name { font-size: 16px; }
   .vn-menu__lang-code { display: none; } /* код языка — в подсказке глобуса; в узкой шапке наезжал на сжатый логотип */
 }
 
@@ -1039,7 +1032,7 @@ body {
   width: min(100%, calc(439 * var(--u)));
   max-height: 100%;
 }
-.vn-warning__title { margin: 0; font: 400 calc(var(--h1) * var(--u)) / 0.96 var(--font-title); color: #fff; }
+.vn-warning__title { margin: 0; font: 400 calc(var(--h1) * var(--u) - 3px) / 0.96 var(--font-title); color: #fff; }
 .vn-warning__body { font-size: calc(16 * var(--ut)); line-height: 1.2; color: rgb(255 255 255 / 0.9); }
 .vn-warning__body p { margin: 0; }
 .vn-warning__body p + p { margin-top: 1.2em; }
@@ -1163,7 +1156,7 @@ body {
   height: 100%;
 }
 .vn-archive__head { display: flex; align-items: center; justify-content: space-between; gap: calc(12 * var(--u)); }
-.vn-archive__title { margin: 0; font: 400 calc(20 * var(--u)) / normal var(--font-title); color: #fff; }
+.vn-archive__title { margin: 0; font: 400 calc(20 * var(--u) - 3px) / normal var(--font-title); color: #fff; }
 .vn-archive__page {
   flex: 1 1 auto;
   min-height: 0;
@@ -1286,7 +1279,7 @@ body {
   padding: 0 6px;
   display: grid;
   place-items: center;
-  font: 400 calc(13 * var(--u)) / 1 var(--font-title);
+  font: 400 calc(13 * var(--u) - 3px) / 1 var(--font-title);
   color: #fff;
   background: var(--c-accent);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
@@ -1296,18 +1289,19 @@ body {
   position: absolute;
   z-index: 2;
   right: 8px;
-  bottom: -10px;
-  padding: 3px 7px 2px;
-  font: 400 calc(11 * var(--u)) / 1.15 var(--font-title);
-  letter-spacing: 0.1em;
+  bottom: -8px;
+  padding: 2px 5px 1px;
+  font: 400 max(8px, calc(8 * var(--u))) / 1.15 var(--font-title); /* меньше (владелец 2026-10-14) */
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgb(200 20 20 / 0.92);
-  border: 2px solid rgb(200 20 20 / 0.85);
+  border: 1.5px solid rgb(200 20 20 / 0.85);
   transform: rotate(-4deg);
   mix-blend-mode: multiply;
   pointer-events: none;
 }
-.vn-archive__item.has-scan .vn-archive__stamp { top: 42%; right: 6%; bottom: auto; transform: rotate(-9deg); }
+/* на скане — в нижнем углу листа, а не поперёк текста */
+.vn-archive__item.has-scan .vn-archive__stamp { top: auto; right: 20%; bottom: calc(1.4em + 14px); transform: rotate(-6deg); }
 /* у скана номер — на углу самого листа (лист — 64 % колонки, по центру) */
 .vn-archive__item.has-scan .vn-archive__num { left: calc(18% - 11px); }
 
@@ -1331,7 +1325,7 @@ body {
   min-width: 100%;
 }
 .vn-document__heading { display: flex; flex-direction: column; align-items: flex-start; gap: calc(3 * var(--u)); min-width: 0; }
-.vn-document__title { margin: 0; font: 400 calc(20 * var(--u)) / normal var(--font-title); color: #fff; }
+.vn-document__title { margin: 0; font: 400 calc(20 * var(--u) - 3px) / normal var(--font-title); color: #fff; }
 .vn-document__tag {
   padding: calc(2 * var(--u)) calc(4 * var(--u));
   font-size: calc(14 * var(--ut));
@@ -1392,7 +1386,7 @@ body {
 .vn-ending__kicker { margin: 0; font: 0.9em var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--c-muted); }
 .vn-ending__title {
   margin: 0.1rem 0 0.8rem;
-  font: 400 clamp(28px, 7vmin, 52px) / 1.05 var(--font-title);
+  font: 400 clamp(25px, calc(7vmin - 3px), 49px) / 1.05 var(--font-title);
   text-transform: uppercase;
   color: #f2efe6;
   text-shadow: 0 0 0.45em rgb(218 24 24 / 0.55);
@@ -1498,7 +1492,7 @@ body {
 .vn-toast {
   position: relative;
   padding: 0.6rem 1rem 0.55rem;
-  font-size: 17px;
+  font-size: 14px;
   line-height: 1.35;
   color: #1b1a17;
   background: #f8f6f0;

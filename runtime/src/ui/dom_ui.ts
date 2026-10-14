@@ -513,8 +513,11 @@ export class DomUI implements SessionUI {
   private lineView(p: LinePending): LineView {
     const view = this.d.view();
     const preset = presetOf(view?.presentation ?? 'reconstruction');
-    const layout: TextLayout = preset.text === 'window' ? 'window' : 'subtitle';
-    const showName = p.style === 'say' && p.who !== null && (preset.speakerName || layout === 'subtitle');
+    // Реплика персонажа — всегда в окне с именем, как везде в игре (владелец 2026-10-14: запись 2004 года была по
+    // центру субтитром); субтитр — только рассказчику хроники, суда и монтажа.
+    const speaker = p.style === 'say' && p.who !== null;
+    const layout: TextLayout = preset.text === 'window' || speaker ? 'window' : 'subtitle';
+    const showName = speaker && (preset.speakerName || preset.text !== 'window');
     // Окно реплики (макет в Figma): полное имя, подпись под ним и портрет.
     return {
       name: showName ? nameOf(this.d.episode, p.who, false) : null,

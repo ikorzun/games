@@ -887,7 +887,18 @@ export class ArchiveScreen extends BaseScreen {
       ? [
           h(
             'button',
-            { class: 'vn-archive__open', type: 'button', aria: { label: title }, on: { click: () => open?.(a) } },
+            {
+              class: 'vn-archive__open',
+              type: 'button',
+              aria: { label: title },
+              on: {
+                // штамп снимается тут же, без перерисовки доски (прокрутка остаётся на месте)
+                click: (e) => {
+                  (e.currentTarget as HTMLElement).closest('.vn-archive__item')?.querySelector('.vn-archive__stamp')?.remove();
+                  open?.(a);
+                },
+              },
+            },
             picture('vn-archive__scan', scan),
             h('span', { class: 'vn-archive__clip', aria: { hidden: true } }),
           ),

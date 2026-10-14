@@ -701,9 +701,11 @@ describe('ArchiveScreen и ErrorScreen', () => {
     loaded('./assets/doc_y.webp');
     await Promise.resolve();
     expect(img.getAttribute('src')).toBe('./assets/doc_y.webp');
+    expect(doc.querySelector('.vn-archive__stamp')?.textContent).toBe('Новый материал');
     btn.click();
     expect(opened).toEqual(['arc_y']);
-    expect(doc.querySelector('.vn-archive__stamp')?.textContent).toBe('Новый материал');
+    // посмотрел бумагу — штамп с неё снят сразу (владелец 2026-10-14)
+    expect(doc.querySelector('.vn-archive__stamp')).toBeNull();
     s.el.querySelector<HTMLButtonElement>('.vn-document__close')?.click();
     expect(onDone).toHaveBeenCalledTimes(1);
   });
