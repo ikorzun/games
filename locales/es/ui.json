@@ -171,5 +171,8 @@
   "ui.case.photo.flip": "",
   "ui.case.chapter_done": "",
   "ui.case.rotate": "",
-  "ui.minigame.finish_search": "Terminar la búsqueda"
+  "ui.minigame.finish_search": "Terminar la búsqueda",
+  "ui.minigame.start_check": "Empezar a comparar",
+  "ui.minigame.nothing_to_check": "Nada que comparar aquí",
+  "ui.minigame.body_loupe": "Lupa: pasa el cursor sobre la hoja; en el teléfono, mantén el dedo."
 }

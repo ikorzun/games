@@ -120,7 +120,8 @@ export function parseSceneConfig(cfg: MinigameConfig, id = ''): SceneConfig | nu
 /**
  * Какая зона получила тап (u, v — доли картинки; widthPx × heightPx — её размер на экране).
  * Зона растягивается до MIN_HIT_PX и получает запас SLOP_PX; из подходящих выигрывает та,
- * чей центр ближе (в долях её размера). null — промах.
+ * чей центр ближе (в долях её размера). null — промах. Мышь точнее пальца — сверка документов зовёт с меньшими
+ * minPx / slopPx.
  */
 export function hitTest(
   zones: ReadonlyArray<{ id: string; rect: Rect }>,
@@ -128,6 +129,8 @@ export function hitTest(
   v: number,
   widthPx: number,
   heightPx: number,
+  minPx = MIN_HIT_PX,
+  slopPx = SLOP_PX,
 ): string | null {
   const px = u * widthPx;
   const py = v * heightPx;
@@ -137,8 +140,8 @@ export function hitTest(
     const [x, y, w, hh] = z.rect;
     const cx = (x + w / 2) * widthPx;
     const cy = (y + hh / 2) * heightPx;
-    const halfW = Math.max(w * widthPx, MIN_HIT_PX) / 2 + SLOP_PX;
-    const halfH = Math.max(hh * heightPx, MIN_HIT_PX) / 2 + SLOP_PX;
+    const halfW = Math.max(w * widthPx, minPx) / 2 + slopPx;
+    const halfH = Math.max(hh * heightPx, minPx) / 2 + slopPx;
     const dx = Math.abs(px - cx) / halfW;
     const dy = Math.abs(py - cy) / halfH;
     if (dx > 1 || dy > 1) continue;

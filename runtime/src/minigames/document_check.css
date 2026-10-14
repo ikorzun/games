@@ -212,3 +212,142 @@
     transform: translateX(3px);
   }
 }
+
+/*
+ * Сканы (раскладка 'stage'; владелец 2026-10-14: «Два скана, тап по листу»): настоящие бумаги рядом на тёмном столе,
+ * размер листов считает layoutPages() (оба целиком, 3:4, в стороне от блока). Поля — невидимые кнопки (только для
+ * клавиатуры и скринридера: мышь и палец идут в лист, зоны не подсвечиваются — иначе видно, где искать).
+ */
+.mg-docs__desk {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: #000;
+  outline: none;
+}
+.mg-docs__page {
+  position: relative;
+  flex: none;
+  width: 30vw;
+  height: 40vw;
+  background: #e9e2cf;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.6);
+  cursor: crosshair;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.mg-docs__scan {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.mg-docs__page.is-missing .mg-docs__scan {
+  visibility: hidden;
+}
+.mg-docs__marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.mg-docs__zone {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  pointer-events: none;
+}
+.mg-docs__zone:focus-visible {
+  outline: 2px solid var(--mg-accent);
+  outline-offset: 2px;
+}
+
+/* Отметки карандашом: найденное — красный кружок, подсказка — пунктир, ловушка — серая галочка. */
+.mg-docs__ring {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid #c41f1f;
+  border-radius: 50%;
+  transform: rotate(-1.5deg);
+  animation: mg-docs-draw 0.35s ease-out both;
+}
+@keyframes mg-docs-draw {
+  from {
+    opacity: 0;
+    transform: rotate(-1.5deg) scale(1.15);
+  }
+}
+.mg-docs__hintbox {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px dotted var(--mg-accent);
+}
+.mg-docs__tick {
+  position: absolute;
+  box-sizing: border-box;
+  aspect-ratio: 1 / 2;
+  margin-left: 0.6%;
+  border: solid rgb(40 40 40 / 0.7);
+  border-width: 0 2px 2px 0;
+  transform: rotate(40deg) translateY(-15%);
+}
+
+/* Надпись у места тапа: «Здесь всё сходится», «Здесь нечего сверять». */
+.mg-docs__flash {
+  position: absolute;
+  z-index: 2;
+  padding: 0.2em 0.5em;
+  font: 400 clamp(12px, 1.1vw, 16px) / 1.1 var(--font-body, serif);
+  color: #fff;
+  white-space: nowrap;
+  background: rgb(0 0 0 / 0.8);
+  transform: translate(-50%, -140%);
+  opacity: 0;
+  pointer-events: none;
+}
+.mg-docs__flash.is-on {
+  animation: mg-docs-flash 1.6s ease-out both;
+}
+@keyframes mg-docs-flash {
+  0% {
+    opacity: 0;
+  }
+  10%,
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Лупа: круглое стекло с тёмной оправой — предмет на столе, не окно интерфейса. */
+.mg-docs__loupe {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  background-color: #e9e2cf;
+  background-repeat: no-repeat;
+  border: 3px solid #161616;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.35),
+    0 10px 30px rgb(0 0 0 / 0.55);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mg-docs__ring,
+  .mg-docs__flash.is-on {
+    animation: none;
+  }
+  .mg-docs__flash.is-on {
+    opacity: 1;
+  }
+}

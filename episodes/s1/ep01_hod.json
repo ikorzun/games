@@ -10981,27 +10981,222 @@
      {
       "doc": "doc_power_of_attorney",
       "field": "principal",
-      "text_key": "ep01.mg_docs.f.poa_principal"
+      "text_key": "ep01.mg_docs.f.poa_principal",
+      "rects": [
+       [
+        0.145,
+        0.25,
+        0.265,
+        0.033
+       ]
+      ]
      },
      {
       "doc": "doc_power_of_attorney",
       "field": "date",
-      "text_key": "ep01.mg_docs.f.poa_date"
+      "text_key": "ep01.mg_docs.f.poa_date",
+      "rects": [
+       [
+        0.32,
+        0.186,
+        0.19,
+        0.032
+       ]
+      ]
      },
      {
       "doc": "doc_power_of_attorney",
       "field": "notary",
-      "text_key": "ep01.mg_docs.f.poa_notary"
+      "text_key": "ep01.mg_docs.f.poa_notary",
+      "rects": [
+       [
+        0.49,
+        0.665,
+        0.425,
+        0.031
+       ]
+      ]
      },
      {
       "doc": "doc_contract_sale",
       "field": "poa_ref",
-      "text_key": "ep01.mg_docs.f.contract_poa_ref"
+      "text_key": "ep01.mg_docs.f.contract_poa_ref",
+      "rects": [
+       [
+        0.805,
+        0.229,
+        0.055,
+        0.032
+       ],
+       [
+        0.105,
+        0.266,
+        0.495,
+        0.032
+       ]
+      ]
      },
      {
       "doc": "doc_contract_sale",
       "field": "signature",
-      "text_key": "ep01.mg_docs.f.contract_signature"
+      "text_key": "ep01.mg_docs.f.contract_signature",
+      "rects": [
+       [
+        0.53,
+        0.47,
+        0.33,
+        0.07
+       ]
+      ]
+     },
+     {
+      "doc": "doc_power_of_attorney",
+      "field": "address",
+      "text_key": "ep01.mg_docs.f.poa_address",
+      "rects": [
+       [
+        0.093,
+        0.287,
+        0.447,
+        0.03
+       ]
+      ]
+     },
+     {
+      "doc": "doc_power_of_attorney",
+      "field": "attorney",
+      "text_key": "ep01.mg_docs.f.poa_attorney",
+      "rects": [
+       [
+        0.3,
+        0.321,
+        0.405,
+        0.03
+       ]
+      ]
+     },
+     {
+      "doc": "doc_power_of_attorney",
+      "field": "principal_sign",
+      "text_key": "ep01.mg_docs.f.poa_principal_sign",
+      "rects": [
+       [
+        0.705,
+        0.515,
+        0.24,
+        0.065
+       ]
+      ]
+     },
+     {
+      "doc": "doc_power_of_attorney",
+      "field": "notary_sign",
+      "text_key": "ep01.mg_docs.f.poa_notary_sign",
+      "rects": [
+       [
+        0.28,
+        0.745,
+        0.26,
+        0.125
+       ]
+      ]
+     },
+     {
+      "doc": "doc_power_of_attorney",
+      "field": "stamp",
+      "text_key": "ep01.mg_docs.f.poa_stamp",
+      "rects": [
+       [
+        0.545,
+        0.715,
+        0.24,
+        0.185
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "seller",
+      "text_key": "ep01.mg_docs.f.contract_seller",
+      "rects": [
+       [
+        0.155,
+        0.229,
+        0.385,
+        0.032
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "attorney",
+      "text_key": "ep01.mg_docs.f.contract_attorney",
+      "rects": [
+       [
+        0.755,
+        0.266,
+        0.15,
+        0.032
+       ],
+       [
+        0.105,
+        0.301,
+        0.265,
+        0.032
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "address",
+      "text_key": "ep01.mg_docs.f.contract_address",
+      "rects": [
+       [
+        0.6,
+        0.34,
+        0.355,
+        0.032
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "notary",
+      "text_key": "ep01.mg_docs.f.contract_notary",
+      "rects": [
+       [
+        0.105,
+        0.68,
+        0.62,
+        0.032
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "notary_sign",
+      "text_key": "ep01.mg_docs.f.contract_notary_sign",
+      "rects": [
+       [
+        0.4,
+        0.73,
+        0.235,
+        0.1
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "stamp",
+      "text_key": "ep01.mg_docs.f.contract_stamp",
+      "rects": [
+       [
+        0.12,
+        0.725,
+        0.265,
+        0.2
+       ]
+      ]
      }
     ],
     "decoys": 3,
@@ -11261,27 +11456,222 @@
      {
       "doc": "doc_power_of_attorney",
       "field": "principal",
-      "text_key": "ep01.mg_docs.f.poa_principal"
+      "text_key": "ep01.mg_docs.f.poa_principal",
+      "rects": [
+       [
+        0.145,
+        0.25,
+        0.265,
+        0.033
+       ]
+      ]
      },
      {
       "doc": "doc_power_of_attorney",
       "field": "date",
-      "text_key": "ep01.mg_docs.f.poa_date"
+      "text_key": "ep01.mg_docs.f.poa_date",
+      "rects": [
+       [
+        0.32,
+        0.186,
+        0.19,
+        0.032
+       ]
+      ]
      },
      {
       "doc": "doc_power_of_attorney",
       "field": "notary",
-      "text_key": "ep01.mg_docs.f.poa_notary"
+      "text_key": "ep01.mg_docs.f.poa_notary",
+      "rects": [
+       [
+        0.49,
+        0.665,
+        0.425,
+        0.031
+       ]
+      ]
      },
      {
       "doc": "doc_contract_sale",
       "field": "poa_ref",
-      "text_key": "ep01.mg_docs.f.contract_poa_ref"
+      "text_key": "ep01.mg_docs.f.contract_poa_ref",
+      "rects": [
+       [
+        0.805,
+        0.229,
+        0.055,
+        0.032
+       ],
+       [
+        0.105,
+        0.266,
+        0.495,
+        0.032
+       ]
+      ]
      },
      {
       "doc": "doc_contract_sale",
       "field": "signature",
-      "text_key": "ep01.mg_docs.f.contract_signature"
+      "text_key": "ep01.mg_docs.f.contract_signature",
+      "rects": [
+       [
+        0.53,
+        0.47,
+        0.33,
+        0.07
+       ]
+      ]
+     },
+     {
+      "doc": "doc_power_of_attorney",
+      "field": "address",
+      "text_key": "ep01.mg_docs.f.poa_address",
+      "rects": [
+       [
+        0.093,
+        0.287,
+        0.447,
+        0.03
+       ]
+      ]
+     },
+     {
+      "doc": "doc_power_of_attorney",
+      "field": "attorney",
+      "text_key": "ep01.mg_docs.f.poa_attorney",
+      "rects": [
+       [
+        0.3,
+        0.321,
+        0.405,
+        0.03
+       ]
+      ]
+     },
+     {
+      "doc": "doc_power_of_attorney",
+      "field": "principal_sign",
+      "text_key": "ep01.mg_docs.f.poa_principal_sign",
+      "rects": [
+       [
+        0.705,
+        0.515,
+        0.24,
+        0.065
+       ]
+      ]
+     },
+     {
+      "doc": "doc_power_of_attorney",
+      "field": "notary_sign",
+      "text_key": "ep01.mg_docs.f.poa_notary_sign",
+      "rects": [
+       [
+        0.28,
+        0.745,
+        0.26,
+        0.125
+       ]
+      ]
+     },
+     {
+      "doc": "doc_power_of_attorney",
+      "field": "stamp",
+      "text_key": "ep01.mg_docs.f.poa_stamp",
+      "rects": [
+       [
+        0.545,
+        0.715,
+        0.24,
+        0.185
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "seller",
+      "text_key": "ep01.mg_docs.f.contract_seller",
+      "rects": [
+       [
+        0.155,
+        0.229,
+        0.385,
+        0.032
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "attorney",
+      "text_key": "ep01.mg_docs.f.contract_attorney",
+      "rects": [
+       [
+        0.755,
+        0.266,
+        0.15,
+        0.032
+       ],
+       [
+        0.105,
+        0.301,
+        0.265,
+        0.032
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "address",
+      "text_key": "ep01.mg_docs.f.contract_address",
+      "rects": [
+       [
+        0.6,
+        0.34,
+        0.355,
+        0.032
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "notary",
+      "text_key": "ep01.mg_docs.f.contract_notary",
+      "rects": [
+       [
+        0.105,
+        0.68,
+        0.62,
+        0.032
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "notary_sign",
+      "text_key": "ep01.mg_docs.f.contract_notary_sign",
+      "rects": [
+       [
+        0.4,
+        0.73,
+        0.235,
+        0.1
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "stamp",
+      "text_key": "ep01.mg_docs.f.contract_stamp",
+      "rects": [
+       [
+        0.12,
+        0.725,
+        0.265,
+        0.2
+       ]
+      ]
      }
     ],
     "decoys": 3,
@@ -11331,27 +11721,222 @@
      {
       "doc": "doc_power_of_attorney",
       "field": "principal",
-      "text_key": "ep01.mg_docs.f.poa_principal"
+      "text_key": "ep01.mg_docs.f.poa_principal",
+      "rects": [
+       [
+        0.145,
+        0.25,
+        0.265,
+        0.033
+       ]
+      ]
      },
      {
       "doc": "doc_power_of_attorney",
       "field": "date",
-      "text_key": "ep01.mg_docs.f.poa_date"
+      "text_key": "ep01.mg_docs.f.poa_date",
+      "rects": [
+       [
+        0.32,
+        0.186,
+        0.19,
+        0.032
+       ]
+      ]
      },
      {
       "doc": "doc_power_of_attorney",
       "field": "notary",
-      "text_key": "ep01.mg_docs.f.poa_notary"
+      "text_key": "ep01.mg_docs.f.poa_notary",
+      "rects": [
+       [
+        0.49,
+        0.665,
+        0.425,
+        0.031
+       ]
+      ]
      },
      {
       "doc": "doc_contract_sale",
       "field": "poa_ref",
-      "text_key": "ep01.mg_docs.f.contract_poa_ref"
+      "text_key": "ep01.mg_docs.f.contract_poa_ref",
+      "rects": [
+       [
+        0.805,
+        0.229,
+        0.055,
+        0.032
+       ],
+       [
+        0.105,
+        0.266,
+        0.495,
+        0.032
+       ]
+      ]
      },
      {
       "doc": "doc_contract_sale",
       "field": "signature",
-      "text_key": "ep01.mg_docs.f.contract_signature"
+      "text_key": "ep01.mg_docs.f.contract_signature",
+      "rects": [
+       [
+        0.53,
+        0.47,
+        0.33,
+        0.07
+       ]
+      ]
+     },
+     {
+      "doc": "doc_power_of_attorney",
+      "field": "address",
+      "text_key": "ep01.mg_docs.f.poa_address",
+      "rects": [
+       [
+        0.093,
+        0.287,
+        0.447,
+        0.03
+       ]
+      ]
+     },
+     {
+      "doc": "doc_power_of_attorney",
+      "field": "attorney",
+      "text_key": "ep01.mg_docs.f.poa_attorney",
+      "rects": [
+       [
+        0.3,
+        0.321,
+        0.405,
+        0.03
+       ]
+      ]
+     },
+     {
+      "doc": "doc_power_of_attorney",
+      "field": "principal_sign",
+      "text_key": "ep01.mg_docs.f.poa_principal_sign",
+      "rects": [
+       [
+        0.705,
+        0.515,
+        0.24,
+        0.065
+       ]
+      ]
+     },
+     {
+      "doc": "doc_power_of_attorney",
+      "field": "notary_sign",
+      "text_key": "ep01.mg_docs.f.poa_notary_sign",
+      "rects": [
+       [
+        0.28,
+        0.745,
+        0.26,
+        0.125
+       ]
+      ]
+     },
+     {
+      "doc": "doc_power_of_attorney",
+      "field": "stamp",
+      "text_key": "ep01.mg_docs.f.poa_stamp",
+      "rects": [
+       [
+        0.545,
+        0.715,
+        0.24,
+        0.185
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "seller",
+      "text_key": "ep01.mg_docs.f.contract_seller",
+      "rects": [
+       [
+        0.155,
+        0.229,
+        0.385,
+        0.032
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "attorney",
+      "text_key": "ep01.mg_docs.f.contract_attorney",
+      "rects": [
+       [
+        0.755,
+        0.266,
+        0.15,
+        0.032
+       ],
+       [
+        0.105,
+        0.301,
+        0.265,
+        0.032
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "address",
+      "text_key": "ep01.mg_docs.f.contract_address",
+      "rects": [
+       [
+        0.6,
+        0.34,
+        0.355,
+        0.032
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "notary",
+      "text_key": "ep01.mg_docs.f.contract_notary",
+      "rects": [
+       [
+        0.105,
+        0.68,
+        0.62,
+        0.032
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "notary_sign",
+      "text_key": "ep01.mg_docs.f.contract_notary_sign",
+      "rects": [
+       [
+        0.4,
+        0.73,
+        0.235,
+        0.1
+       ]
+      ]
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "stamp",
+      "text_key": "ep01.mg_docs.f.contract_stamp",
+      "rects": [
+       [
+        0.12,
+        0.725,
+        0.265,
+        0.2
+       ]
+      ]
      }
     ],
     "decoys": 3,

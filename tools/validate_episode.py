@@ -602,8 +602,32 @@ def minigame_integrity(ep: dict, ru: dict | None, rep: Report) -> None:
             for doc in docs:
                 if doc not in texts:
                     rep.warn(f"{where}: у документа {doc} нет текста (шаг document / archive_items) — фрагменты пойдут отдельными строками")
+            # Зоны на сканах: доли картинки, ненулевые, в её пределах
+            for f in fields:
+                for r in f.get("rects", []):
+                    x, y, w, h = r
+                    if w <= 0 or h <= 0:
+                        rep.err(f"{where}: поле {f.get('doc')}/{f.get('field')}: зона с нулевым размером")
+                    elif x + w > 1.0001 or y + h > 1.0001:
+                        rep.warn(f"{where}: поле {f.get('doc')}/{f.get('field')}: зона выходит за границы скана")
+            scans = {d["id"] for d in ep.get("assets", {}).get("documents", []) if d.get("localized")}
+            if docs and all(d in scans for d in docs):
+                for d in discrepancies:
+                    f = next((x for x in fields if (x.get("doc"), x.get("field")) == (d.get("doc"), d.get("field"))), None)
+                    if f is not None and not f.get("rects"):
+                        rep.warn(f"{where}: у несоответствия {d.get('doc')}/{d.get('field')} нет rects — на сканах игра останется текстовой")
+            # Дословно в тексте нужны только поля текстового режима: несоответствия и первые `decoys` ловушек
+            disc_keys = {(d.get("doc"), d.get("field")) for d in discrepancies}
+            limit = cfg.get("decoys", len(fields))
+            text_fields, n = [], 0
+            for f in fields:
+                if (f.get("doc"), f.get("field")) in disc_keys:
+                    text_fields.append(f)
+                elif n < limit:
+                    text_fields.append(f)
+                    n += 1
             if ru:
-                for f in fields:
+                for f in text_fields:
                     full = ru.get(texts.get(f.get("doc"), ""), "")
                     snippet = ru.get(f.get("text_key"), "")
                     if full and snippet and snippet not in full:

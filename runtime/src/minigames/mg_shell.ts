@@ -100,6 +100,7 @@ interface StageChrome {
   intro: HTMLElement;
   heading: HTMLElement;
   attempts: HTMLElement;
+  note: HTMLElement;
   start: HTMLButtonElement;
   dock: HTMLElement;
   move: HTMLElement;
@@ -220,6 +221,14 @@ export abstract class MinigameShell implements IMinigame {
   protected panelList(): HTMLElement | null {
     return null;
   }
+  /** Раскладка 'stage': надпись кнопки вступления. */
+  protected startLabelKey(): string {
+    return 'ui.minigame.start_search';
+  }
+  /** Раскладка 'stage': строка вступления под попытками (как играть); пусто — нет строки. */
+  protected introNote(): string {
+    return '';
+  }
   /** Раскладка 'stage': куда поставить фокус после «Начать». */
   protected focusField(): void {
     /* по умолчанию — никуда */
@@ -278,7 +287,9 @@ export abstract class MinigameShell implements IMinigame {
       st.heading.textContent = u.title.textContent;
       st.intro.hidden = this.started;
       st.dock.hidden = !this.started || this.over !== null;
-      st.start.textContent = t('ui.minigame.start_search');
+      st.start.textContent = t(this.startLabelKey());
+      st.note.textContent = this.introNote();
+      st.note.hidden = st.note.textContent === '';
       st.move.textContent = t('ui.minigame.move');
       const lim = this.failLimit();
       st.attempts.hidden = lim <= 0;
@@ -598,11 +609,12 @@ export abstract class MinigameShell implements IMinigame {
     const p = this.chromeParts();
     const heading = h('h2', { class: 'mg-stage__heading' });
     const attempts = h('p', { class: 'mg-stage__attempts' });
+    const note = h('p', { class: 'mg-stage__note', hidden: true });
     const start = h('button', { class: 'mg-btn mg-shell__btn is-start is-primary', type: 'button', on: { click: () => this.begin() } });
     const intro = h(
       'div',
       { class: 'mg-stage__layer' },
-      h('div', { class: 'mg-stage__col' }, heading, p.intro, h('div', { class: 'mg-stage__text' }, p.brief, attempts), start),
+      h('div', { class: 'mg-stage__col' }, heading, p.intro, h('div', { class: 'mg-stage__text' }, p.brief, attempts, note), start),
     );
     // Итог — колонкой по центру, как вступление.
     const col = h('div', { class: 'mg-stage__col' });
@@ -625,7 +637,7 @@ export abstract class MinigameShell implements IMinigame {
     const dock = h('div', { class: 'mg-stage__dock' }, handle, panel);
     const root = h('section', { class: `mg-shell mg-stage ${this.cls}`, role: 'group' }, h('div', { class: 'mg-shell__body' }, body), dock, intro, p.result);
     this.makeDraggable(dock, panel, root);
-    return { root, foot, ...p, stage: { intro, heading, attempts, start, dock, move } };
+    return { root, foot, ...p, stage: { intro, heading, attempts, note, start, dock, move } };
   }
 
   /**

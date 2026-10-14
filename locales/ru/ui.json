@@ -171,5 +171,8 @@
   "ui.case.photo.flip": "Перевернуть",
   "ui.case.chapter_done": "Глава закрыта",
   "ui.case.rotate": "Поверните телефон — предметы крупнее",
-  "ui.minigame.finish_search": "Закончить осмотр"
+  "ui.minigame.finish_search": "Закончить осмотр",
+  "ui.minigame.start_check": "Начать сверку",
+  "ui.minigame.nothing_to_check": "Здесь нечего сверять",
+  "ui.minigame.body_loupe": "Лупа — наведите на лист; на телефоне подержите палец."
 }

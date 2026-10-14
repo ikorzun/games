@@ -171,5 +171,8 @@
   "ui.case.photo.flip": "Turn over",
   "ui.case.chapter_done": "Chapter closed",
   "ui.case.rotate": "Turn your phone: items get bigger",
-  "ui.minigame.finish_search": "Finish the search"
+  "ui.minigame.finish_search": "Finish the search",
+  "ui.minigame.start_check": "Start checking",
+  "ui.minigame.nothing_to_check": "Nothing to compare here",
+  "ui.minigame.body_loupe": "Magnifier: hover over a sheet; on a phone, press and hold."
 }

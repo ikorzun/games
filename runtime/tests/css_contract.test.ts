@@ -210,7 +210,7 @@ describe('интерфейс: документальная эстетика, mob
     expect(uiCss).toMatch(/\.vn-textbox\[data-style='voiceover'\] \.vn-textbox__text \{ color: #e4dfd1; \}/);
   });
 
-  it('без скруглений (решение владельца 2026-10-13): круглые только портрет у имени, экран-кинескоп меню, лампа REC, номер варианта, крестик документа, номера и попытки осмотра (макеты 2026-10-13)', () => {
+  it('без скруглений (решение владельца 2026-10-13): круглые только портрет у имени, экран-кинескоп меню, лампа REC, номер варианта, крестик документа, номера и попытки осмотра (макеты 2026-10-13), лупа и кружок карандашом на сверке документов (предметы на столе, 2026-10-14)', () => {
     const cssOf = (dir: string): string[] => {
       const d = join(HERE, '..', 'src', dir);
       return readdirSync(d).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(d, f), 'utf8'));
@@ -220,6 +220,8 @@ describe('интерфейс: документальная эстетика, mob
       for (const m of css.matchAll(/([^{}]+)\{[^}]*border-radius:(?!\s*0;)[^}]*\}/g)) owners.push(m[1]!.trim().split('\n').pop()!.trim());
     }
     expect(owners.sort()).toEqual([
+      '.mg-docs__loupe',
+      '.mg-docs__ring',
       '.mg-scene__num',
       '.mg-scene__pin',
       '.mg-stage .mg-shell__pip',

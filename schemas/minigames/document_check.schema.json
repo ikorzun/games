@@ -27,11 +27,16 @@
         "properties": {
           "doc": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
           "field": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
-          "text_key": { "type": "string" }
+          "text_key": { "type": "string" },
+          "rects": {
+            "type": "array", "minItems": 1,
+            "description": "Где фрагмент на скане документа (assets.documents, localized: true): прямоугольники [x, y, w, h] в долях картинки, по одному на строку (фрагмент с переносом — два). На языке скана игра идёт на самих листах: судится тап по любому полю с rects, тап по пустой бумаге не считается; без rects у несоответствия — текстовый режим.",
+            "items": { "type": "array", "minItems": 4, "maxItems": 4, "items": { "type": "number", "minimum": 0, "maximum": 1 } }
+          }
         }
       }
     },
-    "decoys": { "type": "integer", "minimum": 0, "maximum": 10, "description": "Сколько полей-ловушек подсвечивать как кликабельные: первые N фрагментов из fields, не вошедших в discrepancies (порядок — как в fields). Не задано — все." },
+    "decoys": { "type": "integer", "minimum": 0, "maximum": 10, "description": "Текстовый режим: сколько полей-ловушек подсвечивать как кликабельные — первые N фрагментов из fields, не вошедших в discrepancies (порядок — как в fields). Не задано — все. На сканах судятся все поля с rects." },
     "required": { "type": "integer", "minimum": 1 },
     "max_mistakes": { "type": "integer", "minimum": 1 }
   }

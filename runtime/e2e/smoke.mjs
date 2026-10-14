@@ -707,6 +707,19 @@ async function solveInspect(page) {
   return centers.length;
 }
 
+/** Сверка документов на сканах: «Начать сверку» и клик мышью по дате доверенности (зона — невидимая кнопка поля). */
+async function solveDocs(page) {
+  await page.waitForSelector('.mg-shell__btn.is-start', { state: 'visible', timeout: 20000 });
+  await page.click('.mg-shell__btn.is-start');
+  await sleep(300);
+  const [x, y] = await page.$eval('.mg-docs__zone[data-key="doc_power_of_attorney/date"]', (z) => {
+    const b = z.getBoundingClientRect();
+    return [b.left + b.width / 2, b.top + b.height / 2];
+  });
+  await clickScene(page, x, y);
+  await page.waitForSelector('.mg-docs__ring', { state: 'attached', timeout: 3000 });
+}
+
 /** Клик мышью по месту картинки; если его закрывает блок осмотра — сперва отодвинуть блок за ручку, как игрок. */
 async function clickScene(page, x, y) {
   const covered = await page.evaluate(([px, py]) => !!document.elementFromPoint(px, py)?.closest('.mg-stage__dock'), [x, y]);
@@ -867,6 +880,7 @@ async function playHod(page, plan, onStep = async () => undefined, max = 8000) {
       seen.minigames.push(p.id);
       if (p.type === 'crime_scene_search') await solveInspect(page);
       else if (p.type === 'database_search') await solveCards(page, { notary: 'kovrigin', attorney: 'murashov_sv' });
+      else if (p.type === 'document_check') await solveDocs(page);
       else await page.locator('.is-skip:visible').first().click(); // «только история»: «Пропустить» виден сразу
       // у оболочки итог ждёт «Далее»; доска и допрос при пропуске отдают результат сразу
       const next = await page.waitForSelector('.mg-shell__btn.is-next', { state: 'visible', timeout: 3000 }).catch(() => null);

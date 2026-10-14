@@ -1695,6 +1695,36 @@ MG_DOCS = legacy_minigame('mg_docs', {'success': {'goto': 'd1_lens_ok'}, 'fail':
 MG_DOCS['config'] = {**MG_DOCS['config'], 'required': 1,
                      'discrepancies': [d for d in MG_DOCS['config']['discrepancies'] if d['field'] == 'date']
                      + [{'doc': 'doc_contract_sale', 'field': 'poa_ref', 'hint_key': 'ep01.mg_docs.hint.ref'}]}
+# 2026-10-14 (владелец: «интерфейс проверки документов — под реальный»; выбрал «Два скана, тап по листу»): сверка на
+# самих сканах. rects — где поле на скане, доли картинки 1536×2048 (сверены по сетке 5 %); строка — прямоугольник,
+# фрагмент с переносом — два. Судится тап по любому полю с rects: сличаемые факты обеих бумаг (имя, адрес, доверенное
+# лицо, нотариус, подписи, печати, даты доверенности). Тап по пустому месту и по тексту без поля (Лапин, дата договора,
+# «расчёт произведён») — «нечего сверять», без ошибки. Текстовый режим (не язык скана) — прежние поля, decoys: 3.
+SCAN_RECTS = {
+    ('doc_power_of_attorney', 'principal'): [[0.145, 0.250, 0.265, 0.033]],
+    ('doc_power_of_attorney', 'date'): [[0.320, 0.186, 0.190, 0.032]],
+    ('doc_power_of_attorney', 'notary'): [[0.490, 0.665, 0.425, 0.031]],
+    ('doc_contract_sale', 'poa_ref'): [[0.805, 0.229, 0.055, 0.032], [0.105, 0.266, 0.495, 0.032]],
+    ('doc_contract_sale', 'signature'): [[0.530, 0.470, 0.330, 0.070]],
+}
+SCAN_FIELDS = [  # только на сканах: в текстовом режиме их нет — decoys: 3 берёт первые три ловушки из прежних
+    ('doc_power_of_attorney', 'address', 'poa_address', 'ул. Молодогвардейская, кв. 34', [[0.093, 0.287, 0.447, 0.030]]),
+    ('doc_power_of_attorney', 'attorney', 'poa_attorney', 'Мурашова Сергея Викторовича', [[0.300, 0.321, 0.405, 0.030]]),
+    ('doc_power_of_attorney', 'principal_sign', 'poa_principal_sign', 'Подпись Зои Павловны', [[0.705, 0.515, 0.240, 0.065]]),
+    ('doc_power_of_attorney', 'notary_sign', 'poa_notary_sign', 'Подпись нотариуса', [[0.280, 0.745, 0.260, 0.125]]),
+    ('doc_power_of_attorney', 'stamp', 'poa_stamp', 'Печать нотариуса Ковригина', [[0.545, 0.715, 0.240, 0.185]]),
+    ('doc_contract_sale', 'seller', 'contract_seller', 'Продавец С. Зоя Павловна', [[0.155, 0.229, 0.385, 0.032]]),
+    ('doc_contract_sale', 'attorney', 'contract_attorney', 'Мурашов Сергей Викторович', [[0.755, 0.266, 0.150, 0.032], [0.105, 0.301, 0.265, 0.032]]),
+    ('doc_contract_sale', 'address', 'contract_address', 'на Молодогвардейской ул.', [[0.600, 0.340, 0.355, 0.032]]),
+    ('doc_contract_sale', 'notary', 'contract_notary', 'Удостоверено нотариусом Ковригиным А. Н.', [[0.105, 0.680, 0.620, 0.032]]),
+    ('doc_contract_sale', 'notary_sign', 'contract_notary_sign', 'Подпись нотариуса', [[0.400, 0.730, 0.235, 0.100]]),
+    ('doc_contract_sale', 'stamp', 'contract_stamp', 'Печать нотариуса Ковригина', [[0.120, 0.725, 0.265, 0.200]]),
+]
+MG_DOCS['config']['fields'] = (
+    [{**f, 'rects': SCAN_RECTS[(f['doc'], f['field'])]} if (f['doc'], f['field']) in SCAN_RECTS else f for f in MG_DOCS['config']['fields']]
+    + [{'doc': d, 'field': fld, 'text_key': f'ep01.mg_docs.f.{k}', 'rects': r} for d, fld, k, _, r in SCAN_FIELDS])
+for _d, _f, _k, _text, _r in SCAN_FIELDS:
+    RU[f'ep01.mg_docs.f.{_k}'] = _text
 # Среда: та же сверка — свежим глазом (в понедельник не нашли) или впервые (договор достали во вторник).
 MG_DOCS_D3 = legacy_minigame('mg_docs', {'success': {'goto': 'd3_lens_ok'}, 'fail': {'goto': 'd3_lens_fail'}}, 'success',
                              id='mg_docs_d3', config=MG_DOCS['config'])
