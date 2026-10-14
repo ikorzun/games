@@ -139,10 +139,10 @@ def say(text: str, clip: str = '', model: str = '') -> str:
     return f'{tag} {spoken(text)}' if tag else spoken(text)
 
 
-def tts(who: str, text: str, prev: str = '', nxt: str = '', clip: str = '') -> bytes:
+def tts(who: str, text: str, prev: str = '', nxt: str = '', clip: str = '', voice: str = '') -> bytes:
     c = cast()
     role = c['roles'][who]
-    voice = role.get('voice_id') or c['roles'].get(role.get('voice_of', ''), {}).get('voice_id')
+    voice = voice or role.get('voice_id') or c['roles'].get(role.get('voice_of', ''), {}).get('voice_id')
     if not voice:
         sys.exit(f'{who}: голос не выбран — заполните voice_id в {os.path.relpath(CAST, ROOT)}')
     model = role.get('model', c['model'])
@@ -308,8 +308,7 @@ def try_voice(role: str, voice_id: str, label: str = '') -> None:
     vid = res.get('voice_id', voice_id)
     try:
         text = sample_line(role)
-        body = {'text': spoken(text), 'model_id': c['model'], 'voice_settings': {**c['settings'], **c['roles'][role].get('settings', {})}}
-        audio = call('POST', f'/v1/text-to-speech/{vid}?output_format={FORMAT}', body, accept='audio/mpeg')
+        audio = tts(role, text, voice=vid)
         out = os.path.join(RAW, 'audition')
         os.makedirs(out, exist_ok=True)
         dst = os.path.join(out, f'{role}_{label or v["name"].split(" ")[0]}.mp3')
