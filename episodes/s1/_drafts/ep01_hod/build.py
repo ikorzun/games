@@ -1702,7 +1702,7 @@ MG_DOCS['config'] = {**MG_DOCS['config'], 'required': 1,
 # «расчёт произведён») — «нечего сверять», без ошибки. Текстовый режим (не язык скана) — прежние поля, decoys: 3.
 SCAN_RECTS = {
     ('doc_power_of_attorney', 'principal'): [[0.145, 0.250, 0.265, 0.033]],
-    ('doc_power_of_attorney', 'date'): [[0.320, 0.186, 0.190, 0.032]],
+    ('doc_power_of_attorney', 'date'): [[0.272, 0.186, 0.238, 0.032]],  # с «14»: тап по исправленной «4» — находка
     ('doc_power_of_attorney', 'notary'): [[0.490, 0.665, 0.425, 0.031]],
     ('doc_contract_sale', 'poa_ref'): [[0.805, 0.229, 0.055, 0.032], [0.105, 0.266, 0.495, 0.032]],
     ('doc_contract_sale', 'signature'): [[0.530, 0.470, 0.330, 0.070]],
