@@ -87,7 +87,7 @@ export class AudioManager implements IAudioSink {
   private muted = false;
   private platformEnabled = true;
   private voiceOn = true;
-  private volumes: AudioVolumes = { music: 0.7, sfx: 0.8, voice: 0.9 };
+  private volumes: AudioVolumes = { music: 0.4, sfx: 0.8, voice: 0.9 };
   private voiceClip: VoicePlayback | null = null;
   private readonly listeners = new Set<() => void>();
 
@@ -223,7 +223,8 @@ export class AudioManager implements IAudioSink {
   private applyGain(): void {
     const k = this.audible ? 1 : 0;
     this.backend?.setGain('music', this.volumes.music * k);
-    this.backend?.setGain('ambient', this.volumes.music * k);
+    // Фон места (улица, подъезд, кабинет) — это звук, а не музыка: идёт с ползунком «Звуки» (владелец 2026-10-14).
+    this.backend?.setGain('ambient', this.volumes.sfx * k);
     this.backend?.setGain('sfx', this.volumes.sfx * k);
     this.backend?.setGain('voice', this.voiceOn ? this.volumes.voice * k : 0);
     this.emit();

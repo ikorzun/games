@@ -177,10 +177,14 @@ export class DomUI implements SessionUI {
     this.d.kit.textbox.hide();
     if (p.reason === 'caption' && p.caption) {
       const close = this.d.captions.hold(p.caption.key, p.caption.style);
+      // На отбивке дня — только дата на чёрном: кнопки быстрого меню прячутся (владелец 2026-10-14).
+      const day = p.caption.style === 'day';
+      if (day) this.d.kit.root.classList.add('is-day-card');
       try {
         await this.waitHold(p.ms, ctx);
       } finally {
         close();
+        if (day) this.d.kit.root.classList.remove('is-day-card');
       }
       // Отбивка дня гаснет на чёрном и только потом проявляется сцена — дата не висит поверх нового кадра.
       if (p.caption.style === 'day' && !ctx.instant) await new Promise((r) => setTimeout(r, 360));

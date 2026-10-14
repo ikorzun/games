@@ -19,9 +19,16 @@ describe('настройка «Графика»: реализм / воспоми
     expect(sanitizeSettings({ fontScale: 1.2 }).graphics).toBe('memory');
   });
 
+  it('версия 3: музыка по умолчанию вдвое тише звуков; нетронутое прежнее умолчание 0,7 — тоже 0,4, выбор игрока — его', () => {
+    expect(sanitizeSettings({})).toMatchObject({ music: 0.4, sfx: 0.8, v: 3 });
+    expect(sanitizeSettings({ v: 2, music: 0.7 }).music).toBe(0.4);
+    expect(sanitizeSettings({ v: 2, music: 0.55 }).music).toBe(0.55);
+    expect(sanitizeSettings({ v: 3, music: 0.7 }).music).toBe(0.7); // после обновления 0,7 — уже выбор игрока
+  });
+
   it('сохранённые до версии 2: «Реализм» был прежним умолчанием — получают «Воспоминания»; остальное не трогаем', () => {
     const old = sanitizeSettings({ graphics: 'real', fontScale: 1.25, cameraFx: 'off' });
-    expect(old).toMatchObject({ graphics: 'memory', fontScale: 1.25, cameraFx: 'off', v: 2 });
+    expect(old).toMatchObject({ graphics: 'memory', fontScale: 1.25, cameraFx: 'off', v: 3 });
     // Выбор после обновления переживает перезапуск (повторная чистка того, что записали).
     expect(sanitizeSettings({ ...old, graphics: 'real' }).graphics).toBe('real');
   });

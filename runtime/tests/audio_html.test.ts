@@ -243,7 +243,7 @@ describe('HtmlAudioBackend: громкости, mute, запрет платфо�
     expect(el.volume).toBe(0);
     expect(el.paused).toBe(false);
     audio.setMuted(false);
-    expect(el.volume).toBeCloseTo(0.7, 9); // громкость музыки по умолчанию
+    expect(el.volume).toBeCloseTo(0.4, 9); // громкость музыки по умолчанию: вдвое тише звуков (владелец 2026-10-14)
   });
 });
 
@@ -489,7 +489,7 @@ describe('AudioManager: события сценария → бэкенд', () =>
     expect(calls).toEqual(['paused:true']);
     audio.setVolumes({ music: 0.5, sfx: 0.25, voice: 1 });
     expect(calls).toContain('gain:music:0.50');
-    expect(calls).toContain('gain:ambient:0.50'); // эмбиент следует громкости музыки
+    expect(calls).toContain('gain:ambient:0.25'); // фон места — звук: следует ползунку «Звуки», а не музыке (2026-10-14)
     expect(calls).toContain('gain:sfx:0.25');
     const seen: number[] = [];
     audio.onChange(() => seen.push(1));
