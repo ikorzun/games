@@ -50,6 +50,7 @@ import type {
   PumpResult,
   SayStep,
   Scene,
+  Shot,
   Snapshot,
   SpriteView,
   StageFilter,
@@ -561,7 +562,7 @@ export class Interpreter {
     // реплики явный кадр (сцена держится на кадре через плечо), входим сразу на нём: иначе общий план мелькал на
     // время перехода и тут же сменялся (владелец 2026-10-14: «лишние промежуточные кадры на полсекунды»).
     if (view.coverage !== null && this.shots.hasSet(view.coverage)) {
-      view.shot = this.firstLineShot(scene) ?? entryShot(this.shots, view.coverage, this.sceneCast(scene))?.id ?? null;
+      view.shot = this.firstLineShot(scene, view.coverage) ?? entryShot(this.shots, view.coverage, this.sceneCast(scene))?.id ?? null;
       view.shot_ctx = { ...EMPTY_CTX };
     } else {
       view.coverage = null;
@@ -677,11 +678,11 @@ export class Interpreter {
   }
 
   /** Явный кадр первой реплики сцены, если до неё нет ничего, что показывает или ждёт (выбор, документ, эффект…). */
-  private firstLineShot(scene: Scene): string | null {
+  private firstLineShot(scene: Scene, coverage: string): string | null {
     for (const st of scene.steps) {
       if (st.do === 'say' || st.do === 'narrate') {
         if (st.when !== undefined && !this.test(st.when)) continue;
-        return st.shot !== undefined && this.shots.get(st.shot) ? st.shot : null;
+        return st.shot !== undefined && this.shots.get(st.shot) ? this.altShot(scene, coverage, st.shot) : null;
       }
       if (!PASSIVE_STEPS.has(st.do)) return null;
     }
@@ -719,9 +720,24 @@ export class Interpreter {
     );
   }
 
-  private explicitShotEvent(id: string, who: string | null): EngineEvent | null {
+  /**
+   * coverage_alt заменил сет сцены: явный кадр основного сета — кадр того же вида и того же порядка среди кадров этого
+   * вида в сете-замене (вид из окна машины в понедельник → вид вторника). Пары нет — кадр основного сета (линтер это ловит).
+   */
+  private altShot(scene: Scene, cov: string, id: string): string {
+    const shot = this.shots.get(id);
+    if (!shot || shot.set !== scene.coverage || shot.set === cov) return id;
+    const sameKind = (set: string): Shot[] => this.shots.set(set).filter((s) => s.kind === shot.kind);
+    const alt = sameKind(cov)[sameKind(shot.set).indexOf(shot)];
+    if (!alt) this.warn(`сцена ${scene.id}: у кадра ${id} нет пары того же вида в сете ${cov} — показан кадр основного сета`);
+    return alt?.id ?? id;
+  }
+
+  private explicitShotEvent(explicit: string, who: string | null): EngineEvent | null {
     const view = this.view;
     if (view.coverage === null) return null;
+    const scene = this.scene(this.state.scene_id);
+    const id = scene ? this.altShot(scene, view.coverage, explicit) : explicit;
     const shot = this.shots.get(id);
     if (!shot) {
       this.warn(`сцена ${this.state.scene_id}: кадр ${id} не объявлен в assets.shots — оставлен текущий`);

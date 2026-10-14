@@ -263,6 +263,48 @@ describe('сцена с coverage', () => {
     expect(lineShots.every((s) => s === null || s.endsWith('_d2'))).toBe(true);
   });
 
+  it('coverage_alt: явный кадр основного сета — кадр того же вида из сета дня (вход в сцену и реплика)', () => {
+    const d2 = SHOTS.map((s) => ({ ...s, id: `${s.id}_d2`, set: 'office_d2', bg: 'bg_b' }));
+    const alt = [{ when: 'day == 2', coverage: 'office_d2', bg: 'bg_b' }];
+    const steps: Step[] = [
+      { do: 'show', who: 'a', position: 'left' },
+      { do: 'narrate', key: 'k.1', shot: 'insert_1' }, // дорога открывается видом из окна
+      { do: 'say', who: 'b', key: 'k.2', shot: 'ots_a_b' },
+      { do: 'end', ending: 'e_main' },
+    ];
+    const mk = (day: number, withAlt = true) => {
+      const warnings: string[] = [];
+      const ep = miniEpisode({ s1: { coverage: SET, ...(withAlt ? { coverage_alt: alt } : {}), steps } }, {
+        shots: [...SHOTS, ...d2],
+        pov: 'a',
+        variables: { day: { type: 'int', default: day } },
+      });
+      const interp = new Interpreter(ep, { warn: (m) => warnings.push(m) });
+      interp.start();
+      interp.pump();
+      const entry = interp.view.shot; // кадр входа — кадр первой реплики
+      const { lineShots } = run(interp);
+      return { entry, lineShots, warnings };
+    };
+    expect(mk(1)).toMatchObject({ entry: 'insert_1', lineShots: ['insert_1', 'ots_a_b'] });
+    expect(mk(2)).toEqual({ entry: 'insert_1_d2', lineShots: ['insert_1_d2', 'ots_a_b_d2'], warnings: [] });
+    expect(mk(2, false)).toMatchObject({ entry: 'insert_1', lineShots: ['insert_1', 'ots_a_b'] }); // без coverage_alt — как написано
+    // Пары нет — кадр основного сета и предупреждение.
+    const loneWarnings: string[] = [];
+    const lone = new Interpreter(
+      miniEpisode({ s1: { coverage: SET, coverage_alt: alt, steps } }, {
+        shots: [...SHOTS, ...d2.filter((s) => s.kind !== 'insert')],
+        pov: 'a',
+        variables: { day: { type: 'int', default: 2 } },
+      }),
+      { warn: (m) => loneWarnings.push(m) },
+    );
+    lone.start();
+    lone.pump();
+    expect(lone.view.shot).toBe('insert_1');
+    expect(loneWarnings.join('\n')).toContain('нет пары того же вида в сете office_d2');
+  });
+
   it('fx с кадром: кадр выстрела встаёт до вспышки, без реплики', () => {
     const steps: Step[] = [
       { do: 'show', who: 'a', position: 'left' },

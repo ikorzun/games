@@ -1377,7 +1377,8 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.go_flat.l01"
+     "key": "ep01.h.go_flat.l01",
+     "shot": "sh_car_view"
     },
     {
      "do": "narrate",
@@ -1430,7 +1431,8 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.go_galina.l01"
+     "key": "ep01.h.go_galina.l01",
+     "shot": "sh_car_view"
     },
     {
      "do": "narrate",
@@ -1484,19 +1486,22 @@
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.go_notary.l01",
-     "when": "have_contract"
+     "when": "have_contract",
+     "shot": "sh_car_view"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.go_notary.l02",
-     "when": "!have_contract"
+     "when": "!have_contract",
+     "shot": "sh_car_view"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.go_notary.l03",
-     "when": "glasses_found"
+     "when": "glasses_found",
+     "shot": "sh_car_view"
     },
     {
      "do": "branch",
@@ -1549,7 +1554,8 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.go_zhek.l01"
+     "key": "ep01.h.go_zhek.l01",
+     "shot": "sh_car_view"
     },
     {
      "do": "jump",
@@ -1597,13 +1603,15 @@
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.go_bti.l01",
-     "when": "know_name"
+     "when": "know_name",
+     "shot": "sh_car_view"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.go_bti.l02",
-     "when": "!know_name"
+     "when": "!know_name",
+     "shot": "sh_car_view"
     },
     {
      "do": "jump",
@@ -7267,7 +7275,8 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.g3c_second.l01"
+     "key": "ep01.h.g3c_second.l01",
+     "shot": "sh_car_view"
     },
     {
      "do": "jump",
@@ -7356,7 +7365,8 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.g3c_address.l01"
+     "key": "ep01.h.g3c_address.l01",
+     "shot": "sh_car_view"
     },
     {
      "do": "jump",
@@ -7446,13 +7456,15 @@
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.g3c_kovrigin.l01",
-     "when": "bti_chain"
+     "when": "bti_chain",
+     "shot": "sh_car_view"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.g3c_kovrigin.l02",
-     "when": "!bti_chain"
+     "when": "!bti_chain",
+     "shot": "sh_car_view"
     },
     {
      "do": "jump",

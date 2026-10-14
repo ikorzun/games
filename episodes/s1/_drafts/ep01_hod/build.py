@@ -459,11 +459,19 @@ scene('route_car', 'bp_places', 'hod_car', lambda: [
 # ── Дорога: машина Сайко, Громов вспоминает, зачем едем; место — растворением (переход между сетами) ──
 
 
+def road(lines):
+    """Мысли Громова в машине: первая — и её варианты до первой безусловной — на виде из окна (владелец 2026-10-14:
+    «нужна сцена в авто и вид из окна, потому что это разные дни»; во вторник и среду рантайм берёт вид своего дня —
+    coverage_alt), дальше кадр выбирает монтажёр."""
+    first = next((i for i, (_, w) in enumerate(lines) if w is None), len(lines) - 1)
+    return [inner(t, when=w, shot='car_view' if i <= first else None) for i, (t, w) in enumerate(lines)]
+
+
 def go(place, lines, then=None):
     scene(f'go_{place}', 'bp_places', 'hod_car', lambda: [
         show('oper', 'left'), show('sledak', 'right'),
         sfx('sfx_car_go'),
-        *[inner(t, when=w) for t, w in lines],
+        *road(lines),
         then if then else jump(place),
     ], ambient='amb_street_day')
 
@@ -1144,7 +1152,7 @@ def go3(place, car, walk):
     """Дорога к месту среды: с Сайко — его машина, без него — Громов один. Мысль — (текст, условие)."""
     scene(f'g3_{place}', 'b5_day3', 'hod_t_street', lambda: [branch([('oper_with', f'g3c_{place}')], f'g3w_{place}')])
     scene(f'g3c_{place}', 'b5_day3', 'hod_car', lambda: [
-        show('oper', 'left'), show('sledak', 'right'), *[inner(t, when=w) for t, w in car], jump(place),
+        show('oper', 'left'), show('sledak', 'right'), *road(car), jump(place),
     ], ambient='amb_street_day')
     scene(f'g3w_{place}', 'b5_day3', 'hod_walk', lambda: [show('sledak', 'center'), *[inner(t, when=w) for t, w in walk], jump(place)],
           ambient='amb_street_day')

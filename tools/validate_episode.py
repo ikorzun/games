@@ -259,6 +259,17 @@ def shots_check(ep: dict, rep: Report) -> None:
             main_bg = scene.get("stage", {}).get("bg")
             if place_of.get(bg, bg) != place_of.get(main_bg, main_bg):
                 rep.warn(f"scene {sid}: coverage_alt {cov} — другое место ({bg}), а вариант задуман для того же места")
+            # Явный кадр основного сета рантайм заменяет кадром того же вида и порядка из сета варианта: пары нет — в этот
+            # день покажется кадр основного сета (вид из окна понедельника во вторник).
+            base = scene.get("coverage")
+            for i, step in enumerate(scene.get("steps", [])):
+                sh = by_id.get(step.get("shot"))
+                if not sh or sh["set"] != base or cov not in sets:
+                    continue
+                n = [s["id"] for s in sets[base] if s["kind"] == sh["kind"]].index(sh["id"])
+                if n >= len([s for s in sets[cov] if s["kind"] == sh["kind"]]):
+                    rep.err(f"scene {sid} step {i}: у кадра {sh['id']} ({sh['kind']}) нет пары того же вида в сете {cov} — "
+                            f"в этот день покажется кадр основного сета")
     for sid, i, step in iter_steps(ep):
         if step.get("shot") and not ep["scenes"][sid].get("coverage"):
             rep.warn(f"scene {sid} step {i}: shot {step['shot']} в сцене без coverage — кадр не покажется")
