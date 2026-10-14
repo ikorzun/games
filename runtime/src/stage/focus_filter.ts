@@ -13,10 +13,13 @@ import type { TextureSource } from 'pixi.js';
 export const FOCUS_MS = 450;
 /** Насколько гаснет окружение (доля яркости): 25–35 % по брифу. */
 export const FOCUS_DIM = 0.3;
-/** В графике «Воспоминания» — мягче: 10–20 % по промпту владельца (раздел 08). */
-export const FOCUS_DIM_MEMORY = 0.15;
+/** В графике «Воспоминания» — 10–20 % по промпту владельца (раздел 08); берём верхнюю границу: при 15 % подсветки
+ *  не было видно (владелец 2026-10-14: «нежная подсветка говорящего должна быть и в воспоминаниях»). */
+export const FOCUS_DIM_MEMORY = 0.2;
 /** Сила контрового света. */
 export const FOCUS_RIM = 0.32;
+/** В «Воспоминаниях» контровой свет сильнее: «subtle but clearly perceptible» (раздел 08 промпта владельца). */
+export const FOCUS_RIM_MEMORY = 0.5;
 /** Ширина каймы — доля ширины кадра. */
 export const FOCUS_RIM_RADIUS = 0.006;
 
@@ -87,6 +90,8 @@ export interface FocusFrame {
   shot: { x: number; y: number; width: number; height: number };
   /** Насколько гаснет окружение; по умолчанию FOCUS_DIM. */
   dim?: number;
+  /** Сила контрового света (по умолчанию FOCUS_RIM). */
+  rim?: number;
 }
 
 /** Плавный переход веса маски: от from к to за ms с t0 (smoothstep). */
@@ -133,7 +138,7 @@ export class FocusFilter extends Filter {
     this.resources.uMaskA = (f.maskA ?? Texture.EMPTY).source as TextureSource;
     this.resources.uMaskB = (f.maskB ?? Texture.EMPTY).source as TextureSource;
     this.u.uShot!.set([f.shot.x, f.shot.y, Math.max(1, f.shot.width), Math.max(1, f.shot.height)]);
-    this.u.uFocus!.set([f.maskA ? f.wA : 0, f.maskB ? f.wB : 0, f.dim ?? FOCUS_DIM, FOCUS_RIM]);
+    this.u.uFocus!.set([f.maskA ? f.wA : 0, f.maskB ? f.wB : 0, f.dim ?? FOCUS_DIM, f.rim ?? FOCUS_RIM]);
     (this.resources.focusUniforms as UniformGroup).update();
   }
 }

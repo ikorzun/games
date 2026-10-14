@@ -82,8 +82,17 @@ MEMORY = {
 }
 
 
+# «Реализм»: маски у всех кадров с людьми (владелец 2026-10-14: «всё — во всех версиях»); порядок слева направо — как у
+# «Воспоминаний» (кадр перерисован с того же «Реализма»), отличия — в REALISM_ORDER.
+REALISM_ORDER: dict[str, list[str]] = {
+    'car_ots_oper': ['_', 'oper', 'sledak'],  # обрывок у левого края (заднее сиденье) Vision считает человеком
+    'search_wide': ['sledak', '_'],  # понятые за Громовым — одной маской
+}
+REALISM = {shot: (v[0], REALISM_ORDER.get(shot, v[1])) for shot, v in MEMORY.items()}
+
+
 def path_of(shot: str, who: str) -> str:
-    return f'assets/ep01/hod/{ORDER[shot][0]}/{shot}.{who}.webp'
+    return f'assets/ep01/hod/{REALISM[shot][0]}/{shot}.{who}.webp'
 
 
 def people_masks(frame: str, people: list[str], label: str) -> list[tuple[str, np.ndarray]]:
@@ -105,7 +114,7 @@ def people_masks(frame: str, people: list[str], label: str) -> list[tuple[str, n
             kept.append((cx, m))
     found = kept
     if len(found) != len(people):
-        sys.exit(f'{label}: людей на кадре {len(found)}, а в порядке {len(people)} — проверьте кадр и порядок')
+        raise Mismatch(f'{label}: людей на кадре {len(found)}, а в порядке {len(people)} — проверьте кадр и порядок')
     pairs = list(zip(sorted(found, key=lambda f: f[0]), people))
     for (cx, _), who in pairs:
         print(f'{label}: {who} (центр {cx:.2f})')
@@ -118,10 +127,15 @@ def save(m: np.ndarray, path: str, size: tuple[int, int]) -> None:
     print('  →', path)
 
 
+class Mismatch(Exception):
+    """Vision нашёл не столько людей, сколько в порядке: кадр пропускаем, список — в конце прогона."""
+
+
 def make(shot: str) -> None:
-    set_, people = ORDER[shot]
+    set_, people = REALISM[shot]
     for who, m in people_masks(os.path.join(ROOT, f'assets/ep01/hod/{set_}/{shot}.webp'), people, shot):
-        save(m, path_of(shot, who), SIZE)
+        if who != '_':
+            save(m, path_of(shot, who), SIZE)
 
 
 def make_memory(shot: str) -> None:
@@ -137,9 +151,13 @@ def make_memory(shot: str) -> None:
 
 if __name__ == '__main__':
     args = sys.argv[1:]
-    if args[:1] == ['--memory']:
-        for s in args[1:] or MEMORY:
-            make_memory(s)
-    else:
-        for s in args or ORDER:
-            make(s)
+    memory = args[:1] == ['--memory']
+    failed = []
+    for s in (args[1:] if memory else args) or (MEMORY if memory else REALISM):
+        try:
+            (make_memory if memory else make)(s)
+        except Mismatch as e:
+            failed.append(str(e))
+    for f in failed:
+        print('ПРОПУЩЕН', f)
+    sys.exit(1 if failed else 0)

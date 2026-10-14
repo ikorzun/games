@@ -26,7 +26,7 @@ import { isOffscreen, POSITION_X, SILHOUETTE_ALPHA, SPRITE_FIT, SPRITE_MAX_WIDTH
 import type { ISceneRenderer, SlotStates } from './renderer';
 import type { CamFrame, SignalProfile } from './camcorder';
 import { VHS_FRAGMENT, VhsFilter } from './vhs_filter';
-import { fadeAt, fadeDone, FOCUS_DIM, FOCUS_DIM_MEMORY, FOCUS_FRAGMENT, FOCUS_MS, FocusFilter } from './focus_filter';
+import { fadeAt, fadeDone, FOCUS_DIM, FOCUS_DIM_MEMORY, FOCUS_FRAGMENT, FOCUS_MS, FOCUS_RIM, FOCUS_RIM_MEMORY, FocusFilter } from './focus_filter';
 import { DITHER_CELL, DITHER_FRAGMENT, DitherFilter } from './dither_filter';
 import type { FocusFade } from './focus_filter';
 
@@ -478,8 +478,10 @@ export class PixiSceneRenderer implements ISceneRenderer {
     const area = this.shotLayer.filterArea;
     if (!area || area.width !== W || area.height !== H) this.shotLayer.filterArea = new Rectangle(0, 0, W, H);
     const b = this.shotPic.getBounds();
-    const dim = this.graphics === 'memory' ? FOCUS_DIM_MEMORY : FOCUS_DIM;
-    f.setFrame({ maskA: prev?.tex ?? null, maskB: cur?.tex ?? null, wA, wB, shot: { x: b.x, y: b.y, width: b.width, height: b.height }, dim });
+    const memory = this.graphics === 'memory';
+    const dim = memory ? FOCUS_DIM_MEMORY : FOCUS_DIM;
+    const rim = memory ? FOCUS_RIM_MEMORY : FOCUS_RIM;
+    f.setFrame({ maskA: prev?.tex ?? null, maskB: cur?.tex ?? null, wA, wB, shot: { x: b.x, y: b.y, width: b.width, height: b.height }, dim, rim });
     return moving;
   }
 

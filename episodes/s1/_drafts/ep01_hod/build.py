@@ -251,6 +251,8 @@ def memory_of(sid: str, set_: str, cast: list[str]) -> dict | None:
     return m
 
 
+# Вставки с лицами: у лупы над бумагами — Левина и Громов, их подсвечивает говорящий (у реестра, ключей, фото — только руки).
+INSERT_PEOPLE = {'office_eve_lens'}
 SHOTS, BACKGROUNDS = [], []
 for p in PLAN:
     if p['kind'] in ('doc', 'search'):  # бланк и фон мини-игры осмотра — не кадры покрытия
@@ -259,7 +261,8 @@ for p in PLAN:
         continue
     kind = 'wide' if p['set'] in AUX_SETS else p['kind']
     sh = {'id': f'sh_{p["id"]}', 'set': p['set'], 'bg': f'bg_{p["set"]}', 'kind': kind, 'angle': 'eye',
-          'cast': [] if p['kind'] == 'insert' else [{'who': w} for w in p['cast']], 'file': FILE(p['id'], p['set'])}
+          'cast': [] if p['kind'] == 'insert' and p['id'] not in INSERT_PEOPLE else [{'who': w} for w in p['cast']],
+          'file': FILE(p['id'], p['set'])}
     if p['id'] in OTS:
         sh['from'], sh['focus'] = OTS[p['id']]
     for c in sh['cast']:  # маска человека для подсветки того, на ком внимание (tools/hod/masks.py)
