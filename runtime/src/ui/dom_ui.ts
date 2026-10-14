@@ -591,11 +591,13 @@ export class DomUI implements SessionUI {
         if (finished) return;
         finished = true;
         clearTimeout(timer);
-        this.waiter = null;
+        // эффект мог кончиться раньше паузы (hold: Promise.race) — тогда тут уже ожидание следующей реплики, его не трогаем
+        if (this.waiter === waiter) this.waiter = null;
         resolve();
       };
       const timer = setTimeout(done, ms);
-      this.waiter = { advance: done };
+      const waiter: Waiter = { advance: done };
+      this.waiter = waiter;
       ctx.signal.addEventListener('abort', done, { once: true });
     });
   }

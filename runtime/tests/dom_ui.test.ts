@@ -606,6 +606,21 @@ describe('DomUI: паузы сценария (титры chapter/fact, эффе�
     expect(a.done).toBe(true);
   });
 
+  it('эффект кончился раньше паузы — следующая реплика листается: таймер паузы не снимает её ожидание', async () => {
+    const quick = { minigameRoot: {}, playFx: () => Promise.resolve(), setMinigameActive: () => undefined, setFocus: () => undefined } as unknown as Stage;
+    const { ui } = makeRig({}, 'procedural', { stage: quick });
+    const a = track(ui.hold({ kind: 'hold', reason: 'fx', ms: 250, fx: { fx: 'flash', intensity: 1 } }, { signal: ctl().signal, instant: false }));
+    await flush();
+    expect(a.done).toBe(true);
+    const line = track(ui.showLine(lineP('k.after'), lineCtx(ctl())));
+    await flush(300); // таймер паузы срабатывает, когда реплика уже на экране
+    ui.advance(); // допечатать
+    await flush();
+    ui.advance(); // дальше
+    await flush();
+    expect(line.done).toBe(true);
+  });
+
   it('отмена партии снимает ожидание паузы', async () => {
     const { ui } = makeRig();
     const c = ctl();
