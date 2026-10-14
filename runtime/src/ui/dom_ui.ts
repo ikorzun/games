@@ -298,13 +298,18 @@ export class DomUI implements SessionUI {
     this.d.kit.textbox.hide();
     this.d.kit.choices.close();
     return new Promise<void>((resolve) => {
-      const screen = new EndingScreen(p.ending, state, {
-        onMenu: () => {
-          this.closeGameScreen(screen);
-          resolve();
+      const screen = new EndingScreen(
+        p.ending,
+        state,
+        {
+          onMenu: () => {
+            this.closeGameScreen(screen);
+            resolve();
+          },
+          onArchive: this.d.onOpenArchive,
         },
-        onArchive: this.d.onOpenArchive,
-      });
+        this.d.episode,
+      );
       this.openGameScreen(screen);
       ctx.signal.addEventListener('abort', () => this.closeGameScreen(screen), { once: true });
     });

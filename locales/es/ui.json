@@ -66,7 +66,7 @@
   "ui.minigame.nothing_here": "Aquí no hay nada",
   "ui.minigame.scene_help.body": "Toca un lugar sospechoso. Con teclado: las flechas mueven la mira y Enter inspecciona.",
   "ui.end.title": "",
-  "ui.end.decisions": "",
+  "ui.end.decisions": "La investigación",
   "ui.end.back_to_menu": "",
   "ui.common.yes": "",
   "ui.common.no": "",
@@ -174,5 +174,8 @@
   "ui.minigame.finish_search": "Terminar la búsqueda",
   "ui.minigame.start_check": "Empezar a comparar",
   "ui.minigame.nothing_to_check": "Nada que comparar aquí",
-  "ui.minigame.body_loupe": "Lupa: pasa el cursor sobre la hoja; en el teléfono, mantén el dedo."
+  "ui.minigame.body_loupe": "Lupa: pasa el cursor sobre la hoja; en el teléfono, mantén el dedo.",
+  "ui.end.case": "Causa penal",
+  "ui.end.materials": "Libreta: {n} / {total}",
+  "ui.end.decisions_n": "Decisiones: {n}"
 }

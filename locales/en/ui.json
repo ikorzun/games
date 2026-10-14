@@ -66,7 +66,7 @@
   "ui.minigame.nothing_here": "Nothing here",
   "ui.minigame.scene_help.body": "Tap a suspicious spot. With a keyboard: arrows move the crosshair, Enter inspects.",
   "ui.end.title": "Ending",
-  "ui.end.decisions": "Your choices",
+  "ui.end.decisions": "The investigation",
   "ui.end.back_to_menu": "Main menu",
   "ui.common.yes": "Yes",
   "ui.common.no": "No",
@@ -174,5 +174,8 @@
   "ui.minigame.finish_search": "Finish the search",
   "ui.minigame.start_check": "Start checking",
   "ui.minigame.nothing_to_check": "Nothing to compare here",
-  "ui.minigame.body_loupe": "Magnifier: hover over a sheet; on a phone, press and hold."
+  "ui.minigame.body_loupe": "Magnifier: hover over a sheet; on a phone, press and hold.",
+  "ui.end.case": "Criminal case",
+  "ui.end.materials": "Notebook: {n} / {total}",
+  "ui.end.decisions_n": "Decisions: {n}"
 }

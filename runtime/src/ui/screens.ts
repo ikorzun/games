@@ -1059,36 +1059,65 @@ export class EndingScreen extends BaseScreen {
     private readonly ending: Ending,
     private readonly state: Readonly<GameState>,
     private readonly handlers: { onMenu: () => void; onArchive: () => void },
+    private readonly episode: Episode | null = null,
   ) {
     super('vn-ending', false);
   }
 
+  /**
+   * Финал (владелец 2026-10-14: «переделать интереснее, с бумаги»): лист уголовного дела. Шапка — «Уголовное дело»,
+   * город и год (на языке оригинала; иначе — год), название эпизода; штамп — название концовки; «Ход следствия» —
+   * решения партии по порядку; внизу — сколько материалов собрано в блокнот и сколько решений. Кнопки — под листом.
+   */
   render(): void {
-    const journal = this.state.journal;
+    const { journal, archive } = this.state;
+    const ep = this.episode;
+    const year = ep?.based_on.years[0];
+    const city = ep && i18n.lang === (ep.localization?.source_lang ?? 'ru') ? ep.based_on.city : '';
+    const place = [city, year === undefined ? '' : String(year)].filter((x) => x !== '').join(' · ');
+    const total = ep?.archive_items?.length ?? 0;
     fill(
       this.el,
-      card(
-        'vn-ending__card',
-        h('p', { class: 'vn-ending__kicker', text: t('ui.end.title') }),
-        h('h2', { class: 'vn-ending__title', text: t(this.ending.title_key) }),
-        h('h3', { class: 'vn-ending__sub', text: t('ui.end.decisions') }),
-        journal.length === 0
-          ? h('p', { class: 'vn-muted', text: '—' })
-          : h(
-              'ul',
-              { class: 'vn-ending__journal' },
-              ...journal.map((j) =>
-                h(
-                  'li',
-                  { class: `vn-ending__entry${j.kind ? ` is-${j.kind}` : ''}` },
-                  j.prompt_key ? h('span', { class: 'vn-ending__prompt', text: t(j.prompt_key) }) : null,
-                  h('span', { class: 'vn-ending__choice', text: t(j.key) }),
+      h(
+        'div',
+        { class: 'vn-ending__box' },
+        h(
+          'article',
+          { class: `vn-ending__sheet is-${this.ending.kind}` },
+          h('span', { class: 'vn-ending__clip', aria: { hidden: true } }),
+          h('header', { class: 'vn-ending__head' }, h('span', { text: t('ui.end.case') }), place ? h('span', { text: place }) : null),
+          ep ? h('p', { class: 'vn-ending__case', text: t(ep.title_key) }) : null,
+          h('div', { class: 'vn-ending__stamp' }, h('span', { class: 'vn-ending__kicker', text: t('ui.end.title') }), h('h2', { class: 'vn-ending__title', text: t(this.ending.title_key) })),
+          h('h3', { class: 'vn-ending__sub', text: t('ui.end.decisions') }),
+          journal.length === 0
+            ? h('p', { class: 'vn-muted', text: '—' })
+            : h(
+                'ol',
+                { class: 'vn-ending__journal' },
+                ...journal.map((j, i) =>
+                  h(
+                    'li',
+                    { class: `vn-ending__entry${j.kind ? ` is-${j.kind}` : ''}`, style: { '--i': String(i) } },
+                    h('span', { class: 'vn-ending__n', text: String(i + 1).padStart(2, '0') }),
+                    h(
+                      'span',
+                      { class: 'vn-ending__text' },
+                      j.prompt_key ? h('span', { class: 'vn-ending__prompt', text: t(j.prompt_key) }) : null,
+                      h('span', { class: 'vn-ending__choice', text: t(j.key) }),
+                    ),
+                  ),
                 ),
               ),
-            ),
+          h(
+            'footer',
+            { class: 'vn-ending__foot' },
+            total > 0 ? h('span', { text: t('ui.end.materials', { n: Math.min(archive.length, total), total }) }) : null,
+            h('span', { text: t('ui.end.decisions_n', { n: journal.length }) }),
+          ),
+        ),
         h(
           'div',
-          { class: 'vn-actions' },
+          { class: 'vn-actions vn-ending__actions' },
           h('button', { class: 'vn-btn', type: 'button', text: t('ui.menu.archive'), on: { click: this.handlers.onArchive } }),
           h('button', { class: 'vn-btn is-primary', type: 'button', text: t('ui.end.back_to_menu'), on: { click: this.handlers.onMenu } }),
         ),

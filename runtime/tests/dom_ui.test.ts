@@ -153,8 +153,12 @@ beforeEach(() => {
     'ui.common.ok': 'Понятно',
     'ui.common.back': 'Назад',
     'ui.end.title': 'Финал',
-    'ui.end.decisions': 'Ваши решения',
+    'ui.end.decisions': 'Ход следствия',
     'ui.end.back_to_menu': 'В меню',
+    'ui.end.case': 'Уголовное дело',
+    'ui.end.materials': 'Блокнот: {n} / {total}',
+    'ui.end.decisions_n': 'Решений: {n}',
+    'mini.title': 'Смерть за квартиры',
     'ui.menu.archive': 'Архив',
     'ui.archive.new_item': 'Новый материал',
     'ui.minigame.success': 'Успех',
@@ -793,11 +797,18 @@ describe('DomUI: документ, мини-игра, финал', () => {
     ],
   });
 
-  it('финал: название концовки и журнал решений, кнопки «Архив» и «В меню»', async () => {
+  it('финал — лист уголовного дела: шапка, название эпизода, штамп с концовкой, ход следствия, итог; кнопки «Архив» и «В меню»', async () => {
     const { ui, kit, archiveOpens } = makeRig();
-    const res = track(ui.showEnding({ kind: 'end', ending }, stateWithJournal(), baseCtx(ctl())));
+    const res = track(ui.showEnding({ kind: 'end', ending }, { ...stateWithJournal(), archive: ['arc_x'] }, baseCtx(ctl())));
     const el = kit.screens.el;
+    expect(el.querySelector('.vn-ending__sheet.is-canonical')).not.toBeNull();
+    expect([...el.querySelectorAll('.vn-ending__head span')].map((n) => n.textContent)).toEqual(['Уголовное дело', 'x · 1993']);
+    expect(el.querySelector('.vn-ending__case')?.textContent).toBe('Смерть за квартиры');
+    expect(el.querySelector('.vn-ending__stamp .vn-ending__kicker')?.textContent).toBe('Финал');
     expect(el.querySelector('.vn-ending__title')?.textContent).toBe('Каноническая концовка');
+    expect(el.querySelector('.vn-ending__sub')?.textContent).toBe('Ход следствия');
+    expect([...el.querySelectorAll('.vn-ending__n')].map((n) => n.textContent)).toEqual(['01', '02']);
+    expect([...el.querySelectorAll('.vn-ending__foot span')].map((n) => n.textContent)).toEqual(['Блокнот: 1 / 2', 'Решений: 2']);
     const entries = [...el.querySelectorAll('.vn-ending__entry')];
     expect(entries.map((n) => n.querySelector('.vn-ending__choice')?.textContent)).toEqual(['Первый', 'Второй']);
     expect(entries[0]?.querySelector('.vn-ending__prompt')?.textContent).toBe('Что делаем?');
