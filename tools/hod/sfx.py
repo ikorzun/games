@@ -51,6 +51,14 @@ PARTS = {
     'night_flat': (16.0, True, 'A quiet apartment at night: a refrigerator hums, a wall clock ticks, a distant city outside a closed window. Steady background, no voices, no music.'),
     'court_room': (16.0, True, 'A small courtroom: quiet murmur of a few people, chairs creaking, papers shuffling, an occasional cough, no clear words. Steady background, no music.'),
     'winter_street': (16.0, True, 'A city street in winter: light cold wind, distant traffic on wet snow, a trolleybus passing far away, muffled footsteps on snow. Steady background, no voices, no music.'),
+    # общие фоны и VHS-склейка — раньше были не из ElevenLabs (владелец 2026-10-14: «звуки и музыку — из ElevenLabs»)
+    'yard_summer': (16.0, True, 'A Moscow apartment courtyard on a summer day heard through an open window: children playing far away, sparrows chirping, leaves rustling, a distant car. Steady background, no clear words, no music.'),
+    'office_day': (16.0, True, 'An old Soviet government office in the daytime: a typewriter clacking behind a wall, muffled murmur in the corridor, a wall clock ticking, a chair creaking now and then. Steady background, no telephone, no clear words, no music.'),
+    'street_day': (16.0, True, 'A Moscow street on a summer day in the early 1990s: steady traffic of old cars and buses passing, a trolleybus hum, distant horns, sparrows. Steady background, no clear words, no music.'),
+    'street_night': (16.0, True, 'A city street on a summer night just after rain: tyres hissing on wet asphalt as an occasional car passes, distant traffic, water dripping from a drainpipe, no rain falling. Steady background, no voices, no music.'),
+    'archive_hum': (16.0, True, 'A quiet windowless archive room: fluorescent tube lights buzzing and humming, a low ventilation hum, an occasional rustle of paper. Steady background, no voices, no music.'),
+    'stairwell': (16.0, True, 'A concrete stairwell in an old Soviet apartment block: hollow quiet echo, a faint lift hum, a muffled television far behind an apartment door. Steady background, no door slams, no clear words, no music.'),
+    'vhs_glitch': (2.0, False, 'A VHS tape glitch: a short burst of analog video tracking noise, tape warble and static hiss, ending with a click. No voices, no music.'),
 }
 # Готовые звуки игры: имя → (папка, состав). Состав — части и паузы (число, с) по порядку; тайминг события задаём тут,
 # а сценарий ждёт столько же (sfx hold_ms), чтобы реплика пришлась после звука (снял трубку — заговорил).
@@ -79,6 +87,13 @@ SOUNDS = {
     'night_flat': ('amb', ['night_flat']),
     'court_room': ('amb', ['court_room']),
     'winter_street': ('amb', ['winter_street']),
+    'yard_summer': ('amb', ['yard_summer']),
+    'office_day': ('amb', ['office_day']),
+    'street_day': ('amb', ['street_day']),
+    'street_night': ('amb', ['street_night']),
+    'archive_hum': ('amb', ['archive_hum']),
+    'stairwell': ('amb', ['stairwell']),
+    'vhs_glitch': ('sfx', ['vhs_glitch']),
 }
 
 
@@ -155,7 +170,12 @@ def pick(part: str) -> str:
         x = x[a:b].copy()
         fade = min(len(x), 1764)  # 40 мс спада в конце
         x[-fade:] *= np.linspace(1, 0, fade)[:, None]
-    chain = 'loudnorm=I=-30:TP=-3:LRA=11' if loop else 'loudnorm=I=-20:TP=-2:LRA=11'
+    chain = 'loudnorm=I=-20:TP=-2:LRA=11'
+    if loop:  # петля — одно усиление на весь файл: динамический loudnorm в начале «вдыхает», и на шве скачок до 10 дБ
+        m = subprocess.run(['ffmpeg', '-hide_banner', '-nostats', '-f', 'f32le', '-ar', '44100', '-ac', str(ch), '-i', '-',
+                            '-af', 'loudnorm=I=-30:TP=-3:print_format=json', '-f', 'null', '-'],
+                           input=x.astype(np.float32).tobytes(), capture_output=True).stderr.decode()
+        chain = f"volume={-30 - float(json.loads(m[m.rindex('{'):m.rindex('}') + 1])['input_i']):.2f}dB"
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'f32le', '-ar', '44100', '-ac', str(ch), '-i', '-', '-af', chain,
                     '-ar', '44100', part_path(part)], input=x.astype(np.float32).tobytes(), check=True)
     return best
