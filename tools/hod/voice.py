@@ -2,7 +2,9 @@
 
 Рантайм играет клип вместе с репликой (runtime/README.md, «Озвучка»): файл кладётся по ключу локализации, индекс
 клипов строит сборка. Кастинг — tools/hod/voice_cast.json (кто → голос ElevenLabs и его настройки), профили голосов —
-docs/season1/ep01-voices.md. Ключ API — из окружения ELEVENLABS_API_KEY или из связки ключей macOS (служба «elevenlabs»:
+docs/season1/ep01-voices.md. Модель eleven_v3 играет реплику по пометке из tools/hod/voice_direction.json (ключ клипа →
+«[nervous, whispering]»: эмоция и подача по-английски, перед русским текстом; пометка тоже идёт в счёт знаков). Ключ
+API — из окружения ELEVENLABS_API_KEY или из связки ключей macOS (служба «elevenlabs»:
 security add-generic-password -a "$USER" -s elevenlabs -w); в чат, в лог и в репозиторий его не пишем. Сырьё (пробы,
 журнал знаков) — assets/ep01/_hod/voice/ (вне git).
 
@@ -16,8 +18,9 @@ security add-generic-password -a "$USER" -s elevenlabs -w); в чат, в лог
                                                        # (голос на время пробы добавляется в аккаунт и убирается)
   python3 tools/hod/voice.py design-save <роль> <n>     # сохранить пробу n как голос аккаунта, id — в кастинг (меняет аккаунт!)
   python3 tools/hod/voice.py samples [who ...]         # по одной пробе на персонажа → assets/ep01/_hod/voice/samples/
-  python3 tools/hod/voice.py gen [--who sledak,oper] [--force] [--limit N]   # реплики; готовые клипы пропускает;
-                                                       # роль тянет за собой роли того же голоса (voice_of)
+  python3 tools/hod/voice.py gen [--who sledak,oper] [--scene galina_open,…] [--force] [--limit N] [--dry]
+                                                       # реплики; готовые клипы пропускает; роль тянет за собой роли
+                                                       # того же голоса (voice_of); --dry — список и цена без синтеза
   python3 tools/hod/voice.py norm                      # заново выровнять громкость всех клипов из сырья (_hod/voice/clips)
   python3 tools/hod/voice.py stats                     # сколько реплик и знаков, сколько уже озвучено, расход по журналу
 """
@@ -31,6 +34,7 @@ from export_voice_lines import collect, load  # noqa: E402
 EPISODE = os.path.join(ROOT, 'episodes/s1/ep01_hod.json')
 TEXTS = os.path.join(ROOT, 'locales/ru/ep01_hod.json')
 CAST = os.path.join(ROOT, 'tools/hod/voice_cast.json')
+DIRECTION = os.path.join(ROOT, 'tools/hod/voice_direction.json')
 OUT = os.path.join(ROOT, 'assets/ep01/voice/ru')
 RAW = os.path.join(ROOT, 'assets/ep01/_hod/voice')
 API = 'https://api.elevenlabs.io'
@@ -39,6 +43,10 @@ FORMAT = 'mp3_44100_64'  # моно 64 кбит/с: речь чистая, ≈ 8
 # речи, исходник ElevenLabs остаётся в сырье (_hod/voice/clips) — выравнивание можно переделать без кредитов.
 LOUD = {'I': -16.0, 'TP': -1.5, 'LRA': 11.0}
 LANG_MODELS = {'eleven_turbo_v2_5', 'eleven_flash_v2_5', 'eleven_v3'}  # эти модели принимают language_code
+V3 = 'eleven_v3'  # пометки игры в тексте; стабильность только 0 / 0.5 / 1 (Creative / Natural / Robust); контекст соседних
+                  # реплик (previous_text/next_text) не передаём — пилот, утверждённый владельцем, шёл без него. «settings»
+                  # роли — для v2; у v3 своё поле «v3», а speed v3 не слушает (темп — пометкой: «[calm, measured]»)
+V3_RATE = 0.4     # v3 списывает ≈0,4 кредита за знак вместе с пометкой (история аккаунта, 10.2026)
 
 
 def _tls() -> ssl.SSLContext:
@@ -58,7 +66,9 @@ TLS = _tls()
 SAY = [('БТИ', 'Бэ-Тэ-И'), ('№', 'номер '), ('С. В.', 'Эс Вэ'), ('А. Н.', 'А Эн'), ('МУРе', 'МУРе'), ('…', '...'),
        # экран жертв: инициал фамилии и годы жизни — словами (иначе «С.» читается как предлог, годы — как числа)
        ('Павловна С. 1919–1993', 'Павловна Эс. Тысяча девятьсот девятнадцатый — тысяча девятьсот девяносто третий'),
-       ('Ильич Р. 1914–1993', 'Ильич Эр. Тысяча девятьсот четырнадцатый — тысяча девятьсот девяносто третий')]
+       ('Ильич Р. 1914–1993', 'Ильич Эр. Тысяча девятьсот четырнадцатый — тысяча девятьсот девяносто третий'),
+       # v3 упрощает редкое слово и глотает «Палыч» в конце фразы (сверка распознаванием): ударение и пауза-тире
+       ('отдолжала', 'отдолжа́ла'), ('голова. И Палыч.', 'голова. И — Палыч.')]
 
 
 KEYCHAIN = 'elevenlabs'  # служба в связке ключей macOS
@@ -119,18 +129,31 @@ def spoken(text: str) -> str:
     return text
 
 
-def tts(who: str, text: str, prev: str = '', nxt: str = '') -> bytes:
+def direction() -> dict:
+    return json.load(open(DIRECTION, encoding='utf-8')) if os.path.exists(DIRECTION) else {}
+
+
+def say(text: str, clip: str = '', model: str = '') -> str:
+    """Текст запроса: для v3 — пометка игры реплики перед текстом."""
+    tag = direction().get(clip, '') if model == V3 else ''
+    return f'{tag} {spoken(text)}' if tag else spoken(text)
+
+
+def tts(who: str, text: str, prev: str = '', nxt: str = '', clip: str = '') -> bytes:
     c = cast()
     role = c['roles'][who]
     voice = role.get('voice_id') or c['roles'].get(role.get('voice_of', ''), {}).get('voice_id')
     if not voice:
         sys.exit(f'{who}: голос не выбран — заполните voice_id в {os.path.relpath(CAST, ROOT)}')
     model = role.get('model', c['model'])
-    body = {'text': spoken(text), 'model_id': model, 'voice_settings': {**c['settings'], **role.get('settings', {})}}
-    if prev:
-        body['previous_text'] = spoken(prev)
-    if nxt:
-        body['next_text'] = spoken(nxt)
+    if model == V3:
+        body = {'text': say(text, clip, model), 'model_id': model, 'voice_settings': {'stability': 0.5, **role.get('v3', {})}}
+    else:
+        body = {'text': spoken(text), 'model_id': model, 'voice_settings': {**c['settings'], **role.get('settings', {})}}
+        if prev:
+            body['previous_text'] = spoken(prev)
+        if nxt:
+            body['next_text'] = spoken(nxt)
     if model in LANG_MODELS:
         body['language_code'] = 'ru'
     return call('POST', f'/v1/text-to-speech/{voice}?output_format={FORMAT}', body, accept='audio/mpeg')
@@ -145,7 +168,10 @@ def normalize(src: str, dst: str) -> None:
     j = json.loads(m[m.rindex('{'):m.rindex('}') + 1])
     gain = LOUD['I'] - float(j['input_i'])
     limit = 10 ** (LOUD['TP'] / 20)
-    af = f'volume={gain:.2f}dB,alimiter=limit={limit:.3f}:attack=2:release=60:level=false'
+    # v3 оставляет по краям до 2 с тишины — срезаем (в начале 0,08 с запаса, в конце 0,25 с): иначе реплика «висит»
+    trim = ('silenceremove=start_periods=1:start_silence=0.08:start_threshold=-45dB,areverse,'
+            'silenceremove=start_periods=1:start_silence=0.25:start_threshold=-45dB,areverse')
+    af = f'{trim},volume={gain:.2f}dB,alimiter=limit={limit:.3f}:attack=2:release=60:level=false'
     tmp = dst + '.tmp.mp3'
     # в игру — моно 48 кбит/с, 32 кГц (runtime/README.md, «Озвучка»: речь 32–48 кбит/с): эпизод ≈ 35 минут ≈ 12,5 МБ
     subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', src, '-af', af, '-ar', '32000', '-ac', '1',
@@ -172,9 +198,11 @@ def check() -> None:
     """Ключ принят? Тариф и сколько знаков осталось в этом месяце; сколько нужно на эпизод."""
     sub = json.loads(call('GET', '/v1/user/subscription'))
     used, limit = sub.get('character_count', 0), sub.get('character_limit', 0)
-    need = sum(len(x['text']) for x in lines())
+    model = cast()['model']
+    need = sum(len(say(x['text'], x['clip'], model)) for x in lines())
+    rate = V3_RATE if model == V3 else 1
     print(f"ключ принят · тариф {sub.get('tier', '?')} · знаков в месяце {limit}, потрачено {used}, осталось {limit - used}")
-    print(f'на эпизод нужно ≈ {need} знаков (модель {cast()["model"]}: знак = кредит) плюс пробы и переозвучки')
+    print(f'на эпизод нужно ≈ {round(need * rate)} кредитов ({need} знаков с пометками, модель {model}) плюс пробы и переозвучки')
 
 
 def voices() -> None:
@@ -319,14 +347,18 @@ def samples(who_list: list[str]) -> None:
         print(f'{who}: {len(text)} зн. → {os.path.relpath(dst, ROOT)}')
 
 
-def gen(who: str | None, force: bool, limit: int) -> None:
+def gen(who: str | None, force: bool, limit: int, scenes: str | None = None, dry: bool = False) -> None:
     os.makedirs(OUT, exist_ok=True)
     os.makedirs(os.path.join(RAW, 'clips'), exist_ok=True)
     all_lines = lines()
     roles = with_shared(set(who.split(','))) if who else None
+    only = set(scenes.split(',')) if scenes else None
+    c = cast()
     todo = []
     for i, ln in enumerate(all_lines):
         if roles and ln['who'] not in roles:
+            continue
+        if only and ln['scene'] not in only:
             continue
         dst = os.path.join(OUT, f"{ln['clip']}.mp3")
         if os.path.exists(dst) and not force:
@@ -336,16 +368,23 @@ def gen(who: str | None, force: bool, limit: int) -> None:
         nxt = all_lines[i + 1]['text'] if same(i + 1) else ''
         todo.append((ln, prev, nxt, dst))
     todo = todo[:limit] if limit else todo
-    print(f'к озвучке: {len(todo)} реплик, {sum(len(t[0]["text"]) for t in todo)} знаков')
+    model = lambda ln: c['roles'][ln['who']].get('model', c['model'])  # noqa: E731
+    sent = lambda ln: len(say(ln['text'], ln['clip'], model(ln)))  # noqa: E731
+    cost = sum(sent(t[0]) * (V3_RATE if model(t[0]) == V3 else 1) for t in todo)
+    print(f'к озвучке: {len(todo)} реплик, {sum(sent(t[0]) for t in todo)} знаков с пометками ≈ {round(cost)} кредитов')
+    if dry:
+        for ln, *_ in todo:
+            print(f"  {ln['clip']} · {ln['who']} · {say(ln['text'], ln['clip'], model(ln))[:90]}")
+        return
 
     def one(item):
         ln, prev, nxt, dst = item
-        audio = tts(ln['who'], ln['text'], prev, nxt)
+        audio = tts(ln['who'], ln['text'], prev, nxt, ln['clip'])
         raw = os.path.join(RAW, 'clips', os.path.basename(dst))
         open(raw + '.tmp', 'wb').write(audio)
         os.replace(raw + '.tmp', raw)
         normalize(raw, dst)
-        ledger(ln['clip'], len(ln['text']))
+        ledger(ln['clip'], sent(ln))
         return f"{ln['clip']} ({ln['who']}, {len(ln['text'])} зн.)"
 
     with ThreadPoolExecutor(max_workers=3) as ex:  # ElevenLabs ограничивает одновременные запросы по тарифу
@@ -389,7 +428,8 @@ if __name__ == '__main__':
     elif cmd == 'gen':
         who = args[args.index('--who') + 1] if '--who' in args else None
         limit = int(args[args.index('--limit') + 1]) if '--limit' in args else 0
-        gen(who, '--force' in args, limit)
+        scenes = args[args.index('--scene') + 1] if '--scene' in args else None
+        gen(who, '--force' in args, limit, scenes, '--dry' in args)
     elif cmd == 'norm':
         norm_all()
     elif cmd == 'stats':

@@ -1,6 +1,6 @@
 {
   "_doc": "Кастинг озвучки «Хода следствия» (tools/hod/voice.py). Профили — docs/season1/ep01-voices.md. voice_id — голос ElevenLabs из аккаунта владельца (python3 tools/hod/voice.py voices / library); voice_of — тот же голос, что у другой роли; settings переопределяют общие. Пустой voice_id — роль ещё не озвучена. design — голос по описанию (voice.py design / design-save); library — исходный голос библиотеки для add.",
-  "model": "eleven_multilingual_v2",
+  "model": "eleven_v3",
   "settings": {
     "stability": 0.5,
     "similarity_boost": 0.75,
