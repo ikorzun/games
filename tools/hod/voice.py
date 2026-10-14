@@ -2,16 +2,18 @@
 
 Рантайм играет клип вместе с репликой (runtime/README.md, «Озвучка»): файл кладётся по ключу локализации, индекс
 клипов строит сборка. Кастинг — tools/hod/voice_cast.json (кто → голос ElevenLabs и его настройки), профили голосов —
-docs/season1/ep01-voices.md. Ключ API — только из окружения ELEVENLABS_API_KEY: в чат, в лог и в репозиторий его не
-пишем. Сырьё (пробы, журнал знаков) — assets/ep01/_hod/voice/ (вне git).
+docs/season1/ep01-voices.md. Ключ API — из окружения ELEVENLABS_API_KEY или из связки ключей macOS (служба «elevenlabs»:
+security add-generic-password -a "$USER" -s elevenlabs -w); в чат, в лог и в репозиторий его не пишем. Сырьё (пробы,
+журнал знаков) — assets/ep01/_hod/voice/ (вне git).
 
+  python3 tools/hod/voice.py check                     # ключ работает? тариф и остаток знаков (ключ не печатается)
   python3 tools/hod/voice.py voices                    # голоса аккаунта: имя, id, метки
   python3 tools/hod/voice.py library male|female [query]   # библиотека ElevenLabs: русские голоса для кастинга
   python3 tools/hod/voice.py samples [who ...]         # по одной пробе на персонажа → assets/ep01/_hod/voice/samples/
   python3 tools/hod/voice.py gen [--who oper] [--force] [--limit N]   # реплики эпизода; готовые клипы пропускает
   python3 tools/hod/voice.py stats                     # сколько реплик и знаков, сколько уже озвучено, расход по журналу
 """
-import json, os, sys, time, urllib.error, urllib.parse, urllib.request
+import json, os, ssl, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,16 +29,41 @@ API = 'https://api.elevenlabs.io'
 FORMAT = 'mp3_44100_64'  # моно 64 кбит/с: речь чистая, ≈ 8 КБ на секунду
 LANG_MODELS = {'eleven_turbo_v2_5', 'eleven_flash_v2_5', 'eleven_v3'}  # эти модели принимают language_code
 
+
+def _tls() -> ssl.SSLContext:
+    """Python с python.org на macOS не видит системных сертификатов (CERTIFICATE_VERIFY_FAILED): берём certifi, иначе
+    системный набор macOS."""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        cafile = '/etc/ssl/cert.pem'
+        return ssl.create_default_context(cafile=cafile) if os.path.exists(cafile) else ssl.create_default_context()
+
+
+TLS = _tls()
+
 # Только для запроса к синтезу (субтитры не меняются): аббревиатуры, которые модель читает буквами неверно.
 SAY = [('БТИ', 'Бэ-Тэ-И'), ('№', 'номер '), ('С. В.', 'Эс Вэ'), ('А. Н.', 'А Эн'), ('МУРе', 'МУРе'), ('…', '...')]
 
 
+KEYCHAIN = 'elevenlabs'  # служба в связке ключей macOS
+_key: list[str] = []
+
+
 def key() -> str:
-    k = os.environ.get('ELEVENLABS_API_KEY', '').strip()
-    if not k:
-        sys.exit('Нет ключа: добавьте ELEVENLABS_API_KEY в окружение (~/.zshrc или env в ~/.claude/settings.json). '
-                 'В чат ключ не присылайте.')
-    return k
+    """Ключ: ELEVENLABS_API_KEY, иначе связка ключей macOS — так ключ не нужно класть в файлы и перезапускать приложение."""
+    if not _key:
+        k = os.environ.get('ELEVENLABS_API_KEY', '').strip()
+        if not k and sys.platform == 'darwin':
+            r = subprocess.run(['security', 'find-generic-password', '-s', KEYCHAIN, '-w'], capture_output=True, text=True)
+            k = r.stdout.strip() if r.returncode == 0 else ''
+        if not k:
+            sys.exit('Нет ключа: сохраните его в связке ключей — в Терминале выполните\n'
+                     '  security add-generic-password -a "$USER" -s elevenlabs -w\n'
+                     'и вставьте ключ дважды (на экране он не появится). В чат ключ не присылайте.')
+        _key.append(k)
+    return _key[0]
 
 
 def call(method: str, path: str, body: dict | None = None, accept: str = 'application/json', tries: int = 4) -> bytes:
@@ -45,15 +72,15 @@ def call(method: str, path: str, body: dict | None = None, accept: str = 'applic
         req = urllib.request.Request(API + path, data=data, method=method,
                                      headers={'xi-api-key': key(), 'Content-Type': 'application/json', 'Accept': accept})
         try:
-            with urllib.request.urlopen(req, timeout=120) as r:
+            with urllib.request.urlopen(req, timeout=120, context=TLS) as r:
                 return r.read()
         except urllib.error.HTTPError as e:
             detail = e.read().decode('utf-8', 'replace')[:300]
             if e.code in (429, 500, 502, 503) and attempt < tries - 1:
                 time.sleep(4 * (attempt + 1))
                 continue
-            if e.code == 401:
-                sys.exit('ElevenLabs: ключ не принят (401). Проверьте ELEVENLABS_API_KEY.')
+            if e.code == 401:  # в ответе — чего не хватает (например, права ключа), сам ключ там не повторяется
+                sys.exit(f'ElevenLabs: 401 на {path.split("?")[0]} — {detail}')
             sys.exit(f'ElevenLabs {method} {path.split("?")[0]}: HTTP {e.code} {detail}')
         except (urllib.error.URLError, TimeoutError) as e:
             if attempt < tries - 1:
@@ -100,6 +127,15 @@ def ledger(name: str, chars: int) -> None:
     path = os.path.join(RAW, 'ledger.jsonl')
     with open(path, 'a', encoding='utf-8') as f:
         f.write(json.dumps({'name': name, 'chars': chars, 't': int(time.time())}, ensure_ascii=False) + '\n')
+
+
+def check() -> None:
+    """Ключ принят? Тариф и сколько знаков осталось в этом месяце; сколько нужно на эпизод."""
+    sub = json.loads(call('GET', '/v1/user/subscription'))
+    used, limit = sub.get('character_count', 0), sub.get('character_limit', 0)
+    need = sum(len(x['text']) for x in lines())
+    print(f"ключ принят · тариф {sub.get('tier', '?')} · знаков в месяце {limit}, потрачено {used}, осталось {limit - used}")
+    print(f'на эпизод нужно ≈ {need} знаков (модель {cast()["model"]}: знак = кредит) плюс пробы и переозвучки')
 
 
 def voices() -> None:
@@ -179,7 +215,9 @@ def stats() -> None:
 
 if __name__ == '__main__':
     cmd, *args = sys.argv[1:] or ['stats']
-    if cmd == 'voices':
+    if cmd == 'check':
+        check()
+    elif cmd == 'voices':
         voices()
     elif cmd == 'library':
         library(args[0], ' '.join(args[1:]))
