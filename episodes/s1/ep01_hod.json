@@ -675,7 +675,7 @@
     "d3_go",
     "d3_go_car",
     "d3_go_walk",
-    "d3_route",
+    "d3_next",
     "d3_route_car",
     "d3_route_walk",
     "g3_second",
@@ -979,7 +979,7 @@
       },
       {
        "when": "day == 3",
-       "goto": "d3_route"
+       "goto": "d3_route_car"
       }
      ],
      "default": "route_car"
@@ -5160,42 +5160,49 @@
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d3_office.l02",
-     "when": "notary_alarmed"
+     "when": "notary_alarmed",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d3_office.l03",
-     "when": "!notary_alarmed"
+     "when": "!notary_alarmed",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "say",
      "who": "boss",
      "key": "ep01.h.d3_office.l04",
-     "when": "case_opened"
+     "when": "case_opened",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "say",
      "who": "boss",
      "key": "ep01.h.d3_office.l05",
-     "when": "!case_opened"
+     "when": "!case_opened",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "say",
      "who": "boss",
      "key": "ep01.h.d3_office.l06",
-     "when": "boss_favor < 0"
+     "when": "boss_favor < 0",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "say",
      "who": "sledak",
-     "key": "ep01.h.d3_office.l07"
+     "key": "ep01.h.d3_office.l07",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "say",
      "who": "oper",
      "key": "ep01.h.d3_office.l08",
-     "when": "oper_with"
+     "when": "oper_with",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "archive_unlock",
@@ -5206,7 +5213,8 @@
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d3_office.l09",
-     "when": "!oper_with"
+     "when": "!oper_with",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "archive_unlock",
@@ -5221,13 +5229,15 @@
      "do": "say",
      "who": "lapin_wife",
      "key": "ep01.h.d3_office.l10",
-     "when": "lapins_told_truth"
+     "when": "lapins_told_truth",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d3_office.l11",
-     "when": "lapins_told_truth"
+     "when": "lapins_told_truth",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "archive_unlock",
@@ -5243,7 +5253,8 @@
      "do": "say",
      "who": "expert",
      "key": "ep01.h.d3_office.l12",
-     "when": "photo_later && !photo_seen"
+     "when": "photo_later && !photo_seen",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "archive_unlock",
@@ -5270,7 +5281,8 @@
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d3_office.l13",
-     "when": "!case_opened"
+     "when": "!case_opened",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "jump",
@@ -5406,7 +5418,7 @@
    "id": "d3_go",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_car",
+    "bg": "bg_hod_t_street",
     "time_of_day": "day"
    },
    "steps": [
@@ -5420,8 +5432,7 @@
      ],
      "default": "d3_go_walk"
     }
-   ],
-   "coverage": "hod_car"
+   ]
   },
   "d3_go_car": {
    "id": "d3_go_car",
@@ -5874,17 +5885,31 @@
    ],
    "ambient": "amb_street_day"
   },
-  "d3_route": {
-   "id": "d3_route",
+  "d3_next": {
+   "id": "d3_next",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_car",
+    "bg": "bg_hod_t_street",
     "time_of_day": "day"
    },
    "steps": [
     {
+     "do": "set",
+     "effects": [
+      {
+       "var": "slot",
+       "op": "add",
+       "value": 1
+      }
+     ]
+    },
+    {
      "do": "branch",
      "cases": [
+      {
+       "when": "slot >= 2",
+       "goto": "d3_evening"
+      },
       {
        "when": "oper_with",
        "goto": "d3_route_car"
@@ -5892,8 +5917,7 @@
      ],
      "default": "d3_route_walk"
     }
-   ],
-   "coverage": "hod_car"
+   ]
   },
   "d3_route_car": {
    "id": "d3_route_car",
@@ -6423,7 +6447,7 @@
    "id": "g3_second",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_car",
+    "bg": "bg_hod_t_street",
     "time_of_day": "day"
    },
    "steps": [
@@ -6437,8 +6461,7 @@
      ],
      "default": "g3w_second"
     }
-   ],
-   "coverage": "hod_car"
+   ]
   },
   "g3c_second": {
    "id": "g3c_second",
@@ -6495,7 +6518,7 @@
    "id": "g3_address",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_car",
+    "bg": "bg_hod_t_street",
     "time_of_day": "day"
    },
    "steps": [
@@ -6509,8 +6532,7 @@
      ],
      "default": "g3w_address"
     }
-   ],
-   "coverage": "hod_car"
+   ]
   },
   "g3c_address": {
    "id": "g3c_address",
@@ -6567,7 +6589,7 @@
    "id": "g3_kovrigin",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_car",
+    "bg": "bg_hod_t_street",
     "time_of_day": "day"
    },
    "steps": [
@@ -6581,8 +6603,7 @@
      ],
      "default": "g3w_kovrigin"
     }
-   ],
-   "coverage": "hod_car"
+   ]
   },
   "g3c_kovrigin": {
    "id": "g3c_kovrigin",
@@ -6786,7 +6807,7 @@
     },
     {
      "do": "jump",
-     "scene": "route"
+     "scene": "d3_next"
     }
    ]
   },
@@ -6810,7 +6831,7 @@
     },
     {
      "do": "jump",
-     "scene": "route"
+     "scene": "d3_next"
     }
    ]
   },
@@ -7001,7 +7022,7 @@
     },
     {
      "do": "jump",
-     "scene": "route"
+     "scene": "d3_next"
     }
    ],
    "ambient": "amb_street_day"
@@ -7055,7 +7076,7 @@
     },
     {
      "do": "jump",
-     "scene": "route"
+     "scene": "d3_next"
     }
    ],
    "ambient": "amb_street_day"
@@ -7080,7 +7101,7 @@
     },
     {
      "do": "jump",
-     "scene": "route"
+     "scene": "d3_next"
     }
    ],
    "ambient": "amb_street_day"
@@ -7132,53 +7153,62 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.kovrigin.l02"
+     "key": "ep01.h.kovrigin.l02",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.kovrigin.l03",
-     "when": "lyuda_talked"
+     "when": "lyuda_talked",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "say",
      "who": "notary",
      "key": "ep01.h.kovrigin.l04",
-     "when": "visited_notary"
+     "when": "visited_notary",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "say",
      "who": "notary",
      "key": "ep01.h.kovrigin.l05",
-     "when": "!visited_notary"
+     "when": "!visited_notary",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "say",
      "who": "sledak",
      "key": "ep01.h.kovrigin.l06",
-     "when": "bti_six"
+     "when": "bti_six",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "say",
      "who": "sledak",
      "key": "ep01.h.kovrigin.l07",
-     "when": "bti_chain && !bti_six"
+     "when": "bti_chain && !bti_six",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "say",
      "who": "sledak",
      "key": "ep01.h.kovrigin.l08",
-     "when": "!bti_chain"
+     "when": "!bti_chain",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "say",
      "who": "notary",
-     "key": "ep01.h.kovrigin.l09"
+     "key": "ep01.h.kovrigin.l09",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "say",
      "who": "notary",
-     "key": "ep01.h.kovrigin.l10"
+     "key": "ep01.h.kovrigin.l10",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "set",
@@ -7239,22 +7269,26 @@
     {
      "do": "say",
      "who": "notary",
-     "key": "ep01.h.kovrigin_deal.l01"
+     "key": "ep01.h.kovrigin_deal.l01",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "say",
      "who": "notary",
-     "key": "ep01.h.kovrigin_deal.l02"
+     "key": "ep01.h.kovrigin_deal.l02",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "say",
      "who": "notary",
-     "key": "ep01.h.kovrigin_deal.l03"
+     "key": "ep01.h.kovrigin_deal.l03",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "say",
      "who": "notary",
-     "key": "ep01.h.kovrigin_deal.l04"
+     "key": "ep01.h.kovrigin_deal.l04",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "archive_unlock",
@@ -7310,11 +7344,12 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.kovrigin_deal.l05"
+     "key": "ep01.h.kovrigin_deal.l05",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "jump",
-     "scene": "route"
+     "scene": "d3_next"
     }
    ],
    "coverage": "hod_notary_alone"
@@ -7346,12 +7381,14 @@
     {
      "do": "say",
      "who": "notary",
-     "key": "ep01.h.kovrigin_press.l01"
+     "key": "ep01.h.kovrigin_press.l01",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "say",
      "who": "notary",
-     "key": "ep01.h.kovrigin_press.l02"
+     "key": "ep01.h.kovrigin_press.l02",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "archive_unlock",
@@ -7385,11 +7422,12 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.kovrigin_press.l03"
+     "key": "ep01.h.kovrigin_press.l03",
+     "shot": "sh_notary_alone_ots"
     },
     {
      "do": "jump",
-     "scene": "route"
+     "scene": "d3_next"
     }
    ],
    "coverage": "hod_notary_alone"
@@ -7426,13 +7464,15 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d3_evening.l02"
+     "key": "ep01.h.d3_evening.l02",
+     "shot": "sh_office_eve_ots_expert"
     },
     {
      "do": "say",
      "who": "expert",
      "key": "ep01.h.d3_evening.l03",
-     "when": "photo_later && !photo_seen"
+     "when": "photo_later && !photo_seen",
+     "shot": "sh_office_eve_ots_expert"
     },
     {
      "do": "archive_unlock",
@@ -7453,13 +7493,15 @@
     {
      "do": "say",
      "who": "expert",
-     "key": "ep01.h.d3_evening.l04"
+     "key": "ep01.h.d3_evening.l04",
+     "shot": "sh_office_eve_ots_expert"
     },
     {
      "do": "say",
      "who": "expert",
      "key": "ep01.h.d3_evening.l05",
-     "when": "version_weak"
+     "when": "version_weak",
+     "shot": "sh_office_eve_ots_expert"
     },
     {
      "do": "minigame",
@@ -7498,18 +7540,21 @@
      "do": "say",
      "who": "expert",
      "key": "ep01.h.d3_board_done.l01",
-     "when": "board_ok"
+     "when": "board_ok",
+     "shot": "sh_office_eve_ots_expert"
     },
     {
      "do": "say",
      "who": "expert",
      "key": "ep01.h.d3_board_done.l02",
-     "when": "!board_ok"
+     "when": "!board_ok",
+     "shot": "sh_office_eve_ots_expert"
     },
     {
      "do": "say",
      "who": "expert",
-     "key": "ep01.h.d3_board_done.l03"
+     "key": "ep01.h.d3_board_done.l03",
+     "shot": "sh_office_eve_ots_expert"
     },
     {
      "do": "jump",
@@ -7541,6 +7586,12 @@
      "who": "oper",
      "position": "center",
      "when": "oper_with"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d3_where.l01",
+     "shot": "sh_office_eve_ots_expert"
     },
     {
      "do": "choice",
@@ -7606,25 +7657,29 @@
      "do": "say",
      "who": "expert",
      "key": "ep01.h.d3_where_w1.l01",
-     "when": "bti_six"
+     "when": "bti_six",
+     "shot": "sh_office_eve_ots_expert"
     },
     {
      "do": "say",
      "who": "expert",
      "key": "ep01.h.d3_where_w1.l02",
-     "when": "bti_chain && !bti_six"
+     "when": "bti_chain && !bti_six",
+     "shot": "sh_office_eve_ots_expert"
     },
     {
      "do": "say",
      "who": "expert",
      "key": "ep01.h.d3_where_w1.l03",
-     "when": "!bti_chain"
+     "when": "!bti_chain",
+     "shot": "sh_office_eve_ots_expert"
     },
     {
      "do": "say",
      "who": "expert",
      "key": "ep01.h.d3_where_w1.l04",
-     "when": "second_victim"
+     "when": "second_victim",
+     "shot": "sh_office_eve_ots_expert"
     },
     {
      "do": "jump",
@@ -7660,7 +7715,8 @@
     {
      "do": "say",
      "who": "expert",
-     "key": "ep01.h.d3_where_w2.l01"
+     "key": "ep01.h.d3_where_w2.l01",
+     "shot": "sh_office_eve_ots_expert"
     },
     {
      "do": "jump",
@@ -7690,12 +7746,14 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d3_night.l01"
+     "key": "ep01.h.d3_night.l01",
+     "shot": "sh_office_night_ots_expert"
     },
     {
      "do": "say",
      "who": "expert",
-     "key": "ep01.h.d3_night.l02"
+     "key": "ep01.h.d3_night.l02",
+     "shot": "sh_office_night_ots_expert"
     },
     {
      "do": "sfx",
@@ -7705,13 +7763,15 @@
      "do": "say",
      "who": "oper",
      "key": "ep01.h.d3_night.l03",
-     "when": "oper_with && shmel_named"
+     "when": "oper_with && shmel_named",
+     "shot": "sh_office_night_ots_expert"
     },
     {
      "do": "say",
      "who": "oper",
      "key": "ep01.h.d3_night.l04",
-     "when": "oper_with && driver_known && !shmel_named"
+     "when": "oper_with && driver_known && !shmel_named",
+     "shot": "sh_office_night_ots_expert"
     },
     {
      "do": "archive_unlock",
@@ -7733,7 +7793,8 @@
      "do": "say",
      "who": "sledak",
      "key": "ep01.h.d3_night.l05",
-     "when": "!oper_with || !driver_known"
+     "when": "!oper_with || !driver_known",
+     "shot": "sh_office_night_ots_expert"
     },
     {
      "do": "set",
@@ -7786,24 +7847,28 @@
     {
      "do": "say",
      "who": "sledak",
-     "key": "ep01.h.d4_office.l02"
+     "key": "ep01.h.d4_office.l02",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "say",
      "who": "boss",
-     "key": "ep01.h.d4_office.l03"
+     "key": "ep01.h.d4_office.l03",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "say",
      "who": "sledak",
      "key": "ep01.h.d4_office.l04",
-     "when": "bti_six"
+     "when": "bti_six",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "say",
      "who": "sledak",
      "key": "ep01.h.d4_office.l05",
-     "when": "!bti_six"
+     "when": "!bti_six",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "branch",
@@ -7848,24 +7913,28 @@
      "do": "say",
      "who": "boss",
      "key": "ep01.h.d4_sanction.l01",
-     "when": "case_opened"
+     "when": "case_opened",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "say",
      "who": "boss",
      "key": "ep01.h.d4_sanction.l02",
-     "when": "!case_opened && klava_statement"
+     "when": "!case_opened && klava_statement",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "say",
      "who": "boss",
      "key": "ep01.h.d4_sanction.l03",
-     "when": "!case_opened && !klava_statement"
+     "when": "!case_opened && !klava_statement",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "say",
      "who": "boss",
-     "key": "ep01.h.d4_sanction.l04"
+     "key": "ep01.h.d4_sanction.l04",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "archive_unlock",
@@ -7884,7 +7953,8 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d4_sanction.l05"
+     "key": "ep01.h.d4_sanction.l05",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "jump",
@@ -7895,7 +7965,8 @@
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d4_sanction.l06",
-     "when": "galina_trust"
+     "when": "galina_trust",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "choice",
@@ -7919,7 +7990,8 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d4_sanction.l07"
+     "key": "ep01.h.d4_sanction.l07",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "jump",
@@ -7961,17 +8033,20 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d4_ident_irina.l02"
+     "key": "ep01.h.d4_ident_irina.l02",
+     "shot": "sh_flat_ots_wife"
     },
     {
      "do": "say",
      "who": "lapin_wife",
-     "key": "ep01.h.d4_ident_irina.l03"
+     "key": "ep01.h.d4_ident_irina.l03",
+     "shot": "sh_flat_ots_wife"
     },
     {
      "do": "say",
      "who": "lapin_wife",
-     "key": "ep01.h.d4_ident_irina.l04"
+     "key": "ep01.h.d4_ident_irina.l04",
+     "shot": "sh_flat_ots_wife"
     },
     {
      "do": "set",
@@ -8022,27 +8097,32 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d4_ident_galina.l01"
+     "key": "ep01.h.d4_ident_galina.l01",
+     "shot": "sh_landing_open_ots"
     },
     {
      "do": "say",
      "who": "neighbor",
-     "key": "ep01.h.d4_ident_galina.l02"
+     "key": "ep01.h.d4_ident_galina.l02",
+     "shot": "sh_landing_open_ots"
     },
     {
      "do": "say",
      "who": "sledak",
-     "key": "ep01.h.d4_ident_galina.l03"
+     "key": "ep01.h.d4_ident_galina.l03",
+     "shot": "sh_landing_open_ots"
     },
     {
      "do": "say",
      "who": "neighbor",
-     "key": "ep01.h.d4_ident_galina.l04"
+     "key": "ep01.h.d4_ident_galina.l04",
+     "shot": "sh_landing_open_ots"
     },
     {
      "do": "say",
      "who": "neighbor",
-     "key": "ep01.h.d4_ident_galina.l05"
+     "key": "ep01.h.d4_ident_galina.l05",
+     "shot": "sh_landing_open_ots"
     },
     {
      "do": "set",
@@ -8099,17 +8179,20 @@
     {
      "do": "say",
      "who": "boss",
-     "key": "ep01.h.d4_refuse.l01"
+     "key": "ep01.h.d4_refuse.l01",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "say",
      "who": "sledak",
-     "key": "ep01.h.d4_refuse.l02"
+     "key": "ep01.h.d4_refuse.l02",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "say",
      "who": "boss",
-     "key": "ep01.h.d4_refuse.l03"
+     "key": "ep01.h.d4_refuse.l03",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "set",
@@ -8124,7 +8207,8 @@
     {
      "do": "narrate",
      "style": "inner",
-     "key": "ep01.h.d4_refuse.l04"
+     "key": "ep01.h.d4_refuse.l04",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "jump",
@@ -8982,19 +9066,22 @@
      "do": "say",
      "who": "boss",
      "key": "ep01.h.d5_boss.l02",
-     "when": "!case_transferred"
+     "when": "!case_transferred",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "say",
      "who": "boss",
      "key": "ep01.h.d5_boss.l03",
-     "when": "case_transferred"
+     "when": "case_transferred",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "say",
      "who": "oper",
      "key": "ep01.h.d5_boss.l04",
-     "when": "oper_with && !oper_wounded"
+     "when": "oper_with && !oper_wounded",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "sfx",
@@ -9005,13 +9092,15 @@
      "do": "say",
      "who": "oper",
      "key": "ep01.h.d5_boss.l05",
-     "when": "oper_wounded"
+     "when": "oper_wounded",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d5_boss.l06",
-     "when": "oper_wounded"
+     "when": "oper_wounded",
+     "shot": "sh_office_d2_ots_boss"
     },
     {
      "do": "jump",
