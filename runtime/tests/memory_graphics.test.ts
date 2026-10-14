@@ -46,18 +46,19 @@ describe('каталог: кадры «Воспоминаний»', () => {
         memory: { file: 'assets/m/wide.webp', square: 'assets/m/wide.square.webp', masks: { a: 'assets/m/wide.a.webp' }, square_masks: { a: 'assets/m/wide.square.a.webp' }, video: 'assets/m/wide.mp4' },
       },
       { id: 'sh_wide_only', set: 'room', bg: 'bg_room', kind: 'ots', angle: 'eye', file: 'assets/x/ots.webp', cast: [{ who: 'a' }], memory: { file: 'assets/m/ots.webp', video: 'assets/m/ots.mp4', video_loop: true } },
-      { id: 'sh_real', set: 'room', bg: 'bg_room', kind: 'wide', angle: 'eye', file: 'assets/x/real.webp', cast: [{ who: 'a', mask: 'assets/x/real.a.webp' }] },
+      { id: 'sh_real', set: 'room', bg: 'bg_room', kind: 'wide', angle: 'eye', file: 'assets/x/real.webp', video: 'assets/x/real.mp4', video_loop: true, cast: [{ who: 'a', mask: 'assets/x/real.a.webp' }] },
     ],
   };
   const urls = (c: { urls: readonly string[] } | null): readonly string[] | undefined => c?.urls;
 
-  it('«Реализм»: прежние файлы и маски, квадратов и роликов нет', () => {
+  it('«Реализм»: прежние файлы и маски, квадратов нет; ролик — только свой, не «Воспоминаний»', () => {
     const cat = new AssetCatalog(ep, './');
     expect(urls(cat.shotChain('sh_full'))).toEqual(['./assets/x/wide.webp']);
     expect(urls(cat.shotMask('sh_full', 'a'))).toEqual(['./assets/x/wide.a.webp']);
     expect(urls(cat.bgChain('bg_room'))).toEqual(['./assets/x/room.webp']);
     expect(cat.shotIsSquare('sh_full')).toBe(false);
-    expect(cat.shotVideo('sh_full')).toBeNull();
+    expect(cat.shotVideo('sh_full')).toBeNull(); // у кадра только ролик «Воспоминаний»
+    expect(cat.shotVideo('sh_real')).toEqual({ url: './assets/x/real.mp4', loop: true }); // свой ролик «Реализма»
   });
 
   it('«Воспоминания», горизонталь: кадр 16:9, его маски и ролик; реалистичный кадр — запасным вторым в цепочке', () => {
@@ -72,7 +73,7 @@ describe('каталог: кадры «Воспоминаний»', () => {
     expect(cat.shotIsSquare('sh_full')).toBe(false);
     expect(cat.shotVideo('sh_full')).toEqual({ url: './assets/m/wide.mp4', loop: false }); // один раз и замирает
     expect(cat.shotVideo('sh_wide_only')).toEqual({ url: './assets/m/ots.mp4', loop: true });
-    expect(cat.shotVideo('sh_real')).toBeNull();
+    expect(cat.shotVideo('sh_real')).toEqual({ url: './assets/x/real.mp4', loop: true }); // «воспоминаний» нет — показан кадр «Реализма» и его ролик
     expect(urls(cat.shotChain('sh_full'))).not.toContain('./assets/m/wide.mp4'); // ролик не идёт в цепочку картинок (их грузит предзагрузчик)
   });
 

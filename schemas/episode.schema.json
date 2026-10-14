@@ -680,6 +680,8 @@
         "from": { "$ref": "#/$defs/asciiId", "description": "ots: через чьё плечо снято." },
         "focus": { "$ref": "#/$defs/asciiId", "description": "О ком кадр: говорящий (close/ots) или слушающий (reaction)." },
         "file": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$", "description": "assets/<ep>/shots/<set>/<name>.webp, 1920×1080." },
+        "video": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+\\.mp4$", "description": "Ролик того же кадра для графики «Реализм» (H.264, без звука): первый кадр совпадает с file. Играет поверх кадра; не загрузился или prefers-reduced-motion — остаётся file. Для «Воспоминаний» — свой memory.video." },
+        "video_loop": { "type": "boolean", "default": false, "description": "true — ролик повторяется, пока кадр на экране; false — играет один раз и замирает на последнем кадре." },
         "memory": {
           "type": "object",
           "additionalProperties": false,

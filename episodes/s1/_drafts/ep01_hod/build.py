@@ -264,8 +264,8 @@ MEM = lambda sid, set_, tail='': f'assets/ep01/hod_memory/{set_}/{sid}{tail}.web
 HAS = lambda path: os.path.exists(os.path.join(ROOT, path))  # noqa: E731
 
 
-# Ролики Seedance к кадрам «Воспоминаний» (assets/ep01/hod_memory/<сет>/<кадр>.mp4): дождь, снег и ветер повторяются,
-# дорога за окном машины проезжает один раз и замирает на последнем кадре.
+# Ролики Seedance рядом с кадрами (assets/ep01/hod/… — «Реализм», assets/ep01/hod_memory/… — «Воспоминания»; <кадр>.mp4):
+# дождь, снег и ветер повторяются, дорога за окном машины проезжает один раз и замирает на последнем кадре.
 VIDEO_LOOP = {'op_wide', 'epi_prison', 'epi_agency_winter', 'epi_notary_closed'}
 
 
@@ -302,6 +302,11 @@ for p in PLAN:
           'file': FILE(p['id'], p['set'])}
     if p['id'] in OTS:
         sh['from'], sh['focus'] = OTS[p['id']]
+    video = FILE(p['id'], p['set'])[:-len('.webp')] + '.mp4'  # ролик «Реализма» рядом с кадром (VIDEO_LOOP — петли)
+    if HAS(video):
+        sh['video'] = video
+        if p['id'] in VIDEO_LOOP:
+            sh['video_loop'] = True
     for c in sh['cast']:  # маска человека для подсветки того, на ком внимание (tools/hod/masks.py)
         mask = f'assets/ep01/hod/{p["set"]}/{p["id"]}.{c["who"]}.webp'
         if os.path.exists(os.path.join(ROOT, mask)):

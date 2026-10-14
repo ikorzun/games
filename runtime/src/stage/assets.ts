@@ -143,11 +143,15 @@ export class AssetCatalog {
     return { urls: mem ? [this.url(mem), this.url(s.file)] : [this.url(s.file)], silhouetteFirst: false };
   }
 
-  /** Ролик кадра (memory.video): только «Воспоминания» на горизонтальном экране — квадрат и «Реализм» остаются кадром. */
+  /**
+   * Ролик показанного кадра: в «Воспоминаниях» — memory.video, в «Реализме» (и в «Воспоминаниях» у кадра без своей
+   * версии — тогда показан кадр «Реализма») — video. Квадрат на вертикальном экране остаётся кадром.
+   */
   shotVideo(id: string): ShotVideo | null {
-    const m = this.graphics.memory ? this.shots.get(id)?.memory : undefined;
-    if (!m?.video || this.shotIsSquare(id)) return null;
-    return { url: this.url(m.video), loop: m.video_loop ?? false };
+    const s = this.shots.get(id);
+    if (!s || this.shotIsSquare(id)) return null;
+    const v = this.graphics.memory && s.memory ? s.memory : s;
+    return v.video ? { url: this.url(v.video), loop: v.video_loop ?? false } : null;
   }
 
   /** Маска человека на кадре (shots[].cast[].mask; у «воспоминаний» — свои) — для подсветки того, на ком внимание. */
