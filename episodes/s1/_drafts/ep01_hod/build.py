@@ -264,8 +264,13 @@ MEM = lambda sid, set_, tail='': f'assets/ep01/hod_memory/{set_}/{sid}{tail}.web
 HAS = lambda path: os.path.exists(os.path.join(ROOT, path))  # noqa: E731
 
 
+# Ролики Seedance к кадрам «Воспоминаний» (assets/ep01/hod_memory/<сет>/<кадр>.mp4): дождь, снег и ветер повторяются,
+# дорога за окном машины проезжает один раз и замирает на последнем кадре.
+VIDEO_LOOP = {'op_wide', 'epi_prison', 'epi_agency_winter', 'epi_notary_closed'}
+
+
 def memory_of(sid: str, set_: str, cast: list[str]) -> dict | None:
-    """Графика «Воспоминания» (tools/hod/memory.py): кадр 16:9, квадрат для телефона и маски людей — что уже есть."""
+    """Графика «Воспоминания» (tools/hod/memory.py): кадр 16:9, квадрат для телефона, маски людей и ролик — что уже есть."""
     if not HAS(MEM(sid, set_)):
         return None
     m = {'file': MEM(sid, set_)}
@@ -275,6 +280,11 @@ def memory_of(sid: str, set_: str, cast: list[str]) -> dict | None:
         found = {w: MEM(sid, set_, f'{tail}.{w}') for w in cast if HAS(MEM(sid, set_, f'{tail}.{w}'))}
         if found:
             m[key] = found
+    video = MEM(sid, set_)[:-len('.webp')] + '.mp4'
+    if HAS(video):
+        m['video'] = video
+        if sid in VIDEO_LOOP:
+            m['video_loop'] = True
     return m
 
 

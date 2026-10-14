@@ -14200,7 +14200,8 @@
     "file": "assets/ep01/hod/hod_car/car_view.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_car/car_view.webp",
-     "square": "assets/ep01/hod_memory/hod_car/car_view.square.webp"
+     "square": "assets/ep01/hod_memory/hod_car/car_view.square.webp",
+     "video": "assets/ep01/hod_memory/hod_car/car_view.mp4"
     }
    },
    {
@@ -14275,7 +14276,8 @@
     "file": "assets/ep01/hod/hod_car_d2/car_d2_view.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_car_d2/car_d2_view.webp",
-     "square": "assets/ep01/hod_memory/hod_car_d2/car_d2_view.square.webp"
+     "square": "assets/ep01/hod_memory/hod_car_d2/car_d2_view.square.webp",
+     "video": "assets/ep01/hod_memory/hod_car_d2/car_d2_view.mp4"
     }
    },
    {
@@ -14350,7 +14352,8 @@
     "file": "assets/ep01/hod/hod_car_d3/car_d3_view.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_car_d3/car_d3_view.webp",
-     "square": "assets/ep01/hod_memory/hod_car_d3/car_d3_view.square.webp"
+     "square": "assets/ep01/hod_memory/hod_car_d3/car_d3_view.square.webp",
+     "video": "assets/ep01/hod_memory/hod_car_d3/car_d3_view.mp4"
     }
    },
    {
@@ -14657,7 +14660,9 @@
     "file": "assets/ep01/hod/hod_op/op_wide.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_op/op_wide.webp",
-     "square": "assets/ep01/hod_memory/hod_op/op_wide.square.webp"
+     "square": "assets/ep01/hod_memory/hod_op/op_wide.square.webp",
+     "video": "assets/ep01/hod_memory/hod_op/op_wide.mp4",
+     "video_loop": true
     }
    },
    {
@@ -15215,7 +15220,9 @@
     "file": "assets/ep01/hod/hod_epilogue/epi_notary_closed.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_epilogue/epi_notary_closed.webp",
-     "square": "assets/ep01/hod_memory/hod_epilogue/epi_notary_closed.square.webp"
+     "square": "assets/ep01/hod_memory/hod_epilogue/epi_notary_closed.square.webp",
+     "video": "assets/ep01/hod_memory/hod_epilogue/epi_notary_closed.mp4",
+     "video_loop": true
     }
    },
    {
@@ -15228,7 +15235,9 @@
     "file": "assets/ep01/hod/hod_epilogue/epi_agency_winter.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_epilogue/epi_agency_winter.webp",
-     "square": "assets/ep01/hod_memory/hod_epilogue/epi_agency_winter.square.webp"
+     "square": "assets/ep01/hod_memory/hod_epilogue/epi_agency_winter.square.webp",
+     "video": "assets/ep01/hod_memory/hod_epilogue/epi_agency_winter.mp4",
+     "video_loop": true
     }
    },
    {
@@ -15241,7 +15250,9 @@
     "file": "assets/ep01/hod/hod_court/epi_prison.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_court/epi_prison.webp",
-     "square": "assets/ep01/hod_memory/hod_court/epi_prison.square.webp"
+     "square": "assets/ep01/hod_memory/hod_court/epi_prison.square.webp",
+     "video": "assets/ep01/hod_memory/hod_court/epi_prison.mp4",
+     "video_loop": true
     }
    },
    {

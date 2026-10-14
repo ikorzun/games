@@ -15,12 +15,12 @@
  * left / center / right, offscreen_* не рисуются. Говорящего подсвечивают затемнением остальных
  * (tint), силуэт без собственного файла — чёрный кадр с прозрачностью .85.
  */
-import { Application, Container, defaultFilterVert, GlProgram, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
+import { Application, Container, defaultFilterVert, GlProgram, Graphics, Rectangle, Sprite, Text, Texture, VideoSource } from 'pixi.js';
 import type { WebGLRenderer } from 'pixi.js';
 import type { ViolenceMode } from '../core/settings';
 import type { SpriteView, TransitionKind, ViewState } from '../core/types';
 import { NO_ASSETS } from './assets';
-import type { ImageChain, ImageHandle, SceneAssets } from './assets';
+import type { ImageChain, ImageHandle, SceneAssets, ShotVideo } from './assets';
 import { hslToInt, placeholderHsl, placeholderLabel } from './placeholders';
 import { isOffscreen, POSITION_X, SILHOUETTE_ALPHA, SPRITE_FIT, SPRITE_MAX_WIDTH, wantFlip } from './renderer';
 import type { ISceneRenderer, SlotStates } from './renderer';
@@ -37,6 +37,11 @@ const VHS_Y_DOWN = true;
 const TEXTURE_BUDGET = 120 * 1024 * 1024;
 /** Множитель яркости остальных, когда говорит кто-то другой. */
 const DIM_TINT = 0x9e9e9e;
+/** Ролик кадра проявляется поверх неподвижного кадра, мс (первый кадр ролика с ним совпадает — смена почти незаметна). */
+const CLIP_FADE_MS = 200;
+
+/** prefers-reduced-motion: ролики кадров не играют, остаётся неподвижный кадр. */
+const prefersReducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 interface Tween {
   from: number;
@@ -80,6 +85,15 @@ interface Slot {
   token: number;
   /** Сплошной цвет (режим solid), 0xRRGGBB. */
   color: number;
+}
+
+/** Ролик кадра: элемент video, текстура (появляется, когда пошли кадры), состояние и когда начал проявляться. */
+interface ShotClip {
+  readonly url: string;
+  readonly el: HTMLVideoElement;
+  tex: Texture | null;
+  state: 'loading' | 'playing' | 'ended' | 'failed';
+  t0: number;
 }
 
 function makeText(size: number, weight: '400' | '700', fill = 0xffffff): Text {
@@ -155,6 +169,9 @@ export class PixiSceneRenderer implements ISceneRenderer {
   /** Кадр покрытия: между спрайтами и CG; когда показан, слой спрайтов выключен. */
   private readonly shotLayer = new Container();
   private readonly shotPic = new Sprite();
+  /** Ролик кадра поверх неподвижного кадра («Воспоминания», memory.video): проявляется, когда пошли кадры. */
+  private readonly videoPic = new Sprite();
+  private clip: ShotClip | null = null;
   private readonly cgLayer = new Container();
   /** Растворение: снимок прежнего кадра поверх нового, гаснет (crossfade). */
   private readonly fadeLayer = new Container();
@@ -217,11 +234,13 @@ export class PixiSceneRenderer implements ISceneRenderer {
     this.bgPic.anchor.set(0.5);
     this.cgPic.anchor.set(0.5);
     this.shotPic.anchor.set(0.5);
+    this.videoPic.anchor.set(0.5);
     this.bgPic.visible = false;
     this.cgPic.visible = false;
     this.shotPic.visible = false;
+    this.videoPic.visible = false;
     this.bgLayer.addChild(this.bgG, this.bgLabel, this.bgTag, this.bgPic);
-    this.shotLayer.addChild(this.shotPic);
+    this.shotLayer.addChild(this.shotPic, this.videoPic);
     this.shotLayer.visible = false;
     this.cgLayer.addChild(this.cgG, this.cgLabel, this.cgPic);
     this.cgLayer.visible = false;
@@ -252,6 +271,7 @@ export class PixiSceneRenderer implements ISceneRenderer {
     this.resolveSlot(this.bgSlot, this.assets.bgChain(view.bg));
     this.shotId = view.shot ?? null;
     this.resolveSlot(this.shotSlot, this.shotChain(this.shotId));
+    this.syncClip();
     this.retargetFocus(false);
     this.cgId = view.cg;
     this.cgFade = 1;
@@ -264,6 +284,7 @@ export class PixiSceneRenderer implements ISceneRenderer {
     this.shotId = shot;
     this.shotCutAt = performance.now();
     this.resolveSlot(this.shotSlot, this.shotChain(shot));
+    this.syncClip();
     this.retargetFocus(false);
     this.layout();
   }
@@ -302,6 +323,73 @@ export class PixiSceneRenderer implements ISceneRenderer {
 
   private shotChain(shot: string | null): ImageChain | null {
     return shot !== null ? (this.assets.shotChain?.(shot) ?? null) : null;
+  }
+
+  /** Ролик кадра: тот же продолжает идти (новая сцена на том же кадре), другой — прежний снимается, новый ставится. */
+  private syncClip(): void {
+    const v = this.shotId !== null && !prefersReducedMotion() ? (this.assets.shotVideo?.(this.shotId) ?? null) : null;
+    if (v?.url === this.clip?.url) return;
+    this.dropClip();
+    if (v) this.startClip(v);
+  }
+
+  /**
+   * Ролик играет без звука и inline (так его разрешают iOS и Chrome без жеста игрока). Пока не пошли кадры — виден
+   * неподвижный кадр (первый кадр ролика совпадает с ним); не пошёл (нет кодека, энергосбережение) — кадр и остаётся.
+   */
+  private startClip(v: ShotVideo): void {
+    const el = document.createElement('video');
+    el.muted = true;
+    el.playsInline = true;
+    el.loop = v.loop;
+    el.preload = 'auto';
+    const clip: ShotClip = { url: v.url, el, tex: null, state: 'loading', t0: 0 };
+    this.clip = clip;
+    const fail = (why: unknown): void => {
+      if (this.clip !== clip || clip.state === 'failed') return;
+      console.info('[stage] ролик не играет, остаётся неподвижный кадр:', v.url, why);
+      this.releaseClip(clip);
+      clip.state = 'failed';
+      this.layout();
+    };
+    el.addEventListener('playing', () => {
+      if (this.clip !== clip || clip.tex) return;
+      // Текстуру заводим, когда кадры уже идут: VideoSource тогда сам берёт их по requestVideoFrameCallback и не
+      // перезапускает загрузку элемента. Каждый новый кадр ролика — один кадр сцены.
+      const source = new VideoSource({ resource: el, autoPlay: false });
+      source.on('update', () => this.invalidate());
+      clip.tex = new Texture({ source });
+      clip.state = 'playing';
+      clip.t0 = performance.now();
+      this.videoPic.texture = clip.tex;
+      this.videoPic.alpha = 0;
+      this.layout();
+    });
+    el.addEventListener('ended', () => {
+      if (this.clip === clip) clip.state = 'ended'; // остаётся последний кадр
+    });
+    el.addEventListener('error', () => fail(el.error?.message || el.error?.code));
+    el.src = v.url;
+    el.play().catch(fail);
+  }
+
+  private dropClip(): void {
+    const clip = this.clip;
+    if (!clip) return;
+    this.clip = null;
+    this.releaseClip(clip);
+  }
+
+  /** Остановить ролик и отпустить декодер (на iOS их немного): у элемента не остаётся источника. */
+  private releaseClip(clip: ShotClip): void {
+    if (this.videoPic.texture === clip.tex) this.videoPic.texture = Texture.EMPTY;
+    if (clip.tex) clip.tex.destroy(true); // VideoSource.destroy: pause, src = '', load()
+    else {
+      clip.el.pause();
+      clip.el.removeAttribute('src');
+      clip.el.load();
+    }
+    clip.tex = null;
   }
 
   setBackground(bg: string): void {
@@ -354,7 +442,8 @@ export class PixiSceneRenderer implements ISceneRenderer {
     const sprites: Record<string, Mode> = {};
     for (const [who, node] of this.nodes) sprites[who] = node.mode;
     const focus = { who: this.focusWho, mask: (this.focusCur ? (this.focusCur.tex ? 'image' : 'loading') : 'none') as Mode };
-    return { bg: this.bgSlot.mode, bgId: this.bgId, cg: this.cgSlot.mode, cgId: this.cgId, shot: this.shotSlot.mode, shotId: this.shotId, focus, sprites };
+    const video = this.clip?.state ?? 'none';
+    return { bg: this.bgSlot.mode, bgId: this.bgId, cg: this.cgSlot.mode, cgId: this.cgId, shot: this.shotSlot.mode, shotId: this.shotId, focus, video, sprites };
   }
 
   setViolenceMode(mode: ViolenceMode): void {
@@ -370,6 +459,7 @@ export class PixiSceneRenderer implements ISceneRenderer {
 
   destroy(): void {
     this.destroyed = true;
+    this.dropClip();
     this.observer?.disconnect();
     this.app.destroy({ removeView: true }, { children: true });
     this.textures.destroy();
@@ -705,6 +795,11 @@ export class PixiSceneRenderer implements ISceneRenderer {
       if (k >= 1) this.dropFade();
     }
     if (this.applyFocus(now)) animating = true;
+    const clip = this.clip;
+    if (clip?.tex && this.videoPic.alpha < 1) {
+      this.videoPic.alpha = Math.min(1, (now - clip.t0) / CLIP_FADE_MS);
+      animating = true;
+    }
     if (animating || this.dirty || this.continuous) {
       this.dirty = false;
       this.app.render();
@@ -756,6 +851,9 @@ export class PixiSceneRenderer implements ISceneRenderer {
     this.shotPic.visible = shotOn;
     this.spriteLayer.visible = !shotOn;
     if (shotOn) this.coverFit(this.shotPic, W, H);
+    const clipOn = shotOn && Boolean(this.clip?.tex);
+    this.videoPic.visible = clipOn;
+    if (clipOn) this.coverFit(this.videoPic, W, H);
 
     // CG
     const cgMode = this.cgSlot.mode;

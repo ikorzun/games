@@ -442,6 +442,10 @@ export interface ShotMemory {
   square?: string;
   masks?: Record<string, string>;
   square_masks?: Record<string, string>;
+  /** Ролик того же кадра 16:9 (первый кадр совпадает с file): только «Воспоминания» на горизонтальном экране. */
+  video?: string;
+  /** Ролик повторяется; иначе играет один раз и замирает на последнем кадре. */
+  video_loop?: boolean;
 }
 
 export interface Assets {

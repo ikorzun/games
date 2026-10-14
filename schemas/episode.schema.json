@@ -689,7 +689,9 @@
             "file": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" },
             "square": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" },
             "masks": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" } },
-            "square_masks": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" } }
+            "square_masks": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" } },
+            "video": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+\\.mp4$", "description": "Ролик того же кадра 16:9 (H.264, без звука): первый кадр совпадает с file. Играет поверх кадра только в «Воспоминаниях» на горизонтальном экране; не загрузился или prefers-reduced-motion — остаётся file." },
+            "video_loop": { "type": "boolean", "default": false, "description": "true — ролик повторяется, пока кадр на экране; false — играет один раз и замирает на последнем кадре." }
           }
         },
         "notes": { "type": "string" }

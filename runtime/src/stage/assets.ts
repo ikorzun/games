@@ -68,6 +68,12 @@ export interface ImageChain {
   readonly solid?: string;
 }
 
+/** Ролик поверх кадра покрытия: адрес mp4 и повторять ли его (иначе — один раз и замереть на последнем кадре). */
+export interface ShotVideo {
+  readonly url: string;
+  readonly loop: boolean;
+}
+
 export class AssetCatalog {
   private readonly bg = new Map<string, string>();
   private readonly cg = new Map<string, string>();
@@ -135,6 +141,13 @@ export class AssetCatalog {
     const m = this.graphics.memory ? s.memory : undefined;
     const mem = m ? (this.shotIsSquare(id) ? m.square : m.file) : undefined;
     return { urls: mem ? [this.url(mem), this.url(s.file)] : [this.url(s.file)], silhouetteFirst: false };
+  }
+
+  /** Ролик кадра (memory.video): только «Воспоминания» на горизонтальном экране — квадрат и «Реализм» остаются кадром. */
+  shotVideo(id: string): ShotVideo | null {
+    const m = this.graphics.memory ? this.shots.get(id)?.memory : undefined;
+    if (!m?.video || this.shotIsSquare(id)) return null;
+    return { url: this.url(m.video), loop: m.video_loop ?? false };
   }
 
   /** Маска человека на кадре (shots[].cast[].mask; у «воспоминаний» — свои) — для подсветки того, на ком внимание. */
@@ -572,6 +585,8 @@ export interface SceneAssets {
   shotChain?(id: string): ImageChain | null;
   /** Маска человека на кадре для подсветки того, на ком внимание; нет метода или маски — без подсветки. */
   shotMask?(shot: string, who: string): ImageChain | null;
+  /** Ролик поверх кадра; нет метода или ролика — кадр неподвижен. */
+  shotVideo?(shot: string): ShotVideo | null;
   /** Графика «Воспоминания» / вертикальный экран (квадратные кадры); нет метода — только «Реализм». */
   setGraphics?(g: { memory: boolean; square: boolean }): void;
   /** Кадр показывается квадратным. */
@@ -612,6 +627,9 @@ export class StoreSceneAssets implements SceneAssets {
   }
   shotMask(shot: string, who: string): ImageChain | null {
     return this.catalog.shotMask(shot, who);
+  }
+  shotVideo(shot: string): ShotVideo | null {
+    return this.catalog.shotVideo(shot);
   }
   setGraphics(g: { memory: boolean; square: boolean }): void {
     this.catalog.setGraphics(g);

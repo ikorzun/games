@@ -43,23 +43,24 @@ describe('каталог: кадры «Воспоминаний»', () => {
       {
         id: 'sh_full', set: 'room', bg: 'bg_room', kind: 'wide', angle: 'eye', file: 'assets/x/wide.webp',
         cast: [{ who: 'a', mask: 'assets/x/wide.a.webp' }],
-        memory: { file: 'assets/m/wide.webp', square: 'assets/m/wide.square.webp', masks: { a: 'assets/m/wide.a.webp' }, square_masks: { a: 'assets/m/wide.square.a.webp' } },
+        memory: { file: 'assets/m/wide.webp', square: 'assets/m/wide.square.webp', masks: { a: 'assets/m/wide.a.webp' }, square_masks: { a: 'assets/m/wide.square.a.webp' }, video: 'assets/m/wide.mp4' },
       },
-      { id: 'sh_wide_only', set: 'room', bg: 'bg_room', kind: 'ots', angle: 'eye', file: 'assets/x/ots.webp', cast: [{ who: 'a' }], memory: { file: 'assets/m/ots.webp' } },
+      { id: 'sh_wide_only', set: 'room', bg: 'bg_room', kind: 'ots', angle: 'eye', file: 'assets/x/ots.webp', cast: [{ who: 'a' }], memory: { file: 'assets/m/ots.webp', video: 'assets/m/ots.mp4', video_loop: true } },
       { id: 'sh_real', set: 'room', bg: 'bg_room', kind: 'wide', angle: 'eye', file: 'assets/x/real.webp', cast: [{ who: 'a', mask: 'assets/x/real.a.webp' }] },
     ],
   };
   const urls = (c: { urls: readonly string[] } | null): readonly string[] | undefined => c?.urls;
 
-  it('«Реализм»: прежние файлы и маски, квадратов нет', () => {
+  it('«Реализм»: прежние файлы и маски, квадратов и роликов нет', () => {
     const cat = new AssetCatalog(ep, './');
     expect(urls(cat.shotChain('sh_full'))).toEqual(['./assets/x/wide.webp']);
     expect(urls(cat.shotMask('sh_full', 'a'))).toEqual(['./assets/x/wide.a.webp']);
     expect(urls(cat.bgChain('bg_room'))).toEqual(['./assets/x/room.webp']);
     expect(cat.shotIsSquare('sh_full')).toBe(false);
+    expect(cat.shotVideo('sh_full')).toBeNull();
   });
 
-  it('«Воспоминания», горизонталь: кадр 16:9 и его маски; реалистичный кадр — запасным вторым в цепочке', () => {
+  it('«Воспоминания», горизонталь: кадр 16:9, его маски и ролик; реалистичный кадр — запасным вторым в цепочке', () => {
     const cat = new AssetCatalog(ep, './');
     cat.setGraphics({ memory: true, square: false });
     expect(urls(cat.shotChain('sh_full'))).toEqual(['./assets/m/wide.webp', './assets/x/wide.webp']);
@@ -69,9 +70,13 @@ describe('каталог: кадры «Воспоминаний»', () => {
     expect(urls(cat.shotChain('sh_real'))).toEqual(['./assets/x/real.webp']); // у кадра нет «воспоминаний»
     expect(urls(cat.shotMask('sh_real', 'a'))).toEqual(['./assets/x/real.a.webp']);
     expect(cat.shotIsSquare('sh_full')).toBe(false);
+    expect(cat.shotVideo('sh_full')).toEqual({ url: './assets/m/wide.mp4', loop: false }); // один раз и замирает
+    expect(cat.shotVideo('sh_wide_only')).toEqual({ url: './assets/m/ots.mp4', loop: true });
+    expect(cat.shotVideo('sh_real')).toBeNull();
+    expect(urls(cat.shotChain('sh_full'))).not.toContain('./assets/m/wide.mp4'); // ролик не идёт в цепочку картинок (их грузит предзагрузчик)
   });
 
-  it('«Воспоминания», вертикаль: квадрат и его маски там, где квадрат есть; без квадрата — кадр 16:9', () => {
+  it('«Воспоминания», вертикаль: квадрат и его маски там, где квадрат есть; без квадрата — кадр 16:9 и его ролик', () => {
     const cat = new AssetCatalog(ep, './');
     cat.setGraphics({ memory: true, square: true });
     expect(urls(cat.shotChain('sh_full'))).toEqual(['./assets/m/wide.square.webp', './assets/x/wide.webp']);
@@ -80,6 +85,8 @@ describe('каталог: кадры «Воспоминаний»', () => {
     expect(urls(cat.shotChain('sh_wide_only'))).toEqual(['./assets/m/ots.webp', './assets/x/ots.webp']);
     expect(cat.shotIsSquare('sh_wide_only')).toBe(false);
     expect(cat.shotMask('sh_wide_only', 'a')).toBeNull(); // масок у «воспоминаний» этого кадра нет — без подсветки
+    expect(cat.shotVideo('sh_full')).toBeNull(); // ролик 16:9 квадрат не заменяет
+    expect(cat.shotVideo('sh_wide_only')).toEqual({ url: './assets/m/ots.mp4', loop: true });
   });
 });
 

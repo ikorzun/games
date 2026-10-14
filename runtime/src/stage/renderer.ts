@@ -21,6 +21,8 @@ export interface SlotStates {
   shotId: string | null;
   /** Подсветка: на ком внимание и есть ли у него маска на этом кадре (image) — только у PixiJS. */
   focus?: { who: string | null; mask: SlotState };
+  /** Ролик кадра (только PixiJS): грузится, идёт, доиграл и замер, не пошёл (остался кадр), ролика нет. */
+  video?: 'none' | 'loading' | 'playing' | 'ended' | 'failed';
   /** who → состояние спрайта (ушедшие и закадровые не входят). */
   sprites: Record<string, SlotState>;
 }

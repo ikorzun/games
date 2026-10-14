@@ -18,8 +18,8 @@
 import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
 
-/** Расширения, которые рантайм умеет использовать (mp3 и m4a/AAC — звук, оба играют в iOS Safari; ogg — запасной). */
-export const ASSET_EXTENSIONS = ['.webp', '.png', '.jpg', '.jpeg', '.mp3', '.m4a', '.ogg'];
+/** Расширения, которые рантайм умеет использовать (mp3 и m4a/AAC — звук, оба играют в iOS Safari; ogg — запасной; mp4/H.264 — ролики кадров). */
+export const ASSET_EXTENSIONS = ['.webp', '.png', '.jpg', '.jpeg', '.mp3', '.m4a', '.ogg', '.mp4'];
 
 export const MIME = {
   '.webp': 'image/webp',
@@ -29,6 +29,7 @@ export const MIME = {
   '.mp3': 'audio/mpeg',
   '.m4a': 'audio/mp4',
   '.ogg': 'audio/ogg',
+  '.mp4': 'video/mp4',
 };
 
 /** Индекс клипов озвучки в корне сборки. */
