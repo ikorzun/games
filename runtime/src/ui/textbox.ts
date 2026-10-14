@@ -127,6 +127,10 @@ export class TextBox {
   /** Показать реплику. cps = Infinity — мгновенно. */
   show(line: LineView, cps: number): void {
     this.render(line);
+    // Новая реплика мягко проявляется (просьба владельца 2026-10-14): класс снимаем и ставим заново — анимация с начала.
+    this.el.classList.remove('is-entering');
+    void this.el.offsetWidth;
+    this.el.classList.add('is-entering');
     this.cps = cps;
     this.chars = splitGraphemes(line.text);
     this.index = 0;

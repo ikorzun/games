@@ -276,7 +276,13 @@ body {
 }
 .vn-textbox.is-complete .vn-textbox__more svg {
   opacity: 1;
-  animation: more-blink 1s steps(2) infinite;
+  animation: more-pulse 1.8s ease-in-out infinite;
+}
+/* Новая реплика: строка говорящего и текст мягко проявляются и чуть всплывают (просьба владельца 2026-10-14). */
+.vn-textbox.is-entering .vn-textbox__who,
+.vn-textbox.is-entering .vn-textbox__box { animation: vn-line-in 0.34s ease-out both; }
+@keyframes vn-line-in {
+  from { opacity: 0; transform: translateY(0.3em); }
 }
 /* Закадровый голос и мысли — своим цветом, без курсива и без черты слева (решение владельца 2026-10-13). */
 .vn-textbox[data-style='voiceover'] .vn-textbox__text { color: #e4dfd1; }
@@ -295,8 +301,10 @@ body {
 .vn-textbox[data-layout='subtitle'] .vn-textbox__text { padding: 0 calc(24em / 15); }
 .vn-textbox[data-layout='subtitle'] .vn-textbox__bars,
 .vn-textbox[data-layout='subtitle'] .vn-textbox__more::before { display: none; }
-@keyframes more-blink {
-  50% { opacity: 0.15; }
+/* «>» не мигает, а плавно дышит (просьба владельца 2026-10-14: «мягче пульсацию»). */
+@keyframes more-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 @media (orientation: portrait) {
@@ -682,6 +690,9 @@ body {
   font-size: max(18px, calc(var(--fs) * 0.9));
   opacity: 0;
   transition: opacity 0.2s ease;
+  /* Экран — свой слой: z-index внутри (записи блокнота) не поднимается над экраном, открытым позже (документ из
+     блокнота). На ПК слой давало размытие, на телефоне его нет — карточки блокнота перекрывали документ. */
+  isolation: isolate;
 }
 .vn-screen.is-in { opacity: 1; }
 /* Предупреждение, выбор и документ (макеты Figma «Claude» 2026-10-13): кадр под ними размыт и затемнён на 60 %. --u —
@@ -1133,16 +1144,17 @@ body {
 .vn-confirm p { margin: 0; }
 
 /* Блокнот и архив — по референсам владельца (2026-10-14: доска расследования, «Кембриджская пятёрка», карта из
-   карточек со стрелками): лист старой бумаги без линовки (текстура — GPT Image, бесшовная зеркальной укладкой), на нём
-   предметы — белые карточки и обрывки под скотчем, жёлтые стикеры, сканы бумаг под скрепкой, фото отпечатком. В игре
-   записи идут в порядке находок: номер на красной бирке и красная стрелка к следующей — ход следствия. Наклон (--tilt,
-   до ±1,4°) и вид бумаги (data-paper) — от id записи. Новое с прошлого раза — красный штамп. Скруглений нет. */
+   карточек со стрелками). Подложки нет: в игре под записями размытый кадр в момент открытия (как под документом), в
+   меню кадра нет — графитовый фон. Записи — предметы: белые карточки и обрывки под скотчем, жёлтые стикеры, сканы бумаг
+   под скрепкой, фото отпечатком. В игре они идут в порядке находок: номер на красной бирке и красная стрелка к
+   следующей — ход следствия. Наклон (--tilt, до ±1,4°) и вид бумаги (data-paper) — от id записи. Новое с прошлого
+   раза — красный штамп. Скруглений нет. Тап по пустому месту закрывает блокнот (data-backdrop). */
 .vn-archive {
   --nb-ink: #1b1a17;
-  --nb-shade: rgb(40 32 20 / 0.35);
-  --nb-line: rgb(200 22 22 / 0.8);
-  --nb-paper: url(./img/notebook-paper.webp) 0 0 / 1100px 1100px; /* крупно: зеркальная укладка не бросается в глаза */
+  --nb-shade: rgb(0 0 0 / 0.45);
+  --nb-line: rgb(232 44 44 / 0.88);
 }
+.vn-archive.is-menu { background: #232428; } /* непрозрачный графит: размытие под ним не видно */
 .vn-archive__box {
   display: flex;
   flex-direction: column;
@@ -1157,16 +1169,13 @@ body {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: var(--nb-paper), #d9d3c4;
-  box-shadow: 0 12px 40px rgb(0 0 0 / 0.6);
 }
-.vn-archive__empty { margin: 0; padding: calc(28 * var(--u)); color: #5f584c; }
-/* Лист — фон самой доски: он растёт с записями и листается вместе с ними; стрелки — слой под бумажками. */
+.vn-archive__empty { margin: 0; padding: calc(28 * var(--u)) 0; color: var(--c-muted); }
+/* Доска растёт с записями и листается вместе с ними; стрелки — слой под бумажками. */
 .vn-archive__board {
   position: relative;
   box-sizing: border-box;
   min-height: 100%;
-  background: var(--nb-paper), #d9d3c4;
 }
 .vn-archive__lines { position: absolute; left: 0; top: 0; z-index: 0; overflow: visible; pointer-events: none; }
 .vn-archive__lines path { fill: none; stroke: var(--nb-line); stroke-width: 2; stroke-linecap: round; }
@@ -1239,7 +1248,7 @@ body {
 .vn-archive__item.has-scan { filter: none; }
 .vn-archive__item.has-scan::before { content: none; }
 .vn-archive__item.has-scan .vn-archive__paper { padding: 0; background: none; clip-path: none; }
-.vn-archive__item.has-scan h3 { margin-top: 0.7em; padding: 0; border: 0; text-align: center; }
+.vn-archive__item.has-scan h3 { margin-top: 0.7em; padding: 0; border: 0; text-align: center; color: #f1eee6; text-shadow: 0 1px 3px rgb(0 0 0 / 0.8); }
 .vn-archive__open {
   position: relative;
   display: block;

@@ -633,6 +633,29 @@ describe('ScreenHost: стек модальных экранов', () => {
     expect(s.closed).toBe(1);
   });
 
+  it('клик по фону (сам экран или обёртка с data-backdrop) закрывает закрываемый экран; по содержимому и у незакрываемого — нет', () => {
+    const host = new ScreenHost();
+    document.body.appendChild(host.el);
+    const s = screen();
+    const wrap = document.createElement('div');
+    wrap.dataset.backdrop = '1';
+    s.el.appendChild(wrap);
+    host.open(s);
+    s.el.querySelector('button')?.click(); // кнопка внутри — не фон
+    expect(host.count).toBe(1);
+    wrap.click(); // пустое место между записями блокнота
+    expect(host.count).toBe(0);
+    expect(s.closed).toBe(1);
+    const t = screen();
+    host.open(t);
+    t.el.click(); // сам экран вне содержимого
+    expect(host.count).toBe(0);
+    const locked = screen({ dismissible: false });
+    host.open(locked);
+    locked.el.click(); // предупреждение, мини-игра, финал: фон не отменяет действие в сюжете
+    expect(host.count).toBe(1);
+  });
+
   it('фокус не возвращается на кнопку быстрого меню (иначе Space повторил бы её действие)', () => {
     const host = new ScreenHost();
     document.body.appendChild(host.el);

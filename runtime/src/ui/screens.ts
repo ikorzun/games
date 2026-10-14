@@ -784,10 +784,10 @@ function drawPath(board: HTMLElement, svg: SVGSVGElement): void {
 }
 
 /**
- * Блокнот следователя (в меню — «Архив»): лист старой бумаги, на нём записи-предметы — карточки и обрывки под скотчем,
- * жёлтые стикеры, бумаги дела сканом под скрепкой (касание открывает окно документа), фото — отпечатком. В игре записи
- * идут в порядке находок, с номерами, и от каждой к следующей — красная стрелка: ход следствия. Новое с прошлого раза —
- * под красным штампом.
+ * Блокнот следователя (в меню — «Архив»): без подложки — в игре поверх размытого кадра, в меню на графите. Записи —
+ * предметы: карточки и обрывки под скотчем, жёлтые стикеры, бумаги дела сканом под скрепкой (касание открывает окно
+ * документа), фото — отпечатком. В игре записи идут в порядке находок, с номерами, и от каждой к следующей — красная
+ * стрелка: ход следствия. Новое с прошлого раза — под красным штампом.
  */
 export class ArchiveScreen extends BaseScreen {
   /** Esc закрывает блокнот мимо onDone: хозяин узнаёт о закрытии отсюда. */
@@ -817,15 +817,21 @@ export class ArchiveScreen extends BaseScreen {
     const board =
       items.length === 0
         ? null
-        : h('div', { class: 'vn-archive__board' }, h('ul', { class: 'vn-archive__list' }, ...items.map((a, i) => this.note(a, i))));
+        : h(
+            'div',
+            { class: 'vn-archive__board', data: { backdrop: 1 } },
+            h('ul', { class: 'vn-archive__list', data: { backdrop: 1 } }, ...items.map((a, i) => this.note(a, i))),
+          );
+    // В игре под блокнотом — размытый кадр (как под документом); в меню кадра нет — графитовый фон.
+    this.el.classList.toggle('is-menu', !this.opts.path);
     fill(
       this.el,
       h(
         'div',
-        { class: 'vn-archive__box' },
+        { class: 'vn-archive__box', data: { backdrop: 1 } },
         h(
           'div',
-          { class: 'vn-archive__head' },
+          { class: 'vn-archive__head', data: { backdrop: 1 } },
           h('h2', { class: 'vn-archive__title', text: t(this.titleKey) }),
           // Крестик — как у окна документа.
           h(
@@ -834,7 +840,7 @@ export class ArchiveScreen extends BaseScreen {
             icon('close'),
           ),
         ),
-        h('div', { class: 'vn-archive__page' }, board ?? h('p', { class: 'vn-archive__empty', text: t('ui.archive.empty') })),
+        h('div', { class: 'vn-archive__page', data: { backdrop: 1 } }, board ?? h('p', { class: 'vn-archive__empty', text: t('ui.archive.empty') })),
       ),
     );
     if (board && this.opts.path && items.length > 1) this.trackPath(board);
@@ -1006,7 +1012,7 @@ export class DocumentScreen extends BaseScreen {
         this.el,
         h(
           'div',
-          { class: 'vn-document__box' },
+          { class: 'vn-document__box', data: { backdrop: 1 } },
           head,
           sheet,
           // Текст бумаги — для скринридера; на других языках — перевод под картинкой (в картинке он русский).
@@ -1019,7 +1025,7 @@ export class DocumentScreen extends BaseScreen {
       this.el,
       h(
         'div',
-        { class: 'vn-document__box' },
+        { class: 'vn-document__box', data: { backdrop: 1 } },
         head,
         h(
           'div',

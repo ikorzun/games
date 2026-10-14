@@ -21,6 +21,7 @@ export class ScreenHost {
   readonly el: HTMLElement;
   private readonly stack: Array<{ screen: Screen; returnFocus: Element | null }> = [];
   private readonly listeners = new Set<() => void>();
+  private readonly backdrops = new WeakSet<Screen>();
 
   constructor() {
     this.el = h('div', { class: 'vn-screens' });
@@ -50,6 +51,7 @@ export class ScreenHost {
     screen.el.classList.add('vn-screen');
     this.el.appendChild(screen.el);
     this.stack.push({ screen, returnFocus });
+    this.listenBackdrop(screen);
     screen.render?.();
     requestAnimationFrame(() => screen.el.classList.add('is-in'));
     const first = screen.el.querySelector<HTMLElement>(FOCUSABLE);
@@ -70,6 +72,24 @@ export class ScreenHost {
       else back.focus({ preventScroll: true });
     }
     this.emit();
+  }
+
+  /**
+   * Клик или тап по фону — по самому экрану вне содержимого или по обёртке с data-backdrop (пустое место между записями
+   * блокнота) — закрывает экран, как Esc и крестик (просьба владельца 2026-10-14). Незакрываемые экраны (меню,
+   * предупреждение, мини-игра, финал) — нет: там фон не отменяет действие внутри сюжета.
+   */
+  private listenBackdrop(screen: Screen): void {
+    if (this.backdrops.has(screen)) return;
+    this.backdrops.add(screen);
+    screen.el.addEventListener('click', (e) => {
+      if (screen.dismissible === false || this.top !== screen) return;
+      const t = e.target;
+      if (t !== screen.el && !(t instanceof HTMLElement && t.dataset.backdrop !== undefined)) return;
+      // Тот же клик не должен долистать реплику под экраном: экран уже закрыт, когда клик дойдёт до сцены.
+      e.stopPropagation();
+      this.close(screen);
+    });
   }
 
   /** Закрыть верхний экран, если он закрываемый. true — что-то закрыто. */

@@ -1049,6 +1049,27 @@ async function scenarioHod(browser, baseUrl) {
     const choiceBad = await ph.page.evaluate(layoutProbe);
     if (wantShots) await ph.page.screenshot({ path: join(OUT, `hod_${name}_choice.png`) });
     check(`${name}: реплика, бумага и выбор держат вёрстку`, lineBad.length === 0 && choiceBad.length === 0, [...lineBad, ...choiceBad].join('; '));
+    // Блокнот на телефоне (размытия нет — слой экрану даёт isolation): бумага из блокнота лежит поверх записей; тап по
+    // фону закрывает бумагу, затем блокнот, а выбор под ними остаётся.
+    const before = JSON.stringify(await pending(ph.page));
+    await ph.page.click('.vn-qbtn--notebook');
+    await ph.page.waitForSelector('.vn-archive', { state: 'visible' });
+    let docOnTop = null;
+    if ((await ph.page.locator('.vn-archive__open').count()) > 0) {
+      await ph.page.click('.vn-archive__open');
+      await ph.page.waitForSelector('.vn-document', { state: 'visible' });
+      await sleep(300);
+      docOnTop = await ph.page.$eval('.vn-document__sheet', (s) => {
+        const r = s.getBoundingClientRect();
+        return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('.vn-document') != null;
+      });
+      await ph.page.touchscreen.tap(4, height / 2);
+      await ph.page.waitForSelector('.vn-document', { state: 'detached' });
+    }
+    await ph.page.touchscreen.tap(4, height / 2);
+    await ph.page.waitForSelector('.vn-archive', { state: 'detached' });
+    const after = JSON.stringify(await pending(ph.page));
+    check(`${name}: бумага из блокнота поверх записей, тап по фону закрывает её и блокнот, выбор остаётся`, docOnTop === true && before === after, `${docOnTop}; ${before === after ? 'выбор тот же' : `${before} → ${after}`}`);
     check(`${name}: нет ошибок в консоли`, ph.log.errors.length === 0, ph.log.errors.join(' | ').slice(0, 200));
     await ph.context.close();
   }
