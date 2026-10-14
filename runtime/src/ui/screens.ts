@@ -7,7 +7,6 @@ import { i18n, t } from '../core/i18n';
 import type { SaveFile } from '../core/saves';
 import { AUTO_DELAY_RANGE, CAMERA_FX_LEVELS, FONT_SCALE_RANGE, GRAPHICS_MODES } from '../core/settings';
 import type { CameraFx, Settings } from '../core/settings';
-import { LANGS } from '../core/types';
 import type { ArchiveItem, Episode, GameState, Ending, Lang } from '../core/types';
 import type { LogEntry } from '../session';
 import { cssUrl, fill, h } from './dom';
@@ -137,7 +136,7 @@ export class MenuScreen extends BaseScreen {
       'nav',
       { class: 'vn-menu__icons' },
       h('span', { class: 'vn-menu__lang-code', text: i18n.lang.toUpperCase(), aria: { hidden: true } }),
-      iconBtn('globe', t('ui.menu.language'), () => this.toggleLangs(), 'is-lang', this.langOpen),
+      i18n.available.length > 1 ? iconBtn('globe', t('ui.menu.language'), () => this.toggleLangs(), 'is-lang', this.langOpen) : null,
       iconBtn('log', t('ui.menu.archive'), hd.onArchive, 'is-archive'),
       iconBtn('settings', t('ui.menu.settings'), hd.onSettings, 'is-settings'),
     );
@@ -232,7 +231,7 @@ export function languageChips(onPick: (lang: Lang) => void): HTMLElement {
   return h(
     'div',
     { class: 'vn-langs', role: 'group', aria: { label: t('ui.menu.language') } },
-    ...LANGS.map((lang) =>
+    ...i18n.available.map((lang) =>
       h('button', {
         class: `vn-chip${i18n.lang === lang ? ' is-on' : ''}`,
         type: 'button',
@@ -503,7 +502,9 @@ export class SettingsScreen extends BaseScreen {
         'vn-settings__card',
         h('h2', { class: 'vn-card__title', text: t('ui.menu.settings') }),
         quick,
-        h('div', { class: 'vn-settings__group' }, h('span', { class: 'vn-settings__legend', text: t('ui.settings.language') }), languageChips(hd.onLanguage)),
+        i18n.available.length > 1
+          ? h('div', { class: 'vn-settings__group' }, h('span', { class: 'vn-settings__legend', text: t('ui.settings.language') }), languageChips(hd.onLanguage))
+          : null,
         cameraFx,
         graphics,
         range(t('ui.settings.font_size'), 'fontScale', FONT_SCALE_RANGE.min, FONT_SCALE_RANGE.max, FONT_SCALE_RANGE.step, pct),

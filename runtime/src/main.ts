@@ -6,7 +6,7 @@ import './stage/stage.css';
 import './ui/styles.css';
 
 import { App } from './app';
-import { i18n, parseSupportedLang } from './core/i18n';
+import { i18n, parseSupportedLang, playableLangs } from './core/i18n';
 import { ensureLangs, loadCase, loadEpisode, loadManifest, loadSeason, loadVoiceIndex } from './core/loader';
 import { SaveManager } from './core/saves';
 import type { Lang } from './core/types';
@@ -90,8 +90,13 @@ async function boot(): Promise<void> {
     // Режим дела (поиск улик), если рядом с эпизодом есть его дело; ?vn=1 — прежняя новелла.
     const caseLoad = params.get('vn') === '1' ? Promise.resolve(null) : loadCase(base, entry, episode);
 
-    // Язык: ?lang= → выбор игрока → язык платформы (bridge.platform.language / браузер) → en.
-    const lang: Lang = parseSupportedLang(params.get('lang')) ?? saves.settings.lang ?? platform.language();
+    // Язык: ?lang= → выбор игрока → язык платформы (bridge.platform.language / браузер) → en. Предлагаются только языки,
+    // на которые эпизод переведён (localization.status); остальные сводятся к языку оригинала. ?lang= — без ограничений (QA).
+    const asked = parseSupportedLang(params.get('lang'));
+    if (!asked) i18n.setAvailable(playableLangs(episode.localization));
+    const preferred = asked ?? saves.settings.lang ?? platform.language();
+    const source = episode.localization?.source_lang ?? 'ru';
+    const lang: Lang = i18n.available.includes(preferred) ? preferred : i18n.available.includes(source) ? source : i18n.available[0]!;
     await ensureLangs(i18n, base, episode.id, [lang]);
     i18n.setLang(lang);
     document.documentElement.lang = lang; // по языку выбирается шрифт индикации камеры (кириллица — JetBrains Mono)

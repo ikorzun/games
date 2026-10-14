@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
-import { fallbackChain, I18n, interpolate, normalizeLang } from '../src/core/i18n';
+import { fallbackChain, I18n, interpolate, normalizeLang, playableLangs } from '../src/core/i18n';
 import { LANGS } from '../src/core/types';
 import type { Episode, Lang } from '../src/core/types';
 import { EP01_PATH, hasRepoContent, loadEpisode, loadLocale, loadStrings } from './helpers/content';
@@ -84,6 +84,15 @@ describe('i18n: цепочка фолбэков', () => {
     i.setLang('en');
     expect(i.t('ok')).toBe('да');
     expect(i.t('num')).toBe('[num]');
+  });
+});
+
+describe('i18n: языки, на которых эпизод можно играть', () => {
+  it('без перевода (status none) язык не предлагается; нет статуса — доступен; пусто — язык оригинала', () => {
+    expect(playableLangs({ source_lang: 'ru', status: { ru: 'source', en: 'none', es: 'none', pt: 'none' } })).toEqual(['ru']);
+    expect(playableLangs({ source_lang: 'ru', status: { ru: 'source', en: 'done', es: 'none' } })).toEqual(['ru', 'en', 'pt']);
+    expect(playableLangs(undefined)).toEqual([...LANGS]);
+    expect(playableLangs({ status: { ru: 'none', en: 'none', es: 'none', pt: 'none' } })).toEqual(['ru']);
   });
 });
 

@@ -16,6 +16,7 @@ import {
   ArchiveScreen,
   DocumentScreen,
   ErrorScreen,
+  languageChips,
   LogScreen,
   MenuScreen,
   SaveLoadScreen,
@@ -201,6 +202,17 @@ describe('MenuScreen', () => {
     expect(hd.onLanguage).toHaveBeenCalledWith('es');
     expect(s.el.querySelector('.vn-langs')).toBeNull();
     expect(s.el.querySelector('.vn-menu__lang-code')?.textContent).toBe('RU');
+  });
+
+  it('эпизод переведён на один язык: глобуса в меню и выбора языка в настройках нет', () => {
+    i18n.setAvailable(['ru']);
+    try {
+      const s = open(new MenuScreen(episode, handlers()));
+      expect(s.el.querySelector('.vn-menu__icon.is-lang')).toBeNull();
+      expect(languageChips(() => undefined).querySelectorAll('button')).toHaveLength(1);
+    } finally {
+      i18n.setAvailable(['ru', 'en', 'es', 'pt']);
+    }
   });
 
   it('архив и настройки — иконками', () => {
