@@ -23,6 +23,7 @@ security add-generic-password -a "$USER" -s elevenlabs -w); в чат, в лог
                                                        # того же голоса (voice_of); --dry — список и цена без синтеза
   python3 tools/hod/voice.py norm                      # заново выровнять громкость всех клипов из сырья (_hod/voice/clips)
   python3 tools/hod/voice.py stats                     # сколько реплик и знаков, сколько уже озвучено, расход по журналу
+  … --lang en                                          # любая команда на другом языке: текст locales/en, клипы voice/en
 """
 import json, os, ssl, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -36,7 +37,9 @@ TEXTS = os.path.join(ROOT, 'locales/ru/ep01_hod.json')
 CAST = os.path.join(ROOT, 'tools/hod/voice_cast.json')
 DIRECTION = os.path.join(ROOT, 'tools/hod/voice_direction.json')
 OUT = os.path.join(ROOT, 'assets/ep01/voice/ru')
+LANG = 'ru'  # --lang en: текст из locales/en, клипы в voice/en, сырьё в _hod/voice/clips_en, language_code en
 RAW = os.path.join(ROOT, 'assets/ep01/_hod/voice')
+CLIPS = os.path.join(RAW, 'clips')
 API = 'https://api.elevenlabs.io'
 FORMAT = 'mp3_44100_64'  # моно 64 кбит/с: речь чистая, ≈ 8 КБ на секунду
 # Голоса библиотеки записаны на разной громкости (пробы — от −23 до −35 LUFS): каждый клип приводится к одной громкости
@@ -69,6 +72,10 @@ SAY = [('БТИ', 'Бэ-Тэ-И'), ('№', 'номер '), ('С. В.', 'Эс В�
        ('Ильич Р. 1914–1993', 'Ильич Эр. Тысяча девятьсот четырнадцатый — тысяча девятьсот девяносто третий'),
        # v3 упрощает редкое слово и глотает «Палыч» в конце фразы (сверка распознаванием): ударение и пауза-тире
        ('отдолжала', 'отдолжа́ла'), ('голова. И Палыч.', 'голова. И — Палыч.')]
+
+
+SAY_EN = [('…', '...'), ('1919–1993', 'nineteen nineteen to nineteen ninety-three'),
+          ('1914–1993', 'nineteen fourteen to nineteen ninety-three')]
 
 
 KEYCHAIN = 'elevenlabs'  # служба в связке ключей macOS
@@ -123,7 +130,20 @@ def lines() -> list[dict]:
     return got
 
 
+def set_lang(lang: str) -> None:
+    """Язык озвучки: те же голоса и пометки игры, свой текст, папка клипов и сырьё."""
+    global LANG, TEXTS, OUT, CLIPS
+    LANG = lang
+    TEXTS = os.path.join(ROOT, f'locales/{lang}/ep01_hod.json')
+    OUT = os.path.join(ROOT, f'assets/ep01/voice/{lang}')
+    CLIPS = os.path.join(RAW, 'clips' if lang == 'ru' else f'clips_{lang}')
+
+
 def spoken(text: str) -> str:
+    if LANG != 'ru':  # подсказки SAY — русские; у английского свои: годы жизни на экране памяти — словами, через «to»
+        for x, y in SAY_EN:
+            text = text.replace(x, y)
+        return text
     for a, b in SAY:
         text = text.replace(a, b)
     return text
@@ -155,7 +175,7 @@ def tts(who: str, text: str, prev: str = '', nxt: str = '', clip: str = '', voic
         if nxt:
             body['next_text'] = spoken(nxt)
     if model in LANG_MODELS:
-        body['language_code'] = 'ru'
+        body['language_code'] = LANG
     return call('POST', f'/v1/text-to-speech/{voice}?output_format={FORMAT}', body, accept='audio/mpeg')
 
 
@@ -180,7 +200,7 @@ def normalize(src: str, dst: str) -> None:
 
 
 def norm_all() -> None:
-    src_dir = os.path.join(RAW, 'clips')
+    src_dir = CLIPS
     names = sorted(f for f in os.listdir(src_dir) if f.endswith('.mp3'))
     with ThreadPoolExecutor(max_workers=6) as ex:
         list(ex.map(lambda f: normalize(os.path.join(src_dir, f), os.path.join(OUT, f)), names))
@@ -348,7 +368,7 @@ def samples(who_list: list[str]) -> None:
 
 def gen(who: str | None, force: bool, limit: int, scenes: str | None = None, dry: bool = False) -> None:
     os.makedirs(OUT, exist_ok=True)
-    os.makedirs(os.path.join(RAW, 'clips'), exist_ok=True)
+    os.makedirs(CLIPS, exist_ok=True)
     all_lines = lines()
     roles = with_shared(set(who.split(','))) if who else None
     only = set(scenes.split(',')) if scenes else None
@@ -379,11 +399,11 @@ def gen(who: str | None, force: bool, limit: int, scenes: str | None = None, dry
     def one(item):
         ln, prev, nxt, dst = item
         audio = tts(ln['who'], ln['text'], prev, nxt, ln['clip'])
-        raw = os.path.join(RAW, 'clips', os.path.basename(dst))
+        raw = os.path.join(CLIPS, os.path.basename(dst))
         open(raw + '.tmp', 'wb').write(audio)
         os.replace(raw + '.tmp', raw)
         normalize(raw, dst)
-        ledger(ln['clip'], sent(ln))
+        ledger(ln['clip'] if LANG == 'ru' else f"{LANG}:{ln['clip']}", sent(ln))
         return f"{ln['clip']} ({ln['who']}, {len(ln['text'])} зн.)"
 
     with ThreadPoolExecutor(max_workers=3) as ex:  # ElevenLabs ограничивает одновременные запросы по тарифу
@@ -403,7 +423,12 @@ def stats() -> None:
 
 
 if __name__ == '__main__':
-    cmd, *args = sys.argv[1:] or ['stats']
+    argv = sys.argv[1:]
+    if '--lang' in argv:
+        i = argv.index('--lang')
+        set_lang(argv[i + 1])
+        del argv[i:i + 2]
+    cmd, *args = argv or ['stats']
     if cmd == 'check':
         check()
     elif cmd == 'voices':
