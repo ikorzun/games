@@ -1,27 +1,249 @@
 {
-  "_doc": "Кастинг озвучки «Хода следствия» (tools/hod/voice.py). Профили — docs/season1/ep01-voices.md. voice_id — голос ElevenLabs из аккаунта владельца (python3 tools/hod/voice.py voices / library); voice_of — тот же голос, что у другой роли; settings переопределяют общие. Пустой voice_id — роль ещё не озвучена.",
+  "_doc": "Кастинг озвучки «Хода следствия» (tools/hod/voice.py). Профили — docs/season1/ep01-voices.md. voice_id — голос ElevenLabs из аккаунта владельца (python3 tools/hod/voice.py voices / library); voice_of — тот же голос, что у другой роли; settings переопределяют общие. Пустой voice_id — роль ещё не озвучена. design — голос по описанию (voice.py design / design-save); library — исходный голос библиотеки для add.",
   "model": "eleven_multilingual_v2",
-  "settings": {"stability": 0.5, "similarity_boost": 0.75, "style": 0.0, "use_speaker_boost": true, "speed": 1.0},
+  "settings": {
+    "stability": 0.5,
+    "similarity_boost": 0.75,
+    "style": 0.0,
+    "use_speaker_boost": true,
+    "speed": 1.0
+  },
   "roles": {
-    "_narrator": {"voice_id": "", "brief": "мужской 45–55, низкий ровный баритон документальной передачи, медленно, бесстрастно", "settings": {"stability": 0.7, "speed": 0.95}},
-    "_inner": {"voice_of": "sledak", "brief": "мысли Громова: тот же голос, тише и ровнее, концы фраз глотаются", "settings": {"stability": 0.65, "style": 0.0}},
-    "sledak": {"voice_id": "", "brief": "мужской 28–32, сдержанный, чуть глуховатый, негромко и чётко, паузы перед важным", "settings": {"stability": 0.55, "style": 0.1}},
-    "sledak_old": {"voice_id": "", "brief": "тот же человек в 40: ниже и плотнее, усталость, длинные паузы", "settings": {"stability": 0.6, "speed": 0.92}},
-    "oper": {"voice_id": "", "brief": "мужской 32–38, хрипловатый тёплый «с улицы», быстро, с усмешкой, короткими фразами", "settings": {"stability": 0.4, "style": 0.35, "speed": 1.06}},
-    "expert": {"voice_id": "", "brief": "женский 42–50, низкий прокуренный альт, ровно, экономно, без эмоций", "settings": {"stability": 0.6, "style": 0.1}},
-    "boss": {"voice_id": "", "brief": "мужской 52–60, плотный баритон руководителя, медленно, негромко, непререкаемо", "settings": {"stability": 0.6, "style": 0.15, "speed": 0.95}},
-    "murashov": {"voice_id": "", "brief": "мужской 36–42, мягкий вежливый «радийный» и бесцветный, неторопливо, без эмоций", "settings": {"stability": 0.75, "style": 0.0, "speed": 0.95}},
-    "murashov_sil": {"voice_of": "murashov", "brief": "тот же, ещё мягче и участливее", "settings": {"stability": 0.7, "style": 0.1, "speed": 0.95}},
-    "notary": {"voice_id": "", "brief": "мужской 52–60, высоковатый тенор с одышкой, быстро и сбивчиво, оправдываясь", "settings": {"stability": 0.35, "style": 0.35, "speed": 1.08}},
-    "zoya": {"voice_id": "", "brief": "женский 70–78, высокий мягкий голос с лёгкой дрожью, медленно, доверчиво", "settings": {"stability": 0.5, "style": 0.2, "speed": 0.9}},
-    "neighbor": {"voice_id": "", "brief": "женский 55–65, грудной «дворовый», быстро, по-соседски; в испуге — тихо", "settings": {"stability": 0.4, "style": 0.3, "speed": 1.05}},
-    "klava": {"voice_id": "", "brief": "женский 70–78, сухой цепкий голос, горечь без слёз, неторопливо", "settings": {"stability": 0.45, "style": 0.25, "speed": 0.97}},
-    "buyer": {"voice_id": "", "brief": "мужской 38–45, напряжённый высоковатый, неровно, оправдываясь, негромко", "settings": {"stability": 0.4, "style": 0.3}},
-    "lapin_wife": {"voice_id": "", "brief": "женский 35–42, усталый тёплый, сдержанно, прямо, без крика", "settings": {"stability": 0.5, "style": 0.2}},
-    "clerk": {"voice_id": "", "brief": "женский 58–65, низкий прокуренный, неторопливо, насмешливо, по-хозяйски", "settings": {"stability": 0.55, "style": 0.25, "speed": 0.97}},
-    "passport_clerk": {"voice_id": "", "brief": "женский 48–55, бойкий конторский, быстро, между делом", "settings": {"stability": 0.45, "style": 0.25, "speed": 1.05}},
-    "assistant": {"voice_id": "", "brief": "женский 20–25, тихий испуганный, торопливо, шёпотом на лестнице", "settings": {"stability": 0.45, "style": 0.3, "speed": 1.03}},
-    "landlady": {"voice_id": "", "brief": "женский 55–60, добродушный разговорчивый, по-домашнему", "settings": {"stability": 0.5, "style": 0.2}},
-    "accomplice": {"voice_id": "", "brief": "мужской 25–32, простой глуховатый, коротко, испуганно, будто через силу", "settings": {"stability": 0.5, "style": 0.2, "speed": 0.95}}
+    "_narrator": {
+      "voice_id": "a2cWmGM4AUuNsHwInFjF",
+      "brief": "мужской 45–55, низкий ровный баритон документальной передачи, медленно, бесстрастно",
+      "settings": {
+        "stability": 0.7,
+        "speed": 0.95
+      },
+      "library": {
+        "voice_id": "a2cWmGM4AUuNsHwInFjF",
+        "name": "Mikhail - Calm & Low"
+      }
+    },
+    "_inner": {
+      "voice_of": "sledak",
+      "brief": "мысли Громова: тот же голос, тише и ровнее, концы фраз глотаются",
+      "settings": {
+        "stability": 0.65,
+        "style": 0.0
+      }
+    },
+    "sledak": {
+      "voice_id": "srULqtwUV9XZPg1ZCO5w",
+      "brief": "мужской 28–32, сдержанный, чуть глуховатый, негромко и чётко, паузы перед важным",
+      "settings": {
+        "stability": 0.55,
+        "style": 0.1
+      },
+      "library": {
+        "voice_id": "srULqtwUV9XZPg1ZCO5w",
+        "name": "Kyrylo - Clear and Natural"
+      }
+    },
+    "sledak_old": {
+      "voice_of": "sledak",
+      "brief": "тот же человек в 40: ниже и плотнее, усталость, длинные паузы — голос Громова медленнее и ровнее (своего места в аккаунте не занимает)",
+      "settings": {
+        "stability": 0.65,
+        "speed": 0.9
+      }
+    },
+    "oper": {
+      "voice_id": "sRk0zCqhS2Cmv0bzx5wA",
+      "brief": "мужской 32–38, хрипловатый тёплый «с улицы», быстро, с усмешкой, короткими фразами",
+      "settings": {
+        "stability": 0.4,
+        "style": 0.35,
+        "speed": 1.06
+      },
+      "library": {
+        "voice_id": "sRk0zCqhS2Cmv0bzx5wA",
+        "name": "Felix - Calm, Clear and Friendly"
+      }
+    },
+    "expert": {
+      "voice_id": "ELWVgJ5Mo9lF5Tha9ahW",
+      "brief": "женский 42–50, низкий прокуренный альт, ровно, экономно, без эмоций",
+      "settings": {
+        "stability": 0.6,
+        "style": 0.1
+      },
+      "library": {
+        "voice_id": "ELWVgJ5Mo9lF5Tha9ahW",
+        "name": "Arina "
+      }
+    },
+    "boss": {
+      "voice_id": "LTkx8oHrUXaND7aaxdTA",
+      "brief": "мужской 52–60, плотный баритон руководителя, медленно, негромко, непререкаемо",
+      "settings": {
+        "stability": 0.6,
+        "style": 0.15,
+        "speed": 0.95
+      },
+      "library": {
+        "voice_id": "LTkx8oHrUXaND7aaxdTA",
+        "name": "Alexrady"
+      }
+    },
+    "murashov": {
+      "voice_id": "tP9YsmQkjzs9J7dtsSNY",
+      "brief": "мужской 36–42, мягкий вежливый «радийный» и бесцветный, неторопливо, без эмоций",
+      "settings": {
+        "stability": 0.75,
+        "style": 0.0,
+        "speed": 0.8
+      },
+      "library": {
+        "voice_id": "tP9YsmQkjzs9J7dtsSNY",
+        "name": "Alex - Pleasant & Calm"
+      }
+    },
+    "murashov_sil": {
+      "voice_of": "murashov",
+      "brief": "тот же, ещё мягче и участливее",
+      "settings": {
+        "stability": 0.7,
+        "style": 0.1,
+        "speed": 0.8
+      }
+    },
+    "notary": {
+      "voice_id": "6A9D8WSMm4rFsg2DWFeE",
+      "brief": "мужской 52–60, высоковатый тенор с одышкой, быстро и сбивчиво, оправдываясь",
+      "settings": {
+        "stability": 0.35,
+        "style": 0.35,
+        "speed": 1.08
+      },
+      "library": {
+        "voice_id": "6A9D8WSMm4rFsg2DWFeE",
+        "name": "Egor Gadzhiyev - Clear and Commanding"
+      }
+    },
+    "zoya": {
+      "voice_id": "q5CEw9gpPzbyccmrQbR4",
+      "brief": "женский 70–78, высокий мягкий голос с лёгкой дрожью, медленно, доверчиво",
+      "settings": {
+        "stability": 0.5,
+        "style": 0.2,
+        "speed": 0.9
+      },
+      "design": {
+        "description": "An elderly Russian woman of about 75, a native Russian speaker from Moscow. High, soft, slightly trembling voice; gentle, trusting and polite, the old-fashioned educated speech of a retired proofreader; slow, careful pace; warm and a little frail. Clean, close studio recording with no background noise."
+      }
+    },
+    "neighbor": {
+      "voice_id": "tK17a1Yx9PokL2pq4w4E",
+      "brief": "женский 55–65, грудной «дворовый», быстро, по-соседски; в испуге — тихо",
+      "settings": {
+        "stability": 0.4,
+        "style": 0.3,
+        "speed": 1.05
+      },
+      "design": {
+        "description": "A Russian woman of about 60, a native Russian speaker from Moscow. Full, chesty, lively voice of a talkative courtyard neighbour; quick everyday speech, warm and emotional, turning quiet and anxious when frightened. Clean, close studio recording with no background noise."
+      }
+    },
+    "klava": {
+      "voice_id": "o29ijLfBD25hLspoX6Ds",
+      "brief": "женский 70–78, сухой цепкий голос, горечь без слёз, неторопливо",
+      "settings": {
+        "stability": 0.45,
+        "style": 0.25,
+        "speed": 0.97
+      },
+      "design": {
+        "description": "An elderly Russian woman of about 75, a native Russian speaker. Dry, wiry, slightly hoarse voice; sharp, observant and stubborn; bitter but without tears; unhurried working-class Moscow speech of a retired factory worker. Clean, close studio recording with no background noise."
+      }
+    },
+    "buyer": {
+      "voice_id": "ouyTiWqmHA5WI5bbX7zj",
+      "brief": "мужской 38–45, напряжённый высоковатый, неровно, оправдываясь, негромко",
+      "settings": {
+        "stability": 0.4,
+        "style": 0.3
+      },
+      "library": {
+        "voice_id": "ouyTiWqmHA5WI5bbX7zj",
+        "name": "Mikhail - Confident and Emotional"
+      }
+    },
+    "lapin_wife": {
+      "voice_id": "q22qntNqQAvTaBoqE089",
+      "brief": "женский 35–42, усталый тёплый, сдержанно, прямо, без крика",
+      "settings": {
+        "stability": 0.5,
+        "style": 0.2
+      },
+      "library": {
+        "voice_id": "q22qntNqQAvTaBoqE089",
+        "name": "Anna - Melancholic and Reflective"
+      }
+    },
+    "clerk": {
+      "voice_id": "mlxoKP6a3YjbuGwFAc2C",
+      "brief": "женский 58–65, низкий прокуренный, неторопливо, насмешливо, по-хозяйски",
+      "settings": {
+        "stability": 0.55,
+        "style": 0.25,
+        "speed": 0.97
+      },
+      "design": {
+        "description": "A Russian woman of about 60, a native Russian speaker. Low, smoky, slightly hoarse voice of a seasoned archive clerk; unhurried, ironic and a little bossy. Clean, close studio recording with no background noise."
+      }
+    },
+    "passport_clerk": {
+      "voice_id": "0ArNnoIAWKlT4WweaVMY",
+      "brief": "женский 48–55, бойкий конторский, быстро, между делом",
+      "settings": {
+        "stability": 0.45,
+        "style": 0.25,
+        "speed": 1.05
+      },
+      "library": {
+        "voice_id": "0ArNnoIAWKlT4WweaVMY",
+        "name": "Elena Gromova — Podcasts & Conversation"
+      }
+    },
+    "assistant": {
+      "voice_id": "sk83Bye6Z8drwXh0KBFz",
+      "brief": "женский 20–25, тихий испуганный, торопливо, шёпотом на лестнице",
+      "settings": {
+        "stability": 0.45,
+        "style": 0.3,
+        "speed": 1.03
+      },
+      "library": {
+        "voice_id": "sk83Bye6Z8drwXh0KBFz",
+        "name": "Dasha - Permium Podcast Host"
+      }
+    },
+    "landlady": {
+      "voice_id": "ymDCYd8puC7gYjxIamPt",
+      "brief": "женский 55–60, добродушный разговорчивый, по-домашнему",
+      "settings": {
+        "stability": 0.5,
+        "style": 0.2
+      },
+      "library": {
+        "voice_id": "ymDCYd8puC7gYjxIamPt",
+        "name": "Marina - Soft, Clear and Warm"
+      }
+    },
+    "accomplice": {
+      "voice_id": "hD8aK7CmEPgH3mbFO08e",
+      "brief": "мужской 25–32, простой глуховатый, коротко, испуганно, будто через силу",
+      "settings": {
+        "stability": 0.5,
+        "style": 0.2,
+        "speed": 0.95
+      },
+      "library": {
+        "voice_id": "hD8aK7CmEPgH3mbFO08e",
+        "name": "Ivo - Calming, chill and narrative"
+      }
+    }
   }
 }

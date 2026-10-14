@@ -9,8 +9,14 @@ security add-generic-password -a "$USER" -s elevenlabs -w); в чат, в лог
   python3 tools/hod/voice.py check                     # ключ работает? тариф и остаток знаков (ключ не печатается)
   python3 tools/hod/voice.py voices                    # голоса аккаунта: имя, id, метки
   python3 tools/hod/voice.py library male|female [query]   # библиотека ElevenLabs: русские голоса для кастинга
+  python3 tools/hod/voice.py add <роль> <voice_id>      # голос из библиотеки → в аккаунт, id — в кастинг (меняет аккаунт!)
+  python3 tools/hod/voice.py remove <voice_id>          # убрать голос из аккаунта (место для следующих; меняет аккаунт!)
+  python3 tools/hod/voice.py design <роль> [seed]       # голос по описанию (кастинг: design): 3 пробы → _hod/voice/design/
+  python3 tools/hod/voice.py design-save <роль> <n>     # сохранить пробу n как голос аккаунта, id — в кастинг (меняет аккаунт!)
   python3 tools/hod/voice.py samples [who ...]         # по одной пробе на персонажа → assets/ep01/_hod/voice/samples/
-  python3 tools/hod/voice.py gen [--who oper] [--force] [--limit N]   # реплики эпизода; готовые клипы пропускает
+  python3 tools/hod/voice.py gen [--who sledak,oper] [--force] [--limit N]   # реплики; готовые клипы пропускает;
+                                                       # роль тянет за собой роли того же голоса (voice_of)
+  python3 tools/hod/voice.py norm                      # заново выровнять громкость всех клипов из сырья (_hod/voice/clips)
   python3 tools/hod/voice.py stats                     # сколько реплик и знаков, сколько уже озвучено, расход по журналу
 """
 import json, os, ssl, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
@@ -27,6 +33,9 @@ OUT = os.path.join(ROOT, 'assets/ep01/voice/ru')
 RAW = os.path.join(ROOT, 'assets/ep01/_hod/voice')
 API = 'https://api.elevenlabs.io'
 FORMAT = 'mp3_44100_64'  # моно 64 кбит/с: речь чистая, ≈ 8 КБ на секунду
+# Голоса библиотеки записаны на разной громкости (пробы — от −23 до −35 LUFS): каждый клип приводится к одной громкости
+# речи, исходник ElevenLabs остаётся в сырье (_hod/voice/clips) — выравнивание можно переделать без кредитов.
+LOUD = {'I': -16.0, 'TP': -1.5, 'LRA': 11.0}
 LANG_MODELS = {'eleven_turbo_v2_5', 'eleven_flash_v2_5', 'eleven_v3'}  # эти модели принимают language_code
 
 
@@ -122,6 +131,28 @@ def tts(who: str, text: str, prev: str = '', nxt: str = '') -> bytes:
     return call('POST', f'/v1/text-to-speech/{voice}?output_format={FORMAT}', body, accept='audio/mpeg')
 
 
+def normalize(src: str, dst: str) -> None:
+    """Громкость речи — к LOUD (EBU R128, два прохода loudnorm, линейно: без «качания» на коротких репликах)."""
+    target = f"I={LOUD['I']}:TP={LOUD['TP']}:LRA={LOUD['LRA']}"
+    m = subprocess.run(['ffmpeg', '-hide_banner', '-nostats', '-i', src, '-af', f'loudnorm={target}:print_format=json', '-f', 'null', '-'],
+                       capture_output=True, text=True).stderr
+    j = json.loads(m[m.rindex('{'):m.rindex('}') + 1])
+    af = (f"loudnorm={target}:measured_I={j['input_i']}:measured_TP={j['input_tp']}:measured_LRA={j['input_lra']}:"
+          f"measured_thresh={j['input_thresh']}:offset={j['target_offset']}:linear=true")
+    tmp = dst + '.tmp.mp3'
+    subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', src, '-af', af, '-ar', '44100', '-ac', '1',
+                    '-c:a', 'libmp3lame', '-b:a', '64k', tmp], check=True)
+    os.replace(tmp, dst)
+
+
+def norm_all() -> None:
+    src_dir = os.path.join(RAW, 'clips')
+    names = sorted(f for f in os.listdir(src_dir) if f.endswith('.mp3'))
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        list(ex.map(lambda f: normalize(os.path.join(src_dir, f), os.path.join(OUT, f)), names))
+    print(f'выровнено: {len(names)} клипов → {os.path.relpath(OUT, ROOT)}')
+
+
 def ledger(name: str, chars: int) -> None:
     os.makedirs(RAW, exist_ok=True)
     path = os.path.join(RAW, 'ledger.jsonl')
@@ -155,29 +186,107 @@ def library(gender: str, query: str = '') -> None:
               f"{v.get('accent', '')[:14]:14s} {(v.get('description') or '').replace(chr(10), ' ')[:90]}")
 
 
+def save_cast(c: dict) -> None:
+    open(CAST, 'w', encoding='utf-8').write(json.dumps(c, ensure_ascii=False, indent=2) + '\n')
+
+
+def add(role: str, voice_id: str) -> None:
+    """Общий голос библиотеки — в «Мои голоса» аккаунта (занимает место: на Starter их 10), id — в кастинг."""
+    c = cast()
+    q = {'page_size': 100, 'search': voice_id}
+    found = [v for v in json.loads(call('GET', '/v1/shared-voices?' + urllib.parse.urlencode(q))).get('voices', []) if v['voice_id'] == voice_id]
+    if not found:
+        sys.exit(f'{voice_id}: в библиотеке не найден')
+    v = found[0]
+    res = json.loads(call('POST', f"/v1/voices/add/{v['public_owner_id']}/{voice_id}", {'new_name': f"hod {role} — {v['name'][:40]}"}))
+    c['roles'][role]['voice_id'] = res.get('voice_id', voice_id)
+    c['roles'][role]['library'] = {'voice_id': voice_id, 'name': v['name']}
+    save_cast(c)
+    print(f"{role}: {v['name']} → {c['roles'][role]['voice_id']}")
+
+
+def remove(voice_id: str) -> None:
+    call('DELETE', f'/v1/voices/{voice_id}')
+    print(f'{voice_id}: убран из аккаунта (id в кастинге остаётся — для повторного add)')
+
+
+def design(role: str, seed: int | None = None) -> None:
+    """Голос по описанию (Voice Design, eleven_ttv_v3): три пробы на репликах самой роли; в аккаунт ничего не пишется."""
+    import base64
+    c = cast()
+    desc = c['roles'][role]['design']
+    own = [ln['text'] for ln in lines() if ln['who'] == role]
+    text = ''
+    for t in own:
+        text = f'{text} {t}'.strip()
+        if len(text) >= 160:
+            break
+    text = text[:1000] if len(text) >= 100 else (text + ' ' + desc.get('extra_text', 'Ну что вы, милый, я же вам всё рассказала, как было. Вы уж разберитесь.'))[:1000]
+    before = json.loads(call('GET', '/v1/user/subscription')).get('character_count', 0)
+    body = {'voice_description': desc['description'], 'model_id': 'eleven_ttv_v3', 'text': spoken(text)}
+    if seed is not None:
+        body['seed'] = seed
+    res = json.loads(call('POST', '/v1/text-to-voice/design?output_format=' + FORMAT, body))
+    after = json.loads(call('GET', '/v1/user/subscription')).get('character_count', 0)
+    out = os.path.join(RAW, 'design')
+    os.makedirs(out, exist_ok=True)
+    meta = {'role': role, 'text': res.get('text', text), 'previews': []}
+    for i, pv in enumerate(res.get('previews', []), 1):
+        dst = os.path.join(out, f'{role}_{i}.mp3')
+        open(dst, 'wb').write(base64.b64decode(pv['audio_base_64']))
+        meta['previews'].append({'n': i, 'generated_voice_id': pv['generated_voice_id'], 'file': os.path.relpath(dst, ROOT)})
+        print(f'{role} проба {i}: {os.path.relpath(dst, ROOT)} ({pv.get("duration_secs", 0):.1f} с)')
+    json.dump(meta, open(os.path.join(out, f'{role}.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    ledger(f'design:{role}', after - before)
+    print(f'списано знаков: {after - before}')
+
+
+def design_save(role: str, n: int) -> None:
+    c = cast()
+    meta = json.load(open(os.path.join(RAW, 'design', f'{role}.json'), encoding='utf-8'))
+    pv = next(p for p in meta['previews'] if p['n'] == n)
+    res = json.loads(call('POST', '/v1/text-to-voice', {'voice_name': f'hod {role} (design)',
+                                                         'voice_description': c['roles'][role]['design']['description'],
+                                                         'generated_voice_id': pv['generated_voice_id']}))
+    c['roles'][role]['voice_id'] = res['voice_id']
+    save_cast(c)
+    print(f"{role}: проба {n} → голос {res['voice_id']}")
+
+
+def with_shared(roles: set[str]) -> set[str]:
+    """Роли, которые звучат тем же голосом (voice_of): «sledak» тянет «_inner» и «sledak_old»."""
+    c = cast()
+    return roles | {w for w, r in c['roles'].items() if r.get('voice_of') in roles}
+
+
 def samples(who_list: list[str]) -> None:
     c = cast()
     os.makedirs(os.path.join(RAW, 'samples'), exist_ok=True)
-    by = {}
+    by: dict[str, list[str]] = {}
     for ln in lines():
-        by.setdefault(ln['who'], ln)
+        by.setdefault(ln['who'], []).append(ln['text'])
     for who in who_list or list(c['roles']):
-        text = c['roles'][who].get('sample') or by.get(who, {}).get('text')
+        # проба — характерная реплика роли средней длины (около 120 знаков), а не первая попавшаяся
+        own = by.get(who, [])
+        text = c['roles'][who].get('sample') or (min(own, key=lambda t: abs(len(t) - 120)) if own else '')
         if not text:
             continue
         audio = tts(who, text)
         dst = os.path.join(RAW, 'samples', f'{who}.mp3')
-        open(dst, 'wb').write(audio)
+        open(dst[:-4] + '.raw.mp3', 'wb').write(audio)
+        normalize(dst[:-4] + '.raw.mp3', dst)
         ledger(f'sample:{who}', len(text))
         print(f'{who}: {len(text)} зн. → {os.path.relpath(dst, ROOT)}')
 
 
 def gen(who: str | None, force: bool, limit: int) -> None:
     os.makedirs(OUT, exist_ok=True)
+    os.makedirs(os.path.join(RAW, 'clips'), exist_ok=True)
     all_lines = lines()
+    roles = with_shared(set(who.split(','))) if who else None
     todo = []
     for i, ln in enumerate(all_lines):
-        if who and ln['who'] != who:
+        if roles and ln['who'] not in roles:
             continue
         dst = os.path.join(OUT, f"{ln['clip']}.mp3")
         if os.path.exists(dst) and not force:
@@ -192,8 +301,10 @@ def gen(who: str | None, force: bool, limit: int) -> None:
     def one(item):
         ln, prev, nxt, dst = item
         audio = tts(ln['who'], ln['text'], prev, nxt)
-        open(dst + '.tmp', 'wb').write(audio)
-        os.replace(dst + '.tmp', dst)
+        raw = os.path.join(RAW, 'clips', os.path.basename(dst))
+        open(raw + '.tmp', 'wb').write(audio)
+        os.replace(raw + '.tmp', raw)
+        normalize(raw, dst)
         ledger(ln['clip'], len(ln['text']))
         return f"{ln['clip']} ({ln['who']}, {len(ln['text'])} зн.)"
 
@@ -221,12 +332,22 @@ if __name__ == '__main__':
         voices()
     elif cmd == 'library':
         library(args[0], ' '.join(args[1:]))
+    elif cmd == 'add':
+        add(args[0], args[1])
+    elif cmd == 'remove':
+        remove(args[0])
+    elif cmd == 'design':
+        design(args[0], int(args[1]) if len(args) > 1 else None)
+    elif cmd == 'design-save':
+        design_save(args[0], int(args[1]))
     elif cmd == 'samples':
         samples(args)
     elif cmd == 'gen':
         who = args[args.index('--who') + 1] if '--who' in args else None
         limit = int(args[args.index('--limit') + 1]) if '--limit' in args else 0
         gen(who, '--force' in args, limit)
+    elif cmd == 'norm':
+        norm_all()
     elif cmd == 'stats':
         stats()
     else:
