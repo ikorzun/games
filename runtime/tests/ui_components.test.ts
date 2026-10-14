@@ -636,23 +636,32 @@ describe('ScreenHost: стек модальных экранов', () => {
   it('клик по фону (сам экран или обёртка с data-backdrop) закрывает закрываемый экран; по содержимому и у незакрываемого — нет', () => {
     const host = new ScreenHost();
     document.body.appendChild(host.el);
+    const press = (el: Element): boolean => el.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    const tap = (el: HTMLElement): void => {
+      press(el);
+      el.click();
+    };
     const s = screen();
     const wrap = document.createElement('div');
     wrap.dataset.backdrop = '1';
     s.el.appendChild(wrap);
     host.open(s);
-    s.el.querySelector('button')?.click(); // кнопка внутри — не фон
+    const button = s.el.querySelector('button');
+    if (button) tap(button); // кнопка внутри — не фон
     expect(host.count).toBe(1);
-    wrap.click(); // пустое место между записями блокнота
+    if (button) press(button);
+    wrap.click(); // нажали на содержимом, отпустили на фоне (тянули лист): клик у общего предка — не закрывает
+    expect(host.count).toBe(1);
+    tap(wrap); // пустое место между записями блокнота
     expect(host.count).toBe(0);
     expect(s.closed).toBe(1);
     const t = screen();
     host.open(t);
-    t.el.click(); // сам экран вне содержимого
+    tap(t.el); // сам экран вне содержимого
     expect(host.count).toBe(0);
     const locked = screen({ dismissible: false });
     host.open(locked);
-    locked.el.click(); // предупреждение, мини-игра, финал: фон не отменяет действие в сюжете
+    tap(locked.el); // предупреждение, мини-игра, финал: фон не отменяет действие в сюжете
     expect(host.count).toBe(1);
   });
 

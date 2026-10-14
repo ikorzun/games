@@ -82,10 +82,13 @@ export class ScreenHost {
   private listenBackdrop(screen: Screen): void {
     if (this.backdrops.has(screen)) return;
     this.backdrops.add(screen);
+    const isBackdrop = (t: EventTarget | null): boolean => t === screen.el || (t instanceof HTMLElement && t.dataset.backdrop !== undefined);
+    // Нажали на содержимом, отпустили на фоне (тянули лист, выделяли текст) — клик достаётся их общему предку, фону;
+    // такое не закрывает: нажатие тоже должно прийтись на фон.
+    let downOnBackdrop = false;
+    screen.el.addEventListener('pointerdown', (e) => (downOnBackdrop = isBackdrop(e.target)), true);
     screen.el.addEventListener('click', (e) => {
-      if (screen.dismissible === false || this.top !== screen) return;
-      const t = e.target;
-      if (t !== screen.el && !(t instanceof HTMLElement && t.dataset.backdrop !== undefined)) return;
+      if (screen.dismissible === false || this.top !== screen || !downOnBackdrop || !isBackdrop(e.target)) return;
       // Тот же клик не должен долистать реплику под экраном: экран уже закрыт, когда клик дойдёт до сцены.
       e.stopPropagation();
       this.close(screen);
