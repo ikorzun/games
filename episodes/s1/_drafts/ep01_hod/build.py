@@ -112,10 +112,14 @@ def jump(scene, transition=None, when=None):
     return st
 
 
-def fx(kind, ms=None):
+def fx(kind, ms=None, shot=None, when=None):
     st = {'do': 'fx', 'fx': kind}
     if ms:
         st['ms'] = ms
+    if shot:  # кадр на время эффекта (вспышка выстрела)
+        st['shot'] = f'sh_{shot}'
+    if when:
+        st['when'] = when
     return st
 
 
@@ -190,6 +194,11 @@ def scene(sid, block, set_, steps_fn, time='day', music=None, ambient=None, filt
     s = {'id': sid, 'block': block, 'stage': {'bg': BG[set_], 'time_of_day': time}, 'steps': steps}
     if set_ in SHOT_SETS:  # временные сеты на старых фонах кадров не имеют — сцена идёт фоном и окном реплики
         s['coverage'] = set_
+        # Машина Сайко в разные дни — разные кадры (владелец 2026-10-14: «одни и те же положения героев в разные дни
+        # выглядят уныло»): вторник и среда — свои сеты, понедельник — основной.
+        alt = [{'when': w, 'coverage': c, 'bg': BG[c]} for w, c in CAR_DAYS.get(set_, []) if c in SHOT_SETS]
+        if alt:
+            s['coverage_alt'] = alt
     if filter_:
         s['stage']['filter'] = filter_
     if season:
@@ -210,14 +219,18 @@ WIDE_OF = {  # сет → общий план (он же фон сета)
     'hod_office_night': 'office_night_wide', 'hod_flat': 'flat_wide', 'hod_flat_photo': 'flat_wide',
     'hod_landing_chain': 'landing_chain_wide', 'hod_landing_open': 'landing_open_wide', 'hod_notary': 'notary_wide',
     'hod_notary_register': 'notary_wide', 'hod_notary_stairs': 'stairs_wide', 'hod_zhek': 'zhek_wide',
-    'hod_bti': 'bti_wide', 'hod_car': 'car_wide', 'hod_recon': 'recon_wide', 'hod_notary_alone': 'notary_alone_wide',
+    'hod_bti': 'bti_wide', 'hod_car': 'car_wide', 'hod_car_d2': 'car_d2_wide', 'hod_car_d3': 'car_d3_wide',
+    'hod_recon': 'recon_wide', 'hod_notary_alone': 'notary_alone_wide',
     # дни 3–5 и развязка
     'hod_walk': 'walk_wide', 'hod_second': 'second_wide', 'hod_chertanovo': 'chertanovo_wide',
     'hod_agency_street': 'agency_street_wide', 'hod_agency': 'agency_wide', 'hod_watch': 'watch_wide', 'hod_op': 'op_wide',
     'hod_search': 'search_wide', 'hod_field': 'field_wide', 'hod_interrog': 'interrog_wide', 'hod_court': 'court_wide',
     'hod_bio': 'bio_zoya', 'hod_2004': 'gromov_2004', 'hod_agency_closed': 'agency_closed',
+    'hod_epilogue': 'epi_grandson',
 }
-OUTDOOR = {'hod_car', 'hod_walk', 'hod_agency_street', 'hod_watch', 'hod_op', 'hod_field', 'hod_agency_closed'}
+OUTDOOR = {'hod_car', 'hod_car_d2', 'hod_car_d3', 'hod_walk', 'hod_agency_street', 'hod_watch', 'hod_op', 'hod_field',
+           'hod_agency_closed'}
+CAR_DAYS = {'hod_car': [('day == 2', 'hod_car_d2'), ('day == 3', 'hod_car_d3')]}
 # Место действия фона (assets.backgrounds[].place): смена фона внутри места — склейка, растворение (в «Воспоминаниях»
 # точками) — только при смене места (владелец 2026-10-14). Сеты без записи — сами себе место.
 PLACE = {
@@ -227,12 +240,13 @@ PLACE = {
                                          'hod_landing_open')},
     **{s: 'notary' for s in ('hod_notary', 'hod_notary_register', 'hod_notary_stairs', 'hod_notary_alone')},
     **{s: 'agency' for s in ('hod_agency_street', 'hod_agency', 'hod_agency_closed')},
+    **{s: 'car' for s in ('hod_car', 'hod_car_d2', 'hod_car_d3')},
 }
 # Сеты из одного кадра (телефон, лупа, фото, реестр): их кадр — «общий план» сета, монтажёр берёт его на любую реплику,
 # а в чужих сценах он не появится. Так вставка не всплывёт раньше времени (до того, как игрок открыл сервант).
 AUX_SETS = {'hod_office_call_am', 'hod_office_call_eve', 'hod_office_lens', 'hod_office_lens_am', 'hod_flat_photo',
             'hod_notary_register', 'hod_bio',
-            'hod_2004'}
+            'hod_2004', 'hod_epilogue'}
 OTS = {  # кадр через плечо: чьё плечо → на кого
     'office_am_ots_oper': ('sledak', 'oper'), 'office_eve_ots_expert': ('sledak', 'expert'),
     'office_d2_ots_boss': ('sledak', 'boss'), 'office_night_ots_expert': ('sledak', 'expert'),
@@ -240,6 +254,7 @@ OTS = {  # кадр через плечо: чьё плечо → на кого
     'landing_chain_ots': ('sledak', 'neighbor'), 'landing_open_ots': ('sledak', 'neighbor'),
     'notary_ots_notary': ('sledak', 'notary'), 'stairs_ots_assistant': ('oper', 'assistant'),
     'zhek_ots_clerk': ('sledak', 'passport_clerk'), 'bti_ots_clerk': ('sledak', 'clerk'), 'car_ots_oper': ('sledak', 'oper'),
+    'car_d2_ots_oper': ('sledak', 'oper'), 'car_d3_ots_oper': ('sledak', 'oper'),
     'recon_ots_zoya': ('murashov_sil', 'zoya'),
     'second_ots_klava': ('sledak', 'klava'), 'agency_ots_murashov': ('sledak', 'murashov'),
     'field_ots_expert': ('sledak', 'expert'), 'interrog_ots_murashov': ('sledak', 'murashov'),
@@ -1433,8 +1448,9 @@ scene('d4_op_now', 'b7_op', 'hod_op', lambda: [
     inner('Сайко нет. Со мной два сержанта из отделения. Берём сразу.', when='!oper_with && !murashov_spooked'),
     inner('Сайко нет. Со мной два сержанта из отделения.', when='!oper_with && murashov_spooked'),
     inner('Расписания у нас нет. Ждать — значит гадать. Берём сразу.', when='oper_with && !office_watched && !murashov_spooked'),
-    inner('Водитель замечает нас первым.'),
-    sfx('sfx_shot'), fx('flash'),
+    # как Сайко получил пулю (владелец 2026-10-14): водитель замечает и лезет в карман; вспышка — на кадре выстрела
+    inner('Водитель замечает нас первым.', shot='op_draw'),
+    sfx('sfx_shot'), fx('flash', shot='op_shot', when='oper_with'), fx('flash', when='!oper_with'),
     inner('Сайко сидит на асфальте и держится за плечо.', when='oper_with', shot='op_wounded'),
     say('oper', 'Царапина, юрист. Бери своего. Водителя ребята держат.', when='oper_with', shot='op_wounded'),
     setv(e('oper_wounded', 'set', True), e('accomplice_talks', 'set', True), when='oper_with'),
@@ -1464,7 +1480,7 @@ scene('d4_search', 'b7_op', 'hod_search', lambda: [
     show('sledak', 'center'),
     inner('Мурашова взяли на рассвете, на крыльце его дома за городом. Он не бежал и ни о чём не спрашивал.', when='op_waited'),
     cap('location', 'Обыск в агентстве'),
-    inner('Три телефона, папки по годам, на окне — фикус. Как у человека, у которого всё в порядке.'),
+    inner('Папки по годам, графин, на окне — фикус. Как у человека, у которого всё в порядке.'),
     say('oper', 'Громов, с чего начнём? Скоро приедет адвокат — всё перевернуть не успеем.', when='oper_with && !oper_wounded'),
     inner('Скоро приедет адвокат. Всё перевернуть не успею.', when='!oper_with || oper_wounded'),
     choice('c_search', 'Обыск: с чего начать?', 'investigative', [
@@ -1607,53 +1623,53 @@ scene('fin_court', 'b9_end', 'hod_court', lambda: [
     vo('В приговоре — шесть эпизодов.', when='bti_six || field_seen'),
     vo('В приговоре — те эпизоды, что успели доказать.', when='!bti_six && !field_seen'),
     cap('fact', 'С 1996 года в России действует мораторий на смертную казнь.'),
-    vo('Приговор Мурашову так и не исполнили: исключительную меру заменили пожизненным лишением свободы.'),
+    vo('Приговор Мурашову так и не исполнили: исключительную меру заменили пожизненным лишением свободы.', shot='epi_prison'),
     vo('Шмелёва взяли через сутки, на Казанском вокзале.', when='shmel_escaped'),
     vo('Нотариус Ковригин получил шесть лет и лишился права заверять документы. Шмелёв — двенадцать.'),
     vo('Ковригин на суде повторял одно: «Мне обещали».', when='kovrigin_deal'),
     vo('Мурашов на суде не сказал ни слова. Только попросил вести протокол дословно.', when="confession != 'full'"),
     jump('fin_epilogue', 'slow_fade'),
-], ambient='amb_court')
-scene('fin_epilogue', 'b9_end', 'hod_t_moscow', lambda: [
+], ambient='amb_court', pin='court_wide')
+scene('fin_epilogue', 'b9_end', 'hod_epilogue', lambda: [
     cap('day', 'Москва, 1994–1997 годы'),
-    vo('Квартиру на Молодогвардейской по суду вернули внуку из Самары.'),
-    vo('Фотографию из серванта отдали ему вместе с ключами.', when='photo_seen'),
-    vo('Лапины дали показания, и по суду им вернули часть денег.', when='lapins_told_truth'),
-    vo('Лапины узнали всё из повестки.', when='!lapins_told_truth'),
-    vo('Галина опознала Мурашова — и через год переехала к дочери в Тулу. Адреса Громову не оставила.', when='galina_promise_broken'),
-    vo('Имя Галины в деле так и не прозвучало.', when='galina_trust && !galina_promise_broken'),
-    vo('Галина уехала в Тулу ещё в августе и в Москву не вернулась.', when='galina_leaving'),
-    vo('Галина так и не узнала, что её заявление стало делом.', when='galina_closed || !visited_galina'),
-    vo('Люда ушла из конторы и поступила на юридический.', when='lyuda_talked'),
-    vo('Помощница Ковригина из отпуска в контору не вернулась.', when='lyuda_gone && !lyuda_talked'),
-    vo('Клавдия Семёновна пришла на каждое заседание суда.', when='klava_statement'),
-    vo('Место под Апрелевкой Шмелёв показал только весной 1994-го.', when='!field_seen'),
-    vo('Сайко вернулся через четыре месяца. Правая рука выше плеча так и не поднялась.', when='oper_wounded'),
-    vo('Сайко получил благодарность в приказе.', when='oper_with && !oper_wounded && sanction'),
-    vo('Сайко вернулся к своим делам в МУРе. Когда Мурашова взяли в Твери, позвонил Громову первым.', when='oper_with && !sanction'),
-    vo('Сайко узнал, чем кончилось дело, из сводки.', when='!oper_with'),
-    vo('Валентин Павлович ушёл на пенсию в 1995-м. На проводах про Громова сказал: «Неудобный. Но довёл».', when='!case_transferred'),
-    vo('Валентин Павлович ушёл на пенсию в 1995-м. Про дело Мурашова на проводах не вспоминали.', when='case_transferred'),
-    vo('Мурашова задержали весной 1994-го в Твери — другие люди. Громова перевели на хозяйственные дела.', when='!sanction'),
-    vo('Дело довела горпрокуратура. Громова перевели на хозяйственные дела.', when='sanction && case_transferred'),
-    vo('Громов остался в Кунцеве. «Квартирные» дела теперь приносили ему первому.', when='!case_transferred'),
+    vo('Квартиру на Молодогвардейской по суду вернули внуку из Самары.', shot='epi_grandson'),
+    vo('Фотографию из серванта отдали ему вместе с ключами.', when='photo_seen', shot='epi_grandson'),
+    vo('Лапины дали показания, и по суду им вернули часть денег.', when='lapins_told_truth', shot='epi_lapins'),
+    vo('Лапины узнали всё из повестки.', when='!lapins_told_truth', shot='epi_lapins'),
+    vo('Галина опознала Мурашова — и через год переехала к дочери в Тулу. Адреса Громову не оставила.', when='galina_promise_broken', shot='epi_galina_station'),
+    vo('Имя Галины в деле так и не прозвучало.', when='galina_trust && !galina_promise_broken', shot='epi_galina_home'),
+    vo('Галина уехала в Тулу ещё в августе и в Москву не вернулась.', when='galina_leaving', shot='epi_galina_summer'),
+    vo('Галина так и не узнала, что её заявление стало делом.', when='galina_closed || !visited_galina', shot='epi_galina_home'),
+    vo('Люда ушла из конторы и поступила на юридический.', when='lyuda_talked', shot='epi_lyuda'),
+    vo('Помощница Ковригина из отпуска в контору не вернулась.', when='lyuda_gone && !lyuda_talked', shot='epi_notary_closed'),
+    vo('Клавдия Семёновна пришла на каждое заседание суда.', when='klava_statement', shot='epi_klava'),
+    vo('Место под Апрелевкой Шмелёв показал только весной 1994-го.', when='!field_seen', shot='epi_field_spring'),
+    vo('Сайко вернулся через четыре месяца. Правая рука выше плеча так и не поднялась.', when='oper_wounded', shot='epi_sayko'),
+    vo('Сайко получил благодарность в приказе.', when='oper_with && !oper_wounded && sanction', shot='epi_sayko'),
+    vo('Сайко вернулся к своим делам в МУРе. Когда Мурашова взяли в Твери, позвонил Громову первым.', when='oper_with && !sanction', shot='epi_sayko'),
+    vo('Сайко узнал, чем кончилось дело, из сводки.', when='!oper_with', shot='epi_sayko'),
+    vo('Валентин Павлович ушёл на пенсию в 1995-м. На проводах про Громова сказал: «Неудобный. Но довёл».', when='!case_transferred', shot='epi_boss'),
+    vo('Валентин Павлович ушёл на пенсию в 1995-м. Про дело Мурашова на проводах не вспоминали.', when='case_transferred', shot='epi_boss'),
+    vo('Мурашова задержали весной 1994-го в Твери — другие люди. Громова перевели на хозяйственные дела.', when='!sanction', shot='epi_gromov'),
+    vo('Дело довела горпрокуратура. Громова перевели на хозяйственные дела.', when='sanction && case_transferred', shot='epi_gromov'),
+    vo('Громов остался в Кунцеве. «Квартирные» дела теперь приносили ему первому.', when='!case_transferred', shot='epi_gromov'),
     jump('fin_journal'),
 ], filter_='archive_photo', season='winter', ambient='amb_winter_street')
 # Журнал решений: три главных — Галина, Ковригин, операция; одной фразой, без оценки.
-scene('fin_journal', 'b9_end', 'hod_t_moscow', lambda: [
-    vo('Галине пообещали, что её имя не прозвучит, — и попросили опознать.', when='galina_promise_broken'),
-    vo('Галине пообещали, что её имя не прозвучит, — и слово сдержали.', when='galina_trust && !galina_promise_broken'),
-    vo('Галине сказали: «Это ваш долг», — и она уехала.', when='galina_leaving'),
-    vo('С Галиной заговорили протоколом — и цепочка с двери так и не снялась.', when='galina_closed'),
-    vo('К Галине так и не зашли.', when='!visited_galina'),
-    vo('Ковригину пообещали, что он пойдёт свидетелем. Суд решил иначе.', when='kovrigin_deal'),
-    vo('Ковригину ничего не обещали — и он сказал только, где искать Мурашова.', when='kovrigin_pressed'),
-    vo('К Ковригину в среду не поехали.', when='!v3_kovrigin'),
-    vo('Санкцию не дали — и в ту же ночь Мурашов уехал.', when='!sanction'),
-    vo('У агентства ждали до полуночи — и взяли обоих порознь.', when='op_waited'),
-    vo('Брали сразу — и пуля досталась Сайко.', when='oper_wounded'),
-    vo('Брали сразу, без Сайко, — и Шмелёв ушёл дворами.', when='shmel_escaped && shmel_named'),
-    vo('Брали сразу, без Сайко, — и водитель ушёл дворами.', when='shmel_escaped && !shmel_named'),
+scene('fin_journal', 'b9_end', 'hod_epilogue', lambda: [
+    vo('Галине пообещали, что её имя не прозвучит, — и попросили опознать.', when='galina_promise_broken', shot='epi_galina_station'),
+    vo('Галине пообещали, что её имя не прозвучит, — и слово сдержали.', when='galina_trust && !galina_promise_broken', shot='epi_galina_home'),
+    vo('Галине сказали: «Это ваш долг», — и она уехала.', when='galina_leaving', shot='epi_galina_summer'),
+    vo('С Галиной заговорили протоколом — и цепочка с двери так и не снялась.', when='galina_closed', shot='epi_galina_home'),
+    vo('К Галине так и не зашли.', when='!visited_galina', shot='epi_galina_home'),
+    vo('Ковригину пообещали, что он пойдёт свидетелем. Суд решил иначе.', when='kovrigin_deal', shot='epi_notary_closed'),
+    vo('Ковригину ничего не обещали — и он сказал только, где искать Мурашова.', when='kovrigin_pressed', shot='epi_notary_closed'),
+    vo('К Ковригину в среду не поехали.', when='!v3_kovrigin', shot='epi_notary_closed'),
+    vo('Санкцию не дали — и в ту же ночь Мурашов уехал.', when='!sanction', shot='epi_agency_winter'),
+    vo('У агентства ждали до полуночи — и взяли обоих порознь.', when='op_waited', shot='epi_agency_winter'),
+    vo('Брали сразу — и пуля досталась Сайко.', when='oper_wounded', shot='epi_sayko'),
+    vo('Брали сразу, без Сайко, — и Шмелёв ушёл дворами.', when='shmel_escaped && shmel_named', shot='epi_agency_winter'),
+    vo('Брали сразу, без Сайко, — и водитель ушёл дворами.', when='shmel_escaped && !shmel_named', shot='epi_agency_winter'),
     jump('fin_2004', 'vhs_glitch'),
 ], filter_='archive_photo', season='winter')
 scene('fin_2004', 'b9_end', 'hod_2004', lambda: [

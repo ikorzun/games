@@ -412,6 +412,7 @@
         "when": { "$ref": "#/$defs/expr", "description": "Условие показа шага; ложное — шаг пропускается." },
         "do": { "const": "fx" },
         "fx": { "type": "string", "enum": ["fade_out", "fade_in", "flash", "shake", "vhs_glitch", "tracking_noise", "freeze_frame", "zoom_in", "slow_motion", "black_hold", "static_tv", "rewind"] },
+        "shot": { "$ref": "#/$defs/asciiId", "description": "Кадр на время эффекта (вспышка выстрела — кадр выстрела без реплики): явный кадр сценариста, как у реплики." },
         "ms": { "type": "integer", "minimum": 50, "maximum": 10000 },
         "intensity": { "type": "number", "minimum": 0, "maximum": 1 }
       }

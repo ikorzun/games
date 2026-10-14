@@ -30,7 +30,11 @@ MEMORY = {
     **ORDER,
     'office_am_phone': ('hod_office_call_am', ['sledak']),  # Громов один (владелец 2026-10-14)
     'car_wide': ('hod_car', ['oper', 'sledak']),
-    'car_ots_oper': ('hod_car', ['oper', 'sledak']),
+    'car_ots_oper': ('hod_car', ['_', 'oper', 'sledak'], ['oper', 'sledak']),  # обрывок у левого края (заднее сиденье)
+    'car_d2_wide': ('hod_car_d2', ['oper', 'sledak']),
+    'car_d2_ots_oper': ('hod_car_d2', ['_', 'oper', 'sledak'], ['_', 'oper', 'sledak']),  # обрывок у левого края
+    'car_d3_wide': ('hod_car_d3', ['oper', 'sledak']),
+    'car_d3_ots_oper': ('hod_car_d3', ['oper', 'sledak']),
     'flat_wide': ('hod_flat', ['oper', 'buyer', 'sledak', 'lapin_wife']),
     'flat_ots_buyer': ('hod_flat', ['buyer', 'sledak']),
     'flat_ots_wife': ('hod_flat', ['sledak', 'lapin_wife']),
@@ -74,7 +78,7 @@ MEMORY = {
     'op_stairs': ('hod_op', ['sledak', 'murashov']),
     'op_metro': ('hod_op', ['_', 'accomplice', 'oper'], ['_', '_']),  # сержант слева; в квадрате Vision сливает Шмелёва с Сайко — без масок
     'search_wide': ('hod_search', ['sledak', '_', '_']),  # понятые и милиционер
-    'field_wide': ('hod_field', ['sledak'], ['expert', 'sledak']),  # в квадрате Левина крупнее — Vision её видит
+    'field_wide': ('hod_field', ['sledak'], ['sledak']),  # Левину у раскопа Vision не видит — маска только у Громова
     'field_ots_expert': ('hod_field', ['expert', 'sledak']),
     'field_oper': ('hod_field', ['oper']),
     'interrog_wide': ('hod_interrog', ['sledak', 'murashov']),
@@ -87,7 +91,7 @@ MEMORY = {
 # «Реализм»: маски у всех кадров с людьми (владелец 2026-10-14: «всё — во всех версиях»); порядок слева направо — как у
 # «Воспоминаний» (кадр перерисован с того же «Реализма»), отличия — в REALISM_ORDER.
 REALISM_ORDER: dict[str, list[str]] = {
-    'car_ots_oper': ['_', 'oper', 'sledak'],  # обрывок у левого края (заднее сиденье) Vision считает человеком
+    'car_ots_oper': ['oper', 'sledak'],  # в «Реализме» обрывка у края нет
     'search_wide': ['sledak', '_'],  # понятые за Громовым — одной маской
 }
 REALISM = {shot: (v[0], REALISM_ORDER.get(shot, v[1])) for shot, v in MEMORY.items()}

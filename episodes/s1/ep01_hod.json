@@ -1030,6 +1030,18 @@
     }
    ],
    "coverage": "hod_car",
+   "coverage_alt": [
+    {
+     "when": "day == 2",
+     "coverage": "hod_car_d2",
+     "bg": "bg_hod_car_d2"
+    },
+    {
+     "when": "day == 3",
+     "coverage": "hod_car_d3",
+     "bg": "bg_hod_car_d3"
+    }
+   ],
    "ambient": "amb_street_day"
   },
   "route_home": {
@@ -1051,7 +1063,19 @@
      "default": "d2_night"
     }
    ],
-   "coverage": "hod_car"
+   "coverage": "hod_car",
+   "coverage_alt": [
+    {
+     "when": "day == 2",
+     "coverage": "hod_car_d2",
+     "bg": "bg_hod_car_d2"
+    },
+    {
+     "when": "day == 3",
+     "coverage": "hod_car_d3",
+     "bg": "bg_hod_car_d3"
+    }
+   ]
   },
   "route_car": {
    "id": "route_car",
@@ -1314,7 +1338,19 @@
      "remember": false
     }
    ],
-   "coverage": "hod_car"
+   "coverage": "hod_car",
+   "coverage_alt": [
+    {
+     "when": "day == 2",
+     "coverage": "hod_car_d2",
+     "bg": "bg_hod_car_d2"
+    },
+    {
+     "when": "day == 3",
+     "coverage": "hod_car_d3",
+     "bg": "bg_hod_car_d3"
+    }
+   ]
   },
   "go_flat": {
    "id": "go_flat",
@@ -1355,6 +1391,18 @@
     }
    ],
    "coverage": "hod_car",
+   "coverage_alt": [
+    {
+     "when": "day == 2",
+     "coverage": "hod_car_d2",
+     "bg": "bg_hod_car_d2"
+    },
+    {
+     "when": "day == 3",
+     "coverage": "hod_car_d3",
+     "bg": "bg_hod_car_d3"
+    }
+   ],
    "ambient": "amb_street_day"
   },
   "go_galina": {
@@ -1396,6 +1444,18 @@
     }
    ],
    "coverage": "hod_car",
+   "coverage_alt": [
+    {
+     "when": "day == 2",
+     "coverage": "hod_car_d2",
+     "bg": "bg_hod_car_d2"
+    },
+    {
+     "when": "day == 3",
+     "coverage": "hod_car_d3",
+     "bg": "bg_hod_car_d3"
+    }
+   ],
    "ambient": "amb_street_day"
   },
   "go_notary": {
@@ -1450,6 +1510,18 @@
     }
    ],
    "coverage": "hod_car",
+   "coverage_alt": [
+    {
+     "when": "day == 2",
+     "coverage": "hod_car_d2",
+     "bg": "bg_hod_car_d2"
+    },
+    {
+     "when": "day == 3",
+     "coverage": "hod_car_d3",
+     "bg": "bg_hod_car_d3"
+    }
+   ],
    "ambient": "amb_street_day"
   },
   "go_zhek": {
@@ -1485,6 +1557,18 @@
     }
    ],
    "coverage": "hod_car",
+   "coverage_alt": [
+    {
+     "when": "day == 2",
+     "coverage": "hod_car_d2",
+     "bg": "bg_hod_car_d2"
+    },
+    {
+     "when": "day == 3",
+     "coverage": "hod_car_d3",
+     "bg": "bg_hod_car_d3"
+    }
+   ],
    "ambient": "amb_street_day"
   },
   "go_bti": {
@@ -1527,6 +1611,18 @@
     }
    ],
    "coverage": "hod_car",
+   "coverage_alt": [
+    {
+     "when": "day == 2",
+     "coverage": "hod_car_d2",
+     "bg": "bg_hod_car_d2"
+    },
+    {
+     "when": "day == 3",
+     "coverage": "hod_car_d3",
+     "bg": "bg_hod_car_d3"
+    }
+   ],
    "ambient": "amb_street_day"
   },
   "flat": {
@@ -6307,6 +6403,18 @@
     }
    ],
    "coverage": "hod_car",
+   "coverage_alt": [
+    {
+     "when": "day == 2",
+     "coverage": "hod_car_d2",
+     "bg": "bg_hod_car_d2"
+    },
+    {
+     "when": "day == 3",
+     "coverage": "hod_car_d3",
+     "bg": "bg_hod_car_d3"
+    }
+   ],
    "ambient": "amb_street_day"
   },
   "d3_go_walk": {
@@ -6841,6 +6949,18 @@
     }
    ],
    "coverage": "hod_car",
+   "coverage_alt": [
+    {
+     "when": "day == 2",
+     "coverage": "hod_car_d2",
+     "bg": "bg_hod_car_d2"
+    },
+    {
+     "when": "day == 3",
+     "coverage": "hod_car_d3",
+     "bg": "bg_hod_car_d3"
+    }
+   ],
    "ambient": "amb_street_day"
   },
   "d3_route_walk": {
@@ -7155,6 +7275,18 @@
     }
    ],
    "coverage": "hod_car",
+   "coverage_alt": [
+    {
+     "when": "day == 2",
+     "coverage": "hod_car_d2",
+     "bg": "bg_hod_car_d2"
+    },
+    {
+     "when": "day == 3",
+     "coverage": "hod_car_d3",
+     "bg": "bg_hod_car_d3"
+    }
+   ],
    "ambient": "amb_street_day"
   },
   "g3w_second": {
@@ -7232,6 +7364,18 @@
     }
    ],
    "coverage": "hod_car",
+   "coverage_alt": [
+    {
+     "when": "day == 2",
+     "coverage": "hod_car_d2",
+     "bg": "bg_hod_car_d2"
+    },
+    {
+     "when": "day == 3",
+     "coverage": "hod_car_d3",
+     "bg": "bg_hod_car_d3"
+    }
+   ],
    "ambient": "amb_street_day"
   },
   "g3w_address": {
@@ -7316,6 +7460,18 @@
     }
    ],
    "coverage": "hod_car",
+   "coverage_alt": [
+    {
+     "when": "day == 2",
+     "coverage": "hod_car_d2",
+     "bg": "bg_hod_car_d2"
+    },
+    {
+     "when": "day == 3",
+     "coverage": "hod_car_d3",
+     "bg": "bg_hod_car_d3"
+    }
+   ],
    "ambient": "amb_street_day"
   },
   "g3w_kovrigin": {
@@ -9473,7 +9629,7 @@
      "do": "narrate",
      "style": "inner",
      "key": "ep01.h.d4_op_now.l05",
-     "shot": "sh_op_wide"
+     "shot": "sh_op_draw"
     },
     {
      "do": "sfx",
@@ -9481,7 +9637,14 @@
     },
     {
      "do": "fx",
-     "fx": "flash"
+     "fx": "flash",
+     "shot": "sh_op_shot",
+     "when": "oper_with"
+    },
+    {
+     "do": "fx",
+     "fx": "flash",
+     "when": "!oper_with"
     },
     {
      "do": "narrate",
@@ -10609,19 +10772,22 @@
     {
      "do": "narrate",
      "style": "voiceover",
-     "key": "ep01.h.fin_court.l03"
+     "key": "ep01.h.fin_court.l03",
+     "shot": "sh_court_wide"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_court.l04",
-     "when": "bti_six || field_seen"
+     "when": "bti_six || field_seen",
+     "shot": "sh_court_wide"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_court.l05",
-     "when": "!bti_six && !field_seen"
+     "when": "!bti_six && !field_seen",
+     "shot": "sh_court_wide"
     },
     {
      "do": "caption",
@@ -10631,30 +10797,35 @@
     {
      "do": "narrate",
      "style": "voiceover",
-     "key": "ep01.h.fin_court.l07"
+     "key": "ep01.h.fin_court.l07",
+     "shot": "sh_epi_prison"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_court.l08",
-     "when": "shmel_escaped"
+     "when": "shmel_escaped",
+     "shot": "sh_court_wide"
     },
     {
      "do": "narrate",
      "style": "voiceover",
-     "key": "ep01.h.fin_court.l09"
+     "key": "ep01.h.fin_court.l09",
+     "shot": "sh_court_wide"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_court.l10",
-     "when": "kovrigin_deal"
+     "when": "kovrigin_deal",
+     "shot": "sh_court_wide"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_court.l11",
-     "when": "confession != 'full'"
+     "when": "confession != 'full'",
+     "shot": "sh_court_wide"
     },
     {
      "do": "jump",
@@ -10669,7 +10840,7 @@
    "id": "fin_epilogue",
    "block": "b9_end",
    "stage": {
-    "bg": "bg_hod_t_moscow",
+    "bg": "bg_hod_epilogue",
     "time_of_day": "day",
     "filter": "archive_photo",
     "season": "winter"
@@ -10683,140 +10854,162 @@
     {
      "do": "narrate",
      "style": "voiceover",
-     "key": "ep01.h.fin_epilogue.l02"
+     "key": "ep01.h.fin_epilogue.l02",
+     "shot": "sh_epi_grandson"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l03",
-     "when": "photo_seen"
+     "when": "photo_seen",
+     "shot": "sh_epi_grandson"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l04",
-     "when": "lapins_told_truth"
+     "when": "lapins_told_truth",
+     "shot": "sh_epi_lapins"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l05",
-     "when": "!lapins_told_truth"
+     "when": "!lapins_told_truth",
+     "shot": "sh_epi_lapins"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l06",
-     "when": "galina_promise_broken"
+     "when": "galina_promise_broken",
+     "shot": "sh_epi_galina_station"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l07",
-     "when": "galina_trust && !galina_promise_broken"
+     "when": "galina_trust && !galina_promise_broken",
+     "shot": "sh_epi_galina_home"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l08",
-     "when": "galina_leaving"
+     "when": "galina_leaving",
+     "shot": "sh_epi_galina_summer"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l09",
-     "when": "galina_closed || !visited_galina"
+     "when": "galina_closed || !visited_galina",
+     "shot": "sh_epi_galina_home"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l10",
-     "when": "lyuda_talked"
+     "when": "lyuda_talked",
+     "shot": "sh_epi_lyuda"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l11",
-     "when": "lyuda_gone && !lyuda_talked"
+     "when": "lyuda_gone && !lyuda_talked",
+     "shot": "sh_epi_notary_closed"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l12",
-     "when": "klava_statement"
+     "when": "klava_statement",
+     "shot": "sh_epi_klava"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l13",
-     "when": "!field_seen"
+     "when": "!field_seen",
+     "shot": "sh_epi_field_spring"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l14",
-     "when": "oper_wounded"
+     "when": "oper_wounded",
+     "shot": "sh_epi_sayko"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l15",
-     "when": "oper_with && !oper_wounded && sanction"
+     "when": "oper_with && !oper_wounded && sanction",
+     "shot": "sh_epi_sayko"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l16",
-     "when": "oper_with && !sanction"
+     "when": "oper_with && !sanction",
+     "shot": "sh_epi_sayko"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l17",
-     "when": "!oper_with"
+     "when": "!oper_with",
+     "shot": "sh_epi_sayko"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l18",
-     "when": "!case_transferred"
+     "when": "!case_transferred",
+     "shot": "sh_epi_boss"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l19",
-     "when": "case_transferred"
+     "when": "case_transferred",
+     "shot": "sh_epi_boss"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l20",
-     "when": "!sanction"
+     "when": "!sanction",
+     "shot": "sh_epi_gromov"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l21",
-     "when": "sanction && case_transferred"
+     "when": "sanction && case_transferred",
+     "shot": "sh_epi_gromov"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_epilogue.l22",
-     "when": "!case_transferred"
+     "when": "!case_transferred",
+     "shot": "sh_epi_gromov"
     },
     {
      "do": "jump",
      "scene": "fin_journal"
     }
    ],
+   "coverage": "hod_epilogue",
    "ambient": "amb_winter_street"
   },
   "fin_journal": {
    "id": "fin_journal",
    "block": "b9_end",
    "stage": {
-    "bg": "bg_hod_t_moscow",
+    "bg": "bg_hod_epilogue",
     "time_of_day": "day",
     "filter": "archive_photo",
     "season": "winter"
@@ -10826,86 +11019,100 @@
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_journal.l01",
-     "when": "galina_promise_broken"
+     "when": "galina_promise_broken",
+     "shot": "sh_epi_galina_station"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_journal.l02",
-     "when": "galina_trust && !galina_promise_broken"
+     "when": "galina_trust && !galina_promise_broken",
+     "shot": "sh_epi_galina_home"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_journal.l03",
-     "when": "galina_leaving"
+     "when": "galina_leaving",
+     "shot": "sh_epi_galina_summer"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_journal.l04",
-     "when": "galina_closed"
+     "when": "galina_closed",
+     "shot": "sh_epi_galina_home"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_journal.l05",
-     "when": "!visited_galina"
+     "when": "!visited_galina",
+     "shot": "sh_epi_galina_home"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_journal.l06",
-     "when": "kovrigin_deal"
+     "when": "kovrigin_deal",
+     "shot": "sh_epi_notary_closed"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_journal.l07",
-     "when": "kovrigin_pressed"
+     "when": "kovrigin_pressed",
+     "shot": "sh_epi_notary_closed"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_journal.l08",
-     "when": "!v3_kovrigin"
+     "when": "!v3_kovrigin",
+     "shot": "sh_epi_notary_closed"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_journal.l09",
-     "when": "!sanction"
+     "when": "!sanction",
+     "shot": "sh_epi_agency_winter"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_journal.l10",
-     "when": "op_waited"
+     "when": "op_waited",
+     "shot": "sh_epi_agency_winter"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_journal.l11",
-     "when": "oper_wounded"
+     "when": "oper_wounded",
+     "shot": "sh_epi_sayko"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_journal.l12",
-     "when": "shmel_escaped && shmel_named"
+     "when": "shmel_escaped && shmel_named",
+     "shot": "sh_epi_agency_winter"
     },
     {
      "do": "narrate",
      "style": "voiceover",
      "key": "ep01.h.fin_journal.l13",
-     "when": "shmel_escaped && !shmel_named"
+     "when": "shmel_escaped && !shmel_named",
+     "shot": "sh_epi_agency_winter"
     },
     {
      "do": "jump",
      "scene": "fin_2004",
      "transition": "vhs_glitch"
     }
-   ]
+   ],
+   "coverage": "hod_epilogue"
   },
   "fin_2004": {
    "id": "fin_2004",
@@ -12817,7 +13024,24 @@
     "path": "assets/ep01/hod/hod_car/car_wide.webp",
     "season": "summer",
     "memory": "assets/ep01/hod_memory/hod_car/car_wide.webp",
+    "place": "car",
     "notes": "черновой общий план car_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_car_d2",
+    "path": "assets/ep01/hod/hod_car_d2/car_d2_wide.webp",
+    "season": "summer",
+    "memory": "assets/ep01/hod_memory/hod_car_d2/car_d2_wide.webp",
+    "place": "car",
+    "notes": "черновой общий план car_d2_wide (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_car_d3",
+    "path": "assets/ep01/hod/hod_car_d3/car_d3_wide.webp",
+    "season": "summer",
+    "memory": "assets/ep01/hod_memory/hod_car_d3/car_d3_wide.webp",
+    "place": "car",
+    "notes": "черновой общий план car_d3_wide (лето 1993-го)"
    },
    {
     "id": "bg_hod_recon",
@@ -12933,6 +13157,13 @@
     "memory": "assets/ep01/hod_memory/hod_agency_closed/agency_closed.webp",
     "place": "agency",
     "notes": "черновой общий план agency_closed (лето 1993-го)"
+   },
+   {
+    "id": "bg_hod_epilogue",
+    "path": "assets/ep01/hod/hod_epilogue/epi_grandson.webp",
+    "season": "indoor",
+    "memory": "assets/ep01/hod_memory/hod_epilogue/epi_grandson.webp",
+    "notes": "черновой общий план epi_grandson (лето 1993-го)"
    },
    {
     "id": "bg_hod_t_street",
@@ -13960,6 +14191,169 @@
     }
    },
    {
+    "id": "sh_car_view",
+    "set": "hod_car",
+    "bg": "bg_hod_car",
+    "kind": "insert",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_car/car_view.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_car/car_view.webp",
+     "square": "assets/ep01/hod_memory/hod_car/car_view.square.webp"
+    }
+   },
+   {
+    "id": "sh_car_d2_wide",
+    "set": "hod_car_d2",
+    "bg": "bg_hod_car_d2",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "oper",
+      "mask": "assets/ep01/hod/hod_car_d2/car_d2_wide.oper.webp"
+     },
+     {
+      "who": "sledak",
+      "mask": "assets/ep01/hod/hod_car_d2/car_d2_wide.sledak.webp"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_car_d2/car_d2_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_car_d2/car_d2_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_car_d2/car_d2_wide.square.webp",
+     "masks": {
+      "oper": "assets/ep01/hod_memory/hod_car_d2/car_d2_wide.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_car_d2/car_d2_wide.sledak.webp"
+     },
+     "square_masks": {
+      "oper": "assets/ep01/hod_memory/hod_car_d2/car_d2_wide.square.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_car_d2/car_d2_wide.square.sledak.webp"
+     }
+    }
+   },
+   {
+    "id": "sh_car_d2_ots_oper",
+    "set": "hod_car_d2",
+    "bg": "bg_hod_car_d2",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "oper",
+      "mask": "assets/ep01/hod/hod_car_d2/car_d2_ots_oper.oper.webp"
+     },
+     {
+      "who": "sledak",
+      "mask": "assets/ep01/hod/hod_car_d2/car_d2_ots_oper.sledak.webp"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_car_d2/car_d2_ots_oper.webp",
+    "from": "sledak",
+    "focus": "oper",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_car_d2/car_d2_ots_oper.webp",
+     "square": "assets/ep01/hod_memory/hod_car_d2/car_d2_ots_oper.square.webp",
+     "masks": {
+      "oper": "assets/ep01/hod_memory/hod_car_d2/car_d2_ots_oper.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_car_d2/car_d2_ots_oper.sledak.webp"
+     },
+     "square_masks": {
+      "oper": "assets/ep01/hod_memory/hod_car_d2/car_d2_ots_oper.square.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_car_d2/car_d2_ots_oper.square.sledak.webp"
+     }
+    }
+   },
+   {
+    "id": "sh_car_d2_view",
+    "set": "hod_car_d2",
+    "bg": "bg_hod_car_d2",
+    "kind": "insert",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_car_d2/car_d2_view.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_car_d2/car_d2_view.webp",
+     "square": "assets/ep01/hod_memory/hod_car_d2/car_d2_view.square.webp"
+    }
+   },
+   {
+    "id": "sh_car_d3_wide",
+    "set": "hod_car_d3",
+    "bg": "bg_hod_car_d3",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "oper",
+      "mask": "assets/ep01/hod/hod_car_d3/car_d3_wide.oper.webp"
+     },
+     {
+      "who": "sledak",
+      "mask": "assets/ep01/hod/hod_car_d3/car_d3_wide.sledak.webp"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_car_d3/car_d3_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_car_d3/car_d3_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_car_d3/car_d3_wide.square.webp",
+     "masks": {
+      "oper": "assets/ep01/hod_memory/hod_car_d3/car_d3_wide.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_car_d3/car_d3_wide.sledak.webp"
+     },
+     "square_masks": {
+      "oper": "assets/ep01/hod_memory/hod_car_d3/car_d3_wide.square.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_car_d3/car_d3_wide.square.sledak.webp"
+     }
+    }
+   },
+   {
+    "id": "sh_car_d3_ots_oper",
+    "set": "hod_car_d3",
+    "bg": "bg_hod_car_d3",
+    "kind": "ots",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "oper",
+      "mask": "assets/ep01/hod/hod_car_d3/car_d3_ots_oper.oper.webp"
+     },
+     {
+      "who": "sledak",
+      "mask": "assets/ep01/hod/hod_car_d3/car_d3_ots_oper.sledak.webp"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_car_d3/car_d3_ots_oper.webp",
+    "from": "sledak",
+    "focus": "oper",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_car_d3/car_d3_ots_oper.webp",
+     "square": "assets/ep01/hod_memory/hod_car_d3/car_d3_ots_oper.square.webp",
+     "masks": {
+      "oper": "assets/ep01/hod_memory/hod_car_d3/car_d3_ots_oper.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_car_d3/car_d3_ots_oper.sledak.webp"
+     },
+     "square_masks": {
+      "oper": "assets/ep01/hod_memory/hod_car_d3/car_d3_ots_oper.square.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_car_d3/car_d3_ots_oper.square.sledak.webp"
+     }
+    }
+   },
+   {
+    "id": "sh_car_d3_view",
+    "set": "hod_car_d3",
+    "bg": "bg_hod_car_d3",
+    "kind": "insert",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_car_d3/car_d3_view.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_car_d3/car_d3_view.webp",
+     "square": "assets/ep01/hod_memory/hod_car_d3/car_d3_view.square.webp"
+    }
+   },
+   {
     "id": "sh_recon_wide",
     "set": "hod_recon",
     "bg": "bg_hod_recon",
@@ -14267,6 +14661,32 @@
     }
    },
    {
+    "id": "sh_op_draw",
+    "set": "hod_op",
+    "bg": "bg_hod_op",
+    "kind": "insert",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_op/op_draw.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_op/op_draw.webp",
+     "square": "assets/ep01/hod_memory/hod_op/op_draw.square.webp"
+    }
+   },
+   {
+    "id": "sh_op_shot",
+    "set": "hod_op",
+    "bg": "bg_hod_op",
+    "kind": "insert",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_op/op_shot.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_op/op_shot.webp",
+     "square": "assets/ep01/hod_memory/hod_op/op_shot.square.webp"
+    }
+   },
+   {
     "id": "sh_op_wounded",
     "set": "hod_op",
     "bg": "bg_hod_op",
@@ -14425,7 +14845,6 @@
       "sledak": "assets/ep01/hod_memory/hod_field/field_wide.sledak.webp"
      },
      "square_masks": {
-      "expert": "assets/ep01/hod_memory/hod_field/field_wide.square.expert.webp",
       "sledak": "assets/ep01/hod_memory/hod_field/field_wide.square.sledak.webp"
      }
     }
@@ -14641,6 +15060,188 @@
      "square_masks": {
       "sledak_old": "assets/ep01/hod_memory/hod_2004/gromov_2004.square.sledak_old.webp"
      }
+    }
+   },
+   {
+    "id": "sh_epi_grandson",
+    "set": "hod_epilogue",
+    "bg": "bg_hod_epilogue",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_epilogue/epi_grandson.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_epilogue/epi_grandson.webp",
+     "square": "assets/ep01/hod_memory/hod_epilogue/epi_grandson.square.webp"
+    }
+   },
+   {
+    "id": "sh_epi_lapins",
+    "set": "hod_epilogue",
+    "bg": "bg_hod_epilogue",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_epilogue/epi_lapins.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_epilogue/epi_lapins.webp",
+     "square": "assets/ep01/hod_memory/hod_epilogue/epi_lapins.square.webp"
+    }
+   },
+   {
+    "id": "sh_epi_galina_home",
+    "set": "hod_epilogue",
+    "bg": "bg_hod_epilogue",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_epilogue/epi_galina_home.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_epilogue/epi_galina_home.webp",
+     "square": "assets/ep01/hod_memory/hod_epilogue/epi_galina_home.square.webp"
+    }
+   },
+   {
+    "id": "sh_epi_galina_station",
+    "set": "hod_epilogue",
+    "bg": "bg_hod_epilogue",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_epilogue/epi_galina_station.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_epilogue/epi_galina_station.webp",
+     "square": "assets/ep01/hod_memory/hod_epilogue/epi_galina_station.square.webp"
+    }
+   },
+   {
+    "id": "sh_epi_galina_summer",
+    "set": "hod_epilogue",
+    "bg": "bg_hod_epilogue",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_epilogue/epi_galina_summer.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_epilogue/epi_galina_summer.webp",
+     "square": "assets/ep01/hod_memory/hod_epilogue/epi_galina_summer.square.webp"
+    }
+   },
+   {
+    "id": "sh_epi_lyuda",
+    "set": "hod_epilogue",
+    "bg": "bg_hod_epilogue",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_epilogue/epi_lyuda.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_epilogue/epi_lyuda.webp",
+     "square": "assets/ep01/hod_memory/hod_epilogue/epi_lyuda.square.webp"
+    }
+   },
+   {
+    "id": "sh_epi_klava",
+    "set": "hod_epilogue",
+    "bg": "bg_hod_epilogue",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_epilogue/epi_klava.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_epilogue/epi_klava.webp",
+     "square": "assets/ep01/hod_memory/hod_epilogue/epi_klava.square.webp"
+    }
+   },
+   {
+    "id": "sh_epi_sayko",
+    "set": "hod_epilogue",
+    "bg": "bg_hod_epilogue",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_epilogue/epi_sayko.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_epilogue/epi_sayko.webp",
+     "square": "assets/ep01/hod_memory/hod_epilogue/epi_sayko.square.webp"
+    }
+   },
+   {
+    "id": "sh_epi_boss",
+    "set": "hod_epilogue",
+    "bg": "bg_hod_epilogue",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_epilogue/epi_boss.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_epilogue/epi_boss.webp",
+     "square": "assets/ep01/hod_memory/hod_epilogue/epi_boss.square.webp"
+    }
+   },
+   {
+    "id": "sh_epi_gromov",
+    "set": "hod_epilogue",
+    "bg": "bg_hod_epilogue",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_epilogue/epi_gromov.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_epilogue/epi_gromov.webp",
+     "square": "assets/ep01/hod_memory/hod_epilogue/epi_gromov.square.webp"
+    }
+   },
+   {
+    "id": "sh_epi_field_spring",
+    "set": "hod_epilogue",
+    "bg": "bg_hod_epilogue",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_epilogue/epi_field_spring.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_epilogue/epi_field_spring.webp",
+     "square": "assets/ep01/hod_memory/hod_epilogue/epi_field_spring.square.webp"
+    }
+   },
+   {
+    "id": "sh_epi_notary_closed",
+    "set": "hod_epilogue",
+    "bg": "bg_hod_epilogue",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_epilogue/epi_notary_closed.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_epilogue/epi_notary_closed.webp",
+     "square": "assets/ep01/hod_memory/hod_epilogue/epi_notary_closed.square.webp"
+    }
+   },
+   {
+    "id": "sh_epi_agency_winter",
+    "set": "hod_epilogue",
+    "bg": "bg_hod_epilogue",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_epilogue/epi_agency_winter.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_epilogue/epi_agency_winter.webp",
+     "square": "assets/ep01/hod_memory/hod_epilogue/epi_agency_winter.square.webp"
+    }
+   },
+   {
+    "id": "sh_epi_prison",
+    "set": "hod_court",
+    "bg": "bg_hod_court",
+    "kind": "insert",
+    "angle": "eye",
+    "cast": [],
+    "file": "assets/ep01/hod/hod_court/epi_prison.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_court/epi_prison.webp",
+     "square": "assets/ep01/hod_memory/hod_court/epi_prison.square.webp"
     }
    },
    {

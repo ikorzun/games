@@ -263,6 +263,23 @@ describe('сцена с coverage', () => {
     expect(lineShots.every((s) => s === null || s.endsWith('_d2'))).toBe(true);
   });
 
+  it('fx с кадром: кадр выстрела встаёт до вспышки, без реплики', () => {
+    const steps: Step[] = [
+      { do: 'show', who: 'a', position: 'left' },
+      { do: 'show', who: 'b', position: 'right' },
+      { do: 'say', who: 'a', key: 'k.1' },
+      { do: 'fx', fx: 'flash', shot: 'insert_1' },
+      { do: 'end', ending: 'e_main' },
+    ];
+    const { interp } = make(steps);
+    interp.pump(); // реплика k.1
+    interp.continue();
+    const r = interp.pump();
+    expect(r.pending).toMatchObject({ kind: 'hold', reason: 'fx' });
+    expect(interp.view.shot).toBe('insert_1');
+    expect(shotEvents(r.events)).toEqual(['insert_1']);
+  });
+
   it('coverage указывает на сет без кадров — как без покрытия', () => {
     const episode = miniEpisode({ s1: { coverage: 'nope', steps: talk } }, { shots: SHOTS, pov: 'a' });
     const interp = new Interpreter(episode);

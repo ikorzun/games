@@ -349,6 +349,70 @@
 - Предметы: the steering wheel, the open window.
 - Референсы: shot:car_wide, face:oper
 
+## `car_view` — insert, сет `hod_car`
+
+- Время: a sunny August day, 1993, early afternoon. Место: car.
+- Камера: The view out of Sayko's moving Zhiguli on Monday: a wide avenue, a trolleybus, high-rise blocks; nobody in the frame.
+- Свет: bright summer daylight.
+- Предметы: the windscreen, the dashboard edge.
+- Референсы: shot:car_wide
+
+## `car_d2_wide` — wide, сет `hod_car_d2`
+
+- Время: an overcast Tuesday, 10 August 1993, early afternoon. Место: car.
+- Detective Viktor Sayko: drives on the LEFT, one hand on the wheel, a cigarette in his other hand by the open window.
+- Investigator Andrei Gromov: sits in the passenger seat on the RIGHT, the folder closed on his knees, looking out of his window.
+- Камера: The same camera as car_wide, from the back seat between the front seats.
+- Свет: overcast grey daylight.
+- Предметы: the dashboard, the mirror with the icon, an old Presnya street with a tram.
+- Референсы: shot:car_wide, face:oper, face:sledak
+
+## `car_d2_ots_oper` — ots, сет `hod_car_d2`
+
+- Время: an overcast Tuesday, 10 August 1993, early afternoon. Место: car.
+- Detective Viktor Sayko: drives in three-quarter view, a cigarette in his hand by the open window, talking drily.
+- Investigator Andrei Gromov: only the back of his head and his shoulder at the RIGHT edge.
+- Камера: The camera is just behind Investigator Andrei Gromov's shoulder at eye level, a 45 mm-equivalent field of view: the back of Investigator Andrei Gromov's head and shoulder overlap the near RIGHT edge of the frame, out of focus; Detective Viktor Sayko faces the camera beyond, their face in the upper half of the frame (the text box covers the lower third); the background recognizable with modest optical softness; the 180-degree axis of the conversation is kept.
+- Свет: overcast grey daylight.
+- Предметы: the steering wheel, the open window.
+- Референсы: shot:car_d2_wide, face:oper
+
+## `car_d2_view` — insert, сет `hod_car_d2`
+
+- Время: an overcast Tuesday, 10 August 1993, early afternoon. Место: car.
+- Камера: The view out of the passenger window: an old Presnya street, a tram; nobody in the car in the frame.
+- Свет: overcast grey daylight.
+- Предметы: the door frame, the side mirror.
+- Референсы: shot:car_d2_wide
+
+## `car_d3_wide` — wide, сет `hod_car_d3`
+
+- Время: a sunny Wednesday, 11 August 1993, late afternoon. Место: car.
+- Detective Viktor Sayko: drives on the LEFT with both hands on the wheel, serious and silent.
+- Investigator Andrei Gromov: sits in the passenger seat on the RIGHT reading a typed list of addresses.
+- Камера: The same camera as car_wide, from the back seat between the front seats.
+- Свет: low warm late-afternoon sun.
+- Предметы: the dashboard, the mirror with the icon, the Khoroshevskoye highway.
+- Референсы: shot:car_wide, face:oper, face:sledak
+
+## `car_d3_ots_oper` — ots, сет `hod_car_d3`
+
+- Время: a sunny Wednesday, 11 August 1993, late afternoon. Место: car.
+- Detective Viktor Sayko: drives in three-quarter view, both hands on the wheel, unsmiling.
+- Investigator Andrei Gromov: only the back of his head and his shoulder at the RIGHT edge.
+- Камера: The camera is just behind Investigator Andrei Gromov's shoulder at eye level, a 45 mm-equivalent field of view: the back of Investigator Andrei Gromov's head and shoulder overlap the near RIGHT edge of the frame, out of focus; Detective Viktor Sayko faces the camera beyond, their face in the upper half of the frame (the text box covers the lower third); the background recognizable with modest optical softness; the 180-degree axis of the conversation is kept.
+- Свет: low warm sun.
+- Предметы: the steering wheel.
+- Референсы: shot:car_d3_wide, face:oper
+
+## `car_d3_view` — insert, сет `hod_car_d3`
+
+- Время: a sunny Wednesday, 11 August 1993, late afternoon. Место: car.
+- Камера: The view through the windscreen: the Khoroshevskoye highway in low sun; nobody in the frame.
+- Свет: low warm sun.
+- Предметы: the dashboard edge.
+- Референсы: shot:car_d3_wide
+
 ## `recon_wide` — wide, сет `hod_recon`
 
 - Время: a sunny June day, 1993, morning. Место: zhek.
@@ -462,6 +526,22 @@
 - Предметы: the lit window, the Volga, the street lamp, the dashboard silhouette.
 - Пометка: Людей в машине не видно: кадр общий для ветки с Сайко и без него.
 - Референсы: place:agency_street_wide
+
+## `op_draw` — insert, сет `hod_op`
+
+- Время: a warm August night, Thursday 12 August 1993, about 11:40 p.m.. Место: presnya_night.
+- Камера: From the dark pavement a few steps from the agency: the driver by the Volga turns, his hand going into the heavy pocket; his face in shadow.
+- Свет: night: the street lamp behind the driver.
+- Предметы: the Volga, the lit window.
+- Референсы: shot:op_wide
+
+## `op_shot` — insert, сет `hod_op`
+
+- Время: a warm August night, Thursday 12 August 1993, about 11:40 p.m.. Место: presnya_night.
+- Камера: Sayko in the foreground lurches as if hit in the right shoulder; ahead the driver is a faceless silhouette with a muzzle flash; non-graphic.
+- Свет: night: the street lamp, the muzzle flash.
+- Предметы: the Volga.
+- Референсы: shot:op_draw, face:oper
 
 ## `op_wounded` — medium, сет `hod_op`
 
@@ -628,6 +708,132 @@
 - Предметы: the blinds, the CRT monitor, the bookcase.
 - Пометка: «Говорящая голова» 2004 года; одна реплика в финале.
 - Референсы: face:sledak_old
+
+## `epi_grandson` — insert, сет `hod_epilogue`
+
+- Время: winter, 1994–1997. Место: epilogue.
+- Камера: the emptied room on Molodogvardeyskaya; the grandson with the keys and the snapshot
+- Свет: as in the frame.
+- Предметы: as in the frame.
+- Пометка: Эпилог: снят realism.py (NEW).
+- Референсы: 
+
+## `epi_lapins` — insert, сет `hod_epilogue`
+
+- Время: winter, 1994–1997. Место: epilogue.
+- Камера: the Lapins' kitchen in winter; a court summons on the table
+- Свет: as in the frame.
+- Предметы: as in the frame.
+- Пометка: Эпилог: снят realism.py (NEW).
+- Референсы: 
+
+## `epi_galina_home` — insert, сет `hod_epilogue`
+
+- Время: winter, 1994–1997. Место: epilogue.
+- Камера: Galina at her kitchen window in winter
+- Свет: as in the frame.
+- Предметы: as in the frame.
+- Пометка: Эпилог: снят realism.py (NEW).
+- Референсы: 
+
+## `epi_galina_station` — insert, сет `hod_epilogue`
+
+- Время: winter, 1994–1997. Место: epilogue.
+- Камера: Galina on a snowy platform of the Kursky station by the Moscow — Tula train
+- Свет: as in the frame.
+- Предметы: as in the frame.
+- Пометка: Эпилог: снят realism.py (NEW).
+- Референсы: 
+
+## `epi_galina_summer` — insert, сет `hod_epilogue`
+
+- Время: winter, 1994–1997. Место: epilogue.
+- Камера: Galina on a sunny platform of the Kursky station in August 1993
+- Свет: as in the frame.
+- Предметы: as in the frame.
+- Пометка: Эпилог: снят realism.py (NEW).
+- Референсы: 
+
+## `epi_lyuda` — insert, сет `hod_epilogue`
+
+- Время: winter, 1994–1997. Место: epilogue.
+- Камера: Lyuda on the snowy steps of the university with textbooks
+- Свет: as in the frame.
+- Предметы: as in the frame.
+- Пометка: Эпилог: снят realism.py (NEW).
+- Референсы: 
+
+## `epi_klava` — insert, сет `hod_epilogue`
+
+- Время: winter, 1994–1997. Место: epilogue.
+- Камера: Klavdia Semyonovna waiting on a bench in the court corridor
+- Свет: as in the frame.
+- Предметы: as in the frame.
+- Пометка: Эпилог: снят realism.py (NEW).
+- Референсы: 
+
+## `epi_sayko` — insert, сет `hod_epilogue`
+
+- Время: winter, 1994–1997. Место: epilogue.
+- Камера: Sayko at the porch of the militia department, lighting a cigarette with his left hand
+- Свет: as in the frame.
+- Предметы: as in the frame.
+- Пометка: Эпилог: снят realism.py (NEW).
+- Референсы: 
+
+## `epi_boss` — insert, сет `hod_epilogue`
+
+- Время: winter, 1994–1997. Место: epilogue.
+- Камера: Valentin Pavlovich's farewell party with carnations
+- Свет: as in the frame.
+- Предметы: as in the frame.
+- Пометка: Эпилог: снят realism.py (NEW).
+- Референсы: 
+
+## `epi_gromov` — insert, сет `hod_epilogue`
+
+- Время: winter, 1994–1997. Место: epilogue.
+- Камера: Gromov alone at his desk in winter
+- Свет: as in the frame.
+- Предметы: as in the frame.
+- Пометка: Эпилог: снят realism.py (NEW).
+- Референсы: 
+
+## `epi_field_spring` — insert, сет `hod_epilogue`
+
+- Время: winter, 1994–1997. Место: epilogue.
+- Камера: the birch strip near Aprelevka in spring 1994, militiamen digging
+- Свет: as in the frame.
+- Предметы: as in the frame.
+- Пометка: Эпилог: снят realism.py (NEW).
+- Референсы: 
+
+## `epi_notary_closed` — insert, сет `hod_epilogue`
+
+- Время: winter, 1994–1997. Место: epilogue.
+- Камера: Kovrigin's office closed and sealed in winter
+- Свет: as in the frame.
+- Предметы: as in the frame.
+- Пометка: Эпилог: снят realism.py (NEW).
+- Референсы: 
+
+## `epi_agency_winter` — insert, сет `hod_epilogue`
+
+- Время: winter, 1994–1997. Место: epilogue.
+- Камера: the agency building abandoned in winter, the sign gone
+- Свет: as in the frame.
+- Предметы: as in the frame.
+- Пометка: Эпилог: снят realism.py (NEW).
+- Референсы: 
+
+## `epi_prison` — insert, сет `hod_court`
+
+- Время: winter, 1996. Место: epilogue.
+- Камера: A remote prison colony wall with a watchtower in snow; no people.
+- Свет: grey winter daylight.
+- Предметы: the wall, the gate.
+- Пометка: Колония: в fin_court на реплике о замене приговора пожизненным.
+- Референсы: 
 
 ## `field_find` — insert, сет `hod_field`
 

@@ -329,6 +329,18 @@ CLOTHES = {'sledak': 'pale-blue short-sleeved shirt and a navy tie', 'oper': 'bl
            'murashov': 'light beige summer jacket and a pale-blue shirt', 'accomplice': 'navy tracksuit top with white stripes',
            'klava': 'brown checked house dress with a white collar, thick glasses', 'landlady': 'sleeveless floral house dress',
            'sledak_old': 'charcoal blazer over a black shirt'}
+# Эпилог (зима 1994–1997): своя одежда кадра вместо летней — и для «Реализма» (realism.py), и для «Воспоминаний».
+CLOTHES_BY_SHOT = {
+    'epi_lapins': {'lapin_wife': 'a warm wool cardigan over a house dress', 'buyer': 'a grey home-knit sweater over a shirt'},
+    'epi_galina_home': {'neighbor': 'a warm flowered house dress and a knitted shawl over her shoulders'},
+    'epi_galina_station': {'neighbor': 'a dark winter coat and a grey woollen shawl over her head'},
+    'epi_lyuda': {'assistant': 'a long dark winter coat and a knitted hat'},
+    'epi_klava': {'klava': 'a dark winter coat with a fur collar and a warm headscarf, thick glasses'},
+    'epi_sayko': {'oper': 'a worn dark winter jacket and a knitted hat'},
+    'epi_boss': {'boss': 'a dark suit and tie', 'expert': 'a dark dress with a brooch'},
+    'epi_gromov': {'sledak': 'a grey wool sweater over a pale-blue shirt and a navy tie, his wristwatch on his left wrist'},
+    'epi_galina_summer': {'neighbor': 'a light beige summer raincoat over a flowered dress and a light headscarf'},
+}
 SCENE_STYLE = ['01', '02', '03', '04', '05', '06', '07', '10', '11', '12', '13']
 SQUARE_STYLE = ['02', '03', '04', '05', '06', '07', '10', '12']
 SQUARE = ('Reframe this illustrated film frame (image 1) into a square 1:1 frame for a phone screen. Keep every person who is '
@@ -372,8 +384,8 @@ STAGING = {
                       'left of the camera',
         'sledak': 'only the back of his head and his shoulder at the LEFT edge'},
     'flat_photo': {
-        'sledak': 'only his head in three-quarter view from behind, his short sleeve and his hand at the RIGHT, holding the '
-                  'half-open glass door of the sideboard; his eyes on the framed photograph'},
+        'sledak': 'only his head in three-quarter view from behind, his short sleeve and his LEFT hand (with the wristwatch) '
+                  'at the RIGHT, holding the half-open glass door of the sideboard; his eyes on the framed colour snapshot'},
     'flat_inspect': {},
     # Остальные места — по описаниям принятых кадров «Реализма» (tools/hod/shots.py), взгляд — как на них.
     'office_eve_wide': {
@@ -510,6 +522,44 @@ STAGING = {
         'oper': "sits in the driver's seat on the LEFT, seen from behind, a hand on the wheel; his eyes on the agency entrance across the road",
         'sledak': 'sits in the passenger seat on the RIGHT, seen from behind, the folder closed on his knees; his eyes on the agency entrance'},
     'op_wide': {},
+    # этап 3: эпилог, Москва 1994–1997 (кадры — tools/hod/realism.py NEW; люди не из CHARS — WHO_TEXT)
+    'epi_grandson': {}, 'epi_field_spring': {}, 'epi_prison': {}, 'epi_notary_closed': {}, 'epi_agency_winter': {},
+    'epi_lapins': {'lapin_wife': 'sits at a small kitchen table holding a printed court summons in both hands, reading it, '
+                                 'worried; her eyes on the paper',
+                   'buyer': 'sits beside her, rubbing his forehead with one hand; his eyes down on the table'},
+    'epi_galina_home': {'neighbor': 'stands at the window of her small kitchen holding a cup of tea, looking out at the snowy '
+                                    'yard, thoughtful'},
+    'epi_galina_station': {'neighbor': 'stands on a snowy platform beside the green train, a suitcase and a string bag at her '
+                                       'feet, looking back over her shoulder'},
+    'epi_galina_summer': {'neighbor': 'stands on a sunny platform beside the green train, a suitcase and a string bag at her '
+                                      'feet, looking back over her shoulder'},
+    'epi_lyuda': {'assistant': 'walks down the snowy university steps hugging a stack of textbooks to her chest, a slight smile'},
+    'epi_klava': {'klava': 'sits alone on a wooden bench in the court corridor, a handbag on her knees, waiting, her face set'},
+    'epi_sayko': {'oper': 'stands at the porch of the militia department lighting a cigarette with his LEFT hand (the steel watch '
+                          'on that wrist), his right hand in his jacket pocket; his eyes on the camera side, a wry look'},
+    'epi_boss': {'boss': 'stands at the head of the party table holding a vase of red carnations in his left hand and a glass '
+                         'in his right, an awkward half-smile',
+                 'expert': 'stands at the table raising a glass, a dry smile'},
+    'epi_gromov': {'sledak': 'sits alone behind his desk writing in a new folder, tired and calm; his eyes on the paper'},
+    # этап 3: как ранили Сайко — водитель лезет в карман; вспышка, стрелявший — силуэт без лица
+    'op_draw': {},
+    'op_shot': {'oper': 'in the foreground, seen three-quarter from behind, lurches as if hit in his RIGHT shoulder, his left '
+                        'hand flying to it'},
+    # этап 3: машина по дням и вид из окна
+    'car_view': {}, 'car_d2_view': {}, 'car_d3_view': {},
+    'car_d2_wide': {
+        'oper': 'drives on the LEFT, one hand on the wheel, a cigarette in his other hand by the open window; his eyes on the road',
+        'sledak': 'sits in the passenger seat on the RIGHT, the folder closed on his knees, looking out of his side window'},
+    'car_d2_ots_oper': {
+        'oper': 'drives in three-quarter view, a cigarette in his hand by the open window, talking drily; his eyes on Gromov, '
+                'just right of the camera',
+        'sledak': 'only the back of his head and his shoulder at the RIGHT edge'},
+    'car_d3_wide': {
+        'oper': 'drives on the LEFT with both hands on the wheel, serious and silent; his eyes on the road',
+        'sledak': 'sits in the passenger seat on the RIGHT reading a typed list of addresses; his eyes on the list'},
+    'car_d3_ots_oper': {
+        'oper': 'drives in three-quarter view, both hands on the wheel, unsmiling; his eyes on the road ahead',
+        'sledak': 'only the back of his head and his shoulder at the RIGHT edge'},
     'op_wounded': {
         'oper': "sits on the wet asphalt against the rear wheel of the grey Volga; his left hand crosses his chest and presses his RIGHT shoulder (on the LEFT side of the frame), a dark patch on the sleeve; a crooked grin; his eyes on Gromov",
         'sledak': "crouches on the RIGHT, seen in profile, his hand on Sayko's unhurt shoulder; his eyes on the wound"},
@@ -571,7 +621,13 @@ STYLE_REF = {'office_am_ots_oper': 'office_am_wide', 'office_am_phone': 'office_
              'recon_wide': 'zhek_wide', 'recon_ots_zoya': 'recon_wide',
              # дни 3–5
              'second_ots_klava': 'second_wide', 'agency_ots_murashov': 'agency_wide', 'agency_closed': 'agency_street_wide',
-             'op_wide': 'agency_street_wide', 'watch_wide': 'car_wide', 'search_keys': 'search_wide', 'search_papers': 'search_wide',
+             'op_wide': 'agency_street_wide', 'watch_wide': 'car_wide', 'op_draw': 'op_wide', 'op_shot': 'op_wide',
+             'car_view': 'car_wide', 'car_d2_wide': 'car_wide', 'car_d2_ots_oper': 'car_d2_wide', 'car_d2_view': 'car_d2_wide',
+             'car_d3_wide': 'car_wide', 'car_d3_ots_oper': 'car_d3_wide', 'car_d3_view': 'car_d3_wide',
+             **{e: 'epi_grandson' for e in ('epi_lapins', 'epi_galina_home', 'epi_galina_station', 'epi_galina_summer',
+                                           'epi_lyuda', 'epi_klava', 'epi_sayko', 'epi_boss', 'epi_gromov', 'epi_field_spring',
+                                           'epi_notary_closed', 'epi_agency_winter')},
+             'epi_prison': 'court_wide', 'search_keys': 'search_wide', 'search_papers': 'search_wide',
              'field_ots_expert': 'field_wide', 'field_oper': 'field_wide', 'interrog_ots_murashov': 'interrog_wide',
              'confront_wide': 'interrog_wide'}
 
@@ -584,11 +640,12 @@ def shot_info(sid: str) -> tuple[str, str, list[str]]:
     return s['file'], s['set'], list(STAGING[sid])
 
 
-def people(cast: list[str], first: int) -> tuple[str, list[str]]:
+def people(cast: list[str], first: int, sid: str = '') -> tuple[str, list[str]]:
     """Листы голов тех, кто в кадре (утверждённые развёртки), и как сказать модели, кто есть кто."""
     who = [w for w in cast if w in CHARS and CHARS[w].get('sheet', True)]
     files = [os.path.join(RAW, 'sheets', f'{w}_head.png') for w in who]
-    text = '; '.join(f'image {first + i} — {CHARS[w]["name"]} ({CLOTHES[w]})' for i, w in enumerate(who))
+    clothes = {**CLOTHES, **CLOTHES_BY_SHOT.get(sid, {})}
+    text = '; '.join(f'image {first + i} — {CHARS[w]["name"]} ({clothes[w]})' for i, w in enumerate(who))
     return text, files
 
 
@@ -603,7 +660,7 @@ def scene_inputs(sid: str) -> tuple[str, list[str]]:
     os.makedirs(os.path.join(RAW, 'src'), exist_ok=True)
     src_png = os.path.join(RAW, 'src', f'{sid}.png')
     pad.save(src_png)
-    who, sheets = people(cast, 2)
+    who, sheets = people(cast, 2, sid)
     images = [src_png, *sheets]
     intro = ('IMAGES. Image 1 is the source film frame to redraw: keep its composition, framing and every person and object '
              'exactly where they are, in the same state.')
@@ -616,8 +673,39 @@ def scene_inputs(sid: str) -> tuple[str, list[str]]:
         intro += (f' Image {len(images)} is the already approved illustrated wide frame of this same place: match its drawing '
                   f'style, line weight, palette and the way the room and the people are drawn; take nothing else from it — the '
                   f'composition comes from image 1.')
-    parts = [intro, *where(sid, cast)] if cast else [intro, 'There are no people in this frame.']
+    if sid in WHO_TEXT:
+        parts = [intro, WHO_TEXT[sid], GAZE]
+    else:
+        parts = [intro, *where(sid, cast)] if cast else [intro, 'There are no people in this frame.']
+    if sid in NOTES:
+        parts.append(NOTES[sid])
     return '\n\n'.join(parts) + f'\n\n{style(SCENE_STYLE, header=True)}', images
+
+
+# Кто в кадре, если людей нет в CHARS (эпилог): как есть на кадре «Реализма».
+WHO_TEXT = {
+    'epi_grandson': ('WHO IS WHERE (exactly as in image 1): a slim young man of about twenty-one in a dark winter coat and a '
+                     'knitted scarf stands in the emptied room holding a ring of keys and a small framed snapshot, looking down '
+                     'at it; in the doorway a middle-aged woman in a fur hat and a winter coat holds an open folder.'),
+    'epi_field_spring': 'WHO IS WHERE (exactly as in image 1): three militiamen dig with spades beyond the tape; nobody in front.',
+    'epi_prison': 'There are no people in this frame.',
+    'epi_notary_closed': 'There are no people in this frame.',
+    'epi_agency_winter': 'There are no people in this frame.',
+}
+# Что кадр обязан сохранить из «Реализма» (этап 3, владелец 2026-10-14) — модель перерисовки иногда возвращает старое.
+NOTES = {
+    **{sid: ('The door chain of flat No. 33 is mounted on the INSIDE, exactly as in image 1: nothing is screwed to the outer '
+             'leatherette face of the door or to the outside of the frame.')
+       for sid in ('landing_chain_wide', 'landing_chain_ots', 'landing_open_wide', 'landing_open_ots')},
+    **{sid: ('The sideboard holds ONE small framed colour snapshot of the grandson, exactly as in image 1 — no other '
+             'portraits or photographs; the wooden step-ladder stands upright on four straight legs, the bucket beside it.')
+       for sid in ('flat_wide', 'flat_ots_buyer', 'flat_ots_wife', 'flat_photo')},
+    'notary_wide': 'There is no chair in front of the desk, exactly as in image 1.',
+    'notary_alone_wide': ('There is no chair in front of the desk, and the typewriter by the window is completely under a '
+                          'grey cover, exactly as in image 1.'),
+    'notary_register': ('Keep every handwritten word of the register exactly as written in image 1, on the same lines: the '
+                        'text must stay legible and identical; row 1187 stays in brighter blue ink.'),
+}
 
 
 def where(sid: str, cast: list[str]) -> list[str]:
@@ -633,9 +721,10 @@ def scene(sid: str) -> None:
 def square(sid: str) -> None:
     _, _, cast = shot_info(sid)
     base = os.path.join(RAW, 'scenes', f'{sid}.png')
-    who, sheets = people(cast, 2)
+    who, sheets = people(cast, 2, sid)
     refs = f' Approved character turnaround sheets for identity: {who}.' if sheets else ''
-    parts = [SQUARE + refs, *(where(sid, cast) if cast else [])]
+    parts = [SQUARE + refs, *([WHO_TEXT[sid]] if sid in WHO_TEXT else where(sid, cast) if cast else []),
+             *([NOTES[sid]] if sid in NOTES else [])]
     gen(f'{sid}.square', '\n\n'.join(parts) + f'\n\n{style(SQUARE_STYLE, header=False)}', [base, *sheets], '1536x1536',
         os.path.join(RAW, 'squares'))
 

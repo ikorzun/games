@@ -233,6 +233,8 @@ export interface AudioStep extends StepBase {
 export interface FxStep extends StepBase {
   do: 'fx';
   fx: FxKind;
+  /** Кадр на время эффекта (вспышка выстрела — кадр выстрела без реплики). */
+  shot?: string;
   ms?: number;
   intensity?: number;
 }

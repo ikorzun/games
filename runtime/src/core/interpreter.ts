@@ -895,6 +895,11 @@ export class Interpreter {
         return null;
       }
       case 'fx': {
+        // Кадр эффекта (выстрел: вспышка на кадре выстрела) — до паузы, чтобы эффект лёг уже на него.
+        if (step.shot !== undefined) {
+          const ev = this.explicitShotEvent(step.shot, null);
+          if (ev) this.emit(ev);
+        }
         const p: HoldPending = {
           kind: 'hold',
           reason: 'fx',

@@ -415,6 +415,37 @@ shot('car_ots_oper', 'hod_car', 'ots', 'car', DAY, SUMMER,
      'bright daylight outside the car, Sayko\'s face in the soft shade of the cabin', 'the steering wheel, the open window',
      ['shot:car_wide', 'face:oper'])
 
+# Машина по дням (владелец 2026-10-14: «нужна сцена в авто и вид из окна, потому что это разные дни») и вид из окна;
+# сняты tools/hod/realism.py (NEW), здесь — для плана эпизода (сет, состав, вид кадра).
+shot('car_view', 'hod_car', 'insert', 'car', DAY, SUMMER, {},
+     "The view out of Sayko's moving Zhiguli on Monday: a wide avenue, a trolleybus, high-rise blocks; nobody in the frame.",
+     'bright summer daylight', 'the windscreen, the dashboard edge', ['shot:car_wide'])
+shot('car_d2_wide', 'hod_car_d2', 'wide', 'car', 'an overcast Tuesday, 10 August 1993, early afternoon', SUMMER,
+     {'oper': 'drives on the LEFT, one hand on the wheel, a cigarette in his other hand by the open window',
+      'sledak': 'sits in the passenger seat on the RIGHT, the folder closed on his knees, looking out of his window'},
+     'The same camera as car_wide, from the back seat between the front seats.', 'overcast grey daylight',
+     'the dashboard, the mirror with the icon, an old Presnya street with a tram', ['shot:car_wide', 'face:oper', 'face:sledak'])
+shot('car_d2_ots_oper', 'hod_car_d2', 'ots', 'car', 'an overcast Tuesday, 10 August 1993, early afternoon', SUMMER,
+     {'oper': 'drives in three-quarter view, a cigarette in his hand by the open window, talking drily',
+      'sledak': 'only the back of his head and his shoulder at the RIGHT edge'},
+     ots('sledak', 'oper', 'RIGHT'), 'overcast grey daylight', 'the steering wheel, the open window',
+     ['shot:car_d2_wide', 'face:oper'])
+shot('car_d2_view', 'hod_car_d2', 'insert', 'car', 'an overcast Tuesday, 10 August 1993, early afternoon', SUMMER, {},
+     'The view out of the passenger window: an old Presnya street, a tram; nobody in the car in the frame.',
+     'overcast grey daylight', 'the door frame, the side mirror', ['shot:car_d2_wide'])
+shot('car_d3_wide', 'hod_car_d3', 'wide', 'car', 'a sunny Wednesday, 11 August 1993, late afternoon', SUMMER,
+     {'oper': 'drives on the LEFT with both hands on the wheel, serious and silent',
+      'sledak': 'sits in the passenger seat on the RIGHT reading a typed list of addresses'},
+     'The same camera as car_wide, from the back seat between the front seats.', 'low warm late-afternoon sun',
+     'the dashboard, the mirror with the icon, the Khoroshevskoye highway', ['shot:car_wide', 'face:oper', 'face:sledak'])
+shot('car_d3_ots_oper', 'hod_car_d3', 'ots', 'car', 'a sunny Wednesday, 11 August 1993, late afternoon', SUMMER,
+     {'oper': 'drives in three-quarter view, both hands on the wheel, unsmiling',
+      'sledak': 'only the back of his head and his shoulder at the RIGHT edge'},
+     ots('sledak', 'oper', 'RIGHT'), 'low warm sun', 'the steering wheel', ['shot:car_d3_wide', 'face:oper'])
+shot('car_d3_view', 'hod_car_d3', 'insert', 'car', 'a sunny Wednesday, 11 August 1993, late afternoon', SUMMER, {},
+     'The view through the windscreen: the Khoroshevskoye highway in low sun; nobody in the frame.', 'low warm sun',
+     'the dashboard edge', ['shot:car_d3_wide'])
+
 # Реконструкция: ЖЭК, июнь 1993-го.
 shot('recon_wide', 'hod_recon', 'wide', 'zhek', 'a sunny June day, 1993, morning', JUNE,
      {'zoya': 'stands near the service window, LEFT of centre, holding a cardboard folder of papers to her chest, looking up at the polite man with cautious gratitude',
@@ -551,6 +582,14 @@ shot('op_wide', 'hod_op', 'wide', 'presnya_night', THU_NIGHT, SUMMER,
      'The camera is inside a dark parked car across the road, low, over the dashboard: the dark windscreen frame and the silhouette of the dashboard in the foreground, nobody visible inside the car; across the road the building with the ONE lit window on the second floor, the grey GAZ-24 Volga at the entrance under the street lamp, and a big man leaning on it, a glowing cigarette, his face lost in shadow.',
      'night: the street lamp, the one lit window, the glow of the cigarette; everything else dark blue', 'the lit window, the Volga, the street lamp, the dashboard silhouette',
      ['place:agency_street_wide'], note='Людей в машине не видно: кадр общий для ветки с Сайко и без него.')
+# Как Сайко получил пулю (владелец 2026-10-14: «не понятно как Сайко получил пулю, а это важные кадры»): водитель
+# замечает их и лезет в карман; вспышка выстрела — стрелявший тёмным силуэтом без лица (приём страшных кадров).
+shot('op_draw', 'hod_op', 'insert', 'presnya_night', THU_NIGHT, SUMMER, {},
+     'From the dark pavement a few steps from the agency: the driver by the Volga turns, his hand going into the heavy pocket; '
+     'his face in shadow.', 'night: the street lamp behind the driver', 'the Volga, the lit window', ['shot:op_wide'])
+shot('op_shot', 'hod_op', 'insert', 'presnya_night', THU_NIGHT, SUMMER, {},
+     'Sayko in the foreground lurches as if hit in the right shoulder; ahead the driver is a faceless silhouette with a muzzle '
+     'flash; non-graphic.', 'night: the street lamp, the muzzle flash', 'the Volga', ['shot:op_draw', 'face:oper'])
 shot('op_wounded', 'hod_op', 'medium', 'presnya_night', THU_NIGHT, SUMMER,
      {'oper': 'sits on the asphalt facing the camera, leaning back against the rear wheel of the grey Volga; the wound is in his RIGHT shoulder, which is on the LEFT side of the frame: his left hand crosses his chest and presses that shoulder, a dark patch on the checked sleeve under his fingers; his other shoulder, on the RIGHT side of the frame, is unhurt; he grimaces into a crooked grin, looking up at Gromov',
       'sledak': 'crouches beside him on the RIGHT of the frame, seen in profile, his hand resting on Sayko\'s unhurt shoulder on the RIGHT side of the frame (never on the wound), looking at the wound'},
@@ -656,6 +695,32 @@ shot('gromov_2004', 'hod_2004', 'medium', 'office2004', 'an overcast day, 2004',
      'A television interview frame: the camera at seated eye level, a 50 mm-equivalent field of view, a medium shot from the chest up, his face in the upper half of the frame; the lower third is kept free (a name caption is overlaid there).',
      'soft grey daylight through the vertical blinds and a warm desk lamp', 'the blinds, the CRT monitor, the bookcase',
      ['face:sledak_old'], note='«Говорящая голова» 2004 года; одна реплика в финале.')
+# Эпилог, Москва 1994–1997 (этап 3, владелец 2026-10-14: «последние сцены с историей очень скучно, нужно иначе с
+# разными сценами»): свой кадр на каждую группу реплик развязки. Сняты tools/hod/realism.py (NEW) — здесь только для плана
+# эпизода: сет, вид кадра. Реплики развязки — закадровые (vo), состав кадров для подсветки не нужен.
+LOC['epilogue'] = 'Moscow, 1994–1997: places of the epilogue, mostly winter.'
+EPILOGUE = [
+    ('epi_grandson', 'the emptied room on Molodogvardeyskaya; the grandson with the keys and the snapshot'),
+    ('epi_lapins', "the Lapins' kitchen in winter; a court summons on the table"),
+    ('epi_galina_home', "Galina at her kitchen window in winter"),
+    ('epi_galina_station', 'Galina on a snowy platform of the Kursky station by the Moscow — Tula train'),
+    ('epi_galina_summer', 'Galina on a sunny platform of the Kursky station in August 1993'),
+    ('epi_lyuda', 'Lyuda on the snowy steps of the university with textbooks'),
+    ('epi_klava', 'Klavdia Semyonovna waiting on a bench in the court corridor'),
+    ('epi_sayko', 'Sayko at the porch of the militia department, lighting a cigarette with his left hand'),
+    ('epi_boss', "Valentin Pavlovich's farewell party with carnations"),
+    ('epi_gromov', 'Gromov alone at his desk in winter'),
+    ('epi_field_spring', 'the birch strip near Aprelevka in spring 1994, militiamen digging'),
+    ('epi_notary_closed', "Kovrigin's office closed and sealed in winter"),
+    ('epi_agency_winter', 'the agency building abandoned in winter, the sign gone'),
+]
+for _id, _what in EPILOGUE:
+    shot(_id, 'hod_epilogue', 'insert', 'epilogue', 'winter, 1994–1997', 'Winter.', {}, _what, 'as in the frame', 'as in the frame',
+         [], note='Эпилог: снят realism.py (NEW).')
+shot('epi_prison', 'hod_court', 'insert', 'epilogue', 'winter, 1996', 'Winter.', {},
+     'A remote prison colony wall with a watchtower in snow; no people.', 'grey winter daylight', 'the wall, the gate', [],
+     note='Колония: в fin_court на реплике о замене приговора пожизненным.')
+
 RED_FIGURE = '''THE DECEASED: one adult lying in the grass is shown ONLY as an opaque, coarse-pixelated red silhouette — the television documentary convention. The red silhouette occupies the correct projected footprint of a realistically proportioned adult lying diagonally on the ground at this distance, judged against the birch trunks, the spades and the tape at the same depth; believable foreshortening; the broad relationship of head, torso, arms and legs is readable only through the overall shape. No face, hair, skin, clothing, shoes or fingers anywhere inside or outside the red shape; it is an opaque matte brick-red fill, not a red tint over a person; only two or three neighbouring red tones; no highlights, no internal shadows, no blood, no stains, no glow. The red shape is built from large hard-edged square blocks on one screen-space grid, about 20–30 blocks from head to foot, with pronounced square steps along the whole outline; nothing else in the frame is pixelated. Not a small floor marker, not a giant shape, not a puddle, not a rectangular censorship box.'''
 shot('field_find', 'hod_field', 'insert', 'field', FIELD_AM, SUMMER,
      {},
@@ -674,6 +739,9 @@ WAVES_D345 = [  # первая волна — без ссылок на новы�
      'field_wide', 'interrog_wide', 'court_wide', 'bio_zoya', 'bio_pyotr', 'gromov_2004', 'op_wounded', 'op_stairs', 'op_metro'],
     ['second_ots_klava', 'agency_ots_murashov', 'op_wide', 'search_keys', 'search_papers', 'field_ots_expert', 'field_oper',
      'interrog_ots_murashov', 'confront_wide', 'agency_closed'],
+    # этап 3 (2026-10-14): машина по дням, вид из окна, выстрел — сняты tools/hod/realism.py
+    ['car_view', 'car_d2_wide', 'car_d2_ots_oper', 'car_d2_view', 'car_d3_wide', 'car_d3_ots_oper', 'car_d3_view',
+     'op_draw', 'op_shot'],
 ]
 
 WAVES = [
