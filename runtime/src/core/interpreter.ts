@@ -611,7 +611,12 @@ export class Interpreter {
       const on = new Set<string>();
       const off = new Set<string>();
       const spoke = new Set<string>();
+      let conditional = false; // show с when: состав зависит от партии — не кешируем
       for (const step of scene.steps) {
+        if (step.do === 'show' && step.when !== undefined) {
+          conditional = true;
+          if (!this.test(step.when)) continue;
+        }
         if (step.do === 'show') (isOffscreenPos(step.position) ? off : on).add(step.who);
         else if (step.do === 'say') {
           if (step.position !== undefined) (isOffscreenPos(step.position) ? off : on).add(step.who);
@@ -621,7 +626,7 @@ export class Interpreter {
       }
       for (const who of spoke) if (!off.has(who)) on.add(who);
       cast = [...on];
-      this.sceneCasts.set(scene.id, cast);
+      if (!conditional) this.sceneCasts.set(scene.id, cast);
     }
     return cast;
   }

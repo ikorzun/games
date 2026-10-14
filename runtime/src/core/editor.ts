@@ -164,10 +164,13 @@ export function listenerOf(ctx: ShotCtx, who: string | null): string | null {
   return ctx.prev_speaker !== who ? ctx.prev_speaker : null;
 }
 
-/** Вход в сцену (§4.1): wide сета с максимальным совпадением состава; без wide — medium; иначе null. */
+/**
+ * Вход в сцену (§4.1): wide сета с максимальным совпадением состава; без wide — medium; без него — ots (фон сета —
+ * это его общий план, и на нём были бы те, кого в сцене нет); иначе null.
+ */
 export function entryShot(index: ShotIndex, set: string, cast: readonly string[]): Shot | null {
   const shots = index.set(set);
-  return wideOf(shots, cast) ?? candidates(shots, 'medium', cast)[0] ?? null;
+  return wideOf(shots, cast) ?? candidates(shots, 'medium', cast)[0] ?? candidates(shots, 'ots', cast)[0] ?? null;
 }
 
 export interface LineInput {

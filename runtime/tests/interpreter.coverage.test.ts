@@ -63,6 +63,21 @@ function run(interp: Interpreter): { events: EngineEvent[]; lineShots: Array<str
 const shotEvents = (events: EngineEvent[]): Array<string | null> => events.filter((e) => e.t === 'shot').map((e) => (e as { shot: string | null }).shot);
 
 describe('сцена с coverage', () => {
+  it('вход: show с ложным when в состав не входит; общий план с ним не годится — кадр через плечо', () => {
+    const shots = [sh('wide_abc', 'wide', ['a', 'b', 'c']), sh('ots_a_b', 'ots', ['a', 'b'], { from: 'a', focus: 'b' })];
+    const steps: Step[] = [
+      { do: 'show', who: 'a', position: 'left' },
+      { do: 'show', who: 'b', position: 'right' },
+      { do: 'show', who: 'c', position: 'center', when: 'false' }, // его в этой ветке нет
+      { do: 'say', who: 'a', key: 'k.1' },
+      { do: 'end', ending: 'e_main' },
+    ];
+    const interp = new Interpreter(miniEpisode({ s1: { coverage: SET, steps } }, { shots, pov: 'a' }), { warn: () => undefined });
+    interp.start();
+    const scene = run(interp).events.find((e) => e.t === 'scene');
+    expect(scene && scene.t === 'scene' ? scene.view.shot : null).toBe('ots_a_b');
+  });
+
   it('вход — wide с составом сцены в самом событии scene; реплики режутся по грамматике; события shot идут перед speaker', () => {
     const { interp } = make();
     const { events, lineShots } = run(interp);
