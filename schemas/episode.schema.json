@@ -622,6 +622,7 @@
         "license": { "type": "string" },
         "localized": { "type": "boolean", "default": false },
         "memory": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$", "description": "Для фонов: та же картинка для графики «Воспоминания»." },
+        "place": { "$ref": "#/$defs/asciiId", "description": "Для фонов: место действия (кабинет, дом на Молодогвардейской, нотариус). Смена фона внутри места — монтажная склейка; растворение (в «Воспоминаниях» точками) — только при смене места. Нет поля — место совпадает с фоном." },
         "season": { "type": "string", "enum": ["spring", "summer", "autumn", "winter", "indoor", "any"], "description": "Для фонов и CG: сезон на картинке; indoor — интерьер, any — нейтральная картинка." },
         "notes": { "type": "string" }
       }

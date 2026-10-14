@@ -99,9 +99,9 @@ describe('числа владельца зафиксированы', () => {
     });
   });
 
-  it('«оператор поправил кадр» — только reconstruction и procedural; HUD записи — только reconstruction', () => {
+  it('«оператор поправил кадр» выключен во всех пресетах (владелец 2026-10-14: не дёргать кадр при смене сцены); HUD записи — только reconstruction', () => {
     const rf = Object.entries(PRESETS).filter(([, v]) => v.reframe).map(([k]) => k).sort();
-    expect(rf).toEqual(['procedural', 'reconstruction']);
+    expect(rf).toEqual([]);
     const hud = Object.entries(PRESETS).filter(([, v]) => v.recHud).map(([k]) => k);
     expect(hud).toEqual(['reconstruction']);
   });
@@ -322,8 +322,8 @@ describe('«оператор поправил кадр»', () => {
     expect(reframeAt(r, 1000 + r.dur)).toBeNull();
   });
 
-  it('вход в сцену reconstruction / procedural запускает поправку: кадр заметно смещён и масштабирован, потом оседает', () => {
-    const s = make(8);
+  it('механизм поправки (в пресетах выключен, остался для отладки): вход в сцену с reframe смещает кадр, потом оседает', () => {
+    const s = make(8, { ...RECON, reframe: true });
     run(s, 1000);
     const calm = s.step(1016);
     s.enterScene();

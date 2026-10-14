@@ -358,20 +358,17 @@ describe('CamcorderLayer: canvas зерна и помех', () => {
     expect(r.hand.style.transform).not.toBe(t);
   });
 
-  it('поправка оператора при входе в сцену заметно смещает кадр, затем кадр оседает', () => {
+  it('вход в сцену кадр не дёргает: остаётся спокойное дрожание (владелец 2026-10-14)', () => {
     const r = rig();
     r.layer.setContext('reconstruction', 'vhs');
     r.layer.setActive(true);
     r.run(500);
     r.layer.enterScene();
     r.tick(532);
-    const kicked = r.layer.lastFrame!;
+    const after = r.layer.lastFrame!;
     const shake = SHAKE.shiftPct * LEVELS.low.amp; // предел дрожания «Слабо»
-    expect(Math.max(Math.abs(kicked.tx), Math.abs(kicked.ty), Math.abs(kicked.rot))).toBeGreaterThan(shake * 0.8);
-    r.run(3500, 548);
-    const settled = r.layer.lastFrame!;
-    expect(Math.abs(settled.tx)).toBeLessThanOrEqual(shake + 1e-9);
-    expect(settled.scale).toBeLessThanOrEqual(LEVELS.low.scaleMax + 1e-9);
+    expect(Math.max(Math.abs(after.tx), Math.abs(after.ty))).toBeLessThanOrEqual(shake + 1e-9);
+    expect(after.scale).toBeLessThanOrEqual(LEVELS.low.scaleMax + 1e-9);
   });
 });
 

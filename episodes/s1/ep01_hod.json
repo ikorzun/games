@@ -11551,6 +11551,7 @@
     "id": "bg_hod_flat_inspect",
     "path": "assets/ep01/hod/hod_flat_inspect/flat_inspect.webp",
     "season": "indoor",
+    "place": "molodogvardeyskaya",
     "memory": "assets/ep01/hod_memory/hod_flat_inspect/flat_inspect.webp",
     "notes": "черновой кадр осмотра (лето 1993-го): фото внука, очки на футляре, таблетки на подоконнике"
    },
@@ -11559,6 +11560,7 @@
     "path": "assets/ep01/hod/hod_office_am/office_am_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_office_am/office_am_wide.webp",
+    "place": "office",
     "notes": "черновой общий план office_am_wide (лето 1993-го)"
    },
    {
@@ -11566,6 +11568,7 @@
     "path": "assets/ep01/hod/hod_office_am/office_am_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_office_am/office_am_wide.webp",
+    "place": "office",
     "notes": "черновой общий план office_am_wide (лето 1993-го)"
    },
    {
@@ -11573,6 +11576,7 @@
     "path": "assets/ep01/hod/hod_office_eve/office_eve_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_office_eve/office_eve_wide.webp",
+    "place": "office",
     "notes": "черновой общий план office_eve_wide (лето 1993-го)"
    },
    {
@@ -11580,6 +11584,7 @@
     "path": "assets/ep01/hod/hod_office_eve/office_eve_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_office_eve/office_eve_wide.webp",
+    "place": "office",
     "notes": "черновой общий план office_eve_wide (лето 1993-го)"
    },
    {
@@ -11587,6 +11592,7 @@
     "path": "assets/ep01/hod/hod_office_eve/office_eve_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_office_eve/office_eve_wide.webp",
+    "place": "office",
     "notes": "черновой общий план office_eve_wide (лето 1993-го)"
    },
    {
@@ -11594,6 +11600,7 @@
     "path": "assets/ep01/hod/hod_office_d2/office_d2_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_office_d2/office_d2_wide.webp",
+    "place": "office",
     "notes": "черновой общий план office_d2_wide (лето 1993-го)"
    },
    {
@@ -11601,6 +11608,7 @@
     "path": "assets/ep01/hod/hod_office_night/office_night_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_office_night/office_night_wide.webp",
+    "place": "office",
     "notes": "черновой общий план office_night_wide (лето 1993-го)"
    },
    {
@@ -11608,6 +11616,7 @@
     "path": "assets/ep01/hod/hod_flat/flat_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_flat/flat_wide.webp",
+    "place": "molodogvardeyskaya",
     "notes": "черновой общий план flat_wide (лето 1993-го)"
    },
    {
@@ -11615,6 +11624,7 @@
     "path": "assets/ep01/hod/hod_flat/flat_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_flat/flat_wide.webp",
+    "place": "molodogvardeyskaya",
     "notes": "черновой общий план flat_wide (лето 1993-го)"
    },
    {
@@ -11622,6 +11632,7 @@
     "path": "assets/ep01/hod/hod_landing_chain/landing_chain_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_landing_chain/landing_chain_wide.webp",
+    "place": "molodogvardeyskaya",
     "notes": "черновой общий план landing_chain_wide (лето 1993-го)"
    },
    {
@@ -11629,6 +11640,7 @@
     "path": "assets/ep01/hod/hod_landing_open/landing_open_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_landing_open/landing_open_wide.webp",
+    "place": "molodogvardeyskaya",
     "notes": "черновой общий план landing_open_wide (лето 1993-го)"
    },
    {
@@ -11636,6 +11648,7 @@
     "path": "assets/ep01/hod/hod_notary/notary_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_notary/notary_wide.webp",
+    "place": "notary",
     "notes": "черновой общий план notary_wide (лето 1993-го)"
    },
    {
@@ -11643,6 +11656,7 @@
     "path": "assets/ep01/hod/hod_notary/notary_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_notary/notary_wide.webp",
+    "place": "notary",
     "notes": "черновой общий план notary_wide (лето 1993-го)"
    },
    {
@@ -11650,6 +11664,7 @@
     "path": "assets/ep01/hod/hod_notary_stairs/stairs_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_notary_stairs/stairs_wide.webp",
+    "place": "notary",
     "notes": "черновой общий план stairs_wide (лето 1993-го)"
    },
    {
@@ -11685,6 +11700,7 @@
     "path": "assets/ep01/hod/hod_notary_alone/notary_alone_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_notary_alone/notary_alone_wide.webp",
+    "place": "notary",
     "notes": "черновой общий план notary_alone_wide (лето 1993-го)"
    },
    {
@@ -11713,6 +11729,7 @@
     "path": "assets/ep01/hod/hod_agency_street/agency_street_wide.webp",
     "season": "summer",
     "memory": "assets/ep01/hod_memory/hod_agency_street/agency_street_wide.webp",
+    "place": "agency",
     "notes": "черновой общий план agency_street_wide (лето 1993-го)"
    },
    {
@@ -11720,6 +11737,7 @@
     "path": "assets/ep01/hod/hod_agency/agency_wide.webp",
     "season": "indoor",
     "memory": "assets/ep01/hod_memory/hod_agency/agency_wide.webp",
+    "place": "agency",
     "notes": "черновой общий план agency_wide (лето 1993-го)"
    },
    {
@@ -11782,6 +11800,7 @@
     "path": "assets/ep01/hod/hod_agency_closed/agency_closed.webp",
     "season": "summer",
     "memory": "assets/ep01/hod_memory/hod_agency_closed/agency_closed.webp",
+    "place": "agency",
     "notes": "черновой общий план agency_closed (лето 1993-го)"
    },
    {

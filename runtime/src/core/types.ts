@@ -376,6 +376,8 @@ export interface AssetEntry {
   localized?: boolean;
   /** Для фонов: та же картинка для графики «Воспоминания». */
   memory?: string;
+  /** Для фонов: место действия; смена фона внутри места — склейка, растворение — только при смене места. */
+  place?: string;
   notes?: string;
 }
 /** Поворот персонажа на кадрах набора: влево, вправо (сторона зрителя) или анфас. */
@@ -595,6 +597,8 @@ export type AudioKind = 'music' | 'sfx' | 'ambient' | 'stop_music' | 'stop_ambie
 /** Неблокирующие команды презентационному слою (сцена, титры, звук). Применяются по порядку. */
 export type EngineEvent =
   | { t: 'scene'; view: ViewState; transition: TransitionKind; newBlock: boolean; first: boolean }
+  /** Сцена-логика (только переменные, ветвления, прыжки, звук) пройдена без показа: кадр на экране не меняется. */
+  | { t: 'scene_pass'; scene: string }
   | { t: 'caption'; key: string; style: CaptionStyle; hold_ms: number }
   | { t: 'show'; sprite: SpriteView; existing: boolean; transition: TransitionKind }
   | { t: 'hide'; who: string; transition: TransitionKind }

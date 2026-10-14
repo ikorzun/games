@@ -786,6 +786,45 @@ describe('сцена: спрайты, CG, звук', () => {
     expect(interp.view.speaker).toBe('b');
   });
 
+  it('переход — от показанного кадра: фон того же места — склейка, другое место — растворение; сцена-логика не показывается', () => {
+    const ep = miniEpisode({
+      office: { stage: { bg: 'bg_office' }, steps: [{ do: 'narrate', key: 'k.1' }, { do: 'jump', scene: 'call' }] },
+      call: { stage: { bg: 'bg_call' }, steps: [{ do: 'narrate', key: 'k.2' }, { do: 'jump', scene: 'route' }] },
+      route: { stage: { bg: 'bg_car' }, steps: [{ do: 'set', effects: [{ var: 'n', op: 'add', value: 1 }] }, { do: 'jump', scene: 'back' }] },
+      back: { stage: { bg: 'bg_office' }, steps: [{ do: 'narrate', key: 'k.3' }, { do: 'jump', scene: 'flat' }] },
+      flat: { stage: { bg: 'bg_flat' }, steps: [{ do: 'narrate', key: 'k.4' }, { do: 'jump', scene: 'logic', transition: 'slow_fade' }] },
+      logic: { stage: { bg: 'bg_car' }, steps: [{ do: 'jump', scene: 'end' }] },
+      end: { stage: { bg: 'bg_office' }, steps: [{ do: 'end', ending: 'e_main' }] },
+    }, { variables: { n: { type: 'int', default: 0 } } });
+    ep.assets = {
+      ...ep.assets,
+      backgrounds: [
+        { id: 'bg_office', path: 'office.webp', place: 'office' },
+        { id: 'bg_call', path: 'call.webp', place: 'office' },
+        { id: 'bg_car', path: 'car.webp' },
+        { id: 'bg_flat', path: 'flat.webp' },
+      ],
+    };
+    const { interp } = make(ep);
+    const events: EngineEvent[] = [];
+    for (let i = 0; i < 20; i++) {
+      const r = interp.pump();
+      events.push(...r.events);
+      if (r.pending.kind === 'end') break;
+      interp.continue();
+    }
+    const shown = events.filter((e) => e.t === 'scene').map((e) => (e.t === 'scene' ? [e.view.scene, e.transition] : []));
+    expect(shown).toEqual([
+      ['office', 'fade'],
+      ['call', 'cut'], // тот же кабинет: склейка, без точек
+      ['back', 'cut'], // машина-логика не показана: переход считается от звонка, место то же
+      ['flat', 'dissolve'], // другое место
+      ['end', 'slow_fade'], // явный переход прыжка в сцену-логику достаётся следующей показанной
+    ]);
+    expect(events.filter((e) => e.t === 'scene_pass').map((e) => (e.t === 'scene_pass' ? e.scene : ''))).toEqual(['route', 'logic']);
+    expect(interp.state.vars.n).toBe(1); // логика сцены выполнена
+  });
+
   it('смена сцены очищает спрайты; музыка переключается только если id другой', () => {
     const ep = miniEpisode({
       s1: {
@@ -801,11 +840,12 @@ describe('сцена: спрайты, CG, звук', () => {
     const audio = events.filter((e) => e.t === 'audio').map((e) => (e.t === 'audio' ? `${e.kind}:${e.id}` : ''));
     expect(audio).toEqual(['music:m_a', 'ambient:amb_a', 'sfx:sfx_a', 'music:m_b', 'stop_ambient:null']);
     const scenes = events.filter((e) => e.t === 'scene');
+    // s2 — одна логика: на экран не выходит (её фон мелькал бы), явный переход прыжка в неё достаётся s3.
     expect(scenes.map((e) => (e.t === 'scene' ? [e.view.scene, e.transition] : []))).toEqual([
       ['s1', 'fade'],
-      ['s2', 'vhs_glitch'],
-      ['s3', 'cut'],
+      ['s3', 'vhs_glitch'],
     ]);
+    expect(events.filter((e) => e.t === 'scene_pass')).toEqual([{ t: 'scene_pass', scene: 's2' }]);
     expect(interp.view.sprites).toEqual([]);
     expect(interp.view.music).toBe('m_b');
     expect(interp.view.ambient).toBeNull();

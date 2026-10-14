@@ -204,6 +204,16 @@ WIDE_OF = {  # сет → общий план (он же фон сета)
     'hod_bio': 'bio_zoya', 'hod_2004': 'gromov_2004', 'hod_agency_closed': 'agency_closed',
 }
 OUTDOOR = {'hod_car', 'hod_walk', 'hod_agency_street', 'hod_watch', 'hod_op', 'hod_field', 'hod_agency_closed'}
+# Место действия фона (assets.backgrounds[].place): смена фона внутри места — склейка, растворение (в «Воспоминаниях»
+# точками) — только при смене места (владелец 2026-10-14). Сеты без записи — сами себе место.
+PLACE = {
+    **{s: 'office' for s in ('hod_office_am', 'hod_office_call_am', 'hod_office_eve', 'hod_office_lens',
+                             'hod_office_call_eve', 'hod_office_d2', 'hod_office_night')},
+    **{s: 'molodogvardeyskaya' for s in ('hod_flat', 'hod_flat_photo', 'hod_flat_inspect', 'hod_landing_chain',
+                                         'hod_landing_open')},
+    **{s: 'notary' for s in ('hod_notary', 'hod_notary_register', 'hod_notary_stairs', 'hod_notary_alone')},
+    **{s: 'agency' for s in ('hod_agency_street', 'hod_agency', 'hod_agency_closed')},
+}
 # Сеты из одного кадра (телефон, лупа, фото, реестр): их кадр — «общий план» сета, монтажёр берёт его на любую реплику,
 # а в чужих сценах он не появится. Так вставка не всплывёт раньше времени (до того, как игрок открыл сервант).
 AUX_SETS = {'hod_office_call_am', 'hod_office_call_eve', 'hod_office_lens', 'hod_flat_photo', 'hod_notary_register', 'hod_bio',
@@ -270,6 +280,7 @@ for sid, set_ in (('op_shmel_sil', 'hod_op'), ('recon_sil', 'hod_recon')):
                   'file': FILE(sid, set_), 'memory': {'file': FILE(sid, set_), 'square': FILE(f'{sid}.square', set_)}})
 # Фон мини-игры «Осмотр квартиры»: стена Зои Павловны крупно, три улики врозь, людей нет.
 BACKGROUNDS.append({'id': 'bg_hod_flat_inspect', 'path': FILE('flat_inspect', 'hod_flat_inspect'), 'season': 'indoor',
+                    'place': PLACE['hod_flat_inspect'],
                     **({'memory': MEM('flat_inspect', 'hod_flat_inspect')} if HAS(MEM('flat_inspect', 'hod_flat_inspect')) else {}),
                     'notes': 'черновой кадр осмотра (лето 1993-го): фото внука, очки на футляре, таблетки на подоконнике'})
 for set_, wide in WIDE_OF.items():
@@ -277,6 +288,7 @@ for set_, wide in WIDE_OF.items():
     wide_set = next(p['set'] for p in PLAN if p['id'] == wide)
     BACKGROUNDS.append({'id': f'bg_{set_}', 'path': FILE(wide, wide_set), 'season': 'summer' if set_ in OUTDOOR else 'indoor',
                         **({'memory': MEM(wide, wide_set)} if HAS(MEM(wide, wide_set)) else {}),
+                        **({'place': PLACE[set_]} if set_ in PLACE else {}),
                         'notes': f'черновой общий план {wide} (лето 1993-го)'})
 SHOT_SETS = {sh['set'] for sh in SHOTS}
 # Дни 3–5: кадры сняты (tools/hod/shots.py); чёрный — только у переходов-развилок и титра пятницы, эпилог — на фоне

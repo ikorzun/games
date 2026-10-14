@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * Stage с камкордером (src/stage/stage.ts): слои кадра (дрожание только на картинке, текст и интерфейс
- * не затрагиваются), HUD записи только в reconstruction, «оператор поправил кадр» при входе в сцену,
+ * не затрагиваются), HUD записи только в reconstruction, смена сцены без «поправки оператора» (кадр не дёргается),
  * fx zoom_in / freeze_frame / vhs_glitch, пауза, мини-игра, ожидание картинок перед сменой сцены.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -248,17 +248,15 @@ describe('Stage: HUD записи и эффекты камеры', () => {
     expect(stage.camcorder.running).toBe(true);
   });
 
-  it('«оператор поправил кадр»: при входе в сцену (changeScene), но не при загрузке/откате (setView)', async () => {
+  it('смена сцены кадр не дёргает: ни при входе в сцену (changeScene), ни при загрузке/откате (setView) — владелец 2026-10-14', async () => {
     const { stage, frames } = await rig();
     stage.setView(view('reconstruction'));
     frames(500);
-    const calm = stage.camcorder.lastFrame!;
     await stage.changeScene(view('reconstruction', { scene: 's2' }), 'cut', false);
     frames(32, 520);
-    const kicked = stage.camcorder.lastFrame!;
+    const entered = stage.camcorder.lastFrame!;
     const shake = SHAKE.shiftPct * LEVELS.low.amp; // предел дрожания «Слабо»
-    expect(Math.max(Math.abs(kicked.tx), Math.abs(kicked.ty), Math.abs(kicked.rot))).toBeGreaterThan(shake * 0.8);
-    expect(kicked.scale).toBeGreaterThan(calm.scale);
+    expect(Math.max(Math.abs(entered.tx), Math.abs(entered.ty))).toBeLessThanOrEqual(shake + 1e-9);
     // после загрузки сейва (setView) кадр не дёргается
     stage.setView(view('reconstruction', { scene: 's3' }));
     frames(5000, 600);

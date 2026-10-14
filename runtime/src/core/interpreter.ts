@@ -99,6 +99,13 @@ export const DEFAULT_FX_MS: Readonly<Record<FxKind, number>> = {
 /** Предохранитель от бесконечных неблокирующих циклов (например, jump сам в себя). */
 const MAX_NONBLOCKING_STEPS = 5000;
 
+/**
+ * Шаги, которые ничего не показывают и не ждут игрока. Сцена только из них — развилка-логика (подсчёт мест,
+ * маршрут): на экран она не выходит, иначе её фон мелькал бы на время растворения (владелец 2026-10-14: «лишние
+ * промежуточные кадры на полсекунды»).
+ */
+const LOGIC_STEPS: ReadonlySet<string> = new Set(['set', 'branch', 'jump', 'archive_unlock', 'music', 'ambient', 'sfx', 'stop_music', 'stop_ambient']);
+
 /** Дедуктивная развилка: после стольких неверных ходов верные опции подсвечиваются (schema: hint_after). */
 export const DEFAULT_HINT_AFTER = 2;
 
@@ -174,6 +181,12 @@ export class Interpreter {
 
   private _state: GameState | null = null;
   private _view: ViewState | null = null;
+  /** Последний кадр, ушедший на экран: сцены-логика его не меняют, переход считается от него. */
+  private shown: ViewState | null = null;
+  /** Явный переход прыжка в сцену-логику: достаётся следующей показанной сцене. */
+  private carry: TransitionKind | null = null;
+  /** Фон → место действия (assets.backgrounds[].place; нет — сам фон): растворение только при смене места. */
+  private readonly placeOf = new Map<string, string>();
   private queue: EngineEvent[] = [];
   private current: Pending | null = null;
   private adBlock: string | null = null;
@@ -194,6 +207,7 @@ export class Interpreter {
       this.archiveItems.set(a.id, a);
     }
     this.shots = new ShotIndex(episode.assets?.shots ?? []);
+    for (const b of episode.assets?.backgrounds ?? []) this.placeOf.set(b.id, b.place ?? b.id);
     this.pov = episode.frame.player_character ?? null;
     this.lineLength = options.lineLength ?? (() => 0);
   }
@@ -254,6 +268,8 @@ export class Interpreter {
     if (!first) throw new EngineError('в эпизоде нет блоков');
     this._state = createInitialState(this.episode, first.entry_scene, carried ?? this.carriedGlobals);
     this._view = null;
+    this.shown = null;
+    this.carry = null;
     this.queue = [];
     this.current = null;
     this.adBlock = null;
@@ -277,6 +293,8 @@ export class Interpreter {
     }
     this._state = cloneJson(snap.state);
     this._view = cloneJson(snap.view);
+    this.shown = this._view;
+    this.carry = null;
     // Снимки до появления дедуктивных развилок: счётчиков нет — ни одна опция ещё не испробована.
     this._state.deductions ??= {};
     // Сейвы до появления покрытия: кадра нет, сцена идёт спрайтами до следующего входа в сцену.
@@ -538,11 +556,19 @@ export class Interpreter {
 
     if (prev?.cg && newBlock) this.emit({ t: 'cg_hide', transition: 'fade' });
 
+    // Переход — от последнего показанного кадра: новый блок — затемнение; другое место — растворение (в «Воспоминаниях»
+    // точками); другой фон того же места (кабинет → звонок, площадка → квартира) — склейка (владелец 2026-10-14:
+    // «точки только при глобальной смене локаций»).
+    const shown = this.shown;
+    const place = (bg: string | null): string | null => (bg === null ? null : (this.placeOf.get(bg) ?? bg));
+    const passThrough = shown !== null && scene.steps.every((st) => LOGIC_STEPS.has(st.do));
+    const explicit = opts.transition ?? this.carry;
     let transition: TransitionKind;
-    if (opts.transition) transition = opts.transition;
-    else if (prev === null || newBlock) transition = 'fade';
-    else transition = prev.bg !== view.bg ? 'dissolve' : 'cut';
-    if (prev && transition === 'cut' && prev.presentation !== view.presentation) transition = 'fade';
+    if (explicit) transition = explicit;
+    else if (shown === null || shown.block !== block.id) transition = 'fade';
+    else transition = place(shown.bg) !== place(view.bg) ? 'dissolve' : 'cut';
+    if (shown && transition === 'cut' && shown.presentation !== view.presentation) transition = 'fade';
+    this.carry = passThrough ? explicit : null;
 
     // Музыка/эмбиент сцены (или блока при входе в него) включаются при входе; без указания — продолжают играть.
     const music = scene.music ?? (newBlock ? block.music : undefined);
@@ -555,7 +581,13 @@ export class Interpreter {
     state.scene_id = scene.id;
     state.step_index = 0;
     this._view = view;
-    this.emit({ t: 'scene', view: cloneJson(view), transition, newBlock, first: prev === null });
+    if (passThrough) {
+      this.emit({ t: 'scene_pass', scene: scene.id });
+    } else {
+      this.shown = view;
+      // newBlock для сцены — от показанного кадра: блок, вошедший через сцену-логику, всё равно подгрузится.
+      this.emit({ t: 'scene', view: cloneJson(view), transition, newBlock: shown === null || shown.block !== block.id, first: prev === null });
+    }
     if (startMusic !== null) {
       this.emit({ t: 'audio', kind: 'music', id: startMusic, fade_ms: 800, loop: true, volume: 1 });
     }
