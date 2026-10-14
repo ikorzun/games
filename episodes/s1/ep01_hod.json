@@ -15373,34 +15373,35 @@
    {
     "id": "m_chronicle",
     "path": "assets/common/music/chronicle.m4a",
-    "license": "original"
+    "license": "ElevenLabs Music (сгенерировано для проекта, 2026-10-14)",
+    "notes": "по ДНК главной темы: запись темы — аудио-образец (conditioning_ref), tools/hod/music.py"
    },
    {
     "id": "m_investigation",
     "path": "assets/common/music/investigation.m4a",
-    "license": "original"
+    "license": "ElevenLabs Music (сгенерировано для проекта, 2026-10-14)",
+    "notes": "по ДНК главной темы: запись темы — аудио-образец (conditioning_ref), tools/hod/music.py"
    },
    {
     "id": "m_tension",
     "path": "assets/common/music/tension.m4a",
-    "license": "original"
+    "license": "ElevenLabs Music (сгенерировано для проекта, 2026-10-14)",
+    "notes": "по ДНК главной темы: запись темы — аудио-образец (conditioning_ref), tools/hod/music.py"
    },
    {
     "id": "m_calm",
     "path": "assets/common/music/calm.m4a",
-    "license": "original"
+    "license": "ElevenLabs Music (сгенерировано для проекта, 2026-10-14)",
+    "notes": "по ДНК главной темы: запись темы — аудио-образец (conditioning_ref), tools/hod/music.py"
    },
    {
     "id": "m_epilogue",
     "path": "assets/common/music/epilogue.m4a",
-    "license": "original"
+    "license": "ElevenLabs Music (сгенерировано для проекта, 2026-10-14)",
+    "notes": "по ДНК главной темы: запись темы — аудио-образец (conditioning_ref), tools/hod/music.py"
    }
   ],
   "sfx": [
-   {
-    "id": "sfx_vhs",
-    "path": "assets/common/sfx/vhs_glitch.mp3"
-   },
    {
     "id": "sfx_phone_ring",
     "path": "assets/ep01/sfx/phone_ring.mp3",
@@ -15500,33 +15501,14 @@
     "id": "sfx_shot",
     "path": "assets/ep01/sfx/gunshot.mp3",
     "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "sfx_vhs",
+    "path": "assets/ep01/sfx/vhs_glitch.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
    }
   ],
   "ambient": [
-   {
-    "id": "amb_yard",
-    "path": "assets/common/amb/yard_summer.mp3"
-   },
-   {
-    "id": "amb_office",
-    "path": "assets/common/amb/office_typewriter.mp3"
-   },
-   {
-    "id": "amb_street_night",
-    "path": "assets/common/amb/street_rain_night.mp3"
-   },
-   {
-    "id": "amb_archive",
-    "path": "assets/common/amb/archive_fluorescent.mp3"
-   },
-   {
-    "id": "amb_street_day",
-    "path": "assets/common/amb/street_day_car.mp3"
-   },
-   {
-    "id": "amb_stairwell",
-    "path": "assets/common/amb/stairwell.mp3"
-   },
    {
     "id": "amb_forest_dawn",
     "path": "assets/ep01/amb/forest_dawn.mp3",
@@ -15545,6 +15527,36 @@
    {
     "id": "amb_winter_street",
     "path": "assets/ep01/amb/winter_street.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "amb_yard",
+    "path": "assets/ep01/amb/yard_summer.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "amb_office",
+    "path": "assets/ep01/amb/office_day.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "amb_street_day",
+    "path": "assets/ep01/amb/street_day.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "amb_street_night",
+    "path": "assets/ep01/amb/street_night.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "amb_archive",
+    "path": "assets/ep01/amb/archive_hum.mp3",
+    "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
+   },
+   {
+    "id": "amb_stairwell",
+    "path": "assets/ep01/amb/stairwell.mp3",
     "license": "ElevenLabs Sound Effects (сгенерировано для проекта, 2026-10-14)"
    }
   ],

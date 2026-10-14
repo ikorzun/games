@@ -2108,9 +2108,14 @@ SFX = [{'id': f'sfx_{i}', 'path': f'assets/ep01/sfx/{f}.mp3', 'license': _SFX_LI
     ('office_door', 'office_door'), ('stairs_up', 'stairs_up'), ('stairs_run', 'stairs_run'), ('car_go', 'car_go'),
     ('car_trunk', 'car_trunk'), ('pen_drop', 'pen_drop'), ('stamp', 'stamp'), ('drawer_keys', 'drawer_keys'),
     ('drawer_close', 'drawer_close'), ('match', 'match'), ('tea', 'tea_glasses'), ('handcuffs', 'handcuffs'),
-    ('shovels', 'shovels'), ('shot', 'gunshot'))]
+    ('shovels', 'shovels'), ('shot', 'gunshot'), ('vhs', 'vhs_glitch'))]
 AMB = [{'id': f'amb_{i}', 'path': f'assets/ep01/amb/{f}.mp3', 'license': _SFX_LICENSE} for i, f in (
-    ('forest_dawn', 'forest_dawn'), ('night_room', 'night_flat'), ('court', 'court_room'), ('winter_street', 'winter_street'))]
+    ('forest_dawn', 'forest_dawn'), ('night_room', 'night_flat'), ('court', 'court_room'), ('winter_street', 'winter_street'),
+    ('yard', 'yard_summer'), ('office', 'office_day'), ('street_day', 'street_day'), ('street_night', 'street_night'),
+    ('archive', 'archive_hum'), ('stairwell', 'stairwell'))]
+# Фоновая музыка — tools/hod/music.py (ElevenLabs Music, 2026-10-14): запись главной темы — аудио-образец каждого лупа.
+_MUSIC = {'license': 'ElevenLabs Music (сгенерировано для проекта, 2026-10-14)',
+          'notes': 'по ДНК главной темы: запись темы — аудио-образец (conditioning_ref), tools/hod/music.py'}
 episode = {
     'schema_version': 1, 'id': EP_ID, 'season': 1, 'order': 1, 'title_key': 'ep01.title', 'logline_key': 'ep01.logline',
     'archetype': OLD['archetype'], 'template': OLD['template'], 'based_on': OLD['based_on'],
@@ -2135,9 +2140,10 @@ episode = {
                      # снимок для блокнота: вырезка из вставки flat_photo (тот же снимок, что в серванте и на фоне осмотра)
                      + [{'id': 'doc_photo_grandson', 'path': 'assets/ep01/hod/docs/photo_grandson.webp', 'localized': False,
                          'notes': 'фото внука из серванта — отпечаток в блокноте'}],
-        'music': keep('music', {'m_theme_main', 'm_investigation', 'm_calm', 'm_tension', 'm_chronicle', 'm_epilogue'}),
-        'sfx': keep('sfx', {'sfx_vhs'}) + SFX,
-        'ambient': keep('ambient', {'amb_office', 'amb_stairwell', 'amb_street_day', 'amb_archive', 'amb_street_night', 'amb_yard'}) + AMB,
+        'music': [a if a['id'] == 'm_theme_main' else {**a, **_MUSIC}
+                  for a in keep('music', {'m_theme_main', 'm_investigation', 'm_calm', 'm_tension', 'm_chronicle', 'm_epilogue'})],
+        'sfx': SFX,
+        'ambient': AMB,
         'budget_mb': 30,
     },
 }
