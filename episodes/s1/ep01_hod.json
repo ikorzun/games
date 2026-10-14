@@ -9883,6 +9883,11 @@
       "doc": "doc_power_of_attorney",
       "field": "date",
       "hint_key": "ep01.mg_docs.hint.date"
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "poa_ref",
+      "hint_key": "ep01.mg_docs.hint.ref"
      }
     ],
     "fields": [
@@ -10140,6 +10145,11 @@
       "doc": "doc_power_of_attorney",
       "field": "date",
       "hint_key": "ep01.mg_docs.hint.date"
+     },
+     {
+      "doc": "doc_contract_sale",
+      "field": "poa_ref",
+      "hint_key": "ep01.mg_docs.hint.ref"
      }
     ],
     "fields": [
@@ -10351,7 +10361,8 @@
       "contradicted_by": [
        "ev_photo",
        "ev_pills"
-      ]
+      ],
+      "press_key": "ep01.h.mg_interrogation_hod.press.south"
      },
      {
       "id": "st_read",
@@ -10359,7 +10370,8 @@
       "contradicted_by": [
        "ev_glasses",
        "ev_read"
-      ]
+      ],
+      "press_key": "ep01.h.mg_interrogation_hod.press.read"
      },
      {
       "id": "st_free",
@@ -10367,7 +10379,8 @@
       "contradicted_by": [
        "ev_lyuda",
        "ev_deals"
-      ]
+      ],
+      "press_key": "ep01.h.mg_interrogation_hod.press.free"
      },
      {
       "id": "st_shmel",
@@ -10375,7 +10388,8 @@
       "contradicted_by": [
        "ev_driver",
        "ev_shmel"
-      ]
+      ],
+      "press_key": "ep01.h.mg_interrogation_hod.press.shmel"
      },
      {
       "id": "st_where",
@@ -10383,7 +10397,8 @@
       "contradicted_by": [
        "ev_keys",
        "ev_field"
-      ]
+      ],
+      "press_key": "ep01.h.mg_interrogation_hod.press.where"
      }
     ],
     "evidence": [
