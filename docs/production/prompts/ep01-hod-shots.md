@@ -26,8 +26,7 @@
 ## `office_am_phone` — medium, сет `hod_office_call_am`
 
 - Время: a sunny Monday morning, 9 August 1993, about 9 a.m.. Место: office.
-- Investigator Andrei Gromov: sits behind the desk holding the black receiver of the rotary telephone to his right ear, eyes down on the statements, a pencil in his other hand, his face closed and dutiful: he is listening to his boss.
-- Detective Viktor Sayko: only his shoulder, out of focus, at the RIGHT edge of the frame in the foreground.
+- Investigator Andrei Gromov: sits ALONE behind the desk holding the black receiver of the rotary telephone to his left ear with his left hand, eyes down on the statements, a pencil in his right hand, his face closed and dutiful: he is listening to his boss.
 - Камера: The camera is at the visitor's chair, at the eye level of a seated person, a 45 mm-equivalent field of view: Gromov from the waist up behind the desk, the safe and the calendar behind him, his face in the upper half of the frame.
 - Свет: bright morning sunlight through the window: sunny patches on the desk and the parquet, the rest of the room in soft shade.
 - Предметы: the black rotary telephone with its cord, the statements, the green lamp (off).
@@ -37,11 +36,11 @@
 
 - Время: a warm August evening, 1993, about 7:40 p.m., an hour before sunset. Место: office.
 - Investigator Andrei Gromov: sits behind the desk on the LEFT in the same place as in the morning, reaching for a glass of tea Levina holds out to him.
-- forensic expert Nina Levina: sits on the RIGHT corner of the desk, half-turned toward Gromov, holding out a glass of tea in a metal glass-holder, a second glass beside her.
+- forensic expert Nina Levina: sits on the visitor's chair at the window end of the desk, half-turned toward Gromov, holding out a glass of tea in a metal glass-holder with one hand, the other hand on the desk edge, her own glass beside her.
 - Detective Viktor Sayko: stands at the open window in the centre of the back wall, smoking, half-turned to the room, his eyes on Gromov and Levina at the desk (toward the left of the frame), not toward the camera.
 - Камера: The camera stands in the corner by the door at the eye level of a standing person, a 32 mm-equivalent field of view: the whole room with everyone in it, people small inside the space; the lower third of the frame is kept free of faces (the text box lives there), headroom above the tallest person. The same view as the morning: the desk across the left half, the window in the centre.
 - Свет: low golden evening sunlight through the open window, long warm shadows across the parquet; the green desk lamp is switched on.
-- Предметы: two glasses of tea in metal glass-holders, the green lamp (on), the folders, the open window.
+- Предметы: three identical glasses of tea in metal glass-holders (Gromov's, Levina's, Sayko's on the windowsill), the green lamp (on), the typewriter under a grey cover, the folders, the open window.
 - Пометка: Тот же кабинет, что утром; свет — низкое золотое солнце, лампа включена.
 - Референсы: place:office_am_wide, face:expert, face:oper, face:sledak
 
@@ -68,12 +67,21 @@
 ## `office_eve_phone` — medium, сет `hod_office_call_eve`
 
 - Время: a warm August evening, 1993, about 7:40 p.m., an hour before sunset. Место: office.
-- Investigator Andrei Gromov: sits behind the desk with the telephone receiver at his ear, rubbing his eyes with his other hand, tired.
-- forensic expert Nina Levina: only her white lab-coat shoulder, out of focus, at the RIGHT edge in the foreground.
+- Investigator Andrei Gromov: sits ALONE behind the desk with the telephone receiver at his left ear, rubbing his eyes with his right hand, tired.
 - Камера: The camera is at the right corner of the desk at the eye level of a seated person, a 45 mm-equivalent field of view: Gromov from the waist up, his face in the upper half of the frame.
 - Свет: low golden evening sunlight across the wall behind him; the green desk lamp is on.
 - Предметы: the black rotary telephone, the green lamp, the glass of tea.
 - Референсы: shot:office_eve_wide, face:sledak
+
+## `office_am_lens` — insert, сет `hod_office_lens_am`
+
+- Время: a sunny Wednesday morning, 11 August 1993, about 10 a.m.. Место: office.
+- forensic expert Nina Levina: bends over two typed papers lying side by side, a round magnifying glass in her left hand over the date line, pointing with a pencil in her right hand.
+- Investigator Andrei Gromov: leans in from the left on his forearms, looking at the same spot on the paper.
+- Камера: The camera is at the edge of the desk at seated eye level, a 45 mm-equivalent field of view: the two papers, the magnifying glass and both faces bent over them; nothing readable on the paper.
+- Свет: bright summer daylight through the window; the room lit by the window alone; the green desk lamp is switched off.
+- Предметы: two typed papers side by side (a power of attorney and a sale contract), a round magnifying glass, a pencil, the green lamp (off), a glass of tea at the edge.
+- Референсы: shot:office_eve_lens, face:expert, face:sledak
 
 ## `office_d2_wide` — wide, сет `hod_office_d2`
 

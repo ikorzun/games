@@ -164,8 +164,7 @@ shot('office_am_ots_oper', 'hod_office_am', 'ots', 'office', MORNING, SUMMER,
      SUN_AM, 'the edge of the desk with the folder of statements in the foreground, the window behind Sayko',
      ['shot:office_am_wide', 'face:oper', 'face:sledak'])
 shot('office_am_phone', 'hod_office_call_am', 'medium', 'office', MORNING, SUMMER,
-     {'sledak': 'sits behind the desk holding the black receiver of the rotary telephone to his right ear, eyes down on the statements, a pencil in his other hand, his face closed and dutiful: he is listening to his boss',
-      'oper': 'only his shoulder, out of focus, at the RIGHT edge of the frame in the foreground'},
+     {'sledak': 'sits ALONE behind the desk holding the black receiver of the rotary telephone to his left ear with his left hand, eyes down on the statements, a pencil in his right hand, his face closed and dutiful: he is listening to his boss'},
      'The camera is at the visitor\'s chair, at the eye level of a seated person, a 45 mm-equivalent field of view: Gromov from the waist up behind the desk, the safe and the calendar behind him, his face in the upper half of the frame.',
      SUN_AM, 'the black rotary telephone with its cord, the statements, the green lamp (off)',
      ['shot:office_am_wide', 'face:sledak'])
@@ -173,11 +172,11 @@ shot('office_am_phone', 'hod_office_call_am', 'medium', 'office', MORNING, SUMME
 # Кабинет, понедельник, вечер: Левина с чаем; Сайко курит у окна.
 shot('office_eve_wide', 'hod_office_eve', 'wide', 'office', EVENING, SUMMER,
      {'sledak': 'sits behind the desk on the LEFT in the same place as in the morning, reaching for a glass of tea Levina holds out to him',
-      'expert': 'sits on the RIGHT corner of the desk, half-turned toward Gromov, holding out a glass of tea in a metal glass-holder, a second glass beside her',
+      'expert': "sits on the visitor's chair at the window end of the desk, half-turned toward Gromov, holding out a glass of tea in a metal glass-holder with one hand, the other hand on the desk edge, her own glass beside her",
       'oper': 'stands at the open window in the centre of the back wall, smoking, half-turned to the room, his eyes on Gromov and Levina at the desk (toward the left of the frame), not toward the camera'},
      WIDE_DOOR + ' The same view as the morning: the desk across the left half, the window in the centre.',
      'low golden evening sunlight through the open window, long warm shadows across the parquet; the green desk lamp is switched on',
-     'two glasses of tea in metal glass-holders, the green lamp (on), the folders, the open window',
+     "three identical glasses of tea in metal glass-holders (Gromov's, Levina's, Sayko's on the windowsill), the green lamp (on), the typewriter under a grey cover, the folders, the open window",
      ['place:office_am_wide', 'face:expert', 'face:oper', 'face:sledak'],
      note='Тот же кабинет, что утром; свет — низкое золотое солнце, лампа включена.')
 shot('office_eve_ots_expert', 'hod_office_eve', 'ots', 'office', EVENING, SUMMER,
@@ -195,12 +194,20 @@ shot('office_eve_lens', 'hod_office_lens', 'insert', 'office', EVENING, SUMMER,
      'one typed document (a copy of a power of attorney, unreadable), a round magnifying glass, a pencil, the green lamp',
      ['shot:office_eve_wide', 'face:expert', 'face:sledak'])
 shot('office_eve_phone', 'hod_office_call_eve', 'medium', 'office', EVENING, SUMMER,
-     {'sledak': 'sits behind the desk with the telephone receiver at his ear, rubbing his eyes with his other hand, tired',
-      'expert': 'only her white lab-coat shoulder, out of focus, at the RIGHT edge in the foreground'},
+     {'sledak': 'sits ALONE behind the desk with the telephone receiver at his left ear, rubbing his eyes with his right hand, tired'},
      'The camera is at the right corner of the desk at the eye level of a seated person, a 45 mm-equivalent field of view: Gromov from the waist up, his face in the upper half of the frame.',
      'low golden evening sunlight across the wall behind him; the green desk lamp is on',
      'the black rotary telephone, the green lamp, the glass of tea',
      ['shot:office_eve_wide', 'face:sledak'])
+
+# Кабинет, среда, утро: лупа «свежим глазом» (d3_lens) — те же двое над двумя бумагами, дневной свет, лампа выключена.
+shot('office_am_lens', 'hod_office_lens_am', 'insert', 'office', 'a sunny Wednesday morning, 11 August 1993, about 10 a.m.', SUMMER,
+     {'expert': 'bends over two typed papers lying side by side, a round magnifying glass in her left hand over the date line, pointing with a pencil in her right hand',
+      'sledak': 'leans in from the left on his forearms, looking at the same spot on the paper'},
+     'The camera is at the edge of the desk at seated eye level, a 45 mm-equivalent field of view: the two papers, the magnifying glass and both faces bent over them; nothing readable on the paper.',
+     SUN_DAY + '; the green desk lamp is switched off',
+     'two typed papers side by side (a power of attorney and a sale contract), a round magnifying glass, a pencil, the green lamp (off), a glass of tea at the edge',
+     ['shot:office_eve_lens', 'face:expert', 'face:sledak'])
 
 # Кабинет, вторник, утро: начальник в дверях.
 shot('office_d2_wide', 'hod_office_d2', 'wide', 'office', MORNING2, SUMMER,

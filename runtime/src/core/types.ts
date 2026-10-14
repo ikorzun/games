@@ -310,6 +310,12 @@ export type Step =
   | ArchiveStep
   | EndStep;
 
+export interface CoverageAlt {
+  when: string;
+  coverage: string;
+  bg: string;
+}
+
 export interface Scene {
   id: string;
   block: string;
@@ -318,6 +324,8 @@ export interface Scene {
   ambient?: string;
   /** Сет кадров покрытия (assets.shots[].set); без него сцена идёт фоном и спрайтами. */
   coverage?: string;
+  /** Другой сет того же места по условию (машина в разные дни): первый с истинным when заменяет coverage и фон. */
+  coverage_alt?: CoverageAlt[];
   steps: Step[];
   notes?: string;
 }

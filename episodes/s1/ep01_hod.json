@@ -5839,7 +5839,7 @@
    "id": "d3_lens",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_office_lens",
+    "bg": "bg_hod_office_lens_am",
     "time_of_day": "day"
    },
    "steps": [
@@ -5972,13 +5972,13 @@
      "minigame": "mg_docs_d3"
     }
    ],
-   "coverage": "hod_office_lens"
+   "coverage": "hod_office_lens_am"
   },
   "d3_lens_ok": {
    "id": "d3_lens_ok",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_office_lens",
+    "bg": "bg_hod_office_lens_am",
     "time_of_day": "day"
    },
    "steps": [
@@ -6021,13 +6021,13 @@
      "scene": "d3_go"
     }
    ],
-   "coverage": "hod_office_lens"
+   "coverage": "hod_office_lens_am"
   },
   "d3_lens_fail": {
    "id": "d3_lens_fail",
    "block": "b5_day3",
    "stage": {
-    "bg": "bg_hod_office_lens",
+    "bg": "bg_hod_office_lens_am",
     "time_of_day": "day"
    },
    "steps": [
@@ -6056,7 +6056,7 @@
      "scene": "d3_go"
     }
    ],
-   "coverage": "hod_office_lens"
+   "coverage": "hod_office_lens_am"
   },
   "d3_go": {
    "id": "d3_go",
@@ -12711,6 +12711,14 @@
     "notes": "черновой общий план office_eve_wide (лето 1993-го)"
    },
    {
+    "id": "bg_hod_office_lens_am",
+    "path": "assets/ep01/hod/hod_office_am/office_am_wide.webp",
+    "season": "indoor",
+    "memory": "assets/ep01/hod_memory/hod_office_am/office_am_wide.webp",
+    "place": "office",
+    "notes": "черновой общий план office_am_wide (лето 1993-го)"
+   },
+   {
     "id": "bg_hod_office_call_eve",
     "path": "assets/ep01/hod/hod_office_eve/office_eve_wide.webp",
     "season": "indoor",
@@ -13014,10 +13022,6 @@
      {
       "who": "sledak",
       "mask": "assets/ep01/hod/hod_office_call_am/office_am_phone.sledak.webp"
-     },
-     {
-      "who": "oper",
-      "mask": "assets/ep01/hod/hod_office_call_am/office_am_phone.oper.webp"
      }
     ],
     "file": "assets/ep01/hod/hod_office_call_am/office_am_phone.webp",
@@ -13025,12 +13029,10 @@
      "file": "assets/ep01/hod_memory/hod_office_call_am/office_am_phone.webp",
      "square": "assets/ep01/hod_memory/hod_office_call_am/office_am_phone.square.webp",
      "masks": {
-      "sledak": "assets/ep01/hod_memory/hod_office_call_am/office_am_phone.sledak.webp",
-      "oper": "assets/ep01/hod_memory/hod_office_call_am/office_am_phone.oper.webp"
+      "sledak": "assets/ep01/hod_memory/hod_office_call_am/office_am_phone.sledak.webp"
      },
      "square_masks": {
-      "sledak": "assets/ep01/hod_memory/hod_office_call_am/office_am_phone.square.sledak.webp",
-      "oper": "assets/ep01/hod_memory/hod_office_call_am/office_am_phone.square.oper.webp"
+      "sledak": "assets/ep01/hod_memory/hod_office_call_am/office_am_phone.square.sledak.webp"
      }
     }
    },
@@ -13142,10 +13144,6 @@
      {
       "who": "sledak",
       "mask": "assets/ep01/hod/hod_office_call_eve/office_eve_phone.sledak.webp"
-     },
-     {
-      "who": "expert",
-      "mask": "assets/ep01/hod/hod_office_call_eve/office_eve_phone.expert.webp"
      }
     ],
     "file": "assets/ep01/hod/hod_office_call_eve/office_eve_phone.webp",
@@ -13153,12 +13151,40 @@
      "file": "assets/ep01/hod_memory/hod_office_call_eve/office_eve_phone.webp",
      "square": "assets/ep01/hod_memory/hod_office_call_eve/office_eve_phone.square.webp",
      "masks": {
-      "sledak": "assets/ep01/hod_memory/hod_office_call_eve/office_eve_phone.sledak.webp",
-      "expert": "assets/ep01/hod_memory/hod_office_call_eve/office_eve_phone.expert.webp"
+      "sledak": "assets/ep01/hod_memory/hod_office_call_eve/office_eve_phone.sledak.webp"
      },
      "square_masks": {
-      "sledak": "assets/ep01/hod_memory/hod_office_call_eve/office_eve_phone.square.sledak.webp",
-      "expert": "assets/ep01/hod_memory/hod_office_call_eve/office_eve_phone.square.expert.webp"
+      "sledak": "assets/ep01/hod_memory/hod_office_call_eve/office_eve_phone.square.sledak.webp"
+     }
+    }
+   },
+   {
+    "id": "sh_office_am_lens",
+    "set": "hod_office_lens_am",
+    "bg": "bg_hod_office_lens_am",
+    "kind": "wide",
+    "angle": "eye",
+    "cast": [
+     {
+      "who": "expert",
+      "mask": "assets/ep01/hod/hod_office_lens_am/office_am_lens.expert.webp"
+     },
+     {
+      "who": "sledak",
+      "mask": "assets/ep01/hod/hod_office_lens_am/office_am_lens.sledak.webp"
+     }
+    ],
+    "file": "assets/ep01/hod/hod_office_lens_am/office_am_lens.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_office_lens_am/office_am_lens.webp",
+     "square": "assets/ep01/hod_memory/hod_office_lens_am/office_am_lens.square.webp",
+     "masks": {
+      "expert": "assets/ep01/hod_memory/hod_office_lens_am/office_am_lens.expert.webp",
+      "sledak": "assets/ep01/hod_memory/hod_office_lens_am/office_am_lens.sledak.webp"
+     },
+     "square_masks": {
+      "expert": "assets/ep01/hod_memory/hod_office_lens_am/office_am_lens.square.expert.webp",
+      "sledak": "assets/ep01/hod_memory/hod_office_lens_am/office_am_lens.square.sledak.webp"
      }
     }
    },

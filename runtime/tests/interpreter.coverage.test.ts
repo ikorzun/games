@@ -238,6 +238,31 @@ describe('сцена с coverage', () => {
     expect(defaultViewFor(episode, 's1')).toMatchObject({ coverage: null, shot: null, shot_ctx: null });
   });
 
+  it('coverage_alt: тот же путь в другой день — первый вариант с истинным условием даёт свой сет и фон', () => {
+    const d2 = SHOTS.map((s) => ({ ...s, id: `${s.id}_d2`, set: 'office_d2', bg: 'bg_b' }));
+    const alt = [{ when: 'day == 2', coverage: 'office_d2', bg: 'bg_b' }];
+    const mk = (day: number) => {
+      const ep = miniEpisode({ s1: { coverage: SET, coverage_alt: alt, steps: talk } }, {
+        shots: [...SHOTS, ...d2],
+        pov: 'a',
+        variables: { day: { type: 'int', default: day } },
+      });
+      const interp = new Interpreter(ep);
+      interp.start();
+      return interp;
+    };
+    const day1 = mk(1);
+    day1.pump();
+    expect(day1.view).toMatchObject({ coverage: SET, bg: 'bg_a', shot: 'wide_ab' });
+    const day2 = mk(2);
+    const first = day2.pump();
+    expect(day2.view).toMatchObject({ coverage: 'office_d2', bg: 'bg_b', shot: 'wide_ab_d2' });
+    const sceneEv = first.events.find((e) => e.t === 'scene');
+    expect(sceneEv?.t === 'scene' ? sceneEv.view.bg : null).toBe('bg_b');
+    const { lineShots } = run(day2);
+    expect(lineShots.every((s) => s === null || s.endsWith('_d2'))).toBe(true);
+  });
+
   it('coverage указывает на сет без кадров — как без покрытия', () => {
     const episode = miniEpisode({ s1: { coverage: 'nope', steps: talk } }, { shots: SHOTS, pov: 'a' });
     const interp = new Interpreter(episode);

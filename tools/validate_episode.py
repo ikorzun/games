@@ -247,6 +247,18 @@ def shots_check(ep: dict, rep: Report) -> None:
             elif by_id[ref]["set"] != cov and place_of.get(by_id[ref]["bg"], by_id[ref]["bg"]) != place_of.get(set_bg, set_bg):
                 # кадр другого сета — только того же места (звонок в кабинете: Громов у телефона)
                 rep.err(f"{where}: shot {ref} из сета {by_id[ref]['set']} (другое место), а сцена покрыта сетом {cov}")
+    for sid, scene in ep.get("scenes", {}).items():
+        for alt in scene.get("coverage_alt", []):
+            cov, bg = alt.get("coverage"), alt.get("bg")
+            if not scene.get("coverage"):
+                rep.err(f"scene {sid}: coverage_alt без coverage — вариант заменяет основной сет, а его нет")
+            if cov not in sets:
+                rep.err(f"scene {sid}: coverage_alt {cov} — такого сета нет в assets.shots")
+            elif sets[cov][0]["bg"] != bg:
+                rep.err(f"scene {sid}: coverage_alt {cov} снят в фоне {sets[cov][0]['bg']}, а в варианте — {bg}")
+            main_bg = scene.get("stage", {}).get("bg")
+            if place_of.get(bg, bg) != place_of.get(main_bg, main_bg):
+                rep.warn(f"scene {sid}: coverage_alt {cov} — другое место ({bg}), а вариант задуман для того же места")
     for sid, i, step in iter_steps(ep):
         if step.get("shot") and not ep["scenes"][sid].get("coverage"):
             rep.warn(f"scene {sid} step {i}: shot {step['shot']} в сцене без coverage — кадр не покажется")

@@ -349,9 +349,8 @@ STAGING = {
                 'of the camera',
         'sledak': 'only the back of his head and his shoulder at the LEFT edge, out of focus'},
     'office_am_phone': {
-        'sledak': 'sits behind the desk holding the black receiver of the rotary telephone to his right ear, a pencil in his '
-                  "other hand, listening; his eyes turned right toward Sayko's shoulder",
-        'oper': 'only the back of his head and his shoulder at the RIGHT edge in the foreground, out of focus'},
+        'sledak': 'sits ALONE behind the desk holding the black receiver of the rotary telephone to his left ear with his left '
+                  'hand, a pencil in his right hand, listening; his eyes turned aside, toward the window'},
     'car_wide': {
         'oper': 'drives on the LEFT, one hand on the wheel, glancing right at Gromov',
         'sledak': 'sits in the passenger seat on the RIGHT, his eyes down on the papers in the open case folder on his knees'},
@@ -379,21 +378,26 @@ STAGING = {
     # Остальные места — по описаниям принятых кадров «Реализма» (tools/hod/shots.py), взгляд — как на них.
     'office_eve_wide': {
         'sledak': 'sits behind the desk on the LEFT, reaching for a glass of tea Levina holds out to him; his eyes on Levina',
-        'oper': 'stands at the open window in the centre of the back wall, smoking, half-turned to the room; his eyes on Gromov and '
-                'Levina at the desk',
-        'expert': 'sits on the RIGHT corner of the desk, half-turned toward Gromov, holding out a glass of tea in a metal '
-                  'glass-holder; her eyes on Gromov'},
+        'oper': 'stands at the open window in the centre of the back wall, smoking one cigarette, half-turned to the room, his '
+                'glass of tea on the windowsill; his eyes on Gromov and Levina at the desk',
+        'expert': "sits on the visitor's chair at the window end of the desk, legs crossed, half-turned toward Gromov, holding "
+                  'out a glass of tea in a metal glass-holder with one hand, her other hand on the desk edge, nothing on her '
+                  'lap; her eyes on Gromov'},
     'office_eve_ots_expert': {
-        'expert': 'sits on the desk corner facing the camera, a glass of tea in one hand, a cigarette in the other, dry and calm; '
-                  'her eyes on Gromov over her glasses, just left of the camera',
+        'expert': "sits on the visitor's chair at the window end of the desk facing the camera, a glass of tea in her right "
+                  'hand, ONE cigarette in her left, dry and calm; her eyes on Gromov over her glasses, just left of the camera',
         'sledak': 'only the back of his head and his shoulder at the LEFT edge'},
     'office_eve_lens': {
-        'expert': 'bends over a typed document under the green desk lamp, a round magnifying glass in her hand, pointing with the '
-                  'tip of a pencil at the date line; her eyes on the paper',
-        'sledak': 'leans in from the left, his eyes on the same spot on the paper'},
+        'expert': 'bends over two typed papers under the green desk lamp, a round magnifying glass in her left hand, pointing '
+                  'with the tip of a pencil in her right hand at the date line; her eyes on the paper',
+        'sledak': 'leans in from the left on his forearms, hands apart, his eyes on the same spot on the paper'},
+    'office_am_lens': {
+        'expert': 'bends over two typed papers in daylight, a round magnifying glass in her left hand, pointing with the tip of a '
+                  'pencil in her right hand at the date line; her eyes on the paper',
+        'sledak': 'leans in from the left on his forearms, hands apart, his eyes on the same spot on the paper'},
     'office_eve_phone': {
-        'sledak': 'sits behind the desk with the telephone receiver at his ear, rubbing his eyes with his other hand, tired',
-        'expert': 'only her white lab-coat shoulder at the RIGHT edge in the foreground, out of focus'},
+        'sledak': 'sits ALONE behind the desk with the telephone receiver at his left ear, rubbing his eyes with his right hand, '
+                  'tired'},
     'office_d2_wide': {
         'sledak': 'has stood up behind his desk on the LEFT, seen three-quarter from behind, facing the boss',
         'oper': "sits on the visitor's chair between them, turned toward the door; his eyes on the boss",
@@ -557,6 +561,7 @@ STYLE_REF = {'office_am_ots_oper': 'office_am_wide', 'office_am_phone': 'office_
              'flat_ots_buyer': 'flat_wide', 'flat_ots_wife': 'flat_wide', 'flat_photo': 'flat_wide', 'flat_inspect': 'flat_wide',
              # кабинет вечером, утром второго дня и ночью — тот же кабинет, рисунок держит утренний общий план
              'office_eve_wide': 'office_am_wide', 'office_eve_ots_expert': 'office_eve_wide', 'office_eve_lens': 'office_eve_wide',
+             'office_am_lens': 'office_eve_lens',
              'office_eve_phone': 'office_eve_wide', 'office_d2_wide': 'office_am_wide', 'office_d2_ots_boss': 'office_d2_wide',
              'office_night_wide': 'office_am_wide', 'office_night_ots_expert': 'office_night_wide',
              'landing_chain_ots': 'landing_chain_wide', 'landing_open_wide': 'landing_chain_wide', 'landing_open_ots': 'landing_open_wide',

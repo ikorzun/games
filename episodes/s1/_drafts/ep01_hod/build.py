@@ -205,7 +205,8 @@ def scene(sid, block, set_, steps_fn, time='day', music=None, ambient=None, filt
 
 WIDE_OF = {  # сет → общий план (он же фон сета)
     'hod_office_am': 'office_am_wide', 'hod_office_call_am': 'office_am_wide', 'hod_office_eve': 'office_eve_wide',
-    'hod_office_lens': 'office_eve_wide', 'hod_office_call_eve': 'office_eve_wide', 'hod_office_d2': 'office_d2_wide',
+    'hod_office_lens': 'office_eve_wide', 'hod_office_lens_am': 'office_am_wide', 'hod_office_call_eve': 'office_eve_wide',
+    'hod_office_d2': 'office_d2_wide',
     'hod_office_night': 'office_night_wide', 'hod_flat': 'flat_wide', 'hod_flat_photo': 'flat_wide',
     'hod_landing_chain': 'landing_chain_wide', 'hod_landing_open': 'landing_open_wide', 'hod_notary': 'notary_wide',
     'hod_notary_register': 'notary_wide', 'hod_notary_stairs': 'stairs_wide', 'hod_zhek': 'zhek_wide',
@@ -220,7 +221,7 @@ OUTDOOR = {'hod_car', 'hod_walk', 'hod_agency_street', 'hod_watch', 'hod_op', 'h
 # Место действия фона (assets.backgrounds[].place): смена фона внутри места — склейка, растворение (в «Воспоминаниях»
 # точками) — только при смене места (владелец 2026-10-14). Сеты без записи — сами себе место.
 PLACE = {
-    **{s: 'office' for s in ('hod_office_am', 'hod_office_call_am', 'hod_office_eve', 'hod_office_lens',
+    **{s: 'office' for s in ('hod_office_am', 'hod_office_call_am', 'hod_office_eve', 'hod_office_lens', 'hod_office_lens_am',
                              'hod_office_call_eve', 'hod_office_d2', 'hod_office_night')},
     **{s: 'molodogvardeyskaya' for s in ('hod_flat', 'hod_flat_photo', 'hod_flat_inspect', 'hod_landing_chain',
                                          'hod_landing_open')},
@@ -229,7 +230,8 @@ PLACE = {
 }
 # Сеты из одного кадра (телефон, лупа, фото, реестр): их кадр — «общий план» сета, монтажёр берёт его на любую реплику,
 # а в чужих сценах он не появится. Так вставка не всплывёт раньше времени (до того, как игрок открыл сервант).
-AUX_SETS = {'hod_office_call_am', 'hod_office_call_eve', 'hod_office_lens', 'hod_flat_photo', 'hod_notary_register', 'hod_bio',
+AUX_SETS = {'hod_office_call_am', 'hod_office_call_eve', 'hod_office_lens', 'hod_office_lens_am', 'hod_flat_photo',
+            'hod_notary_register', 'hod_bio',
             'hod_2004'}
 OTS = {  # кадр через плечо: чьё плечо → на кого
     'office_am_ots_oper': ('sledak', 'oper'), 'office_eve_ots_expert': ('sledak', 'expert'),
@@ -262,7 +264,7 @@ def memory_of(sid: str, set_: str, cast: list[str]) -> dict | None:
 
 
 # Вставки с лицами: у лупы над бумагами — Левина и Громов, их подсвечивает говорящий (у реестра, ключей, фото — только руки).
-INSERT_PEOPLE = {'office_eve_lens'}
+INSERT_PEOPLE = {'office_eve_lens', 'office_am_lens'}
 SHOTS, BACKGROUNDS = [], []
 for p in PLAN:
     if p['kind'] in ('doc', 'search'):  # бланк и фон мини-игры осмотра — не кадры покрытия
@@ -1042,7 +1044,7 @@ scene('d3_office', 'b5_day3', 'hod_office_d2', lambda: [
     inner('Договора у меня нет: к Лапиным я так и не доехал. Бумагу к пятнице дадут только люди — Ковригин или тот, кто напишет заявление.', when="!case_opened && third != 'flat'"),
     jump('d3_go'),
 ], music='m_investigation', ambient='amb_office', pin='office_d2_ots_boss')
-scene('d3_lens', 'b5_day3', 'hod_office_lens', lambda: [
+scene('d3_lens', 'b5_day3', 'hod_office_lens_am', lambda: [
     show('sledak', 'left'), show('expert', 'right'),
     say('expert', 'В понедельник к вечеру мы оба ослепли. Давай свежим глазом: доверенность и договор — под лампу.', when='lens_tried'),
     say('expert', 'Договор и доверенность — рядом, под лампу. Пока бумага не доказала обратного, она чистая.', when='!lens_tried'),
@@ -1051,14 +1053,14 @@ scene('d3_lens', 'b5_day3', 'hod_office_lens', lambda: [
     setv(e('lens_d3_done', 'set', True)),
     {'do': 'minigame', 'minigame': 'mg_docs_d3'},
 ])
-scene('d3_lens_ok', 'b5_day3', 'hod_office_lens', lambda: [
+scene('d3_lens_ok', 'b5_day3', 'hod_office_lens_am', lambda: [
     show('sledak', 'left'), show('expert', 'right'),
     say('expert', 'В договоре — доверенность от одиннадцатого июня, а сама она — от четырнадцатого. Под лампой видно: четвёрка поверх единицы. Оговорки «исправленному верить» нет.'),
     unlock('n_date'), setv(e('case_opened', 'set', True)),
     inner('Бумага с изъяном. Дело возбуждаю сегодня — Палыч подпишет, никуда не денется.'),
     jump('d3_go'),
 ])
-scene('d3_lens_fail', 'b5_day3', 'hod_office_lens', lambda: [
+scene('d3_lens_fail', 'b5_day3', 'hod_office_lens_am', lambda: [
     show('sledak', 'left'), show('expert', 'right'),
     say('expert', 'Нет, Громов. Бумага как бумага. Если изъян и есть, то не в ней.'),
     inner('Значит, бумагу к пятнице дадут люди: Ковригин, который заверял, или тот, кто напишет заявление.'),

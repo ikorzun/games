@@ -234,6 +234,19 @@
         "music": { "$ref": "#/$defs/asciiId" },
         "ambient": { "$ref": "#/$defs/asciiId" },
         "coverage": { "$ref": "#/$defs/asciiId", "description": "Сет кадров покрытия (assets.shots[].set): монтажёр рантайма берёт из него кадры по грамматике docs/architecture/08-shot-grammar.md §4. Без coverage сцена показывается фоном и спрайтами." },
+        "coverage_alt": {
+          "type": "array", "minItems": 1,
+          "description": "Другой сет того же места по условию (машина Сайко в разные дни): при входе в сцену берётся первый, чей when истинен, — его сет и фон вместо coverage и stage.bg.",
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["when", "coverage", "bg"],
+            "properties": {
+              "when": { "$ref": "#/$defs/expr" },
+              "coverage": { "$ref": "#/$defs/asciiId" },
+              "bg": { "$ref": "#/$defs/asciiId" }
+            }
+          }
+        },
         "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/step" } },
         "notes": { "type": "string", "description": "Заметки сценариста/режиссёра, не попадают в сборку." }
       }

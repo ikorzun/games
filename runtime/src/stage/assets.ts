@@ -270,14 +270,17 @@ export function collectBlockAssets(episode: Episode, catalog: AssetCatalog, bloc
     addChain(catalog.bgChain(scene.stage.bg));
     addAudio(scene.music);
     addAudio(scene.ambient);
-    if (scene.coverage && !coveredSets.has(scene.coverage)) {
+    // Сет сцены и сеты её вариантов по условию (coverage_alt): какой понадобится, решится при входе в сцену.
+    for (const cov of [scene.coverage, ...(scene.coverage_alt ?? []).map((a) => a.coverage)]) {
+      if (!cov || coveredSets.has(cov)) continue;
       // Кадры покрытия: общие планы (вход в сцену) ждём вместе с фоном, остальные греем в фоне.
-      coveredSets.add(scene.coverage);
-      for (const s of catalog.shotsOfSet(scene.coverage)) {
+      coveredSets.add(cov);
+      for (const s of catalog.shotsOfSet(cov)) {
         (s.kind === 'wide' ? addChain : addIdle)(catalog.shotChain(s.id));
         for (const c of s.cast) addIdle(catalog.shotMask(s.id, c.who)); // маски подсветки — маленькие, в фоне
       }
     }
+    for (const a of scene.coverage_alt ?? []) addIdle(catalog.bgChain(a.bg));
     for (const step of scene.steps) {
       switch (step.do) {
         case 'bg':

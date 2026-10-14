@@ -28,7 +28,7 @@ ORDER = {
 # фона осмотра нет: там в центре внимания предмет, а не человек.
 MEMORY = {
     **ORDER,
-    'office_am_phone': ('hod_office_call_am', ['sledak', 'oper']),
+    'office_am_phone': ('hod_office_call_am', ['sledak']),  # Громов один (владелец 2026-10-14)
     'car_wide': ('hod_car', ['oper', 'sledak']),
     'car_ots_oper': ('hod_car', ['oper', 'sledak']),
     'flat_wide': ('hod_flat', ['oper', 'buyer', 'sledak', 'lapin_wife']),
@@ -36,9 +36,11 @@ MEMORY = {
     'flat_ots_wife': ('hod_flat', ['sledak', 'lapin_wife']),
     # остальные места (2026-10-13); третий элемент — порядок у квадрата, если кадрирование его меняет
     'office_eve_wide': ('hod_office_eve', ['sledak', 'expert', 'oper']),
-    'office_eve_ots_expert': ('hod_office_eve', ['sledak', 'expert', '_']),  # Сайко у окна на заднем плане
+    'office_eve_ots_expert': ('hod_office_eve', ['sledak', 'expert', '_'],  # Сайко у окна на заднем плане
+                              ['sledak', 'expert', '_', '_']),  # в квадрате Vision считает человеком и пиджак на вешалке
     'office_eve_lens': ('hod_office_lens', ['sledak', 'expert']),
-    'office_eve_phone': ('hod_office_call_eve', ['sledak', 'expert']),
+    'office_eve_phone': ('hod_office_call_eve', ['sledak']),  # Громов один (владелец 2026-10-14)
+    'office_am_lens': ('hod_office_lens_am', ['sledak', 'expert']),
     'office_d2_wide': ('hod_office_d2', ['sledak', 'oper', 'boss']),
     'office_d2_ots_boss': ('hod_office_d2', ['sledak', 'boss']),
     'office_night_wide': ('hod_office_night', ['sledak', 'expert', 'oper']),

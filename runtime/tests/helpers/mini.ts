@@ -8,6 +8,8 @@ export interface MiniScene {
   ambient?: string;
   /** Сет кадров покрытия (монтажёр). */
   coverage?: string;
+  /** Варианты сета по условию (coverage_alt). */
+  coverage_alt?: Scene['coverage_alt'];
   steps: Step[];
 }
 
@@ -32,6 +34,7 @@ export function miniEpisode(scenes: Record<string, MiniScene>, opts: MiniOptions
       ...(sc.music ? { music: sc.music } : {}),
       ...(sc.ambient ? { ambient: sc.ambient } : {}),
       ...(sc.coverage ? { coverage: sc.coverage } : {}),
+      ...(sc.coverage_alt ? { coverage_alt: sc.coverage_alt } : {}),
       steps: sc.steps,
     };
   }
