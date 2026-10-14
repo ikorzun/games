@@ -10978,66 +10978,77 @@
     "id": "bg_hod_walk",
     "path": "assets/ep01/hod/hod_walk/walk_wide.webp",
     "season": "summer",
+    "memory": "assets/ep01/hod_memory/hod_walk/walk_wide.webp",
     "notes": "черновой общий план walk_wide (лето 1993-го)"
    },
    {
     "id": "bg_hod_second",
     "path": "assets/ep01/hod/hod_second/second_wide.webp",
     "season": "indoor",
+    "memory": "assets/ep01/hod_memory/hod_second/second_wide.webp",
     "notes": "черновой общий план second_wide (лето 1993-го)"
    },
    {
     "id": "bg_hod_chertanovo",
     "path": "assets/ep01/hod/hod_chertanovo/chertanovo_wide.webp",
     "season": "indoor",
+    "memory": "assets/ep01/hod_memory/hod_chertanovo/chertanovo_wide.webp",
     "notes": "черновой общий план chertanovo_wide (лето 1993-го)"
    },
    {
     "id": "bg_hod_agency_street",
     "path": "assets/ep01/hod/hod_agency_street/agency_street_wide.webp",
     "season": "summer",
+    "memory": "assets/ep01/hod_memory/hod_agency_street/agency_street_wide.webp",
     "notes": "черновой общий план agency_street_wide (лето 1993-го)"
    },
    {
     "id": "bg_hod_agency",
     "path": "assets/ep01/hod/hod_agency/agency_wide.webp",
     "season": "indoor",
+    "memory": "assets/ep01/hod_memory/hod_agency/agency_wide.webp",
     "notes": "черновой общий план agency_wide (лето 1993-го)"
    },
    {
     "id": "bg_hod_watch",
     "path": "assets/ep01/hod/hod_watch/watch_wide.webp",
     "season": "summer",
+    "memory": "assets/ep01/hod_memory/hod_watch/watch_wide.webp",
     "notes": "черновой общий план watch_wide (лето 1993-го)"
    },
    {
     "id": "bg_hod_op",
     "path": "assets/ep01/hod/hod_op/op_wide.webp",
     "season": "summer",
+    "memory": "assets/ep01/hod_memory/hod_op/op_wide.webp",
     "notes": "черновой общий план op_wide (лето 1993-го)"
    },
    {
     "id": "bg_hod_search",
     "path": "assets/ep01/hod/hod_search/search_wide.webp",
     "season": "indoor",
+    "memory": "assets/ep01/hod_memory/hod_search/search_wide.webp",
     "notes": "черновой общий план search_wide (лето 1993-го)"
    },
    {
     "id": "bg_hod_field",
     "path": "assets/ep01/hod/hod_field/field_wide.webp",
     "season": "summer",
+    "memory": "assets/ep01/hod_memory/hod_field/field_wide.webp",
     "notes": "черновой общий план field_wide (лето 1993-го)"
    },
    {
     "id": "bg_hod_interrog",
     "path": "assets/ep01/hod/hod_interrog/interrog_wide.webp",
     "season": "indoor",
+    "memory": "assets/ep01/hod_memory/hod_interrog/interrog_wide.webp",
     "notes": "черновой общий план interrog_wide (лето 1993-го)"
    },
    {
     "id": "bg_hod_court",
     "path": "assets/ep01/hod/hod_court/court_wide.webp",
     "season": "indoor",
+    "memory": "assets/ep01/hod_memory/hod_court/court_wide.webp",
     "notes": "черновой общий план court_wide (лето 1993-го)"
    },
    {
@@ -11050,12 +11061,14 @@
     "id": "bg_hod_2004",
     "path": "assets/ep01/hod/hod_2004/gromov_2004.webp",
     "season": "indoor",
+    "memory": "assets/ep01/hod_memory/hod_2004/gromov_2004.webp",
     "notes": "черновой общий план gromov_2004 (лето 1993-го)"
    },
    {
     "id": "bg_hod_agency_closed",
     "path": "assets/ep01/hod/hod_agency_closed/agency_closed.webp",
     "season": "summer",
+    "memory": "assets/ep01/hod_memory/hod_agency_closed/agency_closed.webp",
     "notes": "черновой общий план agency_closed (лето 1993-го)"
    },
    {
@@ -12054,7 +12067,17 @@
       "who": "sledak"
      }
     ],
-    "file": "assets/ep01/hod/hod_walk/walk_wide.webp"
+    "file": "assets/ep01/hod/hod_walk/walk_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_walk/walk_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_walk/walk_wide.square.webp",
+     "masks": {
+      "sledak": "assets/ep01/hod_memory/hod_walk/walk_wide.sledak.webp"
+     },
+     "square_masks": {
+      "sledak": "assets/ep01/hod_memory/hod_walk/walk_wide.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_second_wide",
@@ -12070,7 +12093,19 @@
       "who": "sledak"
      }
     ],
-    "file": "assets/ep01/hod/hod_second/second_wide.webp"
+    "file": "assets/ep01/hod/hod_second/second_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_second/second_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_second/second_wide.square.webp",
+     "masks": {
+      "klava": "assets/ep01/hod_memory/hod_second/second_wide.klava.webp",
+      "sledak": "assets/ep01/hod_memory/hod_second/second_wide.sledak.webp"
+     },
+     "square_masks": {
+      "klava": "assets/ep01/hod_memory/hod_second/second_wide.square.klava.webp",
+      "sledak": "assets/ep01/hod_memory/hod_second/second_wide.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_second_ots_klava",
@@ -12088,7 +12123,19 @@
     ],
     "file": "assets/ep01/hod/hod_second/second_ots_klava.webp",
     "from": "sledak",
-    "focus": "klava"
+    "focus": "klava",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_second/second_ots_klava.webp",
+     "square": "assets/ep01/hod_memory/hod_second/second_ots_klava.square.webp",
+     "masks": {
+      "klava": "assets/ep01/hod_memory/hod_second/second_ots_klava.klava.webp",
+      "sledak": "assets/ep01/hod_memory/hod_second/second_ots_klava.sledak.webp"
+     },
+     "square_masks": {
+      "klava": "assets/ep01/hod_memory/hod_second/second_ots_klava.square.klava.webp",
+      "sledak": "assets/ep01/hod_memory/hod_second/second_ots_klava.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_chertanovo_wide",
@@ -12104,7 +12151,19 @@
       "who": "sledak"
      }
     ],
-    "file": "assets/ep01/hod/hod_chertanovo/chertanovo_wide.webp"
+    "file": "assets/ep01/hod/hod_chertanovo/chertanovo_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_chertanovo/chertanovo_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_chertanovo/chertanovo_wide.square.webp",
+     "masks": {
+      "landlady": "assets/ep01/hod_memory/hod_chertanovo/chertanovo_wide.landlady.webp",
+      "sledak": "assets/ep01/hod_memory/hod_chertanovo/chertanovo_wide.sledak.webp"
+     },
+     "square_masks": {
+      "landlady": "assets/ep01/hod_memory/hod_chertanovo/chertanovo_wide.square.landlady.webp",
+      "sledak": "assets/ep01/hod_memory/hod_chertanovo/chertanovo_wide.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_agency_street_wide",
@@ -12117,7 +12176,17 @@
       "who": "sledak"
      }
     ],
-    "file": "assets/ep01/hod/hod_agency_street/agency_street_wide.webp"
+    "file": "assets/ep01/hod/hod_agency_street/agency_street_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_agency_street/agency_street_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_agency_street/agency_street_wide.square.webp",
+     "masks": {
+      "sledak": "assets/ep01/hod_memory/hod_agency_street/agency_street_wide.sledak.webp"
+     },
+     "square_masks": {
+      "sledak": "assets/ep01/hod_memory/hod_agency_street/agency_street_wide.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_agency_wide",
@@ -12133,7 +12202,19 @@
       "who": "sledak"
      }
     ],
-    "file": "assets/ep01/hod/hod_agency/agency_wide.webp"
+    "file": "assets/ep01/hod/hod_agency/agency_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_agency/agency_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_agency/agency_wide.square.webp",
+     "masks": {
+      "murashov": "assets/ep01/hod_memory/hod_agency/agency_wide.murashov.webp",
+      "sledak": "assets/ep01/hod_memory/hod_agency/agency_wide.sledak.webp"
+     },
+     "square_masks": {
+      "murashov": "assets/ep01/hod_memory/hod_agency/agency_wide.square.murashov.webp",
+      "sledak": "assets/ep01/hod_memory/hod_agency/agency_wide.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_agency_ots_murashov",
@@ -12151,7 +12232,19 @@
     ],
     "file": "assets/ep01/hod/hod_agency/agency_ots_murashov.webp",
     "from": "sledak",
-    "focus": "murashov"
+    "focus": "murashov",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_agency/agency_ots_murashov.webp",
+     "square": "assets/ep01/hod_memory/hod_agency/agency_ots_murashov.square.webp",
+     "masks": {
+      "murashov": "assets/ep01/hod_memory/hod_agency/agency_ots_murashov.murashov.webp",
+      "sledak": "assets/ep01/hod_memory/hod_agency/agency_ots_murashov.sledak.webp"
+     },
+     "square_masks": {
+      "murashov": "assets/ep01/hod_memory/hod_agency/agency_ots_murashov.square.murashov.webp",
+      "sledak": "assets/ep01/hod_memory/hod_agency/agency_ots_murashov.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_watch_wide",
@@ -12167,7 +12260,19 @@
       "who": "sledak"
      }
     ],
-    "file": "assets/ep01/hod/hod_watch/watch_wide.webp"
+    "file": "assets/ep01/hod/hod_watch/watch_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_watch/watch_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_watch/watch_wide.square.webp",
+     "masks": {
+      "oper": "assets/ep01/hod_memory/hod_watch/watch_wide.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_watch/watch_wide.sledak.webp"
+     },
+     "square_masks": {
+      "oper": "assets/ep01/hod_memory/hod_watch/watch_wide.square.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_watch/watch_wide.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_op_wide",
@@ -12176,7 +12281,11 @@
     "kind": "wide",
     "angle": "eye",
     "cast": [],
-    "file": "assets/ep01/hod/hod_op/op_wide.webp"
+    "file": "assets/ep01/hod/hod_op/op_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_op/op_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_op/op_wide.square.webp"
+    }
    },
    {
     "id": "sh_op_wounded",
@@ -12192,7 +12301,19 @@
       "who": "sledak"
      }
     ],
-    "file": "assets/ep01/hod/hod_op/op_wounded.webp"
+    "file": "assets/ep01/hod/hod_op/op_wounded.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_op/op_wounded.webp",
+     "square": "assets/ep01/hod_memory/hod_op/op_wounded.square.webp",
+     "masks": {
+      "oper": "assets/ep01/hod_memory/hod_op/op_wounded.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_op/op_wounded.sledak.webp"
+     },
+     "square_masks": {
+      "oper": "assets/ep01/hod_memory/hod_op/op_wounded.square.oper.webp",
+      "sledak": "assets/ep01/hod_memory/hod_op/op_wounded.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_op_stairs",
@@ -12208,7 +12329,19 @@
       "who": "sledak"
      }
     ],
-    "file": "assets/ep01/hod/hod_op/op_stairs.webp"
+    "file": "assets/ep01/hod/hod_op/op_stairs.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_op/op_stairs.webp",
+     "square": "assets/ep01/hod_memory/hod_op/op_stairs.square.webp",
+     "masks": {
+      "murashov": "assets/ep01/hod_memory/hod_op/op_stairs.murashov.webp",
+      "sledak": "assets/ep01/hod_memory/hod_op/op_stairs.sledak.webp"
+     },
+     "square_masks": {
+      "murashov": "assets/ep01/hod_memory/hod_op/op_stairs.square.murashov.webp",
+      "sledak": "assets/ep01/hod_memory/hod_op/op_stairs.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_op_metro",
@@ -12224,7 +12357,15 @@
       "who": "oper"
      }
     ],
-    "file": "assets/ep01/hod/hod_op/op_metro.webp"
+    "file": "assets/ep01/hod/hod_op/op_metro.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_op/op_metro.webp",
+     "square": "assets/ep01/hod_memory/hod_op/op_metro.square.webp",
+     "masks": {
+      "accomplice": "assets/ep01/hod_memory/hod_op/op_metro.accomplice.webp",
+      "oper": "assets/ep01/hod_memory/hod_op/op_metro.oper.webp"
+     }
+    }
    },
    {
     "id": "sh_search_wide",
@@ -12237,7 +12378,17 @@
       "who": "sledak"
      }
     ],
-    "file": "assets/ep01/hod/hod_search/search_wide.webp"
+    "file": "assets/ep01/hod/hod_search/search_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_search/search_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_search/search_wide.square.webp",
+     "masks": {
+      "sledak": "assets/ep01/hod_memory/hod_search/search_wide.sledak.webp"
+     },
+     "square_masks": {
+      "sledak": "assets/ep01/hod_memory/hod_search/search_wide.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_search_keys",
@@ -12246,7 +12397,11 @@
     "kind": "insert",
     "angle": "eye",
     "cast": [],
-    "file": "assets/ep01/hod/hod_search/search_keys.webp"
+    "file": "assets/ep01/hod/hod_search/search_keys.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_search/search_keys.webp",
+     "square": "assets/ep01/hod_memory/hod_search/search_keys.square.webp"
+    }
    },
    {
     "id": "sh_search_papers",
@@ -12255,7 +12410,11 @@
     "kind": "insert",
     "angle": "eye",
     "cast": [],
-    "file": "assets/ep01/hod/hod_search/search_papers.webp"
+    "file": "assets/ep01/hod/hod_search/search_papers.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_search/search_papers.webp",
+     "square": "assets/ep01/hod_memory/hod_search/search_papers.square.webp"
+    }
    },
    {
     "id": "sh_field_wide",
@@ -12271,7 +12430,18 @@
       "who": "sledak"
      }
     ],
-    "file": "assets/ep01/hod/hod_field/field_wide.webp"
+    "file": "assets/ep01/hod/hod_field/field_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_field/field_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_field/field_wide.square.webp",
+     "masks": {
+      "sledak": "assets/ep01/hod_memory/hod_field/field_wide.sledak.webp"
+     },
+     "square_masks": {
+      "expert": "assets/ep01/hod_memory/hod_field/field_wide.square.expert.webp",
+      "sledak": "assets/ep01/hod_memory/hod_field/field_wide.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_field_ots_expert",
@@ -12289,7 +12459,19 @@
     ],
     "file": "assets/ep01/hod/hod_field/field_ots_expert.webp",
     "from": "sledak",
-    "focus": "expert"
+    "focus": "expert",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_field/field_ots_expert.webp",
+     "square": "assets/ep01/hod_memory/hod_field/field_ots_expert.square.webp",
+     "masks": {
+      "expert": "assets/ep01/hod_memory/hod_field/field_ots_expert.expert.webp",
+      "sledak": "assets/ep01/hod_memory/hod_field/field_ots_expert.sledak.webp"
+     },
+     "square_masks": {
+      "expert": "assets/ep01/hod_memory/hod_field/field_ots_expert.square.expert.webp",
+      "sledak": "assets/ep01/hod_memory/hod_field/field_ots_expert.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_field_oper",
@@ -12302,7 +12484,17 @@
       "who": "oper"
      }
     ],
-    "file": "assets/ep01/hod/hod_field/field_oper.webp"
+    "file": "assets/ep01/hod/hod_field/field_oper.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_field/field_oper.webp",
+     "square": "assets/ep01/hod_memory/hod_field/field_oper.square.webp",
+     "masks": {
+      "oper": "assets/ep01/hod_memory/hod_field/field_oper.oper.webp"
+     },
+     "square_masks": {
+      "oper": "assets/ep01/hod_memory/hod_field/field_oper.square.oper.webp"
+     }
+    }
    },
    {
     "id": "sh_interrog_wide",
@@ -12318,7 +12510,19 @@
       "who": "sledak"
      }
     ],
-    "file": "assets/ep01/hod/hod_interrog/interrog_wide.webp"
+    "file": "assets/ep01/hod/hod_interrog/interrog_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_interrog/interrog_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_interrog/interrog_wide.square.webp",
+     "masks": {
+      "murashov": "assets/ep01/hod_memory/hod_interrog/interrog_wide.murashov.webp",
+      "sledak": "assets/ep01/hod_memory/hod_interrog/interrog_wide.sledak.webp"
+     },
+     "square_masks": {
+      "murashov": "assets/ep01/hod_memory/hod_interrog/interrog_wide.square.murashov.webp",
+      "sledak": "assets/ep01/hod_memory/hod_interrog/interrog_wide.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_interrog_ots_murashov",
@@ -12336,7 +12540,19 @@
     ],
     "file": "assets/ep01/hod/hod_interrog/interrog_ots_murashov.webp",
     "from": "sledak",
-    "focus": "murashov"
+    "focus": "murashov",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_interrog/interrog_ots_murashov.webp",
+     "square": "assets/ep01/hod_memory/hod_interrog/interrog_ots_murashov.square.webp",
+     "masks": {
+      "murashov": "assets/ep01/hod_memory/hod_interrog/interrog_ots_murashov.murashov.webp",
+      "sledak": "assets/ep01/hod_memory/hod_interrog/interrog_ots_murashov.sledak.webp"
+     },
+     "square_masks": {
+      "murashov": "assets/ep01/hod_memory/hod_interrog/interrog_ots_murashov.square.murashov.webp",
+      "sledak": "assets/ep01/hod_memory/hod_interrog/interrog_ots_murashov.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_confront_wide",
@@ -12355,7 +12571,21 @@
       "who": "sledak"
      }
     ],
-    "file": "assets/ep01/hod/hod_interrog/confront_wide.webp"
+    "file": "assets/ep01/hod/hod_interrog/confront_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_interrog/confront_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_interrog/confront_wide.square.webp",
+     "masks": {
+      "murashov": "assets/ep01/hod_memory/hod_interrog/confront_wide.murashov.webp",
+      "notary": "assets/ep01/hod_memory/hod_interrog/confront_wide.notary.webp",
+      "sledak": "assets/ep01/hod_memory/hod_interrog/confront_wide.sledak.webp"
+     },
+     "square_masks": {
+      "murashov": "assets/ep01/hod_memory/hod_interrog/confront_wide.square.murashov.webp",
+      "notary": "assets/ep01/hod_memory/hod_interrog/confront_wide.square.notary.webp",
+      "sledak": "assets/ep01/hod_memory/hod_interrog/confront_wide.square.sledak.webp"
+     }
+    }
    },
    {
     "id": "sh_court_wide",
@@ -12368,7 +12598,11 @@
       "who": "murashov"
      }
     ],
-    "file": "assets/ep01/hod/hod_court/court_wide.webp"
+    "file": "assets/ep01/hod/hod_court/court_wide.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_court/court_wide.webp",
+     "square": "assets/ep01/hod_memory/hod_court/court_wide.square.webp"
+    }
    },
    {
     "id": "sh_bio_zoya",
@@ -12399,7 +12633,17 @@
       "who": "sledak_old"
      }
     ],
-    "file": "assets/ep01/hod/hod_2004/gromov_2004.webp"
+    "file": "assets/ep01/hod/hod_2004/gromov_2004.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_2004/gromov_2004.webp",
+     "square": "assets/ep01/hod_memory/hod_2004/gromov_2004.square.webp",
+     "masks": {
+      "sledak_old": "assets/ep01/hod_memory/hod_2004/gromov_2004.sledak_old.webp"
+     },
+     "square_masks": {
+      "sledak_old": "assets/ep01/hod_memory/hod_2004/gromov_2004.square.sledak_old.webp"
+     }
+    }
    },
    {
     "id": "sh_agency_closed",
@@ -12412,7 +12656,11 @@
       "who": "sledak"
      }
     ],
-    "file": "assets/ep01/hod/hod_agency_closed/agency_closed.webp"
+    "file": "assets/ep01/hod/hod_agency_closed/agency_closed.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_agency_closed/agency_closed.webp",
+     "square": "assets/ep01/hod_memory/hod_agency_closed/agency_closed.square.webp"
+    }
    },
    {
     "id": "sh_notary_alone_ots",

@@ -58,6 +58,27 @@ MEMORY = {
     'bti_ots_clerk': ('hod_bti', ['clerk', 'sledak']),
     'recon_wide': ('hod_recon', ['_', '_', 'zoya', 'murashov_sil']),  # очередь на лавке
     'recon_ots_zoya': ('hod_recon', ['_', '_', 'zoya', 'murashov_sil']),
+    # дни 3–5 (2026-10-14). Суд и закрытое агентство — без масок: там говорит рассказчик; Левину вдали в лесополосе
+    # Vision не видит — на общем плане маска только у Громова, её реплики идут на её плане через плечо.
+    'walk_wide': ('hod_walk', ['sledak']),
+    'second_wide': ('hod_second', ['sledak', 'klava']),
+    'second_ots_klava': ('hod_second', ['sledak', 'klava']),
+    'chertanovo_wide': ('hod_chertanovo', ['sledak', 'landlady']),
+    'agency_street_wide': ('hod_agency_street', ['sledak', '_'], ['sledak']),  # водитель у «Волги» спиной; в квадрате его Vision не видит
+    'agency_wide': ('hod_agency', ['sledak', 'murashov']),
+    'agency_ots_murashov': ('hod_agency', ['sledak', 'murashov']),
+    'watch_wide': ('hod_watch', ['oper', 'sledak']),
+    'op_wounded': ('hod_op', ['oper', 'sledak']),
+    'op_stairs': ('hod_op', ['sledak', 'murashov']),
+    'op_metro': ('hod_op', ['accomplice', 'oper'], ['_']),  # в квадрате Vision сливает двоих в одну фигуру — без масок
+    'search_wide': ('hod_search', ['sledak', '_', '_']),  # понятые и милиционер
+    'field_wide': ('hod_field', ['sledak'], ['expert', 'sledak']),  # в квадрате Левина крупнее — Vision её видит
+    'field_ots_expert': ('hod_field', ['expert', 'sledak']),
+    'field_oper': ('hod_field', ['oper']),
+    'interrog_wide': ('hod_interrog', ['sledak', 'murashov']),
+    'interrog_ots_murashov': ('hod_interrog', ['sledak', 'murashov']),
+    'confront_wide': ('hod_interrog', ['notary', 'sledak', 'murashov']),
+    'gromov_2004': ('hod_2004', ['sledak_old']),
 }
 
 
