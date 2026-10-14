@@ -63,6 +63,21 @@ function run(interp: Interpreter): { events: EngineEvent[]; lineShots: Array<str
 const shotEvents = (events: EngineEvent[]): Array<string | null> => events.filter((e) => e.t === 'shot').map((e) => (e as { shot: string | null }).shot);
 
 describe('сцена с coverage', () => {
+  it('у первой реплики явный кадр (сцена «на кадре через плечо») — вход сразу на нём: общий план не мелькает', () => {
+    const steps: Step[] = [
+      { do: 'show', who: 'a', position: 'left' },
+      { do: 'show', who: 'b', position: 'right' },
+      { do: 'say', who: 'b', key: 'k.1', shot: 'ots_a_b' },
+      { do: 'say', who: 'a', key: 'k.2', shot: 'ots_a_b' },
+      { do: 'end', ending: 'e_main' },
+    ];
+    const { interp } = make(steps);
+    const { events } = run(interp);
+    const scene = events.find((e) => e.t === 'scene');
+    expect(scene && scene.t === 'scene' ? scene.view.shot : null).toBe('ots_a_b');
+    expect(shotEvents(events)).toEqual([]); // ни одной склейки: на общем плане сцена не стояла
+  });
+
   it('вход: show с ложным when в состав не входит; общий план с ним не годится — кадр через плечо', () => {
     const shots = [sh('wide_abc', 'wide', ['a', 'b', 'c']), sh('ots_a_b', 'ots', ['a', 'b'], { from: 'a', focus: 'b' })];
     const steps: Step[] = [

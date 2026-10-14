@@ -107,6 +107,9 @@ const MAX_NONBLOCKING_STEPS = 5000;
  */
 const LOGIC_STEPS: ReadonlySet<string> = new Set(['set', 'branch', 'jump', 'archive_unlock', 'music', 'ambient', 'sfx', 'stop_music', 'stop_ambient']);
 
+/** Шаги, которые не показывают кадр и не ждут игрока: через них ищется первая реплика сцены (её явный кадр — входной). */
+const PASSIVE_STEPS: ReadonlySet<string> = new Set([...LOGIC_STEPS, 'caption', 'show', 'hide']);
+
 /** Дедуктивная развилка: после стольких неверных ходов верные опции подсвечиваются (schema: hint_after). */
 export const DEFAULT_HINT_AFTER = 2;
 
@@ -547,9 +550,11 @@ export class Interpreter {
       ambient: prev?.ambient ?? null,
     };
 
-    // Покрытие: вход в сцену — общий план сета с составом сцены (08 §4.1); кадров нет — спрайты.
+    // Покрытие: вход в сцену — общий план сета с составом сцены (08 §4.1); кадров нет — спрайты. Если у первой
+    // реплики явный кадр (сцена держится на кадре через плечо), входим сразу на нём: иначе общий план мелькал на
+    // время перехода и тут же сменялся (владелец 2026-10-14: «лишние промежуточные кадры на полсекунды»).
     if (view.coverage !== null && this.shots.hasSet(view.coverage)) {
-      view.shot = entryShot(this.shots, view.coverage, this.sceneCast(scene))?.id ?? null;
+      view.shot = this.firstLineShot(scene) ?? entryShot(this.shots, view.coverage, this.sceneCast(scene))?.id ?? null;
       view.shot_ctx = { ...EMPTY_CTX };
     } else {
       view.coverage = null;
@@ -662,6 +667,18 @@ export class Interpreter {
       if (!conditional) this.sceneCasts.set(scene.id, cast);
     }
     return cast;
+  }
+
+  /** Явный кадр первой реплики сцены, если до неё нет ничего, что показывает или ждёт (выбор, документ, эффект…). */
+  private firstLineShot(scene: Scene): string | null {
+    for (const st of scene.steps) {
+      if (st.do === 'say' || st.do === 'narrate') {
+        if (st.when !== undefined && !this.test(st.when)) continue;
+        return st.shot !== undefined && this.shots.get(st.shot) ? st.shot : null;
+      }
+      if (!PASSIVE_STEPS.has(st.do)) return null;
+    }
+    return null;
   }
 
   private shotEvent(pick: ShotPick): EngineEvent | null {
