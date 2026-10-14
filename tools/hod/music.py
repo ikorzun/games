@@ -3,12 +3,13 @@
 
 ДНК передаётся не словами, а звуком: запись темы (assets/common/music/theme_main.mp3, по лицензии) загружена в Music
 (/v1/music/upload), и каждый луп — composition plan модели music_v2_5 с аудио-образцом (conditioning_ref): отрезок темы
-задаёт тембр, лад и «поступь», текст роли — плотность и настроение. Проба на 15 с повторила замеры темы: шаг 56 BPM
-(дробление 112), ноты C G A D F B♭, спектральный центр ≈2 кГц.
+задаёт лад, «поступь» и настроение, текст роли — состав и плотность. Проба на 15 с повторила замеры темы: шаг 56 BPM
+(дробление 112), ноты C G A D F B♭. Звучание — камерный состав по 2–3 живых инструмента, образец слабый (STYLE).
 
 Луп для рантайма (HTML <audio loop>, без перехода): конец петли ищется там, где рисунок ударов совпадает с началом
-(темп по замеру неоднозначен даже у самой темы: 56 / 76 / 112), хвост переходит в начало за 2 с с равной мощностью. Громкость −13 LUFS (тема −10, прежние лупы −11…−13), пик −1,5 dBTP,
-AAC 128 кбит/с стерео → assets/common/music/<роль>.m4a (пути и id m_* в эпизоде прежние). Сырьё — assets/ep01/_hod/music
+(темп по замеру неоднозначен даже у самой темы: 56 / 76 / 112), хвост переходит в начало за XFADE с равной мощностью.
+Дубль приходит без сжатия (PCM), громкость только понижается до −14 LUFS с пиком не выше −1,5 dBTP (без лимитера),
+AAC 144 кбит/с стерео — один раз → assets/common/music/<роль>.m4a (пути и id m_* прежние). Сырьё — assets/ep01/_hod/music
 (вне git). Ключ и запросы — как у озвучки (tools/hod/voice.py).
 
     python3 tools/hod/music.py gen [роль …]    # недостающие дубли (TAKES на роль), выбор лучшего, луп → assets/common/music
@@ -30,28 +31,31 @@ STATE = os.path.join(RAW, 'state.json')  # song_id загруженной тем
 MODEL = 'music_v2_5'
 TAKES = 2
 LENGTH_MS = 90000
-LOUD = {'I': -13.0, 'TP': -1.5}
+LOUD = {'I': -14.0, 'TP': -1.5}  # только вниз: дубли Music уже сведены (≈ −12,7 LUFS, пик ≈ −1 dBTP), лимитер «качал» звук
+XFADE = 0.75  # с, переход хвоста в начало петли (2 с давали «двоение» на стыке)
+STYLE = 'chamber'  # владелец 2026-10-14: синтезаторный вариант — «сильно синтетическая, местами зажёвывает», полный
+                   # оркестр — «инструменты мешают друг другу»; камерный состав по 2–3 инструмента принят на пробе
 
-DNA = ['instrumental', 'dark cinematic underscore', 'cold early-1990s synthesizers and samplers', 'sampled string stabs',
-       'metallic percussion', 'low pulsing bass', 'minor key', 'slow heavy marching pulse']
-NOT = ['vocals', 'lyrics', 'singing', 'choir', 'intro', 'outro', 'ending', 'fade out', 'acoustic guitar', 'cheerful']
-# роль → (отрезок темы-образца, мс; сила образца; стили роли; чего не надо; указание в тексте)
+DNA = ['instrumental', 'dark cinematic underscore', 'minimal chamber arrangement', 'lots of space between phrases',
+       'each instrument in its own register, clear separation', 'minor key', 'slow heavy marching pulse',
+       'warm natural acoustic recording']
+NOT = ['vocals', 'lyrics', 'singing', 'choir', 'intro', 'outro', 'ending', 'fade out', 'climax', 'cheerful',
+       'synthesizer', 'synth pads', 'electronic', 'drum machine', 'full orchestra', 'dense orchestration', 'busy arrangement',
+       'wall of sound', 'layered strings', 'doubling', 'cluttered', 'brass', 'tape warble', 'wow and flutter', 'glitch', 'lo-fi']
+# роль → (отрезок темы-образца, мс; сила образца; состав и настроение; чего не надо; указание в тексте). Образец слабый
+# (low): от темы — лад, шаг и настроение, тембр — живой.
 ROLES = {
-    'calm': ((0, 30000), 'medium', ['quiet office underscore', 'soft cold pad', 'restrained bass pulse', 'sparse',
-                                    'no lead melody', 'low intensity'], ['drums', 'loud percussion', 'build-up', 'climax'],
-             'quiet, sparse, steady, no ending'),
-    'investigation': ((0, 30000), 'high', ['steady ticking pulse', 'muted bass ostinato', 'distant strings on a minor chord',
-                                           'focused, methodical', 'medium-low intensity'], ['climax', 'drop'],
-                      'steady pulse, constant density, no ending'),
-    'tension': ((20000, 50000), 'high', ['insistent minor synth ostinato', 'staccato strings', 'slowly rising dissonant pad',
-                                         'urgent, ominous', 'unresolved'], ['resolution', 'drop'],
-                'insistent, ominous, constant density, no ending'),
-    'chronicle': ((0, 30000), 'medium', ['documentary newsreel underscore', 'solemn', 'sampled piano over a cold pad',
-                                         'archival, historical'], ['climax', 'drop'],
-                  'solemn, steady, no ending'),
-    'epilogue': ((33400, 63400), 'medium', ['elegiac', 'mournful sparse sampled piano and strings', 'quiet aftermath',
-                                            'bittersweet minor'], ['drums', 'build-up', 'climax'],
-                 'quiet, mournful, steady, no ending'),
+    'calm': ((0, 30000), 'low', ['only two instruments', 'solo cello, long low notes', 'soft felt piano', 'very sparse', 'quiet'],
+             ['percussion', 'drums', 'build-up'], 'quiet, sparse, steady, no ending'),
+    'investigation': ((0, 30000), 'low', ['only three instruments', 'pizzicato double bass pulse', 'solo cello', 'sparse felt piano notes',
+                                          'focused, methodical'], ['drums', 'build-up'], 'sparse, focused, methodical, steady pulse, no ending'),
+    'tension': ((20000, 50000), 'low', ['only three instruments', 'low cello and double bass ostinato in unison', 'soft timpani heartbeat',
+                                        'high dissonant violin harmonics', 'urgent, ominous', 'unresolved'], ['resolution', 'drop'],
+                'insistent, ominous, sparse, steady, no ending'),
+    'chronicle': ((0, 30000), 'low', ['only two instruments', 'solo piano, slow solemn chords', 'low cello drone', 'documentary, archival'],
+                  ['percussion', 'drums', 'build-up'], 'solemn, sparse, steady, no ending'),
+    'epilogue': ((33400, 63400), 'low', ['only two instruments', 'solo cello melody', 'sparse piano', 'elegiac, mournful', 'quiet aftermath'],
+                 ['percussion', 'drums', 'build-up'], 'quiet, mournful, sparse, steady, no ending'),
 }
 SR = 44100
 
@@ -81,7 +85,7 @@ def theme_id() -> str:
 
 
 def take_path(role: str, n: int) -> str:
-    return os.path.join(RAW, f'{role}.{n}.mp3')
+    return os.path.join(RAW, f'{role}.{STYLE}.{n}.wav')
 
 
 def generate(role: str, n: int) -> None:
@@ -89,10 +93,11 @@ def generate(role: str, n: int) -> None:
     chunk = {'text': f'[Instrumental] {{{direction}}}', 'duration_ms': LENGTH_MS, 'positive_styles': DNA + styles,
              'negative_styles': NOT + nots, 'context_adherence': 'high', 'condition_strength': strength,
              'conditioning_ref': {'song_id': theme_id(), 'range': {'start_ms': a, 'end_ms': b}}}
-    audio = voice.call('POST', '/v1/music?output_format=mp3_44100_192',
-                       {'composition_plan': {'chunks': [chunk]}, 'model_id': MODEL}, accept='audio/mpeg')
+    pcm = voice.call('POST', '/v1/music?output_format=pcm_44100',  # без сжатия: AAC кодируется один раз, в конце
+                     {'composition_plan': {'chunks': [chunk]}, 'model_id': MODEL}, accept='audio/pcm')
     os.makedirs(RAW, exist_ok=True)
-    open(take_path(role, n), 'wb').write(audio)
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 's16le', '-ar', str(SR), '-ac', '2', '-i', '-', take_path(role, n)],
+                   input=pcm, check=True)
 
 
 def load(path: str, ch: int = 2) -> np.ndarray:
@@ -123,15 +128,15 @@ def chroma(mono: np.ndarray) -> np.ndarray:
 
 def loopify(x: np.ndarray) -> tuple[np.ndarray, float]:
     """Конец петли — там, где рисунок ударов ближе всего к началу (окно 4 с, поиск от 65 с): шов попадает в долю при
-    любом темпе. Первую секунду пропускаем (атака генерации), хвост переходит в начало за 2 с с равной мощностью.
+    любом темпе. Первую секунду пропускаем (атака генерации), хвост переходит в начало за XFADE с равной мощностью.
     Второе значение — совпадение рисунка у шва (корреляция, 1 — один в один)."""
     hop, fps = 512, SR / 512
     env = onsets(x.mean(1))
-    s0, w, fade = int(fps), int(4 * fps), 2 * SR
+    s0, w, fade = int(fps), int(4 * fps), int(XFADE * SR)
     a = env[s0:s0 + w]
     a = (a - a.mean()) / (a.std() + 1e-9)
     best, match = 0, -1.0
-    for n in range(int(65 * fps), len(env) - s0 - w - fade // hop - 1):
+    for n in range(int(65 * fps), min(len(env) - s0 - w - fade // hop - 1, int(80 * fps))):  # ≤ 80 с: ≤ 1,5 МБ
         b = env[s0 + n:s0 + n + w]
         c = float(np.dot(a, (b - b.mean()) / (b.std() + 1e-9)) / w)
         if c > match:
@@ -155,12 +160,12 @@ def write(role: str, path: str) -> None:
     tmp = os.path.join(RAW, f'{role}.loop.wav')
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'f32le', '-ar', str(SR), '-ac', '2', '-i', '-', tmp],
                    input=y.astype(np.float32).tobytes(), check=True)
-    m = subprocess.run(['ffmpeg', '-hide_banner', '-nostats', '-i', tmp, '-af', f"loudnorm=I={LOUD['I']}:TP={LOUD['TP']}:print_format=json",
-                        '-f', 'null', '-'], capture_output=True, text=True).stderr
-    gain = LOUD['I'] - float(json.loads(m[m.rindex('{'):m.rindex('}') + 1])['input_i'])
-    af = f"volume={gain:.2f}dB,alimiter=limit={10 ** (LOUD['TP'] / 20):.3f}:attack=5:release=80:level=false"
-    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', tmp, '-af', af, '-c:a', 'aac', '-b:a', '128k', '-ar', str(SR),
-                    '-movflags', '+faststart', os.path.join(OUT, f'{role}.m4a')], check=True)
+    m = subprocess.run(['ffmpeg', '-hide_banner', '-nostats', '-i', tmp, '-af', 'loudnorm=print_format=json', '-f', 'null', '-'],
+                       capture_output=True, text=True).stderr
+    j = json.loads(m[m.rindex('{'):m.rindex('}') + 1])
+    gain = min(LOUD['I'] - float(j['input_i']), LOUD['TP'] - float(j['input_tp']))  # без лимитера: пик не выше TP
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', tmp, '-af', f'volume={gain:.2f}dB', '-c:a', 'aac', '-b:a', '144k',
+                    '-ar', str(SR), '-movflags', '+faststart', os.path.join(OUT, f'{role}.m4a')], check=True)
 
 
 def main() -> None:
