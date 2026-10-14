@@ -69,6 +69,17 @@ export class QuickMenu {
     if (b) b.disabled = disabled;
   }
 
+  /** Метка «есть новое» (блокнот пополнился): красный квадрат в углу кнопки; с каждой новой записью иконка вздрагивает. */
+  setBadge(action: QuickAction, on: boolean): void {
+    const b = this.buttons.get(action);
+    if (!b) return;
+    b.classList.toggle('has-new', on);
+    b.classList.remove('is-nudged');
+    if (!on) return;
+    void b.offsetWidth; // перезапуск анимации
+    b.classList.add('is-nudged');
+  }
+
   /** Подписи заново (смена языка). */
   refresh(): void {
     for (const [action, btn] of this.buttons) {

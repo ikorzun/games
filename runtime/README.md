@@ -40,11 +40,11 @@ npm run smoke:matrix   # + раскладка 5 размеров × языки, 
 
 | Параметр | Что делает |
 |---|---|
-| `?lang=ru\|en\|es\|pt` | язык интерфейса (иначе: выбор игрока → язык платформы → `en`) |
+| `?lang=ru\|en\|es\|pt` | язык интерфейса; заодно открывает все четыре языка — проверка переводов. Без параметра игроку доступны только языки, на которые эпизод переведён (`localization.status` не `none`): выбор игрока → язык платформы → язык источника; язык один — глобуса в меню и выбора языка в настройках нет |
 | `?debug=1` | отладочная панель (сцена, шаг, переменные, ожидание) и подробный лог Bridge SDK |
 | `?autostart=1` | сразу новая партия новеллы, без меню и контент-предупреждения |
 | `?vn=1` | вместе с `?episode=ep01_murylev`: прежняя новелла вместо режима дела — клик по эпизоду в меню открывает партию, а не папку дела (`docs/architecture/09-case-mode.md`) |
-| `?scene=s15_q&vars=found_photo:true,nerves:3&items=arc_keys` | проверка геймплея: новая партия минуя меню, переменные как в эффектах сценария (true/false, целое, строка), `items` — материалы архива в партию (улики дедуктивных развилок, без тоста; то же — `__vn.unlock(item)`), переход сразу к сцене. Дедуктивные развилки эпизода 1: `s15_q` (Галина), `s16b_q` (Ковригин, `found_photo:true` для скрытой опции), `s20b_q` (Лапин), `s29b_q` (Ковригин с папкой: `vars=found_chain:true,docs_flaw:true&items=arc_bti,arc_power_of_attorney,arc_registration`), `s41b_q` (очная ставка: `vars=keys_found:true,docs_flaw:true&items=arc_keys,arc_power_of_attorney,arc_registration`) |
+| `?scene=s15_q&vars=found_photo:true,nerves:3&items=arc_keys` | проверка геймплея: новая партия минуя меню, переменные как в эффектах сценария (true/false, целое, строка), `items` — материалы архива в партию (улики дедуктивных развилок, тихо: без метки на кнопке «Блокнот»; то же — `__vn.unlock(item)`), переход сразу к сцене. Дедуктивные развилки эпизода 1: `s15_q` (Галина), `s16b_q` (Ковригин, `found_photo:true` для скрытой опции), `s20b_q` (Лапин), `s29b_q` (Ковригин с папкой: `vars=found_chain:true,docs_flaw:true&items=arc_bti,arc_power_of_attorney,arc_registration`), `s41b_q` (очная ставка: `vars=keys_found:true,docs_flaw:true&items=arc_keys,arc_power_of_attorney,arc_registration`) |
 | `?renderer=dom\|pixi` | принудительно DOM-рендерер или PixiJS (по умолчанию PixiJS, при отказе WebGL — DOM) |
 | `?pseudo=1` | псевдолокализация: +35 % длины, диакритика (проверка вёрстки), см. `src/core/pseudo.ts` |
 | `?episode=<id>` | эпизод из манифеста (по умолчанию первый — проба «Хода следствия» `ep01_hod`; прежний эпизод 1 — `ep01_murylev`) |

@@ -661,7 +661,73 @@ describe('ArchiveScreen и ErrorScreen', () => {
     expect(texts(s.el, '.vn-archive__item h3')).toEqual(['Протокол осмотра', 'Справка']);
     unlocked.length = 0;
     s.render();
-    expect(s.el.querySelector('.vn-muted')?.textContent).toBe('Пусто');
+    expect(s.el.querySelector('.vn-archive__empty')?.textContent).toBe('Пусто');
+  });
+
+  it('блокнот: бумажки на странице, бумага дела — сканом под скрепкой, касание открывает её; новое — под штампом', async () => {
+    const ep = {
+      ...episode,
+      archive_items: [
+        { id: 'arc_x', kind: 'fact' as const, title_key: 'mini.arc_x', text_key: 'mini.doc.text' },
+        { id: 'arc_y', kind: 'document' as const, title_key: 'mini.arc_y', text_key: 'mini.doc.text', asset: 'doc_y' },
+      ],
+    };
+    let loaded: (url: string | null) => void = () => undefined;
+    const art = vi.fn(() => ({ url: null, ready: new Promise<string | null>((r) => (loaded = r)) }));
+    const opened: string[] = [];
+    const onDone = vi.fn();
+    const s = open(
+      new ArchiveScreen(ep, () => ['arc_x', 'arc_y'], onDone, 'ui.archive.title', {
+        documentArt: art,
+        onOpenDocument: (item) => opened.push(item.id),
+        isNew: (id) => id === 'arc_y',
+      }),
+    );
+    expect(s.el.querySelector('.vn-archive__title')?.textContent).toBe('Архив дела');
+    const fact = s.el.querySelector<HTMLElement>('.vn-archive__item.is-fact')!;
+    expect(fact.querySelector('h3')?.textContent).toBe('Протокол осмотра');
+    expect(fact.querySelector('p')?.textContent).toBe('Текст бланка');
+    expect(fact.querySelector('.vn-archive__stamp')).toBeNull();
+    // скан: кнопка с картинкой и скрепкой, полного текста бумаги в блокноте нет
+    const doc = s.el.querySelector<HTMLElement>('.vn-archive__item.is-document')!;
+    expect(doc.classList.contains('has-scan')).toBe(true);
+    expect(art).toHaveBeenCalledWith('doc_y');
+    expect(doc.querySelector('p')).toBeNull();
+    const btn = doc.querySelector<HTMLButtonElement>('button.vn-archive__open')!;
+    expect(btn.getAttribute('aria-label')).toBe('Справка');
+    expect(btn.querySelector('svg.vn-ico--clip')).not.toBeNull();
+    const img = btn.querySelector<HTMLImageElement>('img.vn-archive__scan')!;
+    expect(img.getAttribute('src')).toBeNull(); // скан ещё грузится
+    loaded('./assets/doc_y.webp');
+    await Promise.resolve();
+    expect(img.getAttribute('src')).toBe('./assets/doc_y.webp');
+    btn.click();
+    expect(opened).toEqual(['arc_y']);
+    expect(doc.querySelector('.vn-archive__stamp')?.textContent).toBe('Новый материал');
+    s.el.querySelector<HTMLButtonElement>('.vn-document__close')?.click();
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('блокнот: наклон и бумага — от id записи (новая запись не перекладывает старые); без окна документа бумага — текстом', () => {
+    const ep = {
+      ...episode,
+      archive_items: [
+        { id: 'arc_x', kind: 'fact' as const, title_key: 'mini.arc_x' },
+        { id: 'arc_y', kind: 'document' as const, title_key: 'mini.arc_y', text_key: 'mini.doc.text', asset: 'doc_y' },
+      ],
+    };
+    const unlocked = ['arc_y'];
+    const s = open(new ArchiveScreen(ep, () => unlocked, vi.fn()));
+    const look = (id: string): string => {
+      const li = [...s.el.querySelectorAll<HTMLElement>('.vn-archive__item')].find((x) => x.querySelector('h3')?.textContent === id)!;
+      return `${li.style.getPropertyValue('--tilt')} ${li.dataset.paper}`;
+    };
+    const before = look('Справка');
+    unlocked.unshift('arc_x');
+    s.render();
+    expect(look('Справка')).toBe(before);
+    expect(s.el.querySelector('.vn-archive__item.is-document p')?.textContent).toBe('Текст бланка');
+    expect(s.el.querySelector('.vn-archive__open')).toBeNull();
   });
 
   it('экран ошибки показывает сообщение и закрывается кнопкой', () => {
@@ -723,6 +789,12 @@ describe('DocumentScreen: бланк с картинкой', () => {
     close?.click();
     expect(done).toHaveBeenCalledTimes(1);
     expect(s.dismissible).toBe(true); // Esc закрывает (DomUI продолжает партию через onClose)
+  });
+
+  it('бумага, открытая из блокнота, — с названием, но без метки «новый материал»', () => {
+    const s = open(new DocumentScreen(episode, 'doc_x', 'mini.doc.text', 'arc_x', vi.fn(), null, false, false));
+    expect(s.el.querySelector('.vn-document__title')?.textContent).toBe('Протокол осмотра');
+    expect(s.el.querySelector('.vn-document__tag')).toBeNull();
   });
 
   it('настоящая бумага: увеличенный лист двигается мышью с зажатой кнопкой; перетаскивание не меняет масштаб, палец — прокрутка браузера', () => {

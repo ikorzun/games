@@ -325,6 +325,7 @@ body {
   z-index: 7;
 }
 .vn-qbtn {
+  position: relative;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
@@ -337,6 +338,25 @@ body {
   cursor: pointer;
 }
 .vn-qbtn:hover { background: rgb(255 255 255 / 0.14); }
+/* Блокнот пополнился: красный квадрат в углу кнопки, иконка вздрагивает (снимается, когда блокнот закрыли). */
+.vn-qbtn.has-new::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  background: var(--c-accent);
+  box-shadow: 0 0 0 2px rgb(10 10 12 / 0.85);
+}
+.vn-qbtn.is-nudged .vn-ico { animation: vn-nudge 0.9s ease-in-out; }
+@keyframes vn-nudge {
+  0%, 100% { transform: none; }
+  15% { transform: rotate(-14deg) scale(1.1); }
+  35% { transform: rotate(10deg) scale(1.1); }
+  55% { transform: rotate(-6deg); }
+  75% { transform: rotate(3deg); }
+}
 .vn-qbtn:focus-visible { outline: 2px solid var(--c-accent-soft); outline-offset: 1px; }
 .vn-qbtn:disabled { opacity: 0.4; cursor: default; }
 .vn-qbtn.is-on { background: var(--c-accent); color: #fff; }
@@ -671,16 +691,19 @@ body {
    плотнее (85 %), чтобы прежняя реплика не просвечивала сквозь текст. Предупреждение — на своём чёрном фоне. */
 .vn-warning,
 .vn-document,
+.vn-archive,
 .vn-choices {
   --u: calc(var(--fs-grid) * var(--font-scale) / 16);
   --ut: calc(var(--fs) * var(--font-scale) / 16);
 }
 .vn-document,
+.vn-archive,
 .vn-choices {
   background: rgb(0 0 0 / 0.85);
 }
 @media (hover: hover) and (pointer: fine) {
   .vn-document,
+  .vn-archive,
   .vn-choices {
     background: rgb(0 0 0 / 0.6);
     -webkit-backdrop-filter: blur(5px);
@@ -1109,11 +1132,158 @@ body {
 }
 .vn-confirm p { margin: 0; }
 
-/* Архив */
-.vn-archive__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.7rem; }
-.vn-archive__item { padding: 0.6rem 0.9rem; background: #1a1a1f; border-left: 3px solid var(--c-accent-soft); }
-.vn-archive__item h3 { display: inline; margin: 0 0.5rem 0 0; font: 400 1.05em var(--font-title); }
-.vn-archive__item p { margin: 0.3rem 0 0; font-size: 0.95em; color: #d4d0c6; }
+/* Архив и блокнот — страница общей тетради: клетка 5 мм, поля справа красной линией (как в советской тетради), у
+   левого края страница уходит в корешок. К ней приклеены бумажки: факт — на обрывке в клетку, карточке или жёлтом
+   листке под скотчем; бумага дела — сканом под скрепкой (касание — окно документа); фото — в фотоуголках. Наклон
+   (--tilt, до ±1,4°) и вид бумаги (data-paper) — от id записи. Новое с прошлого раза — красный штамп. Скруглений нет. */
+.vn-archive {
+  --nb-ink: #1d1b17;
+  --nb-shade: rgb(52 36 14 / 0.32);
+  --nb-rule: rgb(64 104 150 / 0.16);
+  --nb-margin: rgb(218 24 24 / 0.42);
+}
+.vn-archive__box {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8 * var(--u));
+  width: min(100%, calc(900 * var(--u)));
+  height: 100%;
+}
+.vn-archive__head { display: flex; align-items: center; justify-content: space-between; gap: calc(12 * var(--u)); }
+.vn-archive__title { margin: 0; font: 400 calc(20 * var(--u)) / normal var(--font-title); color: #fff; }
+.vn-archive__cover {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  padding: 6px 6px 6px 12px;
+  background: #2a231e;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.6);
+}
+.vn-archive__page {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #ebe5d3;
+  box-shadow: inset 16px 0 18px -12px rgb(40 28 12 / 0.45);
+}
+.vn-archive__empty { margin: 0; padding: calc(28 * var(--u)); color: #6b6458; }
+/* Клетка и поля — фон самого списка: он растёт с записями и листается вместе с ними. */
+.vn-archive__list {
+  box-sizing: border-box;
+  min-height: 100%;
+  margin: 0;
+  padding: calc(30 * var(--u)) calc(56 * var(--u)) calc(36 * var(--u)) calc(28 * var(--u));
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(230 * var(--u))), 1fr));
+  gap: calc(32 * var(--u)) calc(24 * var(--u));
+  align-items: start;
+  background:
+    linear-gradient(90deg, transparent calc(100% - 36px), var(--nb-margin) calc(100% - 36px), var(--nb-margin) calc(100% - 34px), transparent calc(100% - 34px)),
+    linear-gradient(var(--nb-rule) 1px, transparent 1px) 0 0 / 100% 20px,
+    linear-gradient(90deg, var(--nb-rule) 1px, transparent 1px) 0 0 / 20px 100%;
+}
+.vn-archive__item {
+  position: relative;
+  transform: rotate(var(--tilt, 0deg));
+  /* тень повторяет рваный край бумажки (clip-path срезал бы box-shadow) */
+  filter: drop-shadow(0 1px 1px var(--nb-shade)) drop-shadow(0 5px 6px rgb(52 36 14 / 0.16));
+}
+.vn-archive__paper {
+  padding: calc(14 * var(--u)) calc(16 * var(--u)) calc(16 * var(--u));
+  color: var(--nb-ink);
+  background: #f1ead6;
+}
+.vn-archive__item h3 { margin: 0; font: 400 0.9em / 1.25 var(--font-title); overflow-wrap: anywhere; }
+.vn-archive__item p { margin: 0.45em 0 0; font-size: 0.92em; line-height: 1.35; overflow-wrap: anywhere; }
+.vn-archive__item .vn-badge { margin-top: 0.4em; }
+/* Скотч поверх верхнего края: полупрозрачная лента с неровными концами. */
+.vn-archive__item::before {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: -9px;
+  left: calc(50% - 34px);
+  width: 72px;
+  height: 20px;
+  background: linear-gradient(rgb(255 255 255 / 0.25), rgb(255 255 255 / 0) 40%), rgb(226 214 172 / 0.78);
+  transform: rotate(calc(var(--tilt, 0deg) * -2.5));
+  clip-path: polygon(0 8%, 4% 0, 96% 6%, 100% 0, 97% 50%, 100% 100%, 95% 92%, 3% 100%, 0 94%, 4% 50%);
+}
+/* Обрывок тетради в клетку: верх оторван. */
+.vn-archive__item[data-paper='0'] .vn-archive__paper {
+  padding-top: calc(18 * var(--u));
+  background:
+    linear-gradient(var(--nb-rule) 1px, transparent 1px) 0 0 / 100% 14px,
+    linear-gradient(90deg, var(--nb-rule) 1px, transparent 1px) 0 0 / 14px 100%,
+    #f7f5ee;
+  clip-path: polygon(0 5px, 6% 1px, 13% 4px, 21% 0, 30% 5px, 38% 2px, 47% 5px, 55% 1px, 64% 4px, 72% 0, 81% 4px, 89% 1px, 100% 5px, 100% 100%, 0 100%);
+}
+/* Карточка: под заголовком красная линейка. */
+.vn-archive__item[data-paper='1'] h3 { padding-bottom: 0.35em; border-bottom: 1px solid var(--nb-margin); }
+/* Жёлтый листок, края потемнели. */
+.vn-archive__item[data-paper='2'] .vn-archive__paper { background: #e8ddbd; box-shadow: inset 0 0 22px rgb(150 115 50 / 0.22); }
+/* Фото — оборотом вверх, в четырёх фотоуголках, без скотча. */
+.vn-archive__item.is-photo::before { content: none; }
+.vn-archive__item.is-photo .vn-archive__paper {
+  padding: calc(18 * var(--u)) calc(20 * var(--u));
+  background:
+    linear-gradient(135deg, #2a231e 9px, transparent 9px) left top / 18px 18px no-repeat,
+    linear-gradient(225deg, #2a231e 9px, transparent 9px) right top / 18px 18px no-repeat,
+    linear-gradient(45deg, #2a231e 9px, transparent 9px) left bottom / 18px 18px no-repeat,
+    linear-gradient(315deg, #2a231e 9px, transparent 9px) right bottom / 18px 18px no-repeat,
+    #fbfaf5;
+  box-shadow: none;
+  clip-path: none;
+}
+/* Бумага дела: скан под скрепкой — кнопка, открывает окно документа. */
+.vn-archive__item.has-scan { filter: none; }
+.vn-archive__item.has-scan::before { content: none; }
+.vn-archive__item.has-scan .vn-archive__paper { padding: 0; background: none; box-shadow: none; clip-path: none; }
+.vn-archive__item.has-scan h3 { margin-top: 0.7em; padding: 0; border: 0; text-align: center; }
+.vn-archive__open {
+  position: relative;
+  display: block;
+  width: 64%;
+  margin: 0 auto;
+  padding: 0;
+  background: #e9e2cf;
+  border: 0;
+  cursor: zoom-in;
+  box-shadow: 0 1px 2px var(--nb-shade), 0 8px 14px rgb(52 36 14 / 0.22);
+  transition: transform 0.15s ease;
+}
+.vn-archive__open:hover { transform: translateY(-3px); }
+.vn-archive__open:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 3px; }
+.vn-archive__scan { display: block; width: 100%; height: auto; min-height: 60px; }
+.vn-archive__open .vn-ico--clip {
+  position: absolute;
+  top: -17px;
+  left: 10px;
+  width: 42px;
+  height: 42px;
+  color: #6c7176;
+  stroke-width: 1.5;
+  filter: drop-shadow(1px 1px 0 rgb(255 255 255 / 0.55));
+}
+/* Штамп «новый материал»: красная краска поверх бумаги, край штампа заходит за край бумажки. */
+.vn-archive__stamp {
+  position: absolute;
+  z-index: 2;
+  right: 8px;
+  bottom: -10px;
+  padding: 3px 7px 2px;
+  font: 400 calc(11 * var(--u)) / 1.15 var(--font-title);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgb(200 20 20 / 0.92);
+  border: 2px solid rgb(200 20 20 / 0.85);
+  transform: rotate(-4deg);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+.vn-archive__item.has-scan .vn-archive__stamp { top: 42%; right: 6%; bottom: auto; transform: rotate(-9deg); }
 
 /* Документ */
 /* Документ по макету (Figma «Claude», узел 1232:1560): шапка — название, метка «новый материал», крестик; под ней
@@ -1298,17 +1468,31 @@ body {
   transform: translateX(-50%);
   pointer-events: none;
 }
+/* Уведомление — записка на бумаге блокнота: поля красной линией, сверху скотч; прилетает чуть наискось. */
 .vn-toast {
-  padding: 0.55rem 0.9rem;
-  font-size: 15px;
-  background: rgb(12 12 14 / 0.95);
-  border: 1px solid var(--c-accent-soft);
-  border-left: 4px solid var(--c-accent);
+  position: relative;
+  padding: 0.6rem 1rem 0.55rem 1.5rem;
+  font-size: 17px;
+  line-height: 1.35;
+  color: #1d1b17;
+  background: linear-gradient(90deg, transparent 0.85rem, rgb(218 24 24 / 0.42) 0.85rem, rgb(218 24 24 / 0.42) calc(0.85rem + 1.5px), transparent calc(0.85rem + 1.5px)), #ebe5d3;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 24px rgb(0 0 0 / 0.45);
   opacity: 0;
-  transform: translateY(-8px);
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transform: translateY(-10px) rotate(-1.8deg);
+  transition: opacity 0.3s ease, transform 0.35s ease;
 }
-.vn-toast.is-in { opacity: 1; transform: none; }
+.vn-toast.is-in { opacity: 1; transform: rotate(-0.6deg); }
+.vn-toast::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: calc(50% - 30px);
+  width: 60px;
+  height: 15px;
+  background: linear-gradient(rgb(255 255 255 / 0.25), rgb(255 255 255 / 0) 40%), rgb(226 214 172 / 0.85);
+  transform: rotate(2.5deg);
+  clip-path: polygon(0 8%, 4% 0, 96% 6%, 100% 0, 97% 50%, 100% 100%, 95% 92%, 3% 100%, 0 94%, 4% 50%);
+}
 /* Портрет: картинка невысокая (16:9 по ширине) — уведомления внизу панели текста, над кнопками, а не поверх кадра. */
 @media (orientation: portrait) {
   .vn-toasts { top: auto; bottom: calc(max(10px, env(safe-area-inset-bottom)) + 52px); }

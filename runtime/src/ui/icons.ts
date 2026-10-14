@@ -101,6 +101,8 @@ const ICONS = {
     ['path', { d: 'M8.6 14.2a5.5 5.5 0 1 1 6.8 0c-.6.5-.9 1.2-.9 2v1.3h-5v-1.3c0-.8-.3-1.5-.9-2z' }],
     ['path', { d: 'M10 20.5h4' }],
   ],
+  /** Канцелярская скрепка (стоя): бумаги в блокноте приколоты ею к странице. */
+  clip: [['path', { d: 'M10.5 8v9.5a1.75 1.75 0 0 0 3.5 0V4.5a2.75 2.75 0 0 0-5.5 0V19a3.5 3.5 0 0 0 7 0V7.5' }]],
 } as const satisfies Record<string, readonly Node2[]>;
 
 export type IconName = keyof typeof ICONS;

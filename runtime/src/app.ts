@@ -9,7 +9,7 @@ import { i18n, t } from './core/i18n';
 import type { SeasonInfo } from './core/loader';
 import type { SaveFile, SaveManager } from './core/saves';
 import type { Settings } from './core/settings';
-import type { Episode, Lang, Value, ViewState } from './core/types';
+import type { ArchiveItem, Episode, Lang, Value, ViewState } from './core/types';
 import type { IPlatform } from './platform/types';
 import { Session } from './session';
 import type { RunOutcome } from './session';
@@ -29,6 +29,7 @@ import { UiKit } from './ui/kit';
 import type { QuickAction } from './ui/quick_menu';
 import {
   ArchiveScreen,
+  DocumentScreen,
   ErrorScreen,
   LogScreen,
   MenuScreen,
@@ -78,6 +79,11 @@ export class App {
   private talkView: (() => ViewState) | null = null;
   private settingsScreen: SettingsScreen | null = null;
   private settingsOpen = false;
+  /**
+   * Записи блокнота, пришедшие с тех пор, как игрок его открывал: метка на кнопке «Блокнот» и штамп на бумажке.
+   * Только в памяти партии: после загрузки сейва и в архиве меню ничего не помечено.
+   */
+  private readonly freshNotes = new Set<string>();
 
   /** Собрать приложение: каркас → сцена (PixiJS или DOM) → всё остальное. */
   static async create(init: AppInit): Promise<App> {
@@ -114,7 +120,10 @@ export class App {
       ...(d.assets ? { loader: d.assets.preloader } : {}),
       captions: captionSink,
       checkpoint: (reason) => this.session.autosave(reason),
-      archiveUnlocked: (item) => d.saves.unlockArchive(ep.id, item),
+      archiveUnlocked: (item, toast) => {
+        d.saves.unlockArchive(ep.id, item);
+        if (toast) this.markNote(item);
+      },
     });
     this.ui = new DomUI({
       episode: ep,
@@ -210,6 +219,7 @@ export class App {
     this.caseMode?.stop();
     this.session.cancel();
     this.kit.screens.closeAll();
+    this.clearNotes();
     this.kit.root.classList.remove('in-game');
     this.ui.setSkip(false);
     if (this.ui.autoOn) this.ui.toggleAuto();
@@ -299,6 +309,7 @@ export class App {
     // Тема меню уступает место музыке сценария (первая сцена включит свою, если она задана).
     if (this.d.audio.music === THEME_MUSIC) this.d.audio.handle({ t: 'audio', kind: 'stop_music', id: null, fade_ms: 600, loop: false, volume: 0 });
     this.kit.screens.closeAll();
+    this.clearNotes();
     this.kit.root.classList.add('in-game');
     void start().then((outcome) => {
       if (outcome.reason === 'rejected') {
@@ -411,13 +422,51 @@ export class App {
   openArchive(titleKey?: string): void {
     this.d.platform.track('archive_opened');
     const ep = this.d.episode;
+    const assets = this.d.assets;
+    // Штампы «новый материал» держатся, пока блокнот открыт; закрыли — всё прочитано, метка с кнопки снята.
+    const fresh = new Set(this.freshNotes);
     const screen: ArchiveScreen = new ArchiveScreen(
       ep,
       () => [...new Set([...this.d.saves.archiveOf(ep.id), ...(this.session.interp.started ? this.session.interp.state.archive : [])])],
       () => this.kit.screens.close(screen),
       titleKey,
+      {
+        isNew: (id) => fresh.has(id),
+        onOpenDocument: (item) => this.openNoteDocument(item),
+        ...(assets ? { documentArt: (id: string) => assets.document(id) } : {}),
+      },
+    );
+    screen.onClose = () => this.clearNotes();
+    this.kit.screens.open(screen);
+  }
+
+  /** Бумага из блокнота крупно: окно документа поверх блокнота, без метки «новый материал»; закрыли — снова блокнот. */
+  private openNoteDocument(item: ArchiveItem): void {
+    const art = item.asset ? this.d.assets?.document(item.asset) : undefined;
+    const screen: DocumentScreen = new DocumentScreen(
+      this.d.episode,
+      item.asset ?? item.id,
+      item.text_key ?? null,
+      item.id,
+      () => this.kit.screens.close(screen),
+      art?.url ?? null,
+      art?.textInImage === true,
+      false,
     );
     this.kit.screens.open(screen);
+    void art?.ready.then((url) => {
+      if (url && this.kit.screens.has(screen)) screen.setImage(url);
+    });
+  }
+
+  private markNote(item: string): void {
+    this.freshNotes.add(item);
+    this.kit.quick.setBadge('notebook', true);
+  }
+
+  private clearNotes(): void {
+    this.freshNotes.clear();
+    this.kit.quick.setBadge('notebook', false);
   }
 
   private showError(e: unknown): void {

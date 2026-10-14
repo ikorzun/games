@@ -32,8 +32,8 @@ export interface DirectorSinks {
   loader?: IBlockLoader;
   /** checkpoint-события интерпретатора: границы блоков и решения. */
   checkpoint: (reason: 'block' | 'choice' | 'minigame') => void;
-  /** Новый архивный материал открыт (для общего архива профиля). */
-  archiveUnlocked?: (item: string) => void;
+  /** Новый архивный материал открыт (общий архив профиля); toast — сценарий хочет, чтобы игрок это заметил. */
+  archiveUnlocked?: (item: string, toast: boolean) => void;
 }
 
 export interface PresentOptions {
@@ -173,8 +173,8 @@ export class Director {
         audio.handle(ev);
         break;
       case 'archive':
-        // Уведомление «Новый материал» не показываем (решение владельца 2026-10-13): метка — в шапке документа.
-        this.sinks.archiveUnlocked?.(ev.item);
+        // Тоста «Новый материал» нет (решение владельца 2026-10-13): метка — в шапке документа и на кнопке блокнота.
+        this.sinks.archiveUnlocked?.(ev.item, ev.toast);
         break;
       case 'checkpoint':
         this.sinks.checkpoint(ev.reason);

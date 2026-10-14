@@ -25,7 +25,7 @@ function setup() {
       checkpoints.push(r);
       t.push(`checkpoint:${r}`);
     },
-    archiveUnlocked: (i) => archived.push(i),
+    archiveUnlocked: (i, toast) => archived.push(toast ? i : `${i} (тихо)`),
   });
   return { t, director, checkpoints, archived };
 }
@@ -83,7 +83,8 @@ describe('Director: обычный показ', () => {
       'checkpoint:block',
     ]);
     expect(checkpoints).toEqual(['block']);
-    expect(archived).toEqual(['arc_x', 'arc_y']); // профиль узнаёт обо всех; уведомлений «Новый материал» нет (2026-10-13)
+    // профиль узнаёт обо всех; тихие (toast: false — финал, отладка) не ставят метку на кнопке блокнота
+    expect(archived).toEqual(['arc_x', 'arc_y (тихо)']);
     expect(director.holdingBlack).toBe(false);
   });
 

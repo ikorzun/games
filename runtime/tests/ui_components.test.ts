@@ -507,6 +507,20 @@ describe('QuickMenu', () => {
     expect(document.activeElement).not.toBe(btn); // Space потом продвигает сюжет, а не повторяет «Журнал»
   });
 
+  it('метка «есть новое» на блокноте: квадрат в углу, иконка вздрагивает с каждой новой записью; снимается целиком', () => {
+    const qm = new QuickMenu(() => undefined);
+    const nb = qm.el.querySelector<HTMLElement>('[data-action="notebook"]')!;
+    expect(nb.className).not.toMatch(/has-new|is-nudged/);
+    qm.setBadge('notebook', true);
+    expect(nb.classList.contains('has-new')).toBe(true);
+    expect(nb.classList.contains('is-nudged')).toBe(true);
+    qm.setBadge('notebook', true);
+    expect(nb.classList.contains('is-nudged')).toBe(true);
+    qm.setBadge('notebook', false);
+    expect(nb.className).not.toMatch(/has-new|is-nudged/);
+    expect(qm.el.querySelectorAll('.has-new')).toHaveLength(0);
+  });
+
   it('переключатели Auto / Skip отражают состояние классом и aria-pressed', () => {
     const qm = new QuickMenu(() => undefined);
     const pressed = (a: string): string | null | undefined => qm.el.querySelector(`[data-action="${a}"]`)?.getAttribute('aria-pressed');

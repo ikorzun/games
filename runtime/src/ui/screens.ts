@@ -709,13 +709,41 @@ export class SaveLoadScreen extends BaseScreen {
 
 // ───────────────────────────── архив ─────────────────────────────
 
+export interface ArchiveOptions {
+  /** Скан бумаги по id ассета (как у окна документа): адрес, если уже загружен, и промис загрузки. */
+  documentArt?: (docId: string) => { url: string | null; ready: Promise<string | null> };
+  /** Открыть бумагу крупно — окном документа поверх блокнота. Нет — бумага лежит записью с текстом. */
+  onOpenDocument?: (item: ArchiveItem) => void;
+  /** Запись появилась после того, как блокнот открывали в последний раз: на ней штамп «новый материал». */
+  isNew?: (id: string) => boolean;
+}
+
+/** Наклон бумажки и вид бумаги — от id записи, а не от места в списке: новая запись не перекладывает старые. */
+const NOTE_TILTS = [-1.3, 0.9, -0.5, 1.2, -0.9, 0.4, 1.4, -0.3];
+
+/** FNV-1a: бумаги и наклоны распределяются по записям ровнее, чем простой полиномиальный хэш. */
+function noteSeed(id: string): number {
+  let s = 2166136261;
+  for (const ch of id) s = Math.imul(s ^ ch.charCodeAt(0), 16777619) >>> 0;
+  return s;
+}
+
+/**
+ * Блокнот следователя (в меню — «Архив»): страница общей тетради в клетку, к ней приклеены бумажки — факты на обрывке,
+ * карточке или листке; бумаги дела — сканом под скрепкой (касание открывает окно документа). Новое с прошлого раза —
+ * под красным штампом.
+ */
 export class ArchiveScreen extends BaseScreen {
+  /** Esc закрывает блокнот мимо onDone: хозяин узнаёт о закрытии отсюда. */
+  onClose?: () => void;
+
   constructor(
     private readonly episode: Episode,
     private readonly unlocked: () => readonly string[],
     private readonly onDone: () => void,
     /** В игре тот же список открывается кнопкой «Блокнот» — с её заголовком. */
     private readonly titleKey = 'ui.archive.title',
+    private readonly opts: ArchiveOptions = {},
   ) {
     super('vn-archive');
   }
@@ -725,26 +753,69 @@ export class ArchiveScreen extends BaseScreen {
     const items: ArchiveItem[] = (this.episode.archive_items ?? []).filter((a) => ids.has(a.id));
     fill(
       this.el,
-      card(
-        'vn-archive__card',
-        h('h2', { class: 'vn-card__title', text: t(this.titleKey) }),
-        items.length === 0
-          ? h('p', { class: 'vn-muted', text: t('ui.archive.empty') })
-          : h(
-              'ul',
-              { class: 'vn-archive__list' },
-              ...items.map((a) =>
-                h(
-                  'li',
-                  { class: `vn-archive__item is-${a.kind}` },
-                  h('h3', { text: t(a.title_key) }),
-                  a.real_fact ? h('span', { class: 'vn-badge', text: t('ui.archive.real_fact') }) : null,
-                  a.text_key ? h('p', { text: t(a.text_key) }) : null,
-                ),
-              ),
-            ),
-        h('div', { class: 'vn-actions' }, backButton(this.onDone)),
+      h(
+        'div',
+        { class: 'vn-archive__box' },
+        h(
+          'div',
+          { class: 'vn-archive__head' },
+          h('h2', { class: 'vn-archive__title', text: t(this.titleKey) }),
+          // Крестик — как у окна документа.
+          h(
+            'button',
+            { class: 'vn-document__close', type: 'button', title: t('ui.common.close'), aria: { label: t('ui.common.close') }, on: { click: this.onDone } },
+            icon('close'),
+          ),
+        ),
+        h(
+          'div',
+          { class: 'vn-archive__cover' },
+          h(
+            'div',
+            { class: 'vn-archive__page' },
+            items.length === 0
+              ? h('p', { class: 'vn-archive__empty', text: t('ui.archive.empty') })
+              : h('ul', { class: 'vn-archive__list' }, ...items.map((a) => this.note(a))),
+          ),
+        ),
       ),
+    );
+  }
+
+  private note(a: ArchiveItem): HTMLElement {
+    const seed = noteSeed(a.id);
+    const title = t(a.title_key);
+    const open = this.opts.onOpenDocument;
+    const art = a.kind === 'document' && a.asset && open ? this.opts.documentArt?.(a.asset) : undefined;
+    let body: HTMLElement[];
+    if (art) {
+      const img = h('img', { class: 'vn-archive__scan' });
+      img.alt = '';
+      if (art.url) img.src = art.url;
+      else
+        void art.ready.then((url) => {
+          if (url) img.src = url;
+        });
+      body = [
+        h('button', { class: 'vn-archive__open', type: 'button', aria: { label: title }, on: { click: () => open?.(a) } }, img, icon('clip')),
+        h('h3', { text: title }),
+      ];
+    } else {
+      body = [
+        h('h3', { text: title }),
+        ...(a.real_fact ? [h('span', { class: 'vn-badge', text: t('ui.archive.real_fact') })] : []),
+        ...(a.text_key ? [h('p', { text: t(a.text_key) })] : []),
+      ];
+    }
+    return h(
+      'li',
+      {
+        class: `vn-archive__item is-${a.kind}${art ? ' has-scan' : ''}`,
+        data: { paper: seed % 3 },
+        style: { '--tilt': `${NOTE_TILTS[(seed >>> 3) % NOTE_TILTS.length]}deg` },
+      },
+      h('div', { class: 'vn-archive__paper' }, ...body),
+      this.opts.isNew?.(a.id) ? h('span', { class: 'vn-archive__stamp', text: t('ui.archive.new_item') }) : null,
     );
   }
 }
@@ -803,6 +874,8 @@ export class DocumentScreen extends BaseScreen {
     private imageUrl: string | null = null,
     /** Текст впечатан в картинку (настоящая бумага, пока по-русски): картинка целиком, касание — увеличить. */
     private readonly textInImage = false,
+    /** Бумага только что пришла в дело — метка «новый материал»; из блокнота её открывают уже знакомой, без метки. */
+    private readonly fresh = true,
   ) {
     super('vn-document');
   }
@@ -831,7 +904,7 @@ export class DocumentScreen extends BaseScreen {
         'div',
         { class: 'vn-document__heading' },
         item ? h('h2', { class: 'vn-document__title', text: t(item.title_key) }) : null,
-        item ? h('span', { class: 'vn-document__tag', text: t('ui.archive.new_item') }) : null,
+        item && this.fresh ? h('span', { class: 'vn-document__tag', text: t('ui.archive.new_item') }) : null,
       ),
       h(
         'button',

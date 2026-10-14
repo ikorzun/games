@@ -189,7 +189,9 @@ const PLACEHOLDER = /\[(?:ui|common|ep\d+)\.[a-z0-9_.]+\]/;
 
 async function scenarioPlay(browser, baseUrl) {
   section('Игра: загрузка → предупреждение → первый выбор → сейв/лоад → язык (новелла, ?episode=ep01_murylev&vn=1)');
-  const { page, context, log } = await openPage(browser, baseUrl, `?debug=1&vn=1&episode=${LEGACY}`, { locale: 'ru-RU' }, null);
+  // ?lang= открывает все четыре языка (проверка переводов): без него у эпизода, переведённого только на русский,
+  // выбора языка нет вовсе (это проверяет «Ход следствия»), а здесь проверяется сама смена языка на лету.
+  const { page, context, log } = await openPage(browser, baseUrl, `?debug=1&vn=1&episode=${LEGACY}&lang=ru`, { locale: 'ru-RU' }, null);
   await toMenu(page);
   // Игра открывается сразу главным меню (без заставки), и при его показе стартует главная тема передачи
   // (в смоуке автозапуск разрешён флагом Chromium; в браузере без жеста трек ждёт первого касания или клика).
@@ -200,7 +202,7 @@ async function scenarioPlay(browser, baseUrl) {
   check('меню показано, window.__vn установлен', await page.evaluate(() => typeof window.__vn?.goto === 'function'));
   const isBridge = await page.evaluate(() => !!window.bridge);
   console.log(`  (платформа: ${isBridge ? 'Playgama Bridge' : 'web-plain'}; рендерер сцены: ${await page.evaluate(() => window.__vn.renderer())})`);
-  check('язык выбран по браузеру (ru-RU → ru)', (await page.evaluate(() => document.documentElement.lang)) === 'ru');
+  check('язык из адреса (?lang=ru)', (await page.evaluate(() => document.documentElement.lang)) === 'ru');
 
   // клик по эпизоду (сейва нет) → новая игра → контент-предупреждение
   check('на полке открыт текущий эпизод и есть закрытые', (await page.locator('.vn-ep.is-open').count()) === 1 && (await page.locator('.vn-ep.is-locked').count()) > 0);
@@ -619,15 +621,26 @@ async function scenarioMatrix(browser, baseUrl) {
       await page.evaluate(() => window.__vn.goto('s12'));
       await advanceUntil(page, (p) => p.kind === 'line' && p.style === 'say');
       await probe('dialogue');
+      // «только история» до мини-игры: оболочка читает её при старте, и «Пропустить» виден сразу
+      await page.evaluate(() => window.__vn.settings({ storyOnly: true }));
       await page.evaluate(() => window.__vn.goto('s11'));
       await advanceUntil(page, (p) => p.kind === 'choice');
       await probe('choice');
       await page.keyboard.press('1');
-      await advanceUntil(page, (p) => p.kind === 'minigame');
+      // до мини-игры по пути есть и другие развилки (c_levina): на них — первый вариант
+      for (let i = 0, p = await pending(page); p?.kind !== 'minigame'; i++, p = await pending(page)) {
+        if (i > 800) throw new Error(`до мини-игры не дошли: ${JSON.stringify(p)}`);
+        await page.keyboard.press(p?.kind === 'choice' ? '1' : 'Space');
+        await sleep(30);
+      }
       await probe('minigame');
-      // Настоящий осмотр прячет «Пропустить» до skip.after_fails промахов: один тап мимо зон открывает его.
-      if (await page.$('.mg-scene__stage')) await page.click('.mg-scene__stage', { position: { x: 4, y: 4 } });
-      await page.click('.mg-btn.is-skip');
+      // Осмотр открывается вступлением (макет 2026-10-13), «Пропустить» прячет до skip.after_fails промахов — в «только
+      // истории» он виден сразу; итог ждёт «Далее».
+      const start = await page.$('.mg-shell__btn.is-start');
+      if (start && (await start.isVisible())) await start.click(); // вступление осмотра: «Начать осмотр»
+      await page.locator('.is-skip:visible').first().click();
+      const next = await page.waitForSelector('.mg-shell__btn.is-next', { state: 'visible', timeout: 3000 }).catch(() => null);
+      if (next) await next.click();
       await sleep(300);
       await page.click('.vn-qbtn--settings');
       await page.waitForSelector('.vn-settings');
@@ -878,6 +891,13 @@ async function scenarioHod(browser, baseUrl) {
   section('Ход следствия (по умолчанию): меню → день 1 → день 2 → версия → реконструкция → среда → доска → четверг → пятница → развязка');
   const { page, context, log } = await openPage(browser, baseUrl, '?debug=1', { locale: 'ru-RU' });
   await toMenu(page);
+  // Эпизод переведён только на русский: выбора языка нет, а английский браузер получает русский интерфейс, не смесь.
+  const en = await openPage(browser, baseUrl, '?debug=1', { locale: 'en-US' });
+  await toMenu(en.page);
+  const enLang = await en.page.evaluate(() => [document.documentElement.lang, document.querySelectorAll('.vn-menu__icons button').length]);
+  await en.context.close();
+  check('эпизод только на русском: и в английском браузере интерфейс русский, глобуса в меню нет (две иконки — архив и настройки)',
+    enLang[0] === 'ru' && enLang[1] === 2 && (await page.locator('.vn-menu__icons button').count()) === 2, JSON.stringify(enLang));
   // «только история»: у доски, сверки и допроса «Пропустить» виден сразу (осмотр и картотеку смоук решает кликами)
   await page.evaluate(() => window.__vn.settings({ textSpeed: 5, lang: 'ru', storyOnly: true }));
   check('на полке один открытый эпизод', (await page.locator('.vn-ep.is-open').count()) === 1);
@@ -912,15 +932,28 @@ async function scenarioHod(browser, baseUrl) {
     // Блокнот после Галины: факты разговора уже в нём
     if (!notes.checked && p.kind === 'choice' && p.id === 'c_route_d1') {
       notes.checked = true;
+      const badge = await page.$eval('.vn-qbtn--notebook', (b) => b.classList.contains('has-new'));
       await page.click('.vn-qbtn--notebook');
       await page.waitForSelector('.vn-archive', { state: 'visible' });
       const titles = await page.$$eval('.vn-archive__item h3', (els) => els.map((e) => e.textContent));
-      notes.notebook = { title: await page.locator('.vn-archive .vn-card__title').textContent(), titles };
+      const stamps = await page.locator('.vn-archive__stamp').count();
+      const scans = await page.locator('.vn-archive__open').count();
+      notes.notebook = { title: await page.locator('.vn-archive__title').textContent(), titles, badge, stamps, scans };
       await sleep(400); // экран проявляется
       notes.layout.push(...(await page.evaluate(layoutProbe)));
       await shot('notebook');
+      // скан бумаги открывает окно документа поверх блокнота — без метки «новый материал»; Esc возвращает в блокнот
+      if (scans > 0) {
+        await page.click('.vn-archive__open');
+        await page.waitForSelector('.vn-document', { state: 'visible' });
+        notes.notebook.doc = { title: await page.locator('.vn-document__title').textContent(), tag: await page.locator('.vn-document__tag').count() };
+        await page.keyboard.press('Escape');
+        await page.waitForSelector('.vn-document', { state: 'detached' });
+        notes.notebook.back = await page.locator('.vn-archive').isVisible();
+      }
       await page.keyboard.press('Escape');
       await page.waitForSelector('.vn-archive', { state: 'detached' });
+      notes.notebook.badgeAfter = await page.$eval('.vn-qbtn--notebook', (b) => b.classList.contains('has-new'));
     }
     if (p.kind === 'choice' && p.id === 'd_who' && !notes.deduction) {
       notes.deduction = true;
@@ -962,6 +995,9 @@ async function scenarioHod(browser, baseUrl) {
   });
   check('первый выбор дня — куда ехать: три места', notes.firstChoice?.id === 'c_d1_go' && notes.firstChoice.options.length === 3, JSON.stringify(notes.firstChoice));
   check('блокнот открывается в игре и держит факты Галины', notes.notebook?.title === 'Блокнот' && notes.notebook.titles.includes('Галина: «Сергей Викторович»'), JSON.stringify(notes.notebook));
+  check('блокнот пополнился — метка на кнопке и штампы «новый материал»; бумага открывается сканом без метки; закрыли — метка снята',
+    notes.notebook?.badge === true && notes.notebook.stamps > 0 && notes.notebook.scans > 0 && notes.notebook.doc?.tag === 0 && notes.notebook.back === true && notes.notebook.badgeAfter === false,
+    JSON.stringify(notes.notebook));
   check('маршрут пройден по плану до конца (Сайко ранен при спешке — концовка e_variant)', run.end.ending === 'e_variant', run.choices.join(' → '));
   const st = await stateOf(page);
   check('итог: пятница, четыре места пробы, неверные ходы в версии и на доске стоили самообладания, бумаги показаны', st.vars.day === 5 && ['visited_galina', 'visited_notary', 'visited_flat', 'visited_bti'].every((k) => st.vars[k] === true) && st.vars.visited_zhek === false && st.vars.nerves === 1 && run.docs === 2,
