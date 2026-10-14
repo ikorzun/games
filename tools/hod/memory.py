@@ -601,6 +601,9 @@ STAGING = {
                                "assessors in dark suits"},
     'field_find': {},
     'agency_closed': {'sledak': 'stands at the closed agency door RIGHT of centre, small in the frame, seen from the side; his eyes on the paper sign on the glass'},
+    # экраны биографий — только «Реализм» (фото на экране), без «Воспоминаний»
+    'bio_zoya': {'zoya': 'sits on a courtyard bench with her arm around her grandson, laughing; her eyes on him'},
+    'bio_pyotr': {},
     'gromov_2004': {'sledak_old': 'sits in a leather office chair, turned three-quarter to the RIGHT; his eyes on an unseen interviewer off-camera on the right, never into the lens'},
 }
 GAZE = ('Every person keeps the pose, head turn and gaze of image 1: each looks at another person or an object as written, '

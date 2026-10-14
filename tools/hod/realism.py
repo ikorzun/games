@@ -266,7 +266,16 @@ FIX.update({
                    'toward the dig; his steel watch on his LEFT wrist; behind him the tape, the trenches and the numbered stakes.'),
     'chertanovo_wide': ('The window at the end of the landing is an old wooden double frame painted white, with a small '
                         'ventilation pane — not a plastic window.'),
-    'bio_zoya': 'Zoya Pavlovna is about sixty-six here: grey hair, a lively face, younger than in 1993.',
+    'bio_zoya': ('A black-and-white amateur family photograph from about 1985, slightly faded, with a narrow white border, '
+                 'filling the frame: Zoya Pavlovna at about sixty-six — the woman of the identity photo, but eight years '
+                 'younger: a fuller face with fewer wrinkles, grey hair in a neat bun, no headscarf, a lively look — '
+                 'in a light summer dress and a cardigan sits on a courtyard bench with her arm around her grandson, a boy of '
+                 'about twelve, laughing at something he says; they look at each other, not at the camera; lilac bushes and a '
+                 'panel block behind. Exactly two people, each with two hands. No writing.'),
+    'bio_pyotr': ('A black-and-white factory photograph from about 1975, slightly faded, with a narrow white border, filling '
+                  'the frame: Pyotr Ilyich, a lean man of about sixty in a work smock and a cap, stands at his lathe measuring '
+                  'a freshly turned steel part with a caliper, absorbed in the work, not looking at the camera; exactly two '
+                  'hands — one holds the caliper, the other the part; nobody else; other machines soft behind. No writing.'),
     'field_find': (
         'The same morning and the same camera as the wide frame of image 1, but nobody stands in the foreground: beyond the '
         'red-and-white tape, inside the trench of turned earth by the numbered stake «3», one deceased adult lies diagonally — '
@@ -287,7 +296,10 @@ FIX.update({
                   'only darkness and a distant streetlight.'),
 })
 # Пересъёмка с новой мизансценой: картинка 1 — только место, люди и свет; камера и расстановка — по FIX.
-RESTAGE = {'search_wide', 'search_keys', 'search_papers', 'field_wide', 'field_ots_expert', 'field_oper', 'field_find'}
+RESTAGE = {'search_wide', 'search_keys', 'search_papers', 'field_wide', 'field_ots_expert', 'field_oper', 'field_find', 'bio_zoya'}
+
+# Кто в кадре, если людей нет в CHARS / STAGING (фото на экранах биографий): описано в FIX.
+WHO = {'bio_zoya': 'WHO IS WHERE: as described in the FIX below.', 'bio_pyotr': 'WHO IS WHERE: as described in the FIX below.'}
 
 # Предметы-образцы (картинка после лиц): что именно нарисовать.
 GRANDSON = (os.path.join(HQ, 'props', 'prop_grandson_photo.png'),
@@ -510,7 +522,7 @@ def inputs(sid: str) -> tuple[str, list[str]]:
              + (f' Reference objects: {"; ".join(props)}.' if props else '')
              + room)
     clothes = {**memory.CLOTHES, **memory.CLOTHES_BY_SHOT.get(sid, {})}
-    who = NEW.get(sid, {}).get('who') or (
+    who = NEW.get(sid, {}).get('who') or WHO.get(sid) or (
         ('WHO IS WHERE: ' + ' '.join(f'{memory.CHARS[w]["name"]} ({clothes.get(w, "")}): {t}.' for w, t in staging.items()
                                      if w in memory.CHARS)) if staging else 'There are no people in this frame.')
     fix = FIX.get(sid) or NEW.get(sid, {}).get('fix')
