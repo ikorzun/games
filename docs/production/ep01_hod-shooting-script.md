@@ -798,6 +798,8 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 - **НИНА ЛЕВИНА:** Сервант, говоришь? Завтра с утра съезжу с понятыми. По протоколу — значит, в дело. _(если `photo_later`)_
 - **НИНА ЛЕВИНА:** Очки дома, а подпись в доверенности ровная. Значит, читал ей кто-то другой. _(если `glasses_found`)_
 - **НИНА ЛЕВИНА:** Нитроглицерин оставила? Такие на юг не уезжают, Громов. _(если `pills_found`)_
+- **НИНА ЛЕВИНА:** Календарь на двадцать седьмом июня, а двадцать восьмого квартиру уже продавали. С того дня её никто и не видел. _(если `calendar_seen`)_
+- **НИНА ЛЕВИНА:** И пенсионное на кровати оставила. Значит, уходила ненадолго — и не вернулась. _(если `pension_found`)_
 - **САЙКО:** Звонил знакомый с Пресни. Ковригин сегодня отпустил помощницу — в отпуск, с завтрашнего дня. Адреса она не оставила. _(если `visited_flat && !lyuda_talked`)_
 - переменные: lyuda_gone set True
 - **ВНУТРЕННИЙ ГОЛОС:** Лапины кому-то позвонили, едва мы ушли. Или нотариус сам всё понял. _(если `visited_flat && !lyuda_talked`)_
@@ -865,10 +867,14 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 - **НИНА ЛЕВИНА:** И очки её — на серванте, на футляре. И нитроглицерин с подоконника. Всё в протоколе. _(если `photo_later && !glasses_found && !pills_found`)_
 - **НИНА ЛЕВИНА:** И очки её — на серванте, на футляре. Тоже в протоколе. _(если `photo_later && !glasses_found && pills_found`)_
 - **НИНА ЛЕВИНА:** И нитроглицерин с подоконника. Тоже в протоколе. _(если `photo_later && glasses_found && !pills_found`)_
+- **НИНА ЛЕВИНА:** Календарь со стены — листок на двадцать седьмом июня. Тоже в протоколе. _(если `photo_later && !calendar_seen`)_
+- **НИНА ЛЕВИНА:** И пенсионное удостоверение с кровати. _(если `photo_later && !pension_found`)_
 - архив: открыт материал `n_photo`
 - архив: открыт материал `n_glasses`
 - архив: открыт материал `n_pills`
-- переменные: glasses_found set True, pills_found set True, photo_seen set True
+- архив: открыт материал `n_calendar`
+- архив: открыт материал `n_pension`
+- переменные: glasses_found set True, pills_found set True, photo_seen set True, calendar_seen set True, pension_found set True
 - звук: sfx `sfx_phone_ring`
 - **ИРИНА:** Это Ирина Лапина. Вчера, как вы ушли, муж позвонил нотариусу. Посредник так велел: если кто придёт — звонить. _(если `lapins_told_truth`)_
 - архив: открыт материал `n_call`
@@ -1078,10 +1084,14 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 - **НИНА ЛЕВИНА:** И очки её — на серванте, на футляре. И нитроглицерин с подоконника. Всё в протоколе. _(если `photo_later && !photo_seen && !lens_d3 && !glasses_found && !pills_found`)_
 - **НИНА ЛЕВИНА:** И очки её — на серванте, на футляре. Тоже в протоколе. _(если `photo_later && !photo_seen && !lens_d3 && !glasses_found && pills_found`)_
 - **НИНА ЛЕВИНА:** И нитроглицерин с подоконника. Тоже в протоколе. _(если `photo_later && !photo_seen && !lens_d3 && glasses_found && !pills_found`)_
+- **НИНА ЛЕВИНА:** Календарь со стены — листок на двадцать седьмом июня. Тоже в протоколе. _(если `photo_later && !photo_seen && !lens_d3 && !calendar_seen`)_
+- **НИНА ЛЕВИНА:** И пенсионное удостоверение с кровати. _(если `photo_later && !photo_seen && !lens_d3 && !pension_found`)_
 - архив: открыт материал `n_photo`
 - архив: открыт материал `n_glasses`
 - архив: открыт материал `n_pills`
-- переменные: glasses_found set True, pills_found set True, photo_seen set True
+- архив: открыт материал `n_calendar`
+- архив: открыт материал `n_pension`
+- переменные: glasses_found set True, pills_found set True, photo_seen set True, calendar_seen set True, pension_found set True
 - → d3_lens
 - **ВНУТРЕННИЙ ГОЛОС:** Договор у Лапиных — я к ним так и не доехал. Привезу сегодня — вечером Левина посмотрит его под лампой. _(если `!case_opened && third == 'flat'`)_
 - **ВНУТРЕННИЙ ГОЛОС:** Договора у меня нет: к Лапиным я так и не доехал. Бумагу к пятнице дадут только люди — Ковригин или тот, кто напишет заявление. _(если `!case_opened && third != 'flat'`)_
@@ -1099,10 +1109,14 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 - **НИНА ЛЕВИНА:** И очки её — на серванте, на футляре. И нитроглицерин с подоконника. Всё в протоколе. _(если `photo_later && !photo_seen && !glasses_found && !pills_found`)_
 - **НИНА ЛЕВИНА:** И очки её — на серванте, на футляре. Тоже в протоколе. _(если `photo_later && !photo_seen && !glasses_found && pills_found`)_
 - **НИНА ЛЕВИНА:** И нитроглицерин с подоконника. Тоже в протоколе. _(если `photo_later && !photo_seen && glasses_found && !pills_found`)_
+- **НИНА ЛЕВИНА:** Календарь со стены — листок на двадцать седьмом июня. Тоже в протоколе. _(если `photo_later && !photo_seen && !calendar_seen`)_
+- **НИНА ЛЕВИНА:** И пенсионное удостоверение с кровати. _(если `photo_later && !photo_seen && !pension_found`)_
 - архив: открыт материал `n_photo`
 - архив: открыт материал `n_glasses`
 - архив: открыт материал `n_pills`
-- переменные: glasses_found set True, pills_found set True, photo_seen set True
+- архив: открыт материал `n_calendar`
+- архив: открыт материал `n_pension`
+- переменные: glasses_found set True, pills_found set True, photo_seen set True, calendar_seen set True, pension_found set True
 - переменные: lens_d3_done set True
 - МИНИ-ИГРА `document_check` «Проверка документов»:  _(исходы: success → d3_lens_ok; fail → d3_lens_fail)_
 
@@ -1582,10 +1596,14 @@ _Август 1993-го. Пенсионеры пропадают, их квар�
 - **НИНА ЛЕВИНА:** И очки её — на серванте, на футляре. И нитроглицерин с подоконника. Всё в протоколе. _(если `photo_later && !photo_seen && !glasses_found && !pills_found`)_
 - **НИНА ЛЕВИНА:** И очки её — на серванте, на футляре. Тоже в протоколе. _(если `photo_later && !photo_seen && !glasses_found && pills_found`)_
 - **НИНА ЛЕВИНА:** И нитроглицерин с подоконника. Тоже в протоколе. _(если `photo_later && !photo_seen && glasses_found && !pills_found`)_
+- **НИНА ЛЕВИНА:** Календарь со стены — листок на двадцать седьмом июня. Тоже в протоколе. _(если `photo_later && !photo_seen && !calendar_seen`)_
+- **НИНА ЛЕВИНА:** И пенсионное удостоверение с кровати. _(если `photo_later && !photo_seen && !pension_found`)_
 - архив: открыт материал `n_photo`
 - архив: открыт материал `n_glasses`
 - архив: открыт материал `n_pills`
-- переменные: glasses_found set True, pills_found set True, photo_seen set True
+- архив: открыт материал `n_calendar`
+- архив: открыт материал `n_pension`
+- переменные: glasses_found set True, pills_found set True, photo_seen set True, calendar_seen set True, pension_found set True
 - **НИНА ЛЕВИНА:** Вешай всё, что набегал. Только то, что есть, — без «наверное».
 - **НИНА ЛЕВИНА:** И не торопись. Во вторник ты половину угадал. _(если `version_weak`)_
 - МИНИ-ИГРА `evidence_board` «Доска Левиной»:  _(исходы: success → d3_board_done; partial → d3_board_done; fail → d3_board_done)_

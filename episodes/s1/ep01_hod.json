@@ -317,6 +317,16 @@
    "default": false,
    "doc": "Её нитроглицерин найден: при осмотре или Левиной по протоколу."
   },
+  "calendar_seen": {
+   "type": "bool",
+   "default": false,
+   "doc": "Календарь на 27 июня найден: при осмотре или Левиной по протоколу."
+  },
+  "pension_found": {
+   "type": "bool",
+   "default": false,
+   "doc": "Её пенсионное удостоверение найдено: при осмотре или Левиной по протоколу."
+  },
   "galina_open": {
    "type": "bool",
    "default": false,
@@ -4210,6 +4220,18 @@
     },
     {
      "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d1_eve_rest.x_calendar",
+     "when": "calendar_seen"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d1_eve_rest.x_pension",
+     "when": "pension_found"
+    },
+    {
+     "do": "say",
      "who": "oper",
      "key": "ep01.h.d1_eve_rest.l08",
      "when": "visited_flat && !lyuda_talked"
@@ -4553,6 +4575,18 @@
      "when": "photo_later && glasses_found && !pills_found"
     },
     {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d2_calls.x_seized_cal",
+     "when": "photo_later && !calendar_seen"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d2_calls.x_seized_pen",
+     "when": "photo_later && !pension_found"
+    },
+    {
      "do": "archive_unlock",
      "item": "n_photo",
      "when": "photo_later"
@@ -4566,6 +4600,16 @@
      "do": "archive_unlock",
      "item": "n_pills",
      "when": "photo_later && !pills_found"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_calendar",
+     "when": "photo_later && !calendar_seen"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_pension",
+     "when": "photo_later && !pension_found"
     },
     {
      "do": "set",
@@ -4582,6 +4626,16 @@
       },
       {
        "var": "photo_seen",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "calendar_seen",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "pension_found",
        "op": "set",
        "value": true
       }
@@ -5684,6 +5738,20 @@
      "shot": "sh_office_d2_ots_boss"
     },
     {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d3_office.x_seized_cal",
+     "when": "photo_later && !photo_seen && !lens_d3 && !calendar_seen",
+     "shot": "sh_office_d2_ots_boss"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d3_office.x_seized_pen",
+     "when": "photo_later && !photo_seen && !lens_d3 && !pension_found",
+     "shot": "sh_office_d2_ots_boss"
+    },
+    {
      "do": "archive_unlock",
      "item": "n_photo",
      "when": "photo_later && !photo_seen && !lens_d3"
@@ -5697,6 +5765,16 @@
      "do": "archive_unlock",
      "item": "n_pills",
      "when": "photo_later && !photo_seen && !lens_d3 && !pills_found"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_calendar",
+     "when": "photo_later && !photo_seen && !lens_d3 && !calendar_seen"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_pension",
+     "when": "photo_later && !photo_seen && !lens_d3 && !pension_found"
     },
     {
      "do": "set",
@@ -5713,6 +5791,16 @@
       },
       {
        "var": "photo_seen",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "calendar_seen",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "pension_found",
        "op": "set",
        "value": true
       }
@@ -5802,6 +5890,18 @@
      "when": "photo_later && !photo_seen && glasses_found && !pills_found"
     },
     {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d3_lens.x_seized_cal",
+     "when": "photo_later && !photo_seen && !calendar_seen"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d3_lens.x_seized_pen",
+     "when": "photo_later && !photo_seen && !pension_found"
+    },
+    {
      "do": "archive_unlock",
      "item": "n_photo",
      "when": "photo_later && !photo_seen"
@@ -5815,6 +5915,16 @@
      "do": "archive_unlock",
      "item": "n_pills",
      "when": "photo_later && !photo_seen && !pills_found"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_calendar",
+     "when": "photo_later && !photo_seen && !calendar_seen"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_pension",
+     "when": "photo_later && !photo_seen && !pension_found"
     },
     {
      "do": "set",
@@ -5831,6 +5941,16 @@
       },
       {
        "var": "photo_seen",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "calendar_seen",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "pension_found",
        "op": "set",
        "value": true
       }
@@ -8348,6 +8468,20 @@
      "shot": "sh_office_eve_ots_expert"
     },
     {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d3_board.x_seized_cal",
+     "when": "photo_later && !photo_seen && !calendar_seen",
+     "shot": "sh_office_eve_ots_expert"
+    },
+    {
+     "do": "say",
+     "who": "expert",
+     "key": "ep01.h.d3_board.x_seized_pen",
+     "when": "photo_later && !photo_seen && !pension_found",
+     "shot": "sh_office_eve_ots_expert"
+    },
+    {
      "do": "archive_unlock",
      "item": "n_photo",
      "when": "photo_later && !photo_seen"
@@ -8361,6 +8495,16 @@
      "do": "archive_unlock",
      "item": "n_pills",
      "when": "photo_later && !photo_seen && !pills_found"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_calendar",
+     "when": "photo_later && !photo_seen && !calendar_seen"
+    },
+    {
+     "do": "archive_unlock",
+     "item": "n_pension",
+     "when": "photo_later && !photo_seen && !pension_found"
     },
     {
      "do": "set",
@@ -8377,6 +8521,16 @@
       },
       {
        "var": "photo_seen",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "calendar_seen",
+       "op": "set",
+       "value": true
+      },
+      {
+       "var": "pension_found",
        "op": "set",
        "value": true
       }
@@ -11544,6 +11698,7 @@
        0.1215
       ],
       "label_key": "ep01.h.mg_flat_inspect.hs.photo",
+      "clue_key": "ep01.h.mg_flat_inspect.clue.photo",
       "why_key": "ep01.h.mg_flat_inspect.why.photo",
       "required": true,
       "archive_unlock": "n_photo",
@@ -11564,6 +11719,7 @@
        0.0718
       ],
       "label_key": "ep01.h.mg_flat_inspect.hs.glasses",
+      "clue_key": "ep01.h.mg_flat_inspect.clue.glasses",
       "why_key": "ep01.h.mg_flat_inspect.why.glasses",
       "required": true,
       "archive_unlock": "n_glasses",
@@ -11584,12 +11740,55 @@
        0.044
       ],
       "label_key": "ep01.h.mg_flat_inspect.hs.pills",
+      "clue_key": "ep01.h.mg_flat_inspect.clue.pills",
       "why_key": "ep01.h.mg_flat_inspect.why.pills",
       "required": false,
       "archive_unlock": "n_pills",
       "effects": [
        {
         "var": "pills_found",
+        "op": "set",
+        "value": true
+       }
+      ]
+     },
+     {
+      "id": "calendar",
+      "rect": [
+       0.866,
+       0.173,
+       0.046,
+       0.123
+      ],
+      "label_key": "ep01.h.mg_flat_inspect.hs.calendar",
+      "clue_key": "ep01.h.mg_flat_inspect.clue.calendar",
+      "why_key": "ep01.h.mg_flat_inspect.why.calendar",
+      "required": false,
+      "archive_unlock": "n_calendar",
+      "effects": [
+       {
+        "var": "calendar_seen",
+        "op": "set",
+        "value": true
+       }
+      ]
+     },
+     {
+      "id": "pension",
+      "rect": [
+       0.918,
+       0.827,
+       0.059,
+       0.056
+      ],
+      "label_key": "ep01.h.mg_flat_inspect.hs.pension",
+      "clue_key": "ep01.h.mg_flat_inspect.clue.pension",
+      "why_key": "ep01.h.mg_flat_inspect.why.pension",
+      "required": false,
+      "archive_unlock": "n_pension",
+      "effects": [
+       {
+        "var": "pension_found",
         "op": "set",
         "value": true
        }
@@ -11762,6 +11961,18 @@
    "kind": "fact",
    "title_key": "ep01.h.note.n_pills.title",
    "text_key": "ep01.h.note.n_pills.text"
+  },
+  {
+   "id": "n_calendar",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_calendar.title",
+   "text_key": "ep01.h.note.n_calendar.text"
+  },
+  {
+   "id": "n_pension",
+   "kind": "fact",
+   "title_key": "ep01.h.note.n_pension.title",
+   "text_key": "ep01.h.note.n_pension.text"
   },
   {
    "id": "n_read",

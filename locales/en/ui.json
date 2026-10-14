@@ -121,7 +121,7 @@
   "ui.minigame.no_match": "Doesn't match",
   "ui.minigame.start_search": "Start the search",
   "ui.minigame.move": "Move",
-  "ui.minigame.find_item": "Find an item",
+  "ui.minigame.find_item": "Not found yet",
   "ui.minigame.body_attempts_one": "You have only {n} attempt to spot the details.",
   "ui.minigame.body_attempts_few": "You have only {n} attempts to spot the details.",
   "ui.minigame.body_attempts_many": "You have only {n} attempts to spot the details.",
@@ -170,5 +170,6 @@
   "ui.case.result.best": "Best result",
   "ui.case.photo.flip": "Turn over",
   "ui.case.chapter_done": "Chapter closed",
-  "ui.case.rotate": "Turn your phone: items get bigger"
+  "ui.case.rotate": "Turn your phone: items get bigger",
+  "ui.minigame.finish_search": "Finish the search"
 }

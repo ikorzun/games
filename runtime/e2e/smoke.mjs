@@ -700,7 +700,7 @@ async function solveInspect(page) {
     return [b.left + b.width / 2, b.top + b.height / 2];
   }));
   for (const [x, y] of centers) {
-    if (await page.isVisible('.mg-shell__btn.is-next')) break; // всё обязательное найдено — осмотр закончен
+    if (await page.isVisible('.mg-shell__btn.is-next')) break; // найдено всё — осмотр закончен (режим дела — все цели)
     await clickScene(page, x, y);
     await sleep(120);
   }

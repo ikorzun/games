@@ -121,7 +121,7 @@
   "ui.minigame.no_match": "Не подходит",
   "ui.minigame.start_search": "Начать осмотр",
   "ui.minigame.move": "Переместить",
-  "ui.minigame.find_item": "Найди вещь",
+  "ui.minigame.find_item": "Ещё не найдено",
   "ui.minigame.body_attempts_one": "У вас всего {n} попытка подметить детали.",
   "ui.minigame.body_attempts_few": "У вас всего {n} попытки подметить детали.",
   "ui.minigame.body_attempts_many": "У вас всего {n} попыток подметить детали.",
@@ -170,5 +170,6 @@
   "ui.case.result.best": "Лучший результат",
   "ui.case.photo.flip": "Перевернуть",
   "ui.case.chapter_done": "Глава закрыта",
-  "ui.case.rotate": "Поверните телефон — предметы крупнее"
+  "ui.case.rotate": "Поверните телефон — предметы крупнее",
+  "ui.minigame.finish_search": "Закончить осмотр"
 }

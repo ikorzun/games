@@ -11,12 +11,14 @@
  * С клавиатуры — прицел: стрелки двигают, Enter осматривает.
  *
  * Итог: найдены все обязательные зоны → success; хотя бы одна → partial; ни одной → fail.
- * Игра заканчивается, когда найдено всё обязательное, промахов стало max_misses или вышло время. На экране итога —
+ * Игра заканчивается, когда найдено всё (и необязательное тоже), промахов стало max_misses или вышло время; после
+ * обязательных находок её можно закончить кнопкой «Закончить осмотр». Итог — по обязательным. На экране итога —
  * найденное по порядку и под каждой находкой, что она значит для дела (why_key): находки срабатывают при любом итоге.
  *
  * Раскладка «сцена» (макеты Figma «Claude» 2026-10-13): картинка во весь экран, перед партией — вступление с вопросом
  * и «Начать осмотр», по ходу — перетаскиваемый блок со списком: найденное — номер на белом и название, ненайденное —
- * бледное «Найди вещь» (подсказанное — по имени); «Найдено: n из N» считает все вещи, и необязательные. Мышью картинка видна целиком; пальцем — во всю
+ * бледная загадка, что искать (clue_key; нет её — «Ещё не найдено»; подсказанное — по имени); «Найдено: n из N» считает
+ * все вещи, и необязательные. Мышью картинка видна целиком; пальцем — во всю
  * высоту, шире экрана листается.
  *
  * Режим списка (`list: true`, режим дела — docs/architecture/09-case-mode.md): все цели перечислены в блоке
@@ -42,6 +44,8 @@ export interface Hotspot {
   labelKey: string | null;
   /** Что находка значит и что меняет в деле — строка экрана итога (why_key); null — только название. */
   whyKey: string | null;
+  /** Загадка в блоке, пока вещь не найдена: что искать, не называя вещь (clue_key); null — «Ещё не найдено». */
+  clueKey: string | null;
   required: boolean;
 }
 
@@ -90,7 +94,7 @@ export function parseSceneConfig(cfg: MinigameConfig, id = ''): SceneConfig | nu
     const [x, y, w, hh] = (r as number[]).map(clamp01) as [number, number, number, number];
     if (w <= 0 || hh <= 0) return null;
     seen.add(id);
-    hotspots.push({ id, rect: [x, y, w, hh], labelKey: asStr(item.label_key), whyKey: asStr(item.why_key), required: item.required === true });
+    hotspots.push({ id, rect: [x, y, w, hh], labelKey: asStr(item.label_key), whyKey: asStr(item.why_key), clueKey: asStr(item.clue_key), required: item.required === true });
   }
   const list = cfg.list === true;
   if (list) {
@@ -180,6 +184,8 @@ class CrimeSceneSearch extends MinigameShell {
   private cross!: HTMLElement;
   private list!: HTMLElement;
   private help!: HTMLElement;
+  /** «Закончить осмотр»: появляется, когда обязательное найдено, а искать есть что. */
+  private finishBtn!: HTMLButtonElement;
   private zoneEls = new Map<string, ZoneEls>();
   /** Пропорции картинки (по загруженному файлу) и подгонка поля под экран. */
   private ar = 16 / 9;
@@ -214,6 +220,12 @@ class CrimeSceneSearch extends MinigameShell {
   // ───────────────────────────── разметка ─────────────────────────────
 
   protected override build(): HTMLElement {
+    this.finishBtn = h('button', {
+      class: 'mg-btn mg-shell__btn is-finish',
+      type: 'button',
+      hidden: true,
+      on: { click: () => this.canFinish() && this.conclude('done') },
+    });
     const { cfg } = this;
     const helpId = `mg-scene-help-${++helpSeq}`;
     this.help = h('p', { class: 'mg-scene__help', id: helpId });
@@ -327,8 +339,9 @@ class CrimeSceneSearch extends MinigameShell {
       z.pin.textContent = order >= 0 ? String(order + 1) : '';
       z.tag.textContent = this.label(hs);
     }
-    // Блок: найденное — номер на белом и название; ненайденное — бледное «Найди вещь» (в режиме списка — название
-    // цели), строк столько, сколько вещей на месте; подсказанное — по имени, с красной рамкой номера.
+    // Блок: найденное — номер на белом и название; ненайденное — бледной загадкой, что искать, не называя вещь (нет
+    // загадки — «Ещё не найдено»; в режиме списка — название цели), строк столько, сколько вещей на месте; подсказанное —
+    // по имени, с красной рамкой номера.
     const row = (n: number, text: string, cls: string, id: string | null): HTMLElement =>
       h(
         'li',
@@ -354,9 +367,12 @@ class CrimeSceneSearch extends MinigameShell {
     const ordered = [...left.filter((hs) => hinted.includes(hs.id)), ...left.filter((hs) => !hinted.includes(hs.id))];
     ordered.forEach((hs, j) => {
       const n = found.length + j + 1;
-      rows.push(hinted.includes(hs.id) ? row(n, `${this.t('ui.minigame.hint')}: ${this.label(hs)}`, ' is-hint', hs.id) : row(n, this.t('ui.minigame.find_item'), '', null));
+      rows.push(hinted.includes(hs.id) ? row(n, `${this.t('ui.minigame.hint')}: ${this.label(hs)}`, ' is-hint', hs.id) : row(n, hs.clueKey ? this.t(hs.clueKey) : this.t('ui.minigame.find_item'), '', null));
     });
     fill(this.list, ...rows);
+    // Обязательное найдено, но есть ещё что искать: осмотр можно закончить, не тратя попытки.
+    this.finishBtn.textContent = this.t('ui.minigame.finish_search');
+    this.finishBtn.hidden = !this.canFinish();
   }
 
   private label(hs: Hotspot): string {
@@ -484,8 +500,24 @@ class CrimeSceneSearch extends MinigameShell {
     return { n: this.found.length, total: this.cfg.hotspots.length };
   }
 
+  /**
+   * Осмотр кончается, когда найдено всё (владелец 2026-10-14: «найти нужно 3, а игра заканчивается на 2»), кончились
+   * попытки или игрок сам закончил после обязательных находок («Закончить осмотр»). Итог — по обязательным (evaluate).
+   */
   protected override isComplete(): boolean {
-    return this.foundRequired() >= this.requiredTotal;
+    return this.found.length >= this.cfg.hotspots.length;
+  }
+
+  private canFinish(): boolean {
+    return this.canAct() && this.foundRequired() >= this.requiredTotal && !this.isComplete();
+  }
+
+  protected override extraActions(): HTMLElement[] {
+    return [this.finishBtn];
+  }
+
+  protected override extraActionsVisible(): boolean {
+    return this.canFinish();
   }
 
   protected override evaluate(): MinigameOutcomeKind {

@@ -303,21 +303,35 @@ describe('ход игры: находки, промахи, исходы по п�
     const el = q(r.dom, '.mg-scene__zone[data-id="pills"]');
     expect(el.classList.contains('is-found')).toBe(true);
     expect(q(el, '.mg-scene__pin').textContent).toBe('1');
-    // Блок: найденное — номер и название; ненайденные обязательные — безымянные «Найди вещь».
+    // Блок: найденное — номер и название; ненайденное без загадки (clue_key) — «Ещё не найдено».
     // строк столько, сколько вещей на месте (и необязательная тоже)
-    expect(texts(r.dom, '.mg-scene__item')).toEqual(['1Лекарства', '2Найди вещь', '3Найди вещь', '4Найди вещь']);
+    expect(texts(r.dom, '.mg-scene__item')).toEqual(['1Лекарства', '2Ещё не найдено', '3Ещё не найдено', '4Ещё не найдено']);
     expect(q(r.dom, '.mg-shell__progress').textContent).toBe('Найдено: 1 из 4');
     expect(q(r.dom, '.mg-shell__status').textContent).toBe('Лекарства');
     expect(r.autosaves).toBe(1);
     expect(r.results).toEqual([]);
   });
 
-  it('все обязательные → success; итог показан, onResult — только по «Далее» и ровно один раз', () => {
+  it('ненайденное с загадкой (clue_key): строка блока — загадка, вещь не названа; найдено — название', () => {
+    const CLUE = { ...CFG, hotspots: CFG.hotspots.map((x) => (x.id === 'photo' ? { ...x, clue_key: 'clue.photo' } : x)) };
+    const { r, zone } = play({}, CLUE, {}, { ...STRINGS, 'clue.photo': 'Кого она ждала в гости' });
+    zone('pills');
+    expect(texts(r.dom, '.mg-scene__item')).toEqual(['1Лекарства', '2Ещё не найдено', '3Кого она ждала в гости', '4Ещё не найдено']);
+    zone('photo');
+    expect(texts(r.dom, '.mg-scene__item').slice(0, 2)).toEqual(['1Лекарства', '2Фотография внука']);
+  });
+
+  it('все обязательные → осмотр идёт дальше, «Закончить осмотр» → success; onResult — только по «Далее» и ровно один раз', () => {
     const { r, zone, next } = play();
     zone('glasses');
     zone('pills');
-    expect(r.dom.querySelector('.mg-shell__result:not([hidden])')).toBeNull();
+    expect(btn(r.dom, 'is-finish')).toBeNull();
     zone('photo');
+    // владелец 2026-10-14: «найти нужно 3, а игра заканчивается на 2» — пока есть что искать, осмотр не обрывается
+    expect(r.dom.querySelector('.mg-shell__result:not([hidden])')).toBeNull();
+    expect(btn(r.dom, 'is-finish')?.textContent).toBe('Закончить осмотр');
+    expect(q(r.dom, '.mg-shell__actions').hidden).toBe(false);
+    click(btn(r.dom, 'is-finish'));
     const banner = q(r.dom, '.mg-shell__result');
     expect(banner.hidden).toBe(false);
     expect(banner.dataset.outcome).toBe('success');
@@ -479,6 +493,7 @@ describe('экран итога: что найдено и что это меня
     zone('glasses');
     zone('pills');
     zone('photo');
+    click(btn(r.dom, 'is-finish'));
     r.setStrings({ ...STRINGS, 'hs.glasses': 'Glasses', 'why.glasses': 'She cannot read without them' });
     r.fireLanguageChange();
     expect(texts(r.dom, '.mg-scene__find')[0]).toBe('1GlassesShe cannot read without them');
@@ -725,6 +740,7 @@ describe('таймер', () => {
     zone('glasses');
     zone('pills');
     zone('photo');
+    click(btn(r.dom, 'is-finish'));
     vi.advanceTimersByTime(60000);
     expect(q(r.dom, '.mg-shell__result').dataset.outcome).toBe('success');
     expect(q(r.dom, '.mg-shell__result-note').textContent).toBe('Найдено: 3 из 4');
@@ -754,6 +770,8 @@ describe('пауза', () => {
     zone('glasses');
     zone('pills');
     zone('photo');
+    zone('slippers'); // найдено всё — итог сразу, без «Закончить осмотр»
+    expect(q(r.dom, '.mg-shell__result').hidden).toBe(false);
     m.pause();
     next();
     expect(r.results).toEqual([]);
@@ -955,6 +973,7 @@ describe.skipIf(!hasRepoContent())('настоящая мини-игра ep01 (m
     for (const hs of cfg.hotspots.filter((x) => x.required)) {
       click(stage, { clientX: (hs.rect[0] + hs.rect[2] / 2) * 360, clientY: (hs.rect[1] + hs.rect[3] / 2) * 202 });
     }
+    click(btn(r.dom, 'is-finish'));
     expect(q(r.dom, '.mg-shell__result').dataset.outcome).toBe('success');
     click(btn(r.dom, 'is-next'));
     expect(r.results).toEqual(['success']);

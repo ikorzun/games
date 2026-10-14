@@ -121,7 +121,7 @@
   "ui.minigame.no_match": "No coincide",
   "ui.minigame.start_search": "",
   "ui.minigame.move": "",
-  "ui.minigame.find_item": "",
+  "ui.minigame.find_item": "Aún sin encontrar",
   "ui.minigame.body_attempts_one": "",
   "ui.minigame.body_attempts_few": "",
   "ui.minigame.body_attempts_many": "",
@@ -170,5 +170,6 @@
   "ui.case.result.best": "",
   "ui.case.photo.flip": "",
   "ui.case.chapter_done": "",
-  "ui.case.rotate": ""
+  "ui.case.rotate": "",
+  "ui.minigame.finish_search": "Terminar la búsqueda"
 }

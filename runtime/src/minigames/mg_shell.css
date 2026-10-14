@@ -375,8 +375,12 @@
   border: 0;
 }
 
-/* Блок: ручка «Переместить» и панель */
+/* Блок: ручка «Переместить» и панель. На 30 % меньше прежнего и растёт с экраном (владелец 2026-10-14): единица
+   блока — от ширины окна (при 1440 px — 0,7 прежней), в пределах 0,7–1,2 px, и растёт с настройкой шрифта; правила блока
+   ниже считают в ней же (--u, --ut). Тянется весь блок, а не только ручка. */
 .mg-stage__dock {
+  --u: calc(clamp(0.7px, 0.0608vw, 1.2px) * var(--font-scale, 1));
+  --ut: calc(var(--u) * 1.125);
   position: absolute;
   right: calc(8 * var(--u));
   bottom: calc(8 * var(--u));
@@ -385,7 +389,12 @@
   flex-direction: column;
   gap: calc(11 * var(--u));
   width: min(calc(100% - 16px), calc(290 * var(--u)));
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
+.mg-stage__dock button { cursor: pointer; }
 .mg-stage__handle {
   display: flex;
   align-items: center;
@@ -394,11 +403,8 @@
   font-size: calc(16 * var(--ut));
   line-height: 1;
   color: #fff;
-  cursor: grab;
-  touch-action: none;
-  -webkit-user-select: none;
-  user-select: none;
 }
+.mg-stage__dock.is-dragging,
 .mg-stage__dock.is-dragging .mg-stage__handle {
   cursor: grabbing;
 }
@@ -417,6 +423,11 @@
   padding: calc(16 * var(--u));
   overflow: auto;
   background: rgb(0 0 0 / 0.6);
+  /* Панель — свой контейнер прокрутки: touch-action блока до неё не доходит, задаём заново. */
+  touch-action: none;
+}
+.mg-stage__dock.is-scroll .mg-stage__panel {
+  touch-action: pan-y;
 }
 .mg-stage .mg-shell__title {
   margin: 0;

@@ -29,19 +29,24 @@ def key(suffix: str, text: str) -> str:
     return k
 
 
-def _line(step: dict, text: str, **kw) -> dict:
-    _cur['n'] += 1
-    step['key'] = key(f'l{_cur["n"]:02d}', text)
+def _line(step: dict, text: str, kid=None, **kw) -> dict:
+    """kid — свой ключ реплики вне счётчика сцены: новая реплика посреди озвученной сцены не сдвигает ключи
+    следующих (озвучка лежит по ключам)."""
+    if kid:
+        step['key'] = key(kid, text)
+    else:
+        _cur['n'] += 1
+        step['key'] = key(f'l{_cur["n"]:02d}', text)
     step.update({k: v for k, v in kw.items() if v is not None})
     return step
 
 
-def say(who, text, when=None, shot=None, expression=None, beat=None):
-    return _line({'do': 'say', 'who': who}, text, when=when, shot=f'sh_{shot}' if shot else None, expression=expression, beat=beat)
+def say(who, text, when=None, shot=None, expression=None, beat=None, kid=None):
+    return _line({'do': 'say', 'who': who}, text, kid, when=when, shot=f'sh_{shot}' if shot else None, expression=expression, beat=beat)
 
 
-def inner(text, when=None, shot=None):
-    return _line({'do': 'narrate', 'style': 'inner'}, text, when=when, shot=f'sh_{shot}' if shot else None)
+def inner(text, when=None, shot=None, kid=None):
+    return _line({'do': 'narrate', 'style': 'inner'}, text, kid, when=when, shot=f'sh_{shot}' if shot else None)
 
 
 def vo(text, when=None, shot=None):
@@ -125,10 +130,15 @@ def seized(when):
         say('expert', 'И очки её — на серванте, на футляре. И нитроглицерин с подоконника. Всё в протоколе.', when=f'{when} && !glasses_found && !pills_found'),
         say('expert', 'И очки её — на серванте, на футляре. Тоже в протоколе.', when=f'{when} && !glasses_found && pills_found'),
         say('expert', 'И нитроглицерин с подоконника. Тоже в протоколе.', when=f'{when} && glasses_found && !pills_found'),
+        say('expert', 'Календарь со стены — листок на двадцать седьмом июня. Тоже в протоколе.', when=f'{when} && !calendar_seen', kid='x_seized_cal'),
+        say('expert', 'И пенсионное удостоверение с кровати.', when=f'{when} && !pension_found', kid='x_seized_pen'),
         unlock('n_photo', when=when),
         unlock('n_glasses', when=f'{when} && !glasses_found'),
         unlock('n_pills', when=f'{when} && !pills_found'),
-        setv(e('glasses_found', 'set', True), e('pills_found', 'set', True), e('photo_seen', 'set', True), when=when),
+        unlock('n_calendar', when=f'{when} && !calendar_seen'),
+        unlock('n_pension', when=f'{when} && !pension_found'),
+        setv(e('glasses_found', 'set', True), e('pills_found', 'set', True), e('photo_seen', 'set', True),
+             e('calendar_seen', 'set', True), e('pension_found', 'set', True), when=when),
     ]
 
 
@@ -811,6 +821,8 @@ scene('d1_eve_rest', 'b2_evening', 'hod_office_eve', lambda: [
     say('expert', 'Сервант, говоришь? Завтра с утра съезжу с понятыми. По протоколу — значит, в дело.', when='photo_later'),
     say('expert', 'Очки дома, а подпись в доверенности ровная. Значит, читал ей кто-то другой.', when='glasses_found'),
     say('expert', 'Нитроглицерин оставила? Такие на юг не уезжают, Громов.', when='pills_found'),
+    say('expert', 'Календарь на двадцать седьмом июня, а двадцать восьмого квартиру уже продавали. С того дня её никто и не видел.', when='calendar_seen', kid='x_calendar'),
+    say('expert', 'И пенсионное на кровати оставила. Значит, уходила ненадолго — и не вернулась.', when='pension_found', kid='x_pension'),
     say('oper', 'Звонил знакомый с Пресни. Ковригин сегодня отпустил помощницу — в отпуск, с завтрашнего дня. Адреса она не оставила.', when='visited_flat && !lyuda_talked'),
     setv(e('lyuda_gone', 'set', True), when='visited_flat && !lyuda_talked'),
     inner('Лапины кому-то позвонили, едва мы ушли. Или нотариус сам всё понял.', when='visited_flat && !lyuda_talked'),
@@ -1821,14 +1833,27 @@ MINIGAMES = {
             # вопрос нотариусу c_*_ask, реплики Левиной в d1_eve_rest)
             'hotspots': [
                 {'id': 'photo', 'rect': [0.1087, 0.3218, 0.0456, 0.1215], 'label_key': key('hs.photo', 'Фото внука в серванте'),
+                 'clue_key': key('clue.photo', 'Кто у неё был из родных'),
                  'why_key': key('why.photo', 'У Зои Павловны один родственник — внук в Самаре. А Лапиным сказали, что она уехала к родне на юг. Громов спросит их об этом сразу.'),
                  'required': True, 'archive_unlock': 'n_photo', 'effects': [e('photo_seen', 'set', True)]},
                 {'id': 'glasses', 'rect': [0.0898, 0.6169, 0.0781, 0.0718], 'label_key': key('hs.glasses', 'Её очки на футляре'),
+                 'clue_key': key('clue.glasses', 'Без чего она не читала'),
                  'why_key': key('why.glasses', 'Без очков Зоя Павловна не читает — значит, доверенность подписала, не прочитав. Кто же ей её читал?'),
                  'required': True, 'archive_unlock': 'n_glasses', 'effects': [e('glasses_found', 'set', True)]},
                 {'id': 'pills', 'rect': [0.7676, 0.4016, 0.0378, 0.0440], 'label_key': key('hs.pills', 'Таблетки на подоконнике'),
+                 'clue_key': key('clue.pills', 'Без чего она не выходила из дома'),
                  'why_key': key('why.pills', 'Нитроглицерин. Сердечница без него из дома не выходит — значит, на юг она не уезжала.'),
                  'required': False, 'archive_unlock': 'n_pills', 'effects': [e('pills_found', 'set', True)]},
+                # 2026-10-14 (владелец: «мало вещей»): календарь на стене у кухни и пенсионное на кровати — дорисованы в
+                # оба кадра осмотра (tools/hod/memory.py fix / rfix); рамки сверены на картинках
+                {'id': 'calendar', 'rect': [0.866, 0.173, 0.046, 0.123], 'label_key': key('hs.calendar', 'Календарь на 27 июня'),
+                 'clue_key': key('clue.calendar', 'На каком дне всё остановилось'),
+                 'why_key': key('why.calendar', 'Листки не отрывали с 27 июня. Двадцать восьмого Лапины уже покупали квартиру: хозяйка «уехала» за день до сделки.'),
+                 'required': False, 'archive_unlock': 'n_calendar', 'effects': [e('calendar_seen', 'set', True)]},
+                {'id': 'pension', 'rect': [0.918, 0.827, 0.059, 0.056], 'label_key': key('hs.pension', 'Пенсионное на кровати'),
+                 'clue_key': key('clue.pension', 'Без чего не дадут пенсию'),
+                 'why_key': key('why.pension', 'Без удостоверения пенсию на почте не выдадут. Уезжая на всё лето, его не оставляют — она уходила ненадолго.'),
+                 'required': False, 'archive_unlock': 'n_pension', 'effects': [e('pension_found', 'set', True)]},
             ],
             'max_misses': 4,
             'hint_after_misses': 2,
@@ -1868,6 +1893,8 @@ NOTES = [
     ('n_date', 'fact', 'Дата в доверенности', 'Договор ссылается на доверенность от 11 июня, а в самой доверенности — 14-е. Левина: четвёрка написана поверх единицы, оговорки «исправленному верить» нет. Бумага с изъяном.', None),
     ('n_glasses', 'fact', 'Очки Зои Павловны', 'Остались дома, на серванте, на футляре. Без очков она не читает: доверенность подписывала, не прочитав.', None),
     ('n_pills', 'fact', 'Таблетки на подоконнике', 'Нитроглицерин. Сердечница без него из дома не выходит — на юг она не уезжала.', None),
+    ('n_calendar', 'fact', 'Календарь на 27 июня', 'Отрывной календарь у кухни: листки не отрывали с 27 июня. Двадцать восьмого Лапины уже покупали квартиру.', None),
+    ('n_pension', 'fact', 'Пенсионное удостоверение', 'Осталось дома, на кровати. Без него пенсию не выдадут: уходила она ненадолго.', None),
     ('n_read', 'fact', 'Доверенность ей читал Мурашов', 'Ковригин: бабушка была без очков, текст ей зачитало доверенное лицо — сам Мурашов. «По закону можно».', None),
     ('n_call', 'fact', 'Лапины звонили нотариусу', 'Посредник велел Лапиным звонить нотариусу, если придут из милиции. Нотариус и посредник — одна связка.', None),
     # дни 3–5
@@ -1971,6 +1998,8 @@ for b, doc_ in [('visited_flat', 'Были в квартире у Лапиных
                 ('photo_seen', 'Фото внука найдено.'), ('photo_later', 'Фото оставили до понятых.'),
                 ('glasses_found', 'Очки Зои Павловны найдены: при осмотре или Левиной по протоколу.'),
                 ('pills_found', 'Её нитроглицерин найден: при осмотре или Левиной по протоколу.'),
+                ('calendar_seen', 'Календарь на 27 июня найден: при осмотре или Левиной по протоколу.'),
+                ('pension_found', 'Её пенсионное удостоверение найдено: при осмотре или Левиной по протоколу.'),
                 ('galina_open', 'Галина рассказала всё.'), ('galina_closed', 'С Галиной заговорили протоколом.'),
                 ('galina_trust', 'Галине обещали, что её имя не прозвучит.'), ('galina_leaving', 'Галина собирается уехать к дочери.'),
                 ('notary_alarmed', 'Нотариус встревожен и жалуется.'),

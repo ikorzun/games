@@ -151,6 +151,8 @@ export abstract class MinigameShell implements IMinigame {
   protected over: MinigameOutcomeKind | null = null;
   protected overWhy: EndWhy | null = null;
 
+  /** Возвращает перетащенный блок раскладки 'stage' в поле при смене размера окна. */
+  private dockObserver: ResizeObserver | null = null;
   private ui: Chrome | null = null;
   private fallback: GreyBoxMinigame | null = null;
   private offLang: (() => void) | null = null;
@@ -428,6 +430,8 @@ export abstract class MinigameShell implements IMinigame {
     this.countdown = null;
     this.offLang?.();
     this.offLang = null;
+    this.dockObserver?.disconnect();
+    this.dockObserver = null;
     this.ui?.root.remove();
     this.ui = null;
   }
@@ -620,34 +624,54 @@ export abstract class MinigameShell implements IMinigame {
     );
     const dock = h('div', { class: 'mg-stage__dock' }, handle, panel);
     const root = h('section', { class: `mg-shell mg-stage ${this.cls}`, role: 'group' }, h('div', { class: 'mg-shell__body' }, body), dock, intro, p.result);
-    this.makeDraggable(dock, handle, root);
+    this.makeDraggable(dock, panel, root);
     return { root, foot, ...p, stage: { intro, heading, attempts, start, dock, move } };
   }
 
-  /** Блок раскладки 'stage' двигается за ручку мышью и пальцем и не выходит за поле. */
-  private makeDraggable(dock: HTMLElement, handle: HTMLElement, root: HTMLElement): void {
-    let from: { x: number; y: number; left: number; top: number } | null = null;
-    handle.addEventListener('pointerdown', (e) => {
+  /**
+   * Блок раскладки 'stage' тянется целиком (владелец 2026-10-14: «таская сам блок, а не только иконку»), мышью и
+   * пальцем, и не выходит за поле; нажатие на кнопку — клик, а не перетаскивание (сдвиг меньше 4 px — тоже клик).
+   * Окно поменяло размер — блок возвращается в поле. Панель не влезла по высоте и листается — пальцем по ней
+   * вертикальный жест листает, остальные тянут блок (is-scroll; жест пальцем браузер решает до pointerdown).
+   */
+  private makeDraggable(dock: HTMLElement, panel: HTMLElement, root: HTMLElement): void {
+    let from: { x: number; y: number; left: number; top: number; id: number; on: boolean } | null = null;
+    const place = (left: number, top: number): void => {
+      const r = root.getBoundingClientRect();
+      const l = Math.min(Math.max(0, left), Math.max(0, r.width - dock.offsetWidth));
+      const t = Math.min(Math.max(0, top), Math.max(0, r.height - dock.offsetHeight));
+      Object.assign(dock.style, { left: `${l}px`, top: `${t}px`, right: 'auto', bottom: 'auto' });
+    };
+    dock.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || (e.target instanceof Element && e.target.closest('button, a, input'))) return;
       const d = dock.getBoundingClientRect();
       const r = root.getBoundingClientRect();
-      from = { x: e.clientX, y: e.clientY, left: d.left - r.left, top: d.top - r.top };
-      handle.setPointerCapture?.(e.pointerId);
-      dock.classList.add('is-dragging');
-      e.preventDefault();
+      from = { x: e.clientX, y: e.clientY, left: d.left - r.left, top: d.top - r.top, id: e.pointerId, on: false };
+      // Захват сразу: резкий рывок мышью уводит указатель за блок уже первым движением.
+      dock.setPointerCapture?.(e.pointerId);
     });
-    handle.addEventListener('pointermove', (e) => {
-      if (!from) return;
-      const r = root.getBoundingClientRect();
-      const left = Math.min(Math.max(0, from.left + e.clientX - from.x), Math.max(0, r.width - dock.offsetWidth));
-      const top = Math.min(Math.max(0, from.top + e.clientY - from.y), Math.max(0, r.height - dock.offsetHeight));
-      Object.assign(dock.style, { left: `${left}px`, top: `${top}px`, right: 'auto', bottom: 'auto' });
+    dock.addEventListener('pointermove', (e) => {
+      if (!from || e.pointerId !== from.id) return;
+      if (!from.on) {
+        if (Math.hypot(e.clientX - from.x, e.clientY - from.y) < 4) return;
+        from.on = true;
+        dock.classList.add('is-dragging');
+      }
+      place(from.left + e.clientX - from.x, from.top + e.clientY - from.y);
     });
     const stop = (): void => {
       from = null;
       dock.classList.remove('is-dragging');
     };
-    handle.addEventListener('pointerup', stop);
-    handle.addEventListener('pointercancel', stop);
+    dock.addEventListener('pointerup', stop);
+    dock.addEventListener('pointercancel', stop);
+    if (typeof ResizeObserver !== 'undefined') {
+      this.dockObserver = new ResizeObserver(() => {
+        if (dock.style.left) place(parseFloat(dock.style.left), parseFloat(dock.style.top));
+        dock.classList.toggle('is-scroll', panel.scrollHeight > panel.clientHeight + 1);
+      });
+      for (const el of [root, panel, ...Array.from(panel.children)]) this.dockObserver.observe(el);
+    }
   }
 
   private paintPips(limit: number): void {
