@@ -90,7 +90,7 @@ DOCS = {
             '- Centred at the top: «ДОГОВОР КУПЛИ-ПРОДАЖИ КВАРТИРЫ»\n'
             '- Next line: «Москва» on the left, «28 июня 1993 г.» on the right.\n'
             '- Body, two paragraphs with indents: «Продавец С. Зоя Павловна, от имени которой по доверенности от '
-            '14 июня 1993 г. действует Мурашов Сергей Викторович, продаёт, а покупатель Лапин покупает однокомнатную '
+            '11 июня 1993 г. действует Мурашов Сергей Викторович, продаёт, а покупатель Лапин покупает однокомнатную '
             'квартиру на Молодогвардейской ул.» / «Расчёт произведён полностью.»\n'
             '- Signatures, typed labels with handwritten blue signatures on the lines: «Продавец (по доверенности):» '
             'followed by a quick sharp signature; «Покупатель:» followed by a careful rounded signature.\n'

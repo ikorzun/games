@@ -46,7 +46,7 @@ Document: the buyer's copy of a notarised flat sale contract, the original typed
 Layout and exact text, typewritten in a Cyrillic typewriter face with uneven letter weight, one and a half line spacing:
 - Centred at the top: «ДОГОВОР КУПЛИ-ПРОДАЖИ КВАРТИРЫ»
 - Next line: «Москва» on the left, «28 июня 1993 г.» on the right.
-- Body, two paragraphs with indents: «Продавец С. Зоя Павловна, от имени которой по доверенности от 14 июня 1993 г. действует Мурашов Сергей Викторович, продаёт, а покупатель Лапин покупает однокомнатную квартиру на Молодогвардейской ул.» / «Расчёт произведён полностью.»
+- Body, two paragraphs with indents: «Продавец С. Зоя Павловна, от имени которой по доверенности от 11 июня 1993 г. действует Мурашов Сергей Викторович, продаёт, а покупатель Лапин покупает однокомнатную квартиру на Молодогвардейской ул.» / «Расчёт произведён полностью.»
 - Signatures, typed labels with handwritten blue signatures on the lines: «Продавец (по доверенности):» followed by a quick sharp signature; «Покупатель:» followed by a careful rounded signature.
 - Below, typed: «Удостоверено нотариусом Ковригиным А. Н.», a looping notary signature, and a violet round seal about 4 cm across with the ring text «НОТАРИУС г. МОСКВЫ КОВРИГИН А. Н.» and «г. Москва» in the centre (no emblem), slightly smudged.
 ```

@@ -637,7 +637,8 @@ def square(sid: str) -> None:
 
 def keep_mask(raw: str, keep: list[str]) -> Image.Image:
     """Что правка по маске не трогает: 'people' — все люди на кадре (Apple Vision локально, с запасом 8 px вокруг силуэта),
-    'x0,y0,x1,y1' — прямоугольник (предмет перед правкой: ведро, папка в руке)."""
+    'x0,y0,x1,y1' — прямоугольник (предмет перед правкой: ведро, папка в руке), путь к .png — готовая маска (белое —
+    не трогать; например, один человек из person_masks.swift, когда соседний правится)."""
     import tempfile
     from PIL import ImageChops, ImageDraw, ImageFilter
     size = Image.open(raw).size
@@ -649,19 +650,25 @@ def keep_mask(raw: str, keep: list[str]) -> Image.Image:
                 for name in os.listdir(tmp):
                     m = Image.open(os.path.join(tmp, name)).convert('L').resize(size)
                     out = ImageChops.lighter(out, m.point(lambda v: 255 if v > 64 else 0).filter(ImageFilter.MaxFilter(17)))
+        elif k.endswith('.png'):
+            m = Image.open(k).convert('L').resize(size)
+            out = ImageChops.lighter(out, m.point(lambda v: 255 if v > 64 else 0).filter(ImageFilter.MaxFilter(9)))
         else:
             ImageDraw.Draw(out).rectangle(tuple(int(v) for v in k.split(',')), fill=255)
     return out
 
 
-def fix(target: str, box: str, what: str, keep: list[str] = (), ref: str = '', raw: str = '', realism: bool = False) -> None:
+def fix(target: str, box: str, what: str, keep: list[str] = (), ref: str = '', raw: str = '', realism: bool = False,
+        faces: list[str] = (), sheets_of: list[str] = ()) -> None:
     """Правка по маске (sunburst): перерисовать только прямоугольник box кадра (<кадр> или <кадр>.square), остальное —
     пиксель в пиксель; первый вариант кадра сохраняется рядом как .orig.png. keep — что внутри прямоугольника не трогать
     (keep_mask); ref — картинка-образец предмета (тот же предмет в другом кадре сета). raw и realism — правка кадра
-    «Реализма» (rfix): свой файл и фотографический, а не рисованный стиль."""
+    «Реализма» (rfix): свой файл и фотографический, а не рисованный стиль. faces — кто в прямоугольнике (лицо правится):
+    образцом лица идут фото assets/ep01/faces/<кто>.webp, а не рисованные листы. sheets_of — чьи рисованные листы дать, если
+    человек в прямоугольнике не из состава кадра по STAGING (Сайко на заднем плане)."""
     import shutil
     from PIL import ImageChops, ImageDraw, ImageFilter, ImageOps
-    sid = target.removesuffix('.square')
+    sid = target.removesuffix('.square').removeprefix('r_')
     raw = raw or os.path.join(RAW, 'squares' if target.endswith('.square') else 'scenes', f'{target}.png')
     orig = raw[:-4] + '.orig.png'
     if not os.path.exists(orig):
@@ -676,8 +683,18 @@ def fix(target: str, box: str, what: str, keep: list[str] = (), ref: str = '', r
     os.makedirs(os.path.join(RAW, 'fix'), exist_ok=True)
     mpath = os.path.join(RAW, 'fix', f'{target}.mask.png')
     mask.save(mpath)
-    # Люди под защитой — лица не перерисовываются, листы персонажей не нужны.
-    who, sheets = ('', []) if 'people' in keep else people(shot_info(sid)[2], 2)
+    # Люди под защитой — лица не перерисовываются, листы персонажей не нужны. Номер первой картинки-образца — после
+    # кадра и образца предмета.
+    first = 3 if ref else 2
+    if faces:
+        sheets = [os.path.join(ROOT, 'assets/ep01/faces', f'{w}.webp') for w in faces]
+        who = '; '.join(f'image {first + i} — {CHARS[w]["name"]}' for i, w in enumerate(faces))
+    elif sheets_of:
+        who, sheets = people(list(sheets_of), first)
+    elif 'people' in keep or sid not in STAGING:  # кадр без мизансцены (биография на фото): кто в кадре, не знаем
+        who, sheets = '', []
+    else:
+        who, sheets = people(shot_info(sid)[2], first)
     look = ('photographic look — film grain, lens softness, palette and light —' if realism else
             'drawing style, ink line weight, cel shading, palette and light')
     prompt = (f'Edit only the transparent masked area of image 1; everything outside it stays exactly as it is. Inside the '
@@ -685,7 +702,8 @@ def fix(target: str, box: str, what: str, keep: list[str] = (), ref: str = '', r
               + (' People and objects that stay outside the area are in front: paint behind them, never over them.' if kept else '')
               + (' Image 2 shows the same object in this room from another shot: draw it exactly like that, seen from this '
                  'camera.' if ref else '')
-              + (f' Character turnaround sheets for identity: {who}.' if sheets else ''))
+              + (f' Identity photos of the people in the area — keep their faces exactly: {who}.' if faces else
+                 f' Character turnaround sheets for identity: {who}.' if sheets else ''))
     out = gen(f'{target}.fix', prompt, [raw, *([ref] if ref else []), *sheets], f'{src.size[0]}x{src.size[1]}',
               os.path.join(RAW, 'fix'), mask=mpath)
     fixed = Image.open(out).convert('RGB').resize(src.size)
@@ -721,24 +739,37 @@ if __name__ == '__main__':
         for sid in args:
             {'scene': scene, 'square': square, 'accept': accept}[cmd](sid)
     elif cmd == 'fix':  # fix <кадр>[.square] x0,y0,x1,y1 "что исправить" [--keep people|x0,y0,x1,y1 ...] [--ref картинка]
-        rest, keep, ref = args[3:], [], ''
+        rest, keep, ref, sheet = args[3:], [], '', []
         while rest:
             flag, val, rest = rest[0], rest[1], rest[2:]
             if flag == '--keep':
                 keep.append(val)
             elif flag == '--ref':
                 ref = val
+            elif flag == '--sheet':  # чьи листы (лицо и одежда) — если человек не из состава кадра по STAGING
+                sheet.append(val)
             else:
                 sys.exit(f'fix: непонятный ключ {flag}')
-        fix(args[0], args[1], args[2], keep, ref)
-    elif cmd == 'rfix':  # rfix <сет>/<кадр> x0,y0,x1,y1 "что исправить" [--keep …] — кадр «Реализма», координаты 1920×1088
+        fix(args[0], args[1], args[2], keep, ref, sheets_of=sheet)
+    elif cmd == 'rfix':  # rfix <сет>/<кадр> x0,y0,x1,y1 "что исправить" [--keep …] [--ref картинка] [--face кто …] [--people]
         set_, sid = args[0].split('/')
-        rest, keep = args[3:], ['people']  # людей на кадрах «Реализма» не перерисовываем: их маски подсветки остаются верными
+        # Людей на кадрах «Реализма» по умолчанию не перерисовываем: их маски подсветки остаются верными. --people — правка
+        # самого человека (рука, поза, взгляд); --face — чьё лицо в прямоугольнике (образец — фото лица).
+        rest, keep, ref, faces = args[3:], ['people'], '', []
         while rest:
+            if rest[0] == '--people':
+                keep.remove('people')
+                rest = rest[1:]
+                continue
             flag, val, rest = rest[0], rest[1], rest[2:]
-            if flag != '--keep':
+            if flag == '--keep':
+                keep.append(val)
+            elif flag == '--ref':
+                ref = val
+            elif flag == '--face':
+                faces.append(val)
+            else:
                 sys.exit(f'rfix: непонятный ключ {flag}')
-            keep.append(val)
         src = os.path.join(ROOT, f'assets/ep01/hod/{set_}/{sid}.webp')
         raw = os.path.join(RAW, 'realism', f'{sid}.png')
         if not os.path.exists(raw):  # API — кратно 16: 1080 → 1088, по 4 px повторённого края сверху и снизу
@@ -747,7 +778,7 @@ if __name__ == '__main__':
             pad = Image.new('RGB', (1920, 1088))
             pad.paste(im, (0, 4)); pad.paste(im.crop((0, 0, 1920, 4)), (0, 0)); pad.paste(im.crop((0, 1076, 1920, 1080)), (0, 1084))
             pad.save(raw)
-        fix(f'r_{sid}', args[1], args[2], keep, raw=raw, realism=True)
+        fix(f'r_{sid}', args[1], args[2], keep, ref=ref, raw=raw, realism=True, faces=faces)
         Image.open(raw).convert('RGB').crop((0, 4, 1920, 1084)).save(src, 'WEBP', quality=82, method=6)
         print('принято', src)
     elif cmd == 'prompt':  # prompt <кадр> — промпт кадра и картинки; prompt <персонаж> head|body — лист

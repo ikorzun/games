@@ -115,6 +115,20 @@ def branch(cases, default):
     return {'do': 'branch', 'cases': [{'when': w, 'goto': g} for w, g in cases], 'default': default}
 
 
+def seized(when):
+    """Левина с понятыми (фото «оставили до понятых» или осмотр его не нашёл): фото — и то, чего Громов сам не нашёл, —
+    очки на футляре и нитроглицерин. «Не трогать без понятых» медленнее (наутро), но полнее и по закону."""
+    return [
+        say('expert', 'И очки её — на серванте, на футляре. И нитроглицерин с подоконника. Всё в протоколе.', when=f'{when} && !glasses_found && !pills_found'),
+        say('expert', 'И очки её — на серванте, на футляре. Тоже в протоколе.', when=f'{when} && !glasses_found && pills_found'),
+        say('expert', 'И нитроглицерин с подоконника. Тоже в протоколе.', when=f'{when} && glasses_found && !pills_found'),
+        unlock('n_photo', when=when),
+        unlock('n_glasses', when=f'{when} && !glasses_found'),
+        unlock('n_pills', when=f'{when} && !pills_found'),
+        setv(e('glasses_found', 'set', True), e('pills_found', 'set', True), e('photo_seen', 'set', True), when=when),
+    ]
+
+
 def opt(oid, text, goto, effects=(), when=None, hidden=True, item=None, verdict=None):
     return dict(oid=oid, text=text, goto=goto, effects=list(effects), when=when, hidden=hidden, item=item, verdict=verdict)
 
@@ -314,7 +328,7 @@ scene('d1_office', 'b1_day1', 'hod_office_am', lambda: [
     say('oper', 'Громов? Виктор Сайко, МУР. Это я тебе их принёс. Молодогвардейская — первая. Остальные три — Фили, Пресня и опять Кунцево.'),
     say('sledak', 'Везде одно и то же?'),
     say('oper', 'Старик живёт один. Старик пропадает. Через месяц в квартире новые люди, а бумаги — хоть в рамку вешай.'),
-    say('oper', 'По Молодогвардейской я пробил: сделку заверял нотариус на Пресне, Ковригин. Остальное — твоя работа.'),
+    say('oper', 'По Молодогвардейской я пробил: покупатели — Лапины, сделку заверял нотариус на Пресне, Ковригин. Остальное — твоя работа.'),
     jump('d1_call'),
 ], time='day', music='m_investigation', ambient='amb_office')
 
@@ -330,7 +344,7 @@ scene('d1_call', 'b1_day1', 'hod_office_call_am', lambda: [
 
 scene('d1_go', 'b1_day1', 'hod_office_am', lambda: [
     show('sledak', 'left'), show('oper', 'right'),
-    say('oper', 'Ну что, юрист, куда едем? Машина внизу, бензина полбака.'),
+    say('oper', 'Ну что, юрист? Машина внизу, бензина полбака.'),
     choice('c_d1_go', 'Куда едем?', 'investigative', [
         opt('flat', 'На Молодогвардейскую. Посмотрим квартиру', 'go_flat'),
         opt('galina', 'К соседке, которая писала заявление', 'go_galina'),
@@ -354,14 +368,13 @@ scene('route_car', 'bp_places', 'hod_car', lambda: [
     say('oper', 'Пришли с пустыми руками — ушли с пустыми руками. Он теперь будет звонить.', when="last_place == 'notary' && !have_contract && notary_alarmed"),
     say('oper', 'Девочка за машинкой с тебя глаз не сводила. Ей есть что сказать — только не при шефе.', when="last_place == 'notary' && !have_contract && !notary_alarmed"),
     say('oper', 'Девочка напугана до смерти. Сергей Викторович у них, считай, свой человек.', when="last_place == 'notary' && lyuda_talked"),
-    say('oper', 'Ковригин потел, как в бане. И не от жары.', when="last_place == 'notary' && have_contract && !lyuda_talked"),
+    say('oper', 'Ковригин потел как в бане. И не от жары.', when="last_place == 'notary' && have_contract && !lyuda_talked"),
     say('oper', 'Шоколадку он ей принёс… Вежливый, сволочь.', when="last_place == 'zhek'"),
-    say('sledak', 'Шесть квартир за лето. Один нотариус, одно доверенное лицо.', when="last_place == 'bti' && bti_six"),
-    say('sledak', 'Три сделки нашёл, остальное не дали досмотреть. Один нотариус, одно доверенное лицо.', when="last_place == 'bti' && bti_chain && !bti_six"),
+    say('sledak', 'Шесть, Сайко. Шесть стариков.', when="last_place == 'bti' && bti_six"),
+    say('sledak', 'Три. И это не всё.', when="last_place == 'bti' && bti_chain && !bti_six"),
     say('oper', 'Это уже не совпадение. Это конвейер.', when="last_place == 'bti' && bti_chain"),
     say('sledak', 'Фамилия есть. Мурашов С. В., по доверенности.', when="last_place == 'bti' && !bti_chain"),
     say('oper', 'Мурашов… Пробьём.', when="last_place == 'bti' && !bti_chain"),
-    say('oper', 'Дальше куда?'),
     choice('c_route_d1', 'Дальше куда?', 'investigative', [
         opt('flat', 'На Молодогвардейскую, к Лапиным', 'go_flat', when='!visited_flat'),
         opt('galina', 'К Галине, соседке', 'go_galina', when='!visited_galina'),
@@ -382,11 +395,11 @@ def go(place, lines, then=None):
 
 
 go('flat', [
-    ('Квартира тридцать четыре. Там теперь живут Лапины. Посмотрю, по каким бумагам они купили, — и что осталось от хозяйки.', None),
+    ('Квартира тридцать четыре. Там теперь живут Лапины. Посмотрю, по каким бумагам они купили — и что осталось от хозяйки.', None),
     ('Галина говорила: Зоя Павловна никуда не собиралась. Проверим.', 'galina_open'),
 ])
 go('galina', [
-    ('Галина Васильевна писала заявление. Она последней видела Зою Павловну — надо узнать, кто к ней ходил.', None),
+    ('Галина Васильевна писала заявление. Живёт дверь в дверь — должна знать, кто ходил к Зое Павловне.', None),
     ('И видела ли она того, кто продал квартиру, — Мурашова.', 'know_name'),
 ])
 go('notary', [
@@ -398,7 +411,8 @@ go('zhek', [
     ('Паспортный стол ЖЭКа: Зою Павловну выписали из квартиры. Кто подал заявление — и видели ли его там раньше?', None),
 ])
 go('bti', [
-    ('Архив БТИ: там видна каждая сделка с квартирой. Если Мурашов работает не первый раз — это будет в картотеке.', None),
+    ('Архив БТИ: там видна каждая сделка с квартирой. Если Мурашов работает не первый раз — это будет в картотеке.', 'know_name'),
+    ('Архив БТИ: там видна каждая сделка с квартирой. Если доверенное лицо работает не первый раз — это будет в картотеке.', '!know_name'),
 ])
 
 # ── Квартира Зои Павловны у Лапиных ──
@@ -438,7 +452,8 @@ scene('flat_truth', 'bp_places', 'hod_flat', lambda: [
     unlock('n_poa'),
     setv(e('have_contract', 'set', True), e('know_name', 'set', True)),
     unlock('n_name'), unlock('n_cash'),
-    setv(e('murashov_spooked', 'set', True), when='day == 3'),  # в среду Лапины снова звонят нотариусу — Мурашов предупреждён
+    # в среду Лапины снова звонят нотариусу — Мурашов предупреждён; утром в четверг об этом скажет Ирина
+    setv(e('murashov_spooked', 'set', True), e('irina_call_d4', 'set', True), when='day == 3'),
     jump('flat_look'),
 ])
 scene('flat_look', 'bp_places', 'hod_flat', lambda: [
@@ -464,15 +479,13 @@ scene('flat_inspect_done', 'bp_places', 'hod_flat', lambda: [
     show('buyer', 'left'), show('oper', 'left'), show('sledak', 'center'), show('lapin_wife', 'right'),
     say('sledak', 'Родственники на юге, говорите? У неё один внук. В Самаре.', when='photo_seen'),
     say('lapin_wife', 'Нам так сказали… Мы же не знали.', when='photo_seen'),
-    inner('Очки на футляре. Без очков она и газету не читала. А доверенность, выходит, подписала не глядя.', when='glasses_found'),
-    inner('Нитроглицерин на подоконнике. Сердечники без него из дома не выходят.', when='pills_found'),
-    inner('Копаться дальше при хозяевах не дадут. Завтра Левина посмотрит по протоколу, с понятыми.', when='!photo_seen'),
+    inner('Копаться дальше при хозяевах не дадут. Левина посмотрит по протоколу, с понятыми.', when='!photo_seen'),
     setv(e('photo_later', 'set', True), when='!photo_seen'),
     jump('route'),
 ])
 scene('flat_later', 'bp_places', 'hod_flat', lambda: [
     show('buyer', 'left'), show('oper', 'left'), show('sledak', 'center'), show('lapin_wife', 'right'),
-    inner('Без понятых это не улика, а сувенир. Завтра Левина изымет её по протоколу.'),
+    inner('Без понятых это не улика, а сувенир. Фото за стеклом Левина изымет по протоколу.'),
     jump('route'),
 ])
 
@@ -485,9 +498,9 @@ scene('galina', 'bp_places', 'hod_landing_chain', lambda: [
     say('neighbor', 'Опять милиция? Я всё написала. Всё, что знала.'),
     choice('c_galina', 'Как говорить с Галиной?', 'dialogue', [
         opt('formal', 'Гражданка Сомова, ваши показания нужно оформить протоколом', 'galina_closed',
-            effects=[e('galina_closed', 'set', True), e('trust_oper', 'sub', 1)]),
+            effects=[e('galina_closed', 'set', True), e('trust_oper', 'sub', 1), e('oper_points', 'sub', 1)]),
         opt('human', 'Галина Васильевна, давайте без протокола. Кто к ней ходил?', 'galina_open',
-            effects=[e('galina_open', 'set', True), e('trust_oper', 'add', 1)]),
+            effects=[e('galina_open', 'set', True), e('trust_oper', 'add', 1), e('oper_points', 'add', 1)]),
     ]),
 ], ambient='amb_stairwell')
 scene('galina_closed', 'bp_places', 'hod_landing_chain', lambda: [
@@ -532,7 +545,8 @@ def notary_chain(pre: str, set_: str, lyuda: bool) -> None:
         cap('location', 'Нотариальная контора. Пресня'),
         *cast(),
         inner('Очередь до дверей. Ковригин принимает нас сразу — и это ему явно не нравится.'),
-        *([] if lyuda else [inner('Машинка у окна под чехлом. Помощница, говорят, со вчерашнего дня в отпуске.')]),
+        # кадр конторы без помощницы — тот же, что в понедельник: машинка открыта, в ней лист (QA кадров 2026-10-14)
+        *([] if lyuda else [inner('Машинка у окна брошена — в ней так и торчит лист. Помощницы нет.')]),
         say('notary', 'Прокуратура? Прошу. Только недолго: у меня люди с утра сидят, а помощница одна.' if lyuda else
             'Прокуратура? Прошу. Только недолго: помощница в отпуске, я тут один на всю очередь.'),
         # без помощницы контора бывает только после Лапиных, а у них договор дают всегда
@@ -543,7 +557,7 @@ def notary_chain(pre: str, set_: str, lyuda: bool) -> None:
     scene(f'{pre}_bare', 'bp_places', set_, lambda: [
         *cast(),
         say('sledak', 'Нас интересует сделка по Молодогвардейской. Июнь.'),
-        say('notary', 'Голубчик, у меня таких сделок сотни. Номер в реестре, дата — или официальный запрос. Через горпрокуратуру.'),
+        say('notary', 'Молодой человек, у меня таких сделок сотни. Номер в реестре, дата — или официальный запрос. Через горпрокуратуру.'),
         choice(f'c_{pre}_bare', 'Ковригин тянет время', 'dialogue', [
             opt('insist', 'Вы обязаны показать реестр следователю', f'{pre}_insist', effects=[e('notary_alarmed', 'set', True)]),
             opt('retreat', 'Хорошо. Придём с запросом', f'{pre}_retreat'),
@@ -580,8 +594,9 @@ def papers(pre, set_, cast, after_talk):
     ])
     scene(f'{pre}_glasses', 'bp_places', set_, lambda: [
         *cast(),
-        say('notary', 'Очки?.. Да, она была без очков. Текст зачитал доверенный, при мне. По закону так можно.'),
+        say('notary', 'Очки?.. Да, она была без очков. Текст зачитало доверенное лицо, при мне. По закону так можно.'),
         inner('Значит, доверенность ей читал сам Мурашов. Что он там прочитал — знает только он.'),
+        *([inner('За машинкой упала ручка. Помощница нагнулась за ней и не спешит подниматься.')] if lyuda else []),
         unlock('n_read'), setv(e('murashov_read', 'set', True)),
         jump(after_talk),
     ])
@@ -599,14 +614,14 @@ def papers(pre, set_, cast, after_talk):
     scene(f'{pre}_reg2', 'bp_places', set_, lambda: [
         *cast(),
         say('notary', 'Техническая ошибка помощницы. Бывает.'),
-        *([inner('За машинкой что-то упало. Помощница нагнулась за ручкой и не спешит подниматься.')] if lyuda else
+        *([inner('За машинкой упала ручка. Помощница нагнулась за ней и не спешит подниматься.')] if lyuda else
           [inner('Помощницы нет, и спросить, чья это ошибка, некого.')]),
         jump(after_talk),
     ])
     scene(f'{pre}_who', 'bp_places', set_, lambda: [
         *cast(),
-        say('notary', 'Доверенное лицо. Мурашов Сергей Викторович. Приличный человек, вежливый, всё объяснял бабушке сам.'),
-        *([inner('За машинкой что-то упало. Помощница нагнулась за ручкой и не спешит подниматься.')] if lyuda else []),
+        say('notary', 'Он и привёл, Мурашов Сергей Викторович. Приличный человек, вежливый, всё объяснял бабушке сам.'),
+        *([inner('За машинкой упала ручка. Помощница нагнулась за ней и не спешит подниматься.')] if lyuda else []),
         jump(after_talk),
     ])
 
@@ -615,7 +630,7 @@ notary_chain('notary', 'hod_notary', True)
 notary_chain('notary_alone', 'hod_notary_alone', False)
 scene('notary_lyuda_q', 'bp_places', 'hod_notary', lambda: [
     show('assistant', 'left'), show('notary', 'center'), show('sledak', 'center'), show('oper', 'right'),
-    say('oper', 'Юрист, девочка сейчас заплачет. Выйду покурить — как раз на её лестницу.'),
+    say('oper', 'Юрист, девочка сейчас заплачет. Выйду покурить на лестницу — она выйдет следом, вот увидишь.'),
     choice('c_lyuda', 'Сайко предлагает поговорить с помощницей', 'tactical', [
         opt('go', 'Иди. Только аккуратно', 'lyuda'),
         opt('no', 'Не надо. Спугнём нотариуса', 'route'),
@@ -626,10 +641,10 @@ scene('lyuda', 'bp_places', 'hod_notary_stairs', lambda: [
     show('sledak', 'left'), show('assistant', 'center'), show('oper', 'right'),
     say('assistant', 'Я ничего не знаю. Я тут полгода всего.'),
     say('oper', 'Да мы ж не про тебя. Про Сергея Викторовича. Часто бывает?'),
-    say('assistant', 'Раз в месяц. Всегда со старушкой, всегда без очереди. За срочность платит наличными — Анатолию Николаевичу прямо в стол.'),
+    say('assistant', 'Часто. Всегда со стариками, всегда без очереди. За срочность платит наличными — Анатолию Николаевичу прямо в стол.'),
     unlock('n_lyuda'),
     say('assistant', 'Только вы ему не говорите. Он и так кричит, что я лишнее вижу.'),
-    setv(e('lyuda_talked', 'set', True), e('trust_oper', 'add', 1)),
+    setv(e('lyuda_talked', 'set', True), e('trust_oper', 'add', 1), e('oper_points', 'add', 1)),
     jump('route'),
 ], ambient='amb_stairwell')
 
@@ -645,7 +660,8 @@ scene('zhek', 'bp_places', 'hod_zhek', lambda: [
     unlock('n_vypiska'),
     say('passport_clerk', 'Ещё что? Только быстро — у меня граждане ждут.'),
     choice('c_zhek', 'Один вопрос, и быстро', 'investigative', [
-        opt('name', 'Как его фамилия? В заявлении должна быть', 'zhek_name', effects=[e('know_name', 'set', True)]),
+        opt('name', 'Как его фамилия? В заявлении должна быть', 'zhek_name', effects=[e('know_name', 'set', True)], when='!know_name'),
+        opt('name_check', 'Это Мурашов? Посмотрите по заявлению', 'zhek_name', when='know_name'),
         opt('seen', 'Вы его раньше видели?', 'zhek_seen'),
     ]),
 ])
@@ -657,7 +673,7 @@ scene('zhek_name', 'bp_places', 'hod_zhek', lambda: [
 ])
 scene('zhek_seen', 'bp_places', 'hod_zhek', lambda: [
     show('oper', 'left'), show('sledak', 'center'), show('passport_clerk', 'right'),
-    say('passport_clerk', 'Так он у нас всё лето в очереди крутился. Со старушками разговаривал, справки им заполнял. Я думала — внук чей-то.'),
+    say('passport_clerk', 'Так он у нас всё лето в очереди крутился. Со старушками разговаривал, справки им заполнял. Я думала — сын чей-то.'),
     unlock('n_queue'),
     jump('route'),
 ])
@@ -667,8 +683,8 @@ scene('bti', 'bp_places', 'hod_bti', lambda: [
     setv(e('visited_bti', 'set', True), e('last_place', 'set', 'bti')),
     cap('location', 'Архив БТИ. Приём по вторникам и четвергам'),
     show('clerk', 'left'), show('sledak', 'right'),
-    inner('Сайко остался в машине: бумаги — это моё. Раиса Львовна смотрит на моё удостоверение дольше, чем на меня.'),
-    say('clerk', 'Среда у нас неприёмная, милый. Ну, раз уж приехал…', when='day == 3'),
+    inner('Сайко остался в машине: бумаги — это моё. Раиса Львовна смотрит на удостоверение дольше, чем на меня.'),
+    say('clerk', 'Среда у нас неприёмная. Ну, раз уж приехал…', when='day == 3'),
     say('clerk', 'Прокуратура… Запрос есть? Без запроса — только по адресу.'),
     say('sledak', 'По адресу. Молодогвардейская, квартира тридцать четыре.'),
     say('clerk', 'Переход права — договор от двадцать восьмого июня. Нотариус Ковригин. Представитель продавца по доверенности — Мурашов С. В.'),
@@ -682,7 +698,7 @@ scene('bti', 'bp_places', 'hod_bti', lambda: [
 ], ambient='amb_archive')
 scene('bti_chain', 'bp_places', 'hod_bti', lambda: [
     show('clerk', 'left'), show('sledak', 'right'),
-    say('clerk', '…Летом, говоришь? Ковригин и этот Мурашов? Ищи сам, милый. До обеда — час.'),
+    say('clerk', '…Четверо, говоришь? Ковригин и этот Мурашов? Ищи сам. До обеда — час.'),
     {'do': 'minigame', 'minigame': 'mg_db'},
 ])
 scene('bti_chain_ok', 'bp_places', 'hod_bti', lambda: [
@@ -698,7 +714,7 @@ scene('bti_chain_part', 'bp_places', 'hod_bti', lambda: [
 ])
 scene('bti_chain_fail', 'bp_places', 'hod_bti', lambda: [
     show('clerk', 'left'), show('sledak', 'right'),
-    say('clerk', 'Всё, милый, обед. Приходи в четверг — с запросом.'),
+    say('clerk', 'Всё, обед. Приходи в четверг — с запросом.'),
     inner('Целый час в картотеке — и ни одной карточки, кроме нашей.'),
     jump('route'),
 ])
@@ -715,9 +731,9 @@ scene('bti_formal', 'bp_places', 'hod_bti', lambda: [
 scene('d1_evening', 'b2_evening', 'hod_office_eve', lambda: [
     cap('date_stamp', 'Понедельник, 19:40'),
     show('sledak', 'left'), show('expert', 'right'), show('oper', 'center'),
-    inner('К вечеру отдел пустеет. Остаются лампа, машинка под чехлом и Левина с двумя стаканами чая.'),
+    inner('К вечеру отдел пустеет. Остаются лампа, машинка под чехлом и Левина с тремя стаканами чая.'),
     say('expert', 'Чай горячий, сигарета моя. Рассказывай, что набегали.'),
-    say('expert', 'Давай сюда доверенность. Подчистки видны только в косом свете.', when='have_contract'),
+    say('expert', 'Давай сюда доверенность и договор. Положим рядом.', when='have_contract'),
     branch([('have_contract', 'd1_lens')], 'd1_eve_rest'),
 ], time='evening', music='m_calm', ambient='amb_office')
 scene('d1_lens', 'b2_evening', 'hod_office_lens', lambda: [
@@ -744,10 +760,10 @@ scene('d1_eve_rest', 'b2_evening', 'hod_office_eve', lambda: [
     say('expert', 'Бумаги есть, а изъяна в них не видно. Палыч скажет — отказной. До пятницы четыре дня.', when='have_contract && !case_opened'),
     say('expert', '«Сергей» и серая «Волга» — уже кое-что. Но бумаги с изъяном нет, а до пятницы четыре дня.', when='!have_contract && galina_open'),
     say('expert', 'Пустой день — тоже день. Только до пятницы их осталось четыре.', when='!have_contract && !galina_open'),
-    say('expert', 'Фото, говоришь, за стеклом? Завтра с утра съезжу с понятыми. По протоколу — значит, в дело.', when='photo_later'),
+    say('expert', 'Сервант, говоришь? Завтра с утра съезжу с понятыми. По протоколу — значит, в дело.', when='photo_later'),
     say('expert', 'Очки дома, а подпись в доверенности ровная. Значит, читал ей кто-то другой.', when='glasses_found'),
     say('expert', 'Нитроглицерин оставила? Такие на юг не уезжают, Громов.', when='pills_found'),
-    say('oper', 'Звонил знакомый с Пресни. Ковригин сегодня отпустил помощницу — в отпуск, с завтрашнего дня. Адреса не оставил.', when='visited_flat && !lyuda_talked'),
+    say('oper', 'Звонил знакомый с Пресни. Ковригин сегодня отпустил помощницу — в отпуск, с завтрашнего дня. Адреса она не оставила.', when='visited_flat && !lyuda_talked'),
     setv(e('lyuda_gone', 'set', True), when='visited_flat && !lyuda_talked'),
     inner('Лапины кому-то позвонили, едва мы ушли. Или нотариус сам всё понял.', when='visited_flat && !lyuda_talked'),
     jump('d1_eve_call'),
@@ -755,12 +771,13 @@ scene('d1_eve_rest', 'b2_evening', 'hod_office_eve', lambda: [
 scene('d1_eve_call', 'b2_evening', 'hod_office_call_eve', lambda: [
     show('sledak', 'left'), show('expert', 'right'),
     sfx('sfx_phone_ring', when='notary_alarmed'),
-    say('boss', 'Громов! Мне из горпрокуратуры звонили. Нотариус Ковригин жалуется: следователь ломится к нему без бумаг. Ты что творишь?', when='notary_alarmed'),
+    say('boss', 'Громов! Мне из горпрокуратуры звонили. Нотариус Ковригин жалуется: следователь ломится к нему без запроса. Ты что творишь?', when='notary_alarmed'),
     say('sledak', 'Работаю, Валентин Павлович.', when='notary_alarmed'),
-    setv(e('boss_favor', 'sub', 1), when='notary_alarmed'),
+    setv(e('boss_favor', 'sub', 1), e('complaint_handled', 'set', True), when='notary_alarmed'),
     sfx('sfx_phone_ring'),
     say('sledak', 'Да, мам. Задержусь. Суп на плите, я сам разогрею.'),
-    inner('Где-то по Москве ездит серая «Волга». У её хозяина тоже есть планы на завтра.'),
+    inner('Где-то по Москве ездит серая «Волга». У её хозяина тоже есть планы на завтра.', when='galina_open'),
+    inner('Где-то по Москве ходит человек, который продал квартиру Зои Павловны. У него тоже есть планы на завтра.', when='!galina_open'),
     setv(e('day', 'set', 2), e('slot', 'set', 0), e('last_place', 'set', '')),
     jump('d2_office', 'fade'),
 ], time='evening')
@@ -776,7 +793,8 @@ scene('d2_office', 'b3_day2', 'hod_office_d2', lambda: [
     say('boss', 'До пятницы, помнишь? Бумага с изъяном — или отказной.', when='!case_opened && !notary_alarmed'),
     choice('c_boss', 'Что ответить Палычу?', 'moral', [
         opt('quiet', 'Понял. Тихо', 'd2_route', effects=[e('boss_favor', 'add', 1)]),
-        opt('push', 'Пропавших уже четверо, Валентин Павлович', 'd2_push', effects=[e('gromov_rep', 'add', 1), e('trust_oper', 'add', 1)]),
+        opt('push', 'Пропавших уже четверо, Валентин Павлович', 'd2_push',
+            effects=[e('gromov_rep', 'add', 1), e('trust_oper', 'add', 1), e('oper_points', 'add', 1)]),
     ]),
 ], time='day', music='m_investigation', ambient='amb_office')
 scene('d2_push', 'b3_day2', 'hod_office_d2', lambda: [
@@ -791,7 +809,7 @@ scene('d2_calls', 'b3_day2', 'hod_office_call_am', lambda: [
     show('sledak', 'left'), show('oper', 'right'),
     sfx('sfx_phone_ring', when='photo_later'),
     say('expert', 'Громов, я с Молодогвардейской. Фото изъято, понятые расписались. На обороте — «Бабушке от внука. Самара».', when='photo_later'),
-    unlock('n_photo', when='photo_later'), setv(e('photo_seen', 'set', True), when='photo_later'),
+    *seized('photo_later'),
     sfx('sfx_phone_ring', when='lapins_told_truth'),
     say('lapin_wife', 'Это Ирина Лапина. Вчера, как вы ушли, муж позвонил нотариусу. Посредник так велел: если кто придёт — звонить.', when='lapins_told_truth'),
     unlock('n_call', when='lapins_told_truth'),
@@ -800,7 +818,7 @@ scene('d2_calls', 'b3_day2', 'hod_office_call_am', lambda: [
 ])
 scene('d2_go', 'b3_day2', 'hod_office_am', lambda: [
     show('sledak', 'left'), show('oper', 'right'),
-    say('oper', 'Ну, юрист, куда сегодня?'),
+    say('oper', 'Ну что, юрист, поехали? Бензин я залил.'),
     *day2_choices('c_d2_go', 'Куда сегодня?'),
 ])
 
@@ -809,7 +827,7 @@ VERSION_PENALTY = [e('nerves', 'sub', 1)]  # шкала «Самообладан
 scene('d2_night', 'b4_night', 'hod_office_night', lambda: [
     cap('date_stamp', 'Вторник, 22:40'),
     show('sledak', 'left'), show('expert', 'center'), show('oper', 'right'),
-    inner('Отдел пуст. Лампа, папки и Левина у открытого окна.'),
+    inner('Отдел пуст. Лампа, папки, Сайко и Левина у открытого окна.'),
     say('oper', 'Заезжал к Галине — протокол подписать. Соседи говорят: уехала в Тулу, к дочке. Свидетельницы у тебя больше нет.', when='galina_leaving'),
     say('expert', 'Излагай. Как по-твоему было? Только по бумагам, не по чувствам.'),
     jump('d_who'),
@@ -837,7 +855,7 @@ scene('d_how', 'b4_night', 'hod_office_night', lambda: [
     show('sledak', 'left'), show('expert', 'center'), show('oper', 'right'),
     choice('d_how', 'Где у этой сделки слабое место?', 'deduction', [
         opt('none', 'Нигде. Всё подписано, всё по закону', 'd_how_w1', verdict='wrong'),
-        opt('date', 'Дата в доверенности исправлена задним числом', 'd_where', item='n_date', verdict='right'),
+        opt('date', 'Дата в доверенности исправлена — с договором не сходится', 'd_where', item='n_date', verdict='right'),
         opt('cash', 'Нотариус берёт за срочность и не задаёт вопросов', 'd_where', item='n_lyuda', verdict='right'),
         opt('notary', 'Без нотариуса такая сделка не прошла бы', 'd_where', verdict='right', effects=[e('version_weak', 'set', True)]),
     ], penalty=VERSION_PENALTY),
@@ -858,7 +876,7 @@ scene('d_where', 'b4_night', 'hod_office_night', lambda: [
 ])
 scene('d_where_w1', 'b4_night', 'hod_office_night', lambda: [
     show('sledak', 'left'), show('expert', 'center'), show('oper', 'right'),
-    say('expert', 'К кому? Внук у неё в Самаре, ты сам фото видел.', when='photo_seen'),
+    say('expert', 'К кому? Внук у неё в Самаре — на обороте фото так и написано.', when='photo_seen'),
     say('expert', 'К кому? Ты хоть одного родственника на юге нашёл?', when='!photo_seen'),
     jump('d_where'),
 ])
@@ -867,7 +885,7 @@ scene('version', 'b4_night', 'hod_office_night', lambda: [
     say('expert', 'Сходится. Фамилия, слабое место сделки, пропавшая хозяйка.', when='!version_weak'),
     say('expert', 'Сходится, но на соплях. Половину ты угадал, а не нашёл.', when='version_weak'),
     say('expert', 'И мимо ты бил не раз. В суде переспросить не дадут.', when='nerves <= 1'),
-    say('expert', 'Только это пока версия. Чтобы стало делом, надо понять, как он их находит.'),
+    say('expert', 'Только это пока версия. Чтобы её доказать, надо понять, как он их находит.'),
     jump('recon', 'vhs_glitch'),
 ])
 
@@ -882,18 +900,18 @@ scene('recon', 'br_recon', 'hod_recon', lambda: [
     say('murashov_sil', 'Я из бывших журналистов, привык разбираться в бумагах. Помогаю людям — бесплатно, по-соседски. Сергей Викторович.'),
     say('zoya', 'Бесплатно? Так не бывает, Сергей Викторович.'),
     say('murashov_sil', 'Бывает, когда человека жалко.', shot='recon_sil'),  # страшные слова — силуэт на красном
-    vo('Через неделю она подпишет доверенность, не надев очков. Ещё через неделю выйдет из дома с сумкой — и больше не вернётся.', shot='recon_wide'),
+    vo('Через неделю она подпишет доверенность, не надев очков. А в конце июня выйдет из дома с сумкой — и больше не вернётся.', shot='recon_wide'),
     jump('d2_late', 'vhs_glitch'),
 ], time='day', music='m_chronicle')
 scene('d2_late', 'b4_night', 'hod_office_night', lambda: [
     show('sledak', 'left'), show('expert', 'center'), show('oper', 'right'),
-    say('oper', 'Толик, привет, это Сайко. Пробей мне Мурашова Сергея Викторовича: машина на нём есть? …«Волга»? Серая? Номер диктуй.', when='trust_oper >= 1'),
-    inner('Серая «Волга» под окнами Галины. Сергей Викторович. Мурашов. Сходится.', when='trust_oper >= 1 && galina_open'),
-    inner('«Волга», серая. Осталось найти, кто её видел у дома Зои Павловны.', when='trust_oper >= 1 && !galina_open'),
-    setv(e('volga_known', 'set', True), when='trust_oper >= 1'),
-    say('oper', 'Всё, юрист, я спать. Мурашова своего завтра сам пробивай — у меня в МУРе четыре дела своих.', when='trust_oper == 0'),
-    inner('Завтра, похоже, начну без него.', when='trust_oper == 0'),
-    setv(e('oper_with', 'set', False), when='trust_oper == 0'),
+    say('oper', 'Толик, привет, это Сайко. Пробей мне Мурашова Сергея Викторовича: машина на нём есть? …«Волга»? Серая? Номер диктуй.', when='oper_points >= 1'),
+    inner('Серая «Волга» под окнами Галины. Сергей Викторович. Мурашов. Одно к одному.', when='oper_points >= 1 && galina_open'),
+    inner('«Волга», серая. Осталось найти, кто её видел у дома Зои Павловны.', when='oper_points >= 1 && !galina_open'),
+    setv(e('volga_known', 'set', True), when='oper_points >= 1'),
+    say('oper', 'Всё, юрист, я спать. Мурашова своего завтра сам пробивай — у меня в МУРе четыре дела своих.', when='oper_points < 1'),
+    inner('Завтра, похоже, начну без него.', when='oper_points < 1'),
+    setv(e('oper_with', 'set', False), when='oper_points < 1'),
     inner('До пятницы три дня.'),
     setv(e('day', 'set', 3), e('slot', 'set', 0), e('last_place', 'set', '')),
     jump('d3_office', 'fade'),
@@ -934,32 +952,39 @@ scene('d3_office', 'b5_day3', 'hod_office_d2', lambda: [
     *[setv(e('third', 'set', p), when=f'!bti_chain && oper_with && !visited_{p}') for p in ('flat', 'galina', 'zhek', 'bti')],
     setv(e('murashov_spooked', 'set', True), when='lapins_told_truth'),
     show('sledak', 'left'), show('oper', 'center', when='oper_with'), show('boss', 'right'),
-    inner('Палыч опять пришёл сам. Значит, ему опять звонили.', when='notary_alarmed'),
+    inner('Палыч опять пришёл сам. Значит, ему звонили.', when='notary_alarmed'),
     inner('Палыч заходит без стука — проверить, на месте ли я.', when='!notary_alarmed'),
     say('boss', 'Дело у тебя возбуждено. К пятнице жду не бумагу, Громов, а человека.', when='case_opened'),
-    say('boss', 'Среда, Громов. В пятницу — бумага с изъяном на стол или отказной. Третьего не дано.', when='!case_opened'),
+    say('boss', 'Среда, Громов. В пятницу — бумага с изъяном на стол или отказной.', when='!case_opened'),
+    # нажим на нотариуса во вторник стоит того же, что в понедельник: звонок в город — и минус у Палыча
+    say('boss', 'Нотариус Ковригин жалуется в город: следователь ходит к нему без запроса.', when='notary_alarmed && !complaint_handled'),
+    setv(e('boss_favor', 'sub', 1), e('complaint_handled', 'set', True), when='notary_alarmed && !complaint_handled'),
     say('boss', 'И если нотариус ещё раз позвонит в город — дело заберут. Мне за тебя краснеть надоело.', when='boss_favor < 0'),
     say('sledak', 'Будет, Валентин Павлович.'),
-    say('oper', 'Пока ты спал, юрист, я не спал. Мурашов Сергей Викторович, пятьдесят пятого года, прописан в Чертанове. «Волга» серая — на нём.', when='oper_with'),
+    say('oper', 'Пока ты спал, юрист, я не спал. Мурашов Сергей Викторович, пятьдесят пятого года, прописан в Чертанове. «Волга» серая — на нём.', when='oper_with', shot='office_d2_wide'),
     unlock('n_volga', when='oper_with'),
-    inner('Сайко нет. На его столе записка: «Я в МУРе». Мурашова пробиваю сам, через паспортный стол: в заявлении о выписке есть его паспорт. Прописан в Чертанове.', when='!oper_with'),
+    inner('Сайко нет. На моём столе его записка: «Я в МУРе». Мурашова пробиваю сам, через адресное бюро. Прописан в Чертанове.', when='!oper_with'),
     unlock('n_address'),
     sfx('sfx_phone_ring', when='lapins_told_truth'),
     say('lapin_wife', 'Это Ирина Лапина. Вчера вечером звонил Сергей Викторович. Велел молчать, обещал вернуть деньги, если всё будет тихо.', when='lapins_told_truth'),
     inner('Он знает, что его ищут.', when='lapins_told_truth'),
     unlock('n_irina', when='lapins_told_truth'),
-    sfx('sfx_phone_ring', when='photo_later && !photo_seen'),
-    say('expert', 'Громов, это Левина. Фото внука изъяла, понятые расписались. На обороте — «Бабушке от внука. Самара».', when='photo_later && !photo_seen'),
-    unlock('n_photo', when='photo_later && !photo_seen'),
-    setv(e('photo_seen', 'set', True), when='photo_later'),
-    jump('d3_lens', when='!case_opened && have_contract'),
-    inner('Договора у меня нет: к Лапиным я так и не доехал. Бумагу к пятнице дадут только люди — Ковригин или тот, кто напишет заявление.', when='!case_opened'),
+    setv(e('lens_d3', 'set', True), when='!case_opened && have_contract'),
+    sfx('sfx_phone_ring', when='photo_later && !photo_seen && !lens_d3'),
+    say('expert', 'Громов, это Левина. Фото внука изъяла, понятые расписались. На обороте — «Бабушке от внука. Самара».', when='photo_later && !photo_seen && !lens_d3'),
+    *seized('photo_later && !photo_seen && !lens_d3'),
+    jump('d3_lens', when='lens_d3'),
+    inner('Договор у Лапиных — я к ним так и не доехал. Привезу сегодня — вечером Левина посмотрит его под лампой.', when="!case_opened && third == 'flat'"),
+    inner('Договора у меня нет: к Лапиным я так и не доехал. Бумагу к пятнице дадут только люди — Ковригин или тот, кто напишет заявление.', when="!case_opened && third != 'flat'"),
     jump('d3_go'),
 ], music='m_investigation', ambient='amb_office', pin='office_d2_ots_boss')
 scene('d3_lens', 'b5_day3', 'hod_office_lens', lambda: [
     show('sledak', 'left'), show('expert', 'right'),
     say('expert', 'В понедельник к вечеру мы оба ослепли. Давай свежим глазом: доверенность и договор — под лампу.', when='lens_tried'),
     say('expert', 'Договор и доверенность — рядом, под лампу. Пока бумага не доказала обратного, она чистая.', when='!lens_tried'),
+    say('expert', 'И фото внука я с утра изъяла, понятые расписались. На обороте — «Бабушке от внука. Самара».', when='photo_later && !photo_seen'),
+    *seized('photo_later && !photo_seen'),
+    setv(e('lens_d3_done', 'set', True)),
     {'do': 'minigame', 'minigame': 'mg_docs_d3'},
 ])
 scene('d3_lens_ok', 'b5_day3', 'hod_office_lens', lambda: [
@@ -979,7 +1004,7 @@ scene('d3_lens_fail', 'b5_day3', 'hod_office_lens', lambda: [
 scene('d3_go', 'b5_day3', 'hod_t_street', lambda: [branch([('oper_with', 'd3_go_car')], 'd3_go_walk')])
 scene('d3_go_car', 'b5_day3', 'hod_car', lambda: [
     show('oper', 'left'), show('sledak', 'right'),
-    say('oper', 'Ну что, юрист. Куда сначала?'),
+    say('oper', 'Ну что, юрист. День длинный, бак полный.'),
     *d3_choices('c_d3_go_car', 'Куда сначала?'),
 ], ambient='amb_street_day')
 scene('d3_go_walk', 'b5_day3', 'hod_walk', lambda: [
@@ -991,19 +1016,21 @@ scene('d3_go_walk', 'b5_day3', 'hod_walk', lambda: [
 D3_REACT = [  # после места среды: (условие, реплика Сайко в машине, мысль Громова без него)
     ("last_place == 'second'", 'Здоровый, стриженый, за рулём. Значит, «вежливый» работает не один.',
      'Вежливый работает не один. За рулём у него — здоровый, стриженый.'),
-    ("last_place == 'second' && klava_statement", 'А заявление о пропаже — это уже дело. Палыч не отвертится.',
-     'Заявление о пропаже. От такого Палыч не отмахнётся.'),
-    ("last_place == 'address' && murashov_spooked", 'Он тебя срисовал, юрист. Видел, как он в окно смотрел?',
+    ("last_place == 'second' && klava_statement", 'А заявление со свидетелем — это уже дело. Палыч не отвертится.',
+     'Заявление со свидетелем. От такого Палыч не отмахнётся.'),
+    ("last_place == 'address' && seen_by_murashov", 'Он тебя срисовал, Громов. Видел, как он в окно смотрел?',
      'Он посмотрел мне вслед из окна. Запомнил.'),
+    ("last_place == 'address' && murashov_spooked && !seen_by_murashov", 'Лапины ему уже отзвонились. Ждать он не будет.',
+     'Лапины его уже предупредили. Ждать он не станет.'),
     ("last_place == 'address' && office_watched", 'Водилу этого я где-то видел. Ночью пробью.', None),
-    ("last_place == 'address' && !murashov_spooked && !office_watched", None,
+    ("last_place == 'address' && !seen_by_murashov && !office_watched", None,
      'Где его брать, я знаю. Осталось — с чем.'),
     ("last_place == 'kovrigin' && kovrigin_deal", 'Нотариус поплыл. Свидетелем, значит… Ну-ну.',
      'Показания под протокол. Бумага к пятнице есть.'),
-    ("last_place == 'kovrigin' && kovrigin_pressed", 'Адвоката ждёт. А Палычу — вторая жалоба.',
-     'Вторая жалоба. Палыч будет рад.'),
+    ("last_place == 'kovrigin' && kovrigin_pressed", 'Адвоката ждёт. А Палычу — жалоба.',
+     'Жалоба. Палыч будет рад.'),
     ("last_place == 'flat' || last_place == 'galina' || last_place == 'zhek' || last_place == 'bti'",
-     'Что с понедельника висело — закрыли.', None),
+     'Что висело — закрыли.', None),
 ]
 # После места среды: третье место пробы (только с Сайко) возвращается через route, новые места — через d3_next.
 scene('d3_next', 'b5_day3', 'hod_t_street', lambda: [
@@ -1013,7 +1040,6 @@ scene('d3_next', 'b5_day3', 'hod_t_street', lambda: [
 scene('d3_route_car', 'b5_day3', 'hod_car', lambda: [
     show('oper', 'left'), show('sledak', 'right'),
     *[say('oper', car, when=w) for w, car, _ in D3_REACT if car],
-    say('oper', 'Дальше куда?'),
     *d3_choices('c_d3_route_car', 'Дальше куда?'),
 ], ambient='amb_street_day')
 scene('d3_route_walk', 'b5_day3', 'hod_walk', lambda: [
@@ -1024,21 +1050,22 @@ scene('d3_route_walk', 'b5_day3', 'hod_walk', lambda: [
 
 
 def go3(place, car, walk):
-    """Дорога к месту среды: с Сайко — его машина, без него — Громов один."""
+    """Дорога к месту среды: с Сайко — его машина, без него — Громов один. Мысль — (текст, условие)."""
     scene(f'g3_{place}', 'b5_day3', 'hod_t_street', lambda: [branch([('oper_with', f'g3c_{place}')], f'g3w_{place}')])
     scene(f'g3c_{place}', 'b5_day3', 'hod_car', lambda: [
-        show('oper', 'left'), show('sledak', 'right'), *[inner(t) for t in car], jump(place),
+        show('oper', 'left'), show('sledak', 'right'), *[inner(t, when=w) for t, w in car], jump(place),
     ], ambient='amb_street_day')
-    scene(f'g3w_{place}', 'b5_day3', 'hod_walk', lambda: [show('sledak', 'center'), *[inner(t) for t in walk], jump(place)],
+    scene(f'g3w_{place}', 'b5_day3', 'hod_walk', lambda: [show('sledak', 'center'), *[inner(t, when=w) for t, w in walk], jump(place)],
           ambient='amb_street_day')
 
 
-go3('second', ['Вторая карточка из картотеки: Хорошёвка, квартира Петра Ильича. «Уехал к сестре». Посмотрим, кто его провожал.'],
-    ['Хорошёвка, вторая карточка из картотеки. Пётр Ильич «уехал к сестре». Доеду на троллейбусе — посмотрю, кто его провожал.'])
-go3('address', ['Чертаново, адрес по прописке. Сайко говорит, такие, как Мурашов, по прописке не живут. Проверим.'],
-    ['Чертаново, адрес по прописке. Час на метро. Такие, как Мурашов, по прописке обычно не живут.'])
-go3('kovrigin', ['Ковригин. Он заверял всё, что подписал Мурашов. Посмотрим, сколько он выдержит, когда поймёт, что это не одна сделка.'],
-    ['Ковригин. Он заверял всё, что подписал Мурашов. Посмотрим, сколько он выдержит, когда поймёт, что это не одна сделка.'])
+go3('second', [('Вторая карточка из картотеки: Хорошёвка. Хозяин — одинокий старик, как Зоя Павловна. Посмотрим, кто там теперь живёт.', None)],
+    [('Хорошёвка, вторая карточка из картотеки. Хозяин — одинокий старик, как Зоя Павловна. Доеду на троллейбусе — посмотрю, кто там теперь живёт.', None)])
+go3('address', [('Чертаново, адрес по прописке. Сайко говорит, такие, как Мурашов, по прописке не живут. Проверим.', None)],
+    [('Чертаново, адрес по прописке. Час на метро. Такие, как Мурашов, по прописке обычно не живут.', None)])
+KOV_GO = [('Ковригин. Он заверял всё, что подписал Мурашов. Посмотрим, сколько он выдержит, когда поймёт, что это не одна сделка.', 'bti_chain'),
+          ('Ковригин. Он заверял доверенность Зои Павловны. Посмотрим, сколько он выдержит, если спросить в лоб.', '!bti_chain')]
+go3('kovrigin', KOV_GO, KOV_GO)
 
 # А. Вторая квартира (Хорошёвка): Пётр Ильич и соседка Клавдия Семёновна — первый след водителя.
 scene('second', 'b5_day3', 'hod_second', lambda: [
@@ -1056,7 +1083,7 @@ scene('second', 'b5_day3', 'hod_second', lambda: [
     say('klava', 'И мне рукой не помахал. Он всегда махал.'),
     unlock('n_driver'), setv(e('driver_known', 'set', True), e('volga_known', 'set', True)),
     choice('c_klava', 'Клавдия Семёновна видела больше всех', 'dialogue', [
-        opt('statement', 'Напишите заявление о пропаже. Тогда его будут искать', 'second_statement'),
+        opt('statement', 'Напишите заявление — всё, что видели. Тогда его будут искать', 'second_statement'),
         opt('talk', 'Просто расскажите. Без бумаг', 'second_talk'),
     ]),
 ], ambient='amb_stairwell')
@@ -1066,7 +1093,7 @@ scene('second_statement', 'b5_day3', 'hod_second', lambda: [
     say('sledak', 'Заявление ляжет в дело, а не на лавочку у подъезда. Его будут искать, а не вас.'),
     say('klava', 'Давайте бумагу. Пётр Ильич бы за меня написал.'),
     setv(e('klava_statement', 'set', True)), unlock('n_klava'),
-    inner('Заявление о пропаже человека. Это уже не бумага с изъяном — это основание для дела.'),
+    inner('Заявление со свидетелем: Петра Ильича увезли двое, на серой «Волге». Это уже не розыск — это основание для дела.'),
     jump('d3_next'),
 ])
 scene('second_talk', 'b5_day3', 'hod_second', lambda: [
@@ -1083,7 +1110,7 @@ scene('address', 'b5_day3', 'hod_chertanovo', lambda: [
     cap('location', 'Чертаново. Квартира, где прописан Мурашов'),
     inner('Сайко ждёт внизу, в машине.', when='oper_with'),
     inner('Дверь открывают жильцы: квартиру сдают. Хозяйка живёт этажом ниже и поднимается на звонок.'),
-    say('landlady', 'Сергей Викторович? Платит аккуратно, за полгода вперёд. Только не живёт тут — за городом у него дом. А работает на Пресне, в агентстве. Где раньше газета была.'),
+    say('landlady', 'Сергей Викторович? За прописку платит аккуратно, за полгода вперёд. Только не живёт тут — за городом у него дом. А работает на Пресне, в агентстве. Где раньше газета была.'),
     unlock('n_office'), setv(e('office_known', 'set', True)),
     say('landlady', 'Вежливый. Цветы мне на Восьмое марта принёс. А что он натворил?'),
     say('sledak', 'Спасибо. Мы разберёмся.'),
@@ -1108,15 +1135,15 @@ scene('address_buyer', 'b5_day3', 'hod_agency', lambda: [
     say('sledak', 'Мне бы для матери. Поближе к метро.'),
     say('murashov', 'Для матери — понимаю. Оставьте телефон, я перезвоню.'),
     inner('Вежливый. Бесцветный. В очереди я бы на него не оглянулся. Только смотрел он на меня на секунду дольше, чем нужно.'),
-    unlock('n_seen'), setv(e('murashov_spooked', 'set', True), e('driver_known', 'set', True)),
+    unlock('n_seen'), setv(e('murashov_spooked', 'set', True), e('seen_by_murashov', 'set', True), e('driver_known', 'set', True)),
     jump('d3_next'),
 ], ambient='amb_street_day')
 scene('address_watch', 'b5_day3', 'hod_watch', lambda: [
     show('oper', 'left'), show('sledak', 'right'),
     inner('Сайко ставит машину через дорогу. Три часа мы смотрим на дверь бывшей редакции.'),
     say('oper', 'Водитель от машины не отходит. Курит, ждёт. Хозяина возит, не иначе.'),
-    inner('В шесть выходит Мурашов. Водитель открывает ему дверцу — здоровый, стриженый, шея как у быка.'),
-    say('oper', 'Номер я переписал. Если он так каждый день — в шесть из конторы, в полночь за город, — его можно брать без водителя. А водителя — отдельно.'),
+    inner('В шесть Мурашов выходит на крыльцо, что-то говорит водителю и возвращается. Водитель — здоровый, стриженый, шея как у быка.'),
+    say('oper', 'Номер сходится. Я у водилы прикурить попросил — говорит, сидят до двенадцати, потом за город. Значит, брать можно порознь.'),
     unlock('n_watch'), setv(e('office_watched', 'set', True), e('driver_known', 'set', True)),
     jump('d3_next'),
 ], ambient='amb_street_day')
@@ -1132,13 +1159,14 @@ scene('kovrigin', 'b5_day3', 'hod_notary_alone', lambda: [
     setv(e('v3_kovrigin', 'set', True), e('last_place', 'set', 'kovrigin')),
     cap('location', 'Нотариальная контора. Пресня'),
     show('notary', 'center'), show('sledak', 'center'), show('oper', 'right', when='oper_with'),
-    inner('Очереди нет. На двери табличка: «Приём временно не ведётся». Машинка у окна под чехлом.'),
+    inner('На двери табличка: «Нотариус Ковригин Анатолий Николаевич. Приём временно не ведётся». В коридоре всё равно сидят — по привычке.'),
+    inner('Машинка у окна брошена — в ней так и торчит лист.'),
     inner('Люды нет. Похоже, Ковригин понял, кто его сдал.', when='lyuda_talked'),
-    say('notary', 'Опять вы. Я ведь сказал — по запросу.', when='visited_notary'),
+    say('notary', 'Опять вы. Я вам всё уже сказал.', when='visited_notary'),
     say('notary', 'Прокуратура? Я ждал. Вернее, ждал, что кто-нибудь придёт.', when='!visited_notary'),
-    say('sledak', 'Шесть сделок за лето, Анатолий Николаевич. Один доверенный — Мурашов. Один нотариус — вы.', when='bti_six'),
-    say('sledak', 'Три сделки за лето — и это не всё. Один доверенный — Мурашов. Один нотариус — вы.', when='bti_chain && !bti_six'),
-    say('sledak', 'Доверенность Зои Павловны, Анатолий Николаевич. Доверенный — Мурашов. Заверяли — вы.', when='!bti_chain'),
+    say('sledak', 'Шесть сделок за лето, Анатолий Николаевич. Одно доверенное лицо — Мурашов. Один нотариус — вы.', when='bti_six'),
+    say('sledak', 'Три сделки за лето — и это не всё. Одно доверенное лицо — Мурашов. Один нотариус — вы.', when='bti_chain && !bti_six'),
+    say('sledak', 'Доверенность Зои Павловны, Анатолий Николаевич. Доверенное лицо — Мурашов. Заверяли — вы.', when='!bti_chain'),
     say('notary', 'Я заверял. Это моя работа. Что люди потом делают со своими квартирами…'),
     say('notary', 'Скажите прямо: что мне будет?'),
     setv(e('visited_notary', 'set', True)),
@@ -1152,7 +1180,7 @@ scene('kovrigin_deal', 'b5_day3', 'hod_notary_alone', lambda: [
     say('notary', 'Свидетелем… Хорошо. Пишите.'),
     say('notary', 'Водитель у него — Шмелёв Дмитрий. Шмелём зовут. Сидел. Возит Сергея Викторовича на «Волге» и ждёт у меня под окнами.'),
     say('notary', 'Доверенности старикам читал он сам, вслух. Я только спрашивал: «Согласны?» Они кивали.'),
-    say('notary', 'Даты других сделок — в реестре, я покажу. А сидит он на Пресне, в агентстве, где раньше была редакция. Два квартала отсюда.'),
+    say('notary', 'Даты других сделок — в реестре, я покажу. А контора у Сергея Викторовича на Пресне, в агентстве, где раньше была редакция. Два квартала отсюда.'),
     unlock('n_kovrigin'), unlock('n_shmel'), unlock('n_office'), unlock('n_read'),
     setv(e('kovrigin_deal', 'set', True), e('driver_known', 'set', True), e('shmel_named', 'set', True),
          e('murashov_read', 'set', True), e('office_known', 'set', True), e('volga_known', 'set', True)),
@@ -1161,11 +1189,11 @@ scene('kovrigin_deal', 'b5_day3', 'hod_notary_alone', lambda: [
 ], pin='notary_alone_ots')
 scene('kovrigin_press', 'b5_day3', 'hod_notary_alone', lambda: [
     show('notary', 'center'), show('sledak', 'center'), show('oper', 'right', when='oper_with'),
-    say('notary', 'Явку? Я? Да вы знаете, сколько лет я в палате?'),
+    say('notary', 'Явку? Я? Да вы знаете, сколько лет я в нотариате?'),
     say('notary', 'Мурашова и спрашивайте. Сидит на Пресне, в агентстве, где раньше была редакция. А я без адвоката больше ни слова.'),
     unlock('n_office'),
     setv(e('office_known', 'set', True), e('kovrigin_pressed', 'set', True), e('notary_alarmed', 'set', True), e('boss_favor', 'sub', 1)),
-    inner('Он снимает трубку — звонить адвокату. Вторая жалоба ляжет Палычу на стол раньше, чем я доеду до отдела.'),
+    inner('Он снимает трубку — звонить адвокату. Жалоба ляжет Палычу на стол раньше, чем я доеду до отдела.'),
     jump('d3_next'),
 ], pin='notary_alone_ots')
 
@@ -1173,10 +1201,32 @@ scene('kovrigin_press', 'b5_day3', 'hod_notary_alone', lambda: [
 scene('d3_evening', 'b6_board', 'hod_office_eve', lambda: [
     cap('date_stamp', 'Среда, 20:30'),
     show('sledak', 'left'), show('expert', 'right'), show('oper', 'center', when='oper_with'),
+    say('expert', 'Договор привёз? Сначала под лампу — рядом с доверенностью.', when='have_contract && !case_opened && !lens_d3_done'),
+    jump('d3_lens_eve', when='have_contract && !case_opened && !lens_d3_done'),
+    jump('d3_board'),
+], time='evening', music='m_calm', ambient='amb_office', pin='office_eve_ots_expert')
+scene('d3_lens_eve', 'b6_board', 'hod_office_lens', lambda: [
+    show('sledak', 'left'), show('expert', 'right'),
+    setv(e('lens_d3_done', 'set', True)),
+    {'do': 'minigame', 'minigame': 'mg_docs_d3e'},
+], time='evening')
+scene('d3_lens_eve_ok', 'b6_board', 'hod_office_lens', lambda: [
+    show('sledak', 'left'), show('expert', 'right'),
+    say('expert', 'В договоре — доверенность от одиннадцатого июня, а сама она — от четырнадцатого. Под лампой видно: четвёрка поверх единицы. Оговорки «исправленному верить» нет.'),
+    unlock('n_date'), setv(e('case_opened', 'set', True)),
+    inner('Бумага с изъяном. Утром — к Палычу: дело возбуждаю.'),
+    jump('d3_board'),
+], time='evening')
+scene('d3_lens_eve_fail', 'b6_board', 'hod_office_lens', lambda: [
+    show('sledak', 'left'), show('expert', 'right'),
+    say('expert', 'Нет, Громов. Бумага как бумага. Если изъян и есть, то не в ней.'),
+    jump('d3_board'),
+], time='evening')
+scene('d3_board', 'b6_board', 'hod_office_eve', lambda: [
+    show('sledak', 'left'), show('expert', 'right'), show('oper', 'center', when='oper_with'),
     inner('Левина прикалывает к стене кусок обоев изнанкой наружу. Вместо доски.'),
     say('expert', 'Фото внука я изъяла, понятые расписались. Вешай рядом.', when='photo_later && !photo_seen'),
-    unlock('n_photo', when='photo_later && !photo_seen'),
-    setv(e('photo_seen', 'set', True), when='photo_later'),
+    *seized('photo_later && !photo_seen'),
     say('expert', 'Вешай всё, что набегал. Только то, что есть, — без «наверное».'),
     say('expert', 'И не торопись. Во вторник ты половину угадал.', when='version_weak'),
     {'do': 'minigame', 'minigame': 'mg_board'},
@@ -1201,13 +1251,14 @@ scene('d3_where_w1', 'b6_board', 'hod_office_eve', lambda: [
     show('sledak', 'left'), show('expert', 'right'), show('oper', 'center', when='oper_with'),
     say('expert', 'Шестеро — и ни один не позвонил? Ни внуку, ни соседке?', when='bti_six'),
     say('expert', 'Трое — и ни один не позвонил? Ни внуку, ни соседке?', when='bti_chain && !bti_six'),
-    say('expert', 'Зоя Павловна уехала к родне — и ни разу не позвонила внуку?', when='!bti_chain'),
+    say('expert', 'Зоя Павловна уехала к родне — и ни разу не позвонила внуку?', when='!bti_chain && photo_seen'),
+    say('expert', 'Зоя Павловна уехала к родне — и ни разу не позвонила соседке?', when='!bti_chain && !photo_seen'),
     say('expert', 'А Пётр Ильич — к сестре, которой десять лет как нет.', when='second_victim'),
     jump('d3_where'),
 ], time='evening', pin='office_eve_ots_expert')
 scene('d3_where_w2', 'b6_board', 'hod_office_eve', lambda: [
     show('sledak', 'left'), show('expert', 'right'), show('oper', 'center', when='oper_with'),
-    say('expert', 'Держать их у себя? Квартиры проданы, деньги получены. Зачем ему лишние рты, Громов?'),
+    say('expert', 'Держать их у себя? Квартиры проданы, деньги получены. Зачем они ему теперь, Громов?'),
     jump('d3_where'),
 ], time='evening', pin='office_eve_ots_expert')
 scene('d3_night', 'b6_board', 'hod_office_night', lambda: [
@@ -1215,8 +1266,8 @@ scene('d3_night', 'b6_board', 'hod_office_night', lambda: [
     inner('Три дня я искал подпись. А надо было — людей.'),
     say('expert', 'Иди домой, Громов. Завтра тебе понадобится голова. И Палыч.'),
     sfx('sfx_phone_ring'),
-    say('oper', 'Юрист, это Сайко. Шмелёва твоего пробил: тридцать четыре года, два раза сидел. Тяжёлый.', when='oper_with && shmel_named'),
-    say('oper', 'Юрист, это Сайко. Водитель твой — Шмелёв Дмитрий, Шмель. Тридцать четыре года, два раза сидел. Возит Мурашова.', when='oper_with && driver_known && !shmel_named'),
+    say('oper', 'Громов, это Сайко. Шмелёва твоего пробил: двадцать семь лет, два раза сидел. Тяжёлый.', when='oper_with && shmel_named'),
+    say('oper', 'Громов, это Сайко. Водитель твой — Шмелёв Дмитрий, Шмель. Двадцать семь лет, два раза сидел. Возит Мурашова.', when='oper_with && driver_known && !shmel_named'),
     unlock('n_shmel', when='oper_with && driver_known'),
     setv(e('shmel_named', 'set', True), when='oper_with && driver_known'),
     say('sledak', 'Да, мам. Поздно. Нет, не жди.', when='!oper_with || !driver_known'),
@@ -1228,16 +1279,21 @@ scene('d3_night', 'b6_board', 'hod_office_night', lambda: [
 scene('d4_office', 'b7_op', 'hod_office_d2', lambda: [
     cap('date_stamp', 'Четверг, 12 августа'),
     show('sledak', 'left'), show('oper', 'center', when='oper_with'), show('boss', 'right'),
-    say('sledak', 'Валентин Павлович, мне нужна санкция на задержание. Сегодня.'),
+    sfx('sfx_phone_ring', when='irina_call_d4'),
+    say('lapin_wife', 'Это Ирина Лапина. Ночью звонил Сергей Викторович — спрашивал, кто к нам приходил и что мы сказали.', when='irina_call_d4'),
+    inner('Он знает, что его ищут.', when='irina_call_d4'),
+    unlock('n_irina', when='irina_call_d4'),
+    say('sledak', 'Валентин Павлович, мне нужна санкция на арест. Сегодня.'),
     say('boss', 'На кого?'),
-    say('sledak', 'Мурашов Сергей Викторович. Посредник. Шесть квартир за лето — и ни одного хозяина в живых.', when='bti_six'),
-    say('sledak', 'Мурашов Сергей Викторович. Посредник. Квартиры одиноких стариков — и ни одного хозяина в живых.', when='!bti_six'),
+    say('sledak', 'Мурашов Сергей Викторович. Посредник. Шесть квартир за лето — и ни одного хозяина с тех пор никто не видел.', when='bti_six'),
+    say('sledak', 'Мурашов Сергей Викторович. Посредник. Три квартиры за лето — и ни одного хозяина с тех пор никто не видел.', when='bti_chain && !bti_six'),
+    say('sledak', 'Мурашов Сергей Викторович. Посредник. Продал квартиру Зои Павловны — и её с тех пор никто не видел.', when='!bti_chain'),
     branch([('case_opened || klava_statement || kovrigin_deal', 'd4_sanction')], 'd4_refuse'),
 ], music='m_tension', ambient='amb_office', pin='office_d2_ots_boss')
 scene('d4_sanction', 'b7_op', 'hod_office_d2', lambda: [
     show('sledak', 'left'), show('oper', 'center', when='oper_with'), show('boss', 'right'),
     say('boss', 'Дело возбуждено, бумага с изъяном есть. Ладно.', when='case_opened'),
-    say('boss', 'Заявление о пропаже второго старика… Это уже не бумаги, Громов. Это люди.', when='!case_opened && klava_statement'),
+    say('boss', 'Ещё одно заявление, и опять твой посредник… Это уже не бумаги, Громов. Это люди.', when='!case_opened && klava_statement'),
     say('boss', 'Нотариус сам пишет показания? Ну ты даёшь, Громов.', when='!case_opened && !klava_statement'),
     say('boss', 'Подписываю. Но если возьмёшь не того — отвечать будешь сам.'),
     unlock('n_sanction'), setv(e('sanction', 'set', True)),
@@ -1252,7 +1308,7 @@ scene('d4_sanction', 'b7_op', 'hod_office_d2', lambda: [
     jump('d4_op', 'fade'),
 ], pin='office_d2_ots_boss')
 scene('d4_ident_irina', 'b7_op', 'hod_flat', lambda: [
-    cap('location', 'Молодогвардейская, квартира 34'),
+    cap('location', 'Молодогвардейская улица, квартира 34'),
     show('oper', 'left', when='oper_with'), show('sledak', 'center'), show('lapin_wife', 'right'),
     inner('Ирина смотрит на фото долго, будто считает про себя до десяти.'),
     say('lapin_wife', 'Он. Сергей Викторович. В коридоре у нотариуса деньги пересчитывал — два раза, чтобы мы видели.'),
@@ -1272,7 +1328,7 @@ scene('d4_ident_galina', 'b7_op', 'hod_landing_open', lambda: [
 ], ambient='amb_stairwell', pin='landing_open_ots')
 scene('d4_refuse', 'b7_op', 'hod_office_d2', lambda: [
     show('sledak', 'left'), show('oper', 'center', when='oper_with'), show('boss', 'right'),
-    say('boss', 'На каком основании? Бумаги чистые, дела нет, заявлений нет. Без дела никого брать не дам.'),
+    say('boss', 'На каком основании? Бумаги чистые, дела нет. Заявления у тебя о розыске — преступления в них нет. Без дела никого брать не дам.'),
     say('sledak', 'Он уедет, Валентин Павлович.'),
     say('boss', 'Значит, уедет. Отдавай материал в город — пусть у них голова болит.'),
     setv(e('case_transferred', 'set', True)),
@@ -1299,14 +1355,17 @@ scene('d4_op_choice', 'b7_op', 'hod_op', lambda: [
 ], time='night', pin='op_wide')
 scene('d4_op_now', 'b7_op', 'hod_op', lambda: [
     show('sledak', 'center'), show('oper', 'left', when='oper_with'),
-    inner('В агентстве свет, у входа «Волга» с открытым багажником. Он уезжает — ждать нельзя.', when='murashov_spooked'),
-    inner('Сайко нет. Со мной два сержанта из отделения. Ждать некому — берём сразу.', when='!oper_with'),
+    inner('Багажник «Волги» открыт. Он уезжает — ждать нельзя.', when='murashov_spooked'),
+    inner('Сайко нет. Со мной два сержанта из отделения. Берём сразу.', when='!oper_with && !murashov_spooked'),
+    inner('Сайко нет. Со мной два сержанта из отделения.', when='!oper_with && murashov_spooked'),
     inner('Расписания у нас нет. Ждать — значит гадать. Берём сразу.', when='oper_with && !office_watched && !murashov_spooked'),
     inner('Водитель замечает нас первым.'),
     sfx('sfx_shot'), fx('flash'),
     inner('Сайко сидит на асфальте и держится за плечо.', when='oper_with', shot='op_wounded'),
     say('oper', 'Царапина, юрист. Бери своего. Водителя ребята держат.', when='oper_with', shot='op_wounded'),
     setv(e('oper_wounded', 'set', True), e('accomplice_talks', 'set', True), when='oper_with'),
+    inner('По правам водитель — Шмелёв Дмитрий. Судимый, говорит сержант.', when='oper_with && !shmel_named'),
+    setv(e('shmel_named', 'set', True), when='oper_with'),
     inner('Водитель уходит дворами. Сержант бежит за ним и возвращается один.', when='!oper_with'),
     setv(e('shmel_escaped', 'set', True), when='!oper_with'),
     show('murashov', 'right'),
@@ -1316,7 +1375,7 @@ scene('d4_op_now', 'b7_op', 'hod_op', lambda: [
 scene('d4_op_wait', 'b7_op', 'hod_op', lambda: [
     show('sledak', 'center'), show('oper', 'left'), show('accomplice', 'right'),
     setv(e('op_waited', 'set', True)),
-    inner('Полночь. Мурашов выходит, Шмелёв открывает ему дверцу. «Волга» уходит в сторону области.', shot='op_wide'),
+    inner('Полночь. Мурашов выходит, Шмелёв открывает ему дверцу. «Волга» уходит в сторону области — за ней без фар идёт машина отделения.', shot='op_wide'),
     inner('В половине второго она возвращается — одна. Шмелёва берут у метро: руку из кармана он вынуть не успевает.'),
     say('accomplice', 'Я только возил.', shot='op_shmel_sil'),  # признание — силуэт на красном
     say('accomplice', 'Возил в лес.', shot='op_shmel_sil'),
@@ -1327,10 +1386,10 @@ scene('d4_op_wait', 'b7_op', 'hod_op', lambda: [
 scene('d4_search', 'b7_op', 'hod_search', lambda: [
     show('sledak', 'center'),
     inner('Мурашова взяли на рассвете, на крыльце его дома за городом. Он не бежал и ни о чём не спрашивал.', when='op_waited'),
-    cap('location', 'Обыск у Мурашова'),
-    inner('Три телефона, папки по годам, на окне — фикус. Всё как у человека, у которого всё в порядке.'),
-    say('oper', 'Юрист, с чего начнём? К утру приедет адвокат — всё перевернуть не успеем.', when='oper_with && !oper_wounded'),
-    inner('К утру приедет адвокат. Всё перевернуть не успею.', when='!oper_with || oper_wounded'),
+    cap('location', 'Обыск в агентстве'),
+    inner('Три телефона, папки по годам, на окне — фикус. Как у человека, у которого всё в порядке.'),
+    say('oper', 'Громов, с чего начнём? Скоро приедет адвокат — всё перевернуть не успеем.', when='oper_with && !oper_wounded'),
+    inner('Скоро приедет адвокат. Всё перевернуть не успею.', when='!oper_with || oper_wounded'),
     choice('c_search', 'Обыск: с чего начать?', 'investigative', [
         opt('papers', 'Папки. Доверенности, расписки, договоры', 'd4_search_papers'),
         opt('keys', 'Ключи и вещи. Всё, что не его', 'd4_search_keys'),
@@ -1340,18 +1399,19 @@ scene('d4_search_papers', 'b7_op', 'hod_search', lambda: [
     show('sledak', 'center'),
     inner('Доверенности. Шесть штук, все на его имя, все заверены Ковригиным.', shot='search_papers'),
     inner('Это я знал и так — из картотеки.', when='bti_six'),
-    inner('В картотеке я нашёл меньше. Теперь их шесть — и все на бумаге.', when='!bti_six'),
+    inner('В картотеке я нашёл меньше. Теперь их шесть — и все на бумаге.', when='bti_chain && !bti_six'),
+    inner('Шесть. А я знал про одну — Зои Павловны.', when='!bti_chain'),
     unlock('n_bti', when='!bti_six'),
     setv(e('bti_chain', 'set', True), e('bti_six', 'set', True)),
-    inner('До ящиков стола руки не дошли: в семь утра приехал адвокат.'),
+    inner('До ящиков стола руки не дошли: приехал адвокат.'),
     jump('d5_morning', 'fade'),
 ], time='night')
 scene('d4_search_keys', 'b7_op', 'hod_search', lambda: [
     show('sledak', 'center'),
     inner('В нижнем ящике стола — связка ключей. На каждом картонная бирка, адрес его рукой.', shot='search_keys'),
     inner('Под ключами — паспорта. Чужие. Сверху — паспорт Зои Павловны.', shot='search_keys'),
-    inner('Тут же — женская сумка. С ней, говорила Галина, Зоя Павловна вышла из дома в конце июня.', when='galina_open', shot='search_keys'),
-    inner('Тут же — старая матерчатая женская сумка.', when='!galina_open', shot='search_keys'),
+    inner('Тут же — женская сумка. С ней, говорила Галина, Зоя Павловна вышла из дома в конце июня.', when='visited_galina', shot='search_keys'),
+    inner('Тут же — старая матерчатая женская сумка.', when='!visited_galina', shot='search_keys'),
     setv(e('keys_found', 'set', True)), unlock('n_keys'),
     jump('d5_morning', 'fade'),
 ], time='night')
@@ -1366,13 +1426,14 @@ scene('d5_morning', 'b8_friday', 'hod_t_street', lambda: [
 scene('d5_field', 'b8_friday', 'hod_field', lambda: [
     show('sledak', 'right'), show('expert', 'left'), show('oper', 'center', when='!oper_wounded'),
     cap('location', 'Лесополоса под Апрелевкой, 7:20'),
-    inner('Шмелёв показал место ночью. Сам попросил карту.'),
+    inner('Шмелёв показал место ночью. Сам попросил карту.', when='op_waited'),
+    inner('Шмелёв ночью заговорил: «Я только возил». Сам попросил карту и показал место.', when='!op_waited'),
     unlock('n_shmel_talks'),
-    inner('Лента между берёзами. Лопаты. Левина в резиновых сапогах ходит вдоль ленты и ничего не говорит.'),
+    inner('Лента между берёзами. Лопаты. Левина в резиновых сапогах ходит вдоль ленты и ничего не говорит.', shot='field_ots_expert'),
     inner('Я стою у машины. Ближе меня не зовут — и я не прошу.'),
-    say('expert', 'Шестеро, Громов. Как в картотеке.', when='bti_six', shot='field_find'),  # находка — красная замена тела
+    say('expert', 'Шестеро, Громов. Сколько было сделок.', when='bti_six', shot='field_find'),  # находка — красная замена тела
     say('expert', 'Больше, чем ты нашёл, Громов.', when='!bti_six', shot='field_find'),
-    inner('Сайко в Боткинской. Позвонил в шесть: «Шмель показал место». И повесил трубку.', when='oper_wounded'),
+    inner('Сайко в Боткинской. Позвонил в шесть, спросил: «Нашли?» — и повесил трубку.', when='oper_wounded'),
     inner('Сайко курит у машины. Не шутит.', when='!oper_wounded', shot='field_oper'),
     setv(e('field_seen', 'set', True)), unlock('n_field'),
     jump('d5_interrog', 'fade'),
@@ -1431,7 +1492,7 @@ scene('d5_boss', 'b8_friday', 'hod_office_d2', lambda: [
     say('boss', 'Дело забирает город. Не обижайся: у них люди и сроки, а у тебя — бумаги и нервы.', when='case_transferred'),
     say('oper', 'Ну что, юрист. Пятница.', when='oper_with && !oper_wounded'),
     sfx('sfx_phone_ring', when='oper_wounded'),
-    say('oper', 'Юрист? Из Боткинской звоню. Рука на месте, врач говорит — повезло.', when='oper_wounded'),
+    say('oper', 'Громов? Из Боткинской звоню. Рука на месте, врач говорит — повезло.', when='oper_wounded'),
     inner('В трубке слышно, как жена говорит ему: «Дай сюда. Сколько можно».', when='oper_wounded'),
     jump('fin_zoya', 'slow_fade'),
 ], time='evening', ambient='amb_office', pin='office_d2_ots_boss')
@@ -1441,7 +1502,7 @@ scene('d5_gone', 'b8_friday', 'hod_agency_closed', lambda: [
     setv(e('day', 'set', 5)),
     cap('location', 'Пресня, у агентства'),
     inner('Агентство закрыто. На двери — «Ремонт». «Волги» у входа нет.'),
-    say('oper', 'Уехал, юрист. Ночью, с вещами. Соседи видели.', when='oper_with'),
+    say('oper', 'Уехал, Громов. Ночью, с вещами. Соседи видели.', when='oper_with'),
     inner('Соседи видели: ночью грузили вещи в серую «Волгу».', when='!oper_with'),
     inner('Материал в городе. С моей подписью на последней странице.'),
     jump('fin_zoya', 'slow_fade'),
@@ -1454,7 +1515,7 @@ scene('fin_zoya', 'b9_end', 'hod_bio', lambda: [
     vo('Сорок лет — корректор в типографии на Пресне. Опечатки в чужих текстах видела с первого взгляда.'),
     vo('Внука вырастила сама. Когда он уехал учиться в Самару, писала ему каждое воскресенье.'),
     vo('Квартиру на Молодогвардейской хотела оставить ему.'),
-    vo('Пётр Ильич Р. 1914–1993. Токарь, сорок лет у станка. Чинил соседям утюги и замки — и денег не брал.', when='second_victim', shot='bio_pyotr'),
+    vo('Пётр Ильич Р. 1914–1993. Токарь, всю жизнь у станка. Чинил соседям утюги и замки — и денег не брал.', when='second_victim', shot='bio_pyotr'),
     jump('fin_court', 'slow_fade'),
 ], music='m_epilogue', pin='bio_zoya')
 scene('fin_court', 'b9_end', 'hod_court', lambda: [
@@ -1466,6 +1527,7 @@ scene('fin_court', 'b9_end', 'hod_court', lambda: [
     vo('В приговоре — те эпизоды, что успели доказать.', when='!bti_six && !field_seen'),
     cap('fact', 'С 1996 года в России действует мораторий на смертную казнь.'),
     vo('Приговор Мурашову так и не исполнили: исключительную меру заменили пожизненным лишением свободы.'),
+    vo('Шмелёва взяли через сутки, на Казанском вокзале.', when='shmel_escaped'),
     vo('Нотариус Ковригин получил шесть лет и лишился права заверять документы. Шмелёв — двенадцать.'),
     vo('Ковригин на суде повторял одно: «Мне обещали».', when='kovrigin_deal'),
     vo('Мурашов на суде не сказал ни слова. Только попросил вести протокол дословно.', when="confession != 'full'"),
@@ -1475,19 +1537,22 @@ scene('fin_epilogue', 'b9_end', 'hod_t_moscow', lambda: [
     cap('date_stamp', 'Москва, 1994–1997 годы'),
     vo('Квартиру на Молодогвардейской по суду вернули внуку из Самары.'),
     vo('Фотографию из серванта отдали ему вместе с ключами.', when='photo_seen'),
-    vo('Лапины дали показания и по суду вернули часть денег.', when='lapins_told_truth'),
+    vo('Лапины дали показания, и по суду им вернули часть денег.', when='lapins_told_truth'),
     vo('Лапины узнали всё из повестки.', when='!lapins_told_truth'),
     vo('Галина опознала Мурашова — и через год переехала к дочери в Тулу. Адреса Громову не оставила.', when='galina_promise_broken'),
     vo('Имя Галины в деле так и не прозвучало.', when='galina_trust && !galina_promise_broken'),
     vo('Галина уехала в Тулу ещё в августе и в Москву не вернулась.', when='galina_leaving'),
     vo('Галина так и не узнала, что её заявление стало делом.', when='galina_closed || !visited_galina'),
     vo('Люда ушла из конторы и поступила на юридический.', when='lyuda_talked'),
-    vo('Люда из отпуска в контору не вернулась.', when='lyuda_gone && !lyuda_talked'),
+    vo('Помощница Ковригина из отпуска в контору не вернулась.', when='lyuda_gone && !lyuda_talked'),
+    vo('Клавдия Семёновна пришла на каждое заседание суда.', when='klava_statement'),
     vo('Место под Апрелевкой Шмелёв показал только весной 1994-го.', when='!field_seen'),
     vo('Сайко вернулся через четыре месяца. Правая рука выше плеча так и не поднялась.', when='oper_wounded'),
-    vo('Сайко получил благодарность в приказе — и «квартирные» дела потоком.', when='oper_with && !oper_wounded'),
+    vo('Сайко получил благодарность в приказе.', when='oper_with && !oper_wounded && sanction'),
+    vo('Сайко вернулся к своим делам в МУРе. Когда Мурашова взяли в Твери, позвонил Громову первым.', when='oper_with && !sanction'),
     vo('Сайко узнал, чем кончилось дело, из сводки.', when='!oper_with'),
-    vo('Палыч ушёл на пенсию в девяносто пятом. На проводах про Громова сказал: «Неудобный. Но довёл».', when='!case_transferred'),
+    vo('Валентин Павлович ушёл на пенсию в 1995-м. На проводах про Громова сказал: «Неудобный. Но довёл».', when='!case_transferred'),
+    vo('Валентин Павлович ушёл на пенсию в 1995-м. Про дело Мурашова на проводах не вспоминали.', when='case_transferred'),
     vo('Мурашова задержали весной 1994-го в Твери — другие люди. Громова перевели на хозяйственные дела.', when='!sanction'),
     vo('Дело довела горпрокуратура. Громова перевели на хозяйственные дела.', when='sanction && case_transferred'),
     vo('Громов остался в Кунцеве. «Квартирные» дела теперь приносили ему первому.', when='!case_transferred'),
@@ -1501,18 +1566,19 @@ scene('fin_journal', 'b9_end', 'hod_t_moscow', lambda: [
     vo('С Галиной заговорили протоколом — и цепочка с двери так и не снялась.', when='galina_closed'),
     vo('К Галине так и не зашли.', when='!visited_galina'),
     vo('Ковригину пообещали, что он пойдёт свидетелем. Суд решил иначе.', when='kovrigin_deal'),
-    vo('Ковригину ничего не обещали — и он ничего не сказал.', when='kovrigin_pressed'),
+    vo('Ковригину ничего не обещали — и он сказал только, где искать Мурашова.', when='kovrigin_pressed'),
     vo('К Ковригину в среду не поехали.', when='!v3_kovrigin'),
-    vo('Санкцию не дали — и брать было некого.', when='!sanction'),
+    vo('Санкцию не дали — и в ту же ночь Мурашов уехал.', when='!sanction'),
     vo('У агентства ждали до полуночи — и взяли обоих порознь.', when='op_waited'),
     vo('Брали сразу — и пуля досталась Сайко.', when='oper_wounded'),
-    vo('Брали сразу, без Сайко, — и Шмелёв ушёл дворами.', when='shmel_escaped'),
+    vo('Брали сразу, без Сайко, — и Шмелёв ушёл дворами.', when='shmel_escaped && shmel_named'),
+    vo('Брали сразу, без Сайко, — и водитель ушёл дворами.', when='shmel_escaped && !shmel_named'),
     jump('fin_2004', 'vhs_glitch'),
 ], filter_='archive_photo', season='winter')
 scene('fin_2004', 'b9_end', 'hod_2004', lambda: [
     show('sledak_old', 'center'),
     cap('lower_third', 'Андрей Громов, следователь. Запись 2004 года'),
-    say('sledak_old', 'Мне до сих пор пишут внуки. Не про Мурашова — про бабушек. Спрашивают, какими они были. А я знаю только, какими были их бумаги.'),
+    say('sledak_old', 'Мне до сих пор пишут внуки. Не про Мурашова — про стариков. Спрашивают, какими они были. А я знаю только, какими были их бумаги.'),
     {'do': 'end', 'ending': 'e_early', 'when': '!sanction || case_transferred'},
     {'do': 'end', 'ending': 'e_variant', 'when': 'oper_wounded || case_strength < 5'},
     {'do': 'end', 'ending': 'e_canon'},
@@ -1552,6 +1618,9 @@ MG_DOCS['config'] = {**MG_DOCS['config'], 'required': 1,
 # Среда: та же сверка — свежим глазом (в понедельник не нашли) или впервые (договор достали во вторник).
 MG_DOCS_D3 = legacy_minigame('mg_docs', {'success': {'goto': 'd3_lens_ok'}, 'fail': {'goto': 'd3_lens_fail'}}, 'success',
                              id='mg_docs_d3', config=MG_DOCS['config'])
+# Среда, вечер: договор привезли днём (Лапины — третье место), утром класть под лампу было нечего.
+MG_DOCS_D3E = legacy_minigame('mg_docs', {'success': {'goto': 'd3_lens_eve_ok'}, 'fail': {'goto': 'd3_lens_eve_fail'}}, 'success',
+                              id='mg_docs_d3e', config=MG_DOCS['config'])
 MG_DB = legacy_minigame('mg_db', {'success': {'goto': 'bti_chain_ok', 'effects': [e('bti_chain', 'set', True), e('bti_six', 'set', True)], 'archive_unlock': 'n_bti'},
                                   'partial': {'goto': 'bti_chain_part', 'effects': [e('bti_chain', 'set', True)], 'archive_unlock': 'n_bti3'},
                                   'fail': {'goto': 'bti_chain_fail'}}, 'partial')
@@ -1560,10 +1629,22 @@ MG_DB = legacy_minigame('mg_db', {'success': {'goto': 'bti_chain_ok', 'effects':
 MG_DB['config'] = {**MG_DB['config'], 'dates': {'from': '1992-06-01', 'to': '1993-08-06'},
                    'target_dates': {'from': '1993-06-01', 'to': '1993-08-06'},
                    'fixed': [{'values': {'address': 'molodogvardeyskaya', 'notary': 'kovrigin', 'attorney': 'murashov_sv', 'buyer': 'lapin'},
-                              'n': 34, 'date': '1993-06-28'}]}
+                              'n': 34, 'date': '1993-06-28'},
+                             # квартира Петра Ильича — вторая карточка, к которой Громов едет в среду
+                             {'values': {'address': 'khoroshevskoe', 'notary': 'kovrigin', 'attorney': 'murashov_sv', 'buyer': 'zaitsev'},
+                              'n': 12, 'date': '1993-07-23'}]}
+for f in MG_DB['config']['values']:
+    if f['field'] == 'address':
+        f['options'].append({'id': 'khoroshevskoe', 'text_key': 'ep01.mg_db.v.address.khoroshevskoe'})
+    if f['field'] == 'buyer':
+        f['options'].append({'id': 'zaitsev', 'text_key': 'ep01.mg_db.v.buyer.zaitsev'})
+RU['ep01.mg_db.v.address.khoroshevskoe'] = 'Хорошёвское ш., кв. {n}'
+RU['ep01.mg_db.v.buyer.zaitsev'] = 'Зайцев В. П.'
+RU['ep01.mg_db.v.buyer.lapin'] = 'Лапин В. Г.'
+RU['ep01.mg_db.brief'] = 'Отберите карточки с тем же нотариусом и тем же доверенным лицом, что в сделке Зои Павловны.'
 RU['ep01.mg_docs.brief'] = 'Сравните доверенность и договор и отметьте место, где они не сходятся.'
 RU['ep01.mg_docs.f.contract_poa_ref'] = 'по доверенности от 11 июня 1993 г.'
-RU['ep01.mg_docs.hint.ref'] = 'Договор ссылается на доверенность с другой датой, чем стоит в ней самой'
+RU['ep01.mg_docs.hint.ref'] = 'В договоре у доверенности одна дата, в самой доверенности — другая'
 RU.pop('ep01.mg_docs.hint.signature', None)  # подпись в договоре в пробе не изъян
 
 # Доска Левиной (среда, вечер): на доске только найденное — узел с requires есть, только если переменная истинна, и связи
@@ -1614,8 +1695,8 @@ IP_STATEMENTS = [  # (id, утверждение, улики, ответ на «
      'Нотариус удостоверил её подпись. Это его работа, не моя. Спросите его.'),
     ('free', 'Я помогал старикам с бумагами бесплатно. По-соседски.', ['ev_lyuda', 'ev_deals'],
      'Справки, такси, очереди — расходы я брал на себя. Это не запрещено.'),
-    ('shmel', 'Шмелёва я не знаю. Мало ли кто стоит у подъезда.', ['ev_driver', 'ev_shmel'],
-     'Водителей я беру по объявлению. Фамилии не спрашиваю. Платят им за дорогу.'),
+    ('shmel', 'Водителя этого я не знаю. Мало ли кто стоит у подъезда.', ['ev_driver', 'ev_shmel'],
+     'Водителей я беру по объявлению. Фамилии не спрашиваю. Плачу за дорогу.'),
     ('where', 'Где они сейчас — не знаю. Взрослые люди, уехали куда хотели.', ['ev_keys', 'ev_field'],
      'Я не опекун. Деньги получил — деньги передал. Расписки у меня в порядке.'),
 ]
@@ -1625,13 +1706,13 @@ IP_EVIDENCE = [  # (id, подпись, requires)
     ('ev_glasses', 'Очки на футляре', 'glasses_found'),
     ('ev_read', 'Ковригин: доверенность читал Мурашов', 'murashov_read'),
     ('ev_lyuda', 'Люда: наличные Ковригину в стол', 'lyuda_talked'),
-    ('ev_deals', 'Сделки из картотеки БТИ', 'bti_chain'),
+    ('ev_deals', 'Сделки Ковригина и Мурашова', 'bti_chain'),
     ('ev_driver', 'Водитель «Волги»', 'driver_known'),
     ('ev_shmel', 'Шмелёв: «Возил в лес»', 'accomplice_talks'),
     ('ev_keys', 'Ключи с бирками и паспорта', 'keys_found'),
     ('ev_field', 'Лесополоса под Апрелевкой', 'field_seen'),
     ('ev_statement', 'Заявление Галины', None),
-    ('ev_contract', 'Договор Лапиных', None),
+    ('ev_contract', 'Договор Лапиных', 'have_contract'),
 ]
 MG_INTERROGATION = {
     'id': 'mg_interrogation_hod', 'type': 'interrogation_press', 'beat': 'confrontation',
@@ -1657,12 +1738,13 @@ MINIGAMES = {
     'mg_docs': MG_DOCS,
     'mg_db': MG_DB,
     'mg_docs_d3': MG_DOCS_D3,
+    'mg_docs_d3e': MG_DOCS_D3E,
     'mg_board': MG_BOARD,
     'mg_interrogation_hod': MG_INTERROGATION,
     'mg_flat_inspect': {
         'id': 'mg_flat_inspect', 'type': 'crime_scene_search', 'beat': 'crime_scene',
         # Макет мини-игры (Figma 2026-10-13): заголовок — вопрос, под ним бриф и (из max_misses) «У вас всего 4 попытки…».
-        'title_key': key('title', 'Что Зоя Павловна «оставила», уезжая на юг?'),
+        'title_key': key('title', 'Что Зоя Павловна оставила, «уезжая на юг»?'),
         'brief_key': key('brief', 'Лапины смотрят: копаться долго не дадут.'),
         'config': {
             'scene_bg': 'bg_hod_flat_inspect',
@@ -1670,14 +1752,14 @@ MINIGAMES = {
             # экрана итога: что находка значит и что меняет дальше (только то, что делают её effects: сцены 409/411/412,
             # вопрос нотариусу c_*_ask, реплики Левиной в d1_eve_rest)
             'hotspots': [
-                {'id': 'photo', 'rect': [0.1087, 0.3218, 0.0456, 0.1215], 'label_key': key('hs.photo', 'Фото внука за стеклом'),
+                {'id': 'photo', 'rect': [0.1087, 0.3218, 0.0456, 0.1215], 'label_key': key('hs.photo', 'Фото внука в серванте'),
                  'why_key': key('why.photo', 'У Зои Павловны один родственник — внук в Самаре. А Лапиным сказали, что она уехала к родне на юг. Громов спросит их об этом сразу.'),
                  'required': True, 'archive_unlock': 'n_photo', 'effects': [e('photo_seen', 'set', True)]},
                 {'id': 'glasses', 'rect': [0.0898, 0.6169, 0.0781, 0.0718], 'label_key': key('hs.glasses', 'Её очки на футляре'),
-                 'why_key': key('why.glasses', 'Без очков Зоя Павловна не читает — значит, доверенность подписала, не прочитав. У нотариуса появится вопрос: как она её прочла?'),
+                 'why_key': key('why.glasses', 'Без очков Зоя Павловна не читает — значит, доверенность подписала, не прочитав. Кто же ей её читал?'),
                  'required': True, 'archive_unlock': 'n_glasses', 'effects': [e('glasses_found', 'set', True)]},
                 {'id': 'pills', 'rect': [0.7676, 0.4016, 0.0378, 0.0440], 'label_key': key('hs.pills', 'Таблетки на подоконнике'),
-                 'why_key': key('why.pills', 'Нитроглицерин. Сердечница без него из дома не выходит — значит, на юг она не уезжала. Вечером это подтвердит Левина.'),
+                 'why_key': key('why.pills', 'Нитроглицерин. Сердечница без него из дома не выходит — значит, на юг она не уезжала.'),
                  'required': False, 'archive_unlock': 'n_pills', 'effects': [e('pills_found', 'set', True)]},
             ],
             'max_misses': 4,
@@ -1709,7 +1791,7 @@ NOTES = [
     ('n_sergei', 'fact', 'Галина: «Сергей Викторович»', 'Вежливый, «из газеты», три недели помогал Зое Павловне с бумагами. Приезжал на серой «Волге», ставил её под окнами Галины, не у подъезда.', None),
     ('n_last_seen', 'fact', 'Галина: в последний раз', 'В конце июня Зоя Павловна вышла с сумкой, в выходном плаще. Сказала: Сергей Викторович заедет, по бумагам. Больше её не видели.', None),
     ('n_register', 'fact', 'Реестр Ковригина', 'Запись о доверенности от 14 июня вписана другими чернилами, синее соседних строк. Ковригин: «техническая ошибка помощницы».', None),
-    ('n_lyuda', 'fact', 'Помощница нотариуса', 'Люда: Сергей Викторович бывает раз в месяц, всегда со старушкой и без очереди; за срочность платит наличными Ковригину в стол.', None),
+    ('n_lyuda', 'fact', 'Помощница нотариуса', 'Люда: Сергей Викторович бывает часто, всегда со стариками и без очереди; за срочность платит наличными Ковригину в стол.', None),
     ('n_vypiska', 'fact', 'ЖЭК: выписана 25 июня', 'Зою Павловну выписали 25 июня по заявлению доверенного лица. Сама она не приходила. Паспортистке он принёс шоколадку.', None),
     ('n_queue', 'fact', 'ЖЭК: он ходил в очередь', 'Всё лето вежливый мужчина крутился в очереди ЖЭКа, разговаривал со старушками и заполнял им справки.', None),
     ('n_card', 'document', 'Карточка БТИ', 'Молодогвардейская, кв. 34. Переход права: договор от 28.06.1993, нотариус Ковригин А. Н. Представитель продавца по доверенности: Мурашов С. В.', 'doc_bti_card'),
@@ -1718,7 +1800,7 @@ NOTES = [
     ('n_date', 'fact', 'Дата в доверенности', 'Договор ссылается на доверенность от 11 июня, а в самой доверенности — 14-е. Левина: четвёрка написана поверх единицы, оговорки «исправленному верить» нет. Бумага с изъяном.', None),
     ('n_glasses', 'fact', 'Очки Зои Павловны', 'Остались дома, на серванте, на футляре. Без очков она не читает: доверенность подписывала, не прочитав.', None),
     ('n_pills', 'fact', 'Таблетки на подоконнике', 'Нитроглицерин. Сердечница без него из дома не выходит — на юг она не уезжала.', None),
-    ('n_read', 'fact', 'Доверенность ей читал Мурашов', 'Ковригин: бабушка была без очков, текст ей зачитал доверенный — сам Мурашов. «По закону можно».', None),
+    ('n_read', 'fact', 'Доверенность ей читал Мурашов', 'Ковригин: бабушка была без очков, текст ей зачитало доверенное лицо — сам Мурашов. «По закону можно».', None),
     ('n_call', 'fact', 'Лапины звонили нотариусу', 'Посредник велел Лапиным звонить нотариусу, если придут из милиции. Нотариус и посредник — одна связка.', None),
     # дни 3–5
     ('n_address', 'fact', 'Прописка Мурашова', 'Мурашов Сергей Викторович, 1955 года рождения. Прописан в Чертанове.', None),
@@ -1726,13 +1808,13 @@ NOTES = [
     ('n_irina', 'fact', 'Ирина: звонил Сергей Викторович', 'Мурашов звонил Лапиным: велел молчать, обещал вернуть деньги, если всё будет тихо. Он знает, что его ищут.', None),
     ('n_pyotr', 'fact', 'Пётр Ильич, 79 лет', 'Хорошёвка, вторая квартира из картотеки. Токарь на пенсии. «Уехал к сестре в Краснодар» в июле — а сестры нет в живых десять лет.', None),
     ('n_driver', 'fact', 'Клавдия Семёновна: водитель', 'Петра Ильича увезли в июле на серой «Волге». Рядом сидел вежливый, при галстуке, за рулём — здоровый, стриженый.', None),
-    ('n_klava', 'fact', 'Заявление о пропаже', 'Клавдия Семёновна написала заявление о пропаже Петра Ильича. Это основание для дела.', None),
-    ('n_office', 'fact', 'Агентство на Пресне', 'Мурашов живёт за городом, а работает в агентстве недвижимости на Пресне — в бывшей редакции газеты. У входа его «Волга».', None),
-    ('n_seen', 'fact', 'Мурашов в лицо', 'Громов зашёл в агентство под видом покупателя: вежливый, бесцветный. Мурашов запомнил лицо.', None),
-    ('n_watch', 'fact', 'Расписание Мурашова', 'В шесть он уходит из агентства, в полночь водитель везёт его за город и возвращается один. Брать можно порознь.', None),
+    ('n_klava', 'fact', 'Заявление со свидетелем', 'Клавдия Семёновна написала заявление: Петра Ильича увезли двое, на серой «Волге». Это уже не розыск, а основание для дела.', None),
+    ('n_office', 'fact', 'Агентство на Пресне', 'Мурашов работает в агентстве недвижимости на Пресне — в бывшей редакции газеты.', None),
+    ('n_seen', 'fact', 'Мурашов в лицо', 'Громов зашёл в агентство под видом покупателя. Мурашов — вежливый, бесцветный — запомнил его лицо.', None),
+    ('n_watch', 'fact', 'Расписание Мурашова', 'Мурашов сидит в агентстве до полуночи, потом водитель везёт его за город и возвращается один. Брать можно порознь.', None),
     ('n_kovrigin', 'fact', 'Показания Ковригина', 'Под протокол: доверенности старикам читал вслух Мурашов, даты других сделок — в реестре. Ковригину обещано, что он пойдёт свидетелем.', None),
-    ('n_shmel', 'fact', 'Шмелёв Дмитрий («Шмель»)', 'Водитель Мурашова. Тридцать четыре года, дважды судим.', None),
-    ('n_sanction', 'fact', 'Санкция на задержание', 'Палыч подписал санкцию на задержание Мурашова.', None),
+    ('n_shmel', 'fact', 'Шмелёв Дмитрий («Шмель»)', 'Водитель Мурашова. Судим.', None),
+    ('n_sanction', 'fact', 'Санкция на арест', 'Палыч подписал санкцию на арест Мурашова.', None),
     ('n_ident', 'fact', 'Опознание', 'Мурашова опознали по фото из паспортного стола.', None),
     ('n_shmel_talks', 'fact', 'Шмелёв: «Возил в лес»', '«Я только возил. Возил в лес». Место показал сам.', None),
     ('n_keys', 'fact', 'Ключи с бирками', 'При обыске: ключи от чужих квартир с бирками, адреса его рукой; паспорта стариков; сумка Зои Павловны.', None),
@@ -1782,7 +1864,7 @@ TITLES = {
     'boss': 'начальник следственного отдела', 'notary': 'нотариус', 'assistant': 'помощница нотариуса',
     'neighbor': 'соседка', 'buyer': 'покупатель', 'lapin_wife': 'покупательница', 'clerk': 'архив БТИ',
     'passport_clerk': 'ЖЭК', 'zoya': 'пенсионерка', 'murashov_sil': 'посетитель',
-    'murashov': 'посредник по сделкам с жильём', 'accomplice': 'водитель Мурашова', 'sledak_old': 'запись 2004 года',
+    'murashov': 'посредник по сделкам с жильём', 'accomplice': 'водитель Мурашова', 'sledak_old': 'следователь, запись 2004 года',
     'klava': 'соседка Петра Ильича', 'landlady': 'Чертаново',
 }
 for c in cast:
@@ -1791,6 +1873,7 @@ for c in cast:
         c['portrait'] = f"assets/ep01/portraits/{c['id']}.webp"
     RU[c['title_key']] = TITLES[c['id']]
 RU['ep01.cast.notary'] = 'Ковригин'
+RU['ep01.cast.sledak_old'] = 'Андрей Громов'  # год — в подписи и в титре, не в имени
 RU['ep01.cast.assistant'] = 'Люда'
 RU['ep01.cast.clerk'] = 'Раиса Львовна'
 RU['ep01.title'] = OLD_RU['ep01.title']
@@ -1805,6 +1888,8 @@ for b, t in (('b1_day1', 'День первый'), ('b3_day2', 'День вто�
 V = lambda t, d, doc, **kw: {'type': t, 'default': d, 'doc': doc, **kw}  # noqa: E731
 variables = {
     'trust_oper': OLD['variables']['trust_oper'], 'boss_favor': OLD['variables']['boss_favor'],
+    'oper_points': V('int', 0, 'Доверие Сайко в этом эпизоде: те же плюсы и минусы, что у trust_oper, но без нижней границы 0 — '
+                     'остаётся ли Сайко ночью вторника, решает сумма, а не порядок визитов.', min=-3, max=4),
     'gromov_rep': OLD['variables']['gromov_rep'],
     'day': V('int', 1, 'День следствия.', min=1, max=6), 'slot': V('int', 0, 'Сколько мест отработано за день.', min=0, max=3),
     'last_place': V('string', '', 'Где были только что (реплика Сайко в машине).'),
@@ -1816,7 +1901,8 @@ for b, doc_ in [('visited_flat', 'Были в квартире у Лапиных
                 ('have_contract', 'Копия договора и доверенности у следователя.'), ('know_name', 'Фамилия доверенного известна.'),
                 ('lapins_told_truth', 'Лапиным сказали, что сделку могут признать недействительной.'),
                 ('photo_seen', 'Фото внука найдено.'), ('photo_later', 'Фото оставили до понятых.'),
-                ('glasses_found', 'При осмотре нашли очки Зои Павловны.'), ('pills_found', 'При осмотре нашли её таблетки.'),
+                ('glasses_found', 'Очки Зои Павловны найдены: при осмотре или Левиной по протоколу.'),
+                ('pills_found', 'Её нитроглицерин найден: при осмотре или Левиной по протоколу.'),
                 ('galina_open', 'Галина рассказала всё.'), ('galina_closed', 'С Галиной заговорили протоколом.'),
                 ('galina_trust', 'Галине обещали, что её имя не прозвучит.'), ('galina_leaving', 'Галина собирается уехать к дочери.'),
                 ('notary_alarmed', 'Нотариус встревожен и жалуется.'),
@@ -1830,19 +1916,24 @@ for b, doc_ in [('visited_flat', 'Были в квартире у Лапиных
                 ('shmel_named', 'Водитель известен по имени — Шмелёв.'), ('office_known', 'Агентство Мурашова на Пресне известно.'),
                 ('office_watched', 'За агентством следили с Сайко: расписание известно.'),
                 ('murashov_spooked', 'Мурашов знает, что его ищут (Лапины или визит под видом покупателя): ждать нельзя.'),
-                ('second_victim', 'Были во второй квартире — у Петра Ильича.'), ('klava_statement', 'Заявление о пропаже Петра Ильича.'),
+                ('seen_by_murashov', 'Громов заходил в агентство под видом покупателя: Мурашов видел его лицо.'),
+                ('irina_call_d4', 'Лапиным сказали правду в среду: утром в четверг звонит Ирина.'),
+                ('complaint_handled', 'Жалоба нотариуса уже стоила отношения Палыча (звонок в понедельник или утро среды).'),
+                ('lens_d3', 'Утром среды договор есть, а дело не возбуждено: сверка у лампы до выезда.'),
+                ('lens_d3_done', 'В среду договор уже сверяли под лампой.'),
+                ('second_victim', 'Были во второй квартире — у Петра Ильича.'), ('klava_statement', 'Заявление Клавдии Семёновны: Петра Ильича увезли двое на «Волге».'),
                 ('kovrigin_deal', 'Ковригин дал показания за обещание «пойдёте свидетелем».'),
-                ('kovrigin_pressed', 'Ковригина давили явкой — он молчит, вторая жалоба.'),
+                ('kovrigin_pressed', 'Ковригина давили явкой — он молчит и жалуется.'),
                 ('kovrigin_retracted', 'На очной ставке Ковригин отказался от показаний.'),
                 ('v3_third', 'Третье место среды отработано.'), ('v3_address', 'Были по адресу Мурашова.'), ('v3_kovrigin', 'Были у Ковригина в среду.'),
-                ('board_ok', 'Доска сошлась целиком.'), ('sanction', 'Санкция на задержание есть.'), ('identified', 'Мурашова опознали.'),
+                ('board_ok', 'Доска сошлась целиком.'), ('sanction', 'Санкция на арест есть.'), ('identified', 'Мурашова опознали.'),
                 ('galina_promise_broken', 'Галину попросили опознать вопреки обещанию.'),
                 ('oper_wounded', 'Сайко ранен при задержании.'), ('accomplice_talks', 'Шмелёв заговорил.'),
                 ('shmel_escaped', 'Шмелёв ушёл при задержании.'), ('op_waited', 'У агентства ждали и взяли порознь.'),
                 ('keys_found', 'При обыске нашли ключи и паспорта.'), ('field_seen', 'Лесополоса под Апрелевкой.'),
                 ('case_transferred', 'Дело ушло в горпрокуратуру.')]:
     variables[b] = V('bool', False, doc_)
-variables['oper_with'] = V('bool', True, 'Сайко работает с Громовым; с среды — только если пробил «Волгу» (доверие ≥ 1).')
+variables['oper_with'] = V('bool', True, 'Сайко работает с Громовым; со среды — только если пробил «Волгу» (oper_points ≥ 1).')
 variables['third'] = V('string', '', 'Третье место среды: second — вторая квартира; flat, galina, zhek, bti — место пробы, до которого не доехали.')
 variables['confession'] = V('string', 'none', 'Итог допроса: none | partial | full.')
 variables['case_strength'] = V('int', 0, 'Сила дела (§6): восемь пунктов, считается в пятницу вечером.', min=0, max=8)
