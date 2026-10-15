@@ -260,7 +260,11 @@ class DocumentCheck extends MinigameShell {
   }
 
   protected override introNote(): string {
-    return this.scans ? this.t('ui.minigame.body_loupe') : '';
+    if (!this.scans) return '';
+    const loupe = this.t('ui.minigame.body_loupe');
+    // Узкий вертикальный экран: листы мелкие и друг под другом — подсказать повернуть телефон (владелец 2026-10-15).
+    const portrait = globalThis.matchMedia?.('(orientation: portrait) and (max-width: 600px)').matches ?? false;
+    return portrait ? `${loupe} ${this.t('ui.minigame.body_rotate')}` : loupe;
   }
 
   protected override focusField(): void {
@@ -521,8 +525,12 @@ class DocumentCheck extends MinigameShell {
     const right = shown && wide ? (dock?.offsetWidth ?? 0) + pad * 2 : pad;
     const bottom = shown && !wide ? (dock?.offsetHeight ?? 0) + pad * 2 : pad;
     const n = this.pages.length;
-    const pw = Math.max(60, Math.floor(Math.min((W - pad - right - pad * (n - 1)) / n, (H - pad - bottom) * 0.75)));
-    Object.assign(d.style, { padding: `${pad}px ${right}px ${bottom}px ${pad}px`, gap: `${pad}px` });
+    // Рядом или друг под другом — как листы крупнее: на вертикальном телефоне друг под другом (владелец 2026-10-15).
+    const row = Math.floor(Math.min((W - pad - right - pad * (n - 1)) / n, (H - pad - bottom) * 0.75));
+    const col = Math.floor(Math.min(W - pad - right, ((H - pad - bottom - pad * (n - 1)) / n) * 0.75));
+    const stack = col > row;
+    const pw = Math.max(60, stack ? col : row);
+    Object.assign(d.style, { padding: `${pad}px ${right}px ${bottom}px ${pad}px`, gap: `${pad}px`, flexDirection: stack ? 'column' : 'row' });
     for (const p of this.pages) Object.assign(p.el.style, { width: `${pw}px`, height: `${Math.round(pw / 0.75)}px` });
     this.loupeSize = Math.round(Math.min(230, Math.max(130, pw * 0.42)));
     // увеличение — почти до разрешения скана (1536 px по ширине): под лупой видна и стёртая цифра

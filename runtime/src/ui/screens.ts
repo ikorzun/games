@@ -832,7 +832,13 @@ export class ArchiveScreen extends BaseScreen {
         h(
           'div',
           { class: 'vn-archive__head', data: { backdrop: 1 } },
-          h('h2', { class: 'vn-archive__title', text: t(this.titleKey) }),
+          h(
+            'h2',
+            { class: 'vn-archive__title' },
+            t(this.titleKey),
+            // Архив в меню — всё, что найдено за все партии: здесь и общий счёт (на финале партии — только её блокнот).
+            !this.opts.path && all.length > 0 ? h('span', { class: 'vn-archive__count', text: t('ui.archive.count', { n: items.length, total: all.length }) }) : null,
+          ),
           // Крестик — как у окна документа.
           h(
             'button',
@@ -1111,14 +1117,14 @@ export class EndingScreen extends BaseScreen {
           h(
             'footer',
             { class: 'vn-ending__foot' },
-            total > 0 ? h('span', { text: t('ui.end.materials', { n: Math.min(archive.length, total), total }) }) : null,
+            total > 0 ? h('span', { text: t('ui.end.materials', { n: Math.min(archive.length, total) }) }) : null,
             h('span', { text: t('ui.end.decisions_n', { n: journal.length }) }),
           ),
         ),
         h(
           'div',
           { class: 'vn-actions vn-ending__actions' },
-          h('button', { class: 'vn-btn', type: 'button', text: t('ui.menu.archive'), on: { click: this.handlers.onArchive } }),
+          h('button', { class: 'vn-btn', type: 'button', text: t('ui.quick.notebook'), on: { click: this.handlers.onArchive } }),
           h('button', { class: 'vn-btn is-primary', type: 'button', text: t('ui.end.back_to_menu'), on: { click: this.handlers.onMenu } }),
         ),
       ),

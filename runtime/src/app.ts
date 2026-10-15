@@ -134,7 +134,7 @@ export class App {
       settings: () => d.saves.settings,
       view: () => this.talkView?.() ?? (this.session.interp.started ? this.session.interp.view : null),
       env: () => (this.session.interp.started ? this.session.interp.env() : {}),
-      onOpenArchive: () => this.openArchive(),
+      onOpenArchive: () => this.openArchive('ui.quick.notebook'), // с финала — блокнот этой партии (владелец 2026-10-15)
       onAction: (a) => this.onAction(a),
       onRollback: () => this.rollback(1),
       ...(d.assets ? { documentArt: (id: string) => d.assets!.document(id), portraitArt: (who: string) => d.assets!.catalog.portraitUrl(who) } : {}),

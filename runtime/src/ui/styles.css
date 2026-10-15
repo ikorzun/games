@@ -1183,6 +1183,7 @@ body {
 }
 .vn-archive__head { display: flex; align-items: center; justify-content: space-between; gap: calc(12 * var(--u)); }
 .vn-archive__title { margin: 0; font: 400 calc(20 * var(--u) - 3px) / normal var(--font-title); color: #fff; }
+.vn-archive__count { margin-left: 0.8em; font-size: 0.7em; letter-spacing: 0.08em; color: rgb(255 255 255 / 0.6); font-variant-numeric: lining-nums tabular-nums; }
 .vn-archive__page {
   flex: 1 1 auto;
   min-height: 0;

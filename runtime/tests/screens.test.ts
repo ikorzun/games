@@ -103,6 +103,7 @@ beforeEach(() => {
     'ui.common.no': 'Нет',
     'ui.archive.title': 'Архив дела',
     'ui.archive.empty': 'Пусто',
+    'ui.archive.count': '{n} из {total}',
     'ui.archive.real_fact': 'Реальный факт',
     'ui.save.empty': 'Пусто',
     'ui.save.slot': 'Слот',
@@ -656,9 +657,11 @@ describe('ArchiveScreen и ErrorScreen', () => {
     const s = open(new ArchiveScreen(ep, () => unlocked, vi.fn()));
     expect(texts(s.el, '.vn-archive__item h3')).toEqual(['Протокол осмотра']);
     expect(s.el.querySelector('.vn-badge')?.textContent).toBe('Реальный факт');
+    expect(s.el.querySelector('.vn-archive__count')?.textContent).toBe('1 из 2'); // в меню — счёт за все партии
     unlocked.push('arc_y');
     s.render();
     expect(texts(s.el, '.vn-archive__item h3')).toEqual(['Протокол осмотра', 'Справка']);
+    expect(s.el.querySelector('.vn-archive__count')?.textContent).toBe('2 из 2');
     unlocked.length = 0;
     s.render();
     expect(s.el.querySelector('.vn-archive__empty')?.textContent).toBe('Пусто');
@@ -683,7 +686,8 @@ describe('ArchiveScreen и ErrorScreen', () => {
         isNew: (id) => id === 'arc_y',
       }),
     );
-    expect(s.el.querySelector('.vn-archive__title')?.textContent).toBe('Архив дела');
+    expect(s.el.querySelector('.vn-archive__title')?.firstChild?.textContent).toBe('Архив дела');
+    expect(s.el.querySelector('.vn-archive__title .vn-archive__count')?.textContent).toBe('2 из 2');
     const fact = s.el.querySelector<HTMLElement>('.vn-archive__item.is-fact')!;
     expect(fact.querySelector('h3')?.textContent).toBe('Протокол осмотра');
     expect(fact.querySelector('p')?.textContent).toBe('Текст бланка');
@@ -724,6 +728,7 @@ describe('ArchiveScreen и ErrorScreen', () => {
     expect(texts(game.el, '.vn-archive__item h3')).toEqual(['Справка', 'Протокол осмотра']);
     expect(texts(game.el, '.vn-archive__num')).toEqual(['1', '2']);
     expect(game.el.querySelector('.vn-archive__board svg.vn-archive__lines')).not.toBeNull();
+    expect(game.el.querySelector('.vn-archive__count')).toBeNull(); // блокнот партии — без общего счёта (владелец 2026-10-15)
     // фото — отпечатком, не кнопкой: окно документа для снимка не нужно
     const photo = game.el.querySelector<HTMLElement>('.vn-archive__item.is-photo')!;
     expect(photo.classList.contains('has-print')).toBe(true);

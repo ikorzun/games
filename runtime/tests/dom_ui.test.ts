@@ -156,7 +156,8 @@ beforeEach(() => {
     'ui.end.decisions': 'Ход следствия',
     'ui.end.back_to_menu': 'В меню',
     'ui.end.case': 'Уголовное дело',
-    'ui.end.materials': 'Блокнот: {n} / {total}',
+    'ui.end.materials': 'Блокнот: {n}',
+    'ui.quick.notebook': 'Блокнот',
     'ui.end.decisions_n': 'Решений: {n}',
     'mini.title': 'Смерть за квартиры',
     'ui.menu.archive': 'Архив',
@@ -797,7 +798,7 @@ describe('DomUI: документ, мини-игра, финал', () => {
     ],
   });
 
-  it('финал — лист уголовного дела: шапка, название эпизода, штамп с концовкой, ход следствия, итог; кнопки «Архив» и «В меню»', async () => {
+  it('финал — лист уголовного дела: шапка, название эпизода, штамп с концовкой, ход следствия, итог; кнопки «Блокнот» и «В меню»', async () => {
     const { ui, kit, archiveOpens } = makeRig();
     const res = track(ui.showEnding({ kind: 'end', ending }, { ...stateWithJournal(), archive: ['arc_x'] }, baseCtx(ctl())));
     const el = kit.screens.el;
@@ -808,7 +809,8 @@ describe('DomUI: документ, мини-игра, финал', () => {
     expect(el.querySelector('.vn-ending__title')?.textContent).toBe('Каноническая концовка');
     expect(el.querySelector('.vn-ending__sub')?.textContent).toBe('Ход следствия');
     expect([...el.querySelectorAll('.vn-ending__n')].map((n) => n.textContent)).toEqual(['01', '02']);
-    expect([...el.querySelectorAll('.vn-ending__foot span')].map((n) => n.textContent)).toEqual(['Блокнот: 1 / 2', 'Решений: 2']);
+    expect([...el.querySelectorAll('.vn-ending__foot span')].map((n) => n.textContent)).toEqual(['Блокнот: 1', 'Решений: 2']); // без «/ всего» (владелец 2026-10-15)
+    expect(el.querySelector('.vn-ending__actions .vn-btn')?.textContent).toBe('Блокнот'); // открывает блокнот этой партии
     const entries = [...el.querySelectorAll('.vn-ending__entry')];
     expect(entries.map((n) => n.querySelector('.vn-ending__choice')?.textContent)).toEqual(['Первый', 'Второй']);
     expect(entries[0]?.querySelector('.vn-ending__prompt')?.textContent).toBe('Что делаем?');

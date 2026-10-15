@@ -49,6 +49,7 @@
   "ui.disclaimer.body_age_schematic": "",
   "ui.archive.title": "",
   "ui.archive.empty": "",
+  "ui.archive.count": "{n} de {total}",
   "ui.archive.new_item": "",
   "ui.archive.real_fact": "",
   "ui.minigame.skip": "Omitir",
@@ -175,7 +176,8 @@
   "ui.minigame.start_check": "Empezar a comparar",
   "ui.minigame.nothing_to_check": "Nada que comparar aquí",
   "ui.minigame.body_loupe": "Lupa: pasa el cursor sobre la hoja; en el teléfono, mantén el dedo.",
+  "ui.minigame.body_rotate": "Gira el teléfono: las hojas se verán más grandes.",
   "ui.end.case": "Causa penal",
-  "ui.end.materials": "Libreta: {n} / {total}",
+  "ui.end.materials": "Libreta: {n}",
   "ui.end.decisions_n": "Decisiones: {n}"
 }

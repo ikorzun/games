@@ -49,6 +49,7 @@
   "ui.disclaimer.body_age_schematic": "Scenes of violence are shown schematically, without graphic detail. 16+",
   "ui.archive.title": "Archive",
   "ui.archive.empty": "Nothing here yet",
+  "ui.archive.count": "{n} of {total}",
   "ui.archive.new_item": "New material",
   "ui.archive.real_fact": "This really happened",
   "ui.minigame.skip": "Skip",
@@ -175,7 +176,8 @@
   "ui.minigame.start_check": "Start checking",
   "ui.minigame.nothing_to_check": "Nothing to compare here",
   "ui.minigame.body_loupe": "Magnifier: hover over a sheet; on a phone, press and hold.",
+  "ui.minigame.body_rotate": "Turn your phone: the sheets get bigger.",
   "ui.end.case": "Criminal case",
-  "ui.end.materials": "Notebook: {n} / {total}",
+  "ui.end.materials": "Notebook: {n}",
   "ui.end.decisions_n": "Decisions: {n}"
 }
