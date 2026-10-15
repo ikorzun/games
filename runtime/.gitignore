@@ -2,3 +2,4 @@
 dist-playgama/
 # Скриншоты смоук-теста (npm run smoke:matrix)
 e2e/out/
+release/

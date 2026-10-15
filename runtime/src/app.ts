@@ -2,12 +2,14 @@
  * App — склейка всего: каркас интерфейса, сцена, Session, DomUI, платформа, сейвы, настройки,
  * меню и экраны. Здесь же маршрутизация быстрого меню и смена языка на лету.
  */
+import type { CaseDef } from './case/case_def';
+import { CaseMode } from './case/case_mode';
 import type { AutoplayPolicy, AutoplayReport } from './core/autoplay';
 import { i18n, t } from './core/i18n';
 import type { SeasonInfo } from './core/loader';
 import type { SaveFile, SaveManager } from './core/saves';
 import type { Settings } from './core/settings';
-import type { Episode, Lang, Value } from './core/types';
+import type { ArchiveItem, Episode, Lang, Value, ViewState } from './core/types';
 import type { IPlatform } from './platform/types';
 import { Session } from './session';
 import type { RunOutcome } from './session';
@@ -27,14 +29,14 @@ import { UiKit } from './ui/kit';
 import type { QuickAction } from './ui/quick_menu';
 import {
   ArchiveScreen,
+  DocumentScreen,
   ErrorScreen,
-  LogScreen,
   MenuScreen,
   SaveLoadScreen,
   SettingsScreen,
   WarningScreen,
 } from './ui/screens';
-import type { MenuSeason } from './ui/screens';
+import type { MenuSeason, NotesTab } from './ui/screens';
 
 export interface AppInit {
   root: HTMLElement;
@@ -51,6 +53,8 @@ export interface AppInit {
   loadLang: (lang: Lang) => Promise<void>;
   /** Рамка сезона для полки эпизодов главного меню (episodes/s<N>/season.json); нет — только текущий эпизод. */
   season?: SeasonInfo | null;
+  /** Дело эпизода (режим поиска улик, docs/architecture/09-case-mode.md); есть — клик по эпизоду открывает папку дела. */
+  caseDef?: CaseDef | null;
   renderer?: RendererChoice;
   debug?: boolean;
 }
@@ -66,20 +70,25 @@ export class App {
   readonly ui: DomUI;
   readonly session: Session;
 
+  /** Режим дела; null — эпизод играется как новелла. */
+  readonly caseMode: CaseMode | null = null;
+
   private hud: Hud | null = null;
+  /** Кадр разговора дела для текстового окна (у разговоров свой интерпретатор). */
+  private talkView: (() => ViewState) | null = null;
   private settingsScreen: SettingsScreen | null = null;
   private settingsOpen = false;
+  /**
+   * Записи блокнота, пришедшие с тех пор, как игрок его открывал: метка на кнопке «Блокнот» и штамп на бумажке.
+   * Только в памяти партии: после загрузки сейва и в архиве меню ничего не помечено.
+   */
+  private readonly freshNotes = new Set<string>();
 
   /** Собрать приложение: каркас → сцена (PixiJS или DOM) → всё остальное. */
   static async create(init: AppInit): Promise<App> {
-    const ep = init.episode;
     // Быстрое меню создаётся до App, поэтому обращается к нему через замыкание.
     let app: App | null = null;
-    const kit = new UiKit(
-      init.root,
-      (a) => app?.onAction(a),
-      (item) => ep.archive_items?.find((x) => x.id === item)?.title_key ?? null,
-    );
+    const kit = new UiKit(init.root, (a) => app?.onAction(a));
     const stage = await createStage(kit.main, init.renderer ?? 'auto', init.assets?.scene ?? NO_ASSETS);
     app = new App(init, kit, stage);
     return app;
@@ -109,9 +118,11 @@ export class App {
       audio: d.audio,
       ...(d.assets ? { loader: d.assets.preloader } : {}),
       captions: captionSink,
-      toasts: kit.toasts,
       checkpoint: (reason) => this.session.autosave(reason),
-      archiveUnlocked: (item) => d.saves.unlockArchive(ep.id, item),
+      archiveUnlocked: (item, toast) => {
+        d.saves.unlockArchive(ep.id, item);
+        if (toast) this.markNote(item);
+      },
     });
     this.ui = new DomUI({
       episode: ep,
@@ -120,12 +131,12 @@ export class App {
       captions: this.captions,
       platform: d.platform,
       settings: () => d.saves.settings,
-      view: () => (this.session.interp.started ? this.session.interp.view : null),
+      view: () => this.talkView?.() ?? (this.session.interp.started ? this.session.interp.view : null),
       env: () => (this.session.interp.started ? this.session.interp.env() : {}),
-      onOpenArchive: () => this.openArchive(),
+      onOpenArchive: () => this.openNotes('notebook'), // с финала — заметки этой партии (владелец 2026-10-15)
       onAction: (a) => this.onAction(a),
       onRollback: () => this.rollback(1),
-      ...(d.assets ? { documentArt: (id: string) => d.assets!.document(id) } : {}),
+      ...(d.assets ? { documentArt: (id: string) => d.assets!.document(id), portraitArt: (who: string) => d.assets!.catalog.portraitUrl(who) } : {}),
       ...(d.voice ? { voice: d.voice } : {}),
     });
     this.session = new Session({
@@ -164,6 +175,24 @@ export class App {
     kit.screens.onChange(() => this.trackSettingsPause());
     i18n.onChange(() => this.ui.refreshLanguage());
 
+    if (d.caseDef) {
+      this.caseMode = new CaseMode({
+        def: d.caseDef,
+        episode: ep,
+        kit,
+        ui: this.ui,
+        // Свой режиссёр: у сцен дела нет блоков эпизода, предзагрузка по блокам им не нужна (картинки грузит сцена).
+        director: new Director({ stage, audio: d.audio, captions: captionSink, checkpoint: () => undefined }),
+        saves: d.saves,
+        platform: d.platform,
+        settings: () => d.saves.settings,
+        url: (path) => d.assets?.catalog.url(path) ?? path,
+        setTalkView: (view) => (this.talkView = view),
+        setInGame: (on) => this.kit.root.classList.toggle('in-game', on),
+        onMenu: () => this.showMenu(),
+      });
+    }
+
     if (d.debug) {
       this.hud = new Hud(this.session, stage, d.audio, this.ui);
       kit.root.appendChild(this.hud.el);
@@ -186,23 +215,24 @@ export class App {
 
   /** Показать главное меню (при запуске, после финала). */
   showMenu(): void {
+    this.caseMode?.stop();
     this.session.cancel();
     this.kit.screens.closeAll();
+    this.clearNotes();
     this.kit.root.classList.remove('in-game');
     this.ui.setSkip(false);
-    if (this.ui.autoOn) this.ui.toggleAuto();
-    this.ui.setUiHidden(false);
     this.playTheme();
     const ep = this.d.episode;
     const saves = this.d.saves;
     const season = this.menuSeason();
+    const cm = this.caseMode;
     const menu = new MenuScreen(ep, {
       ...(this.d.assets ? { art: this.d.assets.art } : {}),
       ...(season ? { season } : {}),
-      hasContinue: () => this.continuable() !== null,
-      completed: () => (saves.profile.endings[ep.id]?.length ?? 0) > 0,
-      onContinue: () => this.continueGame(),
-      onNew: () => void this.startNewGame(),
+      hasContinue: () => (cm ? cm.started : this.continuable() !== null),
+      completed: () => (cm ? cm.completed : (saves.profile.endings[ep.id]?.length ?? 0) > 0),
+      onContinue: () => (cm ? this.openCase() : this.continueGame()),
+      onNew: () => (cm ? this.newCase() : void this.startNewGame()),
       onArchive: () => this.openArchive(),
       onSettings: () => this.openSettings(),
       onLanguage: (lang) => void this.setLanguage(lang),
@@ -210,7 +240,10 @@ export class App {
     this.kit.screens.open(menu);
   }
 
-  /** Полка эпизодов: слоты рамки сезона с обложками; открыт текущий эпизод, остальные — «скоро». */
+  /**
+   * Полка эпизодов: слоты рамки сезона с обложками; открыт слот текущего эпизода, остальные — «скоро». Слот ищется по
+   * номеру: у эпизода 1 есть прежние варианты (новелла и режим дела), их открывают по адресу ?episode=ep01_murylev.
+   */
   private menuSeason(): MenuSeason | null {
     const s = this.d.season;
     if (!s) return null;
@@ -219,7 +252,7 @@ export class App {
       n: s.season,
       titleKey: s.title_key,
       years: s.years ?? null,
-      slots: s.episodes.map((x) => ({ order: x.order, year: x.year ?? null, current: x.id === this.d.episode.id, cover: cover(x.cover) })),
+      slots: s.episodes.map((x) => ({ order: x.order, year: x.year ?? null, current: x.order === this.d.episode.order, cover: cover(x.cover) })),
     };
   }
 
@@ -228,13 +261,32 @@ export class App {
     return f && f.state.episode_id === this.d.episode.id ? f : null;
   }
 
-  /** «Новая игра»: сначала контент-предупреждение (если не отключено), затем партия. */
+  /** «Новая игра»: сначала экран «Основано на реальных событиях», затем партия. */
   async startNewGame(opts: { skipWarning?: boolean } = {}): Promise<void> {
-    if (!opts.skipWarning && !this.d.saves.profile.warning_dismissed) {
-      this.openWarning();
+    if (!opts.skipWarning) {
+      this.openWarning(() => this.beginGame(() => this.session.newGame()));
       return;
     }
     this.beginGame(() => this.session.newGame());
+  }
+
+  /** Дело с начала: экран «Основано на реальных событиях», прогресс дела сбрасывается, вступление главы. */
+  newCase(opts: { skipWarning?: boolean } = {}): void {
+    const go = (): void => {
+      this.caseMode?.reset();
+      this.openCase();
+    };
+    if (!opts.skipWarning) this.openWarning(go);
+    else go();
+  }
+
+  /** Папка дела (продолжение с того места, где игрок остановился). */
+  openCase(): void {
+    if (!this.caseMode) return;
+    this.session.cancel();
+    this.kit.screens.closeAll();
+    this.kit.root.classList.remove('in-game');
+    void this.caseMode.enter();
   }
 
   continueGame(): void {
@@ -254,6 +306,7 @@ export class App {
     // Тема меню уступает место музыке сценария (первая сцена включит свою, если она задана).
     if (this.d.audio.music === THEME_MUSIC) this.d.audio.handle({ t: 'audio', kind: 'stop_music', id: null, fade_ms: 600, loop: false, volume: 0 });
     this.kit.screens.closeAll();
+    this.clearNotes();
     this.kit.root.classList.add('in-game');
     void start().then((outcome) => {
       if (outcome.reason === 'rejected') {
@@ -264,19 +317,13 @@ export class App {
     });
   }
 
-  private openWarning(): void {
+  private openWarning(onGo: () => void): void {
     const saves = this.d.saves;
     const screen: WarningScreen = new WarningScreen(this.d.episode, {
       settings: () => saves.settings,
-      onViolenceMode: (mode) => {
-        this.updateSettings({ violenceMode: mode });
-        screen.render();
-      },
-      onContinue: (dontShowAgain) => {
-        if (dontShowAgain) saves.setWarningDismissed(true);
-        this.beginGame(() => this.session.newGame());
-      },
+      onContinue: onGo,
       onBack: () => this.kit.screens.close(screen),
+      logo: this.d.assets?.art.logo ?? null,
     });
     this.kit.screens.open(screen);
   }
@@ -290,14 +337,15 @@ export class App {
   onAction(action: QuickAction): void {
     if (!this.inGame && action !== 'settings' && action !== 'mute') return;
     switch (action) {
-      case 'auto':
-        this.ui.toggleAuto();
-        break;
       case 'skip':
         this.ui.toggleSkip();
         break;
+      case 'notes':
+      case 'notebook':
+        this.openNotes('notebook');
+        break;
       case 'log':
-        this.openLog();
+        this.openNotes('log');
         break;
       case 'save':
         this.openSaveLoad('save');
@@ -311,9 +359,6 @@ export class App {
       case 'settings':
         this.openSettings();
         break;
-      case 'hide':
-        this.ui.toggleHidden();
-        break;
     }
   }
 
@@ -326,7 +371,9 @@ export class App {
       onChange: (patch) => this.updateSettings(patch),
       onLanguage: (lang) => void this.setLanguage(lang),
       onClose: () => this.kit.screens.close(screen),
-      inGame: () => this.inGame,
+      // Сохранение и загрузка — только в партии новеллы: у разговора дела своего сейва нет, а загрузка запустила бы
+      // вторую партию поверх него.
+      inGame: () => this.inGame && this.session.interp.started,
       muted: () => this.d.saves.settings.muted,
       onSave: () => this.openSaveLoad('save'),
       onLoad: () => this.openSaveLoad('load'),
@@ -336,21 +383,9 @@ export class App {
     this.kit.screens.open(screen);
   }
 
-  openLog(): void {
-    const screen: LogScreen = new LogScreen(this.d.episode, {
-      entries: () => this.session.log,
-      maxRollback: () => this.session.rollbackDepth,
-      onRollback: (steps) => {
-        this.kit.screens.close(screen);
-        this.rollback(steps);
-      },
-      onClose: () => this.kit.screens.close(screen),
-    });
-    this.kit.screens.open(screen);
-  }
-
   openSaveLoad(mode: 'save' | 'load'): void {
     if (mode === 'save' && (!this.session.interp.started || this.session.interp.isEnded)) return;
+    if (mode === 'load' && this.inGame && !this.session.interp.started) return; // идёт разговор дела
     const saves = this.d.saves;
     const screen: SaveLoadScreen = new SaveLoadScreen(this.d.episode, {
       mode,
@@ -363,15 +398,85 @@ export class App {
     this.kit.screens.open(screen);
   }
 
-  openArchive(): void {
+  /** Заметки: блокнот улик и журнал реплик в одном окне (владелец 2026-10-15); блокнот открывается по умолчанию. */
+  openNotes(tab: NotesTab = 'notebook'): void {
+    this.openArchive('ui.quick.notes', tab);
+  }
+
+  openArchive(titleKey?: string, tab: NotesTab = 'notebook'): void {
     this.d.platform.track('archive_opened');
     const ep = this.d.episode;
+    const assets = this.d.assets;
+    // Штампы «новый материал» держатся, пока блокнот открыт; закрыли — всё прочитано, метка с кнопки снята.
+    const fresh = new Set(this.freshNotes);
+    // В партии блокнот — эта партия в порядке находок (номера и стрелки — ход следствия); в меню архив — всё, что
+    // профиль когда-либо находил, в порядке эпизода.
+    const interp = this.session.interp;
+    const path = this.inGame && interp.started;
     const screen: ArchiveScreen = new ArchiveScreen(
       ep,
-      () => [...new Set([...this.d.saves.archiveOf(ep.id), ...(this.session.interp.started ? this.session.interp.state.archive : [])])],
+      () => (path ? [...interp.state.archive] : [...new Set([...this.d.saves.archiveOf(ep.id), ...(interp.started ? interp.state.archive : [])])]),
       () => this.kit.screens.close(screen),
+      titleKey,
+      {
+        path,
+        isNew: (id) => fresh.has(id),
+        // Посмотрел бумагу — штамп с неё снят сразу, не дожидаясь закрытия блокнота (владелец 2026-10-14).
+        onOpenDocument: (item) => {
+          fresh.delete(item.id);
+          this.openNoteDocument(item);
+        },
+        ...(assets ? { documentArt: (id: string) => assets.document(id) } : {}),
+        // Журнал — только в партии: в меню реплик нет.
+        ...(path
+          ? {
+              log: {
+                entries: () => this.session.log,
+                maxRollback: () => this.session.rollbackDepth,
+                onRollback: (steps: number) => {
+                  this.kit.screens.close(screen);
+                  this.rollback(steps);
+                },
+              },
+            }
+          : {}),
+      },
+    );
+    screen.tab = tab;
+    // Штампы сняты, только если блокнот видели: заглянули лишь в журнал — метка на кнопке остаётся.
+    screen.onClose = () => {
+      if (screen.sawNotebook) this.clearNotes();
+    };
+    this.kit.screens.open(screen);
+  }
+
+  /** Бумага из блокнота крупно: окно документа поверх блокнота, без метки «новый материал»; закрыли — снова блокнот. */
+  private openNoteDocument(item: ArchiveItem): void {
+    const art = item.asset ? this.d.assets?.document(item.asset) : undefined;
+    const screen: DocumentScreen = new DocumentScreen(
+      this.d.episode,
+      item.asset ?? item.id,
+      item.text_key ?? null,
+      item.id,
+      () => this.kit.screens.close(screen),
+      art?.url ?? null,
+      art?.textInImage === true,
+      false,
     );
     this.kit.screens.open(screen);
+    void art?.ready.then((url) => {
+      if (url && this.kit.screens.has(screen)) screen.setImage(url);
+    });
+  }
+
+  private markNote(item: string): void {
+    this.freshNotes.add(item);
+    this.kit.quick.setBadge('notes', true);
+  }
+
+  private clearNotes(): void {
+    this.freshNotes.clear();
+    this.kit.quick.setBadge('notes', false);
   }
 
   private showError(e: unknown): void {
@@ -425,6 +530,7 @@ export class App {
     this.kit.quick.setState({ muted: s.muted });
     this.stage.setViolenceMode(s.violenceMode);
     this.stage.setCameraFx(s.cameraFx, retryCamera);
+    this.stage.setGraphics(s.graphics);
   }
 
   /** Смена языка на лету: догрузить строки, перерисовать текущий шаг, не трогая сцену и состояние. */

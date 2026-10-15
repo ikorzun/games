@@ -68,15 +68,29 @@ export interface ImageChain {
   readonly solid?: string;
 }
 
+/** Ролик поверх кадра покрытия: адрес mp4 и повторять ли его (иначе — один раз и замереть на последнем кадре). */
+export interface ShotVideo {
+  readonly url: string;
+  readonly loop: boolean;
+}
+
 export class AssetCatalog {
   private readonly bg = new Map<string, string>();
   private readonly cg = new Map<string, string>();
   private readonly docs = new Map<string, string>();
+  /** Бумаги с текстом в самой картинке (localized: true) — текст поверх не накладывается. */
+  private readonly docsWithText = new Set<string>();
+  private readonly portraits = new Map<string, string>();
   private readonly audio = new Map<string, string>();
   private readonly sets = new Map<string, SpriteSet>();
   private readonly setOfChar = new Map<string, string>();
   private readonly shots = new Map<string, Shot>();
   private readonly shotSets = new Map<string, Shot[]>();
+  private readonly bgMemory = new Map<string, string>();
+  /** Квадрат по файлу 16:9 (обе графики): фон сцены — тот же файл, что её общий план, и на вертикальном экране берёт его квадрат. */
+  private readonly squareOf = new Map<string, string>();
+  /** Графика «Воспоминания» и вертикальный экран (квадратные кадры): что отдавать в цепочках. */
+  private graphics = { memory: false, square: false };
 
   constructor(
     episode: Pick<Episode, 'assets' | 'cast'>,
@@ -84,17 +98,22 @@ export class AssetCatalog {
   ) {
     const a = episode.assets ?? {};
     for (const e of a.backgrounds ?? []) this.bg.set(e.id, e.path);
+    for (const e of a.backgrounds ?? []) if (e.memory) this.bgMemory.set(e.id, e.memory);
     for (const e of a.cg ?? []) this.cg.set(e.id, e.path);
     for (const e of a.documents ?? []) this.docs.set(e.id, e.path);
+    for (const e of a.documents ?? []) if (e.localized) this.docsWithText.add(e.id);
     // Музыка, эмбиент, sfx и голос делят одно пространство id (id в эпизоде уникальны по префиксам m_/amb_/sfx_).
     for (const list of [a.music, a.ambient, a.sfx, a.voice]) for (const e of list ?? []) this.audio.set(e.id, e.path);
     for (const s of a.sprites ?? []) this.sets.set(s.id, s);
     for (const c of episode.cast ?? []) if (c.sprite_set) this.setOfChar.set(c.id, c.sprite_set);
+    for (const c of episode.cast ?? []) if (c.portrait) this.portraits.set(c.id, c.portrait);
     for (const s of a.shots ?? []) {
       this.shots.set(s.id, s);
       const list = this.shotSets.get(s.set);
       if (list) list.push(s);
       else this.shotSets.set(s.set, [s]);
+      if (s.memory?.square) this.squareOf.set(s.memory.file, s.memory.square);
+      if (s.square) this.squareOf.set(s.file, s.square);
     }
   }
 
@@ -107,9 +126,47 @@ export class AssetCatalog {
     return this.shotSets.get(set) ?? [];
   }
 
+  /**
+   * Графика: «Воспоминания» (memory) отдают кадры и фоны в стиле графического романа, где они есть; на вертикальном
+   * экране (square) обе графики отдают квадраты (у «Реализма» — с 2026-10-15); нет файла — кадр 16:9 вторым в цепочке.
+   */
+  setGraphics(g: { memory: boolean; square: boolean }): void {
+    this.graphics = { ...g };
+  }
+
+  /** Кадр показывается квадратным: вертикальный экран и у кадра есть квадрат своей графики. */
+  shotIsSquare(id: string): boolean {
+    const s = this.shots.get(id);
+    return this.graphics.square && Boolean(this.graphics.memory && s?.memory ? s.memory.square : s?.square);
+  }
+
   shotChain(id: string): ImageChain | null {
     const s = this.shots.get(id);
-    return s ? { urls: [this.url(s.file)], silhouetteFirst: false } : null;
+    if (!s) return null;
+    const m = this.graphics.memory ? s.memory : undefined;
+    const sq = this.shotIsSquare(id);
+    const first = m ? (sq ? m.square : m.file) : sq ? s.square : undefined;
+    return { urls: first ? [this.url(first), this.url(s.file)] : [this.url(s.file)], silhouetteFirst: false };
+  }
+
+  /**
+   * Ролик показанного кадра: в «Воспоминаниях» — memory.video, в «Реализме» (и в «Воспоминаниях» у кадра без своей
+   * версии — тогда показан кадр «Реализма») — video. Квадрат на вертикальном экране остаётся кадром.
+   */
+  shotVideo(id: string): ShotVideo | null {
+    const s = this.shots.get(id);
+    if (!s || this.shotIsSquare(id)) return null;
+    const v = this.graphics.memory && s.memory ? s.memory : s;
+    return v.video ? { url: this.url(v.video), loop: v.video_loop ?? false } : null;
+  }
+
+  /** Маска человека на кадре (shots[].cast[].mask; у «воспоминаний» — свои) — для подсветки того, на ком внимание. */
+  shotMask(id: string, who: string): ImageChain | null {
+    const s = this.shots.get(id);
+    const m = this.graphics.memory ? s?.memory : undefined;
+    const sq = this.shotIsSquare(id);
+    const mask = m ? (sq ? m.square_masks : m.masks)?.[who] : sq ? s?.square_masks?.[who] : s?.cast.find((c) => c.who === who)?.mask;
+    return mask ? { urls: [this.url(mask)], silhouetteFirst: false } : null;
   }
 
   url(path: string): string {
@@ -131,6 +188,17 @@ export class AssetCatalog {
     return p ? this.url(p) : null;
   }
 
+  /** Текст бумаги впечатан в картинку (пока только русский): экран показывает её целиком, без слоя текста. */
+  docHasText(id: string): boolean {
+    return this.docsWithText.has(id);
+  }
+
+  /** Портрет персонажа для окна реплики (cast.portrait). */
+  portraitUrl(who: string): string | null {
+    const p = this.portraits.get(who);
+    return p ? this.url(p) : null;
+  }
+
   audioUrl(id: string): string | null {
     const p = this.audio.get(id);
     return p ? this.url(p) : null;
@@ -147,7 +215,10 @@ export class AssetCatalog {
     if (!path) return null;
     // Чёрный фон (assets/common/bg/black.png) — не картинка: рисуется сплошным цветом.
     if (BLACK_FILE.test(path)) return { urls: [], silhouetteFirst: false, solid: '#000000' };
-    return { urls: [this.url(path)], silhouetteFirst: false };
+    const mem = this.graphics.memory ? this.bgMemory.get(id) : undefined;
+    // На вертикальном экране — сразу квадрат (владелец 2026-10-15: «на телефоне загружать только квадратные картинки»).
+    const sq = this.graphics.square ? this.squareOf.get(mem ?? path) : undefined;
+    return { urls: [sq, mem, path].filter((u): u is string => Boolean(u)).map((u) => this.url(u)), silhouetteFirst: false };
   }
 
   cgChain(id: string): ImageChain | null {
@@ -225,11 +296,17 @@ export function collectBlockAssets(episode: Episode, catalog: AssetCatalog, bloc
     addChain(catalog.bgChain(scene.stage.bg));
     addAudio(scene.music);
     addAudio(scene.ambient);
-    if (scene.coverage && !coveredSets.has(scene.coverage)) {
+    // Сет сцены и сеты её вариантов по условию (coverage_alt): какой понадобится, решится при входе в сцену.
+    for (const cov of [scene.coverage, ...(scene.coverage_alt ?? []).map((a) => a.coverage)]) {
+      if (!cov || coveredSets.has(cov)) continue;
       // Кадры покрытия: общие планы (вход в сцену) ждём вместе с фоном, остальные греем в фоне.
-      coveredSets.add(scene.coverage);
-      for (const s of catalog.shotsOfSet(scene.coverage)) (s.kind === 'wide' ? addChain : addIdle)(catalog.shotChain(s.id));
+      coveredSets.add(cov);
+      for (const s of catalog.shotsOfSet(cov)) {
+        (s.kind === 'wide' ? addChain : addIdle)(catalog.shotChain(s.id));
+        for (const c of s.cast) addIdle(catalog.shotMask(s.id, c.who)); // маски подсветки — маленькие, в фоне
+      }
     }
+    for (const a of scene.coverage_alt ?? []) addIdle(catalog.bgChain(a.bg));
     for (const step of scene.steps) {
       switch (step.do) {
         case 'bg':
@@ -249,6 +326,10 @@ export function collectBlockAssets(episode: Episode, catalog: AssetCatalog, bloc
           break;
         case 'say':
           lines.push({ key: step.key, voice: step.voice ?? null, who: step.who });
+          {
+            const u = catalog.portraitUrl(step.who);
+            if (u) addChain({ urls: [u], silhouetteFirst: false });
+          }
           // Реплика с выражением может сама вывести персонажа на сцену или сменить его выражение.
           if (step.expression !== undefined) addSprite(step.who, step.expression, false);
           break;
@@ -515,6 +596,14 @@ export interface SceneAssets {
   spriteFacing?(who: string): SpriteFacing;
   /** Кадр покрытия (assets.shots[].id); нет метода или записи — кадра нет, рендерер показывает спрайты. */
   shotChain?(id: string): ImageChain | null;
+  /** Маска человека на кадре для подсветки того, на ком внимание; нет метода или маски — без подсветки. */
+  shotMask?(shot: string, who: string): ImageChain | null;
+  /** Ролик поверх кадра; нет метода или ролика — кадр неподвижен. */
+  shotVideo?(shot: string): ShotVideo | null;
+  /** Графика «Воспоминания» / вертикальный экран (квадратные кадры); нет метода — только «Реализм». */
+  setGraphics?(g: { memory: boolean; square: boolean }): void;
+  /** Кадр показывается квадратным. */
+  shotIsSquare?(shot: string): boolean;
   /** Готовый результат по цепочке: найден / файлов нет (null) / пока неизвестно (undefined). */
   peek(urls: readonly string[]): { handle: ImageHandle; index: number } | null | undefined;
   load(urls: readonly string[], prio?: LoadPriority): Promise<{ handle: ImageHandle; index: number } | null>;
@@ -548,6 +637,18 @@ export class StoreSceneAssets implements SceneAssets {
   }
   shotChain(id: string): ImageChain | null {
     return this.catalog.shotChain(id);
+  }
+  shotMask(shot: string, who: string): ImageChain | null {
+    return this.catalog.shotMask(shot, who);
+  }
+  shotVideo(shot: string): ShotVideo | null {
+    return this.catalog.shotVideo(shot);
+  }
+  setGraphics(g: { memory: boolean; square: boolean }): void {
+    this.catalog.setGraphics(g);
+  }
+  shotIsSquare(shot: string): boolean {
+    return this.catalog.shotIsSquare(shot);
   }
   peek(urls: readonly string[]): { handle: ImageHandle; index: number } | null | undefined {
     return this.store.peekFirst(urls);

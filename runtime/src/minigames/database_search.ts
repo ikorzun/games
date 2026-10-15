@@ -4,7 +4,10 @@
  * Колода генерируется из config (`records`, `fields`, `values`, `pattern`, `seed`) детерминированно и не зависит от
  * языка: `target_count` карточек несут паттерн (например, один нотариус и один представитель), часть «шума» совпадает
  * с паттерном лишь наполовину (поэтому одного фильтра мало), остальное — случайные значения. Значения полей — строки
- * локали (`values[].options[].text_key`; `{n}` в строке — номер квартиры), даты — дд.мм.гггг.
+ * локали (`values[].options[].text_key`; `{n}` в строке — номер квартиры), даты — дд.мм.гггг. Даты колоды — в
+ * `dates` (`{from, to}`, по умолчанию 1992-01-01…1994-03-31), целевых карточек — в `target_dates`. `fixed` — карточки,
+ * которые есть в колоде всегда (например, сделка по квартире жертвы); их значения вне паттерна у случайных карточек не
+ * встречаются.
  *
  * Игрок листает карточки, сужает список чипами-фильтрами (поля с 2–8 вариантами), отмечает карточки (крупные строки,
  * отметка видна) и жмёт «Проверить»: подходящие закрепляются, лишние — ошибки (max_mistakes, по умолчанию 4).
@@ -47,6 +50,17 @@ export interface DbConfig {
   minForPartial: number | null;
   maxMistakes: number;
   seed: number | null;
+  /** Даты колоды и целевых карточек (UTC, мс), включительно. */
+  dates: [number, number];
+  targetDates: [number, number];
+  fixed: DbFixedCard[];
+}
+
+/** Карточка, которая есть в колоде всегда: значения всех полей с вариантами, номер квартиры, дата гггг-мм-дд. */
+export interface DbFixedCard {
+  values: Record<string, string>;
+  n: number;
+  date: string;
 }
 
 /** Чипы-фильтры получают поля, у которых вариантов не больше этого. */
@@ -106,6 +120,27 @@ export function parseDbConfig(cfg: MinigameConfig): DbConfig | null {
   const targetCount = asInt(cfg.target_count, 1);
   if (records === null || targetCount === null || targetCount > records) return null;
   const minRaw = asInt(cfg.min_for_partial, 1);
+  const dates = parseRange(cfg.dates, [FIRST_DAY, LAST_DAY]);
+  const targetDates = dates && parseRange(cfg.target_dates, dates);
+  if (!dates || !targetDates) return null;
+  const fixed: DbFixedCard[] = [];
+  if (cfg.fixed !== undefined) {
+    if (!Array.isArray(cfg.fixed)) return null;
+    for (const raw of cfg.fixed) {
+      const values: Record<string, string> = {};
+      for (const f of fields.filter((x) => !x.isDate)) {
+        const id = isRecord(raw) && isRecord(raw.values) ? raw.values[f.field] : undefined;
+        if (typeof id !== 'string' || !f.options.some((o) => o.id === id)) return null;
+        values[f.field] = id;
+      }
+      const n = isRecord(raw) ? asInt(raw.n, 1) : null;
+      const day = isRecord(raw) ? parseDay(raw.date) : null;
+      if (n === null || day === null) return null;
+      fixed.push({ values, n, date: new Date(day).toISOString().slice(0, 10) });
+    }
+  }
+  const fixedTargets = fixed.filter((c) => Object.entries(pattern).every(([f, id]) => c.values[f] === id)).length;
+  if (fixedTargets > targetCount || records < targetCount + fixed.length - fixedTargets) return null;
   return {
     fields,
     records,
@@ -115,7 +150,27 @@ export function parseDbConfig(cfg: MinigameConfig): DbConfig | null {
     minForPartial: minRaw === null ? null : Math.min(minRaw, targetCount),
     maxMistakes: asInt(cfg.max_mistakes, 1) ?? 4,
     seed: asInt(cfg.seed),
+    dates,
+    targetDates,
+    fixed,
   };
+}
+
+/** гггг-мм-дд → UTC, мс; иначе null. */
+function parseDay(v: unknown): number | null {
+  const s = asStr(v);
+  if (s === null || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const t = Date.parse(`${s}T00:00:00Z`);
+  return Number.isNaN(t) ? null : t;
+}
+
+/** `{from, to}` → [from, to]; не задано — def; непригодно — null. */
+function parseRange(v: unknown, def: [number, number]): [number, number] | null {
+  if (v === undefined) return def;
+  if (!isRecord(v)) return null;
+  const from = parseDay(v.from);
+  const to = parseDay(v.to);
+  return from !== null && to !== null && from <= to ? [from, to] : null;
 }
 
 export interface DbCard {
@@ -137,6 +192,10 @@ export interface DeckSpec {
   records: number;
   targets: number;
   seed: number;
+  /** Даты колоды и целевых карточек (UTC, мс); не заданы — 1992-01-01…1994-03-31. */
+  dates?: [number, number];
+  targetDates?: [number, number];
+  fixed?: readonly DbFixedCard[];
 }
 
 const DAY_MS = 86_400_000;
@@ -144,15 +203,27 @@ const FIRST_DAY = Date.UTC(1992, 0, 1);
 const LAST_DAY = Date.UTC(1994, 2, 31);
 
 /**
- * Колода: `targets` карточек с паттерном; по `⌊шум/4⌋` карточек на каждое поле паттерна совпадают только по нему
- * (при двух и более полях паттерна); остальные не совпадают ни по одному полю паттерна. Порядок — по дате.
+ * Колода: `targets` карточек с паттерном (закреплённые `fixed` с паттерном входят в их число); по `⌊шум/4⌋` карточек
+ * на каждое поле паттерна совпадают только по нему (при двух и более полях паттерна); остальные не совпадают ни по
+ * одному полю паттерна. Значения закреплённых карточек вне паттерна случайным не достаются. Порядок — по дате.
  */
 export function buildDeck(spec: DeckSpec): DbCard[] {
   const rnd = mulberry32(spec.seed);
   const int = (n: number): number => Math.floor(rnd() * n);
   const optionFields = spec.fields.filter((f) => !f.isDate && f.optionIds.length > 0);
   const patternFields = optionFields.filter((f) => f.field in spec.pattern).map((f) => f.field);
-  const noise = Math.max(0, spec.records - spec.targets);
+  const [from, to] = spec.dates ?? [FIRST_DAY, LAST_DAY];
+  const [targetFrom, targetTo] = spec.targetDates ?? [from, to];
+  const fixed = (spec.fixed ?? []).map((c) => ({
+    id: '',
+    n: c.n,
+    date: c.date,
+    target: Object.entries(spec.pattern).every(([f, id]) => c.values[f] === id),
+    values: { ...c.values },
+  }));
+  const reserved = new Set(fixed.flatMap((c) => Object.entries(c.values).filter(([f]) => !(f in spec.pattern)).map(([f, id]) => `${f}:${id}`)));
+  const randomTargets = Math.max(0, spec.targets - fixed.filter((c) => c.target).length);
+  const noise = Math.max(0, spec.records - spec.targets - fixed.filter((c) => !c.target).length);
   const nearEach = patternFields.length >= 2 ? Math.min(Math.floor(noise * 0.25), Math.floor(noise / patternFields.length)) : 0;
 
   const make = (matched: ReadonlySet<string>, target: boolean): DbCard => {
@@ -161,16 +232,17 @@ export function buildDeck(spec: DeckSpec): DbCard[] {
       const wanted = spec.pattern[f.field];
       if (wanted !== undefined && matched.has(f.field)) values[f.field] = wanted;
       else {
-        const pool = wanted === undefined ? f.optionIds : f.optionIds.filter((id) => id !== wanted);
+        const pool = f.optionIds.filter((id) => id !== wanted && !reserved.has(`${f.field}:${id}`));
         values[f.field] = pool[int(pool.length)] ?? f.optionIds[0] ?? '';
       }
     }
-    const day = FIRST_DAY + int(Math.round((LAST_DAY - FIRST_DAY) / DAY_MS) + 1) * DAY_MS;
+    const [a, b] = target ? [targetFrom, targetTo] : [from, to];
+    const day = a + int(Math.round((b - a) / DAY_MS) + 1) * DAY_MS;
     return { id: '', n: 1 + int(180), date: new Date(day).toISOString().slice(0, 10), target, values };
   };
 
-  const cards: DbCard[] = [];
-  for (let i = 0; i < spec.targets; i++) cards.push(make(new Set(patternFields), true));
+  const cards: DbCard[] = [...fixed];
+  for (let i = 0; i < randomTargets; i++) cards.push(make(new Set(patternFields), true));
   for (const only of patternFields) {
     if (nearEach === 0) break;
     for (let i = 0; i < nearEach; i++) cards.push(make(new Set([only]), false));
@@ -259,6 +331,9 @@ class DatabaseSearch extends MinigameShell {
       records: parsed.records,
       targets: parsed.targetCount,
       seed: parsed.seed ?? hashString(ctx.def.id),
+      dates: parsed.dates,
+      targetDates: parsed.targetDates,
+      fixed: parsed.fixed,
     });
     return true;
   }

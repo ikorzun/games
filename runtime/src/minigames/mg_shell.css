@@ -9,7 +9,7 @@
   --mg-ink: var(--c-text, #ecebe6);
   --mg-muted: var(--c-muted, #a8a398);
   --mg-line: var(--panel-line, var(--c-line, rgb(255 255 255 / 0.28)));
-  --mg-accent: var(--c-accent, #c9362f);
+  --mg-accent: var(--c-accent, #da1818);
   --mg-gold: var(--c-accent-soft, #e8d9b5);
   --mg-ok: #7fb577;
   box-sizing: border-box;
@@ -21,7 +21,6 @@
   color: var(--mg-ink);
   background: var(--c-card, #131316);
   border: 1px solid var(--mg-line);
-  border-radius: 14px;
   box-shadow: 0 12px 40px rgb(0 0 0 / 0.6);
   font: 400 1em / 1.35 var(--font-body, system-ui, sans-serif);
   text-align: left;
@@ -53,7 +52,6 @@
   margin: 0;
   padding-left: 0.65rem;
   color: #e2ddd0;
-  font-style: italic;
   border-left: 3px solid var(--mg-gold);
 }
 .mg-shell__brief {
@@ -111,7 +109,6 @@
   width: 9px;
   height: 9px;
   border: 1px solid var(--mg-muted);
-  border-radius: 2px;
 }
 .mg-shell__pip.is-used {
   background: var(--mg-accent);
@@ -130,7 +127,6 @@
   height: 5px;
   overflow: hidden;
   background: rgb(255 255 255 / 0.12);
-  border-radius: 3px;
 }
 .mg-shell__timer-bar {
   display: block;
@@ -166,7 +162,6 @@
   padding: 0.55rem 0.9rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
   background: var(--c-card, #131316);
   border-top: 1px solid var(--mg-line);
-  border-radius: 0 0 14px 14px;
 }
 .mg-shell__actions,
 .mg-shell__result {
@@ -183,7 +178,6 @@
   font: inherit;
   background: #1c1c21;
   border: 1px solid var(--mg-line);
-  border-radius: var(--radius, 8px);
   cursor: pointer;
 }
 .mg-shell .mg-shell__btn:hover:not(:disabled) {
@@ -211,7 +205,6 @@
   background: rgb(255 255 255 / 0.05);
   border: 1px solid var(--mg-line);
   border-left: 4px solid var(--mg-gold);
-  border-radius: 10px;
 }
 .mg-shell__result[data-outcome='success'] {
   border-left-color: var(--mg-ok);
@@ -280,4 +273,234 @@
   .mg-shell__title {
     font-size: 1.3em;
   }
+}
+
+/* ───────────── Раскладка «сцена» (layout() === 'stage'; макеты Figma «Claude» 2026-10-13, узлы 1232:3680 и 1232:1721):
+   поле во весь экран; вступление и итог — слоем поверх (затемнение 60 % и размытие при мыши, на телефоне 85 % — как
+   выбор и документ); по ходу — перетаскиваемый блок справа внизу. --u — пиксель макета: 16 px макета = кегль игры. */
+
+.mg-stage {
+  --u: calc(var(--fs-grid, 16px) * var(--font-scale, 1) / 16);
+  --ut: calc(var(--fs, 18px) * var(--font-scale, 1) / 16); /* основной текст: на 2 px крупнее макета */
+  position: absolute;
+  inset: 0;
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+  border: 0;
+  box-shadow: none;
+}
+.mg-stage.no-foot {
+  padding: 0;
+}
+.mg-stage .mg-shell__body {
+  position: absolute;
+  inset: 0;
+}
+
+/* Вступление и итог */
+.mg-stage__layer,
+.mg-stage .mg-shell__result {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow: auto;
+  background: rgb(0 0 0 / 0.85);
+  border: 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mg-stage__layer,
+  .mg-stage .mg-shell__result {
+    background: rgb(0 0 0 / 0.6);
+    -webkit-backdrop-filter: blur(5px);
+    backdrop-filter: blur(5px);
+  }
+}
+.mg-stage__col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(20 * var(--u));
+  width: min(100%, calc(400 * var(--u)));
+  margin: auto;
+}
+.mg-stage__heading,
+.mg-stage .mg-shell__result-title {
+  margin: 0;
+  font: 400 calc(var(--h1, 32) * var(--u) - 3px) / 0.96 var(--font-title, serif);
+  color: #fff;
+}
+.mg-stage__text,
+.mg-stage .mg-shell__result-note {
+  font-size: calc(16 * var(--ut));
+  line-height: 1.2;
+  color: rgb(255 255 255 / 0.72);
+}
+.mg-stage__text p {
+  margin: 0;
+}
+.mg-stage .mg-shell__brief {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: none;
+  overflow: visible;
+  color: inherit;
+  font-size: inherit;
+  cursor: default;
+}
+.mg-stage .mg-shell__intro {
+  margin: 0;
+  font-size: calc(16 * var(--ut));
+}
+.mg-stage .mg-shell__result-text {
+  display: flex;
+  flex-direction: column;
+  gap: calc(20 * var(--u));
+}
+.mg-stage .mg-shell__btn.is-start,
+.mg-stage .mg-shell__btn.is-next {
+  flex: none;
+  min-width: calc(197 * var(--u));
+  min-height: 0;
+  padding: calc(12 * var(--u));
+  font-size: calc(16 * var(--ut));
+  line-height: normal;
+  color: #fff;
+  background: var(--mg-accent);
+  border: 0;
+}
+
+/* Блок: ручка «Переместить» и панель. На 30 % меньше прежнего и растёт с экраном (владелец 2026-10-14): единица
+   блока — от ширины окна (при 1440 px — 0,7 прежней), в пределах 0,7–1,2 px, и растёт с настройкой шрифта; правила блока
+   ниже считают в ней же (--u, --ut). Тянется весь блок, а не только ручка. */
+.mg-stage__dock {
+  --u: calc(clamp(0.7px, 0.0608vw, 1.2px) * var(--font-scale, 1));
+  --ut: calc(var(--u) * 1.125);
+  position: absolute;
+  right: calc(8 * var(--u));
+  bottom: calc(8 * var(--u));
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: calc(11 * var(--u));
+  width: min(calc(100% - 16px), calc(290 * var(--u)));
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.mg-stage__dock button { cursor: pointer; }
+.mg-stage__handle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(8 * var(--u));
+  font-size: calc(16 * var(--ut));
+  line-height: 1;
+  color: #fff;
+}
+.mg-stage__dock.is-dragging,
+.mg-stage__dock.is-dragging .mg-stage__handle {
+  cursor: grabbing;
+}
+.mg-stage__move {
+  opacity: 0.5;
+}
+.mg-stage__handle .vn-ico {
+  width: calc(24 * var(--u));
+  height: calc(24 * var(--u));
+}
+.mg-stage__panel {
+  display: flex;
+  flex-direction: column;
+  gap: calc(12 * var(--u));
+  max-height: calc(100vh - 6rem);
+  padding: calc(16 * var(--u));
+  overflow: auto;
+  background: rgb(0 0 0 / 0.6);
+  /* Панель — свой контейнер прокрутки: touch-action блока до неё не доходит, задаём заново. */
+  touch-action: none;
+}
+.mg-stage__dock.is-scroll .mg-stage__panel {
+  touch-action: pan-y;
+}
+.mg-stage .mg-shell__title {
+  margin: 0;
+  font: 400 calc(21 * var(--u) - 3px) / 1 var(--font-title, serif);
+  color: #fff;
+}
+.mg-stage__rule {
+  width: 100%;
+  height: 0;
+  margin: 0;
+  border: 0;
+  border-top: 0.5px solid rgb(255 255 255 / 0.3);
+}
+.mg-stage__sum {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: calc(16 * var(--ut));
+  line-height: 0.96;
+}
+.mg-stage .mg-shell__progress {
+  color: #fff;
+}
+.mg-stage .mg-shell__pips {
+  display: flex;
+  gap: calc(3 * var(--u));
+}
+.mg-stage .mg-shell__pip {
+  box-sizing: border-box;
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
+  border: 1px solid rgb(255 255 255 / 0.5);
+  border-radius: 50%;
+}
+.mg-stage .mg-shell__pip.is-used {
+  background: var(--mg-accent);
+  border-color: var(--mg-accent);
+}
+/* «Промахи: n из 4» и сообщения о ходе — для скринридера: на экране — кружки и сама картинка. */
+.mg-stage .mg-shell__fails-text,
+.mg-stage .mg-shell__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.mg-stage .mg-shell__timer {
+  margin-left: auto;
+  font-size: calc(14 * var(--ut));
+}
+.mg-stage .mg-shell__foot {
+  position: static;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+.mg-stage .mg-shell__actions .mg-shell__btn {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: calc(8 * var(--u)) calc(10 * var(--u));
+  font-size: calc(14 * var(--ut));
+  color: #fff;
+  background: none;
+  border: 0.5px solid rgb(255 255 255 / 0.4);
+}
+.mg-stage .mg-shell__actions .mg-shell__btn.is-primary {
+  background: var(--mg-accent);
+  border-color: var(--mg-accent);
 }

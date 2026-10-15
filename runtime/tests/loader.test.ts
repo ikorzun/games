@@ -8,6 +8,7 @@ import {
   ContentError,
   contentHash,
   ensureLangs,
+  loadCase,
   loadEpisode,
   loadManifest,
   loadStrings,
@@ -184,7 +185,7 @@ describe('loadSeason: рамка сезона для полки эпизодов
 
   it.skipIf(!hasRepoContent())('season.json сезона 1 в репозитории: текущий эпизод на полке, у остальных — год', () => {
     const s = JSON.parse(readFileSync(join(REPO_ROOT, 'episodes', 's1', 'season.json'), 'utf8')) as { episodes: Array<{ id?: string; year?: number }> };
-    expect(s.episodes.some((x) => x.id === 'ep01_murylev')).toBe(true);
+    expect(s.episodes.some((x) => x.id === 'ep01_hod')).toBe(true);
     expect(s.episodes.every((x) => typeof x.year === 'number')).toBe(true);
   });
 });
@@ -226,5 +227,26 @@ describe('loadVoiceIndex: индекс клипов озвучки', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('loadCase: дело рядом с эпизодом', () => {
+  const ep = miniEpisode({ s1: { steps: [{ do: 'end', ending: 'e_main' }] } });
+  const entry = { path: 'episodes/s1/x.json' };
+  const URL = '/b/episodes/s1/x.case.json';
+  const good = { schema_version: 1, episode: ep.id, title_key: 't', traits: [], suspects: [], clues: [], scenes: {}, talks: {}, chapters: [{ id: 'ch1', title_key: 'c', tasks: [] }] };
+
+  it('читает <эпизод>.case.json и проверяет, что это дело этого эпизода', async () => {
+    await expect(loadCase('/b/', entry, ep, fakeFetch({ [URL]: JSON.stringify(good) }))).resolves.toMatchObject({ episode: ep.id });
+  });
+
+  it('никогда не бросает: нет файла, кривой JSON, чужой эпизод, сбой сети — null', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await expect(loadCase('/b/', entry, ep, fakeFetch({}))).resolves.toBeNull();
+    await expect(loadCase('/b/', entry, ep, fakeFetch({ [URL]: '{нет' }))).resolves.toBeNull();
+    await expect(loadCase('/b/', entry, ep, fakeFetch({ [URL]: JSON.stringify({ ...good, episode: 'other' }) }))).resolves.toBeNull();
+    await expect(loadCase('/b/', entry, ep, fakeFetch({ [URL]: { throws: 'offline' } }))).resolves.toBeNull();
+    expect(warn).toHaveBeenCalledTimes(3); // 404 — штатно и молча
+    warn.mockRestore();
   });
 });

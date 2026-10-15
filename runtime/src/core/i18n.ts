@@ -24,6 +24,15 @@ export function normalizeLang(raw: string | null | undefined): Lang {
   return parseSupportedLang(raw) ?? 'en';
 }
 
+/**
+ * Языки, на которых эпизод можно играть: статус перевода в episode.localization.status не `none` (нет статуса — язык
+ * доступен). Без перевода интерфейс был бы на одном языке, а сюжет — на другом (подстановка ru). Пусто → язык оригинала.
+ */
+export function playableLangs(loc: { source_lang?: Lang; status?: Partial<Record<Lang, string>> } | undefined): Lang[] {
+  const ok = LANGS.filter((l) => loc?.status?.[l] !== 'none');
+  return ok.length > 0 ? ok : [loc?.source_lang ?? 'ru'];
+}
+
 /** Цепочка подстановки для языка: сам язык, затем en, затем ru (без повторов). */
 export function fallbackChain(lang: Lang): Lang[] {
   return [...new Set<Lang>([lang, 'en', 'ru'])];
@@ -44,6 +53,8 @@ export class I18n {
   private readonly listeners = new Set<Listener>();
   private current: Lang = 'en';
   private pseudo = false;
+  /** Языки, которые игроку предлагают переключатели (playableLangs эпизода); по умолчанию все. */
+  private langs: readonly Lang[] = LANGS;
   /** Ключи, которые не нашлись ни в одном языке цепочки (для отладки/QA). */
   readonly missing = new Set<string>();
 
@@ -65,6 +76,14 @@ export class I18n {
 
   hasLang(lang: Lang): boolean {
     return this.bundles.has(lang);
+  }
+
+  get available(): readonly Lang[] {
+    return this.langs;
+  }
+
+  setAvailable(langs: readonly Lang[]): void {
+    if (langs.length > 0) this.langs = [...langs];
   }
 
   setLang(lang: Lang): void {

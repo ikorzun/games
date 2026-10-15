@@ -16,7 +16,7 @@ import { QuickMenu } from '../src/ui/quick_menu';
 import type { QuickAction } from '../src/ui/quick_menu';
 import { ScreenHost } from '../src/ui/screen_host';
 import type { Screen } from '../src/ui/screen_host';
-import { TextBox } from '../src/ui/textbox';
+import { strokeBeat, TextBox } from '../src/ui/textbox';
 import type { LineView } from '../src/ui/textbox';
 import { ToastLayer } from '../src/ui/toasts';
 
@@ -31,18 +31,17 @@ beforeEach(() => {
     'c.prompt': 'Что делаем?',
     'cap.k': 'Москва, 1993',
     'cap.f': 'Факт дела',
-    'ui.quick.auto': 'Авто',
     'ui.quick.skip': 'Пропуск',
     'ui.quick.log': 'Журнал',
+    'ui.quick.notes': 'Заметки',
     'ui.quick.save': 'Сохранить',
     'ui.quick.load': 'Загрузить',
     'ui.quick.mute': 'Звук',
     'ui.quick.settings': 'Настройки',
-    'ui.quick.hide': 'Скрыть',
     'ui.menu.settings': 'Настройки',
     'ui.archive.new_item': 'Новый материал',
   });
-  i18n.addStrings('en', { 'c.a': 'First', 'c.b': 'Second', 'cap.k': 'Moscow, 1993', 'ui.quick.auto': 'Auto', 'ui.quick.mute': 'Mute', 'ui.quick.log': 'Log', 'ui.quick.hide': 'Hide UI' });
+  i18n.addStrings('en', { 'c.a': 'First', 'c.b': 'Second', 'cap.k': 'Moscow, 1993', 'ui.quick.skip': 'Skip', 'ui.quick.mute': 'Mute', 'ui.quick.log': 'Log', 'ui.quick.notes': 'Notes' });
   i18n.setLang('ru');
 });
 
@@ -54,7 +53,8 @@ afterEach(() => {
 
 const line = (text: string, over: Partial<LineView> = {}): LineView => ({
   name: null,
-  nameColor: null,
+  title: null,
+  portrait: null,
   text,
   style: 'say',
   layout: 'window',
@@ -123,16 +123,79 @@ describe('TextBox: typewriter', () => {
     expect(shown(tb)).toBe('éx');
   });
 
-  it('имя говорящего: цвет из cast.name_color, у рассказчика имя скрыто', () => {
+  it('говорящий над подложкой: портрет, имя и подпись; у рассказчика строки говорящего нет', () => {
     const tb = new TextBox();
-    tb.show(line('Текст', { name: 'Ирина', nameColor: '#ff8800' }), Number.POSITIVE_INFINITY);
-    const name = tb.el.querySelector<HTMLElement>('.vn-textbox__name');
-    expect(name?.hidden).toBe(false);
-    expect(name?.textContent).toBe('Ирина');
-    expect(name?.style.getPropertyValue('--name-color')).toBe('#ff8800');
+    tb.show(line('Текст', { name: 'Ирина Лапина', title: 'покупательница', portrait: './assets/ep01/portraits/lapin_wife.webp' }), Number.POSITIVE_INFINITY);
+    const who = tb.el.querySelector<HTMLElement>('.vn-textbox__who');
+    const avatar = tb.el.querySelector<HTMLImageElement>('.vn-textbox__avatar');
+    const title = tb.el.querySelector<HTMLElement>('.vn-textbox__title');
+    expect(who?.hidden).toBe(false);
+    expect(tb.el.querySelector('.vn-textbox__name')?.textContent).toBe('Ирина Лапина');
+    expect(title?.hidden).toBe(false);
+    expect(title?.textContent).toBe('покупательница');
+    expect(avatar?.hidden).toBe(false);
+    expect(avatar?.getAttribute('src')).toBe('./assets/ep01/portraits/lapin_wife.webp');
+    expect(avatar?.alt).toBe('');
+    expect(who?.nextElementSibling?.classList.contains('vn-textbox__box')).toBe(true);
+    tb.show(line('Без портрета и подписи', { name: 'Паспортистка' }), Number.POSITIVE_INFINITY);
+    expect(avatar?.hidden).toBe(true);
+    expect(avatar?.hasAttribute('src')).toBe(false);
+    expect(title?.hidden).toBe(true);
     tb.show(line('Закадровый', { style: 'voiceover' }), Number.POSITIVE_INFINITY);
-    expect(name?.hidden).toBe(true);
+    expect(who?.hidden).toBe(true);
     expect(tb.el.dataset.style).toBe('voiceover');
+  });
+
+  it('каретка с «>» (макет 1232:3796) — сразу за напечатанным, перед непоказанной частью; «>» виден, когда допечатано', () => {
+    const tb = new TextBox();
+    tb.show(line('Мы ничего не нарушали.'), 10);
+    const text = tb.el.querySelector('.vn-textbox__text:not(.vn-textbox__bars)');
+    const more = text?.querySelector('.vn-textbox__more');
+    expect(more?.previousElementSibling?.className).toBe('vn-textbox__shown');
+    expect(more?.nextElementSibling?.className).toBe('vn-textbox__rest');
+    expect(more?.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 6 8');
+    expect(more?.textContent).toBe(''); // ширины в строке не занимает
+    expect(tb.el.classList.contains('is-complete')).toBe(false);
+    tb.finishNow();
+    expect(tb.el.classList.contains('is-complete')).toBe(true);
+  });
+
+  it('слой полос повторяет текст: напечатанное — в полосе, остальное — без неё; оба слоя скрыты от скринридера', () => {
+    const tb = new TextBox();
+    tb.show(line('Купили по договору'), 10);
+    vi.advanceTimersByTime(600);
+    const bars = tb.el.querySelector<HTMLElement>('.vn-textbox__bars');
+    expect(bars?.getAttribute('aria-hidden')).toBe('true');
+    expect(bars?.querySelector('.vn-textbox__bar')?.textContent).toBe(shown(tb));
+    expect(bars?.textContent).toBe('Купили по договору');
+    tb.finishNow();
+    expect(bars?.querySelector('.vn-textbox__bar')?.textContent).toBe('Купили по договору');
+  });
+
+  it('печатная машинка: после точки и запятой рука замирает, ритм одинаков при каждом показе', () => {
+    expect(strokeBeat('.', 5)).toBe(6);
+    expect(strokeBeat('…', 5)).toBe(6);
+    expect(strokeBeat(',', 5)).toBe(3);
+    const beats = Array.from({ length: 200 }, (_, i) => strokeBeat('а', i));
+    expect(Math.min(...beats)).toBeGreaterThanOrEqual(0.75);
+    expect(Math.max(...beats)).toBeLessThanOrEqual(1.25);
+    expect(beats.reduce((a, b) => a + b, 0) / beats.length).toBeCloseTo(1, 1);
+    const run = (): number[] => {
+      const tb = new TextBox();
+      tb.show(line('Да. Нет'), 10);
+      const at: number[] = [];
+      for (let t = 0; t < 3000 && tb.typing; t += 10) {
+        vi.advanceTimersByTime(10);
+        while (shown(tb).length > at.length) at.push(t);
+      }
+      return at;
+    };
+    const a = run();
+    expect(a).toHaveLength(7);
+    const gaps = a.slice(1).map((t, i) => t - a[i]!);
+    // пауза после «.» перед пробелом — самая длинная
+    expect(gaps.indexOf(Math.max(...gaps))).toBe(2);
+    expect(Math.max(...gaps)).toBeGreaterThan(3 * Math.min(...gaps));
   });
 
   it('скринридер получает реплику целиком сразу (aria-live), а не по буквам', () => {
@@ -219,7 +282,7 @@ describe('ChoiceMenu', () => {
     expect(btns.map((b) => b.querySelector('.vn-choice__label')?.textContent)).toEqual(['Первый', 'Второй', 'Третий']);
     expect(btns.map((b) => b.disabled)).toEqual([false, true, false]);
     expect(btns.map((b) => b.querySelector('.vn-choice__n')?.textContent)).toEqual(['1', '2', '3']);
-    expect(document.activeElement).toBe(btns[0]); // фокус на первом доступном
+    expect(document.activeElement).toBe(menu.el); // фокус на группе: ни один вариант не выглядит выбранным заранее
     btns[1]?.click(); // выключенная — игнорируется (disabled-кнопка не кликается)
     btns[2]?.click();
     await expect(result).resolves.toBe('c');
@@ -420,11 +483,11 @@ describe('CaptionLayer: плашка заставки', () => {
 });
 
 describe('QuickMenu', () => {
-  it('пять кнопок в фиксированном порядке: Auto, Skip, Log, Settings, Hide (сохранение, загрузка и звук — в настройках)', () => {
+  it('три кнопки в фиксированном порядке: Skip, Notes, Settings (2026-10-15: без «Авто» и «Скрыть интерфейс»; журнал и блокнот — «Заметки»)', () => {
     const qm = new QuickMenu(() => undefined);
     const actions = [...qm.el.querySelectorAll<HTMLElement>('button')].map((b) => b.dataset.action);
-    expect(actions).toEqual(['auto', 'skip', 'log', 'settings', 'hide']);
-    expect(qm.el.querySelector('[data-action="auto"]')?.textContent).toBe('Авто');
+    expect(actions).toEqual(['skip', 'notes', 'settings']);
+    expect(qm.el.querySelector('[data-action="notes"]')?.textContent).toBe('Заметки');
   });
 
   it('клик вызывает действие, не всплывает до сцены (не продвигает сюжет) и снимает фокус с кнопки', () => {
@@ -435,36 +498,50 @@ describe('QuickMenu', () => {
     wrap.addEventListener('click', outer);
     wrap.appendChild(qm.el);
     document.body.appendChild(wrap);
-    const btn = qm.el.querySelector<HTMLButtonElement>('[data-action="log"]');
+    const btn = qm.el.querySelector<HTMLButtonElement>('[data-action="notes"]');
     btn?.focus();
     btn?.click();
-    expect(calls).toEqual(['log']);
+    expect(calls).toEqual(['notes']);
     expect(outer).not.toHaveBeenCalled();
-    expect(document.activeElement).not.toBe(btn); // Space потом продвигает сюжет, а не повторяет «Журнал»
+    expect(document.activeElement).not.toBe(btn); // Space потом продвигает сюжет, а не повторяет «Заметки»
   });
 
-  it('переключатели Auto / Skip отражают состояние классом и aria-pressed', () => {
+  it('метка «есть новое» на заметках: квадрат в углу, иконка вздрагивает с каждой новой записью; снимается целиком', () => {
+    const qm = new QuickMenu(() => undefined);
+    const nb = qm.el.querySelector<HTMLElement>('[data-action="notes"]')!;
+    expect(nb.className).not.toMatch(/has-new|is-nudged/);
+    qm.setBadge('notes', true);
+    expect(nb.classList.contains('has-new')).toBe(true);
+    expect(nb.classList.contains('is-nudged')).toBe(true);
+    qm.setBadge('notes', true);
+    expect(nb.classList.contains('is-nudged')).toBe(true);
+    qm.setBadge('notes', false);
+    expect(nb.className).not.toMatch(/has-new|is-nudged/);
+    expect(qm.el.querySelectorAll('.has-new')).toHaveLength(0);
+  });
+
+  it('переключатель Skip отражает состояние классом и aria-pressed', () => {
     const qm = new QuickMenu(() => undefined);
     const pressed = (a: string): string | null | undefined => qm.el.querySelector(`[data-action="${a}"]`)?.getAttribute('aria-pressed');
-    expect([pressed('auto'), pressed('skip')]).toEqual(['false', 'false']);
-    expect(pressed('log')).toBeNull(); // не переключатель
-    qm.setState({ auto: true, muted: true });
-    expect([pressed('auto'), pressed('skip')]).toEqual(['true', 'false']);
-    expect(qm.el.querySelector('[data-action="auto"]')?.classList.contains('is-on')).toBe(true);
+    expect(pressed('skip')).toBe('false');
+    expect(pressed('notes')).toBeNull(); // не переключатель
+    qm.setState({ skip: true, muted: true });
+    expect(pressed('skip')).toBe('true');
+    expect(qm.el.querySelector('[data-action="skip"]')?.classList.contains('is-on')).toBe(true);
   });
 
   it('refresh подставляет подписи нового языка; setDisabled блокирует кнопку', () => {
     const qm = new QuickMenu(() => undefined);
     i18n.setLang('en');
     qm.refresh();
-    expect(qm.el.querySelector('[data-action="auto"]')?.textContent).toBe('Auto');
-    qm.setDisabled('log', true);
-    expect(qm.el.querySelector<HTMLButtonElement>('[data-action="log"]')?.disabled).toBe(true);
+    expect(qm.el.querySelector('[data-action="notes"]')?.textContent).toBe('Notes');
+    qm.setDisabled('notes', true);
+    expect(qm.el.querySelector<HTMLButtonElement>('[data-action="notes"]')?.disabled).toBe(true);
   });
 });
 
 describe('QuickMenu: кнопки-иконки', () => {
-  const ACTIONS: QuickAction[] = ['auto', 'skip', 'log', 'settings', 'hide'];
+  const ACTIONS: QuickAction[] = ['skip', 'notes', 'settings'];
   const btn = (qm: QuickMenu, a: string): HTMLButtonElement => qm.el.querySelector<HTMLButtonElement>(`[data-action="${a}"]`)!;
 
   it('у каждой кнопки встроенная SVG-иконка (декоративная) и подпись скрытым текстом; title совпадает с подписью', () => {
@@ -482,30 +559,30 @@ describe('QuickMenu: кнопки-иконки', () => {
       expect(label?.textContent, a).toBe(b.title);
       expect(label?.textContent?.length ?? 0, a).toBeGreaterThan(0);
     }
-    expect(btn(qm, 'auto').textContent).toBe('Авто'); // скрытый текст остаётся в разметке (innerText/textContent для QA и ридера)
-    expect(btn(qm, 'hide').title).toBe('Скрыть'); // подпись приходит из локали, а не зашита в иконку
+    expect(btn(qm, 'notes').textContent).toBe('Заметки'); // скрытый текст остаётся в разметке (innerText/textContent для QA и ридера)
+    expect(btn(qm, 'settings').title).toBe('Настройки'); // подпись приходит из локали, а не зашита в иконку
   });
 
   it('refresh меняет подписи и title на язык интерфейса, иконки остаются теми же узлами', () => {
     const qm = new QuickMenu(() => undefined);
-    const before = btn(qm, 'log').querySelector('svg');
+    const before = btn(qm, 'notes').querySelector('svg');
     i18n.setLang('en');
     qm.refresh();
-    expect(btn(qm, 'log').querySelector('.vn-qbtn__label')?.textContent).toBe('Log');
-    expect(btn(qm, 'log').title).toBe('Log');
-    expect(btn(qm, 'hide').title).toBe('Hide UI');
-    expect(btn(qm, 'log').querySelector('svg')).toBe(before);
+    expect(btn(qm, 'notes').querySelector('.vn-qbtn__label')?.textContent).toBe('Notes');
+    expect(btn(qm, 'notes').title).toBe('Notes');
+    expect(btn(qm, 'skip').title).toBe('Skip');
+    expect(btn(qm, 'notes').querySelector('svg')).toBe(before);
     expect(qm.el.getAttribute('aria-label')).toBeTruthy();
   });
 
-  it('журнал — иконка папки (решение владельца 2026-10-11)', () => {
+  it('заметки — иконка блокнота', () => {
     const qm = new QuickMenu(() => undefined);
-    expect(btn(qm, 'log').querySelector('svg')?.classList.contains('vn-ico--log')).toBe(true);
-    expect(btn(qm, 'log').querySelector('path')?.getAttribute('d')).toContain('M3.5 7.5h6l2 2h9v9.5h-17z');
+    expect(btn(qm, 'notes').querySelector('svg')?.classList.contains('vn-ico--notes')).toBe(true);
+    expect(btn(qm, 'notes').querySelector('path')?.getAttribute('d')).toBe('M6.5 3.5h12v17h-12z');
   });
 
   it('icon(name): новый элемент на каждый вызов, имя в классе; все имена из быстрого меню существуют', () => {
-    const names: IconName[] = ['auto', 'skip', 'log', 'save', 'load', 'mute', 'settings', 'hide'];
+    const names: IconName[] = ['skip', 'log', 'notebook', 'notes', 'save', 'load', 'mute', 'settings'];
     for (const n of names) {
       const a = icon(n);
       const b = icon(n);
@@ -553,6 +630,38 @@ describe('ScreenHost: стек модальных экранов', () => {
     expect(document.activeElement).toBe(opener);
     host.close(s); // повторное закрытие безопасно
     expect(s.closed).toBe(1);
+  });
+
+  it('клик по фону (сам экран или обёртка с data-backdrop) закрывает закрываемый экран; по содержимому и у незакрываемого — нет', () => {
+    const host = new ScreenHost();
+    document.body.appendChild(host.el);
+    const press = (el: Element): boolean => el.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    const tap = (el: HTMLElement): void => {
+      press(el);
+      el.click();
+    };
+    const s = screen();
+    const wrap = document.createElement('div');
+    wrap.dataset.backdrop = '1';
+    s.el.appendChild(wrap);
+    host.open(s);
+    const button = s.el.querySelector('button');
+    if (button) tap(button); // кнопка внутри — не фон
+    expect(host.count).toBe(1);
+    if (button) press(button);
+    wrap.click(); // нажали на содержимом, отпустили на фоне (тянули лист): клик у общего предка — не закрывает
+    expect(host.count).toBe(1);
+    tap(wrap); // пустое место между записями блокнота
+    expect(host.count).toBe(0);
+    expect(s.closed).toBe(1);
+    const t = screen();
+    host.open(t);
+    tap(t.el); // сам экран вне содержимого
+    expect(host.count).toBe(0);
+    const locked = screen({ dismissible: false });
+    host.open(locked);
+    tap(locked.el); // предупреждение, мини-игра, финал: фон не отменяет действие в сюжете
+    expect(host.count).toBe(1);
   });
 
   it('фокус не возвращается на кнопку быстрого меню (иначе Space повторил бы её действие)', () => {
@@ -643,14 +752,12 @@ describe('ScreenHost: стек модальных экранов', () => {
 });
 
 describe('ToastLayer', () => {
-  it('«Новый материал: название» с названием из локали или id, если ключа нет; уведомление гаснет само', () => {
-    i18n.addStrings('ru', { 'arc.t': 'Протокол осмотра' });
-    const toasts = new ToastLayer((item) => (item === 'arc_x' ? 'arc.t' : null));
+  it('служебное уведомление показывается и гаснет само («Новый материал» больше не показываем, 2026-10-13)', () => {
+    const toasts = new ToastLayer();
     document.body.appendChild(toasts.el);
-    toasts.archive('arc_x');
-    toasts.archive('arc_unknown');
+    toasts.push('Только прочитанное');
     const texts = [...toasts.el.querySelectorAll('.vn-toast')].map((n) => n.textContent);
-    expect(texts).toEqual(['Новый материал: Протокол осмотра', 'Новый материал: arc_unknown']);
+    expect(texts).toEqual(['Только прочитанное']);
     expect(toasts.el.getAttribute('aria-live')).toBe('polite');
     vi.advanceTimersByTime(3200 + 400);
     expect(toasts.el.querySelectorAll('.vn-toast')).toHaveLength(0);
@@ -661,7 +768,7 @@ describe('UiKit: каркас', () => {
   it('собирает корень: сцена под слоем UI, экраны и тосты рядом; контекстное меню и drag отключены', () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
-    const kit = new UiKit(root, () => undefined, () => null);
+    const kit = new UiKit(root, () => undefined);
     const stageEl = document.createElement('div');
     stageEl.className = 'vn-stage';
     kit.mountStage(stageEl);
@@ -677,8 +784,6 @@ describe('UiKit: каркас', () => {
     root.dispatchEvent(drag);
     expect(drag.defaultPrevented).toBe(true);
 
-    kit.setUiHidden(true);
-    expect(root.classList.contains('ui-hidden')).toBe(true);
     kit.setFontScale(1.3);
     expect(root.style.getPropertyValue('--font-scale')).toBe('1.3');
   });
@@ -688,7 +793,7 @@ describe('UiKit: индикатор загрузки', () => {
   it('индикатор есть в корне, скрыт от скринридера и по умолчанию выключен; setLoading переключает is-on', () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
-    const kit = new UiKit(root, () => undefined, () => null);
+    const kit = new UiKit(root, () => undefined);
     expect(root.contains(kit.loading)).toBe(true);
     expect(kit.loading.classList.contains('vn-loading')).toBe(true);
     expect(kit.loading.getAttribute('aria-hidden')).toBe('true');
@@ -704,7 +809,7 @@ describe('UiKit: индикатор загрузки', () => {
 
   it('индикатор не перехватывает касания: он последний ребёнок корня и не входит в слой интерфейса', () => {
     const root = document.createElement('div');
-    const kit = new UiKit(root, () => undefined, () => null);
+    const kit = new UiKit(root, () => undefined);
     expect(root.lastElementChild).toBe(kit.loading);
     expect(kit.ui.contains(kit.loading)).toBe(false);
   });

@@ -12004,7 +12004,8 @@
               0.09
             ],
             "label_key": "ep01.mg_scene.hs.photo",
-            "required": true
+            "required": true,
+            "archive_unlock": "arc_photo_grandson"
           },
           {
             "id": "slippers",
@@ -12041,8 +12042,7 @@
               "op": "add",
               "value": 1
             }
-          ],
-          "archive_unlock": "arc_photo_grandson"
+          ]
         },
         "partial": {
           "goto": "s14",

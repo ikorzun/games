@@ -42,7 +42,7 @@ export class Hud {
     this.el.textContent = [
       `renderer ${this.stage.renderer.kind} · ${v.presentation} · filter ${v.filter ?? '(preset)'}`,
       `scene ${s.scene_id} #${s.step_index} · block ${v.block}`,
-      `pending ${p ? p.kind : '-'} · auto ${this.ui.autoOn ? 'on' : 'off'} · skip ${this.ui.skipOn ? 'on' : 'off'}`,
+      `pending ${p ? p.kind : '-'} · skip ${this.ui.skipOn ? 'on' : 'off'}`,
       `music ${this.audio.music ?? '-'} · amb ${this.audio.ambient ?? '-'} · voice ${this.audio.voicePlaying?.split('/').pop() ?? '-'} · audible ${this.audio.audible}`,
       `archive ${s.archive.length} · journal ${s.journal.length} · rollback ${this.session.rollbackDepth}`,
       JSON.stringify(vars),

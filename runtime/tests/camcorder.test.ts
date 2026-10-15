@@ -18,9 +18,14 @@ import {
   LEVELS,
   makeBurst,
   makeReframe,
+  signalFor,
+  VIRTUAL_LINES,
+  vhsUniforms,
+  virtualLines,
   makeTear,
   MAX_DT,
   mulberry32,
+  REFRAME_ROT_CAP,
   REFRAME_SCALE_MAX,
   reframeAt,
   SHAKE,
@@ -65,12 +70,13 @@ describe('ГСЧ', () => {
 });
 
 describe('числа владельца зафиксированы', () => {
-  it('слабо (по умолчанию): сдвиг 1,2 %, поворот 0,5°, масштаб до 1,03; помехи 20–45 с на 150–500 мс; vhs_heavy 6–12 с', () => {
+  it('слабо (по умолчанию): вдвое слабее прежнего (2026-10-13) — сдвиг 0,6 %, поворот 0,25°, масштаб до 1,015; помехи 20–45 с на 150–500 мс; vhs_heavy 6–12 с', () => {
     expect(SHAKE.shiftPct).toBe(1.2);
     expect(SHAKE.rotDeg).toBe(0.5);
     expect(SHAKE.scaleMax).toBe(1.03);
-    expect(LEVELS.low.scaleMax).toBe(1.03);
-    expect(LEVELS.low.amp).toBe(1);
+    expect(LEVELS.low.amp).toBe(0.5); // база SHAKE × 0,5
+    expect(LEVELS.low.scaleMax).toBe(1.015);
+    expect(LEVELS.high.amp).toBe(0.8);
     expect(LEVELS.low.burstGap).toEqual([20_000, 45_000]);
     expect(LEVELS.low.burstMs).toEqual([150, 500]);
     expect(LEVELS.low.heavyGap).toEqual([6_000, 12_000]);
@@ -93,9 +99,9 @@ describe('числа владельца зафиксированы', () => {
     });
   });
 
-  it('«оператор поправил кадр» — только reconstruction и procedural; HUD записи — только reconstruction', () => {
+  it('«оператор поправил кадр» выключен во всех пресетах (владелец 2026-10-14: не дёргать кадр при смене сцены); HUD записи — только reconstruction', () => {
     const rf = Object.entries(PRESETS).filter(([, v]) => v.reframe).map(([k]) => k).sort();
-    expect(rf).toEqual(['procedural', 'reconstruction']);
+    expect(rf).toEqual([]);
     const hud = Object.entries(PRESETS).filter(([, v]) => v.recHud).map(([k]) => k);
     expect(hud).toEqual(['reconstruction']);
   });
@@ -139,8 +145,8 @@ describe('дрожание не постоянное: эпизоды «бесп�
       // число эпизодов за 10 минут — из интервалов 14–32 с плюс сам эпизод ≤ 5 с
       expect(s.unrestLog.length).toBeGreaterThanOrEqual(10 * MIN / (32_000 + 5_000) - 1);
       expect(s.unrestLog.length).toBeLessThanOrEqual(10 * MIN / 14_000 + 1);
-      // вне эпизодов (с запасом на вход и выход) кадр почти неподвижен: ≤ 15 % предела дрожания
-      const calmLimit = SHAKE.shiftPct * LEVELS.low.restAmp + 1e-6;
+      // вне эпизодов (с запасом на вход и выход) кадр почти неподвижен: ≤ 15 % предела дрожания уровня
+      const calmLimit = SHAKE.shiftPct * LEVELS.low.amp * LEVELS.low.restAmp + 1e-6;
       let calm = 0;
       let seen = 0;
       frames.forEach((f, i) => {
@@ -154,7 +160,7 @@ describe('дрожание не постоянное: эпизоды «бесп�
       expect(calm).toBe(seen);
       // а в эпизодах дрожание доходит до полной амплитуды
       const peak = Math.max(...frames.filter((f) => !f.burst).map((f) => Math.abs(f.tx)));
-      expect(peak).toBeGreaterThan(SHAKE.shiftPct * 0.5);
+      expect(peak).toBeGreaterThan(SHAKE.shiftPct * LEVELS.low.amp * 0.5);
     }
     const strong = make(2, RECON, 'high');
     run(strong, 10 * MIN, 33);
@@ -275,7 +281,7 @@ describe('«оператор поправил кадр»', () => {
     return Array.from({ length: n }, () => makeReframe(rng, 0, strength));
   };
 
-  it('обычная поправка: сдвиг 2–4 %, наклон до 1°, 300–500 мс; «неожиданный ракурс» — поворот 1,2–2°, оседание 2–3 с', () => {
+  it('обычная поправка: сдвиг 2–4 % × сила, наклон до 0,5° (потолок REFRAME_ROT_CAP — вдвое слабее с 2026-10-13), 300–500 мс; «неожиданный ракурс» — поворот 0,6–1°, оседание 2–3 с', () => {
     const all = sample(5000);
     const normal = all.filter((r) => !r.angle);
     const angle = all.filter((r) => r.angle);
@@ -286,11 +292,11 @@ describe('«оператор поправил кадр»', () => {
       expect(mag).toBeLessThanOrEqual(4 + 1e-6);
       expect(r.dur).toBeGreaterThanOrEqual(300);
       expect(r.dur).toBeLessThanOrEqual(500);
-      expect(Math.abs(r.drot)).toBeLessThanOrEqual(1 + 1e-9);
+      expect(Math.abs(r.drot)).toBeLessThanOrEqual(REFRAME_ROT_CAP + 1e-9);
     }
     for (const r of angle) {
-      expect(Math.abs(r.drot)).toBeGreaterThanOrEqual(1.2 - 1e-9);
-      expect(Math.abs(r.drot)).toBeLessThanOrEqual(2 + 1e-9);
+      expect(Math.abs(r.drot)).toBeGreaterThanOrEqual(1.2 * REFRAME_ROT_CAP - 1e-9);
+      expect(Math.abs(r.drot)).toBeLessThanOrEqual(2 * REFRAME_ROT_CAP + 1e-9);
       expect(r.dur).toBeGreaterThanOrEqual(2000);
       expect(r.dur).toBeLessThanOrEqual(3000);
     }
@@ -316,23 +322,23 @@ describe('«оператор поправил кадр»', () => {
     expect(reframeAt(r, 1000 + r.dur)).toBeNull();
   });
 
-  it('вход в сцену reconstruction / procedural запускает поправку: кадр заметно смещён и масштабирован, потом оседает', () => {
-    const s = make(8);
+  it('механизм поправки (в пресетах выключен, остался для отладки): вход в сцену с reframe смещает кадр, потом оседает', () => {
+    const s = make(8, { ...RECON, reframe: true });
     run(s, 1000);
     const calm = s.step(1016);
     s.enterScene();
     const kick = s.step(1032);
-    // сразу после входа смещение заметно больше предела спокойного дрожания
+    // сразу после входа смещение заметно больше предела спокойного дрожания уровня
     const shift = Math.max(Math.abs(kick.tx), Math.abs(kick.ty), Math.abs(kick.rot));
-    expect(shift).toBeGreaterThan(SHAKE.shiftPct * 0.9);
+    expect(shift).toBeGreaterThan(SHAKE.shiftPct * LEVELS.low.amp * 0.9);
     expect(kick.scale).toBeGreaterThan(calm.scale);
     expect(kick.scale).toBeLessThanOrEqual(REFRAME_SCALE_MAX + 1e-9);
     expect(coverScale(kick.tx, kick.ty, kick.rot, 16 / 9)).toBeLessThanOrEqual(kick.scale + 1e-6);
     // через 3,2 секунды (дольше любого оседания) — снова спокойное дрожание в пределах слабого уровня
     const after = run(s, 3300, 16, 1048).slice(-20);
     for (const f of after) {
-      expect(Math.abs(f.tx)).toBeLessThanOrEqual(SHAKE.shiftPct + 1e-9);
-      expect(f.scale).toBeLessThanOrEqual(1.03 + 1e-9);
+      expect(Math.abs(f.tx)).toBeLessThanOrEqual(SHAKE.shiftPct * LEVELS.low.amp + 1e-9);
+      expect(f.scale).toBeLessThanOrEqual(LEVELS.low.scaleMax + 1e-9);
     }
   });
 
@@ -603,5 +609,67 @@ describe('моторный зум (fx zoom_in)', () => {
     expect(kf.some((k) => k.filter.startsWith('blur('))).toBe(true);
     for (let i = 1; i < kf.length; i++) expect(kf[i]!.offset).toBeGreaterThan(kf[i - 1]!.offset);
     expect(zoomKeyframes(target, false).every((k) => k.filter === 'none')).toBe(true);
+  });
+});
+
+describe('камкордер: искажения записи (шейдер vhs_filter.ts)', () => {
+  it('профиль сигнала: «выкл» — нет, «сильно» сильнее «слабо» по всем искажениям', () => {
+    expect(signalFor('off', false)).toBeNull();
+    const low = signalFor('low', false)!;
+    const high = signalFor('high', false)!;
+    for (const k of ['lumaSmear', 'ringing', 'chromaBleed', 'chromaDelay', 'lumaNoise', 'chromaNoise', 'snow', 'dropout', 'jitter', 'edgeWave', 'headSwitch', 'chromaPhase'] as const) {
+      expect(high[k], k).toBeGreaterThan(low[k]);
+    }
+    expect(high.saturation).toBeLessThan(low.saturation); // запись сильнее теряет цвет
+    expect(low.crawl).toBe(0); // на «слабо» цвет в яркость не просачивается
+    expect(low.interlace).toBe(0); // и строк чересстрочности нет (муар на хронике с Ken Burns)
+  });
+
+  it('«слабо» бережёт картинку: яркость почти не размыта, шум и снег редкие', () => {
+    const low = signalFor('low', false)!;
+    expect(low.lumaSmear).toBeLessThanOrEqual(1);
+    expect(low.lumaNoise).toBeLessThanOrEqual(0.04);
+    expect(low.snow).toBeLessThanOrEqual(0.002);
+    expect(low.dropout).toBeLessThanOrEqual(0.002);
+  });
+
+  it('vhs_heavy: лента «старше» — шум, снег, выпадения и дрожание строк × HEAVY_STRENGTH, строки чересстрочности есть', () => {
+    const base = signalFor('low', false)!;
+    const heavy = signalFor('low', true)!;
+    for (const k of ['lumaNoise', 'chromaNoise', 'snow', 'dropout', 'jitter', 'edgeWave'] as const) {
+      expect(heavy[k], k).toBeCloseTo(base[k] * HEAVY_STRENGTH, 9);
+    }
+    expect(heavy.lumaSmear).toBe(base.lumaSmear); // мягче картинка не становится
+    expect(heavy.interlace).toBeGreaterThan(0);
+  });
+
+  it('виртуальные строки: не тоньше двух пикселей (без муара на телефоне), от 120 до 480', () => {
+    expect(virtualLines(1080)).toBe(480);
+    expect(virtualLines(720)).toBe(360);
+    expect(virtualLines(438)).toBe(219); // телефон: картинка 16:9 по ширине, разрешение 2
+    expect(virtualLines(100)).toBe(120);
+    expect(virtualLines(4000)).toBe(VIRTUAL_LINES);
+  });
+
+  it('униформы кадра: камера в долях кадра и радианах, номер кадра и время свёрнуты, помехи и шов — из кадра планировщика', () => {
+    const s = new CameraScheduler({ rng: mulberry32(3), level: 'low' });
+    s.setContext({ handheld: 1, reframe: true, filter: 'vhs' });
+    s.burstNow();
+    const f = s.step(0);
+    const u = vhsUniforms({ frame: { ...f, tx: 1.5, ty: -0.5, rot: 0.5, scale: 1.02 }, signal: signalFor('low', false)!, timeMs: 1_234_567, frameNo: 5000, heightPx: 720, yDown: true });
+    expect(u.uCam[0]).toBeCloseTo(0.015, 9);
+    expect(u.uCam[1]).toBeCloseTo(-0.005, 9);
+    expect(u.uCam[2]).toBeCloseTo((0.5 * Math.PI) / 180, 9);
+    expect(u.uCam[3]).toBeCloseTo(1.02, 9);
+    expect(u.uClock[0]).toBeLessThan(600); // время свёрнуто: mediump не теряет точность за долгую сессию
+    expect(u.uClock[1]).toBeLessThan(1009);
+    expect(u.uClock[2]).toBe(360);
+    expect(u.uClock[3]).toBe(1);
+    expect(u.uBurst[0]).toBeGreaterThanOrEqual(0); // всплеск идёт: сила — огибающая × сила
+    expect(u.uBurst[2]).toBeGreaterThan(0); // высота полосы трекинга
+    const idle = vhsUniforms({ frame: IDLE_FRAME, signal: signalFor('high', false)!, timeMs: 0, frameNo: 0, heightPx: 1080, yDown: false });
+    expect(idle.uBurst).toEqual([0, 0, 0, 0]);
+    expect(idle.uTear).toEqual([0, 0, 0, 0]);
+    expect(idle.uClock[3]).toBe(-1);
   });
 });

@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { i18n } from '../src/core/i18n';
 import type { SaveFile } from '../src/core/saves';
-import { AUTO_DELAY_RANGE, DEFAULT_SETTINGS, FONT_SCALE_RANGE } from '../src/core/settings';
+import { DEFAULT_SETTINGS, FONT_SCALE_RANGE } from '../src/core/settings';
 import type { Settings } from '../src/core/settings';
 import { createInitialState } from '../src/core/state';
 import type { Episode } from '../src/core/types';
@@ -16,12 +16,13 @@ import {
   ArchiveScreen,
   DocumentScreen,
   ErrorScreen,
-  LogScreen,
+  languageChips,
   MenuScreen,
   SaveLoadScreen,
   SettingsScreen,
   WarningScreen,
 } from '../src/ui/screens';
+import type { LogSource } from '../src/ui/screens';
 import { miniEpisode } from './helpers/mini';
 
 const episode: Episode = {
@@ -63,18 +64,15 @@ beforeEach(() => {
     'ui.lang.en': 'English',
     'ui.lang.es': 'Español',
     'ui.lang.pt': 'Português',
-    'ui.warning.title': 'Предупреждение',
-    'ui.warning.body_generic': 'Сцены насилия',
-    'ui.warning.body_schematic': 'Насилие схематично',
-    'ui.warning.details': 'Подробнее',
-    'ui.warning.dont_show': 'Больше не показывать',
     'ui.warning.continue': 'Продолжить',
-    'ui.disclaimer.title': 'Дисклеймер',
-    'ui.disclaimer.body': 'Имена изменены',
+    'ui.disclaimer.title': 'Основано на реальных событиях',
+    'ui.disclaimer.body': 'Сцены насилия.\n\nИмена изменены.',
+    'ui.disclaimer.body_age': 'Строго {rating}.',
+    'ui.disclaimer.body_age_schematic': 'Насилие схематично. 16+',
+    'ui.common.close': 'Закрыть',
     'ui.settings.language': 'Язык',
     'ui.settings.font_size': 'Размер шрифта',
     'ui.settings.text_speed': 'Скорость текста',
-    'ui.settings.auto_delay': 'Пауза авто',
     'ui.settings.music': 'Музыка',
     'ui.settings.sfx': 'Звуки',
     'ui.settings.voice': 'Озвучка',
@@ -98,19 +96,22 @@ beforeEach(() => {
     'ui.archive.new_item': 'Новый материал',
     'mini.doc.text': 'Текст бланка',
     'ui.quick.log': 'Журнал',
+    'ui.quick.notebook': 'Блокнот',
+    'ui.quick.notes': 'Заметки',
     'ui.common.back': 'Назад',
     'ui.common.ok': 'Понятно',
     'ui.common.yes': 'Да',
     'ui.common.no': 'Нет',
     'ui.archive.title': 'Архив дела',
     'ui.archive.empty': 'Пусто',
+    'ui.archive.count': '{n} из {total}',
     'ui.archive.real_fact': 'Реальный факт',
     'ui.save.empty': 'Пусто',
     'ui.save.slot': 'Слот',
     'ui.save.autosave': 'Автосохранение',
     'ui.save.overwrite_confirm': 'Перезаписать?',
   });
-  i18n.addStrings('en', { 'ui.menu.new_game': 'New game', 'ui.menu.badge_new': 'New', 'ui.menu.archive': 'Archive', 'ui.warning.title': 'Content warning' });
+  i18n.addStrings('en', { 'ui.menu.new_game': 'New game', 'ui.menu.badge_new': 'New', 'ui.menu.archive': 'Archive' });
   i18n.setLang('ru');
 });
 
@@ -205,6 +206,17 @@ describe('MenuScreen', () => {
     expect(s.el.querySelector('.vn-menu__lang-code')?.textContent).toBe('RU');
   });
 
+  it('эпизод переведён на один язык: глобуса в меню и выбора языка в настройках нет', () => {
+    i18n.setAvailable(['ru']);
+    try {
+      const s = open(new MenuScreen(episode, handlers()));
+      expect(s.el.querySelector('.vn-menu__icon.is-lang')).toBeNull();
+      expect(languageChips(() => undefined).querySelectorAll('button')).toHaveLength(1);
+    } finally {
+      i18n.setAvailable(['ru', 'en', 'es', 'pt']);
+    }
+  });
+
   it('архив и настройки — иконками', () => {
     const hd = handlers();
     const s = open(new MenuScreen(episode, hd));
@@ -250,58 +262,40 @@ describe('MenuScreen', () => {
   });
 });
 
-describe('WarningScreen: перед эпизодом', () => {
+describe('WarningScreen: «Основано на реальных событиях» перед эпизодом', () => {
   const make = (over: Partial<Settings> = {}) => {
     const settings: Settings = { ...DEFAULT_SETTINGS, ...over };
-    const hd = {
-      settings: () => settings,
-      onViolenceMode: vi.fn((m: Settings['violenceMode']) => void (settings.violenceMode = m)),
-      onContinue: vi.fn(),
-      onBack: vi.fn(),
-    };
+    const hd = { settings: () => settings, onContinue: vi.fn(), onBack: vi.fn() };
     return { s: open(new WarningScreen(episode, hd)), hd, settings };
   };
+  const paragraphs = (el: HTMLElement): string[] => [...el.querySelectorAll('.vn-warning__body p')].map((p) => p.textContent ?? '');
 
-  it('показывает заголовок и текст предупреждения (ui.warning.*), дисклеймер (ui.disclaimer.*) и рейтинг', () => {
+  it('заголовок, текст абзацами (пустая строка в локали — новый абзац) и возраст из эпизода', () => {
     const { s } = make();
-    expect(s.el.querySelector('.vn-warning__title')?.textContent).toBe('Предупреждение');
-    expect(s.el.querySelector('.vn-warning__body')?.textContent).toBe('Сцены насилия');
-    expect(s.el.querySelector('.vn-warning__disclaimer h3')?.textContent).toBe('Дисклеймер');
-    expect(s.el.querySelector('.vn-warning__disclaimer p')?.textContent).toBe('Имена изменены');
-    expect(s.el.querySelector('.vn-warning__rating')?.textContent).toBe('18+');
+    expect(s.el.querySelector('.vn-warning__title')?.textContent).toBe('Основано на реальных событиях');
+    expect(paragraphs(s.el)).toEqual(['Сцены насилия.', 'Имена изменены.', 'Строго 18+.']);
   });
 
-  it('режим показа насилия выбирается прямо здесь; текст предупреждения меняется под схематичный режим', () => {
-    const { s, hd } = make();
-    const radios = [...s.el.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
-    expect(radios.map((r) => [r.value, r.checked])).toEqual([['full', true], ['schematic', false]]);
-    radios[1]?.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(hd.onViolenceMode).toHaveBeenCalledWith('schematic');
-    s.render();
-    expect(s.el.querySelector('.vn-warning__body')?.textContent).toBe('Насилие схематично');
-  });
-
-  it('«Подробнее» сворачивает и разворачивает дисклеймер', () => {
+  it('логотип передачи справа вверху — если файл есть; нет файла — без картинки', () => {
+    const settings: Settings = { ...DEFAULT_SETTINGS };
+    const withLogo = open(new WarningScreen(episode, { settings: () => settings, onContinue: vi.fn(), onBack: vi.fn(), logo: './assets/common/ui/logo_kr.webp' }));
+    expect(withLogo.el.querySelector<HTMLImageElement>('img.vn-warning__logo')?.getAttribute('src')).toBe('./assets/common/ui/logo_kr.webp');
     const { s } = make();
-    expect(s.el.querySelector<HTMLElement>('.vn-warning__disclaimer')?.hidden).toBe(false);
-    s.el.querySelector<HTMLButtonElement>('.vn-linkbtn')?.click();
-    expect(s.el.querySelector<HTMLElement>('.vn-warning__disclaimer')?.hidden).toBe(true);
-    s.el.querySelector<HTMLButtonElement>('.vn-linkbtn')?.click();
-    expect(s.el.querySelector<HTMLElement>('.vn-warning__disclaimer')?.hidden).toBe(false);
+    expect(s.el.querySelector('img.vn-warning__logo')).toBeNull();
   });
 
-  it('«Продолжить» передаёт флаг «больше не показывать»; «Назад» возвращает в меню; Esc экран не закрывает', () => {
+  it('в схематичном режиме (сборка 16+) вместо «Строго 18+» — строка про схематичный показ', () => {
+    const { s } = make({ violenceMode: 'schematic' });
+    expect(paragraphs(s.el)).toEqual(['Сцены насилия.', 'Имена изменены.', 'Насилие схематично. 16+']);
+  });
+
+  it('по макету только «Назад» и «Продолжить»: ни переключателя режима, ни «Подробнее», ни «Больше не показывать»; Esc экран не закрывает', () => {
     const { s, hd } = make();
-    s.el.querySelector<HTMLButtonElement>('.vn-btn.is-primary')?.click();
-    expect(hd.onContinue).toHaveBeenLastCalledWith(false);
-    const box = s.el.querySelector<HTMLInputElement>('input[type="checkbox"]');
-    if (box) {
-      box.checked = true;
-      box.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    s.el.querySelector<HTMLButtonElement>('.vn-btn.is-primary')?.click();
-    expect(hd.onContinue).toHaveBeenLastCalledWith(true);
-    s.el.querySelector<HTMLButtonElement>('.vn-actions .vn-btn:not(.is-primary)')?.click();
+    expect(s.el.querySelectorAll('input')).toHaveLength(0);
+    expect(s.el.querySelectorAll('button')).toHaveLength(2);
+    s.el.querySelector<HTMLButtonElement>('.vn-warning__actions .vn-btn.is-primary')?.click();
+    expect(hd.onContinue).toHaveBeenCalledTimes(1);
+    s.el.querySelector<HTMLButtonElement>('.vn-warning__actions .vn-btn:not(.is-primary)')?.click();
     expect(hd.onBack).toHaveBeenCalledTimes(1);
     expect(s.dismissible).toBe(false);
   });
@@ -364,12 +358,12 @@ describe('SettingsScreen', () => {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   };
 
-  it('размер шрифта, скорость текста, пауза авто, громкости — ползунки с границами из настроек', () => {
+  it('размер шрифта, скорость текста, громкости — ползунки с границами из настроек; паузы авто-режима нет (2026-10-15)', () => {
     const { s } = make();
     const font = range(s.el, 'Размер шрифта');
     expect([Number(font.min), Number(font.max)]).toEqual([FONT_SCALE_RANGE.min, FONT_SCALE_RANGE.max]);
-    const delay = range(s.el, 'Пауза авто');
-    expect([Number(delay.min), Number(delay.max)]).toEqual([AUTO_DELAY_RANGE.min, AUTO_DELAY_RANGE.max]);
+    const labels = [...s.el.querySelectorAll('input[type="range"]')].map((i) => i.getAttribute('aria-label'));
+    expect(labels).toEqual(['Размер шрифта', 'Скорость текста', 'Музыка', 'Звуки', 'Громкость озвучки']);
     expect([Number(range(s.el, 'Скорость текста').min), Number(range(s.el, 'Скорость текста').max)]).toEqual([1, 5]);
     for (const label of ['Музыка', 'Звуки', 'Громкость озвучки']) expect(Number(range(s.el, label).max)).toBe(1);
   });
@@ -381,8 +375,6 @@ describe('SettingsScreen', () => {
     expect(s.el.querySelector('.vn-range__out')?.textContent).toBe('130%');
     slide(range(s.el, 'Скорость текста'), 5);
     expect(hd.onChange).toHaveBeenLastCalledWith({ textSpeed: 5 });
-    slide(range(s.el, 'Пауза авто'), 3000);
-    expect(hd.onChange).toHaveBeenLastCalledWith({ autoDelayMs: 3000 });
   });
 
   it('таймеры выборов и «только история» — флажки; режим насилия — переключатель', () => {
@@ -538,16 +530,36 @@ describe('SettingsScreen: эффекты камеры', () => {
   });
 });
 
-describe('LogScreen: журнал реплик и откат', () => {
+describe('Заметки: блокнот и журнал в одном окне (владелец 2026-10-15)', () => {
   const entries: LogEntry[] = [
     { kind: 'say', who: 'a', key: 'k.line', narrate_style: null },
     { kind: 'narrate', who: null, key: 'k.line', narrate_style: 'voiceover' },
     { kind: 'say', who: 'b', key: 'k.line', narrate_style: null },
   ];
+  const notes = (log: Partial<LogSource> = {}): ArchiveScreen =>
+    new ArchiveScreen(episode, () => [], vi.fn(), 'ui.quick.notes', {
+      path: true,
+      log: { entries: () => entries, maxRollback: () => 1, onRollback: vi.fn(), ...log },
+    });
+  const tabs = (el: HTMLElement): HTMLButtonElement[] => [...el.querySelectorAll<HTMLButtonElement>('.vn-notes__tabs .vn-chip')];
 
-  it('показывает имена говорящих (у рассказчика имени нет) и кнопку отката только там, куда можно вернуться', () => {
+  it('сегмент «Блокнот | Журнал» под шапкой; по умолчанию открыт блокнот; заголовок — «Заметки»', () => {
+    const s = open(notes());
+    expect(s.el.querySelector('.vn-archive__title')?.textContent).toBe('Заметки');
+    expect(tabs(s.el).map((b) => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([
+      ['Блокнот', 'true'],
+      ['Журнал', 'false'],
+    ]);
+    expect(s.el.querySelector('.vn-log__list')).toBeNull();
+    expect(s.sawNotebook).toBe(true);
+  });
+
+  it('вкладка «Журнал»: имена говорящих (у рассказчика имени нет), откат только туда, куда можно вернуться', () => {
     const onRollback = vi.fn();
-    const s = open(new LogScreen(episode, { entries: () => entries, maxRollback: () => 1, onRollback, onClose: vi.fn() }));
+    const s = notes({ onRollback });
+    s.tab = 'log';
+    open(s);
+    expect(s.sawNotebook).toBe(false); // штампы блокнота журнал не снимает
     const items = [...s.el.querySelectorAll('.vn-log__item')];
     expect(items).toHaveLength(3);
     expect(items.map((i) => i.querySelector('.vn-log__name')?.textContent ?? null)).toEqual(['Следователь Орлов', null, 'Свидетель']);
@@ -556,14 +568,19 @@ describe('LogScreen: журнал реплик и откат', () => {
     expect(items.map((i) => i.querySelector('.vn-log__back') !== null)).toEqual([false, true, false]);
     items[1]?.querySelector<HTMLButtonElement>('.vn-log__back')?.click();
     expect(onRollback).toHaveBeenCalledWith(1);
+    tabs(s.el)[0]?.click(); // обратно в блокнот
+    expect(s.el.querySelector('.vn-log__list')).toBeNull();
+    expect(tabs(s.el)[0]?.getAttribute('aria-pressed')).toBe('true');
+    expect(s.sawNotebook).toBe(true);
   });
 
-  it('пустой журнал — заглушка; «Назад» закрывает', () => {
-    const onClose = vi.fn();
-    const s = open(new LogScreen(episode, { entries: () => [], maxRollback: () => 0, onRollback: vi.fn(), onClose }));
-    expect(s.el.querySelector('.vn-muted')?.textContent).toBe('Пусто');
-    s.el.querySelector<HTMLButtonElement>('.vn-actions .vn-btn')?.click();
-    expect(onClose).toHaveBeenCalledTimes(1);
+  it('пустой журнал — заглушка; в архиве меню (без журнала) сегмента нет', () => {
+    const s = notes({ entries: () => [] });
+    s.tab = 'log';
+    open(s);
+    expect(s.el.querySelector('.vn-archive__empty')?.textContent).toBe('Пусто');
+    const menu = open(new ArchiveScreen(episode, () => [], vi.fn()));
+    expect(menu.el.querySelector('.vn-notes__tabs')).toBeNull();
   });
 });
 
@@ -664,12 +681,109 @@ describe('ArchiveScreen и ErrorScreen', () => {
     const s = open(new ArchiveScreen(ep, () => unlocked, vi.fn()));
     expect(texts(s.el, '.vn-archive__item h3')).toEqual(['Протокол осмотра']);
     expect(s.el.querySelector('.vn-badge')?.textContent).toBe('Реальный факт');
+    expect(s.el.querySelector('.vn-archive__count')?.textContent).toBe('1 из 2'); // в меню — счёт за все партии
     unlocked.push('arc_y');
     s.render();
     expect(texts(s.el, '.vn-archive__item h3')).toEqual(['Протокол осмотра', 'Справка']);
+    expect(s.el.querySelector('.vn-archive__count')?.textContent).toBe('2 из 2');
     unlocked.length = 0;
     s.render();
-    expect(s.el.querySelector('.vn-muted')?.textContent).toBe('Пусто');
+    expect(s.el.querySelector('.vn-archive__empty')?.textContent).toBe('Пусто');
+  });
+
+  it('блокнот: бумажки на странице, бумага дела — сканом под скрепкой, касание открывает её; новое — под штампом', async () => {
+    const ep = {
+      ...episode,
+      archive_items: [
+        { id: 'arc_x', kind: 'fact' as const, title_key: 'mini.arc_x', text_key: 'mini.doc.text' },
+        { id: 'arc_y', kind: 'document' as const, title_key: 'mini.arc_y', text_key: 'mini.doc.text', asset: 'doc_y' },
+      ],
+    };
+    let loaded: (url: string | null) => void = () => undefined;
+    const art = vi.fn(() => ({ url: null, ready: new Promise<string | null>((r) => (loaded = r)) }));
+    const opened: string[] = [];
+    const onDone = vi.fn();
+    const s = open(
+      new ArchiveScreen(ep, () => ['arc_x', 'arc_y'], onDone, 'ui.archive.title', {
+        documentArt: art,
+        onOpenDocument: (item) => opened.push(item.id),
+        isNew: (id) => id === 'arc_y',
+      }),
+    );
+    expect(s.el.querySelector('.vn-archive__title')?.firstChild?.textContent).toBe('Архив дела');
+    expect(s.el.querySelector('.vn-archive__title .vn-archive__count')?.textContent).toBe('2 из 2');
+    const fact = s.el.querySelector<HTMLElement>('.vn-archive__item.is-fact')!;
+    expect(fact.querySelector('h3')?.textContent).toBe('Протокол осмотра');
+    expect(fact.querySelector('p')?.textContent).toBe('Текст бланка');
+    expect(fact.querySelector('.vn-archive__stamp')).toBeNull();
+    // скан: кнопка с картинкой и скрепкой, полного текста бумаги в блокноте нет
+    const doc = s.el.querySelector<HTMLElement>('.vn-archive__item.is-document')!;
+    expect(doc.classList.contains('has-scan')).toBe(true);
+    expect(art).toHaveBeenCalledWith('doc_y');
+    expect(doc.querySelector('p')).toBeNull();
+    const btn = doc.querySelector<HTMLButtonElement>('button.vn-archive__open')!;
+    expect(btn.getAttribute('aria-label')).toBe('Справка');
+    expect(btn.querySelector('.vn-archive__clip')).not.toBeNull();
+    const img = btn.querySelector<HTMLImageElement>('img.vn-archive__scan')!;
+    expect(img.getAttribute('src')).toBeNull(); // скан ещё грузится
+    loaded('./assets/doc_y.webp');
+    await Promise.resolve();
+    expect(img.getAttribute('src')).toBe('./assets/doc_y.webp');
+    expect(doc.querySelector('.vn-archive__stamp')?.textContent).toBe('Новый материал');
+    btn.click();
+    expect(opened).toEqual(['arc_y']);
+    // посмотрел бумагу — штамп с неё снят сразу (владелец 2026-10-14)
+    expect(doc.querySelector('.vn-archive__stamp')).toBeNull();
+    s.el.querySelector<HTMLButtonElement>('.vn-document__close')?.click();
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('ход следствия: в партии записи в порядке находок, с номерами и слоем стрелок; в меню — порядок эпизода, без них', () => {
+    const ep = {
+      ...episode,
+      archive_items: [
+        { id: 'arc_x', kind: 'fact' as const, title_key: 'mini.arc_x' },
+        { id: 'arc_y', kind: 'photo' as const, title_key: 'mini.arc_y', text_key: 'mini.doc.text', asset: 'doc_p' },
+      ],
+    };
+    const art = vi.fn(() => ({ url: './assets/doc_p.webp', ready: Promise.resolve('./assets/doc_p.webp') }));
+    const found = ['arc_y', 'arc_x', 'arc_y']; // порядок находок партии (повтор не дублирует запись)
+    const game = open(new ArchiveScreen(ep, () => found, vi.fn(), 'ui.archive.title', { path: true, documentArt: art }));
+    expect(texts(game.el, '.vn-archive__item h3')).toEqual(['Справка', 'Протокол осмотра']);
+    expect(texts(game.el, '.vn-archive__num')).toEqual(['1', '2']);
+    expect(game.el.querySelector('.vn-archive__board svg.vn-archive__lines')).not.toBeNull();
+    expect(game.el.querySelector('.vn-archive__count')).toBeNull(); // блокнот партии — без общего счёта (владелец 2026-10-15)
+    // фото — отпечатком, не кнопкой: окно документа для снимка не нужно
+    const photo = game.el.querySelector<HTMLElement>('.vn-archive__item.is-photo')!;
+    expect(photo.classList.contains('has-print')).toBe(true);
+    expect(photo.querySelector('img.vn-archive__print')?.getAttribute('src')).toBe('./assets/doc_p.webp');
+    expect(photo.querySelector('button')).toBeNull();
+    const menu = open(new ArchiveScreen(ep, () => found, vi.fn()));
+    expect(texts(menu.el, '.vn-archive__item h3')).toEqual(['Протокол осмотра', 'Справка']);
+    expect(menu.el.querySelector('.vn-archive__num')).toBeNull();
+    expect(menu.el.querySelector('.vn-archive__lines')).toBeNull();
+  });
+
+  it('блокнот: наклон и бумага — от id записи (новая запись не перекладывает старые); без окна документа бумага — текстом', () => {
+    const ep = {
+      ...episode,
+      archive_items: [
+        { id: 'arc_x', kind: 'fact' as const, title_key: 'mini.arc_x' },
+        { id: 'arc_y', kind: 'document' as const, title_key: 'mini.arc_y', text_key: 'mini.doc.text', asset: 'doc_y' },
+      ],
+    };
+    const unlocked = ['arc_y'];
+    const s = open(new ArchiveScreen(ep, () => unlocked, vi.fn()));
+    const look = (id: string): string => {
+      const li = [...s.el.querySelectorAll<HTMLElement>('.vn-archive__item')].find((x) => x.querySelector('h3')?.textContent === id)!;
+      return `${li.style.getPropertyValue('--tilt')} ${li.dataset.paper}`;
+    };
+    const before = look('Справка');
+    unlocked.unshift('arc_x');
+    s.render();
+    expect(look('Справка')).toBe(before);
+    expect(s.el.querySelector('.vn-archive__item.is-document p')?.textContent).toBe('Текст бланка');
+    expect(s.el.querySelector('.vn-archive__open')).toBeNull();
   });
 
   it('экран ошибки показывает сообщение и закрывается кнопкой', () => {
@@ -717,13 +831,69 @@ describe('DocumentScreen: бланк с картинкой', () => {
     expect(paper(s.el).style.getPropertyValue('--doc-img')).toBe('');
   });
 
-  it('setImage до отрисовки ничего не ломает; «Понятно» закрывает; новый материал архива помечается', () => {
+  it('setImage до отрисовки ничего не ломает; шапка по макету — название, метка «новый материал», крестик закрывает', () => {
     const onDone = vi.fn();
     const fresh = new DocumentScreen(episode, 'doc_x', null, null, onDone);
     expect(() => fresh.setImage('./a.webp')).not.toThrow();
     const { s, onDone: done } = make(null, 'mini.doc.text', 'arc_x');
-    expect(s.el.querySelector('.vn-badge')?.textContent).toBe('Новый материал');
-    s.el.querySelector<HTMLButtonElement>('.vn-actions .vn-btn')?.click();
+    expect(s.el.querySelector('.vn-document__head .vn-document__tag')?.textContent).toBe('Новый материал');
+    expect(s.el.querySelector('.vn-document__head .vn-document__title')).not.toBeNull();
+    expect(s.el.querySelector('.vn-actions')).toBeNull();
+    const close = s.el.querySelector<HTMLButtonElement>('.vn-document__close');
+    expect(close?.getAttribute('aria-label')).toBe('Закрыть');
+    expect(close?.querySelector('svg.vn-ico--close')).not.toBeNull();
+    close?.click();
     expect(done).toHaveBeenCalledTimes(1);
+    expect(s.dismissible).toBe(true); // Esc закрывает (DomUI продолжает партию через onClose)
+  });
+
+  it('бумага, открытая из блокнота, — с названием, но без метки «новый материал»', () => {
+    const s = open(new DocumentScreen(episode, 'doc_x', 'mini.doc.text', 'arc_x', vi.fn(), null, false, false));
+    expect(s.el.querySelector('.vn-document__title')?.textContent).toBe('Протокол осмотра');
+    expect(s.el.querySelector('.vn-document__tag')).toBeNull();
+  });
+
+  it('настоящая бумага: увеличенный лист двигается мышью с зажатой кнопкой; перетаскивание не меняет масштаб, палец — прокрутка браузера', () => {
+    const s = open(new DocumentScreen(episode, 'doc_x', 'mini.doc.text', null, vi.fn(), './a.webp', true));
+    const sheet = s.el.querySelector<HTMLElement>('.vn-document__sheet')!;
+    const scroll = { left: 0, top: 0 };
+    Object.defineProperty(sheet, 'scrollLeft', { get: () => scroll.left, set: (v: number) => void (scroll.left = v), configurable: true });
+    Object.defineProperty(sheet, 'scrollTop', { get: () => scroll.top, set: (v: number) => void (scroll.top = v), configurable: true });
+    const ev = (type: string, x: number, y: number, pointerType = 'mouse'): PointerEvent => {
+      const e = new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true, cancelable: true }) as PointerEvent;
+      Object.defineProperty(e, 'pointerId', { value: 1 });
+      Object.defineProperty(e, 'pointerType', { value: pointerType });
+      return e;
+    };
+    // не увеличен — перетаскивания нет, клик увеличивает
+    sheet.dispatchEvent(ev('pointerdown', 100, 100));
+    sheet.dispatchEvent(ev('pointermove', 50, 40));
+    expect(scroll).toEqual({ left: 0, top: 0 });
+    sheet.dispatchEvent(ev('pointerup', 50, 40));
+    sheet.click();
+    expect(sheet.classList.contains('is-zoomed')).toBe(true);
+    // увеличен — тянем мышью: лист едет за рукой
+    scroll.left = 200;
+    scroll.top = 100;
+    sheet.dispatchEvent(ev('pointerdown', 300, 300));
+    sheet.dispatchEvent(ev('pointermove', 260, 250));
+    expect(sheet.classList.contains('is-dragging')).toBe(true);
+    expect(scroll).toEqual({ left: 240, top: 150 });
+    sheet.dispatchEvent(ev('pointerup', 260, 250));
+    sheet.click(); // клик после перетаскивания — не клик
+    expect(sheet.classList.contains('is-zoomed')).toBe(true);
+    expect(sheet.classList.contains('is-dragging')).toBe(false);
+    // дрожь руки меньше 4 px — это клик: масштаб назад
+    sheet.dispatchEvent(ev('pointerdown', 300, 300));
+    sheet.dispatchEvent(ev('pointermove', 302, 301));
+    sheet.dispatchEvent(ev('pointerup', 302, 301));
+    expect(scroll).toEqual({ left: 240, top: 150 });
+    sheet.click();
+    expect(sheet.classList.contains('is-zoomed')).toBe(false);
+    // палец: скрипт не двигает, листает сам браузер (overflow: auto)
+    sheet.click();
+    sheet.dispatchEvent(ev('pointerdown', 300, 300, 'touch'));
+    sheet.dispatchEvent(ev('pointermove', 200, 200, 'touch'));
+    expect(scroll).toEqual({ left: 240, top: 150 });
   });
 });

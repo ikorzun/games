@@ -66,7 +66,12 @@ export interface VnDebugApi {
     degraded: boolean;
     running: boolean;
     rec: boolean;
+    /** Трансформация камеры последнего кадра (запись CSS; '' — эффектов нет). */
     transform: string;
+    /** Камкордер рисует шейдер видеокарты (PixiJS), а не CSS-трансформация и холст помех. */
+    gpu: boolean;
+    /** Сколько кадров камкордер показал с запуска страницы. */
+    frames: number;
     bursts: number[];
   };
   /**
@@ -139,7 +144,6 @@ export function installDebug(app: App): VnDebugApi {
     camera: (force) => {
       const c = app.stage.camcorder;
       if (force) c.force(force);
-      const hand = app.stage.el.querySelector<HTMLElement>('.vn-stage__hand');
       return {
         setting: app.settings.cameraFx,
         effective: c.effectiveLevel,
@@ -147,7 +151,9 @@ export function installDebug(app: App): VnDebugApi {
         degraded: c.degradedByPerformance,
         running: c.running,
         rec: app.stage.el.classList.contains('cam-rec'),
-        transform: hand?.style.transform ?? '',
+        transform: c.transformText,
+        gpu: c.gpuActive,
+        frames: c.framesPresented,
         bursts: [...c.scheduler.burstLog],
       };
     },

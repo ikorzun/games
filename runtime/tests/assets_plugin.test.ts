@@ -53,9 +53,10 @@ describe('collectAssets', () => {
     expect(collectAssets(join(tmpdir(), 'vn-no-such-assets'))).toEqual([]);
   });
 
-  it('webp, png, mp3 — и m4a (музыка эпизода) — входят в список расширений', () => {
-    for (const ext of ['.webp', '.png', '.mp3', '.m4a']) expect(ASSET_EXTENSIONS).toContain(ext);
+  it('webp, png, mp3, m4a (музыка эпизода) и mp4 (ролики кадров) — входят в список расширений', () => {
+    for (const ext of ['.webp', '.png', '.mp3', '.m4a', '.mp4']) expect(ASSET_EXTENSIONS).toContain(ext);
     expect(MIME['.m4a']).toBe('audio/mp4');
+    expect(MIME['.mp4']).toBe('video/mp4'); // ролики кадров «Воспоминаний»
     expect(MIME['.mp3']).toBe('audio/mpeg');
     expect(MIME['.webp']).toBe('image/webp');
   });

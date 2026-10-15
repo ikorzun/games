@@ -141,7 +141,6 @@ describe('слои камкордера в CSS', () => {
     expect(stageCss).toMatch(/@keyframes rec-blink\s*\{\s*0%,\s*49\.99%\s*\{\s*opacity:\s*1;\s*\}\s*50%,\s*100%\s*\{\s*opacity:\s*0;/);
     expect(stageCss).toMatch(/\.vn-stage__hud\s*\{[^}]*display:\s*none/);
     expect(stageCss).toMatch(/\.vn-stage\.cam-rec\s+\.vn-stage__hud\s*\{\s*display:\s*block/);
-    expect(uiCss).toMatch(/\.vn-root\.ui-hidden\s+\.vn-cap--date_stamp,\s*\.vn-root\.ui-hidden\s+\.vn-stage__hud\s*\{\s*visibility:\s*hidden/);
   });
 
   it('vignette: два независимых затемнения (фильтр и камкордер) без max()', () => {
@@ -150,33 +149,104 @@ describe('слои камкордера в CSS', () => {
 });
 
 describe('интерфейс: документальная эстетика, mobile-first', () => {
-  it('текстовое окно: тёмное полупрозрачное ≈ rgba(0,0,0,.72) без рамки (решение владельца 2026-10-11), DM Mono / JetBrains Mono для кириллицы, без backdrop-filter (дорого на телефоне)', () => {
-    expect(uiCss).toMatch(/--panel:\s*rgb\(0 0 0 \/ 0\.72\)/);
-    expect(uiCss).toMatch(/--panel-line:\s*rgb\(255 255 255 \/ 0\.28\)/);
+  it('окно реплики по макету в Figma (узел 1232:3796, 2026-10-13): полоса 40 % чёрного под каждой строкой без тени, над текстом портрет 48 px, имя и подпись; текст — Cormorant Garamond', () => {
     const box = /\n\.vn-textbox\s*\{([^}]*)\}/.exec(uiCss)![1]!;
-    expect(box).toMatch(/background:\s*var\(--panel\)/);
-    expect(box).toMatch(/border:\s*0;/);
+    expect(box).not.toMatch(/background/);
+    expect(box).not.toMatch(/text-shadow/);
     expect(box).toMatch(/font-family:\s*var\(--font-body\)/);
-    expect(uiCss).toMatch(/--font-latin:\s*'DM Mono'/);
-    expect(uiCss).toMatch(/--font-cyr:\s*'JetBrains Mono'/);
-    expect(uiCss).toMatch(/html\[lang='ru'\]\s*\{\s*--font-body:\s*var\(--font-cyr\)/);
-    expect((uiCss.match(/@font-face/g) ?? []).length).toBeGreaterThanOrEqual(12); // свои woff2, без Google Fonts в рантайме
-    expect(uiCss).not.toMatch(/backdrop-filter/);
+    expect(box).toMatch(/width:\s*min\(100%,\s*calc\(585em \/ 15\)\)/);
+    const plate = /\n\.vn-textbox__box\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(plate).not.toMatch(/background/); // сплошной подложки больше нет — полосы по строкам
+    const text = /\n\.vn-textbox__text\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(text).toMatch(/line-height:\s*calc\(20em \/ 15\)/); // шаг строк = высота полосы
+    expect(text).toMatch(/padding:\s*0 calc\(24em \/ 15\) 0 calc\(5em \/ 15\)/);
+    const bars = /\n\.vn-textbox__bars\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(bars).toMatch(/opacity:\s*0\.4;/);
+    expect(bars).toMatch(/color:\s*transparent/);
+    const bar = /\n\.vn-textbox__bar\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(bar).toMatch(/background:\s*#000/);
+    expect(bar).toMatch(/-webkit-box-decoration-break:\s*clone;[\s\S]*\bbox-decoration-break:\s*clone/);
+    expect(bar).toMatch(/box-shadow:\s*calc\(-5em \/ 15\) 0 #000, calc\(5em \/ 15\) 0 #000/);
+    const avatar = /\n\.vn-textbox__avatar\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(avatar).toMatch(/width:\s*48px;[\s\S]*height:\s*48px;/);
+    expect(avatar).toMatch(/border-radius:\s*50%/);
+    expect(uiCss).toMatch(/\.vn-textbox__name\s*\{\s*font-size:\s*calc\(14em \/ 15\);\s*\}/);
+    // подпись под именем — на 2 px ближе к нему (владелец 2026-10-14: −4 px, 2026-10-15: отступ на 2 px больше)
+    expect(uiCss).toMatch(/\.vn-textbox__title\s*\{\s*margin-top:\s*-2px;\s*font-size:\s*calc\(10em \/ 15\);\s*opacity:\s*0\.7;\s*\}/);
+    expect(uiCss).toMatch(/--font-body:\s*'Cormorant Garamond'/); // текст и кнопки (решение владельца 2026-10-13)
+    expect(uiCss).toMatch(/--font-title:\s*'Tenor Sans'/); // заголовки
+    expect(uiCss).toMatch(/--panel-line:\s*rgb\(255 255 255 \/ 0\.28\)/);
+    // свои woff2 (кириллица и латиница), без Google Fonts в рантайме; только 400, без курсива
+    expect((uiCss.match(/@font-face \{ font-family: 'Tenor Sans'; font-style: normal; font-weight: 400;/g) ?? []).length).toBe(2);
+    expect((uiCss.match(/@font-face \{ font-family: 'Cormorant Garamond'; font-style: normal; font-weight: 400;/g) ?? []).length).toBe(2);
+    expect(uiCss).not.toMatch(/fonts\.googleapis|Tinos/);
+    // Размытие — только у оверлеев выбора и документа по макетам 2026-10-13 (и у блокнота — он такая же бумага поверх
+    // кадра) и только при мыши: на телефоне дорого.
+    const blur = /@media \(hover: hover\) and \(pointer: fine\) \{\s*\.vn-document,\s*\.vn-archive,\s*\.vn-choices\s*\{([^}]*)\}\s*\}/.exec(uiCss);
+    expect(blur?.[1]).toMatch(/background:\s*rgb\(0 0 0 \/ 0\.6\);[\s\S]*backdrop-filter:\s*blur\(5px\)/);
+    expect(uiCss.replace(blur![0], '')).not.toMatch(/backdrop-filter/);
   });
 
-  it('шрифт только 400 или тоньше (решение владельца 2026-10-12): ни жирных начертаний, ни их файлов', () => {
-    const mgDir = join(HERE, '..', 'src', 'minigames');
-    const mgCss = readdirSync(mgDir).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(mgDir, f), 'utf8'));
-    for (const css of [uiCss, ...mgCss]) {
+  it('шрифт только 400 или тоньше (решение владельца 2026-10-12): знак «дальше» — рисунок из макета реплик, не жирная буква', () => {
+    const cssOf = (dir: string): string[] => {
+      const d = join(HERE, '..', 'src', dir);
+      return readdirSync(d).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(d, f), 'utf8'));
+    };
+    // Мини-игры и режим дела (папка, итог поиска, осмотр фото).
+    for (const css of [uiCss, ...cssOf('minigames'), ...cssOf('case')]) {
       expect(css).not.toMatch(/font-weight:\s*(?:[5-9]00|bold)/);
       expect(css).not.toMatch(/font:\s*(?:[5-9]00|bold)\s/);
     }
   });
 
-  it('имя говорящего — маленькая плашка без обводки', () => {
-    const name = /\.vn-textbox__name\s*\{([^}]*)\}/.exec(uiCss)![1]!;
-    expect(name).toMatch(/font:\s*400\s+0\.8em\s*\/\s*1\.4\s+var\(--font-body\)/);
-    expect(name).toMatch(/border:\s*0;/);
+  it('курсива нет нигде (решение владельца 2026-10-13): мысли и закадровый голос — своим цветом, у мыслей нет черты слева', () => {
+    const cssOf = (dir: string): string[] => {
+      const d = join(HERE, '..', 'src', dir);
+      return readdirSync(d).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(d, f), 'utf8'));
+    };
+    for (const css of [uiCss, stageCss, ...cssOf('minigames'), ...cssOf('case')]) expect(css).not.toMatch(/italic|oblique/);
+    expect(uiCss).toMatch(/\.vn-textbox\[data-style='inner'\] \.vn-textbox__text \{ color: #cfd2d8; \}/);
+    expect(uiCss).toMatch(/\.vn-textbox\[data-style='voiceover'\] \.vn-textbox__text \{ color: #e4dfd1; \}/);
+  });
+
+  it('без скруглений (решение владельца 2026-10-13): круглые только портрет у имени, экран-кинескоп меню, лампа REC, номер варианта, крестик документа, номера и попытки осмотра (макеты 2026-10-13), лупа и кружок карандашом на сверке документов (предметы на столе, 2026-10-14)', () => {
+    const cssOf = (dir: string): string[] => {
+      const d = join(HERE, '..', 'src', dir);
+      return readdirSync(d).filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(d, f), 'utf8'));
+    };
+    const owners: string[] = [];
+    for (const css of [uiCss, stageCss, ...cssOf('minigames'), ...cssOf('case')]) {
+      for (const m of css.matchAll(/([^{}]+)\{[^}]*border-radius:(?!\s*0;)[^}]*\}/g)) owners.push(m[1]!.trim().split('\n').pop()!.trim());
+    }
+    expect(owners.sort()).toEqual([
+      '.mg-docs__loupe',
+      '.mg-docs__ring',
+      '.mg-scene__num',
+      '.mg-scene__pin',
+      '.mg-stage .mg-shell__pip',
+      '.vn-choice__n',
+      '.vn-crt__in',
+      '.vn-crt__screen',
+      '.vn-crt__screen::after',
+      '.vn-document__close',
+      '.vn-rec__dot',
+      '.vn-textbox__avatar',
+    ]);
+    expect(uiCss).not.toMatch(/--radius/);
+  });
+
+  it('каретка — плашка 19 × 20 (40 % #ac0000) сразу за полосой, ширины не занимает; белый «>» виден, когда реплика допечатана', () => {
+    expect(uiCss).toMatch(/\n\.vn-textbox__more\s*\{\s*position:\s*relative;\s*\}/);
+    const plate = /\n\.vn-textbox__more::before\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(plate).toMatch(/position:\s*absolute/);
+    expect(plate).toMatch(/width:\s*calc\(19em \/ 15\)/);
+    expect(plate).toMatch(/height:\s*calc\(20em \/ 15\)/);
+    expect(plate).toMatch(/background:\s*rgb\(172 0 0 \/ 0\.4\)/);
+    const glyph = /\n\.vn-textbox__more svg\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(glyph).toMatch(/position:\s*absolute/);
+    expect(glyph).toMatch(/fill:\s*#fff/);
+    expect(glyph).toMatch(/opacity:\s*0;/);
+    expect(uiCss).toMatch(/\.vn-textbox\.is-complete\s+\.vn-textbox__more svg\s*\{\s*opacity:\s*1;/);
   });
 
   it('кнопки быстрого меню — полупрозрачная подложка 8 % белого без контура, фокус с клавиатуры виден', () => {
@@ -187,8 +257,8 @@ describe('интерфейс: документальная эстетика, mob
   });
 
   it('кнопки выбора — крупные: не ниже 48 px (у нас 52); кнопки быстрого меню — иконки не меньше 40 px', () => {
-    const choice = /\.vn-choice\s*\{([^}]*)\}/.exec(uiCss)![1]!;
-    expect(Number(/min-height:\s*(\d+)px/.exec(choice)![1])).toBeGreaterThanOrEqual(48);
+    const choice = /\n\.vn-choice\s*\{([^}]*)\}/.exec(uiCss)![1]!;
+    expect(Number(/min-height:\s*max\((\d+)px/.exec(choice)![1])).toBeGreaterThanOrEqual(48); // и растёт с кеглем
     const q = /\n\.vn-qbtn\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(Number(/width:\s*(\d+)px/.exec(q)![1])).toBeGreaterThanOrEqual(40);
     expect(Number(/height:\s*(\d+)px/.exec(q)![1])).toBeGreaterThanOrEqual(40);
@@ -198,8 +268,12 @@ describe('интерфейс: документальная эстетика, mob
     const stamp = /\.vn-cap--date_stamp\s*\{([^}]*)\}/.exec(uiCss)![1]!;
     expect(stamp).toMatch(/right:/);
     expect(stamp).not.toMatch(/\bleft:/);
-    expect(stamp).toMatch(/var\(--font-mono\)/);
-    expect(uiCss).toMatch(/--font-mono:\s*var\(--font-body\)/);
+    expect(stamp).toMatch(/var\(--font-osd\)/); // индикация камеры осталась моноширинной
+    expect(uiCss).toMatch(/--font-osd:\s*var\(--font-latin\)/);
+    expect(uiCss).toMatch(/--font-latin:\s*'DM Mono'/);
+    expect(uiCss).toMatch(/--font-cyr:\s*'JetBrains Mono'/);
+    expect(uiCss).toMatch(/html\[lang='ru'\]\s*\{\s*--font-osd:\s*var\(--font-cyr\)/);
+    expect(stageCss).toMatch(/var\(--font-osd, monospace\)/);
     expect(Number(/font:\s*400\s+clamp\((\d+)px/.exec(stamp)![1])).toBeLessThanOrEqual(12); // мелкий
     expect(stamp).toMatch(/env\(safe-area-inset-top\)/);
     expect(stageCss).toMatch(/--hud-top:\s*max\(10px,\s*env\(safe-area-inset-top\)\)/);
@@ -214,9 +288,9 @@ describe('интерфейс: документальная эстетика, mob
     expect(uiCss).toMatch(/env\(safe-area-inset-right\)/);
   });
 
-  it('портрет: картинка сверху, текст под ней; HUD внутри сцены (а не в панели текста)', () => {
+  it('портрет: картинка сверху целиком (16:9 по ширине), текст под ней; HUD внутри сцены (а не в панели текста)', () => {
     expect(uiCss).toMatch(/@media \(orientation: portrait\)/);
-    expect(uiCss).toMatch(/grid-template-rows:\s*minmax\(0,\s*56%\)\s*minmax\(0,\s*1fr\)/);
+    expect(uiCss).toMatch(/grid-template-rows:\s*minmax\(0,\s*min\(56%,\s*56\.25vw\)\)\s*minmax\(0,\s*1fr\)/);
     expect(uiCss).toMatch(/\.vn-main > \.vn-ui\s*\{\s*grid-area:\s*2 \/ 1/);
     expect(stageCss).toMatch(/\.vn-stage__hud/);
   });

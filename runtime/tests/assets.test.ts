@@ -139,6 +139,18 @@ describe('AssetCatalog: фоны, CG, документы, звук', () => {
     expect(cat.audioUrl('nope')).toBeNull();
   });
 
+  it('портрет для окна реплики: cast.portrait → адрес; без портрета и для неизвестного — null; say грузит портрет с блоком', () => {
+    const ep = assetEpisode();
+    ep.cast = ep.cast.map((c) => (c.id === 'murashov' ? { ...c, portrait: 'assets/ep01/portraits/murashov.webp' } : c));
+    ep.scenes.s1!.steps = [{ do: 'say', who: 'murashov', key: 'k' }, { do: 'say', who: 'zoya', key: 'k2' }, { do: 'jump', scene: 's2' }];
+    const c = new AssetCatalog(ep, BASE);
+    expect(c.portraitUrl('murashov')).toBe('./assets/ep01/portraits/murashov.webp');
+    expect(c.portraitUrl('zoya')).toBeNull();
+    expect(c.portraitUrl('nobody')).toBeNull();
+    const flat = collectBlockAssets(ep, c, 'b1').images.map((x) => x.urls.join(' > '));
+    expect(flat).toContain('./assets/ep01/portraits/murashov.webp');
+  });
+
   it('bgChain: один файл; неизвестный фон — null (плейсхолдер); чёрный кадр — сплошной цвет без запросов', () => {
     expect(cat.bgChain('bg_yard')).toEqual({ urls: ['./assets/ep01/bg/yard.webp'], silhouetteFirst: false });
     expect(cat.bgChain('bg_none')).toBeNull();
@@ -639,7 +651,11 @@ describe('AppAssets: бланки документов, картинки инт�
     expect(first.url).toBeNull(); // ещё не загружен
     expect(await first.ready).toBe('./assets/ep01/docs/paper.webp');
     expect(assets.document('doc_paper').url).toBe('./assets/ep01/docs/paper.webp');
-    expect(assets.document('doc_unknown')).toEqual({ url: null, ready: expect.any(Promise) });
+    expect(assets.document('doc_unknown')).toEqual({ url: null, ready: expect.any(Promise), textInImage: false });
+    expect(assets.document('doc_paper').textInImage).toBe(false); // бланк: текст накладывается слоем
+    const baked = assetEpisode();
+    baked.assets.documents = baked.assets.documents!.map((d) => ({ ...d, localized: true }));
+    expect(createAppAssets(baked, BASE, null, store).document('doc_paper').textInImage).toBe(true); // текст в самой картинке
     expect(await assets.document('doc_unknown').ready).toBeNull();
     // файл описан, но не загрузился
     const ep2 = assetEpisode();

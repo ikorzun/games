@@ -63,14 +63,44 @@ function run(interp: Interpreter): { events: EngineEvent[]; lineShots: Array<str
 const shotEvents = (events: EngineEvent[]): Array<string | null> => events.filter((e) => e.t === 'shot').map((e) => (e as { shot: string | null }).shot);
 
 describe('сцена с coverage', () => {
+  it('у первой реплики явный кадр (сцена «на кадре через плечо») — вход сразу на нём: общий план не мелькает', () => {
+    const steps: Step[] = [
+      { do: 'show', who: 'a', position: 'left' },
+      { do: 'show', who: 'b', position: 'right' },
+      { do: 'say', who: 'b', key: 'k.1', shot: 'ots_a_b' },
+      { do: 'say', who: 'a', key: 'k.2', shot: 'ots_a_b' },
+      { do: 'end', ending: 'e_main' },
+    ];
+    const { interp } = make(steps);
+    const { events } = run(interp);
+    const scene = events.find((e) => e.t === 'scene');
+    expect(scene && scene.t === 'scene' ? scene.view.shot : null).toBe('ots_a_b');
+    expect(shotEvents(events)).toEqual([]); // ни одной склейки: на общем плане сцена не стояла
+  });
+
+  it('вход: show с ложным when в состав не входит; общий план с ним не годится — кадр через плечо', () => {
+    const shots = [sh('wide_abc', 'wide', ['a', 'b', 'c']), sh('ots_a_b', 'ots', ['a', 'b'], { from: 'a', focus: 'b' })];
+    const steps: Step[] = [
+      { do: 'show', who: 'a', position: 'left' },
+      { do: 'show', who: 'b', position: 'right' },
+      { do: 'show', who: 'c', position: 'center', when: 'false' }, // его в этой ветке нет
+      { do: 'say', who: 'a', key: 'k.1' },
+      { do: 'end', ending: 'e_main' },
+    ];
+    const interp = new Interpreter(miniEpisode({ s1: { coverage: SET, steps } }, { shots, pov: 'a' }), { warn: () => undefined });
+    interp.start();
+    const scene = run(interp).events.find((e) => e.t === 'scene');
+    expect(scene && scene.t === 'scene' ? scene.view.shot : null).toBe('ots_a_b');
+  });
+
   it('вход — wide с составом сцены в самом событии scene; реплики режутся по грамматике; события shot идут перед speaker', () => {
     const { interp } = make();
     const { events, lineShots } = run(interp);
     const scene = events.find((e) => e.t === 'scene');
     expect(scene && scene.t === 'scene' ? scene.view.shot : null).toBe('wide_ab');
     expect(scene && scene.t === 'scene' ? scene.view.coverage : null).toBe(SET);
-    // a: medium (ots не от кого); b: ots от a; b tense: крупный план; рассказчик: wide; после ухода b — a один: wide не годится → спрайты; реплика a → крупный план a
-    expect(lineShots).toEqual(['medium_ab', 'ots_a_b', 'close_b_tense', 'wide_ab', 'close_a_neutral']);
+    // a: общий план входа держится на первой реплике; b: ots от a; b tense: крупный план; рассказчик: wide; после ухода b — a один: wide не годится → спрайты; реплика a → крупный план a
+    expect(lineShots).toEqual(['wide_ab', 'ots_a_b', 'close_b_tense', 'wide_ab', 'close_a_neutral']);
     const order = events.map((e) => e.t);
     const iShot = order.indexOf('shot');
     expect(iShot).toBeGreaterThan(-1);
@@ -78,7 +108,26 @@ describe('сцена с coverage', () => {
     // hide b: кадр с b сменился до события hide
     const iHide = order.indexOf('hide');
     expect(order[iHide - 1]).toBe('shot');
-    expect(shotEvents(events)).toEqual(['medium_ab', 'ots_a_b', 'close_b_tense', 'wide_ab', null, 'close_a_neutral']);
+    expect(shotEvents(events)).toEqual(['ots_a_b', 'close_b_tense', 'wide_ab', null, 'close_a_neutral']);
+  });
+
+  it('общий план входа — по составу до первой реплики: пришедший позже не попадает в кадр, кадр держится на первой реплике', () => {
+    const steps: Step[] = [
+      { do: 'show', who: 'a', position: 'left' },
+      { do: 'say', who: 'a', key: 'k.1' },
+      { do: 'show', who: 'b', position: 'right' }, // открыли дверь
+      { do: 'say', who: 'b', key: 'k.2' },
+      { do: 'end', ending: 'e_main' },
+    ];
+    const shots: Shot[] = [...SHOTS, sh('wide_a', 'wide', ['a'])];
+    const episode = miniEpisode({ s1: { coverage: SET, steps } }, { shots, pov: 'a' });
+    const interp = new Interpreter(episode);
+    interp.start();
+    const { events, lineShots } = run(interp);
+    const scene = events.find((e) => e.t === 'scene');
+    expect(scene && scene.t === 'scene' ? scene.view.shot : null).toBe('wide_a'); // не wide_ab: b ещё нет
+    expect(lineShots[0]).toBe('wide_a'); // без мелькания: на первой реплике тот же кадр
+    expect(shotEvents(events)[0]).not.toBe('wide_a');
   });
 
   it('кадр хранится в view и переживает снимок/восстановление; старый снимок без полей нормализуется', () => {
@@ -130,7 +179,7 @@ describe('сцена с coverage', () => {
     ];
     const { interp } = make(steps);
     const { events, lineShots } = run(interp);
-    expect(lineShots).toEqual(['medium_ab', null, null]);
+    expect(lineShots).toEqual(['wide_ab', null, null]);
     const kinds = events.map((e) => (e.t === 'shot' ? `shot:${e.shot ?? '-'}` : e.t));
     expect(kinds.indexOf('shot:-')).toBeLessThan(kinds.indexOf('bg'));
     expect(interp.view.coverage).toBeNull();
@@ -176,7 +225,7 @@ describe('сцена с coverage', () => {
     const interp = new Interpreter(episode, { lineLength: (key) => (key === 'k.long' ? 200 : 10) });
     interp.start();
     const { lineShots } = run(interp);
-    expect(lineShots).toEqual(['medium_ab', 'medium_ab', 'medium_ab', 'close_b_tense', 'reaction_a']);
+    expect(lineShots).toEqual(['wide_ab', 'medium_ab', 'medium_ab', 'close_b_tense', 'reaction_a']); // первая — общий план входа
   });
 
   it('сцена без coverage — кадров нет и событий shot нет; defaultViewFor без coverage', () => {
@@ -187,6 +236,90 @@ describe('сцена с coverage', () => {
     expect(shotEvents(events)).toEqual([]);
     expect(lineShots.every((s) => s === null)).toBe(true);
     expect(defaultViewFor(episode, 's1')).toMatchObject({ coverage: null, shot: null, shot_ctx: null });
+  });
+
+  it('coverage_alt: тот же путь в другой день — первый вариант с истинным условием даёт свой сет и фон', () => {
+    const d2 = SHOTS.map((s) => ({ ...s, id: `${s.id}_d2`, set: 'office_d2', bg: 'bg_b' }));
+    const alt = [{ when: 'day == 2', coverage: 'office_d2', bg: 'bg_b' }];
+    const mk = (day: number) => {
+      const ep = miniEpisode({ s1: { coverage: SET, coverage_alt: alt, steps: talk } }, {
+        shots: [...SHOTS, ...d2],
+        pov: 'a',
+        variables: { day: { type: 'int', default: day } },
+      });
+      const interp = new Interpreter(ep);
+      interp.start();
+      return interp;
+    };
+    const day1 = mk(1);
+    day1.pump();
+    expect(day1.view).toMatchObject({ coverage: SET, bg: 'bg_a', shot: 'wide_ab' });
+    const day2 = mk(2);
+    const first = day2.pump();
+    expect(day2.view).toMatchObject({ coverage: 'office_d2', bg: 'bg_b', shot: 'wide_ab_d2' });
+    const sceneEv = first.events.find((e) => e.t === 'scene');
+    expect(sceneEv?.t === 'scene' ? sceneEv.view.bg : null).toBe('bg_b');
+    const { lineShots } = run(day2);
+    expect(lineShots.every((s) => s === null || s.endsWith('_d2'))).toBe(true);
+  });
+
+  it('coverage_alt: явный кадр основного сета — кадр того же вида из сета дня (вход в сцену и реплика)', () => {
+    const d2 = SHOTS.map((s) => ({ ...s, id: `${s.id}_d2`, set: 'office_d2', bg: 'bg_b' }));
+    const alt = [{ when: 'day == 2', coverage: 'office_d2', bg: 'bg_b' }];
+    const steps: Step[] = [
+      { do: 'show', who: 'a', position: 'left' },
+      { do: 'narrate', key: 'k.1', shot: 'insert_1' }, // дорога открывается видом из окна
+      { do: 'say', who: 'b', key: 'k.2', shot: 'ots_a_b' },
+      { do: 'end', ending: 'e_main' },
+    ];
+    const mk = (day: number, withAlt = true) => {
+      const warnings: string[] = [];
+      const ep = miniEpisode({ s1: { coverage: SET, ...(withAlt ? { coverage_alt: alt } : {}), steps } }, {
+        shots: [...SHOTS, ...d2],
+        pov: 'a',
+        variables: { day: { type: 'int', default: day } },
+      });
+      const interp = new Interpreter(ep, { warn: (m) => warnings.push(m) });
+      interp.start();
+      interp.pump();
+      const entry = interp.view.shot; // кадр входа — кадр первой реплики
+      const { lineShots } = run(interp);
+      return { entry, lineShots, warnings };
+    };
+    expect(mk(1)).toMatchObject({ entry: 'insert_1', lineShots: ['insert_1', 'ots_a_b'] });
+    expect(mk(2)).toEqual({ entry: 'insert_1_d2', lineShots: ['insert_1_d2', 'ots_a_b_d2'], warnings: [] });
+    expect(mk(2, false)).toMatchObject({ entry: 'insert_1', lineShots: ['insert_1', 'ots_a_b'] }); // без coverage_alt — как написано
+    // Пары нет — кадр основного сета и предупреждение.
+    const loneWarnings: string[] = [];
+    const lone = new Interpreter(
+      miniEpisode({ s1: { coverage: SET, coverage_alt: alt, steps } }, {
+        shots: [...SHOTS, ...d2.filter((s) => s.kind !== 'insert')],
+        pov: 'a',
+        variables: { day: { type: 'int', default: 2 } },
+      }),
+      { warn: (m) => loneWarnings.push(m) },
+    );
+    lone.start();
+    lone.pump();
+    expect(lone.view.shot).toBe('insert_1');
+    expect(loneWarnings.join('\n')).toContain('нет пары того же вида в сете office_d2');
+  });
+
+  it('fx с кадром: кадр выстрела встаёт до вспышки, без реплики', () => {
+    const steps: Step[] = [
+      { do: 'show', who: 'a', position: 'left' },
+      { do: 'show', who: 'b', position: 'right' },
+      { do: 'say', who: 'a', key: 'k.1' },
+      { do: 'fx', fx: 'flash', shot: 'insert_1' },
+      { do: 'end', ending: 'e_main' },
+    ];
+    const { interp } = make(steps);
+    interp.pump(); // реплика k.1
+    interp.continue();
+    const r = interp.pump();
+    expect(r.pending).toMatchObject({ kind: 'hold', reason: 'fx' });
+    expect(interp.view.shot).toBe('insert_1');
+    expect(shotEvents(r.events)).toEqual(['insert_1']);
   });
 
   it('coverage указывает на сет без кадров — как без покрытия', () => {

@@ -47,6 +47,8 @@ export interface MinigameContext extends BaseContext {
   restore: unknown;
   /** Запросить автосейв после «хода» внутри мини-игры. */
   autosave: () => void;
+  /** Итоговое состояние мини-игры (IMinigame.serialize) — до destroy; режим дела считает по нему ★. */
+  final?: (state: unknown) => void;
 }
 
 export interface SessionUI {
@@ -290,6 +292,9 @@ export class Session {
             await abortable(ui.hold(p, { signal, instant: this.instant }), signal);
             if (!alive()) return cancelled;
             this.interp.continue();
+            // Отбивка дня держала новую сцену под чёрным — проявить её (без удержания — ничего не делает).
+            await director.release({ instant: this.instant, cancelled: () => !alive() });
+            if (!alive()) return cancelled;
             break;
           }
           case 'document': {
@@ -305,7 +310,8 @@ export class Session {
             if (!alive()) return cancelled;
             platform.track('ad_break', { block: p.block, shown });
             this.interp.continue();
-            await director.release({ instant: this.instant, cancelled: () => !alive() });
+            // Сразу за рекламой — отбивка дня: сцену проявим после даты (в case 'hold'), иначе она мелькнёт перед ней.
+            if (!this.dayCardNext()) await director.release({ instant: this.instant, cancelled: () => !alive() });
             if (!alive()) return cancelled;
             break;
           }
@@ -327,12 +333,14 @@ export class Session {
             const restore = this.restoreMg && this.restoreMg.id === def.id ? this.restoreMg.state : undefined;
             this.restoreMg = null;
             platform.track('minigame_start', { id: def.id, type: def.type });
+            // Итоговое состояние мини-игры: найденные зоны осмотра дают свои факты (finishMinigame).
+            let final: unknown;
             const outcome = await abortable(
-              ui.runMinigame(p, { signal, restore, autosave: () => this.autosave('minigame_move') }),
+              ui.runMinigame(p, { signal, restore, autosave: () => this.autosave('minigame_move'), final: (st) => (final = st) }),
               signal,
             );
             if (!alive()) return cancelled;
-            const r = this.interp.finishMinigame(outcome);
+            const r = this.interp.finishMinigame(outcome, foundOf(final));
             platform.track(outcome === 'skipped' ? 'minigame_skip' : 'minigame_finish', {
               id: def.id,
               type: def.type,
@@ -355,6 +363,18 @@ export class Session {
       if (!alive()) return cancelled;
       return this.fail(e);
     }
+  }
+
+  /** Следующие шаги сцены — отбивка дня (титр day, условие которого выполнено), до первого шага не-титра. */
+  private dayCardNext(): boolean {
+    const { scene_id, step_index } = this.interp.state;
+    const steps = this.interp.scene(scene_id)?.steps ?? [];
+    for (let i = step_index; i < steps.length; i++) {
+      const st = steps[i];
+      if (!st || st.do !== 'caption') return false;
+      if (st.style === 'day' && (st.when === undefined || this.interp.test(st.when))) return true;
+    }
+    return false;
   }
 
   private levelData(): { world: string; level: string } {
@@ -446,4 +466,15 @@ export class Session {
       if (ev.t === 'archive') this.d.saves.unlockArchive(this.d.episode.id, ev.item);
     }
   }
+}
+
+/**
+ * Найденные зоны из итогового состояния мини-игры: `{ found: string[] }` или сейв оболочки мини-игр, где состояние
+ * игры лежит в `t` (`{ v, over, t: { found } }`); нет списка — undefined.
+ */
+export function foundOf(state: unknown): string[] | undefined {
+  const rec = (v: unknown): { found?: unknown; t?: unknown } | null => (typeof v === 'object' && v !== null ? v : null);
+  const s = rec(state);
+  const found = s?.found ?? rec(s?.t)?.found;
+  return Array.isArray(found) && found.every((x) => typeof x === 'string') ? [...found] : undefined;
 }

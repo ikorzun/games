@@ -157,6 +157,12 @@ describe('parseDbConfig', () => {
     ['нет target_count', { ...CFG, target_count: undefined }],
     ['повтор id среди options', { ...CFG, values: CFG.values.map((v) => (v.field === 'notary' ? { ...v, options: [...(v.options ?? []), { id: 'kov', text_key: 'x' }] } : v)) }],
     ['у поля паттерна один вариант', { ...CFG, values: CFG.values.map((v) => (v.field === 'notary' ? { ...v, options: [{ id: 'kov', text_key: 'v.notary.kov' }] } : v)) }],
+    ['даты: from позже to', { ...CFG, dates: { from: '1993-08-06', to: '1993-01-01' } }],
+    ['даты: не гггг-мм-дд', { ...CFG, target_dates: { from: '1993-6-1', to: '1993-08-06' } }],
+    ['закреплённая карточка: значение вне options', { ...CFG, fixed: [{ ...{ values: { address: 'a1', notary: 'kov', attorney: 'mur', buyer: 'b1' }, n: 34, date: '1993-06-28' }, values: { ...{ values: { address: 'a1', notary: 'kov', attorney: 'mur', buyer: 'b1' }, n: 34, date: '1993-06-28' }.values, buyer: 'nobody' } }] }],
+    ['закреплённая карточка: не все поля', { ...CFG, fixed: [{ ...{ values: { address: 'a1', notary: 'kov', attorney: 'mur', buyer: 'b1' }, n: 34, date: '1993-06-28' }, values: { notary: 'kov', attorney: 'mur' } }] }],
+    ['закреплённая карточка без даты', { ...CFG, fixed: [{ values: { values: { address: 'a1', notary: 'kov', attorney: 'mur', buyer: 'b1' }, n: 34, date: '1993-06-28' }.values, n: 34 }] }],
+    ['закреплённых целевых больше target_count', { ...CFG, target_count: 1, fixed: [{ values: { address: 'a1', notary: 'kov', attorney: 'mur', buyer: 'b1' }, n: 34, date: '1993-06-28' }, { ...{ values: { address: 'a1', notary: 'kov', attorney: 'mur', buyer: 'b1' }, n: 34, date: '1993-06-28' }, n: 35 }] }],
   ])('непригодный config (%s) → null', (_name, cfg) => {
     expect(parseDbConfig(cfg as Record<string, unknown>)).toBeNull();
   });
@@ -241,6 +247,29 @@ describe('buildDeck', () => {
 
   it('formatDate: гггг-мм-дд → дд.мм.гггг', () => {
     expect(formatDate('1993-06-28')).toBe('28.06.1993');
+  });
+
+  it('даты колоды и целевых карточек из config; закреплённая карточка есть всегда и входит в целевые', () => {
+    const day = (s: string): number => Date.parse(`${s}T00:00:00Z`);
+    const fixed = { values: { address: 'a1', notary: 'kov', attorney: 'mur' }, n: 34, date: '1993-06-28' };
+    const deck = buildDeck({ ...spec, dates: [day('1992-06-01'), day('1993-08-06')], targetDates: [day('1993-06-01'), day('1993-08-06')], fixed: [fixed] });
+    expect(deck).toHaveLength(24);
+    expect(deck.filter((c) => c.target)).toHaveLength(6);
+    expect(deck.every((c) => c.date >= '1992-06-01' && c.date <= '1993-08-06')).toBe(true);
+    expect(deck.filter((c) => c.target).every((c) => c.date >= '1993-06-01')).toBe(true);
+    const pinned = deck.filter((c) => c.values.address === 'a1');
+    expect(pinned).toHaveLength(1);
+    expect(pinned[0]).toMatchObject({ n: 34, date: '1993-06-28', target: true });
+  });
+
+  it('config: dates, target_dates и fixed разбираются; без них — прежний диапазон и пустой список', () => {
+    const c = parseDbConfig({ ...CFG, dates: { from: '1992-06-01', to: '1993-08-06' }, fixed: [{ values: { address: 'a1', notary: 'kov', attorney: 'mur', buyer: 'b1' }, n: 34, date: '1993-06-28' }] });
+    expect(c?.dates).toEqual([Date.parse('1992-06-01T00:00:00Z'), Date.parse('1993-08-06T00:00:00Z')]);
+    expect(c?.targetDates).toEqual(c?.dates);
+    expect(c?.fixed).toEqual([{ values: { address: 'a1', notary: 'kov', attorney: 'mur', buyer: 'b1' }, n: 34, date: '1993-06-28' }]);
+    const plain = parseDbConfig(CFG);
+    expect(plain?.dates).toEqual([Date.parse('1992-01-01T00:00:00Z'), Date.parse('1994-03-31T00:00:00Z')]);
+    expect(plain?.fixed).toEqual([]);
   });
 });
 

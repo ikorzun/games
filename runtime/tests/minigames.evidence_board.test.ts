@@ -180,6 +180,23 @@ describe('parseBoard: чтение конфига', () => {
     expect([...spec.decoys]).toEqual(['a|c']);
   });
 
+  it('узел с requires — на доске, только если улика найдена; связи с отсутствующим узлом не считаются (счёт по найденному)', () => {
+    const cfg = {
+      nodes: ['a', 'b', { id: 'c', requires: 'found_c' }],
+      required_links: [['a', 'b'], ['b', 'c']],
+      decoy_links: [['a', 'c']],
+      max_wrong_links: 2,
+    };
+    const without = parseBoard(cfg, { found_c: false });
+    expect(without.nodes.map((n) => n.id)).toEqual(['a', 'b']);
+    expect(without.required).toEqual(['a|b']);
+    expect([...without.decoys]).toEqual([]);
+    const withIt = parseBoard(cfg, { found_c: true });
+    expect(withIt.nodes.map((n) => n.id)).toEqual(['a', 'b', 'c']);
+    expect(withIt.required).toEqual(['a|b', 'b|c']);
+    expect(parseBoard(cfg).nodes.map((n) => n.id)).toEqual(['a', 'b']); // переменных нет — не найдено
+  });
+
   it('значения по умолчанию: max_wrong_links = 3, partial_threshold = 1; порог зажимается в 1…число верных связей', () => {
     const base = { nodes: ['a', 'b', 'c'], required_links: [['a', 'b'], ['b', 'c']] };
     expect(parseBoard(base)).toMatchObject({ maxWrong: 3, partialAt: 1 });

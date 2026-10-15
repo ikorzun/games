@@ -164,10 +164,13 @@ export function listenerOf(ctx: ShotCtx, who: string | null): string | null {
   return ctx.prev_speaker !== who ? ctx.prev_speaker : null;
 }
 
-/** Вход в сцену (§4.1): wide сета с максимальным совпадением состава; без wide — medium; иначе null. */
+/**
+ * Вход в сцену (§4.1): wide сета с максимальным совпадением состава; без wide — medium; без него — ots (фон сета —
+ * это его общий план, и на нём были бы те, кого в сцене нет); иначе null.
+ */
 export function entryShot(index: ShotIndex, set: string, cast: readonly string[]): Shot | null {
   const shots = index.set(set);
-  return wideOf(shots, cast) ?? candidates(shots, 'medium', cast)[0] ?? null;
+  return wideOf(shots, cast) ?? candidates(shots, 'medium', cast)[0] ?? candidates(shots, 'ots', cast)[0] ?? null;
 }
 
 export interface LineInput {
@@ -214,6 +217,12 @@ function choose(shots: readonly Shot[], cur: Shot | null, inp: LineInput): Choic
     return { shot: (odd ? (insert ?? wide) : (wide ?? insert)) ?? cur, reaction: false };
   }
 
+  // §4.1 Общий план входа держится на первой реплике сцены, если говорящий в нём есть: иначе он виден только на время
+  // перехода и мелькает (полсекунды) перед первым крупным планом.
+  if (ctx.line === 0 && cur !== null && cur.kind === 'wide' && fits(cur, cast) && cur.cast.some((c) => c.who === who)) {
+    return { shot: cur, reaction: false };
+  }
+
   const other = listenerOf(ctx, who);
 
   // §4.4 Реакция слушающего: длинная реплика после крупного плана говорящего, не чаще каждой четвёртой.
@@ -237,7 +246,9 @@ function choose(shots: readonly Shot[], cur: Shot | null, inp: LineInput): Choic
   const beat: Beat = cur?.kind === 'angle' ? 'calm' : inp.beat;
   let pick: Shot | null;
   if (beat === 'calm') {
-    pick = (other !== null ? otsOf(shots, other, who, cast) : null) ?? mediumWith(shots, who, cast) ?? closeOf(shots, who, inp.expression, cast);
+    // Слушатель неизвестен (первая реплика сцены) или к нему нет кадра через плечо — слушает персонаж игрока.
+    const povOts = inp.pov !== null && inp.pov !== who ? otsOf(shots, inp.pov, who, cast) : null;
+    pick = (other !== null ? otsOf(shots, other, who, cast) : null) ?? povOts ?? mediumWith(shots, who, cast) ?? closeOf(shots, who, inp.expression, cast);
   } else {
     const sinceAngle = ctx.last_angle < 0 ? Infinity : ctx.line - ctx.last_angle;
     if (beat === 'climax' && sinceAngle >= ANGLE_EVERY && hashSeed(inp.seed) % 3 === 0) {

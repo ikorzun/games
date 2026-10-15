@@ -102,6 +102,12 @@ describe('вход в сцену (§4.1)', () => {
     expect(entryShot(index, S, ['a'])).toBeNull();
     expect(entryShot(index, 'nope', ['a', 'b'])).toBeNull();
   });
+
+  it('общего и среднего плана по составу нет — вход через плечо, а не фон сета с теми, кого нет', () => {
+    const only = new ShotIndex([sh('wide_abc', 'wide', ['a', 'b', 'c']), sh('ots_a_b', 'ots', ['a', 'b'], { from: 'a', focus: 'b' })]);
+    expect(entryShot(only, S, ['a', 'b'])?.id).toBe('ots_a_b');
+    expect(entryShot(only, S, ['a'])).toBeNull();
+  });
 });
 
 describe('реплики (§4.2): спокойный разговор', () => {

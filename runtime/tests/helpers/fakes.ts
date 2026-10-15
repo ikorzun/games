@@ -20,7 +20,7 @@ import type {
 } from '../../src/core/types';
 import type { IPlatform, TrackData } from '../../src/platform/types';
 import type { BaseContext, HoldContext, LineContext, MinigameContext, SessionUI } from '../../src/session';
-import type { AudioEventPayload, CaptionEventPayload, IAudioSink, ICaptionSink, IStage, IToastSink } from '../../src/stage/types';
+import type { AudioEventPayload, CaptionEventPayload, IAudioSink, ICaptionSink, IStage } from '../../src/stage/types';
 
 export type Timeline = string[];
 
@@ -88,13 +88,6 @@ export class FakeCaptions implements ICaptionSink {
   }
   clear(): void {
     this.t.push('caption:clear');
-  }
-}
-
-export class FakeToasts implements IToastSink {
-  constructor(private readonly t: Timeline) {}
-  archive(item: string): void {
-    this.t.push(`toast:${item}`);
   }
 }
 

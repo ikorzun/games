@@ -17,7 +17,7 @@
  * до рекламы). Если игрок загрузил другой сейв во время удержания — reset() снимает его.
  */
 import type { EngineEvent, PumpResult, TransitionKind, ViewState } from '../core/types';
-import type { IAudioSink, ICaptionSink, IStage, IToastSink } from './types';
+import type { IAudioSink, ICaptionSink, IStage } from './types';
 
 /** Порт предзагрузки ассетов: вход в блок ждёт картинки блока (но не дольше таймаута), следующие блоки греются в фоне. */
 export interface IBlockLoader {
@@ -28,13 +28,12 @@ export interface DirectorSinks {
   stage: IStage;
   audio: IAudioSink;
   captions: ICaptionSink;
-  toasts: IToastSink;
   /** Предзагрузка ассетов по блокам (без неё сцена просто показывает то, что успело загрузиться). */
   loader?: IBlockLoader;
   /** checkpoint-события интерпретатора: границы блоков и решения. */
   checkpoint: (reason: 'block' | 'choice' | 'minigame') => void;
-  /** Новый архивный материал открыт (для общего архива профиля), независимо от тоста. */
-  archiveUnlocked?: (item: string) => void;
+  /** Новый архивный материал открыт (общий архив профиля); toast — сценарий хочет, чтобы игрок это заметил. */
+  archiveUnlocked?: (item: string, toast: boolean) => void;
 }
 
 export interface PresentOptions {
@@ -71,9 +70,10 @@ export class Director {
     const instant = opts.instant === true;
     const { events, pending } = result;
 
-    // Индекс последнего события scene — именно оно вводит блок, перед которым стоит реклама.
+    // Индекс последнего события scene — именно оно вводит блок, перед которым стоит реклама, или день под отбивкой
+    // (титр day): экран гаснет и держится чёрным, пока идёт реклама или висит дата; новый кадр проявляется после.
     let adScene = -1;
-    if (pending.kind === 'ad_break') {
+    if (pending.kind === 'ad_break' || (pending.kind === 'hold' && pending.caption?.style === 'day')) {
       for (let i = events.length - 1; i >= 0; i--) {
         if (events[i]?.t === 'scene') {
           adScene = i;
@@ -139,7 +139,7 @@ export class Director {
   }
 
   private async apply(ev: EngineEvent, instant: boolean): Promise<void> {
-    const { stage, audio, captions, toasts } = this.sinks;
+    const { stage, audio, captions } = this.sinks;
     switch (ev.t) {
       case 'scene':
         captions.clear();
@@ -174,8 +174,8 @@ export class Director {
         audio.handle(ev);
         break;
       case 'archive':
-        this.sinks.archiveUnlocked?.(ev.item);
-        if (ev.toast) toasts.archive(ev.item);
+        // Тоста «Новый материал» нет (решение владельца 2026-10-13): метка — в шапке документа и на кнопке блокнота.
+        this.sinks.archiveUnlocked?.(ev.item, ev.toast);
         break;
       case 'checkpoint':
         this.sinks.checkpoint(ev.reason);

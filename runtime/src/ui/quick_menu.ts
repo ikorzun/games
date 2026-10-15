@@ -1,6 +1,6 @@
 /**
- * Быстрое меню: Auto, Skip (прочитанное), Log (папка), Settings, Hide. Save/Load/Mute остаются действиями
- * (клавиши S/L/M не меняются… точнее, горячие клавиши) и кнопками экрана настроек.
+ * Быстрое меню: Skip (прочитанное), Notes (заметки: блокнот улик и журнал реплик), Settings. Log и Notebook — действия
+ * горячих клавиш L и N (открывают заметки на своей вкладке); Save/Load/Mute — действия и кнопки экрана настроек.
  * Кнопки — иконки (icons.ts); подпись остаётся в разметке скрытым текстом и в title: так кнопку
  * читает скринридер, а смена языка обновляет подсказки.
  */
@@ -8,24 +8,27 @@ import { t } from '../core/i18n';
 import { h } from './dom';
 import { icon } from './icons';
 
-export type QuickAction = 'auto' | 'skip' | 'log' | 'save' | 'load' | 'mute' | 'settings' | 'hide';
+export type QuickAction = 'skip' | 'notes' | 'log' | 'notebook' | 'save' | 'load' | 'mute' | 'settings';
 
 export interface QuickState {
-  auto: boolean;
   skip: boolean;
   muted: boolean;
 }
 
-/** В панели — пять кнопок; сохранение, загрузка и звук живут в настройках (решение владельца 2026-10-11). */
-const ORDER: readonly QuickAction[] = ['auto', 'skip', 'log', 'settings', 'hide'];
+/**
+ * Сохранение, загрузка и звук живут в настройках (решение владельца 2026-10-11). Блокнот с пробы «Хода следствия»
+ * (2026-10-13): выводы игрок делает сам по собранным фактам, и они должны быть под рукой. 2026-10-15 владелец убрал
+ * «Авто» и «Скрыть интерфейс», а журнал и блокнот объединил в «Заметки».
+ */
+const ORDER: readonly QuickAction[] = ['skip', 'notes', 'settings'];
 /** Кнопки-переключатели и поле состояния, которое каждая из них показывает. */
-const TOGGLE_KEY: Readonly<Partial<Record<QuickAction, keyof QuickState>>> = { auto: 'auto', skip: 'skip', mute: 'muted' };
+const TOGGLE_KEY: Readonly<Partial<Record<QuickAction, keyof QuickState>>> = { skip: 'skip', mute: 'muted' };
 
 export class QuickMenu {
   readonly el: HTMLElement;
   private readonly buttons = new Map<QuickAction, HTMLButtonElement>();
   private readonly labels = new Map<QuickAction, HTMLElement>();
-  private state: QuickState = { auto: false, skip: false, muted: false };
+  private state: QuickState = { skip: false, muted: false };
 
   constructor(private readonly onAction: (action: QuickAction) => void) {
     this.el = h('div', { class: 'vn-quick', role: 'toolbar' });
@@ -64,6 +67,17 @@ export class QuickMenu {
   setDisabled(action: QuickAction, disabled: boolean): void {
     const b = this.buttons.get(action);
     if (b) b.disabled = disabled;
+  }
+
+  /** Метка «есть новое» (блокнот пополнился): красный квадрат в углу кнопки; с каждой новой записью иконка вздрагивает. */
+  setBadge(action: QuickAction, on: boolean): void {
+    const b = this.buttons.get(action);
+    if (!b) return;
+    b.classList.toggle('has-new', on);
+    b.classList.remove('is-nudged');
+    if (!on) return;
+    void b.offsetWidth; // перезапуск анимации
+    b.classList.add('is-nudged');
   }
 
   /** Подписи заново (смена языка). */

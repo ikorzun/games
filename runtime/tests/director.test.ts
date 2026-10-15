@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultViewFor } from '../src/core/interpreter';
 import type { EngineEvent, Pending, PumpResult, TransitionKind } from '../src/core/types';
 import { Director } from '../src/stage/director';
-import { FakeAudio, FakeCaptions, FakeStage, FakeToasts } from './helpers/fakes';
+import { FakeAudio, FakeCaptions, FakeStage } from './helpers/fakes';
 import type { Timeline } from './helpers/fakes';
 import { miniEpisode } from './helpers/mini';
 
@@ -21,12 +21,11 @@ function setup() {
     stage: new FakeStage(t),
     audio: new FakeAudio(t),
     captions: new FakeCaptions(t),
-    toasts: new FakeToasts(t),
     checkpoint: (r) => {
       checkpoints.push(r);
       t.push(`checkpoint:${r}`);
     },
-    archiveUnlocked: (i) => archived.push(i),
+    archiveUnlocked: (i, toast) => archived.push(toast ? i : `${i} (тихо)`),
   });
   return { t, director, checkpoints, archived };
 }
@@ -81,11 +80,11 @@ describe('Director: обычный показ', () => {
       'stage:cg:cg_a:flash',
       'stage:cgHide:fade',
       'stage:hide:a:fade',
-      'toast:arc_x',
       'checkpoint:block',
     ]);
     expect(checkpoints).toEqual(['block']);
-    expect(archived).toEqual(['arc_x', 'arc_y']); // профиль узнаёт обо всех, тост — только о toast:true
+    // профиль узнаёт обо всех; тихие (toast: false — финал, отладка) не ставят метку на кнопке блокнота
+    expect(archived).toEqual(['arc_x', 'arc_y (тихо)']);
     expect(director.holdingBlack).toBe(false);
   });
 
@@ -147,6 +146,22 @@ describe('Director: реклама на границе блока', () => {
     });
   }
 
+  it('отбивка дня (титр day): новая сцена держится под чёрным, пока висит дата, и проявляется после release()', async () => {
+    const { t, director } = setup();
+    const day: Pending = { kind: 'hold', reason: 'caption', ms: 2600, caption: { key: 'k.day', style: 'day' } };
+    await director.present({ ...adBatch('fade'), pending: day });
+    expect(t).toEqual(['caption:clear', 'stage:fadeToBlackAndHold:fade', 'checkpoint:block']);
+    expect(director.holdingBlack).toBe(true);
+    t.push('day:shown'); // здесь UI показывает дату на чёрном, затем interp.continue()
+    await director.release();
+    expect(t.slice(-3)).toEqual(['day:shown', 'stage:revealFromBlack:s_new:fade', 'audio:music:m_new']);
+    // обычный титр-пауза (chapter) сцену не задерживает
+    const other = setup();
+    await other.director.present({ ...adBatch('fade'), pending: { ...day, caption: { key: 'k.ch', style: 'chapter' } } });
+    expect(other.director.holdingBlack).toBe(false);
+    expect(other.t).toContain('stage:changeScene:s_new:fade');
+  });
+
   it('любой другой переход (vhs_glitch, dissolve, cut, flash, wipe) тоже гасится в чёрный: сцена не попадает на экран до рекламы', async () => {
     for (const tr of ['vhs_glitch', 'dissolve', 'cut', 'flash', 'wipe'] as const) {
       const { t, director } = setup();
@@ -169,7 +184,7 @@ describe('Director: реклама на границе блока', () => {
       ],
       pending: AD,
     });
-    expect(t).toEqual(['toast:arc_x', 'audio:sfx:sfx_a', 'caption:clear', 'stage:fadeToBlackAndHold:fade']);
+    expect(t).toEqual(['audio:sfx:sfx_a', 'caption:clear', 'stage:fadeToBlackAndHold:fade']);
   });
 
   it('автосейв при удержании выполняется сразу (сейв уже указывает на новую сцену), а не после рекламы', async () => {

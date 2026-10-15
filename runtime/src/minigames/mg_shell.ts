@@ -18,7 +18,8 @@
 import type { Container } from 'pixi.js';
 import type { Params } from '../core/i18n';
 import type { MinigameOutcomeKind, MinigameResult } from '../core/types';
-import { h } from '../ui/dom';
+import { fill, h } from '../ui/dom';
+import { icon } from '../ui/icons';
 import { GreyBoxMinigame } from './grey_box';
 import { Countdown, formatTime } from './mg_timer';
 import type { GameContext, IMinigame, MinigameConfig } from './types';
@@ -85,6 +86,26 @@ const OUTCOME_KEY: Readonly<Record<MinigameOutcomeKind, string>> = {
 const OUTCOMES: readonly MinigameOutcomeKind[] = ['success', 'partial', 'fail'];
 const WHYS: readonly EndWhy[] = ['done', 'limit', 'time'];
 
+/** Форма числа по правилам языка (Intl.PluralRules): one / few / many / other — суффикс ключа строки с числом. */
+export function pluralForm(n: number, lang: string): string {
+  try {
+    return new Intl.PluralRules(lang).select(n);
+  } catch {
+    return 'other'; // очень старый браузер — общая форма
+  }
+}
+
+/** Раскладка «сцена»: вступление поверх картинки, перетаскиваемый блок по ходу партии. */
+interface StageChrome {
+  intro: HTMLElement;
+  heading: HTMLElement;
+  attempts: HTMLElement;
+  note: HTMLElement;
+  start: HTMLButtonElement;
+  dock: HTMLElement;
+  move: HTMLElement;
+}
+
 /** Ссылки на элементы оболочки. */
 interface Chrome {
   root: HTMLElement;
@@ -106,8 +127,15 @@ interface Chrome {
   result: HTMLElement;
   resultTitle: HTMLElement;
   resultNote: HTMLElement;
+  /** Подробности итога от игры (resultDetails); пусто — скрыто. */
+  resultBody: HTMLElement;
   next: HTMLButtonElement;
+  /** Только у раскладки 'stage'. */
+  stage?: StageChrome;
 }
+
+/** Элементы оболочки без расстановки (её делает раскладка). */
+type ChromeParts = Omit<Chrome, 'root' | 'foot' | 'stage'>;
 
 export abstract class MinigameShell implements IMinigame {
   onResult: (result: MinigameResult) => void = () => undefined;
@@ -124,6 +152,8 @@ export abstract class MinigameShell implements IMinigame {
   protected over: MinigameOutcomeKind | null = null;
   protected overWhy: EndWhy | null = null;
 
+  /** Возвращает перетащенный блок раскладки 'stage' в поле при смене размера окна. */
+  private dockObserver: ResizeObserver | null = null;
   private ui: Chrome | null = null;
   private fallback: GreyBoxMinigame | null = null;
   private offLang: (() => void) | null = null;
@@ -134,6 +164,8 @@ export abstract class MinigameShell implements IMinigame {
   private destroyed = false;
   private busyHint = false;
   private statusFn: StatusFn | null = null;
+  /** Партия начата: в раскладке 'stage' — после «Начать» на вступлении, в карточке — сразу. */
+  private started = true;
 
   // ───────────────────────────── что реализует игра ─────────────────────────────
 
@@ -178,6 +210,33 @@ export abstract class MinigameShell implements IMinigame {
   protected extraActionsVisible(): boolean {
     return false;
   }
+  /**
+   * Раскладка: 'card' — карточка с заголовком, полем и подвалом (по умолчанию); 'stage' — поле во весь экран, вступление
+   * и итог поверх него, по ходу партии — перетаскиваемый блок (макеты Figma «Claude» 2026-10-13, осмотр места).
+   */
+  protected layout(): 'card' | 'stage' {
+    return 'card';
+  }
+  /** Раскладка 'stage': список игры для блока (под заголовком). */
+  protected panelList(): HTMLElement | null {
+    return null;
+  }
+  /** Раскладка 'stage': надпись кнопки вступления. */
+  protected startLabelKey(): string {
+    return 'ui.minigame.start_search';
+  }
+  /** Раскладка 'stage': строка вступления под попытками (как играть); пусто — нет строки. */
+  protected introNote(): string {
+    return '';
+  }
+  /** Раскладка 'stage': куда поставить фокус после «Начать». */
+  protected focusField(): void {
+    /* по умолчанию — никуда */
+  }
+  /** Подробности на экране итога (под «Найдено»): например, что найдено и что это меняет в деле. По умолчанию нет. */
+  protected resultDetails(): HTMLElement[] {
+    return [];
+  }
 
   // ───────────────────────────── помощники для игры ─────────────────────────────
 
@@ -187,7 +246,7 @@ export abstract class MinigameShell implements IMinigame {
 
   /** Принимает ли игра ввод: не окончена, не на паузе, не уничтожена. */
   protected canAct(): boolean {
-    return !this.over && !this.paused && !this.finished && !this.destroyed && this.fallback === null;
+    return this.started && !this.over && !this.paused && !this.finished && !this.destroyed && this.fallback === null;
   }
 
   /** Сообщение игроку (в том числе для скринридера); null — очистить. */
@@ -223,6 +282,20 @@ export abstract class MinigameShell implements IMinigame {
     u.intro.textContent = ctx.introKey ? t(ctx.introKey) : '';
     u.root.setAttribute('aria-label', u.title.textContent);
 
+    const st = u.stage;
+    if (st) {
+      st.heading.textContent = u.title.textContent;
+      st.intro.hidden = this.started;
+      st.dock.hidden = !this.started || this.over !== null;
+      st.start.textContent = t(this.startLabelKey());
+      st.note.textContent = this.introNote();
+      st.note.hidden = st.note.textContent === '';
+      st.move.textContent = t('ui.minigame.move');
+      const lim = this.failLimit();
+      st.attempts.hidden = lim <= 0;
+      st.attempts.textContent = lim > 0 ? t(`ui.minigame.body_attempts_${pluralForm(lim, ctx.lang)}`, { n: lim }) : '';
+    }
+
     const p = this.progress();
     u.progress.textContent = t('ui.minigame.found', { n: p.n, total: p.total });
 
@@ -245,6 +318,8 @@ export abstract class MinigameShell implements IMinigame {
       u.resultTitle.textContent = t(OUTCOME_KEY[over]);
       const note = t('ui.minigame.found', { n: p.n, total: p.total });
       u.resultNote.textContent = this.overWhy === 'time' ? `${t('ui.minigame.time_up')}. ${note}` : note;
+      fill(u.resultBody, ...this.resultDetails());
+      u.resultBody.hidden = u.resultBody.childElementCount === 0;
       u.next.textContent = t('ui.common.next');
     }
 
@@ -294,11 +369,13 @@ export abstract class MinigameShell implements IMinigame {
       );
     }
 
-    this.ui = this.buildChrome(this.build());
+    const stage = this.layout() === 'stage';
+    this.started = !stage;
+    this.ui = stage ? this.buildStageChrome(this.build()) : this.buildChrome(this.build());
     dom.appendChild(this.ui.root);
     this.render();
     this.offLang = ctx.onLanguageChange(() => this.render());
-    this.countdown?.start();
+    if (this.started) this.countdown?.start();
   }
 
   pause(): void {
@@ -314,7 +391,7 @@ export abstract class MinigameShell implements IMinigame {
     if (!this.paused) return;
     this.paused = false;
     this.ui?.root.classList.remove('is-paused');
-    if (!this.over && !this.destroyed) this.countdown?.start();
+    if (!this.over && !this.destroyed && this.started) this.countdown?.start();
   }
 
   serialize(): unknown {
@@ -325,6 +402,7 @@ export abstract class MinigameShell implements IMinigame {
       over: this.over,
       why: this.overWhy,
       left: this.countdown ? Math.round(this.countdown.remainingMs) : null,
+      started: this.started,
       t: this.saveState(),
     };
   }
@@ -340,10 +418,13 @@ export abstract class MinigameShell implements IMinigame {
     const over = OUTCOMES.find((x) => x === state.over) ?? null;
     this.over = over;
     this.overWhy = over ? (WHYS.find((x) => x === state.why) ?? 'done') : null;
+    // Вступление раскладки 'stage': в старых сейвах поля нет — партия уже шла.
+    this.started = over !== null || state.started !== false;
     const left = asInt(state.left, 0);
     if (left !== null && this.countdown) this.countdown.setRemaining(left);
     if (isRecord(state.t)) this.loadState(state.t);
     if (this.over) this.countdown?.stop();
+    else if (this.started && !this.paused) this.countdown?.start();
     this.render();
   }
 
@@ -360,6 +441,8 @@ export abstract class MinigameShell implements IMinigame {
     this.countdown = null;
     this.offLang?.();
     this.offLang = null;
+    this.dockObserver?.disconnect();
+    this.dockObserver = null;
     this.ui?.root.remove();
     this.ui = null;
   }
@@ -375,6 +458,15 @@ export abstract class MinigameShell implements IMinigame {
     this.render();
     this.ui?.next.focus({ preventScroll: true });
     this.ctx.autosave();
+  }
+
+  /** «Начать осмотр» (раскладка 'stage'): вступление уходит, идёт время, поле принимает ввод. */
+  private begin(): void {
+    if (this.started || this.paused || this.destroyed) return;
+    this.started = true;
+    this.countdown?.start();
+    this.render();
+    this.focusField();
   }
 
   private onTimeUp(): void {
@@ -439,7 +531,8 @@ export abstract class MinigameShell implements IMinigame {
 
   // ───────────────────────────── разметка оболочки ─────────────────────────────
 
-  private buildChrome(body: HTMLElement): Chrome {
+  /** Элементы оболочки: заголовок, бриф, строка состояния, кнопки, итог — общие для обеих раскладок. */
+  private chromeParts(): ChromeParts {
     const title = h('h2', { class: 'mg-shell__title' });
     const brief = h('p', { class: 'mg-shell__brief' });
     const intro = h('p', { class: 'mg-shell__intro', hidden: true });
@@ -473,6 +566,7 @@ export abstract class MinigameShell implements IMinigame {
 
     const resultTitle = h('strong', { class: 'mg-shell__result-title' });
     const resultNote = h('span', { class: 'mg-shell__result-note' });
+    const resultBody = h('div', { class: 'mg-shell__result-body', hidden: true });
     const next = h('button', {
       class: 'mg-btn mg-shell__btn is-next is-primary',
       type: 'button',
@@ -482,24 +576,114 @@ export abstract class MinigameShell implements IMinigame {
         },
       },
     });
-    const result = h('div', { class: 'mg-shell__result', hidden: true }, h('div', { class: 'mg-shell__result-text' }, resultTitle, resultNote), next);
+    const result = h('div', { class: 'mg-shell__result', hidden: true }, h('div', { class: 'mg-shell__result-text' }, resultTitle, resultNote, resultBody), next);
+    return { title, brief, intro, progress, fails, failsText, pips, timer, timerText, timerBar, status, actions, hint, skip, result, resultTitle, resultNote, resultBody, next };
+  }
 
-    const foot = h('footer', { class: 'mg-shell__foot' }, actions, result);
+  private buildChrome(body: HTMLElement): Chrome {
+    const p = this.chromeParts();
+    const foot = h('footer', { class: 'mg-shell__foot' }, p.actions, p.result);
 
     // Заголовок на узких экранах сжат: бриф — две строки, по тапу раскрывается целиком.
-    brief.addEventListener('click', () => brief.classList.toggle('is-open'));
+    p.brief.addEventListener('click', () => p.brief.classList.toggle('is-open'));
 
     const root = h(
       'section',
       { class: `mg-shell ${this.cls}`, role: 'group' },
-      h('header', { class: 'mg-shell__head' }, title, intro, brief),
-      h('div', { class: 'mg-shell__hud' }, progress, fails, timer),
+      h('header', { class: 'mg-shell__head' }, p.title, p.intro, p.brief),
+      h('div', { class: 'mg-shell__hud' }, p.progress, p.fails, p.timer),
       // Сообщение о ходе — сразу под строкой состояния: на телефоне поле игры ниже, а ответ на тап нужен на виду.
-      status,
+      p.status,
       h('div', { class: 'mg-shell__body' }, body),
       foot,
     );
-    return { root, title, brief, intro, progress, fails, failsText, pips, timer, timerText, timerBar, status, foot, actions, hint, skip, result, resultTitle, resultNote, next };
+    return { root, foot, ...p };
+  }
+
+  /**
+   * Раскладка «сцена» (макеты Figma «Claude» 2026-10-13: «Game-start», «Game-process»): поле во весь экран; вступление —
+   * вопрос, бриф, сколько попыток, «Начать осмотр»; по ходу — блок справа внизу (ручка «Переместить», вопрос, список
+   * игры, линия, «Найдено» и попытки кружками, подсказка и пропуск); итог — тем же слоем, что вступление.
+   */
+  private buildStageChrome(body: HTMLElement): Chrome {
+    const p = this.chromeParts();
+    const heading = h('h2', { class: 'mg-stage__heading' });
+    const attempts = h('p', { class: 'mg-stage__attempts' });
+    const note = h('p', { class: 'mg-stage__note', hidden: true });
+    const start = h('button', { class: 'mg-btn mg-shell__btn is-start is-primary', type: 'button', on: { click: () => this.begin() } });
+    const intro = h(
+      'div',
+      { class: 'mg-stage__layer' },
+      h('div', { class: 'mg-stage__col' }, heading, p.intro, h('div', { class: 'mg-stage__text' }, p.brief, attempts, note), start),
+    );
+    // Итог — колонкой по центру, как вступление.
+    const col = h('div', { class: 'mg-stage__col' });
+    col.append(...Array.from(p.result.childNodes));
+    p.result.append(col);
+
+    const move = h('span', { class: 'mg-stage__move' });
+    const handle = h('div', { class: 'mg-stage__handle', aria: { hidden: true } }, move, icon('move'));
+    const foot = h('footer', { class: 'mg-shell__foot' }, p.actions);
+    const panel = h(
+      'div',
+      { class: 'mg-stage__panel' },
+      p.title,
+      this.panelList(),
+      h('hr', { class: 'mg-stage__rule' }),
+      h('div', { class: 'mg-stage__sum' }, p.progress, p.timer, p.fails),
+      foot,
+      p.status,
+    );
+    const dock = h('div', { class: 'mg-stage__dock' }, handle, panel);
+    const root = h('section', { class: `mg-shell mg-stage ${this.cls}`, role: 'group' }, h('div', { class: 'mg-shell__body' }, body), dock, intro, p.result);
+    this.makeDraggable(dock, panel, root);
+    return { root, foot, ...p, stage: { intro, heading, attempts, note, start, dock, move } };
+  }
+
+  /**
+   * Блок раскладки 'stage' тянется целиком (владелец 2026-10-14: «таская сам блок, а не только иконку»), мышью и
+   * пальцем, и не выходит за поле; нажатие на кнопку — клик, а не перетаскивание (сдвиг меньше 4 px — тоже клик).
+   * Окно поменяло размер — блок возвращается в поле. Панель не влезла по высоте и листается — пальцем по ней
+   * вертикальный жест листает, остальные тянут блок (is-scroll; жест пальцем браузер решает до pointerdown).
+   */
+  private makeDraggable(dock: HTMLElement, panel: HTMLElement, root: HTMLElement): void {
+    let from: { x: number; y: number; left: number; top: number; id: number; on: boolean } | null = null;
+    const place = (left: number, top: number): void => {
+      const r = root.getBoundingClientRect();
+      const l = Math.min(Math.max(0, left), Math.max(0, r.width - dock.offsetWidth));
+      const t = Math.min(Math.max(0, top), Math.max(0, r.height - dock.offsetHeight));
+      Object.assign(dock.style, { left: `${l}px`, top: `${t}px`, right: 'auto', bottom: 'auto' });
+    };
+    dock.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || (e.target instanceof Element && e.target.closest('button, a, input'))) return;
+      const d = dock.getBoundingClientRect();
+      const r = root.getBoundingClientRect();
+      from = { x: e.clientX, y: e.clientY, left: d.left - r.left, top: d.top - r.top, id: e.pointerId, on: false };
+      // Захват сразу: резкий рывок мышью уводит указатель за блок уже первым движением.
+      dock.setPointerCapture?.(e.pointerId);
+    });
+    dock.addEventListener('pointermove', (e) => {
+      if (!from || e.pointerId !== from.id) return;
+      if (!from.on) {
+        if (Math.hypot(e.clientX - from.x, e.clientY - from.y) < 4) return;
+        from.on = true;
+        dock.classList.add('is-dragging');
+      }
+      place(from.left + e.clientX - from.x, from.top + e.clientY - from.y);
+    });
+    const stop = (): void => {
+      from = null;
+      dock.classList.remove('is-dragging');
+    };
+    dock.addEventListener('pointerup', stop);
+    dock.addEventListener('pointercancel', stop);
+    if (typeof ResizeObserver !== 'undefined') {
+      this.dockObserver = new ResizeObserver(() => {
+        if (dock.style.left) place(parseFloat(dock.style.left), parseFloat(dock.style.top));
+        dock.classList.toggle('is-scroll', panel.scrollHeight > panel.clientHeight + 1);
+      });
+      for (const el of [root, panel, ...Array.from(panel.children)]) this.dockObserver.observe(el);
+    }
   }
 
   private paintPips(limit: number): void {

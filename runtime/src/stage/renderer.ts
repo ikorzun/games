@@ -3,6 +3,7 @@
  * Две реализации: PixiJS (основная, WebGL) и DOM (резерв, если WebGL недоступен). Оболочка Stage
  * (stage.ts) не зависит от того, чем рисуется кадр.
  */
+import type { CamFrame, SignalProfile } from './camcorder';
 import type { ViolenceMode } from '../core/settings';
 import type { SpriteView, TransitionKind, ViewState, SpriteFacing } from '../core/types';
 
@@ -18,6 +19,10 @@ export interface SlotStates {
   /** Кадр покрытия: image — показан вместо спрайтов; placeholder — файла нет, видны спрайты (запасной вариант). */
   shot: SlotState;
   shotId: string | null;
+  /** Подсветка: на ком внимание и есть ли у него маска на этом кадре (image) — только у PixiJS. */
+  focus?: { who: string | null; mask: SlotState };
+  /** Ролик кадра (только PixiJS): грузится, идёт, доиграл и замер, не пошёл (остался кадр), ролика нет. */
+  video?: 'none' | 'loading' | 'playing' | 'ended' | 'failed';
   /** who → состояние спрайта (ушедшие и закадровые не входят). */
   sprites: Record<string, SlotState>;
 }
@@ -44,6 +49,25 @@ export interface ISceneRenderer {
   readonly minigameRoot?: unknown;
   /** Показать/скрыть слой мини-игр. */
   setMinigameActive?(active: boolean): void;
+  /**
+   * Камкордер на видеокарте (PixiJS): движение камеры и искажения записи шейдером на всём кадре. false — не умеет
+   * (DOM-рендерер, шейдер не собрался): камкордер двигает холст CSS-трансформацией и рисует помехи на своём холсте.
+   */
+  camera?(frame: CamFrame, signal: SignalProfile, timeMs: number): boolean;
+  /** Снять камкордер с кадра. */
+  cameraOff?(): void;
+  /**
+   * Настоящее растворение (PixiJS): снимок текущего кадра гаснет за ms поверх следующего. false — не умеет
+   * (DOM-рендерер): Stage делает «нырок» в полутень.
+   */
+  crossfade?(ms: number, style?: 'fade' | 'dither'): boolean;
+  /** Графика (настройка): «Воспоминания» — мягче подсветка говорящего, растворение точками. Только PixiJS. */
+  setGraphics?(mode: 'real' | 'memory'): void;
+  /**
+   * На ком внимание (говорит или его ждут): по маске на кадре покрытия окружение гаснет, по краю силуэта — контровой
+   * свет; смена — плавная. null или нет маски — без подсветки. Только PixiJS.
+   */
+  setFocus?(who: string | null): void;
   destroy(): void;
 }
 

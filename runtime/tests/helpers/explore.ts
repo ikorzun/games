@@ -171,7 +171,10 @@ export function exploreAll(episode: Episode, options: ExploreOptions = {}): Expl
       } catch (e) {
         return fail(`исключение на пути [${trail.join(' → ')}]: ${(e as Error).message}`);
       }
-      for (const ev of res.events) if (ev.t === 'scene') report.visitedScenes.add(ev.view.scene);
+      for (const ev of res.events) {
+        if (ev.t === 'scene') report.visitedScenes.add(ev.view.scene);
+        else if (ev.t === 'scene_pass') report.visitedScenes.add(ev.scene);
+      }
       const p = res.pending;
       const s = interp.state;
       const segKey = `${p.kind}@${s.scene_id}#${s.step_index}|${liveKey(s)}`;

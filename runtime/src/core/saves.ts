@@ -37,8 +37,6 @@ export interface SaveFile {
 
 export interface Profile {
   v: 1;
-  /** «Больше не показывать» на экране контент-предупреждения. */
-  warning_dismissed: boolean;
   /** Прочитанные реплики по эпизодам (для Skip «только прочитанное»). */
   read: Record<string, string[]>;
   /** Достигнутые концовки по эпизодам. */
@@ -51,6 +49,8 @@ export interface ProgressBlob {
   v: 1;
   autosave: unknown;
   quick: unknown;
+  /** Прогресс режима дела по id эпизода; форму проверяет case/state.ts. */
+  cases: Record<string, unknown>;
 }
 
 export interface ArchiveBlob {
@@ -184,7 +184,6 @@ export function sanitizeProfile(raw: unknown): Profile {
   }
   return {
     v: 1,
-    warning_dismissed: r.warning_dismissed === true,
     read: strArrayMap(r.read),
     endings: strArrayMap(r.endings),
     globals,
@@ -197,7 +196,7 @@ export function sanitizeArchive(raw: unknown): ArchiveBlob {
 
 export function sanitizeProgress(raw: unknown): ProgressBlob {
   const r = isRecord(raw) ? raw : {};
-  return { v: 1, autosave: r.autosave ?? null, quick: r.quick ?? null };
+  return { v: 1, autosave: r.autosave ?? null, quick: r.quick ?? null, cases: isRecord(r.cases) ? { ...r.cases } : {} };
 }
 
 // ───────────────────────────── менеджер ─────────────────────────────
@@ -270,6 +269,17 @@ export class SaveManager {
 
   writeQuicksave(file: SaveFile): void {
     this.progress.quick = cloneJson(file);
+    this.scheduleFlush();
+  }
+
+  // — режим дела —
+
+  caseProgress(episodeId: string): unknown {
+    return this.progress.cases[episodeId] ?? null;
+  }
+
+  writeCase(episodeId: string, data: unknown): void {
+    this.progress.cases[episodeId] = cloneJson(data);
     this.scheduleFlush();
   }
 
@@ -369,11 +379,6 @@ export class SaveManager {
 
   setGlobals(globals: Readonly<Record<string, Value>>): void {
     this.profile.globals = { ...this.profile.globals, ...globals };
-    this.scheduleFlush();
-  }
-
-  setWarningDismissed(v: boolean): void {
-    this.profile.warning_dismissed = v;
     this.scheduleFlush();
   }
 

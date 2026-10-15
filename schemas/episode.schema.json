@@ -152,7 +152,9 @@
         "sprite_set": { "$ref": "#/$defs/asciiId", "description": "Имя набора спрайтов в assets.sprites." },
         "voice": { "type": "string", "enum": ["none", "ru_only", "all"] },
         "name_color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-        "bio_key": { "$ref": "#/$defs/locKey" }
+        "bio_key": { "$ref": "#/$defs/locKey" },
+        "title_key": { "$ref": "#/$defs/locKey", "description": "Подпись под именем в окне реплики: роль в истории («покупатель»), без спойлеров." },
+        "portrait": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+\\.(webp|png|jpg)$", "description": "Портрет для круга у имени в окне реплики (квадрат, 128×128), путь от корня репозитория." }
       }
     },
 
@@ -232,6 +234,19 @@
         "music": { "$ref": "#/$defs/asciiId" },
         "ambient": { "$ref": "#/$defs/asciiId" },
         "coverage": { "$ref": "#/$defs/asciiId", "description": "Сет кадров покрытия (assets.shots[].set): монтажёр рантайма берёт из него кадры по грамматике docs/architecture/08-shot-grammar.md §4. Без coverage сцена показывается фоном и спрайтами." },
+        "coverage_alt": {
+          "type": "array", "minItems": 1,
+          "description": "Другой сет того же места по условию (машина Сайко в разные дни): при входе в сцену берётся первый, чей when истинен, — его сет и фон вместо coverage и stage.bg.",
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["when", "coverage", "bg"],
+            "properties": {
+              "when": { "$ref": "#/$defs/expr" },
+              "coverage": { "$ref": "#/$defs/asciiId" },
+              "bg": { "$ref": "#/$defs/asciiId" }
+            }
+          }
+        },
         "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/step" } },
         "notes": { "type": "string", "description": "Заметки сценариста/режиссёра, не попадают в сборку." }
       }
@@ -314,7 +329,7 @@
         "when": { "$ref": "#/$defs/expr", "description": "Условие показа шага; ложное — шаг пропускается." },
         "do": { "const": "caption" },
         "key": { "$ref": "#/$defs/locKey" },
-        "style": { "type": "string", "enum": ["date_stamp", "location", "lower_third", "chapter", "fact"], "description": "date_stamp — «Москва, октябрь 1993»; lower_third — подпись «говорящей головы»; chapter — титр части; fact — сухая справка." },
+        "style": { "type": "string", "enum": ["date_stamp", "location", "lower_third", "chapter", "fact", "day"], "description": "date_stamp — «Москва, октябрь 1993»; lower_third — подпись «говорящей головы»; chapter — титр части; fact — сухая справка; day — отбивка нового дня: экран уходит в чёрное, на нём дата, потом проявляется сцена (держит паузу)." },
         "hold_ms": { "type": "integer", "minimum": 500, "maximum": 10000 }
       }
     },
@@ -386,7 +401,8 @@
         "id": { "$ref": "#/$defs/asciiId" },
         "fade_ms": { "type": "integer", "minimum": 0, "maximum": 10000 },
         "loop": { "type": "boolean" },
-        "volume": { "type": "number", "minimum": 0, "maximum": 1 }
+        "volume": { "type": "number", "minimum": 0, "maximum": 1 },
+        "hold_ms": { "type": "integer", "minimum": 0, "maximum": 8000, "description": "Только sfx: сценарий ждёт столько мс от начала звука, чтобы следующая реплика пришлась на конец события (два звонка и щелчок трубки — потом голос). Окно реплики на это время скрыто; тап ускоряет." }
       }
     },
     "stepFx": {
@@ -396,6 +412,7 @@
         "when": { "$ref": "#/$defs/expr", "description": "Условие показа шага; ложное — шаг пропускается." },
         "do": { "const": "fx" },
         "fx": { "type": "string", "enum": ["fade_out", "fade_in", "flash", "shake", "vhs_glitch", "tracking_noise", "freeze_frame", "zoom_in", "slow_motion", "black_hold", "static_tv", "rewind"] },
+        "shot": { "$ref": "#/$defs/asciiId", "description": "Кадр на время эффекта (вспышка выстрела — кадр выстрела без реплики): явный кадр сценариста, как у реплики." },
         "ms": { "type": "integer", "minimum": 50, "maximum": 10000 },
         "intensity": { "type": "number", "minimum": 0, "maximum": 1 }
       }
@@ -415,7 +432,7 @@
         "hint_after": { "type": "integer", "minimum": 1, "maximum": 5, "default": 2, "description": "Только kind=deduction: после скольких неверных ответов подсветить верные опции (верный ход всегда достижим — история не ломается)." },
         "penalty": { "type": "array", "items": { "$ref": "#/$defs/effect" }, "description": "Только kind=deduction: эффекты за каждый неверный ответ (обычно nerves sub 1). Переменная первого эффекта показывается шкалой во время выбора." },
         "options": {
-          "type": "array", "minItems": 2, "maxItems": 4,
+          "type": "array", "minItems": 1, "maxItems": 4, "description": "Одна опция — «выбор из одного» там, где идти больше некуда (владелец 2026-10-14: в машине — «Пора в отдел»).",
           "items": {
             "type": "object", "additionalProperties": false,
             "required": ["id", "key", "goto"],
@@ -619,6 +636,8 @@
         "path": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$", "description": "Относительный путь; только латиница." },
         "license": { "type": "string" },
         "localized": { "type": "boolean", "default": false },
+        "memory": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$", "description": "Для фонов: та же картинка для графики «Воспоминания»." },
+        "place": { "$ref": "#/$defs/asciiId", "description": "Для фонов: место действия (кабинет, дом на Молодогвардейской, нотариус). Смена фона внутри места — монтажная склейка; растворение (в «Воспоминаниях» точками) — только при смене места. Нет поля — место совпадает с фоном." },
         "season": { "type": "string", "enum": ["spring", "summer", "autumn", "winter", "indoor", "any"], "description": "Для фонов и CG: сезон на картинке; indoor — интерьер, any — нейтральная картинка." },
         "notes": { "type": "string" }
       }
@@ -661,6 +680,24 @@
         "from": { "$ref": "#/$defs/asciiId", "description": "ots: через чьё плечо снято." },
         "focus": { "$ref": "#/$defs/asciiId", "description": "О ком кадр: говорящий (close/ots) или слушающий (reaction)." },
         "file": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$", "description": "assets/<ep>/shots/<set>/<name>.webp, 1920×1080." },
+        "video": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+\\.mp4$", "description": "Ролик того же кадра для графики «Реализм» (H.264, без звука): первый кадр совпадает с file. Играет поверх кадра; не загрузился или prefers-reduced-motion — остаётся file. Для «Воспоминаний» — свой memory.video." },
+        "video_loop": { "type": "boolean", "default": false, "description": "true — ролик повторяется, пока кадр на экране; false — играет один раз и замирает на последнем кадре." },
+        "square": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$", "description": "Квадрат «Реализма» для вертикального экрана (1200×1200): тот же кадр, подрезанный по бокам и достроенный сверху/снизу; нет — 16:9 кадрируется." },
+        "square_masks": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" }, "description": "Маски людей на квадрате «Реализма» (кто → файл), для подсветки говорящего." },
+        "memory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file"],
+          "description": "Тот же кадр для графики «Воспоминания» (стиль графического романа): 16:9, квадрат для вертикального экрана и маски людей к каждому.",
+          "properties": {
+            "file": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" },
+            "square": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" },
+            "masks": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" } },
+            "square_masks": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" } },
+            "video": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+\\.mp4$", "description": "Ролик того же кадра 16:9 (H.264, без звука): первый кадр совпадает с file. Играет поверх кадра только в «Воспоминаниях» на горизонтальном экране; не загрузился или prefers-reduced-motion — остаётся file." },
+            "video_loop": { "type": "boolean", "default": false, "description": "true — ролик повторяется, пока кадр на экране; false — играет один раз и замирает на последнем кадре." }
+          }
+        },
         "notes": { "type": "string" }
       }
     },

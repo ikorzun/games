@@ -786,6 +786,57 @@ describe('сцена: спрайты, CG, звук', () => {
     expect(interp.view.speaker).toBe('b');
   });
 
+  it('переход — от показанного кадра: фон того же места — склейка, другое место — растворение; сцена-логика не показывается', () => {
+    const ep = miniEpisode({
+      office: { stage: { bg: 'bg_office' }, steps: [{ do: 'narrate', key: 'k.1' }, { do: 'jump', scene: 'call' }] },
+      call: { stage: { bg: 'bg_call' }, steps: [{ do: 'narrate', key: 'k.2' }, { do: 'jump', scene: 'route' }] },
+      route: { stage: { bg: 'bg_car' }, steps: [{ do: 'set', effects: [{ var: 'n', op: 'add', value: 1 }] }, { do: 'jump', scene: 'back' }] },
+      back: { stage: { bg: 'bg_office' }, steps: [{ do: 'narrate', key: 'k.3' }, { do: 'jump', scene: 'flat' }] },
+      flat: { stage: { bg: 'bg_flat' }, steps: [{ do: 'narrate', key: 'k.4' }, { do: 'jump', scene: 'logic', transition: 'slow_fade' }] },
+      logic: { stage: { bg: 'bg_car' }, steps: [{ do: 'jump', scene: 'end' }] },
+      end: { stage: { bg: 'bg_office' }, steps: [{ do: 'end', ending: 'e_main' }] },
+    }, { variables: { n: { type: 'int', default: 0 } } });
+    ep.assets = {
+      ...ep.assets,
+      backgrounds: [
+        { id: 'bg_office', path: 'office.webp', place: 'office' },
+        { id: 'bg_call', path: 'call.webp', place: 'office' },
+        { id: 'bg_car', path: 'car.webp' },
+        { id: 'bg_flat', path: 'flat.webp' },
+      ],
+    };
+    const { interp } = make(ep);
+    const events: EngineEvent[] = [];
+    for (let i = 0; i < 20; i++) {
+      const r = interp.pump();
+      events.push(...r.events);
+      if (r.pending.kind === 'end') break;
+      interp.continue();
+    }
+    const shown = events.filter((e) => e.t === 'scene').map((e) => (e.t === 'scene' ? [e.view.scene, e.transition] : []));
+    expect(shown).toEqual([
+      ['office', 'fade'],
+      ['call', 'cut'], // тот же кабинет: склейка, без точек
+      ['back', 'cut'], // машина-логика не показана: переход считается от звонка, место то же
+      ['flat', 'dissolve'], // другое место
+      ['end', 'slow_fade'], // явный переход прыжка в сцену-логику достаётся следующей показанной
+    ]);
+    expect(events.filter((e) => e.t === 'scene_pass').map((e) => (e.t === 'scene_pass' ? e.scene : ''))).toEqual(['route', 'logic']);
+    expect(interp.state.vars.n).toBe(1); // логика сцены выполнена
+  });
+
+  it('звук события с hold_ms: сценарий ждёт, реплика — после звука (звонок, звонок, щелчок трубки — потом голос)', () => {
+    const ep = miniEpisode({
+      s1: { steps: [{ do: 'sfx', id: 'sfx_ring', hold_ms: 3300 }, { do: 'say', who: 'a', key: 'k.hello' }, { do: 'end', ending: 'e_main' }] },
+    });
+    const { interp } = make(ep);
+    const r = interp.pump();
+    expect(r.events.filter((e) => e.t === 'audio').map((e) => (e.t === 'audio' ? e.id : ''))).toEqual(['sfx_ring']);
+    expect(r.pending).toEqual({ kind: 'hold', reason: 'sound', ms: 3300 });
+    interp.continue();
+    expect(interp.pump().pending).toMatchObject({ kind: 'line', key: 'k.hello' });
+  });
+
   it('смена сцены очищает спрайты; музыка переключается только если id другой', () => {
     const ep = miniEpisode({
       s1: {
@@ -801,11 +852,12 @@ describe('сцена: спрайты, CG, звук', () => {
     const audio = events.filter((e) => e.t === 'audio').map((e) => (e.t === 'audio' ? `${e.kind}:${e.id}` : ''));
     expect(audio).toEqual(['music:m_a', 'ambient:amb_a', 'sfx:sfx_a', 'music:m_b', 'stop_ambient:null']);
     const scenes = events.filter((e) => e.t === 'scene');
+    // s2 — одна логика: на экран не выходит (её фон мелькал бы), явный переход прыжка в неё достаётся s3.
     expect(scenes.map((e) => (e.t === 'scene' ? [e.view.scene, e.transition] : []))).toEqual([
       ['s1', 'fade'],
-      ['s2', 'vhs_glitch'],
-      ['s3', 'cut'],
+      ['s3', 'vhs_glitch'],
     ]);
+    expect(events.filter((e) => e.t === 'scene_pass')).toEqual([{ t: 'scene_pass', scene: 's2' }]);
     expect(interp.view.sprites).toEqual([]);
     expect(interp.view.music).toBe('m_b');
     expect(interp.view.ambient).toBeNull();
@@ -1060,5 +1112,69 @@ describe('автопилот', () => {
     expect(a).toEqual(b);
     const cut = runAutoplay(new Interpreter(ep), { maxSteps: 1 });
     expect(cut).toMatchObject({ ending: null, truncated: true });
+  });
+});
+
+describe('Interpreter: находки осмотра (crime_scene_search: hotspots[].archive_unlock / effects)', () => {
+  const BOOL: VariableDef = { type: 'bool', default: false };
+  const ep = miniEpisode(
+    {
+      s1: { steps: [{ do: 'minigame', minigame: 'm_look' }] },
+      s_ok: { steps: [{ do: 'end', ending: 'e_main' }] },
+      s_bad: { steps: [{ do: 'end', ending: 'e_main' }] },
+    },
+    {
+      variables: { photo: BOOL, glasses: BOOL, pills: BOOL },
+      archive: ['arc_photo', 'arc_glasses', 'arc_pills'],
+      minigames: {
+        m_look: mg('m_look', {
+          type: 'crime_scene_search',
+          config: {
+            scene_bg: 'bg_a',
+            max_misses: 3,
+            hotspots: [
+              { id: 'photo', rect: [0.1, 0.1, 0.1, 0.1], label_key: 'k.photo', required: true, archive_unlock: 'arc_photo', effects: [{ var: 'photo', op: 'set', value: true }] },
+              { id: 'glasses', rect: [0.4, 0.1, 0.1, 0.1], label_key: 'k.glasses', required: true, archive_unlock: 'arc_glasses', effects: [{ var: 'glasses', op: 'set', value: true }] },
+              { id: 'pills', rect: [0.7, 0.1, 0.1, 0.1], label_key: 'k.pills', required: false, archive_unlock: 'arc_pills', effects: [{ var: 'pills', op: 'set', value: true }] },
+            ],
+          },
+          outcomes: { success: { goto: 's_ok' }, partial: { goto: 's_ok' }, fail: { goto: 's_bad' } },
+          skip: { allowed: true, skip_counts_as: 'partial' },
+        }),
+      },
+    },
+  );
+  const look = (result: Parameters<Interpreter['finishMinigame']>[0], found?: string[]) => {
+    const interp = new Interpreter(ep);
+    interp.start();
+    expect(interp.pump().pending.kind).toBe('minigame');
+    interp.finishMinigame(result, found);
+    return interp.state;
+  };
+
+  it('что нашёл — то и узнал: каждая найденная зона открывает свой материал и ставит свои переменные', () => {
+    const st = look('partial', ['glasses', 'pills']);
+    expect(st.archive).toEqual(['arc_glasses', 'arc_pills']);
+    expect([st.vars.photo, st.vars.glasses, st.vars.pills]).toEqual([false, true, true]);
+  });
+
+  it('без списка находок (автопилот): успех — все обязательные зоны, частично и неудача — ничего', () => {
+    const ok = look('success');
+    expect(ok.archive).toEqual(['arc_photo', 'arc_glasses']); // необязательная находка не угадывается
+    expect([ok.vars.photo, ok.vars.glasses, ok.vars.pills]).toEqual([true, true, false]);
+    expect(look('partial').archive).toEqual([]);
+    expect(look('fail').archive).toEqual([]);
+  });
+
+  it('пропуск не даёт находок, даже если список пришёл (не смотрел — не видел)', () => {
+    const st = look('skipped', ['photo', 'glasses']);
+    expect(st.archive).toEqual([]);
+    expect(st.vars.photo).toBe(false);
+  });
+
+  it('неудача со списком: найденное до конца времени всё равно найдено', () => {
+    const st = look('fail', ['photo']);
+    expect(st.archive).toEqual(['arc_photo']);
+    expect(st.vars.photo).toBe(true);
   });
 });

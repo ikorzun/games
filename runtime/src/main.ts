@@ -6,8 +6,8 @@ import './stage/stage.css';
 import './ui/styles.css';
 
 import { App } from './app';
-import { i18n, parseSupportedLang } from './core/i18n';
-import { ensureLangs, loadEpisode, loadManifest, loadSeason, loadVoiceIndex } from './core/loader';
+import { i18n, parseSupportedLang, playableLangs } from './core/i18n';
+import { ensureLangs, loadCase, loadEpisode, loadManifest, loadSeason, loadVoiceIndex } from './core/loader';
 import { SaveManager } from './core/saves';
 import type { Lang } from './core/types';
 import { installDebug } from './debug/debug';
@@ -24,13 +24,14 @@ import { LineVoice } from './stage/voice';
 /** Дождаться шрифтов, но не дольше таймаута: без них игра всё равно играбельна. */
 async function loadFonts(timeoutMs = 2500): Promise<void> {
   if (!('fonts' in document)) return;
-  // DM Mono (латиница) и JetBrains Mono (кириллица) — свои файлы в src/ui/fonts (@font-face в styles.css).
+  // Tenor Sans (заголовки), Cormorant Garamond (текст и кнопки), DM Mono и JetBrains Mono (индикация камеры) — свои файлы
+  // в src/ui/fonts (@font-face в styles.css).
   const sample = 'Аёбв Ññãçüé ¿¡ 1993';
   const load = Promise.all([
+    document.fonts.load('16px "Tenor Sans"', sample),
+    document.fonts.load('16px "Cormorant Garamond"', sample),
     document.fonts.load('16px "DM Mono"', sample),
-    document.fonts.load('300 16px "DM Mono"', sample),
     document.fonts.load('16px "JetBrains Mono"', sample),
-    document.fonts.load('300 16px "JetBrains Mono"', sample),
   ]);
   await Promise.race([load, new Promise((r) => setTimeout(r, timeoutMs))]);
 }
@@ -86,12 +87,19 @@ async function boot(): Promise<void> {
     if (!entry) throw new Error('в манифесте нет эпизодов');
     const seasonLoad = loadSeason(base, entry.season); // рамка сезона для полки эпизодов меню: ошибок не бросает
     const { episode, contentVersion } = await loadEpisode(base, entry);
+    // Режим дела (поиск улик), если рядом с эпизодом есть его дело; ?vn=1 — прежняя новелла.
+    const caseLoad = params.get('vn') === '1' ? Promise.resolve(null) : loadCase(base, entry, episode);
 
-    // Язык: ?lang= → выбор игрока → язык платформы (bridge.platform.language / браузер) → en.
-    const lang: Lang = parseSupportedLang(params.get('lang')) ?? saves.settings.lang ?? platform.language();
+    // Язык: ?lang= → выбор игрока → язык платформы (bridge.platform.language / браузер) → en. Предлагаются только языки,
+    // на которые эпизод переведён (localization.status); остальные сводятся к языку оригинала. ?lang= — без ограничений (QA).
+    const asked = parseSupportedLang(params.get('lang'));
+    if (!asked) i18n.setAvailable(playableLangs(episode.localization));
+    const preferred = asked ?? saves.settings.lang ?? platform.language();
+    const source = episode.localization?.source_lang ?? 'ru';
+    const lang: Lang = i18n.available.includes(preferred) ? preferred : i18n.available.includes(source) ? source : i18n.available[0]!;
     await ensureLangs(i18n, base, episode.id, [lang]);
     i18n.setLang(lang);
-    document.documentElement.lang = lang; // по языку выбирается шрифт (кириллица — JetBrains Mono)
+    document.documentElement.lang = lang; // по языку выбирается шрифт индикации камеры (кириллица — JetBrains Mono)
     if (params.get('pseudo') === '1') i18n.setPseudo(true);
 
     registerBuiltinMinigames();
@@ -119,6 +127,7 @@ async function boot(): Promise<void> {
       assets,
       loadLang: (l) => ensureLangs(i18n, base, episode.id, [l]),
       season: await seasonLoad,
+      caseDef: await caseLoad,
       renderer: renderer === 'dom' || renderer === 'pixi' ? (renderer as RendererChoice) : 'auto',
       debug: params.get('debug') === '1' || import.meta.env.DEV,
     });

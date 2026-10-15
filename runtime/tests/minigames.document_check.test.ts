@@ -9,8 +9,9 @@ import type { Episode } from '../src/core/types';
 import { createDocumentCheck, docTextKey, parseDocsConfig, segmentText, TYPE } from '../src/minigames/document_check';
 import { createMinigame, registerBuiltinMinigames } from '../src/minigames/registry';
 import type { GameContext } from '../src/minigames/types';
-import { EP01_PATH, hasRepoContent, loadEpisode, loadStrings } from './helpers/content';
-import { btn, click, defOf, mountGame, press, q, rig, texts, UI } from './helpers/mg_kit';
+import { join } from 'node:path';
+import { EP01_PATH, hasRepoContent, loadEpisode, loadStrings, REPO_ROOT } from './helpers/content';
+import { btn, click, defOf, mountGame, press, q, rig, sizeOf, texts, UI } from './helpers/mg_kit';
 import type { Rig } from './helpers/mg_kit';
 import { miniEpisode } from './helpers/mini';
 
@@ -814,5 +815,248 @@ describe.skipIf(!hasRepoContent())('настоящая мини-игра ep01 (m
     click(q(r.dom, '[data-key="doc_power_of_attorney/principal"]'));
     expect(btn(r.dom, 'is-skip')).not.toBeNull();
     expect(def.skip.skip_counts_as).toBe('fail');
+  });
+});
+
+// ───────────────────────────── сканы ─────────────────────────────
+
+/** Сканы с текстом (localized) у обоих документов: на языке скана сверка идёт на листах. */
+function scanEpisode(): Episode {
+  const ep = episode();
+  ep.assets = {
+    ...(ep.assets ?? {}),
+    documents: [
+      { id: 'doc_poa', path: 'assets/docs/ru/poa.webp', localized: true },
+      { id: 'doc_contract', path: 'assets/docs/ru/contract.webp', localized: true },
+    ],
+  };
+  return ep;
+}
+
+const SCAN_CFG = {
+  ...CFG,
+  fields: [
+    { doc: 'doc_poa', field: 'principal', text_key: 'f.principal', rects: [[0.1, 0.25, 0.3, 0.03]] },
+    { doc: 'doc_poa', field: 'date', text_key: 'f.poa_date', rects: [[0.3, 0.18, 0.2, 0.03]] },
+    { doc: 'doc_poa', field: 'notary', text_key: 'f.notary', rects: [[0.5, 0.66, 0.4, 0.03]] },
+    { doc: 'doc_contract', field: 'poa_ref', text_key: 'f.ref', rects: [[0.8, 0.23, 0.06, 0.03], [0.1, 0.27, 0.5, 0.03]] },
+    { doc: 'doc_contract', field: 'signature', text_key: 'f.sig', rects: [[0.5, 0.47, 0.33, 0.07]] },
+    // без rects: на скане не судится (тап по нему — «нечего сверять»)
+    { doc: 'doc_contract', field: 'date', text_key: 'f.contract_date' },
+  ],
+};
+
+const PW = 300;
+const PH = 400;
+
+interface ScanPlay {
+  r: Rig;
+  m: ReturnType<typeof createDocumentCheck>;
+  page(doc: string): HTMLElement;
+  /** Тап по листу в долях его размера. */
+  tap(doc: string, u: number, v: number, init?: MouseEventInit): void;
+}
+
+function scanPlay(cfg: Record<string, unknown> = SCAN_CFG, ctx: Partial<GameContext> = {}, ep: Episode = scanEpisode()): ScanPlay {
+  const r = rig(defOf(TYPE, cfg), { episode: ep, ctx, strings: STRINGS });
+  const m = mountGame(createDocumentCheck(), r, cfg);
+  click(q(r.dom, 'button.is-start'));
+  const page = (doc: string): HTMLElement => q(r.dom, `.mg-docs__page[data-doc="${doc}"]`);
+  sizeOf(page('doc_poa'), PW, PH, 0, 0);
+  sizeOf(page('doc_contract'), PW, PH, 320, 0);
+  sizeOf(q(r.dom, '.mg-docs__desk'), 640, 420, 0, 0);
+  const tap = (doc: string, u: number, v: number, init: MouseEventInit = {}): void =>
+    click(page(doc), { clientX: (doc === 'doc_poa' ? 0 : 320) + u * PW, clientY: v * PH, ...init });
+  return { r, m, page, tap };
+}
+
+/** Указатель с типом (мышь / палец): у MouseEvent в jsdom нет pointerType — дописываем. */
+function pointer(el: Element, type: string, pointerType: string, x: number, y: number): void {
+  const ev = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y });
+  Object.defineProperty(ev, 'pointerType', { value: pointerType });
+  Object.defineProperty(ev, 'pointerId', { value: 1 });
+  el.dispatchEvent(ev);
+}
+
+describe('сканы: сверка на самих листах (решение владельца 2026-10-14)', () => {
+  it('на языке скана — два листа-скана в раскладке «сцена», текстовых панелей нет; поля — невидимые кнопки', () => {
+    const r = rig(defOf(TYPE, SCAN_CFG), { episode: scanEpisode(), strings: STRINGS });
+    mountGame(createDocumentCheck(), r, SCAN_CFG);
+    expect(r.dom.querySelector('.mg-stage')).not.toBeNull();
+    expect(q(r.dom, 'button.is-start').textContent).toBe('Начать сверку');
+    expect(q(r.dom, '.mg-stage__note').textContent).toBe('Лупа — наведите на лист; на телефоне подержите палец.');
+    expect(r.dom.querySelector('.mg-docs__text')).toBeNull();
+    expect(r.dom.querySelector('.mg-docs__tab')).toBeNull();
+    const scans = [...r.dom.querySelectorAll<HTMLImageElement>('img.mg-docs__scan')].map((i) => i.getAttribute('src'));
+    expect(scans).toEqual(['/assets/docs/ru/poa.webp', '/assets/docs/ru/contract.webp']);
+    // кнопки — только у полей с rects; подписи — фрагменты из локали (для скринридера)
+    expect([...r.dom.querySelectorAll('.mg-docs__zone')].map((z) => z.getAttribute('aria-label'))).toEqual([
+      'С. Зоя Павловна',
+      '14 июня 1993 г.',
+      'Ковригиным А. Н.',
+      'по доверенности от 14 июня 1993 г.',
+      '(подпись)',
+    ]);
+    expect(texts(r.dom, '.mg-scene__item')).toEqual(['1Ещё не найдено', '2Ещё не найдено']);
+  });
+
+  it('тап по несоответствию — находка и красный кружок; по ловушке — ошибка, галочка, «Здесь всё сходится»; по пустому — без ошибки', () => {
+    const { r, tap } = scanPlay();
+    tap('doc_poa', 0.5, 0.95); // пустое поле листа
+    expect(mistakes(r)).toBe('Ошибки: 0 из 3');
+    expect(q(r.dom, '.mg-docs__page[data-doc="doc_poa"] .mg-docs__flash').textContent).toBe('Здесь нечего сверять');
+    tap('doc_poa', 0.7, 0.675); // нотариус — ловушка
+    expect(mistakes(r)).toBe('Ошибки: 1 из 3');
+    expect(r.dom.querySelectorAll('.mg-docs__tick')).toHaveLength(1);
+    expect(q(r.dom, '.mg-docs__page[data-doc="doc_poa"] .mg-docs__flash').textContent).toBe('Здесь всё сходится');
+    tap('doc_poa', 0.7, 0.675); // повтор той же ловушки — не вторая ошибка
+    expect(mistakes(r)).toBe('Ошибки: 1 из 3');
+    tap('doc_poa', 0.4, 0.195); // дата доверенности
+    expect(progress(r)).toBe('Найдено: 1 из 2');
+    expect(r.dom.querySelectorAll('.mg-docs__page[data-doc="doc_poa"] .mg-docs__ring')).toHaveLength(1);
+    expect(texts(r.dom, '.mg-scene__item')).toEqual(['1«14 июня 1993 г.»', '2Ещё не найдено']);
+    tap('doc_contract', 0.9, 0.7); // поле без rects (и пустое место) — не судится
+    expect(mistakes(r)).toBe('Ошибки: 1 из 3');
+  });
+
+  it('мышь точна: тап в стороне от строки — пустое место; пальцем зона растягивается до пальца', () => {
+    const a = scanPlay();
+    a.tap('doc_poa', 0.4, 0.228); // между строкой даты и строкой доверителя, мышью
+    expect(progress(a.r)).toBe('Найдено: 0 из 2');
+    expect(mistakes(a.r)).toBe('Ошибки: 0 из 3');
+    document.body.replaceChildren();
+    const b = scanPlay();
+    pointer(b.page('doc_poa'), 'pointerdown', 'touch', 0.4 * PW, 0.215 * PH);
+    pointer(b.page('doc_poa'), 'pointerup', 'touch', 0.4 * PW, 0.215 * PH);
+    b.tap('doc_poa', 0.4, 0.215);
+    expect(progress(b.r)).toBe('Найдено: 1 из 2');
+  });
+
+  it('оба несоответствия → success; итог — найденное и что оно значит', () => {
+    const { r, tap } = scanPlay();
+    tap('doc_poa', 0.4, 0.195);
+    tap('doc_contract', 0.66, 0.505); // подпись в договоре
+    expect(outcome(r)).toBe('success');
+    expect(texts(r.dom, '.mg-scene__find')).toEqual(['1«14 июня 1993 г.»Дата исправлена', '2«(подпись)»Подпись не совпадает']);
+    click(btn(r.dom, 'is-next'));
+    expect(r.results).toEqual(['success']);
+  });
+
+  it('клавиатура: Enter / Space по кнопке поля — отметка; у такого клика нет координат, пустым местом он не считается', () => {
+    const { r } = scanPlay();
+    click(q(r.dom, '.mg-docs__zone[data-key="doc_poa/notary"]'));
+    expect(mistakes(r)).toBe('Ошибки: 1 из 3');
+    click(q(r.dom, '.mg-docs__zone[data-key="doc_poa/date"]'));
+    expect(progress(r)).toBe('Найдено: 1 из 2');
+    expect(q(r.dom, '.mg-docs__zone[data-key="doc_poa/date"]').getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('палец: подержал — лупа, отпустил — отметки нет; быстрый тап — отметка', () => {
+    vi.useFakeTimers();
+    const { r, page, tap } = scanPlay();
+    const loupe = q(r.dom, '.mg-docs__loupe');
+    pointer(page('doc_poa'), 'pointerdown', 'touch', 0.4 * PW, 0.195 * PH);
+    vi.advanceTimersByTime(300);
+    expect(loupe.hidden).toBe(false);
+    expect(loupe.style.backgroundImage).toContain('poa.webp');
+    pointer(page('doc_poa'), 'pointerup', 'touch', 0.4 * PW, 0.195 * PH);
+    expect(loupe.hidden).toBe(true);
+    tap('doc_poa', 0.4, 0.195); // click, который браузер шлёт после жеста, — не отметка
+    expect(progress(r)).toBe('Найдено: 0 из 2');
+    vi.advanceTimersByTime(600);
+    pointer(page('doc_poa'), 'pointerdown', 'touch', 0.4 * PW, 0.195 * PH);
+    vi.advanceTimersByTime(80);
+    pointer(page('doc_poa'), 'pointerup', 'touch', 0.4 * PW, 0.195 * PH);
+    tap('doc_poa', 0.4, 0.195);
+    expect(loupe.hidden).toBe(true);
+    expect(progress(r)).toBe('Найдено: 1 из 2');
+  });
+
+  it('мышь: лупа над листом, ушла с листа — лупы нет', () => {
+    const { r, page } = scanPlay();
+    const loupe = q(r.dom, '.mg-docs__loupe');
+    pointer(page('doc_contract'), 'pointermove', 'mouse', 320 + 0.5 * PW, 0.3 * PH);
+    expect(loupe.hidden).toBe(false);
+    expect(loupe.style.backgroundImage).toContain('contract.webp');
+    pointer(page('doc_contract'), 'pointerleave', 'mouse', 320 + PW + 5, 0.3 * PH);
+    expect(loupe.hidden).toBe(true);
+  });
+
+  it('подсказка — пунктир на листе и строка в блоке', () => {
+    const { r, m } = scanPlay({ ...SCAN_CFG }, {});
+    (m as unknown as { giveHint(): void }).giveHint();
+    m.serialize(); // подсказка — состояние партии
+    (m as unknown as { render(): void }).render();
+    expect(r.dom.querySelectorAll('.mg-docs__hintbox')).toHaveLength(1);
+    expect(texts(r.dom, '.mg-scene__item')[0]).toBe('1Подсказка: Дата исправлена');
+  });
+
+  it('serialize / restore: найденное и ошибки возвращаются с отметками на листах', () => {
+    const a = scanPlay();
+    a.tap('doc_poa', 0.4, 0.195);
+    a.tap('doc_poa', 0.7, 0.675);
+    const saved = a.m.serialize();
+    document.body.replaceChildren();
+    const b = scanPlay();
+    b.m.restore(saved);
+    expect(progress(b.r)).toBe('Найдено: 1 из 2');
+    expect(mistakes(b.r)).toBe('Ошибки: 1 из 3');
+    expect(b.r.dom.querySelectorAll('.mg-docs__ring')).toHaveLength(1);
+    expect(b.r.dom.querySelectorAll('.mg-docs__tick')).toHaveLength(1);
+  });
+
+  it('текстовый режим остаётся: не язык скана, документ без скана с текстом, несоответствие без rects', () => {
+    const en = rig(defOf(TYPE, SCAN_CFG), { episode: scanEpisode(), ctx: { lang: 'en' }, strings: STRINGS });
+    mountGame(createDocumentCheck(), en, SCAN_CFG);
+    expect(en.dom.querySelector('.mg-stage')).toBeNull();
+    expect(en.dom.querySelectorAll('.mg-docs__tab')).toHaveLength(2);
+    document.body.replaceChildren();
+    const plain = scanEpisode();
+    plain.assets!.documents![1]!.localized = false;
+    const r2 = rig(defOf(TYPE, SCAN_CFG), { episode: plain, strings: STRINGS });
+    mountGame(createDocumentCheck(), r2, SCAN_CFG);
+    expect(r2.dom.querySelector('.mg-stage')).toBeNull();
+    document.body.replaceChildren();
+    const noRects = { ...SCAN_CFG, fields: SCAN_CFG.fields.map((f) => (f.field === 'signature' ? { ...f, rects: undefined } : f)) };
+    const r3 = rig(defOf(TYPE, noRects), { episode: scanEpisode(), strings: STRINGS });
+    mountGame(createDocumentCheck(), r3, noRects);
+    expect(r3.dom.querySelector('.mg-stage')).toBeNull();
+  });
+});
+
+describe.skipIf(!hasRepoContent())('настоящая сверка «Хода следствия» (ep01_hod, mg_docs) — на сканах', () => {
+  const ep = loadEpisode(join(REPO_ROOT, 'episodes', 's1', 'ep01_hod.json'));
+  const def = ep.minigames?.mg_docs;
+  const strings = { ...UI, ...loadStrings('ru', ep.id) };
+
+  it('по-русски — сканы доверенности и договора; дата доверенности находится тапом по центру зоны, ловушка — ошибка', () => {
+    expect(def).toBeDefined();
+    if (!def) return;
+    const r = rig(def, { episode: ep, strings });
+    mountGame(createDocumentCheck(), r, def.config);
+    click(q(r.dom, 'button.is-start'));
+    expect(r.dom.querySelectorAll('.mg-docs__page')).toHaveLength(2);
+    const fields = def.config.fields as Array<{ doc: string; field: string; rects?: number[][] }>;
+    expect(r.dom.querySelectorAll('.mg-docs__zone')).toHaveLength(fields.filter((f) => f.rects).length);
+    const page = q(r.dom, '.mg-docs__page[data-doc="doc_power_of_attorney"]');
+    sizeOf(page, 471, 628);
+    const at = (field: string): MouseEventInit => {
+      const rect = fields.find((f) => f.doc === 'doc_power_of_attorney' && f.field === field)?.rects?.[0];
+      if (!rect) throw new Error(`нет зоны ${field}`);
+      return { clientX: (rect[0]! + rect[2]! / 2) * 471, clientY: (rect[1]! + rect[3]! / 2) * 628 };
+    };
+    click(page, at('stamp'));
+    expect(mistakes(r)).toBe('Ошибки: 1 из 3');
+    click(page, at('date'));
+    expect(outcome(r)).toBe('success');
+    expect(texts(r.dom, '.mg-scene__find')[0]).toBe('1«14 июня 1993 г.»Дата удостоверения исправлена поверх другой цифры');
+  });
+
+  it('по-английски — прежний текстовый режим (сканы русские)', () => {
+    if (!def) return;
+    const r = rig(def, { episode: ep, strings, ctx: { lang: 'en' } });
+    mountGame(createDocumentCheck(), r, def.config);
+    expect(r.dom.querySelector('.mg-stage')).toBeNull();
+    expect(r.dom.querySelectorAll('.mg-docs__frag').length).toBeGreaterThan(0);
   });
 });

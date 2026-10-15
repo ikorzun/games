@@ -31,16 +31,12 @@ import type { ILineVoice } from '../stage/voice';
 import type { CaptionLayer } from './captions';
 import type { UiKit } from './kit';
 import type { QuickAction } from './quick_menu';
-import { DocumentScreen, EndingScreen, MinigameScreen, nameColorOf, nameOf } from './screens';
+import { DocumentScreen, EndingScreen, MinigameScreen, nameOf, titleOf } from './screens';
 import type { Screen } from './screen_host';
 import type { LineView, TextLayout } from './textbox';
 
 /** Пауза между репликами при Skip. */
 const SKIP_DELAY_MS = 35;
-/** Авто-режим с озвучкой: после конца клипа (и полного вывода текста) ждём ещё столько, потом листаем. */
-export const AUTO_VOICE_TAIL_MS = 300;
-/** Страховка авто-режима: клип завис (оборвалась сеть, play() не отвечает) — дольше этого реплику не держим. */
-export const AUTO_VOICE_MAX_WAIT_MS = 120_000;
 
 export interface DomUIDeps {
   episode: Episode;
@@ -53,7 +49,9 @@ export interface DomUIDeps {
   env: () => Readonly<Record<string, Value>>;
   onOpenArchive: () => void;
   /** Изображение бланка документа (assets.documents): адрес сразу, если уже загружен, и промис на позже. */
-  documentArt?: (docId: string) => { url: string | null; ready: Promise<string | null> };
+  documentArt?: (docId: string) => { url: string | null; ready: Promise<string | null>; textInImage?: boolean };
+  /** Портрет персонажа для окна реплики (cast.portrait); нет — null. */
+  portraitArt?: (who: string) => string | null;
   /** Быстрое меню / горячие клавиши, которыми управляет App. */
   onAction: (action: QuickAction) => void;
   onRollback: () => void;
@@ -67,9 +65,7 @@ interface Waiter {
 }
 
 export class DomUI implements SessionUI {
-  autoOn = false;
   skipOn = false;
-  uiHidden = false;
 
   private ctrlSkip = false;
   private paused = false;
@@ -77,9 +73,8 @@ export class DomUI implements SessionUI {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private currentLine: LinePending | null = null;
   private lineRead = false;
-  /** Клип озвучки показанной реплики и отписка авто-режима от его конца. */
+  /** Клип озвучки показанной реплики. */
   private clip: VoicePlayback | null = null;
-  private clipOff: (() => void) | null = null;
   private activeMg: { id: string; mg: IMinigame } | null = null;
   private readonly gameScreens = new Set<Screen>();
   private dummyRoot: unknown = null;
@@ -115,6 +110,8 @@ export class DomUI implements SessionUI {
     this.stopClip();
     if (!mayFast && !ctx.signal.aborted) this.clip = this.d.voice?.start(p) ?? null;
     kit.textbox.show(this.lineView(p), mayFast ? Number.POSITIVE_INFINITY : charsPerSecond(settings.textSpeed));
+    // Подсветка: на ком внимание — говорящий; мысли героя — на нём; рассказчик — ни на ком.
+    this.d.stage.setFocus(p.style === 'say' ? p.who : p.narrate_style === 'inner' ? this.hero() : null);
 
     return new Promise<void>((resolve) => {
       let finished = false;
@@ -132,8 +129,6 @@ export class DomUI implements SessionUI {
         if (finished || this.paused || kit.screens.count > 0) return;
         if (this.fastForward && (this.lineRead || this.d.settings().skipUnread)) {
           this.timer = setTimeout(finish, SKIP_DELAY_MS);
-        } else if (this.autoOn) {
-          this.armAuto(p, finish, arrange);
         }
       };
       const off = kit.textbox.onComplete(arrange);
@@ -162,6 +157,7 @@ export class DomUI implements SessionUI {
   async showChoice(p: ChoicePending, ctx: BaseContext): Promise<string> {
     this.setSkip(false);
     this.clearTimer();
+    this.d.stage.setFocus(this.hero()); // выбор за героем: все ждут его решения
     const s = this.d.settings();
     // Таймеры выборов — только если включены в настройках и не режим «только история».
     return this.d.kit.choices.ask(p, { timers: s.timers && !s.storyOnly, signal: ctx.signal });
@@ -172,17 +168,26 @@ export class DomUI implements SessionUI {
     this.d.kit.textbox.hide();
     if (p.reason === 'caption' && p.caption) {
       const close = this.d.captions.hold(p.caption.key, p.caption.style);
+      // На отбивке дня — только дата на чёрном: кнопки быстрого меню прячутся (владелец 2026-10-14).
+      const day = p.caption.style === 'day';
+      if (day) this.d.kit.root.classList.add('is-day-card');
       try {
         await this.waitHold(p.ms, ctx);
       } finally {
         close();
+        if (day) this.d.kit.root.classList.remove('is-day-card');
       }
+      // Отбивка дня гаснет на чёрном и только потом проявляется сцена — дата не висит поверх нового кадра.
+      if (p.caption.style === 'day' && !ctx.instant) await new Promise((r) => setTimeout(r, 360));
       return;
     }
     if (p.fx) {
       const visual = this.d.stage.playFx(p.fx.fx, p.ms, p.fx.intensity, ctx.instant);
       await Promise.race([visual, this.waitHold(p.ms, ctx)]);
+      return;
     }
+    // Пауза на звук события (звонок телефона, в дверь): кадр без окна реплики, пока звук не отыграет.
+    if (p.reason === 'sound') await this.waitHold(p.ms, ctx);
   }
 
   showDocument(p: DocumentPending, ctx: BaseContext): Promise<void> {
@@ -200,7 +205,13 @@ export class DomUI implements SessionUI {
           resolve();
         },
         art?.url ?? null,
+        art?.textInImage === true,
       );
+      // Esc закрывает документ, как крестик. Закрытие при выходе из партии (closeGameScreen) шаг не продолжает.
+      screen.onClose = () => {
+        if (!this.gameScreens.delete(screen)) return;
+        resolve();
+      };
       this.openGameScreen(screen);
       // Бланк мог ещё грузиться: покажем, как только придёт.
       void art?.ready.then((url) => {
@@ -229,7 +240,7 @@ export class DomUI implements SessionUI {
       },
       t: (key, params) => t(key, params),
       vars: () => this.d.env(),
-      settings: { timers: settings.timers && !settings.storyOnly, storyOnly: settings.storyOnly },
+      settings: { timers: settings.timers && !settings.storyOnly, storyOnly: settings.storyOnly, graphics: settings.graphics },
       introKey: p.intro_key,
       ...(platform.capabilities.rewarded ? { showRewarded: () => platform.showRewarded('minigame_hint') } : {}),
       track: (event, data) => platform.track(event, data),
@@ -251,7 +262,9 @@ export class DomUI implements SessionUI {
       mg.onResult = (r) => {
         if (done) return;
         done = true;
+        const state = ctx.final ? mg.serialize() : undefined;
         cleanup();
+        ctx.final?.(state);
         resolve(r);
       };
       ctx.signal.addEventListener(
@@ -276,13 +289,18 @@ export class DomUI implements SessionUI {
     this.d.kit.textbox.hide();
     this.d.kit.choices.close();
     return new Promise<void>((resolve) => {
-      const screen = new EndingScreen(p.ending, state, {
-        onMenu: () => {
-          this.closeGameScreen(screen);
-          resolve();
+      const screen = new EndingScreen(
+        p.ending,
+        state,
+        {
+          onMenu: () => {
+            this.closeGameScreen(screen);
+            resolve();
+          },
+          onArchive: this.d.onOpenArchive,
         },
-        onArchive: this.d.onOpenArchive,
-      });
+        this.d.episode,
+      );
       this.openGameScreen(screen);
       ctx.signal.addEventListener('abort', () => this.closeGameScreen(screen), { once: true });
     });
@@ -321,13 +339,6 @@ export class DomUI implements SessionUI {
 
   // ───────────────────────────── режимы и ввод ─────────────────────────────
 
-  toggleAuto(): void {
-    this.autoOn = !this.autoOn;
-    this.d.kit.quick.setState({ auto: this.autoOn });
-    if (this.autoOn) this.waiter?.rearrange?.();
-    else this.clearTimer();
-  }
-
   toggleSkip(): void {
     if (!this.skipOn && this.currentLine && !(this.lineRead || this.d.settings().skipUnread)) {
       // Пропускать можно только прочитанное: объясняем подсказкой, иначе кнопка выглядит сломанной.
@@ -344,22 +355,9 @@ export class DomUI implements SessionUI {
     this.d.kit.quick.setState({ skip: on });
   }
 
-  toggleHidden(): void {
-    this.setUiHidden(!this.uiHidden);
-  }
-
-  setUiHidden(hidden: boolean): void {
-    this.uiHidden = hidden;
-    this.d.kit.setUiHidden(hidden);
-  }
-
   /** Продвинуть сюжет: клик, тап, Space, Enter. */
   advance(): void {
     if (this.d.kit.screens.count > 0) return;
-    if (this.uiHidden) {
-      this.setUiHidden(false);
-      return;
-    }
     if (this.d.kit.choices.active) return;
     this.waiter?.advance();
   }
@@ -373,11 +371,8 @@ export class DomUI implements SessionUI {
     captions.refresh();
     kit.screens.refresh();
     if (this.currentLine && kit.textbox.visible) kit.textbox.rerender(this.lineView(this.currentLine));
-    // Клип прежнего языка обрывается; авто-режим считает паузу по тексту (отсчёт возобновится, когда закроют экран).
-    if (this.clip) {
-      this.stopClip();
-      this.waiter?.rearrange?.();
-    }
+    // Клип прежнего языка обрывается.
+    this.stopClip();
   }
 
   private pokeSkip(): void {
@@ -414,10 +409,7 @@ export class DomUI implements SessionUI {
       const inControl = !!target?.closest('button, input, select, textarea, a');
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (!this.d.kit.screens.closeTop()) {
-          if (this.uiHidden) this.setUiHidden(false);
-          else this.d.onAction('settings');
-        }
+        if (!this.d.kit.screens.closeTop()) this.d.onAction('settings');
         return;
       }
       if (this.d.kit.screens.count > 0) return;
@@ -440,10 +432,6 @@ export class DomUI implements SessionUI {
           e.preventDefault();
           this.d.onRollback();
           break;
-        case 'a':
-        case 'A':
-          this.d.onAction('auto');
-          break;
         case 's':
         case 'S':
           this.d.onAction('skip');
@@ -452,9 +440,9 @@ export class DomUI implements SessionUI {
         case 'L':
           this.d.onAction('log');
           break;
-        case 'h':
-        case 'H':
-          this.d.onAction('hide');
+        case 'n':
+        case 'N':
+          this.d.onAction('notebook');
           break;
         case 'm':
         case 'M':
@@ -488,70 +476,39 @@ export class DomUI implements SessionUI {
 
   // ───────────────────────────── внутренности ─────────────────────────────
 
+  /** Герой, за которого играет игрок (frame.player_character); его подсвечивают в мыслях и на выборе. */
+  private hero(): string | null {
+    return this.d.episode.frame.player_character ?? null;
+  }
+
   private lineView(p: LinePending): LineView {
     const view = this.d.view();
     const preset = presetOf(view?.presentation ?? 'reconstruction');
-    const layout: TextLayout = preset.text === 'window' ? 'window' : 'subtitle';
-    const showName = p.style === 'say' && p.who !== null && (preset.speakerName || layout === 'subtitle');
+    // Реплика персонажа — всегда в окне с именем, как везде в игре (владелец 2026-10-14: запись 2004 года была по
+    // центру субтитром); субтитр — только рассказчику хроники, суда и монтажа.
+    const speaker = p.style === 'say' && p.who !== null;
+    const layout: TextLayout = preset.text === 'window' || speaker ? 'window' : 'subtitle';
+    const showName = speaker && (preset.speakerName || preset.text !== 'window');
+    // Окно реплики (макет в Figma): полное имя, подпись под ним и портрет.
     return {
-      name: showName ? nameOf(this.d.episode, p.who) : null,
-      nameColor: showName ? nameColorOf(this.d.episode, p.who) : null,
+      name: showName ? nameOf(this.d.episode, p.who, false) : null,
+      title: showName ? titleOf(this.d.episode, p.who) : null,
+      portrait: showName && p.who ? (this.d.portraitArt?.(p.who) ?? null) : null,
       text: t(p.key),
       style: p.style === 'say' ? 'say' : (p.narrate_style ?? 'voiceover'),
       layout,
     };
   }
 
-  private autoDelay(p: LinePending): number {
-    const chars = Array.from(t(p.key)).length;
-    return this.d.settings().autoDelayMs + Math.min(2500, chars * 20);
-  }
-
   private clearTimer(): void {
-    this.d.kit.autobar.stop();
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
-    this.clipOff?.();
-    this.clipOff = null;
-  }
-
-  /**
-   * Авто-режим. С озвучкой реплика длится, пока играет клип: ждём его конец (и полный вывод текста — сюда попадаем
-   * после него) плюс AUTO_VOICE_TAIL_MS. Клип сорвался (файл не читается, автозапуск запрещён) или его остановили
-   * (озвучку выключили, сменили язык) — снова считаем паузу по длине текста, как для реплики без клипа.
-   */
-  private armAuto(p: LinePending, finish: () => void, rearm: () => void): void {
-    const clip = this.clip;
-    const bar = this.d.kit.autobar;
-    if (clip?.state === 'playing') {
-      // Длительность клипа заранее неизвестна: полоса отсчёта показывается только для паузы по тексту.
-      bar.stop();
-      this.timer = setTimeout(finish, AUTO_VOICE_MAX_WAIT_MS);
-      this.clipOff = clip.onEnd((how) => {
-        this.clipOff = null;
-        if (this.timer !== null) clearTimeout(this.timer);
-        this.timer = null;
-        if (how === 'ended') {
-          this.timer = setTimeout(finish, AUTO_VOICE_TAIL_MS);
-          bar.start(AUTO_VOICE_TAIL_MS);
-        } else rearm();
-      });
-    } else if (clip?.state === 'ended') {
-      this.timer = setTimeout(finish, AUTO_VOICE_TAIL_MS);
-      bar.start(AUTO_VOICE_TAIL_MS);
-    } else {
-      const ms = this.autoDelay(p);
-      this.timer = setTimeout(finish, ms);
-      bar.start(ms);
-    }
   }
 
   /** Оборвать клип озвучки показанной реплики и отписаться от его конца. */
   private stopClip(): void {
     const clip = this.clip;
     this.clip = null;
-    this.clipOff?.();
-    this.clipOff = null;
     clip?.stop();
   }
 
@@ -567,11 +524,13 @@ export class DomUI implements SessionUI {
         if (finished) return;
         finished = true;
         clearTimeout(timer);
-        this.waiter = null;
+        // эффект мог кончиться раньше паузы (hold: Promise.race) — тогда тут уже ожидание следующей реплики, его не трогаем
+        if (this.waiter === waiter) this.waiter = null;
         resolve();
       };
       const timer = setTimeout(done, ms);
-      this.waiter = { advance: done };
+      const waiter: Waiter = { advance: done };
+      this.waiter = waiter;
       ctx.signal.addEventListener('abort', done, { once: true });
     });
   }

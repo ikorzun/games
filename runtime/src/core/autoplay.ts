@@ -106,7 +106,10 @@ export function runAutoplay(
 
   for (let i = 0; i < maxSteps; i++) {
     const { events, pending } = interp.pump();
-    for (const ev of events) if (ev.t === 'scene') report.scenes.push(ev.view.scene);
+    for (const ev of events) {
+      if (ev.t === 'scene') report.scenes.push(ev.view.scene);
+      else if (ev.t === 'scene_pass') report.scenes.push(ev.scene); // сцена-логика: пройдена, хоть и без показа
+    }
     hooks.onEvents?.(events);
     report.steps += 1;
 

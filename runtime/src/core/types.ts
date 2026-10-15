@@ -55,7 +55,8 @@ export const STAGE_FILTERS: readonly StageFilter[] = [
 
 export type Position = 'left' | 'center' | 'right' | 'offscreen_left' | 'offscreen_right';
 export type TransitionKind = 'cut' | 'fade' | 'dissolve' | 'wipe' | 'vhs_glitch' | 'flash' | 'slow_fade';
-export type CaptionStyle = 'date_stamp' | 'location' | 'lower_third' | 'chapter' | 'fact';
+/** day — отбивка нового дня: экран уходит в чёрное, на нём дата, потом проявляется сцена (владелец 2026-10-14). */
+export type CaptionStyle = 'date_stamp' | 'location' | 'lower_third' | 'chapter' | 'fact' | 'day';
 export type NarrateStyle = 'voiceover' | 'inner' | 'report';
 export type FxKind =
   | 'fade_out'
@@ -116,6 +117,10 @@ export interface Character {
   voice?: 'none' | 'ru_only' | 'all';
   name_color?: string;
   bio_key?: string;
+  /** Подпись под именем в окне реплики (роль в истории: «покупатель»). */
+  title_key?: string;
+  /** Портрет для круга у имени в окне реплики (путь от корня репозитория, как у ассетов). */
+  portrait?: string;
 }
 
 export interface Block {
@@ -222,10 +227,14 @@ export interface AudioStep extends StepBase {
   fade_ms?: number;
   loop?: boolean;
   volume?: number;
+  /** Только sfx: сценарий ждёт столько мс от начала звука — следующая реплика приходится на конец события. */
+  hold_ms?: number;
 }
 export interface FxStep extends StepBase {
   do: 'fx';
   fx: FxKind;
+  /** Кадр на время эффекта (вспышка выстрела — кадр выстрела без реплики). */
+  shot?: string;
   ms?: number;
   intensity?: number;
 }
@@ -303,6 +312,12 @@ export type Step =
   | ArchiveStep
   | EndStep;
 
+export interface CoverageAlt {
+  when: string;
+  coverage: string;
+  bg: string;
+}
+
 export interface Scene {
   id: string;
   block: string;
@@ -311,6 +326,8 @@ export interface Scene {
   ambient?: string;
   /** Сет кадров покрытия (assets.shots[].set); без него сцена идёт фоном и спрайтами. */
   coverage?: string;
+  /** Другой сет того же места по условию (машина в разные дни): первый с истинным when заменяет coverage и фон. */
+  coverage_alt?: CoverageAlt[];
   steps: Step[];
   notes?: string;
 }
@@ -370,6 +387,10 @@ export interface AssetEntry {
   path: string;
   license?: string;
   localized?: boolean;
+  /** Для фонов: та же картинка для графики «Воспоминания». */
+  memory?: string;
+  /** Для фонов: место действия; смена фона внутри места — склейка, растворение — только при смене места. */
+  place?: string;
   notes?: string;
 }
 /** Поворот персонажа на кадрах набора: влево, вправо (сторона зрителя) или анфас. */
@@ -411,7 +432,27 @@ export interface Shot {
   /** О ком кадр: говорящий (close/ots) или слушающий (reaction). */
   focus?: string;
   file: string;
+  /** Ролик того же кадра для «Реализма» (первый кадр совпадает с file); у «Воспоминаний» — свой memory.video. */
+  video?: string;
+  /** Ролик повторяется; иначе играет один раз и замирает на последнем кадре. */
+  video_loop?: boolean;
+  /** Квадрат «Реализма» для вертикального экрана (владелец 2026-10-15) и маски людей на нём. */
+  square?: string;
+  square_masks?: Record<string, string>;
+  /** Тот же кадр для графики «Воспоминания»: 16:9, квадрат для вертикального экрана и маски людей к каждому. */
+  memory?: ShotMemory;
   notes?: string;
+}
+
+export interface ShotMemory {
+  file: string;
+  square?: string;
+  masks?: Record<string, string>;
+  square_masks?: Record<string, string>;
+  /** Ролик того же кадра 16:9 (первый кадр совпадает с file): только «Воспоминания» на горизонтальном экране. */
+  video?: string;
+  /** Ролик повторяется; иначе играет один раз и замирает на последнем кадре. */
+  video_loop?: boolean;
 }
 
 export interface Assets {
@@ -580,6 +621,8 @@ export type AudioKind = 'music' | 'sfx' | 'ambient' | 'stop_music' | 'stop_ambie
 /** Неблокирующие команды презентационному слою (сцена, титры, звук). Применяются по порядку. */
 export type EngineEvent =
   | { t: 'scene'; view: ViewState; transition: TransitionKind; newBlock: boolean; first: boolean }
+  /** Сцена-логика (только переменные, ветвления, прыжки, звук) пройдена без показа: кадр на экране не меняется. */
+  | { t: 'scene_pass'; scene: string }
   | { t: 'caption'; key: string; style: CaptionStyle; hold_ms: number }
   | { t: 'show'; sprite: SpriteView; existing: boolean; transition: TransitionKind }
   | { t: 'hide'; who: string; transition: TransitionKind }
@@ -607,7 +650,8 @@ export interface LinePending {
 
 export interface HoldPending {
   kind: 'hold';
-  reason: 'caption' | 'fx';
+  /** sound — пауза на звук события (sfx с hold_ms): звонок отзвенел, трубку сняли — тогда реплика. */
+  reason: 'caption' | 'fx' | 'sound';
   ms: number;
   caption?: { key: string; style: CaptionStyle };
   fx?: { fx: FxKind; intensity: number };

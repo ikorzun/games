@@ -32,6 +32,7 @@ import type {
   ChoiceStep,
   DeductionMeter,
   DocumentPending,
+  Effect,
   Ending,
   EngineEvent,
   Episode,
@@ -49,6 +50,7 @@ import type {
   PumpResult,
   SayStep,
   Scene,
+  Shot,
   Snapshot,
   SpriteView,
   StageFilter,
@@ -78,6 +80,7 @@ export const DEFAULT_CAPTION_HOLD_MS: Readonly<Record<CaptionStyle, number>> = {
   lower_third: 4500,
   chapter: 3500,
   fact: 4000,
+  day: 2600,
 };
 
 export const DEFAULT_FX_MS: Readonly<Record<FxKind, number>> = {
@@ -97,6 +100,16 @@ export const DEFAULT_FX_MS: Readonly<Record<FxKind, number>> = {
 
 /** Предохранитель от бесконечных неблокирующих циклов (например, jump сам в себя). */
 const MAX_NONBLOCKING_STEPS = 5000;
+
+/**
+ * Шаги, которые ничего не показывают и не ждут игрока. Сцена только из них — развилка-логика (подсчёт мест,
+ * маршрут): на экран она не выходит, иначе её фон мелькал бы на время растворения (владелец 2026-10-14: «лишние
+ * промежуточные кадры на полсекунды»).
+ */
+const LOGIC_STEPS: ReadonlySet<string> = new Set(['set', 'branch', 'jump', 'archive_unlock', 'music', 'ambient', 'sfx', 'stop_music', 'stop_ambient']);
+
+/** Шаги, которые не показывают кадр и не ждут игрока: через них ищется первая реплика сцены (её явный кадр — входной). */
+const PASSIVE_STEPS: ReadonlySet<string> = new Set([...LOGIC_STEPS, 'caption', 'show', 'hide']);
 
 /** Дедуктивная развилка: после стольких неверных ходов верные опции подсвечиваются (schema: hint_after). */
 export const DEFAULT_HINT_AFTER = 2;
@@ -173,6 +186,12 @@ export class Interpreter {
 
   private _state: GameState | null = null;
   private _view: ViewState | null = null;
+  /** Последний кадр, ушедший на экран: сцены-логика его не меняют, переход считается от него. */
+  private shown: ViewState | null = null;
+  /** Явный переход прыжка в сцену-логику: достаётся следующей показанной сцене. */
+  private carry: TransitionKind | null = null;
+  /** Фон → место действия (assets.backgrounds[].place; нет — сам фон): растворение только при смене места. */
+  private readonly placeOf = new Map<string, string>();
   private queue: EngineEvent[] = [];
   private current: Pending | null = null;
   private adBlock: string | null = null;
@@ -193,6 +212,7 @@ export class Interpreter {
       this.archiveItems.set(a.id, a);
     }
     this.shots = new ShotIndex(episode.assets?.shots ?? []);
+    for (const b of episode.assets?.backgrounds ?? []) this.placeOf.set(b.id, b.place ?? b.id);
     this.pov = episode.frame.player_character ?? null;
     this.lineLength = options.lineLength ?? (() => 0);
   }
@@ -253,6 +273,8 @@ export class Interpreter {
     if (!first) throw new EngineError('в эпизоде нет блоков');
     this._state = createInitialState(this.episode, first.entry_scene, carried ?? this.carriedGlobals);
     this._view = null;
+    this.shown = null;
+    this.carry = null;
     this.queue = [];
     this.current = null;
     this.adBlock = null;
@@ -276,6 +298,8 @@ export class Interpreter {
     }
     this._state = cloneJson(snap.state);
     this._view = cloneJson(snap.view);
+    this.shown = this._view;
+    this.carry = null;
     // Снимки до появления дедуктивных развилок: счётчиков нет — ни одна опция ещё не испробована.
     this._state.deductions ??= {};
     // Сейвы до появления покрытия: кадра нет, сцена идёт спрайтами до следующего входа в сцену.
@@ -393,8 +417,13 @@ export class Interpreter {
     this.queue.push({ t: 'checkpoint', reason: 'choice' });
   }
 
-  /** Ответ на ожидание minigame. `skipped` маппится в `skip.skip_counts_as` (по умолчанию partial). */
-  finishMinigame(result: MinigameResult): MinigameResolution {
+  /**
+   * Ответ на ожидание minigame. `skipped` маппится в `skip.skip_counts_as` (по умолчанию partial).
+   * `found` — что игрок нашёл в осмотре (id зон config.hotspots): каждая найденная зона применяет свои
+   * archive_unlock и effects (что нашёл — то и узнал). Без списка (автопилот, тесты): успех — найдены все
+   * обязательные зоны, иначе ничего; пропуск — ничего, даже со списком (не смотрел — не видел).
+   */
+  finishMinigame(result: MinigameResult, found?: readonly string[]): MinigameResolution {
     const p = this.current;
     if (!p || p.kind !== 'minigame') throw new EngineError('finishMinigame(): сейчас нет мини-игры');
     const def = p.def;
@@ -406,10 +435,25 @@ export class Interpreter {
     const outcome: Outcome = def.outcomes[counted] ?? def.outcomes.fail;
     applyEffects(this.state, this.episode, outcome.effects);
     if (outcome.archive_unlock) this.unlock(outcome.archive_unlock, true);
+    this.applyFinds(def, counted, result === 'skipped' ? [] : found);
     this.current = null;
     this.enterScene(outcome.goto, { reason: 'goto' });
     this.queue.push({ t: 'checkpoint', reason: 'minigame' });
     return { result, counted, goto: outcome.goto };
+  }
+
+  /** Награды найденных зон осмотра (config.hotspots[].archive_unlock / effects). */
+  private applyFinds(def: MinigameDef, counted: MinigameOutcomeKind, found: readonly string[] | undefined): void {
+    const zones = Array.isArray(def.config.hotspots) ? (def.config.hotspots as unknown[]) : [];
+    const isZone = (z: unknown): z is { id: string; required?: unknown; archive_unlock?: unknown; effects?: unknown } =>
+      typeof z === 'object' && z !== null && typeof (z as { id?: unknown }).id === 'string';
+    const list = zones.filter(isZone);
+    const ids = found ?? (counted === 'success' ? list.filter((z) => z.required === true).map((z) => z.id) : []);
+    for (const z of list) {
+      if (!ids.includes(z.id)) continue;
+      if (Array.isArray(z.effects)) applyEffects(this.state, this.episode, z.effects as Effect[]);
+      if (typeof z.archive_unlock === 'string') this.unlock(z.archive_unlock, true);
+    }
   }
 
   // ───────────────────────────── внутренности ─────────────────────────────
@@ -506,10 +550,19 @@ export class Interpreter {
       music: prev?.music ?? null,
       ambient: prev?.ambient ?? null,
     };
+    // Тот же путь в другой день — другие кадры (владелец 2026-10-14: «одни и те же положения героев в разные дни выглядят
+    // уныло»): первый вариант с истинным условием заменяет сет и фон сцены.
+    const alt = scene.coverage_alt?.find((a) => this.test(a.when));
+    if (alt) {
+      view.coverage = alt.coverage;
+      view.bg = alt.bg;
+    }
 
-    // Покрытие: вход в сцену — общий план сета с составом сцены (08 §4.1); кадров нет — спрайты.
+    // Покрытие: вход в сцену — общий план сета с составом сцены (08 §4.1); кадров нет — спрайты. Если у первой
+    // реплики явный кадр (сцена держится на кадре через плечо), входим сразу на нём: иначе общий план мелькал на
+    // время перехода и тут же сменялся (владелец 2026-10-14: «лишние промежуточные кадры на полсекунды»).
     if (view.coverage !== null && this.shots.hasSet(view.coverage)) {
-      view.shot = entryShot(this.shots, view.coverage, this.sceneCast(scene))?.id ?? null;
+      view.shot = this.firstLineShot(scene, view.coverage) ?? entryShot(this.shots, view.coverage, this.sceneCast(scene))?.id ?? null;
       view.shot_ctx = { ...EMPTY_CTX };
     } else {
       view.coverage = null;
@@ -517,11 +570,19 @@ export class Interpreter {
 
     if (prev?.cg && newBlock) this.emit({ t: 'cg_hide', transition: 'fade' });
 
+    // Переход — от последнего показанного кадра: новый блок — затемнение; другое место — растворение (в «Воспоминаниях»
+    // точками); другой фон того же места (кабинет → звонок, площадка → квартира) — склейка (владелец 2026-10-14:
+    // «точки только при глобальной смене локаций»).
+    const shown = this.shown;
+    const place = (bg: string | null): string | null => (bg === null ? null : (this.placeOf.get(bg) ?? bg));
+    const passThrough = shown !== null && scene.steps.every((st) => LOGIC_STEPS.has(st.do));
+    const explicit = opts.transition ?? this.carry;
     let transition: TransitionKind;
-    if (opts.transition) transition = opts.transition;
-    else if (prev === null || newBlock) transition = 'fade';
-    else transition = prev.bg !== view.bg ? 'dissolve' : 'cut';
-    if (prev && transition === 'cut' && prev.presentation !== view.presentation) transition = 'fade';
+    if (explicit) transition = explicit;
+    else if (shown === null || shown.block !== block.id) transition = 'fade';
+    else transition = place(shown.bg) !== place(view.bg) ? 'dissolve' : 'cut';
+    if (shown && transition === 'cut' && shown.presentation !== view.presentation) transition = 'fade';
+    this.carry = passThrough ? explicit : null;
 
     // Музыка/эмбиент сцены (или блока при входе в него) включаются при входе; без указания — продолжают играть.
     const music = scene.music ?? (newBlock ? block.music : undefined);
@@ -534,7 +595,13 @@ export class Interpreter {
     state.scene_id = scene.id;
     state.step_index = 0;
     this._view = view;
-    this.emit({ t: 'scene', view: cloneJson(view), transition, newBlock, first: prev === null });
+    if (passThrough) {
+      this.emit({ t: 'scene_pass', scene: scene.id });
+    } else {
+      this.shown = view;
+      // newBlock для сцены — от показанного кадра: блок, вошедший через сцену-логику, всё равно подгрузится.
+      this.emit({ t: 'scene', view: cloneJson(view), transition, newBlock: shown === null || shown.block !== block.id, first: prev === null });
+    }
     if (startMusic !== null) {
       this.emit({ t: 'audio', kind: 'music', id: startMusic, fade_ms: 800, loop: true, volume: 1 });
     }
@@ -579,25 +646,47 @@ export class Interpreter {
     return this.view.sprites.filter((s) => !isOffscreenPos(s.position)).map((s) => s.who);
   }
 
-  /** Состав сцены по её шагам — для общего плана при входе, когда спрайтов ещё нет. */
+  /**
+   * Состав на входе в сцену — для общего плана, когда спрайтов ещё нет: кто появился до первой реплики персонажа,
+   * и сам первый говорящий. Кто приходит позже (дверь открылась после реплики), в общий план входа не попадает:
+   * иначе кадр показывал человека, которого ещё нет, и на первой реплике тут же сменялся (s02: Лапин на полсекунды).
+   */
   private sceneCast(scene: Scene): string[] {
     let cast = this.sceneCasts.get(scene.id);
     if (!cast) {
       const on = new Set<string>();
       const off = new Set<string>();
       const spoke = new Set<string>();
+      let conditional = false; // show с when: состав зависит от партии — не кешируем
       for (const step of scene.steps) {
+        if (step.do === 'show' && step.when !== undefined) {
+          conditional = true;
+          if (!this.test(step.when)) continue;
+        }
         if (step.do === 'show') (isOffscreenPos(step.position) ? off : on).add(step.who);
         else if (step.do === 'say') {
           if (step.position !== undefined) (isOffscreenPos(step.position) ? off : on).add(step.who);
           else spoke.add(step.who);
+          break; // первая реплика персонажа — конец входа
         }
       }
       for (const who of spoke) if (!off.has(who)) on.add(who);
       cast = [...on];
-      this.sceneCasts.set(scene.id, cast);
+      if (!conditional) this.sceneCasts.set(scene.id, cast);
     }
     return cast;
+  }
+
+  /** Явный кадр первой реплики сцены, если до неё нет ничего, что показывает или ждёт (выбор, документ, эффект…). */
+  private firstLineShot(scene: Scene, coverage: string): string | null {
+    for (const st of scene.steps) {
+      if (st.do === 'say' || st.do === 'narrate') {
+        if (st.when !== undefined && !this.test(st.when)) continue;
+        return st.shot !== undefined && this.shots.get(st.shot) ? this.altShot(scene, coverage, st.shot) : null;
+      }
+      if (!PASSIVE_STEPS.has(st.do)) return null;
+    }
+    return null;
   }
 
   private shotEvent(pick: ShotPick): EngineEvent | null {
@@ -631,15 +720,34 @@ export class Interpreter {
     );
   }
 
-  private explicitShotEvent(id: string, who: string | null): EngineEvent | null {
+  /**
+   * coverage_alt заменил сет сцены: явный кадр основного сета — кадр того же вида и того же порядка среди кадров этого
+   * вида в сете-замене (вид из окна машины в понедельник → вид вторника). Пары нет — кадр основного сета (линтер это ловит).
+   */
+  private altShot(scene: Scene, cov: string, id: string): string {
+    const shot = this.shots.get(id);
+    if (!shot || shot.set !== scene.coverage || shot.set === cov) return id;
+    const sameKind = (set: string): Shot[] => this.shots.set(set).filter((s) => s.kind === shot.kind);
+    const alt = sameKind(cov)[sameKind(shot.set).indexOf(shot)];
+    if (!alt) this.warn(`сцена ${scene.id}: у кадра ${id} нет пары того же вида в сете ${cov} — показан кадр основного сета`);
+    return alt?.id ?? id;
+  }
+
+  private explicitShotEvent(explicit: string, who: string | null): EngineEvent | null {
     const view = this.view;
     if (view.coverage === null) return null;
+    const scene = this.scene(this.state.scene_id);
+    const id = scene ? this.altShot(scene, view.coverage, explicit) : explicit;
     const shot = this.shots.get(id);
     if (!shot) {
       this.warn(`сцена ${this.state.scene_id}: кадр ${id} не объявлен в assets.shots — оставлен текущий`);
       return null;
     }
-    if (shot.set !== view.coverage) this.warn(`сцена ${this.state.scene_id}: кадр ${id} из сета ${shot.set}, а сцена покрыта сетом ${view.coverage}`);
+    // Кадр другого сета того же места (звонок в кабинете — Громов у телефона) — штатно; другого места — ошибка сценария.
+    const place = (bg: string): string => this.placeOf.get(bg) ?? bg;
+    if (shot.set !== view.coverage && place(shot.bg) !== place(view.bg)) {
+      this.warn(`сцена ${this.state.scene_id}: кадр ${id} из сета ${shot.set} (другое место), а сцена покрыта сетом ${view.coverage}`);
+    }
     return this.shotEvent(explicitShot(this.shots, id, view.shot, view.shot_ctx ?? { ...EMPTY_CTX }, who));
   }
 
@@ -788,6 +896,8 @@ export class Interpreter {
             loop: step.loop ?? step.do !== 'sfx',
             volume: step.volume ?? 1,
           });
+          // Звук события с паузой: следующая реплика — после него (step_index сдвинет continue()).
+          if (step.do === 'sfx' && step.hold_ms) return { kind: 'hold', reason: 'sound', ms: step.hold_ms } satisfies HoldPending;
         }
         state.step_index += 1;
         return null;
@@ -801,6 +911,11 @@ export class Interpreter {
         return null;
       }
       case 'fx': {
+        // Кадр эффекта (выстрел: вспышка на кадре выстрела) — до паузы, чтобы эффект лёг уже на него.
+        if (step.shot !== undefined) {
+          const ev = this.explicitShotEvent(step.shot, null);
+          if (ev) this.emit(ev);
+        }
         const p: HoldPending = {
           kind: 'hold',
           reason: 'fx',

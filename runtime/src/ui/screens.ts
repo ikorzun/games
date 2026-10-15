@@ -5,9 +5,8 @@
  */
 import { i18n, t } from '../core/i18n';
 import type { SaveFile } from '../core/saves';
-import { AUTO_DELAY_RANGE, CAMERA_FX_LEVELS, FONT_SCALE_RANGE } from '../core/settings';
+import { CAMERA_FX_LEVELS, FONT_SCALE_RANGE, GRAPHICS_MODES } from '../core/settings';
 import type { CameraFx, Settings } from '../core/settings';
-import { LANGS } from '../core/types';
 import type { ArchiveItem, Episode, GameState, Ending, Lang } from '../core/types';
 import type { LogEntry } from '../session';
 import { cssUrl, fill, h } from './dom';
@@ -41,6 +40,12 @@ export function nameOf(episode: Episode, who: string | null, short = true): stri
   const c = episode.cast.find((x) => x.id === who);
   if (!c) return who;
   return t(short && c.short_name_key ? c.short_name_key : c.name_key);
+}
+
+/** Подпись под именем в окне реплики (cast.title_key); нет — null. */
+export function titleOf(episode: Episode, who: string | null): string | null {
+  const key = who ? episode.cast.find((x) => x.id === who)?.title_key : undefined;
+  return key ? t(key) : null;
 }
 
 export function nameColorOf(episode: Episode, who: string | null): string | null {
@@ -131,7 +136,7 @@ export class MenuScreen extends BaseScreen {
       'nav',
       { class: 'vn-menu__icons' },
       h('span', { class: 'vn-menu__lang-code', text: i18n.lang.toUpperCase(), aria: { hidden: true } }),
-      iconBtn('globe', t('ui.menu.language'), () => this.toggleLangs(), 'is-lang', this.langOpen),
+      i18n.available.length > 1 ? iconBtn('globe', t('ui.menu.language'), () => this.toggleLangs(), 'is-lang', this.langOpen) : null,
       iconBtn('log', t('ui.menu.archive'), hd.onArchive, 'is-archive'),
       iconBtn('settings', t('ui.menu.settings'), hd.onSettings, 'is-settings'),
     );
@@ -226,7 +231,7 @@ export function languageChips(onPick: (lang: Lang) => void): HTMLElement {
   return h(
     'div',
     { class: 'vn-langs', role: 'group', aria: { label: t('ui.menu.language') } },
-    ...LANGS.map((lang) =>
+    ...i18n.available.map((lang) =>
       h('button', {
         class: `vn-chip${i18n.lang === lang ? ' is-on' : ''}`,
         type: 'button',
@@ -245,16 +250,20 @@ export function languageChips(onPick: (lang: Lang) => void): HTMLElement {
 
 export interface WarningHandlers {
   settings: () => Settings;
-  onViolenceMode: (mode: Settings['violenceMode']) => void;
-  onContinue: (dontShowAgain: boolean) => void;
+  onContinue: () => void;
   onBack: () => void;
+  /** Логотип передачи (assets/common/ui/logo_kr.webp, адрес загруженного файла) — в правом верхнем углу. */
+  logo?: string | null;
 }
 
-/** Экран перед эпизодом: предупреждение о содержании + юридический дисклеймер (ethics-and-legal.md §5, §7). */
+/**
+ * Экран перед эпизодом «Основано на реальных событиях» (макет Figma «Claude», узел 1232:1612, решение владельца
+ * 2026-10-13): на чёрном фоне с красным низом — заголовок, предупреждение и дисклеймер одним текстом
+ * (ethics-and-legal.md §5), возраст, «Назад / Продолжить»; логотип передачи справа вверху. Режим показа насилия — в
+ * настройках; в схематичном режиме вместо «Строго 18+» — строка про схематичный показ (16+). Показывается перед каждой
+ * новой игрой.
+ */
 export class WarningScreen extends BaseScreen {
-  private dontShow = false;
-  private detailsOpen = true;
-
   constructor(
     private readonly episode: Episode,
     private readonly handlers: WarningHandlers,
@@ -264,73 +273,31 @@ export class WarningScreen extends BaseScreen {
 
   render(): void {
     const { handlers: hd, episode: ep } = this;
-    const mode = hd.settings().violenceMode;
-    const body = mode === 'schematic' ? t('ui.warning.body_schematic') : t('ui.warning.body_generic');
-    const radio = (value: Settings['violenceMode'], label: string): HTMLElement =>
-      h(
-        'label',
-        { class: 'vn-radio' },
-        h('input', {
-          type: 'radio',
-          name: 'violence',
-          value,
-          checked: mode === value,
-          on: { change: () => hd.onViolenceMode(value) },
-        }),
-        h('span', { text: label }),
-      );
+    const age =
+      hd.settings().violenceMode === 'schematic'
+        ? t('ui.disclaimer.body_age_schematic')
+        : t('ui.disclaimer.body_age', { rating: ep.age_rating ?? '18+' });
+    const paragraphs = [...t('ui.disclaimer.body').split(/\n\s*\n/), age].filter((p) => p.trim() !== '');
+    let logo: HTMLImageElement | null = null;
+    if (hd.logo) {
+      logo = h('img', { class: 'vn-warning__logo' });
+      logo.src = hd.logo;
+      logo.alt = t('ui.menu.brand');
+      logo.draggable = false;
+    }
     fill(
       this.el,
-      card(
-        'vn-warning__card',
-        h('h2', { class: 'vn-warning__title', text: t('ui.warning.title') }),
-        h('p', { class: 'vn-warning__body', text: body }),
-        h(
-          'fieldset',
-          { class: 'vn-warning__violence' },
-          h('legend', { text: t('ui.settings.violence_mode') }),
-          radio('full', t('ui.settings.violence_full')),
-          radio('schematic', t('ui.settings.violence_schematic')),
-        ),
-        h('button', {
-          class: 'vn-linkbtn',
-          type: 'button',
-          text: t('ui.warning.details'),
-          aria: { expanded: this.detailsOpen },
-          on: {
-            click: () => {
-              this.detailsOpen = !this.detailsOpen;
-              this.render();
-            },
-          },
-        }),
-        h(
-          'section',
-          { class: 'vn-warning__disclaimer', hidden: !this.detailsOpen },
-          h('h3', { text: t('ui.disclaimer.title') }),
-          h('p', { text: t('ui.disclaimer.body') }),
-          ep.age_rating ? h('p', { class: 'vn-warning__rating', text: ep.age_rating }) : null,
-        ),
-        h(
-          'label',
-          { class: 'vn-check' },
-          h('input', {
-            type: 'checkbox',
-            checked: this.dontShow,
-            on: { change: (e) => (this.dontShow = (e.target as HTMLInputElement).checked) },
-          }),
-          h('span', { text: t('ui.warning.dont_show') }),
-        ),
+      logo,
+      h(
+        'div',
+        { class: 'vn-warning__box' },
+        h('h2', { class: 'vn-warning__title', text: t('ui.disclaimer.title') }),
+        h('div', { class: 'vn-warning__body' }, ...paragraphs.map((text) => h('p', { text }))),
         h(
           'div',
-          { class: 'vn-actions' },
+          { class: 'vn-warning__actions' },
           backButton(hd.onBack),
-          h('button', {
-            class: 'vn-btn is-primary',
-            type: 'button',
-            text: t('ui.warning.continue'),
-            on: { click: () => hd.onContinue(this.dontShow) },
-          }),
+          h('button', { class: 'vn-btn is-primary', type: 'button', text: t('ui.warning.continue'), on: { click: () => hd.onContinue() } }),
         ),
       ),
     );
@@ -369,13 +336,14 @@ export class SettingsScreen extends BaseScreen {
     const hd = this.handlers;
     const range = (
       label: string,
-      key: 'fontScale' | 'textSpeed' | 'autoDelayMs' | 'music' | 'sfx' | 'voice',
+      key: 'fontScale' | 'textSpeed' | 'music' | 'sfx' | 'voice',
       min: number,
       max: number,
       step: number,
       fmt: (v: number) => string,
     ): HTMLElement => {
       const out = h('output', { class: 'vn-range__out', text: fmt(s[key]) });
+      const fill = (v: number): string => `${((v - min) / (max - min)) * 100}%`; // заливка дорожки до бегунка
       return h(
         'label',
         { class: 'vn-range' },
@@ -387,9 +355,12 @@ export class SettingsScreen extends BaseScreen {
           step,
           value: s[key],
           aria: { label },
+          style: { '--val': fill(s[key]) },
           on: {
             input: (e) => {
-              const v = Number((e.target as HTMLInputElement).value);
+              const el = e.target as HTMLInputElement;
+              const v = Number(el.value);
+              el.style.setProperty('--val', fill(v));
               out.textContent = fmt(v);
               hd.onChange({ [key]: v } as Partial<Settings>);
             },
@@ -432,6 +403,31 @@ export class SettingsScreen extends BaseScreen {
     const pct = (v: number): string => `${Math.round(v * 100)}%`;
     // «Эффекты камеры»: выкл / слабо / сильно. Кнопки-сегменты, а не radio — как переключатель языка.
     const reduced = hd.reducedMotion?.() ?? false;
+    // «Графика»: реализм / воспоминания — те же кнопки-сегменты.
+    const graphics = h(
+      'div',
+      { class: 'vn-settings__group' },
+      h('span', { class: 'vn-settings__legend', text: t('ui.settings.graphics') }),
+      h(
+        'div',
+        { class: 'vn-langs vn-graphics', role: 'group', aria: { label: t('ui.settings.graphics') } },
+        ...GRAPHICS_MODES.map((mode) =>
+          h('button', {
+            class: `vn-chip${s.graphics === mode ? ' is-on' : ''}`,
+            type: 'button',
+            text: t(`ui.settings.graphics_${mode}`),
+            data: { graphics: mode },
+            aria: { pressed: s.graphics === mode },
+            on: {
+              click: () => {
+                hd.onChange({ graphics: mode });
+                this.render();
+              },
+            },
+          }),
+        ),
+      ),
+    );
     const camLevel: CameraFx = hd.effectiveCameraFx?.() ?? (reduced ? 'off' : s.cameraFx);
     const cameraFx = h(
       'div',
@@ -506,11 +502,13 @@ export class SettingsScreen extends BaseScreen {
         'vn-settings__card',
         h('h2', { class: 'vn-card__title', text: t('ui.menu.settings') }),
         quick,
-        h('div', { class: 'vn-settings__group' }, h('span', { class: 'vn-settings__legend', text: t('ui.settings.language') }), languageChips(hd.onLanguage)),
+        i18n.available.length > 1
+          ? h('div', { class: 'vn-settings__group' }, h('span', { class: 'vn-settings__legend', text: t('ui.settings.language') }), languageChips(hd.onLanguage))
+          : null,
         cameraFx,
+        graphics,
         range(t('ui.settings.font_size'), 'fontScale', FONT_SCALE_RANGE.min, FONT_SCALE_RANGE.max, FONT_SCALE_RANGE.step, pct),
         range(t('ui.settings.text_speed'), 'textSpeed', 1, 5, 1, (v) => `${v}/5`),
-        range(t('ui.settings.auto_delay'), 'autoDelayMs', AUTO_DELAY_RANGE.min, AUTO_DELAY_RANGE.max, AUTO_DELAY_RANGE.step, (v) => `${(v / 1000).toFixed(1)} s`),
         range(t('ui.settings.music'), 'music', 0, 1, 0.05, pct),
         range(t('ui.settings.sfx'), 'sfx', 0, 1, 0.05, pct),
         voice,
@@ -532,59 +530,40 @@ export class SettingsScreen extends BaseScreen {
 
 // ───────────────────────────── журнал (backlog) ─────────────────────────────
 
-export interface LogHandlers {
+/** Журнал реплик — вкладка «Журнал» в заметках (владелец 2026-10-15: журнал и блокнот — одно окно «Заметки»). */
+export interface LogSource {
   entries: () => readonly LogEntry[];
   /** Сколько реплик назад можно откатиться максимум. */
   maxRollback: () => number;
   onRollback: (steps: number) => void;
-  onClose: () => void;
 }
 
-export class LogScreen extends BaseScreen {
-  constructor(
-    private readonly episode: Episode,
-    private readonly handlers: LogHandlers,
-  ) {
-    super('vn-log');
-  }
-
-  render(): void {
-    const entries = this.handlers.entries();
-    const maxBack = this.handlers.maxRollback();
-    const items = entries.map((e, i) => {
-      const steps = entries.length - 1 - i;
-      const name = nameOf(this.episode, e.who);
-      return h(
-        'li',
-        { class: `vn-log__item is-${e.kind}${e.narrate_style ? ` is-${e.narrate_style}` : ''}` },
-        name ? h('b', { class: 'vn-log__name', style: { color: nameColorOf(this.episode, e.who) ?? '' }, text: name }) : null,
-        h('span', { class: 'vn-log__text', text: t(e.key) }),
-        steps > 0 && steps <= maxBack
-          ? h('button', {
-              class: 'vn-log__back',
-              type: 'button',
-              title: t('ui.common.back'),
-              aria: { label: `${t('ui.common.back')} ×${steps}` },
-              text: '↶',
-              on: { click: () => this.handlers.onRollback(steps) },
-            })
-          : null,
-      );
-    });
-    const list = h('ol', { class: 'vn-log__list' }, ...items);
-    fill(
-      this.el,
-      card(
-        'vn-log__card',
-        h('h2', { class: 'vn-card__title', text: t('ui.quick.log') }),
-        entries.length === 0 ? h('p', { class: 'vn-muted', text: t('ui.archive.empty') }) : list,
-        h('div', { class: 'vn-actions' }, backButton(this.handlers.onClose)),
-      ),
+/** Список реплик с кнопками отката; пустой журнал — строка «пока пусто». */
+function logList(episode: Episode, src: LogSource): HTMLElement {
+  const entries = src.entries();
+  if (entries.length === 0) return h('p', { class: 'vn-archive__empty', text: t('ui.archive.empty') });
+  const maxBack = src.maxRollback();
+  const items = entries.map((e, i) => {
+    const steps = entries.length - 1 - i;
+    const name = nameOf(episode, e.who);
+    return h(
+      'li',
+      { class: `vn-log__item is-${e.kind}${e.narrate_style ? ` is-${e.narrate_style}` : ''}` },
+      name ? h('b', { class: 'vn-log__name', style: { color: nameColorOf(episode, e.who) ?? '' }, text: name }) : null,
+      h('span', { class: 'vn-log__text', text: t(e.key) }),
+      steps > 0 && steps <= maxBack
+        ? h('button', {
+            class: 'vn-log__back',
+            type: 'button',
+            title: t('ui.common.back'),
+            aria: { label: `${t('ui.common.back')} ×${steps}` },
+            text: '↶',
+            on: { click: () => src.onRollback(steps) },
+          })
+        : null,
     );
-    requestAnimationFrame(() => {
-      list.scrollTop = list.scrollHeight;
-    });
-  }
+  });
+  return h('ol', { class: 'vn-log__list' }, ...items);
 }
 
 // ───────────────────────────── сохранение / загрузка ─────────────────────────────
@@ -710,47 +689,313 @@ export class SaveLoadScreen extends BaseScreen {
 
 // ───────────────────────────── архив ─────────────────────────────
 
+export interface ArchiveOptions {
+  /** Скан бумаги по id ассета (как у окна документа): адрес, если уже загружен, и промис загрузки. */
+  documentArt?: (docId: string) => { url: string | null; ready: Promise<string | null> };
+  /** Открыть бумагу крупно — окном документа поверх блокнота. Нет — бумага лежит записью с текстом. */
+  onOpenDocument?: (item: ArchiveItem) => void;
+  /** Запись появилась после того, как блокнот открывали в последний раз: на ней штамп «новый материал». */
+  isNew?: (id: string) => boolean;
+  /**
+   * Ход следствия: записи в том порядке, в каком их отдаёт unlocked (порядок находок партии), с номерами и красными
+   * стрелками от каждой к следующей. Нет — порядок эпизода, без номеров и стрелок (архив в меню).
+   */
+  path?: boolean;
+  /** Заметки в партии: рядом с блокнотом вкладка «Журнал» (владелец 2026-10-15). Нет — только блокнот (архив в меню). */
+  log?: LogSource;
+}
+
+/** Вкладки заметок: блокнот открывается по умолчанию. */
+export type NotesTab = 'notebook' | 'log';
+
+/** Наклон бумажки и вид бумаги — от id записи, а не от места в списке: новая запись не перекладывает старые. */
+const NOTE_TILTS = [-1.3, 0.9, -0.5, 1.2, -0.9, 0.4, 1.4, -0.3];
+
+/** FNV-1a: бумаги и наклоны распределяются по записям ровнее, чем простой полиномиальный хэш. */
+function noteSeed(id: string): number {
+  let s = 2166136261;
+  for (const ch of id) s = Math.imul(s ^ ch.charCodeAt(0), 16777619) >>> 0;
+  return s;
+}
+
+interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Точка на краю прямоугольника r в сторону центра s, отступив gap наружу: стрелка не прячется под бумажкой. */
+function edgeToward(r: Box, s: Box, gap: number): [number, number] {
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  const dx = s.x + s.w / 2 - cx;
+  const dy = s.y + s.h / 2 - cy;
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return [cx, cy];
+  const t = Math.min(dx !== 0 ? r.w / 2 / Math.abs(dx) : Infinity, dy !== 0 ? r.h / 2 / Math.abs(dy) : Infinity);
+  return [cx + dx * t + (dx / len) * gap, cy + dy * t + (dy / len) * gap];
+}
+
+/** Красные стрелки от записи к следующей — лёгкой дугой, по очереди в разные стороны, как рукой по бумаге. */
+function drawPath(board: HTMLElement, svg: SVGSVGElement): void {
+  const box = board.getBoundingClientRect();
+  if (box.width === 0 || box.height === 0) return; // экран ещё не выложен (или jsdom)
+  // Концы стрелок — у самой бумаги: у скана это лист под скрепкой, а не вся колонка записи.
+  const rects: Box[] = [...board.querySelectorAll<HTMLElement>('.vn-archive__item')].map((el) => {
+    const r = (el.querySelector('.vn-archive__open') ?? el.querySelector('.vn-archive__paper') ?? el).getBoundingClientRect();
+    return { x: r.left - box.left, y: r.top - box.top, w: r.width, h: r.height };
+  });
+  const paths: string[] = [];
+  for (let i = 1; i < rects.length; i++) {
+    const a = rects[i - 1]!;
+    const b = rects[i]!;
+    const [x1, y1] = edgeToward(a, b, 6);
+    const [x2, y2] = edgeToward(b, a, 12);
+    const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+    const bend = Math.min(36, len * 0.12) * (i % 2 ? 1 : -1);
+    const qx = (x1 + x2) / 2 - ((y2 - y1) / len) * bend;
+    const qy = (y1 + y2) / 2 + ((x2 - x1) / len) * bend;
+    const n = (v: number): string => v.toFixed(1);
+    paths.push(`<path d="M${n(x1)} ${n(y1)}Q${n(qx)} ${n(qy)} ${n(x2)} ${n(y2)}" marker-end="url(#vn-archive-arrow)"/>`);
+  }
+  svg.setAttribute('viewBox', `0 0 ${box.width.toFixed(0)} ${box.height.toFixed(0)}`);
+  svg.setAttribute('width', box.width.toFixed(0));
+  svg.setAttribute('height', box.height.toFixed(0));
+  svg.innerHTML =
+    '<defs><marker id="vn-archive-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="8" markerHeight="8" orient="auto">' +
+    '<path d="M0 1L10 5L0 9z"/></marker></defs>' +
+    paths.join('');
+}
+
+/**
+ * Блокнот следователя (в меню — «Архив»): без подложки — в игре поверх размытого кадра, в меню на графите. Записи —
+ * предметы: карточки и обрывки под скотчем, жёлтые стикеры, бумаги дела сканом под скрепкой (касание открывает окно
+ * документа), фото — отпечатком. В игре записи идут в порядке находок, с номерами, и от каждой к следующей — красная
+ * стрелка: ход следствия. Новое с прошлого раза — под красным штампом.
+ */
 export class ArchiveScreen extends BaseScreen {
+  /** Esc закрывает блокнот мимо onDone: хозяин узнаёт о закрытии отсюда. */
+  onClose?: () => void;
+  /** Стрелки пересчитываются, когда меняются размеры (догрузились сканы, сменилась ширина окна). */
+  private resize: ResizeObserver | null = null;
+  /** Открытая вкладка заметок (без журнала — всегда блокнот). */
+  tab: NotesTab = 'notebook';
+  /** Блокнот показывали: штампы «новый материал» увидены (журнал их не снимает). */
+  sawNotebook = false;
+
   constructor(
     private readonly episode: Episode,
     private readonly unlocked: () => readonly string[],
     private readonly onDone: () => void,
+    /** В игре тот же список открывается кнопкой «Блокнот» — с её заголовком. */
+    private readonly titleKey = 'ui.archive.title',
+    private readonly opts: ArchiveOptions = {},
   ) {
     super('vn-archive');
   }
 
   render(): void {
-    const ids = new Set(this.unlocked());
-    const items: ArchiveItem[] = (this.episode.archive_items ?? []).filter((a) => ids.has(a.id));
+    this.resize?.disconnect();
+    this.resize = null;
+    const all = this.episode.archive_items ?? [];
+    const open = this.unlocked();
+    const items: ArchiveItem[] = this.opts.path
+      ? [...new Set(open)].map((id) => all.find((a) => a.id === id)).filter((a): a is ArchiveItem => a !== undefined)
+      : all.filter((a) => open.includes(a.id));
+    const board =
+      items.length === 0
+        ? null
+        : h(
+            'div',
+            { class: 'vn-archive__board', data: { backdrop: 1 } },
+            h('ul', { class: 'vn-archive__list', data: { backdrop: 1 } }, ...items.map((a, i) => this.note(a, i))),
+          );
+    // В игре под блокнотом — размытый кадр (как под документом); в меню кадра нет — графитовый фон.
+    this.el.classList.toggle('is-menu', !this.opts.path);
+    const log = this.opts.log;
+    const onLog = log !== undefined && this.tab === 'log';
+    if (!onLog) this.sawNotebook = true;
+    const page = onLog
+      ? h('div', { class: 'vn-archive__page is-log' }, logList(this.episode, log))
+      : h('div', { class: 'vn-archive__page', data: { backdrop: 1 } }, board ?? h('p', { class: 'vn-archive__empty', text: t('ui.archive.empty') }));
+    // Сегмент «Блокнот | Журнал» — как переключатели в настройках (vn-chip, aria-pressed).
+    const tabs = log
+      ? h(
+          'div',
+          { class: 'vn-notes__tabs', role: 'group', aria: { label: t(this.titleKey) } },
+          ...(['notebook', 'log'] as const).map((tab) =>
+            h('button', {
+              class: `vn-chip${this.tab === tab ? ' is-on' : ''}`,
+              type: 'button',
+              text: t(`ui.quick.${tab}`),
+              data: { tab },
+              aria: { pressed: this.tab === tab },
+              on: {
+                click: () => {
+                  if (this.tab === tab) return;
+                  this.tab = tab;
+                  this.render();
+                },
+              },
+            }),
+          ),
+        )
+      : null;
     fill(
       this.el,
-      card(
-        'vn-archive__card',
-        h('h2', { class: 'vn-card__title', text: t('ui.archive.title') }),
-        items.length === 0
-          ? h('p', { class: 'vn-muted', text: t('ui.archive.empty') })
-          : h(
-              'ul',
-              { class: 'vn-archive__list' },
-              ...items.map((a) =>
-                h(
-                  'li',
-                  { class: `vn-archive__item is-${a.kind}` },
-                  h('h3', { text: t(a.title_key) }),
-                  a.real_fact ? h('span', { class: 'vn-badge', text: t('ui.archive.real_fact') }) : null,
-                  a.text_key ? h('p', { text: t(a.text_key) }) : null,
-                ),
-              ),
-            ),
-        h('div', { class: 'vn-actions' }, backButton(this.onDone)),
+      h(
+        'div',
+        { class: 'vn-archive__box', data: { backdrop: 1 } },
+        h(
+          'div',
+          { class: 'vn-archive__head', data: { backdrop: 1 } },
+          h(
+            'h2',
+            { class: 'vn-archive__title' },
+            t(this.titleKey),
+            // Архив в меню — всё, что найдено за все партии: здесь и общий счёт (на финале партии — только её блокнот).
+            !this.opts.path && all.length > 0 ? h('span', { class: 'vn-archive__count', text: t('ui.archive.count', { n: items.length, total: all.length }) }) : null,
+          ),
+          // Крестик — как у окна документа.
+          h(
+            'button',
+            { class: 'vn-document__close', type: 'button', title: t('ui.common.close'), aria: { label: t('ui.common.close') }, on: { click: this.onDone } },
+            icon('close'),
+          ),
+        ),
+        tabs,
+        page,
       ),
+    );
+    if (onLog) {
+      const list = page.querySelector('.vn-log__list');
+      requestAnimationFrame(() => {
+        if (list) list.scrollTop = list.scrollHeight;
+        page.scrollTop = page.scrollHeight;
+      });
+    } else if (board && this.opts.path && items.length > 1) this.trackPath(board);
+  }
+
+  private trackPath(board: HTMLElement): void {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'vn-archive__lines');
+    svg.setAttribute('aria-hidden', 'true');
+    board.prepend(svg);
+    const draw = (): void => {
+      if (board.isConnected) drawPath(board, svg);
+      else this.resize?.disconnect();
+    };
+    draw();
+    if (typeof ResizeObserver !== 'function') return;
+    this.resize = new ResizeObserver(draw);
+    this.resize.observe(board);
+    for (const li of board.querySelectorAll('.vn-archive__item')) this.resize.observe(li);
+  }
+
+  private note(a: ArchiveItem, index: number): HTMLElement {
+    const seed = noteSeed(a.id);
+    const title = t(a.title_key);
+    const open = this.opts.onOpenDocument;
+    const scan = a.kind === 'document' && a.asset && open ? this.opts.documentArt?.(a.asset) : undefined;
+    const print = a.kind === 'photo' && a.asset ? this.opts.documentArt?.(a.asset) : undefined;
+    const picture = (cls: string, art: { url: string | null; ready: Promise<string | null> }): HTMLImageElement => {
+      const img = h('img', { class: cls });
+      img.alt = '';
+      if (art.url) img.src = art.url;
+      else
+        void art.ready.then((url) => {
+          if (url) img.src = url;
+        });
+      return img;
+    };
+    const text = [
+      h('h3', { text: title }),
+      ...(a.real_fact ? [h('span', { class: 'vn-badge', text: t('ui.archive.real_fact') })] : []),
+      ...(a.text_key ? [h('p', { text: t(a.text_key) })] : []),
+    ];
+    const body: HTMLElement[] = scan
+      ? [
+          h(
+            'button',
+            {
+              class: 'vn-archive__open',
+              type: 'button',
+              aria: { label: title },
+              on: {
+                // штамп снимается тут же, без перерисовки доски (прокрутка остаётся на месте)
+                click: (e) => {
+                  (e.currentTarget as HTMLElement).closest('.vn-archive__item')?.querySelector('.vn-archive__stamp')?.remove();
+                  open?.(a);
+                },
+              },
+            },
+            picture('vn-archive__scan', scan),
+            h('span', { class: 'vn-archive__clip', aria: { hidden: true } }),
+          ),
+          h('h3', { text: title }),
+        ]
+      : print
+        ? [picture('vn-archive__print', print), ...text]
+        : text;
+    return h(
+      'li',
+      {
+        class: `vn-archive__item is-${a.kind}${scan ? ' has-scan' : ''}${print ? ' has-print' : ''}`,
+        data: { paper: seed % 3 },
+        style: { '--tilt': `${NOTE_TILTS[(seed >>> 3) % NOTE_TILTS.length]}deg` },
+      },
+      this.opts.path ? h('span', { class: 'vn-archive__num', text: String(index + 1) }) : null,
+      h('div', { class: 'vn-archive__paper' }, ...body),
+      this.opts.isNew?.(a.id) ? h('span', { class: 'vn-archive__stamp', text: t('ui.archive.new_item') }) : null,
     );
   }
 }
 
 // ───────────────────────────── документ ─────────────────────────────
 
+/**
+ * Лист настоящей бумаги: клик или касание — вдвое крупнее, ещё раз — назад. Увеличенный лист двигают мышью с зажатой
+ * кнопкой (решение владельца 2026-10-13); пальцем — прокруткой браузера, с инерцией. Перетаскивание — не клик: масштаб
+ * от него не меняется.
+ */
+function zoomableSheet(sheet: HTMLElement): HTMLElement {
+  let drag: { x: number; y: number; left: number; top: number; moved: boolean } | null = null;
+  let dragged = false;
+  sheet.addEventListener('pointerdown', (e) => {
+    dragged = false;
+    if (e.pointerType !== 'mouse' || e.button !== 0 || !sheet.classList.contains('is-zoomed')) return;
+    drag = { x: e.clientX, y: e.clientY, left: sheet.scrollLeft, top: sheet.scrollTop, moved: false };
+    sheet.setPointerCapture?.(e.pointerId);
+  });
+  sheet.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 4) return; // дрожь руки при клике — ещё клик
+    drag.moved = true;
+    sheet.classList.add('is-dragging');
+    sheet.scrollLeft = drag.left - dx;
+    sheet.scrollTop = drag.top - dy;
+  });
+  const end = (): void => {
+    dragged = drag?.moved ?? false;
+    drag = null;
+    sheet.classList.remove('is-dragging');
+  };
+  sheet.addEventListener('pointerup', end);
+  sheet.addEventListener('pointercancel', end);
+  sheet.addEventListener('click', () => {
+    if (dragged) dragged = false;
+    else sheet.classList.toggle('is-zoomed');
+  });
+  return sheet;
+}
+
 export class DocumentScreen extends BaseScreen {
+  /** Закрыли не крестиком, а Esc (ScreenHost.closeTop): DomUI продолжает партию так же, как по крестику. */
+  onClose?: () => void;
+
   constructor(
     private readonly episode: Episode,
     private readonly doc: string,
@@ -759,13 +1004,21 @@ export class DocumentScreen extends BaseScreen {
     private readonly onDone: () => void,
     /** Изображение бланка без текста (assets.documents); текст накладывается слоем из локали. */
     private imageUrl: string | null = null,
+    /** Текст впечатан в картинку (настоящая бумага, пока по-русски): картинка целиком, касание — увеличить. */
+    private readonly textInImage = false,
+    /** Бумага только что пришла в дело — метка «новый материал»; из блокнота её открывают уже знакомой, без метки. */
+    private readonly fresh = true,
   ) {
-    super('vn-document', false);
+    super('vn-document');
   }
 
   /** Картинка бланка пришла позже, чем открыли экран. */
   setImage(url: string | null): void {
     this.imageUrl = url;
+    if (this.textInImage) {
+      this.render();
+      return;
+    }
     const paper = this.el.querySelector<HTMLElement>('.vn-document__paper');
     if (!paper) return;
     paper.classList.toggle('has-image', url !== null);
@@ -775,12 +1028,47 @@ export class DocumentScreen extends BaseScreen {
 
   render(): void {
     const item = this.archiveItem ? this.episode.archive_items?.find((a) => a.id === this.archiveItem) : undefined;
+    // Шапка по макету (Figma «Claude», узел 1232:1560): название и метка «новый материал» слева, крестик справа.
+    const head = h(
+      'div',
+      { class: 'vn-document__head' },
+      h(
+        'div',
+        { class: 'vn-document__heading' },
+        item ? h('h2', { class: 'vn-document__title', text: t(item.title_key) }) : null,
+        item && this.fresh ? h('span', { class: 'vn-document__tag', text: t('ui.archive.new_item') }) : null,
+      ),
+      h(
+        'button',
+        { class: 'vn-document__close', type: 'button', title: t('ui.common.close'), aria: { label: t('ui.common.close') }, on: { click: this.onDone } },
+        icon('close'),
+      ),
+    );
+    if (this.textInImage && this.imageUrl) {
+      const img = h('img', { class: 'vn-document__img' });
+      img.alt = '';
+      img.src = this.imageUrl;
+      const sheet = zoomableSheet(h('div', { class: 'vn-document__sheet', data: { doc: this.doc } }, img));
+      const text = this.textKey ? t(this.textKey) : '';
+      fill(
+        this.el,
+        h(
+          'div',
+          { class: 'vn-document__box', data: { backdrop: 1 } },
+          head,
+          sheet,
+          // Текст бумаги — для скринридера; на других языках — перевод под картинкой (в картинке он русский).
+          text ? h('p', { class: i18n.lang === 'ru' ? 'vn-sr' : 'vn-document__text vn-document__translation', text }) : null,
+        ),
+      );
+      return;
+    }
     fill(
       this.el,
-      card(
-        'vn-document__card',
-        item ? h('h2', { class: 'vn-card__title', text: t(item.title_key) }) : null,
-        item ? h('span', { class: 'vn-badge', text: t('ui.archive.new_item') }) : null,
+      h(
+        'div',
+        { class: 'vn-document__box', data: { backdrop: 1 } },
+        head,
         h(
           'div',
           {
@@ -790,7 +1078,6 @@ export class DocumentScreen extends BaseScreen {
           },
           this.textKey ? h('p', { class: 'vn-document__text', text: t(this.textKey) }) : h('p', { class: 'vn-muted', text: this.doc }),
         ),
-        h('div', { class: 'vn-actions' }, backButton(this.onDone, 'ui.common.ok')),
       ),
     );
   }
@@ -803,37 +1090,66 @@ export class EndingScreen extends BaseScreen {
     private readonly ending: Ending,
     private readonly state: Readonly<GameState>,
     private readonly handlers: { onMenu: () => void; onArchive: () => void },
+    private readonly episode: Episode | null = null,
   ) {
     super('vn-ending', false);
   }
 
+  /**
+   * Финал (владелец 2026-10-14: «переделать интереснее, с бумаги»): лист уголовного дела. Шапка — «Уголовное дело»,
+   * город и год (на языке оригинала; иначе — год), название эпизода; штамп — название концовки; «Ход следствия» —
+   * решения партии по порядку; внизу — сколько материалов собрано в блокнот и сколько решений. Кнопки — под листом.
+   */
   render(): void {
-    const journal = this.state.journal;
+    const { journal, archive } = this.state;
+    const ep = this.episode;
+    const year = ep?.based_on.years[0];
+    const city = ep && i18n.lang === (ep.localization?.source_lang ?? 'ru') ? ep.based_on.city : '';
+    const place = [city, year === undefined ? '' : String(year)].filter((x) => x !== '').join(' · ');
+    const total = ep?.archive_items?.length ?? 0;
     fill(
       this.el,
-      card(
-        'vn-ending__card',
-        h('p', { class: 'vn-ending__kicker', text: t('ui.end.title') }),
-        h('h2', { class: 'vn-ending__title', text: t(this.ending.title_key) }),
-        h('h3', { class: 'vn-ending__sub', text: t('ui.end.decisions') }),
-        journal.length === 0
-          ? h('p', { class: 'vn-muted', text: '—' })
-          : h(
-              'ul',
-              { class: 'vn-ending__journal' },
-              ...journal.map((j) =>
-                h(
-                  'li',
-                  { class: `vn-ending__entry${j.kind ? ` is-${j.kind}` : ''}` },
-                  j.prompt_key ? h('span', { class: 'vn-ending__prompt', text: t(j.prompt_key) }) : null,
-                  h('span', { class: 'vn-ending__choice', text: t(j.key) }),
+      h(
+        'div',
+        { class: 'vn-ending__box' },
+        h(
+          'article',
+          { class: `vn-ending__sheet is-${this.ending.kind}` },
+          h('span', { class: 'vn-ending__clip', aria: { hidden: true } }),
+          h('header', { class: 'vn-ending__head' }, h('span', { text: t('ui.end.case') }), place ? h('span', { text: place }) : null),
+          ep ? h('p', { class: 'vn-ending__case', text: t(ep.title_key) }) : null,
+          h('div', { class: 'vn-ending__stamp' }, h('span', { class: 'vn-ending__kicker', text: t('ui.end.title') }), h('h2', { class: 'vn-ending__title', text: t(this.ending.title_key) })),
+          h('h3', { class: 'vn-ending__sub', text: t('ui.end.decisions') }),
+          journal.length === 0
+            ? h('p', { class: 'vn-muted', text: '—' })
+            : h(
+                'ol',
+                { class: 'vn-ending__journal' },
+                ...journal.map((j, i) =>
+                  h(
+                    'li',
+                    { class: `vn-ending__entry${j.kind ? ` is-${j.kind}` : ''}`, style: { '--i': String(i) } },
+                    h('span', { class: 'vn-ending__n', text: String(i + 1).padStart(2, '0') }),
+                    h(
+                      'span',
+                      { class: 'vn-ending__text' },
+                      j.prompt_key ? h('span', { class: 'vn-ending__prompt', text: t(j.prompt_key) }) : null,
+                      h('span', { class: 'vn-ending__choice', text: t(j.key) }),
+                    ),
+                  ),
                 ),
               ),
-            ),
+          h(
+            'footer',
+            { class: 'vn-ending__foot' },
+            total > 0 ? h('span', { text: t('ui.end.materials', { n: Math.min(archive.length, total) }) }) : null,
+            h('span', { text: t('ui.end.decisions_n', { n: journal.length }) }),
+          ),
+        ),
         h(
           'div',
-          { class: 'vn-actions' },
-          h('button', { class: 'vn-btn', type: 'button', text: t('ui.menu.archive'), on: { click: this.handlers.onArchive } }),
+          { class: 'vn-actions vn-ending__actions' },
+          h('button', { class: 'vn-btn', type: 'button', text: t('ui.quick.notes'), on: { click: this.handlers.onArchive } }),
           h('button', { class: 'vn-btn is-primary', type: 'button', text: t('ui.end.back_to_menu'), on: { click: this.handlers.onMenu } }),
         ),
       ),

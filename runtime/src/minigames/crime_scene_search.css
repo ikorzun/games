@@ -1,7 +1,7 @@
 /*
- * Осмотр места (crime_scene_search.ts). Общая рамка — mg_shell.css.
- * Картинка места вписана в ширину карточки целиком. Зоны невидимы, пока не найдены; в режиме заглушки
- * (нет файла картинки) показаны серыми коробками с подписями.
+ * Осмотр места (crime_scene_search.ts). Общая рамка — mg_shell.css, раскладка «сцена» (.mg-stage): картинка во весь
+ * экран (размер ставит fitStage), список находок — в перетаскиваемом блоке. Зоны невидимы, пока не найдены; в режиме
+ * заглушки (нет файла картинки) показаны серыми коробками с подписями.
  */
 
 .mg-scene__wrap {
@@ -17,7 +17,6 @@
   overflow: hidden;
   background: #0b0b0d;
   border: 1px solid var(--mg-line);
-  border-radius: 10px;
 }
 
 .mg-scene__stage {
@@ -64,23 +63,24 @@
   min-width: 44px;
   min-height: 44px;
   border: 2px solid transparent;
-  border-radius: 10px;
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
+/* Номер найденного — белый круг, как в блоке (макет 2026-10-13). */
 .mg-scene__pin {
   position: absolute;
-  top: -11px;
-  left: -11px;
+  top: calc(-14 * var(--u, 1px));
+  left: calc(-14 * var(--u, 1px));
   display: none;
-  width: 22px;
-  height: 22px;
-  color: #1d1b17;
-  font: 400 12px / 22px var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  width: calc(28 * var(--u, 1px));
+  height: calc(28 * var(--u, 1px));
+  color: #000;
+  font: 400 calc(16 * var(--ut, 1px)) / calc(28 * var(--u, 1px)) var(--font-body, serif);
   text-align: center;
-  background: var(--mg-gold);
+  background: #fff;
   border-radius: 50%;
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.6);
+  font-variant-numeric: lining-nums tabular-nums;
 }
 .mg-scene__tag {
   position: absolute;
@@ -92,12 +92,11 @@
   margin-top: 5px;
   padding: 2px 9px;
   overflow: hidden;
-  color: var(--mg-gold);
-  font: 0.78em / 1.35 var(--font-body, system-ui, sans-serif);
+  color: #fff;
+  font: calc(14 * var(--ut, 1px)) / 1.35 var(--font-body, serif);
   white-space: nowrap;
   text-overflow: ellipsis;
-  background: rgb(0 0 0 / 0.82);
-  border-radius: 5px;
+  background: rgb(0 0 0 / 0.6);
   transform: translateX(-50%);
 }
 .mg-scene__zone.is-right .mg-scene__tag {
@@ -165,9 +164,9 @@
 
 /* Найдено */
 .mg-scene__zone.is-found {
-  background: rgb(232 217 181 / 0.14);
-  border: 2px solid var(--mg-gold);
-  box-shadow: 0 0 0 2px rgb(0 0 0 / 0.45), 0 0 18px rgb(232 217 181 / 0.45);
+  background: rgb(255 255 255 / 0.1);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px rgb(0 0 0 / 0.45), 0 0 18px rgb(255 255 255 / 0.35);
   animation: mg-scene-pop 0.35s ease-out;
 }
 .mg-scene__zone.is-found:not(.is-required) {
@@ -180,7 +179,7 @@
   display: block;
 }
 .mg-scene__stage.is-placeholder .mg-scene__zone.is-found .mg-scene__tag {
-  color: var(--mg-gold);
+  color: #fff;
 }
 
 /* Подсказка */
@@ -215,10 +214,9 @@
   height: 30px;
   margin: -15px 0 0 -15px;
   color: var(--mg-accent);
-  font: 400 18px / 26px var(--font-body, system-ui, sans-serif);
+  font: 400 15px / 26px var(--font-body, system-ui, sans-serif);
   text-align: center;
   border: 2px solid var(--mg-accent);
-  border-radius: 50%;
   animation: mg-scene-miss 0.75s ease-out forwards;
 }
 .mg-scene__miss::before {
@@ -232,8 +230,7 @@
   width: 40px;
   height: 40px;
   margin: -20px 0 0 -20px;
-  border: 2px solid var(--mg-gold);
-  border-radius: 50%;
+  border: 2px solid #fff;
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.6), inset 0 0 0 1px rgb(0 0 0 / 0.4);
   pointer-events: none;
 }
@@ -241,7 +238,7 @@
 .mg-scene__cross::after {
   content: '';
   position: absolute;
-  background: var(--mg-gold);
+  background: #fff;
 }
 .mg-scene__cross::before {
   top: 50%;
@@ -261,53 +258,89 @@
   display: block;
 }
 
-/* Найденное */
+/* Блок (макет 2026-10-13): номер в круге и название; найденное — номер на белом; ненайденное — бледно. */
 .mg-scene__list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  min-height: 2.1rem;
+  flex-direction: column;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .mg-scene__item {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.4rem;
-  min-width: 0;
-  max-width: 100%;
-  padding: 0.25rem 0.7rem 0.25rem 0.3rem;
-  font-size: 0.88em;
-  background: rgb(232 217 181 / 0.1);
-  border: 1px solid rgb(232 217 181 / 0.4);
-  border-radius: 999px;
-}
-.mg-scene__item.is-extra {
-  border-style: dashed;
-  opacity: 0.85;
-}
-.mg-scene__item.is-hint {
-  padding-left: 0.7rem;
-  background: rgb(201 54 47 / 0.12);
-  border-color: var(--mg-accent);
-}
-.mg-scene__name {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  gap: calc(13 * var(--u, 1px));
+  padding: calc(8 * var(--u, 1px)) calc(8 * var(--u, 1px)) calc(8 * var(--u, 1px)) 0;
+  font-size: calc(16 * var(--ut, 1px));
+  line-height: 1;
+  color: rgb(255 255 255 / 0.3);
 }
 .mg-scene__num {
   flex: none;
-  display: inline-grid;
+  display: grid;
   place-items: center;
-  width: 1.55em;
-  height: 1.55em;
-  color: #1d1b17;
-  font: 400 0.8em var(--font-mono, monospace);
-  background: var(--mg-gold);
+  box-sizing: border-box;
+  width: calc(28 * var(--u, 1px));
+  height: calc(28 * var(--u, 1px));
+  line-height: 1.2;
+  border: 1px solid rgb(255 255 255 / 0.3);
   border-radius: 50%;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.mg-scene__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.mg-scene__item.is-found {
+  color: #fff;
+}
+.mg-scene__item.is-found .mg-scene__num {
+  color: #000;
+  background: #fff;
+  border-color: #fff;
+}
+.mg-scene__item.is-hint {
+  color: #fff;
+}
+.mg-scene__item.is-hint .mg-scene__num {
+  border-color: var(--mg-accent);
+}
+
+/* Экран итога: найденное по порядку — номер на белом, название и что находка меняет в деле. */
+.mg-scene__finds {
+  display: flex;
+  flex-direction: column;
+  gap: calc(16 * var(--u, 1px));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: calc(16 * var(--ut, 1px));
+  line-height: 1.2;
+}
+.mg-scene__find {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(13 * var(--u, 1px));
+}
+.mg-scene__find .mg-scene__num {
+  color: #000;
+  background: #fff;
+  border-color: #fff;
+}
+.mg-scene__find-text {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--u, 1px));
+  min-width: 0;
+  padding-top: calc(5 * var(--u, 1px));
+}
+.mg-scene__find .mg-scene__name {
+  color: #fff;
+}
+.mg-scene__why {
+  margin: 0;
+  color: rgb(255 255 255 / 0.72);
+  font-size: max(11px, 0.6em); /* на 40 % мельче названия находки (владелец 2026-10-14), но не мельче 11 px: на телефоне было 9 (2026-10-15) */
 }
 
 /* Описание для скринридера */
@@ -326,12 +359,12 @@
 @keyframes mg-scene-pop {
   from {
     opacity: 0.2;
-    box-shadow: 0 0 0 10px rgb(232 217 181 / 0.55), 0 0 30px rgb(232 217 181 / 0.8);
+    box-shadow: 0 0 0 10px rgb(255 255 255 / 0.5), 0 0 30px rgb(255 255 255 / 0.7);
   }
 }
 @keyframes mg-scene-pulse {
   50% {
-    box-shadow: 0 0 0 4px rgb(201 54 47 / 0.35), 0 0 18px rgb(201 54 47 / 0.55);
+    box-shadow: 0 0 0 4px rgb(218 24 24 / 0.35), 0 0 18px rgb(218 24 24 / 0.55);
   }
 }
 @keyframes mg-scene-miss {
@@ -345,17 +378,22 @@
   }
 }
 
-/* Короткий ландшафт (телефон на боку): картинка слева на всю высоту, остальное — справа. */
-@media (orientation: landscape) and (max-height: 560px) {
-  .mg-shell:has(.mg-scene__wrap) {
-    grid-template-areas:
-      'body head'
-      'body hud'
-      'body status'
-      'body foot';
-  }
-  .mg-scene__stage {
-    width: min(100%, calc((100vh - 8rem) * 1.7778));
-    margin: 0 auto;
-  }
+/* Раскладка «сцена»: картинка во весь экран; размер ставит fitStage — шире экрана листается, уже — по центру. */
+.mg-stage .mg-scene__wrap {
+  position: absolute;
+  inset: 0;
+}
+.mg-stage .mg-scene__viewport {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  background: #000;
+  border: 0;
+}
+.mg-stage .mg-scene__stage {
+  flex: none;
+  margin: auto;
 }

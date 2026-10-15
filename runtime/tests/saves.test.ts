@@ -78,7 +78,7 @@ describe('SaveManager: пакетная запись (Playgama: один выз�
     await sm.init();
     expect(st.loadCalls).toEqual([[...STORAGE_KEYS]]);
     expect(sm.settings).toEqual(DEFAULT_SETTINGS);
-    expect(sm.profile).toEqual({ v: 1, warning_dismissed: false, read: {}, endings: {}, globals: {} });
+    expect(sm.profile).toEqual({ v: 1, read: {}, endings: {}, globals: {} });
     expect(sm.archive).toEqual({ v: 1, items: {} });
     expect(sm.autosave).toBeNull();
     expect(sm.quicksave).toBeNull();
@@ -125,6 +125,20 @@ describe('SaveManager: пакетная запись (Playgama: один выз�
     }
   });
 
+  it('прогресс режима дела переживает «перезапуск» и пишется копией', async () => {
+    const st = new SpyStorage();
+    const a = new SaveManager(st, { slots: 0, debounceMs: 0 });
+    await a.init();
+    const data = { v: 1, stars: 3, done: ['search_flat'] };
+    a.writeCase('ep_mini', data);
+    data.stars = 99;
+    await a.flush();
+    const b = new SaveManager(st, { slots: 0, debounceMs: 0 });
+    await b.init();
+    expect(b.caseProgress('ep_mini')).toEqual({ v: 1, stars: 3, done: ['search_flat'] });
+    expect(b.caseProgress('other')).toBeNull();
+  });
+
   it('данные переживают «перезапуск»: новый менеджер читает то, что записал прежний', async () => {
     const st = new SpyStorage();
     const a = new SaveManager(st, { slots: 0, debounceMs: 0 });
@@ -132,7 +146,6 @@ describe('SaveManager: пакетная запись (Playgama: один выз�
     a.markRead('ep_mini', 's1:3');
     a.unlockArchive('ep_mini', 'arc_y');
     a.recordEnding('ep_mini', 'e_alt');
-    a.setWarningDismissed(true);
     a.setGlobals({ season_karma: 3 });
     a.updateSettings({ lang: 'pt', fontScale: 1.25, timers: false });
     await a.flush();
@@ -143,7 +156,6 @@ describe('SaveManager: пакетная запись (Playgama: один выз�
     expect(b.isRead('ep_mini', 's1:4')).toBe(false);
     expect(b.archiveOf('ep_mini')).toEqual(['arc_y']);
     expect(b.profile.endings).toEqual({ ep_mini: ['e_alt'] });
-    expect(b.profile.warning_dismissed).toBe(true);
     expect(b.profile.globals).toEqual({ season_karma: 3 });
     expect(b.settings).toMatchObject({ lang: 'pt', fontScale: 1.25, timers: false });
   });
@@ -406,25 +418,26 @@ describe('prepareLoad: сейв против текущего описания �
 
 describe('очистка данных профиля и настроек', () => {
   it('sanitizeProfile / sanitizeArchive / sanitizeProgress принимают мусор и возвращают валидную форму', () => {
-    expect(sanitizeProfile('мусор')).toEqual({ v: 1, warning_dismissed: false, read: {}, endings: {}, globals: {} });
+    expect(sanitizeProfile('мусор')).toEqual({ v: 1, read: {}, endings: {}, globals: {} });
     expect(
       sanitizeProfile({
-        warning_dismissed: 'yes',
+        warning_dismissed: true, // поле старых профилей («Больше не показывать» убрали 2026-10-13) — отбрасывается
         read: { e: ['a', 3, 'b'], f: 'x' },
         endings: [],
         globals: { ok: 1, flag: true, s: 'x', bad: { a: 1 }, nul: null },
       }),
     ).toEqual({
       v: 1,
-      warning_dismissed: false,
       read: { e: ['a', 'b'], f: [] },
       endings: {},
       globals: { ok: 1, flag: true, s: 'x' },
     });
     expect(sanitizeArchive({ items: { e: ['x', 1] } })).toEqual({ v: 1, items: { e: ['x'] } });
     expect(sanitizeArchive(7)).toEqual({ v: 1, items: {} });
-    expect(sanitizeProgress({ autosave: { a: 1 } })).toEqual({ v: 1, autosave: { a: 1 }, quick: null });
-    expect(sanitizeProgress(null)).toEqual({ v: 1, autosave: null, quick: null });
+    expect(sanitizeProgress({ autosave: { a: 1 } })).toEqual({ v: 1, autosave: { a: 1 }, quick: null, cases: {} });
+    expect(sanitizeProgress(null)).toEqual({ v: 1, autosave: null, quick: null, cases: {} });
+    expect(sanitizeProgress({ cases: { ep: { stars: 2 } } }).cases).toEqual({ ep: { stars: 2 } });
+    expect(sanitizeProgress({ cases: [1, 2] }).cases).toEqual({});
   });
 
   it('sanitizeSettings: неизвестное — к умолчанию, числа зажимаются, язык проверяется по списку', () => {
@@ -433,7 +446,6 @@ describe('очистка данных профиля и настроек', () =>
       lang: 'de',
       fontScale: 9,
       textSpeed: 99,
-      autoDelayMs: 1,
       music: -1,
       sfx: 2,
       voice: 'loud',
@@ -446,7 +458,6 @@ describe('очистка данных профиля и настроек', () =>
     expect(s.lang).toBeNull();
     expect(s.fontScale).toBe(FONT_SCALE_RANGE.max);
     expect(s.textSpeed).toBe(5);
-    expect(s.autoDelayMs).toBe(500);
     expect(s.music).toBe(0);
     expect(s.sfx).toBe(1);
     expect(s.voice).toBe(DEFAULT_SETTINGS.voice);

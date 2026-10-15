@@ -4,8 +4,8 @@
  * опции показываются выключенными — игрок видит, что что-то упустил.
  *
  * Дедуктивная развилка (p.deduction, 02-narrative-blocks §5a): над кнопками — шкала цены ошибок
- * (точки, подпись, aria «Самообладание: 3 из 5»); опция-улика — карточка с иконкой по виду материала;
- * испробованная — погашена, со значком ✕ и пометкой «уже пробовали» для скринридера; подсвеченная
+ * (точки, подпись, aria «Самообладание: 3 из 5»); опция-улика — без значка: он выдавал верный ответ (решение
+ * владельца 2026-10-14), вариант просто появляется, когда улика найдена; испробованная — погашена, со значком ✕ и пометкой «уже пробовали» для скринридера; подсвеченная
  * подсказкой — мягкая подсветка и значок, под кнопками одна строка «Подсказка: верный ход подсвечен».
  * Смысл никогда не передаётся одним цветом: значок + класс + текст.
  */
@@ -13,22 +13,6 @@ import { t } from '../core/i18n';
 import type { ChoiceOptionView, ChoicePending, DeductionMeter } from '../core/types';
 import { h } from './dom';
 import { icon } from './icons';
-import type { IconName } from './icons';
-
-/** Иконка карточки-улики по виду материала (archive_items[].kind); неизвестный вид — документ. */
-const ITEM_ICONS: Readonly<Record<string, IconName>> = {
-  document: 'document',
-  photo: 'photo',
-  newspaper: 'newspaper',
-  object: 'object',
-  map: 'map',
-  audio: 'audio',
-  fact: 'fact',
-};
-
-export function itemIcon(kind: string): IconName {
-  return ITEM_ICONS[kind] ?? 'document';
-}
 
 let menuSeq = 0;
 
@@ -55,7 +39,7 @@ export class ChoiceMenu {
   private readonly hintId = `vn-choices-hint-${++menuSeq}`;
 
   constructor() {
-    this.el = h('div', { class: 'vn-choices', hidden: true, role: 'group' });
+    this.el = h('div', { class: 'vn-choices', hidden: true, role: 'group', tabindex: -1 });
   }
 
   get active(): boolean {
@@ -73,7 +57,9 @@ export class ChoiceMenu {
       opts.signal.addEventListener('abort', () => this.close(), { once: true });
       this.render();
       this.el.hidden = false;
-      this.buttons.find((b) => !b.disabled)?.focus({ preventScroll: true });
+      // Фокус — на группе, а не на первом варианте: иначе после клавиатуры первый вариант сразу выглядит выбранным
+      // (решение владельца 2026-10-13). Tab ведёт к вариантам, цифры 1–9 выбирают.
+      this.el.focus({ preventScroll: true });
       const useTimer = opts.timers && p.timer_ms !== null && p.default_option !== null;
       if (useTimer && p.timer_ms !== null) this.startTimer(p.timer_ms);
     });
@@ -134,9 +120,11 @@ export class ChoiceMenu {
     this.buttons = p.options.map((o, i) => this.option(o, i));
     this.el.setAttribute('aria-label', p.prompt_key ? t(p.prompt_key) : '');
     const kids: Node[] = [];
-    if (this.promptEl) kids.push(this.promptEl);
+    // По макету (Figma «Claude», узел 1232:1660): вопрос, под ним тонкая линия, затем варианты одним списком —
+    // список нужен, чтобы при наведении на вариант остальные гасли (CSS .vn-choices__list:hover).
+    if (this.promptEl) kids.push(this.promptEl, h('hr', { class: 'vn-choices__rule' }));
     if (p.deduction?.meter) kids.push(this.meter(p.deduction.meter));
-    kids.push(...this.buttons);
+    kids.push(h('div', { class: 'vn-choices__list' }, ...this.buttons));
     if (p.options.some((o) => o.hinted)) kids.push(h('p', { class: 'vn-choices__hint', id: this.hintId, text: t('ui.choice.hint') }));
     if (this.timerWrap) kids.push(this.timerWrap);
     this.el.replaceChildren(...kids);
@@ -168,7 +156,6 @@ export class ChoiceMenu {
         on: { click: () => o.enabled && this.pick?.(o.id) },
       },
       h('span', { class: 'vn-choice__n', text: String(i + 1) }),
-      o.item ? h('span', { class: 'vn-choice__item' }, icon(itemIcon(o.item.kind))) : null,
       h('span', { class: 'vn-choice__label', text: label }),
       mark,
     );

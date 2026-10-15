@@ -23,7 +23,8 @@ export interface PresentationPreset {
    * 0 — штатив (хроника, заставка, карта, документ, суд). Решение владельца 2026-10-10.
    */
   handheld: number;
-  /** «Оператор поправил кадр» при входе в сцену (быстрый сдвиг, иногда неожиданный ракурс). */
+  /** «Оператор поправил кадр» при входе в сцену (быстрый сдвиг, иногда неожиданный ракурс). Выключен во всех пресетах:
+   *  владелец 2026-10-14 — «при переходе между сценами оставь только эффект точек, не дёргай кадр». */
   reframe: boolean;
   /** Камкордерный HUD: красная точка и REC в углу кадра (только в реконструкции). */
   recHud: boolean;
@@ -31,10 +32,10 @@ export interface PresentationPreset {
 
 export const PRESETS: Readonly<Record<Presentation, PresentationPreset>> = {
   title: { filter: 'none', text: 'none', speakerName: false, camera: 'static', casePanel: false, handheld: 0, reframe: false, recHud: false },
-  reconstruction: { filter: 'vhs', text: 'window', speakerName: true, camera: 'static', casePanel: false, handheld: 1, reframe: true, recHud: true },
+  reconstruction: { filter: 'vhs', text: 'window', speakerName: true, camera: 'static', casePanel: false, handheld: 1, reframe: false, recHud: true },
   chronicle: { filter: 'archive_photo', text: 'subtitle', speakerName: false, camera: 'ken_burns', casePanel: false, handheld: 0, reframe: false, recHud: false },
   talking_head: { filter: 'vhs', text: 'window', speakerName: false, camera: 'static', casePanel: false, handheld: 0.25, reframe: false, recHud: false },
-  procedural: { filter: 'none', text: 'window', speakerName: true, camera: 'static', casePanel: true, handheld: 0.5, reframe: true, recHud: false },
+  procedural: { filter: 'none', text: 'window', speakerName: true, camera: 'static', casePanel: true, handheld: 0.5, reframe: false, recHud: false },
   map: { filter: 'sepia', text: 'window', speakerName: true, camera: 'static', casePanel: false, handheld: 0, reframe: false, recHud: false },
   courtroom: { filter: 'desaturated', text: 'subtitle', speakerName: false, camera: 'static', casePanel: false, handheld: 0, reframe: false, recHud: false },
   montage: { filter: 'archive_photo', text: 'subtitle', speakerName: false, camera: 'static', casePanel: false, handheld: 0.5, reframe: false, recHud: false },

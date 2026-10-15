@@ -21,7 +21,7 @@
  *    `vn-stage__hold`), новая сцена выставляется под ним и проявляется только в revealFromBlack().
  *    Кто и когда их вызывает — правило в stage/director.ts.
  */
-import type { CameraFx, ViolenceMode } from '../core/settings';
+import type { CameraFx, Graphics, ViolenceMode } from '../core/settings';
 import type { FxKind, SpriteView, StageFilter, TransitionKind, ViewState } from '../core/types';
 import { h, sleep } from '../ui/dom';
 import { NO_ASSETS, prepareView } from './assets';
@@ -29,12 +29,15 @@ import type { SceneAssets } from './assets';
 import { ZOOM_AMOUNT, zoomKeyframes } from './camcorder';
 import { CamcorderLayer } from './camcorder_layer';
 import type { CamcorderLayerOptions } from './camcorder_layer';
+import { DITHER_MS } from './dither_filter';
 import { effectiveFilter, presetOf } from './presets';
 import type { ISceneRenderer } from './renderer';
 import type { IStage } from './types';
 
 /** Сколько ждать картинку кадра покрытия перед склейкой (дольше — показываем реплику, кадр догрузится). */
 export const SHOT_WAIT_MS = 2000;
+/** Растворение между местами (настоящий кроссфейд на PixiJS), мс. */
+export const DISSOLVE_MS = 750;
 
 const FILTERS: readonly StageFilter[] = ['vhs', 'vhs_heavy', 'archive_photo', 'night', 'sepia', 'desaturated', 'noir'];
 
@@ -75,10 +78,19 @@ export class Stage implements IStage {
   private zoomAnim: Animation | null = null;
   private platformPaused = false;
   private minigameActive = false;
+  /** Графика (настройка) и вертикальный экран: «Воспоминания» на телефоне — квадратные кадры, где они есть. */
+  private graphics: Graphics = 'real';
+  private portraitMq: MediaQueryList | null = null;
+  private readonly onOrientation = (): void => {
+    this.refreshGraphics(); // квадраты есть у обеих график (у «Реализма» — с 2026-10-15)
+  };
 
   constructor(renderer: ISceneRenderer, opts: StageOptions = {}) {
     this.renderer = renderer;
     this.assets = opts.assets ?? NO_ASSETS;
+    // Ориентация известна сразу: режим графики приходит из настроек до mount, и каталог должен с первого кадра отдавать
+    // квадраты на телефоне, а не 16:9 (владелец 2026-10-15: «сразу загружать только квадратные картинки»).
+    this.portraitMq = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(orientation: portrait)') : null;
     this.hostEl = h('div', { class: 'vn-stage__host' });
     this.camEl = h('div', { class: 'vn-stage__cam' }, this.hostEl);
     this.gradeEl = h('div', { class: 'vn-stage__grade' }, this.camEl);
@@ -113,17 +125,24 @@ export class Stage implements IStage {
       this.trEl,
       this.holdEl,
     );
-    this.camcorder = new CamcorderLayer({ ...opts.camcorder, stage: this.el, hand: this.handEl, canvas: fxCanvas });
+    // Рендерер PixiJS рисует камкордер шейдером (движение камеры + искажения записи); DOM-рендерер — нет.
+    const sink = renderer.camera && renderer.cameraOff
+      ? { camera: renderer.camera.bind(renderer), cameraOff: renderer.cameraOff.bind(renderer) }
+      : null;
+    this.camcorder = new CamcorderLayer({ ...opts.camcorder, stage: this.el, hand: this.handEl, canvas: fxCanvas, sink });
   }
 
   /** Вставить сцену в родителя и поднять рендерер. При ошибке рендерера вызывающий делает destroy(). */
   async mount(parent: HTMLElement): Promise<void> {
     parent.appendChild(this.el);
     await this.renderer.mount(this.hostEl);
+    this.portraitMq?.addEventListener?.('change', this.onOrientation);
+    this.refreshGraphics(); // режим и ориентация известны раньше, чем сцена поднялась
   }
 
   destroy(): void {
     this.gen += 1;
+    this.portraitMq?.removeEventListener?.('change', this.onOrientation);
     this.camcorder.destroy();
     try {
       this.renderer.destroy();
@@ -155,6 +174,30 @@ export class Stage implements IStage {
     this.camcorder.setLevel(level, retry);
   }
 
+  /** Настройка «Графика»: «Воспоминания» — кадры в стиле графического романа (где они есть) и растворение точками. */
+  setGraphics(mode: Graphics): void {
+    if (mode === this.graphics) return; // настройки применяются целиком при любом изменении — кадр трогаем только при смене
+    this.graphics = mode;
+    this.renderer.setGraphics?.(mode);
+    this.refreshGraphics();
+  }
+
+  /** Каталогу — режим и ориентация; текущий кадр — заново (файлы другие); высота кадра на телефоне — по квадрату. */
+  private refreshGraphics(): void {
+    this.assets.setGraphics?.({ memory: this.graphics === 'memory', square: this.portraitMq?.matches ?? false });
+    if (this.view) this.renderer.setView(this.view);
+    this.updateSquare();
+  }
+
+  /**
+   * Вертикальный экран (обе графики): область кадра над текстом всегда квадратная, на любом кадре — квадрат, фон или
+   * кадр без квадрата (его 16:9 кадрируется в квадрат). Раньше высота прыгала между квадратом и 16:9 от кадра к кадру
+   * (владелец 2026-10-15).
+   */
+  private updateSquare(): void {
+    this.el.parentElement?.classList.toggle('is-square', this.portraitMq?.matches ?? false);
+  }
+
   /** Пауза платформы / вкладки в фоне: камкордер останавливает цикл. */
   setPaused(paused: boolean): void {
     this.platformPaused = paused;
@@ -180,6 +223,7 @@ export class Stage implements IStage {
     this.resetTransient();
     this.applyFrame(view);
     this.renderer.setView(view);
+    this.updateSquare();
   }
 
   async changeScene(view: ViewState, transition: TransitionKind, instant: boolean): Promise<void> {
@@ -189,6 +233,7 @@ export class Stage implements IStage {
     const swap = (): void => {
       this.applyFrame(view);
       this.renderer.setView(view);
+      this.updateSquare();
       this.releasePersistedBlack();
       if (!instant) this.camcorder.enterScene();
     };
@@ -295,6 +340,7 @@ export class Stage implements IStage {
     const swap = (): void => {
       if (this.view) this.view = { ...this.view, shot };
       this.renderer.setShot(shot);
+      this.updateSquare();
     };
     if (instant || transition === 'cut') swap();
     else await this.transition(transition, swap);
@@ -313,6 +359,11 @@ export class Stage implements IStage {
   setSpeaker(who: string | null): void {
     if (this.view) this.view = { ...this.view, speaker: who };
     this.renderer.setSpeaker(who);
+  }
+
+  /** На ком внимание (подсветка по маске на кадре покрытия): говорящий, а при выборе и мыслях — герой. */
+  setFocus(who: string | null): void {
+    this.renderer.setFocus?.(who);
   }
 
   // ───────────────────────────── кадр и фильтры ─────────────────────────────
@@ -389,6 +440,17 @@ export class Stage implements IStage {
         await dip('#000', 650, 750, 1);
         break;
       case 'dissolve':
+        // Настоящее растворение (PixiJS): прежний кадр гаснет поверх нового — смена места без «нырка» в черноту.
+        // В графике «Воспоминания» — точками: последний кадр рассыпается в первый кадр новой сцены.
+        {
+          const memory = this.graphics === 'memory';
+          const ms = memory ? DITHER_MS : DISSOLVE_MS;
+          if (this.renderer.crossfade?.(ms, memory ? 'dither' : 'fade')) {
+            swap();
+            await this.wait(ms);
+            break;
+          }
+        }
         await dip('#000', 200, 260, 0.62);
         break;
       case 'flash':

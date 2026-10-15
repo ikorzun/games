@@ -25,6 +25,8 @@ except ImportError:  # pragma: no cover
     print("нужен пакет jsonschema: pip install jsonschema", file=sys.stderr)
     sys.exit(2)
 
+import validate_case  # noqa: E402  (сам импортирует jsonschema — после проверки выше)
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA_PATH = os.path.join(ROOT, "schemas", "episode.schema.json")
 LANGS = ("ru", "en", "es", "pt")
@@ -157,7 +159,7 @@ def seasons(ep: dict, ru: dict | None, rep: Report) -> None:
                 rep.err(f"scene {sid}: {kind} {aid} — {season}, а сцена — {eff} (блок {scene.get('block')})")
         if ru:
             for st in scene.get("steps", []):
-                if st.get("do") == "caption" and st.get("style") == "date_stamp":
+                if st.get("do") == "caption" and st.get("style") in ("date_stamp", "day"):
                     text = ru.get(st.get("key", ""), "")
                     cs = caption_season(text) if isinstance(text, str) else None
                     if not cs:
@@ -211,12 +213,25 @@ def shots_check(ep: dict, rep: Report) -> None:
             rep.warn(f"{where}: insert с персонажами в cast — монтажёр считает его кадром без лиц")
         if not os.path.exists(os.path.join(ROOT, sh["file"])):
             rep.warn(f"{where}: файла {sh['file']} нет в репозитории (рантайм покажет спрайты)")
+        if sh.get("video") and not os.path.exists(os.path.join(ROOT, sh["video"])):
+            rep.warn(f"{where}: ролика {sh['video']} нет в репозитории (покажется неподвижный кадр)")
+        for c in sh.get("cast", []):
+            if c.get("mask") and not os.path.exists(os.path.join(ROOT, c["mask"])):
+                rep.warn(f"{where}: маски {c['mask']} нет в репозитории (без подсветки {c['who']})")
+        for path in [sh.get("square"), *(sh.get("square_masks") or {}).values()]:
+            if path and not os.path.exists(os.path.join(ROOT, path)):
+                rep.warn(f"{where}: квадрата «Реализма» {path} нет в репозитории (на телефоне кадрируется 16:9)")
+        mem = sh.get("memory") or {}
+        for path in [mem.get("file"), mem.get("square"), mem.get("video"), *(mem.get("masks") or {}).values(), *(mem.get("square_masks") or {}).values()]:
+            if path and not os.path.exists(os.path.join(ROOT, path)):
+                rep.warn(f"{where}: файла «Воспоминаний» {path} нет в репозитории (покажется кадр «Реализма»)")
     for name, lst in sets.items():
         bg_set = {sh["bg"] for sh in lst}
         if len(bg_set) > 1:
             rep.err(f"set {name}: кадры из разных фонов {sorted(bg_set)} — сет привязан к одному фону")
         if not any(sh["kind"] == "wide" for sh in lst):
             rep.warn(f"set {name}: нет ни одного wide — при входе в сцену монтажёр покажет спрайты")
+    place_of = {b["id"]: b.get("place", b["id"]) for b in ep.get("assets", {}).get("backgrounds", [])}
     for sid, scene in ep.get("scenes", {}).items():
         cov = scene.get("coverage")
         if not cov:
@@ -234,8 +249,32 @@ def shots_check(ep: dict, rep: Report) -> None:
             where = f"scene {sid} step {i} ({step.get('do')})"
             if ref not in by_id:
                 rep.err(f"{where}: shot {ref} не объявлен в assets.shots")
-            elif by_id[ref]["set"] != cov:
-                rep.err(f"{where}: shot {ref} из сета {by_id[ref]['set']}, а сцена покрыта сетом {cov}")
+            elif by_id[ref]["set"] != cov and place_of.get(by_id[ref]["bg"], by_id[ref]["bg"]) != place_of.get(set_bg, set_bg):
+                # кадр другого сета — только того же места (звонок в кабинете: Громов у телефона)
+                rep.err(f"{where}: shot {ref} из сета {by_id[ref]['set']} (другое место), а сцена покрыта сетом {cov}")
+    for sid, scene in ep.get("scenes", {}).items():
+        for alt in scene.get("coverage_alt", []):
+            cov, bg = alt.get("coverage"), alt.get("bg")
+            if not scene.get("coverage"):
+                rep.err(f"scene {sid}: coverage_alt без coverage — вариант заменяет основной сет, а его нет")
+            if cov not in sets:
+                rep.err(f"scene {sid}: coverage_alt {cov} — такого сета нет в assets.shots")
+            elif sets[cov][0]["bg"] != bg:
+                rep.err(f"scene {sid}: coverage_alt {cov} снят в фоне {sets[cov][0]['bg']}, а в варианте — {bg}")
+            main_bg = scene.get("stage", {}).get("bg")
+            if place_of.get(bg, bg) != place_of.get(main_bg, main_bg):
+                rep.warn(f"scene {sid}: coverage_alt {cov} — другое место ({bg}), а вариант задуман для того же места")
+            # Явный кадр основного сета рантайм заменяет кадром того же вида и порядка из сета варианта: пары нет — в этот
+            # день покажется кадр основного сета (вид из окна понедельника во вторник).
+            base = scene.get("coverage")
+            for i, step in enumerate(scene.get("steps", [])):
+                sh = by_id.get(step.get("shot"))
+                if not sh or sh["set"] != base or cov not in sets:
+                    continue
+                n = [s["id"] for s in sets[base] if s["kind"] == sh["kind"]].index(sh["id"])
+                if n >= len([s for s in sets[cov] if s["kind"] == sh["kind"]]):
+                    rep.err(f"scene {sid} step {i}: у кадра {sh['id']} ({sh['kind']}) нет пары того же вида в сете {cov} — "
+                            f"в этот день покажется кадр основного сета")
     for sid, i, step in iter_steps(ep):
         if step.get("shot") and not ep["scenes"][sid].get("coverage"):
             rep.warn(f"scene {sid} step {i}: shot {step['shot']} в сцене без coverage — кадр не покажется")
@@ -256,6 +295,9 @@ def integrity(ep: dict, rep: Report) -> None:
     for ss in sprites.values():
         if not ss.get("facing"):
             rep.warn(f"sprite_set {ss['id']}: не указан facing (left/right/front) — персонаж не повернётся к собеседнику")
+    for c in cast.values():
+        if c.get("portrait") and not os.path.exists(os.path.join(ROOT, c["portrait"])):
+            rep.warn(f"cast {c['id']}: файла портрета {c['portrait']} нет в репозитории (реплика без кружка)")
 
     # scene.id == key
     for sid, scene in scenes.items():
@@ -303,7 +345,7 @@ def integrity(ep: dict, rep: Report) -> None:
         if steps[-1].get("do") not in TERMINAL:
             rep.err(f"scene {sid}: последний шаг должен быть одним из {sorted(TERMINAL)} (явный переход)")
         for i, step in enumerate(steps[:-1]):
-            if step.get("do") in ("jump", "end", "branch"):
+            if step.get("do") in ("jump", "end", "branch") and not (step.get("when") and step["do"] != "branch"):
                 rep.warn(f"scene {sid} step {i}: безусловный {step['do']} не в конце сцены — следующие шаги недостижимы")
 
     # steps
@@ -548,7 +590,14 @@ def minigame_integrity(ep: dict, ru: dict | None, rep: Report) -> None:
                 rep.err(f"{where}: повтор id зоны {dup}")
             if zones and not any(z.get("required") for z in zones):
                 rep.warn(f"{where}: нет обязательных зон — рантайм сочтёт обязательными все")
+            archive = {a["id"] for a in ep.get("archive_items", [])}
+            variables = set(ep.get("variables", {}))
             for z in zones:
+                # находка открывает свой факт (finishMinigame применяет archive_unlock и effects найденных зон)
+                if z.get("archive_unlock") and z["archive_unlock"] not in archive:
+                    rep.err(f"{where}: зона {z.get('id')}: archive item {z['archive_unlock']} не объявлен")
+                for eff in z.get("effects", []):
+                    check_effect(eff, variables, ep, f"{where} зона {z.get('id')}", rep)
                 x, y, w, h = z.get("rect", [0, 0, 0, 0])
                 if w <= 0 or h <= 0:
                     rep.err(f"{where}: зона {z.get('id')} с нулевым размером")
@@ -581,8 +630,32 @@ def minigame_integrity(ep: dict, ru: dict | None, rep: Report) -> None:
             for doc in docs:
                 if doc not in texts:
                     rep.warn(f"{where}: у документа {doc} нет текста (шаг document / archive_items) — фрагменты пойдут отдельными строками")
+            # Зоны на сканах: доли картинки, ненулевые, в её пределах
+            for f in fields:
+                for r in f.get("rects", []):
+                    x, y, w, h = r
+                    if w <= 0 or h <= 0:
+                        rep.err(f"{where}: поле {f.get('doc')}/{f.get('field')}: зона с нулевым размером")
+                    elif x + w > 1.0001 or y + h > 1.0001:
+                        rep.warn(f"{where}: поле {f.get('doc')}/{f.get('field')}: зона выходит за границы скана")
+            scans = {d["id"] for d in ep.get("assets", {}).get("documents", []) if d.get("localized")}
+            if docs and all(d in scans for d in docs):
+                for d in discrepancies:
+                    f = next((x for x in fields if (x.get("doc"), x.get("field")) == (d.get("doc"), d.get("field"))), None)
+                    if f is not None and not f.get("rects"):
+                        rep.warn(f"{where}: у несоответствия {d.get('doc')}/{d.get('field')} нет rects — на сканах игра останется текстовой")
+            # Дословно в тексте нужны только поля текстового режима: несоответствия и первые `decoys` ловушек
+            disc_keys = {(d.get("doc"), d.get("field")) for d in discrepancies}
+            limit = cfg.get("decoys", len(fields))
+            text_fields, n = [], 0
+            for f in fields:
+                if (f.get("doc"), f.get("field")) in disc_keys:
+                    text_fields.append(f)
+                elif n < limit:
+                    text_fields.append(f)
+                    n += 1
             if ru:
-                for f in fields:
+                for f in text_fields:
                     full = ru.get(texts.get(f.get("doc"), ""), "")
                     snippet = ru.get(f.get("text_key"), "")
                     if full and snippet and snippet not in full:
@@ -612,6 +685,26 @@ def minigame_integrity(ep: dict, ru: dict | None, rep: Report) -> None:
                 rep.err(f"{where}: target_count {cfg['target_count']} больше records {cfg['records']}")
             if cfg.get("min_for_partial", 0) > cfg.get("target_count", 0):
                 rep.err(f"{where}: min_for_partial {cfg['min_for_partial']} больше target_count {cfg['target_count']}")
+            for key in ("dates", "target_dates"):
+                r = cfg.get(key)
+                if r and r.get("from", "") > r.get("to", ""):
+                    rep.err(f"{where}: {key}: from {r.get('from')} позже to {r.get('to')}")
+            fixed_targets = 0
+            for i, card in enumerate(cfg.get("fixed", [])):
+                cv = card.get("values", {})
+                for name in fields:
+                    oids = {o["id"] for o in values.get(name, {}).get("options", [])}
+                    if name == "date" and not oids:
+                        continue
+                    if cv.get(name) not in oids:
+                        rep.err(f"{where}: fixed[{i}]: поле {name} — значение {cv.get(name)!r} не среди options")
+                for name in cv:
+                    if name not in fields:
+                        rep.err(f"{where}: fixed[{i}]: поле {name} не входит в fields")
+                if all(cv.get(k) == v for k, v in cfg.get("pattern", {}).items()):
+                    fixed_targets += 1
+            if fixed_targets > cfg.get("target_count", 0):
+                rep.err(f"{where}: закреплённых карточек с паттерном ({fixed_targets}) больше target_count")
         elif kind == "evidence_board":
             nodes = [n if isinstance(n, dict) else {"id": n} for n in cfg.get("nodes", [])]
             ids = [n.get("id") for n in nodes]
@@ -620,6 +713,11 @@ def minigame_integrity(ep: dict, ru: dict | None, rep: Report) -> None:
             for n in nodes:
                 if not n.get("label_key"):
                     rep.warn(f"{where}: у узла {n.get('id')} нет label_key — в игре будет виден id")
+                req = n.get("requires")
+                if req and req not in ep.get("variables", {}):
+                    rep.err(f"{where}: узел {n.get('id')}: requires {req} — необъявленная переменная")
+                elif req and ep["variables"][req].get("type") != "bool":
+                    rep.warn(f"{where}: узел {n.get('id')}: requires {req} — не bool; узел стоит на доске при «истинном» значении")
             first_seen: dict[tuple[str, str], str] = {}
             for name in ("required_links", "decoy_links"):
                 for pair in cfg.get(name, []):
@@ -705,7 +803,8 @@ def collect_loc_keys(ep: dict) -> set[str]:
 
 
 LENGTH_LIMITS = {  # роль строки -> максимум символов (любой язык); см. docs/architecture/05-localization.md §4
-    "option": 60, "date_stamp": 32, "location": 56, "lower_third": 48, "chapter": 40, "title": 40, "fact": 120, "say": 220, "narrate": 240,
+    "option": 60, "date_stamp": 32, "day": 40, "location": 56, "lower_third": 48, "chapter": 40, "title": 40, "fact": 120, "say": 220, "narrate": 240,
+    "why": 160, "clue": 40,
 }
 
 
@@ -717,6 +816,11 @@ def key_roles(ep: dict) -> dict[str, str]:
             roles[b["title_key"]] = "title"
     for mg in ep.get("minigames", {}).values():
         roles[mg["title_key"]] = "title"
+        for hs in (mg.get("config") or {}).get("hotspots") or []:
+            if isinstance(hs, dict) and hs.get("why_key"):
+                roles[hs["why_key"]] = "why"  # осмотр: что находка меняет в деле (экран итога)
+            if isinstance(hs, dict) and hs.get("clue_key"):
+                roles[hs["clue_key"]] = "clue"  # осмотр: загадка в блоке, пока вещь не найдена
     for e in ep.get("endings", []):
         roles[e["title_key"]] = "title"
     for a in ep.get("archive_items", []):
@@ -734,14 +838,16 @@ def key_roles(ep: dict) -> dict[str, str]:
     return roles
 
 
-def localization(ep: dict, locales_dir: str, rep: Report) -> None:
+def localization(ep: dict, locales_dir: str, rep: Report, extra: frozenset[str] = frozenset()) -> None:
     ns = ep["id"].split("_")[0]
+    # extra — ключи дела рядом с эпизодом (<id>.case.json): они живут в той же локали и не «лишние».
     keys = collect_loc_keys(ep)
     roles = key_roles(ep)
     for k in sorted(keys):
         head = k.split(".")[0]
         if head not in (ns, "ui", "common"):
             rep.warn(f"loc key {k}: ожидается пространство имён {ns}.*, ui.* или common.*")
+    keys = keys | extra
     for lang in LANGS:
         path = os.path.join(locales_dir, lang, f"{ep['id']}.json")
         if not os.path.exists(path):
@@ -815,6 +921,19 @@ def ui_check(locales_dir: str, rep: Report) -> None:
                 rep.warn(f"ui.json {lang}: {k} {len(str(v))} символов > {lim}")
 
 
+def case_main(a, rep: Report) -> int:
+    """Файл дела (*.case.json) — свой линтер, tools/validate_case.py."""
+    case = validate_case.lint_case(a.episode, a.locales, rep, load_json)
+    for w in rep.warnings:
+        print(f"WARN  {w}")
+    for e in rep.errors:
+        print(f"ERROR {e}")
+    tasks = sum(len(ch.get("tasks", [])) for ch in case.get("chapters", []))
+    print(f"-- {a.episode}: глав {len(case.get('chapters', []))}, задач {tasks}, сцен поиска {len(case.get('scenes', {}))}, "
+          f"разговоров {len(case.get('talks', {}))}; ошибок {len(rep.errors)}, предупреждений {len(rep.warnings)}")
+    return 1 if rep.errors or (a.strict and rep.warnings) else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("episode")
@@ -824,6 +943,8 @@ def main() -> int:
     a = ap.parse_args()
 
     rep = Report()
+    if a.episode.endswith(".case.json"):
+        return case_main(a, rep)
     ep = load_json(a.episode)
     schema_check(ep, rep)
     if not rep.errors:
@@ -835,7 +956,8 @@ def main() -> int:
         seasons(ep, ru, rep)
         minigame_integrity(ep, ru, rep)
         if not a.no_loc:
-            localization(ep, a.locales, rep)
+            case_path = os.path.join(os.path.dirname(a.episode), f"{ep['id']}.case.json")
+            localization(ep, a.locales, rep, frozenset(validate_case.case_keys(case_path, load_json)))
             ui_check(a.locales, rep)
 
     for w in rep.warnings:

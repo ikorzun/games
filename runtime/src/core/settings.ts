@@ -13,6 +13,9 @@ export type ViolenceMode = 'full' | 'schematic';
  */
 export type CameraFx = 'off' | 'low' | 'high';
 export const CAMERA_FX_LEVELS: readonly CameraFx[] = ['off', 'low', 'high'];
+/** Графика: «Воспоминания» (по умолчанию с 2026-10-13) — кадры в стиле графического романа, где они есть; «Реализм» — как есть. */
+export type Graphics = 'real' | 'memory';
+export const GRAPHICS_MODES: readonly Graphics[] = ['real', 'memory'];
 
 export interface Settings {
   /** Выбранный язык; null — определять автоматически (платформа / браузер). */
@@ -21,8 +24,6 @@ export interface Settings {
   fontScale: number;
   /** Скорость текста: 1..5, 5 — мгновенно. */
   textSpeed: number;
-  /** Пауза авто-режима после показа реплики, мс. */
-  autoDelayMs: number;
   music: number;
   sfx: number;
   /** Громкость озвучки реплик, 0..1 (множится на «общий мастер»: Mute игрока и запрет звука платформой). */
@@ -39,14 +40,22 @@ export interface Settings {
   skipUnread: boolean;
   /** Эффекты камеры: выкл / слабо (по умолчанию) / сильно. */
   cameraFx: CameraFx;
+  /** Графика: воспоминания (по умолчанию) / реализм. */
+  graphics: Graphics;
+  /**
+   * Версия настроек. 2 — с 2026-10-13: «Воспоминания» стали умолчанием; в сохранённых раньше настройках «Реализм» был
+   * прежним умолчанием, а не выбором игрока, поэтому при загрузке они получают «Воспоминания». 3 — с 2026-10-14:
+   * музыка по умолчанию вдвое тише звуков (0,7 → 0,4); кто ползунок не трогал (сохранено 0,7) — получает 0,4.
+   */
+  v: 3;
 }
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
   lang: null,
   fontScale: 1,
   textSpeed: 3,
-  autoDelayMs: 1800,
-  music: 0.7,
+  // Музыка вдвое тише звуков (владелец 2026-10-14): 0,4 при звуках 0,8.
+  music: 0.4,
   sfx: 0.8,
   voice: 0.9,
   voiceEnabled: true,
@@ -56,10 +65,11 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   violenceMode: 'full',
   skipUnread: false,
   cameraFx: 'low',
+  graphics: 'memory',
+  v: 3,
 };
 
 export const FONT_SCALE_RANGE = { min: 0.85, max: 1.6, step: 0.05 } as const;
-export const AUTO_DELAY_RANGE = { min: 500, max: 5000, step: 250 } as const;
 
 /** Символов в секунду для уровня скорости; Infinity — мгновенный вывод. */
 export function charsPerSecond(level: number): number {
@@ -76,12 +86,14 @@ export function sanitizeSettings(raw: unknown): Settings {
   const d = DEFAULT_SETTINGS;
   const r = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
   const lang = typeof r.lang === 'string' && (LANGS as readonly string[]).includes(r.lang) ? (r.lang as Lang) : null;
+  const v = typeof r.v === 'number' ? r.v : 0;
+  // До v3 музыка по умолчанию была 0,7: кто ползунок не трогал — получает новое умолчание (вдвое тише звуков).
+  const music = v < 3 && r.music === 0.7 ? d.music : num(r.music, 0, 1, d.music);
   return {
     lang,
     fontScale: num(r.fontScale, FONT_SCALE_RANGE.min, FONT_SCALE_RANGE.max, d.fontScale),
     textSpeed: Math.round(num(r.textSpeed, 1, 5, d.textSpeed)),
-    autoDelayMs: num(r.autoDelayMs, AUTO_DELAY_RANGE.min, AUTO_DELAY_RANGE.max, d.autoDelayMs),
-    music: num(r.music, 0, 1, d.music),
+    music,
     sfx: num(r.sfx, 0, 1, d.sfx),
     voice: num(r.voice, 0, 1, d.voice),
     voiceEnabled: typeof r.voiceEnabled === 'boolean' ? r.voiceEnabled : d.voiceEnabled,
@@ -91,5 +103,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     violenceMode: r.violenceMode === 'schematic' ? 'schematic' : 'full',
     skipUnread: typeof r.skipUnread === 'boolean' ? r.skipUnread : d.skipUnread,
     cameraFx: (CAMERA_FX_LEVELS as readonly unknown[]).includes(r.cameraFx) ? (r.cameraFx as CameraFx) : d.cameraFx,
+    graphics: v >= 2 && (GRAPHICS_MODES as readonly unknown[]).includes(r.graphics) ? (r.graphics as Graphics) : d.graphics,
+    v: 3,
   };
 }

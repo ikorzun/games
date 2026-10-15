@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "episode": "ep01_murylev",
+  "title_key": "ep01.title",
+  "notes": "Серый прототип главы 1 (docs/architecture/09-case-mode.md, решение владельца 2026-10-12: поиск улик в духе Criminal Case). Фоны — нынешние bg_apartment_zoya и bg_stairwell; рамки предметов сверены с картинками. Отступления от листа задач 09: улика подъезда — ящик с газетами (квитанции за дверь на фоне нет); доверенное лицо названо в документах, поэтому третий подозреваемый — Мурашов С. В. без лица, а «Сергей» Галины ложится на него в разговоре и в итоге главы.",
+  "traits": [
+    { "id": "volga", "label_key": "ep01.case.trait.volga" },
+    { "id": "kovrigin", "label_key": "ep01.case.trait.kovrigin" },
+    { "id": "deals", "label_key": "ep01.case.trait.deals" },
+    { "id": "journalist", "label_key": "ep01.case.trait.journalist" },
+    { "id": "keys", "label_key": "ep01.case.trait.keys" }
+  ],
+  "suspects": [
+    { "id": "lapin", "name_key": "ep01.cast.buyer", "who": "buyer", "note_key": "ep01.case.suspect.lapin" },
+    { "id": "kovrigin", "name_key": "ep01.cast.notary", "who": "notary", "note_key": "ep01.case.suspect.kovrigin" },
+    { "id": "murashov", "name_key": "ep01.case.suspect.murashov_name", "note_key": "ep01.case.suspect.murashov" }
+  ],
+  "clues": [
+    { "id": "photo", "label_key": "ep01.case.clue.photo" },
+    { "id": "glasses", "label_key": "ep01.case.clue.glasses" },
+    { "id": "pills", "label_key": "ep01.case.clue.pills" },
+    { "id": "contract", "label_key": "ep01.case.clue.contract" },
+    { "id": "mailbox", "label_key": "ep01.case.clue.mailbox" }
+  ],
+  "facts": [
+    { "id": "photo_back", "text_key": "ep01.case.fact.photo_back" },
+    { "id": "contract_date", "suspect": "kovrigin", "text_key": "ep01.case.fact.contract_date" },
+    { "id": "galina_sergei", "suspect": "murashov", "text_key": "ep01.case.fact.galina_sergei" }
+  ],
+  "scenes": {
+    "flat": {
+      "bg": "bg_apartment_zoya",
+      "title_key": "ep01.case.scene.flat.title",
+      "brief_key": "ep01.case.scene.flat.brief",
+      "pick": 10,
+      "time_limit_ms": 180000,
+      "star_time_ms": 90000,
+      "star_misses": 3,
+      "items": [
+        { "id": "photo", "rect": [0.1797, 0.3259, 0.0292, 0.0685], "label_key": "ep01.case.item.photo", "clue": "photo" },
+        { "id": "glasses", "rect": [0.8354, 0.5185, 0.0365, 0.0259], "label_key": "ep01.case.item.glasses", "clue": "glasses" },
+        { "id": "pills", "rect": [0.8802, 0.4852, 0.0563, 0.0593], "label_key": "ep01.case.item.pills", "clue": "pills" },
+        { "id": "tv", "rect": [0.6937, 0.3935, 0.1125, 0.1556], "label_key": "ep01.case.item.tv" },
+        { "id": "tape", "rect": [0.2344, 0.0519, 0.0896, 0.0741], "label_key": "ep01.case.item.tape" },
+        { "id": "rug", "rect": [0.2927, 0.0, 0.1187, 0.4815], "label_key": "ep01.case.item.rug" },
+        { "id": "radio", "rect": [0.9208, 0.1204, 0.0656, 0.0611], "label_key": "ep01.case.item.radio" },
+        { "id": "lamp", "rect": [0.9229, 0.2315, 0.0771, 0.1593], "label_key": "ep01.case.item.lamp" },
+        { "id": "radiator", "rect": [0.499, 0.4583, 0.1323, 0.1815], "label_key": "ep01.case.item.radiator" },
+        { "id": "chair", "rect": [0.3906, 0.4407, 0.0781, 0.2444], "label_key": "ep01.case.item.chair" },
+        { "id": "plant", "rect": [0.5078, 0.3056, 0.0781, 0.1093], "label_key": "ep01.case.item.plant" },
+        { "id": "pillow", "rect": [0.8812, 0.6148, 0.1187, 0.1537], "label_key": "ep01.case.item.pillow" },
+        { "id": "books", "rect": [0.862, 0.1278, 0.0589, 0.0926], "label_key": "ep01.case.item.books" },
+        { "id": "picture", "rect": [0.9427, 0.0, 0.026, 0.0981], "label_key": "ep01.case.item.picture" },
+        { "id": "crystal", "rect": [0.1302, 0.1796, 0.076, 0.063], "label_key": "ep01.case.item.crystal" },
+        { "id": "teapot", "rect": [0.1719, 0.487, 0.0396, 0.0389], "label_key": "ep01.case.item.teapot" },
+        { "id": "figurines", "rect": [0.1328, 0.4574, 0.0312, 0.0759], "label_key": "ep01.case.item.figurines" },
+        { "id": "vase", "rect": [0.1615, 0.0, 0.0573, 0.0704], "label_key": "ep01.case.item.vase" },
+        { "id": "doorknob", "rect": [0.0698, 0.6444, 0.0479, 0.0704], "label_key": "ep01.case.item.doorknob" }
+      ]
+    },
+    "stairs": {
+      "bg": "bg_stairwell",
+      "title_key": "ep01.case.scene.stairs.title",
+      "brief_key": "ep01.case.scene.stairs.brief",
+      "pick": 9,
+      "time_limit_ms": 180000,
+      "star_time_ms": 80000,
+      "star_misses": 3,
+      "items": [
+        { "id": "mailbox", "rect": [0.376, 0.35, 0.0573, 0.0389], "label_key": "ep01.case.item.mailbox", "clue": "mailbox" },
+        { "id": "bulb", "rect": [0.5885, 0.0, 0.0219, 0.0759], "label_key": "ep01.case.item.bulb" },
+        { "id": "lift_button", "rect": [0.4948, 0.3556, 0.0177, 0.0556], "label_key": "ep01.case.item.lift_button" },
+        { "id": "crack", "rect": [0.0667, 0.1852, 0.0542, 0.0926], "label_key": "ep01.case.item.crack" },
+        { "id": "radiator", "rect": [0.0729, 0.537, 0.0885, 0.1944], "label_key": "ep01.case.item.radiator" },
+        { "id": "handrail", "rect": [0.1979, 0.5667, 0.1589, 0.088], "label_key": "ep01.case.item.handrail" },
+        { "id": "panel", "rect": [0.8896, 0.1278, 0.0437, 0.2296], "label_key": "ep01.case.item.panel" },
+        { "id": "pipes", "rect": [0.2177, 0.0278, 0.0281, 0.6667], "label_key": "ep01.case.item.pipes" },
+        { "id": "peephole", "rect": [0.7969, 0.2778, 0.0125, 0.0222], "label_key": "ep01.case.item.peephole" },
+        { "id": "handle", "rect": [0.7417, 0.4278, 0.0292, 0.0778], "label_key": "ep01.case.item.handle" },
+        { "id": "knob", "rect": [0.9698, 0.6037, 0.0271, 0.0574], "label_key": "ep01.case.item.knob" },
+        { "id": "lock_plate", "rect": [0.7417, 0.3593, 0.0125, 0.0278], "label_key": "ep01.case.item.lock_plate" },
+        { "id": "steps", "rect": [0.0, 0.8148, 0.1562, 0.1852], "label_key": "ep01.case.item.steps" }
+      ]
+    }
+  },
+  "talks": {
+    "intro": {
+      "stage": { "bg": "bg_office_prosecutor", "filter": "desaturated", "time_of_day": "day" },
+      "steps": [
+        { "do": "show", "who": "sledak", "expression": "neutral", "position": "left" },
+        { "do": "show", "who": "oper", "expression": "neutral", "position": "right" },
+        { "do": "say", "who": "oper", "key": "ep01.s11.l002" },
+        { "do": "say", "who": "oper", "key": "ep01.s11.l004" },
+        { "do": "say", "who": "sledak", "key": "ep01.s11.l005" }
+      ]
+    },
+    "lapin": {
+      "stage": { "bg": "bg_apartment_zoya", "filter": "desaturated", "time_of_day": "day" },
+      "steps": [
+        { "do": "show", "who": "sledak", "expression": "neutral", "position": "left" },
+        { "do": "show", "who": "buyer", "expression": "neutral", "position": "right" },
+        { "do": "say", "who": "buyer", "key": "ep01.case.talk.lapin.l1" },
+        { "do": "say", "who": "buyer", "key": "ep01.s13.l005" },
+        { "do": "say", "who": "sledak", "key": "ep01.case.talk.lapin.l3" },
+        { "do": "say", "who": "buyer", "key": "ep01.case.talk.lapin.l4" }
+      ]
+    },
+    "photo": {
+      "stage": { "bg": "bg_apartment_zoya", "filter": "desaturated", "time_of_day": "day" },
+      "steps": [
+        { "do": "show", "who": "sledak", "expression": "neutral", "position": "left" },
+        { "do": "show", "who": "expert", "expression": "focused", "position": "right" },
+        { "do": "say", "who": "expert", "key": "ep01.s14.l002" },
+        { "do": "say", "who": "sledak", "key": "ep01.s14.l003" },
+        { "do": "say", "who": "expert", "key": "ep01.s14.l004" }
+      ]
+    },
+    "galina": {
+      "stage": { "bg": "bg_stairwell", "filter": "desaturated", "time_of_day": "evening" },
+      "steps": [
+        { "do": "show", "who": "sledak", "expression": "neutral", "position": "left" },
+        { "do": "show", "who": "neighbor", "expression": "neutral", "position": "right" },
+        { "do": "say", "who": "neighbor", "key": "ep01.s15.l002" },
+        { "do": "say", "who": "sledak", "key": "ep01.s15.l003" },
+        { "do": "say", "who": "neighbor", "key": "ep01.s15.l004" },
+        { "do": "say", "who": "neighbor", "key": "ep01.s15_r.l001" }
+      ]
+    },
+    "outro": {
+      "stage": { "bg": "bg_office_prosecutor", "filter": "desaturated", "time_of_day": "evening" },
+      "steps": [
+        { "do": "show", "who": "sledak", "expression": "neutral", "position": "left" },
+        { "do": "show", "who": "oper", "expression": "neutral", "position": "right" },
+        { "do": "say", "who": "sledak", "key": "ep01.case.talk.outro.l1" },
+        { "do": "say", "who": "oper", "key": "ep01.case.talk.outro.l2" }
+      ]
+    }
+  },
+  "chapters": [
+    {
+      "id": "ch1",
+      "title_key": "ep01.case.ch1.title",
+      "intro": "intro",
+      "outro": "outro",
+      "summary_key": "ep01.case.ch1.summary",
+      "tasks": [
+        { "id": "search_flat", "kind": "search", "title_key": "ep01.case.task.search_flat", "cost": 0, "requires": [], "scene": "flat", "gives": { "clues": ["photo", "glasses", "pills"] } },
+        { "id": "talk_lapin", "kind": "talk", "title_key": "ep01.case.task.talk_lapin", "cost": 1, "requires": ["search_flat"], "talk": "lapin", "gives": { "suspects": ["lapin"], "clues": ["contract"] } },
+        { "id": "examine_photo", "kind": "photo", "title_key": "ep01.case.task.examine_photo", "cost": 1, "requires": ["talk_lapin"], "scene": "flat", "item": "photo", "back_key": "ep01.case.photo_back", "talk": "photo", "gives": { "facts": ["photo_back"] } },
+        { "id": "examine_contract", "kind": "minigame", "title_key": "ep01.case.task.examine_contract", "cost": 1, "requires": ["talk_lapin"], "minigame": "mg_docs", "gives": { "suspects": ["kovrigin", "murashov"], "traits": ["kovrigin"], "facts": ["contract_date"] } },
+        { "id": "search_stairs", "kind": "search", "title_key": "ep01.case.task.search_stairs", "cost": 1, "requires": ["search_flat"], "scene": "stairs", "gives": { "clues": ["mailbox"] } },
+        { "id": "talk_galina", "kind": "talk", "title_key": "ep01.case.task.talk_galina", "cost": 1, "requires": ["search_stairs", "examine_contract"], "talk": "galina", "gives": { "traits": ["volga"], "facts": ["galina_sergei"] } }
+      ]
+    },
+    { "id": "ch2", "title_key": "ep01.case.ch2.title", "locked": true, "tasks": [] },
+    { "id": "ch3", "title_key": "ep01.case.ch3.title", "locked": true, "tasks": [] }
+  ]
+}
