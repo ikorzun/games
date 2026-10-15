@@ -12339,7 +12339,9 @@
       "text_key": "ep01.h.mg_interrogation_hod.st.south",
       "contradicted_by": [
        "ev_photo",
-       "ev_pills"
+       "ev_pills",
+       "ev_calendar",
+       "ev_pension"
       ],
       "press_key": "ep01.h.mg_interrogation_hod.press.south"
      },
@@ -12390,6 +12392,16 @@
       "id": "ev_pills",
       "label_key": "ep01.h.mg_interrogation_hod.ev.pills",
       "requires": "pills_found"
+     },
+     {
+      "id": "ev_calendar",
+      "label_key": "ep01.h.mg_interrogation_hod.ev.calendar",
+      "requires": "calendar_seen"
+     },
+     {
+      "id": "ev_pension",
+      "label_key": "ep01.h.mg_interrogation_hod.ev.pension",
+      "requires": "pension_found"
      },
      {
       "id": "ev_glasses",
@@ -13182,12 +13194,6 @@
     "path": "assets/common/bg/black.png",
     "season": "any",
     "notes": "чёрный: переходы-развилки и титр пятницы"
-   },
-   {
-    "id": "bg_hod_t_moscow",
-    "path": "assets/ep01/bg/moscow_1994.webp",
-    "season": "winter",
-    "notes": "временно: Москва зимой 1994-го (эпилог)"
    }
   ],
   "sprites": [],
