@@ -115,8 +115,9 @@ async function launchBrowser() {
     return await chromium.launch({
       executablePath,
       headless: true,
-      // Программный WebGL: на CI без GPU PixiJS всё равно получает контекст.
-      args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', ...extra],
+      // Программный WebGL: на CI без GPU PixiJS всё равно получает контекст. Звук играет (тайминги озвучки проверяются),
+      // но в колонки не выходит: фоновые прогоны мешают владельцу (2026-10-15).
+      args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--mute-audio', ...extra],
     });
   } catch (e) {
     console.error(`Не удалось запустить Chromium: ${e.message}\nУкажите CHROMIUM_PATH или выполните: npx playwright-core install chromium`);

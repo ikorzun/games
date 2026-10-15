@@ -172,8 +172,8 @@ describe('интерфейс: документальная эстетика, mob
     expect(avatar).toMatch(/width:\s*48px;[\s\S]*height:\s*48px;/);
     expect(avatar).toMatch(/border-radius:\s*50%/);
     expect(uiCss).toMatch(/\.vn-textbox__name\s*\{\s*font-size:\s*calc\(14em \/ 15\);\s*\}/);
-    // подпись под именем — на 4 px ближе к нему (владелец 2026-10-14)
-    expect(uiCss).toMatch(/\.vn-textbox__title\s*\{\s*margin-top:\s*-4px;\s*font-size:\s*calc\(10em \/ 15\);\s*opacity:\s*0\.7;\s*\}/);
+    // подпись под именем — на 2 px ближе к нему (владелец 2026-10-14: −4 px, 2026-10-15: отступ на 2 px больше)
+    expect(uiCss).toMatch(/\.vn-textbox__title\s*\{\s*margin-top:\s*-2px;\s*font-size:\s*calc\(10em \/ 15\);\s*opacity:\s*0\.7;\s*\}/);
     expect(uiCss).toMatch(/--font-body:\s*'Cormorant Garamond'/); // текст и кнопки (решение владельца 2026-10-13)
     expect(uiCss).toMatch(/--font-title:\s*'Tenor Sans'/); // заголовки
     expect(uiCss).toMatch(/--panel-line:\s*rgb\(255 255 255 \/ 0\.28\)/);

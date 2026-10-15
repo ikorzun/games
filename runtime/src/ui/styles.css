@@ -217,7 +217,7 @@ body {
   min-width: 0;
 }
 .vn-textbox__name { font-size: calc(14em / 15); }
-.vn-textbox__title { margin-top: -4px; font-size: calc(10em / 15); opacity: 0.7; } /* к имени на 4 px ближе (владелец 2026-10-14) */
+.vn-textbox__title { margin-top: -2px; font-size: calc(10em / 15); opacity: 0.7; } /* к имени на 2 px ближе (владелец 2026-10-14: −4, 2026-10-15: +2) */
 /* Текст не ниже двух строк, чтобы имя не прыгало от короткой реплики к длинной. */
 .vn-textbox__box {
   position: relative;
