@@ -315,12 +315,13 @@ for p in PLAN:
     if mem:
         sh['memory'] = mem
     SHOTS.append(sh)
-# Контора без помощницы: тот же кадр через плечо на Ковригина (на нём Люды не видно).
+# Контора без помощницы: кадр через плечо на Ковригина понедельника, но машинка Люды под серым чехлом, как на общем
+# плане вторника (аудит владельца 2026-10-15: в понедельник она открыта).
 SHOTS.append({'id': 'sh_notary_alone_ots', 'set': 'hod_notary_alone', 'bg': 'bg_hod_notary_alone', 'kind': 'ots', 'angle': 'eye',
               'cast': [{'who': 'notary'}, {'who': 'sledak'}], 'from': 'sledak', 'focus': 'notary',
-              'file': FILE('notary_ots_notary', 'hod_notary'),
-              **({'memory': memory_of('notary_ots_notary', 'hod_notary', ['notary', 'sledak'])}
-                 if memory_of('notary_ots_notary', 'hod_notary', ['notary', 'sledak']) else {})})
+              'file': FILE('notary_alone_ots', 'hod_notary_alone'),
+              **({'memory': memory_of('notary_alone_ots', 'hod_notary_alone', ['notary', 'sledak'])}
+                 if memory_of('notary_alone_ots', 'hod_notary_alone', ['notary', 'sledak']) else {})})
 # Страшные кадры (docs/production/prompts/scary-frames.md, tools/hod/scary.py): силуэт признания на красном — одна
 # картинка на обе графики (лица нет — рисовать «Воспоминания» нечего), квадрат — центральная вырезка.
 for sid, set_ in (('op_shmel_sil', 'hod_op'), ('recon_sil', 'hod_recon')):

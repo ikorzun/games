@@ -34,7 +34,7 @@ MEMORY = {
     'car_d2_wide': ('hod_car_d2', ['oper', 'sledak']),
     'car_d2_ots_oper': ('hod_car_d2', ['_', 'oper', 'sledak'], ['_', 'oper', 'sledak']),  # обрывок у левого края
     'car_d3_wide': ('hod_car_d3', ['oper', 'sledak']),
-    'car_d3_ots_oper': ('hod_car_d3', ['oper', 'sledak']),
+    'car_d3_ots_oper': ('hod_car_d3', ['_', 'oper', 'sledak'], ['oper', 'sledak']),  # спинка сиденья у левого края (16:9)
     'flat_wide': ('hod_flat', ['oper', 'buyer', 'sledak', 'lapin_wife']),
     'flat_ots_buyer': ('hod_flat', ['buyer', 'sledak']),
     'flat_ots_wife': ('hod_flat', ['sledak', 'lapin_wife']),
@@ -93,6 +93,7 @@ MEMORY = {
 REALISM_ORDER: dict[str, list[str]] = {
     'car_ots_oper': ['oper', 'sledak'],  # в «Реализме» обрывка у края нет
     'search_wide': ['sledak', '_'],  # понятые за Громовым — одной маской
+    'car_d3_ots_oper': ['oper', 'sledak'],
 }
 REALISM = {shot: (v[0], REALISM_ORDER.get(shot, v[1])) for shot, v in MEMORY.items()}
 

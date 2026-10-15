@@ -15329,17 +15329,17 @@
     ],
     "from": "sledak",
     "focus": "notary",
-    "file": "assets/ep01/hod/hod_notary/notary_ots_notary.webp",
+    "file": "assets/ep01/hod/hod_notary_alone/notary_alone_ots.webp",
     "memory": {
-     "file": "assets/ep01/hod_memory/hod_notary/notary_ots_notary.webp",
-     "square": "assets/ep01/hod_memory/hod_notary/notary_ots_notary.square.webp",
+     "file": "assets/ep01/hod_memory/hod_notary_alone/notary_alone_ots.webp",
+     "square": "assets/ep01/hod_memory/hod_notary_alone/notary_alone_ots.square.webp",
      "masks": {
-      "notary": "assets/ep01/hod_memory/hod_notary/notary_ots_notary.notary.webp",
-      "sledak": "assets/ep01/hod_memory/hod_notary/notary_ots_notary.sledak.webp"
+      "notary": "assets/ep01/hod_memory/hod_notary_alone/notary_alone_ots.notary.webp",
+      "sledak": "assets/ep01/hod_memory/hod_notary_alone/notary_alone_ots.sledak.webp"
      },
      "square_masks": {
-      "notary": "assets/ep01/hod_memory/hod_notary/notary_ots_notary.square.notary.webp",
-      "sledak": "assets/ep01/hod_memory/hod_notary/notary_ots_notary.square.sledak.webp"
+      "notary": "assets/ep01/hod_memory/hod_notary_alone/notary_alone_ots.square.notary.webp",
+      "sledak": "assets/ep01/hod_memory/hod_notary_alone/notary_alone_ots.square.sledak.webp"
      }
     }
    },

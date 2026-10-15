@@ -344,9 +344,15 @@ NEW = {
         'moment: Sayko holds the wheel with both hands, Gromov reads a typed list. Outside: a wide highway with Soviet '
         'apartment blocks in low sun.')},
     'car_d3_ots_oper': {'set': 'hod_car_d3', 'from': 'car_ots_oper', 'staging': {
-        'oper': 'drives in three-quarter view, both hands on the wheel, unsmiling; his eyes on the road ahead',
+        'oper': 'drives, both hands on the wheel, unsmiling; his face in three-quarter view toward the camera, fully visible, '
+                'his eyes on the road ahead',
         'sledak': 'only the back of his head and his shoulder at the RIGHT edge'}, 'fix': (
-        'Wednesday, late afternoon, low warm sun; through the windscreen the Khoroshevskoye highway and long apartment blocks.')},
+        'The camera is exactly where it is in image 1: in the passenger seat just behind Gromov\'s right shoulder, looking '
+        'across the cabin at the driver, as in the Monday and Tuesday frames of this conversation — NOT from the back seat '
+        '(аудит владельца 2026-10-15: на прежнем кадре Сайко был виден со спины). Sayko\'s face is seen in three-quarter '
+        'view, never his back or the back of his head. Image 4 only gives the Wednesday light, the icon and the air freshener. '
+        'Wednesday, late afternoon, low warm sun; through his side window and the windscreen the Khoroshevskoye highway and '
+        'long apartment blocks.')},
     'car_d3_view': {'set': 'hod_car_d3', 'from': 'car_wide', 'staging': {}, 'fix': (
         "A view through the windscreen of Sayko's moving Zhiguli on a Wednesday evening in August 1993: the Khoroshevskoye "
         'highway, a few Soviet cars and a bus, a very long apartment block in low warm sun, poplars; the dashboard edge at the '
