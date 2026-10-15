@@ -87,7 +87,7 @@ export class AssetCatalog {
   private readonly shots = new Map<string, Shot>();
   private readonly shotSets = new Map<string, Shot[]>();
   private readonly bgMemory = new Map<string, string>();
-  /** Квадрат «Воспоминаний» по файлу 16:9: фон сцены — тот же файл, что её общий план, и на вертикальном экране берёт его квадрат. */
+  /** Квадрат по файлу 16:9 (обе графики): фон сцены — тот же файл, что её общий план, и на вертикальном экране берёт его квадрат. */
   private readonly squareOf = new Map<string, string>();
   /** Графика «Воспоминания» и вертикальный экран (квадратные кадры): что отдавать в цепочках. */
   private graphics = { memory: false, square: false };
@@ -113,6 +113,7 @@ export class AssetCatalog {
       if (list) list.push(s);
       else this.shotSets.set(s.set, [s]);
       if (s.memory?.square) this.squareOf.set(s.memory.file, s.memory.square);
+      if (s.square) this.squareOf.set(s.file, s.square);
     }
   }
 
@@ -126,24 +127,26 @@ export class AssetCatalog {
   }
 
   /**
-   * Графика: «Воспоминания» (memory) отдают кадры и фоны в стиле графического романа, где они есть, а на вертикальном
-   * экране (square) — квадратные кадры; нет файла — прежний кадр «Реализма» вторым в цепочке.
+   * Графика: «Воспоминания» (memory) отдают кадры и фоны в стиле графического романа, где они есть; на вертикальном
+   * экране (square) обе графики отдают квадраты (у «Реализма» — с 2026-10-15); нет файла — кадр 16:9 вторым в цепочке.
    */
   setGraphics(g: { memory: boolean; square: boolean }): void {
     this.graphics = { ...g };
   }
 
-  /** Кадр показывается квадратным (воспоминания, вертикальный экран, у кадра есть квадрат). */
+  /** Кадр показывается квадратным: вертикальный экран и у кадра есть квадрат своей графики. */
   shotIsSquare(id: string): boolean {
-    return this.graphics.memory && this.graphics.square && Boolean(this.shots.get(id)?.memory?.square);
+    const s = this.shots.get(id);
+    return this.graphics.square && Boolean(this.graphics.memory && s?.memory ? s.memory.square : s?.square);
   }
 
   shotChain(id: string): ImageChain | null {
     const s = this.shots.get(id);
     if (!s) return null;
     const m = this.graphics.memory ? s.memory : undefined;
-    const mem = m ? (this.shotIsSquare(id) ? m.square : m.file) : undefined;
-    return { urls: mem ? [this.url(mem), this.url(s.file)] : [this.url(s.file)], silhouetteFirst: false };
+    const sq = this.shotIsSquare(id);
+    const first = m ? (sq ? m.square : m.file) : sq ? s.square : undefined;
+    return { urls: first ? [this.url(first), this.url(s.file)] : [this.url(s.file)], silhouetteFirst: false };
   }
 
   /**
@@ -161,7 +164,8 @@ export class AssetCatalog {
   shotMask(id: string, who: string): ImageChain | null {
     const s = this.shots.get(id);
     const m = this.graphics.memory ? s?.memory : undefined;
-    const mask = m ? (this.shotIsSquare(id) ? m.square_masks : m.masks)?.[who] : s?.cast.find((c) => c.who === who)?.mask;
+    const sq = this.shotIsSquare(id);
+    const mask = m ? (sq ? m.square_masks : m.masks)?.[who] : sq ? s?.square_masks?.[who] : s?.cast.find((c) => c.who === who)?.mask;
     return mask ? { urls: [this.url(mask)], silhouetteFirst: false } : null;
   }
 
@@ -213,7 +217,7 @@ export class AssetCatalog {
     if (BLACK_FILE.test(path)) return { urls: [], silhouetteFirst: false, solid: '#000000' };
     const mem = this.graphics.memory ? this.bgMemory.get(id) : undefined;
     // На вертикальном экране — сразу квадрат (владелец 2026-10-15: «на телефоне загружать только квадратные картинки»).
-    const sq = mem && this.graphics.square ? this.squareOf.get(mem) : undefined;
+    const sq = this.graphics.square ? this.squareOf.get(mem ?? path) : undefined;
     return { urls: [sq, mem, path].filter((u): u is string => Boolean(u)).map((u) => this.url(u)), silhouetteFirst: false };
   }
 

@@ -42,11 +42,13 @@ describe('каталог: кадры «Воспоминаний»', () => {
       { id: 'bg_room', path: 'assets/x/room.webp', memory: 'assets/m/room.webp' },
       { id: 'bg_plain', path: 'assets/x/plain.webp' },
       { id: 'bg_wide', path: 'assets/x/wide_bg.webp', memory: 'assets/m/wide.webp' }, // фон — тот же файл, что общий план
+      { id: 'bg_real', path: 'assets/x/wide.webp' }, // фон «Реализма» — файл общего плана
     ],
     shots: [
       {
         id: 'sh_full', set: 'room', bg: 'bg_room', kind: 'wide', angle: 'eye', file: 'assets/x/wide.webp',
         cast: [{ who: 'a', mask: 'assets/x/wide.a.webp' }],
+        square: 'assets/x/wide.square.webp', square_masks: { a: 'assets/x/wide.square.a.webp' },
         memory: { file: 'assets/m/wide.webp', square: 'assets/m/wide.square.webp', masks: { a: 'assets/m/wide.a.webp' }, square_masks: { a: 'assets/m/wide.square.a.webp' }, video: 'assets/m/wide.mp4' },
       },
       { id: 'sh_wide_only', set: 'room', bg: 'bg_room', kind: 'ots', angle: 'eye', file: 'assets/x/ots.webp', cast: [{ who: 'a' }], memory: { file: 'assets/m/ots.webp', video: 'assets/m/ots.mp4', video_loop: true } },
@@ -96,6 +98,45 @@ describe('каталог: кадры «Воспоминаний»', () => {
     // Фон сцены — тот же файл, что её общий план: на вертикальном экране сразу квадрат, 16:9 — только запасным.
     expect(urls(cat.bgChain('bg_wide'))).toEqual(['./assets/m/wide.square.webp', './assets/m/wide.webp', './assets/x/wide_bg.webp']);
     expect(urls(cat.bgChain('bg_room'))).toEqual(['./assets/m/room.webp', './assets/x/room.webp']); // квадрата нет
+  });
+});
+
+describe('каталог: квадраты «Реализма» (владелец 2026-10-15)', () => {
+  const ep = miniEpisode({ s1: { steps: [{ do: 'end', ending: 'e_main' }] } });
+  ep.assets = {
+    ...ep.assets,
+    backgrounds: [{ id: 'bg_real', path: 'assets/x/wide.webp' }, { id: 'bg_other', path: 'assets/x/other.webp' }],
+    shots: [
+      { id: 'sh_sq', set: 'room', bg: 'bg_real', kind: 'wide', angle: 'eye', file: 'assets/x/wide.webp', cast: [{ who: 'a', mask: 'assets/x/wide.a.webp' }],
+        square: 'assets/x/wide.square.webp', square_masks: { a: 'assets/x/wide.square.a.webp' }, video: 'assets/x/wide.mp4' },
+      { id: 'sh_no_sq', set: 'room', bg: 'bg_real', kind: 'ots', angle: 'eye', file: 'assets/x/ots.webp', cast: [{ who: 'a', mask: 'assets/x/ots.a.webp' }] },
+    ],
+  };
+  const urls = (c: { urls: readonly string[] } | null): readonly string[] | undefined => c?.urls;
+
+  it('вертикаль: квадрат и его маски, фон — квадрат своего общего плана; ролика нет (квадрат его не заменяет)', () => {
+    const cat = new AssetCatalog(ep, './');
+    cat.setGraphics({ memory: false, square: true });
+    expect(cat.shotIsSquare('sh_sq')).toBe(true);
+    expect(urls(cat.shotChain('sh_sq'))).toEqual(['./assets/x/wide.square.webp', './assets/x/wide.webp']);
+    expect(urls(cat.shotMask('sh_sq', 'a'))).toEqual(['./assets/x/wide.square.a.webp']);
+    expect(urls(cat.bgChain('bg_real'))).toEqual(['./assets/x/wide.square.webp', './assets/x/wide.webp']);
+    expect(urls(cat.bgChain('bg_other'))).toEqual(['./assets/x/other.webp']);
+    expect(cat.shotVideo('sh_sq')).toBeNull();
+    // кадр без квадрата — 16:9 и его маска (сцена кадрирует их одинаково)
+    expect(cat.shotIsSquare('sh_no_sq')).toBe(false);
+    expect(urls(cat.shotChain('sh_no_sq'))).toEqual(['./assets/x/ots.webp']);
+    expect(urls(cat.shotMask('sh_no_sq', 'a'))).toEqual(['./assets/x/ots.a.webp']);
+  });
+
+  it('горизонталь: прежний 16:9, его маски и ролик', () => {
+    const cat = new AssetCatalog(ep, './');
+    cat.setGraphics({ memory: false, square: false });
+    expect(cat.shotIsSquare('sh_sq')).toBe(false);
+    expect(urls(cat.shotChain('sh_sq'))).toEqual(['./assets/x/wide.webp']);
+    expect(urls(cat.shotMask('sh_sq', 'a'))).toEqual(['./assets/x/wide.a.webp']);
+    expect(urls(cat.bgChain('bg_real'))).toEqual(['./assets/x/wide.webp']);
+    expect(cat.shotVideo('sh_sq')).toEqual({ url: './assets/x/wide.mp4', loop: false });
   });
 });
 

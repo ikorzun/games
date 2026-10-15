@@ -13217,6 +13217,11 @@
      }
     ],
     "file": "assets/ep01/hod/hod_office_am/office_am_wide.webp",
+    "square": "assets/ep01/hod/hod_office_am/office_am_wide.square.webp",
+    "square_masks": {
+     "sledak": "assets/ep01/hod/hod_office_am/office_am_wide.square.sledak.webp",
+     "oper": "assets/ep01/hod/hod_office_am/office_am_wide.square.oper.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_office_am/office_am_wide.webp",
      "square": "assets/ep01/hod_memory/hod_office_am/office_am_wide.square.webp",
@@ -13249,6 +13254,11 @@
     "file": "assets/ep01/hod/hod_office_am/office_am_ots_oper.webp",
     "from": "sledak",
     "focus": "oper",
+    "square": "assets/ep01/hod/hod_office_am/office_am_ots_oper.square.webp",
+    "square_masks": {
+     "oper": "assets/ep01/hod/hod_office_am/office_am_ots_oper.square.oper.webp",
+     "sledak": "assets/ep01/hod/hod_office_am/office_am_ots_oper.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_office_am/office_am_ots_oper.webp",
      "square": "assets/ep01/hod_memory/hod_office_am/office_am_ots_oper.square.webp",
@@ -13371,6 +13381,11 @@
      }
     ],
     "file": "assets/ep01/hod/hod_office_lens/office_eve_lens.webp",
+    "square": "assets/ep01/hod/hod_office_lens/office_eve_lens.square.webp",
+    "square_masks": {
+     "expert": "assets/ep01/hod/hod_office_lens/office_eve_lens.square.expert.webp",
+     "sledak": "assets/ep01/hod/hod_office_lens/office_eve_lens.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_office_lens/office_eve_lens.webp",
      "square": "assets/ep01/hod_memory/hod_office_lens/office_eve_lens.square.webp",
@@ -13397,6 +13412,10 @@
      }
     ],
     "file": "assets/ep01/hod/hod_office_call_eve/office_eve_phone.webp",
+    "square": "assets/ep01/hod/hod_office_call_eve/office_eve_phone.square.webp",
+    "square_masks": {
+     "sledak": "assets/ep01/hod/hod_office_call_eve/office_eve_phone.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_office_call_eve/office_eve_phone.webp",
      "square": "assets/ep01/hod_memory/hod_office_call_eve/office_eve_phone.square.webp",
@@ -13425,6 +13444,11 @@
      }
     ],
     "file": "assets/ep01/hod/hod_office_lens_am/office_am_lens.webp",
+    "square": "assets/ep01/hod/hod_office_lens_am/office_am_lens.square.webp",
+    "square_masks": {
+     "expert": "assets/ep01/hod/hod_office_lens_am/office_am_lens.square.expert.webp",
+     "sledak": "assets/ep01/hod/hod_office_lens_am/office_am_lens.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_office_lens_am/office_am_lens.webp",
      "square": "assets/ep01/hod_memory/hod_office_lens_am/office_am_lens.square.webp",
@@ -13493,6 +13517,11 @@
     "file": "assets/ep01/hod/hod_office_d2/office_d2_ots_boss.webp",
     "from": "sledak",
     "focus": "boss",
+    "square": "assets/ep01/hod/hod_office_d2/office_d2_ots_boss.square.webp",
+    "square_masks": {
+     "boss": "assets/ep01/hod/hod_office_d2/office_d2_ots_boss.square.boss.webp",
+     "sledak": "assets/ep01/hod/hod_office_d2/office_d2_ots_boss.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_office_d2/office_d2_ots_boss.webp",
      "square": "assets/ep01/hod_memory/hod_office_d2/office_d2_ots_boss.square.webp",
@@ -13561,6 +13590,11 @@
     "file": "assets/ep01/hod/hod_office_night/office_night_ots_expert.webp",
     "from": "sledak",
     "focus": "expert",
+    "square": "assets/ep01/hod/hod_office_night/office_night_ots_expert.square.webp",
+    "square_masks": {
+     "expert": "assets/ep01/hod/hod_office_night/office_night_ots_expert.square.expert.webp",
+     "sledak": "assets/ep01/hod/hod_office_night/office_night_ots_expert.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_office_night/office_night_ots_expert.webp",
      "square": "assets/ep01/hod_memory/hod_office_night/office_night_ots_expert.square.webp",
@@ -13635,6 +13669,11 @@
     "file": "assets/ep01/hod/hod_flat/flat_ots_buyer.webp",
     "from": "sledak",
     "focus": "buyer",
+    "square": "assets/ep01/hod/hod_flat/flat_ots_buyer.square.webp",
+    "square_masks": {
+     "buyer": "assets/ep01/hod/hod_flat/flat_ots_buyer.square.buyer.webp",
+     "sledak": "assets/ep01/hod/hod_flat/flat_ots_buyer.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_flat/flat_ots_buyer.webp",
      "square": "assets/ep01/hod_memory/hod_flat/flat_ots_buyer.square.webp",
@@ -13667,6 +13706,11 @@
     "file": "assets/ep01/hod/hod_flat/flat_ots_wife.webp",
     "from": "sledak",
     "focus": "lapin_wife",
+    "square": "assets/ep01/hod/hod_flat/flat_ots_wife.square.webp",
+    "square_masks": {
+     "lapin_wife": "assets/ep01/hod/hod_flat/flat_ots_wife.square.lapin_wife.webp",
+     "sledak": "assets/ep01/hod/hod_flat/flat_ots_wife.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_flat/flat_ots_wife.webp",
      "square": "assets/ep01/hod_memory/hod_flat/flat_ots_wife.square.webp",
@@ -13688,6 +13732,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_flat_photo/flat_photo.webp",
+    "square": "assets/ep01/hod/hod_flat_photo/flat_photo.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_flat_photo/flat_photo.webp",
      "square": "assets/ep01/hod_memory/hod_flat_photo/flat_photo.square.webp"
@@ -13714,6 +13759,12 @@
      }
     ],
     "file": "assets/ep01/hod/hod_landing_chain/landing_chain_wide.webp",
+    "square": "assets/ep01/hod/hod_landing_chain/landing_chain_wide.square.webp",
+    "square_masks": {
+     "neighbor": "assets/ep01/hod/hod_landing_chain/landing_chain_wide.square.neighbor.webp",
+     "sledak": "assets/ep01/hod/hod_landing_chain/landing_chain_wide.square.sledak.webp",
+     "oper": "assets/ep01/hod/hod_landing_chain/landing_chain_wide.square.oper.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_landing_chain/landing_chain_wide.webp",
      "square": "assets/ep01/hod_memory/hod_landing_chain/landing_chain_wide.square.webp",
@@ -13748,6 +13799,11 @@
     "file": "assets/ep01/hod/hod_landing_chain/landing_chain_ots.webp",
     "from": "sledak",
     "focus": "neighbor",
+    "square": "assets/ep01/hod/hod_landing_chain/landing_chain_ots.square.webp",
+    "square_masks": {
+     "neighbor": "assets/ep01/hod/hod_landing_chain/landing_chain_ots.square.neighbor.webp",
+     "sledak": "assets/ep01/hod/hod_landing_chain/landing_chain_ots.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_landing_chain/landing_chain_ots.webp",
      "square": "assets/ep01/hod_memory/hod_landing_chain/landing_chain_ots.square.webp",
@@ -13782,6 +13838,12 @@
      }
     ],
     "file": "assets/ep01/hod/hod_landing_open/landing_open_wide.webp",
+    "square": "assets/ep01/hod/hod_landing_open/landing_open_wide.square.webp",
+    "square_masks": {
+     "neighbor": "assets/ep01/hod/hod_landing_open/landing_open_wide.square.neighbor.webp",
+     "sledak": "assets/ep01/hod/hod_landing_open/landing_open_wide.square.sledak.webp",
+     "oper": "assets/ep01/hod/hod_landing_open/landing_open_wide.square.oper.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_landing_open/landing_open_wide.webp",
      "square": "assets/ep01/hod_memory/hod_landing_open/landing_open_wide.square.webp",
@@ -13816,6 +13878,11 @@
     "file": "assets/ep01/hod/hod_landing_open/landing_open_ots.webp",
     "from": "sledak",
     "focus": "neighbor",
+    "square": "assets/ep01/hod/hod_landing_open/landing_open_ots.square.webp",
+    "square_masks": {
+     "neighbor": "assets/ep01/hod/hod_landing_open/landing_open_ots.square.neighbor.webp",
+     "sledak": "assets/ep01/hod/hod_landing_open/landing_open_ots.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_landing_open/landing_open_ots.webp",
      "square": "assets/ep01/hod_memory/hod_landing_open/landing_open_ots.square.webp",
@@ -13854,6 +13921,13 @@
      }
     ],
     "file": "assets/ep01/hod/hod_notary/notary_wide.webp",
+    "square": "assets/ep01/hod/hod_notary/notary_wide.square.webp",
+    "square_masks": {
+     "notary": "assets/ep01/hod/hod_notary/notary_wide.square.notary.webp",
+     "assistant": "assets/ep01/hod/hod_notary/notary_wide.square.assistant.webp",
+     "sledak": "assets/ep01/hod/hod_notary/notary_wide.square.sledak.webp",
+     "oper": "assets/ep01/hod/hod_notary/notary_wide.square.oper.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_notary/notary_wide.webp",
      "square": "assets/ep01/hod_memory/hod_notary/notary_wide.square.webp",
@@ -13890,6 +13964,11 @@
     "file": "assets/ep01/hod/hod_notary/notary_ots_notary.webp",
     "from": "sledak",
     "focus": "notary",
+    "square": "assets/ep01/hod/hod_notary/notary_ots_notary.square.webp",
+    "square_masks": {
+     "notary": "assets/ep01/hod/hod_notary/notary_ots_notary.square.notary.webp",
+     "sledak": "assets/ep01/hod/hod_notary/notary_ots_notary.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_notary/notary_ots_notary.webp",
      "square": "assets/ep01/hod_memory/hod_notary/notary_ots_notary.square.webp",
@@ -13937,6 +14016,12 @@
      }
     ],
     "file": "assets/ep01/hod/hod_notary_alone/notary_alone_wide.webp",
+    "square": "assets/ep01/hod/hod_notary_alone/notary_alone_wide.square.webp",
+    "square_masks": {
+     "notary": "assets/ep01/hod/hod_notary_alone/notary_alone_wide.square.notary.webp",
+     "sledak": "assets/ep01/hod/hod_notary_alone/notary_alone_wide.square.sledak.webp",
+     "oper": "assets/ep01/hod/hod_notary_alone/notary_alone_wide.square.oper.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_notary_alone/notary_alone_wide.webp",
      "square": "assets/ep01/hod_memory/hod_notary_alone/notary_alone_wide.square.webp",
@@ -13973,6 +14058,12 @@
      }
     ],
     "file": "assets/ep01/hod/hod_notary_stairs/stairs_wide.webp",
+    "square": "assets/ep01/hod/hod_notary_stairs/stairs_wide.square.webp",
+    "square_masks": {
+     "assistant": "assets/ep01/hod/hod_notary_stairs/stairs_wide.square.assistant.webp",
+     "oper": "assets/ep01/hod/hod_notary_stairs/stairs_wide.square.oper.webp",
+     "sledak": "assets/ep01/hod/hod_notary_stairs/stairs_wide.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_notary_stairs/stairs_wide.webp",
      "square": "assets/ep01/hod_memory/hod_notary_stairs/stairs_wide.square.webp",
@@ -14007,6 +14098,11 @@
     "file": "assets/ep01/hod/hod_notary_stairs/stairs_ots_assistant.webp",
     "from": "oper",
     "focus": "assistant",
+    "square": "assets/ep01/hod/hod_notary_stairs/stairs_ots_assistant.square.webp",
+    "square_masks": {
+     "assistant": "assets/ep01/hod/hod_notary_stairs/stairs_ots_assistant.square.assistant.webp",
+     "oper": "assets/ep01/hod/hod_notary_stairs/stairs_ots_assistant.square.oper.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_notary_stairs/stairs_ots_assistant.webp",
      "square": "assets/ep01/hod_memory/hod_notary_stairs/stairs_ots_assistant.square.webp",
@@ -14040,6 +14136,11 @@
      }
     ],
     "file": "assets/ep01/hod/hod_zhek/zhek_wide.webp",
+    "square": "assets/ep01/hod/hod_zhek/zhek_wide.square.webp",
+    "square_masks": {
+     "sledak": "assets/ep01/hod/hod_zhek/zhek_wide.square.sledak.webp",
+     "oper": "assets/ep01/hod/hod_zhek/zhek_wide.square.oper.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_zhek/zhek_wide.webp",
      "square": "assets/ep01/hod_memory/hod_zhek/zhek_wide.square.webp",
@@ -14072,6 +14173,11 @@
     "file": "assets/ep01/hod/hod_zhek/zhek_ots_clerk.webp",
     "from": "sledak",
     "focus": "passport_clerk",
+    "square": "assets/ep01/hod/hod_zhek/zhek_ots_clerk.square.webp",
+    "square_masks": {
+     "passport_clerk": "assets/ep01/hod/hod_zhek/zhek_ots_clerk.square.passport_clerk.webp",
+     "sledak": "assets/ep01/hod/hod_zhek/zhek_ots_clerk.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_zhek/zhek_ots_clerk.webp",
      "square": "assets/ep01/hod_memory/hod_zhek/zhek_ots_clerk.square.webp",
@@ -14134,6 +14240,11 @@
     "file": "assets/ep01/hod/hod_bti/bti_ots_clerk.webp",
     "from": "sledak",
     "focus": "clerk",
+    "square": "assets/ep01/hod/hod_bti/bti_ots_clerk.square.webp",
+    "square_masks": {
+     "clerk": "assets/ep01/hod/hod_bti/bti_ots_clerk.square.clerk.webp",
+     "sledak": "assets/ep01/hod/hod_bti/bti_ots_clerk.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_bti/bti_ots_clerk.webp",
      "square": "assets/ep01/hod_memory/hod_bti/bti_ots_clerk.square.webp",
@@ -14164,6 +14275,11 @@
      }
     ],
     "file": "assets/ep01/hod/hod_car/car_wide.webp",
+    "square": "assets/ep01/hod/hod_car/car_wide.square.webp",
+    "square_masks": {
+     "oper": "assets/ep01/hod/hod_car/car_wide.square.oper.webp",
+     "sledak": "assets/ep01/hod/hod_car/car_wide.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_car/car_wide.webp",
      "square": "assets/ep01/hod_memory/hod_car/car_wide.square.webp",
@@ -14196,6 +14312,11 @@
     "file": "assets/ep01/hod/hod_car/car_ots_oper.webp",
     "from": "sledak",
     "focus": "oper",
+    "square": "assets/ep01/hod/hod_car/car_ots_oper.square.webp",
+    "square_masks": {
+     "oper": "assets/ep01/hod/hod_car/car_ots_oper.square.oper.webp",
+     "sledak": "assets/ep01/hod/hod_car/car_ots_oper.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_car/car_ots_oper.webp",
      "square": "assets/ep01/hod_memory/hod_car/car_ots_oper.square.webp",
@@ -14217,6 +14338,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_car/car_view.webp",
+    "square": "assets/ep01/hod/hod_car/car_view.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_car/car_view.webp",
      "square": "assets/ep01/hod_memory/hod_car/car_view.square.webp"
@@ -14239,6 +14361,11 @@
      }
     ],
     "file": "assets/ep01/hod/hod_car_d2/car_d2_wide.webp",
+    "square": "assets/ep01/hod/hod_car_d2/car_d2_wide.square.webp",
+    "square_masks": {
+     "oper": "assets/ep01/hod/hod_car_d2/car_d2_wide.square.oper.webp",
+     "sledak": "assets/ep01/hod/hod_car_d2/car_d2_wide.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_car_d2/car_d2_wide.webp",
      "square": "assets/ep01/hod_memory/hod_car_d2/car_d2_wide.square.webp",
@@ -14271,6 +14398,11 @@
     "file": "assets/ep01/hod/hod_car_d2/car_d2_ots_oper.webp",
     "from": "sledak",
     "focus": "oper",
+    "square": "assets/ep01/hod/hod_car_d2/car_d2_ots_oper.square.webp",
+    "square_masks": {
+     "oper": "assets/ep01/hod/hod_car_d2/car_d2_ots_oper.square.oper.webp",
+     "sledak": "assets/ep01/hod/hod_car_d2/car_d2_ots_oper.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_car_d2/car_d2_ots_oper.webp",
      "square": "assets/ep01/hod_memory/hod_car_d2/car_d2_ots_oper.square.webp",
@@ -14292,6 +14424,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_car_d2/car_d2_view.webp",
+    "square": "assets/ep01/hod/hod_car_d2/car_d2_view.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_car_d2/car_d2_view.webp",
      "square": "assets/ep01/hod_memory/hod_car_d2/car_d2_view.square.webp"
@@ -14314,6 +14447,11 @@
      }
     ],
     "file": "assets/ep01/hod/hod_car_d3/car_d3_wide.webp",
+    "square": "assets/ep01/hod/hod_car_d3/car_d3_wide.square.webp",
+    "square_masks": {
+     "oper": "assets/ep01/hod/hod_car_d3/car_d3_wide.square.oper.webp",
+     "sledak": "assets/ep01/hod/hod_car_d3/car_d3_wide.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_car_d3/car_d3_wide.webp",
      "square": "assets/ep01/hod_memory/hod_car_d3/car_d3_wide.square.webp",
@@ -14346,6 +14484,11 @@
     "file": "assets/ep01/hod/hod_car_d3/car_d3_ots_oper.webp",
     "from": "sledak",
     "focus": "oper",
+    "square": "assets/ep01/hod/hod_car_d3/car_d3_ots_oper.square.webp",
+    "square_masks": {
+     "oper": "assets/ep01/hod/hod_car_d3/car_d3_ots_oper.square.oper.webp",
+     "sledak": "assets/ep01/hod/hod_car_d3/car_d3_ots_oper.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_car_d3/car_d3_ots_oper.webp",
      "square": "assets/ep01/hod_memory/hod_car_d3/car_d3_ots_oper.square.webp",
@@ -14367,6 +14510,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_car_d3/car_d3_view.webp",
+    "square": "assets/ep01/hod/hod_car_d3/car_d3_view.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_car_d3/car_d3_view.webp",
      "square": "assets/ep01/hod_memory/hod_car_d3/car_d3_view.square.webp"
@@ -14389,6 +14533,11 @@
      }
     ],
     "file": "assets/ep01/hod/hod_recon/recon_wide.webp",
+    "square": "assets/ep01/hod/hod_recon/recon_wide.square.webp",
+    "square_masks": {
+     "zoya": "assets/ep01/hod/hod_recon/recon_wide.square.zoya.webp",
+     "murashov_sil": "assets/ep01/hod/hod_recon/recon_wide.square.murashov_sil.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_recon/recon_wide.webp",
      "square": "assets/ep01/hod_memory/hod_recon/recon_wide.square.webp",
@@ -14421,6 +14570,11 @@
     "file": "assets/ep01/hod/hod_recon/recon_ots_zoya.webp",
     "from": "murashov_sil",
     "focus": "zoya",
+    "square": "assets/ep01/hod/hod_recon/recon_ots_zoya.square.webp",
+    "square_masks": {
+     "zoya": "assets/ep01/hod/hod_recon/recon_ots_zoya.square.zoya.webp",
+     "murashov_sil": "assets/ep01/hod/hod_recon/recon_ots_zoya.square.murashov_sil.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_recon/recon_ots_zoya.webp",
      "square": "assets/ep01/hod_memory/hod_recon/recon_ots_zoya.square.webp",
@@ -14447,6 +14601,10 @@
      }
     ],
     "file": "assets/ep01/hod/hod_walk/walk_wide.webp",
+    "square": "assets/ep01/hod/hod_walk/walk_wide.square.webp",
+    "square_masks": {
+     "sledak": "assets/ep01/hod/hod_walk/walk_wide.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_walk/walk_wide.webp",
      "square": "assets/ep01/hod_memory/hod_walk/walk_wide.square.webp",
@@ -14507,6 +14665,11 @@
     "file": "assets/ep01/hod/hod_second/second_ots_klava.webp",
     "from": "sledak",
     "focus": "klava",
+    "square": "assets/ep01/hod/hod_second/second_ots_klava.square.webp",
+    "square_masks": {
+     "klava": "assets/ep01/hod/hod_second/second_ots_klava.square.klava.webp",
+     "sledak": "assets/ep01/hod/hod_second/second_ots_klava.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_second/second_ots_klava.webp",
      "square": "assets/ep01/hod_memory/hod_second/second_ots_klava.square.webp",
@@ -14537,6 +14700,11 @@
      }
     ],
     "file": "assets/ep01/hod/hod_chertanovo/chertanovo_wide.webp",
+    "square": "assets/ep01/hod/hod_chertanovo/chertanovo_wide.square.webp",
+    "square_masks": {
+     "landlady": "assets/ep01/hod/hod_chertanovo/chertanovo_wide.square.landlady.webp",
+     "sledak": "assets/ep01/hod/hod_chertanovo/chertanovo_wide.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_chertanovo/chertanovo_wide.webp",
      "square": "assets/ep01/hod_memory/hod_chertanovo/chertanovo_wide.square.webp",
@@ -14563,6 +14731,10 @@
      }
     ],
     "file": "assets/ep01/hod/hod_agency_street/agency_street_wide.webp",
+    "square": "assets/ep01/hod/hod_agency_street/agency_street_wide.square.webp",
+    "square_masks": {
+     "sledak": "assets/ep01/hod/hod_agency_street/agency_street_wide.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_agency_street/agency_street_wide.webp",
      "square": "assets/ep01/hod_memory/hod_agency_street/agency_street_wide.square.webp",
@@ -14591,6 +14763,11 @@
      }
     ],
     "file": "assets/ep01/hod/hod_agency/agency_wide.webp",
+    "square": "assets/ep01/hod/hod_agency/agency_wide.square.webp",
+    "square_masks": {
+     "murashov": "assets/ep01/hod/hod_agency/agency_wide.square.murashov.webp",
+     "sledak": "assets/ep01/hod/hod_agency/agency_wide.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_agency/agency_wide.webp",
      "square": "assets/ep01/hod_memory/hod_agency/agency_wide.square.webp",
@@ -14623,6 +14800,11 @@
     "file": "assets/ep01/hod/hod_agency/agency_ots_murashov.webp",
     "from": "sledak",
     "focus": "murashov",
+    "square": "assets/ep01/hod/hod_agency/agency_ots_murashov.square.webp",
+    "square_masks": {
+     "murashov": "assets/ep01/hod/hod_agency/agency_ots_murashov.square.murashov.webp",
+     "sledak": "assets/ep01/hod/hod_agency/agency_ots_murashov.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_agency/agency_ots_murashov.webp",
      "square": "assets/ep01/hod_memory/hod_agency/agency_ots_murashov.square.webp",
@@ -14653,6 +14835,11 @@
      }
     ],
     "file": "assets/ep01/hod/hod_watch/watch_wide.webp",
+    "square": "assets/ep01/hod/hod_watch/watch_wide.square.webp",
+    "square_masks": {
+     "oper": "assets/ep01/hod/hod_watch/watch_wide.square.oper.webp",
+     "sledak": "assets/ep01/hod/hod_watch/watch_wide.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_watch/watch_wide.webp",
      "square": "assets/ep01/hod_memory/hod_watch/watch_wide.square.webp",
@@ -14676,6 +14863,7 @@
     "file": "assets/ep01/hod/hod_op/op_wide.webp",
     "video": "assets/ep01/hod/hod_op/op_wide.mp4",
     "video_loop": true,
+    "square": "assets/ep01/hod/hod_op/op_wide.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_op/op_wide.webp",
      "square": "assets/ep01/hod_memory/hod_op/op_wide.square.webp",
@@ -14691,6 +14879,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_op/op_draw.webp",
+    "square": "assets/ep01/hod/hod_op/op_draw.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_op/op_draw.webp",
      "square": "assets/ep01/hod_memory/hod_op/op_draw.square.webp"
@@ -14704,6 +14893,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_op/op_shot.webp",
+    "square": "assets/ep01/hod/hod_op/op_shot.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_op/op_shot.webp",
      "square": "assets/ep01/hod_memory/hod_op/op_shot.square.webp"
@@ -14726,6 +14916,11 @@
      }
     ],
     "file": "assets/ep01/hod/hod_op/op_wounded.webp",
+    "square": "assets/ep01/hod/hod_op/op_wounded.square.webp",
+    "square_masks": {
+     "oper": "assets/ep01/hod/hod_op/op_wounded.square.oper.webp",
+     "sledak": "assets/ep01/hod/hod_op/op_wounded.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_op/op_wounded.webp",
      "square": "assets/ep01/hod_memory/hod_op/op_wounded.square.webp",
@@ -14786,6 +14981,11 @@
      }
     ],
     "file": "assets/ep01/hod/hod_op/op_metro.webp",
+    "square": "assets/ep01/hod/hod_op/op_metro.square.webp",
+    "square_masks": {
+     "accomplice": "assets/ep01/hod/hod_op/op_metro.square.accomplice.webp",
+     "oper": "assets/ep01/hod/hod_op/op_metro.square.oper.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_op/op_metro.webp",
      "square": "assets/ep01/hod_memory/hod_op/op_metro.square.webp",
@@ -14827,6 +15027,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_search/search_keys.webp",
+    "square": "assets/ep01/hod/hod_search/search_keys.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_search/search_keys.webp",
      "square": "assets/ep01/hod_memory/hod_search/search_keys.square.webp"
@@ -14840,6 +15041,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_search/search_papers.webp",
+    "square": "assets/ep01/hod/hod_search/search_papers.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_search/search_papers.webp",
      "square": "assets/ep01/hod_memory/hod_search/search_papers.square.webp"
@@ -14861,6 +15063,10 @@
      }
     ],
     "file": "assets/ep01/hod/hod_field/field_wide.webp",
+    "square": "assets/ep01/hod/hod_field/field_wide.square.webp",
+    "square_masks": {
+     "sledak": "assets/ep01/hod/hod_field/field_wide.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_field/field_wide.webp",
      "square": "assets/ep01/hod_memory/hod_field/field_wide.square.webp",
@@ -14891,6 +15097,11 @@
     "file": "assets/ep01/hod/hod_field/field_ots_expert.webp",
     "from": "sledak",
     "focus": "expert",
+    "square": "assets/ep01/hod/hod_field/field_ots_expert.square.webp",
+    "square_masks": {
+     "expert": "assets/ep01/hod/hod_field/field_ots_expert.square.expert.webp",
+     "sledak": "assets/ep01/hod/hod_field/field_ots_expert.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_field/field_ots_expert.webp",
      "square": "assets/ep01/hod_memory/hod_field/field_ots_expert.square.webp",
@@ -14917,6 +15128,10 @@
      }
     ],
     "file": "assets/ep01/hod/hod_field/field_oper.webp",
+    "square": "assets/ep01/hod/hod_field/field_oper.square.webp",
+    "square_masks": {
+     "oper": "assets/ep01/hod/hod_field/field_oper.square.oper.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_field/field_oper.webp",
      "square": "assets/ep01/hod_memory/hod_field/field_oper.square.webp",
@@ -14945,6 +15160,11 @@
      }
     ],
     "file": "assets/ep01/hod/hod_interrog/interrog_wide.webp",
+    "square": "assets/ep01/hod/hod_interrog/interrog_wide.square.webp",
+    "square_masks": {
+     "murashov": "assets/ep01/hod/hod_interrog/interrog_wide.square.murashov.webp",
+     "sledak": "assets/ep01/hod/hod_interrog/interrog_wide.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_interrog/interrog_wide.webp",
      "square": "assets/ep01/hod_memory/hod_interrog/interrog_wide.square.webp",
@@ -14977,6 +15197,11 @@
     "file": "assets/ep01/hod/hod_interrog/interrog_ots_murashov.webp",
     "from": "sledak",
     "focus": "murashov",
+    "square": "assets/ep01/hod/hod_interrog/interrog_ots_murashov.square.webp",
+    "square_masks": {
+     "murashov": "assets/ep01/hod/hod_interrog/interrog_ots_murashov.square.murashov.webp",
+     "sledak": "assets/ep01/hod/hod_interrog/interrog_ots_murashov.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_interrog/interrog_ots_murashov.webp",
      "square": "assets/ep01/hod_memory/hod_interrog/interrog_ots_murashov.square.webp",
@@ -15011,6 +15236,12 @@
      }
     ],
     "file": "assets/ep01/hod/hod_interrog/confront_wide.webp",
+    "square": "assets/ep01/hod/hod_interrog/confront_wide.square.webp",
+    "square_masks": {
+     "murashov": "assets/ep01/hod/hod_interrog/confront_wide.square.murashov.webp",
+     "notary": "assets/ep01/hod/hod_interrog/confront_wide.square.notary.webp",
+     "sledak": "assets/ep01/hod/hod_interrog/confront_wide.square.sledak.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_interrog/confront_wide.webp",
      "square": "assets/ep01/hod_memory/hod_interrog/confront_wide.square.webp",
@@ -15038,6 +15269,7 @@
      }
     ],
     "file": "assets/ep01/hod/hod_court/court_wide.webp",
+    "square": "assets/ep01/hod/hod_court/court_wide.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_court/court_wide.webp",
      "square": "assets/ep01/hod_memory/hod_court/court_wide.square.webp"
@@ -15064,6 +15296,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_bio/bio_pyotr.webp",
+    "square": "assets/ep01/hod/hod_bio/bio_pyotr.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_bio/bio_pyotr.webp",
      "square": "assets/ep01/hod_memory/hod_bio/bio_pyotr.square.webp"
@@ -15082,6 +15315,10 @@
      }
     ],
     "file": "assets/ep01/hod/hod_2004/gromov_2004.webp",
+    "square": "assets/ep01/hod/hod_2004/gromov_2004.square.webp",
+    "square_masks": {
+     "sledak_old": "assets/ep01/hod/hod_2004/gromov_2004.square.sledak_old.webp"
+    },
     "memory": {
      "file": "assets/ep01/hod_memory/hod_2004/gromov_2004.webp",
      "square": "assets/ep01/hod_memory/hod_2004/gromov_2004.square.webp",
@@ -15101,6 +15338,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_epilogue/epi_grandson.webp",
+    "square": "assets/ep01/hod/hod_epilogue/epi_grandson.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_epilogue/epi_grandson.webp",
      "square": "assets/ep01/hod_memory/hod_epilogue/epi_grandson.square.webp"
@@ -15114,6 +15352,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_epilogue/epi_lapins.webp",
+    "square": "assets/ep01/hod/hod_epilogue/epi_lapins.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_epilogue/epi_lapins.webp",
      "square": "assets/ep01/hod_memory/hod_epilogue/epi_lapins.square.webp"
@@ -15127,6 +15366,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_epilogue/epi_galina_home.webp",
+    "square": "assets/ep01/hod/hod_epilogue/epi_galina_home.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_epilogue/epi_galina_home.webp",
      "square": "assets/ep01/hod_memory/hod_epilogue/epi_galina_home.square.webp"
@@ -15140,6 +15380,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_epilogue/epi_galina_station.webp",
+    "square": "assets/ep01/hod/hod_epilogue/epi_galina_station.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_epilogue/epi_galina_station.webp",
      "square": "assets/ep01/hod_memory/hod_epilogue/epi_galina_station.square.webp"
@@ -15153,6 +15394,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_epilogue/epi_galina_summer.webp",
+    "square": "assets/ep01/hod/hod_epilogue/epi_galina_summer.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_epilogue/epi_galina_summer.webp",
      "square": "assets/ep01/hod_memory/hod_epilogue/epi_galina_summer.square.webp"
@@ -15166,6 +15408,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_epilogue/epi_lyuda.webp",
+    "square": "assets/ep01/hod/hod_epilogue/epi_lyuda.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_epilogue/epi_lyuda.webp",
      "square": "assets/ep01/hod_memory/hod_epilogue/epi_lyuda.square.webp"
@@ -15179,6 +15422,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_epilogue/epi_klava.webp",
+    "square": "assets/ep01/hod/hod_epilogue/epi_klava.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_epilogue/epi_klava.webp",
      "square": "assets/ep01/hod_memory/hod_epilogue/epi_klava.square.webp"
@@ -15192,6 +15436,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_epilogue/epi_sayko.webp",
+    "square": "assets/ep01/hod/hod_epilogue/epi_sayko.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_epilogue/epi_sayko.webp",
      "square": "assets/ep01/hod_memory/hod_epilogue/epi_sayko.square.webp"
@@ -15205,6 +15450,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_epilogue/epi_boss.webp",
+    "square": "assets/ep01/hod/hod_epilogue/epi_boss.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_epilogue/epi_boss.webp",
      "square": "assets/ep01/hod_memory/hod_epilogue/epi_boss.square.webp"
@@ -15218,6 +15464,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_epilogue/epi_gromov.webp",
+    "square": "assets/ep01/hod/hod_epilogue/epi_gromov.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_epilogue/epi_gromov.webp",
      "square": "assets/ep01/hod_memory/hod_epilogue/epi_gromov.square.webp"
@@ -15231,6 +15478,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_epilogue/epi_field_spring.webp",
+    "square": "assets/ep01/hod/hod_epilogue/epi_field_spring.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_epilogue/epi_field_spring.webp",
      "square": "assets/ep01/hod_memory/hod_epilogue/epi_field_spring.square.webp"
@@ -15246,6 +15494,7 @@
     "file": "assets/ep01/hod/hod_epilogue/epi_notary_closed.webp",
     "video": "assets/ep01/hod/hod_epilogue/epi_notary_closed.mp4",
     "video_loop": true,
+    "square": "assets/ep01/hod/hod_epilogue/epi_notary_closed.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_epilogue/epi_notary_closed.webp",
      "square": "assets/ep01/hod_memory/hod_epilogue/epi_notary_closed.square.webp",
@@ -15263,6 +15512,7 @@
     "file": "assets/ep01/hod/hod_epilogue/epi_agency_winter.webp",
     "video": "assets/ep01/hod/hod_epilogue/epi_agency_winter.mp4",
     "video_loop": true,
+    "square": "assets/ep01/hod/hod_epilogue/epi_agency_winter.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_epilogue/epi_agency_winter.webp",
      "square": "assets/ep01/hod_memory/hod_epilogue/epi_agency_winter.square.webp",
@@ -15280,6 +15530,7 @@
     "file": "assets/ep01/hod/hod_court/epi_prison.webp",
     "video": "assets/ep01/hod/hod_court/epi_prison.mp4",
     "video_loop": true,
+    "square": "assets/ep01/hod/hod_court/epi_prison.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_court/epi_prison.webp",
      "square": "assets/ep01/hod_memory/hod_court/epi_prison.square.webp",
@@ -15295,6 +15546,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_field/field_find.webp",
+    "square": "assets/ep01/hod/hod_field/field_find.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_field/field_find.webp",
      "square": "assets/ep01/hod_memory/hod_field/field_find.square.webp"
@@ -15312,6 +15564,7 @@
      }
     ],
     "file": "assets/ep01/hod/hod_agency_closed/agency_closed.webp",
+    "square": "assets/ep01/hod/hod_agency_closed/agency_closed.square.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_agency_closed/agency_closed.webp",
      "square": "assets/ep01/hod_memory/hod_agency_closed/agency_closed.square.webp"
@@ -15347,6 +15600,11 @@
       "notary": "assets/ep01/hod_memory/hod_notary_alone/notary_alone_ots.square.notary.webp",
       "sledak": "assets/ep01/hod_memory/hod_notary_alone/notary_alone_ots.square.sledak.webp"
      }
+    },
+    "square": "assets/ep01/hod/hod_notary_alone/notary_alone_ots.square.webp",
+    "square_masks": {
+     "notary": "assets/ep01/hod/hod_notary_alone/notary_alone_ots.square.notary.webp",
+     "sledak": "assets/ep01/hod/hod_notary_alone/notary_alone_ots.square.sledak.webp"
     }
    },
    {
@@ -15357,6 +15615,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_op/op_shmel_sil.webp",
+    "square": "assets/ep01/hod/hod_op/op_shmel_sil.square.webp",
     "memory": {
      "file": "assets/ep01/hod/hod_op/op_shmel_sil.webp",
      "square": "assets/ep01/hod/hod_op/op_shmel_sil.square.webp"
@@ -15370,6 +15629,7 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_recon/recon_sil.webp",
+    "square": "assets/ep01/hod/hod_recon/recon_sil.square.webp",
     "memory": {
      "file": "assets/ep01/hod/hod_recon/recon_sil.webp",
      "square": "assets/ep01/hod/hod_recon/recon_sil.square.webp"

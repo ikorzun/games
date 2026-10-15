@@ -682,6 +682,8 @@
         "file": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$", "description": "assets/<ep>/shots/<set>/<name>.webp, 1920×1080." },
         "video": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+\\.mp4$", "description": "Ролик того же кадра для графики «Реализм» (H.264, без звука): первый кадр совпадает с file. Играет поверх кадра; не загрузился или prefers-reduced-motion — остаётся file. Для «Воспоминаний» — свой memory.video." },
         "video_loop": { "type": "boolean", "default": false, "description": "true — ролик повторяется, пока кадр на экране; false — играет один раз и замирает на последнем кадре." },
+        "square": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$", "description": "Квадрат «Реализма» для вертикального экрана (1200×1200): тот же кадр, подрезанный по бокам и достроенный сверху/снизу; нет — 16:9 кадрируется." },
+        "square_masks": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" }, "description": "Маски людей на квадрате «Реализма» (кто → файл), для подсветки говорящего." },
         "memory": {
           "type": "object",
           "additionalProperties": false,

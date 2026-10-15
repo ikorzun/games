@@ -270,6 +270,15 @@ HAS = lambda path: os.path.exists(os.path.join(ROOT, path))  # noqa: E731
 VIDEO_LOOP = {'op_wide', 'epi_prison', 'epi_agency_winter', 'epi_notary_closed'}
 
 
+def realism_square(sh: dict, sid: str, set_: str) -> None:
+    """Квадрат «Реализма» для телефона (tools/hod/realism.py square) и маски людей на нём — что уже есть."""
+    if HAS(FILE(f'{sid}.square', set_)):
+        sh['square'] = FILE(f'{sid}.square', set_)
+        found = {c['who']: FILE(f'{sid}.square.{c["who"]}', set_) for c in sh['cast'] if HAS(FILE(f'{sid}.square.{c["who"]}', set_))}
+        if found:
+            sh['square_masks'] = found
+
+
 def memory_of(sid: str, set_: str, cast: list[str]) -> dict | None:
     """Графика «Воспоминания» (tools/hod/memory.py): кадр 16:9, квадрат для телефона, маски людей и ролик — что уже есть."""
     if not HAS(MEM(sid, set_)):
@@ -312,6 +321,7 @@ for p in PLAN:
         mask = f'assets/ep01/hod/{p["set"]}/{p["id"]}.{c["who"]}.webp'
         if os.path.exists(os.path.join(ROOT, mask)):
             c['mask'] = mask
+    realism_square(sh, p['id'], p['set'])
     mem = memory_of(p['id'], p['set'], [c['who'] for c in sh['cast']])
     if mem:
         sh['memory'] = mem
@@ -325,11 +335,13 @@ SHOTS.append({'id': 'sh_notary_alone_ots', 'set': 'hod_notary_alone', 'bg': 'bg_
               'file': FILE('notary_alone_ots', 'hod_notary_alone'),
               **({'memory': memory_of('notary_alone_ots', 'hod_notary_alone', ['notary', 'sledak'])}
                  if memory_of('notary_alone_ots', 'hod_notary_alone', ['notary', 'sledak']) else {})})
+realism_square(SHOTS[-1], 'notary_alone_ots', 'hod_notary_alone')
 # Страшные кадры (docs/production/prompts/scary-frames.md, tools/hod/scary.py): силуэт признания на красном — одна
 # картинка на обе графики (лица нет — рисовать «Воспоминания» нечего), квадрат — центральная вырезка.
 for sid, set_ in (('op_shmel_sil', 'hod_op'), ('recon_sil', 'hod_recon')):
     SHOTS.append({'id': f'sh_{sid}', 'set': set_, 'bg': f'bg_{set_}', 'kind': 'insert', 'angle': 'eye', 'cast': [],
-                  'file': FILE(sid, set_), 'memory': {'file': FILE(sid, set_), 'square': FILE(f'{sid}.square', set_)}})
+                  'file': FILE(sid, set_), 'square': FILE(f'{sid}.square', set_),
+                  'memory': {'file': FILE(sid, set_), 'square': FILE(f'{sid}.square', set_)}})
 # Фон мини-игры «Осмотр квартиры»: стена Зои Павловны крупно, три улики врозь, людей нет.
 BACKGROUNDS.append({'id': 'bg_hod_flat_inspect', 'path': FILE('flat_inspect', 'hod_flat_inspect'), 'season': 'indoor',
                     'place': PLACE['hod_flat_inspect'],

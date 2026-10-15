@@ -10,6 +10,7 @@ high, 1920×1088; расходы — в общий журнал assets/ep01/_hod
   python3 tools/hod/realism.py shoot office_eve_wide office_…    # снять (по 3 параллельно) → assets/ep01/_hod/hq/<кадр>.png
   python3 tools/hod/realism.py sheet office_eve_wide …           # черновик и новый кадр рядом → assets/ep01/_hod/hq/sheet/
   python3 tools/hod/realism.py accept office_eve_wide …          # принять → assets/ep01/hod/<сет>/<кадр>.webp (1920×1080)
+  python3 tools/hod/realism.py square office_eve_wide …          # квадрат для телефона → <сет>/<кадр>.square.webp + маски
 
 Новый кадр (которого ещё нет в эпизоде) снимается по NEW: сет, состав и образец композиции — другой кадр.
 После приёмки: «Воспоминания» — memory.py scene/square/accept, маски — masks.py (оба режима).
@@ -333,8 +334,8 @@ NEW = {
         'the front seats), but a different moment: Sayko smokes one cigarette by his open window, Gromov looks out of his '
         'window. Outside: an old street of Presnya with pre-revolutionary brick houses and a tram.')},
     'car_d2_ots_oper': {'set': 'hod_car_d2', 'from': 'car_ots_oper', 'staging': {
-        'oper': 'drives in three-quarter view, one hand on the wheel, the other holding a cigarette by the open window, talking '
-                'drily; his eyes on Gromov, just right of the camera',
+        'oper': 'drives in three-quarter view, his LEFT hand on the wheel with a lit cigarette between its fingers (watch on that '
+                'wrist), talking drily; his eyes on Gromov, just right of the camera',
         'sledak': 'only the back of his head and his shoulder at the RIGHT edge'}, 'fix': (
         'Tuesday, overcast grey daylight; through the windows the old streets of Presnya. One cigarette in Sayko\'s hand.')},
     'car_d2_view': {'set': 'hod_car_d2', 'from': 'car_wide', 'staging': {}, 'fix': (
@@ -563,6 +564,184 @@ def sheet(sid: str) -> None:
     print('лист', os.path.join(HQ, 'sheet', f'{sid}.jpg'))
 
 
+# Квадрат «Реализма» для телефона (владелец 2026-10-15). Кадр снят по фото лиц, поэтому его не перерисовываем: подрезаем
+# по бокам так, чтобы все люди остались в кадре (кто у края — плечо через плечо — остаётся у края), и дорисовываем только
+# комнату сверху (или снизу), пиксели кадра не меняются — новых рук и лиц взяться неоткуда. Люди умещаются в 1080 —
+# квадрат просто вырезается, без генерации.
+SQ_DIR = os.path.join(HQ, 'squares')
+SQ_SIZE = 1200
+# Модель перерисовывает весь холст и иногда перекомпонует кадр (отъезжает, двигает окно): тогда дорисованная полоса не
+# стыкуется с кадром. Проверка — совпадение её версии кадра с исходным (корреляция яркости); ниже порога — новая попытка.
+SQ_TRIES = 4
+SQ_MIN_CORR = 0.7
+
+
+def _sq_prompt(set_: str, top_pct: int, bottom_pct: int, band: str) -> str:
+    return (f'Image 1 is a square canvas. The part from {top_pct}% to {bottom_pct}% of its height is a film photograph — the '
+            f'same photograph as image 2 — already placed at its final size and position. The grey area at the {band} of '
+            'image 1 is empty. Paint ONLY the empty grey area: extend the photograph into it so the canvas becomes one '
+            'seamless square photograph of the same place and moment — continue the walls, ceiling, windows, furniture and '
+            'whatever the edge of the photograph cuts. The photograph itself must stay exactly where it is, at exactly the '
+            'same size and framing, pixel for pixel: do not zoom out, do not re-frame, do not redraw it. Do not add any '
+            'person, head, hand, face or text in the new area. Same lens, perspective, light, colour and film grain.\n\n'
+            + ROOMS.get(set_, ''))
+
+
+# Ручная раскладка там, где автоматическая не годится: кадр → (x0, сторона W, сверху top) в пикселях кадра 1920×1080.
+SQ_LAYOUT: dict[str, tuple[int, int, int]] = {
+    # Двое на равных у краёв кадра (не «через плечо»): оба говорят, вырезка потеряла бы одного — весь кадр, комната сверху.
+    'office_am_lens': (0, 1920, 840), 'office_eve_lens': (0, 1920, 840), 'confront_wide': (0, 1920, 840),
+}
+
+
+def _episode_shot(sid: str) -> dict:
+    ep = json.load(open(os.path.join(ROOT, 'episodes/s1/ep01_hod.json'), encoding='utf-8'))
+    return next(s for s in ep['assets']['shots'] if s['id'] == f'sh_{sid}')
+
+
+def _people_boxes(path: str) -> list[tuple[int, int, int, int, float]]:
+    """Люди на кадре (Apple Vision, локально): рамка и доля площади."""
+    import subprocess, tempfile
+    out = []
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run(['swift', os.path.join(ROOT, 'tools/hod/person_masks.swift'), path, tmp], check=True, capture_output=True)
+        for name in sorted(os.listdir(tmp)):
+            m = Image.open(os.path.join(tmp, name)).convert('L').resize((1920, 1080)).point(lambda v: 255 if v > 128 else 0)
+            box = m.getbbox()
+            if box:
+                out.append((*box, sum(m.histogram()[255:]) / (1920 * 1080)))
+    return out
+
+
+def square_layout(sid: str, path: str, edges: bool = True) -> tuple[int, int, int]:
+    """Раскладка квадрата: левый край вырезки x0, сторона W (≥ 1080) и сколько комнаты дорисовать сверху (top).
+    edges=False — плечо собеседника у края кадра не держим (запасной вариант крупного плана: просто вырезка)."""
+    if sid in SQ_LAYOUT:
+        return SQ_LAYOUT[sid]
+    people = [b for b in _people_boxes(path) if b[4] >= 0.012]  # дальние фигуры (очередь в коридоре) — не держим
+    if not edges:
+        people = [b for b in people if 6 < b[0] and b[2] < 1914] or people
+    if not people:
+        return 420, 1080, 0  # людей нет — середина кадра
+    pts = []
+    for x0, y0, x1, y1, _ in people:
+        if x0 <= 6 and x1 >= 1914:
+            pts += [700, 1220]
+        elif x0 <= 6:  # у левого края (через плечо): оставить от него 160 px
+            pts.append(max(0, x1 - 160))
+        elif x1 >= 1914:
+            pts.append(min(1920, x0 + 160))
+        else:
+            pts += [x0, x1]
+    lo, hi = max(0, min(pts) - 40), min(1920, max(pts) + 40)
+    W = min(1920, max(1080, hi - lo))
+    x0 = min(max(0, (lo + hi) // 2 - W // 2), 1920 - W)
+    band = W - 1080
+    bottom = any(y1 >= 1074 for _, _, _, y1, _ in people)
+    top_cut = any(y0 <= 6 for _, y0, _, _, _ in people)
+    # Снизу обычно стол, колени, руки — их не дорисовываем: вся комната — сверху, если кто-то срезан нижним краем.
+    top = band if bottom or not top_cut else 0
+    if not bottom and not top_cut:
+        top = band // 2
+    return x0, W, top
+
+
+def square(sid: str, cands: int = 0) -> None:
+    """cands > 0 — не публиковать, а сложить столько годных вариантов (<кадр>.cand<k>.png): выбрать глазами, square_pick."""
+    from PIL import ImageDraw, ImageFilter
+    sh = _episode_shot(sid)
+    src = os.path.join(ROOT, sh['file'])
+    im = Image.open(src).convert('RGB').resize((1920, 1080), Image.LANCZOS)
+    x0, W, top = square_layout(sid, src)
+    if W > 1080 and sid not in SQ_LAYOUT:  # крупный план через плечо: без плеча у края умещается в 1080 — вырезка
+        alt = square_layout(sid, src, edges=False)
+        if alt[1] == 1080:
+            x0, W, top = alt
+    strip = im.crop((x0, 0, x0 + W, 1080))
+    os.makedirs(SQ_DIR, exist_ok=True)
+    raw = os.path.join(SQ_DIR, f'{sid}.square.png')
+    if W == 1080:
+        sq = strip
+    else:
+        import numpy as np
+        n = 1536
+        k = n / W
+        sh_h, y = round(1080 * k), round(top * k)
+        body = strip.resize((n, sh_h), Image.LANCZOS)
+        canvas = Image.new('RGB', (n, n), (128, 128, 128))
+        canvas.paste(body, (0, y))
+        mask = Image.new('RGBA', (n, n), (0, 0, 0, 0))
+        ImageDraw.Draw(mask).rectangle((0, y, n, y + sh_h - 1), fill=(0, 0, 0, 255))
+        cpath, mpath, opath = (os.path.join(SQ_DIR, f'{sid}.{t}.png') for t in ('canvas', 'mask', 'orig'))
+        canvas.save(cpath)
+        mask.save(mpath)
+        strip.save(opath)
+        band = 'top' if y > 0 and y + sh_h >= n else 'bottom' if y == 0 else 'top and bottom'
+        prompt = _sq_prompt(sh['set'], round(100 * y / n), round(100 * (y + sh_h) / n), band)
+        ref = np.asarray(canvas.convert('L'), float)[y:y + sh_h:4, ::4].ravel()
+        best = (-1.0, None)
+        keep = Image.new('L', (n, n), 0)  # кадр — исходные пиксели; шов растушёван на 24 px внутрь кадра
+        ImageDraw.Draw(keep).rectangle((0, y + (24 if y > 0 else 0), n, y + sh_h - 1 - (24 if y + sh_h < n else 0)), fill=255)
+        keep = keep.filter(ImageFilter.GaussianBlur(10))
+        got = 0
+        for attempt in range(1, (SQ_TRIES * 2 if cands else SQ_TRIES) + 1):
+            out = memory.gen(f'sq_{sid}', prompt, [cpath, opath], f'{n}x{n}', SQ_DIR, mask=mpath)
+            gen_im = Image.open(out).convert('RGB').resize((n, n), Image.LANCZOS)
+            corr = float(np.corrcoef(ref, np.asarray(gen_im.convert('L'), float)[y:y + sh_h:4, ::4].ravel())[0, 1])
+            print(f'{sid}: попытка {attempt}, совпадение кадра {corr:.2f}')
+            if corr > best[0]:
+                best = (corr, gen_im)
+            if cands and corr >= SQ_MIN_CORR:
+                got += 1
+                Image.composite(canvas, gen_im, keep).save(os.path.join(SQ_DIR, f'{sid}.cand{got}.png'))
+                if got >= cands:
+                    break
+            elif corr >= SQ_MIN_CORR:
+                break
+        if cands:
+            json.dump({'x0': x0, 'W': W, 'top': top}, open(os.path.join(SQ_DIR, f'{sid}.layout.json'), 'w'))
+            print(f'{sid}: вариантов {got} → {SQ_DIR}/{sid}.cand*.png')
+            return
+        if best[0] < SQ_MIN_CORR:
+            if sid in SQ_LAYOUT:
+                print(f'{sid}: НЕ ВЫШЛО — модель не держит кадр (лучшее {best[0]:.2f}); квадрат не записан')
+                return
+            x0, W, top = square_layout(sid, src, edges=False)
+            if W > 1080:
+                print(f'{sid}: НЕ ВЫШЛО — модель не держит кадр (лучшее {best[0]:.2f}); квадрат не записан')
+                return
+            # Крупный план: без плеча собеседника у края люди умещаются в 1080 — просто вырезка, без дорисовки.
+            print(f'{sid}: дорисовка не держит кадр (лучшее {best[0]:.2f}) — вырезка 1080 без плеча у края')
+            W, top = 1080, 0
+            sq = im.crop((x0, 0, x0 + 1080, 1080))
+        else:
+            sq = Image.composite(canvas, best[1], keep)
+    publish(sid, sq, x0, W, top)
+
+
+def square_pick(sid: str, k: int) -> None:
+    """Опубликовать выбранный вариант квадрата (после square --cands)."""
+    lay = json.load(open(os.path.join(SQ_DIR, f'{sid}.layout.json')))
+    publish(sid, Image.open(os.path.join(SQ_DIR, f'{sid}.cand{k}.png')).convert('RGB'), lay['x0'], lay['W'], lay['top'])
+
+
+def publish(sid: str, sq: Image.Image, x0: int, W: int, top: int) -> None:
+    sh = _episode_shot(sid)
+    sq.save(os.path.join(SQ_DIR, f'{sid}.square.png'))
+    set_ = sh['set']
+    out_dir = os.path.join(ROOT, f'assets/ep01/hod/{set_}')
+    sq.resize((SQ_SIZE, SQ_SIZE), Image.LANCZOS).save(os.path.join(out_dir, f'{sid}.square.webp'), 'WEBP', quality=84, method=6)
+    # Маски подсветки — те же маски кадра, перенесённые в квадрат (в дорисованной полосе людей нет).
+    for c in sh['cast']:
+        if 'mask' not in c:
+            continue
+        m = Image.open(os.path.join(ROOT, c['mask'])).convert('L').resize((1920, 1080)).crop((x0, 0, x0 + W, 1080))
+        sqm = Image.new('L', (W, W), 0)
+        sqm.paste(m, (0, top))
+        sqm.resize((SQ_SIZE, SQ_SIZE), Image.LANCZOS).save(os.path.join(out_dir, f'{sid}.square.{c["who"]}.webp'), 'WEBP', quality=80)
+    print('квадрат', sid, f'x0={x0} W={W} top={top}', '→', os.path.relpath(os.path.join(out_dir, f'{sid}.square.webp'), ROOT))
+
+
 def accept(sid: str) -> None:
     _, set_, _ = info(sid)
     raw = os.path.join(HQ, f'hq_{sid}.png')
@@ -598,5 +777,12 @@ if __name__ == '__main__':
     elif cmd == 'accept':
         for sid in ids:
             accept(sid)
+    elif cmd == 'square':  # square <кадр> … [--cands N] — с --cands только варианты, без публикации
+        n_c = int(ids[ids.index('--cands') + 1]) if '--cands' in ids else 0
+        ids = [i for i in ids if i != '--cands' and i != str(n_c)] if n_c else ids
+        with ThreadPoolExecutor(4) as pool:
+            list(pool.map(lambda i: square(i, n_c), ids))
+    elif cmd == 'square_pick':  # square_pick <кадр> <номер варианта>
+        square_pick(ids[0], int(ids[1]))
     else:
         sys.exit(f'непонятная команда {cmd}')

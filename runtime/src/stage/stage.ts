@@ -82,7 +82,7 @@ export class Stage implements IStage {
   private graphics: Graphics = 'real';
   private portraitMq: MediaQueryList | null = null;
   private readonly onOrientation = (): void => {
-    if (this.graphics === 'memory') this.refreshGraphics(); // квадраты есть только у «воспоминаний»
+    this.refreshGraphics(); // квадраты есть у обеих график (у «Реализма» — с 2026-10-15)
   };
 
   constructor(renderer: ISceneRenderer, opts: StageOptions = {}) {
@@ -137,7 +137,7 @@ export class Stage implements IStage {
     parent.appendChild(this.el);
     await this.renderer.mount(this.hostEl);
     this.portraitMq?.addEventListener?.('change', this.onOrientation);
-    if (this.graphics === 'memory') this.refreshGraphics(); // режим пришёл из настроек раньше, чем сцена поднялась
+    this.refreshGraphics(); // режим и ориентация известны раньше, чем сцена поднялась
   }
 
   destroy(): void {
@@ -190,12 +190,12 @@ export class Stage implements IStage {
   }
 
   /**
-   * «Воспоминания» на вертикальном экране: область кадра над текстом всегда квадратная, на любом кадре — квадрат, фон или
+   * Вертикальный экран (обе графики): область кадра над текстом всегда квадратная, на любом кадре — квадрат, фон или
    * кадр без квадрата (его 16:9 кадрируется в квадрат). Раньше высота прыгала между квадратом и 16:9 от кадра к кадру
    * (владелец 2026-10-15).
    */
   private updateSquare(): void {
-    this.el.parentElement?.classList.toggle('is-square', this.graphics === 'memory' && (this.portraitMq?.matches ?? false));
+    this.el.parentElement?.classList.toggle('is-square', this.portraitMq?.matches ?? false);
   }
 
   /** Пауза платформы / вкладки в фоне: камкордер останавливает цикл. */

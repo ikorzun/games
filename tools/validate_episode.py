@@ -218,6 +218,9 @@ def shots_check(ep: dict, rep: Report) -> None:
         for c in sh.get("cast", []):
             if c.get("mask") and not os.path.exists(os.path.join(ROOT, c["mask"])):
                 rep.warn(f"{where}: маски {c['mask']} нет в репозитории (без подсветки {c['who']})")
+        for path in [sh.get("square"), *(sh.get("square_masks") or {}).values()]:
+            if path and not os.path.exists(os.path.join(ROOT, path)):
+                rep.warn(f"{where}: квадрата «Реализма» {path} нет в репозитории (на телефоне кадрируется 16:9)")
         mem = sh.get("memory") or {}
         for path in [mem.get("file"), mem.get("square"), mem.get("video"), *(mem.get("masks") or {}).values(), *(mem.get("square_masks") or {}).values()]:
             if path and not os.path.exists(os.path.join(ROOT, path)):
