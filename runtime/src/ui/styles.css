@@ -170,7 +170,6 @@ body {
 .vn-root:not(.in-game) .vn-textbox {
   display: none;
 }
-.vn-root.ui-hidden .vn-ui { visibility: hidden; }
 
 /* ───────────── Текстовое окно ───────────── */
 
@@ -682,9 +681,6 @@ body {
 }
 .vn-cap__bar { flex: none; width: 0.9em; background: var(--c-accent); }
 .vn-cap__text { padding: 0.5em 1em 0.55em 0.9em; }
-/* «Скрыть интерфейс»: вместе с UI прячутся и экранные надписи камеры (REC, таймкод). */
-.vn-root.ui-hidden .vn-cap--date_stamp,
-.vn-root.ui-hidden .vn-stage__hud { visibility: hidden; }
 
 /* ───────────── Экраны ───────────── */
 
@@ -1737,34 +1733,6 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-/* ───────────── Полоса авто-режима: отсчёт до следующей реплики ───────────── */
-
-.vn-autobar {
-  display: none;
-  width: 100%;
-  height: 3px;
-  background: rgb(255 255 255 / 0.08);
-  pointer-events: none;
-}
-.vn-autobar.is-on { display: block; }
-.vn-autobar__fill {
-  display: block;
-  height: 100%;
-  background: var(--c-accent);
-  transform-origin: left;
-  transform: scaleX(1);
-}
-.vn-autobar.is-on .vn-autobar__fill { animation: autobar-run var(--autobar-ms, 2s) linear forwards; }
-@keyframes autobar-run {
-  from { transform: scaleX(1); }
-  to { transform: scaleX(0); }
-}
-/* Ландшафт: над окном текста, той же ширины. Портрет: первой строкой панели, вплотную под картинкой. */
-.vn-autobar { align-self: center; width: min(100%, calc(62ch + 3.4em)); margin-bottom: -1.2em; }
-@media (orientation: portrait) {
-  .vn-autobar { order: -1; width: calc(100% + 20px); margin: -8px -10px 0; }
 }
 
 /* ───────────── Настройки: сохранить / загрузить / звук ───────────── */

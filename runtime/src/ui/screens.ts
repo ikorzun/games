@@ -5,7 +5,7 @@
  */
 import { i18n, t } from '../core/i18n';
 import type { SaveFile } from '../core/saves';
-import { AUTO_DELAY_RANGE, CAMERA_FX_LEVELS, FONT_SCALE_RANGE, GRAPHICS_MODES } from '../core/settings';
+import { CAMERA_FX_LEVELS, FONT_SCALE_RANGE, GRAPHICS_MODES } from '../core/settings';
 import type { CameraFx, Settings } from '../core/settings';
 import type { ArchiveItem, Episode, GameState, Ending, Lang } from '../core/types';
 import type { LogEntry } from '../session';
@@ -336,7 +336,7 @@ export class SettingsScreen extends BaseScreen {
     const hd = this.handlers;
     const range = (
       label: string,
-      key: 'fontScale' | 'textSpeed' | 'autoDelayMs' | 'music' | 'sfx' | 'voice',
+      key: 'fontScale' | 'textSpeed' | 'music' | 'sfx' | 'voice',
       min: number,
       max: number,
       step: number,
@@ -509,7 +509,6 @@ export class SettingsScreen extends BaseScreen {
         graphics,
         range(t('ui.settings.font_size'), 'fontScale', FONT_SCALE_RANGE.min, FONT_SCALE_RANGE.max, FONT_SCALE_RANGE.step, pct),
         range(t('ui.settings.text_speed'), 'textSpeed', 1, 5, 1, (v) => `${v}/5`),
-        range(t('ui.settings.auto_delay'), 'autoDelayMs', AUTO_DELAY_RANGE.min, AUTO_DELAY_RANGE.max, AUTO_DELAY_RANGE.step, (v) => `${(v / 1000).toFixed(1)} s`),
         range(t('ui.settings.music'), 'music', 0, 1, 0.05, pct),
         range(t('ui.settings.sfx'), 'sfx', 0, 1, 0.05, pct),
         voice,

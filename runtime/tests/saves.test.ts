@@ -446,7 +446,6 @@ describe('очистка данных профиля и настроек', () =>
       lang: 'de',
       fontScale: 9,
       textSpeed: 99,
-      autoDelayMs: 1,
       music: -1,
       sfx: 2,
       voice: 'loud',
@@ -459,7 +458,6 @@ describe('очистка данных профиля и настроек', () =>
     expect(s.lang).toBeNull();
     expect(s.fontScale).toBe(FONT_SCALE_RANGE.max);
     expect(s.textSpeed).toBe(5);
-    expect(s.autoDelayMs).toBe(500);
     expect(s.music).toBe(0);
     expect(s.sfx).toBe(1);
     expect(s.voice).toBe(DEFAULT_SETTINGS.voice);

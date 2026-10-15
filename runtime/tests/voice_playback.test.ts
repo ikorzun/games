@@ -21,7 +21,7 @@ import { Director } from '../src/stage/director';
 import type { Stage } from '../src/stage/stage';
 import { LineVoice } from '../src/stage/voice';
 import { CaptionLayer } from '../src/ui/captions';
-import { AUTO_VOICE_TAIL_MS, DomUI } from '../src/ui/dom_ui';
+import { DomUI } from '../src/ui/dom_ui';
 import { UiKit } from '../src/ui/kit';
 import { FakeEl } from './helpers/audio_fakes';
 import { FakeAudio, FakeCaptions, FakePlatform, FakeStage } from './helpers/fakes';
@@ -70,7 +70,7 @@ async function makeRig(files: VoiceIndexData['episodes'], over: Partial<Settings
   const captionsHost = document.createElement('div');
   kit.main.appendChild(captionsHost);
   const stage = { minigameRoot: {}, playFx: () => Promise.resolve(), setMinigameActive: () => undefined, setFocus: () => undefined } as unknown as Stage;
-  const settings: Settings = { ...DEFAULT_SETTINGS, textSpeed: 5, autoDelayMs: 500, ...over };
+  const settings: Settings = { ...DEFAULT_SETTINGS, textSpeed: 5, ...over };
 
   const els: FakeEl[] = [];
   const warns: string[] = [];
@@ -211,61 +211,45 @@ describe('озвучка: ключ реплики → клип → элемен�
   });
 });
 
-describe('озвучка: авто-режим', () => {
-  it('ждёт конец клипа + 300 мс, потом листает; пауза по тексту (500 мс) при этом не используется', async () => {
+describe('озвучка: клип и листание', () => {
+  it('клип звучит, пока игрок не пролистал; конец клипа сам реплику не листает (авто-режима нет, 2026-10-15)', async () => {
     const { session, ui, voiceEl } = await makeRig(ALL_RU);
-    ui.toggleAuto();
     void session.newGame();
     await tick();
     expect(voiceEl.src).toBe(P('ru', K1));
-    await tick(4000); // реплика по тексту давно прочитана, клип ещё звучит
-    expect(voiceEl.src).toBe(P('ru', K1));
-    voiceEl.fire('ended'); // клип доиграл (в 4000 мс)
-    await tick(AUTO_VOICE_TAIL_MS - 1);
-    expect(voiceEl.src).toBe(''); // клип снят, но следующая реплика ещё не показана
-    expect(voiceEl.plays).toBe(1);
-    await tick(1);
-    expect(voiceEl.src).toBe(P('ru', K2)); // +300 мс — следующая реплика и её клип
+    voiceEl.fire('ended');
+    await tick(4000);
+    expect(session.log).toHaveLength(1);
+    ui.advance();
+    await tick();
+    expect(voiceEl.src).toBe(P('ru', K2)); // следующая реплика и её клип
     expect(voiceEl.plays).toBe(2);
   });
 
-  it('клипа нет — авто-режим как раньше: пауза по длине текста', async () => {
-    const { session, ui, voiceEl } = await makeRig({});
-    ui.toggleAuto();
-    void session.newGame();
-    await tick();
-    expect(session.log).toHaveLength(1);
-    await tick(500 + 20 * 6 - 1);
-    expect(session.log).toHaveLength(1);
-    await tick(1);
-    expect(session.log).toHaveLength(2);
-    expect(voiceEl.plays).toBe(0);
-  });
-
-  it('клип не прочитался (error элемента) — один warn и авто-режим переходит на паузу по тексту', async () => {
+  it('клип не прочитался (error элемента) — один warn; реплика ждёт игрока', async () => {
     const { session, ui, voiceEl, warns } = await makeRig(ALL_RU);
-    ui.toggleAuto();
     void session.newGame();
     await tick(1000);
-    expect(session.log).toHaveLength(1); // ждём клип
+    expect(session.log).toHaveLength(1);
     voiceEl.fire('error');
     expect(warns).toHaveLength(1);
     expect(warns[0]).toContain(P('ru', K1));
-    await tick(500 + 20 * 6);
+    ui.advance();
+    await tick();
     expect(session.log).toHaveLength(2);
   });
 });
 
 describe('озвучка: выключена, без звука, без клипов', () => {
-  it('voiceEnabled = false — клипы не запускаются, элемент не тронут, авто-режим идёт по тексту', async () => {
+  it('voiceEnabled = false — клипы не запускаются, элемент не тронут, реплики листаются как обычно', async () => {
     const { session, ui, voiceEl, audio } = await makeRig(ALL_RU, { voiceEnabled: false });
-    ui.toggleAuto();
     void session.newGame();
     await tick();
     expect(audio.voiceEnabled).toBe(false);
     expect(voiceEl.plays).toBe(0);
     expect(voiceEl.srcHistory).toEqual([]);
-    await tick(500 + 20 * 6);
+    ui.advance();
+    await tick();
     expect(session.log).toHaveLength(2);
     expect(voiceEl.plays).toBe(0);
   });
@@ -296,11 +280,14 @@ describe('озвучка: выключена, без звука, без клип
     expect(silent.voiceEl.plays).toBe(0);
   });
 
-  it('пустой индекс клипов: эпизод проходится автопилотом интерфейса, звук не трогается, предупреждений нет', async () => {
+  it('пустой индекс клипов: эпизод листается, звук не трогается, предупреждений нет', async () => {
     const { session, ui, voiceEl, els, warns } = await makeRig({});
-    ui.toggleAuto();
     const run = session.newGame();
-    await tick(10_000);
+    for (let i = 0; i < 2; i++) {
+      await tick();
+      ui.advance();
+    }
+    await tick();
     expect(session.log).toHaveLength(3);
     expect(voiceEl.plays).toBe(0);
     expect(voiceEl.srcHistory).toEqual([]);

@@ -16,7 +16,7 @@ import type { ILineVoice } from '../src/stage/voice';
 import type { BaseContext, HoldContext, LineContext, MinigameContext } from '../src/session';
 import type { Stage } from '../src/stage/stage';
 import { CaptionLayer } from '../src/ui/captions';
-import { AUTO_VOICE_MAX_WAIT_MS, AUTO_VOICE_TAIL_MS, DomUI } from '../src/ui/dom_ui';
+import { DomUI } from '../src/ui/dom_ui';
 import type { DomUIDeps } from '../src/ui/dom_ui';
 import { UiKit } from '../src/ui/kit';
 import type { QuickAction } from '../src/ui/quick_menu';
@@ -295,19 +295,6 @@ describe('DomUI: реплики и продвижение сюжета', () => {
     expect(done.done).toBe(false);
   });
 
-  it('скрытый интерфейс: первое нажатие возвращает его, и только потом листает', async () => {
-    const { ui, root } = makeRig({ textSpeed: 5 });
-    const done = track(ui.showLine(lineP('l.1'), lineCtx(ctl())));
-    ui.setUiHidden(true);
-    expect(root.classList.contains('ui-hidden')).toBe(true);
-    ui.advance();
-    await flush();
-    expect(root.classList.contains('ui-hidden')).toBe(false);
-    expect(done.done).toBe(false);
-    ui.advance();
-    await flush();
-    expect(done.done).toBe(true);
-  });
 });
 
 describe('DomUI: горячие клавиши и колесо', () => {
@@ -323,16 +310,12 @@ describe('DomUI: горячие клавиши и колесо', () => {
     expect(actions).toHaveLength(4);
   });
 
-  it('Esc: сначала закрывает верхний экран, потом снимает скрытие интерфейса, иначе открывает настройки', () => {
-    const { ui, kit, actions } = makeRig();
+  it('Esc: сначала закрывает верхний экран, иначе открывает настройки', () => {
+    const { kit, actions } = makeRig();
     const a = { el: document.createElement('div') };
     kit.screens.open(a);
     key('Escape');
     expect(kit.screens.count).toBe(0);
-    expect(actions).toEqual([]);
-    ui.setUiHidden(true);
-    key('Escape');
-    expect(ui.uiHidden).toBe(false);
     expect(actions).toEqual([]);
     key('Escape');
     expect(actions).toEqual(['settings']);
@@ -379,66 +362,6 @@ describe('DomUI: горячие клавиши и колесо', () => {
     ui.dispose();
     key('s');
     expect(actions).toEqual([]);
-  });
-});
-
-describe('DomUI: авто-режим', () => {
-  it('после полного вывода ждёт autoDelayMs + 20 мс на символ и листает сам', async () => {
-    const { ui } = makeRig({ textSpeed: 5, autoDelayMs: 1000 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl()))); // 7 символов → 1000 + 140
-    await flush(1100);
-    expect(done.done).toBe(false);
-    await flush(100);
-    expect(done.done).toBe(true);
-  });
-
-  it('пауза за печатью: таймер стартует только когда реплика показана целиком', async () => {
-    const { ui } = makeRig({ textSpeed: 1, autoDelayMs: 500 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.long'), lineCtx(ctl())));
-    await flush(1500); // 18 зн/с → напечатано ещё не всё
-    expect(done.done).toBe(false);
-    await flush(10_000);
-    expect(done.done).toBe(true);
-  });
-
-  it('выключение авто-режима отменяет отложенное листание', async () => {
-    const { ui } = makeRig({ textSpeed: 5, autoDelayMs: 1000 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
-    await flush(500);
-    ui.toggleAuto();
-    await flush(20_000);
-    expect(done.done).toBe(false);
-  });
-
-  it('включение авто-режима на уже показанной реплике запускает отсчёт', async () => {
-    const { ui } = makeRig({ textSpeed: 5, autoDelayMs: 500 });
-    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
-    await flush(2000);
-    expect(done.done).toBe(false);
-    ui.toggleAuto();
-    await flush(1000);
-    expect(done.done).toBe(true);
-  });
-
-  it('открытый экран (настройки, журнал) и пауза платформы останавливают авто-режим; после закрытия отсчёт заново', async () => {
-    const { ui, kit } = makeRig({ textSpeed: 5, autoDelayMs: 500 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
-    const dialog = { el: document.createElement('div') };
-    kit.screens.open(dialog);
-    await flush(20_000);
-    expect(done.done).toBe(false);
-    kit.screens.close(dialog);
-    ui.setPaused(true);
-    expect(kit.root.classList.contains('is-paused')).toBe(true);
-    await flush(20_000);
-    expect(done.done).toBe(false);
-    ui.setPaused(false);
-    await flush(1000);
-    expect(done.done).toBe(true);
   });
 });
 
@@ -904,105 +827,6 @@ describe('DomUI: озвучка реплик', () => {
     expect(voice.last.state).toBe('playing');
   });
 
-  it('авто-режим ждёт конец клипа + 300 мс, а не паузу по длине текста', async () => {
-    const { ui, voice } = rigWithVoice({ textSpeed: 5, autoDelayMs: 1000 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl()))); // по тексту: 1000 + 7 × 20 = 1140 мс
-    await flush(4000);
-    expect(done.done).toBe(false); // по тексту реплика давно «прочитана», но клип ещё звучит
-    await flush(1000);
-    voice.last.finish('ended'); // t = 5000: клип доиграл
-    expect(AUTO_VOICE_TAIL_MS).toBe(300);
-    await flush(AUTO_VOICE_TAIL_MS - 1);
-    expect(done.done).toBe(false);
-    await flush(1);
-    expect(done.done).toBe(true);
-  });
-
-  it('клип доиграл раньше, чем допечатался текст: листаем через 300 мс после полного вывода, а не через паузу по тексту', async () => {
-    const { ui, voice, kit } = rigWithVoice({ textSpeed: 1, autoDelayMs: 5000 }); // 18 зн/с; по тексту пауза ≥ 5 с
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.long'), lineCtx(ctl())));
-    await flush(500);
-    voice.last.finish('ended');
-    await flush(1000);
-    expect(kit.textbox.complete).toBe(false); // текст ещё печатается — листать нельзя
-    expect(done.done).toBe(false);
-    for (let i = 0; i < 200 && !kit.textbox.complete; i++) await flush(50);
-    expect(kit.textbox.complete).toBe(true);
-    expect(done.done).toBe(false); // 300 мс после полного вывода ещё не прошли
-    await flush(AUTO_VOICE_TAIL_MS);
-    expect(done.done).toBe(true); // пауза по тексту (5 с + 20 мс на символ) здесь не при чём
-  });
-
-  it('клипа нет (озвучка выключена, файла нет в индексе, звук выключен) — авто-режим как раньше, по длине текста', async () => {
-    const { ui, voice } = rigWithVoice({ textSpeed: 5, autoDelayMs: 1000 });
-    voice.hasClip = false;
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
-    await flush(1100);
-    expect(done.done).toBe(false);
-    await flush(100);
-    expect(done.done).toBe(true);
-    expect(voice.started).toEqual(['l.short']);
-  });
-
-  it('без озвучки вообще (порт не подключён) всё прежнее', async () => {
-    const { ui } = makeRig({ textSpeed: 5, autoDelayMs: 1000 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
-    await flush(1140);
-    expect(done.done).toBe(true);
-  });
-
-  it.each(['failed', 'stopped'] as const)('клип закончился как «%s» (файл не читается, автозапуск запрещён, озвучку выключили) — авто-режим считает паузу по тексту от этого момента', async (how) => {
-    const { ui, voice } = rigWithVoice({ textSpeed: 5, autoDelayMs: 1000 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
-    await flush(2000);
-    expect(done.done).toBe(false);
-    voice.last.finish(how);
-    await flush(1100);
-    expect(done.done).toBe(false);
-    await flush(100);
-    expect(done.done).toBe(true);
-  });
-
-  it('страховка: клип завис и не кончается — авто-режим не ждёт вечно, а листает через AUTO_VOICE_MAX_WAIT_MS', async () => {
-    const { ui, voice } = rigWithVoice({ textSpeed: 5, autoDelayMs: 500 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
-    await flush(AUTO_VOICE_MAX_WAIT_MS - 1);
-    expect(done.done).toBe(false);
-    expect(voice.last.state).toBe('playing');
-    await flush(1);
-    expect(done.done).toBe(true);
-    expect(voice.last.state).toBe('stopped'); // зависший клип снят вместе с репликой
-  });
-
-  it('клип кончился вовремя — страховочный таймер снят, а не сработает позже', async () => {
-    const { ui, voice } = rigWithVoice({ textSpeed: 5, autoDelayMs: 500 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
-    await flush(2000);
-    voice.last.finish('ended');
-    await flush(AUTO_VOICE_TAIL_MS);
-    expect(done.done).toBe(true);
-    const next = track(ui.showLine(lineP('l.2'), lineCtx(ctl())));
-    voice.last.finish('failed'); // новая реплика: клип сорвался сразу — идёт пауза по тексту, прежний страховочный таймер не мешает
-    await flush(AUTO_VOICE_MAX_WAIT_MS);
-    expect(next.done).toBe(true);
-  });
-
-  it('клип уже сорвался к моменту полного вывода — сразу обычная пауза по тексту', async () => {
-    const { ui, voice } = rigWithVoice({ textSpeed: 1, autoDelayMs: 500 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.long'), lineCtx(ctl())));
-    voice.last.finish('failed');
-    await flush(10_000);
-    expect(done.done).toBe(true);
-  });
-
   it('листание игроком обрывает клип; первое нажатие только допечатывает текст — клип звучит дальше', async () => {
     const { ui, voice } = rigWithVoice({ textSpeed: 2 });
     const done = track(ui.showLine(lineP('l.long'), lineCtx(ctl())));
@@ -1030,9 +854,8 @@ describe('DomUI: озвучка реплик', () => {
     expect(voice.last.state).toBe('playing');
   });
 
-  it('отмена партии (откат, загрузка сейва, выход в меню) обрывает клип, и авто-режим больше ничего не ждёт', async () => {
+  it('отмена партии (откат, загрузка сейва, выход в меню) обрывает клип, поздний конец клипа ничего не листает', async () => {
     const { ui, voice, kit } = rigWithVoice({ textSpeed: 5 });
-    ui.toggleAuto();
     const c = ctl();
     const done = track(ui.showLine(lineP('l.1'), lineCtx(c)));
     const clip = voice.last;
@@ -1085,116 +908,9 @@ describe('DomUI: озвучка реплик', () => {
     expect(voice.started).toEqual(['l.2']);
   });
 
-  it('открытый экран (настройки, журнал) ставит ожидание авто-режима на паузу; клип доиграл за это время — после закрытия ещё 300 мс', async () => {
-    const { ui, voice, kit } = rigWithVoice({ textSpeed: 5, autoDelayMs: 500 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
-    const dialog = { el: document.createElement('div') };
-    kit.screens.open(dialog);
-    voice.last.finish('ended');
-    await flush(20_000);
-    expect(done.done).toBe(false);
-    kit.screens.close(dialog);
-    await flush(AUTO_VOICE_TAIL_MS - 1);
-    expect(done.done).toBe(false);
-    await flush(1);
-    expect(done.done).toBe(true);
-  });
-
-  it('экран открыт, клип ещё идёт: после закрытия авто-режим снова ждёт его конец', async () => {
-    const { ui, voice, kit } = rigWithVoice({ textSpeed: 5, autoDelayMs: 500 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
-    const dialog = { el: document.createElement('div') };
-    kit.screens.open(dialog);
-    await flush(1000);
-    kit.screens.close(dialog);
-    await flush(20_000); // по тексту уже давно пора, но клип звучит
-    expect(done.done).toBe(false);
-    voice.last.finish('ended');
-    await flush(AUTO_VOICE_TAIL_MS);
-    expect(done.done).toBe(true);
-  });
-
-  it('пауза платформы снимает ожидание; после неё авто-режим всё ещё ждёт конец клипа', async () => {
-    const { ui, voice } = rigWithVoice({ textSpeed: 5, autoDelayMs: 500 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
-    ui.setPaused(true);
-    await flush(20_000);
-    expect(done.done).toBe(false);
-    ui.setPaused(false);
-    await flush(20_000);
-    expect(done.done).toBe(false); // клип идёт
-    voice.last.finish('ended');
-    await flush(AUTO_VOICE_TAIL_MS);
-    expect(done.done).toBe(true);
-  });
-
-  it('выключили Auto, пока клип идёт: клип звучит, сама реплика ждёт игрока', async () => {
-    const { ui, voice } = rigWithVoice({ textSpeed: 5, autoDelayMs: 500 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
-    await flush(100);
-    ui.toggleAuto();
-    voice.last.finish('ended');
-    await flush(20_000);
-    expect(done.done).toBe(false);
-    ui.advance();
-    await flush();
-    expect(done.done).toBe(true);
-  });
-
-  it('смена языка обрывает клип прежнего языка; авто-режим переходит на паузу по тексту, когда экран настроек закрыт', async () => {
-    const { ui, voice, kit } = rigWithVoice({ textSpeed: 5, autoDelayMs: 500 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
-    const settings = { el: document.createElement('div') };
-    kit.screens.open(settings);
-    const clip = voice.last;
-    i18n.setLang('en');
-    ui.refreshLanguage();
-    expect(clip.state).toBe('stopped');
-    kit.screens.close(settings);
-    await flush(1000);
-    expect(done.done).toBe(true); // 500 + 20 × символы
-  });
 });
 
-describe('DomUI: полоса авто-режима и подсказка пропуска (решение владельца 2026-10-11)', () => {
-  it('в авто-режиме после допечатки реплики полоса включается на время задержки и гаснет при переходе', async () => {
-    const { ui, kit } = makeRig({ textSpeed: 5, autoDelayMs: 1800 });
-    ui.toggleAuto();
-    const done = track(ui.showLine(lineP('l.1'), lineCtx(ctl())));
-    await flush();
-    expect(kit.autobar.el.classList.contains('is-on')).toBe(true);
-    expect(kit.autobar.ms).toBeGreaterThanOrEqual(1800);
-    expect(kit.autobar.el.style.getPropertyValue('--autobar-ms')).toBe(`${kit.autobar.ms}ms`);
-    await flush(kit.autobar.ms + 10);
-    expect(done.done).toBe(true);
-    expect(kit.autobar.el.classList.contains('is-on')).toBe(false);
-  });
-
-  it('полоса длиннее у длинной реплики (зависит от числа символов); без авто-режима её нет, выключение гасит', async () => {
-    const { ui, kit } = makeRig({ textSpeed: 5, autoDelayMs: 1800 });
-    void track(ui.showLine(lineP('l.1'), lineCtx(ctl())));
-    await flush();
-    expect(kit.autobar.el.classList.contains('is-on')).toBe(false);
-    ui.toggleAuto();
-    await flush();
-    expect(kit.autobar.el.classList.contains('is-on')).toBe(true);
-    const short = kit.autobar.ms;
-    ui.toggleAuto();
-    expect(kit.autobar.el.classList.contains('is-on')).toBe(false);
-    ui.advance();
-    await flush();
-    i18n.addStrings('ru', { 'l.long': 'Очень длинная реплика, которую игрок читает заметно дольше короткой — поэтому и ждать нужно дольше.' });
-    ui.toggleAuto();
-    void track(ui.showLine(lineP('l.long'), lineCtx(ctl())));
-    await flush();
-    expect(kit.autobar.ms).toBeGreaterThan(short);
-  });
-
+describe('DomUI: подсказка пропуска (решение владельца 2026-10-11)', () => {
   it('«Пропуск» на непрочитанной реплике не включается и объясняет подсказкой; на прочитанной — включается', async () => {
     const { ui, kit } = makeRig({ textSpeed: 5 });
     void track(ui.showLine(lineP('l.1'), lineCtx(ctl(), false)));

@@ -221,8 +221,6 @@ export class App {
     this.clearNotes();
     this.kit.root.classList.remove('in-game');
     this.ui.setSkip(false);
-    if (this.ui.autoOn) this.ui.toggleAuto();
-    this.ui.setUiHidden(false);
     this.playTheme();
     const ep = this.d.episode;
     const saves = this.d.saves;

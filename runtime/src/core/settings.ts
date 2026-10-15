@@ -24,8 +24,6 @@ export interface Settings {
   fontScale: number;
   /** Скорость текста: 1..5, 5 — мгновенно. */
   textSpeed: number;
-  /** Пауза авто-режима после показа реплики, мс. */
-  autoDelayMs: number;
   music: number;
   sfx: number;
   /** Громкость озвучки реплик, 0..1 (множится на «общий мастер»: Mute игрока и запрет звука платформой). */
@@ -56,7 +54,6 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   lang: null,
   fontScale: 1,
   textSpeed: 3,
-  autoDelayMs: 1800,
   // Музыка вдвое тише звуков (владелец 2026-10-14): 0,4 при звуках 0,8.
   music: 0.4,
   sfx: 0.8,
@@ -73,7 +70,6 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
 };
 
 export const FONT_SCALE_RANGE = { min: 0.85, max: 1.6, step: 0.05 } as const;
-export const AUTO_DELAY_RANGE = { min: 500, max: 5000, step: 250 } as const;
 
 /** Символов в секунду для уровня скорости; Infinity — мгновенный вывод. */
 export function charsPerSecond(level: number): number {
@@ -97,7 +93,6 @@ export function sanitizeSettings(raw: unknown): Settings {
     lang,
     fontScale: num(r.fontScale, FONT_SCALE_RANGE.min, FONT_SCALE_RANGE.max, d.fontScale),
     textSpeed: Math.round(num(r.textSpeed, 1, 5, d.textSpeed)),
-    autoDelayMs: num(r.autoDelayMs, AUTO_DELAY_RANGE.min, AUTO_DELAY_RANGE.max, d.autoDelayMs),
     music,
     sfx: num(r.sfx, 0, 1, d.sfx),
     voice: num(r.voice, 0, 1, d.voice),

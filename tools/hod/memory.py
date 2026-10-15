@@ -558,8 +558,8 @@ STAGING = {
         'oper': 'drives on the LEFT, one hand on the wheel, a cigarette in his other hand by the open window; his eyes on the road',
         'sledak': 'sits in the passenger seat on the RIGHT, the folder closed on his knees, looking out of his side window'},
     'car_d2_ots_oper': {
-        'oper': 'drives in three-quarter view, a cigarette in his hand by the open window, talking drily; his eyes on Gromov, '
-                'just right of the camera',
+        'oper': 'drives in three-quarter view, his LEFT hand on the wheel with a lit cigarette between its fingers (watch on that '
+                'wrist), talking drily; his eyes on Gromov, just right of the camera',
         'sledak': 'only the back of his head and his shoulder at the RIGHT edge'},
     'car_d3_wide': {
         'oper': 'drives on the LEFT with both hands on the wheel, serious and silent; his eyes on the road',

@@ -784,8 +784,6 @@ describe('UiKit: каркас', () => {
     root.dispatchEvent(drag);
     expect(drag.defaultPrevented).toBe(true);
 
-    kit.setUiHidden(true);
-    expect(root.classList.contains('ui-hidden')).toBe(true);
     kit.setFontScale(1.3);
     expect(root.style.getPropertyValue('--font-scale')).toBe('1.3');
   });

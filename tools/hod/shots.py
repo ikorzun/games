@@ -426,7 +426,7 @@ shot('car_d2_wide', 'hod_car_d2', 'wide', 'car', 'an overcast Tuesday, 10 August
      'The same camera as car_wide, from the back seat between the front seats.', 'overcast grey daylight',
      'the dashboard, the mirror with the icon, an old Presnya street with a tram', ['shot:car_wide', 'face:oper', 'face:sledak'])
 shot('car_d2_ots_oper', 'hod_car_d2', 'ots', 'car', 'an overcast Tuesday, 10 August 1993, early afternoon', SUMMER,
-     {'oper': 'drives in three-quarter view, a cigarette in his hand by the open window, talking drily',
+     {'oper': 'drives in three-quarter view, his LEFT hand on the wheel with a lit cigarette between its fingers, talking drily',
       'sledak': 'only the back of his head and his shoulder at the RIGHT edge'},
      ots('sledak', 'oper', 'RIGHT'), 'overcast grey daylight', 'the steering wheel, the open window',
      ['shot:car_d2_wide', 'face:oper'])

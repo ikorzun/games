@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { i18n } from '../src/core/i18n';
 import type { SaveFile } from '../src/core/saves';
-import { AUTO_DELAY_RANGE, DEFAULT_SETTINGS, FONT_SCALE_RANGE } from '../src/core/settings';
+import { DEFAULT_SETTINGS, FONT_SCALE_RANGE } from '../src/core/settings';
 import type { Settings } from '../src/core/settings';
 import { createInitialState } from '../src/core/state';
 import type { Episode } from '../src/core/types';
@@ -73,7 +73,6 @@ beforeEach(() => {
     'ui.settings.language': 'Язык',
     'ui.settings.font_size': 'Размер шрифта',
     'ui.settings.text_speed': 'Скорость текста',
-    'ui.settings.auto_delay': 'Пауза авто',
     'ui.settings.music': 'Музыка',
     'ui.settings.sfx': 'Звуки',
     'ui.settings.voice': 'Озвучка',
@@ -359,12 +358,12 @@ describe('SettingsScreen', () => {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   };
 
-  it('размер шрифта, скорость текста, пауза авто, громкости — ползунки с границами из настроек', () => {
+  it('размер шрифта, скорость текста, громкости — ползунки с границами из настроек; паузы авто-режима нет (2026-10-15)', () => {
     const { s } = make();
     const font = range(s.el, 'Размер шрифта');
     expect([Number(font.min), Number(font.max)]).toEqual([FONT_SCALE_RANGE.min, FONT_SCALE_RANGE.max]);
-    const delay = range(s.el, 'Пауза авто');
-    expect([Number(delay.min), Number(delay.max)]).toEqual([AUTO_DELAY_RANGE.min, AUTO_DELAY_RANGE.max]);
+    const labels = [...s.el.querySelectorAll('input[type="range"]')].map((i) => i.getAttribute('aria-label'));
+    expect(labels).toEqual(['Размер шрифта', 'Скорость текста', 'Музыка', 'Звуки', 'Громкость озвучки']);
     expect([Number(range(s.el, 'Скорость текста').min), Number(range(s.el, 'Скорость текста').max)]).toEqual([1, 5]);
     for (const label of ['Музыка', 'Звуки', 'Громкость озвучки']) expect(Number(range(s.el, label).max)).toBe(1);
   });
@@ -376,8 +375,6 @@ describe('SettingsScreen', () => {
     expect(s.el.querySelector('.vn-range__out')?.textContent).toBe('130%');
     slide(range(s.el, 'Скорость текста'), 5);
     expect(hd.onChange).toHaveBeenLastCalledWith({ textSpeed: 5 });
-    slide(range(s.el, 'Пауза авто'), 3000);
-    expect(hd.onChange).toHaveBeenLastCalledWith({ autoDelayMs: 3000 });
   });
 
   it('таймеры выборов и «только история» — флажки; режим насилия — переключатель', () => {

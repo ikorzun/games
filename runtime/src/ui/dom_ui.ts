@@ -37,10 +37,6 @@ import type { LineView, TextLayout } from './textbox';
 
 /** Пауза между репликами при Skip. */
 const SKIP_DELAY_MS = 35;
-/** Авто-режим с озвучкой: после конца клипа (и полного вывода текста) ждём ещё столько, потом листаем. */
-export const AUTO_VOICE_TAIL_MS = 300;
-/** Страховка авто-режима: клип завис (оборвалась сеть, play() не отвечает) — дольше этого реплику не держим. */
-export const AUTO_VOICE_MAX_WAIT_MS = 120_000;
 
 export interface DomUIDeps {
   episode: Episode;
@@ -69,9 +65,7 @@ interface Waiter {
 }
 
 export class DomUI implements SessionUI {
-  autoOn = false;
   skipOn = false;
-  uiHidden = false;
 
   private ctrlSkip = false;
   private paused = false;
@@ -79,9 +73,8 @@ export class DomUI implements SessionUI {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private currentLine: LinePending | null = null;
   private lineRead = false;
-  /** Клип озвучки показанной реплики и отписка авто-режима от его конца. */
+  /** Клип озвучки показанной реплики. */
   private clip: VoicePlayback | null = null;
-  private clipOff: (() => void) | null = null;
   private activeMg: { id: string; mg: IMinigame } | null = null;
   private readonly gameScreens = new Set<Screen>();
   private dummyRoot: unknown = null;
@@ -136,8 +129,6 @@ export class DomUI implements SessionUI {
         if (finished || this.paused || kit.screens.count > 0) return;
         if (this.fastForward && (this.lineRead || this.d.settings().skipUnread)) {
           this.timer = setTimeout(finish, SKIP_DELAY_MS);
-        } else if (this.autoOn) {
-          this.armAuto(p, finish, arrange);
         }
       };
       const off = kit.textbox.onComplete(arrange);
@@ -348,12 +339,6 @@ export class DomUI implements SessionUI {
 
   // ───────────────────────────── режимы и ввод ─────────────────────────────
 
-  toggleAuto(): void {
-    this.autoOn = !this.autoOn;
-    if (this.autoOn) this.waiter?.rearrange?.();
-    else this.clearTimer();
-  }
-
   toggleSkip(): void {
     if (!this.skipOn && this.currentLine && !(this.lineRead || this.d.settings().skipUnread)) {
       // Пропускать можно только прочитанное: объясняем подсказкой, иначе кнопка выглядит сломанной.
@@ -370,18 +355,9 @@ export class DomUI implements SessionUI {
     this.d.kit.quick.setState({ skip: on });
   }
 
-  setUiHidden(hidden: boolean): void {
-    this.uiHidden = hidden;
-    this.d.kit.setUiHidden(hidden);
-  }
-
   /** Продвинуть сюжет: клик, тап, Space, Enter. */
   advance(): void {
     if (this.d.kit.screens.count > 0) return;
-    if (this.uiHidden) {
-      this.setUiHidden(false);
-      return;
-    }
     if (this.d.kit.choices.active) return;
     this.waiter?.advance();
   }
@@ -395,11 +371,8 @@ export class DomUI implements SessionUI {
     captions.refresh();
     kit.screens.refresh();
     if (this.currentLine && kit.textbox.visible) kit.textbox.rerender(this.lineView(this.currentLine));
-    // Клип прежнего языка обрывается; авто-режим считает паузу по тексту (отсчёт возобновится, когда закроют экран).
-    if (this.clip) {
-      this.stopClip();
-      this.waiter?.rearrange?.();
-    }
+    // Клип прежнего языка обрывается.
+    this.stopClip();
   }
 
   private pokeSkip(): void {
@@ -436,10 +409,7 @@ export class DomUI implements SessionUI {
       const inControl = !!target?.closest('button, input, select, textarea, a');
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (!this.d.kit.screens.closeTop()) {
-          if (this.uiHidden) this.setUiHidden(false);
-          else this.d.onAction('settings');
-        }
+        if (!this.d.kit.screens.closeTop()) this.d.onAction('settings');
         return;
       }
       if (this.d.kit.screens.count > 0) return;
@@ -530,56 +500,15 @@ export class DomUI implements SessionUI {
     };
   }
 
-  private autoDelay(p: LinePending): number {
-    const chars = Array.from(t(p.key)).length;
-    return this.d.settings().autoDelayMs + Math.min(2500, chars * 20);
-  }
-
   private clearTimer(): void {
-    this.d.kit.autobar.stop();
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
-    this.clipOff?.();
-    this.clipOff = null;
-  }
-
-  /**
-   * Авто-режим. С озвучкой реплика длится, пока играет клип: ждём его конец (и полный вывод текста — сюда попадаем
-   * после него) плюс AUTO_VOICE_TAIL_MS. Клип сорвался (файл не читается, автозапуск запрещён) или его остановили
-   * (озвучку выключили, сменили язык) — снова считаем паузу по длине текста, как для реплики без клипа.
-   */
-  private armAuto(p: LinePending, finish: () => void, rearm: () => void): void {
-    const clip = this.clip;
-    const bar = this.d.kit.autobar;
-    if (clip?.state === 'playing') {
-      // Длительность клипа заранее неизвестна: полоса отсчёта показывается только для паузы по тексту.
-      bar.stop();
-      this.timer = setTimeout(finish, AUTO_VOICE_MAX_WAIT_MS);
-      this.clipOff = clip.onEnd((how) => {
-        this.clipOff = null;
-        if (this.timer !== null) clearTimeout(this.timer);
-        this.timer = null;
-        if (how === 'ended') {
-          this.timer = setTimeout(finish, AUTO_VOICE_TAIL_MS);
-          bar.start(AUTO_VOICE_TAIL_MS);
-        } else rearm();
-      });
-    } else if (clip?.state === 'ended') {
-      this.timer = setTimeout(finish, AUTO_VOICE_TAIL_MS);
-      bar.start(AUTO_VOICE_TAIL_MS);
-    } else {
-      const ms = this.autoDelay(p);
-      this.timer = setTimeout(finish, ms);
-      bar.start(ms);
-    }
   }
 
   /** Оборвать клип озвучки показанной реплики и отписаться от его конца. */
   private stopClip(): void {
     const clip = this.clip;
     this.clip = null;
-    this.clipOff?.();
-    this.clipOff = null;
     clip?.stop();
   }
 

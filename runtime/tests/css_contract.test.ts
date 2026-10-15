@@ -141,7 +141,6 @@ describe('слои камкордера в CSS', () => {
     expect(stageCss).toMatch(/@keyframes rec-blink\s*\{\s*0%,\s*49\.99%\s*\{\s*opacity:\s*1;\s*\}\s*50%,\s*100%\s*\{\s*opacity:\s*0;/);
     expect(stageCss).toMatch(/\.vn-stage__hud\s*\{[^}]*display:\s*none/);
     expect(stageCss).toMatch(/\.vn-stage\.cam-rec\s+\.vn-stage__hud\s*\{\s*display:\s*block/);
-    expect(uiCss).toMatch(/\.vn-root\.ui-hidden\s+\.vn-cap--date_stamp,\s*\.vn-root\.ui-hidden\s+\.vn-stage__hud\s*\{\s*visibility:\s*hidden/);
   });
 
   it('vignette: два независимых затемнения (фильтр и камкордер) без max()', () => {
