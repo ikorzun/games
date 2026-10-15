@@ -445,8 +445,9 @@ STAGING = {
                     'flick to the side toward the neighbouring door',
         'sledak': 'only the back of his head and his shoulder at the RIGHT edge'},
     'notary_wide': {
-        'assistant': "sits at the small typing desk by the window on the LEFT, her hands frozen above the typewriter keys; her "
-                     "eyes over her shoulder on Gromov's back",
+        'assistant': 'sits at the small typing desk by the window on the LEFT, typing, her head facing the same way as her '
+                     'body — toward the typewriter, face in profile — tilted slightly toward the room as if listening; eyes '
+                     'on the typewriter (owner 2026-10-15: no head turned back over the shoulder)',
         'notary': 'sits behind the desk in the centre, dabbing his forehead with a handkerchief, the open register in front of '
                   'him, a strained polite smile; his eyes on Gromov',
         'sledak': 'stands in front of the desk, RIGHT of centre, seen from behind, his case folder in his hand',

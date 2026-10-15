@@ -325,7 +325,7 @@ shot('landing_open_ots', 'hod_landing_open', 'ots', 'landing', DAY, SUMMER,
 # Нотариус Ковригин, Пресня.
 shot('notary_wide', 'hod_notary', 'wide', 'notary', DAY, SUMMER,
      {'notary': 'sits behind the desk in the centre, facing the visitors and the camera, dabbing his forehead with a handkerchief, the open register in front of him, a strained polite smile',
-      'assistant': 'sits at the small typing desk by the window on the LEFT, her hands frozen above the typewriter keys, glancing over her right shoulder at Gromov\'s back (right of centre), not toward the camera',
+      'assistant': 'sits at the small typing desk by the window on the LEFT, typing, her head facing the same way as her body — toward the typewriter, face in profile — tilted slightly toward the room as if listening; eyes on the typewriter, not toward the camera (owner 2026-10-15: no head turned back over the shoulder)',
       'sledak': 'stands in front of the desk, RIGHT of centre, seen from behind, his case folder in his hand',
       'oper': 'leans on the frame of the open door on the RIGHT, arms crossed, looking at Lyuda'},
      'The camera stands behind the visitors near the wall opposite the desk, at the eye level of a standing person, a 32 mm-equivalent field of view: the whole office with everyone in it; the lower third of the frame is kept free of faces.',
