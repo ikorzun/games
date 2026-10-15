@@ -195,6 +195,14 @@ describe('озвучка: ключ реплики → клип → элемен�
     expect(voiceEl.srcHistory).toEqual([P('en', K1)]);
   });
 
+  it('испанский текст — под английскую озвучку (владелец 2026-10-15): на es играет en-клип, русский не подставляется', async () => {
+    const { session, voiceEl } = await makeRig({ ep01: { ru: [`${K1}.mp3`, `${K2}.mp3`], en: [`${K1}.mp3`] } });
+    i18n.setLang('es');
+    void session.newGame();
+    await tick();
+    expect(voiceEl.src).toBe(P('en', K1));
+  });
+
   it('папка по полному id эпизода (assets/ep01_test/voice/…) тоже принимается', async () => {
     const { session, voiceEl } = await makeRig({ ep01_test: { ru: [`${K1}.mp3`] } });
     void session.newGame();

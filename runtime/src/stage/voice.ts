@@ -7,7 +7,7 @@
  * Клипа нет — `start` возвращает null и ничего не просит у сети: игра идёт как без озвучки.
  */
 import type { Episode, Lang } from '../core/types';
-import { castVoicePolicies, voiceAllowed } from '../core/voice';
+import { castVoicePolicies, voiceAllowed, voiceLangFor } from '../core/voice';
 import type { VoiceClipRef, VoiceIndex, VoiceLineRef } from '../core/voice';
 import type { VoicePlayback } from './audio';
 
@@ -35,7 +35,7 @@ export interface LineVoiceOptions {
   index: VoiceIndex;
   /** Путь относительно корня сборки → адрес файла (с учётом BASE_URL). */
   url: (path: string) => string;
-  /** Текущий язык интерфейса: клип берётся только на нём. */
+  /** Текущий язык интерфейса: клип берётся на языке его озвучки (voiceLangFor: es и pt — английская). */
   lang: () => Lang;
   output: VoiceOutput;
 }
@@ -47,9 +47,9 @@ export class LineVoice implements ILineVoice, IVoiceWarmer {
     this.policies = castVoicePolicies(o.episode);
   }
 
-  /** Клип реплики на текущем языке с учётом `cast[].voice`; null — озвучки у этой реплики нет. */
+  /** Клип реплики на языке озвучки текущего языка с учётом `cast[].voice`; null — озвучки у этой реплики нет. */
   clipFor(line: VoiceLineRef): VoiceClipRef | null {
-    const lang = this.o.lang();
+    const lang = voiceLangFor(this.o.lang());
     if (line.who && !voiceAllowed(this.policies.get(line.who), lang)) return null;
     return this.o.index.resolve(this.o.episode.id, lang, line);
   }
@@ -89,8 +89,8 @@ export class LineVoice implements ILineVoice, IVoiceWarmer {
     }
   }
 
-  /** Сколько клипов у эпизода на текущем языке (`__vn.audio().voice.clips`). */
+  /** Сколько клипов у эпизода на языке озвучки текущего языка (`__vn.audio().voice.clips`). */
   get clips(): number {
-    return this.o.index.count(this.o.episode.id, this.o.lang());
+    return this.o.index.count(this.o.episode.id, voiceLangFor(this.o.lang()));
   }
 }

@@ -15,6 +15,7 @@ import {
   VoiceIndex,
   voiceAllowed,
   voiceFolders,
+  voiceLangFor,
   voicePath,
 } from '../src/core/voice';
 import type { VoiceIndexData } from '../src/core/voice';
@@ -154,6 +155,13 @@ describe('VoiceIndex', () => {
   });
 });
 
+describe('язык озвучки при языке игры (владелец 2026-10-15)', () => {
+  it('ru и en — свой голос; es и pt — английская озвучка под своим текстом', () => {
+    const langs: Lang[] = ['ru', 'en', 'es', 'pt'];
+    expect(langs.map(voiceLangFor)).toEqual(['ru', 'en', 'en', 'en']);
+  });
+});
+
 describe('политика озвучки персонажа (cast[].voice)', () => {
   it('none — не озвучен; ru_only — только на русском; all и не задано — на всех языках', () => {
     const langs: Lang[] = ['ru', 'en', 'es', 'pt'];
@@ -222,17 +230,25 @@ describe('LineVoice: выбор клипа по реплике', () => {
     expect(calls).toEqual(['stop']);
   });
 
-  it('язык берётся в момент вызова: смена языка на лету меняет клип или отнимает его', () => {
-    const { voice, calls, setLang } = make({ ep: { ru: ['k.one.mp3'], en: ['k.one.mp3', 'k.only_en.mp3'] } });
+  it('язык берётся в момент вызова: смена языка на лету меняет клип или отнимает его; es — английский клип', () => {
+    const { voice, calls, setLang } = make({ ep: { ru: ['k.one.mp3', 'k.only_ru.mp3'], en: ['k.one.mp3', 'k.only_en.mp3'] } });
     voice.start(L('k.one'));
     setLang('en');
     voice.start(L('k.one'));
     voice.start(L('k.only_en'));
+    expect(voice.start(L('k.only_ru'))).toBeNull(); // русский голос под английский текст не подставляется
     setLang('es');
-    expect(voice.start(L('k.one'))).toBeNull();
-    expect(calls).toEqual(['play:./assets/ep/voice/ru/k.one.mp3', 'play:./assets/ep/voice/en/k.one.mp3', 'play:./assets/ep/voice/en/k.only_en.mp3']);
+    voice.start(L('k.one')); // испанский текст — английская озвучка (владелец 2026-10-15)
+    expect(voice.start(L('k.only_ru'))).toBeNull();
+    expect(calls).toEqual([
+      'play:./assets/ep/voice/ru/k.one.mp3',
+      'play:./assets/ep/voice/en/k.one.mp3',
+      'play:./assets/ep/voice/en/k.only_en.mp3',
+      'play:./assets/ep/voice/en/k.one.mp3',
+    ]);
+    expect(voice.clips).toBe(2);
     setLang('ru');
-    expect(voice.clips).toBe(1);
+    expect(voice.clips).toBe(2);
     setLang('en');
     expect(voice.clips).toBe(2);
   });

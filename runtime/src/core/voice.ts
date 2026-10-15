@@ -85,6 +85,14 @@ export function parseClipFile(file: string): { id: string; ext: VoiceExt } | nul
 }
 
 /**
+ * Язык озвучки при языке игры (владелец 2026-10-15): русский и английский — текст и голос на одном языке; испанский и
+ * португальский — свой текст под английскую озвучку.
+ */
+export function voiceLangFor(lang: Lang): Lang {
+  return lang === 'es' || lang === 'pt' ? 'en' : lang;
+}
+
+/**
  * Политика озвучки персонажа (`cast[].voice`): none — не озвучен, ru_only — только на русском, all (и не задано) — на всех
  * языках, где есть клипы.
  */
