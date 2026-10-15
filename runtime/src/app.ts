@@ -31,13 +31,12 @@ import {
   ArchiveScreen,
   DocumentScreen,
   ErrorScreen,
-  LogScreen,
   MenuScreen,
   SaveLoadScreen,
   SettingsScreen,
   WarningScreen,
 } from './ui/screens';
-import type { MenuSeason } from './ui/screens';
+import type { MenuSeason, NotesTab } from './ui/screens';
 
 export interface AppInit {
   root: HTMLElement;
@@ -134,7 +133,7 @@ export class App {
       settings: () => d.saves.settings,
       view: () => this.talkView?.() ?? (this.session.interp.started ? this.session.interp.view : null),
       env: () => (this.session.interp.started ? this.session.interp.env() : {}),
-      onOpenArchive: () => this.openArchive('ui.quick.notebook'), // с финала — блокнот этой партии (владелец 2026-10-15)
+      onOpenArchive: () => this.openNotes('notebook'), // с финала — заметки этой партии (владелец 2026-10-15)
       onAction: (a) => this.onAction(a),
       onRollback: () => this.rollback(1),
       ...(d.assets ? { documentArt: (id: string) => d.assets!.document(id), portraitArt: (who: string) => d.assets!.catalog.portraitUrl(who) } : {}),
@@ -340,17 +339,15 @@ export class App {
   onAction(action: QuickAction): void {
     if (!this.inGame && action !== 'settings' && action !== 'mute') return;
     switch (action) {
-      case 'auto':
-        this.ui.toggleAuto();
-        break;
       case 'skip':
         this.ui.toggleSkip();
         break;
-      case 'log':
-        this.openLog();
-        break;
+      case 'notes':
       case 'notebook':
-        this.openArchive('ui.quick.notebook');
+        this.openNotes('notebook');
+        break;
+      case 'log':
+        this.openNotes('log');
         break;
       case 'save':
         this.openSaveLoad('save');
@@ -363,9 +360,6 @@ export class App {
         break;
       case 'settings':
         this.openSettings();
-        break;
-      case 'hide':
-        this.ui.toggleHidden();
         break;
     }
   }
@@ -391,19 +385,6 @@ export class App {
     this.kit.screens.open(screen);
   }
 
-  openLog(): void {
-    const screen: LogScreen = new LogScreen(this.d.episode, {
-      entries: () => this.session.log,
-      maxRollback: () => this.session.rollbackDepth,
-      onRollback: (steps) => {
-        this.kit.screens.close(screen);
-        this.rollback(steps);
-      },
-      onClose: () => this.kit.screens.close(screen),
-    });
-    this.kit.screens.open(screen);
-  }
-
   openSaveLoad(mode: 'save' | 'load'): void {
     if (mode === 'save' && (!this.session.interp.started || this.session.interp.isEnded)) return;
     if (mode === 'load' && this.inGame && !this.session.interp.started) return; // идёт разговор дела
@@ -419,7 +400,12 @@ export class App {
     this.kit.screens.open(screen);
   }
 
-  openArchive(titleKey?: string): void {
+  /** Заметки: блокнот улик и журнал реплик в одном окне (владелец 2026-10-15); блокнот открывается по умолчанию. */
+  openNotes(tab: NotesTab = 'notebook'): void {
+    this.openArchive('ui.quick.notes', tab);
+  }
+
+  openArchive(titleKey?: string, tab: NotesTab = 'notebook'): void {
     this.d.platform.track('archive_opened');
     const ep = this.d.episode;
     const assets = this.d.assets;
@@ -443,9 +429,26 @@ export class App {
           this.openNoteDocument(item);
         },
         ...(assets ? { documentArt: (id: string) => assets.document(id) } : {}),
+        // Журнал — только в партии: в меню реплик нет.
+        ...(path
+          ? {
+              log: {
+                entries: () => this.session.log,
+                maxRollback: () => this.session.rollbackDepth,
+                onRollback: (steps: number) => {
+                  this.kit.screens.close(screen);
+                  this.rollback(steps);
+                },
+              },
+            }
+          : {}),
       },
     );
-    screen.onClose = () => this.clearNotes();
+    screen.tab = tab;
+    // Штампы сняты, только если блокнот видели: заглянули лишь в журнал — метка на кнопке остаётся.
+    screen.onClose = () => {
+      if (screen.sawNotebook) this.clearNotes();
+    };
     this.kit.screens.open(screen);
   }
 
@@ -470,12 +473,12 @@ export class App {
 
   private markNote(item: string): void {
     this.freshNotes.add(item);
-    this.kit.quick.setBadge('notebook', true);
+    this.kit.quick.setBadge('notes', true);
   }
 
   private clearNotes(): void {
     this.freshNotes.clear();
-    this.kit.quick.setBadge('notebook', false);
+    this.kit.quick.setBadge('notes', false);
   }
 
   private showError(e: unknown): void {

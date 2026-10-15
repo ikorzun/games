@@ -7,10 +7,6 @@
 type Node2 = readonly [tag: 'path' | 'circle' | 'rect', attrs: Readonly<Record<string, string>>, group?: 'on' | 'off'];
 
 const ICONS = {
-  auto: [
-    ['circle', { cx: '12', cy: '12', r: '8.5' }],
-    ['path', { d: 'M10.2 8.6l5.2 3.4-5.2 3.4z', fill: 'currentColor' }],
-  ],
   skip: [
     ['path', { d: 'M5 6.5l7 5.5-7 5.5z', fill: 'currentColor' }],
     ['path', { d: 'M12.5 6.5l7 5.5-7 5.5z', fill: 'currentColor' }],
@@ -19,6 +15,11 @@ const ICONS = {
     ['path', { d: 'M3.5 7.5h6l2 2h9v9.5h-17z' }],
   ],
   notebook: [
+    ['path', { d: 'M6.5 3.5h12v17h-12z' }],
+    ['path', { d: 'M4.5 7h4M4.5 12h4M4.5 17h4M10.5 8h5M10.5 11.5h5M10.5 15h3' }],
+  ],
+  /** Заметки (блокнот и журнал вместе) — значок блокнота. */
+  notes: [
     ['path', { d: 'M6.5 3.5h12v17h-12z' }],
     ['path', { d: 'M4.5 7h4M4.5 12h4M4.5 17h4M10.5 8h5M10.5 11.5h5M10.5 15h3' }],
   ],
@@ -39,11 +40,6 @@ const ICONS = {
     ['path', { d: 'M4 7.5h9M17.5 7.5H20M4 16.5h2.5M11 16.5h9' }],
     ['circle', { cx: '15.2', cy: '7.5', r: '2.2' }],
     ['circle', { cx: '8.8', cy: '16.5', r: '2.2' }],
-  ],
-  hide: [
-    ['path', { d: 'M2.8 12S6.2 6.2 12 6.2 21.2 12 21.2 12 17.8 17.8 12 17.8 2.8 12 2.8 12z' }],
-    ['circle', { cx: '12', cy: '12', r: '2.4' }],
-    ['path', { d: 'M4.5 4.5l15 15' }],
   ],
   // ── главное меню: язык и закрытый эпизод ──
   globe: [

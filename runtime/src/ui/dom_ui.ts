@@ -350,7 +350,6 @@ export class DomUI implements SessionUI {
 
   toggleAuto(): void {
     this.autoOn = !this.autoOn;
-    this.d.kit.quick.setState({ auto: this.autoOn });
     if (this.autoOn) this.waiter?.rearrange?.();
     else this.clearTimer();
   }
@@ -369,10 +368,6 @@ export class DomUI implements SessionUI {
     if (this.skipOn === on) return;
     this.skipOn = on;
     this.d.kit.quick.setState({ skip: on });
-  }
-
-  toggleHidden(): void {
-    this.setUiHidden(!this.uiHidden);
   }
 
   setUiHidden(hidden: boolean): void {
@@ -467,10 +462,6 @@ export class DomUI implements SessionUI {
           e.preventDefault();
           this.d.onRollback();
           break;
-        case 'a':
-        case 'A':
-          this.d.onAction('auto');
-          break;
         case 's':
         case 'S':
           this.d.onAction('skip');
@@ -482,10 +473,6 @@ export class DomUI implements SessionUI {
         case 'n':
         case 'N':
           this.d.onAction('notebook');
-          break;
-        case 'h':
-        case 'H':
-          this.d.onAction('hide');
           break;
         case 'm':
         case 'M':

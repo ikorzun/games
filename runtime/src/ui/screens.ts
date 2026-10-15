@@ -531,59 +531,40 @@ export class SettingsScreen extends BaseScreen {
 
 // ───────────────────────────── журнал (backlog) ─────────────────────────────
 
-export interface LogHandlers {
+/** Журнал реплик — вкладка «Журнал» в заметках (владелец 2026-10-15: журнал и блокнот — одно окно «Заметки»). */
+export interface LogSource {
   entries: () => readonly LogEntry[];
   /** Сколько реплик назад можно откатиться максимум. */
   maxRollback: () => number;
   onRollback: (steps: number) => void;
-  onClose: () => void;
 }
 
-export class LogScreen extends BaseScreen {
-  constructor(
-    private readonly episode: Episode,
-    private readonly handlers: LogHandlers,
-  ) {
-    super('vn-log');
-  }
-
-  render(): void {
-    const entries = this.handlers.entries();
-    const maxBack = this.handlers.maxRollback();
-    const items = entries.map((e, i) => {
-      const steps = entries.length - 1 - i;
-      const name = nameOf(this.episode, e.who);
-      return h(
-        'li',
-        { class: `vn-log__item is-${e.kind}${e.narrate_style ? ` is-${e.narrate_style}` : ''}` },
-        name ? h('b', { class: 'vn-log__name', style: { color: nameColorOf(this.episode, e.who) ?? '' }, text: name }) : null,
-        h('span', { class: 'vn-log__text', text: t(e.key) }),
-        steps > 0 && steps <= maxBack
-          ? h('button', {
-              class: 'vn-log__back',
-              type: 'button',
-              title: t('ui.common.back'),
-              aria: { label: `${t('ui.common.back')} ×${steps}` },
-              text: '↶',
-              on: { click: () => this.handlers.onRollback(steps) },
-            })
-          : null,
-      );
-    });
-    const list = h('ol', { class: 'vn-log__list' }, ...items);
-    fill(
-      this.el,
-      card(
-        'vn-log__card',
-        h('h2', { class: 'vn-card__title', text: t('ui.quick.log') }),
-        entries.length === 0 ? h('p', { class: 'vn-muted', text: t('ui.archive.empty') }) : list,
-        h('div', { class: 'vn-actions' }, backButton(this.handlers.onClose)),
-      ),
+/** Список реплик с кнопками отката; пустой журнал — строка «пока пусто». */
+function logList(episode: Episode, src: LogSource): HTMLElement {
+  const entries = src.entries();
+  if (entries.length === 0) return h('p', { class: 'vn-archive__empty', text: t('ui.archive.empty') });
+  const maxBack = src.maxRollback();
+  const items = entries.map((e, i) => {
+    const steps = entries.length - 1 - i;
+    const name = nameOf(episode, e.who);
+    return h(
+      'li',
+      { class: `vn-log__item is-${e.kind}${e.narrate_style ? ` is-${e.narrate_style}` : ''}` },
+      name ? h('b', { class: 'vn-log__name', style: { color: nameColorOf(episode, e.who) ?? '' }, text: name }) : null,
+      h('span', { class: 'vn-log__text', text: t(e.key) }),
+      steps > 0 && steps <= maxBack
+        ? h('button', {
+            class: 'vn-log__back',
+            type: 'button',
+            title: t('ui.common.back'),
+            aria: { label: `${t('ui.common.back')} ×${steps}` },
+            text: '↶',
+            on: { click: () => src.onRollback(steps) },
+          })
+        : null,
     );
-    requestAnimationFrame(() => {
-      list.scrollTop = list.scrollHeight;
-    });
-  }
+  });
+  return h('ol', { class: 'vn-log__list' }, ...items);
 }
 
 // ───────────────────────────── сохранение / загрузка ─────────────────────────────
@@ -721,7 +702,12 @@ export interface ArchiveOptions {
    * стрелками от каждой к следующей. Нет — порядок эпизода, без номеров и стрелок (архив в меню).
    */
   path?: boolean;
+  /** Заметки в партии: рядом с блокнотом вкладка «Журнал» (владелец 2026-10-15). Нет — только блокнот (архив в меню). */
+  log?: LogSource;
 }
+
+/** Вкладки заметок: блокнот открывается по умолчанию. */
+export type NotesTab = 'notebook' | 'log';
 
 /** Наклон бумажки и вид бумаги — от id записи, а не от места в списке: новая запись не перекладывает старые. */
 const NOTE_TILTS = [-1.3, 0.9, -0.5, 1.2, -0.9, 0.4, 1.4, -0.3];
@@ -794,6 +780,10 @@ export class ArchiveScreen extends BaseScreen {
   onClose?: () => void;
   /** Стрелки пересчитываются, когда меняются размеры (догрузились сканы, сменилась ширина окна). */
   private resize: ResizeObserver | null = null;
+  /** Открытая вкладка заметок (без журнала — всегда блокнот). */
+  tab: NotesTab = 'notebook';
+  /** Блокнот показывали: штампы «новый материал» увидены (журнал их не снимает). */
+  sawNotebook = false;
 
   constructor(
     private readonly episode: Episode,
@@ -824,6 +814,35 @@ export class ArchiveScreen extends BaseScreen {
           );
     // В игре под блокнотом — размытый кадр (как под документом); в меню кадра нет — графитовый фон.
     this.el.classList.toggle('is-menu', !this.opts.path);
+    const log = this.opts.log;
+    const onLog = log !== undefined && this.tab === 'log';
+    if (!onLog) this.sawNotebook = true;
+    const page = onLog
+      ? h('div', { class: 'vn-archive__page is-log' }, logList(this.episode, log))
+      : h('div', { class: 'vn-archive__page', data: { backdrop: 1 } }, board ?? h('p', { class: 'vn-archive__empty', text: t('ui.archive.empty') }));
+    // Сегмент «Блокнот | Журнал» — как переключатели в настройках (vn-chip, aria-pressed).
+    const tabs = log
+      ? h(
+          'div',
+          { class: 'vn-notes__tabs', role: 'group', aria: { label: t(this.titleKey) } },
+          ...(['notebook', 'log'] as const).map((tab) =>
+            h('button', {
+              class: `vn-chip${this.tab === tab ? ' is-on' : ''}`,
+              type: 'button',
+              text: t(`ui.quick.${tab}`),
+              data: { tab },
+              aria: { pressed: this.tab === tab },
+              on: {
+                click: () => {
+                  if (this.tab === tab) return;
+                  this.tab = tab;
+                  this.render();
+                },
+              },
+            }),
+          ),
+        )
+      : null;
     fill(
       this.el,
       h(
@@ -846,10 +865,17 @@ export class ArchiveScreen extends BaseScreen {
             icon('close'),
           ),
         ),
-        h('div', { class: 'vn-archive__page', data: { backdrop: 1 } }, board ?? h('p', { class: 'vn-archive__empty', text: t('ui.archive.empty') })),
+        tabs,
+        page,
       ),
     );
-    if (board && this.opts.path && items.length > 1) this.trackPath(board);
+    if (onLog) {
+      const list = page.querySelector('.vn-log__list');
+      requestAnimationFrame(() => {
+        if (list) list.scrollTop = list.scrollHeight;
+        page.scrollTop = page.scrollHeight;
+      });
+    } else if (board && this.opts.path && items.length > 1) this.trackPath(board);
   }
 
   private trackPath(board: HTMLElement): void {
@@ -1124,7 +1150,7 @@ export class EndingScreen extends BaseScreen {
         h(
           'div',
           { class: 'vn-actions vn-ending__actions' },
-          h('button', { class: 'vn-btn', type: 'button', text: t('ui.quick.notebook'), on: { click: this.handlers.onArchive } }),
+          h('button', { class: 'vn-btn', type: 'button', text: t('ui.quick.notes'), on: { click: this.handlers.onArchive } }),
           h('button', { class: 'vn-btn is-primary', type: 'button', text: t('ui.end.back_to_menu'), on: { click: this.handlers.onMenu } }),
         ),
       ),

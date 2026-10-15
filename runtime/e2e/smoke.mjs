@@ -261,12 +261,12 @@ async function scenarioPlay(browser, baseUrl) {
 
   // живая смена языка из настроек: сцена и шаг не меняются
   const before = await stateOf(page);
-  const uiRu = await page.locator('.vn-qbtn--auto').innerText();
+  const uiRu = await page.locator('.vn-qbtn--notes').innerText();
   await page.click('.vn-qbtn--settings');
   await page.waitForSelector('.vn-settings');
   await page.click('.vn-settings [data-lang="en"]');
   await sleep(500);
-  const uiEn = await page.locator('.vn-qbtn--auto').innerText();
+  const uiEn = await page.locator('.vn-qbtn--notes').innerText();
   check('язык переключается на лету (подписи интерфейса меняются)', uiRu !== uiEn && (await page.evaluate(() => document.documentElement.lang)) === 'en', `${uiRu} → ${uiEn}`);
   const after = await stateOf(page);
   check('смена языка не трогает сцену и шаг', before.scene_id === after.scene_id && before.step_index === after.step_index);
@@ -602,7 +602,7 @@ async function scenarioMatrix(browser, baseUrl) {
         choice: '.vn-choices:not([hidden]) .vn-choice',
         minigame: '.mg-shell .mg-shell__body, .mg-gb .mg-btn',
         settings: '.vn-settings.is-in .vn-range',
-        log: '.vn-log.is-in .vn-log__item',
+        log: '.vn-archive.is-in .vn-archive__page.is-log .vn-log__item',
         ending: '.vn-ending.is-in .vn-ending__title',
       };
       const probe = async (screen) => {
@@ -646,8 +646,10 @@ async function scenarioMatrix(browser, baseUrl) {
       await page.waitForSelector('.vn-settings');
       await probe('settings');
       await page.keyboard.press('Escape');
-      await page.click('.vn-qbtn--log');
-      await page.waitForSelector('.vn-log');
+      await page.click('.vn-qbtn--notes');
+      await page.waitForSelector('.vn-notes__tabs');
+      await page.click('.vn-notes__tabs [data-tab="log"]');
+      await page.waitForSelector('.vn-archive__page.is-log');
       await probe('log');
       await page.keyboard.press('Escape');
       await page.evaluate(() => window.__vn.autoplay({ choice: 'first' }));
@@ -920,7 +922,7 @@ async function scenarioHod(browser, baseUrl) {
   await page.click('.vn-warning .vn-btn.is-primary');
   await page.waitForFunction(() => window.__vn.pending()?.kind === 'line', null, { timeout: 15000 });
   check('по умолчанию открывается «Ход следствия» (ep01_hod), без папки дела', (await stateOf(page)).episode_id === 'ep01_hod' && (await page.$('.vn-case')) === null);
-  check('квик-меню: шесть кнопок, среди них «Блокнот»', (await page.locator('.vn-quick .vn-qbtn').count()) === 6 && (await page.locator('.vn-qbtn--notebook').count()) === 1);
+  check('квик-меню: три кнопки — пропуск, «Заметки», настройки (2026-10-15)', (await page.locator('.vn-quick .vn-qbtn').count()) === 3 && (await page.locator('.vn-qbtn--notes').count()) === 1);
   if (wantShots) mkdirSync(OUT, { recursive: true });
   const shot = async (name) => {
     if (wantShots) await page.screenshot({ path: join(OUT, `hod_1280_${name}.png`) });
@@ -947,13 +949,14 @@ async function scenarioHod(browser, baseUrl) {
     // выбор «куда дальше» после Галины — на площадке (c_landing_g2), а не в машине
     if (!notes.checked && p.kind === 'choice' && p.id === 'c_landing_g2') {
       notes.checked = true;
-      const badge = await page.$eval('.vn-qbtn--notebook', (b) => b.classList.contains('has-new'));
-      await page.click('.vn-qbtn--notebook');
+      const badge = await page.$eval('.vn-qbtn--notes', (b) => b.classList.contains('has-new'));
+      await page.click('.vn-qbtn--notes');
       await page.waitForSelector('.vn-archive', { state: 'visible' });
       const titles = await page.$$eval('.vn-archive__item h3', (els) => els.map((e) => e.textContent));
       const stamps = await page.locator('.vn-archive__stamp').count();
       const scans = await page.locator('.vn-archive__open').count();
-      notes.notebook = { title: await page.locator('.vn-archive__title').textContent(), titles, badge, stamps, scans };
+      const tab = await page.locator('.vn-notes__tabs .vn-chip.is-on').getAttribute('data-tab');
+      notes.notebook = { title: await page.locator('.vn-archive__title').textContent(), tab, titles, badge, stamps, scans };
       await sleep(400); // экран проявляется
       notes.layout.push(...(await page.evaluate(layoutProbe)));
       await shot('notebook');
@@ -968,7 +971,7 @@ async function scenarioHod(browser, baseUrl) {
       }
       await page.keyboard.press('Escape');
       await page.waitForSelector('.vn-archive', { state: 'detached' });
-      notes.notebook.badgeAfter = await page.$eval('.vn-qbtn--notebook', (b) => b.classList.contains('has-new'));
+      notes.notebook.badgeAfter = await page.$eval('.vn-qbtn--notes', (b) => b.classList.contains('has-new'));
     }
     if (p.kind === 'choice' && p.id === 'd_who' && !notes.deduction) {
       notes.deduction = true;
@@ -1009,7 +1012,7 @@ async function scenarioHod(browser, baseUrl) {
     }
   });
   check('первый выбор дня — куда ехать: три места', notes.firstChoice?.id === 'c_d1_go' && notes.firstChoice.options.length === 3, JSON.stringify(notes.firstChoice));
-  check('блокнот открывается в игре и держит факты Галины', notes.notebook?.title === 'Блокнот' && notes.notebook.titles.includes('Галина: «Сергей Викторович»'), JSON.stringify(notes.notebook));
+  check('«Заметки» открываются на блокноте и держат факты Галины', notes.notebook?.title === 'Заметки' && notes.notebook.tab === 'notebook' && notes.notebook.titles.includes('Галина: «Сергей Викторович»'), JSON.stringify(notes.notebook));
   check('блокнот пополнился — метка на кнопке и штампы «новый материал»; бумага открывается сканом без метки; закрыли — метка снята',
     notes.notebook?.badge === true && notes.notebook.stamps > 0 && notes.notebook.scans > 0 && notes.notebook.doc?.tag === 0 && notes.notebook.back === true && notes.notebook.badgeAfter === false,
     JSON.stringify(notes.notebook));
@@ -1067,7 +1070,7 @@ async function scenarioHod(browser, baseUrl) {
     // Блокнот на телефоне (размытия нет — слой экрану даёт isolation): бумага из блокнота лежит поверх записей; тап по
     // фону закрывает бумагу, затем блокнот, а выбор под ними остаётся.
     const before = JSON.stringify(await pending(ph.page));
-    await ph.page.click('.vn-qbtn--notebook');
+    await ph.page.click('.vn-qbtn--notes');
     await ph.page.waitForSelector('.vn-archive', { state: 'visible' });
     let docOnTop = null;
     if ((await ph.page.locator('.vn-archive__open').count()) > 0) {

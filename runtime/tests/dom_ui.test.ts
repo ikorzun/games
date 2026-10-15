@@ -158,6 +158,7 @@ beforeEach(() => {
     'ui.end.case': 'Уголовное дело',
     'ui.end.materials': 'Блокнот: {n}',
     'ui.quick.notebook': 'Блокнот',
+    'ui.quick.notes': 'Заметки',
     'ui.end.decisions_n': 'Решений: {n}',
     'mini.title': 'Смерть за квартиры',
     'ui.menu.archive': 'Архив',
@@ -294,10 +295,10 @@ describe('DomUI: реплики и продвижение сюжета', () => {
     expect(done.done).toBe(false);
   });
 
-  it('скрытый интерфейс (H): первое нажатие возвращает его, и только потом листает', async () => {
+  it('скрытый интерфейс: первое нажатие возвращает его, и только потом листает', async () => {
     const { ui, root } = makeRig({ textSpeed: 5 });
     const done = track(ui.showLine(lineP('l.1'), lineCtx(ctl())));
-    ui.toggleHidden();
+    ui.setUiHidden(true);
     expect(root.classList.contains('ui-hidden')).toBe(true);
     ui.advance();
     await flush();
@@ -310,16 +311,16 @@ describe('DomUI: реплики и продвижение сюжета', () => {
 });
 
 describe('DomUI: горячие клавиши и колесо', () => {
-  it('A, S, L, N, H, M передают действия быстрого меню; ← и PageUp — откат; Ctrl/Alt-комбинации игнорируются', () => {
+  it('S, L, N, M передают действия быстрого меню (A и H убраны вместе с кнопками, 2026-10-15); ← и PageUp — откат; Ctrl/Alt-комбинации игнорируются', () => {
     const { actions, rollbacks } = makeRig({ textSpeed: 5 });
     for (const k of ['a', 'S', 'l', 'N', 'H', 'm']) key(k);
-    expect(actions).toEqual(['auto', 'skip', 'log', 'notebook', 'hide', 'mute']);
+    expect(actions).toEqual(['skip', 'log', 'notebook', 'mute']);
     key('ArrowLeft');
     key('PageUp');
     expect(rollbacks.n).toBe(2);
-    key('a', { ctrlKey: true });
+    key('s', { ctrlKey: true });
     key('s', { metaKey: true });
-    expect(actions).toHaveLength(6);
+    expect(actions).toHaveLength(4);
   });
 
   it('Esc: сначала закрывает верхний экран, потом снимает скрытие интерфейса, иначе открывает настройки', () => {
@@ -348,7 +349,7 @@ describe('DomUI: горячие клавиши и колесо', () => {
   it('при открытом экране горячие клавиши сюжета не работают', () => {
     const { kit, actions, rollbacks } = makeRig();
     kit.screens.open({ el: document.createElement('div') });
-    key('a');
+    key('s');
     key('ArrowLeft');
     expect(actions).toEqual([]);
     expect(rollbacks.n).toBe(0);
@@ -376,7 +377,7 @@ describe('DomUI: горячие клавиши и колесо', () => {
   it('dispose снимает глобальные обработчики', () => {
     const { ui, actions } = makeRig();
     ui.dispose();
-    key('a');
+    key('s');
     expect(actions).toEqual([]);
   });
 });
@@ -412,13 +413,12 @@ describe('DomUI: авто-режим', () => {
     expect(done.done).toBe(false);
   });
 
-  it('включение авто-режима на уже показанной реплике запускает отсчёт; кнопка Auto отражает состояние', async () => {
-    const { ui, kit } = makeRig({ textSpeed: 5, autoDelayMs: 500 });
+  it('включение авто-режима на уже показанной реплике запускает отсчёт', async () => {
+    const { ui } = makeRig({ textSpeed: 5, autoDelayMs: 500 });
     const done = track(ui.showLine(lineP('l.short'), lineCtx(ctl())));
     await flush(2000);
     expect(done.done).toBe(false);
     ui.toggleAuto();
-    expect(kit.quick.el.querySelector('[data-action="auto"]')?.getAttribute('aria-pressed')).toBe('true');
     await flush(1000);
     expect(done.done).toBe(true);
   });
@@ -798,7 +798,7 @@ describe('DomUI: документ, мини-игра, финал', () => {
     ],
   });
 
-  it('финал — лист уголовного дела: шапка, название эпизода, штамп с концовкой, ход следствия, итог; кнопки «Блокнот» и «В меню»', async () => {
+  it('финал — лист уголовного дела: шапка, название эпизода, штамп с концовкой, ход следствия, итог; кнопки «Заметки» и «В меню»', async () => {
     const { ui, kit, archiveOpens } = makeRig();
     const res = track(ui.showEnding({ kind: 'end', ending }, { ...stateWithJournal(), archive: ['arc_x'] }, baseCtx(ctl())));
     const el = kit.screens.el;
@@ -810,7 +810,7 @@ describe('DomUI: документ, мини-игра, финал', () => {
     expect(el.querySelector('.vn-ending__sub')?.textContent).toBe('Ход следствия');
     expect([...el.querySelectorAll('.vn-ending__n')].map((n) => n.textContent)).toEqual(['01', '02']);
     expect([...el.querySelectorAll('.vn-ending__foot span')].map((n) => n.textContent)).toEqual(['Блокнот: 1', 'Решений: 2']); // без «/ всего» (владелец 2026-10-15)
-    expect(el.querySelector('.vn-ending__actions .vn-btn')?.textContent).toBe('Блокнот'); // открывает блокнот этой партии
+    expect(el.querySelector('.vn-ending__actions .vn-btn')?.textContent).toBe('Заметки'); // открывает заметки этой партии
     const entries = [...el.querySelectorAll('.vn-ending__entry')];
     expect(entries.map((n) => n.querySelector('.vn-ending__choice')?.textContent)).toEqual(['Первый', 'Второй']);
     expect(entries[0]?.querySelector('.vn-ending__prompt')?.textContent).toBe('Что делаем?');

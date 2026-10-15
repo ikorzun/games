@@ -17,12 +17,12 @@ import {
   DocumentScreen,
   ErrorScreen,
   languageChips,
-  LogScreen,
   MenuScreen,
   SaveLoadScreen,
   SettingsScreen,
   WarningScreen,
 } from '../src/ui/screens';
+import type { LogSource } from '../src/ui/screens';
 import { miniEpisode } from './helpers/mini';
 
 const episode: Episode = {
@@ -97,6 +97,8 @@ beforeEach(() => {
     'ui.archive.new_item': 'Новый материал',
     'mini.doc.text': 'Текст бланка',
     'ui.quick.log': 'Журнал',
+    'ui.quick.notebook': 'Блокнот',
+    'ui.quick.notes': 'Заметки',
     'ui.common.back': 'Назад',
     'ui.common.ok': 'Понятно',
     'ui.common.yes': 'Да',
@@ -531,16 +533,36 @@ describe('SettingsScreen: эффекты камеры', () => {
   });
 });
 
-describe('LogScreen: журнал реплик и откат', () => {
+describe('Заметки: блокнот и журнал в одном окне (владелец 2026-10-15)', () => {
   const entries: LogEntry[] = [
     { kind: 'say', who: 'a', key: 'k.line', narrate_style: null },
     { kind: 'narrate', who: null, key: 'k.line', narrate_style: 'voiceover' },
     { kind: 'say', who: 'b', key: 'k.line', narrate_style: null },
   ];
+  const notes = (log: Partial<LogSource> = {}): ArchiveScreen =>
+    new ArchiveScreen(episode, () => [], vi.fn(), 'ui.quick.notes', {
+      path: true,
+      log: { entries: () => entries, maxRollback: () => 1, onRollback: vi.fn(), ...log },
+    });
+  const tabs = (el: HTMLElement): HTMLButtonElement[] => [...el.querySelectorAll<HTMLButtonElement>('.vn-notes__tabs .vn-chip')];
 
-  it('показывает имена говорящих (у рассказчика имени нет) и кнопку отката только там, куда можно вернуться', () => {
+  it('сегмент «Блокнот | Журнал» под шапкой; по умолчанию открыт блокнот; заголовок — «Заметки»', () => {
+    const s = open(notes());
+    expect(s.el.querySelector('.vn-archive__title')?.textContent).toBe('Заметки');
+    expect(tabs(s.el).map((b) => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([
+      ['Блокнот', 'true'],
+      ['Журнал', 'false'],
+    ]);
+    expect(s.el.querySelector('.vn-log__list')).toBeNull();
+    expect(s.sawNotebook).toBe(true);
+  });
+
+  it('вкладка «Журнал»: имена говорящих (у рассказчика имени нет), откат только туда, куда можно вернуться', () => {
     const onRollback = vi.fn();
-    const s = open(new LogScreen(episode, { entries: () => entries, maxRollback: () => 1, onRollback, onClose: vi.fn() }));
+    const s = notes({ onRollback });
+    s.tab = 'log';
+    open(s);
+    expect(s.sawNotebook).toBe(false); // штампы блокнота журнал не снимает
     const items = [...s.el.querySelectorAll('.vn-log__item')];
     expect(items).toHaveLength(3);
     expect(items.map((i) => i.querySelector('.vn-log__name')?.textContent ?? null)).toEqual(['Следователь Орлов', null, 'Свидетель']);
@@ -549,14 +571,19 @@ describe('LogScreen: журнал реплик и откат', () => {
     expect(items.map((i) => i.querySelector('.vn-log__back') !== null)).toEqual([false, true, false]);
     items[1]?.querySelector<HTMLButtonElement>('.vn-log__back')?.click();
     expect(onRollback).toHaveBeenCalledWith(1);
+    tabs(s.el)[0]?.click(); // обратно в блокнот
+    expect(s.el.querySelector('.vn-log__list')).toBeNull();
+    expect(tabs(s.el)[0]?.getAttribute('aria-pressed')).toBe('true');
+    expect(s.sawNotebook).toBe(true);
   });
 
-  it('пустой журнал — заглушка; «Назад» закрывает', () => {
-    const onClose = vi.fn();
-    const s = open(new LogScreen(episode, { entries: () => [], maxRollback: () => 0, onRollback: vi.fn(), onClose }));
-    expect(s.el.querySelector('.vn-muted')?.textContent).toBe('Пусто');
-    s.el.querySelector<HTMLButtonElement>('.vn-actions .vn-btn')?.click();
-    expect(onClose).toHaveBeenCalledTimes(1);
+  it('пустой журнал — заглушка; в архиве меню (без журнала) сегмента нет', () => {
+    const s = notes({ entries: () => [] });
+    s.tab = 'log';
+    open(s);
+    expect(s.el.querySelector('.vn-archive__empty')?.textContent).toBe('Пусто');
+    const menu = open(new ArchiveScreen(episode, () => [], vi.fn()));
+    expect(menu.el.querySelector('.vn-notes__tabs')).toBeNull();
   });
 });
 

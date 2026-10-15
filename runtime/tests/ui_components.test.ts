@@ -31,18 +31,17 @@ beforeEach(() => {
     'c.prompt': 'Что делаем?',
     'cap.k': 'Москва, 1993',
     'cap.f': 'Факт дела',
-    'ui.quick.auto': 'Авто',
     'ui.quick.skip': 'Пропуск',
     'ui.quick.log': 'Журнал',
+    'ui.quick.notes': 'Заметки',
     'ui.quick.save': 'Сохранить',
     'ui.quick.load': 'Загрузить',
     'ui.quick.mute': 'Звук',
     'ui.quick.settings': 'Настройки',
-    'ui.quick.hide': 'Скрыть',
     'ui.menu.settings': 'Настройки',
     'ui.archive.new_item': 'Новый материал',
   });
-  i18n.addStrings('en', { 'c.a': 'First', 'c.b': 'Second', 'cap.k': 'Moscow, 1993', 'ui.quick.auto': 'Auto', 'ui.quick.mute': 'Mute', 'ui.quick.log': 'Log', 'ui.quick.hide': 'Hide UI' });
+  i18n.addStrings('en', { 'c.a': 'First', 'c.b': 'Second', 'cap.k': 'Moscow, 1993', 'ui.quick.skip': 'Skip', 'ui.quick.mute': 'Mute', 'ui.quick.log': 'Log', 'ui.quick.notes': 'Notes' });
   i18n.setLang('ru');
 });
 
@@ -484,11 +483,11 @@ describe('CaptionLayer: плашка заставки', () => {
 });
 
 describe('QuickMenu', () => {
-  it('шесть кнопок в фиксированном порядке: Auto, Skip, Log, Notebook, Settings, Hide (сохранение, загрузка и звук — в настройках)', () => {
+  it('три кнопки в фиксированном порядке: Skip, Notes, Settings (2026-10-15: без «Авто» и «Скрыть интерфейс»; журнал и блокнот — «Заметки»)', () => {
     const qm = new QuickMenu(() => undefined);
     const actions = [...qm.el.querySelectorAll<HTMLElement>('button')].map((b) => b.dataset.action);
-    expect(actions).toEqual(['auto', 'skip', 'log', 'notebook', 'settings', 'hide']);
-    expect(qm.el.querySelector('[data-action="auto"]')?.textContent).toBe('Авто');
+    expect(actions).toEqual(['skip', 'notes', 'settings']);
+    expect(qm.el.querySelector('[data-action="notes"]')?.textContent).toBe('Заметки');
   });
 
   it('клик вызывает действие, не всплывает до сцены (не продвигает сюжет) и снимает фокус с кнопки', () => {
@@ -499,50 +498,50 @@ describe('QuickMenu', () => {
     wrap.addEventListener('click', outer);
     wrap.appendChild(qm.el);
     document.body.appendChild(wrap);
-    const btn = qm.el.querySelector<HTMLButtonElement>('[data-action="log"]');
+    const btn = qm.el.querySelector<HTMLButtonElement>('[data-action="notes"]');
     btn?.focus();
     btn?.click();
-    expect(calls).toEqual(['log']);
+    expect(calls).toEqual(['notes']);
     expect(outer).not.toHaveBeenCalled();
-    expect(document.activeElement).not.toBe(btn); // Space потом продвигает сюжет, а не повторяет «Журнал»
+    expect(document.activeElement).not.toBe(btn); // Space потом продвигает сюжет, а не повторяет «Заметки»
   });
 
-  it('метка «есть новое» на блокноте: квадрат в углу, иконка вздрагивает с каждой новой записью; снимается целиком', () => {
+  it('метка «есть новое» на заметках: квадрат в углу, иконка вздрагивает с каждой новой записью; снимается целиком', () => {
     const qm = new QuickMenu(() => undefined);
-    const nb = qm.el.querySelector<HTMLElement>('[data-action="notebook"]')!;
+    const nb = qm.el.querySelector<HTMLElement>('[data-action="notes"]')!;
     expect(nb.className).not.toMatch(/has-new|is-nudged/);
-    qm.setBadge('notebook', true);
+    qm.setBadge('notes', true);
     expect(nb.classList.contains('has-new')).toBe(true);
     expect(nb.classList.contains('is-nudged')).toBe(true);
-    qm.setBadge('notebook', true);
+    qm.setBadge('notes', true);
     expect(nb.classList.contains('is-nudged')).toBe(true);
-    qm.setBadge('notebook', false);
+    qm.setBadge('notes', false);
     expect(nb.className).not.toMatch(/has-new|is-nudged/);
     expect(qm.el.querySelectorAll('.has-new')).toHaveLength(0);
   });
 
-  it('переключатели Auto / Skip отражают состояние классом и aria-pressed', () => {
+  it('переключатель Skip отражает состояние классом и aria-pressed', () => {
     const qm = new QuickMenu(() => undefined);
     const pressed = (a: string): string | null | undefined => qm.el.querySelector(`[data-action="${a}"]`)?.getAttribute('aria-pressed');
-    expect([pressed('auto'), pressed('skip')]).toEqual(['false', 'false']);
-    expect(pressed('log')).toBeNull(); // не переключатель
-    qm.setState({ auto: true, muted: true });
-    expect([pressed('auto'), pressed('skip')]).toEqual(['true', 'false']);
-    expect(qm.el.querySelector('[data-action="auto"]')?.classList.contains('is-on')).toBe(true);
+    expect(pressed('skip')).toBe('false');
+    expect(pressed('notes')).toBeNull(); // не переключатель
+    qm.setState({ skip: true, muted: true });
+    expect(pressed('skip')).toBe('true');
+    expect(qm.el.querySelector('[data-action="skip"]')?.classList.contains('is-on')).toBe(true);
   });
 
   it('refresh подставляет подписи нового языка; setDisabled блокирует кнопку', () => {
     const qm = new QuickMenu(() => undefined);
     i18n.setLang('en');
     qm.refresh();
-    expect(qm.el.querySelector('[data-action="auto"]')?.textContent).toBe('Auto');
-    qm.setDisabled('log', true);
-    expect(qm.el.querySelector<HTMLButtonElement>('[data-action="log"]')?.disabled).toBe(true);
+    expect(qm.el.querySelector('[data-action="notes"]')?.textContent).toBe('Notes');
+    qm.setDisabled('notes', true);
+    expect(qm.el.querySelector<HTMLButtonElement>('[data-action="notes"]')?.disabled).toBe(true);
   });
 });
 
 describe('QuickMenu: кнопки-иконки', () => {
-  const ACTIONS: QuickAction[] = ['auto', 'skip', 'log', 'notebook', 'settings', 'hide'];
+  const ACTIONS: QuickAction[] = ['skip', 'notes', 'settings'];
   const btn = (qm: QuickMenu, a: string): HTMLButtonElement => qm.el.querySelector<HTMLButtonElement>(`[data-action="${a}"]`)!;
 
   it('у каждой кнопки встроенная SVG-иконка (декоративная) и подпись скрытым текстом; title совпадает с подписью', () => {
@@ -560,30 +559,30 @@ describe('QuickMenu: кнопки-иконки', () => {
       expect(label?.textContent, a).toBe(b.title);
       expect(label?.textContent?.length ?? 0, a).toBeGreaterThan(0);
     }
-    expect(btn(qm, 'auto').textContent).toBe('Авто'); // скрытый текст остаётся в разметке (innerText/textContent для QA и ридера)
-    expect(btn(qm, 'hide').title).toBe('Скрыть'); // подпись приходит из локали, а не зашита в иконку
+    expect(btn(qm, 'notes').textContent).toBe('Заметки'); // скрытый текст остаётся в разметке (innerText/textContent для QA и ридера)
+    expect(btn(qm, 'settings').title).toBe('Настройки'); // подпись приходит из локали, а не зашита в иконку
   });
 
   it('refresh меняет подписи и title на язык интерфейса, иконки остаются теми же узлами', () => {
     const qm = new QuickMenu(() => undefined);
-    const before = btn(qm, 'log').querySelector('svg');
+    const before = btn(qm, 'notes').querySelector('svg');
     i18n.setLang('en');
     qm.refresh();
-    expect(btn(qm, 'log').querySelector('.vn-qbtn__label')?.textContent).toBe('Log');
-    expect(btn(qm, 'log').title).toBe('Log');
-    expect(btn(qm, 'hide').title).toBe('Hide UI');
-    expect(btn(qm, 'log').querySelector('svg')).toBe(before);
+    expect(btn(qm, 'notes').querySelector('.vn-qbtn__label')?.textContent).toBe('Notes');
+    expect(btn(qm, 'notes').title).toBe('Notes');
+    expect(btn(qm, 'skip').title).toBe('Skip');
+    expect(btn(qm, 'notes').querySelector('svg')).toBe(before);
     expect(qm.el.getAttribute('aria-label')).toBeTruthy();
   });
 
-  it('журнал — иконка папки (решение владельца 2026-10-11)', () => {
+  it('заметки — иконка блокнота', () => {
     const qm = new QuickMenu(() => undefined);
-    expect(btn(qm, 'log').querySelector('svg')?.classList.contains('vn-ico--log')).toBe(true);
-    expect(btn(qm, 'log').querySelector('path')?.getAttribute('d')).toContain('M3.5 7.5h6l2 2h9v9.5h-17z');
+    expect(btn(qm, 'notes').querySelector('svg')?.classList.contains('vn-ico--notes')).toBe(true);
+    expect(btn(qm, 'notes').querySelector('path')?.getAttribute('d')).toBe('M6.5 3.5h12v17h-12z');
   });
 
   it('icon(name): новый элемент на каждый вызов, имя в классе; все имена из быстрого меню существуют', () => {
-    const names: IconName[] = ['auto', 'skip', 'log', 'notebook', 'save', 'load', 'mute', 'settings', 'hide'];
+    const names: IconName[] = ['skip', 'log', 'notebook', 'notes', 'save', 'load', 'mute', 'settings'];
     for (const n of names) {
       const a = icon(n);
       const b = icon(n);

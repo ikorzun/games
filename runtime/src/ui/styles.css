@@ -1191,6 +1191,11 @@ body {
   overscroll-behavior: contain;
 }
 .vn-archive__empty { margin: 0; padding: calc(28 * var(--u)) 0; color: var(--c-muted); }
+/* Заметки (2026-10-15): сегмент «Блокнот | Журнал» под шапкой — кнопки вплотную; журнал — на тёмной подложке поверх
+   размытого кадра, чтобы строки читались. */
+.vn-notes__tabs { display: flex; }
+.vn-notes__tabs .vn-chip + .vn-chip { margin-left: -1px; }
+.vn-archive__page.is-log { padding: 0 calc(16 * var(--u)); background: rgb(14 14 17 / 0.9); }
 /* Доска растёт с записями и листается вместе с ними; стрелки — слой под бумажками. */
 .vn-archive__board {
   position: relative;
