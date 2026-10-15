@@ -87,6 +87,8 @@ export class AssetCatalog {
   private readonly shots = new Map<string, Shot>();
   private readonly shotSets = new Map<string, Shot[]>();
   private readonly bgMemory = new Map<string, string>();
+  /** Квадрат «Воспоминаний» по файлу 16:9: фон сцены — тот же файл, что её общий план, и на вертикальном экране берёт его квадрат. */
+  private readonly squareOf = new Map<string, string>();
   /** Графика «Воспоминания» и вертикальный экран (квадратные кадры): что отдавать в цепочках. */
   private graphics = { memory: false, square: false };
 
@@ -110,6 +112,7 @@ export class AssetCatalog {
       const list = this.shotSets.get(s.set);
       if (list) list.push(s);
       else this.shotSets.set(s.set, [s]);
+      if (s.memory?.square) this.squareOf.set(s.memory.file, s.memory.square);
     }
   }
 
@@ -209,7 +212,9 @@ export class AssetCatalog {
     // Чёрный фон (assets/common/bg/black.png) — не картинка: рисуется сплошным цветом.
     if (BLACK_FILE.test(path)) return { urls: [], silhouetteFirst: false, solid: '#000000' };
     const mem = this.graphics.memory ? this.bgMemory.get(id) : undefined;
-    return { urls: mem ? [this.url(mem), this.url(path)] : [this.url(path)], silhouetteFirst: false };
+    // На вертикальном экране — сразу квадрат (владелец 2026-10-15: «на телефоне загружать только квадратные картинки»).
+    const sq = mem && this.graphics.square ? this.squareOf.get(mem) : undefined;
+    return { urls: [sq, mem, path].filter((u): u is string => Boolean(u)).map((u) => this.url(u)), silhouetteFirst: false };
   }
 
   cgChain(id: string): ImageChain | null {

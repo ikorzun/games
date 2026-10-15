@@ -344,16 +344,16 @@ shot('notary_register', 'hod_notary_register', 'insert', 'notary', DAY, SUMMER,
      'summer daylight from the left', 'the register, one hand, the edge of a rubber stamp',
      ['shot:notary_wide'])
 
-# Нотариус на второй день, когда помощницу отправили в отпуск: стол у окна пуст, машинка под чехлом.
+# Нотариус во вторник и среду, когда помощницу отправили в отпуск: её машинка брошена с листом, другая расстановка.
 shot('notary_alone_wide', 'hod_notary_alone', 'wide', 'notary', 'a sunny Tuesday, 10 August 1993, early afternoon', SUMMER,
-     {'notary': 'sits behind the desk in the centre, facing the visitors and the camera, a handkerchief in his hand, the open register in front of him, a cautious polite smile',
-      'sledak': 'stands in front of the desk, RIGHT of centre, seen from behind, his case folder in his hand',
-      'oper': 'leans on the frame of the open door on the RIGHT, arms crossed, looking at the empty typing desk'},
+     {'notary': 'sits behind the desk in the centre with his jacket off (it hangs on the coat rack), white shirt, sleeves rolled up, hands clasped on the open register, tense',
+      'sledak': "sits on the bentwood visitor's chair in front of the desk, RIGHT of centre, seen from behind, his case folder on his knees",
+      'oper': 'stands by the window on the LEFT next to the empty typing desk, looking down at the sheet left in the typewriter'},
      'The same camera as the first view of this office: behind the visitors near the wall opposite the desk, at the eye level of a standing person, a 32 mm-equivalent field of view; the lower third of the frame is kept free of faces.',
      'summer daylight from the tall window on the left; the green lamp is off',
-     'the small typing desk under the window is EMPTY, its typewriter covered with a grey dust cover, the chair pushed in; the register, the stamps, the fan turning on the bookcase, the queue through the open door',
+     'the small typing desk under the window is abandoned: the typewriter OPEN with a sheet of paper still in the roller, the chair pushed back; the register, the stamps, the fan turning on the bookcase, the queue through the open door',
      ['place:notary_wide', 'face:notary', 'face:sledak', 'face:oper'],
-     note='Тот же кабинет на следующий день: помощницы нет, машинка под чехлом.')
+     note='Тот же кабинет на следующий день: помощницы нет, машинка брошена с листом (текст: «в ней так и торчит лист»).')
 
 # Лестница у нотариуса: Люда курит.
 shot('stairs_wide', 'hod_notary_stairs', 'wide', 'notary_stairs', DAY, SUMMER,

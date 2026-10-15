@@ -316,10 +316,12 @@ for p in PLAN:
     if mem:
         sh['memory'] = mem
     SHOTS.append(sh)
-# Контора без помощницы: кадр через плечо на Ковригина понедельника, но машинка Люды под серым чехлом, как на общем
-# плане вторника (аудит владельца 2026-10-15: в понедельник она открыта).
+# Контора без помощницы (вторник и среда): свой кадр через плечо — Ковригин без пиджака, Громов сидит, машинка брошена
+# с листом (владелец 2026-10-15: другая расстановка, чем в понедельник).
 SHOTS.append({'id': 'sh_notary_alone_ots', 'set': 'hod_notary_alone', 'bg': 'bg_hod_notary_alone', 'kind': 'ots', 'angle': 'eye',
-              'cast': [{'who': 'notary'}, {'who': 'sledak'}], 'from': 'sledak', 'focus': 'notary',
+              'cast': [{'who': w, **({'mask': f'assets/ep01/hod/hod_notary_alone/notary_alone_ots.{w}.webp'}
+                                     if HAS(f'assets/ep01/hod/hod_notary_alone/notary_alone_ots.{w}.webp') else {})}
+                       for w in ('notary', 'sledak')], 'from': 'sledak', 'focus': 'notary',
               'file': FILE('notary_alone_ots', 'hod_notary_alone'),
               **({'memory': memory_of('notary_alone_ots', 'hod_notary_alone', ['notary', 'sledak'])}
                  if memory_of('notary_alone_ots', 'hod_notary_alone', ['notary', 'sledak']) else {})})

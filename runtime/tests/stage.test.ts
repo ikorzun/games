@@ -468,6 +468,25 @@ describe('Stage: растворение между местами', () => {
     await p;
   });
 
+  it('«Воспоминания» на вертикальном экране: область кадра всегда квадратная (и без кадра покрытия); «Реализм» — 16:9', async () => {
+    const mm = window.matchMedia;
+    window.matchMedia = ((q: string) => ({ matches: q.includes('portrait'), media: q, addEventListener: () => undefined, removeEventListener: () => undefined })) as unknown as typeof window.matchMedia;
+    try {
+      const r = await rig();
+      const main = r.stage.el.parentElement!;
+      r.stage.setView(view('procedural', { bg: 'bg_a' })); // кадра покрытия нет — только фон
+      expect(main.classList.contains('is-square')).toBe(false);
+      r.stage.setGraphics('memory');
+      expect(main.classList.contains('is-square')).toBe(true);
+      r.stage.setView(view('procedural', { scene: 's2', bg: 'bg_b' }));
+      expect(main.classList.contains('is-square')).toBe(true); // не прыгает от кадра к кадру
+      r.stage.setGraphics('real');
+      expect(main.classList.contains('is-square')).toBe(false);
+    } finally {
+      window.matchMedia = mm;
+    }
+  });
+
   it('crossfade не удался или его нет — прежний «нырок» в полутень', async () => {
     const r = await rig({ crossfade: () => false });
     r.stage.setView(view('procedural', { bg: 'bg_a' }));

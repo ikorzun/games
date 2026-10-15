@@ -319,7 +319,7 @@ def sheets(who: str) -> None:
 
 EP = json.load(open(os.path.join(ROOT, 'episodes/s1/ep01_hod.json'), encoding='utf-8'))
 SHOT = {s['id'][3:]: s for s in EP['assets']['shots']}
-EXTRA = {'flat_inspect': 'hod_flat_inspect'}  # фон мини-игры осмотра: только 16:9 (квадрат сдвинул бы зоны находок)
+EXTRA = {'flat_inspect': 'hod_flat_inspect', 'notary_alone_ots': 'hod_notary_alone'}  # фон мини-игры осмотра: только 16:9 (квадрат сдвинул бы зоны находок)
 CLOTHES = {'sledak': 'pale-blue short-sleeved shirt and a navy tie', 'oper': 'blue-grey checked shirt over a grey T-shirt',
            'buyer': 'thin-rimmed glasses and a beige paint-spattered checked shirt', 'lapin_wife': 'blue-grey print dress and an apron',
            'expert': 'white lab coat over a beige dress, glasses on a chain', 'boss': 'white short-sleeved shirt and a dark tie',
@@ -458,11 +458,17 @@ STAGING = {
         'sledak': 'only the back of his head and his shoulder at the RIGHT edge, standing'},
     'notary_register': {
         'notary': 'only his plump hand with the gold signet ring resting at the edge of the page'},
+    # Вторник и среда — другая расстановка, чем в понедельник (владелец 2026-10-15): Ковригин без пиджака, Громов сидит,
+    # Сайко у брошенной машинки; машинка открыта и в ней лист — как в тексте («в ней так и торчит лист»).
     'notary_alone_wide': {
-        'notary': 'sits behind the desk in the centre, a handkerchief in his hand, the open register in front of him, a cautious '
-                  'polite smile; his eyes on Gromov',
-        'sledak': 'stands in front of the desk, RIGHT of centre, seen from behind, his case folder in his hand',
-        'oper': 'leans on the frame of the open door on the RIGHT, arms crossed; his eyes on the empty typing desk'},
+        'notary': 'sits behind the desk in the centre with his jacket off — it hangs on the coat rack behind him — in a white shirt with rolled-up sleeves and a loosened tie, both hands clasped on the open register, tense, unsmiling; his eyes on Gromov',
+        'sledak': "sits on the bentwood visitor's chair in front of the desk, RIGHT of centre, seen from behind, his case "
+                  'folder on his knees',
+        'oper': 'stands by the window on the LEFT next to the empty typing desk, half-turned to the room; his eyes down on the '
+                'sheet of paper left in the typewriter'},
+    'notary_alone_ots': {
+        'notary': 'sits behind the desk in the centre with his jacket off — it hangs on the coat rack behind him — in a white shirt with rolled-up sleeves and a loosened tie, both hands clasped on the open register, tense, unsmiling; his eyes on Gromov',
+        'sledak': 'only the back of his head and his shoulder at the RIGHT edge, seated'},
     'stairs_wide': {
         'sledak': 'stands three steps below in the foreground on the LEFT, seen from behind, looking up at them',
         'assistant': 'stands at the window on the landing, arms crossed, a cigarette between two fingers; her eyes down on the '
@@ -611,7 +617,7 @@ GAZE = ('Every person keeps the pose, head turn and gaze of image 1: each looks 
         'never into the lens. The turnaround sheets give only face, hair and clothing — ignore their head poses and their '
         'gaze toward the viewer.')
 # Общий план места, уже перерисованный, — образец рисунка для остальных кадров сета (одна рука, одна палитра).
-STYLE_REF = {'office_am_ots_oper': 'office_am_wide', 'office_am_phone': 'office_am_wide', 'car_ots_oper': 'car_wide',
+STYLE_REF = {'notary_alone_ots': 'notary_alone_wide', 'office_am_ots_oper': 'office_am_wide', 'office_am_phone': 'office_am_wide', 'car_ots_oper': 'car_wide',
              'flat_ots_buyer': 'flat_wide', 'flat_ots_wife': 'flat_wide', 'flat_photo': 'flat_wide', 'flat_inspect': 'flat_wide',
              # кабинет вечером, утром второго дня и ночью — тот же кабинет, рисунок держит утренний общий план
              'office_eve_wide': 'office_am_wide', 'office_eve_ots_expert': 'office_eve_wide', 'office_eve_lens': 'office_eve_wide',
@@ -705,8 +711,8 @@ NOTES = {
              'portraits or photographs; the wooden step-ladder stands upright on four straight legs, the bucket beside it.')
        for sid in ('flat_wide', 'flat_ots_buyer', 'flat_ots_wife', 'flat_photo')},
     'notary_wide': 'There is no chair in front of the desk, exactly as in image 1.',
-    'notary_alone_wide': ('There is no chair in front of the desk, and the typewriter by the window is completely under a '
-                          'grey cover, exactly as in image 1.'),
+    **{sid: ('The typewriter on the small desk by the window is OPEN with a sheet of paper sticking out of the roller and '
+             'nobody at it, exactly as in image 1 — no dust cover; Kovrigin has no jacket on.') for sid in ('notary_alone_wide', 'notary_alone_ots')},
     'notary_register': ('Keep every handwritten word of the register exactly as written in image 1, on the same lines: the '
                         'text must stay legible and identical; row 1187 stays in brighter blue ink.'),
 }

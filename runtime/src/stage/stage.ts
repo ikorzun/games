@@ -88,6 +88,9 @@ export class Stage implements IStage {
   constructor(renderer: ISceneRenderer, opts: StageOptions = {}) {
     this.renderer = renderer;
     this.assets = opts.assets ?? NO_ASSETS;
+    // Ориентация известна сразу: режим графики приходит из настроек до mount, и каталог должен с первого кадра отдавать
+    // квадраты на телефоне, а не 16:9 (владелец 2026-10-15: «сразу загружать только квадратные картинки»).
+    this.portraitMq = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(orientation: portrait)') : null;
     this.hostEl = h('div', { class: 'vn-stage__host' });
     this.camEl = h('div', { class: 'vn-stage__cam' }, this.hostEl);
     this.gradeEl = h('div', { class: 'vn-stage__grade' }, this.camEl);
@@ -133,7 +136,6 @@ export class Stage implements IStage {
   async mount(parent: HTMLElement): Promise<void> {
     parent.appendChild(this.el);
     await this.renderer.mount(this.hostEl);
-    this.portraitMq = typeof window.matchMedia === 'function' ? window.matchMedia('(orientation: portrait)') : null;
     this.portraitMq?.addEventListener?.('change', this.onOrientation);
     if (this.graphics === 'memory') this.refreshGraphics(); // режим пришёл из настроек раньше, чем сцена поднялась
   }
@@ -187,10 +189,13 @@ export class Stage implements IStage {
     this.updateSquare();
   }
 
-  /** Квадратный кадр («Воспоминания» на вертикальном экране): область кадра над текстом — квадратная. */
+  /**
+   * «Воспоминания» на вертикальном экране: область кадра над текстом всегда квадратная, на любом кадре — квадрат, фон или
+   * кадр без квадрата (его 16:9 кадрируется в квадрат). Раньше высота прыгала между квадратом и 16:9 от кадра к кадру
+   * (владелец 2026-10-15).
+   */
   private updateSquare(): void {
-    const shot = this.view?.shot ?? null;
-    this.el.parentElement?.classList.toggle('is-square', shot !== null && (this.assets.shotIsSquare?.(shot) ?? false));
+    this.el.parentElement?.classList.toggle('is-square', this.graphics === 'memory' && (this.portraitMq?.matches ?? false));
   }
 
   /** Пауза платформы / вкладки в фоне: камкордер останавливает цикл. */

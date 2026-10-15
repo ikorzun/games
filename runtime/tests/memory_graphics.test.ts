@@ -38,7 +38,11 @@ describe('каталог: кадры «Воспоминаний»', () => {
   const ep = miniEpisode({ s1: { steps: [{ do: 'end', ending: 'e_main' }] } });
   ep.assets = {
     ...ep.assets,
-    backgrounds: [{ id: 'bg_room', path: 'assets/x/room.webp', memory: 'assets/m/room.webp' }, { id: 'bg_plain', path: 'assets/x/plain.webp' }],
+    backgrounds: [
+      { id: 'bg_room', path: 'assets/x/room.webp', memory: 'assets/m/room.webp' },
+      { id: 'bg_plain', path: 'assets/x/plain.webp' },
+      { id: 'bg_wide', path: 'assets/x/wide_bg.webp', memory: 'assets/m/wide.webp' }, // фон — тот же файл, что общий план
+    ],
     shots: [
       {
         id: 'sh_full', set: 'room', bg: 'bg_room', kind: 'wide', angle: 'eye', file: 'assets/x/wide.webp',
@@ -68,6 +72,7 @@ describe('каталог: кадры «Воспоминаний»', () => {
     expect(urls(cat.shotMask('sh_full', 'a'))).toEqual(['./assets/m/wide.a.webp']);
     expect(urls(cat.bgChain('bg_room'))).toEqual(['./assets/m/room.webp', './assets/x/room.webp']);
     expect(urls(cat.bgChain('bg_plain'))).toEqual(['./assets/x/plain.webp']);
+    expect(urls(cat.bgChain('bg_wide'))).toEqual(['./assets/m/wide.webp', './assets/x/wide_bg.webp']); // горизонталь — 16:9
     expect(urls(cat.shotChain('sh_real'))).toEqual(['./assets/x/real.webp']); // у кадра нет «воспоминаний»
     expect(urls(cat.shotMask('sh_real', 'a'))).toEqual(['./assets/x/real.a.webp']);
     expect(cat.shotIsSquare('sh_full')).toBe(false);
@@ -88,6 +93,9 @@ describe('каталог: кадры «Воспоминаний»', () => {
     expect(cat.shotMask('sh_wide_only', 'a')).toBeNull(); // масок у «воспоминаний» этого кадра нет — без подсветки
     expect(cat.shotVideo('sh_full')).toBeNull(); // ролик 16:9 квадрат не заменяет
     expect(cat.shotVideo('sh_wide_only')).toEqual({ url: './assets/m/ots.mp4', loop: true });
+    // Фон сцены — тот же файл, что её общий план: на вертикальном экране сразу квадрат, 16:9 — только запасным.
+    expect(urls(cat.bgChain('bg_wide'))).toEqual(['./assets/m/wide.square.webp', './assets/m/wide.webp', './assets/x/wide_bg.webp']);
+    expect(urls(cat.bgChain('bg_room'))).toEqual(['./assets/m/room.webp', './assets/x/room.webp']); // квадрата нет
   });
 });
 

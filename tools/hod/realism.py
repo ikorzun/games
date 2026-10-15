@@ -212,8 +212,12 @@ FIX.update({
     'notary_wide': ("The visitor's chair in front of the desk is an ordinary bentwood chair at true human scale: its seat at "
                     "the height of Gromov's knee, its back below his waist. In the corridor beyond the door a queue sits on "
                     'a bench: mostly elderly men and women in light summer clothes, in different natural poses.'),
-    'notary_alone_wide': ('Tuesday: the typewriter on the small desk by the window is completely covered by a grey cover, '
-                          'with no sheet of paper; nobody sits at that desk.'),
+    'notary_alone_wide': ('The same office as image 1, the next day; the camera is in the same place as in image 1. Lyuda is '
+                          'not here: her small typing desk by the window is abandoned — the typewriter stands OPEN with a '
+                          "sheet of paper still sticking out of the roller, her chair pushed back askew, nobody at it. "
+                          "Kovrigin's grey jacket hangs on the coat rack. The visitor's chair is an ordinary bentwood chair at "
+                          'true human scale. In the corridor beyond the open door a queue still sits on the bench. Nobody '
+                          'looks at the camera.'),
     # Реестр — сверху, строки строго горизонтальны: под углом модель сдвигала колонки на строку (запись 1187 попадала
     # к «договору дарения»). Кадр снят отдельным промптом с прежним кадром как образцом стола и руки.
     'notary_register': (
@@ -296,7 +300,7 @@ FIX.update({
                   'only darkness and a distant streetlight.'),
 })
 # Пересъёмка с новой мизансценой: картинка 1 — только место, люди и свет; камера и расстановка — по FIX.
-RESTAGE = {'search_wide', 'search_keys', 'search_papers', 'field_wide', 'field_ots_expert', 'field_oper', 'field_find', 'bio_zoya'}
+RESTAGE = {'notary_alone_wide', 'search_wide', 'search_keys', 'search_papers', 'field_wide', 'field_ots_expert', 'field_oper', 'field_find', 'bio_zoya'}
 
 # Кто в кадре, если людей нет в CHARS / STAGING (фото на экранах биографий): описано в FIX.
 WHO = {'bio_zoya': 'WHO IS WHERE: as described in the FIX below.', 'bio_pyotr': 'WHO IS WHERE: as described in the FIX below.'}
@@ -353,6 +357,12 @@ NEW = {
         'view, never his back or the back of his head. Image 4 only gives the Wednesday light, the icon and the air freshener. '
         'Wednesday, late afternoon, low warm sun; through his side window and the windscreen the Khoroshevskoye highway and '
         'long apartment blocks.')},
+    'notary_alone_ots': {'set': 'hod_notary_alone', 'from': 'notary_ots_notary', 'staging': memory.STAGING['notary_alone_ots'], 'fix': (
+        "The camera exactly as in image 1 — over Gromov's shoulder at the RIGHT edge on Kovrigin behind his desk — but Gromov "
+        'now sits on the visitor\'s chair, so the camera is at the eye level of a seated person. Kovrigin is in a white shirt '
+        'with rolled-up sleeves and a loosened tie, no jacket, both hands clasped on the open register, tense and unsmiling. '
+        'On the LEFT by the window the abandoned typing desk: the typewriter OPEN with a sheet of paper sticking out of it, '
+        'nobody at it. Nobody looks at the camera.')},
     'car_d3_view': {'set': 'hod_car_d3', 'from': 'car_wide', 'staging': {}, 'fix': (
         "A view through the windscreen of Sayko's moving Zhiguli on a Wednesday evening in August 1993: the Khoroshevskoye "
         'highway, a few Soviet cars and a bus, a very long apartment block in low warm sun, poplars; the dashboard edge at the '

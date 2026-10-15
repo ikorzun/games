@@ -13165,6 +13165,7 @@
     "id": "bg_hod_bio",
     "path": "assets/ep01/hod/hod_bio/bio_zoya.webp",
     "season": "indoor",
+    "memory": "assets/ep01/hod_memory/hod_bio/bio_zoya.webp",
     "notes": "черновой общий план bio_zoya (лето 1993-го)"
    },
    {
@@ -15049,7 +15050,11 @@
     "kind": "wide",
     "angle": "eye",
     "cast": [],
-    "file": "assets/ep01/hod/hod_bio/bio_zoya.webp"
+    "file": "assets/ep01/hod/hod_bio/bio_zoya.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_bio/bio_zoya.webp",
+     "square": "assets/ep01/hod_memory/hod_bio/bio_zoya.square.webp"
+    }
    },
    {
     "id": "sh_bio_pyotr",
@@ -15058,7 +15063,11 @@
     "kind": "wide",
     "angle": "eye",
     "cast": [],
-    "file": "assets/ep01/hod/hod_bio/bio_pyotr.webp"
+    "file": "assets/ep01/hod/hod_bio/bio_pyotr.webp",
+    "memory": {
+     "file": "assets/ep01/hod_memory/hod_bio/bio_pyotr.webp",
+     "square": "assets/ep01/hod_memory/hod_bio/bio_pyotr.square.webp"
+    }
    },
    {
     "id": "sh_gromov_2004",
@@ -15316,10 +15325,12 @@
     "angle": "eye",
     "cast": [
      {
-      "who": "notary"
+      "who": "notary",
+      "mask": "assets/ep01/hod/hod_notary_alone/notary_alone_ots.notary.webp"
      },
      {
-      "who": "sledak"
+      "who": "sledak",
+      "mask": "assets/ep01/hod/hod_notary_alone/notary_alone_ots.sledak.webp"
      }
     ],
     "from": "sledak",

@@ -32,7 +32,7 @@ MEMORY = {
     'car_wide': ('hod_car', ['oper', 'sledak']),
     'car_ots_oper': ('hod_car', ['_', 'oper', 'sledak'], ['oper', 'sledak']),  # обрывок у левого края (заднее сиденье)
     'car_d2_wide': ('hod_car_d2', ['oper', 'sledak']),
-    'car_d2_ots_oper': ('hod_car_d2', ['_', 'oper', 'sledak'], ['_', 'oper', 'sledak']),  # обрывок у левого края
+    'car_d2_ots_oper': ('hod_car_d2', ['_', 'oper', 'sledak'], ['oper', 'sledak']),  # спинка сиденья у левого края (16:9); лишняя кисть убрана
     'car_d3_wide': ('hod_car_d3', ['oper', 'sledak']),
     'car_d3_ots_oper': ('hod_car_d3', ['_', 'oper', 'sledak'], ['oper', 'sledak']),  # спинка сиденья у левого края (16:9)
     'flat_wide': ('hod_flat', ['oper', 'buyer', 'sledak', 'lapin_wife']),
@@ -55,7 +55,8 @@ MEMORY = {
     'landing_open_ots': ('hod_landing_open', ['neighbor', 'sledak']),
     'notary_wide': ('hod_notary', ['assistant', 'notary', 'sledak', 'oper']),
     'notary_ots_notary': ('hod_notary', ['notary', 'sledak']),
-    'notary_alone_wide': ('hod_notary_alone', ['notary', 'sledak', 'oper']),
+    'notary_alone_wide': ('hod_notary_alone', ['oper', 'notary', 'sledak']),  # вторник: Сайко у окна слева (2026-10-15)
+    'notary_alone_ots': ('hod_notary_alone', ['notary', 'sledak']),
     'stairs_wide': ('hod_notary_stairs', ['sledak', 'assistant', 'oper']),
     'stairs_ots_assistant': ('hod_notary_stairs', ['assistant', 'oper']),
     'zhek_wide': ('hod_zhek', ['_', 'oper', 'sledak']),  # лавка слева; паспортистку за окошком Vision не видит
