@@ -14216,11 +14216,9 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_car/car_view.webp",
-    "video": "assets/ep01/hod/hod_car/car_view.mp4",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_car/car_view.webp",
-     "square": "assets/ep01/hod_memory/hod_car/car_view.square.webp",
-     "video": "assets/ep01/hod_memory/hod_car/car_view.mp4"
+     "square": "assets/ep01/hod_memory/hod_car/car_view.square.webp"
     }
    },
    {
@@ -14295,8 +14293,7 @@
     "file": "assets/ep01/hod/hod_car_d2/car_d2_view.webp",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_car_d2/car_d2_view.webp",
-     "square": "assets/ep01/hod_memory/hod_car_d2/car_d2_view.square.webp",
-     "video": "assets/ep01/hod_memory/hod_car_d2/car_d2_view.mp4"
+     "square": "assets/ep01/hod_memory/hod_car_d2/car_d2_view.square.webp"
     }
    },
    {
@@ -14369,11 +14366,9 @@
     "angle": "eye",
     "cast": [],
     "file": "assets/ep01/hod/hod_car_d3/car_d3_view.webp",
-    "video": "assets/ep01/hod/hod_car_d3/car_d3_view.mp4",
     "memory": {
      "file": "assets/ep01/hod_memory/hod_car_d3/car_d3_view.webp",
-     "square": "assets/ep01/hod_memory/hod_car_d3/car_d3_view.square.webp",
-     "video": "assets/ep01/hod_memory/hod_car_d3/car_d3_view.mp4"
+     "square": "assets/ep01/hod_memory/hod_car_d3/car_d3_view.square.webp"
     }
    },
    {
