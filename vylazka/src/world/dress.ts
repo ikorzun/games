@@ -111,14 +111,23 @@ export function dressRoom(ctx: RoomCtx): void {
     const rAlong = rnd();
     let wallTaken = s.used;
 
-    // 1. Свободная стена: предмет на пол или на стену.
-    if (!s.used && !s.hazard && floorList && rPlace < (corridor ? 0.26 + 0.1 * tier : 0.72)) {
-      const name = pick(floorList, rPick);
-      const p = PROPS[name];
-      const maxDepth = s.deep ? 0.95 : 0.5;
-      if (p && p.mount !== 'ceiling' && p.mount !== 'free' && p.w <= 2.6 && (p.mount === 'wall' || p.d <= maxDepth)) {
+    // 1. Свободная стена: предмет на пол или на стену. Выбираем только из того, что сюда влезает:
+    // в комнате у глухой стены можно поставить и глубокое, в коридоре — лишь то, что не мешает пройти.
+    if (!s.used && !s.hazard && floorList && rPlace < (corridor ? 0.36 + 0.1 * tier : 0.75)) {
+      const maxDepth = s.deep ? 1.25 : 0.6;
+      // Рядом с приметой, которую игроку предстоит снять на камеру, — только низкое: высокий предмет
+      // у соседней стены мог бы заслонить её со всех точек, откуда она видна.
+      const o = s.xf.pt(0, 0, 0);
+      const nearMark = ctx.landmarks.some((m) => m.room === ctx.room.id && Math.hypot(m.x - o[0], m.z - o[2]) < 3.2);
+      const fitting = floorList.filter(([name]) => {
+        const p = PROPS[name];
+        return p !== undefined && p.mount !== 'ceiling' && p.w <= 2.6 && (p.mount === 'wall' || p.d <= maxDepth) && (!nearMark || p.mount === 'wall' || p.h <= 1.0);
+      });
+      if (fitting.length > 0) {
+        const p = PROPS[pick(fitting, rPick)]!;
         const x = along(s, p.w, p.d, corridor ? rX : 0.5 + (rX - 0.5) * 0.3);
-        p.build(s.xf.child(x, p.mount === 'wall' ? (p.y ?? 1.2) : 0, 0), seed);
+        // Отдельно стоящий предмет описан от своего центра: придвигаем его спиной к стене.
+        p.build(s.xf.child(x, p.mount === 'wall' ? (p.y ?? 1.2) : 0, p.mount === 'free' ? p.d / 2 + 0.03 : 0), seed);
         s.used = true;
         // Низкое или узкое оставляет стену над собой свободной для надписи.
         wallTaken = p.mount === 'wall' || p.h > 1.3;
@@ -145,7 +154,8 @@ export function dressRoom(ctx: RoomCtx): void {
     // 3. Под потолком вдоль стены: воздуховод или кабельный лоток (не над провалами — там и так тесно).
     if (alongList && !s.hazard && rAlong < (corridor ? 0.16 : 0.3)) {
       const p = PROPS[pick(alongList, rnd())];
-      if (p && p.mount === 'ceiling' && p.h <= ctx.h - 2.05) p.build(s.xf.child(0, ctx.h, 0), seed);
+      // Свисающий конец кабеля тонкий и не мешает пройти; сам короб должен остаться выше головы.
+      if (p && p.mount === 'ceiling' && p.h <= 1.0) p.build(s.xf.child(0, ctx.h, 0), seed);
     }
   }
 
@@ -177,7 +187,8 @@ export function dressRoom(ctx: RoomCtx): void {
     if (r < 0.1 + 0.09 * tier) {
       const p = PROPS[pick(CEILING, rp)];
       // Сдвиг от центра: там может висеть лампа.
-      if (p && p.mount === 'ceiling') p.build(c.xf.child(ox > 0 ? 0.55 + ox * 0.4 : -0.55 + ox * 0.4, ctx.h, oz * 0.6 - p.d / 2), seed);
+      // В стороне от середины клетки: там ходят, и там может висеть лампа.
+      if (p && p.mount === 'ceiling') p.build(c.xf.child(ox > 0 ? 0.95 : -0.95, ctx.h, oz * 0.5 - p.d / 2, ox > 0 ? 1 : 3), seed);
     }
     const papers = PROPS.papers;
     if (papers && papers.mount === 'free' && (type === 'archive' || type === 'command' ? r > 0.45 : r > 0.93 - 0.03 * tier)) papers.build(c.xf.child(ox * 0.5, 0, oz * 0.5), seed);
