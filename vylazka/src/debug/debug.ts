@@ -2,6 +2,7 @@
  * Отладочный API window.__vz. Ставится и в боевой сборке: смоук в Chromium гоняет именно её.
  * Симуляцию можно заморозить и шагать вручную — так тесты не зависят от скорости машины.
  */
+import { showcaseNames } from '../world/showcase';
 import { normalizeLang } from '../core/i18n';
 import type { App } from '../app';
 import { STEP } from '../game';
@@ -68,6 +69,8 @@ export interface VzDebugApi {
   probe(): number[];
   missingKeys(): string[];
   /** Состояние звука: загружено, что просили и что прозвучало, какие петли идут. */
+  /** Имена предметов витрины (?level=show) по порядку расстановки. */
+  showcase(): string[];
   audio(): ReturnType<import('../audio/engine').AudioEngine['status']>;
   mute(on: boolean): void;
 }
@@ -275,6 +278,7 @@ export function installDebug(app: App): void {
     },
     missingKeys: () => [...app.i18n.missing],
     audio: () => app.sound.status(),
+    showcase: () => showcaseNames(app.params.get('props')?.split(',') ?? null),
     mute: (on) => app.setMuted(on),
   };
   window.__vz = api;

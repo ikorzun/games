@@ -30,6 +30,7 @@ import type { CardLine } from './ui/overlay';
 import { TouchControls } from './ui/touch_controls';
 import type { BuiltLevel } from './world/level';
 import { buildLevel } from './world/level_build';
+import { buildShowcase } from './world/showcase';
 import { buildTestLevel } from './world/test_level';
 
 const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
@@ -222,7 +223,7 @@ export class App {
     this.seed = seed >>> 0;
     this.rank = rank;
     if (this.testLevel) {
-      this.level = buildTestLevel();
+      this.level = this.params.get('level') === 'show' ? buildShowcase(this.params.get('props')?.split(',') ?? null) : buildTestLevel();
       this.game.loadLevel(this.level, null);
     } else {
       this.level = buildLevel(generateLayout(this.seed, rank));
