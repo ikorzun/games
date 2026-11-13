@@ -17,6 +17,7 @@ const smooth = (t: number): number => t * t * (3 - 2 * t);
 
 /** Фрактальный шум: octaves октав, начиная с px×py периодов на сторону. */
 export function fbmField(size: number, px: number, py: number, octaves: number, seed: number): Field {
+  if ((size & (size - 1)) !== 0) throw new Error('сторона шумового поля должна быть степенью двойки');
   const data = new Float32Array(size * size);
   let amp = 0.5;
   let norm = 0;
@@ -113,15 +114,19 @@ export function cellField(size: number, cells: number, seed: number): CellField 
   return { size, near, edge, id };
 }
 
-/** Прочитать поле с целыми множителями частоты и сдвигом в текселях (бесшовность сохраняется). */
+/**
+ * Прочитать поле с целыми множителями частоты и сдвигом в текселях (бесшовность сохраняется).
+ * Сторона поля — степень двойки: заворот считается маской, а не делением (это самое горячее место запекания).
+ */
 export function at(f: Field, x: number, y: number, kx = 1, ky = kx, ox = 0, oy = 0): number {
-  const n = f.size;
-  return f.data[(((y * ky + oy) % n) + n) % n * n + ((((x * kx + ox) % n) + n) % n)]!;
+  const m = f.size - 1;
+  return f.data[((y * ky + oy) & m) * f.size + ((x * kx + ox) & m)]!;
 }
 
 /** То же для массива ячеистого поля. */
 export function atCell(a: Float32Array, size: number, x: number, y: number, k = 1, ox = 0, oy = 0): number {
-  return a[(((y * k + oy) % size) + size) % size * size + ((((x * k + ox) % size) + size) % size)]!;
+  const m = size - 1;
+  return a[((y * k + oy) & m) * size + ((x * k + ox) & m)]!;
 }
 
 export const sstep = (a: number, b: number, v: number): number => {

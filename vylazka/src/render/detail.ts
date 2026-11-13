@@ -35,6 +35,16 @@ export const DETAIL_LAYERS = 17;
 
 type Texel = [number, number, number, number];
 
+/** Один общий кортеж на все тексели: миллион мелких массивов стоил бы запуску лишних долей секунды. */
+const TEXEL: Texel = [0, 0, 0, 0];
+function px(h: number, a: number, g: number, s: number): Texel {
+  TEXEL[0] = h;
+  TEXEL[1] = a;
+  TEXEL[2] = g;
+  TEXEL[3] = s;
+  return TEXEL;
+}
+
 export interface DetailStack {
   /** RGBA, слой за слоем; строка 0 — нижняя. */
   data: Uint8Array;
@@ -81,7 +91,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const tie = band % 2 === 0 ? sstep(0.021, 0.012, Math.hypot((tu - Math.floor(tu) - 0.5) / 4, (t - 0.5) / boards)) : 0;
     const h = 0.55 + (rnd - 0.5) * 0.22 + (grain - 0.5) * 0.16 + (at(mid, x, y) - 0.5) * 0.12 - seam * 0.35 - pore * 0.4 - cavity * 0.5 - tie * 0.6;
     const a = 0.5 + (rnd - 0.5) * 0.1 + (at(lo, x, y) - 0.5) * 0.22 + (at(mid, x, y) - 0.5) * 0.16 - seam * 0.14 - pore * 0.22 - cavity * 0.3 - tie * 0.3;
-    return [h, a, 0.22 - pore * 0.2, seam];
+    return px(h, a, 0.22 - pore * 0.2, seam);
   };
 
   // 1. Побелка по штукатурке: мазки кисти, местами слой отстал и осыпался.
@@ -92,7 +102,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const rim = sstep(0.55, 0.585, m) * (1 - flake);
     const h = 0.62 + (stroke - 0.5) * 0.14 + (at(hi, x, y) - 0.5) * 0.08 + rim * 0.1 - flake * 0.42;
     const a = 0.52 + (at(lo, x, y) - 0.5) * 0.14 + (stroke - 0.5) * 0.06 - flake * 0.16 - rim * 0.05;
-    return [h, a, 0.1, flake];
+    return px(h, a, 0.1, flake);
   };
 
   // 2. Масляная краска: «апельсиновая корка», редкие пузыри, потёртости.
@@ -103,7 +113,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const run = at(grainV, x, y);
     const h = 0.5 + (peel - 0.5) * 0.1 + blister * 0.45 + (run - 0.5) * 0.06 - scuff * 0.08;
     const a = 0.5 + (at(lo, x, y) - 0.5) * 0.14 + (run - 0.5) * 0.06 - scuff * 0.1;
-    return [h, a, 0.9 - scuff * 0.55 - blister * 0.2, blister];
+    return px(h, a, 0.9 - scuff * 0.55 - blister * 0.2, blister);
   };
 
   // 3. Ржавчина: язвы и чешуя.
@@ -112,7 +122,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const id = atCell(cs.id, N, x, y);
     const h = 0.25 + at(mid, x, y) * 0.3 + at(hi, x, y) * 0.2 + scale * (0.1 + id * 0.25);
     const a = 0.5 + (at(lo, x, y) - 0.5) * 0.5 + (at(hi, x, y) - 0.5) * 0.25 + (id - 0.5) * 0.2 - (1 - scale) * 0.2;
-    return [h, a, 0.08, 1 - scale];
+    return px(h, a, 0.08, 1 - scale);
   };
 
   // 4. Крашеный или голый металл: царапины вдоль и поперёк, пологие вмятины.
@@ -123,7 +133,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const dent = at(lo, x, y, 2, 2, 3, 40);
     const h = 0.5 + (dent - 0.5) * 0.25 + (at(hi, x, y) - 0.5) * 0.05 - sc * 0.3;
     const a = 0.5 + (at(mid, x, y) - 0.5) * 0.1 - sc * 0.08;
-    return [h, a, 0.85 - sc * 0.6 - sstep(0.6, 0.8, at(mid, x, y, 1, 1, 60, 60)) * 0.25, sc];
+    return px(h, a, 0.85 - sc * 0.6 - sstep(0.6, 0.8, at(mid, x, y, 1, 1, 60, 60)) * 0.25, sc);
   };
 
   // 5. Дерево: волокна вдоль U, доски со щелями, редкие сучки.
@@ -138,7 +148,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const knot = sstep(0.14, 0.04, atCell(cl.near, N, x, y)) * sstep(0.7, 0.8, atCell(cl.id, N, x, y));
     const h = 0.5 + (gr - 0.5) * 0.4 - gap * 0.5 - knot * 0.2;
     const a = 0.5 + (gr - 0.5) * 0.34 + (rnd - 0.5) * 0.16 - gap * 0.3 - knot * 0.3 + (at(lo, x, y) - 0.5) * 0.1;
-    return [h, a, 0.3 - gap * 0.2, gap];
+    return px(h, a, 0.3 - gap * 0.2, gap);
   };
 
   // 6. Ткань: переплетение нитей и ворс.
@@ -148,7 +158,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const weave = Math.sin(u) * Math.sin(v) * 0.5 + 0.5;
     const h = 0.4 + weave * 0.35 + (at(hi, x, y) - 0.5) * 0.15;
     const a = 0.5 + (weave - 0.5) * 0.12 + (at(mid, x, y) - 0.5) * 0.14 + (at(lo, x, y) - 0.5) * 0.12;
-    return [h, a, 0.04, weave];
+    return px(h, a, 0.04, weave);
   };
 
   // 7. Керамическая плитка: 8×8 на тайл, затирка в швах, сколы и трещины на некоторых.
@@ -168,7 +178,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const body = 0.72 + sstep(0.0, 0.2, d) * 0.06 + (rnd - 0.5) * 0.05;
     const h = body * (1 - grout) + 0.3 * grout - chipped * 0.3 - crack * 0.25;
     const a = 0.5 + (rnd - 0.5) * 0.12 - grout * 0.22 - chipped * 0.2 - crack * 0.25 + (at(lo, x, y) - 0.5) * 0.06;
-    return [h, a, clamp01(0.97 - grout * 0.85 - chipped * 0.7 - crack * 0.5), grout];
+    return px(h, a, clamp01(0.97 - grout * 0.85 - chipped * 0.7 - crack * 0.5), grout);
   };
 
   // 8. Бетонный пол: стяжка с щебнем, трещины, затёртые пятна.
@@ -178,14 +188,14 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const worn = at(lo, x, y, 2, 2, 9, 9);
     const h = 0.45 + (at(mid, x, y) - 0.5) * 0.3 + pebble * 0.22 + (at(hi, x, y) - 0.5) * 0.1 - crack * 0.5;
     const a = 0.5 + (worn - 0.5) * 0.3 + (at(mid, x, y, 1, 1, 7, 3) - 0.5) * 0.18 + pebble * 0.07 - crack * 0.32;
-    return [h, a, clamp01(0.2 + (worn - 0.5) * 0.5 - crack * 0.2), crack];
+    return px(h, a, clamp01(0.2 + (worn - 0.5) * 0.5 - crack * 0.2), crack);
   };
 
   // 9. Пластик, резина, кожзам: мелкая шагрень.
   layers[DETAIL.plastic] = (x, y) => {
     const h = 0.5 + (at(hi, x, y) - 0.5) * 0.3;
     const a = 0.5 + (at(mid, x, y) - 0.5) * 0.1;
-    return [h, a, 0.7 - sstep(0.6, 0.8, at(mid, x, y, 1, 1, 33, 8)) * 0.3, 0];
+    return px(h, a, 0.7 - sstep(0.6, 0.8, at(mid, x, y, 1, 1, 33, 8)) * 0.3, 0);
   };
 
   // 10. Бумага и картон: волокна, заломы, рыжие пятна.
@@ -194,7 +204,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const fox = sstep(0.74, 0.82, at(mid, x, y, 1, 1, 14, 66));
     const h = 0.5 + (at(grainU, x, y) - 0.5) * 0.12 + (at(hi, x, y) - 0.5) * 0.1 - crease * 0.3;
     const a = 0.52 + (at(lo, x, y) - 0.5) * 0.16 - fox * 0.16 - crease * 0.1;
-    return [h, a, 0.05, crease];
+    return px(h, a, 0.05, crease);
   };
 
   // 11. Кирпичная кладка: 4 кирпича × 12 рядов на тайл, перевязка в полкирпича, шов раствора.
@@ -214,7 +224,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const face = 0.62 + (rnd - 0.5) * 0.2 + (worn - 0.5) * 0.16 + (at(mid, x, y) - 0.5) * 0.14;
     const h = face * (1 - mortar) + (0.22 + (worn - 0.5) * 0.1) * mortar;
     const a = (0.5 + (rnd - 0.5) * 0.3 + (at(mid, x, y) - 0.5) * 0.14) * (1 - mortar) + 0.72 * mortar;
-    return [h, a, 0.1, mortar];
+    return px(h, a, 0.1, mortar);
   };
 
   // 12. Земля, щебень, обломки.
@@ -223,7 +233,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const id = atCell(cs.id, N, x, y);
     const h = 0.2 + at(lo, x, y) * 0.25 + at(mid, x, y) * 0.2 + stone * (0.15 + id * 0.3);
     const a = 0.5 + (at(mid, x, y) - 0.5) * 0.3 + (id - 0.5) * 0.3 * stone + (at(hi, x, y) - 0.5) * 0.15;
-    return [h, a, 0.05, stone];
+    return px(h, a, 0.05, stone);
   };
 
   // 13. Обмотка труб: витки ткани с нахлёстом, пропитанные и растрескавшиеся.
@@ -235,7 +245,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const crack = sstep(0.03, 0.0, atCell(cs.edge, N, x, y)) * sstep(0.5, 0.7, at(lo, x, y, 2, 2));
     const h = 0.4 + (1 - t) * 0.25 * lap + (at(hi, x, y) - 0.5) * 0.14 - (1 - lap) * 0.3 - crack * 0.3;
     const a = 0.5 + (at(lo, x, y) - 0.5) * 0.24 + (at(mid, x, y) - 0.5) * 0.12 - (1 - lap) * 0.2 - crack * 0.2;
-    return [h, a, 0.08, 1 - lap];
+    return px(h, a, 0.08, 1 - lap);
   };
 
   // 14. Оцинковка: кристаллы цинка — плоские лоскуты разной яркости.
@@ -244,7 +254,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const edge = sstep(0.0, 0.04, atCell(cs.edge, N, x, y));
     const h = 0.5 + (id - 0.5) * 0.08 + (at(lo, x, y, 2, 2) - 0.5) * 0.2;
     const a = 0.5 + (id - 0.5) * 0.3 * edge + (at(lo, x, y) - 0.5) * 0.1;
-    return [h, a, 0.75 - sstep(0.6, 0.8, at(mid, x, y)) * 0.4, id];
+    return px(h, a, 0.75 - sstep(0.6, 0.8, at(mid, x, y)) * 0.4, id);
   };
 
   // 15. Гладкое: эмаль, стекло — едва заметные царапины и пыль.
@@ -253,12 +263,12 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const speck = sstep(0.78, 0.84, at(hi, x, y));
     const h = 0.5 - sc * 0.15 + speck * 0.05;
     const a = 0.5 + (at(lo, x, y) - 0.5) * 0.06 - speck * 0.06;
-    return [h, a, 0.97 - sc * 0.5 - speck * 0.35, speck];
+    return px(h, a, 0.97 - sc * 0.5 - speck * 0.35, speck);
   };
 
   // 16. Чешуйки: лоскуты, на которые трескается краска перед тем как отвалиться.
   const fk = cellField(N, 12, seed + 9);
-  layers[DETAIL.flakes] = (x, y) => [atCell(fk.id, N, x, y), atCell(fk.edge, N, x, y) * 1.6, hash01(Math.floor(atCell(fk.id, N, x, y) * 4096), 5, seed), atCell(fk.near, N, x, y)];
+  layers[DETAIL.flakes] = (x, y) => px(atCell(fk.id, N, x, y), atCell(fk.edge, N, x, y) * 1.6, hash01(Math.floor(atCell(fk.id, N, x, y) * 4096), 5, seed), atCell(fk.near, N, x, y));
 
   const data = new Uint8Array(N * N * 4 * DETAIL_LAYERS);
   for (let l = 0; l < DETAIL_LAYERS; l++) {

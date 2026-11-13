@@ -91,6 +91,11 @@ export interface MatcapAtlas {
   base: Vec3[];
 }
 
+/** Таблица «линейный цвет → sRGB8»: степень на каждый из полутора миллионов каналов считать дорого. */
+const SRGB_LUT = new Uint8Array(4097);
+for (let i = 0; i <= 4096; i++) SRGB_LUT[i] = linearToSrgb8(i / 4096);
+const enc = (v: number): number => SRGB_LUT[Math.round((v < 0 ? 0 : v > 1 ? 1 : v) * 4096)]!;
+
 export function bakeMatcapAtlas(defs: readonly MatDef[], cell = 128): MatcapAtlas {
   const width = cell * ATLAS_COLS;
   const height = cell * ATLAS_ROWS;
@@ -117,9 +122,9 @@ export function bakeMatcapAtlas(defs: readonly MatDef[], cell = 128): MatcapAtla
         const c = shadeMatcap(def, albedo, x, y, z, m * 13 + 1);
         const o = ((row * cell + py) * width + col * cell + px) * 4;
         // Блик может быть ярче единицы: в атласе он упирается в белое, как пересвет на записи.
-        data[o] = linearToSrgb8(Math.min(1, c[0]));
-        data[o + 1] = linearToSrgb8(Math.min(1, c[1]));
-        data[o + 2] = linearToSrgb8(Math.min(1, c[2]));
+        data[o] = enc(c[0]);
+        data[o + 1] = enc(c[1]);
+        data[o + 2] = enc(c[2]);
         data[o + 3] = 255;
       }
     }
