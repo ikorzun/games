@@ -62,11 +62,12 @@ export class Overlay {
       '<div class="vz-overlay__box">' +
       '<div class="vz-overlay__title"></div><div class="vz-overlay__sub"></div>' +
       '<div class="vz-overlay__body"></div>' +
-      '<div class="vz-overlay__prompt"></div>' +
+      '<div class="vz-overlay__prompt"></div></div>' +
+      // Настройки прижаты к низу экрана: середина остаётся свободной, нажатие по ней — всегда «начать».
+      '<div class="vz-overlay__foot"><div class="vz-overlay__rotate"></div>' +
       '<div class="vz-overlay__row"><button type="button" class="vz-overlay__opt vz-overlay__opt--sound"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--quality"></button>' +
-      '<button type="button" class="vz-overlay__opt vz-overlay__opt--motion"></button></div>' +
-      '<div class="vz-overlay__rotate"></div></div>';
+      '<button type="button" class="vz-overlay__opt vz-overlay__opt--motion"></button></div></div>';
     parent.append(this.el);
     const q = (sel: string): HTMLElement => this.el.querySelector(sel) as HTMLElement;
     this.title = q('.vz-overlay__title');

@@ -163,6 +163,7 @@ body {
   position: absolute;
   inset: 0;
   display: none;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.78);
@@ -187,6 +188,16 @@ body {
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  /* Карточка — по центру места, оставшегося над настройками. */
+  margin: auto 0;
+}
+.vz-overlay__foot {
+  flex: none;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5em;
 }
 .vz-overlay__title {
   font-size: clamp(30px, 7vmin, 68px);
@@ -229,7 +240,6 @@ body {
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.8em;
-  margin-top: 1.4em;
 }
 .vz-overlay__opt {
   font: inherit;
@@ -250,7 +260,6 @@ body {
 }
 .vz-overlay__rotate {
   display: none;
-  margin-top: 1em;
   font-size: 14px;
   opacity: 0.6;
 }
@@ -596,9 +605,6 @@ body {
   }
   .vz-overlay__prompt {
     margin-top: 0.4em;
-  }
-  .vz-overlay__row {
-    margin-top: 0.5em;
   }
   .vz-overlay__body {
     font-size: 14px;
