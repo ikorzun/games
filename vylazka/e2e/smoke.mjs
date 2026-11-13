@@ -850,12 +850,13 @@ async function scenarioAudio(browser, baseUrl) {
   check('в вылазке идут гул убежища и дыхание, музыки нет', au.loops.includes('amb_bunker') && au.loops.includes('breath_calm') && !au.loops.includes('music_menu'), au.loops.join(', '));
 
   // Шаги: идём отсчитанными шагами симуляции (частота кадров в тестовом браузере непредсказуема),
-  // а между порциями даём пройти настоящему кадру — шаг озвучивается в нём.
+  // а после каждой порции дожидаемся двух настоящих кадров — шаг озвучивается в кадре. Ждать по часам
+  // нельзя: на загруженной машине кадр программного рендера длится дольше любой разумной паузы.
   await vz(page, () => window.__vz.freeze(true));
   await page.keyboard.down('KeyW');
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 8; i++) {
     await vz(page, () => window.__vz.tick(24));
-    await sleep(160);
+    await vz(page, () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(true)))));
   }
   await page.keyboard.up('KeyW');
   au = await vz(page, () => window.__vz.audio());
