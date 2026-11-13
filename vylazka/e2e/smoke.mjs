@@ -849,18 +849,22 @@ async function scenarioAudio(browser, baseUrl) {
   au = await vz(page, () => window.__vz.audio());
   check('в вылазке идут гул убежища и дыхание, музыки нет', au.loops.includes('amb_bunker') && au.loops.includes('breath_calm') && !au.loops.includes('music_menu'), au.loops.join(', '));
 
-  // Шаги: идём отсчитанными шагами симуляции (частота кадров в тестовом браузере непредсказуема),
-  // а после каждой порции дожидаемся двух настоящих кадров — шаг озвучивается в кадре. Ждать по часам
-  // нельзя: на загруженной машине кадр программного рендера длится дольше любой разумной паузы.
+  // Шаги: идём отсчитанными шагами симуляции с явным вводом (частота кадров в тестовом браузере
+  // непредсказуема, а зажатую клавишу может сбросить потеря фокуса окна — клавиатуру проверяет другой
+  // сценарий). После каждой порции дожидаемся двух настоящих кадров: шаг озвучивается в кадре.
   await vz(page, () => window.__vz.freeze(true));
-  await page.keyboard.down('KeyW');
+  const walkFrom = (await state(page)).pos;
+  let walked = await state(page);
   for (let i = 0; i < 8; i++) {
-    await vz(page, () => window.__vz.tick(24));
+    walked = await vz(page, () => window.__vz.step(24, { moveZ: 1 }));
     await vz(page, () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(true)))));
   }
-  await page.keyboard.up('KeyW');
   au = await vz(page, () => window.__vz.audio());
-  check('шаги по бетону звучат на ходу', (au.played.step_concrete ?? 0) >= 2, `сыграно ${au.played.step_concrete ?? 0}`);
+  check(
+    'шаги по бетону звучат на ходу',
+    (au.played.step_concrete ?? 0) >= 2,
+    `сыграно ${au.played.step_concrete ?? 0}, просили ${au.asked.step_concrete ?? 0}, пройдено ${Math.hypot(walked.pos[0] - walkFrom[0], walked.pos[2] - walkFrom[2]).toFixed(2)} м, звук ${au.state}, пауза: ${JSON.stringify(walked.pauseReasons)}`,
+  );
 
   // Фонарь: щелчок выключателя, отказ, дребезг при тряске, оживление.
   await vz(page, () => window.__vz.freeze(true));
