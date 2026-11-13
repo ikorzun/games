@@ -591,7 +591,9 @@ export class GameRenderer {
     (lu.uLightPosV!.value as THREE.Vector3).set(v.lightPos[0], v.lightPos[1], v.lightPos[2]).applyMatrix4(cam.matrixWorldInverse);
     (lu.uLightDirV!.value as THREE.Vector3).set(v.lightDir[0], v.lightDir[1], v.lightDir[2]).transformDirection(cam.matrixWorldInverse);
     // Поверхности в грязи и рельефе отражают меньше, чем ровная краска: фонарь взят с запасом.
-    const k = 3.3 * v.lightIntensity;
+    // Лампа фонаря чуть дышит: контакт неидеален, даже когда фонарь «горит ровно».
+    const breathe = 1 + 0.018 * Math.sin(v.time * 31.0) + 0.012 * Math.sin(v.time * 7.3 + 1.7);
+    const k = 3.3 * v.lightIntensity * breathe;
     const w = v.lightWarmth;
     (lu.uLightColor!.value as THREE.Vector3).set(k, k * (0.94 - 0.2 * w), k * (0.82 - 0.4 * w));
     // Оси пятна фонаря: по ним ложатся разводы отражателя.

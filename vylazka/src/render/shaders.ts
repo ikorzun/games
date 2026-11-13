@@ -206,6 +206,15 @@ void main() {
   // Плесень: тёмные пятна в углах и под потолком.
   float mold = smoothstep(0.8, 0.96, g2.g * 0.5 + g1.r * 0.25 + crev * 0.45 + high * 0.25 + uDecay * 0.42) * step(0.5, float(cls)) * (1.0 - step(4.5, float(cls)));
   stain *= mix(vec3(1.0), vec3(0.3, 0.36, 0.25), mold * 0.85);
+  // Нижний ярус: по стенам, полу и потолку ползёт чёрная поросль — следы роя. Тонкие извилистые
+  // жилы и редкие «гнёзда» в углах; мокрая, чуть выпуклая.
+  float deep = smoothstep(0.62, 0.84, uDecay) * (1.0 - step(5.5, float(cls)));
+  float vein = 1.0 - smoothstep(0.0, 0.012 + 0.03 * g2.g, abs(g1.g - 0.52 + (g2.r - 0.5) * 0.14));
+  float nest = smoothstep(0.8, 0.92, g1.r * 0.55 + g2.g * 0.45 + crev * 0.35);
+  float slime = max(vein * smoothstep(0.35, 0.6, g1.r + crev * 0.5), nest) * deep;
+  stain *= mix(vec3(1.0), vec3(0.045, 0.05, 0.045), slime);
+  wet = max(wet, slime * 0.9);
+  H += slime * 0.006;
   // Потёки по стенам.
   shade *= 1.0 - wall * smoothstep(0.55, 0.9, g1.b) * (0.22 + 0.3 * uDecay) * ma.x;
   alb = mix(alb, 0.55 + 0.9 * d1.g, k);

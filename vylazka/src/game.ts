@@ -539,7 +539,7 @@ export class Game {
       gas: this.gasView,
       decay: 0.25 + 0.6 * depth,
       // Внизу воздух гуще: взвесь, пар от сырых стен; в газу луч упирается в муть.
-      haze: (0.009 + 0.008 * depth) * (1 + 8 * this.gasView),
+      haze: (0.008 + 0.004 * depth) * (1 + 9 * this.gasView),
       fade: this.fade,
       time: this.time,
       frame: this.frame,
