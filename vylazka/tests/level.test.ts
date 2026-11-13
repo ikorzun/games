@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { generateLayout, TIER_DROP } from '../src/gen/layout';
-import { FINDS, populate } from '../src/gen/populate';
+import { generateLayout, HOME_ROOMS, TIER_DROP } from '../src/gen/layout';
 import { createBody, DEFAULT_CONTROLLER, stepPlayer } from '../src/player/controller';
 import type { PlayerBody } from '../src/player/controller';
 import type { ColliderSet } from '../src/world/colliders';
 import type { BuiltLevel, NavNode } from '../src/world/level';
-import { buildItemsMesh } from '../src/world/items';
-import { buildLevel, PIT_HOLE } from '../src/world/level_build';
+import { buildLevel, cellToWorld, PIT_HOLE, tierFloor } from '../src/world/level_build';
 import { MAT_COUNT } from '../src/world/materials';
 
 const DT = 1 / 60;
@@ -237,33 +235,77 @@ describe('сборка уровня из плана', () => {
     expect(path(without, a!.id, bNode!.id)).not.toBeNull();
   });
 
-  it('наполнение: три цели по возрастанию глубины, находки и батарейки на каждом ярусе, без повторов', () => {
-    for (const rank of [1, 2, 3] as const) {
-      for (const seed of [1, 2, 3, 20041113, 999]) {
+  it('ни одна дверь не закрывает проём: в плоскости стены пусто, а свободная ширина прохода не меньше 0,9 м', () => {
+    let doors = 0;
+    for (const seed of [11, 20041113, 555, 9001, 31337, 77, 4242, 808]) {
+      for (const rank of [1, 3] as const) {
         const level = buildLevel(generateLayout(seed, rank));
-        const pop = populate(level, seed);
-        expect(populate(level, seed)).toEqual(pop);
-        expect(pop.objectives.length, `сид ${seed}, ранг ${rank}`).toBe(3);
-        const tiers = pop.objectives.map((o) => o.tier);
-        expect([...tiers].sort((x, y) => x - y)).toEqual(tiers);
-        expect(Math.max(...tiers)).toBe(level.layout!.tierCount - 1);
-        for (const o of pop.objectives) {
-          if (o.type === 'take') expect(pop.items[o.item!]!.type).toBe('find');
-          else expect(o.landmark!.id).not.toBe('exit');
-        }
-        const spotsUsed = new Set(pop.items.map((i) => `${i.x},${i.y},${i.z}`));
-        expect(spotsUsed.size).toBe(pop.items.length);
-        const findIds = pop.items.filter((i) => i.type === 'find').map((i) => i.find!);
-        expect(new Set(findIds).size).toBe(findIds.length);
-        for (const f of findIds) expect(FINDS.some((d) => d.id === f)).toBe(true);
-        for (let t = 0; t < level.layout!.tierCount; t++) {
-          expect(pop.items.filter((i) => i.type === 'battery' && i.tier === t).length, `батарейки, ярус ${t}`).toBe(2);
-          expect(pop.items.filter((i) => i.type === 'find' && i.tier === t).length, `находки, ярус ${t}`).toBeGreaterThanOrEqual(2);
-          const mesh = buildItemsMesh(pop.items, t, new Set());
-          expect(mesh!.index.length).toBeGreaterThan(0);
-          expect(buildItemsMesh(pop.items, t, new Set(pop.items.map((i) => i.id)))).toBeNull();
+        const boxes = level.colliders.boxes;
+        for (const e of level.layout!.edges) {
+          if (e.kind === 'open') continue;
+          doors += 1;
+          const wx = cellToWorld(e.cx) + (e.dir === 0 ? 1.5 : 0);
+          const wz = cellToWorld(e.cz) + (e.dir === 1 ? 1.5 : 0);
+          const y0 = tierFloor(e.tier);
+          // Ось прохода: у ребра к +x идём вдоль z, у ребра к +z — вдоль x.
+          const along = (b: { minX: number; maxX: number; minZ: number; maxZ: number }): [number, number] => (e.dir === 0 ? [b.minZ - wz, b.maxZ - wz] : [b.minX - wx, b.maxX - wx]);
+          const across = (b: { minX: number; maxX: number; minZ: number; maxZ: number }): [number, number] => (e.dir === 0 ? [b.minX - wx, b.maxX - wx] : [b.minZ - wz, b.maxZ - wz]);
+          // Преграда — всё, что выше порога и ниже притолоки; низкое перешагивается.
+          const blockers = boxes.filter((b) => !b.off && b.minY < y0 + 1.9 && b.maxY > y0 + 0.36);
+          const gaps: Array<[number, number]> = [];
+          for (const b of blockers) {
+            const [a0, a1] = along(b);
+            const [c0, c1] = across(b);
+            if (a1 <= -0.55 + 1e-3 || a0 >= 0.55 - 1e-3) continue;
+            // Плоскость самой стены: в проёме там не должно быть ничего.
+            const inFrame = c0 < 0.12 && c1 > -0.12;
+            if (inFrame) expect(false, `сид ${seed}/${rank}: дверь ${e.cx},${e.cz},${e.dir} забита преградой`).toBe(true);
+            // Рядом с проёмом (0,6 м в обе стороны) считаем оставшуюся ширину.
+            if (c0 < 0.6 && c1 > -0.6) gaps.push([Math.max(a0, -0.55), Math.min(a1, 0.55)]);
+          }
+          gaps.sort((p, q) => p[0] - q[0]);
+          let cursor = -0.55;
+          let best = 0;
+          for (const [g0, g1] of gaps) {
+            best = Math.max(best, g0 - cursor);
+            cursor = Math.max(cursor, g1);
+          }
+          best = Math.max(best, 0.55 - cursor);
+          expect(best, `сид ${seed}/${rank}: проход у двери ${e.cx},${e.cz},${e.dir} уже 0,9 м`).toBeGreaterThanOrEqual(0.9);
         }
       }
     }
+    expect(doors).toBeGreaterThan(100);
+  });
+
+  it('в каждой домашней комнате есть 2–3 места для вещей, и стоят они внутри комнаты на полу или на столе', () => {
+    let homes = 0;
+    for (const seed of [11, 20041113, 555, 9001, 31337, 77, 4242, 808, 5, 6]) {
+      const level = buildLevel(generateLayout(seed, 3));
+      for (const r of level.layout!.rooms) {
+        if (!HOME_ROOMS.has(r.type)) continue;
+        homes += 1;
+        const mine = level.spots.filter((p) => p.room === r.id);
+        expect(mine.length, `сид ${seed}: ${r.type} (${r.id})`).toBeGreaterThanOrEqual(2);
+        expect(mine.length, `сид ${seed}: ${r.type} (${r.id})`).toBeLessThanOrEqual(4);
+        for (const p of mine) {
+          expect(p.tier).toBe(r.tier);
+          expect(r.cells.some(([x, z]) => Math.abs(p.x - cellToWorld(x)) <= 1.5 && Math.abs(p.z - cellToWorld(z)) <= 1.5), `сид ${seed}: место вне ${r.type}`).toBe(true);
+        }
+        // Приметная вещь по типу комнаты стоит в каждой (у прихожей, кухни и т. д. id совпадает с типом).
+        expect(level.landmarks.some((m) => m.room === r.id), `сид ${seed}: у ${r.type} нет приметы`).toBe(true);
+      }
+    }
+    expect(homes).toBeGreaterThan(40);
+  });
+
+  it('двери бывают разные: пустые проёмы, распахнутые, прислонённые и лежащие створки; хеш по ребру повторяем', () => {
+    // Створки сорванных дверей — отдельные предметы: по числу коллайдеров и вершин уровень отличается от «все двери распахнуты»,
+    // а повторная сборка того же сида даёт то же самое.
+    const a = buildLevel(generateLayout(20041113, 3));
+    const b = buildLevel(generateLayout(20041113, 3));
+    expect(a.colliders.boxes).toEqual(b.colliders.boxes);
+    const leaves = a.colliders.boxes.filter((x) => Math.abs(x.maxY - x.minY - 2.03) < 0.03 && Math.abs(x.maxX - x.minX - 0.95) < 0.02);
+    expect(leaves.length + a.colliders.boxes.filter((x) => Math.abs(x.maxY - x.minY - 2.0) < 0.03 && Math.abs(x.maxZ - x.minZ - 1.05) < 0.02).length).toBeGreaterThan(0);
   });
 });

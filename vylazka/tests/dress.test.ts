@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { generateLayout } from '../src/gen/layout';
+import { generateLayout, HOME_ROOMS } from '../src/gen/layout';
 import { DRESS_TABLES } from '../src/world/dress';
 import { buildLevel } from '../src/world/level_build';
 import { MAT } from '../src/world/materials';
-import { PROPS } from '../src/world/props_more';
+import { ALL_PROPS as PROPS } from '../src/world/props_all';
+import { HOME_PROPS } from '../src/world/props_home';
 import { SIGN } from '../src/world/signs';
 
 describe('дозаполнение помещений', () => {
@@ -44,5 +45,17 @@ describe('дозаполнение помещений', () => {
     // Четыре вершины на знак: у дверей, на стенах, на гермодверях.
     expect(signs / 4).toBeGreaterThan(40);
     expect(a.colliders.boxes.length).toBe(b.colliders.boxes.length);
+  });
+
+  it('в домашние комнаты не ставят предметы убежища, а в убежище домашнее попадает только по одному и с малым весом', () => {
+    for (const [type, list] of Object.entries(DRESS_TABLES.FLOOR)) {
+      const home = HOME_ROOMS.has(type as never);
+      const total = list!.reduce((s, [, w]) => s + w, 0);
+      for (const [name, w] of list!) {
+        if (home) expect(HOME_PROPS[name], `${type}: ${name}`).toBeDefined();
+        else if (HOME_PROPS[name]) expect(w / total, `${type}: ${name}`).toBeLessThan(0.06);
+      }
+    }
+    for (const t of ['dorm', 'storage', 'command', 'corridor']) expect(DRESS_TABLES.FLOOR[t as 'dorm']!.some(([n]) => HOME_PROPS[n]), t).toBe(true);
   });
 });

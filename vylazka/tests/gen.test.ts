@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DX, DZ, GEN_VERSION, generateLayout, GRID, STAIR_CELLS } from '../src/gen/layout';
+import { DX, DZ, GEN_VERSION, generateLayout, GRID, HOME_ROOMS, STAIR_CELLS } from '../src/gen/layout';
 import type { GenLayout } from '../src/gen/layout';
 
 const SEEDS = Array.from({ length: 300 }, (_, i) => i * 7919 + 13);
@@ -62,9 +62,9 @@ describe('генератор плана', () => {
     };
     expect([sig(1, 1), sig(20041113, 2), sig(777, 3)]).toMatchInlineSnapshot(`
       [
-        "0:17:16:2e74ec5f",
-        "0:26:23:95d899ab",
-        "0:26:23:530f46ba",
+        "0:21:19:9eae588a",
+        "0:33:32:bc127c68",
+        "0:33:32:878a436d",
       ]
     `);
   });
@@ -222,6 +222,28 @@ describe('генератор плана', () => {
       expect(types(1).some((x) => x === 'fvu' || x === 'diesel' || x === 'tanks')).toBe(true);
       expect(types(2).some((x) => x === 'archive' || x === 'collapsed' || x === 'storage')).toBe(true);
       for (let t = 0; t < 3; t++) expect(types(t).filter((x) => !['corridor', 'stairwell', 'entrance', 'airlock'].includes(x)).length).toBeGreaterThanOrEqual(4);
+    }
+  });
+
+  it('дом вырос в убежище: на 200 сидах в уровне ранга 3 не меньше двух домашних комнат, и они на разных ярусах', () => {
+    let total = 0;
+    for (let i = 0; i < 200; i++) {
+      const l = generateLayout(i * 4099 + 5, 3);
+      const home = l.rooms.filter((r) => HOME_ROOMS.has(r.type));
+      expect(home.length, `сид ${i}`).toBeGreaterThanOrEqual(2);
+      expect(new Set(home.map((r) => r.tier)).size, `сид ${i}`).toBeGreaterThanOrEqual(2);
+      total += home.length;
+    }
+    // Не «ровно две на всех»: квоты действительно дают запас.
+    expect(total / 200).toBeGreaterThan(3);
+  });
+
+  it('размеры домашних комнат: гостиная и спальня большие, ванная и прихожая малые', () => {
+    for (let i = 0; i < 100; i++) {
+      for (const r of generateLayout(i * 31 + 3, 3).rooms) {
+        if (r.type === 'bathroom' || r.type === 'hallway') expect(r.cells.length).toBeLessThanOrEqual(2);
+        if (r.type === 'kitchen' || r.type === 'nursery') expect(r.cells.length).toBeLessThanOrEqual(4);
+      }
     }
   });
 });

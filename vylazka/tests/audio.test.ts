@@ -29,14 +29,15 @@ class Recorder implements SoundSink {
   }
 }
 
-const quiet = (): StepEvents => ({ lightFailed: false, lightRevived: false, lightToggled: false, spark: false, strokes: 0, fellOut: false, sortie: [], fear: [] });
+const quiet = (): StepEvents => ({ lightFailed: false, lightRevived: false, lightToggled: false, spark: false, strokes: 0, fellOut: false, session: [], fear: [], dream: [] });
 
 function world(over: Partial<AudioWorld> = {}): AudioWorld & { steps: number } {
   const w = {
     steps: 0,
     light: { state: 'on' },
     swarm: null,
-    sortie: { outcome: null, inWater: false, inGas: false, panic: 0, hold: 0, target: null },
+    session: { inWater: false, inGas: false, panic: 0, hold: 0 } as NonNullable<AudioWorld['session']>,
+    where: 'main',
     body: { y: 0, vx: 0, vz: 0 },
     swarmNear: 0,
     staticLevel: 0,
@@ -110,12 +111,12 @@ describe('движок без браузера и без файлов', () => {
   it('молчит и не падает, пока звук не разблокирован; незнакомый id — ошибка', () => {
     const e = new AudioEngine('./audio/', []);
     e.preload(['hatch']);
-    e.play('pickup');
+    e.play('ui_click');
     e.play('hatch', { late: 3 });
     e.loop('amb_bunker', 1);
     e.stopLoops();
     expect(e.status().state).toBe('locked');
-    expect(e.status().asked).toEqual({ pickup: 1, hatch: 1 });
+    expect(e.status().asked).toEqual({ ui_click: 1, hatch: 1 });
     expect(e.status().played).toEqual({});
     expect(() => e.play('no_such_sound')).toThrow();
   });
@@ -138,23 +139,31 @@ describe('привязка звуков к игре', () => {
     expect(r.ids_()).toEqual(['flash_click', 'flash_die', 'flash_rattle', 'flash_spark', 'flash_rattle', 'flash_click']);
   });
 
-  it('события вылазки и страха находят свой звук', () => {
+  it('события сессии, сна и страха находят свой звук', () => {
     const r = new Recorder();
     const a = new GameAudio(r);
     a.setScene('play');
     const w = world({ swarm: { pos: [5, 0, 0], active: true, cohesion: 1 } });
-    const item = { id: 1, type: 'find', find: 'journal', x: 0, y: 0, z: 0, tier: 0 };
+    const memory = { def: { id: 'kettle', thing: 'kettle' }, index: 0, state: 'active', spot: null };
+    const plan = (cause: string, style: string, to: string): unknown => ({ cause, style, to });
     const ev = quiet();
-    ev.sortie = [
-      { type: 'picked', item },
-      { type: 'objective', objective: { id: 0, type: 'shoot', tier: 0 } },
-      { type: 'swap-start' },
-      { type: 'swap-done' },
+    ev.session = [
+      { type: 'reveal', memory },
+      { type: 'recall', memory },
+      { type: 'forgot', memory },
+      { type: 'all-done' },
       { type: 'collapse', spec: { id: 'c', tier: 0, center: [1, 0, 1], boxes: [] } },
+      { type: 'gas-enter' },
       { type: 'cough' },
-      { type: 'hurt', amount: 40 },
-      { type: 'ended', outcome: 'escaped' },
-    ] as unknown as StepEvents['sortie'];
+      { type: 'fall' },
+      { type: 'faint' },
+    ] as unknown as StepEvents['session'];
+    ev.dream = [
+      { type: 'jump', plan: plan('gaze', 'whiteout', 'void'), phase: 'start' },
+      { type: 'jump', plan: plan('gaze', 'whiteout', 'void'), phase: 'switch' },
+      { type: 'limbo' },
+      { type: 'begin' },
+    ] as unknown as StepEvents['dream'];
     ev.fear = [
       { type: 'scare', id: 'bang', pos: [10, 0, 0] },
       { type: 'scare', id: 'slam', pos: [10, 0, 0] },
@@ -169,24 +178,26 @@ describe('привязка звуков к игре', () => {
       { type: 'swarm', what: 'release' },
     ];
     a.onStep(ev, w);
-    expect(r.ids_()).toEqual(['pickup', 'camera_beep', 'battery_swap', 'flash_click', 'collapse', 'cough', 'fall', 'ladder', 'scare_bang', 'scare_slam', 'scare_steps', 'scare_knock', 'scare_radio', 'flash_spark', 'swarm_cohere', 'swarm_scatter', 'swarm_catch']);
+    expect(r.ids_()).toEqual(['camera_hold', 'camera_beep', 'collapse', 'cough', 'fall', 'flash_spark', 'ui_report', 'hatch', 'scare_bang', 'scare_slam', 'scare_steps', 'scare_knock', 'scare_radio', 'flash_spark', 'swarm_cohere', 'swarm_scatter', 'swarm_catch']);
+    // Скачок слышно только в момент смены места, а не в начале ухода.
+    expect(r.plays.filter((p) => p.id === 'flash_spark').length).toBe(2);
     // Удары и стук слышны из мира, рация — «на груди».
     expect(r.plays.find((p) => p.id === 'scare_bang')!.pos).toEqual([10, 0, 0]);
     expect(r.plays.find((p) => p.id === 'scare_radio')!.pos).toBeUndefined();
     expect(r.plays.find((p) => p.id === 'swarm_cohere')!.pos).toEqual([5, 0, 0]);
   });
 
-  it('шаги: по бетону и по воде; после конца вылазки шагов нет', () => {
+  it('шаги: по бетону и по воде; в карманном пространстве и в лимбо шагов убежища нет', () => {
     const r = new Recorder();
     const a = new GameAudio(r);
     a.setScene('play');
     const w = world();
     w.steps = 1;
     a.frame(w, 0.016, true);
-    w.sortie!.inWater = true;
+    w.session!.inWater = true;
     w.steps = 1;
     a.frame(w, 0.016, true);
-    w.sortie!.outcome = 'caught';
+    w.where = 'limbo';
     w.steps = 1;
     a.frame(w, 0.016, true);
     expect(r.ids_()).toEqual(['step_concrete', 'step_water']);
@@ -207,8 +218,8 @@ describe('привязка звуков к игре', () => {
     expect(r.loops.get('music_menu')).toBe(0);
 
     w.body.y = -9;
-    w.sortie!.panic = 0.9;
-    w.sortie!.inGas = true;
+    w.session!.panic = 0.9;
+    w.session!.inGas = true;
     w.swarm = { pos: [4, -9, 0], active: true, cohesion: 1 };
     w.swarmNear = 0.5;
     w.staticLevel = 0.4;
@@ -223,19 +234,27 @@ describe('привязка звуков к игре', () => {
     expect(r.loops.get('signal_static')).toBeGreaterThan(0.5);
   });
 
-  it('запись кончилась — мир стихает, помехи остаются', () => {
+  it('лимбо и карман: гул убежища, дыхание, газ и рой стихают, помехи остаются', () => {
     const r = new Recorder();
     const a = new GameAudio(r);
     a.setScene('play');
     const w = world({ swarm: { pos: [1, 0, 0], active: true, cohesion: 1 }, staticLevel: 1 });
-    w.sortie!.outcome = 'caught';
-    w.sortie!.inGas = true;
+    w.session!.inGas = true;
     a.frame(w, 0.016, true);
-    for (const id of ['amb_bunker', 'amb_deep', 'breath_calm', 'breath_panic', 'heartbeat', 'gas_hiss', 'swarm_loop']) expect(r.loops.get(id)).toBe(0);
-    expect(r.loops.get('signal_static')).toBe(1);
+    expect(r.loops.get('amb_bunker')).toBe(1);
+    for (const where of ['limbo', 'pocket']) {
+      w.where = where;
+      a.frame(w, 0.016, true);
+      for (const id of ['amb_bunker', 'amb_deep', 'breath_calm', 'breath_panic', 'heartbeat', 'gas_hiss', 'swarm_loop']) expect(r.loops.get(id), `${where}: ${id}`).toBe(0);
+      expect(r.loops.get('signal_static')).toBe(1);
+    }
+    // Вернулись в убежище — гул вернулся.
+    w.where = 'main';
+    a.frame(w, 0.016, true);
+    expect(r.loops.get('amb_bunker')).toBe(1);
   });
 
-  it('в меню играет музыка, петли вылазки оборваны; в вылазке музыки нет', () => {
+  it('в меню играет музыка, петли сессии оборваны; в сессии музыки нет', () => {
     const r = new Recorder();
     const a = new GameAudio(r);
     a.setScene('play');
@@ -249,19 +268,24 @@ describe('привязка звуков к игре', () => {
     expect(r.loops.get('music_menu')).toBe(0);
   });
 
-  it('съёмка приметы: звук наведения один раз за удержание', () => {
+  it('взгляд на вещь воспоминания: звук наведения один раз за удержание; вне убежища — нет', () => {
     const r = new Recorder();
     const a = new GameAudio(r);
     a.setScene('play');
     const w = world();
-    w.sortie!.target = { kind: 'shoot' };
-    w.sortie!.hold = 0.2;
+    w.session!.hold = 0.2;
     a.frame(w, 0.016, true);
-    w.sortie!.hold = 0.5;
+    w.session!.hold = 0.5;
     a.frame(w, 0.016, true);
-    w.sortie!.hold = 0;
+    w.session!.hold = 0;
     a.frame(w, 0.016, true);
-    w.sortie!.hold = 0.1;
+    w.session!.hold = 0.1;
+    a.frame(w, 0.016, true);
+    expect(r.ids_().filter((id) => id === 'camera_hold').length).toBe(2);
+    w.session!.hold = 0;
+    a.frame(w, 0.016, true);
+    w.where = 'limbo';
+    w.session!.hold = 0.3;
     a.frame(w, 0.016, true);
     expect(r.ids_().filter((id) => id === 'camera_hold').length).toBe(2);
   });
