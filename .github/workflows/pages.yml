@@ -25,6 +25,8 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  # Прочитать, каким веткам окружение github-pages разрешает публикацию (см. шаг «May this branch deploy?»).
+  actions: read
 
 concurrency:
   group: pages
@@ -38,6 +40,7 @@ jobs:
         working-directory: runtime
     outputs:
       pages_enabled: ${{ steps.pages.outputs.enabled }}
+      branch_allowed: ${{ steps.branch.outputs.allowed }}
     steps:
       - uses: actions/checkout@v4
       - name: Is GitHub Pages enabled? (if not — try to enable it with Source = GitHub Actions)
@@ -54,6 +57,31 @@ jobs:
             echo "enabled=false" >> "$GITHUB_OUTPUT"
             echo "Ответ API на попытку включить Pages: ${out}"
             echo "::notice::GitHub Pages не включён, а включить его отсюда нельзя: токену workflow не хватает прав администратора репозитория. Один раз вручную: Settings → Pages → Source: GitHub Actions — шаг публикации пропущен"
+          fi
+      - name: May this branch deploy to the github-pages environment?
+        id: branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Окружение github-pages пускает к публикации не все ветки. Если этой ветки в списке нет, шаг
+          # публикации упал бы без единой строки в логе и красил бы PR; вместо этого пропускаем его
+          # и пишем, где ветку добавить. Не удалось прочитать правила — пробуем публиковать как раньше.
+          allowed=true
+          if env_json=$(gh api "repos/${GITHUB_REPOSITORY}/environments/github-pages" 2>/dev/null); then
+            if [ "$(jq -r '.deployment_branch_policy.custom_branch_policies // false' <<<"$env_json")" = "true" ]; then
+              if names=$(gh api "repos/${GITHUB_REPOSITORY}/environments/github-pages/deployment-branch-policies" --jq '.branch_policies[].name' 2>/dev/null); then
+                allowed=false
+                while IFS= read -r pattern; do
+                  [ -n "$pattern" ] || continue
+                  # shellcheck disable=SC2254
+                  case "$GITHUB_REF_NAME" in $pattern) allowed=true ;; esac
+                done <<<"$names"
+              fi
+            fi
+          fi
+          echo "allowed=${allowed}" >> "$GITHUB_OUTPUT"
+          if [ "$allowed" = "false" ]; then
+            echo "::notice::Ветке ${GITHUB_REF_NAME} не разрешена публикация на GitHub Pages. Один раз вручную: Settings → Environments → github-pages → Deployment branches and tags → Add deployment branch or tag rule → ${GITHUB_REF_NAME}. Сборка сайта прошла, шаг публикации пропущен."
           fi
       - uses: actions/setup-node@v4
         with:
@@ -86,7 +114,8 @@ jobs:
     needs: build
     # Публикуем только когда Pages включён в настройках репозитория: иначе деплой падает по внешней
     # причине (404 «Ensure GitHub Pages has been enabled») и красил бы PR.
-    if: needs.build.outputs.pages_enabled == 'true'
+    # И только из ветки, которой окружение github-pages разрешает публикацию.
+    if: needs.build.outputs.pages_enabled == 'true' && needs.build.outputs.branch_allowed != 'false'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
