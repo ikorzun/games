@@ -119,7 +119,7 @@ describe('colliders', () => {
 
 describe('тестовый уровень', () => {
   const level = buildTestLevel();
-  const mesh = level.chunks[0]!;
+  const mesh = level.chunks[0]!.mesh;
 
   it('геометрия без NaN, материалы в пределах атласа', () => {
     expect(mesh.index.length % 3).toBe(0);

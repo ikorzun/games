@@ -5,7 +5,7 @@
  */
 import * as THREE from 'three';
 import type { Vec3 } from '../core/types';
-import type { MeshData } from '../world/kit';
+import type { LevelChunk, StairLink } from '../world/level';
 import { MAT_COUNT, MAT_DEFS } from '../world/materials';
 import { bakeGrime } from './grime';
 import { ATLAS_GRID, bakeMatcapAtlas } from './matcap_atlas';
@@ -102,6 +102,11 @@ export class GameRenderer {
   private lastTris = 0;
   /** Отладка: временно выключить тень, не меняя качество (сравнение «тень вкл/выкл»). */
   debugShadowsOff = false;
+  /** Перепад между ярусами уровня, м (для отсечения этажей). */
+  tierDrop = 4.5;
+  /** Дальше этого расстояния чанки не рисуются: свет фонаря туда уже не достаёт. */
+  cullDistance = 30;
+  private stairs: readonly StairLink[] = [];
 
   /** Вызывается при потере и восстановлении графического контекста. */
   onContextLost: (() => void) | null = null;
@@ -281,14 +286,16 @@ export class GameRenderer {
     this.dustMat.uniforms.uPointScale!.value = h / 160;
   }
 
-  /** Заменить геометрию мира. */
-  setWorld(chunks: readonly MeshData[]): void {
+  /** Заменить геометрию мира. stairs — лестницы между ярусами: рядом с ними виден соседний ярус. */
+  setWorld(chunks: readonly LevelChunk[], stairs: readonly StairLink[] = []): void {
+    this.stairs = stairs;
     for (const m of this.chunks) {
       this.scene.remove(m);
       m.geometry.dispose();
     }
     this.chunks.length = 0;
-    for (const data of chunks) {
+    for (const chunk of chunks) {
+      const data = chunk.mesh;
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(data.position, 3));
       g.setAttribute('normal', new THREE.BufferAttribute(data.normal, 3));
@@ -299,6 +306,8 @@ export class GameRenderer {
       g.computeBoundingSphere();
       const mesh = new THREE.Mesh(g, this.worldMat);
       mesh.matrixAutoUpdate = false;
+      mesh.userData.tierMin = chunk.tierMin;
+      mesh.userData.tierMax = chunk.tierMax;
       this.chunks.push(mesh);
       this.scene.add(mesh);
     }
@@ -320,6 +329,25 @@ export class GameRenderer {
     cam.position.set(v.camPos[0], v.camPos[1], v.camPos[2]);
     cam.rotation.set(v.camPitch, v.camYaw, v.camRoll);
     cam.updateMatrixWorld(true);
+
+    // Отсечение чанков: дальше черты видимости всё равно чёрный туман, а чужой ярус виден только
+    // с лестницы и от её площадок.
+    const tf = -(v.camPos[1] - 1.42) / this.tierDrop;
+    const base = Math.round(tf);
+    let lo = base;
+    let hi = base;
+    if (tf - base > 0.12) hi = base + 1;
+    else if (base - tf > 0.12) lo = base - 1;
+    const near = (p: readonly [number, number, number]): boolean => (p[0] - v.camPos[0]) ** 2 + (p[2] - v.camPos[2]) ** 2 < 16 * 16;
+    for (const s of this.stairs) {
+      if (s.upperTier === base && near(s.top)) hi = Math.max(hi, base + 1);
+      if (s.upperTier + 1 === base && near(s.bottom)) lo = Math.min(lo, base - 1);
+    }
+    for (const m of this.chunks) {
+      const sphere = m.geometry.boundingSphere;
+      const far = sphere ? cam.position.distanceTo(sphere.center) - sphere.radius > this.cullDistance : false;
+      m.visible = !far && (m.userData.tierMax as number) >= lo && (m.userData.tierMin as number) <= hi;
+    }
 
     // Фонарь в пространстве камеры.
     const lu = this.lightU;
@@ -387,8 +415,8 @@ export class GameRenderer {
     this.lastTris = r.info.render.triangles;
   }
 
-  info(): { calls: number; triangles: number; width: number; height: number; quality: Quality; programs: number } {
-    return { calls: this.lastCalls, triangles: this.lastTris, width: this.width, height: this.height, quality: this.quality, programs: this.renderer.info.programs?.length ?? 0 };
+  info(): { calls: number; triangles: number; width: number; height: number; quality: Quality; programs: number; chunks: number; visible: number } {
+    return { calls: this.lastCalls, triangles: this.lastTris, width: this.width, height: this.height, quality: this.quality, programs: this.renderer.info.programs?.length ?? 0, chunks: this.chunks.length, visible: this.chunks.filter((m) => m.visible).length };
   }
 
   /**

@@ -1,0 +1,261 @@
+/**
+ * Сборка уровня из плана генератора: скорлупа по ярусам, лестничные марши, двери, обстановка,
+ * места для находок, приметные объекты и навигационный граф. Чистый TS: работает в тестах и в Worker.
+ */
+import { hash2, mulberry32 } from '../core/rng';
+import type { Vec3 } from '../core/types';
+import { CEIL_H, DX, DZ, GRID, STAIR_CELLS, TIER_DROP } from '../gen/layout';
+import type { GenLayout, GenRoom, RoomType } from '../gen/layout';
+import { ColliderSet } from './colliders';
+import { doorSign, furnishRoom } from './furnish';
+import type { CellInfo, RoomCtx, Slot } from './furnish';
+import { MeshBuilder } from './kit';
+import type { BuiltLevel, ItemSpot, Landmark, LevelChunk, NavNode, StairLink } from './level';
+import { MAT } from './materials';
+import { hermoDoor, stairsDown, Xf } from './props';
+import { plainDoor } from './props_bunker';
+import { buildShell, CELL, Shell, STYLE_CORRIDOR, WALL_T } from './shell';
+import type { ShellCell, WallStyle } from './shell';
+
+const HALF = GRID / 2;
+/** Клетка сетки → координата её центра в мире. */
+export const cellToWorld = (c: number): number => (c - HALF) * CELL;
+export const tierFloor = (tier: number): number => -TIER_DROP * tier;
+
+/** Число ступеней марша и их размеры: 25 × 0,18 м высоты на три клетки длины. */
+const STEPS = Math.round(TIER_DROP / 0.18);
+const RISE = TIER_DROP / STEPS;
+const RUN = (STAIR_CELLS * CELL) / STEPS;
+
+const ROOM_STYLE: Partial<Record<RoomType, Partial<WallStyle>>> = {
+  dorm: { lower: MAT.paintBlue, stripe: MAT.rubber, paintHeight: 1.35 },
+  command: { lower: MAT.wood, lowerTint: [0.75, 0.7, 0.62], stripe: MAT.rubber, paintHeight: 1.1 },
+  medical: { lower: MAT.enamel, lowerTint: [0.85, 0.88, 0.85], stripe: MAT.paintGreen, paintHeight: 1.6 },
+  washroom: { lower: MAT.enamel, lowerTint: [0.7, 0.8, 0.8], stripe: MAT.paintBlue, paintHeight: 1.8, floor: MAT.wetConcrete, floorTint: [0.9, 0.9, 0.9] },
+  storage: { lower: MAT.concrete, lowerTint: [0.7, 0.7, 0.68], upper: MAT.concrete, upperTint: [0.85, 0.85, 0.82], paintHeight: 1.0 },
+  fvu: { lower: MAT.paintGreen, lowerTint: [0.8, 0.85, 0.8], paintHeight: 1.7 },
+  diesel: { lower: MAT.metalGreen, lowerTint: [1.1, 1.1, 1.1], stripe: MAT.paintRed, paintHeight: 1.2 },
+  tanks: { lower: MAT.paintBlue, lowerTint: [0.75, 0.8, 0.8], paintHeight: 1.0, floor: MAT.wetConcrete, floorTint: [0.85, 0.85, 0.85] },
+  switchboard: { lower: MAT.paintBlue, lowerTint: [0.7, 0.7, 0.75], stripe: MAT.paintRed, paintHeight: 1.5 },
+  archive: { lower: MAT.wood, lowerTint: [0.6, 0.55, 0.5], paintHeight: 1.2 },
+  collapsed: { lower: MAT.concrete, upper: MAT.concrete, lowerTint: [0.6, 0.6, 0.6], upperTint: [0.7, 0.7, 0.7] },
+  entrance: { lower: MAT.concrete, lowerTint: [0.75, 0.75, 0.72], upper: MAT.concrete, upperTint: [0.9, 0.9, 0.87], paintHeight: 1.2 },
+  airlock: { lower: MAT.metalGreen, lowerTint: [1.2, 1.25, 1.2], paintHeight: 1.6 },
+};
+
+/** Коридоры ярусов красят по-разному; чем глубже, тем темнее и грязнее. */
+const TIER_CORRIDOR: readonly Partial<WallStyle>[] = [
+  {},
+  { lower: MAT.paintBlue, lowerTint: [0.75, 0.78, 0.8], upperTint: [0.82, 0.8, 0.76], ceilTint: [0.7, 0.68, 0.64], floorTint: [0.72, 0.72, 0.72] },
+  { lower: MAT.concrete, lowerTint: [0.55, 0.57, 0.55], upper: MAT.concrete, upperTint: [0.72, 0.72, 0.7], stripe: MAT.rust, ceil: MAT.concrete, ceilTint: [0.6, 0.6, 0.58], floor: MAT.wetConcrete, floorTint: [0.95, 0.95, 0.95] },
+];
+
+function styleFor(room: GenRoom): WallStyle {
+  const dark = room.tier === 2 ? 0.82 : room.tier === 1 ? 0.92 : 1;
+  const base: WallStyle = { ...STYLE_CORRIDOR, ...(TIER_CORRIDOR[room.tier] ?? {}) };
+  const own = room.type === 'corridor' || room.type === 'stairwell' ? {} : (ROOM_STYLE[room.type] ?? {});
+  const st: WallStyle = { ...base, ...own };
+  const mul = (t: Vec3): Vec3 => [t[0] * dark, t[1] * dark, t[2] * dark];
+  return { ...st, lowerTint: mul(st.lowerTint), upperTint: mul(st.upperTint), floorTint: mul(st.floorTint), ceilTint: mul(st.ceilTint) };
+}
+
+interface ChunkBuild {
+  mb: MeshBuilder;
+  tierMin: number;
+  tierMax: number;
+}
+
+/** Поворот размещения, при котором локальная ось +z смотрит по направлению dir. */
+const ROT_FACING: readonly (0 | 1 | 2 | 3)[] = [1, 0, 3, 2];
+
+export function buildLevel(layout: GenLayout): BuiltLevel {
+  const col = new ColliderSet();
+  const chunks = new Map<string, ChunkBuild>();
+  const T = WALL_T / 2;
+
+  // Какая из двух лестничных клеток верхняя: та, чей ярус совпадает с верхним ярусом марша.
+  const upperWells = new Set<number>();
+  const lowerWells = new Set<number>();
+  for (const room of layout.rooms) {
+    if (room.type !== 'stairwell') continue;
+    const [x, z] = room.cells[0]!;
+    const st = layout.stairs.find((s) => s.cx + DX[s.dir]! === x && s.cz + DZ[s.dir]! === z && (s.upperTier === room.tier || s.upperTier + 1 === room.tier));
+    if (st && st.upperTier === room.tier) upperWells.add(room.id);
+    else lowerWells.add(room.id);
+  }
+
+  const chunkFor = (room: GenRoom, cx: number, cz: number): ChunkBuild => {
+    // Помещение — один чанк; длинные коридоры режутся блоками 4×4 клетки, чтобы отсекаться частями.
+    const key = room.type === 'corridor' ? `${room.id}:${cx >> 2}:${cz >> 2}` : `${room.id}`;
+    let c = chunks.get(key);
+    if (!c) {
+      const well = room.type === 'stairwell';
+      c = { mb: new MeshBuilder(), tierMin: well ? room.tier - (lowerWells.has(room.id) ? 1 : 0) : room.tier, tierMax: well ? room.tier + (upperWells.has(room.id) ? 1 : 0) : room.tier };
+      chunks.set(key, c);
+    }
+    return c;
+  };
+
+  // ── Скорлупа по ярусам ──
+  const shells: Shell[] = [];
+  for (let t = 0; t < layout.tierCount; t++) shells.push(new Shell());
+  for (const room of layout.rooms) {
+    const style = styleFor(room);
+    const y = tierFloor(room.tier);
+    for (const [x, z] of room.cells) {
+      const cell: ShellCell = { cx: x - HALF, cz: z - HALF, floorY: y, ceilY: y + CEIL_H, room: room.id, style };
+      if (upperWells.has(room.id)) cell.noFloor = true;
+      else if (lowerWells.has(room.id)) {
+        // Нижняя часть шахты марша тянется до пола верхнего яруса и открыта вверх.
+        cell.ceilY = y + TIER_DROP;
+        cell.noCeil = true;
+      }
+      shells[room.tier]!.add(cell);
+    }
+  }
+  for (const e of layout.edges) {
+    const sh = shells[e.tier]!;
+    if (e.kind === 'open') sh.setOpen(e.cx - HALF, e.cz - HALF, e.dir);
+    else sh.setDoor(e.cx - HALF, e.cz - HALF, e.dir);
+  }
+  const roomById = (id: number): GenRoom => layout.rooms[id]!;
+  for (const sh of shells) buildShell(sh, (c) => chunkFor(roomById(c.room), c.cx + HALF, c.cz + HALF).mb, col);
+
+  // ── Лестничные марши ──
+  for (const s of layout.stairs) {
+    const well = layout.rooms.find((r) => upperWells.has(r.id) && r.tier === s.upperTier && r.cells[0]![0] === s.cx + DX[s.dir]! && r.cells[0]![1] === s.cz + DZ[s.dir]!)!;
+    const c = chunkFor(well, 0, 0);
+    // Марш спускается вдоль локальной оси −x; начало — середина ребра между площадкой и первой клеткой марша.
+    const rot = ([2, 1, 0, 3] as const)[s.dir]!;
+    const ox = cellToWorld(s.cx) + DX[s.dir]! * (CELL / 2);
+    const oz = cellToWorld(s.cz) + DZ[s.dir]! * (CELL / 2);
+    stairsDown(new Xf(c.mb, col, ox, tierFloor(s.upperTier), oz, rot), STEPS, RISE, RUN, -CELL / 2 + T, CELL / 2 - T);
+  }
+
+  // ── Двери ──
+  const gridAt = (tier: number, x: number, z: number): GenRoom | undefined => {
+    const c = shells[tier]!.get(x - HALF, z - HALF);
+    return c ? roomById(c.room) : undefined;
+  };
+  for (const e of layout.edges) {
+    if (e.kind === 'open') continue;
+    const a = gridAt(e.tier, e.cx, e.cz)!;
+    const bx = e.cx + (e.dir === 0 ? 1 : 0);
+    const bz = e.cz + (e.dir === 1 ? 1 : 0);
+    const b = gridAt(e.tier, bx, bz)!;
+    // Створка открывается внутрь помещения, чтобы не перегораживать коридор.
+    const intoB = b.type !== 'corridor';
+    const toward = e.dir === 0 ? (intoB ? 0 : 2) : intoB ? 1 : 3;
+    const host = intoB ? b : a;
+    const hostCell: [number, number] = intoB ? [bx, bz] : [e.cx, e.cz];
+    const wx = cellToWorld(e.cx) + (e.dir === 0 ? CELL / 2 : 0);
+    const wz = cellToWorld(e.cz) + (e.dir === 1 ? CELL / 2 : 0);
+    const y = tierFloor(e.tier);
+    const xf = new Xf(chunkFor(host, hostCell[0], hostCell[1]).mb, col, wx, y, wz, ROT_FACING[toward]!);
+    if (e.kind === 'hermo') hermoDoor(xf);
+    else plainDoor(xf, host.type === 'medical' ? [1.5, 1.5, 1.45] : [0.9 + ((host.id * 7) % 5) * 0.05, 0.85, 0.8]);
+    // Табличка над дверью со стороны, противоположной створке.
+    const other = intoB ? a : b;
+    const otherCell: [number, number] = intoB ? [e.cx, e.cz] : [bx, bz];
+    const back = ((toward + 2) % 4) as 0 | 1 | 2 | 3;
+    doorSign(new Xf(chunkFor(other, otherCell[0], otherCell[1]).mb, null, wx + DX[back]! * T, y + 2.32, wz + DZ[back]! * T, ROT_FACING[back]!));
+  }
+
+  // ── Обстановка ──
+  const spots: ItemSpot[] = [];
+  const landmarks: Landmark[] = [];
+  for (const room of layout.rooms) {
+    if (lowerWells.has(room.id)) continue;
+    const sh = shells[room.tier]!;
+    const y = tierFloor(room.tier);
+    const slots: Slot[] = [];
+    const cells: CellInfo[] = [];
+    for (const [x, z] of room.cells) {
+      const mb = chunkFor(room, x, z).mb;
+      const sx = x - HALF;
+      const sz = z - HALF;
+      const kinds = [0, 1, 2, 3].map((d) => sh.edge(sx, sz, d));
+      const neighbours = [0, 1, 2, 3].map((d) => sh.get(sx + DX[d]!, sz + DZ[d]!));
+      // Проходом считается дверь или открытое ребро в другое помещение.
+      const doors = kinds.filter((k, d) => k === 'door' || (k === 'open' && neighbours[d] !== undefined && neighbours[d]!.room !== room.id)).length;
+      cells.push({ cx: x, cz: z, xf: new Xf(mb, col, cellToWorld(x), y, cellToWorld(z), 0), doors });
+      for (let d = 0; d < 4; d++) {
+        if (kinds[d] !== 'wall') continue;
+        const inward = ((d + 2) % 4) as 0 | 1 | 2 | 3;
+        const rot = ROT_FACING[inward]!;
+        const xf = new Xf(mb, col, cellToWorld(x) + DX[d]! * (CELL / 2 - T), y, cellToWorld(z) + DZ[d]! * (CELL / 2 - T), rot);
+        // Локальная ось +x слота в мире и концы стены: есть ли там перпендикулярная стена или проход.
+        const ax = xf.pt(1, 0, 0);
+        const along = Math.abs(ax[0] - xf.ox) > 0.5 ? (ax[0] > xf.ox ? 0 : 2) : ax[2] > xf.oz ? 1 : 3;
+        const kR = kinds[along]!;
+        const kL = kinds[(along + 2) % 4]!;
+        slots.push({ xf, cx: x, cz: z, dir: d, deep: doors === 0 && room.type !== 'corridor', cornerR: kR === 'wall' || kR === 'door', cornerL: kL === 'wall' || kL === 'door', used: false });
+      }
+    }
+    // Слоты и клетки — в устойчивом порядке, свой ГСЧ у каждого помещения: правка одной комнаты не сдвигает остальные.
+    const ctx: RoomCtx = { room, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d)), h: CEIL_H, slots, cells, spots, landmarks };
+    furnishRoom(ctx);
+  }
+
+  // ── Навигационный граф: узел на клетку; нижние части шахт — те же места, что верхние, узлов не получают ──
+  const nav: NavNode[] = [];
+  const nodeAt = new Map<string, number>();
+  const nk = (t: number, x: number, z: number): string => `${t},${x},${z}`;
+  for (const room of layout.rooms) {
+    if (lowerWells.has(room.id)) continue;
+    for (const [x, z] of room.cells) {
+      let y = tierFloor(room.tier);
+      if (upperWells.has(room.id)) {
+        const st = layout.stairs.find((s) => s.upperTier === room.tier && [1, 2, 3].some((i) => s.cx + DX[s.dir]! * i === x && s.cz + DZ[s.dir]! * i === z))!;
+        const i = Math.abs(x - st.cx) + Math.abs(z - st.cz);
+        y -= ((i - 0.5) / STAIR_CELLS) * TIER_DROP;
+      }
+      nodeAt.set(nk(room.tier, x, z), nav.length);
+      nav.push({ id: nav.length, tier: room.tier, cx: x, cz: z, x: cellToWorld(x), y, z: cellToWorld(z), room: room.id, links: [] });
+    }
+  }
+  const link = (a: number | undefined, b: number | undefined): void => {
+    if (a === undefined || b === undefined || a === b) return;
+    if (!nav[a]!.links.includes(b)) nav[a]!.links.push(b);
+    if (!nav[b]!.links.includes(a)) nav[b]!.links.push(a);
+  };
+  for (const n of nav.slice()) {
+    for (const d of [0, 1]) {
+      const m = nodeAt.get(nk(n.tier, n.cx + DX[d]!, n.cz + DZ[d]!));
+      if (m !== undefined && nav[m]!.room === n.room) link(n.id, m);
+    }
+  }
+  for (const e of layout.edges) {
+    const a = nodeAt.get(nk(e.tier, e.cx, e.cz));
+    const b = nodeAt.get(nk(e.tier, e.cx + (e.dir === 0 ? 1 : 0), e.cz + (e.dir === 1 ? 1 : 0)));
+    // Ребро внизу марша ведёт из нижней части шахты (узла нет) — его заменяет связь «низ марша — площадка».
+    link(a, b);
+  }
+  for (const s of layout.stairs) {
+    const bottom = nodeAt.get(nk(s.upperTier, s.cx + DX[s.dir]! * STAIR_CELLS, s.cz + DZ[s.dir]! * STAIR_CELLS));
+    const landing = nodeAt.get(nk(s.upperTier + 1, s.cx + DX[s.dir]! * (STAIR_CELLS + 1), s.cz + DZ[s.dir]! * (STAIR_CELLS + 1)));
+    link(bottom, landing);
+  }
+
+  const ent = layout.rooms[layout.entranceRoom]!;
+  const [ex, ez] = ent.cells[0]!;
+  const out: LevelChunk[] = [];
+  for (const c of chunks.values()) if (c.mb.triangleCount > 0) out.push({ mesh: c.mb.build(), tierMin: c.tierMin, tierMax: c.tierMax });
+  const stairs: StairLink[] = layout.stairs.map((s) => ({
+    upperTier: s.upperTier,
+    top: [cellToWorld(s.cx), tierFloor(s.upperTier), cellToWorld(s.cz)],
+    bottom: [cellToWorld(s.cx + DX[s.dir]! * (STAIR_CELLS + 1)), tierFloor(s.upperTier + 1), cellToWorld(s.cz + DZ[s.dir]! * (STAIR_CELLS + 1))],
+  }));
+  return {
+    chunks: out,
+    stairs,
+    colliders: col,
+    // Старт — у люка, лицом к шлюзу (на север).
+    spawn: { pos: [cellToWorld(ex), 0, cellToWorld(ez) + 0.4], yaw: 0 },
+    exit: [cellToWorld(ex), 0, cellToWorld(ez)],
+    spots,
+    landmarks,
+    nav,
+    layout,
+  };
+}

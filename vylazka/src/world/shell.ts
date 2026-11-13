@@ -82,6 +82,8 @@ export class Shell {
   readonly cells = new Map<string, ShellCell>();
   /** Канонические ключи рёбер с дверью: «cx,cz,dir», dir — 0 (восток) или 1 (юг). */
   private readonly doors = new Set<string>();
+  /** Рёбра, открытые явно: проход без двери между разными помещениями (лестничная клетка и коридор). */
+  private readonly opens = new Set<string>();
 
   add(cell: ShellCell): void {
     this.cells.set(cellKey(cell.cx, cell.cz), cell);
@@ -101,6 +103,10 @@ export class Shell {
     this.doors.add(this.edgeKey(cx, cz, dir));
   }
 
+  setOpen(cx: number, cz: number, dir: number): void {
+    this.opens.add(this.edgeKey(cx, cz, dir));
+  }
+
   /** Что на ребре клетки (cx, cz) в сторону dir. Клетка может не существовать — тогда смотрим с другой стороны. */
   edge(cx: number, cz: number, dir: number): EdgeKind {
     const a = this.get(cx, cz);
@@ -108,7 +114,9 @@ export class Shell {
     const b = this.get(cx + d[0], cz + d[1]);
     if (!a && !b) return 'none';
     if (!a || !b) return 'wall';
-    if (this.doors.has(this.edgeKey(cx, cz, dir))) return 'door';
+    const key = this.edgeKey(cx, cz, dir);
+    if (this.doors.has(key)) return 'door';
+    if (this.opens.has(key)) return 'open';
     return a.room === b.room ? 'open' : 'wall';
   }
 }
@@ -203,12 +211,17 @@ function slab(mb: MeshBuilder, shell: Shell, c: ShellCell, y: number, up: boolea
   }
 }
 
-/** Построить геометрию и коллайдеры скорлупы. */
-export function buildShell(shell: Shell, mb: MeshBuilder, col: ColliderSet): void {
+/**
+ * Построить геометрию и коллайдеры скорлупы. target — один сборщик на всё или функция, которая
+ * по клетке отдаёт сборщик её чанка (комната рисуется одним вызовом и отсекается целиком).
+ */
+export function buildShell(shell: Shell, target: MeshBuilder | ((cell: ShellCell) => MeshBuilder), col: ColliderSet): void {
   const H = CELL / 2;
   const T = WALL_T / 2;
+  const pick = typeof target === 'function' ? target : (): MeshBuilder => target;
 
   for (const c of shell.cells.values()) {
+    const mb = pick(c);
     const x0 = c.cx * CELL - H;
     const x1 = c.cx * CELL + H;
     const z0 = c.cz * CELL - H;
@@ -292,8 +305,10 @@ export function buildShell(shell: Shell, mb: MeshBuilder, col: ColliderSet): voi
 
       // Коллайдеры — один раз на ребро (у стены между двумя клетками их строит клетка с меньшим направлением).
       if (other && dir >= 2) continue;
+      // Вверх без запаса: стена нижней части лестничной шахты кончается ровно на уровне пола верхнего
+      // яруса, и выступ над ним стал бы невидимым бортиком на кромке лестницы.
       const lo = Math.min(f, other ? other.floorY : f) - 0.5;
-      const hi = Math.max(h, other ? other.ceilY : h) + 0.5;
+      const hi = Math.max(h, other ? other.ceilY : h);
       const e0 = (alongZ ? z0 : x0) - T;
       const e1 = (alongZ ? z1 : x1) + T;
       const box = (a0: number, a1: number, y0: number, y1: number): void => {
@@ -334,6 +349,7 @@ export function buildShell(shell: Shell, mb: MeshBuilder, col: ColliderSet): voi
       const pz = vz * CELL - H;
       const faceOf = (open: boolean, a: ShellCell | undefined, nx: number, nz: number): void => {
         if (!open || !a) return;
+        const mb = pick(a);
         const x = px + nx * T;
         const z = pz + nz * T;
         // Грань столбика шириной в толщину стены, перпендикулярная нормали.

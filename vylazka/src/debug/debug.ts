@@ -36,6 +36,12 @@ export interface VzDebugApi {
   pause(on: boolean): void;
   lang(code?: string): string;
   loseContext(ms?: number): void;
+  /** Сводка уровня: помещения, приметы, число мест для находок. */
+  level(): Record<string, unknown>;
+  /** Встать в помещении рядом с приметой (по её id и номеру среди одноимённых) лицом к ней. false — такой нет. */
+  gotoLandmark(id: string, index?: number, distance?: number): boolean;
+  /** Встать в центр клетки помещения. */
+  gotoRoom(roomId: number, yawDeg?: number): boolean;
   /** Включить или выключить тень фонаря (для сравнения кадров). */
   shadows(on: boolean): void;
   /** Нарисовать кадр и вернуть его яркость сеткой 32×18, строка 0 — верхняя. */
@@ -111,6 +117,53 @@ export function installDebug(app: App): void {
       return app.i18n.lang;
     },
     loseContext: (ms) => game().renderer.debugLoseContext(ms),
+    level: () => {
+      const l = app.level;
+      return {
+        seed: l.layout?.seed ?? null,
+        rank: l.layout?.rank ?? null,
+        tiers: l.layout?.tierCount ?? 1,
+        chunks: l.chunks.length,
+        triangles: l.chunks.reduce((n, c) => n + c.mesh.index.length / 3, 0),
+        colliders: l.colliders.boxes.length,
+        spots: l.spots.length,
+        rooms: (l.layout?.rooms ?? []).map((r) => ({ id: r.id, type: r.type, tier: r.tier, cells: r.cells.length })),
+        landmarks: l.landmarks.map((m) => ({ id: m.id, room: m.room, tier: m.tier })),
+      };
+    },
+    gotoLandmark: (id, index = 0, distance = 2.2) => {
+      const l = app.level;
+      const m = l.landmarks.filter((x) => x.id === id)[index];
+      if (!m) return false;
+      // Встаём в узле того же помещения, ближайшем к нужной дистанции от приметы.
+      const nodes = l.nav.filter((n) => n.room === m.room);
+      let best = nodes[0];
+      let bestErr = Infinity;
+      for (const n of nodes) {
+        const err = Math.abs(Math.hypot(n.x - m.x, n.z - m.z) - distance);
+        if (err < bestErr) {
+          bestErr = err;
+          best = n;
+        }
+      }
+      if (!best) return false;
+      const dx = m.x - best.x;
+      const dz = m.z - best.z;
+      const d = Math.hypot(dx, dz) || 1;
+      // Не дальше distance от приметы: из центра клетки подходим ближе по прямой.
+      const k = Math.max(0, (d - distance) / d);
+      const px = best.x + dx * k;
+      const pz = best.z + dz * k;
+      const feet = best.y;
+      game().teleport(px, feet, pz, Math.atan2(-(m.x - px), -(m.z - pz)), Math.atan2(m.y - (feet + 1.42), Math.hypot(m.x - px, m.z - pz)));
+      return true;
+    },
+    gotoRoom: (roomId, yawDeg = 0) => {
+      const n = app.level.nav.find((x) => x.room === roomId);
+      if (!n) return false;
+      game().teleport(n.x, n.y, n.z, (yawDeg * Math.PI) / 180, 0);
+      return true;
+    },
     shadows: (on) => {
       game().renderer.debugShadowsOff = !on;
     },

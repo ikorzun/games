@@ -3,19 +3,12 @@
  * за гермодверью, лестница вниз в тупик. Нужен, чтобы проверить вид, частоту кадров и управление
  * на реальных устройствах до генератора. Собирается теми же деталями, что и будущие уровни.
  */
-import type { Vec3 } from '../core/types';
 import { ColliderSet } from './colliders';
 import { MeshBuilder } from './kit';
-import type { MeshData } from './kit';
+import type { BuiltLevel } from './level';
 import { MAT } from './materials';
 import { barrel, bunk, cables, cageLamp, crate, hermoDoor, locker, pipeRun, rubble, signPlate, stairsDown, stool, table, valve, ventGrille, Xf } from './props';
 import { buildShell, Shell, STYLE_CORRIDOR, STYLE_ROOM, WALL_T } from './shell';
-
-export interface BuiltLevel {
-  chunks: MeshData[];
-  colliders: ColliderSet;
-  spawn: { pos: Vec3; yaw: number };
-}
 
 const CEIL = 2.7;
 const LOW = -1.44;
@@ -89,5 +82,5 @@ export function buildTestLevel(): BuiltLevel {
   rubble(at(-12.0, LOW, -15.9), 23);
   signPlate(at(-12, LOW + 2.3, -16.5 + T), 0.5, 0.16);
 
-  return { chunks: [mb.build()], colliders: col, spawn: { pos: [0, 0, 3], yaw: 0 } };
+  return { chunks: [{ mesh: mb.build(), tierMin: 0, tierMax: 1 }], stairs: [], colliders: col, spawn: { pos: [0, 0, 3], yaw: 0 }, exit: [0, 0, 4], spots: [], landmarks: [], nav: [], layout: null };
 }

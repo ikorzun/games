@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Скриншоты фиксированных ракурсов собранной игры — чтобы смотреть картинку глазами на каждом этапе.
- *   npm run build && node e2e/shots.mjs [--dist dist] [--q high] [--size 1280x720] [--only name,name]
+ *   npm run build && node e2e/shots.mjs [--dist dist] [--q high] [--size 1280x720] [--dsf 1] [--only name,name]
  * Кадры детерминированы: симуляция заморожена и шагается вручную через window.__vz.
  * Файлы — в e2e/out/shots/. Браузер: CHROMIUM_PATH или /opt/pw-browsers/chromium.
  */
@@ -22,6 +22,7 @@ const quality = opt('q', 'high');
 const [W, H] = opt('size', '1280x720').split('x').map(Number);
 const only = opt('only', null)?.split(',');
 const extraQuery = opt('query', '');
+const dsf = Number(opt('dsf', '1')) || 1;
 const OUT = join(ROOT, 'e2e', 'out', 'shots');
 mkdirSync(OUT, { recursive: true });
 
@@ -48,7 +49,7 @@ const server = await preview({ configFile: false, root: ROOT, base: './', logLev
 const url = server.resolvedUrls?.local?.[0];
 const executablePath = process.env.CHROMIUM_PATH || (existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
 const browser = await chromium.launch({ executablePath, headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--mute-audio'] });
-const page = await (await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1, locale: 'ru-RU' })).newPage();
+const page = await (await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: dsf, locale: 'ru-RU' })).newPage();
 page.on('console', (m) => {
   if (m.type() === 'error' || m.type() === 'warning') console.log(`[${m.type()}] ${m.text()}`);
 });

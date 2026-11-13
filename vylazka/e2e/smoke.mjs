@@ -7,7 +7,7 @@
  *   npm run smoke:matrix                                             # + раскладка по матрице размеров, скриншоты в e2e/out/
  *   npm run smoke -- --url https://…                                 # опубликованная ссылка
  *
- * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --only play,touch,bridge,matrix.
+ * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --only play,gen,touch,bridge,matrix.
  * Симуляция в тестах заморожена и шагается через window.__vz: проверяется логика и вёрстка, а не
  * частота кадров (SwiftShader даёт 5–10 к/с). Качество задаётся параметром адреса, иначе по строке
  * видеокарты выбралось бы «низкое» и тень осталась бы непроверенной.
@@ -113,7 +113,7 @@ const benign = (w) => /KHR_parallel_shader_compile|GPU stall due to ReadPixels|A
 
 async function scenarioPlay(browser, baseUrl) {
   section('Игра на ПК: загрузка, ходьба, фонарь, тряска, пауза, качество');
-  const { page, context, log } = await openPage(browser, baseUrl, '?q=high&fail=0&lang=ru&touch=0');
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=high&fail=0&lang=ru&touch=0&level=test');
   let st = await state(page);
   check('первый кадр показан, игра ждёт на стартовом экране', st.overlay === 'start' && st.paused === true, JSON.stringify({ overlay: st.overlay, paused: st.paused }));
   check('стартовый экран виден и подписан по-русски', (await page.textContent('.vz-overlay__prompt'))?.includes('Нажмите') === true);
@@ -244,6 +244,40 @@ async function scenarioPlay(browser, baseUrl) {
   await context.close();
 }
 
+async function scenarioGen(browser, baseUrl) {
+  section('Сгенерированный бункер: загрузка, ярусы, отсечение, спуск по лестнице');
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=3');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  const level = await vz(page, () => window.__vz.level());
+  check('уровень собран из генератора: три яруса, помещений больше двадцати', level.seed === 20041113 && level.tiers === 3 && level.rooms.length > 20, `ярусов ${level.tiers}, помещений ${level.rooms.length}`);
+  check('геометрия в бюджете: чанков меньше 140, треугольников меньше 400 тысяч', level.chunks < 140 && level.triangles < 400000, `${level.chunks} чанков, ${level.triangles} треугольников`);
+  check('есть места для находок и приметы на каждом ярусе', level.spots > 25 && [0, 1, 2].every((t) => level.landmarks.some((m) => m.tier === t)), `мест ${level.spots}, примет ${level.landmarks.length}`);
+
+  let st = await vz(page, () => window.__vz.step(30));
+  const grid0 = await vz(page, () => window.__vz.probe());
+  let info = await vz(page, () => window.__vz.info());
+  check('у люка: картинка есть, игрок стоит на полу первого яруса', Math.max(...grid0) > 40 && Math.abs(st.pos[1]) < 0.01 && st.onGround, `y = ${st.pos[1].toFixed(3)}`);
+  check('на первом ярусе чужие этажи не рисуются', info.visible < info.chunks * 0.7, `видно ${info.visible} из ${info.chunks}`);
+  check('вызовов отрисовки не больше 80', info.calls <= 80, `${info.calls} вызовов, ${info.triangles} треугольников`);
+
+  // Приметы на каждом ярусе: встаём рядом, проверяем высоту пола и картинку.
+  for (const [tier, id] of [
+    [1, 'diesel'],
+    [2, 'archive'],
+  ]) {
+    const ok = await vz(page, (i) => window.__vz.gotoLandmark(i), id);
+    st = await vz(page, () => window.__vz.step(40));
+    const g = await vz(page, () => window.__vz.probe());
+    info = await vz(page, () => window.__vz.info());
+    check(`ярус ${tier + 1}: примета «${id}» найдена, игрок стоит на полу яруса, в кадре светло`, ok && Math.abs(st.pos[1] + tier * 4.5) < 0.01 && st.onGround && Math.max(...g) > 40, `y = ${st.pos[1].toFixed(2)}, максимум ${Math.max(...g).toFixed(0)}`);
+    check(`ярус ${tier + 1}: рисуется не весь уровень`, info.visible < info.chunks, `видно ${info.visible} из ${info.chunks}, ${info.calls} вызовов`);
+  }
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  await context.close();
+}
+
 /** Синтетический палец: события указателя на элементе под точкой. */
 const finger = (page, type, id, x, y) =>
   page.evaluate(
@@ -261,7 +295,7 @@ async function scenarioTouch(browser, baseUrl) {
     ['ландшафт 915×412', 915, 412],
     ['портрет 390×844', 390, 844],
   ]) {
-    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru', { viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&level=test', { viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
     let st = await state(page);
     check(`${name}: схема управления — тач`, st.touch === true);
     check(`${name}: стартовый экран зовёт коснуться`, (await page.textContent('.vz-overlay__prompt'))?.includes('Коснитесь') === true);
@@ -389,7 +423,7 @@ async function scenarioMatrix(browser, baseUrl) {
   if (wantShots) mkdirSync(OUT, { recursive: true });
   for (const lang of matrixLangs) {
     for (const [name, width, height, dpr, mobile] of MATRIX) {
-      const { page, context, log } = await openPage(browser, baseUrl, `?lang=${lang}&pseudo=1&q=low&fail=0`, { viewport: { width, height }, deviceScaleFactor: dpr, isMobile: mobile, hasTouch: mobile, locale: lang });
+      const { page, context, log } = await openPage(browser, baseUrl, `?lang=${lang}&pseudo=1&q=low&fail=0&level=test`, { viewport: { width, height }, deviceScaleFactor: dpr, isMobile: mobile, hasTouch: mobile, locale: lang });
       const screens = [];
       const probe = async (screen) => {
         const bad = await page.evaluate(layoutProbe);
@@ -433,7 +467,7 @@ async function scenarioBridge(browser, baseUrl) {
       sdk.push({ text, vals });
     });
   };
-  const { page, context, log } = await openPage(browser, baseUrl, '?debug=1&q=low&fail=0', {}, onConsole);
+  const { page, context, log } = await openPage(browser, baseUrl, '?debug=1&q=low&fail=0&level=test', {}, onConsole);
   const hasBridge = await page.evaluate(() => !!window.bridge);
   if (!hasBridge) {
     console.log('  (window.bridge нет — раздел пропущен)');
@@ -489,6 +523,7 @@ const browser = await launchBrowser();
 console.log(`Смоук: ${remoteUrl ?? distDir} → ${server.url}`);
 try {
   if (wants('play')) await scenarioPlay(browser, server.url);
+  if (wants('gen')) await scenarioGen(browser, server.url);
   if (wants('touch')) await scenarioTouch(browser, server.url);
   if (wants('bridge')) await scenarioBridge(browser, server.url);
   if (wantMatrix && wants('matrix')) await scenarioMatrix(browser, server.url);

@@ -15,7 +15,7 @@ import type { FrameView, GameRenderer } from './render/renderer';
 import { DEFAULT_FLASHLIGHT, Flashlight } from './systems/flashlight';
 import type { FlashlightConfig } from './systems/flashlight';
 import { ColliderSet } from './world/colliders';
-import type { BuiltLevel } from './world/test_level';
+import type { BuiltLevel } from './world/level';
 
 export const STEP = 1 / 60;
 const WALK_SPEED = 2.3;
@@ -73,7 +73,7 @@ export class Game {
   loadLevel(level: BuiltLevel): void {
     this.colliders = level.colliders;
     this.spawn = level.spawn;
-    this.renderer.setWorld(level.chunks);
+    this.renderer.setWorld(level.chunks, level.stairs);
     this.respawn();
   }
 

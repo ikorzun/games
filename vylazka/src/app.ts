@@ -18,6 +18,9 @@ import type { Quality } from './render/renderer';
 import { Hud } from './ui/hud';
 import { Overlay } from './ui/overlay';
 import { TouchControls } from './ui/touch_controls';
+import { generateLayout } from './gen/layout';
+import type { BuiltLevel } from './world/level';
+import { buildLevel } from './world/level_build';
 import { buildTestLevel } from './world/test_level';
 
 const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
@@ -28,6 +31,8 @@ export class App {
   readonly lifecycle = new Lifecycle();
   readonly i18n = i18n;
   game!: Game;
+  /** Текущий уровень (геометрия уже отдана рендеру; здесь — игровые точки и граф). */
+  level!: BuiltLevel;
   overlay!: Overlay;
   hud!: Hud;
   motion!: MotionSensor;
@@ -109,13 +114,16 @@ export class App {
 
     const seed = Number(p.get('seed') ?? '') || 20041113;
     const failAt = Number(p.get('fail') ?? '');
+    const testLevel = p.get('level') === 'test';
+    const rank = Math.max(1, Math.min(3, Math.round(Number(p.get('rank') ?? '') || 2))) as 1 | 2 | 3;
     this.game = new Game(renderer, mulberry32(seed), {
-      // Технический срез: первый отказ скоро, дальше — чаще обычного, чтобы тряску можно было попробовать сразу.
-      firstFailAt: Number.isFinite(failAt) && p.get('fail') !== null ? failAt : 12,
-      meanFailInterval: 30,
-      graceAfterRevive: 10,
+      // Первый отказ фонаря — принудительный и скорый: игрок должен сразу узнать, что фонарь надо трясти.
+      firstFailAt: Number.isFinite(failAt) && p.get('fail') !== null ? failAt : testLevel ? 12 : 40,
+      ...(testLevel ? { meanFailInterval: 30, graceAfterRevive: 10 } : {}),
     });
-    this.game.loadLevel(buildTestLevel());
+    // Уровень: по умолчанию — бункер из генератора по сиду; ?level=test — коридор технического среза.
+    this.level = testLevel ? buildTestLevel() : buildLevel(generateLayout(seed, rank));
+    this.game.loadLevel(this.level);
 
     this.motion = new MotionSensor(this.game.shake);
     this.desktop = new DesktopInput(this.canvas, this.game.shake, this.lifecycle);
@@ -172,7 +180,7 @@ export class App {
   start(): void {
     if (!this.game || this.started) return;
     this.started = true;
-    this.platform.track('level_started', { world: 'slice', level: 'test' });
+    this.platform.track('level_started', { world: 'bunker', level: this.level.layout ? `seed_${this.level.layout.seed}` : 'test' });
     if (this.touchMode && !MotionSensor.needsPermission()) void this.enableMotion();
     this.resume();
   }
