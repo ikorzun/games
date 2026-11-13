@@ -9,7 +9,7 @@
 import { hash2, mulberry32 } from '../core/rng';
 import type { Rng } from '../core/rng';
 
-export const GEN_VERSION = 1;
+export const GEN_VERSION = 2;
 /** Клеток по стороне яруса. */
 export const GRID = 16;
 /** Перепад между ярусами, м. */
@@ -40,7 +40,17 @@ export type RoomType =
   | 'tanks'
   | 'switchboard'
   | 'archive'
-  | 'collapsed';
+  | 'collapsed'
+  // Домашние комнаты: вросли в убежище, как во сне.
+  | 'kitchen'
+  | 'living'
+  | 'bedroom'
+  | 'bathroom'
+  | 'nursery'
+  | 'hallway';
+
+/** Домашние помещения: обои и паркет вместо масляной краски. */
+export const HOME_ROOMS: ReadonlySet<RoomType> = new Set<RoomType>(['kitchen', 'living', 'bedroom', 'bathroom', 'nursery', 'hallway']);
 
 export interface GenRoom {
   id: number;
@@ -127,28 +137,36 @@ const SIZES_SMALL: readonly (readonly [number, number])[] = [
   [1, 1],
 ];
 
+// Порядок в квоте — приоритет размещения, поэтому домашние комнаты чередуются с помещениями убежища.
 const QUOTAS: readonly (readonly Quota[])[] = [
   [
     ['dorm', SIZES_BIG],
+    ['living', SIZES_BIG],
     ['command', SIZES_MID],
+    ['kitchen', SIZES_MID],
     ['medical', SIZES_MID],
+    ['hallway', SIZES_SMALL],
     ['washroom', SIZES_SMALL],
     ['storage', SIZES_MID],
-    ['dorm', SIZES_BIG],
   ],
   [
     ['fvu', SIZES_BIG],
     ['diesel', SIZES_BIG],
+    ['bedroom', SIZES_BIG],
     ['tanks', SIZES_BIG],
+    ['bathroom', SIZES_SMALL],
     ['switchboard', SIZES_SMALL],
     ['storage', SIZES_MID],
   ],
   [
     ['archive', SIZES_BIG],
+    ['nursery', SIZES_MID],
     ['storage', SIZES_MID],
+    ['living', SIZES_BIG],
     ['dorm', SIZES_BIG],
     ['collapsed', [[1, 1]]],
     ['collapsed', [[1, 1]]],
+    ['kitchen', SIZES_MID],
     ['washroom', SIZES_SMALL],
   ],
 ];

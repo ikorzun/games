@@ -417,19 +417,30 @@ export function puddle(xf: Xf, w: number, d: number): void {
   xf.box([-w / 2 + 0.15, 0.002, -d / 2 - 0.18], [w / 2 - 0.2, 0.006, -d / 2], MAT.wetConcrete, { tint: [0.7, 0.72, 0.75], skip: ['ny'] });
 }
 
-/** Простая дверь в проёме 1,1 × 2,05 м: рама и распахнутая створка. Стена вдоль x, створка открыта к +z. */
-export function plainDoor(xf: Xf, tint: Vec3 = [1, 1, 1]): void {
+/** Коробка простой двери в проёме 1,1 × 2,05 м: два косяка и перемычка. Стена вдоль x, створка (если есть) открывается к +z. */
+export function doorFrame(xf: Xf, tint: Vec3 = [1, 1, 1]): void {
   const hw = 0.55;
   const t = 0.165;
   const frame = dim(tint, 0.7);
   xf.box([-hw - 0.05, 0, -t], [-hw, 2.05, t], MAT.wood, { tint: frame, aoBottom: 0.6 });
   xf.box([hw, 0, -t], [hw + 0.05, 2.05, t], MAT.wood, { tint: frame, aoBottom: 0.6 });
   xf.box([-hw - 0.05, 2.05, -t], [hw + 0.05, 2.1, t], MAT.wood, { tint: frame });
-  // Створка на петлях у левого косяка, открыта чуть шире прямого угла — стоит вдоль стены.
+}
+
+/** Створка простой двери: на петлях у левого косяка, открыта чуть шире прямого угла — стоит вдоль стены. */
+export function doorLeaf(xf: Xf, tint: Vec3 = [1, 1, 1]): void {
+  const hw = 0.55;
+  const t = 0.165;
   xf.solid([-hw - 0.045, 0.02, t], [-hw - 0.005, 2.02, t + 1.05], MAT.wood, { bevel: 0.006, tint, aoBottom: 0.7 });
   xf.box([-hw - 0.005, 0.25, t + 0.12], [-hw + 0.004, 0.95, t + 0.93], MAT.wood, { tint: dim(tint, 0.85) });
   xf.box([-hw - 0.005, 1.1, t + 0.12], [-hw + 0.004, 1.85, t + 0.93], MAT.wood, { tint: dim(tint, 0.85) });
   xf.cyl([-hw - 0.005, 1.02, t + 0.95], 'x', 0.06, 0.018, MAT.brass, { segments: 6 });
+}
+
+/** Простая дверь целиком: коробка и распахнутая створка. */
+export function plainDoor(xf: Xf, tint: Vec3 = [1, 1, 1]): void {
+  doorFrame(xf, tint);
+  doorLeaf(xf, tint);
 }
 
 /** Знак «опасно, газ» на стене: жёлтый ромб с тёмной меткой. Начало — центр. */

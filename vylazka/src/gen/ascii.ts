@@ -18,6 +18,12 @@ const GLYPH: Record<RoomType, string> = {
   switchboard: 'B',
   archive: 'R',
   collapsed: 'X',
+  kitchen: 'K',
+  living: 'L',
+  bedroom: 'O',
+  bathroom: 'V',
+  nursery: 'N',
+  hallway: 'H',
 };
 
 /** Ярусы плана строками; двери отмечены «+» между клетками. */

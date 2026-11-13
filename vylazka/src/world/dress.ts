@@ -4,25 +4,25 @@
  * трафареты, таблички и плакаты, потолок — провисшие кабели и натёки, пол — бумаги и мусор.
  * Чем глубже ярус, тем больше хлама и тем чаще надписи от руки.
  *
- * Предметы берутся из реестра PROPS по именам; незнакомое имя просто пропускается.
+ * Предметы берутся из общего реестра ALL_PROPS (убежище и дом) по именам; незнакомое имя просто пропускается.
  */
 import type { Vec3 } from '../core/types';
 import type { RoomType } from '../gen/layout';
 import type { RoomCtx, Slot } from './furnish';
 import { MAT } from './materials';
 import { poster } from './props_bunker';
-import { PROPS } from './props_more';
+import { ALL_PROPS as PROPS } from './props_all';
 import { BRUSH } from './signs';
 
 type Weighted = readonly (readonly [string, number])[];
 
 /** Что ставят на пол у свободной стены. */
 const FLOOR: Partial<Record<RoomType, Weighted>> = {
-  corridor: [['debris_heap', 3], ['bottles', 2], ['canisters', 1], ['boots_helmet', 2], ['gasmask_pile', 2], ['board_stack', 2], ['brick_pile', 1], ['ladder_lean', 1], ['stretcher', 1], ['water_drum', 1], ['barrel_stack', 1], ['kerosene_lamp', 1], ['fire_shield', 2], ['coat_hooks', 1]],
-  dorm: [['bunk_triple', 4], ['bed_frame', 3], ['coat_hooks', 3], ['gasmask_crate', 2], ['canteen_set', 2], ['boots_helmet', 2], ['overturned_table', 1], ['water_drum', 2], ['kerosene_lamp', 2], ['gasmask_pile', 1]],
-  command: [['typewriter_desk', 3], ['field_phone', 3], ['dosimeter_case', 2], ['canteen_set', 1], ['coat_hooks', 1], ['overturned_table', 1], ['kerosene_lamp', 1]],
+  corridor: [['coat_rack', 0.5], ['houseplant', 0.5], ['debris_heap', 3], ['bottles', 2], ['canisters', 1], ['boots_helmet', 2], ['gasmask_pile', 2], ['board_stack', 2], ['brick_pile', 1], ['ladder_lean', 1], ['stretcher', 1], ['water_drum', 1], ['barrel_stack', 1], ['kerosene_lamp', 1], ['fire_shield', 2], ['coat_hooks', 1]],
+  dorm: [['bunk_triple', 4], ['bed_frame', 3], ['coat_hooks', 3], ['gasmask_crate', 2], ['canteen_set', 2], ['boots_helmet', 2], ['overturned_table', 1], ['water_drum', 2], ['kerosene_lamp', 2], ['gasmask_pile', 1], ['armchair', 0.7], ['wardrobe', 0.7]],
+  command: [['typewriter_desk', 3], ['field_phone', 3], ['dosimeter_case', 2], ['canteen_set', 1], ['coat_hooks', 1], ['overturned_table', 1], ['kerosene_lamp', 1], ['floor_lamp', 0.7], ['armchair', 0.7]],
   medical: [['med_stretcher_bed', 4], ['stretcher', 3], ['washstand', 2], ['bottles', 2], ['water_drum', 1]],
-  storage: [['gasmask_crate', 4], ['mesh_partition', 2], ['barrel_stack', 2], ['canisters', 2], ['brick_pile', 1], ['board_stack', 2], ['debris_heap', 2], ['ladder_lean', 1], ['gasmask_pile', 2]],
+  storage: [['gasmask_crate', 4], ['mesh_partition', 2], ['barrel_stack', 2], ['canisters', 2], ['brick_pile', 1], ['board_stack', 2], ['debris_heap', 2], ['ladder_lean', 1], ['gasmask_pile', 2], ['wardrobe', 0.6], ['bookshelf', 0.6]],
   washroom: [['squat_toilet', 4], ['shower_stub', 3], ['washstand', 3], ['hand_pump', 1], ['bottles', 1]],
   fvu: [['filter_stack', 4], ['hand_fan', 3], ['hermo_valve', 3], ['blast_valve', 2], ['u_gauge', 2], ['air_cylinders', 2]],
   diesel: [['battery_rack', 3], ['air_cylinders', 3], ['canisters', 3], ['oil_tray', 2], ['barrel_stack', 2], ['fire_shield', 3], ['knife_switch', 2]],
@@ -32,6 +32,13 @@ const FLOOR: Partial<Record<RoomType, Weighted>> = {
   airlock: [['coat_hooks', 3], ['fire_shield', 2], ['boots_helmet', 2], ['gasmask_pile', 1]],
   entrance: [['coat_hooks', 2], ['fire_shield', 2], ['boots_helmet', 1]],
   collapsed: [['debris_heap', 4], ['brick_pile', 2], ['board_stack', 2]],
+  // Домашние комнаты: то, что остаётся на свободных стенах после основной мебели.
+  kitchen: [['radiator', 3], ['window_fake', 3], ['sink_cabinet', 1], ['houseplant', 1]],
+  living: [['floor_lamp', 3], ['wall_carpet', 3], ['bookshelf', 2], ['armchair', 2], ['houseplant', 2], ['christmas_tree', 0.3]],
+  bedroom: [['wall_carpet', 2], ['radiator', 2], ['window_fake', 2], ['floor_lamp', 2], ['mirror', 2], ['wardrobe', 1]],
+  bathroom: [['mirror', 2], ['clothes_dryer', 2], ['washing_machine', 1]],
+  nursery: [['toy_heap', 2], ['bookshelf', 2], ['window_fake', 2], ['crib', 0.5]],
+  hallway: [['coat_rack', 1], ['mirror', 3], ['door_leaf_lean', 1]],
 };
 
 /** Что висит на свободной стене на уровне глаз: трафарет, табличка или плакат. */
@@ -47,6 +54,11 @@ const SIGNS: Partial<Record<RoomType, Weighted>> = {
   tanks: [['pl_drink', 3], ['water', 3], ['save_water', 2]],
   switchboard: [['pl_voltage', 4], ['pl_nopower', 3], ['sym_bolt', 3]],
   archive: [['no_smoking', 2], ['pl_fire', 2], ['calendar', 1]],
+  kitchen: [['calendar', 2], ['clock', 2]],
+  living: [['clock', 2], ['calendar', 1]],
+  bedroom: [['calendar', 1], ['clock', 1]],
+  nursery: [['calendar', 1]],
+  hallway: [['clock', 1]],
   airlock: [['attention', 2], ['pl_shelter', 3], ['poster', 2], ['sym_rad', 1]],
   entrance: [['pl_shelter', 3], ['exit', 3], ['poster', 1]],
 };

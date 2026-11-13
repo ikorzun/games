@@ -2,7 +2,7 @@
  * Сборка уровня из плана генератора: скорлупа по ярусам, лестничные марши, двери, обстановка,
  * места для находок, приметные объекты и навигационный граф. Чистый TS: работает в тестах и в Worker.
  */
-import { hash2, mulberry32 } from '../core/rng';
+import { hash01, hash2, mulberry32 } from '../core/rng';
 import type { Vec3 } from '../core/types';
 import { CEIL_H, DX, DZ, GRID, STAIR_CELLS, TIER_DROP } from '../gen/layout';
 import type { GenLayout, GenRoom, RoomType } from '../gen/layout';
@@ -14,7 +14,8 @@ import { MeshBuilder } from './kit';
 import type { BuiltLevel, CollapseSpec, ItemSpot, Landmark, LevelChunk, NavNode, RoomVariant, StairLink, Zone } from './level';
 import { MAT } from './materials';
 import { hermoDoor, stairsDown, Xf } from './props';
-import { collapse, pit, plainDoor, warningSign, waterSheet } from './props_bunker';
+import { doorFrame, doorLeaf, collapse, pit, warningSign, waterSheet } from './props_bunker';
+import { ALL_PROPS } from './props_all';
 import { buildShell, CELL, Shell, STYLE_CORRIDOR, WALL_T } from './shell';
 import type { ShellCell, WallStyle } from './shell';
 
@@ -48,6 +49,16 @@ const ROOM_STYLE: Partial<Record<RoomType, Partial<WallStyle>>> = {
   collapsed: { lower: MAT.brick, upper: MAT.concrete, stripe: MAT.brick, lowerTint: [0.7, 0.7, 0.7], upperTint: [0.7, 0.7, 0.7], paintHeight: 1.4 },
   entrance: { lower: MAT.concrete, lowerTint: [0.75, 0.75, 0.72], upper: MAT.concrete, upperTint: [0.9, 0.9, 0.87], paintHeight: 1.2 },
   airlock: { lower: MAT.paintGreen, lowerTint: [0.7, 0.75, 0.62], paintHeight: 1.6 },
+  // Дом, вросший в убежище: обои на всю высоту стены (полоса и верх — те же обои) и паркет вместо бетона.
+  // Оттенки у комнат разные, всё пастельное.
+  living: { lower: MAT.paper, lowerTint: [1.12, 0.88, 0.86], upper: MAT.paper, upperTint: [1.1, 0.9, 0.88], stripe: MAT.paper, paintHeight: 2.2, floor: MAT.wood, floorTint: [0.95, 0.8, 0.65] },
+  bedroom: { lower: MAT.paper, lowerTint: [0.86, 0.95, 1.12], upper: MAT.paper, upperTint: [0.88, 0.96, 1.1], stripe: MAT.paper, paintHeight: 2.2, floor: MAT.wood, floorTint: [0.85, 0.75, 0.65] },
+  nursery: { lower: MAT.paper, lowerTint: [1.12, 1.12, 0.78], upper: MAT.paper, upperTint: [1.1, 1.1, 0.82], stripe: MAT.paper, paintHeight: 2.2, floor: MAT.wood, floorTint: [1.05, 0.9, 0.72] },
+  hallway: { lower: MAT.paper, lowerTint: [0.98, 0.84, 0.68], upper: MAT.paper, upperTint: [1.0, 0.88, 0.74], stripe: MAT.paper, paintHeight: 2.0, floor: MAT.wood, floorTint: [0.78, 0.62, 0.5] },
+  // Ванная светлее санузла убежища: белёсая плитка до потолка, на полу плитка посветлее.
+  bathroom: { lower: MAT.tile, lowerTint: [1.08, 1.14, 1.16], upper: MAT.tile, upperTint: [1.05, 1.1, 1.12], stripe: MAT.tile, paintHeight: 2.2, floor: MAT.tileFloor, floorTint: [1.35, 1.45, 1.55] },
+  // Кухня: крашеный низ, побелка сверху, на полу плитка.
+  kitchen: { lower: MAT.paintGreen, lowerTint: [1.45, 1.5, 1.3], stripe: MAT.paintGreen, paintHeight: 1.5, floor: MAT.tileFloor, floorTint: [1.0, 1.0, 0.95] },
 };
 
 /** Коридоры ярусов красят по-разному; чем глубже, тем темнее и грязнее. */
@@ -156,6 +167,11 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
   }
 
   // ── Двери ──
+  // В игре двери не открывают: проём либо пуст (коробка осталась), либо створка распахнута, либо
+  // сорвана — прислонена к стене рядом или лежит на полу за проёмом.
+  const hazardCells = new Set([...hz.pits, ...hz.water, ...hz.collapses].map((c) => `${c.tier},${c.x},${c.z}`));
+  /** Участки стен у дверей, занятые прислонённой створкой: обстановка их пропускает. */
+  const blockedSlots = new Set<string>();
   const gridAt = (tier: number, x: number, z: number): GenRoom | undefined => {
     const c = shells[tier]!.get(x - HALF, z - HALF);
     return c ? roomById(c.room) : undefined;
@@ -176,7 +192,42 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     const y = tierFloor(e.tier);
     const xf = new Xf(chunkFor(host, hostCell[0], hostCell[1]).mb, col, wx, y, wz, ROT_FACING[toward]!);
     if (e.kind === 'hermo') hermoDoor(xf);
-    else plainDoor(xf, host.type === 'medical' ? [1.5, 1.5, 1.45] : [0.9 + ((host.id * 7) % 5) * 0.05, 0.85, 0.8]);
+    else {
+      const tint: Vec3 = host.type === 'medical' ? [1.5, 1.5, 1.45] : [0.9 + ((host.id * 7) % 5) * 0.05, 0.85, 0.8];
+      doorFrame(xf, tint);
+      // Шахта лестницы и клетки с опасностями остаются как есть: створка распахнута.
+      const plain = a.type === 'stairwell' || b.type === 'stairwell' || hazardCells.has(`${e.tier},${hostCell[0]},${hostCell[1]}`) || hazardCells.has(`${e.tier},${e.cx},${e.cz}`) || hazardCells.has(`${e.tier},${bx},${bz}`);
+      const h = plain ? 0.35 : hash01(e.cx * 64 + e.cz, e.dir + 2 * e.tier, layout.seed ^ 0xd00d);
+      const seed = Math.floor(hash01(e.cz * 64 + e.cx, e.tier, layout.seed ^ 0xbeef) * 1e6);
+      let lean = h >= 0.65 && h < 0.85;
+      let side: 1 | -1 = hash2(e.cx, e.cz, layout.seed ^ e.dir) & 1 ? 1 : -1;
+      if (lean) {
+        // Прислонить можно к глухому участку той же стены; у одноклеточных помещений стену не отнимаем.
+        const ax = xf.pt(1, 0, 0);
+        const dirPlus = Math.abs(ax[0] - xf.ox) > 0.5 ? (ax[0] > xf.ox ? 0 : 2) : ax[2] > xf.oz ? 1 : 3;
+        const hsx = hostCell[0] - HALF;
+        const hsz = hostCell[1] - HALF;
+        const wallAt = (sd: 1 | -1): boolean => shells[e.tier]!.edge(hsx, hsz, sd === 1 ? dirPlus : (dirPlus + 2) % 4) === 'wall';
+        if (host.cells.length < 2) lean = false;
+        else if (!wallAt(side)) {
+          side = side === 1 ? -1 : 1;
+          if (!wallAt(side)) lean = false;
+        }
+        if (lean) {
+          blockedSlots.add(`${e.tier},${hostCell[0]},${hostCell[1]},${side === 1 ? dirPlus : (dirPlus + 2) % 4}`);
+        }
+      }
+      if (h < 0.35) {
+        // Только коробка.
+      } else if (h < 0.65 || (h < 0.85 && !lean)) doorLeaf(xf, tint);
+      else if (lean) {
+        // Створка сорвана и прислонена к стене у проёма: от косяка до угла остаётся не меньше 0,9 м прохода.
+        ALL_PROPS.door_leaf_lean!.build(xf.child(side * 0.9, 0, 0.17), seed);
+      } else {
+        // Лежит на полу сразу за проёмом, плашмя: перешагнуть можно, преграды нет.
+        ALL_PROPS.door_leaf_down!.build(xf.child(0, 0, 1.4), seed);
+      }
+    }
     // Табличка над дверью со стороны, противоположной створке.
     const other = intoB ? a : b;
     const otherCell: [number, number] = intoB ? [e.cx, e.cz] : [bx, bz];
@@ -260,7 +311,6 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
 
   // ── Обстановка ──
   // У провала, в воде и под будущим завалом у стен пусто: там нужен проход по карнизу.
-  const hazardCells = new Set([...hz.pits, ...hz.water, ...hz.collapses].map((c) => `${c.tier},${c.x},${c.z}`));
   const spots: ItemSpot[] = [];
   const landmarks: Landmark[] = [];
   // Комната-аномалия: одно помещение нижнего яруса получает два варианта обстановки. Находок и целей
@@ -298,7 +348,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
         const along = Math.abs(ax[0] - xf.ox) > 0.5 ? (ax[0] > xf.ox ? 0 : 2) : ax[2] > xf.oz ? 1 : 3;
         const kR = kinds[along]!;
         const kL = kinds[(along + 2) % 4]!;
-        slots.push({ xf, cx: x, cz: z, dir: d, hazard, deep: doors === 0 && room.type !== 'corridor', cornerR: kR === 'wall' || kR === 'door', cornerL: kL === 'wall' || kL === 'door', used: false });
+        slots.push({ xf, cx: x, cz: z, dir: d, hazard, deep: doors === 0 && room.type !== 'corridor', cornerR: kR === 'wall' || kR === 'door', cornerL: kL === 'wall' || kL === 'door', used: blockedSlots.has(`${room.tier},${x},${z},${d}`) });
       }
     }
     // Свой ГСЧ у каждого помещения: правка одной комнаты не сдвигает остальные.

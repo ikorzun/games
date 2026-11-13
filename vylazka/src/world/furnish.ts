@@ -8,6 +8,7 @@ import { dressRoom } from './dress';
 import type { GenRoom } from '../gen/layout';
 import type { ItemSpot, Landmark } from './level';
 import { MAT } from './materials';
+import { ALL_PROPS } from './props_all';
 import { barrel, bunk, cables, cageLamp, crate, locker, pipeRun, rubble, signPlate, stool, table, valve, ventGrille } from './props';
 import type { Xf } from './props';
 import {
@@ -481,6 +482,145 @@ function collapsed(ctx: RoomCtx): void {
   spot(ctx, pile, 0, 0.02, 1.0, 'floor');
 }
 
+// ───────────────────────── домашние комнаты ─────────────────────────
+
+/** Предмет в стопке на одном участке стены: имя, сдвиг вдоль стены, высота (для настенных — своя). */
+type HomeItem = readonly [name: string, dx?: number, y?: number];
+
+/**
+ * Поставить один или несколько предметов реестра на свободный участок стены. Глубокое (глубже 0,6 м)
+ * — сначала туда, где нет дверей; в тесных комнатах допускается и у двери, если не глубже 0,75 м.
+ * Настенные предметы (ковёр, окно, батарея) вешаются над низкой мебелью на тот же участок.
+ */
+function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; x: number } | null {
+  const specs = items.map(([n]) => ALL_PROPS[n]);
+  if (specs.some((p) => !p)) return null;
+  let depth = 0;
+  let half = 0;
+  items.forEach(([, dx = 0], i) => {
+    const p = specs[i]!;
+    if (p.mount !== 'wall') depth = Math.max(depth, p.d);
+    half = Math.max(half, Math.abs(dx) + p.w / 2);
+  });
+  const s = (depth > 0.6 ? free(ctx, true)[0] ?? (depth <= 0.75 ? free(ctx, false)[0] : undefined) : free(ctx, false)[0]) ?? null;
+  if (!s) return null;
+  s.used = true;
+  const x = fit(s, half * 2, depth);
+  items.forEach(([, dx = 0, y], i) => {
+    const p = specs[i]!;
+    const seed = Math.floor(ctx.rng() * 1e6);
+    p.build(s.xf.child(x + dx, p.mount === 'wall' ? (y ?? p.y ?? 1.2) : 0, 0), seed);
+  });
+  return { s, x };
+}
+
+/** Клетка для центральных предметов: лучше без проходов. */
+function homeCentre(ctx: RoomCtx): CellInfo {
+  return ctx.cells.find((c) => c.doors === 0) ?? ctx.cells[0]!;
+}
+
+/** Ковёр посреди клетки. */
+function rugAt(ctx: RoomCtx, c: CellInfo): void {
+  ALL_PROPS.rug!.build(c.xf.child(0, 0, 0), Math.floor(ctx.rng() * 1e6));
+}
+
+/** Места для вещей на полу: свободные точки у центров клеток, по кругу, чтобы не налезали друг на друга. */
+function floorSpots(ctx: RoomCtx, n: number): void {
+  const offsets: readonly (readonly [number, number])[] = [
+    [0, 0],
+    [0.55, 0.4],
+    [-0.5, -0.45],
+    [0.45, -0.5],
+  ];
+  const cells = ctx.cells;
+  for (let i = 0; i < n; i++) {
+    const c = cells[i % cells.length]!;
+    const [ox, oz] = offsets[Math.floor(i / cells.length) % offsets.length]!;
+    spot(ctx, c.xf, ox, 0.03, oz, 'floor');
+  }
+}
+
+function kitchen(ctx: RoomCtx): void {
+  lamps(ctx);
+  const table = homeStack(ctx, [['kitchen_table']]);
+  if (table) {
+    landmark(ctx, 'kitchen', table.s.xf, table.x, 0.7, 0.4);
+    // Свободный край столешницы слева от тарелки.
+    spot(ctx, table.s.xf, table.x - 0.42, 0.67, 0.2, 'table');
+  }
+  homeStack(ctx, [['fridge']]);
+  homeStack(ctx, [['stove']]);
+  homeStack(ctx, [['sink_cabinet']]);
+  homeStack(ctx, [['radiator', 0.2], ['window_fake', -0.3]]);
+  floorSpots(ctx, table ? 2 : 3);
+}
+
+function living(ctx: RoomCtx): void {
+  // Люстра в одной клетке, в остальных — обычные лампы.
+  const centre = homeCentre(ctx);
+  ctx.cells.forEach((c, i) => {
+    if (c === centre) ALL_PROPS.chandelier!.build(c.xf.child(0, ctx.h, 0), 0);
+    else if (i % 2 === 0) cageLamp(c.xf.child(0, ctx.h, 0));
+  });
+  const sofa = homeStack(ctx, [['sofa'], ['wall_carpet']]);
+  if (sofa) landmark(ctx, 'living', sofa.s.xf, sofa.x, 0.6, 0.45);
+  homeStack(ctx, [['tv_stand']]);
+  if (ctx.rng() < 0.8) homeStack(ctx, [['armchair']]);
+  if (ctx.rng() < 0.8) homeStack(ctx, [['bookshelf']]);
+  if (ctx.rng() < 0.7) homeStack(ctx, [['floor_lamp']]);
+  if (ctx.rng() < 0.6) homeStack(ctx, [['houseplant']]);
+  // Ёлка стоит не везде и не всегда: сон помнит праздник выборочно.
+  if (ctx.rng() < 0.15) homeStack(ctx, [['christmas_tree']]);
+  rugAt(ctx, centre);
+  floorSpots(ctx, 3);
+}
+
+function bedroom(ctx: RoomCtx): void {
+  lamps(ctx);
+  const bed = homeStack(ctx, ctx.rng() < 0.6 ? [['bed_home'], ['wall_carpet']] : [['bed_home']]);
+  if (bed) landmark(ctx, 'bedroom', bed.s.xf, bed.x, 0.55, 0.5);
+  homeStack(ctx, [['wardrobe']]);
+  homeStack(ctx, [['mirror', 0.5], ['floor_lamp', -0.5]]);
+  homeStack(ctx, [['radiator', 0.2], ['window_fake', -0.3]]);
+  floorSpots(ctx, 3);
+}
+
+function bathroom(ctx: RoomCtx): void {
+  lamps(ctx);
+  const tub = homeStack(ctx, [['bathtub']]);
+  if (tub) landmark(ctx, 'bathroom', tub.s.xf, tub.x, 0.6, 0.4);
+  // Зеркало вешается над унитазом и стиральной машиной, поэтому выше обычного.
+  homeStack(ctx, [['toilet_home', -0.55], ['washing_machine', 0.5], ['mirror', 0.5, 1.15]]);
+  homeStack(ctx, [['clothes_dryer']]);
+  floorSpots(ctx, 2);
+}
+
+function nursery(ctx: RoomCtx): void {
+  lamps(ctx);
+  const crib = homeStack(ctx, [['crib']]);
+  if (crib) landmark(ctx, 'nursery', crib.s.xf, crib.x, 0.6, 0.35);
+  const desk = homeStack(ctx, [['desk_pc']]);
+  // Справа от монитора столешница свободна.
+  if (desk) spot(ctx, desk.s.xf, desk.x + 0.45, 0.77, 0.3, 'table');
+  homeStack(ctx, [['toy_heap']]);
+  homeStack(ctx, [['bookshelf']]);
+  homeStack(ctx, [['window_fake']]);
+  rugAt(ctx, homeCentre(ctx));
+  floorSpots(ctx, desk ? 2 : 3);
+}
+
+function hallway(ctx: RoomCtx): void {
+  lamps(ctx);
+  const rack = homeStack(ctx, [['coat_rack']]);
+  if (rack) landmark(ctx, 'hallway', rack.s.xf, rack.x, 1.1, 0.25);
+  // Зеркало висит выше гладильной доски, чтобы доска не вросла в раму.
+  const wall: HomeItem[] = [['mirror', -0.3, 1.0]];
+  if (ctx.rng() < 0.5) wall.push(['ironing_board', 0.45]);
+  homeStack(ctx, wall);
+  if (ctx.rng() < 0.6) homeStack(ctx, [['door_leaf_lean']]);
+  floorSpots(ctx, ctx.cells.length > 1 ? 3 : 2);
+}
+
 function stairwell(_ctx: RoomCtx): void {
   // В шахте лестницы пусто: ни ламп, ни труб — ничто не должно выдавать, сколько пройдено.
 }
@@ -501,6 +641,12 @@ const FURNISH: Record<GenRoom['type'], (ctx: RoomCtx) => void> = {
   switchboard,
   archive,
   collapsed,
+  kitchen,
+  living,
+  bedroom,
+  bathroom,
+  nursery,
+  hallway,
 };
 
 /** Обставить помещение. Порядок вызовов и ГСЧ фиксированы: один сид — одна и та же обстановка. */
