@@ -7,14 +7,20 @@
  *   npm run smoke:matrix                                             # + раскладка по матрице размеров, скриншоты в e2e/out/
  *   npm run smoke -- --url https://…                                 # опубликованная ссылка
  *
- * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --only play,gen,sortie,fear,audio,touch,bridge,matrix.
+ * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --shell, --only play,gen,sortie,fear,audio,touch,bridge,matrix.
  * Симуляция в тестах заморожена и шагается через window.__vz: проверяется логика и вёрстка, а не
  * частота кадров (SwiftShader даёт 5–10 к/с). Качество задаётся параметром адреса, иначе по строке
  * видеокарты выбралось бы «низкое» и тень осталась бы непроверенной.
  * Браузер: CHROMIUM_PATH (или /opt/pw-browsers/chromium, или `npx playwright-core install chromium`).
+ * Браузеров два, и ведут они себя по-разному. Без пути Playwright берёт chromium-headless-shell — так
+ * идёт CI; /opt/pw-browsers/chromium — полный Chromium, он ближе к браузеру игрока. Разница, на которой
+ * мы уже обжигались: под захватом мыши headless-shell держит курсор в точке (0, 0) и каждое движение
+ * присылает парой «+координата, −координата», а нажатие кнопки — одиночным «−координата». Взгляд в нём
+ * после работы мышью случаен, поэтому проверки картинки выставляют его заново. Перед отправкой
+ * прогоняйте оба: `npm run smoke` и `npm run smoke -- --shell` (тот же браузер, что на CI).
  * Выход: 0 — всё прошло, 1 — есть провалы, 2 — не запустился браузер.
  */
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
@@ -61,8 +67,22 @@ async function startServer() {
   return { url, close: () => server.close() };
 }
 
+/** Предустановленный chromium-headless-shell (браузер CI), если он есть на этой машине. */
+function localShell() {
+  const root = '/opt/pw-browsers';
+  if (!existsSync(root)) return undefined;
+  for (const dir of readdirSync(root).filter((d) => d.startsWith('chromium_headless_shell-')).sort().reverse()) {
+    for (const sub of readdirSync(join(root, dir))) {
+      const exe = join(root, dir, sub, 'chrome-headless-shell');
+      if (existsSync(exe)) return exe;
+    }
+  }
+  return undefined;
+}
+
 async function launchBrowser() {
-  const executablePath = process.env.CHROMIUM_PATH || (existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
+  // --shell: как на CI. Если своего headless-shell нет, путь не задаётся и Playwright берёт его сам.
+  const executablePath = process.env.CHROMIUM_PATH || (flag('shell') ? localShell() : existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
   const extra = (process.env.CHROMIUM_ARGS ?? '').split(/\s+/).filter(Boolean);
   try {
     return await chromium.launch({ executablePath, headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--mute-audio', ...extra] });
@@ -217,6 +237,9 @@ async function scenarioPlay(browser, baseUrl) {
   await vz(page, () => window.__vz.quality('low'));
   const low = await vz(page, () => window.__vz.info());
   check('низкое качество: буфер 640×360', low.width === 640 && low.height === 360, `${low.width}×${low.height}`);
+  // После тряски мышью и кликов взгляд в тестовом браузере может стоять как угодно — выставляем заново.
+  await vz(page, ([y, p]) => window.__vz.teleport(3.6, 0, -7.6, y, p), [25 * R, 2 * R]);
+  await vz(page, () => window.__vz.step(30));
   const lowGrid = await vz(page, () => window.__vz.probe());
   check('на низком качестве картинка есть', center(lowGrid) > 30, `центр ${center(lowGrid).toFixed(1)}`);
   await vz(page, () => window.__vz.quality('high'));
@@ -971,7 +994,9 @@ async function scenarioAudio(browser, baseUrl) {
 
 const server = await startServer();
 const browser = await launchBrowser();
-console.log(`Смоук: ${remoteUrl ?? distDir} → ${server.url}`);
+// «HeadlessChrome/…» — chromium-headless-shell, «Chrome/…» — полный Chromium: по логу видно, кто гонял тест.
+const product = await browser.newBrowserCDPSession().then((cdp) => cdp.send('Browser.getVersion')).then((v) => v.product).catch(() => browser.version());
+console.log(`Смоук: ${remoteUrl ?? distDir} → ${server.url}; браузер ${product}`);
 try {
   if (wants('play')) await scenarioPlay(browser, server.url);
   if (wants('gen')) await scenarioGen(browser, server.url);

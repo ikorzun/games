@@ -23,6 +23,7 @@ npm run build              # dist/ + проверка архива (scripts/chec
 npm run build:playgama     # dist-playgama/ с Playgama Bridge SDK
 npm run smoke              # смоук сборки в Chromium (программный WebGL)
 npm run smoke -- --dist dist-playgama
+npm run smoke -- --shell   # в chromium-headless-shell: тот же браузер, что на CI
 npm run smoke:matrix       # + раскладка на 6 размерах экрана × ru/en, скриншоты в e2e/out/
 node e2e/shots.mjs         # скриншоты ракурсов тестового коридора в e2e/out/shots/ — смотреть картинку глазами
 node e2e/shots_gen.mjs     # скриншоты сгенерированного бункера: по кадру на примету и на коридор яруса
@@ -31,6 +32,12 @@ node e2e/shots_props.mjs   # скриншоты витрины реквизит�
 
 Браузер для смоука: переменная `CHROMIUM_PATH`, иначе `/opt/pw-browsers/chromium`, иначе
 `npx playwright-core install chromium`.
+
+Браузеров два, и перед отправкой смоук стоит прогнать в обоих. Локально по умолчанию идёт полный
+Chromium — он ведёт себя как браузер игрока. CI берёт `chromium-headless-shell` (ключ `--shell`),
+а у того захват мыши ненастоящий: курсор стоит в точке (0, 0), каждое движение приходит парой
+«+координата, −координата», нажатие кнопки — одиночным рывком. Проверка, зелёная в одном браузере,
+может упасть в другом; какой браузер гонял тест, написано в первой строке лога.
 
 ## Управление
 

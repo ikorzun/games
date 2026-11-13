@@ -9,10 +9,14 @@ import type { InputFrame, InputSource } from './input';
 import type { ShakeMeter } from './shake';
 
 const SENS = 0.0021;
-/** Движение мыши за одно событие больше этого (px) — выброс, а не рука: человек так не дёргает. */
-const SPIKE = 500;
 /** Сколько миллисекунд после захвата или потери мыши её движение не считается. */
-const LOCK_QUIET_MS = 120;
+export const LOCK_QUIET_MS = 250;
+/**
+ * Тихое окно действует только на события, созданные не раньше чем за минуту до его конца. Если у
+ * браузера время событий мыши и pointerlockchange идёт по разным часам (бывало у старых версий),
+ * сравнение бессмысленно — и пусть тогда окно не сработает вовсе, чем мышь перестанет вести луч.
+ */
+const QUIET_REACH_MS = 60000;
 
 export class DesktopInput implements InputSource {
   private readonly keys = new Set<string>();
@@ -26,8 +30,10 @@ export class DesktopInput implements InputSource {
   /** Захват мыши недоступен (песочница iframe): ведём луч мышью с зажатой кнопкой. */
   private dragLook = false;
   private dragging = false;
-  /** До этого момента (performance.now) движение мыши пропускается: только что сменился захват. */
-  private quietUntil = 0;
+  /** События мыши, созданные раньше этого момента (часы Event.timeStamp), не считаются: только что сменился захват. */
+  private quietUntil = -Infinity;
+  /** Захват мыши, каким мы видели его в последний раз. */
+  private lockSeen = false;
 
   constructor(
     private readonly target: HTMLElement,
@@ -55,13 +61,18 @@ export class DesktopInput implements InputSource {
     on(window, 'keyup', (e) => this.keys.delete(e.code));
     on(window, 'blur', () => this.release());
     on(document, 'mousemove', (e) => {
-      if (this.lifecycle.paused) return;
       const locked = document.pointerLockElement === this.target;
+      // Захват мог смениться, а событие о нём ещё не дошло: элемент захвата браузер выставляет раньше,
+      // чем раздаёт pointerlockchange, и движение мыши успевает вклиниться между ними.
+      if (locked !== this.lockSeen) this.lockChanged(locked, e.timeStamp);
+      if (this.lifecycle.paused) return;
       if (!locked && !(this.dragLook && this.dragging)) return;
-      // Сразу после захвата мыши браузер может прислать «движение» на полэкрана (курсор переносится
-      // в центр); бывают и одиночные выбросы посреди игры. Ни то ни другое не должно дёргать взгляд.
-      if (performance.now() < this.quietUntil) return;
-      if (Math.abs(e.movementX) > SPIKE || Math.abs(e.movementY) > SPIKE) return;
+      // Захватывая мышь, браузер переносит курсор и может прислать это как «движение» на полэкрана.
+      // Такое событие создано до захвата или в его момент, а дойти до страницы может заметно позже
+      // (события мыши раздаются перед кадром), поэтому сверяем время создания события, а не время
+      // обработки. Величину движения не ограничиваем: резкий рывок мышью — это и есть тряска фонаря.
+      const toQuietEnd = this.quietUntil - e.timeStamp;
+      if (toQuietEnd > 0 && toQuietEnd < QUIET_REACH_MS) return;
       this.lookYaw -= e.movementX * SENS;
       this.lookPitch -= e.movementY * SENS;
       this.shake.pushMotion(e.movementX, e.movementY);
@@ -73,15 +84,21 @@ export class DesktopInput implements InputSource {
     on(window, 'mouseup', () => {
       this.dragging = false;
     });
-    on(document, 'pointerlockchange', () => {
+    on(document, 'pointerlockchange', (e) => {
       const locked = document.pointerLockElement === this.target;
-      this.quietUntil = performance.now() + LOCK_QUIET_MS;
+      this.lockChanged(locked, e.timeStamp);
       // Захват потерян во время игры (Esc, переключение окна) — пауза.
       if (!locked && !this.dragLook) this.lifecycle.set('pointer', true);
     });
     on(document, 'pointerlockerror', () => {
       this.dragLook = true;
     });
+  }
+
+  /** Захват мыши сменился (ts — время события, по которому мы это узнали): начать тихое окно. */
+  private lockChanged(locked: boolean, ts: number): void {
+    this.lockSeen = locked;
+    this.quietUntil = ts + LOCK_QUIET_MS;
   }
 
   /** Захватить мышь. Вызывать из обработчика клика (нужен жест пользователя). */
