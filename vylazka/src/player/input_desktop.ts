@@ -2,6 +2,9 @@
  * Клавиатура и мышь. Клавиши читаются по физическому коду (KeyW…), поэтому WASD работает
  * на любой раскладке. Мышь захватывается по клику; потеря захвата ставит игру на паузу.
  * Движение мыши одновременно ведёт луч и кормит детектор тряски.
+ *
+ * Если захват не дался ни разу (песочница iframe без allow-pointer-lock), луч ведётся мышью с зажатой
+ * кнопкой. Если же он уже работал, отказ считается временным: пауза, следующий клик пробует снова.
  */
 import type { Lifecycle } from '../lifecycle';
 import { emptyInput } from './input';
@@ -30,6 +33,8 @@ export class DesktopInput implements InputSource {
   /** Захват мыши недоступен (песочница iframe): ведём луч мышью с зажатой кнопкой. */
   private dragLook = false;
   private dragging = false;
+  /** Захват хоть раз удался: значит, он доступен, и любой отказ после этого — временный. */
+  private everLocked = false;
   /** События мыши, созданные раньше этого момента (часы Event.timeStamp), не считаются: только что сменился захват. */
   private quietUntil = -Infinity;
   /** Захват мыши, каким мы видели его в последний раз. */
@@ -66,7 +71,15 @@ export class DesktopInput implements InputSource {
       // чем раздаёт pointerlockchange, и движение мыши успевает вклиниться между ними.
       if (locked !== this.lockSeen) this.lockChanged(locked, e.timeStamp);
       if (this.lifecycle.paused) return;
-      if (!locked && !(this.dragLook && this.dragging)) return;
+      if (!locked) {
+        if (!this.dragLook) return;
+        if (!this.dragging) {
+          // Курсор свободен, луч стоит. Но трясти фонарь можно и не зажимая кнопку: подсказка
+          // «трясите мышью» должна работать как написана.
+          this.shake.pushMotion(e.movementX, e.movementY);
+          return;
+        }
+      }
       // Захватывая мышь, браузер переносит курсор и может прислать это как «движение» на полэкрана.
       // Такое событие создано до захвата или в его момент, а дойти до страницы может заметно позже
       // (события мыши раздаются перед кадром), поэтому сверяем время создания события, а не время
@@ -87,12 +100,28 @@ export class DesktopInput implements InputSource {
     on(document, 'pointerlockchange', (e) => {
       const locked = document.pointerLockElement === this.target;
       this.lockChanged(locked, e.timeStamp);
+      if (locked) this.everLocked = true;
       // Захват потерян во время игры (Esc, переключение окна) — пауза.
       if (!locked && !this.dragLook) this.lifecycle.set('pointer', true);
     });
-    on(document, 'pointerlockerror', () => {
+    on(document, 'pointerlockerror', () => this.lockFailed());
+  }
+
+  /** Захват мыши недоступен: луч ведётся мышью с зажатой кнопкой (игроку об этом говорит подсказка). */
+  get dragMode(): boolean {
+    return this.dragLook;
+  }
+
+  /** Браузер отказал в захвате мыши. */
+  private lockFailed(): void {
+    if (document.pointerLockElement === this.target) return;
+    if (this.everLocked) {
+      // Захват уже работал — отказ временный: Chrome, например, около секунды после Esc не даёт
+      // захватить мышь снова. Возвращаем паузу: следующее нажатие повторит попытку.
+      this.lifecycle.set('pointer', true);
+    } else {
       this.dragLook = true;
-    });
+    }
   }
 
   /** Захват мыши сменился (ts — время события, по которому мы это узнали): начать тихое окно. */
@@ -106,11 +135,9 @@ export class DesktopInput implements InputSource {
     if (this.dragLook || document.pointerLockElement === this.target) return;
     try {
       const p = this.target.requestPointerLock() as unknown as Promise<void> | undefined;
-      p?.catch?.(() => {
-        this.dragLook = true;
-      });
+      p?.catch?.(() => this.lockFailed());
     } catch {
-      this.dragLook = true;
+      this.lockFailed();
     }
   }
 

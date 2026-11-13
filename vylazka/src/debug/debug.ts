@@ -96,6 +96,7 @@ export function installDebug(app: App): void {
       profile: { sorties: app.profile.sorties, successes: app.profile.successes, archive: [...app.profile.archive] },
       platform: app.platform.id,
       touch: app.touchMode,
+      drag: app.dragMode,
       motion: app.motion.state,
     }),
     freeze: (on) => {

@@ -300,6 +300,11 @@ export class App {
     this.resumePlay();
   }
 
+  /** Мышь на ПК не захватывается (песочница iframe): луч ведётся с зажатой кнопкой. */
+  get dragMode(): boolean {
+    return !this.touchMode && (this.desktop?.dragMode ?? false);
+  }
+
   private resumePlay(): void {
     if (this.screen !== 'play' && this.screen !== 'ending') return;
     this.lifecycle.set('pointer', false);
@@ -575,7 +580,7 @@ export class App {
     const base = this.touchMode ? 'touch' : 'desktop';
     let hint = '';
     if (!dead && this.screen === 'play') {
-      if (g.time < 7) hint = t(`hint.move.${base}`);
+      if (g.time < 7) hint = t(this.dragMode ? 'hint.move.desktop_drag' : `hint.move.${base}`);
       else if (g.time < 12) hint = t(`hint.light.${base}`);
       else if (g.time < 16 && !this.touchMode) hint = t('hint.pause.desktop');
     }

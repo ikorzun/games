@@ -7,7 +7,7 @@
  *   npm run smoke:matrix                                             # + раскладка по матрице размеров, скриншоты в e2e/out/
  *   npm run smoke -- --url https://…                                 # опубликованная ссылка
  *
- * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --shell, --only play,gen,sortie,fear,audio,touch,bridge,matrix.
+ * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --shell, --only play,gen,sortie,fear,audio,frame,touch,bridge,matrix.
  * Симуляция в тестах заморожена и шагается через window.__vz: проверяется логика и вёрстка, а не
  * частота кадров (SwiftShader даёт 5–10 к/с). Качество задаётся параметром адреса, иначе по строке
  * видеокарты выбралось бы «низкое» и тень осталась бы непроверенной.
@@ -61,7 +61,9 @@ const R = Math.PI / 180;
 
 async function startServer() {
   if (remoteUrl) return { url: remoteUrl, close: async () => undefined };
-  const server = await preview({ configFile: false, root: ROOT, base: './', logLevel: 'error', build: { outDir: distDir }, preview: { host: '127.0.0.1', port: 4185, strictPort: false, open: false } });
+  // cors: в песочнице iframe без allow-same-origin у страницы «пустой» источник, и модули со стилями
+  // браузер отдаёт ей только с заголовком Access-Control-Allow-Origin (GitHub Pages и CDN его шлют).
+  const server = await preview({ configFile: false, root: ROOT, base: './', logLevel: 'error', build: { outDir: distDir }, preview: { host: '127.0.0.1', port: 4185, strictPort: false, open: false, cors: true } });
   const url = server.resolvedUrls?.local?.[0];
   if (!url) throw new Error('vite preview не вернул адрес');
   return { url, close: () => server.close() };
@@ -231,6 +233,27 @@ async function scenarioPlay(browser, baseUrl) {
   await page.click('.vz-overlay');
   await sleep(300);
   check('клик возвращает в игру', (await state(page)).paused === false);
+
+  // Захват мыши не дался один раз: Chrome около секунды после Esc отклоняет повторный захват. Игра
+  // не должна решить, что захвата нет вовсе, — она возвращает паузу, и следующий клик пробует снова.
+  await page.evaluate(() => document.exitPointerLock());
+  await page.waitForFunction(() => window.__vz.state().overlay === 'paused', null, { timeout: 15000 }).catch(() => undefined);
+  await page.evaluate(() => {
+    const real = Element.prototype.requestPointerLock;
+    Element.prototype.requestPointerLock = function refuseOnce() {
+      Element.prototype.requestPointerLock = real;
+      return Promise.reject(new DOMException('The user has exited the lock before this request was completed.', 'SecurityError'));
+    };
+  });
+  await page.click('.vz-overlay');
+  await sleep(400);
+  st = await state(page);
+  check('отказ в захвате мыши возвращает паузу, а не переводит в режим зажатой кнопки', st.paused === true && st.overlay === 'paused' && st.drag === false, JSON.stringify({ paused: st.paused, overlay: st.overlay, drag: st.drag, reasons: st.pauseReasons }));
+  await page.click('.vz-overlay');
+  await sleep(400);
+  st = await state(page);
+  const relocked = await page.evaluate(() => document.pointerLockElement !== null);
+  check('следующий клик захватывает мышь, игра идёт', st.paused === false && relocked && st.drag === false, JSON.stringify({ paused: st.paused, locked: relocked, drag: st.drag, reasons: st.pauseReasons }));
   await vz(page, () => window.__vz.freeze(true));
 
   // Качество и язык.
@@ -990,6 +1013,71 @@ async function scenarioAudio(browser, baseUrl) {
   await bare.context.close();
 }
 
+/**
+ * Игра внутри iframe с песочницей без allow-pointer-lock и без allow-same-origin: так её может встроить
+ * портал или просмотрщик файлов. Мышь не захватывается, хранилище недоступно — игра обязана идти.
+ */
+async function scenarioFrame(browser, baseUrl) {
+  section('Песочница iframe: без захвата мыши и без хранилища');
+  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: 'en-US' });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  const src = new URL('?q=low&fail=0&lang=ru&touch=0&level=test', baseUrl).toString();
+  await page.setContent(`<!doctype html><style>html,body{margin:0;height:100%;background:#000}iframe{border:0;width:100%;height:100%}</style><iframe sandbox="allow-scripts" src="${src}"></iframe>`);
+  const frame = page.frames().find((f) => f !== page.mainFrame());
+  let ready = true;
+  await frame.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 }).catch(() => {
+    ready = false;
+  });
+  check('игра загрузилась в песочнице', ready, errors.join(' | ').slice(0, 300));
+  if (!ready) {
+    await context.close();
+    return;
+  }
+  const fstate = () => frame.evaluate(() => window.__vz.state());
+  await frame.click('.vz-overlay');
+  await sleep(400);
+  await frame.evaluate(() => window.__vz.freeze(true));
+  let st = await frame.evaluate(() => window.__vz.step(1));
+  const locked = await frame.evaluate(() => document.pointerLockElement !== null);
+  check('мышь не захвачена, но игра идёт без паузы', st.paused === false && st.overlay === 'hidden' && locked === false && st.drag === true, JSON.stringify({ paused: st.paused, overlay: st.overlay, locked, drag: st.drag, reasons: st.pauseReasons }));
+  const hint = await frame.textContent('.vz-hud__hint');
+  check('подсказка говорит про зажатую кнопку мыши', hint?.includes('зажатой') === true, hint ?? '');
+
+  // Луч: только с зажатой кнопкой.
+  const aim0 = st.aim[0];
+  await page.mouse.move(640, 360);
+  await page.mouse.down();
+  await page.mouse.move(760, 360, { steps: 6 });
+  await page.mouse.up();
+  st = await frame.evaluate(() => window.__vz.tick(2));
+  const turned = st.aim[0] - aim0;
+  check('с зажатой кнопкой мышь ведёт луч', Math.abs(turned + 0.252) < 0.03, `поворот ${turned.toFixed(3)} рад при движении на 120 px`);
+  await page.mouse.move(520, 360, { steps: 6 });
+  st = await frame.evaluate(() => window.__vz.tick(2));
+  check('без кнопки луч стоит', Math.abs(st.aim[0] - aim0 - turned) < 0.005, `ушёл на ${(st.aim[0] - aim0 - turned).toFixed(3)} рад`);
+
+  // Тряска: подсказка «трясите мышью» работает и без зажатой кнопки.
+  await frame.evaluate(() => window.__vz.fail());
+  await frame.evaluate(() => window.__vz.step(10));
+  for (let i = 0; i < 44; i++) {
+    await page.mouse.move(640 + (i % 2 === 0 ? 90 : -90), 360, { steps: 3 });
+    await frame.evaluate(() => window.__vz.tick(5));
+    if ((await fstate()).light.state === 'on') break;
+  }
+  st = await fstate();
+  check('тряска мышью оживляет фонарь и без зажатой кнопки', st.light.state === 'on', `состояние ${st.light.state}, прогресс ${st.light.revive.toFixed(2)}`);
+
+  // Браузер сам пишет в консоль, что захват мыши в песочнице запрещён, — это не ошибка игры.
+  const own = errors.filter((e) => !/Blocked pointer lock/i.test(e));
+  check('игра не сыплет ошибками без хранилища и захвата мыши', own.length === 0, own.join(' | ').slice(0, 400));
+  await context.close();
+}
+
 // ───────────────────────────── запуск ─────────────────────────────
 
 const server = await startServer();
@@ -1003,6 +1091,7 @@ try {
   if (wants('sortie')) await scenarioSortie(browser, server.url);
   if (wants('fear')) await scenarioFear(browser, server.url);
   if (wants('audio')) await scenarioAudio(browser, server.url);
+  if (wants('frame')) await scenarioFrame(browser, server.url);
   if (wants('touch')) await scenarioTouch(browser, server.url);
   if (wants('touch')) await scenarioTouchSortie(browser, server.url);
   if (wants('bridge')) await scenarioBridge(browser, server.url);

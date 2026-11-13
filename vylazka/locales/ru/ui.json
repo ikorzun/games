@@ -27,6 +27,7 @@
   "hud.rec": "REC",
   "hud.cam": "КАМ-07",
   "hint.move.desktop": "WASD — идти, мышь — луч, Shift — бежать",
+  "hint.move.desktop_drag": "WASD — идти, мышь с зажатой кнопкой — луч, Shift — бежать",
   "hint.move.touch": "Слева — идти, справа — вести луч",
   "hint.light.desktop": "F — фонарь",
   "hint.light.touch": "Кнопка справа — фонарь",

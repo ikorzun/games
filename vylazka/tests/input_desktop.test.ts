@@ -195,6 +195,7 @@ describe('мышь на ПК', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(doc.pointerLockElement).toBeNull();
+    expect(input.dragMode).toBe(true);
 
     move(120, 50);
     expect(input.poll().lookYaw).toBeCloseTo(-0.105, 6);
@@ -206,6 +207,65 @@ describe('мышь на ПК', () => {
     el.emit('mousedown', { timeStamp: 300 });
     expect(el.requests).toBe(1);
     doc.emit('pointerlockchange', { timeStamp: 310 });
+    expect(life.paused).toBe(false);
+  });
+
+  it('без захвата трясти можно и не зажимая кнопку: тряска считается, луч стоит', async () => {
+    el.lockAllowed = false;
+    el.emit('mousedown', { timeStamp: 100 });
+    await Promise.resolve();
+    await Promise.resolve();
+    win.emit('mouseup', { timeStamp: 150 });
+
+    let ts = 200;
+    for (let i = 0; i < 8; i++) {
+      move(ts, i % 2 === 0 ? 80 : -80);
+      ts += 16;
+      shake.update(0.016);
+    }
+    expect(shake.strokes).toBeGreaterThanOrEqual(6);
+    expect(input.poll().lookYaw).toBe(0);
+  });
+
+  it('захват уже работал, а потом браузер отказал: это временно — пауза, режим не меняется', async () => {
+    lockAt(0);
+    expect(input.dragMode).toBe(false);
+
+    // Игрок нажал Esc и тут же щёлкнул «продолжить»: Chrome около секунды отклоняет повторный захват.
+    doc.pointerLockElement = null;
+    doc.emit('pointerlockchange', { timeStamp: 5000 });
+    life.set('pointer', false);
+    el.lockAllowed = false;
+    input.capture();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(input.dragMode).toBe(false);
+    expect(life.has('pointer')).toBe(true);
+
+    // Следующий клик — через секунду — мышь захватывает, луч снова ведётся без кнопки.
+    life.set('pointer', false);
+    el.lockAllowed = true;
+    input.capture();
+    doc.emit('pointerlockchange', { timeStamp: 7000 });
+    expect(doc.pointerLockElement).toBe(el);
+    move(7000 + LOCK_QUIET_MS, 40);
+    expect(input.poll().lookYaw).toBeCloseTo(-0.084, 6);
+  });
+
+  it('отказ, пришедший событием pointerlockerror, обрабатывается так же', () => {
+    lockAt(0);
+    doc.pointerLockElement = null;
+    doc.emit('pointerlockchange', { timeStamp: 5000 });
+    life.set('pointer', false);
+    doc.emit('pointerlockerror', { timeStamp: 5100 });
+    expect(input.dragMode).toBe(false);
+    expect(life.has('pointer')).toBe(true);
+  });
+
+  it('запоздалый отказ не сбивает уже полученный захват', () => {
+    lockAt(0);
+    doc.emit('pointerlockerror', { timeStamp: 50 });
+    expect(input.dragMode).toBe(false);
     expect(life.paused).toBe(false);
   });
 
