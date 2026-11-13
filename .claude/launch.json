@@ -26,6 +26,20 @@
         "runtime/dist"
       ],
       "port": 8766
+    },
+    {
+      "name": "vylazka",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8767",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "vylazka/dist"
+      ],
+      "port": 8767
     }
   ]
 }

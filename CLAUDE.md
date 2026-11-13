@@ -4,6 +4,11 @@
 web через Playgama + desktop). Карта документов — `README.md`. Сценарий — данные
 (`schemas/episode.schema.json`); движок исполняет JSON.
 
+В репозитории есть вторая, отдельная игра — «Вылазка» (`vylazka/`): хоррор-исследование от первого
+лица, three.js, процедурные уровни. С новеллой она не связана ни сборкой, ни контентом; правила
+про эпизоды, линтер и делегирование сценарных задач к ней не относятся. Общие для обеих: русский —
+источник, английский обязателен, имена и ключи `[a-z0-9_.]`, требования Playgama.
+
 ## Команды
 
 ```bash
@@ -17,6 +22,10 @@ python3 tools/export_script.py episodes/s1/<ep>.json --out docs/production/<ep>-
 
 cd runtime && npm install && npm run typecheck && npm test && npm run build   # рантайм (см. runtime/README.md)
 npm run dev      # dev-сервер с контентом из ../episodes и ../locales;  npm run smoke — Chromium-смоук сборки
+
+# Вторая игра — «Вылазка» (3D-хоррор с бодикама, three.js): отдельный пакет, см. vylazka/README.md
+cd vylazka && npm install && npm run typecheck && npm test && npm run build && npm run smoke
+node e2e/shots.mjs   # скриншоты фиксированных ракурсов — смотреть картинку глазами
 ```
 
 ## Конвенции

@@ -8,6 +8,7 @@ on:
       - "schemas/**"
       - "tools/**"
       - "runtime/**"
+      - "vylazka/**"
       - ".github/workflows/validate.yml"
   pull_request:
 
@@ -64,4 +65,35 @@ jobs:
         with:
           name: dist-playgama
           path: runtime/dist-playgama
+          retention-days: 14
+
+  vylazka:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vylazka
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: vylazka/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Build (web-plain) + dist checks
+        run: npm run build
+      - name: Build (Playgama) + dist checks
+        run: npm run build:playgama
+      - name: Install Chromium for smoke
+        run: npx playwright-core install --with-deps chromium
+      - name: Smoke (web-plain build) + layout matrix
+        run: npm run smoke:matrix -- --no-shots
+      - name: Smoke (Playgama build, mock platform)
+        run: npm run smoke -- --dist dist-playgama
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vylazka-dist-playgama
+          path: vylazka/dist-playgama
           retention-days: 14
