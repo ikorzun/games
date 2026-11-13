@@ -204,6 +204,8 @@ body {
   text-transform: uppercase;
   opacity: 0.55;
   min-height: 1.3em;
+  /* На узком экране строка делится пополам, а не оставляет одно слово висеть. */
+  text-wrap: balance;
 }
 .vz-overlay__prompt {
   margin-top: 1.2em;

@@ -279,3 +279,46 @@ describe('привязка звуков к игре', () => {
     for (const d of drips) expect(Math.hypot(d.pos![0], d.pos![2])).toBeGreaterThan(0.9);
   });
 });
+
+describe('проверка архива: звук — весь набор или ничего', () => {
+  const makeDist = async (files: string[]): Promise<string> => {
+    const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'vz-dist-'));
+    writeFileSync(join(dir, 'index.html'), '<!doctype html><title>t</title>');
+    mkdirSync(join(dir, 'audio'), { recursive: true });
+    for (const f of files) writeFileSync(join(dir, 'audio', f), 'x');
+    return dir;
+  };
+  const check = async (dir: string, opts: Record<string, unknown> = {}): Promise<{ problems: string[]; warnings: string[] }> => {
+    // Скрипт сборки — обычный .mjs без типов: берём его как есть.
+    const mod = (await import('../scripts/check_dist.mjs' as string)) as { checkDist(dir: string, opts?: Record<string, unknown>): { problems: string[]; warnings: string[] } };
+    return mod.checkDist(dir, opts);
+  };
+
+  it('звука нет — предупреждение, а в строгом режиме ошибка', async () => {
+    const dir = await makeDist([]);
+    const soft = await check(dir, { requireAudio: false });
+    expect(soft.problems).toEqual([]);
+    expect(soft.warnings.some((w) => w.includes('звука в сборке нет'))).toBe(true);
+    expect((await check(dir, { requireAudio: true })).problems.some((p) => p.includes('звука в сборке нет'))).toBe(true);
+  });
+
+  it('полный набор проходит, неполный — ошибка с именами потерянных файлов, лишний файл — предупреждение', async () => {
+    const all = allSoundFiles();
+    const full = await check(await makeDist(all), { requireAudio: true });
+    expect(full.problems).toEqual([]);
+    expect(full.warnings).toEqual([]);
+
+    const part = await check(await makeDist(all.filter((f) => f !== 'hatch_1.mp3' && f !== 'drip_3.mp3')));
+    expect(part.problems.length).toBe(1);
+    expect(part.problems[0]).toContain('нет 2 из');
+    expect(part.problems[0]).toContain('hatch_1.mp3');
+    expect(part.problems[0]).toContain('drip_3.mp3');
+
+    const extra = await check(await makeDist([...all, 'old_take_1.mp3']), { requireAudio: true });
+    expect(extra.problems).toEqual([]);
+    expect(extra.warnings.some((w) => w.includes('old_take_1.mp3'))).toBe(true);
+  });
+});
