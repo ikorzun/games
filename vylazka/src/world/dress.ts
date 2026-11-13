@@ -9,6 +9,7 @@
 import type { Vec3 } from '../core/types';
 import type { RoomType } from '../gen/layout';
 import type { RoomCtx, Slot } from './furnish';
+import { MAT } from './materials';
 import { poster } from './props_bunker';
 import { PROPS } from './props_more';
 import { BRUSH } from './signs';
@@ -145,7 +146,25 @@ export function dressRoom(ctx: RoomCtx): void {
     }
   }
 
-  // 4. Посреди клетки: с потолка свисает, на полу лежит. Ничто из этого не мешает пройти.
+  // 4. Балки: в прямом коридоре через каждую клетку поперёк идёт ригель — потолок давит ниже.
+  if (corridor) {
+    const byCell = new Map<string, Slot[]>();
+    for (const s of ctx.slots) {
+      const k = `${s.cx},${s.cz}`;
+      const list = byCell.get(k);
+      if (list) list.push(s);
+      else byCell.set(k, [s]);
+    }
+    for (const list of byCell.values()) {
+      // Ровно две стены друг напротив друга — прямой участок.
+      if (list.length !== 2 || (list[0]!.dir + 2) % 4 !== list[1]!.dir) continue;
+      const s = list[0]!.dir < list[1]!.dir ? list[0]! : list[1]!;
+      const tone = 0.62 - 0.08 * tier;
+      s.xf.box([-1.33, ctx.h - 0.24, -0.02], [-1.07, ctx.h + 0.01, 2.72], MAT.concrete, { tint: [tone, tone, tone * 0.97], bevel: 0.02 });
+    }
+  }
+
+  // 5. Посреди клетки: с потолка свисает, на полу лежит. Ничто из этого не мешает пройти.
   for (const c of ctx.cells) {
     const seed = Math.floor(rnd() * 1e6);
     const r = rnd();

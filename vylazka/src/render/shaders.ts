@@ -157,9 +157,15 @@ void main() {
   float low = wall * (1.0 - smoothstep(0.0, 0.7 + g1.g * 1.1, hgt));
   float high = wall * smoothstep(1.8, 2.7, hgt + g1.r * 0.6);
 
+  // На низком качестве вторая выборка карты и фактура изнанки заменены тем, что уже есть:
+  // облезшая краска и ржавчина остаются, пропадают только рельеф и мелкая пестрота.
 #ifdef DETAIL
   vec4 g2 = texture2D(uGrime, uvw * 1.31 + 0.37);
   vec4 d1 = texture(uDetail, vec3(uvw * uMatA[mj].w, uMatA[mj].z));
+#else
+  vec4 g2 = g1.brga;
+  vec4 d1 = d0;
+#endif
   // Чешуйки: краска и побелка отваливаются лоскутами, поэтому край облезшего места ломаный.
   vec4 fl = texture(uDetail, vec3(uvw * (cls == 1 ? 2.3 : 1.15), 16.0));
   if (cls == 1) {
@@ -202,8 +208,9 @@ void main() {
   stain *= mix(vec3(1.0), vec3(0.3, 0.36, 0.25), mold * 0.85);
   // Потёки по стенам.
   shade *= 1.0 - wall * smoothstep(0.55, 0.9, g1.b) * (0.22 + 0.3 * uDecay) * ma.x;
-  H = mix(H, d1.r * uMatB[mj].x - 0.002, k);
   alb = mix(alb, 0.55 + 0.9 * d1.g, k);
+#ifdef DETAIL
+  H = mix(H, d1.r * uMatB[mj].x - 0.002, k);
   vec3 N = perturb(Ng, vPosV, H);
   float dirt = mix(1.0, (0.62 + 0.5 * g2.r) * (0.8 + 0.4 * g1.g), ma.x);
 #else
@@ -216,10 +223,10 @@ void main() {
   vec3 by = cross(L, bx);
   vec3 mc = matcap(mi, N, bx, by);
   vec3 base = uMatBase[mi];
-#ifdef DETAIL
   vec3 mc2 = matcap(mj, N, bx, by);
   mc = mix(mc, mc2, max(k, wet * 0.85));
   base = mix(base, uMatBase[mj], max(k, wet * 0.85));
+#ifdef DETAIL
   // Рельеф под лучом: чем сильнее свет скользит по поверхности, тем резче тени пор и кромок.
   float ngl = dot(Ng, L);
   float relief = clamp(dot(N, L) / max(ngl, 0.08), 0.0, 2.2);

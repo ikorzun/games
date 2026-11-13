@@ -78,7 +78,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const cavity = crackLine(x, y, 0.012);
     // Отверстия от стяжек опалубки: ряд круглых гнёзд через две доски.
     const tu = (x / N) * 4;
-    const tie = band % 2 === 0 ? sstep(0.05, 0.03, Math.hypot((tu - Math.floor(tu) - 0.5) / 4, (t - 0.5) / boards)) : 0;
+    const tie = band % 2 === 0 ? sstep(0.021, 0.012, Math.hypot((tu - Math.floor(tu) - 0.5) / 4, (t - 0.5) / boards)) : 0;
     const h = 0.55 + (rnd - 0.5) * 0.22 + (grain - 0.5) * 0.16 + (at(mid, x, y) - 0.5) * 0.12 - seam * 0.35 - pore * 0.4 - cavity * 0.5 - tie * 0.6;
     const a = 0.5 + (rnd - 0.5) * 0.1 + (at(lo, x, y) - 0.5) * 0.22 + (at(mid, x, y) - 0.5) * 0.16 - seam * 0.14 - pore * 0.22 - cavity * 0.3 - tie * 0.3;
     return [h, a, 0.22 - pore * 0.2, seam];
