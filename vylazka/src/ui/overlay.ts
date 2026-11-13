@@ -17,6 +17,9 @@ export interface OverlayHandlers {
   onMotion?(): void;
   /** Кнопка звука: включить или выключить. */
   onSound?(): void;
+  /** Чувствительность обзора и яркость: по кругу ниже → средняя → выше. */
+  onSens?(): void;
+  onBright?(): void;
 }
 
 /** Строка карточки: обычная, выполненная цель или подзаголовок. */
@@ -45,6 +48,10 @@ export class Overlay {
   private readonly qualityBtn: HTMLButtonElement;
   private readonly motionBtn: HTMLButtonElement;
   private readonly soundBtn: HTMLButtonElement;
+  private readonly sensBtn: HTMLButtonElement;
+  private readonly brightBtn: HTMLButtonElement;
+  private sens = 1;
+  private bright = 1;
   private sound = true;
   private quality: Quality = 'med';
   private touch = false;
@@ -67,6 +74,8 @@ export class Overlay {
       '<div class="vz-overlay__foot"><div class="vz-overlay__rotate"></div>' +
       '<div class="vz-overlay__row"><button type="button" class="vz-overlay__opt vz-overlay__opt--sound"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--quality"></button>' +
+      '<button type="button" class="vz-overlay__opt vz-overlay__opt--sens"></button>' +
+      '<button type="button" class="vz-overlay__opt vz-overlay__opt--bright"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--motion"></button></div></div>';
     parent.append(this.el);
     const q = (sel: string): HTMLElement => this.el.querySelector(sel) as HTMLElement;
@@ -78,6 +87,16 @@ export class Overlay {
     this.qualityBtn = q('.vz-overlay__opt--quality') as HTMLButtonElement;
     this.motionBtn = q('.vz-overlay__opt--motion') as HTMLButtonElement;
     this.motionBtn.hidden = true;
+    this.sensBtn = q('.vz-overlay__opt--sens') as HTMLButtonElement;
+    this.brightBtn = q('.vz-overlay__opt--bright') as HTMLButtonElement;
+    this.sensBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.handlers.onSens?.();
+    });
+    this.brightBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.handlers.onBright?.();
+    });
     this.soundBtn = q('.vz-overlay__opt--sound') as HTMLButtonElement;
     this.soundBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -114,6 +133,13 @@ export class Overlay {
 
   setSound(on: boolean): void {
     this.sound = on;
+    this.refresh();
+  }
+
+  /** Уровни чувствительности и яркости: 0 — ниже, 1 — средняя, 2 — выше. */
+  setLevels(sens: number, bright: number): void {
+    this.sens = sens;
+    this.bright = bright;
     this.refresh();
   }
 
@@ -157,6 +183,11 @@ export class Overlay {
     this.soundBtn.textContent = `${t('ui.sound')}: ${t(this.sound ? 'ui.sound.on' : 'ui.sound.off')}`;
     this.soundBtn.setAttribute('aria-pressed', String(this.sound));
     this.soundBtn.hidden = m !== 'start' && m !== 'paused' && m !== 'report';
+    const lv = ['low', 'med', 'high'] as const;
+    this.sensBtn.textContent = `${t('ui.sens')}: ${t(`ui.level.${lv[this.sens] ?? 'med'}`)}`;
+    this.brightBtn.textContent = `${t('ui.bright')}: ${t(`ui.level.${lv[this.bright] ?? 'med'}`)}`;
+    this.sensBtn.hidden = this.qualityBtn.hidden;
+    this.brightBtn.hidden = this.qualityBtn.hidden;
     this.rotate.textContent = t('ui.rotate');
   }
 }

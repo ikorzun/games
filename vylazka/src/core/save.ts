@@ -18,7 +18,13 @@ export interface Profile {
   baseSeed: number;
   /** Игрок выключил звук. */
   muted: boolean;
+  /** Чувствительность обзора и яркость картинки: 0 — ниже, 1 — как задумано, 2 — выше. */
+  sens: Level3;
+  bright: Level3;
 }
+
+export type Level3 = 0 | 1 | 2;
+const level3 = (v: unknown): Level3 => (v === 0 || v === 2 ? v : 1);
 
 export interface RunSave {
   v: 1;
@@ -46,7 +52,7 @@ const numArr = (v: unknown): number[] => (Array.isArray(v) ? v.filter(isNum) : [
 const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
 export function defaultProfile(baseSeed: number): Profile {
-  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false };
+  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1 };
 }
 
 /** Разобрать профиль из хранилища; всё непонятное заменяется значениями по умолчанию. */
@@ -61,6 +67,8 @@ export function parseProfile(raw: unknown, baseSeed: number): Profile {
     archive: [...new Set(strArr(o.archive))],
     baseSeed: isNum(o.baseSeed) ? o.baseSeed >>> 0 : baseSeed,
     muted: o.muted === true,
+    sens: level3(o.sens),
+    bright: level3(o.bright),
   };
 }
 

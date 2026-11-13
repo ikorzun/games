@@ -273,6 +273,11 @@ void main() {
   float bounce = uBounce.w / (1.0 + 0.35 * db * db) * (0.35 + 0.65 * max(dot(N, toB / max(db, 1e-3)), 0.0));
   col += base * tint * ao * (uAmbient + uLightColor * bounce);
 
+  // Мокрый пол и плитка отражают освещённое пятно: блик тянется от дальней стены к ногам.
+  float gloss = max(wet, mi == 12 ? 1.0 : (mi == 18 ? 0.5 : 0.0)) * step(0.5, up);
+  vec3 R = reflect(normalize(vPosV), N);
+  col += uLightColor * (uBounce.w * 16.0 * gloss * pow(max(dot(R, toB / max(db, 1e-3)), 0.0), 48.0)) * (0.6 + 0.4 * d0.b);
+
   col += uMatBase[mi] * ma.y;
   col *= exp(-uFog * length(vPosV));
   gl_FragColor = vec4(col, 1.0);

@@ -129,6 +129,8 @@ export class GameRenderer {
   private cssH = 1;
   private lastCalls = 0;
   private lastTris = 0;
+  /** Яркость картинки по выбору игрока: множитель усиления камеры. */
+  brightness = 1;
   /** Отладка: временно выключить тень, не меняя качество (сравнение «тень вкл/выкл»). */
   debugShadowsOff = false;
   /** Перепад между ярусами уровня, м (для отсечения этажей). */
@@ -669,7 +671,7 @@ export class GameRenderer {
     pu.tScene!.value = this.sceneRT.texture;
     pu.tHaze!.value = this.hazeRT ? this.hazeRT.texture : null;
     pu.uFrame!.value = v.frame;
-    pu.uGain!.value = v.gain;
+    pu.uGain!.value = v.gain * this.brightness;
     pu.uNoise!.value = v.noise;
     pu.uGlitch!.value = v.glitch;
     pu.uTunnel!.value = v.tunnel;

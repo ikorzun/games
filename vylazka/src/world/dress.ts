@@ -63,6 +63,9 @@ const ALONG: Partial<Record<RoomType, Weighted>> = {
   storage: [['cable_tray', 1]],
 };
 
+/** Таблицы выбора — наружу для теста: каждое имя должно существовать. */
+export const DRESS_TABLES = { FLOOR, SIGNS, CEILING, ALONG } as const;
+
 const RED: Vec3 = [0.6, 0.11, 0.08];
 const BLACK: Vec3 = [0.09, 0.09, 0.09];
 const CHALK: Vec3 = [0.85, 0.84, 0.8];

@@ -7,7 +7,7 @@ import { GameAudio, LOAD_FIRST } from './audio/game_audio';
 import { i18n, t } from './core/i18n';
 import { mulberry32 } from './core/rng';
 import { loadSave, objectNumber, rankFor, sortieSeed, writeProfile, writeSave } from './core/save';
-import type { Profile, RunSave } from './core/save';
+import type { Level3, Profile, RunSave } from './core/save';
 import type { Lang } from './core/types';
 import { Game, STEP } from './game';
 import type { StepEvents } from './game';
@@ -38,6 +38,9 @@ const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimation
 
 const isQuality = (v: string | null): v is Quality => v === 'low' || v === 'med' || v === 'high';
 const ROMAN = ['I', 'II', 'III'];
+/** Множители обзора и яркости для уровней «ниже / средне / выше». */
+const SENS = [0.6, 1, 1.6] as const;
+const BRIGHT = [0.78, 1, 1.35] as const;
 
 type Screen = 'boot' | 'briefing' | 'play' | 'ending' | 'report';
 
@@ -125,6 +128,8 @@ export class App {
       },
       onMotion: () => void this.enableMotion(),
       onSound: () => this.setMuted(!this.profile.muted),
+      onSens: () => this.setLevels(((this.profile.sens + 1) % 3) as Level3, this.profile.bright),
+      onBright: () => this.setLevels(this.profile.sens, ((this.profile.bright + 1) % 3) as Level3),
     });
     // Браузер даёт звук только после жеста: будим его первым же нажатием, где бы оно ни было.
     const wake = (): void => this.sound.unlock();
@@ -167,6 +172,8 @@ export class App {
     this.profile = save.profile;
     this.sound.setMuted(this.profile.muted);
     this.overlay.setSound(!this.profile.muted);
+    this.overlay.setLevels(this.profile.sens, this.profile.bright);
+    renderer.brightness = BRIGHT[this.profile.bright];
     this.testLevel = p.get('level') === 'test';
     const failAt = Number(p.get('fail') ?? '');
     this.game = new Game(renderer, mulberry32(baseSeed), {
@@ -329,6 +336,17 @@ export class App {
     const hard = lc.has('platform') || lc.has('hidden') || lc.has('ad') || lc.has('context');
     const menu = this.screen === 'briefing' || this.screen === 'report';
     this.sound.setPaused(hard || (lc.paused && !menu));
+  }
+
+  /** Чувствительность обзора и яркость картинки: кнопки в меню, выбор запоминается. */
+  setLevels(sens: Level3, bright: Level3): void {
+    this.profile.sens = sens;
+    this.profile.bright = bright;
+    this.overlay.setLevels(sens, bright);
+    this.game.renderer.brightness = BRIGHT[bright];
+    this.audio.ui('ui_click');
+    this.saveProfile();
+    this.redraw();
   }
 
   /** Выключатель звука игрока: кнопка в меню и клавиша M. Выбор запоминается. */
@@ -627,7 +645,8 @@ export class App {
       this.lifecycle.set('user', true);
       return;
     }
-    this.game.look(input.lookYaw, input.lookPitch);
+    const k = SENS[this.profile.sens];
+    this.game.look(input.lookYaw * k, input.lookPitch * k);
     this.acc += dt;
     let steps = Math.floor(this.acc / STEP);
     if (steps > 5) {
