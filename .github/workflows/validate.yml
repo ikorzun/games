@@ -2,6 +2,9 @@ name: validate
 
 on:
   push:
+    # Только основные ветки: ветку с открытым PR проверяет событие pull_request. Иначе каждая отправка
+    # в PR проверялась бы дважды — и дважды присылала письмо о результате.
+    branches: [main, claude/magical-thompson-ore6eh]
     paths:
       - "episodes/**"
       - "locales/**"
