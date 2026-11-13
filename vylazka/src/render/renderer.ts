@@ -514,6 +514,19 @@ export class GameRenderer {
     this.swarmMat.uniforms.uTime!.value = time;
   }
 
+  /** Атлас надписей и плакатов, нарисованный на canvas (render/signs_atlas.ts). */
+  setSigns(canvas: HTMLCanvasElement): void {
+    this.signsTex.dispose();
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.generateMipmaps = true;
+    tex.anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy());
+    this.signsTex = tex;
+    this.worldMat.uniforms.uSigns!.value = tex;
+  }
+
   /** Показать или скрыть именованный чанк (обвал обрушился, комната сменила вариант). */
   setChunkVisible(id: string, on: boolean): void {
     if (on) this.hiddenIds.delete(id);

@@ -80,6 +80,31 @@ export class MeshBuilder {
     return i;
   }
 
+  /**
+   * Четырёхугольник с явными uv (надписи и плакаты: uv указывает в атлас, а не в мир).
+   * Обход p0→p1→p2→p3 — против часовой с лица.
+   */
+  quadUv(p: readonly [Vec3, Vec3, Vec3, Vec3], uv: readonly [number, number, number, number], mat: number, tint: Vec3 = WHITE, ao = 1): void {
+    const n = normalize(cross(sub(p[1], p[0]), sub(p[3], p[0])));
+    const [u0, v0, u1, v1] = uv;
+    const corners: readonly [number, number][] = [
+      [u0, v0],
+      [u1, v0],
+      [u1, v1],
+      [u0, v1],
+    ];
+    const first = this.pos.length / 3;
+    for (let i = 0; i < 4; i++) {
+      const q = p[i]!;
+      this.pos.push(q[0], q[1], q[2]);
+      this.nrm.push(n[0], n[1], n[2]);
+      this.col.push(tint[0], tint[1], tint[2], ao);
+      this.mats.push(mat);
+      this.uvs.push(corners[i]![0], corners[i]![1]);
+    }
+    this.idx.push(first, first + 1, first + 2, first, first + 2, first + 3);
+  }
+
   tri(a: number, b: number, c: number): void {
     this.idx.push(a, b, c);
   }

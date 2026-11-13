@@ -3,6 +3,7 @@
  * лицом к +z, по ширине центрирован по x = 0, начало координат — на полу. Исключения оговорены.
  * Всё собрано из коробок с фасками и цилиндров; детали мельче ладони — отдельными деталями, а не текстурой.
  */
+import { POSTERS, SIGN } from './signs';
 import type { Vec3 } from '../core/types';
 import { MAT } from './materials';
 import type { Xf } from './props';
@@ -84,13 +85,12 @@ export function radioSet(xf: Xf): void {
 export function mapBoard(xf: Xf, w = 1.4, h = 0.9): void {
   xf.box([-w / 2 - 0.03, -h / 2 - 0.03, 0], [w / 2 + 0.03, h / 2 + 0.03, 0.02], MAT.wood, { tint: [0.6, 0.55, 0.5] });
   xf.box([-w / 2, -h / 2, 0.02], [w / 2, h / 2, 0.026], MAT.paper, { tint: [0.95, 0.92, 0.82] });
-  // Пометки: полоски и квадраты «условных знаков».
-  const rnd = lcg(Math.round(w * 100 + h * 7));
-  for (let i = 0; i < 9; i++) {
-    const x = (rnd() - 0.5) * (w - 0.3);
-    const y = (rnd() - 0.5) * (h - 0.2);
-    xf.box([x, y, 0.026], [x + 0.05 + rnd() * 0.22, y + 0.012 + rnd() * 0.05, 0.029], rnd() < 0.5 ? MAT.paintRed : MAT.paintBlue);
-  }
+  // План убежища с путём к выходу — из атласа надписей; по углам кнопки.
+  const s = SIGN.scheme!;
+  const sw = Math.min(w - 0.08, ((h - 0.08) * s.pw) / s.ph);
+  const sh = (sw * s.ph) / s.pw;
+  xf.sign('scheme', 0, -sh / 2, sw, [1, 1, 1], 0.028);
+  for (const [x, y] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) xf.box([(x * sw) / 2 - 0.012, (y * sh) / 2 - 0.012, 0.028], [(x * sw) / 2 + 0.012, (y * sh) / 2 + 0.012, 0.034], MAT.paintRed);
 }
 
 /** Сейф 0,5 × 0,45 × 0,75 м. */
@@ -265,8 +265,7 @@ export function controlPanel(xf: Xf): void {
   for (let i = 0; i < 3; i++) {
     const x = -0.26 + i * 0.26;
     xf.cyl([x, 1.42, 0.35], 'z', 0.03, 0.085, MAT.enamel, { segments: 12 });
-    xf.cyl([x, 1.42, 0.38], 'z', 0.008, 0.07, MAT.paper, { segments: 12, tint: [0.9, 0.9, 0.8] });
-    xf.box([x - 0.004, 1.42, 0.388], [x + 0.004, 1.48, 0.392], MAT.rubber);
+    xf.sign(['dial_a', 'dial_b', 'dial_c'][i]!, x, 1.35, 0.14, [1, 1, 1], 0.382);
   }
   for (let i = 0; i < 5; i++) {
     const x = -0.32 + i * 0.16;
@@ -372,22 +371,19 @@ export function wallPhone(xf: Xf): void {
   xf.cyl([-0.11, -0.4, 0.04], 'y', 0.5, 0.006, MAT.rubber, { segments: 4 });
 }
 
-/** Плакат или стенд на стене: бумага в рейках, с «иллюстрациями». Начало — центр. */
+/**
+ * Плакат на стене: xf — середина листа. Что на нём, решает seed: плакат ГО, схема убежища или правила.
+ * Лист на рейках, рисунок — из атласа надписей. w и h задают место под лист; сам лист — по пропорции рисунка.
+ */
 export function poster(xf: Xf, w: number, h: number, seed: number): void {
-  const rnd = lcg(seed);
-  const tone: Vec3 = [0.9 + rnd() * 0.1, 0.85 + rnd() * 0.1, 0.7 + rnd() * 0.12];
-  xf.box([-w / 2, -h / 2, 0], [w / 2, h / 2, 0.006], MAT.paper, { tint: tone });
-  xf.box([-w / 2, h / 2 - 0.02, 0], [w / 2, h / 2, 0.012], MAT.wood, { tint: [0.6, 0.55, 0.5] });
-  xf.box([-w / 2, -h / 2, 0], [w / 2, -h / 2 + 0.02, 0.012], MAT.wood, { tint: [0.6, 0.55, 0.5] });
-  // Заголовок и блоки: красная шапка, тёмные «строки», цветные «рисунки».
-  xf.box([-w / 2 + 0.04, h / 2 - 0.1, 0.006], [w / 2 - 0.04, h / 2 - 0.05, 0.008], MAT.paintRed);
-  const cols = w > 0.6 ? 3 : 2;
-  for (let c = 0; c < cols; c++) {
-    const x0 = -w / 2 + 0.04 + (c * (w - 0.08)) / cols;
-    const cw = (w - 0.08) / cols - 0.03;
-    xf.box([x0, -0.02, 0.006], [x0 + cw, h / 2 - 0.14, 0.008], rnd() < 0.5 ? MAT.paintGreen : MAT.paintBlue, { tint: [1.2, 1.2, 1.2] });
-    for (let y = -h / 2 + 0.05; y < -0.06; y += 0.035) xf.box([x0, y, 0.006], [x0 + cw * (0.6 + rnd() * 0.4), y + 0.012, 0.008], MAT.rubber, { tint: [0.6, 0.6, 0.6] });
-  }
+  const pool = [...POSTERS, ...POSTERS, 'scheme', 'pl_rules'];
+  const id = pool[seed % pool.length]!;
+  const s = SIGN[id]!;
+  const width = Math.min(w, s.w, (h * s.pw) / s.ph);
+  const height = (width * s.ph) / s.pw;
+  xf.box([-width / 2 - 0.012, height / 2, 0], [width / 2 + 0.012, height / 2 + 0.018, 0.014], MAT.wood, { tint: [0.6, 0.55, 0.5] });
+  xf.box([-width / 2 - 0.012, -height / 2 - 0.018, 0], [width / 2 + 0.012, -height / 2, 0.014], MAT.wood, { tint: [0.6, 0.55, 0.5] });
+  xf.sign(id, 0, -height / 2, width, [1, 1, 1], 0.006);
 }
 
 /** Завал: обрушенная плита, обломки и арматура. Занимает клетку 2,7 × 2,7 м; начало — её центр на полу. */

@@ -4,6 +4,7 @@
  * регистрирует места для находок и приметные объекты — цели «снять на камеру».
  */
 import type { Rng } from '../core/rng';
+import { dressRoom } from './dress';
 import type { GenRoom } from '../gen/layout';
 import type { ItemSpot, Landmark } from './level';
 import { MAT } from './materials';
@@ -505,6 +506,8 @@ const FURNISH: Record<GenRoom['type'], (ctx: RoomCtx) => void> = {
 /** Обставить помещение. Порядок вызовов и ГСЧ фиксированы: один сид — одна и та же обстановка. */
 export function furnishRoom(ctx: RoomCtx): void {
   FURNISH[ctx.room.type](ctx);
+  // Сначала — то, что положено помещению по назначению, потом — следы людей и времени.
+  dressRoom(ctx);
 }
 
 /** Подпись-табличка над дверью со стороны коридора (слабое фосфорное свечение помогает ориентироваться). */

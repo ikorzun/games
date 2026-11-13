@@ -8,6 +8,7 @@ import { CEIL_H, DX, DZ, GRID, STAIR_CELLS, TIER_DROP } from '../gen/layout';
 import type { GenLayout, GenRoom, RoomType } from '../gen/layout';
 import { ColliderSet } from './colliders';
 import { doorSign, furnishRoom } from './furnish';
+import { ROOM_LABEL, SIGN } from './signs';
 import type { CellInfo, RoomCtx, Slot } from './furnish';
 import { MeshBuilder } from './kit';
 import type { BuiltLevel, CollapseSpec, ItemSpot, Landmark, LevelChunk, NavNode, RoomVariant, StairLink, Zone } from './level';
@@ -180,7 +181,19 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     const other = intoB ? a : b;
     const otherCell: [number, number] = intoB ? [e.cx, e.cz] : [bx, bz];
     const back = ((toward + 2) % 4) as 0 | 1 | 2 | 3;
-    doorSign(new Xf(chunkFor(other, otherCell[0], otherCell[1]).mb, null, wx + DX[back]! * T, y + 2.32, wz + DZ[back]! * T, ROT_FACING[back]!));
+    const outer = new Xf(chunkFor(other, otherCell[0], otherCell[1]).mb, null, wx + DX[back]! * T, y, wz + DZ[back]! * T, ROT_FACING[back]!);
+    doorSign(outer.child(0, 2.32, 0));
+    // Трафарет справа от двери: что за ней. У гермодвери слева — предупреждение.
+    const label = ROOM_LABEL[host.type];
+    const ink: Vec3 = e.tier === 2 ? [0.82, 0.8, 0.76] : host.id % 3 === 0 ? [0.1, 0.1, 0.1] : [0.6, 0.11, 0.08];
+    if (label && other.type !== 'stairwell') {
+      const w = Math.min(SIGN[label]!.w, 0.74);
+      outer.sign(label, 0.72 + w / 2, 1.52, w, ink);
+    }
+    if (e.kind === 'hermo' && other.type !== 'stairwell') {
+      outer.sign('attention', -1.05, 1.66, 0.44, [0.6, 0.11, 0.08]);
+      outer.sign('door_sector', -1.05, 1.52, 0.66, [0.6, 0.11, 0.08]);
+    }
   }
 
   // ── Опасности среды ──

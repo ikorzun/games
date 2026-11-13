@@ -22,6 +22,7 @@ import type { InputFrame } from './player/input';
 import { DesktopInput } from './player/input_desktop';
 import { MotionSensor } from './player/motion';
 import { GameRenderer } from './render/renderer';
+import { drawSigns } from './render/signs_atlas';
 import type { Quality } from './render/renderer';
 import type { Outcome, Target } from './systems/sortie';
 import { Hud } from './ui/hud';
@@ -136,7 +137,7 @@ export class App {
     this.lifecycle.set('boot', true);
 
     // Шрифт интерфейса: ждём недолго, чтобы первый экран не мигнул системным.
-    await Promise.race([document.fonts?.load?.('16px "JetBrains Mono"').catch(() => undefined) ?? Promise.resolve(), new Promise((r) => setTimeout(r, 1500))]);
+    await Promise.race([document.fonts?.load?.('16px "JetBrains Mono"', 'Убежище Ag').catch(() => undefined) ?? Promise.resolve(), new Promise((r) => setTimeout(r, 1500))]);
 
     const qParam = p.get('q');
     const quality: Quality = isQuality(qParam) ? qParam : this.touchMode ? 'med' : 'high';
@@ -150,6 +151,9 @@ export class App {
       this.platform.ready();
       return;
     }
+    // Надписи рисуются шрифтом игры; если он догрузится позже — перерисуем.
+    renderer.setSigns(drawSigns());
+    void document.fonts?.ready?.then(() => renderer.setSigns(drawSigns()));
     renderer.onContextLost = () => this.lifecycle.set('context', true);
     renderer.onContextRestored = () => {
       this.lifecycle.set('context', false);

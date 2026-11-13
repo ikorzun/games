@@ -7,6 +7,7 @@ import type { Vec3 } from '../core/types';
 import type { ColliderSet } from './colliders';
 import type { Axis, BoxOpts, MeshBuilder } from './kit';
 import { MAT } from './materials';
+import { SIGN } from './signs';
 
 /** Размещение: начало координат предмета и поворот на rot четвертей оборота против часовой (вид сверху). */
 export class Xf {
@@ -77,6 +78,30 @@ export class Xf {
     const rEnd = opts.radiusEnd ?? radius;
     if (flipped) this.mb.cylinder(b, worldAxis, length, rEnd, mat, { ...opts, radiusEnd: radius });
     else this.mb.cylinder(a, worldAxis, length, radius, mat, opts);
+  }
+
+  /**
+   * Надпись, табличка или плакат из атласа (world/signs.ts) на стене позади: середина низа — в точке
+   * (x, y), ширина w метров, высота по пропорции знака. Лист отстоит от стены на off, чтобы не рябил.
+   * tint красит трафарет (у печатного — оставить белым).
+   */
+  sign(id: string, x: number, y: number, w?: number, tint: Vec3 = [1, 1, 1], off = 0.005): void {
+    const s = SIGN[id];
+    if (!s) throw new Error(`нет такого знака: ${id}`);
+    const width = w ?? s.w;
+    const height = (width * s.ph) / s.pw;
+    const alpha = s.kind === 'stencil' || s.kind === 'brush' || s.kind === 'arc' || s.kind === 'tally';
+    this.mb.quadUv([this.pt(x - width / 2, y, off), this.pt(x + width / 2, y, off), this.pt(x + width / 2, y + height, off), this.pt(x - width / 2, y + height, off)], [s.u0, s.v0, s.u1, s.v1], alpha ? MAT.stencil : MAT.print, tint, 1);
+  }
+
+  /** Знак на полу: левый нижний угол рисунка — в точке (x0, z0), ширина w вдоль +x, верх рисунка — в сторону +z. */
+  floorSign(id: string, x0: number, z0: number, w: number, tint: Vec3 = [1, 1, 1], y = 0.004): void {
+    const s = SIGN[id];
+    if (!s) throw new Error(`нет такого знака: ${id}`);
+    const depth = (w * s.ph) / s.pw;
+    const alpha = s.kind === 'stencil' || s.kind === 'brush' || s.kind === 'arc' || s.kind === 'tally';
+    // Лист смотрит вверх: обход идёт от правого ближнего угла, поэтому u перевёрнуто.
+    this.mb.quadUv([this.pt(x0 + w, y, z0), this.pt(x0, y, z0), this.pt(x0, y, z0 + depth), this.pt(x0 + w, y, z0 + depth)], [s.u1, s.v0, s.u0, s.v1], alpha ? MAT.stencil : MAT.print, tint, 1);
   }
 
   /** Вложенное размещение: локальный сдвиг и добавочный поворот. */
@@ -233,6 +258,12 @@ export function hermoDoor(xf: Xf): void {
   xf.cyl([dx1 + 0.03, 1.1, t + 0.56], 'x', 0.07, 0.02, MAT.steel);
   xf.cyl([dx1 + 0.1, 1.1, t + 0.56], 'x', 0.025, 0.17, MAT.steel, { segments: 14, tint: [0.75, 0.75, 0.75] });
   for (const y of [0.4, 1.7]) xf.cyl([dx0 + 0.04, y - 0.08, t + 0.03], 'y', 0.16, 0.035, MAT.steel);
+  // Трафареты на створке (она распахнута, смотрит вдоль стены) и красный сектор распаха на полу.
+  const leaf = xf.child(dx1, 0, t + 0.54, 1);
+  const red: Vec3 = [0.62, 0.11, 0.08];
+  leaf.sign('germo', 0, 1.68, 0.62, red, 0.004);
+  leaf.sign('dzg', 0, 1.24, 0.34, red, 0.004);
+  xf.floorSign('arc', -hw, t, 1.08, red);
 }
 
 /** Вентиляционная решётка на стене z = 0, лицом к +z. Начало — центр решётки. */
