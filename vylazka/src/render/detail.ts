@@ -66,9 +66,17 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
   // Трещины: линии уровня плавного шума — длинные, извилистые, не замкнутые в соты.
   const crackA = fbmField(N, 2, 2, 3, seed + 7);
   const crackB = fbmField(N, 3, 3, 2, seed + 8);
+  /** Расстояние до линии уровня в текселях: значение делится на крутизну поля, и трещина выходит ровной толщины. */
+  const isoline = (f: typeof crackA, x: number, y: number, level: number): number => {
+    const v = at(f, x, y) - level;
+    const gx = at(f, x + 1, y) - at(f, x - 1, y);
+    const gy = at(f, x, y + 1) - at(f, x, y - 1);
+    return Math.abs(v) / Math.max(1e-5, 0.5 * Math.hypot(gx, gy));
+  };
+  /** width — полуширина трещины в текселях. */
   const crackLine = (x: number, y: number, width: number): number => {
-    const a = 1 - sstep(0, width, Math.abs(at(crackA, x, y) - 0.5));
-    const b = 1 - sstep(0, width * 0.7, Math.abs(at(crackB, x, y) - 0.47));
+    const a = 1 - sstep(width * 0.4, width, isoline(crackA, x, y, 0.5));
+    const b = 1 - sstep(width * 0.3, width * 0.8, isoline(crackB, x, y, 0.47));
     // Каждая трещина видна не на всём протяжении.
     return Math.max(a * sstep(0.45, 0.6, at(lo, x, y, 1, 1, 90, 17)), b * sstep(0.55, 0.7, at(lo, x, y, 1, 1, 23, 140)));
   };
@@ -85,7 +93,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const seam = 1 - sstep(0.0, 0.07, Math.min(t, 1 - t));
     const grain = at(grainU, x, y);
     const pore = sstep(0.7, 0.78, at(hi, x, y)) * sstep(0.35, 0.6, at(mid, x, y, 1, 1, 37, 91));
-    const cavity = crackLine(x, y, 0.012);
+    const cavity = crackLine(x, y, 1.3);
     // Отверстия от стяжек опалубки: ряд круглых гнёзд через две доски.
     const tu = (x / N) * 4;
     const tie = band % 2 === 0 ? sstep(0.021, 0.012, Math.hypot((tu - Math.floor(tu) - 0.5) / 4, (t - 0.5) / boards)) : 0;
@@ -173,8 +181,12 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const d = Math.min(du, dv);
     const grout = 1 - sstep(0.03, 0.055, d);
     const rnd = hash01(iu, iv, seed + 7);
-    const chipped = rnd > 0.82 ? sstep(0.3, 0.12, Math.hypot(du, dv) + (at(hi, x, y) - 0.5) * 0.1) : 0;
-    const crack = rnd < 0.2 ? crackLine(x, y, 0.014) : 0;
+    // Скол — у одного угла плитки, а не у всех четырёх.
+    const corner = Math.floor(rnd * 97) % 4;
+    const cu = fu - iu - (corner & 1);
+    const cv = fv - iv - (corner >> 1);
+    const chipped = rnd > 0.82 ? sstep(0.34, 0.2, Math.hypot(cu, cv) + (at(hi, x, y) - 0.5) * 0.12) : 0;
+    const crack = rnd < 0.2 ? crackLine(x, y, 1.2) : 0;
     const body = 0.72 + sstep(0.0, 0.2, d) * 0.06 + (rnd - 0.5) * 0.05;
     const h = body * (1 - grout) + 0.3 * grout - chipped * 0.3 - crack * 0.25;
     const a = 0.5 + (rnd - 0.5) * 0.12 - grout * 0.22 - chipped * 0.2 - crack * 0.25 + (at(lo, x, y) - 0.5) * 0.06;
@@ -184,7 +196,7 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
   // 8. Бетонный пол: стяжка с щебнем, трещины, затёртые пятна.
   layers[DETAIL.floor] = (x, y) => {
     const pebble = sstep(0.28, 0.1, atCell(cs.near, N, x, y)) * sstep(0.55, 0.75, atCell(cs.id, N, x, y));
-    const crack = crackLine(x, y, 0.014);
+    const crack = crackLine(x, y, 1.4);
     const worn = at(lo, x, y, 2, 2, 9, 9);
     const h = 0.45 + (at(mid, x, y) - 0.5) * 0.3 + pebble * 0.22 + (at(hi, x, y) - 0.5) * 0.1 - crack * 0.5;
     const a = 0.5 + (worn - 0.5) * 0.3 + (at(mid, x, y, 1, 1, 7, 3) - 0.5) * 0.18 + pebble * 0.07 - crack * 0.32;
