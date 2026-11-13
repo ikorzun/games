@@ -9,7 +9,9 @@ name: pages
 # Дальше публикация идёт при каждом push в ветку.
 on:
   push:
-    branches: [main, claude/magical-thompson-ore6eh]
+    # claude/cool-clarke-gdi2gp — рабочая ветка «Вылазки»: владелец проверяет игру по ссылке до слияния.
+    # Новелла в этой ветке та же, что в основной; после слияния строку с веткой можно убрать.
+    branches: [main, claude/magical-thompson-ore6eh, claude/cool-clarke-gdi2gp]
     paths:
       - "runtime/**"
       - "episodes/**"
