@@ -15,6 +15,8 @@ export interface OverlayHandlers {
   onQuality(next: Quality): void;
   /** Кнопка «трясти телефоном» (только там, где нужен явный запрос разрешения). */
   onMotion?(): void;
+  /** Кнопка звука: включить или выключить. */
+  onSound?(): void;
 }
 
 /** Строка карточки: обычная, выполненная цель или подзаголовок. */
@@ -42,6 +44,8 @@ export class Overlay {
   private readonly rotate: HTMLElement;
   private readonly qualityBtn: HTMLButtonElement;
   private readonly motionBtn: HTMLButtonElement;
+  private readonly soundBtn: HTMLButtonElement;
+  private sound = true;
   private quality: Quality = 'med';
   private touch = false;
   private errorText = '';
@@ -59,7 +63,8 @@ export class Overlay {
       '<div class="vz-overlay__title"></div><div class="vz-overlay__sub"></div>' +
       '<div class="vz-overlay__body"></div>' +
       '<div class="vz-overlay__prompt"></div>' +
-      '<div class="vz-overlay__row"><button type="button" class="vz-overlay__opt vz-overlay__opt--quality"></button>' +
+      '<div class="vz-overlay__row"><button type="button" class="vz-overlay__opt vz-overlay__opt--sound"></button>' +
+      '<button type="button" class="vz-overlay__opt vz-overlay__opt--quality"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--motion"></button></div>' +
       '<div class="vz-overlay__rotate"></div></div>';
     parent.append(this.el);
@@ -72,6 +77,11 @@ export class Overlay {
     this.qualityBtn = q('.vz-overlay__opt--quality') as HTMLButtonElement;
     this.motionBtn = q('.vz-overlay__opt--motion') as HTMLButtonElement;
     this.motionBtn.hidden = true;
+    this.soundBtn = q('.vz-overlay__opt--sound') as HTMLButtonElement;
+    this.soundBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.handlers.onSound?.();
+    });
 
     this.qualityBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -98,6 +108,11 @@ export class Overlay {
 
   setQuality(q: Quality): void {
     this.quality = q;
+    this.refresh();
+  }
+
+  setSound(on: boolean): void {
+    this.sound = on;
     this.refresh();
   }
 
@@ -138,6 +153,9 @@ export class Overlay {
     this.prompt.textContent = card ? card.prompt : m === 'loading' ? t('ui.loading') : m === 'start' ? t(`ui.start${sfx}`) : m === 'paused' ? t(`ui.resume${sfx}`) : m === 'error' ? this.errorText : '';
     this.qualityBtn.textContent = `${t('ui.quality')}: ${t(`ui.quality.${this.quality}`)}`;
     this.qualityBtn.hidden = m !== 'start' && m !== 'paused';
+    this.soundBtn.textContent = `${t('ui.sound')}: ${t(this.sound ? 'ui.sound.on' : 'ui.sound.off')}`;
+    this.soundBtn.setAttribute('aria-pressed', String(this.sound));
+    this.soundBtn.hidden = m !== 'start' && m !== 'paused' && m !== 'report';
     this.rotate.textContent = t('ui.rotate');
   }
 }

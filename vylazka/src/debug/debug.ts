@@ -54,11 +54,22 @@ export interface VzDebugApi {
   gotoExit(): void;
   /** Зоны среды и обвалы уровня. */
   hazards(): Record<string, unknown>;
+  /** Выпустить рой в hops клетках от игрока (сразу настороже) либо показать его фигурой без охоты. */
+  swarm(cmd: 'release' | 'appear' | 'sleep', hops?: number): boolean;
+  /** Поставить фазу режиссёра страха: 0 — ложные события, 1 — рой мелькает, 2 — охотится. */
+  phase(n: 0 | 1 | 2): void;
+  /** Лестницы уровня и комнаты-аномалии. */
+  anomalies(): Record<string, unknown>;
+  /** Выключить рой, режиссёра и аномалии: для проверок, которым они мешают. */
+  calm(on: boolean): void;
   /** Включить или выключить тень фонаря (для сравнения кадров). */
   shadows(on: boolean): void;
   /** Нарисовать кадр и вернуть его яркость сеткой 32×18, строка 0 — верхняя. */
   probe(): number[];
   missingKeys(): string[];
+  /** Состояние звука: загружено, что просили и что прозвучало, какие петли идут. */
+  audio(): ReturnType<import('../audio/engine').AudioEngine['status']>;
+  mute(on: boolean): void;
 }
 
 declare global {
@@ -149,28 +160,26 @@ export function installDebug(app: App): void {
       const l = app.level;
       const m = l.landmarks.filter((x) => x.id === id)[index];
       if (!m) return false;
-      // Встаём в узле того же помещения, ближайшем к нужной дистанции от приметы.
-      const nodes = l.nav.filter((n) => n.room === m.room);
-      let best = nodes[0];
-      let bestErr = Infinity;
+      // Пробуем встать в узлах помещения приметы и соседних с ним: подходим на нужную дистанцию,
+      // даём контроллеру вытолкнуть игрока из мебели и только потом целимся.
+      const own = l.nav.filter((n) => n.room === m.room);
+      const near = own.flatMap((n) => n.links.map((i) => l.nav[i]!)).filter((n) => n.room !== m.room);
+      const nodes = [...own, ...near].sort((a, b) => Math.abs(Math.hypot(a.x - m.x, a.z - m.z) - distance) - Math.abs(Math.hypot(b.x - m.x, b.z - m.z) - distance));
       for (const n of nodes) {
-        const err = Math.abs(Math.hypot(n.x - m.x, n.z - m.z) - distance);
-        if (err < bestErr) {
-          bestErr = err;
-          best = n;
-        }
+        const dx = m.x - n.x;
+        const dz = m.z - n.z;
+        const d = Math.hypot(dx, dz) || 1;
+        const k = Math.max(0, (d - distance) / d);
+        game().teleport(n.x + dx * k, n.y, n.z + dz * k);
+        app.advance(emptyInput(), 2, 1, STEP);
+        game().aimAt(m.x, m.y, m.z);
+        app.advance(emptyInput(), 2, 1, STEP);
+        const st = game().snapshot() as { pos: number[]; beamDist: number };
+        const dist = Math.hypot(m.x - st.pos[0]!, m.y - (st.pos[1]! + 1), m.z - st.pos[2]!);
+        // Примета видна: луч доходит до неё, а не упирается в преграду раньше.
+        if (dist > 0.6 && dist < 6 && st.beamDist >= dist - 1.2) return true;
       }
-      if (!best) return false;
-      const dx = m.x - best.x;
-      const dz = m.z - best.z;
-      const d = Math.hypot(dx, dz) || 1;
-      // Не дальше distance от приметы: из центра клетки подходим ближе по прямой.
-      const k = Math.max(0, (d - distance) / d);
-      const px = best.x + dx * k;
-      const pz = best.z + dz * k;
-      const feet = best.y;
-      game().teleport(px, feet, pz, Math.atan2(-(m.x - px), -(m.z - pz)), Math.atan2(m.y - (feet + 1.42), Math.hypot(m.x - px, m.z - pz)));
-      return true;
+      return false;
     },
     goals: () => {
       const srt = game().sortie;
@@ -189,19 +198,20 @@ export function installDebug(app: App): void {
       const srt = game().sortie;
       const it = srt?.pop.items[id];
       if (!it) return false;
-      // Встаём в метре от предмета со стороны ближайшего узла его помещения.
-      const nodes = app.level.nav.filter((n) => n.room === it.room);
-      let best = nodes[0];
-      for (const n of nodes) if (best && Math.hypot(n.x - it.x, n.z - it.z) < Math.hypot(best.x - it.x, best.z - it.z)) best = n;
-      if (!best) return false;
-      const dx = best.x - it.x;
-      const dz = best.z - it.z;
-      const d = Math.hypot(dx, dz) || 1;
-      const k = Math.min(1, 1.0 / d);
-      const px = it.x + dx * k;
-      const pz = it.z + dz * k;
-      game().teleport(px, best.y, pz, Math.atan2(-(it.x - px), -(it.z - pz)), Math.atan2(it.y - (best.y + 1.42), Math.hypot(it.x - px, it.z - pz)));
-      return true;
+      // Встаём в метре от предмета: пробуем подойти с разных сторон, пока он не окажется под рукой.
+      // Предмет может лежать на столе посреди клетки — тогда контроллер вытолкнет игрока из стола,
+      // поэтому целимся уже после того, как игрок встал.
+      const floor = -it.tier * 4.5;
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4;
+        game().teleport(it.x + Math.cos(a) * 1.0, floor, it.z + Math.sin(a) * 1.0);
+        app.advance(emptyInput(), 2, 1, STEP);
+        game().aimAt(it.x, it.y, it.z);
+        app.advance(emptyInput(), 2, 1, STEP);
+        const tg = srt.target;
+        if (tg?.kind === 'item' && tg.item.id === id) return true;
+      }
+      return false;
     },
     gotoGoal: (index) => {
       const o = game().sortie?.objectives[index];
@@ -218,6 +228,37 @@ export function installDebug(app: App): void {
       zones: app.level.zones.map((z) => ({ kind: z.kind, tier: z.tier, center: [(z.minX + z.maxX) / 2, z.maxY, (z.minZ + z.maxZ) / 2] })),
       collapses: app.level.collapses.map((c) => ({ id: c.id, tier: c.tier, center: c.center })),
     }),
+    swarm: (cmd, hops = 5) => {
+      const g = game();
+      const sw = g.swarm;
+      if (!sw) return false;
+      if (cmd === 'sleep') {
+        sw.mode = 'dormant';
+        sw.cohesion = 0;
+        return true;
+      }
+      const n = sw.nodeAround(g.playerNode(), hops, hops);
+      if (n < 0) return false;
+      if (cmd === 'appear') sw.appear(n, 8);
+      else {
+        sw.activate(n);
+        sw.alert(g.playerNode());
+      }
+      g.swarmBody.snap(sw.pos, sw.cohesion);
+      return true;
+    },
+    phase: (n) => {
+      const d = game().director;
+      if (d) d.phase = n;
+    },
+    calm: (on) => {
+      game().calm = on;
+      if (on && game().swarm) {
+        game().swarm!.mode = 'dormant';
+        game().swarm!.cohesion = 0;
+      }
+    },
+    anomalies: () => ({ stairs: app.level.stairs, variants: app.level.variants, state: game().anomalies?.state() ?? null }),
     gotoRoom: (roomId, yawDeg = 0) => {
       const n = app.level.nav.find((x) => x.room === roomId);
       if (!n) return false;
@@ -232,6 +273,8 @@ export function installDebug(app: App): void {
       return game().renderer.probe();
     },
     missingKeys: () => [...app.i18n.missing],
+    audio: () => app.sound.status(),
+    mute: (on) => app.setMuted(on),
   };
   window.__vz = api;
 }

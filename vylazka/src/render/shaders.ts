@@ -189,6 +189,71 @@ void main() {
 }
 `;
 
+/**
+ * Рой: каждый червь — трубка, изогнутая в вершинном шейдере вдоль пути за головой. Тело почти
+ * чёрное; в луче фонаря блестит мокрым бликом, в темноте едва светится по кромке. Прозрачность —
+ * экранным дизерингом, без сортировки.
+ */
+export const SWARM_VERT = /* glsl */ `
+attribute vec3 iHead;
+attribute vec3 iDir;
+attribute vec2 iParam;
+uniform float uTime;
+uniform float uThick;
+varying vec3 vPosV;
+varying vec3 vNrmV;
+varying float vT;
+
+void main() {
+  float t = position.z;
+  vec3 d = normalize(iDir + vec3(1e-4, 2e-4, 0.0));
+  vec3 up = abs(d.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+  vec3 side = normalize(cross(d, up));
+  vec3 up2 = cross(side, d);
+  float seed = iParam.x;
+  float len = iParam.y;
+  float ph = t * 9.0 - uTime * (6.0 + seed * 3.0) + seed * 40.0;
+  float amp = 0.07 * len * (0.25 + t);
+  vec3 center = iHead - d * (t * len) + side * sin(ph) * amp + up2 * cos(ph * 0.7 + seed * 11.0) * amp * 0.6;
+  // Толще в середине, тонкий хвост, чуть притуплённая голова.
+  float r = uThick * (0.4 + 0.6 * sin(3.14159 * min(1.0, t * 1.1 + 0.14)));
+  vec3 n = side * position.x + up2 * position.y;
+  vec4 mv = viewMatrix * vec4(center + n * r, 1.0);
+  vPosV = mv.xyz;
+  vNrmV = mat3(viewMatrix) * n;
+  vT = t;
+  gl_Position = projectionMatrix * mv;
+}
+`;
+
+export const SWARM_FRAG = /* glsl */ `
+precision highp float;
+uniform float uAlpha;
+uniform float uFog;
+varying vec3 vPosV;
+varying vec3 vNrmV;
+varying float vT;
+
+${BEAM_GLSL}
+
+void main() {
+  // Дизеринг-прозрачность: interleaved gradient noise не даёт муара после дисторсии.
+  float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+  if (ign > uAlpha * (1.0 - vT * 0.45)) discard;
+  vec3 N = normalize(vNrmV);
+  vec3 V = normalize(-vPosV);
+  vec4 lb = beamAt(vPosV);
+  float rim = pow(1.0 - max(dot(N, V), 0.0), 2.5);
+  float spec = pow(max(dot(N, normalize(lb.xyz + V)), 0.0), 36.0);
+  // Тело чёрное: в луче рой читается тёмным силуэтом с редкими мокрыми бликами.
+  vec3 col = uLightColor * lb.w * (vec3(0.004, 0.004, 0.005) + spec * 0.16 + rim * 0.012);
+  // В темноте — едва заметная холодная кромка: рой угадывается, но не светится.
+  col += vec3(0.007, 0.009, 0.011) * rim;
+  col *= exp(-uFog * length(vPosV));
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
 export const POST_VERT = /* glsl */ `
 varying vec2 vUv;
 void main() {

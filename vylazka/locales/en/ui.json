@@ -13,6 +13,8 @@
   "ui.quality.med": "medium",
   "ui.quality.high": "high",
   "ui.sound": "Sound",
+  "ui.sound.on": "on",
+  "ui.sound.off": "off",
   "ui.on": "on",
   "ui.off": "off",
   "ui.error.webgl": "The browser did not provide WebGL2. The game cannot run on this device.",
@@ -121,5 +123,6 @@
   "report.next": "Click for the next sortie",
   "report.next.touch": "Tap for the next sortie",
   "touch.act": "Action",
-  "touch.goals": "Assignment"
+  "touch.goals": "Assignment",
+  "teach.swarm": "Keep the beam on it and it falls apart. Not for long"
 }

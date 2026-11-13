@@ -157,6 +157,38 @@ describe('сборка уровня из плана', () => {
     for (let t = 0; t < 3; t++) expect(level.landmarks.filter((l) => l.tier === t && l.id !== 'exit').length, `ярус ${t}`).toBeGreaterThanOrEqual(2);
   });
 
+  it('каждую примету можно снять: есть место, откуда она ближе 6 м и ничем не заслонена', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const level = buildLevel(generateLayout(seed * 977, 3));
+      for (const lm of level.landmarks) {
+        if (lm.id === 'exit') continue;
+        const own = level.nav.filter((n) => n.room === lm.room);
+        const around = own.flatMap((n) => n.links.map((i) => level.nav[i]!));
+        // С центра клетки и с четырёх точек вокруг него: игрок не обязан стоять ровно посередине.
+        const ok = [...own, ...around].some((n) =>
+          [
+            [0, 0],
+            [0.8, 0],
+            [-0.8, 0],
+            [0, 0.8],
+            [0, -0.8],
+          ].some(([ox, oz]) => {
+            const ex = n.x + ox!;
+            const ey = n.y + 1.42;
+            const ez = n.z + oz!;
+            const dx = lm.x - ex;
+            const dy = lm.y - ey;
+            const dz = lm.z - ez;
+            const d = Math.hypot(dx, dy, dz);
+            if (d > 6 || d < 0.4) return false;
+            return level.colliders.raycast(ex, ey, ez, dx / d, dy / d, dz / d, d) >= d - 1.0;
+          }),
+        );
+        expect(ok, `сид ${seed * 977}: примету «${lm.id}» (ярус ${lm.tier}) не снять ниоткуда`).toBe(true);
+      }
+    }
+  });
+
   it('опасности на месте: зоны воды, газа и провалов; у провала есть карниз, а в дыре — гибель', () => {
     let pits = 0;
     for (const seed of [5, 20041113, 31337, 808, 4242]) {
@@ -168,7 +200,7 @@ describe('сборка уровня из плана', () => {
       expect(level.collapses.length).toBe(hz.collapses.length);
       for (const c of level.collapses) {
         expect(c.boxes.length).toBeGreaterThan(0);
-        expect(level.chunks.filter((ch) => ch.hidden === c.id).length).toBe(1);
+        expect(level.chunks.filter((ch) => ch.id === c.id && ch.hidden === true).length).toBe(1);
       }
       for (const z of level.zones.filter((q) => q.kind === 'pit')) {
         pits += 1;

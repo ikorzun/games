@@ -10,7 +10,8 @@ import type { LevelChunk, StairLink } from '../world/level';
 import { MAT_COUNT, MAT_DEFS } from '../world/materials';
 import { bakeGrime } from './grime';
 import { ATLAS_GRID, bakeMatcapAtlas } from './matcap_atlas';
-import { DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, POST_FRAG, POST_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
+import { MAX_WORMS } from '../swarm/body';
+import { DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, POST_FRAG, POST_VERT, SWARM_FRAG, SWARM_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
 
 export type Quality = 'low' | 'med' | 'high';
 
@@ -22,12 +23,14 @@ export interface QualitySpec {
   chroma: boolean;
   detail: boolean;
   dust: number;
+  /** Сколько червей роя рисовать. */
+  worms: number;
 }
 
 export const QUALITY: Record<Quality, QualitySpec> = {
-  low: { pixels: 640 * 360, shadow: 0, chroma: false, detail: false, dust: 140 },
-  med: { pixels: 960 * 540, shadow: 512, chroma: true, detail: true, dust: 300 },
-  high: { pixels: 1280 * 720, shadow: 1024, chroma: true, detail: true, dust: 520 },
+  low: { pixels: 640 * 360, shadow: 0, chroma: false, detail: false, dust: 140, worms: 44 },
+  med: { pixels: 960 * 540, shadow: 512, chroma: true, detail: true, dust: 300, worms: 68 },
+  high: { pixels: 1280 * 720, shadow: 1024, chroma: true, detail: true, dust: 520, worms: MAX_WORMS },
 };
 
 /** Всё, что нужно для одного кадра. */
@@ -95,11 +98,16 @@ export class GameRenderer {
   private readonly postCam = new THREE.Camera();
   private dust: THREE.Points | null = null;
   private readonly dustMat: THREE.ShaderMaterial;
+  private readonly swarmMat: THREE.ShaderMaterial;
+  private readonly swarmMesh: THREE.Mesh;
+  private readonly swarmHead: THREE.InstancedBufferAttribute;
+  private readonly swarmDir: THREE.InstancedBufferAttribute;
+  private readonly swarmParam: THREE.InstancedBufferAttribute;
   private readonly chunks: THREE.Mesh[] = [];
   /** Предметы по ярусам: по одной маленькой геометрии на ярус. */
   private readonly items = new Map<number, THREE.Mesh>();
-  /** id скрытых чанков, которые уже показаны (обвалы после обрушения). */
-  private readonly revealed = new Set<string>();
+  /** Имена чанков, которые сейчас скрыты (обвал до обрушения, неактивный вариант комнаты). */
+  private readonly hiddenIds = new Set<string>();
   private readonly lightU: Record<string, THREE.IUniform>;
   private readonly tmpV = new THREE.Vector3();
   private readonly tmpM = new THREE.Matrix4();
@@ -186,6 +194,49 @@ export class GameRenderer {
       transparent: true,
       depthWrite: false,
     });
+    // Рой: шаблон одного червя (кольца × грани), размноженный инстансами.
+    const RINGS = 9;
+    const SIDES = 5;
+    const tpl: number[] = [];
+    const idx: number[] = [];
+    for (let r = 0; r < RINGS; r++) {
+      for (let k = 0; k < SIDES; k++) {
+        const a = (k / SIDES) * Math.PI * 2;
+        tpl.push(Math.cos(a), Math.sin(a), r / (RINGS - 1));
+      }
+    }
+    for (let r = 0; r < RINGS - 1; r++) {
+      for (let k = 0; k < SIDES; k++) {
+        const a = r * SIDES + k;
+        const b = r * SIDES + ((k + 1) % SIDES);
+        idx.push(a, a + SIDES, b, b, a + SIDES, b + SIDES);
+      }
+    }
+    const sg = new THREE.InstancedBufferGeometry();
+    sg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(tpl), 3));
+    sg.setIndex(idx);
+    this.swarmHead = new THREE.InstancedBufferAttribute(new Float32Array(MAX_WORMS * 3), 3);
+    this.swarmDir = new THREE.InstancedBufferAttribute(new Float32Array(MAX_WORMS * 3), 3);
+    this.swarmParam = new THREE.InstancedBufferAttribute(new Float32Array(MAX_WORMS * 2), 2);
+    this.swarmHead.setUsage(THREE.DynamicDrawUsage);
+    this.swarmDir.setUsage(THREE.DynamicDrawUsage);
+    sg.setAttribute('iHead', this.swarmHead);
+    sg.setAttribute('iDir', this.swarmDir);
+    sg.setAttribute('iParam', this.swarmParam);
+    sg.instanceCount = 0;
+    this.swarmMat = new THREE.ShaderMaterial({
+      vertexShader: SWARM_VERT,
+      fragmentShader: SWARM_FRAG,
+      uniforms: { ...this.lightU, uTime: { value: 0 }, uThick: { value: 0.042 }, uAlpha: { value: 0.85 }, uFog: { value: 0.035 } },
+      side: THREE.DoubleSide,
+    });
+    this.swarmMesh = new THREE.Mesh(sg, this.swarmMat);
+    this.swarmMesh.frustumCulled = false;
+    // Слой 1: рой не попадает в проход тени — он «призрачный» и тени не отбрасывает.
+    this.swarmMesh.layers.set(1);
+    this.swarmMesh.visible = false;
+    this.scene.add(this.swarmMesh);
+
     this.postMat = new THREE.ShaderMaterial({
       vertexShader: POST_VERT,
       fragmentShader: POST_FRAG,
@@ -302,7 +353,7 @@ export class GameRenderer {
       m.geometry.dispose();
     }
     this.chunks.length = 0;
-    this.revealed.clear();
+    this.hiddenIds.clear();
     for (const m of this.items.values()) {
       this.scene.remove(m);
       m.geometry.dispose();
@@ -310,7 +361,8 @@ export class GameRenderer {
     this.items.clear();
     for (const chunk of chunks) {
       const mesh = this.makeMesh(chunk.mesh, chunk.tierMin, chunk.tierMax);
-      if (chunk.hidden) mesh.userData.hidden = chunk.hidden;
+      if (chunk.id) mesh.userData.id = chunk.id;
+      if (chunk.id && chunk.hidden) this.hiddenIds.add(chunk.id);
       this.chunks.push(mesh);
       this.scene.add(mesh);
     }
@@ -348,9 +400,37 @@ export class GameRenderer {
     this.scene.add(mesh);
   }
 
-  /** Показать скрытый чанк (обвал обрушился). */
-  reveal(id: string): void {
-    this.revealed.add(id);
+  /**
+   * Передать рою позиции на кадр. heads, dirs, params — массивы тела роя; alpha — плотность
+   * (0 — роя нет). Сколько червей рисовать, решает качество.
+   */
+  setSwarm(heads: Float32Array, dirs: Float32Array, params: Float32Array, alpha: number, time: number): void {
+    const on = alpha > 0.01;
+    this.swarmMesh.visible = on;
+    if (!on) return;
+    (this.swarmHead.array as Float32Array).set(heads);
+    (this.swarmDir.array as Float32Array).set(dirs);
+    (this.swarmParam.array as Float32Array).set(params);
+    this.swarmHead.needsUpdate = true;
+    this.swarmDir.needsUpdate = true;
+    this.swarmParam.needsUpdate = true;
+    (this.swarmMesh.geometry as THREE.InstancedBufferGeometry).instanceCount = Math.min(MAX_WORMS, QUALITY[this.quality].worms);
+    this.swarmMat.uniforms.uAlpha!.value = alpha;
+    this.swarmMat.uniforms.uTime!.value = time;
+  }
+
+  /** Показать или скрыть именованный чанк (обвал обрушился, комната сменила вариант). */
+  setChunkVisible(id: string, on: boolean): void {
+    if (on) this.hiddenIds.delete(id);
+    else this.hiddenIds.add(id);
+  }
+
+  /** Яркость фосфорных надписей: 1 — обычная, 0 — погасли, больше — вспышка. */
+  setGlow(k: number): void {
+    const params = this.worldMat.uniforms.uMatParams!.value as THREE.Vector4[];
+    params.forEach((p, i) => {
+      p.y = (MAT_DEFS[i]?.glow ?? 0) * k;
+    });
   }
 
   /** Точка мира на экране: x, y в долях кадра (0..1, y вниз); visible — перед камерой и в кадре. */
@@ -392,7 +472,7 @@ export class GameRenderer {
     for (const m of this.chunks) {
       const sphere = m.geometry.boundingSphere;
       const far = sphere ? cam.position.distanceTo(sphere.center) - sphere.radius > this.cullDistance : false;
-      const hidden = m.userData.hidden !== undefined && !this.revealed.has(m.userData.hidden as string);
+      const hidden = m.userData.id !== undefined && this.hiddenIds.has(m.userData.id as string);
       m.visible = !far && !hidden && (m.userData.tierMax as number) >= lo && (m.userData.tierMin as number) <= hi;
     }
     for (const [tier, m] of this.items) m.visible = tier >= lo && tier <= hi;

@@ -6,14 +6,16 @@
  *   - имена файлов и папок — только латиница [A-Za-z0-9_.-] (и «/» как разделитель);
  *   - никаких внешних ресурсов в index.html и CSS (http:// и https:// в src/href/url());
  *   - ядро (всё, кроме игровых ассетов) ≤ 5 МБ; весь архив ≤ 300 МБ;
- *   - игровые ассеты (графика и звук: assets/<папка>/…) считаются отдельной строкой: больше 40 МБ —
+ *   - звук: в сборке либо весь набор из audio/manifest.json (audio/<id>_<n>.mp3), либо ничего;
+ *     неполный набор — ошибка, отсутствие — предупреждение (VZ_REQUIRE_AUDIO=1 делает его ошибкой);
+ *   - игровые ассеты (графика и звук: assets/<папка>/… и audio/…) считаются отдельной строкой: больше 40 МБ —
  *     предупреждение (грузить игру станет долго), общий лимит архива 300 МБ — жёсткий.
  *     Файлы бандла Vite лежат в assets/ плоско (assets/index-<хеш>.js) и входят в ядро.
  * Выход: код 0 — всё в порядке (предупреждения не мешают), 1 — есть нарушения (перечислены в stderr).
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, resolve, sep } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { dirname, join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const CORE_BUDGET_BYTES = 5 * 1024 * 1024;
 export const ARCHIVE_BUDGET_BYTES = 300 * 1024 * 1024;
@@ -21,8 +23,20 @@ export const ARCHIVE_BUDGET_BYTES = 300 * 1024 * 1024;
 export const ASSETS_WARN_BYTES = 40 * 1024 * 1024;
 /** Каталоги контента вне «ядра» (у этой игры их нет: уровни процедурные, строки вшиты). */
 const CONTENT_DIRS = [];
-/** Игровой ассет: assets/<папка>/…; плоские assets/<файл> — бандл Vite, это ядро. */
-const isGameAsset = (rel) => rel.startsWith('assets/') && rel.indexOf('/', 'assets/'.length) > 0;
+/** Игровой ассет: assets/<папка>/… и звук audio/…; плоские assets/<файл> — бандл Vite, это ядро. */
+const isGameAsset = (rel) => rel.startsWith('audio/') || (rel.startsWith('assets/') && rel.indexOf('/', 'assets/'.length) > 0);
+
+/** Какие звуковые файлы обязаны быть в сборке: из audio/manifest.json. */
+function expectedAudio() {
+  try {
+    const manifest = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'audio', 'manifest.json'), 'utf8'));
+    const out = [];
+    for (const s of manifest.sounds) for (let v = 1; v <= s.variants; v++) out.push(`audio/${s.id}_${v}.mp3`);
+    return out;
+  } catch {
+    return [];
+  }
+}
 const NAME_RE = /^[A-Za-z0-9_.\-/]+$/;
 const EXTERNAL_IN_HTML = /\b(?:src|href|action|poster|data)\s*=\s*["']\s*(?:https?:)?\/\//gi;
 const EXTERNAL_IN_CSS = /url\(\s*["']?\s*(?:https?:)?\/\//gi;
@@ -76,6 +90,19 @@ export function checkDist(dir, opts = {}) {
       const hits = [...(css.match(EXTERNAL_IN_CSS) ?? []), ...(css.match(EXTERNAL_IMPORT_IN_CSS) ?? [])];
       if (hits.length) problems.push(`внешние ресурсы в ${f.rel}: ${[...new Set(hits.map((h) => h.trim()))].join(', ')}`);
     }
+  }
+  // Звук: либо весь набор из манифеста, либо ничего. Игра с половиной звуков — брак.
+  const expected = expectedAudio();
+  const present = new Set(files.filter((f) => f.rel.startsWith('audio/') && f.rel.endsWith('.mp3')).map((f) => f.rel));
+  if (expected.length > 0) {
+    const lost = expected.filter((f) => !present.has(f));
+    if (present.size === 0) {
+      const msg = `звука в сборке нет: ожидается ${expected.length} файлов по audio/manifest.json`;
+      if (opts.requireAudio ?? process.env.VZ_REQUIRE_AUDIO === '1') problems.push(msg);
+      else warnings.push(msg);
+    } else if (lost.length > 0) problems.push(`набор звуков неполный, нет ${lost.length} из ${expected.length}: ${lost.slice(0, 8).join(', ')}${lost.length > 8 ? '…' : ''}`);
+    const extra = [...present].filter((f) => !expected.includes(f));
+    if (extra.length > 0) warnings.push(`лишние звуковые файлы (нет в манифесте): ${extra.slice(0, 8).join(', ')}`);
   }
   const core = total - content - assets;
   if (core > coreBudget) problems.push(`ядро ${mb(core)} МБ больше бюджета ${mb(coreBudget)} МБ`);

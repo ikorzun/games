@@ -469,18 +469,19 @@ function archive(ctx: RoomCtx): void {
 function collapsed(ctx: RoomCtx): void {
   const c = ctx.cells[0];
   if (!c) return;
-  // Завал у стены, противоположной входу: слот без двери с самой дальней стороны.
-  const back = ctx.slots[0];
-  const rot = back ? back.xf.rot : 0;
-  const pile = c.xf.child(0, 0, 0, ((rot + 2) % 4) as 0 | 1 | 2 | 3);
+  // Завал лежит высокой стороной к глухой стене, открытой — к двери: иначе его не увидеть и не снять.
+  const walls = new Set(ctx.slots.filter((s) => s.cx === c.cx && s.cz === c.cz).map((s) => s.dir));
+  const door = [0, 1, 2, 3].find((d) => !walls.has(d)) ?? 0;
+  // Поворот, при котором локальная ось +z завала смотрит на дверь.
+  const rot = ([1, 0, 3, 2] as const)[door]!;
+  const pile = c.xf.child(0, 0, 0, rot);
   collapse(pile, ctx.h, c.cx * 53 + c.cz * 29);
   landmark(ctx, 'collapse', pile, 0, 1.2, 0.2);
   spot(ctx, pile, 0, 0.02, 1.0, 'floor');
 }
 
-function stairwell(ctx: RoomCtx): void {
-  const first = ctx.cells[0];
-  if (first) cageLamp(first.xf.child(0, ctx.h, 0));
+function stairwell(_ctx: RoomCtx): void {
+  // В шахте лестницы пусто: ни ламп, ни труб — ничто не должно выдавать, сколько пройдено.
 }
 
 const FURNISH: Record<GenRoom['type'], (ctx: RoomCtx) => void> = {

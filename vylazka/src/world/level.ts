@@ -9,8 +9,24 @@ export interface LevelChunk {
   mesh: MeshData;
   tierMin: number;
   tierMax: number;
-  /** Чанк скрыт, пока игра не покажет его по этому id (обвал до обрушения). */
-  hidden?: string;
+  /** Имя чанка, по которому игра может показать или скрыть его (обвал, вариант комнаты). */
+  id?: string;
+  /** Чанк с именем изначально скрыт. */
+  hidden?: boolean;
+}
+
+/**
+ * Комната с двумя вариантами обстановки (аномалия «изменилась, пока не смотрел»).
+ * У каждого варианта свой чанк и своя группа коллайдеров; стены, пол и двери общие.
+ */
+export interface RoomVariant {
+  room: number;
+  tier: number;
+  center: Vec3;
+  chunkA: string;
+  chunkB: string;
+  groupA: string;
+  groupB: string;
 }
 
 /** Зона среды: вода замедляет и глушит фонарь, газ душит, провал убивает. */
@@ -87,6 +103,7 @@ export interface BuiltLevel {
   landmarks: Landmark[];
   zones: Zone[];
   collapses: CollapseSpec[];
+  variants: RoomVariant[];
   nav: NavNode[];
   /** План, по которому собран уровень (у тестового уровня его нет). */
   layout: GenLayout | null;

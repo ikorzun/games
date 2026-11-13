@@ -72,6 +72,7 @@ export class Flashlight {
   private firstFailDone = false;
   /** > 0 — идёт предупреждающее мерцание перед отказом. */
   private dying = 0;
+  private forced = false;
   private need = 1;
   private work = 0;
   private sparkLeft = 0;
@@ -104,6 +105,11 @@ export class Flashlight {
     this.reviveProgress = 0;
   }
 
+  /** Заставить фонарь мигать заданное время, не гася его (пугалка). */
+  stutter(seconds: number): void {
+    if (this.state === 'on') this.unstable = Math.max(this.unstable, seconds);
+  }
+
   /** Батарейка села: тряска не поможет, нужна замена. */
   get empty(): boolean {
     return this.charge <= 0;
@@ -114,6 +120,8 @@ export class Flashlight {
     if (this.state !== 'on') return;
     this.dying = 0;
     this.beginDead();
+    // Об отказе сообщит следующий шаг: звук и вибрация у принудительного отказа те же, что у случайного.
+    this.forced = true;
   }
 
   private beginDead(): void {
@@ -137,6 +145,10 @@ export class Flashlight {
       return ev;
     }
     this.sinceRevive += dt;
+    if (this.forced) {
+      this.forced = false;
+      ev.failed = true;
+    }
 
     if (this.state === 'on') {
       this.litTime += dt;

@@ -16,6 +16,8 @@ export interface Profile {
   archive: string[];
   /** Зерно, от которого считаются сиды объектов этого игрока. */
   baseSeed: number;
+  /** Игрок выключил звук. */
+  muted: boolean;
 }
 
 export interface RunSave {
@@ -31,6 +33,10 @@ export interface RunSave {
   time: number;
   maxTier: number;
   collapsed: string[];
+  /** Аномалии: сколько раз лестница ещё удлинится и какие комнаты показаны вторым вариантом. */
+  anomaly: { loops: number; alt: number[] };
+  /** Рой уже вышел на охоту. */
+  released: boolean;
 }
 
 const KEYS = ['profile', 'run'];
@@ -40,7 +46,7 @@ const numArr = (v: unknown): number[] => (Array.isArray(v) ? v.filter(isNum) : [
 const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
 export function defaultProfile(baseSeed: number): Profile {
-  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed };
+  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false };
 }
 
 /** Разобрать профиль из хранилища; всё непонятное заменяется значениями по умолчанию. */
@@ -54,6 +60,7 @@ export function parseProfile(raw: unknown, baseSeed: number): Profile {
     successes: isNum(o.successes) ? Math.max(0, Math.floor(o.successes)) : 0,
     archive: [...new Set(strArr(o.archive))],
     baseSeed: isNum(o.baseSeed) ? o.baseSeed >>> 0 : baseSeed,
+    muted: o.muted === true,
   };
 }
 
@@ -77,7 +84,15 @@ export function parseRun(raw: unknown, genVersion: number): RunSave | null {
     time: isNum(o.time) ? Math.max(0, o.time) : 0,
     maxTier: isNum(o.maxTier) ? Math.max(0, Math.floor(o.maxTier)) : 0,
     collapsed: strArr(o.collapsed),
+    anomaly: parseAnomaly(o.anomaly),
+    released: o.released === true,
   };
+}
+
+function parseAnomaly(raw: unknown): { loops: number; alt: number[] } {
+  if (!raw || typeof raw !== 'object') return { loops: 2, alt: [] };
+  const o = raw as Record<string, unknown>;
+  return { loops: isNum(o.loops) ? Math.max(0, Math.min(2, Math.floor(o.loops))) : 2, alt: numArr(o.alt) };
 }
 
 export async function loadSave(platform: IPlatform, baseSeed: number, genVersion: number): Promise<{ profile: Profile; run: RunSave | null }> {
@@ -95,6 +110,15 @@ export async function writeSave(platform: IPlatform, profile: Profile, run: RunS
     await platform.save(KEYS, [profile, run]);
   } catch (e) {
     console.warn('[save] не удалось записать сохранение:', e);
+  }
+}
+
+/** Записать только профиль, не трогая сохранённую вылазку (настройки). */
+export async function writeProfile(platform: IPlatform, profile: Profile): Promise<void> {
+  try {
+    await platform.save([KEYS[0]!], [profile]);
+  } catch (e) {
+    console.warn('[save] не удалось записать профиль:', e);
   }
 }
 

@@ -1,3 +1,4 @@
+import { existsSync, readdirSync } from 'node:fs';
 import playgamaBridge from '@playgama/bridge/vite';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
@@ -19,9 +20,19 @@ function bridgeConfigPlugin(): Plugin {
   };
 }
 
+/**
+ * Какие звуковые файлы лежат в public/audio на момент сборки. Список вшивается в код: игра
+ * запрашивает только существующие файлы и не сыплет ошибками 404, пока звук не сгенерирован.
+ */
+function audioFiles(): string[] {
+  const dir = new URL('./public/audio/', import.meta.url);
+  return existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.mp3')).sort() : [];
+}
+
 export default defineConfig(({ mode }) => {
   const playgama = mode === 'playgama';
   return {
+    define: { __VZ_AUDIO__: JSON.stringify(audioFiles()) },
     // Относительные пути: index.html в корне архива, игра работает из любой подпапки.
     base: './',
     plugins: playgama ? [playgamaBridge({ mode: 'local' }), bridgeConfigPlugin()] : [],

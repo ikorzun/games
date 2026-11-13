@@ -10,6 +10,7 @@ type Listener = (paused: boolean) => void;
 export class Lifecycle {
   private readonly reasons = new Set<PauseReason>();
   private readonly listeners = new Set<Listener>();
+  private readonly reasonListeners = new Set<() => void>();
 
   get paused(): boolean {
     return this.reasons.size > 0;
@@ -25,9 +26,17 @@ export class Lifecycle {
 
   set(reason: PauseReason, on: boolean): void {
     const before = this.paused;
+    if (on === this.reasons.has(reason)) return;
     if (on) this.reasons.add(reason);
     else this.reasons.delete(reason);
     if (this.paused !== before) for (const cb of [...this.listeners]) cb(this.paused);
+    for (const cb of [...this.reasonListeners]) cb();
+  }
+
+  /** Вызывается при любой смене набора причин, даже если игра как стояла, так и стоит. */
+  onReasons(cb: () => void): () => void {
+    this.reasonListeners.add(cb);
+    return () => this.reasonListeners.delete(cb);
   }
 
   onChange(cb: Listener): () => void {

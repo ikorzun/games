@@ -1,6 +1,9 @@
 name: pages
 
-# Публикация сборки рантайма (web-plain) на GitHub Pages: https://ikorzun.github.io/games/
+# Публикация сборок (web-plain) на GitHub Pages одним сайтом:
+#   новелла  — https://ikorzun.github.io/games/
+#   «Вылазка» — https://ikorzun.github.io/games/vylazka/
+# Обе игры собираются с относительными путями (base './'), поэтому живут в любой подпапке.
 # Pages нужно один раз включить вручную: Settings → Pages → Source: GitHub Actions (токен workflow не может
 # создать сайт — не хватает прав администратора; попытка всё равно делается и причина отказа печатается в лог).
 # Дальше публикация идёт при каждом push в ветку.
@@ -12,6 +15,7 @@ on:
       - "episodes/**"
       - "locales/**"
       - "assets/**"
+      - "vylazka/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -53,12 +57,28 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: runtime/package-lock.json
-      - run: npm ci
-      - run: npm run build
+          cache-dependency-path: |
+            runtime/package-lock.json
+            vylazka/package-lock.json
+      - name: Build the novel
+        run: npm ci && npm run build
+      - name: Build «Вылазка»
+        working-directory: vylazka
+        run: npm ci && npm run build
+      - name: Assemble the site (novel at the root, «Вылазка» in /vylazka/)
+        working-directory: .
+        run: |
+          set -e
+          rm -rf site
+          mkdir -p site/vylazka
+          cp -a runtime/dist/. site/
+          # Папка второй игры не должна затереть файлы новеллы и наоборот.
+          if [ -n "$(ls -A site/vylazka)" ]; then echo "::error::в сборке новеллы уже есть папка vylazka/"; exit 1; fi
+          cp -a vylazka/dist/. site/vylazka/
+          test -f site/index.html && test -f site/vylazka/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: runtime/dist
+          path: site
 
   deploy:
     needs: build

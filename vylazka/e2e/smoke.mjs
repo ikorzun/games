@@ -7,7 +7,7 @@
  *   npm run smoke:matrix                                             # + раскладка по матрице размеров, скриншоты в e2e/out/
  *   npm run smoke -- --url https://…                                 # опубликованная ссылка
  *
- * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --only play,gen,sortie,touch,bridge,matrix.
+ * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --only play,gen,sortie,fear,audio,touch,bridge,matrix.
  * Симуляция в тестах заморожена и шагается через window.__vz: проверяется логика и вёрстка, а не
  * частота кадров (SwiftShader даёт 5–10 к/с). Качество задаётся параметром адреса, иначе по строке
  * видеокарты выбралось бы «низкое» и тень осталась бы непроверенной.
@@ -72,8 +72,9 @@ async function launchBrowser() {
 }
 
 /** Страница с журналом ошибок, неудачных и внешних запросов. */
-async function openPage(browser, baseUrl, query, ctxOpts = {}, onConsole = null) {
+async function openPage(browser, baseUrl, query, ctxOpts = {}, onConsole = null, prepare = null) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: 'en-US', ...ctxOpts });
+  if (prepare) await prepare(context);
   const page = await context.newPage();
   const origin = new URL(baseUrl).origin;
   const log = { errors: [], warnings: [], external: [], failed: [] };
@@ -250,6 +251,7 @@ async function scenarioGen(browser, baseUrl) {
   await page.click('.vz-overlay');
   await sleep(300);
   await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
   const level = await vz(page, () => window.__vz.level());
   check('уровень собран из генератора: три яруса, помещений больше двадцати', level.seed === 20041113 && level.tiers === 3 && level.rooms.length > 20, `ярусов ${level.tiers}, помещений ${level.rooms.length}`);
   check('геометрия в бюджете: чанков меньше 140, треугольников меньше 400 тысяч', level.chunks < 140 && level.triangles < 400000, `${level.chunks} чанков, ${level.triangles} треугольников`);
@@ -278,6 +280,80 @@ async function scenarioGen(browser, baseUrl) {
   await context.close();
 }
 
+async function scenarioFear(browser, baseUrl) {
+  section('Рой и аномалии: охота, развал лучом, возвращение, поимка, длинная лестница, изменившаяся комната');
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&rank=3&seed=20041113');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  let st = await vz(page, () => window.__vz.step(5));
+  check('в начале вылазки рой спит, режиссёр в первой фазе', st.swarm.mode === 'dormant' && st.director.phase === 0 && st.swarm.near === 0);
+
+  // Повернуть луч на рой и шагать, пока не выполнится условие.
+  const aimAndStep = (steps, extra = {}) =>
+    vz(
+      page,
+      ([n, inp]) => {
+        const v = window.__vz;
+        const s = v.state();
+        const dx = s.swarm.pos[0] - s.pos[0];
+        const dz = s.swarm.pos[2] - s.pos[2];
+        v.teleport(s.pos[0], s.pos[1], s.pos[2], Math.atan2(-dx, -dz), 0.02);
+        return v.step(n, inp);
+      },
+      [steps, extra],
+    );
+
+  // ── Аномалии (пока рой спит) ──
+  const an = await vz(page, () => window.__vz.anomalies());
+  const stair = an.stairs.find((x) => x.upperTier === 1);
+  const ax = Math.sign(stair.bottom[0] - stair.top[0]);
+  const az = Math.sign(stair.bottom[2] - stair.top[2]);
+  await vz(page, ([p, yaw]) => window.__vz.teleport(p[0], p[1], p[2], yaw, -0.3), [stair.top, Math.atan2(-ax, -az)]);
+  st = await vz(page, () => window.__vz.step(10));
+  check('перед спуском на нижний ярус лестница «заряжена» на два лишних пролёта', st.anomalies.loops === 2 && Math.abs(st.pos[1] + 4.5) < 0.01);
+  let ticks = 0;
+  for (; ticks < 40 && st.pos[1] > -8.95; ticks++) st = await vz(page, () => window.__vz.step(20, { moveZ: 1 }));
+  const seconds = (ticks * 20) / 60;
+  check('спуск занял заметно дольше обычного: лестница оказалась длиннее', st.anomalies.loops === 0 && Math.abs(st.pos[1] + 9) < 0.06 && seconds > 6.3 && seconds < 11, `${seconds.toFixed(1)} с вместо ~4,5; осталось пролётов ${st.anomalies.loops}; y = ${st.pos[1].toFixed(2)}`);
+  check('камера на лестнице не дёргалась рывком вверх', st.onGround === true);
+
+  const variant = an.variants[0];
+  await vz(page, () => window.__vz.swarm('sleep'));
+  await vz(page, () => window.__vz.phase(0));
+  await vz(page, (c) => window.__vz.teleport(c[0], c[1], c[2]), variant.center);
+  st = await vz(page, () => window.__vz.step(5));
+  check('в комнате-аномалии поначалу первый вариант обстановки', st.anomalies.alt.length === 0);
+  const far = [variant.center[0] + 30, variant.center[1], variant.center[2] + 30];
+  await vz(page, () => window.__vz.gotoExit());
+  st = await vz(page, () => window.__vz.step(5));
+  check('побывал, ушёл далеко — комната изменилась', st.anomalies.alt.includes(variant.room), JSON.stringify(st.anomalies.alt));
+  void far;
+
+  // ── Рой ──
+  await vz(page, () => window.__vz.phase(0));
+  const ok = await vz(page, () => window.__vz.swarm('release', 5));
+  st = await state(page);
+  check('рой выпущен в пяти клетках и знает, где игрок', ok && (st.swarm.mode === 'stalk' || st.swarm.mode === 'cohere') && st.swarm.awareness > 0.5, st.swarm.mode);
+  for (let i = 0; i < 60 && st.swarm.mode !== 'hunt'; i++) st = await vz(page, () => window.__vz.step(20));
+  check('рой подошёл на свет и собрался в фигуру', st.swarm.mode === 'hunt' && st.swarm.cohesion === 1 && st.swarm.near > 0.15, `${st.swarm.mode}, сцепление ${st.swarm.cohesion.toFixed(2)}, близость ${st.swarm.near.toFixed(2)}`);
+  check('подсказка про луч показана один раз', (await page.textContent('.vz-hud__toast'))?.includes('луч') === true);
+  for (let i = 0; i < 80 && st.swarm.mode === 'hunt' && !st.sortie.outcome; i++) st = await aimAndStep(6);
+  check('прямой луч развалил рой, игрок цел', st.swarm.mode === 'scatter' && st.swarm.aggravation === 1 && st.sortie.outcome === null, `${st.swarm.mode}, исход ${st.sortie.outcome}`);
+  for (let i = 0; i < 90 && st.swarm.mode !== 'hunt' && !st.sortie.outcome; i++) st = await vz(page, () => window.__vz.step(20));
+  check('рой вернулся и снова охотится', st.swarm.mode === 'hunt' && st.sortie.outcome === null, st.swarm.mode);
+  // Гасим фонарь: в темноте рой, который уже знает, где игрок, добирается быстро.
+  await vz(page, () => window.__vz.toggleLight());
+  for (let i = 0; i < 90 && !st.sortie.outcome; i++) st = await vz(page, () => window.__vz.step(20, { moveZ: 0 }));
+  check('с погашенным фонарём рой ловит игрока', st.sortie.outcome === 'caught', `исход ${st.sortie.outcome}, рой ${st.swarm.mode}, близость ${st.swarm.near.toFixed(2)}`);
+  st = await vz(page, () => window.__vz.step(130));
+  check('отчёт: запись прервана, причина — сигнал потерян', st.overlay === 'report' && (await page.textContent('.vz-overlay__title')) === 'ЗАПИСЬ ПРЕРВАНА' && (await page.textContent('.vz-overlay__sub')) === 'сигнал потерян');
+
+  check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0);
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  await context.close();
+}
+
 /**
  * Выполнить цель вылазки: встать перед ней и взять либо снять. Рядом с целью может лежать другая
  * вещь — она берётся первой, поэтому «забрать» повторяется, пока цель не закрыта.
@@ -296,6 +372,14 @@ async function doGoal(page, index, goal) {
 async function scenarioSortie(browser, baseUrl) {
   section('Вылазка: задание, цели, батарейка, продолжение после перезагрузки, выход и отчёт, гибель');
   const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&rank=3');
+  // Журнал сообщений вверху кадра: сами сообщения гаснут через несколько секунд реального времени.
+  await page.evaluate(() => {
+    window.__toasts = [];
+    const el = document.querySelector('.vz-hud__toast');
+    new MutationObserver(() => {
+      if (el.textContent) window.__toasts.push(el.textContent);
+    }).observe(el, { childList: true, characterData: true, subtree: true });
+  });
   let st = await state(page);
   const lines = await page.$$eval('.vz-overlay__line--todo', (els) => els.map((e) => e.textContent));
   check('карточка задания: объект с номером и три цели', st.screen === 'briefing' && /Убежище № \d{3}/.test((await page.textContent('.vz-overlay__sub')) ?? '') && lines.length === 3, `экран ${st.screen}, целей ${lines.length}`);
@@ -303,6 +387,7 @@ async function scenarioSortie(browser, baseUrl) {
   await page.click('.vz-overlay');
   await sleep(300);
   await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
   st = await vz(page, () => window.__vz.step(5));
   check('вылазка началась, счётчик вылазок вырос', st.screen === 'play' && st.profile.sorties === 1 && st.sortie.outcome === null);
   check('список целей виден в начале вылазки', await page.evaluate(() => document.querySelector('.vz-hud__goals').classList.contains('is-on') && document.querySelectorAll('.vz-hud__goal').length === 3));
@@ -314,7 +399,8 @@ async function scenarioSortie(browser, baseUrl) {
   st = await vz(page, () => window.__vz.step(20));
   check(`цель «${first.type}» под рукой: подсказка действия и рамка видны`, st.sortie.target === (first.type === 'take' ? 'item' : 'shoot') && (await page.isVisible('.vz-hud__act')) && (await page.isVisible('.vz-hud__mark')), `под рукой: ${st.sortie.target}`);
   st = await doGoal(page, 0, first);
-  check('первая цель выполнена, на экране сообщение', st.sortie.done.includes(first.id) && (await page.evaluate(() => document.querySelector('.vz-hud__toast').classList.contains('is-on'))), JSON.stringify(st.sortie.done));
+  const toasts = await page.evaluate(() => window.__toasts ?? []);
+  check('первая цель выполнена, на экране было сообщение об этом', st.sortie.done.includes(first.id) && toasts.some((x) => x.startsWith('Выполнено')), `${JSON.stringify(st.sortie.done)}; сообщения: ${toasts.join(' | ')}`);
   check('в списке целей она зачёркнута', (await page.$$eval('.vz-hud__goal.is-done', (els) => els.length)) === 1);
 
   // Батарейка.
@@ -352,6 +438,7 @@ async function scenarioSortie(browser, baseUrl) {
   await page.click('.vz-overlay');
   await sleep(300);
   await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
   st = await vz(page, () => window.__vz.step(5));
   check('прогресс восстановлен: цель, батарейка, находка; вылазка не посчитана второй раз', st.sortie.done.includes(first.id) && st.sortie.spares === sparesSaved && st.sortie.finds.includes(find.find) && st.profile.sorties === 1, JSON.stringify({ done: st.sortie.done, spares: st.sortie.spares, sorties: st.profile.sorties }));
 
@@ -387,6 +474,7 @@ async function scenarioSortie(browser, baseUrl) {
   await page.click('.vz-overlay');
   await sleep(300);
   await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
   const archiveBefore = (await state(page)).profile.archive.length;
   const hz = await vz(page, () => window.__vz.hazards());
   const pit = hz.zones.find((z) => z.kind === 'pit');
@@ -517,6 +605,7 @@ async function scenarioTouchSortie(browser, baseUrl) {
     await page.tap('.vz-overlay');
     await sleep(300);
     await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
     let st = await vz(page, () => window.__vz.step(5));
     check(`${name}: кнопки действия нет, пока брать нечего`, await page.evaluate(() => document.querySelector('.vz-touch__btn--act').hidden === true));
     const items = await vz(page, () => window.__vz.items());
@@ -714,6 +803,152 @@ async function scenarioBridge(browser, baseUrl) {
   await context.close();
 }
 
+/** Короткий тихий WAV: тестовая замена любому звуковому файлу (настоящие клипы смоуку не нужны). */
+function tinyWav(seconds = 0.25, rate = 8000) {
+  const n = Math.floor(seconds * rate);
+  const buf = Buffer.alloc(44 + n * 2);
+  buf.write('RIFF', 0);
+  buf.writeUInt32LE(36 + n * 2, 4);
+  buf.write('WAVEfmt ', 8);
+  buf.writeUInt32LE(16, 16);
+  buf.writeUInt16LE(1, 20);
+  buf.writeUInt16LE(1, 22);
+  buf.writeUInt32LE(rate, 24);
+  buf.writeUInt32LE(rate * 2, 28);
+  buf.writeUInt16LE(2, 32);
+  buf.writeUInt16LE(16, 34);
+  buf.write('data', 36);
+  buf.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i++) buf.writeInt16LE(Math.round(Math.sin(i * 0.35) * 900), 44 + i * 2);
+  return buf;
+}
+
+async function scenarioAudio(browser, baseUrl) {
+  section('Звук: разблокировка жестом, загрузка набора, события и петли, пауза, выключатель');
+  const wav = tinyWav();
+  const asked = [];
+  const prepare = (context) =>
+    context.route('**/snd/*.mp3', (route) => {
+      asked.push(new URL(route.request().url()).pathname.split('/').pop());
+      return route.fulfill({ status: 200, contentType: 'audio/wav', body: wav });
+    });
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113&audio=snd', {}, null, prepare);
+  // Набор грузится в фоне сразу после первого кадра, но звучать до нажатия браузер не даст.
+  await page.waitForFunction(() => window.__vz.audio().loaded === window.__vz.audio().total, null, { timeout: 30000 }).catch(() => undefined);
+  let au = await vz(page, () => window.__vz.audio());
+  check('до первого нажатия звук заперт, а набор уже загружен целиком', au.state === 'locked' && au.known === au.total && au.total >= 50 && au.loaded === au.total && au.missing === 0, JSON.stringify({ state: au.state, known: au.known, total: au.total, loaded: au.loaded, missing: au.missing }));
+  check('каждый файл запрошен один раз, первыми — нужные в начале вылазки', asked.length === au.total && new Set(asked).size === au.total && asked.slice(0, 3).join() === 'ui_click_1.mp3,ui_start_1.mp3,hatch_1.mp3', `${asked.length} запросов, первые: ${asked.slice(0, 3).join(', ')}`);
+  check('на карточке задания есть кнопка звука', (await page.textContent('.vz-overlay__opt--sound'))?.trim() === 'Звук: вкл');
+
+  await page.click('.vz-overlay');
+  await sleep(300);
+  au = await vz(page, () => window.__vz.audio());
+  check('нажатие «начать» будит звук: старт записи и люк звучат сразу', au.state === 'running' && (au.played.ui_start ?? 0) === 1 && (au.played.hatch ?? 0) === 1, JSON.stringify({ state: au.state, start: au.played.ui_start, hatch: au.played.hatch }));
+  await vz(page, () => window.__vz.calm(true));
+  await sleep(400);
+  au = await vz(page, () => window.__vz.audio());
+  check('в вылазке идут гул убежища и дыхание, музыки нет', au.loops.includes('amb_bunker') && au.loops.includes('breath_calm') && !au.loops.includes('music_menu'), au.loops.join(', '));
+
+  // Шаги: идём настоящими кадрами, чтобы камера «шагала».
+  await page.keyboard.down('KeyW');
+  await sleep(1800);
+  await page.keyboard.up('KeyW');
+  au = await vz(page, () => window.__vz.audio());
+  check('шаги по бетону звучат на ходу', (au.played.step_concrete ?? 0) >= 2, `сыграно ${au.played.step_concrete ?? 0}`);
+
+  // Фонарь: щелчок выключателя, отказ, дребезг при тряске, оживление.
+  await vz(page, () => window.__vz.freeze(true));
+  const clicks = au.played.flash_click ?? 0;
+  await vz(page, () => window.__vz.step(2, { light: true }));
+  await vz(page, () => window.__vz.step(2, { light: true }));
+  au = await vz(page, () => window.__vz.audio());
+  check('выключатель фонаря щёлкает', (au.played.flash_click ?? 0) >= clicks + 2, `${clicks} → ${au.played.flash_click ?? 0}`);
+  await vz(page, () => window.__vz.fail());
+  await vz(page, () => window.__vz.step(2));
+  let st = await state(page);
+  // Настоящая тряска мышью: звук дребезга идёт от рывков, которые видит детектор.
+  await page.mouse.move(640, 360);
+  await page.mouse.down();
+  for (let i = 0; i < 44 && st.light.state === 'dead'; i++) {
+    await page.mouse.move(640 + (i % 2 === 0 ? 90 : -90), 360, { steps: 3 });
+    st = await vz(page, () => window.__vz.tick(5));
+    await sleep(140);
+  }
+  await page.mouse.up();
+  au = await vz(page, () => window.__vz.audio());
+  check('фонарь глохнет со звуком, при тряске гремят батарейки, потом щелчок', st.light.state === 'on' && (au.played.flash_die ?? 0) === 1 && (au.played.flash_rattle ?? 0) >= 2 && (au.played.flash_click ?? 0) >= clicks + 3, JSON.stringify({ die: au.played.flash_die, rattle: au.played.flash_rattle, click: au.played.flash_click, light: st.light.state }));
+
+  // Находка и газ.
+  await vz(page, () => window.__vz.gotoItem(0));
+  await vz(page, () => window.__vz.step(3, { actionPressed: true, action: true }));
+  au = await vz(page, () => window.__vz.audio());
+  check('находка убрана в сумку со звуком', (au.played.pickup ?? 0) >= 1);
+
+  // Пауза и возврат.
+  await vz(page, () => window.__vz.freeze(false));
+  await vz(page, () => window.__vz.pause(true));
+  await sleep(250);
+  au = await vz(page, () => window.__vz.audio());
+  check('на паузе звук остановлен целиком', au.state === 'suspended', au.state);
+  check('на экране паузы тоже есть кнопка звука', (await page.isVisible('.vz-overlay__opt--sound')) === true);
+  await page.click('.vz-overlay__opt--sound');
+  au = await vz(page, () => window.__vz.audio());
+  st = await state(page);
+  check('кнопка звука выключает звук и не снимает паузу', au.muted === true && st.paused === true && (await page.textContent('.vz-overlay__opt--sound'))?.trim() === 'Звук: выкл');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  au = await vz(page, () => window.__vz.audio());
+  check('после паузы звук снова идёт (но выключен игроком)', au.state === 'running' && au.muted === true, au.state);
+  await page.keyboard.press('KeyM');
+  au = await vz(page, () => window.__vz.audio());
+  check('клавиша M включает звук обратно', au.muted === false);
+  await page.keyboard.press('KeyM');
+  await sleep(200);
+
+  // Выбор запоминается.
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
+  au = await vz(page, () => window.__vz.audio());
+  check('после перезагрузки звук остаётся выключенным', au.muted === true && (await page.textContent('.vz-overlay__opt--sound'))?.trim() === 'Звук: выкл');
+  await page.click('.vz-overlay__opt--sound');
+  await sleep(600);
+  au = await vz(page, () => window.__vz.audio());
+  st = await state(page);
+  check('на карточке задания играет музыка меню, вылазка не началась', st.overlay === 'start' && au.muted === false && au.state === 'running' && au.loops.includes('music_menu'), JSON.stringify({ overlay: st.overlay, state: au.state, loops: au.loops }));
+
+  // Конец вылазки: отчёт и музыка.
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  // Выход предлагается только тому, кто уже отходил от люка.
+  await vz(page, () => window.__vz.gotoGoal(0));
+  await vz(page, () => window.__vz.step(10));
+  await vz(page, () => window.__vz.gotoExit());
+  st = await vz(page, () => window.__vz.step(10));
+  for (let i = 0; i < 40 && !st.sortie.outcome; i++) st = await vz(page, (first) => window.__vz.step(10, { action: true, actionPressed: first }), i === 0);
+  st = await vz(page, () => window.__vz.step(130));
+  await vz(page, () => window.__vz.freeze(false));
+  await sleep(500);
+  au = await vz(page, () => window.__vz.audio());
+  check('выход наверх: звук лестницы, отчёт, петли вылазки оборваны, играет музыка', st.overlay === 'report' && (au.played.ladder ?? 0) === 1 && (au.played.ui_report ?? 0) === 1 && au.loops.join() === 'music_menu', JSON.stringify({ overlay: st.overlay, outcome: st.sortie.outcome, ladder: au.played.ladder, report: au.played.ui_report, loops: au.loops }));
+
+  check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0);
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  check('нет неудачных запросов', log.failed.length === 0, log.failed.join(' | ').slice(0, 300));
+  await context.close();
+
+  // Сборка без звуковых файлов: игра молчит и ничего не запрашивает.
+  const bare = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113');
+  await bare.page.click('.vz-overlay');
+  await sleep(500);
+  au = await vz(bare.page, () => window.__vz.audio());
+  const real = au.known > 0;
+  check(real ? 'в сборке лежит полный набор звуков' : 'без файлов игра молчит и не запрашивает несуществующее', real ? au.known === au.total : au.loaded === 0 && au.missing === 0 && bare.log.failed.length === 0, JSON.stringify({ known: au.known, loaded: au.loaded, failed: bare.log.failed.length }));
+  check('нет ошибок в консоли', bare.log.errors.length === 0, bare.log.errors.join(' | ').slice(0, 300));
+  await bare.context.close();
+}
+
 // ───────────────────────────── запуск ─────────────────────────────
 
 const server = await startServer();
@@ -723,6 +958,8 @@ try {
   if (wants('play')) await scenarioPlay(browser, server.url);
   if (wants('gen')) await scenarioGen(browser, server.url);
   if (wants('sortie')) await scenarioSortie(browser, server.url);
+  if (wants('fear')) await scenarioFear(browser, server.url);
+  if (wants('audio')) await scenarioAudio(browser, server.url);
   if (wants('touch')) await scenarioTouch(browser, server.url);
   if (wants('touch')) await scenarioTouchSortie(browser, server.url);
   if (wants('bridge')) await scenarioBridge(browser, server.url);

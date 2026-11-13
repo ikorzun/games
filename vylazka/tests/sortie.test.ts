@@ -219,7 +219,10 @@ describe('сохранение', () => {
   it('профиль: мусор заменяется значениями по умолчанию, архив без повторов', () => {
     expect(parseProfile(null, 7)).toEqual(defaultProfile(7));
     expect(parseProfile({ v: 2 }, 7)).toEqual(defaultProfile(7));
-    expect(parseProfile({ v: 1, sorties: 3.7, successes: -2, archive: ['a', 'a', 5, 'b'], baseSeed: 42 }, 7)).toEqual({ v: 1, sorties: 3, successes: 0, archive: ['a', 'b'], baseSeed: 42 });
+    expect(parseProfile({ v: 1, sorties: 3.7, successes: -2, archive: ['a', 'a', 5, 'b'], baseSeed: 42 }, 7)).toEqual({ v: 1, sorties: 3, successes: 0, archive: ['a', 'b'], baseSeed: 42, muted: false });
+    // Выключатель звука запоминается; всё, кроме true, — «звук включён».
+    expect(parseProfile({ v: 1, muted: true }, 7).muted).toBe(true);
+    expect(parseProfile({ v: 1, muted: 'yes' }, 7).muted).toBe(false);
   });
 
   it('вылазка от другой версии генератора не открывается', () => {

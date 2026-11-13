@@ -91,6 +91,11 @@ export class CameraRig {
     this.started = true;
   }
 
+  /** Сдвинуть сглаженную высоту вместе с игроком (телепорт без рывка кадра). */
+  shift(dy: number): void {
+    this.camY += dy;
+  }
+
   update(input: RigInput, dt: number): RigOutput {
     const p = this.params;
     if (!this.started) this.snap(input);

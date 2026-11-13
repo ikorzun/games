@@ -2,9 +2,11 @@
  * Приложение: цикл «задание → вылазка → отчёт», пауза, ввод с устройств, сохранения и главный цикл.
  * Игровая логика — в game.ts и systems/.
  */
+import { allSoundFiles, AudioEngine } from './audio/engine';
+import { GameAudio, LOAD_FIRST } from './audio/game_audio';
 import { i18n, t } from './core/i18n';
 import { mulberry32 } from './core/rng';
-import { loadSave, objectNumber, rankFor, sortieSeed, writeSave } from './core/save';
+import { loadSave, objectNumber, rankFor, sortieSeed, writeProfile, writeSave } from './core/save';
 import type { Profile, RunSave } from './core/save';
 import type { Lang } from './core/types';
 import { Game, STEP } from './game';
@@ -40,6 +42,9 @@ type Screen = 'boot' | 'briefing' | 'play' | 'ending' | 'report';
 export class App {
   readonly lifecycle = new Lifecycle();
   readonly i18n = i18n;
+  /** Звук: движок и привязка звуков к событиям игры. */
+  readonly sound: AudioEngine;
+  readonly audio: GameAudio;
   game!: Game;
   /** Текущий уровень (геометрия уже отдана рендеру; здесь — игровые точки и граф). */
   level!: BuiltLevel;
@@ -82,7 +87,13 @@ export class App {
     readonly root: HTMLElement,
     readonly platform: IPlatform,
     readonly params: URLSearchParams,
-  ) {}
+  ) {
+    // ?audio=<папка> — взять весь набор звуков из папки рядом с игрой (проверка новых клипов без пересборки).
+    const dir = params.get('audio');
+    const local = dir !== null && /^[a-z0-9_./-]+$/i.test(dir) && !dir.includes('//') ? dir.replace(/\/?$/, '/') : null;
+    this.sound = local ? new AudioEngine(local, allSoundFiles()) : new AudioEngine();
+    this.audio = new GameAudio(this.sound);
+  }
 
   async init(): Promise<void> {
     const p = this.params;
@@ -108,8 +119,16 @@ export class App {
       onQuality: (q) => {
         this.qualityManual = true;
         this.setQuality(q);
+        this.audio.ui('ui_click');
       },
       onMotion: () => void this.enableMotion(),
+      onSound: () => this.setMuted(!this.profile.muted),
+    });
+    // Браузер даёт звук только после жеста: будим его первым же нажатием, где бы оно ни было.
+    const wake = (): void => this.sound.unlock();
+    for (const type of ['pointerdown', 'pointerup', 'keydown', 'touchend'] as const) window.addEventListener(type, wake, { capture: true, passive: true });
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyM' && !e.repeat && this.profile) this.setMuted(!this.profile.muted);
     });
     this.overlay.setTouch(this.touchMode);
     this.overlay.show('loading');
@@ -141,6 +160,8 @@ export class App {
     const baseSeed = Number(p.get('seed') ?? '') || 20041113;
     const save = await loadSave(this.platform, baseSeed, GEN_VERSION);
     this.profile = save.profile;
+    this.sound.setMuted(this.profile.muted);
+    this.overlay.setSound(!this.profile.muted);
     this.testLevel = p.get('level') === 'test';
     const failAt = Number(p.get('fail') ?? '');
     this.game = new Game(renderer, mulberry32(baseSeed), {
@@ -175,8 +196,10 @@ export class App {
     resize();
 
     this.platform.onPause((paused) => this.lifecycle.set('platform', paused));
+    this.platform.onAudio((enabled) => this.sound.setEnabled(enabled));
     document.addEventListener('visibilitychange', () => this.lifecycle.set('hidden', document.hidden));
     this.lifecycle.onChange((paused) => this.onPauseChange(paused));
+    this.lifecycle.onReasons(() => this.syncAudio());
 
     await renderer.warmup();
     this.redraw();
@@ -187,6 +210,8 @@ export class App {
     this.overlay.show('start');
     this.platform.ready();
     this.ready = true;
+    // Звук грузится в фоне уже после первого кадра: игра его не ждёт.
+    this.sound.preload(LOAD_FIRST);
     if (p.get('autostart') === '1') this.start();
     this.last = performance.now();
     requestAnimationFrame(this.loop);
@@ -209,9 +234,13 @@ export class App {
         this.game.time = this.resume.time;
         this.game.refreshItems();
         this.game.applyCollapses();
+        this.game.restoreAnomalies(this.resume.anomaly);
+        this.game.director?.restore(this.resume.time, this.resume.released);
       }
     }
     this.screen = 'briefing';
+    this.audio.setScene('menu');
+    this.syncAudio();
     this.lastSavedTier = 0;
     this.endingAt = 0;
     this.overlay.setCard(this.briefingCard());
@@ -246,6 +275,9 @@ export class App {
   start(): void {
     if (!this.game || this.screen !== 'briefing') return;
     this.screen = 'play';
+    this.sound.unlock();
+    this.audio.setScene('play');
+    this.audio.sortieStart(this.resume !== null);
     if (!this.resume && !this.testLevel) this.profile.sorties += 1;
     this.resume = null;
     this.platform.track('level_started', { world: 'bunker', level: this.testLevel ? 'test' : `seed_${this.seed}` });
@@ -281,6 +313,26 @@ export class App {
       this.last = performance.now();
       this.acc = 0;
     }
+  }
+
+  /**
+   * Когда звук молчит целиком. Площадка, реклама и скрытая вкладка глушат всё; пауза игрока глушит
+   * вылазку, но не меню: на карточке задания и в отчёте игра «стоит», а музыка играет.
+   */
+  private syncAudio(): void {
+    const lc = this.lifecycle;
+    const hard = lc.has('platform') || lc.has('hidden') || lc.has('ad') || lc.has('context');
+    const menu = this.screen === 'briefing' || this.screen === 'report';
+    this.sound.setPaused(hard || (lc.paused && !menu));
+  }
+
+  /** Выключатель звука игрока: кнопка в меню и клавиша M. Выбор запоминается. */
+  setMuted(muted: boolean): void {
+    this.profile.muted = muted;
+    this.sound.setMuted(muted);
+    this.overlay.setSound(!muted);
+    if (!muted) this.audio.ui('ui_click');
+    this.saveProfile();
   }
 
   /** Включить тач-управление (при загрузке или по первому касанию экрана). */
@@ -354,6 +406,7 @@ export class App {
 
   /** Реакция на события шага: сообщения, сохранение, вибрация, конец вылазки. */
   handleEvents(ev: StepEvents): void {
+    this.audio.onStep(ev, this.game);
     if (this.touchMode && typeof navigator.vibrate === 'function') {
       if (ev.lightRevived) navigator.vibrate(45);
       else if (ev.strokes > 0 && this.game.light.state === 'dead') navigator.vibrate(10);
@@ -380,6 +433,11 @@ export class App {
         this.endingAt = this.game.time + 1.6;
       }
     }
+    for (const e of ev.fear) {
+      if (e.type === 'swarm' && e.what === 'cohered') this.teach('swarm', t('teach.swarm'), 6000);
+      else if (e.type === 'swarm' && e.what === 'release') save = true;
+      if (this.touchMode && typeof navigator.vibrate === 'function' && (e.type === 'scare' || e.what === 'cohered')) navigator.vibrate(e.type === 'scare' ? 25 : [40, 60, 40]);
+    }
     const tier = this.game.sortie?.maxTier ?? 0;
     if (tier !== this.lastSavedTier) {
       this.lastSavedTier = tier;
@@ -391,13 +449,22 @@ export class App {
   /** Записать профиль и текущую вылазку. Вызовы идут по очереди и только по событиям. */
   private saveRun(): void {
     const s = this.game.sortie;
-    if (!s) return;
+    if (!s) {
+      this.saveProfile();
+      return;
+    }
     const run: RunSave | null =
       this.screen === 'play' && !s.outcome
-        ? { v: 1, genVersion: GEN_VERSION, seed: this.seed, rank: this.rank, taken: [...s.taken], done: [...s.done], finds: [...s.finds], spares: s.spares, charge: this.game.light.charge, time: this.game.time, maxTier: s.maxTier, collapsed: s.collapsed() }
+        ? { v: 1, genVersion: GEN_VERSION, seed: this.seed, rank: this.rank, taken: [...s.taken], done: [...s.done], finds: [...s.finds], spares: s.spares, charge: this.game.light.charge, time: this.game.time, maxTier: s.maxTier, collapsed: s.collapsed(), anomaly: this.game.anomalies?.state() ?? { loops: 0, alt: [] }, released: this.game.director?.wasReleased ?? false }
         : null;
     const profile = { ...this.profile, archive: [...this.profile.archive] };
     this.saving = this.saving.then(() => writeSave(this.platform, profile, run));
+  }
+
+  /** Записать только профиль (настройка звука): сохранённую вылазку не трогаем. */
+  private saveProfile(): void {
+    const profile = { ...this.profile, archive: [...this.profile.archive] };
+    this.saving = this.saving.then(() => writeProfile(this.platform, profile));
   }
 
   /** Конец вылазки: счёт, архив, отчёт. */
@@ -438,11 +505,15 @@ export class App {
     this.touch?.setVisible(false);
     this.hud.setVisible(false);
     this.overlay.show('report');
+    this.audio.setScene('menu');
+    this.audio.ui('ui_report');
+    this.syncAudio();
   }
 
   /** После отчёта: реклама между вылазками и следующий объект. */
   async nextSortie(): Promise<void> {
     if (this.screen !== 'report') return;
+    this.audio.ui('ui_click');
     this.screen = 'boot';
     this.overlay.show('loading');
     this.lifecycle.set('ad', true);
@@ -541,6 +612,8 @@ export class App {
     requestAnimationFrame(this.loop);
     const dt = Math.min(0.1, Math.max(0, (now - this.last) / 1000));
     this.last = now;
+    // Звук считается и на паузе: в меню игра стоит, а музыка идёт.
+    if (this.game) this.audio.frame(this.game, dt, !this.lifecycle.paused);
     if (this.frozen || this.lifecycle.paused) return;
     if (dt > 0) this.fps += (1 / dt - this.fps) * 0.08;
 

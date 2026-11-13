@@ -10,6 +10,10 @@ export interface Aabb {
   maxX: number;
   maxY: number;
   maxZ: number;
+  /** Группа: коробки одной группы включаются и выключаются разом (обстановка варианта комнаты). */
+  group?: string;
+  /** Коробка выключена: игрок и лучи её не замечают. */
+  off?: boolean;
 }
 
 const CELL = 2;
@@ -66,11 +70,17 @@ export class ColliderSet {
         for (const id of list) {
           if (this.seen[id] === this.stamp) continue;
           this.seen[id] = this.stamp;
-          out.push(this.boxes[id]!);
+          const box = this.boxes[id]!;
+          if (!box.off) out.push(box);
         }
       }
     }
     return out;
+  }
+
+  /** Включить или выключить все коробки группы. */
+  setGroup(group: string, on: boolean): void {
+    for (const b of this.boxes) if (b.group === group) b.off = !on;
   }
 
   /**
