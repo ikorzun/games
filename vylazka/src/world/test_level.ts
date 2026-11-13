@@ -82,5 +82,5 @@ export function buildTestLevel(): BuiltLevel {
   rubble(at(-12.0, LOW, -15.9), 23);
   signPlate(at(-12, LOW + 2.3, -16.5 + T), 0.5, 0.16);
 
-  return { chunks: [{ mesh: mb.build(), tierMin: 0, tierMax: 1 }], stairs: [], colliders: col, spawn: { pos: [0, 0, 3], yaw: 0 }, exit: [0, 0, 4], spots: [], landmarks: [], nav: [], layout: null };
+  return { chunks: [{ mesh: mb.build(), tierMin: 0, tierMax: 1 }], stairs: [], colliders: col, spawn: { pos: [0, 0, 3], yaw: 0 }, exit: [0, 0, 4], spots: [], landmarks: [], zones: [], collapses: [], nav: [], layout: null };
 }

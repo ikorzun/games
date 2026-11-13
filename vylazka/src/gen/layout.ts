@@ -71,6 +71,27 @@ export interface GenStair {
   dir: Dir;
 }
 
+export interface CellRef {
+  tier: number;
+  x: number;
+  z: number;
+}
+
+/**
+ * Опасности среды, заложенные в план. Провалы и вода меняют геометрию, поэтому решаются здесь,
+ * а не при расстановке находок.
+ */
+export interface GenHazards {
+  /** Провал в полу прямого участка коридора: по краям остаются узкие карнизы. */
+  pits: CellRef[];
+  /** Затопленные клетки коридора. */
+  water: CellRef[];
+  /** id помещений с карманом газа. */
+  gasRooms: number[];
+  /** Клетки, которые может засыпать обвал. Все лежат на циклах: проход вокруг остаётся. */
+  collapses: CellRef[];
+}
+
 export interface GenLayout {
   seed: number;
   attempt: number;
@@ -84,6 +105,7 @@ export interface GenLayout {
   entranceRoom: number;
   /** Сколько циклов замкнуто на каждом ярусе (петли коридоров и вторые двери помещений). */
   loops: number[];
+  hazards: GenHazards;
 }
 
 /** Квоты помещений по ярусам: [тип, варианты размера в клетках (вдоль стены коридора × вглубь)]. */
@@ -186,6 +208,8 @@ interface Build {
   edges: GenEdge[];
   stairs: GenStair[];
   loops: number[];
+  /** Клетки, которыми замкнуты петли коридоров: убрать такую клетку — связность сохранится. */
+  loopCells: CellRef[];
 }
 
 function newRoom(b: Build, type: RoomType, tier: number): GenRoom {
@@ -279,6 +303,7 @@ function closeLoop(b: Build, corridor: GenRoom): boolean {
     const along = dist[near[1]![1] * GRID + near[1]![0]]!;
     if (along < 6 || along > 40) continue;
     addCell(b, corridor, x, z);
+    b.loopCells.push({ tier: corridor.tier, x, z });
     return true;
   }
   return false;
@@ -385,7 +410,7 @@ function secondDoor(b: Build, corridor: GenRoom, room: GenRoom): boolean {
 
 function buildAttempt(seed: number, attempt: number, rank: 1 | 2 | 3): GenLayout {
   const tierCount = rank === 1 ? 2 : 3;
-  const b: Build = { rng: mulberry32(hash2(seed, attempt, 0x51ed)), grids: [], rooms: [], edges: [], stairs: [], loops: [] };
+  const b: Build = { rng: mulberry32(hash2(seed, attempt, 0x51ed)), grids: [], rooms: [], edges: [], stairs: [], loops: [], loopCells: [] };
   for (let t = 0; t < tierCount; t++) b.grids.push(new TierGrid());
 
   // Вход: люк у южного края, за ним шлюз с двумя гермодверями, дальше — коридор на север.
@@ -461,7 +486,97 @@ function buildAttempt(seed: number, attempt: number, rank: 1 | 2 | 3): GenLayout
     }
   }
 
-  return { seed, attempt, genVersion: GEN_VERSION, rank, tierCount, rooms: b.rooms, edges: b.edges, stairs: b.stairs, entranceRoom: entrance.id, loops: b.loops };
+  return { seed, attempt, genVersion: GEN_VERSION, rank, tierCount, rooms: b.rooms, edges: b.edges, stairs: b.stairs, entranceRoom: entrance.id, loops: b.loops, hazards: planHazards(b, rank) };
+}
+
+/** Помещения, где может стоять газ: закрытые, без выхода наверх. */
+const GAS_ROOMS: ReadonlySet<RoomType> = new Set<RoomType>(['storage', 'dorm', 'washroom', 'archive', 'switchboard']);
+
+/**
+ * Разложить опасности. Первый ярус безопасен; глубже — вода, с ранга II ещё провалы, газ и обвалы.
+ * Опасности не ставятся на площадки лестниц и в клетки с дверями.
+ */
+function planHazards(b: Build, rank: 1 | 2 | 3): GenHazards {
+  const hz: GenHazards = { pits: [], water: [], gasRooms: [], collapses: [] };
+  const key = (t: number, x: number, z: number): string => `${t},${x},${z}`;
+  const busy = new Set<string>();
+  // Площадки лестниц и клетки по обе стороны каждого прохода.
+  for (const s of b.stairs) {
+    busy.add(key(s.upperTier, s.cx, s.cz));
+    busy.add(key(s.upperTier + 1, s.cx + DX[s.dir]! * (STAIR_CELLS + 1), s.cz + DZ[s.dir]! * (STAIR_CELLS + 1)));
+  }
+  for (const e of b.edges) {
+    busy.add(key(e.tier, e.cx, e.cz));
+    busy.add(key(e.tier, e.cx + (e.dir === 0 ? 1 : 0), e.cz + (e.dir === 1 ? 1 : 0)));
+  }
+  for (let t = 1; t < b.grids.length; t++) {
+    const grid = b.grids[t]!;
+    const corridor = b.rooms.find((r) => r.tier === t && r.type === 'corridor')!;
+    const isCorr = (x: number, z: number): boolean => grid.get(x, z) === corridor.id;
+    // Прямые участки: ровно два коридорных соседа друг напротив друга.
+    const straight = shuffle(
+      b.rng,
+      corridor.cells.filter(([x, z]) => {
+        if (busy.has(key(t, x, z))) return false;
+        const n = [0, 1, 2, 3].map((d) => isCorr(x + DX[d]!, z + DZ[d]!));
+        return (n[0] && n[2] && !n[1] && !n[3]) || (n[1] && n[3] && !n[0] && !n[2]);
+      }),
+    );
+    const take = (x: number, z: number): void => {
+      busy.add(key(t, x, z));
+    };
+
+    // Обвал — на клетке, замкнувшей петлю: обойти можно всегда.
+    if (rank >= 2) {
+      const loop = b.loopCells.find((c) => c.tier === t && !busy.has(key(t, c.x, c.z)));
+      if (loop) {
+        hz.collapses.push(loop);
+        take(loop.x, loop.z);
+      }
+    }
+    // Провалы: не рядом друг с другом и не рядом с обвалом.
+    const pits = rank === 1 ? 0 : t === 1 ? 1 : 2;
+    for (const [x, z] of straight) {
+      if (hz.pits.filter((p) => p.tier === t).length >= pits) break;
+      if (busy.has(key(t, x, z)) || [0, 1, 2, 3].some((d) => busy.has(key(t, x + DX[d]!, z + DZ[d]!)))) continue;
+      hz.pits.push({ tier: t, x, z });
+      take(x, z);
+      for (let d = 0; d < 4; d++) take(x + DX[d]!, z + DZ[d]!);
+    }
+    // Вода: один-два участка по 2–4 клетки подряд.
+    const runs = 1 + (t === 2 ? 1 : 0);
+    let made = 0;
+    for (const [x, z] of straight) {
+      if (made >= runs) break;
+      if (busy.has(key(t, x, z))) continue;
+      const along = isCorr(x + 1, z) ? 0 : 1;
+      const len = 2 + Math.floor(b.rng() * 3);
+      const cells: Array<[number, number]> = [[x, z]];
+      for (const sign of [1, -1]) {
+        for (let i = 1; cells.length < len; i++) {
+          const nx = x + DX[along]! * i * sign;
+          const nz = z + DZ[along]! * i * sign;
+          if (!isCorr(nx, nz) || busy.has(key(t, nx, nz))) break;
+          cells.push([nx, nz]);
+        }
+      }
+      if (cells.length < 2) continue;
+      for (const [cx, cz] of cells) {
+        hz.water.push({ tier: t, x: cx, z: cz });
+        take(cx, cz);
+      }
+      made += 1;
+    }
+    // Газ: одно закрытое помещение на ярусе (на втором — только с ранга III).
+    if (rank >= 2 && (t === 2 || rank === 3)) {
+      const rooms = shuffle(
+        b.rng,
+        b.rooms.filter((r) => r.tier === t && GAS_ROOMS.has(r.type)),
+      );
+      if (rooms[0]) hz.gasRooms.push(rooms[0].id);
+    }
+  }
+  return hz;
 }
 
 /** Сгенерировать план по сиду и рангу объекта. Детерминирован: один сид — один уровень. */

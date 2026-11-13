@@ -13,7 +13,7 @@ const LOOK_SENS = 0.0052;
 const STICK_R = 54;
 
 interface Pointer {
-  role: 'stick' | 'look' | 'light';
+  role: 'stick' | 'look' | 'light' | 'act';
   x0: number;
   y0: number;
   x: number;
@@ -28,6 +28,11 @@ export class TouchControls implements InputSource {
   private readonly stickKnob: HTMLElement;
   private readonly lightBtn: HTMLButtonElement;
   private readonly pauseBtn: HTMLButtonElement;
+  private readonly actBtn: HTMLButtonElement;
+  private readonly goalsBtn: HTMLButtonElement;
+  private action = false;
+  private actionPressed = false;
+  private goalsUntil = 0;
   private readonly pointers = new Map<number, Pointer>();
   private moveX = 0;
   private moveZ = 0;
@@ -57,7 +62,17 @@ export class TouchControls implements InputSource {
     this.pauseBtn = document.createElement('button');
     this.pauseBtn.type = 'button';
     this.pauseBtn.className = 'vz-touch__btn vz-touch__btn--pause';
-    this.el.append(this.stickBase, this.lightBtn, this.pauseBtn);
+    this.actBtn = document.createElement('button');
+    this.actBtn.type = 'button';
+    this.actBtn.className = 'vz-touch__btn vz-touch__btn--act';
+    // Значок действия: рамка видоискателя с точкой.
+    this.actBtn.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 16V8h8M32 8h8v8M40 32v8h-8M16 40H8v-8" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="24" cy="24" r="5" fill="currentColor"/></svg>';
+    this.actBtn.hidden = true;
+    this.goalsBtn = document.createElement('button');
+    this.goalsBtn.type = 'button';
+    this.goalsBtn.className = 'vz-touch__btn vz-touch__btn--goals';
+    this.goalsBtn.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M12 14h4M22 14h14M12 24h4M22 24h14M12 34h4M22 34h14" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>';
+    this.el.append(this.stickBase, this.lightBtn, this.actBtn, this.pauseBtn, this.goalsBtn);
     parent.append(this.el);
     this.relabel();
 
@@ -70,11 +85,17 @@ export class TouchControls implements InputSource {
     this.pauseBtn.addEventListener('click', () => {
       this.pause = true;
     });
+    this.goalsBtn.addEventListener('click', () => {
+      // Список целей показывается на несколько секунд.
+      this.goalsUntil = performance.now() + 4000;
+    });
   }
 
   relabel(): void {
     this.lightBtn.setAttribute('aria-label', t('touch.light'));
     this.pauseBtn.setAttribute('aria-label', t('touch.pause'));
+    this.actBtn.setAttribute('aria-label', t('touch.act'));
+    this.goalsBtn.setAttribute('aria-label', t('touch.goals'));
   }
 
   /** Подсветить кнопку фонаря, когда его надо трясти; progress 0..1. */
@@ -87,8 +108,15 @@ export class TouchControls implements InputSource {
     this.lightBtn.classList.toggle('is-lit', on);
   }
 
+  /** Кнопка действия видна, только когда есть что взять, снять или куда подняться; progress — доля удержания. */
+  setAction(on: boolean, progress: number): void {
+    if (this.actBtn.hidden === on) this.actBtn.hidden = !on;
+    this.actBtn.style.setProperty('--vz-progress', String(Math.round(progress * 100)));
+    if (!on) this.action = false;
+  }
+
   private down(e: PointerEvent): void {
-    if (e.target === this.pauseBtn) return;
+    if (e.target === this.pauseBtn || e.target === this.goalsBtn) return;
     e.preventDefault();
     try {
       this.el.setPointerCapture(e.pointerId);
@@ -96,9 +124,14 @@ export class TouchControls implements InputSource {
       /* указатель уже отпущен */
     }
     const onLight = e.target === this.lightBtn;
+    const onAct = e.target === this.actBtn;
     const left = e.clientX < this.el.clientWidth / 2;
     const hasStick = [...this.pointers.values()].some((p) => p.role === 'stick');
-    const role: Pointer['role'] = onLight ? 'light' : left && !hasStick ? 'stick' : 'look';
+    const role: Pointer['role'] = onLight ? 'light' : onAct ? 'act' : left && !hasStick ? 'stick' : 'look';
+    if (onAct) {
+      this.action = true;
+      this.actionPressed = true;
+    }
     this.pointers.set(e.pointerId, { role, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t0: performance.now(), travel: 0 });
     if (role === 'stick') {
       this.stickBase.style.left = `${e.clientX}px`;
@@ -121,7 +154,7 @@ export class TouchControls implements InputSource {
       this.lookPitch -= dy * LOOK_SENS;
     } else if (p.role === 'light') {
       this.shake.pushMotion(dx, dy, TOUCH_SCALE);
-    } else {
+    } else if (p.role === 'stick') {
       let sx = p.x - p.x0;
       let sy = p.y - p.y0;
       const len = Math.hypot(sx, sy);
@@ -143,6 +176,8 @@ export class TouchControls implements InputSource {
       this.moveX = 0;
       this.moveZ = 0;
       this.stickBase.classList.remove('is-on');
+    } else if (p.role === 'act') {
+      this.action = false;
     } else if (p.role === 'light') {
       // Короткое касание без движения — нажатие кнопки; протяжка — тряска.
       if (p.travel < 14 && performance.now() - p.t0 < 400) {
@@ -165,10 +200,14 @@ export class TouchControls implements InputSource {
     f.lookPitch = this.lookPitch;
     f.light = this.light;
     f.pause = this.pause;
+    f.action = this.action;
+    f.actionPressed = this.actionPressed;
+    f.showGoals = performance.now() < this.goalsUntil;
     this.lookYaw = 0;
     this.lookPitch = 0;
     this.light = false;
     this.pause = false;
+    this.actionPressed = false;
     return f;
   }
 
@@ -179,6 +218,8 @@ export class TouchControls implements InputSource {
     this.lookYaw = 0;
     this.lookPitch = 0;
     this.light = false;
+    this.action = false;
+    this.actionPressed = false;
     this.stickBase.classList.remove('is-on');
   }
 

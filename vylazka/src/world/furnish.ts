@@ -47,6 +47,8 @@ export interface Slot {
   dir: number;
   /** Можно ли ставить глубокие предметы (нет двери рядом и хватает места). */
   deep: boolean;
+  /** Клетка с провалом, водой или будущим завалом: у стены ничего не ставим, только трубы и кабели. */
+  hazard: boolean;
   /** На этом конце стены внутренний угол: там глубокий предмет упрётся в соседнюю стену. */
   cornerL: boolean;
   cornerR: boolean;
@@ -159,13 +161,14 @@ function corridor(ctx: RoomCtx): void {
     } else {
       cables(s.xf.child(-1.5, 2.56, 0), 3.0);
     }
-    if (ctx.rng() < (tier === 2 ? 0.3 : 0.2)) {
+    if (!s.hazard && ctx.rng() < (tier === 2 ? 0.3 : 0.2)) {
       clutter(ctx, s, tier > 0);
       s.used = true;
     }
   }
   // Сыро на нижних ярусах.
-  if (tier > 0) for (const c of ctx.cells) if (ctx.rng() < 0.12 * tier) puddle(c.xf.child((ctx.rng() - 0.5) * 0.8, 0, (ctx.rng() - 0.5) * 0.8), 0.9 + ctx.rng(), 0.6 + ctx.rng() * 0.6);
+  const dry = new Set(ctx.slots.filter((s) => s.hazard).map((s) => `${s.cx},${s.cz}`));
+  if (tier > 0) for (const c of ctx.cells) if (!dry.has(`${c.cx},${c.cz}`) && ctx.rng() < 0.12 * tier) puddle(c.xf.child((ctx.rng() - 0.5) * 0.8, 0, (ctx.rng() - 0.5) * 0.8), 0.9 + ctx.rng(), 0.6 + ctx.rng() * 0.6);
 }
 
 function entrance(ctx: RoomCtx): void {

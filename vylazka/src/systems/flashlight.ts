@@ -64,6 +64,8 @@ export class Flashlight {
   intensity = 1;
   /** Прогресс оживления, 0..1 (для подсказки на экране). */
   reviveProgress = 0;
+  /** Фонарь разобран (идёт замена батарейки): света нет, время не идёт. */
+  suspended = false;
 
   private sinceRevive = 0;
   private litTime = 0;
@@ -92,6 +94,21 @@ export class Flashlight {
     }
   }
 
+  /** Вставить свежую батарейку: полный заряд, фонарь горит. */
+  replaceBattery(): void {
+    this.charge = 1;
+    this.state = 'on';
+    this.dying = 0;
+    this.sinceRevive = 0;
+    this.unstable = 0.35;
+    this.reviveProgress = 0;
+  }
+
+  /** Батарейка села: тряска не поможет, нужна замена. */
+  get empty(): boolean {
+    return this.charge <= 0;
+  }
+
   /** Принудительный отказ (отладка, сценарные события). */
   forceFail(): void {
     if (this.state !== 'on') return;
@@ -115,6 +132,10 @@ export class Flashlight {
 
   update(dt: number, env: FlashlightEnv = CALM_ENV): FlashlightEvents {
     const ev: FlashlightEvents = { failed: false, revived: false, spark: false, clicked: false, rattle: 0 };
+    if (this.suspended) {
+      this.intensity = 0;
+      return ev;
+    }
     this.sinceRevive += dt;
 
     if (this.state === 'on') {

@@ -358,3 +358,286 @@ body {
 .vz-touch__btn--pause::after {
   right: 13px;
 }
+
+/* ── Цели, заряд, действие, сообщения ── */
+.vz-hud__goals {
+  margin-top: 0.9em;
+  max-width: min(78%, 26em);
+  font-size: clamp(13px, 0.9vmin + 9px, 17px);
+  letter-spacing: 0.01em;
+  line-height: 1.35;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.vz-root.is-touch .vz-hud__goals {
+  /* Слева вверху у тача стоят кнопки паузы и задания, справа под временем — заряд фонаря. */
+  margin-left: 58px;
+  max-width: calc(100% - 58px - 7em);
+}
+.vz-hud__goals.is-on {
+  opacity: 0.92;
+}
+.vz-hud__goals-title {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.82em;
+  opacity: 0.6;
+  margin-bottom: 0.25em;
+}
+.vz-hud__goal {
+  padding-left: 1.5em;
+  position: relative;
+}
+.vz-hud__goal::before {
+  content: '';
+  position: absolute;
+  left: 0.15em;
+  top: 0.32em;
+  width: 0.62em;
+  height: 0.62em;
+  border: 1px solid currentColor;
+  box-sizing: border-box;
+  opacity: 0.8;
+}
+.vz-hud__goal.is-done {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.vz-hud__goal.is-done::before {
+  background: currentColor;
+}
+.vz-hud__toast {
+  position: absolute;
+  left: 50%;
+  /* Ниже списка целей: тот занимает верх кадра слева. */
+  top: 34%;
+  transform: translateX(-50%);
+  max-width: min(88%, 32em);
+  text-align: center;
+  font-size: clamp(15px, 1.1vmin + 10px, 20px);
+  letter-spacing: 0.01em;
+  color: #f3e7c2;
+  opacity: 0;
+  transition: opacity 0.35s;
+}
+.vz-hud__toast.is-on {
+  opacity: 0.95;
+}
+.vz-hud__act {
+  position: absolute;
+  left: 50%;
+  bottom: 30%;
+  transform: translateX(-50%);
+  width: min(88%, 34em);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5em;
+  text-align: center;
+  font-size: clamp(15px, 1.1vmin + 10px, 20px);
+  letter-spacing: 0.01em;
+}
+.vz-hud__act.is-on {
+  display: flex;
+}
+/* Обучающая подсказка внизу уступает место подсказке действия и призыву трясти фонарь. */
+.vz-hud__act.is-on ~ .vz-hud__hint,
+.vz-hud.is-shake .vz-hud__hint {
+  opacity: 0;
+  transition: none;
+}
+/* Когда фонарь надо трясти, подсказка действия не мешает. */
+.vz-hud.is-shake .vz-hud__act {
+  display: none;
+}
+.vz-hud__act .vz-hud__bar {
+  visibility: hidden;
+}
+.vz-hud__act .vz-hud__bar.is-on {
+  visibility: visible;
+}
+.vz-hud__bat {
+  position: absolute;
+  left: max(14px, env(safe-area-inset-left));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: none;
+  align-items: center;
+  gap: 0.5em;
+  font-size: clamp(12px, 0.9vmin + 8px, 16px);
+  opacity: 0.85;
+}
+.vz-hud__bat.is-on {
+  display: flex;
+}
+.vz-root.is-touch .vz-hud__bat {
+  /* У тача низ слева — зона стика: заряд переезжает под цели. */
+  top: calc(max(12px, env(safe-area-inset-top)) + 2.2em);
+  bottom: auto;
+  left: auto;
+  right: max(14px, env(safe-area-inset-right));
+}
+.vz-hud__bat-cell {
+  position: relative;
+  width: 2.6em;
+  height: 1.05em;
+  border: 1px solid rgba(240, 238, 228, 0.8);
+  border-radius: 2px;
+  box-sizing: border-box;
+  padding: 2px;
+}
+.vz-hud__bat-cell::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: 25%;
+  width: 3px;
+  height: 50%;
+  background: rgba(240, 238, 228, 0.8);
+  border-radius: 0 1px 1px 0;
+}
+.vz-hud__bat-cell i {
+  display: block;
+  height: 100%;
+  background: rgba(240, 238, 228, 0.85);
+}
+.vz-hud__bat.is-low .vz-hud__bat-cell i {
+  background: #e0362c;
+}
+.vz-hud__bat.is-low .vz-hud__bat-cell {
+  animation: vz-blink 1s steps(1) infinite;
+}
+.vz-hud__mark {
+  position: absolute;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  display: none;
+  background:
+    linear-gradient(#f3e7c2, #f3e7c2) left top / 12px 2px no-repeat,
+    linear-gradient(#f3e7c2, #f3e7c2) left top / 2px 12px no-repeat,
+    linear-gradient(#f3e7c2, #f3e7c2) right top / 12px 2px no-repeat,
+    linear-gradient(#f3e7c2, #f3e7c2) right top / 2px 12px no-repeat,
+    linear-gradient(#f3e7c2, #f3e7c2) left bottom / 12px 2px no-repeat,
+    linear-gradient(#f3e7c2, #f3e7c2) left bottom / 2px 12px no-repeat,
+    linear-gradient(#f3e7c2, #f3e7c2) right bottom / 12px 2px no-repeat,
+    linear-gradient(#f3e7c2, #f3e7c2) right bottom / 2px 12px no-repeat;
+  opacity: 0.75;
+}
+.vz-hud__mark.is-on {
+  display: block;
+}
+.vz-hud__mark.is-locked {
+  opacity: 1;
+  transform: scale(0.82);
+  transition: transform 0.2s;
+}
+
+/* ── Карточка задания и отчёт ── */
+.vz-overlay__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+  margin-top: 0.6em;
+  max-width: min(100%, 34em);
+  text-align: left;
+  font-size: clamp(14px, 1vmin + 9px, 18px);
+  line-height: 1.35;
+}
+.vz-overlay__body:empty {
+  display: none;
+}
+.vz-overlay__line--head {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.82em;
+  opacity: 0.6;
+  margin-top: 0.5em;
+}
+.vz-overlay__line--todo,
+.vz-overlay__line--done {
+  padding-left: 1.5em;
+  position: relative;
+}
+.vz-overlay__line--todo::before,
+.vz-overlay__line--done::before {
+  content: '';
+  position: absolute;
+  left: 0.15em;
+  top: 0.32em;
+  width: 0.62em;
+  height: 0.62em;
+  border: 1px solid currentColor;
+  box-sizing: border-box;
+}
+.vz-overlay__line--done::before {
+  background: currentColor;
+}
+.vz-overlay__line--done {
+  color: #c9d9b4;
+}
+.vz-overlay__line--dim {
+  opacity: 0.6;
+}
+.vz-overlay[data-mode='report'] {
+  background: rgba(0, 0, 0, 0.94);
+}
+@media (max-height: 460px) {
+  .vz-hud__toast {
+    top: 46%;
+  }
+  /* Низкий ландшафт телефона: карточка должна помещаться без прокрутки. */
+  .vz-overlay__title {
+    font-size: clamp(22px, 9vh, 40px);
+  }
+  .vz-overlay__box {
+    gap: 0.3em;
+  }
+  .vz-overlay__prompt {
+    margin-top: 0.4em;
+  }
+  .vz-overlay__row {
+    margin-top: 0.5em;
+  }
+  .vz-overlay__body {
+    font-size: 14px;
+    gap: 0.15em;
+    margin-top: 0.2em;
+  }
+  .vz-overlay__opt {
+    min-height: 40px;
+    padding: 0.4em 1em;
+  }
+}
+
+/* ── Кнопки действия и задания на таче ── */
+.vz-touch__btn--act {
+  right: max(26px, calc(env(safe-area-inset-right) + 14px));
+  bottom: calc(max(34px, env(safe-area-inset-bottom) + 20px) + 104px);
+  width: 76px;
+  height: 76px;
+  border-color: #f3d98a;
+  color: #f3e7c2;
+  background:
+    radial-gradient(circle, rgba(20, 20, 20, 0.7) 0 60%, transparent 61%),
+    conic-gradient(#f3d98a calc(var(--vz-progress, 0) * 1%), rgba(255, 255, 255, 0.1) 0);
+}
+.vz-touch__btn--act[hidden] {
+  display: none;
+}
+.vz-touch__btn--act svg {
+  opacity: 0.95;
+}
+.vz-touch__btn--goals {
+  left: max(12px, env(safe-area-inset-left));
+  top: calc(max(12px, env(safe-area-inset-top)) + 2.4em + 54px);
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border-width: 1px;
+  opacity: 0.7;
+}
+.vz-touch__btn--goals svg {
+  width: 30px;
+  height: 30px;
+  opacity: 0.9;
+}

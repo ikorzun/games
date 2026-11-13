@@ -1,7 +1,7 @@
 /** Собранный уровень: геометрия чанками, коллайдеры и игровые точки. Общий тип для генератора и тестового уровня. */
 import type { Vec3 } from '../core/types';
 import type { GenLayout } from '../gen/layout';
-import type { ColliderSet } from './colliders';
+import type { Aabb, ColliderSet } from './colliders';
 import type { MeshData } from './kit';
 
 /** Кусок геометрии, рисуемый одним вызовом. Ярусы — чтобы не рисовать этажи, которых не видно. */
@@ -9,6 +9,30 @@ export interface LevelChunk {
   mesh: MeshData;
   tierMin: number;
   tierMax: number;
+  /** Чанк скрыт, пока игра не покажет его по этому id (обвал до обрушения). */
+  hidden?: string;
+}
+
+/** Зона среды: вода замедляет и глушит фонарь, газ душит, провал убивает. */
+export interface Zone {
+  kind: 'water' | 'gas' | 'pit';
+  tier: number;
+  minX: number;
+  minY: number;
+  minZ: number;
+  maxX: number;
+  maxY: number;
+  maxZ: number;
+}
+
+/** Обвал, который может засыпать клетку коридора за спиной игрока. */
+export interface CollapseSpec {
+  /** id скрытого чанка с завалом. */
+  id: string;
+  tier: number;
+  center: Vec3;
+  /** Преграды, которые появятся вместе с завалом. */
+  boxes: Aabb[];
 }
 
 /** Место, куда можно положить находку или батарейку. */
@@ -61,6 +85,8 @@ export interface BuiltLevel {
   exit: Vec3;
   spots: ItemSpot[];
   landmarks: Landmark[];
+  zones: Zone[];
+  collapses: CollapseSpec[];
   nav: NavNode[];
   /** План, по которому собран уровень (у тестового уровня его нет). */
   layout: GenLayout | null;

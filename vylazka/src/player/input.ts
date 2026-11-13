@@ -11,12 +11,18 @@ export interface InputFrame {
   light: boolean;
   /** Кнопка действия удерживается. */
   action: boolean;
+  /** Кнопка действия нажата в этом кадре. */
+  actionPressed: boolean;
+  /** Заменить батарейку. */
+  swap: boolean;
+  /** Показать список целей (удерживается). */
+  showGoals: boolean;
   /** Запрошена пауза. */
   pause: boolean;
 }
 
 export function emptyInput(): InputFrame {
-  return { moveX: 0, moveZ: 0, run: false, lookYaw: 0, lookPitch: 0, light: false, action: false, pause: false };
+  return { moveX: 0, moveZ: 0, run: false, lookYaw: 0, lookPitch: 0, light: false, action: false, actionPressed: false, swap: false, showGoals: false, pause: false };
 }
 
 export interface InputSource {

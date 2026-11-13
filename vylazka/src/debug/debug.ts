@@ -42,6 +42,18 @@ export interface VzDebugApi {
   gotoLandmark(id: string, index?: number, distance?: number): boolean;
   /** Встать в центр клетки помещения. */
   gotoRoom(roomId: number, yawDeg?: number): boolean;
+  /** Цели вылазки: тип, ярус, выполнена ли, где находится. */
+  goals(): Array<Record<string, unknown>>;
+  /** Предметы уровня. */
+  items(): Array<Record<string, unknown>>;
+  /** Встать перед предметом лицом к нему. */
+  gotoItem(id: number): boolean;
+  /** Встать перед целью вылазки (предметом или приметой) лицом к ней. */
+  gotoGoal(index: number): boolean;
+  /** Встать у лестницы на выход. */
+  gotoExit(): void;
+  /** Зоны среды и обвалы уровня. */
+  hazards(): Record<string, unknown>;
   /** Включить или выключить тень фонаря (для сравнения кадров). */
   shadows(on: boolean): void;
   /** Нарисовать кадр и вернуть его яркость сеткой 32×18, строка 0 — верхняя. */
@@ -59,19 +71,26 @@ export function installDebug(app: App): void {
   const game = (): App['game'] => app.game;
   const api: VzDebugApi = {
     ready: () => app.ready,
-    state: () => ({ ...game().snapshot(), paused: app.lifecycle.paused, pauseReasons: app.lifecycle.list(), overlay: app.overlay.mode, platform: app.platform.id, touch: app.touchMode, motion: app.motion.state }),
+    state: () => ({
+      ...game().snapshot(),
+      paused: app.lifecycle.paused,
+      pauseReasons: app.lifecycle.list(),
+      overlay: app.overlay.mode,
+      screen: app.screen,
+      seed: app.seed,
+      rank: app.rank,
+      profile: { sorties: app.profile.sorties, successes: app.profile.successes, archive: [...app.profile.archive] },
+      platform: app.platform.id,
+      touch: app.touchMode,
+      motion: app.motion.state,
+    }),
     freeze: (on) => {
       app.frozen = on;
     },
     step: (n, input) => {
       const f = { ...emptyInput(), ...input };
       if (input?.lookYaw || input?.lookPitch) game().look(f.lookYaw, f.lookPitch);
-      for (let i = 0; i < n; i++) {
-        app.handleEvents(game().step(STEP, f));
-        f.light = false;
-        game().draw(1, STEP);
-      }
-      app.updateHud();
+      for (let i = 0; i < n; i++) app.advance(f, 1, 1, STEP);
       return api.state();
     },
     tick: (n) => {
@@ -82,10 +101,8 @@ export function installDebug(app: App): void {
           break;
         }
         game().look(input.lookYaw, input.lookPitch);
-        app.handleEvents(game().step(STEP, input));
-        game().draw(1, STEP);
+        app.advance(input, 1, 1, STEP);
       }
-      app.updateHud();
       return api.state();
     },
     render: () => game().draw(1, STEP),
@@ -94,14 +111,11 @@ export function installDebug(app: App): void {
     fail: () => game().light.forceFail(),
     shake: (level, seconds) => {
       const steps = Math.round(seconds / STEP);
-      const f = emptyInput();
       for (let i = 0; i < steps; i++) {
         // Удерживаем уровень: детектор сам затухает между толчками.
         game().shake.level = Math.max(game().shake.level, level);
-        app.handleEvents(game().step(STEP, f));
-        game().draw(1, STEP);
+        app.advance(emptyInput(), 1, 1, STEP);
       }
-      app.updateHud();
       return api.state();
     },
     toggleLight: () => game().light.toggle(),
@@ -158,6 +172,52 @@ export function installDebug(app: App): void {
       game().teleport(px, feet, pz, Math.atan2(-(m.x - px), -(m.z - pz)), Math.atan2(m.y - (feet + 1.42), Math.hypot(m.x - px, m.z - pz)));
       return true;
     },
+    goals: () => {
+      const srt = game().sortie;
+      if (!srt) return [];
+      return srt.objectives.map((o) => {
+        const it = o.type === 'take' ? srt.pop.items[o.item!]! : null;
+        const p = it ?? o.landmark!;
+        return { id: o.id, type: o.type, tier: o.tier, done: srt.done.has(o.id), what: it ? it.find : o.landmark!.id, pos: [p.x, p.y, p.z] };
+      });
+    },
+    items: () => {
+      const srt = game().sortie;
+      return srt ? srt.pop.items.map((i) => ({ id: i.id, type: i.type, find: i.find ?? null, tier: i.tier, taken: srt.taken.has(i.id), pos: [i.x, i.y, i.z] })) : [];
+    },
+    gotoItem: (id) => {
+      const srt = game().sortie;
+      const it = srt?.pop.items[id];
+      if (!it) return false;
+      // Встаём в метре от предмета со стороны ближайшего узла его помещения.
+      const nodes = app.level.nav.filter((n) => n.room === it.room);
+      let best = nodes[0];
+      for (const n of nodes) if (best && Math.hypot(n.x - it.x, n.z - it.z) < Math.hypot(best.x - it.x, best.z - it.z)) best = n;
+      if (!best) return false;
+      const dx = best.x - it.x;
+      const dz = best.z - it.z;
+      const d = Math.hypot(dx, dz) || 1;
+      const k = Math.min(1, 1.0 / d);
+      const px = it.x + dx * k;
+      const pz = it.z + dz * k;
+      game().teleport(px, best.y, pz, Math.atan2(-(it.x - px), -(it.z - pz)), Math.atan2(it.y - (best.y + 1.42), Math.hypot(it.x - px, it.z - pz)));
+      return true;
+    },
+    gotoGoal: (index) => {
+      const o = game().sortie?.objectives[index];
+      if (!o) return false;
+      if (o.type === 'take') return api.gotoItem(o.item!);
+      const idx = app.level.landmarks.filter((m) => m.id === o.landmark!.id).indexOf(o.landmark!);
+      return api.gotoLandmark(o.landmark!.id, Math.max(0, idx), 2.4);
+    },
+    gotoExit: () => {
+      const [x, y, z] = app.level.exit;
+      game().teleport(x, y, z + 0.5, 0, 0);
+    },
+    hazards: () => ({
+      zones: app.level.zones.map((z) => ({ kind: z.kind, tier: z.tier, center: [(z.minX + z.maxX) / 2, z.maxY, (z.minZ + z.maxZ) / 2] })),
+      collapses: app.level.collapses.map((c) => ({ id: c.id, tier: c.tier, center: c.center })),
+    }),
     gotoRoom: (roomId, yawDeg = 0) => {
       const n = app.level.nav.find((x) => x.room === roomId);
       if (!n) return false;

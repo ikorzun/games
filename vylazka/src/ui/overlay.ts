@@ -1,15 +1,33 @@
-/** Экраны поверх игры: старт и пауза. Один и тот же блок с разным текстом и кнопками настроек. */
+/**
+ * Экраны поверх игры: загрузка, карточка задания, пауза, отчёт о вылазке. Один блок с заголовком,
+ * строками и подсказкой; весь экран — кнопка «дальше».
+ */
 import { t } from '../core/i18n';
 import type { Quality } from '../render/renderer';
 
-export type OverlayMode = 'hidden' | 'loading' | 'start' | 'paused' | 'error';
+export type OverlayMode = 'hidden' | 'loading' | 'start' | 'paused' | 'report' | 'error';
 
 export interface OverlayHandlers {
   onStart(): void;
   onResume(): void;
+  /** Нажатие на экране отчёта: следующая вылазка. */
+  onNext(): void;
   onQuality(next: Quality): void;
   /** Кнопка «трясти телефоном» (только там, где нужен явный запрос разрешения). */
   onMotion?(): void;
+}
+
+/** Строка карточки: обычная, выполненная цель или подзаголовок. */
+export interface CardLine {
+  text: string;
+  kind?: 'plain' | 'done' | 'todo' | 'head' | 'dim';
+}
+
+export interface Card {
+  title: string;
+  sub: string;
+  lines: readonly CardLine[];
+  prompt: string;
 }
 
 const ORDER: readonly Quality[] = ['low', 'med', 'high'];
@@ -19,6 +37,7 @@ export class Overlay {
   mode: OverlayMode = 'hidden';
   private readonly title: HTMLElement;
   private readonly sub: HTMLElement;
+  private readonly body: HTMLElement;
   private readonly prompt: HTMLElement;
   private readonly rotate: HTMLElement;
   private readonly qualityBtn: HTMLButtonElement;
@@ -26,6 +45,8 @@ export class Overlay {
   private quality: Quality = 'med';
   private touch = false;
   private errorText = '';
+  private card: Card | null = null;
+  private shownAt = 0;
 
   constructor(
     parent: HTMLElement,
@@ -36,6 +57,7 @@ export class Overlay {
     this.el.innerHTML =
       '<div class="vz-overlay__box">' +
       '<div class="vz-overlay__title"></div><div class="vz-overlay__sub"></div>' +
+      '<div class="vz-overlay__body"></div>' +
       '<div class="vz-overlay__prompt"></div>' +
       '<div class="vz-overlay__row"><button type="button" class="vz-overlay__opt vz-overlay__opt--quality"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--motion"></button></div>' +
@@ -44,6 +66,7 @@ export class Overlay {
     const q = (sel: string): HTMLElement => this.el.querySelector(sel) as HTMLElement;
     this.title = q('.vz-overlay__title');
     this.sub = q('.vz-overlay__sub');
+    this.body = q('.vz-overlay__body');
     this.prompt = q('.vz-overlay__prompt');
     this.rotate = q('.vz-overlay__rotate');
     this.qualityBtn = q('.vz-overlay__opt--quality') as HTMLButtonElement;
@@ -59,10 +82,12 @@ export class Overlay {
       e.stopPropagation();
       this.handlers.onMotion?.();
     });
-    // Весь экран — кнопка «начать» или «продолжить».
+    // Весь экран — кнопка «начать», «продолжить» или «дальше».
     this.el.addEventListener('click', () => {
       if (this.mode === 'start') this.handlers.onStart();
       else if (this.mode === 'paused') this.handlers.onResume();
+      // Отчёт нельзя пролистнуть случайным нажатием сразу после конца вылазки.
+      else if (this.mode === 'report' && performance.now() - this.shownAt > 900) this.handlers.onNext();
     });
   }
 
@@ -82,7 +107,14 @@ export class Overlay {
     if (label !== null) this.motionBtn.textContent = label;
   }
 
+  /** Содержимое карточки для экранов задания и отчёта. */
+  setCard(card: Card | null): void {
+    this.card = card;
+    this.refresh();
+  }
+
   show(mode: OverlayMode, errorText = ''): void {
+    if (mode !== this.mode) this.shownAt = performance.now();
     this.mode = mode;
     this.errorText = errorText;
     this.refresh();
@@ -90,12 +122,20 @@ export class Overlay {
 
   refresh(): void {
     const m = this.mode;
+    const card = m === 'start' || m === 'report' ? this.card : null;
     this.el.classList.toggle('is-on', m !== 'hidden');
     this.el.dataset.mode = m;
-    this.title.textContent = m === 'paused' ? t('ui.paused') : t('ui.title');
-    this.sub.textContent = m === 'paused' ? '' : t('ui.subtitle');
+    this.title.textContent = card ? card.title : m === 'paused' ? t('ui.paused') : t('ui.title');
+    this.sub.textContent = card ? card.sub : m === 'paused' ? '' : t('ui.subtitle');
+    this.body.replaceChildren();
+    for (const line of card?.lines ?? []) {
+      const row = document.createElement('div');
+      row.className = `vz-overlay__line vz-overlay__line--${line.kind ?? 'plain'}`;
+      row.textContent = line.text;
+      this.body.append(row);
+    }
     const sfx = this.touch ? '.touch' : '';
-    this.prompt.textContent = m === 'loading' ? t('ui.loading') : m === 'start' ? t(`ui.start${sfx}`) : m === 'paused' ? t(`ui.resume${sfx}`) : m === 'error' ? this.errorText : '';
+    this.prompt.textContent = card ? card.prompt : m === 'loading' ? t('ui.loading') : m === 'start' ? t(`ui.start${sfx}`) : m === 'paused' ? t(`ui.resume${sfx}`) : m === 'error' ? this.errorText : '';
     this.qualityBtn.textContent = `${t('ui.quality')}: ${t(`ui.quality.${this.quality}`)}`;
     this.qualityBtn.hidden = m !== 'start' && m !== 'paused';
     this.rotate.textContent = t('ui.rotate');

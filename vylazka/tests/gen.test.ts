@@ -156,6 +156,62 @@ describe('генератор плана', () => {
     }
   });
 
+  it('опасности: первый ярус чист; провалы только на прямых участках; обвалы — на циклах; газ — в закрытых помещениях', () => {
+    let pits = 0;
+    let water = 0;
+    let gas = 0;
+    let collapses = 0;
+    for (const rank of [1, 2, 3] as const) {
+      for (const seed of SEEDS) {
+        const l = generateLayout(seed, rank);
+        const h = l.hazards;
+        const corr = (t: number): Set<string> => new Set(l.rooms.filter((r) => r.tier === t && r.type === 'corridor').flatMap((r) => r.cells.map(([x, z]) => `${x},${z}`)));
+        const doorCells = new Set<string>();
+        for (const e of l.edges) {
+          doorCells.add(`${e.tier},${e.cx},${e.cz}`);
+          doorCells.add(`${e.tier},${e.cx + (e.dir === 0 ? 1 : 0)},${e.cz + (e.dir === 1 ? 1 : 0)}`);
+        }
+        const used = new Set<string>();
+        for (const c of [...h.pits, ...h.water, ...h.collapses]) {
+          expect(c.tier, `сид ${seed}`).toBeGreaterThanOrEqual(1);
+          expect(corr(c.tier).has(`${c.x},${c.z}`), `сид ${seed}: опасность вне коридора`).toBe(true);
+          expect(doorCells.has(`${c.tier},${c.x},${c.z}`), `сид ${seed}: опасность у двери или лестницы`).toBe(false);
+          const k = `${c.tier},${c.x},${c.z}`;
+          expect(used.has(k), `сид ${seed}: две опасности в одной клетке`).toBe(false);
+          used.add(k);
+        }
+        for (const p of h.pits) {
+          const c = corr(p.tier);
+          const n = [0, 1, 2, 3].map((d) => c.has(`${p.x + DX[d]!},${p.z + DZ[d]!}`));
+          expect((n[0] && n[2] && !n[1] && !n[3]) || (n[1] && n[3] && !n[0] && !n[2]), `сид ${seed}: провал не на прямом участке`).toBe(true);
+        }
+        if (rank === 1) expect(h.pits.length + h.gasRooms.length + h.collapses.length).toBe(0);
+        // Обвал не рвёт уровень: без засыпанных клеток всё по-прежнему достижимо.
+        if (h.collapses.length > 0) {
+          const g = cellGraph(l);
+          for (const c of h.collapses) {
+            const k = `${c.tier},${c.x},${c.z}`;
+            for (const n of g.get(k) ?? []) g.set(n, (g.get(n) ?? []).filter((m) => m !== k));
+            g.delete(k);
+          }
+          const ent = l.rooms[l.entranceRoom]!;
+          const seen = reach(g, `0,${ent.cells[0]![0]},${ent.cells[0]![1]}`);
+          for (const r of l.rooms) for (const [x, z] of r.cells) if (!h.collapses.some((c) => c.tier === r.tier && c.x === x && c.z === z)) expect(seen.has(`${r.tier},${x},${z}`), `сид ${seed}: обвал отрезал ${r.type}`).toBe(true);
+        }
+        for (const id of h.gasRooms) expect(['storage', 'dorm', 'washroom', 'archive', 'switchboard']).toContain(l.rooms[id]!.type);
+        pits += h.pits.length;
+        water += h.water.length;
+        gas += h.gasRooms.length;
+        collapses += h.collapses.length;
+      }
+    }
+    // Опасности действительно встречаются, а не отфильтровываются в ноль.
+    expect(pits).toBeGreaterThan(600);
+    expect(water).toBeGreaterThan(1500);
+    expect(gas).toBeGreaterThan(500);
+    expect(collapses).toBeGreaterThan(300);
+  });
+
   it('состав ярусов: жилой, технический, нижний; вход и шлюз одни', () => {
     for (const seed of SEEDS.slice(0, 100)) {
       const l = generateLayout(seed, 3);

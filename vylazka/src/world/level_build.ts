@@ -10,10 +10,10 @@ import { ColliderSet } from './colliders';
 import { doorSign, furnishRoom } from './furnish';
 import type { CellInfo, RoomCtx, Slot } from './furnish';
 import { MeshBuilder } from './kit';
-import type { BuiltLevel, ItemSpot, Landmark, LevelChunk, NavNode, StairLink } from './level';
+import type { BuiltLevel, CollapseSpec, ItemSpot, Landmark, LevelChunk, NavNode, StairLink, Zone } from './level';
 import { MAT } from './materials';
 import { hermoDoor, stairsDown, Xf } from './props';
-import { plainDoor } from './props_bunker';
+import { collapse, pit, plainDoor, warningSign, waterSheet } from './props_bunker';
 import { buildShell, CELL, Shell, STYLE_CORRIDOR, WALL_T } from './shell';
 import type { ShellCell, WallStyle } from './shell';
 
@@ -63,10 +63,16 @@ interface ChunkBuild {
   mb: MeshBuilder;
   tierMin: number;
   tierMax: number;
+  hidden?: string;
 }
 
 /** Поворот размещения, при котором локальная ось +z смотрит по направлению dir. */
 const ROT_FACING: readonly (0 | 1 | 2 | 3)[] = [1, 0, 3, 2];
+/** Сторона дыры провала, м: по краям коридора остаются карнизы по 0,7 м. */
+export const PIT_HOLE = 1.3;
+const PIT_DEPTH = 1.6;
+/** Смещение навигационного узла от центра клетки с провалом — на середину карниза. */
+const PIT_LEDGE = 0.95;
 
 export function buildLevel(layout: GenLayout): BuiltLevel {
   const col = new ColliderSet();
@@ -96,6 +102,9 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     return c;
   };
 
+  const hz = layout.hazards;
+  const pitAt = new Set(hz.pits.map((p) => `${p.tier},${p.x},${p.z}`));
+
   // ── Скорлупа по ярусам ──
   const shells: Shell[] = [];
   for (let t = 0; t < layout.tierCount; t++) shells.push(new Shell());
@@ -104,6 +113,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     const y = tierFloor(room.tier);
     for (const [x, z] of room.cells) {
       const cell: ShellCell = { cx: x - HALF, cz: z - HALF, floorY: y, ceilY: y + CEIL_H, room: room.id, style };
+      if (pitAt.has(`${room.tier},${x},${z}`)) cell.noFloor = true;
       if (upperWells.has(room.id)) cell.noFloor = true;
       else if (lowerWells.has(room.id)) {
         // Нижняя часть шахты марша тянется до пола верхнего яруса и открыта вверх.
@@ -161,7 +171,71 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     doorSign(new Xf(chunkFor(other, otherCell[0], otherCell[1]).mb, null, wx + DX[back]! * T, y + 2.32, wz + DZ[back]! * T, ROT_FACING[back]!));
   }
 
+  // ── Опасности среды ──
+  const zones: Zone[] = [];
+  const collapses: CollapseSpec[] = [];
+  const roomOf = (tier: number, x: number, z: number): GenRoom => gridAt(tier, x, z)!;
+  for (const p of hz.pits) {
+    const room = roomOf(p.tier, p.x, p.z);
+    const y = tierFloor(p.tier);
+    const wx = cellToWorld(p.x);
+    const wz = cellToWorld(p.z);
+    const st = styleFor(room);
+    pit(new Xf(chunkFor(room, p.x, p.z).mb, col, wx, y, wz, 0), CELL, PIT_HOLE, PIT_DEPTH, st.floor, st.floorTint);
+    zones.push({ kind: 'pit', tier: p.tier, minX: wx - PIT_HOLE / 2, maxX: wx + PIT_HOLE / 2, minZ: wz - PIT_HOLE / 2, maxZ: wz + PIT_HOLE / 2, minY: y - PIT_DEPTH - 1, maxY: y - 0.7 });
+  }
+  for (const w of hz.water) {
+    const room = roomOf(w.tier, w.x, w.z);
+    const y = tierFloor(w.tier);
+    const wx = cellToWorld(w.x);
+    const wz = cellToWorld(w.z);
+    waterSheet(new Xf(chunkFor(room, w.x, w.z).mb, null, wx, y, wz, 0), CELL);
+    zones.push({ kind: 'water', tier: w.tier, minX: wx - CELL / 2, maxX: wx + CELL / 2, minZ: wz - CELL / 2, maxZ: wz + CELL / 2, minY: y - 0.2, maxY: y + 1 });
+  }
+  for (const id of hz.gasRooms) {
+    const room = roomById(id);
+    const y = tierFloor(room.tier);
+    for (const [x, z] of room.cells) {
+      const wx = cellToWorld(x);
+      const wz = cellToWorld(z);
+      zones.push({ kind: 'gas', tier: room.tier, minX: wx - CELL / 2 + T, maxX: wx + CELL / 2 - T, minZ: wz - CELL / 2 + T, maxZ: wz + CELL / 2 - T, minY: y - 0.2, maxY: y + CEIL_H });
+    }
+    // Знак у каждой двери помещения со стороны коридора.
+    for (const e of layout.edges) {
+      if (e.tier !== room.tier || e.kind === 'open') continue;
+      const bx = e.cx + (e.dir === 0 ? 1 : 0);
+      const bz = e.cz + (e.dir === 1 ? 1 : 0);
+      const aIn = roomOf(e.tier, e.cx, e.cz).id === id;
+      const bIn = roomOf(e.tier, bx, bz).id === id;
+      if (aIn === bIn) continue;
+      // Нормаль от стены в сторону коридора.
+      const out = e.dir === 0 ? (aIn ? 0 : 2) : aIn ? 1 : 3;
+      const host = aIn ? roomOf(e.tier, bx, bz) : roomOf(e.tier, e.cx, e.cz);
+      const hostCell: [number, number] = aIn ? [bx, bz] : [e.cx, e.cz];
+      const wx = cellToWorld(e.cx) + (e.dir === 0 ? CELL / 2 : 0) + DX[out]! * T;
+      const wz = cellToWorld(e.cz) + (e.dir === 1 ? CELL / 2 : 0) + DZ[out]! * T;
+      const xf = new Xf(chunkFor(host, hostCell[0], hostCell[1]).mb, null, wx, y + 1.5, wz, ROT_FACING[out]!);
+      warningSign(xf.child(0.9, 0, 0));
+    }
+  }
+  hz.collapses.forEach((c, i) => {
+    const y = tierFloor(c.tier);
+    const wx = cellToWorld(c.x);
+    const wz = cellToWorld(c.z);
+    // Завал лежит отдельным скрытым чанком; его преграды попадут в мир в момент обрушения.
+    const mb = new MeshBuilder();
+    const tmp = new ColliderSet();
+    // Клетка-перемычка: проход идёт вдоль той оси, где есть коридорные соседи.
+    const alongX = gridAt(c.tier, c.x + 1, c.z) !== undefined && gridAt(c.tier, c.x - 1, c.z) !== undefined;
+    for (const rot of alongX ? ([1, 3] as const) : ([0, 2] as const)) collapse(new Xf(mb, tmp, wx, y, wz, rot), CEIL_H, c.x * 53 + c.z * 29 + rot);
+    const id = `collapse:${i}`;
+    chunks.set(id, { mb, tierMin: c.tier, tierMax: c.tier, hidden: id });
+    collapses.push({ id, tier: c.tier, center: [wx, y, wz], boxes: tmp.boxes.slice() });
+  });
+
   // ── Обстановка ──
+  // У провала, в воде и под будущим завалом у стен пусто: там нужен проход по карнизу.
+  const hazardCells = new Set([...hz.pits, ...hz.water, ...hz.collapses].map((c) => `${c.tier},${c.x},${c.z}`));
   const spots: ItemSpot[] = [];
   const landmarks: Landmark[] = [];
   for (const room of layout.rooms) {
@@ -179,6 +253,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
       // Проходом считается дверь или открытое ребро в другое помещение.
       const doors = kinds.filter((k, d) => k === 'door' || (k === 'open' && neighbours[d] !== undefined && neighbours[d]!.room !== room.id)).length;
       cells.push({ cx: x, cz: z, xf: new Xf(mb, col, cellToWorld(x), y, cellToWorld(z), 0), doors });
+      const hazard = hazardCells.has(`${room.tier},${x},${z}`);
       for (let d = 0; d < 4; d++) {
         if (kinds[d] !== 'wall') continue;
         const inward = ((d + 2) % 4) as 0 | 1 | 2 | 3;
@@ -189,7 +264,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
         const along = Math.abs(ax[0] - xf.ox) > 0.5 ? (ax[0] > xf.ox ? 0 : 2) : ax[2] > xf.oz ? 1 : 3;
         const kR = kinds[along]!;
         const kL = kinds[(along + 2) % 4]!;
-        slots.push({ xf, cx: x, cz: z, dir: d, deep: doors === 0 && room.type !== 'corridor', cornerR: kR === 'wall' || kR === 'door', cornerL: kL === 'wall' || kL === 'door', used: false });
+        slots.push({ xf, cx: x, cz: z, dir: d, hazard, deep: doors === 0 && room.type !== 'corridor', cornerR: kR === 'wall' || kR === 'door', cornerL: kL === 'wall' || kL === 'door', used: false });
       }
     }
     // Слоты и клетки — в устойчивом порядке, свой ГСЧ у каждого помещения: правка одной комнаты не сдвигает остальные.
@@ -210,8 +285,16 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
         const i = Math.abs(x - st.cx) + Math.abs(z - st.cz);
         y -= ((i - 0.5) / STAIR_CELLS) * TIER_DROP;
       }
+      // У провала узел стоит на карнизе, а не над дырой: по нему ходит и тест маршрута, и рой.
+      let ox = 0;
+      let oz = 0;
+      if (pitAt.has(nk(room.tier, x, z))) {
+        const alongX = gridAt(room.tier, x + 1, z)?.id === room.id && gridAt(room.tier, x - 1, z)?.id === room.id;
+        if (alongX) oz = PIT_LEDGE;
+        else ox = PIT_LEDGE;
+      }
       nodeAt.set(nk(room.tier, x, z), nav.length);
-      nav.push({ id: nav.length, tier: room.tier, cx: x, cz: z, x: cellToWorld(x), y, z: cellToWorld(z), room: room.id, links: [] });
+      nav.push({ id: nav.length, tier: room.tier, cx: x, cz: z, x: cellToWorld(x) + ox, y, z: cellToWorld(z) + oz, room: room.id, links: [] });
     }
   }
   const link = (a: number | undefined, b: number | undefined): void => {
@@ -240,7 +323,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
   const ent = layout.rooms[layout.entranceRoom]!;
   const [ex, ez] = ent.cells[0]!;
   const out: LevelChunk[] = [];
-  for (const c of chunks.values()) if (c.mb.triangleCount > 0) out.push({ mesh: c.mb.build(), tierMin: c.tierMin, tierMax: c.tierMax });
+  for (const c of chunks.values()) if (c.mb.triangleCount > 0) out.push({ mesh: c.mb.build(), tierMin: c.tierMin, tierMax: c.tierMax, ...(c.hidden ? { hidden: c.hidden } : {}) });
   const stairs: StairLink[] = layout.stairs.map((s) => ({
     upperTier: s.upperTier,
     top: [cellToWorld(s.cx), tierFloor(s.upperTier), cellToWorld(s.cz)],
@@ -255,6 +338,8 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     exit: [cellToWorld(ex), 0, cellToWorld(ez)],
     spots,
     landmarks,
+    zones,
+    collapses,
     nav,
     layout,
   };

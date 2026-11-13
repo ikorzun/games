@@ -7,7 +7,7 @@
  *   npm run smoke:matrix                                             # + раскладка по матрице размеров, скриншоты в e2e/out/
  *   npm run smoke -- --url https://…                                 # опубликованная ссылка
  *
- * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --only play,gen,touch,bridge,matrix.
+ * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --only play,gen,sortie,touch,bridge,matrix.
  * Симуляция в тестах заморожена и шагается через window.__vz: проверяется логика и вёрстка, а не
  * частота кадров (SwiftShader даёт 5–10 к/с). Качество задаётся параметром адреса, иначе по строке
  * видеокарты выбралось бы «низкое» и тень осталась бы непроверенной.
@@ -278,6 +278,138 @@ async function scenarioGen(browser, baseUrl) {
   await context.close();
 }
 
+/**
+ * Выполнить цель вылазки: встать перед ней и взять либо снять. Рядом с целью может лежать другая
+ * вещь — она берётся первой, поэтому «забрать» повторяется, пока цель не закрыта.
+ */
+async function doGoal(page, index, goal) {
+  let st;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await vz(page, (n) => window.__vz.gotoGoal(n), index);
+    await vz(page, () => window.__vz.step(20));
+    st = goal.type === 'take' ? await vz(page, () => window.__vz.step(3, { actionPressed: true, action: true })) : await vz(page, () => window.__vz.step(110, { action: true }));
+    if (st.sortie.done.includes(goal.id)) break;
+  }
+  return st;
+}
+
+async function scenarioSortie(browser, baseUrl) {
+  section('Вылазка: задание, цели, батарейка, продолжение после перезагрузки, выход и отчёт, гибель');
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&rank=3');
+  let st = await state(page);
+  const lines = await page.$$eval('.vz-overlay__line--todo', (els) => els.map((e) => e.textContent));
+  check('карточка задания: объект с номером и три цели', st.screen === 'briefing' && /Убежище № \d{3}/.test((await page.textContent('.vz-overlay__sub')) ?? '') && lines.length === 3, `экран ${st.screen}, целей ${lines.length}`);
+  const seed1 = st.seed;
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  st = await vz(page, () => window.__vz.step(5));
+  check('вылазка началась, счётчик вылазок вырос', st.screen === 'play' && st.profile.sorties === 1 && st.sortie.outcome === null);
+  check('список целей виден в начале вылазки', await page.evaluate(() => document.querySelector('.vz-hud__goals').classList.contains('is-on') && document.querySelectorAll('.vz-hud__goal').length === 3));
+
+  // Первая цель: подойти и выполнить.
+  const goals = await vz(page, () => window.__vz.goals());
+  const first = goals[0];
+  await vz(page, () => window.__vz.gotoGoal(0));
+  st = await vz(page, () => window.__vz.step(20));
+  check(`цель «${first.type}» под рукой: подсказка действия и рамка видны`, st.sortie.target === (first.type === 'take' ? 'item' : 'shoot') && (await page.isVisible('.vz-hud__act')) && (await page.isVisible('.vz-hud__mark')), `под рукой: ${st.sortie.target}`);
+  st = await doGoal(page, 0, first);
+  check('первая цель выполнена, на экране сообщение', st.sortie.done.includes(first.id) && (await page.evaluate(() => document.querySelector('.vz-hud__toast').classList.contains('is-on'))), JSON.stringify(st.sortie.done));
+  check('в списке целей она зачёркнута', (await page.$$eval('.vz-hud__goal.is-done', (els) => els.length)) === 1);
+
+  // Батарейка.
+  let items = await vz(page, () => window.__vz.items());
+  const sparesBefore = st.sortie.spares;
+  const bat = items.find((i) => i.type === 'battery' && !i.taken);
+  for (let attempt = 0; attempt < 4 && !(await state(page)).sortie.taken.includes(bat.id); attempt++) {
+    await vz(page, (id) => window.__vz.gotoItem(id), bat.id);
+    await vz(page, () => window.__vz.step(10));
+    await vz(page, () => window.__vz.step(3, { actionPressed: true, action: true }));
+  }
+  st = await state(page);
+  check('батарейка подобрана: запасная в счётчике', st.sortie.taken.includes(bat.id) && st.sortie.spares > sparesBefore && (await page.textContent('.vz-hud__bat-spare')) === `+${st.sortie.spares}`, `запасных ${st.sortie.spares}`);
+  items = await vz(page, () => window.__vz.items());
+  const sparesSaved = st.sortie.spares;
+  // Настоящая клавиша E берёт предмет.
+  const find = items.find((i) => i.type === 'find' && !i.taken && !goals.some((g) => g.type === 'take' && g.pos[0] === i.pos[0] && g.pos[2] === i.pos[2]));
+  for (let attempt = 0; attempt < 4 && !(await state(page)).sortie.taken.includes(find.id); attempt++) {
+    await vz(page, (id) => window.__vz.gotoItem(id), find.id);
+    await vz(page, () => window.__vz.step(10));
+    await page.keyboard.down('KeyE');
+    await vz(page, () => window.__vz.tick(4));
+    await page.keyboard.up('KeyE');
+    await vz(page, () => window.__vz.tick(2));
+  }
+  st = await state(page);
+  check('клавиша E подбирает находку', st.sortie.taken.includes(find.id) && st.sortie.finds.includes(find.find), `находки: ${st.sortie.finds.join(', ')}`);
+
+  // Перезагрузка: вылазку можно продолжить.
+  await sleep(300);
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
+  st = await state(page);
+  check('после перезагрузки тот же объект, предлагается продолжить', st.seed === seed1 && (await page.textContent('.vz-overlay__prompt'))?.includes('продолжить') === true && (await page.$$eval('.vz-overlay__line--done', (els) => els.length)) === 1, `сид ${st.seed} вместо ${seed1}`);
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  st = await vz(page, () => window.__vz.step(5));
+  check('прогресс восстановлен: цель, батарейка, находка; вылазка не посчитана второй раз', st.sortie.done.includes(first.id) && st.sortie.spares === sparesSaved && st.sortie.finds.includes(find.find) && st.profile.sorties === 1, JSON.stringify({ done: st.sortie.done, spares: st.sortie.spares, sorties: st.profile.sorties }));
+
+  // Остальные цели и выход.
+  for (let i = 1; i < 3; i++) {
+    const g = goals[i];
+    st = await doGoal(page, i, g);
+    check(`цель ${i + 1} («${g.type}», ярус ${g.tier + 1}) выполнена`, st.sortie.done.includes(g.id), `под рукой: ${st.sortie.target}, удержание ${st.sortie.hold.toFixed(2)}`);
+  }
+  check('спуск на третий ярус отмечен как глубина вылазки', st.sortie.maxTier === 2);
+  await vz(page, () => window.__vz.gotoExit());
+  st = await vz(page, () => window.__vz.step(10));
+  check('у лестницы предлагается подняться', st.sortie.target === 'exit' && (await page.textContent('.vz-hud__act-text'))?.includes('подняться') === true);
+  st = await vz(page, () => window.__vz.step(80, { action: true }));
+  check('удержание у лестницы завершает вылазку', st.sortie.outcome === 'escaped' && st.screen === 'ending');
+  st = await vz(page, () => window.__vz.step(120));
+  const title = await page.textContent('.vz-overlay__title');
+  check('отчёт: вылазка завершена, находки вынесены и попали в архив', st.screen === 'report' && st.overlay === 'report' && title === 'ВЫЛАЗКА ЗАВЕРШЕНА' && st.profile.successes === 1 && st.profile.archive.includes(find.find), `${title}; архив: ${st.profile.archive.join(', ')}`);
+  check('в отчёте три выполненные цели', (await page.$$eval('.vz-overlay__line--done', (els) => els.length)) === 3);
+  const bad = await page.evaluate(layoutProbe);
+  check('отчёт помещается на экране', bad.length === 0, bad.join('; '));
+
+  // Следующий объект.
+  await vz(page, () => window.__vz.freeze(false));
+  await sleep(1000);
+  await page.click('.vz-overlay');
+  await page.waitForFunction(() => window.__vz.state().screen === 'briefing', null, { timeout: 30000 }).catch(() => undefined);
+  st = await state(page);
+  check('после отчёта — новый объект', st.screen === 'briefing' && st.seed !== seed1 && st.sortie.done.length === 0, `сид ${st.seed}`);
+  check('в карточке задания виден счёт архива', (await page.textContent('.vz-overlay__body'))?.includes('В архиве') === true);
+
+  // Гибель в провале: находки не выносятся.
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  const archiveBefore = (await state(page)).profile.archive.length;
+  const hz = await vz(page, () => window.__vz.hazards());
+  const pit = hz.zones.find((z) => z.kind === 'pit');
+  check('на объекте есть провалы, вода, газ и обвал', !!pit && hz.zones.some((z) => z.kind === 'water') && hz.zones.some((z) => z.kind === 'gas') && hz.collapses.length > 0, JSON.stringify(hz.zones.map((z) => z.kind)));
+  const water = hz.zones.find((z) => z.kind === 'water');
+  await vz(page, (c) => window.__vz.teleport(c[0], c[1] - 1, c[2]), water.center);
+  st = await vz(page, () => window.__vz.step(30));
+  check('в воде игрок «в воде» и идёт медленнее', st.sortie.inWater === true);
+  const gas = hz.zones.find((z) => z.kind === 'gas');
+  await vz(page, (c) => window.__vz.teleport(c[0], c[1] - 2.7, c[2]), gas.center);
+  st = await vz(page, () => window.__vz.step(400));
+  check('в газу здоровье падает и растёт паника', st.sortie.inGas === true && st.sortie.health < 85 && st.sortie.panic > 0.3, `здоровье ${st.sortie.health.toFixed(0)}, паника ${st.sortie.panic.toFixed(2)}`);
+  await vz(page, (c) => window.__vz.teleport(c[0], c[1] + 0.8, c[2]), pit.center);
+  st = await vz(page, () => window.__vz.step(60));
+  check('шаг в провал обрывает запись', st.sortie.outcome === 'fell');
+  st = await vz(page, () => window.__vz.step(120));
+  check('отчёт: запись прервана, архив не пополнился', st.overlay === 'report' && (await page.textContent('.vz-overlay__title')) === 'ЗАПИСЬ ПРЕРВАНА' && st.profile.archive.length === archiveBefore && st.profile.successes === 1);
+
+  check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0, (await vz(page, () => window.__vz.missingKeys())).join(', '));
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  await context.close();
+}
+
 /** Синтетический палец: события указателя на элементе под точкой. */
 const finger = (page, type, id, x, y) =>
   page.evaluate(
@@ -304,7 +436,7 @@ async function scenarioTouch(browser, baseUrl) {
     st = await state(page);
     check(`${name}: касание запускает игру`, st.paused === false);
     await vz(page, () => window.__vz.freeze(true));
-    check(`${name}: кнопки фонаря и паузы видны и достаточно велики`, await page.evaluate(() => [...document.querySelectorAll('.vz-touch__btn')].every((b) => b.getBoundingClientRect().width >= 44 && b.getBoundingClientRect().height >= 44)));
+    check(`${name}: кнопки фонаря и паузы видны и достаточно велики`, await page.evaluate(() => [...document.querySelectorAll('.vz-touch__btn')].filter((b) => !b.hidden).every((b) => b.getBoundingClientRect().width >= 44 && b.getBoundingClientRect().height >= 44)));
 
     // Стик слева: палец вверх — вперёд.
     const sx = width * 0.2;
@@ -373,6 +505,54 @@ async function scenarioTouch(browser, baseUrl) {
   }
 }
 
+async function scenarioTouchSortie(browser, baseUrl) {
+  section('Телефон в вылазке: кнопка действия, список целей, раскладка');
+  for (const [name, width, height] of [
+    ['ландшафт 915×412', 915, 412],
+    ['портрет 390×844', 390, 844],
+  ]) {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&rank=2', { viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    let bad = await page.evaluate(layoutProbe);
+    check(`${name}: карточка задания помещается на экране`, bad.length === 0 && (await page.$$eval('.vz-overlay__line--todo', (els) => els.length)) === 3, bad.join('; '));
+    await page.tap('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    let st = await vz(page, () => window.__vz.step(5));
+    check(`${name}: кнопки действия нет, пока брать нечего`, await page.evaluate(() => document.querySelector('.vz-touch__btn--act').hidden === true));
+    const items = await vz(page, () => window.__vz.items());
+    const bat = items.find((i) => i.type === 'battery');
+    await vz(page, (id) => window.__vz.gotoItem(id), bat.id);
+    st = await vz(page, () => window.__vz.step(10));
+    const rect = await page.evaluate(() => {
+      const b = document.querySelector('.vz-touch__btn--act');
+      const r = b.getBoundingClientRect();
+      return b.hidden ? null : [r.left + r.width / 2, r.top + r.height / 2, r.width];
+    });
+    check(`${name}: рядом с предметом появляется кнопка действия`, st.sortie.target === 'item' && rect !== null && rect[2] >= 44, `под рукой: ${st.sortie.target}`);
+    bad = await page.evaluate(layoutProbe);
+    check(`${name}: цели, заряд, подсказка действия и кнопки не наезжают друг на друга`, bad.length === 0, bad.join('; '));
+    if (wantShots) {
+      mkdirSync(OUT, { recursive: true });
+      await page.screenshot({ path: join(OUT, `touch_sortie_${width}x${height}.png`) });
+    }
+    if (rect) {
+      const before = st.sortie.taken.length;
+      await finger(page, 'pointerdown', 7, rect[0], rect[1]);
+      st = await vz(page, () => window.__vz.tick(3));
+      await finger(page, 'pointerup', 7, rect[0], rect[1]);
+      check(`${name}: касание кнопки действия подбирает предмет`, st.sortie.taken.length === before + 1, `взято ${st.sortie.taken.length}`);
+    }
+    // Кнопка «задание» показывает список целей.
+    await vz(page, () => window.__vz.step(600));
+    const hiddenGoals = await page.evaluate(() => !document.querySelector('.vz-hud__goals').classList.contains('is-on'));
+    await page.tap('.vz-touch__btn--goals');
+    await vz(page, () => window.__vz.tick(2));
+    check(`${name}: список целей прячется сам и открывается кнопкой`, hiddenGoals && (await page.evaluate(() => document.querySelector('.vz-hud__goals').classList.contains('is-on'))));
+    check(`${name}: нет ошибок в консоли`, log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    await context.close();
+  }
+}
+
 /** Выход за экран, обрезанный текст и прокрутка страницы. */
 const layoutProbe = () => {
   const vw = innerWidth;
@@ -404,6 +584,19 @@ const layoutProbe = () => {
   if (overlap(tl, pause) || overlap(tr, pause)) bad.push('overlap надписи и кнопка паузы');
   if (overlap(rect('.vz-hud__prompt'), rect('.vz-touch__btn--light'))) bad.push('overlap подсказка тряски и кнопка фонаря');
   if (overlap(rect('.vz-hud__hint.is-on'), rect('.vz-touch__btn--light'))) bad.push('overlap подсказка и кнопка фонаря');
+  const goals = rect('.vz-hud__goals.is-on');
+  const act = rect('.vz-hud__act.is-on');
+  const bat = rect('.vz-hud__bat.is-on');
+  const actBtn = document.querySelector('.vz-touch__btn--act:not([hidden])') ? rect('.vz-touch__btn--act') : null;
+  if (overlap(goals, pause) || overlap(goals, rect('.vz-touch__btn--goals'))) bad.push('overlap цели и кнопки слева');
+  if (overlap(goals, tr) || overlap(goals, bat)) bad.push('overlap цели и время или заряд');
+  if (overlap(bat, tr) || overlap(bat, tl)) bad.push('overlap заряд и надписи записи');
+  if (overlap(act, actBtn) || overlap(act, rect('.vz-touch__btn--light'))) bad.push('overlap подсказка действия и кнопки справа');
+  if (overlap(act, goals)) bad.push('overlap подсказка действия и цели');
+  const hint = document.querySelector('.vz-hud__hint.is-on');
+  if (hint && Number(getComputedStyle(hint).opacity) > 0.05 && (overlap(act, rect('.vz-hud__hint.is-on')) || overlap(rect('.vz-hud__prompt'), rect('.vz-hud__hint.is-on')))) bad.push('overlap подсказка и подсказка действия');
+  const toast = rect('.vz-hud__toast.is-on');
+  if (overlap(toast, goals) || overlap(toast, act)) bad.push('overlap сообщение и цели или действие');
   const de = document.documentElement;
   if (de.scrollWidth > de.clientWidth || de.scrollHeight > de.clientHeight) bad.push(`page-scroll ${de.scrollWidth}x${de.scrollHeight} в ${de.clientWidth}x${de.clientHeight}`);
   return bad.slice(0, 6);
@@ -467,7 +660,7 @@ async function scenarioBridge(browser, baseUrl) {
       sdk.push({ text, vals });
     });
   };
-  const { page, context, log } = await openPage(browser, baseUrl, '?debug=1&q=low&fail=0&level=test', {}, onConsole);
+  const { page, context, log } = await openPage(browser, baseUrl, '?debug=1&q=low&fail=0&rank=1', {}, onConsole);
   const hasBridge = await page.evaluate(() => !!window.bridge);
   if (!hasBridge) {
     console.log('  (window.bridge нет — раздел пропущен)');
@@ -483,12 +676,17 @@ async function scenarioBridge(browser, baseUrl) {
   await queue;
   check('Bridge инициализирован до старта игры', await page.evaluate(() => window.bridge.isInitialized === true));
   check('игра работает через адаптер playgama', (await state(page)).platform === 'playgama');
+  const gets = sdk.filter((c) => /\[storage\] get\(\)$/.test(c.text));
+  check('хранилище читается одним вызовом с обоими ключами', gets.length === 1 && JSON.stringify(gets[0].vals[0]) === JSON.stringify(['profile', 'run']), JSON.stringify(gets.map((g) => g.vals[0])));
   check('game_ready отправлен ровно один раз', messages('game_ready').length === 1, `отправлено ${messages('game_ready').length}`);
   check('до нажатия «начать» level_started не уходит', messages('level_started').length === 0);
   await page.click('.vz-overlay');
   await sleep(600);
   await queue;
   check('level_started отправлен при старте', messages('level_started').length === 1 && !!messages('level_started')[0].vals[1]?.level, JSON.stringify(messages('level_started').map((m) => m.vals[1])));
+  const firstGet = sdk.findIndex((c) => /\[storage\] get\(\)$/.test(c.text));
+  const sets = sdk.slice(firstGet + 1).filter((c) => /\[storage\] set\(\)$/.test(c.text));
+  check('запись хранилища пакетная: profile и run одним вызовом, и только по событию', sets.length >= 1 && sets.length <= 2 && sets.every((c) => JSON.stringify(c.vals[0]) === JSON.stringify(['profile', 'run'])), `записей ${sets.length}: ${JSON.stringify(sets.map((c) => c.vals[0]))}`);
   check('localStorage напрямую не используется (ключи vylazka:*)', !(await page.evaluate(() => Object.keys(localStorage).some((k) => k.startsWith('vylazka:')))));
   // Пауза приходит из SDK при уходе вкладки в фон.
   const hide = (hidden) =>
@@ -524,7 +722,9 @@ console.log(`Смоук: ${remoteUrl ?? distDir} → ${server.url}`);
 try {
   if (wants('play')) await scenarioPlay(browser, server.url);
   if (wants('gen')) await scenarioGen(browser, server.url);
+  if (wants('sortie')) await scenarioSortie(browser, server.url);
   if (wants('touch')) await scenarioTouch(browser, server.url);
+  if (wants('touch')) await scenarioTouchSortie(browser, server.url);
   if (wants('bridge')) await scenarioBridge(browser, server.url);
   if (wantMatrix && wants('matrix')) await scenarioMatrix(browser, server.url);
 } catch (e) {

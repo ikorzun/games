@@ -215,6 +215,7 @@ uniform float uBarrel;
 uniform float uVignette;
 uniform float uGlitch;
 uniform float uTunnel;
+uniform float uGas;
 uniform float uFade;
 uniform vec3 uBeam;      // xy — где на экране центр луча, z — сила свечения пыльного воздуха
 
@@ -278,6 +279,9 @@ void main() {
   bc.x *= uAspect;
   vec2 bd = c - bc;
   col += vec3(1.0, 0.95, 0.85) * uBeam.z * exp(-dot(bd, bd) * 3.2);
+
+  // Газ: жёлто-зелёная муть, в которой свет фонаря расплывается.
+  col = mix(col, col * vec3(1.05, 1.0, 0.5) + vec3(0.012, 0.013, 0.004) + vec3(1.0, 1.0, 0.6) * uBeam.z * 1.5 * exp(-dot(bd, bd) * 0.9), uGas);
 
   // Усиление сенсора и его шум: в темноте камера «тянет» картинку, зерно растёт.
   col *= uGain;

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { generateLayout, TIER_DROP } from '../src/gen/layout';
+import { FINDS, populate } from '../src/gen/populate';
 import { createBody, DEFAULT_CONTROLLER, stepPlayer } from '../src/player/controller';
 import type { PlayerBody } from '../src/player/controller';
 import type { ColliderSet } from '../src/world/colliders';
 import type { BuiltLevel, NavNode } from '../src/world/level';
-import { buildLevel } from '../src/world/level_build';
+import { buildItemsMesh } from '../src/world/items';
+import { buildLevel, PIT_HOLE } from '../src/world/level_build';
 import { MAT_COUNT } from '../src/world/materials';
 
 const DT = 1 / 60;
@@ -153,5 +155,83 @@ describe('сборка уровня из плана', () => {
       expect(inside, `находка вне помещения ${room.type}`).toBe(true);
     }
     for (let t = 0; t < 3; t++) expect(level.landmarks.filter((l) => l.tier === t && l.id !== 'exit').length, `ярус ${t}`).toBeGreaterThanOrEqual(2);
+  });
+
+  it('опасности на месте: зоны воды, газа и провалов; у провала есть карниз, а в дыре — гибель', () => {
+    let pits = 0;
+    for (const seed of [5, 20041113, 31337, 808, 4242]) {
+      const level = buildLevel(generateLayout(seed, 3));
+      const hz = level.layout!.hazards;
+      expect(level.zones.filter((z) => z.kind === 'pit').length).toBe(hz.pits.length);
+      expect(level.zones.filter((z) => z.kind === 'water').length).toBe(hz.water.length);
+      expect(level.zones.some((z) => z.kind === 'gas')).toBe(hz.gasRooms.length > 0);
+      expect(level.collapses.length).toBe(hz.collapses.length);
+      for (const c of level.collapses) {
+        expect(c.boxes.length).toBeGreaterThan(0);
+        expect(level.chunks.filter((ch) => ch.hidden === c.id).length).toBe(1);
+      }
+      for (const z of level.zones.filter((q) => q.kind === 'pit')) {
+        pits += 1;
+        const cx = (z.minX + z.maxX) / 2;
+        const cz = (z.minZ + z.maxZ) / 2;
+        const floor = -z.tier * TIER_DROP;
+        // Шаг в дыру — падение ниже пола, в зону гибели.
+        const b = createBody(cx, floor, cz);
+        b.onGround = false;
+        for (let i = 0; i < 120; i++) stepPlayer(b, 0, 0, 0, DT, level.colliders, DEFAULT_CONTROLLER);
+        expect(b.y).toBeLessThan(z.maxY);
+        expect(b.y).toBeGreaterThan(z.minY);
+        // Дыра уже коридора: по краю остаётся опора.
+        expect(PIT_HOLE).toBeLessThan(2.7 - 1.2);
+      }
+    }
+    expect(pits).toBeGreaterThan(5);
+  });
+
+  it('обвал перекрывает клетку: до обрушения по ней ходят, после — нет, а обход остаётся', () => {
+    const level = buildLevel(generateLayout(20041113, 3));
+    const c = level.collapses[0]!;
+    const node = level.nav.find((n) => Math.abs(n.x - c.center[0]) < 0.1 && Math.abs(n.z - c.center[2]) < 0.1 && n.tier === c.tier)!;
+    const [a, bNode] = node.links.map((i) => level.nav[i]!);
+    const walk = (): boolean => {
+      const b = createBody(a!.x, a!.y, a!.z);
+      return walkPath(level, [a!.id, node.id, bNode!.id], b, level.colliders).ok;
+    };
+    expect(walk()).toBe(true);
+    for (const box of c.boxes) level.colliders.add(box);
+    expect(walk()).toBe(false);
+    // В обход: путь по графу без засыпанного узла существует.
+    const without = level.nav.map((n) => ({ ...n, links: n.links.filter((l) => l !== node.id) }));
+    expect(path(without, a!.id, bNode!.id)).not.toBeNull();
+  });
+
+  it('наполнение: три цели по возрастанию глубины, находки и батарейки на каждом ярусе, без повторов', () => {
+    for (const rank of [1, 2, 3] as const) {
+      for (const seed of [1, 2, 3, 20041113, 999]) {
+        const level = buildLevel(generateLayout(seed, rank));
+        const pop = populate(level, seed);
+        expect(populate(level, seed)).toEqual(pop);
+        expect(pop.objectives.length, `сид ${seed}, ранг ${rank}`).toBe(3);
+        const tiers = pop.objectives.map((o) => o.tier);
+        expect([...tiers].sort((x, y) => x - y)).toEqual(tiers);
+        expect(Math.max(...tiers)).toBe(level.layout!.tierCount - 1);
+        for (const o of pop.objectives) {
+          if (o.type === 'take') expect(pop.items[o.item!]!.type).toBe('find');
+          else expect(o.landmark!.id).not.toBe('exit');
+        }
+        const spotsUsed = new Set(pop.items.map((i) => `${i.x},${i.y},${i.z}`));
+        expect(spotsUsed.size).toBe(pop.items.length);
+        const findIds = pop.items.filter((i) => i.type === 'find').map((i) => i.find!);
+        expect(new Set(findIds).size).toBe(findIds.length);
+        for (const f of findIds) expect(FINDS.some((d) => d.id === f)).toBe(true);
+        for (let t = 0; t < level.layout!.tierCount; t++) {
+          expect(pop.items.filter((i) => i.type === 'battery' && i.tier === t).length, `батарейки, ярус ${t}`).toBe(2);
+          expect(pop.items.filter((i) => i.type === 'find' && i.tier === t).length, `находки, ярус ${t}`).toBeGreaterThanOrEqual(2);
+          const mesh = buildItemsMesh(pop.items, t, new Set());
+          expect(mesh!.index.length).toBeGreaterThan(0);
+          expect(buildItemsMesh(pop.items, t, new Set(pop.items.map((i) => i.id)))).toBeNull();
+        }
+      }
+    }
   });
 });

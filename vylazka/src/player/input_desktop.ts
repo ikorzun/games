@@ -16,6 +16,8 @@ export class DesktopInput implements InputSource {
   private lookPitch = 0;
   private light = false;
   private pause = false;
+  private actionPressed = false;
+  private swap = false;
   private readonly off: Array<() => void> = [];
   /** Захват мыши недоступен (песочница iframe): ведём луч мышью с зажатой кнопкой. */
   private dragLook = false;
@@ -40,7 +42,9 @@ export class DesktopInput implements InputSource {
         this.shake.pushImpulse(0.3);
       }
       if (e.code === 'KeyP') this.pause = true;
-      if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
+      if (e.code === 'KeyE') this.actionPressed = true;
+      if (e.code === 'KeyR') this.swap = true;
+      if (e.code.startsWith('Arrow') || e.code === 'Space' || e.code === 'Tab') e.preventDefault();
     });
     on(window, 'keyup', (e) => this.keys.delete(e.code));
     on(window, 'blur', () => this.release());
@@ -97,6 +101,9 @@ export class DesktopInput implements InputSource {
     f.moveZ = z / len;
     f.run = k.has('ShiftLeft') || k.has('ShiftRight');
     f.action = k.has('KeyE');
+    f.actionPressed = this.actionPressed;
+    f.swap = this.swap;
+    f.showGoals = k.has('Tab');
     f.lookYaw = this.lookYaw;
     f.lookPitch = this.lookPitch;
     f.light = this.light;
@@ -105,6 +112,8 @@ export class DesktopInput implements InputSource {
     this.lookPitch = 0;
     this.light = false;
     this.pause = false;
+    this.actionPressed = false;
+    this.swap = false;
     return f;
   }
 
@@ -113,6 +122,8 @@ export class DesktopInput implements InputSource {
     this.lookYaw = 0;
     this.lookPitch = 0;
     this.light = false;
+    this.actionPressed = false;
+    this.swap = false;
     this.dragging = false;
   }
 

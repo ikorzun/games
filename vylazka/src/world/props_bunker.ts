@@ -435,3 +435,56 @@ export function plainDoor(xf: Xf, tint: Vec3 = [1, 1, 1]): void {
   xf.box([-hw - 0.005, 1.1, t + 0.12], [-hw + 0.004, 1.85, t + 0.93], MAT.wood, { tint: dim(tint, 0.85) });
   xf.cyl([-hw - 0.005, 1.02, t + 0.95], 'x', 0.06, 0.018, MAT.brass, { segments: 6 });
 }
+
+/** Знак «опасно, газ» на стене: жёлтый ромб с тёмной меткой. Начало — центр. */
+export function warningSign(xf: Xf): void {
+  xf.box([-0.16, -0.16, 0], [0.16, 0.16, 0.006], MAT.brass, { tint: [1.5, 1.35, 0.5] });
+  xf.box([-0.16, -0.16, 0], [0.16, -0.13, 0.009], MAT.rubber, { tint: DARK });
+  xf.box([-0.16, 0.13, 0], [0.16, 0.16, 0.009], MAT.rubber, { tint: DARK });
+  xf.box([-0.02, -0.04, 0.006], [0.02, 0.1, 0.01], MAT.rubber, { tint: DARK });
+  xf.box([-0.02, -0.1, 0.006], [0.02, -0.065, 0.01], MAT.rubber, { tint: DARK });
+}
+
+/**
+ * Провал в полу клетки: пол кольцом вокруг дыры hole × hole, стенки шахты, чёрная вода внизу,
+ * обломанные края и арматура. Начало — центр клетки на уровне пола; cell — размер клетки.
+ */
+export function pit(xf: Xf, cell: number, hole: number, depth: number, floorMat: number, tint: Vec3): void {
+  const c = cell / 2;
+  const h = hole / 2;
+  // Четыре полосы пола вокруг дыры — они же опора для игрока.
+  for (const [x0, z0, x1, z1] of [
+    [-c, -c, c, -h],
+    [-c, h, c, c],
+    [-c, -h, -h, h],
+    [h, -h, c, h],
+  ] as const) {
+    xf.solid([x0, -depth - 0.3, z0], [x1, 0, z1], floorMat, { tint, skip: ['ny'] });
+  }
+  // Чёрная вода на дне.
+  xf.solid([-h, -depth - 0.3, -h], [h, -depth, h], MAT.wetConcrete, { tint: [0.25, 0.28, 0.3], skip: ['ny', 'px', 'nx', 'pz', 'nz'] });
+  // Обломанные края плиты и торчащая арматура.
+  const rnd = lcg(Math.round(xf.ox * 31 + xf.oz * 17));
+  for (let i = 0; i < 14; i++) {
+    const side = i % 4;
+    const t = (rnd() - 0.5) * hole;
+    const w = 0.12 + rnd() * 0.25;
+    const d = 0.05 + rnd() * 0.16;
+    const x = side === 0 ? -h : side === 1 ? h : t;
+    const z = side === 2 ? -h : side === 3 ? h : t;
+    const g = 0.5 + rnd() * 0.3;
+    xf.box([x - (side < 2 ? d : w) / 2, -0.12 - rnd() * 0.1, z - (side < 2 ? w : d) / 2], [x + (side < 2 ? d : w) / 2, 0.012, z + (side < 2 ? w : d) / 2], MAT.concrete, { bevel: 0.012, tint: [g, g, g] });
+    if (i % 2 === 0) {
+      const inward = side === 0 ? 1 : side === 1 ? -1 : 0;
+      const inwardZ = side === 2 ? 1 : side === 3 ? -1 : 0;
+      if (inward !== 0) xf.cyl([inward > 0 ? x : x - 0.25 - rnd() * 0.2, -0.1, z], 'x', 0.25 + rnd() * 0.2, 0.007, MAT.rust, { segments: 4 });
+      else xf.cyl([x, -0.1, inwardZ > 0 ? z : z - 0.25 - rnd() * 0.2], 'z', 0.25 + rnd() * 0.2, 0.007, MAT.rust, { segments: 4 });
+    }
+  }
+}
+
+/** Гладь воды на затопленном участке: тонкая тёмная плёнка над полом клетки. Начало — центр клетки. */
+export function waterSheet(xf: Xf, cell: number): void {
+  const c = cell / 2;
+  xf.box([-c, 0.03, -c], [c, 0.045, c], MAT.wetConcrete, { tint: [0.42, 0.47, 0.5], skip: ['ny', 'px', 'nx', 'pz', 'nz'] });
+}

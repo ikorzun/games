@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three';
 import type { Vec3 } from '../core/types';
+import type { MeshData } from '../world/kit';
 import type { LevelChunk, StairLink } from '../world/level';
 import { MAT_COUNT, MAT_DEFS } from '../world/materials';
 import { bakeGrime } from './grime';
@@ -47,6 +48,8 @@ export interface FrameView {
   noise: number;
   glitch: number;
   tunnel: number;
+  /** 0..1: игрок в газу — жёлтая муть. */
+  gas: number;
   fade: number;
   time: number;
   frame: number;
@@ -93,6 +96,10 @@ export class GameRenderer {
   private dust: THREE.Points | null = null;
   private readonly dustMat: THREE.ShaderMaterial;
   private readonly chunks: THREE.Mesh[] = [];
+  /** Предметы по ярусам: по одной маленькой геометрии на ярус. */
+  private readonly items = new Map<number, THREE.Mesh>();
+  /** id скрытых чанков, которые уже показаны (обвалы после обрушения). */
+  private readonly revealed = new Set<string>();
   private readonly lightU: Record<string, THREE.IUniform>;
   private readonly tmpV = new THREE.Vector3();
   private readonly tmpM = new THREE.Matrix4();
@@ -194,6 +201,7 @@ export class GameRenderer {
         uGlitch: { value: 0 },
         uTunnel: { value: 0 },
         uFade: { value: 1 },
+        uGas: { value: 0 },
         uBeam: { value: new THREE.Vector3(0.5, 0.5, 0) },
       },
       depthTest: false,
@@ -294,23 +302,61 @@ export class GameRenderer {
       m.geometry.dispose();
     }
     this.chunks.length = 0;
+    this.revealed.clear();
+    for (const m of this.items.values()) {
+      this.scene.remove(m);
+      m.geometry.dispose();
+    }
+    this.items.clear();
     for (const chunk of chunks) {
-      const data = chunk.mesh;
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.BufferAttribute(data.position, 3));
-      g.setAttribute('normal', new THREE.BufferAttribute(data.normal, 3));
-      g.setAttribute('uv', new THREE.BufferAttribute(data.uv, 2));
-      g.setAttribute('aColor', new THREE.BufferAttribute(data.color, 4));
-      g.setAttribute('aMat', new THREE.BufferAttribute(data.mat, 1));
-      g.setIndex(new THREE.BufferAttribute(data.index, 1));
-      g.computeBoundingSphere();
-      const mesh = new THREE.Mesh(g, this.worldMat);
-      mesh.matrixAutoUpdate = false;
-      mesh.userData.tierMin = chunk.tierMin;
-      mesh.userData.tierMax = chunk.tierMax;
+      const mesh = this.makeMesh(chunk.mesh, chunk.tierMin, chunk.tierMax);
+      if (chunk.hidden) mesh.userData.hidden = chunk.hidden;
       this.chunks.push(mesh);
       this.scene.add(mesh);
     }
+  }
+
+  private makeMesh(data: MeshData, tierMin: number, tierMax: number): THREE.Mesh {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(data.position, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(data.normal, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(data.uv, 2));
+    g.setAttribute('aColor', new THREE.BufferAttribute(data.color, 4));
+    g.setAttribute('aMat', new THREE.BufferAttribute(data.mat, 1));
+    g.setIndex(new THREE.BufferAttribute(data.index, 1));
+    g.computeBoundingSphere();
+    const mesh = new THREE.Mesh(g, this.worldMat);
+    mesh.matrixAutoUpdate = false;
+    mesh.userData.tierMin = tierMin;
+    mesh.userData.tierMax = tierMax;
+    return mesh;
+  }
+
+  /** Заменить геометрию предметов яруса (null — на ярусе пусто). */
+  setItems(tier: number, data: MeshData | null): void {
+    const old = this.items.get(tier);
+    if (old) {
+      this.scene.remove(old);
+      old.geometry.dispose();
+      this.items.delete(tier);
+    }
+    if (!data) return;
+    const mesh = this.makeMesh(data, tier, tier);
+    // Предметы мелкие и разбросаны по ярусу: общую сферу не отсекаем по расстоянию.
+    mesh.userData.items = true;
+    this.items.set(tier, mesh);
+    this.scene.add(mesh);
+  }
+
+  /** Показать скрытый чанк (обвал обрушился). */
+  reveal(id: string): void {
+    this.revealed.add(id);
+  }
+
+  /** Точка мира на экране: x, y в долях кадра (0..1, y вниз); visible — перед камерой и в кадре. */
+  project(p: readonly [number, number, number]): { x: number; y: number; visible: boolean } {
+    const v = this.tmpV.set(p[0], p[1], p[2]).project(this.camera);
+    return { x: v.x * 0.5 + 0.5, y: 0.5 - v.y * 0.5, visible: v.z > -1 && v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1 };
   }
 
   /** Заранее собрать шейдеры, чтобы первый кадр не подвисал. */
@@ -346,8 +392,10 @@ export class GameRenderer {
     for (const m of this.chunks) {
       const sphere = m.geometry.boundingSphere;
       const far = sphere ? cam.position.distanceTo(sphere.center) - sphere.radius > this.cullDistance : false;
-      m.visible = !far && (m.userData.tierMax as number) >= lo && (m.userData.tierMin as number) <= hi;
+      const hidden = m.userData.hidden !== undefined && !this.revealed.has(m.userData.hidden as string);
+      m.visible = !far && !hidden && (m.userData.tierMax as number) >= lo && (m.userData.tierMin as number) <= hi;
     }
+    for (const [tier, m] of this.items) m.visible = tier >= lo && tier <= hi;
 
     // Фонарь в пространстве камеры.
     const lu = this.lightU;
@@ -407,6 +455,7 @@ export class GameRenderer {
     pu.uNoise!.value = v.noise;
     pu.uGlitch!.value = v.glitch;
     pu.uTunnel!.value = v.tunnel;
+    pu.uGas!.value = v.gas;
     pu.uFade!.value = v.fade;
     r.setRenderTarget(null);
     r.render(this.postScene, this.postCam);
