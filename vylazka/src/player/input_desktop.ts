@@ -9,6 +9,10 @@ import type { InputFrame, InputSource } from './input';
 import type { ShakeMeter } from './shake';
 
 const SENS = 0.0021;
+/** Движение мыши за одно событие больше этого (px) — выброс, а не рука: человек так не дёргает. */
+const SPIKE = 500;
+/** Сколько миллисекунд после захвата или потери мыши её движение не считается. */
+const LOCK_QUIET_MS = 120;
 
 export class DesktopInput implements InputSource {
   private readonly keys = new Set<string>();
@@ -22,6 +26,8 @@ export class DesktopInput implements InputSource {
   /** Захват мыши недоступен (песочница iframe): ведём луч мышью с зажатой кнопкой. */
   private dragLook = false;
   private dragging = false;
+  /** До этого момента (performance.now) движение мыши пропускается: только что сменился захват. */
+  private quietUntil = 0;
 
   constructor(
     private readonly target: HTMLElement,
@@ -52,6 +58,10 @@ export class DesktopInput implements InputSource {
       if (this.lifecycle.paused) return;
       const locked = document.pointerLockElement === this.target;
       if (!locked && !(this.dragLook && this.dragging)) return;
+      // Сразу после захвата мыши браузер может прислать «движение» на полэкрана (курсор переносится
+      // в центр); бывают и одиночные выбросы посреди игры. Ни то ни другое не должно дёргать взгляд.
+      if (performance.now() < this.quietUntil) return;
+      if (Math.abs(e.movementX) > SPIKE || Math.abs(e.movementY) > SPIKE) return;
       this.lookYaw -= e.movementX * SENS;
       this.lookPitch -= e.movementY * SENS;
       this.shake.pushMotion(e.movementX, e.movementY);
@@ -65,6 +75,7 @@ export class DesktopInput implements InputSource {
     });
     on(document, 'pointerlockchange', () => {
       const locked = document.pointerLockElement === this.target;
+      this.quietUntil = performance.now() + LOCK_QUIET_MS;
       // Захват потерян во время игры (Esc, переключение окна) — пауза.
       if (!locked && !this.dragLook) this.lifecycle.set('pointer', true);
     });

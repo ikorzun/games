@@ -44,7 +44,8 @@ function check(name, ok, details = '') {
     passed += 1;
     console.log(`  ok   ${name}`);
   } else {
-    failures.push(name);
+    // Подробности — и в итоговую сводку: по хвосту лога CI должно быть видно не только что упало, но и как.
+    failures.push(`${name}${details ? ` — ${details}` : ''}`);
     console.log(`  FAIL ${name}${details ? ` — ${details}` : ''}`);
   }
 }
@@ -833,6 +834,7 @@ async function scenarioAudio(browser, baseUrl) {
       return route.fulfill({ status: 200, contentType: 'audio/wav', body: wav });
     });
   const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113&audio=snd', {}, null, prepare);
+  const aim0 = (await state(page)).aim;
   // Набор грузится в фоне сразу после первого кадра, но звучать до нажатия браузер не даст.
   await page.waitForFunction(() => window.__vz.audio().loaded === window.__vz.audio().total, null, { timeout: 30000 }).catch(() => undefined);
   let au = await vz(page, () => window.__vz.audio());
@@ -849,12 +851,18 @@ async function scenarioAudio(browser, baseUrl) {
   au = await vz(page, () => window.__vz.audio());
   check('в вылазке идут гул убежища и дыхание, музыки нет', au.loops.includes('amb_bunker') && au.loops.includes('breath_calm') && !au.loops.includes('music_menu'), au.loops.join(', '));
 
-  // Шаги: идём отсчитанными шагами симуляции с явным вводом (частота кадров в тестовом браузере
-  // непредсказуема, а зажатую клавишу может сбросить потеря фокуса окна — клавиатуру проверяет другой
-  // сценарий). После каждой порции дожидаемся двух настоящих кадров: шаг озвучивается в кадре.
+  // Взгляд не должен поворачиваться сам: мышь после старта никто не трогал. (Сразу после захвата
+  // мыши браузер может прислать ложное «движение» — игра обязана его пропустить.)
   await vz(page, () => window.__vz.freeze(true));
-  const walkFrom = (await state(page)).pos;
-  let walked = await state(page);
+  const before = await state(page);
+  const locked = await page.evaluate(() => document.pointerLockElement !== null);
+  check('взгляд после старта не дёрнулся сам по себе', Math.abs(before.aim[0] - aim0[0]) < 0.02 && Math.abs(before.aim[1] - aim0[1]) < 0.02, `был ${aim0.map((v) => v.toFixed(3)).join(', ')}, стал ${before.aim.map((v) => v.toFixed(3)).join(', ')}; мышь захвачена: ${locked}`);
+
+  // Шаги: идём отсчитанными шагами симуляции с явным вводом (частота кадров в тестовом браузере
+  // непредсказуема, клавиатуру проверяет другой сценарий) и строго вперёд от люка — взгляд выставлен
+  // заново. После каждой порции дожидаемся двух настоящих кадров: шаг озвучивается в кадре.
+  await vz(page, ([p, a]) => window.__vz.teleport(p[0], p[1], p[2], a[0], a[1]), [before.pos, aim0]);
+  let walked = before;
   for (let i = 0; i < 8; i++) {
     walked = await vz(page, () => window.__vz.step(24, { moveZ: 1 }));
     await vz(page, () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(true)))));
@@ -863,7 +871,7 @@ async function scenarioAudio(browser, baseUrl) {
   check(
     'шаги по бетону звучат на ходу',
     (au.played.step_concrete ?? 0) >= 2,
-    `сыграно ${au.played.step_concrete ?? 0}, просили ${au.asked.step_concrete ?? 0}, пройдено ${Math.hypot(walked.pos[0] - walkFrom[0], walked.pos[2] - walkFrom[2]).toFixed(2)} м, звук ${au.state}, пауза: ${JSON.stringify(walked.pauseReasons)}`,
+    `сыграно ${au.played.step_concrete ?? 0}, просили ${au.asked.step_concrete ?? 0}, пройдено ${Math.hypot(walked.pos[0] - before.pos[0], walked.pos[2] - before.pos[2]).toFixed(2)} м от ${before.pos.map((v) => v.toFixed(2)).join(', ')} до ${walked.pos.map((v) => v.toFixed(2)).join(', ')}, звук ${au.state}, пауза: ${JSON.stringify(walked.pauseReasons)}`,
   );
 
   // Фонарь: щелчок выключателя, отказ, дребезг при тряске, оживление.
