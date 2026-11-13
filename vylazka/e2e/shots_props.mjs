@@ -33,23 +33,27 @@ page.on('console', (m) => {
 page.on('pageerror', (e) => console.log(`[pageerror] ${e.message}`));
 await page.goto(new URL(`?level=show&q=${quality}&fail=0&lang=ru${only ? `&props=${only}` : ''}`, server.resolvedUrls.local[0]).toString());
 await page.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 120000 });
-const names = await page.evaluate(() => {
+const items = await page.evaluate(() => {
   window.__vz.freeze(true);
   window.__vz.start();
   window.__vz.calm?.(true);
   return window.__vz.showcase();
 });
-console.log(`предметов на витрине: ${names.length}`);
+console.log(`предметов на витрине: ${items.length}`);
 await page.addStyleTag({ content: '.vz-hud { display: none !important; }' });
-for (let i = 0; i < names.length; i++) {
-  // Камера в двух метрах к югу и чуть сбоку от предмета, луч — в середину его высоты.
-  await page.evaluate(([x]) => {
+for (let i = 0; i < items.length; i++) {
+  const it = items[i];
+  // Камера в двух с лишним метрах к югу и чуть сбоку от предмета. Луч — в середину его высоты:
+  // на потолочное смотрим вверх, на высокое — прямо, на низкое — вниз.
+  const mid = it.mount === 'ceiling' ? 2.7 - it.h / 2 : it.mount === 'wall' ? it.y + it.h / 2 : it.h / 2;
+  const pitch = Math.atan2(mid - 1.42, 2.45);
+  await page.evaluate(([x, p]) => {
     const v = window.__vz;
-    v.teleport(x + 0.45, 0, 1.15, 0.17, -0.22);
+    v.teleport(x + 0.45, 0, 1.15, 0.17, p);
     v.step(40);
-  }, [i * STEP]);
-  await page.screenshot({ path: join(OUT, `${names[i]}.png`) });
-  console.log(`  ${names[i]}`);
+  }, [i * STEP, pitch]);
+  await page.screenshot({ path: join(OUT, `${it.name}.png`) });
+  console.log(`  ${it.name}`);
 }
 await browser.close();
 await server.close();

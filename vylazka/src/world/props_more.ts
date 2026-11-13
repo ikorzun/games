@@ -58,11 +58,17 @@ function vnorm(v: Vec3): Vec3 {
   return [v[0] / l, v[1] / l, v[2] / l];
 }
 
+/** Направление из координат предмета в мир: тот же поворот, что в Xf.pt, но без сдвига. */
+function turn(xf: Xf, n: Vec3): Vec3 {
+  if (xf.rot === 1) return [n[2], n[1], -n[0]];
+  if (xf.rot === 2) return [-n[0], n[1], -n[2]];
+  if (xf.rot === 3) return [-n[2], n[1], n[0]];
+  return n;
+}
+
 /** Тонкий лист по четырём точкам (в координатах предмета, по кругу), лицом в сторону вектора n. */
 function sheet(xf: Xf, a: Vec3, b: Vec3, c: Vec3, d: Vec3, n: Vec3, mat: number, tint: Vec3 = WHITE, ao: Ao = 1): void {
-  const o = xf.pt(0, 0, 0);
-  const f = xf.pt(n[0], n[1], n[2]);
-  xf.mb.quadFacing(xf.pt(a[0], a[1], a[2]), xf.pt(b[0], b[1], b[2]), xf.pt(c[0], c[1], c[2]), xf.pt(d[0], d[1], d[2]), [f[0] - o[0], f[1] - o[1], f[2] - o[2]], mat, tint, ao);
+  xf.mb.quadFacing(xf.pt(a[0], a[1], a[2]), xf.pt(b[0], b[1], b[2]), xf.pt(c[0], c[1], c[2]), xf.pt(d[0], d[1], d[2]), turn(xf, n), mat, tint, ao);
 }
 
 /**
@@ -78,17 +84,27 @@ function beam(xf: Xf, a: Vec3, b: Vec3, w: number, t: number, mat: number, tint:
   s = vnorm(vcross(n, d));
   const hw = w / 2;
   const ht = t / 2;
-  const at = (p: Vec3, i: number, j: number): Vec3 => [p[0] + s[0] * hw * i + n[0] * ht * j, p[1] + s[1] * hw * i + n[1] * ht * j, p[2] + s[2] * hw * i + n[2] * ht * j];
+  // Угол сечения: i — вдоль s, j — вдоль n; сразу в мировых координатах.
+  const at = (p: Vec3, i: number, j: number): Vec3 => xf.pt(p[0] + s[0] * hw * i + n[0] * ht * j, p[1] + s[1] * hw * i + n[1] * ht * j, p[2] + s[2] * hw * i + n[2] * ht * j);
+  const a00 = at(a, -1, -1);
+  const a01 = at(a, -1, 1);
+  const a10 = at(a, 1, -1);
+  const a11 = at(a, 1, 1);
+  const b00 = at(b, -1, -1);
+  const b01 = at(b, -1, 1);
+  const b10 = at(b, 1, -1);
+  const b11 = at(b, 1, 1);
   const aoB = opts.ao ?? 1;
   const aoA = opts.aoA ?? aoB;
-  const ao: Ao = [aoA, aoA, aoB, aoB];
-  sheet(xf, at(a, 1, -1), at(a, 1, 1), at(b, 1, 1), at(b, 1, -1), s, mat, tint, ao);
-  sheet(xf, at(a, -1, -1), at(a, -1, 1), at(b, -1, 1), at(b, -1, -1), vneg(s), mat, tint, ao);
-  sheet(xf, at(a, -1, 1), at(a, 1, 1), at(b, 1, 1), at(b, -1, 1), n, mat, tint, ao);
-  sheet(xf, at(a, -1, -1), at(a, 1, -1), at(b, 1, -1), at(b, -1, -1), vneg(n), mat, tint, ao);
+  // Тройка (d, s, n) правая, поворот размещения её не выворачивает — обход граней известен заранее.
+  const mb = xf.mb;
+  mb.quad(a10, a11, b11, b10, mat, tint, [aoA, aoA, aoB, aoB]);
+  mb.quad(a00, b00, b01, a01, mat, tint, [aoA, aoB, aoB, aoA]);
+  mb.quad(a01, b01, b11, a11, mat, tint, [aoA, aoB, aoB, aoA]);
+  mb.quad(a00, a10, b10, b00, mat, tint, [aoA, aoA, aoB, aoB]);
   if (opts.caps === false) return;
-  sheet(xf, at(a, -1, -1), at(a, 1, -1), at(a, 1, 1), at(a, -1, 1), vneg(d), mat, tint, aoA);
-  sheet(xf, at(b, -1, -1), at(b, 1, -1), at(b, 1, 1), at(b, -1, 1), d, mat, tint, aoB);
+  mb.quad(a00, a01, a11, a10, mat, tint, aoA);
+  mb.quad(b00, b10, b11, b01, mat, tint, aoB);
 }
 
 /** Оси плоскости, перпендикулярной оси axis: номера координат [вдоль оси, первая поперёк, вторая поперёк]. */

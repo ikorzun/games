@@ -23,6 +23,14 @@ export function showcaseNames(only: readonly string[] | null): string[] {
   return only ? only.filter((n) => n in PROPS) : all;
 }
 
+/** Что стоит на витрине и как закреплено: по этому съёмка решает, куда смотреть. */
+export function showcaseItems(only: readonly string[] | null): { name: string; mount: string; h: number; y: number }[] {
+  return showcaseNames(only).map((name) => {
+    const p = PROPS[name]!;
+    return { name, mount: p.mount, h: p.h, y: p.y ?? 0 };
+  });
+}
+
 export function buildShowcase(only: readonly string[] | null): BuiltLevel {
   const names = showcaseNames(only);
   const cells = Math.max(2, Math.ceil(((names.length - 1) * SHOW_STEP + 3) / 3));

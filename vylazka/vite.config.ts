@@ -49,6 +49,8 @@ export default defineConfig(({ mode }) => {
       environment: 'node',
       include: ['tests/**/*.test.ts'],
       reporters: ['default'],
+      // Тесты, собирающие десятки уровней, идут по 4–5 с: на загруженной машине стандартных 5 с не хватает.
+      testTimeout: 30000,
     },
   };
 });

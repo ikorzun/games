@@ -174,7 +174,8 @@ export class App {
     this.overlay.setSound(!this.profile.muted);
     this.overlay.setLevels(this.profile.sens, this.profile.bright);
     renderer.brightness = BRIGHT[this.profile.bright];
-    this.testLevel = p.get('level') === 'test';
+    // level=test — коридор технического среза, level=show — витрина реквизита.
+    this.testLevel = p.get('level') === 'test' || p.get('level') === 'show';
     const failAt = Number(p.get('fail') ?? '');
     this.game = new Game(renderer, mulberry32(baseSeed), {
       // Первый отказ фонаря — принудительный и скорый: игрок должен сразу узнать, что фонарь надо трясти.

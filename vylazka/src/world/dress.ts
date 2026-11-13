@@ -115,13 +115,9 @@ export function dressRoom(ctx: RoomCtx): void {
     // в комнате у глухой стены можно поставить и глубокое, в коридоре — лишь то, что не мешает пройти.
     if (!s.used && !s.hazard && floorList && rPlace < (corridor ? 0.36 + 0.1 * tier : 0.75)) {
       const maxDepth = s.deep ? 1.25 : 0.6;
-      // Рядом с приметой, которую игроку предстоит снять на камеру, — только низкое: высокий предмет
-      // у соседней стены мог бы заслонить её со всех точек, откуда она видна.
-      const o = s.xf.pt(0, 0, 0);
-      const nearMark = ctx.landmarks.some((m) => m.room === ctx.room.id && Math.hypot(m.x - o[0], m.z - o[2]) < 3.2);
       const fitting = floorList.filter(([name]) => {
         const p = PROPS[name];
-        return p !== undefined && p.mount !== 'ceiling' && p.w <= 2.6 && (p.mount === 'wall' || p.d <= maxDepth) && (!nearMark || p.mount === 'wall' || p.h <= 1.0);
+        return p !== undefined && p.mount !== 'ceiling' && p.w <= 2.6 && (p.mount === 'wall' || p.d <= maxDepth);
       });
       if (fitting.length > 0) {
         const p = PROPS[pick(fitting, rPick)]!;
