@@ -870,15 +870,16 @@ export function coatHooks(xf: Xf, seed: number): void {
 }
 
 /**
- * Шлем-маска противогаза лицом вверх: лицевая часть с очками, клапанная коробка с обрывком трубки,
- * затылок. Начало — центр лица на полу, трубка тянется к −z.
+ * Шлем-маска противогаза лицом вверх: бледная резина, два круглых тёмных стекла, клапанная коробка
+ * с обрывком трубки, затылок шлема. Начало — центр лица на полу, трубка тянется к −z. Лицо и стёкла
+ * нарочно крупные и контрастные: в луче это должно читаться как лицо, которое смотрит в потолок.
  */
 function maskFace(xf: Xf, tint: Vec3): void {
-  xf.cyl([0, 0, 0], 'y', 0.05, 0.075, MAT.enamel, { segments: 6, tint, ao: 0.9 });
-  xf.box([-0.07, 0, 0.05], [0.07, 0.03, 0.17], MAT.enamel, { tint: dim(tint, 0.9), aoBottom: 0.7 });
-  for (const s of [-1, 1]) xf.cyl([s * 0.034, 0.05, 0.02], 'y', 0.008, 0.024, MAT.glass, { segments: 5 });
-  xf.cyl([0, 0.05, -0.035], 'y', 0.025, 0.026, MAT.enamel, { segments: 5, tint: dim(tint, 0.8) });
-  xf.cyl([0, 0.02, -0.16], 'z', 0.1, 0.016, MAT.canvas, { segments: 5, caps: false, tint: [0.7, 0.75, 0.65] });
+  xf.box([-0.08, 0, 0.03], [0.08, 0.035, 0.19], MAT.enamel, { tint: dim(tint, 0.82), aoBottom: 0.7 });
+  xf.cyl([0, 0, 0], 'y', 0.055, 0.085, MAT.enamel, { segments: 7, tint, ao: 0.9 });
+  for (const s of [-1, 1]) xf.cyl([s * 0.04, 0.055, 0.022], 'y', 0.007, 0.03, MAT.glass, { segments: 6 });
+  xf.cyl([0, 0.055, -0.045], 'y', 0.028, 0.03, MAT.enamel, { segments: 5, tint: dim(tint, 0.6) });
+  xf.cyl([0, 0.022, -0.17], 'z', 0.1, 0.018, MAT.canvas, { segments: 5, caps: false, tint: [0.7, 0.75, 0.65] });
 }
 
 /**
@@ -905,7 +906,7 @@ export function gasmaskCrate(xf: Xf, seed: number): void {
   }
   // Маски: стопка серой резины, верхняя лежит лицом вверх.
   xf.box([0.15, 0.24, z0 + 0.03], [0.37, 0.285, z1 - 0.03], MAT.enamel, { tint: [0.3, 0.32, 0.3] });
-  maskFace(xf.child(0.26, 0.285, z0 + 0.25), [0.36, 0.38, 0.36]);
+  maskFace(xf.child(0.26, 0.285, z0 + 0.25), [0.48, 0.51, 0.46]);
   xf.cyl([-0.2, 0.24, z0 + 0.38], 'x', 0.3, 0.016, MAT.canvas, { segments: 5, tint: [0.7, 0.75, 0.65] });
   // Крышка откинута и привалена к стене.
   const lidZ = (y: number): number => z0 - 0.012 - ((y - 0.4) / 0.49) * (z0 - 0.028);
@@ -930,21 +931,22 @@ function scatterSpot(rnd: () => number, placed: Array<[number, number, number]>,
 }
 
 /**
- * Груда противогазов на полу у стены, 1,2 × 0,6 м: 8–10 фильтрующих коробок вповалку (одна — вторым
- * слоем), две серые шлем-маски лицом вверх — очки смотрят в потолок, — три чёрные маски ничком,
+ * Груда противогазов на полу у стены, 1,2 × 0,6 м: три бледные шлем-маски лицом вверх — стёкла смотрят
+ * в потолок, — три чёрные маски ничком, 6–8 фильтрующих коробок вповалку (одна — вторым слоем),
  * обрывки гофрированных трубок, две сумки. Низкая — преграды нет.
  */
 export function gasmaskPile(xf: Xf, seed: number): void {
   const rnd = rng(seed);
   const placed: Array<[number, number, number]> = [];
   const r = 0.055;
-  // Маски ложатся первыми — им нужно больше места.
-  for (let i = 0; i < 2; i++) {
-    const [x, z] = scatterSpot(rnd, placed, 0.15, -0.42, 0.42, 0.22, 0.4);
-    const g = 0.85 + rnd() * 0.2;
-    maskFace(xf.child(x, 0, z, Math.floor(rnd() * 4) as 0 | 1 | 2 | 3), [0.34 * g, 0.36 * g, 0.34 * g]);
+  // Маски ложатся первыми — им нужно больше места. Резина серо-зелёная, разного возраста; белее нельзя:
+  // в луче бледное лицо со стёклами начинает читаться как череп.
+  for (let i = 0; i < 3; i++) {
+    const [x, z] = scatterSpot(rnd, placed, 0.14, -0.4, 0.4, 0.22, 0.4);
+    const g = 0.4 + rnd() * 0.16;
+    maskFace(xf.child(x, 0, z, Math.floor(rnd() * 4) as 0 | 1 | 2 | 3), [g, g * 1.05, g * 0.94]);
   }
-  const n = 8 + Math.floor(rnd() * 3);
+  const n = 6 + Math.floor(rnd() * 3);
   let top: [number, number, number] = [0, 0.4, 0.11];
   for (let i = 0; i < n; i++) {
     const [x, z] = scatterSpot(rnd, placed, 0.06, -0.5, 0.5, 0.08, 0.5);
@@ -1349,13 +1351,16 @@ export function debrisHeap(xf: Xf, seed: number): void {
     const y = onFloor ? 0 : h - 0.006;
     xf.box([x, y, z], [x + s, y + 0.02 + rnd() * 0.03, z + sd], MAT.plaster, { tint: [g, g, g * 0.95], aoBottom: 0.7 });
   }
-  // Доски: одна лежит поперёк самого высокого кома, одна съехала к полу, одна торчит к стене.
+  // Доски: одна лежит поперёк самого высокого кома, одна съехала к полу.
   const [tx0, tx1, tz0, tz1, th] = lumps.reduce((a, b) => (b[4] > a[4] ? b : a));
   const tc = (tx0 + tx1) / 2;
   const tz = (tz0 + tz1) / 2;
   xf.box([Math.max(-0.8, tx0 - 0.16), th - 0.004, tz - 0.02], [Math.min(0.8, tx1 + 0.1), th + 0.022, tz + 0.09], MAT.wood, { tint: [0.75, 0.72, 0.66] });
   beam(xf, [tc + 0.1, 0.012, 0.6], [tc + 0.14, th + 0.03, tz + 0.03], 0.1, 0.024, MAT.wood, [0.82, 0.78, 0.7], { side: [1, 0, 0], aoA: 0.6 });
-  beam(xf, [tc - 0.1, th - 0.02, Math.min(0.22, tz1 - 0.04)], [tc - 0.16, 1.0, 0.03], 0.09, 0.022, MAT.wood, [0.7, 0.66, 0.6], { side: [1, 0, 0] });
+  // Третья привалена к стене наискось: нижний конец на вершине кучи, верхний ушёл вбок — туда, где просторнее.
+  const lean = tc > 0 ? -1 : 1;
+  const wallX = Math.max(-0.72, Math.min(0.72, tc + lean * 0.5));
+  beam(xf, [tc - lean * 0.06, th - 0.01, Math.min(0.24, tz1 - 0.03)], [wallX, 0.93, 0.035], 0.1, 0.022, MAT.wood, [0.7, 0.66, 0.6], { side: [1, 0, 0] });
   // Ведро на боку у края кучи, зевом наружу.
   const out = cx > 0 ? -1 : 1;
   const bx = out * 0.6;
@@ -1811,7 +1816,8 @@ export function overturnedTable(xf: Xf, seed: number): void {
 export function bootsHelmet(xf: Xf, seed: number): void {
   const rnd = rng(seed);
   const m = rnd() < 0.5 ? 1 : -1;
-  const kirza: Vec3 = dim([0.5, 0.55, 0.6], 0.9 + rnd() * 0.2);
+  // Кирза чёрная: под лучом светлое голенище читалось как картонная труба.
+  const kirza: Vec3 = dim([0.24, 0.25, 0.27], 0.9 + rnd() * 0.2);
   // Сапог стоит: головка, голенище с раструбом.
   const bx = m * -0.32;
   xf.box([bx - 0.055, 0, 0.075], [bx + 0.055, 0.018, 0.355], MAT.rubber, { tint: [1.1, 1.1, 1.1] });
