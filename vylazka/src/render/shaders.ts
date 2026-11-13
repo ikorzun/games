@@ -33,11 +33,40 @@ vec4 beamAt(vec3 posV) {
 }
 `;
 
+/**
+ * Распад: мир или отдельная вещь рассыпаются. Вершины расползаются кто куда (каждая клетка 0,4 м —
+ * в свою сторону и вверх), а фрагментный шейдер выбивает в поверхности дыры. uDissolve — весь мир,
+ * uThing.x — одна вещь (у неё свой материал).
+ */
+export const CRUMBLE_GLSL = /* glsl */ `
+uniform float uDissolve;
+uniform vec4 uThing;      // x — распад вещи 0..1, y — запас, z — запас, w — сид вещи
+
+vec3 cellJitter(vec3 p) {
+  ivec3 q = ivec3(floor(p)) + 32768;
+  uint n = uint(q.x) * 0x27d4eb2du ^ uint(q.y) * 0x165667b1u ^ uint(q.z) * 0x9e3779b1u;
+  n ^= n >> 15; n *= 0x2c1b3c6du; n ^= n >> 12;
+  uvec3 m = uvec3(n, n * 0x297a2d39u, n * 0x85ebca6bu);
+  m ^= m >> 15;
+  return vec3(m & uvec3(0xffffu)) / 65535.0 - 0.5;
+}
+
+vec3 crumble(vec3 wp, float dis) {
+  if (dis <= 0.0) return wp;
+  vec3 h = cellJitter(wp * 2.5 + uThing.w);
+  float k = dis * dis;
+  return wp + (h * vec3(1.7, 1.0, 1.7) + vec3(0.0, 0.8, 0.0)) * k * 1.5;
+}
+`;
+
 export const WORLD_VERT = /* glsl */ `
 attribute vec4 aColor;
 attribute float aMat;
 uniform mat4 uShadowMatrix;
 uniform float uTierDrop;
+varying vec3 vWorld;
+varying float vDis;
+${CRUMBLE_GLSL}
 varying vec3 vPosV;
 varying vec3 vNrmV;
 varying vec4 vColor;
@@ -49,7 +78,9 @@ varying vec3 vSurf;   // x — стена (1) или пол с потолком 
 void main() {
   vec4 wp = modelMatrix * vec4(position, 1.0);
   vec3 wn = normalize(mat3(modelMatrix) * normal);
-  vec4 mv = viewMatrix * wp;
+  vWorld = wp.xyz;
+  vDis = max(uDissolve, uThing.x);
+  vec4 mv = viewMatrix * vec4(crumble(wp.xyz, vDis), 1.0);
   vPosV = mv.xyz;
   vNrmV = mat3(viewMatrix) * wn;
   vColor = aColor;
@@ -82,6 +113,7 @@ uniform float uShadowTexel;
 uniform vec3 uAmbient;
 uniform vec4 uBounce;     // xyz — точка попадания луча (пространство камеры), w — сила отсвета
 uniform float uFog;
+uniform vec3 uFogColor;   // во что уходит даль: в убежище — чернота, в белом нигде — белое
 uniform float uDecay;     // 0..1: насколько здесь сыро и запущено (растёт с глубиной)
 uniform vec3 uLightRightV;
 uniform vec3 uLightUpV;
@@ -96,8 +128,18 @@ varying float vMat;
 varying vec2 vUv;
 varying vec4 vShadow;
 varying vec3 vSurf;
+varying vec3 vWorld;
+varying float vDis;
 
 ${BEAM_GLSL}
+
+/** Случайное число клетки мира (для дыр распада): целочисленный хеш, одинаковый на любом устройстве. */
+float cellHash(vec3 p) {
+  ivec3 q = ivec3(floor(p)) + 32768;
+  uint n = uint(q.x) * 0x27d4eb2du ^ uint(q.y) * 0x165667b1u ^ uint(q.z) * 0x9e3779b1u;
+  n ^= n >> 15; n *= 0x2c1b3c6du; n ^= n >> 12; n *= 0x297a2d39u; n ^= n >> 15;
+  return float(n & 0xffffu) / 65535.0;
+}
 
 vec3 matcap(int m, vec3 N, vec3 bx, vec3 by) {
   vec2 muv = vec2(dot(bx, N), dot(by, N)) * 0.47 + 0.5;
@@ -117,6 +159,13 @@ vec3 perturb(vec3 N, vec3 p, float h) {
 }
 
 void main() {
+  // Распад: поверхность выгорает клетками по 9 см; кромка дыры светится красным.
+  float burn = 0.0;
+  if (vDis > 0.0) {
+    float edge = cellHash(vWorld * 11.0) - (vDis * 1.2 - 0.1);
+    if (edge < 0.0) discard;
+    burn = smoothstep(0.14, 0.0, edge) * min(1.0, vDis * 4.0);
+  }
   vec3 Ng = normalize(vNrmV);
   int mi = int(vMat + 0.5);
   vec4 ma = uMatA[mi];
@@ -259,7 +308,15 @@ void main() {
 #endif
 
   // То, что проступило из-под краски, годами стояло сырым: оно серее и грязнее свежей поверхности.
-  vec3 tint = vColor.rgb * ink * stain * (dirt * alb * mix(1.0, 0.55, wet) * mix(1.0, 0.62 + 0.2 * g1.r, k * step(0.5, 1.5 - abs(float(cls) - 1.0))));
+  // У светящегося материала оттенок вершины — множитель яркости свечения (до сотен): в освещение он
+  // идёт приведённым к единице, иначе рассеянный свет выбелил бы небо и экраны.
+  vec3 vc = vColor.rgb;
+  float lit = 1.0;
+  if (mi == 14) {
+    vc /= max(1.0, max(vc.r, max(vc.g, vc.b)));
+    lit = 0.0;
+  }
+  vec3 tint = vc * ink * stain * (dirt * alb * mix(1.0, 0.55, wet) * mix(1.0, 0.62 + 0.2 * g1.r, k * step(0.5, 1.5 - abs(float(cls) - 1.0))));
   vec3 surf = mc * tint * shade;
   // Пыль на всём, что лежит выше пола и смотрит вверх.
   float dust = smoothstep(0.6, 0.95, up) * smoothstep(0.06, 0.2, hgt) * (0.35 + 0.4 * g1.g) * (1.0 - wet);
@@ -271,16 +328,51 @@ void main() {
   vec3 toB = uBounce.xyz - vPosV;
   float db = length(toB);
   float bounce = uBounce.w / (1.0 + 0.35 * db * db) * (0.35 + 0.65 * max(dot(N, toB / max(db, 1e-3)), 0.0));
-  col += base * tint * ao * (uAmbient + uLightColor * bounce);
+  col += base * tint * ao * (uAmbient * lit + uLightColor * bounce);
 
   // Мокрый пол и плитка отражают освещённое пятно: блик тянется от дальней стены к ногам.
   float gloss = max(wet, mi == 12 ? 1.0 : (mi == 18 ? 0.5 : 0.0)) * step(0.5, up);
   vec3 R = reflect(normalize(vPosV), N);
   col += uLightColor * (uBounce.w * 16.0 * gloss * pow(max(dot(R, toB / max(db, 1e-3)), 0.0), 48.0)) * (0.6 + 0.4 * d0.b);
 
-  col += uMatBase[mi] * ma.y;
-  col *= exp(-uFog * length(vPosV));
+  // Свечение. У фосфорных табличек (оттенок до 1) цвет даёт основа материала; у экранов, окон и неба
+  // оттенок вершины больше единицы — он и есть цвет, помноженный на яркость (основа тогда серая).
+  vec3 glowBase = max(vColor.r, max(vColor.g, vColor.b)) > 1.5 ? vec3(0.55) : uMatBase[mi];
+  col += glowBase * ma.y * vColor.rgb;
+  col += vec3(0.9, 0.07, 0.03) * burn;
+  col = mix(uFogColor, col, exp(-uFog * length(vPosV)));
   gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+/**
+ * Красная полигонная сетка: рёбра той же геометрии отдельными линиями. Светится сама, фонарь ей не
+ * нужен — в полной темноте видна только она. Распадается вместе с миром.
+ */
+export const WIRE_VERT = /* glsl */ `
+varying float vDist;
+${CRUMBLE_GLSL}
+
+void main() {
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vec4 mv = viewMatrix * vec4(crumble(wp.xyz, max(uDissolve, uThing.x)), 1.0);
+  vDist = -mv.z;
+  gl_Position = projectionMatrix * mv;
+  // Чуть к камере, чтобы линия не тонула в своей же поверхности.
+  gl_Position.z -= 0.0012 * gl_Position.w;
+}
+`;
+
+export const WIRE_FRAG = /* glsl */ `
+precision mediump float;
+uniform vec3 uWireColor;
+uniform float uWireAlpha;
+uniform float uTime;
+varying float vDist;
+
+void main() {
+  float pulse = 0.78 + 0.22 * sin(uTime * 4.3 - vDist * 1.9);
+  gl_FragColor = vec4(uWireColor * (uWireAlpha * pulse * exp(-vDist * 0.045)), 1.0);
 }
 `;
 
@@ -303,6 +395,7 @@ attribute vec3 aSeed;
 uniform float uTime;
 uniform vec3 uCamPos;
 uniform float uPointScale;
+uniform float uBoost;     // 0..1: мир рассыпается — пыль видна и без луча, летит вверх
 varying float vLight;
 
 ${BEAM_GLSL}
@@ -310,12 +403,12 @@ ${BEAM_GLSL}
 void main() {
   const vec3 box = vec3(7.0, 3.2, 7.0);
   vec3 p = aSeed * box;
-  p += vec3(sin(uTime * 0.11 + aSeed.y * 40.0), uTime * 0.02 + cos(uTime * 0.07 + aSeed.x * 31.0) * 0.3, cos(uTime * 0.09 + aSeed.z * 23.0)) * 0.25;
+  p += vec3(sin(uTime * 0.11 + aSeed.y * 40.0), uTime * (0.02 + 0.9 * uBoost) + cos(uTime * 0.07 + aSeed.x * 31.0) * 0.3, cos(uTime * 0.09 + aSeed.z * 23.0)) * 0.25;
   // Облако бесконечно: точки заворачиваются вокруг камеры.
   p = mod(p - uCamPos + box * 0.5, box) - box * 0.5 + uCamPos;
   vec4 mv = viewMatrix * vec4(p, 1.0);
   float dist = -mv.z;
-  vLight = beamAt(mv.xyz).w * smoothstep(0.25, 0.9, dist) * (0.4 + 0.6 * fract(aSeed.x * 91.7));
+  vLight = max(beamAt(mv.xyz).w, uBoost * 0.35) * smoothstep(0.25, 0.9, dist) * (0.4 + 0.6 * fract(aSeed.x * 91.7));
   gl_PointSize = clamp(uPointScale * (0.6 + fract(aSeed.z * 57.3)) / max(dist, 0.2), 1.0, 5.0);
   gl_Position = projectionMatrix * mv;
 }
@@ -324,12 +417,13 @@ void main() {
 export const DUST_FRAG = /* glsl */ `
 precision mediump float;
 uniform vec3 uLightColor;
+uniform highp float uBoost;
 varying float vLight;
 
 void main() {
   vec2 c = gl_PointCoord - 0.5;
   float a = smoothstep(0.5, 0.1, length(c));
-  gl_FragColor = vec4(uLightColor * vLight * a * 0.16, 1.0);
+  gl_FragColor = vec4(max(uLightColor, vec3(uBoost)) * vLight * a * 0.16, 1.0);
 }
 `;
 
@@ -490,6 +584,8 @@ uniform sampler2D tHaze;
 uniform sampler2D uGrime;
 uniform vec2 uHazeTexel;
 uniform float uBloom;
+uniform float uCrt;       // 0..1: насколько «кинескоп» заметен — строки, маска, дрожь строк, бегущая полоса
+uniform float uFlash;     // 0..1: кадр выбеливается (скачок между пространствами)
 
 varying vec2 vUv;
 
@@ -532,6 +628,12 @@ void main() {
     }
     float line = hash(uvec2(0u, px.y / 3u), frame / 2u);
     if (line < uGlitch * 0.08) uv.x += (line - 0.02) * 0.6;
+  }
+
+  // Кинескоп: строки чуть гуляют по горизонтали, сильнее — когда картинка «под нагрузкой».
+  if (uCrt > 0.0) {
+    float wob = hash(uvec2(1u, px.y / 2u), frame) - 0.5;
+    uv.x += wob * 0.0022 * uCrt * uCrt;
   }
 
   vec3 col;
@@ -587,8 +689,16 @@ void main() {
   col *= smoothstep(-0.02, 0.09, l) * 0.35 + 0.65;
 
   col = mix(col * 12.92, 1.055 * pow(col, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, col));
-  // Чересстрочная фактура видеозаписи.
-  col *= 1.0 - 0.035 * float(px.y & 1u);
+  // Чересстрочная фактура видеозаписи; с uCrt строки и маска кинескопа проступают сильнее.
+  col *= 1.0 - (0.035 + 0.11 * uCrt) * float(px.y & 1u);
+  if (uCrt > 0.0) {
+    uint tri = px.x % 3u;
+    col *= mix(vec3(1.0), vec3(tri == 0u ? 1.0 : 0.82, tri == 1u ? 1.0 : 0.82, tri == 2u ? 1.0 : 0.82), 0.45 * uCrt);
+    // Бегущая полоса: светлая строка медленно сползает по кадру.
+    float bar = fract(vUv.y + uFrame * 0.0031);
+    col += vec3(0.05, 0.055, 0.06) * uCrt * smoothstep(0.035, 0.0, abs(bar - 0.5));
+  }
+  col = mix(col, vec3(1.0), uFlash);
   gl_FragColor = vec4(col * uFade, 1.0);
 }
 `;

@@ -2,6 +2,8 @@
  * Отладочный API window.__vz. Ставится и в боевой сборке: смоук в Chromium гоняет именно её.
  * Симуляцию можно заморозить и шагать вручную — так тесты не зависят от скорости машины.
  */
+import type { RoomFx } from '../game';
+import type { JumpStyle, JumpTarget } from '../systems/jumps';
 import { showcaseItems } from '../world/showcase';
 import { normalizeLang } from '../core/i18n';
 import type { App } from '../app';
@@ -43,16 +45,26 @@ export interface VzDebugApi {
   gotoLandmark(id: string, index?: number, distance?: number): boolean;
   /** Встать в центр клетки помещения. */
   gotoRoom(roomId: number, yawDeg?: number): boolean;
-  /** Цели вылазки: тип, ярус, выполнена ли, где находится. */
-  goals(): Array<Record<string, unknown>>;
-  /** Предметы уровня. */
-  items(): Array<Record<string, unknown>>;
-  /** Встать перед предметом лицом к нему. */
-  gotoItem(id: number): boolean;
-  /** Встать перед целью вылазки (предметом или приметой) лицом к ней. */
-  gotoGoal(index: number): boolean;
-  /** Встать у лестницы на выход. */
-  gotoExit(): void;
+  /** Вещи сна: что стоит, что с ним станет под взглядом, в каком оно состоянии. */
+  things(): Array<Record<string, unknown>>;
+  /** Встать перед вещью лицом к ней. */
+  gotoThing(id: number, distance?: number): boolean;
+  /** Почему вещь видна или не видна: расстояние, попадание в луч (dot против нужного need), путь луча до преграды. */
+  sees(id: number): Record<string, number> | null;
+  /** Искомое воспоминание: его id, вещь и где она (null — сейчас ничего не ищут). */
+  memory(): { id: string; thing: number; pos: number[] } | null;
+  /** Поторопить следующее воспоминание: оно придёт на ближайшем шаге. */
+  reveal(): void;
+  /** Встать перед вещью искомого воспоминания. */
+  gotoMemory(): boolean;
+  /** Начать скачок: в карманное пространство ('void', 'meadow', 'dollhouse'), в другое место ('elsewhere') или в лимбо. */
+  jump(to: JumpTarget, style?: JumpStyle): boolean;
+  /** Встать в помещение с особенностью: 'strobe', 'dark', 'wire', 'thin'. */
+  gotoFx(fx: RoomFx): boolean;
+  /** Считать всё вспомненным: место рассыплется, игрок попадёт в лимбо. */
+  finish(): void;
+  /** Вспышки помягче (как в настройке игрока). */
+  calmFlash(on: boolean): void;
   /** Зоны среды и обвалы уровня. */
   hazards(): Record<string, unknown>;
   /** Выпустить рой в hops клетках от игрока (сразу настороже) либо показать его фигурой без охоты. */
@@ -67,6 +79,8 @@ export interface VzDebugApi {
   shadows(on: boolean): void;
   /** Нарисовать кадр и вернуть его яркость сеткой 32×18, строка 0 — верхняя. */
   probe(): number[];
+  /** Средний цвет кадра (0..255) и доля красных точек: виден ли красная сетка. */
+  probeColor(): { r: number; g: number; b: number; red: number };
   missingKeys(): string[];
   /** Состояние звука: загружено, что просили и что прозвучало, какие петли идут. */
   /** Предметы витрины (?level=show) по порядку расстановки: имя, крепление, высота. */
@@ -186,48 +200,66 @@ export function installDebug(app: App): void {
       }
       return false;
     },
-    goals: () => {
-      const srt = game().sortie;
-      if (!srt) return [];
-      return srt.objectives.map((o) => {
-        const it = o.type === 'take' ? srt.pop.items[o.item!]! : null;
-        const p = it ?? o.landmark!;
-        return { id: o.id, type: o.type, tier: o.tier, done: srt.done.has(o.id), what: it ? it.find : o.landmark!.id, pos: [p.x, p.y, p.z] };
-      });
-    },
-    items: () => {
-      const srt = game().sortie;
-      return srt ? srt.pop.items.map((i) => ({ id: i.id, type: i.type, find: i.find ?? null, tier: i.tier, taken: srt.taken.has(i.id), pos: [i.x, i.y, i.z] })) : [];
-    },
-    gotoItem: (id) => {
-      const srt = game().sortie;
-      const it = srt?.pop.items[id];
-      if (!it) return false;
-      // Встаём в метре от предмета: пробуем подойти с разных сторон, пока он не окажется под рукой.
-      // Предмет может лежать на столе посреди клетки — тогда контроллер вытолкнет игрока из стола,
-      // поэтому целимся уже после того, как игрок встал.
-      const floor = -it.tier * 4.5;
-      for (let i = 0; i < 8; i++) {
-        const a = (i * Math.PI) / 4;
-        game().teleport(it.x + Math.cos(a) * 1.0, floor, it.z + Math.sin(a) * 1.0);
+    things: () => game().things.list.map((t) => ({ id: t.id, kind: t.kind, state: t.state, fate: t.fate, memory: t.memory, gaze: t.gaze, scale: t.scale, dissolve: t.dissolve, pos: [...t.pos] })),
+    gotoThing: (id, distance = 2.2) => {
+      const g = game();
+      const t = g.things.list.find((x) => x.id === id);
+      if (!t) return false;
+      const [x, y, z] = t.pos;
+      const aimY = y + Math.max(0.2, t.radius * 0.6);
+      const tryFrom = (px: number, py: number, pz: number): boolean => {
+        g.teleport(px, py, pz);
         app.advance(emptyInput(), 2, 1, STEP);
-        game().aimAt(it.x, it.y, it.z);
+        g.aimAt(x, aimY, z);
         app.advance(emptyInput(), 2, 1, STEP);
-        const tg = srt.target;
-        if (tg?.kind === 'item' && tg.item.id === id) return true;
+        // Вещь видна так же строго, как это требует игра: в луче и не заслонена от камеры.
+        const v = api.sees(id);
+        return v !== null && v.d! > 0.4 && v.d! < 5.5 && v.dot! >= v.need! + 0.01 && v.los! >= v.d! - 0.45;
+      };
+      // Пол яруса (или карманного пространства) под вещью.
+      const floor = Math.floor((y + 0.3) / 4.5) * 4.5;
+      // Сначала вплотную с разных сторон, потом — с расстояния: вещь может стоять среди мебели.
+      for (const r of [1.1, distance, 1.7, 3]) {
+        for (let i = 0; i < 12; i++) {
+          const a = (i * Math.PI) / 6;
+          if (tryFrom(x + Math.cos(a) * r, floor, z + Math.sin(a) * r)) return true;
+        }
       }
       return false;
     },
-    gotoGoal: (index) => {
-      const o = game().sortie?.objectives[index];
-      if (!o) return false;
-      if (o.type === 'take') return api.gotoItem(o.item!);
-      const idx = app.level.landmarks.filter((m) => m.id === o.landmark!.id).indexOf(o.landmark!);
-      return api.gotoLandmark(o.landmark!.id, Math.max(0, idx), 2.4);
+    sees: (id) => {
+      const g = game();
+      const t = g.things.list.find((x) => x.id === id);
+      const st = g.snapshot() as { eye: number[]; lightDir: number[]; light: { intensity: number } };
+      if (!t) return null;
+      const target = [t.pos[0], t.pos[1] + Math.max(0.2, t.radius * 0.6), t.pos[2]];
+      const dx = target[0]! - st.eye[0]!;
+      const dy = target[1]! - st.eye[1]!;
+      const dz = target[2]! - st.eye[2]!;
+      const d = Math.hypot(dx, dy, dz);
+      const los = g.colliders.raycast(st.eye[0]!, st.eye[1]!, st.eye[2]!, dx / d, dy / d, dz / d, d);
+      return { d, dot: (dx * st.lightDir[0]! + dy * st.lightDir[1]! + dz * st.lightDir[2]!) / d, need: 0.972 - Math.min(0.12, (t.radius / d) * 0.45), los, light: st.light.intensity, radius: t.radius };
     },
-    gotoExit: () => {
-      const [x, y, z] = app.level.exit;
-      game().teleport(x, y, z + 0.5, 0, 0);
+    memory: () => {
+      const m = game().session?.active;
+      const t = game().things.list.find((x) => x.memory);
+      return m && t ? { id: m.def.id, thing: t.id, pos: [...t.pos] } : null;
+    },
+    reveal: () => {
+      game().session?.rush();
+    },
+    gotoMemory: () => {
+      const t = game().things.list.find((x) => x.memory);
+      return t ? api.gotoThing(t.id, 2.2) : false;
+    },
+    jump: (to, style = 'cut') => game().beginJump({ cause: 'gaze', style, to }, []),
+    gotoFx: (fx) => {
+      for (const [room, kind] of game().roomFx) if (kind === fx) return api.gotoRoom(room);
+      return false;
+    },
+    finish: () => game().debugFinish(),
+    calmFlash: (on) => {
+      game().calmFlash = on;
     },
     hazards: () => ({
       zones: app.level.zones.map((z) => ({ kind: z.kind, tier: z.tier, center: [(z.minX + z.maxX) / 2, z.maxY, (z.minZ + z.maxZ) / 2] })),
@@ -276,6 +308,10 @@ export function installDebug(app: App): void {
     probe: () => {
       game().draw(1, 0);
       return game().renderer.probe();
+    },
+    probeColor: () => {
+      game().draw(1, 0);
+      return game().renderer.probeColor();
     },
     missingKeys: () => [...app.i18n.missing],
     audio: () => app.sound.status(),

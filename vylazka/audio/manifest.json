@@ -115,26 +115,6 @@
       "ru": "фонарь глохнет"
     },
     {
-      "id": "battery_swap",
-      "bus": "sfx",
-      "variants": 1,
-      "loop": false,
-      "seconds": 1.8,
-      "volume": 0.5,
-      "prompt": "Unscrewing the metal cap of a flashlight, sliding out an old flat battery, inserting a new one and screwing the cap back, close, dry, hurried hands",
-      "ru": "замена батарейки"
-    },
-    {
-      "id": "pickup",
-      "bus": "sfx",
-      "variants": 2,
-      "loop": false,
-      "seconds": 0.5,
-      "volume": 0.45,
-      "prompt": "Picking up a small object and tucking it into a canvas bag, soft cloth rustle, close",
-      "ru": "находка убрана в сумку"
-    },
-    {
       "id": "camera_beep",
       "bus": "sfx",
       "variants": 1,
@@ -153,16 +133,6 @@
       "volume": 0.25,
       "prompt": "Faint electronic autofocus whirr and ticking of a small digital camera recording, steady, very quiet, 1.6 seconds",
       "ru": "камера наводится, пока удерживают съёмку"
-    },
-    {
-      "id": "ladder",
-      "bus": "sfx",
-      "variants": 1,
-      "loop": false,
-      "seconds": 2.5,
-      "volume": 0.6,
-      "prompt": "Climbing a steel rung ladder in a narrow concrete shaft: hands and boots on metal rungs, three steps, echo going upward",
-      "ru": "подъём по лестнице на выход"
     },
     {
       "id": "hatch",

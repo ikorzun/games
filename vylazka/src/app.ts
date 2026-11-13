@@ -1,19 +1,18 @@
 /**
- * Приложение: цикл «задание → вылазка → отчёт», пауза, ввод с устройств, сохранения и главный цикл.
- * Игровая логика — в game.ts и systems/.
+ * Приложение: заставка → сессии одна за другой через лимбо; пауза, ввод с устройств, профиль
+ * и главный цикл. Игровая логика — в game.ts и systems/.
  */
 import { allSoundFiles, AudioEngine } from './audio/engine';
 import { GameAudio, LOAD_FIRST } from './audio/game_audio';
-import { i18n, t } from './core/i18n';
+import { i18n, normalizeLang, t } from './core/i18n';
 import { mulberry32 } from './core/rng';
-import { loadSave, objectNumber, rankFor, sortieSeed, writeProfile, writeSave } from './core/save';
-import type { Level3, Profile, RunSave } from './core/save';
+import { loadSave, rankFor, sortieSeed, writeProfile } from './core/save';
+import type { Level3, Profile } from './core/save';
+import { LANGS } from './core/types';
 import type { Lang } from './core/types';
 import { Game, STEP } from './game';
 import type { StepEvents } from './game';
-import { GEN_VERSION, generateLayout } from './gen/layout';
-import { populate } from './gen/populate';
-import type { Objective } from './gen/populate';
+import { generateLayout } from './gen/layout';
 import { Lifecycle } from './lifecycle';
 import { detectCoarsePointer } from './platform';
 import type { IPlatform } from './platform';
@@ -24,25 +23,29 @@ import { MotionSensor } from './player/motion';
 import { GameRenderer } from './render/renderer';
 import { drawSigns } from './render/signs_atlas';
 import type { Quality } from './render/renderer';
-import type { Outcome, Target } from './systems/sortie';
+import { MEMORIES } from './systems/session';
 import { Hud } from './ui/hud';
 import { Overlay } from './ui/overlay';
-import type { CardLine } from './ui/overlay';
+import type { Card, CardLine } from './ui/overlay';
 import { TouchControls } from './ui/touch_controls';
+import { ColliderSet } from './world/colliders';
 import type { BuiltLevel } from './world/level';
 import { buildLevel } from './world/level_build';
+import { buildPocket } from './world/pockets';
+import type { PocketKind } from './world/pockets';
+import { ALL_PROPS } from './world/props_all';
 import { buildShowcase } from './world/showcase';
 import { buildTestLevel } from './world/test_level';
+import { setThingRegistry } from './world/thing_mesh';
 
 const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
 const isQuality = (v: string | null): v is Quality => v === 'low' || v === 'med' || v === 'high';
-const ROMAN = ['I', 'II', 'III'];
 /** Множители обзора и яркости для уровней «ниже / средне / выше». */
 const SENS = [0.6, 1, 1.6] as const;
 const BRIGHT = [0.78, 1, 1.35] as const;
 
-type Screen = 'boot' | 'briefing' | 'play' | 'ending' | 'report';
+type Screen = 'boot' | 'title' | 'play';
 
 export class App {
   readonly lifecycle = new Lifecycle();
@@ -78,13 +81,12 @@ export class App {
   private slowTime = 0;
   private showFps = false;
   private testLevel = false;
-  private goalsUntil = 0;
-  private goalsHeld = false;
-  private endingAt = 0;
-  private lastSavedTier = 0;
   private saving: Promise<void> = Promise.resolve();
-  /** Сохранённая вылазка, которую можно продолжить (до первого старта). */
-  private resume: RunSave | null = null;
+  /** Какое воспоминание сейчас ищут и с какого момента (для подсказки «погаси свет»). */
+  private seeking = '';
+  private seekingSince = 0;
+  /** Следующая сессия, собранная за время лимбо. */
+  private next: { level: BuiltLevel; seed: number; rank: 1 | 2 | 3 } | null = null;
   /** Подсказки обучения, уже показанные в этой сессии. */
   private readonly taught = new Set<string>();
 
@@ -102,7 +104,8 @@ export class App {
 
   async init(): Promise<void> {
     const p = this.params;
-    this.setLang(p.get('lang') ? (p.get('lang') as Lang) : this.platform.language(), true);
+    // Язык по умолчанию — английский (решение владельца); выбор игрока хранится в профиле.
+    this.setLang(normalizeLang(p.get('lang') ?? 'en'), true);
     if (p.get('pseudo') === '1') i18n.setPseudo(true);
     this.showFps = p.get('fps') === '1';
 
@@ -120,7 +123,9 @@ export class App {
     this.overlay = new Overlay(this.root, {
       onStart: () => this.start(),
       onResume: () => this.resumePlay(),
-      onNext: () => void this.nextSortie(),
+      onNext: () => undefined,
+      onFlash: () => this.setCalm(!this.profile.calm),
+      onLang: () => this.cycleLang(),
       onQuality: (q) => {
         this.qualityManual = true;
         this.setQuality(q);
@@ -168,20 +173,25 @@ export class App {
 
     // Сохранение читается одним пакетным вызовом до первого кадра.
     const baseSeed = Number(p.get('seed') ?? '') || 20041113;
-    const save = await loadSave(this.platform, baseSeed, GEN_VERSION);
+    const save = await loadSave(this.platform, baseSeed);
     this.profile = save.profile;
     this.sound.setMuted(this.profile.muted);
     this.overlay.setSound(!this.profile.muted);
     this.overlay.setLevels(this.profile.sens, this.profile.bright);
+    this.overlay.setFlash(this.profile.calm);
+    if (p.get('lang') === null && this.profile.lang) this.setLang(normalizeLang(this.profile.lang), true);
     renderer.brightness = BRIGHT[this.profile.bright];
+    setThingRegistry(ALL_PROPS);
     // level=test — коридор технического среза, level=show — витрина реквизита.
-    this.testLevel = p.get('level') === 'test' || p.get('level') === 'show';
+    this.testLevel = p.get('level') === 'test' || p.get('level') === 'show' || (p.get('level') ?? '').startsWith('pocket_');
     const failAt = Number(p.get('fail') ?? '');
     this.game = new Game(renderer, mulberry32(baseSeed), {
       // Первый отказ фонаря — принудительный и скорый: игрок должен сразу узнать, что фонарь надо трясти.
       firstFailAt: Number.isFinite(failAt) && p.get('fail') !== null ? failAt : this.testLevel ? 12 : 40,
       ...(this.testLevel ? { meanFailInterval: 30, graceAfterRevive: 10 } : {}),
     });
+    this.game.calmFlash = this.profile.calm;
+    this.game.archive = [...this.profile.archive];
     this.motion = new MotionSensor(this.game.shake);
     this.desktop = new DesktopInput(this.canvas, this.game.shake, this.lifecycle);
     if (this.touchMode) this.enableTouch();
@@ -194,12 +204,8 @@ export class App {
       this.root.addEventListener('pointerdown', onFirstTouch, true);
     }
 
-    // Уровень: сохранённая вылазка, объект из адреса или следующий объект игрока.
-    this.resume = !this.testLevel && p.get('seed') === null ? save.run : null;
-    const rankParam = Math.round(Number(p.get('rank') ?? ''));
-    const rank = rankParam >= 1 && rankParam <= 3 ? (rankParam as 1 | 2 | 3) : null;
-    if (this.resume) this.prepare(this.resume.seed, this.resume.rank);
-    else this.prepare(p.get('seed') !== null ? baseSeed : sortieSeed(this.profile), rank ?? rankFor(this.profile));
+    // Первая сессия: сид из адреса или следующий сид игрока.
+    this.prepare(p.get('seed') !== null ? baseSeed : sortieSeed(this.profile), this.rankParam() ?? rankFor(this.profile));
 
     const resize = (): void => {
       renderer.resize(this.root.clientWidth, this.root.clientHeight);
@@ -230,74 +236,119 @@ export class App {
     requestAnimationFrame(this.loop);
   }
 
-  /** Собрать объект и показать карточку задания. */
+  private rankParam(): 1 | 2 | 3 | null {
+    const r = Math.round(Number(this.params.get('rank') ?? ''));
+    return r >= 1 && r <= 3 ? (r as 1 | 2 | 3) : null;
+  }
+
+  /** Собрать первую сессию и показать заставку. */
   private prepare(seed: number, rank: 1 | 2 | 3): void {
     this.seed = seed >>> 0;
     this.rank = rank;
     if (this.testLevel) {
-      this.level = this.params.get('level') === 'show' ? buildShowcase(this.params.get('props')?.split(',') ?? null) : buildTestLevel();
-      this.game.loadLevel(this.level, null);
+      const name = this.params.get('level') ?? '';
+      if (name.startsWith('pocket_')) {
+        // Просмотр карманного пространства: ?level=pocket_void | pocket_meadow | pocket_dollhouse.
+        const pocket = buildPocket(name.slice(7) as PocketKind, this.seed, [0, 0, 0]);
+        const colliders = new ColliderSet();
+        for (const b of pocket.colliders) colliders.add(b);
+        this.level = { chunks: pocket.meshes.map((mesh) => ({ mesh, tierMin: 0, tierMax: 0 })), stairs: [], colliders, spawn: pocket.spawn, exit: pocket.spawn.pos, spots: [], landmarks: [], zones: [], collapses: [], variants: [], nav: [], layout: null };
+        this.game.loadLevel(this.level, null);
+        this.game.env = pocket.env;
+        this.game.renderer.cullDistance = 400;
+      } else {
+        this.level = name === 'show' ? buildShowcase(this.params.get('props')?.split(',') ?? null) : buildTestLevel();
+        this.game.loadLevel(this.level, null);
+      }
     } else {
       this.level = buildLevel(generateLayout(this.seed, rank));
-      this.game.loadLevel(this.level, populate(this.level, this.seed));
-      const s = this.game.sortie!;
-      if (this.resume) {
-        s.restore(this.resume);
-        this.game.light.charge = this.resume.charge;
-        this.game.time = this.resume.time;
-        this.game.refreshItems();
-        this.game.applyCollapses();
-        this.game.restoreAnomalies(this.resume.anomaly);
-        this.game.director?.restore(this.resume.time, this.resume.released);
-      }
+      this.game.loadLevel(this.level, { seed: this.seed, known: new Set(this.profile.archive) });
     }
-    this.screen = 'briefing';
+    this.screen = 'title';
     this.audio.setScene('menu');
     this.syncAudio();
-    this.lastSavedTier = 0;
-    this.endingAt = 0;
-    this.overlay.setCard(this.briefingCard());
+    this.overlay.setCard(this.titleCard());
     this.updateHud();
   }
 
-  private goalText(o: Objective): string {
-    if (o.type === 'take') {
-      const item = this.game.sortie!.pop.items[o.item!]!;
-      return t('goal.take', { name: t(`find.${item.find}.name`) });
-    }
-    return t('goal.shoot', { name: t(`mark.${o.landmark!.id}`) });
+  /** Заставка: название, чем это объясняется, предупреждение о вспышках. */
+  private titleCard(): Card {
+    const lines: CardLine[] = [
+      { text: t('title.how'), kind: 'plain' },
+      { text: t('title.warn'), kind: 'dim' },
+    ];
+    if (this.profile.successes > 0) lines.push({ text: t('title.count', { n: this.profile.successes, k: this.profile.archive.length, total: MEMORIES.length }), kind: 'dim' });
+    return { title: t('ui.title'), sub: t('ui.subtitle'), lines, prompt: t(`ui.start${this.touchMode ? '.touch' : ''}`) };
   }
 
-  private briefingCard(): { title: string; sub: string; lines: CardLine[]; prompt: string } | null {
-    const s = this.game.sortie;
-    if (!s) return null;
-    const sfx = this.touchMode ? '.touch' : '';
-    const lines: CardLine[] = [{ text: t('brief.goals'), kind: 'head' }];
-    for (const o of s.objectives) lines.push({ text: this.goalText(o), kind: s.done.has(o.id) ? 'done' : 'todo' });
-    lines.push({ text: t('brief.return'), kind: 'dim' });
-    if (this.profile.archive.length > 0) lines.push({ text: t('brief.archive', { n: this.profile.archive.length, total: 16 }), kind: 'dim' });
-    return {
-      title: t('ui.title'),
-      sub: t('brief.object', { n: objectNumber(this.seed), rank: ROMAN[this.rank - 1]!, tiers: this.level.layout?.tierCount ?? 1 }),
-      lines,
-      prompt: this.resume ? t(`brief.resume${sfx}`) : t(`ui.start${sfx}`),
-    };
+  /** Номер сессии, как имя несохранённого файла. */
+  private sessionNumber(): string {
+    return String(Math.max(1, this.profile.sorties)).padStart(4, '0');
   }
 
-  /** Начать вылазку (нажатие на карточке задания). */
+  /** Начать (нажатие на заставке). */
   start(): void {
-    if (!this.game || this.screen !== 'briefing') return;
+    if (!this.game || this.screen !== 'title') return;
     this.screen = 'play';
     this.sound.unlock();
     this.audio.setScene('play');
-    this.audio.sortieStart(this.resume !== null);
-    if (!this.resume && !this.testLevel) this.profile.sorties += 1;
-    this.resume = null;
-    this.platform.track('level_started', { world: 'bunker', level: this.testLevel ? 'test' : `seed_${this.seed}` });
+    this.audio.sortieStart(false);
+    if (!this.testLevel) {
+      this.profile.sorties += 1;
+      this.saveProfile();
+      this.hud.toast(t('session.begin', { n: this.sessionNumber() }), 4200);
+    }
+    this.platform.track('level_started', { world: 'session', level: this.testLevel ? 'test' : `seed_${this.seed}` });
     if (this.touchMode && !MotionSensor.needsPermission()) void this.enableMotion();
-    this.goalsUntil = this.game.time + 7;
-    this.saveRun();
     this.resumePlay();
+  }
+
+  /** Сессия кончилась, игрок в лимбо: записать итог и собрать следующую. */
+  private onLimbo(): void {
+    this.profile.successes += 1;
+    this.saveProfile();
+    this.platform.track('level_completed', { world: 'session', level: `seed_${this.seed}` });
+    // Сборку откладываем на полсекунды: лимбо уже на экране, и заминка не выглядит зависшим переходом.
+    setTimeout(() => {
+      const seed = sortieSeed(this.profile);
+      const rank = this.rankParam() ?? rankFor(this.profile);
+      const level = buildLevel(generateLayout(seed, rank));
+      this.next = { level, seed, rank };
+      this.game.queueSession(level, { seed, known: new Set(this.profile.archive) });
+    }, 500);
+  }
+
+  /** Лимбо отпустило: началась следующая сессия. */
+  private onBegin(): void {
+    const n = this.next;
+    if (n) {
+      this.level = n.level;
+      this.seed = n.seed;
+      this.rank = n.rank;
+      this.next = null;
+    }
+    this.profile.sorties += 1;
+    this.saveProfile();
+    this.platform.track('level_started', { world: 'session', level: `seed_${this.seed}` });
+    this.hud.toast(t('session.begin', { n: this.sessionNumber() }), 4200);
+  }
+
+  /** Вспышки: полные или мягкие. */
+  setCalm(calm: boolean): void {
+    this.profile.calm = calm;
+    this.game.calmFlash = calm;
+    this.overlay.setFlash(calm);
+    this.audio.ui('ui_click');
+    this.saveProfile();
+  }
+
+  /** Следующий язык по кругу; выбор запоминается. */
+  private cycleLang(): void {
+    const lang = LANGS[(LANGS.indexOf(i18n.lang) + 1) % LANGS.length]!;
+    this.profile.lang = lang;
+    this.setLang(lang);
+    this.audio.ui('ui_click');
+    this.saveProfile();
   }
 
   /** Мышь на ПК не захватывается (песочница iframe): луч ведётся с зажатой кнопкой. */
@@ -306,14 +357,14 @@ export class App {
   }
 
   private resumePlay(): void {
-    if (this.screen !== 'play' && this.screen !== 'ending') return;
+    if (this.screen !== 'play') return;
     this.lifecycle.set('pointer', false);
     this.lifecycle.set('user', false);
     if (!this.touchMode) this.desktop?.capture();
   }
 
   private onPauseChange(paused: boolean): void {
-    if (this.screen !== 'play' && this.screen !== 'ending') return;
+    if (this.screen !== 'play') return;
     if (paused) {
       // Возврат в игру — всегда по нажатию: браузер не даст захватить мышь без жеста.
       this.lifecycle.set('user', true);
@@ -323,7 +374,7 @@ export class App {
       this.touch?.setVisible(false);
       this.game.shake.reset();
       this.overlay.show('paused');
-      this.saveRun();
+      this.saveProfile();
     } else {
       this.overlay.show('hidden');
       this.hud.setVisible(true);
@@ -335,12 +386,12 @@ export class App {
 
   /**
    * Когда звук молчит целиком. Площадка, реклама и скрытая вкладка глушат всё; пауза игрока глушит
-   * вылазку, но не меню: на карточке задания и в отчёте игра «стоит», а музыка играет.
+   * сессию, но не заставку: там игра «стоит», а музыка играет.
    */
   private syncAudio(): void {
     const lc = this.lifecycle;
     const hard = lc.has('platform') || lc.has('hidden') || lc.has('ad') || lc.has('context');
-    const menu = this.screen === 'briefing' || this.screen === 'report';
+    const menu = this.screen === 'title';
     this.sound.setPaused(hard || (lc.paused && !menu));
   }
 
@@ -373,7 +424,7 @@ export class App {
     this.touch.setVisible(this.screen === 'play' && !this.lifecycle.paused);
     this.overlay.setTouch(true);
     this.refreshMotionButton();
-    if (this.screen === 'briefing') this.overlay.setCard(this.briefingCard());
+    if (this.screen === 'title') this.overlay.setCard(this.titleCard());
     if (this.screen === 'play' && !MotionSensor.needsPermission()) void this.enableMotion();
   }
 
@@ -399,7 +450,7 @@ export class App {
     if (initial) return;
     this.hud.relabel();
     this.touch?.relabel();
-    if (this.screen === 'briefing') this.overlay.setCard(this.briefingCard());
+    if (this.screen === 'title') this.overlay.setCard(this.titleCard());
     else this.overlay.refresh();
     this.refreshMotionButton();
     this.updateHud();
@@ -425,140 +476,48 @@ export class App {
       lookYaw: a.lookYaw + b.lookYaw,
       lookPitch: a.lookPitch + b.lookPitch,
       light: a.light || b.light,
-      action: a.action || b.action,
-      actionPressed: a.actionPressed || b.actionPressed,
-      swap: a.swap || b.swap,
-      showGoals: a.showGoals || b.showGoals,
       pause: a.pause || b.pause,
     };
   }
 
-  /** Реакция на события шага: сообщения, сохранение, вибрация, конец вылазки. */
+  /** Реакция на события шага: вспышки воспоминаний, вибрация, профиль, смена сессий. */
   handleEvents(ev: StepEvents): void {
     this.audio.onStep(ev, this.game);
-    if (this.touchMode && typeof navigator.vibrate === 'function') {
+    const buzz = this.touchMode && typeof navigator.vibrate === 'function';
+    if (buzz) {
       if (ev.lightRevived) navigator.vibrate(45);
       else if (ev.strokes > 0 && this.game.light.state === 'dead') navigator.vibrate(10);
     }
-    let save = false;
-    for (const e of ev.sortie) {
-      if (e.type === 'picked') {
-        this.hud.toast(e.item.type === 'battery' ? t('toast.battery') : t('toast.find', { name: t(`find.${e.item.find}.name`) }));
-        save = true;
-      } else if (e.type === 'objective') {
-        this.hud.toast(t('toast.goal', { text: this.goalText(e.objective) }));
-        this.goalsUntil = this.game.time + 4;
-        this.platform.track('goal_done', { type: e.objective.type, tier: e.objective.tier });
-        save = true;
-      } else if (e.type === 'all-done') {
-        this.hud.toast(t('toast.alldone'), 5000);
-        this.goalsUntil = this.game.time + 6;
-      } else if (e.type === 'swap-start') this.hud.toast(t('toast.swap'), 1800);
+    for (const e of ev.session) {
+      if (e.type === 'reveal') {
+        this.hud.flash(t(`mem.${e.memory.def.id}.flash`));
+        if (buzz) navigator.vibrate([30, 40, 30]);
+      } else if (e.type === 'recall') {
+        const id = e.memory.def.id;
+        this.hud.flash(t(`mem.${id}.done`));
+        if (!this.profile.archive.includes(id)) this.profile.archive.push(id);
+        this.platform.track('goal_done', { type: 'memory', tier: e.memory.spot?.tier ?? 0 });
+        this.saveProfile();
+        if (buzz) navigator.vibrate(60);
+      } else if (e.type === 'forgot') this.hud.toast(t('toast.forgot'), 2600);
       else if (e.type === 'gas-enter') this.hud.toast(t('toast.gas'), 3000);
-      else if (e.type === 'collapse') save = true;
-      else if (e.type === 'ended') {
-        this.screen = 'ending';
-        // Даём кадру погаснуть, потом — отчёт.
-        this.endingAt = this.game.time + 1.6;
-      }
     }
     for (const e of ev.fear) {
       if (e.type === 'swarm' && e.what === 'cohered') this.teach('swarm', t('teach.swarm'), 6000);
-      else if (e.type === 'swarm' && e.what === 'release') save = true;
-      if (this.touchMode && typeof navigator.vibrate === 'function' && (e.type === 'scare' || e.what === 'cohered')) navigator.vibrate(e.type === 'scare' ? 25 : [40, 60, 40]);
+      if (buzz && (e.type === 'scare' || e.what === 'cohered')) navigator.vibrate(e.type === 'scare' ? 25 : [40, 60, 40]);
     }
-    const tier = this.game.sortie?.maxTier ?? 0;
-    if (tier !== this.lastSavedTier) {
-      this.lastSavedTier = tier;
-      save = true;
+    for (const e of ev.dream) {
+      if (e.type === 'limbo') this.onLimbo();
+      else if (e.type === 'begin') this.onBegin();
+      else if (e.type === 'thing' && e.what === 'changing' && e.thing.fate !== 'dust') this.teach('thing', t('teach.thing'));
+      else if (e.type === 'jump' && e.phase === 'switch' && buzz) navigator.vibrate(35);
     }
-    if (save) this.saveRun();
   }
 
-  /** Записать профиль и текущую вылазку. Вызовы идут по очереди и только по событиям. */
-  private saveRun(): void {
-    const s = this.game.sortie;
-    if (!s) {
-      this.saveProfile();
-      return;
-    }
-    const run: RunSave | null =
-      this.screen === 'play' && !s.outcome
-        ? { v: 1, genVersion: GEN_VERSION, seed: this.seed, rank: this.rank, taken: [...s.taken], done: [...s.done], finds: [...s.finds], spares: s.spares, charge: this.game.light.charge, time: this.game.time, maxTier: s.maxTier, collapsed: s.collapsed(), anomaly: this.game.anomalies?.state() ?? { loops: 0, alt: [] }, released: this.game.director?.wasReleased ?? false }
-        : null;
-    const profile = { ...this.profile, archive: [...this.profile.archive] };
-    this.saving = this.saving.then(() => writeSave(this.platform, profile, run));
-  }
-
-  /** Записать только профиль (настройка звука): сохранённую вылазку не трогаем. */
+  /** Записать профиль. Вызовы идут по очереди и только по событиям. */
   private saveProfile(): void {
     const profile = { ...this.profile, archive: [...this.profile.archive] };
     this.saving = this.saving.then(() => writeProfile(this.platform, profile));
-  }
-
-  /** Конец вылазки: счёт, архив, отчёт. */
-  private finish(outcome: Outcome): void {
-    const s = this.game.sortie!;
-    this.screen = 'report';
-    const escaped = outcome === 'escaped';
-    const fresh: string[] = [];
-    if (escaped) {
-      this.profile.successes += 1;
-      for (const f of s.finds) {
-        if (!this.profile.archive.includes(f)) {
-          this.profile.archive.push(f);
-          fresh.push(f);
-        }
-      }
-    }
-    this.saveRun();
-    this.platform.track(escaped ? 'level_completed' : 'level_failed', { world: 'bunker', level: `seed_${this.seed}` });
-
-    const doneCount = s.objectives.filter((o) => s.done.has(o.id)).length;
-    const minutes = Math.floor(s.time / 60);
-    const seconds = Math.floor(s.time % 60);
-    const lines: CardLine[] = [];
-    for (const o of s.objectives) lines.push({ text: this.goalText(o), kind: s.done.has(o.id) ? 'done' : 'todo' });
-    lines.push({ text: t('report.stats', { done: doneCount, total: s.objectives.length, time: `${minutes}:${String(seconds).padStart(2, '0')}`, tier: ROMAN[s.maxTier] ?? 'I' }), kind: 'dim' });
-    if (s.finds.length > 0) {
-      lines.push({ text: escaped ? t('report.finds') : t('report.lost'), kind: 'head' });
-      for (const f of s.finds) lines.push({ text: `${t(`find.${f}.name`)}${fresh.includes(f) ? ` — ${t('report.new')}` : ''}`, kind: escaped ? 'plain' : 'dim' });
-      if (escaped) for (const f of fresh.slice(0, 2)) lines.push({ text: t(`find.${f}.desc`), kind: 'dim' });
-    }
-    const sfx = this.touchMode ? '.touch' : '';
-    this.overlay.setCard({ title: escaped ? t('report.escaped') : t('report.lostsignal'), sub: t(`report.cause.${outcome}`), lines, prompt: t(`report.next${sfx}`) });
-    this.lifecycle.set('user', true);
-    this.desktop?.release();
-    this.desktop?.uncapture();
-    this.touch?.release();
-    this.touch?.setVisible(false);
-    this.hud.setVisible(false);
-    this.overlay.show('report');
-    this.audio.setScene('menu');
-    this.audio.ui('ui_report');
-    this.syncAudio();
-  }
-
-  /** После отчёта: реклама между вылазками и следующий объект. */
-  async nextSortie(): Promise<void> {
-    if (this.screen !== 'report') return;
-    this.audio.ui('ui_click');
-    this.screen = 'boot';
-    this.overlay.show('loading');
-    this.lifecycle.set('ad', true);
-    await this.platform.showInterstitial('between_sorties');
-    this.lifecycle.set('ad', false);
-    const rankParam = Math.round(Number(this.params.get('rank') ?? ''));
-    this.prepare(sortieSeed(this.profile), rankParam >= 1 && rankParam <= 3 ? (rankParam as 1 | 2 | 3) : rankFor(this.profile));
-    this.redraw();
-    this.overlay.show('start');
-  }
-
-  private actionText(target: Target): string {
-    const sfx = this.touchMode ? '.touch' : '';
-    if (target.kind === 'item') return target.item.type === 'battery' ? t(`act.battery${sfx}`) : t(`act.take${sfx}`, { name: t(`find.${target.item.find}.name`) });
-    if (target.kind === 'shoot') return t(`act.shoot${sfx}`, { name: t(`mark.${target.objective.landmark!.id}`) });
-    return t(`act.exit${sfx}`);
   }
 
   /** Подсказка обучения: показывается один раз за сессию. */
@@ -570,16 +529,15 @@ export class App {
 
   updateHud(): void {
     const g = this.game;
-    const s = g.sortie;
+    const s = g.session;
     const light = g.light;
     this.hud.setTime(g.time);
-    const dead = light.state === 'dead' && !light.empty;
+    const dead = light.state === 'dead';
     const kind = this.touchMode ? (this.motion?.state === 'active' ? 'motion' : 'touch') : 'desktop';
-    const swapping = (s?.swapping ?? 0) > 0;
-    this.hud.setShakePrompt(dead && !swapping ? t(`hint.shake.${kind}`) : swapping ? t('hint.swap') : light.empty && light.state === 'dead' ? t('hint.empty') : '', swapping ? 1 - s!.swapping / s!.cfg.swapTime : light.reviveProgress);
+    this.hud.setShakePrompt(dead ? t(`hint.shake.${kind}`) : '', light.reviveProgress);
     const base = this.touchMode ? 'touch' : 'desktop';
     let hint = '';
-    if (!dead && this.screen === 'play') {
+    if (!dead && this.screen === 'play' && g.where === 'main' && this.profile.successes === 0) {
       if (g.time < 7) hint = t(this.dragMode ? 'hint.move.desktop_drag' : `hint.move.${base}`);
       else if (g.time < 12) hint = t(`hint.light.${base}`);
       else if (g.time < 16 && !this.touchMode) hint = t('hint.pause.desktop');
@@ -587,35 +545,42 @@ export class App {
     this.hud.setHint(hint);
     this.touch?.setShakePrompt(dead, light.reviveProgress);
     this.touch?.setLit(light.state === 'on');
+    this.hud.setBattery(1, 0, true);
+    this.hud.setAction('', 0);
+    // В светлом пространстве (белое нигде, луг) светлые надписи не видны: переключаем их на тёмные.
+    const amb = g.env.ambient;
+    this.hud.el.classList.toggle('is-bright', (amb[0] + amb[1] + amb[2]) / 3 > 0.3);
 
-    if (s) {
-      const show = this.goalsHeld || g.time < this.goalsUntil;
-      this.hud.setGoals(
-        t('brief.goals'),
-        s.objectives.map((o) => ({ text: this.goalText(o), done: s.done.has(o.id) })),
-        show,
-      );
-      this.hud.setBattery(light.charge, s.spares);
-      const target = s.outcome ? null : s.target;
-      this.hud.setAction(target ? this.actionText(target) : '', s.hold);
-      this.touch?.setAction(target !== null, s.hold);
-      if (target && target.kind !== 'exit') {
-        const p = target.kind === 'item' ? ([target.item.x, target.item.y + 0.05, target.item.z] as const) : ([target.objective.landmark!.x, target.objective.landmark!.y, target.objective.landmark!.z] as const);
-        const m = g.renderer.project(p);
-        this.hud.setMarker(m.x, m.y, m.visible, s.hold > 0);
+    if (s && g.where !== 'limbo') {
+      // Воспоминания, которые уже пришли: что ищем и что вспомнили.
+      const lines = s.memories.filter((m) => m.state !== 'hidden').map((m) => ({ text: t(`mem.${m.def.id}.task`), done: m.state === 'done' }));
+      this.hud.setGoals('', lines, lines.length > 0);
+      // Рамка — на том, во что игрок всматривается: искомая вещь или любая «неустойчивая».
+      const act = s.active;
+      const focus = g.things.focus;
+      const at = focus ? ([focus.pos[0], focus.pos[1] + focus.radius * 0.6, focus.pos[2]] as const) : null;
+      if (at) {
+        const m = g.renderer.project(at);
+        this.hud.setMarker(m.x, m.y, m.visible, s.hold > 0 || (focus?.gaze ?? 0) > 0.5);
       } else this.hud.setMarker(0, 0, false);
       // Обучение через игру: подсказка появляется, когда она впервые к месту.
-      if (target?.kind === 'shoot') this.teach('shoot', t(`teach.shoot.${base}`));
-      else if (target?.kind === 'item') this.teach('take', t(`teach.take.${base}`));
-      if (light.charge < 0.25 && s.spares > 0 && !this.touchMode) this.teach('swap', t('teach.swap'));
+      const id = act?.def.id ?? '';
+      if (id !== this.seeking) {
+        this.seeking = id;
+        this.seekingSince = g.time;
+      }
+      if (act && s.hold > 0.05) this.teach('look', t('teach.look'));
+      if (act && g.time - this.seekingSince > 25) this.teach('dark', t('teach.dark'), 7000);
       if (s.inWater) this.teach('water', t('teach.water'));
     } else {
       this.hud.setGoals('', [], false);
-      this.hud.setBattery(light.charge, 0, true);
-      this.hud.setAction('', 0);
       this.hud.setMarker(0, 0, false);
-      this.touch?.setAction(false, 0);
     }
+    // Лимбо: итог сессии и строка «от системы».
+    if (g.where === 'limbo') {
+      const k = s ? s.doneCount : 0;
+      this.hud.setLimbo([t('limbo.done', { n: this.sessionNumber(), k }), t(`limbo.line.${(this.profile.successes + this.profile.archive.length) % 6}`), t('limbo.wait')]);
+    } else this.hud.setLimbo([]);
     if (this.showFps) {
       const i = g.renderer.info();
       this.hud.setFps(`${this.fps.toFixed(0)} fps · ${i.width}×${i.height} · ${i.calls} dc · ${(i.triangles / 1000).toFixed(1)}k`);
@@ -624,17 +589,12 @@ export class App {
 
   /** Один оборот игры: шаги симуляции, кадр, надписи. Отладочный API вызывает то же самое вручную. */
   advance(input: InputFrame, steps: number, alpha: number, dt: number, present = true): void {
-    this.goalsHeld = input.showGoals;
     for (let i = 0; i < steps; i++) {
       this.handleEvents(this.game.step(STEP, input));
       input.light = false;
-      input.actionPressed = false;
-      input.swap = false;
     }
     this.game.draw(alpha, dt, present);
     this.updateHud();
-    const s = this.game.sortie;
-    if (this.screen === 'ending' && s?.outcome && this.game.time >= this.endingAt) this.finish(s.outcome);
   }
 
   private readonly loop = (now: number): void => {

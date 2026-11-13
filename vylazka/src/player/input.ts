@@ -1,4 +1,7 @@
-/** Ввод игрока за кадр: общий вид для клавиатуры с мышью и для тача. */
+/**
+ * Ввод игрока за кадр: общий вид для клавиатуры с мышью и для тача. Игрок только ходит, смотрит
+ * и светит — кнопок действия нет.
+ */
 export interface InputFrame {
   /** Движение в осях игрока: x — вправо, z — вперёд; длина до 1. */
   moveX: number;
@@ -9,20 +12,12 @@ export interface InputFrame {
   lookPitch: number;
   /** Кнопка фонаря нажата в этом кадре. */
   light: boolean;
-  /** Кнопка действия удерживается. */
-  action: boolean;
-  /** Кнопка действия нажата в этом кадре. */
-  actionPressed: boolean;
-  /** Заменить батарейку. */
-  swap: boolean;
-  /** Показать список целей (удерживается). */
-  showGoals: boolean;
   /** Запрошена пауза. */
   pause: boolean;
 }
 
 export function emptyInput(): InputFrame {
-  return { moveX: 0, moveZ: 0, run: false, lookYaw: 0, lookPitch: 0, light: false, action: false, actionPressed: false, swap: false, showGoals: false, pause: false };
+  return { moveX: 0, moveZ: 0, run: false, lookYaw: 0, lookPitch: 0, light: false, pause: false };
 }
 
 export interface InputSource {

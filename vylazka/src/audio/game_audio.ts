@@ -22,7 +22,9 @@ export interface SoundSink {
 export interface AudioWorld {
   light: { state: string };
   swarm: { pos: Vec3; active: boolean; cohesion: number } | null;
-  sortie: { outcome: unknown; inWater: boolean; inGas: boolean; panic: number; hold: number; target: { kind: string } | null } | null;
+  session: { inWater: boolean; inGas: boolean; panic: number; hold: number } | null;
+  /** Где игрок: в убежище, в карманном пространстве или в лимбо. */
+  where: string;
   body: { y: number; vx: number; vz: number };
   swarmNear: number;
   staticLevel: number;
@@ -88,20 +90,19 @@ export class GameAudio {
       a.play('flash_rattle', { rate: this.jitter(0.08), volume: game.light.state === 'dead' ? 1 : 0.6 });
     }
 
-    for (const e of ev.sortie) {
-      if (e.type === 'picked') a.play('pickup', { rate: this.jitter(0.05) });
-      else if (e.type === 'objective') {
-        if (e.objective.type === 'shoot') a.play('camera_beep');
-      } else if (e.type === 'swap-start') a.play('battery_swap');
-      else if (e.type === 'swap-done') a.play('flash_click', { rate: 0.95 });
+    for (const e of ev.session) {
+      // Вспышка воспоминания — нарастающий тон камеры; «вспомнил» — её писк.
+      if (e.type === 'reveal') a.play('camera_hold');
+      else if (e.type === 'recall') a.play('camera_beep');
       else if (e.type === 'collapse') a.play('collapse', { pos: e.spec.center });
       else if (e.type === 'cough') a.play('cough', { rate: this.jitter(0.05) });
-      else if (e.type === 'hurt') a.play('fall', { volume: clamp01(0.5 + e.amount / 60) });
-      else if (e.type === 'ended') {
-        if (e.outcome === 'escaped') a.play('ladder');
-        else if (e.outcome === 'fell') a.play('fall');
-        else if (e.outcome === 'gassed') a.play('cough', { rate: 0.9 });
-      }
+      else if (e.type === 'fall') a.play('fall');
+    }
+    for (const e of ev.dream) {
+      // Скачок: искра в момент, когда место сменилось. Новая сессия начинается, как первая, — люком.
+      if (e.type === 'jump' && e.phase === 'switch') a.play('flash_spark', { rate: 0.7, volume: 0.8 });
+      else if (e.type === 'limbo') a.play('ui_report');
+      else if (e.type === 'begin') a.play('hatch', { volume: 0.8 });
     }
 
     const swarmPos = game.swarm?.pos;
@@ -129,8 +130,9 @@ export class GameAudio {
 
     const ears = game.listener();
     a.setListener(ears.pos, ears.yaw);
-    const s = game.sortie;
-    const over = Boolean(s?.outcome);
+    const s = game.session;
+    // В карманных пространствах и в лимбо убежища не слышно.
+    const over = game.where !== 'main';
     const b = game.body;
     this.clock += dt;
 
@@ -139,8 +141,8 @@ export class GameAudio {
       a.play(s?.inWater ? 'step_water' : 'step_concrete', { rate: this.jitter(0.07), volume: 0.55 + Math.min(0.45, speed / 9) });
     }
 
-    // Съёмка приметы: камера наводится, пока игрок держит кнопку.
-    const holding = !over && (s?.hold ?? 0) > 0 && s?.target?.kind === 'shoot';
+    // Игрок всматривается в искомую вещь: камера наводится.
+    const holding = !over && (s?.hold ?? 0) > 0;
     if (holding && !this.holding) a.play('camera_hold');
     this.holding = holding;
 
@@ -148,7 +150,7 @@ export class GameAudio {
     const depth = clamp01(-b.y / 9);
     const panic = s?.panic ?? 0;
     const near = game.swarmNear;
-    // Запись кончилась — мир стихает за те полторы секунды, что гаснет кадр; помехи остаются.
+    // Вне убежища его звуки стихают; помехи остаются.
     const live = over ? 0 : 1;
     a.loop('amb_bunker', live * (1 - depth * 0.7));
     a.loop('amb_deep', live * depth);

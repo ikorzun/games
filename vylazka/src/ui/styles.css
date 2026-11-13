@@ -649,3 +649,96 @@ body {
   height: 30px;
   opacity: 0.9;
 }
+
+/* ── Вспышка воспоминания: строка посреди кадра, появляется рывком и медленно гаснет ── */
+.vz-hud__flash {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%);
+  max-width: min(86%, 30em);
+  text-align: center;
+  text-wrap: balance;
+  font-size: clamp(17px, 1.6vmin + 11px, 26px);
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-shadow:
+    1px 0 0 rgba(255, 40, 30, 0.75),
+    -1px 0 0 rgba(40, 200, 255, 0.55),
+    0 0 14px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  transition: opacity 1.6s ease-out;
+  pointer-events: none;
+}
+.vz-hud__flash.is-on {
+  opacity: 0.96;
+  transition: none;
+  animation: vz-flash-in 0.5s steps(5, end);
+}
+@keyframes vz-flash-in {
+  0% {
+    opacity: 0;
+    transform: translate(-51%, -50%) skewX(-8deg);
+  }
+  40% {
+    opacity: 1;
+    transform: translate(-49%, -50%) skewX(5deg);
+  }
+  100% {
+    opacity: 0.96;
+    transform: translate(-50%, -50%);
+  }
+}
+/* ── Лимбо: тёмные строки на белом ── */
+.vz-hud__limbo {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  width: min(88%, 34em);
+  text-align: center;
+  text-wrap: balance;
+  font-size: clamp(14px, 1.1vmin + 10px, 19px);
+  line-height: 1.7;
+  letter-spacing: 0.03em;
+  color: #1c1c1c;
+  opacity: 0;
+  transition: opacity 1.2s;
+  pointer-events: none;
+}
+.vz-hud__limbo.is-on {
+  opacity: 0.82;
+}
+.vz-hud__limbo > div:nth-child(2) {
+  opacity: 0.6;
+  font-style: italic;
+}
+.vz-hud__limbo > div:nth-child(3) {
+  margin-top: 0.8em;
+  opacity: 0.45;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vz-hud__flash.is-on {
+    animation: none;
+  }
+}
+
+/* ── Светлое пространство: надписи темнеют, иначе они белым по белому ── */
+.vz-hud.is-bright,
+.vz-hud.is-bright .vz-hud__toast,
+.vz-hud.is-bright .vz-hud__hint,
+.vz-hud.is-bright .vz-hud__goal,
+.vz-hud.is-bright .vz-hud__prompt {
+  color: #161616;
+  text-shadow: none;
+}
+.vz-hud.is-bright .vz-hud__flash {
+  color: #101010;
+  text-shadow:
+    1px 0 0 rgba(255, 40, 30, 0.6),
+    -1px 0 0 rgba(40, 160, 255, 0.5);
+}
+.vz-hud.is-bright .vz-hud__mark {
+  filter: invert(1);
+}

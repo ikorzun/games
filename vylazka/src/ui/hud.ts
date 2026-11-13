@@ -38,6 +38,10 @@ export class Hud {
   private readonly actText: HTMLElement;
   private readonly actBar: HTMLElement;
   private readonly toastEl: HTMLElement;
+  private readonly flashEl: HTMLElement;
+  private readonly limboEl: HTMLElement;
+  private flashTimer: ReturnType<typeof setTimeout> | undefined;
+  private lastLimbo = '';
   private readonly mark: HTMLElement;
   private lastClock = '';
   private lastHint = '';
@@ -57,6 +61,8 @@ export class Hud {
       '</div>' +
       '<div class="vz-hud__goals"></div>' +
       '<div class="vz-hud__toast"></div>' +
+      '<div class="vz-hud__flash"></div>' +
+      '<div class="vz-hud__limbo"></div>' +
       '<div class="vz-hud__mark"></div>' +
       '<div class="vz-hud__prompt"><span class="vz-hud__prompt-text"></span><span class="vz-hud__bar"><i></i></span></div>' +
       '<div class="vz-hud__act"><span class="vz-hud__act-text"></span><span class="vz-hud__bar"><i></i></span></div>' +
@@ -79,6 +85,8 @@ export class Hud {
     this.actText = q('.vz-hud__act-text');
     this.actBar = q('.vz-hud__act .vz-hud__bar i');
     this.toastEl = q('.vz-hud__toast');
+    this.flashEl = q('.vz-hud__flash');
+    this.limboEl = q('.vz-hud__limbo');
     this.mark = q('.vz-hud__mark');
     this.relabel();
   }
@@ -165,6 +173,31 @@ export class Hud {
     this.toastEl.classList.add('is-on');
     if (this.toastTimer !== undefined) clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => this.toastEl.classList.remove('is-on'), ms);
+  }
+
+  /** Вспышка воспоминания: строка посреди кадра, появляется рывком и медленно гаснет. */
+  flash(text: string, ms = 5200): void {
+    this.flashEl.textContent = text;
+    this.flashEl.classList.remove('is-on');
+    // Перезапуск анимации появления.
+    void this.flashEl.offsetWidth;
+    this.flashEl.classList.add('is-on');
+    if (this.flashTimer !== undefined) clearTimeout(this.flashTimer);
+    this.flashTimer = setTimeout(() => this.flashEl.classList.remove('is-on'), ms);
+  }
+
+  /** Строки лимбо посреди кадра; пустой список — убрать. */
+  setLimbo(lines: readonly string[]): void {
+    const key = lines.join('\n');
+    if (key === this.lastLimbo) return;
+    this.lastLimbo = key;
+    this.limboEl.replaceChildren();
+    for (const l of lines) {
+      const row = document.createElement('div');
+      row.textContent = l;
+      this.limboEl.append(row);
+    }
+    this.limboEl.classList.toggle('is-on', lines.length > 0);
   }
 
   /** Рамка видоискателя вокруг предмета или приметы под рукой: x, y — доли кадра. */

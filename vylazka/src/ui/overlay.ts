@@ -20,6 +20,10 @@ export interface OverlayHandlers {
   /** Чувствительность обзора и яркость: по кругу ниже → средняя → выше. */
   onSens?(): void;
   onBright?(): void;
+  /** Вспышки: полные или мягкие. */
+  onFlash?(): void;
+  /** Сменить язык. */
+  onLang?(): void;
 }
 
 /** Строка карточки: обычная, выполненная цель или подзаголовок. */
@@ -50,6 +54,9 @@ export class Overlay {
   private readonly soundBtn: HTMLButtonElement;
   private readonly sensBtn: HTMLButtonElement;
   private readonly brightBtn: HTMLButtonElement;
+  private readonly flashBtn: HTMLButtonElement;
+  private readonly langBtn: HTMLButtonElement;
+  private calm = false;
   private sens = 1;
   private bright = 1;
   private sound = true;
@@ -76,6 +83,8 @@ export class Overlay {
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--quality"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--sens"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--bright"></button>' +
+      '<button type="button" class="vz-overlay__opt vz-overlay__opt--flash"></button>' +
+      '<button type="button" class="vz-overlay__opt vz-overlay__opt--lang"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--motion"></button></div></div>';
     parent.append(this.el);
     const q = (sel: string): HTMLElement => this.el.querySelector(sel) as HTMLElement;
@@ -96,6 +105,16 @@ export class Overlay {
     this.brightBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.handlers.onBright?.();
+    });
+    this.flashBtn = q('.vz-overlay__opt--flash') as HTMLButtonElement;
+    this.flashBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.handlers.onFlash?.();
+    });
+    this.langBtn = q('.vz-overlay__opt--lang') as HTMLButtonElement;
+    this.langBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.handlers.onLang?.();
     });
     this.soundBtn = q('.vz-overlay__opt--sound') as HTMLButtonElement;
     this.soundBtn.addEventListener('click', (e) => {
@@ -150,6 +169,12 @@ export class Overlay {
   }
 
   /** Содержимое карточки для экранов задания и отчёта. */
+  /** Вспышки мягкие (true) или полные. */
+  setFlash(calm: boolean): void {
+    this.calm = calm;
+    this.refresh();
+  }
+
   setCard(card: Card | null): void {
     this.card = card;
     this.refresh();
@@ -188,6 +213,11 @@ export class Overlay {
     this.brightBtn.textContent = `${t('ui.bright')}: ${t(`ui.level.${lv[this.bright] ?? 'med'}`)}`;
     this.sensBtn.hidden = this.qualityBtn.hidden;
     this.brightBtn.hidden = this.qualityBtn.hidden;
+    this.flashBtn.textContent = `${t('ui.flash')}: ${t(this.calm ? 'ui.flash.calm' : 'ui.flash.full')}`;
+    this.flashBtn.setAttribute('aria-pressed', String(this.calm));
+    this.flashBtn.hidden = this.qualityBtn.hidden;
+    this.langBtn.textContent = `${t('ui.lang')}: ${t('ui.lang.name')}`;
+    this.langBtn.hidden = this.qualityBtn.hidden;
     this.rotate.textContent = t('ui.rotate');
   }
 }

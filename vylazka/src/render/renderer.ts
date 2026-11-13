@@ -12,7 +12,7 @@ import { bakeDetail } from './detail';
 import { bakeGrime } from './grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from './matcap_atlas';
 import { MAX_WORMS } from '../swarm/body';
-import { DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, HAZE_FRAG, POST_FRAG, POST_VERT, SWARM_FRAG, SWARM_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
+import { DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, HAZE_FRAG, POST_FRAG, POST_VERT, SWARM_FRAG, SWARM_VERT, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
 
 export type Quality = 'low' | 'med' | 'high';
 
@@ -66,6 +66,65 @@ export interface FrameView {
   fade: number;
   time: number;
   frame: number;
+  /** Окружение пространства: рассеянный свет, цвет дали (он же фон) и плотность тумана. */
+  ambient: Vec3;
+  fogColor: Vec3;
+  fogDensity: number;
+  /** Множитель света фонаря в этом месте: 0 — фонарь «не проходит». */
+  lightScale: number;
+  /** 0..1: мир рассыпается в пыль. */
+  dissolve: number;
+  /** 0..1: красная полигонная сетка на всём, что видно. */
+  wire: number;
+  /** 0..1: насколько заметен кинескоп. */
+  crt: number;
+  /** 0..1: кадр выбелен (скачок между пространствами). */
+  flash: number;
+}
+
+/** Состояние «вещи» — отдельного предмета, который можно двигать, растить и рассыпать. */
+export interface ThingView {
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  scale: number;
+  /** 0..1: вещь рассыпается. */
+  dissolve: number;
+  /** 0..1: красная сетка поверх вещи. */
+  wire: number;
+  /** Сетка видна сквозь стены. */
+  xray: boolean;
+  visible: boolean;
+}
+
+interface Thing {
+  mesh: THREE.Mesh;
+  mat: THREE.ShaderMaterial;
+  wire: THREE.LineSegments | null;
+  wireMat: THREE.ShaderMaterial | null;
+  radius: number;
+}
+
+/** Рёбра треугольников сетки без повторов: индексы для линий. */
+function edgeIndex(index: ArrayLike<number>, vertexCount: number): Uint32Array {
+  const seen = new Set<number>();
+  const out: number[] = [];
+  const push = (a: number, b: number): void => {
+    const k = a < b ? a * vertexCount + b : b * vertexCount + a;
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push(a, b);
+  };
+  for (let i = 0; i + 2 < index.length; i += 3) {
+    const a = index[i]!;
+    const b = index[i + 1]!;
+    const c = index[i + 2]!;
+    push(a, b);
+    push(b, c);
+    push(c, a);
+  }
+  return new Uint32Array(out);
 }
 
 /** Размер внутреннего буфера под соотношение сторон экрана и бюджет пикселей. */
@@ -118,8 +177,13 @@ export class GameRenderer {
   private readonly swarmDir: THREE.InstancedBufferAttribute;
   private readonly swarmParam: THREE.InstancedBufferAttribute;
   private readonly chunks: THREE.Mesh[] = [];
+  /** Геометрия карманного пространства (белое нигде, луг…): рисуется всегда, пока оно активно. */
+  private readonly pocket: THREE.Mesh[] = [];
+  private readonly things = new Map<number, Thing>();
+  private nextThing = 1;
+  private readonly wireMat: THREE.ShaderMaterial;
+  private readonly clearColor = new THREE.Color(0, 0, 0);
   /** Предметы по ярусам: по одной маленькой геометрии на ярус. */
-  private readonly items = new Map<number, THREE.Mesh>();
   /** Имена чанков, которые сейчас скрыты (обвал до обрушения, неактивный вариант комнаты). */
   private readonly hiddenIds = new Set<string>();
   private readonly lightU: Record<string, THREE.IUniform>;
@@ -222,16 +286,34 @@ export class GameRenderer {
         uAmbient: { value: new THREE.Vector3(0.0016, 0.0019, 0.0024) },
         uBounce: { value: new THREE.Vector4(0, 0, -1000, 0) },
         uFog: { value: 0.035 },
+        uFogColor: { value: new THREE.Vector3(0, 0, 0) },
+        uDissolve: { value: 0 },
+        uThing: { value: new THREE.Vector4(0, 0, 0, 0) },
         uMatA: { value: matA },
         uMatB: { value: matB },
         uMatBase: { value: atlas.base.map((b) => new THREE.Vector3(b[0], b[1], b[2])) },
       },
     });
     this.depthMat = new THREE.ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, side: THREE.BackSide, colorWrite: false });
+    // Красная сетка: распад берёт у мира (одни и те же uniform-объекты), яркость своя.
+    this.wireMat = new THREE.ShaderMaterial({
+      vertexShader: WIRE_VERT,
+      fragmentShader: WIRE_FRAG,
+      uniforms: {
+        uDissolve: this.worldMat.uniforms.uDissolve!,
+        uThing: this.worldMat.uniforms.uThing!,
+        uWireColor: { value: new THREE.Vector3(1.0, 0.06, 0.03) },
+        uWireAlpha: { value: 0 },
+        uTime: { value: 0 },
+      },
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+    });
     this.dustMat = new THREE.ShaderMaterial({
       vertexShader: DUST_VERT,
       fragmentShader: DUST_FRAG,
-      uniforms: { ...this.lightU, uTime: { value: 0 }, uCamPos: { value: new THREE.Vector3() }, uPointScale: { value: 4 } },
+      uniforms: { ...this.lightU, uTime: { value: 0 }, uCamPos: { value: new THREE.Vector3() }, uPointScale: { value: 4 }, uBoost: { value: 0 } },
       blending: THREE.AdditiveBlending,
       transparent: true,
       depthWrite: false,
@@ -300,6 +382,8 @@ export class GameRenderer {
         uGrime: { value: grimeTex },
         uHazeTexel: { value: new THREE.Vector2(1, 1) },
         uBloom: { value: 0.1 },
+        uCrt: { value: 0 },
+        uFlash: { value: 0 },
       },
       depthTest: false,
       depthWrite: false,
@@ -371,6 +455,10 @@ export class GameRenderer {
     }
     this.worldMat.defines = { ...(q.shadow > 0 ? { SHADOWS: '' } : {}), ...(q.detail ? { DETAIL: '' } : {}) };
     this.worldMat.needsUpdate = true;
+    for (const t of this.things.values()) {
+      t.mat.defines = { ...this.worldMat.defines };
+      t.mat.needsUpdate = true;
+    }
     this.postMat.defines = { ...(q.chroma ? { CHROMA: '' } : {}), ...(q.haze > 0 ? { HAZE: '' } : {}) };
     this.postMat.needsUpdate = true;
     this.hazeMat.defines = { HAZE_STEPS: Math.max(1, q.haze), ...(q.hazeShadow && q.shadow > 0 ? { HAZE_SHADOW: '' } : {}) };
@@ -445,17 +533,9 @@ export class GameRenderer {
   /** Заменить геометрию мира. stairs — лестницы между ярусами: рядом с ними виден соседний ярус. */
   setWorld(chunks: readonly LevelChunk[], stairs: readonly StairLink[] = []): void {
     this.stairs = stairs;
-    for (const m of this.chunks) {
-      this.scene.remove(m);
-      m.geometry.dispose();
-    }
+    for (const m of this.chunks) this.dropMesh(m);
     this.chunks.length = 0;
     this.hiddenIds.clear();
-    for (const m of this.items.values()) {
-      this.scene.remove(m);
-      m.geometry.dispose();
-    }
-    this.items.clear();
     for (const chunk of chunks) {
       const mesh = this.makeMesh(chunk.mesh, chunk.tierMin, chunk.tierMax);
       if (chunk.id) mesh.userData.id = chunk.id;
@@ -481,20 +561,96 @@ export class GameRenderer {
     return mesh;
   }
 
-  /** Заменить геометрию предметов яруса (null — на ярусе пусто). */
-  setItems(tier: number, data: MeshData | null): void {
-    const old = this.items.get(tier);
-    if (old) {
-      this.scene.remove(old);
-      old.geometry.dispose();
-      this.items.delete(tier);
+  /** Убрать сетку из сцены вместе с её красной сеткой. */
+  private dropMesh(m: THREE.Mesh): void {
+    const w = m.userData.wire as THREE.LineSegments | undefined;
+    if (w) w.geometry.dispose();
+    this.scene.remove(m);
+    m.geometry.dispose();
+  }
+
+  /** Линии рёбер сетки: строятся при первом показе и остаются при ней. */
+  private wireFor(m: THREE.Mesh, mat: THREE.ShaderMaterial): THREE.LineSegments {
+    const have = m.userData.wire as THREE.LineSegments | undefined;
+    if (have) return have;
+    const g = new THREE.BufferGeometry();
+    const pos = m.geometry.getAttribute('position');
+    g.setAttribute('position', pos);
+    g.setIndex(new THREE.BufferAttribute(edgeIndex(m.geometry.getIndex()!.array, pos.count), 1));
+    g.boundingSphere = m.geometry.boundingSphere;
+    const lines = new THREE.LineSegments(g, mat);
+    // Слой 1: в проход тени линии не попадают.
+    lines.layers.set(1);
+    lines.frustumCulled = false;
+    m.add(lines);
+    m.userData.wire = lines;
+    return lines;
+  }
+
+  /** Показать карманное пространство (null — убрать). Убежище при этом остаётся в сцене, но оно далеко. */
+  setPocket(meshes: readonly MeshData[] | null): void {
+    for (const m of this.pocket) this.dropMesh(m);
+    this.pocket.length = 0;
+    for (const data of meshes ?? []) {
+      const mesh = this.makeMesh(data, 0, 0);
+      this.pocket.push(mesh);
+      this.scene.add(mesh);
     }
-    if (!data) return;
-    const mesh = this.makeMesh(data, tier, tier);
-    // Предметы мелкие и разбросаны по ярусу: общую сферу не отсекаем по расстоянию.
-    mesh.userData.items = true;
-    this.items.set(tier, mesh);
+  }
+
+  /** Добавить вещь: геометрия вокруг начала координат. Возвращает номер для setThing и removeThing. */
+  addThing(data: MeshData, seed = 0): number {
+    const mat = this.worldMat.clone();
+    // Всё общее — теми же uniform-объектами, что у мира: свет, туман, фактуры обновляются разом.
+    for (const k of Object.keys(this.worldMat.uniforms)) mat.uniforms[k] = this.worldMat.uniforms[k]!;
+    mat.uniforms.uThing = { value: new THREE.Vector4(0, 0, 0, (seed % 97) * 1.37) };
+    mat.defines = { ...this.worldMat.defines };
+    const mesh = this.makeMesh(data, 0, 0);
+    mesh.material = mat;
+    mesh.matrixAutoUpdate = true;
+    mesh.visible = false;
     this.scene.add(mesh);
+    const id = this.nextThing++;
+    this.things.set(id, { mesh, mat, wire: null, wireMat: null, radius: mesh.geometry.boundingSphere?.radius ?? 0.5 });
+    return id;
+  }
+
+  setThing(id: number, v: ThingView): void {
+    const t = this.things.get(id);
+    if (!t) return;
+    t.mesh.visible = v.visible;
+    if (!v.visible) return;
+    t.mesh.position.set(v.x, v.y, v.z);
+    t.mesh.rotation.set(0, v.yaw, 0);
+    t.mesh.scale.setScalar(v.scale);
+    (t.mat.uniforms.uThing!.value as THREE.Vector4).x = v.dissolve;
+    // Рассыпающаяся вещь тени не отбрасывает.
+    t.mesh.layers.set(v.dissolve > 0.4 ? 1 : 0);
+    if (v.wire > 0.01) {
+      if (!t.wire) {
+        t.wireMat = this.wireMat.clone();
+        t.wireMat.uniforms.uDissolve = this.worldMat.uniforms.uDissolve!;
+        t.wireMat.uniforms.uThing = t.mat.uniforms.uThing!;
+        t.wireMat.uniforms.uTime = this.wireMat.uniforms.uTime!;
+        t.wire = this.wireFor(t.mesh, t.wireMat);
+      }
+      t.wire.visible = true;
+      t.wireMat!.uniforms.uWireAlpha!.value = v.wire;
+      t.wireMat!.depthTest = !v.xray;
+    } else if (t.wire) t.wire.visible = false;
+  }
+
+  removeThing(id: number): void {
+    const t = this.things.get(id);
+    if (!t) return;
+    this.dropMesh(t.mesh);
+    t.mat.dispose();
+    t.wireMat?.dispose();
+    this.things.delete(id);
+  }
+
+  clearThings(): void {
+    for (const id of [...this.things.keys()]) this.removeThing(id);
   }
 
   /**
@@ -586,7 +742,37 @@ export class GameRenderer {
       const hidden = m.userData.id !== undefined && this.hiddenIds.has(m.userData.id as string);
       m.visible = !far && !hidden && (m.userData.tierMax as number) >= lo && (m.userData.tierMin as number) <= hi;
     }
-    for (const [tier, m] of this.items) m.visible = tier >= lo && tier <= hi;
+    for (const m of this.pocket) m.visible = true;
+
+    // Красная сетка на всём видимом. Линии строятся по мере надобности: то, что рядом с камерой, — сразу
+    // (иначе первый кадр в «сеточной» комнате пуст), дальнее — не больше трёх сеток за кадр.
+    this.wireMat.uniforms.uWireAlpha!.value = v.wire;
+    this.wireMat.uniforms.uTime!.value = v.time;
+    let built = 0;
+    for (const m of [...this.chunks, ...this.pocket]) {
+      const w = m.userData.wire as THREE.LineSegments | undefined;
+      if (v.wire > 0.01 && m.visible) {
+        if (w) w.visible = true;
+        else {
+          const sphere = m.geometry.boundingSphere;
+          const near = sphere ? cam.position.distanceTo(sphere.center) - sphere.radius < 7 : true;
+          if (near || built < 3) {
+            this.wireFor(m, this.wireMat).visible = true;
+            if (!near) built += 1;
+          }
+        }
+      } else if (w) w.visible = false;
+    }
+
+    // Окружение пространства.
+    const wuEnv = this.worldMat.uniforms;
+    (wuEnv.uAmbient!.value as THREE.Vector3).set(v.ambient[0], v.ambient[1], v.ambient[2]);
+    (wuEnv.uFogColor!.value as THREE.Vector3).set(v.fogColor[0], v.fogColor[1], v.fogColor[2]);
+    wuEnv.uFog!.value = v.fogDensity;
+    wuEnv.uDissolve!.value = v.dissolve;
+    this.swarmMat.uniforms.uFog!.value = v.fogDensity;
+    this.dustMat.uniforms.uBoost!.value = v.dissolve;
+    this.clearColor.setRGB(v.fogColor[0], v.fogColor[1], v.fogColor[2]);
 
     // Фонарь в пространстве камеры.
     const lu = this.lightU;
@@ -595,7 +781,7 @@ export class GameRenderer {
     // Поверхности в грязи и рельефе отражают меньше, чем ровная краска: фонарь взят с запасом.
     // Лампа фонаря чуть дышит: контакт неидеален, даже когда фонарь «горит ровно».
     const breathe = 1 + 0.018 * Math.sin(v.time * 31.0) + 0.012 * Math.sin(v.time * 7.3 + 1.7);
-    const k = 3.3 * v.lightIntensity * breathe;
+    const k = 3.3 * v.lightIntensity * v.lightScale * breathe;
     const w = v.lightWarmth;
     (lu.uLightColor!.value as THREE.Vector3).set(k, k * (0.94 - 0.2 * w), k * (0.82 - 0.4 * w));
     // Оси пятна фонаря: по ним ложатся разводы отражателя.
@@ -614,11 +800,11 @@ export class GameRenderer {
     const hit = this.tmpV.set(v.lightPos[0] + v.lightDir[0] * hitDist, v.lightPos[1] + v.lightDir[1] * hitDist, v.lightPos[2] + v.lightDir[2] * hitDist);
     const hitWorld = hit.clone();
     hit.applyMatrix4(cam.matrixWorldInverse);
-    const bounce = v.beamDist < 30 ? (0.05 * v.lightIntensity) / (1 + 0.07 * hitDist * hitDist) : 0;
+    const bounce = v.beamDist < 30 ? (0.05 * v.lightIntensity * v.lightScale) / (1 + 0.07 * hitDist * hitDist) : 0;
     (this.worldMat.uniforms.uBounce!.value as THREE.Vector4).set(hit.x, hit.y, hit.z, bounce);
 
     // Тень: глубина сцены из точки фонаря.
-    const shadowOn = this.shadowRT !== null && v.lightIntensity > 0.01 && !this.debugShadowsOff;
+    const shadowOn = this.shadowRT !== null && v.lightIntensity * v.lightScale > 0.01 && !this.debugShadowsOff;
     if (this.shadowRT && shadowOn) {
       const lc = this.lightCam;
       lc.position.set(v.lightPos[0], v.lightPos[1], v.lightPos[2]);
@@ -645,8 +831,10 @@ export class GameRenderer {
     (this.dustMat.uniforms.uCamPos!.value as THREE.Vector3).copy(cam.position);
 
     r.setRenderTarget(this.sceneRT);
+    r.setClearColor(this.clearColor, 1);
     r.clear();
     r.render(this.scene, cam);
+    r.setClearColor(0x000000, 1);
 
     // Дымка в луче: маленький буфер, по глубине готового кадра.
     if (this.hazeRT) {
@@ -656,7 +844,7 @@ export class GameRenderer {
       (hu.uShadowMatrixV!.value as THREE.Matrix4).multiplyMatrices(this.worldMat.uniforms.uShadowMatrix!.value as THREE.Matrix4, cam.matrixWorld);
       (hu.uCamRot!.value as THREE.Matrix3).setFromMatrix4(cam.matrixWorld);
       (hu.uCamPos!.value as THREE.Vector3).copy(cam.position);
-      hu.uDensity!.value = v.lightIntensity > 0.01 ? v.haze : 0;
+      hu.uDensity!.value = v.lightIntensity * v.lightScale > 0.01 ? v.haze : 0;
       hu.uFrame!.value = v.frame;
       hu.uTime!.value = v.time;
       r.setRenderTarget(this.hazeRT);
@@ -667,7 +855,9 @@ export class GameRenderer {
     const ndc = hitWorld.project(cam);
     const visible = ndc.z < 1 && ndc.z > -1;
     const pu = this.postMat.uniforms;
-    (pu.uBeam!.value as THREE.Vector3).set(ndc.x * 0.5 + 0.5, ndc.y * 0.5 + 0.5, visible ? 0.018 * v.lightIntensity : 0);
+    (pu.uBeam!.value as THREE.Vector3).set(ndc.x * 0.5 + 0.5, ndc.y * 0.5 + 0.5, visible ? 0.018 * v.lightIntensity * v.lightScale : 0);
+    pu.uCrt!.value = v.crt;
+    pu.uFlash!.value = v.flash;
     pu.tScene!.value = this.sceneRT.texture;
     pu.tHaze!.value = this.hazeRT ? this.hazeRT.texture : null;
     pu.uFrame!.value = v.frame;
@@ -692,6 +882,34 @@ export class GameRenderer {
    * Яркость текущего кадра сеткой cols×rows (0..255). Вызывать сразу после render() в том же такте:
    * буфер экрана очищается после показа. Нужна смоуку: «в конусе светло», «тень что-то меняет».
    */
+  /**
+   * Средний цвет кадра и доля «красных» точек (красный канал заметно сильнее двух других): по ней
+   * проверки отличают красную сетку от просто светлой картинки.
+   */
+  probeColor(): { r: number; g: number; b: number; red: number } {
+    const gl = this.renderer.getContext();
+    const w = this.width;
+    const h = this.height;
+    const px = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    let red = 0;
+    let n = 0;
+    for (let o = 0; o < px.length; o += 8) {
+      const pr = px[o]!;
+      const pg = px[o + 1]!;
+      const pb = px[o + 2]!;
+      r += pr;
+      g += pg;
+      b += pb;
+      if (pr > 70 && pr > pg * 1.6 && pr > pb * 1.6) red += 1;
+      n += 1;
+    }
+    return { r: r / n, g: g / n, b: b / n, red: red / n };
+  }
+
   probe(cols = 32, rows = 18): number[] {
     const gl = this.renderer.getContext();
     const w = this.width;

@@ -21,38 +21,22 @@ export interface Profile {
   /** Чувствительность обзора и яркость картинки: 0 — ниже, 1 — как задумано, 2 — выше. */
   sens: Level3;
   bright: Level3;
+  /** Игрок просил поменьше вспышек: стробоскоп становится плавным, белые вспышки — затемнением. */
+  calm: boolean;
+  /** Язык, выбранный игроком (null — по умолчанию, английский). */
+  lang: string | null;
 }
 
 export type Level3 = 0 | 1 | 2;
 const level3 = (v: unknown): Level3 => (v === 0 || v === 2 ? v : 1);
 
-export interface RunSave {
-  v: 1;
-  genVersion: number;
-  seed: number;
-  rank: 1 | 2 | 3;
-  taken: number[];
-  done: number[];
-  finds: string[];
-  spares: number;
-  charge: number;
-  time: number;
-  maxTier: number;
-  collapsed: string[];
-  /** Аномалии: сколько раз лестница ещё удлинится и какие комнаты показаны вторым вариантом. */
-  anomaly: { loops: number; alt: number[] };
-  /** Рой уже вышел на охоту. */
-  released: boolean;
-}
-
-const KEYS = ['profile', 'run'];
+const KEYS = ['profile'];
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
-const numArr = (v: unknown): number[] => (Array.isArray(v) ? v.filter(isNum) : []);
 const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
 export function defaultProfile(baseSeed: number): Profile {
-  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1 };
+  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1, calm: false, lang: null };
 }
 
 /** Разобрать профиль из хранилища; всё непонятное заменяется значениями по умолчанию. */
@@ -69,59 +53,22 @@ export function parseProfile(raw: unknown, baseSeed: number): Profile {
     muted: o.muted === true,
     sens: level3(o.sens),
     bright: level3(o.bright),
+    calm: o.calm === true,
+    lang: typeof o.lang === 'string' ? o.lang : null,
   };
 }
 
-/** Разобрать сохранённую вылазку; null — её нет или она от другой версии генератора. */
-export function parseRun(raw: unknown, genVersion: number): RunSave | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const o = raw as Record<string, unknown>;
-  if (o.v !== 1 || o.genVersion !== genVersion || !isNum(o.seed)) return null;
-  const rank = o.rank === 1 || o.rank === 2 || o.rank === 3 ? o.rank : null;
-  if (!rank) return null;
-  return {
-    v: 1,
-    genVersion,
-    seed: o.seed >>> 0,
-    rank,
-    taken: numArr(o.taken),
-    done: numArr(o.done),
-    finds: strArr(o.finds),
-    spares: isNum(o.spares) ? Math.max(0, Math.floor(o.spares)) : 0,
-    charge: isNum(o.charge) ? Math.max(0, Math.min(1, o.charge)) : 1,
-    time: isNum(o.time) ? Math.max(0, o.time) : 0,
-    maxTier: isNum(o.maxTier) ? Math.max(0, Math.floor(o.maxTier)) : 0,
-    collapsed: strArr(o.collapsed),
-    anomaly: parseAnomaly(o.anomaly),
-    released: o.released === true,
-  };
-}
-
-function parseAnomaly(raw: unknown): { loops: number; alt: number[] } {
-  if (!raw || typeof raw !== 'object') return { loops: 2, alt: [] };
-  const o = raw as Record<string, unknown>;
-  return { loops: isNum(o.loops) ? Math.max(0, Math.min(2, Math.floor(o.loops))) : 2, alt: numArr(o.alt) };
-}
-
-export async function loadSave(platform: IPlatform, baseSeed: number, genVersion: number): Promise<{ profile: Profile; run: RunSave | null }> {
+export async function loadSave(platform: IPlatform, baseSeed: number): Promise<{ profile: Profile }> {
   try {
-    const [p, r] = await platform.load(KEYS);
-    return { profile: parseProfile(p, baseSeed), run: parseRun(r, genVersion) };
+    const [p] = await platform.load(KEYS);
+    return { profile: parseProfile(p, baseSeed) };
   } catch (e) {
     console.warn('[save] не удалось прочитать сохранение:', e);
-    return { profile: defaultProfile(baseSeed), run: null };
+    return { profile: defaultProfile(baseSeed) };
   }
 }
 
-export async function writeSave(platform: IPlatform, profile: Profile, run: RunSave | null): Promise<void> {
-  try {
-    await platform.save(KEYS, [profile, run]);
-  } catch (e) {
-    console.warn('[save] не удалось записать сохранение:', e);
-  }
-}
-
-/** Записать только профиль, не трогая сохранённую вылазку (настройки). */
+/** Записать профиль. */
 export async function writeProfile(platform: IPlatform, profile: Profile): Promise<void> {
   try {
     await platform.save([KEYS[0]!], [profile]);
@@ -130,7 +77,7 @@ export async function writeProfile(platform: IPlatform, profile: Profile): Promi
   }
 }
 
-/** Ранг следующего объекта: первый — простой, дальше глубже. */
+/** Ранг следующей сессии: первая — небольшая, дальше глубже и страннее. */
 export function rankFor(profile: Profile): 1 | 2 | 3 {
   return profile.successes < 1 ? 1 : profile.successes < 3 ? 2 : 3;
 }

@@ -1,12 +1,14 @@
 /**
  * Игра: симуляция фиксированным шагом и сборка кадра. Здесь сходятся контроллер, нагрудная камера,
- * фонарь, детектор тряски, вылазка (цели, среда, паника) и рендер. Экраны, пауза и ввод — в app.ts.
+ * фонарь, детектор тряски, сессия (воспоминания, среда, паника), вещи, меняющиеся под взглядом,
+ * скачки между пространствами и рендер. Экраны, пауза и ввод — в app.ts.
+ *
+ * Игрок только ходит, смотрит и светит. Смерти нет: провал, газ и рой выбрасывают его в другое место.
  */
 import { approach, clamp, lerp } from './core/math';
-import { hash2 } from './core/rng';
+import { hash01, hash2, mulberry32 } from './core/rng';
 import type { Rng } from './core/rng';
 import type { Vec3 } from './core/types';
-import type { Population } from './gen/populate';
 import { createBody, DEFAULT_CONTROLLER, stepPlayer } from './player/controller';
 import type { PlayerBody } from './player/controller';
 import type { InputFrame } from './player/input';
@@ -23,12 +25,18 @@ import { Director } from './systems/director';
 import type { ScareId } from './systems/director';
 import { DEFAULT_FLASHLIGHT, Flashlight } from './systems/flashlight';
 import type { FlashlightConfig } from './systems/flashlight';
-import { Sortie } from './systems/sortie';
-import type { SortieEvent } from './systems/sortie';
+import { Jumps } from './systems/jumps';
+import type { JumpPlan, JumpStyle } from './systems/jumps';
+import { DEFAULT_SESSION, MEMORIES, Session } from './systems/session';
+import type { SessionConfig, SessionEvent } from './systems/session';
+import { looksAt, Things } from './systems/things';
+import type { Fate, Look, Thing } from './systems/things';
 import { ColliderSet } from './world/colliders';
-import { buildItemsMesh } from './world/items';
 import type { BuiltLevel } from './world/level';
 import { STAIR_RISE, STAIR_RUN, STAIR_STEPS } from './world/level_build';
+import { buildPocket, ENV_BUNKER } from './world/pockets';
+import type { Env, PocketKind, PocketSpace } from './world/pockets';
+import { thingMesh } from './world/thing_mesh';
 
 export const STEP = 1 / 60;
 const WALK_SPEED = 2.3;
@@ -48,6 +56,21 @@ const EXPOSURE_RAYS: readonly (readonly [number, number])[] = [
 /** pos у пугалки — откуда она слышна; без него звук идёт «из рации» или его нет вовсе. */
 export type FearEvent = { type: 'scare'; id: ScareId; pos?: Vec3 } | { type: 'swarm'; what: 'apparition' | 'release' | 'cohered' | 'scattered' | 'caught' };
 
+/** Где сейчас игрок: в убежище, в карманном пространстве или в лимбо между сессиями. */
+export type Where = 'main' | 'pocket' | 'limbo';
+
+/** Особенность помещения: стробоскоп, полная темнота, красная сетка, «тонкое место» (рассыпается под ногами). */
+export type RoomFx = 'strobe' | 'dark' | 'wire' | 'thin';
+
+/** События сна: скачки, превращения вещей, смена сессий. */
+export type DreamEvent =
+  | { type: 'jump'; plan: JumpPlan; phase: 'start' | 'switch' }
+  | { type: 'thing'; thing: Thing; what: 'changing' | 'settled' }
+  /** Сессия кончилась, игрок в лимбо: пора готовить следующую (queueSession). */
+  | { type: 'limbo' }
+  /** Началась новая сессия. */
+  | { type: 'begin' };
+
 export interface StepEvents {
   lightFailed: boolean;
   lightRevived: boolean;
@@ -57,11 +80,53 @@ export interface StepEvents {
   /** Засчитанных ходов тряски за шаг (для вибрации и звука дребезга). */
   strokes: number;
   fellOut: boolean;
-  /** События вылазки: находки, цели, обвалы, конец. */
-  sortie: SortieEvent[];
+  /** События сессии: воспоминания, обвалы, газ. */
+  session: SessionEvent[];
   /** Пугалки и рой. */
   fear: FearEvent[];
+  dream: DreamEvent[];
 }
+
+/** Что нужно, чтобы начать сессию на уровне: сид и то, что игрок уже вспоминал раньше. */
+export interface DreamSeed {
+  seed: number;
+  known: ReadonlySet<string>;
+}
+
+interface Transition {
+  plan: JumpPlan;
+  t: number;
+  /** Длительность ухода и прихода, с. */
+  out: number;
+  back: number;
+  switched: boolean;
+}
+
+/** Сколько длится уход из места и приход в новое, с. */
+const TIMING: Record<JumpStyle, readonly [number, number]> = { cut: [0.18, 0.45], dissolve: [1.6, 1.2], blackout: [0.55, 0.9], whiteout: [0.4, 1.2] };
+/** Где собираются карманные пространства: далеко в стороне от убежища. */
+const POCKET_ORIGIN: Vec3 = [400, 0, 0];
+/** Сколько самое меньшее длится лимбо, с. */
+const LIMBO_MIN = 7;
+/** Мелочь, которой сон засоряет столы и полки, и крупные вещи посреди коридоров. */
+const SMALL_THINGS = ['mug', 'slippers', 'ball', 'teddy', 'alarm_clock', 'remote', 'photo_frame', 'night_light', 'school_bag', 'goldfish_bowl', 'keys', 'phone'];
+const BIG_THINGS: readonly (readonly [string, PocketKind | null])[] = [
+  ['armchair', null],
+  ['tv_stand', 'void'],
+  ['floor_lamp', null],
+  ['houseplant', 'meadow'],
+  ['toy_heap', 'dollhouse'],
+  ['washing_machine', null],
+  ['fridge', null],
+  ['crib', 'dollhouse'],
+  ['christmas_tree', 'meadow'],
+];
+const SMALL_FATES: readonly Fate[] = ['shrink', 'dust', 'grow', 'dust', 'shrink', 'grow'];
+const BIG_FATES: readonly Fate[] = ['jump', 'grow', 'dust', 'jump', 'shrink', 'grow'];
+/** Воспоминание → вещь-образ. */
+const MEMORY_THING: Record<string, string> = Object.fromEntries(MEMORIES.map((m) => [m.id, m.thing]));
+/** Цвет дали там, куда ведёт скачок: уходящее место растворяется в этот цвет. */
+const DEST_FOG: Record<string, Vec3> = { void: [0.86, 0.86, 0.86], limbo: [0.86, 0.86, 0.86], meadow: [0.62, 0.74, 0.88], dollhouse: [0.03, 0.02, 0.03], elsewhere: [0, 0, 0], session: [0, 0, 0] };
 
 export class Game {
   readonly shake = new ShakeMeter();
@@ -70,8 +135,23 @@ export class Game {
   readonly exposure = new AutoExposure();
   colliders = new ColliderSet();
   level: BuiltLevel | null = null;
-  /** Текущая вылазка; null — свободная прогулка (тестовый коридор без целей). */
-  sortie: Sortie | null = null;
+  /** Текущая сессия; null — свободная прогулка (тестовый коридор, витрина, просмотр пространства). */
+  session: Session | null = null;
+  readonly things = new Things();
+  jumps: Jumps | null = null;
+  where: Where = 'main';
+  /** Карманное пространство, в котором сейчас игрок (или лимбо). */
+  pocket: PocketSpace | null = null;
+  /** Идущий скачок. */
+  transition: Transition | null = null;
+  /** Особенности помещений этой сессии: id помещения → что с ним не так. */
+  readonly roomFx = new Map<number, RoomFx>();
+  /** Правила сессии: сколько воспоминаний, паузы между ними (тесты подменяют на короткие). */
+  sessionCfg: SessionConfig = DEFAULT_SESSION;
+  /** Игрок просил поменьше вспышек: строб становится плавным, белые вспышки — затемнением. */
+  calmFlash = false;
+  /** Что игрок вспомнил за всё время (id воспоминаний): эти вещи копятся в лимбо. */
+  archive: string[] = [];
   swarm: SwarmAI | null = null;
   readonly swarmBody = new SwarmBody();
   director: Director | null = null;
@@ -110,6 +190,36 @@ export class Game {
   private scareCount = 0;
   /** Помехи сигнала в последнем кадре, 0..1 (для звука помех). */
   staticLevel = 0;
+  /** Окружение места, где сейчас игрок: свет, туман, сила фонаря. */
+  env: Env = ENV_BUNKER;
+  /** Вещь → её номер в рендере и пространство, куда она утягивает. */
+  private readonly thingRender = new Map<number, number>();
+  private readonly thingPocket = new Map<number, PocketKind | null>();
+  /** Вещи, живущие только в текущем карманном пространстве. */
+  private pocketThings: Thing[] = [];
+  private memoryThing: Thing | null = null;
+  private pocketGroup = 0;
+  private pocketAge = 0;
+  private pocketStay = 40;
+  private anchorGaze = 0;
+  private limboTime = 0;
+  private limboAsked = false;
+  /** Следующая сессия, собранная за время лимбо. */
+  private pending: { level: BuiltLevel; dream: DreamSeed } | null = null;
+  /** Через сколько секунд после «всё вспомнено» место рассыплется. */
+  private endIn = -1;
+  private readonly thinUsed = new Set<number>();
+  private thinTime = 0;
+  /** Откуда игрок ушёл в карманное пространство. */
+  private returnNode = -1;
+  /** В этом шаге случилось наблюдение (всмотрелся в вещь, вернулся из скачка). */
+  private observed = false;
+  /** Сглаженные особенности помещения: сила фонаря и красная сетка. */
+  private fxLight = 1;
+  private fxWire = 0;
+  private room = -1;
+  private nextGlitch = 12;
+  private dreamSeed = 0;
 
   constructor(
     readonly renderer: GameRenderer,
@@ -119,29 +229,51 @@ export class Game {
     this.light = new Flashlight(rng, { ...DEFAULT_FLASHLIGHT, ...lightCfg });
   }
 
-  /** Загрузить уровень. pop — наполнение (цели и предметы); без него — свободная прогулка. */
-  loadLevel(level: BuiltLevel, pop: Population | null = null): void {
+  /** Загрузить уровень. dream — начать на нём сессию; без него — свободная прогулка. */
+  loadLevel(level: BuiltLevel, dream: DreamSeed | null = null): void {
+    this.leavePocket();
+    this.clearThings();
     this.level = level;
     this.colliders = level.colliders;
     this.spawn = level.spawn;
     this.renderer.setWorld(level.chunks, level.stairs);
-    this.light = new Flashlight(this.rng, { ...DEFAULT_FLASHLIGHT, ...this.lightCfg });
-    this.sortie = pop ? new Sortie(level, pop) : null;
+    // Батарейка в сессии не садится: фонарь глохнет от контакта, а не от заряда.
+    this.light = new Flashlight(this.rng, { ...DEFAULT_FLASHLIGHT, drainSeconds: Infinity, ...this.lightCfg });
+    const rank = level.layout?.rank ?? 1;
+    this.session = dream ? new Session(level, dream.seed, dream.known, this.sessionCfg) : null;
     this.nodeAt.clear();
     for (const n of level.nav) this.nodeAt.set(`${n.tier},${n.cx},${n.cz}`, n.id);
     const tiers = level.layout?.tierCount ?? 1;
-    const rank = level.layout?.rank ?? 1;
-    if (pop) {
+    this.roomFx.clear();
+    this.thinUsed.clear();
+    if (dream) {
+      this.dreamSeed = dream.seed;
       this.swarm = new SwarmAI(level.nav, this.rng);
       this.director = new Director(this.rng);
+      this.jumps = new Jumps(this.rng);
       // Лестница на нижний ярус удлиняется дважды — только на объектах, где есть «неправильный» ярус.
       const stair = rank >= 2 && tiers >= 3 ? (level.stairs.find((st) => st.upperTier === tiers - 2) ?? null) : null;
       this.anomalies = new Anomalies(stair, { run: STAIR_RUN, rise: STAIR_RISE, steps: STAIR_STEPS }, level.variants, 2);
+      this.assignRooms(dream.seed);
+      this.placeThings(dream.seed);
+      // Место собирается вокруг игрока из пыли.
+      this.transition = { plan: { cause: 'begin', style: 'dissolve', to: 'session' }, t: 0, out: 0, back: 1.6, switched: true };
     } else {
       this.swarm = null;
       this.director = null;
       this.anomalies = null;
+      this.jumps = null;
+      this.transition = null;
     }
+    this.where = 'main';
+    this.env = ENV_BUNKER;
+    this.pending = null;
+    this.endIn = -1;
+    this.memoryThing = null;
+    this.observed = false;
+    this.fxLight = 1;
+    this.fxWire = 0;
+    this.room = -1;
     this.swarmNear = 0;
     this.glow = 1;
     this.glowTimer = 0;
@@ -153,30 +285,231 @@ export class Game {
     this.quake = 0;
     this.gasView = 0;
     this.shake.reset();
-    this.refreshItems();
     this.respawn();
   }
 
-  /** Пересобрать геометрию предметов (после находки или загрузки сохранения). */
-  refreshItems(tier?: number): void {
-    const s = this.sortie;
-    const tiers = this.level?.layout?.tierCount ?? 1;
-    for (let t = 0; t < tiers; t++) {
-      if (tier !== undefined && t !== tier) continue;
-      this.renderer.setItems(t, s ? buildItemsMesh(s.pop.items, t, s.taken) : null);
+  /** Раздать помещениям особенности: строб, темноту, сетку, «тонкие места». */
+  private assignRooms(seed: number): void {
+    const rooms = this.level?.layout?.rooms ?? [];
+    const rng = mulberry32(hash2(seed, 0xf0, 0x0d));
+    const pool = rooms.filter((r) => r.type !== 'corridor' && r.type !== 'entrance' && r.type !== 'airlock' && r.type !== 'stairwell' && r.type !== 'collapsed');
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+    }
+    // Стробу нужен простор: первое же помещение в две клетки и больше.
+    const big = pool.findIndex((r) => r.cells.length >= 2);
+    if (big > 0) [pool[0], pool[big]] = [pool[big]!, pool[0]!];
+    const order: RoomFx[] = ['strobe', 'dark', 'thin', 'wire', 'thin', 'dark'];
+    const n = Math.min(order.length, Math.ceil(pool.length * 0.45));
+    for (let i = 0; i < n; i++) this.roomFx.set(pool[i]!.id, order[i]!);
+    for (const r of rooms) if (r.type === 'collapsed') this.roomFx.set(r.id, 'wire');
+  }
+
+  /** Расставить вещи сна: мелочь по столам и полкам, крупное — посреди коридоров. */
+  private placeThings(seed: number): void {
+    const level = this.level;
+    const s = this.session;
+    if (!level || !s) return;
+    const rng = mulberry32(hash2(seed, 0x7417, 0x65));
+    const pick = <T>(a: readonly T[]): T => a[Math.floor(rng() * a.length)]!;
+    const spots = level.spots.slice();
+    for (let i = spots.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [spots[i], spots[j]] = [spots[j]!, spots[i]!];
+    }
+    // В «тёмных» помещениях фонарь не светит — рассмотреть там ничего нельзя: вещам там не место.
+    const lit = spots.filter((sp) => this.roomFx.get(sp.room) !== 'dark');
+    for (const sp of spots) if (this.roomFx.get(sp.room) === 'dark') s.reserve(sp);
+    spots.length = 0;
+    spots.push(...lit);
+    // Не больше трети мест: остальные нужны вещам-воспоминаниям.
+    const small = Math.min(9, Math.floor(spots.length / 3));
+    for (let i = 0; i < small; i++) {
+      const sp = spots[i]!;
+      s.reserve(sp);
+      this.addThing(SMALL_THINGS[i % SMALL_THINGS.length]!, [sp.x, sp.y, sp.z], rng() * Math.PI * 2, SMALL_FATES[i % SMALL_FATES.length]!);
+    }
+    // Крупные — в клетках коридора, где нет ни ям, ни воды, ни лестниц, поодаль друг от друга и от входа.
+    const type = new Map((level.layout?.rooms ?? []).map((r) => [r.id, r.type]));
+    const [sx, , sz] = level.spawn.pos;
+    const chosen: Vec3[] = [];
+    const nodes = level.nav.filter((n) => {
+      if (type.get(n.room) !== 'corridor' || n.links.length < 2) return false;
+      if (Math.hypot(n.x - sx, n.z - sz) < 7.5) return false;
+      if (n.links.some((l) => Math.abs(level.nav[l]!.y - n.y) > 0.2)) return false;
+      if (level.zones.some((z) => n.x >= z.minX - 1.5 && n.x <= z.maxX + 1.5 && n.z >= z.minZ - 1.5 && n.z <= z.maxZ + 1.5 && Math.abs(n.y - z.minY) < 3)) return false;
+      return !level.collapses.some((c) => Math.hypot(c.center[0] - n.x, c.center[2] - n.z) < 4 && Math.abs(c.center[1] - n.y) < 1.5);
+    });
+    const want = 4 + (level.layout?.rank ?? 1);
+    for (let k = 0; k < 60 && chosen.length < want && nodes.length > 0; k++) {
+      const n = pick(nodes);
+      if (chosen.some((c) => Math.hypot(c[0] - n.x, c[2] - n.z) < 10 && Math.abs(c[1] - n.y) < 1)) continue;
+      const pos: Vec3 = [n.x, n.y, n.z];
+      chosen.push(pos);
+      const [kind, pocket] = BIG_THINGS[(chosen.length + Math.floor(rng() * 3)) % BIG_THINGS.length]!;
+      const fate = BIG_FATES[chosen.length % BIG_FATES.length]!;
+      const t = this.addThing(kind, pos, Math.floor(rng() * 4) * (Math.PI / 2), fate, false, true);
+      this.thingPocket.set(t.id, pocket);
     }
   }
 
-  /** Вернуть в мир завалы, которые уже обрушились (после загрузки сохранения). */
-  applyCollapses(): void {
-    const s = this.sortie;
-    if (!s || !this.level) return;
-    for (const id of s.collapsed()) {
-      const spec = this.level.collapses.find((c) => c.id === id);
-      if (!spec) continue;
-      for (const b of spec.boxes) this.colliders.add(b);
-      this.renderer.setChunkVisible(id, true);
+  /** Поставить вещь в мир. solid — она мешает пройти, пока не начала меняться. */
+  addThing(kind: string, pos: Vec3, yaw: number, fate: Fate, memory = false, solid = false): Thing {
+    const tm = thingMesh(kind, hash2(Math.round(pos[0] * 10), Math.round(pos[2] * 10), 0x71) >>> 0);
+    const t = this.things.add(kind, pos, yaw, fate, tm.radius, memory);
+    this.thingRender.set(t.id, this.renderer.addThing(tm.mesh, t.id));
+    if (solid) {
+      const turned = Math.abs(Math.sin(yaw)) > 0.5;
+      const hx = (turned ? tm.d : tm.w) / 2;
+      const hz = (turned ? tm.w : tm.d) / 2;
+      t.collider = this.colliders.addBox(pos[0] - hx, pos[1], pos[2] - hz, pos[0] + hx, pos[1] + tm.h, pos[2] + hz);
     }
+    return t;
+  }
+
+  private dropThing(t: Thing): void {
+    const id = this.thingRender.get(t.id);
+    if (id !== undefined) this.renderer.removeThing(id);
+    this.thingRender.delete(t.id);
+    this.thingPocket.delete(t.id);
+    if (t.collider >= 0) this.colliders.boxes[t.collider]!.off = true;
+    this.things.remove(t);
+  }
+
+  private clearThings(): void {
+    for (const t of [...this.things.list]) this.dropThing(t);
+    this.things.clear();
+    this.pocketThings = [];
+    this.memoryThing = null;
+  }
+
+  /** Следующая сессия готова: как только лимбо отпустит, игрок окажется в ней. */
+  queueSession(level: BuiltLevel, dream: DreamSeed): void {
+    this.pending = { level, dream };
+  }
+
+  /** Отладка: считать всё вспомненным — через полсекунды место рассыплется. */
+  debugFinish(): void {
+    const s = this.session;
+    if (!s || s.over) return;
+    for (const m of s.memories) m.state = 'done';
+    s.over = true;
+    if (this.memoryThing) {
+      this.memoryThing.memory = false;
+      this.things.change(this.memoryThing, 'dust');
+      this.memoryThing = null;
+    }
+    this.endIn = 0.5;
+  }
+
+  /** Начать скачок. Если один уже идёт — этот не начинается. */
+  beginJump(plan: JumpPlan, dream: DreamEvent[]): boolean {
+    if (this.transition) return false;
+    const [out, back] = TIMING[plan.style];
+    this.transition = { plan, t: 0, out, back, switched: false };
+    dream.push({ type: 'jump', plan, phase: 'start' });
+    return true;
+  }
+
+  /** Узел убежища подальше от from (−1 — от входа): туда возвращает скачок. */
+  private farNode(from: number): number {
+    const nav = this.level?.nav ?? [];
+    if (nav.length === 0) return -1;
+    const start = from >= 0 ? from : this.playerNodeAt(this.spawn.pos);
+    const far = start >= 0 ? nodesInRange(nav, start, 6, 40) : [];
+    const pool = (far.length > 0 ? far : nav.map((n) => n.id)).filter((id) => {
+      const n = nav[id]!;
+      // Не на лестничный марш и не в яму.
+      if (n.links.some((l) => Math.abs(nav[l]!.y - n.y) > 0.2)) return false;
+      return !this.level!.zones.some((z) => z.kind === 'pit' && n.x >= z.minX - 1 && n.x <= z.maxX + 1 && n.z >= z.minZ - 1 && n.z <= z.maxZ + 1 && Math.abs(n.y - z.minY) < 3);
+    });
+    return pool.length > 0 ? pool[Math.floor(this.rng() * pool.length)]! : start;
+  }
+
+  private playerNodeAt(p: Vec3): number {
+    const cx = Math.round(p[0] / 3) + 8;
+    const cz = Math.round(p[2] / 3) + 8;
+    const t = Math.max(0, Math.round(-p[1] / 4.5));
+    for (const tier of [t, t - 1, t + 1]) {
+      const id = this.nodeAt.get(`${tier},${cx},${cz}`);
+      if (id !== undefined) return id;
+    }
+    return -1;
+  }
+
+  /** Убрать карманное пространство: его геометрию, преграды и вещи. */
+  private leavePocket(): void {
+    if (!this.pocket) return;
+    this.colliders.setGroup(`pocket${this.pocketGroup}`, false);
+    this.renderer.setPocket(null);
+    for (const t of this.pocketThings) this.dropThing(t);
+    this.pocketThings = [];
+    this.pocket = null;
+  }
+
+  private enterPocket(kind: PocketKind, limbo: boolean): void {
+    this.leavePocket();
+    const p = buildPocket(kind, (this.dreamSeed + this.pocketGroup * 7919) >>> 0, POCKET_ORIGIN);
+    this.pocket = p;
+    this.pocketGroup += 1;
+    const group = `pocket${this.pocketGroup}`;
+    for (const b of p.colliders) this.colliders.add({ ...b, group });
+    this.renderer.setPocket(p.meshes);
+    this.where = limbo ? 'limbo' : 'pocket';
+    this.env = p.env;
+    this.pocketAge = 0;
+    this.pocketStay = 34 + this.rng() * 22;
+    this.anchorGaze = 0;
+    this.limboTime = 0;
+    this.limboAsked = false;
+    this.teleport(p.spawn.pos[0], p.spawn.pos[1], p.spawn.pos[2], p.spawn.yaw, 0);
+    // Вещи: в лимбо — всё, что игрок вспомнил раньше; в кармане — пара случайных мелочей.
+    const kinds = limbo ? this.archive.map((id) => MEMORY_THING[id] ?? id) : [SMALL_THINGS[Math.floor(this.rng() * SMALL_THINGS.length)]!, SMALL_THINGS[Math.floor(this.rng() * SMALL_THINGS.length)]!];
+    kinds.slice(0, p.spots.length).forEach((kind, i) => {
+      const sp = p.spots[i]!;
+      this.pocketThings.push(this.addThing(kind, sp, this.rng() * Math.PI * 2, limbo ? 'grow' : SMALL_FATES[i % SMALL_FATES.length]!));
+    });
+  }
+
+  /** Исполнить скачок: переставить игрока и сменить место. */
+  private switchPlace(plan: JumpPlan, dream: DreamEvent[]): void {
+    const to = plan.to;
+    if (to === 'session') {
+      const next = this.pending;
+      if (next) {
+        this.loadLevel(next.level, next.dream);
+        dream.push({ type: 'begin' });
+      }
+    } else if (to === 'limbo') {
+      // Вещи убежища больше не нужны: сессия кончилась.
+      this.clearThings();
+      this.enterPocket('void', true);
+    } else if (to === 'elsewhere') {
+      const from = this.where === 'main' ? this.playerNode() : this.returnNode;
+      this.leavePocket();
+      this.where = 'main';
+      this.env = ENV_BUNKER;
+      // Иногда возвращает туда же, откуда унесло; чаще — в другое место.
+      const back = plan.cause === 'return' && this.returnNode >= 0 && this.rng() < 0.3;
+      const id = back ? this.returnNode : this.farNode(from);
+      const n = this.level?.nav[id];
+      if (n) {
+        const l = this.level!.nav[n.links[Math.floor(this.rng() * n.links.length)] ?? n.id]!;
+        this.teleport(n.x, n.y, n.z, l === n ? this.aimYaw : Math.atan2(-(l.x - n.x), -(l.z - n.z)), 0);
+      } else this.respawn();
+      // Рой, поймавший игрока, остаётся позади и ищет заново.
+      if (plan.cause === 'caught' && this.swarm && id >= 0) {
+        const away = this.swarm.nodeAround(id, 8, 14);
+        this.swarm.activate(away >= 0 ? away : this.swarm.nodeAround(id, 4, 30));
+        this.swarmBody.snap(this.swarm.pos, 0);
+      }
+    } else {
+      if (this.where === 'main') this.returnNode = this.playerNode();
+      this.enterPocket(to, false);
+    }
+    this.observed = true;
+    dream.push({ type: 'jump', plan, phase: 'switch' });
   }
 
   /** Узел навигации, в клетке которого стоит игрок (−1 — вне графа). */
@@ -277,7 +610,7 @@ export class Game {
 
   /** Ложное событие: толчок, помехи, мигание — без урона. Звук подключается по id. */
   private applyScare(id: ScareId): void {
-    const s = this.sortie;
+    const s = this.session;
     if (id === 'bang') {
       this.quake = Math.max(this.quake, 0.18);
       s?.scare(0.06);
@@ -315,7 +648,7 @@ export class Game {
   }
 
   get panic(): number {
-    return this.sortie?.panic ?? 0;
+    return this.session?.panic ?? 0;
   }
 
   /** Навести луч и камеру на точку мира с того места, где игрок стоит сейчас. */
@@ -332,68 +665,157 @@ export class Game {
     this.aimPitch = clamp(this.aimPitch + pitch, -MAX_PITCH, MAX_PITCH);
   }
 
+  /** Насколько сейчас видно вокруг: свет фонаря в этом месте или рассеянный свет. */
+  private get seeing(): number {
+    const amb = (this.env.ambient[0] + this.env.ambient[1] + this.env.ambient[2]) / 3;
+    return Math.max(this.light.intensity * this.env.light * this.fxLight, amb > 0.2 ? 1 : 0);
+  }
+
   step(dt: number, input: InputFrame): StepEvents {
     this.time += dt;
     this.fade = approach(this.fade, this.fadeTo, this.fadeTo > this.fade ? 0.5 : 0.25, dt);
     this.quake = Math.max(0, this.quake - dt * 1.4);
-    const s = this.sortie;
-    const over = s?.outcome != null;
+    const s = this.session;
     const b = this.body;
     this.prevX = b.x;
     this.prevY = b.y;
     this.prevZ = b.z;
 
-    // Движение — в осях луча: «вперёд» туда, куда светишь. После конца вылазки игрок не управляется.
+    // Движение — в осях луча: «вперёд» туда, куда светишь.
     const sin = Math.sin(this.aimYaw);
     const cos = Math.cos(this.aimYaw);
-    const mx = over ? 0 : input.moveX;
-    const mz = over ? 0 : input.moveZ;
-    const wishX = cos * mx - sin * mz;
-    const wishZ = -sin * mx - cos * mz;
+    const wishX = cos * input.moveX - sin * input.moveZ;
+    const wishZ = -sin * input.moveX - cos * input.moveZ;
     const speed = (input.run ? RUN_SPEED : WALK_SPEED) * (s?.inWater ? WATER_SPEED : 1);
     const res = stepPlayer(b, wishX, wishZ, speed, dt, this.colliders, DEFAULT_CONTROLLER);
-    if (res.fellOut && !s) this.respawn();
+    // Выпал из мира (ушёл за край пространства) — возвращаем на место появления.
+    if (res.fellOut) {
+      if (this.pocket) this.teleport(this.pocket.spawn.pos[0], this.pocket.spawn.pos[1], this.pocket.spawn.pos[2], this.aimYaw, 0);
+      else this.respawn();
+    }
 
     // Фонарь.
-    const swapping = (s?.swapping ?? 0) > 0;
-    this.light.suspended = swapping;
-    const toggled = input.light && !swapping && !over;
+    const wasOff = this.light.state === 'off';
+    const toggled = input.light;
     if (toggled) this.light.toggle();
     const level = this.shake.update(dt);
     const ev = this.light.update(dt, { panic: this.panic, wet: s?.inWater ? 1 : 0, swarm: this.swarmNear, shake: level });
     const strokes = this.shake.strokes - this.lastStrokes;
     this.lastStrokes = this.shake.strokes;
 
-    // Вылазка.
-    const out: SortieEvent[] = [];
-    if (s && !over) {
-      // Батарейка села — меняем сами, если есть запасная; R — заменить заранее.
-      if ((this.light.empty || (input.swap && this.light.charge < 0.6)) && !swapping) {
-        const e = s.startSwap();
-        if (e) out.push(e);
-      }
-      const eye: Vec3 = this.lastRig ? this.lastRig.camPos : [b.x, b.y + 1.42, b.z];
-      const aim: Vec3 = this.lastRig ? this.lastRig.lightDir : dirFromAngles(this.aimYaw, this.aimPitch);
-      const los = (from: Vec3, to: Vec3): number => {
-        const dx = to[0] - from[0];
-        const dy = to[1] - from[1];
-        const dz = to[2] - from[2];
-        const d = Math.hypot(dx, dy, dz) || 1;
-        return this.colliders.raycast(from[0], from[1], from[2], dx / d, dy / d, dz / d, d);
-      };
-      out.push(...s.update(dt, { pos: [b.x, b.y, b.z], eye, aim, light: this.light.intensity, actionPressed: input.actionPressed, actionHeld: input.action, landed: res.landed, swarm: this.swarmNear }, los));
-    }
+    const out: SessionEvent[] = [];
     const fear: FearEvent[] = [];
-    if (s && !s.outcome && !this.calm) this.stepFear(dt, input, level, fear, out);
-    else if (this.calm) this.swarmNear = 0;
-    for (const e of out) this.applyEvent(e);
+    const dream: DreamEvent[] = [];
+    const eye: Vec3 = this.lastRig ? this.lastRig.camPos : [b.x, b.y + 1.42, b.z];
+    const aim: Vec3 = this.lastRig ? this.lastRig.lightDir : dirFromAngles(this.aimYaw, this.aimPitch);
+    const los = (from: Vec3, to: Vec3): number => {
+      const dx = to[0] - from[0];
+      const dy = to[1] - from[1];
+      const dz = to[2] - from[2];
+      const d = Math.hypot(dx, dy, dz) || 1;
+      return this.colliders.raycast(from[0], from[1], from[2], dx / d, dy / d, dz / d, d);
+    };
+    const look: Look = { eye, aim, light: this.seeing };
+    const node = this.where === 'main' ? this.playerNode() : -1;
+    this.room = node >= 0 ? this.level!.nav[node]!.room : -1;
+
+    // Вещи: под взглядом уменьшаются, рассыпаются, растут.
+    for (const e of this.things.update(dt, look, [b.x, b.y, b.z], los)) {
+      const t = e.thing;
+      if (e.type === 'noticed') this.observed = true;
+      else if (e.type === 'changing') {
+        if (t.collider >= 0) this.colliders.boxes[t.collider]!.off = true;
+        dream.push({ type: 'thing', thing: t, what: 'changing' });
+      } else if (e.type === 'settled') dream.push({ type: 'thing', thing: t, what: 'settled' });
+      else if (this.jumps && s && !s.over) this.beginJump(this.jumps.onEngulf(this.thingPocket.get(t.id) ?? null), dream);
+    }
+
+    // Сессия: воспоминания и среда.
+    if (s && this.where !== 'limbo') {
+      out.push(...s.update(dt, { pos: [b.x, b.y, b.z], eye, aim, light: look.light, node, swarm: this.swarmNear, observed: this.observed, landed: res.landed }, los));
+      this.observed = false;
+    }
+    for (let i = 0; i < out.length; i++) this.applySessionEvent(out[i]!, out, dream, node);
+
+    const quiet = this.where !== 'main' || this.transition !== null;
+    if (s && !s.over && !this.calm && !quiet) this.stepFear(dt, input, level, fear, out, dream);
+    else this.swarmNear = this.calm ? 0 : approach(this.swarmNear, 0, 0.5, dt);
+
+    // Поводы для скачка: простые действия и наблюдения.
+    const jumps = this.jumps;
+    if (jumps && s && !s.over && !this.calm && !quiet) {
+      jumps.update(dt);
+      let plan: JumpPlan | null = null;
+      if (toggled && wasOff && this.light.state === 'on') plan = jumps.onLightOn();
+      if (!plan && ev.revived) plan = jumps.onRevive();
+      if (!plan) plan = jumps.onDark(dt, look.light < 0.05, Math.hypot(b.vx, b.vz) < 0.3);
+      if (!plan) {
+        // «Тонкое» помещение: постоял в нём — оно рассыпается.
+        const thin = this.roomFx.get(this.room) === 'thin' && !this.thinUsed.has(this.room);
+        this.thinTime = thin ? this.thinTime + dt : 0;
+        if (thin && this.thinTime > 2.5) {
+          plan = jumps.onThin();
+          if (plan) this.thinUsed.add(this.room);
+        }
+      }
+      if (plan) this.beginJump(plan, dream);
+    }
+
+    // Всё вспомнено: чуть погодя место рассыпается, игрок попадает в лимбо.
+    if (this.endIn >= 0 && !this.transition) {
+      this.endIn -= dt;
+      if (this.endIn < 0) this.beginJump({ cause: 'end', style: 'dissolve', to: 'limbo' }, dream);
+    }
+
+    // Карманное пространство отпускает: ушёл за край, засмотрелся на якорь или просто вышло время.
+    const p = this.pocket;
+    if (p && this.where === 'pocket' && !this.transition) {
+      this.pocketAge += dt;
+      const far = Math.hypot(b.x - p.center[0], b.z - p.center[2]) > p.radius;
+      // Первые секунды якорь не действует: иначе пространство отпустит раньше, чем игрок осмотрится.
+      const onAnchor = this.pocketAge > 6 && p.anchors.some((a) => looksAt(look, a, 0.6, 16, los));
+      this.anchorGaze = onAnchor ? this.anchorGaze + dt : Math.max(0, this.anchorGaze - dt);
+      if (far) this.beginJump({ cause: 'return', style: 'cut', to: 'elsewhere' }, dream);
+      else if (this.anchorGaze > 1.8) this.beginJump({ cause: 'return', style: 'whiteout', to: 'elsewhere' }, dream);
+      else if (this.pocketAge > this.pocketStay) this.beginJump({ cause: 'return', style: 'dissolve', to: 'elsewhere' }, dream);
+    }
+
+    // Лимбо: просим следующую сессию и ждём, пока её соберут.
+    if (this.where === 'limbo' && !this.transition) {
+      this.limboTime += dt;
+      if (!this.limboAsked) {
+        this.limboAsked = true;
+        dream.push({ type: 'limbo' });
+      }
+      if (this.pending && this.limboTime > LIMBO_MIN) this.beginJump({ cause: 'begin', style: 'dissolve', to: 'session' }, dream);
+    }
+
+    // Идущий скачок.
+    const tr = this.transition;
+    if (tr) {
+      tr.t += dt;
+      if (!tr.switched && tr.t >= tr.out) {
+        tr.switched = true;
+        this.switchPlace(tr.plan, dream);
+      }
+      // switchPlace может начать новую сессию со своим переходом: тогда этот уже не наш.
+      if (this.transition === tr && tr.t >= tr.out + tr.back) this.transition = null;
+    }
+
+    // Камера изредка сбоит сама по себе — едва заметно.
+    this.nextGlitch -= dt;
+    if (this.nextGlitch <= 0) {
+      this.nextGlitch = 9 + this.rng() * 14;
+      this.glitch = Math.max(this.glitch, 0.16);
+    }
+
     this.stepGlow(dt);
-    return { lightFailed: ev.failed, lightRevived: ev.revived, lightToggled: toggled, spark: ev.spark, strokes, fellOut: res.fellOut, sortie: out, fear };
+    return { lightFailed: ev.failed, lightRevived: ev.revived, lightToggled: toggled, spark: ev.spark, strokes, fellOut: res.fellOut, session: out, fear, dream };
   }
 
   /** Рой, режиссёр и аномалии за шаг. */
-  private stepFear(dt: number, input: InputFrame, shakeLevel: number, fear: FearEvent[], out: SortieEvent[]): void {
-    const s = this.sortie!;
+  private stepFear(dt: number, input: InputFrame, shakeLevel: number, fear: FearEvent[], out: SessionEvent[], dream: DreamEvent[]): void {
+    const s = this.session!;
     const sw = this.swarm;
     const b = this.body;
     const node = this.playerNode();
@@ -409,9 +831,18 @@ export class Game {
         fear.push({ type: 'swarm', what: 'cohered' });
       }
       if (res.scattered) fear.push({ type: 'swarm', what: 'scattered' });
-      if (res.caught) {
+      if (res.caught && this.jumps) {
+        // Рой не убивает: он гасит всё и уносит в другое место; искомая вещь при этом «забывается».
         fear.push({ type: 'swarm', what: 'caught' });
-        out.push(...s.caught());
+        s.scare(0.4);
+        const f = s.forget(node);
+        if (f) {
+          out.push(f);
+          // События сессии этого шага уже применены: вещь переставляем сами.
+          this.applySessionEvent(f, out, dream, node);
+        }
+        this.glitch = 1;
+        this.beginJump(this.jumps.forced('caught'), dream);
       }
       this.swarmNear = sw.proximity(pos);
     }
@@ -419,7 +850,7 @@ export class Game {
     const dir = this.director;
     if (dir) {
       const tiers = this.level?.layout?.tierCount ?? 1;
-      for (const e of dir.update({ time: s.time, tier: Math.max(0, Math.round(-b.y / 4.5)), goalsDone: s.done.size, swarmBusy: sw?.active ?? true, tiers })) {
+      for (const e of dir.update({ time: s.time, tier: Math.max(0, Math.round(-b.y / 4.5)), goalsDone: s.doneCount, swarmBusy: sw?.active ?? true, tiers })) {
         if (e.type === 'scare') {
           this.applyScare(e.id);
           const src = this.scareSource(e.id, node);
@@ -458,21 +889,36 @@ export class Game {
     }
   }
 
-  /** Последствия события вылазки для мира и камеры. */
-  private applyEvent(e: SortieEvent): void {
-    if (e.type === 'picked') this.refreshItems(e.item.tier);
-    else if (e.type === 'swap-done') this.light.replaceBattery();
+  /** Последствия события сессии для мира и камеры. out — список событий шага: сюда же дописываются следствия. */
+  private applySessionEvent(e: SessionEvent, out: SessionEvent[], dream: DreamEvent[], node: number): void {
+    const s = this.session!;
+    if (e.type === 'reveal') {
+      const sp = e.memory.spot!;
+      this.memoryThing = this.addThing(e.memory.def.thing, [sp.x, sp.y, sp.z], this.rng() * Math.PI * 2, 'dust', true);
+      // Вспышка воспоминания: кадр на миг рвётся.
+      this.glitch = Math.max(this.glitch, 0.5);
+    } else if (e.type === 'recall') {
+      const t = this.memoryThing;
+      this.memoryThing = null;
+      if (t) {
+        t.memory = false;
+        if (this.things.change(t, 'dust')) dream.push({ type: 'thing', thing: t, what: 'changing' });
+      }
+      if (!this.archive.includes(e.memory.def.id)) this.archive.push(e.memory.def.id);
+    } else if (e.type === 'forgot') {
+      const sp = e.memory.spot!;
+      if (this.memoryThing) this.memoryThing.pos = [sp.x, sp.y, sp.z];
+    } else if (e.type === 'all-done') this.endIn = 3.5;
     else if (e.type === 'collapse') {
-      for (const b of e.spec.boxes) this.colliders.add(b);
+      for (const bx of e.spec.boxes) this.colliders.add(bx);
       this.renderer.setChunkVisible(e.spec.id, true);
       this.quake = 1;
-    } else if (e.type === 'hurt') {
-      this.quake = Math.max(this.quake, 0.7);
-      this.glitch = Math.max(this.glitch, 0.6);
-    } else if (e.type === 'ended') {
-      this.fadeTo = 0;
-      // Запись обрывается помехами; при выходе наверх просто гаснет.
-      if (e.outcome !== 'escaped') this.glitch = 1;
+    } else if ((e.type === 'fall' || e.type === 'faint') && this.jumps) {
+      // Провал и газ не убивают: выбрасывают в другое пространство, а искомая вещь «забывается».
+      if (this.beginJump(this.jumps.forced(e.type), dream)) {
+        const f = s.forget(node);
+        if (f) out.push(f);
+      }
     }
   }
 
@@ -493,6 +939,47 @@ export class Game {
     );
     this.lastRig = rig;
     if (rig.footstep) this.stepped = true;
+
+    // Особенности помещения: в «тёмном» фонарь не проходит и проступает сетка; в «сеточном» — только сетка.
+    const fx = this.where === 'main' ? this.roomFx.get(this.room) : undefined;
+    this.fxLight = approach(this.fxLight, fx === 'dark' ? 0 : 1, 0.3, dt);
+    this.fxWire = approach(this.fxWire, fx === 'dark' ? 0.85 : fx === 'wire' ? 0.5 : 0, 0.5, dt);
+    let lightScale = this.env.light * this.fxLight;
+    let wire = this.fxWire;
+    // Стробоскоп: короткие вспышки не чаще трёх в секунду (вразнобой, часть пропущена). По просьбе
+    // игрока «поменьше вспышек» — ровное медленное мерцание.
+    let strobe = 0;
+    if (fx === 'strobe') {
+      const beat = this.time * 2.6;
+      const k = Math.floor(beat);
+      strobe = this.calmFlash ? 0.06 + 0.04 * Math.sin(this.time * 2.2) : hash01(k, 3, this.dreamSeed) < 0.8 && beat - k < 0.17 ? 1 : 0;
+    }
+
+    // Скачок: уходящее место рвётся, рассыпается, гаснет или выбеливается; новое — проступает обратно.
+    const tr = this.transition;
+    let dissolve = 0;
+    let flash = 0;
+    let fadeMul = 1;
+    let fog = this.env.fog;
+    if (tr) {
+      const k = tr.switched ? 1 - clamp((tr.t - tr.out) / tr.back, 0, 1) : clamp(tr.t / Math.max(tr.out, 1e-3), 0, 1);
+      const style = tr.plan.style;
+      if (style === 'cut') this.glitch = Math.max(this.glitch, 0.9 * k);
+      else if (style === 'dissolve') {
+        dissolve = k;
+        wire = Math.max(wire, 0.7 * Math.sin(k * Math.PI));
+        // Уходящее место растворяется в цвет того, куда ведёт скачок.
+        if (!tr.switched) {
+          const to = DEST_FOG[tr.plan.to] ?? this.env.fog;
+          fog = [lerp(fog[0], to[0], k), lerp(fog[1], to[1], k), lerp(fog[2], to[2], k)];
+        }
+      } else if (style === 'blackout') {
+        lightScale *= 1 - k;
+        fadeMul = 1 - k;
+      } else if (this.calmFlash) fadeMul = 1 - k;
+      else flash = k;
+    }
+
     const [lx, ly, lz] = rig.lightPos;
     this.beamDist = this.colliders.raycast(lx, ly, lz, rig.lightDir[0], rig.lightDir[1], rig.lightDir[2], 30);
     // Яркость кадра для автоэкспозиции: центр луча и четыре луча по ореолу — берём самое светлое место.
@@ -503,25 +990,50 @@ export class Game {
       const d = dirFromAngles(yaw + dy, pitch + dp);
       lum = Math.max(lum, 0.3 * beamAtten(this.colliders.raycast(lx, ly, lz, d[0], d[1], d[2], 30)));
     }
-    const gain = this.exposure.update(dt, lum * this.light.intensity, this.light.intensity);
-    this.gasView = approach(this.gasView, this.sortie?.inGas ? 1 : 0, 0.6, dt);
-    if (this.sortie?.outcome == null) this.glitch = Math.max(0, this.glitch - dt * 1.5);
-    // Рой: тело тянется за центром. В момент поимки он рывком смыкается в метре перед камерой —
-    // не на объективе: сотня червей во весь экран стоила бы кадров, экран закрывает срыв сигнала.
+    // В светлом пространстве камеру держит рассеянный свет, а не пятно фонаря. Вспышки строба
+    // экспозицию не сбивают: камера за ними не успевает.
+    const amb = (this.env.ambient[0] + this.env.ambient[1] + this.env.ambient[2]) / 3;
+    const lit = this.light.intensity * lightScale;
+    const gain = this.exposure.update(dt, Math.max(lum * lit, amb * 1.2), amb > 0.05 ? 1 : lit);
+    this.gasView = approach(this.gasView, this.session?.inGas ? 1 : 0, 0.6, dt);
+    this.glitch = Math.max(0, this.glitch - dt * 1.5);
+    // Рой: тело тянется за центром.
     const sw = this.swarm;
-    if (sw && sw.active) {
-      const caught = this.sortie?.outcome === 'caught';
-      const lunge: Vec3 | null = caught ? [rig.camPos[0] + rig.lightDir[0] * 0.95, rig.camPos[1] - 0.15, rig.camPos[2] + rig.lightDir[2] * 0.95] : null;
-      this.swarmBody.update(dt, sw.pos, sw.cohesion, lunge);
+    if (sw && sw.active && this.where === 'main') {
+      this.swarmBody.update(dt, sw.pos, sw.cohesion, null);
       this.renderer.setSwarm(this.swarmBody.heads, this.swarmBody.dirs, this.swarmBody.params, 0.88, this.time);
     } else this.renderer.setSwarm(this.swarmBody.heads, this.swarmBody.dirs, this.swarmBody.params, 0, this.time);
     // Рядом с роем сигнал камеры рвётся.
     const hunting = sw?.mode === 'hunt' || sw?.mode === 'cohere';
     const static_ = hunting ? this.swarmNear * this.swarmNear * 0.42 : this.swarmNear * 0.1;
     this.frame += 1;
-    const hurt = this.sortie ? 1 - this.sortie.health / 100 : 0;
+
+    // Вещи: положение, рост, распад и красная сетка. Цель воспоминания в темноте светится сеткой сквозь стены.
+    const focus = this.things.focus;
+    let memNear = 0;
+    for (const t of this.things.list) {
+      const id = this.thingRender.get(t.id);
+      if (id === undefined) continue;
+      const d = Math.hypot(t.pos[0] - rig.camPos[0], t.pos[1] - rig.camPos[1], t.pos[2] - rig.camPos[2]);
+      let w = t.state === 'changing' ? 0.8 : t.state === 'idle' ? t.gaze * (0.45 + 0.35 * Math.sin(this.time * 23)) : 0;
+      let xray = false;
+      if (t.memory) {
+        memNear = Math.max(memNear, 1 - d / 8);
+        if (lit < 0.15 && d < 45) {
+          w = Math.max(w, 0.6);
+          xray = true;
+        }
+      }
+      this.renderer.setThing(id, { x: t.pos[0], y: t.pos[1], z: t.pos[2], yaw: t.yaw, scale: t.scale, dissolve: t.dissolve, wire: w, xray, visible: t.state !== 'gone' && (d < 40 || xray) });
+    }
+    // Кинескоп заметнее на ходу, под взглядом на вещь, рядом с искомым и в момент скачка.
+    const speed = Math.hypot(b.vx, b.vz);
+    const hold = this.session?.hold ?? 0;
+    const crt = clamp(0.1 + 0.2 * (speed / RUN_SPEED) + 0.5 * Math.max(focus?.gaze ?? 0, hold) + 0.3 * Math.max(0, memNear) + (tr ? 0.45 : 0), 0, 1);
+
     // Глубина 0…1: от входа до нижнего яруса.
     const depth = clamp(-(rig.camPos[1] - 1.42) / 9, 0, 1);
+    const bunker = this.env === ENV_BUNKER;
     const view: FrameView = {
       camPos: rig.camPos,
       camYaw: rig.camYaw,
@@ -530,19 +1042,27 @@ export class Game {
       lightPos: rig.lightPos,
       lightDir: rig.lightDir,
       lightIntensity: this.light.intensity,
-      lightWarmth: 1 - clamp(this.light.charge / 0.35, 0, 1),
+      lightWarmth: 0,
       beamDist: this.beamDist,
       gain,
       noise: this.exposure.noise(),
       glitch: (this.staticLevel = Math.max(this.glitch, static_)),
-      tunnel: clamp(this.panic * 0.6 + hurt * 0.5, 0, 0.95),
+      tunnel: clamp(this.panic * 0.6, 0, 0.95),
       gas: this.gasView,
-      decay: 0.25 + 0.6 * depth,
+      decay: bunker ? 0.25 + 0.6 * depth : this.env.decay,
       // Внизу воздух гуще: взвесь, пар от сырых стен; в газу луч упирается в муть.
-      haze: (0.008 + 0.004 * depth) * (1 + 9 * this.gasView),
-      fade: this.fade,
+      haze: bunker ? (0.008 + 0.004 * depth) * (1 + 9 * this.gasView) : this.env.haze,
+      fade: this.fade * fadeMul,
       time: this.time,
       frame: this.frame,
+      ambient: strobe > 0 ? [this.env.ambient[0] + 0.42 * strobe, this.env.ambient[1] + 0.45 * strobe, this.env.ambient[2] + 0.5 * strobe] : this.env.ambient,
+      fogColor: fog,
+      fogDensity: this.env.fogDensity,
+      lightScale,
+      dissolve,
+      wire,
+      crt,
+      flash,
     };
     if (present) this.renderer.render(view);
   }
@@ -563,13 +1083,16 @@ export class Game {
   /** Снимок состояния для отладки и смоука. */
   snapshot(): Record<string, unknown> {
     const b = this.body;
-    const s = this.sortie;
+    const s = this.session;
+    const tr = this.transition;
     return {
       pos: [b.x, b.y, b.z],
       vel: [b.vx, b.vy, b.vz],
       onGround: b.onGround,
       aim: [this.aimYaw, this.aimPitch],
       cam: this.lastRig ? [this.lastRig.camYaw, this.lastRig.camPitch] : null,
+      eye: this.lastRig ? [...this.lastRig.camPos] : [b.x, b.y + 1.42, b.z],
+      lightDir: this.lastRig ? [...this.lastRig.lightDir] : [0, 0, -1],
       light: { state: this.light.state, charge: this.light.charge, intensity: this.light.intensity, revive: this.light.reviveProgress },
       shake: this.shake.level,
       beamDist: this.beamDist,
@@ -577,24 +1100,29 @@ export class Game {
       time: this.time,
       frame: this.frame,
       fade: this.fade,
-      sortie: s
+      where: this.where,
+      pocket: this.pocket?.kind ?? null,
+      jump: tr ? { cause: tr.plan.cause, style: tr.plan.style, to: tr.plan.to, switched: tr.switched } : null,
+      room: this.room,
+      roomFx: this.roomFx.get(this.room) ?? null,
+      fx: { light: this.fxLight, wire: this.fxWire },
+      session: s
         ? {
-            done: [...s.done],
-            taken: [...s.taken],
-            finds: [...s.finds],
-            spares: s.spares,
-            health: s.health,
-            panic: s.panic,
-            outcome: s.outcome,
-            target: s.target ? s.target.kind : null,
+            memories: s.memories.map((m) => ({ id: m.def.id, thing: m.def.thing, state: m.state, spot: m.spot ? [m.spot.x, m.spot.y, m.spot.z] : null })),
+            done: s.doneCount,
+            over: s.over,
             hold: s.hold,
-            swapping: s.swapping,
+            panic: s.panic,
+            time: s.time,
             inWater: s.inWater,
             inGas: s.inGas,
             maxTier: s.maxTier,
             collapsed: s.collapsed(),
           }
         : null,
+      things: this.things.list.map((t) => ({ id: t.id, kind: t.kind, state: t.state, fate: t.fate, memory: t.memory, gaze: t.gaze, scale: t.scale, dissolve: t.dissolve, pos: t.pos })),
+      jumps: this.jumps ? { count: this.jumps.count, cooldown: this.jumps.cooldown } : null,
+      archive: [...this.archive],
       swarm: this.swarm ? { mode: this.swarm.mode, pos: [...this.swarm.pos], node: this.swarm.node, cohesion: this.swarm.cohesion, awareness: this.swarm.awareness, aggravation: this.swarm.aggravation, near: this.swarmNear } : null,
       director: this.director ? { phase: this.director.phase } : null,
       anomalies: this.anomalies ? this.anomalies.state() : null,
