@@ -1,5 +1,5 @@
 /**
- * Витрина реквизита (?level=show): длинный зал, вдоль стены в ряд стоят предметы из реестра PROPS.
+ * Витрина реквизита (?level=show): длинный зал, вдоль стены в ряд стоят предметы из реестров PROPS и HOME_PROPS (ALL_PROPS).
  * Нужна, чтобы посмотреть каждый предмет под фонарём, не разыскивая его по сгенерированному убежищу.
  *   ?level=show                 — весь реестр
  *   ?level=show&props=a,b,c     — только названные
@@ -9,7 +9,7 @@ import { ColliderSet } from './colliders';
 import { MeshBuilder } from './kit';
 import type { BuiltLevel } from './level';
 import { Xf } from './props';
-import { PROPS } from './props_more';
+import { ALL_PROPS } from './props_all';
 import { buildShell, Shell, STYLE_ROOM, WALL_T } from './shell';
 
 export const SHOW_STEP = 2.4;
@@ -19,14 +19,14 @@ const CEIL = 2.7;
 
 /** Имена предметов витрины по порядку (все или только существующие из запрошенных). */
 export function showcaseNames(only: readonly string[] | null): string[] {
-  const all = Object.keys(PROPS);
-  return only ? only.filter((n) => n in PROPS) : all;
+  const all = Object.keys(ALL_PROPS);
+  return only ? only.filter((n) => n in ALL_PROPS) : all;
 }
 
 /** Что стоит на витрине и как закреплено: по этому съёмка решает, куда смотреть. */
 export function showcaseItems(only: readonly string[] | null): { name: string; mount: string; h: number; y: number }[] {
   return showcaseNames(only).map((name) => {
-    const p = PROPS[name]!;
+    const p = ALL_PROPS[name]!;
     return { name, mount: p.mount, h: p.h, y: p.y ?? 0 };
   });
 }
@@ -40,7 +40,7 @@ export function buildShowcase(only: readonly string[] | null): BuiltLevel {
   const col = new ColliderSet();
   buildShell(shell, mb, col);
   names.forEach((name, i) => {
-    const p = PROPS[name]!;
+    const p = ALL_PROPS[name]!;
     const x = i * SHOW_STEP;
     const y = p.mount === 'wall' ? (p.y ?? 1.2) : p.mount === 'ceiling' ? CEIL : 0;
     // Отдельно стоящие предметы отодвинуты от стены, чтобы их можно было обойти.

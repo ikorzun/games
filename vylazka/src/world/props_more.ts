@@ -33,10 +33,10 @@ export interface PropSpec {
 
 type Ao = number | readonly [number, number, number, number];
 
-const WHITE: Vec3 = [1, 1, 1];
-const DARK: Vec3 = [0.5, 0.5, 0.5];
-const GREY: Vec3 = [0.7, 0.7, 0.7];
-const dim = (t: Vec3, k: number): Vec3 => [t[0] * k, t[1] * k, t[2] * k];
+export const WHITE: Vec3 = [1, 1, 1];
+export const DARK: Vec3 = [0.5, 0.5, 0.5];
+export const GREY: Vec3 = [0.7, 0.7, 0.7];
+export const dim = (t: Vec3, k: number): Vec3 => [t[0] * k, t[1] * k, t[2] * k];
 
 /** Простой детерминированный разброс для мелочей (на геймплей не влияет). */
 function lcg(seed: number): () => number {
@@ -48,7 +48,7 @@ function lcg(seed: number): () => number {
 }
 
 /** Генератор предмета. Сид перемешан: соседние сиды (витрина даёт 1000, 1007…) не должны давать близнецов. */
-const rng = (seed: number): (() => number) => lcg(Math.imul(seed ^ 0x5bd1e995, 0x9e3779b1));
+export const rng = (seed: number): (() => number) => lcg(Math.imul(seed ^ 0x5bd1e995, 0x9e3779b1));
 
 const vsub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const vcross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -59,7 +59,7 @@ function vnorm(v: Vec3): Vec3 {
 }
 
 /** Направление из координат предмета в мир: тот же поворот, что в Xf.pt, но без сдвига. */
-function turn(xf: Xf, n: Vec3): Vec3 {
+export function turn(xf: Xf, n: Vec3): Vec3 {
   if (xf.rot === 1) return [n[2], n[1], -n[0]];
   if (xf.rot === 2) return [-n[0], n[1], -n[2]];
   if (xf.rot === 3) return [-n[2], n[1], n[0]];
@@ -67,7 +67,7 @@ function turn(xf: Xf, n: Vec3): Vec3 {
 }
 
 /** Тонкий лист по четырём точкам (в координатах предмета, по кругу), лицом в сторону вектора n. */
-function sheet(xf: Xf, a: Vec3, b: Vec3, c: Vec3, d: Vec3, n: Vec3, mat: number, tint: Vec3 = WHITE, ao: Ao = 1): void {
+export function sheet(xf: Xf, a: Vec3, b: Vec3, c: Vec3, d: Vec3, n: Vec3, mat: number, tint: Vec3 = WHITE, ao: Ao = 1): void {
   xf.mb.quadFacing(xf.pt(a[0], a[1], a[2]), xf.pt(b[0], b[1], b[2]), xf.pt(c[0], c[1], c[2]), xf.pt(d[0], d[1], d[2]), turn(xf, n), mat, tint, ao);
 }
 
@@ -76,7 +76,7 @@ function sheet(xf: Xf, a: Vec3, b: Vec3, c: Vec3, d: Vec3, n: Vec3, mat: number,
  * рычагов, провисших кабелей. w лежит по горизонтали поперёк бруса (или вдоль side), t — по второй нормали.
  * aoA — затенение у конца a (контактная тень у пола).
  */
-function beam(xf: Xf, a: Vec3, b: Vec3, w: number, t: number, mat: number, tint: Vec3 = WHITE, opts: { side?: Vec3; ao?: number; aoA?: number; caps?: boolean } = {}): void {
+export function beam(xf: Xf, a: Vec3, b: Vec3, w: number, t: number, mat: number, tint: Vec3 = WHITE, opts: { side?: Vec3; ao?: number; aoA?: number; caps?: boolean } = {}): void {
   const d = vnorm(vsub(b, a));
   let s = opts.side ?? vcross(d, [0, 1, 0]);
   if (Math.hypot(s[0], s[1], s[2]) < 1e-4) s = [1, 0, 0];
@@ -114,7 +114,7 @@ function planeOf(axis: Axis): [number, number, number] {
 }
 
 /** Кольцо прямоугольного сечения из seg звеньев — обод штурвала. c — центр, axis — ось вращения. */
-function ring(xf: Xf, c: Vec3, axis: Axis, r: number, tube: number, seg: number, mat: number, tint: Vec3 = WHITE): void {
+export function ring(xf: Xf, c: Vec3, axis: Axis, r: number, tube: number, seg: number, mat: number, tint: Vec3 = WHITE): void {
   const [a, u, v] = planeOf(axis);
   const at = (ang: number, rad: number, h: number): Vec3 => {
     const p: Vec3 = [c[0], c[1], c[2]];
