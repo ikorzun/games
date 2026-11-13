@@ -8,10 +8,11 @@ import type { Vec3 } from '../core/types';
 import type { MeshData } from '../world/kit';
 import type { LevelChunk, StairLink } from '../world/level';
 import { MAT_COUNT, MAT_DEFS } from '../world/materials';
+import { bakeDetail } from './detail';
 import { bakeGrime } from './grime';
-import { ATLAS_GRID, bakeMatcapAtlas } from './matcap_atlas';
+import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from './matcap_atlas';
 import { MAX_WORMS } from '../swarm/body';
-import { DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, POST_FRAG, POST_VERT, SWARM_FRAG, SWARM_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
+import { DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, HAZE_FRAG, POST_FRAG, POST_VERT, SWARM_FRAG, SWARM_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
 
 export type Quality = 'low' | 'med' | 'high';
 
@@ -25,12 +26,17 @@ export interface QualitySpec {
   dust: number;
   /** Сколько червей роя рисовать. */
   worms: number;
+  /** Дымка в луче: число шагов вдоль взгляда (0 — выключена) и во сколько раз её буфер меньше кадра. */
+  haze: number;
+  hazeDiv: number;
+  /** Предметы режут дымку тенями. */
+  hazeShadow: boolean;
 }
 
 export const QUALITY: Record<Quality, QualitySpec> = {
-  low: { pixels: 640 * 360, shadow: 0, chroma: false, detail: false, dust: 140, worms: 44 },
-  med: { pixels: 960 * 540, shadow: 512, chroma: true, detail: true, dust: 300, worms: 68 },
-  high: { pixels: 1280 * 720, shadow: 1024, chroma: true, detail: true, dust: 520, worms: MAX_WORMS },
+  low: { pixels: 640 * 360, shadow: 0, chroma: false, detail: false, dust: 140, worms: 44, haze: 0, hazeDiv: 3, hazeShadow: false },
+  med: { pixels: 960 * 540, shadow: 512, chroma: true, detail: true, dust: 300, worms: 68, haze: 8, hazeDiv: 3, hazeShadow: false },
+  high: { pixels: 1280 * 720, shadow: 1024, chroma: true, detail: true, dust: 520, worms: MAX_WORMS, haze: 14, hazeDiv: 2, hazeShadow: true },
 };
 
 /** Всё, что нужно для одного кадра. */
@@ -53,6 +59,10 @@ export interface FrameView {
   tunnel: number;
   /** 0..1: игрок в газу — жёлтая муть. */
   gas: number;
+  /** 0..1: насколько здесь сыро и запущено (растёт с глубиной): облезшая краска, ржавчина, плесень. */
+  decay: number;
+  /** Плотность взвеси в воздухе: насколько виден сам луч. */
+  haze: number;
   fade: number;
   time: number;
   frame: number;
@@ -92,8 +102,12 @@ export class GameRenderer {
   private sceneRT: THREE.WebGLRenderTarget;
   private shadowRT: THREE.WebGLRenderTarget | null = null;
   private readonly worldMat: THREE.ShaderMaterial;
+  private signsTex: THREE.Texture;
   private readonly depthMat: THREE.ShaderMaterial;
   private readonly postMat: THREE.ShaderMaterial;
+  private readonly hazeMat: THREE.ShaderMaterial;
+  private readonly hazeScene = new THREE.Scene();
+  private hazeRT: THREE.WebGLRenderTarget | null = null;
   private readonly postScene = new THREE.Scene();
   private readonly postCam = new THREE.Camera();
   private dust: THREE.Points | null = null;
@@ -145,7 +159,7 @@ export class GameRenderer {
 
     // Текстуры запекаются на CPU: детерминированы и переживают потерю контекста.
     const atlas = bakeMatcapAtlas(MAT_DEFS);
-    const atlasTex = new THREE.DataTexture(atlas.data, atlas.size, atlas.size, THREE.RGBAFormat, THREE.UnsignedByteType);
+    const atlasTex = new THREE.DataTexture(atlas.data, atlas.width, atlas.height, THREE.RGBAFormat, THREE.UnsignedByteType);
     atlasTex.colorSpace = THREE.SRGBColorSpace;
     atlasTex.magFilter = THREE.LinearFilter;
     atlasTex.minFilter = THREE.LinearFilter;
@@ -158,7 +172,23 @@ export class GameRenderer {
     grimeTex.minFilter = THREE.LinearMipmapLinearFilter;
     grimeTex.generateMipmaps = true;
     grimeTex.needsUpdate = true;
-    if (ATLAS_GRID * ATLAS_GRID < MAT_COUNT) throw new Error('атлас matcap меньше числа материалов');
+    if (ATLAS_COLS * ATLAS_ROWS < MAT_COUNT) throw new Error('атлас matcap меньше числа материалов');
+    // Фактуры: стопка слоёв. Анизотропная фильтрация держит рельеф на стенах, уходящих вдаль.
+    const detail = bakeDetail(256);
+    const detailTex = new THREE.DataArrayTexture(detail.data, detail.size, detail.size, detail.layers);
+    detailTex.format = THREE.RGBAFormat;
+    detailTex.type = THREE.UnsignedByteType;
+    detailTex.wrapS = THREE.RepeatWrapping;
+    detailTex.wrapT = THREE.RepeatWrapping;
+    detailTex.magFilter = THREE.LinearFilter;
+    detailTex.minFilter = THREE.LinearMipmapLinearFilter;
+    detailTex.generateMipmaps = true;
+    detailTex.anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy());
+    detailTex.needsUpdate = true;
+    grimeTex.anisotropy = detailTex.anisotropy;
+    // Атлас надписей и плакатов: пока пустой белый лист, рисуется отдельно (setSigns).
+    this.signsTex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    this.signsTex.needsUpdate = true;
 
     this.lightU = {
       uLightPosV: { value: new THREE.Vector3() },
@@ -167,6 +197,9 @@ export class GameRenderer {
       // Яркое пятно 7–13°, ореол до 25°, слабая засветка до 52°.
       uCone: { value: new THREE.Vector4(deg(7), deg(13), deg(25), deg(52)) },
     };
+    const defOf = (i: number): (typeof MAT_DEFS)[number] => MAT_DEFS[i] ?? MAT_DEFS[0]!;
+    const matA = Array.from({ length: MAT_COUNT }, (_, i) => new THREE.Vector4(defOf(i).grime, defOf(i).glow ?? 0, defOf(i).layer, 1 / defOf(i).tile));
+    const matB = Array.from({ length: MAT_COUNT }, (_, i) => new THREE.Vector4(defOf(i).bump, defOf(i).decay, defOf(i).alt ?? i, 0));
 
     this.worldMat = new THREE.ShaderMaterial({
       vertexShader: WORLD_VERT,
@@ -175,13 +208,20 @@ export class GameRenderer {
         ...this.lightU,
         uAtlas: { value: atlasTex },
         uGrime: { value: grimeTex },
+        uDetail: { value: detailTex },
+        uSigns: { value: this.signsTex },
+        uDecay: { value: 0.3 },
+        uTierDrop: { value: 4.5 },
+        uLightRightV: { value: new THREE.Vector3(1, 0, 0) },
+        uLightUpV: { value: new THREE.Vector3(0, 1, 0) },
         uShadowMap: { value: null },
         uShadowMatrix: { value: new THREE.Matrix4() },
         uShadowTexel: { value: 1 / 512 },
         uAmbient: { value: new THREE.Vector3(0.0016, 0.0019, 0.0024) },
         uBounce: { value: new THREE.Vector4(0, 0, -1000, 0) },
         uFog: { value: 0.035 },
-        uMatParams: { value: MAT_DEFS.map((d) => new THREE.Vector4(d.grime, d.glow ?? 0, 0, 0)) },
+        uMatA: { value: matA },
+        uMatB: { value: matB },
         uMatBase: { value: atlas.base.map((b) => new THREE.Vector3(b[0], b[1], b[2])) },
       },
     });
@@ -254,6 +294,10 @@ export class GameRenderer {
         uFade: { value: 1 },
         uGas: { value: 0 },
         uBeam: { value: new THREE.Vector3(0.5, 0.5, 0) },
+        tHaze: { value: null },
+        uGrime: { value: grimeTex },
+        uHazeTexel: { value: new THREE.Vector2(1, 1) },
+        uBloom: { value: 0.1 },
       },
       depthTest: false,
       depthWrite: false,
@@ -264,6 +308,31 @@ export class GameRenderer {
     postMesh.frustumCulled = false;
     this.postScene.add(postMesh);
 
+    this.hazeMat = new THREE.ShaderMaterial({
+      vertexShader: POST_VERT,
+      fragmentShader: HAZE_FRAG,
+      uniforms: {
+        ...this.lightU,
+        tDepth: { value: null },
+        uGrime: { value: grimeTex },
+        uShadowMap: { value: null },
+        uShadowMatrixV: { value: new THREE.Matrix4() },
+        uCamRot: { value: new THREE.Matrix3() },
+        uCamPos: { value: new THREE.Vector3() },
+        uTan: { value: new THREE.Vector2(1, 1) },
+        uNearFar: { value: new THREE.Vector2(0.05, 70) },
+        uDensity: { value: 0.02 },
+        uFrame: { value: 0 },
+        uTime: { value: 0 },
+      },
+      defines: { HAZE_STEPS: 8 },
+      depthTest: false,
+      depthWrite: false,
+    });
+    const hazeMesh = new THREE.Mesh(tri, this.hazeMat);
+    hazeMesh.frustumCulled = false;
+    this.hazeScene.add(hazeMesh);
+
     this.camera.rotation.order = 'YXZ';
     this.camera.layers.enable(1);
     this.sceneRT = this.makeSceneRT(2, 2);
@@ -271,8 +340,17 @@ export class GameRenderer {
   }
 
   private makeSceneRT(w: number, h: number): THREE.WebGLRenderTarget {
-    const rt = new THREE.WebGLRenderTarget(w, h, { depthBuffer: true, stencilBuffer: false, type: THREE.UnsignedByteType, magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter, generateMipmaps: false });
+    // Глубина — текстурой: по ней дымка знает, где кончается воздух. Уменьшенные копии кадра нужны ореолу.
+    const haze = QUALITY[this.quality].haze > 0;
+    const depthTexture = new THREE.DepthTexture(w, h);
+    const rt = new THREE.WebGLRenderTarget(w, h, { depthBuffer: true, depthTexture, stencilBuffer: false, type: THREE.UnsignedByteType, magFilter: THREE.LinearFilter, minFilter: haze ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter, generateMipmaps: haze });
     // sRGB8: в тёмных градиентах нет полос, шейдер пишет линейный цвет, выборка возвращает линейный.
+    rt.texture.colorSpace = THREE.SRGBColorSpace;
+    return rt;
+  }
+
+  private makeHazeRT(w: number, h: number): THREE.WebGLRenderTarget {
+    const rt = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false, stencilBuffer: false, type: THREE.UnsignedByteType, magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter, generateMipmaps: false });
     rt.texture.colorSpace = THREE.SRGBColorSpace;
     return rt;
   }
@@ -291,9 +369,13 @@ export class GameRenderer {
     }
     this.worldMat.defines = { ...(q.shadow > 0 ? { SHADOWS: '' } : {}), ...(q.detail ? { DETAIL: '' } : {}) };
     this.worldMat.needsUpdate = true;
-    this.postMat.defines = q.chroma ? { CHROMA: '' } : {};
+    this.postMat.defines = { ...(q.chroma ? { CHROMA: '' } : {}), ...(q.haze > 0 ? { HAZE: '' } : {}) };
     this.postMat.needsUpdate = true;
+    this.hazeMat.defines = { HAZE_STEPS: Math.max(1, q.haze), ...(q.hazeShadow && q.shadow > 0 ? { HAZE_SHADOW: '' } : {}) };
+    this.hazeMat.needsUpdate = true;
     this.rebuildDust(q.dust);
+    // Буферы зависят от качества (копии кадра, дымка): пересоздаём, даже если размер тот же.
+    this.width = 0;
     this.resize(this.cssW, this.cssH);
   }
 
@@ -334,12 +416,25 @@ export class GameRenderer {
     this.width = w;
     this.height = h;
     this.renderer.setSize(w, h, false);
+    this.sceneRT.depthTexture?.dispose();
     this.sceneRT.dispose();
     this.sceneRT = this.makeSceneRT(w, h);
+    this.hazeRT?.dispose();
+    this.hazeRT = null;
+    const q = QUALITY[this.quality];
+    if (q.haze > 0) {
+      const hw = Math.max(2, Math.round(w / q.hazeDiv));
+      const hh = Math.max(2, Math.round(h / q.hazeDiv));
+      this.hazeRT = this.makeHazeRT(hw, hh);
+      this.postMat.uniforms.uHazeTexel!.value.set(1 / hw, 1 / hh);
+    }
     const aspect = w / h;
     this.camera.aspect = aspect;
     this.camera.fov = verticalFov(aspect);
     this.camera.updateProjectionMatrix();
+    const tanY = Math.tan((this.camera.fov * Math.PI) / 360);
+    this.hazeMat.uniforms.uTan!.value.set(tanY * aspect, tanY);
+    this.hazeMat.uniforms.uNearFar!.value.set(this.camera.near, this.camera.far);
     this.postMat.uniforms.uRes!.value.set(w, h);
     this.postMat.uniforms.uAspect!.value = aspect;
     this.dustMat.uniforms.uPointScale!.value = h / 160;
@@ -427,7 +522,7 @@ export class GameRenderer {
 
   /** Яркость фосфорных надписей: 1 — обычная, 0 — погасли, больше — вспышка. */
   setGlow(k: number): void {
-    const params = this.worldMat.uniforms.uMatParams!.value as THREE.Vector4[];
+    const params = this.worldMat.uniforms.uMatA!.value as THREE.Vector4[];
     params.forEach((p, i) => {
       p.y = (MAT_DEFS[i]?.glow ?? 0) * k;
     });
@@ -445,6 +540,7 @@ export class GameRenderer {
     await this.renderer.compileAsync(this.scene, this.camera);
     this.renderer.setRenderTarget(null);
     await this.renderer.compileAsync(this.postScene, this.postCam);
+    if (this.hazeRT) await this.renderer.compileAsync(this.hazeScene, this.postCam);
   }
 
   render(v: FrameView): void {
@@ -481,9 +577,20 @@ export class GameRenderer {
     const lu = this.lightU;
     (lu.uLightPosV!.value as THREE.Vector3).set(v.lightPos[0], v.lightPos[1], v.lightPos[2]).applyMatrix4(cam.matrixWorldInverse);
     (lu.uLightDirV!.value as THREE.Vector3).set(v.lightDir[0], v.lightDir[1], v.lightDir[2]).transformDirection(cam.matrixWorldInverse);
-    const k = 2.6 * v.lightIntensity;
+    // Поверхности в грязи и рельефе отражают меньше, чем ровная краска: фонарь взят с запасом.
+    const k = 3.3 * v.lightIntensity;
     const w = v.lightWarmth;
     (lu.uLightColor!.value as THREE.Vector3).set(k, k * (0.94 - 0.2 * w), k * (0.82 - 0.4 * w));
+    // Оси пятна фонаря: по ним ложатся разводы отражателя.
+    const wu = this.worldMat.uniforms;
+    const right = (wu.uLightRightV!.value as THREE.Vector3).set(-v.lightDir[2], 0, v.lightDir[0]);
+    if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+    right.normalize();
+    const upL = (wu.uLightUpV!.value as THREE.Vector3).set(v.lightDir[0], v.lightDir[1], v.lightDir[2]).cross(right).negate().normalize();
+    right.transformDirection(cam.matrixWorldInverse);
+    upL.transformDirection(cam.matrixWorldInverse);
+    wu.uDecay!.value = v.decay;
+    wu.uTierDrop!.value = this.tierDrop;
 
     // Отсвет от пятна: точка попадания луча и сила, убывающая с расстоянием до стены.
     const hitDist = Math.min(v.beamDist, 30);
@@ -524,12 +631,28 @@ export class GameRenderer {
     r.clear();
     r.render(this.scene, cam);
 
+    // Дымка в луче: маленький буфер, по глубине готового кадра.
+    if (this.hazeRT) {
+      const hu = this.hazeMat.uniforms;
+      hu.tDepth!.value = this.sceneRT.depthTexture;
+      hu.uShadowMap!.value = shadowOn && this.shadowRT ? this.shadowRT.depthTexture : null;
+      (hu.uShadowMatrixV!.value as THREE.Matrix4).multiplyMatrices(this.worldMat.uniforms.uShadowMatrix!.value as THREE.Matrix4, cam.matrixWorld);
+      (hu.uCamRot!.value as THREE.Matrix3).setFromMatrix4(cam.matrixWorld);
+      (hu.uCamPos!.value as THREE.Vector3).copy(cam.position);
+      hu.uDensity!.value = v.lightIntensity > 0.01 ? v.haze : 0;
+      hu.uFrame!.value = v.frame;
+      hu.uTime!.value = v.time;
+      r.setRenderTarget(this.hazeRT);
+      r.render(this.hazeScene, this.postCam);
+    }
+
     // Где на экране центр луча — там светится пыльный воздух.
     const ndc = hitWorld.project(cam);
     const visible = ndc.z < 1 && ndc.z > -1;
     const pu = this.postMat.uniforms;
     (pu.uBeam!.value as THREE.Vector3).set(ndc.x * 0.5 + 0.5, ndc.y * 0.5 + 0.5, visible ? 0.018 * v.lightIntensity : 0);
     pu.tScene!.value = this.sceneRT.texture;
+    pu.tHaze!.value = this.hazeRT ? this.hazeRT.texture : null;
     pu.uFrame!.value = v.frame;
     pu.uGain!.value = v.gain;
     pu.uNoise!.value = v.noise;

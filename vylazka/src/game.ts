@@ -476,8 +476,12 @@ export class Game {
     }
   }
 
-  /** Нарисовать кадр. alpha — доля шага между прошлым и текущим состоянием, dt — реальное время кадра. */
-  draw(alpha: number, dt: number): void {
+  /**
+   * Нарисовать кадр. alpha — доля шага между прошлым и текущим состоянием, dt — реальное время кадра.
+   * present = false — посчитать камеру, луч и экспозицию, но видеокарту не трогать (пошаговая отладка:
+   * из сотни шагов подряд показать нужно только последний).
+   */
+  draw(alpha: number, dt: number, present = true): void {
     const b = this.body;
     const x = lerp(this.prevX, b.x, alpha);
     const y = lerp(this.prevY, b.y, alpha);
@@ -516,6 +520,8 @@ export class Game {
     const static_ = hunting ? this.swarmNear * this.swarmNear * 0.42 : this.swarmNear * 0.1;
     this.frame += 1;
     const hurt = this.sortie ? 1 - this.sortie.health / 100 : 0;
+    // Глубина 0…1: от входа до нижнего яруса.
+    const depth = clamp(-(rig.camPos[1] - 1.42) / 9, 0, 1);
     const view: FrameView = {
       camPos: rig.camPos,
       camYaw: rig.camYaw,
@@ -531,11 +537,14 @@ export class Game {
       glitch: (this.staticLevel = Math.max(this.glitch, static_)),
       tunnel: clamp(this.panic * 0.6 + hurt * 0.5, 0, 0.95),
       gas: this.gasView,
+      decay: 0.25 + 0.6 * depth,
+      // Внизу воздух гуще: взвесь, пар от сырых стен; в газу луч упирается в муть.
+      haze: (0.009 + 0.008 * depth) * (1 + 8 * this.gasView),
       fade: this.fade,
       time: this.time,
       frame: this.frame,
     };
-    this.renderer.render(view);
+    if (present) this.renderer.render(view);
   }
 
   /** Был ли шаг с прошлого вызова (для звука шагов). */

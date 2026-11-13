@@ -3,12 +3,13 @@ import { mulberry32 } from '../src/core/rng';
 import { STORAGE_PREFIX, WebPlainPlatform } from '../src/platform/web_plain';
 import { Lifecycle } from '../src/lifecycle';
 import { AutoExposure, beamAtten } from '../src/render/exposure';
+import { bakeDetail, DETAIL, DETAIL_LAYERS } from '../src/render/detail';
 import { bakeGrime } from '../src/render/grime';
 import { bakeMatcapAtlas } from '../src/render/matcap_atlas';
 import { internalSize, QUALITY, verticalFov } from '../src/render/renderer';
 import { CALM_ENV, DEFAULT_FLASHLIGHT, Flashlight } from '../src/systems/flashlight';
 import { recTimestamp } from '../src/ui/hud';
-import { MAT, MAT_DEFS } from '../src/world/materials';
+import { DECAY, MAT, MAT_DEFS } from '../src/world/materials';
 
 const DT = 1 / 60;
 
@@ -152,23 +153,74 @@ describe('экспозиция', () => {
 describe('запечённые текстуры', () => {
   const atlas = bakeMatcapAtlas(MAT_DEFS, 32);
 
-  it('атлас детерминирован и нужного размера', () => {
-    expect(atlas.size).toBe(128);
-    expect(atlas.data.length).toBe(128 * 128 * 4);
+  it('атлас детерминирован и нужного размера: 8×4 шара', () => {
+    expect(atlas.width).toBe(256);
+    expect(atlas.height).toBe(128);
+    expect(atlas.data.length).toBe(256 * 128 * 4);
     expect(bakeMatcapAtlas(MAT_DEFS, 32).data).toEqual(atlas.data);
+    expect(MAT_DEFS.length).toBe(32);
   });
 
   it('шар светлее в центре, чем у края; у гладкого материала блик ярче', () => {
     const at = (mat: number, px: number, py: number): number => {
-      const o = ((Math.floor(mat / 4) * 32 + py) * 128 + (mat % 4) * 32 + px) * 4;
+      const o = ((Math.floor(mat / 8) * 32 + py) * 256 + (mat % 8) * 32 + px) * 4;
       return atlas.data[o]! + atlas.data[o + 1]! + atlas.data[o + 2]!;
     };
-    for (let m = 0; m < 16; m++) expect(at(m, 16, 16), MAT_DEFS[m]!.name).toBeGreaterThan(at(m, 30, 16));
+    for (let m = 0; m < 32; m++) expect(at(m, 16, 16), MAT_DEFS[m]!.name).toBeGreaterThan(at(m, 30, 16));
     // Эмаль бликует сильнее побелки, хотя альбедо у них близкое.
     expect(at(MAT.enamel, 16, 16) / at(MAT.enamel, 22, 16)).toBeGreaterThan(at(MAT.plaster, 16, 16) / at(MAT.plaster, 22, 16));
-    // За кругом шара — цвет края, а не чернота: фильтрация не подмешает мусор.
-    expect(at(MAT.plaster, 0, 0)).toBe(at(MAT.plaster, 0, 0));
+    // Стекло тёмное, но блик на нём — до белого.
+    expect(at(MAT.glass, 16, 16)).toBeGreaterThan(600);
+    expect(at(MAT.glass, 24, 16)).toBeLessThan(at(MAT.glass, 16, 16) / 3);
     expect(atlas.data.every((v, i) => i % 4 !== 3 || v === 255)).toBe(true);
+  });
+
+  it('у каждого материала есть слой фактуры, а проступающий материал существует', () => {
+    for (const d of MAT_DEFS) {
+      expect(d.layer, d.name).toBeGreaterThanOrEqual(0);
+      expect(d.layer, d.name).toBeLessThan(DETAIL_LAYERS);
+      expect(d.tile, d.name).toBeGreaterThan(0.1);
+      expect(d.bump, d.name).toBeLessThanOrEqual(0.03);
+      if (d.alt !== undefined) expect(MAT_DEFS[d.alt], d.name).toBeDefined();
+      // Краска и металл без «изнанки» не могут ни облезть, ни заржаветь.
+      if (d.decay === DECAY.paint || d.decay === DECAY.metal) expect(d.alt, d.name).toBeDefined();
+    }
+    // Номера слоёв в материалах и в стопке фактур — одни и те же.
+    expect(MAT_DEFS[MAT.concrete]!.layer).toBe(DETAIL.concrete);
+    expect(MAT_DEFS[MAT.paintGreen]!.layer).toBe(DETAIL.paint);
+    expect(MAT_DEFS[MAT.brick]!.layer).toBe(DETAIL.brick);
+    expect(MAT_DEFS[MAT.zinc]!.layer).toBe(DETAIL.zinc);
+    expect(MAT_DEFS[MAT.tile]!.layer).toBe(DETAIL.tile);
+  });
+
+  it('фактуры детерминированы, бесшовны и не вырождаются в ровный серый', () => {
+    const size = 64;
+    const d = bakeDetail(size);
+    expect(d.layers).toBe(DETAIL_LAYERS);
+    expect(d.data.length).toBe(size * size * 4 * DETAIL_LAYERS);
+    expect(bakeDetail(size).data).toEqual(d.data);
+    for (let l = 0; l < DETAIL_LAYERS; l++) {
+      const base = l * size * size * 4;
+      let lo = 255;
+      let hi = 0;
+      let jump = 0;
+      let inner = 0;
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const h = d.data[base + (y * size + x) * 4]!;
+          lo = Math.min(lo, h);
+          hi = Math.max(hi, h);
+        }
+        const left = d.data[base + (y * size) * 4]!;
+        const right = d.data[base + (y * size + size - 1) * 4]!;
+        jump += Math.abs(left - right);
+        inner += Math.abs(left - d.data[base + (y * size + 1) * 4]!);
+      }
+      // Рельеф есть: высота гуляет хотя бы на десятую долю диапазона.
+      expect(hi - lo, `слой ${l}`).toBeGreaterThan(25);
+      // Шов на стыке повторов не грубее обычного перепада между соседними точками (с запасом).
+      expect(jump, `слой ${l}`).toBeLessThanOrEqual(inner * 3 + size * 4);
+    }
   });
 
   it('грязь тайлится: края совпадают с противоположными с точностью до шага шума', () => {

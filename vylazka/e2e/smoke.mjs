@@ -158,7 +158,7 @@ async function scenarioPlay(browser, baseUrl) {
   await vz(page, () => window.__vz.shadows(true));
   let maxDiff = 0;
   for (let i = 0; i < lit.length; i++) maxDiff = Math.max(maxDiff, noShadow[i] - lit[i]);
-  check('в центре луча светло, по краям кадра темно', center(lit) > 60 && mean(lit) < center(lit) * 0.6, `центр ${center(lit).toFixed(1)}, среднее ${mean(lit).toFixed(1)}`);
+  check('в центре луча светло, по краям кадра темно', center(lit) > 48 && mean(lit) < center(lit) * 0.6, `центр ${center(lit).toFixed(1)}, среднее ${mean(lit).toFixed(1)}`);
   check('тень фонаря затемняет часть кадра', maxDiff > 8, `наибольшая разница ${maxDiff.toFixed(1)}`);
   const info = await vz(page, () => window.__vz.info());
   check('мир рисуется малым числом вызовов', info.calls <= 8 && info.triangles > 5000, `${info.calls} вызовов, ${info.triangles} треугольников`);

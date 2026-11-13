@@ -32,19 +32,21 @@ export const STAIR_RISE = TIER_DROP / STAIR_STEPS;
 export const STAIR_RUN = (STAIR_CELLS * CELL) / STAIR_STEPS;
 
 const ROOM_STYLE: Partial<Record<RoomType, Partial<WallStyle>>> = {
-  dorm: { lower: MAT.paintBlue, stripe: MAT.rubber, paintHeight: 1.35 },
+  dorm: { lower: MAT.paintOchre, stripe: MAT.rubber, paintHeight: 1.35 },
   command: { lower: MAT.wood, lowerTint: [0.75, 0.7, 0.62], stripe: MAT.rubber, paintHeight: 1.1 },
-  medical: { lower: MAT.enamel, lowerTint: [0.85, 0.88, 0.85], stripe: MAT.paintGreen, paintHeight: 1.6 },
-  washroom: { lower: MAT.enamel, lowerTint: [0.7, 0.8, 0.8], stripe: MAT.paintBlue, paintHeight: 1.8, floor: MAT.wetConcrete, floorTint: [0.9, 0.9, 0.9] },
-  storage: { lower: MAT.concrete, lowerTint: [0.7, 0.7, 0.68], upper: MAT.concrete, upperTint: [0.85, 0.85, 0.82], paintHeight: 1.0 },
+  // Медпункт и санузел — в кафеле до плеча, на полу мелкая плитка.
+  medical: { lower: MAT.tile, lowerTint: [0.95, 0.97, 0.95], stripe: MAT.paintGreen, paintHeight: 1.6, floor: MAT.tileFloor, floorTint: [0.9, 0.9, 0.9] },
+  washroom: { lower: MAT.tile, lowerTint: [0.82, 0.9, 0.9], stripe: MAT.paintBlue, paintHeight: 1.8, floor: MAT.tileFloor, floorTint: [0.8, 0.8, 0.8] },
+  // Кладовые сложены из кирпича и никогда не красились.
+  storage: { lower: MAT.brick, lowerTint: [0.85, 0.85, 0.85], upper: MAT.brick, upperTint: [1.05, 1.05, 1.05], stripe: MAT.brick, paintHeight: 1.0 },
   fvu: { lower: MAT.paintGreen, lowerTint: [0.8, 0.85, 0.8], paintHeight: 1.7 },
-  diesel: { lower: MAT.metalGreen, lowerTint: [1.1, 1.1, 1.1], stripe: MAT.paintRed, paintHeight: 1.2 },
+  diesel: { lower: MAT.paintGreen, lowerTint: [0.62, 0.66, 0.55], stripe: MAT.paintRed, paintHeight: 1.2, floor: MAT.tileFloor, floorTint: [0.75, 0.75, 0.75] },
   tanks: { lower: MAT.paintBlue, lowerTint: [0.75, 0.8, 0.8], paintHeight: 1.0, floor: MAT.wetConcrete, floorTint: [0.85, 0.85, 0.85] },
-  switchboard: { lower: MAT.paintBlue, lowerTint: [0.7, 0.7, 0.75], stripe: MAT.paintRed, paintHeight: 1.5 },
+  switchboard: { lower: MAT.paintOchre, lowerTint: [0.85, 0.85, 0.85], stripe: MAT.paintRed, paintHeight: 1.5 },
   archive: { lower: MAT.wood, lowerTint: [0.6, 0.55, 0.5], paintHeight: 1.2 },
-  collapsed: { lower: MAT.concrete, upper: MAT.concrete, lowerTint: [0.6, 0.6, 0.6], upperTint: [0.7, 0.7, 0.7] },
+  collapsed: { lower: MAT.brick, upper: MAT.concrete, stripe: MAT.brick, lowerTint: [0.7, 0.7, 0.7], upperTint: [0.7, 0.7, 0.7], paintHeight: 1.4 },
   entrance: { lower: MAT.concrete, lowerTint: [0.75, 0.75, 0.72], upper: MAT.concrete, upperTint: [0.9, 0.9, 0.87], paintHeight: 1.2 },
-  airlock: { lower: MAT.metalGreen, lowerTint: [1.2, 1.25, 1.2], paintHeight: 1.6 },
+  airlock: { lower: MAT.paintGreen, lowerTint: [0.7, 0.75, 0.62], paintHeight: 1.6 },
 };
 
 /** Коридоры ярусов красят по-разному; чем глубже, тем темнее и грязнее. */

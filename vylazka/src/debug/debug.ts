@@ -101,7 +101,8 @@ export function installDebug(app: App): void {
     step: (n, input) => {
       const f = { ...emptyInput(), ...input };
       if (input?.lookYaw || input?.lookPitch) game().look(f.lookYaw, f.lookPitch);
-      for (let i = 0; i < n; i++) app.advance(f, 1, 1, STEP);
+      // Кадр на экран — только после последнего шага: остальные считают камеру и свет без видеокарты.
+      for (let i = 0; i < n; i++) app.advance(f, 1, 1, STEP, i === n - 1);
       return api.state();
     },
     tick: (n) => {
@@ -112,7 +113,7 @@ export function installDebug(app: App): void {
           break;
         }
         game().look(input.lookYaw, input.lookPitch);
-        app.advance(input, 1, 1, STEP);
+        app.advance(input, 1, 1, STEP, i === n - 1);
       }
       return api.state();
     },
@@ -125,7 +126,7 @@ export function installDebug(app: App): void {
       for (let i = 0; i < steps; i++) {
         // Удерживаем уровень: детектор сам затухает между толчками.
         game().shake.level = Math.max(game().shake.level, level);
-        app.advance(emptyInput(), 1, 1, STEP);
+        app.advance(emptyInput(), 1, 1, STEP, i === steps - 1);
       }
       return api.state();
     },

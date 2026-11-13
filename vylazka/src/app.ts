@@ -594,7 +594,7 @@ export class App {
   }
 
   /** Один оборот игры: шаги симуляции, кадр, надписи. Отладочный API вызывает то же самое вручную. */
-  advance(input: InputFrame, steps: number, alpha: number, dt: number): void {
+  advance(input: InputFrame, steps: number, alpha: number, dt: number, present = true): void {
     this.goalsHeld = input.showGoals;
     for (let i = 0; i < steps; i++) {
       this.handleEvents(this.game.step(STEP, input));
@@ -602,7 +602,7 @@ export class App {
       input.actionPressed = false;
       input.swap = false;
     }
-    this.game.draw(alpha, dt);
+    this.game.draw(alpha, dt, present);
     this.updateHud();
     const s = this.game.sortie;
     if (this.screen === 'ending' && s?.outcome && this.game.time >= this.endingAt) this.finish(s.outcome);

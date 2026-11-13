@@ -36,7 +36,7 @@ export const STYLE_CORRIDOR: WallStyle = {
   lower: MAT.paintGreen,
   upper: MAT.plaster,
   stripe: MAT.metalGreen,
-  floor: MAT.concrete,
+  floor: MAT.floor,
   ceil: MAT.plaster,
   lowerTint: [1, 1, 1],
   upperTint: [0.92, 0.9, 0.84],
