@@ -1,0 +1,344 @@
+{
+  "note": "Звуки игры. prompt — инструкция генеративной модели (по-английски), ru — что это и где звучит. Файлы: public/audio/<id>_<n>.mp3, n от 1 до variants. xfade — сколько секунд конец петли перетекает в её начало: шумовым петлям побольше, ритмичным (дыхание, сердце) — только чтобы не щёлкало.",
+  "sounds": [
+    {
+      "id": "step_concrete",
+      "bus": "sfx",
+      "variants": 4,
+      "loop": false,
+      "seconds": 0.5,
+      "volume": 0.5,
+      "prompt": "Single footstep of a heavy boot on a dusty concrete floor in an empty underground corridor, close perspective, short dry reverb, no music, no voice",
+      "ru": "шаг сапога по бетону в пустом подземном коридоре"
+    },
+    {
+      "id": "step_water",
+      "bus": "sfx",
+      "variants": 3,
+      "loop": false,
+      "seconds": 0.7,
+      "volume": 0.55,
+      "prompt": "Single footstep splashing in shallow standing water on a concrete floor in a flooded underground tunnel, close perspective, short echo, no music",
+      "ru": "шаг по мелкой воде на затопленном участке"
+    },
+    {
+      "id": "breath_calm",
+      "bus": "body",
+      "variants": 1,
+      "loop": true,
+      "seconds": 6,
+      "xfade": 0.15,
+      "volume": 0.22,
+      "prompt": "Calm steady breathing of a man through the nose, heard from a chest-mounted camera microphone, slightly muffled, quiet room tone, seamless loop, no music, no words",
+      "ru": "спокойное дыхание, слышное нагрудной камере"
+    },
+    {
+      "id": "breath_panic",
+      "bus": "body",
+      "variants": 1,
+      "loop": true,
+      "seconds": 5,
+      "xfade": 0.12,
+      "volume": 0.4,
+      "prompt": "Fast shaky frightened breathing of a man trying to stay quiet, heard from a chest-mounted camera microphone, close and muffled, seamless loop, no music, no words",
+      "ru": "частое испуганное дыхание при панике"
+    },
+    {
+      "id": "heartbeat",
+      "bus": "body",
+      "variants": 1,
+      "loop": true,
+      "seconds": 4,
+      "xfade": 0.04,
+      "volume": 0.35,
+      "prompt": "Slow heavy heartbeat heard from inside the chest, deep muffled thuds, no other sound, seamless loop",
+      "ru": "глухое сердцебиение при панике и рядом с роем"
+    },
+    {
+      "id": "cough",
+      "bus": "body",
+      "variants": 2,
+      "loop": false,
+      "seconds": 1.2,
+      "volume": 0.5,
+      "prompt": "A man's short dry choking cough, close microphone, slightly muffled, small concrete room reverb, no words",
+      "ru": "кашель в газу"
+    },
+    {
+      "id": "fall",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 1.0,
+      "volume": 0.7,
+      "prompt": "A body in heavy clothing falling hard onto a concrete floor with a grunt-free dull thud and gear rattle, underground echo",
+      "ru": "падение и ушиб"
+    },
+    {
+      "id": "flash_click",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 0.3,
+      "volume": 0.5,
+      "prompt": "Click of a metal flashlight slide switch, very close, dry",
+      "ru": "щелчок выключателя фонаря"
+    },
+    {
+      "id": "flash_rattle",
+      "bus": "sfx",
+      "variants": 3,
+      "loop": false,
+      "seconds": 0.5,
+      "volume": 0.55,
+      "prompt": "Shaking an old metal flashlight: batteries and loose contacts rattling inside the metal tube, one quick shake, very close, dry",
+      "ru": "дребезг батареек при тряске фонаря"
+    },
+    {
+      "id": "flash_spark",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 0.3,
+      "volume": 0.4,
+      "prompt": "Tiny electrical crackle and tick of a loose contact in a flashlight bulb flickering on for an instant, very close",
+      "ru": "искра контакта, когда фонарь на миг вспыхивает"
+    },
+    {
+      "id": "flash_die",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 0.8,
+      "volume": 0.45,
+      "prompt": "A flashlight bulb filament buzzing faintly then cutting out with a soft electrical tick, very close, dry",
+      "ru": "фонарь глохнет"
+    },
+    {
+      "id": "camera_beep",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 0.5,
+      "volume": 0.4,
+      "prompt": "Body camera confirmation: two short high electronic beeps of a small digital recorder marking a clip",
+      "ru": "сигнал камеры: примета снята"
+    },
+    {
+      "id": "camera_hold",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 1.6,
+      "volume": 0.25,
+      "prompt": "Faint electronic autofocus whirr and ticking of a small digital camera recording, steady, very quiet, 1.6 seconds",
+      "ru": "камера наводится, пока удерживают съёмку"
+    },
+    {
+      "id": "hatch",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 2.5,
+      "volume": 0.6,
+      "prompt": "Heavy steel hatch closing above with a dull boom in a concrete shaft, then silence, long underground echo",
+      "ru": "люк закрывается над головой в начале вылазки"
+    },
+    {
+      "id": "amb_bunker",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 30,
+      "xfade": 2.0,
+      "volume": 0.3,
+      "prompt": "Room tone of an abandoned underground concrete shelter: very quiet low air hum, faint distant ventilation resonance, no events, no music, seamless loop",
+      "ru": "тишина заброшенного убежища: гул воздуха"
+    },
+    {
+      "id": "amb_deep",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 30,
+      "xfade": 2.0,
+      "volume": 0.35,
+      "prompt": "Deep underground room tone: oppressive low rumble, faint metallic resonance in pipes, slow distant drips, claustrophobic, no music, seamless loop",
+      "ru": "нижние ярусы: давящий низкий гул и резонанс труб"
+    },
+    {
+      "id": "drip",
+      "bus": "sfx",
+      "variants": 4,
+      "loop": false,
+      "seconds": 1.0,
+      "volume": 0.3,
+      "prompt": "A single water drop falling into a small puddle on concrete in a silent underground room, long natural echo",
+      "ru": "одиночная капля в тишине"
+    },
+    {
+      "id": "gas_hiss",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 6,
+      "xfade": 0.5,
+      "volume": 0.3,
+      "prompt": "Faint continuous hiss of gas leaking from a corroded pipe in a small concrete room, steady, seamless loop",
+      "ru": "шипение газа в загазованном помещении"
+    },
+    {
+      "id": "collapse",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 3.5,
+      "volume": 0.9,
+      "prompt": "A concrete ceiling slab collapsing in an underground corridor: sharp crack, heavy rubble crashing down, debris settling, dust, long echo",
+      "ru": "обвал перекрытия за спиной"
+    },
+    {
+      "id": "scare_bang",
+      "bus": "sfx",
+      "variants": 3,
+      "loop": false,
+      "seconds": 2.0,
+      "volume": 0.6,
+      "prompt": "A single distant heavy metallic bang somewhere deep in an abandoned underground bunker, as if something struck a steel door, long reverberating echo down concrete corridors",
+      "ru": "далёкий удар по металлу"
+    },
+    {
+      "id": "scare_slam",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 2.2,
+      "volume": 0.75,
+      "prompt": "A heavy steel blast door slamming shut somewhere nearby in a concrete bunker, loud boom, rattling frame, long echo",
+      "ru": "хлопок гермодвери"
+    },
+    {
+      "id": "scare_steps",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 2.5,
+      "volume": 0.45,
+      "prompt": "Three slow footsteps on concrete somewhere behind in an empty underground corridor, then they stop, distant, reverberant, no voice",
+      "ru": "шаги за спиной, которые останавливаются"
+    },
+    {
+      "id": "scare_knock",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 1.5,
+      "volume": 0.5,
+      "prompt": "Three dull knocks from inside a closed metal locker, hollow sheet-metal resonance, close, small room",
+      "ru": "стук изнутри металлического шкафчика"
+    },
+    {
+      "id": "scare_radio",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 1.8,
+      "volume": 0.45,
+      "prompt": "Burst of radio static from a small handheld receiver with a brief unintelligible distorted fragment underneath, then cut off",
+      "ru": "треск рации с обрывком неразборчивого сигнала"
+    },
+    {
+      "id": "swarm_loop",
+      "bus": "swarm",
+      "variants": 1,
+      "loop": true,
+      "seconds": 8,
+      "xfade": 0.8,
+      "volume": 0.5,
+      "prompt": "A mass of wet worms writhing and slithering over concrete: dense soft squelching, faint dry chitinous clicking, organic and unsettling, close, seamless loop, no music",
+      "ru": "рой шевелится рядом: влажный шорох и сухое потрескивание"
+    },
+    {
+      "id": "swarm_cohere",
+      "bus": "swarm",
+      "variants": 1,
+      "loop": false,
+      "seconds": 1.8,
+      "volume": 0.7,
+      "prompt": "Thousands of wet worms rapidly gathering into one mass: rising slithering rush pulled inward like a slow inhale, ending in a low organic thud, unsettling, no music",
+      "ru": "рой собирается в фигуру"
+    },
+    {
+      "id": "swarm_scatter",
+      "bus": "swarm",
+      "variants": 1,
+      "loop": false,
+      "seconds": 1.4,
+      "volume": 0.6,
+      "prompt": "A mass of wet worms suddenly falling apart and scattering across a concrete floor: sharp hissing rustle spreading outward and fading",
+      "ru": "рой рассыпается под лучом"
+    },
+    {
+      "id": "swarm_catch",
+      "bus": "swarm",
+      "variants": 1,
+      "loop": false,
+      "seconds": 2.8,
+      "volume": 0.9,
+      "prompt": "Wet slithering mass engulfing a microphone: overwhelming close squelching and scraping, then digital signal breakup, static burst and abrupt silence",
+      "ru": "рой накрывает камеру, сигнал рвётся"
+    },
+    {
+      "id": "signal_static",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 3,
+      "xfade": 0.3,
+      "volume": 0.3,
+      "prompt": "Digital video signal interference: harsh buzzing static with glitchy dropouts of a body camera feed, seamless loop",
+      "ru": "помехи сигнала камеры рядом с роем"
+    },
+    {
+      "id": "ui_click",
+      "bus": "ui",
+      "variants": 1,
+      "loop": false,
+      "seconds": 0.15,
+      "volume": 0.35,
+      "prompt": "Soft low mechanical button click of an old tape recorder key",
+      "ru": "нажатие в меню"
+    },
+    {
+      "id": "ui_start",
+      "bus": "ui",
+      "variants": 1,
+      "loop": false,
+      "seconds": 1.2,
+      "volume": 0.5,
+      "prompt": "A small digital body camera starting to record: short power-up chirp followed by a single record beep",
+      "ru": "старт записи: вылазка началась"
+    },
+    {
+      "id": "ui_report",
+      "bus": "ui",
+      "variants": 1,
+      "loop": false,
+      "seconds": 1.5,
+      "volume": 0.5,
+      "prompt": "A body camera recording stopping: descending two-tone beep followed by a short tape-stop whirr",
+      "ru": "конец записи: экран отчёта"
+    },
+    {
+      "id": "music_menu",
+      "bus": "music",
+      "variants": 1,
+      "loop": true,
+      "seconds": 45,
+      "xfade": 3.0,
+      "volume": 0.35,
+      "prompt": "Dark ambient drone for a horror game menu: slow evolving low synth pad, distant bowed metal, sparse sub-bass pulses, cold and empty, no melody, no drums, seamless loop",
+      "ru": "музыка меню и отчёта: тёмный эмбиент"
+    }
+  ]
+}
