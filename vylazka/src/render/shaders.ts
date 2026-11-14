@@ -201,6 +201,7 @@ uniform vec3 uAmbient;
 uniform vec3 uKeyDirV;    // прямой свет пространства: направление на источник (пространство камеры)
 uniform vec3 uKeyColor;   // его цвет и сила; ноль — прямого света нет (убежище)
 uniform vec4 uBounce;     // xyz — точка попадания луча (пространство камеры), w — сила отсвета
+uniform sampler2D uSpot;  // средний цвет освещённого пятна в прошлом кадре: им окрашен отсвет
 uniform float uFog;
 uniform vec3 uFogColor;   // во что уходит даль: в убежище — чернота, в белом нигде — белое
 uniform float uDecay;     // 0..1: насколько здесь сыро и запущено (растёт с глубиной)
@@ -305,6 +306,10 @@ void main() {
   vec3 toB = uBounce.xyz - vPosV;
   float db = length(toB);
   float bounce0 = uBounce.w / (1.0 + 0.35 * db * db);
+  // Свет, отражённый зелёной стеной, зеленит всё вокруг: оттенок отсвета — оттенок пятна.
+  vec3 spot = texture2D(uSpot, vec2(0.5)).rgb;
+  float spotMax = max(spot.r, max(spot.g, spot.b));
+  vec3 bounceTint = spotMax > 0.004 ? mix(vec3(1.0), spot / spotMax, 0.8) : vec3(1.0);
   float maxc = max(vColor.r, max(vColor.g, vColor.b));
 
   // ── Облако точек: сколько здесь «замеров» ──
@@ -351,7 +356,7 @@ void main() {
   // Туда, где света почти нет, фактуры не нужны: точка — просто цвет материала.
   if (hLit < 0.1 && eGlow < 0.004 && eAmb < 0.02) {
     vec3 flat_ = uMatBase[mi] * vColor.rgb * ao;
-    vec3 colG = flat_ * (ghost + uAmbient * (0.66 + 0.34 * up) + uLightColor * (eLight * 0.45 + bounce0) * boost);
+    vec3 colG = flat_ * (ghost + uAmbient * (0.66 + 0.34 * up) + uLightColor * (eLight * 0.45 + bounce0 * bounceTint) * boost);
     colG += vec3(0.9, 0.07, 0.03) * burn;
     gl_FragColor = vec4(mix(uFogColor, colG, exp(-uFog * distV)), 1.0);
     return;
@@ -481,7 +486,7 @@ void main() {
   float bounce = bounce0 * (0.35 + 0.65 * max(dot(N, toB / max(db, 1e-3)), 0.0));
   // Рассеянный свет пространства идёт больше сверху (небо, потолок), чем снизу; прямой — от солнца или лампы.
   vec3 skyLit = uAmbient * (0.66 + 0.34 * up) + uKeyColor * max(dot(N, uKeyDirV), 0.0);
-  col += base * tint * ao * (skyLit * lit + uLightColor * bounce);
+  col += base * tint * ao * (skyLit * lit + uLightColor * bounceTint * bounce);
 
   // Мокрый пол и плитка отражают освещённое пятно: блик тянется от дальней стены к ногам.
   float gloss = max(wet, mi == 12 ? 1.0 : (mi == 18 ? 0.5 : 0.0)) * step(0.5, up);
@@ -705,6 +710,30 @@ void main() {
 }
 `;
 
+/**
+ * Цвет освещённого пятна: среднее по кадру вокруг точки, куда бьёт луч (уменьшенные копии кадра
+ * плюс пять выборок — на случай, когда копий нет). Пишется в буфер 2×2, мир читает его в следующем
+ * кадре. Луча в кадре нет — пишется нейтральный серый.
+ */
+export const SPOT_FRAG = /* glsl */ `
+precision highp float;
+uniform sampler2D tScene;
+uniform vec3 uBeam;   // xy — точка на экране, z > 0 — луч в кадре
+uniform float uLod;
+uniform float uAspect;
+varying vec2 vUv;
+void main() {
+  vec3 c = vec3(0.5);
+  if (uBeam.z > 0.0) {
+    vec2 r = vec2(0.045 / uAspect, 0.045);
+    c = textureLod(tScene, uBeam.xy, uLod).rgb * 0.4
+      + 0.15 * (textureLod(tScene, uBeam.xy + vec2(r.x, 0.0), uLod).rgb + textureLod(tScene, uBeam.xy - vec2(r.x, 0.0), uLod).rgb
+              + textureLod(tScene, uBeam.xy + vec2(0.0, r.y), uLod).rgb + textureLod(tScene, uBeam.xy - vec2(0.0, r.y), uLod).rgb);
+  }
+  gl_FragColor = vec4(c, 1.0);
+}
+`;
+
 export const POST_VERT = /* glsl */ `
 varying vec2 vUv;
 void main() {
@@ -738,6 +767,9 @@ uniform sampler2D tHaze;
 uniform sampler2D uGrime;
 uniform vec2 uHazeTexel;
 uniform float uBloom;
+uniform sampler2D tDepth;  // глубина кадра: по ней находятся кромки предметов
+uniform vec2 uNearFar;
+uniform float uEdge;      // 0..1: насколько «крошатся» кромки (0 — выключено)
 uniform float uCrt;       // 0..1: насколько «кинескоп» заметен — строки, маска, дрожь строк, бегущая полоса
 uniform float uFlash;     // 0..1: кадр выбеливается (скачок между пространствами)
 
@@ -760,6 +792,30 @@ vec2 distort(vec2 uv, float k) {
   c *= (1.0 + k * r2) / (1.0 + k * edge * edge);
   c.x /= uAspect;
   return c * 0.5 + 0.5;
+}
+
+float linDepth(vec2 uv) {
+  float z = textureLod(tDepth, uv, 0.0).r * 2.0 - 1.0;
+  return 2.0 * uNearFar.x * uNearFar.y / (uNearFar.y + uNearFar.x - z * (uNearFar.y - uNearFar.x));
+}
+
+/**
+ * У настоящего скана кромки предметов неровные: на границе ближнего и дальнего замер попадает то туда,
+ * то сюда, и точки ближней поверхности «перелетают» на дальнюю. Здесь то же: рядом с перепадом глубины
+ * часть точек берёт цвет соседа через кромку. Сдвиг считается блоками 2×2 пикселя и меняется несколько
+ * раз в секунду — кромка живёт, как у сканера, который меряет заново.
+ */
+vec2 edgeScatter(vec2 uv, uvec2 px, uint frame) {
+  if (uEdge <= 0.0) return vec2(0.0);
+  uvec2 blk = px / 2u;
+  uint slot = frame / 9u;
+  if (hash(blk, slot + 911u) > 0.26 * uEdge) return vec2(0.0);
+  float a = hash(blk, slot + 577u) * 6.2832;
+  float r = 1.5 + 3.0 * hash(blk, slot + 131u);
+  vec2 off = vec2(cos(a), sin(a)) * r / uRes;
+  float d0 = linDepth(uv);
+  float d1 = linDepth(uv + off);
+  return abs(d0 - d1) > 0.06 * min(d0, d1) + 0.04 ? off : vec2(0.0);
 }
 
 vec3 sampleScene(vec2 uv) {
@@ -794,11 +850,13 @@ void main() {
 #ifdef CHROMA
   // Разлёт цветов невелик: мир собран из точек в два-три пикселя, и сильный разлёт растягивал бы
   // каждую в радужный штрих.
-  col.r = sampleScene(distort(uv, uBarrel * 1.025)).r;
-  col.g = sampleScene(distort(uv, uBarrel)).g;
-  col.b = sampleScene(distort(uv, uBarrel * 0.975)).b;
+  vec2 es = edgeScatter(distort(uv, uBarrel), px, frame);
+  col.r = sampleScene(distort(uv, uBarrel * 1.025) + es).r;
+  col.g = sampleScene(distort(uv, uBarrel) + es).g;
+  col.b = sampleScene(distort(uv, uBarrel * 0.975) + es).b;
 #else
-  col = sampleScene(distort(uv, uBarrel));
+  vec2 es = edgeScatter(distort(uv, uBarrel), px, frame);
+  col = sampleScene(distort(uv, uBarrel) + es);
 #endif
 
   vec2 c = vUv * 2.0 - 1.0;

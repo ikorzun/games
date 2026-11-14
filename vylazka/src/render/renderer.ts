@@ -12,7 +12,7 @@ import { bakeDetail } from './detail';
 import { bakeGrime } from './grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from './matcap_atlas';
 import { MAX_WORMS } from '../swarm/body';
-import { DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, HAZE_FRAG, POST_FRAG, POST_VERT, SWARM_FRAG, SWARM_VERT, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
+import { DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, HAZE_FRAG, POST_FRAG, POST_VERT, SPOT_FRAG, SWARM_FRAG, SWARM_VERT, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
 
 export type Quality = 'low' | 'med' | 'high';
 
@@ -186,6 +186,10 @@ export class GameRenderer {
   private readonly postMat: THREE.ShaderMaterial;
   private readonly hazeMat: THREE.ShaderMaterial;
   private readonly hazeScene = new THREE.Scene();
+  /** Цвет освещённого пятна прошлого кадра (2×2): им окрашен отсвет фонаря. */
+  private readonly spotRT = new THREE.WebGLRenderTarget(2, 2, { depthBuffer: false, stencilBuffer: false, magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter, generateMipmaps: false });
+  private readonly spotScene = new THREE.Scene();
+  private spotMat!: THREE.ShaderMaterial;
   private hazeRT: THREE.WebGLRenderTarget | null = null;
   private readonly postScene = new THREE.Scene();
   private readonly postCam = new THREE.Camera();
@@ -310,6 +314,7 @@ export class GameRenderer {
         uKeyDirV: { value: new THREE.Vector3(0, 1, 0) },
         uKeyColor: { value: new THREE.Vector3(0, 0, 0) },
         uBounce: { value: new THREE.Vector4(0, 0, -1000, 0) },
+        uSpot: { value: this.spotRT.texture },
         uFog: { value: 0.035 },
         uFogColor: { value: new THREE.Vector3(0, 0, 0) },
         uDissolve: { value: 0 },
@@ -414,6 +419,9 @@ export class GameRenderer {
         uBloom: { value: 0.1 },
         uCrt: { value: 0 },
         uFlash: { value: 0 },
+        tDepth: { value: null },
+        uNearFar: { value: new THREE.Vector2(0.05, 120) },
+        uEdge: { value: 1 },
       },
       depthTest: false,
       depthWrite: false,
@@ -423,6 +431,17 @@ export class GameRenderer {
     const postMesh = new THREE.Mesh(tri, this.postMat);
     postMesh.frustumCulled = false;
     this.postScene.add(postMesh);
+
+    this.spotMat = new THREE.ShaderMaterial({
+      vertexShader: POST_VERT,
+      fragmentShader: SPOT_FRAG,
+      uniforms: { tScene: { value: null }, uBeam: { value: new THREE.Vector3(0.5, 0.5, 0) }, uLod: { value: 5 }, uAspect: { value: 1 } },
+      depthTest: false,
+      depthWrite: false,
+    });
+    const spotMesh = new THREE.Mesh(tri, this.spotMat);
+    spotMesh.frustumCulled = false;
+    this.spotScene.add(spotMesh);
 
     this.hazeMat = new THREE.ShaderMaterial({
       vertexShader: POST_VERT,
@@ -557,6 +576,10 @@ export class GameRenderer {
     this.hazeMat.uniforms.uNearFar!.value.set(this.camera.near, this.camera.far);
     this.postMat.uniforms.uRes!.value.set(w, h);
     this.postMat.uniforms.uAspect!.value = aspect;
+    (this.postMat.uniforms.uNearFar!.value as THREE.Vector2).set(this.camera.near, this.camera.far);
+    this.spotMat.uniforms.uAspect!.value = aspect;
+    // Уменьшенная копия, где один тексель — примерно восьмая часть высоты кадра.
+    this.spotMat.uniforms.uLod!.value = Math.max(0, Math.log2(h) - 3);
     this.dustMat.uniforms.uPointScale!.value = h / 160;
     this.worldMat.uniforms.uDot!.value = Math.max(SCAN.dotMin, (SCAN.dot * h) / 540);
   }
@@ -901,7 +924,15 @@ export class GameRenderer {
     // Где на экране центр луча — там светится пыльный воздух.
     const ndc = hitWorld.project(cam);
     const visible = ndc.z < 1 && ndc.z > -1;
+    // Цвет освещённого пятна — в маленький буфер: в следующем кадре им окрасится отсвет.
+    const su = this.spotMat.uniforms;
+    su.tScene!.value = this.sceneRT.texture;
+    const inFrame = visible && Math.abs(ndc.x) < 0.95 && Math.abs(ndc.y) < 0.95 && v.lightIntensity * v.lightScale > 0.05 && v.beamDist < 30;
+    (su.uBeam!.value as THREE.Vector3).set(ndc.x * 0.5 + 0.5, ndc.y * 0.5 + 0.5, inFrame ? 1 : 0);
+    r.setRenderTarget(this.spotRT);
+    r.render(this.spotScene, this.postCam);
     const pu = this.postMat.uniforms;
+    pu.tDepth!.value = this.sceneRT.depthTexture;
     (pu.uBeam!.value as THREE.Vector3).set(ndc.x * 0.5 + 0.5, ndc.y * 0.5 + 0.5, visible ? 0.018 * v.lightIntensity * v.lightScale : 0);
     pu.uCrt!.value = v.crt;
     pu.uFlash!.value = v.flash;
