@@ -12,7 +12,8 @@ import { bakeDetail } from './detail';
 import { bakeGrime } from './grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from './matcap_atlas';
 import { MAX_WORMS } from '../swarm/body';
-import { DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, HAZE_FRAG, POST_FRAG, POST_VERT, SPOT_FRAG, SWARM_FRAG, SWARM_VERT, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
+import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, HAZE_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, SPOT_FRAG, SWARM_FRAG, SWARM_VERT, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
+import { SplatClouds } from './splats';
 
 export type Quality = 'low' | 'med' | 'high';
 
@@ -31,12 +32,14 @@ export interface QualitySpec {
   hazeDiv: number;
   /** Предметы режут дымку тенями. */
   hazeShadow: boolean;
+  /** Точек-сплатов на квадратный метр поверхности в полную плотность (рядом с игроком). */
+  points: number;
 }
 
 export const QUALITY: Record<Quality, QualitySpec> = {
-  low: { pixels: 640 * 360, shadow: 0, chroma: false, detail: false, dust: 140, worms: 44, haze: 0, hazeDiv: 3, hazeShadow: false },
-  med: { pixels: 960 * 540, shadow: 512, chroma: true, detail: true, dust: 300, worms: 68, haze: 8, hazeDiv: 3, hazeShadow: false },
-  high: { pixels: 1280 * 720, shadow: 1024, chroma: true, detail: true, dust: 520, worms: MAX_WORMS, haze: 14, hazeDiv: 2, hazeShadow: true },
+  low: { pixels: 640 * 360, shadow: 0, chroma: false, detail: false, dust: 140, worms: 44, haze: 0, hazeDiv: 3, hazeShadow: false, points: 300 },
+  med: { pixels: 960 * 540, shadow: 512, chroma: true, detail: true, dust: 300, worms: 68, haze: 8, hazeDiv: 3, hazeShadow: false, points: 600 },
+  high: { pixels: 1280 * 720, shadow: 1024, chroma: true, detail: true, dust: 520, worms: MAX_WORMS, haze: 14, hazeDiv: 2, hazeShadow: true, points: 1100 },
 };
 
 /** Всё, что нужно для одного кадра. */
@@ -156,14 +159,18 @@ export function verticalFov(aspect: number): number {
 }
 
 /**
- * Облако точек (см. SCAN_GLSL). h — «число замеров»: закрытая доля поверхности равна 1 − exp(−h).
- * ghost — h там, куда свет не достаёт (редкие «призрачные» точки: занято около 5 % клеток); perLight —
- * h на единицу освещённости (яркое пятно луча закрыто почти сплошь, в ореоле точки стоят плотно, на
- * краю — россыпью); max — предел (97 %: даже в середине луча остаются редкие дыры, как у настоящего
- * скана); glow — насколько светятся призрачные точки; dot — клетка точек в пикселях буфера высотой
- * 540, dotMin — наименьшая клетка (на низком качестве точки не мельче двух пикселей).
+ * Облако точек (см. SCAN_GLSL и SPLAT_VERT). h — «число замеров» места: perLight — h на единицу
+ * освещённости, max — предел (при нём сплаты слились и поверхность видна сама). ghost — доля точек,
+ * видимых без света («призрачные»: по ним в темноте угадываются стены), glow — чем они светятся.
+ * lodDist — до этого расстояния точки стоят в полную плотность, дальше редеют как квадрат расстояния;
+ * far — дальше этого точек нет совсем (к нему они гаснут), sow — сколько точек досевается за кадр на
+ * каждую точку плотности (чем плотнее посев, тем больше работы за кадр, а время досева то же).
+ * size — размер сплата в мире на плотность 1 точка на м²: чем плотнее посев, тем мельче сплат
+ * (покрытие поверхности при этом одно и то же). maxPx — больше этого сплат на экране не бывает
+ * (в долях высоты буфера). follow — как быстро «внимание скана» догоняет луч (1/с), after — насколько
+ * ярко держится место, с которого луч только что ушёл.
  */
-const SCAN = { ghost: 0.05, perLight: 24, max: 3.5, glow: 0.11, dot: 3.0, dotMin: 2.2 } as const;
+const SCAN = { perLight: 24, max: 3.5, ghost: 0.07, glow: 0.11, lodDist: 3.5, far: 28, sow: 45, size: 0.7, maxPx: 0.013, follow: 8, after: 0.18 } as const;
 
 /** Сколько материалов помещается в массивы шейдера мира (uMatA, uMatB, uMatBase). */
 const MAT_SLOTS = 48;
@@ -183,6 +190,19 @@ export class GameRenderer {
   /** Камера тени прямого света (солнце, лампа): лучи параллельны, область — квадрат вокруг центра пространства. */
   private readonly keyCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 200);
   private sceneRT: THREE.WebGLRenderTarget;
+  /** Кадр после сведения: поверхности там, где сплаты слились, и точки поверх. */
+  private compRT: THREE.WebGLRenderTarget;
+  private readonly composeScene = new THREE.Scene();
+  private readonly composeMat: THREE.ShaderMaterial;
+  private readonly splatMat: THREE.ShaderMaterial;
+  /** Облака точек мира: у каждой сетки свои сплаты. */
+  private readonly clouds: SplatClouds;
+  /** «Внимание скана»: луч фонаря с запаздыванием — туда собираются точки. */
+  private readonly focusPos = new THREE.Vector3();
+  private readonly focusDir = new THREE.Vector3(0, 0, -1);
+  private readonly focusColor = new THREE.Vector3();
+  private focusOn = 0;
+  private focusTime = -1;
   private shadowRT: THREE.WebGLRenderTarget | null = null;
   private readonly worldMat: THREE.ShaderMaterial;
   private signsTex: THREE.Texture;
@@ -324,9 +344,11 @@ export class GameRenderer {
         uFogColor: { value: new THREE.Vector3(0, 0, 0) },
         uDissolve: { value: 0 },
         uThing: { value: new THREE.Vector4(0, 0, 0, 0) },
-        uScan: { value: new THREE.Vector4(SCAN.ghost, SCAN.perLight, SCAN.max, SCAN.glow) },
-        uDot: { value: SCAN.dot },
-        uScanTime: { value: 0 },
+        uScan: { value: new THREE.Vector4(0, SCAN.perLight, SCAN.max, 0) },
+        uFocusPosV: { value: new THREE.Vector3() },
+        uFocusDirV: { value: new THREE.Vector3(0, 0, -1) },
+        uFocusOn: { value: 0 },
+        uAfterColor: { value: new THREE.Vector3() },
         uScanFade: { value: 1 },
         uScanRange: { value: new THREE.Vector2(4, 15) },
         uMatA: { value: matA },
@@ -424,9 +446,6 @@ export class GameRenderer {
         uBloom: { value: 0.1 },
         uCrt: { value: 0 },
         uFlash: { value: 0 },
-        tDepth: { value: null },
-        uNearFar: { value: new THREE.Vector2(0.05, 120) },
-        uEdge: { value: 1 },
       },
       depthTest: false,
       depthWrite: false,
@@ -473,18 +492,74 @@ export class GameRenderer {
     hazeMesh.frustumCulled = false;
     this.hazeScene.add(hazeMesh);
 
+    // Сведение кадра и сплаты.
+    this.composeMat = new THREE.ShaderMaterial({
+      vertexShader: POST_VERT,
+      fragmentShader: COMPOSE_FRAG,
+      uniforms: { tScene: { value: null }, uFogColor: this.worldMat.uniforms.uFogColor!, uSolid: { value: 0 } },
+      depthTest: false,
+      depthWrite: false,
+    });
+    const composeMesh = new THREE.Mesh(tri, this.composeMat);
+    composeMesh.frustumCulled = false;
+    this.composeScene.add(composeMesh);
+    this.splatMat = new THREE.ShaderMaterial({
+      vertexShader: SPLAT_VERT,
+      fragmentShader: SPLAT_FRAG,
+      uniforms: {
+        tScene: { value: null },
+        tDepth: { value: null },
+        uNearFar: { value: new THREE.Vector2(0.05, 70) },
+        uTime: { value: 0 },
+        uSize: { value: 0.03 },
+        uProj: { value: 300 },
+        uMaxPx: { value: 12 },
+        uLodDist: { value: SCAN.lodDist },
+        uFar: { value: SCAN.far },
+        uGhost: { value: SCAN.ghost },
+        uGhostColor: { value: new THREE.Vector3() },
+        uAmbientScan: { value: 0 },
+        uHMax: { value: SCAN.max },
+        uCone: this.lightU.uCone!,
+        uDissolve: this.worldMat.uniforms.uDissolve!,
+        uSeedW: { value: 0 },
+        uFocusPosV: this.worldMat.uniforms.uFocusPosV!,
+        uFocusDirV: this.worldMat.uniforms.uFocusDirV!,
+        uFocusOn: this.worldMat.uniforms.uFocusOn!,
+      },
+      // Сплаты полупрозрачны и накладываются друг на друга; за стеной точку отсекает сам шейдер.
+      blending: THREE.NormalBlending,
+      premultipliedAlpha: true,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    this.clouds = new SplatClouds(this.splatMat);
+    this.clouds.lodDist = SCAN.lodDist;
+    this.clouds.far = SCAN.far;
+
     this.camera.rotation.order = 'YXZ';
     this.camera.layers.enable(1);
     this.sceneRT = this.makeSceneRT(2, 2);
+    this.compRT = this.makeCompRT(2, 2);
     this.applyQuality();
   }
 
   private makeSceneRT(w: number, h: number): THREE.WebGLRenderTarget {
-    // Глубина — текстурой: по ней дымка знает, где кончается воздух. Уменьшенные копии кадра нужны ореолу.
-    const haze = QUALITY[this.quality].haze > 0;
+    // Мир как он есть: цвет поверхностей и (в альфе) число замеров. Глубина — текстурой: по ней дымка
+    // знает, где кончается воздух, а сплаты — что они за стеной. Выборка — ближайшая: точка берёт цвет
+    // и число замеров своего места, а не смесь с соседним.
     const depthTexture = new THREE.DepthTexture(w, h);
-    const rt = new THREE.WebGLRenderTarget(w, h, { depthBuffer: true, depthTexture, stencilBuffer: false, type: THREE.UnsignedByteType, magFilter: THREE.LinearFilter, minFilter: haze ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter, generateMipmaps: haze });
+    const rt = new THREE.WebGLRenderTarget(w, h, { depthBuffer: true, depthTexture, stencilBuffer: false, type: THREE.UnsignedByteType, magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter, generateMipmaps: false });
     // sRGB8: в тёмных градиентах нет полос, шейдер пишет линейный цвет, выборка возвращает линейный.
+    rt.texture.colorSpace = THREE.SRGBColorSpace;
+    return rt;
+  }
+
+  private makeCompRT(w: number, h: number): THREE.WebGLRenderTarget {
+    // Готовый кадр до «камеры». Уменьшенные копии кадра нужны ореолу и цвету отсвета.
+    const haze = QUALITY[this.quality].haze > 0;
+    const rt = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false, stencilBuffer: false, type: THREE.UnsignedByteType, magFilter: THREE.LinearFilter, minFilter: haze ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter, generateMipmaps: haze });
     rt.texture.colorSpace = THREE.SRGBColorSpace;
     return rt;
   }
@@ -563,6 +638,8 @@ export class GameRenderer {
     this.sceneRT.depthTexture?.dispose();
     this.sceneRT.dispose();
     this.sceneRT = this.makeSceneRT(w, h);
+    this.compRT.dispose();
+    this.compRT = this.makeCompRT(w, h);
     this.hazeRT?.dispose();
     this.hazeRT = null;
     const q = QUALITY[this.quality];
@@ -581,12 +658,18 @@ export class GameRenderer {
     this.hazeMat.uniforms.uNearFar!.value.set(this.camera.near, this.camera.far);
     this.postMat.uniforms.uRes!.value.set(w, h);
     this.postMat.uniforms.uAspect!.value = aspect;
-    (this.postMat.uniforms.uNearFar!.value as THREE.Vector2).set(this.camera.near, this.camera.far);
     this.spotMat.uniforms.uAspect!.value = aspect;
     // Уменьшенная копия, где один тексель — примерно восьмая часть высоты кадра.
     this.spotMat.uniforms.uLod!.value = Math.max(0, Math.log2(h) - 3);
     this.dustMat.uniforms.uPointScale!.value = h / 160;
-    this.worldMat.uniforms.uDot!.value = Math.max(SCAN.dotMin, (SCAN.dot * h) / 540);
+    // Сплаты: сколько пикселей буфера в метре на расстоянии в метр и какой у сплата размер в мире.
+    const su = this.splatMat.uniforms;
+    su.uProj!.value = h / (2 * tanY);
+    su.uMaxPx!.value = Math.max(5, h * SCAN.maxPx);
+    su.uSize!.value = SCAN.size / Math.sqrt(q.points);
+    (su.uNearFar!.value as THREE.Vector2).set(this.camera.near, this.camera.far);
+    this.clouds.setDensity(q.points);
+    this.clouds.budget = q.points * SCAN.sow;
   }
 
   /** Отладка: облако точек вкл/выкл. */
@@ -608,6 +691,7 @@ export class GameRenderer {
       if (chunk.id && chunk.hidden) this.hiddenIds.add(chunk.id);
       this.chunks.push(mesh);
       this.scene.add(mesh);
+      this.clouds.add(mesh, chunk.mesh);
     }
   }
 
@@ -629,6 +713,7 @@ export class GameRenderer {
 
   /** Убрать сетку из сцены вместе с её красной сеткой. */
   private dropMesh(m: THREE.Mesh): void {
+    this.clouds.remove(m);
     const w = m.userData.wire as THREE.LineSegments | undefined;
     if (w) w.geometry.dispose();
     this.scene.remove(m);
@@ -653,7 +738,11 @@ export class GameRenderer {
     return lines;
   }
 
-  /** Показать карманное пространство (null — убрать). Убежище при этом остаётся в сцене, но оно далеко. */
+  /**
+   * Показать карманное пространство (null — убрать). Убежище при этом остаётся в сцене, но оно далеко.
+   * Точки здесь вшестеро реже, чем в убежище: рядом поверхность и так видна. Сеются они клетками вокруг
+   * игрока, поэтому огромный пол белого нигде (88 × 88 м) целиком не засевается.
+   */
   setPocket(meshes: readonly MeshData[] | null): void {
     for (const m of this.pocket) this.dropMesh(m);
     this.pocket.length = 0;
@@ -661,6 +750,7 @@ export class GameRenderer {
       const mesh = this.makeMesh(data, 0, 0);
       this.pocket.push(mesh);
       this.scene.add(mesh);
+      this.clouds.add(mesh, data, { thin: 6 });
     }
   }
 
@@ -676,6 +766,7 @@ export class GameRenderer {
     mesh.matrixAutoUpdate = true;
     mesh.visible = false;
     this.scene.add(mesh);
+    this.clouds.add(mesh, data, { follow: true });
     const id = this.nextThing++;
     this.things.set(id, { mesh, mat, wire: null, wireMat: null, radius: mesh.geometry.boundingSphere?.radius ?? 0.5 });
     return id;
@@ -862,13 +953,35 @@ export class GameRenderer {
     upL.transformDirection(cam.matrixWorldInverse);
     wu.uDecay!.value = v.decay;
     wu.uTierDrop!.value = this.tierDrop;
-    wu.uScanTime!.value = v.time;
-    const scan = wu.uScan!.value as THREE.Vector4;
     wu.uScanFade!.value = v.scanFade;
     (wu.uScanRange!.value as THREE.Vector2).set(v.scanRange[0], v.scanRange[1]);
-    scan.x = SCAN.ghost * v.lightScale;
-    // Призрачные точки не разгораются, когда камера в темноте поднимает усиление: темнота остаётся темнотой.
-    scan.w = (SCAN.glow * v.lightScale) / Math.max(1, v.gain) ** 0.55;
+
+    // Внимание скана догоняет луч с запаздыванием: точки собираются туда, куда оно уже дошло, а место,
+    // с которого луч только что ушёл, ещё немного держится. После скачка в другое место (или первой
+    // картинки) оно переносится сразу.
+    const dt = this.focusTime < 0 ? 1 : Math.max(0, v.time - this.focusTime);
+    this.focusTime = v.time;
+    const lp = this.tmpV.set(v.lightPos[0], v.lightPos[1], v.lightPos[2]);
+    const snap = dt > 0.3 || this.focusPos.distanceToSquared(lp) > 9;
+    const f = snap ? 1 : 1 - Math.exp(-dt * SCAN.follow);
+    // Рука идёт вместе с игроком: место догоняется втрое быстрее направления.
+    this.focusPos.lerp(lp, Math.min(1, f * 3));
+    this.focusDir.lerp(this.tmpV.set(v.lightDir[0], v.lightDir[1], v.lightDir[2]), f).normalize();
+    this.focusOn += (Math.min(1, v.lightIntensity * v.lightScale) - this.focusOn) * f;
+    this.focusColor.lerp(lu.uLightColor!.value as THREE.Vector3, f);
+    (wu.uFocusPosV!.value as THREE.Vector3).copy(this.focusPos).applyMatrix4(cam.matrixWorldInverse);
+    (wu.uFocusDirV!.value as THREE.Vector3).copy(this.focusDir).transformDirection(cam.matrixWorldInverse);
+    wu.uFocusOn!.value = this.focusOn;
+    (wu.uAfterColor!.value as THREE.Vector3).copy(this.focusColor).multiplyScalar(SCAN.after);
+
+    // Сплаты: без света видна только призрачная доля точек (в полной темноте помещения нет и её);
+    // призрачные точки не разгораются, когда камера в темноте поднимает усиление.
+    const pu0 = this.splatMat.uniforms;
+    pu0.uTime!.value = v.time;
+    pu0.uGhost!.value = SCAN.ghost * Math.min(1, v.lightScale);
+    (pu0.uGhostColor!.value as THREE.Vector3).set(0.62, 0.72, 0.9).multiplyScalar((SCAN.glow * Math.min(1, v.lightScale)) / Math.max(1, v.gain) ** 0.55);
+    // В пространствах с рассеянным светом точки собираются и без фонаря: «сканирует» сам свет.
+    pu0.uAmbientScan!.value = Math.min(1, ((v.ambient[0] + v.ambient[1] + v.ambient[2]) / 3) * 8);
 
     // Отсвет от пятна: точка попадания луча и сила, убывающая с расстоянием до стены.
     const hitDist = Math.min(v.beamDist, 30);
@@ -945,6 +1058,20 @@ export class GameRenderer {
     r.render(this.scene, cam);
     r.setClearColor(0x000000, 1);
 
+    // Сведение: поверхности — только там, где сплаты слились; поверх — сами точки, из которых собран мир.
+    this.composeMat.uniforms.tScene!.value = this.sceneRT.texture;
+    this.composeMat.uniforms.uSolid!.value = this.debugScanOff ? 1 : 0;
+    r.setRenderTarget(this.compRT);
+    r.render(this.composeScene, this.postCam);
+    if (!this.debugScanOff) {
+      this.clouds.update(cam);
+      pu0.tScene!.value = this.sceneRT.texture;
+      pu0.tDepth!.value = this.sceneRT.depthTexture;
+      r.autoClear = false;
+      r.render(this.clouds.scene, cam);
+      r.autoClear = true;
+    }
+
     // Дымка в луче: маленький буфер, по глубине готового кадра.
     if (this.hazeRT) {
       const hu = this.hazeMat.uniforms;
@@ -966,17 +1093,16 @@ export class GameRenderer {
     const visible = ndc.z < 1 && ndc.z > -1;
     // Цвет освещённого пятна — в маленький буфер: в следующем кадре им окрасится отсвет.
     const su = this.spotMat.uniforms;
-    su.tScene!.value = this.sceneRT.texture;
+    su.tScene!.value = this.compRT.texture;
     const inFrame = visible && Math.abs(ndc.x) < 0.95 && Math.abs(ndc.y) < 0.95 && v.lightIntensity * v.lightScale > 0.05 && v.beamDist < 30;
     (su.uBeam!.value as THREE.Vector3).set(ndc.x * 0.5 + 0.5, ndc.y * 0.5 + 0.5, inFrame ? 1 : 0);
     r.setRenderTarget(this.spotRT);
     r.render(this.spotScene, this.postCam);
     const pu = this.postMat.uniforms;
-    pu.tDepth!.value = this.sceneRT.depthTexture;
     (pu.uBeam!.value as THREE.Vector3).set(ndc.x * 0.5 + 0.5, ndc.y * 0.5 + 0.5, visible ? 0.018 * v.lightIntensity * v.lightScale : 0);
     pu.uCrt!.value = v.crt;
     pu.uFlash!.value = v.flash;
-    pu.tScene!.value = this.sceneRT.texture;
+    pu.tScene!.value = this.compRT.texture;
     pu.tHaze!.value = this.hazeRT ? this.hazeRT.texture : null;
     pu.uFrame!.value = v.frame;
     pu.uGain!.value = v.gain * this.brightness;
@@ -992,8 +1118,17 @@ export class GameRenderer {
     this.lastTris = r.info.render.triangles;
   }
 
-  info(): { calls: number; triangles: number; width: number; height: number; quality: Quality; programs: number; chunks: number; visible: number } {
-    return { calls: this.lastCalls, triangles: this.lastTris, width: this.width, height: this.height, quality: this.quality, programs: this.renderer.info.programs?.length ?? 0, chunks: this.chunks.length, visible: this.chunks.filter((m) => m.visible).length };
+  /** Сколько из отданных видеокарте точек-сплатов не спрятано отбором по расстоянию (перебор; для отладки). */
+  cloudUsage(): { drawn: number; shown: number; cells: number } {
+    return this.clouds.usage();
+  }
+
+  /**
+   * points — сколько точек-сплатов отдано видеокарте в прошлом кадре, clouds — у скольких сеток есть
+   * облака точек, cells — сколько клеток с точками сейчас живо (у сеток рядом с игроком).
+   */
+  info(): { calls: number; triangles: number; width: number; height: number; quality: Quality; programs: number; chunks: number; visible: number; points: number; clouds: number; cells: number } {
+    return { calls: this.lastCalls, triangles: this.lastTris, width: this.width, height: this.height, quality: this.quality, programs: this.renderer.info.programs?.length ?? 0, chunks: this.chunks.length, visible: this.chunks.filter((m) => m.visible).length, points: this.clouds.drawn, clouds: this.clouds.count, cells: this.clouds.cells };
   }
 
   /**

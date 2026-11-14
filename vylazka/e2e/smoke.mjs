@@ -106,8 +106,9 @@ async function launchBrowser() {
  * набирают гигабайты памяти, кадры почти перестают идти, и на длинном сценарии страница падает
  * («Target crashed»). В полном Chromium и в настоящих браузерах такого нет.
  *
- * Поэтому настоящий захват оставлен только там, где проверяется сама мышь (realLock в openPage);
- * остальные сценарии ведут игру через window.__vz, и им хватает заглушки.
+ * Поэтому настоящий захват оставлен только там, где проверяется сама мышь (realLock в openPage),
+ * и страница там лёгкая: тестовый коридор на низком качестве. Остальные сценарии ведут игру через
+ * window.__vz, и им хватает заглушки.
  */
 const FAKE_LOCK = () => {
   let locked = null;
@@ -197,8 +198,10 @@ async function scenarioPlay(browser, baseUrl) {
     await t.context.close();
   }
 
-  // Здесь проверяется сама мышь (тряска, потеря и возврат захвата), поэтому захват настоящий.
-  const { page, context, log } = await openPage(browser, baseUrl, '?q=high&fail=0&lang=ru&touch=0&level=test', {}, null, null, true);
+  // Картинка и всё, чему сама мышь не нужна, — на высоком качестве и с заглушкой захвата. Настоящий
+  // захват в браузере CI заваливает страницу событиями мыши (см. FAKE_LOCK); тяжёлая страница
+  // (1280×720, облако точек) разбирать их не успевает, поэтому сама мышь проверяется ниже, на лёгкой.
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=high&fail=0&lang=ru&touch=0&level=test');
   let st = await state(page);
   check('первый кадр показан, игра ждёт на стартовом экране', st.overlay === 'start' && st.paused === true, JSON.stringify({ overlay: st.overlay, paused: st.paused }));
   check('стартовый экран виден и подписан по-русски', (await page.textContent('.vz-overlay__prompt'))?.includes('Нажмите') === true);
@@ -242,16 +245,18 @@ async function scenarioPlay(browser, baseUrl) {
   await vz(page, () => window.__vz.shadows(true));
   let maxDiff = 0;
   for (let i = 0; i < lit.length; i++) maxDiff = Math.max(maxDiff, noShadow[i] - lit[i]);
-  // Порог центра — с запасом: мир собран из точек, и даже в середине луча остаются редкие дыры
-  // (сплошная картинка давала здесь 49,6, облако точек — 48,1).
+  // Порог центра — с запасом (сплошная картинка даёт здесь около 49,6): в ядре луча сплаты слились,
+  // и поверхность видна сама.
   check('в центре луча светло, по краям кадра темно', center(lit) > 40 && mean(lit) < center(lit) * 0.6, `центр ${center(lit).toFixed(1)}, среднее ${mean(lit).toFixed(1)}`);
   check('тень фонаря затемняет часть кадра', maxDiff > 8, `наибольшая разница ${maxDiff.toFixed(1)}`);
   const info = await vz(page, () => window.__vz.info());
-  check('мир рисуется малым числом вызовов', info.calls <= 8 && info.triangles > 5000, `${info.calls} вызовов, ${info.triangles} треугольников`);
+  // Тестовый коридор — одна сетка: тени, кадр, сведение, дымка, отсвет и пост-обработка — семь вызовов;
+  // ещё по одному на каждую клетку облака точек в кадре (коридор длиной 24 м — четыре-пять клеток).
+  check('мир рисуется малым числом вызовов', info.calls <= 14 && info.triangles > 5000, `${info.calls} вызовов, ${info.triangles} треугольников`);
   check('внутренний буфер 1280×720 на высоком качестве', info.width === 1280 && info.height === 720, `${info.width}×${info.height}`);
 
-  // Облако точек: мир собран из точек, как 3D-скан. В середине луча они стоят почти вплотную — там кадр
-  // так же ярок, как у сплошной картинки; вокруг луча остаётся россыпь, и кадр в целом темнее.
+  // Облако точек: мир собран из точек-сплатов, как 3D-скан. В ядре луча они слились — там кадр так же
+  // ярок, как у сплошной картинки; вокруг луча остаются сами точки, и кадр в целом темнее.
   const dots = await vz(page, () => window.__vz.probeColor());
   await vz(page, () => window.__vz.scan(false));
   const solidGrid = await vz(page, () => window.__vz.probe());
@@ -259,9 +264,9 @@ async function scenarioPlay(browser, baseUrl) {
   await vz(page, () => window.__vz.scan(true));
   const dotsAgain = await vz(page, () => window.__vz.probe());
   check(
-    'мир собран из точек: середина луча почти сплошная, вокруг — россыпь',
-    Math.abs(center(lit) - center(solidGrid)) < center(solidGrid) * 0.2 && mean(lit) < mean(solidGrid) * 0.9 && dots.dark > solid.dark + 0.015,
-    `центр ${center(lit).toFixed(1)} против ${center(solidGrid).toFixed(1)} у сплошной картинки, среднее ${mean(lit).toFixed(1)} против ${mean(solidGrid).toFixed(1)}, тёмных точек кадра ${dots.dark.toFixed(3)} против ${solid.dark.toFixed(3)}`,
+    'мир собран из точек: в ядре луча поверхность собрана, вокруг — россыпь сплатов',
+    Math.abs(center(lit) - center(solidGrid)) < center(solidGrid) * 0.2 && mean(lit) < mean(solidGrid) * 0.9 && dots.dark > solid.dark + 0.015 && info.points > 3000 && info.clouds >= 1,
+    `центр ${center(lit).toFixed(1)} против ${center(solidGrid).toFixed(1)} у сплошной картинки, среднее ${mean(lit).toFixed(1)} против ${mean(solidGrid).toFixed(1)}, тёмных точек кадра ${dots.dark.toFixed(3)} против ${solid.dark.toFixed(3)}, сплатов в кадре ${info.points}, облаков ${info.clouds}`,
   );
   check('облако точек выключается и включается обратно: кадр тот же', Math.abs(mean(dotsAgain) - mean(lit)) < 1.5 && Math.abs(center(dotsAgain) - center(lit)) < 3, `среднее ${mean(lit).toFixed(1)} → ${mean(dotsAgain).toFixed(1)}, центр ${center(lit).toFixed(1)} → ${center(dotsAgain).toFixed(1)}`);
 
@@ -279,66 +284,18 @@ async function scenarioPlay(browser, baseUrl) {
   check('на экране подсказка «трясите» с полосой прогресса', (await page.isVisible('.vz-hud__prompt')) && (await page.textContent('.vz-hud__prompt-text'))?.includes('мыш') === true);
   st = await vz(page, () => window.__vz.step(120));
   check('без тряски фонарь не оживает', st.light.state === 'dead');
-  // Настоящая тряска мышью: быстрые развороты.
-  await page.mouse.move(640, 360);
-  await page.mouse.down();
-  for (let i = 0; i < 44; i++) {
-    await page.mouse.move(640 + (i % 2 === 0 ? 90 : -90), 360, { steps: 3 });
-    await vz(page, () => window.__vz.tick(5));
-    if ((await state(page)).light.state === 'on') break;
-  }
-  await page.mouse.up();
-  st = await state(page);
-  check('тряска мышью оживляет фонарь', st.light.state === 'on', `состояние ${st.light.state}, прогресс ${st.light.revive.toFixed(2)}`);
-  check('подсказка убрана', !(await page.isVisible('.vz-hud__prompt')));
-  await vz(page, () => window.__vz.fail());
-  await vz(page, () => window.__vz.step(5));
   for (let i = 0; i < 60 && (await state(page)).light.state === 'dead'; i++) {
     await page.keyboard.press('KeyF');
     await vz(page, () => window.__vz.tick(6));
   }
   check('запасной способ: стучать клавишей F', (await state(page)).light.state === 'on');
-
-  // Пауза клавишей P и возврат кликом.
-  await vz(page, () => window.__vz.freeze(false));
-  await page.keyboard.press('KeyP');
-  await page.waitForFunction(() => window.__vz.state().overlay === 'paused', null, { timeout: 15000 }).catch(() => undefined);
-  st = await state(page);
-  check('P ставит на паузу, экран паузы виден', st.paused === true && st.overlay === 'paused');
-  const tPaused = st.time;
-  await sleep(500);
-  check('на паузе игровое время стоит', (await state(page)).time === tPaused);
-  await page.click('.vz-overlay');
-  await sleep(300);
-  check('клик возвращает в игру', (await state(page)).paused === false);
-
-  // Захват мыши не дался один раз: Chrome около секунды после Esc отклоняет повторный захват. Игра
-  // не должна решить, что захвата нет вовсе, — она возвращает паузу, и следующий клик пробует снова.
-  await page.evaluate(() => document.exitPointerLock());
-  await page.waitForFunction(() => window.__vz.state().overlay === 'paused', null, { timeout: 15000 }).catch(() => undefined);
-  await page.evaluate(() => {
-    const real = Element.prototype.requestPointerLock;
-    Element.prototype.requestPointerLock = function refuseOnce() {
-      Element.prototype.requestPointerLock = real;
-      return Promise.reject(new DOMException('The user has exited the lock before this request was completed.', 'SecurityError'));
-    };
-  });
-  await page.click('.vz-overlay');
-  await sleep(400);
-  st = await state(page);
-  check('отказ в захвате мыши возвращает паузу, а не переводит в режим зажатой кнопки', st.paused === true && st.overlay === 'paused' && st.drag === false, JSON.stringify({ paused: st.paused, overlay: st.overlay, drag: st.drag, reasons: st.pauseReasons }));
-  await page.click('.vz-overlay');
-  await sleep(400);
-  st = await state(page);
-  const relocked = await page.evaluate(() => document.pointerLockElement !== null);
-  check('следующий клик захватывает мышь, игра идёт', st.paused === false && relocked && st.drag === false, JSON.stringify({ paused: st.paused, locked: relocked, drag: st.drag, reasons: st.pauseReasons }));
-  await vz(page, () => window.__vz.freeze(true));
+  check('фонарь ожил — подсказка убрана', !(await page.isVisible('.vz-hud__prompt')));
 
   // Качество и язык.
   await vz(page, () => window.__vz.quality('low'));
   const low = await vz(page, () => window.__vz.info());
   check('низкое качество: буфер 640×360', low.width === 640 && low.height === 360, `${low.width}×${low.height}`);
-  // После тряски мышью и кликов взгляд в тестовом браузере может стоять как угодно — выставляем заново.
+  // После клавиш и кликов взгляд в тестовом браузере может стоять как угодно — выставляем заново.
   await vz(page, ([y, p]) => window.__vz.teleport(3.6, 0, -7.6, y, p), [25 * R, 2 * R]);
   await vz(page, () => window.__vz.step(30));
   const lowGrid = await vz(page, () => window.__vz.probe());
@@ -380,6 +337,73 @@ async function scenarioPlay(browser, baseUrl) {
   check('нет внешних запросов', log.external.length === 0, log.external.join(', ').slice(0, 300));
   check('нет неудачных запросов', log.failed.length === 0, log.failed.join(', ').slice(0, 300));
   await context.close();
+
+  // Сама мышь: тряска, пауза, потеря и возврат захвата. Захват здесь настоящий, а страница лёгкая
+  // (низкое качество): поток событий захваченной мыши в браузере CI она разбирать успевает.
+  {
+    const m = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&level=test', {}, null, null, true);
+    const mp = m.page;
+    await mp.click('.vz-overlay');
+    await sleep(300);
+    st = await state(mp);
+    const locked = await mp.evaluate(() => document.pointerLockElement !== null);
+    check('клик по стартовому экрану захватывает мышь по-настоящему, игра идёт', st.paused === false && locked, JSON.stringify({ paused: st.paused, locked, reasons: st.pauseReasons }));
+    await vz(mp, () => window.__vz.freeze(true));
+    await vz(mp, () => window.__vz.fail());
+    st = await vz(mp, () => window.__vz.step(10));
+    const wasDead = st.light.state === 'dead' && (await mp.isVisible('.vz-hud__prompt'));
+    // Настоящая тряска мышью: быстрые развороты.
+    await mp.mouse.move(640, 360);
+    await mp.mouse.down();
+    for (let i = 0; i < 44; i++) {
+      await mp.mouse.move(640 + (i % 2 === 0 ? 90 : -90), 360, { steps: 3 });
+      await vz(mp, () => window.__vz.tick(5));
+      if ((await state(mp)).light.state === 'on') break;
+    }
+    await mp.mouse.up();
+    st = await state(mp);
+    check('тряска мышью оживляет фонарь', wasDead && st.light.state === 'on', `состояние ${st.light.state}, прогресс ${st.light.revive.toFixed(2)}`);
+    check('подсказка убрана', !(await mp.isVisible('.vz-hud__prompt')));
+
+    // Пауза клавишей P и возврат кликом.
+    await vz(mp, () => window.__vz.freeze(false));
+    await mp.keyboard.press('KeyP');
+    await mp.waitForFunction(() => window.__vz.state().overlay === 'paused', null, { timeout: 15000 }).catch(() => undefined);
+    st = await state(mp);
+    check('P ставит на паузу, экран паузы виден', st.paused === true && st.overlay === 'paused');
+    const tPaused = st.time;
+    await sleep(500);
+    check('на паузе игровое время стоит', (await state(mp)).time === tPaused);
+    await mp.click('.vz-overlay');
+    await sleep(300);
+    check('клик возвращает в игру', (await state(mp)).paused === false);
+
+    // Захват мыши не дался один раз: Chrome около секунды после Esc отклоняет повторный захват. Игра
+    // не должна решить, что захвата нет вовсе, — она возвращает паузу, и следующий клик пробует снова.
+    await mp.evaluate(() => document.exitPointerLock());
+    await mp.waitForFunction(() => window.__vz.state().overlay === 'paused', null, { timeout: 15000 }).catch(() => undefined);
+    await mp.evaluate(() => {
+      const real = Element.prototype.requestPointerLock;
+      Element.prototype.requestPointerLock = function refuseOnce() {
+        Element.prototype.requestPointerLock = real;
+        return Promise.reject(new DOMException('The user has exited the lock before this request was completed.', 'SecurityError'));
+      };
+    });
+    await mp.click('.vz-overlay');
+    await sleep(400);
+    st = await state(mp);
+    check('отказ в захвате мыши возвращает паузу, а не переводит в режим зажатой кнопки', st.paused === true && st.overlay === 'paused' && st.drag === false, JSON.stringify({ paused: st.paused, overlay: st.overlay, drag: st.drag, reasons: st.pauseReasons }));
+    await mp.click('.vz-overlay');
+    await sleep(400);
+    st = await state(mp);
+    const relocked = await mp.evaluate(() => document.pointerLockElement !== null);
+    check('следующий клик захватывает мышь, игра идёт', st.paused === false && relocked && st.drag === false, JSON.stringify({ paused: st.paused, locked: relocked, drag: st.drag, reasons: st.pauseReasons }));
+
+    check('страница с настоящей мышью: нет ошибок в консоли', m.log.errors.length === 0, m.log.errors.join(' | ').slice(0, 400));
+    const mouseWarns = m.log.warnings.filter((w) => !benign(w));
+    check('страница с настоящей мышью: нет предупреждений в консоли', mouseWarns.length === 0, mouseWarns.join(' | ').slice(0, 400));
+    await m.context.close();
+  }
 }
 
 async function scenarioGen(browser, baseUrl) {
@@ -399,7 +423,14 @@ async function scenarioGen(browser, baseUrl) {
   let info = await vz(page, () => window.__vz.info());
   check('у люка: картинка есть, игрок стоит на полу первого яруса', Math.max(...grid0) > 40 && Math.abs(st.pos[1]) < 0.01 && st.onGround, `y = ${st.pos[1].toFixed(3)}`);
   check('на первом ярусе чужие этажи не рисуются', info.visible < info.chunks * 0.7, `видно ${info.visible} из ${info.chunks}`);
-  check('вызовов отрисовки не больше 80', info.calls <= 80, `${info.calls} вызовов, ${info.triangles} треугольников`);
+  // Каждый видимый чанк рисуется трижды: в карту теней, в кадр и своим облаком точек; плюс вещи и
+  // полноэкранные проходы. У люка это около 80 вызовов (40 — кадр, 18 — тени, 20 — облака).
+  check('вызовов отрисовки не больше 100, облака точек посеяны', info.calls <= 100 && info.points > 50000 && info.clouds >= info.chunks, `${info.calls} вызовов, ${info.triangles} треугольников, сплатов ${info.points}, облаков ${info.clouds} на ${info.chunks} чанков`);
+  // Нагрузка от точек. Облако помещения поделено на клетки: плотность клетки — по расстоянию до неё,
+  // клетка за кадром или дальше 28 м не рисуется. Поэтому видеокарта получает немного лишнего: больше
+  // трети отданных точек шейдер показывает (без клеток — меньше трети, а самих точек было втрое больше).
+  const use = await vz(page, () => window.__vz.cloudUsage());
+  check('точек в кадре в меру: не больше 450 тысяч на среднем качестве, и больше трети из них видны', use.drawn === info.points && use.drawn < 450000 && use.shown > use.drawn * 0.36 && use.cells >= 10 && info.cells >= use.cells, `отдано ${use.drawn}, видно ${use.shown} (${((100 * use.shown) / Math.max(1, use.drawn)).toFixed(0)} %), облаков в кадре ${use.cells} из ${info.cells} живых клеток`);
 
   // Приметы на каждом ярусе: встаём рядом, проверяем высоту пола и картинку.
   for (const [tier, id] of [
@@ -861,10 +892,14 @@ async function scenarioThings(browser, baseUrl) {
   // И дождаться: время пространства ограничено.
   await vz(page, () => window.__vz.jump('meadow', 'cut'));
   st = await stepUntil(page, (s) => s.where === 'pocket', 20, 20);
-  const tIn = st.time;
+  // Срок пространства — 46–60 с, выбирается случайно при входе; когда он вышел, место рассыпается и
+  // возвращает в убежище (1,6 + 1,2 с). Срок читается из состояния: проверка не зависит от того, какой
+  // он выпал. Ожидание идёт шагами по 5 с игрового времени — возврат замечается с опозданием до 5 с.
+  const tIn = st.time - st.pocketInfo.age;
+  const stay = st.pocketInfo.stay;
   st = await stepUntil(page, (s) => s.where === 'main' && s.jump === null, 300, 16);
-  // Срок пространства теперь 46–60 с (было 34–56), плюс 1,6 с распада на уходе: верхняя граница 62 → 64. Нижняя (6 с) — раньше выведет только взгляд на дверь или проход сквозь неё.
-  check('можно просто подождать: карман отпускает не позже чем через минуту с небольшим', st.where === 'main' && st.time - tIn < 64 && st.time - tIn > 6, `прошло ${(st.time - tIn).toFixed(0)} с, ${st.where}`);
+  const waited = st.time - tIn;
+  check('можно просто подождать: карман отпускает, как только выходит его срок (46–60 с)', st.where === 'main' && stay >= 46 && stay <= 60 && waited >= stay + 2.7 && waited < stay + 2.8 + 5.1, `срок ${stay.toFixed(1)} с, прошло ${waited.toFixed(1)} с, ${st.where}`);
 
   // Скачки в каждое пространство: картинка есть и не чёрная.
   for (const [to, style] of [['void', 'whiteout'], ['meadow', 'dissolve'], ['dollhouse', 'blackout']]) {

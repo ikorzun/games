@@ -36,6 +36,8 @@ export interface VzDebugApi {
   toggleLight(): void;
   quality(q?: Quality): Quality;
   info(): Record<string, unknown>;
+  /** Облако точек: сколько точек отдано видеокарте и сколько из них не спрятано отбором по расстоянию. */
+  cloudUsage(): { drawn: number; shown: number; cells: number };
   start(): void;
   pause(on: boolean): void;
   lang(code?: string): string;
@@ -173,6 +175,7 @@ export function installDebug(app: App): void {
       return game().renderer.quality;
     },
     info: () => ({ ...game().renderer.info(), fps: app.fps }),
+    cloudUsage: () => game().renderer.cloudUsage(),
     start: () => app.start(),
     pause: (on) => app.lifecycle.set('user', on),
     lang: (code) => {
