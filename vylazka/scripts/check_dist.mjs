@@ -8,6 +8,8 @@
  *   - ядро (всё, кроме игровых ассетов) ≤ 5 МБ; весь архив ≤ 300 МБ;
  *   - звук: в сборке либо весь набор из audio/manifest.json (audio/<id>_<n>.mp3), либо ничего;
  *     неполный набор — ошибка, отсутствие — предупреждение (VZ_REQUIRE_AUDIO=1 делает его ошибкой);
+ *   - плакаты: у каждого листа из assets/posters/<id>.webp в сборке есть свой файл assets/<id>-<хеш>.webp —
+ *     без него на стене висел бы пустой лист;
  *   - игровые ассеты (графика и звук: assets/<папка>/… и audio/…) считаются отдельной строкой: больше 40 МБ —
  *     предупреждение (грузить игру станет долго), общий лимит архива 300 МБ — жёсткий.
  *     Файлы бандла Vite лежат в assets/ плоско (assets/index-<хеш>.js) и входят в ядро.
@@ -33,6 +35,18 @@ function expectedAudio() {
     const out = [];
     for (const s of manifest.sounds) for (let v = 1; v <= s.variants; v++) out.push(`audio/${s.id}_${v}.mp3`);
     return out;
+  } catch {
+    return [];
+  }
+}
+/** Какие листы-картинки (плакаты, план убежища) обязаны быть в сборке: всё, что лежит в assets/posters. */
+function expectedSheets() {
+  try {
+    const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'posters');
+    return readdirSync(dir)
+      .filter((f) => f.endsWith('.webp'))
+      .map((f) => f.slice(0, -'.webp'.length))
+      .sort();
   } catch {
     return [];
   }
@@ -91,6 +105,10 @@ export function checkDist(dir, opts = {}) {
       if (hits.length) problems.push(`внешние ресурсы в ${f.rel}: ${[...new Set(hits.map((h) => h.trim()))].join(', ')}`);
     }
   }
+  // Плакаты: Vite кладёт каждый лист как assets/<id>-<хеш>.webp. Нет файла — на стене пустой лист.
+  const sheets = opts.sheets ?? expectedSheets();
+  const lostSheets = sheets.filter((id) => !files.some((f) => f.rel.startsWith(`assets/${id}-`) && f.rel.endsWith('.webp')));
+  if (lostSheets.length > 0) problems.push(`в сборке нет листов-картинок (${lostSheets.length} из ${sheets.length}): ${lostSheets.join(', ')}`);
   // Звук: либо весь набор из манифеста, либо ничего. Игра с половиной звуков — брак.
   const expected = expectedAudio();
   const present = new Set(files.filter((f) => f.rel.startsWith('audio/') && f.rel.endsWith('.mp3')).map((f) => f.rel));

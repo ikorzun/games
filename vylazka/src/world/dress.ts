@@ -147,7 +147,7 @@ export function dressRoom(ctx: RoomCtx): void {
       const id = pick(signList, rSignPick);
       const x = (rX - 0.5) * (wallTaken ? 1.6 : 1.2);
       if (id === 'poster') {
-        if (!wallTaken) poster(s.xf.child(x, 1.72, 0), 0.62, 0.82, seed);
+        if (!wallTaken) poster(s.xf.child(x, 1.7, 0), 0.62, 0.9, seed);
       } else {
         const stencilInk = type === 'storage' || type === 'collapsed' || dark ? CHALK : seed % 3 === 0 ? BLACK : RED;
         const printed = id.startsWith('pl_') || id.startsWith('sym_') || id === 'scheme' || id === 'calendar' || id === 'clock';

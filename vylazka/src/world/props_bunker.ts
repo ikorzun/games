@@ -372,11 +372,11 @@ export function wallPhone(xf: Xf): void {
 }
 
 /**
- * Плакат на стене: xf — середина листа. Что на нём, решает seed: плакат ГО, схема убежища или правила.
- * Лист на рейках, рисунок — из атласа надписей. w и h задают место под лист; сам лист — по пропорции рисунка.
+ * Плакат на стене: xf — середина листа. Что на нём, решает seed: один из плакатов ГО или план убежища.
+ * Лист на рейках, сам плакат — картинка из атласа надписей. w и h задают место под лист; лист — по своей пропорции.
  */
 export function poster(xf: Xf, w: number, h: number, seed: number): void {
-  const pool = [...POSTERS, ...POSTERS, 'scheme', 'pl_rules'];
+  const pool = [...POSTERS, 'scheme'];
   const id = pool[seed % pool.length]!;
   const s = SIGN[id]!;
   const width = Math.min(w, s.w, (h * s.pw) / s.ph);

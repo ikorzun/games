@@ -52,7 +52,16 @@ export function planarUv(p: Vec3, n: Vec3): [number, number] {
   return [p[0], p[1]];
 }
 
+/** Где висит лист-картинка (плакат, план убежища): середина листа и куда он смотрит. */
+export interface SheetMark {
+  id: string;
+  at: Vec3;
+  n: Vec3;
+}
+
 export class MeshBuilder {
+  /** Листы-картинки, повешенные в этой сетке: по ним проверки и отладка находят плакаты на стенах. */
+  readonly sheets: SheetMark[] = [];
   private readonly pos: number[] = [];
   private readonly nrm: number[] = [];
   private readonly col: number[] = [];

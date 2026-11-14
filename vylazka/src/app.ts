@@ -21,7 +21,9 @@ import type { InputFrame } from './player/input';
 import { DesktopInput } from './player/input_desktop';
 import { MotionSensor } from './player/motion';
 import { GameRenderer } from './render/renderer';
+import { loadSheets } from './render/poster_images';
 import { drawSigns } from './render/signs_atlas';
+import type { Sheets } from './render/signs_atlas';
 import type { Quality } from './render/renderer';
 import { MEMORIES } from './systems/session';
 import { Hud } from './ui/hud';
@@ -46,6 +48,16 @@ const SENS = [0.6, 1, 1.6] as const;
 const BRIGHT = [0.78, 1, 1.35] as const;
 
 type Screen = 'boot' | 'title' | 'play';
+
+/** «Испачкан» ли canvas чужой картинкой: с такого нельзя читать точки и нельзя снять текстуру. */
+function tainted(canvas: HTMLCanvasElement): boolean {
+  try {
+    canvas.getContext('2d')?.getImageData(0, 0, 1, 1);
+    return false;
+  } catch {
+    return true;
+  }
+}
 
 export class App {
   readonly lifecycle = new Lifecycle();
@@ -89,6 +101,10 @@ export class App {
   private next: { level: BuiltLevel; seed: number; rank: 1 | 2 | 3 } | null = null;
   /** Подсказки обучения, уже показанные в этой сессии. */
   private readonly taught = new Set<string>();
+  /** Какие листы-картинки (плакаты, план убежища) уже загружены и стоят в атласе надписей. */
+  sheetIds: string[] = [];
+  /** Атлас надписей, как он сейчас нарисован (для проверок: что в клетке листа действительно картинка). */
+  signsCanvas: HTMLCanvasElement | null = null;
   /** Подсказка из кукольного домика: в каком помещении лежит искомая вещь (до тех пор, пока её не вспомнили или не «забыли»). */
   private mapHint: { memory: string; room: string } | null = null;
 
@@ -163,9 +179,29 @@ export class App {
       this.platform.ready();
       return;
     }
-    // Надписи рисуются шрифтом игры; если он догрузится позже — перерисуем.
-    renderer.setSigns(drawSigns());
-    void document.fonts?.ready?.then(() => renderer.setSigns(drawSigns()));
+    // Надписи рисуются шрифтом игры, плакаты — картинки из файлов: и то и другое может прийти позже
+    // первого кадра, тогда атлас перерисовывается.
+    let sheets: Sheets = {};
+    const redraw = (): void => {
+      let canvas = drawSigns(sheets);
+      // Страховка: если какой-то лист всё же «испачкал» canvas (сервер не разрешил читать картинку),
+      // с такого canvas текстуру не снять — тогда атлас рисуется без листов, а надписи остаются целы.
+      if (Object.keys(sheets).length > 0 && tainted(canvas)) {
+        console.warn('[vylazka] плакаты не удалось взять в атлас: сервер не разрешает читать картинки');
+        sheets = {};
+        this.sheetIds = [];
+        canvas = drawSigns();
+      }
+      this.signsCanvas = canvas;
+      renderer.setSigns(canvas);
+    };
+    redraw();
+    void document.fonts?.ready?.then(redraw);
+    void loadSheets().then((loaded) => {
+      sheets = loaded;
+      this.sheetIds = Object.keys(loaded).sort();
+      redraw();
+    });
     renderer.onContextLost = () => this.lifecycle.set('context', true);
     renderer.onContextRestored = () => {
       this.lifecycle.set('context', false);
@@ -254,7 +290,7 @@ export class App {
         const pocket = buildPocket(name.slice(7) as PocketKind, this.seed, [0, 0, 0]);
         const colliders = new ColliderSet();
         for (const b of pocket.colliders) colliders.add(b);
-        this.level = { chunks: pocket.meshes.map((mesh) => ({ mesh, tierMin: 0, tierMax: 0 })), stairs: [], colliders, spawn: pocket.spawn, exit: pocket.spawn.pos, spots: [], landmarks: [], zones: [], collapses: [], variants: [], nav: [], layout: null };
+        this.level = { chunks: pocket.meshes.map((mesh) => ({ mesh, tierMin: 0, tierMax: 0 })), stairs: [], colliders, spawn: pocket.spawn, exit: pocket.spawn.pos, spots: [], landmarks: [], zones: [], collapses: [], variants: [], nav: [], sheets: [], layout: null };
         this.game.loadLevel(this.level, null);
         this.game.env = pocket.env;
         this.game.renderer.cullDistance = 400;

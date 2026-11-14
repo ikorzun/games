@@ -11,6 +11,7 @@
     "dev": "vite",
     "build": "vite build && node scripts/check_dist.mjs dist",
     "build:playgama": "vite build --mode playgama && node scripts/check_dist.mjs dist-playgama",
+    "build:single": "node scripts/single_page.mjs dist dist-single/untitled_session.html",
     "preview": "vite preview",
     "preview:playgama": "vite preview --outDir dist-playgama --port 4176",
     "test": "vitest run",

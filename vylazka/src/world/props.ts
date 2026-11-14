@@ -92,6 +92,11 @@ export class Xf {
     const height = (width * s.ph) / s.pw;
     const alpha = s.kind === 'stencil' || s.kind === 'brush' || s.kind === 'arc' || s.kind === 'tally';
     this.mb.quadUv([this.pt(x - width / 2, y, off), this.pt(x + width / 2, y, off), this.pt(x + width / 2, y + height, off), this.pt(x - width / 2, y + height, off)], [s.u0, s.v0, s.u1, s.v1], alpha ? MAT.stencil : MAT.print, tint, 1);
+    if (s.kind === 'poster' || s.kind === 'scheme') {
+      const o = this.pt(0, 0, 0);
+      const f = this.pt(0, 0, 1);
+      this.mb.sheets.push({ id, at: this.pt(x, y + height / 2, off), n: [f[0] - o[0], f[1] - o[1], f[2] - o[2]] });
+    }
   }
 
   /** Знак на полу: левый нижний угол рисунка — в точке (x0, z0), ширина w вдоль +x, верх рисунка — в сторону +z. */

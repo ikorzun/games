@@ -4,3 +4,5 @@ dist-playgama/
 e2e/out/
 # временная сборка для витрины реквизита
 dist-props/
+# одна страница для ссылки: npm run build:single
+dist-single/

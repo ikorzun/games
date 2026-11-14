@@ -47,5 +47,5 @@ export function buildShowcase(only: readonly string[] | null): BuiltLevel {
     const z = p.mount === 'free' ? SHOW_WALL_Z + 1.2 : SHOW_WALL_Z;
     p.build(new Xf(mb, col, x, y, z, 0), 1000 + i * 7);
   });
-  return { chunks: [{ mesh: mb.build(), tierMin: 0, tierMax: 0 }], stairs: [], colliders: col, spawn: { pos: [0, 0, 3], yaw: 0 }, exit: [0, 0, 4], spots: [], landmarks: [], zones: [], collapses: [], variants: [], nav: [], layout: null };
+  return { chunks: [{ mesh: mb.build(), tierMin: 0, tierMax: 0 }], stairs: [], colliders: col, spawn: { pos: [0, 0, 3], yaw: 0 }, exit: [0, 0, 4], spots: [], landmarks: [], zones: [], collapses: [], variants: [], nav: [], sheets: mb.sheets, layout: null };
 }

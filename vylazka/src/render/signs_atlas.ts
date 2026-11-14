@@ -1,6 +1,7 @@
 /**
- * Атлас надписей: трафареты, таблички, плакаты ГО, шкалы приборов. Рисуется на canvas при запуске
- * по раскладке из world/signs.ts — ни одной готовой картинки в игре нет.
+ * Атлас надписей: трафареты, таблички, шкалы приборов рисуются на canvas при запуске по раскладке
+ * из world/signs.ts. Плакаты гражданской обороны и план убежища — настоящие листы: готовые картинки
+ * (assets/posters), которые сюда только вклеиваются и старятся.
  *
  * Буквы ставятся по одной, каждая в свою клетку: раскладка не зависит от того, успел ли загрузиться
  * шрифт. У трафарета в буквах прорезаны перемычки, как у настоящего листа с вырезанными буквами.
@@ -152,170 +153,57 @@ function plate(g: G, s: SignRect): void {
   age(g, s, rnd, true);
 }
 
-// ── Рисунки плакатов: простые фигуры одним цветом ──
+/** Листы-картинки по id (плакаты ГО, план убежища): их грузит render/poster_images.ts. */
+export type Sheets = Readonly<Record<string, CanvasImageSource>>;
 
-function person(g: G, x: number, y: number, k: number, run = false): void {
-  g.beginPath();
-  g.arc(x, y - 16 * k, 4 * k, 0, Math.PI * 2);
-  g.fill();
-  g.lineWidth = 3 * k;
-  g.lineCap = 'round';
-  g.beginPath();
-  g.moveTo(x, y - 12 * k);
-  g.lineTo(x + (run ? 2 * k : 0), y);
-  g.moveTo(x, y - 9 * k);
-  g.lineTo(x - 6 * k, y - (run ? 12 : 3) * k);
-  g.moveTo(x, y - 9 * k);
-  g.lineTo(x + 6 * k, y - (run ? 4 : 3) * k);
-  g.moveTo(x + (run ? 2 * k : 0), y);
-  g.lineTo(x - (run ? 7 : 3) * k, y + 11 * k);
-  g.moveTo(x + (run ? 2 * k : 0), y);
-  g.lineTo(x + (run ? 9 : 3) * k, y + (run ? 8 : 11) * k);
-  g.stroke();
-}
-
-function gasMask(g: G, x: number, y: number, k: number): void {
-  g.beginPath();
-  g.ellipse(x, y, 15 * k, 19 * k, 0, 0, Math.PI * 2);
-  g.fill();
-  g.fillStyle = PAPER;
-  for (const dx of [-6, 6]) {
-    g.beginPath();
-    g.arc(x + dx * k, y - 4 * k, 4.5 * k, 0, Math.PI * 2);
-    g.fill();
-  }
-  g.fillStyle = INK;
-  g.fillRect(x - 6 * k, y + 10 * k, 12 * k, 8 * k);
-  g.beginPath();
-  g.ellipse(x, y + 24 * k, 9 * k, 6 * k, 0, 0, Math.PI * 2);
-  g.fill();
-}
-
-function picture(g: G, style: number, row: number, x: number, y: number, w: number, h: number): void {
-  const cx = x + w / 2;
-  const cy = y + h / 2;
-  g.fillStyle = INK;
-  g.strokeStyle = INK;
-  g.lineWidth = 2;
-  const key = style * 3 + row;
-  if (key === 0) {
-    // Сирена и волны звука.
-    g.beginPath();
-    g.moveTo(cx - 18, cy - 6);
-    g.lineTo(cx - 4, cy - 14);
-    g.lineTo(cx - 4, cy + 14);
-    g.lineTo(cx - 18, cy + 6);
-    g.closePath();
-    g.fill();
-    for (let i = 1; i <= 3; i++) {
-      g.beginPath();
-      g.arc(cx - 4, cy, 7 + i * 7, -0.7, 0.7);
-      g.stroke();
-    }
-  } else if (key === 1) {
-    // Люди бегут к входу.
-    person(g, cx - 18, cy + 2, 0.9, true);
-    person(g, cx - 2, cy + 2, 0.9, true);
-    g.fillRect(cx + 16, cy - 20, 12, 36);
-    g.fillStyle = PAPER;
-    g.fillRect(cx + 19, cy - 16, 6, 30);
-  } else if (key === 2 || key === 6) {
-    // Разрез: земля, дом, под ним убежище с людьми.
-    g.fillRect(x + 4, cy - 2, w - 8, 3);
-    g.fillRect(cx - 22, cy - 24, 20, 22);
-    g.strokeRect(cx - 26, cy + 4, 52, 20);
-    for (const dx of [-16, -4, 8]) person(g, cx + dx, cy + 14, 0.45);
-  } else if (key === 3) {
-    gasMask(g, cx, cy - 6, 0.95);
-  } else if (key === 4) {
-    // Сумка с противогазом через плечо.
-    g.fillRect(cx - 14, cy - 6, 28, 24);
-    g.lineWidth = 3;
-    g.beginPath();
-    g.moveTo(cx - 14, cy - 6);
-    g.quadraticCurveTo(cx, cy - 34, cx + 14, cy - 6);
-    g.stroke();
-    g.fillStyle = PAPER;
-    g.fillRect(cx - 9, cy + 2, 18, 3);
-  } else if (key === 5) {
-    // Человек в противогазе.
-    person(g, cx, cy + 6, 1.1);
-    g.beginPath();
-    g.ellipse(cx, cy - 12, 6, 7.5, 0, 0, Math.PI * 2);
-    g.fill();
-    g.fillRect(cx - 2, cy - 6, 4, 8);
-  } else if (key === 7) {
-    // Не курить: перечёркнутая папироса.
-    g.fillRect(cx - 18, cy - 3, 30, 6);
-    g.strokeStyle = '#a1241b';
-    g.lineWidth = 4;
-    g.beginPath();
-    g.arc(cx, cy, 22, 0, Math.PI * 2);
-    g.moveTo(cx - 15, cy + 15);
-    g.lineTo(cx + 15, cy - 15);
-    g.stroke();
-  } else if (key === 8) {
-    // Нары в два яруса.
-    for (const dy of [-14, 6]) g.fillRect(cx - 24, cy + dy, 48, 4);
-    for (const dx of [-24, 21]) g.fillRect(cx + dx, cy - 22, 3, 44);
-    person(g, cx - 6, cy - 2, 0.5);
-  } else if (key === 9) {
-    g.fillStyle = '#a1241b';
-    g.fillRect(cx - 6, cy - 20, 12, 40);
-    g.fillRect(cx - 20, cy - 6, 40, 12);
-  } else if (key === 10) {
-    // Перевязка руки.
-    g.lineWidth = 9;
-    g.lineCap = 'round';
-    g.beginPath();
-    g.moveTo(cx - 22, cy + 10);
-    g.lineTo(cx + 20, cy - 10);
-    g.stroke();
-    g.strokeStyle = PAPER;
-    g.lineWidth = 2;
-    for (let i = -1; i <= 2; i++) {
-      g.beginPath();
-      g.moveTo(cx - 6 + i * 6, cy - 4);
-      g.lineTo(cx - 2 + i * 6, cy + 8);
-      g.stroke();
-    }
-  } else {
-    // Носилки.
-    g.fillRect(cx - 26, cy - 2, 52, 4);
-    g.fillRect(cx - 18, cy - 8, 36, 6);
-    person(g, cx - 28, cy + 4, 0.55);
-    person(g, cx + 28, cy + 4, 0.55);
-  }
-}
-
-function poster(g: G, s: SignRect): void {
+/**
+ * Лист-картинка: настоящий плакат, провисевший на стене тридцать лет. Сам рисунок — из файла; здесь
+ * только следы времени: сгибы (лист везли сложенным вчетверо), пожелтевшие края, бурые пятна, ржавчина
+ * от кнопок по углам. Пока файл не пришёл, на стене пустой лист — без рисунка, но и без подделки под него.
+ */
+function sheet(g: G, s: SignRect, img: CanvasImageSource | undefined): void {
   const rnd = lcg(seedOf(s.id));
-  const style = s.style ?? 0;
   g.fillStyle = PAPER;
   g.fillRect(0, 0, s.pw, s.ph);
-  g.fillStyle = ['#a1281e', '#274f70', '#2f5a3a', '#8f2a22'][style % 4]!;
-  g.fillRect(6, 6, s.pw - 12, 46);
-  g.fillStyle = '#efe9d2';
-  s.lines.forEach((line, i) => {
-    const h = Math.min(16, (s.pw - 22) / (line.length * ADV));
-    mono(g, line, (s.pw - line.length * ADV * h) / 2, 20 + i * 19, h);
-  });
-  const rowH = (s.ph - 64) / 3;
-  for (let row = 0; row < 3; row++) {
-    const y = 58 + row * rowH;
-    g.strokeStyle = '#6c6654';
-    g.lineWidth = 1;
-    g.strokeRect(8, y + 2, 72, rowH - 8);
-    picture(g, style, row, 8, y + 2, 72, rowH - 8);
-    // Мелкий текст: строчки, которые с двух шагов не прочесть.
-    g.fillStyle = '#4b473d';
-    for (let l = 0; l < 6; l++) g.fillRect(88, y + 8 + l * 9, (s.pw - 100) * (0.55 + rnd() * 0.45), 2.5);
+  if (img) {
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(img, 0, 0, s.pw, s.ph);
   }
-  // Сгибы и пожелтевшие края.
-  g.fillStyle = 'rgba(60, 45, 20, 0.12)';
-  g.fillRect(0, s.ph / 2 - 1, s.pw, 2);
-  g.fillRect(s.pw / 2 - 1, 0, 2, s.ph);
+  // Сгибы: тёмная нитка и светлая рядом — бумага на сгибе вытерлась.
+  const fx = Math.round(s.pw / 2 + (rnd() - 0.5) * 8);
+  const fy = Math.round(s.ph / 2 + (rnd() - 0.5) * 8);
+  g.fillStyle = 'rgba(52, 38, 18, 0.22)';
+  g.fillRect(0, fy - 1, s.pw, 1.5);
+  g.fillRect(fx - 1, 0, 1.5, s.ph);
+  g.fillStyle = 'rgba(255, 250, 235, 0.16)';
+  g.fillRect(0, fy + 0.5, s.pw, 1.5);
+  g.fillRect(fx + 0.5, 0, 1.5, s.ph);
+  // Края пожелтели и потемнели сильнее середины; пятна ложатся на печать, а не поверх неё.
+  g.globalCompositeOperation = 'multiply';
+  const e = Math.min(s.pw, s.ph) * 0.1;
+  const edge = (x0: number, y0: number, x1: number, y1: number, x: number, y: number, w: number, h: number): void => {
+    const gr = g.createLinearGradient(x0, y0, x1, y1);
+    gr.addColorStop(0, 'rgba(146, 112, 64, 0.6)');
+    gr.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    g.fillStyle = gr;
+    g.fillRect(x, y, w, h);
+  };
+  edge(0, 0, e, 0, 0, 0, e, s.ph);
+  edge(s.pw, 0, s.pw - e, 0, s.pw - e, 0, e, s.ph);
+  edge(0, 0, 0, e, 0, 0, s.pw, e);
+  edge(0, s.ph, 0, s.ph - e, 0, s.ph - e, s.pw, e);
   age(g, s, rnd, false);
+  // Ржавчина от кнопок по углам.
+  for (const [cx, cy] of [[9, 9], [s.pw - 9, 9], [9, s.ph - 9], [s.pw - 9, s.ph - 9]] as const) {
+    const gr = g.createRadialGradient(cx, cy, 0.5, cx, cy, 7 + rnd() * 5);
+    gr.addColorStop(0, 'rgba(96, 52, 24, 0.9)');
+    gr.addColorStop(0.35, 'rgba(140, 86, 40, 0.45)');
+    gr.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    g.fillStyle = gr;
+    g.fillRect(cx - 14, cy - 14, 28, 28);
+  }
+  g.globalCompositeOperation = 'source-over';
 }
 
 function dial(g: G, s: SignRect): void {
@@ -429,37 +317,6 @@ function arc(g: G, s: SignRect): void {
   g.stroke();
 }
 
-function scheme(g: G, s: SignRect): void {
-  const rnd = lcg(seedOf(s.id));
-  g.fillStyle = PAPER;
-  g.fillRect(0, 0, s.pw, s.ph);
-  g.fillStyle = INK;
-  mono(g, s.lines[0]!, 10, 14, 13);
-  g.strokeStyle = INK;
-  g.lineWidth = 1.5;
-  // Коридор и помещения по обе стороны.
-  g.strokeRect(14, 66, s.pw - 28, 14);
-  for (let i = 0; i < 6; i++) {
-    const x = 16 + i * ((s.pw - 32) / 6);
-    const w = (s.pw - 32) / 6 - 4;
-    g.strokeRect(x, 30 + rnd() * 6, w, 36 - rnd() * 6);
-    if (i % 2 === 0 || rnd() < 0.6) g.strokeRect(x, 80, w, 26 + rnd() * 14);
-  }
-  // Путь к выходу.
-  g.strokeStyle = '#a1281e';
-  g.lineWidth = 2.5;
-  g.beginPath();
-  g.moveTo(s.pw - 22, 73);
-  g.lineTo(24, 73);
-  g.lineTo(30, 68);
-  g.moveTo(24, 73);
-  g.lineTo(30, 78);
-  g.stroke();
-  g.fillStyle = '#4b473d';
-  for (let l = 0; l < 3; l++) g.fillRect(14, s.ph - 22 + l * 6, 60 + rnd() * 70, 2);
-  age(g, s, rnd, false);
-}
-
 function symbol(g: G, s: SignRect): void {
   const style = s.style ?? 0;
   const c = s.pw / 2;
@@ -514,10 +371,13 @@ function symbol(g: G, s: SignRect): void {
   }
 }
 
-const DRAW: Record<SignRect['kind'], (g: G, s: SignRect) => void> = { stencil, brush, plate, poster, dial, clock, calendar, hazard, arc, scheme, tally, symbol };
+const DRAW: Record<Exclude<SignRect['kind'], 'poster' | 'scheme'>, (g: G, s: SignRect) => void> = { stencil, brush, plate, dial, clock, calendar, hazard, arc, tally, symbol };
 
-/** Нарисовать атлас. Только в браузере. */
-export function drawSigns(): HTMLCanvasElement {
+/**
+ * Нарисовать атлас. Только в браузере. sheets — листы-картинки, которые уже загрузились: без них
+ * на месте плакатов пустые листы, и атлас перерисовывают, когда картинки приходят.
+ */
+export function drawSigns(sheets: Sheets = {}): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = SIGNS_SIZE;
   canvas.height = SIGNS_SIZE;
@@ -529,7 +389,8 @@ export function drawSigns(): HTMLCanvasElement {
     g.rect(s.x, s.y, s.pw, s.ph);
     g.clip();
     g.translate(s.x, s.y);
-    DRAW[s.kind](g, s);
+    if (s.kind === 'poster' || s.kind === 'scheme') sheet(g, s, sheets[s.id]);
+    else DRAW[s.kind](g, s);
     g.restore();
   }
   return canvas;

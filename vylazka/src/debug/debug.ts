@@ -5,6 +5,7 @@
 import type { RoomFx } from '../game';
 import type { JumpStyle, JumpTarget } from '../systems/jumps';
 import { showcaseItems } from '../world/showcase';
+import { SIGN } from '../world/signs';
 import { normalizeLang } from '../core/i18n';
 import type { App } from '../app';
 import { STEP } from '../game';
@@ -89,6 +90,17 @@ export interface VzDebugApi {
   /** Средний цвет кадра (0..255) и доля красных точек: виден ли красная сетка. */
   probeColor(): { r: number; g: number; b: number; red: number; dark: number };
   missingKeys(): string[];
+  /** Какие листы-картинки (плакаты ГО, план убежища) уже загружены. */
+  sheets(): string[];
+  /**
+   * Насколько пёстрая клетка листа в атласе надписей: разброс яркости её точек. У пустого листа он
+   * около 10 (только пятна старения), у листа с плакатом — десятки. −1 — такого листа или атласа нет.
+   */
+  sheetContrast(id: string): number;
+  /** Где на уровне висят листы-картинки: id листа, середина и куда он смотрит. */
+  sheetMarks(): { id: string; at: number[]; n: number[] }[];
+  /** Встать перед листом с этим номером (из sheetMarks) лицом к нему. false — такого листа нет. */
+  gotoSheet(index: number, distance?: number): boolean;
   /** Состояние звука: загружено, что просили и что прозвучало, какие петли идут. */
   /** Предметы витрины (?level=show) по порядку расстановки: имя, крепление, высота. */
   showcase(): { name: string; mount: string; h: number; y: number }[];
@@ -341,6 +353,39 @@ export function installDebug(app: App): void {
       return game().renderer.probeColor();
     },
     missingKeys: () => [...app.i18n.missing],
+    sheets: () => [...app.sheetIds],
+    sheetContrast: (id) => {
+      const s = SIGN[id];
+      const g = app.signsCanvas?.getContext('2d');
+      if (!s || !g) return -1;
+      const d = g.getImageData(s.x, s.y, s.pw, s.ph).data;
+      let sum = 0;
+      let sq = 0;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 28) {
+        const l = 0.3 * d[i]! + 0.59 * d[i + 1]! + 0.11 * d[i + 2]!;
+        sum += l;
+        sq += l * l;
+        n += 1;
+      }
+      const mean = sum / n;
+      return Math.sqrt(Math.max(0, sq / n - mean * mean));
+    },
+    sheetMarks: () => app.level.sheets.map((m) => ({ id: m.id, at: [...m.at], n: [...m.n] })),
+    gotoSheet: (index, distance = 1.4) => {
+      const m = app.level.sheets[index];
+      if (!m) return false;
+      game().debugHome();
+      const x = m.at[0] + m.n[0] * distance;
+      const z = m.at[2] + m.n[2] * distance;
+      // Пол — у ближайшего узла того же яруса (лист висит на уровне глаз); у тестового уровня узлов нет.
+      const floor = app.level.nav.filter((n) => Math.abs(n.y + 1.7 - m.at[1]) < 1.2).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
+      game().teleport(x, floor ? floor.y : 0, z);
+      app.advance(emptyInput(), 2, 1, STEP);
+      game().aimAt(m.at[0], m.at[1], m.at[2]);
+      app.advance(emptyInput(), 2, 1, STEP);
+      return true;
+    },
     audio: () => app.sound.status(),
     showcase: () => showcaseItems(app.params.get('props')?.split(',') ?? null),
     mute: (on) => app.setMuted(on),

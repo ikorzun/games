@@ -3,10 +3,13 @@
  * Здесь только данные и раскладка — чистый TS, без canvas: уровень собирается и в тестах, и в Worker.
  * Рисует атлас render/signs_atlas.ts (в браузере), по этой же раскладке.
  *
+ * Плакаты гражданской обороны и план убежища — не рисунки кодом, а настоящие листы: картинки из
+ * assets/posters/<id>.webp (их грузит render/poster_images.ts и кладёт в свои клетки атласа).
+ *
  * Надписи остаются русскими на любом языке интерфейса: это часть места действия.
  */
 
-export const SIGNS_SIZE = 1024;
+export const SIGNS_SIZE = 2048;
 
 export type SignKind =
   /** Трафарет по стене: буквы с перемычками, вне букв прозрачно. Цвет даёт вершина. */
@@ -15,7 +18,7 @@ export type SignKind =
   | 'brush'
   /** Эмалированная табличка: светлое поле, рамка, текст. */
   | 'plate'
-  /** Плакат гражданской обороны. */
+  /** Плакат гражданской обороны: лист-картинка из assets/posters. */
   | 'poster'
   /** Шкала прибора. */
   | 'dial'
@@ -25,7 +28,7 @@ export type SignKind =
   | 'hazard'
   /** Сектор распаха гермодвери на полу. */
   | 'arc'
-  /** Схема убежища. */
+  /** План убежища: тоже лист-картинка. */
   | 'scheme'
   /** Зарубки-счёт на стене. */
   | 'tally'
@@ -42,7 +45,7 @@ export interface SignDef {
   ph: number;
   /** Ширина на стене по умолчанию, м (высота — по пропорции). */
   w: number;
-  /** Вариант оформления: цвет шапки плаката, рисунок, вид знака. */
+  /** Вариант оформления: цвет таблички, вид шкалы или знака. */
   style?: number;
 }
 
@@ -63,6 +66,17 @@ export const PL_H = 17;
 
 function stencil(id: string, text: string, w: number, kind: 'stencil' | 'brush' = 'stencil'): SignDef {
   return { id, kind, lines: [text], pw: Math.ceil(text.length * ADV * ST_H + 10), ph: Math.ceil(ST_H * 1.3), w };
+}
+
+/**
+ * Лист-картинка в атласе: 400×600 (плакат 2:3; план убежища — тот же лист на боку). На стене плакат
+ * шириной 62 см — как настоящий лист 60×90: с двух шагов читаются и заголовок, и подписи.
+ */
+const SHEET_PW = 400;
+const SHEET_PH = 600;
+
+function sheet(id: string, lines: readonly string[]): SignDef {
+  return { id, kind: 'poster', lines, pw: SHEET_PW, ph: SHEET_PH, w: 0.62 };
 }
 
 function plate(id: string, lines: readonly string[], w: number, style = 0): SignDef {
@@ -139,13 +153,18 @@ const DEFS: readonly SignDef[] = [
   plate('pl_modes', ['РЕЖИМЫ ВЕНТИЛЯЦИИ', 'I   ЧИСТАЯ ВЕНТИЛЯЦИЯ', 'II  ФИЛЬТРОВЕНТИЛЯЦИЯ', 'III ПОЛНАЯ ИЗОЛЯЦИЯ'], 0.55),
   plate('pl_rules', ['ПРАВИЛА ПОВЕДЕНИЯ', 'В УБЕЖИЩЕ', '1. НЕ ШУМЕТЬ', '2. НЕ КУРИТЬ', '3. СЛУШАТЬ КОМЕНДАНТА'], 0.5),
   plate('pl_fireext', ['ОГНЕТУШИТЕЛЬ'], 0.3, 1),
-  // ── Плакаты ГО: шапка, три картинки с подписями ──
-  { id: 'poster_alarm', kind: 'poster', lines: ['ПО СИГНАЛУ', '«ВОЗДУШНАЯ ТРЕВОГА»'], pw: 192, ph: 256, w: 0.62, style: 0 },
-  { id: 'poster_mask', kind: 'poster', lines: ['УМЕЙ ПОЛЬЗОВАТЬСЯ', 'ПРОТИВОГАЗОМ'], pw: 192, ph: 256, w: 0.62, style: 1 },
-  { id: 'poster_shelter', kind: 'poster', lines: ['ПРАВИЛА ПОВЕДЕНИЯ', 'В УБЕЖИЩЕ'], pw: 192, ph: 256, w: 0.62, style: 2 },
-  { id: 'poster_aid', kind: 'poster', lines: ['ПЕРВАЯ ПОМОЩЬ', 'ПОСТРАДАВШИМ'], pw: 192, ph: 256, w: 0.62, style: 3 },
+  // ── Плакаты ГО и план убежища: листы-картинки (строки — заголовок листа, для справки и тестов) ──
+  sheet('poster_alarm', ['ПО СИГНАЛУ', '«ВОЗДУШНАЯ ТРЕВОГА»']),
+  sheet('poster_mask', ['УМЕЙ ПОЛЬЗОВАТЬСЯ', 'ПРОТИВОГАЗОМ']),
+  sheet('poster_shelter', ['ПРАВИЛА ПОВЕДЕНИЯ', 'В УБЕЖИЩЕ']),
+  sheet('poster_aid', ['ПЕРВАЯ МЕДИЦИНСКАЯ', 'ПОМОЩЬ']),
+  sheet('poster_signals', ['СИГНАЛЫ', 'ГРАЖДАНСКОЙ ОБОРОНЫ']),
+  sheet('poster_protect', ['СРЕДСТВА', 'ИНДИВИДУАЛЬНОЙ ЗАЩИТЫ']),
+  sheet('poster_nuclear', ['ЯДЕРНЫЙ ВЗРЫВ', 'ПОРАЖАЮЩИЕ ФАКТОРЫ']),
+  sheet('poster_refuge', ['УБЕЖИЩЕ', 'НАДЕЖНАЯ ЗАЩИТА']),
+  sheet('poster_dose', ['ДОЗИМЕТРИЧЕСКИЙ', 'КОНТРОЛЬ']),
+  { id: 'scheme', kind: 'scheme', lines: ['ПЛАН УБЕЖИЩА'], pw: SHEET_PH, ph: SHEET_PW, w: 0.8 },
   // ── Приборы и прочее ──
-  { id: 'scheme', kind: 'scheme', lines: ['ПЛАН УБЕЖИЩА'], pw: 208, ph: 144, w: 0.8 },
   { id: 'dial_a', kind: 'dial', lines: [], pw: 96, ph: 96, w: 0.12, style: 0 },
   { id: 'dial_b', kind: 'dial', lines: [], pw: 96, ph: 96, w: 0.12, style: 1 },
   { id: 'dial_c', kind: 'dial', lines: [], pw: 96, ph: 96, w: 0.12, style: 2 },
@@ -192,6 +211,8 @@ export function digitRect(d: number): { u0: number; v0: number; u1: number; v1: 
 }
 
 /** Плакаты, которые вешают в коридорах и отсеках. */
-export const POSTERS: readonly string[] = ['poster_alarm', 'poster_mask', 'poster_shelter', 'poster_aid'];
+export const POSTERS: readonly string[] = ['poster_alarm', 'poster_mask', 'poster_shelter', 'poster_aid', 'poster_signals', 'poster_protect', 'poster_nuclear', 'poster_refuge', 'poster_dose'];
+/** Листы, которые берутся из файлов-картинок assets/posters/<id>.webp: все плакаты и план убежища. */
+export const SHEETS: readonly string[] = [...POSTERS, 'scheme'];
 /** Надписи от руки — только там, где уже неладно. */
 export const BRUSH: readonly string[] = ['br_noopen', 'br_below', 'br_nolight', 'br_quiet', 'br_back', 'br_count'];

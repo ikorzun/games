@@ -450,6 +450,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     collapses,
     variants,
     nav,
+    sheets: [...chunks.values()].filter((c) => !c.hidden).flatMap((c) => c.mb.sheets),
     layout,
   };
 }

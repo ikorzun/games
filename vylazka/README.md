@@ -5,7 +5,8 @@
 вросли домашние комнаты, и ищет вещи из воспоминаний; место время от времени рассыпается и выбрасывает
 в другое. Кнопки действия нет: игрок ходит, смотрит и светит. Язык по умолчанию — английский.
 Движок — three.js (WebGL2), мир собирается кодом. Замысел — `docs/vylazka/untitled_session.md`,
-числа и устройство — `docs/vylazka/design.md`.
+числа и устройство — `docs/vylazka/design.md`. Плакаты на стенах убежища — настоящие листы-картинки
+(`assets/posters/`, там же README; запросы, по которым они сделаны, — `docs/vylazka/posters.md`).
 
 **Состояние:** ядро (сессия, скачки, вещи), три карманных пространства (белое нигде, луг, кукольный
 домик), особые помещения, кинескоп и рендер мира точками (как 3D-скан: в луче фонаря точки стоят
@@ -21,6 +22,7 @@ npm run dev                # dev-сервер, http://localhost:5175
 npm run typecheck && npm test
 npm run build              # dist/ + проверка архива (scripts/check_dist.mjs)
 npm run build:playgama     # dist-playgama/ с Playgama Bridge SDK
+npm run build:single       # dist/ одной страницей (dist-single/untitled_session.html): код, шрифты и плакаты вшиты
 npm run smoke              # смоук сборки в Chromium (программный WebGL)
 npm run smoke -- --dist dist-playgama
 npm run smoke -- --shell   # в chromium-headless-shell: тот же браузер, что на CI
@@ -180,7 +182,9 @@ src/
 (почему вещь видна или нет), `memory()` (искомое воспоминание), `reveal()` (поторопить следующее),
 `gotoMemory()`, `gotoPocket('exit' | 'focus', distance?)` (в карманном пространстве встать перед красным проёмом выхода или перед макетом в домике и посмотреть на него), `jump(to, style)` (начать скачок), `gotoFx(fx)` (встать в помещение с особенностью
 `strobe`, `dark`, `wire`, `thin`), `finish()` (считать всё вспомненным), `calmFlash(on)` (мягкие
-вспышки), `probeColor()` (средний цвет кадра и доля красных точек), `missingKeys()`, `showcase()`.
+вспышки), `probeColor()` (средний цвет кадра и доля красных точек), `missingKeys()`, `showcase()`,
+`sheets()` (какие листы-плакаты загружены), `sheetMarks()` (где они висят), `gotoSheet(i, distance?)` (встать
+перед листом), `sheetContrast(id)` (есть ли в клетке листа рисунок: у пустого листа около 10, у плаката — десятки).
 В `state()` добавился `pocketInfo` — `{ age, stay, done, fade, exit, focus, blanks }`: сколько прошло и
 сколько отпущено в карманном пространстве, сделало ли оно своё дело, насколько редеет (1 → 0,2), где
 выход и главный предмет (макет), какие вещи — белые болванки; вне пространства `null`. Строка-вспышка

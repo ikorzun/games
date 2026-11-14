@@ -2,7 +2,7 @@
 import type { Vec3 } from '../core/types';
 import type { GenLayout } from '../gen/layout';
 import type { Aabb, ColliderSet } from './colliders';
-import type { MeshData } from './kit';
+import type { MeshData, SheetMark } from './kit';
 
 /** Кусок геометрии, рисуемый одним вызовом. Ярусы — чтобы не рисовать этажи, которых не видно. */
 export interface LevelChunk {
@@ -105,6 +105,8 @@ export interface BuiltLevel {
   collapses: CollapseSpec[];
   variants: RoomVariant[];
   nav: NavNode[];
+  /** Где висят листы-картинки: плакаты и планы убежища (только в видимых с самого начала частях уровня). */
+  sheets: SheetMark[];
   /** План, по которому собран уровень (у тестового уровня его нет). */
   layout: GenLayout | null;
 }

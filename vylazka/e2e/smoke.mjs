@@ -413,6 +413,26 @@ async function scenarioGen(browser, baseUrl) {
     check(`ярус ${tier + 1}: примета «${id}» найдена, игрок стоит на полу яруса, в кадре светло`, ok && Math.abs(st.pos[1] + tier * 4.5) < 0.01 && st.onGround && Math.max(...g) > 40, `y = ${st.pos[1].toFixed(2)}, максимум ${Math.max(...g).toFixed(0)}`);
     check(`ярус ${tier + 1}: рисуется не весь уровень`, info.visible < info.chunks, `видно ${info.visible} из ${info.chunks}, ${info.calls} вызовов`);
   }
+
+  // ── Плакаты: настоящие листы-картинки, а не рисунки кодом ──
+  // Картинки приходят отдельными файлами после старта: ждём по условию, а не по времени.
+  await page.waitForFunction(() => window.__vz.sheets().length >= 10, null, { timeout: 30000 }).catch(() => {});
+  const sheets = await vz(page, () => window.__vz.sheets());
+  const SHEETS = ['poster_aid', 'poster_alarm', 'poster_dose', 'poster_mask', 'poster_nuclear', 'poster_protect', 'poster_refuge', 'poster_shelter', 'poster_signals', 'scheme'];
+  check('плакаты и план убежища — картинки из файлов: все десять листов загружены', SHEETS.every((id) => sheets.includes(id)) && sheets.length === SHEETS.length, sheets.join(', '));
+  // В клетке каждого листа в атласе — рисунок: разброс яркости у плаката в разы больше, чем у пустого листа (около 10).
+  const contrast = await vz(page, (ids) => ids.map((id) => [id, Math.round(window.__vz.sheetContrast(id))]), SHEETS);
+  check('в атласе на месте каждого листа — рисунок, а не пустая бумага', contrast.every(([, c]) => c > 25), contrast.map(([id, c]) => `${id} ${c}`).join(', '));
+  const marks = await vz(page, () => window.__vz.sheetMarks());
+  const kinds = new Set(marks.map((m) => m.id));
+  check('на уровне висят плакаты: не меньше десяти листов, не меньше шести разных, у каждого есть картинка', marks.length >= 10 && kinds.size >= 6 && [...kinds].every((id) => sheets.includes(id)), `${marks.length} листов, разных ${kinds.size}`);
+  // Перед плакатом: лист в кадре, луч на нём — в кадре светло.
+  const first = marks.findIndex((m) => m.id.startsWith('poster_'));
+  const stood = await vz(page, (i) => window.__vz.gotoSheet(i, 1.3), first);
+  st = await vz(page, () => window.__vz.step(40));
+  const gp = await vz(page, () => window.__vz.probe());
+  check('к плакату можно подойти: игрок стоит перед листом, в кадре светло', stood && st.onGround && Math.max(...gp) > 40, `лист ${marks[first]?.id}, ярче всего ${Math.max(...gp).toFixed(0)}`);
+  if (wantShots) await page.screenshot({ path: join(OUT, 'gen_poster.png') });
   check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
   await context.close();
 }
@@ -1608,6 +1628,13 @@ async function scenarioFrame(browser, baseUrl) {
   }
   st = await fstate();
   check('тряска мышью оживляет фонарь и без зажатой кнопки', st.light.state === 'on', `состояние ${st.light.state}, прогресс ${st.light.revive.toFixed(2)}`);
+
+  // Плакаты в песочнице: у страницы здесь нет своего адреса, и картинка с того же сервера считается
+  // чужой. Если её нарисовать на canvas без разрешения сервера, с него не снять текстуру — пропадут все
+  // надписи. Проверяем, что листы загрузились и атлас читается.
+  await frame.waitForFunction(() => window.__vz.sheets().length >= 10, null, { timeout: 30000 }).catch(() => {});
+  const sandboxSheets = await frame.evaluate(() => ({ ids: window.__vz.sheets(), mask: Math.round(window.__vz.sheetContrast('poster_mask')), plan: Math.round(window.__vz.sheetContrast('scheme')) }));
+  check('в песочнице плакаты загружены и стоят в атласе: canvas не «испачкан», надписи целы', sandboxSheets.ids.length === 10 && sandboxSheets.mask > 25 && sandboxSheets.plan > 25, JSON.stringify(sandboxSheets));
 
   // Заставка в песочнице: без хранилища и без ?lang игра английская, что бы ни говорил браузер.
   const page2 = await context.newPage();
