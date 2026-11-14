@@ -334,7 +334,19 @@ async function scenarioPlay(browser, baseUrl) {
   // Потеря графического контекста.
   await vz(page, () => window.__vz.freeze(false));
   await vz(page, () => window.__vz.loseContext(250));
-  await sleep(1200);
+  // Контекст возвращается через четверть секунды, но пересборка шейдеров на программном рендере идёт
+  // от долей секунды до нескольких: ждём самого события (пауза игрока осталась, причины «context»
+  // уже нет), а не срок — на медленной машине фиксированной секунды не хватало.
+  await page
+    .waitForFunction(
+      () => {
+        const r = window.__vz.state().pauseReasons;
+        return r.includes('user') && !r.includes('context');
+      },
+      null,
+      { timeout: 30000 },
+    )
+    .catch(() => undefined);
   st = await state(page);
   check('потеря контекста ставит паузу, после восстановления её можно снять', st.pauseReasons.includes('context') === false && st.paused === true, JSON.stringify(st.pauseReasons));
   await page.click('.vz-overlay');
@@ -646,8 +658,18 @@ async function scenarioSession(browser, baseUrl) {
   let b0 = brief(st);
   await pressKeys();
   check('клавиши E, R, Tab ничего не делают: ни движения, ни паузы, ни действий', brief(await state(page)) === b0, `${b0} → ${brief(await state(page))}`);
-  await vz(page, () => window.__vz.reveal());
-  st = await vz(page, () => window.__vz.step(5));
+  // Вызвать воспоминание и тем же обращением к странице прочитать вспышку. Она горит 5,2 с настоящего
+  // времени, а между вызовом и чтением у теста бывают десятки обращений: на медленной машине (CI)
+  // вспышка успевала погаснуть раньше, чем её читали.
+  const revealNow = () =>
+    vz(page, () => {
+      window.__vz.reveal();
+      const s = window.__vz.step(5);
+      const el = document.querySelector('.vz-hud__flash');
+      return { st: s, flash: { on: el.classList.contains('is-on'), text: el.textContent } };
+    });
+  let revealed = await revealNow();
+  st = revealed.st;
   b0 = brief(st);
   await pressKeys();
   check('и когда воспоминание уже пришло, они ничего не берут и не снимают', brief(await state(page)) === b0 && (await state(page)).session.memories.some((m) => m.state === 'active'));
@@ -656,12 +678,12 @@ async function scenarioSession(browser, baseUrl) {
   let shot = 0;
   for (let k = 0; k < 5; k++) {
     if (k > 0) {
-      await vz(page, () => window.__vz.reveal());
-      st = await vz(page, () => window.__vz.step(5));
+      revealed = await revealNow();
+      st = revealed.st;
     }
     const mem = await vz(page, () => window.__vz.memory());
     const active = st.session.memories.find((m) => m.state === 'active');
-    const flash = await page.evaluate(() => ({ on: document.querySelector('.vz-hud__flash').classList.contains('is-on'), text: document.querySelector('.vz-hud__flash').textContent }));
+    const flash = revealed.flash;
     const rows = await page.$$eval('.vz-hud__goal', (els) => els.map((e) => ({ text: e.textContent, done: e.classList.contains('is-done') })));
     const flashOk = !!active && flash.on && flash.text === memText(RU, active.id, 'flash');
     const rowsOk = rows.length === k + 1 && rows.at(-1).text === memText(RU, active?.id, 'task') && !rows.at(-1).done;
