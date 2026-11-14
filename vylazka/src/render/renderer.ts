@@ -192,6 +192,13 @@ export function verticalFov(aspect: number): number {
  */
 const SCAN = { perLight: 24, max: 3.5, hold: 7, lodDist: 3.5, far: 28, sow: 45, size: 0.7, maxPx: 0.013, follow: 8, smear: 0.55 } as const;
 
+/**
+ * Проекции — картинки из света (world/flat.ts). washFrom…washTo — при каком свете в точке картинка
+ * начинает выгорать и когда пропадает совсем (мерка — освещённость луча фонаря: в его середине на
+ * трёх метрах около 0,6, в ореоле — 0,1, в дальнем разливе — 0,015); gain — её яркость.
+ */
+const SLIDE = { washFrom: 0.012, washTo: 0.11, gain: 0.085 } as const;
+
 /** Сколько материалов помещается в массивы шейдера мира (uMatA, uMatB, uMatBase). */
 const MAT_SLOTS = 48;
 /** Сторона текстуры света по клеткам: столько клеток по стороне у сетки генератора. */
@@ -246,7 +253,13 @@ export class GameRenderer {
   private focusTime = -1;
   private shadowRT: THREE.WebGLRenderTarget | null = null;
   private readonly worldMat: THREE.ShaderMaterial;
+  /** Проекции (world/flat.ts): тот же шейдер мира с веткой SLIDE — картинка из света, которую свет смывает. */
+  private readonly slideMat: THREE.ShaderMaterial;
+  /** Отладка: проекции скрыты (чтобы сравнить кадр с ними и без них). */
+  debugSlidesOff = false;
   private signsTex: THREE.Texture;
+  /** Атлас картинок выставочных экранов (render/screen_images.ts). */
+  private screensTex: THREE.Texture;
   private readonly depthMat: THREE.ShaderMaterial;
   private readonly postMat: THREE.ShaderMaterial;
   private readonly hazeMat: THREE.ShaderMaterial;
@@ -358,6 +371,9 @@ export class GameRenderer {
     // Атлас надписей и плакатов: пока пустой белый лист, рисуется отдельно (setSigns).
     this.signsTex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.signsTex.needsUpdate = true;
+    // Атлас экранов: пока не нарисован — тёмно-серый тексель.
+    this.screensTex = new THREE.DataTexture(new Uint8Array([40, 40, 44, 255]), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    this.screensTex.needsUpdate = true;
 
     this.lightU = {
       uLightPosV: { value: new THREE.Vector3() },
@@ -386,6 +402,7 @@ export class GameRenderer {
         uGrime: { value: grimeTex },
         uDetail: { value: detailTex },
         uSigns: { value: this.signsTex },
+        uScreens: { value: this.screensTex },
         uDecay: { value: 0.3 },
         uTierDrop: { value: 4.5 },
         uLightRightV: { value: new THREE.Vector3(1, 0, 0) },
@@ -406,12 +423,15 @@ export class GameRenderer {
         uScan: { value: new THREE.Vector4(0, SCAN.perLight, SCAN.max, 0) },
         uScanFade: { value: 1 },
         uScanRange: { value: new THREE.Vector2(4, 15) },
+        uSlide: { value: new THREE.Vector4(SLIDE.washFrom, SLIDE.washTo, SLIDE.gain, 0) },
         uMatA: { value: matA },
         uMatB: { value: matB },
         uMatBase: { value: Array.from({ length: MAT_SLOTS }, (_, i) => new THREE.Vector3(...(atlas.base[i] ?? [0.5, 0.5, 0.5]))) },
       },
     });
     this.depthMat = new THREE.ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, side: THREE.BackSide, colorWrite: false });
+    // Проекции: всё общее — теми же uniform-объектами, что у мира.
+    this.slideMat = this.worldLike();
     // Красная сетка: распад берёт у мира (одни и те же uniform-объекты), яркость своя.
     this.wireMat = new THREE.ShaderMaterial({
       vertexShader: WIRE_VERT,
@@ -738,6 +758,8 @@ export class GameRenderer {
     }
     this.worldMat.defines = { ATLAS_ROWS, ...(q.shadow > 0 ? { SHADOWS: '' } : {}), ...(q.detail ? { DETAIL: '' } : {}), ...(this.debugScanOff ? {} : { SCAN: '' }) };
     this.worldMat.needsUpdate = true;
+    this.slideMat.defines = { ...this.worldMat.defines, SLIDE: '' };
+    this.slideMat.needsUpdate = true;
     for (const t of this.things.values()) {
       t.mat.defines = { ...this.worldMat.defines };
       t.mat.needsUpdate = true;
@@ -856,6 +878,15 @@ export class GameRenderer {
       this.chunks.push(mesh);
       this.scene.add(mesh);
       this.clouds.add(mesh, chunk.mesh);
+      if (chunk.slides) {
+        // Проекции куска — его дочерняя сетка: видна вместе с ним. Слой 1: тени не отбрасывает; точек
+        // на ней нет — она не вещество, а свет.
+        const slide = this.makeMesh(chunk.slides, chunk.tierMin, chunk.tierMax);
+        slide.material = this.slideMat;
+        slide.layers.set(1);
+        mesh.add(slide);
+        mesh.userData.slide = slide;
+      }
     }
   }
 
@@ -880,6 +911,7 @@ export class GameRenderer {
     this.clouds.remove(m);
     const w = m.userData.wire as THREE.LineSegments | undefined;
     if (w) w.geometry.dispose();
+    (m.userData.slide as THREE.Mesh | undefined)?.geometry.dispose();
     this.scene.remove(m);
     m.geometry.dispose();
   }
@@ -920,11 +952,19 @@ export class GameRenderer {
     }
   }
 
+  /**
+   * Ещё один материал мира: те же шейдеры и те же uniform-объекты (словарь свой — в нём можно подменить
+   * отдельный uniform). Не clone(): тот копирует каждую фактуру и вектор, а на фактурах целей отрисовки
+   * (uSpot) three.js пишет предупреждение в консоль — на каждый материал.
+   */
+  private worldLike(): THREE.ShaderMaterial {
+    return new THREE.ShaderMaterial({ vertexShader: WORLD_VERT, fragmentShader: WORLD_FRAG, uniforms: { ...this.worldMat.uniforms } });
+  }
+
   /** Добавить вещь: геометрия вокруг начала координат. Возвращает номер для setThing и removeThing. */
   addThing(data: MeshData, seed = 0): number {
-    const mat = this.worldMat.clone();
     // Всё общее — теми же uniform-объектами, что у мира: свет, туман, фактуры обновляются разом.
-    for (const k of Object.keys(this.worldMat.uniforms)) mat.uniforms[k] = this.worldMat.uniforms[k]!;
+    const mat = this.worldLike();
     mat.uniforms.uThing = { value: new THREE.Vector4(0, 0, 0, (seed % 97) * 1.37) };
     mat.defines = { ...this.worldMat.defines };
     const mesh = this.makeMesh(data, 0, 0);
@@ -1010,6 +1050,20 @@ export class GameRenderer {
     this.worldMat.uniforms.uSigns!.value = tex;
   }
 
+  /** Атлас картинок выставочных экранов, нарисованный на canvas (render/screen_images.ts). */
+  setScreens(canvas: HTMLCanvasElement): void {
+    this.screensTex.dispose();
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.generateMipmaps = true;
+    // Прислонённый экран виден под углом: без анизотропии картинка на нём мылится.
+    tex.anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy());
+    this.screensTex = tex;
+    this.worldMat.uniforms.uScreens!.value = tex;
+  }
+
   /** Показать или скрыть именованный чанк (обвал обрушился, комната сменила вариант). */
   setChunkVisible(id: string, on: boolean): void {
     if (on) this.hiddenIds.delete(id);
@@ -1074,6 +1128,8 @@ export class GameRenderer {
       const far = sphere ? cam.position.distanceTo(sphere.center) - sphere.radius > this.cullDistance : false;
       const hidden = m.userData.id !== undefined && this.hiddenIds.has(m.userData.id as string);
       m.visible = !far && !hidden && (m.userData.tierMax as number) >= lo && (m.userData.tierMin as number) <= hi;
+      const slide = m.userData.slide as THREE.Mesh | undefined;
+      if (slide) slide.visible = !this.debugSlidesOff;
     }
     for (const m of this.pocket) m.visible = true;
 
@@ -1134,6 +1190,7 @@ export class GameRenderer {
     right.transformDirection(cam.matrixWorldInverse);
     upL.transformDirection(cam.matrixWorldInverse);
     wu.uDecay!.value = v.decay;
+    (wu.uSlide!.value as THREE.Vector4).w = v.time;
     wu.uTierDrop!.value = this.tierDrop;
     wu.uScanFade!.value = v.scanFade;
     (wu.uScanRange!.value as THREE.Vector2).set(v.scanRange[0], v.scanRange[1]);
@@ -1402,8 +1459,8 @@ export class GameRenderer {
    * points — сколько точек-сплатов отдано видеокарте в прошлом кадре, clouds — у скольких сеток есть
    * облака точек, cells — сколько клеток с точками сейчас живо (у сеток рядом с игроком).
    */
-  info(): { calls: number; triangles: number; width: number; height: number; quality: Quality; programs: number; chunks: number; visible: number; points: number; clouds: number; cells: number } {
-    return { calls: this.lastCalls, triangles: this.lastTris, width: this.width, height: this.height, quality: this.quality, programs: this.renderer.info.programs?.length ?? 0, chunks: this.chunks.length, visible: this.chunks.filter((m) => m.visible).length, points: this.clouds.drawn, clouds: this.clouds.count, cells: this.clouds.cells };
+  info(): { calls: number; triangles: number; width: number; height: number; quality: Quality; programs: number; chunks: number; visible: number; points: number; clouds: number; cells: number; slides: number } {
+    return { calls: this.lastCalls, triangles: this.lastTris, width: this.width, height: this.height, quality: this.quality, programs: this.renderer.info.programs?.length ?? 0, chunks: this.chunks.length, visible: this.chunks.filter((m) => m.visible).length, points: this.clouds.drawn, clouds: this.clouds.count, cells: this.clouds.cells, slides: this.chunks.filter((m) => m.userData.slide !== undefined).length };
   }
 
   /**

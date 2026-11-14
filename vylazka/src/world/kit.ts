@@ -89,6 +89,14 @@ export class MeshBuilder {
     return i;
   }
 
+  /** Вершина с явными uv (у проекций uv — место внутри картинки, а не метры по стене). */
+  vertexUv(p: Vec3, n: Vec3, mat: number, tint: Vec3, ao: number, uv: readonly [number, number]): number {
+    const i = this.vertex(p, n, mat, tint, ao);
+    this.uvs[i * 2] = uv[0];
+    this.uvs[i * 2 + 1] = uv[1];
+    return i;
+  }
+
   /**
    * Четырёхугольник с явными uv (надписи и плакаты: uv указывает в атлас, а не в мир).
    * Обход p0→p1→p2→p3 — против часовой с лица.

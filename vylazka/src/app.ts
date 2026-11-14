@@ -23,6 +23,7 @@ import { DesktopInput } from './player/input_desktop';
 import { MotionSensor } from './player/motion';
 import { GameRenderer } from './render/renderer';
 import { loadSheets } from './render/poster_images';
+import { drawScreens, loadScreens } from './render/screen_images';
 import { drawSigns } from './render/signs_atlas';
 import type { Sheets } from './render/signs_atlas';
 import type { Quality } from './render/renderer';
@@ -108,6 +109,8 @@ export class App {
   sheetIds: string[] = [];
   /** Атлас надписей, как он сейчас нарисован (для проверок: что в клетке листа действительно картинка). */
   signsCanvas: HTMLCanvasElement | null = null;
+  /** Какие картинки выставочных экранов загрузились (остальные экраны показывают «нет сигнала»). */
+  screenIds: string[] = [];
   /** Подсказка из кукольного домика: в каком помещении лежит искомая вещь (до тех пор, пока её не вспомнили или не «забыли»). */
   private mapHint: { memory: string; room: string } | null = null;
 
@@ -206,6 +209,24 @@ export class App {
       this.sheetIds = Object.keys(loaded).sort();
       redraw();
     });
+    // Картинки выставочных экранов — свой атлас. Пока файлы не пришли, на экранах «нет сигнала».
+    let screens: Record<string, HTMLImageElement> = {};
+    const redrawScreens = (): void => {
+      let canvas = drawScreens(screens);
+      if (Object.keys(screens).length > 0 && tainted(canvas)) {
+        console.warn('[vylazka] картинки экранов не удалось взять в атлас: сервер не разрешает читать картинки');
+        screens = {};
+        this.screenIds = [];
+        canvas = drawScreens();
+      }
+      renderer.setScreens(canvas);
+    };
+    redrawScreens();
+    void loadScreens().then((loaded) => {
+      screens = loaded;
+      this.screenIds = Object.keys(loaded).sort();
+      redrawScreens();
+    });
     renderer.onContextLost = () => this.lifecycle.set('context', true);
     renderer.onContextRestored = () => {
       this.lifecycle.set('context', false);
@@ -303,7 +324,7 @@ export class App {
         this.game.env = pocket.env;
         this.game.renderer.cullDistance = 400;
       } else {
-        this.level = name === 'show' ? buildShowcase(this.params.get('props')?.split(',') ?? null) : buildTestLevel();
+        this.level = name === 'show' ? buildShowcase(this.params.get('props')?.split(',') ?? null, this.params.get('flat') === '1') : buildTestLevel();
         this.game.loadLevel(this.level, null);
       }
     } else {

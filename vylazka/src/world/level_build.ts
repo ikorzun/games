@@ -7,6 +7,7 @@ import type { Vec3 } from '../core/types';
 import { CEIL_H, DX, DZ, GRID, STAIR_CELLS, TIER_DROP } from '../gen/layout';
 import type { GenLayout, GenRoom, RoomType, WorldKind } from '../gen/layout';
 import { ColliderSet } from './colliders';
+import type { FlatMark } from './flat';
 import { doorSign, furnishRoom } from './furnish';
 import { ROOM_LABEL, SIGN } from './signs';
 import type { CellInfo, RoomCtx, Slot } from './furnish';
@@ -132,6 +133,8 @@ function styleFor(room: GenRoom, world: WorldKind): WallStyle {
 
 interface ChunkBuild {
   mb: MeshBuilder;
+  /** Проекции этого куска — картинки из света; отдельная сетка. */
+  sl: MeshBuilder;
   tierMin: number;
   tierMax: number;
   id?: string;
@@ -171,7 +174,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     let c = chunks.get(key);
     if (!c) {
       const well = room.type === 'stairwell';
-      c = { mb: new MeshBuilder(), tierMin: well ? room.tier - (lowerWells.has(room.id) ? 1 : 0) : room.tier, tierMax: well ? room.tier + (upperWells.has(room.id) ? 1 : 0) : room.tier };
+      c = { mb: new MeshBuilder(), sl: new MeshBuilder(), tierMin: well ? room.tier - (lowerWells.has(room.id) ? 1 : 0) : room.tier, tierMax: well ? room.tier + (upperWells.has(room.id) ? 1 : 0) : room.tier };
       chunks.set(key, c);
     }
     return c;
@@ -361,7 +364,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     const alongX = gridAt(c.tier, c.x + 1, c.z) !== undefined && gridAt(c.tier, c.x - 1, c.z) !== undefined;
     for (const rot of alongX ? ([1, 3] as const) : ([0, 2] as const)) collapse(new Xf(mb, tmp, wx, y, wz, rot), CEIL_H, c.x * 53 + c.z * 29 + rot);
     const id = `collapse:${i}`;
-    chunks.set(id, { mb, tierMin: c.tier, tierMax: c.tier, id, hidden: true });
+    chunks.set(id, { mb, sl: new MeshBuilder(), tierMin: c.tier, tierMax: c.tier, id, hidden: true });
     collapses.push({ id, tier: c.tier, center: [wx, y, wz], boxes: tmp.boxes.slice() });
   });
 
@@ -369,6 +372,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
   // У провала, в воде и под будущим завалом у стен пусто: там нужен проход по карнизу.
   const spots: ItemSpot[] = [];
   const landmarks: Landmark[] = [];
+  const flats: FlatMark[] = [];
   // Комната-аномалия: одно помещение нижнего яруса получает два варианта обстановки. Находок и целей
   // в ней нет — иначе после подмены они повисли бы в воздухе.
   const variants: RoomVariant[] = [];
@@ -378,27 +382,30 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
       ? layout.rooms.filter((r) => r.tier === lastTier && VARIANT_ROOMS.has(r.type) && r.cells.length >= 2 && !hz.gasRooms.includes(r.id)).sort((a, b) => b.cells.length - a.cells.length || a.id - b.id)[0]
       : undefined;
 
-  /** Слоты и клетки помещения; геометрия идёт в mbFor, преграды — в colSet. */
-  const roomCtx = (room: GenRoom, mbFor: (x: number, z: number) => MeshBuilder, colSet: ColliderSet, salt: number, outSpots: ItemSpot[], outMarks: Landmark[]): RoomCtx => {
+  // Откуда начинается вылазка: рядом с началом обманок не ставим.
+  const startRoom = layout.rooms[layout.entranceRoom]!;
+  const start = { cx: startRoom.cells[0]![0], cz: startRoom.cells[0]![1], tier: startRoom.tier };
+  /** Слоты и клетки помещения; геометрия идёт в mbFor (вещество и проекции), преграды — в colSet. */
+  const roomCtx = (room: GenRoom, mbFor: (x: number, z: number) => { mb: MeshBuilder; sl: MeshBuilder }, colSet: ColliderSet, salt: number, outSpots: ItemSpot[], outMarks: Landmark[], outFlats: FlatMark[]): RoomCtx => {
     const sh = shells[room.tier]!;
     const y = tierFloor(room.tier);
     const slots: Slot[] = [];
     const cells: CellInfo[] = [];
     for (const [x, z] of room.cells) {
-      const mb = mbFor(x, z);
+      const { mb, sl } = mbFor(x, z);
       const sx = x - HALF;
       const sz = z - HALF;
       const kinds = [0, 1, 2, 3].map((d) => sh.edge(sx, sz, d));
       const neighbours = [0, 1, 2, 3].map((d) => sh.get(sx + DX[d]!, sz + DZ[d]!));
       // Проходом считается дверь или открытое ребро в другое помещение.
       const doors = kinds.filter((k, d) => k === 'door' || (k === 'open' && neighbours[d] !== undefined && neighbours[d]!.room !== room.id)).length;
-      cells.push({ cx: x, cz: z, xf: new Xf(mb, colSet, cellToWorld(x), y, cellToWorld(z), 0), doors });
+      cells.push({ cx: x, cz: z, xf: new Xf(mb, colSet, cellToWorld(x), y, cellToWorld(z), 0, sl), doors });
       const hazard = hazardCells.has(`${room.tier},${x},${z}`);
       for (let d = 0; d < 4; d++) {
         if (kinds[d] !== 'wall') continue;
         const inward = ((d + 2) % 4) as 0 | 1 | 2 | 3;
         const rot = ROT_FACING[inward]!;
-        const xf = new Xf(mb, colSet, cellToWorld(x) + DX[d]! * (CELL / 2 - T), y, cellToWorld(z) + DZ[d]! * (CELL / 2 - T), rot);
+        const xf = new Xf(mb, colSet, cellToWorld(x) + DX[d]! * (CELL / 2 - T), y, cellToWorld(z) + DZ[d]! * (CELL / 2 - T), rot, sl);
         // Локальная ось +x слота в мире и концы стены: есть ли там перпендикулярная стена или проход.
         const ax = xf.pt(1, 0, 0);
         const along = Math.abs(ax[0] - xf.ox) > 0.5 ? (ax[0] > xf.ox ? 0 : 2) : ax[2] > xf.oz ? 1 : 3;
@@ -408,13 +415,13 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
       }
     }
     // Свой ГСЧ у каждого помещения: правка одной комнаты не сдвигает остальные.
-    return { room, world, seed: layout.seed, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d + salt)), h: CEIL_H, slots, cells, spots: outSpots, landmarks: outMarks };
+    return { room, world, seed: layout.seed, start, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d + salt)), h: CEIL_H, slots, cells, spots: outSpots, landmarks: outMarks, flats: outFlats };
   };
 
   for (const room of layout.rooms) {
     if (lowerWells.has(room.id)) continue;
     if (room !== variantRoom) {
-      furnishRoom(roomCtx(room, (x, z) => chunkFor(room, x, z).mb, col, 0, spots, landmarks));
+      furnishRoom(roomCtx(room, (x, z) => chunkFor(room, x, z), col, 0, spots, landmarks, flats));
       continue;
     }
     // Два варианта: обстановка каждого — в своём чанке и своей группе коллайдеров.
@@ -422,9 +429,11 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     const ids = names.map((n) => `variant:${room.id}:${n}`);
     names.forEach((_, i) => {
       const mb = new MeshBuilder();
+      const sl = new MeshBuilder();
       const tmp = new ColliderSet();
-      furnishRoom(roomCtx(room, () => mb, tmp, i * 7919, [], []));
-      chunks.set(ids[i]!, { mb, tierMin: room.tier, tierMax: room.tier, id: ids[i]!, hidden: i === 1 });
+      // Плоские вещи варианта в общий список не идут: после подмены их там уже нет.
+      furnishRoom(roomCtx(room, () => ({ mb, sl }), tmp, i * 7919, [], [], []));
+      chunks.set(ids[i]!, { mb, sl, tierMin: room.tier, tierMax: room.tier, id: ids[i]!, hidden: i === 1 });
       for (const b of tmp.boxes) col.add({ ...b, group: ids[i]!, off: i === 1 });
     });
     let cx = 0;
@@ -487,7 +496,10 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
   const ent = layout.rooms[layout.entranceRoom]!;
   const [ex, ez] = ent.cells[0]!;
   const out: LevelChunk[] = [];
-  for (const c of chunks.values()) if (c.mb.triangleCount > 0) out.push({ mesh: c.mb.build(), tierMin: c.tierMin, tierMax: c.tierMax, ...(c.id ? { id: c.id } : {}), ...(c.hidden ? { hidden: true } : {}) });
+  for (const c of chunks.values()) {
+    if (c.mb.triangleCount === 0) continue;
+    out.push({ mesh: c.mb.build(), tierMin: c.tierMin, tierMax: c.tierMax, ...(c.id ? { id: c.id } : {}), ...(c.hidden ? { hidden: true } : {}), ...(c.sl.triangleCount > 0 ? { slides: c.sl.build() } : {}) });
+  }
   const stairs: StairLink[] = layout.stairs.map((s) => ({
     upperTier: s.upperTier,
     top: [cellToWorld(s.cx), tierFloor(s.upperTier), cellToWorld(s.cz)],
@@ -507,6 +519,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     variants,
     nav,
     sheets: [...chunks.values()].filter((c) => !c.hidden).flatMap((c) => c.mb.sheets),
+    flats,
     layout,
     world,
   };

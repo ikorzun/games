@@ -7,7 +7,7 @@
  *   npm run smoke:matrix                                             # + раскладка по матрице размеров, скриншоты в e2e/out/
  *   npm run smoke -- --url https://…                                 # опубликованная ссылка
  *
- * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --shell, --only play,gen,worlds,session,pockets,fear,audio,frame,touch,bridge,matrix.
+ * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --shell, --only play,gen,worlds,flats,session,pockets,fear,audio,frame,touch,bridge,matrix.
  * Симуляция в тестах заморожена и шагается через window.__vz: проверяется логика и вёрстка, а не
  * частота кадров (SwiftShader даёт 5–10 к/с). Качество задаётся параметром адреса, иначе по строке
  * видеокарты выбралось бы «низкое» и тень осталась бы непроверенной.
@@ -484,11 +484,12 @@ async function scenarioWorlds(browser, baseUrl) {
     check('после перезагрузки место запомнено', (await place()) === RU['ui.place.yellow'] && (await world()) === 'yellow', `«${await place()}», мир ${await world()}`);
     await page.click('.vz-overlay__opt--place');
     check('по кругу — снова убежище', (await place()) === RU['ui.place.shelter'] && (await world()) === 'shelter', `«${await place()}», мир ${await world()}`);
-    // На паузе места не сменить: кнопки нет.
+    // На паузе места не сменить: кнопки нет. Ждём не по сроку, а по делу: после смены места уровень
+    // пересобирается, и на медленной машине игра начинается позже.
     await page.click('.vz-overlay');
-    await sleep(300);
+    await page.waitForFunction(() => window.__vz.state().overlay === 'hidden' && window.__vz.state().paused === false, null, { timeout: 20000 }).catch(() => {});
     await page.keyboard.press('KeyP');
-    await sleep(300);
+    await page.waitForFunction(() => window.__vz.state().paused === true, null, { timeout: 10000 }).catch(() => {});
     st = await state(page);
     check('посреди вылазки место не сменить: на паузе кнопки «Место» нет', st.paused === true && !(await page.isVisible('.vz-overlay__opt--place')), `пауза ${st.paused}`);
     check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
@@ -566,6 +567,134 @@ async function scenarioWorlds(browser, baseUrl) {
     check('свет жёлтый: красного и зелёного заметно больше синего', color.r > color.b * 1.4 && color.g > color.b * 1.25, JSON.stringify(color));
     check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
     if (wantShots) await page.screenshot({ path: join(OUT, 'world_yellow.png') });
+    await context.close();
+  }
+}
+
+/** Средняя яркость середины кадра (сетка 32×18): столбцы 12–19, строки 5–12. */
+function centre(grid) {
+  let sum = 0;
+  let n = 0;
+  for (let r = 5; r <= 12; r++) {
+    for (let c = 12; c <= 19; c++) {
+      sum += grid[r * 32 + c];
+      n += 1;
+    }
+  }
+  return sum / n;
+}
+
+async function scenarioFlats(browser, baseUrl) {
+  section('Плоские вещи: картонки, проекции, выставочные экраны');
+
+  // Убежище: проекция поперёк коридора и картонка у стены.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=2');
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    const afterSec = async (seconds, input) => {
+      for (let i = 0; i < Math.round(seconds * 10); i++) await vz(page, (inp) => window.__vz.step(6, inp ?? undefined), input ?? null);
+      return vz(page, () => window.__vz.probe());
+    };
+    await afterSec(3);
+    const flats = await vz(page, () => window.__vz.flats());
+    const veil = flats.findIndex((f) => f.kind === 'veil');
+    const stand = flats.findIndex((f) => f.kind === 'standee');
+    check('в убежище есть и проекция, и картонка', veil >= 0 && stand >= 0, JSON.stringify(flats.map((f) => `${f.kind}:${f.what}`)));
+    const side = (st, f) => (st.pos[0] - f.at[0]) * f.n[0] + (st.pos[2] - f.at[2]) * f.n[2];
+
+    // Проекция светится в темноте: с ней середина кадра светлая, без неё — чёрная.
+    await vz(page, (i) => window.__vz.gotoFlat(i, 4.4), veil);
+    await vz(page, () => window.__vz.toggleLight());
+    const shown = centre(await afterSec(9));
+    await vz(page, () => window.__vz.slides(false));
+    const hidden = centre(await afterSec(9));
+    await vz(page, () => window.__vz.slides(true));
+    check('проекция светится в темноте сама: с ней середина кадра светлая, без неё темно', shown > 28 && hidden < shown * 0.4, `с проекцией ${shown.toFixed(1)}, без неё ${hidden.toFixed(1)}`);
+    // Луч фонаря её смывает: под лучом кадр с проекцией и без неё почти одинаков.
+    await vz(page, () => window.__vz.toggleLight());
+    const litShown = centre(await afterSec(3));
+    await vz(page, () => window.__vz.slides(false));
+    const litHidden = centre(await afterSec(3));
+    await vz(page, () => window.__vz.slides(true));
+    check('луч фонаря смывает проекцию: под ним видно то, что за ней на самом деле', Math.abs(litShown - litHidden) < Math.max(6, litHidden * 0.12), `с проекцией ${litShown.toFixed(1)}, без неё ${litHidden.toFixed(1)}`);
+    // Сквозь неё можно пройти.
+    await vz(page, (i) => window.__vz.gotoFlat(i, 2), veil);
+    let st = await vz(page, () => window.__vz.step(1));
+    const before = side(st, flats[veil]);
+    await afterSec(3.5, { moveZ: 1 });
+    st = await state(page);
+    check('сквозь проекцию можно пройти: игрок по ту сторону', before > 1.5 && side(st, flats[veil]) < -1, `было ${before.toFixed(2)} м перед ней, стало ${side(st, flats[veil]).toFixed(2)}`);
+    // С изнанки её нет.
+    await vz(page, (i) => window.__vz.gotoFlat(i, -3.5), veil);
+    await vz(page, () => window.__vz.toggleLight());
+    const back = centre(await afterSec(9));
+    check('с изнанки проекции нет: там темно', back < shown * 0.4, `с лица ${shown.toFixed(1)}, с изнанки ${back.toFixed(1)}`);
+    await vz(page, () => window.__vz.toggleLight());
+
+    // Картонка: сквозь неё проходишь до самой стены.
+    await vz(page, (i) => window.__vz.gotoFlat(i, 1.5), stand);
+    await afterSec(2.5, { moveZ: 1 });
+    st = await state(page);
+    check('картонка не мешает пройти: игрок прошёл сквозь лист', side(st, flats[stand]) < -0.05, `${flats[stand].what}: ${side(st, flats[stand]).toFixed(2)} м от листа`);
+    check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    if (wantShots) {
+      mkdirSync(OUT, { recursive: true });
+      await vz(page, (i) => window.__vz.gotoFlat(i, 4.4), veil);
+      await vz(page, () => window.__vz.toggleLight());
+      await afterSec(9);
+      await page.screenshot({ path: join(OUT, 'flat_veil.png') });
+    }
+    await context.close();
+  }
+
+  // Офис: выставочные экраны с картинками.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&world=office');
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    const afterSec = async (seconds, input) => {
+      for (let i = 0; i < Math.round(seconds * 10); i++) await vz(page, (inp) => window.__vz.step(6, inp ?? undefined), input ?? null);
+      return vz(page, () => window.__vz.probe());
+    };
+    await page.waitForFunction(() => window.__vz.screens().length >= 8, null, { timeout: 30000 }).catch(() => {});
+    const loaded = await vz(page, () => window.__vz.screens());
+    check('картинки экранов загружены: все восемь', loaded.length === 8, loaded.join(', '));
+    await afterSec(3);
+    const flats = await vz(page, () => window.__vz.flats());
+    const lvl = await vz(page, () => window.__vz.level());
+    const reception = lvl.rooms.find((r) => r.type === 'reception');
+    const scr = flats.findIndex((f) => f.kind === 'screen' && f.room === reception?.id);
+    check('в приёмной офиса стоит экран с природой; проекций в офисе нет', scr >= 0 && !flats.some((f) => f.kind === 'veil'), JSON.stringify(flats.map((f) => `${f.kind}:${f.what}`)));
+    await vz(page, (i) => window.__vz.gotoFlat(i, 1.9), scr);
+    await vz(page, () => window.__vz.toggleLight());
+    const shown = centre(await afterSec(3));
+    await vz(page, () => window.__vz.slides(false));
+    const hidden = centre(await afterSec(9));
+    await vz(page, () => window.__vz.slides(true));
+    check('экран светится картинкой: без неё на его месте чёрная панель', shown > hidden + 12, `с картинкой ${shown.toFixed(1)}, без неё ${hidden.toFixed(1)}`);
+    // Фонарь экран не смывает.
+    await vz(page, () => window.__vz.toggleLight());
+    const litShown = centre(await afterSec(3));
+    await vz(page, () => window.__vz.slides(false));
+    const litHidden = centre(await afterSec(3));
+    await vz(page, () => window.__vz.slides(true));
+    check('фонарь экран не смывает: под лучом картинка на месте', Math.abs(litShown - litHidden) > 8, `с картинкой ${litShown.toFixed(1)}, без неё ${litHidden.toFixed(1)}`);
+    // Экран — вещь: сквозь него не пройти.
+    const side = (st, f) => (st.pos[0] - f.at[0]) * f.n[0] + (st.pos[2] - f.at[2]) * f.n[2];
+    await afterSec(2.5, { moveZ: 1 });
+    const st = await state(page);
+    check('экран — настоящая вещь: пройти сквозь него нельзя', side(st, flats[scr]) > 0.15, `${side(st, flats[scr]).toFixed(2)} м перед экраном`);
+    check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    if (wantShots) {
+      await vz(page, (i) => window.__vz.gotoFlat(i, 1.9, 0.9), scr);
+      await afterSec(2);
+      await page.screenshot({ path: join(OUT, 'flat_screen.png') });
+    }
     await context.close();
   }
 }
@@ -1124,6 +1253,12 @@ async function scenarioThings(browser, baseUrl) {
   }
   check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0);
   check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  // У каждой вещи сна свой материал: раньше он делался копией материала мира, и three.js писал
+  // предупреждение на каждую вещь (в коридоре первого сценария вещей нет — там это было не видно).
+  {
+    const warns = log.warnings.filter((w) => !benign(w));
+    check('вещи сна и карманы не сыплют предупреждениями в консоль', warns.length === 0, `${warns.length}: ${[...new Set(warns)].join(' | ').slice(0, 300)}`);
+  }
   await context.close();
 }
 
@@ -1951,6 +2086,7 @@ try {
   if (wants('play')) await scenarioPlay(browser, server.url);
   if (wants('gen')) await scenarioGen(browser, server.url);
   if (wants('worlds')) await scenarioWorlds(browser, server.url);
+  if (wants('flats')) await scenarioFlats(browser, server.url);
   if (wants('session')) await scenarioSession(browser, server.url);
   // Только карманные пространства (быстрый прогон; в полный session они уже входят).
   if (only?.includes('pockets')) await scenarioPockets(browser, server.url);

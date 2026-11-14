@@ -3,9 +3,12 @@
  * Нужна, чтобы посмотреть каждый предмет под фонарём, не разыскивая его по сгенерированному убежищу.
  *   ?level=show                 — весь реестр
  *   ?level=show&props=a,b,c     — только названные
+ *   ?level=show&flat=1          — напольные предметы стоят картонками (world/flat.ts): плоские, без преград
  * Предмет № i стоит у северной стены в точке x = i · SHOW_STEP; смотреть на него — с юга.
  */
 import { ColliderSet } from './colliders';
+import { standee } from './flat';
+import type { FlatMark } from './flat';
 import { MeshBuilder } from './kit';
 import type { BuiltLevel } from './level';
 import { Xf } from './props';
@@ -31,7 +34,7 @@ export function showcaseItems(only: readonly string[] | null): { name: string; m
   });
 }
 
-export function buildShowcase(only: readonly string[] | null): BuiltLevel {
+export function buildShowcase(only: readonly string[] | null, flat = false): BuiltLevel {
   const names = showcaseNames(only);
   const cells = Math.max(2, Math.ceil(((names.length - 1) * SHOW_STEP + 3) / 3));
   const shell = new Shell();
@@ -39,13 +42,18 @@ export function buildShowcase(only: readonly string[] | null): BuiltLevel {
   const mb = new MeshBuilder();
   const col = new ColliderSet();
   buildShell(shell, mb, col);
+  const flats: FlatMark[] = [];
   names.forEach((name, i) => {
     const p = ALL_PROPS[name]!;
     const x = i * SHOW_STEP;
     const y = p.mount === 'wall' ? (p.y ?? 1.2) : p.mount === 'ceiling' ? CEIL : 0;
     // Отдельно стоящие предметы отодвинуты от стены, чтобы их можно было обойти.
     const z = p.mount === 'free' ? SHOW_WALL_Z + 1.2 : SHOW_WALL_Z;
-    p.build(new Xf(mb, col, x, y, z, 0), 1000 + i * 7);
+    if (flat && p.mount === 'floor') {
+      const xf = new Xf(mb, null, x, y, z, 0);
+      const r = standee(xf, p, 1000 + i * 7);
+      flats.push({ kind: 'standee', what: name, at: xf.pt(0, Math.min(1.42, r.h * 0.6), r.plane), n: xf.dir(0, 0, 1), w: r.w, h: r.h, floor: y, room: 1, tier: 0 });
+    } else p.build(new Xf(mb, col, x, y, z, 0), 1000 + i * 7);
   });
-  return { chunks: [{ mesh: mb.build(), tierMin: 0, tierMax: 0 }], stairs: [], colliders: col, spawn: { pos: [0, 0, 3], yaw: 0 }, exit: [0, 0, 4], spots: [], landmarks: [], zones: [], collapses: [], variants: [], nav: [], sheets: mb.sheets, layout: null };
+  return { chunks: [{ mesh: mb.build(), tierMin: 0, tierMax: 0 }], stairs: [], colliders: col, spawn: { pos: [0, 0, 3], yaw: 0 }, exit: [0, 0, 4], spots: [], landmarks: [], zones: [], collapses: [], variants: [], nav: [], sheets: mb.sheets, flats, layout: null };
 }

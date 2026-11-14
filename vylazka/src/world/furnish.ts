@@ -3,15 +3,23 @@
  * (предметы ставятся спиной к стене) и центры клеток. Каждая функция обставляет свой тип комнаты,
  * регистрирует места для находок и приметные объекты — цели «снять на камеру».
  */
+import { hash01 } from '../core/rng';
 import type { Rng } from '../core/rng';
 import { dressRoom } from './dress';
+import { FLAT_EYE, standee, veil, VEIL_SCENES } from './flat';
+import type { FlatMark } from './flat';
 import type { GenRoom, WorldKind } from '../gen/layout';
 import { furnishOffice, furnishYellow } from './furnish_office';
 import type { ItemSpot, Landmark } from './level';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
 import { barrel, bunk, cables, cageLamp, crate, locker, pipeRun, rubble, signPlate, stool, table, valve, ventGrille } from './props';
-import type { Xf } from './props';
+import { buildDisplay, DISPLAY_SIZE } from './props_screens';
+import type { DisplayShape } from './props_screens';
+import { SCREEN_IMAGES, screenFor } from './screens';
+import type { ScreenKind } from './screens';
+import { CELL, WALL_T } from './shell';
+import { Xf } from './props';
 import {
   bench,
   bucket,
@@ -73,6 +81,8 @@ export interface RoomCtx {
   world: WorldKind;
   /** Сид уровня (общий для всех помещений): по нему решается то, что должны знать и обстановка, и игра. */
   seed: number;
+  /** Клетка, с которой начинается вылазка: рядом с ней обманок не ставим. */
+  start: { cx: number; cz: number; tier: number };
   rng: Rng;
   /** Высота потолка над полом. */
   h: number;
@@ -80,6 +90,8 @@ export interface RoomCtx {
   cells: CellInfo[];
   spots: ItemSpot[];
   landmarks: Landmark[];
+  /** Плоские вещи помещения: картонки и проекции (world/flat.ts). */
+  flats: FlatMark[];
 }
 
 function shuffled<T>(rng: Rng, items: readonly T[]): T[] {
@@ -176,6 +188,13 @@ function corridor(ctx: RoomCtx): void {
   // Сыро на нижних ярусах.
   const dry = new Set(ctx.slots.filter((s) => s.hazard).map((s) => `${s.cx},${s.cz}`));
   if (tier > 0) for (const c of ctx.cells) if (!dry.has(`${c.cx},${c.cz}`) && ctx.rng() < 0.12 * tier) puddle(c.xf.child((ctx.rng() - 0.5) * 0.8, 0, (ctx.rng() - 0.5) * 0.8), 0.9 + ctx.rng(), 0.6 + ctx.rng() * 0.6);
+  // Ниже первого яруса в убежище проступает дом — комнатами, которых нет: по одной проекции на ярус.
+  if (tier > 0) veils(ctx, 1);
+}
+
+/** Экраны в убежище: ниже первого яруса у стены коридора изредка стоит экран — в нём нет сигнала, лес или обрывок передачи. */
+function shelterScreens(ctx: RoomCtx): void {
+  if (ctx.room.type === 'corridor' && ctx.room.tier > 0) leanScreens(ctx, 1, 0.05, ['signal', 'nature', 'pop']);
 }
 
 function entrance(ctx: RoomCtx): void {
@@ -511,12 +530,128 @@ export function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; 
   if (!s) return null;
   s.used = true;
   const x = fit(s, half * 2, depth);
-  items.forEach(([, dx = 0, y], i) => {
+  items.forEach(([name, dx = 0, y], i) => {
     const p = specs[i]!;
     const seed = Math.floor(ctx.rng() * 1e6);
-    p.build(s.xf.child(x + dx, p.mount === 'wall' ? (y ?? p.y ?? 1.2) : 0, 0), seed);
+    const at = s.xf.child(x + dx, p.mount === 'wall' ? (y ?? p.y ?? 1.2) : 0, 0);
+    if (p.mount === 'floor' && isFlat(ctx, s, name, i)) {
+      // Картонка: стоит там же, где стоял бы настоящий предмет, но это лист — и преграды у неё нет.
+      const r = standee(new Xf(at.mb, null, at.ox, at.oy, at.oz, at.rot, at.sl), p, seed);
+      ctx.flats.push({ kind: 'standee', what: name, at: at.pt(0, Math.min(FLAT_EYE, r.h * 0.6), r.plane), n: at.dir(0, 0, 1), w: r.w, h: r.h, floor: at.oy, room: ctx.room.id, tier: ctx.room.tier });
+    } else p.build(at, seed);
   });
   return { s, x };
+}
+
+/**
+ * Выставочный экран на свободный участок стены (прислонённый или висящий) либо посреди клетки (на
+ * подставке). Что на нём — решает сид уровня и место: картинка из родов kinds. Возвращает, поставлен ли.
+ */
+export function screenAt(ctx: RoomCtx, xf: Xf, shape: DisplayShape, kinds: readonly ScreenKind[], salt: number): void {
+  const image = screenFor(Math.floor(hash01(Math.round(xf.ox * 7) + salt, Math.round(xf.oz * 11) + ctx.room.id, ctx.seed ^ 0x5c4e) * 1e6), kinds);
+  buildDisplay(xf, shape, image);
+  const [w, h] = DISPLAY_SIZE[shape];
+  // Метка — середина картинки: у прислонённого экрана она на полпути между стеной и его низом.
+  const z = shape === 'lean' ? 0.26 : shape === 'wall' ? 0.07 : 0.03;
+  const y = shape === 'wall' ? h / 2 : shape === 'lean' ? h * 0.49 : 0.07 + h / 2;
+  ctx.flats.push({ kind: 'screen', what: SCREEN_IMAGES[image]!.id, at: xf.pt(0, y, z), n: xf.dir(0, 0, 1), w, h, floor: shape === 'wall' ? xf.oy - 1.05 : xf.oy, room: ctx.room.id, tier: ctx.room.tier });
+}
+
+/**
+ * Прислонить экраны к свободным стенам помещения: не больше count, каждый — с вероятностью rate на
+ * участок. Решает сид уровня и место, а не ГСЧ помещения: остальная обстановка от этого не сдвигается.
+ */
+export function leanScreens(ctx: RoomCtx, count: number, rate: number, kinds: readonly ScreenKind[]): number {
+  let placed = 0;
+  for (const s of ctx.slots) {
+    if (placed >= count) break;
+    if (s.used || s.hazard) continue;
+    // В коридоре экран у двери мешал бы пройти: там ему нужен участок без проходов рядом.
+    if (ctx.room.type === 'corridor' && ctx.cells.find((c) => c.cx === s.cx && c.cz === s.cz)!.doors > 0) continue;
+    if (hash01(s.cx * 37 + s.dir * 5, s.cz * 41 + ctx.room.id, ctx.seed ^ 0xd15b) >= rate) continue;
+    s.used = true;
+    screenAt(ctx, s.xf.child(fit(s, 1.2, 0.52), 0, 0), 'lean', kinds, s.dir);
+    placed += 1;
+  }
+  return placed;
+}
+
+/**
+ * Какие предметы бывают картонками: только мебель у стены, на которой ничего не лежит и к которой
+ * не привязаны ни находки, ни приметы.
+ */
+const FLAT_OK: ReadonlySet<string> = new Set([
+  'wardrobe',
+  'bookshelf',
+  'fridge',
+  'stove',
+  'armchair',
+  'floor_lamp',
+  'houseplant',
+  'washing_machine',
+  'christmas_tree',
+  'wall_unit',
+  'filing_cabinet',
+  'water_cooler',
+  'binder_shelf',
+  'vending_machine',
+  'server_rack',
+  'kk_armchair',
+  'kk_lamp_standing',
+]);
+
+/**
+ * Доля картонок среди такой мебели. Чем «ложнее» воспоминание, тем больше в нём снимков вместо вещей:
+ * офис был на самом деле, убежище и жёлтые комнаты собраны из чужих картинок.
+ */
+export const FLAT_SHARE: Record<WorldKind, number> = { shelter: 0.24, office: 0.04, yellow: 0.45 };
+
+/** Быть ли предмету картонкой: решают сид уровня и место, а не ГСЧ помещения — остальная обстановка от этого не сдвигается. */
+function isFlat(ctx: RoomCtx, s: Slot, name: string, i: number): boolean {
+  if (!FLAT_OK.has(name)) return false;
+  return hash01(s.cx * 131 + s.dir * 7 + i, s.cz * 173 + ctx.room.id * 3, ctx.seed ^ 0xf1a7) < FLAT_SHARE[ctx.world];
+}
+
+/**
+ * Проекции в коридоре: комнаты, которых нет, поперёк прямых участков. Издали — освещённая комната
+ * в конце коридора; вблизи — картинка из света, сквозь которую можно пройти. Ставятся не ближе
+ * четырёх клеток от начала вылазки и не ближе шести друг к другу, только там, где по бокам глухие
+ * стены. Смотрит проекция в одну сторону: с изнанки её нет. only — какие клетки годятся (в жёлтых
+ * комнатах — только тёмные: свет проекцию смывает).
+ */
+export function veils(ctx: RoomCtx, count: number, only: (c: CellInfo) => boolean = () => true): void {
+  if (count <= 0) return;
+  const has = new Set(ctx.cells.map((c) => `${c.cx},${c.cz}`));
+  const risky = new Set(ctx.slots.filter((s) => s.hazard).map((s) => `${s.cx},${s.cz}`));
+  const found: { c: CellInfo; alongX: boolean; rank: number }[] = [];
+  for (const c of ctx.cells) {
+    if (c.doors > 0 || risky.has(`${c.cx},${c.cz}`) || !only(c)) continue;
+    const e = has.has(`${c.cx + 1},${c.cz}`);
+    const w = has.has(`${c.cx - 1},${c.cz}`);
+    const n = has.has(`${c.cx},${c.cz - 1}`);
+    const s = has.has(`${c.cx},${c.cz + 1}`);
+    const alongX = e && w && !n && !s;
+    const alongZ = n && s && !e && !w;
+    if (!alongX && !alongZ) continue;
+    if (ctx.room.tier === ctx.start.tier && Math.abs(c.cx - ctx.start.cx) + Math.abs(c.cz - ctx.start.cz) < 4) continue;
+    found.push({ c, alongX, rank: hash01(c.cx * 53 + 11, c.cz * 97 + ctx.room.tier * 7, ctx.seed ^ 0x7e11) });
+  }
+  found.sort((a, b) => a.rank - b.rank);
+  const scenes = VEIL_SCENES.filter((sc) => sc.items.every(([name]) => ALL_PROPS[name]));
+  const placed: CellInfo[] = [];
+  for (const f of found) {
+    if (placed.length >= count || scenes.length === 0) break;
+    if (placed.some((p) => Math.abs(p.cx - f.c.cx) + Math.abs(p.cz - f.c.cz) < 6)) continue;
+    const flip = hash01(f.c.cx * 29, f.c.cz * 31, ctx.seed ^ 0x51de) < 0.5;
+    // Локальная ось +z — на зрителя: вдоль коридора в одну из двух сторон.
+    const rot = (f.alongX ? (flip ? 1 : 3) : flip ? 0 : 2) as 0 | 1 | 2 | 3;
+    const scene = scenes[(Math.floor(hash01(ctx.room.tier * 13 + 5, ctx.room.id, ctx.seed ^ 0x5ce2) * scenes.length) + placed.length) % scenes.length]!;
+    const xf = f.c.xf.child(0, 0, 0, rot);
+    const r = veil(xf, scene, ALL_PROPS, Math.floor(f.rank * 1e6), CELL - WALL_T, ctx.h);
+    if (!r) continue;
+    placed.push(f.c);
+    ctx.flats.push({ kind: 'veil', what: scene.id, at: xf.pt(0, FLAT_EYE, 0), n: xf.dir(0, 0, 1), w: r.w, h: r.h, floor: xf.oy, room: ctx.room.id, tier: ctx.room.tier });
+  }
 }
 
 /** Клетка для центральных предметов: лучше без проходов. */
@@ -663,6 +798,8 @@ export function furnishRoom(ctx: RoomCtx): void {
   FURNISH[ctx.room.type]?.(ctx);
   // Сначала — то, что положено помещению по назначению, потом — следы людей и времени.
   dressRoom(ctx);
+  // Последними — экраны: им достаются участки стен, которые остались пустыми.
+  shelterScreens(ctx);
 }
 
 /** Подпись-табличка над дверью со стороны коридора (слабое фосфорное свечение помогает ориентироваться). */

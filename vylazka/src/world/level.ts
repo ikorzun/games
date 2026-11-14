@@ -2,6 +2,7 @@
 import type { Vec3 } from '../core/types';
 import type { GenLayout, WorldKind } from '../gen/layout';
 import type { Aabb, ColliderSet } from './colliders';
+import type { FlatMark } from './flat';
 import type { MeshData, SheetMark } from './kit';
 
 /** Кусок геометрии, рисуемый одним вызовом. Ярусы — чтобы не рисовать этажи, которых не видно. */
@@ -13,6 +14,8 @@ export interface LevelChunk {
   id?: string;
   /** Чанк с именем изначально скрыт. */
   hidden?: boolean;
+  /** Проекции этого куска: картинки из света (world/flat.ts). Рисуются отдельно — без тени и без точек. */
+  slides?: MeshData;
 }
 
 /**
@@ -107,6 +110,8 @@ export interface BuiltLevel {
   nav: NavNode[];
   /** Где висят листы-картинки: плакаты и планы убежища (только в видимых с самого начала частях уровня). */
   sheets: SheetMark[];
+  /** Плоские вещи: картонки и проекции (у тестового уровня их нет). */
+  flats?: FlatMark[];
   /** План, по которому собран уровень (у тестового уровня его нет). */
   layout: GenLayout | null;
   /** Какой это мир (не задано — убежище): от него зависят свет, запущенность и воспоминания. */

@@ -87,6 +87,17 @@ export interface VzDebugApi {
   shadows(on: boolean): void;
   /** Облако точек вкл/выкл: выкл — мир рисуется сплошными поверхностями (для сравнения кадров). */
   scan(on: boolean): void;
+  /** Плоские вещи уровня: картонки (standee) и проекции (veil) — что изображено, где стоит и куда смотрит. */
+  flats(): Array<Record<string, unknown>>;
+  /**
+   * Встать перед плоской вещью лицом к ней: distance — на каком расстоянии от её плоскости, side — сдвиг
+   * вбок, м (чтобы посмотреть на неё не в лоб). Отрицательное расстояние — встать с изнанки. false — такой нет.
+   */
+  gotoFlat(index: number, distance?: number, side?: number): boolean;
+  /** Показать или скрыть проекции и картинки экранов (чтобы сравнить кадр с ними и без них). */
+  slides(on: boolean): void;
+  /** Какие картинки выставочных экранов загружены из файлов (остальные экраны показывают «нет сигнала»). */
+  screens(): string[];
   /** Нарисовать кадр и вернуть его яркость сеткой 32×18, строка 0 — верхняя. */
   probe(): number[];
   /** Средний цвет кадра (0..255) и доля красных точек: виден ли красная сетка. */
@@ -197,8 +208,24 @@ export function installDebug(app: App): void {
         spawn: [...l.spawn.pos],
         rooms: (l.layout?.rooms ?? []).map((r) => ({ id: r.id, type: r.type, tier: r.tier, cells: r.cells.length })),
         landmarks: l.landmarks.map((m) => ({ id: m.id, room: m.room, tier: m.tier })),
+        flats: (l.flats ?? []).map((f) => ({ kind: f.kind, what: f.what, room: f.room, tier: f.tier })),
       };
     },
+    flats: () => (app.level.flats ?? []).map((f) => ({ ...f, at: [...f.at], n: [...f.n] })),
+    gotoFlat: (index, distance = 3, side = 0) => {
+      const f = (app.level.flats ?? [])[index];
+      if (!f) return false;
+      game().debugHome();
+      // Вбок — вдоль плоскости картинки: поворот нормали на четверть оборота вокруг вертикали.
+      const x = f.at[0] + f.n[0] * distance + f.n[2] * side;
+      const z = f.at[2] + f.n[2] * distance - f.n[0] * side;
+      game().teleport(x, f.floor, z, Math.atan2(-(f.at[0] - x), -(f.at[2] - z)), 0);
+      return true;
+    },
+    slides: (on) => {
+      game().renderer.debugSlidesOff = !on;
+    },
+    screens: () => [...app.screenIds],
     gotoLandmark: (id, index = 0, distance = 2.2) => {
       const l = app.level;
       const m = l.landmarks.filter((x) => x.id === id)[index];

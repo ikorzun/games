@@ -303,6 +303,127 @@ function bookshelf(xf: Xf, seed: number): void {
   xf.collider([-0.5, 0, 0], [0.5, 1.9, 0.32]);
 }
 
+/** Стрелка часов на передней стороне: из центра в направлении a (градусы по часовой от «12»), длина len, ширина w. */
+function clockHand(xf: Xf, cx: number, cy: number, a: number, len: number, w: number, z: number, tint: Vec3): void {
+  const dx = Math.sin((a * Math.PI) / 180);
+  const dy = Math.cos((a * Math.PI) / 180);
+  const px = -dy * w;
+  const py = dx * w;
+  sheet(xf, [cx - px, cy - py, z], [cx + px, cy + py, z], [cx + px * 0.5 + dx * len, cy + py * 0.5 + dy * len, z], [cx - px * 0.5 + dx * len, cy - py * 0.5 + dy * len, z], FRONT, MAT.bakelite, tint);
+}
+
+/**
+ * Советская «стенка» 2,6 × 0,46 × 2,1: тёмный полированный корпус, снизу ряд закрытых тумб, по бокам серванты
+ * со стеклом и хрусталём, в середине собрание сочинений, телевизор (выключен) и на полке круглые часы 17:50.
+ */
+function wallUnit(xf: Xf, seed: number): void {
+  const rnd = rng(seed);
+  const k = 0.94 + rnd() * 0.12;
+  const body: Vec3 = [0.5 * k, 0.36 * k, 0.27 * k];
+  const lite = dim(body, 1.2);
+  const F = 0.46;
+  const crystal: Vec3 = [1.2, 1.35, 1.5];
+  const china: Vec3 = [1.45, 1.45, 1.38];
+  // Цоколь, тумбы (дверцы-заплатки, щели между ними — тёмный корпус), столешница.
+  bx(xf, [-1.25, 0, 0.03], [1.25, 0.05, F - 0.03], MAT.veneer, dim(body, 0.7), { skip: ['nz', 'ny'] });
+  bx(xf, [-1.3, 0.05, 0], [1.3, 0.55, F], MAT.veneer, dim(body, 0.8), { skip: ['nz', 'ny', 'py'] });
+  bx(xf, [-1.3, 0.55, 0], [1.3, 0.58, F + 0.01], MAT.veneer, lite, { skip: ['nz', 'ny'] });
+  for (let i = 0; i < 5; i++) {
+    const x0 = -1.27 + i * 0.508;
+    face(xf, x0, 0.08, x0 + 0.496, 0.53, F + 0.003, MAT.veneer, dim(body, 1.05));
+    bx(xf, [x0 + 0.42, 0.27, F + 0.003], [x0 + 0.45, 0.35, F + 0.03], MAT.brass, [1.4, 1.25, 1], { skip: ['nz', 'ny', 'py'] });
+  }
+  // Каркас: боковины, перегородки, светлые задники, карниз на 3 см шире корпуса.
+  for (const x of [-1.3, 1.27, -0.65, 0.62]) bx(xf, [x, 0.58, 0], [x + 0.03, 2.05, F], MAT.veneer, body, { skip: ['nz', 'ny', 'py'] });
+  face(xf, -1.27, 0.58, -0.65, 2.05, 0.02, MAT.enamel, [1.35, 1.2, 0.9]);
+  face(xf, 0.65, 0.58, 1.27, 2.05, 0.02, MAT.enamel, [1.05, 1.2, 1.4]);
+  face(xf, -0.62, 0.58, 0.62, 2.05, 0.02, MAT.veneer, dim(body, 0.55));
+  bx(xf, [-1.33, 2.05, 0], [1.33, 2.1, 0.49], MAT.veneer, lite, { skip: ['nz', 'ny'] });
+  // Серванты: стеклянные полки (верх на 0,912 / 1,262 / 1,612), рамки-стойки и узкий блик.
+  for (const s of [-1, 1]) {
+    const a = s > 0 ? 0.65 : -1.27;
+    const b = s > 0 ? 1.27 : -0.65;
+    for (const y of [0.9, 1.25, 1.6]) bx(xf, [a, y, 0.03], [b, y + 0.012, F - 0.02], MAT.glass, [1.5, 1.5, 1.5], { skip: ['nz', 'ny', 'px', 'nx'] });
+    for (const x of [a, b - 0.025]) bx(xf, [x, 0.58, F], [x + 0.025, 2.05, F + 0.015], MAT.veneer, lite, { skip: ['nz', 'ny', 'py'] });
+    const g = a + 0.2;
+    sheet(xf, [g, 0.65, F + 0.016], [g + 0.025, 0.65, F + 0.016], [g + 0.075, 1.98, F + 0.016], [g + 0.05, 1.98, F + 0.016], FRONT, MAT.paper, [1.3, 1.35, 1.5]);
+  }
+  // Левый: стопки тарелок; графин с пробкой и рюмки; блюдо на ребре и высокая ваза; ваза-ладья.
+  for (const [x0, x1] of [[-1.22, -1.07], [-1.04, -0.89]] as const) {
+    bx(xf, [x0, 0.58, 0.12], [x1, 0.74, 0.32], MAT.enamel, china, { skip: ['nz', 'ny'] });
+  }
+  xf.cyl([-0.76, 0.69, 0.2], 'z', 0.03, 0.1, MAT.paintBlue, { segments: 6, tint: [1.2, 1.3, 1.5] });
+  xf.cyl([-1.1, 0.912, 0.2], 'y', 0.17, 0.065, MAT.enamel, { segments: 6, tint: crystal });
+  bx(xf, [-1.12, 1.082, 0.18], [-1.08, 1.18, 0.22], MAT.enamel, crystal, { skip: ['nz', 'ny'] });
+  bx(xf, [-1.13, 1.18, 0.17], [-1.07, 1.22, 0.23], MAT.paintRed, [1.3, 1.1, 1.1], { skip: ['nz', 'ny'] });
+  for (let i = 0; i < 4; i++) xf.cyl([-0.93 + i * 0.075, 0.912, 0.2], 'y', 0.1, 0.015, MAT.enamel, { segments: 5, tint: crystal, radiusEnd: 0.045, caps: false });
+  xf.cyl([-0.9, 1.372, 0.2], 'z', 0.03, 0.1, MAT.paintBlue, { segments: 6, tint: [1.2, 1.3, 1.5] });
+  bx(xf, [-1.0, 1.612, 0.17], [-0.9, 1.65, 0.23], MAT.enamel, crystal, { skip: ['nz', 'ny'] });
+  xf.cyl([-1.15, 1.74, 0.2], 'x', 0.38, 0.045, MAT.paintBlue, { segments: 6, tint: [1.2, 1.3, 1.5], radiusEnd: 0.09 });
+  // Правый: ряд книг корешками наружу, чашки с блюдцами (белые, цветок-пятно), хрустальные вазы.
+  let bxp = 0.67;
+  for (let i = 0; i < 6; i++) {
+    const w = 0.07 + rnd() * 0.02;
+    const h = 0.22 + rnd() * 0.08;
+    bx(xf, [bxp, 0.58, 0.07], [bxp + w, 0.58 + h, 0.3], i % 2 ? MAT.paintRed : MAT.paintBlue, i % 2 ? [1.2, 1.0, 1.0] : [1.1, 1.2, 1.4], { skip: ['ny', 'nz', 'px', 'nx'] });
+    bxp += w + 0.003;
+  }
+  const flowers = [MAT.paintRed, MAT.paintOchre, MAT.paintBlue, MAT.paintRed] as const;
+  const cups: Array<[number, number]> = [[0.8, 0.912], [0.97, 0.912], [1.14, 0.912], [0.97, 1.262]];
+  cups.forEach(([cx, cy], i) => {
+    bx(xf, [cx - 0.06, cy, 0.14], [cx + 0.06, cy + 0.012, 0.26], MAT.enamel, china, { skip: ['nz', 'ny'] });
+    bx(xf, [cx - 0.035, cy + 0.012, 0.165], [cx + 0.035, cy + 0.075, 0.235], MAT.enamel, china, { skip: ['nz', 'ny'] });
+    face(xf, cx - 0.015, cy + 0.03, cx + 0.015, cy + 0.06, 0.236, flowers[i]!, [1.4, 1.2, 1.0]);
+  });
+  xf.cyl([0.8, 1.612, 0.2], 'y', 0.26, 0.05, MAT.enamel, { segments: 6, tint: crystal, radiusEnd: 0.085 });
+  xf.cyl([1.1, 1.612, 0.2], 'y', 0.32, 0.04, MAT.enamel, { segments: 6, tint: crystal, radiusEnd: 0.075 });
+  // Середина, верх: собрание сочинений (одинаковая высота), три книги плашмя, пара наклонена вправо.
+  bx(xf, [-0.62, 1.6, 0.03], [0.62, 1.63, F - 0.02], MAT.veneer, lite, { skip: ['nz', 'ny', 'px', 'nx'] });
+  const ws: number[] = [];
+  for (let i = 0; i < 10; i++) ws.push(0.05 + rnd() * 0.04);
+  const wsum = ws.reduce((a, b) => a + b, 0);
+  let x = -0.6;
+  ws.forEach((w0, i) => {
+    const w = (w0 / wsum) * 0.95;
+    const green = i % 3 !== 1;
+    bx(xf, [x, 1.63, 0.08], [x + w, 1.93, 0.3], green ? MAT.paintGreen : MAT.wood, green ? [0.55, 0.75, 0.5] : [0.7, 0.55, 0.42], { skip: ['ny', 'nz', 'px', 'nx'] });
+    if (i % 2 === 0) face(xf, x, 1.84, x + w, 1.855, 0.3, MAT.brass, [1.4, 1.25, 0.7]);
+    x += w;
+  });
+  for (const [x0, x1, y0] of [[-0.58, -0.26, 1.93], [-0.5, -0.2, 1.97], [-0.05, 0.25, 1.93]] as const) bx(xf, [x0, y0, 0.07], [x1, y0 + 0.04, 0.3], MAT.wood, [0.65, 0.5, 0.4], { skip: ['ny', 'nz'] });
+  beam(xf, [0.4, 1.635, 0.19], [0.47, 1.93, 0.19], 0.22, 0.05, MAT.paintGreen, [0.55, 0.75, 0.5], { side: FRONT });
+  beam(xf, [0.46, 1.635, 0.19], [0.56, 1.92, 0.19], 0.22, 0.05, MAT.wood, [0.7, 0.55, 0.42], { side: FRONT });
+  // Середина, ниша: кинескопный телевизор, выключен.
+  bx(xf, [-0.62, 0.93, 0.03], [0.62, 0.95, F - 0.02], MAT.veneer, lite, { skip: ['nz', 'ny', 'px', 'nx'] });
+  bx(xf, [-0.4, 1.03, 0.05], [0.4, 1.49, 0.24], MAT.bakelite, [1.1, 1.1, 1.1], { skip: ['nz', 'ny', 'pz'] });
+  bx(xf, [-0.58, 0.96, 0.24], [0.58, 1.56, 0.44], MAT.bakelite, [1.3, 1.3, 1.3], { skip: ['nz', 'ny'] });
+  bx(xf, [-0.52, 1.0, 0.44], [0.22, 1.52, 0.452], MAT.bakelite, [0.8, 0.8, 0.8], { skip: ['nz', 'ny'] });
+  bx(xf, [-0.48, 1.04, 0.452], [0.18, 1.48, 0.468], MAT.glass, [0.9, 0.9, 0.9], { skip: ['nz', 'ny'] });
+  for (const y of [1.36, 1.41, 1.46]) face(xf, 0.29, y, 0.51, y + 0.02, 0.441, MAT.bakelite, [0.6, 0.6, 0.6]);
+  xf.cyl([0.4, 1.15, 0.44], 'z', 0.03, 0.04, MAT.steel, { segments: 6, tint: [1.4, 1.4, 1.4] });
+  bx(xf, [0.5, 1.0, 0.44], [0.53, 1.03, 0.45], MAT.glow, [3, 12, 3], { skip: ['nz', 'ny'] });
+  // Середина, открытая полка: стопки книг плашмя (светлые обрезы наружу) и часы 17:50.
+  for (const x0 of [-0.58, 0.22]) {
+    const x1 = x0 + 0.36;
+    for (let i = 0; i < 3; i++) {
+      const y0 = 0.58 + i * 0.075;
+      bx(xf, [x0, y0 + 0.012, 0.1], [x1, y0 + 0.07, 0.4], MAT.paper, [1.4, 1.35, 1.1], { skip: ['ny', 'nz'] });
+      face(xf, x0, y0, x1, y0 + 0.012, 0.402, MAT.paintGreen, [0.55, 0.7, 0.5]);
+    }
+    sheet(xf, [x0, 0.805, 0.1], [x1, 0.805, 0.1], [x1, 0.805, 0.4], [x0, 0.805, 0.4], UP, MAT.paintGreen, [0.55, 0.7, 0.5]);
+  }
+  const cy = 0.725;
+  bx(xf, [-0.07, 0.58, 0.2], [0.07, 0.62, 0.34], MAT.brass, [1.1, 1.0, 0.8], { skip: ['nz', 'ny'] });
+  xf.cyl([0, cy, 0.22], 'z', 0.06, 0.105, MAT.brass, { segments: 8, tint: [1.3, 1.2, 0.9] });
+  xf.cyl([0, cy, 0.28], 'z', 0.008, 0.09, MAT.enamel, { segments: 8, tint: [1.5, 1.5, 1.4] });
+  const zf = 0.2885;
+  const dark: Vec3 = [0.4, 0.4, 0.4];
+  for (const [tx, ty, w, h] of [[0, 0.07, 0.008, 0.022], [0, -0.07, 0.008, 0.022], [0.07, 0, 0.022, 0.008], [-0.07, 0, 0.022, 0.008]] as const) face(xf, tx - w, cy + ty - h, tx + w, cy + ty + h, zf, MAT.bakelite, dark);
+  clockHand(xf, 0, cy, 175, 0.052, 0.008, zf + 0.0005, dark);
+  clockHand(xf, 0, cy, 300, 0.078, 0.006, zf + 0.001, dark);
+  xf.collider([-1.3, 0, 0], [1.3, 2.1, 0.46]);
+}
+
 /** Кровать 2,0 × 0,95 × 0,75: изголовье и спинка, скомканное одеяло, подушка. */
 function bedHome(xf: Xf, seed: number): void {
   const rnd = rng(seed);
@@ -1132,6 +1253,7 @@ export const HOME_PROPS: Record<string, PropSpec> = {
   kitchen_table: { w: 1.2, d: 0.8, h: 0.78, mount: 'floor', ru: 'кухонный стол под клеёнкой, табуретка, тарелка, хлебница', build: kitchenTable },
   sink_cabinet: { w: 0.8, d: 0.58, h: 1.35, mount: 'floor', ru: 'мойка-тумба с краном и сушилкой для тарелок', build: sinkCabinet },
   wardrobe: { w: 1.3, d: 0.58, h: 2.2, mount: 'floor', ru: 'платяной шкаф, одна дверца распахнута, чемодан наверху', build: wardrobe },
+  wall_unit: { w: 2.6, d: 0.46, h: 2.1, mount: 'floor', ru: 'стенка: сервант с хрусталём, книги, телевизор, часы', build: wallUnit },
   bookshelf: { w: 1.0, d: 0.32, h: 1.9, mount: 'floor', ru: 'стеллаж с пёстрыми книгами', build: bookshelf },
   bed_home: { w: 2.0, d: 0.95, h: 0.75, mount: 'floor', ru: 'кровать с изголовьем, скомканным одеялом и подушкой', build: bedHome },
   wall_carpet: { w: 1.9, d: 0.04, h: 1.3, mount: 'wall', y: 0.85, ru: 'ковёр на стене с ромбами', build: (xf) => wallCarpet(xf) },

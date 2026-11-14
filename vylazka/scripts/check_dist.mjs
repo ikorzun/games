@@ -39,6 +39,18 @@ function expectedAudio() {
     return [];
   }
 }
+/** Какие картинки выставочных экранов обязаны быть в сборке: всё, что лежит в assets/screens. */
+function expectedScreens() {
+  try {
+    const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'screens');
+    return readdirSync(dir)
+      .filter((f) => f.endsWith('.webp'))
+      .map((f) => f.slice(0, -'.webp'.length))
+      .sort();
+  } catch {
+    return [];
+  }
+}
 /** Какие листы-картинки (плакаты, план убежища) обязаны быть в сборке: всё, что лежит в assets/posters. */
 function expectedSheets() {
   try {
@@ -109,6 +121,10 @@ export function checkDist(dir, opts = {}) {
   const sheets = opts.sheets ?? expectedSheets();
   const lostSheets = sheets.filter((id) => !files.some((f) => f.rel.startsWith(`assets/${id}-`) && f.rel.endsWith('.webp')));
   if (lostSheets.length > 0) problems.push(`в сборке нет листов-картинок (${lostSheets.length} из ${sheets.length}): ${lostSheets.join(', ')}`);
+  // Экраны: то же самое. Нет файла — на экране вместо картинки настроечные полосы.
+  const screens = opts.screens ?? expectedScreens();
+  const lostScreens = screens.filter((id) => !files.some((f) => f.rel.startsWith(`assets/${id}-`) && f.rel.endsWith('.webp')));
+  if (lostScreens.length > 0) problems.push(`в сборке нет картинок экранов (${lostScreens.length} из ${screens.length}): ${lostScreens.join(', ')}`);
   // Звук: либо весь набор из манифеста, либо ничего. Игра с половиной звуков — брак.
   const expected = expectedAudio();
   const present = new Set(files.filter((f) => f.rel.startsWith('audio/') && f.rel.endsWith('.mp3')).map((f) => f.rel));

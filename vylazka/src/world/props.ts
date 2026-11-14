@@ -18,7 +18,15 @@ export class Xf {
     readonly oy: number,
     readonly oz: number,
     readonly rot: 0 | 1 | 2 | 3 = 0,
+    /** Куда складываются проекции — картинки из света (world/flat.ts); null — в этом месте их нет. */
+    readonly sl: MeshBuilder | null = null,
   ) {}
+
+  /** Направление из локальных осей в мировые (поворот без сдвига). */
+  dir(x: number, y: number, z: number): Vec3 {
+    const p = this.pt(x, y, z);
+    return [p[0] - this.ox, p[1] - this.oy, p[2] - this.oz];
+  }
 
   pt(x: number, y: number, z: number): Vec3 {
     let rx = x;
@@ -112,7 +120,7 @@ export class Xf {
   /** Вложенное размещение: локальный сдвиг и добавочный поворот. */
   child(x: number, y: number, z: number, rot: 0 | 1 | 2 | 3 = 0): Xf {
     const p = this.pt(x, y, z);
-    return new Xf(this.mb, this.col, p[0], p[1], p[2], ((this.rot + rot) % 4) as 0 | 1 | 2 | 3);
+    return new Xf(this.mb, this.col, p[0], p[1], p[2], ((this.rot + rot) % 4) as 0 | 1 | 2 | 3, this.sl);
   }
 }
 

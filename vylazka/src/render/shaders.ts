@@ -143,6 +143,8 @@ uniform sampler2D uCellLight; // свет по клеткам уровня: r �
 uniform vec4 uCellGrid;       // xy — угол сетки в мире (x, z), z — шаг клетки, м, w — клеток по стороне (0 — света по клеткам нет)
 uniform vec3 uLightRightV;
 uniform vec3 uLightUpV;
+uniform vec4 uSlide;      // проекции: x, y — при каком свете картинка начинает выгорать и когда пропадает совсем; z — её яркость; w — время, с
+uniform sampler2D uScreens; // атлас картинок выставочных экранов (world/screens.ts)
 // Материалов может быть до 48 (атлас шаров 8 × ATLAS_ROWS); сколько их на деле — знает world/materials.ts.
 #ifndef ATLAS_ROWS
 #define ATLAS_ROWS 4
@@ -222,6 +224,42 @@ void main() {
     burn = smoothstep(0.14, 0.0, edge) * min(1.0, vDis * 4.0);
   }
   vec3 Ng = normalize(vNrmV);
+#ifdef SLIDE
+  // Проекция — не вещь, а свет на том, что позади: комната, которой нет. В темноте она светится сама,
+  // а свет её смывает, как смывает картинку проектора: чем ярче здесь луч фонаря или лампы потолка,
+  // тем меньше от неё остаётся. Выгорает она зерном — и сквозь дыру видно то, что за ней на самом деле.
+  {
+    vec4 lbS = beamAt(vPosV);
+    float distS0 = length(vPosV);
+    if (int(vMat + 0.5) == 30) {
+      // Экран: стекло, за которым светится картинка. Свет её не смывает — на стекле остаётся только
+      // блик фонаря. Вблизи видны строки матрицы; подсветка чуть дышит.
+      vec3 pic = texture2D(uScreens, vUv).rgb;
+      float rows = mix(1.0, 0.9 + 0.1 * sin(vWorld.y * 480.0), smoothstep(3.5, 1.2, distS0));
+      float back = 0.96 + 0.04 * sin(uSlide.w * 5.0 + vWorld.x * 2.0);
+      // Яркость подстроена под помещение, как у настоящего экрана: при свете панелей он ярче.
+      float roomS = dot(uAmbient, vec3(0.3333)) * cellLight(vWorld.xz);
+      vec3 colS = pic * (uSlide.z * (2.2 + 9.0 * min(roomS, 0.6)) * rows * back) + vec3(0.004, 0.005, 0.007);
+      vec3 Rs = reflect(normalize(vPosV), Ng);
+      colS += uLightColor * (pow(max(dot(Rs, lbS.xyz), 0.0), 120.0) * lbS.w * 0.35);
+      colS += vec3(0.9, 0.07, 0.03) * burn;
+      gl_FragColor = vec4(mix(uFogColor, colS, exp(-uFog * distS0)), 1.0);
+      return;
+    }
+    float lightS = lbS.w * uLightColor.r * (1.0 / 3.3) + dot(uAmbient, vec3(0.3333)) * cellLight(vWorld.xz);
+    float wash = smoothstep(uSlide.x, uSlide.y, lightS);
+    // Зерно сидит на самой картинке (клетки по 1,5 см) и «кипит», пока свет на ней.
+    if (cellHash(vWorld * 66.0 + vec3(0.0, 0.0, floor(uSlide.w * 11.0))) < wash) discard;
+    float distS = length(vPosV);
+    // Лампа проектора дышит; к краям картинка темнее, чем в середине.
+    vec2 q = vUv * 2.0 - 1.0;
+    float lampS = (0.93 + 0.07 * sin(uSlide.w * 9.0) * sin(uSlide.w * 2.3 + 1.1)) * (1.0 - 0.3 * dot(q, q) * 0.5);
+    vec3 img = vColor.rgb * (uSlide.z * lampS * (1.0 - 0.6 * wash));
+    img += vec3(0.9, 0.07, 0.03) * burn;
+    gl_FragColor = vec4(mix(uFogColor, img, exp(-uFog * distS)), 1.0);
+    return;
+  }
+#endif
   int mi = int(vMat + 0.5);
   vec4 ma = uMatA[mi];
   vec4 mb = uMatB[mi];

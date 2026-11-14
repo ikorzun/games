@@ -13,11 +13,12 @@
  * диваны, растения и картины — готовые модели (props_models.ts).
  */
 import { panelDead } from '../systems/cell_lights';
-import { floorSpots, free, homeCentre, homeStack, landmark, spot } from './furnish';
+import { floorSpots, free, homeCentre, homeStack, landmark, leanScreens, screenAt, spot, veils } from './furnish';
 import type { CellInfo, HomeItem, RoomCtx, Slot } from './furnish';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
 import type { Xf } from './props';
+import type { ScreenKind } from './screens';
 
 const seedOf = (ctx: RoomCtx): number => Math.floor(ctx.rng() * 1e6);
 
@@ -73,6 +74,10 @@ function middle(ctx: RoomCtx): { c: CellInfo; dx: number; dz: number } {
   return { c, dx: ((x0 + x1) / 2 - c.cx) * 3, dz: ((z0 + z1) / 2 - c.cz) * 3 };
 }
 
+/** Что показывают экраны: в офисе — природу (ею заменяют окна), в жёлтых комнатах — то, что забыли выключить. */
+const NATURE: readonly ScreenKind[] = ['nature', 'strange'];
+const LEFT_ON: readonly ScreenKind[] = ['pop', 'strange', 'signal'];
+
 // ───────────────────────── офис ─────────────────────────
 
 function corridor(ctx: RoomCtx): void {
@@ -94,6 +99,8 @@ function corridor(ctx: RoomCtx): void {
   ctx.cells.forEach((c, i) => {
     if (i % 3 === 1) put(ctx, 'ceiling_vent', c.xf.child(0.95, ctx.h, -0.3));
   });
+  // Экраны с природой у стен: то, чем офис заменяет окна.
+  leanScreens(ctx, 3, 0.05, NATURE);
 }
 
 function lift(ctx: RoomCtx): void {
@@ -116,6 +123,8 @@ function reception(ctx: RoomCtx): void {
   }
   // Напротив — стулья для тех, кто ждёт, и кактус между ними.
   wall(ctx, ['kk_chair_a', -0.75], ['kk_chair_a', 0.75], ['kk_cactus_small', 0, 0]);
+  // Экран в приёмной: лес вместо окна.
+  leanScreens(ctx, 1, 1, NATURE);
   floorSpots(ctx, 1);
 }
 
@@ -162,6 +171,12 @@ function meeting(ctx: RoomCtx): void {
   wall(ctx, ['whiteboard']);
   wall(ctx, ['office_clock']);
   corner(ctx, 'kk_cactus');
+  // Экран для презентаций на свободной стене.
+  const scr = free(ctx, false)[0];
+  if (scr) {
+    scr.used = true;
+    screenAt(ctx, scr.xf.child(0, 1.05, 0), 'wall', NATURE, scr.dir);
+  }
   floorSpots(ctx, 1);
 }
 
@@ -291,12 +306,18 @@ function yellowCorridor(ctx: RoomCtx): void {
   panels(ctx, true);
   // В коридоре остатков почти нет: только знак, о который нельзя споткнуться.
   for (const c of ctx.cells) if (c.doors === 0 && ctx.rng() < 0.05) put(ctx, 'wet_floor_sign', c.xf.child((ctx.rng() - 0.5) * 0.8, 0, (ctx.rng() - 0.5) * 0.8));
+  // Свет здесь не гаснет, а проекцию он смывает: комнаты, которых нет, держатся только под мёртвыми лампами.
+  veils(ctx, 3, (c) => panelDead(ctx.seed, c.cx, c.cz));
 }
 
 function hall(ctx: RoomCtx): void {
   panels(ctx, true);
   pillars(ctx);
   leftovers(ctx, 0.45);
+  // Экраны остались включёнными: у стен — прислонённые, в больших залах один стоит посреди.
+  leanScreens(ctx, 2, 0.16, LEFT_ON);
+  const mid = ctx.cells.find((c) => c.doors === 0 && ctx.cells.length >= 4 && !ctx.slots.some((s) => s.cx === c.cx && s.cz === c.cz));
+  if (mid) screenAt(ctx, mid.xf.child(0.95, 0, -0.95, ((mid.cx + mid.cz) % 4) as 0 | 1 | 2 | 3), 'stand', LEFT_ON, 9);
   floorSpots(ctx, Math.min(4, ctx.cells.length + 1));
   const c = ctx.cells[0]!;
   landmark(ctx, 'hall', c.xf, 0, 1.2, 0);
