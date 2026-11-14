@@ -1,11 +1,14 @@
 /**
- * Рой: поведение. Чистая логика на навигационном графе, без three.js.
+ * Осыпь (в коде — рой): поведение. Чистая логика на навигационном графе, без three.js.
  *
- *   dormant ─(режиссёр)→ roam ─(заметил свет или шум)→ stalk ─(подошёл)→ cohere → hunt
- *   hunt ─(луч держали на нём)→ scatter ─(переждал)→ stalk …      hunt ─(дотянулся)→ поймал
+ *   dormant ─(режиссёр)→ roam ─(почуяла свет, шум или темноту рядом с игроком)→ stalk ─(подошла)→ cohere → hunt
+ *   hunt ─(луч держали на ней)→ scatter ─(переждала)→ stalk …      hunt ─(дотянулась)→ поймала
  *
- * Рой идёт на свет и шум. В темноте и тишине теряет игрока. Прямой луч разваливает собранный рой,
- * но он пересобирается поблизости — с каждым разом быстрее. Тряска фонаря шумит.
+ * Осыпь — то, что свет отпустил: точки мест, с которых он ушёл. Она тянется к тому, кто несёт
+ * фонарь: идёт на свет и на шум, а темнота рядом с игроком зовёт её сильнее всего — погасить фонарь
+ * поблизости значит не спрятаться, а позвать. Издалека, в темноте и тишине, она игрока теряет.
+ * Прямой луч держит её на месте: под ним она почти не движется, а если держать дольше — «проявляется»
+ * до конца, рассыпается и собирается снова поблизости, с каждым разом быстрее. Тряска фонаря шумит.
  */
 import { clamp01 } from '../core/math';
 import type { Rng } from '../core/rng';
@@ -29,6 +32,8 @@ export interface SwarmConfig {
   sightNodes: number;
   /** За сколько секунд без света и шума рой теряет игрока. */
   forgetTime: number;
+  /** На сколько узлов пути чувствуется темнота вокруг игрока, когда его фонарь не светит. */
+  darkNodes: number;
 }
 
 export const DEFAULT_SWARM: SwarmConfig = {
@@ -36,11 +41,12 @@ export const DEFAULT_SWARM: SwarmConfig = {
   stalkSpeed: 2.5,
   huntDark: 2.7,
   huntLit: 1.9,
-  huntBeam: 0.5,
-  burnTime: 1.2,
+  huntBeam: 0.12,
+  burnTime: 1.5,
   catchDist: 0.95,
   sightNodes: 9,
   forgetTime: 8,
+  darkNodes: 6,
 };
 
 export interface SwarmInput {
@@ -253,8 +259,10 @@ export class SwarmAI {
     // ── Что рой знает об игроке ──
     const sees = inp.lightOn && hops >= 0 && hops <= c.sightNodes;
     const hears = inp.noise > 0.05 && hops >= 0 && hops <= Math.round(2 + inp.noise * 4);
-    if (sees || hears) {
-      this.awareness = clamp01(this.awareness + (sees ? 0.5 : 0) * dt + (hears ? inp.noise * 1.5 : 0) * dt);
+    // Темнота вокруг игрока — её среда: место там уже осыпается ей навстречу.
+    const feels = !inp.lightOn && hops >= 0 && hops <= c.darkNodes;
+    if (sees || hears || feels) {
+      this.awareness = clamp01(this.awareness + ((sees ? 0.5 : 0) + (feels ? 0.7 : 0) + (hears ? inp.noise * 1.5 : 0)) * dt);
       this.lastKnown = inp.playerNode;
     } else this.awareness = clamp01(this.awareness - dt / c.forgetTime);
 

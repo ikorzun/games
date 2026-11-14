@@ -12,7 +12,7 @@ import { bakeDetail } from './detail';
 import { bakeGrime } from './grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from './matcap_atlas';
 import { MAX_WORMS } from '../swarm/body';
-import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, SPOT_FRAG, TRAIL_FRAG, SWARM_FRAG, SWARM_VERT, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
+import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, ENTITY_VERT, SPOT_FRAG, TRAIL_FRAG, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
 import { smoothstep } from '../core/math';
 import { SplatClouds } from './splats';
 
@@ -28,6 +28,8 @@ export interface QualitySpec {
   dust: number;
   /** Сколько червей роя рисовать. */
   worms: number;
+  /** Точек в одной пряди Осыпи. */
+  strand: number;
   /** Дымка в луче: число шагов вдоль взгляда (0 — выключена) и во сколько раз её буфер меньше кадра. */
   haze: number;
   hazeDiv: number;
@@ -38,9 +40,9 @@ export interface QualitySpec {
 }
 
 export const QUALITY: Record<Quality, QualitySpec> = {
-  low: { pixels: 640 * 360, shadow: 0, chroma: false, detail: false, dust: 140, worms: 44, haze: 0, hazeDiv: 3, hazeShadow: false, points: 300 },
-  med: { pixels: 960 * 540, shadow: 512, chroma: true, detail: true, dust: 300, worms: 68, haze: 8, hazeDiv: 3, hazeShadow: false, points: 600 },
-  high: { pixels: 1280 * 720, shadow: 1024, chroma: true, detail: true, dust: 520, worms: MAX_WORMS, haze: 14, hazeDiv: 2, hazeShadow: true, points: 1100 },
+  low: { pixels: 640 * 360, shadow: 0, chroma: false, detail: false, dust: 140, worms: 44, strand: 56, haze: 0, hazeDiv: 3, hazeShadow: false, points: 300 },
+  med: { pixels: 960 * 540, shadow: 512, chroma: true, detail: true, dust: 300, worms: 68, strand: 80, haze: 8, hazeDiv: 3, hazeShadow: false, points: 600 },
+  high: { pixels: 1280 * 720, shadow: 1024, chroma: true, detail: true, dust: 520, worms: MAX_WORMS, strand: 110, haze: 14, hazeDiv: 2, hazeShadow: true, points: 1100 },
 };
 
 /** Всё, что нужно для одного кадра. */
@@ -241,7 +243,10 @@ export class GameRenderer {
   private dust: THREE.Points | null = null;
   private readonly dustMat: THREE.ShaderMaterial;
   private readonly swarmMat: THREE.ShaderMaterial;
-  private readonly swarmMesh: THREE.Mesh;
+  private readonly swarmGeo: THREE.InstancedBufferGeometry;
+  private readonly swarmPoints: THREE.Points;
+  /** Сцена Осыпи: рисуется вслед за точками мира, тем же проходом. */
+  private readonly swarmScene = new THREE.Scene();
   private readonly swarmHead: THREE.InstancedBufferAttribute;
   private readonly swarmDir: THREE.InstancedBufferAttribute;
   private readonly swarmParam: THREE.InstancedBufferAttribute;
@@ -397,27 +402,24 @@ export class GameRenderer {
       transparent: true,
       depthWrite: false,
     });
-    // Рой: шаблон одного червя (кольца × грани), размноженный инстансами.
-    const RINGS = 9;
-    const SIDES = 5;
-    const tpl: number[] = [];
-    const idx: number[] = [];
-    for (let r = 0; r < RINGS; r++) {
-      for (let k = 0; k < SIDES; k++) {
-        const a = (k / SIDES) * Math.PI * 2;
-        tpl.push(Math.cos(a), Math.sin(a), r / (RINGS - 1));
-      }
-    }
-    for (let r = 0; r < RINGS - 1; r++) {
-      for (let k = 0; k < SIDES; k++) {
-        const a = r * SIDES + k;
-        const b = r * SIDES + ((k + 1) % SIDES);
-        idx.push(a, a + SIDES, b, b, a + SIDES, b + SIDES);
-      }
-    }
+    // Осыпь: прядь из точек, размноженная инстансами (у каждой пряди своя голова и направление).
+    // Точек в пряди — с запасом на высокое качество; сколько из них рисовать, решает качество.
+    const STRAND = 110;
+    const rnd = new Float32Array(STRAND * 4);
+    let seed = 0x2f6e2b1;
+    const next = (): number => {
+      seed ^= seed << 13;
+      seed >>>= 0;
+      seed ^= seed >>> 17;
+      seed ^= seed << 5;
+      seed >>>= 0;
+      return seed / 4294967296;
+    };
+    // Точки идут вперемешку по длине пряди: любое их начало покрывает прядь целиком.
+    for (let i = 0; i < STRAND; i++) rnd.set([next(), next(), next(), next()], i * 4);
     const sg = new THREE.InstancedBufferGeometry();
-    sg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(tpl), 3));
-    sg.setIndex(idx);
+    sg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(STRAND * 3), 3));
+    sg.setAttribute('aRnd', new THREE.BufferAttribute(rnd, 4));
     this.swarmHead = new THREE.InstancedBufferAttribute(new Float32Array(MAX_WORMS * 3), 3);
     this.swarmDir = new THREE.InstancedBufferAttribute(new Float32Array(MAX_WORMS * 3), 3);
     this.swarmParam = new THREE.InstancedBufferAttribute(new Float32Array(MAX_WORMS * 2), 2);
@@ -427,18 +429,8 @@ export class GameRenderer {
     sg.setAttribute('iDir', this.swarmDir);
     sg.setAttribute('iParam', this.swarmParam);
     sg.instanceCount = 0;
-    this.swarmMat = new THREE.ShaderMaterial({
-      vertexShader: SWARM_VERT,
-      fragmentShader: SWARM_FRAG,
-      uniforms: { ...this.lightU, uTime: { value: 0 }, uThick: { value: 0.042 }, uAlpha: { value: 0.85 }, uFog: { value: 0.035 } },
-      side: THREE.DoubleSide,
-    });
-    this.swarmMesh = new THREE.Mesh(sg, this.swarmMat);
-    this.swarmMesh.frustumCulled = false;
-    // Слой 1: рой не попадает в проход тени — он «призрачный» и тени не отбрасывает.
-    this.swarmMesh.layers.set(1);
-    this.swarmMesh.visible = false;
-    this.scene.add(this.swarmMesh);
+    // Материал — после материала точек мира: у них общие размеры и глубина кадра.
+    this.swarmGeo = sg;
 
     this.postMat = new THREE.ShaderMaterial({
       vertexShader: POST_VERT,
@@ -556,6 +548,31 @@ export class GameRenderer {
     this.clouds = new SplatClouds(this.splatMat);
     this.clouds.lodDist = SCAN.lodDist;
     this.clouds.far = SCAN.far;
+    // Осыпь: те же точки, что у мира, — тот же размер, та же форма, та же глубина кадра.
+    this.swarmMat = new THREE.ShaderMaterial({
+      vertexShader: ENTITY_VERT,
+      fragmentShader: SPLAT_FRAG,
+      uniforms: {
+        ...this.lightU,
+        tDepth: this.splatMat.uniforms.tDepth!,
+        uNearFar: this.splatMat.uniforms.uNearFar!,
+        uTime: { value: 0 },
+        uSize: this.splatMat.uniforms.uSize!,
+        uProj: this.splatMat.uniforms.uProj!,
+        uMaxPx: this.splatMat.uniforms.uMaxPx!,
+        uAlpha: { value: 0 },
+        uDarkGain: { value: 1 },
+      },
+      blending: THREE.NormalBlending,
+      premultipliedAlpha: true,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    this.swarmPoints = new THREE.Points(this.swarmGeo, this.swarmMat);
+    this.swarmPoints.frustumCulled = false;
+    this.swarmPoints.visible = false;
+    this.swarmScene.add(this.swarmPoints);
     // Память света: полноэкранный проход из мира этого кадра и памяти прошлого.
     this.memMat = new THREE.ShaderMaterial({
       vertexShader: POST_VERT,
@@ -886,12 +903,13 @@ export class GameRenderer {
   }
 
   /**
-   * Передать рою позиции на кадр. heads, dirs, params — массивы тела роя; alpha — плотность
-   * (0 — роя нет). Сколько червей рисовать, решает качество.
+   * Передать Осыпи (рою) позиции на кадр. heads, dirs, params — массивы тела; alpha — плотность
+   * (0 — её нет). Сколько прядей и точек в пряди рисовать, решает качество.
    */
   setSwarm(heads: Float32Array, dirs: Float32Array, params: Float32Array, alpha: number, time: number): void {
     const on = alpha > 0.01;
-    this.swarmMesh.visible = on;
+    this.swarmPoints.visible = on;
+    this.swarmMat.uniforms.uAlpha!.value = on ? alpha : 0;
     if (!on) return;
     (this.swarmHead.array as Float32Array).set(heads);
     (this.swarmDir.array as Float32Array).set(dirs);
@@ -899,8 +917,9 @@ export class GameRenderer {
     this.swarmHead.needsUpdate = true;
     this.swarmDir.needsUpdate = true;
     this.swarmParam.needsUpdate = true;
-    (this.swarmMesh.geometry as THREE.InstancedBufferGeometry).instanceCount = Math.min(MAX_WORMS, QUALITY[this.quality].worms);
-    this.swarmMat.uniforms.uAlpha!.value = alpha;
+    const q = QUALITY[this.quality];
+    this.swarmGeo.instanceCount = Math.min(MAX_WORMS, q.worms);
+    this.swarmGeo.setDrawRange(0, q.strand);
     this.swarmMat.uniforms.uTime!.value = time;
   }
 
@@ -941,6 +960,11 @@ export class GameRenderer {
   async warmup(): Promise<void> {
     this.renderer.setRenderTarget(this.sceneRT);
     await this.renderer.compileAsync(this.scene, this.camera);
+    // Осыпь появляется посреди игры: её шейдер собирается заранее, чтобы первый её кадр не подвисал.
+    const shown = this.swarmPoints.visible;
+    this.swarmPoints.visible = true;
+    await this.renderer.compileAsync(this.swarmScene, this.camera);
+    this.swarmPoints.visible = shown;
     this.renderer.setRenderTarget(null);
     await this.renderer.compileAsync(this.postScene, this.postCam);
     if (this.hazeRT) await this.renderer.compileAsync(this.hazeScene, this.postCam);
@@ -1004,7 +1028,6 @@ export class GameRenderer {
     (wuEnv.uKeyColor!.value as THREE.Vector3).set(v.keyColor[0], v.keyColor[1], v.keyColor[2]);
     wuEnv.uFog!.value = v.fogDensity;
     wuEnv.uDissolve!.value = v.dissolve;
-    this.swarmMat.uniforms.uFog!.value = v.fogDensity;
     this.dustMat.uniforms.uBoost!.value = v.dissolve;
     this.clearColor.setRGB(v.fogColor[0], v.fogColor[1], v.fogColor[2]);
 
@@ -1175,6 +1198,14 @@ export class GameRenderer {
       pu0.tMem!.value = memNow.texture;
       r.autoClear = false;
       r.render(this.clouds.scene, cam);
+      r.autoClear = true;
+    }
+    // Осыпь — поверх точек мира. В темноте она светится сама; усиление камеры её не разгоняет.
+    if (this.swarmPoints.visible) {
+      this.swarmMat.uniforms.uDarkGain!.value = 1 / Math.max(1, v.gain) ** 0.5;
+      this.swarmMat.uniforms.tDepth!.value = this.sceneRT.depthTexture;
+      r.autoClear = false;
+      r.render(this.swarmScene, cam);
       r.autoClear = true;
     }
 

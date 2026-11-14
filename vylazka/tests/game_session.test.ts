@@ -29,7 +29,18 @@ class FakeRenderer {
     this.worlds += 1;
   }
   setGlow(): void {}
-  setSwarm(): void {}
+  /** Осыпь в последнем кадре: плотность и середина тела. */
+  swarm = { alpha: 0, center: [0, 0, 0] as Vec3 };
+  setSwarm(heads: Float32Array, _dirs: Float32Array, _params: Float32Array, alpha: number): void {
+    const c: Vec3 = [0, 0, 0];
+    const n = heads.length / 3;
+    for (let i = 0; i < n; i++) {
+      c[0] += heads[i * 3]! / n;
+      c[1] += heads[i * 3 + 1]! / n;
+      c[2] += heads[i * 3 + 2]! / n;
+    }
+    this.swarm = { alpha, center: c };
+  }
   setChunkVisible(): void {}
   setPocket(m: unknown): void {
     this.pocketShown = m !== null;
@@ -898,5 +909,79 @@ describe('игра целиком: без света место не обяза�
     expect(dark(h).shifts).toBe(0);
     expect(dark(h).for).toBe(0);
     expect(places(mine)).toEqual(before);
+  });
+});
+
+describe('игра целиком: Осыпь под лучом и её рост', () => {
+  type SwarmState = { mode: string; growth: number; flow: number | null };
+  const swarmOf = (h: Harness) => (h.game.snapshot() as { swarm: SwarmState }).swarm;
+
+  /** Осыпь охотится в нескольких клетках, игрок держит на ней луч. true — её проявили (рассыпалась). */
+  function expose(h: Harness): boolean {
+    const g = h.game;
+    const sw = g.swarm!;
+    const here = g.playerNode();
+    for (const node of nodesInRange(levelOf(SEED).nav, here, 2, 4)) {
+      sw.activate(node);
+      sw.mode = 'hunt';
+      sw.cohesion = 1;
+      sw.awareness = 1;
+      h.log.fear.length = 0;
+      for (let i = 0; i < Math.round(3 / STEP); i++) {
+        g.aimAt(sw.pos[0], sw.pos[1] + 1.1, sw.pos[2]);
+        h.tick();
+        if (h.log.fear.some((e) => e.type === 'swarm' && e.what === 'scattered')) return true;
+        if (h.log.fear.some((e) => e.type === 'swarm' && e.what === 'caught')) return false;
+      }
+    }
+    return false;
+  }
+
+  it('проявленная лучом, она рассыпается и три секунды течёт по пути к искомой вещи', () => {
+    const h = new Harness(levelOf(SEED), { calm: false, seed: 6 });
+    const g = h.game;
+    h.run(2);
+    h.reveal();
+    const spot = g.session!.active!.spot!;
+    expect(expose(h), 'Осыпь не удалось проявить лучом').toBe(true);
+    expect(swarmOf(h).mode).toBe('scatter');
+    expect(swarmOf(h).flow).not.toBeNull();
+    // Тело идёт вдоль пути: за две секунды его середина заметно ближе к искомой вещи (по прямой или по пути —
+    // первый отрезок пути всегда приближает к следующему узлу).
+    const start = [...h.r.swarm.center];
+    const to = (c: number[]) => Math.hypot(c[0]! - spot.x, c[2]! - spot.z);
+    h.run(2);
+    const moved = Math.hypot(h.r.swarm.center[0] - start[0]!, h.r.swarm.center[2] - start[2]!);
+    expect(moved).toBeGreaterThan(3);
+    expect(h.r.swarm.alpha).toBeGreaterThan(0.5);
+    expect(Number.isFinite(to(h.r.swarm.center))).toBe(true);
+    // К концу третьей секунды редеет, потом течение кончается.
+    h.run(0.8);
+    expect(h.r.swarm.alpha).toBeLessThan(0.5);
+    h.run(0.4);
+    expect(swarmOf(h).flow).toBeNull();
+  });
+
+  it('когда искать нечего, проявленная Осыпь просто рассыпается: течь ей некуда', () => {
+    // Первая вспышка воспоминания — нескоро: пока Осыпь проявляют, искать нечего.
+    const h = new Harness(levelOf(SEED), { calm: false, seed: 6, cfg: { ...QUICK, firstDelay: 600 } });
+    h.run(0.3);
+    expect(expose(h), 'Осыпь не удалось проявить лучом').toBe(true);
+    expect(h.game.session!.active).toBeNull();
+    expect(swarmOf(h).flow).toBeNull();
+  });
+
+  it('фигура растёт с каждым вспомненным: четверть роста за воспоминание', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3 });
+    const g = h.game;
+    expect(swarmOf(h).growth).toBe(0);
+    for (let k = 1; k <= 2; k++) {
+      expect(h.until(() => g.session!.active !== null, 4)).toBe(true);
+      const thing = g.things.list.find((x) => x.memory)!;
+      expect(h.standBefore(thing.id)).toBe(true);
+      const before = h.count('recall');
+      expect(h.until(() => h.count('recall') > before, 4)).toBe(true);
+      expect(swarmOf(h).growth).toBeCloseTo(k / 4, 6);
+    }
   });
 });

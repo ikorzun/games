@@ -527,7 +527,7 @@ async function scenarioFear(browser, baseUrl) {
   await sleep(300);
   await vz(page, () => window.__vz.freeze(true));
   let st = await vz(page, () => window.__vz.step(5));
-  check('в начале сессии рой спит, режиссёр в первой фазе', st.swarm.mode === 'dormant' && st.director.phase === 0 && st.swarm.near === 0);
+  check('в начале сессии рой спит, режиссёр в первой фазе; фигура ещё не выросла', st.swarm.mode === 'dormant' && st.director.phase === 0 && st.swarm.near === 0 && st.swarm.growth === 0 && st.swarm.flow === null);
   const spawn = [...st.pos];
 
   // Повернуть луч на рой и шагать, пока не выполнится условие.
@@ -585,6 +585,12 @@ async function scenarioFear(browser, baseUrl) {
   check('подсказка про луч показана один раз', (await page.textContent('.vz-hud__toast'))?.includes('луч') === true);
   for (let i = 0; i < 80 && st.swarm.mode === 'hunt' && st.jump?.cause !== 'caught'; i++) st = await aimAndStep(6);
   check('прямой луч развалил рой, игрок цел', st.swarm.mode === 'scatter' && st.swarm.aggravation === 1 && st.jump?.cause !== 'caught', `${st.swarm.mode}, скачок ${JSON.stringify(st.jump)}`);
+  // Проявленная лучом, Осыпь три секунды течёт по пути к искомой вещи — подсказка, куда идти.
+  const flowAt = st.swarm.flow;
+  st = await vz(page, () => window.__vz.step(100));
+  const flowMid = st.swarm.flow;
+  st = await vz(page, () => window.__vz.step(100));
+  check('проявленная, она три секунды течёт к искомой вещи, потом течение кончается', flowAt !== null && flowAt < 0.5 && flowMid !== null && flowMid > 1.4 && st.swarm.flow === null && st.swarm.mode === 'scatter', `течение ${flowAt} → ${flowMid} → ${st.swarm.flow}, ${st.swarm.mode}`);
   for (let i = 0; i < 90 && st.swarm.mode !== 'hunt' && st.jump?.cause !== 'caught'; i++) st = await vz(page, () => window.__vz.step(20));
   check('рой вернулся и снова охотится', st.swarm.mode === 'hunt' && st.jump?.cause !== 'caught', st.swarm.mode);
   // Гасим фонарь: в темноте рой, который уже знает, где игрок, добирается быстро. Поимка — не конец.
@@ -641,10 +647,11 @@ async function scenarioRooms(browser, baseUrl) {
     if (s.roomFx === null) plain.push(r.id);
   }
   // Красноту кадра меряем при выключенном фонаре: кирпичная кладовая и бордовый ковёр в луче красные
-  // сами по себе, а сетка светится и без света.
+  // сами по себе, а сетка светится и без света. Ждём восемь секунд: первые семь место ещё держится
+  // в памяти — со своими цветами.
   const redInDark = async () => {
     await vz(page, () => window.__vz.toggleLight());
-    await vz(page, () => window.__vz.step(50));
+    await vz(page, () => window.__vz.step(480));
     const col = await vz(page, () => window.__vz.probeColor());
     await vz(page, () => window.__vz.toggleLight());
     await vz(page, () => window.__vz.step(20));
@@ -716,10 +723,25 @@ async function scenarioRooms(browser, baseUrl) {
   const flashes = rises(hard, 0.5);
   const gaps = flashes.slice(1).map((x, i) => (x - flashes[i]) / 60);
   check('строб: вспышек за 4 секунды не больше 12 и не чаще трёх в секунду', strobeRoom && flashes.length >= 3 && flashes.length <= 12 && Math.min(...gaps) >= 1 / 3 - 0.01, `вспышек ${flashes.length}, наименьший промежуток ${Math.min(...gaps).toFixed(2)} с`);
-  // Картинка: кадр со вспышкой заметно светлее кадра без неё (три пары, чтобы не попасть на случайность).
+  // Картинка: кадр со вспышкой заметно светлее промежутка (три пары, чтобы не попасть на случайность).
+  // Промежуток теперь не чёрный: без света место держится в памяти и тянет след (длинная выдержка),
+  // поэтому вспышка не обрывается, а гаснет. Снимаем три кадра: вспышка, сразу после неё и через
+  // четверть секунды (если следующая вспышка ещё не началась).
   const pairs = [];
-  for (let i = 0; i < 3; i++) pairs.push([await frameWhen((v) => v > 0.5), await frameWhen((v) => v < 0.5)]);
-  check('строб: во вспышке кадр светлеет целиком', pairs.every(([on, off]) => on !== null && off !== null && on > off * 1.5 && on - off > 12), pairs.map(([on, off]) => `${on?.toFixed(1)} / ${off?.toFixed(1)}`).join('; '));
+  for (let i = 0; i < 3; i++) {
+    const on = await frameWhen((v) => v > 0.5);
+    const early = await frameWhen((v) => v < 0.5);
+    const s = await vz(page, () => window.__vz.step(14));
+    const late = s.fx.strobe < 0.5 ? mean(await vz(page, () => window.__vz.probe())) : null;
+    if (late === null) {
+      i -= 1;
+      continue;
+    }
+    pairs.push([on, early, late]);
+  }
+  const show = pairs.map(([on, early, late]) => `${on?.toFixed(1)} / ${early?.toFixed(1)} / ${late?.toFixed(1)}`).join('; ');
+  check('строб: во вспышке кадр светлеет целиком', pairs.every(([on, , late]) => on !== null && late !== null && on > late * 1.2 && on - late > 12), show);
+  check('строб: вспышка не обрывается, а гаснет — сразу после неё кадр ярче, чем через четверть секунды', pairs.every(([on, early, late]) => early !== null && late !== null && early > late * 1.1 && early <= on * 1.02), show);
   check('мягкие вспышки: сила света плывёт без скачков', rises(soft, 0.02).length === 0 && jumpMax(soft) < 0.02 && Math.max(...soft) < 0.2, `наибольший скачок ${jumpMax(soft).toFixed(3)}, предел ${Math.max(...soft).toFixed(2)}`);
   check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
   await context.close();

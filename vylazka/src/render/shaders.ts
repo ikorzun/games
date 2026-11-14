@@ -520,67 +520,95 @@ void main() {
 `;
 
 /**
- * Рой: каждый червь — трубка, изогнутая в вершинном шейдере вдоль пути за головой. Тело почти
- * чёрное; в луче фонаря блестит мокрым бликом, в темноте едва светится по кромке. Прозрачность —
- * экранным дизерингом, без сортировки.
+ * Осыпь — сущность (в коде — рой). Она сделана из того же, из чего мир: из точек. Тело — сотня
+ * прядей (их головы и направления считает swarm/body.ts), вдоль каждой пряди расставлены точки.
+ *
+ * В темноте пряди рыхлые: точки висят вокруг оси, дрожат и светятся тускло и холодно — Осыпь видна
+ * и без света, она и есть то, что остаётся в темноте. Под лучом фонаря точки стягиваются к оси
+ * («свет держит её») и берут свет, как любая поверхность: фигура становится плотной и яркой.
+ * Часть точек помнит цвет мест, с которых осыпалась, — охру, зелёную краску, ржавчину.
+ * Рисуется тем же проходом и той же формой, что точки мира (SPLAT_FRAG); за стеной её не видно.
  */
-export const SWARM_VERT = /* glsl */ `
+export const ENTITY_VERT = /* glsl */ `
+attribute vec4 aRnd;        // x — место вдоль пряди 0..1, yzw — случайные числа точки
 attribute vec3 iHead;
 attribute vec3 iDir;
-attribute vec2 iParam;
+attribute vec2 iParam;      // зерно пряди и её длина
+uniform highp sampler2D tDepth;
+uniform vec2 uNearFar;
 uniform float uTime;
-uniform float uThick;
-varying vec3 vPosV;
-varying vec3 vNrmV;
-varying float vT;
+uniform float uSize;        // размер точки в мире, м
+uniform float uProj;        // пикселей буфера на метр на расстоянии в метр
+uniform float uMaxPx;
+uniform float uAlpha;       // 0 — Осыпи нет
+uniform float uDarkGain;    // яркость свечения в темноте (не растёт вместе с усилением камеры)
+uniform vec3 uLightPosV;
+uniform vec3 uLightDirV;
+uniform vec3 uLightColor;
+uniform vec4 uCone;
+varying vec4 vCol;
+varying vec3 vShape;
+
+float linDepth(float d) {
+  return (2.0 * uNearFar.x * uNearFar.y) / (uNearFar.y + uNearFar.x - (d * 2.0 - 1.0) * (uNearFar.y - uNearFar.x));
+}
 
 void main() {
-  float t = position.z;
+  vCol = vec4(0.0);
+  vShape = vec3(1.0, 0.0, 1.0);
+  gl_PointSize = 1.0;
+  gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+  if (uAlpha <= 0.004) return;
+
+  // Ось пряди: голова, за ней хвост, который вьётся.
+  float t = aRnd.x;
   vec3 d = normalize(iDir + vec3(1e-4, 2e-4, 0.0));
   vec3 up = abs(d.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
   vec3 side = normalize(cross(d, up));
   vec3 up2 = cross(side, d);
   float seed = iParam.x;
-  float len = iParam.y;
+  float len = iParam.y * 1.5;
   float ph = t * 9.0 - uTime * (6.0 + seed * 3.0) + seed * 40.0;
   float amp = 0.07 * len * (0.25 + t);
-  vec3 center = iHead - d * (t * len) + side * sin(ph) * amp + up2 * cos(ph * 0.7 + seed * 11.0) * amp * 0.6;
-  // Толще в середине, тонкий хвост, чуть притуплённая голова.
-  float r = uThick * (0.4 + 0.6 * sin(3.14159 * min(1.0, t * 1.1 + 0.14)));
-  vec3 n = side * position.x + up2 * position.y;
-  vec4 mv = viewMatrix * vec4(center + n * r, 1.0);
-  vPosV = mv.xyz;
-  vNrmV = mat3(viewMatrix) * n;
-  vT = t;
-  gl_Position = projectionMatrix * mv;
-}
-`;
+  vec3 axis = iHead - d * (t * len) + side * sin(ph) * amp + up2 * cos(ph * 0.7 + seed * 11.0) * amp * 0.6;
 
-export const SWARM_FRAG = /* glsl */ `
-precision highp float;
-uniform float uAlpha;
-uniform float uFog;
-varying vec3 vPosV;
-varying vec3 vNrmV;
-varying float vT;
+  // Сколько света фонаря приходит в это место (конус и затухание, без теней).
+  vec3 av = (viewMatrix * vec4(axis, 1.0)).xyz;
+  vec3 toL = uLightPosV - av;
+  float dl = length(toL);
+  float cosA = dot(-toL / max(dl, 1e-4), uLightDirV);
+  float beam = (smoothstep(uCone.y, uCone.x, cosA) * 0.78 + smoothstep(uCone.z, uCone.y, cosA) * 0.19 + smoothstep(uCone.w, uCone.z, cosA) * 0.03) / (1.0 + 0.07 * dl * dl);
+  float held = smoothstep(0.03, 0.5, beam * dot(uLightColor, vec3(0.3333)));
 
-${BEAM_GLSL}
+  // Точка вокруг оси: в темноте рыхло и дрожит, под светом стянута и стоит.
+  vec3 rnd = aRnd.yzw * 2.0 - 1.0;
+  float tw = uTime * (0.8 + aRnd.z) + aRnd.y * 6.2832;
+  vec3 wob = vec3(sin(tw), sin(tw * 1.3 + 1.7), cos(tw * 0.9));
+  float loose = mix(0.17, 0.035, held);
+  vec3 p = axis + (side * rnd.x + up2 * rnd.y + d * rnd.z * 0.6) * loose + wob * (loose * 0.35 * (1.0 - held));
 
-void main() {
-  // Дизеринг-прозрачность: interleaved gradient noise не даёт муара после дисторсии.
-  float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-  if (ign > uAlpha * (1.0 - vT * 0.45)) discard;
-  vec3 N = normalize(vNrmV);
-  vec3 V = normalize(-vPosV);
-  vec4 lb = beamAt(vPosV);
-  float rim = pow(1.0 - max(dot(N, V), 0.0), 2.5);
-  float spec = pow(max(dot(N, normalize(lb.xyz + V)), 0.0), 36.0);
-  // Тело чёрное: в луче рой читается тёмным силуэтом с редкими мокрыми бликами.
-  vec3 col = uLightColor * lb.w * (vec3(0.004, 0.004, 0.005) + spec * 0.16 + rim * 0.012);
-  // В темноте — едва заметная холодная кромка: рой угадывается, но не светится.
-  col += vec3(0.007, 0.009, 0.011) * rim;
-  col *= exp(-uFog * length(vPosV));
-  gl_FragColor = vec4(col, 1.0);
+  vec4 pv = viewMatrix * vec4(p, 1.0);
+  vec4 pc = projectionMatrix * pv;
+  if (pc.w <= 0.0) return;
+  vec2 uv = pc.xy / pc.w * 0.5 + 0.5;
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return;
+  // За стеной её не видно.
+  if (-pv.z > linDepth(texture2D(tDepth, uv).r) + 0.02) return;
+
+  float px = uSize * uProj / max(-pv.z, 0.05) * mix(0.8, 1.2, held);
+  float alpha = uAlpha * (0.5 + 0.5 * aRnd.w) * (1.0 - 0.5 * t);
+  if (px < 1.6) {
+    alpha *= px * px / 2.56;
+    px = 1.6;
+  }
+  gl_PointSize = min(px, uMaxPx);
+
+  // Цвет. Большинство точек — выцветшие, цвета кости; часть помнит краски мест, с которых осыпалась.
+  float k = fract(aRnd.w * 7.0 + seed * 3.0);
+  vec3 tint = k < 0.6 ? vec3(0.85, 0.82, 0.75) : (k < 0.75 ? vec3(0.78, 0.56, 0.3) : (k < 0.9 ? vec3(0.36, 0.56, 0.42) : vec3(0.72, 0.3, 0.22)));
+  vec3 dark = vec3(0.62, 0.72, 0.9) * ((0.07 + 0.07 * aRnd.w) * uDarkGain);
+  vCol = vec4(dark + uLightColor * (beam * 0.42) * tint, alpha);
+  gl_Position = pc;
 }
 `;
 

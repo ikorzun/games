@@ -114,6 +114,27 @@ interface Transition {
  * место успевает раствориться — см. SCAN.hold в рендере), как часто повторяется и как далеко достаёт, м.
  */
 const DARK_SHIFT = { first: 7, every: 9, range: 14 } as const;
+/** Сколько воспоминаний нужно, чтобы фигура Осыпи выросла в полный рост. */
+const SWARM_GROWN = 4;
+/** Течение Осыпи к искомой вещи после проявки: сколько секунд длится, с какой скоростью идёт и как далеко уходит, м. */
+const SWARM_FLOW = { time: 3, speed: 3.2, reach: 8.5 } as const;
+
+/** Точка на ломаной в s метрах от её начала (дальше конца — сам конец). */
+function pointAlong(path: readonly Vec3[], s: number): Vec3 {
+  let left = s;
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1]!;
+    const b = path[i]!;
+    const d = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+    if (left <= d && d > 1e-6) {
+      const k = left / d;
+      return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+    }
+    left -= d;
+  }
+  return [...path[path.length - 1]!];
+}
+
 const TIMING: Record<JumpStyle, readonly [number, number]> = { cut: [0.18, 0.45], dissolve: [1.6, 1.2], blackout: [0.55, 0.9], whiteout: [0.4, 1.2] };
 /** Где собираются карманные пространства: далеко в стороне от убежища. */
 const POCKET_ORIGIN: Vec3 = [400, 0, 0];
@@ -189,6 +210,8 @@ export class Game {
   private glow = 1;
   private glowTimer = 0;
   /** Сколько секунд подряд фонарь не светит; сколько раз за эту темноту детали уже менялись; сколько вещей изменилось всего. */
+  /** Осыпь течёт к искомой вещи после того, как её проявили лучом: путь и сколько секунд она уже течёт. */
+  private swarmFlow: { path: Vec3[]; t: number } | null = null;
   private darkFor = 0;
   private darkShifts = 0;
   private detailShifts = 0;
@@ -304,6 +327,7 @@ export class Game {
     this.darkFor = 0;
     this.darkShifts = 0;
     this.detailShifts = 0;
+    this.swarmFlow = null;
     this.glow = 1;
     this.glowTimer = 0;
     this.renderer.setGlow(1);
@@ -752,6 +776,25 @@ export class Game {
     return this.colliders.raycast(lx, ly, lz, tx / d, ty / d, tz / d, d) >= d - 0.4;
   }
 
+  /**
+   * Куда потечёт рассыпавшаяся Осыпь: ломаная от её места по узлам пути к искомой вещи.
+   * null — искать нечего или пути нет.
+   */
+  private flowToMemory(): { path: Vec3[]; t: number } | null {
+    const sw = this.swarm;
+    const spot = this.session?.active?.spot;
+    if (!sw || !spot || !this.level || sw.node < 0) return null;
+    const goal = this.playerNodeAt([spot.x, spot.y, spot.z]);
+    const route = goal >= 0 ? sw.route(sw.node, goal) : [];
+    if (route.length < 2) return null;
+    const path: Vec3[] = [[sw.pos[0], sw.pos[1], sw.pos[2]]];
+    for (const id of route.slice(1)) {
+      const n = this.level.nav[id]!;
+      path.push([n.x, n.y, n.z]);
+    }
+    return { path, t: 0 };
+  }
+
   /** Узел для явления роя: в 3–5 клетках, на виду у игрока. −1 — подходящего нет. */
   private apparitionNode(from: number): number {
     const sw = this.swarm;
@@ -1042,7 +1085,12 @@ export class Game {
         s.scare(0.2);
         fear.push({ type: 'swarm', what: 'cohered' });
       }
-      if (res.scattered) fear.push({ type: 'swarm', what: 'scattered' });
+      if (res.scattered) {
+        fear.push({ type: 'swarm', what: 'scattered' });
+        // Проявленная до конца, Осыпь рассыпается и несколько секунд течёт в сторону искомой вещи:
+        // она знает, где лежит то, что ещё не вспомнили.
+        this.swarmFlow = this.flowToMemory();
+      }
       if (res.caught && this.jumps) {
         // Рой не убивает: он гасит всё и уносит в другое место; искомая вещь при этом «забывается».
         fear.push({ type: 'swarm', what: 'caught' });
@@ -1211,11 +1259,27 @@ export class Game {
     const gain = this.exposure.update(dt, Math.max(lum * lit, amb * 1.2), amb > 0.05 ? 1 : lit);
     this.gasView = approach(this.gasView, this.session?.inGas ? 1 : 0, 0.6, dt);
     this.glitch = Math.max(0, this.glitch - dt * 1.5);
-    // Рой: тело тянется за центром.
+    // Осыпь (рой): тело тянется за центром. Чем больше вспомнено, тем выше и определённее фигура.
     const sw = this.swarm;
+    const flow = this.swarmFlow;
+    if (flow && (!sw || this.where !== 'main')) this.swarmFlow = null;
     if (sw && sw.active && this.where === 'main') {
-      this.swarmBody.update(dt, sw.pos, sw.cohesion, null);
-      this.renderer.setSwarm(this.swarmBody.heads, this.swarmBody.dirs, this.swarmBody.params, 0.88, this.time);
+      const growth = Math.min(1, (this.session?.doneCount ?? 0) / SWARM_GROWN);
+      if (flow) {
+        // Течёт по полу вдоль пути к искомой вещи; под конец редеет, потом тело возвращается к центру.
+        flow.t += dt;
+        const at = pointAlong(flow.path, Math.min(flow.t * SWARM_FLOW.speed, SWARM_FLOW.reach));
+        this.swarmBody.update(dt, at, 0, null, growth);
+        const fade = 1 - Math.max(0, (flow.t - (SWARM_FLOW.time - 0.8)) / 0.8);
+        this.renderer.setSwarm(this.swarmBody.heads, this.swarmBody.dirs, this.swarmBody.params, 0.88 * Math.max(0, fade), this.time);
+        if (flow.t >= SWARM_FLOW.time) {
+          this.swarmFlow = null;
+          this.swarmBody.snap(sw.pos, sw.cohesion);
+        }
+      } else {
+        this.swarmBody.update(dt, sw.pos, sw.cohesion, null, growth);
+        this.renderer.setSwarm(this.swarmBody.heads, this.swarmBody.dirs, this.swarmBody.params, 0.88, this.time);
+      }
     } else this.renderer.setSwarm(this.swarmBody.heads, this.swarmBody.dirs, this.swarmBody.params, 0, this.time);
     // Рядом с роем сигнал камеры рвётся.
     const hunting = sw?.mode === 'hunt' || sw?.mode === 'cohere';
@@ -1353,7 +1417,7 @@ export class Game {
       things: this.things.list.map((t) => ({ id: t.id, kind: t.kind, state: t.state, fate: t.fate, memory: t.memory, gaze: t.gaze, scale: t.scale, dissolve: t.dissolve, pos: t.pos })),
       jumps: this.jumps ? { count: this.jumps.count, cooldown: this.jumps.cooldown } : null,
       archive: [...this.archive],
-      swarm: this.swarm ? { mode: this.swarm.mode, pos: [...this.swarm.pos], node: this.swarm.node, cohesion: this.swarm.cohesion, awareness: this.swarm.awareness, aggravation: this.swarm.aggravation, near: this.swarmNear } : null,
+      swarm: this.swarm ? { mode: this.swarm.mode, pos: [...this.swarm.pos], node: this.swarm.node, cohesion: this.swarm.cohesion, awareness: this.swarm.awareness, aggravation: this.swarm.aggravation, near: this.swarmNear, growth: Math.min(1, (this.session?.doneCount ?? 0) / SWARM_GROWN), flow: this.swarmFlow ? this.swarmFlow.t : null } : null,
       director: this.director ? { phase: this.director.phase } : null,
       anomalies: this.anomalies ? this.anomalies.state() : null,
       node: this.playerNode(),

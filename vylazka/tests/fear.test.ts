@@ -33,16 +33,38 @@ function run(sw: SwarmAI, seconds: number, inp: SwarmInput | ((t: number) => Swa
 }
 
 describe('рой: поведение', () => {
-  it('спит, пока не выпустили; в темноте и тишине не находит игрока', () => {
-    const sw = new SwarmAI(line(20), mulberry32(1));
+  it('спит, пока не выпустили; издалека, в темноте и тишине, игрока не находит', () => {
+    const sw = new SwarmAI(line(60), mulberry32(1));
     expect(run(sw, 5, at(10)).caught).toBe(false);
     expect(sw.mode).toBe('dormant');
     expect(sw.proximity([30, 0, 0])).toBe(0);
     sw.activate(0);
-    const r = run(sw, 40, at(15, { lightOn: false }));
+    // Игрок в полусотне клеток: бродя, она к нему не подойдёт ближе, чем чувствует темноту.
+    const r = run(sw, 40, at(55, { lightOn: false }));
     expect(r.caught).toBe(false);
     expect(sw.awareness).toBe(0);
     expect(['roam']).toContain(sw.mode);
+  });
+
+  it('темнота рядом с игроком зовёт её: погасить фонарь поблизости — не спрятаться', () => {
+    // В шести клетках и ближе погасший фонарь чувствуется; дальше — нет.
+    const near = new SwarmAI(line(20), mulberry32(11));
+    near.activate(0);
+    run(near, 1, at(5, { lightOn: false }));
+    expect(near.awareness).toBeGreaterThan(0.5);
+    const far = new SwarmAI(line(20), mulberry32(11));
+    far.activate(0);
+    far.update(DT, at(8, { lightOn: false }));
+    expect(far.awareness).toBe(0);
+    // Игрок заметил её и погасил фонарь: она не теряет его, а доходит и дотягивается.
+    const sw = new SwarmAI(line(20), mulberry32(12));
+    sw.activate(0);
+    run(sw, 0.6, at(5));
+    const seen = sw.awareness;
+    expect(seen).toBeGreaterThan(0.2);
+    const r = run(sw, 30, at(5, { lightOn: false }));
+    expect(sw.awareness).toBeGreaterThan(seen);
+    expect(r.caught).toBe(true);
   });
 
   it('идёт на свет: замечает, подходит, собирается в фигуру и охотится', () => {
@@ -55,15 +77,16 @@ describe('рой: поведение', () => {
     expect(sw.cohesion).toBe(1);
   });
 
-  it('слышит шум издалека меньше, чем видит свет: тряска фонаря выдаёт игрока в темноте', () => {
+  it('слышит шум: тряска фонаря в темноте выдаёт игрока вдвое быстрее, чем сама темнота', () => {
     const quiet = new SwarmAI(line(20), mulberry32(3));
     quiet.activate(0);
-    run(quiet, 6, at(5, { lightOn: false, noise: 0 }));
-    expect(quiet.awareness).toBe(0);
+    run(quiet, 0.4, at(5, { lightOn: false, noise: 0 }));
     const loud = new SwarmAI(line(20), mulberry32(3));
     loud.activate(0);
-    run(loud, 6, at(5, { lightOn: false, noise: 0.9 }));
-    expect(loud.awareness).toBeGreaterThan(0.5);
+    run(loud, 0.4, at(5, { lightOn: false, noise: 0.9 }));
+    expect(quiet.awareness).toBeGreaterThan(0.2);
+    expect(quiet.awareness).toBeLessThan(0.35);
+    expect(loud.awareness).toBeGreaterThan(quiet.awareness * 2);
     // Тихий шаг в десяти клетках не слышен.
     const far = new SwarmAI(line(20), mulberry32(3));
     far.activate(0);
@@ -113,7 +136,9 @@ describe('рой: поведение', () => {
     const beam = dist({ beamOnSwarm: true });
     const lit = dist({});
     const dark = dist({ lightOn: false });
-    expect(beam).toBeLessThan(lit * 0.4);
+    // Луч держит её на месте: за секунду — сантиметры.
+    expect(beam).toBeLessThan(0.15);
+    expect(beam).toBeLessThan(lit * 0.1);
     expect(dark).toBeGreaterThan(lit * 1.3);
   });
 
@@ -192,6 +217,31 @@ describe('рой: тело', () => {
       expect(Number.isFinite(body.heads[i])).toBe(true);
       expect(Number.isFinite(body.dirs[i])).toBe(true);
     }
+  });
+
+  it('фигура растёт вместе с сессией: сначала низкая широкая куча, потом столб выше человека', () => {
+    expect(SwarmBody.height(0)).toBeCloseTo(1.01, 2);
+    expect(SwarmBody.height(0.5)).toBeCloseTo(1.63, 2);
+    expect(SwarmBody.height(1)).toBeCloseTo(2.25, 2);
+    expect(SwarmBody.height(7)).toBeCloseTo(2.25, 2);
+    const center: Vec3 = [0, 0, 0];
+    const shape = (growth: number): { top: number; spread: number } => {
+      const body = new SwarmBody(3);
+      body.snap(center, 1);
+      for (let i = 0; i < 120; i++) body.update(DT, center, 1, null, growth);
+      let top = -Infinity;
+      let spread = 0;
+      for (let i = 0; i < MAX_WORMS; i++) {
+        top = Math.max(top, body.heads[i * 3 + 1]!);
+        spread += Math.hypot(body.heads[i * 3]!, body.heads[i * 3 + 2]!) / MAX_WORMS;
+      }
+      return { top, spread };
+    };
+    const small = shape(0);
+    const grown = shape(1);
+    expect(small.top).toBeLessThan(1.25);
+    expect(grown.top).toBeGreaterThan(1.9);
+    expect(small.spread).toBeGreaterThan(grown.spread * 1.3);
   });
 
   it('в момент поимки рой рывком смыкается в заданной точке', () => {
