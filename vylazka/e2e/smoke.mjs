@@ -7,7 +7,7 @@
  *   npm run smoke:matrix                                             # + раскладка по матрице размеров, скриншоты в e2e/out/
  *   npm run smoke -- --url https://…                                 # опубликованная ссылка
  *
- * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --shell, --only play,gen,session,fear,audio,frame,touch,bridge,matrix.
+ * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --shell, --only play,gen,session,pockets,fear,audio,frame,touch,bridge,matrix.
  * Симуляция в тестах заморожена и шагается через window.__vz: проверяется логика и вёрстка, а не
  * частота кадров (SwiftShader даёт 5–10 к/с). Качество задаётся параметром адреса, иначе по строке
  * видеокарты выбралось бы «низкое» и тень осталась бы непроверенной.
@@ -759,6 +759,7 @@ async function scenarioSession(browser, baseUrl) {
 
   await scenarioHonest(browser, baseUrl);
   await scenarioThings(browser, baseUrl);
+  await scenarioPockets(browser, baseUrl);
 }
 
 /** Честный прогон без подсказок: ничего не подталкиваем, симуляции не больше 40 секунд. */
@@ -842,7 +843,8 @@ async function scenarioThings(browser, baseUrl) {
   st = await stepUntil(page, (s) => s.where === 'pocket', 20, 20);
   const tIn = st.time;
   st = await stepUntil(page, (s) => s.where === 'main' && s.jump === null, 300, 16);
-  check('можно просто подождать: карман отпускает не позже чем через минуту', st.where === 'main' && st.time - tIn < 62 && st.time - tIn > 6, `прошло ${(st.time - tIn).toFixed(0)} с, ${st.where}`);
+  // Срок пространства теперь 46–60 с (было 34–56), плюс 1,6 с распада на уходе: верхняя граница 62 → 64. Нижняя (6 с) — раньше выведет только взгляд на дверь или проход сквозь неё.
+  check('можно просто подождать: карман отпускает не позже чем через минуту с небольшим', st.where === 'main' && st.time - tIn < 64 && st.time - tIn > 6, `прошло ${(st.time - tIn).toFixed(0)} с, ${st.where}`);
 
   // Скачки в каждое пространство: картинка есть и не чёрная.
   for (const [to, style] of [['void', 'whiteout'], ['meadow', 'dissolve'], ['dollhouse', 'blackout']]) {
@@ -856,6 +858,179 @@ async function scenarioThings(browser, baseUrl) {
     st = await stepUntil(page, (s) => s.where === 'main' && s.jump === null, 20, 30);
   }
   check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0);
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  await context.close();
+}
+
+/**
+ * Смысл карманных пространств: строка при входе и нижняя строка, макет в кукольном домике, красный проём
+ * как выход, болванки в белом нигде, дверь луга, редение к концу срока. Всё, что на экране живёт по
+ * настоящему времени (строка-вспышка горит несколько секунд), читается тем же page.evaluate, которым
+ * вызвано событие, а не отдельным обращением позже.
+ */
+async function scenarioPockets(browser, baseUrl) {
+  section('Карманные пространства: зачем они, как выйти, как виден счёт времени');
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113&rank=2');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  let st = await vz(page, () => window.__vz.step(150));
+  const tierName = (y) => RU[`tier.${Math.min(2, Math.max(0, Math.round(-y / 4.5)))}`];
+  const hintText = () => page.$eval('.vz-hud__hint', (el) => el.textContent);
+  const rowsText = () => page.$$eval('.vz-hud__goal', (els) => els.map((e) => e.textContent));
+  /** Скачок в пространство; строка-вспышка читается в том же обращении, как только игрок оказался там. */
+  const enter = (to) =>
+    vz(
+      page,
+      (t) => {
+        window.__vz.jump(t, 'cut');
+        let s = window.__vz.step(3);
+        for (let i = 0; i < 120 && s.where !== 'pocket'; i++) s = window.__vz.step(3);
+        const el = document.querySelector('.vz-hud__flash');
+        return { st: s, flash: { on: el.classList.contains('is-on'), text: el.textContent } };
+      },
+      to,
+    );
+  /** Встать в проём выхода (не раньше 1,5 с после входа) и дождаться возвращения в убежище. */
+  const walkOut = async () => {
+    let s = await vz(page, () => window.__vz.step(100));
+    const e = s.pocketInfo?.exit;
+    if (!e) return { s, ok: false };
+    await vz(page, ([p, y]) => window.__vz.teleport(p[0], y, p[2]), [e, s.pos[1]]);
+    s = await stepUntil(page, (x) => x.where === 'main' && x.jump === null, 20, 60);
+    return { s, ok: true };
+  };
+  const leave = async () => {
+    await vz(page, () => window.__vz.jump('elsewhere', 'cut'));
+    return stepUntil(page, (x) => x.where === 'main' && x.jump === null, 20, 30);
+  };
+  /** Подойти к предмету и смотреть, пока пространство не сделает своё дело; вспышка читается тут же. */
+  const lookUntilDone = (fn, arg) =>
+    vz(
+      page,
+      ([name, a]) => {
+        const near = name === 'thing' ? window.__vz.gotoThing(a, 2.2) : window.__vz.gotoPocket(a);
+        let s = window.__vz.step(10);
+        for (let i = 0; i < 80 && !s.pocketInfo?.done; i++) s = window.__vz.step(10);
+        const el = document.querySelector('.vz-hud__flash');
+        return { near, done: s.pocketInfo?.done, flash: { on: el.classList.contains('is-on'), text: el.textContent }, rows: [...document.querySelectorAll('.vz-hud__goal')].map((e) => e.textContent) };
+      },
+      [fn, arg],
+    );
+
+  // ── Кукольный домик, когда искать нечего ──
+  check('перед проверками ничего не ищем', (await vz(page, () => window.__vz.memory())) === null);
+  let r = await enter('dollhouse');
+  check('кукольный домик без искомого: строка при входе «пока ничего не потеряно»', r.flash.on && r.flash.text === RU['pocket.dollhouse.enter.idle'], JSON.stringify(r.flash));
+  st = await vz(page, () => window.__vz.step(60));
+  check('в пространстве нижняя строка говорит, как выйти', (await hintText()) === RU['pocket.hint.exit'], await hintText());
+  check('в снимке есть выход и макет; срок 46–60 с, пространство ещё не редеет', !!st.pocketInfo?.exit && !!st.pocketInfo?.focus && st.pocketInfo.stay >= 46 && st.pocketInfo.stay <= 60 && st.pocketInfo.fade === 1, JSON.stringify(st.pocketInfo));
+  const idleMap = await lookUntilDone('pocket', 'focus');
+  check('макет без искомого: «ты был здесь, пока ничего не потеряно»', idleMap.done === true && idleMap.flash.on && idleMap.flash.text === RU['pocket.dollhouse.map.idle'], JSON.stringify(idleMap));
+  await leave();
+
+  // ── Кукольный домик с искомым: макет называет помещение и ярус ──
+  await vz(page, () => window.__vz.reveal());
+  st = await vz(page, () => window.__vz.step(5));
+  const mem = await vz(page, () => window.__vz.memory());
+  const task = mem ? RU[`mem.${mem.id}.task`] : '?';
+  const level = await vz(page, () => window.__vz.level());
+  const tier = mem ? Math.max(0, Math.round(-mem.pos[1] / 4.5)) : 0;
+  const nodeBefore = st.node;
+  r = await enter('dollhouse');
+  check('кукольный домик с искомым: строка при входе про огонёк на столе', !!mem && r.flash.on && r.flash.text === RU['pocket.dollhouse.enter'], JSON.stringify(r.flash));
+  const map = await lookUntilDone('pocket', 'focus');
+  const row = map.rows.at(-1) ?? '';
+  const roomName = row.startsWith(`${task} · `) ? row.slice(task.length + 3) : null;
+  const roomType = Object.keys(RU).find((k) => k.startsWith('room.') && RU[k] === roomName)?.slice(5);
+  const expectMap = RU['pocket.dollhouse.map'].replace('{what}', task).replace('{room}', roomName ?? '?').replace('{tier}', tierName(mem?.pos[1] ?? 0));
+  check('макет: на экране «что: помещение, ярус» — помещение настоящее, ярус — ярус вещи', map.done === true && map.flash.on && map.flash.text === expectMap && !!roomType && level.rooms.some((x) => x.type === roomType && x.tier === tier), JSON.stringify({ flash: map.flash.text, expectMap, roomType, tier }));
+  check('и в списке слева к искомому добавилось помещение', map.rows.length === 1 && roomName !== null, JSON.stringify(map.rows));
+  if (wantShots) await page.screenshot({ path: join(OUT, 'session_pocket_dollhouse_map.png') });
+  st = await state(page);
+  check('макет прочитан: пространство сделало своё дело — срок сокращён до «сейчас + 14 с»', st.pocketInfo.done === true && st.pocketInfo.stay <= st.pocketInfo.age + 14.1, JSON.stringify(st.pocketInfo));
+  // Красный проём — выход: проход сквозь него возвращает туда, откуда унесло.
+  const out = await walkOut();
+  check('проход сквозь красный проём возвращает в убежище, в тот же узел, откуда унесло', out.ok && out.s.where === 'main' && out.s.node === nodeBefore && out.s.pocket === null, JSON.stringify({ where: out.s.where, node: out.s.node, nodeBefore }));
+  check('помещение в списке слева остаётся, пока вещь не вспомнили', (await rowsText()).at(-1) === row, JSON.stringify(await rowsText()));
+
+  // ── Взгляд на проём ──
+  st = await state(page);
+  const nodeLook = st.node;
+  await enter('dollhouse');
+  await vz(page, () => window.__vz.gotoPocket('exit', 3));
+  st = await vz(page, () => window.__vz.step(5 * 60 - 20));
+  const early = st.where === 'pocket' && st.jump === null;
+  st = await stepUntil(page, (x) => x.where === 'main' && x.jump === null, 20, 40);
+  check('взгляд на красный проём выводит обратно, но не раньше шестой секунды', early && st.where === 'main' && st.node === nodeLook, JSON.stringify({ early, where: st.where, node: st.node, nodeLook }));
+
+  // ── Луг: дверь выводит рядом с искомой вещью ──
+  r = await enter('meadow');
+  check('луг: строка при входе про дверь, которая ближе к искомому', r.flash.on && r.flash.text === RU['pocket.meadow.enter'], JSON.stringify(r.flash));
+  const door = await walkOut();
+  const dxz = Math.hypot(door.s.pos[0] - mem.pos[0], door.s.pos[2] - mem.pos[2]);
+  // Не дальше 4 клеток пути: клетка 3 м, четыре шага — до 12 м по горизонтали плюс разброс вещи в клетке
+  // (точный путь по графу проверяют юнит-тесты, здесь — что дверь вообще привела к вещи, а не «подальше»).
+  check('дверь луга выводит рядом с искомой вещью: не дальше 4 клеток пути', door.ok && door.s.where === 'main' && dxz <= 15 && Math.abs(door.s.pos[1] - mem.pos[1]) <= 9, JSON.stringify({ dxz: +dxz.toFixed(1), dy: door.s.pos[1] - mem.pos[1] }));
+
+  // ── Белое нигде: вспомненное и болванки ──
+  // Вспоминаем текущее воспоминание и сразу уходим в белое нигде: следующее ещё не пришло.
+  await vz(page, () => window.__vz.gotoMemory());
+  await vz(page, () => window.__vz.step(20));
+  st = await vz(page, () => window.__vz.step(140));
+  const first = mem.id;
+  check('вспомнено одно воспоминание, нового пока нет', st.session.done === 1 && (await vz(page, () => window.__vz.memory())) === null, JSON.stringify({ done: st.session.done }));
+  const nodeVoid = st.node;
+  r = await enter('void');
+  check('белое нигде: строка при входе «это то, что ты сохранил»', r.flash.on && r.flash.text === RU['pocket.void.enter'], JSON.stringify(r.flash));
+  st = await state(page);
+  const things = await vz(page, () => window.__vz.things());
+  const blanks = st.pocketInfo.blanks;
+  const exhibits = things.filter((t) => Math.abs(Math.hypot(t.pos[0] - st.pos[0], t.pos[2] - st.pos[2]) - 3.4) < 0.06);
+  check('перед игроком дугой пять экспонатов: одна вещь и четыре белые болванки', exhibits.length === 5 && blanks.length === 4 && exhibits.filter((t) => t.kind === 'blank').length === 4 && exhibits.every((t) => (t.kind === 'blank') === blanks.includes(t.id)), JSON.stringify({ n: exhibits.length, blanks: blanks.length }));
+  if (wantShots) await page.screenshot({ path: join(OUT, 'session_pocket_void_exhibits.png') });
+  const mine = exhibits.find((t) => t.kind !== 'blank');
+  const replay = await lookUntilDone('thing', mine.id);
+  check('взгляд на вспомненное повторяет его строку, пространство при этом ничего не вызывает', replay.near && replay.flash.on && replay.flash.text === RU[`mem.${first}.done`] && replay.done === false, JSON.stringify(replay));
+  // Контроль: без взгляда на болванку само следующее воспоминание не приходит (пауза 40 с).
+  const ctl = await walkOut();
+  st = await vz(page, () => window.__vz.step(4 * 60));
+  check('без болванки следующее воспоминание не торопится: после выхода его нет', ctl.ok && ctl.s.node === nodeVoid && (await vz(page, () => window.__vz.memory())) === null, JSON.stringify({ node: ctl.s.node, nodeVoid }));
+  // Теперь — взгляд на болванку.
+  await enter('void');
+  st = await state(page);
+  const next = await lookUntilDone('thing', st.pocketInfo.blanks[0]);
+  check('взгляд на болванку без воспоминания: «оно уже идёт»', next.near && next.done === true && next.flash.on && next.flash.text === RU['pocket.void.next'], JSON.stringify(next));
+  const back = await walkOut();
+  st = await vz(page, () => window.__vz.step(90));
+  const mem2 = await vz(page, () => window.__vz.memory());
+  check('и следующее воспоминание приходит сразу после возврата', back.ok && back.s.where === 'main' && mem2 !== null && mem2.id !== first, JSON.stringify({ mem2, where: back.s.where }));
+  // Болванка при идущем воспоминании — напоминание.
+  await enter('void');
+  st = await state(page);
+  const remind = await lookUntilDone('thing', st.pocketInfo.blanks[0]);
+  check('болванка при идущем воспоминании напоминает, что ищешь', remind.near && remind.done === true && remind.flash.on && remind.flash.text === RU[`mem.${mem2?.id}.flash`], JSON.stringify(remind));
+  await leave();
+
+  // ── Счёт времени: пространство редеет, строка внизу меняется ──
+  await enter('void');
+  st = await state(page);
+  // Белое нигде появляется лицом к выходу: отвернуться, иначе взгляд на проём выведет раньше срока.
+  await vz(page, ([p]) => window.__vz.teleport(p[0], p[1], p[2], Math.PI, 0), [st.pos]);
+  st = await stepUntil(page, (x) => x.pocketInfo && x.pocketInfo.age >= x.pocketInfo.stay * 0.5 - 4, 60, 80);
+  for (let i = 0; i < 3 && st.light?.state === 'dead' && st.where === 'pocket'; i++) st = await vz(page, () => window.__vz.shake(1, 1));
+  const half = { fade: st.pocketInfo?.fade, hint: await hintText(), age: st.pocketInfo?.age, stay: st.pocketInfo?.stay };
+  check('в первой половине срока пространство не редеет: fade 1, внизу «красный проём ведёт назад»', st.where === 'pocket' && half.fade === 1 && half.hint === RU['pocket.hint.exit'], JSON.stringify(half));
+  st = await stepUntil(page, (x) => !x.pocketInfo || x.pocketInfo.fade < 0.3, 20, 120);
+  // Заглохший фонарь прячет нижнюю строку (см. updateHud: условие !dead) — оживляем встряской, чтобы читать её.
+  for (let i = 0; i < 3 && st.light?.state === 'dead' && st.where === 'pocket'; i++) st = await vz(page, () => window.__vz.shake(1, 1));
+  const end = { light: st.light?.state, jump: st.jump, where: st.where, fade: st.pocketInfo?.fade, hint: await hintText(), age: st.pocketInfo?.age, stay: st.pocketInfo?.stay };
+  check('к концу срока fade падает ниже 0,3, а нижняя строка — «это место редеет»', end.where === 'pocket' && end.fade < 0.3 && end.fade >= 0.2 - 1e-6 && end.hint === RU['pocket.hint.fading'], JSON.stringify(end));
+  if (wantShots) await page.screenshot({ path: join(OUT, 'session_pocket_fading.png') });
+  st = await stepUntil(page, (x) => x.where === 'main' && x.jump === null, 20, 60);
+  check('и пространство отпускает само, вернув в убежище', st.where === 'main' && st.pocketInfo === null, JSON.stringify({ where: st.where }));
+  check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0, (await vz(page, () => window.__vz.missingKeys())).join(', '));
   check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
   await context.close();
 }
@@ -1468,6 +1643,8 @@ try {
   if (wants('play')) await scenarioPlay(browser, server.url);
   if (wants('gen')) await scenarioGen(browser, server.url);
   if (wants('session')) await scenarioSession(browser, server.url);
+  // Только карманные пространства (быстрый прогон; в полный session они уже входят).
+  if (only?.includes('pockets')) await scenarioPockets(browser, server.url);
   if (wants('fear')) await scenarioFear(browser, server.url);
   if (wants('audio')) await scenarioAudio(browser, server.url);
   if (wants('frame')) await scenarioFrame(browser, server.url);

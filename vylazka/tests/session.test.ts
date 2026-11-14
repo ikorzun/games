@@ -525,3 +525,84 @@ describe('сессия: среда', () => {
     expect(s.maxTier).toBe(2);
   });
 });
+
+describe('сессия: hurry() — поторопить из белого нигде', () => {
+  /** Подряд пять воспоминаний с большой паузой: сами они в ближайшее время не придут. */
+  const SLOW: SessionConfig = { ...DEFAULT_SESSION, firstDelay: 2, delay: 100, fallback: 0, minLength: 0 };
+
+  it('пауза считается выдержанной: следующее воспоминание приходит сразу, а без hurry() не пришло бы', () => {
+    const level = levelOf(SEED, 3);
+    const node = startNode(level);
+    // Даже первого воспоминания (firstDelay) без hurry() за двадцать секунд нет.
+    const cfg: SessionConfig = { ...SLOW, firstDelay: 100 };
+    const calm = new Session(level, 31, new Set(), cfg);
+    expect(types(run(calm, 20, idle(level, node, { observed: true })))).toEqual([]);
+
+    const s = new Session(level, 31, new Set(), cfg);
+    expect(s.hurry()).toBe(true);
+    expect(types(run(s, DT * 2, idle(level, node, { observed: true })))).toEqual(['reveal']);
+    expect(s.active).not.toBeNull();
+  });
+
+  it('следом за вспомненным тоже работает: пауза delay пропускается', () => {
+    const level = levelOf(SEED, 3);
+    const node = startNode(level);
+    const s = new Session(level, 32, new Set(), SLOW);
+    s.rush();
+    run(s, DT * 2, idle(level, node));
+    run(s, SLOW.lookTime + 0.1, gaze(s.active!.spot!, node));
+    expect(s.doneCount).toBe(1);
+    expect(s.active).toBeNull();
+    // Пауза в сто секунд: само не придёт.
+    expect(types(run(s, 10, idle(level, node, { observed: true })))).toEqual([]);
+    expect(s.hurry()).toBe(true);
+    expect(types(run(s, DT * 2, idle(level, node, { observed: true })))).toEqual(['reveal']);
+  });
+
+  it('false, если воспоминание уже идёт; пауза при этом не трогается', () => {
+    const level = levelOf(SEED, 3);
+    const node = startNode(level);
+    const s = new Session(level, 33, new Set(), SLOW);
+    s.rush();
+    run(s, DT * 2, idle(level, node));
+    expect(s.active).not.toBeNull();
+    expect(s.hurry()).toBe(false);
+    expect(s.active).not.toBeNull();
+  });
+
+  it('false, если все вспомнены (сессия кончилась)', () => {
+    const level = levelOf(SEED, 3);
+    const node = startNode(level);
+    const s = new Session(level, 34, new Set(), SLOW);
+    for (let k = 0; k < SLOW.count; k++) {
+      s.rush();
+      run(s, DT * 2, idle(level, node));
+      run(s, SLOW.lookTime + 0.1, gaze(s.active!.spot!, node));
+    }
+    expect(s.over).toBe(true);
+    expect(s.hurry()).toBe(false);
+  });
+
+  it('последнее воспоминание всё равно ждёт minLength', () => {
+    const level = levelOf(SEED, 3);
+    const node = startNode(level);
+    const cfg: SessionConfig = { ...SLOW, minLength: 60 };
+    const s = new Session(level, 35, new Set(), cfg);
+    // Четыре воспоминания подряд — через rush (он минимум обходит, но сбрасывает своё «поторопили» при вспышке).
+    for (let k = 0; k < cfg.count - 1; k++) {
+      s.rush();
+      run(s, DT * 2, idle(level, node));
+      run(s, cfg.lookTime + 0.1, gaze(s.active!.spot!, node));
+    }
+    expect(s.doneCount).toBe(cfg.count - 1);
+    expect(s.time).toBeLessThan(60);
+    // hurry() «успешен» (воспоминание ещё не пришло), но последнее раньше minLength не выйдет.
+    expect(s.hurry()).toBe(true);
+    expect(types(run(s, 5, idle(level, node, { observed: true })))).toEqual([]);
+    expect(s.active).toBeNull();
+    expect(s.hurry()).toBe(true);
+    // Когда минимум прошёл, оно приходит без всякой паузы.
+    run(s, 60 - s.time + 0.1, idle(level, node, { observed: true }));
+    expect(s.active).not.toBeNull();
+  });
+});

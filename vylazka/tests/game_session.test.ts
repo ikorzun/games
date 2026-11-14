@@ -10,6 +10,7 @@ import type { FrameView, GameRenderer, ThingView } from '../src/render/renderer'
 import { DEFAULT_SESSION } from '../src/systems/session';
 import type { SessionEvent } from '../src/systems/session';
 import { looksAt } from '../src/systems/things';
+import { nodesInRange } from '../src/swarm/ai';
 import type { BuiltLevel } from '../src/world/level';
 import { buildLevel } from '../src/world/level_build';
 import { ALL_PROPS } from '../src/world/props_all';
@@ -444,5 +445,343 @@ describe('игра целиком: рендер получает разумны�
     h.run(1);
     expect(h.r.pocketShown).toBe(true);
     expect(h.r.frames.at(-1)!.fogColor[0]).toBeGreaterThan(0.5);
+  });
+});
+
+/** Что игра рассказывает о карманном пространстве в снимке состояния (отладочный API читает то же самое). */
+interface PocketInfo {
+  age: number;
+  stay: number;
+  done: boolean;
+  fade: number;
+  exit: Vec3 | null;
+  focus: Vec3 | null;
+  blanks: number[];
+}
+/** Сессия, где воспоминание само не придёт: «искать нечего». */
+const NOTHING = { ...QUICK, firstDelay: 500, delay: 500 };
+const info = (h: Harness): PocketInfo => (h.game.snapshot() as unknown as { pocketInfo: PocketInfo | null }).pocketInfo!;
+type PocketEvent = Extract<DreamEvent, { type: 'pocket' }>;
+const pocketEvents = (h: Harness, what?: string): PocketEvent[] => h.log.dream.filter((e): e is PocketEvent => e.type === 'pocket' && (what === undefined || e.what === what));
+
+/** Скачок в карманное пространство: ждём, пока скачок кончится. */
+function enter(h: Harness, kind: 'void' | 'meadow' | 'dollhouse'): void {
+  expect(h.until(() => h.game.transition === null, 5)).toBe(true);
+  expect(h.game.beginJump({ cause: 'gaze', style: 'cut', to: kind }, [])).toBe(true);
+  expect(h.until(() => h.game.where === 'pocket' && h.game.transition === null, 5), `вход в ${kind}`).toBe(true);
+  expect(h.game.pocket!.kind).toBe(kind);
+}
+
+/** Встать на выход пространства: ровно в проём. */
+function stepInto(h: Harness): void {
+  const g = h.game;
+  const e = g.pocket!.exit!;
+  g.teleport(e[0], g.pocket!.spawn.pos[1], e[2]);
+}
+
+/** Встать перед выходом (по его оси) или перед макетом (со стороны точки появления) и посмотреть на него. */
+function standAt(h: Harness, what: 'exit' | 'focus', distance = what === 'exit' ? 1.6 : 1.5): void {
+  const g = h.game;
+  const p = g.pocket!;
+  const at = (what === 'exit' ? p.exit : p.focus)!;
+  const dx = what === 'exit' ? 0 : p.spawn.pos[0] - at[0];
+  const dz = what === 'exit' ? 1 : p.spawn.pos[2] - at[2];
+  const d = Math.hypot(dx, dz) || 1;
+  g.teleport(at[0] + (dx / d) * distance, p.spawn.pos[1], at[2] + (dz / d) * distance);
+  h.tick();
+  h.tick();
+  g.aimAt(at[0], what === 'exit' ? at[1] + 1.2 : at[1], at[2]);
+  h.tick();
+  h.tick();
+}
+
+/** Вспомнить текущее воспоминание (встать перед вещью и подержать в луче). */
+function recallActive(h: Harness): void {
+  const t = h.game.things.list.find((x) => x.memory)!;
+  expect(h.standBefore(t.id)).toBe(true);
+  const before = h.count('recall');
+  expect(h.until(() => h.count('recall') > before, 5)).toBe(true);
+}
+
+describe('игра целиком: карманные пространства обретают смысл', () => {
+  it('вход в кукольный домик даёт событие enter: с искомым воспоминанием, если оно идёт, и без — если нет', () => {
+    const idle = new Harness(levelOf(SEED), { seed: 21, cfg: NOTHING });
+    idle.run(0.3);
+    expect(idle.game.session!.active).toBeNull();
+    enter(idle, 'dollhouse');
+    const e0 = pocketEvents(idle, 'enter');
+    expect(e0).toHaveLength(1);
+    expect(e0[0]).toMatchObject({ kind: 'dollhouse', what: 'enter' });
+    expect(e0[0]!.memory).toBeUndefined();
+
+    const h = new Harness(levelOf(SEED), { seed: 22 });
+    const { memoryId } = h.reveal();
+    enter(h, 'dollhouse');
+    const e1 = pocketEvents(h, 'enter');
+    expect(e1).toHaveLength(1);
+    expect(e1[0]).toMatchObject({ kind: 'dollhouse', what: 'enter', memory: memoryId });
+    // Остальные виды тоже говорят о входе.
+    for (const kind of ['void', 'meadow'] as const) {
+      const k = new Harness(levelOf(SEED), { seed: 23 });
+      enter(k, kind);
+      expect(pocketEvents(k, 'enter')).toMatchObject([{ kind, what: 'enter' }]);
+    }
+  });
+
+  it('взгляд на макет: map с помещением и ярусом искомой вещи; срок пребывания сокращается до «сейчас + 14 с»', () => {
+    const level = levelOf(SEED);
+    const h = new Harness(level, { seed: 24 });
+    const { memoryId } = h.reveal();
+    const spot = h.game.session!.active!.spot!;
+    enter(h, 'dollhouse');
+    expect(info(h).focus).not.toBeNull();
+    expect(info(h).done).toBe(false);
+    standAt(h, 'focus');
+    expect(h.until(() => pocketEvents(h, 'map').length > 0, 4), 'макет не прочитан').toBe(true);
+    const m = pocketEvents(h, 'map')[0]!;
+    expect(m).toMatchObject({ kind: 'dollhouse', what: 'map', memory: memoryId });
+    // Помещение — настоящее помещение уровня, ярус — ярус места, где лежит вещь.
+    const room = level.layout!.rooms.find((r) => r.type === m.room);
+    expect(room, `помещение ${m.room}`).toBeTruthy();
+    expect(m.tier).toBe(Math.max(0, Math.round(-spot.y / 4.5)));
+    const inf = info(h);
+    expect(inf.done).toBe(true);
+    expect(inf.stay).toBeLessThanOrEqual(inf.age + 14.01);
+    // Один раз за заход.
+    h.run(3);
+    expect(pocketEvents(h, 'map')).toHaveLength(1);
+  });
+
+  it('макет, когда искать нечего: map без воспоминания', () => {
+    const h = new Harness(levelOf(SEED), { seed: 25, cfg: NOTHING });
+    h.run(0.3);
+    expect(h.game.session!.active).toBeNull();
+    enter(h, 'dollhouse');
+    standAt(h, 'focus');
+    expect(h.until(() => pocketEvents(h, 'map').length > 0, 4)).toBe(true);
+    const m = pocketEvents(h, 'map')[0]!;
+    expect(m.memory).toBeUndefined();
+    expect(m.room).toBeUndefined();
+  });
+
+  it('в белом нигде перед игроком экспонаты: вспомненное — своей вещью, остальное — болванками; взгляд на вспомненное даёт replay', () => {
+    const h = new Harness(levelOf(SEED), { seed: 26 });
+    h.reveal();
+    recallActive(h);
+    const first = h.game.session!.memories.find((m) => m.state === 'done')!;
+    // Вспомнили одно — сессия ещё идёт; пока следующее не пришло, уходим в белое нигде.
+    expect(h.game.session!.active).toBeNull();
+    enter(h, 'void');
+    const g = h.game;
+    const still = g.things.list.filter((t) => t.still);
+    expect(still).toHaveLength(g.session!.memories.length);
+    expect(still.filter((t) => t.kind === 'blank')).toHaveLength(g.session!.memories.length - 1);
+    expect(info(h).blanks).toHaveLength(g.session!.memories.length - 1);
+    const mine = still.find((t) => t.kind === first.def.thing)!;
+    expect(mine).toBeTruthy();
+    // Они стоят дугой перед игроком, на радиусе 3,4 м.
+    const sp = g.pocket!.spawn.pos;
+    for (const t of still) expect(Math.hypot(t.pos[0] - sp[0], t.pos[2] - sp[2])).toBeCloseTo(3.4, 1);
+    expect(h.standBefore(mine.id)).toBe(true);
+    expect(h.until(() => pocketEvents(h, 'replay').length > 0, 5)).toBe(true);
+    expect(pocketEvents(h, 'replay')[0]).toMatchObject({ kind: 'void', what: 'replay', memory: first.def.id });
+    // Экспонат не изменился, сессия ничего не вызвала.
+    expect(mine.state).toBe('idle');
+    expect(pocketEvents(h, 'next')).toHaveLength(0);
+    expect(info(h).done).toBe(false);
+  });
+
+  it('болванка без идущего воспоминания: next, и следующее воспоминание приходит сразу после возврата (а без взгляда — нет)', () => {
+    // Пауза между воспоминаниями огромна: само следующее не придёт ни в карманном пространстве, ни после него.
+    const cfg = { ...QUICK, delay: 500 };
+    const scenario = (look: boolean): Harness => {
+      const h = new Harness(levelOf(SEED), { seed: 27, cfg });
+      h.reveal();
+      recallActive(h);
+      const g = h.game;
+      expect(g.session!.active).toBeNull();
+      const back = g.playerNode();
+      enter(h, 'void');
+      if (look) {
+        const blank = g.things.list.find((t) => t.still && t.kind === 'blank')!;
+        expect(h.standBefore(blank.id)).toBe(true);
+        expect(h.until(() => pocketEvents(h, 'next').length > 0, 5), 'болванка не сработала').toBe(true);
+        expect(info(h).done).toBe(true);
+        expect(info(h).stay).toBeLessThanOrEqual(info(h).age + 14.01);
+      } else h.run(2);
+      // Выходим через проём.
+      stepInto(h);
+      expect(h.until(() => g.where === 'main' && g.transition === null, 8)).toBe(true);
+      expect(g.playerNode()).toBe(back);
+      return h;
+    };
+    const asked = scenario(true);
+    expect(asked.until(() => asked.game.session!.active !== null, 3), 'следующее воспоминание не пришло').toBe(true);
+    const idle = scenario(false);
+    idle.run(3);
+    expect(idle.game.session!.active).toBeNull();
+    expect(pocketEvents(idle, 'next')).toHaveLength(0);
+  });
+
+  it('болванка при идущем воспоминании: remind, воспоминание не торопят', () => {
+    const h = new Harness(levelOf(SEED), { seed: 28 });
+    const { memoryId } = h.reveal();
+    enter(h, 'void');
+    const blank = h.game.things.list.find((t) => t.still && t.kind === 'blank')!;
+    expect(blank).toBeTruthy();
+    expect(h.standBefore(blank.id)).toBe(true);
+    expect(h.until(() => pocketEvents(h, 'remind').length > 0, 5)).toBe(true);
+    expect(pocketEvents(h, 'remind')[0]).toMatchObject({ kind: 'void', what: 'remind', memory: memoryId });
+    expect(pocketEvents(h, 'next')).toHaveLength(0);
+    expect(h.game.session!.active?.def.id).toBe(memoryId);
+  });
+
+  it('лимбо: выхода нет, болванок нет, экспонатов нет', () => {
+    const h = new Harness(levelOf(SEED), { seed: 29 });
+    h.game.debugFinish();
+    expect(h.until(() => h.game.where === 'limbo', 8)).toBe(true);
+    expect(h.game.pocket!.exit).toBeNull();
+    h.run(1);
+    expect(info(h).exit).toBeNull();
+    expect(info(h).blanks).toEqual([]);
+    expect(h.game.things.list.some((t) => t.still)).toBe(false);
+  });
+
+  it.each(['void', 'dollhouse'] as const)('проход сквозь выход (%s) возвращает в убежище, в узел, откуда унесло; раньше 1,5 с он не действует', (kind) => {
+    const h = new Harness(levelOf(SEED), { seed: 30 });
+    const g = h.game;
+    h.run(1);
+    const back = g.playerNode();
+    expect(back).toBeGreaterThanOrEqual(0);
+    enter(h, kind);
+    // Сразу после входа проём ещё «спит».
+    stepInto(h);
+    h.tick();
+    h.tick();
+    expect(g.transition).toBeNull();
+    expect(info(h).age).toBeLessThan(1.5);
+    expect(h.until(() => g.transition !== null, 2)).toBe(true);
+    expect(g.transition!.plan).toMatchObject({ cause: 'return', style: 'whiteout', to: 'elsewhere', dest: 'back' });
+    expect(h.until(() => g.where === 'main' && g.transition === null, 6)).toBe(true);
+    expect(g.pocket).toBeNull();
+    expect(g.playerNode()).toBe(back);
+  });
+
+  it('в стороне от проёма (шире 0,42 м) выход не срабатывает', () => {
+    const h = new Harness(levelOf(SEED), { seed: 31 });
+    enter(h, 'void');
+    const g = h.game;
+    const e = g.pocket!.exit!;
+    g.teleport(e[0] + 0.7, g.pocket!.spawn.pos[1], e[2]);
+    h.run(3);
+    expect(g.transition).toBeNull();
+    expect(g.where).toBe('pocket');
+  });
+
+  it('взгляд на проём 1,8 с (не раньше 6 с после входа) тоже выводит обратно', () => {
+    const h = new Harness(levelOf(SEED), { seed: 32 });
+    h.run(1);
+    const back = h.game.playerNode();
+    enter(h, 'dollhouse');
+    const g = h.game;
+    standAt(h, 'exit', 3);
+    // До шестой секунды взгляд не считается.
+    h.run(Math.max(0, 5 - info(h).age));
+    expect(g.transition).toBeNull();
+    expect(info(h).age).toBeLessThan(6);
+    expect(h.until(() => g.transition !== null, 6)).toBe(true);
+    expect(info(h).age).toBeGreaterThan(6);
+    expect(g.transition!.plan).toMatchObject({ cause: 'return', style: 'whiteout', dest: 'back' });
+    expect(h.until(() => g.where === 'main' && g.transition === null, 6)).toBe(true);
+    expect(g.playerNode()).toBe(back);
+  });
+
+  it('дверь луга при идущем воспоминании выводит не дальше 4 клеток пути от искомой вещи', () => {
+    const level = levelOf(SEED);
+    for (const seed of [33, 34, 35, 36]) {
+      const h = new Harness(level, { seed });
+      const g = h.game;
+      h.run(1);
+      h.reveal();
+      const spot = g.session!.active!.spot!;
+      // Узел вещи считаем так же, как игра: по клетке сетки и ярусу.
+      const cx = Math.round(spot.x / 3) + 8;
+      const cz = Math.round(spot.z / 3) + 8;
+      const t = Math.max(0, Math.round(-spot.y / 4.5));
+      const at = [t, t - 1, t + 1].map((tier) => level.nav.find((n) => n.tier === tier && n.cx === cx && n.cz === cz)).find((n) => n)!;
+      expect(at).toBeTruthy();
+      enter(h, 'meadow');
+      stepInto(h);
+      expect(h.until(() => g.transition !== null, 3)).toBe(true);
+      expect(g.transition!.plan).toMatchObject({ cause: 'return', style: 'whiteout', dest: 'thing' });
+      expect(h.until(() => g.where === 'main' && g.transition === null, 6)).toBe(true);
+      expect(nodesInRange(level.nav, at.id, 0, 4), `сид ${seed}: вышли не рядом с вещью`).toContain(g.playerNode());
+    }
+  });
+
+  it('дверь луга без идущего воспоминания возвращает обратно', () => {
+    const h = new Harness(levelOf(SEED), { seed: 37, cfg: NOTHING });
+    h.run(0.3);
+    expect(h.game.session!.active).toBeNull();
+    const back = h.game.playerNode();
+    enter(h, 'meadow');
+    stepInto(h);
+    expect(h.until(() => h.game.transition !== null, 3)).toBe(true);
+    expect(h.game.transition!.plan.dest).toBe('back');
+    expect(h.until(() => h.game.where === 'main' && h.game.transition === null, 6)).toBe(true);
+    expect(h.game.playerNode()).toBe(back);
+  });
+
+  it('на лугу паника падает быстрее обычного (около 0,22 в секунду), в белом нигде — как обычно', () => {
+    const drop = (kind: 'meadow' | 'void'): number => {
+      const h = new Harness(levelOf(SEED), { seed: 38 });
+      enter(h, kind);
+      const s = h.game.session!;
+      s.panic = 0.9;
+      h.run(2);
+      return 0.9 - s.panic;
+    };
+    const meadow = drop('meadow');
+    expect(meadow).toBeGreaterThanOrEqual(0.22 * 2 - 0.02);
+    expect(drop('void')).toBeLessThan(meadow);
+  });
+
+  it('pocketFade: 1 в первой половине срока, к концу меньше 0,3; в убежище всегда 1', () => {
+    const h = new Harness(levelOf(SEED), { seed: 39 });
+    const g = h.game;
+    expect(g.pocketFade).toBe(1);
+    enter(h, 'void');
+    const inf = info(h);
+    // Белое нигде появляется лицом к выходу: отворачиваемся, иначе взгляд на проём сам выведет обратно.
+    const sp = g.pocket!.spawn.pos;
+    g.teleport(sp[0], sp[1], sp[2], Math.PI, 0);
+    expect(inf.stay).toBeGreaterThanOrEqual(46);
+    expect(inf.stay).toBeLessThanOrEqual(60);
+    // До половины срока ничего не редеет.
+    expect(h.until(() => info(h).age >= info(h).stay * 0.5 - 0.1, 40)).toBe(true);
+    expect(g.pocketFade).toBe(1);
+    // Потом падает монотонно и к концу меньше 0,3 (до 0,2).
+    let prev = 1;
+    while (info(h).age < info(h).stay - 1 && g.where === 'pocket') {
+      h.run(1);
+      if (g.where !== 'pocket') break;
+      expect(g.pocketFade).toBeLessThanOrEqual(prev + 1e-9);
+      prev = g.pocketFade;
+    }
+    expect(prev).toBeLessThan(0.3);
+    expect(prev).toBeGreaterThanOrEqual(0.2 - 1e-6);
+    // И само пространство отпускает после срока.
+    expect(h.until(() => g.where === 'main', 6)).toBe(true);
+    expect(g.pocketFade).toBe(1);
+  });
+
+  it('кадр получает scanFade и параметры света пространства', () => {
+    const h = new Harness(levelOf(SEED), { seed: 40 });
+    enter(h, 'meadow');
+    h.run(0.2);
+    const f = h.r.frames.at(-1)!;
+    expect(f.scanFade).toBe(1);
+    expect(f.keyColor[0] + f.keyColor[1] + f.keyColor[2]).toBeGreaterThan(0);
+    expect(f.scanRange[1]).toBeGreaterThan(15);
   });
 });

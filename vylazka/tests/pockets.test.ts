@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Vec3 } from '../src/core/types';
-import { MAT_COUNT } from '../src/world/materials';
+import { MAT, MAT_COUNT } from '../src/world/materials';
 import { buildPocket, POCKET_KINDS } from '../src/world/pockets';
-import type { PocketKind, PocketSpace } from '../src/world/pockets';
+import type { ModelCell, PocketContext, PocketKind, PocketSpace } from '../src/world/pockets';
 
 const ORIGIN: Vec3 = [1000, 40, -500];
 const SHIFTED: Vec3 = [-300, 12.5, 777];
@@ -107,5 +107,93 @@ describe.each(POCKET_KINDS.map((k) => [k] as [PocketKind]))('карманное 
     });
     expect(o.spawn.yaw).toBe(s.spawn.yaw);
     expect(o.spawn.pos[2] - s.spawn.pos[2]).toBeCloseTo(d[2], 2);
+  });
+});
+
+/** Меш, целиком сделанный из светящегося материала: так выглядит обводка выхода (она добавляется отдельным мешем). */
+const glowOnly = (s: PocketSpace): boolean => s.meshes.some((m) => m.mat.length > 0 && Array.from(m.mat).every((v) => v === MAT.glow));
+
+describe.each(POCKET_KINDS.map((k) => [k] as [PocketKind]))('выход пространства %s', (kind) => {
+  it('есть выход на полу, якорь — на высоте 1,2 м над ним, обводка — отдельный светящийся меш', () => {
+    const s = buildPocket(kind, 7, ORIGIN);
+    expect(s.exit).toBeTruthy();
+    const e = s.exit!;
+    expect(dist(s, e)).toBeLessThan(s.radius);
+    expect(inside(s, e, 0.3)).toBe(false);
+    expect(s.anchors.length).toBeGreaterThan(0);
+    expect(s.anchors[0]![0]).toBeCloseTo(e[0], 5);
+    expect(s.anchors[0]![2]).toBeCloseTo(e[2], 5);
+    expect(s.anchors[0]![1] - ORIGIN[1]).toBeCloseTo(1.2, 5);
+    expect(glowOnly(s)).toBe(true);
+  });
+
+  it('обводка стоит вокруг самого выхода: красные рейки лежат в пределах проёма', () => {
+    const s = buildPocket(kind, 7, ORIGIN);
+    const e = s.exit!;
+    const m = s.meshes.find((x) => Array.from(x.mat).every((v) => v === MAT.glow))!;
+    for (let i = 0; i < m.position.length; i += 3) {
+      expect(Math.abs(m.position[i]! - e[0])).toBeLessThanOrEqual(0.46);
+      expect(Math.abs(m.position[i + 2]! - e[2])).toBeLessThanOrEqual(0.04);
+      expect(m.position[i + 1]! - e[1]).toBeGreaterThanOrEqual(-0.001);
+      expect(m.position[i + 1]! - e[1]).toBeLessThanOrEqual(2.06);
+    }
+  });
+});
+
+describe('лимбо: белое нигде в конце сессии', () => {
+  it('выхода и обводки нет, якорей нет', () => {
+    const s = buildPocket('void', 7, ORIGIN, { limbo: true });
+    expect(s.exit).toBeNull();
+    expect(s.anchors).toEqual([]);
+    expect(glowOnly(s)).toBe(false);
+  });
+
+  it('посреди сессии (не лимбо) выход у белого нигде есть', () => {
+    const s = buildPocket('void', 7, ORIGIN, { limbo: false });
+    expect(s.exit).not.toBeNull();
+    expect(glowOnly(s)).toBe(true);
+  });
+});
+
+describe('кукольный домик: стол с макетом', () => {
+  const cells: ModelCell[] = [
+    { x: 3, z: 4, tier: 1, type: 'kitchen', room: 1 },
+    { x: 4, z: 4, tier: 1, type: 'kitchen', room: 1 },
+    { x: 5, z: 4, tier: 1, type: 'corridor', room: 2 },
+    { x: 5, z: 5, tier: 1, type: 'bedroom', room: 3 },
+    { x: 0, z: 0, tier: 0, type: 'entrance', room: 0 },
+  ];
+  const ctx: PocketContext = { cells, target: { x: 4, z: 4, tier: 1 }, here: { x: 5, z: 5, tier: 1 } };
+
+  it('есть главный предмет (focus); точка появления смотрит на стол (yaw π, взгляд вниз) и дальше 0,8 м от выхода', () => {
+    const s = buildPocket('dollhouse', 7, ORIGIN, ctx);
+    expect(s.focus).toBeTruthy();
+    expect(s.spawn.yaw).toBeCloseTo(Math.PI, 5);
+    expect(s.spawn.pitch).toBeCloseTo(-0.3, 5);
+    // Взгляд yaw π идёт в +z: стол должен лежать впереди, а не за спиной.
+    expect(s.focus![2]).toBeGreaterThan(s.spawn.pos[2]);
+    const e = s.exit!;
+    expect(Math.hypot(s.spawn.pos[0] - e[0], s.spawn.pos[2] - e[2])).toBeGreaterThan(0.8);
+  });
+
+  it('с планом убежища макет добавляет геометрию', () => {
+    const bare = buildPocket('dollhouse', 7, ORIGIN);
+    const full = buildPocket('dollhouse', 7, ORIGIN, ctx);
+    expect(triangles(full)).toBeGreaterThan(triangles(bare));
+    // Макет — часть дома: сама сцена не меняется ни по выходу, ни по точке появления.
+    expect(full.exit).toEqual(bare.exit);
+    expect(full.focus).toEqual(bare.focus);
+    expect(full.spawn).toEqual(bare.spawn);
+  });
+
+  it('искомая вещь и «ты здесь» добавляют метки: без target и here геометрии меньше', () => {
+    const plain = buildPocket('dollhouse', 7, ORIGIN, { cells });
+    const marked = buildPocket('dollhouse', 7, ORIGIN, ctx);
+    expect(triangles(marked)).toBeGreaterThan(triangles(plain));
+  });
+
+  it('другие виды focus не имеют', () => {
+    expect(buildPocket('void', 7, ORIGIN).focus).toBeNull();
+    expect(buildPocket('meadow', 7, ORIGIN).focus).toBeNull();
   });
 });

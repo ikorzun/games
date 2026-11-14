@@ -186,6 +186,45 @@ describe('вещи: вещь-воспоминание', () => {
   });
 });
 
+describe('вещи: экспонат (still)', () => {
+  function exhibit(fate: Fate = 'shrink'): { th: Things; t: Thing } {
+    const th = new Things();
+    const t = th.add('mug', [0, 0, 0], 0, fate, 0.3, false, true);
+    return { th, t };
+  }
+
+  it('под взглядом не меняется: ни noticed, ни changing; gaze доходит до 1', () => {
+    for (const fate of ['shrink', 'grow', 'dust'] as Fate[]) {
+      const { th, t } = exhibit(fate);
+      const ev = run(th, 20, onThing(t));
+      expect(ev, fate).toEqual([]);
+      expect(t.state).toBe('idle');
+      expect(t.gaze).toBe(1);
+      expect(t.scale).toBe(1);
+      expect(t.dissolve).toBe(0);
+    }
+  });
+
+  it('gaze растёт не мгновенно (около 0,4 с) и спадает, когда отвели взгляд', () => {
+    const { th, t } = exhibit();
+    run(th, 0.2, onThing(t));
+    expect(t.gaze).toBeGreaterThan(0);
+    expect(t.gaze).toBeLessThan(1);
+    run(th, 1, onThing(t));
+    expect(t.gaze).toBe(1);
+    run(th, 1, away());
+    expect(t.gaze).toBe(0);
+  });
+
+  it('обычная вещь той же судьбы под тем же взглядом меняется — разница именно в still', () => {
+    const th = new Things();
+    const t = th.add('mug', [0, 0, 0], 0, 'dust', 0.3);
+    const ev = run(th, 20, onThing(t));
+    expect(ev.length).toBeGreaterThan(0);
+    expect(t.state).not.toBe('idle');
+  });
+});
+
 describe('looksAt', () => {
   const target: Vec3 = [0, 1, 0];
   const at = (eye: Vec3, light = 1): Look => ({ eye, aim: norm([target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]]), light });
