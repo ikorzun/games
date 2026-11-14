@@ -177,6 +177,8 @@ export class Hud {
 
   /** Вспышка воспоминания: строка посреди кадра, появляется рывком и медленно гаснет. */
   flash(text: string, ms = 5200): void {
+    // Вспышка важнее прочих сообщений: они стоят почти там же и легли бы строкой на строку.
+    this.toastEl.classList.remove('is-on');
     this.flashEl.textContent = text;
     this.flashEl.classList.remove('is-on');
     // Перезапуск анимации появления.
@@ -191,6 +193,11 @@ export class Hud {
     const key = lines.join('\n');
     if (key === this.lastLimbo) return;
     this.lastLimbo = key;
+    // Последняя вспышка воспоминания ещё может гореть: лимбо её гасит, иначе строки лягут друг на друга.
+    if (lines.length > 0) {
+      this.flashEl.classList.remove('is-on');
+      this.toastEl.classList.remove('is-on');
+    }
     this.limboEl.replaceChildren();
     for (const l of lines) {
       const row = document.createElement('div');

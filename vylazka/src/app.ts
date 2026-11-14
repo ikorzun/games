@@ -534,7 +534,10 @@ export class App {
     this.hud.setTime(g.time);
     const dead = light.state === 'dead';
     const kind = this.touchMode ? (this.motion?.state === 'active' ? 'motion' : 'touch') : 'desktop';
-    this.hud.setShakePrompt(dead ? t(`hint.shake.${kind}`) : '', light.reviveProgress);
+    // В светлом пространстве (луг, белое нигде, лимбо) фонарь не нужен: о том, что он заглох, молчим.
+    const env = g.env.ambient;
+    const bright = (env[0] + env[1] + env[2]) / 3 > 0.3;
+    this.hud.setShakePrompt(dead && !bright ? t(`hint.shake.${kind}`) : '', light.reviveProgress);
     const base = this.touchMode ? 'touch' : 'desktop';
     let hint = '';
     if (!dead && this.screen === 'play' && g.where === 'main' && this.profile.successes === 0) {
@@ -543,13 +546,12 @@ export class App {
       else if (g.time < 16 && !this.touchMode) hint = t('hint.pause.desktop');
     }
     this.hud.setHint(hint);
-    this.touch?.setShakePrompt(dead, light.reviveProgress);
+    this.touch?.setShakePrompt(dead && !bright, light.reviveProgress);
     this.touch?.setLit(light.state === 'on');
     this.hud.setBattery(1, 0, true);
     this.hud.setAction('', 0);
-    // В светлом пространстве (белое нигде, луг) светлые надписи не видны: переключаем их на тёмные.
-    const amb = g.env.ambient;
-    this.hud.el.classList.toggle('is-bright', (amb[0] + amb[1] + amb[2]) / 3 > 0.3);
+    // В светлом пространстве светлые надписи не видны: переключаем их на тёмные.
+    this.hud.el.classList.toggle('is-bright', bright);
 
     if (s && g.where !== 'limbo') {
       // Воспоминания, которые уже пришли: что ищем и что вспомнили.

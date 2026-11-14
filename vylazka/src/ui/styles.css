@@ -742,3 +742,76 @@ body {
 .vz-hud.is-bright .vz-hud__mark {
   filter: invert(1);
 }
+
+/* ── Заставка: название, две строки и семь настроек обязаны поместиться целиком на любом экране ── */
+.vz-overlay__body {
+  text-align: center;
+  text-wrap: balance;
+}
+.vz-overlay__title {
+  /* Название длинное: разрядка и кегль уступают ширине экрана. */
+  font-size: clamp(22px, 5.4vmin, 60px);
+  letter-spacing: 0.2em;
+  padding-left: 0.2em;
+  overflow-wrap: normal;
+  text-wrap: balance;
+}
+@media (max-width: 560px), (max-height: 560px) {
+  .vz-overlay {
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  .vz-overlay__box {
+    gap: 0.35em;
+  }
+  .vz-overlay__title {
+    font-size: clamp(20px, 6vmin, 30px);
+    letter-spacing: 0.12em;
+    padding-left: 0.12em;
+  }
+  .vz-overlay__sub {
+    font-size: 12px;
+    letter-spacing: 0.06em;
+  }
+  .vz-overlay__body {
+    margin-top: 0.3em;
+    font-size: 13px;
+    line-height: 1.3;
+    gap: 0.25em;
+  }
+  .vz-overlay__prompt {
+    margin-top: 0.4em;
+    font-size: 16px;
+  }
+  .vz-overlay__foot {
+    gap: 0.35em;
+  }
+  .vz-overlay__row {
+    gap: 0.35em;
+  }
+  .vz-overlay__opt {
+    font-size: 13px;
+    padding: 0.3em 0.6em;
+  }
+  .vz-overlay__rotate {
+    font-size: 12px;
+  }
+}
+/* Узкий экран: настройки в две колонки, а не лесенкой. */
+@media (max-width: 560px) {
+  .vz-overlay__row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+  .vz-overlay__opt {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+/* Низкий экран (телефон лёжа): строка о правилах уступает место предупреждению о вспышках. */
+@media (max-height: 480px) {
+  .vz-overlay__line--plain {
+    display: none;
+  }
+}

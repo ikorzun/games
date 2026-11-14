@@ -217,6 +217,8 @@ export class Game {
   /** Сглаженные особенности помещения: сила фонаря и красная сетка. */
   private fxLight = 1;
   private fxWire = 0;
+  /** Сила вспышки стробоскопа в последнем кадре, 0..1 (для проверок). */
+  private strobeNow = 0;
   private room = -1;
   private nextGlitch = 12;
   private dreamSeed = 0;
@@ -292,7 +294,9 @@ export class Game {
   private assignRooms(seed: number): void {
     const rooms = this.level?.layout?.rooms ?? [];
     const rng = mulberry32(hash2(seed, 0xf0, 0x0d));
-    const pool = rooms.filter((r) => r.type !== 'corridor' && r.type !== 'entrance' && r.type !== 'airlock' && r.type !== 'stairwell' && r.type !== 'collapsed');
+    // В помещениях с газом особенностей нет: там игрок теряет сознание раньше, чем успеет их разглядеть.
+    const gas = new Set(this.level?.layout?.hazards.gasRooms ?? []);
+    const pool = rooms.filter((r) => r.type !== 'corridor' && r.type !== 'entrance' && r.type !== 'airlock' && r.type !== 'stairwell' && r.type !== 'collapsed' && !gas.has(r.id));
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
       [pool[i], pool[j]] = [pool[j]!, pool[i]!];
@@ -387,6 +391,15 @@ export class Game {
   /** Следующая сессия готова: как только лимбо отпустит, игрок окажется в ней. */
   queueSession(level: BuiltLevel, dream: DreamSeed): void {
     this.pending = { level, dream };
+  }
+
+  /** Отладка: немедленно вернуться в убежище (карманное пространство и идущий скачок сбрасываются). */
+  debugHome(): void {
+    if (this.where === 'limbo') return;
+    this.leavePocket();
+    this.where = 'main';
+    this.env = ENV_BUNKER;
+    this.transition = null;
   }
 
   /** Отладка: считать всё вспомненным — через полсекунды место рассыплется. */
@@ -949,10 +962,12 @@ export class Game {
     // Стробоскоп: короткие вспышки не чаще трёх в секунду (вразнобой, часть пропущена). По просьбе
     // игрока «поменьше вспышек» — ровное медленное мерцание.
     let strobe = 0;
+    this.strobeNow = 0;
     if (fx === 'strobe') {
       const beat = this.time * 2.6;
       const k = Math.floor(beat);
       strobe = this.calmFlash ? 0.06 + 0.04 * Math.sin(this.time * 2.2) : hash01(k, 3, this.dreamSeed) < 0.8 && beat - k < 0.17 ? 1 : 0;
+      this.strobeNow = strobe;
     }
 
     // Скачок: уходящее место рвётся, рассыпается, гаснет или выбеливается; новое — проступает обратно.
@@ -1105,7 +1120,7 @@ export class Game {
       jump: tr ? { cause: tr.plan.cause, style: tr.plan.style, to: tr.plan.to, switched: tr.switched } : null,
       room: this.room,
       roomFx: this.roomFx.get(this.room) ?? null,
-      fx: { light: this.fxLight, wire: this.fxWire },
+      fx: { light: this.fxLight, wire: this.fxWire, strobe: this.strobeNow },
       session: s
         ? {
             memories: s.memories.map((m) => ({ id: m.def.id, thing: m.def.thing, state: m.state, spot: m.spot ? [m.spot.x, m.spot.y, m.spot.z] : null })),

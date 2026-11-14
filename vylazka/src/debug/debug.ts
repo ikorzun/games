@@ -179,6 +179,7 @@ export function installDebug(app: App): void {
       const l = app.level;
       const m = l.landmarks.filter((x) => x.id === id)[index];
       if (!m) return false;
+      game().debugHome();
       // Пробуем встать в узлах помещения приметы и соседних с ним: подходим на нужную дистанцию,
       // даём контроллеру вытолкнуть игрока из мебели и только потом целимся.
       const own = l.nav.filter((n) => n.room === m.room);
@@ -299,6 +300,8 @@ export function installDebug(app: App): void {
     gotoRoom: (roomId, yawDeg = 0) => {
       const n = app.level.nav.find((x) => x.room === roomId);
       if (!n) return false;
+      // «Встать в помещение убежища» — значит быть в убежище, а не в карманном пространстве.
+      game().debugHome();
       game().teleport(n.x, n.y, n.z, (yawDeg * Math.PI) / 180, 0);
       return true;
     },
