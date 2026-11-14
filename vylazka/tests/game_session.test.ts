@@ -790,3 +790,113 @@ describe('игра целиком: карманные пространства �
     expect(f.scanRange[1]).toBeGreaterThan(15);
   });
 });
+
+describe('игра целиком: без света место не обязано остаться прежним', () => {
+  /** Мелкие вещи сна (не цели воспоминаний, без преграды) и их места. */
+  const smallOf = (h: Harness) => h.game.things.list.filter((t) => !t.memory && !t.still && t.collider < 0 && t.state === 'idle');
+  const places = (list: { pos: Vec3 }[]) => list.map((t) => t.pos.map((v) => v.toFixed(3)).join(','));
+  const dark = (h: Harness) => (h.game.snapshot() as { dark: { for: number; shifts: number } }).dark;
+
+  /** Встать так, чтобы рядом (ближе 14 м, на том же ярусе) было хотя бы три мелкие вещи. */
+  function standAmong(h: Harness): ReturnType<typeof smallOf> {
+    const all = smallOf(h);
+    for (const t of all) {
+      const near = all.filter((o) => Math.hypot(o.pos[0] - t.pos[0], o.pos[2] - t.pos[2]) < 9 && Math.abs(o.pos[1] - t.pos[1]) < 2);
+      if (near.length < 3) continue;
+      const floor = Math.floor((t.pos[1] + 0.3) / 4.5) * 4.5;
+      h.game.teleport(t.pos[0] + 0.8, floor, t.pos[2] + 0.8);
+      h.run(0.2);
+      return near;
+    }
+    throw new Error('на уровне нет трёх мелких вещей рядом');
+  }
+
+  it('пока фонарь горит, вещи стоят где стояли', () => {
+    const h = new Harness(levelOf(SEED));
+    const near = standAmong(h);
+    const before = places(near);
+    const yaws = near.map((t) => t.yaw);
+    h.run(12);
+    expect(places(near)).toEqual(before);
+    expect(near.map((t) => t.yaw)).toEqual(yaws);
+    expect(dark(h).shifts).toBe(0);
+    expect(dark(h).for).toBe(0);
+  });
+
+  it('фонарь выключен: семь секунд всё на месте, потом мелкие вещи меняются местами и поворачиваются', () => {
+    const h = new Harness(levelOf(SEED));
+    const near = standAmong(h);
+    const before = places(near);
+    const yaws = near.map((t) => t.yaw);
+    h.tick({ ...emptyInput(), light: true });
+    h.run(6.5);
+    // Место ещё держится в памяти: ничего не менялось.
+    expect(places(near)).toEqual(before);
+    expect(dark(h).shifts).toBe(0);
+    h.run(1);
+    const after = places(near);
+    // Места те же самые, но вещи на них — другие: ни одна не осталась на своём.
+    expect([...after].sort()).toEqual([...before].sort());
+    expect(after.filter((p, i) => p === before[i]).length).toBe(0);
+    expect(near.filter((t, i) => t.yaw !== yaws[i]).length).toBe(near.length);
+    expect(dark(h).shifts).toBeGreaterThanOrEqual(near.length);
+    // Свет вернулся — больше ничего не меняется, счёт темноты сброшен.
+    h.tick({ ...emptyInput(), light: true });
+    h.run(0.5);
+    const settled = places(near);
+    const count = dark(h).shifts;
+    h.run(12);
+    expect(places(near)).toEqual(settled);
+    expect(dark(h).shifts).toBe(count);
+    expect(dark(h).for).toBe(0);
+  });
+
+  it('темнота затянулась — детали меняются снова, каждые девять секунд', () => {
+    const h = new Harness(levelOf(SEED));
+    standAmong(h);
+    h.tick({ ...emptyInput(), light: true });
+    h.run(7.5);
+    const first = dark(h).shifts;
+    expect(first).toBeGreaterThan(0);
+    h.run(8);
+    expect(dark(h).shifts).toBe(first);
+    h.run(1.5);
+    expect(dark(h).shifts).toBeGreaterThan(first);
+  });
+
+  it('вещь воспоминания темнота не трогает; крупные вещи остаются на месте и с той же преградой', () => {
+    const h = new Harness(levelOf(SEED));
+    const { id } = h.reveal();
+    const target = h.game.things.list.find((t) => t.id === id)!;
+    const floor = Math.floor((target.pos[1] + 0.3) / 4.5) * 4.5;
+    h.game.teleport(target.pos[0] + 1.2, floor, target.pos[2] + 1.2);
+    h.run(0.2);
+    const pos = [...target.pos];
+    const yaw = target.yaw;
+    const big = h.game.things.list.filter((t) => t.collider >= 0);
+    const bigPlaces = places(big);
+    const boxes = big.map((t) => ({ ...h.game.colliders.boxes[t.collider]! }));
+    h.tick({ ...emptyInput(), light: true });
+    h.run(17);
+    expect(dark(h).for).toBeGreaterThan(16);
+    expect(target.pos).toEqual(pos);
+    expect(target.yaw).toBe(yaw);
+    expect(places(big)).toEqual(bigPlaces);
+    expect(big.map((t) => ({ ...h.game.colliders.boxes[t.collider]! }))).toEqual(boxes);
+  });
+
+  it('в карманном пространстве темноты нет: фонарь выключен, а вещи не меняются', () => {
+    const h = new Harness(levelOf(SEED));
+    standAmong(h);
+    // Вещи убежища: у пространства появятся свои, они не в счёт.
+    const mine = smallOf(h);
+    const before = places(mine);
+    enter(h, 'meadow');
+    expect(h.game.where).toBe('pocket');
+    h.tick({ ...emptyInput(), light: true });
+    h.run(12);
+    expect(dark(h).shifts).toBe(0);
+    expect(dark(h).for).toBe(0);
+    expect(places(mine)).toEqual(before);
+  });
+});

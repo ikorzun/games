@@ -77,25 +77,6 @@ export const SCAN_GLSL = /* glsl */ `
 uniform vec4 uScan;       // x — h без света, y — h на единицу света, z — предел h, w — запас
 uniform float uScanFade;  // 1 — пространство держится; меньше — редеет (его время выходит)
 uniform vec2 uScanRange;  // докуда рассеянный свет «сканирует»: плотно до x, россыпь после y, м
-uniform vec3 uFocusPosV;  // внимание скана: откуда и куда смотрит запаздывающий луч (пространство камеры)
-uniform vec3 uFocusDirV;
-uniform float uFocusOn;   // 0..1: сглаженная сила лампы
-
-/** Освещённость от запаздывающего луча: тот же конус, что у фонаря, без колец отражателя и без тени. */
-float focusAt(vec3 posV) {
-  vec3 toL = uFocusPosV - posV;
-  float d = length(toL);
-  float cosA = dot(-toL / max(d, 1e-4), uFocusDirV);
-  float beam = smoothstep(uCone.y, uCone.x, cosA) * 0.78 + smoothstep(uCone.z, uCone.y, cosA) * 0.19 + smoothstep(uCone.w, uCone.z, cosA) * 0.03;
-  return uFocusOn * beam / (1.0 + 0.07 * d * d);
-}
-
-/** Попадает ли точка в конус внимания: 1 — внутри, 0 — снаружи (без затухания с расстоянием). */
-float focusCone(vec3 posV) {
-  vec3 toL = uFocusPosV - posV;
-  float cosA = dot(-normalize(toL), uFocusDirV);
-  return uFocusOn * smoothstep(uCone.w, mix(uCone.w, uCone.z, 0.7), cosA);
-}
 `;
 
 export const WORLD_VERT = /* glsl */ `
@@ -160,7 +141,6 @@ uniform vec3 uFogColor;   // во что уходит даль: в убежищ�
 uniform float uDecay;     // 0..1: насколько здесь сыро и запущено (растёт с глубиной)
 uniform vec3 uLightRightV;
 uniform vec3 uLightUpV;
-uniform vec3 uAfterColor; // цвет и сила «памяти скана»: свет запаздывающего луча
 // Материалов может быть до 48 (атлас шаров 8 × ATLAS_ROWS); сколько их на деле — знает world/materials.ts.
 #ifndef ATLAS_ROWS
 #define ATLAS_ROWS 4
@@ -291,10 +271,7 @@ void main() {
   float back = mix(0.6, 1.0, smoothstep(0.03, 0.4, toCam)) * (mi == 24 ? 0.35 : (mi == 7 || mi == 23 ? 0.6 : (mi == 12 ? 0.78 : (mi == 30 || mi == 15 ? 1.8 : 1.0))));
   // Прямой свет пространства тоже «сканирует»: освещённая сторона плотнее теневой.
   float keyLit = max(dot(Ng, uKeyDirV), 0.0) * dot(uKeyColor, vec3(0.3333)) * shadowKey;
-  // Память скана: место, с которого луч только что ушёл, ещё немного держится — тускло и без теней.
-  // Пока луч стоит на месте, памяти нет: она только там, где внимание скана ещё есть, а света уже нет.
-  float eAfter = max(0.0, focusAt(vPosV) - lb.w * lamp) * smoothstep(-0.02, 0.1, dot(Ng, normalize(uFocusPosV - vPosV)));
-  float hLit = (eLight + eAfter * 0.35 + bounce0 * 1.2) * uScan.y * back;
+  float hLit = (eLight + bounce0 * 1.2) * uScan.y * back;
   float hEnv = uScan.z * (min(1.0, eGlow * 4.0) + min(1.0, eAmb * 8.0) * (0.72 + 0.28 * min(1.0, keyLit * 3.0 + step(dot(uKeyColor, vec3(1.0)), 0.001))) * back * (1.0 - smoothstep(uScanRange.x, uScanRange.y, distV)));
   // Пространство, чьё время выходит, редеет; светящееся (красный контур выхода, небо) держится до конца.
   float hScan = min(uScan.z, max(uScan.x, hLit + hEnv)) * mix(mix(0.06, 1.0, uScanFade), 1.0, step(0.004, eGlow));
@@ -306,7 +283,7 @@ void main() {
   // Туда, где света почти нет, фактуры не нужны: поверхность — просто цвет материала.
   if (hLit < 0.1 && eGlow < 0.004 && eAmb < 0.02) {
     vec3 flat_ = uMatBase[mi] * vColor.rgb * ao;
-    vec3 colG = flat_ * (uAmbient * (0.66 + 0.34 * up) + uLightColor * (eLight * 0.45 + bounce0 * bounceTint) + uAfterColor * eAfter);
+    vec3 colG = flat_ * (uAmbient * (0.66 + 0.34 * up) + uLightColor * (eLight * 0.45 + bounce0 * bounceTint));
     colG += vec3(0.9, 0.07, 0.03) * burn;
     gl_FragColor = vec4(mix(uFogColor, colG, exp(-uFog * distV)), hOut);
     return;
@@ -436,7 +413,7 @@ void main() {
   float bounce = bounce0 * (0.35 + 0.65 * max(dot(N, toB / max(db, 1e-3)), 0.0));
   // Рассеянный свет пространства идёт больше сверху (небо, потолок), чем снизу; прямой — от солнца или лампы.
   vec3 skyLit = uAmbient * (0.66 + 0.34 * up) + uKeyColor * (max(dot(N, uKeyDirV), 0.0) * shadowKey);
-  col += base * tint * ao * (skyLit * lit + uLightColor * bounceTint * bounce + uAfterColor * eAfter);
+  col += base * tint * ao * (skyLit * lit + uLightColor * bounceTint * bounce);
 
   // Мокрый пол и плитка отражают освещённое пятно: блик тянется от дальней стены к ногам.
   float gloss = max(wet, mi == 12 ? 1.0 : (mi == 18 ? 0.5 : 0.0)) * step(0.5, up);
@@ -713,8 +690,9 @@ uniform float uProj;        // пикселей буфера на метр на 
 uniform float uMaxPx;       // больше этого сплат на экране не бывает
 uniform float uLodDist;     // до этого расстояния точки стоят в полную плотность, дальше редеют
 uniform float uFar;         // дальше этого точек нет: к нему они гаснут
-uniform float uGhost;       // доля точек, видимых без света («призрачные»)
-uniform vec3 uGhostColor;   // чем они светятся
+uniform sampler2D tMem;     // память света: rgb — каким место было при свете, a — свежесть (1 — только что)
+uniform vec3 uMemColor;     // во что остывает цвет точки, пока память стареет
+uniform float uMemGain;     // яркость точек памяти: не растёт, когда камера в темноте поднимает усиление
 uniform float uAmbientScan; // 0..1: пространство «сканирует» рассеянный свет, фонарь для сборки не нужен
 uniform float uHMax;
 uniform vec4 uCone;
@@ -768,19 +746,38 @@ void main() {
   vec4 hc = projectionMatrix * hv;
   vec2 huv = hc.xy / max(hc.w, 1e-4) * 0.5 + 0.5;
   float h = 0.0;
+  float fresh = 0.0;
   vec3 col = vec3(0.0);
+  vec3 kept = vec3(0.0);
   if (hc.w > 0.0 && huv.x > 0.0 && huv.x < 1.0 && huv.y > 0.0 && huv.y < 1.0) {
     float zs = linDepth(texture2D(tDepth, huv).r);
     if (abs(zs + hv.z) < 0.035 * dist + 0.05) {
       vec4 sc = texture2D(tScene, huv);
       h = sc.a * uHMax;
       col = sc.rgb;
+      vec4 mem = texture2D(tMem, huv);
+      fresh = mem.a;
+      kept = mem.rgb;
     }
   }
 
-  // Кто виден: в темноте — только призрачная доля точек; чем больше замеров, тем их больше.
-  float want = min(lod, mix(uGhost, 1.0, smoothstep(0.02, 0.5, h)));
-  float alpha = 1.0 - smoothstep(want * 0.7, want, rank);
+  // Кто виден при свете: чем больше замеров, тем больше точек. Без света точек нет.
+  float hk = smoothstep(0.02, 0.5, h);
+  float want = min(lod, hk);
+  float aLit = want > 0.0 ? 1.0 - smoothstep(want * 0.7, want, rank) : 0.0;
+
+  // Память света: место, с которого свет ушёл, ещё держится точками. У каждой точки свой срок: пока
+  // свежесть памяти выше её порога, точка стоит на поверхности. Срок выходит — точка отпускает
+  // поверхность (relax), потом осыпается и гаснет (dying). Свежесть убывает ровно, пороги у точек
+  // разные — поэтому место редеет постепенно, зерно за зерном, пока не исчезнет совсем.
+  // Порог — та же очередь, по которой точки появляются при свете: кто пришёл последним, уходит первым.
+  // Поэтому в миг, когда свет ушёл, на месте остаются те же точки, а редея, россыпь остаётся ровной.
+  float life = fresh - 0.94 * rank / lod;
+  float relax = 1.0 - clamp(life / 0.5, 0.0, 1.0);
+  float dying = 1.0 - clamp(life / 0.18, 0.0, 1.0);
+  float aMem = life > 0.0 ? 1.0 - dying * dying : 0.0;
+
+  float alpha = max(aLit, aMem);
   // Там, где поверхность уже проявилась сама, точки в ней растворяются. И к пределу дальности гаснут.
   alpha *= (1.0 - smoothstep(0.8 * uHMax, 0.98 * uHMax, h)) * (1.0 - smoothstep(0.7 * uFar, uFar, dist));
   if (alpha <= 0.004) return;
@@ -788,16 +785,23 @@ void main() {
   // Сборка: замеров хватает и внимание скана уже здесь — точка стоит на своём месте.
   vec3 toF = uFocusPosV - hv.xyz;
   float cone = uFocusOn * smoothstep(uCone.w, mix(uCone.w, uCone.z, 0.7), dot(-normalize(toF), uFocusDirV));
-  float a = smoothstep(0.02, 0.5, h) * mix(cone, 1.0, uAmbientScan);
-  float s = 1.0 - a;
+  float a = hk * mix(cone, 1.0, uAmbientScan);
+  // Насколько точку держит память: свежая — на месте, с истекающим сроком — отпущена.
+  float held = life > 0.0 ? 1.0 - relax : 0.0;
+  float s = (1.0 - a) * (1.0 - held);
 
-  // Разлёт: вне сборки точка висит у своей поверхности и медленно кружит; пока летит — отходит дальше.
+  // Разлёт: вне сборки точка висит у своей поверхности и медленно кружит; пока летит к месту — отходит дальше.
   float t = uTime * (0.25 + 0.35 * aSeed.z) + aSeed.y * 6.2832;
   vec3 swirl = vec3(sin(t + wp.y * 2.1), sin(t * 0.8 + wp.x * 1.7 + 1.3), cos(t * 1.1 + wp.z * 1.9));
   vec3 rnd = aSeed.yzw * 2.0 - 1.0;
   float rest = 0.015 + 0.09 * aSeed.w;
-  float burst = 4.0 * s * (1.0 - s) * (0.1 + 0.26 * aSeed.z);
-  vec3 p = home + wn * (rest * s + burst) + rnd * (0.04 * s + burst * 0.55) + swirl * (0.018 * s + 0.05 * burst);
+  float burst = 4.0 * a * (1.0 - a) * (0.1 + 0.26 * aSeed.z);
+  // Осыпание: чем меньше осталось срока, тем дальше точка съезжает вниз, как песок со стены (каждая
+  // третья всплывает, как пыль), и уходит от взгляда. Место без света не гаснет, а оплывает и
+  // осыпается. Под светом этого нет.
+  float drop = relax * relax * (1.0 - aLit);
+  vec3 slip = (vec3(0.0, (aSeed.w < 0.33 ? 0.35 : -1.0) * (0.2 + 0.75 * aSeed.z), 0.0) + normalize(wp.xyz - cameraPosition) * 0.25 + swirl * 0.22) * drop;
+  vec3 p = home + wn * (rest * s + burst) + rnd * (0.04 * s + burst * 0.55) + swirl * (0.018 * s + 0.05 * burst) + slip;
 
   vec4 pv = viewMatrix * vec4(p, 1.0);
   vec4 pc = projectionMatrix * pv;
@@ -809,7 +813,7 @@ void main() {
 
   // Размер: в мире сплат постоянный, поэтому вблизи он крупнее. Дальние точки реже и потому крупнее —
   // на экране их размер перестаёт уменьшаться. Точка в разлёте мельче.
-  float px = uSize * uProj / min(max(-pv.z, 0.05), uLodDist) * mix(1.0, 0.72, s);
+  float px = uSize * uProj / min(max(-pv.z, 0.05), uLodDist) * mix(1.0, 0.72, s) * (1.0 - 0.4 * drop);
   if (px < 1.6) {
     alpha *= px * px / 2.56;
     px = 1.6;
@@ -822,15 +826,22 @@ void main() {
   float cosv = abs(dot(nv, vd));
   vec2 ax = nv.xy - vd.xy * dot(nv, vd);
   float al = length(ax);
-  vShape = vec3(al > 1e-4 ? ax / al : vec2(1.0, 0.0), mix(1.0, max(cosv, 0.32), a));
+  vShape = vec3(al > 1e-4 ? ax / al : vec2(1.0, 0.0), mix(1.0, max(cosv, 0.32), max(a, held)));
 
-  // Цвет — цвет места под точкой, но не темнее отметки скана: на краю луча поверхность освещена слабо,
-  // а точка должна читаться. Оттенок при этом остаётся оттенком поверхности. Без света точка светится
-  // сама, холодным — так отличима «призрачная» россыпь от того, что уже высвечено.
-  float lum = max(dot(col, vec3(0.3, 0.59, 0.11)), 1e-3);
+  // Цвет при свете — цвет места под точкой, но не темнее отметки скана: на краю луча поверхность
+  // освещена слабо, а точка должна читаться. Оттенок при этом остаётся оттенком поверхности.
+  const vec3 W = vec3(0.3, 0.59, 0.11);
+  float lum = max(dot(col, W), 1e-3);
   float lift = clamp((0.06 + 0.2 * smoothstep(0.0, 1.6, h)) / lum, 1.0, 7.0);
-  vec3 c = col * mix(lift, 1.0, smoothstep(1.6, 3.0, h)) + uGhostColor * (exp(-h * 1.4) * (0.45 + 0.55 * aSeed.w));
-  vCol = vec4(c, alpha);
+  vec3 lit = col * mix(lift, 1.0, smoothstep(1.6, 3.0, h));
+  // Цвет в памяти — оттенок, каким место было при свете; яркость — по свежести и по тому, насколько
+  // ярким место запомнилось: середина луча держится в памяти ярче его краёв. Старея, точка остывает
+  // и тускнеет.
+  float was = dot(kept, W);
+  vec3 hue = kept / max(was, 0.02);
+  vec3 old = mix(uMemColor, hue, 0.3 + 0.7 * fresh) * ((0.04 + (0.16 + 0.6 * smoothstep(0.03, 0.7, was)) * fresh * sqrt(fresh)) * uMemGain);
+  // Что ярче: в полутьме сразу после света точка не должна провалиться в черноту.
+  vCol = vec4(max(old * aMem, lit * smoothstep(0.0, 0.3, hk)), alpha);
   gl_Position = pc;
 }
 `;
@@ -854,20 +865,122 @@ void main() {
 `;
 
 /**
+ * Память света. Мир существует, пока на него светят: место, с которого свет ушёл, ещё несколько
+ * секунд держится в памяти — и по ней точки стоят на своих местах, а потом осыпаются (SPLAT_VERT).
+ *
+ * Память хранится в кадре, а не в мире: rgb — каким место было при свете, a — свежесть (1 — свет
+ * здесь, 0 — забыто). Каждый кадр она переносится на новое положение камеры: по глубине пикселя
+ * находится его точка в мире и её место в прошлом кадре. Если там было что-то другое (другая
+ * глубина) или это место было за кадром — памяти нет. То, от чего отвернулись, забыто сразу.
+ */
+export const MEMORY_FRAG = /* glsl */ `
+precision highp float;
+uniform sampler2D tScene;            // кадр мира: rgb — цвет, a — число замеров (в долях предела)
+uniform highp sampler2D tDepth;
+uniform sampler2D tPrev;             // память прошлого кадра
+uniform highp sampler2D tPrevDepth;  // глубина прошлого кадра
+uniform mat4 uReproj;                // из экранных координат этого кадра — в экранные прошлого
+uniform vec2 uNearFar;
+uniform float uDecay;                // сколько свежести уходит за этот кадр
+uniform float uHMax;                 // предел числа замеров
+uniform float uKeep;                 // 0 — прошлого нет (первый кадр, другое место): забыть всё
+uniform float uFrame;
+varying vec2 vUv;
+
+float lin(float d) {
+  return (2.0 * uNearFar.x * uNearFar.y) / (uNearFar.y + uNearFar.x - (d * 2.0 - 1.0) * (uNearFar.y - uNearFar.x));
+}
+
+float hash(uvec2 p, uint s) {
+  uint h = p.x * 0x27d4eb2du ^ p.y * 0x165667b1u ^ s * 0x9e3779b1u;
+  h ^= h >> 15; h *= 0x2c1b3c6du;
+  h ^= h >> 12; h *= 0x297a2d39u;
+  h ^= h >> 15;
+  return float(h) * (1.0 / 4294967296.0);
+}
+
+void main() {
+  vec4 sc = texture2D(tScene, vUv);
+  float d = texture2D(tDepth, vUv).r;
+  vec4 mem = vec4(0.0);
+  if (uKeep > 0.5 && d < 0.99999) {
+    vec4 p = uReproj * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+    if (p.w > 0.0) {
+      vec3 q = p.xyz / p.w * 0.5 + 0.5;
+      if (q.x > 0.0 && q.x < 1.0 && q.y > 0.0 && q.y < 1.0 && q.z > 0.0 && q.z < 1.0) {
+        float was = lin(texture2D(tPrevDepth, q.xy).r);
+        float now = lin(q.z);
+        if (abs(was - now) < 0.03 * now + 0.05) mem = texture2D(tPrev, q.xy);
+      }
+    }
+  }
+  // Свежесть хранится с шагом 1/255, а за кадр её уходит меньше шага. Поэтому убыль — целое число
+  // шагов, выбранное случайно так, чтобы в среднем выходило ровно сколько нужно, при любой частоте кадров.
+  float steps = uDecay * 255.0;
+  float lose = (floor(steps) + (hash(uvec2(gl_FragCoord.xy), uint(uFrame)) < fract(steps) ? 1.0 : 0.0)) / 255.0;
+  float fresh = max(mem.a - lose, 0.0);
+  vec3 col = fresh > 0.004 ? mem.rgb : vec3(0.0);
+  // Свет обновляет память, и тем крепче, чем он ярче. Мера та же, по которой при свете видны точки
+  // (SPLAT_VERT): сколько их было видно — столько и помнится. Цвет помнится самый яркий из виденных:
+  // луч, уходя, тускнеет, а место остаётся в памяти таким, каким было в его середине.
+  float lit = smoothstep(0.02, 0.5, sc.a * uHMax);
+  const vec3 W = vec3(0.3, 0.59, 0.11);
+  if (lit > 0.0 && dot(sc.rgb, W) >= dot(col, W)) col = sc.rgb;
+  gl_FragColor = vec4(col, max(fresh, lit));
+}
+`;
+
+/**
+ * Длинная выдержка. Без фонаря камера «не закрывает затвор»: всё яркое в кадре оставляет след,
+ * и при повороте головы пространство смазывается, как на снимке с долгой выдержкой. Кадр — это
+ * новая картинка поверх остывающей прошлой; при свете прошлой нет вовсе (uKeep = 0).
+ */
+export const TRAIL_FRAG = /* glsl */ `
+precision highp float;
+uniform sampler2D tNow;    // кадр без выдержки: поверхности и точки
+uniform sampler2D tPrev;   // прошлый кадр — уже со следами
+uniform float uKeep;       // какая доля яркости прошлого кадра остаётся (0 — выдержки нет)
+varying vec2 vUv;
+
+void main() {
+  vec3 now = texture2D(tNow, vUv).rgb;
+  // Малый вычет — чтобы след гас до конца, а не застревал на шаге 1/255.
+  vec3 was = max(texture2D(tPrev, vUv).rgb * uKeep - 0.0015, 0.0) * step(0.001, uKeep);
+  gl_FragColor = vec4(max(now, was), 1.0);
+}
+`;
+
+/**
  * Сведение: сама поверхность видна только там, где замеров хватило, чтобы сплаты слились; где их
  * меньше, остаётся даль (чернота убежища), и поверх неё следующим шагом рисуются точки.
  */
 export const COMPOSE_FRAG = /* glsl */ `
 precision highp float;
 uniform sampler2D tScene;
+uniform sampler2D tMem;   // память света: какой поверхность была и насколько это свежо
+uniform float uMemGain;   // яркость памяти: не растёт, когда камера в темноте поднимает усиление
 uniform vec3 uFogColor;
 uniform float uSolid;     // 1 — показывать поверхности целиком (облако точек выключено)
 varying vec2 vUv;
 
 void main() {
   vec4 c = texture2D(tScene, vUv);
-  float g = max(uSolid, smoothstep(0.22, 0.85, c.a));
-  gl_FragColor = vec4(mix(uFogColor, c.rgb, g), 1.0);
+  if (uSolid > 0.5) {
+    gl_FragColor = vec4(c.rgb, 1.0);
+    return;
+  }
+  // Поверхность не гаснет разом: первые мгновения после света она ещё видна по памяти и тает,
+  // оставляя вместо себя точки. Так держится только то, что запомнилось ярким, — середина луча, где
+  // поверхность и была сплошной; ореол, собранный из точек, остаётся точками.
+  // Тает она не ровно, а крошится: зерно за зерном выпадает из неё, пока не останется ничего.
+  vec4 m = texture2D(tMem, vUv);
+  float now = smoothstep(0.22, 0.85, c.a);
+  float keep = smoothstep(0.86, 1.0, m.a) * smoothstep(0.1, 0.4, dot(m.rgb, vec3(0.3, 0.59, 0.11)));
+  uvec2 px = uvec2(gl_FragCoord.xy);
+  uint n = px.x * 0x27d4eb2du ^ px.y * 0x165667b1u;
+  n ^= n >> 15; n *= 0x2c1b3c6du; n ^= n >> 12;
+  float kept = step(float(n & 0xffffu) / 65535.0, keep * 0.97);
+  gl_FragColor = vec4(mix(uFogColor, mix(m.rgb * uMemGain, c.rgb, now), max(now, kept)), 1.0);
 }
 `;
 

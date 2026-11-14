@@ -61,6 +61,24 @@ export class Anomalies {
   }
 
   /**
+   * Темнота: пока свет не горит, место никто не держит, и комната неподалёку (не та, где стоит
+   * игрок, и на его ярусе) меняет обстановку — вернётся свет, и она окажется другой.
+   */
+  flipInDark(pos: Vec3, room: number): AnomalyEvent[] {
+    const ev: AnomalyEvent[] = [];
+    for (const v of this.variants) {
+      if (room === v.room) continue;
+      if (Math.hypot(pos[0] - v.center[0], pos[2] - v.center[2]) > 24 || Math.abs(pos[1] - v.center[1]) > 2) continue;
+      const alt = !this.alt.has(v.room);
+      if (alt) this.alt.add(v.room);
+      else this.alt.delete(v.room);
+      this.visited.delete(v.room);
+      ev.push({ type: 'variant', variant: v, alt });
+    }
+    return ev;
+  }
+
+  /**
    * Шаг. pos — ступни игрока; room — id помещения, в котором он стоит (−1 — неизвестно);
    * blocked — рядом рой: аномалии не срабатывают, чтобы не сломать погоню.
    */

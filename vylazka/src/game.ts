@@ -109,6 +109,11 @@ interface Transition {
 }
 
 /** Сколько длится уход из места и приход в новое, с. */
+/**
+ * Смена деталей в темноте: через сколько секунд без света она случается первый раз (за это время
+ * место успевает раствориться — см. SCAN.hold в рендере), как часто повторяется и как далеко достаёт, м.
+ */
+const DARK_SHIFT = { first: 7, every: 9, range: 14 } as const;
 const TIMING: Record<JumpStyle, readonly [number, number]> = { cut: [0.18, 0.45], dissolve: [1.6, 1.2], blackout: [0.55, 0.9], whiteout: [0.4, 1.2] };
 /** Где собираются карманные пространства: далеко в стороне от убежища. */
 const POCKET_ORIGIN: Vec3 = [400, 0, 0];
@@ -183,6 +188,10 @@ export class Game {
   /** Яркость фосфорных надписей и таймер её события (вспышка, затем темнота). */
   private glow = 1;
   private glowTimer = 0;
+  /** Сколько секунд подряд фонарь не светит; сколько раз за эту темноту детали уже менялись; сколько вещей изменилось всего. */
+  private darkFor = 0;
+  private darkShifts = 0;
+  private detailShifts = 0;
   /** Клетка «ярус,x,z» → узел навигации. */
   private readonly nodeAt = new Map<string, number>();
   private prevX = 0;
@@ -292,6 +301,9 @@ export class Game {
     this.fxWire = 0;
     this.room = -1;
     this.swarmNear = 0;
+    this.darkFor = 0;
+    this.darkShifts = 0;
+    this.detailShifts = 0;
     this.glow = 1;
     this.glowTimer = 0;
     this.renderer.setGlow(1);
@@ -371,6 +383,43 @@ export class Game {
       const t = this.addThing(kind, pos, Math.floor(rng() * 4) * (Math.PI / 2), fate, false, true);
       this.thingPocket.set(t.id, pocket);
     }
+  }
+
+  /**
+   * Сменить детали места, пока его не видно: мелкие вещи меняются местами и поворачиваются, крупные
+   * встают задом наперёд (место и преграда у них те же), комната-аномалия неподалёку меняет
+   * обстановку. Вещи воспоминаний и то, что уже меняется, не трогаются. Возвращает, сколько вещей изменилось.
+   */
+  private shiftDetails(): number {
+    const b = this.body;
+    const dist = (t: Thing): number => Math.hypot(t.pos[0] - b.x, t.pos[2] - b.z);
+    const near = this.things.list.filter((t) => t.state === 'idle' && !t.memory && !t.still && dist(t) < DARK_SHIFT.range && Math.abs(t.pos[1] - b.y) < 3);
+    const small = near.filter((t) => t.collider < 0);
+    let changed = 0;
+    if (small.length >= 2) {
+      // По кругу: каждая встаёт на место другой.
+      const by = 1 + Math.floor(this.rng() * (small.length - 1));
+      const places = small.map((t) => t.pos);
+      small.forEach((t, i) => {
+        const p = places[(i + by) % small.length]!;
+        t.pos = [p[0], p[1], p[2]];
+      });
+    }
+    for (const t of small) {
+      t.yaw = this.rng() * Math.PI * 2;
+      changed += 1;
+    }
+    // Рядом с игроком крупное не трогаем: оно на виду даже в темноте — в него упираются.
+    for (const t of near) {
+      if (t.collider < 0 || dist(t) < 1.5 || this.rng() < 0.35) continue;
+      t.yaw += Math.PI;
+      changed += 1;
+    }
+    if (this.anomalies) {
+      const node = this.playerNode();
+      this.applyAnomalies(this.anomalies.flipInDark([b.x, b.y, b.z], node >= 0 ? this.level!.nav[node]!.room : -1));
+    }
+    return changed;
   }
 
   /** Поставить вещь в мир. solid — она мешает пройти, пока не начала меняться. */
@@ -848,6 +897,20 @@ export class Game {
     const strokes = this.shake.strokes - this.lastStrokes;
     this.lastStrokes = this.shake.strokes;
 
+    // Темнота. Мир держится светом: пока фонарь не светит, место растворяется (это показывает рендер),
+    // а когда растворилось — собираться прежним оно не обязано. Детали меняются: первый раз — когда
+    // место успело исчезнуть, дальше — каждые несколько секунд, пока темно.
+    if (this.where === 'main' && this.light.intensity * this.fxLight < 0.15) {
+      this.darkFor += dt;
+      if (this.darkFor >= DARK_SHIFT.first + this.darkShifts * DARK_SHIFT.every) {
+        this.darkShifts += 1;
+        this.detailShifts += this.shiftDetails();
+      }
+    } else {
+      this.darkFor = 0;
+      this.darkShifts = 0;
+    }
+
     const out: SessionEvent[] = [];
     const fear: FearEvent[] = [];
     const dream: DreamEvent[] = [];
@@ -1264,6 +1327,7 @@ export class Game {
       frame: this.frame,
       fade: this.fade,
       where: this.where,
+      dark: { for: this.darkFor, shifts: this.detailShifts },
       pocket: this.pocket?.kind ?? null,
       pocketInfo: this.pocket
         ? { age: this.pocketAge, stay: this.pocketStay, done: this.pocketDone, fade: this.pocketFade, exit: this.pocket.exit ?? null, focus: this.pocket.focus ?? null, blanks: this.blanks.map((t) => t.id) }

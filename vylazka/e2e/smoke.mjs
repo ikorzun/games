@@ -270,12 +270,42 @@ async function scenarioPlay(browser, baseUrl) {
   );
   check('облако точек выключается и включается обратно: кадр тот же', Math.abs(mean(dotsAgain) - mean(lit)) < 1.5 && Math.abs(center(dotsAgain) - center(lit)) < 3, `среднее ${mean(lit).toFixed(1)} → ${mean(dotsAgain).toFixed(1)}, центр ${center(lit).toFixed(1)} → ${center(dotsAgain).toFixed(1)}`);
 
+  // Память света: мир существует, пока на него светят. Свет погас — место не гаснет разом, а ещё
+  // несколько секунд держится точками, редеет и осыпается; через семь секунд его нет. Шаги — по шесть:
+  // память стареет по игровому времени, но кадры между снимками тоже должны рисоваться.
+  const afterSec = async (seconds) => {
+    for (let i = 0; i < Math.round(seconds * 10); i++) await vz(page, () => window.__vz.step(6));
+    return vz(page, () => window.__vz.probe());
+  };
   await vz(page, () => window.__vz.toggleLight());
-  await vz(page, () => window.__vz.step(240));
-  const dark = await vz(page, () => window.__vz.probe());
+  const m03 = await afterSec(0.3);
+  const m2 = await afterSec(1.7);
+  const m5 = await afterSec(3);
+  const dark = await afterSec(4);
   st = await state(page);
-  check('фонарь выключен — в кадре темно, камера поднимает усиление', center(dark) < center(lit) * 0.45 && st.gain > 3, `центр ${center(dark).toFixed(1)}, усиление ${st.gain.toFixed(2)}`);
+  check('свет погас — место не гаснет разом: через треть секунды оно ещё видно', center(m03) > center(lit) * 0.6, `центр ${center(m03).toFixed(1)} против ${center(lit).toFixed(1)} при свете`);
+  check('без света место редеет: через две секунды темнее, через пять — ещё темнее', center(m03) > center(m2) + 3 && center(m2) > center(m5) + 3, `центр ${center(m03).toFixed(1)} → ${center(m2).toFixed(1)} → ${center(m5).toFixed(1)}`);
+  check('фонарь выключен — через девять секунд в кадре темно, камера поднимает усиление', center(dark) < center(lit) * 0.45 && center(dark) < center(m5) + 1 && st.gain > 3, `центр ${center(dark).toFixed(1)}, усиление ${st.gain.toFixed(2)}`);
   await vz(page, () => window.__vz.toggleLight());
+  const relit = await afterSec(1.5);
+  check('свет вернулся — место собирается заново', center(relit) > 40, `центр ${center(relit).toFixed(1)}`);
+
+  // Длинная выдержка: без фонаря яркое в кадре тянет след, и при повороте пространство смазывается;
+  // при свете следа нет.
+  const turn = async (yaw) => {
+    for (let i = 0; i < 8; i++) await vz(page, (y) => window.__vz.step(2, { lookYaw: y }), yaw / 8);
+    return vz(page, () => window.__vz.probe());
+  };
+  await vz(page, () => window.__vz.toggleLight());
+  const still = await afterSec(0.4);
+  const smeared = await turn(-0.5);
+  const faded = await afterSec(1);
+  check('без фонаря поворот смазывает кадр: яркое тянет за собой след', mean(smeared) > mean(still) * 1.25, `среднее ${mean(still).toFixed(1)} → ${mean(smeared).toFixed(1)}`);
+  check('след гаснет: через секунду кадр темнее, чем до поворота', mean(faded) < mean(still), `среднее ${mean(faded).toFixed(1)} против ${mean(still).toFixed(1)}`);
+  await vz(page, () => window.__vz.toggleLight());
+  const litStill = await afterSec(1.5);
+  const litTurn = await turn(0.5);
+  check('при свете следа нет: поворот кадр не засвечивает', mean(litTurn) < mean(litStill) * 1.2, `среднее ${mean(litStill).toFixed(1)} → ${mean(litTurn).toFixed(1)}`);
 
   // Отказ и тряска.
   await vz(page, () => window.__vz.fail());
@@ -847,6 +877,30 @@ async function scenarioThings(browser, baseUrl) {
   let st = await vz(page, () => window.__vz.step(150));
   const things = await vz(page, () => window.__vz.things());
   check('в убежище стоят вещи сна: мелкие и крупные, с разными судьбами', things.length >= 8 && ['shrink', 'dust', 'grow', 'jump'].every((f) => things.some((t) => t.fate === f)), things.map((t) => `${t.kind}/${t.fate}`).join(' '));
+  // Темнота меняет детали: пока фонарь не горит, место растворяется, и собраться прежним не обязано —
+  // мелкие вещи рядом меняются местами. Первые семь секунд (пока место ещё держится в памяти) всё стоит.
+  {
+    const small = things.filter((t) => !t.memory && t.state === 'idle' && SMALL_THINGS.includes(t.kind));
+    const close = (a, b) => Math.hypot(a.pos[0] - b.pos[0], a.pos[2] - b.pos[2]) < 10 && Math.abs(a.pos[1] - b.pos[1]) < 2;
+    const anchor = small.find((t) => small.some((o) => o.id !== t.id && close(o, t)));
+    const where = (list) => new Map(list.map((t) => [t.id, t.pos.map((v) => v.toFixed(2)).join(',')]));
+    const reached = anchor ? await vz(page, (id) => window.__vz.gotoThing(id, 2.4), anchor.id) : false;
+    await vz(page, () => window.__vz.step(30));
+    const before = where(await vz(page, () => window.__vz.things()));
+    await vz(page, () => window.__vz.toggleLight());
+    st = await vz(page, () => window.__vz.step(390));
+    const held = where(await vz(page, () => window.__vz.things()));
+    check('свет погас: шесть секунд вещи стоят где стояли', reached && st.dark.for > 6 && st.dark.shifts === 0 && [...before].every(([id, p]) => held.get(id) === p), `темно ${st.dark.for.toFixed(1)} с, перемен ${st.dark.shifts}`);
+    st = await vz(page, () => window.__vz.step(90));
+    const shifted = where(await vz(page, () => window.__vz.things()));
+    const moved = [...before].filter(([id, p]) => shifted.get(id) !== p).length;
+    check('темнота затянулась — мелкие вещи рядом поменялись местами', st.dark.shifts >= 2 && moved >= 2 && [...shifted.values()].sort().join('|') === [...before.values()].sort().join('|'), `перемен ${st.dark.shifts}, вещей на новых местах ${moved}`);
+    await vz(page, () => window.__vz.toggleLight());
+    st = await vz(page, () => window.__vz.step(120));
+    const settled = where(await vz(page, () => window.__vz.things()));
+    check('свет вернулся — больше ничего не меняется', st.dark.for === 0 && [...shifted].every(([id, p]) => settled.get(id) === p), `темно ${st.dark.for.toFixed(1)} с`);
+  }
+
   const watch = async (fate) => {
     const t = things.find((x) => x.fate === fate && !x.memory && SMALL_THINGS.includes(x.kind)) ?? things.find((x) => x.fate === fate && !x.memory);
     if (!t) return null;
@@ -1135,6 +1189,44 @@ async function scenarioTouch(browser, baseUrl) {
     await finger(page, 'pointerup', 1, sx, sy - 40);
     st = await vz(page, () => window.__vz.tick(40));
     check(`${name}: палец убран — игрок останавливается`, Math.hypot(st.vel[0], st.vel[2]) < 0.1);
+
+    // Тап по экрану — шаг вперёд: игрок идёт около секунды и останавливается сам.
+    const tapAt = [width * 0.7, height * 0.5];
+    let from = st.pos;
+    const yawTap = st.aim[0];
+    await finger(page, 'pointerdown', 5, tapAt[0], tapAt[1]);
+    await finger(page, 'pointerup', 5, tapAt[0], tapAt[1]);
+    st = await vz(page, () => window.__vz.tick(30));
+    let walked = Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]);
+    check(`${name}: тап по экрану — шаг вперёд, луч на месте`, walked > 0.5 && Math.abs(st.aim[0] - yawTap) < 0.01, `пройдено ${walked.toFixed(2)} м, Δyaw = ${(st.aim[0] - yawTap).toFixed(3)}`);
+    // Шаг длится 0,85 с настоящего времени: ждём, пока он кончится.
+    await sleep(950);
+    st = await vz(page, () => window.__vz.tick(40));
+    check(`${name}: шаг кончился — игрок стоит`, Math.hypot(st.vel[0], st.vel[2]) < 0.1, `скорость ${Math.hypot(st.vel[0], st.vel[2]).toFixed(2)}`);
+
+    // Удержание: палец на месте — идём, пока держим; тем же пальцем можно вести луч.
+    await finger(page, 'pointerdown', 6, tapAt[0], tapAt[1]);
+    await sleep(260);
+    from = (await state(page)).pos;
+    st = await vz(page, () => window.__vz.tick(60));
+    walked = Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]);
+    check(`${name}: палец держат на месте — игрок идёт вперёд, под пальцем кольцо`, walked > 1.5 && (await page.evaluate(() => document.querySelector('.vz-touch__hold').classList.contains('is-on'))), `пройдено ${walked.toFixed(2)} м`);
+    const yawHold = st.aim[0];
+    await finger(page, 'pointermove', 6, tapAt[0] + 50, tapAt[1]);
+    st = await vz(page, () => window.__vz.tick(12));
+    check(`${name}: тем же пальцем ведут луч, не останавливаясь`, st.aim[0] < yawHold - 0.2 && Math.hypot(st.vel[0], st.vel[2]) > 1, `Δyaw = ${(st.aim[0] - yawHold).toFixed(3)}, скорость ${Math.hypot(st.vel[0], st.vel[2]).toFixed(2)}`);
+    await finger(page, 'pointerup', 6, tapAt[0] + 50, tapAt[1]);
+    st = await vz(page, () => window.__vz.tick(40));
+    check(`${name}: палец отпущен — игрок останавливается, кольца нет`, Math.hypot(st.vel[0], st.vel[2]) < 0.1 && !(await page.evaluate(() => document.querySelector('.vz-touch__hold').classList.contains('is-on'))));
+    // Ведение без удержания — только луч: игрок стоит.
+    from = st.pos;
+    await finger(page, 'pointerdown', 7, tapAt[0], tapAt[1]);
+    await finger(page, 'pointermove', 7, tapAt[0] - 50, tapAt[1]);
+    await sleep(260);
+    st = await vz(page, () => window.__vz.tick(30));
+    await finger(page, 'pointerup', 7, tapAt[0] - 50, tapAt[1]);
+    check(`${name}: повёл пальцем сразу — луч повернулся, а игрок стоит`, Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]) < 0.05, `сдвиг ${Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]).toFixed(2)} м`);
+    st = await vz(page, () => window.__vz.tick(10));
 
     // Кнопка фонаря: тап выключает и включает.
     const btn = await page.evaluate(() => {

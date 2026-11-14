@@ -331,6 +331,24 @@ describe('аномалии', () => {
     expect(again.loops).toBe(1);
   });
 
+  it('в темноте комната неподалёку меняет обстановку — но не та, где стоит игрок, не далёкая и не на другом ярусе', () => {
+    const v = level.variants[0]!;
+    const an = new Anomalies(null, geo, level.variants, 0);
+    const near: Vec3 = [v.center[0] + 10, v.center[1], v.center[2]];
+    // Игрок в самой комнате: обстановка под ногами не меняется.
+    expect(an.flipInDark(v.center, v.room)).toEqual([]);
+    // Далеко и на другом ярусе — тоже нет.
+    expect(an.flipInDark([v.center[0] + 40, v.center[1], v.center[2]], -1)).toEqual([]);
+    expect(an.flipInDark([v.center[0] + 10, v.center[1] + 4.5, v.center[2]], -1)).toEqual([]);
+    // Рядом, в темноте: меняется, и ещё раз — обратно.
+    expect(an.flipInDark(near, -1)).toEqual([{ type: 'variant', variant: v, alt: true }]);
+    expect(an.state().alt).toEqual([v.room]);
+    expect(an.flipInDark(near, -1)).toEqual([{ type: 'variant', variant: v, alt: false }]);
+    expect(an.state().alt).toEqual([]);
+    // Обычная подмена «ушёл далеко» после этого не срабатывает сама: в комнате надо побывать заново.
+    expect(an.update([v.center[0] + 20, v.center[1], v.center[2]], -1, false)).toEqual([]);
+  });
+
   it('на первом ранге аномалий нет', () => {
     const l1 = buildLevel(generateLayout(20041113, 1));
     expect(l1.variants).toEqual([]);

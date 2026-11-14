@@ -28,7 +28,7 @@
   "hud.cam": "CAM-07",
   "hint.move.desktop": "WASD to walk, mouse to aim the beam, Shift to run",
   "hint.move.desktop_drag": "WASD to walk, hold the mouse button and drag to aim the beam, Shift to run",
-  "hint.move.touch": "Left side to walk, right side to aim the beam",
+  "hint.move.touch": "Hold to walk, drag to aim the beam",
   "hint.light.desktop": "F — flashlight",
   "hint.light.touch": "Button on the right — flashlight",
   "hint.shake.desktop": "The flashlight died. Shake the mouse side to side or tap F",

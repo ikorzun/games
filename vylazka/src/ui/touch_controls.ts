@@ -1,5 +1,7 @@
 /**
- * Тач-управление: левая половина экрана — стик ходьбы (появляется под пальцем), правая — ведёт луч.
+ * Тач-управление. Коснулся и отпустил — шаг вперёд; держишь палец — идёшь вперёд; ведёшь пальцем —
+ * в левой половине экрана это стик ходьбы (появляется под пальцем), в правой — луч. Что значит
+ * каждое касание, решает player/touch_gestures.ts; здесь — экран: стик, отметка удержания, кнопки.
  * Кнопка фонаря: короткий тап — включить или выключить; если фонарь заглох — её быстро трут пальцем
  * (это основной жест тряски на телефоне), тап тоже считается ударом.
  */
@@ -8,14 +10,10 @@ import { emptyInput } from '../player/input';
 import type { InputFrame, InputSource } from '../player/input';
 import { TOUCH_SCALE } from '../player/shake';
 import type { ShakeMeter } from '../player/shake';
+import { TouchGestures } from '../player/touch_gestures';
 
-const LOOK_SENS = 0.0052;
-const STICK_R = 54;
-
-interface Pointer {
-  role: 'stick' | 'look' | 'light';
-  x0: number;
-  y0: number;
+/** Палец на кнопке фонаря: тап или тряска. Остальные касания ведёт TouchGestures. */
+interface LightPointer {
   x: number;
   y: number;
   t0: number;
@@ -26,13 +24,12 @@ export class TouchControls implements InputSource {
   readonly el: HTMLElement;
   private readonly stickBase: HTMLElement;
   private readonly stickKnob: HTMLElement;
+  /** Кольцо под пальцем, который идёт удержанием. */
+  private readonly holdMark: HTMLElement;
   private readonly lightBtn: HTMLButtonElement;
   private readonly pauseBtn: HTMLButtonElement;
-  private readonly pointers = new Map<number, Pointer>();
-  private moveX = 0;
-  private moveZ = 0;
-  private lookYaw = 0;
-  private lookPitch = 0;
+  private readonly gestures = new TouchGestures();
+  private readonly lightPointers = new Map<number, LightPointer>();
   private light = false;
   private pause = false;
 
@@ -47,6 +44,8 @@ export class TouchControls implements InputSource {
     this.stickKnob = document.createElement('div');
     this.stickKnob.className = 'vz-touch__knob';
     this.stickBase.append(this.stickKnob);
+    this.holdMark = document.createElement('div');
+    this.holdMark.className = 'vz-touch__hold';
     this.lightBtn = document.createElement('button');
     this.lightBtn.type = 'button';
     this.lightBtn.className = 'vz-touch__btn vz-touch__btn--light';
@@ -58,7 +57,7 @@ export class TouchControls implements InputSource {
     this.pauseBtn.type = 'button';
     this.pauseBtn.className = 'vz-touch__btn vz-touch__btn--pause';
     // Кнопок действия нет: игрок только ходит, смотрит и светит.
-    this.el.append(this.stickBase, this.lightBtn, this.pauseBtn);
+    this.el.append(this.stickBase, this.holdMark, this.lightBtn, this.pauseBtn);
     parent.append(this.el);
     this.relabel();
 
@@ -96,91 +95,75 @@ export class TouchControls implements InputSource {
     } catch {
       /* указатель уже отпущен */
     }
-    const onLight = e.target === this.lightBtn;
-    const left = e.clientX < this.el.clientWidth / 2;
-    const hasStick = [...this.pointers.values()].some((p) => p.role === 'stick');
-    const role: Pointer['role'] = onLight ? 'light' : left && !hasStick ? 'stick' : 'look';
-    this.pointers.set(e.pointerId, { role, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t0: performance.now(), travel: 0 });
-    if (role === 'stick') {
-      this.stickBase.style.left = `${e.clientX}px`;
-      this.stickBase.style.top = `${e.clientY}px`;
-      this.stickBase.classList.add('is-on');
-      this.stickKnob.style.transform = 'translate(-50%, -50%)';
+    if (e.target === this.lightBtn) {
+      this.lightPointers.set(e.pointerId, { x: e.clientX, y: e.clientY, t0: performance.now(), travel: 0 });
+      return;
     }
+    this.gestures.down(e.pointerId, e.clientX, e.clientY, performance.now(), e.clientX < this.el.clientWidth / 2);
   }
 
   private move(e: PointerEvent): void {
-    const p = this.pointers.get(e.pointerId);
-    if (!p) return;
-    const dx = e.clientX - p.x;
-    const dy = e.clientY - p.y;
-    p.x = e.clientX;
-    p.y = e.clientY;
-    p.travel += Math.abs(dx) + Math.abs(dy);
-    if (p.role === 'look') {
-      this.lookYaw -= dx * LOOK_SENS;
-      this.lookPitch -= dy * LOOK_SENS;
-    } else if (p.role === 'light') {
+    const p = this.lightPointers.get(e.pointerId);
+    if (p) {
+      const dx = e.clientX - p.x;
+      const dy = e.clientY - p.y;
+      p.x = e.clientX;
+      p.y = e.clientY;
+      p.travel += Math.abs(dx) + Math.abs(dy);
       this.shake.pushMotion(dx, dy, TOUCH_SCALE);
-    } else if (p.role === 'stick') {
-      let sx = p.x - p.x0;
-      let sy = p.y - p.y0;
-      const len = Math.hypot(sx, sy);
-      if (len > STICK_R) {
-        sx *= STICK_R / len;
-        sy *= STICK_R / len;
-      }
-      this.moveX = sx / STICK_R;
-      this.moveZ = -sy / STICK_R;
-      this.stickKnob.style.transform = `translate(calc(-50% + ${sx}px), calc(-50% + ${sy}px))`;
+      return;
     }
+    this.gestures.move(e.pointerId, e.clientX, e.clientY, performance.now());
   }
 
   private up(e: PointerEvent): void {
-    const p = this.pointers.get(e.pointerId);
-    if (!p) return;
-    this.pointers.delete(e.pointerId);
-    if (p.role === 'stick') {
-      this.moveX = 0;
-      this.moveZ = 0;
-      this.stickBase.classList.remove('is-on');
-    } else if (p.role === 'light') {
+    const p = this.lightPointers.get(e.pointerId);
+    if (p) {
+      this.lightPointers.delete(e.pointerId);
       // Короткое касание без движения — нажатие кнопки; протяжка — тряска.
       if (p.travel < 14 && performance.now() - p.t0 < 400) {
         this.light = true;
         this.shake.pushImpulse(0.3);
       }
+      return;
     }
+    this.gestures.up(e.pointerId, performance.now());
   }
 
   poll(): InputFrame {
     const f = emptyInput();
-    const len = Math.hypot(this.moveX, this.moveZ);
-    // Мёртвая зона в центре; стик, отведённый до упора, — бег.
-    if (len > 0.14) {
-      f.moveX = this.moveX;
-      f.moveZ = this.moveZ;
-      f.run = len > 0.93;
-    }
-    f.lookYaw = this.lookYaw;
-    f.lookPitch = this.lookPitch;
+    const g = this.gestures.poll(performance.now());
+    f.moveX = g.moveX;
+    f.moveZ = g.moveZ;
+    f.run = g.run;
+    f.lookYaw = g.lookYaw;
+    f.lookPitch = g.lookPitch;
     f.light = this.light;
     f.pause = this.pause;
-    this.lookYaw = 0;
-    this.lookPitch = 0;
     this.light = false;
     this.pause = false;
+    // Стик — под пальцем левой половины; кольцо — под пальцем, который идёт удержанием.
+    this.stickBase.classList.toggle('is-on', g.stick !== null);
+    if (g.stick) {
+      this.stickBase.style.left = `${g.stick.x}px`;
+      this.stickBase.style.top = `${g.stick.y}px`;
+      this.stickKnob.style.transform = `translate(calc(-50% + ${g.stick.dx}px), calc(-50% + ${g.stick.dy}px))`;
+    }
+    this.stickBase.classList.toggle('is-walk', g.walking && g.stick !== null && g.hold === null);
+    this.holdMark.classList.toggle('is-on', g.hold !== null);
+    if (g.hold) {
+      this.holdMark.style.left = `${g.hold.x}px`;
+      this.holdMark.style.top = `${g.hold.y}px`;
+    }
     return f;
   }
 
   release(): void {
-    this.pointers.clear();
-    this.moveX = 0;
-    this.moveZ = 0;
-    this.lookYaw = 0;
-    this.lookPitch = 0;
+    this.gestures.release();
+    this.lightPointers.clear();
     this.light = false;
-    this.stickBase.classList.remove('is-on');
+    this.stickBase.classList.remove('is-on', 'is-walk');
+    this.holdMark.classList.remove('is-on');
   }
 
   setVisible(on: boolean): void {
