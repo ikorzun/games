@@ -72,6 +72,13 @@ export interface FrameView {
   fogDensity: number;
   /** Множитель света фонаря в этом месте: 0 — фонарь «не проходит». */
   lightScale: number;
+  /** Множитель плотности облака точек, 0..1: карманное пространство редеет, когда его время выходит. */
+  scanFade: number;
+  /** Прямой свет пространства: направление на источник (мир) и цвет; цвет [0,0,0] — прямого света нет. */
+  keyDir: Vec3;
+  keyColor: Vec3;
+  /** Докуда рассеянный свет «сканирует» пространство, м: плотно до первого, россыпь после второго. */
+  scanRange: [number, number];
   /** 0..1: мир рассыпается в пыль. */
   dissolve: number;
   /** 0..1: красная полигонная сетка на всём, что видно. */
@@ -300,6 +307,8 @@ export class GameRenderer {
         uShadowMatrix: { value: new THREE.Matrix4() },
         uShadowTexel: { value: 1 / 512 },
         uAmbient: { value: new THREE.Vector3(0.0016, 0.0019, 0.0024) },
+        uKeyDirV: { value: new THREE.Vector3(0, 1, 0) },
+        uKeyColor: { value: new THREE.Vector3(0, 0, 0) },
         uBounce: { value: new THREE.Vector4(0, 0, -1000, 0) },
         uFog: { value: 0.035 },
         uFogColor: { value: new THREE.Vector3(0, 0, 0) },
@@ -308,6 +317,8 @@ export class GameRenderer {
         uScan: { value: new THREE.Vector4(SCAN.ghost, SCAN.perLight, SCAN.max, SCAN.glow) },
         uDot: { value: SCAN.dot },
         uScanTime: { value: 0 },
+        uScanFade: { value: 1 },
+        uScanRange: { value: new THREE.Vector2(4, 15) },
         uMatA: { value: matA },
         uMatB: { value: matB },
         uMatBase: { value: Array.from({ length: MAT_SLOTS }, (_, i) => new THREE.Vector3(...(atlas.base[i] ?? [0.5, 0.5, 0.5]))) },
@@ -795,6 +806,8 @@ export class GameRenderer {
     const wuEnv = this.worldMat.uniforms;
     (wuEnv.uAmbient!.value as THREE.Vector3).set(v.ambient[0], v.ambient[1], v.ambient[2]);
     (wuEnv.uFogColor!.value as THREE.Vector3).set(v.fogColor[0], v.fogColor[1], v.fogColor[2]);
+    (wuEnv.uKeyDirV!.value as THREE.Vector3).set(v.keyDir[0], v.keyDir[1], v.keyDir[2]).transformDirection(cam.matrixWorldInverse);
+    (wuEnv.uKeyColor!.value as THREE.Vector3).set(v.keyColor[0], v.keyColor[1], v.keyColor[2]);
     wuEnv.uFog!.value = v.fogDensity;
     wuEnv.uDissolve!.value = v.dissolve;
     this.swarmMat.uniforms.uFog!.value = v.fogDensity;
@@ -823,6 +836,8 @@ export class GameRenderer {
     wu.uTierDrop!.value = this.tierDrop;
     wu.uScanTime!.value = v.time;
     const scan = wu.uScan!.value as THREE.Vector4;
+    wu.uScanFade!.value = v.scanFade;
+    (wu.uScanRange!.value as THREE.Vector2).set(v.scanRange[0], v.scanRange[1]);
     scan.x = SCAN.ghost * v.lightScale;
     // Призрачные точки не разгораются, когда камера в темноте поднимает усиление: темнота остаётся темнотой.
     scan.w = (SCAN.glow * v.lightScale) / Math.max(1, v.gain) ** 0.55;

@@ -22,6 +22,11 @@ export interface JumpPlan {
   style: JumpStyle;
   /** Куда: карманное пространство, другое место убежища, лимбо между сессиями или новая сессия. */
   to: JumpTarget;
+  /**
+   * Для возврата в убежище (to: 'elsewhere') — куда именно: back — туда, откуда унесло; thing — поближе
+   * к искомой вещи (дверь на лугу); far — подальше. Не задано — решает случай.
+   */
+  dest?: 'back' | 'thing' | 'far';
 }
 
 export interface JumpsConfig {

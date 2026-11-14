@@ -35,7 +35,7 @@ import { ColliderSet } from './world/colliders';
 import type { BuiltLevel } from './world/level';
 import { STAIR_RISE, STAIR_RUN, STAIR_STEPS } from './world/level_build';
 import { buildPocket, ENV_BUNKER } from './world/pockets';
-import type { Env, PocketKind, PocketSpace } from './world/pockets';
+import type { Env, ModelCell, PocketContext, PocketKind, PocketSpace } from './world/pockets';
 import { thingMesh } from './world/thing_mesh';
 
 export const STEP = 1 / 60;
@@ -66,6 +66,12 @@ export type RoomFx = 'strobe' | 'dark' | 'wire' | 'thin';
 export type DreamEvent =
   | { type: 'jump'; plan: JumpPlan; phase: 'start' | 'switch' }
   | { type: 'thing'; thing: Thing; what: 'changing' | 'settled' }
+  /**
+   * Карманное пространство сделало своё дело: enter — игрок вошёл; map — прочёл макет в кукольном домике
+   * (room и tier — где лежит искомое; без memory — искать пока нечего); next — в белом нигде вызвал следующее
+   * воспоминание; remind — там же напомнил себе, что ищет; replay — перечитал вспомненное.
+   */
+  | { type: 'pocket'; kind: PocketKind; what: 'enter' | 'map' | 'next' | 'remind' | 'replay'; memory?: string; room?: string; tier?: number }
   /** Сессия кончилась, игрок в лимбо: пора готовить следующую (queueSession). */
   | { type: 'limbo' }
   /** Началась новая сессия. */
@@ -201,6 +207,16 @@ export class Game {
   private pocketGroup = 0;
   private pocketAge = 0;
   private pocketStay = 40;
+  /** Пространство уже сделало своё дело (макет прочитан, воспоминание вызвано): дальше оно только отпускает. */
+  private pocketDone = false;
+  /** Сколько секунд игрок светит на главное в пространстве (макет) и на вещь-экспонат. */
+  private focusGaze = 0;
+  private holdThing: Thing | null = null;
+  private holdT = 0;
+  /** Экспонаты, которые уже «прозвучали» в этот заход. */
+  private readonly heard = new Set<number>();
+  /** Белые болванки в белом нигде: ещё не вспомненное. */
+  private blanks: Thing[] = [];
   private anchorGaze = 0;
   private limboTime = 0;
   private limboAsked = false;
@@ -461,9 +477,37 @@ export class Game {
     this.pocket = null;
   }
 
+  /** Что пространству надо знать об игре: план убежища, где лежит искомая вещь и откуда игрока унесло. */
+  private pocketContext(limbo: boolean): PocketContext {
+    const nav = this.level?.nav ?? [];
+    const cells: ModelCell[] = [];
+    for (const r of this.level?.layout?.rooms ?? []) for (const [x, z] of r.cells) cells.push({ x, z, tier: r.tier, type: r.type, room: r.id });
+    const cellOf = (id: number): { x: number; z: number; tier: number } | null => {
+      const n = nav[id];
+      return n ? { x: n.cx, z: n.cz, tier: n.tier } : null;
+    };
+    const spot = this.session?.active?.spot;
+    return { cells, target: spot ? cellOf(this.playerNodeAt([spot.x, spot.y, spot.z])) : null, here: cellOf(this.returnNode), limbo };
+  }
+
+  /** Узел в двух-четырёх клетках пути от искомой вещи: туда выводит дверь на лугу. −1 — искать нечего. */
+  private nodeNearThing(): number {
+    const spot = this.session?.active?.spot;
+    const nav = this.level?.nav ?? [];
+    if (!spot) return -1;
+    const at = this.playerNodeAt([spot.x, spot.y, spot.z]);
+    if (at < 0) return -1;
+    const gas = new Set(this.level?.layout?.hazards.gasRooms ?? []);
+    const pool = nodesInRange(nav, at, 2, 4).filter((id) => {
+      const n = nav[id]!;
+      return !gas.has(n.room) && !this.roomFx.has(n.room) && !this.level!.zones.some((z) => n.x >= z.minX - 1.2 && n.x <= z.maxX + 1.2 && n.z >= z.minZ - 1.2 && n.z <= z.maxZ + 1.2 && Math.abs(n.y - z.minY) < 3);
+    });
+    return pool.length > 0 ? pool[Math.floor(this.rng() * pool.length)]! : at;
+  }
+
   private enterPocket(kind: PocketKind, limbo: boolean): void {
     this.leavePocket();
-    const p = buildPocket(kind, (this.dreamSeed + this.pocketGroup * 7919) >>> 0, POCKET_ORIGIN);
+    const p = buildPocket(kind, (this.dreamSeed + this.pocketGroup * 7919) >>> 0, POCKET_ORIGIN, this.pocketContext(limbo));
     this.pocket = p;
     this.pocketGroup += 1;
     const group = `pocket${this.pocketGroup}`;
@@ -472,17 +516,89 @@ export class Game {
     this.where = limbo ? 'limbo' : 'pocket';
     this.env = p.env;
     this.pocketAge = 0;
-    this.pocketStay = 34 + this.rng() * 22;
+    this.pocketStay = 46 + this.rng() * 14;
+    this.pocketDone = false;
+    this.focusGaze = 0;
+    this.holdThing = null;
+    this.holdT = 0;
+    this.heard.clear();
+    this.blanks = [];
     this.anchorGaze = 0;
     this.limboTime = 0;
     this.limboAsked = false;
-    this.teleport(p.spawn.pos[0], p.spawn.pos[1], p.spawn.pos[2], p.spawn.yaw, 0);
-    // Вещи: в лимбо — всё, что игрок вспомнил раньше; в кармане — пара случайных мелочей.
+    this.teleport(p.spawn.pos[0], p.spawn.pos[1], p.spawn.pos[2], p.spawn.yaw, p.spawn.pitch ?? 0);
+    if (kind === 'void' && !limbo) {
+      // Белое нигде посреди сессии: перед игроком дугой лежит то, что он уже вспомнил, а на месте
+      // остального стоят белые болванки. Экспонаты под взглядом не меняются.
+      const mem = this.session?.memories ?? [];
+      const [sx, sy, sz] = p.spawn.pos;
+      mem.forEach((m, i) => {
+        const a = ((i - (mem.length - 1) / 2) * 24 * Math.PI) / 180;
+        const at: Vec3 = [sx + Math.sin(a) * 3.4, sy, sz - Math.cos(a) * 3.4];
+        const done = m.state === 'done';
+        const tm = thingMesh(done ? m.def.thing : 'blank', 7);
+        const t = this.things.add(done ? m.def.thing : 'blank', at, done ? a + 0.4 : 0, 'dust', tm.radius, false, true);
+        this.thingRender.set(t.id, this.renderer.addThing(tm.mesh, t.id));
+        this.pocketThings.push(t);
+        if (!done) this.blanks.push(t);
+      });
+      return;
+    }
+    // Вещи: в лимбо — всё, что игрок вспомнил раньше; на лугу и в домике — пара случайных мелочей.
     const kinds = limbo ? this.archive.map((id) => MEMORY_THING[id] ?? id) : [SMALL_THINGS[Math.floor(this.rng() * SMALL_THINGS.length)]!, SMALL_THINGS[Math.floor(this.rng() * SMALL_THINGS.length)]!];
     kinds.slice(0, p.spots.length).forEach((kind, i) => {
       const sp = p.spots[i]!;
       this.pocketThings.push(this.addThing(kind, sp, this.rng() * Math.PI * 2, limbo ? 'grow' : SMALL_FATES[i % SMALL_FATES.length]!));
     });
+  }
+
+  /**
+   * Смысл пространства. Кукольный домик — макет убежища: посветил на него — узнал, где лежит искомое.
+   * Белое нигде — то, что сохранено: взгляд на вспомненную вещь повторяет её строку, взгляд на болванку
+   * вызывает следующее воспоминание (или напоминает, что ищешь сейчас). Луг — передышка: паника уходит,
+   * а дверь выводит поближе к искомому (это решает выход, не здесь).
+   */
+  private pocketPurpose(dt: number, look: Look, los: (from: Vec3, to: Vec3) => number, dream: DreamEvent[]): void {
+    const p = this.pocket;
+    const s = this.session;
+    if (!p) return;
+    if (p.kind === 'meadow' && s) s.panic = Math.max(0, s.panic - dt * 0.22);
+    if (p.focus && !this.pocketDone) {
+      this.focusGaze = looksAt(look, p.focus, 0.45, 4.5, los) ? this.focusGaze + dt : Math.max(0, this.focusGaze - dt * 2);
+      if (this.focusGaze > 1.3) {
+        this.pocketDone = true;
+        const act = s?.active;
+        const node = act?.spot ? this.level?.nav[this.playerNodeAt([act.spot.x, act.spot.y, act.spot.z])] : undefined;
+        const room = node ? this.level?.layout?.rooms.find((r) => r.id === node.room)?.type : undefined;
+        dream.push(act && node ? { type: 'pocket', kind: p.kind, what: 'map', memory: act.def.id, room: room ?? 'corridor', tier: node.tier } : { type: 'pocket', kind: p.kind, what: 'map' });
+        this.pocketStay = Math.min(this.pocketStay, this.pocketAge + 14);
+      }
+    }
+    if (p.kind === 'void') {
+      // Экспонат «звучит», когда на него посмотрели подольше; каждый — один раз за заход.
+      const seen = this.pocketThings.find((t) => t.still && t.gaze >= 1 && !this.heard.has(t.id)) ?? null;
+      if (seen !== this.holdThing) {
+        this.holdThing = seen;
+        this.holdT = 0;
+      } else if (seen) {
+        this.holdT += dt;
+        if (this.holdT > 0.9) {
+          this.heard.add(seen.id);
+          this.holdThing = null;
+          if (!this.blanks.includes(seen)) {
+            const m = s?.memories.find((x) => x.def.thing === seen.kind && x.state === 'done');
+            if (m) dream.push({ type: 'pocket', kind: 'void', what: 'replay', memory: m.def.id });
+          } else if (!this.pocketDone) {
+            this.pocketDone = true;
+            for (const b of this.blanks) this.heard.add(b.id);
+            const act = s?.active;
+            if (act) dream.push({ type: 'pocket', kind: 'void', what: 'remind', memory: act.def.id });
+            else if (s?.hurry()) dream.push({ type: 'pocket', kind: 'void', what: 'next' });
+            this.pocketStay = Math.min(this.pocketStay, this.pocketAge + 14);
+          }
+        }
+      }
+    }
   }
 
   /** Исполнить скачок: переставить игрока и сменить место. */
@@ -503,9 +619,11 @@ export class Game {
       this.leavePocket();
       this.where = 'main';
       this.env = ENV_BUNKER;
-      // Иногда возвращает туда же, откуда унесло; чаще — в другое место.
-      const back = plan.cause === 'return' && this.returnNode >= 0 && this.rng() < 0.3;
-      const id = back ? this.returnNode : this.farNode(from);
+      // Проём выводит туда, куда обещал (обратно или к искомой вещи); если пространство отпустило само —
+      // иногда туда же, откуда унесло, чаще в другое место.
+      const near = plan.dest === 'thing' ? this.nodeNearThing() : -1;
+      const back = plan.dest === 'back' || (plan.dest === undefined && plan.cause === 'return' && this.rng() < 0.3);
+      const id = near >= 0 ? near : back && this.returnNode >= 0 ? this.returnNode : this.farNode(from);
       const n = this.level?.nav[id];
       if (n) {
         const l = this.level!.nav[n.links[Math.floor(this.rng() * n.links.length)] ?? n.id]!;
@@ -520,6 +638,7 @@ export class Game {
     } else {
       if (this.where === 'main') this.returnNode = this.playerNode();
       this.enterPocket(to, false);
+      dream.push({ type: 'pocket', kind: to, what: 'enter', ...(this.session?.active ? { memory: this.session.active.def.id } : {}) });
     }
     this.observed = true;
     dream.push({ type: 'jump', plan, phase: 'switch' });
@@ -678,6 +797,21 @@ export class Game {
     this.aimPitch = clamp(this.aimPitch + pitch, -MAX_PITCH, MAX_PITCH);
   }
 
+  /** Идёт скачок: кадр рвётся или растворяется, игроку не до подсказок. */
+  get jumping(): boolean {
+    return this.transition !== null;
+  }
+
+  /**
+   * Насколько карманное пространство ещё держится, 1..0,2: с середины срока оно редеет (точек всё
+   * меньше) — так видно, что время здесь кончается. В убежище и в лимбо — всегда 1.
+   */
+  get pocketFade(): number {
+    if (this.where !== 'pocket' || !this.pocket) return 1;
+    const k = clamp((this.pocketAge / this.pocketStay - 0.5) / 0.5, 0, 1);
+    return 1 - 0.8 * k * k * (3 - 2 * k);
+  }
+
   /** Насколько сейчас видно вокруг: свет фонаря в этом месте или рассеянный свет. */
   private get seeing(): number {
     const amb = (this.env.ambient[0] + this.env.ambient[1] + this.env.ambient[2]) / 3;
@@ -785,11 +919,16 @@ export class Game {
     if (p && this.where === 'pocket' && !this.transition) {
       this.pocketAge += dt;
       const far = Math.hypot(b.x - p.center[0], b.z - p.center[2]) > p.radius;
-      // Первые секунды якорь не действует: иначе пространство отпустит раньше, чем игрок осмотрится.
+      // Выход — проём, обведённый красным: пройти сквозь него или засмотреться на него. Первые секунды
+      // он не действует: иначе пространство отпустит раньше, чем игрок осмотрится.
+      const through = !!p.exit && this.pocketAge > 1.5 && Math.abs(b.x - p.exit[0]) < 0.42 && Math.abs(b.z - p.exit[2]) < 0.3 && Math.abs(b.y - p.exit[1]) < 1;
       const onAnchor = this.pocketAge > 6 && p.anchors.some((a) => looksAt(look, a, 0.6, 16, los));
       this.anchorGaze = onAnchor ? this.anchorGaze + dt : Math.max(0, this.anchorGaze - dt);
-      if (far) this.beginJump({ cause: 'return', style: 'cut', to: 'elsewhere' }, dream);
-      else if (this.anchorGaze > 1.8) this.beginJump({ cause: 'return', style: 'whiteout', to: 'elsewhere' }, dream);
+      this.pocketPurpose(dt, look, los, dream);
+      // Дверь на лугу выводит поближе к искомой вещи; остальные проёмы — туда, откуда унесло.
+      const door = p.kind === 'meadow' && this.session?.active ? 'thing' : 'back';
+      if (through || this.anchorGaze > 1.8) this.beginJump({ cause: 'return', style: 'whiteout', to: 'elsewhere', dest: door }, dream);
+      else if (far) this.beginJump({ cause: 'return', style: 'cut', to: 'elsewhere' }, dream);
       else if (this.pocketAge > this.pocketStay) this.beginJump({ cause: 'return', style: 'dissolve', to: 'elsewhere' }, dream);
     }
 
@@ -1074,6 +1213,10 @@ export class Game {
       fogColor: fog,
       fogDensity: this.env.fogDensity,
       lightScale,
+      scanFade: this.pocketFade,
+      keyDir: this.env.key?.dir ?? [0, 1, 0],
+      keyColor: this.env.key?.color ?? [0, 0, 0],
+      scanRange: this.env.scan ?? [4, 15],
       dissolve,
       wire,
       crt,
@@ -1117,6 +1260,9 @@ export class Game {
       fade: this.fade,
       where: this.where,
       pocket: this.pocket?.kind ?? null,
+      pocketInfo: this.pocket
+        ? { age: this.pocketAge, stay: this.pocketStay, done: this.pocketDone, fade: this.pocketFade, exit: this.pocket.exit ?? null, focus: this.pocket.focus ?? null, blanks: this.blanks.map((t) => t.id) }
+        : null,
       jump: tr ? { cause: tr.plan.cause, style: tr.plan.style, to: tr.plan.to, switched: tr.switched } : null,
       room: this.room,
       roomFx: this.roomFx.get(this.room) ?? null,

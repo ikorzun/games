@@ -89,6 +89,8 @@ export class App {
   private next: { level: BuiltLevel; seed: number; rank: 1 | 2 | 3 } | null = null;
   /** Подсказки обучения, уже показанные в этой сессии. */
   private readonly taught = new Set<string>();
+  /** Подсказка из кукольного домика: в каком помещении лежит искомая вещь (до тех пор, пока её не вспомнили или не «забыли»). */
+  private mapHint: { memory: string; room: string } | null = null;
 
   constructor(
     readonly root: HTMLElement,
@@ -328,6 +330,7 @@ export class App {
       this.next = null;
     }
     this.profile.sorties += 1;
+    this.mapHint = null;
     this.saveProfile();
     this.platform.track('level_started', { world: 'session', level: `seed_${this.seed}` });
     this.hud.toast(t('session.begin', { n: this.sessionNumber() }), 4200);
@@ -499,7 +502,12 @@ export class App {
         this.platform.track('goal_done', { type: 'memory', tier: e.memory.spot?.tier ?? 0 });
         this.saveProfile();
         if (buzz) navigator.vibrate(60);
-      } else if (e.type === 'forgot') this.hud.toast(t('toast.forgot'), 2600);
+        if (this.mapHint?.memory === id) this.mapHint = null;
+      } else if (e.type === 'forgot') {
+        // Вещь унесло в другое место: то, что показал макет, больше не верно.
+        this.mapHint = null;
+        this.hud.toast(t('toast.forgot'), 2600);
+      }
       else if (e.type === 'gas-enter') this.hud.toast(t('toast.gas'), 3000);
     }
     for (const e of ev.fear) {
@@ -511,7 +519,26 @@ export class App {
       else if (e.type === 'begin') this.onBegin();
       else if (e.type === 'thing' && e.what === 'changing' && e.thing.fate !== 'dust') this.teach('thing', t('teach.thing'));
       else if (e.type === 'jump' && e.phase === 'switch' && buzz) navigator.vibrate(35);
+      else if (e.type === 'pocket') this.onPocket(e);
     }
+  }
+
+  /** Карманное пространство говорит, зачем оно: строка при входе и строка, когда оно сделало своё дело. */
+  private onPocket(e: Extract<StepEvents['dream'][number], { type: 'pocket' }>): void {
+    const task = e.memory ? t(`mem.${e.memory}.task`) : '';
+    if (e.what === 'enter') {
+      // В кукольном домике и в белом нигде строка зависит от того, ищет ли игрок что-нибудь прямо сейчас.
+      const idle = !e.memory && e.kind === 'dollhouse' ? '.idle' : '';
+      this.hud.flash(t(`pocket.${e.kind}.enter${idle}`), 6200);
+    } else if (e.what === 'map') {
+      if (e.memory && e.room !== undefined) {
+        this.mapHint = { memory: e.memory, room: e.room };
+        this.hud.flash(t('pocket.dollhouse.map', { what: task, room: t(`room.${e.room}`), tier: t(`tier.${Math.min(2, e.tier ?? 0)}`) }), 6200);
+      } else this.hud.flash(t('pocket.dollhouse.map.idle'));
+    } else if (e.what === 'next') this.hud.flash(t('pocket.void.next'));
+    else if (e.what === 'remind' && e.memory) this.hud.flash(t(`mem.${e.memory}.flash`));
+    else if (e.what === 'replay' && e.memory) this.hud.flash(t(`mem.${e.memory}.done`));
+    if (e.what !== 'enter' && this.touchMode && typeof navigator.vibrate === 'function') navigator.vibrate(30);
   }
 
   /** Записать профиль. Вызовы идут по очереди и только по событиям. */
@@ -535,8 +562,10 @@ export class App {
     const dead = light.state === 'dead';
     const kind = this.touchMode ? (this.motion?.state === 'active' ? 'motion' : 'touch') : 'desktop';
     // В светлом пространстве (луг, белое нигде, лимбо) фонарь не нужен: о том, что он заглох, молчим.
+    // Светло — значит много рассеянного света или есть прямой (лампа кукольного домика светит на пастельные стены).
     const env = g.env.ambient;
-    const bright = (env[0] + env[1] + env[2]) / 3 > 0.3;
+    const key = g.env.key?.color ?? [0, 0, 0];
+    const bright = (env[0] + env[1] + env[2]) / 3 + (key[0] + key[1] + key[2]) / 6 > 0.3;
     this.hud.setShakePrompt(dead && !bright ? t(`hint.shake.${kind}`) : '', light.reviveProgress);
     const base = this.touchMode ? 'touch' : 'desktop';
     let hint = '';
@@ -545,6 +574,9 @@ export class App {
       else if (g.time < 12) hint = t(`hint.light.${base}`);
       else if (g.time < 16 && !this.touchMode) hint = t('hint.pause.desktop');
     }
+    // В карманном пространстве нижняя строка говорит, как выйти, а под конец — что место уходит само.
+    const info = g.where === 'pocket' ? g.pocketFade : 1;
+    if (!dead && this.screen === 'play' && g.where === 'pocket' && !g.jumping) hint = info < 0.75 ? t('pocket.hint.fading') : t('pocket.hint.exit');
     this.hud.setHint(hint);
     this.touch?.setShakePrompt(dead && !bright, light.reviveProgress);
     this.touch?.setLit(light.state === 'on');
@@ -555,7 +587,9 @@ export class App {
 
     if (s && g.where !== 'limbo') {
       // Воспоминания, которые уже пришли: что ищем и что вспомнили.
-      const lines = s.memories.filter((m) => m.state !== 'hidden').map((m) => ({ text: t(`mem.${m.def.id}.task`), done: m.state === 'done' }));
+      const lines = s.memories
+        .filter((m) => m.state !== 'hidden')
+        .map((m) => ({ text: t(`mem.${m.def.id}.task`) + (m.state === 'active' && this.mapHint?.memory === m.def.id ? ` · ${t(`room.${this.mapHint.room}`)}` : ''), done: m.state === 'done' }));
       this.hud.setGoals('', lines, lines.length > 0);
       // Рамка — на том, во что игрок всматривается: искомая вещь или любая «неустойчивая».
       const act = s.active;

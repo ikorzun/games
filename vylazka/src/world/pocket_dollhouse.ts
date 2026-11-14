@@ -4,14 +4,19 @@
  * за открытой стороной, — огромная тёмная комната: доски пола, великанские ножки стула и кровати,
  * одна тёплая лампа. Домик стоит на полу в чьей-то комнате.
  *
- * Направление: открытая сторона — в −z (куда смотрит игрок при yaw 0), задняя стена — в +z.
+ * Зачем сюда попадают: на столе в средней комнате стоит макет убежища — те же помещения, сведённые
+ * к игрушке. Тёплый огонёк на макете — там, где лежит искомая вещь; красный колышек — там, откуда
+ * игрока унесло. Посветил на макет — узнал, куда идти. Выход — дверная коробка в правой комнате.
+ *
+ * Направление: открытая сторона — в −z, задняя стена — в +z; игрок появляется лицом к столу (в +z).
  */
 import type { Vec3 } from '../core/types';
 import { ColliderSet } from './colliders';
 import { MeshBuilder } from './kit';
 import { MAT } from './materials';
 import { Xf } from './props';
-import type { PocketBuilder, PocketSpace } from './pockets';
+import { doorFrame } from './pockets';
+import type { ModelCell, PocketBuilder, PocketContext, PocketSpace } from './pockets';
 
 const T = 0.12; // толщина стен
 const W = 3.2; // ширина и глубина комнаты
@@ -76,7 +81,76 @@ function chair(xf: Xf, tint: Vec3): void {
   xf.collider([-0.26, 0, -0.27], [0.26, 0.52, 0.26]);
 }
 
-export const buildDollhouse: PocketBuilder = (seed, origin): PocketSpace => {
+/** Цвет клетки макета по роду помещения: дом тёплый, убежище серо-зелёное, коридор тёмный. */
+function cellTint(type: string): Vec3 {
+  if (type === 'corridor') return [0.42, 0.42, 0.44];
+  if (type === 'stairwell') return [0.28, 0.28, 0.33];
+  if (type === 'entrance' || type === 'airlock') return [1.25, 1.25, 1.3];
+  if (type === 'collapsed') return [0.42, 0.28, 0.22];
+  if (['kitchen', 'living', 'bedroom', 'bathroom', 'nursery', 'hallway'].includes(type)) return [1.45, 1.2, 0.85];
+  return [0.72, 0.82, 0.68];
+}
+
+/** Середина столешницы и её размер под макет, м (в координатах дома). */
+const MODEL_AT: Vec3 = [0.3, 0.78, 0.9];
+const MODEL_W = 0.8;
+const MODEL_D = 0.6;
+
+/**
+ * Макет убежища на столе: план одного яруса — того, где лежит искомая вещь (или того, откуда пришёл
+ * игрок, если искать нечего). Клетка — плитка; помещение с вещью светлее остальных и на нём горит
+ * тёплый огонёк; красный колышек — «ты был здесь». Сбоку стопка из трёх пластин: какой это ярус.
+ */
+function shelterModel(house: Xf, ctx: PocketContext | undefined): void {
+  const [mx, my, mz] = MODEL_AT;
+  house.box([mx - MODEL_W / 2 - 0.02, my, mz - MODEL_D / 2 - 0.02], [mx + MODEL_W / 2 + 0.02, my + 0.012, mz + MODEL_D / 2 + 0.02], MAT.wood, { tint: [0.55, 0.45, 0.35], bevel: 0.004 });
+  const cells: readonly ModelCell[] = ctx?.cells ?? [];
+  const tier = ctx?.target?.tier ?? ctx?.here?.tier ?? 0;
+  const plan = cells.filter((c) => c.tier === tier);
+  if (plan.length === 0) return;
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  let z0 = Infinity;
+  let z1 = -Infinity;
+  for (const c of plan) {
+    x0 = Math.min(x0, c.x);
+    x1 = Math.max(x1, c.x);
+    z0 = Math.min(z0, c.z);
+    z1 = Math.max(z1, c.z);
+  }
+  // Клетка макета: чтобы план влез на доску, но не крупнее 7 см.
+  const k = Math.min(0.07, (MODEL_W - 0.12) / (x1 - x0 + 1), MODEL_D / (z1 - z0 + 1));
+  const px = (cx: number): number => mx + 0.06 + (cx - (x0 + x1) / 2) * k;
+  const pz = (cz: number): number => mz + (cz - (z0 + z1) / 2) * k;
+  const y = my + 0.012;
+  const tgt = ctx?.target && ctx.target.tier === tier ? ctx.target : null;
+  const tgtRoom = tgt ? plan.find((c) => c.x === tgt.x && c.z === tgt.z)?.room : undefined;
+  for (const c of plan) {
+    const lit = tgtRoom !== undefined && c.room === tgtRoom;
+    const t = cellTint(c.type);
+    const tint: Vec3 = lit ? [t[0] * 1.35 + 0.25, t[1] * 1.3 + 0.2, t[2] * 1.1 + 0.05] : t;
+    house.box([px(c.x) - k * 0.46, y, pz(c.z) - k * 0.46], [px(c.x) + k * 0.46, y + (lit ? 0.016 : 0.01), pz(c.z) + k * 0.46], MAT.enamel, { tint });
+  }
+  if (tgt) {
+    // Тёплый огонёк: то, что потеряно, лежит здесь.
+    const r = k * 0.28;
+    house.box([px(tgt.x) - r, y + 0.016, pz(tgt.z) - r], [px(tgt.x) + r, y + 0.016 + r * 2.6, pz(tgt.z) + r], MAT.glow, { tint: [190, 140, 42] });
+  }
+  const here = ctx?.here && ctx.here.tier === tier ? ctx.here : null;
+  if (here) {
+    const r = k * 0.12;
+    const ox = tgt && tgt.x === here.x && tgt.z === here.z ? k * 0.3 : 0;
+    house.box([px(here.x) + ox - r, y + 0.01, pz(here.z) - r], [px(here.x) + ox + r, y + 0.01 + k * 1.1, pz(here.z) + r], MAT.glow, { tint: [190, 15, 7] });
+  }
+  // Какой ярус: три пластины стопкой слева, показанный ярус светлый.
+  for (let t = 0; t < 3; t++) {
+    const on = t === tier;
+    const ty = y + 0.05 - t * 0.022;
+    house.box([mx - MODEL_W / 2 + 0.005, ty, mz - 0.05], [mx - MODEL_W / 2 + 0.075, ty + 0.008, mz + 0.05], MAT.enamel, { tint: on ? [1.9, 1.8, 1.5] : [0.35, 0.35, 0.38] });
+  }
+}
+
+export const buildDollhouse: PocketBuilder = (seed, origin, ctx): PocketSpace => {
   const [ox, oy, oz] = origin;
   const rnd = lcg(seed);
   const mb = new MeshBuilder();
@@ -171,6 +245,7 @@ export const buildDollhouse: PocketBuilder = (seed, origin): PocketSpace => {
   for (const sx of [0, 1]) {
     for (const sz of [0, 1]) house.solid([-0.12 + sx * 0.82, 0, 0.58 + sz * 0.6], [-0.03 + sx * 0.82, 0.7, 0.67 + sz * 0.6], MAT.enamel, { tint: [1.5, 1.15, 0.6] });
   }
+  shelterModel(house, ctx);
   const chA = house.child(-0.72, 0, 0.9, 1);
   chair(chA, [1.5, 0.7, 0.8]);
   doll(chA, true, [1.6, 0.6, 0.9]);
@@ -239,6 +314,11 @@ export const buildDollhouse: PocketBuilder = (seed, origin): PocketSpace => {
   mb.cylinder(at(lx, floorY, lz), 'y', 12, 0.3, MAT.bakelite, { segments: 8, caps: false });
   mb.cylinder(at(lx, floorY + 10, lz), 'y', 6, 3.2, MAT.glow, { segments: 12, radiusEnd: 4.4, caps: false, tint: [180.1, 141.6, 42.8] });
 
+  // Выход: дверная коробка у открытой стороны средней комнаты, за спиной у игрока — обернулся, и вот
+  // она, а за ней тёмная большая комната (красную обводку добавит buildPocket).
+  const exit: Vec3 = [ox + 0.3, oy, oz + ZB + 0.14];
+  doorFrame(mb, exit, [1.6, 1.55, 1.4]);
+
   const spots: Vec3[] = [
     [-PITCH + 0.6, 0, -0.5],
     [-2.4, 0, 0.0],
@@ -251,11 +331,15 @@ export const buildDollhouse: PocketBuilder = (seed, origin): PocketSpace => {
     kind: 'dollhouse',
     meshes: [mb.build()],
     colliders: cs.boxes.map((b) => ({ ...b })),
-    spawn: { pos: [ox, oy, oz], yaw: 0 },
-    env: { ambient: [0.34, 0.3, 0.27], fog: [0.03, 0.02, 0.03], fogDensity: 0.02, light: 0.7, decay: 0, haze: 0.004 },
+    // Игрок появляется посреди средней комнаты, лицом к столу и взглядом на макет.
+    spawn: { pos: [ox + 0.3, oy, oz - 0.3], yaw: Math.PI, pitch: -0.3 },
+    // Свет в дом идёт от большой лампы снаружи, через открытую сторону: задние стены тёплые, боковые в тени.
+    env: { ambient: [0.24, 0.22, 0.2], fog: [0.03, 0.02, 0.03], fogDensity: 0.02, light: 0.7, decay: 0, haze: 0.004, key: { dir: [0, 0.238, -0.971], color: [0.52, 0.4, 0.23] } },
     center: [ox, oy, oz],
     radius: 40,
-    anchors: [[ox - 0.72, oy + 1.19, oz + 0.9]],
+    anchors: [[exit[0], exit[1] + 1.2, exit[2]]],
     spots,
+    exit,
+    focus: [ox + MODEL_AT[0], oy + MODEL_AT[1] + 0.03, oz + MODEL_AT[2]],
   };
 };

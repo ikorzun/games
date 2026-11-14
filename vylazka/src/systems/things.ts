@@ -21,6 +21,8 @@ export interface Thing {
   state: 'idle' | 'changing' | 'giant' | 'gone';
   /** Вещь — цель воспоминания: сама под взглядом не меняется, её судьбу решает сессия. */
   memory: boolean;
+  /** Вещь-экспонат (вспомненное в белом нигде): под взглядом не меняется, игра только знает, что на неё смотрят. */
+  still: boolean;
   /** Сколько на неё уже смотрят, 0..1. */
   gaze: number;
   /** Время с начала превращения, с. */
@@ -88,8 +90,8 @@ export class Things {
 
   constructor(readonly cfg: ThingsConfig = DEFAULT_THINGS) {}
 
-  add(kind: string, pos: Vec3, yaw: number, fate: Fate, radius = 0.3, memory = false): Thing {
-    const t: Thing = { id: this.nextId++, kind, pos, yaw, radius, fate, state: 'idle', memory, gaze: 0, t: 0, scale: 1, dissolve: 0, collider: -1 };
+  add(kind: string, pos: Vec3, yaw: number, fate: Fate, radius = 0.3, memory = false, still = false): Thing {
+    const t: Thing = { id: this.nextId++, kind, pos, yaw, radius, fate, state: 'idle', memory, still, gaze: 0, t: 0, scale: 1, dissolve: 0, collider: -1 };
     this.list.push(t);
     return t;
   }
@@ -128,8 +130,8 @@ export class Things {
       if (t.state === 'idle') {
         const centre: Vec3 = [t.pos[0], t.pos[1] + t.radius * 0.6, t.pos[2]];
         const seen = looksAt(look, centre, t.radius, c.range, los);
-        if (t.memory) {
-          // Цель воспоминания: взгляд копит сессия, здесь только отметка «на неё смотрят».
+        if (t.memory || t.still) {
+          // Цель воспоминания или экспонат: взгляд копит сессия (игра), здесь только отметка «на неё смотрят».
           t.gaze = seen ? Math.min(1, t.gaze + dt / 0.4) : Math.max(0, t.gaze - dt * 2);
           continue;
         }

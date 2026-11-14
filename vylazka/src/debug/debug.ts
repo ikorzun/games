@@ -57,6 +57,11 @@ export interface VzDebugApi {
   reveal(): void;
   /** Встать перед вещью искомого воспоминания. */
   gotoMemory(): boolean;
+  /**
+   * В карманном пространстве: встать перед выходом (красным проёмом) или перед главным предметом (макетом
+   * в кукольном домике) и посмотреть на него. distance — с какого расстояния, м. false — такого здесь нет.
+   */
+  gotoPocket(what: 'exit' | 'focus', distance?: number): boolean;
   /** Начать скачок: в карманное пространство ('void', 'meadow', 'dollhouse'), в другое место ('elsewhere') или в лимбо. */
   jump(to: JumpTarget, style?: JumpStyle): boolean;
   /** Встать в помещение с особенностью: 'strobe', 'dark', 'wire', 'thin'. */
@@ -254,6 +259,22 @@ export function installDebug(app: App): void {
     gotoMemory: () => {
       const t = game().things.list.find((x) => x.memory);
       return t ? api.gotoThing(t.id, 2.2) : false;
+    },
+    gotoPocket: (what, distance = what === 'exit' ? 1.6 : 1.5) => {
+      const g = game();
+      const p = g.pocket;
+      const at = what === 'exit' ? p?.exit : p?.focus;
+      if (!p || !at) return false;
+      // К макету подходим со стороны точки появления; к выходу — по его оси (проём стоит поперёк z и
+      // смотрит на точку появления).
+      const dx = what === 'exit' ? 0 : p.spawn.pos[0] - at[0];
+      const dz = what === 'exit' ? 1 : p.spawn.pos[2] - at[2];
+      const d = Math.hypot(dx, dz) || 1;
+      g.teleport(at[0] + (dx / d) * distance, p.spawn.pos[1], at[2] + (dz / d) * distance);
+      app.advance(emptyInput(), 2, 1, STEP);
+      g.aimAt(at[0], what === 'exit' ? at[1] + 1.2 : at[1], at[2]);
+      app.advance(emptyInput(), 2, 1, STEP);
+      return true;
     },
     jump: (to, style = 'cut') => game().beginJump({ cause: 'gaze', style, to }, []),
     gotoFx: (fx) => {

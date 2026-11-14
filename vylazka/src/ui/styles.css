@@ -731,13 +731,18 @@ body {
 .vz-hud.is-bright .vz-hud__goal,
 .vz-hud.is-bright .vz-hud__prompt {
   color: #161616;
-  text-shadow: none;
+  /* Светлый ореол: в домике и на лугу под строкой бывает и тёмное (пол, ели) — тёмные буквы должны читаться везде. */
+  text-shadow:
+    0 0 3px rgba(255, 255, 255, 0.85),
+    0 0 8px rgba(255, 255, 255, 0.55);
 }
 .vz-hud.is-bright .vz-hud__flash {
   color: #101010;
   text-shadow:
     1px 0 0 rgba(255, 40, 30, 0.6),
-    -1px 0 0 rgba(40, 160, 255, 0.5);
+    -1px 0 0 rgba(40, 160, 255, 0.5),
+    0 0 6px rgba(255, 255, 255, 0.8),
+    0 0 14px rgba(255, 255, 255, 0.6);
 }
 .vz-hud.is-bright .vz-hud__mark {
   filter: invert(1);

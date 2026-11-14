@@ -330,6 +330,17 @@ export class Session {
     this.rushed = true;
   }
 
+  /**
+   * Поторопить: пауза перед следующим воспоминанием считается выдержанной (игрок вызвал его сам —
+   * в белом нигде). Правило наименьшей длины сессии остаётся в силе: последнее раньше срока не придёт.
+   * Возвращает false, если торопить нечего: воспоминание уже идёт или все вспомнены.
+   */
+  hurry(): boolean {
+    if (this.active || this.over || !this.memories.some((m) => m.state === 'hidden')) return false;
+    this.since = Math.max(this.since, this.cfg.delay + this.cfg.firstDelay);
+    return true;
+  }
+
   /** Занять место: там уже лежит что-то другое, вещь воспоминания туда не попадёт. */
   reserve(spot: ItemSpot): void {
     this.usedSpots.add(spot);

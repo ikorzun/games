@@ -79,6 +79,8 @@ export const SCAN_GLSL = /* glsl */ `
 uniform vec4 uScan;       // x — h без света («призрачные» точки), y — h на единицу света, z — предел h, w — свечение призрачных точек
 uniform float uDot;       // размер клетки точек, пикселей буфера
 uniform float uScanTime;
+uniform float uScanFade;  // 1 — пространство держится; меньше — редеет (его время выходит)
+uniform vec2 uScanRange;  // докуда рассеянный свет «сканирует»: плотно до x, россыпь после y, м
 
 uint scanHash(ivec2 c, int id) {
   uint n = uint(c.x) * 0x27d4eb2du ^ uint(c.y) * 0x165667b1u ^ uint(id) * 0x9e3779b1u;
@@ -196,6 +198,8 @@ uniform sampler2D uSigns;
 uniform sampler2DShadow uShadowMap;
 uniform float uShadowTexel;
 uniform vec3 uAmbient;
+uniform vec3 uKeyDirV;    // прямой свет пространства: направление на источник (пространство камеры)
+uniform vec3 uKeyColor;   // его цвет и сила; ноль — прямого света нет (убежище)
 uniform vec4 uBounce;     // xyz — точка попадания луча (пространство камеры), w — сила отсвета
 uniform float uFog;
 uniform vec3 uFogColor;   // во что уходит даль: в убежище — чернота, в белом нигде — белое
@@ -310,9 +314,16 @@ void main() {
   float eAmb = dot(uAmbient, vec3(0.3333));
   float eGlow = ma.y * maxc;
   float distV = length(vPosV);
-  float hLit = (eLight + bounce0 * 1.2) * uScan.y;
-  float hEnv = uScan.z * (min(1.0, eGlow * 4.0) + min(1.0, eAmb * 8.0) * (1.0 - smoothstep(4.0, 15.0, distV)));
-  float hScan = min(uScan.z, max(uScan.x, hLit + hEnv));
+  // Настоящий сканер хуже видит то, от чего луч не возвращается: поверхность, по которой он скользит,
+  // стекло (луч уходит насквозь), чёрную резину и бакелит (луч гаснет), мокрый пол (луч отражается прочь).
+  float toCam = abs(dot(Ng, vPosV)) / max(distV, 1e-3);
+  float back = mix(0.6, 1.0, smoothstep(0.03, 0.4, toCam)) * (mi == 24 ? 0.35 : (mi == 7 || mi == 23 ? 0.6 : (mi == 12 ? 0.78 : 1.0)));
+  // Прямой свет пространства тоже «сканирует»: освещённая сторона плотнее теневой.
+  float keyLit = max(dot(Ng, uKeyDirV), 0.0) * dot(uKeyColor, vec3(0.3333));
+  float hLit = (eLight + bounce0 * 1.2) * uScan.y * back;
+  float hEnv = uScan.z * (min(1.0, eGlow * 4.0) + min(1.0, eAmb * 8.0) * (0.72 + 0.28 * min(1.0, keyLit * 3.0 + step(dot(uKeyColor, vec3(1.0)), 0.001))) * back * (1.0 - smoothstep(uScanRange.x, uScanRange.y, distV)));
+  // Пространство, чьё время выходит, редеет; светящееся (красный контур выхода, небо) держится до конца.
+  float hScan = min(uScan.z, max(uScan.x, hLit + hEnv)) * mix(mix(0.06, 1.0, uScanFade), 1.0, step(0.004, eGlow));
   // Пока замеров мало, точки отдельные; сливаться в сплошную поверхность начинают только там, где
   // занята почти каждая клетка.
   float grow = smoothstep(1.5, 3.1, hScan);
@@ -334,14 +345,13 @@ void main() {
 #endif
   // Призрачные точки светятся сами, пока до них не дотянулся настоящий свет. Поверхность, повёрнутая
   // к камере, светится сильнее той, что уходит вскользь: по одной россыпи читаются углы и проёмы.
-  float toCam = abs(dot(Ng, vPosV)) / max(distV, 1e-3);
   vec3 ghost = vec3(0.62, 0.72, 0.9) * (uScan.w * exp(-(eLight + bounce0) * 60.0) * dot_ * (0.4 + 0.6 * toCam));
 
 #ifdef SCAN
   // Туда, где света почти нет, фактуры не нужны: точка — просто цвет материала.
   if (hLit < 0.1 && eGlow < 0.004 && eAmb < 0.02) {
     vec3 flat_ = uMatBase[mi] * vColor.rgb * ao;
-    vec3 colG = flat_ * (ghost + uAmbient + uLightColor * (eLight * 0.45 + bounce0) * boost);
+    vec3 colG = flat_ * (ghost + uAmbient * (0.66 + 0.34 * up) + uLightColor * (eLight * 0.45 + bounce0) * boost);
     colG += vec3(0.9, 0.07, 0.03) * burn;
     gl_FragColor = vec4(mix(uFogColor, colG, exp(-uFog * distV)), 1.0);
     return;
@@ -469,7 +479,9 @@ void main() {
 
   // Отсвет от освещённого пятна: мягко подсвечивает окрестности, как рассеянный от стены свет.
   float bounce = bounce0 * (0.35 + 0.65 * max(dot(N, toB / max(db, 1e-3)), 0.0));
-  col += base * tint * ao * (uAmbient * lit + uLightColor * bounce);
+  // Рассеянный свет пространства идёт больше сверху (небо, потолок), чем снизу; прямой — от солнца или лампы.
+  vec3 skyLit = uAmbient * (0.66 + 0.34 * up) + uKeyColor * max(dot(N, uKeyDirV), 0.0);
+  col += base * tint * ao * (skyLit * lit + uLightColor * bounce);
 
   // Мокрый пол и плитка отражают освещённое пятно: блик тянется от дальней стены к ногам.
   float gloss = max(wet, mi == 12 ? 1.0 : (mi == 18 ? 0.5 : 0.0)) * step(0.5, up);
