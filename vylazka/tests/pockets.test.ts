@@ -41,8 +41,10 @@ describe.each(POCKET_KINDS.map((k) => [k] as [PocketKind]))('карманное 
     }
   });
 
-  it('не больше 14000 треугольников', () => {
-    expect(triangles(s)).toBeLessThanOrEqual(14000);
+  // Луг — открытая сцена с травой, деревьями и небом: ему отведено больше, чем комнатам.
+  const limit = kind === 'meadow' ? 60000 : 14000;
+  it(`не больше ${limit} треугольников`, () => {
+    expect(triangles(s)).toBeLessThanOrEqual(limit);
   });
 
   it('материалы — существующие номера', () => {
