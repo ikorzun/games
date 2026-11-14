@@ -65,14 +65,20 @@ export interface SessionConfig {
   maxCells: number;
   /** Сколько секунд в газу до обморока. */
   faintTime: number;
+  /**
+   * Наименьшая длина сессии, с: последнее воспоминание не приходит раньше этой секунды, как бы
+   * быстро игрок ни нашёл остальные. До вещи ещё надо дойти, так что сессия всегда длиннее.
+   */
+  minLength: number;
 }
 
 /**
- * Пять воспоминаний с паузами 30 + 4 × 40 с — одно ожидание даёт больше трёх минут, а за каждой вещью
- * ещё надо дойти (не ближе семи клеток пути): сессия не бывает короче пяти минут даже у того, кто
- * идёт прямо к цели.
+ * Пять воспоминаний с паузами 30 + 4 × 40 с: одно ожидание даёт больше трёх минут, а за каждой вещью
+ * ещё надо дойти (не ближе семи клеток пути) — обычная сессия идёт 7–10 минут. Тот, кто находит вещи
+ * сразу (погасил фонарь, увидел сетку сквозь стены), уложился бы в четыре с половиной, поэтому есть и
+ * жёсткое правило: последнее воспоминание не приходит раньше пятой минуты (minLength).
  */
-export const DEFAULT_SESSION: SessionConfig = { count: 5, firstDelay: 30, delay: 40, fallback: 25, lookRange: 6, lookTime: 1.6, minCells: 7, maxCells: 16, faintTime: 5.5 };
+export const DEFAULT_SESSION: SessionConfig = { count: 5, firstDelay: 30, delay: 40, fallback: 25, lookRange: 6, lookTime: 1.6, minCells: 7, maxCells: 16, faintTime: 5.5, minLength: 300 };
 
 export interface SessionInput {
   /** Ступни игрока. */
@@ -124,6 +130,8 @@ export class Session {
   private fainted = false;
   /** Время с последнего события воспоминаний (начало, вспышка, «вспомнил»). */
   private since = 0;
+  /** Отладка попросила следующее воспоминание немедленно (см. rush). */
+  private rushed = false;
   private readonly rng: Rng;
   private readonly usedSpots = new Set<ItemSpot>();
   /** Узел навигации, ближайший к каждому месту (−1 — места вне графа). */
@@ -297,14 +305,18 @@ export class Session {
         }
       } else this.hold = Math.max(0, this.hold - dt * 2);
     } else if (!act && inside) {
-      const next = this.memories.find((m) => m.state === 'hidden');
+      const hidden = this.memories.filter((m) => m.state === 'hidden');
+      const next = hidden[0];
       const wait = this.doneCount === 0 ? this.cfg.firstDelay : this.cfg.delay;
-      if (next && this.since >= wait && (inp.observed || this.since >= wait + this.cfg.fallback)) {
+      // Последнее воспоминание ждёт minLength: сессия не кончается раньше, как бы быстро ни шёл игрок.
+      const early = hidden.length === 1 && !this.rushed && this.time < this.cfg.minLength;
+      if (next && !early && this.since >= wait && (inp.observed || this.since >= wait + this.cfg.fallback)) {
         const spot = this.pickSpot(inp.node);
         if (spot) {
           next.state = 'active';
           next.spot = spot;
           this.since = 0;
+          this.rushed = false;
           ev.push({ type: 'reveal', memory: next });
         }
       }
@@ -312,9 +324,10 @@ export class Session {
     return ev;
   }
 
-  /** Отладка: не ждать — следующее воспоминание придёт на ближайшем шаге. */
+  /** Отладка: не ждать — следующее воспоминание придёт на ближайшем шаге (и минимум длины сессии не действует). */
   rush(): void {
     this.since = 1e6;
+    this.rushed = true;
   }
 
   /** Занять место: там уже лежит что-то другое, вещь воспоминания туда не попадёт. */

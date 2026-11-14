@@ -9,7 +9,7 @@ import { buildLevel } from '../src/world/level_build';
 const DT = 1 / 60;
 const SEED = 20041113;
 /** Короткие паузы, чтобы не крутить минуты симуляции. */
-const FAST: SessionConfig = { ...DEFAULT_SESSION, firstDelay: 2, delay: 3, fallback: 4 };
+const FAST: SessionConfig = { ...DEFAULT_SESSION, firstDelay: 2, delay: 3, fallback: 4, minLength: 0 };
 
 const clear = (): number => 99;
 const wall = (): number => 0.5;
@@ -352,6 +352,7 @@ describe('сессия: порядок и длина', () => {
 
   it('сессия по умолчанию — не короче пяти минут: пауз на 180 с и больше, воспоминаний не меньше пяти', () => {
     const c = DEFAULT_SESSION;
+    expect(c.minLength).toBeGreaterThanOrEqual(300);
     expect(c.count).toBeGreaterThanOrEqual(5);
     const waits = c.firstDelay + (c.count - 1) * c.delay;
     expect(waits).toBeGreaterThanOrEqual(180);
@@ -359,6 +360,63 @@ describe('сессия: порядок и длина', () => {
     expect(c.minCells).toBeGreaterThanOrEqual(5);
     expect(c.maxCells).toBeGreaterThan(c.minCells);
     expect(MEMORIES.length).toBeGreaterThanOrEqual(c.count);
+  });
+});
+
+describe('сессия: наименьшая длина', () => {
+  /** Игрок находит вещь мгновенно: стоит у неё и светит, как только она появилась. */
+  function speedrun(s: Session, level: BuiltLevel, node: number, seconds: number): SessionEvent[] {
+    const out: SessionEvent[] = [];
+    for (let i = 0; i < Math.round(seconds / DT); i++) {
+      const act = s.active;
+      out.push(...s.update(DT, act?.spot ? gaze(act.spot, node, { observed: true }) : idle(level, node, { observed: true }), clear));
+    }
+    return out;
+  }
+
+  it('последнее воспоминание не приходит раньше minLength, даже если остальные найдены мгновенно', () => {
+    const level = levelOf(SEED, 3);
+    const cfg: SessionConfig = { ...DEFAULT_SESSION, firstDelay: 2, delay: 3, fallback: 4, minLength: 60 };
+    const s = new Session(level, 21, new Set(), cfg);
+    const node = startNode(level);
+    // Четыре воспоминания из пяти уходят за два десятка секунд: 2 + 3 × 3 с пауз и по 1,6 с на взгляд.
+    speedrun(s, level, node, 30);
+    expect(s.doneCount).toBe(4);
+    expect(s.active).toBeNull();
+    // Пауза delay давно прошла, игрок смотрит на вещи — а пятого всё нет.
+    expect(types(speedrun(s, level, node, 29))).toEqual([]);
+    expect(s.time).toBeLessThan(60);
+    // На шестидесятой секунде оно приходит, и сессию можно закончить.
+    const ev = speedrun(s, level, node, 4);
+    expect(types(ev)).toEqual(['reveal', 'recall', 'all-done']);
+    expect(s.time).toBeGreaterThanOrEqual(60);
+    expect(s.over).toBe(true);
+  });
+
+  it('ранние воспоминания минимум не задерживает; тому, кто идёт дольше минимума, он не мешает', () => {
+    const level = levelOf(SEED, 3);
+    const cfg: SessionConfig = { ...DEFAULT_SESSION, firstDelay: 2, delay: 3, fallback: 4, minLength: 12 };
+    const s = new Session(level, 22, new Set(), cfg);
+    const node = startNode(level);
+    // Первое — как обычно, на второй секунде.
+    expect(types(speedrun(s, level, node, 2.2))).toEqual(['reveal']);
+    // К двадцатой секунде минимум (12 с) позади: пятое пришло в свой черёд, сессия закончена.
+    speedrun(s, level, node, 20);
+    expect(s.over).toBe(true);
+    expect(s.time).toBeLessThan(23);
+  });
+
+  it('отладочный rush() обходит минимум: проверкам не надо крутить пять минут', () => {
+    const level = levelOf(SEED, 3);
+    const s = new Session(level, 23, new Set(), DEFAULT_SESSION);
+    const node = startNode(level);
+    for (let k = 0; k < DEFAULT_SESSION.count; k++) {
+      s.rush();
+      expect(types(run(s, DT, idle(level, node)))).toEqual(['reveal']);
+      run(s, DEFAULT_SESSION.lookTime + 0.1, gaze(s.active!.spot!, node));
+    }
+    expect(s.over).toBe(true);
+    expect(s.time).toBeLessThan(DEFAULT_SESSION.minLength);
   });
 });
 

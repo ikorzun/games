@@ -59,7 +59,7 @@ function levelOf(seed: number, rank: 1 | 2 | 3 = 3): BuiltLevel {
 }
 
 /** Короткая сессия: вспышки через секунду после «вспомнил», без ожидания наблюдения. */
-const QUICK = { ...DEFAULT_SESSION, firstDelay: 1, delay: 1, fallback: 0 };
+const QUICK = { ...DEFAULT_SESSION, firstDelay: 1, delay: 1, fallback: 0, minLength: 0 };
 
 interface Log {
   session: SessionEvent[];
