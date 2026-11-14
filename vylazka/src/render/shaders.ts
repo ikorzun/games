@@ -138,7 +138,9 @@ uniform vec4 uBounce;     // xyz — точка попадания луча (п�
 uniform sampler2D uSpot;  // средний цвет освещённого пятна в прошлом кадре: им окрашен отсвет
 uniform float uFog;
 uniform vec3 uFogColor;   // во что уходит даль: в убежище — чернота, в белом нигде — белое
-uniform float uDecay;     // 0..1: насколько здесь сыро и запущено (растёт с глубиной)
+uniform float uDecay;     // 0..1: насколько здесь сыро и запущено (растёт с глубиной); меньше нуля — чисто, как в офисе
+uniform sampler2D uCellLight; // свет по клеткам уровня: r — сколько рассеянного света в клетке, g — номер помещения
+uniform vec4 uCellGrid;       // xy — угол сетки в мире (x, z), z — шаг клетки, м, w — клеток по стороне (0 — света по клеткам нет)
 uniform vec3 uLightRightV;
 uniform vec3 uLightUpV;
 // Материалов может быть до 48 (атлас шаров 8 × ATLAS_ROWS); сколько их на деле — знает world/materials.ts.
@@ -168,6 +170,30 @@ float cellHash(vec3 p) {
   uint n = uint(q.x) * 0x27d4eb2du ^ uint(q.y) * 0x165667b1u ^ uint(q.z) * 0x9e3779b1u;
   n ^= n >> 15; n *= 0x2c1b3c6du; n ^= n >> 12; n *= 0x297a2d39u; n ^= n >> 15;
   return float(n & 0xffffu) / 65535.0;
+}
+
+/**
+ * Свет потолочных панелей: у каждой клетки уровня свой. Внутри помещения он переходит от клетки
+ * к клетке плавно, а на стене обрывается — соседнее помещение освещено по-своему.
+ */
+float cellLight(vec2 xz) {
+  if (uCellGrid.w < 0.5) return 1.0;
+  vec2 g = (xz - uCellGrid.xy) / uCellGrid.z;
+  vec2 c = floor(g);
+  vec2 f = g - c - 0.5;
+  vec2 sgn = vec2(f.x < 0.0 ? -1.0 : 1.0, f.y < 0.0 ? -1.0 : 1.0);
+  vec2 w = smoothstep(0.1, 0.5, abs(f)) * 0.5;
+  float inv = 1.0 / uCellGrid.w;
+  vec4 t0 = texture2D(uCellLight, (c + 0.5) * inv);
+  vec4 tx = texture2D(uCellLight, (c + vec2(sgn.x, 0.0) + 0.5) * inv);
+  vec4 tz = texture2D(uCellLight, (c + vec2(0.0, sgn.y) + 0.5) * inv);
+  vec4 td = texture2D(uCellLight, (c + sgn + 0.5) * inv);
+  // Соседи из другого помещения не в счёт: свет через стену не идёт. Смешение — билинейное по четырём
+  // клеткам, чтобы на границе клеток не было шва (на границе вес ровно половина с обеих сторон).
+  float lx = abs(tx.g - t0.g) < 0.002 ? tx.r : t0.r;
+  float lz = abs(tz.g - t0.g) < 0.002 ? tz.r : t0.r;
+  float ld = abs(td.g - t0.g) < 0.002 ? td.r : 0.5 * (lx + lz);
+  return mix(mix(t0.r, lx, w.x), mix(lz, ld, w.x), w.y);
 }
 
 vec3 matcap(int m, vec3 N, vec3 bx, vec3 by) {
@@ -260,8 +286,13 @@ void main() {
   // Свет фонаря, отсвет, собственное свечение и рассеянный свет пространства (он «сканирует» только
   // вблизи: в белом нигде и на лугу даль рассыпается на точки).
   float eLight = lb.w * shadow * facing * lamp;
-  float eAmb = dot(uAmbient, vec3(0.3333));
-  float eGlow = ma.y * maxc;
+  // Рассеянный свет здесь — свет потолочной панели этой клетки (где панелей нет, cell = 1).
+  float cell = cellLight(vWorld.xz);
+  vec3 amb = uAmbient * cell;
+  float eAmb = dot(amb, vec3(0.3333));
+  // Светильник светится, только пока свет в его клетке включён.
+  float glowK = mi == 37 ? cell : 1.0;
+  float eGlow = ma.y * maxc * glowK;
   float distV = length(vPosV);
   // Настоящий сканер хуже видит то, от чего луч не возвращается: поверхность, по которой он скользит,
   // стекло (луч уходит насквозь), чёрную резину и бакелит (луч гаснет), мокрый пол (луч отражается прочь).
@@ -283,7 +314,7 @@ void main() {
   // Туда, где света почти нет, фактуры не нужны: поверхность — просто цвет материала.
   if (hLit < 0.1 && eGlow < 0.004 && eAmb < 0.02) {
     vec3 flat_ = uMatBase[mi] * vColor.rgb * ao;
-    vec3 colG = flat_ * (uAmbient * (0.66 + 0.34 * up) + uLightColor * (eLight * 0.45 + bounce0 * bounceTint));
+    vec3 colG = flat_ * (amb * (0.66 + 0.34 * up) + uLightColor * (eLight * 0.45 + bounce0 * bounceTint));
     colG += vec3(0.9, 0.07, 0.03) * burn;
     gl_FragColor = vec4(mix(uFogColor, colG, exp(-uFog * distV)), hOut);
     return;
@@ -303,9 +334,12 @@ void main() {
   float shade = 1.0;  // затемнение: кромки, трещины, плесень
   vec3 stain = vec3(1.0);
   float crev = 1.0 - ao;
+  // Там, где чисто (запущенность меньше нуля — офис), сырости, пыли и потёков нет, а грязи вдесятеро меньше.
+  float damp = clamp(1.0 + uDecay * 2.0, 0.0, 1.0);
+  float grimeK = ma.x * mix(0.1, 1.0, damp);
   // Сырость поднимается от пола и копится под потолком.
-  float low = wall * (1.0 - smoothstep(0.0, 0.7 + g1.g * 1.1, hgt));
-  float high = wall * smoothstep(1.8, 2.7, hgt + g1.r * 0.6);
+  float low = wall * (1.0 - smoothstep(0.0, 0.7 + g1.g * 1.1, hgt)) * damp;
+  float high = wall * smoothstep(1.8, 2.7, hgt + g1.r * 0.6) * damp;
 
   // На низком качестве вторая выборка карты и фактура изнанки заменены тем, что уже есть:
   // облезшая краска и ржавчина остаются, пропадают только рельеф и мелкая пестрота.
@@ -347,7 +381,7 @@ void main() {
       shade *= 1.0 - (1.0 - smoothstep(0.0, 0.08, fl.g)) * front * 0.35;
     }
     // Высолы: белёсая кайма там, где сырость высыхает.
-    float eff = wall * (1.0 - smoothstep(0.0, 0.28, abs(hgt - 0.35 - g1.g * 0.9))) * g2.r * (0.25 + uDecay);
+    float eff = wall * (1.0 - smoothstep(0.0, 0.28, abs(hgt - 0.35 - g1.g * 0.9))) * g2.r * max(0.25 + uDecay, 0.0);
     stain = mix(stain, vec3(1.5, 1.48, 1.42), eff * 0.5 * (1.0 - k));
   } else if (cls == 4) {
     // Дерево, ткань, бумага: темнеют от сырости.
@@ -366,15 +400,15 @@ void main() {
   wet = max(wet, slime * 0.9);
   H += slime * 0.006;
   // Потёки по стенам.
-  shade *= 1.0 - wall * smoothstep(0.55, 0.9, g1.b) * (0.22 + 0.3 * uDecay) * ma.x;
+  shade *= 1.0 - wall * smoothstep(0.55, 0.9, g1.b) * max(0.22 + 0.3 * uDecay, 0.0) * grimeK;
   alb = mix(alb, 0.55 + 0.9 * d1.g, k);
 #ifdef DETAIL
   H = mix(H, d1.r * uMatB[mj].x - 0.002, k);
   vec3 N = perturb(Ng, vPosV, H);
-  float dirt = mix(1.0, (0.62 + 0.5 * g2.r) * (0.8 + 0.4 * g1.g), ma.x);
+  float dirt = mix(1.0, (0.62 + 0.5 * g2.r) * (0.8 + 0.4 * g1.g), grimeK);
 #else
   vec3 N = Ng;
-  float dirt = mix(1.0, 0.72 + 0.56 * g1.r, ma.x);
+  float dirt = mix(1.0, 0.72 + 0.56 * g1.r, grimeK);
 #endif
 
   // Matcap по направлению на фонарь.
@@ -404,7 +438,7 @@ void main() {
   vec3 tint = vc * ink * stain * (dirt * alb * mix(1.0, 0.55, wet) * mix(1.0, 0.62 + 0.2 * g1.r, k * step(0.5, 1.5 - abs(float(cls) - 1.0))));
   vec3 surf = mc * tint * shade;
   // Пыль на всём, что лежит выше пола и смотрит вверх.
-  float dust = smoothstep(0.6, 0.95, up) * smoothstep(0.06, 0.2, hgt) * (0.35 + 0.4 * g1.g) * (1.0 - wet);
+  float dust = smoothstep(0.6, 0.95, up) * smoothstep(0.06, 0.2, hgt) * (0.35 + 0.4 * g1.g) * (1.0 - wet) * damp;
   surf = mix(surf, vec3(0.4, 0.38, 0.34) * pow(max(dot(N, L), 0.0), 0.6) * shade, dust);
 
   vec3 col = surf * uLightColor * (lb.w * shadow * facing * mix(1.0, ao, 0.75));
@@ -412,7 +446,7 @@ void main() {
   // Отсвет от освещённого пятна: мягко подсвечивает окрестности, как рассеянный от стены свет.
   float bounce = bounce0 * (0.35 + 0.65 * max(dot(N, toB / max(db, 1e-3)), 0.0));
   // Рассеянный свет пространства идёт больше сверху (небо, потолок), чем снизу; прямой — от солнца или лампы.
-  vec3 skyLit = uAmbient * (0.66 + 0.34 * up) + uKeyColor * (max(dot(N, uKeyDirV), 0.0) * shadowKey);
+  vec3 skyLit = amb * (0.66 + 0.34 * up) + uKeyColor * (max(dot(N, uKeyDirV), 0.0) * shadowKey);
   col += base * tint * ao * (skyLit * lit + uLightColor * bounceTint * bounce);
 
   // Мокрый пол и плитка отражают освещённое пятно: блик тянется от дальней стены к ногам.
@@ -423,7 +457,7 @@ void main() {
   // Свечение. У фосфорных табличек (оттенок до 1) цвет даёт основа материала; у экранов, окон и неба
   // оттенок вершины больше единицы — он и есть цвет, помноженный на яркость (основа тогда серая).
   vec3 glowBase = maxc > 1.5 ? vec3(0.55) : uMatBase[mi];
-  col += glowBase * ma.y * vColor.rgb;
+  col += glowBase * ma.y * vColor.rgb * glowK;
   col += vec3(0.9, 0.07, 0.03) * burn;
   col = mix(uFogColor, col, exp(-uFog * distV));
   gl_FragColor = vec4(col, hOut);
@@ -542,6 +576,7 @@ uniform float uProj;        // пикселей буфера на метр на 
 uniform float uMaxPx;
 uniform float uAlpha;       // 0 — Осыпи нет
 uniform float uDarkGain;    // яркость свечения в темноте (не растёт вместе с усилением камеры)
+uniform vec4 uGhost;        // призрак из-за спины: xyz — взгляд по горизонтали (мир), w — 1, если это он
 uniform vec3 uLightPosV;
 uniform vec3 uLightDirV;
 uniform vec3 uLightColor;
@@ -587,13 +622,26 @@ void main() {
   float loose = mix(0.17, 0.035, held);
   vec3 p = axis + (side * rnd.x + up2 * rnd.y + d * rnd.z * 0.6) * loose + wob * (loose * 0.35 * (1.0 - held));
 
+  // Призрак: Осыпь позади, и её тело отражено вперёд — как в зеркале, стоящем поперёк взгляда.
+  // Он виден сквозь стены, дрожит и разбит на строки: это не она, а знание о том, что она за спиной.
+  bool ghost = uGhost.w > 0.5;
+  if (ghost) {
+    float back = dot(p - cameraPosition, uGhost.xyz);
+    if (back > -0.3) return;
+    p -= 2.0 * back * uGhost.xyz;
+    float row = floor(p.y * 14.0 + uTime * 3.0);
+    p += vec3(-uGhost.z, 0.0, uGhost.x) * (fract(sin(row * 12.9898 + floor(uTime * 12.0) * 78.233) * 43758.5453) - 0.5) * 0.16;
+  }
+
   vec4 pv = viewMatrix * vec4(p, 1.0);
   vec4 pc = projectionMatrix * pv;
   if (pc.w <= 0.0) return;
   vec2 uv = pc.xy / pc.w * 0.5 + 0.5;
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return;
-  // За стеной её не видно.
-  if (-pv.z > linDepth(texture2D(tDepth, uv).r) + 0.02) return;
+  // За стеной её не видно. Призрак виден и сквозь стены.
+  if (!ghost && -pv.z > linDepth(texture2D(tDepth, uv).r) + 0.02) return;
+  // Строки развёртки: каждая вторая полоса призрака пуста.
+  if (ghost && fract(uv.y * 90.0 + uTime * 0.7) < 0.45) return;
 
   float px = uSize * uProj / max(-pv.z, 0.05) * mix(0.8, 1.2, held);
   float alpha = uAlpha * (0.5 + 0.5 * aRnd.w) * (1.0 - 0.5 * t);
@@ -608,6 +656,8 @@ void main() {
   vec3 tint = k < 0.6 ? vec3(0.85, 0.82, 0.75) : (k < 0.75 ? vec3(0.78, 0.56, 0.3) : (k < 0.9 ? vec3(0.36, 0.56, 0.42) : vec3(0.72, 0.3, 0.22)));
   vec3 dark = vec3(0.62, 0.72, 0.9) * ((0.07 + 0.07 * aRnd.w) * uDarkGain);
   vCol = vec4(dark + uLightColor * (beam * 0.42) * tint, alpha);
+  // Призрак — цвета красной сетки: знак системы, а не вещь мира. Свет фонаря на него не ложится.
+  if (ghost) vCol = vec4(vec3(0.95, 0.16, 0.08) * (0.5 * uDarkGain), alpha);
   gl_Position = pc;
 }
 `;
@@ -949,11 +999,13 @@ void main() {
   float fresh = max(mem.a - lose, 0.0);
   vec3 col = fresh > 0.004 ? mem.rgb : vec3(0.0);
   // Свет обновляет память, и тем крепче, чем он ярче. Мера та же, по которой при свете видны точки
-  // (SPLAT_VERT): сколько их было видно — столько и помнится. Цвет помнится самый яркий из виденных:
-  // луч, уходя, тускнеет, а место остаётся в памяти таким, каким было в его середине.
+  // (SPLAT_VERT): сколько их было видно — столько и помнится. Пока место освещено не слабее, чем
+  // помнится, в памяти — его нынешний цвет: под ровным светом панелей оно не «выгорает» случайной
+  // вспышкой. Когда свет уходит, помнится самый яркий цвет: луч, уходя, тускнеет, а место остаётся
+  // в памяти таким, каким было в его середине.
   float lit = smoothstep(0.02, 0.5, sc.a * uHMax);
   const vec3 W = vec3(0.3, 0.59, 0.11);
-  if (lit > 0.0 && dot(sc.rgb, W) >= dot(col, W)) col = sc.rgb;
+  if (lit > 0.0 && (lit >= fresh - 0.02 || dot(sc.rgb, W) >= dot(col, W))) col = sc.rgb;
   gl_FragColor = vec4(col, max(fresh, lit));
 }
 `;
@@ -1012,6 +1064,66 @@ void main() {
 }
 `;
 
+/**
+ * Эхо — второй способ видеть. Свет показывает место таким, какое оно есть; эхо показывает только,
+ * что оно есть: от шага игрока или от Осыпи расходится волна, и там, где её фронт идёт по стенам
+ * и полу, на мгновение проступают кромки и линии равного расстояния — без цвета и подробностей.
+ *
+ * Один полноэкранный проход по карте глубины готового кадра: для каждого пикселя — его точка в мире
+ * и расстояние до источника каждой волны (их до ECHO_MAX). Кромки берутся из той же глубины: в буфере
+ * она линейна по 1/z, поэтому на плоскости её вторая разность равна нулю, а на краю предмета и в углу
+ * стены с полом — нет. Там, где светло, эха не видно: свет говорит громче.
+ */
+export const ECHO_FRAG = /* glsl */ `
+precision highp float;
+uniform highp sampler2D tDepth;
+uniform sampler2D tScene;         // альфа — число замеров: на свету эхо не нужно
+uniform mat4 uInvViewProj;
+uniform vec2 uNearFar;
+uniform vec2 uTexel;
+uniform vec4 uPulse[ECHO_MAX];    // xyz — источник (мир), w — радиус фронта, м
+uniform vec4 uPulseB[ECHO_MAX];   // x — сила, y — длина хвоста, м, z — род: 0 — шаг, 1 — Осыпь, 2 — вещь
+uniform float uGainInv;           // яркость не растёт вместе с усилением камеры
+varying vec2 vUv;
+
+void main() {
+  float d = texture2D(tDepth, vUv).r;
+  gl_FragColor = vec4(0.0);
+  if (d > 0.99999) return;
+  vec4 hp = uInvViewProj * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+  vec3 wp = hp.xyz / hp.w;
+  float z = (2.0 * uNearFar.x * uNearFar.y) / (uNearFar.y + uNearFar.x - (d * 2.0 - 1.0) * (uNearFar.y - uNearFar.x));
+
+  float dl = texture2D(tDepth, vUv - vec2(uTexel.x, 0.0)).r;
+  float dr = texture2D(tDepth, vUv + vec2(uTexel.x, 0.0)).r;
+  float du = texture2D(tDepth, vUv + vec2(0.0, uTexel.y)).r;
+  float dd = texture2D(tDepth, vUv - vec2(0.0, uTexel.y)).r;
+  float e = (abs(dl + dr - 2.0 * d) + abs(du + dd - 2.0 * d)) * z / uNearFar.x;
+  float edge = smoothstep(0.0025, 0.012, e);
+
+  vec3 col = vec3(0.0);
+  for (int i = 0; i < ECHO_MAX; i++) {
+    float amp = uPulseB[i].x;
+    if (amp <= 0.0) continue;
+    float dist = distance(wp, uPulse[i].xyz);
+    float behind = uPulse[i].w - dist;
+    if (behind < 0.0) continue;
+    // Фронт — узкая яркая кромка; за ним хвост, в котором видны кромки предметов и линии равного
+    // расстояния от источника (каждые 0,8 м): по ним читается форма пола и стен.
+    float front = exp(-behind * 7.0);
+    float tail = exp(-behind / max(uPulseB[i].y, 0.05));
+    float w = 0.005 * z + 0.006;
+    float iso = 1.0 - smoothstep(w, w * 2.2, abs(fract(dist / 0.8 + 0.5) - 0.5) * 0.8);
+    float k = amp / (1.0 + 0.006 * dist * dist) * (front * (0.16 + 0.5 * edge) + tail * (0.6 * edge + 0.22 * iso + 0.02));
+    float kind = uPulseB[i].z;
+    vec3 tint = kind < 0.5 ? vec3(0.5, 0.66, 0.82) : (kind < 1.5 ? vec3(0.92, 0.84, 0.66) : vec3(0.95, 0.12, 0.06));
+    col += tint * k;
+  }
+  float lit = texture2D(tScene, vUv).a;
+  gl_FragColor = vec4(col * (uGainInv * (1.0 - smoothstep(0.06, 0.4, lit))), 1.0);
+}
+`;
+
 export const POST_VERT = /* glsl */ `
 varying vec2 vUv;
 void main() {
@@ -1047,6 +1159,8 @@ uniform vec2 uHazeTexel;
 uniform float uBloom;
 uniform float uCrt;       // 0..1: насколько «кинескоп» заметен — строки, маска, дрожь строк, бегущая полоса
 uniform float uFlash;     // 0..1: кадр выбеливается (скачок между пространствами)
+uniform sampler2D tEcho;  // эхо: линии пространства, проступающие под волной (свой слой: выдержка их не смазывает)
+uniform float uEcho;      // 1 — слой эха есть в этом кадре
 
 varying vec2 vUv;
 
@@ -1107,6 +1221,11 @@ void main() {
 #else
   col = sampleScene(distort(uv, uBarrel));
 #endif
+  if (uEcho > 0.5) {
+    vec2 ev = distort(uv, uBarrel);
+    vec2 in_ = step(vec2(0.0), ev) * step(ev, vec2(1.0));
+    col += texture2D(tEcho, ev).rgb * in_.x * in_.y;
+  }
 
   vec2 c = vUv * 2.0 - 1.0;
   c.x *= uAspect;

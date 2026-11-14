@@ -25,6 +25,13 @@ export const DX: readonly number[] = [1, 0, -1, 0];
 export const DZ: readonly number[] = [0, 1, 0, -1];
 const opposite = (d: number): Dir => ((d + 2) % 4) as Dir;
 
+/**
+ * Мир вылазки: убежище (с вросшими домашними комнатами), офис — стерильный лабиринт с отделом
+ * посередине, и его вторая версия — «жёлтые комнаты»: тот же план, из которого ушло назначение.
+ */
+export type WorldKind = 'shelter' | 'office' | 'yellow';
+export const WORLD_KINDS: readonly WorldKind[] = ['shelter', 'office', 'yellow'];
+
 export type RoomType =
   | 'corridor'
   | 'entrance'
@@ -47,7 +54,21 @@ export type RoomType =
   | 'bedroom'
   | 'bathroom'
   | 'nursery'
-  | 'hallway';
+  | 'hallway'
+  // Офис: лифт (начало), приёмная, отдел с островом столов, кабинки, переговорная, комната отдыха,
+  // кабинет, картотека, копировальная, серверная.
+  | 'lift'
+  | 'reception'
+  | 'department'
+  | 'cubicles'
+  | 'meeting'
+  | 'breakroom'
+  | 'manager'
+  | 'files'
+  | 'copyroom'
+  | 'server'
+  // Жёлтые комнаты: пустой зал, у которого не осталось назначения.
+  | 'hall';
 
 /** Домашние помещения: обои и паркет вместо масляной краски. */
 export const HOME_ROOMS: ReadonlySet<RoomType> = new Set<RoomType>(['kitchen', 'living', 'bedroom', 'bathroom', 'nursery', 'hallway']);
@@ -106,6 +127,8 @@ export interface GenLayout {
   seed: number;
   attempt: number;
   genVersion: number;
+  /** Какой это мир. */
+  world: WorldKind;
   rank: 1 | 2 | 3;
   tierCount: number;
   rooms: GenRoom[];
@@ -169,6 +192,51 @@ const QUOTAS: readonly (readonly Quota[])[] = [
     ['kitchen', SIZES_MID],
     ['washroom', SIZES_SMALL],
   ],
+];
+
+const SIZES_HUGE: readonly (readonly [number, number])[] = [
+  [3, 3],
+  [4, 3],
+  [3, 4],
+  [3, 2],
+];
+
+/**
+ * Офис: один этаж. Первым ставится отдел — самая большая комната, в которой всего один остров
+ * столов; потом кабинки и всё остальное. Порядок — приоритет размещения.
+ */
+const OFFICE_QUOTA: readonly Quota[] = [
+  ['department', SIZES_HUGE],
+  ['cubicles', SIZES_BIG],
+  ['meeting', SIZES_MID],
+  ['breakroom', SIZES_MID],
+  ['manager', SIZES_MID],
+  ['files', SIZES_MID],
+  ['copyroom', SIZES_SMALL],
+  ['server', SIZES_SMALL],
+  ['cubicles', SIZES_BIG],
+  ['washroom', SIZES_SMALL],
+  ['meeting', SIZES_MID],
+  ['files', SIZES_SMALL],
+];
+
+/**
+ * Жёлтые комнаты: тот же этаж, из которого ушло назначение. Почти все помещения — пустые залы;
+ * от офиса остались отдел (остров столов стоит как стоял) и комната отдыха.
+ */
+const YELLOW_QUOTA: readonly Quota[] = [
+  ['hall', SIZES_HUGE],
+  ['department', SIZES_HUGE],
+  ['hall', SIZES_BIG],
+  ['hall', SIZES_BIG],
+  ['hall', SIZES_MID],
+  ['breakroom', SIZES_MID],
+  ['hall', SIZES_BIG],
+  ['hall', SIZES_MID],
+  ['hall', SIZES_SMALL],
+  ['hall', SIZES_MID],
+  ['washroom', SIZES_SMALL],
+  ['hall', SIZES_SMALL],
 ];
 
 /** Помещения за гермодверью. */
@@ -372,11 +440,12 @@ function placeStairs(b: Build, corridor: GenRoom, entry: [number, number]): { st
 }
 
 /** Поставить помещение w×h клеток к коридору. Возвращает его или null, если места нет. */
-function placeRoom(b: Build, corridor: GenRoom, type: RoomType, sizes: readonly (readonly [number, number])[]): GenRoom | null {
+function placeRoom(b: Build, corridor: GenRoom, type: RoomType, sizes: readonly (readonly [number, number])[], way?: EdgeKind): GenRoom | null {
   const tier = corridor.tier;
   const grid = b.grids[tier]!;
   const cells = shuffle(b.rng, corridor.cells.slice());
-  const sizeOrder = shuffle(b.rng, sizes.slice());
+  // Самым большим комнатам размеры пробуются по порядку — от главного к запасному: отдел должен быть велик.
+  const sizeOrder = sizes === SIZES_HUGE ? sizes.slice() : shuffle(b.rng, sizes.slice());
   for (const [w, h] of sizeOrder) {
     for (const [x, z] of cells) {
       for (const d of shuffle(b.rng, [0, 1, 2, 3])) {
@@ -397,7 +466,7 @@ function placeRoom(b: Build, corridor: GenRoom, type: RoomType, sizes: readonly 
         if (!ok) continue;
         const room = newRoom(b, type, tier);
         for (const [rx, rz] of rect) addCell(b, room, rx, rz);
-        addEdge(b, tier, x, z, d, HERMO.has(type) ? 'hermo' : 'door');
+        addEdge(b, tier, x, z, d, way ?? (HERMO.has(type) ? 'hermo' : 'door'));
         return room;
       }
     }
@@ -406,7 +475,7 @@ function placeRoom(b: Build, corridor: GenRoom, type: RoomType, sizes: readonly 
 }
 
 /** Вторая дверь в помещение — к коридорной клетке, далёкой по коридору от первой двери: ещё один цикл. */
-function secondDoor(b: Build, corridor: GenRoom, room: GenRoom): boolean {
+function secondDoor(b: Build, corridor: GenRoom, room: GenRoom, way: EdgeKind = 'door'): boolean {
   const grid = b.grids[room.tier]!;
   const first = b.edges.find((e) => e.tier === room.tier && (grid.get(e.cx, e.cz) === room.id || grid.get(e.cx + (e.dir === 0 ? 1 : 0), e.cz + (e.dir === 1 ? 1 : 0)) === room.id));
   if (!first) return false;
@@ -419,25 +488,29 @@ function secondDoor(b: Build, corridor: GenRoom, room: GenRoom): boolean {
       const nz = z + DZ[d]!;
       if (grid.get(nx, nz) !== corridor.id) continue;
       if (dist[nz * GRID + nx]! < 5) continue;
-      addEdge(b, room.tier, x, z, d, 'door');
+      addEdge(b, room.tier, x, z, d, way);
       return true;
     }
   }
   return false;
 }
 
-function buildAttempt(seed: number, attempt: number, rank: 1 | 2 | 3): GenLayout {
-  const tierCount = rank === 1 ? 2 : 3;
-  const b: Build = { rng: mulberry32(hash2(seed, attempt, 0x51ed)), grids: [], rooms: [], edges: [], stairs: [], loops: [], loopCells: [] };
+function buildAttempt(seed: number, attempt: number, rank: 1 | 2 | 3, world: WorldKind): GenLayout {
+  // Убежище уходит вниз ярусами; офис и жёлтые комнаты — один этаж.
+  const shelter = world === 'shelter';
+  const tierCount = shelter ? (rank === 1 ? 2 : 3) : 1;
+  const b: Build = { rng: mulberry32(hash2(seed, attempt, shelter ? 0x51ed : world === 'office' ? 0x0ff1 : 0x9e11)), grids: [], rooms: [], edges: [], stairs: [], loops: [], loopCells: [] };
   for (let t = 0; t < tierCount; t++) b.grids.push(new TierGrid());
 
   // Вход: люк у южного края, за ним шлюз с двумя гермодверями, дальше — коридор на север.
+  // В офисе на этом месте лифт и приёмная; в жёлтых комнатах проёмы между ними пусты.
   const ex = 3 + Math.floor(b.rng() * (GRID - 6));
-  const entrance = newRoom(b, 'entrance', 0);
+  const entrance = newRoom(b, shelter ? 'entrance' : 'lift', 0);
   addCell(b, entrance, ex, GRID - 1);
-  const airlock = newRoom(b, 'airlock', 0);
+  const airlock = newRoom(b, shelter ? 'airlock' : 'reception', 0);
   addCell(b, airlock, ex, GRID - 2);
-  addEdge(b, 0, ex, GRID - 1, 3, 'hermo');
+  const way: EdgeKind = shelter ? 'hermo' : world === 'office' ? 'door' : 'open';
+  addEdge(b, 0, ex, GRID - 1, 3, way);
 
   let entry: [number, number] = [ex, GRID - 3];
   let heading: Dir = 3;
@@ -446,7 +519,7 @@ function buildAttempt(seed: number, attempt: number, rank: 1 | 2 | 3): GenLayout
     const grid = b.grids[t]!;
     if (!grid.empty(entry[0], entry[1])) throw new GenFail('entry');
     addCell(b, corridor, entry[0], entry[1]);
-    if (t === 0) addEdge(b, 0, ex, GRID - 2, 3, 'hermo');
+    if (t === 0) addEdge(b, 0, ex, GRID - 2, 3, shelter ? 'hermo' : 'open');
     else {
       // Низ марша открыт на нижнюю площадку.
       addEdge(b, t, entry[0], entry[1], opposite(heading), 'open');
@@ -457,8 +530,8 @@ function buildAttempt(seed: number, attempt: number, rank: 1 | 2 | 3): GenLayout
     const spine = growCorridor(b, corridor, entry[0], entry[1], heading, spineLen, 0.68);
     if (spine.length < 7) throw new GenFail('spine');
 
-    // Ответвления от хребта.
-    const branches = 3 + Math.floor(b.rng() * 3);
+    // Ответвления от хребта. В офисе их больше: коридоры там — лабиринт.
+    const branches = 3 + Math.floor(b.rng() * 3) + (shelter ? 0 : 2);
     const roots = shuffle(b.rng, spine.slice(1));
     let grown = 0;
     for (const [x, z] of roots) {
@@ -483,16 +556,18 @@ function buildAttempt(seed: number, attempt: number, rank: 1 | 2 | 3): GenLayout
 
     // Циклы: чтобы от преследования было куда уходить.
     let loops = 0;
-    for (let i = 0; i < 2 + (rank === 3 ? 1 : 0); i++) if (closeLoop(b, corridor)) loops += 1;
+    for (let i = 0; i < 2 + (rank === 3 ? 1 : 0) + (shelter ? 0 : 1); i++) if (closeLoop(b, corridor)) loops += 1;
 
-    // Помещения по квоте яруса.
+    // Помещения по квоте яруса (в офисе и жёлтых комнатах — по квоте мира).
     let placed = 0;
-    const quota = QUOTAS[Math.min(t, QUOTAS.length - 1)]!;
+    const quota = shelter ? QUOTAS[Math.min(t, QUOTAS.length - 1)]! : world === 'office' ? OFFICE_QUOTA : YELLOW_QUOTA;
     for (const [type, sizes] of quota) {
-      const room = placeRoom(b, corridor, type, sizes);
+      const room = placeRoom(b, corridor, type, sizes, world === 'yellow' ? 'open' : undefined);
       if (!room) continue;
       placed += 1;
-      if (room.cells.length >= 4 && b.rng() < 0.45 && secondDoor(b, corridor, room)) loops += 1;
+      // В жёлтых комнатах вторые проёмы почти у каждого зала: место без стен, которые что-то значат.
+      const again = world === 'yellow' ? 0.8 : 0.45;
+      if (room.cells.length >= 4 && b.rng() < again && secondDoor(b, corridor, room, world === 'yellow' ? 'open' : 'door')) loops += 1;
     }
     if (placed < 4) throw new GenFail('rooms');
     if (loops < 1) throw new GenFail('loops');
@@ -504,7 +579,7 @@ function buildAttempt(seed: number, attempt: number, rank: 1 | 2 | 3): GenLayout
     }
   }
 
-  return { seed, attempt, genVersion: GEN_VERSION, rank, tierCount, rooms: b.rooms, edges: b.edges, stairs: b.stairs, entranceRoom: entrance.id, loops: b.loops, hazards: planHazards(b, rank) };
+  return { seed, attempt, genVersion: GEN_VERSION, world, rank, tierCount, rooms: b.rooms, edges: b.edges, stairs: b.stairs, entranceRoom: entrance.id, loops: b.loops, hazards: planHazards(b, rank) };
 }
 
 /** Помещения, где может стоять газ: закрытые, без выхода наверх. */
@@ -597,11 +672,11 @@ function planHazards(b: Build, rank: 1 | 2 | 3): GenHazards {
   return hz;
 }
 
-/** Сгенерировать план по сиду и рангу объекта. Детерминирован: один сид — один уровень. */
-export function generateLayout(seed: number, rank: 1 | 2 | 3 = 2): GenLayout {
+/** Сгенерировать план по сиду, рангу объекта и миру. Детерминирован: один сид — один уровень. */
+export function generateLayout(seed: number, rank: 1 | 2 | 3 = 2, world: WorldKind = 'shelter'): GenLayout {
   for (let attempt = 0; attempt < 200; attempt++) {
     try {
-      return buildAttempt(seed, attempt, rank);
+      return buildAttempt(seed, attempt, rank, world);
     } catch (e) {
       if (!(e instanceof GenFail)) throw e;
     }

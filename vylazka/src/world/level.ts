@@ -1,6 +1,6 @@
 /** Собранный уровень: геометрия чанками, коллайдеры и игровые точки. Общий тип для генератора и тестового уровня. */
 import type { Vec3 } from '../core/types';
-import type { GenLayout } from '../gen/layout';
+import type { GenLayout, WorldKind } from '../gen/layout';
 import type { Aabb, ColliderSet } from './colliders';
 import type { MeshData, SheetMark } from './kit';
 
@@ -109,4 +109,6 @@ export interface BuiltLevel {
   sheets: SheetMark[];
   /** План, по которому собран уровень (у тестового уровня его нет). */
   layout: GenLayout | null;
+  /** Какой это мир (не задано — убежище): от него зависят свет, запущенность и воспоминания. */
+  world?: WorldKind;
 }

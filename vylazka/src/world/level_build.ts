@@ -5,7 +5,7 @@
 import { hash01, hash2, mulberry32 } from '../core/rng';
 import type { Vec3 } from '../core/types';
 import { CEIL_H, DX, DZ, GRID, STAIR_CELLS, TIER_DROP } from '../gen/layout';
-import type { GenLayout, GenRoom, RoomType } from '../gen/layout';
+import type { GenLayout, GenRoom, RoomType, WorldKind } from '../gen/layout';
 import { ColliderSet } from './colliders';
 import { doorSign, furnishRoom } from './furnish';
 import { ROOM_LABEL, SIGN } from './signs';
@@ -68,7 +68,58 @@ const TIER_CORRIDOR: readonly Partial<WallStyle>[] = [
   { lower: MAT.concrete, lowerTint: [0.55, 0.57, 0.55], upper: MAT.concrete, upperTint: [0.72, 0.72, 0.7], stripe: MAT.rust, ceil: MAT.concrete, ceilTint: [0.6, 0.6, 0.58], floor: MAT.wetConcrete, floorTint: [0.95, 0.95, 0.95] },
 ];
 
-function styleFor(room: GenRoom): WallStyle {
+/**
+ * Офис: белые стены с серым плинтусом, светлый глянцевый пол, потолок из плит. Отличаются только
+ * полы: в отделе и кабинете — ковролин, в комнате отдыха и туалете — плитка.
+ */
+const OFFICE_STYLE: WallStyle = {
+  lower: MAT.enamel,
+  lowerTint: [0.6, 0.62, 0.65],
+  stripe: MAT.metalGrey,
+  // Стены — гладкие и матовые, как бумага: у побелки убежища разводы, а здесь их быть не должно.
+  upper: MAT.paper,
+  upperTint: [1.36, 1.4, 1.52],
+  floor: MAT.enamel,
+  floorTint: [0.82, 0.85, 0.88],
+  ceil: MAT.ceilTile,
+  ceilTint: [1.1, 1.1, 1.08],
+  paintHeight: 0.12,
+};
+const OFFICE_ROOMS: Partial<Record<RoomType, Partial<WallStyle>>> = {
+  department: { floor: MAT.carpet, floorTint: [0.42, 0.95, 0.78] },
+  cubicles: { floor: MAT.carpet, floorTint: [0.75, 0.85, 1.05] },
+  meeting: { floor: MAT.carpet, floorTint: [0.9, 0.9, 0.95] },
+  manager: { floor: MAT.parquet, floorTint: [0.9, 0.85, 0.8], upperTint: [1.34, 1.34, 1.36] },
+  breakroom: { floor: MAT.tileFloor, floorTint: [1.5, 1.6, 1.7] },
+  washroom: { lower: MAT.tile, lowerTint: [1.1, 1.14, 1.16], stripe: MAT.tile, upper: MAT.tile, upperTint: [1.1, 1.14, 1.16], paintHeight: 2.2, floor: MAT.tileFloor, floorTint: [1.4, 1.5, 1.6] },
+  server: { floor: MAT.linoleum, floorTint: [0.7, 0.75, 0.9], upperTint: [1.16, 1.24, 1.44] },
+  files: { floor: MAT.linoleum, floorTint: [1.0, 1.0, 1.0] },
+  copyroom: { floor: MAT.linoleum, floorTint: [1.0, 1.0, 1.0] },
+};
+
+/**
+ * Жёлтые комнаты: тот же план под жёлтыми обоями от пола до потолка; ковролин цвета мокрого песка,
+ * потолочные плиты в разводах. Все помещения одинаковы — назначения у них больше нет.
+ */
+const YELLOW_STYLE: WallStyle = {
+  lower: MAT.wallpaper,
+  lowerTint: [1.3, 1.12, 0.5],
+  stripe: MAT.wallpaper,
+  upper: MAT.wallpaper,
+  upperTint: [1.3, 1.12, 0.5],
+  floor: MAT.carpet,
+  floorTint: [1.5, 1.22, 0.62],
+  ceil: MAT.ceilTile,
+  ceilTint: [1.12, 1.04, 0.74],
+  paintHeight: 1.4,
+};
+const YELLOW_ROOMS: Partial<Record<RoomType, Partial<WallStyle>>> = {
+  washroom: { lower: MAT.tile, lowerTint: [1.1, 1.05, 0.8], stripe: MAT.tile, upper: MAT.tile, upperTint: [1.1, 1.05, 0.8], paintHeight: 2.2, floor: MAT.tileFloor, floorTint: [1.3, 1.2, 0.9] },
+};
+
+function styleFor(room: GenRoom, world: WorldKind): WallStyle {
+  if (world === 'office') return { ...OFFICE_STYLE, ...(OFFICE_ROOMS[room.type] ?? {}) };
+  if (world === 'yellow') return { ...YELLOW_STYLE, ...(YELLOW_ROOMS[room.type] ?? {}) };
   const dark = room.tier === 2 ? 0.82 : room.tier === 1 ? 0.92 : 1;
   const base: WallStyle = { ...STYLE_CORRIDOR, ...(TIER_CORRIDOR[room.tier] ?? {}) };
   // Шахта лестницы — голый бетон без линии покраски: на стенах нет ничего, что выдало бы высоту.
@@ -132,8 +183,9 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
   // ── Скорлупа по ярусам ──
   const shells: Shell[] = [];
   for (let t = 0; t < layout.tierCount; t++) shells.push(new Shell());
+  const world = layout.world;
   for (const room of layout.rooms) {
-    const style = styleFor(room);
+    const style = styleFor(room, world);
     const y = tierFloor(room.tier);
     for (const [x, z] of room.cells) {
       const cell: ShellCell = { cx: x - HALF, cz: z - HALF, floorY: y, ceilY: y + CEIL_H, room: room.id, style };
@@ -193,11 +245,15 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     const xf = new Xf(chunkFor(host, hostCell[0], hostCell[1]).mb, col, wx, y, wz, ROT_FACING[toward]!);
     if (e.kind === 'hermo') hermoDoor(xf);
     else {
-      const tint: Vec3 = host.type === 'medical' ? [1.5, 1.5, 1.45] : [0.9 + ((host.id * 7) % 5) * 0.05, 0.85, 0.8];
-      doorFrame(xf, tint);
+      // В офисе коробки и створки белые, и ни одна дверь не сорвана: либо пустой проём, либо створка распахнута.
+      const office = world === 'office';
+      const tint: Vec3 = office ? [0.92, 0.94, 0.97] : host.type === 'medical' ? [1.5, 1.5, 1.45] : [0.9 + ((host.id * 7) % 5) * 0.05, 0.85, 0.8];
+      const doorMat = office ? MAT.enamel : MAT.wood;
+      doorFrame(xf, tint, doorMat);
       // Шахта лестницы и клетки с опасностями остаются как есть: створка распахнута.
       const plain = a.type === 'stairwell' || b.type === 'stairwell' || hazardCells.has(`${e.tier},${hostCell[0]},${hostCell[1]}`) || hazardCells.has(`${e.tier},${e.cx},${e.cz}`) || hazardCells.has(`${e.tier},${bx},${bz}`);
-      const h = plain ? 0.35 : hash01(e.cx * 64 + e.cz, e.dir + 2 * e.tier, layout.seed ^ 0xd00d);
+      const roll = plain ? 0.35 : hash01(e.cx * 64 + e.cz, e.dir + 2 * e.tier, layout.seed ^ 0xd00d);
+      const h = office ? roll * 0.64 : roll;
       const seed = Math.floor(hash01(e.cz * 64 + e.cx, e.tier, layout.seed ^ 0xbeef) * 1e6);
       let lean = h >= 0.65 && h < 0.85;
       let side: 1 | -1 = hash2(e.cx, e.cz, layout.seed ^ e.dir) & 1 ? 1 : -1;
@@ -219,7 +275,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
       }
       if (h < 0.35) {
         // Только коробка.
-      } else if (h < 0.65 || (h < 0.85 && !lean)) doorLeaf(xf, tint);
+      } else if (h < 0.65 || (h < 0.85 && !lean)) doorLeaf(xf, tint, doorMat);
       else if (lean) {
         // Створка сорвана и прислонена к стене у проёма: от косяка до угла остаётся не меньше 0,9 м прохода.
         ALL_PROPS.door_leaf_lean!.build(xf.child(side * 0.9, 0, 0.17), seed);
@@ -256,7 +312,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     const y = tierFloor(p.tier);
     const wx = cellToWorld(p.x);
     const wz = cellToWorld(p.z);
-    const st = styleFor(room);
+    const st = styleFor(room, world);
     pit(new Xf(chunkFor(room, p.x, p.z).mb, col, wx, y, wz, 0), CELL, PIT_HOLE, PIT_DEPTH, st.floor, st.floorTint);
     zones.push({ kind: 'pit', tier: p.tier, minX: wx - PIT_HOLE / 2, maxX: wx + PIT_HOLE / 2, minZ: wz - PIT_HOLE / 2, maxZ: wz + PIT_HOLE / 2, minY: y - PIT_DEPTH - 1, maxY: y - 0.7 });
   }
@@ -352,7 +408,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
       }
     }
     // Свой ГСЧ у каждого помещения: правка одной комнаты не сдвигает остальные.
-    return { room, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d + salt)), h: CEIL_H, slots, cells, spots: outSpots, landmarks: outMarks };
+    return { room, world, seed: layout.seed, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d + salt)), h: CEIL_H, slots, cells, spots: outSpots, landmarks: outMarks };
   };
 
   for (const room of layout.rooms) {
@@ -452,5 +508,6 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     nav,
     sheets: [...chunks.values()].filter((c) => !c.hidden).flatMap((c) => c.mb.sheets),
     layout,
+    world,
   };
 }

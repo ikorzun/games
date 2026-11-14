@@ -5,7 +5,8 @@
  */
 import type { Rng } from '../core/rng';
 import { dressRoom } from './dress';
-import type { GenRoom } from '../gen/layout';
+import type { GenRoom, WorldKind } from '../gen/layout';
+import { furnishOffice, furnishYellow } from './furnish_office';
 import type { ItemSpot, Landmark } from './level';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
@@ -68,6 +69,10 @@ export interface CellInfo {
 
 export interface RoomCtx {
   room: GenRoom;
+  /** Какой это мир: убежище обставляется здесь, офис и жёлтые комнаты — в furnish_office.ts. */
+  world: WorldKind;
+  /** Сид уровня (общий для всех помещений): по нему решается то, что должны знать и обстановка, и игра. */
+  seed: number;
   rng: Rng;
   /** Высота потолка над полом. */
   h: number;
@@ -89,7 +94,7 @@ function shuffled<T>(rng: Rng, items: readonly T[]): T[] {
 }
 
 /** Свободные слоты в случайном порядке; deep — только годные для глубоких предметов. */
-function free(ctx: RoomCtx, deep = true): Slot[] {
+export function free(ctx: RoomCtx, deep = true): Slot[] {
   return shuffled(
     ctx.rng,
     ctx.slots.filter((s) => !s.used && (!deep || s.deep)),
@@ -97,25 +102,25 @@ function free(ctx: RoomCtx, deep = true): Slot[] {
 }
 
 /** Занять следующий свободный слот. */
-function take(ctx: RoomCtx, deep = true): Slot | null {
+export function take(ctx: RoomCtx, deep = true): Slot | null {
   const s = free(ctx, deep)[0];
   if (!s) return null;
   s.used = true;
   return s;
 }
 
-function spot(ctx: RoomCtx, xf: Xf, x: number, y: number, z: number, kind: ItemSpot['kind']): void {
+export function spot(ctx: RoomCtx, xf: Xf, x: number, y: number, z: number, kind: ItemSpot['kind']): void {
   const p = xf.pt(x, y, z);
   ctx.spots.push({ x: p[0], y: p[1], z: p[2], room: ctx.room.id, tier: ctx.room.tier, kind });
 }
 
-function landmark(ctx: RoomCtx, id: string, xf: Xf, x: number, y: number, z: number): void {
+export function landmark(ctx: RoomCtx, id: string, xf: Xf, x: number, y: number, z: number): void {
   const p = xf.pt(x, y, z);
   ctx.landmarks.push({ id, x: p[0], y: p[1], z: p[2], room: ctx.room.id, tier: ctx.room.tier });
 }
 
 /** Сдвиг предмета шириной w вдоль слота так, чтобы он не упёрся в угол. */
-function fit(s: Slot, w: number, depth: number): number {
+export function fit(s: Slot, w: number, depth: number): number {
   const lo = -1.35 + (s.cornerL ? depth + 0.05 : 0) + w / 2;
   const hi = 1.35 - (s.cornerR ? depth + 0.05 : 0) - w / 2;
   if (lo > hi) return 0;
@@ -485,14 +490,14 @@ function collapsed(ctx: RoomCtx): void {
 // ───────────────────────── домашние комнаты ─────────────────────────
 
 /** Предмет в стопке на одном участке стены: имя, сдвиг вдоль стены, высота (для настенных — своя). */
-type HomeItem = readonly [name: string, dx?: number, y?: number];
+export type HomeItem = readonly [name: string, dx?: number, y?: number];
 
 /**
  * Поставить один или несколько предметов реестра на свободный участок стены. Глубокое (глубже 0,6 м)
  * — сначала туда, где нет дверей; в тесных комнатах допускается и у двери, если не глубже 0,75 м.
  * Настенные предметы (ковёр, окно, батарея) вешаются над низкой мебелью на тот же участок.
  */
-function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; x: number } | null {
+export function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; x: number } | null {
   const specs = items.map(([n]) => ALL_PROPS[n]);
   if (specs.some((p) => !p)) return null;
   let depth = 0;
@@ -515,7 +520,7 @@ function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; x: numb
 }
 
 /** Клетка для центральных предметов: лучше без проходов. */
-function homeCentre(ctx: RoomCtx): CellInfo {
+export function homeCentre(ctx: RoomCtx): CellInfo {
   return ctx.cells.find((c) => c.doors === 0) ?? ctx.cells[0]!;
 }
 
@@ -525,7 +530,7 @@ function rugAt(ctx: RoomCtx, c: CellInfo): void {
 }
 
 /** Места для вещей на полу: свободные точки у центров клеток, по кругу, чтобы не налезали друг на друга. */
-function floorSpots(ctx: RoomCtx, n: number): void {
+export function floorSpots(ctx: RoomCtx, n: number): void {
   const offsets: readonly (readonly [number, number])[] = [
     [0, 0],
     [0.55, 0.4],
@@ -625,7 +630,8 @@ function stairwell(_ctx: RoomCtx): void {
   // В шахте лестницы пусто: ни ламп, ни труб — ничто не должно выдавать, сколько пройдено.
 }
 
-const FURNISH: Record<GenRoom['type'], (ctx: RoomCtx) => void> = {
+/** Помещения убежища и вросшего в него дома. Остальные роды помещений — из других миров (furnish_office.ts). */
+const FURNISH: Partial<Record<GenRoom['type'], (ctx: RoomCtx) => void>> = {
   corridor,
   entrance,
   airlock,
@@ -651,7 +657,10 @@ const FURNISH: Record<GenRoom['type'], (ctx: RoomCtx) => void> = {
 
 /** Обставить помещение. Порядок вызовов и ГСЧ фиксированы: один сид — одна и та же обстановка. */
 export function furnishRoom(ctx: RoomCtx): void {
-  FURNISH[ctx.room.type](ctx);
+  // Офис стерилен, жёлтые комнаты пусты: у них своя обстановка и нет «следов людей» убежища.
+  if (ctx.world === 'office') return furnishOffice(ctx);
+  if (ctx.world === 'yellow') return furnishYellow(ctx);
+  FURNISH[ctx.room.type]?.(ctx);
   // Сначала — то, что положено помещению по назначению, потом — следы людей и времени.
   dressRoom(ctx);
 }

@@ -24,6 +24,8 @@ export interface OverlayHandlers {
   onFlash?(): void;
   /** Сменить язык. */
   onLang?(): void;
+  /** Сменить место вылазки (только на заставке): убежище → офис → жёлтые комнаты. */
+  onPlace?(): void;
 }
 
 /** Строка карточки: обычная, выполненная цель или подзаголовок. */
@@ -56,6 +58,8 @@ export class Overlay {
   private readonly brightBtn: HTMLButtonElement;
   private readonly flashBtn: HTMLButtonElement;
   private readonly langBtn: HTMLButtonElement;
+  private readonly placeBtn: HTMLButtonElement;
+  private place = 'shelter';
   private calm = false;
   private sens = 1;
   private bright = 1;
@@ -85,6 +89,7 @@ export class Overlay {
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--bright"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--flash"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--lang"></button>' +
+      '<button type="button" class="vz-overlay__opt vz-overlay__opt--place"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--motion"></button></div></div>';
     parent.append(this.el);
     const q = (sel: string): HTMLElement => this.el.querySelector(sel) as HTMLElement;
@@ -115,6 +120,11 @@ export class Overlay {
     this.langBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.handlers.onLang?.();
+    });
+    this.placeBtn = q('.vz-overlay__opt--place') as HTMLButtonElement;
+    this.placeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.handlers.onPlace?.();
     });
     this.soundBtn = q('.vz-overlay__opt--sound') as HTMLButtonElement;
     this.soundBtn.addEventListener('click', (e) => {
@@ -175,6 +185,12 @@ export class Overlay {
     this.refresh();
   }
 
+  /** Место вылазки, которое выбрано сейчас. */
+  setPlace(place: string): void {
+    this.place = place;
+    this.refresh();
+  }
+
   setCard(card: Card | null): void {
     this.card = card;
     this.refresh();
@@ -218,6 +234,9 @@ export class Overlay {
     this.flashBtn.hidden = this.qualityBtn.hidden;
     this.langBtn.textContent = `${t('ui.lang')}: ${t('ui.lang.name')}`;
     this.langBtn.hidden = this.qualityBtn.hidden;
+    // Место выбирают до начала: посреди вылазки его не сменить.
+    this.placeBtn.textContent = t(`ui.place.${this.place}`);
+    this.placeBtn.hidden = m !== 'start';
     this.rotate.textContent = t('ui.rotate');
   }
 }

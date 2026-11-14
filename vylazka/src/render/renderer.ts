@@ -12,8 +12,9 @@ import { bakeDetail } from './detail';
 import { bakeGrime } from './grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from './matcap_atlas';
 import { MAX_WORMS } from '../swarm/body';
-import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, ENTITY_VERT, SPOT_FRAG, TRAIL_FRAG, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
+import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, ECHO_FRAG, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, ENTITY_VERT, SPOT_FRAG, TRAIL_FRAG, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
 import { smoothstep } from '../core/math';
+import { ECHO_MAX, ECHO_STRIDE } from '../systems/echo';
 import { SplatClouds } from './splats';
 
 export type Quality = 'low' | 'med' | 'high';
@@ -95,6 +96,21 @@ export interface FrameView {
   crt: number;
   /** 0..1: кадр выбелен (скачок между пространствами). */
   flash: number;
+  /**
+   * Эхо: волны от шагов и от Осыпи, по ECHO_STRIDE чисел на волну (x, y, z, радиус, сила, хвост, род, —);
+   * у пустых мест сила — ноль. null — эха нет вовсе.
+   */
+  echo: Float32Array | null;
+  /** 0..1: Осыпь за спиной, и впереди показан её призрак — отражение из-за спины. */
+  ghost: number;
+  /**
+   * Свет потолочных панелей по клеткам уровня (офис, жёлтые комнаты): data — size × size точек RGBA
+   * (r — сколько рассеянного света в клетке, g — номер помещения), origin — угол сетки в мире (x, z),
+   * step — шаг клетки, м. null — рассеянный свет везде одинаков.
+   */
+  cells: { data: Uint8Array; origin: [number, number]; step: number; size: number } | null;
+  /** Сколько рассеянного света там, где стоит игрок, 0..1 (без света по клеткам — 1). */
+  ambientLocal: number;
 }
 
 /** Состояние «вещи» — отдельного предмета, который можно двигать, растить и рассыпать. */
@@ -178,6 +194,8 @@ const SCAN = { perLight: 24, max: 3.5, hold: 7, lodDist: 3.5, far: 28, sow: 45, 
 
 /** Сколько материалов помещается в массивы шейдера мира (uMatA, uMatB, uMatBase). */
 const MAT_SLOTS = 48;
+/** Сторона текстуры света по клеткам: столько клеток по стороне у сетки генератора. */
+const CELL_TEX = 16;
 
 const BIAS = new THREE.Matrix4().set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
 const deg = (d: number): number => Math.cos((d * Math.PI) / 180);
@@ -247,6 +265,15 @@ export class GameRenderer {
   private readonly swarmPoints: THREE.Points;
   /** Сцена Осыпи: рисуется вслед за точками мира, тем же проходом. */
   private readonly swarmScene = new THREE.Scene();
+  /** Призрак Осыпи: то же тело, отражённое из-за спины вперёд. */
+  private readonly ghostMat: THREE.ShaderMaterial;
+  private readonly ghostPoints: THREE.Points;
+  /** Эхо: полноэкранный проход по карте глубины, поверх точек. */
+  private readonly echoScene = new THREE.Scene();
+  private readonly echoMat: THREE.ShaderMaterial;
+  private echoRT: THREE.WebGLRenderTarget;
+  /** Свет по клеткам уровня: маленькая текстура, которую игра обновляет каждый кадр. */
+  private readonly cellTex: THREE.DataTexture;
   private readonly swarmHead: THREE.InstancedBufferAttribute;
   private readonly swarmDir: THREE.InstancedBufferAttribute;
   private readonly swarmParam: THREE.InstancedBufferAttribute;
@@ -344,11 +371,17 @@ export class GameRenderer {
     const matA = Array.from({ length: MAT_SLOTS }, (_, i) => (i < MAT_COUNT ? new THREE.Vector4(defOf(i).grime, defOf(i).glow ?? 0, defOf(i).layer, 1 / defOf(i).tile) : new THREE.Vector4(0, 0, 0, 1)));
     const matB = Array.from({ length: MAT_SLOTS }, (_, i) => (i < MAT_COUNT ? new THREE.Vector4(defOf(i).bump, defOf(i).decay, defOf(i).alt ?? i, 0) : new THREE.Vector4(0, 0, i, 0)));
 
+    this.cellTex = new THREE.DataTexture(new Uint8Array(CELL_TEX * CELL_TEX * 4).fill(255), CELL_TEX, CELL_TEX, THREE.RGBAFormat, THREE.UnsignedByteType);
+    this.cellTex.magFilter = THREE.NearestFilter;
+    this.cellTex.minFilter = THREE.NearestFilter;
+    this.cellTex.needsUpdate = true;
     this.worldMat = new THREE.ShaderMaterial({
       vertexShader: WORLD_VERT,
       fragmentShader: WORLD_FRAG,
       uniforms: {
         ...this.lightU,
+        uCellLight: { value: this.cellTex },
+        uCellGrid: { value: new THREE.Vector4(0, 0, 3, 0) },
         uAtlas: { value: atlasTex },
         uGrime: { value: grimeTex },
         uDetail: { value: detailTex },
@@ -455,6 +488,8 @@ export class GameRenderer {
         uBloom: { value: 0.1 },
         uCrt: { value: 0 },
         uFlash: { value: 0 },
+        tEcho: { value: null },
+        uEcho: { value: 0 },
       },
       depthTest: false,
       depthWrite: false,
@@ -562,6 +597,7 @@ export class GameRenderer {
         uMaxPx: this.splatMat.uniforms.uMaxPx!,
         uAlpha: { value: 0 },
         uDarkGain: { value: 1 },
+        uGhost: { value: new THREE.Vector4(0, 0, -1, 0) },
       },
       blending: THREE.NormalBlending,
       premultipliedAlpha: true,
@@ -573,6 +609,42 @@ export class GameRenderer {
     this.swarmPoints.frustumCulled = false;
     this.swarmPoints.visible = false;
     this.swarmScene.add(this.swarmPoints);
+    // Призрак: та же геометрия и тот же шейдер, свои только плотность и признак отражения.
+    this.ghostMat = new THREE.ShaderMaterial({
+      vertexShader: ENTITY_VERT,
+      fragmentShader: SPLAT_FRAG,
+      uniforms: { ...this.swarmMat.uniforms, uAlpha: { value: 0 }, uGhost: { value: new THREE.Vector4(0, 0, -1, 1) } },
+      blending: THREE.NormalBlending,
+      premultipliedAlpha: true,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    this.ghostPoints = new THREE.Points(this.swarmGeo, this.ghostMat);
+    this.ghostPoints.frustumCulled = false;
+    this.ghostPoints.visible = false;
+    this.swarmScene.add(this.ghostPoints);
+    // Эхо рисуется в свой слой: длинная выдержка его не смазывает, линии остаются чёткими.
+    this.echoMat = new THREE.ShaderMaterial({
+      vertexShader: POST_VERT,
+      fragmentShader: ECHO_FRAG,
+      defines: { ECHO_MAX },
+      uniforms: {
+        tDepth: { value: null },
+        tScene: { value: null },
+        uInvViewProj: { value: new THREE.Matrix4() },
+        uNearFar: this.splatMat.uniforms.uNearFar!,
+        uTexel: { value: new THREE.Vector2(1, 1) },
+        uPulse: { value: Array.from({ length: ECHO_MAX }, () => new THREE.Vector4()) },
+        uPulseB: { value: Array.from({ length: ECHO_MAX }, () => new THREE.Vector4()) },
+        uGainInv: { value: 1 },
+      },
+      depthTest: false,
+      depthWrite: false,
+    });
+    const echoMesh = new THREE.Mesh(tri, this.echoMat);
+    echoMesh.frustumCulled = false;
+    this.echoScene.add(echoMesh);
     // Память света: полноэкранный проход из мира этого кадра и памяти прошлого.
     this.memMat = new THREE.ShaderMaterial({
       vertexShader: POST_VERT,
@@ -613,6 +685,7 @@ export class GameRenderer {
     this.scenePrevRT = this.makeSceneRT(2, 2);
     this.memRT = [this.makeMemRT(2, 2), this.makeMemRT(2, 2)];
     this.rawRT = this.makeMemRT(2, 2);
+    this.echoRT = this.makeMemRT(2, 2);
     this.compRT = this.makeCompRT(2, 2);
     this.compPrevRT = this.makeCompRT(2, 2);
     this.applyQuality();
@@ -724,8 +797,9 @@ export class GameRenderer {
     this.scenePrevRT = this.makeSceneRT(w, h);
     this.memRT = [this.makeMemRT(w, h), this.makeMemRT(w, h)];
     this.memLive = false;
-    for (const rt of [this.rawRT, this.compRT, this.compPrevRT]) rt.dispose();
+    for (const rt of [this.rawRT, this.echoRT, this.compRT, this.compPrevRT]) rt.dispose();
     this.rawRT = this.makeMemRT(w, h);
+    this.echoRT = this.makeMemRT(w, h);
     this.compRT = this.makeCompRT(w, h);
     this.compPrevRT = this.makeCompRT(w, h);
     this.hazeRT?.dispose();
@@ -963,8 +1037,11 @@ export class GameRenderer {
     // Осыпь появляется посреди игры: её шейдер собирается заранее, чтобы первый её кадр не подвисал.
     const shown = this.swarmPoints.visible;
     this.swarmPoints.visible = true;
+    this.ghostPoints.visible = true;
     await this.renderer.compileAsync(this.swarmScene, this.camera);
     this.swarmPoints.visible = shown;
+    this.ghostPoints.visible = false;
+    await this.renderer.compileAsync(this.echoScene, this.postCam);
     this.renderer.setRenderTarget(null);
     await this.renderer.compileAsync(this.postScene, this.postCam);
     if (this.hazeRT) await this.renderer.compileAsync(this.hazeScene, this.postCam);
@@ -1022,6 +1099,13 @@ export class GameRenderer {
 
     // Окружение пространства.
     const wuEnv = this.worldMat.uniforms;
+    // Свет по клеткам: где он есть, рассеянный свет в шейдере умножается на свет клетки.
+    const grid = wuEnv.uCellGrid!.value as THREE.Vector4;
+    if (v.cells && v.cells.size === CELL_TEX) {
+      (this.cellTex.image.data as Uint8Array).set(v.cells.data);
+      this.cellTex.needsUpdate = true;
+      grid.set(v.cells.origin[0], v.cells.origin[1], v.cells.step, v.cells.size);
+    } else grid.w = 0;
     (wuEnv.uAmbient!.value as THREE.Vector3).set(v.ambient[0], v.ambient[1], v.ambient[2]);
     (wuEnv.uFogColor!.value as THREE.Vector3).set(v.fogColor[0], v.fogColor[1], v.fogColor[2]);
     (wuEnv.uKeyDirV!.value as THREE.Vector3).set(v.keyDir[0], v.keyDir[1], v.keyDir[2]).transformDirection(cam.matrixWorldInverse);
@@ -1080,7 +1164,7 @@ export class GameRenderer {
     pu0.uMemGain!.value = memGain;
     this.composeMat.uniforms.uMemGain!.value = memGain;
     // В пространствах с рассеянным светом точки собираются и без фонаря: «сканирует» сам свет.
-    pu0.uAmbientScan!.value = Math.min(1, ((v.ambient[0] + v.ambient[1] + v.ambient[2]) / 3) * 8);
+    pu0.uAmbientScan!.value = Math.min(1, ((v.ambient[0] + v.ambient[1] + v.ambient[2]) / 3) * v.ambientLocal * 8);
 
     // Отсвет от пятна: точка попадания луча и сила, убывающая с расстоянием до стены.
     const hitDist = Math.min(v.beamDist, 30);
@@ -1201,12 +1285,45 @@ export class GameRenderer {
       r.autoClear = true;
     }
     // Осыпь — поверх точек мира. В темноте она светится сама; усиление камеры её не разгоняет.
+    // Если она за спиной, впереди рисуется её призрак: то же тело, отражённое из-за спины.
+    this.ghostPoints.visible = this.swarmPoints.visible && v.ghost > 0.01;
     if (this.swarmPoints.visible) {
       this.swarmMat.uniforms.uDarkGain!.value = 1 / Math.max(1, v.gain) ** 0.5;
       this.swarmMat.uniforms.tDepth!.value = this.sceneRT.depthTexture;
+      if (this.ghostPoints.visible) {
+        this.ghostMat.uniforms.uAlpha!.value = (this.swarmMat.uniforms.uAlpha!.value as number) * v.ghost;
+        (this.ghostMat.uniforms.uGhost!.value as THREE.Vector4).set(-Math.sin(v.camYaw), 0, -Math.cos(v.camYaw), 1);
+      }
       r.autoClear = false;
       r.render(this.swarmScene, cam);
       r.autoClear = true;
+    }
+
+    // Эхо: волны от шагов и от Осыпи проступают на том, чего свет не касается. Свой слой — его
+    // прибавит «камера» (пост-проход).
+    let echoOn = false;
+    if (v.echo && !this.debugScanOff) {
+      const eu = this.echoMat.uniforms;
+      const pa = eu.uPulse!.value as THREE.Vector4[];
+      const pb = eu.uPulseB!.value as THREE.Vector4[];
+      let live = 0;
+      for (let i = 0; i < ECHO_MAX; i++) {
+        const o = i * ECHO_STRIDE;
+        pa[i]!.set(v.echo[o]!, v.echo[o + 1]!, v.echo[o + 2]!, v.echo[o + 3]!);
+        pb[i]!.set(v.echo[o + 4]!, v.echo[o + 5]!, v.echo[o + 6]!, 0);
+        if (v.echo[o + 4]! > 0) live += 1;
+      }
+      if (live > 0) {
+        eu.tDepth!.value = this.sceneRT.depthTexture;
+        eu.tScene!.value = this.sceneRT.texture;
+        // prevViewProj здесь уже матрица этого кадра: её только что записал проход памяти.
+        (eu.uInvViewProj!.value as THREE.Matrix4).copy(this.prevViewProj).invert();
+        (eu.uTexel!.value as THREE.Vector2).set(1.5 / this.sceneRT.width, 1.5 / this.sceneRT.height);
+        eu.uGainInv!.value = 1 / Math.max(1, v.gain);
+        r.setRenderTarget(this.echoRT);
+        r.render(this.echoScene, this.postCam);
+        echoOn = true;
+      }
     }
 
     // Длинная выдержка: без фонаря яркое оставляет след, и при повороте кадр смазывается. Чем темнее,
@@ -1259,6 +1376,8 @@ export class GameRenderer {
     pu.uCrt!.value = v.crt;
     pu.uFlash!.value = v.flash;
     pu.tScene!.value = this.compRT.texture;
+    pu.tEcho!.value = this.echoRT.texture;
+    pu.uEcho!.value = echoOn ? 1 : 0;
     pu.tHaze!.value = this.hazeRT ? this.hazeRT.texture : null;
     pu.uFrame!.value = v.frame;
     pu.uGain!.value = v.gain * this.brightness;

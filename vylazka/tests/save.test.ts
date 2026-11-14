@@ -20,10 +20,14 @@ describe('сохранение', () => {
   it('профиль: мусор заменяется значениями по умолчанию, архив без повторов', () => {
     expect(parseProfile(null, 7)).toEqual(defaultProfile(7));
     expect(parseProfile({ v: 2 }, 7)).toEqual(defaultProfile(7));
-    expect(parseProfile({ v: 1, sorties: 3.7, successes: -2, archive: ['a', 'a', 5, 'b'], baseSeed: 42 }, 7)).toEqual({ v: 1, sorties: 3, successes: 0, archive: ['a', 'b'], baseSeed: 42, muted: false, sens: 1, bright: 1, calm: false, lang: null });
+    expect(parseProfile({ v: 1, sorties: 3.7, successes: -2, archive: ['a', 'a', 5, 'b'], baseSeed: 42 }, 7)).toEqual({ v: 1, sorties: 3, successes: 0, archive: ['a', 'b'], baseSeed: 42, muted: false, sens: 1, bright: 1, calm: false, lang: null, place: 'shelter' });
     // Чувствительность и яркость: только 0, 1, 2; всё прочее — середина.
     expect(parseProfile({ v: 1, sens: 2, bright: 0 }, 7)).toMatchObject({ sens: 2, bright: 0 });
     expect(parseProfile({ v: 1, sens: 5, bright: 'x' }, 7)).toMatchObject({ sens: 1, bright: 1 });
+    // Место вылазки: убежище, офис или жёлтые комнаты; всё прочее — убежище.
+    expect(parseProfile({ v: 1, place: 'office' }, 7).place).toBe('office');
+    expect(parseProfile({ v: 1, place: 'yellow' }, 7).place).toBe('yellow');
+    expect(parseProfile({ v: 1, place: 'moon' }, 7).place).toBe('shelter');
     // Выключатель звука запоминается; всё, кроме true, — «звук включён».
     expect(parseProfile({ v: 1, muted: true }, 7).muted).toBe(true);
     expect(parseProfile({ v: 1, muted: 'yes' }, 7).muted).toBe(false);

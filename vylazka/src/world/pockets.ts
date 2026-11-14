@@ -7,6 +7,7 @@
  * нет и даль чёрная; в белом нигде всё залито ровным светом и даль белая.
  */
 import type { Vec3 } from '../core/types';
+import type { WorldKind } from '../gen/layout';
 import type { Aabb } from './colliders';
 import { MeshBuilder } from './kit';
 import type { MeshData } from './kit';
@@ -37,10 +38,28 @@ export interface Env {
    * второму редеют до россыпи, м. Не задано — 4 и 15 (тесные пространства); на лугу даль видна дольше.
    */
   scan?: [number, number];
+  /**
+   * Рассеянный свет дают потолочные панели, у каждой клетки уровня свой (systems/cell_lights.ts):
+   * sensor — панели включаются там, где игрок, и гаснут за ним; hum — горят всегда, но неровно.
+   * ambient тогда — свет под горящей панелью. Не задано — рассеянный свет везде одинаков.
+   */
+  cells?: 'sensor' | 'hum';
 }
 
 /** Убежище: темно, даль чёрная. decay и haze игра считает по глубине сама. */
 export const ENV_BUNKER: Env = { ambient: [0.0016, 0.0019, 0.0024], fog: [0, 0, 0], fogDensity: 0.035, light: 1, decay: 0.25, haze: 0.008 };
+
+/**
+ * Офис: ровный холодный свет панелей — но только там, где сработал датчик; вокруг чернота. Чисто:
+ * запущенность отрицательная — ни сырости, ни пыли (шейдер мира).
+ */
+export const ENV_OFFICE: Env = { ambient: [0.5, 0.53, 0.52], fog: [0, 0, 0], fogDensity: 0.022, light: 1, decay: -0.5, haze: 0.002, scan: [7, 17], cells: 'sensor' };
+
+/** Жёлтые комнаты: тот же этаж под гудящим жёлтым светом; сыровато — обои отходят у пола и потолка, ковролин в пятнах. */
+export const ENV_YELLOW: Env = { ambient: [0.46, 0.37, 0.16], fog: [0.012, 0.009, 0.003], fogDensity: 0.03, light: 1, decay: 0.3, haze: 0.006, scan: [6, 15], cells: 'hum' };
+
+/** Окружение каждого мира вылазки. */
+export const WORLD_ENV: Record<WorldKind, Env> = { shelter: ENV_BUNKER, office: ENV_OFFICE, yellow: ENV_YELLOW };
 
 export type PocketKind = 'void' | 'meadow' | 'dollhouse';
 export const POCKET_KINDS: readonly PocketKind[] = ['void', 'meadow', 'dollhouse'];

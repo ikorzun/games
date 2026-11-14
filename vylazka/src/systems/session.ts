@@ -10,6 +10,7 @@ import { clamp01 } from '../core/math';
 import { hash2, mulberry32 } from '../core/rng';
 import type { Rng } from '../core/rng';
 import type { Vec3 } from '../core/types';
+import type { WorldKind } from '../gen/layout';
 import type { BuiltLevel, CollapseSpec, ItemSpot, Zone } from '../world/level';
 import { looksAt } from './things';
 
@@ -37,6 +38,36 @@ export const MEMORIES: readonly MemoryDef[] = [
   { id: 'fish', thing: 'goldfish_bowl' },
   { id: 'remote', thing: 'remote' },
 ];
+
+/** Офис: то, что остаётся от работы, — терминал, телефон, отчёт, кресло. */
+export const OFFICE_MEMORIES: readonly MemoryDef[] = [
+  { id: 'terminal', thing: 'office_terminal' },
+  { id: 'deskphone', thing: 'desk_phone' },
+  { id: 'report', thing: 'paper_stack' },
+  { id: 'cactus', thing: 'kk_cactus_small' },
+  { id: 'wallclock', thing: 'office_clock' },
+  { id: 'desklamp', thing: 'kk_lamp_table' },
+  { id: 'chair', thing: 'office_chair' },
+  { id: 'cooler', thing: 'water_cooler' },
+];
+
+/** Жёлтые комнаты: остатки офиса вперемешку с домом, который сюда просочился. */
+export const YELLOW_MEMORIES: readonly MemoryDef[] = [
+  { id: 'sign', thing: 'wet_floor_sign' },
+  { id: 'chair', thing: 'office_chair' },
+  { id: 'deskphone', thing: 'desk_phone' },
+  { id: 'report', thing: 'paper_stack' },
+  { id: 'wallclock', thing: 'office_clock' },
+  { id: 'slippers', thing: 'slippers' },
+  { id: 'nightlight', thing: 'night_light' },
+  { id: 'kettle', thing: 'kettle' },
+];
+
+/** Набор воспоминаний каждого мира вылазки. */
+export const WORLD_MEMORIES: Record<WorldKind, readonly MemoryDef[]> = { shelter: MEMORIES, office: OFFICE_MEMORIES, yellow: YELLOW_MEMORIES };
+
+/** Все воспоминания игры без повторов: по ним считается, сколько всего можно вспомнить. */
+export const ALL_MEMORIES: readonly MemoryDef[] = [...new Map([...MEMORIES, ...OFFICE_MEMORIES, ...YELLOW_MEMORIES].map((m) => [m.id, m])).values()];
 
 export interface Memory {
   def: MemoryDef;
@@ -146,7 +177,7 @@ export class Session {
     readonly cfg: SessionConfig = DEFAULT_SESSION,
   ) {
     this.rng = mulberry32(hash2(seed, 0x5e55, 0x10ad));
-    const pool = MEMORIES.slice();
+    const pool = WORLD_MEMORIES[level.world ?? 'shelter'].slice();
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(this.rng() * (i + 1));
       [pool[i], pool[j]] = [pool[j]!, pool[i]!];

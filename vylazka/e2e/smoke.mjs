@@ -7,7 +7,7 @@
  *   npm run smoke:matrix                                             # + раскладка по матрице размеров, скриншоты в e2e/out/
  *   npm run smoke -- --url https://…                                 # опубликованная ссылка
  *
- * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --shell, --only play,gen,session,pockets,fear,audio,frame,touch,bridge,matrix.
+ * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --shell, --only play,gen,worlds,session,pockets,fear,audio,frame,touch,bridge,matrix.
  * Симуляция в тестах заморожена и шагается через window.__vz: проверяется логика и вёрстка, а не
  * частота кадров (SwiftShader даёт 5–10 к/с). Качество задаётся параметром адреса, иначе по строке
  * видеокарты выбралось бы «низкое» и тень осталась бы непроверенной.
@@ -307,6 +307,26 @@ async function scenarioPlay(browser, baseUrl) {
   const litTurn = await turn(0.5);
   check('при свете следа нет: поворот кадр не засвечивает', mean(litTurn) < mean(litStill) * 1.2, `среднее ${mean(litStill).toFixed(1)} → ${mean(litTurn).toFixed(1)}`);
 
+  // Эхо — второй способ видеть. В темноте стоящий игрок не видит ничего; шаг пускает волну, и там, где
+  // она идёт по стенам и полу, проступают линии места. Волна уходит — снова темно.
+  await vz(page, () => window.__vz.toggleLight());
+  const quiet = await afterSec(9);
+  st = await state(page);
+  check('в темноте, стоя на месте, игрок волн не пускает: эха нет', st.echo.length === 0 && st.light.state === 'off', `волн ${st.echo.length}, среднее ${mean(quiet).toFixed(1)}`);
+  for (let i = 0; i < 10; i++) await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+  const heard = await vz(page, () => window.__vz.probe());
+  st = await state(page);
+  check(
+    'шаг в темноте пускает волну эха: в кадре проступают линии места',
+    st.echo.some((e) => e.kind === 0 && e.radius > 0.5) && mean(heard) > mean(quiet) + 2 && Math.max(...heard) > Math.max(...quiet) + 15,
+    `волн ${st.echo.length}, среднее ${mean(quiet).toFixed(1)} → ${mean(heard).toFixed(1)}, самое светлое ${Math.max(...quiet).toFixed(0)} → ${Math.max(...heard).toFixed(0)}`,
+  );
+  const gone = await afterSec(2.5);
+  st = await state(page);
+  check('волна ушла — снова темно', st.echo.length === 0 && mean(gone) < mean(quiet) + 1.2 && Math.max(...gone) < Math.max(...quiet) + 8, `волн ${st.echo.length}, среднее ${mean(gone).toFixed(1)}, самое светлое ${Math.max(...gone).toFixed(0)}`);
+  await vz(page, () => window.__vz.toggleLight());
+  await afterSec(1.8);
+
   // Отказ и тряска.
   await vz(page, () => window.__vz.fail());
   st = await vz(page, () => window.__vz.step(10));
@@ -433,6 +453,120 @@ async function scenarioPlay(browser, baseUrl) {
     const mouseWarns = m.log.warnings.filter((w) => !benign(w));
     check('страница с настоящей мышью: нет предупреждений в консоли', mouseWarns.length === 0, mouseWarns.join(' | ').slice(0, 400));
     await m.context.close();
+  }
+}
+
+/** Миры: кнопка «Место» на заставке, офис со светом от датчиков, жёлтые комнаты. */
+async function scenarioWorlds(browser, baseUrl) {
+  section('Миры: место на заставке, офис, жёлтые комнаты');
+
+  // Заставка: кнопка листает место, уровень пересобирается сразу, выбор запоминается.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113');
+    const place = () => page.textContent('.vz-overlay__opt--place').then((x) => x?.trim());
+    const world = async () => (await vz(page, () => window.__vz.level())).world;
+    check('на заставке кнопка «Место», по умолчанию — убежище', (await page.isVisible('.vz-overlay__opt--place')) && (await place()) === RU['ui.place.shelter'] && (await world()) === 'shelter', `«${await place()}», мир ${await world()}`);
+    await page.click('.vz-overlay__opt--place');
+    let lvl = await vz(page, () => window.__vz.level());
+    let st = await state(page);
+    check(
+      'нажатие меняет место на офис и не начинает игру; уровень пересобран: один этаж с лифтом и отделом',
+      (await place()) === RU['ui.place.office'] && lvl.world === 'office' && st.screen === 'title' && st.overlay === 'start' && lvl.tiers === 1 && lvl.rooms.some((r) => r.type === 'department') && lvl.rooms.some((r) => r.type === 'lift'),
+      `«${await place()}», мир ${lvl.world}, экран ${st.screen}, ярусов ${lvl.tiers}`,
+    );
+    await page.click('.vz-overlay__opt--place');
+    lvl = await vz(page, () => window.__vz.level());
+    check('ещё раз — жёлтые комнаты: пустые залы вместо кабинетов', (await place()) === RU['ui.place.yellow'] && lvl.world === 'yellow' && lvl.rooms.filter((r) => r.type === 'hall').length >= 5, `«${await place()}», мир ${lvl.world}`);
+    // Профиль пишется по очереди: даём записи дойти до хранилища.
+    await sleep(400);
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
+    check('после перезагрузки место запомнено', (await place()) === RU['ui.place.yellow'] && (await world()) === 'yellow', `«${await place()}», мир ${await world()}`);
+    await page.click('.vz-overlay__opt--place');
+    check('по кругу — снова убежище', (await place()) === RU['ui.place.shelter'] && (await world()) === 'shelter', `«${await place()}», мир ${await world()}`);
+    // На паузе места не сменить: кнопки нет.
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await page.keyboard.press('KeyP');
+    await sleep(300);
+    st = await state(page);
+    check('посреди вылазки место не сменить: на паузе кнопки «Место» нет', st.paused === true && !(await page.isVisible('.vz-overlay__opt--place')), `пауза ${st.paused}`);
+    check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    await context.close();
+  }
+
+  // Офис: свет дают потолочные панели — там, где игрок; рядом с Осыпью они гаснут.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&world=office');
+    check('с ?world=office заставка показывает офис', (await page.textContent('.vz-overlay__opt--place'))?.trim() === RU['ui.place.office']);
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    const afterSec = async (seconds, input) => {
+      for (let i = 0; i < Math.round(seconds * 10); i++) await vz(page, (inp) => window.__vz.step(6, inp ?? undefined), input ?? null);
+      return vz(page, () => window.__vz.probe());
+    };
+    await afterSec(4);
+    let st = await state(page);
+    const lvl = await vz(page, () => window.__vz.level());
+    check('офис: вылазка началась у лифта, мир — офис, над игроком горит панель', st.world === 'office' && st.where === 'main' && st.ambientLocal > 0.9 && Math.hypot(st.pos[0] - lvl.spawn[0], st.pos[2] - lvl.spawn[2]) < 1.5, JSON.stringify({ world: st.world, amb: st.ambientLocal }));
+    check('свет — только вокруг игрока: освещено меньше трети клеток этажа', !!st.lights && st.lights.lit >= 2 && st.lights.lit < st.lights.total / 3, JSON.stringify(st.lights));
+    // Фонарь выключен: светит потолок.
+    await vz(page, () => window.__vz.toggleLight());
+    const lit = await afterSec(2.5);
+    const litColor = await vz(page, () => window.__vz.probeColor());
+    st = await state(page);
+    check('с выключенным фонарём в офисе светло: светит потолок, не фонарь', st.light.state === 'off' && mean(lit) > 60, `среднее ${mean(lit).toFixed(1)}`);
+    check('свет офиса белый, без жёлтого и красного оттенка', Math.abs(litColor.r - litColor.b) < 0.08 * Math.max(litColor.r, litColor.b), JSON.stringify(litColor));
+    check('под горящей панелью без фонаря не «темно»: счётчик темноты стоит', st.dark.for === 0 && st.dark.shifts === 0, JSON.stringify(st.dark));
+    // Свет идёт за игроком.
+    const node0 = st.node;
+    await afterSec(7, { moveZ: 1 });
+    st = await state(page);
+    check('игрок ушёл по коридору — свет ушёл с ним: над ним горит, освещена по-прежнему малая часть этажа', st.node !== node0 && st.ambientLocal > 0.9 && st.lights.lit < st.lights.total / 3, JSON.stringify({ node: [node0, st.node], amb: st.ambientLocal, lights: st.lights }));
+    // Осыпь рядом — панели гаснут.
+    await vz(page, () => window.__vz.calm(false));
+    const came = await vz(page, () => window.__vz.swarm('release', 3));
+    // Она идёт к игроку; как только подошла на клетку — свет над ним гаснет.
+    for (let i = 0; i < 200 && st.ambientLocal > 0.1 && st.jump?.cause !== 'caught'; i++) st = await vz(page, () => window.__vz.step(6));
+    const dark = await vz(page, () => window.__vz.probe());
+    check('Осыпь подошла — панели вокруг неё гаснут, у игрока темно', came && st.ambientLocal < 0.1 && mean(dark) < mean(lit) * 0.5, `свет над игроком ${st.ambientLocal.toFixed(2)}, среднее ${mean(lit).toFixed(1)} → ${mean(dark).toFixed(1)}, Осыпь ${st.swarm.mode}`);
+    await vz(page, () => window.__vz.calm(true));
+    st = await stepUntil(page, (x) => x.jump === null, 10, 30);
+    // Воспоминание — из офисного набора.
+    await vz(page, () => window.__vz.reveal());
+    st = await vz(page, () => window.__vz.step(10));
+    const active = st.session.memories.find((m) => m.state === 'active');
+    const officeIds = ['terminal', 'deskphone', 'report', 'cactus', 'wallclock', 'desklamp', 'chair', 'cooler'];
+    check('воспоминание в офисе — офисное, со своей строкой', !!active && officeIds.includes(active.id) && (await page.textContent('.vz-hud__flash')) === RU[`mem.${active.id}.flash`], JSON.stringify(active));
+    check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0);
+    check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    if (wantShots) {
+      mkdirSync(OUT, { recursive: true });
+      await page.screenshot({ path: join(OUT, 'world_office.png') });
+    }
+    await context.close();
+  }
+
+  // Жёлтые комнаты: свет горит сам, жёлтый и неровный.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&world=yellow');
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    for (let i = 0; i < 40; i++) await vz(page, () => window.__vz.step(6));
+    await vz(page, () => window.__vz.toggleLight());
+    for (let i = 0; i < 25; i++) await vz(page, () => window.__vz.step(6));
+    const st = await state(page);
+    const grid = await vz(page, () => window.__vz.probe());
+    const color = await vz(page, () => window.__vz.probeColor());
+    check('жёлтые комнаты: без фонаря светло, и свет горит не только вокруг игрока', st.world === 'yellow' && st.light.state === 'off' && mean(grid) > 40 && !!st.lights && st.lights.lit > st.lights.total * 0.6 && st.lights.lit < st.lights.total, `среднее ${mean(grid).toFixed(1)}, ${JSON.stringify(st.lights)}`);
+    check('свет жёлтый: красного и зелёного заметно больше синего', color.r > color.b * 1.4 && color.g > color.b * 1.25, JSON.stringify(color));
+    check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    if (wantShots) await page.screenshot({ path: join(OUT, 'world_yellow.png') });
+    await context.close();
   }
 }
 
@@ -605,14 +739,14 @@ async function scenarioFear(browser, baseUrl) {
     st = await vz(page, () => window.__vz.step(5));
     if (st.jump && st.jump.cause !== 'caught' && !others.includes(st.jump.cause)) others.push(st.jump.cause);
   }
-  check('с погашенным фонарём рой ловит игрока: скачок «caught» затемнением в другое место убежища', st.jump?.cause === 'caught' && st.jump.style === 'blackout' && st.jump.to === 'elsewhere', `скачок ${JSON.stringify(st.jump)}, другие: ${others.join(',')}, рой ${st.swarm.mode}`);
+  check('с погашенным фонарём Осыпь ловит игрока: скачок «caught» затемнением — в начало', st.jump?.cause === 'caught' && st.jump.style === 'blackout' && st.jump.to === 'elsewhere' && st.jump.dest === 'start', `скачок ${JSON.stringify(st.jump)}, другие: ${others.join(',')}, рой ${st.swarm.mode}`);
   st = await stepUntil(page, (s) => s.jump === null, 10, 30);
   const mem1 = await vz(page, () => window.__vz.memory());
   const active1 = st.session.memories.find((m) => m.state === 'active');
   check('поимка — не конец: убежище, запись идёт, отчёта и гибели нет', st.where === 'main' && st.screen === 'play' && st.overlay === 'hidden' && st.session.over === false && st.time > timeBefore && !!active1, JSON.stringify({ where: st.where, screen: st.screen, overlay: st.overlay, over: st.session.over }));
-  check('игрока унесло в другое место убежища', st.node >= 0 && st.node !== nodeBefore, `узел ${nodeBefore} → ${st.node}`);
-  check('искомая вещь «забыта»: сессия назначила ей другое место, на экране — «где же это было»', !!active1 && !!spotBefore && Math.hypot(active1.spot[0] - spotBefore[0], active1.spot[2] - spotBefore[2]) > 0.5 && (await page.textContent('.vz-hud__toast')) === RU['toast.forgot'], `${JSON.stringify(spotBefore)} → ${JSON.stringify(active1?.spot)}`);
-  check('и сама вещь в мире переехала на новое место', !!mem1 && !!active1 && Math.hypot(mem1.pos[0] - active1.spot[0], mem1.pos[1] - active1.spot[1], mem1.pos[2] - active1.spot[2]) < 0.05 && Math.hypot(mem1.pos[0] - mem0.pos[0], mem1.pos[2] - mem0.pos[2]) > 0.5, `вещь ${JSON.stringify(mem1?.pos)}, место ${JSON.stringify(active1?.spot)}, было ${JSON.stringify(mem0.pos)}`);
+  const startAt = (await vz(page, () => window.__vz.level())).spawn;
+  check('Осыпь вернула игрока в начало: он стоит там, где вылазка началась; на экране — «снова там, где начал»', Math.hypot(st.pos[0] - startAt[0], st.pos[2] - startAt[2]) < 0.4 && (await page.textContent('.vz-hud__toast')) === RU['toast.caught'], `игрок ${st.pos.map((v) => v.toFixed(1)).join(', ')}, начало ${startAt.map((v) => v.toFixed(1)).join(', ')}, узел ${nodeBefore} → ${st.node}, строка «${await page.textContent('.vz-hud__toast')}»`);
+  check('искомая вещь осталась на месте: её не «забыли», идти за ней надо заново', !!active1 && !!spotBefore && Math.hypot(active1.spot[0] - spotBefore[0], active1.spot[2] - spotBefore[2]) < 0.05 && !!mem1 && Math.hypot(mem1.pos[0] - mem0.pos[0], mem1.pos[2] - mem0.pos[2]) < 0.05, `место ${JSON.stringify(spotBefore)} → ${JSON.stringify(active1?.spot)}`);
   check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0);
   check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
   await context.close();
@@ -1816,6 +1950,7 @@ console.log(`Смоук: ${remoteUrl ?? distDir} → ${server.url}; браузе
 try {
   if (wants('play')) await scenarioPlay(browser, server.url);
   if (wants('gen')) await scenarioGen(browser, server.url);
+  if (wants('worlds')) await scenarioWorlds(browser, server.url);
   if (wants('session')) await scenarioSession(browser, server.url);
   // Только карманные пространства (быстрый прогон; в полный session они уже входят).
   if (only?.includes('pockets')) await scenarioPockets(browser, server.url);

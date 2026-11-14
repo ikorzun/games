@@ -7,12 +7,13 @@ import type { DreamEvent, FearEvent, StepEvents } from '../src/game';
 import { emptyInput } from '../src/player/input';
 import type { InputFrame } from '../src/player/input';
 import type { FrameView, GameRenderer, ThingView } from '../src/render/renderer';
-import { DEFAULT_SESSION } from '../src/systems/session';
+import { DEFAULT_SESSION, OFFICE_MEMORIES, YELLOW_MEMORIES } from '../src/systems/session';
 import type { SessionEvent } from '../src/systems/session';
 import { looksAt } from '../src/systems/things';
 import { nodesInRange } from '../src/swarm/ai';
 import type { BuiltLevel } from '../src/world/level';
 import { buildLevel } from '../src/world/level_build';
+import { ENV_BUNKER, ENV_OFFICE, ENV_YELLOW } from '../src/world/pockets';
 import { ALL_PROPS } from '../src/world/props_all';
 import { setThingRegistry } from '../src/world/thing_mesh';
 
@@ -259,7 +260,7 @@ describe('игра целиком: цикл сессии', () => {
   });
 });
 
-describe('игра целиком: провал, газ и рой не кончают сессию', () => {
+describe('игра целиком: провал, газ и Осыпь не кончают сессию', () => {
   /** Игрока ловит рой, пока ищут вещь: возвращает всё, что нужно для проверок. */
   function caught(seed: number): { h: Harness; id: number; memoryId: string; was: number[]; nodeBefore: number } {
     const h = new Harness(levelOf(SEED), { calm: false, seed });
@@ -283,36 +284,74 @@ describe('игра целиком: провал, газ и рой не конч�
     return { h, id, memoryId, was, nodeBefore };
   }
 
-  it('поимка роем: forgot и скачок в другое место убежища; сессия идёт дальше, цель остаётся искомой', () => {
-    const { h, memoryId, nodeBefore } = caught(6);
+  it('Осыпь возвращает в начало: затемнение, игрок снова там, где вылазка началась; сессия идёт дальше', () => {
+    const { h, memoryId } = caught(6);
     const g = h.game;
-    expect(h.count('forgot')).toBe(1);
-    const forgot = h.log.session.find((e) => e.type === 'forgot') as Extract<SessionEvent, { type: 'forgot' }>;
-    expect(forgot.memory.def.id).toBe(memoryId);
-    expect(g.transition?.plan).toMatchObject({ cause: 'caught', style: 'blackout', to: 'elsewhere' });
-    // Скачок отработал: игрок в убежище, в другом месте, сессия не кончилась.
+    // Вещь не «забывается»: она остаётся, где была, — идти за ней придётся заново.
+    expect(h.count('forgot')).toBe(0);
+    expect(g.transition?.plan).toEqual({ cause: 'caught', style: 'blackout', to: 'elsewhere', dest: 'start' });
     expect(h.until(() => g.transition === null, 4)).toBe(true);
     expect(g.where).toBe('main');
     expect(g.session!.over).toBe(false);
     expect(g.session!.active?.def.id).toBe(memoryId);
-    expect(g.playerNode()).not.toBe(nodeBefore);
+    const spawn = levelOf(SEED).spawn;
+    const b = g.body;
+    expect(Math.hypot(b.x - spawn.pos[0], b.z - spawn.pos[2])).toBeLessThan(0.3);
+    expect(Math.abs(b.y - spawn.pos[1])).toBeLessThan(0.3);
     expect(h.count('all-done')).toBe(0);
     expect(h.dreamCount('limbo')).toBe(0);
     expect(h.dreamCount('jump', 'start')).toBe(1);
     expect(h.dreamCount('jump', 'switch')).toBe(1);
   });
 
-  it('поимка роем: искомая вещь переезжает на новое место сессии, и её можно найти и вспомнить там', () => {
+  it('Осыпь возвращает в начало: искомая вещь остаётся на месте, и её можно дойти и вспомнить', () => {
     const { h, id, was } = caught(6);
     const g = h.game;
     expect(h.until(() => g.transition === null, 4)).toBe(true);
     const spot = g.session!.active!.spot!;
     const now = g.things.list.find((t) => t.id === id)!;
-    // Вещь в мире стоит там же, где сессия ждёт взгляда; со старого места она ушла.
-    expect(now.pos).not.toEqual(was);
+    expect(now.pos).toEqual(was);
     expect(now.pos).toEqual([spot.x, spot.y, spot.z]);
     expect(h.standBefore(id)).toBe(true);
     expect(h.until(() => h.count('recall') > 0, 5)).toBe(true);
+  });
+
+  it('поймав у самого начала, Осыпь отходит и теряет игрока; поймав далеко — остаётся там, где дотянулась', () => {
+    // У начала: игрок пойман там же, где появился.
+    const near = caught(6);
+    const g = near.h.game;
+    expect(near.h.until(() => g.transition === null, 4)).toBe(true);
+    const sw = g.swarm!;
+    const home = g.playerNode();
+    expect(sw.mode).toBe('roam');
+    expect(sw.awareness).toBe(0);
+    expect(sw.route(sw.node, home).length - 1).toBeGreaterThanOrEqual(8);
+
+    // Далеко от начала: игрок стоит у искомой вещи (не ближе семи клеток пути), Осыпь ловит его там.
+    const h = new Harness(levelOf(SEED), { calm: false, seed: 6 });
+    const g2 = h.game;
+    h.run(2);
+    const { id } = h.reveal();
+    expect(h.standBefore(id)).toBe(true);
+    const at = g2.playerNode();
+    const sw2 = g2.swarm!;
+    expect(sw2.route(at, g2.playerNodeAtSpawn()).length - 1).toBeGreaterThanOrEqual(6);
+    const start = sw2.nodeAround(at, 3, 4);
+    expect(start).toBeGreaterThanOrEqual(0);
+    sw2.activate(start);
+    sw2.mode = 'hunt';
+    sw2.cohesion = 1;
+    sw2.awareness = 1;
+    const b = g2.body;
+    g2.aimAt(2 * b.x - sw2.pos[0], b.y + 1.4, 2 * b.z - sw2.pos[2]);
+    // Отвернувшись от вещи, игрок её не вспомнит раньше, чем его поймают.
+    expect(h.until(() => h.log.fear.some((e) => e.type === 'swarm' && e.what === 'caught'), 25), 'Осыпь не поймала').toBe(true);
+    expect(h.until(() => g2.transition === null, 4)).toBe(true);
+    const spawn = levelOf(SEED).spawn;
+    expect(Math.hypot(g2.body.x - spawn.pos[0], g2.body.z - spawn.pos[2])).toBeLessThan(0.3);
+    // Она осталась у места поимки: не дальше двух клеток пути от него.
+    expect(sw2.route(sw2.node, at).length - 1).toBeLessThanOrEqual(2);
+    expect(sw2.mode).toBe('roam');
   });
 
   it('провал в яму: fall, forgot, карман; по краю пространства игру возвращает в убежище', () => {
@@ -912,6 +951,131 @@ describe('игра целиком: без света место не обяза�
   });
 });
 
+describe('игра целиком: эхо и призрак из-за спины', () => {
+  type Pulse = { kind: number; pos: number[]; radius: number; amp: number };
+  const echoOf = (h: Harness) => (h.game.snapshot() as { echo: Pulse[] }).echo;
+  const walk: InputFrame = { ...emptyInput(), moveZ: 1 };
+
+  it('стоя на месте, игрок волн не пускает; шаг — волна у его ступней, и она уходит в кадр', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3 });
+    const g = h.game;
+    h.run(1.5);
+    expect(echoOf(h)).toHaveLength(0);
+    expect(h.r.frames.at(-1)!.echo).toBeNull();
+    h.run(1.2, walk);
+    const steps = echoOf(h).filter((p) => p.kind === 0);
+    expect(steps.length).toBeGreaterThan(0);
+    // Волна родилась под ногами: не дальше двух шагов от того места, где игрок сейчас, на уровне пола.
+    const b = g.body;
+    for (const p of steps) {
+      expect(Math.hypot(p.pos[0]! - b.x, p.pos[2]! - b.z)).toBeLessThan(3);
+      expect(p.pos[1]! - b.y).toBeLessThan(0.2);
+    }
+    expect(h.r.frames.at(-1)!.echo).not.toBeNull();
+    // Шагов живёт не больше трёх разом, сколько бы игрок ни шёл.
+    h.run(3, walk);
+    expect(echoOf(h).filter((p) => p.kind === 0).length).toBeLessThanOrEqual(3);
+  });
+
+  it('бег слышно дальше шага', () => {
+    const quiet = new Harness(levelOf(SEED), { seed: 3 });
+    quiet.run(1, walk);
+    const loud = new Harness(levelOf(SEED), { seed: 3 });
+    loud.run(1, { ...walk, run: true });
+    const amp = (h: Harness) => Math.max(...echoOf(h).map((p) => p.amp));
+    expect(amp(loud)).toBeGreaterThan(amp(quiet));
+  });
+
+  it('щелчок фонаря слышен: волна от игрока; без света эхо видно сильнее, чем со светом', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3 });
+    const g = h.game;
+    h.run(0.5);
+    h.tick({ ...emptyInput(), light: true });
+    expect(g.light.state).toBe('off');
+    const p = echoOf(h);
+    expect(p).toHaveLength(1);
+    expect(p[0]!.kind).toBe(0);
+    expect(Math.hypot(p[0]!.pos[0]! - g.body.x, p[0]!.pos[2]! - g.body.z)).toBeLessThan(0.3);
+    // Свет только что погас: сила ещё «дневная». Через пару секунд темноты та же волна шага — в полную силу.
+    const lit = p[0]!.amp;
+    h.run(2.5);
+    h.run(1.5, walk);
+    const dark = Math.max(...echoOf(h).map((x) => x.amp));
+    expect(dark).toBeGreaterThan(lit * 1.5);
+  });
+
+  it('Осыпь слышно: пока она рядом, от неё расходятся волны; охотящуюся — чаще', () => {
+    const count = (mode: 'roam' | 'hunt'): number => {
+      const h = new Harness(levelOf(SEED), { calm: false, seed: 6 });
+      const g = h.game;
+      h.run(1);
+      const sw = g.swarm!;
+      sw.activate(sw.nodeAround(g.playerNode(), 5, 6));
+      let born = 0;
+      let last = 0;
+      for (let i = 0; i < Math.round(6 / STEP); i++) {
+        // Режим держим силой: считаем только частоту волн.
+        sw.mode = mode;
+        sw.cohesion = mode === 'hunt' ? 1 : 0;
+        const b = g.body;
+        // Спиной к ней, чтобы луч её не проявил.
+        g.aimAt(2 * b.x - sw.pos[0], b.y + 1.4, 2 * b.z - sw.pos[2]);
+        h.tick();
+        if (h.log.fear.some((e) => e.type === 'swarm' && e.what === 'caught')) break;
+        const drift = echoOf(h).filter((p) => p.kind === 1);
+        const youngest = drift.length > 0 ? Math.min(...drift.map((p) => p.radius)) : Infinity;
+        if (youngest < last - 1e-6 || (last === Infinity && youngest < Infinity)) born += 1;
+        if (drift.length > 0 && born === 0) born = 1;
+        last = youngest;
+        // Источник волны — она сама.
+        for (const p of drift) expect(p.radius).toBeGreaterThanOrEqual(0);
+      }
+      return born;
+    };
+    const roam = count('roam');
+    const hunt = count('hunt');
+    expect(roam).toBeGreaterThanOrEqual(2);
+    expect(hunt).toBeGreaterThan(roam);
+  });
+
+  it('Осыпь за спиной — впереди проступает её призрак; повернулся к ней — призрака нет', () => {
+    const h = new Harness(levelOf(SEED), { calm: false, seed: 6 });
+    const g = h.game;
+    h.run(1);
+    const sw = g.swarm!;
+    // Фонарь выключен, чтобы луч её не проявил, пока игрок смотрит на неё. Она стоит на месте (явление).
+    h.tick({ ...emptyInput(), light: true });
+    sw.appear(sw.nodeAround(g.playerNode(), 2, 3), 30);
+    const hold = (face: boolean, seconds: number): void => {
+      for (let i = 0; i < Math.round(seconds / STEP); i++) {
+        const b = g.body;
+        if (face) g.aimAt(sw.pos[0], sw.pos[1] + 1.1, sw.pos[2]);
+        else g.aimAt(2 * b.x - sw.pos[0], b.y + 1.4, 2 * b.z - sw.pos[2]);
+        h.tick();
+      }
+    };
+    hold(false, 1.5);
+    expect(g.ghost).toBeGreaterThan(0.2);
+    expect(h.r.frames.at(-1)!.ghost).toBeGreaterThan(0.2);
+    hold(true, 1.5);
+    expect(g.ghost).toBeLessThan(0.02);
+  });
+
+  it('пока Осыпь спит, призрака нет; в карманном пространстве эха нет вовсе', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3 });
+    const g = h.game;
+    h.run(1, walk);
+    expect(g.ghost).toBe(0);
+    expect(h.r.frames.at(-1)!.echo).not.toBeNull();
+    // Переход начала сессии должен закончиться, прежде чем начнётся скачок.
+    expect(h.until(() => g.transition === null, 6)).toBe(true);
+    expect(g.beginJump({ cause: 'gaze', style: 'cut', to: 'meadow' }, [])).toBe(true);
+    expect(h.until(() => g.transition === null && g.where === 'pocket', 4)).toBe(true);
+    h.run(1, walk);
+    expect(h.r.frames.at(-1)!.echo).toBeNull();
+  });
+});
+
 describe('игра целиком: Осыпь под лучом и её рост', () => {
   type SwarmState = { mode: string; growth: number; flow: number | null };
   const swarmOf = (h: Harness) => (h.game.snapshot() as { swarm: SwarmState }).swarm;
@@ -983,5 +1147,145 @@ describe('игра целиком: Осыпь под лучом и её рост
       expect(h.until(() => h.count('recall') > before, 4)).toBe(true);
       expect(swarmOf(h).growth).toBeCloseTo(k / 4, 6);
     }
+  });
+});
+
+describe('игра целиком: офис и жёлтые комнаты', () => {
+  const office = buildLevel(generateLayout(SEED, 2, 'office'));
+  const yellow = buildLevel(generateLayout(SEED, 2, 'yellow'));
+  const walk: InputFrame = { ...emptyInput(), moveZ: 1 };
+
+  it('в убежище света по клеткам нет: кадр его не несёт, а рассеянный свет везде один', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3 });
+    h.run(1);
+    expect(h.game.world).toBe('shelter');
+    expect(h.game.env).toBe(ENV_BUNKER);
+    expect(h.game.cellLights).toBeNull();
+    expect(h.r.frames.at(-1)!.cells).toBeNull();
+    expect(h.r.frames.at(-1)!.ambientLocal).toBe(1);
+  });
+
+  it('офис: окружение офиса, свет панелей идёт в кадр и горит вокруг игрока; вдали темно', () => {
+    const h = new Harness(office, { seed: 3 });
+    const g = h.game;
+    expect(g.world).toBe('office');
+    expect(g.env).toBe(ENV_OFFICE);
+    h.run(1.5);
+    const f = h.r.frames.at(-1)!;
+    expect(f.cells).not.toBeNull();
+    expect(f.cells!.size).toBe(16);
+    expect(f.cells!.data.length).toBe(16 * 16 * 4);
+    expect(f.ambientLocal).toBeGreaterThan(0.95);
+    expect(f.ambient).toEqual(ENV_OFFICE.ambient);
+    // Под игроком светло, в десяти клетках пути — темно.
+    const here = g.playerNode();
+    expect(g.cellLights!.at(here)).toBeGreaterThan(0.95);
+    const far = nodesInRange(office.nav, here, 9, 30);
+    expect(far.length).toBeGreaterThan(3);
+    for (const id of far) expect(g.cellLights!.at(id)).toBe(0);
+    // Чистота офиса: запущенность в кадре отрицательная, а не «по глубине», как в убежище.
+    expect(f.decay).toBe(ENV_OFFICE.decay);
+  });
+
+  it('офис: свет идёт за игроком — где он прошёл, панели гаснут', () => {
+    const h = new Harness(office, { seed: 3 });
+    const g = h.game;
+    h.run(1);
+    const start = g.playerNode();
+    h.run(8, walk);
+    const now = g.playerNode();
+    expect(now).not.toBe(start);
+    expect(g.cellLights!.at(now)).toBeGreaterThan(0.9);
+    // Ушёл дальше двух клеток пути и прошло больше полутора секунд — у лифта снова темно.
+    if (!nodesInRange(office.nav, now, 0, 2).includes(start)) expect(g.cellLights!.at(start)).toBeLessThan(0.05);
+  });
+
+  it('офис: с выключенным фонарём под горящей панелью не «темно» — детали не меняются и скачка от темноты нет', () => {
+    const h = new Harness(office, { seed: 3 });
+    const g = h.game;
+    h.run(1);
+    h.tick({ ...emptyInput(), light: true });
+    expect(g.light.state).toBe('off');
+    h.run(12);
+    const snap = g.snapshot() as { dark: { for: number; shifts: number }; jump: unknown };
+    expect(snap.dark.for).toBe(0);
+    expect(snap.dark.shifts).toBe(0);
+    expect(g.where).toBe('main');
+  });
+
+  it('офис: Осыпь гасит панели вокруг себя; когда она рядом с игроком, у него темно', () => {
+    const h = new Harness(office, { calm: false, seed: 6 });
+    const g = h.game;
+    h.run(1.5);
+    expect(g.ambientLocal).toBeGreaterThan(0.95);
+    const sw = g.swarm!;
+    // Стоит в соседней клетке (явление: с места не сходит).
+    const near = nodesInRange(office.nav, g.playerNode(), 1, 1);
+    expect(near.length).toBeGreaterThan(0);
+    sw.appear(near[0]!, 30);
+    // Спиной к ней, чтобы луч её не проявил.
+    for (let i = 0; i < Math.round(1 / STEP); i++) {
+      const b = g.body;
+      g.aimAt(2 * b.x - sw.pos[0], b.y + 1.4, 2 * b.z - sw.pos[2]);
+      h.tick();
+    }
+    expect(g.cellLights!.at(sw.node)).toBeLessThan(0.02);
+    expect(g.ambientLocal).toBeLessThan(0.05);
+    expect(h.r.frames.at(-1)!.ambientLocal).toBeLessThan(0.05);
+  });
+
+  it('офис: вещи воспоминаний — из офисного набора; после карманного пространства окружение снова офисное', () => {
+    const h = new Harness(office, { seed: 3 });
+    const g = h.game;
+    const ids = new Set(OFFICE_MEMORIES.map((m) => m.id));
+    for (const m of g.session!.memories) expect(ids.has(m.def.id)).toBe(true);
+    expect(h.until(() => g.transition === null, 6)).toBe(true);
+    expect(g.beginJump({ cause: 'gaze', style: 'cut', to: 'meadow' }, [])).toBe(true);
+    expect(h.until(() => g.transition === null && g.where === 'pocket', 4)).toBe(true);
+    expect(g.env).not.toBe(ENV_OFFICE);
+    expect(h.r.frames.at(-1)!.cells).toBeNull();
+    expect(g.beginJump({ cause: 'return', style: 'cut', to: 'elsewhere' }, [])).toBe(true);
+    expect(h.until(() => g.transition === null && g.where === 'main', 4)).toBe(true);
+    expect(g.env).toBe(ENV_OFFICE);
+    h.run(1);
+    expect(h.r.frames.at(-1)!.cells).not.toBeNull();
+  });
+
+  it('офис: Осыпь возвращает к лифту — туда, где вылазка началась', () => {
+    const h = new Harness(office, { calm: false, seed: 6 });
+    const g = h.game;
+    h.run(2);
+    h.run(6, walk);
+    const sw = g.swarm!;
+    const near = sw.nodeAround(g.playerNode(), 3, 4);
+    expect(near).toBeGreaterThanOrEqual(0);
+    sw.activate(near);
+    sw.mode = 'hunt';
+    sw.cohesion = 1;
+    sw.awareness = 1;
+    const b = g.body;
+    g.aimAt(2 * b.x - sw.pos[0], b.y + 1.4, 2 * b.z - sw.pos[2]);
+    expect(h.until(() => h.log.fear.some((e) => e.type === 'swarm' && e.what === 'caught'), 25), 'Осыпь не поймала').toBe(true);
+    expect(h.until(() => g.transition === null, 4)).toBe(true);
+    expect(Math.hypot(g.body.x - office.spawn.pos[0], g.body.z - office.spawn.pos[2])).toBeLessThan(0.3);
+    expect(g.env).toBe(ENV_OFFICE);
+  });
+
+  it('жёлтые комнаты: свет горит сам и неровно; воспоминания — свои', () => {
+    const h = new Harness(yellow, { seed: 3 });
+    const g = h.game;
+    expect(g.world).toBe('yellow');
+    expect(g.env).toBe(ENV_YELLOW);
+    h.run(1);
+    const f = h.r.frames.at(-1)!;
+    expect(f.cells).not.toBeNull();
+    // Панель над началом вылазки жива: у лифта и в приёмной мёртвых нет.
+    expect(f.ambientLocal).toBeGreaterThan(0.6);
+    // Горит не только рядом с игроком: далёкие клетки тоже освещены (кроме мёртвых).
+    const lit = [...g.cellLights!.level].filter((v) => v > 0.5).length;
+    expect(lit).toBeGreaterThan(yellow.nav.length * 0.6);
+    expect(lit).toBeLessThan(yellow.nav.length);
+    const ids = new Set(YELLOW_MEMORIES.map((m) => m.id));
+    for (const m of g.session!.memories) expect(ids.has(m.def.id)).toBe(true);
   });
 });

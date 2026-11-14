@@ -154,7 +154,8 @@ function wallFace(
   const len = Math.hypot(bx - ax, bz - az);
   if (len < 1e-4 || yTo - yFrom < 1e-4) return;
   const paint = f + st.paintHeight;
-  const ys = [f, f + 0.3, paint, paint + 0.03, h - 0.3, h].filter((y) => y > yFrom + 1e-4 && y < yTo - 1e-4);
+  // По возрастанию: у низкого плинтуса (офис) линия покраски ниже первой полосы затенения.
+  const ys = [f, f + 0.3, paint, paint + 0.03, h - 0.3, h].filter((y) => y > yFrom + 1e-4 && y < yTo - 1e-4).sort((a, b) => a - b);
   const rows = [yFrom, ...ys, yTo];
   const corner = Math.min(0.4, len / 2);
   const ts = len > 0.9 ? [0, corner / len, 1 - corner / len, 1] : [0, 1];

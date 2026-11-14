@@ -187,12 +187,14 @@ export function installDebug(app: App): void {
       const l = app.level;
       return {
         seed: l.layout?.seed ?? null,
+        world: l.world ?? 'shelter',
         rank: l.layout?.rank ?? null,
         tiers: l.layout?.tierCount ?? 1,
         chunks: l.chunks.length,
         triangles: l.chunks.reduce((n, c) => n + c.mesh.index.length / 3, 0),
         colliders: l.colliders.boxes.length,
         spots: l.spots.length,
+        spawn: [...l.spawn.pos],
         rooms: (l.layout?.rooms ?? []).map((r) => ({ id: r.id, type: r.type, tier: r.tier, cells: r.cells.length })),
         landmarks: l.landmarks.map((m) => ({ id: m.id, room: m.room, tier: m.tier })),
       };

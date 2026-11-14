@@ -100,7 +100,7 @@ describe('скачки: когда', () => {
     const faint = j.forced('faint');
     expect(faint).toMatchObject({ style: 'dissolve' });
     expect(POCKETS).toContain(faint.to);
-    expect(j.forced('caught')).toEqual({ cause: 'caught', style: 'blackout', to: 'elsewhere' });
+    expect(j.forced('caught')).toEqual({ cause: 'caught', style: 'blackout', to: 'elsewhere', dest: 'start' });
   });
 });
 

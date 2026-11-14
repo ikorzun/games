@@ -5,7 +5,7 @@
  *
  * Игрок только ходит, смотрит и светит. Смерти нет: провал, газ и рой выбрасывают его в другое место.
  */
-import { approach, clamp, lerp } from './core/math';
+import { approach, clamp, lerp, smoothstep } from './core/math';
 import { hash01, hash2, mulberry32 } from './core/rng';
 import type { Rng } from './core/rng';
 import type { Vec3 } from './core/types';
@@ -21,20 +21,23 @@ import { nodesInRange, SwarmAI } from './swarm/ai';
 import { SwarmBody } from './swarm/body';
 import { Anomalies } from './systems/anomalies';
 import type { AnomalyEvent, AnomalyState } from './systems/anomalies';
+import { CellLights } from './systems/cell_lights';
 import { Director } from './systems/director';
+import { behindness, Echo, ECHO_DRIFT, ECHO_STEP } from './systems/echo';
 import type { ScareId } from './systems/director';
 import { DEFAULT_FLASHLIGHT, Flashlight } from './systems/flashlight';
 import type { FlashlightConfig } from './systems/flashlight';
 import { Jumps } from './systems/jumps';
 import type { JumpPlan, JumpStyle } from './systems/jumps';
-import { DEFAULT_SESSION, MEMORIES, Session } from './systems/session';
+import { ALL_MEMORIES, DEFAULT_SESSION, Session } from './systems/session';
 import type { SessionConfig, SessionEvent } from './systems/session';
 import { looksAt, Things } from './systems/things';
 import type { Fate, Look, Thing } from './systems/things';
 import { ColliderSet } from './world/colliders';
+import type { WorldKind } from './gen/layout';
 import type { BuiltLevel } from './world/level';
 import { STAIR_RISE, STAIR_RUN, STAIR_STEPS } from './world/level_build';
-import { buildPocket, ENV_BUNKER } from './world/pockets';
+import { buildPocket, ENV_BUNKER, WORLD_ENV } from './world/pockets';
 import type { Env, ModelCell, PocketContext, PocketKind, PocketSpace } from './world/pockets';
 import { thingMesh } from './world/thing_mesh';
 
@@ -116,6 +119,17 @@ interface Transition {
 const DARK_SHIFT = { first: 7, every: 9, range: 14 } as const;
 /** Сколько воспоминаний нужно, чтобы фигура Осыпи выросла в полный рост. */
 const SWARM_GROWN = 4;
+/** Угол сетки уровня в мире (x, z): клетка 0 лежит в 8 клетках от начала координат, клетка — 3 м. */
+const CELL_ORIGIN: [number, number] = [-25.5, -25.5];
+/** С какого расстояния слышно Осыпь (от неё идут волны эха), м. */
+const ECHO_HEAR = 24;
+/** Сила эха при свете: без света оно видно в полную силу, со светом — лишь за краем луча. */
+const ECHO_LIT = 0.35;
+/**
+ * Призрак Осыпи из-за спины: half — половина поля зрения, рад (дальше от оси — «за спиной»);
+ * range — докуда он виден, м; open и hidden — плотность, когда между игроком и ней нет стены и когда есть.
+ */
+const GHOST = { half: 0.9, range: 16, open: 0.6, hidden: 0.3 } as const;
 /** Течение Осыпи к искомой вещи после проявки: сколько секунд длится, с какой скоростью идёт и как далеко уходит, м. */
 const SWARM_FLOW = { time: 3, speed: 3.2, reach: 8.5 } as const;
 
@@ -153,10 +167,41 @@ const BIG_THINGS: readonly (readonly [string, PocketKind | null])[] = [
   ['crib', 'dollhouse'],
   ['christmas_tree', 'meadow'],
 ];
+/**
+ * Вещи сна в офисе и в жёлтых комнатах. В офисе — офисная мелочь и то, что стоит посреди коридора
+ * без причины; в жёлтые комнаты просачивается дом: кровать, ёлка, кроватка посреди пустого зала.
+ */
+const WORLD_THINGS: Record<WorldKind, { small: readonly string[]; big: readonly (readonly [string, PocketKind | null])[] }> = {
+  shelter: { small: SMALL_THINGS, big: BIG_THINGS },
+  office: {
+    small: ['mug', 'desk_phone', 'paper_stack', 'kk_cactus_small', 'keys', 'kk_lamp_table', 'kk_book_set', 'trash_bin', 'phone', 'alarm_clock'],
+    big: [
+      ['office_chair', null],
+      ['kk_armchair', 'void'],
+      ['houseplant', 'meadow'],
+      ['filing_cabinet', null],
+      ['toy_heap', 'dollhouse'],
+      ['water_cooler', null],
+      ['partition', null],
+    ],
+  },
+  yellow: {
+    small: ['mug', 'slippers', 'teddy', 'desk_phone', 'night_light', 'paper_stack', 'keys', 'ball', 'kk_pillow'],
+    big: [
+      ['office_chair', null],
+      ['kk_couch', 'void'],
+      ['christmas_tree', 'meadow'],
+      ['crib', 'dollhouse'],
+      ['fridge', null],
+      ['kk_bed_single', 'dollhouse'],
+      ['houseplant', 'meadow'],
+    ],
+  },
+};
 const SMALL_FATES: readonly Fate[] = ['shrink', 'dust', 'grow', 'dust', 'shrink', 'grow'];
 const BIG_FATES: readonly Fate[] = ['jump', 'grow', 'dust', 'jump', 'shrink', 'grow'];
 /** Воспоминание → вещь-образ. */
-const MEMORY_THING: Record<string, string> = Object.fromEntries(MEMORIES.map((m) => [m.id, m.thing]));
+const MEMORY_THING: Record<string, string> = Object.fromEntries(ALL_MEMORIES.map((m) => [m.id, m.thing]));
 /** Цвет дали там, куда ведёт скачок: уходящее место растворяется в этот цвет. */
 const DEST_FOG: Record<string, Vec3> = { void: [0.86, 0.86, 0.86], limbo: [0.86, 0.86, 0.86], meadow: [0.62, 0.74, 0.88], dollhouse: [0.03, 0.02, 0.03], elsewhere: [0, 0, 0], session: [0, 0, 0] };
 
@@ -212,6 +257,21 @@ export class Game {
   /** Сколько секунд подряд фонарь не светит; сколько раз за эту темноту детали уже менялись; сколько вещей изменилось всего. */
   /** Осыпь течёт к искомой вещи после того, как её проявили лучом: путь и сколько секунд она уже течёт. */
   private swarmFlow: { path: Vec3[]; t: number } | null = null;
+  /** Мир вылазки и его окружение: убежище, офис или жёлтые комнаты. */
+  world: WorldKind = 'shelter';
+  private worldEnv: Env = ENV_BUNKER;
+  /** Свет потолочных панелей по клеткам (офис, жёлтые комнаты); в убежище его нет. */
+  cellLights: CellLights | null = null;
+  /** Сколько рассеянного света там, где стоит игрок, 0..1 (без света по клеткам — 1). */
+  ambientLocal = 1;
+  /** Эхо: волны от шагов игрока, щелчка фонаря и от Осыпи — второй способ видеть. */
+  readonly echo = new Echo();
+  /** Сколько секунд до следующей волны от Осыпи. */
+  private driftPulse = 0;
+  /** 0..1: насколько глаза привыкли к темноте — без света эхо видно в полную силу. */
+  private darkAdapt = 0;
+  /** 0..1: Осыпь за спиной — впереди виден её призрак. */
+  ghost = 0;
   private darkFor = 0;
   private darkShifts = 0;
   private detailShifts = 0;
@@ -315,7 +375,18 @@ export class Game {
       this.transition = null;
     }
     this.where = 'main';
-    this.env = ENV_BUNKER;
+    this.world = level.world ?? 'shelter';
+    this.worldEnv = WORLD_ENV[this.world];
+    this.env = this.worldEnv;
+    // Свет панелей: в офисе его включают датчики, в жёлтых комнатах он гудит сам. «Тёмные» помещения — без света.
+    this.cellLights = this.worldEnv.cells ? new CellLights(level.nav, this.worldEnv.cells, level.layout?.seed ?? 0) : null;
+    if (this.cellLights) {
+      for (const r of level.layout?.rooms ?? []) {
+        if (r.type === 'corridor') this.cellLights.corridorRooms.add(r.id);
+        if (this.roomFx.get(r.id) === 'dark') this.cellLights.offRooms.add(r.id);
+      }
+    }
+    this.ambientLocal = 1;
     this.pending = null;
     this.endIn = -1;
     this.memoryThing = null;
@@ -328,6 +399,10 @@ export class Game {
     this.darkShifts = 0;
     this.detailShifts = 0;
     this.swarmFlow = null;
+    this.echo.clear();
+    this.driftPulse = 0;
+    this.darkAdapt = 0;
+    this.ghost = 0;
     this.glow = 1;
     this.glowTimer = 0;
     this.renderer.setGlow(1);
@@ -347,7 +422,9 @@ export class Game {
     const rng = mulberry32(hash2(seed, 0xf0, 0x0d));
     // В помещениях с газом особенностей нет: там игрок теряет сознание раньше, чем успеет их разглядеть.
     const gas = new Set(this.level?.layout?.hazards.gasRooms ?? []);
-    const pool = rooms.filter((r) => r.type !== 'corridor' && r.type !== 'entrance' && r.type !== 'airlock' && r.type !== 'stairwell' && r.type !== 'collapsed' && !gas.has(r.id));
+    // Начало вылазки и отдел остаются как есть: первое должно быть узнаваемым, второе — главное место офиса.
+    const plain: readonly string[] = ['corridor', 'entrance', 'airlock', 'stairwell', 'collapsed', 'lift', 'reception', 'department'];
+    const pool = rooms.filter((r) => !plain.includes(r.type) && !gas.has(r.id));
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
       [pool[i], pool[j]] = [pool[j]!, pool[i]!];
@@ -356,7 +433,8 @@ export class Game {
     const big = pool.findIndex((r) => r.cells.length >= 2);
     if (big > 0) [pool[0], pool[big]] = [pool[big]!, pool[0]!];
     const order: RoomFx[] = ['strobe', 'dark', 'thin', 'wire', 'thin', 'dark'];
-    const n = Math.min(order.length, Math.ceil(pool.length * 0.45));
+    // В офисе особенных помещений меньше: его странность — в одинаковости.
+    const n = Math.min(order.length, Math.ceil(pool.length * (this.level?.world === 'office' ? 0.3 : 0.45)));
     for (let i = 0; i < n; i++) this.roomFx.set(pool[i]!.id, order[i]!);
     for (const r of rooms) if (r.type === 'collapsed') this.roomFx.set(r.id, 'wire');
   }
@@ -378,12 +456,13 @@ export class Game {
     for (const sp of spots) if (this.roomFx.get(sp.room) === 'dark') s.reserve(sp);
     spots.length = 0;
     spots.push(...lit);
+    const kinds = WORLD_THINGS[level.world ?? 'shelter'];
     // Не больше трети мест: остальные нужны вещам-воспоминаниям.
     const small = Math.min(9, Math.floor(spots.length / 3));
     for (let i = 0; i < small; i++) {
       const sp = spots[i]!;
       s.reserve(sp);
-      this.addThing(SMALL_THINGS[i % SMALL_THINGS.length]!, [sp.x, sp.y, sp.z], rng() * Math.PI * 2, SMALL_FATES[i % SMALL_FATES.length]!);
+      this.addThing(kinds.small[i % kinds.small.length]!, [sp.x, sp.y, sp.z], rng() * Math.PI * 2, SMALL_FATES[i % SMALL_FATES.length]!);
     }
     // Крупные — в клетках коридора, где нет ни ям, ни воды, ни лестниц, поодаль друг от друга и от входа.
     const type = new Map((level.layout?.rooms ?? []).map((r) => [r.id, r.type]));
@@ -402,7 +481,7 @@ export class Game {
       if (chosen.some((c) => Math.hypot(c[0] - n.x, c[2] - n.z) < 10 && Math.abs(c[1] - n.y) < 1)) continue;
       const pos: Vec3 = [n.x, n.y, n.z];
       chosen.push(pos);
-      const [kind, pocket] = BIG_THINGS[(chosen.length + Math.floor(rng() * 3)) % BIG_THINGS.length]!;
+      const [kind, pocket] = kinds.big[(chosen.length + Math.floor(rng() * 3)) % kinds.big.length]!;
       const fate = BIG_FATES[chosen.length % BIG_FATES.length]!;
       const t = this.addThing(kind, pos, Math.floor(rng() * 4) * (Math.PI / 2), fate, false, true);
       this.thingPocket.set(t.id, pocket);
@@ -486,7 +565,7 @@ export class Game {
     if (this.where === 'limbo') return;
     this.leavePocket();
     this.where = 'main';
-    this.env = ENV_BUNKER;
+    this.env = this.worldEnv;
     this.transition = null;
   }
 
@@ -526,6 +605,17 @@ export class Game {
       return !this.level!.zones.some((z) => z.kind === 'pit' && n.x >= z.minX - 1 && n.x <= z.maxX + 1 && n.z >= z.minZ - 1 && n.z <= z.maxZ + 1 && Math.abs(n.y - z.minY) < 3);
     });
     return pool.length > 0 ? pool[Math.floor(this.rng() * pool.length)]! : start;
+  }
+
+  /** Рассеянный свет там, где стоит игрок: в убежище — почти ноль, в офисе — свет панели над ним. */
+  get ambientHere(): number {
+    const a = this.env.ambient;
+    return ((a[0] + a[1] + a[2]) / 3) * this.ambientLocal;
+  }
+
+  /** Узел, в клетке которого вылазка началась (−1 — вне графа). */
+  playerNodeAtSpawn(): number {
+    return this.playerNodeAt(this.spawn.pos);
   }
 
   private playerNodeAt(p: Vec3): number {
@@ -689,22 +779,31 @@ export class Game {
       const from = this.where === 'main' ? this.playerNode() : this.returnNode;
       this.leavePocket();
       this.where = 'main';
-      this.env = ENV_BUNKER;
-      // Проём выводит туда, куда обещал (обратно или к искомой вещи); если пространство отпустило само —
-      // иногда туда же, откуда унесло, чаще в другое место.
-      const near = plan.dest === 'thing' ? this.nodeNearThing() : -1;
-      const back = plan.dest === 'back' || (plan.dest === undefined && plan.cause === 'return' && this.rng() < 0.3);
-      const id = near >= 0 ? near : back && this.returnNode >= 0 ? this.returnNode : this.farNode(from);
-      const n = this.level?.nav[id];
-      if (n) {
-        const l = this.level!.nav[n.links[Math.floor(this.rng() * n.links.length)] ?? n.id]!;
-        this.teleport(n.x, n.y, n.z, l === n ? this.aimYaw : Math.atan2(-(l.x - n.x), -(l.z - n.z)), 0);
-      } else this.respawn();
-      // Рой, поймавший игрока, остаётся позади и ищет заново.
-      if (plan.cause === 'caught' && this.swarm && id >= 0) {
-        const away = this.swarm.nodeAround(id, 8, 14);
-        this.swarm.activate(away >= 0 ? away : this.swarm.nodeAround(id, 4, 30));
-        this.swarmBody.snap(this.swarm.pos, 0);
+      this.env = this.worldEnv;
+      if (plan.dest === 'start') {
+        // Осыпь возвращает в начало: игрок снова там, где вылазка началась, лицом туда же. Искомая вещь
+        // остаётся, где была, — до неё надо дойти заново. Сама Осыпь остаётся там, где дотянулась, и
+        // теряет игрока; если это было ближе шести клеток пути от начала — отходит, чтобы не поймать тут же снова.
+        this.respawn();
+        const sw = this.swarm;
+        const home = this.playerNodeAtSpawn();
+        if (sw && home >= 0) {
+          const hops = sw.node >= 0 ? sw.route(sw.node, home).length - 1 : -1;
+          const away = hops >= 0 && hops < 6 ? sw.nodeAround(home, 8, 14) : sw.node;
+          sw.activate(away >= 0 ? away : sw.nodeAround(home, 4, 30));
+          this.swarmBody.snap(sw.pos, 0);
+        }
+      } else {
+        // Проём выводит туда, куда обещал (обратно или к искомой вещи); если пространство отпустило само —
+        // иногда туда же, откуда унесло, чаще в другое место.
+        const near = plan.dest === 'thing' ? this.nodeNearThing() : -1;
+        const back = plan.dest === 'back' || (plan.dest === undefined && plan.cause === 'return' && this.rng() < 0.3);
+        const id = near >= 0 ? near : back && this.returnNode >= 0 ? this.returnNode : this.farNode(from);
+        const n = this.level?.nav[id];
+        if (n) {
+          const l = this.level!.nav[n.links[Math.floor(this.rng() * n.links.length)] ?? n.id]!;
+          this.teleport(n.x, n.y, n.z, l === n ? this.aimYaw : Math.atan2(-(l.x - n.x), -(l.z - n.z)), 0);
+        } else this.respawn();
       }
     } else {
       if (this.where === 'main') this.returnNode = this.playerNode();
@@ -934,7 +1033,11 @@ export class Game {
     // Фонарь.
     const wasOff = this.light.state === 'off';
     const toggled = input.light;
-    if (toggled) this.light.toggle();
+    if (toggled) {
+      this.light.toggle();
+      // Щелчок фонаря слышен: от него расходится волна эха.
+      if (this.where === 'main') this.echo.emit([this.body.x, this.body.y + 1.1, this.body.z], ECHO_STEP, 0.7);
+    }
     const level = this.shake.update(dt);
     const ev = this.light.update(dt, { panic: this.panic, wet: s?.inWater ? 1 : 0, swarm: this.swarmNear, shake: level });
     const strokes = this.shake.strokes - this.lastStrokes;
@@ -943,7 +1046,7 @@ export class Game {
     // Темнота. Мир держится светом: пока фонарь не светит, место растворяется (это показывает рендер),
     // а когда растворилось — собираться прежним оно не обязано. Детали меняются: первый раз — когда
     // место успело исчезнуть, дальше — каждые несколько секунд, пока темно.
-    if (this.where === 'main' && this.light.intensity * this.fxLight < 0.15) {
+    if (this.where === 'main' && this.light.intensity * this.fxLight < 0.15 && this.ambientHere < 0.08) {
       this.darkFor += dt;
       if (this.darkFor >= DARK_SHIFT.first + this.darkShifts * DARK_SHIFT.every) {
         this.darkShifts += 1;
@@ -989,7 +1092,7 @@ export class Game {
     for (let i = 0; i < out.length; i++) this.applySessionEvent(out[i]!, out, dream, node);
 
     const quiet = this.where !== 'main' || this.transition !== null;
-    if (s && !s.over && !this.calm && !quiet) this.stepFear(dt, input, level, fear, out, dream);
+    if (s && !s.over && !this.calm && !quiet) this.stepFear(dt, input, level, fear, dream);
     else this.swarmNear = this.calm ? 0 : approach(this.swarmNear, 0, 0.5, dt);
 
     // Поводы для скачка: простые действия и наблюдения.
@@ -999,7 +1102,7 @@ export class Game {
       let plan: JumpPlan | null = null;
       if (toggled && wasOff && this.light.state === 'on') plan = jumps.onLightOn();
       if (!plan && ev.revived) plan = jumps.onRevive();
-      if (!plan) plan = jumps.onDark(dt, look.light < 0.05, Math.hypot(b.vx, b.vz) < 0.3);
+      if (!plan) plan = jumps.onDark(dt, look.light < 0.05 && this.ambientHere < 0.05, Math.hypot(b.vx, b.vz) < 0.3);
       if (!plan) {
         // «Тонкое» помещение: постоял в нём — оно рассыпается.
         const thin = this.roomFx.get(this.room) === 'thin' && !this.thinUsed.has(this.room);
@@ -1069,7 +1172,7 @@ export class Game {
   }
 
   /** Рой, режиссёр и аномалии за шаг. */
-  private stepFear(dt: number, input: InputFrame, shakeLevel: number, fear: FearEvent[], out: SessionEvent[], dream: DreamEvent[]): void {
+  private stepFear(dt: number, input: InputFrame, shakeLevel: number, fear: FearEvent[], dream: DreamEvent[]): void {
     const s = this.session!;
     const sw = this.swarm;
     const b = this.body;
@@ -1080,7 +1183,7 @@ export class Game {
     const noise = Math.max(input.run && moving > 3 ? 0.6 : moving > 1 ? 0.12 : 0, this.light.state === 'dead' ? shakeLevel * 0.9 : shakeLevel * 0.4, s.panic > 0.6 ? 0.35 : 0, s.inWater && moving > 0.5 ? 0.5 : 0);
 
     if (sw) {
-      const res = sw.update(dt, { player: pos, playerNode: node, lightOn: this.light.intensity > 0.3, beamOnSwarm: this.beamOnSwarm(), noise });
+      const res = sw.update(dt, { player: pos, playerNode: node, lightOn: this.light.intensity > 0.3 || this.ambientHere > 0.1, beamOnSwarm: this.beamOnSwarm(), noise });
       if (res.cohered) {
         s.scare(0.2);
         fear.push({ type: 'swarm', what: 'cohered' });
@@ -1092,15 +1195,10 @@ export class Game {
         this.swarmFlow = this.flowToMemory();
       }
       if (res.caught && this.jumps) {
-        // Рой не убивает: он гасит всё и уносит в другое место; искомая вещь при этом «забывается».
+        // Осыпь не убивает: она гасит всё и возвращает в начало — туда, где вылазка началась. Искомая
+        // вещь остаётся на месте: идти за ней придётся заново.
         fear.push({ type: 'swarm', what: 'caught' });
         s.scare(0.4);
-        const f = s.forget(node);
-        if (f) {
-          out.push(f);
-          // События сессии этого шага уже применены: вещь переставляем сами.
-          this.applySessionEvent(f, out, dream, node);
-        }
         this.glitch = 1;
         this.beginJump(this.jumps.forced('caught'), dream);
       }
@@ -1198,7 +1296,11 @@ export class Game {
       dt,
     );
     this.lastRig = rig;
-    if (rig.footstep) this.stepped = true;
+    if (rig.footstep) {
+      this.stepped = true;
+      // Шаг слышен: от ступней расходится волна эха, от бега — сильнее.
+      if (this.where === 'main') this.echo.emit([x, y + 0.05, z], ECHO_STEP, clamp(Math.hypot(b.vx, b.vz) / RUN_SPEED, 0.35, 1));
+    }
 
     // Особенности помещения: в «тёмном» фонарь не проходит и проступает сетка; в «сеточном» — только сетка.
     const fx = this.where === 'main' ? this.roomFx.get(this.room) : undefined;
@@ -1252,9 +1354,16 @@ export class Game {
       const d = dirFromAngles(yaw + dy, pitch + dp);
       lum = Math.max(lum, 0.3 * beamAtten(this.colliders.raycast(lx, ly, lz, d[0], d[1], d[2], 30)));
     }
+    // Свет потолочных панелей: в офисе он идёт за игроком и гаснет там, где Осыпь.
+    const cl = this.where === 'main' ? this.cellLights : null;
+    if (cl) {
+      const drift = this.swarm && this.swarm.active && this.swarm.mode !== 'scatter' ? this.swarm.node : -1;
+      cl.update(dt, { playerNode: this.playerNode(), driftNode: drift, time: this.time });
+      this.ambientLocal = cl.at(this.playerNode());
+    } else this.ambientLocal = 1;
     // В светлом пространстве камеру держит рассеянный свет, а не пятно фонаря. Вспышки строба
     // экспозицию не сбивают: камера за ними не успевает.
-    const amb = (this.env.ambient[0] + this.env.ambient[1] + this.env.ambient[2]) / 3;
+    const amb = ((this.env.ambient[0] + this.env.ambient[1] + this.env.ambient[2]) / 3) * this.ambientLocal;
     const lit = this.light.intensity * lightScale;
     const gain = this.exposure.update(dt, Math.max(lum * lit, amb * 1.2), amb > 0.05 ? 1 : lit);
     this.gasView = approach(this.gasView, this.session?.inGas ? 1 : 0, 0.6, dt);
@@ -1281,6 +1390,34 @@ export class Game {
         this.renderer.setSwarm(this.swarmBody.heads, this.swarmBody.dirs, this.swarmBody.params, 0.88, this.time);
       }
     } else this.renderer.setSwarm(this.swarmBody.heads, this.swarmBody.dirs, this.swarmBody.params, 0, this.time);
+    // Эхо. Осыпь слышно: пока она рядом, от неё расходятся волны — чаще, когда она тянется к игроку.
+    // Если она за спиной, впереди проступает её призрак — отражение из-за спины.
+    let ghostTo = 0;
+    if (sw && sw.active && this.where === 'main' && sw.mode !== 'scatter' && !flow) {
+      const dist = Math.hypot(sw.pos[0] - x, sw.pos[1] - y, sw.pos[2] - z);
+      this.driftPulse -= dt;
+      if (this.driftPulse <= 0 && dist < ECHO_HEAR) {
+        const loud = sw.mode === 'hunt' || sw.mode === 'cohere' ? 1 : sw.mode === 'stalk' ? 0.7 : 0.45;
+        this.driftPulse = sw.mode === 'hunt' || sw.mode === 'cohere' ? 0.9 : sw.mode === 'stalk' ? 1.5 : 2.6;
+        this.echo.emit([sw.pos[0], sw.pos[1] + 0.6, sw.pos[2]], ECHO_DRIFT, loud);
+      }
+      const behind = behindness(rig.camPos, rig.camYaw, sw.pos, GHOST.half);
+      if (behind > 0 && dist < GHOST.range) {
+        const eye: Vec3 = [rig.camPos[0], rig.camPos[1], rig.camPos[2]];
+        const to: Vec3 = [sw.pos[0] - eye[0], sw.pos[1] + 1 - eye[1], sw.pos[2] - eye[2]];
+        const len = Math.hypot(to[0], to[1], to[2]);
+        const open = len < 0.5 || this.colliders.raycast(eye[0], eye[1], eye[2], to[0] / len, to[1] / len, to[2] / len, len) >= len - 0.3;
+        ghostTo = behind * (1 - smoothstep(GHOST.range * 0.7, GHOST.range, dist)) * (open ? GHOST.open : GHOST.hidden);
+      }
+    } else this.driftPulse = 0;
+    // Призрак проступает за треть секунды и так же быстро уходит, когда к ней повернулись.
+    this.ghost = approach(this.ghost, ghostTo, 0.3, dt);
+    if (this.ghost < 0.004) this.ghost = 0;
+    const unlit = this.where === 'main' && this.light.intensity * lightScale < 0.15 && amb < 0.08;
+    // К темноте привыкают около секунды; свет возвращает «дневную» силу эха сразу.
+    this.darkAdapt = approach(this.darkAdapt, unlit ? 1 : 0, unlit ? 0.9 : 0.25, dt);
+    this.echo.update(dt, ECHO_LIT + (1 - ECHO_LIT) * this.darkAdapt);
+
     // Рядом с роем сигнал камеры рвётся.
     const hunting = sw?.mode === 'hunt' || sw?.mode === 'cohere';
     const static_ = hunting ? this.swarmNear * this.swarmNear * 0.42 : this.swarmNear * 0.1;
@@ -1311,7 +1448,7 @@ export class Game {
 
     // Глубина 0…1: от входа до нижнего яруса.
     const depth = clamp(-(rig.camPos[1] - 1.42) / 9, 0, 1);
-    const bunker = this.env === ENV_BUNKER;
+    const bunker = this.where === 'main' && this.world === 'shelter';
     const view: FrameView = {
       camPos: rig.camPos,
       camYaw: rig.camYaw,
@@ -1353,6 +1490,10 @@ export class Game {
       wire,
       crt,
       flash,
+      echo: this.where === 'main' && this.echo.count > 0 ? this.echo.data : null,
+      ghost: this.ghost,
+      cells: cl ? { data: cl.data, origin: CELL_ORIGIN, step: 3, size: cl.size } : null,
+      ambientLocal: this.ambientLocal,
     };
     if (present) this.renderer.render(view);
   }
@@ -1396,7 +1537,12 @@ export class Game {
       pocketInfo: this.pocket
         ? { age: this.pocketAge, stay: this.pocketStay, done: this.pocketDone, fade: this.pocketFade, exit: this.pocket.exit ?? null, focus: this.pocket.focus ?? null, blanks: this.blanks.map((t) => t.id) }
         : null,
-      jump: tr ? { cause: tr.plan.cause, style: tr.plan.style, to: tr.plan.to, switched: tr.switched } : null,
+      jump: tr ? { cause: tr.plan.cause, style: tr.plan.style, to: tr.plan.to, dest: tr.plan.dest ?? null, switched: tr.switched } : null,
+      echo: this.echo.snapshot(),
+      ghost: this.ghost,
+      world: this.world,
+      ambientLocal: this.ambientLocal,
+      lights: this.cellLights ? { lit: [...this.cellLights.level].filter((v) => v > 0.5).length, total: this.cellLights.level.length } : null,
       room: this.room,
       roomFx: this.roomFx.get(this.room) ?? null,
       fx: { light: this.fxLight, wire: this.fxWire, strobe: this.strobeNow },

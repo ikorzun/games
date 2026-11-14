@@ -3,6 +3,7 @@
  * Пишется пакетно через платформу и только по событиям — находка, цель, смена яруса, пауза, конец.
  * Уровень не хранится: он восстанавливается по сиду и версии генератора.
  */
+import type { WorldKind } from '../gen/layout';
 import type { IPlatform } from '../platform/types';
 import { hash2 } from './rng';
 
@@ -25,6 +26,8 @@ export interface Profile {
   calm: boolean;
   /** Язык, выбранный игроком (null — по умолчанию, английский). */
   lang: string | null;
+  /** Место вылазки, выбранное на заставке: убежище, офис или жёлтые комнаты. */
+  place: WorldKind;
 }
 
 export type Level3 = 0 | 1 | 2;
@@ -36,7 +39,7 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
 export function defaultProfile(baseSeed: number): Profile {
-  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1, calm: false, lang: null };
+  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1, calm: false, lang: null, place: 'shelter' };
 }
 
 /** Разобрать профиль из хранилища; всё непонятное заменяется значениями по умолчанию. */
@@ -55,6 +58,7 @@ export function parseProfile(raw: unknown, baseSeed: number): Profile {
     bright: level3(o.bright),
     calm: o.calm === true,
     lang: typeof o.lang === 'string' ? o.lang : null,
+    place: o.place === 'office' || o.place === 'yellow' ? o.place : 'shelter',
   };
 }
 

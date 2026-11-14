@@ -12,7 +12,8 @@ import { LANGS } from './core/types';
 import type { Lang } from './core/types';
 import { Game, STEP } from './game';
 import type { StepEvents } from './game';
-import { generateLayout } from './gen/layout';
+import { generateLayout, WORLD_KINDS } from './gen/layout';
+import type { WorldKind } from './gen/layout';
 import { Lifecycle } from './lifecycle';
 import { detectCoarsePointer } from './platform';
 import type { IPlatform } from './platform';
@@ -25,7 +26,7 @@ import { loadSheets } from './render/poster_images';
 import { drawSigns } from './render/signs_atlas';
 import type { Sheets } from './render/signs_atlas';
 import type { Quality } from './render/renderer';
-import { MEMORIES } from './systems/session';
+import { ALL_MEMORIES } from './systems/session';
 import { Hud } from './ui/hud';
 import { Overlay } from './ui/overlay';
 import type { Card, CardLine } from './ui/overlay';
@@ -82,6 +83,8 @@ export class App {
   /** Сид и ранг текущего объекта. */
   seed = 0;
   rank: 1 | 2 | 3 = 1;
+  /** Место вылазки: убежище, офис или жёлтые комнаты. */
+  world: WorldKind = 'shelter';
 
   private canvas!: HTMLCanvasElement;
   private desktop: DesktopInput | null = null;
@@ -143,6 +146,7 @@ export class App {
       onResume: () => this.resumePlay(),
       onNext: () => undefined,
       onFlash: () => this.setCalm(!this.profile.calm),
+      onPlace: () => this.setPlace(WORLD_KINDS[(WORLD_KINDS.indexOf(this.world) + 1) % WORLD_KINDS.length]!),
       onLang: () => this.cycleLang(),
       onQuality: (q) => {
         this.qualityManual = true;
@@ -217,6 +221,10 @@ export class App {
     this.overlay.setSound(!this.profile.muted);
     this.overlay.setLevels(this.profile.sens, this.profile.bright);
     this.overlay.setFlash(this.profile.calm);
+    // Место вылазки: из адреса (?world=office) или то, что игрок выбрал на заставке в прошлый раз.
+    const asked = p.get('world');
+    this.world = asked === 'shelter' || asked === 'office' || asked === 'yellow' ? asked : this.profile.place;
+    this.overlay.setPlace(this.world);
     if (p.get('lang') === null && this.profile.lang) this.setLang(normalizeLang(this.profile.lang), true);
     renderer.brightness = BRIGHT[this.profile.bright];
     setThingRegistry(ALL_PROPS);
@@ -299,7 +307,7 @@ export class App {
         this.game.loadLevel(this.level, null);
       }
     } else {
-      this.level = buildLevel(generateLayout(this.seed, rank));
+      this.level = buildLevel(generateLayout(this.seed, rank, this.world));
       this.game.loadLevel(this.level, { seed: this.seed, known: new Set(this.profile.archive) });
     }
     this.screen = 'title';
@@ -315,7 +323,7 @@ export class App {
       { text: t('title.how'), kind: 'plain' },
       { text: t('title.warn'), kind: 'dim' },
     ];
-    if (this.profile.successes > 0) lines.push({ text: t('title.count', { n: this.profile.successes, k: this.profile.archive.length, total: MEMORIES.length }), kind: 'dim' });
+    if (this.profile.successes > 0) lines.push({ text: t('title.count', { n: this.profile.successes, k: this.profile.archive.length, total: ALL_MEMORIES.length }), kind: 'dim' });
     return { title: t('ui.title'), sub: t('ui.subtitle'), lines, prompt: t(`ui.start${this.touchMode ? '.touch' : ''}`) };
   }
 
@@ -350,7 +358,7 @@ export class App {
     setTimeout(() => {
       const seed = sortieSeed(this.profile);
       const rank = this.rankParam() ?? rankFor(this.profile);
-      const level = buildLevel(generateLayout(seed, rank));
+      const level = buildLevel(generateLayout(seed, rank, this.world));
       this.next = { level, seed, rank };
       this.game.queueSession(level, { seed, known: new Set(this.profile.archive) });
     }, 500);
@@ -370,6 +378,19 @@ export class App {
     this.saveProfile();
     this.platform.track('level_started', { world: 'session', level: `seed_${this.seed}` });
     this.hud.toast(t('session.begin', { n: this.sessionNumber() }), 4200);
+  }
+
+  /** Сменить место вылазки. На заставке уровень пересобирается сразу; выбор запоминается. */
+  setPlace(world: WorldKind): void {
+    this.world = world;
+    this.profile.place = world;
+    this.overlay.setPlace(world);
+    this.audio.ui('ui_click');
+    this.saveProfile();
+    if (this.screen === 'title' && !this.testLevel) {
+      this.prepare(this.seed, this.rank);
+      this.redraw();
+    }
   }
 
   /** Вспышки: полные или мягкие. */
@@ -554,7 +575,11 @@ export class App {
       if (e.type === 'limbo') this.onLimbo();
       else if (e.type === 'begin') this.onBegin();
       else if (e.type === 'thing' && e.what === 'changing' && e.thing.fate !== 'dust') this.teach('thing', t('teach.thing'));
-      else if (e.type === 'jump' && e.phase === 'switch' && buzz) navigator.vibrate(35);
+      else if (e.type === 'jump' && e.phase === 'switch') {
+        // Осыпь вернула в начало: об этом говорит строка, иначе непонятно, почему место другое.
+        if (e.plan.cause === 'caught') this.hud.toast(t('toast.caught'), 3400);
+        if (buzz) navigator.vibrate(35);
+      }
       else if (e.type === 'pocket') this.onPocket(e);
     }
   }
