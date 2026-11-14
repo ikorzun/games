@@ -156,6 +156,9 @@ export function verticalFov(aspect: number): number {
  */
 const SCAN = { ghost: 0.05, perLight: 24, max: 3.5, glow: 0.11, dot: 3.0, dotMin: 2.2 } as const;
 
+/** Сколько материалов помещается в массивы шейдера мира (uMatA, uMatB, uMatBase). */
+const MAT_SLOTS = 48;
+
 const BIAS = new THREE.Matrix4().set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
 const deg = (d: number): number => Math.cos((d * Math.PI) / 180);
 
@@ -250,7 +253,7 @@ export class GameRenderer {
     grimeTex.minFilter = THREE.LinearMipmapLinearFilter;
     grimeTex.generateMipmaps = true;
     grimeTex.needsUpdate = true;
-    if (ATLAS_COLS * ATLAS_ROWS < MAT_COUNT) throw new Error('атлас matcap меньше числа материалов');
+    if (ATLAS_COLS * ATLAS_ROWS < MAT_COUNT || MAT_COUNT > MAT_SLOTS) throw new Error(`атлас matcap меньше числа материалов (или их больше ${MAT_SLOTS} — столько места в шейдере)`);
     // Фактуры: стопка слоёв. Анизотропная фильтрация держит рельеф на стенах, уходящих вдаль.
     const detail = bakeDetail(256);
     const detailTex = new THREE.DataArrayTexture(detail.data, detail.size, detail.size, detail.layers);
@@ -276,8 +279,9 @@ export class GameRenderer {
       uCone: { value: new THREE.Vector4(deg(7), deg(13), deg(25), deg(52)) },
     };
     const defOf = (i: number): (typeof MAT_DEFS)[number] => MAT_DEFS[i] ?? MAT_DEFS[0]!;
-    const matA = Array.from({ length: MAT_COUNT }, (_, i) => new THREE.Vector4(defOf(i).grime, defOf(i).glow ?? 0, defOf(i).layer, 1 / defOf(i).tile));
-    const matB = Array.from({ length: MAT_COUNT }, (_, i) => new THREE.Vector4(defOf(i).bump, defOf(i).decay, defOf(i).alt ?? i, 0));
+    // Массивы в шейдере — на MAT_SLOTS мест: three.js заливает их целиком, поэтому хвост заполняется нулями.
+    const matA = Array.from({ length: MAT_SLOTS }, (_, i) => (i < MAT_COUNT ? new THREE.Vector4(defOf(i).grime, defOf(i).glow ?? 0, defOf(i).layer, 1 / defOf(i).tile) : new THREE.Vector4(0, 0, 0, 1)));
+    const matB = Array.from({ length: MAT_SLOTS }, (_, i) => (i < MAT_COUNT ? new THREE.Vector4(defOf(i).bump, defOf(i).decay, defOf(i).alt ?? i, 0) : new THREE.Vector4(0, 0, i, 0)));
 
     this.worldMat = new THREE.ShaderMaterial({
       vertexShader: WORLD_VERT,
@@ -306,7 +310,7 @@ export class GameRenderer {
         uScanTime: { value: 0 },
         uMatA: { value: matA },
         uMatB: { value: matB },
-        uMatBase: { value: atlas.base.map((b) => new THREE.Vector3(b[0], b[1], b[2])) },
+        uMatBase: { value: Array.from({ length: MAT_SLOTS }, (_, i) => new THREE.Vector3(...(atlas.base[i] ?? [0.5, 0.5, 0.5]))) },
       },
     });
     this.depthMat = new THREE.ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, side: THREE.BackSide, colorWrite: false });
@@ -468,7 +472,7 @@ export class GameRenderer {
       this.shadowRT = new THREE.WebGLRenderTarget(q.shadow, q.shadow, { depthBuffer: true, depthTexture: depth, stencilBuffer: false });
       this.worldMat.uniforms.uShadowTexel!.value = 1 / q.shadow;
     }
-    this.worldMat.defines = { ...(q.shadow > 0 ? { SHADOWS: '' } : {}), ...(q.detail ? { DETAIL: '' } : {}), ...(this.debugScanOff ? {} : { SCAN: '' }) };
+    this.worldMat.defines = { ATLAS_ROWS, ...(q.shadow > 0 ? { SHADOWS: '' } : {}), ...(q.detail ? { DETAIL: '' } : {}), ...(this.debugScanOff ? {} : { SCAN: '' }) };
     this.worldMat.needsUpdate = true;
     for (const t of this.things.values()) {
       t.mat.defines = { ...this.worldMat.defines };

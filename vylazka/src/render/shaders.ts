@@ -202,9 +202,13 @@ uniform vec3 uFogColor;   // во что уходит даль: в убежищ�
 uniform float uDecay;     // 0..1: насколько здесь сыро и запущено (растёт с глубиной)
 uniform vec3 uLightRightV;
 uniform vec3 uLightUpV;
-uniform vec4 uMatA[32];   // грязь, свечение, слой фактуры, повторов фактуры на метр
-uniform vec4 uMatB[32];   // рельеф (м), род запустения, проступающий материал, —
-uniform vec3 uMatBase[32];
+// Материалов может быть до 48 (атлас шаров 8 × ATLAS_ROWS); сколько их на деле — знает world/materials.ts.
+#ifndef ATLAS_ROWS
+#define ATLAS_ROWS 4
+#endif
+uniform vec4 uMatA[48];   // грязь, свечение, слой фактуры, повторов фактуры на метр
+uniform vec4 uMatB[48];   // рельеф (м), род запустения, проступающий материал, —
+uniform vec3 uMatBase[48];
 
 varying vec3 vPosV;
 varying vec3 vNrmV;
@@ -230,7 +234,7 @@ float cellHash(vec3 p) {
 vec3 matcap(int m, vec3 N, vec3 bx, vec3 by) {
   vec2 muv = vec2(dot(bx, N), dot(by, N)) * 0.47 + 0.5;
   vec2 cell = vec2(float(m - (m / 8) * 8), float(m / 8));
-  return texture2D(uAtlas, (cell + muv) * vec2(0.125, 0.25)).rgb;
+  return texture2D(uAtlas, (cell + muv) * vec2(0.125, 1.0 / float(ATLAS_ROWS))).rgb;
 }
 
 /** Наклонить нормаль по высоте h (м): градиент берётся экранными производными, без касательных в вершинах. */
