@@ -77,10 +77,12 @@ export interface VzDebugApi {
   calm(on: boolean): void;
   /** Включить или выключить тень фонаря (для сравнения кадров). */
   shadows(on: boolean): void;
+  /** Облако точек вкл/выкл: выкл — мир рисуется сплошными поверхностями (для сравнения кадров). */
+  scan(on: boolean): void;
   /** Нарисовать кадр и вернуть его яркость сеткой 32×18, строка 0 — верхняя. */
   probe(): number[];
   /** Средний цвет кадра (0..255) и доля красных точек: виден ли красная сетка. */
-  probeColor(): { r: number; g: number; b: number; red: number };
+  probeColor(): { r: number; g: number; b: number; red: number; dark: number };
   missingKeys(): string[];
   /** Состояние звука: загружено, что просили и что прозвучало, какие петли идут. */
   /** Предметы витрины (?level=show) по порядку расстановки: имя, крепление, высота. */
@@ -308,6 +310,7 @@ export function installDebug(app: App): void {
     shadows: (on) => {
       game().renderer.debugShadowsOff = !on;
     },
+    scan: (on) => game().renderer.debugScan(on),
     probe: () => {
       game().draw(1, 0);
       return game().renderer.probe();

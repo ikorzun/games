@@ -242,11 +242,28 @@ async function scenarioPlay(browser, baseUrl) {
   await vz(page, () => window.__vz.shadows(true));
   let maxDiff = 0;
   for (let i = 0; i < lit.length; i++) maxDiff = Math.max(maxDiff, noShadow[i] - lit[i]);
-  check('в центре луча светло, по краям кадра темно', center(lit) > 48 && mean(lit) < center(lit) * 0.6, `центр ${center(lit).toFixed(1)}, среднее ${mean(lit).toFixed(1)}`);
+  // Порог центра — с запасом: мир собран из точек, и даже в середине луча остаются редкие дыры
+  // (сплошная картинка давала здесь 49,6, облако точек — 48,1).
+  check('в центре луча светло, по краям кадра темно', center(lit) > 40 && mean(lit) < center(lit) * 0.6, `центр ${center(lit).toFixed(1)}, среднее ${mean(lit).toFixed(1)}`);
   check('тень фонаря затемняет часть кадра', maxDiff > 8, `наибольшая разница ${maxDiff.toFixed(1)}`);
   const info = await vz(page, () => window.__vz.info());
   check('мир рисуется малым числом вызовов', info.calls <= 8 && info.triangles > 5000, `${info.calls} вызовов, ${info.triangles} треугольников`);
   check('внутренний буфер 1280×720 на высоком качестве', info.width === 1280 && info.height === 720, `${info.width}×${info.height}`);
+
+  // Облако точек: мир собран из точек, как 3D-скан. В середине луча они стоят почти вплотную — там кадр
+  // так же ярок, как у сплошной картинки; вокруг луча остаётся россыпь, и кадр в целом темнее.
+  const dots = await vz(page, () => window.__vz.probeColor());
+  await vz(page, () => window.__vz.scan(false));
+  const solidGrid = await vz(page, () => window.__vz.probe());
+  const solid = await vz(page, () => window.__vz.probeColor());
+  await vz(page, () => window.__vz.scan(true));
+  const dotsAgain = await vz(page, () => window.__vz.probe());
+  check(
+    'мир собран из точек: середина луча почти сплошная, вокруг — россыпь',
+    Math.abs(center(lit) - center(solidGrid)) < center(solidGrid) * 0.2 && mean(lit) < mean(solidGrid) * 0.9 && dots.dark > solid.dark + 0.015,
+    `центр ${center(lit).toFixed(1)} против ${center(solidGrid).toFixed(1)} у сплошной картинки, среднее ${mean(lit).toFixed(1)} против ${mean(solidGrid).toFixed(1)}, тёмных точек кадра ${dots.dark.toFixed(3)} против ${solid.dark.toFixed(3)}`,
+  );
+  check('облако точек выключается и включается обратно: кадр тот же', Math.abs(mean(dotsAgain) - mean(lit)) < 1.5 && Math.abs(center(dotsAgain) - center(lit)) < 3, `среднее ${mean(lit).toFixed(1)} → ${mean(dotsAgain).toFixed(1)}, центр ${center(lit).toFixed(1)} → ${center(dotsAgain).toFixed(1)}`);
 
   await vz(page, () => window.__vz.toggleLight());
   await vz(page, () => window.__vz.step(240));

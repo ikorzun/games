@@ -146,6 +146,16 @@ export function verticalFov(aspect: number): number {
   return Math.max(62, Math.min(96, (v * 180) / Math.PI));
 }
 
+/**
+ * Облако точек (см. SCAN_GLSL). h — «число замеров»: закрытая доля поверхности равна 1 − exp(−h).
+ * ghost — h там, куда свет не достаёт (редкие «призрачные» точки: занято около 5 % клеток); perLight —
+ * h на единицу освещённости (яркое пятно луча закрыто почти сплошь, в ореоле точки стоят плотно, на
+ * краю — россыпью); max — предел (97 %: даже в середине луча остаются редкие дыры, как у настоящего
+ * скана); glow — насколько светятся призрачные точки; dot — клетка точек в пикселях буфера высотой
+ * 540, dotMin — наименьшая клетка (на низком качестве точки не мельче двух пикселей).
+ */
+const SCAN = { ghost: 0.05, perLight: 24, max: 3.5, glow: 0.11, dot: 3.0, dotMin: 2.2 } as const;
+
 const BIAS = new THREE.Matrix4().set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
 const deg = (d: number): number => Math.cos((d * Math.PI) / 180);
 
@@ -197,6 +207,8 @@ export class GameRenderer {
   brightness = 1;
   /** Отладка: временно выключить тень, не меняя качество (сравнение «тень вкл/выкл»). */
   debugShadowsOff = false;
+  /** Отладка: рисовать мир сплошными поверхностями, без облака точек (для сравнения кадров). */
+  private debugScanOff = false;
   /** Перепад между ярусами уровня, м (для отсечения этажей). */
   tierDrop = 4.5;
   /** Дальше этого расстояния чанки не рисуются: свет фонаря туда уже не достаёт. */
@@ -289,6 +301,9 @@ export class GameRenderer {
         uFogColor: { value: new THREE.Vector3(0, 0, 0) },
         uDissolve: { value: 0 },
         uThing: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uScan: { value: new THREE.Vector4(SCAN.ghost, SCAN.perLight, SCAN.max, SCAN.glow) },
+        uDot: { value: SCAN.dot },
+        uScanTime: { value: 0 },
         uMatA: { value: matA },
         uMatB: { value: matB },
         uMatBase: { value: atlas.base.map((b) => new THREE.Vector3(b[0], b[1], b[2])) },
@@ -453,7 +468,7 @@ export class GameRenderer {
       this.shadowRT = new THREE.WebGLRenderTarget(q.shadow, q.shadow, { depthBuffer: true, depthTexture: depth, stencilBuffer: false });
       this.worldMat.uniforms.uShadowTexel!.value = 1 / q.shadow;
     }
-    this.worldMat.defines = { ...(q.shadow > 0 ? { SHADOWS: '' } : {}), ...(q.detail ? { DETAIL: '' } : {}) };
+    this.worldMat.defines = { ...(q.shadow > 0 ? { SHADOWS: '' } : {}), ...(q.detail ? { DETAIL: '' } : {}), ...(this.debugScanOff ? {} : { SCAN: '' }) };
     this.worldMat.needsUpdate = true;
     for (const t of this.things.values()) {
       t.mat.defines = { ...this.worldMat.defines };
@@ -528,6 +543,14 @@ export class GameRenderer {
     this.postMat.uniforms.uRes!.value.set(w, h);
     this.postMat.uniforms.uAspect!.value = aspect;
     this.dustMat.uniforms.uPointScale!.value = h / 160;
+    this.worldMat.uniforms.uDot!.value = Math.max(SCAN.dotMin, (SCAN.dot * h) / 540);
+  }
+
+  /** Отладка: облако точек вкл/выкл. */
+  debugScan(on: boolean): void {
+    if (this.debugScanOff === !on) return;
+    this.debugScanOff = !on;
+    this.applyQuality();
   }
 
   /** Заменить геометрию мира. stairs — лестницы между ярусами: рядом с ними виден соседний ярус. */
@@ -794,6 +817,11 @@ export class GameRenderer {
     upL.transformDirection(cam.matrixWorldInverse);
     wu.uDecay!.value = v.decay;
     wu.uTierDrop!.value = this.tierDrop;
+    wu.uScanTime!.value = v.time;
+    const scan = wu.uScan!.value as THREE.Vector4;
+    scan.x = SCAN.ghost * v.lightScale;
+    // Призрачные точки не разгораются, когда камера в темноте поднимает усиление: темнота остаётся темнотой.
+    scan.w = (SCAN.glow * v.lightScale) / Math.max(1, v.gain) ** 0.55;
 
     // Отсвет от пятна: точка попадания луча и сила, убывающая с расстоянием до стены.
     const hitDist = Math.min(v.beamDist, 30);
@@ -883,10 +911,11 @@ export class GameRenderer {
    * буфер экрана очищается после показа. Нужна смоуку: «в конусе светло», «тень что-то меняет».
    */
   /**
-   * Средний цвет кадра и доля «красных» точек (красный канал заметно сильнее двух других): по ней
-   * проверки отличают красную сетку от просто светлой картинки.
+   * Средний цвет кадра, доля «красных» точек (красный канал заметно сильнее двух других): по ней
+   * проверки отличают красную сетку от просто светлой картинки, — и доля тёмных (все каналы ниже 40):
+   * по ней видно, что поверхность собрана из точек с пустотой между ними.
    */
-  probeColor(): { r: number; g: number; b: number; red: number } {
+  probeColor(): { r: number; g: number; b: number; red: number; dark: number } {
     const gl = this.renderer.getContext();
     const w = this.width;
     const h = this.height;
@@ -896,6 +925,7 @@ export class GameRenderer {
     let g = 0;
     let b = 0;
     let red = 0;
+    let dark = 0;
     let n = 0;
     for (let o = 0; o < px.length; o += 8) {
       const pr = px[o]!;
@@ -905,9 +935,10 @@ export class GameRenderer {
       g += pg;
       b += pb;
       if (pr > 70 && pr > pg * 1.6 && pr > pb * 1.6) red += 1;
+      if (pr < 40 && pg < 40 && pb < 40) dark += 1;
       n += 1;
     }
-    return { r: r / n, g: g / n, b: b / n, red: red / n };
+    return { r: r / n, g: g / n, b: b / n, red: red / n, dark: dark / n };
   }
 
   probe(cols = 32, rows = 18): number[] {
