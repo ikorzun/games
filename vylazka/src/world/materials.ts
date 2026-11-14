@@ -46,10 +46,14 @@ export const MAT = {
   linoleum: 34,
   veneer: 35,
   upholstery: 36,
+  // Офис: потолочный светильник (светится, пока свет в его клетке включён), ковролин, потолочная плита.
+  lamp: 37,
+  carpet: 38,
+  ceilTile: 39,
 } as const;
 
 export type MatId = (typeof MAT)[keyof typeof MAT];
-export const MAT_COUNT = 37;
+export const MAT_COUNT = 40;
 
 /** Номера слоёв фактур; совпадают с DETAIL в render/detail.ts (тест следит). */
 const L = { concrete: 0, plaster: 1, paint: 2, rust: 3, metal: 4, wood: 5, fabric: 6, tile: 7, floor: 8, plastic: 9, paper: 10, brick: 11, dirt: 12, lagging: 13, zinc: 14, smooth: 15, wallpaper: 17, parquet: 18, linoleum: 19, veneer: 20, upholstery: 21 } as const;
@@ -145,6 +149,12 @@ export const MAT_DEFS: readonly MatDef[] = [
   { name: 'linoleum', color: '#a08d6a', rough: 0.5, spec: 0.4, coat: 0.3, grime: 0.75, layer: L.linoleum, tile: 1.0, bump: 0.0012, decay: DECAY.glossy },
   { name: 'veneer', color: '#80593a', rough: 0.24, spec: 0.7, coat: 0.95, grime: 0.5, layer: L.veneer, tile: 0.8, bump: 0.0006, decay: DECAY.organic },
   { name: 'upholstery', color: '#716d58', rough: 1.0, spec: 0.0, sheen: 0.5, grime: 0.6, layer: L.upholstery, tile: 0.3, bump: 0.003, decay: DECAY.organic },
+  // Офисный набор. Светильник светится, как фосфорная краска (оттенок вершины — множитель яркости), но
+  // только пока свет в его клетке включён (render: uCellLight). Ковролин — ворс без блика. Потолочная
+  // плита — рисунок плитки с шагом 0,6 м (в слое 8 плиток на повтор).
+  { name: 'lamp', color: '#e9e8dc', rough: 1.0, spec: 0.0, grime: 0.1, glow: 0.012, layer: L.smooth, tile: 0.5, bump: 0.0005, decay: DECAY.none },
+  { name: 'carpet', color: '#6b7068', rough: 1.0, spec: 0.0, sheen: 0.45, grime: 0.65, layer: L.upholstery, tile: 0.45, bump: 0.003, decay: DECAY.organic },
+  { name: 'ceil_tile', color: '#d4d2c8', rough: 1.0, spec: 0.05, grime: 0.7, layer: L.tile, tile: 4.8, bump: 0.003, decay: DECAY.mineral, alt: 0 },
 ];
 
 /** sRGB-hex → линейный цвет. */

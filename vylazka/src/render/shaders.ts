@@ -397,7 +397,7 @@ void main() {
   // идёт приведённым к единице, иначе рассеянный свет выбелил бы небо и экраны.
   vec3 vc = vColor.rgb;
   float lit = 1.0;
-  if (mi == 14) {
+  if (mi == 14 || mi == 37) {
     vc /= max(1.0, max(vc.r, max(vc.g, vc.b)));
     lit = 0.0;
   }

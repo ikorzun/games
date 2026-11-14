@@ -128,7 +128,7 @@ export class SplatClouds {
     // Сетка, где сеять не на что (вся светится или пуста), облаков не получает.
     const { index, mat, position: p } = data;
     let surface = false;
-    for (let t = 0; t < index.length && !surface; t += 3) surface = Math.round(mat[index[t]!]!) !== MAT.glow;
+    for (let t = 0; t < index.length && !surface; t += 3) surface = Math.round(mat[index[t]!]!) !== MAT.glow && Math.round(mat[index[t]!]!) !== MAT.lamp;
     if (!surface) return;
     const box = new THREE.Box3();
     for (let i = 0; i < p.length; i += 3) box.expandByPoint(this.tmp.set(p[i]!, p[i + 1]!, p[i + 2]!));

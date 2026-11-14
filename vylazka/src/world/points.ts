@@ -260,7 +260,7 @@ export function splitCells(mesh: MeshData, size: number): PointSource[] {
   let any = false;
   for (let t = 0; t < count; t++) {
     const a = index[t * 3]! * 3;
-    if (Math.round(mat[index[t * 3]!]!) === MAT.glow) continue;
+    if (Math.round(mat[index[t * 3]!]!) === MAT.glow || Math.round(mat[index[t * 3]!]!) === MAT.lamp) continue;
     const b = index[t * 3 + 1]! * 3;
     const c = index[t * 3 + 2]! * 3;
     if (!(triArea(p[a]!, p[a + 1]!, p[a + 2]!, p[b]!, p[b + 1]!, p[b + 2]!, p[c]!, p[c + 1]!, p[c + 2]!) > 1e-9)) continue;
