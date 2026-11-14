@@ -955,19 +955,19 @@ async function scenarioPockets(browser, baseUrl) {
   check('проход сквозь красный проём возвращает в убежище, в тот же узел, откуда унесло', out.ok && out.s.where === 'main' && out.s.node === nodeBefore && out.s.pocket === null, JSON.stringify({ where: out.s.where, node: out.s.node, nodeBefore }));
   check('помещение в списке слева остаётся, пока вещь не вспомнили', (await rowsText()).at(-1) === row, JSON.stringify(await rowsText()));
 
-  // ── Взгляд на проём ──
-  st = await state(page);
-  const nodeLook = st.node;
+  // ── Взгляд на проём ничего не делает: выйти можно только войдя в него ──
   await enter('dollhouse');
-  await vz(page, () => window.__vz.gotoPocket('exit', 3));
-  st = await vz(page, () => window.__vz.step(5 * 60 - 20));
-  const early = st.where === 'pocket' && st.jump === null;
-  st = await stepUntil(page, (x) => x.where === 'main' && x.jump === null, 20, 40);
-  check('взгляд на красный проём выводит обратно, но не раньше шестой секунды', early && st.where === 'main' && st.node === nodeLook, JSON.stringify({ early, where: st.where, node: st.node, nodeLook }));
+  await vz(page, () => window.__vz.gotoPocket('exit', 1));
+  st = await vz(page, () => window.__vz.step(12 * 60));
+  check('взгляд на красный проём с одного шага двенадцать секунд никуда не уносит', st.where === 'pocket' && st.jump === null, JSON.stringify({ where: st.where, jump: st.jump, age: st.pocketInfo?.age }));
+  await leave();
 
   // ── Луг: дверь выводит рядом с искомой вещью ──
   r = await enter('meadow');
   check('луг: строка при входе про дверь, которая ближе к искомому', r.flash.on && r.flash.text === RU['pocket.meadow.enter'], JSON.stringify(r.flash));
+  // Игрок появляется лицом к двери: пока он просто стоит и смотрит, луг его не выбрасывает.
+  st = await vz(page, () => window.__vz.step(12 * 60));
+  check('кто просто стоит на лугу там, где появился, остаётся на лугу', st.where === 'pocket' && st.jump === null, JSON.stringify({ where: st.where, jump: st.jump, age: st.pocketInfo?.age }));
   const door = await walkOut();
   const dxz = Math.hypot(door.s.pos[0] - mem.pos[0], door.s.pos[2] - mem.pos[2]);
   // Не дальше 4 клеток пути: клетка 3 м, четыре шага — до 12 м по горизонтали плюс разброс вещи в клетке
@@ -1016,15 +1016,13 @@ async function scenarioPockets(browser, baseUrl) {
   // ── Счёт времени: пространство редеет, строка внизу меняется ──
   await enter('void');
   st = await state(page);
-  // Белое нигде появляется лицом к выходу: отвернуться, иначе взгляд на проём выведет раньше срока.
+  // Белое нигде появляется лицом к экспонатам: отвернуться, иначе взгляд на болванку сократит срок.
   await vz(page, ([p]) => window.__vz.teleport(p[0], p[1], p[2], Math.PI, 0), [st.pos]);
   st = await stepUntil(page, (x) => x.pocketInfo && x.pocketInfo.age >= x.pocketInfo.stay * 0.5 - 4, 60, 80);
-  for (let i = 0; i < 3 && st.light?.state === 'dead' && st.where === 'pocket'; i++) st = await vz(page, () => window.__vz.shake(1, 1));
   const half = { fade: st.pocketInfo?.fade, hint: await hintText(), age: st.pocketInfo?.age, stay: st.pocketInfo?.stay };
   check('в первой половине срока пространство не редеет: fade 1, внизу «красный проём ведёт назад»', st.where === 'pocket' && half.fade === 1 && half.hint === RU['pocket.hint.exit'], JSON.stringify(half));
   st = await stepUntil(page, (x) => !x.pocketInfo || x.pocketInfo.fade < 0.3, 20, 120);
-  // Заглохший фонарь прячет нижнюю строку (см. updateHud: условие !dead) — оживляем встряской, чтобы читать её.
-  for (let i = 0; i < 3 && st.light?.state === 'dead' && st.where === 'pocket'; i++) st = await vz(page, () => window.__vz.shake(1, 1));
+  // К этому времени фонарь без дела обычно уже заглох: нижняя строка в светлом пространстве от него не зависит.
   const end = { light: st.light?.state, jump: st.jump, where: st.where, fade: st.pocketInfo?.fade, hint: await hintText(), age: st.pocketInfo?.age, stay: st.pocketInfo?.stay };
   check('к концу срока fade падает ниже 0,3, а нижняя строка — «это место редеет»', end.where === 'pocket' && end.fade < 0.3 && end.fade >= 0.2 - 1e-6 && end.hint === RU['pocket.hint.fading'], JSON.stringify(end));
   if (wantShots) await page.screenshot({ path: join(OUT, 'session_pocket_fading.png') });

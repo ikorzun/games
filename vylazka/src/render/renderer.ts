@@ -79,6 +79,8 @@ export interface FrameView {
   keyColor: Vec3;
   /** Докуда рассеянный свет «сканирует» пространство, м: плотно до первого, россыпь после второго. */
   scanRange: [number, number];
+  /** Где прямой свет даёт тени: центр и полуширина квадрата на земле (м) — он ходит за игроком; null — теней от него нет. */
+  keyBox: { center: Vec3; half: number } | null;
   /** 0..1: мир рассыпается в пыль. */
   dissolve: number;
   /** 0..1: красная полигонная сетка на всём, что видно. */
@@ -178,6 +180,8 @@ export class GameRenderer {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.05, 70);
   private readonly lightCam = new THREE.PerspectiveCamera(66, 1, 0.08, 34);
+  /** Камера тени прямого света (солнце, лампа): лучи параллельны, область — квадрат вокруг центра пространства. */
+  private readonly keyCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 200);
   private sceneRT: THREE.WebGLRenderTarget;
   private shadowRT: THREE.WebGLRenderTarget | null = null;
   private readonly worldMat: THREE.ShaderMaterial;
@@ -313,6 +317,7 @@ export class GameRenderer {
         uAmbient: { value: new THREE.Vector3(0.0016, 0.0019, 0.0024) },
         uKeyDirV: { value: new THREE.Vector3(0, 1, 0) },
         uKeyColor: { value: new THREE.Vector3(0, 0, 0) },
+        uShadowFor: { value: 0 },
         uBounce: { value: new THREE.Vector4(0, 0, -1000, 0) },
         uSpot: { value: this.spotRT.texture },
         uFog: { value: 0.035 },
@@ -873,14 +878,48 @@ export class GameRenderer {
     const bounce = v.beamDist < 30 ? (0.05 * v.lightIntensity * v.lightScale) / (1 + 0.07 * hitDist * hitDist) : 0;
     (this.worldMat.uniforms.uBounce!.value as THREE.Vector4).set(hit.x, hit.y, hit.z, bounce);
 
-    // Тень: глубина сцены из точки фонаря.
-    const shadowOn = this.shadowRT !== null && v.lightIntensity * v.lightScale > 0.01 && !this.debugShadowsOff;
+    // Тень: глубина сцены из точки фонаря — либо, там где есть прямой свет (солнце на лугу, лампа у
+    // кукольного домика), вдоль его лучей: фонарь в таких местах почти не виден, а тени от солнца нужны.
+    const keyOn = this.shadowRT !== null && v.keyBox !== null && v.keyColor[0] + v.keyColor[1] + v.keyColor[2] > 0.01 && !this.debugShadowsOff;
+    const shadowOn = keyOn || (this.shadowRT !== null && v.lightIntensity * v.lightScale > 0.01 && !this.debugShadowsOff);
+    this.worldMat.uniforms.uShadowFor!.value = keyOn ? 1 : 0;
     if (this.shadowRT && shadowOn) {
-      const lc = this.lightCam;
-      lc.position.set(v.lightPos[0], v.lightPos[1], v.lightPos[2]);
-      lc.up.set(0, 1, 0);
-      lc.lookAt(v.lightPos[0] + v.lightDir[0], v.lightPos[1] + v.lightDir[1], v.lightPos[2] + v.lightDir[2]);
+      let lc: THREE.Camera = this.lightCam;
+      if (keyOn && v.keyBox) {
+        const kc = this.keyCam;
+        const h = v.keyBox.half;
+        const back = h * 2 + 20;
+        kc.left = -h;
+        kc.right = h;
+        kc.top = h;
+        kc.bottom = -h;
+        kc.near = 1;
+        kc.far = back + h * 2;
+        kc.updateProjectionMatrix();
+        // Квадрат тени ходит за игроком, но только шагами в один тексель карты: иначе при каждом его
+        // шаге края теней ползли бы по траве.
+        kc.position.set(0, 0, 0);
+        kc.up.set(0, 1, 0);
+        kc.lookAt(-v.keyDir[0], -v.keyDir[1], -v.keyDir[2]);
+        kc.updateMatrixWorld(true);
+        const e = kc.matrixWorld.elements;
+        const texel = (2 * h) / this.shadowRT.width;
+        const c = v.keyBox.center;
+        const dx = Math.round((c[0] * e[0]! + c[1] * e[1]! + c[2] * e[2]!) / texel) * texel - (c[0] * e[0]! + c[1] * e[1]! + c[2] * e[2]!);
+        const dy = Math.round((c[0] * e[4]! + c[1] * e[5]! + c[2] * e[6]!) / texel) * texel - (c[0] * e[4]! + c[1] * e[5]! + c[2] * e[6]!);
+        kc.position.set(
+          c[0] + e[0]! * dx + e[4]! * dy + v.keyDir[0] * back,
+          c[1] + e[1]! * dx + e[5]! * dy + v.keyDir[1] * back,
+          c[2] + e[2]! * dx + e[6]! * dy + v.keyDir[2] * back,
+        );
+        lc = kc;
+      } else {
+        lc.position.set(v.lightPos[0], v.lightPos[1], v.lightPos[2]);
+        lc.up.set(0, 1, 0);
+        lc.lookAt(v.lightPos[0] + v.lightDir[0], v.lightPos[1] + v.lightDir[1], v.lightPos[2] + v.lightDir[2]);
+      }
       lc.updateMatrixWorld(true);
+      lc.matrixWorldInverse.copy(lc.matrixWorld).invert();
       this.tmpM.multiplyMatrices(lc.projectionMatrix, lc.matrixWorldInverse);
       (this.worldMat.uniforms.uShadowMatrix!.value as THREE.Matrix4).multiplyMatrices(BIAS, this.tmpM);
       this.worldMat.uniforms.uShadowMap!.value = null;
@@ -914,7 +953,8 @@ export class GameRenderer {
       (hu.uShadowMatrixV!.value as THREE.Matrix4).multiplyMatrices(this.worldMat.uniforms.uShadowMatrix!.value as THREE.Matrix4, cam.matrixWorld);
       (hu.uCamRot!.value as THREE.Matrix3).setFromMatrix4(cam.matrixWorld);
       (hu.uCamPos!.value as THREE.Vector3).copy(cam.position);
-      hu.uDensity!.value = v.lightIntensity * v.lightScale > 0.01 ? v.haze : 0;
+      // Там, где карта теней занята прямым светом, дымки в луче нет: её тени были бы чужими.
+      hu.uDensity!.value = !keyOn && v.lightIntensity * v.lightScale > 0.01 ? v.haze : 0;
       hu.uFrame!.value = v.frame;
       hu.uTime!.value = v.time;
       r.setRenderTarget(this.hazeRT);

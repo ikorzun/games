@@ -334,10 +334,9 @@ export const buildDollhouse: PocketBuilder = (seed, origin, ctx): PocketSpace =>
     // Игрок появляется посреди средней комнаты, лицом к столу и взглядом на макет.
     spawn: { pos: [ox + 0.3, oy, oz - 0.3], yaw: Math.PI, pitch: -0.3 },
     // Свет в дом идёт от большой лампы снаружи, через открытую сторону: задние стены тёплые, боковые в тени.
-    env: { ambient: [0.24, 0.22, 0.2], fog: [0.03, 0.02, 0.03], fogDensity: 0.02, light: 0.7, decay: 0, haze: 0.004, key: { dir: [0, 0.238, -0.971], color: [0.52, 0.4, 0.23] } },
+    env: { ambient: [0.24, 0.22, 0.2], fog: [0.03, 0.02, 0.03], fogDensity: 0.02, light: 0.7, decay: 0, haze: 0.004, key: { dir: [0, 0.238, -0.971], color: [0.52, 0.4, 0.23], reach: 7 } },
     center: [ox, oy, oz],
     radius: 40,
-    anchors: [[exit[0], exit[1] + 1.2, exit[2]]],
     spots,
     exit,
     focus: [ox + MODEL_AT[0], oy + MODEL_AT[1] + 0.03, oz + MODEL_AT[2]],

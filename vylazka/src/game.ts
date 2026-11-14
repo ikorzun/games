@@ -217,7 +217,6 @@ export class Game {
   private readonly heard = new Set<number>();
   /** Белые болванки в белом нигде: ещё не вспомненное. */
   private blanks: Thing[] = [];
-  private anchorGaze = 0;
   private limboTime = 0;
   private limboAsked = false;
   /** Следующая сессия, собранная за время лимбо. */
@@ -523,7 +522,6 @@ export class Game {
     this.holdT = 0;
     this.heard.clear();
     this.blanks = [];
-    this.anchorGaze = 0;
     this.limboTime = 0;
     this.limboAsked = false;
     this.teleport(p.spawn.pos[0], p.spawn.pos[1], p.spawn.pos[2], p.spawn.yaw, p.spawn.pitch ?? 0);
@@ -914,20 +912,19 @@ export class Game {
       if (this.endIn < 0) this.beginJump({ cause: 'end', style: 'dissolve', to: 'limbo' }, dream);
     }
 
-    // Карманное пространство отпускает: ушёл за край, засмотрелся на якорь или просто вышло время.
+    // Карманное пространство отпускает: вошёл в красный проём, ушёл за край или просто вышло время.
     const p = this.pocket;
     if (p && this.where === 'pocket' && !this.transition) {
       this.pocketAge += dt;
       const far = Math.hypot(b.x - p.center[0], b.z - p.center[2]) > p.radius;
-      // Выход — проём, обведённый красным: пройти сквозь него или засмотреться на него. Первые секунды
-      // он не действует: иначе пространство отпустит раньше, чем игрок осмотрится.
-      const through = !!p.exit && this.pocketAge > 1.5 && Math.abs(b.x - p.exit[0]) < 0.42 && Math.abs(b.z - p.exit[2]) < 0.3 && Math.abs(b.y - p.exit[1]) < 1;
-      const onAnchor = this.pocketAge > 6 && p.anchors.some((a) => looksAt(look, a, 0.6, 16, los));
-      this.anchorGaze = onAnchor ? this.anchorGaze + dt : Math.max(0, this.anchorGaze - dt);
+      // Выход — проём, обведённый красным: войти в него. Смотреть на проём можно сколько угодно —
+      // взгляд никуда не уносит, иначе игрока выбрасывало бы, пока он просто стоит и осматривается.
+      // Первые полторы секунды проём не действует.
+      const through = !!p.exit && this.pocketAge > 1.5 && Math.abs(b.x - p.exit[0]) < 0.5 && Math.abs(b.z - p.exit[2]) < 0.4 && Math.abs(b.y - p.exit[1]) < 1;
       this.pocketPurpose(dt, look, los, dream);
       // Дверь на лугу выводит поближе к искомой вещи; остальные проёмы — туда, откуда унесло.
       const door = p.kind === 'meadow' && this.session?.active ? 'thing' : 'back';
-      if (through || this.anchorGaze > 1.8) this.beginJump({ cause: 'return', style: 'whiteout', to: 'elsewhere', dest: door }, dream);
+      if (through) this.beginJump({ cause: 'return', style: 'whiteout', to: 'elsewhere', dest: door }, dream);
       else if (far) this.beginJump({ cause: 'return', style: 'cut', to: 'elsewhere' }, dream);
       else if (this.pocketAge > this.pocketStay) this.beginJump({ cause: 'return', style: 'dissolve', to: 'elsewhere' }, dream);
     }
@@ -1217,6 +1214,14 @@ export class Game {
       keyDir: this.env.key?.dir ?? [0, 1, 0],
       keyColor: this.env.key?.color ?? [0, 0, 0],
       scanRange: this.env.scan ?? [4, 15],
+      // Тени прямого света — в квадрате вокруг игрока, сдвинутом вперёд по взгляду: позади они не нужны.
+      keyBox:
+        this.pocket && this.env.key?.reach
+          ? {
+              center: [rig.camPos[0] - Math.sin(rig.camYaw) * this.env.key.reach * 0.35, rig.camPos[1] - 1.42, rig.camPos[2] - Math.cos(rig.camYaw) * this.env.key.reach * 0.35],
+              half: this.env.key.reach,
+            }
+          : null,
       dissolve,
       wire,
       crt,

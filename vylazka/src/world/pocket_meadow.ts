@@ -932,12 +932,13 @@ export const buildMeadow: PocketBuilder = (seed, origin): PocketSpace => {
     meshes: [mb.build()],
     colliders: cs.boxes.map((b) => ({ ...b })),
     spawn: { pos: [ox, oy, oz], yaw: 0 },
-    // Ясный день: солнце высоко за правым плечом игрока, небо подсвечивает тени голубым. Даль видна
-    // далеко: точки редеют только к сорока метрам.
-    env: { ambient: [0.38, 0.46, 0.52], fog: [0.28, 0.46, 0.8], fogDensity: 0.006, light: 0.1, decay: 0, haze: 0, key: { dir: [0.4, 0.8, 0.447], color: [0.74, 0.68, 0.48] }, scan: [10, 42] },
+    // Ясный день: солнце высоко за правым плечом игрока и светит втрое сильнее неба — тени на траве
+    // густые и голубоватые, как в полдень. Даль видна далеко: точки редеют только к сорока метрам.
+    env: { ambient: [0.25, 0.32, 0.41], fog: [0.28, 0.46, 0.8], fogDensity: 0.006, light: 0.1, decay: 0, haze: 0, key: { dir: [0.4, 0.8, 0.447], color: [0.96, 0.88, 0.66], reach: 9 }, scan: [10, 42] },
     center: [ox, oy, oz],
     radius: R_WALK,
-    anchors: [[ox, oy + 1.2, oz - 12]],
+    // Выход — дверная коробка посреди луга, прямо по ходу.
+    exit: [ox, oy, oz - 12],
     spots: spotsXZ.map(([x, z]): Vec3 => [ox + x, oy, oz + z]),
   };
 };

@@ -62,10 +62,10 @@ describe.each(POCKET_KINDS.map((k) => [k] as [PocketKind]))('карманное 
     expect(inside(s, s.spawn.pos, 1.0)).toBe(false);
   });
 
-  it('якоря и места лежат в радиусе и вне преград', () => {
-    for (const p of s.anchors) {
-      expect(dist(s, p)).toBeLessThan(s.radius);
-      expect(inside(s, p, 0)).toBe(false);
+  it('выход и места лежат в радиусе и вне преград', () => {
+    if (s.exit) {
+      expect(dist(s, s.exit)).toBeLessThan(s.radius);
+      expect(inside(s, [s.exit[0], s.exit[1] + 1.2, s.exit[2]], 0)).toBe(false);
     }
     for (const p of s.spots) {
       expect(dist(s, p)).toBeLessThan(s.radius);
@@ -114,16 +114,13 @@ describe.each(POCKET_KINDS.map((k) => [k] as [PocketKind]))('карманное 
 const glowOnly = (s: PocketSpace): boolean => s.meshes.some((m) => m.mat.length > 0 && Array.from(m.mat).every((v) => v === MAT.glow));
 
 describe.each(POCKET_KINDS.map((k) => [k] as [PocketKind]))('выход пространства %s', (kind) => {
-  it('есть выход на полу, якорь — на высоте 1,2 м над ним, обводка — отдельный светящийся меш', () => {
+  it('есть выход на полу, обводка — отдельный светящийся меш', () => {
     const s = buildPocket(kind, 7, ORIGIN);
     expect(s.exit).toBeTruthy();
     const e = s.exit!;
     expect(dist(s, e)).toBeLessThan(s.radius);
     expect(inside(s, e, 0.3)).toBe(false);
-    expect(s.anchors.length).toBeGreaterThan(0);
-    expect(s.anchors[0]![0]).toBeCloseTo(e[0], 5);
-    expect(s.anchors[0]![2]).toBeCloseTo(e[2], 5);
-    expect(s.anchors[0]![1] - ORIGIN[1]).toBeCloseTo(1.2, 5);
+    expect(e[1]).toBeCloseTo(ORIGIN[1], 5);
     expect(glowOnly(s)).toBe(true);
   });
 
@@ -141,10 +138,9 @@ describe.each(POCKET_KINDS.map((k) => [k] as [PocketKind]))('выход прос
 });
 
 describe('лимбо: белое нигде в конце сессии', () => {
-  it('выхода и обводки нет, якорей нет', () => {
+  it('выхода и обводки нет', () => {
     const s = buildPocket('void', 7, ORIGIN, { limbo: true });
     expect(s.exit).toBeNull();
-    expect(s.anchors).toEqual([]);
     expect(glowOnly(s)).toBe(false);
   });
 

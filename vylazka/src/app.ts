@@ -575,8 +575,9 @@ export class App {
       else if (g.time < 16 && !this.touchMode) hint = t('hint.pause.desktop');
     }
     // В карманном пространстве нижняя строка говорит, как выйти, а под конец — что место уходит само.
+    // Заглохший фонарь её не прячет: в светлом пространстве о нём молчат, а строка нужна до самого конца.
     const info = g.where === 'pocket' ? g.pocketFade : 1;
-    if (!dead && this.screen === 'play' && g.where === 'pocket' && !g.jumping) hint = info < 0.75 ? t('pocket.hint.fading') : t('pocket.hint.exit');
+    if ((!dead || bright) && this.screen === 'play' && g.where === 'pocket' && !g.jumping) hint = info < 0.75 ? t('pocket.hint.fading') : t('pocket.hint.exit');
     this.hud.setHint(hint);
     this.touch?.setShakePrompt(dead && !bright, light.reviveProgress);
     this.touch?.setLit(light.state === 'on');

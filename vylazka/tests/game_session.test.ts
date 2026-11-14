@@ -667,7 +667,7 @@ describe('игра целиком: карманные пространства �
     expect(g.playerNode()).toBe(back);
   });
 
-  it('в стороне от проёма (шире 0,42 м) выход не срабатывает', () => {
+  it('в стороне от проёма (дальше полуметра от его середины) выход не срабатывает', () => {
     const h = new Harness(levelOf(SEED), { seed: 31 });
     enter(h, 'void');
     const g = h.game;
@@ -678,22 +678,27 @@ describe('игра целиком: карманные пространства �
     expect(g.where).toBe('pocket');
   });
 
-  it('взгляд на проём 1,8 с (не раньше 6 с после входа) тоже выводит обратно', () => {
+  it.each(['void', 'meadow', 'dollhouse'] as const)('взгляд на проём (%s) никуда не уносит: стоять перед ним и смотреть можно сколько угодно', (kind) => {
     const h = new Harness(levelOf(SEED), { seed: 32 });
     h.run(1);
-    const back = h.game.playerNode();
-    enter(h, 'dollhouse');
+    enter(h, kind);
     const g = h.game;
-    standAt(h, 'exit', 3);
-    // До шестой секунды взгляд не считается.
-    h.run(Math.max(0, 5 - info(h).age));
+    // Встал в метре от проёма и смотрит прямо в него двадцать секунд.
+    standAt(h, 'exit', 1);
+    h.run(20);
     expect(g.transition).toBeNull();
-    expect(info(h).age).toBeLessThan(6);
-    expect(h.until(() => g.transition !== null, 6)).toBe(true);
-    expect(info(h).age).toBeGreaterThan(6);
-    expect(g.transition!.plan).toMatchObject({ cause: 'return', style: 'whiteout', dest: 'back' });
-    expect(h.until(() => g.where === 'main' && g.transition === null, 6)).toBe(true);
-    expect(g.playerNode()).toBe(back);
+    expect(g.where).toBe('pocket');
+  });
+
+  it.each(['void', 'meadow'] as const)('кто просто стоит там, где появился (%s), остаётся в пространстве до середины срока', (kind) => {
+    const h = new Harness(levelOf(SEED), { seed: 33 });
+    h.run(1);
+    enter(h, kind);
+    const g = h.game;
+    // Появляется лицом к проёму: раньше взгляд на него сам выводил обратно на восьмой секунде.
+    h.run(20);
+    expect(g.transition).toBeNull();
+    expect(g.where).toBe('pocket');
   });
 
   it('дверь луга при идущем воспоминании выводит не дальше 4 клеток пути от искомой вещи', () => {
@@ -752,7 +757,7 @@ describe('игра целиком: карманные пространства �
     expect(g.pocketFade).toBe(1);
     enter(h, 'void');
     const inf = info(h);
-    // Белое нигде появляется лицом к выходу: отворачиваемся, иначе взгляд на проём сам выведет обратно.
+    // Белое нигде появляется лицом к экспонатам: отворачиваемся, иначе взгляд на болванку сократит срок.
     const sp = g.pocket!.spawn.pos;
     g.teleport(sp[0], sp[1], sp[2], Math.PI, 0);
     expect(inf.stay).toBeGreaterThanOrEqual(46);

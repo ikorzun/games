@@ -200,6 +200,7 @@ uniform float uShadowTexel;
 uniform vec3 uAmbient;
 uniform vec3 uKeyDirV;    // прямой свет пространства: направление на источник (пространство камеры)
 uniform vec3 uKeyColor;   // его цвет и сила; ноль — прямого света нет (убежище)
+uniform float uShadowFor; // чья тень в карте теней: 0 — фонаря, 1 — прямого света пространства (солнце, лампа)
 uniform vec4 uBounce;     // xyz — точка попадания луча (пространство камеры), w — сила отсвета
 uniform sampler2D uSpot;  // средний цвет освещённого пятна в прошлом кадре: им окрашен отсвет
 uniform float uFog;
@@ -291,7 +292,7 @@ void main() {
   float shadow = 1.0;
 #ifdef SHADOWS
   vec3 sc = vShadow.xyz / vShadow.w;
-  if (lb.w * lamp * facing > 0.0008 && vShadow.w > 0.0 && sc.x > 0.002 && sc.x < 0.998 && sc.y > 0.002 && sc.y < 0.998 && sc.z < 1.0) {
+  if ((uShadowFor > 0.5 || lb.w * lamp * facing > 0.0008) && vShadow.w > 0.0 && sc.x > 0.002 && sc.x < 0.998 && sc.y > 0.002 && sc.y < 0.998 && sc.z < 1.0) {
     float z = sc.z - 0.0004;
     float t = uShadowTexel * 0.75;
     shadow = 0.25 * (
@@ -299,6 +300,16 @@ void main() {
       texture(uShadowMap, vec3(sc.xy + vec2( t, -t), z)) +
       texture(uShadowMap, vec3(sc.xy + vec2(-t,  t), z)) +
       texture(uShadowMap, vec3(sc.xy + vec2( t,  t), z)));
+  }
+#endif
+
+  // Карта теней одна: в убежище в ней тень фонаря, на лугу и в домике — тень солнца или лампы. Тень
+  // прямого света есть только вокруг игрока: к краю своего квадрата она сходит на нет.
+  float shadowKey = 1.0;
+#ifdef SHADOWS
+  if (uShadowFor > 0.5) {
+    shadowKey = mix(shadow, 1.0, smoothstep(0.76, 0.98, 2.0 * max(abs(sc.x - 0.5), abs(sc.y - 0.5))));
+    shadow = 1.0;
   }
 #endif
 
@@ -324,7 +335,7 @@ void main() {
   float toCam = abs(dot(Ng, vPosV)) / max(distV, 1e-3);
   float back = mix(0.6, 1.0, smoothstep(0.03, 0.4, toCam)) * (mi == 24 ? 0.35 : (mi == 7 || mi == 23 ? 0.6 : (mi == 12 ? 0.78 : 1.0)));
   // Прямой свет пространства тоже «сканирует»: освещённая сторона плотнее теневой.
-  float keyLit = max(dot(Ng, uKeyDirV), 0.0) * dot(uKeyColor, vec3(0.3333));
+  float keyLit = max(dot(Ng, uKeyDirV), 0.0) * dot(uKeyColor, vec3(0.3333)) * shadowKey;
   float hLit = (eLight + bounce0 * 1.2) * uScan.y * back;
   float hEnv = uScan.z * (min(1.0, eGlow * 4.0) + min(1.0, eAmb * 8.0) * (0.72 + 0.28 * min(1.0, keyLit * 3.0 + step(dot(uKeyColor, vec3(1.0)), 0.001))) * back * (1.0 - smoothstep(uScanRange.x, uScanRange.y, distV)));
   // Пространство, чьё время выходит, редеет; светящееся (красный контур выхода, небо) держится до конца.
@@ -485,7 +496,7 @@ void main() {
   // Отсвет от освещённого пятна: мягко подсвечивает окрестности, как рассеянный от стены свет.
   float bounce = bounce0 * (0.35 + 0.65 * max(dot(N, toB / max(db, 1e-3)), 0.0));
   // Рассеянный свет пространства идёт больше сверху (небо, потолок), чем снизу; прямой — от солнца или лампы.
-  vec3 skyLit = uAmbient * (0.66 + 0.34 * up) + uKeyColor * max(dot(N, uKeyDirV), 0.0);
+  vec3 skyLit = uAmbient * (0.66 + 0.34 * up) + uKeyColor * (max(dot(N, uKeyDirV), 0.0) * shadowKey);
   col += base * tint * ao * (skyLit * lit + uLightColor * bounceTint * bounce);
 
   // Мокрый пол и плитка отражают освещённое пятно: блик тянется от дальней стены к ногам.
@@ -537,7 +548,14 @@ void main() {
 
 /** Глубина из точки фонаря: цвет не пишется. */
 export const DEPTH_VERT = /* glsl */ `
+attribute float aMat;
 void main() {
+  // Светящееся (небо над лугом, абажуры, красный контур выхода) тени не отбрасывает: иначе купол неба
+  // закрыл бы от солнца весь луг.
+  if (aMat > 13.5 && aMat < 14.5) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
 `;
