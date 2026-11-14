@@ -5,11 +5,11 @@ import { Lifecycle } from '../src/lifecycle';
 import { AutoExposure, beamAtten } from '../src/render/exposure';
 import { bakeDetail, DETAIL, DETAIL_LAYERS } from '../src/render/detail';
 import { bakeGrime } from '../src/render/grime';
-import { bakeMatcapAtlas } from '../src/render/matcap_atlas';
+import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from '../src/render/matcap_atlas';
 import { internalSize, QUALITY, verticalFov } from '../src/render/renderer';
 import { CALM_ENV, DEFAULT_FLASHLIGHT, Flashlight } from '../src/systems/flashlight';
 import { recTimestamp } from '../src/ui/hud';
-import { DECAY, MAT, MAT_DEFS } from '../src/world/materials';
+import { DECAY, MAT, MAT_COUNT, MAT_DEFS } from '../src/world/materials';
 
 const DT = 1 / 60;
 
@@ -153,12 +153,13 @@ describe('экспозиция', () => {
 describe('запечённые текстуры', () => {
   const atlas = bakeMatcapAtlas(MAT_DEFS, 32);
 
-  it('атлас детерминирован и нужного размера: 8×4 шара', () => {
+  it('атлас детерминирован и нужного размера: 8×5 шаров', () => {
     expect(atlas.width).toBe(256);
-    expect(atlas.height).toBe(128);
-    expect(atlas.data.length).toBe(256 * 128 * 4);
+    expect(atlas.height).toBe(160);
+    expect(atlas.data.length).toBe(256 * 160 * 4);
     expect(bakeMatcapAtlas(MAT_DEFS, 32).data).toEqual(atlas.data);
-    expect(MAT_DEFS.length).toBe(32);
+    expect(MAT_DEFS.length).toBe(MAT_COUNT);
+    expect(ATLAS_COLS * ATLAS_ROWS).toBeGreaterThanOrEqual(MAT_COUNT);
   });
 
   it('шар светлее в центре, чем у края; у гладкого материала блик ярче', () => {
@@ -166,7 +167,7 @@ describe('запечённые текстуры', () => {
       const o = ((Math.floor(mat / 8) * 32 + py) * 256 + (mat % 8) * 32 + px) * 4;
       return atlas.data[o]! + atlas.data[o + 1]! + atlas.data[o + 2]!;
     };
-    for (let m = 0; m < 32; m++) expect(at(m, 16, 16), MAT_DEFS[m]!.name).toBeGreaterThan(at(m, 30, 16));
+    for (let m = 0; m < MAT_COUNT; m++) expect(at(m, 16, 16), MAT_DEFS[m]!.name).toBeGreaterThan(at(m, 30, 16));
     // Эмаль бликует сильнее побелки, хотя альбедо у них близкое.
     expect(at(MAT.enamel, 16, 16) / at(MAT.enamel, 22, 16)).toBeGreaterThan(at(MAT.plaster, 16, 16) / at(MAT.plaster, 22, 16));
     // Стекло тёмное, но блик на нём — до белого.
@@ -191,6 +192,31 @@ describe('запечённые текстуры', () => {
     expect(MAT_DEFS[MAT.brick]!.layer).toBe(DETAIL.brick);
     expect(MAT_DEFS[MAT.zinc]!.layer).toBe(DETAIL.zinc);
     expect(MAT_DEFS[MAT.tile]!.layer).toBe(DETAIL.tile);
+  });
+
+  it('у домашних материалов свой слой фактуры и свой шар в атласе', () => {
+    const home = [
+      [MAT.wallpaper, DETAIL.wallpaper],
+      [MAT.parquet, DETAIL.parquet],
+      [MAT.linoleum, DETAIL.linoleum],
+      [MAT.veneer, DETAIL.veneer],
+      [MAT.upholstery, DETAIL.upholstery],
+    ] as const;
+    expect(new Set(home.map(([, l]) => l)).size).toBe(home.length);
+    const cell = 32;
+    for (const [m, layer] of home) {
+      expect(MAT_DEFS[m]!.layer, MAT_DEFS[m]!.name).toBe(layer);
+      expect(m, MAT_DEFS[m]!.name).toBeLessThan(ATLAS_COLS * ATLAS_ROWS);
+      // Шар записан: в его ячейке есть непустые пикселы (атлас — sRGB, чёрное — нули).
+      let sum = 0;
+      const x0 = (m % ATLAS_COLS) * cell;
+      const y0 = Math.floor(m / ATLAS_COLS) * cell;
+      for (let py = 0; py < cell; py++) for (let px = 0; px < cell; px++) sum += atlas.data[((y0 + py) * atlas.width + x0 + px) * 4]!;
+      expect(sum, MAT_DEFS[m]!.name).toBeGreaterThan(cell * cell * 8);
+    }
+    // Обои обдираются до штукатурки, как краска.
+    expect(MAT_DEFS[MAT.wallpaper]!.decay).toBe(DECAY.paint);
+    expect(MAT_DEFS[MAT.wallpaper]!.alt).toBe(MAT.plaster);
   });
 
   it('фактуры детерминированы, бесшовны и не вырождаются в ровный серый', () => {

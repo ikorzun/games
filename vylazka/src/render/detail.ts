@@ -29,9 +29,19 @@ export const DETAIL = {
   smooth: 15,
   /** Чешуйки краски: R — случайное число чешуйки, G — расстояние до её края, B — второе случайное число. */
   flakes: 16,
+  /** Бумажные обои: рулон 0,53 м, полосы, розетки в шахматном порядке. */
+  wallpaper: 17,
+  /** Паркет «ёлочкой»: плашки 6 × 30 см под лаком. */
+  parquet: 18,
+  /** Линолеум: квадраты 25 см с мраморной крошкой. */
+  linoleum: 19,
+  /** Полированная мебельная плита: длинное волокно с арками распила. */
+  veneer: 20,
+  /** Обивка: крупное плетение, букле. */
+  upholstery: 21,
 } as const;
 
-export const DETAIL_LAYERS = 17;
+export const DETAIL_LAYERS = 22;
 
 type Texel = [number, number, number, number];
 
@@ -281,6 +291,169 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
   // 16. Чешуйки: лоскуты, на которые трескается краска перед тем как отвалиться.
   const fk = cellField(N, 12, seed + 9);
   layers[DETAIL.flakes] = (x, y) => px(atCell(fk.id, N, x, y), atCell(fk.edge, N, x, y) * 1.6, hash01(Math.floor(atCell(fk.id, N, x, y) * 4096), 5, seed), atCell(fk.near, N, x, y));
+
+  // 17. Обои: рулон 0,53 м (на тайл их два — 1,06 м), шов между рулонами, вертикальные полосы 8 и 4 см разного тона,
+  // между ними розетки с шагом 0,265 м, у соседних столбцов сдвинутые на полшага; между розетками — ромбы.
+  // Рисунок тон-в-тон: он только слегка темнее фона, цвет задаёт оттенок вершины.
+  layers[DETAIL.wallpaper] = (x, y) => {
+    const M = 1.06;
+    const ROLL = 0.53;
+    const PITCH = 0.265;
+    const mx = ((x + 0.5) / N) * M;
+    const my = ((y + 0.5) / N) * M;
+    const roll = Math.floor(mx / ROLL);
+    const xr = mx - roll * ROLL;
+    const e = M / N;
+    const band = (a: number, b: number): number => sstep(a - e, a + e, xr) * (1 - sstep(b - e, b + e, xr));
+    const wide = band(0.0166, 0.0966);
+    const narrow = band(0.2815, 0.3215);
+    // Тонкая светлая кромка у широкой полосы.
+    const hair = Math.max(1 - sstep(0, e * 1.6, Math.abs(xr - 0.0166)), 1 - sstep(0, e * 1.6, Math.abs(xr - 0.0966)));
+    // Розетка: шестилепестковый цветок с серединкой и кольцом; столбцы центров — 0,182 и 0,447 м.
+    let flower = 0;
+    let ring = 0;
+    let dot = 0;
+    let diamond = 0;
+    for (let col = 0; col < 2; col++) {
+      const cx = 0.182 + col * PITCH;
+      const off = col === 0 ? PITCH / 2 : 0;
+      let dy = (((my - off) % PITCH) + PITCH) % PITCH;
+      if (dy > PITCH / 2) dy -= PITCH;
+      const dx = xr - cx;
+      const r = Math.hypot(dx, dy);
+      const R = 0.062 * (0.55 + 0.45 * Math.abs(Math.cos(3 * Math.atan2(dy, dx))));
+      flower = Math.max(flower, 1 - sstep(R - e, R + e, r));
+      ring = Math.max(ring, 1 - sstep(0, e * 1.4, Math.abs(r - 0.026)));
+      dot = Math.max(dot, 1 - sstep(0.012 - e, 0.012 + e, r));
+      // Ромб посередине между двумя розетками одного столбца.
+      const ddy = dy > 0 ? dy - PITCH / 2 : dy + PITCH / 2;
+      diamond = Math.max(diamond, 1 - sstep(0.03 - e, 0.03 + e, Math.abs(dx) + Math.abs(ddy)));
+    }
+    const seam = 1 - sstep(0, e * 1.5, Math.min(xr, ROLL - xr));
+    const paper = at(hi, x, y) - 0.5;
+    const tone = (hash01(roll, 1, seed + 30) - 0.5) * 0.03;
+    const g = 0.5 + tone - wide * 0.1 + narrow * 0.085 + hair * 0.03 * wide - flower * 0.12 + ring * flower * 0.06 + dot * 0.05 - diamond * 0.1 - seam * 0.04 + paper * 0.04 + (at(mid, x, y) - 0.5) * 0.03;
+    const h = 0.5 + paper * 0.14 + (at(grainU, x, y) - 0.5) * 0.06 + wide * 0.12 + narrow * 0.05 + flower * 0.3 + diamond * 0.22 + ring * flower * 0.1 - seam * 0.3;
+    // Гладкость тоже несёт рисунок: шейдер чуть темнит негладкое, и розетки с широкой полосой читаются при лобовом свете.
+    return px(h, g, 0.55 - wide * 0.25 + narrow * 0.25 - flower * 0.35 - diamond * 0.3 - seam * 0.5, seam);
+  };
+
+  // 18. Паркет «ёлочкой»: плашки 6 × 30 см (5 × 1 клетка по 6 см), на тайл 20 × 20 клеток (1,2 м). Сквозь клетку (i, j)
+  // проходит плашка: d = (i − j) mod 10 — горизонтальная при d < 5, вертикальная при d ≥ 5. У каждой свой тон и волокна
+  // вдоль длинной стороны, тёмные щели, лак глянцевый на плашке и стёртый местами.
+  layers[DETAIL.parquet] = (x, y) => {
+    const C = 20;
+    const fx = ((x + 0.5) / N) * C;
+    const fy = ((y + 0.5) / N) * C;
+    const ix = Math.floor(fx);
+    const iy = Math.floor(fy);
+    const d = (((ix - iy) % 10) + 10) % 10;
+    let along: number;
+    let across: number;
+    let ida: number;
+    let idb: number;
+    let horizontal = false;
+    if (d < 5) {
+      horizontal = true;
+      const x0 = ix - d;
+      along = fx - x0;
+      across = fy - iy;
+      ida = ((x0 % C) + C) % C;
+      idb = iy;
+    } else {
+      const y0 = iy - (9 - d);
+      along = fy - y0;
+      across = fx - ix;
+      ida = ix;
+      idb = ((y0 % C) + C) % C;
+    }
+    const rnd = hash01(ida, idb, seed + 40);
+    const rnd2 = hash01(ida, idb, seed + 41);
+    const edge = Math.min(Math.min(along, 5 - along), Math.min(across, 1 - across));
+    const gap = 1 - sstep(0.02, 0.1, edge);
+    const ox = Math.floor(rnd * 251);
+    const oy = Math.floor(rnd2 * 251);
+    const gr = horizontal ? at(grainU, x, y, 1, 1, ox, oy) : at(grainV, x, y, 1, 1, oy, ox);
+    const worn = sstep(0.6, 0.72, at(lo, x, y, 2, 2, 40, 12) * 0.7 + at(mid, x, y, 1, 1, 9, 30) * 0.3);
+    const tone = (rnd - 0.5) * 0.28;
+    const h = 0.62 * (1 - gap) + 0.2 * gap + (gr - 0.5) * 0.1 + (rnd2 - 0.5) * 0.08 - worn * 0.04;
+    const g = 0.5 + tone + (gr - 0.5) * 0.17 + (at(lo, x, y) - 0.5) * 0.06 - gap * 0.38 + worn * 0.08;
+    return px(h, g, clamp01(0.93 - worn * 0.65 - gap * 0.85 - sstep(0.7, 0.8, at(hi, x, y)) * 0.1), gap);
+  };
+
+  // 19. Линолеум с печатным рисунком: квадраты 25 см (4 × 4 на тайл 1 м) в шахматном тоне, в каждом — мраморные прожилки
+  // и крошка, сварные швы; потёртости, чёрные штрихи от каблуков.
+  const chips = cellField(N, 64, seed + 10);
+  layers[DETAIL.linoleum] = (x, y) => {
+    const fx = ((x + 0.5) / N) * 4;
+    const fy = ((y + 0.5) / N) * 4;
+    const ix = Math.floor(fx);
+    const iy = Math.floor(fy);
+    const rnd = hash01(ix, iy, seed + 50);
+    const ox = Math.floor(rnd * 251);
+    const oy = Math.floor(hash01(ix, iy, seed + 51) * 251);
+    const edge = Math.min(Math.min(fx - ix, 1 - (fx - ix)), Math.min(fy - iy, 1 - (fy - iy)));
+    const seam = 1 - sstep(0.006, 0.026, edge);
+    const chk = ((ix + iy) & 1) * 2 - 1;
+    // Мрамор: тонкие извилистые жилы по линиям уровня плавного шума, у каждого квадрата свои.
+    const vein = 1 - sstep(0, 0.045, Math.abs(at(mid, x, y, 1, 1, ox, oy) - 0.5));
+    const vein2 = (1 - sstep(0, 0.025, Math.abs(at(lo, x, y, 2, 2, oy, ox) - 0.5))) * 0.7;
+    const chipId = atCell(chips.id, N, x, y, 1, ox, oy);
+    const chipEdge = 1 - sstep(0, 0.08, atCell(chips.edge, N, x, y, 1, ox, oy));
+    const worn = sstep(0.58, 0.7, at(lo, x, y, 2, 2, 100, 60) * 0.65 + at(mid, x, y, 1, 1, 50, 7) * 0.35);
+    // Штрихи от обуви: в каждой клетке сетки 8 × 8 с вероятностью 1/5 — отрезок с заострёнными концами.
+    const gx = ((x + 0.5) / N) * 8;
+    const gy = ((y + 0.5) / N) * 8;
+    const ci = Math.floor(gx);
+    const cj = Math.floor(gy);
+    let shoe = 0;
+    if (hash01(ci, cj, seed + 52) > 0.8) {
+      const ang = hash01(ci, cj, seed + 53) * Math.PI;
+      const cx = ci + 0.35 + hash01(ci, cj, seed + 54) * 0.3;
+      const cy = cj + 0.35 + hash01(ci, cj, seed + 55) * 0.3;
+      const hl = 0.18 + hash01(ci, cj, seed + 56) * 0.14;
+      const dx = gx - cx;
+      const dy = gy - cy;
+      const t = Math.max(-hl, Math.min(hl, dx * Math.cos(ang) + dy * Math.sin(ang)));
+      const w = 0.02 + 0.03 * (1 - Math.abs(t) / hl);
+      shoe = 1 - sstep(w * 0.4, w, Math.hypot(dx - t * Math.cos(ang), dy - t * Math.sin(ang)));
+    }
+    const g = 0.5 + chk * 0.06 + (rnd - 0.5) * 0.05 + (chipId - 0.5) * 0.24 - chipEdge * 0.025 - vein * 0.15 - vein2 * 0.08 - seam * 0.3 + worn * 0.07 - shoe * 0.3 + (at(lo, x, y) - 0.5) * 0.06;
+    const h = 0.58 + (at(hi, x, y) - 0.5) * 0.08 - chipEdge * 0.05 + chipId * 0.04 - seam * 0.4 - shoe * 0.05;
+    return px(h, g, clamp01(0.82 - worn * 0.5 - seam * 0.7 - chipEdge * 0.15 - shoe * 0.2), shoe);
+  };
+
+  // 20. Полированная мебельная плита: длинное волокно вдоль U, годичные кольца с «арками» распила, поры, редкие царапины.
+  layers[DETAIL.veneer] = (x, y) => {
+    const xn = (x + 0.5) / N;
+    const yn = (y + 0.5) / N;
+    // Фаза колец: линии p = const идут вдоль волокна и выгибаются дугами там, где фаза гуляет по x.
+    const b = 0.5 + 0.5 * Math.cos(TAU * (xn + 0.06 * Math.sin(TAU * yn) - 0.5));
+    const p = yn * 14 + 2.1 * b * b + (at(lo, x, y, 1, 1, 5, 9) - 0.5) * 1.1 + (at(mid, x, y, 1, 1, 12, 3) - 0.5) * 0.5;
+    const f = p - Math.floor(p);
+    const late = sstep(0.55, 0.8, f) * (1 - sstep(0.84, 1.0, f));
+    const fine = at(grainU, x, y, 1, 1, 17, 41);
+    const pore = sstep(0.8, 0.9, at(grainU, x, y, 1, 1, 90, 7)) * sstep(0.35, 0.6, at(mid, x, y, 1, 1, 30, 60));
+    const scratch = sstep(0.93, 0.96, at(grainV, x, y, 1, 1, 33, 71)) * sstep(0.5, 0.65, at(lo, x, y, 2, 2));
+    const g = 0.5 + (late - 0.4) * 0.15 + (fine - 0.5) * 0.14 + (at(lo, x, y, 1, 1, 70, 20) - 0.5) * 0.1 - pore * 0.1 + scratch * 0.05;
+    const h = 0.5 + (fine - 0.5) * 0.3 + late * 0.12 - pore * 0.3 - scratch * 0.3;
+    return px(h, g, clamp01(0.96 - pore * 0.55 - scratch * 0.5 - sstep(0.7, 0.85, at(mid, x, y, 1, 1, 8, 8)) * 0.15), pore);
+  };
+
+  // 21. Обивка: букле — петли-кружки разного тона поверх крупного переплетения; между петлями тёмные щели.
+  const loops = cellField(N, 28, seed + 11);
+  layers[DETAIL.upholstery] = (x, y) => {
+    const u = (x / N) * TAU * 32;
+    const v = (y / N) * TAU * 32;
+    const weave = Math.sin(u) * Math.sin(v) * 0.5 + 0.5;
+    const near = atCell(loops.near, N, x, y);
+    const loop = sstep(0.6, 0.12, near);
+    const id = atCell(loops.id, N, x, y);
+    const crev = 1 - sstep(0, 0.12, atCell(loops.edge, N, x, y));
+    const h = 0.3 + loop * (0.4 + id * 0.15) + weave * 0.1 + (at(hi, x, y) - 0.5) * 0.1;
+    const g = 0.5 + (id - 0.5) * 0.28 * loop + (weave - 0.5) * 0.1 - crev * 0.18 + (at(lo, x, y) - 0.5) * 0.12 + (at(mid, x, y) - 0.5) * 0.06;
+    return px(h, g, 0.04 + loop * 0.1, loop);
+  };
 
   const data = new Uint8Array(N * N * 4 * DETAIL_LAYERS);
   for (let l = 0; l < DETAIL_LAYERS; l++) {

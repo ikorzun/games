@@ -76,11 +76,11 @@ function sofa(xf: Xf, seed: number): void {
   const rnd = rng(seed);
   const fab: Vec3 = rnd() < 0.5 ? [1.45, 1.0, 0.45] : [0.55, 1.25, 1.1];
   for (const x of [-0.95, 0.87]) for (const z of [0.08, 0.78]) bx(xf, [x, 0, z], [x + 0.08, 0.12, z + 0.06], MAT.wood, WOOD_DARK, { aoBottom: 0.6 });
-  bx(xf, [-1, 0.1, 0.04], [1, 0.4, 0.9], MAT.canvas, dim(fab, 0.85), { aoBottom: 0.6 });
-  for (const s of [-1, 1]) bx(xf, [s > 0 ? 0.8 : -1, 0.4, 0.04], [s > 0 ? 1 : -0.8, 0.62, 0.9], MAT.canvas, dim(fab, 0.95), { bevel: 0.02 });
-  bx(xf, [-0.8, 0.4, 0.04], [0.8, 0.79, 0.3], MAT.canvas, fab, { bevel: 0.02 });
-  bx(xf, [-0.8, 0.4, 0.3], [-0.005, 0.52, 0.9], MAT.canvas, dim(fab, 1.12), { bevel: 0.015 });
-  bx(xf, [0.005, 0.4, 0.3], [0.8, 0.52, 0.9], MAT.canvas, dim(fab, 1.12), { bevel: 0.015 });
+  bx(xf, [-1, 0.1, 0.04], [1, 0.4, 0.9], MAT.upholstery, dim(fab, 0.85), { aoBottom: 0.6 });
+  for (const s of [-1, 1]) bx(xf, [s > 0 ? 0.8 : -1, 0.4, 0.04], [s > 0 ? 1 : -0.8, 0.62, 0.9], MAT.upholstery, dim(fab, 0.95), { bevel: 0.02 });
+  bx(xf, [-0.8, 0.4, 0.04], [0.8, 0.79, 0.3], MAT.upholstery, fab, { bevel: 0.02 });
+  bx(xf, [-0.8, 0.4, 0.3], [-0.005, 0.52, 0.9], MAT.upholstery, dim(fab, 1.12), { bevel: 0.015 });
+  bx(xf, [0.005, 0.4, 0.3], [0.8, 0.52, 0.9], MAT.upholstery, dim(fab, 1.12), { bevel: 0.015 });
   // Плед в крупную клетку, переброшен через спинку слева.
   const plaid: Vec3 = [1.1, 0.8, 0.75];
   bx(xf, [-0.6, 0.79, 0.02], [0, 0.85, 0.32], MAT.paintRed, plaid);
@@ -100,10 +100,10 @@ function armchair(xf: Xf, seed: number): void {
   const rnd = rng(seed);
   const fab: Vec3 = rnd() < 0.5 ? [0.55, 1.35, 0.9] : [1.4, 0.5, 0.45];
   for (const x of [-0.4, 0.34]) for (const z of [0.08, 0.76]) bx(xf, [x, 0, z], [x + 0.06, 0.12, z + 0.06], MAT.wood, WOOD_DARK, { aoBottom: 0.6 });
-  bx(xf, [-0.45, 0.1, 0.04], [0.45, 0.38, 0.85], MAT.canvas, dim(fab, 0.85), { aoBottom: 0.6 });
-  for (const s of [-1, 1]) bx(xf, [s > 0 ? 0.33 : -0.45, 0.38, 0.04], [s > 0 ? 0.45 : -0.33, 0.6, 0.85], MAT.canvas, dim(fab, 0.95), { bevel: 0.02 });
-  bx(xf, [-0.33, 0.38, 0.04], [0.33, 0.9, 0.27], MAT.canvas, fab, { bevel: 0.02 });
-  bx(xf, [-0.33, 0.38, 0.27], [0.33, 0.5, 0.85], MAT.canvas, dim(fab, 1.15), { bevel: 0.015 });
+  bx(xf, [-0.45, 0.1, 0.04], [0.45, 0.38, 0.85], MAT.upholstery, dim(fab, 0.85), { aoBottom: 0.6 });
+  for (const s of [-1, 1]) bx(xf, [s > 0 ? 0.33 : -0.45, 0.38, 0.04], [s > 0 ? 0.45 : -0.33, 0.6, 0.85], MAT.upholstery, dim(fab, 0.95), { bevel: 0.02 });
+  bx(xf, [-0.33, 0.38, 0.04], [0.33, 0.9, 0.27], MAT.upholstery, fab, { bevel: 0.02 });
+  bx(xf, [-0.33, 0.38, 0.27], [0.33, 0.5, 0.85], MAT.upholstery, dim(fab, 1.15), { bevel: 0.015 });
   // Кружевные салфетки на спинке и подлокотниках.
   face(xf, -0.2, 0.62, 0.2, 0.86, 0.275, MAT.paper, [1.3, 1.25, 1.0]);
   for (const x of [-0.39, 0.39]) flat(xf, x - 0.05, 0.3, x + 0.05, 0.6, 0.605, MAT.paper, [1.3, 1.25, 1.0]);
@@ -115,7 +115,7 @@ function tvStand(xf: Xf, seed: number): void {
   const rnd = rng(seed);
   const wood: Vec3 = dim([1.05, 0.95, 0.85], 0.9 + rnd() * 0.2);
   for (const x of [-0.5, 0.45]) for (const z of [0.05, 0.43]) bx(xf, [x, 0, z], [x + 0.05, 0.25, z + 0.04], MAT.wood, WOOD_DARK, { aoBottom: 0.6 });
-  bx(xf, [-0.55, 0.25, 0.02], [0.55, 0.55, 0.5], MAT.wood, wood);
+  bx(xf, [-0.55, 0.25, 0.02], [0.55, 0.55, 0.5], MAT.veneer, wood);
   face(xf, -0.005, 0.28, 0.005, 0.52, 0.501, MAT.bakelite);
   for (const x of [-0.08, 0.05]) bx(xf, [x, 0.36, 0.5], [x + 0.03, 0.46, 0.52], MAT.brass, [1.3, 1.2, 1.0]);
   // Видеомагнитофон под тумбой: тёмный ящик, светлая щель, красный огонёк.
@@ -123,7 +123,7 @@ function tvStand(xf: Xf, seed: number): void {
   face(xf, -0.24, 0.1, 0.06, 0.16, 0.461, MAT.steel, [1.2, 1.2, 1.2]);
   bx(xf, [0.18, 0.11, 0.46], [0.23, 0.15, 0.475], MAT.glow, [14, 2, 1]);
   // Телевизор: широкий корпус, горб кинескопа позади, чёрная рамка и выпуклый светящийся экран.
-  bx(xf, [-0.42, 0.55, 0.22], [0.42, 0.97, 0.47], MAT.wood, dim(wood, 1.1));
+  bx(xf, [-0.42, 0.55, 0.22], [0.42, 0.97, 0.47], MAT.veneer, dim(wood, 1.1));
   bx(xf, [-0.3, 0.6, 0.04], [0.3, 0.9, 0.22], MAT.bakelite, [1.2, 1.2, 1.2]);
   bx(xf, [-0.38, 0.6, 0.47], [0.22, 0.93, 0.485], MAT.bakelite, [1.2, 1.2, 1.2]);
   bx(xf, [-0.34, 0.63, 0.485], [0.18, 0.9, 0.5], MAT.glow, [5, 7, 10]);
@@ -239,19 +239,19 @@ function wardrobe(xf: Xf, seed: number): void {
   const D = 0.44;
   for (const x of [-0.52, 0.46]) for (const z of [0.04, 0.34]) bx(xf, [x, 0, z], [x + 0.06, 0.1, z + 0.06], MAT.wood, WOOD_DARK, { aoBottom: 0.6 });
   // Корпус: задняя стенка тёмная (внутри всегда темно), боковины, крыша и дно, перегородка.
-  bx(xf, [-0.55, 0.1, 0], [0.55, 2.0, 0.03], MAT.wood, [0.4, 0.37, 0.34]);
-  bx(xf, [-0.55, 0.1, 0.03], [-0.5, 2.0, D], MAT.wood, wood, { aoBottom: 0.6 });
-  bx(xf, [0.5, 0.1, 0.03], [0.55, 2.0, D], MAT.wood, wood, { aoBottom: 0.6 });
-  bx(xf, [-0.57, 1.96, 0], [0.57, 2.0, 0.47], MAT.wood, dim(wood, 1.1));
-  bx(xf, [-0.5, 0.1, 0.03], [0.5, 0.14, D], MAT.wood, dim(wood, 0.8));
-  bx(xf, [-0.02, 0.14, 0.03], [0.02, 1.96, D], MAT.wood, wood);
+  bx(xf, [-0.55, 0.1, 0], [0.55, 2.0, 0.03], MAT.veneer, [0.4, 0.37, 0.34]);
+  bx(xf, [-0.55, 0.1, 0.03], [-0.5, 2.0, D], MAT.veneer, wood, { aoBottom: 0.6 });
+  bx(xf, [0.5, 0.1, 0.03], [0.55, 2.0, D], MAT.veneer, wood, { aoBottom: 0.6 });
+  bx(xf, [-0.57, 1.96, 0], [0.57, 2.0, 0.47], MAT.veneer, dim(wood, 1.1));
+  bx(xf, [-0.5, 0.1, 0.03], [0.5, 0.14, D], MAT.veneer, dim(wood, 0.8));
+  bx(xf, [-0.02, 0.14, 0.03], [0.02, 1.96, D], MAT.veneer, wood);
   // Закрытая дверца с двумя филёнками и латунной ручкой.
-  bx(xf, [-0.5, 0.14, D], [-0.02, 1.96, D + 0.03], MAT.wood, dim(wood, 1.15));
-  bx(xf, [-0.44, 0.26, D + 0.03], [-0.08, 0.92, D + 0.045], MAT.wood, dim(wood, 0.85));
-  bx(xf, [-0.44, 1.04, D + 0.03], [-0.08, 1.88, D + 0.045], MAT.wood, dim(wood, 0.85));
+  bx(xf, [-0.5, 0.14, D], [-0.02, 1.96, D + 0.03], MAT.veneer, dim(wood, 1.15));
+  bx(xf, [-0.44, 0.26, D + 0.03], [-0.08, 0.92, D + 0.045], MAT.veneer, dim(wood, 0.85));
+  bx(xf, [-0.44, 1.04, D + 0.03], [-0.08, 1.88, D + 0.045], MAT.veneer, dim(wood, 0.85));
   xf.cyl([-0.07, 1.0, D + 0.03], 'z', 0.04, 0.025, MAT.brass, { segments: 6, tint: [1.4, 1.3, 1.1] });
   // Правая дверца распахнута почти на пол-оборота и лежит вдоль правого бока.
-  beam(xf, [0.57, 1.05, D + 0.02], [0.62, 1.05, 0.0], 1.86, 0.035, MAT.wood, dim(wood, 1.15), { side: UP });
+  beam(xf, [0.57, 1.05, D + 0.02], [0.62, 1.05, 0.0], 1.86, 0.035, MAT.veneer, dim(wood, 1.15), { side: UP });
   // Внутри: штанга, плечики с одеждой, нижняя полка со стопками.
   bx(xf, [0.02, 1.72, 0.2], [0.5, 1.75, 0.24], MAT.steel, [1.3, 1.3, 1.3]);
   const cl: Array<[number, number, number, Vec3, number]> = [
@@ -261,7 +261,7 @@ function wardrobe(xf: Xf, seed: number): void {
     [0.41, 1.1, 1.72, [1.3, 1.3, 1.2], MAT.paper],
   ];
   for (const [x, y0, y1, t, m] of cl) bx(xf, [x, y0, 0.14], [x + 0.1, y1, 0.3], m, t);
-  bx(xf, [0.03, 0.48, 0.04], [0.49, 0.51, 0.42], MAT.wood, dim(wood, 0.9));
+  bx(xf, [0.03, 0.48, 0.04], [0.49, 0.51, 0.42], MAT.veneer, dim(wood, 0.9));
   bx(xf, [0.06, 0.51, 0.1], [0.26, 0.68, 0.38], MAT.paper, [1.3, 1.25, 1.0]);
   bx(xf, [0.28, 0.51, 0.1], [0.46, 0.62, 0.38], MAT.paintBlue, [1.2, 1.3, 1.5]);
   // Чемодан наверху: светлая фибра, тёмная ручка, две застёжки.
@@ -275,10 +275,10 @@ function wardrobe(xf: Xf, seed: number): void {
 function bookshelf(xf: Xf, seed: number): void {
   const rnd = rng(seed);
   const wood: Vec3 = dim([1.0, 0.9, 0.8], 0.9 + rnd() * 0.2);
-  bx(xf, [-0.5, 0, 0.0], [0.5, 1.9, 0.02], MAT.wood, [0.4, 0.37, 0.34]);
-  for (const s of [-1, 1]) bx(xf, [s > 0 ? 0.47 : -0.5, 0, 0.02], [s > 0 ? 0.5 : -0.47, 1.9, 0.32], MAT.wood, wood, { aoBottom: 0.6, skip: ['nz'] });
+  bx(xf, [-0.5, 0, 0.0], [0.5, 1.9, 0.02], MAT.veneer, [0.4, 0.37, 0.34]);
+  for (const s of [-1, 1]) bx(xf, [s > 0 ? 0.47 : -0.5, 0, 0.02], [s > 0 ? 0.5 : -0.47, 1.9, 0.32], MAT.veneer, wood, { aoBottom: 0.6, skip: ['nz'] });
   const ys = [0.0, 0.38, 0.76, 1.14, 1.52, 1.88];
-  for (const y of ys) bx(xf, [-0.47, y, 0.02], [0.47, y + 0.03, 0.32], MAT.wood, dim(wood, 0.9), { skip: ['nz'] });
+  for (const y of ys) bx(xf, [-0.47, y, 0.02], [0.47, y + 0.03, 0.32], MAT.veneer, dim(wood, 0.9), { skip: ['nz'] });
   const spines: Array<[number, Vec3]> = [
     [MAT.paintRed, [1.3, 1.1, 1.1]],
     [MAT.paintBlue, [1.2, 1.3, 1.5]],

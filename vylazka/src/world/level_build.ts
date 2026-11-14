@@ -51,10 +51,10 @@ const ROOM_STYLE: Partial<Record<RoomType, Partial<WallStyle>>> = {
   airlock: { lower: MAT.paintGreen, lowerTint: [0.7, 0.75, 0.62], paintHeight: 1.6 },
   // Дом, вросший в убежище: обои на всю высоту стены (полоса и верх — те же обои) и паркет вместо бетона.
   // Оттенки у комнат разные, всё пастельное.
-  living: { lower: MAT.paper, lowerTint: [1.12, 0.88, 0.86], upper: MAT.paper, upperTint: [1.1, 0.9, 0.88], stripe: MAT.paper, paintHeight: 2.2, floor: MAT.wood, floorTint: [0.95, 0.8, 0.65] },
-  bedroom: { lower: MAT.paper, lowerTint: [0.86, 0.95, 1.12], upper: MAT.paper, upperTint: [0.88, 0.96, 1.1], stripe: MAT.paper, paintHeight: 2.2, floor: MAT.wood, floorTint: [0.85, 0.75, 0.65] },
-  nursery: { lower: MAT.paper, lowerTint: [1.12, 1.12, 0.78], upper: MAT.paper, upperTint: [1.1, 1.1, 0.82], stripe: MAT.paper, paintHeight: 2.2, floor: MAT.wood, floorTint: [1.05, 0.9, 0.72] },
-  hallway: { lower: MAT.paper, lowerTint: [0.98, 0.84, 0.68], upper: MAT.paper, upperTint: [1.0, 0.88, 0.74], stripe: MAT.paper, paintHeight: 2.0, floor: MAT.wood, floorTint: [0.78, 0.62, 0.5] },
+  living: { lower: MAT.wallpaper, lowerTint: [1.12, 0.88, 0.86], upper: MAT.wallpaper, upperTint: [1.1, 0.9, 0.88], stripe: MAT.wallpaper, paintHeight: 2.2, floor: MAT.parquet, floorTint: [0.95, 0.8, 0.65] },
+  bedroom: { lower: MAT.wallpaper, lowerTint: [0.86, 0.95, 1.12], upper: MAT.wallpaper, upperTint: [0.88, 0.96, 1.1], stripe: MAT.wallpaper, paintHeight: 2.2, floor: MAT.parquet, floorTint: [0.85, 0.75, 0.65] },
+  nursery: { lower: MAT.wallpaper, lowerTint: [1.12, 1.12, 0.78], upper: MAT.wallpaper, upperTint: [1.1, 1.1, 0.82], stripe: MAT.wallpaper, paintHeight: 2.2, floor: MAT.linoleum, floorTint: [1.05, 0.9, 0.72] },
+  hallway: { lower: MAT.wallpaper, lowerTint: [0.98, 0.84, 0.68], upper: MAT.wallpaper, upperTint: [1.0, 0.88, 0.74], stripe: MAT.wallpaper, paintHeight: 2.0, floor: MAT.linoleum, floorTint: [0.78, 0.62, 0.5] },
   // Ванная светлее санузла убежища: белёсая плитка до потолка, на полу плитка посветлее.
   bathroom: { lower: MAT.tile, lowerTint: [1.08, 1.14, 1.16], upper: MAT.tile, upperTint: [1.05, 1.1, 1.12], stripe: MAT.tile, paintHeight: 2.2, floor: MAT.tileFloor, floorTint: [1.35, 1.45, 1.55] },
   // Кухня: крашеный низ, побелка сверху, на полу плитка.

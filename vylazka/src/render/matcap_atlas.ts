@@ -15,7 +15,7 @@ import { hexToLinear, MAT_COUNT } from '../world/materials';
 import type { MatDef } from '../world/materials';
 
 export const ATLAS_COLS = 8;
-export const ATLAS_ROWS = 4;
+export const ATLAS_ROWS = 5;
 
 /** Блик GGX под соосным светом: полувектор совпадает с направлением на фонарь. */
 function ggx(z: number, alpha: number): number {
@@ -129,5 +129,7 @@ export function bakeMatcapAtlas(defs: readonly MatDef[], cell = 128): MatcapAtla
       }
     }
   }
+  // Ячейки сверх числа материалов остаются чёрными, но непрозрачными.
+  for (let i = 3; i < data.length; i += 4) data[i] = 255;
   return { data, width, height, cell, base };
 }

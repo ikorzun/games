@@ -18,8 +18,8 @@ const MAX_TRIS = 800;
  */
 const EXTRA = Number(process.env.VZ_PROPS_SEEDS ?? 24);
 const SEEDS = [1, 7, 1000, 1007, 1350, 20041113, 0xffffffff, 0, ...Array.from({ length: EXTRA }, (_, i) => (i * 7919 + 13) % 1000000)];
-/** Материалы надписей (print, stencil) реквизиту не положены: их кладёт отдельный слой. */
-const MAX_MAT = MAT.castIron;
+/** Материалы надписей (print, stencil) реквизиту не положены: их кладёт отдельный слой. Домашний набор (обои… обивка) идёт после них. */
+const allowedMat = (v: number): boolean => v <= MAT.castIron || v >= MAT.wallpaper;
 
 interface Built {
   mesh: MeshData;
@@ -106,9 +106,9 @@ describe.each(entries)('предмет %s', (name, p) => {
     for (let i = 0; i < m.normal.length; i += 3) expect(Math.hypot(m.normal[i]!, m.normal[i + 1]!, m.normal[i + 2]!)).toBeCloseTo(1, 4);
   });
 
-  it('материалы — целые номера 0…29, тон приглушён', () => {
+  it('материалы — целые номера без надписей, тон приглушён', () => {
     const m = base.mesh;
-    expect(m.mat.every((v) => Number.isInteger(v) && v >= 0 && v <= MAX_MAT)).toBe(true);
+    expect(m.mat.every((v) => Number.isInteger(v) && v >= 0 && allowedMat(v))).toBe(true);
     // Тон: ничего кислотного и ничего «чернее чёрного»; AO — в пределах 0…1. У светящихся поверхностей
     // (MAT.glow) оттенок — множитель яркости, ему можно до 14.
     for (let i = 0; i < m.color.length; i += 4) {

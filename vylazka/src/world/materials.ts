@@ -1,5 +1,5 @@
 /**
- * Материалы мира: номер = ячейка в атласе matcap (8×4). Один материал-шейдер на весь мир,
+ * Материалы мира: номер = ячейка в атласе matcap (8×5). Один материал-шейдер на весь мир,
  * номер лежит в вершине — комната рисуется одним вызовом.
  *
  * У материала три стороны: matcap-шар (как он блестит под фонарём), фактура (слой из render/detail.ts:
@@ -41,13 +41,18 @@ export const MAT = {
   castIron: 29,
   print: 30,
   stencil: 31,
+  wallpaper: 32,
+  parquet: 33,
+  linoleum: 34,
+  veneer: 35,
+  upholstery: 36,
 } as const;
 
 export type MatId = (typeof MAT)[keyof typeof MAT];
-export const MAT_COUNT = 32;
+export const MAT_COUNT = 37;
 
 /** Номера слоёв фактур; совпадают с DETAIL в render/detail.ts (тест следит). */
-const L = { concrete: 0, plaster: 1, paint: 2, rust: 3, metal: 4, wood: 5, fabric: 6, tile: 7, floor: 8, plastic: 9, paper: 10, brick: 11, dirt: 12, lagging: 13, zinc: 14, smooth: 15 } as const;
+const L = { concrete: 0, plaster: 1, paint: 2, rust: 3, metal: 4, wood: 5, fabric: 6, tile: 7, floor: 8, plastic: 9, paper: 10, brick: 11, dirt: 12, lagging: 13, zinc: 14, smooth: 15, wallpaper: 17, parquet: 18, linoleum: 19, veneer: 20, upholstery: 21 } as const;
 
 /** Род запустения: что шейдер делает с поверхностью со временем. */
 export const DECAY = {
@@ -134,6 +139,12 @@ export const MAT_DEFS: readonly MatDef[] = [
   { name: 'cast_iron', color: '#2e2f31', rough: 0.6, spec: 0.8, metal: 0.6, mottle: 0.3, grime: 0.5, layer: L.rust, tile: 0.4, bump: 0.003, decay: DECAY.metal, alt: 4 },
   { name: 'print', color: '#d8d2bd', rough: 1.0, spec: 0.0, grime: 0.55, layer: L.paper, tile: 0.4, bump: 0.001, decay: DECAY.print },
   { name: 'stencil', color: '#e6e2d6', rough: 0.8, spec: 0.2, grime: 0.5, layer: L.paint, tile: 0.8, bump: 0.001, decay: DECAY.stencil },
+  // Домашний набор: обои, паркет, линолеум, полированная плита, обивка.
+  { name: 'wallpaper', color: '#cfc5aa', rough: 0.9, spec: 0.1, sheen: 0.12, grime: 0.6, layer: L.wallpaper, tile: 1.06, bump: 0.0035, decay: DECAY.paint, alt: 1 },
+  { name: 'parquet', color: '#9a7243', rough: 0.34, spec: 0.55, coat: 0.7, grime: 0.7, layer: L.parquet, tile: 1.2, bump: 0.0016, decay: DECAY.organic },
+  { name: 'linoleum', color: '#a08d6a', rough: 0.5, spec: 0.4, coat: 0.3, grime: 0.75, layer: L.linoleum, tile: 1.0, bump: 0.0012, decay: DECAY.glossy },
+  { name: 'veneer', color: '#80593a', rough: 0.24, spec: 0.7, coat: 0.95, grime: 0.5, layer: L.veneer, tile: 0.8, bump: 0.0006, decay: DECAY.organic },
+  { name: 'upholstery', color: '#716d58', rough: 1.0, spec: 0.0, sheen: 0.5, grime: 0.6, layer: L.upholstery, tile: 0.3, bump: 0.003, decay: DECAY.organic },
 ];
 
 /** sRGB-hex → линейный цвет. */
