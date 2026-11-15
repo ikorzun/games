@@ -75,7 +75,7 @@ export function parseProfile(raw: unknown, baseSeed: number): Profile {
     bright: level3(o.bright),
     calm: o.calm === true,
     lang: typeof o.lang === 'string' ? o.lang : null,
-    place: o.place === 'office' || o.place === 'yellow' ? o.place : 'shelter',
+    place: o.place === 'office' || o.place === 'yellow' || o.place === 'station' ? o.place : 'shelter',
     memories: parseMemories(o.memories),
   };
 }

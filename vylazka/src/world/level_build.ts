@@ -124,8 +124,42 @@ const YELLOW_ROOMS: Partial<Record<RoomType, Partial<WallStyle>>> = {
   washroom: { lower: MAT.tile, lowerTint: [1.1, 1.05, 0.8], stripe: MAT.tile, upper: MAT.tile, upperTint: [1.1, 1.05, 0.8], paintHeight: 2.2, floor: MAT.tileFloor, floorTint: [1.3, 1.2, 0.9] },
 };
 
+/**
+ * Зал ожидания: светлый камень и кремовая штукатурка; в малых комнатах — своё (касса в дереве, камеры
+ * хранения в зелёной краске, буфет в кафеле); переходы к перрону — тёмные, в плитке; перрон — кирпич
+ * и бетон.
+ */
+const STATION_STYLE: WallStyle = {
+  lower: MAT.plaster,
+  lowerTint: [1.02, 0.98, 0.86],
+  stripe: MAT.wood,
+  upper: MAT.plaster,
+  upperTint: [1.2, 1.17, 1.06],
+  floor: MAT.tile,
+  floorTint: [0.9, 0.88, 0.82],
+  ceil: MAT.plaster,
+  ceilTint: [1.15, 1.13, 1.05],
+  paintHeight: 1.5,
+};
+const STATION_ROOMS: Partial<Record<RoomType, Partial<WallStyle>>> = {
+  concourse: { paintHeight: 1.9 },
+  tickets: { lower: MAT.wood, lowerTint: [0.7, 0.6, 0.5], paintHeight: 1.2, floor: MAT.parquet, floorTint: [0.9, 0.8, 0.7] },
+  lockers: { lower: MAT.paintGreen, lowerTint: [0.82, 0.9, 0.84], paintHeight: 1.7, floor: MAT.linoleum, floorTint: [0.85, 0.9, 0.85] },
+  buffet: { lower: MAT.tile, lowerTint: [1.1, 1.06, 0.92], stripe: MAT.tile, paintHeight: 1.6 },
+  washroom: { lower: MAT.tile, lowerTint: [0.95, 1.0, 1.0], stripe: MAT.tile, upper: MAT.tile, upperTint: [0.95, 1.0, 1.0], paintHeight: 2.2 },
+  storage: { lower: MAT.brick, lowerTint: [0.9, 0.88, 0.85], upper: MAT.brick, upperTint: [1.0, 1.0, 1.0], stripe: MAT.brick, floor: MAT.concrete, floorTint: [0.8, 0.8, 0.78] },
+  corridor: { lower: MAT.tile, lowerTint: [0.62, 0.68, 0.64], stripe: MAT.tile, upper: MAT.plaster, upperTint: [0.72, 0.72, 0.68], paintHeight: 1.8, floor: MAT.concrete, floorTint: [0.7, 0.7, 0.68] },
+  platform: { lower: MAT.brick, lowerTint: [0.95, 0.9, 0.85], upper: MAT.brick, upperTint: [1.05, 1.0, 0.95], stripe: MAT.brick, floor: MAT.concrete, floorTint: [0.95, 0.94, 0.9], ceil: MAT.wood, ceilTint: [0.6, 0.55, 0.5] },
+  track: { lower: MAT.brick, lowerTint: [0.55, 0.52, 0.5], upper: MAT.brick, upperTint: [0.6, 0.57, 0.55], stripe: MAT.brick },
+};
+/** Высота потолка в помещениях зала ожидания: простор зала и теснота переходов — половина его ощущения. */
+const STATION_CEIL: Partial<Record<RoomType, number>> = { concourse: 6.3, corridor: 2.5, platform: 3.6, track: 5.2, vestibule: 3.2 };
+/** Пути: насколько они ниже перрона и на сколько от его края начинается пустота, м. */
+const TRACK_DROP = 1.2;
+
 function styleFor(room: GenRoom, world: WorldKind): WallStyle {
   if (world === 'office') return { ...OFFICE_STYLE, ...(OFFICE_ROOMS[room.type] ?? {}) };
+  if (world === 'station') return { ...STATION_STYLE, ...(STATION_ROOMS[room.type] ?? {}) };
   if (world === 'yellow') return { ...YELLOW_STYLE, ...(YELLOW_ROOMS[room.type] ?? {}) };
   const dark = room.tier === 2 ? 0.82 : room.tier === 1 ? 0.92 : 1;
   const base: WallStyle = { ...STYLE_CORRIDOR, ...(TIER_CORRIDOR[room.tier] ?? {}) };
@@ -214,12 +248,16 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
     const id = cellRoom.get(`${c.tier},${c.x},${c.z}`);
     if (id !== undefined) hazardRoom.add(id);
   }
-  const plain = layout.rooms.filter((r) => r !== entrance && r.type !== 'stairwell' && r.type !== 'lift' && r.type !== 'entrance' && r.type !== 'airlock' && !hazardRoom.has(r.id));
+  const plain = layout.rooms.filter((r) => r !== entrance && r.type !== 'stairwell' && r.type !== 'lift' && r.type !== 'entrance' && r.type !== 'airlock' && r.type !== 'track' && !hazardRoom.has(r.id));
+  const station = layout.world === 'station';
   const order = (salt: number) => (a: GenRoom, b: GenRoom): number => hash01(a.id * 17 + 3, salt, layout.seed ^ 0xe87a) - hash01(b.id * 17 + 3, salt, layout.seed ^ 0xe87a);
   const rooms1 = plain.filter((r) => r.type !== 'corridor' && r.type !== 'department' && r.type !== 'collapsed');
   // Сад под потолком: одно помещение верхнего яруса из четырёх клеток и больше — потолок в нём выше.
-  const gardenRoom = rooms1.filter((r) => r.tier === entrance.tier && r.cells.length >= 4).sort(order(1))[0];
-  const flowerRooms = new Set(rooms1.filter((r) => r !== gardenRoom && r.cells.length >= 2).sort(order(2)).slice(0, 2).map((r) => r.id));
+  // В зале ожидания потолки свои (STATION_CEIL), сада нет; цветы — только в комнатах с обычным потолком.
+  const gardenRoom = station ? undefined : rooms1.filter((r) => r.tier === entrance.tier && r.cells.length >= 4).sort(order(1))[0];
+  const flowerRooms = new Set(rooms1.filter((r) => r !== gardenRoom && r.cells.length >= 2 && (!station || r.type === 'lockers' || r.type === 'buffet')).sort(order(2)).slice(0, 2).map((r) => r.id));
+  /** Высота потолка помещения над полом. */
+  const ceilOf = (room: GenRoom): number => (room === gardenRoom ? GARDEN_H : station ? (STATION_CEIL[room.type] ?? CEIL_H) : CEIL_H);
 
   // ── Скорлупа по ярусам ──
   const shells: Shell[] = [];
@@ -230,8 +268,11 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
     const y = tierFloor(room.tier);
     for (const [x, z] of room.cells) {
       // Архитектура здесь условна (слова владельца: «ты можешь менять потолок в комнатах»): в саду он выше.
-      const cell: ShellCell = { cx: x - HALF, cz: z - HALF, floorY: y, ceilY: y + (room === gardenRoom ? GARDEN_H : CEIL_H), room: room.id, style };
+      const cell: ShellCell = { cx: x - HALF, cz: z - HALF, floorY: y, ceilY: y + ceilOf(room), room: room.id, style };
       if (pitAt.has(`${room.tier},${x},${z}`)) cell.noFloor = true;
+      // Зал ожидания: над залом стеклянная крыша (потолка нет, только балки), над путями — небо, под ними — пустота.
+      if (station && (room.type === 'concourse' || room.type === 'track')) cell.noCeil = true;
+      if (station && room.type === 'track') cell.noFloor = true;
       if (upperWells.has(room.id)) cell.noFloor = true;
       else if (lowerWells.has(room.id)) {
         // Нижняя часть шахты марша тянется до пола верхнего яруса и открыта вверх.
@@ -358,6 +399,60 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
     pit(new Xf(chunkFor(room, p.x, p.z).mb, col, wx, y, wz, 0), CELL, PIT_HOLE, PIT_DEPTH, st.floor, st.floorTint);
     zones.push({ kind: 'pit', tier: p.tier, minX: wx - PIT_HOLE / 2, maxX: wx + PIT_HOLE / 2, minZ: wz - PIT_HOLE / 2, maxZ: wz + PIT_HOLE / 2, minY: y - PIT_DEPTH - 1, maxY: y - 0.7 });
   }
+  // ── Зал ожидания: балки стеклянной крыши над залом, пути за краем перрона ──
+  if (station) {
+    for (const room of layout.rooms) {
+      const y = tierFloor(room.tier);
+      for (const [x, z] of room.cells) {
+        const wx = cellToWorld(x);
+        const wz = cellToWorld(z);
+        const xf = new Xf(chunkFor(room, x, z).mb, null, wx, y, wz, 0);
+        if (room.type === 'concourse') {
+          // Переплёт крыши: балка поперёк зала над каждой клеткой и два прогона вдоль. От них на полу
+          // лежит решётка теней — по ней видно, как идёт время.
+          const top = STATION_CEIL.concourse!;
+          xf.box([-CELL / 2, top - 0.32, -0.1], [CELL / 2, top - 0.02, 0.1], MAT.metalGreen, { tint: [0.5, 0.56, 0.52] });
+          for (const px of [-0.75, 0.75]) xf.box([px - 0.045, top - 0.2, -CELL / 2], [px + 0.045, top - 0.08, CELL / 2], MAT.metalGreen, { tint: [0.5, 0.56, 0.52] });
+        } else if (room.type === 'track') {
+          // Пути лежат ниже перрона: балласт, шпалы, два рельса. Преград у них нет: за краем перрона
+          // игрок падает, и падение его будит (зона ниже).
+          xf.box([-CELL / 2, -TRACK_DROP - 0.1, -CELL / 2], [CELL / 2, -TRACK_DROP, CELL / 2], MAT.dirt, { tint: [0.42, 0.4, 0.38] });
+          for (let i = 0; i < 5; i++) {
+            const sx = -1.2 + i * 0.6;
+            xf.box([sx - 0.11, -TRACK_DROP, -1.05], [sx + 0.11, -TRACK_DROP + 0.07, 1.05], MAT.wood, { tint: [0.45, 0.38, 0.32] });
+          }
+          for (const rz of [-0.72, 0.72]) xf.box([-CELL / 2, -TRACK_DROP + 0.07, rz - 0.035], [CELL / 2, -TRACK_DROP + 0.2, rz + 0.035], MAT.steel, { tint: [0.8, 0.8, 0.82] });
+          // Стенки ямы: скорлупа строит стены от пола, а пути лежат ниже — без стенок под дальней стеной
+          // и под кромкой перрона видно «ничто». Дальняя стена и торцы — закопчённый кирпич, кромка — бетон.
+          const sh = shells[room.tier]!;
+          const W = WALL_T / 2;
+          for (let dir = 0; dir < 4; dir++) {
+            const other = sh.get(x - HALF + DX[dir]!, z - HALF + DZ[dir]!);
+            if (other && roomById(other.room).type === 'track') continue;
+            const edge = !!other;
+            const mat = edge ? MAT.concrete : MAT.brick;
+            const tint: Vec3 = edge ? [0.6, 0.58, 0.55] : [0.4, 0.38, 0.37];
+            const d = edge ? 0.06 : W;
+            const lo = -TRACK_DROP - 0.1;
+            if (dir === 0) xf.box([CELL / 2 - d, lo, -CELL / 2], [CELL / 2, 0, CELL / 2], mat, { tint });
+            else if (dir === 2) xf.box([-CELL / 2, lo, -CELL / 2], [-CELL / 2 + d, 0, CELL / 2], mat, { tint });
+            else if (dir === 1) xf.box([-CELL / 2, lo, CELL / 2 - d], [CELL / 2, 0, CELL / 2], mat, { tint });
+            else xf.box([-CELL / 2, lo, -CELL / 2], [CELL / 2, 0, -CELL / 2 + d], mat, { tint });
+            // Белая линия вдоль кромки перрона: дальше нельзя — это понятно без слов.
+            if (edge) {
+              const a = 0.42;
+              const b = 0.54;
+              if (dir === 0) xf.box([CELL / 2 + a, 0, -CELL / 2], [CELL / 2 + b, 0.012, CELL / 2], MAT.enamel, { tint: [0.86, 0.85, 0.8] });
+              else if (dir === 2) xf.box([-CELL / 2 - b, 0, -CELL / 2], [-CELL / 2 - a, 0.012, CELL / 2], MAT.enamel, { tint: [0.86, 0.85, 0.8] });
+              else if (dir === 1) xf.box([-CELL / 2, 0, CELL / 2 + a], [CELL / 2, 0.012, CELL / 2 + b], MAT.enamel, { tint: [0.86, 0.85, 0.8] });
+              else xf.box([-CELL / 2, 0, -CELL / 2 - b], [CELL / 2, 0.012, -CELL / 2 - a], MAT.enamel, { tint: [0.86, 0.85, 0.8] });
+            }
+          }
+          zones.push({ kind: 'pit', tier: room.tier, minX: wx - CELL / 2, maxX: wx + CELL / 2, minZ: wz - CELL / 2, maxZ: wz + CELL / 2, minY: y - 40, maxY: y - 0.8 });
+        }
+      }
+    }
+  }
   for (const w of hz.water) {
     const room = roomOf(w.tier, w.x, w.z);
     const y = tierFloor(w.tier);
@@ -470,14 +565,14 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
       }
     }
     // Свой ГСЧ у каждого помещения: правка одной комнаты не сдвигает остальные.
-    return { room, world, seed: layout.seed, start, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d + salt)), h: room === gardenRoom ? GARDEN_H : CEIL_H, slots, cells, spots: outSpots, landmarks: outMarks, flats: outFlats, decay, ...(screenQuota.has(room.id) ? { screens: screenQuota.get(room.id)! } : {}) };
+    return { room, world, seed: layout.seed, start, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d + salt)), h: ceilOf(room), slots, cells, spots: outSpots, landmarks: outMarks, flats: outFlats, decay, ...(screenQuota.has(room.id) ? { screens: screenQuota.get(room.id)! } : {}) };
   };
 
   // Карточка от руки «please use only when necessary»: одна на уровень, в помещении рядом с началом —
   // не в самом начале, куда возвращает Осыпь (там она читалась бы укором), а на шаг дальше.
   const notes: SheetMark[] = [];
   const noteRoom = layout.rooms
-    .filter((r) => r !== startRoom && r !== variantRoom && !lowerWells.has(r.id) && r.tier === startRoom.tier && r.type !== 'stairwell' && r.type !== 'lift')
+    .filter((r) => r !== startRoom && r !== variantRoom && !lowerWells.has(r.id) && r.tier === startRoom.tier && r.type !== 'stairwell' && r.type !== 'lift' && r.type !== 'track')
     .map((r) => ({ r, d: Math.min(...r.cells.map(([x, z]) => Math.abs(x - start.cx) + Math.abs(z - start.cz))) }))
     .sort((a, b) => a.d - b.d || a.r.id - b.r.id)[0]?.r;
 
@@ -540,7 +635,7 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
   let moundLeft = decay.mound;
   for (const { room, ctx } of furnished.slice().sort((a, b) => fromStart(a.room) - fromStart(b.room) || a.room.id - b.room.id)) {
     if (moundLeft === 0) break;
-    if (room === startRoom || room.tier !== startRoom.tier || room.type === 'corridor' || room.type === 'stairwell' || room.type === 'lift') continue;
+    if (room === startRoom || room.tier !== startRoom.tier || room.type === 'corridor' || room.type === 'stairwell' || room.type === 'lift' || room.type === 'track') continue;
     if (furnishExtras(ctx, { ...NO_EXTRAS, mound: moundLeft }).mound) moundLeft = 0;
   }
   // Цветы: сад под высоким потолком и ещё два помещения.
@@ -567,6 +662,8 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
   const nodeAt = new Map<string, number>();
   const nk = (t: number, x: number, z: number): string => `${t},${x},${z}`;
   for (const room of layout.rooms) {
+    // По путям никто не ходит: ни Осыпь, ни вещи сна туда не попадают (зал ожидания).
+    if (room.type === 'track') continue;
     if (lowerWells.has(room.id)) continue;
     for (const [x, z] of room.cells) {
       let y = tierFloor(room.tier);

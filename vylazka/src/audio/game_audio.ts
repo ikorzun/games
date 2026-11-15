@@ -31,6 +31,11 @@ export interface AudioWorld {
   pocket?: { kind: string } | null;
   /** Стирание места (systems/decay.ts): насколько ещё слышны люди, 0..1. Нет поля — слышны как есть. */
   decay?: { voices: number };
+  /**
+   * Ход времени места (зал ожидания, systems/flow.ts): f — насколько оно идёт, strain — насколько снимок
+   * разошёлся с местом, train — тень поезда, trains — сколько поездов прошло. Нет поля — время обычное.
+   */
+  flow?: { f: number; strain: number; train: number; trains: number } | null;
   body: { y: number; vx: number; vz: number };
   swarmNear: number;
   staticLevel: number;
@@ -44,7 +49,7 @@ export type AudioScene = 'silent' | 'menu' | 'play';
 const MUSIC = 'music_menu';
 
 /** Что грузить раньше остального: первые секунды вылазки и экран задания. */
-export const LOAD_FIRST: readonly string[] = ['ui_click', 'ui_start', 'hatch', 'lift', 'amb_bunker', 'amb_office', 'amb_yellow', 'breath_calm', 'step_concrete', 'step_carpet', 'flash_click', 'flash_die', 'flash_rattle', 'flash_spark', 'music_menu'];
+export const LOAD_FIRST: readonly string[] = ['ui_click', 'ui_start', 'hatch', 'lift', 'amb_bunker', 'amb_office', 'amb_yellow', 'amb_station', 'still_tone', 'breath_calm', 'step_concrete', 'step_carpet', 'flash_click', 'flash_die', 'flash_rattle', 'flash_spark', 'music_menu'];
 
 /**
  * Следы людей (слова владельца: «лёгкий фоновый шёпот, смех, тихий неразличимый разговор людей»).
@@ -56,12 +61,16 @@ const VOICES: Readonly<Record<string, readonly string[]>> = {
   shelter: ['voices_giggle', 'voices_hum', 'voices_laugh', 'voices_call'],
   office: ['phone_far', 'voices_laugh', 'voices_call', 'voices_hum'],
   yellow: ['phone_far'],
+  // Зал ожидания: кого-то окликают, где-то звонит таксофон.
+  station: ['voices_call', 'phone_far', 'voices_hum'],
   meadow: ['voices_laugh', 'voices_giggle', 'voices_hum'],
 };
 /** Насколько слышен разговор за стеной: офис полон людей, жёлтые комнаты почти пусты. */
-const MURMUR: Readonly<Record<string, number>> = { shelter: 0.55, office: 0.8, yellow: 0.3 };
+const MURMUR: Readonly<Record<string, number>> = { shelter: 0.55, office: 0.8, yellow: 0.3, station: 0.6 };
 
 export class GameAudio {
+  /** Сколько поездов уже слышали (зал ожидания). */
+  private trains = 0;
   private scene: AudioScene = 'silent';
   private rattleAt = 0;
   private dripAt = 6;
@@ -95,7 +104,8 @@ export class GameAudio {
   sortieStart(resumed: boolean, world = 'shelter'): void {
     // Первое нажатие в игре — оно же старт: эти два звука готовы подождать свой файл.
     this.engine.play('ui_start', { late: 2 });
-    if (!resumed) this.engine.play(world === 'shelter' ? 'hatch' : 'lift', { volume: 0.9, late: 4 });
+    // В зал ожидания входят с улицы: ни люка, ни лифта.
+    if (!resumed && world !== 'station') this.engine.play(world === 'shelter' ? 'hatch' : 'lift', { volume: 0.9, late: 4 });
     this.dripAt = 5;
     this.voiceAt = 18;
     this.clock = 0;
@@ -197,6 +207,16 @@ export class GameAudio {
     a.loop('amb_deep', place === 'shelter' ? live * depth : 0);
     a.loop('amb_office', place === 'office' ? live : 0);
     a.loop('amb_yellow', place === 'yellow' ? live : 0);
+    // Зал ожидания: на ходу — шум зала; встал — он уходит в один ровный тон (запись владельца), а когда
+    // снимок расходится с местом, тон начинает дрожать. Поезд слышно, когда он проходит за окнами.
+    const fl = !over && place === 'station' ? (game.flow ?? null) : null;
+    const moving = fl ? fl.f : 1;
+    a.loop('amb_station', place === 'station' ? live * (0.2 + 0.8 * moving) : 0);
+    a.loop('still_tone', fl ? live * (1 - moving) * (1 - 0.45 * fl.strain * (0.5 + 0.5 * Math.sin(this.clock * 21))) : 0);
+    if (fl && fl.trains !== this.trains) {
+      if (fl.trains > this.trains && active) a.play('train_pass', { volume: 0.9 });
+      this.trains = fl.trains;
+    }
     a.loop('amb_meadow', pocket === 'meadow' ? 1 : 0);
     a.loop('amb_void', over && pocket !== 'meadow' ? 1 : 0);
     a.loop('breath_calm', live * clamp01(1 - panic * 2.2));

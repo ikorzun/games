@@ -209,6 +209,7 @@ varying float vObj;
 varying float vLace;
 varying float vArch;
 varying vec2 vTone;       // x — предмет выцвел, y — светится своим цветом
+uniform float uKeyCells;  // > 0 — прямой свет есть только там, где клетка светлая: множитель рассеянного света клеток
 uniform vec4 uErase;      // стирание места (systems/decay.ts): x — потолок, y — стены, z — пол; 0 — цело, 1 — стёрто
 
 ${BEAM_GLSL}
@@ -444,6 +445,8 @@ void main() {
   float eLight = lb.w * shadow * facing * lamp;
   // Рассеянный свет здесь — свет потолочной панели этой клетки (где панелей нет, cell = 1).
   float cell = cellLight(vWorld.xz);
+  // Зал ожидания: солнце светит через стеклянную крышу зала и на перрон; в комнатах под потолком его нет.
+  if (uKeyCells > 0.0) shadowKey *= smoothstep(0.7, 0.95, cell / uKeyCells);
   vec3 amb = uAmbient * cell;
   float eAmb = dot(amb, vec3(0.3333));
   // Светильник светится, только пока свет в его клетке включён.
@@ -459,7 +462,10 @@ void main() {
   // Прямой свет пространства тоже «сканирует»: освещённая сторона плотнее теневой.
   float keyLit = max(dot(Ng, uKeyDirV), 0.0) * dot(uKeyColor, vec3(0.3333)) * shadowKey;
   float hLit = (eLight + bounce0 * 1.2) * uScan.y * back;
-  float hEnv = uScan.z * (min(1.0, eGlow * 4.0) + min(1.0, eAmb * 8.0) * (0.72 + 0.28 * min(1.0, keyLit * 3.0 + step(dot(uKeyColor, vec3(1.0)), 0.001))) * back * (1.0 - smoothstep(uScanRange.x, uScanRange.y, distV)));
+  // На лугу и у лампы тень реже освещённой стороны. В зале ожидания (uKeyCells > 0) почти всё стоит
+  // под крышей, в тени; там место собирает не солнце, а неподвижность — тень собрана так же плотно.
+  float keyK = uKeyCells > 0.0 ? 1.0 : min(1.0, keyLit * 3.0 + step(dot(uKeyColor, vec3(1.0)), 0.001));
+  float hEnv = uScan.z * (min(1.0, eGlow * 4.0) + min(1.0, eAmb * 8.0) * (0.72 + 0.28 * keyK) * back * (1.0 - smoothstep(uScanRange.x, uScanRange.y, distV)));
   // Пространство, чьё время выходит, редеет; светящееся (красный контур выхода, небо) держится до конца.
   float hScan = min(uScan.z, max(uScan.x, hLit + hEnv)) * mix(mix(0.06, 1.0, uScanFade), 1.0, step(0.004, eGlow));
   // Число замеров уходит в альфу кадра: по нему следующий проход решает, показать ли саму поверхность

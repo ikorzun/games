@@ -3,7 +3,7 @@ import { generateLayout, WORLD_KINDS } from '../src/gen/layout';
 import type { GenLayout, WorldKind } from '../src/gen/layout';
 import { createBody, DEFAULT_CONTROLLER, stepPlayer } from '../src/player/controller';
 import type { PlayerBody } from '../src/player/controller';
-import { ALL_MEMORIES, DEFAULT_SESSION, MEMORIES, OFFICE_MEMORIES, Session, WORLD_MEMORIES, YELLOW_MEMORIES } from '../src/systems/session';
+import { ALL_MEMORIES, DEFAULT_SESSION, MEMORIES, OFFICE_MEMORIES, Session, STATION_MEMORIES, WORLD_MEMORIES, YELLOW_MEMORIES } from '../src/systems/session';
 import type { ColliderSet } from '../src/world/colliders';
 import type { BuiltLevel, NavNode } from '../src/world/level';
 import { MeshBuilder } from '../src/world/kit';
@@ -136,7 +136,7 @@ describe('миры: генератор', () => {
     const cells = (w: WorldKind): string => JSON.stringify(generateLayout(77, 2, w).rooms.map((r) => r.cells));
     expect(cells('office')).not.toBe(cells('yellow'));
     expect(cells('office')).not.toBe(cells('shelter'));
-    expect(WORLD_KINDS).toEqual(['shelter', 'office', 'yellow']);
+    expect(WORLD_KINDS).toEqual(['shelter', 'office', 'yellow', 'station']);
   });
 });
 
@@ -342,7 +342,8 @@ describe('миры: окружение и воспоминания', () => {
     }
     // Общий список — без повторов: кресло и телефон есть и в офисе, и в жёлтых комнатах, но считаются один раз.
     expect(new Set(ALL_MEMORIES.map((m) => m.id)).size).toBe(ALL_MEMORIES.length);
-    expect(ALL_MEMORIES.length).toBe(MEMORIES.length + OFFICE_MEMORIES.length + 1);
+    // Пять вещей зала ожидания — свои, ни с чем не совпадают.
+    expect(ALL_MEMORIES.length).toBe(MEMORIES.length + OFFICE_MEMORIES.length + 1 + STATION_MEMORIES.length);
   });
 
   it('сессия в офисе берёт воспоминания офиса, в жёлтых комнатах — свои; в убежище — прежние', () => {

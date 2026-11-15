@@ -93,6 +93,13 @@ export interface FrameView {
   scanRange: [number, number];
   /** Где прямой свет даёт тени: центр и полуширина квадрата на земле (м) — он ходит за игроком; null — теней от него нет. */
   keyBox: { center: Vec3; half: number } | null;
+  /**
+   * Прямой свет попадает только туда, где много рассеянного (зал ожидания: солнце — в зале и на
+   * перроне, но не в комнатах под потолком): общий множитель рассеянного света клеток. 0 — не действует.
+   */
+  keyCells?: number;
+  /** Множитель «бочки» объектива: больше единицы — кадр растянут по краям, меньше — сжат. */
+  lens?: number;
   /** 0..1: мир рассыпается в пыль. */
   dissolve: number;
   /** 0..1: красная полигонная сетка на всём, что видно. */
@@ -198,6 +205,9 @@ export function internalSize(cssW: number, cssH: number, pixels: number, dpr = 1
 }
 
 /** Вертикальный угол обзора: в ландшафте держим широкий горизонтальный угол, в портрете не даём «рыбьему глазу» разъехаться. */
+/** «Бочка» объектива нагрудной камеры в обычном состоянии. */
+const BARREL = 0.085;
+
 export function verticalFov(aspect: number): number {
   const hTarget = (106 * Math.PI) / 180;
   const v = 2 * Math.atan(Math.tan(hTarget / 2) / aspect);
@@ -486,6 +496,7 @@ export class GameRenderer {
         uScanRange: { value: new THREE.Vector2(4, 15) },
         uSlide: { value: new THREE.Vector4(SLIDE.washFrom, SLIDE.washTo, SLIDE.gain, 0) },
         uErase: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uKeyCells: { value: 0 },
         uMatA: { value: matA },
         uMatB: { value: matB },
         uMatBase: { value: Array.from({ length: MAT_SLOTS }, (_, i) => new THREE.Vector3(...(atlas.base[i] ?? [0.5, 0.5, 0.5]))) },
@@ -558,7 +569,7 @@ export class GameRenderer {
         uFrame: { value: 0 },
         uGain: { value: 1 },
         uNoise: { value: 0.01 },
-        uBarrel: { value: 0.085 },
+        uBarrel: { value: BARREL },
         uVignette: { value: 1 },
         uGlitch: { value: 0 },
         uTunnel: { value: 0 },
@@ -1462,6 +1473,7 @@ export class GameRenderer {
     wu.uTierDrop!.value = this.tierDrop;
     wu.uScanFade!.value = v.scanFade;
     (wu.uScanRange!.value as THREE.Vector2).set(v.scanRange[0], v.scanRange[1]);
+    wu.uKeyCells!.value = v.keyCells ?? 0;
 
     // Внимание скана догоняет луч с запаздыванием: точки собираются туда, куда оно уже дошло. После
     // скачка в другое место (или первой картинки) оно переносится сразу.
@@ -1731,6 +1743,7 @@ export class GameRenderer {
     pu.uNoise!.value = v.noise;
     pu.uGlitch!.value = v.glitch;
     pu.uTunnel!.value = v.tunnel;
+    pu.uBarrel!.value = BARREL * (v.lens ?? 1);
     pu.uGas!.value = v.gas;
     pu.uFade!.value = v.fade;
     r.setRenderTarget(null);

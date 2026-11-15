@@ -35,6 +35,13 @@ const GLYPH: Record<RoomType, string> = {
   copyroom: 'Y',
   server: 'I',
   hall: 'o',
+  vestibule: 'V',
+  concourse: 'O',
+  tickets: 'T',
+  lockers: 'L',
+  buffet: 'B',
+  platform: 'P',
+  track: '=',
 };
 
 /** Ярусы плана строками; двери отмечены «+» между клетками. */

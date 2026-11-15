@@ -2077,3 +2077,69 @@ describe('игра целиком: всё иллюзорно', () => {
     expect(g.session!.active?.def.thing).toBe(kind);
   });
 });
+
+describe('зал ожидания: время идёт, только пока идёшь', () => {
+  /** Зал ожидания; ждём, пока кончится переход начала сессии: до того ни падение, ни ночь не действуют. */
+  const station = (seed = 7): Harness => {
+    const h = new Harness(buildLevel(generateLayout(seed, 2, 'station')), { seed });
+    h.until(() => h.game.transition === null, 8);
+    return h;
+  };
+  const forward: InputFrame = { ...emptyInput(), moveZ: 1 };
+
+  it('у места свой ход времени и нет фонаря; в остальных мирах время обычное', () => {
+    const h = station();
+    expect(h.game.world).toBe('station');
+    expect(h.game.flow).not.toBeNull();
+    expect(h.game.hasLight).toBe(false);
+    expect(new Harness(buildLevel(generateLayout(7, 2, 'office'))).game.flow).toBeNull();
+    expect(new Harness(buildLevel(generateLayout(7, 2))).game.flow).toBeNull();
+  });
+
+  it('стоя игрок видит снимок: время на нём стоит, под ним — идёт втрое медленнее; первый шаг рвёт снимок', () => {
+    const h = station();
+    const f = h.game.flow!;
+    h.run(3);
+    expect(f.frozen).toBe(true);
+    const view = f.viewT;
+    const t0 = f.t;
+    h.run(4);
+    expect(f.viewT).toBe(view);
+    expect(f.t - t0).toBeGreaterThan(1);
+    expect(f.t - t0).toBeLessThan(1.5);
+    // Пошёл: снимок рвётся (кадр дёргается), время места идёт в полную силу.
+    h.game.lastTear = 0;
+    h.run(1.5, forward);
+    expect(f.frozen).toBe(false);
+    expect(h.game.lastTear).toBeGreaterThan(0.3);
+    expect(f.viewT).toBeCloseTo(f.t, 6);
+    // (Чуть меньше двух секунд: по дороге игрок задевает мебель и на миг сбавляет шаг.)
+    const t1 = f.t;
+    h.run(2, forward);
+    expect(f.t - t1).toBeGreaterThan(1.5);
+  });
+
+  it('за краем перрона ничего нет: шагнул — проснулся в начале', () => {
+    const h = station();
+    const g = h.game;
+    const pit = g.level!.zones.find((z) => z.kind === 'pit')!;
+    g.teleport((pit.minX + pit.maxX) / 2, 0, (pit.minZ + pit.maxZ) / 2);
+    expect(h.until(() => g.transition !== null, 4), 'падение не разбудило').toBe(true);
+    expect(g.transition?.plan).toEqual({ cause: 'caught', style: 'blackout', to: 'elsewhere', dest: 'start' });
+    expect(h.until(() => g.transition === null, 6)).toBe(true);
+    const spawn = g.level!.spawn.pos;
+    expect(Math.hypot(g.body.x - spawn[0], g.body.z - spawn[2])).toBeLessThan(0.5);
+    expect(g.where).toBe('main');
+  });
+
+  it('стемнело — зал закрывается: проснулся в начале, день начинается заново', () => {
+    const h = station();
+    const g = h.game;
+    const f = g.flow!;
+    f.t = f.cfg.day - 0.4;
+    h.run(1.2, forward);
+    expect(g.transition?.plan.cause).toBe('caught');
+    expect(f.t).toBeLessThan(5);
+    expect(f.night).toBe(false);
+  });
+});

@@ -10,7 +10,7 @@ import { clamp01 } from '../core/math';
 import { hash2, mulberry32 } from '../core/rng';
 import type { Rng } from '../core/rng';
 import type { Vec3 } from '../core/types';
-import type { WorldKind } from '../gen/layout';
+import type { RoomType, WorldKind } from '../gen/layout';
 import type { BuiltLevel, CollapseSpec, ItemSpot, Zone } from '../world/level';
 import { looksAt } from './things';
 
@@ -18,6 +18,8 @@ import { looksAt } from './things';
 export interface MemoryDef {
   id: string;
   thing: string;
+  /** В помещениях какого рода искать место вещи (если такое есть и до него можно дойти). */
+  rooms?: readonly RoomType[];
 }
 
 export const MEMORIES: readonly MemoryDef[] = [
@@ -63,11 +65,26 @@ export const YELLOW_MEMORIES: readonly MemoryDef[] = [
   { id: 'kettle', thing: 'kettle' },
 ];
 
+/**
+ * Зал ожидания: пять вещей, всегда одни и те же и всегда по порядку — строка каждой называет место
+ * следующей, последняя возвращает к первой (docs/vylazka/station.md, §5).
+ */
+export const STATION_MEMORIES: readonly MemoryDef[] = [
+  { id: 'st_note', thing: 'st_note', rooms: ['concourse'] },
+  { id: 'st_key', thing: 'st_key', rooms: ['lockers'] },
+  { id: 'st_ticket', thing: 'st_ticket', rooms: ['tickets'] },
+  { id: 'st_cup', thing: 'st_cup', rooms: ['buffet'] },
+  { id: 'st_coat', thing: 'st_coat', rooms: ['platform'] },
+];
+
 /** Набор воспоминаний каждого мира вылазки. */
-export const WORLD_MEMORIES: Record<WorldKind, readonly MemoryDef[]> = { shelter: MEMORIES, office: OFFICE_MEMORIES, yellow: YELLOW_MEMORIES };
+export const WORLD_MEMORIES: Record<WorldKind, readonly MemoryDef[]> = { shelter: MEMORIES, office: OFFICE_MEMORIES, yellow: YELLOW_MEMORIES, station: STATION_MEMORIES };
+
+/** Миры, где воспоминания идут по порядку набора, а не по жребию. */
+export const ORDERED_WORLDS: ReadonlySet<WorldKind> = new Set<WorldKind>(['station']);
 
 /** Все воспоминания игры без повторов: по ним считается, сколько всего можно вспомнить. */
-export const ALL_MEMORIES: readonly MemoryDef[] = [...new Map([...MEMORIES, ...OFFICE_MEMORIES, ...YELLOW_MEMORIES].map((m) => [m.id, m])).values()];
+export const ALL_MEMORIES: readonly MemoryDef[] = [...new Map([...MEMORIES, ...OFFICE_MEMORIES, ...YELLOW_MEMORIES, ...STATION_MEMORIES].map((m) => [m.id, m])).values()];
 
 export interface Memory {
   def: MemoryDef;
@@ -129,6 +146,12 @@ export interface SessionInput {
   landed: number;
   /** Искомой вещи сейчас нет на месте (её коснулись, и она растворилась): вспомнить её нельзя. */
   hidden?: boolean;
+  /**
+   * Сколько времени взгляд держал вещь в этом шаге (не задано — весь шаг). В зале ожидания время места
+   * идёт не так, как настоящее, а вспомнить можно только стоя: игра передаёт сюда настоящее время,
+   * пока игрок стоит, и ноль, пока идёт.
+   */
+  holdDt?: number;
 }
 
 export type SessionEvent =
@@ -179,12 +202,15 @@ export class Session {
     readonly cfg: SessionConfig = DEFAULT_SESSION,
   ) {
     this.rng = mulberry32(hash2(seed, 0x5e55, 0x10ad));
-    const pool = WORLD_MEMORIES[level.world ?? 'shelter'].slice();
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(this.rng() * (i + 1));
-      [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+    const world = level.world ?? 'shelter';
+    const pool = WORLD_MEMORIES[world].slice();
+    if (!ORDERED_WORLDS.has(world)) {
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(this.rng() * (i + 1));
+        [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+      }
+      pool.sort((a, b) => Number(known.has(a.id)) - Number(known.has(b.id)));
     }
-    pool.sort((a, b) => Number(known.has(a.id)) - Number(known.has(b.id)));
     this.memories = pool.slice(0, cfg.count).map((def, index) => ({ def, index, state: 'hidden', spot: null }));
     for (const c of level.collapses) this.collapseState.set(c.id, 'idle');
     for (const s of level.spots) {
@@ -234,7 +260,7 @@ export class Session {
   }
 
   /** Место для вещи: в стольких клетках пути от игрока, чтобы за ней пришлось идти, но не через весь объект. */
-  private pickSpot(from: number): ItemSpot | null {
+  private pickSpot(from: number, rooms?: readonly RoomType[]): ItemSpot | null {
     const dist = this.distances(from);
     const c = this.cfg;
     const free = this.level.spots.filter((s) => !this.usedSpots.has(s));
@@ -242,6 +268,16 @@ export class Session {
       const n = this.spotNode.get(s) ?? -1;
       return n >= 0 ? dist[n]! : -1;
     };
+    // У вещи есть своё место (зал ожидания: ключ — в камерах хранения): берём его, если туда можно дойти.
+    if (rooms && this.level.layout) {
+      const types = this.level.layout.rooms;
+      const own = free.filter((s) => d(s) >= 0 && rooms.includes(types[s.room]?.type as RoomType));
+      if (own.length > 0) {
+        const s = own[Math.floor(this.rng() * own.length)]!;
+        this.usedSpots.add(s);
+        return s;
+      }
+    }
     let pool = free.filter((s) => d(s) >= c.minCells && d(s) <= c.maxCells);
     if (pool.length === 0) {
       // Объект маленький или игрок в углу: берём самое далёкое из достижимого.
@@ -325,7 +361,7 @@ export class Session {
       // Целимся в середину вещи, а не в её подошву: так её реже заслоняет край стола или стула.
       const seen = !inp.hidden && looksAt({ eye: inp.eye, aim: inp.aim, light: inp.light }, [s.x, s.y + 0.2, s.z], 0.3, this.cfg.lookRange, los);
       if (seen) {
-        this.hold = Math.min(1, this.hold + dt / this.cfg.lookTime);
+        this.hold = Math.min(1, this.hold + (inp.holdDt ?? dt) / this.cfg.lookTime);
         if (this.hold >= 1) {
           this.hold = 0;
           act.state = 'done';
@@ -344,7 +380,7 @@ export class Session {
       // Последнее воспоминание ждёт minLength: сессия не кончается раньше, как бы быстро ни шёл игрок.
       const early = hidden.length === 1 && !this.rushed && this.time < this.cfg.minLength;
       if (next && !early && this.since >= wait && (inp.observed || this.since >= wait + this.cfg.fallback)) {
-        const spot = this.pickSpot(inp.node);
+        const spot = this.pickSpot(inp.node, next.def.rooms);
         if (spot) {
           next.state = 'active';
           next.spot = spot;

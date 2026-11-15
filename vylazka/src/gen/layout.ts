@@ -27,10 +27,11 @@ const opposite = (d: number): Dir => ((d + 2) % 4) as Dir;
 
 /**
  * Мир вылазки: убежище (с вросшими домашними комнатами), офис — стерильный лабиринт с отделом
- * посередине, и его вторая версия — «жёлтые комнаты»: тот же план, из которого ушло назначение.
+ * посередине, его вторая версия — «жёлтые комнаты»: тот же план, из которого ушло назначение, —
+ * и зал ожидания (station): место, где время идёт, только пока идёшь (docs/vylazka/station.md).
  */
-export type WorldKind = 'shelter' | 'office' | 'yellow';
-export const WORLD_KINDS: readonly WorldKind[] = ['shelter', 'office', 'yellow'];
+export type WorldKind = 'shelter' | 'office' | 'yellow' | 'station';
+export const WORLD_KINDS: readonly WorldKind[] = ['shelter', 'office', 'yellow', 'station'];
 
 export type RoomType =
   | 'corridor'
@@ -68,7 +69,16 @@ export type RoomType =
   | 'copyroom'
   | 'server'
   // Жёлтые комнаты: пустой зал, у которого не осталось назначения.
-  | 'hall';
+  | 'hall'
+  // Зал ожидания: вход с улицы, сам зал под стеклянной крышей, касса, камеры хранения, буфет,
+  // перрон и пути за его краем (переходы к перрону — обычные коридоры).
+  | 'vestibule'
+  | 'concourse'
+  | 'tickets'
+  | 'lockers'
+  | 'buffet'
+  | 'platform'
+  | 'track';
 
 /** Домашние помещения: обои и паркет вместо масляной краски. */
 export const HOME_ROOMS: ReadonlySet<RoomType> = new Set<RoomType>(['kitchen', 'living', 'bedroom', 'bathroom', 'nursery', 'hallway']);
@@ -582,6 +592,89 @@ function buildAttempt(seed: number, attempt: number, rank: 1 | 2 | 3, world: Wor
   return { seed, attempt, genVersion: GEN_VERSION, world, rank, tierCount, rooms: b.rooms, edges: b.edges, stairs: b.stairs, entranceRoom: entrance.id, loops: b.loops, hazards: planHazards(b, rank) };
 }
 
+/**
+ * Зал ожидания. План не блуждает, как коридоры убежища: это одно большое помещение, которое видно
+ * целиком, с малыми комнатами по бокам и двумя тесными переходами к перрону. От сида зависят
+ * зеркальность плана, длина переходов и перрона и то, с какой стороны что стоит. Переходы и перрон
+ * замыкают петлю: зал → переход → перрон → второй переход → зал.
+ *
+ *        z=3   ░░░░░░░░░░  пути (пола нет)
+ *        z=4–5 ██████████  перрон
+ *        z=6–8   █    █    переходы
+ *        z=9–14 ▒████▒     зал, по бокам — камеры хранения, касса, буфет, кладовая
+ *        z=15     █        вход
+ */
+function stationAttempt(seed: number, attempt: number, rank: 1 | 2 | 3): GenLayout {
+  const b: Build = { rng: mulberry32(hash2(seed, attempt, 0x57a7)), grids: [new TierGrid()], rooms: [], edges: [], stairs: [], loops: [], loopCells: [] };
+  const mirror = b.rng() < 0.5;
+  const X = (x: number): number => (mirror ? GRID - 1 - x : x);
+  const cell = (room: GenRoom, x: number, z: number): void => addCell(b, room, X(x), z);
+  /** Проход между клеткой (x, z) и её соседом к −z (на север) или к +x (на восток, до зеркала). */
+  const north = (x: number, z: number, kind: EdgeKind): void => addEdge(b, 0, X(x), z, 3, kind);
+  const east = (x: number, z: number, kind: EdgeKind): void => addEdge(b, 0, X(x), z, mirror ? 2 : 0, kind);
+
+  const vestibule = newRoom(b, 'vestibule', 0);
+  cell(vestibule, 7, GRID - 1);
+
+  const concourse = newRoom(b, 'concourse', 0);
+  for (let z = 9; z <= 14; z++) for (let x = 6; x <= 9; x++) cell(concourse, x, z);
+  north(7, GRID - 1, 'open');
+
+  // Запад: уборная, касса, камеры хранения.
+  const wash = newRoom(b, 'washroom', 0);
+  cell(wash, 5, 14);
+  east(5, 14, 'door');
+  const tickets = newRoom(b, 'tickets', 0);
+  cell(tickets, 5, 13);
+  cell(tickets, 5, 12);
+  east(5, 13, 'open');
+  east(5, 12, 'open');
+  const lockers = newRoom(b, 'lockers', 0);
+  for (const [x, z] of [[5, 10], [5, 9], [4, 10], [4, 9]] as const) cell(lockers, x, z);
+  east(5, 10, 'door');
+
+  // Восток: буфет и кладовая.
+  const buffet = newRoom(b, 'buffet', 0);
+  for (const [x, z] of [[10, 13], [10, 12], [11, 13], [11, 12]] as const) cell(buffet, x, z);
+  east(9, 13, 'open');
+  east(9, 12, 'open');
+  const store = newRoom(b, 'storage', 0);
+  cell(store, 10, 10);
+  east(9, 10, 'door');
+
+  // Переходы к перрону: тесные, без окон. Длиннее — на старших рангах.
+  const len = rank === 1 ? 2 : 3;
+  const top = 9 - len;
+  const passA = newRoom(b, 'corridor', 0);
+  const passB = newRoom(b, 'corridor', 0);
+  for (let z = 8; z >= top; z--) {
+    cell(passA, 6, z);
+    cell(passB, 9, z);
+  }
+  north(6, 9, 'open');
+  north(9, 9, 'open');
+
+  // Перрон: две клетки в глубину, вдоль путей; за его краем — пути.
+  const half = rank === 1 ? 4 : rank === 2 ? 5 : 6;
+  const x0 = Math.max(1, 8 - half);
+  const x1 = Math.min(GRID - 2, 7 + half);
+  const platform = newRoom(b, 'platform', 0);
+  for (let x = x0; x <= x1; x++) {
+    cell(platform, x, top - 1);
+    cell(platform, x, top - 2);
+  }
+  north(6, top, 'open');
+  north(9, top, 'open');
+  const track = newRoom(b, 'track', 0);
+  for (let x = x0; x <= x1; x++) {
+    cell(track, x, top - 3);
+    north(x, top - 2, 'open');
+  }
+
+  b.loops.push(1);
+  return { seed, attempt, genVersion: GEN_VERSION, world: 'station', rank, tierCount: 1, rooms: b.rooms, edges: b.edges, stairs: b.stairs, entranceRoom: vestibule.id, loops: b.loops, hazards: { pits: [], water: [], gasRooms: [], collapses: [] } };
+}
+
 /** Помещения, где может стоять газ: закрытые, без выхода наверх. */
 const GAS_ROOMS: ReadonlySet<RoomType> = new Set<RoomType>(['storage', 'dorm', 'washroom', 'archive', 'switchboard']);
 
@@ -674,6 +767,7 @@ function planHazards(b: Build, rank: 1 | 2 | 3): GenHazards {
 
 /** Сгенерировать план по сиду, рангу объекта и миру. Детерминирован: один сид — один уровень. */
 export function generateLayout(seed: number, rank: 1 | 2 | 3 = 2, world: WorldKind = 'shelter'): GenLayout {
+  if (world === 'station') return stationAttempt(seed, 0, rank);
   for (let attempt = 0; attempt < 200; attempt++) {
     try {
       return buildAttempt(seed, attempt, rank, world);

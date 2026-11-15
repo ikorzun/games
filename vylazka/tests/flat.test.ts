@@ -247,7 +247,7 @@ describe('плоские вещи в уровне', () => {
   });
 
   it('картонки есть во всех мирах, но редкие: доля 0,12 в убежище, 0,04 в офисе, 0,2 в жёлтых комнатах', () => {
-    expect(FLAT_SHARE).toEqual({ shelter: 0.12, office: 0.04, yellow: 0.2 });
+    expect(FLAT_SHARE).toEqual({ shelter: 0.12, office: 0.04, yellow: 0.2, station: 0.06 });
     expect(FLAT_SHARE.office).toBeLessThan(FLAT_SHARE.shelter);
     expect(FLAT_SHARE.shelter).toBeLessThan(FLAT_SHARE.yellow);
     const count = (world: WorldKind): number => SEEDS.reduce((n, seed) => n + flats(level(seed, world), 'standee').length, 0);

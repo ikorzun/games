@@ -498,6 +498,14 @@ async function scenarioWorlds(browser, baseUrl) {
     await page.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
     check('после перезагрузки место запомнено', (await place()) === RU['ui.place.yellow'] && (await world()) === 'yellow', `«${await place()}», мир ${await world()}`);
     await page.click('.vz-overlay__opt--place');
+    {
+      // Зал ожидания — локация основной модели (docs/vylazka/station.md): время идёт, только пока идёшь.
+      const lv = await vz(page, () => window.__vz.level());
+      const fl = await vz(page, () => window.__vz.flow());
+      const types = lv.rooms.map((r) => r.type);
+      check('ещё раз — зал ожидания: зал под стеклянной крышей, касса, камеры хранения, буфет, перрон и пути; у места свой ход времени', (await place()) === RU['ui.place.station'] && lv.world === 'station' && ['vestibule', 'concourse', 'tickets', 'lockers', 'buffet', 'platform', 'track'].every((x) => types.includes(x)) && fl !== null && fl.frozen === true, `«${await place()}», мир ${lv.world}, ${types.join(' ')}`);
+    }
+    await page.click('.vz-overlay__opt--place');
     check('по кругу — снова убежище', (await place()) === RU['ui.place.shelter'] && (await world()) === 'shelter', `«${await place()}», мир ${await world()}`);
     // На паузе места не сменить: кнопки нет. Ждём не по сроку, а по делу: после смены места уровень
     // пересобирается, и на медленной машине игра начинается позже.
@@ -634,6 +642,37 @@ async function scenarioWorlds(browser, baseUrl) {
     check('с фонарём стена в луче светлая и жёлтая: красного и зелёного заметно больше синего', mean(grid) > dark0 + 10 && color.r > color.b * 1.3 && color.g > color.b * 1.15, `среднее ${dark0.toFixed(1)} → ${mean(grid).toFixed(1)}, цвет ${JSON.stringify(color)}, стена в ${best.d.toFixed(1)} м`);
     check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
     if (wantShots) await saveShot(page, 'world_yellow.png');
+    await context.close();
+  }
+
+  // Зал ожидания: фонаря нет, место держит неподвижность — стоя виден снимок, на ходу время идёт.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&world=station');
+    check('с ?world=station заставка показывает зал ожидания', (await page.textContent('.vz-overlay__opt--place'))?.trim() === RU['ui.place.station']);
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    // Лицом к залу: он всегда к северу от входа.
+    const spawn = (await vz(page, () => window.__vz.level())).spawn;
+    await vz(page, ([x, z]) => window.__vz.teleport(x, 0, z, 0, 0), [spawn[0], spawn[2]]);
+    for (let i = 0; i < 30; i++) await vz(page, () => window.__vz.step(6));
+    const st = await state(page);
+    let fl = await vz(page, () => window.__vz.flow());
+    check('зал ожидания: фонаря нет; игрок стоит — виден снимок, время на нём не идёт', st.world === 'station' && st.hasLight === false && fl !== null && fl.frozen === true && fl.f < 0.05, JSON.stringify({ world: st.world, hasLight: st.hasLight, f: fl?.f, frozen: fl?.frozen }));
+    const bright = mean(await vz(page, () => window.__vz.probe()));
+    check('стоя зал собран и светел', bright > 40, `средняя яркость ${bright.toFixed(1)}`);
+    const t0 = fl.t;
+    for (let i = 0; i < 20; i++) await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+    fl = await vz(page, () => window.__vz.flow());
+    check('пошёл — время места идёт в полную силу, и виден не снимок, а само место', fl.frozen === false && fl.f > 0.9 && fl.t - t0 > 1.4 && Math.abs(fl.viewT - fl.t) < 1e-6, JSON.stringify({ f: +fl.f.toFixed(2), прошло: +(fl.t - t0).toFixed(2), frozen: fl.frozen }));
+    for (let i = 0; i < 20; i++) await vz(page, () => window.__vz.step(6));
+    const a = await vz(page, () => window.__vz.flow());
+    for (let i = 0; i < 20; i++) await vz(page, () => window.__vz.step(6));
+    const b = await vz(page, () => window.__vz.flow());
+    check('остановился — снова снимок: время на нём стоит, а под ним идёт втрое медленнее', a.frozen && b.frozen && b.viewT === a.viewT && b.t - a.t > 0.5 && b.t - a.t < 0.7, JSON.stringify({ снимок: [+a.viewT.toFixed(2), +b.viewT.toFixed(2)], прошло: +(b.t - a.t).toFixed(2) }));
+    check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    if (wantShots) await saveShot(page, 'world_station.png');
     await context.close();
   }
 }

@@ -40,10 +40,11 @@ export interface Env {
   scan?: [number, number];
   /**
    * Рассеянный свет дают потолочные панели, у каждой клетки уровня свой (systems/cell_lights.ts):
-   * sensor — панели включаются там, где игрок, и гаснут за ним; hum — горят всегда, но неровно.
+   * sensor — панели включаются там, где игрок, и гаснут за ним; hum — горят всегда, но неровно;
+   * day — дневной свет зала ожидания: у клетки свой уровень, общий множитель задаёт ход дня.
    * ambient тогда — свет под горящей панелью. Не задано — рассеянный свет везде одинаков.
    */
-  cells?: 'sensor' | 'hum';
+  cells?: 'sensor' | 'hum' | 'day';
   /**
    * Чистое пространство: поверхности — только шар материала (matcap) и оттенок, без фактур, рельефа,
    * грязи, сырости и потёков. Так выглядят жёлтые комнаты (решение владельца).
@@ -71,8 +72,16 @@ export const ENV_OFFICE: Env = { ambient: [0.5, 0.53, 0.52], fog: [0, 0, 0], fog
  */
 export const ENV_YELLOW: Env = { ambient: [0.002, 0.0018, 0.001], fog: [0, 0, 0], fogDensity: 0.03, light: 1, decay: -0.5, haze: 0.004, plain: true };
 
+/**
+ * Зал ожидания: дневной свет через стеклянную крышу, фонаря нет. Место держит неподвижность: пока
+ * игрок стоит, зал собран до дальней стены; пошёл — он осыпается, и остаётся остров вокруг (scan
+ * здесь — для идущего; для стоящего его раздвигает игра, systems/flow.ts). Прямой свет — солнце,
+ * которое движется по времени места; рассеянный — по клеткам: зал светлее комнат, переходы темны.
+ */
+export const ENV_STATION: Env = { ambient: [0.46, 0.44, 0.4], fog: [0.62, 0.6, 0.55], fogDensity: 0.006, light: 0, decay: -0.32, haze: 0.0025, scan: [3, 11], cells: 'day', key: { dir: [0.3, 0.86, 0.4], color: [1.5, 1.42, 1.3], reach: 16 } };
+
 /** Окружение каждого мира вылазки. */
-export const WORLD_ENV: Record<WorldKind, Env> = { shelter: ENV_BUNKER, office: ENV_OFFICE, yellow: ENV_YELLOW };
+export const WORLD_ENV: Record<WorldKind, Env> = { shelter: ENV_BUNKER, office: ENV_OFFICE, yellow: ENV_YELLOW, station: ENV_STATION };
 
 export type PocketKind = 'void' | 'meadow' | 'dollhouse';
 export const POCKET_KINDS: readonly PocketKind[] = ['void', 'meadow', 'dollhouse'];

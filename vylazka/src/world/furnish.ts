@@ -10,6 +10,7 @@ import { FLAT_EYE, standee, veil, VEIL_SCENES } from './flat';
 import type { FlatMark } from './flat';
 import type { GenRoom, WorldKind } from '../gen/layout';
 import { furnishOffice, furnishYellow } from './furnish_office';
+import { furnishStation } from './furnish_station';
 import type { Decay } from '../systems/decay';
 import type { ItemSpot, Landmark } from './level';
 import { MAT } from './materials';
@@ -618,7 +619,7 @@ export const FLAT_OK: ReadonlySet<string> = new Set([
  * офис был на самом деле, убежище и жёлтые комнаты собраны из чужих картинок. Но плоским бывает лишь
  * кое-что (решение владельца): картонка — редкая находка, а не правило.
  */
-export const FLAT_SHARE: Record<WorldKind, number> = { shelter: 0.12, office: 0.04, yellow: 0.2 };
+export const FLAT_SHARE: Record<WorldKind, number> = { shelter: 0.12, office: 0.04, yellow: 0.2, station: 0.06 };
 
 /** Быть ли предмету картонкой: решают сид уровня и место, а не ГСЧ помещения — остальная обстановка от этого не сдвигается. */
 function isFlat(ctx: RoomCtx, s: Slot, name: string, i: number): boolean {
@@ -810,6 +811,7 @@ export function furnishRoom(ctx: RoomCtx): void {
   // Офис стерилен, жёлтые комнаты пусты: у них своя обстановка и нет «следов людей» убежища.
   if (ctx.world === 'office') return furnishOffice(ctx);
   if (ctx.world === 'yellow') return furnishYellow(ctx);
+  if (ctx.world === 'station') return furnishStation(ctx);
   FURNISH[ctx.room.type]?.(ctx);
   // Сначала — то, что положено помещению по назначению, потом — следы людей и времени.
   dressRoom(ctx);

@@ -1,6 +1,6 @@
 /**
  * Весь реквизит разом: убежище (PROPS), «дом каждого» (HOME_PROPS), офис (OFFICE_PROPS), готовые
- * модели (MODEL_PROPS), выставочные экраны (SCREEN_PROPS) и поделки (CRAFT_PROPS). Витрина и обстановка берут отсюда.
+ * модели (MODEL_PROPS), выставочные экраны (SCREEN_PROPS) поделки (CRAFT_PROPS) и вокзал (STATION_PROPS). Витрина и обстановка берут отсюда.
  *
  * Здесь же предмет становится объектом уровня (world/objects.ts): всё, что он кладёт в сетку
  * помещения и в преграды, помечается его номером — по нему предмет можно растворить. Объектом
@@ -14,13 +14,15 @@ import { PROPS } from './props_more';
 import type { PropSpec } from './props_more';
 import { OFFICE_PROPS } from './props_office';
 import { SCREEN_PROPS } from './props_screens';
+import { STATION_PROPS } from './props_station';
 
 /**
  * Предметы, которые не растворяются: порог в проёме (через него перешагивают на каждом шагу), двери
  * лифта (с них начинается вылазка, к ним возвращает Осыпь — это примета места, а не вещь) и гора
- * (слова владельца: «похороненное, что уже не восстановить» — она здесь единственное окончательное).
+ * (слова владельца: «похороненное, что уже не восстановить» — она здесь единственное окончательное);
+ * колонна вокзала (несущая — стоит, пока стоит зал).
  */
-export const FIXED: ReadonlySet<string> = new Set(['coaming', 'elevator_doors', 'mound_small', 'mound', 'mound_big']);
+export const FIXED: ReadonlySet<string> = new Set(['coaming', 'elevator_doors', 'mound_small', 'mound', 'mound_big', 'st_column']);
 
 function tracked(name: string, spec: PropSpec): PropSpec {
   if (spec.mount === 'ceiling' || FIXED.has(name)) return spec;
@@ -28,5 +30,5 @@ function tracked(name: string, spec: PropSpec): PropSpec {
 }
 
 export const ALL_PROPS: Record<string, PropSpec> = Object.fromEntries(
-  Object.entries({ ...PROPS, ...HOME_PROPS, ...OFFICE_PROPS, ...MODEL_PROPS, ...SCREEN_PROPS, ...CRAFT_PROPS }).map(([name, spec]) => [name, tracked(name, spec)]),
+  Object.entries({ ...PROPS, ...HOME_PROPS, ...OFFICE_PROPS, ...MODEL_PROPS, ...SCREEN_PROPS, ...CRAFT_PROPS, ...STATION_PROPS }).map(([name, spec]) => [name, tracked(name, spec)]),
 );

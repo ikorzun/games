@@ -253,7 +253,7 @@ export class App {
     this.overlay.setFlash(this.profile.calm);
     // Место вылазки: из адреса (?world=office) или то, что игрок выбрал на заставке в прошлый раз.
     const asked = p.get('world');
-    this.world = asked === 'shelter' || asked === 'office' || asked === 'yellow' ? asked : this.profile.place;
+    this.world = (WORLD_KINDS as readonly string[]).includes(asked ?? '') ? (asked as WorldKind) : this.profile.place;
     this.overlay.setPlace(this.world);
     if (p.get('lang') === null && this.profile.lang) this.setLang(normalizeLang(this.profile.lang), true);
     renderer.brightness = BRIGHT[this.profile.bright];
@@ -483,12 +483,14 @@ export class App {
    */
   private sayLap(): void {
     const lap = this.lapParam() ?? (this.memory?.laps ?? 0) + 1;
-    if (lap < 2) return;
+    // Зал ожидания на первом круге говорит свой закон — одной строкой, как всё здесь.
+    const line = lap < 2 ? (this.world === 'station' ? 'station.law' : null) : `loop.lap.${Math.min(8, lap)}`;
+    if (!line) return;
     // После названия сессии, а не поверх него: вспышка гасит прочие надписи.
     if (this.lapTimer !== undefined) clearTimeout(this.lapTimer);
     this.lapTimer = setTimeout(() => {
       this.lapTimer = undefined;
-      if (this.screen === 'play') this.hud.flash(t(`loop.lap.${Math.min(8, lap)}`), 6200);
+      if (this.screen === 'play') this.hud.flash(t(line), 6200);
     }, 4400);
   }
 
@@ -694,7 +696,7 @@ export class App {
       }
       else if (e.type === 'pocket') this.onPocket(e);
       // Первое касание: вещь рассыпалась — сказать, что это правило, и как её вернуть.
-      else if (e.type === 'touch' && e.what === 'gone') this.teach('touch', t(this.game.hasLight ? 'teach.touch' : 'teach.touch.still'), 7000);
+      else if (e.type === 'touch' && e.what === 'gone') this.teach('touch', t(this.game.flow ? 'teach.touch.station' : this.game.hasLight ? 'teach.touch' : 'teach.touch.still'), 7000);
     }
   }
 
@@ -747,7 +749,9 @@ export class App {
     const base = this.touchMode ? 'touch' : 'desktop';
     let hint = '';
     if (!dead && this.screen === 'play' && g.where === 'main' && this.profile.successes === 0) {
-      if (g.time < 7) hint = t(this.dragMode ? 'hint.move.desktop_drag' : `hint.move.${base}`);
+      // Где фонаря нет (офис, зал ожидания), мышь ведёт взгляд, а не луч.
+      const what = g.hasLight ? 'move' : 'look';
+      if (g.time < 7) hint = t(this.dragMode ? `hint.${what}.desktop_drag` : `hint.${what}.${base}`);
       else if (g.time < 12 && g.hasLight) hint = t(`hint.light.${base}`);
       else if (g.time < 16 && !this.touchMode) hint = t('hint.pause.desktop');
     }
@@ -786,7 +790,7 @@ export class App {
         this.seekingSince = g.time;
       }
       if (act && s.hold > 0.05) this.teach('look', t('teach.look'));
-      if (act && g.time - this.seekingSince > 25) this.teach('dark', t(g.hasLight ? 'teach.dark' : 'teach.dark.still'), 7000);
+      if (act && g.time - this.seekingSince > 25) this.teach('dark', t(g.flow ? 'teach.dark.station' : g.hasLight ? 'teach.dark' : 'teach.dark.still'), 7000);
       if (s.inWater) this.teach('water', t('teach.water'));
     } else {
       this.hud.setGoals('', [], false);

@@ -34,6 +34,7 @@ import type { SessionConfig, SessionEvent } from './systems/session';
 import { decayAt, keepsClutter, startForm, WEAR } from './systems/decay';
 import type { Decay } from './systems/decay';
 import { DEFAULT_ILLUSIONS, FORM_GONE, FORM_LACE, FORM_REAL, Illusions, worse } from './systems/illusions';
+import { Flow } from './systems/flow';
 import { Spores } from './systems/spores';
 import type { Comeback, ComebackOptions, Form, Mount } from './systems/illusions';
 import { looksAt, Things } from './systems/things';
@@ -204,8 +205,21 @@ const isFlower = (name: string): boolean => name.startsWith('paper_flower');
 /** С какого расстояния цветок расцветает, за сколько секунд и сколько стоит ярким, прежде чем рассыпаться. */
 const FLOWER = { near: 3.4, bloom: 1.5, hold: 0.9 } as const;
 
+/** Зал ожидания: сколько дневного света в помещениях каждого рода (зал — единица). */
+const STATION_LIGHT: Partial<Record<string, number>> = { concourse: 1, platform: 0.92, track: 0.92, vestibule: 0.7, buffet: 0.6, tickets: 0.55, lockers: 0.5, washroom: 0.5, storage: 0.36, corridor: 0.3 };
+
 const WORLD_THINGS: Record<WorldKind, { small: readonly string[]; big: readonly (readonly [string, PocketKind | null])[] }> = {
   shelter: { small: SMALL_THINGS, big: BIG_THINGS },
+  // Зал ожидания: то, что оставляют на сиденьях и у стен те, кто ушёл.
+  station: {
+    small: ['mug', 'keys', 'phone', 'paper_stack', 'alarm_clock', 'kk_book_set'],
+    big: [
+      ['st_suitcase', null],
+      ['kk_armchair', 'void'],
+      ['houseplant', 'meadow'],
+      ['st_suitcase', null],
+    ],
+  },
   office: {
     small: ['mug', 'desk_phone', 'paper_stack', 'kk_cactus_small', 'keys', 'kk_lamp_table', 'kk_book_set', 'trash_bin', 'phone', 'alarm_clock'],
     big: [
@@ -295,6 +309,10 @@ export class Game {
   private worldEnv: Env = ENV_BUNKER;
   /** Свет потолочных панелей по клеткам (офис, жёлтые комнаты); в убежище его нет. */
   cellLights: CellLights | null = null;
+  /** Ход времени места: есть только в зале ожидания (systems/flow.ts). */
+  flow: Flow | null = null;
+  /** Сила последнего разрыва снимка (зал ожидания) — для звука и отладки. */
+  lastTear = 0;
   /** Сколько рассеянного света там, где стоит игрок, 0..1 (без света по клеткам — 1). */
   ambientLocal = 1;
   /** Эхо: волны от шагов игрока и от Осыпи — второй способ видеть (только без фонаря и только на ходу). */
@@ -454,11 +472,18 @@ export class Game {
     this.env = this.worldEnv;
     // Свет панелей: в офисе его включают датчики, в жёлтых комнатах он гудит сам. «Тёмные» помещения — без света.
     this.cellLights = this.worldEnv.cells ? new CellLights(level.nav, this.worldEnv.cells, level.layout?.seed ?? 0) : null;
+    this.flow = this.world === 'station' ? new Flow(level.layout?.seed ?? 0) : null;
+    this.lastTear = 0;
     if (this.cellLights) {
       for (const r of level.layout?.rooms ?? []) {
         if (r.type === 'corridor') this.cellLights.corridorRooms.add(r.id);
         if (this.roomFx.get(r.id) === 'dark') this.cellLights.offRooms.add(r.id);
+        // Дневной свет зала ожидания: зал и перрон — под открытым небом, комнаты темнее, переходы темны.
+        if (this.flow) this.cellLights.roomBase.set(r.id, STATION_LIGHT[r.type] ?? 0.55);
+        // Пути в граф не входят (по ним не ходят), но свет им нужен: иначе за краем перрона ничего не видно.
+        if (this.flow && r.type === 'track') for (const [cx, cz] of r.cells) this.cellLights.extra.push({ cx, cz, room: r.id });
       }
+      this.cellLights.settle();
     }
     this.ambientLocal = 1;
     this.pending = null;
@@ -900,7 +925,9 @@ export class Game {
     if (big > 0) [pool[0], pool[big]] = [pool[big]!, pool[0]!];
     const order: RoomFx[] = ['strobe', 'dark', 'thin', 'wire', 'thin', 'dark'];
     // В офисе особенных помещений меньше: его странность — в одинаковости.
-    const n = Math.min(order.length, Math.ceil(pool.length * (this.level?.world === 'office' ? 0.3 : 0.45)));
+    // В зале ожидания особенных помещений нет: его странность — время, а не комнаты.
+    const share = this.level?.world === 'station' ? 0 : this.level?.world === 'office' ? 0.3 : 0.45;
+    const n = Math.min(order.length, Math.ceil(pool.length * share));
     for (let i = 0; i < n; i++) this.roomFx.set(pool[i]!.id, order[i]!);
     for (const r of rooms) if (r.type === 'collapsed') this.roomFx.set(r.id, 'wire');
   }
@@ -1505,6 +1532,20 @@ export class Game {
     if (Math.hypot(b.vx, b.vz) > 0.25 || input.lookYaw !== 0 || input.lookPitch !== 0) this.stillFor = 0;
     else this.stillFor += dt;
 
+    // Зал ожидания: время места идёт вместе с игроком. Стоя он видит снимок; первый шаг (или слишком
+    // долгая неподвижность) рвёт его — кадр дёргается, всё встаёт туда, где оно есть на самом деле.
+    // wdt — время места за этот шаг: на нём живёт всё, что в зале меняется. В остальных мирах wdt = dt.
+    let wdt = dt;
+    const fl = this.where === 'main' ? this.flow : null;
+    if (fl) {
+      const r = fl.update(dt, Math.hypot(b.vx, b.vz));
+      wdt = r.wdt;
+      if (r.tore > 0) {
+        this.lastTear = r.tore;
+        this.glitch = Math.max(this.glitch, 0.3 + 0.7 * r.tore);
+      }
+    }
+
     // Фонарь. Там, где его нет (офис: свет даёт место), кнопка ничего не делает и глохнуть нечему.
     this.light.suspended = !this.hasLight;
     const wasOff = this.light.state === 'off';
@@ -1547,10 +1588,10 @@ export class Game {
     this.room = node >= 0 ? this.level!.nav[node]!.room : -1;
 
     // Всё иллюзорно: чего коснулся — растворяется; что растворилось — вернётся, когда свет погаснет и зажжётся.
-    if (this.where === 'main') this.stepIllusions(dt, dream);
+    if (this.where === 'main') this.stepIllusions(wdt, dream);
 
     // Вещи: под взглядом уменьшаются, рассыпаются, растут.
-    for (const e of this.things.update(dt, look, [b.x, b.y, b.z], los)) {
+    for (const e of this.things.update(wdt, look, [b.x, b.y, b.z], los)) {
       const t = e.thing;
       if (e.type === 'noticed') this.observed = true;
       else if (e.type === 'changing') {
@@ -1562,19 +1603,36 @@ export class Game {
 
     // Сессия: воспоминания и среда.
     if (s && this.where !== 'limbo') {
-      out.push(...s.update(dt, { pos: [b.x, b.y, b.z], eye, aim, light: look.light, node, swarm: this.swarmNear, observed: this.observed, landed: res.landed, hidden: this.memoryThing !== null && this.memoryThing.state !== 'idle' }, los));
+      // В зале ожидания вспомнить можно только стоя, на снимке: взгляд держит вещь настоящее время, пока игрок стоит.
+      const hold = fl ? { holdDt: fl.frozen ? dt : 0 } : {};
+      out.push(...s.update(wdt, { pos: [b.x, b.y, b.z], eye, aim, light: look.light, node, swarm: this.swarmNear, observed: this.observed, landed: res.landed, hidden: this.memoryThing !== null && this.memoryThing.state !== 'idle', ...hold }, los));
       this.observed = false;
     }
     for (let i = 0; i < out.length; i++) this.applySessionEvent(out[i]!, out, dream, node);
 
     const quiet = this.where !== 'main' || this.transition !== null;
-    if (s && !s.over && !this.calm && !quiet) this.stepFear(dt, input, level, fear, dream);
+    if (s && !s.over && !this.calm && !quiet) this.stepFear(wdt, input, level, fear, dream);
     else this.swarmNear = this.calm ? 0 : approach(this.swarmNear, 0, 0.5, dt);
+
+    // Зал ожидания: за краем перрона ничего нет. Шагнул — проснулся в начале; искомая вещь остаётся на
+    // месте. (Зоны падения сессии здесь не годятся: над путями нет узлов графа, и она их не проверяет.)
+    if (fl && b.y < -0.8 && this.jumps && s && !s.over && !this.transition) {
+      this.wearGain += WEAR.caught;
+      this.glitch = 1;
+      this.beginJump(this.jumps.forced('caught'), dream);
+    }
+    // Зал ожидания: стемнело — зал закрывается. Проснулся в начале, день начинается заново.
+    if (fl && fl.night && this.jumps && s && !s.over && !this.transition) {
+      this.wearGain += WEAR.caught;
+      this.glitch = 1;
+      fl.restart();
+      this.beginJump(this.jumps.forced('caught'), dream);
+    }
 
     // Поводы для скачка: простые действия и наблюдения.
     const jumps = this.jumps;
     if (jumps && s && !s.over && !this.calm && !quiet) {
-      jumps.update(dt);
+      jumps.update(wdt);
       let plan: JumpPlan | null = null;
       if (toggled && wasOff && this.light.state === 'on') plan = jumps.onLightOn();
       if (!plan && ev.revived) plan = jumps.onRevive();
@@ -1748,6 +1806,11 @@ export class Game {
       for (const bx of e.spec.boxes) this.colliders.add(bx);
       this.renderer.setChunkVisible(e.spec.id, true);
       this.quake = 1;
+    } else if (e.type === 'fall' && this.flow && this.jumps) {
+      // Зал ожидания: за краем перрона ничего нет. Шагнул — проснулся в начале; искомая вещь остаётся на месте.
+      this.wearGain += WEAR.caught;
+      this.glitch = 1;
+      this.beginJump(this.jumps.forced('caught'), dream);
     } else if ((e.type === 'fall' || e.type === 'faint') && this.jumps) {
       // Провал и газ не убивают: выбрасывают в другое пространство, а искомая вещь «забывается».
       if (this.beginJump(this.jumps.forced(e.type), dream)) {
@@ -1801,7 +1864,12 @@ export class Game {
     let dissolve = 0;
     let flash = 0;
     let fadeMul = 1;
-    let fog = this.env.fog;
+    // Зал ожидания: свет, тени и небо — те, что на снимке (пока игрок стоит, они не меняются).
+    const fl = this.where === 'main' ? this.flow : null;
+    const sun = fl ? fl.sun() : null;
+    // Даль зала — светлое небо; в тёмном переходе даль тёмная: множитель — свет клетки, где стоит игрок.
+    const sky = sun ? sun.ambient * (0.18 + 0.82 * this.ambientLocal) : 1;
+    let fog = sun ? ([this.env.fog[0] * sky, this.env.fog[1] * sky, this.env.fog[2] * sky] as Vec3) : this.env.fog;
     if (tr) {
       const k = tr.switched ? 1 - clamp((tr.t - tr.out) / tr.back, 0, 1) : clamp(tr.t / Math.max(tr.out, 1e-3), 0, 1);
       const style = tr.plan.style;
@@ -1835,7 +1903,7 @@ export class Game {
     const cl = this.where === 'main' ? this.cellLights : null;
     if (cl) {
       const drift = this.swarm && this.swarm.active && this.swarm.mode !== 'scatter' ? this.swarm.node : -1;
-      cl.update(dt, { playerNode: this.playerNode(), driftNode: drift, time: this.time, idle: this.stillFor });
+      cl.update(dt, { playerNode: this.playerNode(), driftNode: drift, time: this.time, idle: this.stillFor, ...(sun ? { dim: sun.ambient } : {}) });
       this.ambientLocal = cl.at(this.playerNode());
     } else this.ambientLocal = 1;
     // В светлом пространстве камеру держит рассеянный свет, а не пятно фонаря. Вспышки строба
@@ -1852,7 +1920,7 @@ export class Game {
     // Грибы: вокруг собранной Осыпи прорастает всё; в углах — знак, что она рядом или была здесь.
     if (this.spores) {
       const live = this.where === 'main';
-      if (live) this.spores.update(dt, sw ? { pos: sw.pos, active: sw.active && sw.mode !== 'scatter', cohesion: sw.cohesion, hunting: sw.mode === 'hunt' || sw.mode === 'cohere' } : null, this.regret);
+      if (live) this.spores.update(fl?.frozen ? 0 : dt, sw ? { pos: sw.pos, active: sw.active && sw.mode !== 'scatter', cohesion: sw.cohesion, hunting: sw.mode === 'hunt' || sw.mode === 'cohere' } : null, this.regret);
       this.renderer.setSpores(this.sporeBuf, live ? this.spores.visible([x, y, z], SPORES_SHOWN, this.sporeBuf) : 0);
     } else this.renderer.setSpores(this.sporeBuf, 0);
     if (sw && sw.active && this.where === 'main') {
@@ -1870,7 +1938,8 @@ export class Game {
           this.swarmBody.snap(sw.pos, sw.cohesion);
         }
       } else {
-        this.swarmBody.update(dt, sw.pos, sw.cohesion, null, growth);
+        // На снимке (зал ожидания, игрок стоит) Осыпь видна там, где была: тело за ней не тянется.
+        if (!fl?.frozen) this.swarmBody.update(dt, sw.pos, sw.cohesion, null, growth);
         this.renderer.setSwarm(this.swarmBody.heads, this.swarmBody.dirs, this.swarmBody.params, 0.88, this.time);
       }
     } else this.renderer.setSwarm(this.swarmBody.heads, this.swarmBody.dirs, this.swarmBody.params, 0, this.time);
@@ -1944,11 +2013,15 @@ export class Game {
     // Глубина 0…1: от входа до нижнего яруса.
     const depth = clamp(-(rig.camPos[1] - 1.42) / 9, 0, 1);
     const bunker = this.where === 'main' && this.world === 'shelter';
+    // Зал ожидания: дрожь кадра (на ходу — от хода времени, стоя — от разошедшегося снимка) и линза:
+    // в просторном месте на ходу кадр растянут по краям, в тесном переходе — сжат.
+    const rattle = fl ? fl.rattle() : 0;
+    const tight = fl !== null && this.room >= 0 && this.level?.layout?.rooms[this.room]?.type === 'corridor';
     const view: FrameView = {
       camPos: rig.camPos,
-      camYaw: rig.camYaw,
-      camPitch: rig.camPitch,
-      camRoll: rig.camRoll,
+      camYaw: rig.camYaw + rattle * Math.sin(this.time * 71.3) * Math.sin(this.time * 13.7 + 1.1),
+      camPitch: rig.camPitch + rattle * 0.7 * Math.sin(this.time * 57.9 + 0.6),
+      camRoll: rig.camRoll + rattle * 0.5 * Math.sin(this.time * 43.1 + 2.2),
       lightPos: rig.lightPos,
       lightDir: rig.lightDir,
       lightIntensity: this.light.intensity,
@@ -1964,19 +2037,22 @@ export class Game {
       // Внизу воздух гуще: взвесь, пар от сырых стен; в газу луч упирается в муть.
       haze: bunker ? (0.008 + 0.004 * depth) * (1 + 9 * this.gasView) : this.env.haze,
       fade: this.fade * fadeMul,
-      time: this.time,
+      // На снимке время стоит: точки не дрожат, взвесь висит.
+      time: fl ? 100 + fl.viewT : this.time,
       frame: this.frame,
       ambient: strobe > 0 ? [this.env.ambient[0] + 0.42 * strobe, this.env.ambient[1] + 0.45 * strobe, this.env.ambient[2] + 0.5 * strobe] : this.env.ambient,
       fogColor: fog,
       fogDensity: this.env.fogDensity,
       lightScale,
       scanFade: this.pocketFade,
-      keyDir: this.env.key?.dir ?? [0, 1, 0],
-      keyColor: this.env.key?.color ?? [0, 0, 0],
-      scanRange: this.env.scan ?? [4, 15],
+      keyDir: sun ? sun.dir : (this.env.key?.dir ?? [0, 1, 0]),
+      keyColor: sun ? sun.color : (this.env.key?.color ?? [0, 0, 0]),
+      keyCells: sun ? Math.max(0.05, sun.ambient) : 0,
+      lens: fl ? 1 + (fl.fov(tight) - 1) * 6 : 1,
+      scanRange: fl ? fl.scan() : (this.env.scan ?? [4, 15]),
       // Тени прямого света — в квадрате вокруг игрока, сдвинутом вперёд по взгляду: позади они не нужны.
       keyBox:
-        this.pocket && this.env.key?.reach
+        (this.pocket || fl) && this.env.key?.reach
           ? {
               center: [rig.camPos[0] - Math.sin(rig.camYaw) * this.env.key.reach * 0.35, rig.camPos[1] - 1.42, rig.camPos[2] - Math.cos(rig.camYaw) * this.env.key.reach * 0.35],
               half: this.env.key.reach,

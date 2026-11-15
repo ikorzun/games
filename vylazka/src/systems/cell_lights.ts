@@ -60,6 +60,8 @@ export interface CellLightsInput {
   time: number;
   /** Сколько секунд игрок не двигается и не смотрит по сторонам (не задано — он движется). */
   idle?: number;
+  /** Дневной свет (зал ожидания): общий множитель — час дня и тень поезда, 0..1. */
+  dim?: number;
 }
 
 export class CellLights {
@@ -165,6 +167,15 @@ export class CellLights {
         const tau = target > this.level[i]! ? c.rise : this.dark[i]! > 0 ? c.rise : c.fall;
         this.level[i] = target + (this.level[i]! - target) * Math.exp(-dt / tau);
       }
+    } else if (this.mode === 'day') {
+      // Дневной свет: у клетки свой уровень (зал светлее комнат, переходы темны), общий множитель —
+      // час дня и тень поезда. Рядом с Осыпью темнеет, как везде.
+      const dim = inp.dim ?? 1;
+      this.dimNow += (dim - this.dimNow) * (1 - Math.exp(-dt / 0.16));
+      for (let i = 0; i < n; i++) {
+        const target = this.dark[i]! > 0 || this.offRooms.has(this.nav[i]!.room) ? 0 : (this.roomBase.get(this.nav[i]!.room) ?? 1) * dim;
+        this.level[i] = target + (this.level[i]! - target) * Math.exp(-dt / 0.16);
+      }
     } else {
       for (let i = 0; i < n; i++) {
         let target = this.dead[i] ? 0 : this.humBase(i);
@@ -191,6 +202,25 @@ export class CellLights {
   readonly corridorRooms = new Set<number>();
   /** Помещения, где света нет вовсе («тёмные»: там и фонарь не светит). */
   readonly offRooms = new Set<number>();
+  /** Дневной свет: уровень помещения без поправок на час (задаёт игра; не задан — 1). */
+  readonly roomBase = new Map<number, number>();
+  /**
+   * Клетки, по которым никто не ходит (в графе их нет), но которые видно: пути за краем перрона.
+   * Без света место в игре не существует, поэтому свет у них свой — дневной, как у помещения.
+   */
+  readonly extra: { cx: number; cz: number; room: number }[] = [];
+  /** Нынешний общий множитель дневного света. */
+  private dimNow = 1;
+
+  /** Дневной свет: встать сразу на заданный уровень (после того как игра раздала уровни помещений). */
+  settle(dim = 1): void {
+    if (this.mode !== 'day') return;
+    this.dimNow = dim;
+    this.nav.forEach((node, i) => {
+      this.level[i] = this.offRooms.has(node.room) ? 0 : (this.roomBase.get(node.room) ?? 1) * dim;
+    });
+    this.pack();
+  }
 
   /** Свет в узле; вне графа — 0. */
   at(node: number): number {
@@ -207,5 +237,12 @@ export class CellLights {
       d[o + 1] = (node.room % 250) + 1;
       d[o + 3] = 255;
     });
+    for (const c of this.extra) {
+      if (c.cx < 0 || c.cz < 0 || c.cx >= this.size || c.cz >= this.size) continue;
+      const o = (c.cz * this.size + c.cx) * 4;
+      d[o] = Math.round(Math.max(0, Math.min(1, (this.roomBase.get(c.room) ?? 1) * this.dimNow)) * 255);
+      d[o + 1] = (c.room % 250) + 1;
+      d[o + 3] = 255;
+    }
   }
 }

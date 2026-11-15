@@ -45,6 +45,8 @@ export interface VzDebugApi {
   spores(): { pos: number[]; kind: string; grow: number }[];
   /** Стирание места: стёртость сейчас, с какой начат круг и все кривые (systems/decay.ts). */
   wear(): { wear: number; base: number; decay: Decay; forms: Record<string, number> };
+  /** Ход времени в зале ожидания (systems/flow.ts); null — в этом мире время обычное. */
+  flow(t?: number): { f: number; t: number; viewT: number; frozen: boolean; drift: number; strain: number; day: number; night: boolean; trains: number; toTrain: number; tear: number } | null;
   start(): void;
   pause(on: boolean): void;
   lang(code?: string): string;
@@ -215,6 +217,12 @@ export function installDebug(app: App): void {
     cloudUsage: () => game().renderer.cloudUsage(),
     dust: () => game().renderer.dustInfo(),
     spores: () => (game().spores?.sites ?? []).filter((q) => q.grow > 0.03).map((q) => ({ pos: [...q.pos], kind: q.kind, grow: +q.grow.toFixed(3) })),
+    flow: (t) => {
+      const f = game().flow;
+      // С числом — перевести часы места (и снимок) на это время: посмотреть вечер, не дожидаясь его.
+      if (f && typeof t === 'number') f.seek(t);
+      return f ? { f: f.f, t: f.t, viewT: f.viewT, frozen: f.frozen, drift: f.drift, strain: f.strain, day: f.day, night: f.night, trains: f.trains, toTrain: f.toTrain, tear: game().lastTear } : null;
+    },
     wear: () => {
       const forms: Record<string, number> = {};
       for (const i of game().illusions?.list ?? []) forms[String(i.form)] = (forms[String(i.form)] ?? 0) + 1;
