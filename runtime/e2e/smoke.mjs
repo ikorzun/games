@@ -68,7 +68,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Прежний эпизод 1 (новелла и режим дела) открывается по адресу; по умолчанию — «Ход следствия» (ep01_hod). */
 const LEGACY = 'ep01_murylev';
-const AUDIO_URL = /\/assets\/[^?#]+\.(?:mp3|m4a|ogg|wav)(?:[?#]|$)/i;
+/** Звук и ролики кадров: их загрузку браузер обрывает сам, когда игра снимает у элемента src. */
+const MEDIA_URL = /\/assets\/[^?#]+\.(?:mp3|m4a|ogg|wav|mp4)(?:[?#]|$)/i;
 
 /** Заставка (логотип, «коснитесь, чтобы начать») стоит перед меню: тапаем её, если она есть, и ждём меню. */
 /** Сохранение и загрузка живут в настройках (решение владельца 2026-10-11): панель быстрых кнопок над группами. */
@@ -151,8 +152,10 @@ async function openPage(browser, baseUrl, query, ctxOpts = {}, seedStorage = nul
   page.on('pageerror', (e) => log.errors.push(`pageerror: ${e.message}`));
   page.on('requestfailed', (r) => {
     const why = r.failure()?.errorText ?? '';
-    // Браузер сам обрывает загрузку аудио, когда элементу меняют src (смена трека), и при перезагрузке страницы.
-    if (why.includes('ERR_ABORTED') && AUDIO_URL.test(r.url())) return;
+    // Браузер сам обрывает загрузку аудио, когда элементу меняют src (смена трека), ролика — когда кадр сменился
+    // раньше, чем ролик догрузился (игра снимает src и отпускает декодер), и обоих — при перезагрузке страницы.
+    // ERR_ABORTED — отмена со стороны страницы; сбой сервера или сети приходит другой ошибкой или ответом ≥ 400.
+    if (why.includes('ERR_ABORTED') && MEDIA_URL.test(r.url())) return;
     log.failed.push(`${r.url()} ${why}`);
   });
   page.on('response', (r) => {
