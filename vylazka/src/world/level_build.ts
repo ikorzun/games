@@ -256,7 +256,7 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
   // В зале ожидания потолки свои (STATION_CEIL), сада нет; цветы — только в комнатах с обычным потолком.
   const gardenRoom = station ? undefined : rooms1.filter((r) => r.tier === entrance.tier && r.cells.length >= 4).sort(order(1))[0];
   const flowerRooms = new Set(rooms1.filter((r) => r !== gardenRoom && r.cells.length >= 2 && (!station || r.type === 'lockers' || r.type === 'buffet')).sort(order(2)).slice(0, 2).map((r) => r.id));
-  // Небо вместо потолка (слова владельца: «в какой момент игрок заходит в одну из комнат или помещение
+  // Небо вместо потолка (слова партнёра: «в какой момент игрок заходит в одну из комнат или помещение
   // и там нет потолка, только бесконечно глубокое звездное небо и изредка падают звезды»): одно
   // помещение уровня — жилая комната убежища, кабинет офиса, зал жёлтых комнат; не сад и не комната
   // с цветами. В зале ожидания небо и так открыто: там звёзды проступают к вечеру.
@@ -273,7 +273,7 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
     const style = styleFor(room, world);
     const y = tierFloor(room.tier);
     for (const [x, z] of room.cells) {
-      // Архитектура здесь условна (слова владельца: «ты можешь менять потолок в комнатах»): в саду он выше.
+      // Архитектура здесь условна (слова партнёра: «ты можешь менять потолок в комнатах»): в саду он выше.
       const cell: ShellCell = { cx: x - HALF, cz: z - HALF, floorY: y, ceilY: y + ceilOf(room), room: room.id, style };
       if (pitAt.has(`${room.tier},${x},${z}`)) cell.noFloor = true;
       // Зал ожидания: над залом стеклянная крыша (потолка нет, только балки), над путями — небо, под ними — пустота.
@@ -536,7 +536,7 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
     const open = rooms.filter((r) => r.type !== 'corridor');
     const pool = (halls.length > 0 ? halls : open.length > 0 ? open : rooms).slice().sort((a, b) => far(a) - far(b) || a.id - b.id);
     // На ближнем — то же, что на экранах офиса (природа или «странное»). Дальний — не картинка, а проём
-    // (решение владельца: два экрана — «соединение смысла и пространств»): на нём луг, и в него входят.
+    // (решение партнёра: два экрана — «соединение смысла и пространств»): на нём луг, и в него входят.
     const shown = SCREEN_IMAGES.map((im, i) => (im.kind === 'nature' || im.kind === 'strange' ? i : -1)).filter((i) => i >= 0);
     const first = Math.floor(hash01(layout.seed & 0xffff, 0x5c, layout.seed ^ 0x2e11) * shown.length);
     const images = [shown[first]!, DOOR_IMAGE];

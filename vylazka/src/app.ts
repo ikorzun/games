@@ -137,7 +137,7 @@ export class App {
 
   async init(): Promise<void> {
     const p = this.params;
-    // Язык по умолчанию — английский (решение владельца); выбор игрока хранится в профиле.
+    // Язык по умолчанию — английский (решение партнёра); выбор игрока хранится в профиле.
     this.setLang(normalizeLang(p.get('lang') ?? 'en'), true);
     if (p.get('pseudo') === '1') i18n.setPseudo(true);
     this.showFps = p.get('fps') === '1';

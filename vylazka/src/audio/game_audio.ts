@@ -52,7 +52,7 @@ const MUSIC = 'music_menu';
 export const LOAD_FIRST: readonly string[] = ['ui_click', 'ui_start', 'hatch', 'lift', 'amb_bunker', 'amb_office', 'amb_yellow', 'amb_station', 'still_tone', 'breath_calm', 'step_concrete', 'step_carpet', 'flash_click', 'flash_die', 'flash_rattle', 'flash_spark', 'music_menu'];
 
 /**
- * Следы людей (слова владельца: «лёгкий фоновый шёпот, смех, тихий неразличимый разговор людей»).
+ * Следы людей (слова партнёра: «лёгкий фоновый шёпот, смех, тихий неразличимый разговор людей»).
  * Это не пугалки и не события: так звучит место, в котором кто-то жил. Что слышно — зависит от места:
  * в убежище — дом (смешок, напев), в офисе — работа (чужой телефон, оклик), в жёлтых комнатах никого —
  * только где-то звонит телефон; на лугу — смех издалека. В белом нигде, домике и лимбо людей нет.
@@ -212,7 +212,7 @@ export class GameAudio {
     a.loop('amb_deep', place === 'shelter' ? live * depth : 0);
     a.loop('amb_office', place === 'office' ? live : 0);
     a.loop('amb_yellow', place === 'yellow' ? live : 0);
-    // Зал ожидания: на ходу — шум зала; встал — он уходит в один ровный тон (запись владельца), а когда
+    // Зал ожидания: на ходу — шум зала; встал — он уходит в один ровный тон (запись партнёра), а когда
     // снимок расходится с местом, тон начинает дрожать. Поезд слышно, когда он проходит за окнами.
     const fl = !over && place === 'station' ? (game.flow ?? null) : null;
     const moving = fl ? fl.f : 1;

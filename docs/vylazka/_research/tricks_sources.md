@@ -1,6 +1,6 @@
 # Дешёвые визуальные приёмы three.js / WebGL2: источники
 
-Контекст: three.js 0.187, WebGLRenderer (WebGL2), свои GLSL-шейдеры, телефоны, буфер 640x360...1280x720, мир из точек. Приёмы из справочника владельца (blob shadow, AO/lightmaps, matcap, micro-normal, fresnel rim, env map, decals, caustics, volumetric beams, instanced grass, soft sprites, fog, alpha hash, thin glass, impostors/LOD, fake SSS) не повторяются.
+Контекст: three.js 0.187, WebGLRenderer (WebGL2), свои GLSL-шейдеры, телефоны, буфер 640x360...1280x720, мир из точек. Приёмы из справочника партнёра (blob shadow, AO/lightmaps, matcap, micro-normal, fresnel rim, env map, decals, caustics, volumetric beams, instanced grass, soft sprites, fog, alpha hash, thin glass, impostors/LOD, fake SSS) не повторяются.
 
 Пометки: «выдача» = ссылка была в результатах поиска. «не проверено» = страницу не открывали, адрес не из выдачи. Лицензия указана только там, где она была видна в выдаче. Страницы целиком не читались (сеть закрыта), поэтому описания основаны на сниппетах выдачи; детали шейдеров нужно смотреть в первоисточнике. Всё, что касается пригодности для игры, требует проверки на реальном телефоне.
 
@@ -73,7 +73,7 @@
   - Форум three.js: https://discourse.threejs.org/t/octahedral-impostors-for-three-js/80318 (выдача); репозиторий agargaro/octahedral-impostor упомянут в выдаче текстом (лицензия не проверена)
   - Лес: https://discourse.threejs.org/t/a-forest-of-octahedral-impostors/85735 (выдача)
   - Разбор: https://smailikhappy.github.io/posts/Octahedral_imposters/ (выдача); https://arycama.github.io/2024/10/05/Imposters.html (выдача)
-  - Это развитие пункта «tree impostors» из справочника владельца.
+  - Это развитие пункта «tree impostors» из справочника партнёра.
 
 ### 8. Flipbook / sprite sheet анимация, Flipbook
 - Даёт: анимированные спрайты, огонь, дым, шум в кадре, мерцающие экраны за счёт атласа кадров; кадр выбирается по времени.
@@ -114,7 +114,7 @@
 
 ### 12. Fake volumetric light rays (Codrops), Volumetric light rays
 - Даёт: лучи света в виде шейдера на геометрии/полноэкранном квад: работает и когда источник за кадром.
-- Дёшево: один квад/конус с шумом. Ловушка: прозрачность и overdraw, лучи плохо смотрятся вблизи. Близко к пункту «fake volumetric beams» из справочника владельца; здесь лишь лучший источник.
+- Дёшево: один квад/конус с шумом. Ловушка: прозрачность и overdraw, лучи плохо смотрятся вблизи. Близко к пункту «fake volumetric beams» из справочника партнёра; здесь лишь лучший источник.
 - Ссылки:
   - Codrops, «Volumetric Light Rays with Three.js» (2022): https://tympanus.net/codrops/2022/06/27/volumetric-light-rays-with-three-js (выдача; код и тип геометрии не подтверждены)
   - Обсуждение: https://discourse.threejs.org/t/recreating-a-volumetric-light-effect/31387 (выдача)
@@ -329,7 +329,7 @@
 
 ## Блок «Птицы»
 
-Задача владельца: «добавить птиц, пока не понимаю куда и как». Ниже способы от дешёвого к дорогому; места в игре — предложения для проверки, не из источников.
+Задача партнёра: «добавить птиц, пока не понимаю куда и как». Ниже способы от дешёвого к дорогому; места в игре — предложения для проверки, не из источников.
 
 ### Способ 1. Сильно дальние птицы: инстансы треугольников/квадов с взмахом в шейдере
 - Одна «птица» = 2–4 треугольника, взмах = sin(time + фаза инстанса) по высоте крыльев (расстояние вершины от оси тела); ориентация по скорости. Один InstancedMesh на всю стаю, позиции по простому движению (орбита, ветер).

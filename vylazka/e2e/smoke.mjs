@@ -329,7 +329,7 @@ async function scenarioPlay(browser, baseUrl) {
     st.echo.some((e) => e.kind === 0 && e.radius > 0.5) && mean(heard) > mean(quiet) + 2 && Math.max(...heard) > Math.max(...quiet) + 15,
     `волн ${st.echo.length}, среднее ${mean(quiet).toFixed(1)} → ${mean(heard).toFixed(1)}, самое светлое ${Math.max(...quiet).toFixed(0)} → ${Math.max(...heard).toFixed(0)}`,
   );
-  // Эхо — только на ходу (решение владельца): замер — и волны гаснут раньше, чем успевают разойтись.
+  // Эхо — только на ходу (решение партнёра): замер — и волны гаснут раньше, чем успевают разойтись.
   st = await vz(page, () => window.__vz.step(90));
   check('замер в темноте — эхо гаснет: у волн, что ещё живы, силы нет', st.echo.every((e) => e.amp < 0.05), `волн ${st.echo.length}, сила ${st.echo.map((e) => e.amp.toFixed(3)).join(',')}`);
   const gone = await afterSec(2.5);
@@ -337,7 +337,7 @@ async function scenarioPlay(browser, baseUrl) {
   check('волна ушла — снова темно', st.echo.length === 0 && mean(gone) < mean(quiet) + 1.2 && Math.max(...gone) < Math.max(...quiet) + 8, `волн ${st.echo.length}, среднее ${mean(gone).toFixed(1)}, самое светлое ${Math.max(...gone).toFixed(0)}`);
   await vz(page, () => window.__vz.toggleLight());
   await afterSec(1.8);
-  // Пока светит фонарь, эха нет (решение владельца): шаги волн не дают, а уже пущенные не светят.
+  // Пока светит фонарь, эха нет (решение партнёра): шаги волн не дают, а уже пущенные не светят.
   for (let i = 0; i < 10; i++) await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
   st = await state(page);
   check('при горящем фонаре эха нет: шаги волн не дают', st.light.state === 'on' && st.echo.every((e) => e.amp < 0.02), `волн ${st.echo.length}, сила ${st.echo.map((e) => e.amp.toFixed(3)).join(',')}`);
@@ -1200,7 +1200,7 @@ async function scenarioIllusions(browser, baseUrl) {
     await context.close();
   }
 
-  // Офис, стёртый почти до конца: берёзы — «знак последних дней» (решение владельца).
+  // Офис, стёртый почти до конца: берёзы — «знак последних дней» (решение партнёра).
   {
     const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&world=office&wear=0.78');
     await page.click('.vz-overlay');

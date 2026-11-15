@@ -334,7 +334,7 @@ export function buildShell(shell: Shell, target: MeshBuilder | ((cell: ShellCell
       const px = vx * CELL - H;
       const pz = vz * CELL - H;
       // Посреди прямой стены столбик — её продолжение: тон тот же, иначе каждые три метра по стене идёт
-      // тёмная полоса-стык (слова владельца: «чтобы не видно было стыков»). Темнее он только там, где
+      // тёмная полоса-стык (слова партнёра: «чтобы не видно было стыков»). Темнее он только там, где
       // стена кончается или поворачивает, — это настоящий угол.
       const faceOf = (open: boolean, a: ShellCell | undefined, nx: number, nz: number, straight: boolean): void => {
         if (!open || !a) return;
