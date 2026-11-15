@@ -102,6 +102,7 @@ export type Look =
   | { kind: 'splat'; asset: string; density?: number }     // точки с собственным цветом
   | { kind: 'image'; cell: number; w: number; h: number; washable: boolean }   // экран, проекция
   | { kind: 'wire'; mesh: MeshData }
+  | { kind: 'lace'; mesh: MeshData; pattern: string }      // рисунок нитью: швы, кромки, переплёты; сквозной
   | { kind: 'photo'; mesh: MeshData; texture: string };
 export interface Piece {
   id: string; bounds: Aabb; tier: number;
