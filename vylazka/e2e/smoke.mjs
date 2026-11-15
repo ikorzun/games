@@ -1094,6 +1094,46 @@ async function scenarioIllusions(browser, baseUrl) {
       st = await state(page);
       check('офис: пошевелился — панели загорелись, предмет вернулся или ушёл вещью', (o.state === 'here' || o.state === 'left') && st.illusions.back >= 1 && st.lights.lit >= 1, JSON.stringify({ obj: o.state, lights: st.lights, ill: st.illusions }));
     }
+
+    // Берёзы в отделе: картинка с экранов офиса, ставшая комнатой. Стволы растворяются, как всё, но
+    // возвращаются только собой и на своё место: дерево укоренено.
+    {
+      const trees = (await vz(page, () => window.__vz.objects())).filter((x) => x.name === 'birch');
+      check('офис: в отделе проросли берёзы — пять-шесть стволов от пола до потолка', trees.length >= 5 && trees.length <= 6 && trees.every((x) => x.min[1] < 0.05 && x.max[1] > 2.6), `${trees.length}: ${trees.map((x) => x.at.map((v) => v.toFixed(1)).join(',')).join(' | ')}`);
+      const cx = mean(trees.map((x) => x.at[0]));
+      const cz = mean(trees.map((x) => x.at[2]));
+      const t = trees.filter((x) => x.state === 'here').sort((a, b) => Math.hypot(b.at[0] - cx, b.at[2] - cz) - Math.hypot(a.at[0] - cx, a.at[2] - cz))[0];
+      if (t) {
+        // Подходим снаружи рощи: со стороны, противоположной её середине.
+        const d = Math.hypot(t.at[0] - cx, t.at[2] - cz) || 1;
+        const ux = (t.at[0] - cx) / d;
+        const uz = (t.at[2] - cz) / d;
+        const stand = (k) => vz(page, ([x, z, tx, tz]) => window.__vz.teleport(x, 0, z, Math.atan2(-(tx - x), -(tz - z)), 0), [t.at[0] + ux * k, t.at[2] + uz * k, t.at[0], t.at[2]]);
+        await stand(1.2);
+        await run(page, 1.5, wiggle);
+        if (wantShots) {
+          await stand(3.2);
+          await run(page, 2, wiggle);
+          await page.screenshot({ path: join(OUT, 'world_office_grove.png') });
+          await stand(1.2);
+          await run(page, 0.5, wiggle);
+        }
+        let o = await objOf(page, t.id);
+        for (let i = 0; i < 40 && o.state === 'here'; i++) {
+          await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+          o = await objOf(page, t.id);
+        }
+        const touched = o.state;
+        o = await waitObj(page, t.id, (x) => x.state === 'gone', 4, wiggle);
+        check('офис: берёза рассыпается от касания, как всё', ['going', 'gone'].includes(touched) && o.state === 'gone', `${touched} → ${o.state}`);
+        await stand(1.6);
+        st = await run(page, 6.5);
+        o = await objOf(page, t.id);
+        const dark = st.lights.lit === 0 && o.state === 'gone';
+        o = await waitObj(page, t.id, (x) => x.state === 'here' || x.state === 'left', 8, wiggle);
+        check('офис: после темноты берёза встала снова — собой и на своём месте', dark && o.state === 'here' && Math.hypot(o.at[0] - t.at[0], o.at[2] - t.at[2]) < 0.01, JSON.stringify({ dark, state: o.state, at: o.at.map((v) => +v.toFixed(2)) }));
+      }
+    }
     check('офис: нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
     const warns = log.warnings.filter((w) => !benign(w));
     check('офис: нет предупреждений в консоли', warns.length === 0, `${warns.length}: ${[...new Set(warns)].join(' | ').slice(0, 300)}`);

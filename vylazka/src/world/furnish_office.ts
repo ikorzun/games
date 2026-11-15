@@ -18,6 +18,7 @@ import { floorSpots, free, homeCentre, homeStack, landmark, leanScreens, screenA
 import type { CellInfo, HomeItem, RoomCtx, Slot } from './furnish';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
+import { ceilingBreak, leafLitter } from './props_office';
 import type { Xf } from './props';
 import type { ScreenKind } from './screens';
 
@@ -147,6 +148,73 @@ function department(ctx: RoomCtx): void {
   wall(ctx, ['office_clock']);
   wall(ctx, ['water_cooler']);
   wall(ctx, ['binder_shelf']);
+  grove(ctx, m);
+}
+
+/** Сколько берёз в отделе: ряд вдоль одной стороны острова и одна-две поодаль. */
+export const GROVE = { row: 4, min: 5, max: 6 } as const;
+
+/**
+ * Берёзы, проросшие сквозь отдел (слова владельца: «добавить эти деревья в одну из комнат, чтобы они
+ * так же прорастали насквозь локации»; картинка — та самая, что на экранах офиса). Природу в офис
+ * привезли картинкой — а в одной комнате картинка сбылась.
+ *
+ * Стволы стоят в «карманах» у внутренних узлов сетки клеток: там, где сходятся четыре клетки комнаты,
+ * но не в самом узле. Так они не попадают ни на прямые между серединами клеток (по ним ходят игрок
+ * и Осыпь), ни под потолочные панели (панель — посреди клетки), ни в остров столов. Четыре — рядом
+ * вдоль одной стороны острова, как аллея; остальные — поодаль: комната по-прежнему слишком велика.
+ */
+function grove(ctx: RoomCtx, m: { c: CellInfo; dx: number; dz: number }): void {
+  const tree = ALL_PROPS.birch;
+  if (!tree) return;
+  const has = new Set(ctx.cells.map((c) => `${c.cx},${c.cz}`));
+  // Места вещей воспоминаний вокруг острова (см. department): между стволами, но не под ними.
+  const spots = [
+    [m.dx + 2.1, m.dz],
+    [m.dx - 2.1, m.dz],
+    [m.dx, m.dz + 2.0],
+    [m.dx, m.dz - 2.0],
+  ];
+  const cands: { x: number; z: number }[] = [];
+  for (const c of ctx.cells) {
+    if (!has.has(`${c.cx + 1},${c.cz}`) || !has.has(`${c.cx},${c.cz + 1}`) || !has.has(`${c.cx + 1},${c.cz + 1}`)) continue;
+    const vx = (c.cx - m.c.cx) * 3 + 1.5;
+    const vz = (c.cz - m.c.cz) * 3 + 1.5;
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        const x = vx + sx * (0.5 + ctx.rng() * 0.22);
+        const z = vz + sz * (0.5 + ctx.rng() * 0.22);
+        // Не в острове столов и не на месте вещи.
+        if (Math.abs(x - m.dx) < 1.8 && Math.abs(z - m.dz) < 1.8) continue;
+        if (spots.some((p) => Math.hypot(x - p[0]!, z - p[1]!) < 0.75)) continue;
+        cands.push({ x, z });
+      }
+    }
+  }
+  if (cands.length === 0) return;
+  // Сторона острова, вдоль которой встанет ряд: ось и знак.
+  const side = Math.floor(ctx.rng() * 4);
+  const along = (p: { x: number; z: number }): number => (side < 2 ? p.x - m.dx : p.z - m.dz) * (side % 2 === 0 ? 1 : -1);
+  const picked: { x: number; z: number }[] = [];
+  const far = (p: { x: number; z: number }, d: number): boolean => picked.every((q) => Math.hypot(p.x - q.x, p.z - q.z) >= d);
+  // Ряд: всё, что по эту сторону острова.
+  for (const p of cands.filter((q) => along(q) > 1.8)) if (picked.length < GROVE.row && far(p, 1.0)) picked.push(p);
+  // Поодаль: с другой стороны, не ближе двух с половиной метров от уже выбранных.
+  const rest = cands.filter((q) => along(q) <= 1.8);
+  for (let i = rest.length - 1; i > 0; i--) {
+    const j = Math.floor(ctx.rng() * (i + 1));
+    [rest[i], rest[j]] = [rest[j]!, rest[i]!];
+  }
+  const extra = GROVE.min - GROVE.row + Math.floor(ctx.rng() * (GROVE.max - GROVE.min + 1));
+  for (const p of rest) if (picked.length < GROVE.row + extra && far(p, 2.5)) picked.push(p);
+  picked.forEach((p, i) => {
+    const at = m.c.xf.child(p.x, 0, p.z, Math.floor(ctx.rng() * 4) as 0 | 1 | 2 | 3);
+    const seed = seedOf(ctx);
+    ceilingBreak(at, ctx.h, seed);
+    leafLitter(at, seed);
+    tree.build(at, seed);
+    if (i === 0) landmark(ctx, 'grove', m.c.xf, p.x, 1.2, p.z);
+  });
 }
 
 function cubicles(ctx: RoomCtx): void {

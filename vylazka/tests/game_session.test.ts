@@ -1785,6 +1785,53 @@ describe('игра целиком: всё иллюзорно', () => {
     expect(['here', 'left']).toContain(stateOf(h, id));
   });
 
+  it('офис: берёза рассыпается от касания, как всё; после «замер — погасло — пошевелился» встаёт снова — собой и на своём месте', () => {
+    const { sleep, sleepStagger, reach } = DEFAULT_CELL_LIGHTS;
+    const level = buildLevel(generateLayout(SEED, 2, 'office'));
+    const h = new Harness(level, { seed: 3, cfg: NOTHING });
+    const g = h.game;
+    h.run(0.3);
+    const trees = level.objects!.filter((o) => o.name === 'birch');
+    expect(trees.length).toBeGreaterThanOrEqual(5);
+    // Подойти к первой берёзе, к которой получится: с одной из четырёх сторон, с метра.
+    let hit: { id: number; dx: number; dz: number } | null = null;
+    for (const o of trees) {
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        g.teleport(o.at[0] - dx * 1.0, o.at[1], o.at[2] - dz * 1.0);
+        h.tick();
+        g.aimAt(o.at[0], o.at[1] + 1.4, o.at[2]);
+        for (let i = 0; i < 90 && stateOf(h, o.id) === 'here'; i++) h.tick({ ...emptyInput(), moveZ: 1 });
+        if (stateOf(h, o.id) !== 'here') {
+          hit = { id: o.id, dx, dz };
+          break;
+        }
+      }
+      if (hit) break;
+    }
+    expect(hit, 'не вышло коснуться ни одной берёзы').not.toBeNull();
+    const { id, dx, dz } = hit!;
+    const tree = trees.find((o) => o.id === id)!;
+    h.run(1.2);
+    expect(stateOf(h, id)).toBe('gone');
+    expect(g.illusions!.open(id), 'сквозь рассыпавшийся ствол проходят').toBe(true);
+    const things = g.things.list.length;
+    // Отошёл на пару шагов (стволы стоят не ближе двух метров от стен: это ещё отдел); свет горит — ствола нет.
+    g.teleport(tree.at[0] - dx * 1.7, tree.at[1], tree.at[2] - dz * 1.7);
+    h.run(1);
+    expect(stateOf(h, id)).toBe('gone');
+    // Замер: панели гаснут. Пошевелился: зажглось — и берёза собирается.
+    h.run(sleep + reach * sleepStagger + 2.5);
+    expect(lights(h)!.lit).toBe(0);
+    expect(stateOf(h, id)).toBe('gone');
+    h.run(0.6, { ...emptyInput(), lookYaw: 0.01 });
+    h.run(2.5, { ...emptyInput(), lookYaw: 0.002 });
+    // Дерево укоренено: не «ушло» вещью сна и не встало у другой стены.
+    expect(stateOf(h, id)).toBe('here');
+    expect(g.things.list.length).toBe(things);
+    expect(g.illusions!.get(id)!.obj.at).toEqual(tree.at);
+    expect(g.illusions!.open(id)).toBe(false);
+  });
+
   it('эхо: шаг пускает волну и при фонаре, но сила её нулевая; фонарь выключен — больше нуля; включил — снова тишина', () => {
     for (const world of ['shelter', 'yellow'] as const) {
       const level = world === 'shelter' ? levelOf(SEED) : buildLevel(generateLayout(SEED, 2, 'yellow'));
