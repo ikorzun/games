@@ -4,6 +4,7 @@ import type { GenLayout, WorldKind } from '../gen/layout';
 import type { Aabb, ColliderSet } from './colliders';
 import type { FlatMark } from './flat';
 import type { MeshData, SheetMark } from './kit';
+import type { Perch } from '../systems/birds';
 import type { FreeSlot, LevelObject } from './objects';
 
 /** Кусок геометрии, рисуемый одним вызовом. Ярусы — чтобы не рисовать этажи, которых не видно. */
@@ -135,4 +136,11 @@ export interface BuiltLevel {
   skyRoom?: number;
   /** Высота потолка каждого помещения над его полом, м (номер помещения → высота). */
   ceilings?: Record<number, number>;
+  /**
+   * Зал ожидания: стеклянная крыша — её прямоугольник в мире (minX, minZ, maxX, maxZ, по внутренним
+   * граням стен) и высота переплёта, м. По нему рендер считает тень балок без карты теней.
+   */
+  roof?: { box: [number, number, number, number]; y: number };
+  /** Где под крышей садятся птицы (systems/birds.ts): точки на затяжках переплёта. Нет — птиц под крышей нет. */
+  perches?: Perch[];
 }

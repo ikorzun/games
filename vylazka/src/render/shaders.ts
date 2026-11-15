@@ -101,6 +101,27 @@ uniform float uScanFade;  // 1 — пространство держится; м
 uniform vec2 uScanRange;  // докуда рассеянный свет «сканирует»: плотно до x, россыпь после y, м
 `;
 
+/**
+ * Ветер. Всё, что висит или растёт, качается: закреплённый конец стоит, свободный ходит и чуть
+ * запаздывает. Вес вершины кладёт сборщик (world/kit.ts, sway); у стен и мебели он нулевой. Соседние
+ * вещи качаются согласно: фаза идёт по миру волной, как порыв. Время ветра — время места: в зале
+ * ожидания, пока герой стоит, оно застывает вместе со снимком.
+ */
+export const WIND_GLSL = /* glsl */ `
+attribute float aSway;
+uniform vec4 uWind;       // x — время ветра, с; y — размах свободного конца, м; zw — куда дует (x, z)
+
+vec3 windSway(vec3 wp) {
+  if (aSway <= 0.0 || uWind.y <= 0.0) return wp;
+  float ph = dot(wp.xz, vec2(0.37, 0.29));
+  float t = uWind.x - aSway * 0.7;
+  float along = 0.55 * sin(t * 1.31 + ph) + 0.3 * sin(t * 2.17 + ph * 1.7 + 1.1) + 0.45 * sin(t * 0.43 + ph * 0.31 + 0.5);
+  float across = 0.4 * sin(t * 1.73 + ph * 1.3 + 1.9);
+  wp.xz += (uWind.zw * along + vec2(-uWind.w, uWind.z) * across) * (uWind.y * aSway);
+  return wp;
+}
+`;
+
 export const WORLD_VERT = /* glsl */ `
 attribute vec4 aColor;
 attribute float aMat;
@@ -115,6 +136,31 @@ varying float vLace;
 varying float vArch;
 varying vec2 vTone;
 ${CRUMBLE_GLSL}
+${WIND_GLSL}
+#ifdef BIRD
+// Птица (systems/birds.ts): много копий одной сетки. В канале качания у вершин крыла стоит не ветер, а
+// место на крыле — от плеча (0) к кончику (1) со знаком стороны; по нему крыло машет и складывается.
+attribute vec2 iBird;     // x — фаза взмаха, рад; y — раскрытие крыльев 0..1 (0 — сидит, сложив)
+
+void birdWing(inout vec3 p, inout vec3 n) {
+  float w = abs(aSway);
+  if (w <= 0.0) return;
+  float side = sign(aSway);
+  float open = iBird.y;
+  vec2 d = vec2(p.x - side * 0.05, p.y - 0.13);
+  // Сложенное крыло прижато к боку и тянется назад вдоль тела.
+  d.x *= mix(0.2, 1.0, open);
+  p.z -= (1.0 - open) * w * 0.13;
+  d.y -= (1.0 - open) * w * 0.035;
+  // Взмах — поворот вокруг продольной оси в плече; кончик запаздывает и ходит шире корня.
+  float ang = open * (sin(iBird.x - w * 1.2) * (0.5 + 0.55 * w) + 0.18) * side;
+  float c = cos(ang);
+  float s = sin(ang);
+  p.x = side * 0.05 + d.x * c - d.y * s;
+  p.y = 0.13 + d.x * s + d.y * c;
+  n.xy = vec2(n.x * c - n.y * s, n.x * s + n.y * c);
+}
+#endif
 varying vec3 vPosV;
 varying vec3 vNrmV;
 varying vec4 vColor;
@@ -122,6 +168,7 @@ varying float vMat;
 varying vec2 vUv;
 varying vec4 vShadow;
 varying vec3 vSurf;   // x — стена (1) или пол с потолком (0); y — нормаль вверх; z — высота над полом яруса, м
+varying float vShell; // мох слоями (world/moss.ts): уровень слоя, 0 — не мох, 1 — кончики ворса
 
 void main() {
   // Сетка, поставленная много раз (грибы): у каждой копии своё место, поворот и размер.
@@ -130,8 +177,20 @@ void main() {
 #else
   mat4 im = mat4(1.0);
 #endif
+#ifdef BIRD
+  vec3 lp = position;
+  vec3 ln = normal;
+  birdWing(lp, ln);
+  vec4 wp = modelMatrix * (im * vec4(lp, 1.0));
+  vec3 wn = normalize(mat3(modelMatrix) * (mat3(im) * ln));
+  vShell = 0.0;
+#else
+  // Отрицательный вес качания — уровень слоя мха; ветер такие вершины не трогает.
+  vShell = max(-aSway, 0.0);
   vec4 wp = modelMatrix * (im * vec4(position, 1.0));
+  wp.xyz = windSway(wp.xyz);
   vec3 wn = normalize(mat3(modelMatrix) * (mat3(im) * normal));
+#endif
   // Давление: потолок помещения провисает, как брюхо (systems/pressure.ts). У стен он остаётся на месте —
   // двери не закрывает; двигаются только вершины самого потолка, не предметы под ним.
   if (uPressY.z > 0.0 && aObj < 0.5 && uThing.z < 0.5 && wn.y < -0.5 && abs(wp.y - uPressY.y) < 0.3) {
@@ -201,7 +260,7 @@ uniform sampler2D uScreens; // атлас картинок выставочны�
 #define ATLAS_ROWS 4
 #endif
 uniform vec4 uMatA[48];   // грязь, свечение, слой фактуры, повторов фактуры на метр
-uniform vec4 uMatB[48];   // рельеф (м), род запустения, проступающий материал, —
+uniform vec4 uMatB[48];   // рельеф (м), род запустения, проступающий материал, просвет (тонкое светится, когда свет за ним)
 uniform vec3 uMatBase[48];
 
 varying vec3 vPosV;
@@ -217,6 +276,7 @@ varying float vObj;
 varying float vLace;
 varying float vArch;
 varying vec2 vTone;       // x — предмет выцвел, y — светится своим цветом
+varying float vShell;     // мох слоями: уровень слоя, 0 — не мох
 uniform float uKeyCells;  // > 0 — прямой свет есть только там, где клетка светлая: множитель рассеянного света клеток
 uniform float uGaze;      // 0..1: рассеянный свет собирает место только там, куда смотрит герой
 uniform vec2 uGazeCone;   // косинусы края взгляда (за ним ничего не собрано) и его середины (собрано сплошь)
@@ -224,6 +284,15 @@ uniform vec4 uPressBox;   // давление: прямоугольник пом
 uniform vec4 uPress;      // xy — откуда идёт провал, z — радиус рассыпавшегося пола, w — яркость красной сетки
 uniform vec3 uPressY;     // x — пол помещения, y — его потолок, z — на сколько метров потолок провис
 uniform vec4 uErase;      // стирание места (systems/decay.ts): x — потолок, y — стены, z — пол; 0 — цело, 1 — стёрто
+uniform vec4 uRoofBox;    // зал ожидания: прямоугольник стеклянной крыши в мире (minX, minZ, maxX, maxZ)
+uniform float uRoofY;     // высота её переплёта, м; 0 — крыши нет
+uniform vec3 uKeyDirW;    // направление на прямой свет в мире
+uniform sampler2D uContact;   // тени-пятна под обстановкой (render/contact.ts): по каналу на ярус, 1 — темно
+uniform vec3 uContactGrid;    // xy — угол карты в мире (x, z), z — её сторона, м; 0 — карты нет
+uniform float uTierDrop;
+uniform float uCaustic;   // 0..1: луч лежит на воде — отсвет вокруг идёт рябью
+uniform vec4 uVoid;       // Осыпь: xyz — где она (пространство камеры), w — докуда она достаёт, м (0 — её нет)
+uniform vec2 uVoidK;      // x > 0 — она темнота и поглощает свет; x < 0 — она свет и выжигает (яркость); y — насколько она здесь, 0..1
 
 ${BEAM_GLSL}
 ${SCAN_GLSL}
@@ -299,6 +368,171 @@ float cellLight(vec2 xz) {
   return mix(mix(t0.r, lx, w.x), mix(lz, ld, w.x), w.y);
 }
 
+/**
+ * Тень переплёта стеклянной крыши без карты теней (на телефоне карты нет, а время в зале ожидания
+ * видно именно по этим теням). Балки стоят ровной решёткой — поперёк зала каждые три метра, вдоль
+ * каждые полтора, — поэтому тень считается прямо здесь: луч от точки к солнцу пересекает плоскость
+ * крыши и попадает в балку или мимо. Вышел не через крышу, а через стену — тень стены. Полутень тем
+ * шире, чем дальше до крыши; у тонкого прогона она съедает тень почти целиком. Доля света 0..1.
+ */
+float roofShade() {
+  if (uRoofY <= 0.0 || uKeyDirW.y < 0.03) return 1.0;
+  // Только в самом зале: перрон и комнаты под потолком освещены по-своему.
+  if (vWorld.x < uRoofBox.x - 0.2 || vWorld.x > uRoofBox.z + 0.2 || vWorld.z < uRoofBox.y - 0.2 || vWorld.z > uRoofBox.w + 0.2 || vWorld.y > uRoofY - 0.1) return 1.0;
+  float t = (uRoofY - vWorld.y) / uKeyDirW.y;
+  vec2 q = vWorld.xz + uKeyDirW.xz * t;
+  float pen = 0.02 + 0.006 * t;
+  float inside = min(min(q.x - uRoofBox.x, uRoofBox.z - q.x), min(q.y - uRoofBox.y, uRoofBox.w - q.y));
+  float bz = abs(fract(q.y / 3.0 + 0.5) - 0.5) * 3.0;
+  float bx = abs(fract(q.x / 1.5) - 0.5) * 1.5;
+  float fz = clamp((0.1 + pen - bz) / (2.0 * pen), 0.0, min(1.0, 0.1 / pen));
+  float fx = clamp((0.045 + pen - bx) / (2.0 * pen), 0.0, min(1.0, 0.045 / pen));
+  return smoothstep(-pen, pen, inside) * (1.0 - fz) * (1.0 - fx);
+}
+
+#ifdef HEXTILE
+/**
+ * Шестиугольная укладка фактуры (hex tiling, Mikkelsen 2022). Фактура повторяется каждые полметра-метр,
+ * и на большой ровной стене это видно как решётка одинаковых пятен. Здесь поверхность делится на
+ * шестиугольные ячейки, у каждой фактура сдвинута по-своему, а на стыках три соседние смешиваются.
+ * Три выборки вместо одной — поэтому только на высоком качестве и только там, где у фактуры нет своего
+ * рисунка (бетон, штукатурка, краска, ржавчина, земля): кирпичу, плитке и паркету повтор и есть рисунок.
+ */
+vec2 hexShift(ivec2 p) {
+  uint n = uint(p.x + 32768) * 0x27d4eb2du ^ uint(p.y + 32768) * 0x165667b1u;
+  n ^= n >> 15; n *= 0x2c1b3c6du; n ^= n >> 12; n *= 0x297a2d39u; n ^= n >> 15;
+  return vec2(float(n & 0xffffu), float(n >> 16)) / 65535.0;
+}
+
+vec4 hexDetail(vec2 uv, float layer) {
+  // Ячейка — около трети повтора фактуры.
+  vec2 sk = mat2(1.0, 0.0, -0.57735027, 1.15470054) * (uv * 3.4641016);
+  vec2 base = floor(sk);
+  vec3 f = vec3(fract(sk), 0.0);
+  f.z = 1.0 - f.x - f.y;
+  float s = step(0.0, -f.z);
+  float s2 = 2.0 * s - 1.0;
+  vec3 w = vec3(-f.z * s2, s - f.y * s2, s - f.x * s2);
+  ivec2 b = ivec2(base);
+  int si = int(s);
+  vec4 c1 = texture(uDetail, vec3(uv + hexShift(b + ivec2(si, si)), layer));
+  vec4 c2 = texture(uDetail, vec3(uv + hexShift(b + ivec2(si, 1 - si)), layer));
+  vec4 c3 = texture(uDetail, vec3(uv + hexShift(b + ivec2(1 - si, si)), layer));
+  // Веса острее линейных: на стыке ячеек меньше «мыла».
+  w = w * w * w;
+  w /= w.x + w.y + w.z;
+  return c1 * w.x + c2 * w.y + c3 * w.z;
+}
+#endif
+
+#ifdef SLIDE
+/** Луч против коробки: расстояние до входа (или −1) и нормаль грани, в которую он вошёл. */
+float hitBox(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax, out vec3 nrm) {
+  vec3 inv = 1.0 / mix(rd, vec3(1e-5), lessThan(abs(rd), vec3(1e-5)));
+  vec3 t1 = (bmin - ro) * inv;
+  vec3 t2 = (bmax - ro) * inv;
+  vec3 lo = min(t1, t2);
+  vec3 hi = max(t1, t2);
+  float tn = max(max(lo.x, lo.y), lo.z);
+  float tf = min(min(hi.x, hi.y), hi.z);
+  nrm = lo.x > lo.y && lo.x > lo.z ? vec3(-sign(rd.x), 0.0, 0.0) : (lo.y > lo.z ? vec3(0.0, -sign(rd.y), 0.0) : vec3(0.0, 0.0, -sign(rd.z)));
+  return tf >= max(tn, 0.0) ? tn : -1.0;
+}
+
+/**
+ * Ложная комната за окном (interior mapping): геометрии за стеклом нет — луч взгляда пересекается
+ * с воображаемым ящиком, и по тому, во что он упёрся, считается цвет. Обманка зала ожидания: за
+ * окошком кассы — не каморка кассира, а тот же зал под стеклянной крышей, пустой, и в нём вечер, какое
+ * бы время ни стояло здесь. Оси комнаты: x — вдоль окна, y — вверх, z — вглубь; ro — точка на стекле.
+ * yF — пол комнаты относительно середины окна. lv — сколько света в настоящем зале (чтобы ложный не
+ * был ярче или темнее его в разы).
+ */
+vec3 fakeHall(vec3 ro, vec3 rd, float yF, float lv) {
+  const float HW = 6.0;
+  const float DEPTH = 18.0;
+  float yC = yF + 6.3;
+  vec3 inv = 1.0 / mix(rd, vec3(1e-5), lessThan(abs(rd), vec3(1e-5)));
+  float tx = ((rd.x > 0.0 ? HW : -HW) - ro.x) * inv.x;
+  float ty = ((rd.y > 0.0 ? yC : yF) - ro.y) * inv.y;
+  float tz = DEPTH * inv.z;
+  float t = min(tx, min(ty, tz));
+  vec3 hp = ro + rd * t;
+  // Вечернее солнце стоит за дальним торцом: тени переплёта тянутся к зрителю.
+  vec3 sL = normalize(vec3(-0.25, 0.55, 0.5));
+  vec3 sunI = vec3(1.0, 0.7, 0.42) * (lv * 1.7 + 0.04);
+  vec3 ambI = vec3(0.62, 0.64, 0.7) * (lv * 0.55 + 0.012);
+  vec3 plaster = vec3(0.56, 0.54, 0.48);
+  vec3 col;
+  if (t == ty && rd.y < 0.0) {
+    // Пол: плитка 30 см и решётка теней крыши.
+    vec2 tl = abs(fract(hp.xz / 0.3) - 0.5);
+    float joint = smoothstep(0.46, 0.5, max(tl.x, tl.y)) * exp(-t * 0.14);
+    float up = (yC - hp.y) / sL.y;
+    vec2 r = hp.xz + sL.xz * up;
+    float pen = 0.03 + 0.006 * up;
+    float bz = abs(fract(r.y / 3.0 + 0.5) - 0.5) * 3.0;
+    float bx = abs(fract(r.x / 1.5) - 0.5) * 1.5;
+    float lit = (1.0 - clamp((0.1 + pen - bz) / (2.0 * pen), 0.0, min(1.0, 0.1 / pen))) * (1.0 - clamp((0.045 + pen - bx) / (2.0 * pen), 0.0, min(1.0, 0.045 / pen)));
+    // За торцевой стеной солнца нет: свет лежит только там, куда он проходит через крышу.
+    lit *= step(abs(r.x), HW) * step(0.0, r.y) * step(r.y, DEPTH);
+    col = mix(vec3(0.6, 0.58, 0.5), vec3(0.3, 0.29, 0.26), joint) * (ambI + sunI * lit * sL.y * 1.5);
+  } else if (t == ty) {
+    // Крыша: переплёт на фоне вечернего неба.
+    float bz = abs(fract(hp.z / 3.0 + 0.5) - 0.5) * 3.0;
+    float bx = abs(fract(hp.x / 1.5) - 0.5) * 1.5;
+    float beam = max(1.0 - smoothstep(0.09, 0.11, bz), 1.0 - smoothstep(0.04, 0.05, bx));
+    col = mix(vec3(1.0, 0.76, 0.55) * (lv * 1.5 + 0.03), vec3(0.2, 0.24, 0.22) * ambI, beam);
+  } else {
+    // Стены: штукатурка, внизу тёмная панель; в дальнем торце — два проёма переходов.
+    float h = hp.y - yF;
+    vec3 wallC = mix(plaster * vec3(0.55, 0.42, 0.34), plaster, smoothstep(1.18, 1.22, h));
+    float sun = t == tz ? 0.0 : max(dot(vec3(-sign(rd.x), 0.0, 0.0), sL), 0.0);
+    col = wallC * (ambI * (0.75 + 0.25 * smoothstep(0.0, 6.3, h)) + sunI * sun * 0.8);
+    if (t == tz && h < 2.1 && abs(abs(hp.x) - 2.7) < 0.6) col = vec3(0.012, 0.012, 0.014);
+  }
+  // Четыре столба.
+  for (int i = 0; i < 4; i++) {
+    vec3 c = vec3(i < 2 ? -3.0 : 3.0, 0.0, (i == 0 || i == 2) ? 4.5 : 13.5);
+    vec3 n;
+    float th = hitBox(ro, rd, vec3(c.x - 0.3, yF, c.z - 0.3), vec3(c.x + 0.3, yC, c.z + 0.3), n);
+    if (th > 0.0 && th < t) {
+      t = th;
+      col = plaster * (ambI * 0.8 + sunI * max(dot(n, sL), 0.0) * 0.9);
+    }
+  }
+  // Воздух зала: даль уходит в тёплую дымку.
+  return mix(col, vec3(1.0, 0.8, 0.6) * (lv * 0.7 + 0.02), 1.0 - exp(-t * 0.009));
+}
+#endif
+
+/**
+ * Блики ряби («зайчики»): свет, отражённый водой, ложится на стены сетью бегущих светлых линий. Воды
+ * как объёма у нас нет — это три бегущие волны, из которых оставлены одни гребни. 0 — темно, до 2,5 — линия.
+ */
+float caustic(vec2 p, float t) {
+  vec2 q = p * 3.1;
+  float a = sin(q.x * 1.3 + t * 1.1 + sin(q.y * 0.7 + t * 0.6) * 1.5);
+  float b = sin(q.y * 1.7 - t * 0.9 + sin(q.x * 0.9 - t * 0.5) * 1.5);
+  float c = sin((q.x + q.y) * 1.1 + t * 0.7);
+  float v = 1.0 - abs((a + b + c) * 0.3333);
+  v *= v;
+  return v * v * v * 2.5;
+}
+
+/**
+ * Рядом с Осыпью место перестаёт держаться. В светлом воспоминании она — темнота: свет вокруг неё
+ * пропадает. В тёмном она — свет, и он не освещает, а выжигает: поверхность белеет. И там и там место
+ * рядом с ней рассыпается на точки — число замеров падает.
+ */
+void voidTouch(inout vec3 col, inout float h) {
+  if (uVoid.w <= 0.0) return;
+  float k = 1.0 - smoothstep(uVoid.w * 0.25, uVoid.w, length(vPosV - uVoid.xyz));
+  if (k <= 0.0) return;
+  if (uVoidK.x > 0.0) col *= 1.0 - 0.95 * k * uVoidK.x;
+  else col += vec3(1.0, 0.93, 0.82) * (k * k * -uVoidK.x);
+  h *= 1.0 - 0.8 * k * uVoidK.y;
+}
+
 vec3 matcap(int m, vec3 N, vec3 bx, vec3 by) {
   vec2 muv = vec2(dot(bx, N), dot(by, N)) * 0.47 + 0.5;
   vec2 cell = vec2(float(m - (m / 8) * 8), float(m / 8));
@@ -352,6 +586,13 @@ void main() {
       if (length(fract(gp) - centre) > 0.52 * keep) discard;
     }
   }
+  // Мох слоями (shell texturing): поверхность повторена слоями, и в каждом остаются только ворсинки,
+  // дотянувшиеся до него. У каждой ворсинки (клетка в четыре миллиметра) своя высота; кверху она уже.
+  if (vShell > 0.0) {
+    vec2 mq = vUv * 260.0;
+    float tall = cellHash(vec3(floor(mq), 5.0));
+    if (tall < vShell || length(fract(mq) - 0.5) > 0.62 * (1.0 - 0.75 * vShell / max(tall, 1e-3))) discard;
+  }
   // Стирание места и кружево. Стёртый потолок пропадает совсем (над головой чернота), стёртые стены
   // и пол остаются нитями; на кромке стёртого поверхность редеет зерном. Вещь из кружева — нити целиком.
   float laceK = step(0.5, vLace);
@@ -378,6 +619,26 @@ void main() {
   {
     vec4 lbS = beamAt(vPosV);
     float distS0 = length(vPosV);
+    if (int(vMat + 0.5) == 24) {
+      // Окно в ложную комнату. Оттенок вершины здесь не цвет, а размеры: ширина окна, его высота и
+      // высота нижнего края над полом, м.
+      vec3 rdW = normalize(vWorld - cameraPosition);
+      vec3 nW = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+      if (dot(nW, rdW) > 0.0) nW = -nW;
+      vec3 tW = normalize(cross(vec3(0.0, 1.0, 0.0), nW));
+      vec3 rdL = vec3(dot(rdW, tW), rdW.y, dot(rdW, -nW));
+      vec2 q = (vUv - 0.5) * vColor.rg;
+      // Окно смотрит в зал не из середины торца, а сбоку: столбы и проёмы видны под углом.
+      vec3 colI = fakeHall(vec3(q.x + 1.6, q.y, 0.0), rdL, -(vColor.b + vColor.g * 0.5), dot(uAmbient, vec3(0.3333)));
+      // Стекло: под скользящим углом в нём отражается тёмная касса; блик фонаря.
+      float graze = pow(1.0 - abs(dot(normalize(vPosV), Ng)), 3.0);
+      colI = mix(colI, uAmbient * 0.3, 0.55 * graze);
+      vec3 Ri = reflect(normalize(vPosV), Ng);
+      colI += uLightColor * (pow(max(dot(Ri, lbS.xyz), 0.0), 120.0) * lbS.w * 0.35);
+      colI += vec3(0.9, 0.07, 0.03) * burn;
+      gl_FragColor = vec4(mix(uFogColor, colI, exp(-uFog * distS0)), 1.0);
+      return;
+    }
     if (int(vMat + 0.5) == 30) {
       // Экран: стекло, за которым светится картинка. Свет её не смывает — на стекле остаётся только
       // блик фонаря. Вблизи видны строки матрицы; подсветка чуть дышит.
@@ -416,6 +677,15 @@ void main() {
   float wall = vSurf.x;
   float up = vSurf.y;
   float hgt = vSurf.z;
+  // Тень-пятно: под мебелью и вокруг неё пол темнее. Рассеянный свет теней не даёт, и без пятна вещи
+  // висят над полом; карта запечена при сборке уровня — одна выборка, годится и телефону.
+  if (uContactGrid.z > 0.0 && up > 0.5 && hgt < 0.2) {
+    vec4 ct = texture2D(uContact, (vWorld.xz - uContactGrid.xy) / uContactGrid.z);
+    float tierI = -floor((vWorld.y + 0.2) / uTierDrop);
+    ao *= 1.0 - (tierI < 0.5 ? ct.r : (tierI < 1.5 ? ct.g : (tierI < 2.5 ? ct.b : ct.a)));
+  }
+  // Просвет: тонкое (бумага, перо, травинка) пропускает свет. Свет за ним — оно светится своим цветом.
+  float thin = mb.w;
 
   // Надписи и плакаты: uv указывает в атлас, а не в мир.
   vec3 ink = vec3(1.0);
@@ -430,6 +700,8 @@ void main() {
   vec4 lb = beamAt(vPosV);
   vec3 L = lb.xyz;
   float facing = smoothstep(-0.02, 0.1, dot(Ng, L));
+  // Сколько света фонаря проходит насквозь: лист повёрнут к нему изнанкой.
+  float through = thin * max(-dot(Ng, L), 0.0);
   // Сила лампы без цвета: 1 — фонарь горит в полную силу.
   float lamp = uLightColor.r * (1.0 / 3.3);
 
@@ -449,10 +721,11 @@ void main() {
 
   // Карта теней одна: в убежище в ней тень фонаря, на лугу и в домике — тень солнца или лампы. Тень
   // прямого света есть только вокруг игрока: к краю своего квадрата она сходит на нет.
-  float shadowKey = 1.0;
+  // Там, куда карта не достаёт (и на телефоне, где её нет вовсе), тень переплёта крыши считается по формуле.
+  float shadowKey = roofShade();
 #ifdef SHADOWS
   if (uShadowFor > 0.5) {
-    shadowKey = mix(shadow, 1.0, smoothstep(0.76, 0.98, 2.0 * max(abs(sc.x - 0.5), abs(sc.y - 0.5))));
+    shadowKey = mix(shadow, shadowKey, smoothstep(0.76, 0.98, 2.0 * max(abs(sc.x - 0.5), abs(sc.y - 0.5))));
     shadow = 1.0;
   }
 #endif
@@ -470,7 +743,7 @@ void main() {
   // ── Облако точек: сколько здесь «замеров» ──
   // Свет фонаря, отсвет, собственное свечение и рассеянный свет пространства (он «сканирует» только
   // вблизи: в белом нигде и на лугу даль рассыпается на точки).
-  float eLight = lb.w * shadow * facing * lamp;
+  float eLight = lb.w * shadow * (facing + through * 0.7) * lamp;
   // Рассеянный свет здесь — свет потолочной панели этой клетки (где панелей нет, cell = 1).
   float cell = cellLight(vWorld.xz);
   // Зал ожидания: солнце светит через стеклянную крышу зала и на перрон; в комнатах под потолком его нет.
@@ -489,7 +762,7 @@ void main() {
   // плотнее стены вокруг, и печать на них читается раньше, чем проступает сама стена.
   float back = mix(0.6, 1.0, smoothstep(0.03, 0.4, toCam)) * (mi == 24 ? 0.35 : (mi == 7 || mi == 23 ? 0.6 : (mi == 12 ? 0.78 : (mi == 30 || mi == 15 ? 1.8 : 1.0))));
   // Прямой свет пространства тоже «сканирует»: освещённая сторона плотнее теневой.
-  float keyLit = max(dot(Ng, uKeyDirV), 0.0) * dot(uKeyColor, vec3(0.3333)) * shadowKey;
+  float keyLit = (max(dot(Ng, uKeyDirV), 0.0) + thin * 0.7 * max(-dot(Ng, uKeyDirV), 0.0)) * dot(uKeyColor, vec3(0.3333)) * shadowKey;
   float hLit = (eLight + bounce0 * 1.2) * uScan.y * back;
   // На лугу и у лампы тень реже освещённой стороны. В зале ожидания (uKeyCells > 0) почти всё стоит
   // под крышей, в тени; там место собирает не солнце, а неподвижность — тень собрана так же плотно.
@@ -515,6 +788,7 @@ void main() {
     vec3 flat_ = uMatBase[mi] * vColor.rgb * ao;
     vec3 colG = flat_ * (amb * (0.66 + 0.34 * up) + uLightColor * (eLight * 0.45 + bounce0 * bounceTint));
     colG += vec3(0.9, 0.07, 0.03) * burn;
+    voidTouch(colG, hOut);
     gl_FragColor = vec4(mix(uFogColor, colG, exp(-uFog * distV)), hOut);
     return;
   }
@@ -532,10 +806,17 @@ void main() {
   vec4 g1 = texture2D(uGrime, uvw * 0.29 + warp * 0.07);
 #ifdef DETAIL
   vec4 g1b = texture2D(uGrime, mat2(0.829, -0.559, 0.559, 0.829) * uvw * 0.173 + 0.41);
-  // Среднее двух выборок бледнее каждой: контраст возвращаем, чтобы грязи не стало меньше.
-  g1 = clamp((mix(g1, g1b, 0.42) - 0.5) * 1.3 + 0.5, 0.0, 1.0);
+  // Среднее двух выборок бледнее каждой: контраст возвращаем, но не с запасом — иначе пятен сырости и
+  // плесени становится больше, чем было, и они ложатся ровной россыпью по всей стене.
+  g1 = clamp((mix(g1, g1b, 0.42) - 0.5) * 1.12 + 0.5, 0.0, 1.0);
 #endif
+#ifdef HEXTILE
+  // Слои без своего рисунка: бетон, штукатурка, краска, ржавчина (0–3), пол (8), земля и обмотка труб (12, 13).
+  bool loose = cls < 6 && (ma.z < 3.5 || abs(ma.z - 8.0) < 0.5 || (ma.z > 11.5 && ma.z < 13.5));
+  vec4 d0 = loose ? hexDetail(uvw * ma.w, ma.z) : texture(uDetail, vec3(uvw * ma.w, ma.z));
+#else
   vec4 d0 = texture(uDetail, vec3(uvw * ma.w, ma.z));
+#endif
   float alb = 0.55 + 0.9 * d0.g;
 #ifdef DETAIL
   // Большая ровная стена не бывает одного тона: плавные пятна в несколько метров и помельче. Они же
@@ -566,8 +847,19 @@ void main() {
 #endif
   // Чешуйки: краска и побелка отваливаются лоскутами, поэтому край облезшего места ломаный.
   vec4 fl = texture(uDetail, vec3(uvw * (cls == 1 ? 2.3 : 1.15), 16.0));
+  // Облезает стена не ровной россыпью пятен, а участками: где-то она цела на несколько метров, где-то
+  // сошла почти вся. Участки задаёт плавный шум в три-четыре метра; мелким пятнам остаётся меньше веса.
+  // В чистых местах (офис, зал ожидания) участков нет: там и облезать нечему.
+#ifdef DETAIL
+  float region = (softNoise(vWorld * 0.21 + 11.7) - 0.5) * 0.34 * damp;
+#else
+  float region = 0.0;
+#endif
+  // Запущенность добавляет облезлости до середины шкалы в полную силу, дальше — слабее: на нижнем ярусе
+  // стена не превращается в сплошные пятна.
+  float worn = 0.3 * min(uDecay, 0.25) + 0.18 * max(uDecay - 0.25, 0.0);
   if (cls == 1) {
-    float p = g1.g * 0.5 + g2.g * 0.2 + low * 0.34 + high * 0.16 + crev * 0.25 + uDecay * 0.3 - 0.1 + (fl.r - 0.5) * 0.17;
+    float p = g1.g * 0.4 + g2.g * 0.2 + low * 0.36 + high * 0.18 + crev * 0.27 + worn - 0.05 + region + (fl.r - 0.5) * 0.17;
     k = smoothstep(0.6, 0.606, p);
     // Перед кромкой краска ещё держится, но уже растрескалась и загнулась краями наружу.
     float front = smoothstep(0.47, 0.6, p) * (1.0 - k);
@@ -580,15 +872,16 @@ void main() {
     stain = mix(stain, vec3(0.9, 0.62, 0.42), smoothstep(0.5, 0.62, p) * (1.0 - k) * 0.6);
   } else if (cls == 3) {
     if (mj == 12) {
-      // Бетон, пол, кирпич: пятна сырости, на полу — лужицами.
-      wet = smoothstep(0.52, 0.8, g1.g * 0.75 + g2.g * 0.2 + uDecay * 0.5 + low * 0.7 + (1.0 - wall) * max(up, 0.0) * 0.12 - 0.3);
+      // Бетон, пол, кирпич: пятна сырости, на полу — лужицами. На стене сырость держится у пола (она
+      // поднимается от него) и редко забирается выше: посреди стены пятно — исключение, а не узор.
+      wet = smoothstep(0.52, 0.8, g1.g * mix(0.75, 0.5, wall) + g2.g * 0.2 + uDecay * 0.5 + low * 0.95 + (1.0 - wall) * max(up, 0.0) * 0.12 - 0.3);
       // У стен на полу лежит то, что с них осыпалось: чешуйки краски и побелки.
       float chips = step(0.5, up) * step(0.66, fl.r) * smoothstep(0.08, 0.3, fl.g) * smoothstep(0.12, 0.42, crev + g2.r * 0.12);
       stain = mix(stain, vec3(1.75, 1.72, 1.6), chips * 0.75 * (1.0 - wet * 0.6));
       H += chips * 0.004;
     } else {
       // Побелка: отваливается пластами от сырых мест.
-      float p = g1.g * 0.55 + g2.g * 0.2 + low * 0.4 + high * 0.1 + crev * 0.2 + uDecay * 0.3 - 0.16 + (fl.r - 0.5) * 0.14;
+      float p = g1.g * 0.43 + g2.g * 0.2 + low * 0.42 + high * 0.14 + crev * 0.22 + worn - 0.1 + region + (fl.r - 0.5) * 0.14;
       k = smoothstep(0.62, 0.628, p);
       float front = smoothstep(0.5, 0.62, p) * (1.0 - k);
       H += front * (1.0 - smoothstep(0.0, 0.4, fl.g)) * 0.003;
@@ -601,14 +894,18 @@ void main() {
     // Дерево, ткань, бумага: темнеют от сырости.
     shade *= 1.0 - 0.45 * smoothstep(0.45, 0.8, g1.g + uDecay * 0.4 + low * 0.5 - 0.1);
   }
-  // Плесень: тёмные пятна в углах и под потолком.
-  float mold = smoothstep(0.8, 0.96, g2.g * 0.5 + g1.r * 0.25 + crev * 0.45 + high * 0.25 + uDecay * 0.42) * step(0.5, float(cls)) * (1.0 - step(4.5, float(cls)));
+  // Плесень: колонии в углах и под потолком. Ровные тёмные пятна одного размера по всей стене читались
+  // как камуфляж (снимок партнёра с кирпичной стеной). У колонии сплошная только середина; к краю она
+  // редеет на пятнышки — поле плесени решает, сколько чешуек фактуры ею заняты. Посреди стены её мало.
+  float moldK = smoothstep(0.72, 1.02, g2.g * 0.4 + g1.r * 0.25 + crev * 0.5 + high * 0.3 + uDecay * 0.32) * step(0.5, float(cls)) * (1.0 - step(4.5, float(cls)));
+  float mold = moldK * smoothstep(1.0 - moldK, 1.15 - moldK, fl.r * 0.75 + d0.g * 0.35);
   stain *= mix(vec3(1.0), vec3(0.3, 0.36, 0.25), mold * 0.85);
   // Нижний ярус: по стенам, полу и потолку ползёт чёрная поросль — следы роя. Тонкие извилистые
   // жилы и редкие «гнёзда» в углах; мокрая, чуть выпуклая.
   float deep = smoothstep(0.62, 0.84, uDecay) * (1.0 - step(5.5, float(cls)));
   float vein = 1.0 - smoothstep(0.0, 0.012 + 0.03 * g2.g, abs(g1.g - 0.52 + (g2.r - 0.5) * 0.14));
-  float nest = smoothstep(0.8, 0.92, g1.r * 0.55 + g2.g * 0.45 + crev * 0.35);
+  // Гнёзда сидят в углах и щелях, а не посреди стены: без угла порог не взять.
+  float nest = smoothstep(0.8, 0.92, g1.r * 0.45 + g2.g * 0.35 + crev * 0.6);
   float slime = max(vein * smoothstep(0.35, 0.6, g1.r + crev * 0.5), nest) * deep;
   stain *= mix(vec3(1.0), vec3(0.045, 0.05, 0.045), slime);
   wet = max(wet, slime * 0.9);
@@ -642,8 +939,11 @@ void main() {
   vec3 mc = matcap(mi, N, bx, by);
   vec3 base = uMatBase[mi];
   vec3 mc2 = matcap(mj, N, bx, by);
-  mc = mix(mc, mc2, max(k, wet * 0.85));
-  base = mix(base, uMatBase[mj], max(k, wet * 0.85));
+  // Сырой бетон становится мокрым бетоном. Сырой кирпич остаётся кирпичом: он темнеет и лоснится, но
+  // кладка сквозь пятно видна — иначе на стене не сырость, а серая заплата.
+  float swap = max(k, wet * (mi == 19 ? 0.22 : 0.85));
+  mc = mix(mc, mc2, swap);
+  base = mix(base, uMatBase[mj], swap);
 #ifdef DETAIL
   // Рельеф под лучом: чем сильнее свет скользит по поверхности, тем резче тени пор и кромок.
   float ngl = dot(Ng, L);
@@ -667,12 +967,20 @@ void main() {
   surf = mix(surf, vec3(0.4, 0.38, 0.34) * pow(max(dot(N, L), 0.0), 0.6) * shade, dust);
 
   vec3 col = surf * uLightColor * (lb.w * shadow * facing * mix(1.0, ao, 0.75));
+  // Прошедший насквозь свет окрашен листом дважды — цвет гуще и теплее, блика нет.
+  vec3 glowThrough = base * tint * tint * vec3(1.25, 1.05, 0.8);
+  col += glowThrough * uLightColor * (lb.w * shadow * through * 0.9);
 
   // Отсвет от освещённого пятна: мягко подсвечивает окрестности, как рассеянный от стены свет.
   float bounce = bounce0 * (0.35 + 0.65 * max(dot(N, toB / max(db, 1e-3)), 0.0));
+  // Луч на воде: отсвет не ровный, а сетью бегущих бликов — между ними темнее, на линиях втрое ярче.
+  if (uCaustic > 0.0) bounce *= 1.0 + uCaustic * (caustic(vUv, uSlide.w) * 2.4 - 0.45);
   // Рассеянный свет пространства идёт больше сверху (небо, потолок), чем снизу; прямой — от солнца или лампы.
   vec3 skyLit = amb * (0.66 + 0.34 * up) + uKeyColor * (max(dot(N, uKeyDirV), 0.0) * shadowKey);
   col += base * tint * ao * (skyLit * lit + uLightColor * bounceTint * bounce);
+  // То же на просвет: солнце за листом, отсвет от стены позади него и свет потолка сквозь лепесток,
+  // на который смотрят снизу.
+  if (thin > 0.0) col += glowThrough * thin * (uKeyColor * (max(-dot(N, uKeyDirV), 0.0) * shadowKey) + uLightColor * bounceTint * (bounce0 * 0.65 * max(-dot(N, toB / max(db, 1e-3)), 0.0)) + amb * (0.9 * ao * lit * max(-up, 0.0)));
 
   // Мокрый пол и плитка отражают освещённое пятно: блик тянется от дальней стены к ногам.
   float gloss = max(wet, mi == 12 ? 1.0 : (mi == 18 ? 0.5 : 0.0)) * step(0.5, up);
@@ -689,6 +997,7 @@ void main() {
   if (vTone.y > 0.0) col += uMatBase[mi] * vColor.rgb * (vTone.y * 0.38);
   // Нить кружева — выцветшая: от цвета поверхности остаётся намёк, остальное — белёсая пряжа.
   if (laceK > 0.5) col = mix(vec3(dot(col, vec3(0.3, 0.59, 0.11))), col, 0.3) * 1.25 + vec3(0.004, 0.004, 0.005);
+  voidTouch(col, hOut);
   col = mix(uFogColor, col, exp(-uFog * distV));
   gl_FragColor = vec4(col, hOut);
 }
@@ -733,6 +1042,7 @@ export const DEPTH_VERT = /* glsl */ `
 attribute float aMat;
 attribute float aObj;
 uniform highp sampler2D uObjState;
+${WIND_GLSL}
 void main() {
   // Растворяющийся предмет тени не отбрасывает (как и отдельная вещь).
   if (aObj > 0.5) {
@@ -748,7 +1058,14 @@ void main() {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     return;
   }
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+#ifdef USE_INSTANCING
+  // Копии одной сетки (птицы): тень — от птицы с раскрытыми крыльями, без взмаха.
+  vec4 wp = modelMatrix * (instanceMatrix * vec4(position, 1.0));
+#else
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  wp.xyz = windSway(wp.xyz);
+#endif
+  gl_Position = projectionMatrix * viewMatrix * wp;
 }
 `;
 
@@ -820,6 +1137,7 @@ uniform float uMaxPx;
 uniform float uAlpha;       // 0 — Осыпи нет
 uniform float uDarkGain;    // яркость свечения в темноте (не растёт вместе с усилением камеры)
 uniform vec4 uGhost;        // призрак из-за спины: xyz — взгляд по горизонтали (мир), w — 1, если это он
+uniform float uPolar;       // 0 — место тёмное, и она — свет; 1 — место светлое, и она — темнота
 uniform vec3 uLightPosV;
 uniform vec3 uLightDirV;
 uniform vec3 uLightColor;
@@ -886,8 +1204,9 @@ void main() {
   // Строки развёртки: каждая вторая полоса призрака пуста.
   if (ghost && fract(uv.y * 90.0 + uTime * 0.7) < 0.45) return;
 
-  float px = uSize * uProj / max(-pv.z, 0.05) * mix(0.8, 1.2, held);
-  float alpha = uAlpha * (0.5 + 0.5 * aRnd.w) * (1.0 - 0.5 * t);
+  // Тёмная, она плотнее и крупнее: закрывает собой то, что за ней.
+  float px = uSize * uProj / max(-pv.z, 0.05) * mix(0.8, 1.2, held) * mix(1.0, 1.8, uPolar);
+  float alpha = min(1.0, uAlpha * (0.5 + 0.5 * aRnd.w) * (1.0 - 0.5 * t) * mix(1.0, 2.4, uPolar));
   if (px < 1.6) {
     alpha *= px * px / 2.56;
     px = 1.6;
@@ -897,8 +1216,13 @@ void main() {
   // Цвет. Большинство точек — выцветшие, цвета кости; часть помнит краски мест, с которых осыпалась.
   float k = fract(aRnd.w * 7.0 + seed * 3.0);
   vec3 tint = k < 0.6 ? vec3(0.85, 0.82, 0.75) : (k < 0.75 ? vec3(0.78, 0.56, 0.3) : (k < 0.9 ? vec3(0.36, 0.56, 0.42) : vec3(0.72, 0.3, 0.22)));
-  vec3 dark = vec3(0.62, 0.72, 0.9) * ((0.07 + 0.07 * aRnd.w) * uDarkGain);
-  vCol = vec4(dark + uLightColor * (beam * 0.42) * tint, alpha);
+  // Она — негатив места (слова партнёра: «Поглощает темнота в светлых воспоминаниях и в темных,
+  // наоборот, это яркий свет, который тебя разъедает»). В темноте её точки — белый жар: светятся сами,
+  // и чем их больше в одном месте, тем ближе к белому; краски мест, с которых она осыпалась, видны
+  // только под лучом фонаря. На свету она чёрная: не светится и света не берёт — дыра в кадре.
+  vec3 hot = vec3(1.0, 0.94, 0.84) * ((0.55 + 1.1 * aRnd.w) * uDarkGain);
+  vec3 lightForm = hot + uLightColor * (beam * 0.42) * tint;
+  vCol = vec4(mix(lightForm, vec3(0.003, 0.003, 0.005), uPolar), alpha);
   // Призрак — цвета красной сетки: знак системы, а не вещь мира. Свет фонаря на него не ложится.
   if (ghost) vCol = vec4(vec3(0.95, 0.16, 0.08) * (0.5 * uDarkGain), alpha);
   gl_Position = pc;
@@ -1112,6 +1436,7 @@ uniform float uSeedW;
 uniform vec3 uFocusPosV;
 uniform vec3 uFocusDirV;
 uniform float uFocusOn;
+uniform vec3 uEdl;          // объём для точек: xy — шаг выборок глубины (доли экрана), z — сила
 varying vec4 vCol;          // rgb — цвет, a — непрозрачность
 varying vec3 vShape;        // xy — ось сжатия на экране, z — во сколько раз диск сжат вдоль неё
 
@@ -1251,8 +1576,21 @@ void main() {
   float was = dot(kept, W);
   vec3 hue = kept / max(was, 0.02);
   vec3 old = mix(uMemColor, hue, 0.3 + 0.7 * fresh) * ((0.04 + (0.16 + 0.6 * smoothstep(0.03, 0.7, was)) * fresh * sqrt(fresh)) * uMemGain);
+  // Объём для точек (eye-dome lighting, приём сканеров). У облака точек нет ни нормалей, ни теней — без
+  // подсказки оно плоское. Точка темнее, если рядом с ней на экране есть что-то ближе к камере: дальняя
+  // стена за краем ближней вещи уходит в тень, и силуэты читаются. Четыре выборки глубины на точку.
+#ifdef EDL
+  float zl = log2(max(zp, 0.05));
+  float occ = max(0.0, zl - log2(max(linDepth(texture2D(tDepth, puv + vec2(uEdl.x, 0.0)).r), 0.05)))
+    + max(0.0, zl - log2(max(linDepth(texture2D(tDepth, puv - vec2(uEdl.x, 0.0)).r), 0.05)))
+    + max(0.0, zl - log2(max(linDepth(texture2D(tDepth, puv + vec2(0.0, uEdl.y)).r), 0.05)))
+    + max(0.0, zl - log2(max(linDepth(texture2D(tDepth, puv - vec2(0.0, uEdl.y)).r), 0.05)));
+  float edl = 0.25 + 0.75 * exp(-occ * uEdl.z);
+#else
+  float edl = 1.0;
+#endif
   // Что ярче: в полутьме сразу после света точка не должна провалиться в черноту.
-  vCol = vec4(max(old * aMem, lit * smoothstep(0.0, 0.3, hk)), alpha);
+  vCol = vec4(max(old * aMem, lit * smoothstep(0.0, 0.3, hk)) * edl, alpha);
   gl_Position = pc;
 }
 `;
@@ -1353,9 +1691,27 @@ precision highp float;
 uniform sampler2D tNow;    // кадр без выдержки: поверхности и точки
 uniform sampler2D tPrev;   // прошлый кадр — уже со следами
 uniform float uKeep;       // какая доля яркости прошлого кадра остаётся (0 — выдержки нет)
+uniform float uMosh;       // 0..1: разрыв кадра — какая доля блоков ещё не обновилась
+uniform vec2 uMoshShift;   // на сколько кадр сдвинулся с прошлого раза, доли экрана
 varying vec2 vUv;
 
 void main() {
+  // Разрыв кадра (datamosh). Когда снимок в зале ожидания рвётся, новый кадр приходит не весь сразу:
+  // блоки по шестнадцать точек какое-то время держат прошлый кадр — то, что было, — и он тянется по
+  // движению камеры поверх того, что есть. У каждого блока свой срок; чем дальше от разрыва, тем меньше
+  // их осталось. Так рвётся сжатое видео, потерявшее опорный кадр.
+  if (uMosh > 0.0) {
+    uvec2 blk = uvec2(gl_FragCoord.xy) / 16u;
+    uint hb = blk.x * 0x27d4eb2du ^ blk.y * 0x165667b1u;
+    hb ^= hb >> 15; hb *= 0x2c1b3c6du; hb ^= hb >> 12;
+    float lot = float(hb & 0xffffu) / 65535.0;
+    if (lot < uMosh) {
+      // Прошлое не просто едет за камерой, а ещё и оплывает вниз — у каждого блока по-своему.
+      vec2 from = vUv - uMoshShift - vec2(0.0, 0.0012 + 0.0024 * lot);
+      gl_FragColor = vec4(texture2D(tPrev, clamp(from, 0.001, 0.999)).rgb, 1.0);
+      return;
+    }
+  }
   vec3 now = texture2D(tNow, vUv).rgb;
   // Малый вычет — чтобы след гас до конца, а не застревал на шаге 1/255.
   vec3 was = max(texture2D(tPrev, vUv).rgb * uKeep - 0.0015, 0.0) * step(0.001, uKeep);
@@ -1576,8 +1932,17 @@ void main() {
   float smear = texture2D(uGrime, vUv * vec2(uAspect, 1.0) * 0.55 + 0.13).g;
   col += glow * uBloom * (0.35 + 1.3 * smear * smear);
 #else
-  // Пыльный воздух светится вокруг луча.
-  col += vec3(1.0, 0.95, 0.85) * uBeam.z * exp(-dot(bd, bd) * 3.2);
+  // Пыльный воздух светится вокруг луча. Дымки на этом качестве нет, поэтому сам луч дорисован прямо на
+  // кадре: конус-призрак от руки (она за нижним правым краем) к пятну — у руки узкий, к пятну шире и
+  // бледнее. Одна формула на точку, без прохода по глубине.
+  vec2 hand = vec2(0.6 * uAspect, -1.3);
+  vec2 ax = bc - hand;
+  float al2 = max(dot(ax, ax), 1e-4);
+  float sc = clamp(dot(c - hand, ax) / al2, 0.0, 1.0);
+  vec2 off = c - hand - ax * sc;
+  float wc = 0.04 + 0.26 * sc;
+  float cone = exp(-dot(off, off) / (wc * wc)) * smoothstep(0.0, 0.3, sc) * (1.0 - 0.55 * sc);
+  col += vec3(1.0, 0.95, 0.85) * uBeam.z * (exp(-dot(bd, bd) * 3.2) + 0.75 * cone);
 #endif
 
   // Газ: жёлто-зелёная муть, в которой свет фонаря расплывается.
@@ -1695,5 +2060,70 @@ void main() {
   vec2 c = gl_PointCoord - 0.5;
   float a = smoothstep(0.5, 0.04, length(c));
   gl_FragColor = vec4(vCol * a, 1.0);
+}
+`;
+
+/**
+ * Стекло крыши зала ожидания. До него крыши как бы не было — один переплёт на фоне ровного неба.
+ * Стекло — тонкий слой поверх неба: пыль и потёки (гуще вдоль балок, куда их сносит дождь), белёсая
+ * пелена под скользящим углом и само солнце — пятно с ореолом там, где взгляд совпал с направлением
+ * на него; в пыльном стекле ореол шире. Солнце идёт по времени места: на снимке стоит.
+ *
+ * Прозрачность у нас занята (в альфе кадра лежит число замеров), поэтому слой смешивается с кадром
+ * только по цвету: альфа кадра остаётся прежней (см. смешение у glassMat в renderer.ts). Цвет выходит
+ * уже умноженным на непрозрачность пыли.
+ */
+export const GLASS_VERT = /* glsl */ `
+varying vec3 vWorld;
+void main() {
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vWorld = wp.xyz;
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}
+`;
+
+export const GLASS_FRAG = /* glsl */ `
+precision highp float;
+uniform vec3 uSky;        // цвет неба за стеклом (он же цвет дали)
+uniform vec3 uSunDirW;    // направление на солнце в мире
+uniform vec3 uSunColor;   // его цвет и сила; ноль — солнца нет
+uniform float uGlass;     // 0..1: насколько стекло видно (к ночи небо темнеет — и оно с ним)
+varying vec3 vWorld;
+
+float hash2(vec2 p) {
+  ivec2 q = ivec2(floor(p)) + 32768;
+  uint n = uint(q.x) * 0x27d4eb2du ^ uint(q.y) * 0x165667b1u;
+  n ^= n >> 15; n *= 0x2c1b3c6du; n ^= n >> 12; n *= 0x297a2d39u; n ^= n >> 15;
+  return float(n & 0xffffu) / 65535.0;
+}
+
+float noise2(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash2(i), hash2(i + vec2(1.0, 0.0)), f.x), mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
+void main() {
+  vec3 toEye = cameraPosition - vWorld;
+  float dist = length(toEye);
+  vec3 V = toEye / max(dist, 1e-3);
+  // Под скользящим углом стекло белёсое: отражает зал и рассеивает небо.
+  float graze = pow(1.0 - abs(V.y), 3.0);
+  // Пыль: пятна в метр-два, мелкая рябь и потёки вдоль ската; у балок (каждые три метра) и прогонов
+  // (каждые полтора) гуще.
+  float cloud = noise2(vWorld.xz * 0.7 + 3.1) * 0.6 + noise2(vWorld.xz * 2.9 + 11.0) * 0.4;
+  float streak = noise2(vec2(vWorld.x * 9.0, vWorld.z * 0.45));
+  float nearBeam = 1.0 - smoothstep(0.1, 0.55, abs(fract(vWorld.z / 3.0 + 0.5) - 0.5) * 3.0);
+  float nearPurlin = 1.0 - smoothstep(0.05, 0.3, abs(fract(vWorld.x / 1.5) - 0.5) * 1.5);
+  float dust = clamp(0.1 + 0.2 * cloud + 0.16 * streak * cloud + 0.22 * max(nearBeam, nearPurlin * 0.7), 0.0, 0.6);
+  // Солнце сквозь стекло: диск и ореол; пыль ореол ширит.
+  float toSun = max(dot(-V, uSunDirW), 0.0);
+  float sunK = dot(uSunColor, vec3(0.3333));
+  vec3 sun = uSunColor * (pow(toSun, 1800.0) * 14.0 + pow(toSun, 90.0) * (0.25 + 1.3 * dust) + pow(toSun, 12.0) * 0.06 * dust);
+  vec3 dustCol = uSky * vec3(0.6, 0.58, 0.52);
+  float a = dust * uGlass;
+  vec3 col = dustCol * a + uSky * (0.22 * graze * uGlass) + sun * uGlass * step(0.001, sunK);
+  gl_FragColor = vec4(col, a);
 }
 `;

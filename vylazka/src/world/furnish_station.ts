@@ -105,6 +105,11 @@ function concourse(ctx: RoomCtx): void {
   put(ctx, 'st_suitcase', at(2.2, -3.4));
   put(ctx, 'st_suitcase', at(0.2, 6.2));
   floorSpots(ctx, 3);
+  // Птицы (systems/birds.ts): под крышей живут голуби. От них на полу перья, а под затяжками переплёта
+  // висят бумажные птицы на нитках — родня бумажным цветам. Сид у этих вещей свой, от места: остальная
+  // обстановка зала от них не сдвигается. Затяжка висит на 0,87 м ниже верха крыши (level_build.ts, TIE_DROP).
+  for (const [x, z] of [[-1.9, -5.3], [0.6, -0.6], [2.4, 3.1], [-0.7, 6.9]] as const) ALL_PROPS.feather?.build(at(x, z), Math.round(1000 + x * 37 + z * 91));
+  for (const [x, z] of [[-2.2, -1.5], [0.8, 4.5], [2.6, -4.5]] as const) ALL_PROPS.paper_bird_hang?.build(m.c.xf.child(m.dx + x, 6.3 - 0.87, m.dz + z - 0.25), Math.round(2000 + x * 53 + z * 29));
 }
 
 /** Касса: два окошка и стойка с лентой перед ними. */

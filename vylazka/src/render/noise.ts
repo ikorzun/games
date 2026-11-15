@@ -56,6 +56,101 @@ export function fbmField(size: number, px: number, py: number, octaves: number, 
   return { size, data };
 }
 
+/**
+ * Градиентный (перлинов) фрактальный шум. У шума «случайные числа в узлах решётки» (fbmField) пятна
+ * выходят угловатыми — ромбами и квадратами по осям решётки; после растяжки контраста это видно на
+ * стене как камуфляж. Здесь в узлах лежат не числа, а направления: пятна круглее и разной формы.
+ * Значения — около 0..1 (точный разброс потом подгоняют под нужный, см. matchField).
+ */
+export function gradField(size: number, px: number, py: number, octaves: number, seed: number): Field {
+  if ((size & (size - 1)) !== 0) throw new Error('сторона шумового поля должна быть степенью двойки');
+  const data = new Float32Array(size * size);
+  const fade = (t: number): number => t * t * t * (t * (t * 6 - 15) + 10);
+  let amp = 0.5;
+  let norm = 0;
+  let fx = px;
+  let fy = py;
+  for (let o = 0; o < octaves; o++) {
+    const gx = new Float32Array(fx * fy);
+    const gy = new Float32Array(fx * fy);
+    for (let j = 0; j < fy; j++) {
+      for (let i = 0; i < fx; i++) {
+        const a = hash01(i, j, seed + o * 31) * Math.PI * 2;
+        gx[j * fx + i] = Math.cos(a);
+        gy[j * fx + i] = Math.sin(a);
+      }
+    }
+    for (let y = 0; y < size; y++) {
+      const v = (y / size) * fy;
+      const y0 = Math.floor(v);
+      const dy = v - y0;
+      const ty = fade(dy);
+      const r0 = (y0 % fy) * fx;
+      const r1 = ((y0 + 1) % fy) * fx;
+      for (let x = 0; x < size; x++) {
+        const u = (x / size) * fx;
+        const x0 = Math.floor(u);
+        const dx = u - x0;
+        const tx = fade(dx);
+        const c0 = x0 % fx;
+        const c1 = (x0 + 1) % fx;
+        const a = gx[r0 + c0]! * dx + gy[r0 + c0]! * dy;
+        const b = gx[r0 + c1]! * (dx - 1) + gy[r0 + c1]! * dy;
+        const c = gx[r1 + c0]! * dx + gy[r1 + c0]! * (dy - 1);
+        const d = gx[r1 + c1]! * (dx - 1) + gy[r1 + c1]! * (dy - 1);
+        data[y * size + x]! += amp * (a + (b - a) * tx + (c - a) * ty + (a - b - c + d) * tx * ty);
+      }
+    }
+    norm += amp;
+    amp *= 0.5;
+    fx *= 2;
+    fy *= 2;
+    if (fx > size || fy > size) break;
+  }
+  for (let i = 0; i < data.length; i++) data[i] = Math.max(0, Math.min(1, (data[i]! / norm) * 0.75 + 0.5));
+  return { size, data };
+}
+
+/** Увести поле в стороны по другому полю (оба бесшовные — результат тоже): пятна теряют правильность. amount — доля стороны. */
+export function warpField(f: Field, by: Field, amount: number): Field {
+  const n = f.size;
+  const m = n - 1;
+  const out = new Float32Array(n * n);
+  const half = n >> 1;
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const sx = x + (by.data[y * n + x]! - 0.5) * amount * n;
+      const sy = y + (by.data[((y + half) & m) * n + ((x + half) & m)]! - 0.5) * amount * n;
+      const x0 = Math.floor(sx);
+      const y0 = Math.floor(sy);
+      const tx = sx - x0;
+      const ty = sy - y0;
+      const a = f.data[(y0 & m) * n + (x0 & m)]!;
+      const b = f.data[(y0 & m) * n + ((x0 + 1) & m)]!;
+      const c = f.data[((y0 + 1) & m) * n + (x0 & m)]!;
+      const d = f.data[((y0 + 1) & m) * n + ((x0 + 1) & m)]!;
+      out[y * n + x] = a + (b - a) * tx + (c - a) * ty + (a - b - c + d) * tx * ty;
+    }
+  }
+  return { size: n, data: out };
+}
+
+/**
+ * Подогнать разброс значений поля f под разброс поля like (оба одного размера): самое тёмное место f
+ * получает самое тёмное значение like, и так по порядку. Форма пятен — от f, а доля тёмного, среднего
+ * и светлого — как у like: пороги в шейдере, подобранные под прежнюю карту, дают те же площади.
+ */
+export function matchField(f: Field, like: Field): Field {
+  const n = f.data.length;
+  const order = new Uint32Array(n);
+  for (let i = 0; i < n; i++) order[i] = i;
+  order.sort((a, b) => f.data[a]! - f.data[b]! || a - b);
+  const sorted = Float32Array.from(like.data).sort();
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[order[i]!] = sorted[i]!;
+  return { size: f.size, data: out };
+}
+
 export interface CellField {
   size: number;
   /** Расстояние до ближайшей точки, 0..1 (в долях ячейки). */

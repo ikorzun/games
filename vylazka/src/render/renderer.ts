@@ -7,13 +7,15 @@ import * as THREE from 'three';
 import type { Vec3 } from '../core/types';
 import type { MeshData } from '../world/kit';
 import type { LevelChunk, StairLink } from '../world/level';
+import { birdMesh } from '../world/bird';
 import { mushroomCluster } from '../world/mushrooms';
+import { BIRD_STRIDE, BIRDS_MAX } from '../systems/birds';
 import { MAT_COUNT, MAT_DEFS } from '../world/materials';
 import { bakeDetail } from './detail';
 import { bakeGrime } from './grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from './matcap_atlas';
 import { MAX_WORMS } from '../swarm/body';
-import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, ECHO_FRAG, GRAIN_VERT, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, ENTITY_VERT, SPOT_FRAG, STAR_FRAG, STAR_VERT, TRAIL_FRAG, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
+import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, ECHO_FRAG, GRAIN_VERT, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, ENTITY_VERT, GLASS_FRAG, GLASS_VERT, SPOT_FRAG, STAR_FRAG, STAR_VERT, TRAIL_FRAG, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
 import { newGrainLife, objectTriangles, sowGrains, steerGrains, stepGrains } from './grains';
 import type { GrainLife, Grains } from './grains';
 import { smoothstep } from '../core/math';
@@ -42,12 +44,16 @@ export interface QualitySpec {
   hazeShadow: boolean;
   /** Точек-сплатов на квадратный метр поверхности в полную плотность (рядом с игроком). */
   points: number;
+  /** Объём для точек (eye-dome lighting): точки темнеют за краями ближних вещей. */
+  edl: boolean;
+  /** Шестиугольная укладка фактуры: бетон и штукатурка без решётки повторов (три выборки вместо одной). */
+  hex: boolean;
 }
 
 export const QUALITY: Record<Quality, QualitySpec> = {
-  low: { pixels: 640 * 360, shadow: 0, chroma: false, detail: false, dust: 140, worms: 44, strand: 56, haze: 0, hazeDiv: 3, hazeShadow: false, points: 300 },
-  med: { pixels: 960 * 540, shadow: 512, chroma: true, detail: true, dust: 300, worms: 68, strand: 80, haze: 8, hazeDiv: 3, hazeShadow: false, points: 600 },
-  high: { pixels: 1280 * 720, shadow: 1024, chroma: true, detail: true, dust: 520, worms: MAX_WORMS, strand: 110, haze: 14, hazeDiv: 2, hazeShadow: true, points: 1100 },
+  low: { pixels: 640 * 360, shadow: 0, chroma: false, detail: false, dust: 140, worms: 44, strand: 56, haze: 0, hazeDiv: 3, hazeShadow: false, points: 300, edl: false, hex: false },
+  med: { pixels: 960 * 540, shadow: 512, chroma: true, detail: true, dust: 300, worms: 68, strand: 80, haze: 8, hazeDiv: 3, hazeShadow: false, points: 600, edl: false, hex: false },
+  high: { pixels: 1280 * 720, shadow: 1024, chroma: true, detail: true, dust: 520, worms: MAX_WORMS, strand: 110, haze: 14, hazeDiv: 2, hazeShadow: true, points: 1100, edl: true, hex: true },
 };
 
 /** Всё, что нужно для одного кадра. */
@@ -108,6 +114,21 @@ export interface FrameView {
   gazeCone?: readonly [number, number];
   /** Давление: помещение, где рассыпается пол или провисает потолок (systems/pressure.ts); нет — ничего. */
   press?: PressureView | null;
+  /** Ветер: время (с; у места своё — в зале ожидания оно стоит вместе со снимком), размах свободного конца (м) и куда дует (x, z). Нет — штиль. */
+  wind?: { t: number; amp: number; dir: readonly [number, number] };
+  /** Зал ожидания: стеклянная крыша — её прямоугольник в мире (minX, minZ, maxX, maxZ) и высота переплёта, м. Нет — крыши нет. */
+  roof?: { box: readonly [number, number, number, number]; y: number } | null;
+  /**
+   * Полярность Осыпи, 0..1 (слова партнёра: «Поглощает темнота в светлых воспоминаниях и в темных,
+   * наоборот, это яркий свет»): 0 — место тёмное, она — свет и выжигает; 1 — светлое, она — темнота и поглощает.
+   */
+  polar?: number;
+  /** 0..1: разрыв кадра — какая доля блоков ещё держит прошлый кадр (зал ожидания: снимок порвался). */
+  mosh?: number;
+  /** 0..1: луч фонаря лежит на воде — отсвет вокруг идёт рябью («зайчики» на стенах и потолке). */
+  caustic?: number;
+  /** Показывать ли тени-пятна под обстановкой уровня (карта задаётся setContact; в карманных пространствах её нет). */
+  contact?: boolean;
   /** Звёздное небо, 0..1: насколько оно видно (0 — неба нет: карманные пространства, день в зале ожидания). */
   stars?: number;
   /** Множитель «бочки» объектива: больше единицы — кадр растянут по краям, меньше — сжат. */
@@ -320,6 +341,13 @@ export class GameRenderer {
   /** Состояния объектов уровня: байт на объект — насколько он растворён. */
   /** Состояния объектов, по четыре байта: растворён, кружево, выцвел, светится. */
   private readonly objData = new Uint8Array(OBJ_TEX * OBJ_TEX * 4);
+  /** Куда смотрела камера в прошлом кадре: по разнице едет прошлый кадр при разрыве (TRAIL_FRAG, uMosh). */
+  private moshYaw = 0;
+  private moshPitch = 0;
+  private contactTex!: THREE.DataTexture;
+  private readonly swarmCenter = new THREE.Vector3();
+  private contactOrigin: [number, number] = [0, 0];
+  private contactSpan = 0;
   private readonly objTex: THREE.DataTexture;
   private readonly depthMat: THREE.ShaderMaterial;
   private readonly postMat: THREE.ShaderMaterial;
@@ -354,6 +382,12 @@ export class GameRenderer {
   private grainDensity = 1;
   /** Грибы (systems/spores.ts): одна гроздь, поставленная много раз. */
   private sporeMesh: THREE.InstancedMesh | null = null;
+  /** Стекло крыши зала ожидания: один лист над переплётом (GLASS_FRAG). */
+  private glass!: THREE.Mesh;
+  private glassMat!: THREE.ShaderMaterial;
+  private birdMesh: THREE.InstancedMesh | null = null;
+  private birdFlap: THREE.InstancedBufferAttribute | null = null;
+  private readonly birdE = new THREE.Euler();
   private readonly sporeM = new THREE.Matrix4();
   private readonly sporeQ = new THREE.Quaternion();
   private readonly sporeS = new THREE.Vector3();
@@ -469,12 +503,17 @@ export class GameRenderer {
     const defOf = (i: number): (typeof MAT_DEFS)[number] => MAT_DEFS[i] ?? MAT_DEFS[0]!;
     // Массивы в шейдере — на MAT_SLOTS мест: three.js заливает их целиком, поэтому хвост заполняется нулями.
     const matA = Array.from({ length: MAT_SLOTS }, (_, i) => (i < MAT_COUNT ? new THREE.Vector4(defOf(i).grime, defOf(i).glow ?? 0, defOf(i).layer, 1 / defOf(i).tile) : new THREE.Vector4(0, 0, 0, 1)));
-    const matB = Array.from({ length: MAT_SLOTS }, (_, i) => (i < MAT_COUNT ? new THREE.Vector4(defOf(i).bump, defOf(i).decay, defOf(i).alt ?? i, 0) : new THREE.Vector4(0, 0, i, 0)));
+    const matB = Array.from({ length: MAT_SLOTS }, (_, i) => (i < MAT_COUNT ? new THREE.Vector4(defOf(i).bump, defOf(i).decay, defOf(i).alt ?? i, defOf(i).thin ?? 0) : new THREE.Vector4(0, 0, i, 0)));
 
     this.cellTex = new THREE.DataTexture(new Uint8Array(CELL_TEX * CELL_TEX * 4).fill(255), CELL_TEX, CELL_TEX, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.cellTex.magFilter = THREE.NearestFilter;
     this.cellTex.minFilter = THREE.NearestFilter;
     this.cellTex.needsUpdate = true;
+    // Тени-пятна: пока уровень не дал карту — один пустой тексель.
+    this.contactTex = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    this.contactTex.magFilter = THREE.LinearFilter;
+    this.contactTex.minFilter = THREE.LinearFilter;
+    this.contactTex.needsUpdate = true;
     this.worldMat = new THREE.ShaderMaterial({
       vertexShader: WORLD_VERT,
       fragmentShader: WORLD_FRAG,
@@ -517,12 +556,21 @@ export class GameRenderer {
         uPressBox: { value: new THREE.Vector4(0, 0, 0, 0) },
         uPress: { value: new THREE.Vector4(0, 0, 0, 0) },
         uPressY: { value: new THREE.Vector3(0, 0, 0) },
+        uWind: { value: new THREE.Vector4(0, 0, 1, 0) },
+        uRoofBox: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uRoofY: { value: 0 },
+        uKeyDirW: { value: new THREE.Vector3(0, 1, 0) },
+        uContact: { value: this.contactTex },
+        uContactGrid: { value: new THREE.Vector3(0, 0, 0) },
+        uCaustic: { value: 0 },
+        uVoid: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uVoidK: { value: new THREE.Vector2(0, 0) },
         uMatA: { value: matA },
         uMatB: { value: matB },
         uMatBase: { value: Array.from({ length: MAT_SLOTS }, (_, i) => new THREE.Vector3(...(atlas.base[i] ?? [0.5, 0.5, 0.5]))) },
       },
     });
-    this.depthMat = new THREE.ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, side: THREE.BackSide, colorWrite: false, uniforms: { uObjState: { value: this.objTex } } });
+    this.depthMat = new THREE.ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, side: THREE.BackSide, colorWrite: false, uniforms: { uObjState: { value: this.objTex }, uWind: this.worldMat.uniforms.uWind! } });
     // Проекции: всё общее — теми же uniform-объектами, что у мира.
     this.slideMat = this.worldLike();
     // Красная сетка: распад берёт у мира (одни и те же uniform-объекты), яркость своя.
@@ -549,6 +597,30 @@ export class GameRenderer {
       transparent: true,
       depthWrite: false,
     });
+    // Стекло крыши: смешивается с кадром только по цвету — альфа кадра (число замеров) остаётся прежней.
+    this.glassMat = new THREE.ShaderMaterial({
+      vertexShader: GLASS_VERT,
+      fragmentShader: GLASS_FRAG,
+      uniforms: { uSky: { value: new THREE.Vector3() }, uSunDirW: { value: new THREE.Vector3(0, 1, 0) }, uSunColor: { value: new THREE.Vector3() }, uGlass: { value: 1 } },
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneMinusSrcAlphaFactor,
+      blendSrcAlpha: THREE.ZeroFactor,
+      blendDstAlpha: THREE.OneFactor,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    {
+      const g = new THREE.PlaneGeometry(1, 1);
+      g.rotateX(-Math.PI / 2);
+      this.glass = new THREE.Mesh(g, this.glassMat);
+      this.glass.frustumCulled = false;
+      this.glass.layers.set(1);
+      this.glass.visible = false;
+      this.scene.add(this.glass);
+    }
     // Звёздное небо: дальние звёзды (с полосой погуще — млечный путь), ближние (они и дают глубину:
     // смещаются относительно дальних, когда игрок идёт) и три падающие с хвостами из точек.
     this.starMat = new THREE.ShaderMaterial({
@@ -745,6 +817,7 @@ export class GameRenderer {
         uFocusPosV: { value: new THREE.Vector3() },
         uFocusDirV: { value: new THREE.Vector3(0, 0, -1) },
         uFocusOn: { value: 0 },
+        uEdl: { value: new THREE.Vector3(0.005, 0.008, 2) },
       },
       // Сплаты полупрозрачны и накладываются друг на друга; за стеной точку отсекает сам шейдер.
       blending: THREE.NormalBlending,
@@ -771,6 +844,7 @@ export class GameRenderer {
         uAlpha: { value: 0 },
         uDarkGain: { value: 1 },
         uGhost: { value: new THREE.Vector4(0, 0, -1, 0) },
+        uPolar: { value: 0 },
       },
       blending: THREE.NormalBlending,
       premultipliedAlpha: true,
@@ -856,7 +930,7 @@ export class GameRenderer {
     this.trailMat = new THREE.ShaderMaterial({
       vertexShader: POST_VERT,
       fragmentShader: TRAIL_FRAG,
-      uniforms: { tNow: { value: null }, tPrev: { value: null }, uKeep: { value: 0 } },
+      uniforms: { tNow: { value: null }, tPrev: { value: null }, uKeep: { value: 0 }, uMosh: { value: 0 }, uMoshShift: { value: new THREE.Vector2() } },
       depthTest: false,
       depthWrite: false,
     });
@@ -921,13 +995,21 @@ export class GameRenderer {
       this.shadowRT = new THREE.WebGLRenderTarget(q.shadow, q.shadow, { depthBuffer: true, depthTexture: depth, stencilBuffer: false });
       this.worldMat.uniforms.uShadowTexel!.value = 1 / q.shadow;
     }
-    this.worldMat.defines = { ATLAS_ROWS, ...(q.shadow > 0 ? { SHADOWS: '' } : {}), ...(q.detail ? { DETAIL: '' } : {}), ...(this.debugScanOff ? {} : { SCAN: '' }) };
+    this.worldMat.defines = { ATLAS_ROWS, ...(q.shadow > 0 ? { SHADOWS: '' } : {}), ...(q.detail ? { DETAIL: '' } : {}), ...(q.hex ? { HEXTILE: '' } : {}), ...(this.debugScanOff ? {} : { SCAN: '' }) };
     this.worldMat.needsUpdate = true;
     this.slideMat.defines = { ...this.worldMat.defines, SLIDE: '' };
     this.slideMat.needsUpdate = true;
     for (const t of this.things.values()) {
       t.mat.defines = { ...this.worldMat.defines };
       t.mat.needsUpdate = true;
+    }
+    // Объём для точек — только на высоком качестве: четыре лишние выборки глубины на каждую точку.
+    this.splatMat.defines = q.edl ? { EDL: '' } : {};
+    this.splatMat.needsUpdate = true;
+    if (this.birdMesh) {
+      const bm = this.birdMesh.material as THREE.ShaderMaterial;
+      bm.defines = { ...this.worldMat.defines, BIRD: '' };
+      bm.needsUpdate = true;
     }
     this.postMat.defines = { ...(q.chroma ? { CHROMA: '' } : {}), ...(q.haze > 0 ? { HAZE: '' } : {}) };
     this.postMat.needsUpdate = true;
@@ -1034,6 +1116,28 @@ export class GameRenderer {
    * Насколько растворён объект уровня (world/objects.ts): 0 — стоит, 1 — его нет. Объект лежит в общей
    * сетке помещения; шейдер находит его вершины по номеру.
    */
+  /**
+   * Тени-пятна уровня (render/contact.ts): карта size × size, по каналу на ярус, 255 — темно; origin — её
+   * угол в мире (x, z), span — сторона, м. null — карты нет.
+   */
+  setContact(map: { data: Uint8Array; size: number; origin: readonly [number, number]; span: number } | null): void {
+    if (!map) {
+      this.contactSpan = 0;
+      return;
+    }
+    const img = this.contactTex.image as { data: Uint8Array; width: number; height: number };
+    if (img.width !== map.size) {
+      this.contactTex.dispose();
+      this.contactTex = new THREE.DataTexture(new Uint8Array(map.data), map.size, map.size, THREE.RGBAFormat, THREE.UnsignedByteType);
+      this.contactTex.magFilter = THREE.LinearFilter;
+      this.contactTex.minFilter = THREE.LinearFilter;
+      this.worldMat.uniforms.uContact!.value = this.contactTex;
+    } else img.data.set(map.data);
+    this.contactTex.needsUpdate = true;
+    this.contactOrigin = [map.origin[0], map.origin[1]];
+    this.contactSpan = map.span;
+  }
+
   setObjectState(id: number, dis: number, floorY?: number, quiet = false): void {
     if (id <= 0 || id >= OBJ_TEX * OBJ_TEX) return;
     const d = Math.max(0, Math.min(1, dis));
@@ -1090,6 +1194,45 @@ export class GameRenderer {
     this.sporeMesh.count = n;
     this.sporeMesh.visible = n > 0;
     this.sporeMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /**
+   * Птицы (systems/birds.ts): count птиц по BIRD_STRIDE чисел — x, y, z, поворот, наклон носа, крен, фаза
+   * взмаха, раскрытие крыльев, размер. Одна сетка, много копий; крыльями машет шейдер. Свет, тень и
+   * правило взгляда у них те же, что у всего мира: птицу видно там, где место собрано.
+   */
+  setBirds(data: Float32Array, count: number): void {
+    if (!this.birdMesh) {
+      if (count === 0) return;
+      const src = this.makeMesh(birdMesh(), 0, 0);
+      const mat = this.worldLike();
+      mat.uniforms.uThing = { value: new THREE.Vector4(0, 0, 1, 0) };
+      mat.defines = { ...this.worldMat.defines, BIRD: '' };
+      this.birdFlap = new THREE.InstancedBufferAttribute(new Float32Array(BIRDS_MAX * 2), 2);
+      this.birdFlap.setUsage(THREE.DynamicDrawUsage);
+      src.geometry.setAttribute('iBird', this.birdFlap);
+      this.birdMesh = new THREE.InstancedMesh(src.geometry, mat, BIRDS_MAX);
+      this.birdMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.birdMesh.frustumCulled = false;
+      this.birdMesh.matrixAutoUpdate = false;
+      this.scene.add(this.birdMesh);
+    }
+    const n = Math.min(count, BIRDS_MAX);
+    const flap = this.birdFlap!.array as Float32Array;
+    for (let i = 0; i < n; i++) {
+      const o = i * BIRD_STRIDE;
+      const k = data[o + 8]!;
+      // Порядок поворотов: сначала крен вокруг своей оси, потом нос вверх, потом курс.
+      this.sporeQ.setFromEuler(this.birdE.set(-data[o + 4]!, data[o + 3]!, data[o + 5]!, 'YXZ'));
+      this.sporeM.compose(this.tmpV.set(data[o]!, data[o + 1]!, data[o + 2]!), this.sporeQ, this.sporeS.set(k, k, k));
+      this.birdMesh.setMatrixAt(i, this.sporeM);
+      flap[i * 2] = data[o + 6]!;
+      flap[i * 2 + 1] = data[o + 7]!;
+    }
+    this.birdMesh.count = n;
+    this.birdMesh.visible = n > 0;
+    this.birdMesh.instanceMatrix.needsUpdate = true;
+    this.birdFlap!.needsUpdate = true;
   }
 
   /** Объект уровня — кружево: поверхности нет, одни нити (ступень перед пустотой, systems/decay.ts). */
@@ -1228,6 +1371,7 @@ export class GameRenderer {
     g.setAttribute('aMat', new THREE.BufferAttribute(data.mat, 1));
     // Номер объекта у вершины: по нему шейдер растворяет отдельный предмет в общей сетке помещения.
     if (data.obj) g.setAttribute('aObj', new THREE.BufferAttribute(data.obj, 1));
+    if (data.sway) g.setAttribute('aSway', new THREE.BufferAttribute(data.sway, 1));
     g.setIndex(new THREE.BufferAttribute(data.index, 1));
     g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, this.worldMat);
@@ -1383,6 +1527,17 @@ export class GameRenderer {
     this.swarmPoints.visible = on;
     this.swarmMat.uniforms.uAlpha!.value = on ? alpha : 0;
     if (!on) return;
+    // Середина тела: вокруг неё место темнеет или выгорает (WORLD_FRAG, voidTouch).
+    let cx = 0;
+    let cy = 0;
+    let cz = 0;
+    const nh = heads.length / 3;
+    for (let i = 0; i < nh; i++) {
+      cx += heads[i * 3]!;
+      cy += heads[i * 3 + 1]!;
+      cz += heads[i * 3 + 2]!;
+    }
+    this.swarmCenter.set(cx / Math.max(1, nh), cy / Math.max(1, nh), cz / Math.max(1, nh));
     (this.swarmHead.array as Float32Array).set(heads);
     (this.swarmDir.array as Float32Array).set(dirs);
     (this.swarmParam.array as Float32Array).set(params);
@@ -1557,6 +1712,35 @@ export class GameRenderer {
     wu.uGaze!.value = v.gaze ?? 1;
     const gc = v.gazeCone ?? [52, 25];
     (wu.uGazeCone!.value as THREE.Vector2).set(Math.cos((gc[0] * Math.PI) / 180), Math.cos((gc[1] * Math.PI) / 180));
+    const wind = v.wind;
+    if (wind) (wu.uWind!.value as THREE.Vector4).set(wind.t, wind.amp, wind.dir[0], wind.dir[1]);
+    else (wu.uWind!.value as THREE.Vector4).y = 0;
+    const roof = v.roof ?? null;
+    if (roof) (wu.uRoofBox!.value as THREE.Vector4).set(roof.box[0], roof.box[1], roof.box[2], roof.box[3]);
+    // Стекло лежит на переплёте: лист во всю крышу чуть выше балок.
+    this.glass.visible = roof !== null;
+    if (roof) {
+      this.glass.position.set((roof.box[0] + roof.box[2]) / 2, roof.y + 0.16, (roof.box[1] + roof.box[3]) / 2);
+      this.glass.scale.set(roof.box[2] - roof.box[0] + 0.3, 1, roof.box[3] - roof.box[1] + 0.3);
+      this.glass.updateMatrixWorld();
+      const gu = this.glassMat.uniforms;
+      (gu.uSky!.value as THREE.Vector3).set(v.fogColor[0], v.fogColor[1], v.fogColor[2]);
+      (gu.uSunDirW!.value as THREE.Vector3).set(v.keyDir[0], v.keyDir[1], v.keyDir[2]).normalize();
+      (gu.uSunColor!.value as THREE.Vector3).set(v.keyColor[0], v.keyColor[1], v.keyColor[2]);
+    }
+    wu.uRoofY!.value = roof ? roof.y : 0;
+    (wu.uKeyDirW!.value as THREE.Vector3).set(v.keyDir[0], v.keyDir[1], v.keyDir[2]).normalize();
+    wu.uCaustic!.value = v.caustic ?? 0;
+    // Осыпь и место вокруг неё. Между светом и темнотой (пока она переворачивается) ореола нет.
+    const polar = v.polar ?? 0;
+    const here = this.swarmPoints.visible ? (this.swarmMat.uniforms.uAlpha!.value as number) : 0;
+    this.swarmMat.uniforms.uPolar!.value = polar;
+    const vp = this.tmpV.copy(this.swarmCenter).applyMatrix4(cam.matrixWorldInverse);
+    (wu.uVoid!.value as THREE.Vector4).set(vp.x, vp.y, vp.z, here > 0.02 ? 3.4 : 0);
+    const asDark = Math.max(0, polar * 2 - 1);
+    const asLight = Math.max(0, 1 - polar * 2);
+    (wu.uVoidK!.value as THREE.Vector2).set(asDark > 0 ? asDark * here : -(asLight * here * 1.3) / Math.sqrt(Math.max(1, v.gain)), here * Math.max(asDark, asLight));
+    (wu.uContactGrid!.value as THREE.Vector3).set(this.contactOrigin[0], this.contactOrigin[1], v.contact ? this.contactSpan : 0);
     const pv = v.press ?? null;
     if (pv) {
       (wu.uPressBox!.value as THREE.Vector4).set(pv.box[0], pv.box[1], pv.box[2], pv.box[3]);
@@ -1582,6 +1766,8 @@ export class GameRenderer {
     (fu.uFocusPosV!.value as THREE.Vector3).copy(this.focusPos).applyMatrix4(cam.matrixWorldInverse);
     (fu.uFocusDirV!.value as THREE.Vector3).copy(this.focusDir).transformDirection(cam.matrixWorldInverse);
     fu.uFocusOn!.value = this.focusOn;
+    // Объём для точек: глубину смотрим в шести точках буфера от самой точки.
+    (fu.uEdl!.value as THREE.Vector3).set(6 / Math.max(1, this.width), 6 / Math.max(1, this.height), 2);
 
     // Сплаты. Память не разгорается, когда камера в темноте поднимает усиление: что помнится, то
     // гаснет, а не проявляется заново. Усиление достаётся только тому, что видно на самом деле.
@@ -1801,6 +1987,15 @@ export class GameRenderer {
     // он только гаснет.
     const gainNow = Math.max(v.gain, 1e-3);
     tu.uKeep!.value = keep && tau > 0.01 ? Math.exp(-gap / tau) * Math.min(1, this.trailGain / gainNow) : 0;
+    // Разрыв кадра: прошлый кадр едет за камерой. Поворот влево уводит картинку вправо, взгляд вверх — вниз.
+    const mosh = keep ? (v.mosh ?? 0) : 0;
+    tu.uMosh!.value = mosh;
+    const fovY = (this.camera.fov * Math.PI) / 180;
+    let dyaw = v.camYaw - this.moshYaw;
+    dyaw -= Math.round(dyaw / (Math.PI * 2)) * Math.PI * 2;
+    (tu.uMoshShift!.value as THREE.Vector2).set(mosh > 0 ? dyaw / (fovY * this.camera.aspect) : 0, mosh > 0 ? -(v.camPitch - this.moshPitch) / fovY : 0);
+    this.moshYaw = v.camYaw;
+    this.moshPitch = v.camPitch;
     this.trailGain = gainNow;
     r.setRenderTarget(this.compRT);
     r.render(this.trailScene, this.postCam);

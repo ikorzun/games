@@ -7,7 +7,7 @@
  * не становится то, чего не коснуться (потолочное), и то, что держит место на себе (FIXED).
  */
 import { asObject } from './objects';
-import { CRAFT_PROPS } from './props_craft';
+import { BIRD_PROPS, CRAFT_PROPS } from './props_craft';
 import { HOME_PROPS } from './props_home';
 import { MODEL_PROPS } from './props_models';
 import { PROPS } from './props_more';
@@ -30,5 +30,5 @@ function tracked(name: string, spec: PropSpec): PropSpec {
 }
 
 export const ALL_PROPS: Record<string, PropSpec> = Object.fromEntries(
-  Object.entries({ ...PROPS, ...HOME_PROPS, ...OFFICE_PROPS, ...MODEL_PROPS, ...SCREEN_PROPS, ...CRAFT_PROPS, ...STATION_PROPS }).map(([name, spec]) => [name, tracked(name, spec)]),
+  Object.entries({ ...PROPS, ...HOME_PROPS, ...OFFICE_PROPS, ...MODEL_PROPS, ...SCREEN_PROPS, ...CRAFT_PROPS, ...BIRD_PROPS, ...STATION_PROPS }).map(([name, spec]) => [name, tracked(name, spec)]),
 );

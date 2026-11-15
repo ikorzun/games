@@ -2,10 +2,12 @@
  * Сборка уровня из плана генератора: скорлупа по ярусам, лестничные марши, двери, обстановка,
  * места для находок, приметные объекты и навигационный граф. Чистый TS: работает в тестах и в Worker.
  */
+import type { Perch } from '../systems/birds';
 import { hash01, hash2, mulberry32 } from '../core/rng';
 import type { Vec3 } from '../core/types';
 import { CEIL_H, DX, DZ, GRID, STAIR_CELLS, TIER_DROP } from '../gen/layout';
 import type { GenLayout, GenRoom, RoomType, WorldKind } from '../gen/layout';
+import { mossCushion } from './moss';
 import { ColliderSet } from './colliders';
 import type { FlatMark } from './flat';
 import { decayAt } from '../systems/decay';
@@ -29,6 +31,8 @@ import type { ShellCell, WallStyle } from './shell';
 const HALF = GRID / 2;
 /** Клетка сетки → координата её центра в мире. */
 export const cellToWorld = (c: number): number => (c - HALF) * CELL;
+/** На сколько затяжка переплёта висит ниже верха крыши зала ожидания, м. */
+export const TIE_DROP = 0.84;
 export const tierFloor = (tier: number): number => -TIER_DROP * tier;
 
 /**
@@ -407,7 +411,18 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
     zones.push({ kind: 'pit', tier: p.tier, minX: wx - PIT_HOLE / 2, maxX: wx + PIT_HOLE / 2, minZ: wz - PIT_HOLE / 2, maxZ: wz + PIT_HOLE / 2, minY: y - PIT_DEPTH - 1, maxY: y - 0.7 });
   }
   // ── Зал ожидания: балки стеклянной крыши над залом, пути за краем перрона ──
+  let roof: BuiltLevel['roof'];
+  const perches: Perch[] = [];
   if (station) {
+    // Прямоугольник крыши — клетки зала по внутренним граням стен; переплёт висит чуть ниже её верха.
+    const hall = layout.rooms.filter((r) => r.type === 'concourse').flatMap((r) => r.cells.map(([x, z]) => [cellToWorld(x), cellToWorld(z), tierFloor(r.tier)] as const));
+    if (hall.length > 0) {
+      const W = WALL_T / 2;
+      roof = {
+        box: [Math.min(...hall.map((c) => c[0])) - CELL / 2 + W, Math.min(...hall.map((c) => c[1])) - CELL / 2 + W, Math.max(...hall.map((c) => c[0])) + CELL / 2 - W, Math.max(...hall.map((c) => c[1])) + CELL / 2 - W],
+        y: hall[0]![2] + STATION_CEIL.concourse! - 0.15,
+      };
+    }
     for (const room of layout.rooms) {
       const y = tierFloor(room.tier);
       for (const [x, z] of room.cells) {
@@ -420,6 +435,10 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
           const top = STATION_CEIL.concourse!;
           xf.box([-CELL / 2, top - 0.32, -0.1], [CELL / 2, top - 0.02, 0.1], MAT.metalGreen, { tint: [0.5, 0.56, 0.52] });
           for (const px of [-0.75, 0.75]) xf.box([px - 0.045, top - 0.2, -CELL / 2], [px + 0.045, top - 0.08, CELL / 2], MAT.metalGreen, { tint: [0.5, 0.56, 0.52] });
+          // Затяжка под каждой балкой: тонкий стальной прут поперёк зала. На затяжках сидят голуби
+          // (systems/birds.ts) — на самих балках под стеклом им не поместиться.
+          xf.box([-CELL / 2, top - TIE_DROP - 0.03, -0.015], [CELL / 2, top - TIE_DROP, 0.015], MAT.steel, { tint: [0.42, 0.45, 0.44] });
+          for (const px of [-0.9, 0, 0.9]) perches.push({ pos: [wx + px, y + top - TIE_DROP, wz], yaw: (x + z) % 2 === 0 ? 0 : Math.PI });
         } else if (room.type === 'track') {
           // Пути лежат ниже перрона: балласт, шпалы, два рельса. Преград у них нет: за краем перрона
           // игрок падает, и падение его будит (зона ниже).
@@ -466,6 +485,16 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
     const wx = cellToWorld(w.x);
     const wz = cellToWorld(w.z);
     waterSheet(new Xf(chunkFor(room, w.x, w.z).mb, null, wx, y, wz, 0), CELL);
+    // У воды растёт мох: три кочки на клетку, у её краёв. Место — от сида уровня, общий счётчик случайных
+    // чисел не тратится: остальная обстановка от мха не сдвигается.
+    for (let i = 0; i < 3; i++) {
+      const hx = hash01(w.x * 7 + i, w.z * 13 + 1, layout.seed ^ 0x6d055);
+      const hz2 = hash01(w.x * 11 + 2, w.z * 5 + i, layout.seed ^ 0x6d055);
+      const side = i % 2 === 0 ? 1 : -1;
+      const ox = i === 2 ? side * (CELL / 2 - 0.45) : (hx - 0.5) * (CELL - 0.9);
+      const oz = i === 2 ? (hz2 - 0.5) * (CELL - 0.9) : side * (CELL / 2 - 0.45);
+      mossCushion(new Xf(chunkFor(room, w.x, w.z).mb, null, wx + ox, y + 0.04, wz + oz, 0), Math.floor(hx * 1e6) + i, 0.16 + 0.12 * hz2);
+    }
     zones.push({ kind: 'water', tier: w.tier, minX: wx - CELL / 2, maxX: wx + CELL / 2, minZ: wz - CELL / 2, maxZ: wz + CELL / 2, minY: y - 0.2, maxY: y + 1 });
   }
   for (const id of hz.gasRooms) {
@@ -729,6 +758,8 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
   return {
     wear: decay.wear,
     ceilings: Object.fromEntries(layout.rooms.map((r) => [r.id, ceilOf(r)])),
+    ...(roof ? { roof } : {}),
+    ...(perches.length > 0 ? { perches } : {}),
     ...(skyRoom ? { skyRoom: skyRoom.id } : {}),
     chunks: out,
     stairs,

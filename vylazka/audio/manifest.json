@@ -525,9 +525,29 @@
       "seconds": 27,
       "volume": 0.34,
       "xfade": 2.0,
-      "source": "owner",
-      "prompt": "Not generated: a field recording supplied by the project owner - a steady two-tone hum with low thumps; used as the held tone of stopped time in the waiting hall",
+      "source": "partner",
+      "prompt": "Not generated: a field recording supplied by the project partner - a steady two-tone hum with low thumps; used as the held tone of stopped time in the waiting hall",
       "ru": "тон остановившегося времени в зале ожидания: запись партнёра (не сгенерирована)"
+    },
+    {
+      "id": "bird_wings",
+      "bus": "sfx",
+      "variants": 3,
+      "loop": false,
+      "seconds": 2.2,
+      "volume": 0.5,
+      "prompt": "Several pigeons suddenly taking off inside a large empty train station hall, rapid loud wing flapping and wing clapping, close perspective, full recording level, long hall reverb tail, no cooing, no music, no voices",
+      "ru": "птица сорвалась с места: хлопки крыльев под крышей зала ожидания и в комнате под небом"
+    },
+    {
+      "id": "bird_coo",
+      "bus": "sfx",
+      "variants": 3,
+      "loop": false,
+      "seconds": 3.5,
+      "volume": 0.26,
+      "prompt": "A single pigeon cooing under the roof of a large empty train station hall, clear recording at full level, natural hall reverb, three or four coos, no wing sounds, no music, no voices",
+      "ru": "воркование голубя под крышей зала ожидания, изредка, пока время идёт"
     }
   ]
 }

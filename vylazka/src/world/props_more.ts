@@ -13,7 +13,7 @@
 import type { Vec3 } from '../core/types';
 import type { Axis } from './kit';
 import { MAT } from './materials';
-import { stool } from './props';
+import { hung, stool } from './props';
 import type { Xf } from './props';
 import { bucket, chair, desk } from './props_bunker';
 
@@ -1928,8 +1928,8 @@ export const PROPS: Record<string, PropSpec> = {
   bottles: { w: 0.9, d: 0.45, h: 0.3, mount: 'floor', ru: 'бутылки и консервные банки', build: bottles },
   canisters: { w: 1.1, d: 0.55, h: 0.5, mount: 'floor', ru: 'канистры и воронка', build: canisters },
   barrel_stack: { w: 1.25, d: 0.6, h: 1.5, mount: 'floor', ru: 'три бочки: две стоят, одна поверх', build: barrelStack },
-  hanging_cables: { w: 2.0, d: 0.8, h: 1.05, mount: 'ceiling', ru: 'провисшие кабели, один оборван', build: hangingCables },
-  broken_lamp: { w: 1.45, d: 0.35, h: 1.05, mount: 'ceiling', ru: 'светильник на одной цепи', build: brokenLamp },
+  hanging_cables: { w: 2.0, d: 0.8, h: 1.05, mount: 'ceiling', ru: 'провисшие кабели, один оборван', build: (xf, seed) => hung(xf, 1.0, 0.8, () => hangingCables(xf, seed)) },
+  broken_lamp: { w: 1.45, d: 0.35, h: 1.05, mount: 'ceiling', ru: 'светильник на одной цепи', build: (xf, seed) => hung(xf, 1.05, 0.9, () => brokenLamp(xf, seed)) },
   stalactites: { w: 1.4, d: 0.6, h: 0.35, mount: 'ceiling', ru: 'известковые натёки на потолке', build: stalactites },
   ladder_lean: { w: 0.55, d: 0.6, h: 2.4, mount: 'floor', ru: 'приставная лестница', build: ladderLean },
   overturned_table: { w: 2.2, d: 0.9, h: 0.92, mount: 'floor', ru: 'опрокинутый стол и два стула', build: overturnedTable },

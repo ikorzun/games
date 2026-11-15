@@ -685,7 +685,8 @@ export class App {
       else if (e.type === 'gas-enter') this.hud.toast(t('toast.gas'), 3000);
     }
     for (const e of ev.fear) {
-      if (e.type === 'swarm' && e.what === 'cohered') this.teach('swarm', t('teach.swarm'), 6000);
+      // Чем её держат, зависит от места: в тёмном — лучом, в светлом — взглядом (в зале ожидания — только на ходу).
+      if (e.type === 'swarm' && e.what === 'cohered') this.teach('swarm', t(this.game.hasLight ? 'teach.swarm' : this.game.flow ? 'teach.swarm.walk' : 'teach.swarm.gaze'), 6000);
       if (buzz && (e.type === 'scare' || e.what === 'cohered')) navigator.vibrate(e.type === 'scare' ? 25 : [40, 60, 40]);
     }
     for (const e of ev.dream) {

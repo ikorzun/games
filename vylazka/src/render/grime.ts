@@ -5,11 +5,14 @@
  * A — сетка трещин: расстояние до ближайшей трещины (0 — сама трещина).
  */
 import { clamp01 } from '../core/math';
-import { at, atCell, cellField, fbmField } from './noise';
+import { at, atCell, cellField, fbmField, gradField, matchField, warpField } from './noise';
 
 export function bakeGrime(size = 256, seed = 7): Uint8Array {
-  const fine = fbmField(size, 8, 8, 5, seed);
-  const blotch = fbmField(size, 3, 3, 3, seed + 101);
+  // Мелкая грязь и крупные пятна — градиентным шумом, уведённым в стороны: у прежней карты (числа в
+  // узлах решётки) пятна были угловатыми, и на стене это читалось как камуфляж (снимок партнёра 15.11).
+  // Доля тёмного и светлого оставлена прежней (matchField): пороги шейдера дают те же площади.
+  const fine = matchField(gradField(size, 8, 8, 5, seed), fbmField(size, 8, 8, 5, seed));
+  const blotch = matchField(warpField(gradField(size, 3, 3, 4, seed + 101), gradField(size, 2, 2, 3, seed + 151), 0.11), fbmField(size, 3, 3, 3, seed + 101));
   const streak = fbmField(size, 28, 2, 3, seed + 211);
   const cells = cellField(size, 14, seed + 307);
   const data = new Uint8Array(size * size * 4);

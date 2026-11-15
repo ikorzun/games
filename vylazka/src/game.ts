@@ -34,6 +34,8 @@ import type { SessionConfig, SessionEvent } from './systems/session';
 import { decayAt, keepsClutter, startForm, WEAR } from './systems/decay';
 import type { Decay } from './systems/decay';
 import { DEFAULT_ILLUSIONS, FORM_GONE, FORM_LACE, FORM_REAL, Illusions, worse } from './systems/illusions';
+import { BIRD_STRIDE, BIRDS_MAX, DEFAULT_BIRDS, Flock, flockSize, Leaver, packBird } from './systems/birds';
+import type { Perch } from './systems/birds';
 import { Flow } from './systems/flow';
 import { Pressure } from './systems/pressure';
 import type { PressureKind, PressureRoom } from './systems/pressure';
@@ -41,12 +43,13 @@ import { Spores } from './systems/spores';
 import type { Comeback, ComebackOptions, Form, Mount } from './systems/illusions';
 import { looksAt, Things } from './systems/things';
 import type { Fate, Look, Thing } from './systems/things';
+import { bakeContact } from './world/contact';
 import { ColliderSet } from './world/colliders';
 import type { Aabb } from './world/colliders';
 import { DOOR_NAME } from './world/screens';
 import type { LevelObject } from './world/objects';
 import { ALL_PROPS } from './world/props_all';
-import { CEIL_H } from './gen/layout';
+import { CEIL_H, DX, DZ } from './gen/layout';
 import type { WorldKind } from './gen/layout';
 import type { BuiltLevel } from './world/level';
 import { cellToWorld, STAIR_RISE, STAIR_RUN, STAIR_STEPS, tierFloor } from './world/level_build';
@@ -83,6 +86,8 @@ export type RoomFx = 'strobe' | 'dark' | 'wire' | 'thin';
 /** События сна: скачки, превращения вещей, смена сессий. */
 export type DreamEvent =
   | { type: 'jump'; plan: JumpPlan; phase: 'start' | 'switch' }
+  /** Птица сорвалась с места (systems/birds.ts): хлопок крыльев там, где она сидела; coo — воркует сидящая. */
+  | { type: 'bird'; what: 'takeoff' | 'coo'; at: Vec3 }
   | { type: 'thing'; thing: Thing; what: 'changing' | 'settled' }
   /**
    * Всё иллюзорно: gone — игрок коснулся вещи, и она растворяется (first — это первое касание за
@@ -221,6 +226,23 @@ const FLOWER = { near: 3.4, bloom: 1.5, hold: 0.9 } as const;
  */
 const PRESSURE_KINDS: Record<WorldKind, readonly PressureKind[]> = { shelter: ['collapse', 'squeeze'], office: ['squeeze'], yellow: ['collapse'], station: [] };
 
+/**
+ * Полярность Осыпи по мирам (слова партнёра: «Поглощает темнота в светлых воспоминаниях и в темных,
+ * наоборот, это яркий свет, который тебя разъедает»): 1 — место светлое, и она в нём темнота; 0 — место
+ * тёмное, и она в нём свет. Офис записан светлым — это решение основной модели, партнёр назвал только зал.
+ */
+const POLAR: Record<WorldKind, number> = { shelter: 0, yellow: 0, office: 1, station: 1 };
+
+/** Сколько голубей под крышей зала ожидания на первом круге; круг за кругом их меньше (systems/birds.ts, flockSize). */
+const FLOCK_BASE = 6;
+
+/**
+ * Ветер по мирам: размах свободного конца висящего и растущего, м. В убежище — сквозняк из
+ * вентиляции, в офисе — кондиционер, в жёлтых комнатах воздух почти стоит. У зала ожидания ветер свой
+ * (и поезд), у луга — настоящий.
+ */
+const WIND: Record<WorldKind, number> = { shelter: 0.022, office: 0.014, yellow: 0.006, station: 0.035 };
+
 const STATION_LIGHT: Partial<Record<string, number>> = { concourse: 1, platform: 0.92, track: 0.92, vestibule: 0.7, buffet: 0.6, tickets: 0.55, lockers: 0.5, washroom: 0.5, storage: 0.36, corridor: 0.3 };
 
 const WORLD_THINGS: Record<WorldKind, { small: readonly string[]; big: readonly (readonly [string, PocketKind | null])[] }> = {
@@ -281,6 +303,33 @@ export class Game {
   where: Where = 'main';
   /** Карманное пространство, в котором сейчас игрок (или лимбо). */
   pocket: PocketSpace | null = null;
+  /** Предметы, которых сейчас нет (рассыпались): их теней-пятен нет тоже. */
+  private readonly contactGone = new Set<number>();
+  private contactDirty = false;
+  /** 0..1: луч фонаря лежит на воде — по стенам вокруг идут блики ряби. */
+  private caustic = 0;
+  /**
+   * Полярность Осыпи, 0..1: она — негатив места. В светлом воспоминании она темнота (1), в тёмном — свет (0).
+   * Какое место какое — POLAR.
+   */
+  polar = 0;
+  /** Нынешний переход начался с того, что поймала Осыпь (а не пол ушёл и не стемнело): кадр выгорает или тонет по её полярности. */
+  private swarmCaught = false;
+  /** 0..1: разрыв кадра после порванного снимка — какая доля кадра ещё не обновилась. Чем дольше стоял снимок, тем больше; гаснет за полсекунды. */
+  private mosh = 0;
+  /** Птицы (systems/birds.ts): стая под крышей зала ожидания и те, кого можно спугнуть. */
+  flock: Flock | null = null;
+  readonly leavers: Leaver[] = [];
+  private readonly birdBuf = new Float32Array(BIRDS_MAX * BIRD_STRIDE);
+  /** Кто из стаи был в воздухе в прошлом шаге и какое тогда было время места: по ним слышен взлёт. */
+  private birdAir: boolean[] = [];
+  private birdT = -1e9;
+  private birdSound = 0;
+  /** Через сколько секунд времени места кто-нибудь из сидящих заворкует, и который это раз. */
+  private birdCoo = 6;
+  private birdCooN = 0;
+  /** Сколько секунд луч фонаря лежит на сидящей птице: секунда света её спугивает. */
+  private birdLit = 0;
   /** Идущий скачок. */
   transition: Transition | null = null;
   /** Особенности помещений этой сессии: id помещения → что с ним не так. */
@@ -459,6 +508,8 @@ export class Game {
     this.level = level;
     this.colliders = level.colliders;
     this.setupIllusions(level);
+    this.contactGone.clear();
+    this.bakeContact();
     this.spawn = level.spawn;
     this.renderer.setWorld(level.chunks, level.stairs);
     // Батарейка в сессии не садится: фонарь глохнет от контакта, а не от заряда.
@@ -470,6 +521,7 @@ export class Game {
     this.wearBase = Math.max(0, Math.min(1, level.wear ?? 0));
     this.wearGain = 0;
     this.applyWear(level);
+    this.setupBirds(level, dream?.seed ?? level.layout?.seed ?? 1);
     const tiers = level.layout?.tierCount ?? 1;
     this.roomFx.clear();
     this.thinUsed.clear();
@@ -541,6 +593,7 @@ export class Game {
     this.fade = 0;
     this.fadeTo = 1;
     this.glitch = 0;
+    this.mosh = 0;
     this.quake = 0;
     this.gasView = 0;
     this.shake.reset();
@@ -921,7 +974,14 @@ export class Game {
         // Преграды держат, пока вещь не рассыпалась достаточно (и сразу — когда она собирается).
         const open = ill.open(id);
         for (const bx of this.objBoxes.get(id) ?? []) bx.gone = open;
+        // Тень-пятно уходит и возвращается вместе с вещью.
+        if (open !== this.contactGone.has(id)) {
+          if (open) this.contactGone.add(id);
+          else this.contactGone.delete(id);
+          this.contactDirty = true;
+        }
       }
+      if (this.contactDirty) this.bakeContact();
     }
     for (const t of this.things.list) {
       // Вещь, которой коснулись, держит так же недолго, как и мебель.
@@ -992,6 +1052,136 @@ export class Game {
   }
 
   /** Есть ли на уровне, откуда увидеть небо: комната без потолка, крыша зала ожидания, стёртый потолок. */
+  /**
+   * Птицы уровня. В зале ожидания — стая на затяжках крыши (чем сильнее место стёрто, тем их меньше) и
+   * один голубь на полу: подойдёшь — взлетит под крышу и там останется. В остальных мирах — одна птица
+   * на кромке стены комнаты под небом: спугнёшь — улетит вверх и не вернётся.
+   */
+  private setupBirds(level: BuiltLevel, seed: number): void {
+    this.flock = null;
+    this.leavers.length = 0;
+    this.birdAir = [];
+    this.birdT = -1e9;
+    this.birdLit = 0;
+    const objs = level.objects ?? [];
+    const perches = level.perches ?? [];
+    if (perches.length >= 2) {
+      const n = flockSize(FLOCK_BASE, this.wearBase);
+      const box = level.roof?.box;
+      // Столбы зала объектами уровня не числятся (они держат место на себе и не рассыпаются), поэтому
+      // ищем их среди преград: высокие узкие коробки под крышей. Сквозь них стая не летает.
+      const cols = box
+        ? this.colliders.boxes
+            .filter((c) => c.maxY - c.minY > 4 && c.maxX - c.minX < 1.4 && c.maxZ - c.minZ < 1.4 && c.minX > box[0] && c.maxX < box[2] && c.minZ > box[1] && c.maxZ < box[3])
+            .map((c) => [(c.minX + c.maxX) / 2, (c.minZ + c.maxZ) / 2, Math.hypot(c.maxX - c.minX, c.maxZ - c.minZ) / 2] as const)
+        : [];
+      if (n > 0) this.flock = new Flock(perches, n, seed, DEFAULT_BIRDS, cols);
+      if (n >= 2 && box) {
+        // Место на полу: в зале, подальше от входа, не в мебели.
+        const free = (x: number, z: number, y: number): boolean => !objs.some((o) => o.min[1] < y + 1 && o.max[1] > y - 0.1 && x > o.min[0] - 0.5 && x < o.max[0] + 0.5 && z > o.min[2] - 0.5 && z < o.max[2] + 0.5);
+        const spots = level.nav
+          .filter((nd) => nd.x > box[0] && nd.x < box[2] && nd.z > box[1] && nd.z < box[3])
+          .map((nd, i) => ({ x: nd.x + (hash01(i, 1, seed) - 0.5) * 1.6, y: nd.y, z: nd.z + (hash01(i, 2, seed) - 0.5) * 1.6, far: Math.hypot(nd.x - level.spawn.pos[0], nd.z - level.spawn.pos[2]) }))
+          .filter((q) => q.far > 7 && free(q.x, q.z, q.y))
+          .sort((a, b) => a.far - b.far);
+        const q = spots[Math.floor(hash01(3, 4, seed) * Math.min(4, spots.length))];
+        const to = perches[Math.floor(hash01(5, 6, seed) * perches.length)]!;
+        if (q) this.leavers.push(new Leaver({ pos: [q.x, q.y, q.z], yaw: hash01(7, 8, seed) * Math.PI * 2 }, to, seed ^ 0x9e37));
+      }
+    }
+    const sky = level.skyRoom;
+    if (sky !== undefined && this.wearBase < 0.6) {
+      const perch = this.skyPerch(level, sky, seed);
+      if (perch) this.leavers.push(new Leaver(perch, null, seed ^ 0x51ed, { ...DEFAULT_BIRDS, scare: 2.6 }));
+    }
+  }
+
+  /** Где сидит птица комнаты под небом: на кромке глухой стены, подальше от входа, лицом в комнату. */
+  private skyPerch(level: BuiltLevel, roomId: number, seed: number): Perch | null {
+    const layout = level.layout;
+    const room = layout?.rooms[roomId];
+    if (!layout || !room) return null;
+    const cells = new Set(room.cells.map(([x, z]) => `${x},${z}`));
+    const edges = layout.edges.filter((e) => e.tier === room.tier);
+    // Проём между клетками записан у западной или северной из них (gen/layout.ts).
+    const open = (x: number, z: number, dir: number): boolean => {
+      const [ex, ez, ed] = dir === 0 ? [x, z, 0] : dir === 1 ? [x, z, 1] : dir === 2 ? [x - 1, z, 0] : [x, z - 1, 1];
+      return edges.some((e) => e.cx === ex && e.cz === ez && e.dir === ed);
+    };
+    const y = tierFloor(room.tier) + (level.ceilings?.[roomId] ?? CEIL_H);
+    const walls: Perch[] = [];
+    const doors: [number, number][] = [];
+    for (const [x, z] of room.cells) {
+      for (let dir = 0; dir < 4; dir++) {
+        const dx = DX[dir]!;
+        const dz = DZ[dir]!;
+        if (cells.has(`${x + dx},${z + dz}`)) continue;
+        if (open(x, z, dir)) doors.push([cellToWorld(x) + (dx * CELL) / 2, cellToWorld(z) + (dz * CELL) / 2]);
+        else walls.push({ pos: [cellToWorld(x) + dx * (CELL / 2 - 0.12), y, cellToWorld(z) + dz * (CELL / 2 - 0.12)], yaw: Math.atan2(-dx, -dz) });
+      }
+    }
+    if (walls.length === 0) return null;
+    const away = (w: Perch): number => Math.min(...doors.map(([dx, dz]) => Math.hypot(w.pos[0] - dx, w.pos[2] - dz)), 99) + hash01(Math.round(w.pos[0] * 7), Math.round(w.pos[2] * 7), seed) * 0.5;
+    return walls.sort((a, b) => away(b) - away(a))[0]!;
+  }
+
+  /**
+   * Шаг птиц. Те, кого можно спугнуть, живут по времени места (в снимке зала они стоят вместе со всем);
+   * срываются, когда игрок подошёл — или когда на них секунду светит фонарь. Взлёт слышен.
+   */
+  private stepBirds(wdt: number, dream: DreamEvent[]): void {
+    const b = this.body;
+    for (const l of this.leavers) {
+      if (l.state === 'gone' || l.state === 'moved') continue;
+      const d = l.state === 'sits' ? (this.birdLit >= 1 ? 0 : Math.hypot(l.perch.pos[0] - b.x, l.perch.pos[2] - b.z)) : 99;
+      if (l.update(wdt, d)) {
+        this.birdLit = 0;
+        dream.push({ type: 'bird', what: 'takeoff', at: [l.perch.pos[0], l.perch.pos[1], l.perch.pos[2]] });
+      }
+    }
+    const f = this.flock;
+    const fl = this.flow;
+    if (!f || !fl) return;
+    // Стая — функция времени места. Взлёт слышен, только когда время шло само, а не прыгнуло (разрыв снимка).
+    const t = fl.viewT;
+    const steady = Math.abs(t - this.birdT) < 0.5;
+    this.birdT = t;
+    this.birdSound = Math.max(0, this.birdSound - wdt);
+    for (let i = 0; i < f.count; i++) {
+      const p = f.pose(i, t);
+      if (steady && p.flying && this.birdAir[i] === false && this.birdSound <= 0) {
+        dream.push({ type: 'bird', what: 'takeoff', at: p.pos });
+        this.birdSound = 0.8;
+      }
+      this.birdAir[i] = p.flying;
+    }
+    // Воркование: изредка, пока время идёт, — от одной из сидящих.
+    this.birdCoo -= wdt;
+    if (this.birdCoo <= 0 && f.count > 0) {
+      this.birdCooN += 1;
+      this.birdCoo = 9 + 12 * hash01(this.birdCooN, 9, f.seed);
+      const who = Math.floor(hash01(this.birdCooN, 11, f.seed) * f.count) % f.count;
+      const p = f.pose(who, t);
+      if (!p.flying) dream.push({ type: 'bird', what: 'coo', at: p.pos });
+    }
+  }
+
+  /** Пересобрать тени-пятна под обстановкой (world/contact.ts): при загрузке уровня и когда вещь рассыпалась или вернулась. */
+  private bakeContact(): void {
+    this.contactDirty = false;
+    const level = this.level;
+    const objs = level?.objects ?? [];
+    this.renderer.setContact(objs.length > 0 ? bakeContact(objs, tierFloor, level?.layout?.tierCount ?? 1, this.contactGone) : null);
+  }
+
+  /** Ветер места для кадра: время, размах свободного конца (м), направление. */
+  private windView(fl: Flow | null): NonNullable<FrameView['wind']> {
+    const t = fl ? 100 + fl.viewT : this.time;
+    if (this.where !== 'main') return { t, amp: this.pocket?.kind === 'meadow' ? 0.085 : 0.02, dir: [0.8, 0.6] };
+    if (fl) return { t, amp: 0.035 * (1 + 2.2 * fl.train), dir: [0.3, 0.954] };
+    return { t, amp: WIND[this.world], dir: [0.8, 0.6] };
+  }
+
   private get openSky(): boolean {
     return this.level?.skyRoom !== undefined || this.flow !== null || this.decay.ceiling > 0;
   }
@@ -1248,6 +1438,7 @@ export class Game {
   /** Начать скачок. Если один уже идёт — этот не начинается. */
   beginJump(plan: JumpPlan, dream: DreamEvent[]): boolean {
     if (this.transition) return false;
+    this.swarmCaught = false;
     const [out, back] = TIMING[plan.style];
     this.transition = { plan, t: 0, out, back, switched: false };
     dream.push({ type: 'jump', plan, phase: 'start' });
@@ -1526,11 +1717,19 @@ export class Game {
   }
 
   /** Луч фонаря лежит на рое: в конусе, близко и без преград. */
+  /**
+   * Держит ли игрок Осыпь. В тёмном месте её держит луч фонаря: он пересвечивает её, и она выгорает.
+   * В светлом (офис, зал ожидания) фонаря нет — её держит взгляд: пока она в середине взгляда, она стоит,
+   * а продержишь — рассыплется. В зале ожидания взгляд стоящего не считается: он смотрит на снимок, то
+   * есть на то, где она была, — держать её можно только на ходу.
+   */
   private beamOnSwarm(): boolean {
     const sw = this.swarm;
     const rig = this.lastRig;
-    if (!sw || !rig || this.light.intensity < 0.3) return false;
-    const [lx, ly, lz] = rig.lightPos;
+    if (!sw || !rig) return false;
+    const byGaze = this.env.light <= 0;
+    if (byGaze ? this.flow?.frozen === true : this.light.intensity < 0.3) return false;
+    const [lx, ly, lz] = byGaze ? rig.camPos : rig.lightPos;
     const tx = sw.pos[0] - lx;
     const ty = sw.pos[1] + 0.2 + sw.cohesion * 0.9 - ly;
     const tz = sw.pos[2] - lz;
@@ -1707,7 +1906,9 @@ export class Game {
       wdt = r.wdt;
       if (r.tore > 0) {
         this.lastTear = r.tore;
-        this.glitch = Math.max(this.glitch, 0.3 + 0.7 * r.tore);
+        // Снимок порвался: помеха — и прошлый кадр ещё секунду тянется поверх нового (разрыв кадра).
+        this.glitch = Math.max(this.glitch, 0.2 + 0.4 * r.tore);
+        this.mosh = Math.max(this.mosh, 0.8 * r.tore);
       }
     }
 
@@ -1781,6 +1982,7 @@ export class Game {
 
     // Давление помимо Осыпи: пол рассыпается, потолок опускается; не успел — проснулся в начале.
     this.stepPressure(wdt, quiet, dream);
+    if (this.where === 'main') this.stepBirds(wdt, dream);
 
     // Зал ожидания: за краем перрона ничего нет. Шагнул — проснулся в начале; искомая вещь остаётся на
     // месте. (Зоны падения сессии здесь не годятся: над путями нет узлов графа, и она их не проверяет.)
@@ -1903,7 +2105,7 @@ export class Game {
         this.wearGain += WEAR.caught;
         s.scare(0.4);
         this.glitch = 1;
-        this.beginJump(this.jumps.forced('caught'), dream);
+        if (this.beginJump(this.jumps.forced('caught'), dream)) this.swarmCaught = true;
       }
       this.swarmNear = sw.proximity(pos);
     }
@@ -2043,6 +2245,11 @@ export class Game {
     if (tr) {
       const k = tr.switched ? 1 - clamp((tr.t - tr.out) / tr.back, 0, 1) : clamp(tr.t / Math.max(tr.out, 1e-3), 0, 1);
       const style = tr.plan.style;
+      // Поймала: в тёмном месте кадр выгорает добела — свет разъел; в светлом тонет в черноте — поглотила.
+      if (tr.plan.cause === 'caught' && this.swarmCaught) {
+        if (this.polar > 0.5 || this.calmFlash) fadeMul = Math.min(fadeMul, 1 - k);
+        else flash = Math.max(flash, k);
+      }
       if (style === 'cut') this.glitch = Math.max(this.glitch, 0.9 * k);
       else if (style === 'dissolve') {
         dissolve = k;
@@ -2061,6 +2268,16 @@ export class Game {
 
     const [lx, ly, lz] = rig.lightPos;
     this.beamDist = this.colliders.raycast(lx, ly, lz, rig.lightDir[0], rig.lightDir[1], rig.lightDir[2], 30);
+    // Луч упёрся в воду — от неё по стенам идут зайчики (блики ряби). Разгораются и гаснут за полсекунды.
+    const hx = lx + rig.lightDir[0] * this.beamDist;
+    const hy = ly + rig.lightDir[1] * this.beamDist;
+    const hz = lz + rig.lightDir[2] * this.beamDist;
+    const onWater = this.where === 'main' && this.light.intensity > 0.3 && this.beamDist < 30 && (this.level?.zones ?? []).some((z) => z.kind === 'water' && hx > z.minX && hx < z.maxX && hz > z.minZ && hz < z.maxZ && hy > z.minY - 0.1 && hy < z.minY + 0.5);
+    this.caustic = clamp(this.caustic + (onWater ? 1 : -1) * dt * 2.2, 0, 1);
+    this.mosh = Math.max(0, this.mosh - dt * 1.6);
+    // Полярность Осыпи — свойство места, а не света там, где она сейчас: она сама гасит свет вокруг себя
+    // и мигала бы на каждом пороге.
+    this.polar += ((this.where === 'main' ? POLAR[this.world] : 0) - this.polar) * Math.min(1, dt * 1.5);
     // Яркость кадра для автоэкспозиции: центр луча и четыре луча по ореолу — берём самое светлое место.
     let lum = beamAtten(this.beamDist);
     const yaw = Math.atan2(-rig.lightDir[0], -rig.lightDir[2]);
@@ -2088,6 +2305,28 @@ export class Game {
     const flow = this.swarmFlow;
     if (flow && (!sw || this.where !== 'main')) this.swarmFlow = null;
     // Грибы: вокруг собранной Осыпи прорастает всё; в углах — знак, что она рядом или была здесь.
+    // Птицы: стая — по времени места, которое видит игрок (на снимке зала она застыла в воздухе).
+    let nb = 0;
+    let onBird = false;
+    if (this.where === 'main') {
+      const f = this.flock;
+      if (f && fl) for (let i = 0; i < f.count && nb < BIRDS_MAX; i++) packBird(this.birdBuf, nb++, f.pose(i, fl.viewT), 1.2 + 0.16 * (hash01(i, 5, f.seed) - 0.5));
+      for (const l of this.leavers) {
+        const p = l.pose();
+        if (!p || nb >= BIRDS_MAX) continue;
+        packBird(this.birdBuf, nb++, p, 1.25);
+        if (l.state !== 'sits' || this.light.intensity < 0.3) continue;
+        // Луч лежит на сидящей птице: она в узком конусе луча, ближе девяти метров и не за стеной.
+        const [lx0, ly0, lz0] = rig.lightPos;
+        const tx = p.pos[0] - lx0;
+        const ty = p.pos[1] + 0.1 - ly0;
+        const tz = p.pos[2] - lz0;
+        const dl = Math.hypot(tx, ty, tz);
+        if (dl < 9 && dl > 0.2 && (tx * rig.lightDir[0] + ty * rig.lightDir[1] + tz * rig.lightDir[2]) / dl > 0.985 && this.colliders.raycast(lx0, ly0, lz0, tx / dl, ty / dl, tz / dl, dl) >= dl - 0.35) onBird = true;
+      }
+    }
+    this.birdLit = onBird ? this.birdLit + dt : Math.max(0, this.birdLit - dt * 2);
+    this.renderer.setBirds(this.birdBuf, nb);
     if (this.spores) {
       const live = this.where === 'main';
       if (live) this.spores.update(fl?.frozen ? 0 : dt, sw ? { pos: sw.pos, active: sw.active && sw.mode !== 'scatter', cohesion: sw.cohesion, hunting: sw.mode === 'hunt' || sw.mode === 'cohere' } : null, this.regret);
@@ -2228,6 +2467,14 @@ export class Game {
       keyColor: sun ? sun.color : (this.env.key?.color ?? [0, 0, 0]),
       keyCells: sun ? Math.max(0.05, sun.ambient) : 0,
       press: this.where === 'main' ? (this.pressure?.view() ?? null) : null,
+      // Ветер: сквозняк убежища, вентиляция офиса, ветер зала; идущий поезд гонит воздух — всё висящее
+      // качается втрое сильнее. Время ветра — время кадра: на снимке зала оно стоит.
+      wind: this.windView(fl),
+      roof: this.where === 'main' ? (this.level?.roof ?? null) : null,
+      contact: this.where === 'main',
+      caustic: this.caustic,
+      mosh: this.where === 'main' ? this.mosh : 0,
+      polar: this.polar,
       // Звёздное небо стоит над уровнем; видно его там, где нет потолка. В зале ожидания оно проступает
       // к вечеру, в карманных пространствах его нет.
       // Яркость делится на усиление камеры: и в тёмном убежище, и в светлом офисе звёзды видны одинаково.

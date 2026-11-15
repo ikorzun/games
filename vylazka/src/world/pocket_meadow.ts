@@ -262,9 +262,13 @@ export const buildMeadow: PocketBuilder = (seed, origin): PocketSpace => {
     const dx = Math.cos(ang);
     const dz = Math.sin(ang);
     const n = norm3([dx * 0.45 * lean, 1, dz * 0.45 * lean]);
-    const i0 = mb.vertex(at(x - dz * w, y, z + dx * w), n, MAT.canvas, base, 0.62);
+    // Ветер: корень стоит, кончик ходит (world/kit.ts, sway).
+    const root = at(x - dz * w, y, z + dx * w);
+    mb.sway = { from: root[1], span: Math.max(0.05, h * (1 - 0.22 * lean)), gain: 1 };
+    const i0 = mb.vertex(root, n, MAT.canvas, base, 0.62);
     const i1 = mb.vertex(at(x + dz * w, y, z - dx * w), n, MAT.canvas, base, 0.62);
     const i2 = mb.vertex(at(x + dx * lean * h, y + h * (1 - 0.22 * lean), z + dz * lean * h), n, MAT.canvas, tip, 1);
+    mb.sway = null;
     mb.tri(i0, i1, i2);
     mb.tri(i0, i2, i1);
   };

@@ -5,9 +5,26 @@
  */
 import type { Vec3 } from '../core/types';
 import type { ColliderSet } from './colliders';
-import type { Axis, BoxOpts, MeshBuilder } from './kit';
+import type { Axis, BoxOpts, MeshBuilder, SwaySpec } from './kit';
 import { MAT } from './materials';
 import { SIGN } from './signs';
+
+/** Собрать то, что качается на ветру: вес вершины растёт от закреплённого конца (world/kit.ts, SwaySpec). */
+export function swaying<T>(xf: Xf, spec: SwaySpec, build: () => T): T {
+  const prev = xf.mb.sway;
+  xf.mb.sway = spec;
+  try {
+    return build();
+  } finally {
+    xf.mb.sway = prev;
+  }
+}
+
+/** Висящее под потолком (y = 0 — потолок) качается, как маятник: низ на глубине depth ходит в размах × gain. */
+export const hung = <T>(xf: Xf, depth: number, gain: number, build: () => T): T => swaying(xf, { from: xf.oy, span: -depth, gain }, build);
+
+/** Растущее от пола (y = 0 — пол) гнётся, как стебель: верх на высоте height ходит в размах × gain, низ стоит. */
+export const rooted = <T>(xf: Xf, height: number, gain: number, build: () => T): T => swaying(xf, { from: xf.oy, span: height, gain, bend: true }, build);
 
 /** Размещение: начало координат предмета и поворот на rot четвертей оборота против часовой (вид сверху). */
 export class Xf {

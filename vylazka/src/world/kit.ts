@@ -22,6 +22,20 @@ export interface MeshData {
    * Нет поля — в сетке нет ни одного объекта.
    */
   obj?: Uint16Array;
+  /**
+   * Вес качания вершины на ветру: 0 — закреплена, 1 — свободный конец (нить у потолка стоит, цветок
+   * на ней качается; корень травинки стоит, кончик ходит). Нет поля — в сетке ничего не качается.
+   */
+  sway?: Float32Array;
+}
+
+/** Что качается: от закреплённого конца (высота from, мир) вес растёт до gain на расстоянии span, м; span < 0 — вниз. */
+export interface SwaySpec {
+  from: number;
+  span: number;
+  gain: number;
+  /** Гибкое (стебель, травинка) гнётся у корня мало, у кончика сильно — вес идёт квадратом; жёсткое на нити — линейно. */
+  bend?: boolean;
 }
 
 export const WHITE: Vec3 = [1, 1, 1];
@@ -76,6 +90,14 @@ export class MeshBuilder {
   private readonly uvs: number[] = [];
   private readonly idx: number[] = [];
   private readonly objs: number[] = [];
+  private readonly sways: number[] = [];
+  /** Ветер: как качаются новые вершины (null — стоят). Ставит и снимает тот, кто собирает висящее и растущее. */
+  sway: SwaySpec | null = null;
+  /**
+   * Вес качания новых вершин числом, мимо sway (null — не задан). Нужен птице: у неё в этом поле не
+   * ветер, а место вершины на крыле — от плеча (0) к кончику (1), со знаком стороны (world/bird.ts).
+   */
+  swayValue: number | null = null;
   /** Номер объекта, которому достаются новые вершины (0 — никому). Ставит и снимает world/objects.ts. */
   obj = 0;
   /** Журнал объектов уровня: есть у сеток помещений, нет у отдельных вещей и карманных пространств. */
@@ -97,6 +119,12 @@ export class MeshBuilder {
     this.col.push(tint[0], tint[1], tint[2], ao);
     this.mats.push(mat);
     this.objs.push(this.obj);
+    const sw = this.sway;
+    if (this.swayValue !== null) this.sways.push(this.swayValue);
+    else if (sw) {
+      const t = Math.max(0, Math.min(1, (p[1] - sw.from) / sw.span));
+      this.sways.push((sw.bend ? t * t : t) * sw.gain);
+    } else this.sways.push(0);
     const uv = planarUv(p, n);
     this.uvs.push(uv[0], uv[1]);
     return i;
@@ -335,6 +363,7 @@ export class MeshBuilder {
       index: new Uint32Array(this.idx),
     };
     if (this.objs.some((o) => o !== 0)) data.obj = new Uint16Array(this.objs);
+    if (this.sways.some((w) => w !== 0)) data.sway = new Float32Array(this.sways);
     return data;
   }
 }

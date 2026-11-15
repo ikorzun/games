@@ -12,7 +12,7 @@
 import type { Vec3 } from '../core/types';
 import { MeshBuilder } from './kit';
 import { MAT } from './materials';
-import { Xf } from './props';
+import { hung, rooted, Xf } from './props';
 import { rng } from './props_more';
 import type { PropSpec } from './props_more';
 
@@ -1002,13 +1002,78 @@ function stickerPatch(xf: Xf, seed: number): void {
 // ───────────────────────────── реестр ─────────────────────────────
 
 export const CRAFT_PROPS: Record<string, PropSpec> = {
-  paper_flower: { w: 1.0, d: 1.0, h: 2.1, mount: 'free', ru: 'огромный бумажный цветок-поделка на стебле', build: paperFlower },
-  paper_flower_bed: { w: 2.2, d: 1.4, h: 2.3, mount: 'free', ru: 'клумба из бумажных цветов на мятой кочке', build: paperFlowerBed },
-  paper_flower_hang: { w: 1.3, d: 1.3, h: 1.2, mount: 'ceiling', ru: 'бумажный цветок головкой вниз на двух нитях', build: paperFlowerHang },
+  paper_flower: { w: 1.0, d: 1.0, h: 2.1, mount: 'free', ru: 'огромный бумажный цветок-поделка на стебле', build: (xf, seed) => rooted(xf, 2.1, 0.5, () => paperFlower(xf, seed)) },
+  paper_flower_bed: { w: 2.2, d: 1.4, h: 2.3, mount: 'free', ru: 'клумба из бумажных цветов на мятой кочке', build: (xf, seed) => rooted(xf, 2.3, 0.45, () => paperFlowerBed(xf, seed)) },
+  paper_flower_hang: { w: 1.3, d: 1.3, h: 1.2, mount: 'ceiling', ru: 'бумажный цветок головкой вниз на двух нитях', build: (xf, seed) => hung(xf, 1.2, 1, () => paperFlowerHang(xf, seed)) },
   mound_small: { w: 1.0, d: 1.0, h: 0.55, mount: 'free', ru: 'кучка слипшихся комков со свечами', build: (xf, seed) => mound(xf, seed, MOUND_CFG.mound_small!) },
   mound: { w: 2.0, d: 2.0, h: 1.15, mount: 'free', ru: 'гора из комков со свечами за оградкой', build: (xf, seed) => mound(xf, seed, MOUND_CFG.mound!) },
   mound_big: { w: 3.0, d: 3.0, h: 1.7, mount: 'free', ru: 'большая гора из комков со свечами за оградкой', build: (xf, seed) => mound(xf, seed, MOUND_CFG.mound_big!) },
   thicket: { w: 2.4, d: 1.4, h: 2.5, mount: 'free', ru: 'завал из перекрещённых жердей с белыми обмотками', build: thicket },
   sticker_box: { w: 0.62, d: 0.2, h: 0.82, mount: 'wall', y: 0.95, ru: 'настенный шкафчик, сплошь заклеенный наклейками', build: stickerBox },
   sticker_patch: { w: 0.9, d: 0.02, h: 1.0, mount: 'wall', y: 0.9, ru: 'гроздь наклеек и росчерков маркером прямо на стене', build: stickerPatch },
+};
+
+// ───────────────────────────── бумажная птица и перо ─────────────────────────────
+
+/** Бумажная птица-оригами: острые листы под углом; нить от потолка (y = 0) к спине. Центр тела — на depth ниже потолка. */
+function paperBirdBody(xf: Xf, rnd: Rnd, depth: number): void {
+  const paper: V = [1.3, 1.27, 1.15];
+  const col = GOUACHE[Math.floor(rnd() * GOUACHE.length)]!.main;
+  const cy = -depth;
+  const P = (x: number, y: number, z: number): V => [x, cy + y, z];
+  const side: V = [1, 0, 0];
+  const up: V = [0, 1, 0];
+  // Тело — вертикальный клин из двух листов, клюв и хвост — острые треугольники.
+  tri2(xf, P(0, 0.01, 0.15), P(0, 0.05, -0.02), P(0, -0.04, -0.02), side, MAT.paper, wob(rnd, paper));
+  tri2(xf, P(0, 0.05, -0.02), P(0, 0.0, -0.14), P(0, -0.04, -0.02), side, MAT.paper, wob(rnd, paper));
+  tri2(xf, P(0, 0.03, 0.13), P(0, -0.012, 0.13), P(0, 0.0, 0.24), side, MAT.paper, wob(rnd, paper, 0.05));
+  tri2(xf, P(0, 0.03, -0.1), P(0, 0.08, -0.2), P(0, 0.0, -0.2), side, MAT.paper, wob(rnd, paper));
+  // Крылья — два треугольника под небольшим углом вверх; одно крыло цветное.
+  for (const s of [1, -1]) {
+    const tone = s > 0 ? wob(rnd, paper) : tn(col, 1 + (rnd() - 0.5) * 0.1);
+    tri2(xf, P(0, 0.045, 0.07), P(0, 0.045, -0.09), P(s * 0.22, 0.1, -0.03), up, MAT.paper, tone);
+    tri2(xf, P(0, 0.04, 0.0), P(0, 0.04, -0.07), P(s * 0.11, 0.08, -0.1), up, MAT.paper, wob(rnd, tone, 0.06));
+  }
+  // Нить: от потолка к спине.
+  tube(xf, [[0, 0, 0], P(0, 0.05, -0.02)], [0.004, 0.004], { seg: 4, mat: MAT.paper, tint: [1.45, 1.4, 1.2] });
+}
+
+function paperBirdHang(xf: Xf, seed: number): void {
+  const rnd = rng(seed);
+  const depth = 0.6 + rnd() * 0.35;
+  // Подвесное стоит от стены: z от 0 до d, поэтому птица — на полглубины вперёд.
+  paperBirdBody(xf.child(0, 0, 0.25), rnd, depth);
+}
+
+/** Перо на полу: стержень-полоска и по 3–4 бородки с каждой стороны, слегка приподнятые; поворот в плане — от сида. */
+function feather(xf: Xf, seed: number): void {
+  const rnd = rng(seed);
+  const a = (rnd() - 0.5) * 1.0;
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  const R = (x: number, y: number, z: number): V => [x * ca + z * sa, y, -x * sa + z * ca];
+  const up: V = [0, 1, 0];
+  const L = 0.095;
+  // Стержень: узкая полоска вдоль x.
+  const rw = 0.0025;
+  tri2(xf, R(-L, 0.004, -rw), R(L, 0.004, -rw), R(L, 0.004, rw), up, MAT.paper, [1.1, 1.08, 1.0]);
+  tri2(xf, R(-L, 0.004, -rw), R(L, 0.004, rw), R(-L, 0.004, rw), up, MAT.paper, [1.1, 1.08, 1.0]);
+  // Бородки: от основания к кончику опахало шире, у конца сходится.
+  const n = 4;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const x0 = -0.03 + t * 0.115;
+    const wid = 0.03 * Math.sin(Math.PI * (0.15 + 0.8 * t)) * (0.85 + rnd() * 0.3);
+    const tint = lerp([0.95, 0.96, 1.0], [0.7, 0.72, 0.78], t);
+    for (const s of [1, -1]) {
+      const y1 = 0.012 + rnd() * 0.006;
+      tri2(xf, R(x0, 0.004, s * rw), R(x0 + 0.03, 0.004, s * rw), R(x0 + 0.018, y1, s * wid), up, MAT.paper, wob(rnd, tint, 0.05));
+    }
+  }
+}
+
+/** Предметы-гости с птицей; в общий список (props_all.ts) входят отдельно от CRAFT_PROPS. */
+export const BIRD_PROPS: Record<string, PropSpec> = {
+  paper_bird_hang: { w: 0.5, d: 0.5, h: 1.0, mount: 'ceiling', ru: 'бумажная птица на нитке', build: (xf, seed) => hung(xf, 1.0, 1, () => paperBirdHang(xf, seed)) },
+  feather: { w: 0.2, d: 0.08, h: 0.02, mount: 'free', ru: 'перо на полу', build: feather },
 };

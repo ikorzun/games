@@ -134,6 +134,8 @@
   "touch.act": "Action",
   "touch.goals": "Assignment",
   "teach.swarm": "The light holds it in place. Keep the beam on it",
+  "teach.swarm.gaze": "Your eyes hold it in place. Don't look away",
+  "teach.swarm.walk": "Your eyes hold it — while you keep walking. Stand still and you see where it was",
   "ui.flash": "Flashing",
   "ui.flash.full": "full",
   "ui.flash.calm": "reduced",

@@ -68,6 +68,20 @@ class FakeRenderer {
   setErase(ceiling: number, walls: number, floor: number): void {
     this.erase = [ceiling, walls, floor];
   }
+  /** Птицы в последнем кадре: сколько их и их позы (по девять чисел). */
+  birds = 0;
+  birdData = new Float32Array(0);
+  setBirds(data: Float32Array, count: number): void {
+    this.birds = count;
+    this.birdData = data.slice(0, count * 9);
+  }
+  /** Тени-пятна под обстановкой: последняя карта и сколько раз её пересобирали. */
+  contact: { data: Uint8Array; size: number; origin: readonly [number, number]; span: number } | null = null;
+  contactBakes = 0;
+  setContact(map: { data: Uint8Array; size: number; origin: readonly [number, number]; span: number } | null): void {
+    this.contact = map;
+    this.contactBakes += 1;
+  }
   /** Сколько гроздей грибов в последнем кадре. */
   spores = 0;
   setSpores(_data: Float32Array, count: number): void {
@@ -2367,5 +2381,370 @@ describe('собрано только там, куда смотрит герой
         expect(g.roomFx.has(level.skyRoom), `${world}/${seed}`).toBe(false);
       }
     }
+  });
+});
+
+describe('птицы, Осыпь по полярности, эффекты кадра', () => {
+  type World = 'shelter' | 'office' | 'yellow' | 'station';
+  const worldLevel = (world: World, seed = 7, opts?: { wear?: number }): BuiltLevel => buildLevel(generateLayout(seed, 2, world), opts);
+  const forward: InputFrame = { ...emptyInput(), moveZ: 1 };
+  /** Зал ожидания; ждём, пока кончится переход начала сессии. */
+  const station = (seed = 7, opts?: { wear?: number }): Harness => {
+    const h = new Harness(worldLevel('station', seed, opts), { seed });
+    h.until(() => h.game.transition === null, 8);
+    return h;
+  };
+  /** Мир без перехода в начале. */
+  const world = (w: World, seed = 7, opts?: { wear?: number }): Harness => {
+    const h = new Harness(worldLevel(w, seed, opts), { seed });
+    h.until(() => h.game.transition === null, 8);
+    return h;
+  };
+  /** Идти секунду за секундой к точке, на каждом шаге повернувшись к ней: время места идёт, пока игрок идёт. */
+  function walkTo(h: Harness, x: number, z: number, seconds: number): void {
+    const g = h.game;
+    for (let i = 0; i < Math.round(seconds / STEP); i++) {
+      g.aimAt(x, g.body.y + 1.4, z);
+      h.tick({ ...forward });
+    }
+  }
+  /** Ближайший узел пути на том же ярусе, что и точка, но не дальше max от неё; null — нет. */
+  const nodeNear = (level: BuiltLevel, p: Vec3, max: number) =>
+    level.nav
+      .filter((n) => Math.abs(n.y - p[1]) < 0.5 && Math.hypot(n.x - p[0], n.z - p[2]) < max)
+      .sort((a, b) => Math.hypot(a.x - p[0], a.z - p[2]) - Math.hypot(b.x - p[0], b.z - p[2]))[0] ?? null;
+  const birdEvents = (h: Harness, at: Vec3) => h.log.dream.filter((e) => e.type === 'bird' && e.what === 'takeoff' && e.at[0] === at[0] && e.at[1] === at[1] && e.at[2] === at[2]);
+  const last = (h: Harness): FrameView => h.r.frames.at(-1)!;
+
+  describe('зал ожидания: стая и голубь на полу', () => {
+    it('после загрузки есть стая из шести птиц; рендер получает не меньше шести, у каждой по девять чисел', () => {
+      const h = station();
+      const f = h.game.flock;
+      expect(f).not.toBeNull();
+      expect(f!.count).toBe(6);
+      h.run(0.5);
+      expect(h.r.birds).toBeGreaterThanOrEqual(6);
+      expect(h.r.birdData.length).toBe(h.r.birds * 9);
+      for (const v of h.r.birdData) expect(Number.isFinite(v)).toBe(true);
+    });
+
+    it('стая знает четыре столба зала и за пять минут ни разу не пролетает сквозь них', () => {
+      for (const seed of [7, 20041113, 31]) {
+        const h = station(seed);
+        const f = h.game.flock!;
+        expect(f.blocks.length).toBe(4);
+        for (let i = 0; i < f.count; i++) {
+          for (let t = 0; t < 300; t += 0.05) {
+            const p = f.pose(i, t);
+            if (!p.flying) continue;
+            for (const [x, z, r] of f.blocks) expect(Math.hypot(p.pos[0] - x, p.pos[2] - z)).toBeGreaterThan(r * 0.7);
+          }
+        }
+      }
+    });
+
+    it('на полу зала сидит один голубь: он в зале, на уровне пола, и сидит', () => {
+      const h = station();
+      const g = h.game;
+      expect(g.leavers).toHaveLength(1);
+      const l = g.leavers[0]!;
+      expect(l.state).toBe('sits');
+      expect(l.to).not.toBeNull();
+      const [x0, z0, x1, z1] = g.level!.roof!.box;
+      expect(l.perch.pos[0]).toBeGreaterThan(x0);
+      expect(l.perch.pos[0]).toBeLessThan(x1);
+      expect(l.perch.pos[2]).toBeGreaterThan(z0);
+      expect(l.perch.pos[2]).toBeLessThan(z1);
+      expect(Math.abs(l.perch.pos[1])).toBeLessThan(0.5);
+    });
+
+    it('игрок подошёл ближе трёх метров — голубь срывается со звуком, через несколько секунд ходьбы он под крышей', () => {
+      const h = station();
+      const g = h.game;
+      const l = g.leavers[0]!;
+      const p = l.perch.pos;
+      const n = nodeNear(g.level!, p, 3);
+      expect(n, 'у голубя нет узла пути в трёх метрах').not.toBeNull();
+      g.teleport(n!.x, n!.y, n!.z);
+      // Сперва игрок стоит: голубь сидит на месте, пока не подойдёшь, а подойдя, срывается.
+      h.tick();
+      expect(Math.hypot(g.body.x - p[0], g.body.z - p[2])).toBeLessThan(3);
+      walkTo(h, p[0], p[2], 0.3);
+      expect(birdEvents(h, p).length).toBe(1);
+      expect(l.state).toBe('leaves');
+      // Дальше — ходьба по залу: время места идёт, пока идёшь; на месте стоять нельзя.
+      const roof = g.level!.roof!.box;
+      const spots: [number, number][] = [[roof[0] + 2, roof[1] + 3], [roof[2] - 2, roof[3] - 3], [roof[0] + 2, roof[3] - 3], [roof[2] - 2, roof[1] + 3]];
+      for (let k = 0; k < 40 && l.state === 'leaves'; k++) walkTo(h, spots[k % 4]![0], spots[k % 4]![1], 1);
+      expect(l.state).toBe('moved');
+      expect(l.pose()!.pos).toEqual(l.to!.pos);
+      // Сорвалась один раз.
+      expect(birdEvents(h, p).length).toBe(1);
+    });
+
+    it('игрок стоит — позы стаи в двух кадрах подряд те же (снимок); идёт — позы меняются', () => {
+      const h = station();
+      h.run(3);
+      expect(h.game.flow!.frozen).toBe(true);
+      const a = Float32Array.from(h.r.birdData);
+      h.tick();
+      const b = Float32Array.from(h.r.birdData);
+      expect(b).toEqual(a);
+      h.run(2);
+      expect(Float32Array.from(h.r.birdData)).toEqual(a);
+      // Пошёл: за две секунды хода кто-нибудь из стаи успел перелететь или взмахнуть.
+      const roof = h.game.level!.roof!.box;
+      walkTo(h, (roof[0] + roof[2]) / 2, (roof[1] + roof[3]) / 2, 2);
+      expect(h.game.flow!.frozen).toBe(false);
+      expect(Float32Array.from(h.r.birdData)).not.toEqual(a);
+    });
+
+    it('в сильно стёртом месте стаи нет', () => {
+      const h = station(7, { wear: 0.9 });
+      const f = h.game.flock;
+      expect(f === null || f.count === 0).toBe(true);
+      expect(h.game.leavers).toHaveLength(0);
+      h.run(0.5);
+      expect(h.r.birds).toBe(0);
+    });
+  });
+
+  describe('комната под небом: птица на кромке стены', () => {
+    for (const w of ['shelter', 'office', 'yellow'] as const) {
+      it(`${w}: один голубь на высоте потолка комнаты; подошёл ближе 2,6 м — срывается и улетает навсегда`, () => {
+        const level = worldLevel(w, 20041113);
+        expect(level.skyRoom, w).toBeDefined();
+        const h = new Harness(level, { seed: 20041113 });
+        h.until(() => h.game.transition === null, 8);
+        const g = h.game;
+        expect(g.flock).toBeNull();
+        expect(g.leavers).toHaveLength(1);
+        const l = g.leavers[0]!;
+        expect(l.state).toBe('sits');
+        expect(l.to).toBeNull();
+        const room = level.layout!.rooms[level.skyRoom!]!;
+        expect(l.perch.pos[1]).toBeCloseTo(-4.5 * room.tier + level.ceilings![level.skyRoom!]!, 6);
+        h.run(0.3);
+        expect(h.r.birds).toBe(1);
+        // Подошёл: на ближайшем узле комнаты до птицы меньше 2,6 м.
+        const n = nodeNear(level, [l.perch.pos[0], -4.5 * room.tier, l.perch.pos[2]], 2.5);
+        expect(n, 'у птицы нет узла пути ближе 2,6 м').not.toBeNull();
+        g.teleport(n!.x, n!.y, n!.z);
+        h.tick();
+        h.tick();
+        expect(l.state).toBe('leaves');
+        expect(birdEvents(h, l.perch.pos).length).toBe(1);
+        // Через шесть секунд её нет совсем. (Мир обычный: время идёт и стоя.)
+        h.run(6);
+        expect(l.state).toBe('gone');
+        expect(h.r.birds).toBe(0);
+        h.run(10);
+        expect(h.r.birds).toBe(0);
+      });
+    }
+
+    it('в стёртом месте (0,9) её тоже нет', () => {
+      const level = worldLevel('shelter', 20041113, { wear: 0.9 });
+      const h = new Harness(level, { seed: 20041113 });
+      expect(h.game.leavers).toHaveLength(0);
+      h.run(0.3);
+      expect(h.r.birds).toBe(0);
+    });
+  });
+
+  describe('полярность Осыпи', () => {
+    it('в светлых местах (зал ожидания, офис) к третьей секунде она темнота (> 0,9)', () => {
+      for (const w of ['station', 'office'] as const) {
+        const h = world(w);
+        h.run(3);
+        expect(last(h).polar, w).toBeGreaterThan(0.9);
+      }
+    });
+
+    it('в тёмных (убежище, жёлтые комнаты) она свет (< 0,1)', () => {
+      for (const w of ['shelter', 'yellow'] as const) {
+        const h = world(w);
+        h.run(3);
+        expect(last(h).polar, w).toBeLessThan(0.1);
+      }
+    });
+  });
+
+  describe('Осыпь под взглядом, когда фонаря нет', () => {
+    type Fear = { type: string; what?: string };
+    /** Осыпь охотится в соседних клетках. Каждый шаг игрок смотрит на неё (on) или от неё (off). Что случилось первым: рассыпалась, поймала, ничего. */
+    function watch(h: Harness, aim: 'on' | 'off', seconds = 3): { result: 'scattered' | 'caught' | 'none'; node: number } | null {
+      const g = h.game;
+      const sw = g.swarm!;
+      for (const node of nodesInRange(g.level!.nav, g.playerNode(), 2, 4)) {
+        sw.activate(node);
+        sw.mode = 'hunt';
+        sw.cohesion = 1;
+        sw.awareness = 1;
+        h.log.fear.length = 0;
+        for (let i = 0; i < Math.round(seconds / STEP); i++) {
+          const b = g.body;
+          if (aim === 'on') g.aimAt(sw.pos[0], sw.pos[1] + 1.1, sw.pos[2]);
+          else g.aimAt(2 * b.x - sw.pos[0], b.y + 1.4, 2 * b.z - sw.pos[2]);
+          h.tick();
+          const ev = h.log.fear as Fear[];
+          if (ev.some((e) => e.type === 'swarm' && e.what === 'scattered')) return { result: 'scattered', node };
+          if (ev.some((e) => e.type === 'swarm' && e.what === 'caught')) return { result: 'caught', node };
+        }
+        return { result: 'none', node };
+      }
+      return null;
+    }
+
+    it('офис: фонаря нет, но взгляд держит её, и через burnTime она рассыпается', () => {
+      let scattered = 0;
+      for (const seed of [SEED, 7, 42]) {
+        const level = buildLevel(generateLayout(seed, 2, 'office'));
+        const h = new Harness(level, { calm: false, seed: 6 });
+        h.run(2);
+        expect(h.game.light.intensity).toBe(0);
+        const t0 = h.game.session!.time;
+        const r = watch(h, 'on', 3);
+        expect(r, `сид ${seed}: нет узлов для Осыпи`).not.toBeNull();
+        if (r!.result === 'scattered') {
+          scattered += 1;
+          // Не раньше burnTime (1,5 с): рассыпалась под взглядом, а не сразу.
+          expect(h.game.session!.time - t0).toBeGreaterThanOrEqual(1.4);
+          expect((h.game.snapshot() as { swarm: { mode: string } }).swarm.mode).toBe('scatter');
+        }
+      }
+      expect(scattered, 'ни разу не вышло проявить Осыпь взглядом').toBeGreaterThan(0);
+    });
+
+    it('офис: смотришь в сторону — она не рассыпается', () => {
+      const level = buildLevel(generateLayout(SEED, 2, 'office'));
+      const h = new Harness(level, { calm: false, seed: 6 });
+      h.run(2);
+      const r = watch(h, 'off', 3);
+      expect(r).not.toBeNull();
+      expect(r!.result).not.toBe('scattered');
+    });
+
+    it('зал ожидания: у стоящего игрока (снимок) взгляд её не держит; идущего — держит', () => {
+      const h = station();
+      const g = h.game;
+      h.run(3);
+      expect(g.flow!.frozen).toBe(true);
+      const sw = g.swarm!;
+      const beam = (): boolean => (g as unknown as { beamOnSwarm(): boolean }).beamOnSwarm();
+      let held = 0;
+      let heldWalking = 0;
+      for (const node of nodesInRange(g.level!.nav, g.playerNode(), 2, 4)) {
+        sw.activate(node);
+        sw.mode = 'hunt';
+        sw.cohesion = 1;
+        sw.awareness = 1;
+        // Стоя: взгляд на ней, но она «там, где была».
+        g.aimAt(sw.pos[0], sw.pos[1] + 1.1, sw.pos[2]);
+        h.tick();
+        h.tick();
+        if (beam()) held += 1;
+        // Тот же угол, но на ходу.
+        g.aimAt(sw.pos[0], sw.pos[1] + 1.1, sw.pos[2]);
+        h.tick({ ...forward });
+        g.aimAt(sw.pos[0], sw.pos[1] + 1.1, sw.pos[2]);
+        for (let i = 0; i < 30; i++) {
+          h.tick({ ...forward });
+          g.aimAt(sw.pos[0], sw.pos[1] + 1.1, sw.pos[2]);
+        }
+        if (beam()) heldWalking += 1;
+        h.run(3);
+      }
+      expect(held).toBe(0);
+      expect(heldWalking, 'на ходу взгляд ни разу не удержал Осыпь').toBeGreaterThan(0);
+    });
+  });
+
+  describe('разрыв кадра', () => {
+    it('зал ожидания: постоял восемь секунд и шагнул — кадр рвётся; через секунду ходьбы разрыва нет', () => {
+      const h = station();
+      h.run(8);
+      expect(last(h).mosh).toBe(0);
+      let peak = 0;
+      for (let i = 0; i < 5; i++) {
+        h.tick({ ...forward });
+        peak = Math.max(peak, last(h).mosh ?? 0);
+      }
+      expect(peak).toBeGreaterThan(0);
+      h.run(1, forward);
+      expect(last(h).mosh).toBe(0);
+    });
+
+    it('убежище: разрыва кадра нет никогда', () => {
+      const h = world('shelter');
+      for (let i = 0; i < 6; i++) {
+        h.run(1.5, i % 2 === 0 ? undefined : forward);
+        for (const f of h.r.frames) expect(f.mosh ?? 0).toBe(0);
+      }
+    });
+  });
+
+  describe('ветер', () => {
+    it('в каждом мире кадр несёт ветер с ненулевым размахом', () => {
+      for (const w of ['shelter', 'office', 'yellow', 'station'] as const) {
+        const h = world(w);
+        h.run(1);
+        const wind = last(h).wind;
+        expect(wind, w).toBeDefined();
+        expect(wind!.amp, w).toBeGreaterThan(0);
+        expect(Number.isFinite(wind!.t), w).toBe(true);
+      }
+    });
+
+    it('зал ожидания: у стоящего игрока время ветра стоит, у идущего растёт', () => {
+      const h = station();
+      h.run(3);
+      expect(h.game.flow!.frozen).toBe(true);
+      const t0 = last(h).wind!.t;
+      h.run(1.5);
+      expect(last(h).wind!.t).toBe(t0);
+      const roof = h.game.level!.roof!.box;
+      walkTo(h, (roof[0] + roof[2]) / 2, (roof[1] + roof[3]) / 2, 0.5);
+      const t1 = last(h).wind!.t;
+      walkTo(h, (roof[0] + roof[2]) / 2, (roof[1] + roof[3]) / 2, 0.5);
+      expect(t1).toBeGreaterThan(t0);
+      expect(last(h).wind!.t).toBeGreaterThan(t1);
+    });
+  });
+
+  describe('тени-пятна под обстановкой', () => {
+    /** Значение канала tier карты в точке мира. */
+    const mapAt = (m: NonNullable<FakeRenderer['contact']>, x: number, z: number, ch = 0): number => {
+      const ix = Math.floor(((x - m.origin[0]) / m.span) * m.size);
+      const iz = Math.floor(((z - m.origin[1]) / m.span) * m.size);
+      return m.data[(iz * m.size + ix) * 4 + ch]!;
+    };
+
+    it('после загрузки уровня с мебелью карта теней есть; кадр просит рисовать пятна', () => {
+      const h = new Harness(levelOf(SEED), { seed: 3 });
+      h.run(0.2);
+      expect(h.r.contact).not.toBeNull();
+      expect(h.r.contactBakes).toBeGreaterThanOrEqual(1);
+      expect(last(h).contact).toBe(true);
+    });
+
+    it('предмет рассыпался от касания — карту пересобрали, и под ним стало светлее', () => {
+      const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, firstDelay: 600 } });
+      const g = h.game;
+      h.run(0.3);
+      // Высокий предмет на полу первого яруса, у которого пятно в центре тёмное.
+      const o = g.level!.objects!.find((x) => x.solid && !x.flat && x.group === undefined && Math.abs(x.min[1]) < 0.1 && x.max[1] - x.min[1] > 0.5 && ALL_PROPS[x.name]?.mount === 'floor' && mapAt(h.r.contact!, (x.min[0] + x.max[0]) / 2, (x.min[2] + x.max[2]) / 2) > 20);
+      expect(o, 'нет подходящего предмета').toBeDefined();
+      const cx = (o!.min[0] + o!.max[0]) / 2;
+      const cz = (o!.min[2] + o!.max[2]) / 2;
+      const before = mapAt(h.r.contact!, cx, cz);
+      const bakes = h.r.contactBakes;
+      // Коснулись — то же, что делает игра, когда игрок упёрся в вещь.
+      expect(g.illusions!.touch(o!.id)).toBe(true);
+      h.run(2.5);
+      expect(g.illusions!.get(o!.id)!.state).toBe('gone');
+      expect(h.r.contactBakes).toBeGreaterThan(bakes);
+      expect(mapAt(h.r.contact!, cx, cz)).toBeLessThan(before);
+    });
   });
 });

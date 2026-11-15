@@ -13,6 +13,7 @@
 import type { Vec3 } from '../core/types';
 import type { BoxOpts } from './kit';
 import { MAT } from './materials';
+import { hung } from './props';
 import type { Xf } from './props';
 import { beam, ring, rng, sheet, WHITE } from './props_more';
 import type { PropSpec } from './props_more';
@@ -1272,7 +1273,7 @@ export const HOME_PROPS: Record<string, PropSpec> = {
   radiator: { w: 0.9, d: 0.14, h: 0.6, mount: 'wall', y: 0.12, ru: 'чугунная батарея', build: radiator },
   window_fake: { w: 1.3, d: 0.14, h: 1.45, mount: 'wall', y: 0.85, ru: 'окно в никуда: за стеклом ровное бледное свечение', build: windowFake },
   houseplant: { w: 0.5, d: 0.5, h: 1.3, mount: 'floor', ru: 'фикус в кадке', build: houseplant },
-  chandelier: { w: 0.7, d: 0.7, h: 0.55, mount: 'ceiling', ru: 'люстра с тремя плафонами', build: (xf) => chandelier(xf) },
+  chandelier: { w: 0.7, d: 0.7, h: 0.55, mount: 'ceiling', ru: 'люстра с тремя плафонами', build: (xf) => hung(xf, 0.55, 0.25, () => chandelier(xf)) },
   christmas_tree: { w: 1.0, d: 1.0, h: 1.8, mount: 'floor', ru: 'ёлка с шарами, звездой и подарками', build: christmasTree },
   door_leaf_lean: { w: 0.95, d: 0.3, h: 2.05, mount: 'floor', ru: 'сорванная дверная створка, прислонена к стене', build: doorLean },
   door_leaf_down: { w: 0.9, d: 2.0, h: 0.08, mount: 'free', ru: 'дверная створка лежит на полу', build: doorDown },

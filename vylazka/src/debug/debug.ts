@@ -50,6 +50,8 @@ export interface VzDebugApi {
    * Давление помимо Осыпи (systems/pressure.ts): состояние; с видом — начать событие в помещении, где
    * стоит игрок (ok — началось).
    */
+  /** Птицы (systems/birds.ts): позы стаи в то время места, которое видит игрок, и состояние тех, кого можно спугнуть. */
+  birds(): { flock: { pos: number[]; flying: boolean; open: number }[]; leavers: { state: string; at: number[] }[] };
   pressure(kind?: 'collapse' | 'squeeze'): { ok: boolean; rooms: number[]; here: boolean; active: { kind: string; phase: string; room: number; radius: number; ceil: number; origin: number[]; exits: number[][] } | null; falling: number; count: number; camDrop: number } | null;
   flow(t?: number): { f: number; t: number; viewT: number; frozen: boolean; drift: number; strain: number; day: number; night: boolean; trains: number; toTrain: number; tear: number } | null;
   start(): void;
@@ -222,6 +224,15 @@ export function installDebug(app: App): void {
     cloudUsage: () => game().renderer.cloudUsage(),
     dust: () => game().renderer.dustInfo(),
     spores: () => (game().spores?.sites ?? []).filter((q) => q.grow > 0.03).map((q) => ({ pos: [...q.pos], kind: q.kind, grow: +q.grow.toFixed(3) })),
+    birds: () => {
+      const g = game();
+      const t = g.flow ? g.flow.viewT : 0;
+      const f = g.flock;
+      return {
+        flock: f ? Array.from({ length: f.count }, (_, i) => f.pose(i, t)).map((p) => ({ pos: p.pos.map((v) => +v.toFixed(2)), flying: p.flying, open: +p.open.toFixed(2) })) : [],
+        leavers: g.leavers.map((l) => ({ state: l.state, at: l.perch.pos.map((v) => +v.toFixed(2)) })),
+      };
+    },
     pressure: (kind) => {
       const g = game();
       const p = g.pressure;

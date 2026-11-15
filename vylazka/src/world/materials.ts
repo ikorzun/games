@@ -100,6 +100,8 @@ export interface MatDef {
   grime: number;
   /** Собственное свечение (фосфорная краска), линейная яркость. */
   glow?: number;
+  /** Просвет, 0..1: тонкое пропускает свет — когда свет за ним, оно светится своим цветом (бумага, перо, трава). */
+  thin?: number;
   /** Слой фактуры и её масштаб: сколько метров занимает один повтор. */
   layer: number;
   tile: number;
@@ -126,7 +128,7 @@ export const MAT_DEFS: readonly MatDef[] = [
   { name: 'wet_concrete', color: '#4c4b48', rough: 0.55, spec: 0.5, coat: 1.0, grime: 0.5, layer: L.floor, tile: 1.5, bump: 0.006, decay: DECAY.none },
   { name: 'paint_red', color: '#8f2c23', rough: 0.45, spec: 0.5, coat: 0.5, grime: 0.5, layer: L.metal, tile: 0.6, bump: 0.002, decay: DECAY.metal, alt: 4 },
   { name: 'glow', color: '#a6dba8', rough: 1.0, spec: 0.0, grime: 0.15, glow: 0.012, layer: L.paint, tile: 0.4, bump: 0.001, decay: DECAY.none },
-  { name: 'paper', color: '#c8c1a7', rough: 1.0, spec: 0.0, grime: 0.5, layer: L.paper, tile: 0.4, bump: 0.0015, decay: DECAY.organic },
+  { name: 'paper', color: '#c8c1a7', rough: 1.0, spec: 0.0, grime: 0.5, thin: 0.55, layer: L.paper, tile: 0.4, bump: 0.0015, decay: DECAY.organic },
   { name: 'floor', color: '#7b7872', rough: 0.9, spec: 0.3, grime: 0.9, layer: L.floor, tile: 1.5, bump: 0.008, decay: DECAY.mineral, alt: 12 },
   { name: 'tile', color: '#cfcbb8', rough: 0.25, spec: 0.6, coat: 1.0, grime: 0.6, layer: L.tile, tile: 1.2, bump: 0.004, decay: DECAY.glossy },
   { name: 'tile_floor', color: '#8a5a3c', rough: 0.4, spec: 0.5, coat: 0.6, grime: 0.75, layer: L.tile, tile: 0.8, bump: 0.003, decay: DECAY.glossy },

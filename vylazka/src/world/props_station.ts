@@ -15,6 +15,7 @@
 import type { Vec3 } from '../core/types';
 import type { BoxOpts } from './kit';
 import { MAT } from './materials';
+import { hung } from './props';
 import type { Xf } from './props';
 import { beam, ring, rng, sheet, WHITE } from './props_more';
 import type { PropSpec } from './props_more';
@@ -164,7 +165,11 @@ function ticketWindow(xf: Xf): void {
   bx(xf, [0.29, 0.99, F0], [0.35, 2.02, F1], MAT.wood, WOOD, { bevel: 0.004, skip: ['ny'] });
   bx(xf, [-0.64, 1.08, F0], [0.29, 1.2, F1], MAT.wood, WOOD, { bevel: 0.004 });
   bx(xf, [-0.64, 1.88, F0], [0.29, 2.02, F1], MAT.wood, WOOD, { bevel: 0.004 });
-  bx(xf, [-0.64, 1.2, 0.228], [0.29, 1.88, 0.236], MAT.glass, GLASS);
+  // Стекло. За ним — не каморка кассира, а ложная комната (render/shaders.ts, fakeHall): тот же зал под
+  // стеклянной крышей, пустой, в вечернем свете. Это обманка зала ожидания: геометрии за окном нет.
+  // Оттенок вершин у такого окна — его размеры: ширина, высота и высота нижнего края над полом.
+  if (xf.sl) xf.sl.quadUv([xf.pt(-0.64, 1.2, 0.232), xf.pt(0.29, 1.2, 0.232), xf.pt(0.29, 1.88, 0.232), xf.pt(-0.64, 1.88, 0.232)], [0, 0, 1, 1], MAT.glass, [0.93, 0.68, 1.2], 1);
+  else bx(xf, [-0.64, 1.2, 0.228], [0.29, 1.88, 0.236], MAT.glass, GLASS);
   bx(xf, [-0.5, 2.02, 0.21], [0.15, 2.1, 0.27], MAT.paper, LIGHT, { bevel: 0.004, skip: ['ny'] });
   // Полочка для мелочи в щели: лоток с бортиками и тёмным резиновым ковриком.
   bx(xf, [-0.3, 0.99, 0.28], [-0.05, 1.005, 0.46], MAT.metalGreen, STEEL, { skip: ['ny'] });
@@ -514,7 +519,7 @@ export const STATION_PROPS: Record<string, PropSpec> = {
   st_kiosk: { w: 2.0, d: 0.7, h: 1.35, mount: 'floor', ru: 'буфетный прилавок: витрина, бак с краником, стопка стаканов', build: kiosk },
   st_suitcase: { w: 0.6, d: 0.24, h: 0.48, mount: 'free', ru: 'чемодан с ручкой и двумя ремнями', build: (xf) => suitcase(xf) },
   st_bin: { w: 0.4, d: 0.4, h: 0.7, mount: 'free', ru: 'урна-восьмигранник с кольцом', build: (xf) => bin(xf) },
-  st_sign: { w: 1.2, d: 0.06, h: 0.4, mount: 'ceiling', ru: 'подвесной указатель со стрелкой на двух тросиках', build: (xf) => sign(xf) },
+  st_sign: { w: 1.2, d: 0.06, h: 0.4, mount: 'ceiling', ru: 'подвесной указатель со стрелкой на двух тросиках', build: (xf) => hung(xf, 0.4, 0.35, () => sign(xf)) },
   st_barrier: { w: 1.6, d: 0.3, h: 0.95, mount: 'free', ru: 'две стойки ограждения с провисшей лентой', build: (xf) => barrier(xf) },
   st_note: { w: 0.16, d: 0.11, h: 0.03, mount: 'free', ru: 'сложенный вдвое листок с тремя тёмными строчками', build: (xf) => note(xf) },
   st_key: { w: 0.14, d: 0.06, h: 0.02, mount: 'free', ru: 'ключ с большой овальной биркой на кольце', build: (xf) => key(xf) },
