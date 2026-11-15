@@ -10,6 +10,7 @@ import type { BuiltLevel } from '../src/world/level';
 import { buildLevel } from '../src/world/level_build';
 import type { LevelObject } from '../src/world/objects';
 import { ALL_PROPS, FIXED } from '../src/world/props_all';
+import { DOOR_NAME } from '../src/world/screens';
 
 const DT = 1 / 60;
 const C = DEFAULT_ILLUSIONS;
@@ -390,7 +391,9 @@ describe('иллюзорные предметы: объекты уровня', (
         const sc = (l.flats ?? []).filter((f) => f.kind === 'screen');
         screens += sc.length;
         expect(displays.length, `${world} ${seed}`).toBeGreaterThanOrEqual(sc.length);
-        for (const d of displays) expect(['display_lean', 'display_stand', 'display_wall']).toContain(d.name);
+        for (const d of displays) expect(['display_lean', 'display_stand', 'display_wall', DOOR_NAME]).toContain(d.name);
+        // Экран-проём — свой объект: один на этаж жёлтых комнат, в остальных мирах его нет.
+        expect(displays.filter((d) => d.name === DOOR_NAME).length, `${world} ${seed}`).toBe(world === 'yellow' ? 1 : 0);
       }
     }
     expect(standees).toBeGreaterThan(0);

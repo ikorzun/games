@@ -9,16 +9,17 @@ import type { GenLayout, GenRoom, RoomType, WorldKind } from '../gen/layout';
 import { ColliderSet } from './colliders';
 import type { FlatMark } from './flat';
 import { doorSign, furnishRoom } from './furnish';
-import { ROOM_LABEL, SIGN } from './signs';
+import { NOTE_ID, ROOM_LABEL, SIGN } from './signs';
 import type { CellInfo, RoomCtx, Slot } from './furnish';
 import { MeshBuilder } from './kit';
+import type { SheetMark } from './kit';
 import type { BuiltLevel, CollapseSpec, ItemSpot, Landmark, LevelChunk, NavNode, RoomVariant, StairLink, Zone } from './level';
 import { MAT } from './materials';
 import { hermoDoor, stairsDown, Xf } from './props';
 import { doorFrame, doorLeaf, collapse, pit, warningSign, waterSheet } from './props_bunker';
 import { ALL_PROPS } from './props_all';
 import { ObjectLog } from './objects';
-import { SCREEN_IMAGES } from './screens';
+import { DOOR_IMAGE, SCREEN_IMAGES } from './screens';
 import type { FreeSlot } from './objects';
 import { buildShell, CELL, Shell, STYLE_CORRIDOR, WALL_T } from './shell';
 import type { ShellCell, WallStyle } from './shell';
@@ -401,11 +402,11 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     const halls = rooms.filter((r) => r.type === 'hall');
     const open = rooms.filter((r) => r.type !== 'corridor');
     const pool = (halls.length > 0 ? halls : open.length > 0 ? open : rooms).slice().sort((a, b) => far(a) - far(b) || a.id - b.id);
-    // На них то же, что на экранах офиса (природа и «странное»), и на двух — разное.
+    // На ближнем — то же, что на экранах офиса (природа или «странное»). Дальний — не картинка, а проём
+    // (решение владельца: два экрана — «соединение смысла и пространств»): на нём луг, и в него входят.
     const shown = SCREEN_IMAGES.map((im, i) => (im.kind === 'nature' || im.kind === 'strange' ? i : -1)).filter((i) => i >= 0);
     const first = Math.floor(hash01(layout.seed & 0xffff, 0x5c, layout.seed ^ 0x2e11) * shown.length);
-    const second = (first + 1 + Math.floor(hash01(layout.seed & 0xffff, 0x7d, layout.seed ^ 0x9a03) * (shown.length - 1))) % shown.length;
-    const images = [shown[first]!, shown[second]!];
+    const images = [shown[first]!, DOOR_IMAGE];
     (pool.length > 0 ? [pool[0]!, pool[pool.length - 1]!] : []).forEach((r, k) => screenQuota.set(r.id, [...(screenQuota.get(r.id) ?? []), images[k]!]));
   }
   /** Слоты и клетки помещения; геометрия идёт в mbFor (вещество и проекции), преграды — в colSet. */
@@ -441,11 +442,36 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     return { room, world, seed: layout.seed, start, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d + salt)), h: CEIL_H, slots, cells, spots: outSpots, landmarks: outMarks, flats: outFlats, ...(screenQuota.has(room.id) ? { screens: screenQuota.get(room.id)! } : {}) };
   };
 
+  // Карточка от руки «please use only when necessary»: одна на уровень, в помещении рядом с началом —
+  // не в самом начале, куда возвращает Осыпь (там она читалась бы укором), а на шаг дальше.
+  const notes: SheetMark[] = [];
+  const noteRoom = layout.rooms
+    .filter((r) => r !== startRoom && r !== variantRoom && !lowerWells.has(r.id) && r.tier === startRoom.tier && r.type !== 'stairwell' && r.type !== 'lift')
+    .map((r) => ({ r, d: Math.min(...r.cells.map(([x, z]) => Math.abs(x - start.cx) + Math.abs(z - start.cz))) }))
+    .sort((a, b) => a.d - b.d || a.r.id - b.r.id)[0]?.r;
+
   for (const room of layout.rooms) {
     if (lowerWells.has(room.id)) continue;
     if (room !== variantRoom) {
       const ctx = roomCtx(room, (x, z) => chunkFor(room, x, z), col, 0, spots, landmarks, flats);
       furnishRoom(ctx);
+      if (room === noteRoom) {
+        // На свободном участке стены, ближайшем к началу; нет свободного — на любом, сбоку от того, что там висит.
+        const near = (s: Slot): number => Math.abs(s.cx - start.cx) + Math.abs(s.cz - start.cz);
+        const free = ctx.slots.filter((s) => !s.hazard && !s.used).sort((a, b) => near(a) - near(b))[0];
+        const any = free ?? ctx.slots.filter((s) => !s.hazard).sort((a, b) => near(a) - near(b))[0];
+        if (any) {
+          // Место под карточкой больше не свободно: вещь, вернувшаяся «у другой стены», её не закроет.
+          any.used = true;
+          const x = free ? 0 : 1.05;
+          const w = SIGN[NOTE_ID]!.w;
+          const h = (w * SIGN[NOTE_ID]!.ph) / SIGN[NOTE_ID]!.pw;
+          any.xf.sign(NOTE_ID, x, 1.34, w);
+          const o = any.xf.pt(0, 0, 0);
+          const f = any.xf.pt(0, 0, 1);
+          notes.push({ id: NOTE_ID, at: any.xf.pt(x, 1.34 + h / 2, 0.005), n: [f[0] - o[0], f[1] - o[1], f[2] - o[2]] });
+        }
+      }
       // Что осталось пустым у глухих стен — запасные места: туда вещь может вернуться после темноты.
       for (const s of ctx.slots) if (!s.used && !s.hazard && s.deep) freeSlots.push({ at: [s.xf.ox, s.xf.oy, s.xf.oz], rot: s.xf.rot, room: room.id, tier: room.tier });
       continue;
@@ -549,6 +575,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     variants,
     nav,
     sheets: [...chunks.values()].filter((c) => !c.hidden).flatMap((c) => c.mb.sheets),
+    notes,
     flats,
     objects: objects.list,
     freeSlots,

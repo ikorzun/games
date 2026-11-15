@@ -22,7 +22,12 @@ export type ScreenKind =
   /** Природа не на своём месте: проросшее, затопленное, зверь в подъезде. */
   | 'strange'
   /** Обрывки поп-культуры: студия телеигры, кадр мультфильма. Без узнаваемых героев и знаков. */
-  | 'pop';
+  | 'pop'
+  /**
+   * Проём: на экране — другое место игры, каким его видишь, когда в нём оказываешься. Это не картинка:
+   * вошёл в экран — оказался там. Все остальные экраны научили, что это картинка.
+   */
+  | 'door';
 
 export interface ScreenImage {
   id: string;
@@ -43,7 +48,13 @@ export const SCREEN_IMAGES: readonly ScreenImage[] = [
   { id: 'deer', kind: 'strange', ru: 'олень на лестничной площадке панельного дома' },
   { id: 'gameshow', kind: 'pop', ru: 'пустая студия телеигры девяностых' },
   { id: 'cartoon', kind: 'pop', ru: 'кадр рисованного мультфильма: круглый зверь на холме' },
+  { id: 'meadow', kind: 'door', ru: 'луг самой игры с точки появления: тропа к дверной раме — проём' },
 ];
+
+/** Картинка-проём: экран с ней ведёт на луг (карманное пространство). Снимок сделан в самой игре. */
+export const DOOR_IMAGE = SCREEN_IMAGES.findIndex((s) => s.kind === 'door');
+/** Имя объекта уровня у экрана-проёма (у обычных экранов — display_lean, display_stand, display_wall). */
+export const DOOR_NAME = 'display_door';
 
 export const SCREEN_ROWS = Math.ceil(SCREEN_IMAGES.length / SCREEN_COLS);
 export const SCREENS_W = SCREEN_COLS * SCREEN_PW;
@@ -72,8 +83,10 @@ export function screenUv(index: number, band = 1): { u0: number; v0: number; u1:
 
 /** Что показывает экран: выбор по сиду предмета из картинок нужных родов (пусто — из всех). */
 export function screenFor(seed: number, kinds: readonly ScreenKind[] = []): number {
-  const pool = SCREEN_IMAGES.map((s, i) => [s, i] as const).filter(([s]) => kinds.length === 0 || kinds.includes(s.kind));
-  const list = pool.length > 0 ? pool : SCREEN_IMAGES.map((s, i) => [s, i] as const);
+  // Проём сам собой на экран не попадает: его ставит сборка уровня, по одному и в своё место.
+  const all = SCREEN_IMAGES.map((s, i) => [s, i] as const).filter(([s]) => s.kind !== 'door');
+  const pool = all.filter(([s]) => kinds.length === 0 || kinds.includes(s.kind));
+  const list = pool.length > 0 ? pool : all;
   // Сид предмета — целое до миллиона; множитель разводит соседние сиды по разным картинкам.
   const k = Math.abs(Math.imul(Math.floor(seed) | 0, 2654435761) >>> 8) % list.length;
   return list[k]![1];

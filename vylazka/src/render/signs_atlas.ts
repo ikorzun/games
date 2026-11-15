@@ -6,7 +6,7 @@
  * Буквы ставятся по одной, каждая в свою клетку: раскладка не зависит от того, успел ли загрузиться
  * шрифт. У трафарета в буквах прорезаны перемычки, как у настоящего листа с вырезанными буквами.
  */
-import { PL_H, SIGN_LIST, SIGNS_SIZE } from '../world/signs';
+import { HAND, PL_H, SIGN_LIST, SIGNS_SIZE } from '../world/signs';
 import type { SignRect } from '../world/signs';
 
 type G = CanvasRenderingContext2D;
@@ -151,6 +151,73 @@ function plate(g: G, s: SignRect): void {
     g.fill();
   }
   age(g, s, rnd, true);
+}
+
+/** Картонная карточка: светлый картон, карандашная разлиновка, печатные буквы синим маркером. */
+function card(g: G, s: SignRect): void {
+  const rnd = lcg(seedOf(s.id));
+  g.fillStyle = '#e4dcc0';
+  g.fillRect(0, 0, s.pw, s.ph);
+  // Картон чуть темнее к краям и в пятнах от пальцев.
+  for (let i = 0; i < 5; i++) {
+    g.fillStyle = `rgba(120, 100, 70, ${0.03 + rnd() * 0.04})`;
+    g.beginPath();
+    g.ellipse(rnd() * s.pw, rnd() * s.ph, 20 + rnd() * 60, 14 + rnd() * 40, rnd() * 3, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.strokeStyle = 'rgba(70, 60, 45, 0.55)';
+  g.lineWidth = 2;
+  g.strokeRect(1, 1, s.pw - 2, s.ph - 2);
+  const n = s.lines.length;
+  const lh = (s.ph - 28) / n;
+  const ch = lh * 0.62;
+  const cw = ch * 0.62;
+  const gap = cw * 0.34;
+  // Разлиновка карандашом: под каждой строкой и над первой.
+  g.strokeStyle = 'rgba(90, 90, 96, 0.4)';
+  g.lineWidth = 1;
+  for (let i = 0; i < n; i++) {
+    const top = 14 + i * lh + (lh - ch) / 2;
+    for (const y of i === 0 ? [top - 4, top + ch + 4] : [top + ch + 4]) {
+      g.beginPath();
+      g.moveTo(8, y + (rnd() - 0.5) * 1.2);
+      g.lineTo(s.pw - 8, y + (rnd() - 0.5) * 1.2);
+      g.stroke();
+    }
+  }
+  g.strokeStyle = '#2a3fb6';
+  g.lineJoin = 'round';
+  g.lineCap = 'round';
+  s.lines.forEach((line, row) => {
+    const width = line.length * cw + (line.length - 1) * gap;
+    let x = (s.pw - width) / 2 + (rnd() - 0.5) * 6;
+    const y = 14 + row * lh + (lh - ch) / 2;
+    for (const letter of line) {
+      const strokes = HAND[letter];
+      if (strokes) {
+        const dx = (rnd() - 0.5) * 1.6;
+        const dy = (rnd() - 0.5) * 2.2;
+        const lean = (rnd() - 0.5) * 0.08;
+        // Маркер: два прохода — широкий бледный и узкий плотный.
+        for (const [lw, alpha] of [[4.2, 0.55], [2.4, 0.95]] as const) {
+          g.lineWidth = lw;
+          g.globalAlpha = alpha;
+          for (const poly of strokes) {
+            g.beginPath();
+            poly.forEach(([px, py], k) => {
+              const qx = x + dx + (px + (py - 0.5) * lean) * cw;
+              const qy = y + dy + py * ch;
+              if (k === 0) g.moveTo(qx, qy);
+              else g.lineTo(qx, qy);
+            });
+            g.stroke();
+          }
+        }
+        g.globalAlpha = 1;
+      }
+      x += cw + gap;
+    }
+  });
 }
 
 /** Листы-картинки по id (плакаты ГО, план убежища): их грузит render/poster_images.ts. */
@@ -371,7 +438,7 @@ function symbol(g: G, s: SignRect): void {
   }
 }
 
-const DRAW: Record<Exclude<SignRect['kind'], 'poster' | 'scheme'>, (g: G, s: SignRect) => void> = { stencil, brush, plate, dial, clock, calendar, hazard, arc, tally, symbol };
+const DRAW: Record<Exclude<SignRect['kind'], 'poster' | 'scheme'>, (g: G, s: SignRect) => void> = { stencil, brush, plate, dial, clock, calendar, hazard, arc, tally, symbol, card };
 
 /**
  * Нарисовать атлас. Только в браузере. sheets — листы-картинки, которые уже загрузились: без них

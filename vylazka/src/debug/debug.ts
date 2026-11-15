@@ -110,6 +110,10 @@ export interface VzDebugApi {
   gotoObject(id: number, distance?: number): boolean;
   /** Какие картинки выставочных экранов загружены из файлов (остальные экраны показывают «нет сигнала»). */
   screens(): string[];
+  /** Карточки от руки на стенах уровня (world/signs.ts, вид card). */
+  notes(): { id: string; at: number[]; n: number[] }[];
+  /** Встать перед карточкой номер index на расстоянии distance метров, лицом к ней. */
+  gotoNote(index: number, distance?: number): boolean;
   /** Нарисовать кадр и вернуть его яркость сеткой 32×18, строка 0 — верхняя. */
   probe(): number[];
   /** Средний цвет кадра (0..255) и доля красных точек: виден ли красная сетка. */
@@ -261,6 +265,17 @@ export function installDebug(app: App): void {
       return true;
     },
     screens: () => [...app.screenIds],
+    notes: () => (app.level.notes ?? []).map((m) => ({ id: m.id, at: [...m.at], n: [...m.n] })),
+    gotoNote: (index, distance = 1.2) => {
+      const m = (app.level.notes ?? [])[index];
+      if (!m) return false;
+      game().debugHome();
+      const x = m.at[0] + m.n[0] * distance;
+      const z = m.at[2] + m.n[2] * distance;
+      const floor = Math.floor((m.at[1] + 0.3) / 4.5) * 4.5;
+      game().teleport(x, floor, z, Math.atan2(-(m.at[0] - x), -(m.at[2] - z)), 0);
+      return true;
+    },
     gotoLandmark: (id, index = 0, distance = 2.2) => {
       const l = app.level;
       const m = l.landmarks.filter((x) => x.id === id)[index];

@@ -18,7 +18,7 @@ import { Xf } from '../src/world/props';
 import { ALL_PROPS } from '../src/world/props_all';
 import { buildDisplay, DISPLAY_SIZE, SCREEN_PROPS } from '../src/world/props_screens';
 import type { DisplayShape } from '../src/world/props_screens';
-import { SCREEN_COLS, SCREEN_IMAGES, SCREEN_PH, SCREEN_PW, SCREEN_ROWS, screenCell, screenFor, SCREENS_H, SCREENS_W, screenUv } from '../src/world/screens';
+import { DOOR_IMAGE, DOOR_NAME, SCREEN_COLS, SCREEN_IMAGES, SCREEN_PH, SCREEN_PW, SCREEN_ROWS, screenCell, screenFor, SCREENS_H, SCREENS_W, screenUv } from '../src/world/screens';
 import { CELL, WALL_T } from '../src/world/shell';
 
 const SEEDS = [1, 5, 7, 42, 808, 4242, 9001, 31337, 20041113, 123456789, ...Array.from({ length: 20 }, (_, i) => (i * 7919 + 101) >>> 0)];
@@ -458,12 +458,41 @@ describe('выставочные экраны', () => {
     for (const seed of SEEDS) expect(flats(level(seed, 'shelter'), 'screen'), `сид ${seed}`).toHaveLength(0);
   });
 
-  it('в жёлтых комнатах на уровень ровно два экрана — природа и странное, и картинки на них разные', () => {
+  it('в жёлтых комнатах на уровень ровно два экрана: ближний к началу — природа или «странное», дальний — проём с лугом', () => {
     for (const seed of SEEDS) {
-      const screens = flats(level(seed, 'yellow'), 'screen');
+      const l = level(seed, 'yellow');
+      const screens = flats(l, 'screen');
       expect(screens, `сид ${seed}`).toHaveLength(2);
-      for (const s of screens) expect(['nature', 'strange']).toContain(SCREEN_IMAGES.find((im) => im.id === s.what)!.kind);
-      expect(screens[0]!.what, `сид ${seed}: одна картинка на двух экранах`).not.toBe(screens[1]!.what);
+      const kinds = screens.map((s) => SCREEN_IMAGES.find((im) => im.id === s.what)!.kind);
+      expect(kinds.filter((k) => k === 'door'), `сид ${seed}: проём — один`).toHaveLength(1);
+      const door = screens[kinds.indexOf('door')]!;
+      const plain = screens[1 - kinds.indexOf('door')]!;
+      expect(door.what).toBe(SCREEN_IMAGES[DOOR_IMAGE]!.id);
+      expect(['nature', 'strange']).toContain(SCREEN_IMAGES.find((im) => im.id === plain.what)!.kind);
+      // Проём — в зале не ближе к началу, чем обычный экран.
+      const rooms = l.layout!.rooms;
+      const start = rooms[l.layout!.entranceRoom]!.cells[0]!;
+      const far = (id: number): number => Math.min(...rooms.find((r) => r.id === id)!.cells.map(([x, z]) => Math.abs(x - start[0]) + Math.abs(z - start[1])));
+      expect(far(door.room), `сид ${seed}: проём ближе обычного экрана`).toBeGreaterThanOrEqual(far(plain.room));
+      // Сам экран проёма — отдельный объект со своим именем: по нему игра узнаёт, что в него входят.
+      expect(l.objects!.filter((o) => o.name === DOOR_NAME), `сид ${seed}`).toHaveLength(1);
+    }
+  });
+
+  it('проём бывает только в жёлтых комнатах, и сам на экран не попадает: его ставит сборка уровня', () => {
+    expect(SCREEN_IMAGES.filter((s) => s.kind === 'door')).toHaveLength(1);
+    expect(SCREEN_IMAGES[DOOR_IMAGE]!.id).toBe('meadow');
+    for (let seed = 0; seed < 400; seed++) {
+      expect(screenFor(seed)).not.toBe(DOOR_IMAGE);
+      expect(screenFor(seed, ['door'])).not.toBe(DOOR_IMAGE);
+      expect(screenFor(seed, ['nature', 'strange', 'pop'])).not.toBe(DOOR_IMAGE);
+    }
+    for (const world of ['shelter', 'office'] as const) {
+      for (const seed of SEEDS) {
+        const l = level(seed, world);
+        expect(flats(l, 'screen').some((s) => s.what === 'meadow'), `${world} ${seed}`).toBe(false);
+        expect(l.objects!.some((o) => o.name === DOOR_NAME), `${world} ${seed}`).toBe(false);
+      }
     }
   });
 });

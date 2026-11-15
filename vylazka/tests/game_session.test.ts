@@ -13,10 +13,12 @@ import type { SessionEvent } from '../src/systems/session';
 import { DEFAULT_THINGS, looksAt } from '../src/systems/things';
 import { nodesInRange } from '../src/swarm/ai';
 import type { ColliderSet } from '../src/world/colliders';
+import type { FlatMark } from '../src/world/flat';
 import type { BuiltLevel } from '../src/world/level';
 import { buildLevel } from '../src/world/level_build';
 import { ENV_BUNKER, ENV_OFFICE, ENV_YELLOW } from '../src/world/pockets';
 import { ALL_PROPS } from '../src/world/props_all';
+import { DOOR_IMAGE, DOOR_NAME, SCREEN_IMAGES } from '../src/world/screens';
 import { setThingRegistry } from '../src/world/thing_mesh';
 
 const SEED = 20041113;
@@ -1365,6 +1367,143 @@ describe('игра целиком: офис и жёлтые комнаты', () 
     expect(g.light.state).toBe('off');
     const ids = new Set(YELLOW_MEMORIES.map((m) => m.id));
     for (const m of g.session!.memories) expect(ids.has(m.def.id)).toBe(true);
+  });
+
+  type Jump = Extract<DreamEvent, { type: 'jump' }>;
+  const jumps = (h: Harness): Jump[] => h.log.dream.filter((e): e is Jump => e.type === 'jump');
+  const screens = (l: BuiltLevel): FlatMark[] => (l.flats ?? []).filter((f) => f.kind === 'screen');
+  const isDoor = (f: FlatMark): boolean => f.what === SCREEN_IMAGES[DOOR_IMAGE]!.id;
+  /** Объект экрана по его отметке: тот display_*, в чьих габаритах лежит середина картинки. */
+  const displayOf = (l: BuiltLevel, f: FlatMark): number =>
+    l.objects!.find((o) => o.name.startsWith('display_') && f.at[0] > o.min[0] - 0.2 && f.at[0] < o.max[0] + 0.2 && f.at[2] > o.min[2] - 0.2 && f.at[2] < o.max[2] + 0.2 && f.at[1] > o.min[1] && f.at[1] < o.max[1])!.id;
+  /** Встать в полутора метрах перед экраном лицом к нему и идти в него. */
+  function walkInto(h: Harness, f: FlatMark, seconds = 2.5): void {
+    const g = h.game;
+    g.teleport(f.at[0] + f.n[0] * 1.5, f.floor, f.at[2] + f.n[2] * 1.5);
+    h.tick();
+    g.aimAt(f.at[0], f.floor + 1.4, f.at[2]);
+    h.run(seconds, walk);
+  }
+
+  it('жёлтые комнаты: дальний экран — проём: вошёл в него — выбеливание и луг; экран при этом рассыпается, как всё, чего коснулись', () => {
+    const h = new Harness(yellow, { seed: 3, cfg: NOTHING });
+    const g = h.game;
+    h.run(0.3);
+    const door = screens(yellow).find(isDoor)!;
+    expect(door, 'на этаже нет проёма').toBeDefined();
+    const id = displayOf(yellow, door);
+    expect(yellow.objects!.find((o) => o.id === id)!.name).toBe(DOOR_NAME);
+    // Пока в него не вошли, он стоит, и никуда не уносит: просто смотреть на луг можно сколько угодно.
+    g.teleport(door.at[0] + door.n[0] * 1.5, door.floor, door.at[2] + door.n[2] * 1.5);
+    g.aimAt(door.at[0], door.floor + 1.4, door.at[2]);
+    h.run(3);
+    expect(jumps(h)).toHaveLength(0);
+    expect(g.illusions!.get(id)!.state).toBe('here');
+    walkInto(h, door, 1.2);
+    expect(jumps(h)[0]?.plan).toMatchObject({ cause: 'door', style: 'whiteout', to: 'meadow' });
+    expect(['going', 'gone']).toContain(g.illusions!.get(id)!.state);
+    expect(h.until(() => g.where === 'pocket' && g.transition === null, 6), 'на луг не попали').toBe(true);
+    expect(g.pocket!.kind).toBe('meadow');
+    // Один вход — один скачок: пока идёт переход, второй не начинается.
+    expect(jumps(h).filter((e) => e.phase === 'start')).toHaveLength(1);
+  });
+
+  it('жёлтые комнаты: с луга возвращает дверная рама — обратно к экрану, которого уже нет; после темноты он встаёт снова проёмом', () => {
+    const h = new Harness(yellow, { seed: 3, cfg: NOTHING });
+    const g = h.game;
+    h.run(0.3);
+    const door = screens(yellow).find(isDoor)!;
+    const id = displayOf(yellow, door);
+    expect(h.until(() => g.transition === null, 5)).toBe(true);
+    walkInto(h, door, 1.2);
+    expect(h.until(() => g.where === 'pocket' && g.transition === null, 6)).toBe(true);
+    stepInto(h);
+    expect(h.until(() => g.transition !== null, 3)).toBe(true);
+    expect(g.transition!.plan).toMatchObject({ cause: 'return', style: 'whiteout', dest: 'back' });
+    expect(h.until(() => g.where === 'main' && g.transition === null, 6)).toBe(true);
+    // Вернулись туда, откуда вошли: рядом с местом экрана, а самого экрана нет.
+    expect(Math.hypot(g.body.x - door.at[0], g.body.z - door.at[2])).toBeLessThan(4.5);
+    expect(g.illusions!.get(id)!.state).toBe('gone');
+    expect(jumps(h).filter((e) => e.phase === 'start' && e.plan.cause === 'door')).toHaveLength(1);
+    // Отошли, выключили и включили фонарь: экран собирается на прежнем месте и остаётся проёмом.
+    g.teleport(door.at[0] + door.n[0] * 3, door.floor, door.at[2] + door.n[2] * 3);
+    h.tick({ ...emptyInput(), light: true });
+    h.run(1);
+    h.tick({ ...emptyInput(), light: true });
+    h.run(2.5);
+    expect(g.illusions!.get(id)!.state).toBe('here');
+    expect(g.illusions!.get(id)!.obj.name).toBe(DOOR_NAME);
+    walkInto(h, door, 1.2);
+    expect(jumps(h).filter((e) => e.phase === 'start' && e.plan.cause === 'door')).toHaveLength(2);
+  });
+
+  it('жёлтые комнаты: вошёл в проём, пока шёл другой переход, — вход не теряется: проём ждёт конца перехода; ушёл из него раньше — не уносит', () => {
+    const door = screens(yellow).find(isDoor)!;
+    // Первые полторы секунды сессии идёт её собственный переход (begin): второй скачок начаться не может.
+    const h = new Harness(yellow, { seed: 3, cfg: NOTHING });
+    const g = h.game;
+    h.tick();
+    expect(g.transition?.plan.cause).toBe('begin');
+    walkInto(h, door, 0.8);
+    expect(g.transition?.plan.cause, 'переход начала ещё идёт').toBe('begin');
+    expect(['going', 'gone']).toContain(g.illusions!.get(displayOf(yellow, door))!.state);
+    expect(jumps(h).filter((e) => e.plan.cause === 'door')).toHaveLength(0);
+    // Стоим в проёме: переход кончился — уносит.
+    expect(h.until(() => jumps(h).some((e) => e.plan.cause === 'door'), 3), 'проём не дождался').toBe(true);
+    expect(h.until(() => g.where === 'pocket' && g.transition === null, 6)).toBe(true);
+    expect(g.pocket!.kind).toBe('meadow');
+
+    // То же, но из проёма вышли до конца перехода: не вошёл — не унесло.
+    const h2 = new Harness(yellow, { seed: 3, cfg: NOTHING });
+    const g2 = h2.game;
+    h2.tick();
+    walkInto(h2, door, 0.8);
+    expect(g2.transition?.plan.cause).toBe('begin');
+    g2.teleport(door.at[0] + door.n[0] * 4, door.floor, door.at[2] + door.n[2] * 4);
+    h2.run(4);
+    expect(jumps(h2).filter((e) => e.plan.cause === 'door')).toHaveLength(0);
+    expect(g2.where).toBe('main');
+  });
+
+  it('жёлтые комнаты: ближний экран — просто экран: вошёл в него — рассыпался, и никуда не унесло', () => {
+    const h = new Harness(yellow, { seed: 3, cfg: NOTHING });
+    const g = h.game;
+    h.run(0.3);
+    const plain = screens(yellow).find((f) => !isDoor(f))!;
+    expect(plain).toBeDefined();
+    const id = displayOf(yellow, plain);
+    walkInto(h, plain, 2);
+    expect(['going', 'gone']).toContain(g.illusions!.get(id)!.state);
+    expect(jumps(h)).toHaveLength(0);
+    expect(g.where).toBe('main');
+  });
+
+  it('офис: в экран входят так же, как в жёлтых комнатах, но проёма там нет — ни один экран никуда не уносит', () => {
+    const h = new Harness(office, { seed: 3, cfg: NOTHING });
+    const g = h.game;
+    h.run(0.3);
+    expect(screens(office).some(isDoor)).toBe(false);
+    const f = screens(office)[0]!;
+    walkInto(h, f, 2);
+    expect(['going', 'gone']).toContain(g.illusions!.get(displayOf(office, f))!.state);
+    expect(jumps(h)).toHaveLength(0);
+    expect(g.where).toBe('main');
+  });
+
+  it('свободная прогулка по жёлтым комнатам (без сессии): проём рассыпается, но скачка нет', () => {
+    const r = new FakeRenderer();
+    const g = new Game(r as unknown as GameRenderer, mulberry32(7));
+    g.loadLevel(yellow);
+    const door = screens(yellow).find(isDoor)!;
+    const id = displayOf(yellow, door);
+    g.teleport(door.at[0] + door.n[0] * 1.5, door.floor, door.at[2] + door.n[2] * 1.5);
+    g.step(STEP, emptyInput());
+    g.aimAt(door.at[0], door.floor + 1.4, door.at[2]);
+    let jumped = false;
+    for (let i = 0; i < Math.round(2 / STEP); i++) jumped = g.step(STEP, { ...walk }).dream.some((e) => e.type === 'jump') || jumped;
+    expect(['going', 'gone']).toContain(g.illusions!.get(id)!.state);
+    expect(jumped).toBe(false);
+    expect(g.where).toBe('main');
   });
 });
 

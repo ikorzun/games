@@ -17,7 +17,7 @@ import { asObject } from './objects';
 import { barrel, bunk, cables, cageLamp, crate, locker, pipeRun, rubble, signPlate, stool, table, valve, ventGrille } from './props';
 import { buildDisplay, DISPLAY_SIZE } from './props_screens';
 import type { DisplayShape } from './props_screens';
-import { SCREEN_IMAGES, screenFor } from './screens';
+import { DOOR_IMAGE, DOOR_NAME, SCREEN_IMAGES, screenFor } from './screens';
 import type { ScreenKind } from './screens';
 import { CELL, WALL_T } from './shell';
 import { Xf } from './props';
@@ -555,7 +555,8 @@ export function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; 
 export function screenAt(ctx: RoomCtx, xf: Xf, shape: DisplayShape, kinds: readonly ScreenKind[], salt: number, fixed?: number): void {
   // fixed — картинка задана заранее (жёлтые комнаты: два экрана на уровень показывают разное).
   const image = fixed ?? screenFor(Math.floor(hash01(Math.round(xf.ox * 7) + salt, Math.round(xf.oz * 11) + ctx.room.id, ctx.seed ^ 0x5c4e) * 1e6), kinds);
-  asObject(xf, `display_${shape}`, () => buildDisplay(xf, shape, image));
+  // Экран-проём — отдельное имя: игра по нему знает, что касание переносит, а не только растворяет.
+  asObject(xf, image === DOOR_IMAGE ? DOOR_NAME : `display_${shape}`, () => buildDisplay(xf, shape, image));
   const [w, h] = DISPLAY_SIZE[shape];
   // Метка — середина картинки: у прислонённого экрана она на полпути между стеной и его низом.
   const z = shape === 'lean' ? 0.26 : shape === 'wall' ? 0.07 : 0.03;

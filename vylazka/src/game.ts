@@ -38,6 +38,7 @@ import type { Fate, Look, Thing } from './systems/things';
 import { ColliderSet } from './world/colliders';
 import type { Aabb } from './world/colliders';
 import { FLAT_OK } from './world/furnish';
+import { DOOR_NAME } from './world/screens';
 import type { LevelObject } from './world/objects';
 import { ALL_PROPS } from './world/props_all';
 import type { WorldKind } from './gen/layout';
@@ -329,6 +330,8 @@ export class Game {
   /** Сколько вещей растворилось от касания и сколько вернулось за вылазку. */
   touchCount = 0;
   returnCount = 0;
+  /** Номер экрана-проёма, в который вошли и который ещё не унёс (ждёт конца идущего перехода); 0 — нет. */
+  private doorway = 0;
   private pocketGroup = 0;
   private pocketAge = 0;
   private pocketStay = 40;
@@ -467,6 +470,7 @@ export class Game {
     this.touched.clear();
     this.touchCount = 0;
     this.returnCount = 0;
+    this.doorway = 0;
     if (objs.length === 0) return;
     const sensed = new Set<number>();
     for (const bx of this.colliders.boxes) {
@@ -521,6 +525,9 @@ export class Game {
     const ill = this.illusions;
     if (!ill || !ill.touch(id)) return;
     const o = ill.get(id)!.obj;
+    // Экран-проём: на нём не картинка, а другое место. Вошёл в него — оказался на лугу; сам экран при
+    // этом рассыпается, как всё, чего коснулись, и после темноты встаёт снова.
+    if (o.name === DOOR_NAME) this.doorway = id;
     this.touchCount += 1;
     dream.push({ type: 'touch', name: o.name, what: 'gone', first: this.touchCount === 1 });
     for (const t of this.things.list) if (t.state === 'idle' && !t.still && this.restsOn(t.pos, o)) this.touchThing(t, dream);
@@ -666,6 +673,13 @@ export class Game {
         const t = this.things.list.find((x) => x.id === -id);
         if (t && !t.still) this.touchThing(t, dream);
       }
+    }
+    // В проём вошли: уносит на луг. Если в этот миг идёт другой переход, вход не теряется — проём ждёт
+    // его конца; но только пока игрок стоит в проёме: ушёл (или его унесло) — значит, не вошёл.
+    if (this.doorway > 0 && !this.transition) {
+      const o = this.illusions?.get(this.doorway)?.obj;
+      this.doorway = 0;
+      if (o && this.where === 'main' && this.session && !this.session.over && this.standsIn(o.min, o.max, 0.9)) this.beginJump({ cause: 'door', style: 'whiteout', to: 'meadow' }, dream);
     }
     // Мелкая вещь без преграды: коснулся — значит наступил или задел ногой.
     for (const t of this.things.list) {

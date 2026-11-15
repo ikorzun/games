@@ -706,6 +706,24 @@ async function walkThrough(page, cands, dist = 2.2) {
   return null;
 }
 
+/**
+ * Карточка от руки «please use only when necessary»: одна на уровень, рядом с началом; нарисована в
+ * атласе надписей (не пустой лист) и видна на стене — кадр с ней светлее, чем тот же кадр мимо неё.
+ */
+async function noteCheck(page, where) {
+  const notes = await vz(page, () => window.__vz.notes());
+  const ink = await vz(page, () => window.__vz.sheetContrast('card_use'));
+  const start = (await state(page)).pos;
+  const ok = await vz(page, () => window.__vz.gotoNote(0, 1.0));
+  const st = await vz(page, () => window.__vz.step(40));
+  const at = notes[0]?.at ?? [0, 0, 0];
+  const d = Math.hypot(st.pos[0] - at[0], st.pos[2] - at[2]);
+  check(`${where}: карточка от руки — одна на уровень, нарисована (не пустой лист), и к ней можно подойти`, notes.length === 1 && notes[0].id === 'card_use' && ink > 12 && ok === true && d < 1.6, `карточек ${notes.length}, пестрота ${ink.toFixed(1)}, до неё ${d.toFixed(2)} м`);
+  if (wantShots) await page.screenshot({ path: join(OUT, `note_${where === 'убежище' ? 'shelter' : where === 'офис' ? 'office' : 'yellow'}.png`) });
+  await vz(page, ([x, y, z]) => window.__vz.teleport(x, y, z), start);
+  await vz(page, () => window.__vz.step(6));
+}
+
 async function scenarioFlats(browser, baseUrl) {
   section('Плоские вещи: картонки, проекции, выставочные экраны (экраны растворяются от касания)');
 
@@ -725,6 +743,7 @@ async function scenarioFlats(browser, baseUrl) {
     const veil = flats.findIndex((f) => f.kind === 'veil');
     const stand = flats.findIndex((f) => f.kind === 'standee');
     check('в убежище есть и проекция, и картонка; экранов нет', veil >= 0 && stand >= 0 && !flats.some((f) => f.kind === 'screen'), JSON.stringify(flats.map((f) => `${f.kind}:${f.what}`)));
+    await noteCheck(page, 'убежище');
     const side = (st, f) => (st.pos[0] - f.at[0]) * f.n[0] + (st.pos[2] - f.at[2]) * f.n[2];
 
     // Проекция светится в темноте: с ней середина кадра светлая, без неё — чёрная.
@@ -783,15 +802,16 @@ async function scenarioFlats(browser, baseUrl) {
       for (let i = 0; i < Math.round(seconds * 10); i++) await vz(page, (inp) => window.__vz.step(6, inp ?? undefined), input ?? null);
       return vz(page, () => window.__vz.probe());
     };
-    await page.waitForFunction(() => window.__vz.screens().length >= 8, null, { timeout: 30000 }).catch(() => {});
+    await page.waitForFunction(() => window.__vz.screens().length >= 9, null, { timeout: 30000 }).catch(() => {});
     const loaded = await vz(page, () => window.__vz.screens());
-    check('картинки экранов загружены: все восемь', loaded.length === 8, loaded.join(', '));
+    check('картинки экранов загружены: все девять (восемь картинок и луг для проёма)', loaded.length === 9 && loaded.includes('meadow'), loaded.join(', '));
     await afterSec(3);
     const flats = await vz(page, () => window.__vz.flats());
     const lvl = await vz(page, () => window.__vz.level());
     const reception = lvl.rooms.find((r) => r.type === 'reception');
     const scr = flats.findIndex((f) => f.kind === 'screen' && f.room === reception?.id);
     check('в приёмной офиса стоит экран с природой; проекций в офисе нет', scr >= 0 && !flats.some((f) => f.kind === 'veil'), JSON.stringify(flats.map((f) => `${f.kind}:${f.what}`)));
+    await noteCheck(page, 'офис');
     await vz(page, (i) => window.__vz.gotoFlat(i, 1.9), scr);
     await vz(page, () => window.__vz.toggleLight());
     const shown = centre(await afterSec(3));
@@ -846,9 +866,50 @@ async function scenarioFlats(browser, baseUrl) {
     const flats = await vz(page, () => window.__vz.flats());
     const lvl = await vz(page, () => window.__vz.level());
     const screens = flats.filter((f) => f.kind === 'screen');
-    check('в жёлтых комнатах экранов ровно два, и картинки на них разные', screens.length === 2 && screens[0].what !== screens[1].what, JSON.stringify(screens.map((f) => f.what)));
+    check('в жёлтых комнатах экранов ровно два: на одном — картинка, на другом — луг самой игры (проём)', screens.length === 2 && screens.filter((f) => f.what === 'meadow').length === 1, JSON.stringify(screens.map((f) => f.what)));
     const veils = flats.filter((f) => f.kind === 'veil');
     check('проекции в жёлтых комнатах стоят в коридорах (не у ламп)', veils.length >= 1 && veils.every((f) => lvl.rooms.find((r) => r.id === f.room)?.type === 'corridor'), JSON.stringify(veils.map((f) => `${f.what}@${lvl.rooms.find((r) => r.id === f.room)?.type}`)));
+    await noteCheck(page, 'жёлтые комнаты');
+
+    // Проём: экран, на котором не картинка, а другое место. Смотреть на него можно сколько угодно;
+    // вошёл — выбеливание и луг; дверная рама луга возвращает туда, откуда вошёл.
+    const doorAt = flats.findIndex((f) => f.kind === 'screen' && f.what === 'meadow');
+    const doorObj = (await vz(page, () => window.__vz.objects())).find((o) => o.name === 'display_door');
+    await page.waitForFunction(() => window.__vz.screens().includes('meadow'), null, { timeout: 30000 }).catch(() => {});
+    await stepUntil(page, (s) => s.jump === null, 12, 40);
+    // Фонарь выключен: проём светится сам — середина кадра с картинкой светлая, без неё чёрная.
+    await vz(page, (i) => window.__vz.gotoFlat(i, 1.9), doorAt);
+    await vz(page, () => window.__vz.toggleLight());
+    let st = await vz(page, () => window.__vz.step(240));
+    const shown = centre(await vz(page, () => window.__vz.probe()));
+    await vz(page, () => window.__vz.slides(false));
+    await vz(page, () => window.__vz.step(6));
+    const hidden = centre(await vz(page, () => window.__vz.probe()));
+    await vz(page, () => window.__vz.slides(true));
+    await vz(page, () => window.__vz.toggleLight());
+    st = await vz(page, () => window.__vz.step(30));
+    check('перед проёмом можно стоять: экран на месте, в темноте светится лугом и никуда не уносит', st.where === 'main' && st.jump === null && (await objOf(page, doorObj?.id))?.state === 'here' && shown > hidden + 12, `${st.where}, с картинкой ${shown.toFixed(1)}, без неё ${hidden.toFixed(1)}`);
+    if (wantShots) {
+      await vz(page, () => window.__vz.step(1));
+      await page.screenshot({ path: join(OUT, 'flat_door.png') });
+    }
+    const from = st.pos;
+    await vz(page, (i) => window.__vz.gotoFlat(i, 1.4), doorAt);
+    await vz(page, () => window.__vz.step(6));
+    let cause = null;
+    for (let i = 0; i < 40 && !(st.where === 'pocket' && st.jump === null); i++) {
+      st = await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+      if (st.jump && cause === null) cause = `${st.jump.cause}/${st.jump.style}/${st.jump.to}`;
+    }
+    st = await vz(page, () => window.__vz.step(60));
+    const meadow = await vz(page, () => window.__vz.probe());
+    check('вошёл в проём — выбеливание и луг: игрок на лугу, картинка есть и не чёрная', st.where === 'pocket' && st.pocket === 'meadow' && cause === 'door/whiteout/meadow' && frameMean(meadow) > 20, `${st.where}/${st.pocket}, скачок ${cause}, среднее ${frameMean(meadow).toFixed(1)}`);
+    check('экран проёма при этом рассыпался, как всё, чего коснулись', ['going', 'gone'].includes((await objOf(page, doorObj?.id))?.state), (await objOf(page, doorObj?.id))?.state);
+    if (wantShots) await page.screenshot({ path: join(OUT, 'flat_door_meadow.png') });
+    // Обратно — через дверную раму луга.
+    await vz(page, () => window.__vz.gotoPocket('exit', 1));
+    for (let i = 0; i < 60 && !(st.where === 'main' && st.jump === null); i++) st = await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+    check('дверная рама луга возвращает к проёму: игрок снова в жёлтых комнатах, рядом с местом экрана', st.where === 'main' && Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]) < 6, `${st.where}, от места экрана ${Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]).toFixed(1)} м`);
     check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
     await context.close();
   }
