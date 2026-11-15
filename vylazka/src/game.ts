@@ -35,6 +35,8 @@ import { decayAt, keepsClutter, startForm, WEAR } from './systems/decay';
 import type { Decay } from './systems/decay';
 import { DEFAULT_ILLUSIONS, FORM_GONE, FORM_LACE, FORM_REAL, Illusions, worse } from './systems/illusions';
 import { Flow } from './systems/flow';
+import { Pressure } from './systems/pressure';
+import type { PressureKind, PressureRoom } from './systems/pressure';
 import { Spores } from './systems/spores';
 import type { Comeback, ComebackOptions, Form, Mount } from './systems/illusions';
 import { looksAt, Things } from './systems/things';
@@ -44,9 +46,11 @@ import type { Aabb } from './world/colliders';
 import { DOOR_NAME } from './world/screens';
 import type { LevelObject } from './world/objects';
 import { ALL_PROPS } from './world/props_all';
+import { CEIL_H } from './gen/layout';
 import type { WorldKind } from './gen/layout';
 import type { BuiltLevel } from './world/level';
-import { STAIR_RISE, STAIR_RUN, STAIR_STEPS } from './world/level_build';
+import { cellToWorld, STAIR_RISE, STAIR_RUN, STAIR_STEPS, tierFloor } from './world/level_build';
+import { CELL } from './world/shell';
 import { buildPocket, ENV_BUNKER, WORLD_ENV } from './world/pockets';
 import type { Env, ModelCell, PocketContext, PocketKind, PocketSpace } from './world/pockets';
 import { formMesh } from './world/forms';
@@ -96,6 +100,11 @@ export type DreamEvent =
    * воспоминание; remind — там же напомнил себе, что ищет; replay — перечитал вспомненное.
    */
   | { type: 'pocket'; kind: PocketKind; what: 'enter' | 'map' | 'next' | 'remind' | 'replay'; memory?: string; room?: string; tier?: number }
+  /**
+   * Давление помимо Осыпи (systems/pressure.ts): start — событие началось (пол пошёл сеткой, потолок
+   * двинулся); fall — пол ушёл из-под ног; woke — не успел и проснулся в начале.
+   */
+  | { type: 'pressure'; kind: PressureKind; what: 'start' | 'fall' | 'woke'; at: Vec3 }
   /** Сессия кончилась, игрок в лимбо: пора готовить следующую (queueSession). */
   | { type: 'limbo' }
   /** Началась новая сессия. */
@@ -206,6 +215,12 @@ const isFlower = (name: string): boolean => name.startsWith('paper_flower');
 const FLOWER = { near: 3.4, bloom: 1.5, hold: 0.9 } as const;
 
 /** Зал ожидания: сколько дневного света в помещениях каждого рода (зал — единица). */
+/**
+ * Какое давление бывает в каком мире (docs/vylazka/pressure.md, §2). В убежище — и провал, и сжатие;
+ * в офисе давит потолок; в жёлтых комнатах уходит пол; у зала ожидания давление своё — время и край перрона.
+ */
+const PRESSURE_KINDS: Record<WorldKind, readonly PressureKind[]> = { shelter: ['collapse', 'squeeze'], office: ['squeeze'], yellow: ['collapse'], station: [] };
+
 const STATION_LIGHT: Partial<Record<string, number>> = { concourse: 1, platform: 0.92, track: 0.92, vestibule: 0.7, buffet: 0.6, tickets: 0.55, lockers: 0.5, washroom: 0.5, storage: 0.36, corridor: 0.3 };
 
 const WORLD_THINGS: Record<WorldKind, { small: readonly string[]; big: readonly (readonly [string, PocketKind | null])[] }> = {
@@ -311,6 +326,19 @@ export class Game {
   cellLights: CellLights | null = null;
   /** Ход времени места: есть только в зале ожидания (systems/flow.ts). */
   flow: Flow | null = null;
+  /**
+   * Давление помимо Осыпи: пол рассыпается, потолок опускается (systems/pressure.ts,
+   * docs/vylazka/pressure.md, §2). Нет — в этом мире его нет.
+   */
+  pressure: Pressure | null = null;
+  /** Режиссёр давления сам начинает события. Выключают проверки, которым нужен ровный ход. */
+  pressureAuto = true;
+  /** Помещения, где событие возможно: прямоугольные, без своих странностей и опасностей. */
+  readonly pressureRooms = new Map<number, PressureRoom>();
+  /** Предметы помещения, в котором идёт провал: фронт забирает их по очереди. */
+  private pressureObjects: { id: number; d: number }[] = [];
+  /** Что случилось с давлением с прошлого шага: уходит в события сна (звук, подсказки). */
+  private readonly pressureEvents: { kind: PressureKind; what: 'start' | 'fall' | 'woke'; at: Vec3 }[] = [];
   /** Сила последнего разрыва снимка (зал ожидания) — для звука и отладки. */
   lastTear = 0;
   /** Сколько рассеянного света там, где стоит игрок, 0..1 (без света по клеткам — 1). */
@@ -455,6 +483,7 @@ export class Game {
       const stair = rank >= 2 && tiers >= 3 ? (level.stairs.find((st) => st.upperTier === tiers - 2) ?? null) : null;
       this.anomalies = new Anomalies(stair, { run: STAIR_RUN, rise: STAIR_RISE, steps: STAIR_STEPS }, level.variants, 2);
       this.assignRooms(dream.seed);
+      this.setupPressure(level);
       this.placeThings(dream.seed);
       // Место собирается вокруг игрока из пыли.
       this.transition = { plan: { cause: 'begin', style: 'dissolve', to: 'session' }, t: 0, out: 0, back: 1.6, switched: true };
@@ -908,6 +937,133 @@ export class Game {
   }
 
   /** Раздать помещениям особенности: строб, темноту, сетку, «тонкие места». */
+  /**
+   * Где возможны провал и сжатие: помещение-прямоугольник в две клетки и больше, с выходом, без своих
+   * особенностей (строб, темнота, «тонкое») и без опасностей среды; не то, где вылазка началась.
+   */
+  private setupPressure(level: BuiltLevel): void {
+    this.pressureRooms.clear();
+    this.pressureObjects = [];
+    this.pressure = null;
+    const layout = level.layout;
+    // Мир берём из уровня: поле this.world к этому мигу ещё от прошлого места.
+    if (!layout || PRESSURE_KINDS[level.world ?? 'shelter'].length === 0) return;
+    const skip: readonly string[] = ['corridor', 'stairwell', 'lift', 'entrance', 'airlock', 'collapsed'];
+    const gas = new Set(layout.hazards.gasRooms);
+    let startRoom = -1;
+    let best = Infinity;
+    for (const n of level.nav) {
+      const d = Math.hypot(n.x - level.spawn.pos[0], n.y - level.spawn.pos[1], n.z - level.spawn.pos[2]);
+      if (d < best) {
+        best = d;
+        startRoom = n.room;
+      }
+    }
+    const H = CELL / 2;
+    for (const r of layout.rooms) {
+      if (skip.includes(r.type) || r.cells.length < 2 || r.id === startRoom || gas.has(r.id) || this.roomFx.has(r.id)) continue;
+      const xs = r.cells.map((c) => c[0]);
+      const zs = r.cells.map((c) => c[1]);
+      const x0 = Math.min(...xs);
+      const x1 = Math.max(...xs);
+      const z0 = Math.min(...zs);
+      const z1 = Math.max(...zs);
+      if ((x1 - x0 + 1) * (z1 - z0 + 1) !== r.cells.length) continue;
+      const height = level.ceilings?.[r.id] ?? CEIL_H;
+      if (height > 3.2) continue;
+      const room: PressureRoom = { id: r.id, minX: cellToWorld(x0) - H, maxX: cellToWorld(x1) + H, minZ: cellToWorld(z0) - H, maxZ: cellToWorld(z1) + H, floorY: tierFloor(r.tier), height, exits: [] };
+      // Ямы, вода и завалы в помещении: там и так есть чего бояться.
+      if (level.zones.some((z) => z.maxX > room.minX && z.minX < room.maxX && z.maxZ > room.minZ && z.minZ < room.maxZ && Math.abs(z.maxY - room.floorY) < 3)) continue;
+      if (level.collapses.some((c) => c.center[0] > room.minX - 1 && c.center[0] < room.maxX + 1 && c.center[2] > room.minZ - 1 && c.center[2] < room.maxZ + 1 && Math.abs(c.center[1] - room.floorY) < 3)) continue;
+      const mine = new Set(r.cells.map((c) => `${c[0]},${c[1]}`));
+      const exits: [number, number][] = [];
+      for (const e of layout.edges) {
+        if (e.tier !== r.tier) continue;
+        const a = mine.has(`${e.cx},${e.cz}`);
+        const b = mine.has(`${e.cx + (e.dir === 0 ? 1 : 0)},${e.cz + (e.dir === 1 ? 1 : 0)}`);
+        if (a !== b) exits.push([cellToWorld(e.cx) + (e.dir === 0 ? H : 0), cellToWorld(e.cz) + (e.dir === 1 ? H : 0)]);
+      }
+      if (exits.length === 0) continue;
+      room.exits = exits;
+      this.pressureRooms.set(r.id, room);
+    }
+    this.pressure = new Pressure(layout.seed);
+  }
+
+  /** Годится ли для давления помещение, где сейчас стоит игрок. */
+  pressureHere(): boolean {
+    return this.pressureRooms.has(this.room);
+  }
+
+  /** Начать давление в помещении, где стоит игрок (отладка, проверки). false — помещение не годится. */
+  startPressure(kind: PressureKind): boolean {
+    const room = this.pressureRooms.get(this.room);
+    return !!this.pressure && !!room && this.beginPressure(kind, room);
+  }
+
+  private beginPressure(kind: PressureKind, room: PressureRoom): boolean {
+    const pr = this.pressure!;
+    if (!pr.start(kind, room, [this.body.x, this.body.z])) return false;
+    this.onPressureStart();
+    return true;
+  }
+
+  /** Событие началось: запомнить предметы помещения — фронт провала забирает их по очереди, от своего угла. */
+  private onPressureStart(): void {
+    const a = this.pressure?.active;
+    this.pressureObjects = [];
+    if (!a) return;
+    if (a.kind === 'collapse') {
+      const r = a.room;
+      for (const i of this.illusions?.list ?? []) {
+        const o = i.obj;
+        const x = (o.min[0] + o.max[0]) / 2;
+        const z = (o.min[2] + o.max[2]) / 2;
+        // Только то, что стоит на этом полу: висящее на стенах и потолке остаётся.
+        if (x < r.minX || x > r.maxX || z < r.minZ || z > r.maxZ || Math.abs(o.min[1] - r.floorY) > 0.3) continue;
+        this.pressureObjects.push({ id: o.id, d: Math.hypot(x - a.origin[0], z - a.origin[1]) });
+      }
+      this.pressureObjects.sort((p, q) => p.d - q.d);
+    }
+    this.pressureEvents.push({ kind: a.kind, what: 'start', at: [(a.room.minX + a.room.maxX) / 2, a.room.floorY + 1, (a.room.minZ + a.room.maxZ) / 2] });
+  }
+
+  /** Шаг давления: режиссёр, фронт, пробуждение. */
+  private stepPressure(dt: number, quiet: boolean, dream: DreamEvent[]): void {
+    const pr = this.pressure;
+    const s = this.session;
+    if (!pr || this.where !== 'main' || !s || s.over) return;
+    const b = this.body;
+    const lap = 1 + Math.floor(this.wearBase / WEAR.lap + 1e-6);
+    const all = PRESSURE_KINDS[this.world];
+    // Первые два круга — не больше одного события за сессию и только провал (он учит знаку красной сетки).
+    const early = lap <= 2;
+    const kinds = !this.pressureAuto ? [] : early && all.includes('collapse') ? (['collapse'] as const) : all;
+    const was = pr.active;
+    const out = pr.update(dt, { time: this.time, pos: [b.x, b.z], room: this.transition ? null : (this.pressureRooms.get(this.room) ?? null), quiet: quiet || this.calm || this.swarmNear > 0.25, limit: early ? 1 : 3, kinds });
+    if (!was && pr.active) this.onPressureStart();
+    const a = pr.active;
+    if (a && a.kind === 'collapse' && a.radius > 0) {
+      // Фронт дошёл до предмета — пол под ним ушёл, и предмет рассыпается (как от касания, но место не стирается).
+      while (this.pressureObjects.length > 0 && this.pressureObjects[0]!.d < a.radius) {
+        const id = this.pressureObjects.shift()!.id;
+        if (this.illusions?.touch(id)) dream.push({ type: 'touch', name: this.illusions.get(id)!.obj.name, what: 'gone' });
+      }
+    }
+    if (pr.falling === 0) this.pressureEvents.push({ kind: 'collapse', what: 'fall', at: [b.x, b.y, b.z] });
+    // Кадр дрожит тем сильнее, чем ближе конец.
+    if (a || pr.falling >= 0) this.quake = Math.max(this.quake, 0.25 * pr.strain);
+    if (out && this.jumps && !this.transition) {
+      // Проснулся: снова там, где начал; искомая вещь остаётся на месте (как после встречи с Осыпью).
+      this.wearGain += WEAR.caught;
+      this.glitch = 1;
+      this.pressureEvents.push({ kind: out === 'fell' ? 'collapse' : 'squeeze', what: 'woke', at: [b.x, b.y, b.z] });
+      this.beginJump(this.jumps.forced('caught'), dream);
+    }
+    for (const e of this.pressureEvents) dream.push({ type: 'pressure', ...e });
+    this.pressureEvents.length = 0;
+  }
+
   private assignRooms(seed: number): void {
     const rooms = this.level?.layout?.rooms ?? [];
     const rng = mulberry32(hash2(seed, 0xf0, 0x0d));
@@ -1614,6 +1770,9 @@ export class Game {
     if (s && !s.over && !this.calm && !quiet) this.stepFear(wdt, input, level, fear, dream);
     else this.swarmNear = this.calm ? 0 : approach(this.swarmNear, 0, 0.5, dt);
 
+    // Давление помимо Осыпи: пол рассыпается, потолок опускается; не успел — проснулся в начале.
+    this.stepPressure(wdt, quiet, dream);
+
     // Зал ожидания: за краем перрона ничего нет. Шагнул — проснулся в начале; искомая вещь остаётся на
     // месте. (Зоны падения сессии здесь не годятся: над путями нет узлов графа, и она их не проверяет.)
     if (fl && b.y < -0.8 && this.jumps && s && !s.over && !this.transition) {
@@ -1831,8 +1990,10 @@ export class Game {
     const y = lerp(this.prevY, b.y, alpha);
     const z = lerp(this.prevZ, b.z, alpha);
     const dead = this.light.state === 'dead';
+    // Под опускающимся потолком камера пригибается сама; в падении летит вниз.
+    const sink = this.where === 'main' && this.pressure ? this.pressure.camDrop([x, z]) : 0;
     const rig = this.rig.update(
-      { x, y, z, aimYaw: this.aimYaw, aimPitch: this.aimPitch, speed: Math.hypot(b.vx, b.vz), onGround: b.onGround, panic: this.panic, shake: Math.max(dead ? this.shake.level : this.shake.level * 0.35, this.quake) },
+      { x, y: y - sink, z, aimYaw: this.aimYaw, aimPitch: this.aimPitch, speed: Math.hypot(b.vx, b.vz), onGround: b.onGround, panic: this.panic, shake: Math.max(dead ? this.shake.level : this.shake.level * 0.35, this.quake) },
       dt,
     );
     this.lastRig = rig;
@@ -2017,6 +2178,15 @@ export class Game {
     // в просторном месте на ходу кадр растянут по краям, в тесном переходе — сжат.
     const rattle = fl ? fl.rattle() : 0;
     const tight = fl !== null && this.room >= 0 && this.level?.layout?.rooms[this.room]?.type === 'corridor';
+    // Искажение кадра (слова владельца: «замедление и искажение пространства… только там, где это будет
+    // уместно»). В зале ожидания — от хода времени. Под давлением кадр сжимается вместе с потолком и
+    // растягивается в падении. В миг пробуждения, от чего бы оно ни случилось, — короткий рывок.
+    let lens = fl ? 1 + (fl.fov(tight) - 1) * 6 : 1;
+    const pr = this.where === 'main' ? this.pressure : null;
+    if (pr && pr.falling >= 0) lens += 3.5 * Math.min(1, pr.falling / pr.cfg.fall);
+    else if (pr && pr.active?.kind === 'squeeze' && sink > 0) lens -= 2.4 * Math.min(1, sink / 0.7);
+    const wake = this.transition;
+    if (wake && wake.plan.cause === 'caught' && !wake.switched) lens += 2.2 * (1 - Math.min(1, wake.t / Math.max(1e-3, wake.out)));
     const view: FrameView = {
       camPos: rig.camPos,
       camYaw: rig.camYaw + rattle * Math.sin(this.time * 71.3) * Math.sin(this.time * 13.7 + 1.1),
@@ -2048,7 +2218,8 @@ export class Game {
       keyDir: sun ? sun.dir : (this.env.key?.dir ?? [0, 1, 0]),
       keyColor: sun ? sun.color : (this.env.key?.color ?? [0, 0, 0]),
       keyCells: sun ? Math.max(0.05, sun.ambient) : 0,
-      lens: fl ? 1 + (fl.fov(tight) - 1) * 6 : 1,
+      press: this.where === 'main' ? (this.pressure?.view() ?? null) : null,
+      lens,
       scanRange: fl ? fl.scan() : (this.env.scan ?? [4, 15]),
       // Тени прямого света — в квадрате вокруг игрока, сдвинутом вперёд по взгляду: позади они не нужны.
       keyBox:

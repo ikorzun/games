@@ -146,6 +146,11 @@ export class GameAudio {
       else if (e.type === 'begin') a.play((game.world ?? 'shelter') === 'shelter' ? 'hatch' : 'lift', { volume: 0.8 });
       // Всё иллюзорно: тронутая вещь рассыпается в пыль, после темноты собирается из неё.
       else if (e.type === 'touch') a.play(e.what === 'gone' ? 'dissolve' : 'assemble', { rate: this.jitter(0.1), volume: e.what === 'gone' ? 1 : 0.7 });
+      // Давление: пол пошёл — гул обвала издалека; потолок двинулся — тот же гул ниже и глуше; падение.
+      else if (e.type === 'pressure') {
+        if (e.what === 'start') a.play('collapse', { pos: e.at, rate: e.kind === 'squeeze' ? 0.55 : 0.85, volume: e.kind === 'squeeze' ? 0.8 : 0.6 });
+        else if (e.what === 'fall') a.play('fall');
+      }
     }
 
     const swarmPos = game.swarm?.pos;

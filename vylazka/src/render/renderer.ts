@@ -18,6 +18,7 @@ import { newGrainLife, objectTriangles, sowGrains, steerGrains, stepGrains } fro
 import type { GrainLife, Grains } from './grains';
 import { smoothstep } from '../core/math';
 import { ECHO_MAX, ECHO_STRIDE } from '../systems/echo';
+import type { PressureView } from '../systems/pressure';
 import { SplatClouds } from './splats';
 
 export type Quality = 'low' | 'med' | 'high';
@@ -98,6 +99,8 @@ export interface FrameView {
    * перроне, но не в комнатах под потолком): общий множитель рассеянного света клеток. 0 — не действует.
    */
   keyCells?: number;
+  /** Давление: помещение, где рассыпается пол или провисает потолок (systems/pressure.ts); нет — ничего. */
+  press?: PressureView | null;
   /** Множитель «бочки» объектива: больше единицы — кадр растянут по краям, меньше — сжат. */
   lens?: number;
   /** 0..1: мир рассыпается в пыль. */
@@ -497,6 +500,9 @@ export class GameRenderer {
         uSlide: { value: new THREE.Vector4(SLIDE.washFrom, SLIDE.washTo, SLIDE.gain, 0) },
         uErase: { value: new THREE.Vector4(0, 0, 0, 0) },
         uKeyCells: { value: 0 },
+        uPressBox: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uPress: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uPressY: { value: new THREE.Vector3(0, 0, 0) },
         uMatA: { value: matA },
         uMatB: { value: matB },
         uMatBase: { value: Array.from({ length: MAT_SLOTS }, (_, i) => new THREE.Vector3(...(atlas.base[i] ?? [0.5, 0.5, 0.5]))) },
@@ -1474,6 +1480,15 @@ export class GameRenderer {
     wu.uScanFade!.value = v.scanFade;
     (wu.uScanRange!.value as THREE.Vector2).set(v.scanRange[0], v.scanRange[1]);
     wu.uKeyCells!.value = v.keyCells ?? 0;
+    const pv = v.press ?? null;
+    if (pv) {
+      (wu.uPressBox!.value as THREE.Vector4).set(pv.box[0], pv.box[1], pv.box[2], pv.box[3]);
+      (wu.uPress!.value as THREE.Vector4).set(pv.origin[0], pv.origin[1], pv.radius, pv.grid);
+      (wu.uPressY!.value as THREE.Vector3).set(pv.floorY, pv.ceilY, pv.drop);
+    } else {
+      (wu.uPress!.value as THREE.Vector4).set(0, 0, 0, 0);
+      (wu.uPressY!.value as THREE.Vector3).set(0, 0, 0);
+    }
 
     // Внимание скана догоняет луч с запаздыванием: точки собираются туда, куда оно уже дошло. После
     // скачка в другое место (или первой картинки) оно переносится сразу.

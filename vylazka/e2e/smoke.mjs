@@ -589,6 +589,25 @@ async function scenarioWorlds(browser, baseUrl) {
     const officeIds = ['terminal', 'deskphone', 'report', 'cactus', 'wallclock', 'desklamp', 'chair', 'cooler'];
     check('воспоминание в офисе — офисное, со своей строкой', !!active && officeIds.includes(active.id) && (await page.textContent('.vz-hud__flash')) === RU[`mem.${active.id}.flash`], JSON.stringify(active));
     check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0);
+    // Давление: потолок помещения опускается, камера пригибается сама; вышел — отпускает.
+    {
+      const info = await vz(page, () => window.__vz.pressure());
+      const lv = await vz(page, () => window.__vz.level());
+      const room = info.rooms.map((id) => lv.rooms.find((r) => r.id === id)).filter(Boolean).sort((a, b) => b.cells - a.cells)[0];
+      await vz(page, (id) => window.__vz.gotoRoom(id, 0), room.id);
+      await vz(page, () => window.__vz.step(6));
+      const started = await vz(page, () => window.__vz.pressure('squeeze'));
+      // Оглядываемся, чтобы датчики офиса не гасили свет.
+      for (let i = 0; i < 70; i++) await vz(page, (d) => window.__vz.step(6, { lookYaw: d }), i % 2 ? 0.03 : -0.03);
+      const mid = await vz(page, () => window.__vz.pressure());
+      check('офис: потолок помещения опускается, камера пригибается под ним', started.ok === true && mid.active?.kind === 'squeeze' && mid.active.ceil < 1.9 && mid.camDrop > 0.02, JSON.stringify({ ok: started.ok, ceil: mid.active?.ceil, camDrop: mid.camDrop }));
+      const out = lv.rooms.find((r) => r.type === 'corridor');
+      await vz(page, (id) => window.__vz.gotoRoom(id, 0), out.id);
+      for (let i = 0; i < 80; i++) await vz(page, (d) => window.__vz.step(6, { lookYaw: d }), i % 2 ? 0.03 : -0.03);
+      const after = await vz(page, () => window.__vz.pressure());
+      const st4 = await state(page);
+      check('вышел — потолок отпустил: события нет, камера на своей высоте, никто не проснулся', after.active === null && after.camDrop === 0 && st4.jump === null, JSON.stringify({ active: after.active, camDrop: after.camDrop, jump: st4.jump }));
+    }
     check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
     if (wantShots) {
       mkdirSync(OUT, { recursive: true });
@@ -640,6 +659,30 @@ async function scenarioWorlds(browser, baseUrl) {
     const grid = await vz(page, () => window.__vz.probe());
     const color = await vz(page, () => window.__vz.probeColor());
     check('с фонарём стена в луче светлая и жёлтая: красного и зелёного заметно больше синего', mean(grid) > dark0 + 10 && color.r > color.b * 1.3 && color.g > color.b * 1.15, `среднее ${dark0.toFixed(1)} → ${mean(grid).toFixed(1)}, цвет ${JSON.stringify(color)}, стена в ${best.d.toFixed(1)} м`);
+    // Давление: пол зала рассыпается; кто остался стоять — падает и просыпается там, где начал.
+    {
+      const info = await vz(page, () => window.__vz.pressure());
+      const hall = info.rooms.map((id) => lvl.rooms.find((r) => r.id === id)).filter(Boolean).sort((a, b) => b.cells - a.cells)[0];
+      await vz(page, (id) => window.__vz.gotoRoom(id, 0), hall.id);
+      await vz(page, () => window.__vz.step(6));
+      const started = await vz(page, () => window.__vz.pressure('collapse'));
+      let fell = false;
+      let woke = null;
+      for (let i = 0; i < 400 && !woke; i++) {
+        const r = await vz(page, () => {
+          const s2 = window.__vz.step(6);
+          const p = window.__vz.pressure();
+          return { falling: p.falling, radius: p.active?.radius ?? 0, jump: s2.jump };
+        });
+        if (r.falling >= 0) fell = true;
+        if (r.jump) woke = r.jump;
+      }
+      check('жёлтые комнаты: пол зала рассыпался под стоящим — упал и проснулся', started.ok === true && started.active?.phase === 'warn' && fell && woke?.cause === 'caught' && woke?.dest === 'start', JSON.stringify({ ok: started.ok, fell, woke }));
+      for (let i = 0; i < 80; i++) await vz(page, () => window.__vz.step(6));
+      const end = await vz(page, () => window.__vz.pressure());
+      const st3 = await state(page);
+      check('после пробуждения — снова в начале, пол на месте', end.active === null && end.falling < 0 && Math.hypot(st3.pos[0] - lvl.spawn[0], st3.pos[2] - lvl.spawn[2]) < 1, JSON.stringify({ active: end.active, pos: st3.pos.map((v) => +v.toFixed(1)), spawn: lvl.spawn.map((v) => +v.toFixed(1)) }));
+    }
     check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
     if (wantShots) await saveShot(page, 'world_yellow.png');
     await context.close();

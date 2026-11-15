@@ -128,4 +128,6 @@ export interface BuiltLevel {
   world?: WorldKind;
   /** Стёртость места 0..1, с которой уровень собран (systems/decay.ts). Нет поля — место помнится целиком. */
   wear?: number;
+  /** Высота потолка каждого помещения над его полом, м (номер помещения → высота). */
+  ceilings?: Record<number, number>;
 }

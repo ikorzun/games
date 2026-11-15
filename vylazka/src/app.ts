@@ -267,6 +267,9 @@ export class App {
       ...(this.testLevel ? { meanFailInterval: 30, graceAfterRevive: 10 } : {}),
     });
     this.game.calmFlash = this.profile.calm;
+    // Режиссёр давления (провал, сжатие) сам событий не начинает там, где нужен ровный ход: адрес
+    // с fail=0 — проверки. press=1 включает его и там, press=0 выключает везде.
+    this.game.pressureAuto = (p.get('press') ?? (p.get('fail') === '0' ? '0' : '1')) !== '0';
     this.game.archive = [...this.profile.archive];
     this.motion = new MotionSensor(this.game.shake);
     this.desktop = new DesktopInput(this.canvas, this.game.shake, this.lifecycle);

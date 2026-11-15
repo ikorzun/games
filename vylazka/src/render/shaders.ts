@@ -106,6 +106,8 @@ attribute vec4 aColor;
 attribute float aMat;
 uniform mat4 uShadowMatrix;
 uniform float uTierDrop;
+uniform vec4 uPressBox;   // давление: прямоугольник помещения (minX, minZ, maxX, maxZ)
+uniform vec3 uPressY;     // x — пол помещения, y — его потолок, z — на сколько метров потолок провис
 varying vec3 vWorld;
 varying float vDis;
 varying float vObj;
@@ -130,6 +132,12 @@ void main() {
 #endif
   vec4 wp = modelMatrix * (im * vec4(position, 1.0));
   vec3 wn = normalize(mat3(modelMatrix) * (mat3(im) * normal));
+  // Давление: потолок помещения провисает, как брюхо (systems/pressure.ts). У стен он остаётся на месте —
+  // двери не закрывает; двигаются только вершины самого потолка, не предметы под ним.
+  if (uPressY.z > 0.0 && aObj < 0.5 && uThing.z < 0.5 && wn.y < -0.5 && abs(wp.y - uPressY.y) < 0.3) {
+    float pd = min(min(wp.x - uPressBox.x, uPressBox.z - wp.x), min(wp.z - uPressBox.y, uPressBox.w - wp.z));
+    if (pd > 0.0) wp.y -= uPressY.z * smoothstep(0.0, 0.9, pd);
+  }
   vWorld = wp.xyz;
   vec4 os = objState();
   float od = os.x;
@@ -210,6 +218,9 @@ varying float vLace;
 varying float vArch;
 varying vec2 vTone;       // x — предмет выцвел, y — светится своим цветом
 uniform float uKeyCells;  // > 0 — прямой свет есть только там, где клетка светлая: множитель рассеянного света клеток
+uniform vec4 uPressBox;   // давление: прямоугольник помещения (minX, minZ, maxX, maxZ)
+uniform vec4 uPress;      // xy — откуда идёт провал, z — радиус рассыпавшегося пола, w — яркость красной сетки
+uniform vec3 uPressY;     // x — пол помещения, y — его потолок, z — на сколько метров потолок провис
 uniform vec4 uErase;      // стирание места (systems/decay.ts): x — потолок, y — стены, z — пол; 0 — цело, 1 — стёрто
 
 ${BEAM_GLSL}
@@ -310,6 +321,21 @@ void main() {
     float edge = cellHash(vWorld * 11.0) - (vDis * 1.2 - 0.1);
     if (edge < 0.0) discard;
     burn = smoothstep(0.14, 0.0, edge) * min(1.0, vDis * 4.0);
+  }
+  // Давление (systems/pressure.ts): по полу помещения бежит красная сетка, потом он рассыпается кругом
+  // от дальнего угла; под опускающимся потолком сетка идёт по потолку. Сетка светится сама.
+  float press = 0.0;
+  if ((uPress.z > 0.0 || uPress.w > 0.0) && vArch > 0.5 && vSurf.x < 0.5 && vWorld.x > uPressBox.x && vWorld.x < uPressBox.z && vWorld.z > uPressBox.y && vWorld.z < uPressBox.w) {
+    vec2 gq = abs(fract(vWorld.xz * 2.0) - 0.5);
+    float line = smoothstep(0.455, 0.49, max(gq.x, gq.y));
+    if (vSurf.y > 0.5 && uPressY.z <= 0.0 && abs(vWorld.y - uPressY.x) < 0.2) {
+      // За фронтом пола нет; кромка ломаная, перед ней сетка горит ярче.
+      float dO = distance(vWorld.xz, uPress.xy) + (cellHash(vec3(vWorld.x * 5.0, 1.0, vWorld.z * 5.0)) - 0.5) * 0.5;
+      if (uPress.z > 0.0 && dO < uPress.z) discard;
+      float edge = uPress.z > 0.0 ? 1.0 - smoothstep(0.0, 1.1, dO - uPress.z) : 0.0;
+      press = max(line * max(uPress.w, edge), edge * edge * 0.45);
+    } else if (vSurf.y < -0.5 && uPressY.z > 0.0 && vWorld.y > uPressY.x + 0.5 && vWorld.y < uPressY.y + 0.3) press = line * uPress.w;
+    burn = max(burn, press);
   }
   // Распад вещи: поверхность распадается на зёрна по 2 см. У каждого зерна свой срок: пока он не
   // пришёл, зерно закрывает свою клетку целиком; потом сжимается в точку и пропадает.
@@ -451,7 +477,8 @@ void main() {
   float eAmb = dot(amb, vec3(0.3333));
   // Светильник светится, только пока свет в его клетке включён.
   float glowK = mi == 37 ? cell : 1.0;
-  float eGlow = ma.y * maxc * glowK;
+  // Сетка давления светится сама: её видно и там, куда фонарь не достаёт.
+  float eGlow = max(ma.y * maxc * glowK, press * 0.6);
   float distV = length(vPosV);
   // Настоящий сканер хуже видит то, от чего луч не возвращается: поверхность, по которой он скользит,
   // стекло (луч уходит насквозь), чёрную резину и бакелит (луч гаснет), мокрый пол (луч отражается прочь).

@@ -46,6 +46,11 @@ export interface VzDebugApi {
   /** Стирание места: стёртость сейчас, с какой начат круг и все кривые (systems/decay.ts). */
   wear(): { wear: number; base: number; decay: Decay; forms: Record<string, number> };
   /** Ход времени в зале ожидания (systems/flow.ts); null — в этом мире время обычное. */
+  /**
+   * Давление помимо Осыпи (systems/pressure.ts): состояние; с видом — начать событие в помещении, где
+   * стоит игрок (ok — началось).
+   */
+  pressure(kind?: 'collapse' | 'squeeze'): { ok: boolean; rooms: number[]; here: boolean; active: { kind: string; phase: string; room: number; radius: number; ceil: number; origin: number[]; exits: number[][] } | null; falling: number; count: number; camDrop: number } | null;
   flow(t?: number): { f: number; t: number; viewT: number; frozen: boolean; drift: number; strain: number; day: number; night: boolean; trains: number; toTrain: number; tear: number } | null;
   start(): void;
   pause(on: boolean): void;
@@ -217,6 +222,22 @@ export function installDebug(app: App): void {
     cloudUsage: () => game().renderer.cloudUsage(),
     dust: () => game().renderer.dustInfo(),
     spores: () => (game().spores?.sites ?? []).filter((q) => q.grow > 0.03).map((q) => ({ pos: [...q.pos], kind: q.kind, grow: +q.grow.toFixed(3) })),
+    pressure: (kind) => {
+      const g = game();
+      const p = g.pressure;
+      if (!p) return null;
+      const ok = kind ? g.startPressure(kind) : false;
+      const a = p.active;
+      return {
+        ok,
+        rooms: [...g.pressureRooms.keys()],
+        here: g.pressureHere(),
+        active: a ? { kind: a.kind, phase: a.phase, room: a.room.id, radius: a.radius, ceil: a.ceil, origin: [...a.origin], exits: a.room.exits.map((e) => [...e]) } : null,
+        falling: p.falling,
+        count: p.count,
+        camDrop: p.camDrop([g.body.x, g.body.z]),
+      };
+    },
     flow: (t) => {
       const f = game().flow;
       // С числом — перевести часы места (и снимок) на это время: посмотреть вечер, не дожидаясь его.

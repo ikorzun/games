@@ -721,6 +721,7 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
   }));
   return {
     wear: decay.wear,
+    ceilings: Object.fromEntries(layout.rooms.map((r) => [r.id, ceilOf(r)])),
     chunks: out,
     stairs,
     colliders: col,

@@ -8,6 +8,8 @@ import { emptyInput } from '../src/player/input';
 import type { InputFrame } from '../src/player/input';
 import type { FrameView, GameRenderer, ThingView } from '../src/render/renderer';
 import { DEFAULT_CELL_LIGHTS } from '../src/systems/cell_lights';
+import { nearestExit } from '../src/systems/pressure';
+import type { PressureRoom } from '../src/systems/pressure';
 import { DEFAULT_SESSION, OFFICE_MEMORIES, YELLOW_MEMORIES } from '../src/systems/session';
 import type { SessionEvent } from '../src/systems/session';
 import { DEFAULT_THINGS, looksAt } from '../src/systems/things';
@@ -2141,5 +2143,173 @@ describe('зал ожидания: время идёт, только пока и
     expect(g.transition?.plan.cause).toBe('caught');
     expect(f.t).toBeLessThan(5);
     expect(f.night).toBe(false);
+  });
+});
+
+describe('давление помимо Осыпи: пол рассыпается, потолок опускается', () => {
+  const forward: InputFrame = { ...emptyInput(), moveZ: 1 };
+  const yawTo = (fx: number, fz: number, tx: number, tz: number): number => Math.atan2(-(tx - fx), -(tz - fz));
+
+  /**
+   * Мир и игрок в помещении, годном для давления: в самой дальней от выходов точке или (near) метрах
+   * в трёх-четырёх от выхода.
+   */
+  const inRoom = (world: 'shelter' | 'office' | 'yellow', near = false, seed = 7): { h: Harness; room: PressureRoom; exit: readonly [number, number] } => {
+    const level = buildLevel(generateLayout(seed, 2, world));
+    const h = new Harness(level, { seed });
+    h.until(() => h.game.transition === null, 8);
+    const g = h.game;
+    let best: { room: PressureRoom; n: { x: number; y: number; z: number }; score: number } | null = null;
+    for (const room of g.pressureRooms.values()) {
+      for (const n of level.nav) {
+        if (n.room !== room.id) continue;
+        const d = nearestExit(room, n.x, n.z).dist;
+        if (d < 2.6) continue;
+        const score = near ? -Math.abs(d - 3.6) : d;
+        if (!best || score > best.score) best = { room, n, score };
+      }
+    }
+    expect(best, `в мире ${world} нет помещений для давления`).not.toBeNull();
+    const { room, n } = best!;
+    const exit = nearestExit(room, n.x, n.z).exit!;
+    g.teleport(n.x, n.y, n.z, yawTo(n.x, n.z, exit[0], exit[1]), 0);
+    h.tick();
+    return { h, room, exit };
+  };
+
+  /** Идти к выходу и дальше за порог, пока не окажешься в метре с лишним снаружи; не дольше 14 секунд. */
+  const walkOut = (h: Harness, room: PressureRoom, exit: readonly [number, number]): void => {
+    const g = h.game;
+    const out: [number, number] = [exit[0], exit[1]];
+    if (Math.abs(exit[0] - room.minX) < 0.01) out[0] -= 2.2;
+    else if (Math.abs(exit[0] - room.maxX) < 0.01) out[0] += 2.2;
+    else if (Math.abs(exit[1] - room.minZ) < 0.01) out[1] -= 2.2;
+    else out[1] += 2.2;
+    let leg = 0;
+    for (let i = 0; i < 60 * 14; i++) {
+      const target = leg === 0 ? exit : out;
+      if (leg === 0 && Math.hypot(exit[0] - g.body.x, exit[1] - g.body.z) < 0.5) leg = 1;
+      // look — поворот на разницу: доворачиваем к цели.
+      g.look(yawTo(g.body.x, g.body.z, target[0], target[1]) - g.aimYaw, 0);
+      h.tick({ ...forward });
+      if (g.transition) return;
+      if (!(g.body.x > room.minX - 1.2 && g.body.x < room.maxX + 1.2 && g.body.z > room.minZ - 1.2 && g.body.z < room.maxZ + 1.2)) return;
+    }
+  };
+
+  it('помещения для давления есть в убежище, офисе и жёлтых комнатах; в зале ожидания его нет', () => {
+    for (const world of ['shelter', 'office', 'yellow'] as const) {
+      const g = new Harness(buildLevel(generateLayout(7, 2, world))).game;
+      expect(g.pressure, world).not.toBeNull();
+      expect(g.pressureRooms.size, world).toBeGreaterThan(0);
+      for (const r of g.pressureRooms.values()) {
+        expect(r.exits.length).toBeGreaterThan(0);
+        expect(r.maxX - r.minX).toBeGreaterThanOrEqual(3);
+        expect((r.maxX - r.minX) * (r.maxZ - r.minZ)).toBeGreaterThanOrEqual(18);
+      }
+    }
+    expect(new Harness(buildLevel(generateLayout(7, 2, 'station'))).game.pressure).toBeNull();
+  });
+
+  it('провал: остался стоять — пол ушёл, упал, проснулся в начале; искомое остаётся искомым', () => {
+    const { h } = inRoom('shelter');
+    const g = h.game;
+    const wear = g.wear;
+    expect(g.startPressure('collapse')).toBe(true);
+    expect(g.pressure!.active!.phase).toBe('warn');
+    // Сетку и дыру в полу игра отдаёт рендеру.
+    h.run(0.5);
+    expect(h.r.frames.at(-1)!.press).not.toBeNull();
+    expect(h.r.frames.at(-1)!.press!.grid).toBeGreaterThan(0);
+    expect(h.until(() => g.pressure!.falling >= 0, 30), 'пол под стоящим не ушёл').toBe(true);
+    // В падении камера летит вниз.
+    h.run(0.3);
+    expect(g.pressure!.camDrop([g.body.x, g.body.z])).toBeGreaterThan(0.2);
+    expect(h.until(() => g.transition !== null, 3), 'падение не разбудило').toBe(true);
+    expect(g.transition?.plan).toEqual({ cause: 'caught', style: 'blackout', to: 'elsewhere', dest: 'start' });
+    const what = h.log.dream.filter((e) => e.type === 'pressure').map((e) => (e as { what: string }).what);
+    expect(what).toEqual(['start', 'fall', 'woke']);
+    expect(h.until(() => g.transition === null, 6)).toBe(true);
+    const spawn = g.level!.spawn.pos;
+    expect(Math.hypot(g.body.x - spawn[0], g.body.z - spawn[2])).toBeLessThan(0.5);
+    expect(g.pressure!.active).toBeNull();
+    expect(g.wear).toBeGreaterThan(wear);
+    expect(g.session!.over).toBe(false);
+  });
+
+  it('провал: пошёл к выходу из самого дальнего угла — успел; фронт забрал то, что стояло на полу', () => {
+    for (const world of ['shelter', 'yellow'] as const) {
+      const { h, room, exit } = inRoom(world);
+      const g = h.game;
+      const onFloor = (g.illusions?.list ?? []).filter((i) => {
+        const x = (i.obj.min[0] + i.obj.max[0]) / 2;
+        const z = (i.obj.min[2] + i.obj.max[2]) / 2;
+        return x > room.minX && x < room.maxX && z > room.minZ && z < room.maxZ && Math.abs(i.obj.min[1] - room.floorY) < 0.3 && i.state === 'here';
+      });
+      expect(g.startPressure('collapse')).toBe(true);
+      // Полсекунды на то, чтобы понять, — и к выходу.
+      h.run(0.5);
+      walkOut(h, room, exit);
+      expect(g.pressure!.falling, world).toBeLessThan(0);
+      expect(g.transition, world).toBeNull();
+      // Пол досыпается без игрока, стоит пустым и собирается обратно.
+      expect(h.until(() => g.pressure!.active === null, 40), world).toBe(true);
+      expect(g.transition, world).toBeNull();
+      expect(h.log.dream.filter((e) => e.type === 'pressure').map((e) => (e as { what: string }).what)).toEqual(['start']);
+      if (onFloor.length > 0) expect(onFloor.some((i) => i.state !== 'here'), world).toBe(true);
+    }
+  });
+
+  it('сжатие: пошёл к выходу из самого дальнего угла — успел', () => {
+    const { h, room, exit } = inRoom('office');
+    const g = h.game;
+    expect(g.startPressure('squeeze')).toBe(true);
+    h.run(0.5);
+    walkOut(h, room, exit);
+    expect(g.transition).toBeNull();
+    expect(h.until(() => g.pressure!.active === null, 30)).toBe(true);
+  });
+
+  it('сжатие: потолок провисает, камера пригибается; вышел — отпустило', () => {
+    const { h, room, exit } = inRoom('office', true);
+    const g = h.game;
+    expect(g.startPressure('squeeze')).toBe(true);
+    const span = g.pressure!.active!.span;
+    h.run(span * 0.62);
+    const v = h.r.frames.at(-1)!.press!;
+    expect(v.drop).toBeGreaterThan(0.8);
+    expect(v.grid).toBeGreaterThan(0.4);
+    expect(g.pressure!.camDrop([g.body.x, g.body.z])).toBeGreaterThan(0.02);
+    walkOut(h, room, exit);
+    expect(g.transition).toBeNull();
+    expect(g.pressure!.camDrop([g.body.x, g.body.z])).toBe(0);
+    expect(h.until(() => g.pressure!.active === null, 30)).toBe(true);
+  });
+
+  it('сжатие: остался — потолок дошёл до метра, проснулся в начале', () => {
+    const { h } = inRoom('office');
+    const g = h.game;
+    expect(g.startPressure('squeeze')).toBe(true);
+    expect(h.until(() => g.transition !== null, 60), 'потолок не разбудил').toBe(true);
+    expect(g.transition?.plan.cause).toBe('caught');
+    expect(h.log.dream.filter((e) => e.type === 'pressure').map((e) => (e as { what: string }).what)).toEqual(['start', 'woke']);
+  });
+
+  it('режиссёр сам начинает событие, когда игрок задержался в помещении; в покое и с выключенным режиссёром — нет', () => {
+    const quiet = inRoom('yellow');
+    quiet.h.run(70);
+    expect(quiet.h.game.pressure!.count).toBe(0);
+    const off = inRoom('yellow');
+    off.h.game.calm = false;
+    off.h.game.pressureAuto = false;
+    off.h.run(70);
+    expect(off.h.game.pressure!.count).toBe(0);
+    const { h } = inRoom('yellow');
+    const g = h.game;
+    g.calm = false;
+    // Осыпь и случайные скачки этой проверке мешают: ждём только первого события давления.
+    const started = h.until(() => g.pressure!.count > 0 || g.transition !== null, 70);
+    expect(started).toBe(true);
+    if (g.pressure!.count > 0) expect(g.pressure!.active!.kind).toBe('collapse');
   });
 });
