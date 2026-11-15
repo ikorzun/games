@@ -710,17 +710,55 @@ async function solveInspect(page) {
   return centers.length;
 }
 
-/** Сверка документов на сканах: «Начать сверку» и клик мышью по дате доверенности (зона — невидимая кнопка поля). */
+/** Поле сверки, которое отмечает смоук: дата доверенности (в ней «4» поверх стёртой «1»). */
+const POA_DATE = 'doc_power_of_attorney/date';
+
+/**
+ * Что сверка показывает про поле key — одним обращением к странице. В эпизоде нужна одна находка, и она же
+ * заканчивает партию: находка засчитана (counted), когда итог «успех» называет это поле найденным, а на листе
+ * документа стоит кольцо. То и другое рисует один render() прямо в обработчике клика, и оба держатся, пока не
+ * нажато «Далее». Остальные поля — для сообщения о провале.
+ */
+const docsState = (page, key) => page.evaluate((k) => {
+  const text = (sel) => document.querySelector(sel)?.textContent.trim() ?? '';
+  const result = document.querySelector('.mg-docs .mg-shell__result:not([hidden])');
+  const outcome = result?.dataset.outcome ?? null;
+  const finds = [...(result?.querySelectorAll('.mg-scene__find') ?? [])].map((li) => li.dataset.key);
+  const rings = document.querySelectorAll(`.mg-docs__page[data-doc="${k.split('/')[0]}"] .mg-docs__ring`).length;
+  return {
+    counted: outcome === 'success' && finds.includes(k) && rings > 0,
+    outcome,
+    finds,
+    rings,
+    progress: text('.mg-docs .mg-shell__progress'),
+    fails: text('.mg-docs .mg-shell__fails-text'),
+    said: text('.mg-docs .mg-shell__status') || text('.mg-docs__flash.is-on'),
+  };
+}, key);
+
+/**
+ * Сверка документов на сканах: «Начать сверку» и клик мышью по дате доверенности (зона — невидимая кнопка поля).
+ * Засчитан ли клик, читается из состояния игры (docsState), а не ожиданием элемента с пределом времени:
+ * waitForSelector — несколько обращений к странице подряд (найти кольцо, затем вернуть его в тест), и на медленном
+ * раннере CI они не укладываются в короткий предел, хотя кольцо уже стоит. Здесь обращение одно, и его ответ не
+ * зависит от того, как долго страница отвечала; повторы — на случай, если браузер подтвердил клик раньше, чем его
+ * обработала игра.
+ */
 async function solveDocs(page) {
   await page.waitForSelector('.mg-shell__btn.is-start', { state: 'visible', timeout: 20000 });
   await page.click('.mg-shell__btn.is-start');
   await sleep(300);
-  const [x, y] = await page.$eval('.mg-docs__zone[data-key="doc_power_of_attorney/date"]', (z) => {
+  const [x, y] = await page.$eval(`.mg-docs__zone[data-key="${POA_DATE}"]`, (z) => {
     const b = z.getBoundingClientRect();
     return [b.left + b.width / 2, b.top + b.height / 2];
   });
   await clickScene(page, x, y);
-  await page.waitForSelector('.mg-docs__ring', { state: 'attached', timeout: 3000 });
+  let seen = await docsState(page, POA_DATE);
+  for (let i = 0; i < 50 && !seen.counted; i++) {
+    await sleep(100);
+    seen = await docsState(page, POA_DATE);
+  }
+  if (!seen.counted) throw new Error(`solveDocs: после клика по дате доверенности сверка не показала находку (итог «успех» с этим полем и кольцо на листе) — ${JSON.stringify(seen)}`);
 }
 
 /** Клик мышью по месту картинки; если его закрывает блок осмотра — сперва отодвинуть блок за ручку, как игрок. */
@@ -879,15 +917,20 @@ async function playHod(page, plan, onStep = async () => undefined, max = 8000) {
       continue;
     }
     if (p.kind === 'minigame') {
-      // настоящие клики: осмотр — по зонам находок, картотека — фильтры и отметки; затем «Далее»
+      // настоящие клики: осмотр — по зонам находок, картотека — фильтры и отметки, сверка — дата доверенности
       seen.minigames.push(p.id);
+      let skipped = false;
       if (p.type === 'crime_scene_search') await solveInspect(page);
       else if (p.type === 'database_search') await solveCards(page, { notary: 'kovrigin', attorney: 'murashov_sv' });
       else if (p.type === 'document_check') await solveDocs(page);
-      else await page.locator('.is-skip:visible').first().click(); // «только история»: «Пропустить» виден сразу
-      // у оболочки итог ждёт «Далее»; доска и допрос при пропуске отдают результат сразу
-      const next = await page.waitForSelector('.mg-shell__btn.is-next', { state: 'visible', timeout: 3000 }).catch(() => null);
-      if (next) await next.click();
+      else {
+        skipped = true;
+        await page.locator('.is-skip:visible').first().click(); // «только история»: «Пропустить» виден сразу
+      }
+      // Решённая кликами игра показала итог и без «Далее» дальше не пойдёт — жмём его с обычным ожиданием Playwright,
+      // а не пробой «появится ли за 3 с»: под нагрузкой проба может не успеть вернуть кнопку, которая уже на экране.
+      // Доска и допрос при пропуске отдают результат сразу, «Далее» у них нет.
+      if (!skipped) await page.click('.mg-shell__btn.is-next');
       await page.waitForFunction((id) => window.__vn.pending()?.kind !== 'minigame' || window.__vn.pending()?.id !== id, p.id);
       continue;
     }
