@@ -14,12 +14,23 @@ export interface Aabb {
   group?: string;
   /** Коробка выключена: игрок и лучи её не замечают. */
   off?: boolean;
+  /**
+   * Чья это коробка: номер объекта уровня (world/objects.ts) — больше нуля; преграда отдельной вещи сна —
+   * меньше нуля (минус её номер). Упёрся в такую коробку — коснулся предмета.
+   */
+  owner?: number;
+  /** Предмет растворён: коробки нет, пока он не вернётся. Отдельно от off: группы вариантов комнат его не трогают. */
+  gone?: boolean;
+  /** Датчик касания, а не преграда: пройти не мешает, лучи не останавливает — только сообщает, что её задели. */
+  ghost?: boolean;
 }
 
 const CELL = 2;
 
 export class ColliderSet {
   readonly boxes: Aabb[] = [];
+  /** Кому достаются новые коробки (0 — никому): ставит и снимает world/objects.ts, пока собирается предмет. */
+  owner = 0;
   private readonly grid = new Map<number, number[]>();
   private stamp = 0;
   private readonly seen: number[] = [];
@@ -31,6 +42,7 @@ export class ColliderSet {
 
   add(box: Aabb): number {
     const id = this.boxes.length;
+    if (this.owner !== 0 && box.owner === undefined) box.owner = this.owner;
     this.boxes.push(box);
     this.seen.push(0);
     const x0 = Math.floor(box.minX / CELL);
@@ -71,7 +83,7 @@ export class ColliderSet {
           if (this.seen[id] === this.stamp) continue;
           this.seen[id] = this.stamp;
           const box = this.boxes[id]!;
-          if (!box.off) out.push(box);
+          if (!box.off && !box.gone) out.push(box);
         }
       }
     }
@@ -94,6 +106,7 @@ export class ColliderSet {
     this.query(Math.min(ox, ex), Math.min(oz, ez), Math.max(ox, ex), Math.max(oz, ez), scratch);
     let best = maxDist;
     for (const b of scratch) {
+      if (b.ghost) continue;
       const t = rayBox(ox, oy, oz, dx, dy, dz, b);
       if (t >= 0 && t < best) best = t;
     }

@@ -282,6 +282,13 @@ function ceilingPanelDead(xf: Xf, seed: number): void {
   bx(xf, [x0 - 0.04, -0.35, 0.34], [x0 + 0.02, -0.3, 0.4], MAT.bakelite, [1.3, 1.3, 1.3]);
 }
 
+/** Обесточенная панель 1,2 × 0,6 × 0,05: та же панель, но рассеиватель не светится — серый пластик. */
+function ceilingPanelOff(xf: Xf, _seed: number): void {
+  panelFrame(xf, 0.05, [0.78, 0.8, 0.83]);
+  sheet(xf, [-0.56, -0.03, 0.04], [-0.56, -0.03, 0.56], [0.56, -0.03, 0.56], [0.56, -0.03, 0.04], DOWN, MAT.plaster, [0.62, 0.63, 0.62]);
+  for (const x of [-0.187, 0.187]) bx(xf, [x - 0.01, -0.04, 0.04], [x + 0.01, -0.025, 0.56], MAT.metalGrey, METAL_DK);
+}
+
 /** Вентиляционный диффузор 0,6 × 0,6 × 0,05: рамка и три вложенных квадратных жалюзи. */
 function ceilingVent(xf: Xf, seed: number): void {
   const rnd = rng(seed);
@@ -603,6 +610,7 @@ export const OFFICE_PROPS: Record<string, PropSpec> = {
   water_cooler: { w: 0.34, d: 0.34, h: 1.35, mount: 'floor', ru: 'кулер с голубой бутылью', build: waterCooler },
   copier: { w: 1.0, d: 0.65, h: 1.05, mount: 'floor', ru: 'копировальный аппарат с лотком и пультом', build: copier },
   ceiling_panel: { w: 1.2, d: 0.6, h: 0.05, mount: 'ceiling', ru: 'потолочная светящаяся панель', build: ceilingPanel },
+  ceiling_panel_off: { w: 1.2, d: 0.6, h: 0.05, mount: 'ceiling', ru: 'потолочная панель обесточенная', build: ceilingPanelOff },
   ceiling_panel_dead: { w: 1.2, d: 0.6, h: 0.35, mount: 'ceiling', ru: 'потолочная панель потухшая, с оборванным кабелем', build: ceilingPanelDead },
   ceiling_vent: { w: 0.6, d: 0.6, h: 0.05, mount: 'ceiling', ru: 'потолочный вентиляционный диффузор', build: ceilingVent },
   whiteboard: { w: 1.8, d: 0.06, h: 1.0, mount: 'wall', y: 0.9, ru: 'белая доска с маркерными схемами', build: whiteboard },

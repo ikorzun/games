@@ -17,8 +17,8 @@ export interface Thing {
   /** Радиус для проверки взгляда, м. */
   radius: number;
   fate: Fate;
-  /** idle — стоит; changing — меняется; giant — выросла и осталась; gone — её больше нет. */
-  state: 'idle' | 'changing' | 'giant' | 'gone';
+  /** idle — стоит; changing — меняется; giant — выросла и осталась; gone — её больше нет; coming — собирается заново. */
+  state: 'idle' | 'changing' | 'giant' | 'gone' | 'coming';
   /** Вещь — цель воспоминания: сама под взглядом не меняется, её судьбу решает сессия. */
   memory: boolean;
   /** Вещь-экспонат (вспомненное в белом нигде): под взглядом не меняется, игра только знает, что на неё смотрят. */
@@ -31,6 +31,13 @@ export interface Thing {
   dissolve: number;
   /** Номер преграды вещи в наборе коллайдеров (−1 — нет). */
   collider: number;
+  /**
+   * Вещь растворилась от прикосновения (а не под взглядом и не потому, что её вспомнили): такая
+   * возвращается, когда свет погас и зажёгся снова.
+   */
+  touched: boolean;
+  /** После того как она растворилась, свет уже гас: зажжётся — вернётся. */
+  dark: boolean;
 }
 
 export type ThingEvent =
@@ -61,9 +68,12 @@ export interface ThingsConfig {
   growTime: number;
   /** Во сколько раз вырастает вещь. */
   growScale: number;
+  /** За сколько растворяется вещь, которой коснулись, и за сколько она собирается заново, с. */
+  touchTime: number;
+  comeTime: number;
 }
 
-export const DEFAULT_THINGS: ThingsConfig = { range: 7, gazeTime: 2.4, shrinkTime: 1.1, dustTime: 1.5, growTime: 2.6, growScale: 7 };
+export const DEFAULT_THINGS: ThingsConfig = { range: 7, gazeTime: 2.4, shrinkTime: 1.1, dustTime: 1.5, growTime: 2.6, growScale: 7, touchTime: 0.9, comeTime: 0.9 };
 
 const ease = (t: number): number => t * t * (3 - 2 * t);
 
@@ -91,7 +101,7 @@ export class Things {
   constructor(readonly cfg: ThingsConfig = DEFAULT_THINGS) {}
 
   add(kind: string, pos: Vec3, yaw: number, fate: Fate, radius = 0.3, memory = false, still = false): Thing {
-    const t: Thing = { id: this.nextId++, kind, pos, yaw, radius, fate, state: 'idle', memory, still, gaze: 0, t: 0, scale: 1, dissolve: 0, collider: -1 };
+    const t: Thing = { id: this.nextId++, kind, pos, yaw, radius, fate, state: 'idle', memory, still, gaze: 0, t: 0, scale: 1, dissolve: 0, collider: -1, touched: false, dark: false };
     this.list.push(t);
     return t;
   }
@@ -115,6 +125,31 @@ export class Things {
     return { type: 'changing', thing };
   }
 
+  /**
+   * Игрок коснулся вещи: она растворяется (всё здесь иллюзорно) — и вернётся, когда свет погаснет
+   * и зажжётся снова. Вещь, которая уже меняется, прикосновения не замечает.
+   */
+  touch(thing: Thing): ThingEvent | null {
+    if (thing.state !== 'idle') return null;
+    thing.fate = 'dust';
+    thing.state = 'changing';
+    thing.t = 0;
+    thing.touched = true;
+    thing.dark = false;
+    return { type: 'changing', thing };
+  }
+
+  /** Вернуть растворённую вещь: она собирается из пыли на своём (уже, может быть, новом) месте. */
+  comeBack(thing: Thing): void {
+    thing.state = 'coming';
+    thing.t = 0;
+    thing.scale = 1;
+    thing.dissolve = 1;
+    thing.gaze = 0;
+    thing.touched = false;
+    thing.dark = false;
+  }
+
   /** Самый «насмотренный» взгляд сейчас, 0..1 (для кинескопа и рамки). */
   get focus(): Thing | null {
     let best: Thing | null = null;
@@ -127,6 +162,13 @@ export class Things {
     const c = this.cfg;
     for (const t of this.list) {
       if (t.state === 'gone') continue;
+      if (t.state === 'coming') {
+        t.t += dt;
+        const k = Math.min(1, t.t / c.comeTime);
+        t.dissolve = 1 - k;
+        if (k >= 1) this.settle(t, 'idle', ev);
+        continue;
+      }
       if (t.state === 'idle') {
         const centre: Vec3 = [t.pos[0], t.pos[1] + t.radius * 0.6, t.pos[2]];
         const seen = looksAt(look, centre, t.radius, c.range, los);
@@ -155,7 +197,7 @@ export class Things {
         t.scale = 1 - ease(k);
         if (k >= 1) this.settle(t, 'gone', ev);
       } else if (t.fate === 'dust') {
-        const k = Math.min(1, t.t / c.dustTime);
+        const k = Math.min(1, t.t / (t.touched ? c.touchTime : c.dustTime));
         t.dissolve = k;
         if (k >= 1) this.settle(t, 'gone', ev);
       } else {
@@ -175,7 +217,7 @@ export class Things {
     return ev;
   }
 
-  private settle(t: Thing, state: 'gone' | 'giant', ev: ThingEvent[]): void {
+  private settle(t: Thing, state: 'gone' | 'giant' | 'idle', ev: ThingEvent[]): void {
     t.state = state;
     ev.push({ type: 'settled', thing: t });
   }

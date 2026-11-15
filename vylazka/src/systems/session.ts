@@ -127,6 +127,8 @@ export interface SessionInput {
   observed: boolean;
   /** Скорость удара о землю в этом шаге (0 — приземления не было). */
   landed: number;
+  /** Искомой вещи сейчас нет на месте (её коснулись, и она растворилась): вспомнить её нельзя. */
+  hidden?: boolean;
 }
 
 export type SessionEvent =
@@ -321,7 +323,7 @@ export class Session {
     if (act && act.spot) {
       const s = act.spot;
       // Целимся в середину вещи, а не в её подошву: так её реже заслоняет край стола или стула.
-      const seen = looksAt({ eye: inp.eye, aim: inp.aim, light: inp.light }, [s.x, s.y + 0.2, s.z], 0.3, this.cfg.lookRange, los);
+      const seen = !inp.hidden && looksAt({ eye: inp.eye, aim: inp.aim, light: inp.light }, [s.x, s.y + 0.2, s.z], 0.3, this.cfg.lookRange, los);
       if (seen) {
         this.hold = Math.min(1, this.hold + dt / this.cfg.lookTime);
         if (this.hold >= 1) {

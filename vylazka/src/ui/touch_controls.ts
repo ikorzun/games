@@ -83,6 +83,11 @@ export class TouchControls implements InputSource {
     this.lightBtn.style.setProperty('--vz-progress', String(Math.round(progress * 100)));
   }
 
+  /** Спрятать кнопку фонаря: там, где фонаря нет (офис), нажимать нечего. */
+  setLightHidden(on: boolean): void {
+    this.lightBtn.hidden = on;
+  }
+
   setLit(on: boolean): void {
     this.lightBtn.classList.toggle('is-lit', on);
   }

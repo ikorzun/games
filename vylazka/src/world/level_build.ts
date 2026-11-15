@@ -17,6 +17,9 @@ import { MAT } from './materials';
 import { hermoDoor, stairsDown, Xf } from './props';
 import { doorFrame, doorLeaf, collapse, pit, warningSign, waterSheet } from './props_bunker';
 import { ALL_PROPS } from './props_all';
+import { ObjectLog } from './objects';
+import { SCREEN_IMAGES } from './screens';
+import type { FreeSlot } from './objects';
 import { buildShell, CELL, Shell, STYLE_CORRIDOR, WALL_T } from './shell';
 import type { ShellCell, WallStyle } from './shell';
 
@@ -155,6 +158,9 @@ const PIT_LEDGE = 0.95;
 export function buildLevel(layout: GenLayout): BuiltLevel {
   const col = new ColliderSet();
   const chunks = new Map<string, ChunkBuild>();
+  // Журнал объектов — один на уровень: у каждого предмета обстановки свой номер, где бы он ни стоял.
+  const objects = new ObjectLog();
+  const freeSlots: FreeSlot[] = [];
   const T = WALL_T / 2;
 
   // Какая из двух лестничных клеток верхняя: та, чей ярус совпадает с верхним ярусом марша.
@@ -175,6 +181,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     if (!c) {
       const well = room.type === 'stairwell';
       c = { mb: new MeshBuilder(), sl: new MeshBuilder(), tierMin: well ? room.tier - (lowerWells.has(room.id) ? 1 : 0) : room.tier, tierMax: well ? room.tier + (upperWells.has(room.id) ? 1 : 0) : room.tier };
+      c.mb.log = objects;
       chunks.set(key, c);
     }
     return c;
@@ -385,6 +392,22 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
   // Откуда начинается вылазка: рядом с началом обманок не ставим.
   const startRoom = layout.rooms[layout.entranceRoom]!;
   const start = { cx: startRoom.cells[0]![0], cz: startRoom.cells[0]![1], tier: startRoom.tier };
+  // Экраны жёлтых комнат: ровно два на уровень — в ближнем к началу зале и в самом дальнем от него.
+  // Это решает сборка уровня, а не помещение: помещение о соседях не знает.
+  const screenQuota = new Map<number, number[]>();
+  if (world === 'yellow') {
+    const far = (r: GenRoom): number => Math.min(...r.cells.map(([x, z]) => Math.abs(x - start.cx) + Math.abs(z - start.cz)));
+    const rooms = layout.rooms.filter((r) => !lowerWells.has(r.id) && r.type !== 'stairwell' && r.type !== 'lift');
+    const halls = rooms.filter((r) => r.type === 'hall');
+    const open = rooms.filter((r) => r.type !== 'corridor');
+    const pool = (halls.length > 0 ? halls : open.length > 0 ? open : rooms).slice().sort((a, b) => far(a) - far(b) || a.id - b.id);
+    // На них то же, что на экранах офиса (природа и «странное»), и на двух — разное.
+    const shown = SCREEN_IMAGES.map((im, i) => (im.kind === 'nature' || im.kind === 'strange' ? i : -1)).filter((i) => i >= 0);
+    const first = Math.floor(hash01(layout.seed & 0xffff, 0x5c, layout.seed ^ 0x2e11) * shown.length);
+    const second = (first + 1 + Math.floor(hash01(layout.seed & 0xffff, 0x7d, layout.seed ^ 0x9a03) * (shown.length - 1))) % shown.length;
+    const images = [shown[first]!, shown[second]!];
+    (pool.length > 0 ? [pool[0]!, pool[pool.length - 1]!] : []).forEach((r, k) => screenQuota.set(r.id, [...(screenQuota.get(r.id) ?? []), images[k]!]));
+  }
   /** Слоты и клетки помещения; геометрия идёт в mbFor (вещество и проекции), преграды — в colSet. */
   const roomCtx = (room: GenRoom, mbFor: (x: number, z: number) => { mb: MeshBuilder; sl: MeshBuilder }, colSet: ColliderSet, salt: number, outSpots: ItemSpot[], outMarks: Landmark[], outFlats: FlatMark[]): RoomCtx => {
     const sh = shells[room.tier]!;
@@ -415,13 +438,16 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
       }
     }
     // Свой ГСЧ у каждого помещения: правка одной комнаты не сдвигает остальные.
-    return { room, world, seed: layout.seed, start, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d + salt)), h: CEIL_H, slots, cells, spots: outSpots, landmarks: outMarks, flats: outFlats };
+    return { room, world, seed: layout.seed, start, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d + salt)), h: CEIL_H, slots, cells, spots: outSpots, landmarks: outMarks, flats: outFlats, ...(screenQuota.has(room.id) ? { screens: screenQuota.get(room.id)! } : {}) };
   };
 
   for (const room of layout.rooms) {
     if (lowerWells.has(room.id)) continue;
     if (room !== variantRoom) {
-      furnishRoom(roomCtx(room, (x, z) => chunkFor(room, x, z), col, 0, spots, landmarks, flats));
+      const ctx = roomCtx(room, (x, z) => chunkFor(room, x, z), col, 0, spots, landmarks, flats);
+      furnishRoom(ctx);
+      // Что осталось пустым у глухих стен — запасные места: туда вещь может вернуться после темноты.
+      for (const s of ctx.slots) if (!s.used && !s.hazard && s.deep) freeSlots.push({ at: [s.xf.ox, s.xf.oy, s.xf.oz], rot: s.xf.rot, room: room.id, tier: room.tier });
       continue;
     }
     // Два варианта: обстановка каждого — в своём чанке и своей группе коллайдеров.
@@ -429,10 +455,14 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     const ids = names.map((n) => `variant:${room.id}:${n}`);
     names.forEach((_, i) => {
       const mb = new MeshBuilder();
+      mb.log = objects;
       const sl = new MeshBuilder();
       const tmp = new ColliderSet();
+      const first = objects.list.length;
       // Плоские вещи варианта в общий список не идут: после подмены их там уже нет.
       furnishRoom(roomCtx(room, () => ({ mb, sl }), tmp, i * 7919, [], [], []));
+      // Предметы варианта помнят его группу: пока вариант скрыт, их нет и коснуться их нельзя.
+      for (let k = first; k < objects.list.length; k++) objects.list[k]!.group = ids[i]!;
       chunks.set(ids[i]!, { mb, sl, tierMin: room.tier, tierMax: room.tier, id: ids[i]!, hidden: i === 1 });
       for (const b of tmp.boxes) col.add({ ...b, group: ids[i]!, off: i === 1 });
     });
@@ -520,6 +550,8 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     nav,
     sheets: [...chunks.values()].filter((c) => !c.hidden).flatMap((c) => c.mb.sheets),
     flats,
+    objects: objects.list,
+    freeSlots,
     layout,
     world,
   };

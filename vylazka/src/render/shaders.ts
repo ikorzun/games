@@ -41,6 +41,15 @@ vec4 beamAt(vec3 posV) {
 export const CRUMBLE_GLSL = /* glsl */ `
 uniform float uDissolve;
 uniform vec4 uThing;      // x — распад вещи 0..1, y — запас, z — запас, w — сид вещи
+attribute float aObj;     // номер объекта уровня у вершины (0 — вершина ничья: стена, пол)
+uniform highp sampler2D uObjState;   // состояния объектов, 64 × 64: r — насколько объект растворён
+
+/** Насколько растворён предмет, которому принадлежит вершина: его коснулись — он рассыпается. */
+float objDissolve() {
+  if (aObj < 0.5) return 0.0;
+  int id = int(aObj + 0.5);
+  return texelFetch(uObjState, ivec2(id & 63, id >> 6), 0).r;
+}
 
 vec3 cellJitter(vec3 p) {
   ivec3 q = ivec3(floor(p)) + 32768;
@@ -99,7 +108,8 @@ void main() {
   vec4 wp = modelMatrix * vec4(position, 1.0);
   vec3 wn = normalize(mat3(modelMatrix) * normal);
   vWorld = wp.xyz;
-  vDis = max(uDissolve, uThing.x);
+  float od = objDissolve();
+  vDis = max(max(uDissolve, uThing.x), od);
   vec4 mv = viewMatrix * vec4(crumble(wp.xyz, vDis), 1.0);
   vPosV = mv.xyz;
   vNrmV = mat3(viewMatrix) * wn;
@@ -110,6 +120,8 @@ void main() {
   // Сдвиг по нормали убирает «рябь» самозатенения на стенах, в которые свет бьёт вскользь.
   vShadow = uShadowMatrix * vec4(wp.xyz + wn * 0.035, 1.0);
   gl_Position = projectionMatrix * mv;
+  // Растворённого предмета нет вовсе: его треугольники не доходят до растеризации.
+  if (od > 0.995) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
 }
 `;
 
@@ -139,6 +151,7 @@ uniform sampler2D uSpot;  // средний цвет освещённого пя
 uniform float uFog;
 uniform vec3 uFogColor;   // во что уходит даль: в убежище — чернота, в белом нигде — белое
 uniform float uDecay;     // 0..1: насколько здесь сыро и запущено (растёт с глубиной); меньше нуля — чисто, как в офисе
+uniform float uPlain;     // 1 — чистое пространство: только шар материала, без фактур, рельефа и грязи
 uniform sampler2D uCellLight; // свет по клеткам уровня: r — сколько рассеянного света в клетке, g — номер помещения
 uniform vec4 uCellGrid;       // xy — угол сетки в мире (x, z), z — шаг клетки, м, w — клеток по стороне (0 — света по клеткам нет)
 uniform vec3 uLightRightV;
@@ -448,6 +461,17 @@ void main() {
   vec3 N = Ng;
   float dirt = mix(1.0, 0.72 + 0.56 * g1.r, grimeK);
 #endif
+  // Чистое пространство (жёлтые комнаты): ни пестроты, ни рельефа, ни грязи, ни сырости — поверхность
+  // это шар материала и оттенок, больше ничего.
+  if (uPlain > 0.5) {
+    alb = 1.0;
+    k = 0.0;
+    wet = 0.0;
+    shade = 1.0;
+    stain = vec3(1.0);
+    dirt = 1.0;
+    N = Ng;
+  }
 
   // Matcap по направлению на фонарь.
   vec3 bx = normalize(vec3(L.z, 0.0, -L.x) + vec3(1e-5, 0.0, 0.0));
@@ -462,7 +486,7 @@ void main() {
   float ngl = dot(Ng, L);
   float relief = clamp(dot(N, L) / max(ngl, 0.08), 0.0, 2.2);
   shade *= mix(1.0, relief, 0.8 * smoothstep(0.02, 0.22, ngl));
-  shade *= 0.86 + 0.14 * d0.b;
+  shade *= mix(0.86 + 0.14 * d0.b, 1.0, uPlain);
 #endif
   // То, что проступило из-под краски, годами стояло сырым: оно серее и грязнее свежей поверхности.
   // У светящегося материала оттенок вершины — множитель яркости свечения (до сотен): в освещение он
@@ -512,11 +536,14 @@ ${CRUMBLE_GLSL}
 
 void main() {
   vec4 wp = modelMatrix * vec4(position, 1.0);
-  vec4 mv = viewMatrix * vec4(crumble(wp.xyz, max(uDissolve, uThing.x)), 1.0);
+  float od = objDissolve();
+  vec4 mv = viewMatrix * vec4(crumble(wp.xyz, max(max(uDissolve, uThing.x), od)), 1.0);
   vDist = -mv.z;
   gl_Position = projectionMatrix * mv;
   // Чуть к камере, чтобы линия не тонула в своей же поверхности.
   gl_Position.z -= 0.0012 * gl_Position.w;
+  // У растворённого предмета нет и сетки.
+  if (od > 0.6) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
 }
 `;
 
@@ -536,7 +563,17 @@ void main() {
 /** Глубина из точки фонаря: цвет не пишется. */
 export const DEPTH_VERT = /* glsl */ `
 attribute float aMat;
+attribute float aObj;
+uniform highp sampler2D uObjState;
 void main() {
+  // Растворяющийся предмет тени не отбрасывает (как и отдельная вещь).
+  if (aObj > 0.5) {
+    int id = int(aObj + 0.5);
+    if (texelFetch(uObjState, ivec2(id & 63, id >> 6), 0).r > 0.4) {
+      gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+      return;
+    }
+  }
   // Светящееся (небо над лугом, абажуры, красный контур выхода) тени не отбрасывает: иначе купол неба
   // закрыл бы от солнца весь луг.
   if (aMat > 13.5 && aMat < 14.5) {

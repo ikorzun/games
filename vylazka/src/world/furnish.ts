@@ -13,6 +13,7 @@ import { furnishOffice, furnishYellow } from './furnish_office';
 import type { ItemSpot, Landmark } from './level';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
+import { asObject } from './objects';
 import { barrel, bunk, cables, cageLamp, crate, locker, pipeRun, rubble, signPlate, stool, table, valve, ventGrille } from './props';
 import { buildDisplay, DISPLAY_SIZE } from './props_screens';
 import type { DisplayShape } from './props_screens';
@@ -92,6 +93,13 @@ export interface RoomCtx {
   landmarks: Landmark[];
   /** Плоские вещи помещения: картонки и проекции (world/flat.ts). */
   flats: FlatMark[];
+  /**
+   * Выставочные экраны, которые обязаны стоять в этом помещении: номера их картинок (world/screens.ts).
+   * Экраны — вещь офиса; в жёлтых комнатах их ровно два на весь уровень (решение владельца: «как
+   * соединение смысла и пространств»), и кому они достались и что показывают, решает сборка уровня.
+   * Не задано — экранов нет.
+   */
+  screens?: readonly number[];
 }
 
 function shuffled<T>(rng: Rng, items: readonly T[]): T[] {
@@ -190,11 +198,6 @@ function corridor(ctx: RoomCtx): void {
   if (tier > 0) for (const c of ctx.cells) if (!dry.has(`${c.cx},${c.cz}`) && ctx.rng() < 0.12 * tier) puddle(c.xf.child((ctx.rng() - 0.5) * 0.8, 0, (ctx.rng() - 0.5) * 0.8), 0.9 + ctx.rng(), 0.6 + ctx.rng() * 0.6);
   // Ниже первого яруса в убежище проступает дом — комнатами, которых нет: по одной проекции на ярус.
   if (tier > 0) veils(ctx, 1);
-}
-
-/** Экраны в убежище: ниже первого яруса у стены коридора изредка стоит экран — в нём нет сигнала, лес или обрывок передачи. */
-function shelterScreens(ctx: RoomCtx): void {
-  if (ctx.room.type === 'corridor' && ctx.room.tier > 0) leanScreens(ctx, 1, 0.05, ['signal', 'nature', 'pop']);
 }
 
 function entrance(ctx: RoomCtx): void {
@@ -536,7 +539,9 @@ export function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; 
     const at = s.xf.child(x + dx, p.mount === 'wall' ? (y ?? p.y ?? 1.2) : 0, 0);
     if (p.mount === 'floor' && isFlat(ctx, s, name, i)) {
       // Картонка: стоит там же, где стоял бы настоящий предмет, но это лист — и преграды у неё нет.
-      const r = standee(new Xf(at.mb, null, at.ox, at.oy, at.oz, at.rot, at.sl), p, seed);
+      const sheet = new Xf(at.mb, null, at.ox, at.oy, at.oz, at.rot, at.sl);
+      let r = { w: p.w, h: p.h, plane: 0 };
+      asObject(sheet, name, () => (r = standee(sheet, p, seed)), true);
       ctx.flats.push({ kind: 'standee', what: name, at: at.pt(0, Math.min(FLAT_EYE, r.h * 0.6), r.plane), n: at.dir(0, 0, 1), w: r.w, h: r.h, floor: at.oy, room: ctx.room.id, tier: ctx.room.tier });
     } else p.build(at, seed);
   });
@@ -547,9 +552,10 @@ export function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; 
  * Выставочный экран на свободный участок стены (прислонённый или висящий) либо посреди клетки (на
  * подставке). Что на нём — решает сид уровня и место: картинка из родов kinds. Возвращает, поставлен ли.
  */
-export function screenAt(ctx: RoomCtx, xf: Xf, shape: DisplayShape, kinds: readonly ScreenKind[], salt: number): void {
-  const image = screenFor(Math.floor(hash01(Math.round(xf.ox * 7) + salt, Math.round(xf.oz * 11) + ctx.room.id, ctx.seed ^ 0x5c4e) * 1e6), kinds);
-  buildDisplay(xf, shape, image);
+export function screenAt(ctx: RoomCtx, xf: Xf, shape: DisplayShape, kinds: readonly ScreenKind[], salt: number, fixed?: number): void {
+  // fixed — картинка задана заранее (жёлтые комнаты: два экрана на уровень показывают разное).
+  const image = fixed ?? screenFor(Math.floor(hash01(Math.round(xf.ox * 7) + salt, Math.round(xf.oz * 11) + ctx.room.id, ctx.seed ^ 0x5c4e) * 1e6), kinds);
+  asObject(xf, `display_${shape}`, () => buildDisplay(xf, shape, image));
   const [w, h] = DISPLAY_SIZE[shape];
   // Метка — середина картинки: у прислонённого экрана она на полпути между стеной и его низом.
   const z = shape === 'lean' ? 0.26 : shape === 'wall' ? 0.07 : 0.03;
@@ -561,7 +567,7 @@ export function screenAt(ctx: RoomCtx, xf: Xf, shape: DisplayShape, kinds: reado
  * Прислонить экраны к свободным стенам помещения: не больше count, каждый — с вероятностью rate на
  * участок. Решает сид уровня и место, а не ГСЧ помещения: остальная обстановка от этого не сдвигается.
  */
-export function leanScreens(ctx: RoomCtx, count: number, rate: number, kinds: readonly ScreenKind[]): number {
+export function leanScreens(ctx: RoomCtx, count: number, rate: number, kinds: readonly ScreenKind[], images?: readonly number[]): number {
   let placed = 0;
   for (const s of ctx.slots) {
     if (placed >= count) break;
@@ -570,7 +576,7 @@ export function leanScreens(ctx: RoomCtx, count: number, rate: number, kinds: re
     if (ctx.room.type === 'corridor' && ctx.cells.find((c) => c.cx === s.cx && c.cz === s.cz)!.doors > 0) continue;
     if (hash01(s.cx * 37 + s.dir * 5, s.cz * 41 + ctx.room.id, ctx.seed ^ 0xd15b) >= rate) continue;
     s.used = true;
-    screenAt(ctx, s.xf.child(fit(s, 1.2, 0.52), 0, 0), 'lean', kinds, s.dir);
+    screenAt(ctx, s.xf.child(fit(s, 1.2, 0.52), 0, 0), 'lean', kinds, s.dir, images?.[placed]);
     placed += 1;
   }
   return placed;
@@ -580,7 +586,7 @@ export function leanScreens(ctx: RoomCtx, count: number, rate: number, kinds: re
  * Какие предметы бывают картонками: только мебель у стены, на которой ничего не лежит и к которой
  * не привязаны ни находки, ни приметы.
  */
-const FLAT_OK: ReadonlySet<string> = new Set([
+export const FLAT_OK: ReadonlySet<string> = new Set([
   'wardrobe',
   'bookshelf',
   'fridge',
@@ -602,9 +608,10 @@ const FLAT_OK: ReadonlySet<string> = new Set([
 
 /**
  * Доля картонок среди такой мебели. Чем «ложнее» воспоминание, тем больше в нём снимков вместо вещей:
- * офис был на самом деле, убежище и жёлтые комнаты собраны из чужих картинок.
+ * офис был на самом деле, убежище и жёлтые комнаты собраны из чужих картинок. Но плоским бывает лишь
+ * кое-что (решение владельца): картонка — редкая находка, а не правило.
  */
-export const FLAT_SHARE: Record<WorldKind, number> = { shelter: 0.24, office: 0.04, yellow: 0.45 };
+export const FLAT_SHARE: Record<WorldKind, number> = { shelter: 0.12, office: 0.04, yellow: 0.2 };
 
 /** Быть ли предмету картонкой: решают сид уровня и место, а не ГСЧ помещения — остальная обстановка от этого не сдвигается. */
 function isFlat(ctx: RoomCtx, s: Slot, name: string, i: number): boolean {
@@ -798,8 +805,6 @@ export function furnishRoom(ctx: RoomCtx): void {
   FURNISH[ctx.room.type]?.(ctx);
   // Сначала — то, что положено помещению по назначению, потом — следы людей и времени.
   dressRoom(ctx);
-  // Последними — экраны: им достаются участки стен, которые остались пустыми.
-  shelterScreens(ctx);
 }
 
 /** Подпись-табличка над дверью со стороны коридора (слабое фосфорное свечение помогает ориентироваться). */

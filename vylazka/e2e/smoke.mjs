@@ -7,7 +7,7 @@
  *   npm run smoke:matrix                                             # + раскладка по матрице размеров, скриншоты в e2e/out/
  *   npm run smoke -- --url https://…                                 # опубликованная ссылка
  *
- * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --shell, --only play,gen,worlds,flats,session,pockets,fear,audio,frame,touch,bridge,matrix.
+ * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --shell, --only play,gen,worlds,flats,illusions,session,pockets,fear,audio,frame,touch,bridge,matrix.
  * Симуляция в тестах заморожена и шагается через window.__vz: проверяется логика и вёрстка, а не
  * частота кадров (SwiftShader даёт 5–10 к/с). Качество задаётся параметром адреса, иначе по строке
  * видеокарты выбралось бы «низкое» и тень осталась бы непроверенной.
@@ -307,8 +307,9 @@ async function scenarioPlay(browser, baseUrl) {
   const litTurn = await turn(0.5);
   check('при свете следа нет: поворот кадр не засвечивает', mean(litTurn) < mean(litStill) * 1.2, `среднее ${mean(litStill).toFixed(1)} → ${mean(litTurn).toFixed(1)}`);
 
-  // Эхо — второй способ видеть. В темноте стоящий игрок не видит ничего; шаг пускает волну, и там, где
-  // она идёт по стенам и полу, проступают линии места. Волна уходит — снова темно.
+  // Эхо — второй способ видеть: только без фонаря и только на ходу. В темноте стоящий игрок не видит
+  // ничего (щелчок фонаря волну не пускает); шаг пускает волну, и там, где она идёт по стенам и полу,
+  // проступают линии места. Волна уходит — снова темно.
   await vz(page, () => window.__vz.toggleLight());
   const quiet = await afterSec(9);
   st = await state(page);
@@ -321,11 +322,18 @@ async function scenarioPlay(browser, baseUrl) {
     st.echo.some((e) => e.kind === 0 && e.radius > 0.5) && mean(heard) > mean(quiet) + 2 && Math.max(...heard) > Math.max(...quiet) + 15,
     `волн ${st.echo.length}, среднее ${mean(quiet).toFixed(1)} → ${mean(heard).toFixed(1)}, самое светлое ${Math.max(...quiet).toFixed(0)} → ${Math.max(...heard).toFixed(0)}`,
   );
+  // Эхо — только на ходу (решение владельца): замер — и волны гаснут раньше, чем успевают разойтись.
+  st = await vz(page, () => window.__vz.step(90));
+  check('замер в темноте — эхо гаснет: у волн, что ещё живы, силы нет', st.echo.every((e) => e.amp < 0.05), `волн ${st.echo.length}, сила ${st.echo.map((e) => e.amp.toFixed(3)).join(',')}`);
   const gone = await afterSec(2.5);
   st = await state(page);
   check('волна ушла — снова темно', st.echo.length === 0 && mean(gone) < mean(quiet) + 1.2 && Math.max(...gone) < Math.max(...quiet) + 8, `волн ${st.echo.length}, среднее ${mean(gone).toFixed(1)}, самое светлое ${Math.max(...gone).toFixed(0)}`);
   await vz(page, () => window.__vz.toggleLight());
   await afterSec(1.8);
+  // Пока светит фонарь, эха нет (решение владельца): шаги волн не дают, а уже пущенные не светят.
+  for (let i = 0; i < 10; i++) await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+  st = await state(page);
+  check('при горящем фонаре эха нет: шаги волн не дают', st.light.state === 'on' && st.echo.every((e) => e.amp < 0.02), `волн ${st.echo.length}, сила ${st.echo.map((e) => e.amp.toFixed(3)).join(',')}`);
 
   // Отказ и тряска.
   await vz(page, () => window.__vz.fail());
@@ -508,29 +516,53 @@ async function scenarioWorlds(browser, baseUrl) {
       for (let i = 0; i < Math.round(seconds * 10); i++) await vz(page, (inp) => window.__vz.step(6, inp ?? undefined), input ?? null);
       return vz(page, () => window.__vz.probe());
     };
-    await afterSec(4);
+    // Датчики теряют того, кто замер (через ~3 с панели гаснут). Пока проверяется обычный свет, игрок
+    // «жив»: чуть-чуть ведёт взглядом, не сходя с места.
+    const wiggle = { lookYaw: 0.0005 };
+    await afterSec(4, wiggle);
     let st = await state(page);
     const lvl = await vz(page, () => window.__vz.level());
     check('офис: вылазка началась у лифта, мир — офис, над игроком горит панель', st.world === 'office' && st.where === 'main' && st.ambientLocal > 0.9 && Math.hypot(st.pos[0] - lvl.spawn[0], st.pos[2] - lvl.spawn[2]) < 1.5, JSON.stringify({ world: st.world, amb: st.ambientLocal }));
     check('свет — только вокруг игрока: освещено меньше трети клеток этажа', !!st.lights && st.lights.lit >= 2 && st.lights.lit < st.lights.total / 3, JSON.stringify(st.lights));
-    // Фонарь выключен: светит потолок.
+    // Фонаря в офисе нет: светит потолок, кнопка фонаря ничего не меняет.
+    const lit = await afterSec(1, wiggle);
+    check('в офисе фонаря нет: hasLight ложь, луч не светит', st.hasLight === false && st.light.intensity === 0, JSON.stringify({ hasLight: st.hasLight, light: st.light }));
     await vz(page, () => window.__vz.toggleLight());
-    const lit = await afterSec(2.5);
+    const litAfter = await afterSec(2.5, wiggle);
     const litColor = await vz(page, () => window.__vz.probeColor());
     st = await state(page);
-    check('с выключенным фонарём в офисе светло: светит потолок, не фонарь', st.light.state === 'off' && mean(lit) > 60, `среднее ${mean(lit).toFixed(1)}`);
+    check('в офисе светло от потолка; кнопка фонаря ничего не меняет: луча как не было, кадр прежний', st.light.intensity === 0 && mean(litAfter) > 60 && Math.abs(mean(litAfter) - mean(lit)) < 0.15 * mean(lit), `среднее ${mean(lit).toFixed(1)} → ${mean(litAfter).toFixed(1)}, луч ${st.light.intensity}`);
     check('свет офиса белый, без жёлтого и красного оттенка', Math.abs(litColor.r - litColor.b) < 0.08 * Math.max(litColor.r, litColor.b), JSON.stringify(litColor));
     check('под горящей панелью без фонаря не «темно»: счётчик темноты стоит', st.dark.for === 0 && st.dark.shifts === 0, JSON.stringify(st.dark));
     // Свет идёт за игроком.
+    const lit0 = litAfter;
     const node0 = st.node;
     await afterSec(7, { moveZ: 1 });
     st = await state(page);
     check('игрок ушёл по коридору — свет ушёл с ним: над ним горит, освещена по-прежнему малая часть этажа', st.node !== node0 && st.ambientLocal > 0.9 && st.lights.lit < st.lights.total / 3, JSON.stringify({ node: [node0, st.node], amb: st.ambientLocal, lights: st.lights }));
+    // Датчики движения: замер — панели гаснут (3,2 + 1 + 0,5 с), пошевелился — загораются.
+    await afterSec(1, wiggle);
+    st = await state(page);
+    const litBefore = await vz(page, () => window.__vz.probe());
+    check('пока игрок шевелится, неподвижность не копится', st.stillFor < 0.5 && st.lights.lit >= 2, JSON.stringify({ still: st.stillFor, lights: st.lights }));
+    await afterSec(2.2);
+    st = await state(page);
+    check('замер на две секунды — панели ещё горят, неподвижность растёт', st.stillFor > 1.8 && st.lights.lit >= 2, JSON.stringify({ still: st.stillFor, lights: st.lights }));
+    const stillDark = await afterSec(4);
+    st = await state(page);
+    check('замер надолго (ни шага, ни взгляда) — все панели погасли', st.stillFor > 5.5 && st.lights.lit === 0, JSON.stringify({ still: st.stillFor, lights: st.lights }));
+    check('кадр потемнел, место осыпается: счётчик темноты пошёл', mean(stillDark) < mean(litBefore) * 0.4 && st.dark.for > 0, `среднее ${mean(litBefore).toFixed(1)} → ${mean(stillDark).toFixed(1)}, темно ${st.dark.for.toFixed(1)} с`);
+    const woke = await afterSec(1.5, wiggle);
+    st = await state(page);
+    check('пошевелился — панели загорелись, кадр светлый', st.stillFor < 0.5 && st.lights.lit >= 2 && mean(woke) > mean(stillDark) * 2 && mean(woke) > 0.6 * mean(lit0), JSON.stringify({ still: st.stillFor, lights: st.lights, mean: mean(woke).toFixed(1) }));
+
     // Осыпь рядом — панели гаснут.
     await vz(page, () => window.__vz.calm(false));
     const came = await vz(page, () => window.__vz.swarm('release', 3));
     // Она идёт к игроку; как только подошла на клетку — свет над ним гаснет.
-    for (let i = 0; i < 200 && st.ambientLocal > 0.1 && st.jump?.cause !== 'caught'; i++) st = await vz(page, () => window.__vz.step(6));
+    for (let i = 0; i < 200 && st.ambientLocal > 0.1 && st.jump?.cause !== 'caught'; i++) st = await vz(page, (w) => window.__vz.step(6, w), wiggle);
+    // Кадр и экспозиция глаза успевают за светом не сразу: даём полсекунды.
+    for (let i = 0; i < 5 && st.jump?.cause !== 'caught'; i++) st = await vz(page, (w) => window.__vz.step(6, w), wiggle);
     const dark = await vz(page, () => window.__vz.probe());
     check('Осыпь подошла — панели вокруг неё гаснут, у игрока темно', came && st.ambientLocal < 0.1 && mean(dark) < mean(lit) * 0.5, `свет над игроком ${st.ambientLocal.toFixed(2)}, среднее ${mean(lit).toFixed(1)} → ${mean(dark).toFixed(1)}, Осыпь ${st.swarm.mode}`);
     await vz(page, () => window.__vz.calm(true));
@@ -550,7 +582,7 @@ async function scenarioWorlds(browser, baseUrl) {
     await context.close();
   }
 
-  // Жёлтые комнаты: свет горит сам, жёлтый и неровный.
+  // Жёлтые комнаты: темно, как в убежище; светит только фонарь, и стена в его луче жёлтая.
   {
     const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&world=yellow');
     await page.click('.vz-overlay');
@@ -558,13 +590,41 @@ async function scenarioWorlds(browser, baseUrl) {
     await vz(page, () => window.__vz.freeze(true));
     await vz(page, () => window.__vz.calm(true));
     for (let i = 0; i < 40; i++) await vz(page, () => window.__vz.step(6));
+    let st = await state(page);
+    const lvl = await vz(page, () => window.__vz.level());
+    check('жёлтые комнаты: ламп, которые светят, нет (lights пусто), фонарь есть', st.world === 'yellow' && st.lights === null && st.hasLight === true, JSON.stringify({ world: st.world, lights: st.lights, hasLight: st.hasLight }));
+    // Зал без экранов и проекций: ищем тот, где без фонаря кадр темнее всего по всем сторонам.
+    const halls = lvl.rooms.filter((r) => r.type === 'hall');
     await vz(page, () => window.__vz.toggleLight());
+    let darkest = null;
+    for (const h of halls.slice(0, 4)) {
+      let worst = 0;
+      for (const yaw of [0, 90, 180, 270]) {
+        await vz(page, ([r, y]) => window.__vz.gotoRoom(r, y), [h.id, yaw]);
+        for (let i = 0; i < 25; i++) await vz(page, () => window.__vz.step(6));
+        worst = Math.max(worst, mean(await vz(page, () => window.__vz.probe())));
+      }
+      if (!darkest || worst < darkest.worst) darkest = { room: h.id, worst };
+    }
+    st = await state(page);
+    check('без фонаря в жёлтых комнатах темно: ни одна сторона зала не светла (как в убежище, около 12)', !!darkest && darkest.worst < 20 && st.light.state === 'off', `самая светлая сторона самого тёмного зала: ${darkest?.worst.toFixed(1)}`);
+    await vz(page, ([r]) => window.__vz.gotoRoom(r, 0), [darkest.room]);
     for (let i = 0; i < 25; i++) await vz(page, () => window.__vz.step(6));
-    const st = await state(page);
+    const dark0 = mean(await vz(page, () => window.__vz.probe()));
+    await vz(page, () => window.__vz.toggleLight());
+    // Луч на стену: смотрим по сторонам, пока не найдём ближнюю.
+    let best = null;
+    for (const yaw of [0, 90, 180, 270]) {
+      await vz(page, ([r, y]) => window.__vz.gotoRoom(r, y), [darkest.room, yaw]);
+      for (let i = 0; i < 12; i++) await vz(page, () => window.__vz.step(6));
+      const s2 = await state(page);
+      if (!best || s2.beamDist < best.d) best = { yaw, d: s2.beamDist };
+    }
+    await vz(page, ([r, y]) => window.__vz.gotoRoom(r, y), [darkest.room, best.yaw]);
+    for (let i = 0; i < 15; i++) await vz(page, () => window.__vz.step(6));
     const grid = await vz(page, () => window.__vz.probe());
     const color = await vz(page, () => window.__vz.probeColor());
-    check('жёлтые комнаты: без фонаря светло, и свет горит не только вокруг игрока', st.world === 'yellow' && st.light.state === 'off' && mean(grid) > 40 && !!st.lights && st.lights.lit > st.lights.total * 0.6 && st.lights.lit < st.lights.total, `среднее ${mean(grid).toFixed(1)}, ${JSON.stringify(st.lights)}`);
-    check('свет жёлтый: красного и зелёного заметно больше синего', color.r > color.b * 1.4 && color.g > color.b * 1.25, JSON.stringify(color));
+    check('с фонарём стена в луче светлая и жёлтая: красного и зелёного заметно больше синего', mean(grid) > dark0 + 10 && color.r > color.b * 1.3 && color.g > color.b * 1.15, `среднее ${dark0.toFixed(1)} → ${mean(grid).toFixed(1)}, цвет ${JSON.stringify(color)}, стена в ${best.d.toFixed(1)} м`);
     check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
     if (wantShots) await page.screenshot({ path: join(OUT, 'world_yellow.png') });
     await context.close();
@@ -584,8 +644,70 @@ function centre(grid) {
   return sum / n;
 }
 
+/** Объект уровня по номеру (его состояние сейчас). */
+const objOf = async (page, id) => (await vz(page, () => window.__vz.objects())).find((x) => x.id === id);
+/** Куда у объекта «перед»: единичный вектор оси +z (см. gotoObject в debug.ts). */
+const frontOf = (o) => [o.rot === 1 ? 1 : o.rot === 3 ? -1 : 0, o.rot === 0 ? 1 : o.rot === 2 ? -1 : 0];
+/** Расстояние от точки до передней грани объекта вдоль «перед»: положительное — перед ним, отрицательное — внутри или за гранью. */
+function frontDist(o, pos) {
+  const [fx, fz] = frontOf(o);
+  const cx = (o.min[0] + o.max[0]) / 2;
+  const cz = (o.min[2] + o.max[2]) / 2;
+  const half = fx !== 0 ? (o.max[0] - o.min[0]) / 2 : (o.max[2] - o.min[2]) / 2;
+  return (pos[0] - cx) * fx + (pos[2] - cz) * fz - half;
+}
+/** Средняя разница двух кадров по середине (столбцы 10–21, строки 4–13). */
+function centreDiff(a, b) {
+  let sum = 0;
+  let n = 0;
+  for (let r = 4; r <= 13; r++) for (let c = 10; c <= 21; c++, n++) sum += Math.abs(a[r * 32 + c] - b[r * 32 + c]);
+  return sum / n;
+}
+/** Крупные предметы с преградой (не картонки, не двери, не экраны), самые объёмные первыми. */
+function bulkyObjects(list) {
+  const dims = (o) => [o.max[0] - o.min[0], o.max[1] - o.min[1], o.max[2] - o.min[2]];
+  return list
+    .filter((o) => o.solid && !o.flat && !/^(door|display|ladder)/.test(o.name) && dims(o)[1] > 0.8 && Math.min(dims(o)[0], dims(o)[2]) >= 0.4)
+    .sort((a, b) => dims(b)[0] * dims(b)[1] * dims(b)[2] - dims(a)[0] * dims(a)[1] * dims(a)[2]);
+}
+/**
+ * Подойти к предмету и идти в него. Берёт первого из кандидатов, который стоит (here) и до которого
+ * игрок доходит: часть предметов в списке — из скрытого варианта комнаты или загорожена соседями.
+ * Возвращает кадр до касания, расстояние до передней грани в момент, когда предмет начал растворяться,
+ * и после того, как он пропал и игрок прошёл дальше.
+ */
+async function walkThrough(page, cands, dist = 2.2) {
+  const tried = [];
+  for (const c of cands.slice(0, 14)) {
+    if ((await objOf(page, c.id))?.state !== 'here') continue;
+    await vz(page, ([id, d]) => window.__vz.gotoObject(id, d), [c.id, dist]);
+    await vz(page, () => window.__vz.step(6));
+    const g0 = await vz(page, () => window.__vz.probe());
+    let o = await objOf(page, c.id);
+    let touchD = null;
+    let first = null;
+    for (let i = 0; i < 40 && !(touchD !== null && o.state === 'gone'); i++) {
+      const st = await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+      o = await objOf(page, c.id);
+      if (touchD === null && o.state !== 'here') {
+        touchD = frontDist(o, st.pos);
+        first = o.state;
+      }
+    }
+    if (touchD === null) {
+      tried.push(`${c.name}#${c.id}`);
+      continue;
+    }
+    // Ещё секунду вперёд: игрок идёт уже сквозь то, что от предмета осталось.
+    let st;
+    for (let i = 0; i < 10; i++) st = await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+    return { o: await objOf(page, c.id), g0, touchD, first, endD: frontDist(o, st.pos), tried };
+  }
+  return null;
+}
+
 async function scenarioFlats(browser, baseUrl) {
-  section('Плоские вещи: картонки, проекции, выставочные экраны');
+  section('Плоские вещи: картонки, проекции, выставочные экраны (экраны растворяются от касания)');
 
   // Убежище: проекция поперёк коридора и картонка у стены.
   {
@@ -602,7 +724,7 @@ async function scenarioFlats(browser, baseUrl) {
     const flats = await vz(page, () => window.__vz.flats());
     const veil = flats.findIndex((f) => f.kind === 'veil');
     const stand = flats.findIndex((f) => f.kind === 'standee');
-    check('в убежище есть и проекция, и картонка', veil >= 0 && stand >= 0, JSON.stringify(flats.map((f) => `${f.kind}:${f.what}`)));
+    check('в убежище есть и проекция, и картонка; экранов нет', veil >= 0 && stand >= 0 && !flats.some((f) => f.kind === 'screen'), JSON.stringify(flats.map((f) => `${f.kind}:${f.what}`)));
     const side = (st, f) => (st.pos[0] - f.at[0]) * f.n[0] + (st.pos[2] - f.at[2]) * f.n[2];
 
     // Проекция светится в темноте: с ней середина кадра светлая, без неё — чёрная.
@@ -684,17 +806,236 @@ async function scenarioFlats(browser, baseUrl) {
     const litHidden = centre(await afterSec(3));
     await vz(page, () => window.__vz.slides(true));
     check('фонарь экран не смывает: под лучом картинка на месте', Math.abs(litShown - litHidden) > 8, `с картинкой ${litShown.toFixed(1)}, без неё ${litHidden.toFixed(1)}`);
-    // Экран — вещь: сквозь него не пройти.
-    const side = (st, f) => (st.pos[0] - f.at[0]) * f.n[0] + (st.pos[2] - f.at[2]) * f.n[2];
-    await afterSec(2.5, { moveZ: 1 });
-    const st = await state(page);
-    check('экран — настоящая вещь: пройти сквозь него нельзя', side(st, flats[scr]) > 0.15, `${side(st, flats[scr]).toFixed(2)} м перед экраном`);
+    // Экран растворяется от касания — как всё, чего касается герой, — и возвращается собой после темноты.
+    const scrObj = (await vz(page, () => window.__vz.objects()))
+      .filter((o) => o.name.startsWith('display'))
+      .sort((a, b) => Math.hypot(a.at[0] - flats[scr].at[0], a.at[2] - flats[scr].at[2]) - Math.hypot(b.at[0] - flats[scr].at[0], b.at[2] - flats[scr].at[2]))[0];
+    check('у экрана в приёмной есть предмет-объект рядом', !!scrObj && Math.hypot(scrObj.at[0] - flats[scr].at[0], scrObj.at[2] - flats[scr].at[2]) < 1.5, JSON.stringify(scrObj?.at));
+    const hit = scrObj ? await walkThrough(page, [scrObj], 1.9) : null;
+    check('экран растворяется от касания: игрок идёт в него и проходит насквозь', !!hit && ['going', 'gone'].includes(hit.first) && hit.endD < -0.05, hit ? `${hit.first}, до грани ${hit.touchD.toFixed(2)} → ${hit.endD.toFixed(2)} м, ${hit.o.state}` : 'не дошёл');
+    // Отошёл и замер: панели гаснут, экран всё ещё растворён.
+    await vz(page, ([id]) => window.__vz.gotoObject(id, 2.2), [scrObj.id]);
+    await afterSec(6.5);
+    let st = await state(page);
+    let so = await objOf(page, scrObj.id);
+    check('замер — панели погасли; экран, пока темно, не возвращается', st.lights.lit === 0 && so.state === 'gone', JSON.stringify({ lights: st.lights, still: st.stillFor, screen: so.state }));
+    // Пошевелился: свет вернулся, и вместе с ним — экран, собой и на своём месте.
+    for (let i = 0; i < 40 && so.state !== 'here'; i++) {
+      await vz(page, () => window.__vz.step(6, { lookYaw: 0.0005 }));
+      so = await objOf(page, scrObj.id);
+    }
+    st = await state(page);
+    check('пошевелился — экран вернулся собой и на то же место (не «ушёл» вещью сна)', so.state === 'here' && st.illusions.back >= 1, JSON.stringify({ screen: so.state, ill: st.illusions }));
     check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
     if (wantShots) {
       await vz(page, (i) => window.__vz.gotoFlat(i, 1.9, 0.9), scr);
       await afterSec(2);
       await page.screenshot({ path: join(OUT, 'flat_screen.png') });
     }
+    await context.close();
+  }
+
+  // Жёлтые комнаты: ровно два экрана на уровень, картинки разные; проекции — в тёмных коридорах.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&world=yellow');
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    await vz(page, () => window.__vz.step(6));
+    const flats = await vz(page, () => window.__vz.flats());
+    const lvl = await vz(page, () => window.__vz.level());
+    const screens = flats.filter((f) => f.kind === 'screen');
+    check('в жёлтых комнатах экранов ровно два, и картинки на них разные', screens.length === 2 && screens[0].what !== screens[1].what, JSON.stringify(screens.map((f) => f.what)));
+    const veils = flats.filter((f) => f.kind === 'veil');
+    check('проекции в жёлтых комнатах стоят в коридорах (не у ламп)', veils.length >= 1 && veils.every((f) => lvl.rooms.find((r) => r.id === f.room)?.type === 'corridor'), JSON.stringify(veils.map((f) => `${f.what}@${lvl.rooms.find((r) => r.id === f.room)?.type}`)));
+    check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    await context.close();
+  }
+}
+
+/**
+ * «Всё иллюзорно»: чего касается герой, растворяется; вернуться может только после темноты (выкл/вкл
+ * фонарь, в офисе — замер и движение) и уже, быть может, другим или в другом месте.
+ */
+async function scenarioIllusions(browser, baseUrl) {
+  section('Всё иллюзорно: предметы, мелкие вещи, картонки и офис растворяются от касания и возвращаются после темноты');
+  const lightOn = async (page) => {
+    if ((await state(page)).light.state === 'off') await vz(page, () => window.__vz.toggleLight());
+  };
+  const run = (page, seconds, input) => vz(page, ([n, inp]) => {
+    for (let i = 0; i < n; i++) window.__vz.step(30, inp ?? undefined);
+    return window.__vz.state();
+  }, [Math.round(seconds * 2), input ?? null]);
+  /** Шагать по полсекунды, пока не выполнится условие над объектом (но не дольше max секунд). */
+  const waitObj = async (page, id, cond, max, input) => {
+    let o = await objOf(page, id);
+    for (let t = 0; t < max * 2 && !cond(o); t++) {
+      await vz(page, (inp) => window.__vz.step(30, inp ?? undefined), input ?? null);
+      o = await objOf(page, id);
+    }
+    return o;
+  };
+
+  // Убежище.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=2');
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    await run(page, 2);
+    const objs = await vz(page, () => window.__vz.objects());
+    const cands = bulkyObjects(objs);
+    check('на уровне есть объекты, часть с преградой', objs.length >= 20 && objs.some((o) => o.solid) && cands.length >= 3, `объектов ${objs.length}, с преградой ${objs.filter((o) => o.solid).length}, крупных ${cands.length}`);
+
+    // Предмет с преградой.
+    const hit = await walkThrough(page, cands);
+    const id = hit?.o.id;
+    check('игрок идёт в предмет с преградой: тот сперва держит, потом растворяется, игрок проходит на ту сторону передней грани', !!hit && hit.first === 'going' && hit.touchD > 0.05 && hit.endD < -0.1 && hit.o.state === 'gone', hit ? `${hit.o.name}#${id}: в момент касания до грани ${hit.touchD.toFixed(2)} м, потом ${hit.endD.toFixed(2)} м, ${hit.first} → ${hit.o.state}; не подошли: ${hit.tried.join(', ') || '—'}` : 'ни один не растворился');
+    if (!hit) {
+      await context.close();
+      return;
+    }
+    let st = await state(page);
+    check('счётчик касаний вырос', st.illusions.gone >= 1 && st.illusions.back === 0, JSON.stringify(st.illusions));
+    const thingsBefore = (await vz(page, () => window.__vz.things())).length;
+    // Тот же ракурс: до касания в середине был предмет, теперь стена.
+    await vz(page, ([i]) => window.__vz.gotoObject(i, 2.2), [id]);
+    await run(page, 0.3);
+    const g1 = await vz(page, () => window.__vz.probe());
+    const diff1 = centreDiff(hit.g0, g1);
+    check('кадр на месте предмета изменился: вместо него стена', diff1 > 8, `разница середины кадра ${diff1.toFixed(1)}, среднее ${mean(hit.g0).toFixed(1)} → ${mean(g1).toFixed(1)}`);
+    await lightOn(page);
+    await run(page, 5);
+    let o = await objOf(page, id);
+    check('при горящем фонаре за 5 с предмет не вернулся', o.state === 'gone', `${o.state}, back ${(await state(page)).illusions.back}`);
+    // Темнота: фонарь выкл, подождать, вкл.
+    await vz(page, () => window.__vz.toggleLight());
+    await run(page, 3);
+    st = await state(page);
+    const darkBack = st.illusions.back;
+    check('пока фонарь выключен, предмет тоже не возвращается', (await objOf(page, id)).state === 'gone' && darkBack === 0, `${(await objOf(page, id)).state}, back ${darkBack}`);
+    await vz(page, () => window.__vz.toggleLight());
+    o = await waitObj(page, id, (x) => x.state === 'here' || x.state === 'left', 8);
+    st = await state(page);
+    const things1 = (await vz(page, () => window.__vz.things())).length;
+    check('выключил и включил фонарь — предмет вернулся: на месте, либо ушёл вещью сна (вещей стало больше)', (o.state === 'here' || (o.state === 'left' && things1 === thingsBefore + 1)) && st.illusions.back >= 1, `${o.state}, вещей ${thingsBefore} → ${things1}, ${JSON.stringify(st.illusions)}`);
+    await vz(page, ([i]) => window.__vz.gotoObject(i, 2.2), [id]);
+    await run(page, 0.3);
+    const g2 = await vz(page, () => window.__vz.probe());
+    const diff2 = centreDiff(g1, g2);
+    check('на месте снова что-то стоит: кадр снова изменился (если предмет ушёл в другое место — появилась новая вещь)', o.state === 'left' ? things1 === thingsBefore + 1 : diff2 > 8, `${o.state}, разница ${diff2.toFixed(1)}`);
+
+    // Пока игрок стоит на месте предмета, тот не возвращается.
+    const rest = cands.filter((c) => c.id !== id);
+    const hit2 = await walkThrough(page, rest);
+    if (hit2) {
+      const id2 = hit2.o.id;
+      await vz(page, () => window.__vz.toggleLight());
+      await run(page, 3);
+      await vz(page, () => window.__vz.toggleLight());
+      await run(page, 3);
+      let o2 = await objOf(page, id2);
+      const inside = frontDist(o2, (await state(page)).pos) < 0;
+      check('пока игрок стоит на месте предмета, тот не возвращается, хоть свет и погас и зажёгся', inside && o2.state === 'gone', `${o2.name}#${id2}: ${o2.state}, игрок ${inside ? 'внутри' : 'снаружи'}`);
+      await vz(page, ([i]) => window.__vz.gotoObject(i, 2.2), [id2]);
+      o2 = await waitObj(page, id2, (x) => x.state !== 'gone', 6);
+      check('отошёл — предмет вернулся', o2.state !== 'gone' && o2.state !== 'going', o2.state);
+    } else check('пока игрок стоит на месте предмета, тот не возвращается', false, 'второго предмета для проверки не нашлось');
+
+    // Мелкая вещь сна без преграды.
+    await lightOn(page);
+    const things = (await vz(page, () => window.__vz.things())).filter((t) => !t.memory && t.state === 'idle' && SMALL_THINGS.includes(t.kind));
+    let thing = null;
+    for (const t of things) {
+      if (!(await vz(page, ([i]) => window.__vz.gotoThing(i, 2.2), [t.id]))) continue;
+      const from = (await state(page)).pos;
+      // Взгляд в пол: иначе вещь растворится не от касания, а от долгого взгляда (у неё своя судьба), и вернуться ей незачем.
+      await vz(page, () => window.__vz.look(window.__vz.state().aim[0], -1.3));
+      let cur = t;
+      for (let i = 0; i < 40 && cur.state !== 'gone'; i++) {
+        await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+        cur = (await vz(page, () => window.__vz.things())).find((x) => x.id === t.id);
+      }
+      if (cur.state === 'gone') {
+        thing = { t, from };
+        break;
+      }
+    }
+    check('мелкая вещь сна: наступил — растворилась', !!thing, `пробовали: ${things.map((t) => t.kind).join(', ')}`);
+    if (thing) {
+      await vz(page, ([p]) => window.__vz.teleport(p[0], p[1], p[2]), [thing.from]);
+      await vz(page, () => window.__vz.toggleLight());
+      await run(page, 3);
+      await vz(page, () => window.__vz.toggleLight());
+      let cur = null;
+      for (let i = 0; i < 24; i++) {
+        await vz(page, () => window.__vz.step(30));
+        cur = (await vz(page, () => window.__vz.things())).find((x) => x.id === thing.t.id);
+        if (cur.state !== 'gone') break;
+      }
+      check('после выкл/вкл фонаря вещь снова на месте или на другом (не «gone»)', cur.state !== 'gone', `${thing.t.kind}: ${cur.state}, было ${thing.t.pos.map((v) => v.toFixed(1))}, стало ${cur.pos.map((v) => v.toFixed(1))}, kind ${cur.kind}`);
+    }
+
+    // Картонка.
+    await lightOn(page);
+    const flats = await vz(page, () => window.__vz.flats());
+    const stand = flats.findIndex((f) => f.kind === 'standee');
+    const flatObjs = objs.filter((o) => o.flat);
+    const so = stand >= 0 ? flatObjs.sort((a, b) => Math.hypot(a.at[0] - flats[stand].at[0], a.at[2] - flats[stand].at[2]) - Math.hypot(b.at[0] - flats[stand].at[0], b.at[2] - flats[stand].at[2]))[0] : null;
+    check('на уровне есть картонка, и у неё есть объект', stand >= 0 && !!so && Math.hypot(so.at[0] - flats[stand].at[0], so.at[2] - flats[stand].at[2]) < 1.5, JSON.stringify(so?.at));
+    if (so) {
+      await vz(page, ([i]) => window.__vz.gotoFlat(i, 1.5), [stand]);
+      let seen = null;
+      for (let i = 0; i < 40; i++) {
+        await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+        const cur = await objOf(page, so.id);
+        if (cur.state !== 'here') seen = cur.state;
+      }
+      st = await state(page);
+      const side = (st.pos[0] - flats[stand].at[0]) * flats[stand].n[0] + (st.pos[2] - flats[stand].at[2]) * flats[stand].n[2];
+      check('картонка: прошёл сквозь неё — её объект не «here»', seen !== null && side < -0.05, `${flats[stand].what}: ${seen}, ${side.toFixed(2)} м от листа`);
+      await vz(page, ([i]) => window.__vz.gotoFlat(i, 3), [stand]);
+      await vz(page, () => window.__vz.toggleLight());
+      await run(page, 3);
+      await vz(page, () => window.__vz.toggleLight());
+      const back = await waitObj(page, so.id, (x) => x.state === 'here', 8);
+      check('после выкл/вкл фонаря картонка вернулась собой и на своё место (here)', back.state === 'here', back.state);
+    }
+    check('убежище: нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    const warns = log.warnings.filter((w) => !benign(w));
+    check('убежище: нет предупреждений в консоли', warns.length === 0, `${warns.length}: ${[...new Set(warns)].join(' | ').slice(0, 300)}`);
+    await context.close();
+  }
+
+  // Офис: фонаря нет, темноту делает замершее тело.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&world=office');
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    const wiggle = { lookYaw: 0.0005 };
+    let st = await run(page, 2, wiggle);
+    const hasLight0 = st.hasLight;
+    const cands = bulkyObjects(await vz(page, () => window.__vz.objects()));
+    check('офис: фонаря нет', hasLight0 === false && st.light.intensity === 0, JSON.stringify({ hasLight: st.hasLight, light: st.light }));
+    const hit = await walkThrough(page, cands);
+    const id = hit?.o.id;
+    check('офис: дошёл до предмета, коснулся — растворился, игрок прошёл', !!hit && ['going', 'gone'].includes(hit.first) && hit.endD < -0.1, hit ? `${hit.o.name}#${id}: ${hit.first}, до грани ${hit.touchD.toFixed(2)} → ${hit.endD.toFixed(2)} м, ${hit.o.state}; не подошли: ${hit.tried.join(', ') || '—'}` : 'ни один не растворился');
+    if (hit) {
+      await vz(page, ([i]) => window.__vz.gotoObject(i, 2.2), [id]);
+      st = await run(page, 6.5);
+      let o = await objOf(page, id);
+      check('офис: замер — панели погасли; предмет, пока темно, не вернулся', st.lights.lit === 0 && o.state === 'gone' && st.illusions.back === 0, JSON.stringify({ lights: st.lights, still: st.stillFor, obj: o.state }));
+      o = await waitObj(page, id, (x) => x.state === 'here' || x.state === 'left', 8, wiggle);
+      st = await state(page);
+      check('офис: пошевелился — панели загорелись, предмет вернулся или ушёл вещью', (o.state === 'here' || o.state === 'left') && st.illusions.back >= 1 && st.lights.lit >= 1, JSON.stringify({ obj: o.state, lights: st.lights, ill: st.illusions }));
+    }
+    check('офис: нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    const warns = log.warnings.filter((w) => !benign(w));
+    check('офис: нет предупреждений в консоли', warns.length === 0, `${warns.length}: ${[...new Set(warns)].join(' | ').slice(0, 300)}`);
     await context.close();
   }
 }
@@ -2087,6 +2428,7 @@ try {
   if (wants('gen')) await scenarioGen(browser, server.url);
   if (wants('worlds')) await scenarioWorlds(browser, server.url);
   if (wants('flats')) await scenarioFlats(browser, server.url);
+  if (wants('illusions')) await scenarioIllusions(browser, server.url);
   if (wants('session')) await scenarioSession(browser, server.url);
   // Только карманные пространства (быстрый прогон; в полный session они уже входят).
   if (only?.includes('pockets')) await scenarioPockets(browser, server.url);

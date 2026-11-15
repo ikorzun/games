@@ -602,6 +602,8 @@ export class App {
         if (buzz) navigator.vibrate(35);
       }
       else if (e.type === 'pocket') this.onPocket(e);
+      // Первое касание: вещь рассыпалась — сказать, что это правило, и как её вернуть.
+      else if (e.type === 'touch' && e.what === 'gone') this.teach('touch', t(this.game.hasLight ? 'teach.touch' : 'teach.touch.still'), 7000);
     }
   }
 
@@ -653,7 +655,7 @@ export class App {
     let hint = '';
     if (!dead && this.screen === 'play' && g.where === 'main' && this.profile.successes === 0) {
       if (g.time < 7) hint = t(this.dragMode ? 'hint.move.desktop_drag' : `hint.move.${base}`);
-      else if (g.time < 12) hint = t(`hint.light.${base}`);
+      else if (g.time < 12 && g.hasLight) hint = t(`hint.light.${base}`);
       else if (g.time < 16 && !this.touchMode) hint = t('hint.pause.desktop');
     }
     // В карманном пространстве нижняя строка говорит, как выйти, а под конец — что место уходит само.
@@ -663,6 +665,8 @@ export class App {
     this.hud.setHint(hint);
     this.touch?.setShakePrompt(dead && !bright, light.reviveProgress);
     this.touch?.setLit(light.state === 'on');
+    // Где фонаря нет (офис), нет и его кнопки.
+    this.touch?.setLightHidden(!g.hasLight);
     this.hud.setBattery(1, 0, true);
     this.hud.setAction('', 0);
     // В светлом пространстве светлые надписи не видны: переключаем их на тёмные.
@@ -689,7 +693,7 @@ export class App {
         this.seekingSince = g.time;
       }
       if (act && s.hold > 0.05) this.teach('look', t('teach.look'));
-      if (act && g.time - this.seekingSince > 25) this.teach('dark', t('teach.dark'), 7000);
+      if (act && g.time - this.seekingSince > 25) this.teach('dark', t(g.hasLight ? 'teach.dark' : 'teach.dark.still'), 7000);
       if (s.inWater) this.teach('water', t('teach.water'));
     } else {
       this.hud.setGoals('', [], false);

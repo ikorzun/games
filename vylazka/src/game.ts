@@ -31,9 +31,15 @@ import { Jumps } from './systems/jumps';
 import type { JumpPlan, JumpStyle } from './systems/jumps';
 import { ALL_MEMORIES, DEFAULT_SESSION, Session } from './systems/session';
 import type { SessionConfig, SessionEvent } from './systems/session';
+import { DEFAULT_ILLUSIONS, Illusions } from './systems/illusions';
+import type { Comeback, ComebackOptions } from './systems/illusions';
 import { looksAt, Things } from './systems/things';
 import type { Fate, Look, Thing } from './systems/things';
 import { ColliderSet } from './world/colliders';
+import type { Aabb } from './world/colliders';
+import { FLAT_OK } from './world/furnish';
+import type { LevelObject } from './world/objects';
+import { ALL_PROPS } from './world/props_all';
 import type { WorldKind } from './gen/layout';
 import type { BuiltLevel } from './world/level';
 import { STAIR_RISE, STAIR_RUN, STAIR_STEPS } from './world/level_build';
@@ -69,6 +75,12 @@ export type RoomFx = 'strobe' | 'dark' | 'wire' | 'thin';
 export type DreamEvent =
   | { type: 'jump'; plan: JumpPlan; phase: 'start' | 'switch' }
   | { type: 'thing'; thing: Thing; what: 'changing' | 'settled' }
+  /**
+   * Всё иллюзорно: gone — игрок коснулся вещи, и она растворяется (first — это первое касание за
+   * вылазку); back — свет погас и зажёгся, и вещь вернулась: той же (same), другой (kind) или в
+   * другом месте (place).
+   */
+  | { type: 'touch'; name: string; what: 'gone' | 'back'; first?: boolean; how?: Comeback['how'] }
   /**
    * Карманное пространство сделало своё дело: enter — игрок вошёл; map — прочёл макет в кукольном домике
    * (room и tier — где лежит искомое; без memory — искать пока нечего); next — в белом нигде вызвал следующее
@@ -264,12 +276,18 @@ export class Game {
   cellLights: CellLights | null = null;
   /** Сколько рассеянного света там, где стоит игрок, 0..1 (без света по клеткам — 1). */
   ambientLocal = 1;
-  /** Эхо: волны от шагов игрока, щелчка фонаря и от Осыпи — второй способ видеть. */
+  /** Эхо: волны от шагов игрока и от Осыпи — второй способ видеть (только без фонаря и только на ходу). */
   readonly echo = new Echo();
   /** Сколько секунд до следующей волны от Осыпи. */
   private driftPulse = 0;
   /** 0..1: насколько глаза привыкли к темноте — без света эхо видно в полную силу. */
   private darkAdapt = 0;
+  /** 0..1: эхо «открыто» — фонарь не светит. При свете фонаря эха нет. */
+  private echoOpen = 0;
+  /** 0..1: эхо «на ходу» — его поднимают шаги. Замер — волны гаснут: стоящий в темноте слеп. */
+  private echoMove = 0;
+  /** Сколько секунд игрок не идёт и не смотрит по сторонам: датчики движения офиса теряют неподвижного. */
+  private stillFor = 0;
   /** 0..1: Осыпь за спиной — впереди виден её призрак. */
   ghost = 0;
   private darkFor = 0;
@@ -296,6 +314,21 @@ export class Game {
   /** Вещи, живущие только в текущем карманном пространстве. */
   private pocketThings: Thing[] = [];
   private memoryThing: Thing | null = null;
+  /** Иллюзорные предметы обстановки: чего коснулся игрок, то растворяется (systems/illusions.ts). */
+  illusions: Illusions | null = null;
+  /** Хозяева преград и датчиков, которых игрок коснулся за шаг: объект уровня — плюс, вещь сна — минус. */
+  private readonly touched = new Set<number>();
+  /** Преграды и датчики каждого объекта уровня. */
+  private readonly objBoxes = new Map<number, Aabb[]>();
+  /** Узел навигации рядом с объектом: по нему — свет его клетки и его помещение. */
+  private readonly objNode = new Map<number, number>();
+  /** Чем может вернуться предмет с таким именем (подходящие по размеру отдельно стоящие вещи). */
+  private readonly returnKinds = new Map<string, string[]>();
+  /** Свободные места у стен, уже занятые вернувшимися вещами. */
+  private readonly slotTaken = new Set<number>();
+  /** Сколько вещей растворилось от касания и сколько вернулось за вылазку. */
+  touchCount = 0;
+  returnCount = 0;
   private pocketGroup = 0;
   private pocketAge = 0;
   private pocketStay = 40;
@@ -344,6 +377,7 @@ export class Game {
     this.clearThings();
     this.level = level;
     this.colliders = level.colliders;
+    this.setupIllusions(level);
     this.spawn = level.spawn;
     this.renderer.setWorld(level.chunks, level.stairs);
     // Батарейка в сессии не садится: фонарь глохнет от контакта, а не от заряда.
@@ -402,6 +436,9 @@ export class Game {
     this.echo.clear();
     this.driftPulse = 0;
     this.darkAdapt = 0;
+    this.echoOpen = 0;
+    this.echoMove = 0;
+    this.stillFor = 0;
     this.ghost = 0;
     this.glow = 1;
     this.glowTimer = 0;
@@ -414,6 +451,255 @@ export class Game {
     this.gasView = 0;
     this.shake.reset();
     this.respawn();
+  }
+
+  /**
+   * Подготовить иллюзорные предметы уровня: кому какие преграды принадлежат; у предмета без преград
+   * (картонка, коврик, картина на стене) — датчик касания по его габаритам.
+   */
+  private setupIllusions(level: BuiltLevel): void {
+    const objs = level.objects ?? [];
+    this.illusions = objs.length > 0 ? new Illusions(objs, level.layout?.seed ?? 0) : null;
+    this.objBoxes.clear();
+    this.objNode.clear();
+    this.returnKinds.clear();
+    this.slotTaken.clear();
+    this.touched.clear();
+    this.touchCount = 0;
+    this.returnCount = 0;
+    if (objs.length === 0) return;
+    const sensed = new Set<number>();
+    for (const bx of this.colliders.boxes) {
+      if (bx.owner === undefined || bx.owner <= 0) continue;
+      bx.gone = false;
+      if (bx.ghost) sensed.add(bx.owner);
+      const list = this.objBoxes.get(bx.owner);
+      if (list) list.push(bx);
+      else this.objBoxes.set(bx.owner, [bx]);
+    }
+    for (const o of objs) {
+      if (o.solid || sensed.has(o.id)) continue;
+      const bx: Aabb = { minX: o.min[0] - 0.05, minY: o.min[1], minZ: o.min[2] - 0.05, maxX: o.max[0] + 0.05, maxY: Math.max(o.max[1], o.min[1] + 0.05), maxZ: o.max[2] + 0.05, owner: o.id, ghost: true };
+      // Предмет скрытого варианта комнаты: пока вариант не показан, его нет.
+      if (o.group) {
+        bx.group = o.group;
+        bx.off = o.group.endsWith(':b');
+      }
+      this.colliders.add(bx);
+      this.objBoxes.set(o.id, [bx]);
+    }
+  }
+
+  /** Стоит ли игрок в этих габаритах (с запасом m): туда вещь вернуть нельзя — он окажется внутри. */
+  private standsIn(min: Vec3, max: Vec3, m = 0.45): boolean {
+    const b = this.body;
+    return b.x > min[0] - m && b.x < max[0] + m && b.z > min[2] - m && b.z < max[2] + m && b.y < max[1] && b.y + DEFAULT_CONTROLLER.height > min[1];
+  }
+
+  /** Лежит ли точка на предмете: над ним и в его границах (на полу рядом — не считается). */
+  private restsOn(p: Vec3, o: LevelObject): boolean {
+    return p[0] > o.min[0] - 0.05 && p[0] < o.max[0] + 0.05 && p[2] > o.min[2] - 0.05 && p[2] < o.max[2] + 0.05 && p[1] > o.min[1] + 0.12 && p[1] < o.max[1] + 0.15;
+  }
+
+  private nodeOfObject(o: LevelObject): number {
+    let n = this.objNode.get(o.id);
+    if (n === undefined) {
+      n = this.playerNodeAt([(o.min[0] + o.max[0]) / 2, o.at[1], (o.min[2] + o.max[2]) / 2]);
+      this.objNode.set(o.id, n);
+    }
+    return n;
+  }
+
+  /** Сколько света на этом месте: фонарь игрока или потолочная панель клетки (в офисе свет даёт место). */
+  private lightAt(node: number): number {
+    const beam = this.light.intensity * this.fxLight * this.env.light >= 0.15 ? 1 : 0;
+    return Math.max(beam, this.cellLights && node >= 0 ? this.cellLights.at(node) : 0);
+  }
+
+  /** Игрок коснулся предмета обстановки: тот растворяется, и всё, что на нём лежало, — вместе с ним. */
+  private touchObject(id: number, dream: DreamEvent[]): void {
+    const ill = this.illusions;
+    if (!ill || !ill.touch(id)) return;
+    const o = ill.get(id)!.obj;
+    this.touchCount += 1;
+    dream.push({ type: 'touch', name: o.name, what: 'gone', first: this.touchCount === 1 });
+    for (const t of this.things.list) if (t.state === 'idle' && !t.still && this.restsOn(t.pos, o)) this.touchThing(t, dream);
+  }
+
+  /** Игрок коснулся вещи сна: она растворяется и вернётся, когда свет погаснет и зажжётся. */
+  private touchThing(t: Thing, dream: DreamEvent[]): void {
+    if (!this.things.touch(t)) return;
+    this.touchCount += 1;
+    dream.push({ type: 'thing', thing: t, what: 'changing' });
+    dream.push({ type: 'touch', name: t.kind, what: 'gone', first: this.touchCount === 1 });
+  }
+
+  /** Чем может вернуться предмет: отдельно стоящие вещи, которые встанут на его место, не вылезая за него. */
+  private kindsFor(name: string): string[] {
+    let list = this.returnKinds.get(name);
+    if (!list) {
+      const spec = ALL_PROPS[name];
+      list = spec ? [...FLAT_OK].filter((n) => n !== name && ALL_PROPS[n] !== undefined && ALL_PROPS[n]!.mount === 'floor' && ALL_PROPS[n]!.w <= spec.w + 0.15 && ALL_PROPS[n]!.d <= spec.d + 0.2) : [];
+      this.returnKinds.set(name, list);
+    }
+    return list;
+  }
+
+  /**
+   * Из чего выбирать возвращение. Собой и на своё место возвращаются: картонка и экран (у них своя
+   * роль), предмет варианта комнаты, всё настенное и то, на чём что-то лежит.
+   */
+  private comebackOptions(o: LevelObject): ComebackOptions {
+    const spec = ALL_PROPS[o.name];
+    if (!spec || spec.mount !== 'floor' || o.flat || o.group !== undefined || o.name.startsWith('display_')) return { kinds: [], slots: [] };
+    if (this.things.list.some((t) => this.restsOn(t.pos, o))) return { kinds: [], slots: [] };
+    const node = this.nodeOfObject(o);
+    const room = node >= 0 ? this.level!.nav[node]!.room : -1;
+    const b = this.body;
+    const slots: number[] = [];
+    (this.level?.freeSlots ?? []).forEach((s, i) => {
+      if (s.room !== room || this.slotTaken.has(i) || spec.w > 2.3) return;
+      // Не там, где стоит игрок, и не на прежнем месте.
+      if (Math.hypot(s.at[0] - b.x, s.at[2] - b.z) < 1.6 || Math.hypot(s.at[0] - o.at[0], s.at[2] - o.at[2]) < 1.2) return;
+      slots.push(i);
+    });
+    return { kinds: this.kindsFor(o.name), slots };
+  }
+
+  /**
+   * Поставить отдельную вещь туда, где стоял (или мог бы стоять) предмет обстановки: at и rot — начало
+   * координат и поворот предмета у стены. Вещь собирается из пыли.
+   */
+  private standIn(kind: string, at: Vec3, rot: 0 | 1 | 2 | 3): Thing | null {
+    const spec = ALL_PROPS[kind];
+    if (!spec) return null;
+    // У напольного предмета спина лежит на стене, а вещь сна собрана вокруг своей середины: сдвигаем
+    // на полглубины вдоль его оси +z (куда она смотрит в мире — см. Xf.pt).
+    const off = spec.mount === 'free' ? 0 : spec.d / 2;
+    const fx = rot === 1 ? 1 : rot === 3 ? -1 : 0;
+    const fz = rot === 0 ? 1 : rot === 2 ? -1 : 0;
+    const t = this.addThing(kind, [at[0] + fx * off, at[1], at[2] + fz * off], rot * (Math.PI / 2), 'dust', false, spec.h > 0.4);
+    this.things.comeBack(t);
+    return t;
+  }
+
+  /** Исполнить решение о возврате предмета обстановки. */
+  private applyComeback(p: Comeback, dream: DreamEvent[]): void {
+    const ill = this.illusions!;
+    const o = ill.get(p.id)!.obj;
+    if (p.how === 'same') ill.comeBack(p.id);
+    else {
+      const slot = p.how === 'place' ? this.level!.freeSlots![p.slot]! : null;
+      if (p.how === 'place') this.slotTaken.add(p.slot);
+      if (this.standIn(p.how === 'kind' ? p.kind : o.name, slot ? slot.at : o.at, slot ? slot.rot : o.rot)) ill.leave(p.id);
+      else ill.comeBack(p.id);
+    }
+    this.returnCount += 1;
+    dream.push({ type: 'touch', name: o.name, what: 'back', how: p.how });
+  }
+
+  /** Сменить вид вещи сна: другая сетка, другой радиус, другая преграда. */
+  private reskin(t: Thing, kind: string): void {
+    const tm = thingMesh(kind, hash2(Math.round(t.pos[0] * 10), Math.round(t.pos[2] * 10), 0x71) >>> 0);
+    const old = this.thingRender.get(t.id);
+    if (old !== undefined) this.renderer.removeThing(old);
+    this.thingRender.set(t.id, this.renderer.addThing(tm.mesh, t.id));
+    t.kind = kind;
+    t.radius = tm.radius;
+    if (t.collider >= 0) {
+      this.colliders.boxes[t.collider]!.off = true;
+      t.collider = this.thingBox(t, tm.w, tm.d, tm.h);
+    }
+  }
+
+  /** Преграда вещи сна: коробка по её габаритам; хозяин — минус номер вещи (коснулся преграды — коснулся вещи). */
+  private thingBox(t: Thing, w: number, d: number, h: number): number {
+    const turned = Math.abs(Math.sin(t.yaw)) > 0.5;
+    const hx = (turned ? d : w) / 2;
+    const hz = (turned ? w : d) / 2;
+    const id = this.colliders.addBox(t.pos[0] - hx, t.pos[1], t.pos[2] - hz, t.pos[0] + hx, t.pos[1] + h, t.pos[2] + hz);
+    this.colliders.boxes[id]!.owner = -t.id;
+    return id;
+  }
+
+  /**
+   * Вернуть вещь сна, растворённую касанием. Вещь воспоминания возвращается собой и на своё место
+   * (её ищут по строке). Остальные — как решат сид и счёт: той же, другой или в другом месте.
+   */
+  private returnThing(t: Thing, dream: DreamEvent[]): void {
+    let how: Comeback['how'] = 'same';
+    if (!t.memory) {
+      const r = hash01(t.id * 37 + 5, this.returnCount * 13 + 1, this.dreamSeed ^ 0x7e7);
+      const pick = hash01(t.id * 11 + 3, this.returnCount * 7 + 2, this.dreamSeed ^ 0x51c);
+      const pool = WORLD_THINGS[this.world];
+      const solid = t.collider >= 0;
+      const kinds = (solid ? pool.big.map(([k]) => k) : pool.small).filter((k) => k !== t.kind);
+      if (r >= 0.5 && r < 0.8 && kinds.length > 0) {
+        this.reskin(t, kinds[Math.floor(pick * kinds.length)]!);
+        how = 'kind';
+      } else if (r >= 0.8 && !solid) {
+        // Другое место: свободное место для вещей неподалёку, где ничего не лежит.
+        const spots = (this.level?.spots ?? []).filter((sp) => Math.abs(sp.y - t.pos[1]) < 1.6 && Math.hypot(sp.x - t.pos[0], sp.z - t.pos[2]) < 10 && Math.hypot(sp.x - this.body.x, sp.z - this.body.z) > 1.2 && !this.things.list.some((o) => o.state !== 'gone' && Math.hypot(o.pos[0] - sp.x, o.pos[2] - sp.z) < 0.5));
+        const sp = spots[Math.floor(pick * spots.length)];
+        if (sp) {
+          t.pos = [sp.x, sp.y, sp.z];
+          this.session?.reserve(sp);
+          how = 'place';
+        }
+      }
+    }
+    this.things.comeBack(t);
+    if (t.collider >= 0) this.colliders.boxes[t.collider]!.gone = false;
+    this.returnCount += 1;
+    dream.push({ type: 'touch', name: t.kind, what: 'back', how });
+  }
+
+  /**
+   * Шаг правила «всё иллюзорно»: чего игрок коснулся — растворяется; что растворилось — ждёт, пока
+   * свет на его месте погаснет и зажжётся, и возвращается.
+   */
+  private stepIllusions(dt: number, dream: DreamEvent[]): void {
+    const b = this.body;
+    for (const id of this.touched) {
+      if (id > 0) this.touchObject(id, dream);
+      else {
+        const t = this.things.list.find((x) => x.id === -id);
+        if (t && !t.still) this.touchThing(t, dream);
+      }
+    }
+    // Мелкая вещь без преграды: коснулся — значит наступил или задел ногой.
+    for (const t of this.things.list) {
+      if (t.state !== 'idle' || t.collider >= 0 || t.still) continue;
+      const reach = Math.min(0.5, t.radius * 0.6) + DEFAULT_CONTROLLER.radius;
+      if (Math.hypot(t.pos[0] - b.x, t.pos[2] - b.z) < reach && t.pos[1] < b.y + DEFAULT_CONTROLLER.height && t.pos[1] + t.radius * 1.4 > b.y - 0.05) this.touchThing(t, dream);
+    }
+    const ill = this.illusions;
+    if (ill) {
+      const plans = ill.update(
+        dt,
+        (o) => this.lightAt(this.nodeOfObject(o)),
+        (o) => this.standsIn(o.min, o.max),
+        (o) => this.comebackOptions(o),
+      );
+      for (const p of plans) this.applyComeback(p, dream);
+      for (const id of ill.changed()) {
+        this.renderer.setObjectState(id, ill.get(id)!.dis);
+        // Преграды держат, пока вещь не рассыпалась достаточно (и сразу — когда она собирается).
+        const open = ill.open(id);
+        for (const bx of this.objBoxes.get(id) ?? []) bx.gone = open;
+      }
+    }
+    for (const t of this.things.list) {
+      // Вещь, которой коснулись, держит так же недолго, как и мебель.
+      if (t.touched && t.state === 'changing' && t.collider >= 0) this.colliders.boxes[t.collider]!.gone = t.dissolve >= DEFAULT_ILLUSIONS.yield;
+      if (t.state !== 'gone' || !t.touched) continue;
+      const l = this.lightAt(this.playerNodeAt(t.pos));
+      if (l < 0.08) t.dark = true;
+      else if (t.dark && l > 0.45) {
+        const r = t.radius + 0.35;
+        if (!this.standsIn([t.pos[0] - r, t.pos[1], t.pos[2] - r], [t.pos[0] + r, t.pos[1] + 2, t.pos[2] + r], 0)) this.returnThing(t, dream);
+      }
+    }
   }
 
   /** Раздать помещениям особенности: строб, темноту, сетку, «тонкие места». */
@@ -530,12 +816,7 @@ export class Game {
     const tm = thingMesh(kind, hash2(Math.round(pos[0] * 10), Math.round(pos[2] * 10), 0x71) >>> 0);
     const t = this.things.add(kind, pos, yaw, fate, tm.radius, memory);
     this.thingRender.set(t.id, this.renderer.addThing(tm.mesh, t.id));
-    if (solid) {
-      const turned = Math.abs(Math.sin(yaw)) > 0.5;
-      const hx = (turned ? tm.d : tm.w) / 2;
-      const hz = (turned ? tm.w : tm.d) / 2;
-      t.collider = this.colliders.addBox(pos[0] - hx, pos[1], pos[2] - hz, pos[0] + hx, pos[1] + tm.h, pos[2] + hz);
-    }
+    if (solid) t.collider = this.thingBox(t, tm.w, tm.d, tm.h);
     return t;
   }
 
@@ -611,6 +892,11 @@ export class Game {
   get ambientHere(): number {
     const a = this.env.ambient;
     return ((a[0] + a[1] + a[2]) / 3) * this.ambientLocal;
+  }
+
+  /** Есть ли здесь у игрока фонарь: в офисе его нет — свет даёт само место. */
+  get hasLight(): boolean {
+    return this.env.light > 0;
   }
 
   /** Узел, в клетке которого вылазка началась (−1 — вне графа). */
@@ -1003,7 +1289,8 @@ export class Game {
 
   /** Насколько сейчас видно вокруг: свет фонаря в этом месте или рассеянный свет. */
   private get seeing(): number {
-    const amb = (this.env.ambient[0] + this.env.ambient[1] + this.env.ambient[2]) / 3;
+    // Рассеянный свет — тот, что есть здесь на самом деле: под погасшей панелью офиса его нет.
+    const amb = ((this.env.ambient[0] + this.env.ambient[1] + this.env.ambient[2]) / 3) * this.ambientLocal;
     return Math.max(this.light.intensity * this.env.light * this.fxLight, amb > 0.2 ? 1 : 0);
   }
 
@@ -1023,21 +1310,24 @@ export class Game {
     const wishX = cos * input.moveX - sin * input.moveZ;
     const wishZ = -sin * input.moveX - cos * input.moveZ;
     const speed = (input.run ? RUN_SPEED : WALK_SPEED) * (s?.inWater ? WATER_SPEED : 1);
-    const res = stepPlayer(b, wishX, wishZ, speed, dt, this.colliders, DEFAULT_CONTROLLER);
+    this.touched.clear();
+    const res = stepPlayer(b, wishX, wishZ, speed, dt, this.colliders, DEFAULT_CONTROLLER, this.touched);
     // Выпал из мира (ушёл за край пространства) — возвращаем на место появления.
     if (res.fellOut) {
       if (this.pocket) this.teleport(this.pocket.spawn.pos[0], this.pocket.spawn.pos[1], this.pocket.spawn.pos[2], this.aimYaw, 0);
       else this.respawn();
     }
 
-    // Фонарь.
+    // Неподвижность: не идёт и не водит взглядом.
+    if (Math.hypot(b.vx, b.vz) > 0.25 || input.lookYaw !== 0 || input.lookPitch !== 0) this.stillFor = 0;
+    else this.stillFor += dt;
+
+    // Фонарь. Там, где его нет (офис: свет даёт место), кнопка ничего не делает и глохнуть нечему.
+    this.light.suspended = !this.hasLight;
     const wasOff = this.light.state === 'off';
-    const toggled = input.light;
-    if (toggled) {
-      this.light.toggle();
-      // Щелчок фонаря слышен: от него расходится волна эха.
-      if (this.where === 'main') this.echo.emit([this.body.x, this.body.y + 1.1, this.body.z], ECHO_STEP, 0.7);
-    }
+    const toggled = input.light && this.hasLight;
+    // Щелчок фонаря волну эха не пускает (решение владельца: эхо — только без фонаря и на ходу).
+    if (toggled) this.light.toggle();
     const level = this.shake.update(dt);
     const ev = this.light.update(dt, { panic: this.panic, wet: s?.inWater ? 1 : 0, swarm: this.swarmNear, shake: level });
     const strokes = this.shake.strokes - this.lastStrokes;
@@ -1073,6 +1363,9 @@ export class Game {
     const node = this.where === 'main' ? this.playerNode() : -1;
     this.room = node >= 0 ? this.level!.nav[node]!.room : -1;
 
+    // Всё иллюзорно: чего коснулся — растворяется; что растворилось — вернётся, когда свет погаснет и зажжётся.
+    if (this.where === 'main') this.stepIllusions(dt, dream);
+
     // Вещи: под взглядом уменьшаются, рассыпаются, растут.
     for (const e of this.things.update(dt, look, [b.x, b.y, b.z], los)) {
       const t = e.thing;
@@ -1086,7 +1379,7 @@ export class Game {
 
     // Сессия: воспоминания и среда.
     if (s && this.where !== 'limbo') {
-      out.push(...s.update(dt, { pos: [b.x, b.y, b.z], eye, aim, light: look.light, node, swarm: this.swarmNear, observed: this.observed, landed: res.landed }, los));
+      out.push(...s.update(dt, { pos: [b.x, b.y, b.z], eye, aim, light: look.light, node, swarm: this.swarmNear, observed: this.observed, landed: res.landed, hidden: this.memoryThing !== null && this.memoryThing.state !== 'idle' }, los));
       this.observed = false;
     }
     for (let i = 0; i < out.length; i++) this.applySessionEvent(out[i]!, out, dream, node);
@@ -1358,7 +1651,7 @@ export class Game {
     const cl = this.where === 'main' ? this.cellLights : null;
     if (cl) {
       const drift = this.swarm && this.swarm.active && this.swarm.mode !== 'scatter' ? this.swarm.node : -1;
-      cl.update(dt, { playerNode: this.playerNode(), driftNode: drift, time: this.time });
+      cl.update(dt, { playerNode: this.playerNode(), driftNode: drift, time: this.time, idle: this.stillFor });
       this.ambientLocal = cl.at(this.playerNode());
     } else this.ambientLocal = 1;
     // В светлом пространстве камеру держит рассеянный свет, а не пятно фонаря. Вспышки строба
@@ -1416,7 +1709,15 @@ export class Game {
     const unlit = this.where === 'main' && this.light.intensity * lightScale < 0.15 && amb < 0.08;
     // К темноте привыкают около секунды; свет возвращает «дневную» силу эха сразу.
     this.darkAdapt = approach(this.darkAdapt, unlit ? 1 : 0, unlit ? 0.9 : 0.25, dt);
-    this.echo.update(dt, ECHO_LIT + (1 - ECHO_LIT) * this.darkAdapt);
+    // Пока фонарь светит, эха нет вовсе (решение владельца: иначе в нём нет смысла — эхо это способ
+    // видеть без света). Гаснет оно за десятую секунды, возвращается за треть.
+    const beam = this.light.intensity * lightScale >= 0.15;
+    this.echoOpen = approach(this.echoOpen, beam ? 0 : 1, beam ? 0.1 : 0.3, dt);
+    // …и только на ходу (решение владельца): эхо поднимают шаги. Замер — волны гаснут чуть дольше
+    // секунды, последняя успевает разойтись. Стоящий в темноте не видит ничего — и волн Осыпи тоже.
+    const walking = Math.hypot(b.vx, b.vz) > 0.25;
+    this.echoMove = approach(this.echoMove, walking ? 1 : 0, walking ? 0.12 : 0.45, dt);
+    this.echo.update(dt, (ECHO_LIT + (1 - ECHO_LIT) * this.darkAdapt) * this.echoOpen * this.echoMove);
 
     // Рядом с роем сигнал камеры рвётся.
     const hunting = sw?.mode === 'hunt' || sw?.mode === 'cohere';
@@ -1430,11 +1731,12 @@ export class Game {
       const id = this.thingRender.get(t.id);
       if (id === undefined) continue;
       const d = Math.hypot(t.pos[0] - rig.camPos[0], t.pos[1] - rig.camPos[1], t.pos[2] - rig.camPos[2]);
-      let w = t.state === 'changing' ? 0.8 : t.state === 'idle' ? t.gaze * (0.45 + 0.35 * Math.sin(this.time * 23)) : 0;
+      let w = t.state === 'changing' || t.state === 'coming' ? 0.8 : t.state === 'idle' ? t.gaze * (0.45 + 0.35 * Math.sin(this.time * 23)) : 0;
       let xray = false;
       if (t.memory) {
         memNear = Math.max(memNear, 1 - d / 8);
-        if (lit < 0.15 && d < 45) {
+        // Без света — значит темно на самом деле: под горящей панелью офиса сетки сквозь стены нет.
+        if (lit < 0.15 && amb < 0.08 && d < 45) {
           w = Math.max(w, 0.6);
           xray = true;
         }
@@ -1465,6 +1767,7 @@ export class Game {
       tunnel: clamp(this.panic * 0.6, 0, 0.95),
       gas: this.gasView,
       decay: bunker ? 0.25 + 0.6 * depth : this.env.decay,
+      plain: this.env.plain === true,
       // Внизу воздух гуще: взвесь, пар от сырых стен; в газу луч упирается в муть.
       haze: bunker ? (0.008 + 0.004 * depth) * (1 + 9 * this.gasView) : this.env.haze,
       fade: this.fade * fadeMul,
@@ -1533,6 +1836,9 @@ export class Game {
       fade: this.fade,
       where: this.where,
       dark: { for: this.darkFor, shifts: this.detailShifts },
+      illusions: { gone: this.touchCount, back: this.returnCount },
+      hasLight: this.hasLight,
+      stillFor: this.stillFor,
       pocket: this.pocket?.kind ?? null,
       pocketInfo: this.pocket
         ? { age: this.pocketAge, stay: this.pocketStay, done: this.pocketDone, fade: this.pocketFade, exit: this.pocket.exit ?? null, focus: this.pocket.focus ?? null, blanks: this.blanks.map((t) => t.id) }

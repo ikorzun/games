@@ -5,9 +5,10 @@
  * у стен. Посреди самой большой комнаты — отдел: один остров из четырёх столов с терминалами.
  * Остальное — кабинки, переговорная, комната отдыха, кабинет, картотека, копировальная, серверная.
  *
- * Жёлтые комнаты — тот же этаж, из которого ушло назначение: пустые залы с колоннами, часть панелей
- * мертва (те же, что гасит свет по клеткам: systems/cell_lights.ts, panelDead), редкие остатки —
- * одинокий стул, жёлтый знак «мокрый пол», перегородка.
+ * Жёлтые комнаты — тот же этаж, из которого ушло назначение: пустые залы с колоннами, панели
+ * обесточены (у каждой шестой повис провод), редкие остатки — одинокий стул, жёлтый знак «мокрый
+ * пол», перегородка. Темно, как в убежище, и чисто: ни пятен, ни фактур. На весь этаж — два экрана,
+ * таких же, как в офисе.
  *
  * Мебель — из реестра ALL_PROPS: офисные предметы собраны кодом (props_office.ts), стулья, столы,
  * диваны, растения и картины — готовые модели (props_models.ts).
@@ -46,13 +47,13 @@ function corner(ctx: RoomCtx, name: string): boolean {
 }
 
 /**
- * Потолочные панели: по одной на клетку. dead — какие клетки остались без света (жёлтые комнаты):
- * там панель тёмная, с повисшим проводом.
+ * Потолочные панели: по одной на клетку. В жёлтых комнатах этаж обесточен: панели не светят, у каждой
+ * шестой повис провод. Решает мир, а не вызывающий: забыть про это в одном из помещений нельзя.
  */
-function panels(ctx: RoomCtx, dead = false): void {
+function panels(ctx: RoomCtx): void {
+  const off = ctx.world === 'yellow';
   for (const c of ctx.cells) {
-    const off = dead && panelDead(ctx.seed, c.cx, c.cz);
-    const name = off ? 'ceiling_panel_dead' : 'ceiling_panel';
+    const name = !off ? 'ceiling_panel' : panelDead(ctx.seed, c.cx, c.cz) ? 'ceiling_panel_dead' : 'ceiling_panel_off';
     const p = ALL_PROPS[name];
     if (p) p.build(c.xf.child(0, ctx.h, -p.d / 2), seedOf(ctx));
   }
@@ -76,7 +77,8 @@ function middle(ctx: RoomCtx): { c: CellInfo; dx: number; dz: number } {
 
 /** Что показывают экраны: в офисе — природу (ею заменяют окна), в жёлтых комнатах — то, что забыли выключить. */
 const NATURE: readonly ScreenKind[] = ['nature', 'strange'];
-const LEFT_ON: readonly ScreenKind[] = ['pop', 'strange', 'signal'];
+/** Что показывает телевизор в комнате отдыха: общая память — то, что смотрели все. */
+const POP: readonly ScreenKind[] = ['pop'];
 
 // ───────────────────────── офис ─────────────────────────
 
@@ -193,6 +195,14 @@ function breakroom(ctx: RoomCtx): void {
   const t = wall(ctx, ['kk_table_small'], ['kk_chair_a', -0.85], ['kk_chair_a', 0.85]);
   if (t) spot(ctx, t.s.xf, t.x, 0.72, 0.35, 'table');
   floorSpots(ctx, 2);
+  // Телевизор в комнате отдыха — единственный экран офиса, где не природа, а то, что смотрели все:
+  // студия телеигры, кадр мультфильма. Участок стены берётся первый свободный, без ГСЧ — остальная
+  // обстановка от экрана не сдвигается.
+  const tv = ctx.slots.find((sl) => !sl.used && !sl.hazard);
+  if (tv) {
+    tv.used = true;
+    screenAt(ctx, tv.xf.child(0, 1.25, 0), 'wall', POP, tv.dir);
+  }
 }
 
 function manager(ctx: RoomCtx): void {
@@ -303,28 +313,24 @@ function leftovers(ctx: RoomCtx, rate: number): void {
 }
 
 function yellowCorridor(ctx: RoomCtx): void {
-  panels(ctx, true);
+  panels(ctx);
   // В коридоре остатков почти нет: только знак, о который нельзя споткнуться.
   for (const c of ctx.cells) if (c.doors === 0 && ctx.rng() < 0.05) put(ctx, 'wet_floor_sign', c.xf.child((ctx.rng() - 0.5) * 0.8, 0, (ctx.rng() - 0.5) * 0.8));
-  // Свет здесь не гаснет, а проекцию он смывает: комнаты, которых нет, держатся только под мёртвыми лампами.
-  veils(ctx, 3, (c) => panelDead(ctx.seed, c.cx, c.cz));
+  // Этаж обесточен, и в темноте держатся комнаты, которых нет: до трёх на коридор.
+  veils(ctx, 3);
 }
 
 function hall(ctx: RoomCtx): void {
-  panels(ctx, true);
+  panels(ctx);
   pillars(ctx);
   leftovers(ctx, 0.45);
-  // Экраны остались включёнными: у стен — прислонённые, в больших залах один стоит посреди.
-  leanScreens(ctx, 2, 0.16, LEFT_ON);
-  const mid = ctx.cells.find((c) => c.doors === 0 && ctx.cells.length >= 4 && !ctx.slots.some((s) => s.cx === c.cx && s.cz === c.cz));
-  if (mid) screenAt(ctx, mid.xf.child(0.95, 0, -0.95, ((mid.cx + mid.cz) % 4) as 0 | 1 | 2 | 3), 'stand', LEFT_ON, 9);
   floorSpots(ctx, Math.min(4, ctx.cells.length + 1));
   const c = ctx.cells[0]!;
   landmark(ctx, 'hall', c.xf, 0, 1.2, 0);
 }
 
 function yellowDepartment(ctx: RoomCtx): void {
-  panels(ctx, true);
+  panels(ctx);
   // Остров столов стоит как стоял: единственное, что здесь помнит, зачем был этаж.
   const m = middle(ctx);
   if (put(ctx, 'desk_island', m.c.xf.child(m.dx, 0, m.dz))) {
@@ -336,7 +342,7 @@ function yellowDepartment(ctx: RoomCtx): void {
 }
 
 function yellowBreakroom(ctx: RoomCtx): void {
-  panels(ctx, true);
+  panels(ctx);
   // Автомат всё ещё светится.
   const v = wall(ctx, ['vending_machine']);
   if (v) landmark(ctx, 'breakroom', v.s.xf, v.x, 1.0, 0.4);
@@ -370,10 +376,28 @@ const YELLOW: Partial<Record<RoomCtx['room']['type'], (ctx: RoomCtx) => void>> =
   reception: yellowReception,
 };
 
+/**
+ * Экраны жёлтых комнат: ровно столько, сколько досталось помещению (на весь уровень их два). На них
+ * то же, что на экранах офиса, — это и есть связь двух мест: этаж тот же. Сначала — к свободной
+ * стене; не нашлось стены — на подставке посреди клетки, так что экран встаёт всегда.
+ */
+function quotaScreens(ctx: RoomCtx): void {
+  const images = ctx.screens ?? [];
+  let done = leanScreens(ctx, images.length, 1, NATURE, images);
+  const cells = [...ctx.cells].sort((a, b) => a.doors - b.doors);
+  for (let i = 0; done < images.length && i < cells.length; i++, done++) {
+    const c = cells[i]!;
+    screenAt(ctx, c.xf.child(0.95, 0, -0.95, ((c.cx + c.cz) % 4) as 0 | 1 | 2 | 3), 'stand', NATURE, 9, images[done]);
+  }
+}
+
 /** Обставить помещение жёлтых комнат. */
 export function furnishYellow(ctx: RoomCtx): void {
   const fn = YELLOW[ctx.room.type];
-  if (fn) return fn(ctx);
-  panels(ctx, true);
-  floorSpots(ctx, 2);
+  if (fn) fn(ctx);
+  else {
+    panels(ctx);
+    floorSpots(ctx, 2);
+  }
+  quotaScreens(ctx);
 }

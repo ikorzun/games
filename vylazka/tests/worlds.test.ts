@@ -3,13 +3,14 @@ import { generateLayout, WORLD_KINDS } from '../src/gen/layout';
 import type { GenLayout, WorldKind } from '../src/gen/layout';
 import { createBody, DEFAULT_CONTROLLER, stepPlayer } from '../src/player/controller';
 import type { PlayerBody } from '../src/player/controller';
-import { panelDead } from '../src/systems/cell_lights';
 import { ALL_MEMORIES, DEFAULT_SESSION, MEMORIES, OFFICE_MEMORIES, Session, WORLD_MEMORIES, YELLOW_MEMORIES } from '../src/systems/session';
 import type { ColliderSet } from '../src/world/colliders';
 import type { BuiltLevel, NavNode } from '../src/world/level';
+import { MeshBuilder } from '../src/world/kit';
 import { buildLevel } from '../src/world/level_build';
 import { MAT, MAT_COUNT } from '../src/world/materials';
 import { ENV_BUNKER, ENV_OFFICE, ENV_YELLOW, WORLD_ENV } from '../src/world/pockets';
+import { Xf } from '../src/world/props';
 import { ALL_PROPS } from '../src/world/props_all';
 import { hasThing, setThingRegistry } from '../src/world/thing_mesh';
 
@@ -163,25 +164,73 @@ describe('миры: сборка уровня', () => {
     }
   });
 
-  it('в каждой клетке — потолочная панель: в офисе все горят, в жёлтых комнатах мёртвые — без светящейся грани', () => {
-    for (const world of NEW) {
+  /** Сколько раз при сборке уровня ставили каждую из потолочных панелей. */
+  function panelsBuilt(world: WorldKind): { level: BuiltLevel; cells: number; calls: Record<string, number> } {
+    const names = ['ceiling_panel', 'ceiling_panel_off', 'ceiling_panel_dead'];
+    const calls: Record<string, number> = { ceiling_panel: 0, ceiling_panel_off: 0, ceiling_panel_dead: 0 };
+    const saved = names.map((n) => ALL_PROPS[n]!);
+    names.forEach((n, i) => {
+      ALL_PROPS[n] = { ...saved[i]!, build: (xf, seed) => (calls[n]!++, saved[i]!.build(xf, seed)) };
+    });
+    try {
       const layout = generateLayout(20041113, 2, world);
       const level = buildLevel(layout);
-      // Сколько светящихся треугольников (материал «светильник») приходится на клетку.
-      const lampTris = level.chunks.reduce((n, c) => {
-        let k = 0;
-        for (let i = 0; i < c.mesh.index.length; i += 3) if (c.mesh.mat[c.mesh.index[i]!] === MAT.lamp) k += 1;
-        return n + k;
-      }, 0);
-      const cells = layout.rooms.reduce((n, r) => n + r.cells.length, 0);
-      const dead = world === 'yellow' ? layout.rooms.reduce((n, r) => n + r.cells.filter(([x, z]) => r.type !== 'lift' && r.type !== 'reception' && panelDead(layout.seed, x, z)).length, 0) : 0;
-      expect(lampTris).toBeGreaterThanOrEqual((cells - dead) * 2);
-      if (world === 'yellow') {
-        expect(dead).toBeGreaterThan(2);
-        // Мёртвых панелей столько, что светящихся граней заметно меньше, чем клеток с живыми панелями было бы при всех живых.
-        expect(lampTris).toBeLessThan(cells * 2 * 6);
-      }
+      return { level, cells: layout.rooms.reduce((n, r) => n + r.cells.length, 0), calls };
+    } finally {
+      names.forEach((n, i) => (ALL_PROPS[n] = saved[i]!));
     }
+  }
+
+  const lampTrisOf = (level: BuiltLevel): number =>
+    level.chunks.reduce((n, c) => {
+      let k = 0;
+      for (let i = 0; i < c.mesh.index.length; i += 3) if (c.mesh.mat[c.mesh.index[i]!] === MAT.lamp) k += 1;
+      return n + k;
+    }, 0);
+
+  it('в каждой клетке — потолочная панель: в офисе все светятся, в жёлтых комнатах — обесточенные или мёртвые с проводом', () => {
+    const office = panelsBuilt('office');
+    expect(office.calls.ceiling_panel).toBe(office.cells);
+    expect(office.calls.ceiling_panel_off + office.calls.ceiling_panel_dead).toBe(0);
+    // Две светящиеся грани на панель, и больше светящегося в офисе нет.
+    expect(lampTrisOf(office.level)).toBe(office.cells * 2);
+
+    const yellow = panelsBuilt('yellow');
+    const total = yellow.calls.ceiling_panel + yellow.calls.ceiling_panel_off + yellow.calls.ceiling_panel_dead;
+    expect(total).toBe(yellow.cells);
+    expect(yellow.calls.ceiling_panel_off).toBeGreaterThan(yellow.cells / 2);
+    // Провод висит примерно у каждой шестой.
+    expect(yellow.calls.ceiling_panel_dead).toBeGreaterThan(2);
+    expect(yellow.calls.ceiling_panel_dead).toBeLessThan(yellow.cells / 3);
+  });
+
+  it('в жёлтых комнатах ни одна панель не светится: ни светящейся панели, ни светящегося материала', () => {
+    const yellow = panelsBuilt('yellow');
+    expect(yellow.calls.ceiling_panel, 'светящаяся панель в жёлтых комнатах').toBe(0);
+    expect(lampTrisOf(yellow.level), 'светящиеся грани в жёлтых комнатах').toBe(0);
+  });
+
+  it('обесточенная и мёртвая панели сами не светятся; у мёртвой висит провод, и она ниже', () => {
+    const grid = (name: string): { tris: number; lamp: number; top: number } => {
+      const mb = new MeshBuilder();
+      const xf = new Xf(mb, null, 0, 0, 0, 0);
+      ALL_PROPS[name]!.build(xf, 5);
+      const m = mb.build();
+      let lamp = 0;
+      for (let i = 0; i < m.index.length; i += 3) if (m.mat[m.index[i]!] === MAT.lamp) lamp += 1;
+      let low = Infinity;
+      for (let i = 1; i < m.position.length; i += 3) low = Math.min(low, m.position[i]!);
+      return { tris: m.index.length / 3, lamp, top: low };
+    };
+    const lit = grid('ceiling_panel');
+    const off = grid('ceiling_panel_off');
+    const dead = grid('ceiling_panel_dead');
+    expect(lit.lamp).toBeGreaterThan(0);
+    expect(off.tris).toBeGreaterThan(0);
+    expect(off.lamp).toBe(0);
+    expect(dead.lamp).toBe(0);
+    // Провод тянется вниз ниже самой панели.
+    expect(dead.top).toBeLessThan(off.top - 0.1);
   });
 
   it('старт — у лифта, лицом на север; граф навигации связен; мест для вещей хватает и вдали от начала', () => {
@@ -248,20 +297,29 @@ describe('миры: сборка уровня', () => {
 });
 
 describe('миры: окружение и воспоминания', () => {
-  it('у каждого мира своё окружение: в убежище темно, в офисе чисто и светят датчики, в жёлтых комнатах гудит жёлтый свет', () => {
+  it('у каждого мира своё окружение: в убежище темно, в офисе чисто и без фонаря, в жёлтых комнатах темно, как в убежище, и пусто', () => {
     expect(WORLD_ENV.shelter).toBe(ENV_BUNKER);
     expect(WORLD_ENV.office).toBe(ENV_OFFICE);
     expect(WORLD_ENV.yellow).toBe(ENV_YELLOW);
     expect(ENV_BUNKER.cells).toBeUndefined();
+    expect(ENV_BUNKER.light).toBe(1);
+    // Офис: свет даёт место (датчики), фонаря нет, а освещённое видно только вблизи.
     expect(ENV_OFFICE.cells).toBe('sensor');
-    expect(ENV_YELLOW.cells).toBe('hum');
-    // Чистота офиса — отрицательная запущенность; жёлтые комнаты сыроваты.
+    expect(ENV_OFFICE.light).toBe(0);
+    expect(ENV_OFFICE.scan).toEqual([2.5, 10]);
     expect(ENV_OFFICE.decay).toBeLessThan(0);
-    expect(ENV_YELLOW.decay).toBeGreaterThan(0.1);
-    // Жёлтый свет: красного и зелёного заметно больше синего.
-    expect(ENV_YELLOW.ambient[0]).toBeGreaterThan(ENV_YELLOW.ambient[2] * 2);
-    // Вокруг освещённого острова — чернота.
     expect(ENV_OFFICE.fog).toEqual([0, 0, 0]);
+    // Жёлтые комнаты: света по клеткам нет, фонарь есть, рассеянного света ничтожно мало.
+    expect(ENV_YELLOW.cells).toBeUndefined();
+    expect(ENV_YELLOW.light).toBe(1);
+    const avg = (ENV_YELLOW.ambient[0] + ENV_YELLOW.ambient[1] + ENV_YELLOW.ambient[2]) / 3;
+    expect(avg).toBeLessThan(0.01);
+    // Только шар материала, без фактур; чисто, а не сыро.
+    expect(ENV_YELLOW.plain).toBe(true);
+    expect(ENV_YELLOW.decay).toBeLessThan(0);
+    expect(ENV_BUNKER.plain).toBeUndefined();
+    expect(ENV_OFFICE.plain).toBeUndefined();
+    expect(ENV_YELLOW.fog).toEqual([0, 0, 0]);
   });
 
   it('у каждого мира свой набор воспоминаний; у каждого воспоминания есть вещь в реестре и тексты на двух языках', async () => {

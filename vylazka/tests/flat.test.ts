@@ -221,22 +221,33 @@ describe('плоские вещи в уровне', () => {
     }
   });
 
-  it('в жёлтых комнатах проекции держатся только под мёртвыми лампами, в офисе их нет', () => {
+  it('в жёлтых комнатах проекции стоят в прямых клетках коридора — до трёх на коридор и не только под мёртвыми панелями; в офисе их нет', () => {
     let yellow = 0;
+    let underLive = 0;
     for (const seed of SEEDS) {
       expect(flats(level(seed, 'office'), 'veil').length).toBe(0);
       const l = level(seed, 'yellow');
+      const perRoom = new Map<number, number>();
       for (const v of flats(l, 'veil')) {
         yellow += 1;
+        perRoom.set(v.room, (perRoom.get(v.room) ?? 0) + 1);
+        expect(l.layout!.rooms[v.room]!.type).toBe('corridor');
+        // Смотрит строго вдоль коридора.
+        expect(Math.abs(v.n[0]) + Math.abs(v.n[2])).toBeCloseTo(1, 6);
+        expect(v.n[1]).toBeCloseTo(0, 6);
         const cx = Math.round(v.at[0] / CELL) + 8;
         const cz = Math.round(v.at[2] / CELL) + 8;
-        expect(panelDead(l.layout!.seed, cx, cz)).toBe(true);
+        if (!panelDead(l.layout!.seed, cx, cz)) underLive += 1;
       }
+      for (const [room, n] of perRoom) expect(n, `${seed}: коридор ${room}`).toBeLessThanOrEqual(3);
     }
     expect(yellow).toBeGreaterThan(0);
+    // Мёртвая лампа проекции больше не нужна: этаж обесточен целиком, и стоят они где придётся.
+    expect(underLive).toBeGreaterThan(0);
   });
 
-  it('картонки есть во всех мирах, и чем «ложнее» воспоминание, тем их доля больше', () => {
+  it('картонки есть во всех мирах, но редкие: доля 0,12 в убежище, 0,04 в офисе, 0,2 в жёлтых комнатах', () => {
+    expect(FLAT_SHARE).toEqual({ shelter: 0.12, office: 0.04, yellow: 0.2 });
     expect(FLAT_SHARE.office).toBeLessThan(FLAT_SHARE.shelter);
     expect(FLAT_SHARE.shelter).toBeLessThan(FLAT_SHARE.yellow);
     const count = (world: WorldKind): number => SEEDS.reduce((n, seed) => n + flats(level(seed, world), 'standee').length, 0);
@@ -418,27 +429,41 @@ describe('выставочные экраны', () => {
     expect(mod.checkDist(dist).problems.filter((p) => p.includes('картинок экранов'))).toEqual([]);
   });
 
-  it('в офисе экраны показывают природу, в приёмной экран есть всегда', () => {
+  it('в офисе экраны показывают природу, в приёмной экран есть всегда; телевизор в комнате отдыха — единственный с поп-культурой', () => {
     let n = 0;
+    let tvs = 0;
     for (const seed of SEEDS) {
       const l = level(seed, 'office');
       const screens = flats(l, 'screen');
       n += screens.length;
-      for (const s of screens) expect(['nature', 'strange']).toContain(SCREEN_IMAGES.find((im) => im.id === s.what)!.kind);
+      const breakrooms = new Set(l.layout!.rooms.filter((r) => r.type === 'breakroom').map((r) => r.id));
+      for (const s of screens) {
+        const kind = SCREEN_IMAGES.find((im) => im.id === s.what)!.kind;
+        // Поп-культура — только на телевизоре в комнате отдыха; всё остальное — природа и «странное».
+        if (kind === 'pop') {
+          expect(breakrooms.has(s.room), `сид ${seed}: поп-культура вне комнаты отдыха`).toBe(true);
+          tvs += 1;
+        } else expect(['nature', 'strange']).toContain(kind);
+      }
+      // В комнате отдыха — не больше одного телевизора.
+      for (const id of breakrooms) expect(screens.filter((s) => s.room === id && SCREEN_IMAGES.find((im) => im.id === s.what)!.kind === 'pop').length).toBeLessThanOrEqual(1);
       const reception = l.layout!.rooms.find((r) => r.type === 'reception');
       if (reception) expect(screens.some((s) => s.room === reception.id)).toBe(true);
     }
     expect(n).toBeGreaterThan(SEEDS.length);
+    expect(tvs, 'ни в одном офисе нет телевизора в комнате отдыха').toBeGreaterThan(0);
   });
 
-  it('в жёлтых комнатах экраны забыли выключить: поп-культура, странное или «нет сигнала»', () => {
-    let n = 0;
+  it('в убежище экранов нет вовсе', () => {
+    for (const seed of SEEDS) expect(flats(level(seed, 'shelter'), 'screen'), `сид ${seed}`).toHaveLength(0);
+  });
+
+  it('в жёлтых комнатах на уровень ровно два экрана — природа и странное, и картинки на них разные', () => {
     for (const seed of SEEDS) {
-      for (const s of flats(level(seed, 'yellow'), 'screen')) {
-        n += 1;
-        expect(['pop', 'strange', 'signal']).toContain(SCREEN_IMAGES.find((im) => im.id === s.what)!.kind);
-      }
+      const screens = flats(level(seed, 'yellow'), 'screen');
+      expect(screens, `сид ${seed}`).toHaveLength(2);
+      for (const s of screens) expect(['nature', 'strange']).toContain(SCREEN_IMAGES.find((im) => im.id === s.what)!.kind);
+      expect(screens[0]!.what, `сид ${seed}: одна картинка на двух экранах`).not.toBe(screens[1]!.what);
     }
-    expect(n).toBeGreaterThan(SEEDS.length / 2);
   });
 });

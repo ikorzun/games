@@ -96,6 +96,18 @@ export interface VzDebugApi {
   gotoFlat(index: number, distance?: number, side?: number): boolean;
   /** Показать или скрыть проекции и картинки экранов (чтобы сравнить кадр с ними и без них). */
   slides(on: boolean): void;
+  /**
+   * Предметы обстановки как объекты (world/objects.ts): имя, место, габариты, есть ли преграда, картонка
+   * ли это, и что с ним сейчас: here — стоит, going — растворяется, gone — его нет, coming — собирается,
+   * left — вместо него теперь отдельная вещь. group — предмет стоит в варианте комнаты, который
+   * может быть скрыт (тогда коснуться его нельзя).
+   */
+  objects(): Array<{ id: number; name: string; at: number[]; rot: number; min: number[]; max: number[]; solid: boolean; flat: boolean; group: string | null; state: string; dis: number }>;
+  /**
+   * Встать перед объектом лицом к нему: distance — на каком расстоянии от его передней стороны, м.
+   * false — такого объекта нет.
+   */
+  gotoObject(id: number, distance?: number): boolean;
   /** Какие картинки выставочных экранов загружены из файлов (остальные экраны показывают «нет сигнала»). */
   screens(): string[];
   /** Нарисовать кадр и вернуть его яркость сеткой 32×18, строка 0 — верхняя. */
@@ -180,7 +192,10 @@ export function installDebug(app: App): void {
       }
       return api.state();
     },
-    toggleLight: () => game().light.toggle(),
+    // Там, где фонаря нет (офис), щёлкать нечем — как и у настоящей кнопки.
+    toggleLight: () => {
+      if (game().hasLight) game().light.toggle();
+    },
     quality: (q) => {
       if (q) app.setQuality(q);
       return game().renderer.quality;
@@ -224,6 +239,26 @@ export function installDebug(app: App): void {
     },
     slides: (on) => {
       game().renderer.debugSlidesOff = !on;
+    },
+    objects: () =>
+      (game().illusions?.list ?? []).map((i) => ({ id: i.obj.id, name: i.obj.name, at: [...i.obj.at], rot: i.obj.rot, min: [...i.obj.min], max: [...i.obj.max], solid: i.obj.solid, flat: i.obj.flat, group: i.obj.group ?? null, state: i.state, dis: +i.dis.toFixed(3) })),
+    gotoObject: (id, distance = 1.6) => {
+      const o = game().illusions?.get(id)?.obj;
+      if (!o) return false;
+      game().debugHome();
+      // Перед объектом — со стороны его оси +z (см. Xf.pt): у мебели она смотрит от стены в помещение.
+      const fx = o.rot === 1 ? 1 : o.rot === 3 ? -1 : 0;
+      const fz = o.rot === 0 ? 1 : o.rot === 2 ? -1 : 0;
+      const cx = (o.min[0] + o.max[0]) / 2;
+      const cz = (o.min[2] + o.max[2]) / 2;
+      // Передняя сторона — край габаритов вдоль оси +z.
+      const half = Math.abs(fx) > 0 ? (o.max[0] - o.min[0]) / 2 : (o.max[2] - o.min[2]) / 2;
+      const x = cx + fx * (half + distance);
+      const z = cz + fz * (half + distance);
+      // Пол яруса, на котором стоит объект (ярусы идут через 4,5 м вниз; настенное висит выше пола).
+      const floor = Math.floor((o.min[1] + 0.3) / 4.5) * 4.5;
+      game().teleport(x, floor, z, Math.atan2(-(cx - x), -(cz - z)), 0);
+      return true;
     },
     screens: () => [...app.screenIds],
     gotoLandmark: (id, index = 0, distance = 2.2) => {

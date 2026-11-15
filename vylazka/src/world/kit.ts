@@ -5,6 +5,7 @@
  * Обход вершин — против часовой стрелки, если смотреть с лицевой стороны.
  */
 import type { Vec3 } from '../core/types';
+import type { ObjectLog } from './objects';
 
 export interface MeshData {
   position: Float32Array;
@@ -15,6 +16,12 @@ export interface MeshData {
   mat: Float32Array;
   uv: Float32Array;
   index: Uint32Array;
+  /**
+   * Номер объекта у каждой вершины (world/objects.ts): 0 — вершина не принадлежит предмету (стены, пол,
+   * трубы). По нему рендер растворяет отдельный предмет, не вынимая его из общей сетки помещения.
+   * Нет поля — в сетке нет ни одного объекта.
+   */
+  obj?: Uint16Array;
 }
 
 export const WHITE: Vec3 = [1, 1, 1];
@@ -68,6 +75,11 @@ export class MeshBuilder {
   private readonly mats: number[] = [];
   private readonly uvs: number[] = [];
   private readonly idx: number[] = [];
+  private readonly objs: number[] = [];
+  /** Номер объекта, которому достаются новые вершины (0 — никому). Ставит и снимает world/objects.ts. */
+  obj = 0;
+  /** Журнал объектов уровня: есть у сеток помещений, нет у отдельных вещей и карманных пространств. */
+  log: ObjectLog | null = null;
 
   get vertexCount(): number {
     return this.pos.length / 3;
@@ -84,6 +96,7 @@ export class MeshBuilder {
     this.nrm.push(n[0], n[1], n[2]);
     this.col.push(tint[0], tint[1], tint[2], ao);
     this.mats.push(mat);
+    this.objs.push(this.obj);
     const uv = planarUv(p, n);
     this.uvs.push(uv[0], uv[1]);
     return i;
@@ -117,6 +130,7 @@ export class MeshBuilder {
       this.nrm.push(n[0], n[1], n[2]);
       this.col.push(tint[0], tint[1], tint[2], ao);
       this.mats.push(mat);
+      this.objs.push(this.obj);
       this.uvs.push(corners[i]![0], corners[i]![1]);
     }
     this.idx.push(first, first + 1, first + 2, first, first + 2, first + 3);
@@ -295,8 +309,24 @@ export class MeshBuilder {
     }
   }
 
+  /** Габариты вершин, добавленных начиная с номера from; null — их нет. */
+  bounds(from: number): [Vec3, Vec3] | null {
+    const n = this.pos.length / 3;
+    if (from >= n) return null;
+    const lo: Vec3 = [Infinity, Infinity, Infinity];
+    const hi: Vec3 = [-Infinity, -Infinity, -Infinity];
+    for (let i = from; i < n; i++) {
+      for (let k = 0; k < 3; k++) {
+        const v = this.pos[i * 3 + k]!;
+        if (v < lo[k]!) lo[k] = v;
+        if (v > hi[k]!) hi[k] = v;
+      }
+    }
+    return [lo, hi];
+  }
+
   build(): MeshData {
-    return {
+    const data: MeshData = {
       position: new Float32Array(this.pos),
       normal: new Float32Array(this.nrm),
       color: new Float32Array(this.col),
@@ -304,5 +334,7 @@ export class MeshBuilder {
       uv: new Float32Array(this.uvs),
       index: new Uint32Array(this.idx),
     };
+    if (this.objs.some((o) => o !== 0)) data.obj = new Uint16Array(this.objs);
+    return data;
   }
 }

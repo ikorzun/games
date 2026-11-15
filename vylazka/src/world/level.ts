@@ -4,6 +4,7 @@ import type { GenLayout, WorldKind } from '../gen/layout';
 import type { Aabb, ColliderSet } from './colliders';
 import type { FlatMark } from './flat';
 import type { MeshData, SheetMark } from './kit';
+import type { FreeSlot, LevelObject } from './objects';
 
 /** Кусок геометрии, рисуемый одним вызовом. Ярусы — чтобы не рисовать этажи, которых не видно. */
 export interface LevelChunk {
@@ -112,6 +113,13 @@ export interface BuiltLevel {
   sheets: SheetMark[];
   /** Плоские вещи: картонки и проекции (у тестового уровня их нет). */
   flats?: FlatMark[];
+  /**
+   * Предметы обстановки как объекты (world/objects.ts): номер объекта стоит в вершинах сетки и на
+   * преградах. По ним игра растворяет то, чего коснулся игрок. Нет — растворять нечего.
+   */
+  objects?: LevelObject[];
+  /** Свободные участки стен: туда растворённая вещь может вернуться «в другом месте». */
+  freeSlots?: FreeSlot[];
   /** План, по которому собран уровень (у тестового уровня его нет). */
   layout: GenLayout | null;
   /** Какой это мир (не задано — убежище): от него зависят свет, запущенность и воспоминания. */

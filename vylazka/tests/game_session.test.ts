@@ -7,10 +7,12 @@ import type { DreamEvent, FearEvent, StepEvents } from '../src/game';
 import { emptyInput } from '../src/player/input';
 import type { InputFrame } from '../src/player/input';
 import type { FrameView, GameRenderer, ThingView } from '../src/render/renderer';
+import { DEFAULT_CELL_LIGHTS } from '../src/systems/cell_lights';
 import { DEFAULT_SESSION, OFFICE_MEMORIES, YELLOW_MEMORIES } from '../src/systems/session';
 import type { SessionEvent } from '../src/systems/session';
-import { looksAt } from '../src/systems/things';
+import { DEFAULT_THINGS, looksAt } from '../src/systems/things';
 import { nodesInRange } from '../src/swarm/ai';
+import type { ColliderSet } from '../src/world/colliders';
 import type { BuiltLevel } from '../src/world/level';
 import { buildLevel } from '../src/world/level_build';
 import { ENV_BUNKER, ENV_OFFICE, ENV_YELLOW } from '../src/world/pockets';
@@ -43,6 +45,11 @@ class FakeRenderer {
     this.swarm = { alpha, center: c };
   }
   setChunkVisible(): void {}
+  /** Насколько растворён каждый объект уровня (0 — стоит, 1 — его нет). */
+  readonly objects = new Map<number, number>();
+  setObjectState(id: number, dis: number): void {
+    this.objects.set(id, dis);
+  }
   setPocket(m: unknown): void {
     this.pocketShown = m !== null;
   }
@@ -977,31 +984,87 @@ describe('игра целиком: эхо и призрак из-за спины
     expect(echoOf(h).filter((p) => p.kind === 0).length).toBeLessThanOrEqual(3);
   });
 
-  it('бег слышно дальше шага', () => {
-    const quiet = new Harness(levelOf(SEED), { seed: 3 });
-    quiet.run(1, walk);
-    const loud = new Harness(levelOf(SEED), { seed: 3 });
-    loud.run(1, { ...walk, run: true });
+  it('бег слышно дальше шага — когда фонарь выключен (при свете эхо молчит)', () => {
+    const run = (running: boolean): Harness => {
+      const h = new Harness(levelOf(SEED), { seed: 3 });
+      // Выключаем фонарь и привыкаем к темноте.
+      h.tick({ ...emptyInput(), light: true });
+      h.run(2.5);
+      h.run(1, { ...walk, run: running });
+      return h;
+    };
     const amp = (h: Harness) => Math.max(...echoOf(h).map((p) => p.amp));
+    const quiet = run(false);
+    const loud = run(true);
+    expect(amp(quiet)).toBeGreaterThan(0);
     expect(amp(loud)).toBeGreaterThan(amp(quiet));
   });
 
-  it('щелчок фонаря слышен: волна от игрока; без света эхо видно сильнее, чем со светом', () => {
+  it('щелчок фонаря волну не пускает: эхо поднимают только шаги; к темноте оно привыкает', () => {
     const h = new Harness(levelOf(SEED), { seed: 3 });
     const g = h.game;
     h.run(0.5);
     h.tick({ ...emptyInput(), light: true });
     expect(g.light.state).toBe('off');
-    const p = echoOf(h);
-    expect(p).toHaveLength(1);
-    expect(p[0]!.kind).toBe(0);
-    expect(Math.hypot(p[0]!.pos[0]! - g.body.x, p[0]!.pos[2]! - g.body.z)).toBeLessThan(0.3);
-    // Свет только что погас: сила ещё «дневная». Через пару секунд темноты та же волна шага — в полную силу.
-    const lit = p[0]!.amp;
-    h.run(2.5);
-    h.run(1.5, walk);
-    const dark = Math.max(...echoOf(h).map((x) => x.amp));
-    expect(dark).toBeGreaterThan(lit * 1.5);
+    // Ни сразу после щелчка, ни за секунду в темноте стоящий игрок волн не получает.
+    expect(echoOf(h)).toHaveLength(0);
+    h.run(1);
+    expect(echoOf(h)).toHaveLength(0);
+    expect(h.r.frames.at(-1)!.echo).toBeNull();
+    // Пошёл сразу после щелчка — первый же шаг даёт волну, но глаза ещё не привыкли; через пару
+    // секунд темноты такой же первый шаг виден заметно сильнее.
+    const after = (wait: number): number => {
+      const x = new Harness(levelOf(SEED), { seed: 3 });
+      x.run(0.5);
+      x.tick({ ...emptyInput(), light: true });
+      x.run(wait);
+      for (let i = 0; i < Math.round(2 / STEP); i++) {
+        x.tick({ ...walk });
+        const born = echoOf(x);
+        if (born.length > 0) return born[0]!.amp;
+      }
+      return 0;
+    };
+    const early = after(0);
+    const late = after(2.5);
+    expect(early).toBeGreaterThan(0);
+    expect(late).toBeGreaterThan(early * 1.5);
+  });
+
+  it('эхо — только на ходу: замер в темноте — волны гаснут, и волн Осыпи тоже не видно; пошёл — видно', () => {
+    const h = new Harness(levelOf(SEED), { calm: false, seed: 6 });
+    const g = h.game;
+    h.run(1);
+    h.tick({ ...emptyInput(), light: true });
+    expect(g.light.state).toBe('off');
+    const sw = g.swarm!;
+    sw.activate(sw.nodeAround(g.playerNode(), 5, 6));
+    const hold = (seconds: number, input?: InputFrame): Pulse[] => {
+      const seen: Pulse[] = [];
+      for (let i = 0; i < Math.round(seconds / STEP); i++) {
+        // Она бродит рядом и не охотится: проверяем только, видно ли её волны.
+        sw.mode = 'roam';
+        sw.cohesion = 0;
+        h.tick(input);
+        seen.push(...echoOf(h));
+      }
+      return seen;
+    };
+    // Стоим в темноте: волны от неё рождаются, но силы у них нет — стоящий слеп.
+    hold(2.5);
+    const still = hold(4);
+    expect(still.filter((p) => p.kind === 1).length).toBeGreaterThan(0);
+    expect(still.filter((p) => p.kind === 0)).toHaveLength(0);
+    for (const p of still) expect(p.amp).toBeLessThan(0.02);
+    const packed = h.r.frames.at(-1)!.echo;
+    if (packed) for (let i = 0; i < packed.length; i += 8) expect(packed[i + 4]!).toBeLessThan(0.02);
+    // Пошли: её волны проступают — и свои шаги тоже.
+    const moving = hold(1.5, walk);
+    expect(Math.max(...moving.filter((p) => p.kind === 1).map((p) => p.amp))).toBeGreaterThan(0.2);
+    expect(Math.max(...moving.filter((p) => p.kind === 0).map((p) => p.amp))).toBeGreaterThan(0.2);
+    // Замерли снова: за две секунды всё гаснет.
+    hold(2);
+    for (const p of hold(1)) expect(p.amp).toBeLessThan(0.02);
   });
 
   it('Осыпь слышно: пока она рядом, от неё расходятся волны; охотящуюся — чаще', () => {
@@ -1200,14 +1263,22 @@ describe('игра целиком: офис и жёлтые комнаты', () 
     if (!nodesInRange(office.nav, now, 0, 2).includes(start)) expect(g.cellLights!.at(start)).toBeLessThan(0.05);
   });
 
-  it('офис: с выключенным фонарём под горящей панелью не «темно» — детали не меняются и скачка от темноты нет', () => {
+  it('офис: фонаря нет — кнопка ничего не меняет, фонарь разобран, а под горящей панелью не «темно»: детали не меняются', () => {
     const h = new Harness(office, { seed: 3 });
     const g = h.game;
+    expect(g.hasLight).toBe(false);
     h.run(1);
     h.tick({ ...emptyInput(), light: true });
-    expect(g.light.state).toBe('off');
-    h.run(12);
-    const snap = g.snapshot() as { dark: { for: number; shifts: number }; jump: unknown };
+    h.tick({ ...emptyInput(), light: true });
+    expect(g.light.state).toBe('on');
+    expect(g.light.suspended).toBe(true);
+    expect(g.light.intensity).toBe(0);
+    // Щелчка не было — волны от него тоже.
+    expect((g.snapshot() as { echo: unknown[] }).echo).toHaveLength(0);
+    // Идёт — панели горят, и «темноты» нет: счёт не идёт, деталей никто не меняет.
+    h.run(8, walk);
+    const snap = g.snapshot() as { dark: { for: number; shifts: number }; hasLight: boolean };
+    expect(snap.hasLight).toBe(false);
     expect(snap.dark.for).toBe(0);
     expect(snap.dark.shifts).toBe(0);
     expect(g.where).toBe('main');
@@ -1271,21 +1342,371 @@ describe('игра целиком: офис и жёлтые комнаты', () 
     expect(g.env).toBe(ENV_OFFICE);
   });
 
-  it('жёлтые комнаты: свет горит сам и неровно; воспоминания — свои', () => {
+  it('жёлтые комнаты: темно, как в убежище — света по клеткам нет, фонарь есть, поверхности простые; воспоминания — свои', () => {
     const h = new Harness(yellow, { seed: 3 });
     const g = h.game;
     expect(g.world).toBe('yellow');
     expect(g.env).toBe(ENV_YELLOW);
+    expect(g.hasLight).toBe(true);
+    expect(g.light.suspended).toBe(false);
+    expect(g.cellLights).toBeNull();
     h.run(1);
     const f = h.r.frames.at(-1)!;
-    expect(f.cells).not.toBeNull();
-    // Панель над началом вылазки жива: у лифта и в приёмной мёртвых нет.
-    expect(f.ambientLocal).toBeGreaterThan(0.6);
-    // Горит не только рядом с игроком: далёкие клетки тоже освещены (кроме мёртвых).
-    const lit = [...g.cellLights!.level].filter((v) => v > 0.5).length;
-    expect(lit).toBeGreaterThan(yellow.nav.length * 0.6);
-    expect(lit).toBeLessThan(yellow.nav.length);
+    expect(f.cells).toBeNull();
+    expect(f.ambientLocal).toBe(1);
+    expect(f.plain).toBe(true);
+    expect((f.ambient[0] + f.ambient[1] + f.ambient[2]) / 3).toBeLessThan(0.01);
+    const snap = g.snapshot() as { lights: unknown; hasLight: boolean };
+    expect(snap.lights).toBeNull();
+    expect(snap.hasLight).toBe(true);
+    // Фонарь отзывается на кнопку, как в убежище.
+    expect(g.light.state).toBe('on');
+    h.tick({ ...emptyInput(), light: true });
+    expect(g.light.state).toBe('off');
     const ids = new Set(YELLOW_MEMORIES.map((m) => m.id));
     for (const m of g.session!.memories) expect(ids.has(m.def.id)).toBe(true);
+  });
+});
+
+describe('игра целиком: всё иллюзорно', () => {
+  type Illu = { gone: number; back: number };
+  const illu = (h: Harness): Illu => (h.game.snapshot() as unknown as { illusions: Illu }).illusions;
+  const lights = (h: Harness): { lit: number; total: number } | null => (h.game.snapshot() as unknown as { lights: { lit: number; total: number } | null }).lights;
+  const stillFor = (h: Harness): number => (h.game.snapshot() as unknown as { stillFor: number }).stillFor;
+  const stateOf = (h: Harness, id: number): string => h.game.illusions!.get(id)!.state;
+  /** Высота пола под предметом. */
+  const floorOf = (o: { at: Vec3 }): number => o.at[1];
+  /** Две секунды в «свете и темноте»: щелчок фонаря выкл, пауза, щелчок вкл. */
+  function blink(h: Harness, dark = 1): void {
+    h.tick({ ...emptyInput(), light: true });
+    h.run(dark);
+    h.tick({ ...emptyInput(), light: true });
+  }
+
+  /**
+   * Подойти к предмету с преградой и упереться в него. Возвращает его номер и откуда шли (направление
+   * вдоль оси) — или null, если ни к одному подойти не вышло.
+   */
+  function bump(h: Harness): { id: number; dx: number; dz: number; face: number } | null {
+    const g = h.game;
+    const l = g.level!;
+    const spawn = l.spawn.pos;
+    const cands = l.objects!
+      .filter((o) => o.solid && !o.flat && o.group === undefined && ALL_PROPS[o.name]?.mount === 'floor' && Math.abs(floorOf(o) - spawn[1]) < 0.1)
+      .sort((a, b) => Math.hypot(a.at[0] - spawn[0], a.at[2] - spawn[2]) - Math.hypot(b.at[0] - spawn[0], b.at[2] - spawn[2]));
+    for (const o of cands) {
+      const box = g.colliders.boxes.find((b) => b.owner === o.id && !b.ghost);
+      if (!box) continue;
+      const cy = box.minX / 2 + box.maxX / 2;
+      const cz = box.minZ / 2 + box.maxZ / 2;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        // Подходим с противоположной стороны: идём в направлении (dx, dz), встаём в метре от грани.
+        const startX = dx === 0 ? cy : dx > 0 ? box.minX - 1 : box.maxX + 1;
+        const startZ = dz === 0 ? cz : dz > 0 ? box.minZ - 1 : box.maxZ + 1;
+        g.teleport(startX, floorOf(o), startZ);
+        h.tick();
+        if (stateOf(h, o.id) !== 'here') continue;
+        g.aimAt(startX + dx * 5, floorOf(o) + 1.4, startZ + dz * 5);
+        for (let i = 0; i < 90 && stateOf(h, o.id) === 'here'; i++) h.tick({ ...emptyInput(), moveZ: 1 });
+        if (stateOf(h, o.id) !== 'here') return { id: o.id, dx, dz, face: dx !== 0 ? (dx > 0 ? box.minX : box.maxX) : dz > 0 ? box.minZ : box.maxZ };
+      }
+    }
+    return null;
+  }
+
+  it('убежище: игрок упёрся в предмет — тот растворяется до конца, и сквозь него можно пройти', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: NOTHING });
+    const g = h.game;
+    const hit = bump(h)!;
+    expect(hit, 'не вышло упереться ни в один предмет').not.toBeNull();
+    const { id, dx, dz, face } = hit;
+    expect(['going', 'gone']).toContain(stateOf(h, id));
+    expect(illu(h).gone).toBeGreaterThanOrEqual(1);
+    expect(h.dreamCount('touch')).toBeGreaterThanOrEqual(1);
+    // Пока распад не дошёл до yield, предмет ещё держит: игрок не прошёл.
+    const body = g.body;
+    expect((body.x - face) * dx + (body.z - face) * dz).toBeLessThan(0);
+    // Рендеру приходит растворение: от нуля к единице.
+    h.run(1.5);
+    expect(stateOf(h, id)).toBe('gone');
+    expect(h.r.objects.get(id)).toBe(1);
+    // Идём дальше в ту же сторону — теперь он пропускает.
+    const dir = { ...emptyInput(), moveZ: 1 };
+    g.aimAt(body.x + dx * 5, body.y + 1.4, body.z + dz * 5);
+    h.run(1, dir);
+    expect((g.body.x - face) * dx + (g.body.z - face) * dz).toBeGreaterThan(0.1);
+  });
+
+  it('убежище: при горящем фонаре растворённый предмет не возвращается; выключил и включил — вернулся или ушёл вещью', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: NOTHING });
+    const g = h.game;
+    const hit = bump(h)!;
+    expect(hit).not.toBeNull();
+    const { id } = hit;
+    h.run(1.2);
+    expect(stateOf(h, id)).toBe('gone');
+    // Отошли от места предмета: он не должен быть заблокирован игроком.
+    g.teleport(g.body.x - hit.dx * 3, g.body.y, g.body.z - hit.dz * 3);
+    const things = g.things.list.length;
+    h.run(5);
+    expect(g.light.state).toBe('on');
+    expect(stateOf(h, id)).toBe('gone');
+    expect(illu(h).back).toBe(0);
+    // Выключил, подождал, включил.
+    blink(h, 1);
+    h.run(0.2);
+    expect(['coming', 'left', 'here']).toContain(stateOf(h, id));
+    expect(illu(h).back).toBeGreaterThanOrEqual(1);
+    expect(h.log.dream.some((e) => e.type === 'touch' && e.what === 'back')).toBe(true);
+    h.run(1.5);
+    const state = stateOf(h, id);
+    expect(['here', 'left']).toContain(state);
+    if (state === 'left') {
+      // Ушёл насовсем: вместо него появилась отдельная вещь, и сквозь пустое место проходят.
+      expect(g.things.list.length).toBe(things + 1);
+      expect(g.illusions!.open(id)).toBe(true);
+    } else {
+      expect(h.r.objects.get(id)).toBe(0);
+      expect(g.illusions!.open(id)).toBe(false);
+    }
+  });
+
+  it('убежище: вернуться на место, где стоит игрок, предмет не может — он ждёт, пока тот выйдет', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: NOTHING });
+    const g = h.game;
+    const hit = bump(h)!;
+    expect(hit).not.toBeNull();
+    h.run(1.2);
+    expect(stateOf(h, hit.id)).toBe('gone');
+    // Игрок стоит у самого места предмета; фонарь гаснет и зажигается.
+    blink(h, 1);
+    h.run(2);
+    expect(stateOf(h, hit.id)).toBe('gone');
+    expect(illu(h).back).toBe(0);
+    g.teleport(g.body.x - hit.dx * 4, g.body.y, g.body.z - hit.dz * 4);
+    h.run(0.3);
+    expect(illu(h).back).toBeGreaterThanOrEqual(1);
+  });
+
+  /** Мелкая вещь сна без преграды и не воспоминание, лежащая прямо на полу (не на столе и не в стене). */
+  const littleOf = (h: Harness) =>
+    h.game.things.list.find((t) => {
+      if (t.memory || t.still || t.collider >= 0 || t.state !== 'idle') return false;
+      const floor = Math.floor((t.pos[1] + 0.3) / 4.5) * 4.5;
+      if (Math.abs(t.pos[1] - floor) > 0.1) return false;
+      const inside: Parameters<ColliderSet['query']>[4] = [];
+      h.game.colliders.query(t.pos[0] - 0.33, t.pos[2] - 0.33, t.pos[0] + 0.33, t.pos[2] + 0.33, inside);
+      return !inside.some((b) => b.maxY > floor + 0.4 && b.minY < floor + 1.7);
+    })!;
+
+  it('мелкая вещь сна: наступил — растворилась и помечена touched; фонарь выкл/вкл — собралась заново', () => {
+    let h = new Harness(levelOf(SEED), { seed: 3, cfg: NOTHING });
+    // Не на каждом уровне есть вещь прямо на полу и не у стены: берём первый, где она нашлась.
+    for (const seed of [5, 7, 42, 808]) {
+      if (littleOf(h)) break;
+      h = new Harness(levelOf(seed), { seed: 3, cfg: NOTHING });
+    }
+    const g = h.game;
+    const t = littleOf(h);
+    expect(t, 'на уровнях нет вещи на полу').toBeDefined();
+    const floor = Math.floor((t.pos[1] + 0.3) / 4.5) * 4.5;
+    g.teleport(t.pos[0], floor, t.pos[2]);
+    h.tick();
+    h.tick();
+    expect(t.state).toBe('changing');
+    expect(t.touched).toBe(true);
+    expect(h.log.dream.some((e) => e.type === 'touch' && e.what === 'gone' && e.name === t.kind)).toBe(true);
+    h.run(DEFAULT_THINGS.touchTime + 0.3);
+    expect(t.state).toBe('gone');
+    // Свет горит — не возвращается.
+    g.teleport(t.pos[0] + 3, floor, t.pos[2]);
+    h.run(4);
+    expect(t.state).toBe('gone');
+    blink(h, 1);
+    let seen = false;
+    for (let i = 0; i < Math.round(3 / STEP) && !(t.state === 'idle' && !t.touched); i++) {
+      h.tick();
+      if (t.state === 'coming') seen = true;
+    }
+    expect(seen, 'вещь не собиралась').toBe(true);
+    expect(t.state).toBe('idle');
+    expect(t.touched).toBe(false);
+    expect(t.dissolve).toBe(0);
+    expect(illu(h).back).toBeGreaterThanOrEqual(1);
+    // Такая вещь снова растворится от касания.
+    g.teleport(t.pos[0], floor, t.pos[2]);
+    h.tick();
+    h.tick();
+    expect(t.state).toBe('changing');
+  });
+
+  it('вещь, стоявшая на предмете, растворяется вместе с ним', () => {
+    // Вещь на столе есть не на каждом уровне: берём первый из нескольких (на этих она есть — тест не пустой).
+    let found: { h: Harness; id: number; thing: number } | null = null;
+    for (const seed of [5, 8, 15, 19, 22]) {
+      const level = buildLevel(generateLayout(seed, 3, 'shelter'));
+      const h = new Harness(level, { seed: 3, cfg: NOTHING });
+      for (const t of h.game.things.list) {
+        if (t.still || t.collider >= 0) continue;
+        const o = level.objects!.find((q) => q.solid && !q.flat && q.group === undefined && t.pos[0] > q.min[0] - 0.05 && t.pos[0] < q.max[0] + 0.05 && t.pos[2] > q.min[2] - 0.05 && t.pos[2] < q.max[2] + 0.05 && t.pos[1] > q.min[1] + 0.12 && t.pos[1] < q.max[1] + 0.15);
+        if (o) {
+          found = { h, id: o.id, thing: t.id };
+          break;
+        }
+      }
+      if (found) break;
+    }
+    expect(found, 'на уровнях нет вещи, стоящей на предмете').not.toBeNull();
+    if (!found) return;
+    const { h, id } = found;
+    const g = h.game;
+    const o = g.level!.objects![id - 1]!;
+    const t = g.things.list.find((x) => x.id === found!.thing)!;
+    expect(t.state).toBe('idle');
+    // Касаемся самого предмета: встаём вплотную к его коробке.
+    const box = g.colliders.boxes.find((b) => b.owner === id && !b.ghost)!;
+    const floor = floorOf(o);
+    g.teleport(box.minX - 0.25, floor, (box.minZ + box.maxZ) / 2);
+    g.aimAt(box.maxX, floor + 1, (box.minZ + box.maxZ) / 2);
+    for (let i = 0; i < 90 && stateOf(h, id) === 'here'; i++) h.tick({ ...emptyInput(), moveZ: 1 });
+    expect(stateOf(h, id), 'в предмет не упёрлись').not.toBe('here');
+    expect(['changing', 'gone']).toContain(t.state);
+    expect(t.touched).toBe(true);
+    h.run(1.5);
+    expect(t.state).toBe('gone');
+    expect(stateOf(h, id)).toBe('gone');
+  });
+
+  it('офис: фонаря нет, кнопка ничего не меняет — ни состояния, ни эха', () => {
+    const h = new Harness(buildLevel(generateLayout(SEED, 2, 'office')), { seed: 3 });
+    const g = h.game;
+    expect(g.hasLight).toBe(false);
+    h.run(1);
+    const before = { state: g.light.state, intensity: g.light.intensity, echo: (g.snapshot() as unknown as { echo: unknown[] }).echo.length };
+    h.tick({ ...emptyInput(), light: true });
+    h.tick({ ...emptyInput(), light: true });
+    expect(g.light.state).toBe(before.state);
+    expect(g.light.intensity).toBe(before.intensity);
+    expect(g.light.suspended).toBe(true);
+    expect((g.snapshot() as unknown as { echo: unknown[] }).echo.length).toBe(before.echo);
+    // Убежище и жёлтые комнаты — с фонарём.
+    expect(new Harness(levelOf(SEED)).game.hasLight).toBe(true);
+    expect(new Harness(buildLevel(generateLayout(SEED, 2, 'yellow'))).game.hasLight).toBe(true);
+  });
+
+  it('офис: игрок замер — через порог датчики его теряют и свет гаснет; пошевелился — горит снова', () => {
+    const { sleep, sleepStagger, reach } = DEFAULT_CELL_LIGHTS;
+    const h = new Harness(buildLevel(generateLayout(SEED, 2, 'office')), { seed: 3 });
+    const g = h.game;
+    h.run(1.5);
+    expect(lights(h)!.lit).toBeGreaterThan(0);
+    expect(g.cellLights!.at(g.playerNode())).toBeGreaterThan(0.95);
+    // Стоит: до порога свет держится.
+    h.run(sleep - 1.5 - 0.3);
+    expect(g.cellLights!.at(g.playerNode())).toBeGreaterThan(0.95);
+    expect(stillFor(h)).toBeGreaterThan(sleep - 1);
+    // Порог, ещё reach × sleepStagger и запас на затухание — темно везде.
+    h.run(0.3 + reach * sleepStagger + 1.2);
+    expect(stillFor(h)).toBeGreaterThan(sleep + reach * sleepStagger);
+    expect(lights(h)!.lit).toBe(0);
+    expect(g.ambientLocal).toBeLessThan(0.05);
+    // Пошевелился: повернул голову — счёт неподвижности обнулён, свет вернулся.
+    h.run(0.5, { ...emptyInput(), lookYaw: 0.01 });
+    expect(stillFor(h)).toBeLessThan(0.1);
+    expect(lights(h)!.lit).toBeGreaterThan(0);
+    expect(g.cellLights!.at(g.playerNode())).toBeGreaterThan(0.95);
+    // И снова замер — снова погасло.
+    h.run(sleep + reach * sleepStagger + 1.5);
+    expect(lights(h)!.lit).toBe(0);
+  });
+
+  it('офис: растворённый предмет возвращается после цикла «замер — погасло — пошевелился — зажглось»', () => {
+    const { sleep, sleepStagger, reach } = DEFAULT_CELL_LIGHTS;
+    const h = new Harness(buildLevel(generateLayout(SEED, 2, 'office')), { seed: 3 });
+    const g = h.game;
+    const hit = bump(h);
+    expect(hit, 'не вышло упереться ни в один предмет').not.toBeNull();
+    const { id } = hit!;
+    h.run(1.2);
+    expect(stateOf(h, id)).toBe('gone');
+    // Свет горит (игрок только что двигался) — предмет ждёт.
+    g.teleport(g.body.x - hit!.dx * 2, g.body.y, g.body.z - hit!.dz * 2);
+    h.run(1);
+    expect(stateOf(h, id)).toBe('gone');
+    expect(illu(h).back).toBe(0);
+    // Замер: панели гаснут, предмет всё ещё не вернулся — свет на его месте не «зажёгся», а погас.
+    h.run(sleep + reach * sleepStagger + 2.5);
+    expect(lights(h)!.lit).toBe(0);
+    expect(stateOf(h, id)).toBe('gone');
+    expect(illu(h).back).toBe(0);
+    // Пошевелился — зажглось, и вернулся.
+    h.run(0.6, { ...emptyInput(), lookYaw: 0.01 });
+    expect(illu(h).back).toBeGreaterThanOrEqual(1);
+    h.run(1.5);
+    expect(['here', 'left']).toContain(stateOf(h, id));
+  });
+
+  it('эхо: шаг пускает волну и при фонаре, но сила её нулевая; фонарь выключен — больше нуля; включил — снова тишина', () => {
+    for (const world of ['shelter', 'yellow'] as const) {
+      const level = world === 'shelter' ? levelOf(SEED) : buildLevel(generateLayout(SEED, 2, 'yellow'));
+      const h = new Harness(level, { seed: 3 });
+      const g = h.game;
+      const walk: InputFrame = { ...emptyInput(), moveZ: 1 };
+      const echo = (): { kind: number; amp: number }[] => (g.snapshot() as unknown as { echo: { kind: number; amp: number }[] }).echo;
+      const packed = (): number[] => {
+        const e = h.r.frames.at(-1)!.echo;
+        const out: number[] = [];
+        if (e) for (let i = 0; i < e.length; i += 8) out.push(e[i + 4]!);
+        return out;
+      };
+      expect(g.light.state).toBe('on');
+      h.run(1.2, walk);
+      const steps = echo().filter((p) => p.kind === 0);
+      expect(steps.length, `${world}: волн шагов`).toBeGreaterThan(0);
+      for (const p of echo()) expect(p.amp, `${world}: сила волны при свете`).toBe(0);
+      for (const a of packed()) expect(a).toBe(0);
+      // Выключил: ждём, пока привыкнут глаза, идём — волны слышны.
+      h.tick({ ...emptyInput(), light: true });
+      h.run(2.5);
+      h.run(1, walk);
+      expect(Math.max(...echo().map((p) => p.amp)), world).toBeGreaterThan(0.3);
+      // Включил: сила уходит почти сразу.
+      h.tick({ ...emptyInput(), light: true });
+      h.run(0.6, walk);
+      for (const p of echo()) expect(p.amp, `${world}: после включения`).toBeLessThan(0.05);
+    }
+  });
+
+  it('вещь воспоминания, тронутая игроком, возвращается собой и на своё место', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3 });
+    const g = h.game;
+    const { id } = h.reveal();
+    const t = g.things.list.find((x) => x.id === id)!;
+    const pos = [...t.pos];
+    const kind = t.kind;
+    if (t.collider >= 0) {
+      // Вещь с преградой: касаемся её, упёршись.
+      const box = g.colliders.boxes[t.collider]!;
+      expect(box.owner).toBe(-t.id);
+    }
+    const floor = Math.floor((t.pos[1] + 0.3) / 4.5) * 4.5;
+    g.teleport(t.pos[0] - 0.4, floor, t.pos[2]);
+    g.aimAt(t.pos[0], floor + 0.5, t.pos[2]);
+    const recalls = h.count('recall');
+    for (let i = 0; i < 60 && t.state === 'idle'; i++) h.tick({ ...emptyInput(), moveZ: 1 });
+    expect(t.state, 'вещь воспоминания не тронулась').not.toBe('idle');
+    expect(t.touched).toBe(true);
+    // Пока её нет, вспомнить её нельзя.
+    h.run(DEFAULT_THINGS.touchTime + 0.3);
+    expect(t.state).toBe('gone');
+    expect(h.count('recall')).toBe(recalls);
+    g.teleport(t.pos[0] - 4, floor, t.pos[2]);
+    h.run(2);
+    blink(h, 1);
+    h.run(2);
+    expect(t.state).toBe('idle');
+    expect(t.kind).toBe(kind);
+    expect(t.pos).toEqual(pos);
+    expect(g.session!.active?.def.thing).toBe(kind);
   });
 });

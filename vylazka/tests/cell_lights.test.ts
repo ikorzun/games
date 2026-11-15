@@ -206,3 +206,142 @@ describe('свет по клеткам: жёлтые комнаты', () => {
     expect(diff).toBeGreaterThan(10);
   });
 });
+
+/** Игрок стоит на месте: неподвижность копится с idleFrom, шаг за шагом. Возвращает, сколько её накопилось. */
+const stand = (l: CellLights, seconds: number, playerNode: number, idleFrom = 0): number => {
+  const dt = 1 / 60;
+  let idle = idleFrom;
+  for (let i = 0; i < Math.round(seconds / dt); i++) {
+    idle += dt;
+    l.update(dt, { playerNode, driftNode: -1, time: 0, idle });
+  }
+  return idle;
+};
+
+describe('свет по клеткам: датчики теряют неподвижного', () => {
+  const { sleep, sleepStagger, reach } = DEFAULT_CELL_LIGHTS;
+
+  it('по умолчанию датчики засыпают через 3,2 с, а над игроком панель гаснет последней — через reach × sleepStagger = 1 с', () => {
+    expect(sleep).toBe(3.2);
+    expect(reach * sleepStagger).toBeCloseTo(1, 6);
+  });
+
+  it('idle не задан или мал — поведение прежнее: свет держится сколько угодно, пока игрок стоит', () => {
+    const nav = corridorWithRoom(10, 8);
+    const l = sensor(nav);
+    run(l, 30, 4);
+    for (const i of [2, 3, 4, 5, 6]) expect(l.at(i), `клетка ${i}`).toBeGreaterThan(0.95);
+    // Неподвижности меньше порога — то же самое.
+    const m = sensor(nav);
+    stand(m, sleep - 0.05, 4);
+    for (const i of [2, 3, 4, 5, 6]) expect(m.at(i), `клетка ${i}`).toBeGreaterThan(0.95);
+  });
+
+  it('замер: дальние панели гаснут сразу после порога, ближняя — позже, та, что над игроком, — последней', () => {
+    const nav = corridorWithRoom(10, 8);
+    const l = sensor(nav);
+    run(l, 1, 4);
+    // Порог перешагнули на 0,6 с: две клетки от игрока гаснут уже 0,6 с, соседние — 0,1 с, под игроком — ещё нет.
+    stand(l, sleep + sleepStagger + 0.1, 4, 0);
+    expect(l.at(2)).toBeLessThan(0.1);
+    expect(l.at(6)).toBeLessThan(0.1);
+    expect(l.at(3)).toBeGreaterThan(l.at(2));
+    expect(l.at(3)).toBeLessThan(0.9);
+    expect(l.at(5)).toBeLessThan(0.9);
+    expect(l.at(4)).toBeGreaterThan(l.at(3));
+    // Над игроком — через reach × sleepStagger после порога.
+    const m = sensor(nav);
+    run(m, 1, 4);
+    stand(m, sleep + 0.9, 4);
+    expect(m.at(4)).toBeGreaterThan(0.95);
+    stand(m, 0.3, 4, sleep + 0.9);
+    expect(m.at(4)).toBeLessThan(0.95);
+  });
+
+  it('если всё стоит ещё, гаснет всё: темно и под игроком', () => {
+    const nav = corridorWithRoom(10, 8);
+    const l = sensor(nav);
+    run(l, 1, 4);
+    stand(l, sleep + reach * sleepStagger + 3, 4);
+    for (const n of nav) expect(l.at(n.id), `клетка ${n.id}`).toBeLessThan(0.02);
+  });
+
+  it('пошевелился — панели загораются снова: сначала под игроком, потом по очереди вокруг', () => {
+    const nav = corridorWithRoom(10, 8);
+    const l = sensor(nav);
+    run(l, 1, 4);
+    const idle = stand(l, sleep + 4, 4);
+    expect(l.at(4)).toBeLessThan(0.02);
+    // idle обнулился: игрок шагнул, тот же узел.
+    run(l, 0.1, 4);
+    expect(l.at(4)).toBeGreaterThan(0.5);
+    expect(l.at(6)).toBeLessThan(0.05);
+    run(l, 0.6, 4);
+    for (const i of [2, 3, 4, 5, 6]) expect(l.at(i), `клетка ${i}`).toBeGreaterThan(0.95);
+    expect(idle).toBeGreaterThan(sleep);
+  });
+
+  it('и снова засыпают, если замер опять: цикл повторяется', () => {
+    const nav = corridorWithRoom(10, 8);
+    const l = sensor(nav);
+    for (let k = 0; k < 2; k++) {
+      run(l, 1, 4);
+      expect(l.at(4)).toBeGreaterThan(0.95);
+      stand(l, sleep + reach * sleepStagger + 2.5, 4);
+      expect(l.at(4)).toBeLessThan(0.02);
+    }
+  });
+
+  it('вдали от игрока свет и так не горит и после пробуждения не загорается', () => {
+    const nav = corridorWithRoom(10, 8);
+    const l = sensor(nav);
+    stand(l, sleep + 3, 4);
+    run(l, 1, 4);
+    expect(l.at(9)).toBe(0);
+    expect(l.at(8)).toBe(0);
+  });
+
+  it('помещение вне коридора засыпает целиком; в нём тоже загорается разом, когда игрок пошевелился', () => {
+    const nav = corridorWithRoom(10, 8);
+    const l = sensor(nav);
+    const room = [10, 11, 12, 13];
+    run(l, 1, 10);
+    for (const i of room) expect(l.at(i)).toBeGreaterThan(0.95);
+    stand(l, sleep + reach * sleepStagger + 2.5, 10);
+    for (const i of room) expect(l.at(i), `клетка ${i}`).toBeLessThan(0.02);
+    run(l, 0.6, 10);
+    for (const i of room) expect(l.at(i), `клетка ${i}`).toBeGreaterThan(0.9);
+  });
+
+  it('порог можно отключить: бесконечный sleep — датчики не засыпают', () => {
+    const nav = corridorWithRoom(10, 8);
+    const l = new CellLights(nav, 'sensor', 7, 16, { ...DEFAULT_CELL_LIGHTS, sleep: Infinity });
+    l.corridorRooms.add(0);
+    run(l, 1, 4);
+    stand(l, 60, 4);
+    expect(l.at(4)).toBeGreaterThan(0.95);
+    expect(l.at(2)).toBeGreaterThan(0.95);
+  });
+
+  it('очередность задаётся sleepStagger: больше задержка — дольше горит панель над игроком', () => {
+    const nav = corridorWithRoom(10, 8);
+    const l = new CellLights(nav, 'sensor', 7, 16, { ...DEFAULT_CELL_LIGHTS, sleepStagger: 2 });
+    l.corridorRooms.add(0);
+    run(l, 1, 4);
+    // 1,5 с после порога: по умолчанию над игроком уже гасло бы, здесь ему ждать 4 с.
+    stand(l, sleep + 1.5, 4);
+    expect(l.at(4)).toBeGreaterThan(0.95);
+    expect(l.at(2)).toBeLessThan(0.05);
+    stand(l, 4, 4, sleep + 1.5);
+    expect(l.at(4)).toBeLessThan(0.05);
+  });
+
+  it('в жёлтых комнатах (hum) датчиков нет: неподвижность ничего не гасит', () => {
+    const nav = corridorWithRoom(10, 8);
+    const a = new CellLights(nav, 'hum', 5);
+    const b = new CellLights(nav, 'hum', 5);
+    run(a, 10, 4);
+    stand(b, 10, 4);
+    expect([...b.level]).toEqual([...a.level]);
+  });
+});

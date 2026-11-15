@@ -68,6 +68,8 @@ export interface FrameView {
   gas: number;
   /** 0..1: насколько здесь сыро и запущено (растёт с глубиной): облезшая краска, ржавчина, плесень. */
   decay: number;
+  /** Чистое пространство: поверхности — только шар материала, без фактур и грязи (жёлтые комнаты). */
+  plain?: boolean;
   /** Плотность взвеси в воздухе: насколько виден сам луч. */
   haze: number;
   fade: number;
@@ -199,6 +201,12 @@ const SCAN = { perLight: 24, max: 3.5, hold: 7, lodDist: 3.5, far: 28, sow: 45, 
  */
 const SLIDE = { washFrom: 0.012, washTo: 0.11, gain: 0.085 } as const;
 
+/**
+ * Сторона текстуры состояний объектов уровня: 64 × 64 = 4096 объектов (world/objects.ts, MAX_OBJECTS).
+ * То же число зашито в шейдере (objDissolve: id & 63, id >> 6).
+ */
+const OBJ_TEX = 64;
+
 /** Сколько материалов помещается в массивы шейдера мира (uMatA, uMatB, uMatBase). */
 const MAT_SLOTS = 48;
 /** Сторона текстуры света по клеткам: столько клеток по стороне у сетки генератора. */
@@ -260,6 +268,9 @@ export class GameRenderer {
   private signsTex: THREE.Texture;
   /** Атлас картинок выставочных экранов (render/screen_images.ts). */
   private screensTex: THREE.Texture;
+  /** Состояния объектов уровня: байт на объект — насколько он растворён. */
+  private readonly objData = new Uint8Array(OBJ_TEX * OBJ_TEX);
+  private readonly objTex: THREE.DataTexture;
   private readonly depthMat: THREE.ShaderMaterial;
   private readonly postMat: THREE.ShaderMaterial;
   private readonly hazeMat: THREE.ShaderMaterial;
@@ -371,6 +382,10 @@ export class GameRenderer {
     // Атлас надписей и плакатов: пока пустой белый лист, рисуется отдельно (setSigns).
     this.signsTex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.signsTex.needsUpdate = true;
+    this.objTex = new THREE.DataTexture(this.objData, OBJ_TEX, OBJ_TEX, THREE.RedFormat, THREE.UnsignedByteType);
+    this.objTex.magFilter = THREE.NearestFilter;
+    this.objTex.minFilter = THREE.NearestFilter;
+    this.objTex.needsUpdate = true;
     // Атлас экранов: пока не нарисован — тёмно-серый тексель.
     this.screensTex = new THREE.DataTexture(new Uint8Array([40, 40, 44, 255]), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.screensTex.needsUpdate = true;
@@ -404,6 +419,8 @@ export class GameRenderer {
         uSigns: { value: this.signsTex },
         uScreens: { value: this.screensTex },
         uDecay: { value: 0.3 },
+        uPlain: { value: 0 },
+        uObjState: { value: this.objTex },
         uTierDrop: { value: 4.5 },
         uLightRightV: { value: new THREE.Vector3(1, 0, 0) },
         uLightUpV: { value: new THREE.Vector3(0, 1, 0) },
@@ -429,7 +446,7 @@ export class GameRenderer {
         uMatBase: { value: Array.from({ length: MAT_SLOTS }, (_, i) => new THREE.Vector3(...(atlas.base[i] ?? [0.5, 0.5, 0.5]))) },
       },
     });
-    this.depthMat = new THREE.ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, side: THREE.BackSide, colorWrite: false });
+    this.depthMat = new THREE.ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, side: THREE.BackSide, colorWrite: false, uniforms: { uObjState: { value: this.objTex } } });
     // Проекции: всё общее — теми же uniform-объектами, что у мира.
     this.slideMat = this.worldLike();
     // Красная сетка: распад берёт у мира (одни и те же uniform-объекты), яркость своя.
@@ -440,6 +457,7 @@ export class GameRenderer {
         uDissolve: this.worldMat.uniforms.uDissolve!,
         uThing: this.worldMat.uniforms.uThing!,
         uWireColor: { value: new THREE.Vector3(1.0, 0.06, 0.03) },
+        uObjState: { value: this.objTex },
         uWireAlpha: { value: 0 },
         uTime: { value: 0 },
       },
@@ -863,10 +881,25 @@ export class GameRenderer {
     this.applyQuality();
   }
 
+  /**
+   * Насколько растворён объект уровня (world/objects.ts): 0 — стоит, 1 — его нет. Объект лежит в общей
+   * сетке помещения; шейдер находит его вершины по номеру.
+   */
+  setObjectState(id: number, dis: number): void {
+    if (id <= 0 || id >= OBJ_TEX * OBJ_TEX) return;
+    const v = Math.round(Math.max(0, Math.min(1, dis)) * 255);
+    if (this.objData[id] === v) return;
+    this.objData[id] = v;
+    this.objTex.needsUpdate = true;
+  }
+
   /** Заменить геометрию мира. stairs — лестницы между ярусами: рядом с ними виден соседний ярус. */
   setWorld(chunks: readonly LevelChunk[], stairs: readonly StairLink[] = []): void {
     // Другое место — другая память: прежняя к нему не относится.
     this.memLive = false;
+    // И другие предметы: все на месте.
+    this.objData.fill(0);
+    this.objTex.needsUpdate = true;
     this.stairs = stairs;
     for (const m of this.chunks) this.dropMesh(m);
     this.chunks.length = 0;
@@ -897,6 +930,8 @@ export class GameRenderer {
     g.setAttribute('uv', new THREE.BufferAttribute(data.uv, 2));
     g.setAttribute('aColor', new THREE.BufferAttribute(data.color, 4));
     g.setAttribute('aMat', new THREE.BufferAttribute(data.mat, 1));
+    // Номер объекта у вершины: по нему шейдер растворяет отдельный предмет в общей сетке помещения.
+    if (data.obj) g.setAttribute('aObj', new THREE.BufferAttribute(data.obj, 1));
     g.setIndex(new THREE.BufferAttribute(data.index, 1));
     g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, this.worldMat);
@@ -923,6 +958,8 @@ export class GameRenderer {
     const g = new THREE.BufferGeometry();
     const pos = m.geometry.getAttribute('position');
     g.setAttribute('position', pos);
+    const obj = m.geometry.getAttribute('aObj');
+    if (obj) g.setAttribute('aObj', obj);
     g.setIndex(new THREE.BufferAttribute(edgeIndex(m.geometry.getIndex()!.array, pos.count), 1));
     g.boundingSphere = m.geometry.boundingSphere;
     const lines = new THREE.LineSegments(g, mat);
@@ -995,6 +1032,7 @@ export class GameRenderer {
         t.wireMat.uniforms.uDissolve = this.worldMat.uniforms.uDissolve!;
         t.wireMat.uniforms.uThing = t.mat.uniforms.uThing!;
         t.wireMat.uniforms.uTime = this.wireMat.uniforms.uTime!;
+        t.wireMat.uniforms.uObjState = this.wireMat.uniforms.uObjState!;
         t.wire = this.wireFor(t.mesh, t.wireMat);
       }
       t.wire.visible = true;
@@ -1190,6 +1228,7 @@ export class GameRenderer {
     right.transformDirection(cam.matrixWorldInverse);
     upL.transformDirection(cam.matrixWorldInverse);
     wu.uDecay!.value = v.decay;
+    wu.uPlain!.value = v.plain ? 1 : 0;
     (wu.uSlide!.value as THREE.Vector4).w = v.time;
     wu.uTierDrop!.value = this.tierDrop;
     wu.uScanFade!.value = v.scanFade;

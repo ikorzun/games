@@ -35,9 +35,16 @@ export interface CellLightsConfig {
   /** Жёлтые комнаты: доля мёртвых панелей и доля мерцающих. */
   dead: number;
   flicker: number;
+  /**
+   * Датчики движения теряют того, кто замер: через столько секунд неподвижности панели начинают
+   * гаснуть — дальние первыми, та, что над игроком, последней (sleepStagger секунд на клетку пути).
+   * Пошевелился — загораются снова. Бесконечность — датчики не засыпают.
+   */
+  sleep: number;
+  sleepStagger: number;
 }
 
-export const DEFAULT_CELL_LIGHTS: CellLightsConfig = { reach: 2, stagger: 0.11, rise: 0.07, fall: 0.22, hold: 1.6, driftReach: 1, driftHold: 2.5, dead: 0.16, flicker: 0.14 };
+export const DEFAULT_CELL_LIGHTS: CellLightsConfig = { reach: 2, stagger: 0.11, rise: 0.07, fall: 0.22, hold: 1.6, driftReach: 1, driftHold: 2.5, dead: 0.16, flicker: 0.14, sleep: 3.2, sleepStagger: 0.5 };
 
 /** Мертва ли панель в клетке (жёлтые комнаты): одно и то же знают обстановка и свет. */
 export function panelDead(seed: number, cx: number, cz: number, share = DEFAULT_CELL_LIGHTS.dead): boolean {
@@ -51,6 +58,8 @@ export interface CellLightsInput {
   driftNode: number;
   /** Игровое время, с: по нему идёт мерцание. */
   time: number;
+  /** Сколько секунд игрок не двигается и не смотрит по сторонам (не задано — он движется). */
+  idle?: number;
 }
 
 export class CellLights {
@@ -134,16 +143,21 @@ export class CellLights {
       // Датчики: клетки в пределах reach шагов пути и всё помещение, где стоит игрок.
       this.spread(inp.playerNode, c.reach);
       const here = inp.playerNode >= 0 ? this.nav[inp.playerNode]! : null;
+      // Замер — датчики его потеряли: сколько секунд назад.
+      const asleep = (inp.idle ?? 0) - c.sleep;
       for (let i = 0; i < n; i++) {
         const node = this.nav[i]!;
         let h = this.hops[i]!;
         if (h < 0 && here && node.room === here.room && node.tier === here.tier && !this.corridor(here)) h = c.reach;
-        if (h >= 0) {
+        // Панели гаснут по очереди: дальние сразу, та, что над игроком, — последней.
+        const lost = h >= 0 && asleep >= (c.reach - Math.min(h, c.reach)) * c.sleepStagger;
+        if (h >= 0 && !lost) {
           this.want[i] = this.want[i]! + dt;
           this.idle[i] = 0;
         } else {
           this.want[i] = 0;
-          this.idle[i] = this.idle[i]! + dt;
+          this.idle[i] = lost ? Math.max(this.idle[i]!, c.hold) : this.idle[i]! + dt;
+          h = -1;
         }
         // Панель загорается, когда до неё «дошла очередь», и горит ещё hold секунд после ухода игрока.
         const on = this.dark[i]! <= 0 && !this.offRooms.has(node.room) && (h >= 0 ? this.want[i]! >= c.stagger * h : this.idle[i]! < c.hold && this.level[i]! > 0.02);

@@ -225,6 +225,125 @@ describe('вещи: экспонат (still)', () => {
   });
 });
 
+describe('вещи: прикосновение — всё иллюзорно', () => {
+  it('touch: стоящая вещь начинает меняться, судьба — рассыпаться, флаг touched поднят; событие changing', () => {
+    const { th, t } = make('shrink');
+    const ev = th.touch(t);
+    expect(ev).toEqual({ type: 'changing', thing: t });
+    expect(t.state).toBe('changing');
+    // Судьбу от касания определяет касание, а не та, что вещи выпала от взгляда.
+    expect(t.fate).toBe('dust');
+    expect(t.touched).toBe(true);
+    expect(t.dark).toBe(false);
+  });
+
+  it('растворяется за touchTime, а не за dustTime; размер не меняется; settled один раз', () => {
+    expect(DEFAULT_THINGS.touchTime).toBeLessThan(DEFAULT_THINGS.dustTime);
+    const { th, t } = make('dust');
+    th.touch(t);
+    run(th, DEFAULT_THINGS.touchTime / 2, away());
+    expect(t.dissolve).toBeGreaterThan(0.4);
+    expect(t.dissolve).toBeLessThan(0.6);
+    expect(t.scale).toBe(1);
+    const ev = run(th, DEFAULT_THINGS.touchTime / 2 + 0.05, away());
+    expect(kinds(ev)).toEqual(['settled']);
+    expect(t.state).toBe('gone');
+    expect(t.dissolve).toBe(1);
+    expect(kinds(run(th, 3, away()))).toEqual([]);
+  });
+
+  it('вещь, растворённая взглядом, по-прежнему рассыпается за dustTime и не считается «тронутой»', () => {
+    const { th, t } = make('dust');
+    run(th, DEFAULT_THINGS.gazeTime + 0.05, onThing(t));
+    expect(t.touched).toBe(false);
+    run(th, DEFAULT_THINGS.touchTime + 0.1, away());
+    expect(t.state).toBe('changing');
+    run(th, DEFAULT_THINGS.dustTime, away());
+    expect(t.state).toBe('gone');
+    expect(t.touched).toBe(false);
+  });
+
+  it('вещь, которая уже меняется, исчезла или выросла, касания не замечает', () => {
+    const changing = make('dust');
+    run(changing.th, DEFAULT_THINGS.gazeTime + 0.05, onThing(changing.t));
+    expect(changing.th.touch(changing.t)).toBeNull();
+    expect(changing.t.touched).toBe(false);
+    expect(changing.t.fate).toBe('dust');
+
+    const gone = make('shrink');
+    run(gone.th, DEFAULT_THINGS.gazeTime + 0.05, onThing(gone.t));
+    run(gone.th, DEFAULT_THINGS.shrinkTime + 0.2, away());
+    expect(gone.t.state).toBe('gone');
+    expect(gone.th.touch(gone.t)).toBeNull();
+    expect(gone.t.touched).toBe(false);
+
+    const giant = make('grow');
+    run(giant.th, DEFAULT_THINGS.gazeTime + 0.05, onThing(giant.t));
+    run(giant.th, DEFAULT_THINGS.growTime + 0.2, away());
+    expect(giant.t.state).toBe('giant');
+    expect(giant.th.touch(giant.t)).toBeNull();
+    expect(giant.t.touched).toBe(false);
+
+    // Дважды коснулись — растворение не перезапускается.
+    const twice = make('dust');
+    twice.th.touch(twice.t);
+    run(twice.th, 0.4, away());
+    const was = twice.t.dissolve;
+    expect(twice.th.touch(twice.t)).toBeNull();
+    expect(twice.t.dissolve).toBe(was);
+  });
+
+  it('comeBack: растворённая вещь собирается заново за comeTime — dissolve от 1 до 0 — и снова стоит; settled один раз', () => {
+    const { th, t } = make('dust');
+    th.touch(t);
+    run(th, DEFAULT_THINGS.touchTime + 0.1, away());
+    expect(t.state).toBe('gone');
+    th.comeBack(t);
+    expect(t.state).toBe('coming');
+    expect(t.dissolve).toBe(1);
+    expect(t.scale).toBe(1);
+    expect(t.touched).toBe(false);
+    expect(t.dark).toBe(false);
+    run(th, DEFAULT_THINGS.comeTime / 2, away());
+    expect(t.state).toBe('coming');
+    expect(t.dissolve).toBeGreaterThan(0.4);
+    expect(t.dissolve).toBeLessThan(0.6);
+    const ev = run(th, DEFAULT_THINGS.comeTime / 2 + 0.05, away());
+    expect(kinds(ev)).toEqual(['settled']);
+    expect(t.state).toBe('idle');
+    expect(t.dissolve).toBe(0);
+    expect(kinds(run(th, 3, away()))).toEqual([]);
+  });
+
+  it('собирающаяся вещь касания и взгляда не замечает; собравшись, снова меняется и от взгляда, и от касания', () => {
+    const { th, t } = make('shrink');
+    th.touch(t);
+    run(th, DEFAULT_THINGS.touchTime + 0.1, away());
+    th.comeBack(t);
+    run(th, 0.2, away());
+    expect(th.touch(t)).toBeNull();
+    // Смотрят на неё всё время сборки — взгляд не копится.
+    run(th, DEFAULT_THINGS.comeTime, onThing(t));
+    expect(t.state).toBe('idle');
+    expect(t.gaze).toBeLessThan(0.1);
+    // Теперь это снова обычная вещь: взглядом (по её судьбе — dust, после касания) или касанием.
+    expect(th.touch(t)).not.toBeNull();
+    expect(t.state).toBe('changing');
+  });
+
+  it('вещь, вернувшаяся после касания, снова растворяется от взгляда', () => {
+    const { th, t } = make('dust');
+    th.touch(t);
+    run(th, DEFAULT_THINGS.touchTime + 0.1, away());
+    th.comeBack(t);
+    run(th, DEFAULT_THINGS.comeTime + 0.1, away());
+    expect(t.state).toBe('idle');
+    run(th, DEFAULT_THINGS.gazeTime + 0.1, onThing(t));
+    expect(t.state).toBe('changing');
+    expect(t.touched).toBe(false);
+  });
+});
+
 describe('looksAt', () => {
   const target: Vec3 = [0, 1, 0];
   const at = (eye: Vec3, light = 1): Look => ({ eye, aim: norm([target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]]), light });
