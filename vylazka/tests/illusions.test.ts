@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { generateLayout } from '../src/gen/layout';
 import type { WorldKind } from '../src/gen/layout';
 import { createBody, DEFAULT_CONTROLLER, groundHeight, stepPlayer } from '../src/player/controller';
-import { DEFAULT_ILLUSIONS, Illusions } from '../src/systems/illusions';
-import type { Comeback, ComebackOptions } from '../src/systems/illusions';
+import { DEFAULT_ILLUSIONS, FORM_CARD, FORM_GONE, FORM_LACE, FORM_LIGHT, FORM_REAL, Illusions, worse } from '../src/systems/illusions';
+import type { Comeback, ComebackOptions, Form, Mount } from '../src/systems/illusions';
 import { ColliderSet } from '../src/world/colliders';
 import type { MeshData } from '../src/world/kit';
 import type { BuiltLevel } from '../src/world/level';
@@ -18,8 +18,10 @@ const C = DEFAULT_ILLUSIONS;
 /** Предмет-заготовка: габариты и место не важны автомату. */
 const obj = (id: number, name = 'wardrobe'): LevelObject => ({ id, name, at: [id, 0, 0], rot: 0, min: [id - 0.5, 0, -0.3], max: [id + 0.5, 1.8, 0.3], solid: true, flat: false });
 const objects = (n: number): LevelObject[] => Array.from({ length: n }, (_, i) => obj(i + 1));
-const NONE: ComebackOptions = { kinds: [], slots: [] };
-const BOTH: ComebackOptions = { kinds: ['stool', 'locker'], slots: [3, 8, 13] };
+/** Обычная вещь у стены без свободных мест рядом; она же — с местами; вещь, которой положено вернуться собой. */
+const NONE: ComebackOptions = { keep: false, mount: 'floor', slots: [] };
+const BOTH: ComebackOptions = { keep: false, mount: 'floor', slots: [3, 8, 13] };
+const KEEP: ComebackOptions = { keep: true, mount: 'floor', slots: [3, 8, 13] };
 
 /** Прогнать автомат dt за dt. */
 function run(ill: Illusions, seconds: number, light: () => number = () => 1, blocked: () => boolean = () => false, options: ComebackOptions = NONE): Comeback[] {
@@ -143,48 +145,92 @@ describe('иллюзорные предметы: автомат', () => {
     expect(back.map((b) => b.id)).toEqual([2]);
   });
 
-  it('без вариантов предмет всегда возвращается тем же', () => {
+  it('вещь, которой положено вернуться собой (экран, проём), возвращается той же и на своё место', () => {
     const ill = new Illusions(objects(200), 11);
     dissolve(ill);
     run(ill, 1, () => 0);
-    const back = decide(ill, () => 1);
+    const back = decide(ill, () => 1, () => false, KEEP);
     expect(back).toHaveLength(200);
-    for (const b of back) expect(b.how).toBe('same');
+    for (const b of back) expect(b).toEqual({ how: 'same', id: b.id });
   });
 
-  it('если нет мест, второй вариант заменяется предметом, и наоборот — «на месте» достаётся только тем же', () => {
-    const pick = (opt: ComebackOptions): Comeback[] => {
-      const ill = new Illusions(objects(300), 5);
-      dissolve(ill);
-      run(ill, 1, () => 0);
-      return decide(ill, () => 1, () => false, opt);
+  it('ступени: настоящая → картонка → проекция → кружево → нет; не всякая ступень годится всякой вещи', () => {
+    const ladder = (mount: Mount): Form[] => {
+      const out: Form[] = [FORM_REAL];
+      while (out[out.length - 1] !== FORM_GONE) out.push(worse(out[out.length - 1]!, mount));
+      return out;
     };
-    const onlyKinds = pick({ kinds: ['stool'], slots: [] });
-    expect(onlyKinds.some((b) => b.how === 'kind')).toBe(true);
-    expect(onlyKinds.some((b) => b.how === 'place')).toBe(false);
-    const onlySlots = pick({ kinds: [], slots: [4] });
-    expect(onlySlots.some((b) => b.how === 'place')).toBe(true);
-    expect(onlySlots.some((b) => b.how === 'kind')).toBe(false);
+    // У стены на полу — все ступени.
+    expect(ladder('floor')).toEqual([FORM_REAL, FORM_CARD, FORM_LIGHT, FORM_LACE, FORM_GONE]);
+    // Настенная и так плоская: картонки нет.
+    expect(ladder('wall')).toEqual([FORM_REAL, FORM_LIGHT, FORM_LACE, FORM_GONE]);
+    // Посреди пола проекции лечь не на что.
+    expect(ladder('free')).toEqual([FORM_REAL, FORM_CARD, FORM_LACE, FORM_GONE]);
+    // Под потолком — сразу кружево.
+    expect(ladder('ceiling')).toEqual([FORM_REAL, FORM_LACE, FORM_GONE]);
+    // Стёртое остаётся стёртым.
+    for (const m of ['floor', 'wall', 'free', 'ceiling'] as const) expect(worse(FORM_GONE, m)).toBe(FORM_GONE);
   });
 
-  it('с вариантами на 400 предметах доли возвратов — около 0,5 тем же, 0,3 другим предметом, 0,2 в другом месте', () => {
+  it('вещь возвращается на ступень хуже: настоящая — картонкой; картонка из уровня — проекцией', () => {
+    const real = new Illusions(objects(50), 4);
+    dissolve(real);
+    run(real, 1, () => 0);
+    for (const b of decide(real, () => 1)) expect(b).toEqual({ how: 'step', id: b.id, form: FORM_CARD });
+    const flats = new Illusions(objects(50).map((o) => ({ ...o, flat: true, solid: false })), 4);
+    expect(flats.get(1)!.form).toBe(FORM_CARD);
+    dissolve(flats);
+    run(flats, 1, () => 0);
+    for (const b of decide(flats, () => 1)) expect(b).toEqual({ how: 'step', id: b.id, form: FORM_LIGHT });
+    // Настенная минует картонку.
+    const wall = new Illusions(objects(5), 4);
+    dissolve(wall);
+    run(wall, 1, () => 0);
+    for (const b of decide(wall, () => 1, () => false, { keep: false, mount: 'wall', slots: [] })) expect(b).toEqual({ how: 'step', id: b.id, form: FORM_LIGHT });
+  });
+
+  it('ушедшая из сетки вещь помнит свою ступень и больше не решается автоматом', () => {
+    const ill = new Illusions(objects(2), 9);
+    dissolve(ill);
+    run(ill, 1, () => 0);
+    const back = decide(ill, () => 1);
+    expect(back).toHaveLength(2);
+    ill.leave(1, FORM_CARD);
+    ill.leave(2);
+    expect(ill.get(1)!.state).toBe('left');
+    expect(ill.get(1)!.form).toBe(FORM_CARD);
+    // Без ступени — стёрта.
+    expect(ill.get(2)!.form).toBe(FORM_GONE);
+    expect(run(ill, 2, () => 1)).toEqual([]);
+    // Сквозь место ушедшей можно пройти.
+    expect(ill.open(1)).toBe(true);
+  });
+
+  it('на другом месте — около четверти возвратов, и только если места есть; выбор — из предложенных', () => {
     const ill = new Illusions(objects(400), 2004);
     dissolve(ill);
     run(ill, 1, () => 0);
     const back = decide(ill, () => 1, () => false, BOTH);
     expect(back).toHaveLength(400);
-    const share = (how: Comeback['how']): number => back.filter((b) => b.how === how).length / back.length;
-    expect(Math.abs(share('same') - 0.5)).toBeLessThan(0.08);
-    expect(Math.abs(share('kind') - 0.3)).toBeLessThan(0.08);
-    expect(Math.abs(share('place') - 0.2)).toBeLessThan(0.08);
-    // Выбор — только из того, что предложено.
-    for (const b of back) {
-      if (b.how === 'kind') expect(BOTH.kinds).toContain(b.kind);
-      if (b.how === 'place') expect(BOTH.slots).toContain(b.slot);
-    }
-    // Из предложенного выбираются разные.
-    expect(new Set(back.filter((b) => b.how === 'kind').map((b) => (b as { kind: string }).kind)).size).toBe(BOTH.kinds.length);
-    expect(new Set(back.filter((b) => b.how === 'place').map((b) => (b as { slot: number }).slot)).size).toBe(BOTH.slots.length);
+    const moved = back.filter((b) => b.how === 'step' && b.slot !== undefined) as { slot: number }[];
+    expect(Math.abs(moved.length / back.length - C.place)).toBeLessThan(0.07);
+    for (const b of moved) expect(BOTH.slots).toContain(b.slot);
+    expect(new Set(moved.map((b) => b.slot)).size).toBe(BOTH.slots.length);
+    // Мест нет — все на своих.
+    const stay = new Illusions(objects(400), 2004);
+    dissolve(stay);
+    run(stay, 1, () => 0);
+    for (const b of decide(stay, () => 1)) expect(b.how === 'step' && b.slot === undefined).toBe(true);
+  });
+
+  it('стёртая вещь места не занимает: с последней ступени она не возвращается никуда', () => {
+    const ill = new Illusions(objects(300), 5);
+    for (const i of ill.list) i.form = FORM_LACE;
+    dissolve(ill);
+    run(ill, 1, () => 0);
+    const back = decide(ill, () => 1, () => false, BOTH);
+    expect(back).toHaveLength(300);
+    for (const b of back) expect(b).toEqual({ how: 'step', id: b.id, form: FORM_GONE });
   });
 
   it('решения детерминированы: один сид — те же, другой сид — другие', () => {
@@ -211,7 +257,7 @@ describe('иллюзорные предметы: автомат', () => {
     const first = cycle(ill);
     const second = cycle(ill);
     expect(second).toHaveLength(80);
-    expect(second.filter((b, i) => b.how !== first[i]!.how).length).toBeGreaterThan(10);
+    expect(second.filter((b, i) => JSON.stringify(b) !== JSON.stringify(first[i])).length).toBeGreaterThan(10);
   });
 
   it('comeBack: предмет собирается за comeTime и снова стоит; пока собирается, он держит', () => {
@@ -355,7 +401,7 @@ describe('иллюзорные предметы: объекты уровня', (
     }
   });
 
-  it('потолочные предметы и FIXED (порог, двери лифта) объектами не становятся', () => {
+  it('потолочные предметы и FIXED (порог, двери лифта, гора) объектами не становятся; подвесной бумажный цветок — становится', () => {
     const seen = new Set<string>();
     for (const world of WORLDS) {
       for (const seed of SEEDS) {
@@ -363,8 +409,9 @@ describe('иллюзорные предметы: объекты уровня', (
           seen.add(o.name);
           expect(FIXED.has(o.name), o.name).toBe(false);
           const spec = ALL_PROPS[o.name];
-          if (spec) expect(spec.mount, o.name).not.toBe('ceiling');
-          else expect(o.name.startsWith('display_'), `неизвестное имя ${o.name}`).toBe(true);
+          // Подвесного не коснуться — кроме бумажного цветка: он расцветает и рассыпается, когда к нему подходят.
+          if (spec && o.name !== 'paper_flower_hang') expect(spec.mount, o.name).not.toBe('ceiling');
+          else if (!spec) expect(o.name.startsWith('display_'), `неизвестное имя ${o.name}`).toBe(true);
         }
       }
     }

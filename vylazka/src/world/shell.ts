@@ -272,7 +272,7 @@ export function buildShell(shell: Shell, target: MeshBuilder | ((cell: ShellCell
         const b = pt(s1);
         wallFace(mb, a[0], a[1], b[0], b[1], nx, nz, c, f, h, ao0, ao1);
       } else {
-        // Дверь: два простенка, перемычка над проёмом, откосы и низ перемычки.
+        // Дверь: два простенка и перемычка над проёмом.
         const mid = (s0 + s1) / 2;
         const d0 = mid - DOOR_W / 2;
         const d1 = mid + DOOR_W / 2;
@@ -284,24 +284,9 @@ export function buildShell(shell: Shell, target: MeshBuilder | ((cell: ShellCell
         wallFace(mb, a[0], a[1], l[0], l[1], nx, nz, c, f, h, ao0, 0.8);
         wallFace(mb, r[0], r[1], b[0], b[1], nx, nz, c, f, h, 0.8, ao1);
         wallFace(mb, l[0], l[1], r[0], r[1], nx, nz, c, top, h, 0.9, 0.9);
-        // Откосы и низ перемычки строит только одна из двух клеток (у второй они бы совпали).
-        if (!other || dir < 2) {
-          const back = line - (alongZ ? nx : nz) * T;
-          const q = (s: number, depth: number): [number, number] => (alongZ ? [depth, s] : [s, depth]);
-          const jamb = (s: number, sign: number): void => {
-            const p0 = q(s, face);
-            const p1 = q(s, back);
-            const out: Vec3 = alongZ ? [0, 0, sign] : [sign, 0, 0];
-            mb.quadFacing([p0[0], f, p0[1]], [p1[0], f, p1[1]], [p1[0], top, p1[1]], [p0[0], top, p0[1]], out, MAT.concrete, [0.8, 0.8, 0.8], [0.6, 0.6, 0.8, 0.8]);
-          };
-          jamb(d0, 1);
-          jamb(d1, -1);
-          const u0 = q(d0, face);
-          const u1 = q(d1, face);
-          const u2 = q(d1, back);
-          const u3 = q(d0, back);
-          mb.quadFacing([u0[0], top, u0[1]], [u1[0], top, u1[1]], [u2[0], top, u2[1]], [u3[0], top, u3[1]], [0, -1, 0], MAT.concrete, [0.8, 0.8, 0.8], 0.7);
-        }
+        // Откосов и низа перемычки стена не строит: проём всегда закрыт дверной коробкой (doorFrame,
+        // hermoDoor), а она шире стены. Свои откосы легли бы точно в плоскость внутренних граней
+        // коробки — две грани в одной плоскости спорят за пиксель, и проём рябит по всему периметру.
       }
 
       // Коллайдеры — один раз на ребро (у стены между двумя клетками их строит клетка с меньшим направлением).

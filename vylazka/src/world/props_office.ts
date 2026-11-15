@@ -452,7 +452,8 @@ function meetingTable(xf: Xf, seed: number): void {
 /** Серверная стойка 0,6 × 0,9 × 2,0: чёрный шкаф, дверь из тонких горизонтальных планок, ряды огоньков (зелёные и янтарные). */
 function serverRack(xf: Xf, seed: number): void {
   const rnd = rng(seed);
-  bx(xf, [-0.3, 0, 0], [0.3, 2.0, 0.86], MAT.bakelite, [0.9, 0.95, 1.0], { aoBottom: 0.6 });
+  // Корпус на 3 мм уже и ниже рамы: крышка, цоколь и стойки той же ширины легли бы с ним в одну плоскость и рябили.
+  bx(xf, [-0.297, 0, 0], [0.297, 1.997, 0.86], MAT.bakelite, [0.9, 0.95, 1.0], { aoBottom: 0.6 });
   bx(xf, [-0.3, 1.95, 0], [0.3, 2.0, 0.89], MAT.metalGrey, METAL_DK);
   bx(xf, [-0.3, 0, 0.05], [0.3, 0.07, 0.89], MAT.metalGrey, METAL_DK);
   for (const x of [-0.3, 0.26]) bx(xf, [x, 0.07, 0.8], [x + 0.04, 1.95, 0.89], MAT.metalGrey, METAL_DK);
@@ -603,27 +604,16 @@ function binderShelf(xf: Xf, seed: number): void {
 
 /** Высота потолка офиса, м: берёза растёт от пола до него — и, судя по дыре, дальше. */
 export const BIRCH_H = 2.7;
-/** На какой высоте лежат опавшие листья (чуть над ковролином, чтобы не рябили). */
-export const LEAF_Y = 0.006;
 /** Берёста и её отметины; ветки. */
 const BARK: Vec3 = [1.32, 1.32, 1.29];
 const BARK_DK: Vec3 = [0.17, 0.16, 0.15];
 const TWIG: Vec3 = [0.3, 0.24, 0.19];
-/** Осенний лист: жёлтый, охристый, подсохший. */
-const LEAF: readonly Vec3[] = [
-  [1.5, 1.02, 0.1],
-  [1.5, 0.84, 0.1],
-  [1.32, 0.64, 0.12],
-  [1.5, 1.16, 0.2],
-  [0.92, 0.5, 0.14],
-];
-const leafTint = (r: number): Vec3 => LEAF[Math.floor(r * LEAF.length) % LEAF.length]!;
-
 /**
  * Берёза 0,56 × 0,56 × 2,7: ствол от пола до потолка — белая берёста в чёрных чёрточках, тёмный
  * комель, два-три сучка. Она не стоит в комнате, а проросла сквозь неё: пол и потолок ей не помеха.
- * Предмет — только ствол. Дыру в потолке, ветки из неё и листья на полу кладёт помещение
- * (ceilingBreak, leafLitter): они остаются, когда ствол рассыпался от касания.
+ * Предмет — только ствол. Дыру в потолке и голые ветки из неё кладёт помещение (ceilingBreak): они
+ * остаются, когда ствол рассыпался от касания. Листьев нет (слова владельца: «Берёзы знак последних
+ * дней, листья не нужны»).
  *
  * Ствол — не цилиндр из kit: у каждой грани свой тон, иначе на берёсте не нарисовать отметин.
  * (У луга своя берёза — целое дерево с кроной, world/pocket_meadow.ts; эта — столб сквозь этаж.)
@@ -713,32 +703,8 @@ function birch(xf: Xf, seed: number): void {
 }
 
 /**
- * Опавшие листья вокруг ствола: плоские ромбики на полу, у ствола гуще. Это не предмет, а след: они
- * остаются лежать, когда сама берёза рассыпалась от касания.
- */
-export function leafLitter(xf: Xf, seed: number, count = 72, radius = 1.8): void {
-  const rnd = rng(seed ^ 0x1eaf);
-  for (let i = 0; i < count; i++) {
-    const d = 0.2 + (radius - 0.2) * rnd() ** 1.7;
-    const a = rnd() * Math.PI * 2;
-    const cx = Math.sin(a) * d;
-    const cz = Math.cos(a) * d;
-    const yaw = rnd() * Math.PI;
-    const len = 0.04 + rnd() * 0.026;
-    const wid = len * (0.55 + rnd() * 0.2);
-    const lx = Math.cos(yaw) * len;
-    const lz = Math.sin(yaw) * len;
-    const wx = -Math.sin(yaw) * wid;
-    const wz = Math.cos(yaw) * wid;
-    // Листья лежат внахлёст: каждый следующий на волос выше.
-    const y = LEAF_Y + (i % 7) * 0.0004;
-    sheet(xf, [cx + lx, y, cz + lz], [cx + wx, y, cz + wz], [cx - lx, y, cz - lz], [cx - wx, y, cz - wz], UP, MAT.paper, leafTint(rnd()));
-  }
-}
-
-/**
  * Выбитая плита над стволом: тёмный квадрат в потолке на высоте h, в его раме — остатки плиты, из
- * дыры свисают тонкие ветки с жёлтыми листьями; на полу — обломок плиты и разошедшийся ковролин
+ * дыры свисают тонкие голые ветки; на полу — обломок плиты и разошедшийся ковролин
  * у комля. Тоже не предмет: когда ствола нет, дыра остаётся и ветки висят из неё.
  */
 export function ceilingBreak(xf: Xf, h: number, seed: number): void {
@@ -753,22 +719,8 @@ export function ceilingBreak(xf: Xf, h: number, seed: number): void {
   bx(xf, [-s, y - 0.012, -s], [-s + w1, y, s * (rnd() * 0.8)], MAT.ceilTile, tile);
   bx(xf, [-s * (rnd() * 0.6), y - 0.012, s - w2], [s, y, s], MAT.ceilTile, tile);
 
-  // Ветки из дыры: выходят у самого ствола, отходят в сторону и повисают; на них — жёлтые листья.
-  const leaf = (c: Vec3, size: number): void => {
-    const yaw = rnd() * Math.PI;
-    const hx = Math.cos(yaw) * size * 0.62;
-    const hz = Math.sin(yaw) * size * 0.62;
-    const tint = leafTint(rnd());
-    const q: [Vec3, Vec3, Vec3, Vec3] = [
-      [c[0], c[1] + size, c[2]],
-      [c[0] + hx, c[1], c[2] + hz],
-      [c[0], c[1] - size, c[2]],
-      [c[0] - hx, c[1], c[2] - hz],
-    ];
-    // Лист виден с обеих сторон.
-    sheet(xf, q[0], q[1], q[2], q[3], [-Math.sin(yaw), 0, Math.cos(yaw)], MAT.paper, tint);
-    sheet(xf, q[0], q[3], q[2], q[1], [Math.sin(yaw), 0, -Math.cos(yaw)], MAT.paper, tint);
-  };
+  // Ветки из дыры: выходят у самого ствола, отходят в сторону и повисают. Голые (слова владельца:
+  // «Берёзы знак последних дней, листья не нужны»): на них ничего не растёт и ничего не осталось.
   const twigs = 4 + Math.floor(rnd() * 2);
   for (let t = 0; t < twigs; t++) {
     const a = ((t + rnd() * 0.7) / twigs) * Math.PI * 2;
@@ -782,20 +734,13 @@ export function ceilingBreak(xf: Xf, h: number, seed: number): void {
     const tip: Vec3 = [dx * (r + o1 + o2), elbow[1] - 0.26 - rnd() * 0.26, dz * (r + o1 + o2)];
     beam(xf, from, elbow, 0.014, 0.014, MAT.wood, TWIG, { caps: false });
     beam(xf, elbow, tip, 0.009, 0.009, MAT.wood, TWIG, { caps: false });
-    // Гроздь: листья вдоль повисшей части, вразброс вокруг неё.
-    const leaves = 7 + Math.floor(rnd() * 4);
-    for (let l = 0; l < leaves; l++) {
-      const u = (l + rnd()) / leaves;
-      const sp = 0.05 + u * 0.05;
-      leaf([elbow[0] + (tip[0] - elbow[0]) * u + (rnd() - 0.5) * sp, elbow[1] + (tip[1] - elbow[1]) * u - 0.03, elbow[2] + (tip[2] - elbow[2]) * u + (rnd() - 0.5) * sp], 0.036 + rnd() * 0.018);
-    }
+    // Отросток: тонкий прутик от колена в сторону и вниз.
+    const sx = dx * 0.6 + (rnd() - 0.5) * 0.8;
+    const sz = dz * 0.6 + (rnd() - 0.5) * 0.8;
+    const len = 0.1 + rnd() * 0.12;
+    beam(xf, elbow, [elbow[0] + sx * len, elbow[1] - len * (0.5 + rnd() * 0.6), elbow[2] + sz * len], 0.006, 0.004, MAT.wood, TWIG, { caps: false });
   }
-  // И несколько листьев у самой кромки дыры.
-  for (let l = 0; l < 6; l++) {
-    const a = rnd() * Math.PI * 2;
-    const r = 0.2 + rnd() * 0.12;
-    leaf([Math.sin(a) * r, y - 0.05 - rnd() * 0.07, Math.cos(a) * r], 0.034 + rnd() * 0.014);
-  }
+
 
   // Обломок плиты на полу, в стороне от ствола.
   const a = rnd() * Math.PI * 2;

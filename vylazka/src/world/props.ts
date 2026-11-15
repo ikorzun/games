@@ -331,13 +331,14 @@ export function stairsDown(xf: Xf, steps: number, rise: number, run: number, z0:
     const xb = -run * (i + 1); // кромка
     xf.collider([xb, top - 1.2, z0], [xa, top, z1]);
     // Проступь темнеет к подступёнку: ступени читаются и сверху, где видны одни проступи.
-    xf.mb.quadFacing(xf.pt(xb, top, z0), xf.pt(xa, top, z0), xf.pt(xa, top, z1), xf.pt(xb, top, z1), [0, 1, 0], MAT.concrete, grey, [1, 0.45, 0.45, 1]);
+    // У последней ступени проступи нет: она на уровне нижнего пола, и вторая грань в его плоскости рябила бы.
+    if (i < steps - 1) xf.mb.quadFacing(xf.pt(xb, top, z0), xf.pt(xa, top, z0), xf.pt(xa, top, z1), xf.pt(xb, top, z1), [0, 1, 0], MAT.concrete, grey, [1, 0.45, 0.45, 1]);
     // Подступёнок под кромкой, лицом к спускающемуся снизу.
     const out = xf.pt(xb - 1, top, 0);
     const o = xf.pt(xb, top, 0);
     xf.mb.quadFacing(xf.pt(xb, top - rise, z0), xf.pt(xb, top - rise, z1), xf.pt(xb, top, z1), xf.pt(xb, top, z0), [out[0] - o[0], 0, out[2] - o[2]], MAT.concrete, grey, [0.5, 0.5, 0.85, 0.85]);
-    // Стёртый стальной уголок на кромке.
-    xf.box([xb, top - 0.035, z0], [xb + 0.05, top + 0.006, z1], MAT.steel, { tint: [0.85, 0.85, 0.85] });
+    // Стёртый стальной уголок на кромке: выступает за подступёнок на 4 мм — в одной плоскости с ним он бы рябил.
+    xf.box([xb - 0.004, top - 0.035, z0], [xb + 0.05, top + 0.006, z1], MAT.steel, { tint: [0.85, 0.85, 0.85] });
   }
 }
 

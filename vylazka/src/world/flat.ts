@@ -112,7 +112,8 @@ export function flatten(src: MeshData, f: FlatFrame): { position: Float32Array; 
   return { position, tris };
 }
 
-function frontOf(src: MeshData): number {
+/** Передняя плоскость предмета: наибольший z его вершин. */
+export function frontOf(src: MeshData): number {
   let z = -Infinity;
   for (let i = 2; i < src.position.length; i += 3) z = Math.max(z, src.position[i]!);
   return z;
@@ -166,7 +167,7 @@ const AMB = 0.4;
 const KEY_K = 0.72;
 
 /** Цвет вершины на снимке: собственный цвет материала × оттенок × свет «лампы» × затенённость. */
-function bake(mat: number, tint: Vec3, n: Vec3, ao: number): Vec3 {
+export function bake(mat: number, tint: Vec3, n: Vec3, ao: number): Vec3 {
   const m = Math.round(mat);
   if (m === MAT.glow || m === MAT.lamp) {
     // Светящееся на снимке — просто самое яркое: экран, окно, огонёк.

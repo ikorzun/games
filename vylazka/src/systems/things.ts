@@ -38,6 +38,11 @@ export interface Thing {
   touched: boolean;
   /** После того как она растворилась, свет уже гас: зажжётся — вернётся. */
   dark: boolean;
+  /**
+   * Ступень доверия (systems/illusions.ts): 0 — настоящая, 1 — картонка, 2 — проекция, 3 — кружево.
+   * Каждое касание стирает вещь на ступень: вернётся она хуже, чем была.
+   */
+  form: number;
 }
 
 export type ThingEvent =
@@ -101,7 +106,7 @@ export class Things {
   constructor(readonly cfg: ThingsConfig = DEFAULT_THINGS) {}
 
   add(kind: string, pos: Vec3, yaw: number, fate: Fate, radius = 0.3, memory = false, still = false): Thing {
-    const t: Thing = { id: this.nextId++, kind, pos, yaw, radius, fate, state: 'idle', memory, still, gaze: 0, t: 0, scale: 1, dissolve: 0, collider: -1, touched: false, dark: false };
+    const t: Thing = { id: this.nextId++, kind, pos, yaw, radius, fate, state: 'idle', memory, still, gaze: 0, t: 0, scale: 1, dissolve: 0, collider: -1, touched: false, dark: false, form: 0 };
     this.list.push(t);
     return t;
   }

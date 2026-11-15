@@ -2,6 +2,7 @@
  * Отладочный API window.__vz. Ставится и в боевой сборке: смоук в Chromium гоняет именно её.
  * Симуляцию можно заморозить и шагать вручную — так тесты не зависят от скорости машины.
  */
+import type { Decay } from '../systems/decay';
 import type { RoomFx } from '../game';
 import type { JumpStyle, JumpTarget } from '../systems/jumps';
 import { showcaseItems } from '../world/showcase';
@@ -38,6 +39,12 @@ export interface VzDebugApi {
   info(): Record<string, unknown>;
   /** Облако точек: сколько точек отдано видеокарте и сколько из них не спрятано отбором по расстоянию. */
   cloudUsage(): { drawn: number; shown: number; cells: number };
+  /** Пыль тронутых вещей: сколько облаков живо и сколько в них точек. */
+  dust(): { clouds: number; points: number };
+  /** Проросшие грибы: место, род и насколько выросли (systems/spores.ts). */
+  spores(): { pos: number[]; kind: string; grow: number }[];
+  /** Стирание места: стёртость сейчас, с какой начат круг и все кривые (systems/decay.ts). */
+  wear(): { wear: number; base: number; decay: Decay; forms: Record<string, number> };
   start(): void;
   pause(on: boolean): void;
   lang(code?: string): string;
@@ -102,7 +109,7 @@ export interface VzDebugApi {
    * left — вместо него теперь отдельная вещь. group — предмет стоит в варианте комнаты, который
    * может быть скрыт (тогда коснуться его нельзя).
    */
-  objects(): Array<{ id: number; name: string; at: number[]; rot: number; min: number[]; max: number[]; solid: boolean; flat: boolean; group: string | null; state: string; dis: number }>;
+  objects(): Array<{ id: number; name: string; at: number[]; rot: number; min: number[]; max: number[]; solid: boolean; flat: boolean; group: string | null; state: string; dis: number; form: number; keeps: boolean }>;
   /**
    * Встать перед объектом лицом к нему: distance — на каком расстоянии от его передней стороны, м.
    * false — такого объекта нет.
@@ -155,7 +162,7 @@ export function installDebug(app: App): void {
       screen: app.screen,
       seed: app.seed,
       rank: app.rank,
-      profile: { sorties: app.profile.sorties, successes: app.profile.successes, archive: [...app.profile.archive] },
+      profile: { sorties: app.profile.sorties, successes: app.profile.successes, archive: [...app.profile.archive], memories: JSON.parse(JSON.stringify(app.profile.memories ?? {})) },
       platform: app.platform.id,
       touch: app.touchMode,
       drag: app.dragMode,
@@ -206,6 +213,13 @@ export function installDebug(app: App): void {
     },
     info: () => ({ ...game().renderer.info(), fps: app.fps }),
     cloudUsage: () => game().renderer.cloudUsage(),
+    dust: () => game().renderer.dustInfo(),
+    spores: () => (game().spores?.sites ?? []).filter((q) => q.grow > 0.03).map((q) => ({ pos: [...q.pos], kind: q.kind, grow: +q.grow.toFixed(3) })),
+    wear: () => {
+      const forms: Record<string, number> = {};
+      for (const i of game().illusions?.list ?? []) forms[String(i.form)] = (forms[String(i.form)] ?? 0) + 1;
+      return { wear: game().wear, base: game().wearBase, decay: game().decay, forms };
+    },
     start: () => app.start(),
     pause: (on) => app.lifecycle.set('user', on),
     lang: (code) => {
@@ -217,6 +231,7 @@ export function installDebug(app: App): void {
       const l = app.level;
       return {
         seed: l.layout?.seed ?? null,
+        wear: l.wear ?? 0,
         world: l.world ?? 'shelter',
         rank: l.layout?.rank ?? null,
         tiers: l.layout?.tierCount ?? 1,
@@ -245,7 +260,7 @@ export function installDebug(app: App): void {
       game().renderer.debugSlidesOff = !on;
     },
     objects: () =>
-      (game().illusions?.list ?? []).map((i) => ({ id: i.obj.id, name: i.obj.name, at: [...i.obj.at], rot: i.obj.rot, min: [...i.obj.min], max: [...i.obj.max], solid: i.obj.solid, flat: i.obj.flat, group: i.obj.group ?? null, state: i.state, dis: +i.dis.toFixed(3) })),
+      (game().illusions?.list ?? []).map((i) => ({ id: i.obj.id, name: i.obj.name, at: [...i.obj.at], rot: i.obj.rot, min: [...i.obj.min], max: [...i.obj.max], solid: i.obj.solid, flat: i.obj.flat, group: i.obj.group ?? null, state: i.state, dis: +i.dis.toFixed(3), form: i.form, keeps: game().keepsItself(i.obj.id) })),
     gotoObject: (id, distance = 1.6) => {
       const o = game().illusions?.get(id)?.obj;
       if (!o) return false;
@@ -302,7 +317,7 @@ export function installDebug(app: App): void {
       }
       return false;
     },
-    things: () => game().things.list.map((t) => ({ id: t.id, kind: t.kind, state: t.state, fate: t.fate, memory: t.memory, gaze: t.gaze, scale: t.scale, dissolve: t.dissolve, pos: [...t.pos] })),
+    things: () => game().things.list.map((t) => ({ id: t.id, kind: t.kind, state: t.state, fate: t.fate, memory: t.memory, gaze: t.gaze, scale: t.scale, dissolve: t.dissolve, form: t.form, pos: [...t.pos] })),
     gotoThing: (id, distance = 2.2) => {
       const g = game();
       const t = g.things.list.find((x) => x.id === id);

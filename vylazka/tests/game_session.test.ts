@@ -52,6 +52,25 @@ class FakeRenderer {
   setObjectState(id: number, dis: number): void {
     this.objects.set(id, dis);
   }
+  /** Объекты, от которых осталось кружево; тон объектов (выцвел, светится); стирание архитектуры в последнем кадре. */
+  readonly lace = new Set<number>();
+  readonly tones = new Map<number, [number, number]>();
+  erase: [number, number, number] = [0, 0, 0];
+  setObjectLace(id: number, on: boolean): void {
+    if (on) this.lace.add(id);
+    else this.lace.delete(id);
+  }
+  setObjectTone(id: number, dull: number, glow: number): void {
+    this.tones.set(id, [dull, glow]);
+  }
+  setErase(ceiling: number, walls: number, floor: number): void {
+    this.erase = [ceiling, walls, floor];
+  }
+  /** Сколько гроздей грибов в последнем кадре. */
+  spores = 0;
+  setSpores(_data: Float32Array, count: number): void {
+    this.spores = count;
+  }
   setPocket(m: unknown): void {
     this.pocketShown = m !== null;
   }
@@ -1576,12 +1595,13 @@ describe('игра целиком: всё иллюзорно', () => {
     expect((g.body.x - face) * dx + (g.body.z - face) * dz).toBeGreaterThan(0.1);
   });
 
-  it('убежище: при горящем фонаре растворённый предмет не возвращается; выключил и включил — вернулся или ушёл вещью', () => {
+  it('убежище: при горящем фонаре растворённый предмет не возвращается; выключил и включил — вернулся картонкой, на ступень хуже', () => {
     const h = new Harness(levelOf(SEED), { seed: 3, cfg: NOTHING });
     const g = h.game;
     const hit = bump(h)!;
     expect(hit).not.toBeNull();
     const { id } = hit;
+    const name = g.level!.objects![id - 1]!.name;
     h.run(1.2);
     expect(stateOf(h, id)).toBe('gone');
     // Отошли от места предмета: он не должен быть заблокирован игроком.
@@ -1594,20 +1614,178 @@ describe('игра целиком: всё иллюзорно', () => {
     // Выключил, подождал, включил.
     blink(h, 1);
     h.run(0.2);
-    expect(['coming', 'left', 'here']).toContain(stateOf(h, id));
-    expect(illu(h).back).toBeGreaterThanOrEqual(1);
-    expect(h.log.dream.some((e) => e.type === 'touch' && e.what === 'back')).toBe(true);
+    // Из сетки помещения предмет ушёл насовсем: вместо него — отдельная вещь, его плоский снимок.
+    expect(stateOf(h, id)).toBe('left');
+    expect(illu(h).back).toBe(1);
+    expect(h.log.dream.find((e) => e.type === 'touch' && e.what === 'back')).toMatchObject({ name, how: 'step', form: 1 });
+    expect(g.things.list.length).toBe(things + 1);
+    const card = g.things.list[g.things.list.length - 1]!;
+    expect(card.kind).toBe(name);
+    expect(card.form).toBe(1);
+    // Картонка не держит: у неё только датчик касания, и сквозь прежнее место проходят.
+    expect(g.colliders.boxes[card.collider]!.ghost).toBe(true);
+    expect(g.illusions!.open(id)).toBe(true);
     h.run(1.5);
-    const state = stateOf(h, id);
-    expect(['here', 'left']).toContain(state);
-    if (state === 'left') {
-      // Ушёл насовсем: вместо него появилась отдельная вещь, и сквозь пустое место проходят.
-      expect(g.things.list.length).toBe(things + 1);
-      expect(g.illusions!.open(id)).toBe(true);
-    } else {
-      expect(h.r.objects.get(id)).toBe(0);
-      expect(g.illusions!.open(id)).toBe(false);
+    expect(card.state).toBe('idle');
+    expect(card.dissolve).toBe(0);
+  });
+
+  it('убежище: вещь стирается по ступеням — картонка, проекция, кружево — и с последней не возвращается', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: NOTHING });
+    const g = h.game;
+    const hit = bump(h)!;
+    expect(hit).not.toBeNull();
+    const name = g.level!.objects![hit.id - 1]!.name;
+    h.run(1.2);
+    const start: Vec3 = [g.body.x - hit.dx * 3, g.body.y, g.body.z - hit.dz * 3];
+    const seen: number[] = [];
+    for (const form of [1, 2, 3]) {
+      g.teleport(start[0], start[1], start[2]);
+      blink(h, 1);
+      h.run(1.4);
+      const t = g.things.list.find((x) => x.kind === name && x.form === form);
+      expect(t, `ступень ${form} не появилась`).toBeDefined();
+      seen.push(t!.form);
+      expect(t!.state).toBe('idle');
+      // Ни одна ступень, кроме настоящей, не держит.
+      expect(g.colliders.boxes[t!.collider]!.ghost).toBe(true);
+      // Вошли в неё: рассыпается, как всё, чего коснулись.
+      g.teleport(t!.pos[0], t!.pos[1], t!.pos[2]);
+      h.run(1.3);
+      expect(t!.state).toBe('gone');
+      expect(t!.touched).toBe(true);
     }
+    expect(seen).toEqual([1, 2, 3]);
+    // С кружева — в пустоту: вещь стёрта и не вернётся, сколько ни гаси свет.
+    g.teleport(start[0], start[1], start[2]);
+    blink(h, 1);
+    h.run(1.4);
+    expect(g.things.list.some((x) => x.kind === name && x.form > 0)).toBe(false);
+    expect((illu(h) as Illu & { erased: number }).erased).toBe(1);
+    expect(h.log.dream.filter((e) => e.type === 'touch' && e.what === 'erased')).toHaveLength(1);
+    const back = illu(h).back;
+    blink(h, 1);
+    h.run(2);
+    expect(illu(h).back).toBe(back);
+  });
+
+  it('стёртое место: в начале круга часть предметов — кружево, части нет вовсе; настоящих остаётся по кривой', () => {
+    const layout = generateLayout(SEED, 2, 'shelter');
+    const fresh = new Harness(buildLevel(layout), { seed: 3, cfg: NOTHING });
+    expect(fresh.game.wear).toBe(0);
+    expect(fresh.game.illusions!.list.every((i) => i.state === 'here' && (i.form === 0 || i.obj.flat))).toBe(true);
+    expect(fresh.r.lace.size).toBe(0);
+    for (const wear of [0.42, 0.7]) {
+      const h = new Harness(buildLevel(layout, { wear }), { seed: 3, cfg: NOTHING });
+      const g = h.game;
+      expect(g.wear).toBe(wear);
+      const d = g.decay;
+      // Бумажные цветы, экраны и гора в счёт не идут: у них своя судьба.
+      const list = g.illusions!.list.filter((i) => !i.obj.name.startsWith('paper_flower') && !i.obj.name.startsWith('display_') && i.obj.group === undefined);
+      const lace = list.filter((i) => i.form === 3);
+      const gone = list.filter((i) => i.form === 4);
+      expect(Math.abs(gone.length / list.length - d.gone), `стёртость ${wear}: стёрто`).toBeLessThan(0.12);
+      expect(Math.abs((lace.length + gone.length) / list.length - d.lace), `стёртость ${wear}: кружево`).toBeLessThan(0.12);
+      for (const i of gone) {
+        // Стёртого нет: его не видно, сквозь него проходят, и автомат его больше не решает.
+        expect(i.state).toBe('left');
+        expect(h.r.objects.get(i.obj.id)).toBe(1);
+        expect(g.illusions!.open(i.obj.id)).toBe(true);
+        for (const b of g.colliders.boxes.filter((x) => x.owner === i.obj.id)) expect(b.gone).toBe(true);
+      }
+      for (const i of lace) {
+        // Кружево стоит, но не держит: у него только датчик касания.
+        expect(i.state).toBe('here');
+        expect(h.r.lace.has(i.obj.id)).toBe(true);
+        const boxes = g.colliders.boxes.filter((x) => x.owner === i.obj.id);
+        expect(boxes.length).toBeGreaterThan(0);
+        for (const b of boxes) expect(b.ghost).toBe(true);
+      }
+      // Архитектура стирается теми же кривыми — рендер получает их в каждом кадре.
+      h.run(0.1);
+      expect(h.r.erase).toEqual([d.ceiling, d.walls, d.floor]);
+    }
+  });
+
+  it('кружево из стёртого места: вошёл в него — рассыпалось; свет погас и зажёгся — его больше нет', () => {
+    const h = new Harness(buildLevel(generateLayout(SEED, 2, 'shelter'), { wear: 0.55 }), { seed: 3, cfg: NOTHING });
+    const g = h.game;
+    const spawn = g.level!.spawn.pos;
+    const i = g.illusions!.list.filter((x) => x.form === 3 && x.state === 'here' && Math.abs(x.obj.at[1] - spawn[1]) < 0.1 && ALL_PROPS[x.obj.name]?.mount === 'floor').sort((a, b) => Math.hypot(a.obj.at[0] - spawn[0], a.obj.at[2] - spawn[2]) - Math.hypot(b.obj.at[0] - spawn[0], b.obj.at[2] - spawn[2]))[0]!;
+    expect(i, 'нет кружевного предмета на ярусе начала').toBeDefined();
+    const o = i.obj;
+    const before = g.wear;
+    g.teleport((o.min[0] + o.max[0]) / 2, o.at[1], (o.min[2] + o.max[2]) / 2);
+    h.run(1.3);
+    expect(i.state).toBe('gone');
+    // Касание стирает место ещё немного.
+    expect(g.wear).toBeGreaterThan(before);
+    const things = g.things.list.length;
+    g.teleport(spawn[0], spawn[1], spawn[2]);
+    blink(h, 1);
+    h.run(0.5);
+    expect(i.state).toBe('left');
+    expect(i.form).toBe(4);
+    expect(g.things.list.length).toBe(things);
+    expect((illu(h) as Illu & { erased: number }).erased).toBe(1);
+  });
+
+  it('бумажные цветы: тусклые, пока далеко; при подходе расцветают, рассыпаются — и возвращаются кружевом', () => {
+    const h = new Harness(buildLevel(generateLayout(SEED, 2, 'shelter')), { seed: 3, cfg: NOTHING });
+    const g = h.game;
+    const flowers = g.illusions!.list.filter((i) => i.obj.name.startsWith('paper_flower'));
+    expect(flowers.length).toBeGreaterThanOrEqual(2);
+    // Все тусклые: выцвели целиком, не светятся.
+    for (const f of flowers) expect(h.r.tones.get(f.obj.id)).toEqual([1, 0]);
+    // Любой цветок: на полу или подвесной (те висят под высоким потолком сада, к ним подходят снизу).
+    const f = flowers.find((x) => x.obj.name !== 'paper_flower_hang') ?? flowers[0]!;
+    const o = f.obj;
+    const cx = (o.min[0] + o.max[0]) / 2;
+    const cz = (o.min[2] + o.max[2]) / 2;
+    // Пол яруса, на котором он стоит или над которым висит.
+    const floor = Math.floor((o.min[1] + 0.3) / 4.5) * 4.5;
+    // Подошли на два с половиной метра (не касаясь), фонарь горит.
+    const node = g.level!.nav.filter((n) => Math.abs(n.y - floor) < 0.3).sort((a, b) => Math.abs(Math.hypot(a.x - cx, a.z - cz) - 2.4) - Math.abs(Math.hypot(b.x - cx, b.z - cz) - 2.4))[0]!;
+    g.teleport(node.x, node.y, node.z);
+    expect(Math.hypot(node.x - cx, node.z - cz)).toBeLessThan(3.4);
+    h.run(0.8);
+    const mid = h.r.tones.get(o.id)!;
+    expect(mid[0]).toBeLessThan(0.8);
+    expect(mid[1]).toBeGreaterThan(0.2);
+    expect(f.state).toBe('here');
+    h.run(1.0);
+    // Расцвёл целиком: свой цвет и свет.
+    expect(h.r.tones.get(o.id)).toEqual([0, 1]);
+    h.run(2.2);
+    expect(f.state).toBe('gone');
+    expect(h.log.dream.some((e) => e.type === 'touch' && e.what === 'gone' && e.name === o.name)).toBe(true);
+    // Остальные цветы, к которым не подходили, всё так же тусклы.
+    const far = flowers.find((x) => x !== f && Math.hypot((x.obj.min[0] + x.obj.max[0]) / 2 - node.x, (x.obj.min[2] + x.obj.max[2]) / 2 - node.z) > 6);
+    if (far) expect(h.r.tones.get(far.obj.id)).toEqual([1, 0]);
+    // «В следующий раз они более тусклые, как кружева»: возвращается кружевом, минуя картонку.
+    g.teleport(g.level!.spawn.pos[0], g.level!.spawn.pos[1], g.level!.spawn.pos[2]);
+    blink(h, 1);
+    h.run(1.5);
+    expect(f.state).toBe('left');
+    const back = g.things.list.find((t) => t.kind === o.name);
+    expect(back).toBeDefined();
+    expect(back!.form).toBe(3);
+  });
+
+  it('в стёртом месте мелочей меньше; гора у начала растёт с кругами и не растворяется', () => {
+    const layout = generateLayout(SEED, 2, 'shelter');
+    const small = (wear: number): number => {
+      const h = new Harness(buildLevel(layout, { wear }), { seed: 3 });
+      return h.game.things.list.filter((t) => !t.memory && t.collider < 0).length;
+    };
+    expect(small(0)).toBeGreaterThan(small(0.45));
+    expect(small(0.45)).toBeGreaterThanOrEqual(small(0.8));
+    expect(small(0.8)).toBe(0);
+    // Гора — не объект: коснуться её нельзя, она стоит.
+    const worn = buildLevel(layout, { wear: 0.5 });
+    expect(worn.landmarks.filter((m) => m.id === 'mound')).toHaveLength(1);
+    expect(worn.objects!.some((o) => o.name.startsWith('mound'))).toBe(false);
+    expect(buildLevel(layout).landmarks.some((m) => m.id === 'mound')).toBe(false);
   });
 
   it('убежище: вернуться на место, где стоит игрок, предмет не может — он ждёт, пока тот выйдет', () => {
@@ -1787,12 +1965,15 @@ describe('игра целиком: всё иллюзорно', () => {
 
   it('офис: берёза рассыпается от касания, как всё; после «замер — погасло — пошевелился» встаёт снова — собой и на своём месте', () => {
     const { sleep, sleepStagger, reach } = DEFAULT_CELL_LIGHTS;
-    const level = buildLevel(generateLayout(SEED, 2, 'office'));
+    // Берёзы — «знак последних дней»: роща в полную силу стоит в месте, стёртом почти до конца.
+    const level = buildLevel(generateLayout(SEED, 2, 'office'), { wear: 0.9 });
     const h = new Harness(level, { seed: 3, cfg: NOTHING });
     const g = h.game;
     h.run(0.3);
     const trees = level.objects!.filter((o) => o.name === 'birch');
     expect(trees.length).toBeGreaterThanOrEqual(5);
+    // Сами берёзы стирание не трогает: они не вещь памяти, а то, что прорастает сквозь неё.
+    for (const o of trees) expect(g.illusions!.get(o.id)).toMatchObject({ state: 'here', form: 0 });
     // Подойти к первой берёзе, к которой получится: с одной из четырёх сторон, с метра.
     let hit: { id: number; dx: number; dz: number } | null = null;
     for (const o of trees) {

@@ -126,4 +126,6 @@ export interface BuiltLevel {
   layout: GenLayout | null;
   /** Какой это мир (не задано — убежище): от него зависят свет, запущенность и воспоминания. */
   world?: WorldKind;
+  /** Стёртость места 0..1, с которой уровень собран (systems/decay.ts). Нет поля — место помнится целиком. */
+  wear?: number;
 }

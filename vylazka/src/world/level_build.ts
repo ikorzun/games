@@ -8,7 +8,9 @@ import { CEIL_H, DX, DZ, GRID, STAIR_CELLS, TIER_DROP } from '../gen/layout';
 import type { GenLayout, GenRoom, RoomType, WorldKind } from '../gen/layout';
 import { ColliderSet } from './colliders';
 import type { FlatMark } from './flat';
+import { decayAt } from '../systems/decay';
 import { doorSign, furnishRoom } from './furnish';
+import { furnishExtras, GARDEN_H, NO_EXTRAS } from './furnish_extras';
 import { NOTE_ID, ROOM_LABEL, SIGN } from './signs';
 import type { CellInfo, RoomCtx, Slot } from './furnish';
 import { MeshBuilder } from './kit';
@@ -156,7 +158,18 @@ const PIT_DEPTH = 1.6;
 /** Смещение навигационного узла от центра клетки с провалом — на середину карниза. */
 const PIT_LEDGE = 0.95;
 
-export function buildLevel(layout: GenLayout): BuiltLevel {
+/** Как собирать уровень. */
+export interface BuildOptions {
+  /**
+   * Стёртость места 0..1 (systems/decay.ts): то же место, пройденное в который раз. От неё зависит то,
+   * что решается при сборке: сколько вещей стоит картонками, сколько берёз проросло, какой выросла гора.
+   * (Что стёрто у отдельных предметов, стен и потолка, решает игра — геометрия от этого не меняется.)
+   */
+  wear?: number;
+}
+
+export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLevel {
+  const decay = decayAt(opts.wear ?? 0);
   const col = new ColliderSet();
   const chunks = new Map<string, ChunkBuild>();
   // Журнал объектов — один на уровень: у каждого предмета обстановки свой номер, где бы он ни стоял.
@@ -191,6 +204,23 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
   const hz = layout.hazards;
   const pitAt = new Set(hz.pits.map((p) => `${p.tier},${p.x},${p.z}`));
 
+  // ── Помещения под то, что стоит поверх обычной обстановки (world/furnish_extras.ts) ──
+  // Выбор — по сиду уровня, а не по ГСЧ помещений: остальная обстановка от него не сдвигается.
+  const entrance = layout.rooms[layout.entranceRoom]!;
+  const hazardRoom = new Set<number>(hz.gasRooms);
+  const cellRoom = new Map<string, number>();
+  for (const r of layout.rooms) for (const [x, z] of r.cells) cellRoom.set(`${r.tier},${x},${z}`, r.id);
+  for (const c of [...hz.pits, ...hz.water, ...hz.collapses]) {
+    const id = cellRoom.get(`${c.tier},${c.x},${c.z}`);
+    if (id !== undefined) hazardRoom.add(id);
+  }
+  const plain = layout.rooms.filter((r) => r !== entrance && r.type !== 'stairwell' && r.type !== 'lift' && r.type !== 'entrance' && r.type !== 'airlock' && !hazardRoom.has(r.id));
+  const order = (salt: number) => (a: GenRoom, b: GenRoom): number => hash01(a.id * 17 + 3, salt, layout.seed ^ 0xe87a) - hash01(b.id * 17 + 3, salt, layout.seed ^ 0xe87a);
+  const rooms1 = plain.filter((r) => r.type !== 'corridor' && r.type !== 'department' && r.type !== 'collapsed');
+  // Сад под потолком: одно помещение верхнего яруса из четырёх клеток и больше — потолок в нём выше.
+  const gardenRoom = rooms1.filter((r) => r.tier === entrance.tier && r.cells.length >= 4).sort(order(1))[0];
+  const flowerRooms = new Set(rooms1.filter((r) => r !== gardenRoom && r.cells.length >= 2).sort(order(2)).slice(0, 2).map((r) => r.id));
+
   // ── Скорлупа по ярусам ──
   const shells: Shell[] = [];
   for (let t = 0; t < layout.tierCount; t++) shells.push(new Shell());
@@ -199,7 +229,8 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     const style = styleFor(room, world);
     const y = tierFloor(room.tier);
     for (const [x, z] of room.cells) {
-      const cell: ShellCell = { cx: x - HALF, cz: z - HALF, floorY: y, ceilY: y + CEIL_H, room: room.id, style };
+      // Архитектура здесь условна (слова владельца: «ты можешь менять потолок в комнатах»): в саду он выше.
+      const cell: ShellCell = { cx: x - HALF, cz: z - HALF, floorY: y, ceilY: y + (room === gardenRoom ? GARDEN_H : CEIL_H), room: room.id, style };
       if (pitAt.has(`${room.tier},${x},${z}`)) cell.noFloor = true;
       if (upperWells.has(room.id)) cell.noFloor = true;
       else if (lowerWells.has(room.id)) {
@@ -439,7 +470,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
       }
     }
     // Свой ГСЧ у каждого помещения: правка одной комнаты не сдвигает остальные.
-    return { room, world, seed: layout.seed, start, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d + salt)), h: CEIL_H, slots, cells, spots: outSpots, landmarks: outMarks, flats: outFlats, ...(screenQuota.has(room.id) ? { screens: screenQuota.get(room.id)! } : {}) };
+    return { room, world, seed: layout.seed, start, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d + salt)), h: room === gardenRoom ? GARDEN_H : CEIL_H, slots, cells, spots: outSpots, landmarks: outMarks, flats: outFlats, decay, ...(screenQuota.has(room.id) ? { screens: screenQuota.get(room.id)! } : {}) };
   };
 
   // Карточка от руки «please use only when necessary»: одна на уровень, в помещении рядом с началом —
@@ -450,6 +481,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     .map((r) => ({ r, d: Math.min(...r.cells.map(([x, z]) => Math.abs(x - start.cx) + Math.abs(z - start.cz))) }))
     .sort((a, b) => a.d - b.d || a.r.id - b.r.id)[0]?.r;
 
+  const furnished: { room: GenRoom; ctx: RoomCtx }[] = [];
   for (const room of layout.rooms) {
     if (lowerWells.has(room.id)) continue;
     if (room !== variantRoom) {
@@ -473,7 +505,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
         }
       }
       // Что осталось пустым у глухих стен — запасные места: туда вещь может вернуться после темноты.
-      for (const s of ctx.slots) if (!s.used && !s.hazard && s.deep) freeSlots.push({ at: [s.xf.ox, s.xf.oy, s.xf.oz], rot: s.xf.rot, room: room.id, tier: room.tier });
+      furnished.push({ room, ctx });
       continue;
     }
     // Два варианта: обстановка каждого — в своём чанке и своей группе коллайдеров.
@@ -500,6 +532,35 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     }
     variants.push({ room: room.id, tier: room.tier, center: [cx / room.cells.length, tierFloor(room.tier), cz / room.cells.length], chunkA: ids[0]!, chunkB: ids[1]!, groupA: ids[0]!, groupB: ids[1]! });
   }
+
+  // ── Поверх обычной обстановки: гора у начала вылазки, цветы, наклейки, завал (world/furnish_extras.ts) ──
+  // Гора стоит в ближайшем к началу помещении того же яруса, где для неё нашлось место (не в коридоре:
+  // там она перегородила бы путь). Поэтому помещения обходятся от начала вдаль.
+  const fromStart = (r: GenRoom): number => Math.min(...r.cells.map(([x, z]) => Math.abs(x - start.cx) + Math.abs(z - start.cz)));
+  let moundLeft = decay.mound;
+  for (const { room, ctx } of furnished.slice().sort((a, b) => fromStart(a.room) - fromStart(b.room) || a.room.id - b.room.id)) {
+    if (moundLeft === 0) break;
+    if (room === startRoom || room.tier !== startRoom.tier || room.type === 'corridor' || room.type === 'stairwell' || room.type === 'lift') continue;
+    if (furnishExtras(ctx, { ...NO_EXTRAS, mound: moundLeft }).mound) moundLeft = 0;
+  }
+  // Цветы: сад под высоким потолком и ещё два помещения.
+  for (const { room, ctx } of furnished) {
+    if (room !== gardenRoom && !flowerRooms.has(room.id)) continue;
+    furnishExtras(ctx, { ...NO_EXTRAS, garden: room === gardenRoom, flowers: flowerRooms.has(room.id) ? 1 + (room.cells.length >= 4 ? 1 : 0) : 0 });
+  }
+  // Наклейки и завал: помещения перебираются по сиду, пока не встанет сколько нужно.
+  const ranked = (salt: number): { room: GenRoom; ctx: RoomCtx }[] => furnished.filter((f) => plain.includes(f.room) && f.room !== gardenRoom).sort((a, b) => order(salt)(a.room, b.room));
+  let stickersLeft = world === 'yellow' ? 2 : 4;
+  for (const { ctx } of ranked(3)) {
+    if (stickersLeft <= 0) break;
+    stickersLeft -= furnishExtras(ctx, { ...NO_EXTRAS, stickers: Math.min(2, stickersLeft) }).stickers;
+  }
+  for (const { room, ctx } of ranked(4)) {
+    if (room.type === 'corridor' || room.type === 'department' || room.type === 'collapsed' || room.cells.length < 3 || flowerRooms.has(room.id)) continue;
+    if (furnishExtras(ctx, { ...NO_EXTRAS, thicket: true }).thicket) break;
+  }
+  // Свободные участки стен — в порядке помещений уровня: туда вещь может вернуться «в другом месте».
+  for (const { room, ctx } of furnished) for (const s of ctx.slots) if (!s.used && !s.hazard && s.deep) freeSlots.push({ at: [s.xf.ox, s.xf.oy, s.xf.oz], rot: s.xf.rot, room: room.id, tier: room.tier });
 
   // ── Навигационный граф: узел на клетку; нижние части шахт — те же места, что верхние, узлов не получают ──
   const nav: NavNode[] = [];
@@ -562,6 +623,7 @@ export function buildLevel(layout: GenLayout): BuiltLevel {
     bottom: [cellToWorld(s.cx + DX[s.dir]! * (STAIR_CELLS + 1)), tierFloor(s.upperTier + 1), cellToWorld(s.cz + DZ[s.dir]! * (STAIR_CELLS + 1))],
   }));
   return {
+    wear: decay.wear,
     chunks: out,
     stairs,
     colliders: col,

@@ -5,9 +5,14 @@
  *
  * Здесь — предметы обстановки, запечённые в сетку помещения (world/objects.ts). У каждого четыре
  * состояния: стоит → растворяется → нет → собирается. Вернуться он может только после темноты: свет
- * на его месте должен погаснуть и зажечься снова. Каким он вернётся — тем же, другим предметом или
- * на другом свободном месте, — решают сид уровня, номер предмета и то, в который раз он возвращается;
- * случайности нет, поэтому проверяется это тестами без рендера.
+ * на его месте должен погаснуть и зажечься снова.
+ *
+ * Каким он вернётся. Слова владельца (15.11): «Вещи возвращаются на ступень хуже». Ступени — шкала
+ * доверия к вещи: настоящая → картонка (плоский снимок) → проекция (картинка из света) → кружево
+ * (одни нити по рёбрам) → нет. Каждое касание стирает вещь на ступень; с последней она не
+ * возвращается вовсе. Иногда она возвращается ещё и в другом месте — на свободном участке стены
+ * в том же помещении. Случайности нет: решают сид уровня, номер предмета и то, в который раз он
+ * возвращается, поэтому всё это проверяется тестами без рендера.
  *
  * «Свет на месте» у каждого мира свой: в убежище и в жёлтых комнатах это фонарь игрока, в офисе —
  * потолочная панель над предметом. Что считать светом, решает игра; сюда приходит число 0..1.
@@ -20,6 +25,30 @@ import type { LevelObject } from '../world/objects';
 
 export type IllusionState = 'here' | 'going' | 'gone' | 'coming' | 'left';
 
+/** Ступень доверия: 0 — настоящая, 1 — картонка, 2 — проекция, 3 — кружево, 4 — её больше нет. */
+export type Form = 0 | 1 | 2 | 3 | 4;
+export const FORM_REAL: Form = 0;
+export const FORM_CARD: Form = 1;
+export const FORM_LIGHT: Form = 2;
+export const FORM_LACE: Form = 3;
+export const FORM_GONE: Form = 4;
+
+/** Где вещь стоит: у стены на полу, посреди пола, на стене, под потолком (как mount в реестре реквизита). */
+export type Mount = 'floor' | 'free' | 'wall' | 'ceiling';
+
+/**
+ * Следующая ступень. Не всякая ступень годится всякой вещи: картонке нужен пол, чтобы стоять,
+ * проекции — стена, чтобы на неё лечь. Вещь у стены проходит все ступени; настенная минует картонку
+ * (она и так плоская); стоящая посреди пола минует проекцию (лечь не на что); потолочная сразу
+ * становится кружевом.
+ */
+export function worse(form: Form, mount: Mount): Form {
+  if (form >= FORM_LACE) return FORM_GONE;
+  if (form === FORM_LIGHT) return FORM_LACE;
+  if (form === FORM_CARD) return mount === 'free' ? FORM_LACE : FORM_LIGHT;
+  return mount === 'floor' || mount === 'free' ? FORM_CARD : mount === 'wall' ? FORM_LIGHT : FORM_LACE;
+}
+
 export interface Illusion {
   obj: LevelObject;
   /** left — ушла насовсем: вместо неё теперь стоит отдельная вещь (другая или в другом месте). */
@@ -30,16 +59,19 @@ export interface Illusion {
   dark: boolean;
   /** В который раз она возвращается. */
   turns: number;
+  /** На какой ступени она сейчас (картонка, запечённая в уровень, начинает с первой). */
+  form: Form;
 }
 
 /** Как вещь возвращается. */
 export type Comeback =
-  /** Та же, на том же месте. */
+  /** Собой, на том же месте: вещь, которой это положено (экран, проём, предмет варианта комнаты). */
   | { how: 'same'; id: number }
-  /** На её месте — другой предмет. */
-  | { how: 'kind'; id: number; kind: string }
-  /** Тот же предмет, но на другом свободном месте (номер места в списке уровня). */
-  | { how: 'place'; id: number; slot: number };
+  /**
+   * На ступень хуже: form — какой она стала (FORM_GONE — стёрта, не возвращается); slot — если она
+   * при этом встала на другое свободное место (номер места в списке уровня).
+   */
+  | { how: 'step'; id: number; form: Form; slot?: number };
 
 export interface IllusionsConfig {
   /** За сколько вещь растворяется и за сколько собирается, с. */
@@ -48,9 +80,8 @@ export interface IllusionsConfig {
   /** Темно — свет ниже этого; светло — выше этого. Между ними ничего не решается. */
   darkBelow: number;
   litAbove: number;
-  /** Доля возвращений «той же на том же месте» и «другим предметом»; остальное — «на другом месте». */
-  same: number;
-  kind: number;
+  /** Доля возвращений «в другом месте» (если свободные места есть). */
+  place: number;
   /**
    * С какой доли распада сквозь вещь можно пройти. До этого она ещё держит: игрок упирается, видит,
    * как она пошла трещинами, — и только потом проходит. Без этого он оказывался внутри раньше, чем
@@ -59,11 +90,15 @@ export interface IllusionsConfig {
   yield: number;
 }
 
-export const DEFAULT_ILLUSIONS: IllusionsConfig = { goTime: 0.9, comeTime: 0.9, darkBelow: 0.08, litAbove: 0.45, same: 0.5, kind: 0.3, yield: 0.38 };
+export const DEFAULT_ILLUSIONS: IllusionsConfig = { goTime: 0.9, comeTime: 0.9, darkBelow: 0.08, litAbove: 0.45, place: 0.25, yield: 0.38 };
 
-/** Из чего выбирать возвращение: какие предметы годятся на это место и какие свободные места есть рядом. */
+/** Из чего выбирать возвращение. */
 export interface ComebackOptions {
-  kinds: readonly string[];
+  /** Вещь возвращается собой и на своё место (у неё своя роль: экран, проём, предмет варианта комнаты). */
+  keep: boolean;
+  /** Где она стоит: от этого зависит, какие ступени ей доступны. */
+  mount: Mount;
+  /** Свободные места рядом, куда она может встать вместо прежнего. */
   slots: readonly number[];
 }
 
@@ -77,7 +112,7 @@ export class Illusions {
     private readonly seed: number,
     readonly cfg: IllusionsConfig = DEFAULT_ILLUSIONS,
   ) {
-    this.list = objects.map((obj) => ({ obj, state: 'here', dis: 0, dark: false, turns: 0 }));
+    this.list = objects.map((obj) => ({ obj, state: 'here', dis: 0, dark: false, turns: 0, form: obj.flat ? FORM_CARD : FORM_REAL }));
   }
 
   get(id: number): Illusion | undefined {
@@ -133,16 +168,16 @@ export class Illusions {
     return out;
   }
 
-  /** Какой вернётся вещь: решают сид, номер и счёт возвращений. */
+  /** Какой вернётся вещь: на ступень хуже; где — решают сид, номер и счёт возвращений. */
   private decide(i: Illusion, opt: ComebackOptions): Comeback {
     const id = i.obj.id;
+    if (opt.keep) return { how: 'same', id };
+    const form = worse(i.form, opt.mount);
+    if (form === FORM_GONE || opt.slots.length === 0) return { how: 'step', id, form };
     const r = hash01(id * 31 + 7, i.turns * 17 + 3, this.seed ^ 0x1115);
+    if (r >= this.cfg.place) return { how: 'step', id, form };
     const pick = hash01(id * 13 + 1, i.turns * 29 + 11, this.seed ^ 0x9a5e);
-    const kind = (): Comeback | null => (opt.kinds.length > 0 ? { how: 'kind', id, kind: opt.kinds[Math.floor(pick * opt.kinds.length)]! } : null);
-    const place = (): Comeback | null => (opt.slots.length > 0 ? { how: 'place', id, slot: opt.slots[Math.floor(pick * opt.slots.length)]! } : null);
-    if (r < this.cfg.same) return { how: 'same', id };
-    if (r < this.cfg.same + this.cfg.kind) return kind() ?? place() ?? { how: 'same', id };
-    return place() ?? kind() ?? { how: 'same', id };
+    return { how: 'step', id, form, slot: opt.slots[Math.floor(pick * opt.slots.length)]! };
   }
 
   /** Вещь собирается на прежнем месте. */
@@ -155,13 +190,17 @@ export class Illusions {
     this.dirty.add(id);
   }
 
-  /** Вещь ушла насовсем: вместо неё игра поставила отдельную вещь сна. */
-  leave(id: number): void {
+  /**
+   * Вещь ушла из сетки помещения насовсем: вместо неё игра поставила отдельную вещь сна (ступенью
+   * хуже) — или не поставила ничего, если вещь стёрта. form — какой она стала.
+   */
+  leave(id: number, form: Form = FORM_GONE): void {
     const i = this.get(id);
     if (!i || i.state !== 'gone') return;
     i.state = 'left';
     i.dark = false;
     i.turns += 1;
+    i.form = form;
   }
 
   /** Чьё состояние изменилось с прошлого вызова (и очистить список). */

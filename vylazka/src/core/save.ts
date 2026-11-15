@@ -28,6 +28,23 @@ export interface Profile {
   lang: string | null;
   /** Место вылазки, выбранное на заставке: убежище, офис или жёлтые комнаты. */
   place: WorldKind;
+  /**
+   * Воспоминания: у каждого места — то, что сейчас проходится по кругу. Петля (слова владельца:
+   * «бесконечна, пока не сотрётся всё воспоминание»): следующая сессия возвращает в то же место, но оно
+   * стёрто сильнее. Стёрлось совсем — запись убирается, и место открывается другим воспоминанием.
+   */
+  memories: Partial<Record<WorldKind, PlaceMemory>>;
+}
+
+/** Воспоминание, которое проходится по кругу. */
+export interface PlaceMemory {
+  /** Сид и размер уровня: место остаётся тем же от круга к кругу. */
+  seed: number;
+  rank: 1 | 2 | 3;
+  /** Стёртость 0..1 (systems/decay.ts). */
+  wear: number;
+  /** Сколько кругов пройдено. */
+  laps: number;
 }
 
 export type Level3 = 0 | 1 | 2;
@@ -39,7 +56,7 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
 export function defaultProfile(baseSeed: number): Profile {
-  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1, calm: false, lang: null, place: 'shelter' };
+  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1, calm: false, lang: null, place: 'shelter', memories: {} };
 }
 
 /** Разобрать профиль из хранилища; всё непонятное заменяется значениями по умолчанию. */
@@ -59,7 +76,32 @@ export function parseProfile(raw: unknown, baseSeed: number): Profile {
     calm: o.calm === true,
     lang: typeof o.lang === 'string' ? o.lang : null,
     place: o.place === 'office' || o.place === 'yellow' ? o.place : 'shelter',
+    memories: parseMemories(o.memories),
   };
+}
+
+const WORLDS: readonly WorldKind[] = ['shelter', 'office', 'yellow'];
+
+function parseMemories(raw: unknown): Partial<Record<WorldKind, PlaceMemory>> {
+  const out: Partial<Record<WorldKind, PlaceMemory>> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  const o = raw as Record<string, unknown>;
+  for (const w of WORLDS) {
+    const m = o[w] as Record<string, unknown> | undefined;
+    if (!m || typeof m !== 'object' || !isNum(m.seed) || !isNum(m.wear)) continue;
+    const rank = m.rank === 2 || m.rank === 3 ? m.rank : 1;
+    const wear = Math.max(0, Math.min(1, m.wear));
+    // Стёртое до конца воспоминание не хранится: место откроется другим.
+    if (wear >= 1) continue;
+    out[w] = { seed: m.seed >>> 0, rank, wear, laps: isNum(m.laps) ? Math.max(0, Math.floor(m.laps)) : 0 };
+  }
+  return out;
+}
+
+/** Воспоминание места: то, что уже проходится по кругу, или новое (ещё не записанное в профиль). */
+export function memoryFor(profile: Profile, world: WorldKind): PlaceMemory {
+  const m = profile.memories[world];
+  return m ? { ...m } : { seed: sortieSeed(profile), rank: rankFor(profile), wear: 0, laps: 0 };
 }
 
 export async function loadSave(platform: IPlatform, baseSeed: number): Promise<{ profile: Profile }> {

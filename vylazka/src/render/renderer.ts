@@ -7,12 +7,15 @@ import * as THREE from 'three';
 import type { Vec3 } from '../core/types';
 import type { MeshData } from '../world/kit';
 import type { LevelChunk, StairLink } from '../world/level';
+import { mushroomCluster } from '../world/mushrooms';
 import { MAT_COUNT, MAT_DEFS } from '../world/materials';
 import { bakeDetail } from './detail';
 import { bakeGrime } from './grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from './matcap_atlas';
 import { MAX_WORMS } from '../swarm/body';
-import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, ECHO_FRAG, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, ENTITY_VERT, SPOT_FRAG, TRAIL_FRAG, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
+import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, ECHO_FRAG, GRAIN_VERT, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, ENTITY_VERT, SPOT_FRAG, TRAIL_FRAG, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
+import { newGrainLife, objectTriangles, sowGrains, steerGrains, stepGrains } from './grains';
+import type { GrainLife, Grains } from './grains';
 import { smoothstep } from '../core/math';
 import { ECHO_MAX, ECHO_STRIDE } from '../systems/echo';
 import { SplatClouds } from './splats';
@@ -129,7 +132,12 @@ export interface ThingView {
   /** Сетка видна сквозь стены. */
   xray: boolean;
   visible: boolean;
+  /** 0..1: вещь — кружево: поверхности нет, одни нити по её рёбрам (ступень перед пустотой). */
+  lace?: number;
 }
+
+/** Из чего вещь: из вещества, как всё; из света (проекция: светится сама, свет её смывает); из нитей (кружево). */
+export type ThingLook = 'matter' | 'light' | 'lace';
 
 interface Thing {
   mesh: THREE.Mesh;
@@ -137,6 +145,23 @@ interface Thing {
   wire: THREE.LineSegments | null;
   wireMat: THREE.ShaderMaterial | null;
   radius: number;
+  data: MeshData;
+  seed: number;
+  look: ThingLook;
+  /** Последний распад, о котором сообщила игра: по нему заводится облако пыли. */
+  dis: number;
+}
+
+/** Пыль кружева — цвета нитей, а не того, чем вещь была. */
+function threadDust(g: Grains): void {
+  for (let i = 0; i < g.count; i++) g.color.set([0.8, 0.78, 0.72], i * 3);
+}
+
+/** Облако пыли одной вещи (render/grains.ts): осыпается, лежит россыпью, гаснет — или собирается назад. */
+interface Burst {
+  points: THREE.Points;
+  mat: THREE.ShaderMaterial;
+  life: GrainLife;
 }
 
 /** Рёбра треугольников сетки без повторов: индексы для линий. */
@@ -200,10 +225,12 @@ const SCAN = { perLight: 24, max: 3.5, hold: 7, lodDist: 3.5, far: 28, sow: 45, 
  * трёх метрах около 0,6, в ореоле — 0,1, в дальнем разливе — 0,015); gain — её яркость.
  */
 const SLIDE = { washFrom: 0.012, washTo: 0.11, gain: 0.085 } as const;
+/** Сколько гроздей грибов рисуется разом. */
+export const SPORES_MAX = 240;
 
 /**
  * Сторона текстуры состояний объектов уровня: 64 × 64 = 4096 объектов (world/objects.ts, MAX_OBJECTS).
- * То же число зашито в шейдере (objDissolve: id & 63, id >> 6).
+ * То же число зашито в шейдере (objState: id & 63, id >> 6).
  */
 const OBJ_TEX = 64;
 
@@ -269,7 +296,8 @@ export class GameRenderer {
   /** Атлас картинок выставочных экранов (render/screen_images.ts). */
   private screensTex: THREE.Texture;
   /** Состояния объектов уровня: байт на объект — насколько он растворён. */
-  private readonly objData = new Uint8Array(OBJ_TEX * OBJ_TEX);
+  /** Состояния объектов, по четыре байта: растворён, кружево, выцвел, светится. */
+  private readonly objData = new Uint8Array(OBJ_TEX * OBJ_TEX * 4);
   private readonly objTex: THREE.DataTexture;
   private readonly depthMat: THREE.ShaderMaterial;
   private readonly postMat: THREE.ShaderMaterial;
@@ -289,6 +317,22 @@ export class GameRenderer {
   private readonly swarmPoints: THREE.Points;
   /** Сцена Осыпи: рисуется вслед за точками мира, тем же проходом. */
   private readonly swarmScene = new THREE.Scene();
+  /** Пыль тронутых вещей: по облаку на вещь, пока она осыпается или собирается. Ключ — «o<номер объекта>» или «t<номер вещи>». */
+  private readonly grainScene = new THREE.Scene();
+  private readonly bursts = new Map<string, Burst>();
+  private grainU: Record<string, THREE.IUniform> = {};
+  private grainTime = -1;
+  /** Сетки кусков уровня и треугольники их объектов (считаются при первом касании). */
+  private chunkData: MeshData[] = [];
+  private chunkTris: (Map<number, number[]> | null)[] = [];
+  /** Во сколько раз пыль реже полной плотности (по качеству). */
+  private grainDensity = 1;
+  /** Грибы (systems/spores.ts): одна гроздь, поставленная много раз. */
+  private sporeMesh: THREE.InstancedMesh | null = null;
+  private readonly sporeM = new THREE.Matrix4();
+  private readonly sporeQ = new THREE.Quaternion();
+  private readonly sporeS = new THREE.Vector3();
+  private readonly sporeP = new THREE.Vector3();
   /** Призрак Осыпи: то же тело, отражённое из-за спины вперёд. */
   private readonly ghostMat: THREE.ShaderMaterial;
   private readonly ghostPoints: THREE.Points;
@@ -382,7 +426,7 @@ export class GameRenderer {
     // Атлас надписей и плакатов: пока пустой белый лист, рисуется отдельно (setSigns).
     this.signsTex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.signsTex.needsUpdate = true;
-    this.objTex = new THREE.DataTexture(this.objData, OBJ_TEX, OBJ_TEX, THREE.RedFormat, THREE.UnsignedByteType);
+    this.objTex = new THREE.DataTexture(this.objData, OBJ_TEX, OBJ_TEX, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.objTex.magFilter = THREE.NearestFilter;
     this.objTex.minFilter = THREE.NearestFilter;
     this.objTex.needsUpdate = true;
@@ -441,6 +485,7 @@ export class GameRenderer {
         uScanFade: { value: 1 },
         uScanRange: { value: new THREE.Vector2(4, 15) },
         uSlide: { value: new THREE.Vector4(SLIDE.washFrom, SLIDE.washTo, SLIDE.gain, 0) },
+        uErase: { value: new THREE.Vector4(0, 0, 0, 0) },
         uMatA: { value: matA },
         uMatB: { value: matB },
         uMatBase: { value: Array.from({ length: MAT_SLOTS }, (_, i) => new THREE.Vector3(...(atlas.base[i] ?? [0.5, 0.5, 0.5]))) },
@@ -660,6 +705,18 @@ export class GameRenderer {
     });
     this.ghostPoints = new THREE.Points(this.swarmGeo, this.ghostMat);
     this.ghostPoints.frustumCulled = false;
+    // Пыль вещей: те же точки, тот же свет. У каждого облака свои только uGo, uFade и uFloorY.
+    this.grainU = {
+      ...this.lightU,
+      tDepth: this.splatMat.uniforms.tDepth!,
+      uNearFar: this.splatMat.uniforms.uNearFar!,
+      uTime: { value: 0 },
+      uSize: this.splatMat.uniforms.uSize!,
+      uProj: this.splatMat.uniforms.uProj!,
+      uMaxPx: this.splatMat.uniforms.uMaxPx!,
+      uAmbient: this.worldMat.uniforms.uAmbient!,
+      uDarkGain: { value: 1 },
+    };
     this.ghostPoints.visible = false;
     this.swarmScene.add(this.ghostPoints);
     // Эхо рисуется в свой слой: длинная выдержка его не смазывает, линии остаются чёткими.
@@ -871,6 +928,7 @@ export class GameRenderer {
     su.uSize!.value = SCAN.size / Math.sqrt(q.points);
     (su.uNearFar!.value as THREE.Vector2).set(this.camera.near, this.camera.far);
     this.clouds.setDensity(q.points);
+    this.grainDensity = Math.min(1, q.points / 1100 + 0.25);
     this.clouds.budget = q.points * SCAN.sow;
   }
 
@@ -885,12 +943,155 @@ export class GameRenderer {
    * Насколько растворён объект уровня (world/objects.ts): 0 — стоит, 1 — его нет. Объект лежит в общей
    * сетке помещения; шейдер находит его вершины по номеру.
    */
-  setObjectState(id: number, dis: number): void {
+  setObjectState(id: number, dis: number, floorY?: number, quiet = false): void {
     if (id <= 0 || id >= OBJ_TEX * OBJ_TEX) return;
-    const v = Math.round(Math.max(0, Math.min(1, dis)) * 255);
-    if (this.objData[id] === v) return;
-    this.objData[id] = v;
+    const d = Math.max(0, Math.min(1, dis));
+    const v = Math.round(d * 255);
+    const was = this.objData[id * 4]! / 255;
+    if (this.objData[id * 4] !== v) {
+      this.objData[id * 4] = v;
+      this.objTex.needsUpdate = true;
+    }
+    // quiet — без пыли: предмета нет с самого начала круга (стёрт раньше), а не рассыпался на глазах.
+    if (!quiet) this.grainsFor(`o${id}`, was, d, floorY, () => this.sowObject(id));
+  }
+
+  /**
+   * Тон объекта уровня: dull — насколько он выцвел (0 — свой цвет, 1 — бумага), glow — насколько
+   * светится своим цветом. Так бумажные цветы тусклы, пока к ним не подошли, и ярки перед распадом.
+   */
+  setObjectTone(id: number, dull: number, glow: number): void {
+    if (id <= 0 || id >= OBJ_TEX * OBJ_TEX) return;
+    const a = Math.round(Math.max(0, Math.min(1, dull)) * 255);
+    const b = Math.round(Math.max(0, Math.min(1, glow)) * 255);
+    if (this.objData[id * 4 + 2] === a && this.objData[id * 4 + 3] === b) return;
+    this.objData[id * 4 + 2] = a;
+    this.objData[id * 4 + 3] = b;
     this.objTex.needsUpdate = true;
+  }
+
+  /**
+   * Грибы: count мест по шесть чисел — x, y, z, поворот, размер, род (0 — угол: гроздь крупнее; 1 — пол).
+   * Тени они не дают и точками не рассыпаются: это не вещь места, а то, что проросло сквозь него.
+   */
+  setSpores(data: Float32Array, count: number): void {
+    if (!this.sporeMesh) {
+      if (count === 0) return;
+      const src = this.makeMesh(mushroomCluster(), 0, 0);
+      const mat = this.worldLike();
+      mat.uniforms.uThing = { value: new THREE.Vector4(0, 0, 2, 0) };
+      mat.defines = { ...this.worldMat.defines };
+      this.sporeMesh = new THREE.InstancedMesh(src.geometry, mat, SPORES_MAX);
+      this.sporeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.sporeMesh.frustumCulled = false;
+      this.sporeMesh.matrixAutoUpdate = false;
+      this.sporeMesh.layers.set(1);
+      this.scene.add(this.sporeMesh);
+    }
+    const n = Math.min(count, SPORES_MAX);
+    const up = this.sporeP.set(0, 1, 0);
+    for (let i = 0; i < n; i++) {
+      const k = data[i * 6 + 4]! * (data[i * 6 + 5]! < 0.5 ? 1.5 : 1);
+      this.sporeQ.setFromAxisAngle(up, data[i * 6 + 3]!);
+      this.sporeM.compose(this.tmpV.set(data[i * 6]!, data[i * 6 + 1]!, data[i * 6 + 2]!), this.sporeQ, this.sporeS.set(k, k, k));
+      this.sporeMesh.setMatrixAt(i, this.sporeM);
+    }
+    this.sporeMesh.count = n;
+    this.sporeMesh.visible = n > 0;
+    this.sporeMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Объект уровня — кружево: поверхности нет, одни нити (ступень перед пустотой, systems/decay.ts). */
+  setObjectLace(id: number, on: boolean): void {
+    if (id <= 0 || id >= OBJ_TEX * OBJ_TEX) return;
+    const v = on ? 255 : 0;
+    if (this.objData[id * 4 + 1] === v) return;
+    this.objData[id * 4 + 1] = v;
+    this.objTex.needsUpdate = true;
+  }
+
+  /**
+   * Стирание места (systems/decay.ts): насколько нет потолка, стен и пола, 0..1. Потолок пропадает
+   * совсем, стены и пол остаются кружевом. Карманным пространствам стирание не положено — там нули.
+   */
+  setErase(ceiling: number, walls: number, floor: number): void {
+    (this.worldMat.uniforms.uErase!.value as THREE.Vector4).set(ceiling, walls, floor, 0);
+  }
+
+  /** Посеять пыль объекта уровня: его треугольники — в сетке одного из кусков. */
+  private sowObject(id: number): { grains: Grains; matrix: THREE.Matrix4 } | null {
+    for (let c = 0; c < this.chunkData.length; c++) {
+      let map = this.chunkTris[c];
+      if (!map) this.chunkTris[c] = map = objectTriangles(this.chunkData[c]!);
+      const tris = map.get(id);
+      if (tris) {
+        const grains = sowGrains(this.chunkData[c]!, tris, id * 7919 + 13, this.grainDensity);
+        if (this.objData[id * 4 + 1]! > 0) threadDust(grains);
+        return { grains, matrix: this.chunks[c]!.matrixWorld };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Пыль вещи: распад изменился с was на now. Облако заводится, когда вещь начала уходить или
+   * возвращаться, и живёт, пока лежит россыпь (render/grains.ts). floorY — пол под вещью; не задан —
+   * россыпь ложится на уровень её низа.
+   */
+  private grainsFor(key: string, was: number, now: number, floorY: number | undefined, sow: () => { grains: Grains; matrix: THREE.Matrix4 } | null): void {
+    let b = this.bursts.get(key);
+    if (!b) {
+      if (Math.abs(now - was) < 1e-4 || (now <= 0 && was <= 0)) return;
+      const coming = now < was;
+      // Уже собралась (или ещё цела) — пыли нет.
+      if (coming ? now <= 0 : now <= 0.002) return;
+      const made = sow();
+      if (!made || made.grains.count === 0) return;
+      const g = made.grains;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(g.position, 3));
+      geo.setAttribute('aNrm', new THREE.BufferAttribute(g.normal, 3));
+      geo.setAttribute('aCol', new THREE.BufferAttribute(g.color, 3));
+      geo.setAttribute('aRnd', new THREE.BufferAttribute(g.rnd, 4));
+      const life = newGrainLife(now, coming);
+      const y = floorY ?? this.tmpV.set(0, g.minY, 0).applyMatrix4(made.matrix).y;
+      const mat = new THREE.ShaderMaterial({
+        vertexShader: GRAIN_VERT,
+        fragmentShader: SPLAT_FRAG,
+        uniforms: { ...this.grainU, uGo: { value: now }, uFlow: { value: life.flow }, uFade: { value: life.fade }, uFloorY: { value: y } },
+        blending: THREE.NormalBlending,
+        premultipliedAlpha: true,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+      const points = new THREE.Points(geo, mat);
+      points.frustumCulled = false;
+      points.matrixAutoUpdate = false;
+      points.matrix.copy(made.matrix);
+      points.matrixWorldNeedsUpdate = true;
+      this.grainScene.add(points);
+      b = { points, mat, life };
+      this.bursts.set(key, b);
+      return;
+    }
+    steerGrains(b.life, now);
+  }
+
+  private dropBurst(key: string): void {
+    const b = this.bursts.get(key);
+    if (!b) return;
+    this.grainScene.remove(b.points);
+    b.points.geometry.dispose();
+    b.mat.dispose();
+    this.bursts.delete(key);
+  }
+
+  /** Сколько облаков пыли сейчас живо и сколько в них точек (для проверок). */
+  dustInfo(): { clouds: number; points: number } {
+    let points = 0;
+    for (const b of this.bursts.values()) points += b.points.geometry.getAttribute('position').count;
+    return { clouds: this.bursts.size, points };
   }
 
   /** Заменить геометрию мира. stairs — лестницы между ярусами: рядом с ними виден соседний ярус. */
@@ -900,10 +1101,14 @@ export class GameRenderer {
     // И другие предметы: все на месте.
     this.objData.fill(0);
     this.objTex.needsUpdate = true;
+    this.setErase(0, 0, 0);
     this.stairs = stairs;
     for (const m of this.chunks) this.dropMesh(m);
     this.chunks.length = 0;
     this.hiddenIds.clear();
+    for (const key of [...this.bursts.keys()]) this.dropBurst(key);
+    this.chunkData = chunks.map((c) => c.mesh);
+    this.chunkTris = chunks.map(() => null);
     for (const chunk of chunks) {
       const mesh = this.makeMesh(chunk.mesh, chunk.tierMin, chunk.tierMax);
       if (chunk.id) mesh.userData.id = chunk.id;
@@ -998,20 +1203,26 @@ export class GameRenderer {
     return new THREE.ShaderMaterial({ vertexShader: WORLD_VERT, fragmentShader: WORLD_FRAG, uniforms: { ...this.worldMat.uniforms } });
   }
 
-  /** Добавить вещь: геометрия вокруг начала координат. Возвращает номер для setThing и removeThing. */
-  addThing(data: MeshData, seed = 0): number {
+  /**
+   * Добавить вещь: геометрия вокруг начала координат. Возвращает номер для setThing и removeThing.
+   * look — из чего она: из вещества (как всё), из света (проекция: светится сама, свет её смывает; тени
+   * и точек у неё нет) или из нитей (кружево: поверхности нет, одни рёбра).
+   */
+  addThing(data: MeshData, seed = 0, look: ThingLook = 'matter'): number {
     // Всё общее — теми же uniform-объектами, что у мира: свет, туман, фактуры обновляются разом.
     const mat = this.worldLike();
-    mat.uniforms.uThing = { value: new THREE.Vector4(0, 0, 0, (seed % 97) * 1.37) };
-    mat.defines = { ...this.worldMat.defines };
+    // y — вещь из кружева: поверхности нет, одни нити (тот же узор, что у стёртых стен); z — это вещь, а не архитектура.
+    mat.uniforms.uThing = { value: new THREE.Vector4(0, look === 'lace' ? 1 : 0, 1, (seed % 97) * 1.37) };
+    mat.defines = look === 'light' ? { ...this.slideMat.defines } : { ...this.worldMat.defines };
     const mesh = this.makeMesh(data, 0, 0);
     mesh.material = mat;
     mesh.matrixAutoUpdate = true;
     mesh.visible = false;
+    if (look !== 'matter') mesh.layers.set(1);
     this.scene.add(mesh);
-    this.clouds.add(mesh, data, { follow: true });
+    if (look !== 'light') this.clouds.add(mesh, data, { follow: true });
     const id = this.nextThing++;
-    this.things.set(id, { mesh, mat, wire: null, wireMat: null, radius: mesh.geometry.boundingSphere?.radius ?? 0.5 });
+    this.things.set(id, { mesh, mat, wire: null, wireMat: null, radius: mesh.geometry.boundingSphere?.radius ?? 0.5, data, seed, look, dis: 0 });
     return id;
   }
 
@@ -1019,13 +1230,27 @@ export class GameRenderer {
     const t = this.things.get(id);
     if (!t) return;
     t.mesh.visible = v.visible;
-    if (!v.visible) return;
+    if (!v.visible) {
+      // Спрятанная вещь пыли не оставляет (кроме россыпи, которая уже легла: она лежит сама по себе).
+      t.dis = v.dissolve;
+      return;
+    }
     t.mesh.position.set(v.x, v.y, v.z);
     t.mesh.rotation.set(0, v.yaw, 0);
     t.mesh.scale.setScalar(v.scale);
     (t.mat.uniforms.uThing!.value as THREE.Vector4).x = v.dissolve;
-    // Рассыпающаяся вещь тени не отбрасывает.
-    t.mesh.layers.set(v.dissolve > 0.4 ? 1 : 0);
+    // Рассыпающаяся вещь тени не отбрасывает; свет и кружево — никогда.
+    if (t.look === 'matter') t.mesh.layers.set(v.dissolve > 0.4 ? 1 : 0);
+    if (Math.abs(v.dissolve - t.dis) > 1e-4) {
+      this.grainsFor(`t${id}`, t.dis, v.dissolve, v.y, () => {
+        t.mesh.updateMatrix();
+        const grains = sowGrains(t.data, null, t.seed * 31 + 7, this.grainDensity);
+        // Кружево осыпается своим цветом — цветом нитей.
+        if (t.look === 'lace') threadDust(grains);
+        return { grains, matrix: t.mesh.matrix };
+      });
+      t.dis = v.dissolve;
+    }
     if (v.wire > 0.01) {
       if (!t.wire) {
         t.wireMat = this.wireMat.clone();
@@ -1044,6 +1269,9 @@ export class GameRenderer {
   removeThing(id: number): void {
     const t = this.things.get(id);
     if (!t) return;
+    // Россыпь, которая уже лежит, остаётся догорать; недолетевшая пыль уходит вместе с вещью.
+    const b = this.bursts.get(`t${id}`);
+    if (b && (b.life.coming || b.life.go < 1)) this.dropBurst(`t${id}`);
     this.dropMesh(t.mesh);
     t.mat.dispose();
     t.wireMat?.dispose();
@@ -1052,6 +1280,7 @@ export class GameRenderer {
 
   clearThings(): void {
     for (const id of [...this.things.keys()]) this.removeThing(id);
+    for (const key of [...this.bursts.keys()]) if (key.startsWith('t')) this.dropBurst(key);
   }
 
   /**
@@ -1380,6 +1609,28 @@ export class GameRenderer {
       r.render(this.clouds.scene, cam);
       r.autoClear = true;
     }
+    // Пыль тронутых вещей — теми же точками, поверх точек мира.
+    if (this.bursts.size > 0) {
+      const gdt = this.grainTime < 0 ? 0 : Math.max(0, Math.min(0.1, v.time - this.grainTime));
+      this.grainU.uTime!.value = v.time;
+      this.grainU.uDarkGain!.value = 1 / Math.max(1, v.gain) ** 0.5;
+      for (const [key, b] of this.bursts) {
+        stepGrains(b.life, gdt);
+        if (b.life.done) {
+          this.dropBurst(key);
+          continue;
+        }
+        b.mat.uniforms.uGo!.value = b.life.go;
+        b.mat.uniforms.uFlow!.value = b.life.flow;
+        b.mat.uniforms.uFade!.value = b.life.fade;
+      }
+      if (this.bursts.size > 0) {
+        r.autoClear = false;
+        r.render(this.grainScene, cam);
+        r.autoClear = true;
+      }
+    }
+    this.grainTime = v.time;
     // Осыпь — поверх точек мира. В темноте она светится сама; усиление камеры её не разгоняет.
     // Если она за спиной, впереди рисуется её призрак: то же тело, отражённое из-за спины.
     this.ghostPoints.visible = this.swarmPoints.visible && v.ghost > 0.01;

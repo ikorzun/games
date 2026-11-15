@@ -6,7 +6,9 @@ import { allSoundFiles, AudioEngine } from './audio/engine';
 import { GameAudio, LOAD_FIRST } from './audio/game_audio';
 import { i18n, normalizeLang, t } from './core/i18n';
 import { mulberry32 } from './core/rng';
-import { loadSave, rankFor, sortieSeed, writeProfile } from './core/save';
+import { loadSave, memoryFor, rankFor, writeProfile } from './core/save';
+import type { PlaceMemory } from './core/save';
+import { erased, WEAR } from './systems/decay';
 import type { Level3, Profile } from './core/save';
 import { LANGS } from './core/types';
 import type { Lang } from './core/types';
@@ -103,6 +105,13 @@ export class App {
   private seekingSince = 0;
   /** Следующая сессия, собранная за время лимбо. */
   private next: { level: BuiltLevel; seed: number; rank: 1 | 2 | 3 } | null = null;
+  /** Воспоминание, которое сейчас проходится по кругу (в этом месте). */
+  private memory: PlaceMemory | null = null;
+  /** Место закреплено адресом (?seed=): петля идёт по нему, в профиль ничего не пишется. */
+  private pinned: PlaceMemory | null = null;
+  /** Прошлый круг стёр место до конца: следующая сессия — уже в другом. */
+  private wasErased = false;
+  private lapTimer: ReturnType<typeof setTimeout> | undefined;
   /** Подсказки обучения, уже показанные в этой сессии. */
   private readonly taught = new Set<string>();
   /** Какие листы-картинки (плакаты, план убежища) уже загружены и стоят в атласе надписей. */
@@ -271,8 +280,10 @@ export class App {
       this.root.addEventListener('pointerdown', onFirstTouch, true);
     }
 
-    // Первая сессия: сид из адреса или следующий сид игрока.
-    this.prepare(p.get('seed') !== null ? baseSeed : sortieSeed(this.profile), this.rankParam() ?? rankFor(this.profile));
+    // Первая сессия: воспоминание места (то, что уже проходится по кругу, или новое). Сид из адреса
+    // (?seed=) закрепляет место на всё время страницы и в профиль не пишется.
+    this.pinned = p.get('seed') !== null ? { seed: baseSeed >>> 0, rank: this.rankParam() ?? rankFor(this.profile), wear: 0, laps: 0 } : null;
+    this.prepare();
 
     const resize = (): void => {
       renderer.resize(this.root.clientWidth, this.root.clientHeight);
@@ -280,6 +291,12 @@ export class App {
     };
     new ResizeObserver(resize).observe(this.root);
     resize();
+    // Круг сменили в адресе (#lap5), пока открыта заставка: место пересобирается на этом круге.
+    window.addEventListener('hashchange', () => {
+      if (this.screen !== 'title' || this.testLevel) return;
+      this.prepare();
+      this.redraw();
+    });
 
     this.platform.onPause((paused) => this.lifecycle.set('platform', paused));
     this.platform.onAudio((enabled) => this.sound.setEnabled(enabled));
@@ -308,10 +325,38 @@ export class App {
     return r >= 1 && r <= 3 ? (r as 1 | 2 | 3) : null;
   }
 
+  /**
+   * Круг из адреса после решётки (#lap5): посмотреть место на любом круге петли там, где у адреса нет
+   * параметров, — на странице, встроенной по ссылке. Круги считаются с первого.
+   */
+  private lapParam(): number | null {
+    const m = /^#lap-?([1-9])$/.exec(typeof location === 'undefined' ? '' : location.hash);
+    return m ? Number(m[1]) : null;
+  }
+
+  /** Стёртость из адреса (?wear=0.6 или #lap5): посмотреть место на любом круге петли. */
+  private wearParam(): number | null {
+    const raw = this.params.get('wear');
+    const w = Number(raw ?? '');
+    if (raw !== null && Number.isFinite(w)) return Math.max(0, Math.min(1, w));
+    const lap = this.lapParam();
+    return lap === null ? null : Math.min(1, (lap - 1) * WEAR.lap);
+  }
+
+  /** Воспоминание, которое сейчас проходится: закреплённое адресом или записанное за местом в профиле. */
+  private place(): PlaceMemory {
+    const m = this.pinned ?? memoryFor(this.profile, this.world);
+    const rank = this.rankParam();
+    return rank && !this.pinned ? { ...m, rank } : m;
+  }
+
   /** Собрать первую сессию и показать заставку. */
-  private prepare(seed: number, rank: 1 | 2 | 3): void {
-    this.seed = seed >>> 0;
-    this.rank = rank;
+  private prepare(): void {
+    const mem = this.place();
+    this.memory = mem;
+    this.seed = mem.seed >>> 0;
+    this.rank = mem.rank;
+    const wear = this.wearParam() ?? mem.wear;
     if (this.testLevel) {
       const name = this.params.get('level') ?? '';
       if (name.startsWith('pocket_')) {
@@ -328,7 +373,7 @@ export class App {
         this.game.loadLevel(this.level, null);
       }
     } else {
-      this.level = buildLevel(generateLayout(this.seed, rank, this.world));
+      this.level = buildLevel(generateLayout(this.seed, this.rank, this.world), { wear });
       this.game.loadLevel(this.level, { seed: this.seed, known: new Set(this.profile.archive) });
     }
     this.screen = 'title';
@@ -359,29 +404,55 @@ export class App {
     this.screen = 'play';
     this.sound.unlock();
     this.audio.setScene('play');
-    this.audio.sortieStart(false);
+    this.audio.sortieStart(false, this.game.world);
     if (!this.testLevel) {
       this.profile.sorties += 1;
+      // С этой минуты воспоминание проходится по кругу: место записано за ним.
+      this.keepMemory();
       this.saveProfile();
       this.hud.toast(t('session.begin', { n: this.sessionNumber() }), 4200);
+      this.sayLap();
     }
     this.platform.track('level_started', { world: 'session', level: this.testLevel ? 'test' : `seed_${this.seed}` });
     if (this.touchMode && !MotionSensor.needsPermission()) void this.enableMotion();
     this.resumePlay();
   }
 
-  /** Сессия кончилась, игрок в лимбо: записать итог и собрать следующую. */
+  /**
+   * Записать в воспоминание места то, что стёрто за этот круг (касания, встречи с Осыпью). lap — круг
+   * пройден: стёртость растёт ещё и на него. Стёрлось совсем — места больше нет: следующая сессия
+   * откроет другое. Возвращает true, если воспоминание стёрто.
+   */
+  private keepMemory(lap = false): boolean {
+    const m = this.memory;
+    if (!m || this.testLevel) return false;
+    // Стёртость из адреса — только посмотреть: в воспоминание она не идёт.
+    const gained = this.game.wearGain + (lap ? WEAR.lap : 0);
+    m.wear = Math.min(1, m.wear + gained);
+    this.game.wearBase += this.game.wearGain;
+    this.game.wearGain = 0;
+    if (lap) m.laps += 1;
+    const gone = erased(m.wear);
+    if (this.pinned) {
+      if (gone) this.pinned = { ...this.pinned, wear: 0, laps: 0 };
+    } else if (gone) delete this.profile.memories[this.world];
+    else this.profile.memories[this.world] = { ...m };
+    return gone;
+  }
+
+  /** Сессия кончилась, игрок в лимбо: записать итог и собрать следующую — то же место, круг спустя. */
   private onLimbo(): void {
     this.profile.successes += 1;
+    this.wasErased = this.keepMemory(true);
     this.saveProfile();
     this.platform.track('level_completed', { world: 'session', level: `seed_${this.seed}` });
     // Сборку откладываем на полсекунды: лимбо уже на экране, и заминка не выглядит зависшим переходом.
     setTimeout(() => {
-      const seed = sortieSeed(this.profile);
-      const rank = this.rankParam() ?? rankFor(this.profile);
-      const level = buildLevel(generateLayout(seed, rank, this.world));
-      this.next = { level, seed, rank };
-      this.game.queueSession(level, { seed, known: new Set(this.profile.archive) });
+      const mem = this.place();
+      this.memory = mem;
+      const level = buildLevel(generateLayout(mem.seed, mem.rank, this.world), { wear: this.wearParam() ?? mem.wear });
+      this.next = { level, seed: mem.seed, rank: mem.rank };
+      this.game.queueSession(level, { seed: mem.seed, known: new Set(this.profile.archive) });
     }, 500);
   }
 
@@ -396,9 +467,29 @@ export class App {
     }
     this.profile.sorties += 1;
     this.mapHint = null;
+    this.keepMemory();
     this.saveProfile();
     this.platform.track('level_started', { world: 'session', level: `seed_${this.seed}` });
     this.hud.toast(t('session.begin', { n: this.sessionNumber() }), 4200);
+    // Прежнее место стёрлось до конца: это уже другое.
+    if (this.wasErased) this.hud.flash(t('session.erased'), 6200);
+    else this.sayLap();
+    this.wasErased = false;
+  }
+
+  /**
+   * Строка петли: в начале каждого круга, кроме первого, игра говорит одну фразу — по ней игрок
+   * понимает, что место то же и что его становится меньше (docs/vylazka/story.md, §5).
+   */
+  private sayLap(): void {
+    const lap = this.lapParam() ?? (this.memory?.laps ?? 0) + 1;
+    if (lap < 2) return;
+    // После названия сессии, а не поверх него: вспышка гасит прочие надписи.
+    if (this.lapTimer !== undefined) clearTimeout(this.lapTimer);
+    this.lapTimer = setTimeout(() => {
+      this.lapTimer = undefined;
+      if (this.screen === 'play') this.hud.flash(t(`loop.lap.${Math.min(8, lap)}`), 6200);
+    }, 4400);
   }
 
   /** Сменить место вылазки. На заставке уровень пересобирается сразу; выбор запоминается. */
@@ -409,7 +500,7 @@ export class App {
     this.audio.ui('ui_click');
     this.saveProfile();
     if (this.screen === 'title' && !this.testLevel) {
-      this.prepare(this.seed, this.rank);
+      this.prepare();
       this.redraw();
     }
   }
@@ -627,7 +718,9 @@ export class App {
 
   /** Записать профиль. Вызовы идут по очереди и только по событиям. */
   private saveProfile(): void {
-    const profile = { ...this.profile, archive: [...this.profile.archive] };
+    // Что стёрто за круг — в воспоминание места: закрыл вкладку посреди сессии — касания не пропали.
+    if (this.screen === 'play' && this.game && this.game.wearGain > 0) this.keepMemory();
+    const profile = { ...this.profile, archive: [...this.profile.archive], memories: { ...this.profile.memories } };
     this.saving = this.saving.then(() => writeProfile(this.platform, profile));
   }
 

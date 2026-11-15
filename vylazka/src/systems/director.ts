@@ -5,8 +5,13 @@
  */
 import type { Rng } from '../core/rng';
 
-/** Ложные события. Звук к ним подключается по id на этапе звука. */
-export const SCARES = ['bang', 'slam', 'steps', 'knock', 'radio', 'flicker', 'signs'] as const;
+/**
+ * Ложные события. Звук к ним подключается по id на этапе звука. Удара по металлу и хлопка двери здесь
+ * больше нет (решение владельца, 15.11): это язык хоррора, а не памяти. Остались шаги за спиной, стук
+ * из соседнего помещения, рация, мигание фонаря и вспыхивающие надписи; место озвучивают следы людей —
+ * шёпот, смех, разговор за стеной (audio/game_audio.ts).
+ */
+export const SCARES = ['steps', 'knock', 'radio', 'flicker', 'signs'] as const;
 export type ScareId = (typeof SCARES)[number];
 
 export type DirectorEvent =

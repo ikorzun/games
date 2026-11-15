@@ -31,13 +31,15 @@ import { Jumps } from './systems/jumps';
 import type { JumpPlan, JumpStyle } from './systems/jumps';
 import { ALL_MEMORIES, DEFAULT_SESSION, Session } from './systems/session';
 import type { SessionConfig, SessionEvent } from './systems/session';
-import { DEFAULT_ILLUSIONS, Illusions } from './systems/illusions';
-import type { Comeback, ComebackOptions } from './systems/illusions';
+import { decayAt, keepsClutter, startForm, WEAR } from './systems/decay';
+import type { Decay } from './systems/decay';
+import { DEFAULT_ILLUSIONS, FORM_GONE, FORM_LACE, FORM_REAL, Illusions, worse } from './systems/illusions';
+import { Spores } from './systems/spores';
+import type { Comeback, ComebackOptions, Form, Mount } from './systems/illusions';
 import { looksAt, Things } from './systems/things';
 import type { Fate, Look, Thing } from './systems/things';
 import { ColliderSet } from './world/colliders';
 import type { Aabb } from './world/colliders';
-import { FLAT_OK } from './world/furnish';
 import { DOOR_NAME } from './world/screens';
 import type { LevelObject } from './world/objects';
 import { ALL_PROPS } from './world/props_all';
@@ -46,6 +48,7 @@ import type { BuiltLevel } from './world/level';
 import { STAIR_RISE, STAIR_RUN, STAIR_STEPS } from './world/level_build';
 import { buildPocket, ENV_BUNKER, WORLD_ENV } from './world/pockets';
 import type { Env, ModelCell, PocketContext, PocketKind, PocketSpace } from './world/pockets';
+import { formMesh } from './world/forms';
 import { thingMesh } from './world/thing_mesh';
 
 export const STEP = 1 / 60;
@@ -81,7 +84,11 @@ export type DreamEvent =
    * вылазку); back — свет погас и зажёгся, и вещь вернулась: той же (same), другой (kind) или в
    * другом месте (place).
    */
-  | { type: 'touch'; name: string; what: 'gone' | 'back'; first?: boolean; how?: Comeback['how'] }
+  /**
+   * Коснулись вещи (gone), она вернулась (back; form — на какой ступени: 1 — картонка, 2 — проекция,
+   * 3 — кружево; moved — встала на другое место) или стёрта совсем и больше не вернётся (erased).
+   */
+  | { type: 'touch'; name: string; what: 'gone' | 'back' | 'erased'; first?: boolean; how?: Comeback['how']; form?: number; moved?: boolean }
   /**
    * Карманное пространство сделало своё дело: enter — игрок вошёл; map — прочёл макет в кукольном домике
    * (room и tier — где лежит искомое; без memory — искать пока нечего); next — в белом нигде вызвал следующее
@@ -132,6 +139,8 @@ interface Transition {
 const DARK_SHIFT = { first: 7, every: 9, range: 14 } as const;
 /** Сколько воспоминаний нужно, чтобы фигура Осыпи выросла в полный рост. */
 const SWARM_GROWN = 4;
+/** Сколько гроздей грибов показывается разом (ближайшие к игроку). */
+const SPORES_SHOWN = 220;
 /** Угол сетки уровня в мире (x, z): клетка 0 лежит в 8 клетках от начала координат, клетка — 3 м. */
 const CELL_ORIGIN: [number, number] = [-25.5, -25.5];
 /** С какого расстояния слышно Осыпь (от неё идут волны эха), м. */
@@ -184,6 +193,17 @@ const BIG_THINGS: readonly (readonly [string, PocketKind | null])[] = [
  * Вещи сна в офисе и в жёлтых комнатах. В офисе — офисная мелочь и то, что стоит посреди коридора
  * без причины; в жёлтые комнаты просачивается дом: кровать, ёлка, кроватка посреди пустого зала.
  */
+/**
+ * Предметы, которые возвращаются собой, а не ступенью хуже: берёза (она не вещь памяти, а то, что
+ * прорастает сквозь неё) и завал (укрытие: связки рассыпаются от касания, но место он держит).
+ */
+const KEEPS: ReadonlySet<string> = new Set(['birch', 'thicket']);
+
+/** Бумажные цветы: у них своя лестница — расцвёл, рассыпался, вернулся кружевом. */
+const isFlower = (name: string): boolean => name.startsWith('paper_flower');
+/** С какого расстояния цветок расцветает, за сколько секунд и сколько стоит ярким, прежде чем рассыпаться. */
+const FLOWER = { near: 3.4, bloom: 1.5, hold: 0.9 } as const;
+
 const WORLD_THINGS: Record<WorldKind, { small: readonly string[]; big: readonly (readonly [string, PocketKind | null])[] }> = {
   shelter: { small: SMALL_THINGS, big: BIG_THINGS },
   office: {
@@ -324,12 +344,24 @@ export class Game {
   /** Узел навигации рядом с объектом: по нему — свет его клетки и его помещение. */
   private readonly objNode = new Map<number, number>();
   /** Чем может вернуться предмет с таким именем (подходящие по размеру отдельно стоящие вещи). */
-  private readonly returnKinds = new Map<string, string[]>();
   /** Свободные места у стен, уже занятые вернувшимися вещами. */
   private readonly slotTaken = new Set<number>();
   /** Сколько вещей растворилось от касания и сколько вернулось за вылазку. */
   touchCount = 0;
   returnCount = 0;
+  /** Сколько вещей стёрто совсем: прошли все ступени и больше не вернутся. */
+  erasedCount = 0;
+  /**
+   * Стёртость места (systems/decay.ts): с какой начат этот круг и сколько набрано за него — касаниями,
+   * стёртыми вещами, встречами с Осыпью. Следующий круг начнётся с суммы (плюс сам круг).
+   */
+  wearBase = 0;
+  wearGain = 0;
+  /** Грибы: проросшее рядом с Осыпью и её следы в углах (systems/spores.ts). */
+  spores: Spores | null = null;
+  private readonly sporeBuf = new Float32Array(SPORES_SHOWN * 6);
+  /** Бумажные цветы: насколько каждый расцвёл (0 — тусклый, 1 — яркий) и сколько уже держится расцветшим, с. */
+  private readonly blooms = new Map<number, { k: number; hold: number }>();
   /** Номер экрана-проёма, в который вошли и который ещё не унёс (ждёт конца идущего перехода); 0 — нет. */
   private doorway = 0;
   private pocketGroup = 0;
@@ -389,12 +421,16 @@ export class Game {
     this.session = dream ? new Session(level, dream.seed, dream.known, this.sessionCfg) : null;
     this.nodeAt.clear();
     for (const n of level.nav) this.nodeAt.set(`${n.tier},${n.cx},${n.cz}`, n.id);
+    this.wearBase = Math.max(0, Math.min(1, level.wear ?? 0));
+    this.wearGain = 0;
+    this.applyWear(level);
     const tiers = level.layout?.tierCount ?? 1;
     this.roomFx.clear();
     this.thinUsed.clear();
     if (dream) {
       this.dreamSeed = dream.seed;
       this.swarm = new SwarmAI(level.nav, this.rng);
+      this.spores = new Spores(level.nav, dream.seed);
       this.director = new Director(this.rng);
       this.jumps = new Jumps(this.rng);
       // Лестница на нижний ярус удлиняется дважды — только на объектах, где есть «неправильный» ярус.
@@ -406,6 +442,7 @@ export class Game {
       this.transition = { plan: { cause: 'begin', style: 'dissolve', to: 'session' }, t: 0, out: 0, back: 1.6, switched: true };
     } else {
       this.swarm = null;
+      this.spores = null;
       this.director = null;
       this.anomalies = null;
       this.jumps = null;
@@ -465,11 +502,12 @@ export class Game {
     this.illusions = objs.length > 0 ? new Illusions(objs, level.layout?.seed ?? 0) : null;
     this.objBoxes.clear();
     this.objNode.clear();
-    this.returnKinds.clear();
     this.slotTaken.clear();
     this.touched.clear();
     this.touchCount = 0;
     this.returnCount = 0;
+    this.erasedCount = 0;
+    this.blooms.clear();
     this.doorway = 0;
     if (objs.length === 0) return;
     const sensed = new Set<number>();
@@ -491,6 +529,93 @@ export class Game {
       }
       this.colliders.add(bx);
       this.objBoxes.set(o.id, [bx]);
+    }
+  }
+
+  /**
+   * Сожаление, 0..1: из него сделана Осыпь (слова владельца: «Монстр это тревога внутри и сожаление
+   * игрока»). Растёт от всего, что игрок стёр: от тронутого за этот круг, от стёртого совсем и от
+   * того, насколько место стёрто с прошлых кругов.
+   */
+  get regret(): number {
+    return Math.min(1, this.touchCount / 40 + this.erasedCount / 12 + this.wearBase * 0.6);
+  }
+
+  /** Стёртость места сейчас, 0..1. */
+  get wear(): number {
+    return Math.min(1, this.wearBase + this.wearGain);
+  }
+
+  /** Все кривые стирания для нынешней стёртости. */
+  get decay(): Decay {
+    return decayAt(this.wear);
+  }
+
+  /** Предмет, который стирание не трогает в начале круга: у него своя роль или своя лестница. */
+  private wearProof(o: LevelObject): boolean {
+    return ALL_PROPS[o.name] === undefined || o.group !== undefined || o.name.startsWith('display_') || KEEPS.has(o.name) || isFlower(o.name);
+  }
+
+  /**
+   * Начало круга: что от места уже стёрто (systems/decay.ts). У каждого предмета своя «прочность»:
+   * одни ещё настоящие, от других осталось кружево (сквозь него проходят; тронул — и его нет), третьих
+   * нет вовсе. То, что лежало бы на стёртом предмете, лежит на полу под ним. Бумажные цветы тусклы,
+   * пока к ним не подошли.
+   */
+  private applyWear(level: BuiltLevel): void {
+    const ill = this.illusions;
+    if (!ill) return;
+    const seed = level.layout?.seed ?? 0;
+    for (const i of ill.list) {
+      const o = i.obj;
+      if (isFlower(o.name)) {
+        this.blooms.set(o.id, { k: 0, hold: 0 });
+        this.renderer.setObjectTone(o.id, 1, 0);
+        continue;
+      }
+      if (this.wearBase <= 0 || this.wearProof(o)) continue;
+      const f = startForm(o.id, seed, this.wearBase);
+      if (f === FORM_REAL) continue;
+      const floor = this.floorUnder(o);
+      for (const sp of level.spots) if (this.restsOn([sp.x, sp.y, sp.z], o)) sp.y = floor;
+      if (f === FORM_GONE) {
+        i.state = 'left';
+        i.dis = 1;
+        i.form = FORM_GONE;
+        this.renderer.setObjectState(o.id, 1, floor, true);
+        for (const bx of this.objBoxes.get(o.id) ?? []) bx.gone = true;
+      } else {
+        i.form = FORM_LACE;
+        this.renderer.setObjectLace(o.id, true);
+        // Кружево не держит: сквозь него проходят, но касание оно чувствует.
+        for (const bx of this.objBoxes.get(o.id) ?? []) bx.ghost = true;
+      }
+    }
+  }
+
+  /**
+   * Бумажные цветы (слова владельца: «Пусть при подходе к цветам, они становятся яркими и
+   * разноцветными, а потом рассыпаются. В следующий раз, они более тусклые, как кружева»). Тусклый
+   * цветок расцветает, когда игрок рядом и на цветке есть свет; расцвёл, постоял — и рассыпался, как
+   * всё, чего коснулись. Вернётся он уже кружевом.
+   */
+  private stepFlowers(dt: number, dream: DreamEvent[]): void {
+    const ill = this.illusions;
+    if (!ill || this.blooms.size === 0) return;
+    const b = this.body;
+    for (const [id, f] of this.blooms) {
+      const i = ill.get(id);
+      if (!i || i.state !== 'here') continue;
+      const o = i.obj;
+      const cx = (o.min[0] + o.max[0]) / 2;
+      const cz = (o.min[2] + o.max[2]) / 2;
+      const near = Math.hypot(cx - b.x, cz - b.z) < FLOWER.near && Math.abs(o.at[1] - b.y) < 6 && this.lightAt(this.nodeOfObject(o)) > 0.4;
+      if (!near && f.k <= 0) continue;
+      // Начав расцветать, цветок доцветает, даже если игрок отошёл.
+      f.k = Math.min(1, f.k + dt / FLOWER.bloom);
+      if (f.k >= 1) f.hold += dt;
+      this.renderer.setObjectTone(id, 1 - f.k, f.k);
+      if (f.hold >= FLOWER.hold) this.touchObject(id, dream);
     }
   }
 
@@ -529,6 +654,7 @@ export class Game {
     // этом рассыпается, как всё, чего коснулись, и после темноты встаёт снова.
     if (o.name === DOOR_NAME) this.doorway = id;
     this.touchCount += 1;
+    this.wearGain += WEAR.touch;
     dream.push({ type: 'touch', name: o.name, what: 'gone', first: this.touchCount === 1 });
     for (const t of this.things.list) if (t.state === 'idle' && !t.still && this.restsOn(t.pos, o)) this.touchThing(t, dream);
   }
@@ -537,47 +663,57 @@ export class Game {
   private touchThing(t: Thing, dream: DreamEvent[]): void {
     if (!this.things.touch(t)) return;
     this.touchCount += 1;
+    this.wearGain += WEAR.touch;
     dream.push({ type: 'thing', thing: t, what: 'changing' });
     dream.push({ type: 'touch', name: t.kind, what: 'gone', first: this.touchCount === 1 });
   }
 
-  /** Чем может вернуться предмет: отдельно стоящие вещи, которые встанут на его место, не вылезая за него. */
-  private kindsFor(name: string): string[] {
-    let list = this.returnKinds.get(name);
-    if (!list) {
-      const spec = ALL_PROPS[name];
-      list = spec ? [...FLAT_OK].filter((n) => n !== name && ALL_PROPS[n] !== undefined && ALL_PROPS[n]!.mount === 'floor' && ALL_PROPS[n]!.w <= spec.w + 0.15 && ALL_PROPS[n]!.d <= spec.d + 0.2) : [];
-      this.returnKinds.set(name, list);
-    }
-    return list;
+  /** Где стоит вещь с таким именем (от этого зависят её ступени). Мелочь без описания лежит где придётся. */
+  private mountOf(kind: string): Mount {
+    return ALL_PROPS[kind]?.mount ?? 'free';
+  }
+
+  /** Высота пола под предметом: туда осыпается его пыль. */
+  private floorUnder(o: LevelObject): number {
+    const node = this.nodeOfObject(o);
+    return node >= 0 ? this.level!.nav[node]!.y : o.min[1];
   }
 
   /**
-   * Из чего выбирать возвращение. Собой и на своё место возвращаются: картонка и экран (у них своя
-   * роль), предмет варианта комнаты, всё настенное и то, на чём что-то лежит.
+   * Из чего выбирать возвращение. Собой и на своё место возвращаются: экран и проём (у них своя роль),
+   * предмет варианта комнаты, то, что растёт сквозь место (берёза), и то, на чём лежит вещь
+   * воспоминания, — её ищут по строке, и исчезнуть из-под неё опора не должна. Остальное — на ступень хуже.
    */
+  /** Возвращается ли предмет собой (а не на ступень хуже): у него своя роль или на нём лежит вещь воспоминания. */
+  keepsItself(id: number): boolean {
+    const o = this.illusions?.get(id)?.obj;
+    return o ? this.comebackOptions(o).keep : false;
+  }
+
   private comebackOptions(o: LevelObject): ComebackOptions {
     const spec = ALL_PROPS[o.name];
-    if (!spec || spec.mount !== 'floor' || o.flat || o.group !== undefined || o.name.startsWith('display_')) return { kinds: [], slots: [] };
-    if (this.things.list.some((t) => this.restsOn(t.pos, o))) return { kinds: [], slots: [] };
+    // Цветок возвращается сразу кружевом («в следующий раз они более тусклые, как кружева») — как потолочное.
+    const mount = isFlower(o.name) ? 'ceiling' : (spec?.mount ?? 'floor');
+    const keep = !spec || o.group !== undefined || o.name.startsWith('display_') || KEEPS.has(o.name) || this.things.list.some((t) => t.memory && this.restsOn(t.pos, o));
+    if (keep || mount !== 'floor' || spec!.w > 2.3) return { keep, mount, slots: [] };
     const node = this.nodeOfObject(o);
     const room = node >= 0 ? this.level!.nav[node]!.room : -1;
     const b = this.body;
     const slots: number[] = [];
     (this.level?.freeSlots ?? []).forEach((s, i) => {
-      if (s.room !== room || this.slotTaken.has(i) || spec.w > 2.3) return;
+      if (s.room !== room || this.slotTaken.has(i)) return;
       // Не там, где стоит игрок, и не на прежнем месте.
       if (Math.hypot(s.at[0] - b.x, s.at[2] - b.z) < 1.6 || Math.hypot(s.at[0] - o.at[0], s.at[2] - o.at[2]) < 1.2) return;
       slots.push(i);
     });
-    return { kinds: this.kindsFor(o.name), slots };
+    return { keep, mount, slots };
   }
 
   /**
    * Поставить отдельную вещь туда, где стоял (или мог бы стоять) предмет обстановки: at и rot — начало
-   * координат и поворот предмета у стены. Вещь собирается из пыли.
+   * координат и поворот предмета у стены, form — на какой ступени она возвращается. Вещь собирается из пыли.
    */
-  private standIn(kind: string, at: Vec3, rot: 0 | 1 | 2 | 3): Thing | null {
+  private standIn(kind: string, at: Vec3, rot: 0 | 1 | 2 | 3, form: Form = FORM_REAL, floorY = at[1]): Thing | null {
     const spec = ALL_PROPS[kind];
     if (!spec) return null;
     // У напольного предмета спина лежит на стене, а вещь сна собрана вокруг своей середины: сдвигаем
@@ -585,80 +721,109 @@ export class Game {
     const off = spec.mount === 'free' ? 0 : spec.d / 2;
     const fx = rot === 1 ? 1 : rot === 3 ? -1 : 0;
     const fz = rot === 0 ? 1 : rot === 2 ? -1 : 0;
-    const t = this.addThing(kind, [at[0] + fx * off, at[1], at[2] + fz * off], rot * (Math.PI / 2), 'dust', false, spec.h > 0.4);
+    // Подвесное собрано от потолка вниз: его начало координат — точка подвеса.
+    const y = spec.mount === 'ceiling' ? at[1] - spec.h : at[1];
+    const t = this.addThing(kind, [at[0] + fx * off, y, at[2] + fz * off], rot * (Math.PI / 2), 'dust', false, spec.h > 0.4, form, at[1] - floorY);
     this.things.comeBack(t);
     return t;
+  }
+
+  /** Вещь стёрта совсем: прошла все ступени. Больше её нет нигде. */
+  private eraseThing(t: Thing, dream: DreamEvent[]): void {
+    this.erasedCount += 1;
+    this.wearGain += WEAR.erased;
+    dream.push({ type: 'touch', name: t.kind, what: 'erased' });
+    this.dropThing(t);
   }
 
   /** Исполнить решение о возврате предмета обстановки. */
   private applyComeback(p: Comeback, dream: DreamEvent[]): void {
     const ill = this.illusions!;
     const o = ill.get(p.id)!.obj;
-    if (p.how === 'same') ill.comeBack(p.id);
-    else {
-      const slot = p.how === 'place' ? this.level!.freeSlots![p.slot]! : null;
-      if (p.how === 'place') this.slotTaken.add(p.slot);
-      if (this.standIn(p.how === 'kind' ? p.kind : o.name, slot ? slot.at : o.at, slot ? slot.rot : o.rot)) ill.leave(p.id);
-      else ill.comeBack(p.id);
+    if (p.how === 'same') {
+      ill.comeBack(p.id);
+      this.returnCount += 1;
+      dream.push({ type: 'touch', name: o.name, what: 'back', how: p.how, form: ill.get(p.id)!.form });
+      return;
     }
+    // То, что лежало на предмете и растворилось вместе с ним, без него не вернётся: снимку стола
+    // чашку не удержать.
+    for (const t of [...this.things.list]) if (!t.memory && t.touched && t.state === 'gone' && this.restsOn(t.pos, o)) this.eraseThing(t, dream);
+    if (p.form === FORM_GONE) {
+      ill.leave(p.id, FORM_GONE);
+      this.erasedCount += 1;
+      this.wearGain += WEAR.erased;
+      dream.push({ type: 'touch', name: o.name, what: 'erased' });
+      return;
+    }
+    const slot = p.slot !== undefined ? this.level!.freeSlots![p.slot]! : null;
+    if (slot && p.slot !== undefined) this.slotTaken.add(p.slot);
+    if (this.standIn(o.name, slot ? slot.at : o.at, slot ? slot.rot : o.rot, p.form, slot ? slot.at[1] : this.floorUnder(o))) ill.leave(p.id, p.form);
+    else ill.comeBack(p.id);
     this.returnCount += 1;
-    dream.push({ type: 'touch', name: o.name, what: 'back', how: p.how });
+    dream.push({ type: 'touch', name: o.name, what: 'back', how: p.how, form: p.form, moved: slot !== null });
   }
 
-  /** Сменить вид вещи сна: другая сетка, другой радиус, другая преграда. */
-  private reskin(t: Thing, kind: string): void {
-    const tm = thingMesh(kind, hash2(Math.round(t.pos[0] * 10), Math.round(t.pos[2] * 10), 0x71) >>> 0);
+  /** Перевести вещь сна на другую ступень: другая сетка, без преграды — только датчик касания. */
+  private reform(t: Thing, form: Form): void {
+    const fm = formMesh(t.kind, form, hash2(Math.round(t.pos[0] * 10), Math.round(t.pos[2] * 10), 0x71) >>> 0);
     const old = this.thingRender.get(t.id);
     if (old !== undefined) this.renderer.removeThing(old);
-    this.thingRender.set(t.id, this.renderer.addThing(tm.mesh, t.id));
-    t.kind = kind;
-    t.radius = tm.radius;
-    if (t.collider >= 0) {
-      this.colliders.boxes[t.collider]!.off = true;
-      t.collider = this.thingBox(t, tm.w, tm.d, tm.h);
-    }
+    this.thingRender.set(t.id, this.renderer.addThing(fm.mesh, t.id, fm.look));
+    t.form = form;
+    if (t.collider >= 0) this.colliders.boxes[t.collider]!.off = true;
+    t.collider = this.thingBox(t, fm.w, fm.d, fm.h, true);
   }
 
   /** Преграда вещи сна: коробка по её габаритам; хозяин — минус номер вещи (коснулся преграды — коснулся вещи). */
-  private thingBox(t: Thing, w: number, d: number, h: number): number {
+  private thingBox(t: Thing, w: number, d: number, h: number, sensor = false): number {
     const turned = Math.abs(Math.sin(t.yaw)) > 0.5;
     const hx = (turned ? d : w) / 2;
     const hz = (turned ? w : d) / 2;
     const id = this.colliders.addBox(t.pos[0] - hx, t.pos[1], t.pos[2] - hz, t.pos[0] + hx, t.pos[1] + h, t.pos[2] + hz);
     this.colliders.boxes[id]!.owner = -t.id;
+    // Картонка, проекция и кружево не держат: сквозь них проходят, но касание они чувствуют.
+    if (sensor) this.colliders.boxes[id]!.ghost = true;
     return id;
   }
 
   /**
    * Вернуть вещь сна, растворённую касанием. Вещь воспоминания возвращается собой и на своё место
-   * (её ищут по строке). Остальные — как решат сид и счёт: той же, другой или в другом месте.
+   * (её ищут по строке). Остальные — на ступень хуже: настоящая → картонка → проекция → кружево;
+   * с последней ступени вещь не возвращается. Мелочь без преграды при этом может оказаться в другом месте.
    */
   private returnThing(t: Thing, dream: DreamEvent[]): void {
-    let how: Comeback['how'] = 'same';
+    let moved = false;
     if (!t.memory) {
+      const next = worse(t.form as Form, this.mountOf(t.kind));
+      if (next === FORM_GONE) {
+        this.eraseThing(t, dream);
+        return;
+      }
+      const small = t.collider < 0;
       const r = hash01(t.id * 37 + 5, this.returnCount * 13 + 1, this.dreamSeed ^ 0x7e7);
-      const pick = hash01(t.id * 11 + 3, this.returnCount * 7 + 2, this.dreamSeed ^ 0x51c);
-      const pool = WORLD_THINGS[this.world];
-      const solid = t.collider >= 0;
-      const kinds = (solid ? pool.big.map(([k]) => k) : pool.small).filter((k) => k !== t.kind);
-      if (r >= 0.5 && r < 0.8 && kinds.length > 0) {
-        this.reskin(t, kinds[Math.floor(pick * kinds.length)]!);
-        how = 'kind';
-      } else if (r >= 0.8 && !solid) {
+      if (r >= 0.75 && small) {
         // Другое место: свободное место для вещей неподалёку, где ничего не лежит.
+        const pick = hash01(t.id * 11 + 3, this.returnCount * 7 + 2, this.dreamSeed ^ 0x51c);
         const spots = (this.level?.spots ?? []).filter((sp) => Math.abs(sp.y - t.pos[1]) < 1.6 && Math.hypot(sp.x - t.pos[0], sp.z - t.pos[2]) < 10 && Math.hypot(sp.x - this.body.x, sp.z - this.body.z) > 1.2 && !this.things.list.some((o) => o.state !== 'gone' && Math.hypot(o.pos[0] - sp.x, o.pos[2] - sp.z) < 0.5));
         const sp = spots[Math.floor(pick * spots.length)];
         if (sp) {
           t.pos = [sp.x, sp.y, sp.z];
           this.session?.reserve(sp);
-          how = 'place';
+          moved = true;
         }
+      }
+      this.reform(t, next);
+      // У мелочи датчик касания не нужен: на неё наступают (stepIllusions).
+      if (small && t.collider >= 0) {
+        this.colliders.boxes[t.collider]!.off = true;
+        t.collider = -1;
       }
     }
     this.things.comeBack(t);
     if (t.collider >= 0) this.colliders.boxes[t.collider]!.gone = false;
     this.returnCount += 1;
-    dream.push({ type: 'touch', name: t.kind, what: 'back', how });
+    dream.push({ type: 'touch', name: t.kind, what: 'back', how: t.memory ? 'same' : 'step', form: t.form, moved });
   }
 
   /**
@@ -687,6 +852,7 @@ export class Game {
       const reach = Math.min(0.5, t.radius * 0.6) + DEFAULT_CONTROLLER.radius;
       if (Math.hypot(t.pos[0] - b.x, t.pos[2] - b.z) < reach && t.pos[1] < b.y + DEFAULT_CONTROLLER.height && t.pos[1] + t.radius * 1.4 > b.y - 0.05) this.touchThing(t, dream);
     }
+    this.stepFlowers(dt, dream);
     const ill = this.illusions;
     if (ill) {
       const plans = ill.update(
@@ -697,7 +863,7 @@ export class Game {
       );
       for (const p of plans) this.applyComeback(p, dream);
       for (const id of ill.changed()) {
-        this.renderer.setObjectState(id, ill.get(id)!.dis);
+        this.renderer.setObjectState(id, ill.get(id)!.dis, this.floorUnder(ill.get(id)!.obj));
         // Преграды держат, пока вещь не рассыпалась достаточно (и сразу — когда она собирается).
         const open = ill.open(id);
         for (const bx of this.objBoxes.get(id) ?? []) bx.gone = open;
@@ -762,7 +928,10 @@ export class Game {
     for (let i = 0; i < small; i++) {
       const sp = spots[i]!;
       s.reserve(sp);
-      this.addThing(kinds.small[i % kinds.small.length]!, [sp.x, sp.y, sp.z], rng() * Math.PI * 2, SMALL_FATES[i % SMALL_FATES.length]!);
+      const yaw = rng() * Math.PI * 2;
+      // Чем сильнее стёрто место, тем меньше в нём мелочей (место при этом остаётся занятым: воспоминания ложатся как прежде).
+      if (!keepsClutter(i, seed, this.wearBase)) continue;
+      this.addThing(kinds.small[i % kinds.small.length]!, [sp.x, sp.y, sp.z], yaw, SMALL_FATES[i % SMALL_FATES.length]!);
     }
     // Крупные — в клетках коридора, где нет ни ям, ни воды, ни лестниц, поодаль друг от друга и от входа.
     const type = new Map((level.layout?.rooms ?? []).map((r) => [r.id, r.type]));
@@ -826,11 +995,17 @@ export class Game {
   }
 
   /** Поставить вещь в мир. solid — она мешает пройти, пока не начала меняться. */
-  addThing(kind: string, pos: Vec3, yaw: number, fate: Fate, memory = false, solid = false): Thing {
-    const tm = thingMesh(kind, hash2(Math.round(pos[0] * 10), Math.round(pos[2] * 10), 0x71) >>> 0);
+  /**
+   * Поставить вещь в мир. solid — она мешает пройти, пока не начала меняться. form — на какой она
+   * ступени (0 — настоящая; картонка, проекция и кружево не держат, у них только датчик касания);
+   * lift — высота её начала координат над полом (для снимка настенной вещи).
+   */
+  addThing(kind: string, pos: Vec3, yaw: number, fate: Fate, memory = false, solid = false, form: Form = FORM_REAL, lift = 0): Thing {
+    const tm = formMesh(kind, form, hash2(Math.round(pos[0] * 10), Math.round(pos[2] * 10), 0x71) >>> 0, lift);
     const t = this.things.add(kind, pos, yaw, fate, tm.radius, memory);
-    this.thingRender.set(t.id, this.renderer.addThing(tm.mesh, t.id));
-    if (solid) t.collider = this.thingBox(t, tm.w, tm.d, tm.h);
+    t.form = form;
+    this.thingRender.set(t.id, this.renderer.addThing(tm.mesh, t.id, tm.look));
+    if (solid) t.collider = this.thingBox(t, tm.w, tm.d, tm.h, form !== FORM_REAL);
     return t;
   }
 
@@ -1214,13 +1389,13 @@ export class Game {
   }
 
   /**
-   * Откуда слышна пугалка. Удар и хлопок двери — из дальних помещений, стук — из соседнего,
-   * шаги — из-за спины. Рация и мигание источника в мире не имеют.
+   * Откуда слышна пугалка. Стук — из соседнего помещения, шаги — из-за спины. Рация и мигание
+   * источника в мире не имеют.
    */
   private scareSource(id: ScareId, from: number): Vec3 | null {
     const b = this.body;
     if (id === 'steps') return [b.x + Math.sin(this.aimYaw) * 4.5, b.y + 0.1, b.z + Math.cos(this.aimYaw) * 4.5];
-    const range = id === 'bang' ? ([7, 13] as const) : id === 'slam' ? ([4, 8] as const) : id === 'knock' ? ([2, 3] as const) : null;
+    const range = id === 'knock' ? ([2, 3] as const) : null;
     if (!range || !this.level) return null;
     const near = nodesInRange(this.level.nav, from, range[0], range[1]);
     this.scareCount += 1;
@@ -1232,13 +1407,7 @@ export class Game {
   /** Ложное событие: толчок, помехи, мигание — без урона. Звук подключается по id. */
   private applyScare(id: ScareId): void {
     const s = this.session;
-    if (id === 'bang') {
-      this.quake = Math.max(this.quake, 0.18);
-      s?.scare(0.06);
-    } else if (id === 'slam') {
-      this.quake = Math.max(this.quake, 0.32);
-      s?.scare(0.1);
-    } else if (id === 'steps') s?.scare(0.05);
+    if (id === 'steps') s?.scare(0.05);
     else if (id === 'knock') s?.scare(0.08);
     else if (id === 'radio') {
       this.glitch = Math.max(this.glitch, 0.55);
@@ -1505,6 +1674,7 @@ export class Game {
         // Осыпь не убивает: она гасит всё и возвращает в начало — туда, где вылазка началась. Искомая
         // вещь остаётся на месте: идти за ней придётся заново.
         fear.push({ type: 'swarm', what: 'caught' });
+        this.wearGain += WEAR.caught;
         s.scare(0.4);
         this.glitch = 1;
         this.beginJump(this.jumps.forced('caught'), dream);
@@ -1679,8 +1849,15 @@ export class Game {
     const sw = this.swarm;
     const flow = this.swarmFlow;
     if (flow && (!sw || this.where !== 'main')) this.swarmFlow = null;
+    // Грибы: вокруг собранной Осыпи прорастает всё; в углах — знак, что она рядом или была здесь.
+    if (this.spores) {
+      const live = this.where === 'main';
+      if (live) this.spores.update(dt, sw ? { pos: sw.pos, active: sw.active && sw.mode !== 'scatter', cohesion: sw.cohesion, hunting: sw.mode === 'hunt' || sw.mode === 'cohere' } : null, this.regret);
+      this.renderer.setSpores(this.sporeBuf, live ? this.spores.visible([x, y, z], SPORES_SHOWN, this.sporeBuf) : 0);
+    } else this.renderer.setSpores(this.sporeBuf, 0);
     if (sw && sw.active && this.where === 'main') {
-      const growth = Math.min(1, (this.session?.doneCount ?? 0) / SWARM_GROWN);
+      // Чем больше вспомнено и чем больше стёрто, тем выше и определённее фигура: она растёт из тронутого.
+      const growth = Math.min(1, (this.session?.doneCount ?? 0) / SWARM_GROWN + this.regret * 0.6);
       if (flow) {
         // Течёт по полу вдоль пути к искомой вещи; под конец редеет, потом тело возвращается к центру.
         flow.t += dt;
@@ -1745,7 +1922,9 @@ export class Game {
       const id = this.thingRender.get(t.id);
       if (id === undefined) continue;
       const d = Math.hypot(t.pos[0] - rig.camPos[0], t.pos[1] - rig.camPos[1], t.pos[2] - rig.camPos[2]);
-      let w = t.state === 'changing' || t.state === 'coming' ? 0.8 : t.state === 'idle' ? t.gaze * (0.45 + 0.35 * Math.sin(this.time * 23)) : 0;
+      // Красная сетка — знак системы: она на вещи, которую «измеряет» взгляд. Тронутая вещь уходит и
+      // возвращается без неё — одними точками («память — пыль»).
+      let w = t.state === 'changing' && !t.touched ? 0.8 : t.state === 'idle' ? t.gaze * (0.45 + 0.35 * Math.sin(this.time * 23)) : 0;
       let xray = false;
       if (t.memory) {
         memNear = Math.max(memNear, 1 - d / 8);
@@ -1812,6 +1991,9 @@ export class Game {
       cells: cl ? { data: cl.data, origin: CELL_ORIGIN, step: 3, size: cl.size } : null,
       ambientLocal: this.ambientLocal,
     };
+    // Стирание места: потолок выпадает, стены и пол редеют до кружева. В карманных пространствах его нет.
+    const d = this.where === 'main' && this.level?.layout ? this.decay : null;
+    this.renderer.setErase(d ? d.ceiling : 0, d ? d.walls : 0, d ? d.floor : 0);
     if (present) this.renderer.render(view);
   }
 
@@ -1850,7 +2032,10 @@ export class Game {
       fade: this.fade,
       where: this.where,
       dark: { for: this.darkFor, shifts: this.detailShifts },
-      illusions: { gone: this.touchCount, back: this.returnCount },
+      illusions: { gone: this.touchCount, back: this.returnCount, erased: this.erasedCount },
+      wear: this.wear,
+      regret: this.regret,
+      spores: this.spores ? this.spores.sites.filter((q) => q.grow > 0.03).length : 0,
       hasLight: this.hasLight,
       stillFor: this.stillFor,
       pocket: this.pocket?.kind ?? null,

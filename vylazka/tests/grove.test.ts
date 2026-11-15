@@ -7,15 +7,21 @@ import { buildLevel } from '../src/world/level_build';
 import { MAT } from '../src/world/materials';
 import type { LevelObject } from '../src/world/objects';
 import { ALL_PROPS } from '../src/world/props_all';
-import { BIRCH_H, LEAF_Y } from '../src/world/props_office';
+import { decayAt } from '../src/systems/decay';
+import { BIRCH_H } from '../src/world/props_office';
 import { CELL } from '../src/world/shell';
 
 const SEEDS = [1, 5, 7, 42, 808, 4242, 9001, 31337, 20041113, 123456789, ...Array.from({ length: 30 }, (_, i) => (i * 7919 + 101) >>> 0)];
 const levels = new Map<string, BuiltLevel>();
-const level = (seed: number, world: WorldKind = 'office'): BuiltLevel => {
-  const key = `${seed}:${world}`;
+/**
+ * Берёзы — «знак последних дней» (слова владельца): в месте, которое помнится целиком, их нет. Роща
+ * в полную силу — у места, стёртого почти до конца; с ним и идут проверки самой рощи.
+ */
+const LATE = 0.9;
+const level = (seed: number, world: WorldKind = 'office', wear = LATE): BuiltLevel => {
+  const key = `${seed}:${world}:${wear}`;
   let l = levels.get(key);
-  if (!l) levels.set(key, (l = buildLevel(generateLayout(seed, 2, world))));
+  if (!l) levels.set(key, (l = buildLevel(generateLayout(seed, 2, world), { wear })));
   return l;
 };
 const birches = (l: BuiltLevel): LevelObject[] => l.objects!.filter((o) => o.name === 'birch');
@@ -53,6 +59,25 @@ describe('берёзы, проросшие сквозь отдел офиса', 
     expect(p.mount).toBe('free');
     expect(p.h).toBeGreaterThanOrEqual(BIRCH_H);
     expect(p.w).toBeLessThan(0.7);
+  });
+
+  it('берёзы — знак последних дней: в нетронутом месте их нет, прорастают по одной по мере стирания — и всегда на тех же местах', () => {
+    for (const seed of SEEDS.slice(0, 12)) {
+      expect(birches(level(seed, 'office', 0)), `сид ${seed}: в целом месте`).toHaveLength(0);
+      expect(birches(level(seed, 'office', 0.25)), `сид ${seed}: до срока`).toHaveLength(0);
+      let prev: string[] = [];
+      for (const wear of [0.35, 0.45, 0.55, 0.65, 0.75, 0.9, 1]) {
+        const now = birches(level(seed, 'office', wear)).map((o) => at(o).map((v) => v.toFixed(2)).join(','));
+        // Число — по кривой берёз; выросшие раньше стоят где стояли.
+        expect(now.length, `сид ${seed}, стёртость ${wear}`).toBeGreaterThanOrEqual(prev.length);
+        for (const p of prev) expect(now, `сид ${seed}, стёртость ${wear}: берёза пропала`).toContain(p);
+        prev = now;
+      }
+      expect(prev.length).toBeGreaterThanOrEqual(GROVE.min);
+      expect(birches(level(seed, 'office', 0.45)).length).toBeGreaterThanOrEqual(1);
+      expect(birches(level(seed, 'office', 0.45)).length).toBeLessThan(GROVE.min);
+      expect(decayAt(0.45).birches).toBeGreaterThan(0.1);
+    }
   });
 
   it('растут только в отделе офиса: ряд из четырёх и одна-две поодаль; в убежище и жёлтых комнатах их нет', () => {
@@ -115,7 +140,7 @@ describe('берёзы, проросшие сквозь отдел офиса', 
     }
   });
 
-  it('над каждым стволом выбита плита, из дыры свисают ветки с листьями, на полу лежат листья — и это не часть ствола', () => {
+  it('над каждым стволом выбита плита, из дыры свисают голые ветки — и это не часть ствола; листьев нет нигде', () => {
     for (const seed of SEEDS.slice(0, 10)) {
       const l = level(seed);
       for (const o of birches(l)) {
@@ -124,11 +149,10 @@ describe('берёзы, проросшие сквозь отдел офиса', 
         const band = (y0: number, y1: number) => (p: readonly [number, number, number][]): boolean => p.every((q) => q[1] >= y0 && q[1] <= y1);
         // Дыра: тёмный квадрат в плоскости потолка, 0,6 × 0,6 м.
         expect(decor(l, MAT.rubber, (p) => near(0.45)(p) && band(BIRCH_H - 0.01, BIRCH_H)(p)), `сид ${seed}: дыра в потолке`).toBe(2);
-        // Ветки и листья на них: под потолком, не дальше 0,9 м от ствола.
+        // Ветки: под потолком, не дальше 0,9 м от ствола.
         expect(decor(l, MAT.wood, (p) => near(0.9)(p) && band(1.9, BIRCH_H)(p)), `сид ${seed}: ветки`).toBeGreaterThanOrEqual(32);
-        expect(decor(l, MAT.paper, (p) => near(0.9)(p) && band(1.8, BIRCH_H)(p)), `сид ${seed}: листья на ветках`).toBeGreaterThanOrEqual(100);
-        // Листья на полу: плоские, чуть над ковролином.
-        expect(decor(l, MAT.paper, (p) => near(1.95)(p) && band(LEAF_Y - 0.001, LEAF_Y + 0.004)(p)), `сид ${seed}: листья на полу`).toBeGreaterThanOrEqual(120);
+        // Листьев нет (слова владельца: «листья не нужны»): ни на ветках, ни на полу вокруг.
+        expect(decor(l, MAT.paper, (p) => near(1.95)(p) && (band(1.8, BIRCH_H)(p) || band(0, 0.02)(p))), `сид ${seed}: листья`).toBe(0);
       }
       // У самого ствола свои вершины помечены его номером: растворяется только он.
       const g = l.chunks.find((c) => c.mesh.obj && birches(l).some((o) => c.mesh.obj!.includes(o.id)))!;
@@ -136,32 +160,10 @@ describe('берёзы, проросшие сквозь отдел офиса', 
     }
   });
 
-  it('листья лежат на полу отдела и не заходят в стены', () => {
-    for (const seed of SEEDS.slice(0, 10)) {
-      const l = level(seed);
-      const d = department(l);
-      let out = 0;
-      for (const ch of l.chunks) {
-        const g = ch.mesh;
-        for (let i = 0; i < g.position.length / 3; i++) {
-          if (g.mat[i] !== MAT.paper || (g.obj && g.obj[i] !== 0)) continue;
-          const y = g.position[i * 3 + 1]!;
-          if (y < LEAF_Y - 0.001 || y > LEAF_Y + 0.004) continue;
-          const x = g.position[i * 3]!;
-          const z = g.position[i * 3 + 2]!;
-          // Только листья рощи: вокруг отдела.
-          if (Math.abs(x - d.cx) > 6 || Math.abs(z - d.cz) > 6) continue;
-          if (!d.cells.has(cellOf(x, z).join(','))) out += 1;
-        }
-      }
-      expect(out, `сид ${seed}: листья за стеной`).toBe(0);
-    }
-  });
-
   it('один сид — одна и та же роща', () => {
     for (const seed of [808, 20041113]) {
-      const a = birches(buildLevel(generateLayout(seed, 2, 'office'))).map((o) => [o.at, o.rot, o.min, o.max]);
-      const b = birches(buildLevel(generateLayout(seed, 2, 'office'))).map((o) => [o.at, o.rot, o.min, o.max]);
+      const a = birches(buildLevel(generateLayout(seed, 2, 'office'), { wear: LATE })).map((o) => [o.at, o.rot, o.min, o.max]);
+      const b = birches(buildLevel(generateLayout(seed, 2, 'office'), { wear: LATE })).map((o) => [o.at, o.rot, o.min, o.max]);
       expect(a.length).toBeGreaterThan(0);
       expect(a).toEqual(b);
     }

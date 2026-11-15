@@ -1,5 +1,5 @@
 {
-  "note": "Звуки игры. prompt — инструкция генеративной модели (по-английски), ru — что это и где звучит. Файлы: public/audio/<id>_<n>.mp3, n от 1 до variants. xfade — сколько секунд конец петли перетекает в её начало: шумовым петлям побольше, ритмичным (дыхание, сердце) — только чтобы не щёлкало.",
+  "note": "Звуки игры. prompt — инструкция генеративной модели (по-английски), ru — что это и где звучит. Файлы: public/audio/<id>_<n>.mp3, n от 1 до variants. xfade — сколько секунд конец петли перетекает в её начало: шумовым петлям побольше, ритмичным (дыхание, сердце) — только чтобы не щёлкало. Шина voices — следы людей: шёпот, смех, разговор за стеной (просьба владельца от 15.11).",
   "sounds": [
     {
       "id": "step_concrete",
@@ -142,7 +142,7 @@
       "seconds": 2.5,
       "volume": 0.6,
       "prompt": "Heavy steel hatch closing above with a dull boom in a concrete shaft, then silence, long underground echo",
-      "ru": "люк закрывается над головой в начале вылазки"
+      "ru": "люк закрывается над головой в начале вылазки в убежище"
     },
     {
       "id": "amb_bunker",
@@ -152,7 +152,7 @@
       "seconds": 30,
       "xfade": 2.0,
       "volume": 0.3,
-      "prompt": "Room tone of an abandoned underground concrete shelter: very quiet low air hum, faint distant ventilation resonance, no events, no music, seamless loop",
+      "prompt": "Deep hollow drone of air moving through long underground concrete tunnels, low rumbling resonance like wind inside a huge pipe, constant and loud, close microphone, no events, no drips, no voices, no music, seamless loop",
       "ru": "тишина заброшенного убежища: гул воздуха"
     },
     {
@@ -198,26 +198,6 @@
       "ru": "обвал перекрытия за спиной"
     },
     {
-      "id": "scare_bang",
-      "bus": "sfx",
-      "variants": 3,
-      "loop": false,
-      "seconds": 2.0,
-      "volume": 0.6,
-      "prompt": "A single distant heavy metallic bang somewhere deep in an abandoned underground bunker, as if something struck a steel door, long reverberating echo down concrete corridors",
-      "ru": "далёкий удар по металлу"
-    },
-    {
-      "id": "scare_slam",
-      "bus": "sfx",
-      "variants": 2,
-      "loop": false,
-      "seconds": 2.2,
-      "volume": 0.75,
-      "prompt": "A heavy steel blast door slamming shut somewhere nearby in a concrete bunker, loud boom, rattling frame, long echo",
-      "ru": "хлопок гермодвери"
-    },
-    {
       "id": "scare_steps",
       "bus": "sfx",
       "variants": 2,
@@ -255,8 +235,8 @@
       "seconds": 8,
       "xfade": 0.8,
       "volume": 0.5,
-      "prompt": "A mass of wet worms writhing and slithering over concrete: dense soft squelching, faint dry chitinous clicking, organic and unsettling, close, seamless loop, no music",
-      "ru": "рой шевелится рядом: влажный шорох и сухое потрескивание"
+      "prompt": "A slowly shifting mass of dry sand and fine dust: continuous soft granular hiss with a faint low hum and occasional dry crackle, close, quiet and unsettling, seamless loop, no music",
+      "ru": "Осыпь рядом: сухой шорох песка и пыли, которые не лежат на месте"
     },
     {
       "id": "swarm_cohere",
@@ -265,8 +245,8 @@
       "loop": false,
       "seconds": 1.8,
       "volume": 0.7,
-      "prompt": "Thousands of wet worms rapidly gathering into one mass: rising slithering rush pulled inward like a slow inhale, ending in a low organic thud, unsettling, no music",
-      "ru": "рой собирается в фигуру"
+      "prompt": "Dry sand and dust rapidly pulled together into one mass: rising granular rush like a slow inhale, ending in a low soft thud, no music",
+      "ru": "Осыпь собирается в фигуру"
     },
     {
       "id": "swarm_scatter",
@@ -275,8 +255,8 @@
       "loop": false,
       "seconds": 1.4,
       "volume": 0.6,
-      "prompt": "A mass of wet worms suddenly falling apart and scattering across a concrete floor: sharp hissing rustle spreading outward and fading",
-      "ru": "рой рассыпается под лучом"
+      "prompt": "A column of dry sand suddenly collapsing and scattering across a hard floor: sharp dry hiss spreading outward and fading",
+      "ru": "Осыпь рассыпается под лучом"
     },
     {
       "id": "swarm_catch",
@@ -285,8 +265,8 @@
       "loop": false,
       "seconds": 2.8,
       "volume": 0.9,
-      "prompt": "Wet slithering mass engulfing a microphone: overwhelming close squelching and scraping, then digital signal breakup, static burst and abrupt silence",
-      "ru": "рой накрывает камеру, сигнал рвётся"
+      "prompt": "Dry sand and dust engulfing a microphone: overwhelming close granular roar, then digital signal breakup, a static burst and abrupt silence",
+      "ru": "Осыпь накрывает камеру, сигнал рвётся"
     },
     {
       "id": "signal_static",
@@ -298,6 +278,182 @@
       "volume": 0.3,
       "prompt": "Digital video signal interference: harsh buzzing static with glitchy dropouts of a body camera feed, seamless loop",
       "ru": "помехи сигнала камеры рядом с роем"
+    },
+    {
+      "id": "step_carpet",
+      "bus": "sfx",
+      "variants": 4,
+      "loop": false,
+      "seconds": 0.5,
+      "volume": 0.42,
+      "prompt": "Single soft footstep of a shoe on thin office carpet, muffled, close perspective, dry quiet room, no music, no voice",
+      "ru": "шаг по ковролину офиса и жёлтых комнат"
+    },
+    {
+      "id": "step_grass",
+      "bus": "sfx",
+      "variants": 3,
+      "loop": false,
+      "seconds": 0.6,
+      "volume": 0.42,
+      "prompt": "Single footstep on dry grass, clear short rustle and crunch of grass under a boot, close microphone, full recording level, no music, no voice",
+      "ru": "шаг по траве на лугу"
+    },
+    {
+      "id": "lift",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 2.8,
+      "volume": 0.55,
+      "prompt": "An old office elevator arriving: mechanical hum stopping, one mellow ding, doors sliding shut with a dull thud, empty lobby, short reverb",
+      "ru": "лифт привёз и закрыл двери: начало вылазки в офисе и жёлтых комнатах"
+    },
+    {
+      "id": "whiteout",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 2.2,
+      "volume": 0.5,
+      "prompt": "Soft airy shimmer swelling into bright white noise and fading away, like a picture overexposing, gentle, no impact, no music",
+      "ru": "кадр выбеливается: скачок в другое место"
+    },
+    {
+      "id": "dissolve",
+      "bus": "sfx",
+      "variants": 3,
+      "loop": false,
+      "seconds": 1.2,
+      "volume": 0.5,
+      "prompt": "A small object crumbling into dry sand and fine dust that pours and scatters softly, close, quiet, no impact, no music",
+      "ru": "вещь рассыпается в пыль от касания"
+    },
+    {
+      "id": "assemble",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 1.2,
+      "volume": 0.45,
+      "prompt": "Fine dry sand grains rushing together and settling into place, soft granular whoosh ending in a faint tick, close, quiet, no music",
+      "ru": "вещь собирается из пыли, когда свет вернулся"
+    },
+    {
+      "id": "amb_office",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 30,
+      "volume": 0.3,
+      "xfade": 2.0,
+      "prompt": "Room tone of an empty open-plan office at night recorded at high gain: steady fluorescent light buzz, air conditioning hiss and a computer fan whirr, constant, full recording level, no events, no voices, no music, seamless loop",
+      "ru": "тон пустого офиса: гул ламп и вентиляции"
+    },
+    {
+      "id": "amb_yellow",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 20,
+      "volume": 0.3,
+      "xfade": 2.0,
+      "prompt": "Low steady electrical transformer hum inside the walls of a huge empty carpeted room, dull 50 Hz drone with a thin high whine and muffled air pressure, close microphone, full recording level, completely static, no events, no voices, no music, seamless loop",
+      "ru": "тон жёлтых комнат: почти тишина и слабое электрическое гудение"
+    },
+    {
+      "id": "amb_meadow",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 30,
+      "volume": 0.35,
+      "xfade": 2.0,
+      "prompt": "Quiet summer meadow: light wind moving through tall grass, a few distant birds, soft and warm, no insects close by, no voices, no music, seamless loop",
+      "ru": "луг: ветер в траве и далёкие птицы"
+    },
+    {
+      "id": "amb_void",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 20,
+      "volume": 0.25,
+      "xfade": 1.5,
+      "prompt": "Soft airy high room tone of a pure white empty space, faint glassy shimmer, weightless and calm, no events, no music, seamless loop",
+      "ru": "белое нигде, лимбо и кукольный домик: лёгкий высокий тон пустоты"
+    },
+    {
+      "id": "voices_murmur",
+      "bus": "voices",
+      "variants": 1,
+      "loop": true,
+      "seconds": 20,
+      "volume": 0.22,
+      "xfade": 1.5,
+      "prompt": "Indistinct conversation of several people in the next room heard through a wall: steady calm murmur of men and women talking, muffled and dull, no intelligible words, clearly audible, full recording level, no music, seamless loop",
+      "ru": "тихий неразборчивый разговор за стеной"
+    },
+    {
+      "id": "voices_whisper",
+      "bus": "voices",
+      "variants": 1,
+      "loop": true,
+      "seconds": 12,
+      "volume": 0.2,
+      "xfade": 1.0,
+      "prompt": "Faint overlapping whispers of several people, close but unintelligible, breathy, no words can be made out, no music, seamless loop",
+      "ru": "шёпот нескольких голосов, слов не разобрать"
+    },
+    {
+      "id": "voices_laugh",
+      "bus": "voices",
+      "variants": 2,
+      "loop": false,
+      "seconds": 3.0,
+      "volume": 0.3,
+      "prompt": "Distant soft laughter of two or three people, muffled through a wall, warm and brief, no words, quiet room tone",
+      "ru": "далёкий мягкий смех нескольких человек за стеной"
+    },
+    {
+      "id": "voices_giggle",
+      "bus": "voices",
+      "variants": 2,
+      "loop": false,
+      "seconds": 2.0,
+      "volume": 0.28,
+      "prompt": "A small child's short giggle far away down a long empty corridor, faint and reverberant, no words",
+      "ru": "детский смешок далеко в коридоре"
+    },
+    {
+      "id": "voices_hum",
+      "bus": "voices",
+      "variants": 2,
+      "loop": false,
+      "seconds": 5.0,
+      "volume": 0.26,
+      "prompt": "Someone humming a simple slow tune to themselves in another room, muffled through a wall, clearly audible, full recording level, no words, no instruments",
+      "ru": "кто-то напевает себе под нос в соседней комнате"
+    },
+    {
+      "id": "voices_call",
+      "bus": "voices",
+      "variants": 2,
+      "loop": false,
+      "seconds": 2.0,
+      "volume": 0.26,
+      "prompt": "A distant voice calling out once from far away, a name that cannot be made out, muffled and reverberant, no clear words",
+      "ru": "далёкий оклик: зовут кого-то, имени не разобрать"
+    },
+    {
+      "id": "phone_far",
+      "bus": "voices",
+      "variants": 2,
+      "loop": false,
+      "seconds": 4.0,
+      "volume": 0.3,
+      "prompt": "An old landline telephone ringing twice in a distant room, muffled through walls, then silence",
+      "ru": "в дальней комнате дважды звонит телефон: звонят не тебе"
     },
     {
       "id": "ui_click",
@@ -334,11 +490,11 @@
       "bus": "music",
       "variants": 1,
       "loop": true,
-      "seconds": 45,
+      "seconds": 30,
       "xfade": 3.0,
       "volume": 0.35,
-      "prompt": "Dark ambient drone for a horror game menu: slow evolving low synth pad, distant bowed metal, sparse sub-bass pulses, cold and empty, no melody, no drums, seamless loop",
-      "ru": "музыка меню и отчёта: тёмный эмбиент"
+      "prompt": "Quiet dark ambient drone: slow evolving soft synth pad, distant bowed glass, sparse low pulses, cold and empty with a little warmth underneath, no melody, no drums, seamless loop",
+      "ru": "музыка заставки: тёмный тихий эмбиент"
     }
   ]
 }

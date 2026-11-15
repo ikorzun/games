@@ -10,6 +10,7 @@ import { FLAT_EYE, standee, veil, VEIL_SCENES } from './flat';
 import type { FlatMark } from './flat';
 import type { GenRoom, WorldKind } from '../gen/layout';
 import { furnishOffice, furnishYellow } from './furnish_office';
+import type { Decay } from '../systems/decay';
 import type { ItemSpot, Landmark } from './level';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
@@ -100,6 +101,11 @@ export interface RoomCtx {
    * Не задано — экранов нет.
    */
   screens?: readonly number[];
+  /**
+   * Стирание места (systems/decay.ts): от него зависит, сколько вещей стоит картонками и сколько
+   * берёз проросло. Не задано — место помнится целиком.
+   */
+  decay?: Decay;
 }
 
 function shuffled<T>(rng: Rng, items: readonly T[]): T[] {
@@ -617,7 +623,8 @@ export const FLAT_SHARE: Record<WorldKind, number> = { shelter: 0.12, office: 0.
 /** Быть ли предмету картонкой: решают сид уровня и место, а не ГСЧ помещения — остальная обстановка от этого не сдвигается. */
 function isFlat(ctx: RoomCtx, s: Slot, name: string, i: number): boolean {
   if (!FLAT_OK.has(name)) return false;
-  return hash01(s.cx * 131 + s.dir * 7 + i, s.cz * 173 + ctx.room.id * 3, ctx.seed ^ 0xf1a7) < FLAT_SHARE[ctx.world];
+  // Чем сильнее стёрто место, тем больше в нём снимков вместо вещей (но не всё подряд).
+  return hash01(s.cx * 131 + s.dir * 7 + i, s.cz * 173 + ctx.room.id * 3, ctx.seed ^ 0xf1a7) < Math.min(0.7, FLAT_SHARE[ctx.world] * (ctx.decay?.flats ?? 1));
 }
 
 /**

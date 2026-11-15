@@ -159,14 +159,16 @@ describe('привязка звуков к игре', () => {
       { type: 'faint' },
     ] as unknown as StepEvents['session'];
     ev.dream = [
+      { type: 'jump', plan: plan('light', 'cut', 'elsewhere'), phase: 'start' },
+      { type: 'jump', plan: plan('light', 'cut', 'elsewhere'), phase: 'switch' },
       { type: 'jump', plan: plan('gaze', 'whiteout', 'void'), phase: 'start' },
       { type: 'jump', plan: plan('gaze', 'whiteout', 'void'), phase: 'switch' },
+      { type: 'touch', name: 'locker', what: 'gone', first: true },
+      { type: 'touch', name: 'locker', what: 'back', how: 'same' },
       { type: 'limbo' },
       { type: 'begin' },
     ] as unknown as StepEvents['dream'];
     ev.fear = [
-      { type: 'scare', id: 'bang', pos: [10, 0, 0] },
-      { type: 'scare', id: 'slam', pos: [10, 0, 0] },
       { type: 'scare', id: 'steps', pos: [0, 0, 4] },
       { type: 'scare', id: 'knock', pos: [3, 0, 0] },
       { type: 'scare', id: 'radio' },
@@ -178,29 +180,166 @@ describe('привязка звуков к игре', () => {
       { type: 'swarm', what: 'release' },
     ];
     a.onStep(ev, w);
-    expect(r.ids_()).toEqual(['camera_hold', 'camera_beep', 'collapse', 'cough', 'fall', 'flash_spark', 'ui_report', 'hatch', 'scare_bang', 'scare_slam', 'scare_steps', 'scare_knock', 'scare_radio', 'flash_spark', 'swarm_cohere', 'swarm_scatter', 'swarm_catch']);
-    // Скачок слышно только в момент смены места, а не в начале ухода.
+    expect(r.ids_()).toEqual(['camera_hold', 'camera_beep', 'collapse', 'cough', 'fall', 'flash_spark', 'whiteout', 'dissolve', 'assemble', 'ui_report', 'hatch', 'scare_steps', 'scare_knock', 'scare_radio', 'flash_spark', 'swarm_cohere', 'swarm_scatter', 'swarm_catch']);
+    // Рывок слышно только в момент смены места, а не в начале ухода: одна искра (вторая — мигание фонаря).
+    // Выбеливание слышно с самого начала — оно нарастает; искры у него нет.
     expect(r.plays.filter((p) => p.id === 'flash_spark').length).toBe(2);
-    // Удары и стук слышны из мира, рация — «на груди».
-    expect(r.plays.find((p) => p.id === 'scare_bang')!.pos).toEqual([10, 0, 0]);
+    expect(r.plays.filter((p) => p.id === 'whiteout').length).toBe(1);
+    // Стук слышен из мира, рация — «на груди».
+    expect(r.plays.find((p) => p.id === 'scare_knock')!.pos).toEqual([3, 0, 0]);
     expect(r.plays.find((p) => p.id === 'scare_radio')!.pos).toBeUndefined();
     expect(r.plays.find((p) => p.id === 'swarm_cohere')!.pos).toEqual([5, 0, 0]);
   });
 
-  it('шаги: по бетону и по воде; в карманном пространстве и в лимбо шагов убежища нет', () => {
+  it('шаги — по тому, что под ногами: бетон и вода в убежище, ковролин в офисе и жёлтых комнатах, трава на лугу; в белом нигде и в лимбо их не слышно', () => {
     const r = new Recorder();
     const a = new GameAudio(r);
     a.setScene('play');
     const w = world();
-    w.steps = 1;
-    a.frame(w, 0.016, true);
+    const stepIn = (over: Partial<AudioWorld>): void => {
+      Object.assign(w, { where: 'main', world: 'shelter', pocket: null }, over);
+      w.steps = 1;
+      a.frame(w, 0.016, true);
+    };
+    stepIn({});
     w.session!.inWater = true;
-    w.steps = 1;
+    stepIn({});
+    w.session!.inWater = false;
+    stepIn({ world: 'office' });
+    stepIn({ world: 'yellow' });
+    stepIn({ where: 'pocket', pocket: { kind: 'meadow' } });
+    stepIn({ where: 'pocket', pocket: { kind: 'void' } });
+    stepIn({ where: 'pocket', pocket: { kind: 'dollhouse' } });
+    stepIn({ where: 'limbo', pocket: { kind: 'void' } });
+    expect(r.ids_().filter((id) => id.startsWith('step_'))).toEqual(['step_concrete', 'step_water', 'step_carpet', 'step_carpet', 'step_grass']);
+    // Шаг, которого не слышно, не копится: следующий в убежище — один.
+    stepIn({});
+    expect(r.ids_().filter((id) => id.startsWith('step_')).length).toBe(6);
+  });
+
+  it('начало вылазки: в убежище закрывается люк, в офисе и жёлтых комнатах привозит лифт; новая сессия начинается так же', () => {
+    for (const [place, id] of [['shelter', 'hatch'], ['office', 'lift'], ['yellow', 'lift']] as const) {
+      const r = new Recorder();
+      const a = new GameAudio(r);
+      a.setScene('play');
+      a.sortieStart(false, place);
+      expect(r.ids_(), place).toEqual(['ui_start', id]);
+      const ev = quiet();
+      ev.dream = [{ type: 'begin' }] as unknown as StepEvents['dream'];
+      a.onStep(ev, world({ world: place }));
+      expect(r.ids_().at(-1), place).toBe(id);
+    }
+    // Продолжение записи: люк и лифт уже позади.
+    const r = new Recorder();
+    new GameAudio(r).sortieStart(true, 'office');
+    expect(r.ids_()).toEqual(['ui_start']);
+  });
+
+  it('у каждого места свой тон: убежище, офис, жёлтые комнаты, луг, белое нигде', () => {
+    const r = new Recorder();
+    const a = new GameAudio(r);
+    a.setScene('play');
+    const w = world();
+    const tones = ['amb_bunker', 'amb_deep', 'amb_office', 'amb_yellow', 'amb_meadow', 'amb_void'];
+    const heard = (over: Partial<AudioWorld>): string[] => {
+      Object.assign(w, { where: 'main', world: 'shelter', pocket: null }, over);
+      a.frame(w, 0.016, true);
+      return tones.filter((id) => (r.loops.get(id) ?? 0) > 0);
+    };
+    expect(heard({})).toEqual(['amb_bunker']);
+    expect(heard({ world: 'office' })).toEqual(['amb_office']);
+    expect(heard({ world: 'yellow' })).toEqual(['amb_yellow']);
+    expect(heard({ world: 'office', where: 'pocket', pocket: { kind: 'meadow' } })).toEqual(['amb_meadow']);
+    expect(heard({ world: 'office', where: 'pocket', pocket: { kind: 'void' } })).toEqual(['amb_void']);
+    expect(heard({ world: 'yellow', where: 'pocket', pocket: { kind: 'dollhouse' } })).toEqual(['amb_void']);
+    expect(heard({ where: 'limbo', pocket: { kind: 'void' } })).toEqual(['amb_void']);
+    // Вернулись — тон мира вернулся.
+    expect(heard({ world: 'yellow' })).toEqual(['amb_yellow']);
+  });
+
+  it('следы людей: пока спокойно, за стеной тихо разговаривают; чем ближе Осыпь и сильнее паника — тем тише разговор и громче шёпот', () => {
+    const r = new Recorder();
+    const a = new GameAudio(r);
+    a.setScene('play');
+    const w = world();
     a.frame(w, 0.016, true);
-    w.where = 'limbo';
-    w.steps = 1;
+    const murmur = r.loops.get('voices_murmur')!;
+    expect(murmur).toBeGreaterThan(0.3);
+    expect(r.loops.get('voices_whisper')).toBe(0);
+    // В офисе людей больше, в жёлтых комнатах почти никого.
+    Object.assign(w, { world: 'office' });
     a.frame(w, 0.016, true);
-    expect(r.ids_()).toEqual(['step_concrete', 'step_water']);
+    expect(r.loops.get('voices_murmur')!).toBeGreaterThan(murmur);
+    Object.assign(w, { world: 'yellow' });
+    a.frame(w, 0.016, true);
+    expect(r.loops.get('voices_murmur')!).toBeLessThan(murmur);
+    expect(r.loops.get('voices_murmur')!).toBeGreaterThan(0);
+    // Осыпь рядом: разговор смолк, слышен шёпот.
+    w.swarmNear = 0.5;
+    a.frame(w, 0.016, true);
+    expect(r.loops.get('voices_murmur')).toBe(0);
+    expect(r.loops.get('voices_whisper')!).toBeGreaterThan(0.5);
+    // Паника без Осыпи — то же самое.
+    w.swarmNear = 0;
+    w.session!.panic = 0.9;
+    a.frame(w, 0.016, true);
+    expect(r.loops.get('voices_murmur')).toBe(0);
+    expect(r.loops.get('voices_whisper')!).toBeGreaterThan(0.3);
+    // В карманном пространстве и в лимбо за стеной никого.
+    w.session!.panic = 0;
+    for (const where of ['pocket', 'limbo']) {
+      w.where = where;
+      a.frame(w, 0.016, true);
+      expect(r.loops.get('voices_murmur'), where).toBe(0);
+      expect(r.loops.get('voices_whisper'), where).toBe(0);
+    }
+  });
+
+  it('смех, напев, оклик, чужой телефон: изредка, издалека и по месту; при Осыпи и в белом нигде — тишина', () => {
+    const VOICE = ['voices_laugh', 'voices_giggle', 'voices_hum', 'voices_call', 'phone_far'];
+    const run = (over: Partial<AudioWorld>, seconds: number): { id: string; pos?: Vec3 }[] => {
+      const r = new Recorder();
+      const a = new GameAudio(r);
+      a.setScene('play');
+      a.sortieStart(true);
+      const w = world(over);
+      for (let t = 0; t < seconds; t += 0.25) a.frame(w, 0.25, true);
+      return r.plays.filter((p) => VOICE.includes(p.id));
+    };
+    // Пять минут в убежище: от шести до двадцати пяти раз — не чаще раза в двенадцать секунд.
+    const home = run({}, 300);
+    expect(home.length).toBeGreaterThanOrEqual(6);
+    expect(home.length).toBeLessThanOrEqual(25);
+    // Первые восемнадцать секунд — ничего.
+    expect(run({}, 17)).toHaveLength(0);
+    // Издалека: семь–двенадцать метров от слушателя, у каждого своя сторона.
+    for (const p of home) {
+      const d = Math.hypot(p.pos![0], p.pos![2]);
+      expect(d).toBeGreaterThanOrEqual(6.9);
+      expect(d).toBeLessThanOrEqual(12.1);
+    }
+    expect(new Set(home.map((p) => p.id)).size).toBeGreaterThanOrEqual(3);
+    // По месту: телефон звонит в офисе и в жёлтых комнатах, но не в убежище; на лугу — смех и напев.
+    expect(home.some((p) => p.id === 'phone_far')).toBe(false);
+    const office = run({ world: 'office' }, 600);
+    expect(office.some((p) => p.id === 'phone_far')).toBe(true);
+    expect(office.some((p) => p.id === 'voices_giggle')).toBe(false);
+    const meadow = run({ world: 'office', where: 'pocket', pocket: { kind: 'meadow' } }, 600);
+    expect(meadow.length).toBeGreaterThan(0);
+    expect(meadow.every((p) => ['voices_laugh', 'voices_giggle', 'voices_hum'].includes(p.id))).toBe(true);
+    // В жёлтых комнатах — реже, чем в офисе.
+    expect(run({ world: 'yellow' }, 600).length).toBeLessThan(office.length);
+    // Осыпь рядом или паника — никого не слышно; в белом нигде и в лимбо людей нет.
+    expect(run({ swarmNear: 0.5 }, 300)).toHaveLength(0);
+    expect(run({ where: 'pocket', pocket: { kind: 'void' } }, 300)).toHaveLength(0);
+    expect(run({ where: 'limbo', pocket: { kind: 'void' } }, 300)).toHaveLength(0);
+    // В меню и на паузе их тоже нет.
+    const r = new Recorder();
+    const a = new GameAudio(r);
+    a.setScene('play');
+    const w = world();
+    for (let t = 0; t < 300; t += 0.25) a.frame(w, 0.25, false);
+    expect(r.plays.filter((p) => VOICE.includes(p.id))).toHaveLength(0);
   });
 
   it('петли следуют за состоянием: глубина, паника, газ, рой, помехи', () => {
@@ -247,6 +386,8 @@ describe('привязка звуков к игре', () => {
       a.frame(w, 0.016, true);
       for (const id of ['amb_bunker', 'amb_deep', 'breath_calm', 'breath_panic', 'heartbeat', 'gas_hiss', 'swarm_loop']) expect(r.loops.get(id), `${where}: ${id}`).toBe(0);
       expect(r.loops.get('signal_static')).toBe(1);
+      // Вместо гула убежища — тон пустоты.
+      expect(r.loops.get('amb_void'), where).toBe(1);
     }
     // Вернулись в убежище — гул вернулся.
     w.where = 'main';

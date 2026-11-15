@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultProfile, loadSave, objectNumber, parseProfile, rankFor, sortieSeed, writeProfile } from '../src/core/save';
+import { defaultProfile, loadSave, memoryFor, objectNumber, parseProfile, rankFor, sortieSeed, writeProfile } from '../src/core/save';
 import type { IPlatform } from '../src/platform/types';
 
 /** Платформа-заглушка с памятью: записывает всё, что просили сохранить. */
@@ -20,7 +20,7 @@ describe('сохранение', () => {
   it('профиль: мусор заменяется значениями по умолчанию, архив без повторов', () => {
     expect(parseProfile(null, 7)).toEqual(defaultProfile(7));
     expect(parseProfile({ v: 2 }, 7)).toEqual(defaultProfile(7));
-    expect(parseProfile({ v: 1, sorties: 3.7, successes: -2, archive: ['a', 'a', 5, 'b'], baseSeed: 42 }, 7)).toEqual({ v: 1, sorties: 3, successes: 0, archive: ['a', 'b'], baseSeed: 42, muted: false, sens: 1, bright: 1, calm: false, lang: null, place: 'shelter' });
+    expect(parseProfile({ v: 1, sorties: 3.7, successes: -2, archive: ['a', 'a', 5, 'b'], baseSeed: 42 }, 7)).toEqual({ v: 1, sorties: 3, successes: 0, archive: ['a', 'b'], baseSeed: 42, muted: false, sens: 1, bright: 1, calm: false, lang: null, place: 'shelter', memories: {} });
     // Чувствительность и яркость: только 0, 1, 2; всё прочее — середина.
     expect(parseProfile({ v: 1, sens: 2, bright: 0 }, 7)).toMatchObject({ sens: 2, bright: 0 });
     expect(parseProfile({ v: 1, sens: 5, bright: 'x' }, 7)).toMatchObject({ sens: 1, bright: 1 });
@@ -72,5 +72,34 @@ describe('сохранение', () => {
       expect(objectNumber(seed)).toBeGreaterThanOrEqual(100);
       expect(objectNumber(seed)).toBeLessThanOrEqual(999);
     }
+  });
+  it('воспоминания мест: по одному на место, с сидом, размером, стёртостью и числом кругов; мусор и стёртое до конца не хранятся', () => {
+    const p = parseProfile({ v: 1, memories: { office: { seed: 77, rank: 2, wear: 0.42, laps: 3 }, yellow: { seed: 5, rank: 9, wear: 0.1 }, shelter: { seed: 1, rank: 1, wear: 1, laps: 8 }, moon: { seed: 2, wear: 0.2 }, archive: 'x' } }, 7);
+    expect(p.memories.office).toEqual({ seed: 77, rank: 2, wear: 0.42, laps: 3 });
+    // Непонятный размер — наименьший; кругов нет — ноль.
+    expect(p.memories.yellow).toEqual({ seed: 5, rank: 1, wear: 0.1, laps: 0 });
+    // Стёртое до конца не хранится: место откроется другим воспоминанием.
+    expect(p.memories.shelter).toBeUndefined();
+    expect(Object.keys(p.memories).sort()).toEqual(['office', 'yellow']);
+    expect(parseProfile({ v: 1, memories: 'x' }, 7).memories).toEqual({});
+    expect(parseProfile({ v: 1, memories: { office: { seed: 'a', wear: 0.3 } } }, 7).memories).toEqual({});
+    expect(parseProfile({ v: 1, memories: { office: { seed: 3, wear: -5 } } }, 7).memories.office!.wear).toBe(0);
+  });
+
+  it('воспоминание места: записанное — то же самое; нового ещё нет — следующий сид игрока, нетронутое', () => {
+    const p = defaultProfile(42);
+    p.sorties = 3;
+    p.successes = 1;
+    const fresh = memoryFor(p, 'office');
+    expect(fresh).toEqual({ seed: sortieSeed(p), rank: rankFor(p), wear: 0, laps: 0 });
+    // Пока оно не записано, в профиле его нет — и правка копии профиль не трогает.
+    expect(p.memories.office).toBeUndefined();
+    p.memories.office = { seed: 9, rank: 2, wear: 0.28, laps: 2 };
+    const kept = memoryFor(p, 'office');
+    expect(kept).toEqual({ seed: 9, rank: 2, wear: 0.28, laps: 2 });
+    kept.wear = 0.9;
+    expect(p.memories.office.wear).toBe(0.28);
+    // У каждого места своё.
+    expect(memoryFor(p, 'yellow').wear).toBe(0);
   });
 });

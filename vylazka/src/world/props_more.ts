@@ -1314,9 +1314,11 @@ export function debrisHeap(xf: Xf, seed: number): void {
     const w = 0.36 + rnd() * 0.34;
     const d = 0.24 + rnd() * 0.18;
     const xc = i === 0 ? cx : cx + (rnd() - 0.5) * 1.05;
-    const x0 = Math.max(-0.78, Math.min(0.78 - w, xc - w / 2));
+    // Границы у каждого кома свои (шаг 4 мм): два кома, упёршиеся в один и тот же край, легли бы гранями
+    // в одну плоскость и рябили.
+    const x0 = Math.max(-0.78 + i * 0.004, Math.min(0.78 - i * 0.004 - w, xc - w / 2));
     const z0 = i < 3 ? 0 : 0.08 + rnd() * 0.16;
-    const z1 = Math.min(0.5, z0 + d);
+    const z1 = Math.min(0.5 - i * 0.004, z0 + d);
     const k = Math.max(0, 1 - Math.abs(x0 + w / 2 - cx) / 0.75) * (1 - (z0 + z1) / 1.4);
     const h = 0.09 + rnd() * 0.08 + 0.36 * k;
     const g = 0.82 + rnd() * 0.28;
@@ -1331,7 +1333,8 @@ export function debrisHeap(xf: Xf, seed: number): void {
     const o = onFloor ? 0 : Math.floor(rnd() * 3);
     const sx = o === 1 ? 0.12 : len;
     const sz = o === 1 ? len : o === 2 ? 0.065 : 0.12;
-    const sy = o === 2 ? 0.12 : 0.065;
+    // Высота у каждого кирпича чуть своя: верхние грани двух пересёкшихся кирпичей не спорят.
+    const sy = (o === 2 ? 0.12 : 0.065) + i * 0.0015;
     const [x0, x1, z0, z1, h] = lumps[Math.floor(rnd() * lumps.length)]!;
     const x = onFloor ? -0.75 + rnd() * (1.5 - sx) : x0 + 0.02 + rnd() * Math.max(0.01, x1 - x0 - sx - 0.04);
     const z = onFloor ? 0.47 + rnd() * 0.04 : Math.max(0.02, z0) + rnd() * Math.max(0.01, z1 - Math.max(0.02, z0) - sz);

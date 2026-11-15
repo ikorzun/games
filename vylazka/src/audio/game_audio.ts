@@ -25,6 +25,12 @@ export interface AudioWorld {
   session: { inWater: boolean; inGas: boolean; panic: number; hold: number } | null;
   /** Где игрок: в убежище, в карманном пространстве или в лимбо. */
   where: string;
+  /** Мир вылазки: убежище, офис или жёлтые комнаты. Нет поля — убежище. */
+  world?: string;
+  /** Карманное пространство, в котором сейчас игрок: по его роду выбирается тон места. */
+  pocket?: { kind: string } | null;
+  /** Стирание места (systems/decay.ts): насколько ещё слышны люди, 0..1. Нет поля — слышны как есть. */
+  decay?: { voices: number };
   body: { y: number; vx: number; vz: number };
   swarmNear: number;
   staticLevel: number;
@@ -38,12 +44,29 @@ export type AudioScene = 'silent' | 'menu' | 'play';
 const MUSIC = 'music_menu';
 
 /** Что грузить раньше остального: первые секунды вылазки и экран задания. */
-export const LOAD_FIRST: readonly string[] = ['ui_click', 'ui_start', 'hatch', 'amb_bunker', 'breath_calm', 'step_concrete', 'flash_click', 'flash_die', 'flash_rattle', 'flash_spark', 'music_menu'];
+export const LOAD_FIRST: readonly string[] = ['ui_click', 'ui_start', 'hatch', 'lift', 'amb_bunker', 'amb_office', 'amb_yellow', 'breath_calm', 'step_concrete', 'step_carpet', 'flash_click', 'flash_die', 'flash_rattle', 'flash_spark', 'music_menu'];
+
+/**
+ * Следы людей (слова владельца: «лёгкий фоновый шёпот, смех, тихий неразличимый разговор людей»).
+ * Это не пугалки и не события: так звучит место, в котором кто-то жил. Что слышно — зависит от места:
+ * в убежище — дом (смешок, напев), в офисе — работа (чужой телефон, оклик), в жёлтых комнатах никого —
+ * только где-то звонит телефон; на лугу — смех издалека. В белом нигде, домике и лимбо людей нет.
+ */
+const VOICES: Readonly<Record<string, readonly string[]>> = {
+  shelter: ['voices_giggle', 'voices_hum', 'voices_laugh', 'voices_call'],
+  office: ['phone_far', 'voices_laugh', 'voices_call', 'voices_hum'],
+  yellow: ['phone_far'],
+  meadow: ['voices_laugh', 'voices_giggle', 'voices_hum'],
+};
+/** Насколько слышен разговор за стеной: офис полон людей, жёлтые комнаты почти пусты. */
+const MURMUR: Readonly<Record<string, number>> = { shelter: 0.55, office: 0.8, yellow: 0.3 };
 
 export class GameAudio {
   private scene: AudioScene = 'silent';
   private rattleAt = 0;
   private dripAt = 6;
+  private voiceAt = 18;
+  private voiceAngle = 0;
   private count = 0;
   private clock = 0;
   private holding = false;
@@ -68,13 +91,19 @@ export class GameAudio {
     if (scene !== 'play') this.engine.stopLoops(MUSIC);
   }
 
-  /** Начало вылазки: над головой закрывается люк, камера пишет. */
-  sortieStart(resumed: boolean): void {
+  /** Начало вылазки: в убежище над головой закрывается люк, в офисе и жёлтых комнатах привозит лифт; камера пишет. */
+  sortieStart(resumed: boolean, world = 'shelter'): void {
     // Первое нажатие в игре — оно же старт: эти два звука готовы подождать свой файл.
     this.engine.play('ui_start', { late: 2 });
-    if (!resumed) this.engine.play('hatch', { volume: 0.9, late: 4 });
+    if (!resumed) this.engine.play(world === 'shelter' ? 'hatch' : 'lift', { volume: 0.9, late: 4 });
     this.dripAt = 5;
+    this.voiceAt = 18;
     this.clock = 0;
+  }
+
+  /** Случайное целое 0…n−1 тем же счётчиком, что и разброс тона. */
+  private pick(n: number): number {
+    return Math.min(n - 1, Math.floor((this.jitter(0.5) - 0.5) * n));
   }
 
   /** События шага симуляции → разовые звуки. */
@@ -99,10 +128,14 @@ export class GameAudio {
       else if (e.type === 'fall') a.play('fall');
     }
     for (const e of ev.dream) {
-      // Скачок: искра в момент, когда место сменилось. Новая сессия начинается, как первая, — люком.
-      if (e.type === 'jump' && e.phase === 'switch') a.play('flash_spark', { rate: 0.7, volume: 0.8 });
+      // Скачок: кадр выбеливается — нарастающий шум; рывок — искра в момент, когда место сменилось.
+      // Новая сессия начинается, как первая: люком или лифтом.
+      if (e.type === 'jump' && e.phase === 'start' && e.plan.style === 'whiteout') a.play('whiteout');
+      else if (e.type === 'jump' && e.phase === 'switch' && e.plan.style !== 'whiteout') a.play('flash_spark', { rate: 0.7, volume: 0.8 });
       else if (e.type === 'limbo') a.play('ui_report');
-      else if (e.type === 'begin') a.play('hatch', { volume: 0.8 });
+      else if (e.type === 'begin') a.play((game.world ?? 'shelter') === 'shelter' ? 'hatch' : 'lift', { volume: 0.8 });
+      // Всё иллюзорно: тронутая вещь рассыпается в пыль, после темноты собирается из неё.
+      else if (e.type === 'touch') a.play(e.what === 'gone' ? 'dissolve' : 'assemble', { rate: this.jitter(0.1), volume: e.what === 'gone' ? 1 : 0.7 });
     }
 
     const swarmPos = game.swarm?.pos;
@@ -136,9 +169,16 @@ export class GameAudio {
     const b = game.body;
     this.clock += dt;
 
-    if (game.consumeFootstep() && active && !over) {
-      const speed = Math.hypot(b.vx, b.vz);
-      a.play(s?.inWater ? 'step_water' : 'step_concrete', { rate: this.jitter(0.07), volume: 0.55 + Math.min(0.45, speed / 9) });
+    // Шаги — по тому, что под ногами: бетон убежища, вода, ковролин офиса и жёлтых комнат, трава луга.
+    // В белом нигде, в домике и в лимбо шагов не слышно.
+    const place = game.world ?? 'shelter';
+    const pocket = game.where === 'pocket' ? (game.pocket?.kind ?? '') : '';
+    if (game.consumeFootstep() && active) {
+      const id = !over ? (s?.inWater ? 'step_water' : place === 'shelter' ? 'step_concrete' : 'step_carpet') : pocket === 'meadow' ? 'step_grass' : null;
+      if (id) {
+        const speed = Math.hypot(b.vx, b.vz);
+        a.play(id, { rate: this.jitter(0.07), volume: 0.55 + Math.min(0.45, speed / 9) });
+      }
     }
 
     // Игрок всматривается в искомую вещь: камера наводится.
@@ -152,8 +192,13 @@ export class GameAudio {
     const near = game.swarmNear;
     // Вне убежища его звуки стихают; помехи остаются.
     const live = over ? 0 : 1;
-    a.loop('amb_bunker', live * (1 - depth * 0.7));
-    a.loop('amb_deep', live * depth);
+    // Тон места: у каждого мира и у каждого пространства свой.
+    a.loop('amb_bunker', place === 'shelter' ? live * (1 - depth * 0.7) : 0);
+    a.loop('amb_deep', place === 'shelter' ? live * depth : 0);
+    a.loop('amb_office', place === 'office' ? live : 0);
+    a.loop('amb_yellow', place === 'yellow' ? live : 0);
+    a.loop('amb_meadow', pocket === 'meadow' ? 1 : 0);
+    a.loop('amb_void', over && pocket !== 'meadow' ? 1 : 0);
     a.loop('breath_calm', live * clamp01(1 - panic * 2.2));
     a.loop('breath_panic', live * clamp01((panic - 0.3) / 0.45));
     a.loop('heartbeat', live * clamp01(Math.max((panic - 0.35) / 0.5, near * 1.2)));
@@ -163,8 +208,28 @@ export class GameAudio {
     if (sw?.active && !over) a.loop('swarm_loop', 0.55 + 0.45 * sw.cohesion, sw.pos);
     else a.loop('swarm_loop', 0);
 
-    // Капли: редкий одиночный звук откуда-то из темноты; глубже — чаще.
-    if (active && !over && this.clock >= this.dripAt) {
+    // Следы людей. Разговор за стеной слышен, пока спокойно; чем ближе Осыпь и чем сильнее паника,
+    // тем он тише — и тем громче шёпот: тревога заглушает память о людях и говорит вместо неё.
+    // Следы людей слышны в покое — и только пока место помнится: в стёртом месте никого не остаётся.
+    const calm = clamp01(1 - panic * 1.5) * clamp01(1 - near * 2.5) * (game.decay?.voices ?? 1);
+    this.voiceAngle += dt * 0.05;
+    const behindWall: Vec3 = [ears.pos[0] + Math.cos(this.voiceAngle) * 7, ears.pos[1], ears.pos[2] + Math.sin(this.voiceAngle) * 7];
+    a.loop('voices_murmur', live * (MURMUR[place] ?? 0.5) * calm, behindWall);
+    a.loop('voices_whisper', live * clamp01(near * 1.6 + Math.max(0, panic - 0.45) * 1.2));
+    // Смех, напев, оклик, чужой телефон: изредка и издалека, только пока спокойно.
+    if (active && this.clock >= this.voiceAt) {
+      const list = VOICES[over ? pocket : place] ?? [];
+      const rare = place === 'yellow' && !over ? 1.8 : 1;
+      this.voiceAt = this.clock + (22 + 20 * (this.jitter(0.5) - 1)) * rare;
+      if (list.length > 0 && calm > 0.6) {
+        const angle = this.jitter(0.5) * Math.PI * 4;
+        const r = 9.5 + 5 * (this.jitter(0.5) - 1);
+        a.play(list[this.pick(list.length)]!, { pos: [ears.pos[0] + Math.cos(angle) * r, ears.pos[1], ears.pos[2] + Math.sin(angle) * r], rate: this.jitter(0.04) });
+      }
+    }
+
+    // Капли: в убежище — редкий одиночный звук откуда-то из темноты; глубже — чаще.
+    if (active && !over && place === 'shelter' && this.clock >= this.dripAt) {
       const k = this.jitter(0.5);
       this.dripAt = this.clock + (5 + 9 * (k - 0.5)) * (1 - depth * 0.4);
       const angle = this.jitter(0.5) * Math.PI * 4;

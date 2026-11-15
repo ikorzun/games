@@ -18,7 +18,7 @@ import { floorSpots, free, homeCentre, homeStack, landmark, leanScreens, screenA
 import type { CellInfo, HomeItem, RoomCtx, Slot } from './furnish';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
-import { ceilingBreak, leafLitter } from './props_office';
+import { ceilingBreak } from './props_office';
 import type { Xf } from './props';
 import type { ScreenKind } from './screens';
 
@@ -157,7 +157,8 @@ export const GROVE = { row: 4, min: 5, max: 6 } as const;
 /**
  * Берёзы, проросшие сквозь отдел (слова владельца: «добавить эти деревья в одну из комнат, чтобы они
  * так же прорастали насквозь локации»; картинка — та самая, что на экранах офиса). Природу в офис
- * привезли картинкой — а в одной комнате картинка сбылась.
+ * привезли картинкой — а в одной комнате картинка сбывается, когда место начинает стираться:
+ * «Берёзы знак последних дней, листья не нужны».
  *
  * Стволы стоят в «карманах» у внутренних узлов сетки клеток: там, где сходятся четыре клетки комнаты,
  * но не в самом узле. Так они не попадают ни на прямые между серединами клеток (по ним ходят игрок
@@ -207,11 +208,14 @@ function grove(ctx: RoomCtx, m: { c: CellInfo; dx: number; dz: number }): void {
   }
   const extra = GROVE.min - GROVE.row + Math.floor(ctx.rng() * (GROVE.max - GROVE.min + 1));
   for (const p of rest) if (picked.length < GROVE.row + extra && far(p, 2.5)) picked.push(p);
+  // Берёзы — «знак последних дней» (слова владельца): в месте, которое помнится целиком, их нет; они
+  // прорастают по мере того, как оно стирается (systems/decay.ts), — по одной, всегда на тех же местах.
+  const grown = Math.round(picked.length * (ctx.decay?.birches ?? 0));
   picked.forEach((p, i) => {
     const at = m.c.xf.child(p.x, 0, p.z, Math.floor(ctx.rng() * 4) as 0 | 1 | 2 | 3);
     const seed = seedOf(ctx);
+    if (i >= grown) return;
     ceilingBreak(at, ctx.h, seed);
-    leafLitter(at, seed);
     tree.build(at, seed);
     if (i === 0) landmark(ctx, 'grove', m.c.xf, p.x, 1.2, p.z);
   });

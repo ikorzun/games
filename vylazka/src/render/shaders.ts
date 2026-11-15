@@ -34,21 +34,34 @@ vec4 beamAt(vec3 posV) {
 `;
 
 /**
- * Распад: мир или отдельная вещь рассыпаются. Вершины расползаются кто куда (каждая клетка 0,4 м —
- * в свою сторону и вверх), а фрагментный шейдер выбивает в поверхности дыры. uDissolve — весь мир,
- * uThing.x — одна вещь (у неё свой материал).
+ * Распад. Их два, и выглядят они по-разному.
+ *
+ * Мир (uDissolve) рассыпается, когда его время вышло или игрока уносит в другое место: вершины
+ * расползаются кто куда (каждая клетка 0,4 м — в свою сторону и вверх), поверхность выгорает клетками
+ * с красной кромкой. Красное — язык системы.
+ *
+ * Вещь (uThing.x — отдельная вещь, uObjState — предмет в сетке помещения) уходит иначе: «память —
+ * пыль» (слова владельца: распад и сборка — «через точки»). Вершины стоят на месте, а поверхность
+ * распадается на зёрна по два сантиметра: каждое сжимается в точку в свой срок и пропадает. Те же
+ * зёрна — уже настоящими точками — осыпаются на пол отдельным облаком (GRAIN_VERT). Сборка — то же
+ * самое задом наперёд.
  */
 export const CRUMBLE_GLSL = /* glsl */ `
 uniform float uDissolve;
-uniform vec4 uThing;      // x — распад вещи 0..1, y — запас, z — запас, w — сид вещи
+uniform vec4 uThing;      // x — распад вещи 0..1, y — вещь из кружева (1), z — это отдельная вещь (1; 2 — ещё и светится сама), w — сид вещи
 attribute float aObj;     // номер объекта уровня у вершины (0 — вершина ничья: стена, пол)
-uniform highp sampler2D uObjState;   // состояния объектов, 64 × 64: r — насколько объект растворён
+uniform highp sampler2D uObjState;   // состояния объектов, 64 × 64: r — растворён, g — из кружева, b — выцвел, a — светится своим цветом
 
-/** Насколько растворён предмет, которому принадлежит вершина: его коснулись — он рассыпается. */
-float objDissolve() {
-  if (aObj < 0.5) return 0.0;
+/**
+ * Состояние предмета, которому принадлежит вершина: x — насколько он растворён (его коснулись — он
+ * рассыпается), y — от него осталось одно кружево (нити вместо поверхности), z — насколько он выцвел,
+ * w — насколько светится своим цветом (бумажные цветы: тусклые, пока к ним не подошли, — и яркие перед
+ * тем, как рассыпаться).
+ */
+vec4 objState() {
+  if (aObj < 0.5) return vec4(0.0);
   int id = int(aObj + 0.5);
-  return texelFetch(uObjState, ivec2(id & 63, id >> 6), 0).r;
+  return texelFetch(uObjState, ivec2(id & 63, id >> 6), 0);
 }
 
 vec3 cellJitter(vec3 p) {
@@ -95,6 +108,10 @@ uniform mat4 uShadowMatrix;
 uniform float uTierDrop;
 varying vec3 vWorld;
 varying float vDis;
+varying float vObj;
+varying float vLace;
+varying float vArch;
+varying vec2 vTone;
 ${CRUMBLE_GLSL}
 varying vec3 vPosV;
 varying vec3 vNrmV;
@@ -105,11 +122,24 @@ varying vec4 vShadow;
 varying vec3 vSurf;   // x — стена (1) или пол с потолком (0); y — нормаль вверх; z — высота над полом яруса, м
 
 void main() {
-  vec4 wp = modelMatrix * vec4(position, 1.0);
-  vec3 wn = normalize(mat3(modelMatrix) * normal);
+  // Сетка, поставленная много раз (грибы): у каждой копии своё место, поворот и размер.
+#ifdef USE_INSTANCING
+  mat4 im = instanceMatrix;
+#else
+  mat4 im = mat4(1.0);
+#endif
+  vec4 wp = modelMatrix * (im * vec4(position, 1.0));
+  vec3 wn = normalize(mat3(modelMatrix) * (mat3(im) * normal));
   vWorld = wp.xyz;
-  float od = objDissolve();
-  vDis = max(max(uDissolve, uThing.x), od);
+  vec4 os = objState();
+  float od = os.x;
+  vDis = uDissolve;
+  vObj = max(uThing.x, od);
+  vLace = max(uThing.y, os.y);
+  // uThing.z = 2 — вещь чуть светится сама (грибы: их видно и на краю луча, как знак).
+  vTone = os.zw + vec2(0.0, uThing.z > 1.5 ? 0.3 : 0.0);
+  // Архитектура — всё, что не предмет и не отдельная вещь: стены, пол, потолок, трубы на них.
+  vArch = (aObj < 0.5 && uThing.z < 0.5) ? 1.0 : 0.0;
   vec4 mv = viewMatrix * vec4(crumble(wp.xyz, vDis), 1.0);
   vPosV = mv.xyz;
   vNrmV = mat3(viewMatrix) * wn;
@@ -175,6 +205,11 @@ varying vec4 vShadow;
 varying vec3 vSurf;
 varying vec3 vWorld;
 varying float vDis;
+varying float vObj;
+varying float vLace;
+varying float vArch;
+varying vec2 vTone;       // x — предмет выцвел, y — светится своим цветом
+uniform vec4 uErase;      // стирание места (systems/decay.ts): x — потолок, y — стены, z — пол; 0 — цело, 1 — стёрто
 
 ${BEAM_GLSL}
 ${SCAN_GLSL}
@@ -185,6 +220,45 @@ float cellHash(vec3 p) {
   uint n = uint(q.x) * 0x27d4eb2du ^ uint(q.y) * 0x165667b1u ^ uint(q.z) * 0x9e3779b1u;
   n ^= n >> 15; n *= 0x2c1b3c6du; n ^= n >> 12; n *= 0x297a2d39u; n ^= n >> 15;
   return float(n & 0xffffu) / 65535.0;
+}
+
+/** Плавный шум 0..1: случайные числа клеток мира, сглаженные между соседями. */
+float softNoise(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = mix(mix(cellHash(i), cellHash(i + vec3(1.0, 0.0, 0.0)), f.x), mix(cellHash(i + vec3(0.0, 1.0, 0.0)), cellHash(i + vec3(1.0, 1.0, 0.0)), f.x), f.y);
+  float b = mix(mix(cellHash(i + vec3(0.0, 0.0, 1.0)), cellHash(i + vec3(1.0, 0.0, 1.0)), f.x), mix(cellHash(i + vec3(0.0, 1.0, 1.0)), cellHash(i + vec3(1.0, 1.0, 1.0)), f.x), f.y);
+  return mix(a, b, f.z);
+}
+
+/**
+ * Кружево: то, что остаётся от поверхности, когда вещество ушло, — нити. Возвращает расстояние от
+ * места q на поверхности (м) до ближайшей нити, м. Узор: ромбическая сеть с шагом около 11 см,
+ * горизонтальная нить каждые 30 см и «глазки» — кольца в каждом втором ромбе.
+ */
+float laceDist(vec2 q) {
+  vec2 d = vec2(q.x + q.y, q.x - q.y) / 0.15;
+  vec2 near = 0.5 - abs(fract(d) - 0.5);
+  float net = min(near.x, near.y) * 0.106;
+  float row = (0.5 - abs(fract(q.y / 0.3) - 0.5)) * 0.3;
+  vec2 cell = floor(d);
+  float odd = mod(cell.x + cell.y, 2.0);
+  float ring = abs(length(fract(d) - 0.5) - 0.3) * 0.106 + (1.0 - odd);
+  return min(min(net, row), ring);
+}
+
+/**
+ * Насколько стёрто это место архитектуры: 0 — цело, 1 — стёрто. Между ними — кромка, где поверхность
+ * уже редеет. Стирается пятнами около метра; стена — сверху вниз.
+ */
+float archGone() {
+  if (vArch < 0.5) return 0.0;
+  float amount = vSurf.x > 0.5 ? uErase.y : (vSurf.y < -0.5 ? uErase.x : (vSurf.y > 0.5 ? uErase.z : uErase.y));
+  if (amount <= 0.0) return 0.0;
+  float n = softNoise(vWorld * 0.9 + 3.1);
+  if (vSurf.x > 0.5) n = n * 0.65 + (1.0 - clamp(vSurf.z / 2.7, 0.0, 1.0)) * 0.35;
+  return clamp((amount * 1.14 - 0.06 - n) / 0.08, 0.0, 1.0);
 }
 
 /**
@@ -229,12 +303,43 @@ vec3 perturb(vec3 N, vec3 p, float h) {
 }
 
 void main() {
-  // Распад: поверхность выгорает клетками по 9 см; кромка дыры светится красным.
+  // Распад мира: поверхность выгорает клетками по 9 см; кромка дыры светится красным.
   float burn = 0.0;
   if (vDis > 0.0) {
     float edge = cellHash(vWorld * 11.0) - (vDis * 1.2 - 0.1);
     if (edge < 0.0) discard;
     burn = smoothstep(0.14, 0.0, edge) * min(1.0, vDis * 4.0);
+  }
+  // Распад вещи: поверхность распадается на зёрна по 2 см. У каждого зерна свой срок: пока он не
+  // пришёл, зерно закрывает свою клетку целиком; потом сжимается в точку и пропадает.
+  if (vObj > 0.0) {
+    vec3 gp = vWorld * 48.0;
+    vec3 gc = floor(gp);
+    float turn = cellHash(gc) * 0.7;
+    float keep = 1.0 - smoothstep(turn, turn + 0.3, vObj);
+    // Как только срок пришёл, зерно — уже круглая точка в своей клетке (а не квадрат клетки), и она сжимается.
+    if (keep < 0.999) {
+      vec3 centre = 0.35 + 0.3 * vec3(cellHash(gc + 7.1), cellHash(gc + 13.7), cellHash(gc + 29.3));
+      if (length(fract(gp) - centre) > 0.52 * keep) discard;
+    }
+  }
+  // Стирание места и кружево. Стёртый потолок пропадает совсем (над головой чернота), стёртые стены
+  // и пол остаются нитями; на кромке стёртого поверхность редеет зерном. Вещь из кружева — нити целиком.
+  float laceK = step(0.5, vLace);
+  float gone = archGone();
+  if (gone > 0.0) {
+    bool ceil_ = vSurf.x < 0.5 && vSurf.y < -0.5;
+    if (gone >= 1.0) {
+      if (ceil_) discard;
+      laceK = 1.0;
+    } else if (cellHash(floor(vWorld * 48.0) + 17.0) < gone) laceK = 1.0;
+  }
+  if (laceK > 0.5) {
+    vec3 gn = abs(normalize(cross(dFdx(vWorld), dFdy(vWorld))));
+    vec2 q = gn.y > 0.6 ? vWorld.xz : (gn.x > gn.z ? vWorld.zy : vWorld.xy);
+    // Нить не тоньше полутора точек кадра: вдали кружево не пропадает, а сливается в дымку.
+    float px = length(fwidth(q));
+    if (laceDist(q) > max(0.0035, 0.75 * px)) discard;
   }
   vec3 Ng = normalize(vNrmV);
 #ifdef SLIDE
@@ -521,6 +626,11 @@ void main() {
   vec3 glowBase = maxc > 1.5 ? vec3(0.55) : uMatBase[mi];
   col += glowBase * ma.y * vColor.rgb * glowK;
   col += vec3(0.9, 0.07, 0.03) * burn;
+  // Тон предмета: выцветший теряет цвет (остаётся бумага), расцветший светится своим цветом сам.
+  if (vTone.x > 0.0) col = mix(col, vec3(dot(col, vec3(0.3, 0.59, 0.11))) * 0.92, vTone.x * 0.88);
+  if (vTone.y > 0.0) col += uMatBase[mi] * vColor.rgb * (vTone.y * 0.38);
+  // Нить кружева — выцветшая: от цвета поверхности остаётся намёк, остальное — белёсая пряжа.
+  if (laceK > 0.5) col = mix(vec3(dot(col, vec3(0.3, 0.59, 0.11))), col, 0.3) * 1.25 + vec3(0.004, 0.004, 0.005);
   col = mix(uFogColor, col, exp(-uFog * distV));
   gl_FragColor = vec4(col, hOut);
 }
@@ -536,8 +646,8 @@ ${CRUMBLE_GLSL}
 
 void main() {
   vec4 wp = modelMatrix * vec4(position, 1.0);
-  float od = objDissolve();
-  vec4 mv = viewMatrix * vec4(crumble(wp.xyz, max(max(uDissolve, uThing.x), od)), 1.0);
+  float od = objState().x;
+  vec4 mv = viewMatrix * vec4(crumble(wp.xyz, uDissolve), 1.0);
   vDist = -mv.z;
   gl_Position = projectionMatrix * mv;
   // Чуть к камере, чтобы линия не тонула в своей же поверхности.
@@ -733,6 +843,96 @@ void main() {
   vCol = vec4(dark + uLightColor * (beam * 0.42) * tint, alpha);
   // Призрак — цвета красной сетки: знак системы, а не вещь мира. Свет фонаря на него не ложится.
   if (ghost) vCol = vec4(vec3(0.95, 0.16, 0.08) * (0.5 * uDarkGain), alpha);
+  gl_Position = pc;
+}
+`;
+
+/**
+ * Пыль вещи. «Память — пыль»: тронутая вещь не выгорает и не разлетается, а осыпается своими же
+ * точками — и из них же собирается, когда возвращается (слова владельца: распад и сборка — «через
+ * точки»). Точки посеяны по поверхности вещи заранее (render/grains.ts), у каждой — цвет места, с
+ * которого она сойдёт, и свой срок.
+ *
+ * uGo — насколько вещь растворена (0 — стоит, 1 — её нет). Пока срок точки не пришёл, её не видно:
+ * на её месте ещё стоит зерно поверхности (WORLD_FRAG). Срок пришёл — точка отделяется, облачком
+ * отходит от поверхности и падает на пол, в россыпь шире самой вещи. Россыпь лежит, пока её держит
+ * uFade, и гаснет. Сборка — тот же путь назад: россыпь проступает на полу, точки поднимаются и
+ * встают на места, где тут же нарастают зёрна поверхности.
+ *
+ * Рисуется тем же проходом и той же формой, что точки мира (SPLAT_FRAG); за стеной пыли не видно.
+ */
+export const GRAIN_VERT = /* glsl */ `
+attribute vec3 aNrm;
+attribute vec3 aCol;        // цвет места без света: материал × оттенок
+attribute vec4 aRnd;        // x — срок точки, yzw — случайные числа
+uniform highp sampler2D tDepth;
+uniform vec2 uNearFar;
+uniform float uTime;
+uniform float uSize;
+uniform float uProj;
+uniform float uMaxPx;
+uniform float uGo;          // 0..1: насколько вещь растворена
+uniform float uFlow;        // 0..1+: докуда дошло осыпание (отстаёт от uGo: пыль падает дольше, чем тает поверхность)
+uniform float uFade;        // 0..1: насколько видна россыпь на полу
+uniform float uFloorY;      // высота пола под вещью, мир
+uniform vec3 uAmbient;
+uniform float uDarkGain;
+varying vec4 vCol;
+varying vec3 vShape;
+
+${BEAM_GLSL}
+
+float linDepth(float d) {
+  return (2.0 * uNearFar.x * uNearFar.y) / (uNearFar.y + uNearFar.x - (d * 2.0 - 1.0) * (uNearFar.y - uNearFar.x));
+}
+
+void main() {
+  vCol = vec4(0.0);
+  vShape = vec3(1.0, 0.0, 1.0);
+  gl_PointSize = 1.0;
+  gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+
+  // Срок точки: пока он не пришёл, на её месте стоит зерно поверхности. Пришёл — точка видна; путь
+  // (0 — на месте, 1 — на полу) она проходит по uFlow. Верх вещи сходит чуть раньше низа.
+  float turn = aRnd.x * 0.6;
+  float out_ = smoothstep(turn, turn + 0.05, uGo);
+  if (out_ <= 0.0) return;
+  float phi = clamp((uFlow - turn) / 0.5, 0.0, 1.0);
+
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vec3 wn = normalize(mat3(modelMatrix) * aNrm);
+  float spread = 0.16 + 0.3 * aRnd.w;
+  vec3 pile = vec3(wp.x + (aRnd.y - 0.5) * 2.0 * spread, uFloorY + 0.012 + 0.07 * aRnd.w * aRnd.z, wp.z + (aRnd.z - 0.5) * 2.0 * spread);
+  // Вбок — ровно, вниз — с разгоном: точка падает по дуге. В начале пути её относит от поверхности.
+  float fall = phi * phi;
+  vec3 p = vec3(mix(wp.x, pile.x, phi), mix(wp.y, pile.y, fall), mix(wp.z, pile.z, phi));
+  float puff = sin(phi * 3.14159);
+  p += wn * ((0.05 + 0.11 * aRnd.w) * puff);
+  float t = uTime * (1.3 + aRnd.y) + aRnd.z * 6.2832;
+  p += vec3(sin(t), 0.0, cos(t * 0.8)) * (0.02 * puff);
+
+  vec4 pv = viewMatrix * vec4(p, 1.0);
+  vec4 pc = projectionMatrix * pv;
+  if (pc.w <= 0.0) return;
+  vec2 uv = pc.xy / pc.w * 0.5 + 0.5;
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return;
+  if (-pv.z > linDepth(texture2D(tDepth, uv).r) + 0.03) return;
+
+  // В полёте точка видна целиком; на полу — пока россыпь держится.
+  float alpha = mix(1.0, uFade, smoothstep(0.85, 1.0, phi)) * out_ * (0.6 + 0.4 * aRnd.y);
+  if (alpha <= 0.004) return;
+  float px = uSize * uProj / max(-pv.z, 0.05) * mix(1.45, 0.9, phi);
+  if (px < 1.6) {
+    alpha *= px * px / 2.56;
+    px = 1.6;
+  }
+  gl_PointSize = min(px, uMaxPx);
+
+  // Свет: фонарь и рассеянный свет места. Вне луча пыль тлеет сама — так же, как место, с которого
+  // свет ушёл, ещё держится в памяти: иначе россыпь под ногами терялась бы за краем луча.
+  vec4 lb = beamAt(pv.xyz);
+  vec3 light = uLightColor * (lb.w * 0.55) + uAmbient * 0.9 + vec3(0.2, 0.21, 0.24) * uDarkGain;
+  vCol = vec4(aCol * light, alpha);
   gl_Position = pc;
 }
 `;

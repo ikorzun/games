@@ -26,6 +26,11 @@ export interface ThingMesh {
   radius: number;
 }
 
+/** Описание предмета в подключённом реестре (нет такого — undefined). */
+export function thingSpec(kind: string): PropSpec | undefined {
+  return registry[kind];
+}
+
 export function hasThing(kind: string): boolean {
   return kind in registry;
 }

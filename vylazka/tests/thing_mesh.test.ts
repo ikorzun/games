@@ -32,9 +32,10 @@ describe('сетка вещи', () => {
       const t = thingMesh(name, 5);
       expect(t.mesh.index.length, name).toBeGreaterThan(0);
       const { min, max } = bounds(t.mesh);
-      // Допуск: 0,15 м — у несимметричных предметов (лампа с абажуром, свисающие кабели) центр чуть смещён.
-      expect(Math.abs((min[0]! + max[0]!) / 2), `${name}: центр по x`).toBeLessThan(0.15);
-      expect(Math.abs((min[2]! + max[2]!) / 2), `${name}: центр по z`).toBeLessThan(0.15);
+      // Допуск: 0,2 м — у несимметричных предметов (лампа с абажуром, свисающие кабели, бумажный цветок,
+      // кивающий к зрителю) центр чуть смещён.
+      expect(Math.abs((min[0]! + max[0]!) / 2), `${name}: центр по x`).toBeLessThan(0.2);
+      expect(Math.abs((min[2]! + max[2]!) / 2), `${name}: центр по z`).toBeLessThan(0.2);
     }
   });
 
