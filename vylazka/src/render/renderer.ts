@@ -13,7 +13,7 @@ import { bakeDetail } from './detail';
 import { bakeGrime } from './grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from './matcap_atlas';
 import { MAX_WORMS } from '../swarm/body';
-import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, ECHO_FRAG, GRAIN_VERT, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, ENTITY_VERT, SPOT_FRAG, TRAIL_FRAG, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
+import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, ECHO_FRAG, GRAIN_VERT, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, ENTITY_VERT, SPOT_FRAG, STAR_FRAG, STAR_VERT, TRAIL_FRAG, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
 import { newGrainLife, objectTriangles, sowGrains, steerGrains, stepGrains } from './grains';
 import type { GrainLife, Grains } from './grains';
 import { smoothstep } from '../core/math';
@@ -99,8 +99,17 @@ export interface FrameView {
    * перроне, но не в комнатах под потолком): общий множитель рассеянного света клеток. 0 — не действует.
    */
   keyCells?: number;
+  /**
+   * Правило взгляда, 0..1 (слова владельца: «собрано только там, куда смотрит герой»): рассеянный свет
+   * собирает место только в конусе взгляда. 0 — собирает везде, где достаёт (вспышка строба).
+   */
+  gaze?: number;
+  /** Конус взгляда, градусы от его оси: [край, середина]. Не задан — как у луча фонаря: 52 и 25. */
+  gazeCone?: readonly [number, number];
   /** Давление: помещение, где рассыпается пол или провисает потолок (systems/pressure.ts); нет — ничего. */
   press?: PressureView | null;
+  /** Звёздное небо, 0..1: насколько оно видно (0 — неба нет: карманные пространства, день в зале ожидания). */
+  stars?: number;
   /** Множитель «бочки» объектива: больше единицы — кадр растянут по краям, меньше — сжат. */
   lens?: number;
   /** 0..1: мир рассыпается в пыль. */
@@ -324,6 +333,9 @@ export class GameRenderer {
   private readonly postScene = new THREE.Scene();
   private readonly postCam = new THREE.Camera();
   private dust: THREE.Points | null = null;
+  /** Звёздное небо над уровнем: видно там, где нет потолка (STAR_VERT). */
+  private readonly stars: THREE.Points;
+  private readonly starMat: THREE.ShaderMaterial;
   private readonly dustMat: THREE.ShaderMaterial;
   private readonly swarmMat: THREE.ShaderMaterial;
   private readonly swarmGeo: THREE.InstancedBufferGeometry;
@@ -500,6 +512,8 @@ export class GameRenderer {
         uSlide: { value: new THREE.Vector4(SLIDE.washFrom, SLIDE.washTo, SLIDE.gain, 0) },
         uErase: { value: new THREE.Vector4(0, 0, 0, 0) },
         uKeyCells: { value: 0 },
+        uGaze: { value: 1 },
+        uGazeCone: { value: new THREE.Vector2(Math.cos((52 * Math.PI) / 180), Math.cos((25 * Math.PI) / 180)) },
         uPressBox: { value: new THREE.Vector4(0, 0, 0, 0) },
         uPress: { value: new THREE.Vector4(0, 0, 0, 0) },
         uPressY: { value: new THREE.Vector3(0, 0, 0) },
@@ -535,6 +549,65 @@ export class GameRenderer {
       transparent: true,
       depthWrite: false,
     });
+    // Звёздное небо: дальние звёзды (с полосой погуще — млечный путь), ближние (они и дают глубину:
+    // смещаются относительно дальних, когда игрок идёт) и три падающие с хвостами из точек.
+    this.starMat = new THREE.ShaderMaterial({
+      vertexShader: STAR_VERT,
+      fragmentShader: STAR_FRAG,
+      uniforms: { uTime: { value: 0 }, uCamPos: { value: new THREE.Vector3() }, uBright: { value: 0 }, uPx: { value: 1 } },
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+    });
+    {
+      const FAR = 5200;
+      const NEAR = 520;
+      const TAIL = 16;
+      const total = FAR + NEAR + 3 * TAIL;
+      const pos = new Float32Array(total * 3);
+      const star = new Float32Array(total * 4);
+      // Без Math.random: небо одно и то же от запуска к запуску.
+      let seed = 0x5eed57a1;
+      const rnd = (): number => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        return seed / 4294967296;
+      };
+      for (let i = 0; i < FAR + NEAR; i++) {
+        const far = i < FAR;
+        let x = rnd() * 2 - 1;
+        let z = rnd() * 2 - 1;
+        // Треть дальних звёзд собрана в полосу поперёк неба.
+        if (far && rnd() < 0.34) z = Math.max(-1, Math.min(1, 0.45 * x + (rnd() + rnd() + rnd() - 1.5) * 0.16));
+        pos[i * 3] = x;
+        pos[i * 3 + 1] = rnd();
+        pos[i * 3 + 2] = z;
+        // Ярких мало, тусклых много.
+        const m = rnd();
+        star[i * 4] = far ? 0.07 + 0.93 * m * m * m * m : 0.08 + 0.3 * m * m;
+        star[i * 4 + 1] = far ? 1.3 + 2.2 * m * m : 1.2 + 1.2 * m;
+        star[i * 4 + 2] = rnd();
+        star[i * 4 + 3] = far ? 0 : 1;
+      }
+      for (let k = 0; k < 3; k++) {
+        for (let j = 0; j < TAIL; j++) {
+          const i = FAR + NEAR + k * TAIL + j;
+          pos[i * 3] = j / (TAIL - 1);
+          star[i * 4] = 1;
+          star[i * 4 + 1] = 3.2 - 2.0 * (j / (TAIL - 1));
+          star[i * 4 + 2] = rnd();
+          star[i * 4 + 3] = 2 + k;
+        }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('aStar', new THREE.BufferAttribute(star, 4));
+      this.stars = new THREE.Points(g, this.starMat);
+      this.stars.frustumCulled = false;
+      // Слой 1: в карту теней звёзды не идут.
+      this.stars.layers.set(1);
+      this.stars.visible = false;
+      this.scene.add(this.stars);
+    }
     // Осыпь: прядь из точек, размноженная инстансами (у каждой пряди своя голова и направление).
     // Точек в пряди — с запасом на высокое качество; сколько из них рисовать, решает качество.
     const STRAND = 110;
@@ -938,6 +1011,7 @@ export class GameRenderer {
     // Уменьшенная копия, где один тексель — примерно восьмая часть высоты кадра.
     this.spotMat.uniforms.uLod!.value = Math.max(0, Math.log2(h) - 3);
     this.dustMat.uniforms.uPointScale!.value = h / 160;
+    this.starMat.uniforms.uPx!.value = h / 720;
     // Сплаты: сколько пикселей буфера в метре на расстоянии в метр и какой у сплата размер в мире.
     const su = this.splatMat.uniforms;
     su.uProj!.value = h / (2 * tanY);
@@ -1480,6 +1554,9 @@ export class GameRenderer {
     wu.uScanFade!.value = v.scanFade;
     (wu.uScanRange!.value as THREE.Vector2).set(v.scanRange[0], v.scanRange[1]);
     wu.uKeyCells!.value = v.keyCells ?? 0;
+    wu.uGaze!.value = v.gaze ?? 1;
+    const gc = v.gazeCone ?? [52, 25];
+    (wu.uGazeCone!.value as THREE.Vector2).set(Math.cos((gc[0] * Math.PI) / 180), Math.cos((gc[1] * Math.PI) / 180));
     const pv = v.press ?? null;
     if (pv) {
       (wu.uPressBox!.value as THREE.Vector4).set(pv.box[0], pv.box[1], pv.box[2], pv.box[3]);
@@ -1585,6 +1662,15 @@ export class GameRenderer {
     }
 
     this.dustMat.uniforms.uTime!.value = v.time;
+    const starsOn = (v.stars ?? 0) > 0.004;
+    this.stars.visible = starsOn;
+    if (starsOn) {
+      const su = this.starMat.uniforms;
+      // Небо живёт по настоящему времени кадра: звёзды мерцают и падают и тогда, когда время места стоит.
+      su.uTime!.value = v.time;
+      su.uBright!.value = v.stars ?? 0;
+      (su.uCamPos!.value as THREE.Vector3).copy(cam.position);
+    }
     (this.dustMat.uniforms.uCamPos!.value as THREE.Vector3).copy(cam.position);
 
     // Мир прошлого кадра остаётся: по его глубине память света переносится в новый кадр.

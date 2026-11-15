@@ -333,18 +333,24 @@ export function buildShell(shell: Shell, target: MeshBuilder | ((cell: ShellCell
       if (![west, east, north, south].some(isSolid)) continue;
       const px = vx * CELL - H;
       const pz = vz * CELL - H;
-      const faceOf = (open: boolean, a: ShellCell | undefined, nx: number, nz: number): void => {
+      // Посреди прямой стены столбик — её продолжение: тон тот же, иначе каждые три метра по стене идёт
+      // тёмная полоса-стык (слова владельца: «чтобы не видно было стыков»). Темнее он только там, где
+      // стена кончается или поворачивает, — это настоящий угол.
+      const faceOf = (open: boolean, a: ShellCell | undefined, nx: number, nz: number, straight: boolean): void => {
         if (!open || !a) return;
         const mb = pick(a);
         const x = px + nx * T;
         const z = pz + nz * T;
+        const ao = straight ? 1 : 0.85;
         // Грань столбика шириной в толщину стены, перпендикулярная нормали.
-        wallFace(mb, x - nz * T, z - nx * T, x + nz * T, z + nx * T, nx, nz, a, a.floorY, a.ceilY, 0.85, 0.85);
+        wallFace(mb, x - nz * T, z - nx * T, x + nz * T, z + nx * T, nx, nz, a, a.floorY, a.ceilY, ao, ao);
       };
-      faceOf(west === 'open', shell.get(vx - 1, vz - 1), -1, 0);
-      faceOf(east === 'open', shell.get(vx, vz - 1), 1, 0);
-      faceOf(north === 'open', shell.get(vx - 1, vz - 1), 0, -1);
-      faceOf(south === 'open', shell.get(vx - 1, vz), 0, 1);
+      const alongZ = isSolid(north) && isSolid(south);
+      const alongX = isSolid(west) && isSolid(east);
+      faceOf(west === 'open', shell.get(vx - 1, vz - 1), -1, 0, alongZ);
+      faceOf(east === 'open', shell.get(vx, vz - 1), 1, 0, alongZ);
+      faceOf(north === 'open', shell.get(vx - 1, vz - 1), 0, -1, alongX);
+      faceOf(south === 'open', shell.get(vx - 1, vz), 0, 1, alongX);
     }
   }
 }

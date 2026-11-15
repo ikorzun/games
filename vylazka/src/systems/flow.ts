@@ -39,6 +39,12 @@ export interface FlowConfig {
   /** Докуда зал собран, когда игрок стоит и когда идёт: [плотно, россыпь], м. */
   scanStill: readonly [number, number];
   scanMove: readonly [number, number];
+  /**
+   * Конус взгляда, градусы от его оси: [край, середина] — стоя и на ходу. Слова владельца: «собрано
+   * только там, куда смотрит герой». На ходу взгляд узок, как луч фонаря; стоя он раскрывается.
+   */
+  gazeStill: readonly [number, number];
+  gazeMove: readonly [number, number];
   /** Угол зрения на ходу: во столько раз шире в зале и уже в тесном переходе. */
   fovWide: number;
   fovTight: number;
@@ -47,7 +53,7 @@ export interface FlowConfig {
   tremble: number;
 }
 
-export const DEFAULT_FLOW: FlowConfig = { minSpeed: 0.25, up: 0.4, down: 0.6, idle: 0.3, hold: 4, tear: 12, day: 420, trainEvery: [55, 85], trainLen: 3.2, scanStill: [18, 46], scanMove: [3, 11], fovWide: 1.14, fovTight: 0.9, rattle: 0.0022, tremble: 0.0035 };
+export const DEFAULT_FLOW: FlowConfig = { minSpeed: 0.25, up: 0.4, down: 0.6, idle: 0.3, hold: 4, tear: 12, day: 420, trainEvery: [55, 85], trainLen: 3.2, scanStill: [18, 46], scanMove: [3, 11], gazeStill: [62, 36], gazeMove: [52, 25], fovWide: 1.14, fovTight: 0.9, rattle: 0.0022, tremble: 0.0035 };
 
 /** Ниже этого хода времени игрок видит снимок, а не место. */
 const FROZEN_BELOW = 0.15;
@@ -211,6 +217,13 @@ export class Flow {
     // Собирается зал не сразу: сперва время должно почти встать.
     const k = smooth(0.05, 0.75, this.f);
     return [mix(c.scanStill[0], c.scanMove[0], k), mix(c.scanStill[1], c.scanMove[1], k)];
+  }
+
+  /** Конус взгляда сейчас, градусы: [край, середина]. Раскрывается и сужается вместе с тем, докуда зал собран. */
+  gaze(): [number, number] {
+    const c = this.cfg;
+    const k = smooth(0.05, 0.75, this.f);
+    return [mix(c.gazeStill[0], c.gazeMove[0], k), mix(c.gazeStill[1], c.gazeMove[1], k)];
   }
 
   /** Множитель угла зрения: в просторном месте на ходу шире, в тесном — уже. */

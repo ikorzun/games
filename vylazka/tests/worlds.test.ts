@@ -175,7 +175,8 @@ describe('миры: сборка уровня', () => {
     try {
       const layout = generateLayout(20041113, 2, world);
       const level = buildLevel(layout);
-      return { level, cells: layout.rooms.reduce((n, r) => n + r.cells.length, 0), calls };
+      // В комнате под звёздным небом потолка нет, и панелей в ней нет (tests/sky.test.ts).
+      return { level, cells: layout.rooms.reduce((n, r) => n + (r.id === level.skyRoom ? 0 : r.cells.length), 0), calls };
     } finally {
       names.forEach((n, i) => (ALL_PROPS[n] = saved[i]!));
     }
@@ -188,7 +189,7 @@ describe('миры: сборка уровня', () => {
       return n + k;
     }, 0);
 
-  it('в каждой клетке — потолочная панель: в офисе все светятся, в жёлтых комнатах — обесточенные или мёртвые с проводом', () => {
+  it('в каждой клетке под потолком — потолочная панель: в офисе все светятся, в жёлтых комнатах — обесточенные или мёртвые с проводом', () => {
     const office = panelsBuilt('office');
     expect(office.calls.ceiling_panel).toBe(office.cells);
     expect(office.calls.ceiling_panel_off + office.calls.ceiling_panel_dead).toBe(0);
@@ -303,10 +304,13 @@ describe('миры: окружение и воспоминания', () => {
     expect(WORLD_ENV.yellow).toBe(ENV_YELLOW);
     expect(ENV_BUNKER.cells).toBeUndefined();
     expect(ENV_BUNKER.light).toBe(1);
-    // Офис: свет даёт место (датчики), фонаря нет, а освещённое видно только вблизи.
+    // Офис: свет даёт место (датчики), фонаря нет. Собрано только там, куда смотрит герой (новое правило
+    // владельца, 15.11: «локации должны распадаться, как от света фонарика. Не важно светлые они или
+    // темные»), а достаёт взгляд так же далеко, как луч: сплошь метров до девяти, к восемнадцати — ничего.
+    // (Прежнее правило — «освещённое видно только вблизи», 2,5 и 10 м кругом — этим отменено.)
     expect(ENV_OFFICE.cells).toBe('sensor');
     expect(ENV_OFFICE.light).toBe(0);
-    expect(ENV_OFFICE.scan).toEqual([2.5, 10]);
+    expect(ENV_OFFICE.scan).toEqual([7, 18]);
     expect(ENV_OFFICE.decay).toBeLessThan(0);
     expect(ENV_OFFICE.fog).toEqual([0, 0, 0]);
     // Жёлтые комнаты: света по клеткам нет, фонарь есть, рассеянного света ничтожно мало.

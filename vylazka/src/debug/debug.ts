@@ -270,6 +270,7 @@ export function installDebug(app: App): void {
         spots: l.spots.length,
         spawn: [...l.spawn.pos],
         rooms: (l.layout?.rooms ?? []).map((r) => ({ id: r.id, type: r.type, tier: r.tier, cells: r.cells.length })),
+        sky: l.skyRoom ?? null,
         landmarks: l.landmarks.map((m) => ({ id: m.id, room: m.room, tier: m.tier })),
         flats: (l.flats ?? []).map((f) => ({ kind: f.kind, what: f.what, room: f.room, tier: f.tier })),
       };
@@ -354,6 +355,9 @@ export function installDebug(app: App): void {
       const [x, y, z] = t.pos;
       const aimY = y + Math.max(0.2, t.radius * 0.6);
       const tryFrom = (px: number, py: number, pz: number): boolean => {
+        // Встать можно только туда, где есть пол: точка за стеной уровня — не место (вещь у самой стены
+        // «видна» и оттуда — в пределах допуска на мебель, — но игрок там падает).
+        if (g.colliders.raycast(px, py + 1, pz, 0, -1, 0, 1.6) >= 1.6) return false;
         g.teleport(px, py, pz);
         app.advance(emptyInput(), 2, 1, STEP);
         g.aimAt(x, aimY, z);

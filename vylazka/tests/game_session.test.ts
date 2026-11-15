@@ -173,6 +173,8 @@ class Harness {
     for (const r of [1.1, 2.2, 1.7, 3]) {
       for (let i = 0; i < 12; i++) {
         const a = (i * Math.PI) / 6;
+        // Встать можно только туда, где есть пол: за стеной уровня игрок падает.
+        if (g.colliders.raycast(x + Math.cos(a) * r, floor + 1, z + Math.sin(a) * r, 0, -1, 0, 1.6) >= 1.6) continue;
         g.teleport(x + Math.cos(a) * r, floor, z + Math.sin(a) * r);
         this.tick();
         this.tick();
@@ -578,9 +580,9 @@ function standAt(h: Harness, what: 'exit' | 'focus', distance = what === 'exit' 
 /** Вспомнить текущее воспоминание (встать перед вещью и подержать в луче). */
 function recallActive(h: Harness): void {
   const t = h.game.things.list.find((x) => x.memory)!;
-  expect(h.standBefore(t.id)).toBe(true);
+  expect(h.standBefore(t.id), 'перед вещью не встать').toBe(true);
   const before = h.count('recall');
-  expect(h.until(() => h.count('recall') > before, 5)).toBe(true);
+  expect(h.until(() => h.count('recall') > before, 5), 'вещь не вспомнилась').toBe(true);
 }
 
 describe('игра целиком: карманные пространства обретают смысл', () => {
@@ -2311,5 +2313,59 @@ describe('давление помимо Осыпи: пол рассыпаетс�
     const started = h.until(() => g.pressure!.count > 0 || g.transition !== null, 70);
     expect(started).toBe(true);
     if (g.pressure!.count > 0) expect(g.pressure!.active!.kind).toBe('collapse');
+  });
+});
+
+describe('собрано только там, куда смотрит герой; небо видно там, где нет потолка', () => {
+  it('правило взгляда действует во всех мирах; в зале ожидания взгляд стоящего шире, чем идущего', () => {
+    for (const world of ['shelter', 'office', 'yellow', 'station'] as const) {
+      const h = new Harness(buildLevel(generateLayout(7, 2, world)));
+      h.until(() => h.game.transition === null, 8);
+      h.run(1);
+      expect(h.r.frames.at(-1)!.gaze, world).toBe(1);
+    }
+    const h = new Harness(buildLevel(generateLayout(7, 2, 'station')));
+    h.until(() => h.game.transition === null, 8);
+    h.run(4);
+    const still = h.r.frames.at(-1)!.gazeCone!;
+    h.run(3, { ...emptyInput(), moveZ: 1 });
+    const moving = h.r.frames.at(-1)!.gazeCone!;
+    expect(still[1]).toBeGreaterThan(moving[1] + 5);
+    expect(moving[1]).toBeLessThan(30);
+    // В остальных мирах конус — как у луча фонаря (рендер берёт его по умолчанию).
+    expect(new Harness(buildLevel(generateLayout(7, 2, 'office'))).r.frames.at(-1)?.gazeCone).toBeUndefined();
+  });
+
+  it('звёздное небо стоит над убежищем, офисом и жёлтыми комнатами; в зале ожидания проступает к вечеру', () => {
+    for (const world of ['shelter', 'office', 'yellow'] as const) {
+      const level = buildLevel(generateLayout(20041113, 2, world));
+      expect(level.skyRoom, world).toBeDefined();
+      const h = new Harness(level);
+      h.run(1);
+      expect(h.r.frames.at(-1)!.stars, world).toBeGreaterThan(0.4);
+      // Где неба не увидеть — потолок везде цел и комнаты под небом нет, — оно и не рисуется.
+      const closed = new Harness({ ...level, skyRoom: undefined } as BuiltLevel);
+      closed.run(1);
+      expect(closed.r.frames.at(-1)!.stars, world).toBe(0);
+    }
+    const h = new Harness(buildLevel(generateLayout(7, 2, 'station')));
+    h.until(() => h.game.transition === null, 8);
+    h.run(1);
+    expect(h.r.frames.at(-1)!.stars).toBe(0);
+    h.game.flow!.seek(h.game.flow!.cfg.day * 0.96);
+    h.run(0.5);
+    expect(h.r.frames.at(-1)!.stars).toBeGreaterThan(0.4);
+  });
+
+  it('под звёздным небом ничего не давит и нет строба, темноты и сетки', () => {
+    for (const world of ['shelter', 'office', 'yellow'] as const) {
+      for (const seed of [7, 20041113]) {
+        const level = buildLevel(generateLayout(seed, 2, world));
+        if (level.skyRoom === undefined) continue;
+        const g = new Harness(level, { seed }).game;
+        expect(g.pressureRooms.has(level.skyRoom), `${world}/${seed}`).toBe(false);
+        expect(g.roomFx.has(level.skyRoom), `${world}/${seed}`).toBe(false);
+      }
+    }
   });
 });

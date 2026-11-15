@@ -218,6 +218,8 @@ varying float vLace;
 varying float vArch;
 varying vec2 vTone;       // x — предмет выцвел, y — светится своим цветом
 uniform float uKeyCells;  // > 0 — прямой свет есть только там, где клетка светлая: множитель рассеянного света клеток
+uniform float uGaze;      // 0..1: рассеянный свет собирает место только там, куда смотрит герой
+uniform vec2 uGazeCone;   // косинусы края взгляда (за ним ничего не собрано) и его середины (собрано сплошь)
 uniform vec4 uPressBox;   // давление: прямоугольник помещения (minX, minZ, maxX, maxZ)
 uniform vec4 uPress;      // xy — откуда идёт провал, z — радиус рассыпавшегося пола, w — яркость красной сетки
 uniform vec3 uPressY;     // x — пол помещения, y — его потолок, z — на сколько метров потолок провис
@@ -492,7 +494,13 @@ void main() {
   // На лугу и у лампы тень реже освещённой стороны. В зале ожидания (uKeyCells > 0) почти всё стоит
   // под крышей, в тени; там место собирает не солнце, а неподвижность — тень собрана так же плотно.
   float keyK = uKeyCells > 0.0 ? 1.0 : min(1.0, keyLit * 3.0 + step(dot(uKeyColor, vec3(1.0)), 0.001));
-  float hEnv = uScan.z * (min(1.0, eGlow * 4.0) + min(1.0, eAmb * 8.0) * (0.72 + 0.28 * keyK) * back * (1.0 - smoothstep(uScanRange.x, uScanRange.y, distV)));
+  // Слова владельца: «локации должны распадаться, как от света фонарика. Не важно светлые они или
+  // темные: собрано только там, куда смотрит герой». Рассеянный свет собирает место только в конусе
+  // взгляда: в середине сплошь, к краю россыпью, за краем — ничего (там остаются только точки памяти
+  // о том, куда герой смотрел только что). Ширина конуса — у места своя; по умолчанию как у луча фонаря.
+  float cosG = dot(normalize(vPosV - uLightPosV), uLightDirV);
+  float gazeK = mix(1.0, smoothstep(uGazeCone.x, uGazeCone.y, cosG), uGaze);
+  float hEnv = uScan.z * (min(1.0, eGlow * 4.0) + min(1.0, eAmb * 8.0) * (0.72 + 0.28 * keyK) * back * gazeK * (1.0 - smoothstep(uScanRange.x, uScanRange.y, distV)));
   // Пространство, чьё время выходит, редеет; светящееся (красный контур выхода, небо) держится до конца.
   float hScan = min(uScan.z, max(uScan.x, hLit + hEnv)) * mix(mix(0.06, 1.0, uScanFade), 1.0, step(0.004, eGlow));
   // Число замеров уходит в альфу кадра: по нему следующий проход решает, показать ли саму поверхность
@@ -514,9 +522,24 @@ void main() {
   vec2 cuv = vec2(dot(-L, uLightRightV), dot(-L, uLightUpV));
   lb.w *= (0.84 + 0.32 * texture2D(uGrime, cuv * 1.7 + 0.5).g) * (1.0 - 0.2 * smoothstep(0.04, 0.0, length(cuv)));
 
-  vec4 g1 = texture2D(uGrime, uvw * 0.29);
+  // Узор не должен повторяться (слова владельца: «чтобы не видно было стыков и дублирования
+  // паттернов, иначе выглядит дешево»). Карта грязи тайлится каждые три с половиной метра, и пятна
+  // вставали рядами. Теперь её координаты плавно уводит волна с несоизмеримыми длинами, а к первой
+  // выборке подмешана вторая — в другом масштабе и повёрнутая: решётки повторов больше нет.
+  vec2 warp = vec2(sin(uvw.y * 0.61 + uvw.x * 0.23 + 1.3) + 0.6 * sin(uvw.x * 0.37 - 0.9), sin(uvw.x * 0.53 - uvw.y * 0.19 + 0.7) + 0.6 * sin(uvw.y * 0.31 + 2.1));
+  vec4 g1 = texture2D(uGrime, uvw * 0.29 + warp * 0.07);
+#ifdef DETAIL
+  vec4 g1b = texture2D(uGrime, mat2(0.829, -0.559, 0.559, 0.829) * uvw * 0.173 + 0.41);
+  // Среднее двух выборок бледнее каждой: контраст возвращаем, чтобы грязи не стало меньше.
+  g1 = clamp((mix(g1, g1b, 0.42) - 0.5) * 1.3 + 0.5, 0.0, 1.0);
+#endif
   vec4 d0 = texture(uDetail, vec3(uvw * ma.w, ma.z));
   float alb = 0.55 + 0.9 * d0.g;
+#ifdef DETAIL
+  // Большая ровная стена не бывает одного тона: плавные пятна в несколько метров и помельче. Они же
+  // прячут повтор самой фактуры. В чистых местах (офис) их вдвое меньше, в «чистом» рендере нет вовсе.
+  alb *= 1.0 + (1.0 - uPlain) * mix(0.5, 1.0, clamp(1.0 + uDecay * 2.0, 0.0, 1.0)) * (0.11 * (softNoise(vWorld * 0.23 + 7.3) - 0.5) + 0.05 * (softNoise(vWorld * 0.9 + 1.7) - 0.5));
+#endif
   float H = d0.r * mb.x;
   float k = 0.0;      // доля проступающего материала
   float wet = 0.0;    // сырость: темнее и глянцевее
@@ -533,7 +556,7 @@ void main() {
   // На низком качестве вторая выборка карты и фактура изнанки заменены тем, что уже есть:
   // облезшая краска и ржавчина остаются, пропадают только рельеф и мелкая пестрота.
 #ifdef DETAIL
-  vec4 g2 = texture2D(uGrime, uvw * 1.31 + 0.37);
+  vec4 g2 = texture2D(uGrime, uvw * 1.31 + 0.37 - warp.yx * 0.05);
   vec4 d1 = texture(uDetail, vec3(uvw * uMatA[mj].w, uMatA[mj].z));
 #else
   vec4 g2 = g1.brga;
@@ -1590,5 +1613,85 @@ void main() {
   }
   col = mix(col, vec3(1.0), uFlash);
   gl_FragColor = vec4(col * uFade, 1.0);
+}
+`;
+
+/**
+ * Звёздное небо (слова владельца: «там нет потолка, только бесконечно глубокое звездное небо и изредка
+ * падают звезды»). Небо стоит над уровнем всегда; видно его там, где нет потолка: в комнате под небом,
+ * сквозь стёртый потолок на поздних кругах, сквозь стеклянную крышу зала ожидания к вечеру.
+ *
+ * «Бесконечно глубокое» сделано расстоянием: звёзды висят на разной высоте — от пяти метров над полом
+ * до сотен, — и когда игрок идёт, ближние смещаются относительно дальних. Поле бесконечно: оно
+ * повторяется ящиком вокруг камеры, но звёзды стоят в мире, а не едут за игроком.
+ *
+ * Падающие звёзды — три «места» с разными сроками: голова и хвост из точек позади неё. Когда и откуда
+ * летит звезда, решает номер её срока, а не случай: кадры повторяемы.
+ */
+export const STAR_VERT = /* glsl */ `
+precision highp float;
+uniform float uTime;
+uniform vec3 uCamPos;
+uniform float uBright;   // 0..1: насколько небо видно (днём в зале ожидания — 0)
+uniform float uPx;       // пикселей буфера на «пиксель» звезды при 720 строках
+attribute vec4 aStar;    // x — яркость, y — размер, z — случайное число, w — 0 дальняя, 1 ближняя, 2..4 — падающая
+varying vec3 vCol;
+
+float hash1(float n) {
+  return fract(sin(n * 127.1 + 3.7) * 43758.5453);
+}
+
+void main() {
+  vec3 p;
+  float b = aStar.x;
+  if (aStar.w < 1.5) {
+    // Дальние — в ящике со стороной 440 м и на высоте до 430 м; ближние — в ящике 90 м, от 5 до 45 м.
+    float R = aStar.w < 0.5 ? 220.0 : 45.0;
+    float y = aStar.w < 0.5 ? 26.0 + position.y * position.y * 400.0 : 5.0 + position.y * 40.0;
+    vec2 xz = position.xz * R;
+    xz = mod(xz - uCamPos.xz + R, 2.0 * R) - R;
+    // К краю своего ящика звезда гаснет: перескок на другую сторону не виден.
+    b *= 1.0 - smoothstep(0.72 * R, 0.98 * R, max(abs(xz.x), abs(xz.y)));
+    p = vec3(uCamPos.x + xz.x, y, uCamPos.z + xz.y);
+    // Мерцание: у каждой своя частота.
+    b *= 0.72 + 0.28 * sin(uTime * (0.6 + 2.6 * fract(aStar.z * 7.31)) + aStar.z * 6.2832);
+  } else {
+    float k = aStar.w - 1.0;
+    // Падают изредка: у трёх «мест» сроки 32, 45 и 58 секунд, по всему небу — раз в четверть минуты.
+    float period = 19.0 + 13.0 * k;
+    float n = floor(uTime / period);
+    float ph = uTime - n * period;
+    float dur = 0.8 + 0.6 * hash1(n * 3.1 + k);
+    float h1 = hash1(n * 1.7 + k * 11.3);
+    float h2 = hash1(n * 2.9 + k * 5.1);
+    float h3 = hash1(n * 4.3 + k * 2.7);
+    float az = h1 * 6.2832;
+    float el = 0.6 + 0.7 * h2;
+    vec3 start = uCamPos + vec3(cos(az) * cos(el), sin(el), sin(az) * cos(el)) * 150.0;
+    float az2 = az + 1.5708 + (h3 - 0.5) * 1.8;
+    vec3 dir = normalize(vec3(cos(az2), -0.3 - 0.35 * h3, sin(az2)));
+    // position.x — место точки в хвосте: 0 — голова, 1 — его конец.
+    float t = ph - position.x * 0.2;
+    p = start + dir * (120.0 * t);
+    float life = clamp(ph / dur, 0.0, 1.0);
+    b = (t > 0.0 && ph < dur) ? (1.0 - position.x) * (1.0 - position.x) * sin(life * 3.1416) * 2.2 : 0.0;
+  }
+  vec4 mv = viewMatrix * vec4(p, 1.0);
+  gl_Position = projectionMatrix * mv;
+  gl_PointSize = max(1.0, aStar.y * uPx);
+  float v = b * uBright;
+  if (v < 0.004) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+  vCol = mix(vec3(0.8, 0.87, 1.0), vec3(1.0, 0.92, 0.8), fract(aStar.z * 3.7)) * v;
+}
+`;
+
+export const STAR_FRAG = /* glsl */ `
+precision highp float;
+varying vec3 vCol;
+
+void main() {
+  vec2 c = gl_PointCoord - 0.5;
+  float a = smoothstep(0.5, 0.04, length(c));
+  gl_FragColor = vec4(vCol * a, 1.0);
 }
 `;

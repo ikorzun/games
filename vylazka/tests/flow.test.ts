@@ -152,5 +152,11 @@ describe('зал ожидания: ход времени', () => {
     expect(f.scan()[1]).toBeLessThan(12);
     expect(f.fov(false)).toBeGreaterThan(1.1);
     expect(f.fov(true)).toBeLessThan(0.95);
+    // Собрано только там, куда смотрит герой: на ходу взгляд узок, как луч фонаря; стоя — раскрывается.
+    expect(f.gaze()[1]).toBeLessThan(27);
+    expect(f.gaze()[0]).toBeLessThan(54);
+    run(f, 4, 0);
+    expect(f.gaze()[1]).toBeGreaterThan(34);
+    expect(f.gaze()[0]).toBeGreaterThan(60);
   });
 });

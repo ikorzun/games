@@ -163,7 +163,7 @@ export function dressRoom(ctx: RoomCtx): void {
     if (alongList && !s.hazard && rAlong < (corridor ? 0.16 : 0.3)) {
       const p = PROPS[pick(alongList, rnd())];
       // Свисающий конец кабеля тонкий и не мешает пройти; сам короб должен остаться выше головы.
-      if (p && p.mount === 'ceiling' && p.h <= 1.0) p.build(s.xf.child(0, ctx.h, 0), seed);
+      if (p && p.mount === 'ceiling' && p.h <= 1.0 && !ctx.sky) p.build(s.xf.child(0, ctx.h, 0), seed);
     }
   }
 
@@ -181,7 +181,7 @@ export function dressRoom(ctx: RoomCtx): void {
       if (list.length !== 2 || (list[0]!.dir + 2) % 4 !== list[1]!.dir) continue;
       const s = list[0]!.dir < list[1]!.dir ? list[0]! : list[1]!;
       const tone = 0.62 - 0.08 * tier;
-      s.xf.box([-1.33, ctx.h - 0.24, -0.02], [-1.07, ctx.h + 0.01, 2.72], MAT.concrete, { tint: [tone, tone, tone * 0.97], bevel: 0.02 });
+      if (!ctx.sky) s.xf.box([-1.33, ctx.h - 0.24, -0.02], [-1.07, ctx.h + 0.01, 2.72], MAT.concrete, { tint: [tone, tone, tone * 0.97], bevel: 0.02 });
     }
   }
 
@@ -196,7 +196,7 @@ export function dressRoom(ctx: RoomCtx): void {
       const p = PROPS[pick(CEILING, rp)];
       // Сдвиг от центра: там может висеть лампа.
       // В стороне от середины клетки: там ходят, и там может висеть лампа.
-      if (p && p.mount === 'ceiling') p.build(c.xf.child(ox > 0 ? 0.95 : -0.95, ctx.h, oz * 0.5 - p.d / 2, ox > 0 ? 1 : 3), seed);
+      if (p && p.mount === 'ceiling' && !ctx.sky) p.build(c.xf.child(ox > 0 ? 0.95 : -0.95, ctx.h, oz * 0.5 - p.d / 2, ox > 0 ? 1 : 3), seed);
     }
     const papers = PROPS.papers;
     if (papers && papers.mount === 'free' && (type === 'archive' || type === 'command' ? r > 0.45 : r > 0.93 - 0.03 * tier)) papers.build(c.xf.child(ox * 0.5, 0, oz * 0.5), seed);

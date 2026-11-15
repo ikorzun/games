@@ -56,7 +56,9 @@ function panels(ctx: RoomCtx): void {
   for (const c of ctx.cells) {
     const name = !off ? 'ceiling_panel' : panelDead(ctx.seed, c.cx, c.cz) ? 'ceiling_panel_dead' : 'ceiling_panel_off';
     const p = ALL_PROPS[name];
-    if (p) p.build(c.xf.child(0, ctx.h, -p.d / 2), seedOf(ctx));
+    // Под звёздным небом потолочных панелей нет (сид всё равно берётся: остальная обстановка от него не едет).
+    const seed = seedOf(ctx);
+    if (p && !ctx.sky) p.build(c.xf.child(0, ctx.h, -p.d / 2), seed);
   }
 }
 
@@ -100,7 +102,7 @@ function corridor(ctx: RoomCtx): void {
   }
   // Вентиляция — в каждой третьей клетке, в стороне от панели.
   ctx.cells.forEach((c, i) => {
-    if (i % 3 === 1) put(ctx, 'ceiling_vent', c.xf.child(0.95, ctx.h, -0.3));
+    if (i % 3 === 1 && !ctx.sky) put(ctx, 'ceiling_vent', c.xf.child(0.95, ctx.h, -0.3));
   });
   // Экраны с природой у стен: то, чем офис заменяет окна.
   leanScreens(ctx, 3, 0.05, NATURE);

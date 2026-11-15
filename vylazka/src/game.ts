@@ -961,7 +961,8 @@ export class Game {
     }
     const H = CELL / 2;
     for (const r of layout.rooms) {
-      if (skip.includes(r.type) || r.cells.length < 2 || r.id === startRoom || gas.has(r.id) || this.roomFx.has(r.id)) continue;
+      // Под звёздным небом ничего не давит: потолка там нет, и место это тихое.
+      if (skip.includes(r.type) || r.cells.length < 2 || r.id === startRoom || r.id === level.skyRoom || gas.has(r.id) || this.roomFx.has(r.id)) continue;
       const xs = r.cells.map((c) => c[0]);
       const zs = r.cells.map((c) => c[1]);
       const x0 = Math.min(...xs);
@@ -988,6 +989,11 @@ export class Game {
       this.pressureRooms.set(r.id, room);
     }
     this.pressure = new Pressure(layout.seed);
+  }
+
+  /** Есть ли на уровне, откуда увидеть небо: комната без потолка, крыша зала ожидания, стёртый потолок. */
+  private get openSky(): boolean {
+    return this.level?.skyRoom !== undefined || this.flow !== null || this.decay.ceiling > 0;
   }
 
   /** Годится ли для давления помещение, где сейчас стоит игрок. */
@@ -1086,6 +1092,9 @@ export class Game {
     const n = Math.min(order.length, Math.ceil(pool.length * share));
     for (let i = 0; i < n; i++) this.roomFx.set(pool[i]!.id, order[i]!);
     for (const r of rooms) if (r.type === 'collapsed') this.roomFx.set(r.id, 'wire');
+    // Комната под звёздным небом — тихое место: ни строба, ни темноты, ни сетки. (Снимается после
+    // раздачи, а не до неё: остальным помещениям достаётся то же, что и раньше.)
+    if (this.level?.skyRoom !== undefined) this.roomFx.delete(this.level.skyRoom);
   }
 
   /** Расставить вещи сна: мелочь по столам и полкам, крупное — посреди коридоров. */
@@ -2219,6 +2228,15 @@ export class Game {
       keyColor: sun ? sun.color : (this.env.key?.color ?? [0, 0, 0]),
       keyCells: sun ? Math.max(0.05, sun.ambient) : 0,
       press: this.where === 'main' ? (this.pressure?.view() ?? null) : null,
+      // Звёздное небо стоит над уровнем; видно его там, где нет потолка. В зале ожидания оно проступает
+      // к вечеру, в карманных пространствах его нет.
+      // Яркость делится на усиление камеры: и в тёмном убежище, и в светлом офисе звёзды видны одинаково.
+      // Где неба не увидеть (потолок везде цел и комнаты под небом нет), оно и не рисуется.
+      stars: (this.where !== 'main' || !this.openSky ? 0 : fl ? smoothstep(0.7, 0.97, clamp(fl.viewT / fl.cfg.day, 0, 1)) : 1) * clamp(3.2 / gain, 0.5, 4),
+      // Собрано только там, куда смотрит герой, — в светлых местах тоже. Вспышка строба показывает всё.
+      gaze: 1 - clamp(strobe, 0, 1),
+      // В зале ожидания взгляд стоящего раскрывается, идущего — узок, как луч.
+      ...(fl ? { gazeCone: fl.gaze() } : {}),
       lens,
       scanRange: fl ? fl.scan() : (this.env.scan ?? [4, 15]),
       // Тени прямого света — в квадрате вокруг игрока, сдвинутом вперёд по взгляду: позади они не нужны.

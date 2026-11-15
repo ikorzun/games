@@ -256,6 +256,12 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
   // В зале ожидания потолки свои (STATION_CEIL), сада нет; цветы — только в комнатах с обычным потолком.
   const gardenRoom = station ? undefined : rooms1.filter((r) => r.tier === entrance.tier && r.cells.length >= 4).sort(order(1))[0];
   const flowerRooms = new Set(rooms1.filter((r) => r !== gardenRoom && r.cells.length >= 2 && (!station || r.type === 'lockers' || r.type === 'buffet')).sort(order(2)).slice(0, 2).map((r) => r.id));
+  // Небо вместо потолка (слова владельца: «в какой момент игрок заходит в одну из комнат или помещение
+  // и там нет потолка, только бесконечно глубокое звездное небо и изредка падают звезды»): одно
+  // помещение уровня — жилая комната убежища, кабинет офиса, зал жёлтых комнат; не сад и не комната
+  // с цветами. В зале ожидания небо и так открыто: там звёзды проступают к вечеру.
+  const SKY_TYPES: readonly RoomType[] = ['bedroom', 'nursery', 'living', 'hallway', 'kitchen', 'dorm', 'meeting', 'manager', 'files', 'copyroom', 'hall'];
+  const skyRoom = station ? undefined : rooms1.filter((r) => r !== gardenRoom && !flowerRooms.has(r.id) && r.cells.length >= 2 && SKY_TYPES.includes(r.type)).sort(order(7))[0];
   /** Высота потолка помещения над полом. */
   const ceilOf = (room: GenRoom): number => (room === gardenRoom ? GARDEN_H : station ? (STATION_CEIL[room.type] ?? CEIL_H) : CEIL_H);
 
@@ -273,6 +279,7 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
       // Зал ожидания: над залом стеклянная крыша (потолка нет, только балки), над путями — небо, под ними — пустота.
       if (station && (room.type === 'concourse' || room.type === 'track')) cell.noCeil = true;
       if (station && room.type === 'track') cell.noFloor = true;
+      if (room === skyRoom) cell.noCeil = true;
       if (upperWells.has(room.id)) cell.noFloor = true;
       else if (lowerWells.has(room.id)) {
         // Нижняя часть шахты марша тянется до пола верхнего яруса и открыта вверх.
@@ -565,7 +572,7 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
       }
     }
     // Свой ГСЧ у каждого помещения: правка одной комнаты не сдвигает остальные.
-    return { room, world, seed: layout.seed, start, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d + salt)), h: ceilOf(room), slots, cells, spots: outSpots, landmarks: outMarks, flats: outFlats, decay, ...(screenQuota.has(room.id) ? { screens: screenQuota.get(room.id)! } : {}) };
+    return { room, world, seed: layout.seed, start, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d + salt)), h: ceilOf(room), slots, cells, spots: outSpots, landmarks: outMarks, flats: outFlats, decay, ...(screenQuota.has(room.id) ? { screens: screenQuota.get(room.id)! } : {}), ...(room === skyRoom ? { sky: true } : {}) };
   };
 
   // Карточка от руки «please use only when necessary»: одна на уровень, в помещении рядом с началом —
@@ -722,6 +729,7 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
   return {
     wear: decay.wear,
     ceilings: Object.fromEntries(layout.rooms.map((r) => [r.id, ceilOf(r)])),
+    ...(skyRoom ? { skyRoom: skyRoom.id } : {}),
     chunks: out,
     stairs,
     colliders: col,

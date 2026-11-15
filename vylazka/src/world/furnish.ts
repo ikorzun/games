@@ -107,6 +107,8 @@ export interface RoomCtx {
    * берёз проросло. Не задано — место помнится целиком.
    */
   decay?: Decay;
+  /** У помещения нет потолка: над ним звёздное небо (world/level_build.ts). Под потолок здесь ничего не вешают. */
+  sky?: boolean;
 }
 
 function shuffled<T>(rng: Rng, items: readonly T[]): T[] {
@@ -155,6 +157,7 @@ export function fit(s: Slot, w: number, depth: number): number {
 }
 
 function lamps(ctx: RoomCtx, every = 1): void {
+  if (ctx.sky) return;
   ctx.cells.forEach((c, i) => {
     if (i % every === 0) cageLamp(c.xf.child(0, ctx.h, 0));
   });
@@ -715,6 +718,7 @@ function living(ctx: RoomCtx): void {
   // Люстра в одной клетке, в остальных — обычные лампы.
   const centre = homeCentre(ctx);
   ctx.cells.forEach((c, i) => {
+    if (ctx.sky) return;
     if (c === centre) ALL_PROPS.chandelier!.build(c.xf.child(0, ctx.h, 0), 0);
     else if (i % 2 === 0) cageLamp(c.xf.child(0, ctx.h, 0));
   });
