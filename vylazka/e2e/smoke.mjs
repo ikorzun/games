@@ -163,7 +163,7 @@ const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
  * на загруженной машине CI кадр программного рендера — например, огромная вещь во весь экран — может
  * рисоваться десятки секунд, и прогон падал не из-за игры, а из-за картинки для отчёта.
  */
-const shot = (page, name) => page.screenshot({ path: join(OUT, name), timeout: 180000 });
+const saveShot = (page, name) => page.screenshot({ path: join(OUT, name), timeout: 180000 });
 /** Средняя яркость центральной части сетки 32×18. */
 const center = (grid) => {
   const out = [];
@@ -584,7 +584,7 @@ async function scenarioWorlds(browser, baseUrl) {
     check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
     if (wantShots) {
       mkdirSync(OUT, { recursive: true });
-      await shot(page, 'world_office.png');
+      await saveShot(page, 'world_office.png');
     }
     await context.close();
   }
@@ -633,7 +633,7 @@ async function scenarioWorlds(browser, baseUrl) {
     const color = await vz(page, () => window.__vz.probeColor());
     check('с фонарём стена в луче светлая и жёлтая: красного и зелёного заметно больше синего', mean(grid) > dark0 + 10 && color.r > color.b * 1.3 && color.g > color.b * 1.15, `среднее ${dark0.toFixed(1)} → ${mean(grid).toFixed(1)}, цвет ${JSON.stringify(color)}, стена в ${best.d.toFixed(1)} м`);
     check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
-    if (wantShots) await shot(page, 'world_yellow.png');
+    if (wantShots) await saveShot(page, 'world_yellow.png');
     await context.close();
   }
 }
@@ -726,7 +726,7 @@ async function noteCheck(page, where) {
   const at = notes[0]?.at ?? [0, 0, 0];
   const d = Math.hypot(st.pos[0] - at[0], st.pos[2] - at[2]);
   check(`${where}: карточка от руки — одна на уровень, нарисована (не пустой лист), и к ней можно подойти`, notes.length === 1 && notes[0].id === 'card_use' && ink > 12 && ok === true && d < 1.6, `карточек ${notes.length}, пестрота ${ink.toFixed(1)}, до неё ${d.toFixed(2)} м`);
-  if (wantShots) await shot(page, `note_${where === 'убежище' ? 'shelter' : where === 'офис' ? 'office' : 'yellow'}.png`);
+  if (wantShots) await saveShot(page, `note_${where === 'убежище' ? 'shelter' : where === 'офис' ? 'office' : 'yellow'}.png`);
   await vz(page, ([x, y, z]) => window.__vz.teleport(x, y, z), start);
   await vz(page, () => window.__vz.step(6));
 }
@@ -793,7 +793,7 @@ async function scenarioFlats(browser, baseUrl) {
       await vz(page, (i) => window.__vz.gotoFlat(i, 4.4), veil);
       await vz(page, () => window.__vz.toggleLight());
       await afterSec(9);
-      await shot(page, 'flat_veil.png');
+      await saveShot(page, 'flat_veil.png');
     }
     await context.close();
   }
@@ -857,7 +857,7 @@ async function scenarioFlats(browser, baseUrl) {
     if (wantShots) {
       await vz(page, (i) => window.__vz.gotoFlat(i, 1.9, 0.9), scr);
       await afterSec(2);
-      await shot(page, 'flat_screen.png');
+      await saveShot(page, 'flat_screen.png');
     }
     await context.close();
   }
@@ -898,7 +898,7 @@ async function scenarioFlats(browser, baseUrl) {
     check('перед проёмом можно стоять: экран на месте, в темноте светится лугом и никуда не уносит', st.where === 'main' && st.jump === null && (await objOf(page, doorObj?.id))?.state === 'here' && shown > hidden + 12, `${st.where}, с картинкой ${shown.toFixed(1)}, без неё ${hidden.toFixed(1)}`);
     if (wantShots) {
       await vz(page, () => window.__vz.step(1));
-      await shot(page, 'flat_door.png');
+      await saveShot(page, 'flat_door.png');
     }
     const from = st.pos;
     await vz(page, (i) => window.__vz.gotoFlat(i, 1.4), doorAt);
@@ -912,7 +912,7 @@ async function scenarioFlats(browser, baseUrl) {
     const meadow = await vz(page, () => window.__vz.probe());
     check('вошёл в проём — выбеливание и луг: игрок на лугу, картинка есть и не чёрная', st.where === 'pocket' && st.pocket === 'meadow' && cause === 'door/whiteout/meadow' && frameMean(meadow) > 20, `${st.where}/${st.pocket}, скачок ${cause}, среднее ${frameMean(meadow).toFixed(1)}`);
     check('экран проёма при этом рассыпался, как всё, чего коснулись', ['going', 'gone'].includes((await objOf(page, doorObj?.id))?.state), (await objOf(page, doorObj?.id))?.state);
-    if (wantShots) await shot(page, 'flat_door_meadow.png');
+    if (wantShots) await saveShot(page, 'flat_door_meadow.png');
     // Обратно — через дверную раму луга.
     await vz(page, () => window.__vz.gotoPocket('exit', 1));
     for (let i = 0; i < 60 && !(st.where === 'main' && st.jump === null); i++) st = await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
@@ -1121,7 +1121,7 @@ async function scenarioIllusions(browser, baseUrl) {
         if (wantShots) {
           await stand(3.2);
           await run(page, 2, wiggle);
-          await shot(page, 'world_office_grove.png');
+          await saveShot(page, 'world_office_grove.png');
           await stand(1.2);
           await run(page, 0.5, wiggle);
         }
@@ -1205,7 +1205,7 @@ async function scenarioGen(browser, baseUrl) {
   st = await vz(page, () => window.__vz.step(40));
   const gp = await vz(page, () => window.__vz.probe());
   check('к плакату можно подойти: игрок стоит перед листом, в кадре светло', stood && st.onGround && Math.max(...gp) > 40, `лист ${marks[first]?.id}, ярче всего ${Math.max(...gp).toFixed(0)}`);
-  if (wantShots) await shot(page, 'gen_poster.png');
+  if (wantShots) await saveShot(page, 'gen_poster.png');
   check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
   await context.close();
 }
@@ -1507,7 +1507,6 @@ async function scenarioSession(browser, baseUrl) {
   check('и когда воспоминание уже пришло, они ничего не берут и не снимают', brief(await state(page)) === b0 && (await state(page)).session.memories.some((m) => m.state === 'active'));
   // Дальше — пять воспоминаний подряд; первое уже пришло.
   let progress = true;
-  let shot = 0;
   for (let k = 0; k < 5; k++) {
     if (k > 0) {
       revealed = await revealNow();
@@ -1523,7 +1522,7 @@ async function scenarioSession(browser, baseUrl) {
     check(`воспоминание ${k + 1}: на экране вспышка с текстом «${active ? memText(RU, active.id, 'flash') : '?'}», в списке слева появилась строка`, !!mem && flashOk && rowsOk, JSON.stringify({ mem, flash, rows: rows.length }));
     if (wantShots && k === 0) {
       mkdirSync(OUT, { recursive: true });
-      await shot(page, 'session_flash.png');
+      await saveShot(page, 'session_flash.png');
     }
     const near = await vz(page, () => window.__vz.gotoMemory());
     await vz(page, () => window.__vz.step(20));
@@ -1549,7 +1548,7 @@ async function scenarioSession(browser, baseUrl) {
     const limboOn = await page.evaluate(() => document.querySelector('.vz-hud__limbo').classList.contains('is-on') && !document.querySelector('.vz-hud__goals').classList.contains('is-on'));
     check('в лимбо видны строки: итог сессии, реплика, ожидание', limboOn && limbo.length === 3 && /^сессия 0001 закрыта\. сохранено воспоминаний: 5\.$/.test(limbo[0]) && limbo[2] === RU['limbo.wait'], JSON.stringify(limbo));
     check('в лимбо копятся вспомненные вещи; закрытая сессия засчитана', st.things.length === 5 && st.archive.length === 5 && st.profile.successes === 1 && st.profile.archive.length === 5, JSON.stringify({ things: st.things.length, archive: st.archive.length, successes: st.profile.successes }));
-    if (wantShots) await shot(page, 'session_limbo.png');
+    if (wantShots) await saveShot(page, 'session_limbo.png');
 
     // Приложение собирает следующую сессию, лимбо отпускает: новые воспоминания.
     for (let i = 0; i < 50 && st.profile.sorties < 2; i++) {
@@ -1664,7 +1663,7 @@ async function scenarioThings(browser, baseUrl) {
   st = await vz(page, () => window.__vz.step(200));
   cur = now(st, w.t);
   check('и остаётся огромной', cur.state === 'giant' && cur.scale > 6.5 && st.where === 'main', JSON.stringify(cur));
-  if (wantShots) await shot(page, 'session_giant.png');
+  if (wantShots) await saveShot(page, 'session_giant.png');
 
   // Вещь с судьбой jump вырастает и утягивает в карманное пространство.
   w = await watch('jump');
@@ -1696,7 +1695,7 @@ async function scenarioThings(browser, baseUrl) {
     st = await vz(page, () => window.__vz.step(60));
     const g = await vz(page, () => window.__vz.probe());
     check(`скачок в «${to}»: игрок там, картинка есть и не чёрная`, st.where === 'pocket' && st.pocket === to && frameMean(g) > 20 && Math.max(...g) > 100, `среднее ${frameMean(g).toFixed(1)}, максимум ${Math.max(...g).toFixed(0)}, ${st.where}/${st.pocket}`);
-    if (wantShots) await shot(page, `session_pocket_${to}.png`);
+    if (wantShots) await saveShot(page, `session_pocket_${to}.png`);
     await vz(page, () => window.__vz.jump('elsewhere', 'cut'));
     st = await stepUntil(page, (s) => s.where === 'main' && s.jump === null, 20, 30);
   }
@@ -1796,7 +1795,7 @@ async function scenarioPockets(browser, baseUrl) {
   const expectMap = RU['pocket.dollhouse.map'].replace('{what}', task).replace('{room}', roomName ?? '?').replace('{tier}', tierName(mem?.pos[1] ?? 0));
   check('макет: на экране «что: помещение, ярус» — помещение настоящее, ярус — ярус вещи', map.done === true && map.flash.on && map.flash.text === expectMap && !!roomType && level.rooms.some((x) => x.type === roomType && x.tier === tier), JSON.stringify({ flash: map.flash.text, expectMap, roomType, tier }));
   check('и в списке слева к искомому добавилось помещение', map.rows.length === 1 && roomName !== null, JSON.stringify(map.rows));
-  if (wantShots) await shot(page, 'session_pocket_dollhouse_map.png');
+  if (wantShots) await saveShot(page, 'session_pocket_dollhouse_map.png');
   st = await state(page);
   check('макет прочитан: пространство сделало своё дело — срок сокращён до «сейчас + 14 с»', st.pocketInfo.done === true && st.pocketInfo.stay <= st.pocketInfo.age + 14.1, JSON.stringify(st.pocketInfo));
   // Красный проём — выход: проход сквозь него возвращает туда, откуда унесло.
@@ -1838,7 +1837,7 @@ async function scenarioPockets(browser, baseUrl) {
   const blanks = st.pocketInfo.blanks;
   const exhibits = things.filter((t) => Math.abs(Math.hypot(t.pos[0] - st.pos[0], t.pos[2] - st.pos[2]) - 3.4) < 0.06);
   check('перед игроком дугой пять экспонатов: одна вещь и четыре белые болванки', exhibits.length === 5 && blanks.length === 4 && exhibits.filter((t) => t.kind === 'blank').length === 4 && exhibits.every((t) => (t.kind === 'blank') === blanks.includes(t.id)), JSON.stringify({ n: exhibits.length, blanks: blanks.length }));
-  if (wantShots) await shot(page, 'session_pocket_void_exhibits.png');
+  if (wantShots) await saveShot(page, 'session_pocket_void_exhibits.png');
   const mine = exhibits.find((t) => t.kind !== 'blank');
   const replay = await lookUntilDone('thing', mine.id);
   check('взгляд на вспомненное повторяет его строку, пространство при этом ничего не вызывает', replay.near && replay.flash.on && replay.flash.text === RU[`mem.${first}.done`] && replay.done === false, JSON.stringify(replay));
@@ -1874,7 +1873,7 @@ async function scenarioPockets(browser, baseUrl) {
   // К этому времени фонарь без дела обычно уже заглох: нижняя строка в светлом пространстве от него не зависит.
   const end = { light: st.light?.state, jump: st.jump, where: st.where, fade: st.pocketInfo?.fade, hint: await hintText(), age: st.pocketInfo?.age, stay: st.pocketInfo?.stay };
   check('к концу срока fade падает ниже 0,3, а нижняя строка — «это место редеет»', end.where === 'pocket' && end.fade < 0.3 && end.fade >= 0.2 - 1e-6 && end.hint === RU['pocket.hint.fading'], JSON.stringify(end));
-  if (wantShots) await shot(page, 'session_pocket_fading.png');
+  if (wantShots) await saveShot(page, 'session_pocket_fading.png');
   st = await stepUntil(page, (x) => x.where === 'main' && x.jump === null, 20, 60);
   check('и пространство отпускает само, вернув в убежище', st.where === 'main' && st.pocketInfo === null, JSON.stringify({ where: st.where }));
   check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0, (await vz(page, () => window.__vz.missingKeys())).join(', '));
@@ -2003,7 +2002,7 @@ async function scenarioTouch(browser, baseUrl) {
     check(`${name}: надписи и кнопки в пределах экрана`, bad.length === 0, bad.join('; '));
     if (wantShots) {
       mkdirSync(OUT, { recursive: true });
-      await shot(page, `touch_${width}x${height}.png`);
+      await saveShot(page, `touch_${width}x${height}.png`);
     }
     // Пауза кнопкой.
     await vz(page, () => window.__vz.freeze(false));
@@ -2048,7 +2047,7 @@ async function scenarioTouchSession(browser, baseUrl) {
     check(`${name}: вспышка, список слева и кнопки не наезжают друг на друга`, bad.length === 0, bad.join('; '));
     if (wantShots) {
       mkdirSync(OUT, { recursive: true });
-      await shot(page, `touch_session_flash_${width}x${height}.png`);
+      await saveShot(page, `touch_session_flash_${width}x${height}.png`);
     }
 
     // Сессия проходится на таче так же (через отладочный API): вспомнил — строка зачёркнута.
@@ -2072,7 +2071,7 @@ async function scenarioTouchSession(browser, baseUrl) {
     check(`${name}: строки лимбо видны и целиком в кадре`, st.where === 'limbo' && limbo.on && limbo.rows === 3 && limbo.left >= 0 && limbo.right <= limbo.w && limbo.top >= 0 && limbo.bottom <= limbo.h, JSON.stringify(limbo));
     bad = await page.evaluate(layoutProbe);
     check(`${name}: в лимбо надписи и кнопки не наезжают друг на друга`, bad.length === 0, bad.join('; '));
-    if (wantShots) await shot(page, `touch_session_limbo_${width}x${height}.png`);
+    if (wantShots) await saveShot(page, `touch_session_limbo_${width}x${height}.png`);
     check(`${name}: нет ошибок в консоли`, log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
     await context.close();
   }
@@ -2144,7 +2143,7 @@ async function scenarioMatrix(browser, baseUrl) {
       const probe = async (screen) => {
         const bad = await page.evaluate(layoutProbe);
         screens.push(`${screen}${bad.length ? ': ' + bad.join('; ') : ''}`);
-        if (wantShots) await shot(page, `${name}_${lang}_${screen}.png`);
+        if (wantShots) await saveShot(page, `${name}_${lang}_${screen}.png`);
         return bad.length === 0;
       };
       let ok = await probe('start');
