@@ -81,6 +81,17 @@ describe('пыль вещи: посев точек', () => {
     expect(sowGrains(data, objectTriangles(data).get(1)!, 1, 0.5).count).toBe(Math.round(7 * GRAIN_DENSITY * 0.5));
   });
 
+  it('мелкое зерно: точек вчетверо больше, и предел для большой вещи растёт вместе с плотностью', () => {
+    const data = scene();
+    const small = objectTriangles(data).get(2)!;
+    const big = objectTriangles(data).get(1)!;
+    // Ящик 0,66 м²: вчетверо больше точек, чем при обычном зерне.
+    expect(sowGrains(data, small, 1, 4).count).toBe(Math.round(0.66 * GRAIN_DENSITY * 4));
+    // Вещь 7 м² при обычном зерне упирается в предел; при мелком предел вчетверо выше — пыль не редеет.
+    expect(sowGrains(data, big, 1).count).toBe(GRAIN_MAX);
+    expect(sowGrains(data, big, 1, 4).count).toBe(GRAIN_MAX * 4);
+  });
+
   it('один сид — те же точки, другой — другие; пустой набор треугольников — ни одной точки', () => {
     const data = scene();
     const tris = objectTriangles(data).get(1)!;

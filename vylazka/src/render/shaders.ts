@@ -1693,6 +1693,7 @@ uniform sampler2D tPrev;   // прошлый кадр — уже со следа
 uniform float uKeep;       // какая доля яркости прошлого кадра остаётся (0 — выдержки нет)
 uniform float uMosh;       // 0..1: разрыв кадра — какая доля блоков ещё не обновилась
 uniform vec2 uMoshShift;   // на сколько кадр сдвинулся с прошлого раза, доли экрана
+uniform float uFmt;        // «пиксель формата» в пикселях буфера (см. POST_FRAG): блоки на экране одного размера при любом зерне
 varying vec2 vUv;
 
 void main() {
@@ -1701,7 +1702,7 @@ void main() {
   // движению камеры поверх того, что есть. У каждого блока свой срок; чем дальше от разрыва, тем меньше
   // их осталось. Так рвётся сжатое видео, потерявшее опорный кадр.
   if (uMosh > 0.0) {
-    uvec2 blk = uvec2(gl_FragCoord.xy) / 16u;
+    uvec2 blk = uvec2(gl_FragCoord.xy / uFmt) / 16u;
     uint hb = blk.x * 0x27d4eb2du ^ blk.y * 0x165667b1u;
     hb ^= hb >> 15; hb *= 0x2c1b3c6du; hb ^= hb >> 12;
     float lot = float(hb & 0xffffu) / 65535.0;
@@ -1850,6 +1851,13 @@ uniform float uCrt;       // 0..1: насколько «кинескоп» за�
 uniform float uFlash;     // 0..1: кадр выбеливается (скачок между пространствами)
 uniform sampler2D tEcho;  // эхо: линии пространства, проступающие под волной (свой слой: выдержка их не смазывает)
 uniform float uEcho;      // 1 — слой эха есть в этом кадре
+// Мелкое зерно (сильный компьютер, QUALITY.ultra): буфер крупнее, шум сенсора и точки мельче. А то, что
+// принадлежит формату записи, — строки развёртки, маска кинескопа, блоки срыва, ореол, разлёт цветов —
+// на экране остаётся прежним: оно считается в «пикселях формата» (uFmt пикселей буфера в каждом; число
+// не обязательно целое — на экране 1920 × 1080 это полтора, и строка развёртки занимает то один, то два
+// пикселя буфера, а период у строк тот же, что на обычном высоком качестве).
+uniform float uFmt;
+uniform float uLodFine;   // на сколько ступеней уменьшенных копий сдвинут ореол: буфер крупнее — ширина ореола на экране та же
 
 varying vec2 vUv;
 
@@ -1880,23 +1888,25 @@ vec3 sampleScene(vec2 uv) {
 void main() {
   vec2 uv = vUv;
   uvec2 px = uvec2(gl_FragCoord.xy);
+  uvec2 fx = uvec2(gl_FragCoord.xy / uFmt);
   uint frame = uint(uFrame);
 
   // Срыв сигнала: блоки 16 px уезжают по горизонтали, часть кадра рассыпается на крупные квадраты.
   if (uGlitch > 0.0) {
-    uvec2 blk = px / 16u;
+    uvec2 blk = fx / 16u;
     float h = hash(blk, frame / 3u + 7u);
     if (h < uGlitch * 0.35) {
       uv.x += (hash(blk, frame / 3u + 31u) - 0.5) * 0.12 * uGlitch;
-      uv = (floor(uv * uRes / 8.0) + 0.5) * 8.0 / uRes;
+      float sq = 8.0 * uFmt;
+      uv = (floor(uv * uRes / sq) + 0.5) * sq / uRes;
     }
-    float line = hash(uvec2(0u, px.y / 3u), frame / 2u);
+    float line = hash(uvec2(0u, fx.y / 3u), frame / 2u);
     if (line < uGlitch * 0.08) uv.x += (line - 0.02) * 0.6;
   }
 
   // Кинескоп: строки чуть гуляют по горизонтали, сильнее — когда картинка «под нагрузкой».
   if (uCrt > 0.0) {
-    float wob = hash(uvec2(1u, px.y / 2u), frame) - 0.5;
+    float wob = hash(uvec2(1u, fx.y / 2u), frame) - 0.5;
     uv.x += wob * 0.0022 * uCrt * uCrt;
   }
 
@@ -1904,9 +1914,12 @@ void main() {
 #ifdef CHROMA
   // Разлёт цветов невелик: мир собран из точек в два-три пикселя, и сильный разлёт растягивал бы
   // каждую в радужный штрих.
-  col.r = sampleScene(distort(uv, uBarrel * 1.025)).r;
+  // При мелком зерне точка занимает те же два-три пикселя, но уже более крупного буфера, поэтому разлёт
+  // в долях кадра вдвое меньше — в пикселях он тот же.
+  float spread = 0.025 / uFmt;
+  col.r = sampleScene(distort(uv, uBarrel * (1.0 + spread))).r;
   col.g = sampleScene(distort(uv, uBarrel)).g;
-  col.b = sampleScene(distort(uv, uBarrel * 0.975)).b;
+  col.b = sampleScene(distort(uv, uBarrel * (1.0 - spread))).b;
 #else
   col = sampleScene(distort(uv, uBarrel));
 #endif
@@ -1928,7 +1941,7 @@ void main() {
   vec2 ht = uHazeTexel * 0.75;
   col += 0.25 * (texture2D(tHaze, hv + vec2(ht.x, ht.y)).rgb + texture2D(tHaze, hv + vec2(-ht.x, ht.y)).rgb + texture2D(tHaze, hv + vec2(ht.x, -ht.y)).rgb + texture2D(tHaze, hv - ht).rgb);
   // Ореол: яркое пятно расплывается по грязному стеклу объектива.
-  vec3 glow = textureLod(tScene, hv, 3.5).rgb * 0.4 + textureLod(tScene, hv, 5.5).rgb * 0.6;
+  vec3 glow = textureLod(tScene, hv, 3.5 + uLodFine).rgb * 0.4 + textureLod(tScene, hv, 5.5 + uLodFine).rgb * 0.6;
   float smear = texture2D(uGrime, vUv * vec2(uAspect, 1.0) * 0.55 + 0.13).g;
   col += glow * uBloom * (0.35 + 1.3 * smear * smear);
 #else
@@ -1970,9 +1983,9 @@ void main() {
 
   col = mix(col * 12.92, 1.055 * pow(col, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, col));
   // Чересстрочная фактура видеозаписи; с uCrt строки и маска кинескопа проступают сильнее.
-  col *= 1.0 - (0.035 + 0.11 * uCrt) * float(px.y & 1u);
+  col *= 1.0 - (0.035 + 0.11 * uCrt) * float(fx.y & 1u);
   if (uCrt > 0.0) {
-    uint tri = px.x % 3u;
+    uint tri = fx.x % 3u;
     col *= mix(vec3(1.0), vec3(tri == 0u ? 1.0 : 0.82, tri == 1u ? 1.0 : 0.82, tri == 2u ? 1.0 : 0.82), 0.45 * uCrt);
     // Бегущая полоса: светлая строка медленно сползает по кадру.
     float bar = fract(vUv.y + uFrame * 0.0031);

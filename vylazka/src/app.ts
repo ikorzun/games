@@ -46,7 +46,20 @@ import { setThingRegistry } from './world/thing_mesh';
 
 const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
-const isQuality = (v: string | null): v is Quality => v === 'low' || v === 'med' || v === 'high';
+const isQuality = (v: string | null): v is Quality => v === 'low' || v === 'med' || v === 'high' || v === 'ultra';
+
+/**
+ * Замер видеокарты при запуске (App.probeFine). highMs — кадр обычного высокого качества должен
+ * рисоваться быстрее этого, иначе мелкое зерно и пробовать незачем: оно вчетверо тяжелее. fineMs — кадр
+ * мелкого качества на первом экране должен уложиться в это время: шестьдесят кадров в секунду — это 16,7 мс
+ * на кадр, остальное — запас на места тяжелее первого. settleMs — сколько самое большее ждать досева
+ * точек перед замером (пока облако редкое, кадр легче настоящего). minMs — быстрее кадр не рисуется ни на чём: такой ответ
+ * значит, что замер не удался (видеокарту не дождались), и ему не верим. fpsFloor, slowFor — если в игре кадров стало меньше
+ * fpsFloor и так держится slowFor секунд, качество возвращается на обычное высокое.
+ * Числа выбраны расчётом и на настоящих видеокартах не проверены. Они нарочно не строгие: ошибку в
+ * сторону «включили зря» ловит игра (качество вернётся само), а ошибку «не включили» не ловит никто.
+ */
+const PROBE = { highMs: 5, fineMs: 11, minMs: 0.3, settleMs: 700, fpsFloor: 45, slowFor: 2.5 } as const;
 /** Множители обзора и яркости для уровней «ниже / средне / выше». */
 const SENS = [0.6, 1, 1.6] as const;
 const BRIGHT = [0.78, 1, 1.35] as const;
@@ -290,6 +303,8 @@ export class App {
 
     const resize = (): void => {
       renderer.resize(this.root.clientWidth, this.root.clientHeight);
+      // Ступень «ультра» в кнопке качества — только на компьютере и только там, где экран даёт зерно мельче.
+      this.overlay.setFineStep(!this.touchMode && renderer.fineFor('ultra') >= 1.25);
       this.redraw();
     };
     new ResizeObserver(resize).observe(this.root);
@@ -309,6 +324,7 @@ export class App {
 
     await renderer.warmup();
     this.redraw();
+    this.probeFine();
     await nextFrame();
 
     this.lifecycle.set('user', true);
@@ -621,6 +637,29 @@ export class App {
     this.redraw();
   }
 
+  /**
+   * Сильный компьютер получает высокое качество «вдвое мельче» сам (слова партнёра: «на десктопе при
+   * хорошем железе на уровне hight нужно сделать зерно в 2 раза меньше, как и все растворяемые частицы»).
+   * «Сильный» здесь — измеренное, а не угаданное по названию видеокарты: кадр обычного высокого качества
+   * рисуется с большим запасом, а потом и кадр мелкого — быстрее, чем нужно для шестидесяти в секунду.
+   * Замер идёт под заставкой загрузки и на сильной машине занимает доли секунды; слабая отсеивается на
+   * первых двух кадрах. Телефон и качество, заданное в адресе, не трогаются; экран, где зерно вышло бы
+   * мельче меньше чем в полтора раза, — тоже.
+   */
+  private probeFine(): void {
+    const r = this.game.renderer;
+    if (this.qualityManual || this.touchMode || r.quality !== 'high' || r.fineFor('ultra') < 1.5) return;
+    const draw = (): void => this.redraw();
+    const ok = (ms: number, max: number): boolean => ms >= PROBE.minMs && ms <= max;
+    if (!ok(r.measure(draw, 2, PROBE.highMs * 4), PROBE.highMs)) return;
+    this.setQuality('ultra');
+    // Досев точек: пока облако редкое, кадр легче настоящего, и замер обманул бы. Ждём, пока досеется.
+    const t0 = performance.now();
+    do r.measure(draw, 1, PROBE.settleMs);
+    while (r.sowing && performance.now() - t0 < PROBE.settleMs);
+    if (!ok(r.measure(draw, 4, PROBE.fineMs * 6), PROBE.fineMs)) this.setQuality('high');
+  }
+
   setLang(lang: Lang, initial = false): void {
     i18n.setLang(lang);
     document.documentElement.lang = i18n.lang;
@@ -847,17 +886,22 @@ export class App {
     this.autoQuality(dt);
   };
 
-  /** Автопонижение качества: не раньше 10 с игры и только если кадров стабильно мало. */
+  /**
+   * Автопонижение качества: не раньше 10 с игры и только если кадров стабильно мало. Мелкое зерно
+   * держится строже остальных: оно — роскошь, и ради него игра не должна идти рывками.
+   */
   private autoQuality(dt: number): void {
     if (this.qualityManual) return;
     this.playTime += dt;
     if (this.playTime < 10) return;
-    this.slowTime = this.fps < 27 ? this.slowTime + dt : Math.max(0, this.slowTime - dt * 2);
-    if (this.slowTime < 4) return;
+    const q = this.game.renderer.quality;
+    const fine = q === 'ultra';
+    this.slowTime = this.fps < (fine ? PROBE.fpsFloor : 27) ? this.slowTime + dt : Math.max(0, this.slowTime - dt * 2);
+    if (this.slowTime < (fine ? PROBE.slowFor : 4)) return;
     this.slowTime = 0;
     this.playTime = 4;
-    const q = this.game.renderer.quality;
-    if (q === 'high') this.setQuality('med');
+    if (fine) this.setQuality('high');
+    else if (q === 'high') this.setQuality('med');
     else if (q === 'med') this.setQuality('low');
   }
 }

@@ -63,7 +63,7 @@ function albedo(mat: number): readonly [number, number, number] {
 
 /**
  * Посеять точки по треугольникам tris (null — по всей сетке). Число точек — по площади; density — доля
- * от полной плотности (слабое устройство сеет реже). Точки ложатся ровно: площадь режется на равные
+ * от полной плотности (слабое устройство сеет реже; при мелком зерне — больше единицы). Точки ложатся ровно: площадь режется на равные
  * доли, в каждой — одна точка.
  */
 export function sowGrains(data: MeshData, tris: readonly number[] | null, seed: number, density = 1): Grains {
@@ -91,7 +91,9 @@ export function sowGrains(data: MeshData, tris: readonly number[] | null, seed: 
     maxY = Math.max(maxY, P[a + 1]!, P[b + 1]!, P[c + 1]!);
   }
   if (!(area > 1e-6)) return { count: 0, position: new Float32Array(0), normal: new Float32Array(0), color: new Float32Array(0), rnd: new Float32Array(0), area: 0, minY: 0, maxY: 0 };
-  const count = Math.max(GRAIN_MIN, Math.min(GRAIN_MAX, Math.round(area * GRAIN_DENSITY * density)));
+  // Плотность больше единицы — мелкое зерно (сильный компьютер): предел растёт вместе с ней, иначе у
+  // большой вещи точки стали бы мельче, а их число — нет, и её пыль поредела бы.
+  const count = Math.max(GRAIN_MIN, Math.min(GRAIN_MAX * Math.max(1, density), Math.round(area * GRAIN_DENSITY * density)));
   const position = new Float32Array(count * 3);
   const normal = new Float32Array(count * 3);
   const color = new Float32Array(count * 3);

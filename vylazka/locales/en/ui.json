@@ -12,6 +12,7 @@
   "ui.quality.low": "low",
   "ui.quality.med": "medium",
   "ui.quality.high": "high",
+  "ui.quality.ultra": "ultra",
   "ui.sound": "Sound",
   "ui.sound.on": "on",
   "ui.sound.off": "off",

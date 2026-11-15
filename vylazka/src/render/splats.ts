@@ -99,6 +99,8 @@ export class SplatClouds {
   budget = 36000;
   /** Сколько точек отдано видеокарте в прошлом кадре (для отладки и проверок). */
   drawn = 0;
+  /** Скольким клеткам рядом после прошлого кадра ещё не хватает слоёв: облако досевается. */
+  behind = 0;
 
   private readonly frustum = new THREE.Frustum();
   private readonly viewProj = new THREE.Matrix4();
@@ -313,13 +315,16 @@ export class SplatClouds {
       }
     }
     let drawn = 0;
+    let behind = 0;
     for (const { c, need } of list) {
       const have = Math.min(need, c.ends.length);
       const n = have > 0 ? c.ends[have - 1]! : 0;
       c.points.geometry.setDrawRange(0, n);
       if (c.points.visible) drawn += n;
+      if (c.ends.length < need) behind += 1;
     }
     this.drawn = drawn;
+    this.behind = behind;
   }
 
   /**

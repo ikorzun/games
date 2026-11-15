@@ -6,7 +6,7 @@ import { AutoExposure, beamAtten } from '../src/render/exposure';
 import { bakeDetail, DETAIL, DETAIL_LAYERS } from '../src/render/detail';
 import { bakeGrime } from '../src/render/grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from '../src/render/matcap_atlas';
-import { internalSize, QUALITY, verticalFov } from '../src/render/renderer';
+import { fineOf, internalSize, QUALITY, verticalFov } from '../src/render/renderer';
 import { CALM_ENV, DEFAULT_FLASHLIGHT, Flashlight } from '../src/systems/flashlight';
 import { recTimestamp } from '../src/ui/hud';
 import { DECAY, MAT, MAT_COUNT, MAT_DEFS } from '../src/world/materials';
@@ -275,7 +275,7 @@ describe('рендер: чистые функции', () => {
       [2560, 1440],
       [800, 800],
     ] as const) {
-      for (const q of ['low', 'med', 'high'] as const) {
+      for (const q of ['low', 'med', 'high', 'ultra'] as const) {
         const [iw, ih] = internalSize(w, h, QUALITY[q].pixels, 3);
         expect(iw % 2).toBe(0);
         expect(ih % 2).toBe(0);
@@ -285,6 +285,53 @@ describe('рендер: чистые функции', () => {
     }
     // Маленький экран: не больше физических пикселей.
     expect(internalSize(320, 180, QUALITY.high.pixels, 1)).toEqual([320, 180]);
+  });
+
+  // Слова партнёра: «на десктопе при хорошем железе на уровне hight нужно сделать зерно в 2 раза меньше,
+  // как и все растворяемые частицы. Условно, поднять визуал в 2 раза».
+  it('мелкое зерно — то же высокое качество, только буфер вчетверо больше и тень вдвое подробнее', () => {
+    const { pixels: up, shadow: us, fine: uf, ...ultra } = QUALITY.ultra;
+    const { pixels: hp, shadow: hs, fine: hf, ...high } = QUALITY.high;
+    expect(ultra).toEqual(high);
+    expect(hf).toBe(1);
+    expect(uf).toBe(2);
+    expect(up).toBe(hp * uf * uf);
+    expect(us).toBe(hs * 2);
+    for (const q of ['low', 'med', 'high'] as const) expect(QUALITY[q].fine).toBe(1);
+  });
+
+  it('насколько мельче выйдет зерно, решает экран: мельче его пикселя не бывает', () => {
+    // Обычным ступеням мелкость не положена ни на каком экране.
+    for (const q of ['low', 'med', 'high'] as const) expect(fineOf(3840, 2160, QUALITY[q], 2)).toBe(1);
+    const fine = (w: number, h: number, dpr = 1): number => fineOf(w, h, QUALITY.ultra, dpr);
+    expect(fine(2560, 1440)).toBe(2);
+    expect(fine(3840, 2160)).toBe(2);
+    // Окно на экране двойной плотности: пикселей хватает, хотя в точках CSS оно небольшое.
+    expect(fine(1401, 625, 2)).toBe(2);
+    expect(fine(1920, 1080)).toBe(1.5);
+    expect(fine(1600, 900)).toBe(1.25);
+    // Экран не больше буфера обычного высокого качества: мельче делать нечего.
+    expect(fine(1280, 720)).toBe(1);
+    expect(fine(1366, 768)).toBe(1);
+    for (const [w, h, dpr] of [
+      [390, 844, 3],
+      [915, 412, 2.6],
+      [800, 800, 1],
+      [3440, 1440, 1],
+      [1512, 982, 2],
+    ] as const) {
+      const f = fine(w, h, dpr);
+      expect(f).toBeGreaterThanOrEqual(1);
+      expect(f).toBeLessThanOrEqual(2);
+      // Шаг — четверть: плотность посева точек не меняется на каждое движение края окна.
+      expect(Number.isInteger(f * 4)).toBe(true);
+      // Буфер не больше экрана, а зерно мельче ровно настолько, насколько буфер выше обычного.
+      const [iw, ih] = internalSize(w, h, QUALITY.ultra.pixels, dpr);
+      const [, base] = internalSize(w, h, QUALITY.high.pixels, dpr);
+      expect(iw).toBeLessThanOrEqual(Math.ceil(w * dpr) + 1);
+      expect(ih).toBeLessThanOrEqual(Math.ceil(h * dpr) + 1);
+      expect(Math.abs(f - ih / base)).toBeLessThanOrEqual(0.126);
+    }
   });
 
   it('угол обзора: широкий в ландшафте, ограничен в портрете и квадрате', () => {

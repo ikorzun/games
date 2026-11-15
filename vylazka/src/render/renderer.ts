@@ -23,7 +23,7 @@ import { ECHO_MAX, ECHO_STRIDE } from '../systems/echo';
 import type { PressureView } from '../systems/pressure';
 import { SplatClouds } from './splats';
 
-export type Quality = 'low' | 'med' | 'high';
+export type Quality = 'low' | 'med' | 'high' | 'ultra';
 
 export interface QualitySpec {
   /** Число пикселей внутреннего буфера. */
@@ -42,19 +42,39 @@ export interface QualitySpec {
   hazeDiv: number;
   /** Предметы режут дымку тенями. */
   hazeShadow: boolean;
-  /** Точек-сплатов на квадратный метр поверхности в полную плотность (рядом с игроком). */
+  /** Точек-сплатов на квадратный метр поверхности в полную плотность (рядом с игроком) — при обычном зерне. */
   points: number;
   /** Объём для точек (eye-dome lighting): точки темнеют за краями ближних вещей. */
   edl: boolean;
   /** Шестиугольная укладка фактуры: бетон и штукатурка без решётки повторов (три выборки вместо одной). */
   hex: boolean;
+  /**
+   * Во сколько раз зерно кадра и точки распада мельче обычного (слова партнёра: «на десктопе при хорошем
+   * железе на уровне hight нужно сделать зерно в 2 раза меньше, как и все растворяемые частицы»).
+   * 1 — обычное зерно. Больше — буфер крупнее в fine² раз (pixels уже с этим множителем), а всё, что
+   * считается в точках, — dust, strand, points — умножается на fine² при отрисовке: точка вдвое мельче,
+   * точек вчетверо больше, поверхность покрыта так же. Сколько выйдет на деле, решает экран (fineOf).
+   */
+  fine: number;
 }
 
 export const QUALITY: Record<Quality, QualitySpec> = {
-  low: { pixels: 640 * 360, shadow: 0, chroma: false, detail: false, dust: 140, worms: 44, strand: 56, haze: 0, hazeDiv: 3, hazeShadow: false, points: 300, edl: false, hex: false },
-  med: { pixels: 960 * 540, shadow: 512, chroma: true, detail: true, dust: 300, worms: 68, strand: 80, haze: 8, hazeDiv: 3, hazeShadow: false, points: 600, edl: false, hex: false },
-  high: { pixels: 1280 * 720, shadow: 1024, chroma: true, detail: true, dust: 520, worms: MAX_WORMS, strand: 110, haze: 14, hazeDiv: 2, hazeShadow: true, points: 1100, edl: true, hex: true },
+  low: { pixels: 640 * 360, shadow: 0, chroma: false, detail: false, dust: 140, worms: 44, strand: 56, haze: 0, hazeDiv: 3, hazeShadow: false, points: 300, edl: false, hex: false, fine: 1 },
+  med: { pixels: 960 * 540, shadow: 512, chroma: true, detail: true, dust: 300, worms: 68, strand: 80, haze: 8, hazeDiv: 3, hazeShadow: false, points: 600, edl: false, hex: false, fine: 1 },
+  high: { pixels: 1280 * 720, shadow: 1024, chroma: true, detail: true, dust: 520, worms: MAX_WORMS, strand: 110, haze: 14, hazeDiv: 2, hazeShadow: true, points: 1100, edl: true, hex: true, fine: 1 },
+  // Сильный компьютер: то же высокое качество, но вдвое мельче — и зерно, и точки. Тень фонаря тоже вдвое подробнее.
+  ultra: { pixels: 4 * 1280 * 720, shadow: 2048, chroma: true, detail: true, dust: 520, worms: MAX_WORMS, strand: 110, haze: 14, hazeDiv: 2, hazeShadow: true, points: 1100, edl: true, hex: true, fine: 2 },
 };
+
+/** Сколько точек в пряди Осыпи заведено всего: высокое качество при самом мелком зерне. */
+const STRAND_MAX = 440;
+/**
+ * Досев при мелком зерне: точек на метр вчетверо больше, но сеять за кадр вчетверо больше нельзя —
+ * посев идёт на процессоре, около десятой доли микросекунды на точку. Поэтому за кадр — не больше чем
+ * в полтора раза против обычного: первый, редкий слой всё равно ложится сразу, а полная плотность
+ * добирается на полсекунды дольше.
+ */
+const SOW_FINE_MAX = 1.5;
 
 /** Всё, что нужно для одного кадра. */
 export interface FrameView {
@@ -237,6 +257,19 @@ export function internalSize(cssW: number, cssH: number, pixels: number, dpr = 1
   return [Math.max(2, Math.round(w / 2) * 2), Math.max(2, Math.round(h / 2) * 2)];
 }
 
+/**
+ * Насколько мелким выйдет зерно на этом экране: во сколько раз буфер выше, чем был бы при обычном зерне.
+ * Мельче пикселя экрана зерна не бывает, поэтому на небольшом экране выходит меньше, чем просит качество
+ * (1920 × 1080 — в полтора раза, 2560 × 1440 и больше — вдвое). Шаг — четверть: от мелкости зависит
+ * плотность посева точек, а пересевать мир на каждое движение края окна дорого.
+ */
+export function fineOf(cssW: number, cssH: number, q: QualitySpec, dpr = 1): number {
+  if (!(q.fine > 1)) return 1;
+  const [, h] = internalSize(cssW, cssH, q.pixels, dpr);
+  const [, base] = internalSize(cssW, cssH, q.pixels / (q.fine * q.fine), dpr);
+  return Math.max(1, Math.min(q.fine, Math.round((h / base) * 4) / 4));
+}
+
 /** Вертикальный угол обзора: в ландшафте держим широкий горизонтальный угол, в портрете не даём «рыбьему глазу» разъехаться. */
 /** «Бочка» объектива нагрудной камеры в обычном состоянии. */
 const BARREL = 0.085;
@@ -290,6 +323,9 @@ export class GameRenderer {
   quality: Quality;
   width = 2;
   height = 2;
+  /** Во сколько раз зерно и точки сейчас мельче обычного (fineOf): 1 — обычные. */
+  fine = 1;
+  private dustCount = -1;
 
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.05, 70);
@@ -681,8 +717,8 @@ export class GameRenderer {
       this.scene.add(this.stars);
     }
     // Осыпь: прядь из точек, размноженная инстансами (у каждой пряди своя голова и направление).
-    // Точек в пряди — с запасом на высокое качество; сколько из них рисовать, решает качество.
-    const STRAND = 110;
+    // Точек в пряди — с запасом на высокое качество при самом мелком зерне; сколько из них рисовать, решает качество.
+    const STRAND = STRAND_MAX;
     const rnd = new Float32Array(STRAND * 4);
     let seed = 0x2f6e2b1;
     const next = (): number => {
@@ -735,6 +771,8 @@ export class GameRenderer {
         uFlash: { value: 0 },
         tEcho: { value: null },
         uEcho: { value: 0 },
+        uFmt: { value: 1 },
+        uLodFine: { value: 0 },
       },
       depthTest: false,
       depthWrite: false,
@@ -930,7 +968,7 @@ export class GameRenderer {
     this.trailMat = new THREE.ShaderMaterial({
       vertexShader: POST_VERT,
       fragmentShader: TRAIL_FRAG,
-      uniforms: { tNow: { value: null }, tPrev: { value: null }, uKeep: { value: 0 }, uMosh: { value: 0 }, uMoshShift: { value: new THREE.Vector2() } },
+      uniforms: { tNow: { value: null }, tPrev: { value: null }, uKeep: { value: 0 }, uMosh: { value: 0 }, uMoshShift: { value: new THREE.Vector2() }, uFmt: this.postMat.uniforms.uFmt! },
       depthTest: false,
       depthWrite: false,
     });
@@ -1015,13 +1053,13 @@ export class GameRenderer {
     this.postMat.needsUpdate = true;
     this.hazeMat.defines = { HAZE_STEPS: Math.max(1, q.haze), ...(q.hazeShadow && q.shadow > 0 ? { HAZE_SHADOW: '' } : {}) };
     this.hazeMat.needsUpdate = true;
-    this.rebuildDust(q.dust);
     // Буферы зависят от качества (копии кадра, дымка): пересоздаём, даже если размер тот же.
     this.width = 0;
     this.resize(this.cssW, this.cssH);
   }
 
   private rebuildDust(count: number): void {
+    this.dustCount = count;
     if (this.dust) {
       this.scene.remove(this.dust);
       this.dust.geometry.dispose();
@@ -1054,9 +1092,11 @@ export class GameRenderer {
     this.cssH = Math.max(1, cssH);
     const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
     const [w, h] = internalSize(this.cssW, this.cssH, QUALITY[this.quality].pixels, dpr);
-    if (w === this.width && h === this.height) return;
+    const fine = fineOf(this.cssW, this.cssH, QUALITY[this.quality], dpr);
+    if (w === this.width && h === this.height && fine === this.fine) return;
     this.width = w;
     this.height = h;
+    this.fine = fine;
     this.renderer.setSize(w, h, false);
     for (const rt of [this.sceneRT, this.scenePrevRT, ...this.memRT]) {
       rt.depthTexture?.dispose();
@@ -1075,8 +1115,9 @@ export class GameRenderer {
     this.hazeRT = null;
     const q = QUALITY[this.quality];
     if (q.haze > 0) {
-      const hw = Math.max(2, Math.round(w / q.hazeDiv));
-      const hh = Math.max(2, Math.round(h / q.hazeDiv));
+      // Дымка мельче не становится: её буфер остаётся того же размера, что при обычном зерне.
+      const hw = Math.max(2, Math.round(w / (q.hazeDiv * fine)));
+      const hh = Math.max(2, Math.round(h / (q.hazeDiv * fine)));
       this.hazeRT = this.makeHazeRT(hw, hh);
       this.postMat.uniforms.uHazeTexel!.value.set(1 / hw, 1 / hh);
     }
@@ -1092,17 +1133,65 @@ export class GameRenderer {
     this.spotMat.uniforms.uAspect!.value = aspect;
     // Уменьшенная копия, где один тексель — примерно восьмая часть высоты кадра.
     this.spotMat.uniforms.uLod!.value = Math.max(0, Math.log2(h) - 3);
-    this.dustMat.uniforms.uPointScale!.value = h / 160;
+    // Мелкое зерно (fine > 1): всё, что считается в точках, остаётся того же размера в пикселях буфера, а
+    // буфер крупнее — значит, на экране точка мельче во столько же раз. Чтобы поверхность была покрыта
+    // так же, точек больше в fine² раз. То, что принадлежит «формату записи» (строки развёртки, блоки
+    // срыва, ореол, звёзды), на экране остаётся прежним.
+    const f2 = fine * fine;
+    this.dustMat.uniforms.uPointScale!.value = h / 160 / fine;
+    const dustN = Math.round(q.dust * f2);
+    if (dustN !== this.dustCount) this.rebuildDust(dustN);
     this.starMat.uniforms.uPx!.value = h / 720;
+    this.postMat.uniforms.uFmt!.value = fine;
+    this.postMat.uniforms.uLodFine!.value = Math.log2(fine);
     // Сплаты: сколько пикселей буфера в метре на расстоянии в метр и какой у сплата размер в мире.
     const su = this.splatMat.uniforms;
+    const points = q.points * f2;
     su.uProj!.value = h / (2 * tanY);
-    su.uMaxPx!.value = Math.max(5, h * SCAN.maxPx);
-    su.uSize!.value = SCAN.size / Math.sqrt(q.points);
+    su.uMaxPx!.value = Math.max(5, (h * SCAN.maxPx) / fine);
+    su.uSize!.value = SCAN.size / Math.sqrt(points);
     (su.uNearFar!.value as THREE.Vector2).set(this.camera.near, this.camera.far);
-    this.clouds.setDensity(q.points);
-    this.grainDensity = Math.min(1, q.points / 1100 + 0.25);
-    this.clouds.budget = q.points * SCAN.sow;
+    this.clouds.setDensity(points);
+    this.grainDensity = Math.min(1, q.points / 1100 + 0.25) * f2;
+    this.clouds.budget = q.points * SCAN.sow * Math.min(f2, SOW_FINE_MAX);
+  }
+
+  /** Облако точек ещё досевается: кадр сейчас легче, чем будет (замер времени кадра это учитывает). */
+  get sowing(): boolean {
+    return this.clouds.behind > 0;
+  }
+
+  /** Насколько мелким вышло бы зерно на этом экране при таком качестве (сейчас — поле fine). */
+  fineFor(q: Quality): number {
+    return fineOf(this.cssW, this.cssH, QUALITY[q], typeof devicePixelRatio === 'number' ? devicePixelRatio : 1);
+  }
+
+  /**
+   * Сколько миллисекунд уходит на кадр на самом деле: рисует кадры подряд и после каждого ждёт
+   * видеокарту (чтение одной точки кадра не возвращается, пока она не закончит). По частоте кадров этого
+   * не узнать: она упирается в частоту экрана и запаса не показывает. Первый кадр не в счёт — в нём
+   * собираются шейдеры и заводятся буферы. stopMs — замер обрывается, как только на него ушло столько
+   * времени: слабую машину не держим. Возвращает среднее по нарисованным кадрам.
+   */
+  measure(draw: () => void, frames: number, stopMs: number): number {
+    const gl = this.renderer.getContext();
+    const px = new Uint8Array(4);
+    // Читается сам кадр на экране: из буфера другого вида чтение может не состояться — и ожидания не будет.
+    const wait = (): void => {
+      this.renderer.setRenderTarget(null);
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    };
+    draw();
+    wait();
+    const t0 = performance.now();
+    let n = 0;
+    while (n < frames) {
+      draw();
+      wait();
+      n += 1;
+      if (performance.now() - t0 > stopMs) break;
+    }
+    return (performance.now() - t0) / n;
   }
 
   /** Отладка: облако точек вкл/выкл. */
@@ -1546,7 +1635,7 @@ export class GameRenderer {
     this.swarmParam.needsUpdate = true;
     const q = QUALITY[this.quality];
     this.swarmGeo.instanceCount = Math.min(MAX_WORMS, q.worms);
-    this.swarmGeo.setDrawRange(0, q.strand);
+    this.swarmGeo.setDrawRange(0, Math.min(STRAND_MAX, Math.round(q.strand * this.fine * this.fine)));
     this.swarmMat.uniforms.uTime!.value = time;
   }
 
@@ -1964,7 +2053,7 @@ export class GameRenderer {
         eu.tScene!.value = this.sceneRT.texture;
         // prevViewProj здесь уже матрица этого кадра: её только что записал проход памяти.
         (eu.uInvViewProj!.value as THREE.Matrix4).copy(this.prevViewProj).invert();
-        (eu.uTexel!.value as THREE.Vector2).set(1.5 / this.sceneRT.width, 1.5 / this.sceneRT.height);
+        (eu.uTexel!.value as THREE.Vector2).set((1.5 * this.fine) / this.sceneRT.width, (1.5 * this.fine) / this.sceneRT.height);
         eu.uGainInv!.value = 1 / Math.max(1, v.gain);
         r.setRenderTarget(this.echoRT);
         r.render(this.echoScene, this.postCam);
@@ -2058,8 +2147,8 @@ export class GameRenderer {
    * points — сколько точек-сплатов отдано видеокарте в прошлом кадре, clouds — у скольких сеток есть
    * облака точек, cells — сколько клеток с точками сейчас живо (у сеток рядом с игроком).
    */
-  info(): { calls: number; triangles: number; width: number; height: number; quality: Quality; programs: number; chunks: number; visible: number; points: number; clouds: number; cells: number; slides: number } {
-    return { calls: this.lastCalls, triangles: this.lastTris, width: this.width, height: this.height, quality: this.quality, programs: this.renderer.info.programs?.length ?? 0, chunks: this.chunks.length, visible: this.chunks.filter((m) => m.visible).length, points: this.clouds.drawn, clouds: this.clouds.count, cells: this.clouds.cells, slides: this.chunks.filter((m) => m.userData.slide !== undefined).length };
+  info(): { calls: number; triangles: number; width: number; height: number; quality: Quality; fine: number; programs: number; chunks: number; visible: number; points: number; clouds: number; cells: number; slides: number } {
+    return { calls: this.lastCalls, triangles: this.lastTris, width: this.width, height: this.height, quality: this.quality, fine: this.fine, programs: this.renderer.info.programs?.length ?? 0, chunks: this.chunks.length, visible: this.chunks.filter((m) => m.visible).length, points: this.clouds.drawn, clouds: this.clouds.count, cells: this.clouds.cells, slides: this.chunks.filter((m) => m.userData.slide !== undefined).length };
   }
 
   /**

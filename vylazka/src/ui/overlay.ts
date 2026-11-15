@@ -42,6 +42,8 @@ export interface Card {
 }
 
 const ORDER: readonly Quality[] = ['low', 'med', 'high'];
+/** Четвёртая ступень — высокое качество с зерном вдвое мельче: только на компьютере с большим экраном (setFineStep). */
+const ORDER_DESK: readonly Quality[] = [...ORDER, 'ultra'];
 
 export class Overlay {
   readonly el: HTMLElement;
@@ -66,6 +68,7 @@ export class Overlay {
   private sound = true;
   private quality: Quality = 'med';
   private touch = false;
+  private fineStep = false;
   private errorText = '';
   private card: Card | null = null;
   private shownAt = 0;
@@ -134,7 +137,8 @@ export class Overlay {
 
     this.qualityBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const next = ORDER[(ORDER.indexOf(this.quality) + 1) % ORDER.length]!;
+      const order = this.fineStep ? ORDER_DESK : ORDER;
+      const next = order[(order.indexOf(this.quality) + 1) % order.length]!;
       this.handlers.onQuality(next);
     });
     this.motionBtn.addEventListener('click', (e) => {
@@ -153,6 +157,11 @@ export class Overlay {
   setTouch(touch: boolean): void {
     this.touch = touch;
     this.refresh();
+  }
+
+  /** Есть ли в кнопке качества четвёртая ступень (мелкое зерно): решает приложение — по устройству и экрану. */
+  setFineStep(on: boolean): void {
+    this.fineStep = on;
   }
 
   setQuality(q: Quality): void {

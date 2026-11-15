@@ -366,6 +366,25 @@ async function scenarioPlay(browser, baseUrl) {
   const lowGrid = await vz(page, () => window.__vz.probe());
   check('на низком качестве картинка есть', center(lowGrid) > 30, `центр ${center(lowGrid).toFixed(1)}`);
   await vz(page, () => window.__vz.quality('high'));
+  // Ультра — высокое качество с зерном и точками вдвое мельче. Насколько мельче, решает экран: в окне
+  // 1280×720 мельче некуда (буфер тот же), в окне 1600×900 — на четверть, и точек в кадре больше.
+  await vz(page, () => window.__vz.step(20));
+  const high = await vz(page, () => window.__vz.info());
+  await vz(page, () => window.__vz.quality('ultra'));
+  const same = await vz(page, () => window.__vz.info());
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await sleep(400);
+  await vz(page, () => window.__vz.step(20));
+  const fine = await vz(page, () => window.__vz.info());
+  const fineGrid = await vz(page, () => window.__vz.probe());
+  check(
+    'ультра: в малом окне буфер как у высокого, в большом — крупнее, зерно мельче, точек больше, картинка есть',
+    high.fine === 1 && same.quality === 'ultra' && same.fine === 1 && same.width === 1280 && same.height === 720 && fine.width === 1600 && fine.height === 900 && fine.fine === 1.25 && fine.points > high.points * 1.2 && center(fineGrid) > 30,
+    `высокое ${high.width}×${high.height}, точек ${high.points}; ультра ${same.width}×${same.height} → ${fine.width}×${fine.height}, мелкость ${fine.fine}, точек ${fine.points}, центр ${center(fineGrid).toFixed(1)}`,
+  );
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await sleep(400);
+  await vz(page, () => window.__vz.quality('high'));
   await vz(page, () => window.__vz.lang('en'));
   check('смена языка на лету: REC/CAM и документ', (await page.textContent('.vz-hud__cam')) === 'CAM-07' && (await page.evaluate(() => document.documentElement.lang)) === 'en');
   check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0);
