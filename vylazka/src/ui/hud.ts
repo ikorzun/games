@@ -6,6 +6,8 @@
 import { t } from '../core/i18n';
 
 const pad = (n: number): string => String(n).padStart(2, '0');
+/** Сколько гаснет вспышка воспоминания (transition у .vz-hud__flash в styles.css). */
+const FLASH_FADE_MS = 1600;
 
 /** Дата и время записи: старт 13 ноября 2004, 23:41:07, дальше идут игровые секунды. */
 export function recTimestamp(seconds: number): string {
@@ -50,6 +52,11 @@ export class Hud {
   private lastAct = '';
   private lastBat = '';
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Сообщение, которое ждёт конца вспышки. */
+  private toastWait: ReturnType<typeof setTimeout> | undefined;
+  private toastPending: { text: string; ms: number } | null = null;
+  /** До какого времени (Date.now) горит или гаснет вспышка. */
+  private flashUntil = 0;
 
   constructor(parent: HTMLElement) {
     this.el = document.createElement('div');
@@ -167,8 +174,21 @@ export class Hud {
     this.actBar.parentElement!.classList.toggle('is-on', progress > 0);
   }
 
-  /** Короткое сообщение вверху кадра на несколько секунд. */
+  /**
+   * Короткое сообщение вверху кадра на несколько секунд. Пока горит или гаснет вспышка, сообщение ждёт:
+   * на высоком экране длинная подсказка дорастает до середины кадра и ложится на строку вспышки (кадр
+   * партнёра с телефона: подсказка про касание поверх «it only looks still.»).
+   */
   toast(text: string, ms = 3200): void {
+    if (this.toastWait !== undefined) clearTimeout(this.toastWait);
+    this.toastWait = undefined;
+    this.toastPending = null;
+    const wait = this.flashUntil - Date.now();
+    if (wait > 0) {
+      this.toastPending = { text, ms };
+      this.toastWait = setTimeout(() => this.toast(text, ms), wait);
+      return;
+    }
     this.toastEl.textContent = text;
     this.toastEl.classList.add('is-on');
     if (this.toastTimer !== undefined) clearTimeout(this.toastTimer);
@@ -177,7 +197,11 @@ export class Hud {
 
   /** Вспышка воспоминания: строка посреди кадра, появляется рывком и медленно гаснет. */
   flash(text: string, ms = 5200): void {
-    // Вспышка важнее прочих сообщений: они стоят почти там же и легли бы строкой на строку.
+    // Вспышка важнее прочих сообщений: они стоят почти там же и легли бы строкой на строку. Горящее
+    // сообщение гаснет, ждущее — ждёт дальше (до конца новой вспышки и её угасания, 1,6 с в стилях).
+    this.flashUntil = Date.now() + ms + FLASH_FADE_MS;
+    const pending = this.toastPending;
+    if (pending) this.toast(pending.text, pending.ms);
     this.toastEl.classList.remove('is-on');
     this.flashEl.textContent = text;
     this.flashEl.classList.remove('is-on');

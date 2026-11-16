@@ -1519,7 +1519,10 @@ async function scenarioFear(browser, baseUrl) {
   check('рой выпущен в пяти клетках и знает, где игрок', ok && (st.swarm.mode === 'stalk' || st.swarm.mode === 'cohere') && st.swarm.awareness > 0.5, st.swarm.mode);
   for (let i = 0; i < 60 && st.swarm.mode !== 'hunt'; i++) st = await vz(page, () => window.__vz.step(20));
   check('рой подошёл на свет и собрался в фигуру', st.swarm.mode === 'hunt' && st.swarm.cohesion === 1 && st.swarm.near > 0.15, `${st.swarm.mode}, сцепление ${st.swarm.cohesion.toFixed(2)}, близость ${st.swarm.near.toFixed(2)}`);
-  check('подсказка про луч показана один раз', (await page.textContent('.vz-hud__toast'))?.includes('луч') === true);
+  // Подсказка не ложится на вспышку воспоминания: если та ещё горит или гаснет, подсказка ждёт её конца
+  // (кадр партнёра с телефона: подсказка про касание поверх строки «it only looks still.»).
+  const beamHint = await page.waitForFunction(() => document.querySelector('.vz-hud__toast.is-on')?.textContent?.includes('луч') === true && !document.querySelector('.vz-hud__flash')?.classList.contains('is-on'), null, { timeout: 12000 }).then(() => true, () => false);
+  check('подсказка про луч показана один раз — после вспышки, не поверх неё', beamHint);
   // Грибы («Когда он появляется, все начинает прорастать грибами вокруг… в углах как знак»).
   {
     const grown = await vz(page, () => window.__vz.spores());
