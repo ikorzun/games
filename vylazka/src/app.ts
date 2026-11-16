@@ -296,8 +296,6 @@ export class App {
     this.overlay.setPlace(this.world);
     if (p.get('lang') === null && this.profile.lang) this.setLang(normalizeLang(this.profile.lang), true);
     renderer.brightness = BRIGHT[this.profile.bright];
-    // Телефон и планшет: тень от солнца — формулой (см. keyShadowByFormula в render/renderer.ts).
-    renderer.keyShadowByFormula = this.touchMode;
     // Пробная сборка: одна часть сборки места отключена, чтобы на телефоне найти, какая ломает пол.
     setThingRegistry(ALL_PROPS);
     // level=test — коридор технического среза, level=show — витрина реквизита.
@@ -671,7 +669,6 @@ export class App {
   private enableTouch(): void {
     if (this.touch) return;
     this.touchMode = true;
-    this.game.renderer.keyShadowByFormula = true;
     this.root.classList.add('is-touch');
     this.touch = new TouchControls(this.root, this.game.shake);
     this.touch.setVisible(this.screen === 'play' && !this.lifecycle.paused);
@@ -991,6 +988,21 @@ export class App {
     el.append(text, btn);
     this.root.append(el);
     this.diagText = text;
+    // Последняя ошибка страницы — в строку проверки: на телефоне консоли не видно. Перехват ставится
+    // один раз, даже если строку включали и выключали.
+    if (!this.diagHooked) {
+      this.diagHooked = true;
+      const keep = (m: unknown): void => {
+        this.diagErr = String(m instanceof Error ? m.message : m).slice(0, 160);
+      };
+      globalThis.addEventListener?.('error', (e) => keep((e as ErrorEvent).message || 'error'));
+      globalThis.addEventListener?.('unhandledrejection', (e) => keep((e as PromiseRejectionEvent).reason));
+      const orig = console.error.bind(console);
+      console.error = (...a: unknown[]): void => {
+        keep(a.map((x) => (x instanceof Error ? x.message : String(x))).join(' '));
+        orig(...a);
+      };
+    }
     // Метки точек проверки: на снимке экрана видно, куда смотрела каждая строка.
     this.diagMarks = App.PROBE_PTS.map(() => {
       const m = document.createElement('div');
@@ -1001,6 +1013,10 @@ export class App {
   }
 
   private diagMarks: HTMLElement[] = [];
+  /** Ошибки для строки проверки: коды WebGL (сколько раз и последний) и последняя ошибка страницы. */
+  private diagGl = { count: 0, last: 0 };
+  private diagErr = '';
+  private diagHooked = false;
 
   /** Метки точек проверки — на свои места поверх кадра (кадр может быть вписан в окно с полями). */
   private placeDiagMarks(): void {
@@ -1052,6 +1068,8 @@ export class App {
     const i = r.info();
     const d = r.diag([]);
     const u = r.diagUniforms();
+    const ge = r.glError();
+    if (ge !== 0) this.diagGl = { count: this.diagGl.count + 1, last: ge };
     // Цвет служебных кадров лежит в кадре мира в sRGB: обратно в доли 0..1, потом в проценты.
     const lin = (b: number): number => {
       const c = b / 255;
@@ -1083,6 +1101,7 @@ export class App {
     return [
       `${d.gpu} · ${d.webgl2 ? 'WebGL2' : 'WebGL1'} · highp ${d.highp}${this.variant ? ` · проба ${this.variant}` : ''}`,
       `${g.world ?? '?'} · q ${i.quality} ${i.width}×${i.height} · ${this.fps.toFixed(0)} fps · усиление ${g.exposure.gain.toFixed(2)} · яркость ${r.brightness} · солнце ${r.keyShadowByFormula ? 'формулой' : 'картой'}`,
+      `ошибки WebGL: ${this.diagGl.count ? `${this.diagGl.count} раз, последняя ${this.diagGl.last}` : 'нет'}${this.diagErr ? ` · страница: ${this.diagErr}` : ''}`,
       `цп: скан ${u.scan.map((x) => x.toFixed(2)).join('/')} · угас ${u.fade.toFixed(2)} · даль ${u.range.map((x) => x.toFixed(0)).join('–')} · конус ${u.cone.map((x) => x.toFixed(0)).join('/')}° ×${u.tall.toFixed(2)} · солн.клетки ${u.keyCells.toFixed(2)} · сетка ${u.grid.map((x) => x.toFixed(1)).join(',')} · рассеян ${u.ambient.map((x) => x.toFixed(2)).join(',')}`,
       ...App.PROBE_PTS.map((_, k) => row(k)),
     ].join('\n');
