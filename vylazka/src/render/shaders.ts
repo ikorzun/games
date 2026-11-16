@@ -116,6 +116,7 @@ export const SCAN_GLSL = /* glsl */ `
 uniform vec4 uScan;       // x — h без света, y — h на единицу света, z — предел h, w — запас
 uniform float uScanFade;  // 1 — пространство держится; меньше — редеет (его время выходит)
 uniform vec2 uScanRange;  // докуда рассеянный свет «сканирует»: плотно до x, россыпь после y, м
+uniform float uDebugView; // проверка на устройстве (#diag, «факторы»): 1 — вместо цвета то, из чего сложилась сборка
 `;
 
 /**
@@ -902,6 +903,12 @@ void main() {
   float hOut = 1.0;
 #ifdef SCAN
   hOut = hScan / uScan.z;
+  // Проверка на устройстве: вместо цвета — из чего сложилась сборка поверхности: r — взгляд, g — рассеянный
+  // свет, b — дальность, a — итог. Пиксели читает строка проверки (app.ts, diagLines).
+  if (uDebugView > 0.5) {
+    gl_FragColor = vec4(gazeK, min(1.0, eAmb * 8.0), 1.0 - smoothstep(rangeV.x, rangeV.y, distV), hOut);
+    return;
+  }
   // Туда, где света почти нет, фактуры не нужны: поверхность — просто цвет материала.
   if (hLit < 0.1 && eGlow < 0.004 && eAmb < 0.02) {
     vec3 flat_ = uMatBase[mi] * vColor.rgb * ao;

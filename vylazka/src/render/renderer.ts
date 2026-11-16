@@ -677,6 +677,7 @@ export class GameRenderer {
         uDots: { value: 0 },
         uScan: { value: new THREE.Vector4(0, SCAN.perLight, SCAN.max, 0) },
         uScanFade: { value: 1 },
+        uDebugView: { value: 0 },
         uScanRange: { value: new THREE.Vector2(4, 15) },
         uSlide: { value: new THREE.Vector4(SLIDE.washFrom, SLIDE.washTo, SLIDE.gain, 0) },
         uErase: { value: new THREE.Vector4(0, 0, 0, 0) },
@@ -1322,6 +1323,12 @@ export class GameRenderer {
     const probes = points.map(([u, v]) => ({ scene: read(this.sceneRT, u, v), mem: read(this.memRT[1], u, v) }));
     return { gpu, webgl2: typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext, highp, probes };
   }
+
+  /**
+   * Проверка на устройстве, режим «факторы»: мир рисуется не цветом, а тем, из чего сложилась сборка
+   * поверхности (r — взгляд, g — рассеянный свет, b — дальность, a — итог). Только для строки проверки.
+   */
+  debugView = 0;
 
   /** Облако точек сейчас включено (выключенное — мир сплошными поверхностями). */
   get scanOn(): boolean {
@@ -1996,6 +2003,7 @@ export class GameRenderer {
     (wu.uSlide!.value as THREE.Vector4).w = v.time;
     wu.uTierDrop!.value = this.tierDrop;
     wu.uScanFade!.value = v.scanFade;
+    wu.uDebugView!.value = this.debugView;
     (wu.uScanRange!.value as THREE.Vector2).set(v.scanRange[0], v.scanRange[1]);
     wu.uKeyCells!.value = v.keyCells ?? 0;
     wu.uGaze!.value = v.gaze ?? 1;
@@ -2191,7 +2199,7 @@ export class GameRenderer {
     // Сведение: поверхности — только там, где сплаты слились; поверх — сами точки, из которых собран мир.
     this.composeMat.uniforms.tScene!.value = this.sceneRT.texture;
     this.composeMat.uniforms.tMem!.value = memNow.texture;
-    this.composeMat.uniforms.uSolid!.value = this.debugScanOff ? 1 : 0;
+    this.composeMat.uniforms.uSolid!.value = this.debugScanOff || this.debugView > 0 ? 1 : 0;
     r.setRenderTarget(this.rawRT);
     r.render(this.composeScene, this.postCam);
     if (!this.debugScanOff) {

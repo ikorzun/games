@@ -13,6 +13,8 @@ export interface OverlayHandlers {
   /** Нажатие на экране отчёта: следующая вылазка. */
   onNext(): void;
   onQuality(next: Quality): void;
+  /** Долгое нажатие на кнопку качества: строка проверки для телефона вкл/выкл (адрес #diag туда не доходит). */
+  onDiag?(): void;
   /** Кнопка «трясти телефоном» (только там, где нужен явный запрос разрешения). */
   onMotion?(): void;
   /** Кнопка звука: включить или выключить. */
@@ -153,8 +155,32 @@ export class Overlay {
       this.handlers.onSound?.();
     });
 
+    // Подержать кнопку качества полторы секунды — строка проверки (во встроенном просмотре Claude адрес
+    // страницы с #diag до игры не доходит). Отпущенная раньше — обычное нажатие.
+    let holdTimer: number | undefined;
+    let held = false;
+    this.qualityBtn.addEventListener('pointerdown', () => {
+      held = false;
+      if (holdTimer !== undefined) clearTimeout(holdTimer);
+      holdTimer = window.setTimeout(() => {
+        held = true;
+        this.handlers.onDiag?.();
+      }, 1500);
+    });
+    const cancelHold = (): void => {
+      if (holdTimer !== undefined) clearTimeout(holdTimer);
+      holdTimer = undefined;
+    };
+    this.qualityBtn.addEventListener('pointerup', cancelHold);
+    this.qualityBtn.addEventListener('pointercancel', cancelHold);
+    this.qualityBtn.addEventListener('pointerleave', cancelHold);
+    this.qualityBtn.addEventListener('contextmenu', (e) => e.preventDefault());
     this.qualityBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (held) {
+        held = false;
+        return;
+      }
       const order = this.fineStep ? ORDER_DESK : ORDER;
       const next = order[(order.indexOf(this.quality) + 1) % order.length]!;
       this.handlers.onQuality(next);

@@ -165,7 +165,7 @@ export class App {
     if (p.get('pseudo') === '1') i18n.setPseudo(true);
     // Счётчик кадров: ?fps=1 или #fps — на странице по ссылке параметров адреса нет, проходит только #имя.
     this.showFps = p.get('fps') === '1' || (typeof location !== 'undefined' && location.hash === '#fps');
-    if (p.get('diag') === '1' || (typeof location !== 'undefined' && location.hash === '#diag')) this.makeDiag();
+    if (p.get('diag') === '1' || (typeof location !== 'undefined' && location.hash === '#diag') || App.diagSaved()) this.makeDiag();
 
     const device = this.platform.deviceType();
     // Площадка может ошибиться с типом устройства, поэтому смотрим и на сам указатель;
@@ -186,6 +186,7 @@ export class App {
       onPlace: () => this.setPlace(WORLD_KINDS[(WORLD_KINDS.indexOf(this.world) + 1) % WORLD_KINDS.length]!),
       onRestartPlace: () => this.restartPlace(),
       onLang: () => this.cycleLang(),
+      onDiag: () => this.toggleDiag(),
       onQuality: (q) => {
         this.qualityManual = true;
         this.setQuality(q);
@@ -926,6 +927,36 @@ export class App {
    * что на его видеокарте не так. Строки: видеокарта, качество и свет, а в двух точках пола (низ кадра) и
    * в середине — цвет поверхности и её «собранность» (α кадра мира, 0–255) и память света.
    */
+  /** Строка проверки была включена в прошлый раз (долгим нажатием на «качество»). */
+  private static diagSaved(): boolean {
+    try {
+      return globalThis.localStorage?.getItem('vylazka:diag') === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  /** Строка проверки вкл/выкл (долгое нажатие на кнопку качества в паузе); помнится до следующего раза. */
+  private toggleDiag(): void {
+    const on = !this.diagText;
+    try {
+      if (on) globalThis.localStorage?.setItem('vylazka:diag', '1');
+      else globalThis.localStorage?.removeItem('vylazka:diag');
+    } catch {
+      // без хранилища — только до перезагрузки
+    }
+    if (on) this.makeDiag();
+    else {
+      this.diagText?.parentElement?.remove();
+      this.diagText = null;
+      const r = this.game?.renderer;
+      if (r) {
+        r.debugView = 0;
+        if (!r.scanOn) r.debugScan(true);
+      }
+    }
+  }
+
   private makeDiag(): void {
     const el = document.createElement('div');
     el.className = 'vz-diag';
@@ -947,7 +978,22 @@ export class App {
     btn.addEventListener('pointerdown', (e) => e.stopPropagation());
     btn.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
     btn.addEventListener('click', toggle);
-    el.append(text, btn);
+    // «Факторы»: мир рисуется тем, из чего сложилась сборка поверхности; в строке — числа по точкам.
+    const fb = document.createElement('button');
+    fb.type = 'button';
+    fb.style.cssText = btn.style.cssText + ';margin-left:8px';
+    fb.textContent = 'факторы: выкл';
+    fb.addEventListener('pointerdown', (e) => e.stopPropagation());
+    fb.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+    fb.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const r = this.game?.renderer;
+      if (!r) return;
+      r.debugView = r.debugView > 0 ? 0 : 1;
+      fb.textContent = r.debugView > 0 ? 'факторы: ВКЛ' : 'факторы: выкл';
+    });
+    el.append(text, btn, fb);
     this.root.append(el);
     this.diagText = text;
   }
@@ -962,7 +1008,11 @@ export class App {
       [0.5, 0.72],
       [0.5, 0.86],
     ]);
-    const px = (p: { scene: number[]; mem: number[] }): string => `rgb ${p.scene.slice(0, 3).join(',')} α ${p.scene[3]} · память α ${p.mem[3]}`;
+    // В режиме «факторы» в кадре мира не цвет, а причины сборки: взгляд, рассеянный свет, дальность и итог.
+    const px =
+      r.debugView > 0
+        ? (p: { scene: number[]; mem: number[] }): string => `взгляд ${p.scene[0]} · свет ${p.scene[1]} · дальность ${p.scene[2]} · итог ${p.scene[3]}`
+        : (p: { scene: number[]; mem: number[] }): string => `rgb ${p.scene.slice(0, 3).join(',')} α ${p.scene[3]} · память α ${p.mem[3]}`;
     return [
       `${d.gpu} · ${d.webgl2 ? 'WebGL2' : 'WebGL1'} · highp ${d.highp}`,
       `${g.world ?? '?'} · q ${i.quality} ${i.width}×${i.height} · ${this.fps.toFixed(0)} fps · усиление ${g.exposure.gain.toFixed(2)} · яркость ${r.brightness} · солнце ${r.keyShadowByFormula ? 'формулой' : 'картой'}`,
