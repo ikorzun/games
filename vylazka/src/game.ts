@@ -495,6 +495,8 @@ export class Game {
   /** Вещи, живущие только в текущем карманном пространстве. */
   private pocketThings: Thing[] = [];
   private memoryThing: Thing | null = null;
+  /** Принудительный первый отказ фонаря уже был в этой игре: в следующих сессиях и сценах его нет. */
+  private failTaught = false;
   /**
    * Свет памяти (world/memory_light.ts): у какой вещи он горит и насколько разгорелся. Вещь вспомнили —
    * свет гаснет вместе с ней, поэтому он держится за вещь, а не за memoryThing (тот обнуляется сразу).
@@ -597,8 +599,11 @@ export class Game {
     // В новом месте волна идёт вскоре: план виден сразу.
     this.sonarT0 = -1;
     this.sonarAt = this.time + 2.5;
-    // Батарейка в сессии не садится: фонарь глохнет от контакта, а не от заряда.
-    this.light = new Flashlight(this.rng, { ...DEFAULT_FLASHLIGHT, drainSeconds: Infinity, ...this.lightCfg });
+    // Батарейка в сессии не садится: фонарь глохнет от контакта, а не от заряда. Первый отказ —
+    // принудительный, чтобы научить трясти; он один на игру: в каждой новой сессии или сцене сна его нет
+    // (сцена сна короче минуты, и отказ приходился бы почти на каждую вспышку воспоминания).
+    this.failTaught ||= this.light?.taught ?? false;
+    this.light = new Flashlight(this.rng, { ...DEFAULT_FLASHLIGHT, drainSeconds: Infinity, ...this.lightCfg, ...(this.failTaught ? { firstFailAt: 0 } : {}) });
     const rank = level.layout?.rank ?? 1;
     this.session = dream ? new Session(level, dream.seed, dream.known, this.sessionCfg, dream.chainAt ?? 0) : null;
     // Новая сцена или сессия: прежняя очередь сцен не в счёт — следующую поставит приложение.

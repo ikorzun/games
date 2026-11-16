@@ -111,6 +111,11 @@ export class Flashlight {
   }
 
   /** Батарейка села: тряска не поможет, нужна замена. */
+  /** Принудительный первый отказ уже был: игрок знает, что фонарь трясут. */
+  get taught(): boolean {
+    return this.firstFailDone;
+  }
+
   get empty(): boolean {
     return this.charge <= 0;
   }

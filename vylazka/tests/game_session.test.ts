@@ -23,6 +23,7 @@ import { ALL_PROPS } from '../src/world/props_all';
 import { DOOR_IMAGE, DOOR_NAME, SCREEN_IMAGES } from '../src/world/screens';
 import { setThingRegistry } from '../src/world/thing_mesh';
 import { MEM_LIGHT_KIND, MEMORY_LIGHT } from '../src/world/memory_light';
+import type { FlashlightConfig } from '../src/systems/flashlight';
 
 const SEED = 20041113;
 
@@ -143,9 +144,9 @@ class Harness {
 
   constructor(
     level: BuiltLevel,
-    opts: { calm?: boolean; seed?: number; known?: ReadonlySet<string>; cfg?: typeof QUICK } = {},
+    opts: { calm?: boolean; seed?: number; known?: ReadonlySet<string>; cfg?: typeof QUICK; light?: Partial<FlashlightConfig> } = {},
   ) {
-    this.game = new Game(this.r as unknown as GameRenderer, mulberry32(opts.seed ?? 7));
+    this.game = new Game(this.r as unknown as GameRenderer, mulberry32(opts.seed ?? 7), opts.light ?? {});
     this.game.calm = opts.calm ?? true;
     this.game.sessionCfg = opts.cfg ?? QUICK;
     this.game.loadLevel(level, { seed: opts.seed ?? 7, known: opts.known ?? new Set() });
@@ -356,6 +357,21 @@ describe('игра целиком: цикл сессии', () => {
     expect(h.until(() => g.session!.active !== null, 4)).toBe(true);
     h.run(2);
     expect(h.r.memLight).toBeNull();
+  });
+
+  it('принудительный отказ фонаря — один на игру: в следующей сессии или сцене его нет', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, light: { firstFailAt: 1, meanFailInterval: 1e9 } });
+    const g = h.game;
+    expect(h.until(() => g.light.state === 'dead', 4)).toBe(true);
+    expect(g.light.taught).toBe(true);
+    // Новая сессия (или сцена сна): фонарь новый, а научили уже — второго принудительного отказа нет.
+    g.loadLevel(levelOf(SEED), { seed: 4, known: new Set() });
+    let died = false;
+    for (let i = 0; i < Math.round(4 / STEP); i++) {
+      h.tick();
+      if (g.light.state === 'dead') died = true;
+    }
+    expect(died).toBe(false);
   });
 
   it('сон из сцен: цепочка места начинается с заданной вещи и замыкается по кругу', () => {

@@ -30,7 +30,7 @@ import { drawScreens, loadScreens } from './render/screen_images';
 import { drawSigns } from './render/signs_atlas';
 import type { Sheets } from './render/signs_atlas';
 import type { Quality } from './render/renderer';
-import { ALL_MEMORIES, DEFAULT_SESSION } from './systems/session';
+import { ALL_MEMORIES, DEFAULT_SESSION, WORLD_MEMORIES } from './systems/session';
 import type { SessionConfig } from './systems/session';
 import { wornLine } from './systems/worn_text';
 import { Hud } from './ui/hud';
@@ -68,10 +68,11 @@ const SENS = [0.6, 1, 1.6] as const;
 /** Сон из сцен: сцен в сессии (каждая — другое место). */
 const SCENES = 3;
 /**
- * Сцена короче сессии: одна вещь вместо пяти. Первая вспышка — почти сразу, а вспомнить можно не раньше
- * чем через полминуты: место успевает показаться, прежде чем погаснет.
+ * Сцена короче сессии: одна вещь вместо пяти. Вспышка — секунд через десять: место успевает показаться.
+ * Правило «последнее воспоминание не раньше пятой минуты» (minLength) здесь не годится: вещь сцены — она
+ * же последняя, и правило держало бы вспышку до конца срока, а сцена стояла бы пустой.
  */
-const SCENE_SESSION: SessionConfig = { ...DEFAULT_SESSION, count: 1, firstDelay: 10, fallback: 18, minLength: 40 };
+const SCENE_SESSION: SessionConfig = { ...DEFAULT_SESSION, count: 1, firstDelay: 10, fallback: 18, minLength: 0 };
 const BRIGHT = [0.78, 1, 1.35] as const;
 
 type Screen = 'boot' | 'title' | 'play';
@@ -350,6 +351,8 @@ export class App {
     // Первая сессия: воспоминание места (то, что уже проходится по кругу, или новое). Сид из адреса
     // (?seed=) закрепляет место на всё время страницы и в профиль не пишется.
     this.pinned = p.get('seed') !== null ? { seed: baseSeed >>> 0, rank: this.rankParam() ?? rankFor(this.profile), wear: 0, laps: 0 } : null;
+    // Место закреплено адресом — снится только оно: сна из сцен нет (иначе закреплённая память уехала бы в другое место).
+    if (this.pinned) this.scenes = false;
     this.prepare();
 
     const resize = (): void => {
@@ -461,6 +464,9 @@ export class App {
       if (this.scenes) this.game.sessionCfg = SCENE_SESSION;
       this.game.loadLevel(this.level, { seed: this.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
       if (this.scenes) {
+        // Сон начинается с места заставки; места, пролистанные кнопкой «Место», не «снились».
+        for (const w of WORLD_KINDS) delete this.dreamt[w];
+        this.dreamtCount = 0;
         this.sceneIndex = 0;
         this.markDreamt(this.world);
         this.queueNextScene();
@@ -513,15 +519,20 @@ export class App {
    * пройден: стёртость растёт ещё и на него. Стёрлось совсем — места больше нет: следующая сессия
    * откроет другое. Возвращает true, если воспоминание стёрто.
    */
-  private keepMemory(lap = false): boolean {
+  /**
+   * Записать память места. lap — круг пройден: стёртость прибавляет круг (share — его долю: в сне из сцен
+   * одна вспомненная вещь — пятая часть круга её места); newLap — счётчик кругов шагает (в сне из сцен —
+   * только когда цепочка места замкнулась).
+   */
+  private keepMemory(lap = false, share = 1, newLap = lap): boolean {
     const m = this.memory;
     if (!m || this.testLevel) return false;
     // Стёртость из адреса — только посмотреть: в воспоминание она не идёт.
-    const gained = this.game.wearGain + (lap ? WEAR.lap : 0);
+    const gained = this.game.wearGain + (lap ? WEAR.lap * share : 0);
     m.wear = Math.min(1, m.wear + gained);
     this.game.wearBase += this.game.wearGain;
     this.game.wearGain = 0;
-    if (lap) m.laps += 1;
+    if (newLap) m.laps += 1;
     const gone = erased(m.wear);
     if (this.pinned) {
       if (gone) this.pinned = { ...this.pinned, wear: 0, laps: 0 };
@@ -533,9 +544,8 @@ export class App {
   /** Сессия кончилась, игрок в лимбо: записать итог и собрать следующую — то же место, круг спустя. */
   private onLimbo(): void {
     this.profile.successes += 1;
-    // Сон из сцен: вещь последней сцены вспомнена — цепочка её места шагнула.
-    if (this.scenes) this.stepChain();
-    this.wasErased = this.keepMemory(true);
+    // Сон из сцен: вещь последней сцены вспомнена — цепочка её места шагнула; круг места — пять его вещей.
+    this.wasErased = this.scenes ? this.keepSceneMemory() : this.keepMemory(true);
     this.saveProfile();
     this.platform.track('level_completed', { world: 'session', level: `seed_${this.seed}` });
     // Сон из сцен: следующая сессия начнётся в месте, которое давно не снилось (не в том, где кончилась).
@@ -550,10 +560,17 @@ export class App {
     }, 500);
   }
 
-  /** Сон из сцен: вещь сцены вспомнена — следующая сцена этого места начнётся со следующей вещи цепочки. */
-  private stepChain(): void {
+  /**
+   * Сон из сцен: вещь сцены вспомнена — следующая сцена этого места начнётся со следующей вещи цепочки.
+   * Круг места — пять его вещей, хоть и вспомненных в разных снах: вещь прибавляет пятую часть стёртости
+   * круга, а номер круга шагает, когда цепочка замкнулась. Возвращает: место стёрто до конца.
+   */
+  private keepSceneMemory(): boolean {
     const m = this.memory;
+    const len = WORLD_MEMORIES[this.world].length;
     if (m) m.chain = (m.chain ?? 0) + 1;
+    const wrapped = m !== null && (m.chain ?? 0) % len === 0;
+    return this.keepMemory(true, 1 / len, wrapped);
   }
 
   /** Сон из сцен: отметить, что место снилось сейчас. */
@@ -591,7 +608,7 @@ export class App {
     this.sceneTimer = setTimeout(() => {
       this.sceneTimer = undefined;
       const memory = memoryFor(this.profile, world);
-      const level = buildLevel(generateLayout(memory.seed, memory.rank, world), { wear: memory.wear });
+      const level = buildLevel(generateLayout(memory.seed, memory.rank, world), { wear: this.wearParam() ?? memory.wear });
       this.sceneNext = { world, level, memory };
       this.game.queueScene(level, { seed: memory.seed, known: new Set(this.profile.archive), chainAt: memory.chain ?? 0 });
     }, 700);
@@ -602,8 +619,7 @@ export class App {
    * засчитан. Нынешнее становится местом игры: его стёртость, его круг на экране. Объявлений нет — как во сне.
    */
   private onScene(): void {
-    this.stepChain();
-    this.keepMemory(true);
+    const gone = this.keepSceneMemory();
     const n = this.sceneNext;
     if (n) {
       this.world = n.world;
@@ -617,7 +633,9 @@ export class App {
     this.markDreamt(this.world);
     this.mapHint = null;
     this.saveProfile();
-    this.sayLap();
+    // Прежнее место стёрто до конца — об этом строка, как после лимбо; иначе — номер круга нового места.
+    if (gone) this.hud.flash(t('session.erased'), 6200);
+    else this.sayLap();
     this.queueNextScene();
   }
 
@@ -678,7 +696,11 @@ export class App {
     if (this.screen !== 'title' || this.testLevel) return;
     const m = this.memory;
     if (this.pinned) this.pinned = { ...this.pinned, wear: 0, laps: 0 };
-    else if (m) this.profile.memories[this.world] = { ...m, wear: 0, laps: 0 };
+    else if (m) {
+      // Цепочка вещей — тоже с начала.
+      const { chain: _chain, ...rest } = m;
+      this.profile.memories[this.world] = { ...rest, wear: 0, laps: 0 };
+    }
     this.audio.ui('ui_click');
     this.saveProfile();
     this.prepare();
