@@ -2,7 +2,8 @@
  * Реалистичные замены вещам из набора KayKit (слова партнёра: «Точно нужно менять вещи из набора KayKit
  * на более реалистичные по типу стула. Подбери альтернативу и поставь рядом, я выберу что меняем, а что
  * оставим»). Образец — стул из гнутой фанеры (props_seating.ts): настоящие пропорции, тонкие детали,
- * материалы как в жизни. Пока это кандидаты: на уровни их ставит выбор партнёра в опроснике.
+ * материалы как в жизни. С 16.11 стоят на уровнях вместо всех вещей набора, что были в игре (слова
+ * партнёра: «Меняй все вещи, я отметил пару, но нужна замена всех»).
  *
  * Координаты как у заменяемых вещей: у стены — спина в z = 0, пол y = 0; «посреди пола» (free) — середина
  * в начале координат; на стене — низ в y = 0 реквизита, спина в z = 0. Вся случайность — из сида.
@@ -156,6 +157,15 @@ function floorLamp(xf: Xf, seed: number): void {
 
 // ───────────────────────────── кактусы ─────────────────────────────
 
+/** Пучок колючек — светлая точка в два треугольника, лицом от оси кактуса (дешевле коробочки в шесть раз). */
+function spine(xf: Xf, cx: number, cz: number, th: number, rr: number, y: number, size: number): void {
+  const c = Math.cos(th);
+  const s = Math.sin(th);
+  const p: Vec3 = [cx + c * rr, y, cz + s * rr];
+  const t: Vec3 = [-s * size, 0, c * size];
+  xf.mb.quadFacing(xf.pt(p[0] - t[0], p[1], p[2] - t[2]), xf.pt(p[0], p[1] - size, p[2]), xf.pt(p[0] + t[0], p[1], p[2] + t[2]), xf.pt(p[0], p[1] + size, p[2]), xf.dir(c, 0, s), MAT.paper, [1.1, 1.08, 0.95]);
+}
+
 const POT: Vec3 = [0.86, 0.5, 0.36];
 const SOIL: Vec3 = [0.26, 0.2, 0.16];
 const CACTUS: Vec3 = [0.42, 0.62, 0.36];
@@ -186,7 +196,7 @@ function column(xf: Xf, cx: number, cz: number, y0: number, h: number, rad: numb
     cx,
     cz,
     prof,
-    ribs * 4,
+    ribs * 3,
     MAT.leather,
     (t) => mix(shade(tint, 0.8), [0.6, 0.72, 0.5], t > 0.9 ? 0.4 : 0),
     (th) => 1 + 0.14 * Math.cos(th * ribs),
@@ -195,10 +205,7 @@ function column(xf: Xf, cx: number, cz: number, y0: number, h: number, rad: numb
   // Колючки: светлые пучки по рёбрам.
   for (let k = 0; k < ribs; k++) {
     const th = (k / ribs) * Math.PI * 2;
-    for (let y = y0 + 0.03; y < y0 + h * 0.85; y += 0.035 + 0.01 * r()) {
-      const rr = rad * 1.14 + 0.002;
-      xf.box([cx + Math.cos(th) * rr - 0.002, y, cz + Math.sin(th) * rr - 0.002], [cx + Math.cos(th) * rr + 0.002, y + 0.004, cz + Math.sin(th) * rr + 0.002], MAT.paper, { tint: [1.1, 1.08, 0.95] });
-    }
+    for (let y = y0 + 0.03; y < y0 + h * 0.85; y += 0.04 + 0.012 * r()) spine(xf, cx, cz, th, rad * 1.14 + 0.002, y, 0.003);
   }
 }
 
@@ -221,17 +228,11 @@ function cactusRound(xf: Xf, seed: number): void {
     const a = (i / N) * Math.PI;
     prof.push([Math.max(0.0005, Math.sin(a) * 0.055), soil - 0.005 + (1 - Math.cos(a)) * 0.05]);
   }
-  lathe(xf, 0, 0, prof, 48, MAT.leather, () => shade(CACTUS, 1.05), (th) => 1 + 0.13 * Math.cos(th * 12), () => 0.9);
+  lathe(xf, 0, 0, prof, 36, MAT.leather, () => shade(CACTUS, 1.05), (th) => 1 + 0.13 * Math.cos(th * 12), () => 0.9);
   // Пучки колючек по рёбрам — светлые точки.
-  const r = rng(seed + 5);
   for (let k = 0; k < 12; k++) {
     const th = (k / 12) * Math.PI * 2;
-    for (const a of [0.7, 1.2, 1.7, 2.2]) {
-      const rr = Math.sin(a) * 0.055 * 1.13 + 0.002;
-      const y = soil - 0.005 + (1 - Math.cos(a)) * 0.05;
-      const j = 0.002 + 0.001 * r();
-      xf.box([Math.cos(th) * rr - j, y - j, Math.sin(th) * rr - j], [Math.cos(th) * rr + j, y + j, Math.sin(th) * rr + j], MAT.paper, { tint: [1.1, 1.06, 0.9] });
-    }
+    for (const a of [0.8, 1.4, 2.0]) spine(xf, 0, 0, th, Math.sin(a) * 0.055 * 1.13 + 0.002, soil - 0.005 + (1 - Math.cos(a)) * 0.05, 0.0028);
   }
 }
 
@@ -258,7 +259,7 @@ function framedPrint(xf: Xf, seed: number, W: number, H: number): void {
   const y0 = m;
   const pw = W - 2 * m;
   const ph = H - 2 * m;
-  const NX = 24;
+  const NX = 16;
   const NY = Math.round((NX * ph) / pw);
   const horizon = 0.42 + 0.12 * r();
   const forest = horizon + 0.08 + 0.05 * r();
@@ -315,8 +316,8 @@ function woolRug(xf: Xf, seed: number): void {
     return shade(field, 0.92 + 0.12 * Math.sin(u * 40) * Math.sin(v * 28));
   };
   const mb = xf.mb;
-  const NX = 40;
-  const NZ = 28;
+  const NX = 30;
+  const NZ = 20;
   const n = xf.dir(0, 1, 0);
   const ids: number[][] = [];
   for (let j = 0; j <= NZ; j++) {
@@ -332,13 +333,14 @@ function woolRug(xf: Xf, seed: number): void {
   }
   // Кромка толщиной в ворс.
   xf.box([-W / 2, 0, -D / 2], [W / 2, T - 0.0005, D / 2], MAT.carpet, { tint: border, skip: ['ny', 'py'] });
-  // Бахрома по коротким сторонам.
+  // Бахрома по коротким сторонам: кисточки — плоские полоски на полу.
   for (const sx of [-1, 1]) {
-    for (let k = 0; k < 46; k++) {
-      const z = -D / 2 + 0.02 + (k / 45) * (D - 0.04);
+    for (let k = 0; k < 34; k++) {
+      const z = -D / 2 + 0.02 + (k / 33) * (D - 0.04);
       const len = 0.05 + 0.02 * r();
       const x0 = sx * (W / 2);
-      xf.box([Math.min(x0, x0 + sx * len), 0, z - 0.003], [Math.max(x0, x0 + sx * len), 0.003, z + 0.003], MAT.canvas, { tint: ivory, skip: ['ny'] });
+      const x1 = x0 + sx * len;
+      xf.mb.quadFacing(xf.pt(x0, 0.003, z - 0.004), xf.pt(x1, 0.002, z - 0.003), xf.pt(x1, 0.002, z + 0.003), xf.pt(x0, 0.003, z + 0.004), xf.dir(0, 1, 0), MAT.canvas, ivory);
     }
   }
 }
@@ -354,7 +356,7 @@ export const REAL_PROPS: Record<string, PropSpec> = {
   rug_wool: { w: 2.15, d: 1.4, h: 0.01, mount: 'free', ru: 'шерстяной ковёр с медальоном и бахромой', build: woolRug },
 };
 
-/** Пары «вещь из набора KayKit → реалистичная замена» для опросника партнёра (tools/mebel). */
+/** Пары «вещь из набора KayKit → реалистичная замена»: на уровнях стоит замена; опросник (tools/mebel) показывает обе. */
 export const KAYKIT_SWAPS: readonly { from: string; to: string }[] = [
   { from: 'kk_chair_a', to: 'chair_bent' },
   { from: 'kk_table_small', to: 'table_cafe' },

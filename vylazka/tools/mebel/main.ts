@@ -118,7 +118,7 @@ const ITEMS: Item[] = Object.keys(ALL_PROPS)
       name === 'kk_chair_a'
         ? 'уже заменён по вашему слову'
         : kind === 'pair'
-          ? 'менять на новую'
+          ? 'заменена 16.11 по вашему слову'
           : name === 'chair_bent'
         ? 'уже как надо'
         : kind === 'memory'
@@ -422,7 +422,10 @@ const io = new IntersectionObserver(
 
 function where(i: Item): string {
   if (i.kind === 'memory') return 'вещь памяти: ' + MEMORY.get(i.name)!.map((m) => WORLD_RU[m.world] ?? m.world).join(', ');
-  if (i.name === 'kk_chair_a') return 'уже заменён: офис, жёлтые комнаты';
+  if (i.kind === 'pair') {
+    const w = Object.entries(USAGE[i.alt!]?.worlds ?? {});
+    return 'заменена: ' + (w.length ? w.map(([k, v]) => `${WORLD_RU[k] ?? k}: ${v}`).join(' · ') : 'на уровнях');
+  }
   const w = Object.entries(i.worlds);
   if (w.length === 0) return 'на уровнях не стоит';
   return w.map(([k, v]) => `${WORLD_RU[k] ?? k}: ${v}`).join(' · ');

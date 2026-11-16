@@ -28,7 +28,7 @@ const norm = (a: Vec3): Vec3 => {
 };
 
 /** Ломаная со скруглёнными углами: в каждом внутреннем угле — дуга радиуса bend (кривая Безье по углу). */
-export function bendPath(points: readonly Vec3[], bend: number, steps = 4): Vec3[] {
+export function bendPath(points: readonly Vec3[], bend: number, steps = 3): Vec3[] {
   if (points.length < 3) return points.slice();
   const out: Vec3[] = [points[0]!];
   for (let i = 1; i < points.length - 1; i++) {
@@ -52,7 +52,7 @@ export function bendPath(points: readonly Vec3[], bend: number, steps = 4): Vec3
  * Труба радиуса r по ломаной path (в координатах xf). Кольца ведутся параллельным переносом, поэтому на
  * изгибах труба не перекручивается. Концы закрыты заглушками.
  */
-export function tube(xf: Xf, path: readonly Vec3[], r: number, mat: number, tint: Vec3, seg = 8): void {
+export function tube(xf: Xf, path: readonly Vec3[], r: number, mat: number, tint: Vec3, seg = 7): void {
   const mb = xf.mb;
   const n = path.length;
   if (n < 2) return;
@@ -101,8 +101,8 @@ export function tube(xf: Xf, path: readonly Vec3[], r: number, mat: number, tint
  */
 export function panel(xf: Xf, a: number, b: number, thick: number, place: (s: number, t: number) => Vec3, up: Vec3, mat: number, tint: Vec3, edgeTint?: Vec3): void {
   const mb = xf.mb;
-  const RINGS = 5;
-  const SEG = 28;
+  const RINGS = 4;
+  const SEG = 20;
   const E = 5;
   const pt = (rho: number, th: number): [number, number] => {
     const c = Math.cos(th);

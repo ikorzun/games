@@ -94,9 +94,9 @@ function corridor(ctx: RoomCtx): void {
     const x = (ctx.rng() - 0.5) * 1.4;
     if (r < 0.05) put(ctx, 'water_cooler', s.xf.child(x, 0, 0));
     else if (r < 0.1) put(ctx, 'office_clock', s.xf.child(x, ALL_PROPS.office_clock?.y ?? 2.05, 0));
-    else if (r < 0.15) put(ctx, 'kk_picture_medium', s.xf.child(x, 1.4, 0));
+    else if (r < 0.15) put(ctx, 'print_medium', s.xf.child(x, 1.4, 0));
     else if (r < 0.19) put(ctx, 'trash_bin', s.xf.child(x, 0, 0.2));
-    else if (r < 0.22) put(ctx, 'kk_cactus', s.xf.child(x, 0, 0.36));
+    else if (r < 0.22) put(ctx, 'cactus_column', s.xf.child(x, 0, 0.36));
     else continue;
     s.used = true;
   }
@@ -128,7 +128,7 @@ function reception(ctx: RoomCtx): void {
   }
   // Напротив — стулья для тех, кто ждёт, и кактус между ними. Стул — настоящий, из гнутой фанеры на
   // трубе (props_seating.ts): игрушечный из набора KayKit партнёру не понравился.
-  wall(ctx, ['chair_bent', -0.75], ['chair_bent', 0.75], ['kk_cactus_small', 0, 0]);
+  wall(ctx, ['chair_bent', -0.75], ['chair_bent', 0.75], ['cactus_round', 0, 0]);
   // Экран в приёмной: лес вместо окна.
   leanScreens(ctx, 1, 1, NATURE);
   floorSpots(ctx, 1);
@@ -247,7 +247,7 @@ function meeting(ctx: RoomCtx): void {
   }
   wall(ctx, ['whiteboard']);
   wall(ctx, ['office_clock']);
-  corner(ctx, 'kk_cactus');
+  corner(ctx, 'cactus_column');
   // Экран для презентаций на свободной стене.
   const scr = free(ctx, false)[0];
   if (scr) {
@@ -267,8 +267,8 @@ function breakroom(ctx: RoomCtx): void {
   wall(ctx, ['vending_machine']);
   wall(ctx, ['water_cooler', -0.4], ['trash_bin', 0.35]);
   // Столик у стены и два стула по бокам.
-  const t = wall(ctx, ['kk_table_small'], ['chair_bent', -0.85], ['chair_bent', 0.85]);
-  if (t) spot(ctx, t.s.xf, t.x, 0.72, 0.35, 'table');
+  const t = wall(ctx, ['table_cafe'], ['chair_bent', -0.85], ['chair_bent', 0.85]);
+  if (t) spot(ctx, t.s.xf, t.x, 0.745, 0.35, 'table');
   floorSpots(ctx, 2);
   // Телевизор в комнате отдыха — единственный экран офиса, где не природа, а то, что смотрели все:
   // студия телеигры, кадр мультфильма. Участок стены берётся первый свободный, без ГСЧ — остальная
@@ -291,12 +291,12 @@ function manager(ctx: RoomCtx): void {
     landmark(ctx, 'manager', xf, d.x, 0.9, 0.4);
     spot(ctx, xf, d.x + 0.28, 0.77, 0.52, 'table');
   }
-  wall(ctx, ['kk_armchair']);
+  wall(ctx, ['armchair_visitor']);
   wall(ctx, ['binder_shelf']);
-  wall(ctx, ['kk_picture_large']);
-  wall(ctx, ['kk_lamp_standing']);
-  corner(ctx, 'kk_cactus');
-  put(ctx, 'kk_rug_rect', homeCentre(ctx).xf.child(0, 0, 0));
+  wall(ctx, ['print_large']);
+  wall(ctx, ['floor_lamp']);
+  corner(ctx, 'cactus_column');
+  put(ctx, 'rug_wool', homeCentre(ctx).xf.child(0, 0, 0));
   floorSpots(ctx, 2);
 }
 
@@ -421,8 +421,8 @@ function yellowBreakroom(ctx: RoomCtx): void {
   // Автомат всё ещё светится.
   const v = wall(ctx, ['vending_machine']);
   if (v) landmark(ctx, 'breakroom', v.s.xf, v.x, 1.0, 0.4);
-  const t = wall(ctx, ['kk_table_small']);
-  if (t) spot(ctx, t.s.xf, t.x, 0.72, 0.35, 'table');
+  const t = wall(ctx, ['table_cafe']);
+  if (t) spot(ctx, t.s.xf, t.x, 0.745, 0.35, 'table');
   floorSpots(ctx, 2);
 }
 
