@@ -345,7 +345,111 @@ function woolRug(xf: Xf, seed: number): void {
   }
 }
 
+// ───────────────────────────── мелочь со стола: книги, лампа, подушка ─────────────────────────────
+
+/** Обложки старых книг: приглушённые ткань и картон, у каждой своя. */
+const COVERS: readonly Vec3[] = [[0.62, 0.2, 0.17], [0.2, 0.36, 0.27], [0.2, 0.26, 0.42], [0.66, 0.52, 0.28], [0.45, 0.42, 0.38], [0.32, 0.2, 0.3]];
+
+/** Стопка из трёх-четырёх книг: обложка, корешок с полосками, обрез страниц чуть желтее белого. */
+function bookStack(xf: Xf, seed: number): void {
+  const r = rng(seed);
+  const n = 3 + (r() < 0.5 ? 1 : 0);
+  let y = 0;
+  for (let i = 0; i < n; i++) {
+    const w = 0.15 + r() * 0.06;
+    const d = 0.2 + r() * 0.05;
+    const t = 0.022 + r() * 0.024;
+    const ox = (r() - 0.5) * 0.03;
+    const oz = (r() - 0.5) * 0.03;
+    const c = COVERS[Math.floor(r() * COVERS.length)]!;
+    const k = 0.006;
+    // Обложки сверху и снизу, корешок слева; блок страниц утоплен на полсантиметра.
+    xf.box([ox - w / 2, y, oz - d / 2], [ox + w / 2, y + k, oz + d / 2], MAT.canvas, { tint: c, bevel: 0.002 });
+    xf.box([ox - w / 2, y + t - k, oz - d / 2], [ox + w / 2, y + t, oz + d / 2], MAT.canvas, { tint: c, bevel: 0.002 });
+    xf.box([ox - w / 2, y + k, oz - d / 2], [ox - w / 2 + 0.008, y + t - k, oz + d / 2], MAT.canvas, { tint: shade(c, 0.85) });
+    xf.box([ox - w / 2 + 0.008, y + k, oz - d / 2 + 0.004], [ox + w / 2 - 0.004, y + t - k, oz + d / 2 - 0.004], MAT.paper, { tint: [1.08, 1.0, 0.82] });
+    // Полоски тиснения на корешке.
+    for (const f of [0.18, 0.82]) xf.box([ox - w / 2 - 0.0008, y + k, oz - d / 2 + d * f - 0.004], [ox - w / 2 + 0.001, y + t - k, oz - d / 2 + d * f + 0.004], MAT.brass, { tint: [1, 0.85, 0.5] });
+    y += t;
+  }
+}
+
+/** Настольная лампа: тяжёлое латунное основание, тонкая стойка, тканевый абажур конусом. */
+function deskLamp(xf: Xf, seed: number): void {
+  const r = rng(seed);
+  const cloth: Vec3 = r() < 0.5 ? [1.2, 1.05, 0.82] : [0.62, 0.72, 0.6];
+  lathe(xf, 0, 0, [[0.0005, 0], [0.075, 0], [0.078, 0.008], [0.07, 0.022], [0.03, 0.032], [0.012, 0.04]], 20, MAT.brass, () => [0.95, 0.82, 0.55], () => 1, () => 0.85);
+  tube(xf, [[0, 0.035, 0], [0, 0.3, 0]], 0.007, MAT.brass, [0.95, 0.82, 0.55]);
+  // Патрон и абажур.
+  lathe(xf, 0, 0, [[0.016, 0.28], [0.018, 0.31], [0.012, 0.32]], 10, MAT.bakelite, () => [0.4, 0.36, 0.3]);
+  const shadeProf: [number, number][] = [[0.13, 0.25], [0.125, 0.27], [0.075, 0.38], [0.07, 0.385]];
+  lathe(xf, 0, 0, shadeProf, 24, MAT.canvas, (t) => shade(cloth, 0.9 + 0.1 * t));
+  // Изнанка абажура: тот же конус внутрь, светлее (под ним лампочка).
+  lathe(xf, 0, 0, shadeProf.map(([rr, y]) => [rr - 0.003, y] as [number, number]).reverse(), 24, MAT.canvas, () => shade(cloth, 1.25));
+}
+
+/**
+ * Подушка: набитый чехол — надутая плита со скруглёнными углами (суперэллипсоид), посередине толще, к
+ * краям сходит на шов.
+ */
+function pillow(xf: Xf, seed: number): void {
+  const r = rng(seed);
+  const fab: Vec3 = [[1.25, 1.2, 1.1], [0.9, 1.05, 1.25], [1.25, 0.95, 0.85]][Math.floor(r() * 3)] as Vec3;
+  const W = 0.27;
+  const D = 0.19;
+  const H = 0.075;
+  const U = 14;
+  const V = 10;
+  const mb = xf.mb;
+  const grid = (top: boolean): number[][] => {
+    const rows: number[][] = [];
+    for (let i = 0; i <= U; i++) {
+      const row: number[] = [];
+      for (let j = 0; j <= V; j++) {
+        const u = (i / U) * 2 - 1;
+        const v = (j / V) * 2 - 1;
+        // Плоский прямоугольник, края которого оттянуты к шву; высота — купол, к краю ноль.
+        const e = Math.max(Math.abs(u), Math.abs(v));
+        const puff = Math.pow(Math.max(0, 1 - Math.pow(Math.abs(u), 4)) * Math.max(0, 1 - Math.pow(Math.abs(v), 4)), 0.55);
+        const pinch = 1 - 0.06 * puff;
+        const x = u * W * pinch;
+        const z = v * D * pinch;
+        const y = H + (top ? 1 : -1) * H * puff * 0.95;
+        // Нормаль — по уклону купола (приближённо), на шве — вбок.
+        const nx = (top ? 1 : -1) * -u * 0.6 * (1 - puff) + u * 0.4 * (e > 0.95 ? 1 : 0);
+        const nz = (top ? 1 : -1) * -v * 0.6 * (1 - puff) + v * 0.4 * (e > 0.95 ? 1 : 0);
+        const ny = top ? 0.6 + 0.4 * puff : -(0.6 + 0.4 * puff);
+        const l = Math.hypot(nx, ny, nz) || 1;
+        row.push(mb.vertex(xf.pt(x, y, z), xf.dir(nx / l, ny / l, nz / l), MAT.canvas, fab, 0.75 + 0.25 * puff));
+      }
+      rows.push(row);
+    }
+    return rows;
+  };
+  for (const top of [true, false]) {
+    const g = grid(top);
+    for (let i = 0; i < U; i++) {
+      for (let j = 0; j < V; j++) {
+        const a = g[i]![j]!;
+        const b = g[i + 1]![j]!;
+        const c = g[i + 1]![j + 1]!;
+        const d = g[i]![j + 1]!;
+        if (top) {
+          mb.tri(a, c, b);
+          mb.tri(a, d, c);
+        } else {
+          mb.tri(a, b, c);
+          mb.tri(a, c, d);
+        }
+      }
+    }
+  }
+}
+
 export const REAL_PROPS: Record<string, PropSpec> = {
+  book_stack: { w: 0.26, d: 0.3, h: 0.19, mount: 'free', ru: 'стопка старых книг в тканевых обложках', build: bookStack },
+  lamp_desk: { w: 0.28, d: 0.28, h: 0.39, mount: 'free', ru: 'настольная лампа: латунное основание, тканевый абажур', build: deskLamp },
+  pillow: { w: 0.56, d: 0.4, h: 0.15, mount: 'free', ru: 'подушка в цветном чехле', build: pillow },
   table_cafe: { w: 0.7, d: 0.72, h: 0.74, mount: 'floor', ru: 'столик: пластик под дерево на трубчатых ножках', build: cafeTable },
   armchair_visitor: { w: 0.72, d: 0.74, h: 0.86, mount: 'floor', ru: 'кресло для посетителей: обивка, деревянные подлокотники', build: visitorArmchair },
   floor_lamp_brass: { w: 0.48, d: 0.6, h: 1.64, mount: 'floor', ru: 'торшер: латунная стойка, тканевый абажур', build: floorLamp },
@@ -367,4 +471,9 @@ export const KAYKIT_SWAPS: readonly { from: string; to: string }[] = [
   { from: 'kk_picture_large', to: 'print_large' },
   { from: 'kk_picture_medium', to: 'print_medium' },
   { from: 'kk_rug_rect', to: 'rug_wool' },
+  { from: 'kk_book_set', to: 'book_stack' },
+  { from: 'kk_lamp_table', to: 'lamp_desk' },
+  { from: 'kk_pillow', to: 'pillow' },
+  { from: 'kk_couch', to: 'sofa' },
+  { from: 'kk_bed_single', to: 'bed_home' },
 ];

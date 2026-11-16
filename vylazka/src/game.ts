@@ -249,19 +249,19 @@ const WORLD_THINGS: Record<WorldKind, { small: readonly string[]; big: readonly 
   shelter: { small: SMALL_THINGS, big: BIG_THINGS },
   // Зал ожидания: то, что оставляют на сиденьях и у стен те, кто ушёл.
   station: {
-    small: ['mug', 'keys', 'phone', 'paper_stack', 'alarm_clock', 'kk_book_set'],
+    small: ['mug', 'keys', 'phone', 'paper_stack', 'alarm_clock', 'book_stack'],
     big: [
       ['st_suitcase', null],
-      ['kk_armchair', 'void'],
+      ['armchair_visitor', 'void'],
       ['houseplant', 'meadow'],
       ['st_suitcase', null],
     ],
   },
   office: {
-    small: ['mug', 'desk_phone', 'paper_stack', 'kk_cactus_small', 'keys', 'kk_lamp_table', 'kk_book_set', 'trash_bin', 'phone', 'alarm_clock'],
+    small: ['mug', 'desk_phone', 'paper_stack', 'cactus_round', 'keys', 'lamp_desk', 'book_stack', 'trash_bin', 'phone', 'alarm_clock'],
     big: [
       ['office_chair', null],
-      ['kk_armchair', 'void'],
+      ['armchair_visitor', 'void'],
       ['houseplant', 'meadow'],
       ['filing_cabinet', null],
       ['toy_heap', 'dollhouse'],
@@ -270,14 +270,14 @@ const WORLD_THINGS: Record<WorldKind, { small: readonly string[]; big: readonly 
     ],
   },
   yellow: {
-    small: ['mug', 'slippers', 'teddy', 'desk_phone', 'night_light', 'paper_stack', 'keys', 'ball', 'kk_pillow'],
+    small: ['mug', 'slippers', 'teddy', 'desk_phone', 'night_light', 'paper_stack', 'keys', 'ball', 'pillow'],
     big: [
       ['office_chair', null],
-      ['kk_couch', 'void'],
+      ['sofa', 'void'],
       ['christmas_tree', 'meadow'],
       ['crib', 'dollhouse'],
       ['fridge', null],
-      ['kk_bed_single', 'dollhouse'],
+      ['bed_home', 'dollhouse'],
       ['houseplant', 'meadow'],
     ],
   },
