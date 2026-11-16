@@ -31,6 +31,7 @@ import { drawSigns } from './render/signs_atlas';
 import type { Sheets } from './render/signs_atlas';
 import type { Quality } from './render/renderer';
 import { ALL_MEMORIES } from './systems/session';
+import { wornLine } from './systems/worn_text';
 import { Hud } from './ui/hud';
 import { Overlay } from './ui/overlay';
 import type { Card, CardLine } from './ui/overlay';
@@ -421,7 +422,7 @@ export class App {
       { text: t('title.how'), kind: 'plain' },
       { text: t('title.warn'), kind: 'dim' },
     ];
-    if (this.profile.successes > 0) lines.push({ text: t('title.count', { n: this.profile.successes, k: this.profile.archive.length, total: ALL_MEMORIES.length }), kind: 'dim' });
+    if (this.profile.successes > 0) lines.push({ text: t('title.count', { n: this.profile.successes, k: this.profile.archive.filter((id) => ALL_MEMORIES.some((m) => m.id === id)).length, total: ALL_MEMORIES.length }), kind: 'dim' });
     return { title: t('ui.title'), sub: t('ui.subtitle'), lines, prompt: t(`ui.start${this.touchMode ? '.touch' : ''}`) };
   }
 
@@ -732,11 +733,11 @@ export class App {
     }
     for (const e of ev.session) {
       if (e.type === 'reveal') {
-        this.hud.flash(t(`mem.${e.memory.def.id}.flash`));
+        this.hud.flash(wornLine(t(`mem.${e.memory.def.id}.flash`), this.game.wearBase));
         if (buzz) navigator.vibrate([30, 40, 30]);
       } else if (e.type === 'recall') {
         const id = e.memory.def.id;
-        this.hud.flash(t(`mem.${id}.done`));
+        this.hud.flash(wornLine(t(`mem.${id}.done`), this.game.wearBase));
         if (!this.profile.archive.includes(id)) this.profile.archive.push(id);
         this.platform.track('goal_done', { type: 'memory', tier: e.memory.spot?.tier ?? 0 });
         this.saveProfile();
@@ -782,8 +783,9 @@ export class App {
         this.hud.flash(t('pocket.dollhouse.map', { what: task, room: t(`room.${e.room}`), tier: t(`tier.${Math.min(2, e.tier ?? 0)}`) }), 6200);
       } else this.hud.flash(t('pocket.dollhouse.map.idle'));
     } else if (e.what === 'next') this.hud.flash(t('pocket.void.next'));
-    else if (e.what === 'remind' && e.memory) this.hud.flash(t(`mem.${e.memory}.flash`));
-    else if (e.what === 'replay' && e.memory) this.hud.flash(t(`mem.${e.memory}.done`));
+    // Строки вещей с каждым кругом короче (systems/worn_text.ts); список заданий — целиком.
+    else if (e.what === 'remind' && e.memory) this.hud.flash(wornLine(t(`mem.${e.memory}.flash`), this.game.wearBase));
+    else if (e.what === 'replay' && e.memory) this.hud.flash(wornLine(t(`mem.${e.memory}.done`), this.game.wearBase));
     if (e.what !== 'enter' && this.touchMode && typeof navigator.vibrate === 'function') navigator.vibrate(30);
   }
 

@@ -9,6 +9,7 @@ import type { MeshData } from '../src/world/kit';
 import type { BuiltLevel } from '../src/world/level';
 import { buildLevel } from '../src/world/level_build';
 import type { LevelObject } from '../src/world/objects';
+import { GROWTH_OBJ } from '../src/world/objects';
 import { ALL_PROPS, FIXED } from '../src/world/props_all';
 import { DOOR_NAME } from '../src/world/screens';
 
@@ -368,8 +369,9 @@ describe('иллюзорные предметы: объекты уровня', (
           expect(m.obj.length, `${world} ${seed}`).toBe(m.position.length / 3);
           for (let v = 0; v < m.obj.length; v++) {
             const id = m.obj[v]!;
+            // Своё стирание места (рубец, щит с коконами) — не вещь: у него свой номер вне журнала.
+            if (id === 0 || id === GROWTH_OBJ) continue;
             expect(id).toBeLessThanOrEqual(n);
-            if (id === 0) continue;
             marked += 1;
             const o = l.objects![id - 1]!;
             for (let k = 0; k < 3; k++) {

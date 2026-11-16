@@ -5,7 +5,7 @@
  * Что куда — решение основной модели:
  *   — убежище: в жилой комнате вросшего дома — стена лиц, в прихожей — три портрета в рамах, над
  *     кроватью — лица на потолке (их видит тот, кто лежит), в архиве — деньги, которые ничего не стоят,
- *     в кладовой — штабель чемоданов (сюда приходили с вещами);
+ *     в кладовой — штабель чемоданов (сюда приходили с вещами); у входа — домофон, похожий на лицо;
  *   — офис: в кабинете — акции в рамах, в картотеке — щит с купюрами, в переговорной — городские деньги
  *     в раме: всё, что здесь висит, — бывшие ценности;
  *   — жёлтые комнаты: один-единственный портрет на весь уровень — та же женщина, что в раме в убежище;
@@ -46,6 +46,9 @@ const RULES: Record<WorldKind, readonly Rule[]> = {
     { types: ['bedroom'], prop: 'ceil_faces', max: 1, mode: 'bed' },
     { types: ['archive'], prop: 'money_wall', max: 1, mode: 'wall', reserve: true },
     { types: ['storage'], prop: 'st_luggage_stack', max: 1, mode: 'wall' },
+    // Своя обманка убежища: домофон, похожий на лицо, — в прихожей дома (props_found.ts). Не у входа в
+    // убежище: там он висел в шаге от точки появления и рядом с карточкой «please use only when necessary».
+    { types: ['hallway'], prop: 'intercom_face', max: 1, mode: 'wall' },
   ],
   office: [
     { types: ['manager'], prop: 'frames_bonds', max: 1, mode: 'wall', reserve: true },
@@ -138,10 +141,28 @@ function onWall(ctx: RoomCtx, name: string, salt: number): boolean {
     const box = boxAt(c, p.w, p.d, p.h, y);
     return !taken.some((o) => overlaps(box, o));
   });
-  if (!s) return false;
-  s.used = true;
-  build(ctx, name, s, salt);
-  return true;
+  if (s) {
+    s.used = true;
+    build(ctx, name, s, salt);
+    return true;
+  }
+  // Маленькой вещи на стене (домофон) хватает места сбоку от того, что там уже висит или стоит: у входа
+  // голых стен обычно не остаётся. Мимо предметов и мимо листов на стене (табличек, карточки от руки).
+  if (p.mount !== 'wall' || p.w > 0.45) return false;
+  const rank = (k: Slot): number => hash01(k.cx * 131 + k.cz * 17 + k.dir, ctx.room.id * 7 + salt, ctx.seed ^ 0x9a9f);
+  const sheets = ctx.cells.flatMap((c) => c.xf.mb.sheets);
+  for (const k of ctx.slots.filter((q) => !q.hazard).sort((a, b) => rank(a) - rank(b))) {
+    for (const x of [-1.0, 1.0, -0.55, 0.55]) {
+      const at = k.xf.child(x, 0, 0);
+      const box = boxAt({ ...k, xf: at }, p.w + 0.1, p.d + 0.05, p.h + 0.1, y - 0.05);
+      if (taken.some((o) => overlaps(box, o, 0))) continue;
+      const mid = at.pt(0, y + p.h / 2, 0);
+      if (sheets.some((m) => Math.hypot(m.at[0] - mid[0], m.at[1] - mid[1], m.at[2] - mid[2]) < 0.5)) continue;
+      p.build(at.child(0, y, 0), seedOf(ctx, salt));
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Повесить под потолок над приметой помещения — кроватью. Под открытым небом потолка нет. */

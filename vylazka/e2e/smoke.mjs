@@ -1063,7 +1063,8 @@ async function scenarioIllusions(browser, baseUrl) {
     await run(page, 2);
     const objs = await vz(page, () => window.__vz.objects());
     // Не те, что возвращаются собой: предмет со своей ролью или тот, на котором лежит вещь воспоминания.
-    const cands = bulkyObjects(objs).filter((o) => !o.keeps);
+    // И не бумажные цветы: у них своя лестница (тусклые → кружево), картонкой они не возвращаются.
+    const cands = bulkyObjects(objs).filter((o) => !o.keeps && !o.name.startsWith('paper_flower'));
     check('на уровне есть объекты, часть с преградой', objs.length >= 20 && objs.some((o) => o.solid) && cands.length >= 3, `объектов ${objs.length}, с преградой ${objs.filter((o) => o.solid).length}, крупных ${cands.length}, возвращаются собой ${objs.filter((o) => o.keeps).length}`);
 
     // Предмет с преградой.
@@ -1157,46 +1158,65 @@ async function scenarioIllusions(browser, baseUrl) {
       check('после выкл/вкл фонаря вещь снова на месте или на другом (не «gone»)', cur.state !== 'gone', `${thing.t.kind}: ${cur.state}, было ${thing.t.pos.map((v) => v.toFixed(1))}, стало ${cur.pos.map((v) => v.toFixed(1))}, kind ${cur.kind}`);
     }
 
-    // Картонка.
+    // Картонка. Стоячая картонка редка, и на этом сиде её место зависит от расстановки бумаги: если на
+    // ранге 2 её нет, та же проверка идёт на ранге 3 (как в сценарии картонок).
     await lightOn(page);
-    const flats = await vz(page, () => window.__vz.flats());
-    const stand = flats.findIndex((f) => f.kind === 'standee');
-    const flatObjs = objs.filter((o) => o.flat);
+    let cp = page;
+    let extra = null;
+    let cobjs = objs;
+    let flats = await vz(page, () => window.__vz.flats());
+    let stand = flats.findIndex((f) => f.kind === 'standee');
+    if (stand < 0) {
+      extra = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=3');
+      cp = extra.page;
+      await cp.click('.vz-overlay');
+      await sleep(300);
+      await vz(cp, () => window.__vz.freeze(true));
+      await vz(cp, () => window.__vz.calm(true));
+      await run(cp, 2);
+      await lightOn(cp);
+      cobjs = await vz(cp, () => window.__vz.objects());
+      flats = await vz(cp, () => window.__vz.flats());
+      stand = flats.findIndex((f) => f.kind === 'standee');
+    }
+    const flatObjs = cobjs.filter((o) => o.flat);
     const so = stand >= 0 ? flatObjs.sort((a, b) => Math.hypot(a.at[0] - flats[stand].at[0], a.at[2] - flats[stand].at[2]) - Math.hypot(b.at[0] - flats[stand].at[0], b.at[2] - flats[stand].at[2]))[0] : null;
     check('на уровне есть картонка, и у неё есть объект', stand >= 0 && !!so && Math.hypot(so.at[0] - flats[stand].at[0], so.at[2] - flats[stand].at[2]) < 1.5, JSON.stringify(so?.at));
     if (so) {
-      await vz(page, ([i]) => window.__vz.gotoFlat(i, 1.5), [stand]);
+      await vz(cp, ([i]) => window.__vz.gotoFlat(i, 1.5), [stand]);
       let seen = null;
       // Облако точек живёт, пока вещь растворяется: смотрим на него на каждом шаге.
       const most = { clouds: 0, points: 0 };
       for (let i = 0; i < 40; i++) {
-        await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
-        const cur = await objOf(page, so.id);
+        await vz(cp, () => window.__vz.step(6, { moveZ: 1 }));
+        const cur = await objOf(cp, so.id);
         if (cur.state !== 'here') seen = cur.state;
-        const d = await vz(page, () => window.__vz.dust());
+        const d = await vz(cp, () => window.__vz.dust());
         most.clouds = Math.max(most.clouds, d.clouds);
         most.points = Math.max(most.points, d.points);
       }
-      st = await state(page);
+      st = await state(cp);
       const side = (st.pos[0] - flats[stand].at[0]) * flats[stand].n[0] + (st.pos[2] - flats[stand].at[2]) * flats[stand].n[2];
       check('картонка: прошёл сквозь неё — её объект не «here»', seen !== null && side < -0.05, `${flats[stand].what}: ${seen}, ${side.toFixed(2)} м от листа`);
       check('тронутая вещь уходит через точки: пока растворяется, у неё есть облако точек', most.clouds >= 1 && most.points >= 90, JSON.stringify(most));
       // Слова партнёра: «Вещь когда исчезает не должно быть точек в пространстве, они не оседают, а
       // полностью растворяются». Постоял — от растворившейся вещи не осталось ни точки.
-      await run(page, 3);
-      const left = await vz(page, () => window.__vz.dust());
+      await run(cp, 3);
+      const left = await vz(cp, () => window.__vz.dust());
       check('точки не оседают: через 3 с после распада облака нет', left.clouds === 0, JSON.stringify(left));
-      await vz(page, ([i]) => window.__vz.gotoFlat(i, 3), [stand]);
-      await vz(page, () => window.__vz.toggleLight());
-      await run(page, 3);
-      await vz(page, () => window.__vz.toggleLight());
-      const back = await waitObj(page, so.id, (x) => x.state === 'here' || x.state === 'left', 8);
-      const light2 = (await vz(page, () => window.__vz.things())).filter((t) => t.kind === so.name && t.form === 2).length;
+      await vz(cp, ([i]) => window.__vz.gotoFlat(i, 3), [stand]);
+      await vz(cp, () => window.__vz.toggleLight());
+      await run(cp, 3);
+      await vz(cp, () => window.__vz.toggleLight());
+      const back = await waitObj(cp, so.id, (x) => x.state === 'here' || x.state === 'left', 8);
+      const light2 = (await vz(cp, () => window.__vz.things())).filter((t) => t.kind === so.name && t.form === 2).length;
       check('после выкл/вкл фонаря картонка вернулась на ступень хуже — проекцией (картинкой из света)', back.state === 'left' && light2 >= 1, `${back.state}, проекций этого предмета ${light2}`);
     }
-    check('убежище: нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
-    const warns = log.warnings.filter((w) => !benign(w));
+    const errs = [...log.errors, ...(extra?.log.errors ?? [])];
+    check('убежище: нет ошибок в консоли', errs.length === 0, errs.join(' | ').slice(0, 300));
+    const warns = [...log.warnings, ...(extra?.log.warnings ?? [])].filter((w) => !benign(w));
     check('убежище: нет предупреждений в консоли', warns.length === 0, `${warns.length}: ${[...new Set(warns)].join(' | ').slice(0, 300)}`);
+    await extra?.context.close();
     await context.close();
   }
 

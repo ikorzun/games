@@ -77,14 +77,60 @@ export const STATION_MEMORIES: readonly MemoryDef[] = [
   { id: 'st_coat', thing: 'st_coat', rooms: ['platform'] },
 ];
 
-/** Набор воспоминаний каждого мира вылазки. */
-export const WORLD_MEMORIES: Record<WorldKind, readonly MemoryDef[]> = { shelter: MEMORIES, office: OFFICE_MEMORIES, yellow: YELLOW_MEMORIES, station: STATION_MEMORIES };
+/**
+ * Пять вещей по порядку — в каждом месте, как в зале ожидания: строка, которой вещь вспоминается,
+ * называет место следующей, а последняя замыкает круг на первой (docs/vylazka/plan.md, §4, шаг 2).
+ * Круг одного места каждый раз рассказывает одно и то же — и с каждым кругом стёртость оставляет от
+ * него меньше. Вещи те же, что в прежних наборах (MEMORIES, OFFICE_MEMORIES, YELLOW_MEMORIES), а
+ * ключи текстов свои: строки цепочки называют места, и прежние строки в них не годятся.
+ *
+ * Убежище — дом, в котором все ушли спать вниз: будильник в спальне → чайник на кухне → пульт в
+ * гостиной → пальто в прихожей → фотография в спальном отсеке убежища → снова будильник.
+ *
+ * Места выпадают случайно, поэтому связаны не порядком, а вещами: в цепочке места бывает вещь из
+ * другого, и строка это помнит. Пальто в прихожей убежища и билет в картотеке офиса — из зала
+ * ожидания; чайник, тапочки и кресло в жёлтых комнатах — из дома и из офиса.
+ */
+export const SHELTER_CHAIN: readonly MemoryDef[] = [
+  { id: 'sh_alarm', thing: 'alarm_clock', rooms: ['bedroom'] },
+  { id: 'sh_kettle', thing: 'kettle', rooms: ['kitchen'] },
+  { id: 'sh_remote', thing: 'remote', rooms: ['living'] },
+  { id: 'sh_coat', thing: 'st_coat', rooms: ['hallway'] },
+  { id: 'sh_photo', thing: 'photo_frame', rooms: ['dorm'] },
+];
 
-/** Миры, где воспоминания идут по порядку набора, а не по жребию. */
-export const ORDERED_WORLDS: ReadonlySet<WorldKind> = new Set<WorldKind>(['station']);
+/** Офис — работа, из которой не вышел: терминал → кресло у начальника → билет в картотеке → кулер → телефон в приёмной → снова терминал. */
+export const OFFICE_CHAIN: readonly MemoryDef[] = [
+  { id: 'of_terminal', thing: 'office_terminal', rooms: ['cubicles'] },
+  { id: 'of_chair', thing: 'office_chair', rooms: ['manager'] },
+  { id: 'of_ticket', thing: 'st_ticket', rooms: ['files'] },
+  { id: 'of_cooler', thing: 'water_cooler', rooms: ['breakroom'] },
+  { id: 'of_phone', thing: 'desk_phone', rooms: ['reception'] },
+];
+
+/** Жёлтые комнаты — тот же этаж, из которого всё вынесли, и в него протекает дом: табличка → чайник → кресло без стола → тапочки → часы у лифта → тот же этаж. */
+export const YELLOW_CHAIN: readonly MemoryDef[] = [
+  { id: 'ye_sign', thing: 'wet_floor_sign', rooms: ['hall'] },
+  { id: 'ye_kettle', thing: 'kettle', rooms: ['breakroom'] },
+  { id: 'ye_chair', thing: 'office_chair', rooms: ['department'] },
+  { id: 'ye_slippers', thing: 'slippers', rooms: ['washroom'] },
+  { id: 'ye_clock', thing: 'office_clock', rooms: ['reception'] },
+];
+
+/** Набор воспоминаний каждого мира вылазки. */
+export const WORLD_MEMORIES: Record<WorldKind, readonly MemoryDef[]> = { shelter: SHELTER_CHAIN, office: OFFICE_CHAIN, yellow: YELLOW_CHAIN, station: STATION_MEMORIES };
+
+/** Миры, где воспоминания идут по порядку набора, а не по жребию. Теперь — все четыре. */
+export const ORDERED_WORLDS: ReadonlySet<WorldKind> = new Set<WorldKind>(['shelter', 'office', 'yellow', 'station']);
 
 /** Все воспоминания игры без повторов: по ним считается, сколько всего можно вспомнить. */
-export const ALL_MEMORIES: readonly MemoryDef[] = [...new Map([...MEMORIES, ...OFFICE_MEMORIES, ...YELLOW_MEMORIES, ...STATION_MEMORIES].map((m) => [m.id, m])).values()];
+export const ALL_MEMORIES: readonly MemoryDef[] = [...new Map([...SHELTER_CHAIN, ...OFFICE_CHAIN, ...YELLOW_CHAIN, ...STATION_MEMORIES].map((m) => [m.id, m])).values()];
+
+/**
+ * Вещь каждого воспоминания, какое когда-либо было, — и нынешних, и прежних наборов: в архиве игрока
+ * могут лежать вспомненные раньше (их вещи стоят в лимбо).
+ */
+export const MEMORY_THINGS: Readonly<Record<string, string>> = Object.fromEntries([...MEMORIES, ...OFFICE_MEMORIES, ...YELLOW_MEMORIES, ...ALL_MEMORIES].map((m) => [m.id, m.thing]));
 
 export interface Memory {
   def: MemoryDef;

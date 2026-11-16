@@ -10,7 +10,7 @@ import type { FrameView, GameRenderer, ThingView } from '../src/render/renderer'
 import { DEFAULT_CELL_LIGHTS } from '../src/systems/cell_lights';
 import { nearestExit } from '../src/systems/pressure';
 import type { PressureRoom } from '../src/systems/pressure';
-import { DEFAULT_SESSION, OFFICE_MEMORIES, YELLOW_MEMORIES } from '../src/systems/session';
+import { DEFAULT_SESSION, OFFICE_CHAIN, YELLOW_CHAIN } from '../src/systems/session';
 import type { SessionEvent } from '../src/systems/session';
 import { DEFAULT_THINGS, looksAt } from '../src/systems/things';
 import { nodesInRange } from '../src/swarm/ai';
@@ -274,8 +274,9 @@ describe('игра целиком: цикл сессии', () => {
     expect(g.where).toBe('main');
     expect(g.level).toBe(next);
     expect(second.memories.length).toBe(5);
-    // Новая сессия — другие воспоминания: уже вспомненное пошло бы в конец.
-    expect(second.memories.some((m) => ids.includes(m.def.id))).toBe(false);
+    // Вещи места идут цепочкой, и каждый круг рассказывает одно и то же (story.md, §7а): следующая сессия
+    // в том же месте — те же пять вещей в том же порядке, только место стёрто сильнее.
+    expect(second.memories.map((m) => m.def.id)).toEqual(ids);
     // И она начинается сама: ещё через секунду-другую приходит первая вспышка.
     expect(h.until(() => second.active !== null, 5)).toBe(true);
     // Архив пережил смену сессий.
@@ -461,9 +462,10 @@ describe('игра целиком: особенности помещений и 
         const room = roomOf(t.pos);
         if (room !== undefined) expect(dark.has(room), `сид ${seed}: ${t.kind} в тёмном помещении ${room}`).toBe(false);
       }
-      // Вещи воспоминаний: все восемь вспышек.
+      // Вещи воспоминаний: все вспышки сессии (цепочка места — пять вещей, сколько бы ни просили).
       const s = g.session!;
-      for (let k = 0; k < 8; k++) {
+      expect(s.memories.length, `сид ${seed}`).toBeGreaterThanOrEqual(5);
+      for (let k = 0; k < s.memories.length; k++) {
         s.rush();
         h.until(() => s.active !== null, 3);
         const m = s.active!;
@@ -1362,7 +1364,7 @@ describe('игра целиком: офис и жёлтые комнаты', () 
   it('офис: вещи воспоминаний — из офисного набора; после карманного пространства окружение снова офисное', () => {
     const h = new Harness(office, { seed: 3 });
     const g = h.game;
-    const ids = new Set(OFFICE_MEMORIES.map((m) => m.id));
+    const ids = new Set(OFFICE_CHAIN.map((m) => m.id));
     for (const m of g.session!.memories) expect(ids.has(m.def.id)).toBe(true);
     expect(h.until(() => g.transition === null, 6)).toBe(true);
     expect(g.beginJump({ cause: 'gaze', style: 'cut', to: 'meadow' }, [])).toBe(true);
@@ -1417,7 +1419,7 @@ describe('игра целиком: офис и жёлтые комнаты', () 
     expect(g.light.state).toBe('on');
     h.tick({ ...emptyInput(), light: true });
     expect(g.light.state).toBe('off');
-    const ids = new Set(YELLOW_MEMORIES.map((m) => m.id));
+    const ids = new Set(YELLOW_CHAIN.map((m) => m.id));
     for (const m of g.session!.memories) expect(ids.has(m.def.id)).toBe(true);
   });
 

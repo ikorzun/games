@@ -147,6 +147,51 @@
 в своём порядке и последняя строка. Без этого петле нечего повторять: круг должен не только
 стираться, но и рассказывать то же самое всё короче.
 
+## 7а. Пять вещей по порядку в каждом месте (16.11)
+
+Шаг 2 плана (`plan.md`, §4): в убежище, офисе и жёлтых комнатах вещи больше не разыгрываются
+жребием — они идут цепочкой, как в зале ожидания. Строка, которой вещь вспоминается, называет
+помещение следующей; последняя замыкает круг. Каждый круг места рассказывает одно и то же, а
+стёртость оставляет от рассказа всё меньше: строки с кругами короче (`systems/worn_text.ts`), и
+к поздним кругам подсказку «куда дальше» помнит уже игрок, а не строка. Код — `systems/session.ts` (`SHELTER_CHAIN`,
+`OFFICE_CHAIN`, `YELLOW_CHAIN`); помещение каждой вещи есть на каждом уровне (`tests/chains.test.ts`).
+Тексты пишутся по-английски первыми; русский — перевод.
+
+**Убежище — дом, где все ушли спать вниз.**
+
+| | Где | Пришло | Вспомнил |
+|---|---|---|---|
+| будильник | спальня | the alarm is set for an hour that does not exist. | it rang. nobody got up. in the kitchen, the kettle was already on. |
+| чайник | кухня | the kettle. you left it on. | two cups. one went to the living room and never came back. |
+| пульт | гостиная | where is the remote? the channel will not change. | every channel shows the hallway. someone is standing by the door. |
+| пальто | прихожая | a coat. not from this house. it smells of a station. | no keys in the pockets. the hatch was open. everyone went down to sleep. |
+| фотография | спальный отсек | a photo of everyone. the faces did not save. | you are in it. third from the left. still asleep. the alarm is about to ring. |
+
+**Офис — работа, из которой не вышел.**
+
+| | Где | Пришло | Вспомнил |
+|---|---|---|---|
+| терминал | отдел с перегородками | the terminal. you never logged out. | one unread message: see me. it came from the manager's office. |
+| кресло | кабинет начальника | your chair is in the manager's office now. | it still turns to the window. behind it, the files. |
+| билет | картотека | a train ticket, filed with the reports. one way. | you never went. they are talking about it by the water cooler. |
+| кулер | комната отдыха | the water cooler. where everything was really decided. | you remember the talk. not one word of it. the phone at reception is ringing. |
+| телефон | приёмная | the desk phone. line two was for you. | you picked up. it was you, at your desk, asking when you would be back. |
+
+**Жёлтые комнаты — тот же этаж, из которого всё вынесли; в него протекает дом.**
+
+| | Где | Пришло | Вспомнил |
+|---|---|---|---|
+| жёлтый знак | зал | the yellow sign. the floor was never wet. | it points down the hall, to the break room. |
+| чайник | комната отдыха | a kettle from home. it does not belong on this floor. | it was cold. it was always cold. the cups went to the department. |
+| кресло | отдел | your chair. there is no desk any more. | it faces the washroom door. it always did. |
+| тапочки | уборная | your slippers. you came to work in them. | the tiles are warm where you stood. reception is calling your name. |
+| часы | приёмная | the clock. ten to six. the same ten to six. | the lift is coming up. it is the same floor. |
+
+Места выпадают случайно, поэтому связаны не порядком, а вещами (шаг 3 плана): пальто в прихожей
+убежища и билет в картотеке офиса — из зала ожидания (оттуда вещи уезжают); чайник и тапочки в жёлтых
+комнатах — из дома, кресло — из офиса. Строка помнит, откуда вещь. Прежние наборы (шестнадцать вещей убежища, восемь офиса, восемь жёлтых) остались в коде для
+лимбо: там стоят вещи, вспомненные раньше.
+
 ## 8. Спорное
 
 - **Не слишком ли это печально для игры на портале.** Стирание — потеря без выигрыша. Противовес —

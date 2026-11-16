@@ -3,7 +3,7 @@ import { generateLayout, WORLD_KINDS } from '../src/gen/layout';
 import type { GenLayout, WorldKind } from '../src/gen/layout';
 import { createBody, DEFAULT_CONTROLLER, stepPlayer } from '../src/player/controller';
 import type { PlayerBody } from '../src/player/controller';
-import { ALL_MEMORIES, DEFAULT_SESSION, MEMORIES, OFFICE_MEMORIES, Session, STATION_MEMORIES, WORLD_MEMORIES, YELLOW_MEMORIES } from '../src/systems/session';
+import { ALL_MEMORIES, DEFAULT_SESSION, OFFICE_CHAIN, Session, SHELTER_CHAIN, STATION_MEMORIES, WORLD_MEMORIES, YELLOW_CHAIN } from '../src/systems/session';
 import type { ColliderSet } from '../src/world/colliders';
 import type { BuiltLevel, NavNode } from '../src/world/level';
 import { MeshBuilder } from '../src/world/kit';
@@ -326,15 +326,16 @@ describe('миры: окружение и воспоминания', () => {
     expect(ENV_YELLOW.fog).toEqual([0, 0, 0]);
   });
 
-  it('у каждого мира свой набор воспоминаний; у каждого воспоминания есть вещь в реестре и тексты на двух языках', async () => {
+  it('у каждого мира свои пять вещей по порядку; у каждой есть вещь в реестре и тексты на двух языках', async () => {
     setThingRegistry(ALL_PROPS);
-    expect(WORLD_MEMORIES.shelter).toBe(MEMORIES);
-    expect(WORLD_MEMORIES.office).toBe(OFFICE_MEMORIES);
-    expect(WORLD_MEMORIES.yellow).toBe(YELLOW_MEMORIES);
+    expect(WORLD_MEMORIES.shelter).toBe(SHELTER_CHAIN);
+    expect(WORLD_MEMORIES.office).toBe(OFFICE_CHAIN);
+    expect(WORLD_MEMORIES.yellow).toBe(YELLOW_CHAIN);
+    expect(WORLD_MEMORIES.station).toBe(STATION_MEMORIES);
     const en = (await import('../locales/en/ui.json')).default as Record<string, string>;
     const ru = (await import('../locales/ru/ui.json')).default as Record<string, string>;
-    for (const pool of [OFFICE_MEMORIES, YELLOW_MEMORIES]) {
-      expect(pool.length).toBeGreaterThanOrEqual(DEFAULT_SESSION.count + 2);
+    for (const pool of [SHELTER_CHAIN, OFFICE_CHAIN, YELLOW_CHAIN, STATION_MEMORIES]) {
+      expect(pool.length).toBe(DEFAULT_SESSION.count);
       expect(new Set(pool.map((m) => m.id)).size).toBe(pool.length);
       for (const m of pool) {
         expect(hasThing(m.thing), `${m.id}: нет вещи ${m.thing}`).toBe(true);
@@ -344,13 +345,12 @@ describe('миры: окружение и воспоминания', () => {
         }
       }
     }
-    // Общий список — без повторов: кресло и телефон есть и в офисе, и в жёлтых комнатах, но считаются один раз.
+    // Общий список — без повторов: у каждого места свои ключи текстов, даже если вещь та же (кресло, чайник).
     expect(new Set(ALL_MEMORIES.map((m) => m.id)).size).toBe(ALL_MEMORIES.length);
-    // Пять вещей зала ожидания — свои, ни с чем не совпадают.
-    expect(ALL_MEMORIES.length).toBe(MEMORIES.length + OFFICE_MEMORIES.length + 1 + STATION_MEMORIES.length);
+    expect(ALL_MEMORIES.length).toBe(4 * DEFAULT_SESSION.count);
   });
 
-  it('сессия в офисе берёт воспоминания офиса, в жёлтых комнатах — свои; в убежище — прежние', () => {
+  it('сессия каждого мира берёт его пять вещей', () => {
     for (const world of WORLD_KINDS) {
       const level = buildLevel(generateLayout(20041113, 2, world));
       const s = new Session(level, 11);

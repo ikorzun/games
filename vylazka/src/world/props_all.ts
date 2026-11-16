@@ -1,7 +1,7 @@
 /**
  * Весь реквизит разом: убежище (PROPS), «дом каждого» (HOME_PROPS), офис (OFFICE_PROPS), готовые
  * модели (MODEL_PROPS), выставочные экраны (SCREEN_PROPS), поделки (CRAFT_PROPS), вокзал (STATION_PROPS), стена чемоданов
- * (LUGGAGE_PROPS) и бумага — листы на щитах, в рамах и на потолке (PAPER_PROPS). Витрина и обстановка берут отсюда.
+ * (LUGGAGE_PROPS), бумага — листы на щитах, в рамах и на потолке (PAPER_PROPS), находки из снимков партнёра (FOUND_PROPS). Витрина и обстановка берут отсюда.
  *
  * Здесь же предмет становится объектом уровня (world/objects.ts): всё, что он кладёт в сетку
  * помещения и в преграды, помечается его номером — по нему предмет можно растворить. Объектом
@@ -9,6 +9,7 @@
  */
 import { asObject } from './objects';
 import { BIRD_PROPS, CRAFT_PROPS } from './props_craft';
+import { FOUND_PROPS } from './props_found';
 import { HOME_PROPS } from './props_home';
 import { LUGGAGE_PROPS } from './props_luggage';
 import { MODEL_PROPS } from './props_models';
@@ -33,5 +34,5 @@ function tracked(name: string, spec: PropSpec): PropSpec {
 }
 
 export const ALL_PROPS: Record<string, PropSpec> = Object.fromEntries(
-  Object.entries({ ...PROPS, ...HOME_PROPS, ...OFFICE_PROPS, ...MODEL_PROPS, ...SCREEN_PROPS, ...CRAFT_PROPS, ...BIRD_PROPS, ...STATION_PROPS, ...LUGGAGE_PROPS, ...PAPER_PROPS }).map(([name, spec]) => [name, tracked(name, spec)]),
+  Object.entries({ ...PROPS, ...HOME_PROPS, ...OFFICE_PROPS, ...MODEL_PROPS, ...SCREEN_PROPS, ...CRAFT_PROPS, ...BIRD_PROPS, ...STATION_PROPS, ...LUGGAGE_PROPS, ...PAPER_PROPS, ...FOUND_PROPS }).map(([name, spec]) => [name, tracked(name, spec)]),
 );

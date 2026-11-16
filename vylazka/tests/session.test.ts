@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Vec3 } from '../src/core/types';
 import { generateLayout } from '../src/gen/layout';
-import { DEFAULT_SESSION, MEMORIES, Session } from '../src/systems/session';
+import { DEFAULT_SESSION, SHELTER_CHAIN, Session } from '../src/systems/session';
 import type { SessionConfig, SessionEvent, SessionInput } from '../src/systems/session';
 import type { BuiltLevel, ItemSpot } from '../src/world/level';
 import { buildLevel } from '../src/world/level_build';
@@ -168,7 +168,7 @@ describe('сессия: вспышки воспоминаний', () => {
 });
 
 describe('сессия: где появляется вещь', () => {
-  it('в пределах minCells…maxCells клеток пути от игрока; на 30 уровнях разных сидов и рангов', () => {
+  it('в своём помещении (его называет строка), а если туда не дойти — в пределах minCells…maxCells клеток пути; на 30 уровнях', () => {
     const cfg = DEFAULT_SESSION;
     let inRange = 0;
     let n = 0;
@@ -185,6 +185,17 @@ describe('сессия: где появляется вещь', () => {
       const spot = s.active!.spot!;
       expect(level.spots).toContain(spot);
       const d = dist[nodeOfSpot(level, spot)]!;
+      // Пять вещей идут по порядку, и строка вещи называет помещение следующей: там вещь и лежит.
+      const rooms = s.active!.def.rooms ?? [];
+      const plan = level.layout!.rooms;
+      const own = level.spots.some((sp) => dist[nodeOfSpot(level, sp)]! >= 0 && rooms.includes(plan[sp.room]!.type));
+      if (own) {
+        expect(rooms, `уровень ${i}: вещь в своём помещении`).toContain(plan[spot.room]!.type);
+        expect(d, `уровень ${i}: до неё можно дойти`).toBeGreaterThanOrEqual(0);
+        n += 1;
+        inRange += 1;
+        continue;
+      }
       n += 1;
       // Объект маленький или игрок в углу: тогда берётся самое далёкое достижимое.
       const hadRange = level.spots.some((sp) => {
@@ -323,31 +334,23 @@ describe('сессия: «вспомнить»', () => {
 });
 
 describe('сессия: порядок и длина', () => {
-  it('known отодвигает уже вспомненное в конец; порядок по сиду повторяем', () => {
+  it('в убежище пять вещей идут по порядку цепочки: ни сид, ни уже вспомненное его не меняют', () => {
     const level = levelOf(SEED, 1);
-    const ids = MEMORIES.map((m) => m.id);
-    const known = new Set(ids.slice(0, 12));
-    for (const seed of [1, 2, 3, 4, 5]) {
-      const s = new Session(level, seed, known, DEFAULT_SESSION);
-      const order = s.memories.map((m) => m.def.id);
-      // Четыре новых идут первыми, пятое — уже знакомое.
-      expect(order.slice(0, 4).every((id) => !known.has(id))).toBe(true);
-      expect(known.has(order[4]!)).toBe(true);
-      expect(new Set(order).size).toBe(5);
+    const chain = SHELTER_CHAIN.map((m) => m.id);
+    for (const seed of [1, 2, 3, 11, 12]) {
+      expect(new Session(level, seed, new Set(), DEFAULT_SESSION).memories.map((m) => m.def.id)).toEqual(chain);
+      expect(new Session(level, seed, new Set(chain.slice(0, 3)), DEFAULT_SESSION).memories.map((m) => m.def.id)).toEqual(chain);
     }
-    // Новых хватает на всю сессию — знакомых нет вовсе.
-    const some = new Set(ids.slice(0, 5));
-    expect(new Session(level, 7, some, DEFAULT_SESSION).memories.every((m) => !some.has(m.def.id))).toBe(true);
-    // Без known порядок зависит от сида, но для одного сида он один и тот же.
-    const a = new Session(level, 11, new Set(), DEFAULT_SESSION).memories.map((m) => m.def.id);
-    expect(new Session(level, 11, new Set(), DEFAULT_SESSION).memories.map((m) => m.def.id)).toEqual(a);
-    expect(new Session(level, 12, new Set(), DEFAULT_SESSION).memories.map((m) => m.def.id)).not.toEqual(a);
   });
 
-  it('у каждого воспоминания своя вещь, ключи — [a-z0-9_]; их достаточно на несколько сессий', () => {
-    expect(new Set(MEMORIES.map((m) => m.id)).size).toBe(MEMORIES.length);
-    for (const m of MEMORIES) expect(m.id).toMatch(/^[a-z0-9_]+$/);
-    expect(MEMORIES.length).toBeGreaterThanOrEqual(DEFAULT_SESSION.count * 3);
+  it('у каждого воспоминания убежища своя вещь и своё помещение, ключи — [a-z0-9_]', () => {
+    expect(new Set(SHELTER_CHAIN.map((m) => m.id)).size).toBe(SHELTER_CHAIN.length);
+    expect(new Set(SHELTER_CHAIN.map((m) => m.thing)).size).toBe(SHELTER_CHAIN.length);
+    for (const m of SHELTER_CHAIN) {
+      expect(m.id).toMatch(/^[a-z0-9_]+$/);
+      expect(m.rooms?.length ?? 0, m.id).toBeGreaterThan(0);
+    }
+    expect(SHELTER_CHAIN.length).toBe(DEFAULT_SESSION.count);
   });
 
   it('сессия по умолчанию — не короче пяти минут: пауз на 180 с и больше, воспоминаний не меньше пяти', () => {
@@ -359,7 +362,7 @@ describe('сессия: порядок и длина', () => {
     // Вещь не лежит у ног: до неё не меньше minCells клеток пути.
     expect(c.minCells).toBeGreaterThanOrEqual(5);
     expect(c.maxCells).toBeGreaterThan(c.minCells);
-    expect(MEMORIES.length).toBeGreaterThanOrEqual(c.count);
+    expect(SHELTER_CHAIN.length).toBeGreaterThanOrEqual(c.count);
   });
 });
 

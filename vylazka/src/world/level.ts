@@ -1,4 +1,5 @@
 /** Собранный уровень: геометрия чанками, коллайдеры и игровые точки. Общий тип для генератора и тестового уровня. */
+import type { GrowthStats } from './wear_growth';
 import type { Vec3 } from '../core/types';
 import type { GenLayout, WorldKind } from '../gen/layout';
 import type { Aabb, ColliderSet } from './colliders';
@@ -129,6 +130,8 @@ export interface BuiltLevel {
   world?: WorldKind;
   /** Стёртость места 0..1, с которой уровень собран (systems/decay.ts). Нет поля — место помнится целиком. */
   wear?: number;
+  /** Своё стирание места (world/wear_growth.ts): сколько выросло рубца и коконов. Для тестов и отладки. */
+  growth?: GrowthStats;
   /**
    * Помещение без потолка: над ним звёздное небо (слова партнёра: «там нет потолка, только бесконечно
    * глубокое звездное небо и изредка падают звезды»). Нет поля — такого помещения на уровне нет.

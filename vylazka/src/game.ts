@@ -29,7 +29,7 @@ import { DEFAULT_FLASHLIGHT, Flashlight } from './systems/flashlight';
 import type { FlashlightConfig } from './systems/flashlight';
 import { Jumps } from './systems/jumps';
 import type { JumpPlan, JumpStyle } from './systems/jumps';
-import { ALL_MEMORIES, DEFAULT_SESSION, Session } from './systems/session';
+import { DEFAULT_SESSION, MEMORY_THINGS, Session } from './systems/session';
 import type { SessionConfig, SessionEvent } from './systems/session';
 import { decayAt, keepsClutter, startForm, WEAR } from './systems/decay';
 import type { Decay } from './systems/decay';
@@ -285,7 +285,7 @@ const WORLD_THINGS: Record<WorldKind, { small: readonly string[]; big: readonly 
 const SMALL_FATES: readonly Fate[] = ['shrink', 'dust', 'grow', 'dust', 'shrink', 'grow'];
 const BIG_FATES: readonly Fate[] = ['jump', 'grow', 'dust', 'jump', 'shrink', 'grow'];
 /** Воспоминание → вещь-образ. */
-const MEMORY_THING: Record<string, string> = Object.fromEntries(ALL_MEMORIES.map((m) => [m.id, m.thing]));
+const MEMORY_THING: Readonly<Record<string, string>> = MEMORY_THINGS;
 /** Цвет дали там, куда ведёт скачок: уходящее место растворяется в этот цвет. */
 const DEST_FOG: Record<string, Vec3> = { void: [0.86, 0.86, 0.86], limbo: [0.86, 0.86, 0.86], meadow: [0.62, 0.74, 0.88], dollhouse: [0.03, 0.02, 0.03], elsewhere: [0, 0, 0], session: [0, 0, 0] };
 
