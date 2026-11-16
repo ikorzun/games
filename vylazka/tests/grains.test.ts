@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { FLOW_END, FLOW_TIME, GRAIN_DENSITY, GRAIN_MAX, GRAIN_MIN, newGrainLife, objectTriangles, PILE_FADE, PILE_HOLD, PILE_RISE, sowGrains, steerGrains, stepGrains } from '../src/render/grains';
+import { GRAIN_VERT } from '../src/render/shaders';
+import { FLOW_END, FLOW_TIME, GRAIN_DENSITY, GRAIN_MAX, GRAIN_MIN, newGrainLife, objectTriangles, RISE, sowGrains, steerGrains, stepGrains } from '../src/render/grains';
 import { MeshBuilder } from '../src/world/kit';
 import { hexToLinear, MAT, MAT_DEFS } from '../src/world/materials';
 
@@ -128,9 +129,9 @@ describe('пыль вещи: посев точек', () => {
   });
 });
 
-describe('пыль вещи: жизнь россыпи', () => {
+describe('пыль вещи: точки растворяются в воздухе, на пол ничего не оседает', () => {
   const DT = 1 / 60;
-  it('вещь уходит: пыль видна сразу, лежит после исчезновения и гаснет', () => {
+  it('вещь уходит: облако видно сразу; растворилась последняя точка — облака нет, ничего не лежит', () => {
     const g = newGrainLife(0.02, false);
     expect(g.fade).toBe(1);
     for (let go = 0.02; go < 1; go += DT / 0.9) {
@@ -140,37 +141,26 @@ describe('пыль вещи: жизнь россыпи', () => {
       expect(g.done).toBe(false);
     }
     steerGrains(g, 1);
-    // Поверхность уже растаяла, а пыль ещё падает: осыпание отстаёт и идёт чуть дальше единицы.
+    // Поверхность уже растаяла, а точки ещё гаснут: растворение отстаёт и идёт чуть дальше единицы.
     expect(g.flow).toBeLessThan(0.7);
-    let fell = 0;
-    while (g.flow < FLOW_END - 1e-9 && fell < 5) {
+    let left = 0;
+    while (!g.done && left < 5) {
       stepGrains(g, DT);
-      fell += DT;
+      left += DT;
     }
-    expect(g.flow).toBeCloseTo(FLOW_END, 5);
-    // Весь путь — около FLOW_TIME секунд с начала распада.
-    expect(0.9 + fell).toBeGreaterThan(FLOW_TIME - 0.2);
-    expect(0.9 + fell).toBeLessThan(FLOW_TIME + 0.2);
-    expect(g.fade).toBe(1);
-    // Россыпь лежит.
-    for (let t = 0; t < PILE_HOLD - 0.1; t += DT) stepGrains(g, DT);
-    expect(g.fade).toBe(1);
-    expect(g.done).toBe(false);
-    // И гаснет.
-    for (let t = 0; t < 0.3 + PILE_FADE / 2; t += DT) stepGrains(g, DT);
-    expect(g.fade).toBeGreaterThan(0.2);
-    expect(g.fade).toBeLessThan(0.8);
-    for (let t = 0; t < PILE_FADE; t += DT) stepGrains(g, DT);
-    expect(g.fade).toBe(0);
     expect(g.done).toBe(true);
+    expect(g.flow).toBeCloseTo(FLOW_END, 5);
+    // Весь путь — около FLOW_TIME секунд с начала распада; после него не остаётся ничего.
+    expect(0.9 + left).toBeGreaterThan(FLOW_TIME - 0.2);
+    expect(0.9 + left).toBeLessThan(FLOW_TIME + 0.2);
   });
 
-  it('вещь возвращается: россыпь проступает, точки встают на места — и облако больше не нужно', () => {
+  it('вещь возвращается: облако проступает, точки встают на места — и облако больше не нужно', () => {
     const g = newGrainLife(0.98, true);
     expect(g.fade).toBe(0);
     // При сборке отставания нет: точка встаёт на место в тот миг, когда там нарастает зерно.
     expect(g.flow).toBe(0.98);
-    for (let t = 0; t < PILE_RISE + 0.05; t += DT) stepGrains(g, DT);
+    for (let t = 0; t < RISE + 0.05; t += DT) stepGrains(g, DT);
     expect(g.fade).toBe(1);
     expect(g.done).toBe(false);
     for (let go = 0.98; go > 0; go -= DT / 0.9) {
@@ -182,22 +172,29 @@ describe('пыль вещи: жизнь россыпи', () => {
     expect(g.done).toBe(true);
   });
 
-  it('вернулась раньше, чем россыпь погасла: та же россыпь поднимается обратно', () => {
+  it('вернулась, не успев раствориться: те же точки идут обратно; снова тронули — снова гаснут', () => {
     const g = newGrainLife(0.5, false);
-    steerGrains(g, 1);
-    while (g.flow < FLOW_END - 1e-9) stepGrains(g, DT);
-    for (let t = 0; t < PILE_HOLD + PILE_FADE / 2; t += DT) stepGrains(g, DT);
-    const dim = g.fade;
-    expect(dim).toBeGreaterThan(0);
-    expect(dim).toBeLessThan(1);
-    steerGrains(g, 0.95);
+    steerGrains(g, 0.8);
+    for (let t = 0; t < 0.4; t += DT) stepGrains(g, DT);
+    const mid = g.flow;
+    expect(mid).toBeGreaterThan(0);
+    steerGrains(g, 0.7);
     expect(g.coming).toBe(true);
     stepGrains(g, DT);
-    expect(g.fade).toBeGreaterThan(dim);
+    expect(g.flow).toBe(0.7);
     expect(g.done).toBe(false);
-    // Снова тронули, не дав собраться: россыпь лежит заново полный срок.
-    steerGrains(g, 0.97);
+    steerGrains(g, 0.9);
     expect(g.coming).toBe(false);
-    expect(g.hold).toBe(PILE_HOLD);
+    stepGrains(g, DT);
+    expect(g.done).toBe(false);
+  });
+
+  it('шейдер: точка не падает к полу и гаснет к концу пути', () => {
+    // Россыпи на полу больше нет: у облака нет высоты пола, путь идёт от поверхности, а не вниз.
+    expect(GRAIN_VERT).not.toContain('uFloorY');
+    expect(GRAIN_VERT).not.toMatch(/pile/);
+    // К концу пути точка полностью прозрачна; дошедшую до конца не рисуют вовсе.
+    expect(GRAIN_VERT).toContain('(1.0 - smoothstep(0.1, 1.0, phi))');
+    expect(GRAIN_VERT).toContain('if (phi >= 1.0) return;');
   });
 });

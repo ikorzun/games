@@ -835,9 +835,10 @@ async function noteCheck(page, where) {
 async function scenarioFlats(browser, baseUrl) {
   section('Плоские вещи: картонки, проекции, выставочные экраны (экраны растворяются от касания)');
 
-  // Убежище: проекция поперёк коридора и картонка у стены.
+  // Убежище: проекция поперёк коридора и картонка у стены. Картонка — редкая находка, не на каждом
+  // уровне: на этом сиде она есть в ранге 3 (с тех пор как бумага убежища заняла свои участки стен).
   {
-    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=2');
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=3');
     await page.click('.vz-overlay');
     await sleep(300);
     await vz(page, () => window.__vz.freeze(true));
@@ -1166,16 +1167,25 @@ async function scenarioIllusions(browser, baseUrl) {
     if (so) {
       await vz(page, ([i]) => window.__vz.gotoFlat(i, 1.5), [stand]);
       let seen = null;
+      // Облако точек живёт, пока вещь растворяется: смотрим на него на каждом шаге.
+      const most = { clouds: 0, points: 0 };
       for (let i = 0; i < 40; i++) {
         await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
         const cur = await objOf(page, so.id);
         if (cur.state !== 'here') seen = cur.state;
+        const d = await vz(page, () => window.__vz.dust());
+        most.clouds = Math.max(most.clouds, d.clouds);
+        most.points = Math.max(most.points, d.points);
       }
       st = await state(page);
       const side = (st.pos[0] - flats[stand].at[0]) * flats[stand].n[0] + (st.pos[2] - flats[stand].at[2]) * flats[stand].n[2];
       check('картонка: прошёл сквозь неё — её объект не «here»', seen !== null && side < -0.05, `${flats[stand].what}: ${seen}, ${side.toFixed(2)} м от листа`);
-      const dust = await vz(page, () => window.__vz.dust());
-      check('тронутая вещь уходит в пыль: у неё есть облако точек', dust.clouds >= 1 && dust.points >= 90, JSON.stringify(dust));
+      check('тронутая вещь уходит через точки: пока растворяется, у неё есть облако точек', most.clouds >= 1 && most.points >= 90, JSON.stringify(most));
+      // Слова партнёра: «Вещь когда исчезает не должно быть точек в пространстве, они не оседают, а
+      // полностью растворяются». Постоял — от растворившейся вещи не осталось ни точки.
+      await run(page, 3);
+      const left = await vz(page, () => window.__vz.dust());
+      check('точки не оседают: через 3 с после распада облака нет', left.clouds === 0, JSON.stringify(left));
       await vz(page, ([i]) => window.__vz.gotoFlat(i, 3), [stand]);
       await vz(page, () => window.__vz.toggleLight());
       await run(page, 3);

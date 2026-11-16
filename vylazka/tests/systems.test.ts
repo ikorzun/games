@@ -6,7 +6,7 @@ import { AutoExposure, beamAtten } from '../src/render/exposure';
 import { bakeDetail, DETAIL, DETAIL_LAYERS } from '../src/render/detail';
 import { bakeGrime } from '../src/render/grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from '../src/render/matcap_atlas';
-import { fineOf, internalSize, QUALITY, verticalFov } from '../src/render/renderer';
+import { fineOf, gazeTall, internalSize, QUALITY, verticalFov } from '../src/render/renderer';
 import { CALM_ENV, DEFAULT_FLASHLIGHT, Flashlight } from '../src/systems/flashlight';
 import { recTimestamp } from '../src/ui/hud';
 import { DECAY, MAT, MAT_COUNT, MAT_DEFS } from '../src/world/materials';
@@ -340,6 +340,23 @@ describe('рендер: чистые функции', () => {
     expect(verticalFov(1)).toBe(96);
     expect(verticalFov(9 / 16)).toBe(96);
     expect(verticalFov(3)).toBe(62);
+  });
+
+  it('взгляд по форме кадра: в широком кадре конус круглый, в высоком вытянут вместе с экраном', () => {
+    expect(gazeTall(16 / 9)).toBe(1);
+    expect(gazeTall(1)).toBe(1);
+    expect(gazeTall(9 / 16)).toBeCloseTo(0.5625, 6);
+    expect(gazeTall(390 / 844)).toBeCloseTo(390 / 844, 6);
+    // Совсем узкая полоса: взгляд не бесконечный.
+    expect(gazeTall(0.2)).toBe(0.4);
+    // В портрете низ экрана (48° от оси при угле обзора 96°) после сжатия вертикали оказывается не
+    // дальше от оси взгляда, чем край экрана по горизонтали: пол под ногами собран так же, как стена сбоку.
+    const aspect = 390 / 844;
+    const halfV = (verticalFov(aspect) * Math.PI) / 360;
+    const halfH = Math.atan(Math.tan(halfV) * aspect);
+    const squeezed = Math.atan(Math.tan(halfV) * gazeTall(aspect));
+    expect(squeezed).toBeCloseTo(halfH, 6);
+    expect((squeezed * 180) / Math.PI).toBeLessThan(36);
   });
 });
 

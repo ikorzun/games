@@ -689,7 +689,7 @@ export class Game {
         i.state = 'left';
         i.dis = 1;
         i.form = FORM_GONE;
-        this.renderer.setObjectState(o.id, 1, floor, true);
+        this.renderer.setObjectState(o.id, 1, true);
         for (const bx of this.objBoxes.get(o.id) ?? []) bx.gone = true;
       } else {
         i.form = FORM_LACE;
@@ -780,7 +780,7 @@ export class Game {
     return ALL_PROPS[kind]?.mount ?? 'free';
   }
 
-  /** Высота пола под предметом: туда осыпается его пыль. */
+  /** Высота пола под предметом: туда ложится то, что стояло на нём, когда предмета нет. */
   private floorUnder(o: LevelObject): number {
     const node = this.nodeOfObject(o);
     return node >= 0 ? this.level!.nav[node]!.y : o.min[1];
@@ -970,7 +970,7 @@ export class Game {
       );
       for (const p of plans) this.applyComeback(p, dream);
       for (const id of ill.changed()) {
-        this.renderer.setObjectState(id, ill.get(id)!.dis, this.floorUnder(ill.get(id)!.obj));
+        this.renderer.setObjectState(id, ill.get(id)!.dis);
         // Преграды держат, пока вещь не рассыпалась достаточно (и сразу — когда она собирается).
         const open = ill.open(id);
         for (const bx of this.objBoxes.get(id) ?? []) bx.gone = open;

@@ -273,6 +273,15 @@ export function fineOf(cssW: number, cssH: number, q: QualitySpec, dpr = 1): num
 /** «Бочка» объектива нагрудной камеры в обычном состоянии. */
 const BARREL = 0.085;
 
+/**
+ * Взгляд по форме кадра: во сколько раз сжать вертикаль при счёте угла взгляда (uGazeTall). В широком
+ * кадре — 1 (конус круглый), в высоком — отношение сторон: область «куда смотрит герой» вытягивается
+ * вместе с экраном. Ниже 0,4 не опускается — у совсем узкой полосы взгляд не бесконечный.
+ */
+export function gazeTall(aspect: number): number {
+  return Math.max(0.4, Math.min(1, aspect));
+}
+
 /** Вертикальный угол обзора: в ландшафте держим широкий горизонтальный угол, в портрете не даём «рыбьему глазу» разъехаться. */
 export function verticalFov(aspect: number): number {
   const hTarget = (106 * Math.PI) / 180;
@@ -596,6 +605,7 @@ export class GameRenderer {
         uKeyCells: { value: 0 },
         uGaze: { value: 1 },
         uGazeCone: { value: new THREE.Vector2(Math.cos((52 * Math.PI) / 180), Math.cos((25 * Math.PI) / 180)) },
+        uGazeTall: { value: 1 },
         uPressBox: { value: new THREE.Vector4(0, 0, 0, 0) },
         uPress: { value: new THREE.Vector4(0, 0, 0, 0) },
         uPressY: { value: new THREE.Vector3(0, 0, 0) },
@@ -914,7 +924,7 @@ export class GameRenderer {
     });
     this.ghostPoints = new THREE.Points(this.swarmGeo, this.ghostMat);
     this.ghostPoints.frustumCulled = false;
-    // Пыль вещей: те же точки, тот же свет. У каждого облака свои только uGo, uFade и uFloorY.
+    // Пыль вещей: те же точки, тот же свет. У каждого облака свои только uGo, uFlow и uFade.
     this.grainU = {
       ...this.lightU,
       tDepth: this.splatMat.uniforms.tDepth!,
@@ -1234,7 +1244,7 @@ export class GameRenderer {
     this.contactSpan = map.span;
   }
 
-  setObjectState(id: number, dis: number, floorY?: number, quiet = false): void {
+  setObjectState(id: number, dis: number, quiet = false): void {
     if (id <= 0 || id >= OBJ_TEX * OBJ_TEX) return;
     const d = Math.max(0, Math.min(1, dis));
     const v = Math.round(d * 255);
@@ -1244,7 +1254,7 @@ export class GameRenderer {
       this.objTex.needsUpdate = true;
     }
     // quiet — без пыли: предмета нет с самого начала круга (стёрт раньше), а не рассыпался на глазах.
-    if (!quiet) this.grainsFor(`o${id}`, was, d, floorY, () => this.sowObject(id));
+    if (!quiet) this.grainsFor(`o${id}`, was, d, () => this.sowObject(id));
   }
 
   /**
@@ -1366,10 +1376,9 @@ export class GameRenderer {
 
   /**
    * Пыль вещи: распад изменился с was на now. Облако заводится, когда вещь начала уходить или
-   * возвращаться, и живёт, пока лежит россыпь (render/grains.ts). floorY — пол под вещью; не задан —
-   * россыпь ложится на уровень её низа.
+   * возвращаться, и живёт, пока гаснут или встают на места её точки (render/grains.ts).
    */
-  private grainsFor(key: string, was: number, now: number, floorY: number | undefined, sow: () => { grains: Grains; matrix: THREE.Matrix4 } | null): void {
+  private grainsFor(key: string, was: number, now: number, sow: () => { grains: Grains; matrix: THREE.Matrix4 } | null): void {
     let b = this.bursts.get(key);
     if (!b) {
       if (Math.abs(now - was) < 1e-4 || (now <= 0 && was <= 0)) return;
@@ -1385,11 +1394,10 @@ export class GameRenderer {
       geo.setAttribute('aCol', new THREE.BufferAttribute(g.color, 3));
       geo.setAttribute('aRnd', new THREE.BufferAttribute(g.rnd, 4));
       const life = newGrainLife(now, coming);
-      const y = floorY ?? this.tmpV.set(0, g.minY, 0).applyMatrix4(made.matrix).y;
       const mat = new THREE.ShaderMaterial({
         vertexShader: GRAIN_VERT,
         fragmentShader: SPLAT_FRAG,
-        uniforms: { ...this.grainU, uGo: { value: now }, uFlow: { value: life.flow }, uFade: { value: life.fade }, uFloorY: { value: y } },
+        uniforms: { ...this.grainU, uGo: { value: now }, uFlow: { value: life.flow }, uFade: { value: life.fade } },
         blending: THREE.NormalBlending,
         premultipliedAlpha: true,
         transparent: true,
@@ -1574,7 +1582,7 @@ export class GameRenderer {
     // Рассыпающаяся вещь тени не отбрасывает; свет и кружево — никогда.
     if (t.look === 'matter') t.mesh.layers.set(v.dissolve > 0.4 ? 1 : 0);
     if (Math.abs(v.dissolve - t.dis) > 1e-4) {
-      this.grainsFor(`t${id}`, t.dis, v.dissolve, v.y, () => {
+      this.grainsFor(`t${id}`, t.dis, v.dissolve, () => {
         t.mesh.updateMatrix();
         const grains = sowGrains(t.data, null, t.seed * 31 + 7, this.grainDensity);
         // Кружево осыпается своим цветом — цветом нитей.
@@ -1826,6 +1834,7 @@ export class GameRenderer {
     wu.uGaze!.value = v.gaze ?? 1;
     const gc = v.gazeCone ?? [52, 25];
     (wu.uGazeCone!.value as THREE.Vector2).set(Math.cos((gc[0] * Math.PI) / 180), Math.cos((gc[1] * Math.PI) / 180));
+    wu.uGazeTall!.value = gazeTall(this.camera.aspect);
     const wind = v.wind;
     if (wind) (wu.uWind!.value as THREE.Vector4).set(wind.t, wind.amp, wind.dir[0], wind.dir[1]);
     else (wu.uWind!.value as THREE.Vector4).y = 0;
