@@ -113,6 +113,9 @@ export class App {
   private playTime = 0;
   private slowTime = 0;
   private showFps = false;
+  /** Проверка на устройстве (#diag): строка с видеокартой и тем, что в кадре на полу, и кнопка «сплошь». */
+  private diagText: HTMLElement | null = null;
+  private diagAt = 0;
   private testLevel = false;
   private saving: Promise<void> = Promise.resolve();
   /** Какое воспоминание сейчас ищут и с какого момента (для подсказки «погаси свет»). */
@@ -162,6 +165,7 @@ export class App {
     if (p.get('pseudo') === '1') i18n.setPseudo(true);
     // Счётчик кадров: ?fps=1 или #fps — на странице по ссылке параметров адреса нет, проходит только #имя.
     this.showFps = p.get('fps') === '1' || (typeof location !== 'undefined' && location.hash === '#fps');
+    if (p.get('diag') === '1' || (typeof location !== 'undefined' && location.hash === '#diag')) this.makeDiag();
 
     const device = this.platform.deviceType();
     // Площадка может ошибиться с типом устройства, поэтому смотрим и на сам указатель;
@@ -907,10 +911,65 @@ export class App {
       const k = s ? s.doneCount : 0;
       this.hud.setLimbo([t('limbo.done', { n: this.sessionNumber(), k }), t(`limbo.line.${(this.profile.successes + this.profile.archive.length) % 6}`), t('limbo.wait')]);
     } else this.hud.setLimbo([]);
+    if (this.diagText && performance.now() - this.diagAt > 500) {
+      this.diagAt = performance.now();
+      this.diagText.textContent = this.diagLines();
+    }
     if (this.showFps) {
       const i = g.renderer.info();
       this.hud.setFps(`${this.fps.toFixed(0)} fps · ${i.width}×${i.height} · ${i.calls} dc · ${(i.triangles / 1000).toFixed(1)}k`);
     }
+  }
+
+  /**
+   * Проверка на устройстве (#diag в адресе страницы): партнёр присылает снимок экрана — по нему видно,
+   * что на его видеокарте не так. Строки: видеокарта, качество и свет, а в двух точках пола (низ кадра) и
+   * в середине — цвет поверхности и её «собранность» (α кадра мира, 0–255) и память света.
+   */
+  private makeDiag(): void {
+    const el = document.createElement('div');
+    el.className = 'vz-diag';
+    el.style.cssText = 'position:fixed;left:8px;right:8px;top:calc(env(safe-area-inset-top,0px) + 64px);z-index:60;font:11px/1.35 ui-monospace,Menlo,monospace;color:#fff;background:rgba(0,0,0,.62);padding:6px 8px;border-radius:6px;pointer-events:none;white-space:pre-wrap;word-break:break-word';
+    const text = document.createElement('div');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.style.cssText = 'pointer-events:auto;margin-top:6px;font:12px ui-monospace,Menlo,monospace;padding:6px 10px;border-radius:6px;border:1px solid #fff8;background:#222;color:#fff';
+    // Игры при сборке страницы ещё нет: кнопка спрашивает её только при нажатии.
+    btn.textContent = 'сплошь: выкл';
+    const toggle = (e: Event): void => {
+      e.preventDefault();
+      e.stopPropagation();
+      const r = this.game?.renderer;
+      if (!r) return;
+      r.debugScan(!r.scanOn);
+      btn.textContent = r.scanOn ? 'сплошь: выкл' : 'сплошь: ВКЛ';
+    };
+    btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    btn.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+    btn.addEventListener('click', toggle);
+    el.append(text, btn);
+    this.root.append(el);
+    this.diagText = text;
+  }
+
+  private diagLines(): string {
+    const g = this.game;
+    if (!g) return '';
+    const r = g.renderer;
+    const i = r.info();
+    const d = r.diag([
+      [0.5, 0.5],
+      [0.5, 0.72],
+      [0.5, 0.86],
+    ]);
+    const px = (p: { scene: number[]; mem: number[] }): string => `rgb ${p.scene.slice(0, 3).join(',')} α ${p.scene[3]} · память α ${p.mem[3]}`;
+    return [
+      `${d.gpu} · ${d.webgl2 ? 'WebGL2' : 'WebGL1'} · highp ${d.highp}`,
+      `${g.world ?? '?'} · q ${i.quality} ${i.width}×${i.height} · ${this.fps.toFixed(0)} fps · усиление ${g.exposure.gain.toFixed(2)} · яркость ${r.brightness} · солнце ${r.keyShadowByFormula ? 'формулой' : 'картой'}`,
+      `центр: ${px(d.probes[0]!)}`,
+      `пол 72%: ${px(d.probes[1]!)}`,
+      `пол 86%: ${px(d.probes[2]!)}`,
+    ].join('\n');
   }
 
   /** Один оборот игры: шаги симуляции, кадр, надписи. Отладочный API вызывает то же самое вручную. */

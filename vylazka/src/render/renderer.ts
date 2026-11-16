@@ -1297,6 +1297,37 @@ export class GameRenderer {
     return (performance.now() - t0) / n;
   }
 
+  /**
+   * Проверка на устройстве (#diag): видеокарта и что лежит в кадре в заданных точках (доли кадра, y — сверху
+   * вниз): цвет поверхности и её «собранность» (альфа кадра мира — число замеров), память света. Читает
+   * пиксели из видеокарты — только для проверки, не каждый кадр.
+   */
+  diag(points: readonly (readonly [number, number])[]): { gpu: string; webgl2: boolean; highp: number; probes: { scene: number[]; mem: number[] }[] } {
+    const gl = this.renderer.getContext();
+    let gpu = '?';
+    try {
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      gpu = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    } catch {
+      // нет сведений — не беда
+    }
+    const highp = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT)?.precision ?? 0;
+    const buf = new Uint8Array(4);
+    const read = (rt: THREE.WebGLRenderTarget, u: number, v: number): number[] => {
+      const x = Math.min(rt.width - 1, Math.max(0, Math.round(u * rt.width)));
+      const y = Math.min(rt.height - 1, Math.max(0, Math.round((1 - v) * rt.height)));
+      this.renderer.readRenderTargetPixels(rt, x, y, 1, 1, buf);
+      return [buf[0]!, buf[1]!, buf[2]!, buf[3]!];
+    };
+    const probes = points.map(([u, v]) => ({ scene: read(this.sceneRT, u, v), mem: read(this.memRT[1], u, v) }));
+    return { gpu, webgl2: typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext, highp, probes };
+  }
+
+  /** Облако точек сейчас включено (выключенное — мир сплошными поверхностями). */
+  get scanOn(): boolean {
+    return !this.debugScanOff;
+  }
+
   /** Отладка: облако точек вкл/выкл. */
   debugScan(on: boolean): void {
     if (this.debugScanOff === !on) return;
