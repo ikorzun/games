@@ -1326,6 +1326,27 @@ export class GameRenderer {
   }
 
   /**
+   * Проверка на устройстве: что процессор отдал шейдеру мира — для сверки с тем, что видит видеокарта
+   * (служебный кадр 3 пишет номер клетки, а здесь лежит свет этой клетки в текстуре).
+   */
+  diagUniforms(): { scan: number[]; fade: number; range: number[]; cone: number[]; tall: number; keyCells: number; grid: number[]; ambient: number[]; texel: (cx: number, cz: number) => number[] } {
+    const u = this.worldMat.uniforms;
+    const vec = (n: string): number[] => (u[n]!.value as THREE.Vector2 | THREE.Vector3 | THREE.Vector4).toArray();
+    const data = this.cellTex.image.data as Uint8Array;
+    return {
+      scan: vec('uScan'),
+      fade: u.uScanFade!.value as number,
+      range: vec('uScanRange'),
+      cone: vec('uGazeCone').map((c) => (Math.acos(Math.min(1, Math.max(-1, c))) * 180) / Math.PI),
+      tall: u.uGazeTall!.value as number,
+      keyCells: u.uKeyCells!.value as number,
+      grid: vec('uCellGrid'),
+      ambient: vec('uAmbient'),
+      texel: (cx, cz) => (cx < 0 || cz < 0 || cx >= CELL_TEX || cz >= CELL_TEX ? [-1, -1, -1, -1] : Array.from(data.subarray((cz * CELL_TEX + cx) * 4, (cz * CELL_TEX + cx) * 4 + 4))),
+    };
+  }
+
+  /**
    * Проверка на устройстве, режим «факторы»: мир рисуется не цветом, а тем, из чего сложилась сборка
    * поверхности (r — взгляд, g — рассеянный свет, b — дальность, a — итог). Только для строки проверки.
    */
@@ -2170,7 +2191,9 @@ export class GameRenderer {
     this.scenePrevRT = this.sceneRT;
     this.sceneRT = older;
     r.setRenderTarget(this.sceneRT);
-    r.setClearColor(this.clearColor, 1);
+    // Служебный кадр проверки (#diag): фон — нули, чтобы по пикселю было видно, нарисована ли там поверхность.
+    const probe = this.debugView > 0;
+    r.setClearColor(probe ? 0x000000 : this.clearColor, probe ? 0 : 1);
     r.clear();
     r.render(this.scene, cam);
     r.setClearColor(0x000000, 1);
@@ -2178,27 +2201,31 @@ export class GameRenderer {
     // Память света: что было освещено и как давно. Прошлого нет после первого кадра, после скачка в
     // другое место и когда время пошло заново (новая сессия) — тогда всё забыто. Стареет память по
     // игровому времени: на паузе она стоит.
-    const viewProj = this.tmpM.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-    const mu = this.memMat.uniforms;
+    // Служебный кадр проверки в память не идёт: память остаётся той, что была до него.
     const gap = v.time - this.memTime;
     const keep = this.memLive && !this.debugScanOff && gap >= 0 && this.memCam.distanceToSquared(cam.position) < 9;
-    const [memNow, memWas] = this.memRT;
-    mu.tScene!.value = this.sceneRT.texture;
-    mu.tDepth!.value = this.sceneRT.depthTexture;
-    mu.tPrev!.value = memWas.texture;
-    mu.tPrevDepth!.value = this.scenePrevRT.depthTexture;
-    (mu.uReproj!.value as THREE.Matrix4).copy(viewProj).invert().premultiply(this.prevViewProj);
-    mu.uDecay!.value = keep ? Math.min(1, gap / SCAN.hold) : 0;
-    mu.uKeep!.value = keep ? 1 : 0;
-    mu.uFrame!.value = v.frame;
-    r.setRenderTarget(memNow);
-    r.render(this.memScene, this.postCam);
-    this.memRT = [memWas, memNow];
-    this.prevViewProj.copy(viewProj);
-    // Кадры перехода в память не идут: красная сетка и прожог старта не должны висеть в точках потом.
-    this.memLive = !v.memHold;
-    this.memTime = v.time;
-    this.memCam.copy(cam.position);
+    if (!probe) {
+      const viewProj = this.tmpM.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+      const mu = this.memMat.uniforms;
+      const [memOut, memWas] = this.memRT;
+      mu.tScene!.value = this.sceneRT.texture;
+      mu.tDepth!.value = this.sceneRT.depthTexture;
+      mu.tPrev!.value = memWas.texture;
+      mu.tPrevDepth!.value = this.scenePrevRT.depthTexture;
+      (mu.uReproj!.value as THREE.Matrix4).copy(viewProj).invert().premultiply(this.prevViewProj);
+      mu.uDecay!.value = keep ? Math.min(1, gap / SCAN.hold) : 0;
+      mu.uKeep!.value = keep ? 1 : 0;
+      mu.uFrame!.value = v.frame;
+      r.setRenderTarget(memOut);
+      r.render(this.memScene, this.postCam);
+      this.memRT = [memWas, memOut];
+      this.prevViewProj.copy(viewProj);
+      // Кадры перехода в память не идут: красная сетка и прожог старта не должны висеть в точках потом.
+      this.memLive = !v.memHold;
+      this.memTime = v.time;
+      this.memCam.copy(cam.position);
+    }
+    const memNow = this.memRT[1];
 
     // Сведение: поверхности — только там, где сплаты слились; поверх — сами точки, из которых собран мир.
     this.composeMat.uniforms.tScene!.value = this.sceneRT.texture;
@@ -2206,7 +2233,7 @@ export class GameRenderer {
     this.composeMat.uniforms.uSolid!.value = this.debugScanOff || this.debugView > 0 ? 1 : 0;
     r.setRenderTarget(this.rawRT);
     r.render(this.composeScene, this.postCam);
-    if (!this.debugScanOff) {
+    if (!this.debugScanOff && !probe) {
       this.clouds.update(cam);
       pu0.tScene!.value = this.sceneRT.texture;
       pu0.tDepth!.value = this.sceneRT.depthTexture;

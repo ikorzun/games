@@ -167,9 +167,10 @@ export class App {
     if (p.get('pseudo') === '1') i18n.setPseudo(true);
     // Счётчик кадров: ?fps=1 или #fps — на странице по ссылке параметров адреса нет, проходит только #имя.
     this.showFps = p.get('fps') === '1' || (typeof location !== 'undefined' && location.hash === '#fps');
-    if (p.get('diag') === '1' || (typeof location !== 'undefined' && location.hash === '#diag') || App.diagSaved()) this.makeDiag();
     // Пробная сборка для телефона (scripts: страница с __vzVariant): что в ней отключено, видно в строке проверки.
+    // Проба «probe» ничего не отключает: строка проверки в ней включена сразу — нужен один снимок экрана.
     this.variant = String((globalThis as { __vzVariant?: unknown }).__vzVariant ?? '');
+    if (this.variant === 'probe' || p.get('diag') === '1' || (typeof location !== 'undefined' && location.hash === '#diag') || App.diagSaved()) this.makeDiag();
 
     const device = this.platform.deviceType();
     // Площадка может ошибиться с типом устройства, поэтому смотрим и на сам указатель;
@@ -920,9 +921,11 @@ export class App {
       const k = s ? s.doneCount : 0;
       this.hud.setLimbo([t('limbo.done', { n: this.sessionNumber(), k }), t(`limbo.line.${(this.profile.successes + this.profile.archive.length) % 6}`), t('limbo.wait')]);
     } else this.hud.setLimbo([]);
+    if (this.diagText) this.probeTick();
     if (this.diagText && performance.now() - this.diagAt > 500) {
       this.diagAt = performance.now();
       this.diagText.textContent = this.diagLines();
+      this.placeDiagMarks();
     }
     if (this.showFps) {
       const i = g.renderer.info();
@@ -957,6 +960,8 @@ export class App {
     else {
       this.diagText?.parentElement?.remove();
       this.diagText = null;
+      for (const m of this.diagMarks) m.remove();
+      this.diagMarks = [];
       const r = this.game?.renderer;
       if (r) {
         r.debugView = 0;
@@ -986,24 +991,61 @@ export class App {
     btn.addEventListener('pointerdown', (e) => e.stopPropagation());
     btn.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
     btn.addEventListener('click', toggle);
-    // «Факторы»: мир рисуется тем, из чего сложилась сборка поверхности; в строке — числа по точкам.
-    const fb = document.createElement('button');
-    fb.type = 'button';
-    fb.style.cssText = btn.style.cssText + ';margin-left:8px';
-    fb.textContent = 'факторы: выкл';
-    fb.addEventListener('pointerdown', (e) => e.stopPropagation());
-    fb.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
-    fb.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const r = this.game?.renderer;
-      if (!r) return;
-      r.debugView = r.debugView > 0 ? 0 : 1;
-      fb.textContent = r.debugView > 0 ? 'факторы: ВКЛ' : 'факторы: выкл';
-    });
-    el.append(text, btn, fb);
+    el.append(text, btn);
     this.root.append(el);
     this.diagText = text;
+    // Метки точек проверки: на снимке экрана видно, куда смотрела каждая строка.
+    this.diagMarks = App.PROBE_PTS.map(() => {
+      const m = document.createElement('div');
+      m.style.cssText = 'position:fixed;width:9px;height:9px;margin:-5px 0 0 -5px;border:1px solid #ff2a6d;border-radius:50%;z-index:60;pointer-events:none';
+      this.root.append(m);
+      return m;
+    });
+  }
+
+  private diagMarks: HTMLElement[] = [];
+
+  /** Метки точек проверки — на свои места поверх кадра (кадр может быть вписан в окно с полями). */
+  private placeDiagMarks(): void {
+    const c = this.canvas?.getBoundingClientRect();
+    if (!c) return;
+    this.diagMarks.forEach((m, k) => {
+      const [u, v] = App.PROBE_PTS[k]!;
+      m.style.left = `${c.left + u * c.width}px`;
+      m.style.top = `${c.top + v * c.height}px`;
+    });
+  }
+
+  /** Точки проверки (доли кадра, y — сверху вниз): середина, пол по центру ниже и ниже, пол слева и справа. */
+  private static readonly PROBE_PTS: readonly (readonly [number, number])[] = [
+    [0.5, 0.5],
+    [0.5, 0.62],
+    [0.5, 0.75],
+    [0.5, 0.88],
+    [0.2, 0.8],
+    [0.8, 0.8],
+  ];
+  /** Пиксели по точкам проверки: [обычный кадр, служебные 1, 2, 3]. */
+  private probeRes: ({ scene: number[]; mem: number[] }[] | null)[] = [null, null, null, null];
+  private probeAt = 0;
+
+  /**
+   * Раз в полторы секунды — три служебных кадра подряд (render: debugView 1, 2, 3): после каждого кадра
+   * читаем его пиксели по точкам проверки и ставим следующий. Между циклами кадр обычный.
+   */
+  private probeTick(): void {
+    const r = this.game?.renderer;
+    if (!r || this.screen !== 'play') return;
+    const v = r.debugView;
+    if (v > 0) {
+      this.probeRes[v] = r.diag(App.PROBE_PTS).probes;
+      r.debugView = v < 3 ? v + 1 : 0;
+      return;
+    }
+    if (performance.now() - this.probeAt < 1500) return;
+    this.probeAt = performance.now();
+    this.probeRes[0] = r.diag(App.PROBE_PTS).probes;
+    r.debugView = 1;
   }
 
   private diagLines(): string {
@@ -1011,22 +1053,41 @@ export class App {
     if (!g) return '';
     const r = g.renderer;
     const i = r.info();
-    const d = r.diag([
-      [0.5, 0.5],
-      [0.5, 0.72],
-      [0.5, 0.86],
-    ]);
-    // В режиме «факторы» в кадре мира не цвет, а причины сборки: взгляд, рассеянный свет, дальность и итог.
-    const px =
-      r.debugView > 0
-        ? (p: { scene: number[]; mem: number[] }): string => `взгляд ${p.scene[0]} · свет ${p.scene[1]} · дальность ${p.scene[2]} · итог ${p.scene[3]}`
-        : (p: { scene: number[]; mem: number[] }): string => `rgb ${p.scene.slice(0, 3).join(',')} α ${p.scene[3]} · память α ${p.mem[3]}`;
+    const d = r.diag([]);
+    const u = r.diagUniforms();
+    // Цвет служебных кадров лежит в кадре мира в sRGB: обратно в доли 0..1, потом в проценты.
+    const lin = (b: number): number => {
+      const c = b / 255;
+      return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    const pc = (x: number): string => String(Math.round(x * 100)).padStart(3);
+    const res = this.probeRes;
+    const row = (k: number): string => {
+      const n = res[0]?.[k];
+      const a = res[1]?.[k]?.scene;
+      const b = res[2]?.[k]?.scene;
+      const c = res[3]?.[k]?.scene;
+      const [px, py] = App.PROBE_PTS[k]!;
+      const head = `${Math.round(px * 100)}/${Math.round(py * 100)}`.padEnd(6);
+      const base = n ? `α${pc(n.scene[3]! / 255)} пам${pc(n.mem[3]! / 255)}` : 'α  ? пам  ?';
+      const f1 = a ? `взг${pc(lin(a[0]!))} свет${pc(lin(a[1]!))} дал${pc(lin(a[2]!))} итог${pc(a[3]! / 255)}` : '';
+      const f2 = b ? `клет${pc(lin(b[0]!))} отд${pc(lin(b[1]!) * 2)} фон${pc(lin(b[2]!))} гасн${pc(b[3]! / 255)}` : '';
+      let f3 = '';
+      if (c) {
+        const mark = lin(c[0]!);
+        const cells = u.grid[3]! > 0.5 ? u.grid[3]! : 16;
+        const cx = Math.round(lin(c[1]!) * cells - 0.5);
+        const cz = Math.round(lin(c[2]!) * cells - 0.5);
+        const cpu = u.texel(cx, cz);
+        f3 = `${mark < 0.25 ? 'НЕТ поверхности' : mark > 0.75 ? 'NaN!' : 'есть'} кл${cx},${cz}=цп${cpu[0]}/${cpu[1]} окр${pc(c[3]! / 255)}`;
+      }
+      return `${head} ${base} | ${f1} | ${f2} | ${f3}`;
+    };
     return [
       `${d.gpu} · ${d.webgl2 ? 'WebGL2' : 'WebGL1'} · highp ${d.highp}${this.variant ? ` · проба ${this.variant}` : ''}`,
       `${g.world ?? '?'} · q ${i.quality} ${i.width}×${i.height} · ${this.fps.toFixed(0)} fps · усиление ${g.exposure.gain.toFixed(2)} · яркость ${r.brightness} · солнце ${r.keyShadowByFormula ? 'формулой' : 'картой'}`,
-      `центр: ${px(d.probes[0]!)}`,
-      `пол 72%: ${px(d.probes[1]!)}`,
-      `пол 86%: ${px(d.probes[2]!)}`,
+      `цп: скан ${u.scan.map((x) => x.toFixed(2)).join('/')} · угас ${u.fade.toFixed(2)} · даль ${u.range.map((x) => x.toFixed(0)).join('–')} · конус ${u.cone.map((x) => x.toFixed(0)).join('/')}° ×${u.tall.toFixed(2)} · солн.клетки ${u.keyCells.toFixed(2)} · сетка ${u.grid.map((x) => x.toFixed(1)).join(',')} · рассеян ${u.ambient.map((x) => x.toFixed(2)).join(',')}`,
+      ...App.PROBE_PTS.map((_, k) => row(k)),
     ].join('\n');
   }
 

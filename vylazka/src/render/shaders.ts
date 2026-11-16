@@ -908,10 +908,22 @@ void main() {
   float hOut = 1.0;
 #ifdef SCAN
   hOut = hScan / uScan.z;
-  // Проверка на устройстве: вместо цвета — из чего сложилась сборка поверхности: r — взгляд, g — рассеянный
-  // свет, b — дальность, a — итог. Пиксели читает строка проверки (app.ts, diagLines).
+  // Проверка на устройстве: вместо цвета — из чего сложилась сборка поверхности. Три служебных кадра
+  // подряд (app.ts, probeTick), пиксели читает строка проверки:
+  //   1 — r взгляд, g рассеянный свет (×8), b дальность, a итог;
+  //   2 — r свет клетки, g «отдача» поверхности (/2), b вклад фонаря, a множитель угасания места;
+  //   3 — r метка (0,5 — поверхность нарисована; 1 — где-то в счёте NaN), gb — клетка, которую видит
+  //       видеокарта ((индекс + 0,5) / клеток), a — вклад рассеянного света. Фон и выброшенное — нули.
   if (uDebugView > 0.5) {
-    gl_FragColor = vec4(gazeK, min(1.0, eAmb * 8.0), 1.0 - smoothstep(rangeV.x, rangeV.y, distV), hOut);
+    if (uDebugView > 2.5) {
+      bool bad = isnan(hLit) || isnan(hEnv) || isnan(cell) || isnan(gazeK) || isnan(back) || !(hLit + hEnv > -1e30);
+      vec2 cg = uCellGrid.w > 0.5 ? (floor((vWorld.xz - uCellGrid.xy) / uCellGrid.z) + 0.5) / uCellGrid.w : vec2(0.0);
+      gl_FragColor = vec4(bad ? 1.0 : 0.5, clamp(cg, 0.0, 1.0), clamp(hEnv / uScan.z, 0.0, 1.0));
+    } else if (uDebugView > 1.5) {
+      gl_FragColor = vec4(clamp(cell, 0.0, 1.0), clamp(back * 0.5, 0.0, 1.0), clamp(hLit / uScan.z, 0.0, 1.0), mix(mix(0.06, 1.0, uScanFade), 1.0, step(0.004, eGlow)));
+    } else {
+      gl_FragColor = vec4(gazeK, min(1.0, eAmb * 8.0), 1.0 - smoothstep(rangeV.x, rangeV.y, distV), hOut);
+    }
     return;
   }
   // Туда, где света почти нет, фактуры не нужны: поверхность — просто цвет материала.
