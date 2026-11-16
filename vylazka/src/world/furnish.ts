@@ -9,6 +9,8 @@ import { dressRoom } from './dress';
 import { FLAT_EYE, standee, veil, VEIL_SCENES } from './flat';
 import type { FlatMark } from './flat';
 import type { GenRoom, WorldKind } from '../gen/layout';
+import { personSpot } from './furnish_people';
+import type { PersonSpot } from './furnish_people';
 import { reservePapers } from './furnish_papers';
 import type { PaperHold, PaperState } from './furnish_papers';
 import { furnishOffice, furnishYellow } from './furnish_office';
@@ -115,6 +117,8 @@ export interface RoomCtx {
   paperState?: PaperState;
   /** Участки стен, отведённые под бумагу и чемоданы до обстановки: предметы встанут туда последним проходом. */
   papers?: PaperHold[];
+  /** Места, где мог бы быть человек (сиденья, стол, табло): манекены встанут туда последним проходом (world/furnish_people.ts). */
+  people?: PersonSpot[];
 }
 
 function shuffled<T>(rng: Rng, items: readonly T[]): T[] {
@@ -729,7 +733,11 @@ function living(ctx: RoomCtx): void {
     else if (i % 2 === 0) cageLamp(c.xf.child(0, ctx.h, 0));
   });
   const sofa = homeStack(ctx, [['sofa'], ['wall_carpet']]);
-  if (sofa) landmark(ctx, 'living', sofa.s.xf, sofa.x, 0.6, 0.45);
+  if (sofa) {
+    landmark(ctx, 'living', sofa.s.xf, sofa.x, 0.6, 0.45);
+    // Место на диване — справа от пледа, у подушек нет.
+    personSpot(ctx, 'sofa', sofa.s.xf.child(sofa.x + 0.3, 0, 0.16));
+  }
   homeStack(ctx, [['tv_stand']]);
   if (ctx.rng() < 0.8) homeStack(ctx, [['armchair']]);
   if (ctx.rng() < 0.8) homeStack(ctx, [['bookshelf']]);
