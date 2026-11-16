@@ -478,6 +478,14 @@ export class GameRenderer {
   brightness = 1;
   /** Отладка: временно выключить тень, не меняя качество (сравнение «тень вкл/выкл»). */
   debugShadowsOff = false;
+  /**
+   * Тень прямого света (солнце зала ожидания, луга, лампа домика) — формулой, а не картой. На телефоне
+   * партнёра (iPhone) карта тени от солнца не работает: солнце через стеклянную крышу ложилось на светлый
+   * пол зала без тени переплёта, и пол выгорал в белое («пересвечен пол, его по факту просто нет»). Тот
+   * же кадр получается на компьютере, если в шейдере считать карту всегда освещённой. Формула тени
+   * переплёта (roofShade) — та, что на низком качестве. Тень фонаря картой остаётся.
+   */
+  keyShadowByFormula = false;
   /** Отладка: рисовать мир сплошными поверхностями, без облака точек (для сравнения кадров). */
   private debugScanOff = false;
   /** Перепад между ярусами уровня, м (для отсечения этажей). */
@@ -1927,7 +1935,7 @@ export class GameRenderer {
 
     // Тень: глубина сцены из точки фонаря — либо, там где есть прямой свет (солнце на лугу, лампа у
     // кукольного домика), вдоль его лучей: фонарь в таких местах почти не виден, а тени от солнца нужны.
-    const keyOn = this.shadowRT !== null && v.keyBox !== null && v.keyColor[0] + v.keyColor[1] + v.keyColor[2] > 0.01 && !this.debugShadowsOff;
+    const keyOn = this.shadowRT !== null && v.keyBox !== null && v.keyColor[0] + v.keyColor[1] + v.keyColor[2] > 0.01 && !this.debugShadowsOff && !this.keyShadowByFormula;
     const shadowOn = keyOn || (this.shadowRT !== null && v.lightIntensity * v.lightScale > 0.01 && !this.debugShadowsOff);
     this.worldMat.uniforms.uShadowFor!.value = keyOn ? 1 : 0;
     if (this.shadowRT && shadowOn) {

@@ -284,6 +284,8 @@ export class App {
     this.overlay.setPlace(this.world);
     if (p.get('lang') === null && this.profile.lang) this.setLang(normalizeLang(this.profile.lang), true);
     renderer.brightness = BRIGHT[this.profile.bright];
+    // Телефон и планшет: тень от солнца — формулой (см. keyShadowByFormula в render/renderer.ts).
+    renderer.keyShadowByFormula = this.touchMode;
     setThingRegistry(ALL_PROPS);
     // level=test — коридор технического среза, level=show — витрина реквизита.
     this.testLevel = p.get('level') === 'test' || p.get('level') === 'show' || (p.get('level') ?? '').startsWith('pocket_') || this.showParam() !== null;
@@ -639,6 +641,7 @@ export class App {
   private enableTouch(): void {
     if (this.touch) return;
     this.touchMode = true;
+    this.game.renderer.keyShadowByFormula = true;
     this.root.classList.add('is-touch');
     this.touch = new TouchControls(this.root, this.game.shake);
     this.touch.setVisible(this.screen === 'play' && !this.lifecycle.paused);
