@@ -68,6 +68,8 @@ export interface VzDebugApi {
   things(): Array<Record<string, unknown>>;
   /** Встать перед вещью лицом к ней. */
   gotoThing(id: number, distance?: number): boolean;
+  /** Поставить вещь прямо перед камерой на полу (на distance метров) с заданной судьбой; вернуть её номер. */
+  spawnThing(kind: string, fate: 'shrink' | 'dust' | 'grow' | 'jump', distance?: number): number;
   /** Почему вещь видна или не видна: расстояние, попадание в луч (dot против нужного need), путь луча до преграды. */
   sees(id: number): Record<string, number> | null;
   /** Искомое воспоминание: его id, вещь и где она (null — сейчас ничего не ищут). */
@@ -362,6 +364,14 @@ export function installDebug(app: App): void {
       return false;
     },
     things: () => game().things.list.map((t) => ({ id: t.id, kind: t.kind, state: t.state, fate: t.fate, memory: t.memory, gaze: t.gaze, scale: t.scale, dissolve: t.dissolve, form: t.form, pos: [...t.pos] })),
+    spawnThing: (kind, fate, distance = 2.5) => {
+      const g = game();
+      const st = g.snapshot() as { pos: number[]; aim: number[] };
+      const yaw = st.aim[0]!;
+      const x = st.pos[0]! - Math.sin(yaw) * distance;
+      const z = st.pos[2]! - Math.cos(yaw) * distance;
+      return g.addThing(kind, [x, st.pos[1]!, z], 0, fate).id;
+    },
     gotoThing: (id, distance = 2.2) => {
       const g = game();
       const t = g.things.list.find((x) => x.id === id);

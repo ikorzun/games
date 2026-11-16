@@ -49,6 +49,7 @@ vec4 beamAt(vec3 posV) {
 export const CRUMBLE_GLSL = /* glsl */ `
 uniform float uDissolve;
 uniform vec4 uThing;      // x — распад вещи 0..1, y — вещь из кружева (1), z — это отдельная вещь (1; 2 — ещё и светится сама), w — сид вещи
+uniform float uDots;      // 0..1: выросшая вещь — одни точки, её проходят насквозь (слова партнёра)
 attribute float aObj;     // номер объекта уровня у вершины (0 — вершина ничья: стена, пол)
 uniform highp sampler2D uObjState;   // состояния объектов, 64 × 64: r — растворён, g — из кружева, b — выцвел, a — светится своим цветом
 
@@ -588,6 +589,17 @@ void main() {
       if (length(fract(gp) - centre) > 0.52 * keep) discard;
     }
   }
+  // Вещь, выросшая под взглядом, — облако точек: «словно из точек, чтобы было понятно, что её можно
+  // пройти насквозь» (слова партнёра). Клетка ~11 см в мире: чем больше выросла, тем реже точки; точка
+  // остаётся крупной — около трёх сантиметров, — чтобы облако читалось и издали, и в упор.
+  float dotGlow = 0.0;
+  if (uDots > 0.0) {
+    vec3 dp = vWorld * 9.0;
+    vec3 dc = floor(dp);
+    vec3 centre = 0.3 + 0.4 * vec3(cellHash(dc + 3.1), cellHash(dc + 5.7), cellHash(dc + 9.3));
+    if (length(fract(dp) - centre) > mix(0.9, 0.3, uDots)) discard;
+    dotGlow = uDots;
+  }
   // Мох слоями (shell texturing): поверхность повторена слоями, и в каждом остаются только ворсинки,
   // дотянувшиеся до него. У каждой ворсинки (клетка в четыре миллиметра) своя высота; кверху она уже.
   if (vShell > 0.0) {
@@ -1028,6 +1040,8 @@ void main() {
   vec3 glowBase = maxc > 1.5 ? vec3(0.55) : uMatBase[mi];
   col += glowBase * ma.y * vColor.rgb * glowK;
   col += vec3(0.9, 0.07, 0.03) * burn;
+  // Вещь из точек чуть светится своим цветом: облако видно и на краю луча, и оно не похоже на твёрдое.
+  if (dotGlow > 0.0) col += uMatBase[mi] * vColor.rgb * (0.22 * dotGlow);
   // Тон предмета: выцветший теряет цвет (остаётся бумага), расцветший светится своим цветом сам.
   if (vTone.x > 0.0) col = mix(col, vec3(dot(col, vec3(0.3, 0.59, 0.11))) * 0.92, vTone.x * 0.88);
   if (vTone.y > 0.0) col += uMatBase[mi] * vColor.rgb * (vTone.y * 0.38);

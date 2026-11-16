@@ -194,6 +194,8 @@ export interface ThingView {
   visible: boolean;
   /** 0..1: вещь — кружево: поверхности нет, одни нити по её рёбрам (ступень перед пустотой). */
   lace?: number;
+  /** 0..1: вещь выросла под взглядом и стала облаком точек — сквозь неё проходят. */
+  dots?: number;
 }
 
 /** Из чего вещь: из вещества, как всё; из света (проекция: светится сама, свет её смывает); из нитей (кружево). */
@@ -601,6 +603,7 @@ export class GameRenderer {
         uFogColor: { value: new THREE.Vector3(0, 0, 0) },
         uDissolve: { value: 0 },
         uThing: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uDots: { value: 0 },
         uScan: { value: new THREE.Vector4(0, SCAN.perLight, SCAN.max, 0) },
         uScanFade: { value: 1 },
         uScanRange: { value: new THREE.Vector2(4, 15) },
@@ -1557,6 +1560,7 @@ export class GameRenderer {
     const mat = this.worldLike();
     // y — вещь из кружева: поверхности нет, одни нити (тот же узор, что у стёртых стен); z — это вещь, а не архитектура.
     mat.uniforms.uThing = { value: new THREE.Vector4(0, look === 'lace' ? 1 : 0, 1, (seed % 97) * 1.37) };
+    mat.uniforms.uDots = { value: 0 };
     mat.defines = look === 'light' ? { ...this.slideMat.defines } : { ...this.worldMat.defines };
     const mesh = this.makeMesh(data, 0, 0);
     mesh.material = mat;
@@ -1583,8 +1587,13 @@ export class GameRenderer {
     t.mesh.rotation.set(0, v.yaw, 0);
     t.mesh.scale.setScalar(v.scale);
     (t.mat.uniforms.uThing!.value as THREE.Vector4).x = v.dissolve;
-    // Рассыпающаяся вещь тени не отбрасывает; свет и кружево — никогда.
-    if (t.look === 'matter') t.mesh.layers.set(v.dissolve > 0.4 ? 1 : 0);
+    const dots = v.dots ?? 0;
+    t.mat.uniforms.uDots!.value = dots;
+    this.clouds.setSparse(t.mesh, dots);
+    // Выросшая вещь из точек: поверхность редеет точками (uDots), сквозь промежутки видно, что за ней.
+    // Поверхность не выключается целиком: облако точек берёт глубину и цвет из неё, и без неё гаснет тоже.
+    // Рассыпающаяся вещь и вещь из точек тени не отбрасывают; свет и кружево — никогда.
+    if (t.look === 'matter') t.mesh.layers.set(v.dissolve > 0.4 || (v.dots ?? 0) > 0.5 ? 1 : 0);
     if (Math.abs(v.dissolve - t.dis) > 1e-4) {
       this.grainsFor(`t${id}`, t.dis, v.dissolve, () => {
         t.mesh.updateMatrix();

@@ -292,6 +292,26 @@ describe('облака точек: кому сколько слоёв', () => {
     expect(ready(p1)).toBeLessThan(2600 * 2.2);
   });
 
+  it('вещь, выросшая в облако точек: точек на ней вчетверо реже обычного, пересев редкий, а не каждый кадр', () => {
+    const { clouds, scene } = setup();
+    const data = roomData(-0.25, -0.25, 0.5, 0.5);
+    const thing = meshOf(data, scene);
+    clouds.add(thing, data, { follow: true });
+    const cam = camAt(0, 1.5, 2);
+    clouds.update(cam);
+    clouds.setSparse(thing, 1);
+    thing.scale.setScalar(2);
+    thing.updateMatrixWorld(true);
+    clouds.update(cam);
+    const p1 = cellsOf(clouds)[0]!;
+    // Площадь в мире вчетверо больше, плотность вчетверо ниже — точек столько же, сколько было.
+    expect(ready(p1)).toBeGreaterThan(2600 * 0.8);
+    expect(ready(p1)).toBeLessThan(2600 * 1.3);
+    // Следующие кадры при том же размере облако не трогают: никакого пересева на каждом кадре.
+    for (let i = 0; i < 5; i++) clouds.update(cam);
+    expect(cellsOf(clouds)[0]).toBe(p1);
+  });
+
   it('редкое облако карманного пространства: огромный пол сеется только вокруг игрока, клетками покрупнее', () => {
     const { clouds, scene } = setup(600);
     // Пол белого нигде: 88 × 88 м одним прямоугольником.

@@ -124,6 +124,26 @@ describe('вещи: судьбы', () => {
     expect(t.state).toBe('giant');
   });
 
+  it('выросшая вещь — облако точек (её проходят насквозь); пока стоит — нет; растущая навстречу — плотная', () => {
+    const { th, t } = make('grow');
+    expect(Things.dots(t)).toBe(0);
+    run(th, DEFAULT_THINGS.gazeTime + 0.05, onThing(t));
+    let prev = 0;
+    for (let i = 0; i < 12; i++) {
+      run(th, DEFAULT_THINGS.growTime / 12, away());
+      const d = Things.dots(t);
+      expect(d).toBeGreaterThanOrEqual(prev);
+      prev = d;
+    }
+    expect(t.state).toBe('giant');
+    expect(Things.dots(t)).toBe(1);
+    // Растущая навстречу (jump) накрывает — она остаётся плотной.
+    const j = make('jump');
+    run(j.th, DEFAULT_THINGS.gazeTime + 0.05, onThing(j.t));
+    run(j.th, DEFAULT_THINGS.growTime / 2, away());
+    expect(Things.dots(j.t)).toBe(0);
+  });
+
   it('jump: растёт навстречу игроку; как только дотянулась — engulf, затем settled; издали — по окончании роста', () => {
     const near = make('jump');
     run(near.th, DEFAULT_THINGS.gazeTime + 0.05, onThing(near.t));

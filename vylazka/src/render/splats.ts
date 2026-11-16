@@ -65,6 +65,11 @@ interface Group {
    * во сколько выросла её площадь.
    */
   scale: number;
+  /**
+   * Вещь, выросшая под взглядом в облако точек (systems/things.ts, Things.dots): её посев не догоняет
+   * рост, и точки на выросшей поверхности стоят во столько раз реже, во сколько выросла её площадь.
+   */
+  sparse: number;
 }
 
 export interface CloudOptions {
@@ -136,7 +141,13 @@ export class SplatClouds {
     for (let i = 0; i < p.length; i += 3) box.expandByPoint(this.tmp.set(p[i]!, p[i + 1]!, p[i + 2]!));
     const sphere = box.getBoundingSphere(new THREE.Sphere());
     sphere.radius += SCATTER;
-    this.groups.set(owner, { owner, data, follow: opts.follow === true, thin: opts.thin ?? 1, seed: this.nextSeed++, sphere, cells: null, idle: 0, dist: 0, scale: 1 });
+    this.groups.set(owner, { owner, data, follow: opts.follow === true, thin: opts.thin ?? 1, seed: this.nextSeed++, sphere, cells: null, idle: 0, dist: 0, scale: 1, sparse: 0 });
+  }
+
+  /** Вещь стала облаком точек (0..1): её облако больше не пересевается гуще при росте. */
+  setSparse(owner: THREE.Object3D, k: number): void {
+    const g = this.groups.get(owner);
+    if (g) g.sparse = k;
   }
 
   remove(owner: THREE.Object3D): void {
@@ -159,7 +170,7 @@ export class SplatClouds {
 
   /** Плотность посева сетки: у выросшей вещи — больше, чтобы на её поверхности в мире точек было столько же. */
   private densityOf(g: Group): number {
-    return (this.density / g.thin) * g.scale * g.scale;
+    return (this.density / g.thin) * g.scale * g.scale * (g.sparse > 0 ? 0.25 : 1);
   }
 
   /** Разрезать сетку на клетки и завести каждой пустое облако. */
@@ -268,7 +279,9 @@ export class SplatClouds {
       // (пересев меняет рисунок точек, поэтому он редок: за рост в семь раз — два раза).
       if (g.cells && scale > g.scale * 1.3) {
         this.release(g);
-        g.scale = scale * 1.8;
+        // Вещь из точек пересевается без запаса на рост (следующий пересев — на трети роста); сама
+        // плотность у неё вчетверо ниже обычной (densityOf): облако видно, и сквозь него видно.
+        g.scale = g.sparse > 0 ? scale : scale * 1.8;
       }
       if (!g.cells) this.build(g);
       const density = this.densityOf(g);

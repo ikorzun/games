@@ -1786,14 +1786,15 @@ async function scenarioSession(browser, baseUrl) {
     check('в лимбо копятся вспомненные вещи; закрытая сессия засчитана', st.things.length === 5 && st.archive.length === 5 && st.profile.successes === 1 && st.profile.archive.length === 5, JSON.stringify({ things: st.things.length, archive: st.archive.length, successes: st.profile.successes }));
     if (wantShots) await saveShot(page, 'session_limbo.png');
 
-    // Приложение собирает следующую сессию, лимбо отпускает: новые воспоминания.
+    // Приложение собирает следующую сессию, лимбо отпускает. Каждый круг рассказывает ту же цепочку
+    // (story.md, §7а): те же пять вещей в том же порядке, только место стёрто сильнее.
     for (let i = 0; i < 50 && st.profile.sorties < 2; i++) {
       st = await vz(page, () => window.__vz.step(60));
       await sleep(150);
     }
     st = await vz(page, () => window.__vz.step(30));
     const ids2 = st.session?.memories.map((m) => m.id) ?? [];
-    check('через несколько секунд началась новая сессия: другие воспоминания, заданий снова нет', st.where === 'main' && st.profile.sorties === 2 && st.session.memories.every((m) => m.state === 'hidden') && ids2.length === 5 && ids2.every((id) => !ids1.includes(id)) && st.session.time < 5, JSON.stringify({ where: st.where, sorties: st.profile.sorties, ids1, ids2 }));
+    check('через несколько секунд началась новая сессия: та же цепочка воспоминаний, заданий снова нет', st.where === 'main' && st.profile.sorties === 2 && st.session.memories.every((m) => m.state === 'hidden') && ids2.length === 5 && ids2.join() === ids1.join() && st.session.time < 5, JSON.stringify({ where: st.where, sorties: st.profile.sorties, ids1, ids2 }));
     check('на экране — название новой сессии, строк лимбо нет', (await page.textContent('.vz-hud__toast'))?.trim() === 'untitled session 0002' && (await page.evaluate(() => !document.querySelector('.vz-hud__limbo').classList.contains('is-on'))));
     // Петля («Петля бесконечна, пока не сотрётся всё воспоминание»): место то же, но стёрто на круг.
     const lv2 = await vz(page, () => window.__vz.level());

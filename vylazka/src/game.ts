@@ -2412,7 +2412,7 @@ export class Game {
           xray = true;
         }
       }
-      this.renderer.setThing(id, { x: t.pos[0], y: t.pos[1], z: t.pos[2], yaw: t.yaw, scale: t.scale, dissolve: t.dissolve, wire: w, xray, visible: t.state !== 'gone' && (d < 40 || xray) });
+      this.renderer.setThing(id, { x: t.pos[0], y: t.pos[1], z: t.pos[2], yaw: t.yaw, scale: t.scale, dissolve: t.dissolve, wire: w, xray, visible: t.state !== 'gone' && (d < 40 || xray), dots: Things.dots(t) });
     }
     // Кинескоп заметнее на ходу, под взглядом на вещь, рядом с искомым и в момент скачка.
     const speed = Math.hypot(b.vx, b.vz);

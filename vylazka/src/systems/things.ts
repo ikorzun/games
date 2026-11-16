@@ -222,6 +222,17 @@ export class Things {
     return ev;
   }
 
+  /**
+   * Насколько вещь — облако точек, 0..1. Вещь, которая растёт под взглядом и остаётся великаном (fate
+   * 'grow'), по мере роста рассыпается на точки: сквозь неё проходят, и это должно быть видно (слова
+   * партнёра). Вещь, что растёт навстречу и накрывает ('jump'), остаётся плотной — она угроза.
+   */
+  static dots(t: Pick<Thing, 'fate' | 'state' | 'scale'>, cfg: ThingsConfig = DEFAULT_THINGS): number {
+    if (t.fate !== 'grow' || (t.state !== 'changing' && t.state !== 'giant')) return 0;
+    const k = Math.max(0, Math.min(1, (t.scale - 1) / Math.max(1e-6, (cfg.growScale - 1) * 0.45)));
+    return k * k * (3 - 2 * k);
+  }
+
   private settle(t: Thing, state: 'gone' | 'giant' | 'idle', ev: ThingEvent[]): void {
     t.state = state;
     ev.push({ type: 'settled', thing: t });
