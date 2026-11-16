@@ -7,6 +7,7 @@ import { bakeDetail, DETAIL, DETAIL_LAYERS } from '../src/render/detail';
 import { bakeGrime } from '../src/render/grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from '../src/render/matcap_atlas';
 import { fineOf, gazeTall, internalSize, QUALITY, verticalFov } from '../src/render/renderer';
+import { WORLD_FRAG } from '../src/render/shaders';
 import { CALM_ENV, DEFAULT_FLASHLIGHT, Flashlight } from '../src/systems/flashlight';
 import { recTimestamp } from '../src/ui/hud';
 import { DECAY, MAT, MAT_COUNT, MAT_DEFS } from '../src/world/materials';
@@ -342,21 +343,26 @@ describe('рендер: чистые функции', () => {
     expect(verticalFov(3)).toBe(62);
   });
 
-  it('взгляд по форме кадра: в широком кадре конус круглый, в высоком вытянут вместе с экраном', () => {
-    expect(gazeTall(16 / 9)).toBe(1);
-    expect(gazeTall(1)).toBe(1);
-    expect(gazeTall(9 / 16)).toBeCloseTo(0.5625, 6);
-    expect(gazeTall(390 / 844)).toBeCloseTo(390 / 844, 6);
-    // Совсем узкая полоса: взгляд не бесконечный.
-    expect(gazeTall(0.2)).toBe(0.4);
-    // В портрете низ экрана (48° от оси при угле обзора 96°) после сжатия вертикали оказывается не
-    // дальше от оси взгляда, чем край экрана по горизонтали: пол под ногами собран так же, как стена сбоку.
+  it('взгляд по форме кадра: низ высокого кадра — так же далеко от оси, как низ широкого; правило взгляда не пропадает', () => {
+    const deg = (r: number): number => (r * 180) / Math.PI;
+    expect(gazeTall(16 / 9)).toBeCloseTo(1, 6);
+    expect(gazeTall(21 / 9)).toBe(1);
     const aspect = 390 / 844;
+    const k = gazeTall(aspect);
+    expect(k).toBeGreaterThan(0.6);
+    expect(k).toBeLessThan(0.75);
     const halfV = (verticalFov(aspect) * Math.PI) / 360;
-    const halfH = Math.atan(Math.tan(halfV) * aspect);
-    const squeezed = Math.atan(Math.tan(halfV) * gazeTall(aspect));
-    expect(squeezed).toBeCloseTo(halfH, 6);
-    expect((squeezed * 180) / Math.PI).toBeLessThan(36);
+    const halfWideV = (verticalFov(16 / 9) * Math.PI) / 360;
+    // Низ кадра после сжатия — там же, где низ широкого кадра (около 37°): пол под ногами собран, как на ПК.
+    expect(deg(Math.atan(Math.tan(halfV) * k))).toBeCloseTo(deg(halfWideV), 3);
+    // Но не ближе середины конуса (25°): край кадра в портрете собран не сплошь — правило взгляда видно.
+    expect(deg(Math.atan(Math.tan(halfV) * k))).toBeGreaterThan(30);
+  });
+
+  it('пол держится дольше стен: в шейдере мира у пола дальше дальность сборки и меньше потеря на скользящем луче', () => {
+    expect(WORLD_FRAG).toContain('float floorK = smoothstep(0.5, 0.9, up);');
+    expect(WORLD_FRAG).toContain('vec2 rangeV = uScanRange * mix(1.0, 1.7, floorK);');
+    expect(WORLD_FRAG).toContain('uGazeTall');
   });
 });
 
