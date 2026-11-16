@@ -556,8 +556,10 @@ export class Game {
       this.assignRooms(dream.seed);
       this.setupPressure(level);
       this.placeThings(dream.seed);
-      // Место собирается вокруг игрока из пыли.
-      this.transition = { plan: { cause: 'begin', style: 'dissolve', to: 'session' }, t: 0, out: 0, back: 1.6, switched: true };
+      // Место собирается вокруг игрока из пыли; светлое (офис, зал ожидания) проявляется из белого: клетки
+      // распада с красной сеткой на светлом читались битой текстурой (аудит 16.11).
+      const bright = POLAR[level.world ?? 'shelter'] > 0.5;
+      this.transition = { plan: { cause: 'begin', style: bright ? 'whiteout' : 'dissolve', to: 'session' }, t: 0, out: 0, back: 1.6, switched: true };
     } else {
       this.swarm = null;
       this.spores = null;
@@ -2309,7 +2311,8 @@ export class Game {
       if (style === 'cut') this.glitch = Math.max(this.glitch, 0.9 * k);
       else if (style === 'dissolve') {
         dissolve = k;
-        wire = Math.max(wire, 0.7 * Math.sin(k * Math.PI));
+        // В светлом месте красная сетка старта читалась битой текстурой (аудит 16.11): там она тише.
+        wire = Math.max(wire, lerp(0.7, 0.18, this.polar) * Math.sin(k * Math.PI));
         // Уходящее место растворяется в цвет того, куда ведёт скачок.
         if (!tr.switched) {
           const to = DEST_FOG[tr.plan.to] ?? this.env.fog;
@@ -2557,6 +2560,8 @@ export class Game {
       echo: this.where === 'main' && this.echo.count > 0 ? this.echo.data : null,
       ghost: this.ghost,
       sonar: this.sonarView(),
+      burnTint: [lerp(0.9, 0.86, this.polar), lerp(0.07, 0.82, this.polar), lerp(0.03, 0.74, this.polar)],
+      memHold: tr !== null && tr.plan.style === 'dissolve',
       // План держится, но и он к концу петли редеет: на последнем круге он не целее самого места.
       quiet: this.where === 'main' && this.level?.edges ? QUIET * (1 - 0.35 * clamp(this.wear, 0, 1)) : 0,
       cells: cl ? { data: cl.data, origin: CELL_ORIGIN, step: 3, size: cl.size } : null,

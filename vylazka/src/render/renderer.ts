@@ -175,6 +175,10 @@ export interface FrameView {
   sonar?: readonly [number, number, number, number, number] | null;
   /** Сила тихого слоя — точек по рёбрам и углам, 0..1. Нет поля — слоя нет. */
   quiet?: number;
+  /** Цвет кромки распада: красный системы (нет поля) или свой у места. */
+  burnTint?: Vec3;
+  /** Кадр не идёт в память света (переход): после него память начинается с чистого кадра. */
+  memHold?: boolean;
   /**
    * Свет потолочных панелей по клеткам уровня (офис, жёлтые комнаты): data — size × size точек RGBA
    * (r — сколько рассеянного света в клетке, g — номер помещения), origin — угол сетки в мире (x, z),
@@ -233,24 +237,58 @@ interface Burst {
   life: GrainLife;
 }
 
-/** Рёбра треугольников сетки без повторов: индексы для линий. */
-function edgeIndex(index: ArrayLike<number>, vertexCount: number): Uint32Array {
-  const seen = new Set<number>();
-  const out: number[] = [];
-  const push = (a: number, b: number): void => {
-    const k = a < b ? a * vertexCount + b : b * vertexCount + a;
-    if (seen.has(k)) return;
-    seen.add(k);
-    out.push(a, b);
+/** Косинус угла, начиная с которого общее ребро двух граней считается изломом (около 20°). */
+const CREASE_COS = 0.94;
+
+/**
+ * Рёбра сетки для красной сетки «системы»: только изломы (грани сходятся под углом больше ~20°) и края.
+ * Диагонали плоских четырёхугольников не рисуются: сетка со всеми рёбрами треугольников превращала
+ * вещь под взглядом в знак «нет картинки» — прямоугольник с крестом (аудит мест 16.11).
+ */
+export function edgeIndex(index: ArrayLike<number>, pos: ArrayLike<number>, vertexCount: number): Uint32Array {
+  const first = new Map<number, number>();
+  const flat = new Set<number>();
+  const order: number[] = [];
+  const normals: number[] = [];
+  const n = [0, 0, 0];
+  const faceNormal = (a: number, b: number, c: number): void => {
+    const ux = pos[b * 3]! - pos[a * 3]!;
+    const uy = pos[b * 3 + 1]! - pos[a * 3 + 1]!;
+    const uz = pos[b * 3 + 2]! - pos[a * 3 + 2]!;
+    const vx = pos[c * 3]! - pos[a * 3]!;
+    const vy = pos[c * 3 + 1]! - pos[a * 3 + 1]!;
+    const vz = pos[c * 3 + 2]! - pos[a * 3 + 2]!;
+    n[0] = uy * vz - uz * vy;
+    n[1] = uz * vx - ux * vz;
+    n[2] = ux * vy - uy * vx;
+    const l = Math.hypot(n[0], n[1], n[2]) || 1;
+    n[0] /= l;
+    n[1] /= l;
+    n[2] /= l;
   };
-  for (let i = 0; i + 2 < index.length; i += 3) {
+  const visit = (a: number, b: number, f: number): void => {
+    const k = a < b ? a * vertexCount + b : b * vertexCount + a;
+    const g = first.get(k);
+    if (g === undefined) {
+      first.set(k, f);
+      order.push(k, a, b);
+      return;
+    }
+    const dot = normals[g * 3]! * normals[f * 3]! + normals[g * 3 + 1]! * normals[f * 3 + 1]! + normals[g * 3 + 2]! * normals[f * 3 + 2]!;
+    if (dot > CREASE_COS) flat.add(k);
+  };
+  for (let i = 0, f = 0; i + 2 < index.length; i += 3, f++) {
     const a = index[i]!;
     const b = index[i + 1]!;
     const c = index[i + 2]!;
-    push(a, b);
-    push(b, c);
-    push(c, a);
+    faceNormal(a, b, c);
+    normals.push(n[0]!, n[1]!, n[2]!);
+    visit(a, b, f);
+    visit(b, c, f);
+    visit(c, a, f);
   }
+  const out: number[] = [];
+  for (let i = 0; i < order.length; i += 3) if (!flat.has(order[i]!)) out.push(order[i + 1]!, order[i + 2]!);
   return new Uint32Array(out);
 }
 
@@ -629,6 +667,7 @@ export class GameRenderer {
         uScanRange: { value: new THREE.Vector2(4, 15) },
         uSlide: { value: new THREE.Vector4(SLIDE.washFrom, SLIDE.washTo, SLIDE.gain, 0) },
         uErase: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uBurnTint: { value: new THREE.Vector3(0.9, 0.07, 0.03) },
         uKeyCells: { value: 0 },
         uGaze: { value: 1 },
         uGazeCone: { value: new THREE.Vector2(Math.cos((52 * Math.PI) / 180), Math.cos((25 * Math.PI) / 180)) },
@@ -1532,7 +1571,7 @@ export class GameRenderer {
     g.setAttribute('position', pos);
     const obj = m.geometry.getAttribute('aObj');
     if (obj) g.setAttribute('aObj', obj);
-    g.setIndex(new THREE.BufferAttribute(edgeIndex(m.geometry.getIndex()!.array, pos.count), 1));
+    g.setIndex(new THREE.BufferAttribute(edgeIndex(m.geometry.getIndex()!.array, pos.array as ArrayLike<number>, pos.count), 1));
     g.boundingSphere = m.geometry.boundingSphere;
     const lines = new THREE.LineSegments(g, mat);
     // Слой 1: в проход тени линии не попадают.
@@ -1876,6 +1915,8 @@ export class GameRenderer {
     (wuEnv.uKeyColor!.value as THREE.Vector3).set(v.keyColor[0], v.keyColor[1], v.keyColor[2]);
     wuEnv.uFog!.value = v.fogDensity;
     wuEnv.uDissolve!.value = v.dissolve;
+    const bt = v.burnTint ?? [0.9, 0.07, 0.03];
+    (wuEnv.uBurnTint!.value as THREE.Vector3).set(bt[0], bt[1], bt[2]);
     this.dustMat.uniforms.uBoost!.value = v.dissolve;
     this.clearColor.setRGB(v.fogColor[0], v.fogColor[1], v.fogColor[2]);
 
@@ -2086,7 +2127,8 @@ export class GameRenderer {
     r.render(this.memScene, this.postCam);
     this.memRT = [memWas, memNow];
     this.prevViewProj.copy(viewProj);
-    this.memLive = true;
+    // Кадры перехода в память не идут: красная сетка и прожог старта не должны висеть в точках потом.
+    this.memLive = !v.memHold;
     this.memTime = v.time;
     this.memCam.copy(cam.position);
 

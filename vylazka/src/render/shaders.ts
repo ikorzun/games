@@ -294,6 +294,7 @@ uniform vec4 uPressBox;   // давление: прямоугольник пом
 uniform vec4 uPress;      // xy — откуда идёт провал, z — радиус рассыпавшегося пола, w — яркость красной сетки
 uniform vec3 uPressY;     // x — пол помещения, y — его потолок, z — на сколько метров потолок провис
 uniform vec4 uErase;      // стирание места (systems/decay.ts): x — потолок, y — стены, z — пол; 0 — цело, 1 — стёрто
+uniform vec3 uBurnTint;   // цвет кромки распада: красный системы в тёмных местах, тёплый белый в светлых
 uniform vec4 uRoofBox;    // зал ожидания: прямоугольник стеклянной крыши в мире (minX, minZ, maxX, maxZ)
 uniform float uRoofY;     // высота её переплёта, м; 0 — крыши нет
 uniform vec3 uKeyDirW;    // направление на прямой свет в мире
@@ -656,7 +657,7 @@ void main() {
       colI = mix(colI, uAmbient * 0.3, 0.55 * graze);
       vec3 Ri = reflect(normalize(vPosV), Ng);
       colI += uLightColor * (pow(max(dot(Ri, lbS.xyz), 0.0), 120.0) * lbS.w * 0.35);
-      colI += vec3(0.9, 0.07, 0.03) * burn;
+      colI += uBurnTint * burn;
       gl_FragColor = vec4(mix(uFogColor, colI, exp(-uFog * distS0)), 1.0);
       return;
     }
@@ -671,7 +672,7 @@ void main() {
       vec3 colS = pic * (uSlide.z * (2.2 + 9.0 * min(roomS, 0.6)) * rows * back) + vec3(0.004, 0.005, 0.007);
       vec3 Rs = reflect(normalize(vPosV), Ng);
       colS += uLightColor * (pow(max(dot(Rs, lbS.xyz), 0.0), 120.0) * lbS.w * 0.35);
-      colS += vec3(0.9, 0.07, 0.03) * burn;
+      colS += uBurnTint * burn;
       gl_FragColor = vec4(mix(uFogColor, colS, exp(-uFog * distS0)), 1.0);
       return;
     }
@@ -684,7 +685,7 @@ void main() {
     vec2 q = vUv * 2.0 - 1.0;
     float lampS = (0.93 + 0.07 * sin(uSlide.w * 9.0) * sin(uSlide.w * 2.3 + 1.1)) * (1.0 - 0.3 * dot(q, q) * 0.5);
     vec3 img = vColor.rgb * (uSlide.z * lampS * (1.0 - 0.6 * wash));
-    img += vec3(0.9, 0.07, 0.03) * burn;
+    img += uBurnTint * burn;
     gl_FragColor = vec4(mix(uFogColor, img, exp(-uFog * distS)), 1.0);
     return;
   }
@@ -842,7 +843,7 @@ void main() {
   if (hLit < 0.1 && eGlow < 0.004 && eAmb < 0.02) {
     vec3 flat_ = uMatBase[mi] * vColor.rgb * ao;
     vec3 colG = flat_ * (amb * (0.66 + 0.34 * up) + uLightColor * (eLight * 0.45 + bounce0 * bounceTint));
-    colG += vec3(0.9, 0.07, 0.03) * burn;
+    colG += uBurnTint * burn;
     voidTouch(colG, hOut);
     gl_FragColor = vec4(mix(uFogColor, colG, exp(-uFog * distV)), hOut);
     return;
@@ -865,14 +866,20 @@ void main() {
   // плесени становится больше, чем было, и они ложатся ровной россыпью по всей стене.
   g1 = clamp((mix(g1, g1b, 0.42) - 0.5) * 1.12 + 0.5, 0.0, 1.0);
 #endif
-#ifdef HEXTILE
   // Слои без своего рисунка: бетон, штукатурка, краска, ржавчина (0–3), пол (8), земля и обмотка труб (12, 13).
   bool loose = cls < 6 && (ma.z < 3.5 || abs(ma.z - 8.0) < 0.5 || (ma.z > 11.5 && ma.z < 13.5));
+#ifdef HEXTILE
   vec4 d0 = loose ? hexDetail(uvw * ma.w, ma.z) : texture(uDetail, vec3(uvw * ma.w, ma.z));
 #else
   vec4 d0 = texture(uDetail, vec3(uvw * ma.w, ma.z));
+  // Без шестиугольной укладки (среднее и низкое качество, телефон) слой фактуры повторялся раз в метр:
+  // штукатурка зала ожидания читалась плиткой (аудит 16.11). Вторая выборка — повёрнутая и в другом
+  // масштабе — ломает решётку повторов у слоёв без своего рисунка; кирпич и плитку она не трогает.
+  if (loose) d0 = mix(d0, texture(uDetail, vec3(mat2(0.829, -0.559, 0.559, 0.829) * uvw * ma.w * 0.71 + 0.37, ma.z)), 0.45);
 #endif
-  float alb = 0.55 + 0.9 * d0.g;
+  // Пестрота фактуры: в запущенном месте ±45 %, в чистом (офис, зал ожидания) — вдвое-втрое меньше:
+  // чистый вокзал не бывает в пятнах «камуфляжа» (аудит 16.11).
+  float alb = 1.0 + (0.9 * d0.g - 0.45) * mix(0.35, 1.0, clamp(1.0 + uDecay * 2.0, 0.0, 1.0));
 #ifdef DETAIL
   // Большая ровная стена не бывает одного тона: плавные пятна в несколько метров и помельче. Они же
   // прячут повтор самой фактуры. В чистых местах (офис) их вдвое меньше, в «чистом» рендере нет вовсе.
@@ -1046,7 +1053,7 @@ void main() {
   // оттенок вершины больше единицы — он и есть цвет, помноженный на яркость (основа тогда серая).
   vec3 glowBase = maxc > 1.5 ? vec3(0.55) : uMatBase[mi];
   col += glowBase * ma.y * vColor.rgb * glowK;
-  col += vec3(0.9, 0.07, 0.03) * burn;
+  col += uBurnTint * burn;
   // Вещь из точек чуть светится своим цветом: облако видно и на краю луча, и оно не похоже на твёрдое.
   if (dotGlow > 0.0) col += uMatBase[mi] * vColor.rgb * (0.22 * dotGlow);
   // Тон предмета: выцветший теряет цвет (остаётся бумага), расцветший светится своим цветом сам.
@@ -2023,8 +2030,12 @@ void main() {
     float h = hash(blk, frame / 3u + 7u);
     if (h < uGlitch * 0.35) {
       uv.x += (hash(blk, frame / 3u + 31u) - 0.5) * 0.12 * uGlitch;
-      float sq = 8.0 * uFmt;
-      uv = (floor(uv * uRes / sq) + 0.5) * sq / uRes;
+      // Квадраты — только у сильного сбоя (вспышка, разрыв): у слабого они читались битыми пикселями
+      // экрана, а не сбоем записи (аудит 16.11). Слабый сбой только сдвигает блоки и строки.
+      if (uGlitch > 0.45) {
+        float sq = 8.0 * uFmt;
+        uv = (floor(uv * uRes / sq) + 0.5) * sq / uRes;
+      }
     }
     float line = hash(uvec2(0u, fx.y / 3u), frame / 2u);
     if (line < uGlitch * 0.08) uv.x += (line - 0.02) * 0.6;
