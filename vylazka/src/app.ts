@@ -113,6 +113,8 @@ export class App {
   private playTime = 0;
   private slowTime = 0;
   private showFps = false;
+  /** Пробная сборка: 'oldgaze' — взгляд как до 16.11, 'nogaze' — без взгляда, 'solid' — без сборки из точек. */
+  private variant = '';
   /** Проверка на устройстве (#diag): строка с видеокартой и тем, что в кадре на полу, и кнопка «сплошь». */
   private diagText: HTMLElement | null = null;
   private diagAt = 0;
@@ -166,6 +168,8 @@ export class App {
     // Счётчик кадров: ?fps=1 или #fps — на странице по ссылке параметров адреса нет, проходит только #имя.
     this.showFps = p.get('fps') === '1' || (typeof location !== 'undefined' && location.hash === '#fps');
     if (p.get('diag') === '1' || (typeof location !== 'undefined' && location.hash === '#diag') || App.diagSaved()) this.makeDiag();
+    // Пробная сборка для телефона (scripts: страница с __vzVariant): что в ней отключено, видно в строке проверки.
+    this.variant = String((globalThis as { __vzVariant?: unknown }).__vzVariant ?? '');
 
     const device = this.platform.deviceType();
     // Площадка может ошибиться с типом устройства, поэтому смотрим и на сам указатель;
@@ -293,6 +297,10 @@ export class App {
     renderer.brightness = BRIGHT[this.profile.bright];
     // Телефон и планшет: тень от солнца — формулой (см. keyShadowByFormula в render/renderer.ts).
     renderer.keyShadowByFormula = this.touchMode;
+    // Пробная сборка: одна часть сборки места отключена, чтобы на телефоне найти, какая ломает пол.
+    if (this.variant === 'oldgaze') renderer.gazeMode = 1;
+    else if (this.variant === 'nogaze') renderer.gazeMode = 2;
+    else if (this.variant === 'solid') renderer.debugScan(false);
     setThingRegistry(ALL_PROPS);
     // level=test — коридор технического среза, level=show — витрина реквизита.
     this.testLevel = p.get('level') === 'test' || p.get('level') === 'show' || (p.get('level') ?? '').startsWith('pocket_') || this.showParam() !== null;
@@ -1014,7 +1022,7 @@ export class App {
         ? (p: { scene: number[]; mem: number[] }): string => `взгляд ${p.scene[0]} · свет ${p.scene[1]} · дальность ${p.scene[2]} · итог ${p.scene[3]}`
         : (p: { scene: number[]; mem: number[] }): string => `rgb ${p.scene.slice(0, 3).join(',')} α ${p.scene[3]} · память α ${p.mem[3]}`;
     return [
-      `${d.gpu} · ${d.webgl2 ? 'WebGL2' : 'WebGL1'} · highp ${d.highp}`,
+      `${d.gpu} · ${d.webgl2 ? 'WebGL2' : 'WebGL1'} · highp ${d.highp}${this.variant ? ` · проба ${this.variant}` : ''}`,
       `${g.world ?? '?'} · q ${i.quality} ${i.width}×${i.height} · ${this.fps.toFixed(0)} fps · усиление ${g.exposure.gain.toFixed(2)} · яркость ${r.brightness} · солнце ${r.keyShadowByFormula ? 'формулой' : 'картой'}`,
       `центр: ${px(d.probes[0]!)}`,
       `пол 72%: ${px(d.probes[1]!)}`,

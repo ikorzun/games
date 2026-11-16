@@ -685,6 +685,7 @@ export class GameRenderer {
         uBurnTint: { value: new THREE.Vector3(0.9, 0.07, 0.03) },
         uKeyCells: { value: 0 },
         uGaze: { value: 1 },
+        uGazeMode: { value: 0 },
         uGazeCone: { value: new THREE.Vector2(Math.cos((52 * Math.PI) / 180), Math.cos((25 * Math.PI) / 180)) },
         uGazeTall: { value: 1 },
         uPressBox: { value: new THREE.Vector4(0, 0, 0, 0) },
@@ -1329,6 +1330,8 @@ export class GameRenderer {
    * поверхности (r — взгляд, g — рассеянный свет, b — дальность, a — итог). Только для строки проверки.
    */
   debugView = 0;
+  /** Пробная сборка для телефона: 0 — взгляд как сейчас, 1 — как до 16.11 (простой конус), 2 — без взгляда. */
+  gazeMode = 0;
 
   /** Облако точек сейчас включено (выключенное — мир сплошными поверхностями). */
   get scanOn(): boolean {
@@ -2007,6 +2010,7 @@ export class GameRenderer {
     (wu.uScanRange!.value as THREE.Vector2).set(v.scanRange[0], v.scanRange[1]);
     wu.uKeyCells!.value = v.keyCells ?? 0;
     wu.uGaze!.value = v.gaze ?? 1;
+    wu.uGazeMode!.value = this.gazeMode;
     const gc = v.gazeCone ?? [52, 25];
     (wu.uGazeCone!.value as THREE.Vector2).set(Math.cos((gc[0] * Math.PI) / 180), Math.cos((gc[1] * Math.PI) / 180));
     wu.uGazeTall!.value = gazeTall(this.camera.aspect);
