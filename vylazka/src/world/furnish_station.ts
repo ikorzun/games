@@ -8,7 +8,6 @@
  * Предметы — из реестра ALL_PROPS (props_station.ts). Места для вещей-воспоминаний раскладываются
  * здесь же: у каждой вещи зала своё помещение (systems/session.ts, STATION_MEMORIES).
  */
-import { personSpot } from './furnish_people';
 import { floorSpots, free, homeStack, landmark, spot } from './furnish';
 import type { CellInfo, HomeItem, RoomCtx, Slot } from './furnish';
 import { ALL_PROPS } from './props_all';
@@ -57,14 +56,6 @@ function middle(ctx: RoomCtx): { c: CellInfo; dx: number; dz: number } {
 
 /** Высота сиденья: на неё кладутся записка, стакан, пальто. */
 const SEAT_Y = 0.46;
-/** Середины четырёх сидений ряда (props_station.ts, seatRow); сиденье на 0,01 м выше высоты сидячей позы манекена. */
-const SEAT_XS = [-0.81, -0.27, 0.27, 0.81] as const;
-const SEAT_LIFT = 0.01;
-
-/** Места для манекенов на ряду сидений; сиденья, где лежит вещь (x рядом с note), пропускаются. */
-function seatSpots(ctx: RoomCtx, xf: Xf, note?: number): void {
-  for (const cx of SEAT_XS) if (note === undefined || Math.abs(cx - note) > 0.4) personSpot(ctx, 'seat', xf.child(cx, SEAT_LIFT, 0));
-}
 
 // ───────────────────────── помещения ─────────────────────────
 
@@ -93,29 +84,20 @@ function concourse(ctx: RoomCtx): void {
     for (const x of [-1.5, 1.5]) {
       if (!put(ctx, 'st_seats_double', at(x, z))) continue;
       // Места для вещей — на сиденьях: записка лежит там, где кто-то сидел.
-      const note = (i + (x > 0 ? 1 : 0)) % 2 === 0;
-      if (note) spot(ctx, at(x, z), 0.55, SEAT_Y, 0.3, 'table');
-      seatSpots(ctx, at(x, z), note ? 0.55 : undefined);
-      seatSpots(ctx, at(x, z).child(0, 0, 0, 2));
+      if ((i + (x > 0 ? 1 : 0)) % 2 === 0) spot(ctx, at(x, z), 0.55, SEAT_Y, 0.3, 'table');
     }
   });
 
   // Табло и часы — на северной стене, между переходами: их видно от входа.
-  const board = wallAt(ctx, 3, 'st_board');
-  // Перед табло можно стоять и смотреть вверх — лицом к стене.
-  if (board) personSpot(ctx, 'look', board.xf.child(0.3, 0, 2.6, 2));
+  wallAt(ctx, 3, 'st_board');
   wallAt(ctx, 3, 'st_clock');
   // У стен — сиденья, таксофоны, урны.
   for (let i = 0; i < 4; i++) {
     const r = wall(ctx, ['st_seats']);
     if (r && i % 2 === 0) spot(ctx, r.s.xf, r.x - 0.55, SEAT_Y, 0.3, 'table');
-    if (r) seatSpots(ctx, r.s.xf.child(r.x, 0, 0), i % 2 === 0 ? -0.55 : undefined);
   }
-  for (let i = 0; i < 2; i++) {
-    const ph = wall(ctx, ['st_phone']);
-    // У таксофона говорят, повернувшись к нему.
-    if (ph) personSpot(ctx, 'call', ph.s.xf.child(ph.x + 0.12, 0, 0.55, 2));
-  }
+  wall(ctx, ['st_phone']);
+  wall(ctx, ['st_phone']);
   put(ctx, 'st_bin', at(-3.6, -4.5));
   put(ctx, 'st_bin', at(3.6, 4.5));
   // Чемоданы без хозяев.
@@ -166,7 +148,6 @@ function buffet(ctx: RoomCtx): void {
   for (let i = 0; i < 2; i++) {
     const r = wall(ctx, ['st_seats']);
     if (r) spot(ctx, r.s.xf, r.x + 0.55, SEAT_Y, 0.3, 'table');
-    if (r) seatSpots(ctx, r.s.xf.child(r.x, 0, 0), 0.55);
   }
   put(ctx, 'st_bin', ctx.cells[0]!.xf.child(-0.9, 0, 0.9));
   floorSpots(ctx, 1);
@@ -188,7 +169,6 @@ function platform(ctx: RoomCtx): void {
       s.used = true;
       put(ctx, 'st_seats', s.xf.child(0, 0, 0));
       spot(ctx, s.xf, i % 2 === 0 ? -0.55 : 0.55, SEAT_Y, 0.3, 'table');
-      seatSpots(ctx, s.xf, i % 2 === 0 ? -0.55 : 0.55);
     } else if (i % 3 === 0 && i > 0) {
       s.used = true;
       put(ctx, 'st_bin', s.xf.child(0, 0, 0.3));

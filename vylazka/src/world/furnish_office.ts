@@ -13,7 +13,6 @@
  * Мебель — из реестра ALL_PROPS: офисные предметы собраны кодом (props_office.ts), стулья, столы,
  * диваны, растения и картины — готовые модели (props_models.ts).
  */
-import { personSpot } from './furnish_people';
 import { panelDead } from '../systems/cell_lights';
 import { floorSpots, free, homeCentre, homeStack, landmark, leanScreens, screenAt, spot, veils } from './furnish';
 import type { CellInfo, HomeItem, RoomCtx, Slot } from './furnish';
@@ -269,8 +268,6 @@ function breakroom(ctx: RoomCtx): void {
   wall(ctx, ['water_cooler', -0.4], ['trash_bin', 0.35]);
   // Столик у стены и два стула по бокам.
   const t = wall(ctx, ['table_cafe'], ['chair_bent', -0.85], ['chair_bent', 0.85]);
-  // Гнутый стул ниже скамьи на 1,5 см; сидят на нём лицом в комнату.
-  if (t) for (const dx of [-0.85, 0.85]) personSpot(ctx, 'seat', t.s.xf.child(t.x + dx, -0.015, 0.02));
   if (t) spot(ctx, t.s.xf, t.x, 0.745, 0.35, 'table');
   floorSpots(ctx, 2);
   // Телевизор в комнате отдыха — единственный экран офиса, где не природа, а то, что смотрели все:
@@ -291,8 +288,6 @@ function manager(ctx: RoomCtx): void {
     put(ctx, 'office_terminal', xf.child(d.x - 0.32, 0.75, 0.33));
     put(ctx, 'desk_phone', xf.child(d.x + 0.2, 0.75, 0.2));
     put(ctx, 'office_chair', xf.child(d.x - 0.1, 0, 1.15, 2));
-    // В кресле за столом — лицом к столу, спиной к спинке кресла.
-    personSpot(ctx, 'desk', xf.child(d.x - 0.1, 0.01, 1.45, 2));
     landmark(ctx, 'manager', xf, d.x, 0.9, 0.4);
     spot(ctx, xf, d.x + 0.28, 0.77, 0.52, 'table');
   }

@@ -84,20 +84,3 @@ describe('манекены людей', () => {
     expect(Array.from(run(5))).not.toEqual(Array.from(run(6)));
   });
 });
-
-describe('люди по местам', () => {
-  it('в начале петли людей больше всего, к концу их почти нет; в каждом месте свои числа', async () => {
-    const { peopleCount } = await import('../src/world/furnish_people');
-    for (const w of ['station', 'office', 'shelter', 'yellow'] as const) {
-      let prev = Infinity;
-      for (const wear of [0, 0.2, 0.4, 0.6, 0.8, 1]) {
-        const n = peopleCount(w, wear);
-        expect(n, `${w} ${wear}`).toBeLessThanOrEqual(prev);
-        prev = n;
-      }
-      expect(peopleCount(w, 1), w).toBeLessThanOrEqual(1);
-    }
-    expect(peopleCount('station', 0)).toBe(5);
-    expect(peopleCount('yellow', 0)).toBe(1);
-  });
-});

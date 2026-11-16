@@ -14,7 +14,6 @@ import { decayAt } from '../systems/decay';
 import { doorSign, furnishRoom } from './furnish';
 import { furnishExtras, GARDEN_H, NO_EXTRAS } from './furnish_extras';
 import { furnishPapers, newPaperState } from './furnish_papers';
-import { furnishPeople } from './furnish_people';
 import { growWear } from './wear_growth';
 import { NOTE_ID, ROOM_LABEL, SIGN } from './signs';
 import type { CellInfo, RoomCtx, Slot } from './furnish';
@@ -699,8 +698,6 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
   // Бумага и чемоданы (world/furnish_papers.ts): листы на щитах, в рамах и на потолке, стена чемоданов.
   // Последним проходом и своим сидом — номера и места прежних объектов от них не сдвигаются.
   furnishPapers(paperState, furnished);
-  // Манекены людей (world/furnish_people.ts): на записанные обстановкой места, своим сидом.
-  const people = furnishPeople(world, layout.seed, decay.wear, furnished, start);
   // Своё стирание места (world/wear_growth.ts): рубец по стыку стены с потолком в убежище, щит с коконами
   // в кассе и буфете зала ожидания. Тоже последним проходом и своим сидом: обстановка от них не сдвигается.
   const growth = growWear(world, layout.seed, decay.wear, furnished, start);
@@ -793,7 +790,6 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
     objects: objects.list,
     freeSlots,
     growth,
-    people,
     layout,
     world,
   };
