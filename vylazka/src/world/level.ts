@@ -8,6 +8,7 @@ import type { MeshData, SheetMark } from './kit';
 import type { Perch } from '../systems/birds';
 import type { FreeSlot, LevelObject } from './objects';
 import type { EdgePoints } from './edges';
+import type { FigureSpot } from './figure_place';
 
 /** Кусок геометрии, рисуемый одним вызовом. Ярусы — чтобы не рисовать этажи, которых не видно. */
 export interface LevelChunk {
@@ -149,4 +150,6 @@ export interface BuiltLevel {
   perches?: Perch[];
   /** Тихий слой: точки по рёбрам и углам стен (world/edges.ts). Нет — у уровня его нет (тестовый, карман). */
   edges?: EdgePoints;
+  /** Фигуры партнёра, вставшие на уровне по своим правилам (world/figure_place.ts). Нет — ни одной. */
+  figures?: FigureSpot[];
 }

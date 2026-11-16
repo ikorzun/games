@@ -29,6 +29,9 @@ import { DOOR_IMAGE, SCREEN_IMAGES } from './screens';
 import type { FreeSlot } from './objects';
 import { buildShell, CELL, Shell, STYLE_CORRIDOR, WALL_T } from './shell';
 import { EdgeBuilder } from './edges';
+import { placeFigures } from './figure_place';
+import type { FigureSpec } from './figures';
+import { FIGURES } from './figures_data';
 import type { ShellCell, WallStyle } from './shell';
 
 const HALF = GRID / 2;
@@ -213,6 +216,8 @@ export interface BuildOptions {
    * (Что стёрто у отдельных предметов, стен и потолка, решает игра — геометрия от этого не меняется.)
    */
   wear?: number;
+  /** Фигуры партнёра (world/figures_data.ts); не задано — те, что стоят в игре. */
+  figures?: readonly FigureSpec[];
 }
 
 export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLevel {
@@ -712,6 +717,17 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
   // Своё стирание места (world/wear_growth.ts): рубец по стыку стены с потолком в убежище, щит с коконами
   // в кассе и буфете зала ожидания. Тоже последним проходом и своим сидом: обстановка от них не сдвигается.
   const growth = growWear(world, layout.seed, decay.wear, furnished, start);
+  // Фигуры партнёра (world/figure_place.ts): последними, по уже стоящей обстановке — чтобы не врасти в
+  // мебель. Сеток в уровень не добавляют: фигура — отдельная вещь рендера (game.ts).
+  const ent0 = layout.rooms[layout.entranceRoom]!;
+  const figures = placeFigures(opts.figures ?? FIGURES, {
+    layout,
+    shells,
+    col,
+    skip: new Set([...lowerWells, ...(variantRoom ? [variantRoom.id] : [])]),
+    spawn: [cellToWorld(ent0.cells[0]![0]), tierFloor(ent0.tier), cellToWorld(ent0.cells[0]![1]) + 0.4],
+    spawnTier: ent0.tier,
+  });
   // Свободные участки стен — в порядке помещений уровня: туда вещь может вернуться «в другом месте».
   for (const { room, ctx } of furnished) for (const s of ctx.slots) if (!s.used && !s.hazard && s.deep) freeSlots.push({ at: [s.xf.ox, s.xf.oy, s.xf.oz], rot: s.xf.rot, room: room.id, tier: room.tier });
 
@@ -804,5 +820,6 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
     layout,
     world,
     edges,
+    ...(figures.length > 0 ? { figures } : {}),
   };
 }

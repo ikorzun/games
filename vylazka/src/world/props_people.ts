@@ -205,9 +205,19 @@ export function skeletonPoints(s: Skeleton): Vec3[] {
 
 // ───────────────────────────── геометрия ─────────────────────────────
 
-interface Paint {
+export interface Paint {
   mat: number;
   tint: Vec3;
+}
+
+/** Части тела по отдельности: волосатая фигура растворяется ими по очереди — «от рук к телу» (слова партнёра). */
+export const PARTS = ['handL', 'handR', 'foreL', 'foreR', 'upperL', 'upperR', 'footL', 'footR', 'shinL', 'shinR', 'thighL', 'thighR', 'torso', 'head'] as const;
+export type Part = (typeof PARTS)[number];
+
+/** Краска тела и суставов; нет — бук манекена. */
+export interface MannequinPaint {
+  body: Paint;
+  joint: Paint;
 }
 
 /** Эллипсоид с полуосями r (в осях рамки f) — голова, грудь, таз, кисть, стопа. */
@@ -288,44 +298,61 @@ function ball(xf: Xf, c: Vec3, r: number, pt: Paint, detail = 1): void {
  * Сама фигура. Оттенок дерева у каждой свой (сид), шарниры темнее — их видно издалека. detail — во сколько
  * раз больше колец и граней (в игре 1; картинкам материалов — больше, чтобы грани не мешали судить о свете).
  */
-export function buildMannequin(xf: Xf, pose: Pose, seed: number, detail = 1): Skeleton {
+export function buildMannequin(xf: Xf, pose: Pose, seed: number, detail = 1, paint?: MannequinPaint): Skeleton {
+  return mannequin(() => xf, pose, seed, detail, paint);
+}
+
+/**
+ * Манекен по частям: xfOf(part) — куда класть геометрию этой части тела (у цельного манекена — всегда одно
+ * место). Шар сустава принадлежит части ниже него: плечевой — плечу, локтевой — предплечью, лучезапястный —
+ * кисти; шея и её шар — голове.
+ */
+export function mannequin(xfOf: (part: Part) => Xf, pose: Pose, seed: number, detail = 1, paint?: MannequinPaint): Skeleton {
   const D = Math.max(1, Math.round(detail));
   const rnd = rng(seed);
-  // Бук с разбросом тона; шары суставов — темнее, промасленные.
+  // Бук с разбросом тона; шары суставов — темнее, промасленные. Другой материал задаёт краска.
   const k = 0.94 + rnd() * 0.12;
-  const wood: Paint = { mat: MAT.wood, tint: [1.86 * k, 2.12 * k, 2.42 * k] };
-  const joint: Paint = { mat: MAT.wood, tint: [1.2 * k, 1.2 * k, 1.22 * k] };
+  const wood: Paint = paint ? { mat: paint.body.mat, tint: [paint.body.tint[0] * k, paint.body.tint[1] * k, paint.body.tint[2] * k] } : { mat: MAT.wood, tint: [1.86 * k, 2.12 * k, 2.42 * k] };
+  const joint: Paint = paint ? paint.joint : { mat: MAT.wood, tint: [1.2 * k, 1.2 * k, 1.22 * k] };
   const s = skeleton(pose);
   const fr = s.frames;
   const across = mv(fr.pelvis, [1, 0, 0]);
   const acrossC = mv(fr.chest, [1, 0, 0]);
   // Корпус: таз, живот, грудь.
-  ellipsoid(xf, add(s.pelvis, mv(fr.pelvis, [0, 0.01, 0])), fr.pelvis, [0.158, 0.1, 0.108], wood, 6 * D, 10 * D);
-  limb(xf, add(s.pelvis, mv(fr.pelvis, [0, 0.05, 0])), add(s.waist, mv(fr.chest, [0, 0.09, 0])), 0.098, 0.106, across, 1.32, wood, 4 * D, 8 * D);
-  ellipsoid(xf, s.chestC, fr.chest, [0.168, 0.165, 0.112], wood, 7 * D, 11 * D);
-  ball(xf, s.waist, 0.082, joint, D);
+  const torso = xfOf('torso');
+  ellipsoid(torso, add(s.pelvis, mv(fr.pelvis, [0, 0.01, 0])), fr.pelvis, [0.158, 0.1, 0.108], wood, 6 * D, 10 * D);
+  limb(torso, add(s.pelvis, mv(fr.pelvis, [0, 0.05, 0])), add(s.waist, mv(fr.chest, [0, 0.09, 0])), 0.098, 0.106, across, 1.32, wood, 4 * D, 8 * D);
+  ellipsoid(torso, s.chestC, fr.chest, [0.168, 0.165, 0.112], wood, 7 * D, 11 * D);
+  ball(torso, s.waist, 0.082, joint, D);
   // Шея и голова: яйцо без лица, чуть уже книзу.
-  limb(xf, s.neckBase, s.neckTop, 0.044, 0.04, acrossC, 1, wood, 2 * D, 7 * D);
-  ball(xf, s.neckTop, 0.047, joint, D);
-  ellipsoid(xf, s.head, fr.head, [0.093, 0.121, 0.108], wood, 7 * D, 11 * D);
+  const head = xfOf('head');
+  limb(head, s.neckBase, s.neckTop, 0.044, 0.04, acrossC, 1, wood, 2 * D, 7 * D);
+  ball(head, s.neckTop, 0.047, joint, D);
+  ellipsoid(head, s.head, fr.head, [0.093, 0.121, 0.108], wood, 7 * D, 11 * D);
   // Руки.
-  for (const [sh, el, wr, fore] of [[s.shL, s.elL, s.wrL, fr.foreL], [s.shR, s.elR, s.wrR, fr.foreR]] as const) {
-    ball(xf, sh, 0.056, joint, D);
-    limb(xf, sh, el, 0.047, 0.037, acrossC, 1.08, wood, 4 * D, 8 * D);
-    ball(xf, el, 0.04, joint, D);
-    limb(xf, el, wr, 0.037, 0.029, acrossC, 1.12, wood, 4 * D, 8 * D);
-    ball(xf, wr, 0.03, joint, D);
+  for (const [sh, el, wr, fore, side] of [[s.shL, s.elL, s.wrL, fr.foreL, 'L'], [s.shR, s.elR, s.wrR, fr.foreR, 'R']] as const) {
+    const upper = xfOf(`upper${side}`);
+    const foreXf = xfOf(`fore${side}`);
+    const hand = xfOf(`hand${side}`);
+    ball(upper, sh, 0.056, joint, D);
+    limb(upper, sh, el, 0.047, 0.037, acrossC, 1.08, wood, 4 * D, 8 * D);
+    ball(foreXf, el, 0.04, joint, D);
+    limb(foreXf, el, wr, 0.037, 0.029, acrossC, 1.12, wood, 4 * D, 8 * D);
+    ball(hand, wr, 0.03, joint, D);
     // Кисть — плоская варежка вдоль предплечья.
-    ellipsoid(xf, add(wr, mv(fore, [0, -0.085, 0])), fore, [0.044, 0.088, 0.021], wood, 5 * D, 8 * D);
+    ellipsoid(hand, add(wr, mv(fore, [0, -0.085, 0])), fore, [0.044, 0.088, 0.021], wood, 5 * D, 8 * D);
   }
   // Ноги.
-  for (const [hip, kn, an, foot] of [[s.hipL, s.knL, s.anL, fr.footL], [s.hipR, s.knR, s.anR, fr.footR]] as const) {
-    ball(xf, hip, 0.068, joint, D);
-    limb(xf, hip, kn, 0.074, 0.054, across, 1.05, wood, 4 * D, 8 * D);
-    ball(xf, kn, 0.053, joint, D);
-    limb(xf, kn, an, 0.051, 0.035, across, 1.05, wood, 4 * D, 8 * D);
-    ball(xf, an, 0.036, joint, D);
-    ellipsoid(xf, add(an, mv(foot, [0, -0.045, 0.06])), foot, [0.044, 0.033, 0.118], wood, 5 * D, 8 * D);
+  for (const [hip, kn, an, foot, side] of [[s.hipL, s.knL, s.anL, fr.footL, 'L'], [s.hipR, s.knR, s.anR, fr.footR, 'R']] as const) {
+    const thigh = xfOf(`thigh${side}`);
+    const shin = xfOf(`shin${side}`);
+    const footXf = xfOf(`foot${side}`);
+    ball(thigh, hip, 0.068, joint, D);
+    limb(thigh, hip, kn, 0.074, 0.054, across, 1.05, wood, 4 * D, 8 * D);
+    ball(shin, kn, 0.053, joint, D);
+    limb(shin, kn, an, 0.051, 0.035, across, 1.05, wood, 4 * D, 8 * D);
+    ball(footXf, an, 0.036, joint, D);
+    ellipsoid(footXf, add(an, mv(foot, [0, -0.045, 0.06])), foot, [0.044, 0.033, 0.118], wood, 5 * D, 8 * D);
   }
   return s;
 }

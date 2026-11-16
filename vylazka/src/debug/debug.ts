@@ -13,6 +13,10 @@ import { STEP } from '../game';
 import { emptyInput } from '../player/input';
 import type { InputFrame } from '../player/input';
 import type { Quality } from '../render/renderer';
+import { FIGURE_MATERIALS } from '../world/figures';
+import type { FigureMaterial, FigureSpec } from '../world/figures';
+import { POSES } from '../world/props_people';
+import type { Pose } from '../world/props_people';
 
 export interface VzDebugApi {
   /** Игра загрузилась и показала первый кадр. */
@@ -70,6 +74,13 @@ export interface VzDebugApi {
   gotoThing(id: number, distance?: number): boolean;
   /** Поставить вещь прямо перед камерой на полу (на distance метров) с заданной судьбой; вернуть её номер. */
   spawnThing(kind: string, fate: 'shrink' | 'dust' | 'grow' | 'jump', distance?: number): number;
+  /**
+   * Поставить фигуру перед игроком (как партнёр ставит в инструменте): материал, поза-заготовка, на
+   * сколько впереди, на какой высоте, повернуть (град; 0 — лицом к игроку). Вернёт номер фигуры в списке.
+   */
+  figure(material: string, pose?: string, distance?: number, lift?: number, turn?: number): number;
+  /** Фигуры на уровне: ключ, материал, состояние, растворение частей и где стоят. */
+  figures(): { id: string; material: string; state: string; dissolve: number[]; at: number[]; yaw: number }[];
   /** Почему вещь видна или не видна: расстояние, попадание в луч (dot против нужного need), путь луча до преграды. */
   sees(id: number): Record<string, number> | null;
   /** Искомое воспоминание: его id, вещь и где она (null — сейчас ничего не ищут). */
@@ -374,6 +385,28 @@ export function installDebug(app: App): void {
       const z = st.pos[2]! - Math.cos(yaw) * distance;
       return g.addThing(kind, [x, st.pos[1]!, z], 0, fate).id;
     },
+    figure: (material, pose = 'stand', distance = 2.5, lift = 0, turn = 0) => {
+      const g = game();
+      const st = g.snapshot() as { pos: number[]; aim: number[] };
+      const yaw = st.aim[0]!;
+      const x = st.pos[0]! - Math.sin(yaw) * distance;
+      const z = st.pos[2]! - Math.cos(yaw) * distance;
+      const id = `debug_${material}_${pose}`.replace(/[^a-z0-9_]/g, '_').slice(0, 40);
+      const base = (POSES as Record<string, Pose>)[pose] ?? POSES.stand;
+      const spec: FigureSpec = {
+        id,
+        name: id,
+        pose: JSON.parse(JSON.stringify(base)) as Pose,
+        material: (FIGURE_MATERIALS as readonly string[]).includes(material) ? (material as FigureMaterial) : 'wood',
+        rule: { worlds: ['shelter', 'office', 'yellow', 'station'], rooms: [], anchor: 'middle', facing: 'player', lift, count: 1 },
+        yaw: 0,
+        offset: [0, 0],
+      };
+      // Лицом к игроку: фигура смотрит туда, откуда на неё смотрят (+ доворот).
+      g.addDebugFigure(spec, [x, st.pos[1]! + lift, z], yaw + (turn * Math.PI) / 180);
+      return g.figures.list.length - 1;
+    },
+    figures: () => game().figures.list.map((f) => ({ id: f.id, material: f.material, state: f.state, dissolve: f.pieces.map((p) => p.dissolve), at: [...f.at], yaw: f.yaw })),
     gotoThing: (id, distance = 2.2) => {
       const g = game();
       const t = g.things.list.find((x) => x.id === id);

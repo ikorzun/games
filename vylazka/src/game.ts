@@ -43,6 +43,8 @@ import { Pressure } from './systems/pressure';
 import type { PressureKind, PressureRoom } from './systems/pressure';
 import { Spores } from './systems/spores';
 import type { Comeback, ComebackOptions, Form, Mount } from './systems/illusions';
+import { Figures } from './systems/figures';
+import type { FigureLive } from './systems/figures';
 import { looksAt, Things } from './systems/things';
 import type { Fate, Look, Thing } from './systems/things';
 import { bakeContact } from './world/contact';
@@ -54,6 +56,9 @@ import { ALL_PROPS } from './world/props_all';
 import { CEIL_H, DX, DZ } from './gen/layout';
 import type { WorldKind } from './gen/layout';
 import type { BuiltLevel } from './world/level';
+import { figureMesh } from './world/figure_mesh';
+import type { FigureMaterial, FigureSpec } from './world/figures';
+import { FIGURES } from './world/figures_data';
 import { ceilTileOf, cellToWorld, STAIR_RISE, STAIR_RUN, STAIR_STEPS, tierFloor } from './world/level_build';
 import { CELL } from './world/shell';
 import { buildPocket, ENV_BUNKER, WORLD_ENV } from './world/pockets';
@@ -116,6 +121,11 @@ export type DreamEvent =
   | { type: 'limbo' }
   /** От игрока пошла волна сонара (вариант A): звук — тихий пинг (слова партнёра: «Сонар тихий пинг»). */
   | { type: 'sonar' }
+  /**
+   * Фигура партнёра ушла (дымная рассеялась при подходе, волосатая растворилась от рук к телу, другая —
+   * от касания) или вернулась (systems/figures.ts).
+   */
+  | { type: 'figure'; id: string; material: FigureMaterial; what: 'gone' | 'back'; at: Vec3 }
   /** Началась новая сессия. */
   | { type: 'begin' };
 
@@ -329,6 +339,11 @@ export class Game {
   /** Текущая сессия; null — свободная прогулка (тестовый коридор, витрина, просмотр пространства). */
   session: Session | null = null;
   readonly things = new Things();
+  /** Фигуры партнёра на уровне (world/figure_place.ts) и номера их частей в рендере. */
+  readonly figures = new Figures();
+  private readonly figureRender = new Map<FigureLive, number[]>();
+  /** Фигуры, поставленные отладкой (__vz.figure): их нет в списке игры, но уровень их знает. */
+  private readonly figureExtra = new Map<string, FigureSpec>();
   jumps: Jumps | null = null;
   where: Where = 'main';
   /** Карманное пространство, в котором сейчас игрок (или лимбо). */
@@ -552,6 +567,7 @@ export class Game {
     this.leavePocket();
     this.clearThings();
     this.level = level;
+    this.setupFigures(level);
     this.colliders = level.colliders;
     this.setupIllusions(level);
     this.contactGone.clear();
@@ -1459,6 +1475,47 @@ export class Game {
     this.memoryThing = null;
   }
 
+  /** Фигура по ключу: из списка игры или поставленная отладкой. */
+  figureSpec(id: string): FigureSpec | undefined {
+    return this.figureExtra.get(id) ?? FIGURES.find((f) => f.id === id);
+  }
+
+  /** Убрать фигуры прошлого уровня и поставить фигуры этого (точки решила сборка уровня). */
+  private setupFigures(level: BuiltLevel): void {
+    for (const ids of this.figureRender.values()) for (const id of ids) this.renderer.removeThing(id);
+    this.figureRender.clear();
+    this.figures.clear();
+    for (const spot of level.figures ?? []) {
+      const spec = this.figureSpec(spot.id);
+      if (spec) this.addFigure(spec, spot.at, spot.yaw, spot.k);
+    }
+  }
+
+  /** Поставить фигуру: части — отдельными вещами рендера (у волосатой — части тела, у остальных — целиком). */
+  addFigure(spec: FigureSpec, at: Vec3, yaw: number, k = 0): FigureLive {
+    const seed = hash2(spec.id.length * 131 + k, Math.round(at[0] * 10) ^ Math.round(at[2] * 10), 0x6f16) >>> 0;
+    const fm = figureMesh(spec.pose, spec.material, seed);
+    const f = this.figures.add(spec.id, k, spec.material, at, yaw, fm.core, fm.pieces, fm.dots);
+    this.figureRender.set(
+      f,
+      fm.pieces.map((p, i) => this.renderer.addThing(p.data, (seed + i * 17) % 9973, 'matter')),
+    );
+    return f;
+  }
+
+  /** Отладка: поставить фигуру, которой нет в списке игры (__vz.figure). */
+  addDebugFigure(spec: FigureSpec, at: Vec3, yaw: number): FigureLive {
+    this.figureExtra.set(spec.id, spec);
+    return this.addFigure(spec, at, yaw, this.figures.list.filter((f) => f.id === spec.id).length);
+  }
+
+  /** Шаг фигур: подошёл — ушли; отошёл (дым) или свет погас и зажёгся (остальные) — вернулись. */
+  private stepFigures(dt: number, eye: Vec3, dream: DreamEvent[]): void {
+    if (this.figures.list.length === 0) return;
+    const ev = this.figures.update(dt, eye, this.time, (f) => this.lightAt(this.playerNodeAt(f.at)));
+    for (const e of ev) dream.push({ type: 'figure', id: e.figure.id, material: e.figure.material, what: e.what, at: e.figure.core });
+  }
+
   /** Следующая сессия готова: как только лимбо отпустит, игрок окажется в ней. */
   queueSession(level: BuiltLevel, dream: DreamSeed): void {
     this.pending = { level, dream };
@@ -2077,6 +2134,7 @@ export class Game {
     // Давление помимо Осыпи: пол рассыпается, потолок опускается; не успел — проснулся в начале.
     this.stepPressure(wdt, quiet, dream);
     if (this.where === 'main') this.stepBirds(wdt, dream);
+    if (this.where === 'main' && !this.transition) this.stepFigures(dt, eye, dream);
 
     // Зал ожидания: за краем перрона ничего нет. Шагнул — проснулся в начале; искомая вещь остаётся на
     // месте. (Зоны падения сессии здесь не годятся: над путями нет узлов графа, и она их не проверяет.)
@@ -2527,6 +2585,15 @@ export class Game {
         }
       }
       this.renderer.setThing(id, { x: t.pos[0], y: t.pos[1], z: t.pos[2], yaw: t.yaw, scale: t.scale, dissolve: t.dissolve, wire: w, xray, visible: t.state !== 'gone' && (d < 40 || xray), dots: Things.dots(t) });
+    }
+    // Фигуры партнёра: части растворяются каждая в свой черёд; дымная из редких точек и медленно ходит вверх-вниз.
+    for (const [f, ids] of this.figureRender) {
+      const d = Math.hypot(f.core[0] - rig.camPos[0], f.core[1] - rig.camPos[1], f.core[2] - rig.camPos[2]);
+      const show = this.where === 'main' && f.state !== 'gone' && d < 40;
+      for (let i = 0; i < ids.length; i++) {
+        const p = f.pieces[i]!;
+        this.renderer.setThing(ids[i]!, { x: f.at[0], y: f.at[1] + f.bob, z: f.at[2], yaw: f.yaw, scale: 1, dissolve: p.dissolve, wire: 0, xray: false, visible: show && p.dissolve < 0.999, dots: f.dots > 0 ? f.dots + (1 - f.dots) * p.dissolve : 0 });
+      }
     }
     // Кинескоп заметнее на ходу, под взглядом на вещь, рядом с искомым и в момент скачка.
     const speed = Math.hypot(b.vx, b.vz);

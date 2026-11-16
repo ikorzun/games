@@ -171,6 +171,8 @@ export class GameAudio {
       else if (e.type === 'sonar') a.play('sonar_ping', { rate: this.jitter(0.03) });
       // Всё иллюзорно: тронутая вещь рассыпается в пыль, после темноты собирается из неё.
       else if (e.type === 'touch') a.play(e.what === 'gone' ? 'dissolve' : 'assemble', { rate: this.jitter(0.1), volume: e.what === 'gone' ? 1 : 0.7 });
+      // Фигура партнёра: тот же распад и сборка, что у вещей, но с её места; дым — ниже и тише.
+      else if (e.type === 'figure') a.play(e.what === 'gone' ? 'dissolve' : 'assemble', { pos: e.at, rate: e.material === 'smoke' ? 0.78 : this.jitter(0.1), volume: e.material === 'smoke' ? 0.55 : e.what === 'gone' ? 0.9 : 0.6 });
       // Птица сорвалась с места — хлопки крыльев оттуда, где она сидела; воркование — редкое и тихое.
       else if (e.type === 'bird') a.play(e.what === 'takeoff' ? 'bird_wings' : 'bird_coo', { pos: e.at, rate: this.jitter(0.08) });
       // Давление: пол пошёл — гул обвала издалека; потолок двинулся — тот же гул ниже и глуше; падение.
