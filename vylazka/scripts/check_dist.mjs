@@ -10,6 +10,7 @@
  *     неполный набор — ошибка, отсутствие — предупреждение (VZ_REQUIRE_AUDIO=1 делает его ошибкой);
  *   - плакаты: у каждого листа из assets/posters/<id>.webp в сборке есть свой файл assets/<id>-<хеш>.webp —
  *     без него на стене висел бы пустой лист;
+ *   - бумага: то же для слоёв из assets/papers/<id>.webp (портреты, деньги, карты);
  *   - игровые ассеты (графика и звук: assets/<папка>/… и audio/…) считаются отдельной строкой: больше 40 МБ —
  *     предупреждение (грузить игру станет долго), общий лимит архива 300 МБ — жёсткий.
  *     Файлы бандла Vite лежат в assets/ плоско (assets/index-<хеш>.js) и входят в ядро.
@@ -43,6 +44,18 @@ function expectedAudio() {
 function expectedScreens() {
   try {
     const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'screens');
+    return readdirSync(dir)
+      .filter((f) => f.endsWith('.webp'))
+      .map((f) => f.slice(0, -'.webp'.length))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+/** Какие листы бумаги (портреты, деньги, карты) обязаны быть в сборке: всё, что лежит в assets/papers. */
+function expectedPapers() {
+  try {
+    const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'papers');
     return readdirSync(dir)
       .filter((f) => f.endsWith('.webp'))
       .map((f) => f.slice(0, -'.webp'.length))
@@ -125,6 +138,10 @@ export function checkDist(dir, opts = {}) {
   const screens = opts.screens ?? expectedScreens();
   const lostScreens = screens.filter((id) => !files.some((f) => f.rel.startsWith(`assets/${id}-`) && f.rel.endsWith('.webp')));
   if (lostScreens.length > 0) problems.push(`в сборке нет картинок экранов (${lostScreens.length} из ${screens.length}): ${lostScreens.join(', ')}`);
+  // Бумага: то же самое. Нет файла — на щите и в раме чистый лист.
+  const papers = opts.papers ?? expectedPapers();
+  const lostPapers = papers.filter((id) => !files.some((f) => f.rel.startsWith(`assets/${id}-`) && f.rel.endsWith('.webp')));
+  if (lostPapers.length > 0) problems.push(`в сборке нет листов бумаги (${lostPapers.length} из ${papers.length}): ${lostPapers.join(', ')}`);
   // Звук: либо весь набор из манифеста, либо ничего. Игра с половиной звуков — брак.
   const expected = expectedAudio();
   const present = new Set(files.filter((f) => f.rel.startsWith('audio/') && f.rel.endsWith('.mp3')).map((f) => f.rel));

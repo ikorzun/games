@@ -460,7 +460,7 @@ describe('проверка архива: звук — весь набор или
     // Скрипт сборки — обычный .mjs без типов: берём его как есть.
     const mod = (await import('../scripts/check_dist.mjs' as string)) as { checkDist(dir: string, opts?: Record<string, unknown>): { problems: string[]; warnings: string[] } };
     // Здесь проверяется только звук: листы-картинки (плакаты) и картинки экранов у этой сборки-пустышки не спрашиваем.
-    return mod.checkDist(dir, { sheets: [], screens: [], ...opts });
+    return mod.checkDist(dir, { sheets: [], screens: [], papers: [], ...opts });
   };
 
   it('звука нет — предупреждение, а в строгом режиме ошибка', async () => {

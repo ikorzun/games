@@ -9,6 +9,8 @@ import { dressRoom } from './dress';
 import { FLAT_EYE, standee, veil, VEIL_SCENES } from './flat';
 import type { FlatMark } from './flat';
 import type { GenRoom, WorldKind } from '../gen/layout';
+import { reservePapers } from './furnish_papers';
+import type { PaperHold, PaperState } from './furnish_papers';
 import { furnishOffice, furnishYellow } from './furnish_office';
 import { furnishStation } from './furnish_station';
 import type { Decay } from '../systems/decay';
@@ -109,6 +111,10 @@ export interface RoomCtx {
   decay?: Decay;
   /** У помещения нет потолка: над ним звёздное небо (world/level_build.ts). Под потолок здесь ничего не вешают. */
   sky?: boolean;
+  /** Счёт бумаги и чемоданов на уровень (world/furnish_papers.ts). Нет — помещению участки под них не отводятся. */
+  paperState?: PaperState;
+  /** Участки стен, отведённые под бумагу и чемоданы до обстановки: предметы встанут туда последним проходом. */
+  papers?: PaperHold[];
 }
 
 function shuffled<T>(rng: Rng, items: readonly T[]): T[] {
@@ -812,6 +818,8 @@ const FURNISH: Partial<Record<GenRoom['type'], (ctx: RoomCtx) => void>> = {
 
 /** Обставить помещение. Порядок вызовов и ГСЧ фиксированы: один сид — одна и та же обстановка. */
 export function furnishRoom(ctx: RoomCtx): void {
+  // Стене лиц, карте и стене чемоданов нужна голая стена: их участки отводятся до мебели.
+  reservePapers(ctx);
   // Офис стерилен, жёлтые комнаты пусты: у них своя обстановка и нет «следов людей» убежища.
   if (ctx.world === 'office') return furnishOffice(ctx);
   if (ctx.world === 'yellow') return furnishYellow(ctx);

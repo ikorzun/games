@@ -2505,7 +2505,7 @@ export class Game {
     };
     // Стирание места: потолок выпадает, стены и пол редеют до кружева. В карманных пространствах его нет.
     const d = this.where === 'main' && this.level?.layout ? this.decay : null;
-    this.renderer.setErase(d ? d.ceiling : 0, d ? d.walls : 0, d ? d.floor : 0);
+    this.renderer.setErase(d ? d.ceiling : 0, d ? d.walls : 0, d ? d.floor : 0, d ? this.wear : 0);
     if (present) this.renderer.render(view);
   }
 

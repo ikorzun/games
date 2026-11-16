@@ -255,6 +255,7 @@ uniform vec3 uLightRightV;
 uniform vec3 uLightUpV;
 uniform vec4 uSlide;      // проекции: x, y — при каком свете картинка начинает выгорать и когда пропадает совсем; z — её яркость; w — время, с
 uniform sampler2D uScreens; // атлас картинок выставочных экранов (world/screens.ts)
+uniform sampler2DArray uPapers; // листы бумаги (world/papers.ts): портреты, деньги, карты — слой на файл
 // Материалов может быть до 48 (атлас шаров 8 × ATLAS_ROWS); сколько их на деле — знает world/materials.ts.
 #ifndef ATLAS_ROWS
 #define ATLAS_ROWS 4
@@ -690,7 +691,29 @@ void main() {
   // Надписи и плакаты: uv указывает в атлас, а не в мир.
   vec3 ink = vec3(1.0);
   vec2 uvw = vUv;
-  if (cls >= 6) {
+  if (cls == 6 && vUv.x >= 2.0) {
+    // Бумага (world/papers.ts): u сдвинуто на 2 + номер слоя. Каждый приход стирает — и на листе это
+    // видно так же, как в памяти: чем сильнее стёрто место, тем более мелкая копия листа берётся. Лица
+    // и буквы уходят первыми, пятна света и тени остаются, а сам лист выцветает к цвету бумаги.
+    vec2 pu = vec2(fract(vUv.x), vUv.y);
+    float lay = floor(vUv.x) - 2.0;
+    float fadeP = smoothstep(0.0, 0.62, uErase.w);
+    float worn = 4.5 * fadeP;
+    vec3 pg;
+    if (lay < 2.5) {
+      // Портреты: лица не сохраняются. Издали — лица, вблизи лицо расплывается, а одежда, поза и фон
+      // студии остаются; весь лист при этом чуть теряет резкость — навести её не выходит. Где лицо,
+      // сказано в альфа-канале слоя: 1 — лица нет, 0,5 — середина лица (scripts/papers_import.py).
+      float nearP = 1.0 - smoothstep(1.4, 6.0, length(vPosV));
+      vec4 soft = texture(uPapers, vec3(pu, lay), worn + 1.6 * nearP);
+      vec3 gone = texture(uPapers, vec3(pu, lay), worn + 4.4 * nearP).rgb;
+      pg = mix(soft.rgb, gone, smoothstep(0.06, 0.5, (1.0 - soft.a) * 2.0));
+    } else {
+      pg = texture(uPapers, vec3(pu, lay), worn).rgb;
+    }
+    ink = mix(pg, vec3(dot(pg, vec3(0.3, 0.59, 0.11))) * vec3(1.06, 1.0, 0.86) + 0.05, 0.6 * fadeP);
+    uvw = pu * 5.0;
+  } else if (cls >= 6) {
     vec4 sg = texture2D(uSigns, vUv);
     if (cls == 7 && sg.a < 0.5) discard;
     if (cls == 6) ink = sg.rgb;

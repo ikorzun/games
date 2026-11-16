@@ -270,10 +270,10 @@ export function fineOf(cssW: number, cssH: number, q: QualitySpec, dpr = 1): num
   return Math.max(1, Math.min(q.fine, Math.round((h / base) * 4) / 4));
 }
 
-/** Вертикальный угол обзора: в ландшафте держим широкий горизонтальный угол, в портрете не даём «рыбьему глазу» разъехаться. */
 /** «Бочка» объектива нагрудной камеры в обычном состоянии. */
 const BARREL = 0.085;
 
+/** Вертикальный угол обзора: в ландшафте держим широкий горизонтальный угол, в портрете не даём «рыбьему глазу» разъехаться. */
 export function verticalFov(aspect: number): number {
   const hTarget = (106 * Math.PI) / 180;
   const v = 2 * Math.atan(Math.tan(hTarget / 2) / aspect);
@@ -374,6 +374,8 @@ export class GameRenderer {
   private signsTex: THREE.Texture;
   /** Атлас картинок выставочных экранов (render/screen_images.ts). */
   private screensTex: THREE.Texture;
+  /** Листы бумаги (world/papers.ts): стопка слоёв. */
+  private papersTex: THREE.DataArrayTexture;
   /** Состояния объектов уровня: байт на объект — насколько он растворён. */
   /** Состояния объектов, по четыре байта: растворён, кружево, выцвел, светится. */
   private readonly objData = new Uint8Array(OBJ_TEX * OBJ_TEX * 4);
@@ -528,6 +530,10 @@ export class GameRenderer {
     // Атлас экранов: пока не нарисован — тёмно-серый тексель.
     this.screensTex = new THREE.DataTexture(new Uint8Array([40, 40, 44, 255]), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.screensTex.needsUpdate = true;
+    // Пока листы не пришли — один слой в одну точку цвета чистой бумаги.
+    this.papersTex = new THREE.DataArrayTexture(new Uint8Array([196, 187, 164, 255]), 1, 1, 1);
+    this.papersTex.colorSpace = THREE.SRGBColorSpace;
+    this.papersTex.needsUpdate = true;
 
     this.lightU = {
       uLightPosV: { value: new THREE.Vector3() },
@@ -562,6 +568,7 @@ export class GameRenderer {
         uDetail: { value: detailTex },
         uSigns: { value: this.signsTex },
         uScreens: { value: this.screensTex },
+        uPapers: { value: this.papersTex },
         uDecay: { value: 0.3 },
         uPlain: { value: 0 },
         uObjState: { value: this.objTex },
@@ -1336,9 +1343,10 @@ export class GameRenderer {
   /**
    * Стирание места (systems/decay.ts): насколько нет потолка, стен и пола, 0..1. Потолок пропадает
    * совсем, стены и пол остаются кружевом. Карманным пространствам стирание не положено — там нули.
+   * wear — сама стёртость места, 0..1: по ней блёкнут листы бумаги (лица и буквы уходят первыми).
    */
-  setErase(ceiling: number, walls: number, floor: number): void {
-    (this.worldMat.uniforms.uErase!.value as THREE.Vector4).set(ceiling, walls, floor, 0);
+  setErase(ceiling: number, walls: number, floor: number, wear = 0): void {
+    (this.worldMat.uniforms.uErase!.value as THREE.Vector4).set(ceiling, walls, floor, wear);
   }
 
   /** Посеять пыль объекта уровня: его треугольники — в сетке одного из кусков. */
@@ -1664,6 +1672,23 @@ export class GameRenderer {
     tex.anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy());
     this.screensTex = tex;
     this.worldMat.uniforms.uScreens!.value = tex;
+  }
+
+  /** Листы бумаги: стопка слоёв (render/paper_images.ts, drawPapers). */
+  setPapers(stack: { data: Uint8Array; width: number; height: number; depth: number }): void {
+    this.papersTex.dispose();
+    const tex = new THREE.DataArrayTexture(stack.data, stack.width, stack.height, stack.depth);
+    tex.format = THREE.RGBAFormat;
+    tex.type = THREE.UnsignedByteType;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.generateMipmaps = true;
+    // Лист на стене виден вскользь, когда идёшь вдоль неё: без анизотропии лица на нём мылятся.
+    tex.anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy());
+    tex.needsUpdate = true;
+    this.papersTex = tex;
+    this.worldMat.uniforms.uPapers!.value = tex;
   }
 
   /** Показать или скрыть именованный чанк (обвал обрушился, комната сменила вариант). */

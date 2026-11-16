@@ -184,13 +184,33 @@ function platform(ctx: RoomCtx): void {
   });
 }
 
-/** Кладовая: чужие вещи, которые никто не забрал. */
+/**
+ * Кладовая: чужие вещи, которые никто не забрал. У дальней стены — стена чемоданов до потолка
+ * (world/props_luggage.ts): её участок отведён заранее, сама она строится последним проходом
+ * (world/furnish_papers.ts). Рядом с ней — одна секция ячеек у боковой стены, с той стороны, что дальше
+ * от чемоданов: пара секций во всю стену упёрлась бы в них. Без стены чемоданов — как раньше: пара
+ * секций и три чемодана на полу.
+ */
 function store(ctx: RoomCtx): void {
-  wall(ctx, ['st_lockers', -0.69], ['st_lockers', 0.69]);
-  const c = ctx.cells[0]!;
-  put(ctx, 'st_suitcase', c.xf.child(-0.5, 0, 0.2));
-  put(ctx, 'st_suitcase', c.xf.child(0.3, 0, -0.4));
-  put(ctx, 'st_suitcase', c.xf.child(0.6, 0, 0.5));
+  const hold = ctx.papers?.[0];
+  if (!hold) {
+    wall(ctx, ['st_lockers', -0.69], ['st_lockers', 0.69]);
+    const c = ctx.cells[0]!;
+    put(ctx, 'st_suitcase', c.xf.child(-0.5, 0, 0.2));
+    put(ctx, 'st_suitcase', c.xf.child(0.3, 0, -0.4));
+    put(ctx, 'st_suitcase', c.xf.child(0.6, 0, 0.5));
+  } else {
+    const s = ctx.slots.find((k) => !k.used && !k.hazard);
+    if (s) {
+      s.used = true;
+      // В какую сторону вдоль этой стены стоят чемоданы: секция встаёт на другую половину участка.
+      const o = s.xf.pt(0, 0, 0);
+      const x = s.xf.pt(1, 0, 0);
+      const l = hold.slot.xf.pt(0, 0, 0);
+      const toward = (x[0] - o[0]) * (l[0] - o[0]) + (x[2] - o[2]) * (l[2] - o[2]);
+      put(ctx, 'st_lockers', s.xf.child(toward > 0 ? -0.69 : 0.69, 0, 0));
+    }
+  }
   floorSpots(ctx, 1);
 }
 

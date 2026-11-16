@@ -24,6 +24,7 @@ import type { InputFrame } from './player/input';
 import { DesktopInput } from './player/input_desktop';
 import { MotionSensor } from './player/motion';
 import { GameRenderer } from './render/renderer';
+import { drawPapers, loadPapers } from './render/paper_images';
 import { loadSheets } from './render/poster_images';
 import { drawScreens, loadScreens } from './render/screen_images';
 import { drawSigns } from './render/signs_atlas';
@@ -133,6 +134,11 @@ export class App {
   signsCanvas: HTMLCanvasElement | null = null;
   /** Какие картинки выставочных экранов загрузились (остальные экраны показывают «нет сигнала»). */
   screenIds: string[] = [];
+  /** Какие листы бумаги (world/papers.ts) загрузились: остальные висят чистыми листами. */
+  paperIds: string[] = [];
+  /** Загруженные слои бумаги и размер, в котором из них собрана стопка (0 — ещё не собрана). */
+  private paperImages: Record<string, HTMLImageElement> | null = null;
+  private paperScale = 0;
   /** Подсказка из кукольного домика: в каком помещении лежит искомая вещь (до тех пор, пока её не вспомнили или не «забыли»). */
   private mapHint: { memory: string; room: string } | null = null;
 
@@ -248,6 +254,13 @@ export class App {
       screens = loaded;
       this.screenIds = Object.keys(loaded).sort();
       redrawScreens();
+    });
+    // Листы бумаги — своя стопка слоёв (drawPaperStack). Пока файлы не пришли, на щитах и в рамах чистая бумага.
+    void loadPapers().then((loaded) => {
+      this.paperIds = Object.keys(loaded).sort();
+      this.paperImages = loaded;
+      this.drawPaperStack(this.game.renderer.quality);
+      this.redraw();
     });
     renderer.onContextLost = () => this.lifecycle.set('context', true);
     renderer.onContextRestored = () => {
@@ -634,7 +647,20 @@ export class App {
   setQuality(q: Quality): void {
     this.game.renderer.setQuality(q);
     this.overlay.setQuality(q);
+    this.drawPaperStack(q);
     this.redraw();
+  }
+
+  /**
+   * Стопка листов бумаги под нынешнее качество. Телефону полный размер слоя ни к чему: на среднем
+   * качестве слой на четверть меньше, на низком — вдвое. Качество упало само — стопка пересобирается
+   * меньшей, иначе на слабом устройстве остались бы лежать 34 МБ текстуры полного размера.
+   */
+  private drawPaperStack(q: Quality): void {
+    const scale = q === 'low' ? 0.5 : q === 'med' ? 0.75 : 1;
+    if (!this.paperImages || scale === this.paperScale) return;
+    this.paperScale = scale;
+    this.game.renderer.setPapers(drawPapers(this.paperImages, scale));
   }
 
   /**

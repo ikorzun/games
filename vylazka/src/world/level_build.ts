@@ -13,6 +13,7 @@ import type { FlatMark } from './flat';
 import { decayAt } from '../systems/decay';
 import { doorSign, furnishRoom } from './furnish';
 import { furnishExtras, GARDEN_H, NO_EXTRAS } from './furnish_extras';
+import { furnishPapers, newPaperState } from './furnish_papers';
 import { NOTE_ID, ROOM_LABEL, SIGN } from './signs';
 import type { CellInfo, RoomCtx, Slot } from './furnish';
 import { MeshBuilder } from './kit';
@@ -613,10 +614,13 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
     .sort((a, b) => a.d - b.d || a.r.id - b.r.id)[0]?.r;
 
   const furnished: { room: GenRoom; ctx: RoomCtx }[] = [];
+  // Бумага и чемоданы считаются на уровень: одна стена лиц, одна стена чемоданов (world/furnish_papers.ts).
+  const paperState = newPaperState(world);
   for (const room of layout.rooms) {
     if (lowerWells.has(room.id)) continue;
     if (room !== variantRoom) {
       const ctx = roomCtx(room, (x, z) => chunkFor(room, x, z), col, 0, spots, landmarks, flats);
+      ctx.paperState = paperState;
       furnishRoom(ctx);
       if (room === noteRoom) {
         // На свободном участке стены, ближайшем к началу; нет свободного — на любом, сбоку от того, что там висит.
@@ -690,6 +694,9 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
     if (room.type === 'corridor' || room.type === 'department' || room.type === 'collapsed' || room.cells.length < 3 || flowerRooms.has(room.id)) continue;
     if (furnishExtras(ctx, { ...NO_EXTRAS, thicket: true }).thicket) break;
   }
+  // Бумага и чемоданы (world/furnish_papers.ts): листы на щитах, в рамах и на потолке, стена чемоданов.
+  // Последним проходом и своим сидом — номера и места прежних объектов от них не сдвигаются.
+  furnishPapers(paperState, furnished);
   // Свободные участки стен — в порядке помещений уровня: туда вещь может вернуться «в другом месте».
   for (const { room, ctx } of furnished) for (const s of ctx.slots) if (!s.used && !s.hazard && s.deep) freeSlots.push({ at: [s.xf.ox, s.xf.oy, s.xf.oz], rot: s.xf.rot, room: room.id, tier: room.tier });
 

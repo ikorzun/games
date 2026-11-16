@@ -5,8 +5,9 @@
  */
 import type { Vec3 } from '../core/types';
 import type { ColliderSet } from './colliders';
-import type { Axis, BoxOpts, MeshBuilder, SwaySpec } from './kit';
+import type { Axis, BoxOpts, Face, MeshBuilder, SwaySpec } from './kit';
 import { MAT } from './materials';
+import { paperHeight, PAPERS, paperUv } from './papers';
 import { SIGN } from './signs';
 
 /** Собрать то, что качается на ветру: вес вершины растёт от закреплённого конца (world/kit.ts, SwaySpec). */
@@ -25,6 +26,17 @@ export const hung = <T>(xf: Xf, depth: number, gain: number, build: () => T): T 
 
 /** Растущее от пола (y = 0 — пол) гнётся, как стебель: верх на высоте height ходит в размах × gain, низ стоит. */
 export const rooted = <T>(xf: Xf, height: number, gain: number, build: () => T): T => swaying(xf, { from: xf.oy, span: height, gain, bend: true }, build);
+
+/**
+ * Куда смотрит грань коробки предмета в мире после поворота на rot четвертей (см. Xf.pt): при rot = 1
+ * ось +x предмета — это −z мира, ось +z — это +x мира, и так далее. Верх и низ не меняются.
+ */
+const FACE_TURN: Record<0 | 1 | 2 | 3, Record<Face, Face>> = {
+  0: { px: 'px', nx: 'nx', py: 'py', ny: 'ny', pz: 'pz', nz: 'nz' },
+  1: { px: 'nz', nx: 'pz', py: 'py', ny: 'ny', pz: 'px', nz: 'nx' },
+  2: { px: 'nx', nx: 'px', py: 'py', ny: 'ny', pz: 'nz', nz: 'pz' },
+  3: { px: 'pz', nx: 'nz', py: 'py', ny: 'ny', pz: 'nx', nz: 'px' },
+};
 
 /** Размещение: начало координат предмета и поворот на rot четвертей оборота против часовой (вид сверху). */
 export class Xf {
@@ -70,9 +82,14 @@ export class Xf {
     ];
   }
 
+  /**
+   * Коробка в координатах предмета. Грани, которые не строить (opts.skip), названы тоже в координатах
+   * предмета: «nz» — спина, «pz» — лицо. Сборщик сетки понимает грани в осях мира, поэтому у повёрнутого
+   * предмета имена переводятся — иначе у шкафа, стоящего у южной стены, пропадало бы лицо вместо спины.
+   */
   box(min: Vec3, max: Vec3, mat: number, opts: BoxOpts = {}): void {
     const [lo, hi] = this.span(min, max);
-    this.mb.box(lo, hi, mat, opts);
+    this.mb.box(lo, hi, mat, this.rot === 0 || !opts.skip ? opts : { ...opts, skip: opts.skip.map((f) => FACE_TURN[this.rot][f]) });
   }
 
   /** Невидимая преграда для игрока. */
@@ -132,6 +149,34 @@ export class Xf {
     const alpha = s.kind === 'stencil' || s.kind === 'brush' || s.kind === 'arc' || s.kind === 'tally';
     // Лист смотрит вверх: обход идёт от правого ближнего угла, поэтому u перевёрнуто.
     this.mb.quadUv([this.pt(x0 + w, y, z0), this.pt(x0, y, z0), this.pt(x0, y, z0 + depth), this.pt(x0 + w, y, z0 + depth)], [s.u1, s.v0, s.u0, s.v1], alpha ? MAT.stencil : MAT.print, tint, 1);
+  }
+
+  /**
+   * Лист бумаги (world/papers.ts) на стене позади: середина низа — в точке (x, y), ширина w метров,
+   * высота по пропорции листа. Лист отстоит от стены (или от своей подложки) на off, чтобы не рябил.
+   * tint — оттенок бумаги (под стеклом рамки она темнее).
+   */
+  paper(id: string, x: number, y: number, w?: number, tint: Vec3 = [1, 1, 1], off = 0.005): void {
+    const p = PAPERS[id];
+    if (!p) throw new Error(`нет такого листа: ${id}`);
+    const width = w ?? p.width;
+    const height = paperHeight(p, width);
+    const uv = paperUv(id);
+    this.mb.quadUv([this.pt(x - width / 2, y, off), this.pt(x + width / 2, y, off), this.pt(x + width / 2, y + height, off), this.pt(x - width / 2, y + height, off)], [uv.u0, uv.v0, uv.u1, uv.v1], MAT.print, tint, 1);
+  }
+
+  /**
+   * Лист бумаги на потолке: лицом вниз, середина — в точке (x, z), ширина w вдоль x, верх листа — в
+   * сторону +z (от стены в помещение). Правильно читается тем, кто смотрит вверх, стоя лицом к стене.
+   * y — высота листа (чуть ниже потолка, чтобы не рябил).
+   */
+  paperCeil(id: string, x: number, y: number, z: number, w?: number, tint: Vec3 = [1, 1, 1]): void {
+    const p = PAPERS[id];
+    if (!p) throw new Error(`нет такого листа: ${id}`);
+    const width = w ?? p.width;
+    const depth = paperHeight(p, width);
+    const uv = paperUv(id);
+    this.mb.quadUv([this.pt(x - width / 2, y, z - depth / 2), this.pt(x + width / 2, y, z - depth / 2), this.pt(x + width / 2, y, z + depth / 2), this.pt(x - width / 2, y, z + depth / 2)], [uv.u0, uv.v0, uv.u1, uv.v1], MAT.print, tint, 1);
   }
 
   /** Вложенное размещение: локальный сдвиг и добавочный поворот. */

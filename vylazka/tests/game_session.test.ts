@@ -893,14 +893,29 @@ describe('игра целиком: без света место не обяза�
   const places = (list: { pos: Vec3 }[]) => list.map((t) => t.pos.map((v) => v.toFixed(3)).join(','));
   const dark = (h: Harness) => (h.game.snapshot() as { dark: { for: number; shifts: number } }).dark;
 
-  /** Встать так, чтобы рядом (ближе 14 м, на том же ярусе) было хотя бы три мелкие вещи. */
+  /**
+   * Встать так, чтобы рядом (ближе 14 м, на том же ярусе) было хотя бы три мелкие вещи. Встаём не «в шаге
+   * от вещи» (шаг может прийтись на яму или за стену — тогда герой окажется двумя ярусами ниже, и вещи
+   * наверху его уже не касаются), а на ближайший узел проходимой сетки того же яруса: там точно пол.
+   */
   function standAmong(h: Harness): ReturnType<typeof smallOf> {
     const all = smallOf(h);
+    const nav = h.game.level?.nav ?? [];
+    // В опасной зоне стоять нельзя: в газу герой через несколько секунд теряет сознание и оказывается в
+    // карманном пространстве — раньше, чем в темноте успеют сдвинуться детали; в яму он падает.
+    const unsafe = (x: number, y: number, z: number): boolean => (h.game.level?.zones ?? []).some((g) => g.kind !== 'water' && x > g.minX - 0.5 && x < g.maxX + 0.5 && z > g.minZ - 0.5 && z < g.maxZ + 0.5 && y > g.minY - 0.5 && y < g.maxY + 0.5);
     for (const t of all) {
       const near = all.filter((o) => Math.hypot(o.pos[0] - t.pos[0], o.pos[2] - t.pos[2]) < 9 && Math.abs(o.pos[1] - t.pos[1]) < 2);
       if (near.length < 3) continue;
       const floor = Math.floor((t.pos[1] + 0.3) / 4.5) * 4.5;
-      h.game.teleport(t.pos[0] + 0.8, floor, t.pos[2] + 0.8);
+      const node = nav
+        .filter((n) => Math.abs(n.y - floor) < 0.5 && !unsafe(n.x, n.y + 1, n.z))
+        .sort((p, q) => Math.hypot(p.x - t.pos[0], p.z - t.pos[2]) - Math.hypot(q.x - t.pos[0], q.z - t.pos[2]))[0];
+      if (!node || Math.hypot(node.x - t.pos[0], node.z - t.pos[2]) > 4) continue;
+      h.game.teleport(node.x, node.y, node.z);
+      // Проверяются детали места в темноте, а не скачки: стоящего в полной темноте скачок может унести
+      // раньше, чем детали сдвинутся (когда именно — решает жребий паузы между скачками). Скачки отложены.
+      if (h.game.jumps) h.game.jumps.cooldown = 1e6;
       h.run(0.2);
       return near;
     }

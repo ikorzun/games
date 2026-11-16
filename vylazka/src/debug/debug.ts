@@ -126,6 +126,8 @@ export interface VzDebugApi {
   gotoObject(id: number, distance?: number): boolean;
   /** Какие картинки выставочных экранов загружены из файлов (остальные экраны показывают «нет сигнала»). */
   screens(): string[];
+  /** Какие листы бумаги (world/papers.ts) уже загружены. */
+  papers(): string[];
   /** Карточки от руки на стенах уровня (world/signs.ts, вид card). */
   notes(): { id: string; at: number[]; n: number[] }[];
   /** Встать перед карточкой номер index на расстоянии distance метров, лицом к ней. */
@@ -321,6 +323,7 @@ export function installDebug(app: App): void {
       return true;
     },
     screens: () => [...app.screenIds],
+    papers: () => [...app.paperIds],
     notes: () => (app.level.notes ?? []).map((m) => ({ id: m.id, at: [...m.at], n: [...m.n] })),
     gotoNote: (index, distance = 1.2) => {
       const m = (app.level.notes ?? [])[index];
