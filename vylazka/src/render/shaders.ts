@@ -257,6 +257,7 @@ uniform vec3 uLightUpV;
 uniform vec4 uSlide;      // проекции: x, y — при каком свете картинка начинает выгорать и когда пропадает совсем; z — её яркость; w — время, с
 uniform sampler2D uScreens; // атлас картинок выставочных экранов (world/screens.ts)
 uniform sampler2DArray uPapers; // листы бумаги (world/papers.ts): портреты, деньги, карты — слой на файл
+uniform float uDots;      // 0..1: выросшая вещь — одни точки (объявлен и в CRUMBLE_GLSL вершинного шейдера; во фрагментном нужен свой)
 // Материалов может быть до 48 (атлас шаров 8 × ATLAS_ROWS); сколько их на деле — знает world/materials.ts.
 #ifndef ATLAS_ROWS
 #define ATLAS_ROWS 4
