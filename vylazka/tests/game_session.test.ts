@@ -289,6 +289,49 @@ describe('игра целиком: цикл сессии', () => {
     expect(h.r.pocketShown).toBe(false);
   });
 
+  it('сон из сцен: вспомнил вещь сцены — свет гаснет, и вокруг другое место со своей вещью цепочки; сцен больше нет — лимбо', () => {
+    // Прототип (pressure.md, §4.6): в сцене одна вещь; следующую сцену приложение собирает заранее.
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 } });
+    const g = h.game;
+    const office = buildLevel(generateLayout(SEED + 5, 1, 'office'), { wear: 0 });
+    g.queueScene(office, { seed: 11, known: new Set(), chainAt: 2 });
+    expect(g.sceneQueued).toBe(true);
+    const first = g.session!;
+    expect(first.memories.length).toBe(1);
+    expect(h.until(() => first.active !== null, 4)).toBe(true);
+    expect(h.standBefore(g.things.list.find((x) => x.memory)!.id)).toBe(true);
+    expect(h.until(() => h.count('recall') > 0, 4)).toBe(true);
+    expect(h.count('all-done')).toBe(1);
+    // Не лимбо, а темнота — и другое место.
+    expect(h.until(() => h.dreamCount('begin') > 0, 10)).toBe(true);
+    expect(h.log.dream.filter((e) => e.type === 'begin')).toEqual([{ type: 'begin', scene: true }]);
+    expect(h.log.dream.some((e) => e.type === 'jump' && e.phase === 'start' && e.plan.cause === 'end' && e.plan.style === 'blackout' && e.plan.to === 'session')).toBe(true);
+    expect(h.dreamCount('limbo')).toBe(0);
+    expect(g.where).toBe('main');
+    expect(g.level).toBe(office);
+    expect(g.world).toBe('office');
+    expect(g.sceneQueued).toBe(false);
+    // Сцена офиса начинается с той вещи его цепочки, до которой дошли прошлые сцены (третьей).
+    const second = g.session!;
+    expect(second).not.toBe(first);
+    expect(second.memories.map((m) => m.def.id)).toEqual([OFFICE_CHAIN[2]!.id]);
+    // Следующей сцены нет — после неё лимбо.
+    expect(h.until(() => second.active !== null, 4)).toBe(true);
+    expect(h.standBefore(g.things.list.find((x) => x.memory)!.id)).toBe(true);
+    expect(h.until(() => h.count('recall') > 1, 4)).toBe(true);
+    expect(h.until(() => g.where === 'limbo', 10)).toBe(true);
+    expect(h.dreamCount('begin')).toBe(1);
+  });
+
+  it('сон из сцен: цепочка места начинается с заданной вещи и замыкается по кругу', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 3 } });
+    const office = buildLevel(generateLayout(SEED + 5, 1, 'office'), { wear: 0 });
+    h.game.loadLevel(office, { seed: 5, known: new Set(), chainAt: 4 });
+    expect(h.game.session!.memories.map((m) => m.def.id)).toEqual([OFFICE_CHAIN[4]!.id, OFFICE_CHAIN[0]!.id, OFFICE_CHAIN[1]!.id]);
+    h.game.loadLevel(office, { seed: 5, known: new Set(), chainAt: 7 });
+    expect(h.game.session!.memories[0]!.def.id).toBe(OFFICE_CHAIN[2]!.id);
+  });
+
   it('до recall — вещь, на которую не смотрят, не засчитывается; цель «забывается» только от провала, газа и роя', () => {
     const h = new Harness(levelOf(SEED), { seed: 4 });
     const { id } = h.reveal();

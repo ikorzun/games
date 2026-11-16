@@ -86,6 +86,15 @@ describe('сохранение', () => {
     expect(parseProfile({ v: 1, memories: { office: { seed: 3, wear: -5 } } }, 7).memories.office!.wear).toBe(0);
   });
 
+  it('зал ожидания тоже помнится: его стёртость и круги переживают перезагрузку; сон из сцен — место в цепочке вещей', () => {
+    // Раньше разбор профиля знал только три места, и круги зала ожидания терялись при перезагрузке страницы.
+    const p = parseProfile({ v: 1, memories: { station: { seed: 12, rank: 2, wear: 0.3, laps: 2, chain: 4 }, office: { seed: 3, rank: 1, wear: 0.1, chain: -2 }, yellow: { seed: 4, rank: 1, wear: 0.1, chain: 'x' } } }, 7);
+    expect(p.memories.station).toEqual({ seed: 12, rank: 2, wear: 0.3, laps: 2, chain: 4 });
+    // Непонятное место в цепочке — с начала (поля нет).
+    expect(p.memories.office).toEqual({ seed: 3, rank: 1, wear: 0.1, laps: 0 });
+    expect(p.memories.yellow).toEqual({ seed: 4, rank: 1, wear: 0.1, laps: 0 });
+  });
+
   it('воспоминание места: записанное — то же самое; нового ещё нет — следующий сид игрока, нетронутое', () => {
     const p = defaultProfile(42);
     p.sorties = 3;

@@ -30,7 +30,8 @@ import { drawScreens, loadScreens } from './render/screen_images';
 import { drawSigns } from './render/signs_atlas';
 import type { Sheets } from './render/signs_atlas';
 import type { Quality } from './render/renderer';
-import { ALL_MEMORIES } from './systems/session';
+import { ALL_MEMORIES, DEFAULT_SESSION } from './systems/session';
+import type { SessionConfig } from './systems/session';
 import { wornLine } from './systems/worn_text';
 import { Hud } from './ui/hud';
 import { Overlay } from './ui/overlay';
@@ -64,6 +65,13 @@ const isQuality = (v: string | null): v is Quality => v === 'low' || v === 'med'
 const PROBE = { highMs: 5, fineMs: 11, minMs: 0.3, settleMs: 700, fpsFloor: 45, slowFor: 2.5 } as const;
 /** Множители обзора и яркости для уровней «ниже / средне / выше». */
 const SENS = [0.6, 1, 1.6] as const;
+/** Сон из сцен: сцен в сессии (каждая — другое место). */
+const SCENES = 3;
+/**
+ * Сцена короче сессии: одна вещь вместо пяти. Первая вспышка — почти сразу, а вспомнить можно не раньше
+ * чем через полминуты: место успевает показаться, прежде чем погаснет.
+ */
+const SCENE_SESSION: SessionConfig = { ...DEFAULT_SESSION, count: 1, firstDelay: 10, fallback: 18, minLength: 40 };
 const BRIGHT = [0.78, 1, 1.35] as const;
 
 type Screen = 'boot' | 'title' | 'play';
@@ -125,6 +133,21 @@ export class App {
   private seekingSince = 0;
   /** Следующая сессия, собранная за время лимбо. */
   private next: { level: BuiltLevel; seed: number; rank: 1 | 2 | 3 } | null = null;
+  /**
+   * Сон из сцен — прототип (docs/vylazka/pressure.md, §4.6): знак #scenes в конце ссылки, ?scenes=1 или
+   * проба __vzVariant = 'scenes'. Сессия — три сцены из разных мест, в каждой одна вещь цепочки этого
+   * места; вспомнил — свет гаснет, и вокруг уже другое место; после третьей — лимбо. Без знака игра
+   * прежняя: сессия — пять вещей одного места.
+   */
+  private scenes = false;
+  /** Какая по счёту сцена идёт в этой сессии (0 — первая). */
+  private sceneIndex = 0;
+  /** Следующая сцена, уже собранная: место, уровень и его воспоминание. */
+  private sceneNext: { world: WorldKind; level: BuiltLevel; memory: PlaceMemory } | null = null;
+  private sceneTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Когда место снилось в последний раз (номер сцены сна): сон тянет то, что давно не снилось. */
+  private readonly dreamt: Partial<Record<WorldKind, number>> = {};
+  private dreamtCount = 0;
   /** Воспоминание, которое сейчас проходится по кругу (в этом месте). */
   private memory: PlaceMemory | null = null;
   /** Место закреплено адресом (?seed=): петля идёт по нему, в профиль ничего не пишется. */
@@ -171,6 +194,7 @@ export class App {
     // строку проверки с самого начала — нужен один снимок экрана.
     this.variant = String((globalThis as { __vzVariant?: unknown }).__vzVariant ?? '');
     if (this.variant === 'probe' || p.get('diag') === '1' || (typeof location !== 'undefined' && location.hash === '#diag') || App.diagSaved()) this.makeDiag();
+    this.scenes = this.variant === 'scenes' || p.get('scenes') === '1' || (typeof location !== 'undefined' && location.hash === '#scenes');
 
     const device = this.platform.deviceType();
     // Площадка может ошибиться с типом устройства, поэтому смотрим и на сам указатель;
@@ -434,7 +458,13 @@ export class App {
       }
     } else {
       this.level = buildLevel(generateLayout(this.seed, this.rank, this.world), { wear });
-      this.game.loadLevel(this.level, { seed: this.seed, known: new Set(this.profile.archive) });
+      if (this.scenes) this.game.sessionCfg = SCENE_SESSION;
+      this.game.loadLevel(this.level, { seed: this.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
+      if (this.scenes) {
+        this.sceneIndex = 0;
+        this.markDreamt(this.world);
+        this.queueNextScene();
+      }
     }
     this.screen = 'title';
     this.audio.setScene('menu');
@@ -503,21 +533,100 @@ export class App {
   /** Сессия кончилась, игрок в лимбо: записать итог и собрать следующую — то же место, круг спустя. */
   private onLimbo(): void {
     this.profile.successes += 1;
+    // Сон из сцен: вещь последней сцены вспомнена — цепочка её места шагнула.
+    if (this.scenes) this.stepChain();
     this.wasErased = this.keepMemory(true);
     this.saveProfile();
     this.platform.track('level_completed', { world: 'session', level: `seed_${this.seed}` });
+    // Сон из сцен: следующая сессия начнётся в месте, которое давно не снилось (не в том, где кончилась).
+    if (this.scenes && !this.testLevel) this.world = this.sceneWorld();
     // Сборку откладываем на полсекунды: лимбо уже на экране, и заминка не выглядит зависшим переходом.
     setTimeout(() => {
       const mem = this.place();
       this.memory = mem;
       const level = buildLevel(generateLayout(mem.seed, mem.rank, this.world), { wear: this.wearParam() ?? mem.wear });
       this.next = { level, seed: mem.seed, rank: mem.rank };
-      this.game.queueSession(level, { seed: mem.seed, known: new Set(this.profile.archive) });
+      this.game.queueSession(level, { seed: mem.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
     }, 500);
   }
 
-  /** Лимбо отпустило: началась следующая сессия. */
-  private onBegin(): void {
+  /** Сон из сцен: вещь сцены вспомнена — следующая сцена этого места начнётся со следующей вещи цепочки. */
+  private stepChain(): void {
+    const m = this.memory;
+    if (m) m.chain = (m.chain ?? 0) + 1;
+  }
+
+  /** Сон из сцен: отметить, что место снилось сейчас. */
+  private markDreamt(world: WorldKind): void {
+    this.dreamtCount += 1;
+    this.dreamt[world] = this.dreamtCount;
+  }
+
+  /**
+   * Сон из сцен: место следующей сцены — не нынешнее, и из остальных то, что снилось давнее всех
+   * (ещё не снившееся — первым). При равенстве решает сид сна: от сессии к сессии порядок разный.
+   */
+  private sceneWorld(): WorldKind {
+    const pool = WORLD_KINDS.filter((w) => w !== this.world);
+    const age = (w: WorldKind): number => this.dreamt[w] ?? -1;
+    const oldest = Math.min(...pool.map(age));
+    const cands = pool.filter((w) => age(w) === oldest);
+    return cands[(this.seed + this.sceneIndex * 7 + this.profile.sorties) % cands.length]!;
+  }
+
+  /**
+   * Сон из сцен: собрать следующую сцену заранее (другое место), пока идёт эта. Последняя сцена сессии
+   * следующей не имеет: после неё — лимбо.
+   */
+  private queueNextScene(): void {
+    if (this.sceneTimer !== undefined) clearTimeout(this.sceneTimer);
+    this.sceneTimer = undefined;
+    this.sceneNext = null;
+    if (!this.scenes || this.testLevel || this.sceneIndex >= SCENES - 1) {
+      this.game.queueScene(null);
+      return;
+    }
+    const world = this.sceneWorld();
+    // Сборка — с паузой: сцена уже идёт, и игрок не заметит, что следующая собирается.
+    this.sceneTimer = setTimeout(() => {
+      this.sceneTimer = undefined;
+      const memory = memoryFor(this.profile, world);
+      const level = buildLevel(generateLayout(memory.seed, memory.rank, world), { wear: memory.wear });
+      this.sceneNext = { world, level, memory };
+      this.game.queueScene(level, { seed: memory.seed, known: new Set(this.profile.archive), chainAt: memory.chain ?? 0 });
+    }, 700);
+  }
+
+  /**
+   * Сон из сцен: свет погас, и вокруг другое место. Прежнее: его вещь вспомнена — цепочка шагнула, круг
+   * засчитан. Нынешнее становится местом игры: его стёртость, его круг на экране. Объявлений нет — как во сне.
+   */
+  private onScene(): void {
+    this.stepChain();
+    this.keepMemory(true);
+    const n = this.sceneNext;
+    if (n) {
+      this.world = n.world;
+      this.level = n.level;
+      this.seed = n.memory.seed >>> 0;
+      this.rank = n.memory.rank;
+      this.memory = n.memory;
+      this.sceneNext = null;
+    }
+    this.sceneIndex += 1;
+    this.markDreamt(this.world);
+    this.mapHint = null;
+    this.saveProfile();
+    this.sayLap();
+    this.queueNextScene();
+  }
+
+  /** Лимбо отпустило: началась следующая сессия (scene — нет: следующая сцена того же сна). */
+  private onBegin(scene = false): void {
+    if (scene) {
+      this.onScene();
+      return;
+    }
     const n = this.next;
     if (n) {
       this.level = n.level;
@@ -535,6 +644,12 @@ export class App {
     if (this.wasErased) this.hud.flash(t('session.erased'), 6200);
     else this.sayLap();
     this.wasErased = false;
+    // Сон из сцен: новая сессия — снова первая сцена; следующую собираем заранее.
+    if (this.scenes) {
+      this.sceneIndex = 0;
+      this.markDreamt(this.world);
+      this.queueNextScene();
+    }
   }
 
   /**
@@ -800,7 +915,7 @@ export class App {
     }
     for (const e of ev.dream) {
       if (e.type === 'limbo') this.onLimbo();
-      else if (e.type === 'begin') this.onBegin();
+      else if (e.type === 'begin') this.onBegin(e.scene === true);
       else if (e.type === 'thing' && e.what === 'changing' && e.thing.fate !== 'dust') this.teach('thing', t('teach.thing'));
       else if (e.type === 'jump' && e.phase === 'switch') {
         // Осыпь вернула в начало: об этом говорит строка, иначе непонятно, почему место другое.

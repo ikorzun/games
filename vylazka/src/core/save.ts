@@ -45,6 +45,11 @@ export interface PlaceMemory {
   wear: number;
   /** Сколько кругов пройдено. */
   laps: number;
+  /**
+   * Сон из сцен (docs/vylazka/pressure.md, §4.6): сколько вещей цепочки этого места уже вспомнено в его
+   * сценах — с какой вещи начнётся следующая сцена здесь. Нет поля — с первой.
+   */
+  chain?: number;
 }
 
 export type Level3 = 0 | 1 | 2;
@@ -80,7 +85,8 @@ export function parseProfile(raw: unknown, baseSeed: number): Profile {
   };
 }
 
-const WORLDS: readonly WorldKind[] = ['shelter', 'office', 'yellow'];
+// Все четыре места: зал ожидания здесь тоже — без него его стёртость и круги терялись при перезагрузке.
+const WORLDS: readonly WorldKind[] = ['shelter', 'office', 'yellow', 'station'];
 
 function parseMemories(raw: unknown): Partial<Record<WorldKind, PlaceMemory>> {
   const out: Partial<Record<WorldKind, PlaceMemory>> = {};
@@ -93,7 +99,7 @@ function parseMemories(raw: unknown): Partial<Record<WorldKind, PlaceMemory>> {
     const wear = Math.max(0, Math.min(1, m.wear));
     // Стёртое до конца воспоминание не хранится: место откроется другим.
     if (wear >= 1) continue;
-    out[w] = { seed: m.seed >>> 0, rank, wear, laps: isNum(m.laps) ? Math.max(0, Math.floor(m.laps)) : 0 };
+    out[w] = { seed: m.seed >>> 0, rank, wear, laps: isNum(m.laps) ? Math.max(0, Math.floor(m.laps)) : 0, ...(isNum(m.chain) && m.chain > 0 ? { chain: Math.floor(m.chain) } : {}) };
   }
   return out;
 }

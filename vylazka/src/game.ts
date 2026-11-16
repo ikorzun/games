@@ -126,8 +126,8 @@ export type DreamEvent =
    * от касания) или вернулась (systems/figures.ts).
    */
   | { type: 'figure'; id: string; material: FigureMaterial; what: 'gone' | 'back'; at: Vec3 }
-  /** Началась новая сессия. */
-  | { type: 'begin' };
+  /** Началась новая сессия; scene — не сессия, а следующая сцена того же сна (другое место). */
+  | { type: 'begin'; scene?: boolean };
 
 export interface StepEvents {
   lightFailed: boolean;
@@ -149,6 +149,8 @@ export interface StepEvents {
 export interface DreamSeed {
   seed: number;
   known: ReadonlySet<string>;
+  /** Сон из сцен: с какой вещи цепочки места начать (Session, start). */
+  chainAt?: number;
 }
 
 interface Transition {
@@ -537,6 +539,13 @@ export class Game {
   private limboAsked = false;
   /** Следующая сессия, собранная за время лимбо. */
   private pending: { level: BuiltLevel; dream: DreamSeed } | null = null;
+  /**
+   * Сон из сцен (docs/vylazka/pressure.md, §4.6): следующая сцена уже собрана — другое место. Когда в
+   * этой сцене вспомнено всё, свет гаснет, и игрок оказывается там, а не в лимбо.
+   */
+  private sceneNext: { level: BuiltLevel; dream: DreamSeed } | null = null;
+  /** Идущий скачок ведёт в следующую сцену (а не в новую сессию): так и скажет событие begin. */
+  private sceneSwitch = false;
   /** Через сколько секунд после «всё вспомнено» место рассыплется. */
   private endIn = -1;
   private readonly thinUsed = new Set<number>();
@@ -581,7 +590,9 @@ export class Game {
     // Батарейка в сессии не садится: фонарь глохнет от контакта, а не от заряда.
     this.light = new Flashlight(this.rng, { ...DEFAULT_FLASHLIGHT, drainSeconds: Infinity, ...this.lightCfg });
     const rank = level.layout?.rank ?? 1;
-    this.session = dream ? new Session(level, dream.seed, dream.known, this.sessionCfg) : null;
+    this.session = dream ? new Session(level, dream.seed, dream.known, this.sessionCfg, dream.chainAt ?? 0) : null;
+    // Новая сцена или сессия: прежняя очередь сцен не в счёт — следующую поставит приложение.
+    this.sceneNext = null;
     this.nodeAt.clear();
     for (const n of level.nav) this.nodeAt.set(`${n.tier},${n.cx},${n.cz}`, n.id);
     this.wearBase = Math.max(0, Math.min(1, level.wear ?? 0));
@@ -1521,6 +1532,19 @@ export class Game {
     this.pending = { level, dream };
   }
 
+  /**
+   * Сон из сцен: следующая сцена готова (другое место). Когда в этой сцене вспомнено всё, игрок уйдёт
+   * туда, а не в лимбо. null — сцен больше нет: дальше лимбо.
+   */
+  queueScene(level: BuiltLevel | null, dream: DreamSeed | null = null): void {
+    this.sceneNext = level && dream ? { level, dream } : null;
+  }
+
+  /** Есть ли готовая следующая сцена (для проверок). */
+  get sceneQueued(): boolean {
+    return this.sceneNext !== null;
+  }
+
   /** Сонар: изредка волна от игрока проходит по тихому слою и на миг показывает план — и сквозь стены. */
   private stepSonar(): void {
     if (this.sonarT0 >= 0 && (this.time - this.sonarT0) * SONAR_SPEED > SONAR_REACH) this.sonarT0 = -1;
@@ -1770,8 +1794,10 @@ export class Game {
     if (to === 'session') {
       const next = this.pending;
       if (next) {
+        const scene = this.sceneSwitch;
+        this.sceneSwitch = false;
         this.loadLevel(next.level, next.dream);
-        dream.push({ type: 'begin' });
+        dream.push(scene ? { type: 'begin', scene: true } : { type: 'begin' });
       }
     } else if (to === 'limbo') {
       // Вещи убежища больше не нужны: сессия кончилась.
@@ -2174,7 +2200,16 @@ export class Game {
     // Всё вспомнено: чуть погодя место рассыпается, игрок попадает в лимбо.
     if (this.endIn >= 0 && !this.transition) {
       this.endIn -= dt;
-      if (this.endIn < 0) this.beginJump({ cause: 'end', style: 'dissolve', to: 'limbo' }, dream);
+      if (this.endIn < 0) {
+        // Сон из сцен: следующая сцена готова — свет гаснет, и вокруг уже другое место. Иначе — лимбо.
+        const next = this.sceneNext;
+        if (next) {
+          this.pending = next;
+          this.sceneNext = null;
+          this.sceneSwitch = true;
+          this.beginJump({ cause: 'end', style: 'blackout', to: 'session' }, dream);
+        } else this.beginJump({ cause: 'end', style: 'dissolve', to: 'limbo' }, dream);
+      }
     }
 
     // Карманное пространство отпускает: вошёл в красный проём, ушёл за край или просто вышло время.

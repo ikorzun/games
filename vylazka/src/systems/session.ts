@@ -246,10 +246,17 @@ export class Session {
     /** Что уже вспоминалось в прошлых сессиях: новое идёт первым. */
     known: ReadonlySet<string> = new Set(),
     readonly cfg: SessionConfig = DEFAULT_SESSION,
+    /**
+     * С какой вещи цепочки начать (сон из сцен: в сцене места одна вещь — следующая после вспомненных в
+     * прошлых его сценах). Цепочка замкнута: после последней — снова первая.
+     */
+    start = 0,
   ) {
     this.rng = mulberry32(hash2(seed, 0x5e55, 0x10ad));
     const world = level.world ?? 'shelter';
-    const pool = WORLD_MEMORIES[world].slice();
+    const base = WORLD_MEMORIES[world];
+    const at = ((Math.floor(start) % base.length) + base.length) % base.length;
+    const pool = [...base.slice(at), ...base.slice(0, at)];
     if (!ORDERED_WORLDS.has(world)) {
       for (let i = pool.length - 1; i > 0; i--) {
         const j = Math.floor(this.rng() * (i + 1));
