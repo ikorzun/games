@@ -31,7 +31,7 @@ const ROOM_RU: Record<string, string> = {
   tickets: 'касса', lockers: 'камеры хранения', buffet: 'буфет', platform: 'перрон', lift: 'лифт', track: 'пути',
 };
 
-type Kind = 'pair' | 'furniture' | 'memory' | 'other';
+type Kind = 'pair' | 'furniture' | 'memory' | 'people' | 'other';
 type Verdict = 'redo1' | 'redo2' | 'keep' | 'remove' | 'detail1' | 'detail2' | 'swap' | 'swapfix';
 interface Choice {
   id: Verdict;
@@ -54,6 +54,11 @@ const CHOICES: Record<Kind, Choice[]> = {
     { id: 'detail1', label: 'Детальнее — в первую очередь', hint: 'это вещь, которую ищут' },
     { id: 'detail2', label: 'Детальнее — потом', hint: 'после других' },
     { id: 'keep', label: 'Уже хороша', hint: 'не трогать' },
+  ],
+  people: [
+    { id: 'keep', label: 'Поза годится', hint: 'так и ставить' },
+    { id: 'swapfix', label: 'Поза — но поправить', hint: 'напишите в заметке: что не так, как должно быть' },
+    { id: 'remove', label: 'Такую позу не ставить', hint: 'убрать из игры' },
   ],
   other: [
     { id: 'redo1', label: 'Переделать, как стул — первым', hint: 'настоящие пропорции и материалы' },
@@ -110,7 +115,7 @@ const ITEMS: Item[] = Object.keys(ALL_PROPS)
     const toy = name.startsWith('kk_');
     const used = Object.keys(u?.worlds ?? {}).length > 0;
     const alt = SWAP.get(name);
-    const kind: Kind = alt ? 'pair' : MEMORY.has(name) ? 'memory' : ALT.has(name) && name !== 'chair_bent' ? 'other' : FURNITURE.test(p.ru) && used ? 'furniture' : 'other';
+    const kind: Kind = name.startsWith('mq_') ? 'people' : alt ? 'pair' : MEMORY.has(name) ? 'memory' : ALT.has(name) && name !== 'chair_bent' ? 'other' : FURNITURE.test(p.ru) && used ? 'furniture' : 'other';
     // Моё предложение — чтобы было с чем спорить; решает партнёр.
     // Чаще на глазах — раньше переделывать: сколько штук в среднем на уровень в том месте, где их больше.
     const most = Math.max(0, ...Object.values(u?.worlds ?? {}));
@@ -123,6 +128,8 @@ const ITEMS: Item[] = Object.keys(ALL_PROPS)
         ? 'уже как надо'
         : kind === 'memory'
           ? 'детальнее — первой: её ищут'
+          : kind === 'people'
+            ? 'поза-заготовка; свою позу можно описать словами в заметке'
           : toy
             ? 'переделать первым: игрушечный набор'
             : kind !== 'furniture'
@@ -149,7 +156,7 @@ const ITEMS: Item[] = Object.keys(ALL_PROPS)
     };
   })
   .sort((a, b) => Number(b.toy) - Number(a.toy) || a.ru.localeCompare(b.ru, 'ru'));
-const RANK: Record<Kind, number> = { pair: 0, memory: 1, furniture: 2, other: 3 };
+const RANK: Record<Kind, number> = { pair: 0, people: 1, memory: 2, furniture: 3, other: 4 };
 
 // ───────────────────────────── геометрия ─────────────────────────────
 
@@ -396,6 +403,7 @@ function visible(): Item[] {
     if (filter.what === 'pairs' && i.kind !== 'pair') return false;
     if (filter.what === 'furniture' && i.kind !== 'furniture') return false;
     if (filter.what === 'memory' && i.kind !== 'memory') return false;
+    if (filter.what === 'people' && i.kind !== 'people') return false;
     const worlds = i.kind === 'memory' ? MEMORY.get(i.name)!.map((m) => m.world) : Object.keys(i.worlds);
     if (filter.world !== 'all' && !worlds.includes(filter.world)) return false;
     const m = marks.get(i.name)?.verdict;
