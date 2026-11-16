@@ -35,9 +35,11 @@ const ROOM_RU: Record<string, string> = {
 const POSE_RU: Record<PoseName, string> = { stand: 'стоит', wait: 'ждёт', look: 'смотрит вверх', call: 'с телефоном', sit: 'сидит', sofa: 'на диване', desk: 'за столом', hug: 'обхватил колени', lean: 'у стены' };
 const MAT_RU: Record<FigureMaterial, string> = { wood: 'дерево', smoke: 'дым', hair: 'волосы', stone: 'камень', metal: 'металл', coal: 'уголь', skin: 'кожа', plastic: 'пластик' };
 const MAT_NOTE: Partial<Record<FigureMaterial, string>> = {
-  smoke: 'Дымная висит в воздухе и рассеивается, когда к ней подходят: подними её ползунком «Над полом» или тяни таз с ⌥.',
-  hair: 'Волосатая растворяется от рук к телу.',
+  smoke: 'Дымная висит в воздухе, бледная, из редких точек, и медленно ходит вверх-вниз. Подойдёшь ближе 2,3 м — рассеется; отойдёшь дальше 6 м — через 7 с соберётся снова. Подними её ползунком «Над полом» или тяни таз с ⌥.',
+  hair: 'Волосатая — в ворсе. Подойдёшь ближе 1,3 м — растворится от рук к телу: кисти, предплечья, плечи, ноги, тело, голова последней. Вернётся, когда свет погаснет и зажжётся, — от головы к рукам.',
 };
+/** Остальные материалы в игре. */
+const MAT_NOTE_PLAIN = 'В игре растворяется от касания и возвращается, когда свет погаснет и зажжётся.';
 const ANCHOR_RU: Record<FigureAnchor, string> = { corner: 'в углу', wall: 'у стены', middle: 'посреди', door: 'в проёме', ceiling: 'под потолком' };
 const FACING_RU: Record<FigureFacing, string> = { wall: 'лицом в стену', room: 'лицом в комнату', door: 'на дверь', player: 'навстречу идущему' };
 
@@ -412,7 +414,7 @@ function syncPanel(): void {
       if (m === 'smoke' && cur.rule.lift === 0) cur.rule.lift = 0.5;
     }),
   );
-  $('matnote').textContent = MAT_NOTE[cur.material] ?? '';
+  $('matnote').textContent = MAT_NOTE[cur.material] ?? MAT_NOTE_PLAIN;
   chips($('worlds'), FIGURE_WORLDS, (w) => WORLD_RU[w], (w) => cur.rule.worlds.includes(w), (w) =>
     change(() => {
       const has = cur.rule.worlds.includes(w);
