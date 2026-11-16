@@ -13,6 +13,8 @@ import { MeshBuilder } from '../../src/world/kit';
 import { MAT_DEFS, hexToLinear } from '../../src/world/materials';
 import { Xf } from '../../src/world/props';
 import { ALL_PROPS } from '../../src/world/props_all';
+import { ALL_MEMORIES } from '../../src/systems/session';
+import RU from '../../locales/ru/ui.json';
 
 type Usage = Record<string, { worlds: Record<string, number>; rooms: Record<string, number> }>;
 declare const __USAGE__: Usage;
@@ -28,13 +30,33 @@ const ROOM_RU: Record<string, string> = {
   tickets: 'касса', lockers: 'камеры хранения', buffet: 'буфет', platform: 'перрон', lift: 'лифт', track: 'пути',
 };
 
-type Verdict = 'keep' | 'real' | 'replace' | 'remove';
-const VERDICTS: { id: Verdict; label: string; hint: string }[] = [
-  { id: 'keep', label: 'Оставить', hint: 'вещь хорошая' },
-  { id: 'real', label: 'Сделать реальнее', hint: 'та же вещь, но как в жизни' },
-  { id: 'replace', label: 'Заменить другой', hint: 'напишите, чем' },
-  { id: 'remove', label: 'Убрать из игры', hint: 'не нужна' },
-];
+type Kind = 'furniture' | 'memory' | 'other';
+type Verdict = 'redo1' | 'redo2' | 'keep' | 'remove' | 'detail1' | 'detail2';
+interface Choice {
+  id: Verdict;
+  label: string;
+  hint: string;
+}
+const CHOICES: Record<Kind, Choice[]> = {
+  furniture: [
+    { id: 'redo1', label: 'Переделать, как стул — первым', hint: 'настоящие пропорции и материалы' },
+    { id: 'redo2', label: 'Переделать — потом', hint: 'когда дойдут руки' },
+    { id: 'keep', label: 'Оставить как есть', hint: 'вещь годится' },
+    { id: 'remove', label: 'Убрать из игры', hint: 'не нужна' },
+  ],
+  memory: [
+    { id: 'detail1', label: 'Детальнее — в первую очередь', hint: 'это вещь, которую ищут' },
+    { id: 'detail2', label: 'Детальнее — потом', hint: 'после других' },
+    { id: 'keep', label: 'Уже хороша', hint: 'не трогать' },
+  ],
+  other: [
+    { id: 'redo1', label: 'Переделать, как стул — первым', hint: 'настоящие пропорции и материалы' },
+    { id: 'redo2', label: 'Переделать — потом', hint: 'когда дойдут руки' },
+    { id: 'keep', label: 'Оставить как есть', hint: 'вещь годится' },
+    { id: 'remove', label: 'Убрать из игры', hint: 'не нужна' },
+  ],
+};
+const LABEL: Record<string, string> = Object.fromEntries(Object.values(CHOICES).flat().map((c) => [c.id, c.label]));
 interface Mark {
   verdict?: Verdict;
   note?: string;
@@ -44,7 +66,18 @@ interface Mark {
 /** Мебель — то, на чём сидят, лежат, за чем работают и куда кладут. Остальное — в «всё». */
 const FURNITURE = /стул|кресл|табурет|скамь|сиден|диван|кушет|стол|парт|конторк|кроват|нар[ыа]|койк|шкаф|полк|стеллаж|тумб|комод|сундук|вешалк|трюмо|буфет|витрин|прилавок|стойк|сервант|этажерк|кабинк/;
 
+/** Вещи памяти: какая вещь в каком месте и с какой строкой (тексты — русский перевод игры). */
+const MEM_WORLD: Record<string, string> = { sh: 'shelter', of: 'office', ye: 'yellow', st: 'station' };
+const MEMORY = new Map<string, { world: string; line: string }[]>();
+for (const m of ALL_MEMORIES) {
+  const list = MEMORY.get(m.thing) ?? [];
+  list.push({ world: MEM_WORLD[m.id.slice(0, 2)] ?? '', line: (RU as Record<string, string>)[`mem.${m.id}.task`] ?? '' });
+  MEMORY.set(m.thing, list);
+}
+
 interface Item {
+  kind: Kind;
+  advice: string;
   name: string;
   ru: string;
   mount: string;
@@ -64,7 +97,26 @@ const ITEMS: Item[] = Object.keys(ALL_PROPS)
     const p = ALL_PROPS[name]!;
     const u = USAGE[name];
     const toy = name.startsWith('kk_');
+    const used = Object.keys(u?.worlds ?? {}).length > 0;
+    const kind: Kind = MEMORY.has(name) ? 'memory' : FURNITURE.test(p.ru) && used ? 'furniture' : 'other';
+    // Моё предложение — чтобы было с чем спорить; решает партнёр.
+    // Чаще на глазах — раньше переделывать: сколько штук в среднем на уровень в том месте, где их больше.
+    const most = Math.max(0, ...Object.values(u?.worlds ?? {}));
+    const advice =
+      name === 'chair_bent'
+        ? 'уже как надо'
+        : kind === 'memory'
+          ? 'детальнее — первой: её ищут'
+          : toy
+            ? 'переделать первым: игрушечный набор'
+            : kind !== 'furniture'
+              ? ''
+              : most >= 2
+                ? `переделать первым: на глазах чаще всего (${String(most).replace('.', ',')} на уровень)`
+                : 'переделать потом: встречается реже';
     return {
+      kind,
+      advice,
       name,
       ru: p.ru,
       mount: p.mount,
@@ -80,6 +132,7 @@ const ITEMS: Item[] = Object.keys(ALL_PROPS)
     };
   })
   .sort((a, b) => Number(b.toy) - Number(a.toy) || a.ru.localeCompare(b.ru, 'ru'));
+const RANK: Record<Kind, number> = { memory: 0, furniture: 1, other: 2 };
 
 // ───────────────────────────── геометрия ─────────────────────────────
 
@@ -252,6 +305,11 @@ async function connect(): Promise<void> {
   canWrite = can !== false;
   if (!canWrite) setStatus('Можно смотреть; отмечать может только тот, у кого есть право правки.');
   const timer = window.setTimeout(() => setStatus('Отметки пока не загрузились — проверьте связь.'), 10000);
+  db.collection('answers').onSnapshot((snap) => {
+    const g = snap.docs.find((d) => d.id === 'general')?.data() ?? {};
+    for (const [k, v] of Object.entries(g)) if (k !== 'at' && typeof v === 'string') general[k] = v;
+    renderGeneral();
+  });
   db.collection('verdicts').onSnapshot(
     (snap) => {
       if (!snap.metadata.fromCache) {
@@ -262,6 +320,7 @@ async function connect(): Promise<void> {
       for (const d of snap.docs) marks.set(d.id, (d.data() ?? {}) as Mark);
       render();
       renderPanel();
+      renderGeneral();
     },
     () => {
       window.clearTimeout(timer);
@@ -298,10 +357,11 @@ const thumbs = new Map<string, string>();
 
 function visible(): Item[] {
   const q = filter.q.trim().toLowerCase();
-  return ITEMS.filter((i) => {
-    if (filter.what === 'furniture' && !i.furniture) return false;
-    if (filter.what === 'used' && Object.keys(i.worlds).length === 0) return false;
-    if (filter.world !== 'all' && !(filter.world in i.worlds)) return false;
+  return ITEMS.slice().sort((a, b) => RANK[a.kind] - RANK[b.kind]).filter((i) => {
+    if (filter.what === 'furniture' && i.kind !== 'furniture') return false;
+    if (filter.what === 'memory' && i.kind !== 'memory') return false;
+    const worlds = i.kind === 'memory' ? MEMORY.get(i.name)!.map((m) => m.world) : Object.keys(i.worlds);
+    if (filter.world !== 'all' && !worlds.includes(filter.world)) return false;
     const m = marks.get(i.name)?.verdict;
     if (filter.mark === 'none' && m) return false;
     if (filter.mark === 'marked' && !m) return false;
@@ -325,6 +385,7 @@ const io = new IntersectionObserver(
 );
 
 function where(i: Item): string {
+  if (i.kind === 'memory') return 'вещь памяти: ' + MEMORY.get(i.name)!.map((m) => WORLD_RU[m.world] ?? m.world).join(', ');
   const w = Object.entries(i.worlds);
   if (w.length === 0) return 'на уровнях не стоит';
   return w.map(([k, v]) => `${WORLD_RU[k] ?? k}: ${v}`).join(' · ');
@@ -332,10 +393,10 @@ function where(i: Item): string {
 
 function render(): void {
   const items = visible();
-  const total = ITEMS.filter((i) => (filter.what === 'furniture' ? i.furniture : true)).length;
-  document.getElementById('count')!.textContent = `${items.length} из ${total}`;
-  const marked = [...marks.values()].filter((m) => m.verdict).length;
-  document.getElementById('marked')!.textContent = String(marked);
+  const asked = ITEMS.filter((i) => i.kind !== 'other');
+  const answered = asked.filter((i) => marks.get(i.name)?.verdict).length;
+  document.getElementById('count')!.textContent = `${answered} из ${asked.length}`;
+  document.getElementById('marked')!.textContent = String(items.length);
   listEl.textContent = '';
   if (items.length === 0) {
     const p = document.createElement('p');
@@ -367,10 +428,12 @@ function render(): void {
     t.append(ru, meta);
     const tags = document.createElement('span');
     tags.className = 'card__tags';
+    if (i.kind === 'memory') tags.appendChild(tag('вещь памяти', 'mem'));
     if (i.toy) tags.appendChild(tag('игрушечный набор', 'toy'));
     if (i.name === 'chair_bent') tags.appendChild(tag('новый, 16.11', 'new'));
     const v = marks.get(i.name)?.verdict;
-    if (v) tags.appendChild(tag(VERDICTS.find((x) => x.id === v)!.label, `v-${v}`));
+    if (v) tags.appendChild(tag(LABEL[v] ?? v, `v-${v}`));
+    else if (i.advice) tags.appendChild(tag(`моё предложение: ${i.advice}`, 'advice'));
     t.appendChild(tags);
     b.append(img, t);
     b.addEventListener('click', () => {
@@ -404,11 +467,16 @@ function renderPanel(): void {
     const [w, r] = k.split(':');
     return `${ROOM_RU[r!] ?? r} (${WORLD_RU[w!] ?? w})`;
   });
-  document.getElementById('p-rooms')!.textContent = rooms.length ? rooms.join(', ') : '—';
+  document.getElementById('p-rooms')!.textContent =
+    i.kind === 'memory' ? MEMORY.get(i.name)!.map((m) => `«${m.line}» (${WORLD_RU[m.world] ?? m.world})`).join('; ') : rooms.length ? rooms.join(', ') : '—';
+  document.getElementById('p-rooms-dt')!.textContent = i.kind === 'memory' ? 'Задание' : 'Где чаще';
+  document.getElementById('p-advice')!.textContent = i.advice ? `Моё предложение: ${i.advice}.` : '';
+  document.getElementById('p-ask')!.textContent = i.kind === 'memory' ? 'Насколько проработать' : 'Что с ней делать';
+  buildChoices(i.kind);
   const game = document.getElementById('p-game') as HTMLAnchorElement;
   game.href = `${__GAME_URL__}#show-${i.name.replace(/_/g, '-')}`;
   const m = marks.get(i.name) ?? {};
-  for (const btn of document.querySelectorAll<HTMLButtonElement>('.verdict')) {
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('#verdicts .verdict')) {
     const on = btn.dataset.v === m.verdict;
     btn.classList.toggle('is-on', on);
     btn.setAttribute('aria-pressed', String(on));
@@ -419,22 +487,54 @@ function renderPanel(): void {
   (document.getElementById('save-note') as HTMLButtonElement).disabled = !db || !canWrite;
 }
 
-for (const v of VERDICTS) {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = `verdict verdict--${v.id}`;
-  b.dataset.v = v.id;
-  b.innerHTML = '';
-  const l = document.createElement('span');
-  l.textContent = v.label;
-  const h = document.createElement('small');
-  h.textContent = v.hint;
-  b.append(l, h);
-  b.addEventListener('click', () => {
-    const cur = marks.get(current)?.verdict;
-    void save(current, { verdict: cur === v.id ? undefined : v.id, note: noteEl.value });
+let builtFor: Kind | null = null;
+function buildChoices(kind: Kind): void {
+  if (builtFor === kind) return;
+  builtFor = kind;
+  const root = document.getElementById('verdicts')!;
+  root.textContent = '';
+  for (const v of CHOICES[kind]) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `verdict verdict--${v.id}`;
+    b.dataset.v = v.id;
+    const l = document.createElement('span');
+    l.textContent = v.label;
+    const h = document.createElement('small');
+    h.textContent = v.hint;
+    b.append(l, h);
+    b.addEventListener('click', () => {
+      const cur = marks.get(current)?.verdict;
+      void save(current, { verdict: cur === v.id ? undefined : v.id, note: noteEl.value });
+    });
+    root.appendChild(b);
+  }
+}
+
+// Общие вопросы — один документ answers/general.
+const general: Record<string, string> = {};
+function renderGeneral(): void {
+  for (const b of document.querySelectorAll<HTMLButtonElement>('.q button')) {
+    const on = general[b.dataset.q!] === b.dataset.a;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-pressed', String(on));
+    b.disabled = !db || !canWrite;
+  }
+}
+for (const b of document.querySelectorAll<HTMLButtonElement>('.q button')) {
+  b.addEventListener('click', async () => {
+    if (!db || !canWrite) return;
+    const q = b.dataset.q!;
+    general[q] = general[q] === b.dataset.a ? '' : b.dataset.a!;
+    renderGeneral();
+    setStatus('Сохраняю…');
+    try {
+      await db.collection('answers').doc('general').set({ ...general, at: new Date().toISOString() });
+      setStatus('Сохранено.');
+    } catch {
+      setStatus('Не сохранилось. Попробуйте ещё раз через минуту.');
+    }
   });
-  document.getElementById('verdicts')!.appendChild(b);
 }
 document.getElementById('save-note')!.addEventListener('click', () => void save(current, { note: noteEl.value }));
 
@@ -461,6 +561,7 @@ document.getElementById('q')!.addEventListener('input', (e) => {
 
 render();
 renderPanel();
+renderGeneral();
 resize();
 show(current);
 void connect();

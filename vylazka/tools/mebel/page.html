@@ -1,4 +1,4 @@
-<title>Мебель Untitled Session</title>
+<title>Опросник мебели</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -32,7 +32,7 @@ body {
   padding-block: 18px 28px;
 }
 header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin-bottom: 14px; }
-h1 { font: 600 22px/1.2 var(--font-body); margin: 0; letter-spacing: 0.01em; }
+h1 { font: 600 22px/1.2 var(--font-body); margin: 0; letter-spacing: 0.01em; text-wrap: balance; }
 .lead { color: var(--muted); margin: 0; max-width: 72ch; flex: 1 1 420px; min-width: 0; }
 .stats { font: 13px var(--font-mono); color: var(--muted); }
 .stats b { color: var(--accent); font-weight: 600; }
@@ -61,6 +61,19 @@ h1 { font: 600 22px/1.2 var(--font-body); margin: 0; letter-spacing: 0.01em; }
 .tag--v-replace { color: var(--v-replace); border-color: currentColor; }
 .tag--v-remove { color: var(--v-remove); border-color: currentColor; }
 .empty { color: var(--muted); grid-column: 1 / -1; }
+.general { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.q { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.q p { margin: 0; font-weight: 500; }
+.q__a { display: flex; flex-wrap: wrap; gap: 6px; }
+.q__a button { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font: 13px/1.35 var(--font-body); text-align: left; cursor: pointer; }
+.q__a button.is-on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.q__a button:disabled { opacity: 0.55; cursor: default; }
+.q__a button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tag--mem { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.tag--advice { color: var(--muted); border-style: dashed; }
+.tag--v-redo1, .tag--v-detail1 { color: var(--v-real); border-color: currentColor; }
+.tag--v-redo2, .tag--v-detail2 { color: var(--v-replace); border-color: currentColor; }
+.advice { margin: 0; color: var(--muted); font-size: 13px; }
 #panel { position: sticky; top: max(12px, env(safe-area-inset-top, 0px)); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-width: 0; }
 #view { width: 100%; aspect-ratio: 4 / 3.2; max-width: 100%; background: #121417; touch-action: none; }
 #view canvas { display: block; width: 100%; height: 100%; }
@@ -81,8 +94,8 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .verdict small { font: 11px var(--font-body); color: var(--muted); }
 .verdict:disabled { opacity: 0.55; cursor: default; }
 .verdict--keep.is-on { border-color: var(--v-keep); box-shadow: inset 3px 0 0 var(--v-keep); }
-.verdict--real.is-on { border-color: var(--v-real); box-shadow: inset 3px 0 0 var(--v-real); }
-.verdict--replace.is-on { border-color: var(--v-replace); box-shadow: inset 3px 0 0 var(--v-replace); }
+.verdict--redo1.is-on, .verdict--detail1.is-on { border-color: var(--v-real); box-shadow: inset 3px 0 0 var(--v-real); }
+.verdict--redo2.is-on, .verdict--detail2.is-on { border-color: var(--v-replace); box-shadow: inset 3px 0 0 var(--v-replace); }
 .verdict--remove.is-on { border-color: var(--v-remove); box-shadow: inset 3px 0 0 var(--v-remove); }
 textarea { width: 100%; min-height: 76px; resize: vertical; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 14px/1.45 var(--font-body); }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
@@ -98,15 +111,30 @@ textarea { width: 100%; min-height: 76px; resize: vertical; background: var(--bg
 </style>
 
 <header>
-  <h1>Мебель</h1>
-  <p class="lead">Каждая вещь собрана тем же кодом, что в игре. Покрутите её, сравните с ростом человека и отметьте, что с ней делать. Отметки сохраняются здесь же, я их читаю и переделываю вещи.</p>
-  <span class="stats">показано <b id="count">—</b> · отмечено <b id="marked">0</b></span>
+  <h1>Опросник: мебель и вещи памяти</h1>
+  <p class="lead">Стул из гнутой фанеры понравился — по нему можно переделать и остальное. Здесь вся мебель, что стоит в игре, и вещи, которые ищет игрок; каждую можно покрутить рядом с ростом человека. Выберите, что брать и в каком порядке. Ответы сохраняются здесь же, я их читаю.</p>
+  <span class="stats">отвечено <b id="count">—</b> · на экране <b id="marked">0</b></span>
 </header>
+
+<section class="general" aria-label="Общие вопросы">
+  <div class="q">
+    <p>1. Мебель из игрушечного набора (маленький столик, мягкое кресло, торшер, кактусы, коврик, картины) — менять всю разом?</p>
+    <div class="q__a"><button type="button" data-q="toy" data-a="all">Да, всю</button><button type="button" data-q="toy" data-a="each">Решу по каждой ниже</button></div>
+  </div>
+  <div class="q">
+    <p>2. Насколько детальными делать вещи памяти?</p>
+    <div class="q__a"><button type="button" data-q="detail" data-a="chair">Как стул: точные пропорции и материалы</button><button type="button" data-q="detail" data-a="more">Сильнее: мелкие детали и следы жизни — царапины, наклейки, пыль, вмятины</button><button type="button" data-q="detail" data-a="sign">У каждой одна главная деталь, видная издалека</button></div>
+  </div>
+  <div class="q">
+    <p>3. Чем ещё вещь памяти должна отличаться от обстановки?</p>
+    <div class="q__a"><button type="button" data-q="mark" data-a="none">Только проработкой</button><button type="button" data-q="mark" data-a="light">Ещё и светом: ловит луч сильнее остального</button><button type="button" data-q="mark" data-a="sound">Ещё и звуком, когда подходишь</button></div>
+  </div>
+</section>
 
 <div class="filters">
   <div class="seg" id="f-what" role="group" aria-label="Что показывать">
-    <button type="button" class="is-on" aria-pressed="true" data-val="furniture">Мебель</button>
-    <button type="button" aria-pressed="false" data-val="used">Всё, что стоит в игре</button>
+    <button type="button" class="is-on" aria-pressed="true" data-val="furniture">Мебель в игре</button>
+    <button type="button" aria-pressed="false" data-val="memory">Вещи памяти</button>
     <button type="button" aria-pressed="false" data-val="all">Весь реестр</button>
   </div>
   <div class="seg" id="f-world" role="group" aria-label="Место">
@@ -136,12 +164,13 @@ textarea { width: 100%; min-height: 76px; resize: vertical; background: var(--bg
         <dt>Размер</dt><dd id="p-size">—</dd>
         <dt>Сделана</dt><dd id="p-source">—</dd>
         <dt>На уровне</dt><dd id="p-where">—</dd>
-        <dt>Где чаще</dt><dd id="p-rooms">—</dd>
+        <dt id="p-rooms-dt">Где чаще</dt><dd id="p-rooms">—</dd>
       </dl>
+      <p class="advice" id="p-advice"></p>
       <div class="links"><a class="btn" id="p-game" href="#" target="_blank" rel="noopener">Посмотреть в игре под фонарём ↗</a></div>
     </div>
     <div class="mark">
-      <h3>Что с ней делать</h3>
+      <h3 id="p-ask">Что с ней делать</h3>
       <div id="verdicts"></div>
       <label for="note" class="code">Что не так и какой она должна быть (можно ссылку на фото)</label>
       <textarea id="note" placeholder="Например: ножки тоньше, сиденье из кожзама, как в поликлинике"></textarea>
@@ -150,6 +179,6 @@ textarea { width: 100%; min-height: 76px; resize: vertical; background: var(--bg
   </aside>
 </div>
 
-<p class="how"><b>Как это работает.</b> Вещи бывают двух видов: собранные кодом в игре (их я меняю прямо в коде: пропорции, материал, детали) и готовые модели из бесплатного набора KayKit — он нарочно игрушечный, такие лучше заменять целиком. Ставьте отметку и пишите заметку — после следующей сборки здесь появится новая версия вещи, а отметки останутся. Кнопка «Посмотреть в игре» открывает вещь в игре, в той картинке, какой её видит игрок.</p>
+<p class="how"><b>Как это работает.</b> Начните с трёх общих вопросов, потом пройдите «Мебель в игре» и «Вещи памяти»: на каждой карточке — моё предложение, можно соглашаться или нет. Вещи бывают двух видов: собранные кодом в игре (их я меняю прямо в коде: пропорции, материал, детали) и готовые модели из бесплатного набора KayKit — он нарочно игрушечный, такие лучше заменять целиком. Ставьте отметку и пишите заметку — после следующей сборки здесь появится новая версия вещи, а отметки останутся. Кнопка «Посмотреть в игре» открывает вещь в игре, в той картинке, какой её видит игрок.</p>
 
 <!--SCRIPT-->
