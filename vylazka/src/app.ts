@@ -179,6 +179,7 @@ export class App {
       onNext: () => undefined,
       onFlash: () => this.setCalm(!this.profile.calm),
       onPlace: () => this.setPlace(WORLD_KINDS[(WORLD_KINDS.indexOf(this.world) + 1) % WORLD_KINDS.length]!),
+      onRestartPlace: () => this.restartPlace(),
       onLang: () => this.cycleLang(),
       onQuality: (q) => {
         this.qualityManual = true;
@@ -401,6 +402,7 @@ export class App {
   private prepare(): void {
     const mem = this.place();
     this.memory = mem;
+    this.overlay.setRestart(!this.testLevel && (mem.laps > 0 || mem.wear > 0));
     this.seed = mem.seed >>> 0;
     this.rank = mem.rank;
     const wear = this.wearParam() ?? mem.wear;
@@ -531,6 +533,7 @@ export class App {
    */
   private sayLap(): void {
     const lap = this.lapParam() ?? (this.memory?.laps ?? 0) + 1;
+    this.hud.setLap(lap);
     // Зал ожидания на первом круге говорит свой закон — одной строкой, как всё здесь.
     const line = lap < 2 ? (this.world === 'station' ? 'station.law' : null) : `loop.lap.${Math.min(8, lap)}`;
     if (!line) return;
@@ -540,6 +543,21 @@ export class App {
       this.lapTimer = undefined;
       if (this.screen === 'play') this.hud.flash(t(line), 6200);
     }, 4400);
+  }
+
+  /**
+   * Начать место заново (вариант A; партнёр: «Да и да» — номер круга на экране и «начать место заново»
+   * в настройках): стёртость и круги — с нуля, план тот же (тот же сид). Только на заставке.
+   */
+  restartPlace(): void {
+    if (this.screen !== 'title' || this.testLevel) return;
+    const m = this.memory;
+    if (this.pinned) this.pinned = { ...this.pinned, wear: 0, laps: 0 };
+    else if (m) this.profile.memories[this.world] = { ...m, wear: 0, laps: 0 };
+    this.audio.ui('ui_click');
+    this.saveProfile();
+    this.prepare();
+    this.redraw();
   }
 
   /** Сменить место вылазки. На заставке уровень пересобирается сразу; выбор запоминается. */

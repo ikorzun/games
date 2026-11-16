@@ -28,6 +28,7 @@ import { ObjectLog } from './objects';
 import { DOOR_IMAGE, SCREEN_IMAGES } from './screens';
 import type { FreeSlot } from './objects';
 import { buildShell, CELL, Shell, STYLE_CORRIDOR, WALL_T } from './shell';
+import { EdgeBuilder } from './edges';
 import type { ShellCell, WallStyle } from './shell';
 
 const HALF = GRID / 2;
@@ -302,6 +303,10 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
   }
   const roomById = (id: number): GenRoom => layout.rooms[id]!;
   for (const sh of shells) buildShell(sh, (c) => chunkFor(roomById(c.room), c.cx + HALF, c.cz + HALF).mb, col);
+  // Тихий слой: точки по рёбрам и углам той же разметки — план держится, даже когда стены не собраны.
+  const edgeBuild = new EdgeBuilder(layout.seed);
+  shells.forEach((sh, tier) => edgeBuild.addShell(sh, tier));
+  const edges = edgeBuild.build();
 
   // ── Лестничные марши ──
   for (const s of layout.stairs) {
@@ -792,5 +797,6 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
     growth,
     layout,
     world,
+    edges,
   };
 }

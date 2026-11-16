@@ -7,6 +7,7 @@ import type { FlatMark } from './flat';
 import type { MeshData, SheetMark } from './kit';
 import type { Perch } from '../systems/birds';
 import type { FreeSlot, LevelObject } from './objects';
+import type { EdgePoints } from './edges';
 
 /** Кусок геометрии, рисуемый одним вызовом. Ярусы — чтобы не рисовать этажи, которых не видно. */
 export interface LevelChunk {
@@ -146,4 +147,6 @@ export interface BuiltLevel {
   roof?: { box: [number, number, number, number]; y: number };
   /** Где под крышей садятся птицы (systems/birds.ts): точки на затяжках переплёта. Нет — птиц под крышей нет. */
   perches?: Perch[];
+  /** Тихий слой: точки по рёбрам и углам стен (world/edges.ts). Нет — у уровня его нет (тестовый, карман). */
+  edges?: EdgePoints;
 }

@@ -530,6 +530,28 @@
       "ru": "тон остановившегося времени в зале ожидания: запись партнёра (не сгенерирована)"
     },
     {
+      "id": "wake_pass",
+      "bus": "amb",
+      "variants": 1,
+      "loop": false,
+      "seconds": 12,
+      "volume": 0.8,
+      "source": "partner",
+      "prompt": "Not generated: a field recording supplied by the project partner - a low engine rumble with rhythmic thumps that swells as something passes and fades away; soft fades added on import",
+      "ru": "явь: низкий мотор проходит мимо — запись партнёра (не сгенерирована); изредка и глухо сквозь сон, в лимбо — каждый раз"
+    },
+    {
+      "id": "wake_street",
+      "bus": "amb",
+      "variants": 1,
+      "loop": false,
+      "seconds": 15.1,
+      "volume": 1.0,
+      "source": "partner",
+      "prompt": "Not generated: a field recording supplied by the project partner - a quiet narrow street with a distant tune; soft fades added on import",
+      "ru": "явь: тихая узкая улица и далёкий напев — запись партнёра (не сгенерирована); изредка и глухо сквозь сон, в лимбо — каждый раз"
+    },
+    {
       "id": "bird_wings",
       "bus": "sfx",
       "variants": 3,

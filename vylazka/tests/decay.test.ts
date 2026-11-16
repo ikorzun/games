@@ -1,18 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { decayAt, erased, keepsClutter, lapsLeft, startForm, strength, WEAR } from '../src/systems/decay';
+import { CEIL_MAX, decayAt, erased, FLOOR_MAX, keepsClutter, lapsLeft, startForm, strength, WALLS_MAX, WEAR } from '../src/systems/decay';
 import { FORM_GONE, FORM_LACE, FORM_REAL } from '../src/systems/illusions';
 
 const STEPS = Array.from({ length: 101 }, (_, i) => i / 100);
 
 describe('стирание: кривая деградации', () => {
-  it('нетронутое место цело; стёртое — пусто', () => {
+  it('нетронутое место цело; стёртое — без вещей и красок, но архитектура держится (вариант A)', () => {
     const fresh = decayAt(0);
-    expect(fresh).toMatchObject({ integrity: 1, lace: 0, gone: 0, flats: 1, clutter: 1, ceiling: 0, walls: 0, floor: 0, voices: 1, birches: 0, mound: 0 });
+    expect(fresh).toMatchObject({ integrity: 1, lace: 0, gone: 0, flats: 1, clutter: 1, ceiling: 0, walls: 0, floor: 0, paint: 0, voices: 1, birches: 0, mound: 0 });
     const end = decayAt(1);
     expect(end.integrity).toBe(0);
-    expect(end.ceiling).toBe(1);
-    expect(end.walls).toBe(1);
-    expect(end.floor).toBe(1);
+    // Слова партнёра 16.11: «A…» — потолок уходит дырами, не больше половины; стены — пятнами кружева,
+    // не больше трети; пол держится. Раньше в стёртом месте не оставалось ни потолка, ни стен, ни пола.
+    expect(end.ceiling).toBe(CEIL_MAX);
+    expect(end.walls).toBe(WALLS_MAX);
+    expect(end.floor).toBe(FLOOR_MAX);
+    expect(CEIL_MAX).toBeLessThanOrEqual(0.6);
+    expect(WALLS_MAX).toBeLessThanOrEqual(1 / 3);
+    expect(FLOOR_MAX).toBeLessThanOrEqual(0.15);
+    expect(end.paint).toBe(1);
     expect(end.voices).toBe(0);
     expect(end.clutter).toBe(0);
     expect(end.birches).toBe(1);
@@ -29,23 +35,33 @@ describe('стирание: кривая деградации', () => {
     for (let i = 1; i < STEPS.length; i++) {
       const a = decayAt(STEPS[i - 1]!);
       const b = decayAt(STEPS[i]!);
-      for (const k of ['lace', 'gone', 'flats', 'ceiling', 'walls', 'floor', 'birches', 'mound'] as const) expect(b[k], `${k} при ${STEPS[i]}`).toBeGreaterThanOrEqual(a[k]);
+      for (const k of ['lace', 'gone', 'flats', 'ceiling', 'walls', 'floor', 'paint', 'birches', 'mound'] as const) expect(b[k], `${k} при ${STEPS[i]}`).toBeGreaterThanOrEqual(a[k]);
       for (const k of ['integrity', 'clutter', 'voices'] as const) expect(b[k], `${k} при ${STEPS[i]}`).toBeLessThanOrEqual(a[k]);
       expect(b.lace).toBeGreaterThanOrEqual(b.gone);
     }
   });
 
-  it('слои уходят по очереди: мелочи и вещи — потолок — стены — пол', () => {
-    const half = (k: 'clutter' | 'ceiling' | 'walls' | 'floor' | 'lace'): number => STEPS.find((w) => (k === 'clutter' ? 1 - decayAt(w).clutter : decayAt(w)[k]) >= 0.5)!;
+  it('слои уходят по очереди: мелочи, краски и вещи — потолок — стены — пол (доли от того, что слой может потерять)', () => {
+    type Layer = 'clutter' | 'paint' | 'ceiling' | 'walls' | 'floor' | 'lace';
+    const rel = (k: Layer, w: number): number => {
+      const d = decayAt(w);
+      if (k === 'clutter') return 1 - d.clutter;
+      if (k === 'ceiling') return d.ceiling / CEIL_MAX;
+      if (k === 'walls') return d.walls / WALLS_MAX;
+      if (k === 'floor') return d.floor / FLOOR_MAX;
+      return d[k];
+    };
+    const half = (k: Layer): number => STEPS.find((w) => rel(k, w) >= 0.5)!;
     expect(half('clutter')).toBeLessThan(half('ceiling'));
+    expect(half('paint')).toBeLessThan(half('ceiling'));
     expect(half('lace')).toBeLessThan(half('walls'));
     expect(half('ceiling')).toBeLessThan(half('walls'));
     expect(half('walls')).toBeLessThan(half('floor'));
-    // Пока потолок не начал выпадать, стены целы; пока стены не стали кружевом наполовину, пол цел.
+    // Пока потолок не начал выпадать, стены целы; пока стены не поредели, пол цел.
     expect(decayAt(0.44).walls).toBe(0);
-    expect(decayAt(0.44).ceiling).toBeGreaterThan(0.4);
+    expect(rel('ceiling', 0.44)).toBeGreaterThan(0.25);
     expect(decayAt(0.84).floor).toBe(0);
-    expect(decayAt(0.84).walls).toBeGreaterThan(0.9);
+    expect(rel('walls', 0.84)).toBeGreaterThan(0.8);
   });
 
   it('кривая S-образная: первые круги место почти цело, середина рушится быстрее всего', () => {

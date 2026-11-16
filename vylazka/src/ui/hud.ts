@@ -27,6 +27,9 @@ export class Hud {
   readonly el: HTMLElement;
   private readonly rec: HTMLElement;
   private readonly cam: HTMLElement;
+  /** Номер круга петли рядом с камерой (вариант A; партнёр: «Да» — номер круга виден на экране). */
+  private readonly lapEl: HTMLElement;
+  private lapN: number | null = null;
   private readonly clock: HTMLElement;
   private readonly hint: HTMLElement;
   private readonly prompt: HTMLElement;
@@ -63,7 +66,7 @@ export class Hud {
     this.el.className = 'vz-hud';
     this.el.innerHTML =
       '<div class="vz-hud__top">' +
-      '<div class="vz-hud__tl"><span class="vz-hud__dot"></span><span class="vz-hud__rec"></span><span class="vz-hud__cam"></span></div>' +
+      '<div class="vz-hud__tl"><span class="vz-hud__dot"></span><span class="vz-hud__rec"></span><span class="vz-hud__cam"></span><span class="vz-hud__lap"></span></div>' +
       '<div class="vz-hud__tr"><span class="vz-hud__clock"></span><span class="vz-hud__fps"></span></div>' +
       '</div>' +
       '<div class="vz-hud__goals"></div>' +
@@ -79,6 +82,7 @@ export class Hud {
     const q = (sel: string): HTMLElement => this.el.querySelector(sel) as HTMLElement;
     this.rec = q('.vz-hud__rec');
     this.cam = q('.vz-hud__cam');
+    this.lapEl = q('.vz-hud__lap');
     this.clock = q('.vz-hud__clock');
     this.hint = q('.vz-hud__hint');
     this.prompt = q('.vz-hud__prompt-text');
@@ -101,6 +105,13 @@ export class Hud {
   relabel(): void {
     this.rec.textContent = t('hud.rec');
     this.cam.textContent = t('hud.cam');
+    this.lapEl.textContent = this.lapN === null ? '' : t('hud.lap', { n: this.lapN });
+  }
+
+  /** Номер круга петли места; null — не показывать (меню, карманы до первой сессии). */
+  setLap(n: number | null): void {
+    this.lapN = n;
+    this.lapEl.textContent = n === null ? '' : t('hud.lap', { n });
   }
 
   setTime(seconds: number): void {

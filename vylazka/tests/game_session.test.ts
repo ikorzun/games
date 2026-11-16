@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { mulberry32 } from '../src/core/rng';
 import type { Vec3 } from '../src/core/types';
 import { generateLayout } from '../src/gen/layout';
-import { Game, STEP } from '../src/game';
+import { Game, SONAR_EVERY, SONAR_REACH, SONAR_SPEED, STEP } from '../src/game';
 import type { DreamEvent, FearEvent, StepEvents } from '../src/game';
 import { emptyInput } from '../src/player/input';
 import type { InputFrame } from '../src/player/input';
@@ -12,7 +12,7 @@ import { nearestExit } from '../src/systems/pressure';
 import type { PressureRoom } from '../src/systems/pressure';
 import { DEFAULT_SESSION, OFFICE_CHAIN, YELLOW_CHAIN } from '../src/systems/session';
 import type { SessionEvent } from '../src/systems/session';
-import { DEFAULT_THINGS, looksAt } from '../src/systems/things';
+import { DEFAULT_THINGS, looksAt, Things } from '../src/systems/things';
 import { nodesInRange } from '../src/swarm/ai';
 import type { ColliderSet } from '../src/world/colliders';
 import type { FlatMark } from '../src/world/flat';
@@ -34,6 +34,11 @@ class FakeRenderer {
   private next = 1;
   setWorld(): void {
     this.worlds += 1;
+  }
+  /** Тихий слой уровня: сколько точек по рёбрам отдано рендеру. */
+  edges = 0;
+  setEdges(e: { count: number } | null): void {
+    this.edges = e ? e.count : 0;
   }
   setGlow(): void {}
   /** Осыпь в последнем кадре: плотность и середина тела. */
@@ -530,6 +535,30 @@ describe('игра целиком: особенности помещений и 
   });
 });
 
+describe('тихий слой и сонар (вариант A)', () => {
+  it('в месте: точки по рёбрам отданы рендеру, тихий слой включён; волна вскоре после прихода, бежит со своей скоростью, гаснет и приходит снова; в кармане их нет', () => {
+    const h = new Harness(levelOf(SEED), { seed: 31 });
+    const view = (): ReturnType<FakeRenderer['frames']['at']> => h.r.frames.at(-1);
+    expect(h.r.edges).toBeGreaterThan(1000);
+    h.run(0.5);
+    expect(view()!.quiet).toBeGreaterThan(0);
+    expect(h.until(() => (view()?.sonar ?? null) !== null, 4)).toBe(true);
+    const a = view()!.sonar!;
+    h.run(1);
+    const b = view()!.sonar!;
+    expect(b[3] - a[3]).toBeCloseTo(SONAR_SPEED, 0);
+    expect(b[4]).toBeGreaterThan(0);
+    // Волна гаснет к концу пути, следующая приходит не позже чем через SONAR_EVERY[1] с.
+    expect(h.until(() => (view()?.sonar ?? null) === null, SONAR_REACH / SONAR_SPEED + 1)).toBe(true);
+    expect(h.until(() => (view()?.sonar ?? null) !== null, SONAR_EVERY[1] + 1)).toBe(true);
+    // Карман — не место: ни тихого слоя, ни волны.
+    enter(h, 'meadow');
+    h.run(1);
+    expect(view()!.quiet).toBe(0);
+    expect(view()!.sonar ?? null).toBeNull();
+  });
+});
+
 describe('игра целиком: рендер получает разумный кадр', () => {
   it('кадры идут с конечными числами; вещи видны в мире, а в лимбо убежище скрыто пространством', () => {
     const h = new Harness(levelOf(SEED), { seed: 14 });
@@ -734,15 +763,30 @@ describe('игра целиком: карманные пространства �
     expect(h.game.session!.active?.def.id).toBe(memoryId);
   });
 
-  it('лимбо: выхода нет, болванок нет, экспонатов нет', () => {
+  it('лимбо: выхода нет, болванок нет; вспомненное — экспонаты: под взглядом не растёт, не рассыпается в точки и строку не повторяет', () => {
     const h = new Harness(levelOf(SEED), { seed: 29 });
+    // Всё вспомнено: в архиве — пять воспоминаний сессии (debugFinish сам архив не пополняет).
+    h.game.archive.push(...h.game.session!.memories.map((m) => m.def.id));
     h.game.debugFinish();
     expect(h.until(() => h.game.where === 'limbo', 8)).toBe(true);
     expect(h.game.pocket!.exit).toBeNull();
     h.run(1);
     expect(info(h).exit).toBeNull();
     expect(info(h).blanks).toEqual([]);
-    expect(h.game.things.list.some((t) => t.still)).toBe(false);
+    // Противоречие 109 (ideas.md): вещь памяти проработана сильнее всего — в лимбо её разглядывают.
+    const things = h.game.things.list;
+    expect(things.length).toBe(5);
+    expect(things.every((t) => t.still && !t.memory)).toBe(true);
+    const shown = things[0]!;
+    expect(h.standBefore(shown.id)).toBe(true);
+    // Дольше, чем обычной вещи нужно, чтобы начать расти и вырасти (2,4 + 2,6 с).
+    h.run(DEFAULT_THINGS.gazeTime + DEFAULT_THINGS.growTime + 1);
+    expect(h.game.where).toBe('limbo');
+    expect(shown.gaze).toBeGreaterThan(0.9);
+    expect(shown.state).toBe('idle');
+    expect(shown.scale).toBe(1);
+    expect(Things.dots(shown)).toBe(0);
+    expect(pocketEvents(h, 'replay')).toHaveLength(0);
   });
 
   it.each(['void', 'dollhouse'] as const)('проход сквозь выход (%s) возвращает в убежище, в узел, откуда унесло; раньше 1,5 с он не действует', (kind) => {

@@ -68,6 +68,16 @@ const VOICES: Readonly<Record<string, readonly string[]>> = {
 /** Насколько слышен разговор за стеной: офис полон людей, жёлтые комнаты почти пусты. */
 const MURMUR: Readonly<Record<string, number>> = { shelter: 0.55, office: 0.8, yellow: 0.3, station: 0.6 };
 
+/**
+ * Явь — записи партнёра («Добавь эти звуки в игру»): проходящий мотор и тихая улица с далёким напевом.
+ * Это не звуки сна, а то, что доходит до спящего снаружи: изредка, издалека и глухо. Чем сильнее место
+ * стёрто, тем чаще (сон истончается); в лимбо, на самой границе пробуждения, — каждый раз. По очереди.
+ */
+export const WAKING: readonly string[] = ['wake_street', 'wake_pass'];
+/** Через сколько секунд вылазки явь слышна впервые и как часто потом (в целом месте; в стёртом — вдвое чаще). */
+export const WAKE_FIRST = 95;
+export const WAKE_EVERY = 170;
+
 export class GameAudio {
   /** Сколько поездов уже слышали (зал ожидания). */
   private trains = 0;
@@ -76,6 +86,8 @@ export class GameAudio {
   private dripAt = 6;
   private voiceAt = 18;
   private voiceAngle = 0;
+  private wakeAt = WAKE_FIRST;
+  private wakeN = 0;
   private count = 0;
   private clock = 0;
   private holding = false;
@@ -116,6 +128,14 @@ export class GameAudio {
     return Math.min(n - 1, Math.floor((this.jitter(0.5) - 0.5) * n));
   }
 
+  /** Явь: следующая запись по очереди, на расстоянии r и чуть выше головы — глухо, будто из-за стены сна. */
+  private wake(ears: { pos: Vec3; yaw: number }, r: number): void {
+    const id = WAKING[this.wakeN % WAKING.length]!;
+    this.wakeN += 1;
+    const angle = this.jitter(0.5) * Math.PI * 4;
+    this.engine.play(id, { pos: [ears.pos[0] + Math.cos(angle) * r, ears.pos[1] + 1.5, ears.pos[2] + Math.sin(angle) * r] });
+  }
+
   /** События шага симуляции → разовые звуки. */
   onStep(ev: StepEvents, game: AudioWorld): void {
     const a = this.engine;
@@ -142,7 +162,10 @@ export class GameAudio {
       // Новая сессия начинается, как первая: люком или лифтом.
       if (e.type === 'jump' && e.phase === 'start' && e.plan.style === 'whiteout') a.play('whiteout');
       else if (e.type === 'jump' && e.phase === 'switch' && e.plan.style !== 'whiteout') a.play('flash_spark', { rate: 0.7, volume: 0.8 });
-      else if (e.type === 'limbo') a.play('ui_report');
+      else if (e.type === 'limbo') {
+        a.play('ui_report');
+        this.wake(game.listener(), 7);
+      }
       else if (e.type === 'begin') a.play((game.world ?? 'shelter') === 'shelter' ? 'hatch' : 'lift', { volume: 0.8 });
       // Всё иллюзорно: тронутая вещь рассыпается в пыль, после темноты собирается из неё.
       else if (e.type === 'touch') a.play(e.what === 'gone' ? 'dissolve' : 'assemble', { rate: this.jitter(0.1), volume: e.what === 'gone' ? 1 : 0.7 });
@@ -238,7 +261,8 @@ export class GameAudio {
     // Следы людей. Разговор за стеной слышен, пока спокойно; чем ближе Осыпь и чем сильнее паника,
     // тем он тише — и тем громче шёпот: тревога заглушает память о людях и говорит вместо неё.
     // Следы людей слышны в покое — и только пока место помнится: в стёртом месте никого не остаётся.
-    const calm = clamp01(1 - panic * 1.5) * clamp01(1 - near * 2.5) * (game.decay?.voices ?? 1);
+    const settled = clamp01(1 - panic * 1.5) * clamp01(1 - near * 2.5);
+    const calm = settled * (game.decay?.voices ?? 1);
     this.voiceAngle += dt * 0.05;
     const behindWall: Vec3 = [ears.pos[0] + Math.cos(this.voiceAngle) * 7, ears.pos[1], ears.pos[2] + Math.sin(this.voiceAngle) * 7];
     a.loop('voices_murmur', live * (MURMUR[place] ?? 0.5) * calm, behindWall);
@@ -253,6 +277,14 @@ export class GameAudio {
         const r = 9.5 + 5 * (this.jitter(0.5) - 1);
         a.play(list[this.pick(list.length)]!, { pos: [ears.pos[0] + Math.cos(angle) * r, ears.pos[1], ears.pos[2] + Math.sin(angle) * r], rate: this.jitter(0.04) });
       }
+    }
+
+    // Явь сквозь сон: редко, издалека, только пока спокойно; в стёртом месте — чаще.
+    if (active && !over && this.clock >= this.wakeAt) {
+      const thin = 1 - clamp01(game.decay?.voices ?? 1);
+      this.wakeAt = this.clock + (WAKE_EVERY + 80 * (this.jitter(0.5) - 1)) * (1 - 0.5 * thin);
+      // Явь — не память места: стёртость её не глушит (людей нет, а улица слышна); глушат паника и Осыпь.
+      if (settled > 0.6) this.wake(ears, 11);
     }
 
     // Капли: в убежище — редкий одиночный звук откуда-то из темноты; глубже — чаще.

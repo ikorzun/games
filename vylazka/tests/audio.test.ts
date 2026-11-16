@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { allSoundFiles, AudioEngine, SOUNDS, spatialize } from '../src/audio/engine';
-import { GameAudio } from '../src/audio/game_audio';
+import { GameAudio, WAKE_FIRST, WAKING } from '../src/audio/game_audio';
 import type { AudioWorld, SoundSink } from '../src/audio/game_audio';
 import type { Vec3 } from '../src/core/types';
 import type { StepEvents } from '../src/game';
@@ -180,7 +180,7 @@ describe('привязка звуков к игре', () => {
       { type: 'swarm', what: 'release' },
     ];
     a.onStep(ev, w);
-    expect(r.ids_()).toEqual(['camera_hold', 'camera_beep', 'collapse', 'cough', 'fall', 'flash_spark', 'whiteout', 'dissolve', 'assemble', 'ui_report', 'hatch', 'scare_steps', 'scare_knock', 'scare_radio', 'flash_spark', 'swarm_cohere', 'swarm_scatter', 'swarm_catch']);
+    expect(r.ids_()).toEqual(['camera_hold', 'camera_beep', 'collapse', 'cough', 'fall', 'flash_spark', 'whiteout', 'dissolve', 'assemble', 'ui_report', 'wake_street', 'hatch', 'scare_steps', 'scare_knock', 'scare_radio', 'flash_spark', 'swarm_cohere', 'swarm_scatter', 'swarm_catch']);
     // Рывок слышно только в момент смены места, а не в начале ухода: одна искра (вторая — мигание фонаря).
     // Выбеливание слышно с самого начала — оно нарастает; искры у него нет.
     expect(r.plays.filter((p) => p.id === 'flash_spark').length).toBe(2);
@@ -340,6 +340,40 @@ describe('привязка звуков к игре', () => {
     const w = world();
     for (let t = 0; t < 300; t += 0.25) a.frame(w, 0.25, false);
     expect(r.plays.filter((p) => VOICE.includes(p.id))).toHaveLength(0);
+  });
+
+  it('явь — записи партнёра: изредка, издалека и по очереди; в стёртом месте чаще; в лимбо — каждый раз; при Осыпи, в кармане и на паузе — нет', () => {
+    const run = (over: Partial<AudioWorld>, seconds: number, active = true): { id: string; pos?: Vec3 }[] => {
+      const r = new Recorder();
+      const a = new GameAudio(r);
+      a.setScene('play');
+      a.sortieStart(true);
+      const w = world(over);
+      for (let t = 0; t < seconds; t += 0.25) a.frame(w, 0.25, active);
+      return r.plays.filter((p) => WAKING.includes(p.id));
+    };
+    expect(run({}, WAKE_FIRST - 1)).toHaveLength(0);
+    // Десять минут в целом месте: три-четыре раза, обе записи, из-за стены.
+    const whole = run({}, 600);
+    expect(whole.length).toBeGreaterThanOrEqual(3);
+    expect(whole.length).toBeLessThanOrEqual(4);
+    expect(new Set(whole.map((p) => p.id)).size).toBe(2);
+    for (const p of whole) expect(Math.hypot(p.pos![0], p.pos![2])).toBeGreaterThan(10);
+    // В стёртом месте людей не слышно, а явь — чаще: сон истончился.
+    expect(run({ decay: { voices: 0 } }, 600).length).toBeGreaterThan(whole.length);
+    // Осыпь рядом, карман, пауза — тишина.
+    expect(run({ swarmNear: 0.5 }, 600)).toHaveLength(0);
+    expect(run({ where: 'pocket', pocket: { kind: 'meadow' } }, 600)).toHaveLength(0);
+    expect(run({}, 600, false)).toHaveLength(0);
+    // Лимбо — граница пробуждения: каждый раз, по очереди.
+    const r = new Recorder();
+    const a = new GameAudio(r);
+    a.setScene('play');
+    const w = world({ where: 'limbo', pocket: { kind: 'void' } });
+    const limbo = (): StepEvents => ({ ...quiet(), dream: [{ type: 'limbo' }] as StepEvents['dream'] });
+    a.onStep(limbo(), w);
+    a.onStep(limbo(), w);
+    expect(r.ids_().filter((id) => WAKING.includes(id))).toEqual(['wake_street', 'wake_pass']);
   });
 
   it('петли следуют за состоянием: глубина, паника, газ, рой, помехи', () => {

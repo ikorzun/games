@@ -101,6 +101,8 @@ export interface VzDebugApi {
   anomalies(): Record<string, unknown>;
   /** Выключить рой, режиссёра и аномалии: для проверок, которым они мешают. */
   calm(on: boolean): void;
+  /** Пустить волну сонара на ближайшем шаге (вариант A): по тихому слою пробегает план. */
+  sonar(): void;
   /** Включить или выключить тень фонаря (для сравнения кадров). */
   shadows(on: boolean): void;
   /** Облако точек вкл/выкл: выкл — мир рисуется сплошными поверхностями (для сравнения кадров). */
@@ -477,6 +479,9 @@ export function installDebug(app: App): void {
     phase: (n) => {
       const d = game().director;
       if (d) d.phase = n;
+    },
+    sonar: () => {
+      game().pingSonar();
     },
     calm: (on) => {
       game().calm = on;

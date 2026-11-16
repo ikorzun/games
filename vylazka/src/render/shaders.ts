@@ -14,13 +14,19 @@ uniform vec3 uLightPosV;
 uniform vec3 uLightDirV;
 uniform vec3 uLightColor;
 uniform vec4 uCone;
+uniform float uBeamTall;  // 1 — пятно круглое; меньше — вытянуто по вертикали кадра (высокий кадр)
 
 /** Яркость луча в точке (пространство камеры) без тени: xyz — направление на фонарь, w — освещённость. */
 vec4 beamAt(vec3 posV) {
   vec3 toL = uLightPosV - posV;
   float d = length(toL);
   vec3 L = toL / max(d, 1e-4);
-  float cosA = dot(-L, uLightDirV);
+  // В высоком кадре (телефон в руке) пятно вытянуто по вертикали: круглый ореол накрывал меньше половины
+  // высоты кадра, и пол у ног оставался не освещён — «нет пола» (куратор, пачка 24). Отступ от оси
+  // по вертикали сжимается тем же множителем, что и у взгляда (gazeTall в render/renderer.ts).
+  vec3 rel = -L - uLightDirV;
+  rel.y *= uBeamTall;
+  float cosA = dot(normalize(uLightDirV + rel), uLightDirV);
   float hot = smoothstep(uCone.y, uCone.x, cosA);
   float corona = smoothstep(uCone.z, uCone.y, cosA);
   float spill = smoothstep(uCone.w, uCone.z, cosA);
@@ -1048,6 +1054,10 @@ void main() {
   if (vTone.y > 0.0) col += uMatBase[mi] * vColor.rgb * (vTone.y * 0.38);
   // Нить кружева — выцветшая: от цвета поверхности остаётся намёк, остальное — белёсая пряжа.
   if (laceK > 0.5) col = mix(vec3(dot(col, vec3(0.3, 0.59, 0.11))), col, 0.3) * 1.25 + vec3(0.004, 0.004, 0.005);
+  // Краски уходят раньше формы (вариант A): с кругами место выцветает к серому. Та же кривая, что
+  // decayAt().paint — smooth(0,08; 0,7) от стёртости.
+  float paintK = smoothstep(0.08, 0.7, uErase.w);
+  if (paintK > 0.0) col = mix(col, vec3(dot(col, vec3(0.3, 0.59, 0.11))), paintK * 0.7);
   voidTouch(col, hOut);
   col = mix(uFogColor, col, exp(-uFog * distV));
   gl_FragColor = vec4(col, hOut);
@@ -1366,6 +1376,72 @@ void main() {
   vec3 light = uLightColor * (lb.w * 0.55) + uAmbient * 0.9 + vec3(0.2, 0.21, 0.24) * uDarkGain;
   vCol = vec4(aCol * light, alpha);
   gl_Position = pc;
+}
+`;
+
+/**
+ * Тихий слой архитектуры: точки по рёбрам и углам стен (world/edges.ts; вариант A, слова партнёра:
+ * «Тихий слой, это точки по ребрам и углам, иногда пробегает сонар, чтобы игрок понимал хоть какой-то план»).
+ * Видны всегда, даже в темноте, но тихо и только то, что не закрыто стеной (глубина готового кадра);
+ * дальше 7 м гаснут. Сонар — волна от игрока: её фронт зажигает точки ярче, за ним они остывают, а на
+ * миг волна показывает план и сквозь стены — в темноте; при фонаре едва (у темноты остаётся её смысл).
+ * Свет пишется поверх кадра; усиление камеры его не разгоняет.
+ */
+export const EDGE_VERT = /* glsl */ `
+attribute float aTier;
+attribute float aKind;
+uniform highp sampler2D tDepth;
+uniform vec2 uNearFar;
+uniform float uProj;
+uniform vec2 uTiers;      // какие ярусы видны: с какого по какой
+uniform vec4 uSonar;      // xyz — откуда пошла волна, w — её радиус, м
+uniform float uSonarK;    // 0..1: сила волны (гаснет к концу пути)
+uniform float uQuiet;     // 0..1: сила тихого слоя
+uniform float uGainInv;   // 1 / усиление камеры
+uniform float uXray;      // насколько волна видна сквозь стены: в темноте — сильно, при фонаре — едва
+varying vec3 vCol;
+
+float linDepth(float d) {
+  return (2.0 * uNearFar.x * uNearFar.y) / (uNearFar.y + uNearFar.x - (d * 2.0 - 1.0) * (uNearFar.y - uNearFar.x));
+}
+
+void main() {
+  vCol = vec3(0.0);
+  gl_PointSize = 1.0;
+  gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+  if (aTier < uTiers.x - 0.5 || aTier > uTiers.y + 0.5) return;
+  vec4 pv = viewMatrix * vec4(position, 1.0);
+  float dist = -pv.z;
+  if (dist < 0.08) return;
+  vec4 pc = projectionMatrix * pv;
+  vec2 uv = pc.xy / pc.w * 0.5 + 0.5;
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return;
+  bool hidden = dist > linDepth(texture2D(tDepth, uv).r) + 0.06 + dist * 0.004;
+  float r = distance(position, uSonar.xyz);
+  float dr = r - uSonar.w;
+  float front = exp(-dr * dr / 0.8);
+  float after = dr < 0.0 ? exp(dr / 4.0) : 0.0;
+  float sonar = uSonarK * (1.3 * front + 0.4 * after);
+  float quiet = hidden ? 0.0 : uQuiet * (1.0 - smoothstep(8.0, 22.0, dist));
+  float a = max(quiet, sonar * (hidden ? uXray : 1.0));
+  // План читается по углам и проёмам: их точки чуть ярче.
+  a *= aKind > 1.5 ? 1.3 : 1.0;
+  if (a < 0.004) return;
+  gl_PointSize = clamp(0.026 * uProj / dist, 1.4, 3.2) * (1.0 + 0.4 * front * uSonarK);
+  // Холодный цвет: точки плана не путаются с тёплыми точками места, которые собирает свет.
+  vec3 tint = mix(vec3(0.5, 0.72, 0.84), vec3(0.62, 1.0, 1.0), clamp(sonar, 0.0, 1.0));
+  vCol = tint * a * uGainInv;
+  gl_Position = pc;
+}
+`;
+
+export const EDGE_FRAG = /* glsl */ `
+varying vec3 vCol;
+void main() {
+  vec2 q = gl_PointCoord - 0.5;
+  float r2 = dot(q, q) * 4.0;
+  if (r2 > 1.0) discard;
+  gl_FragColor = vec4(vCol * (1.0 - 0.6 * r2), 1.0);
 }
 `;
 

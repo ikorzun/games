@@ -15,7 +15,8 @@ import { bakeDetail } from './detail';
 import { bakeGrime } from './grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from './matcap_atlas';
 import { MAX_WORMS } from '../swarm/body';
-import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, ECHO_FRAG, GRAIN_VERT, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, ENTITY_VERT, GLASS_FRAG, GLASS_VERT, SPOT_FRAG, STAR_FRAG, STAR_VERT, TRAIL_FRAG, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
+import type { EdgePoints } from '../world/edges';
+import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, ECHO_FRAG, EDGE_FRAG, EDGE_VERT, GRAIN_VERT, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, ENTITY_VERT, GLASS_FRAG, GLASS_VERT, SPOT_FRAG, STAR_FRAG, STAR_VERT, TRAIL_FRAG, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
 import { newGrainLife, objectTriangles, sowGrains, steerGrains, stepGrains } from './grains';
 import type { GrainLife, Grains } from './grains';
 import { smoothstep } from '../core/math';
@@ -168,6 +169,12 @@ export interface FrameView {
   echo: Float32Array | null;
   /** 0..1: Осыпь за спиной, и впереди показан её призрак — отражение из-за спины. */
   ghost: number;
+  /**
+   * Сонар (вариант A): откуда пошла волна, её радиус, м, и сила 0..1; null — волны нет.
+   */
+  sonar?: readonly [number, number, number, number, number] | null;
+  /** Сила тихого слоя — точек по рёбрам и углам, 0..1. Нет поля — слоя нет. */
+  quiet?: number;
   /**
    * Свет потолочных панелей по клеткам уровня (офис, жёлтые комнаты): data — size × size точек RGBA
    * (r — сколько рассеянного света в клетке, g — номер помещения), origin — угол сетки в мире (x, z),
@@ -450,6 +457,10 @@ export class GameRenderer {
   private readonly ghostPoints: THREE.Points;
   /** Эхо: полноэкранный проход по карте глубины, поверх точек. */
   private readonly echoScene = new THREE.Scene();
+  /** Тихий слой архитектуры: точки по рёбрам и углам (world/edges.ts) и волна сонара по ним. */
+  private readonly edgeScene = new THREE.Scene();
+  private edgePoints: THREE.Points | null = null;
+  private edgeMat: THREE.ShaderMaterial | null = null;
   private readonly echoMat: THREE.ShaderMaterial;
   private echoRT: THREE.WebGLRenderTarget;
   /** Свет по клеткам уровня: маленькая текстура, которую игра обновляет каждый кадр. */
@@ -564,6 +575,7 @@ export class GameRenderer {
       uLightColor: { value: new THREE.Vector3() },
       // Яркое пятно 7–13°, ореол до 25°, слабая засветка до 52°.
       uCone: { value: new THREE.Vector4(deg(7), deg(13), deg(25), deg(52)) },
+      uBeamTall: { value: 1 },
     };
     const defOf = (i: number): (typeof MAT_DEFS)[number] => MAT_DEFS[i] ?? MAT_DEFS[0]!;
     // Массивы в шейдере — на MAT_SLOTS мест: three.js заливает их целиком, поэтому хвост заполняется нулями.
@@ -1536,6 +1548,46 @@ export class GameRenderer {
    * Точки здесь вшестеро реже, чем в убежище: рядом поверхность и так видна. Сеются они клетками вокруг
    * игрока, поэтому огромный пол белого нигде (88 × 88 м) целиком не засевается.
    */
+  /** Тихий слой уровня: точки по рёбрам и углам стен. null — убрать (карман, тестовый уровень). */
+  setEdges(edges: EdgePoints | null): void {
+    if (this.edgePoints) {
+      this.edgeScene.remove(this.edgePoints);
+      this.edgePoints.geometry.dispose();
+      this.edgePoints = null;
+    }
+    if (!edges || edges.count === 0) return;
+    if (!this.edgeMat) {
+      this.edgeMat = new THREE.ShaderMaterial({
+        vertexShader: EDGE_VERT,
+        fragmentShader: EDGE_FRAG,
+        uniforms: {
+          tDepth: { value: null },
+          uNearFar: this.splatMat.uniforms.uNearFar!,
+          uProj: this.splatMat.uniforms.uProj!,
+          uTiers: { value: new THREE.Vector2(0, 0) },
+          uSonar: { value: new THREE.Vector4(0, 0, 0, -100) },
+          uSonarK: { value: 0 },
+          uQuiet: { value: 0 },
+          uGainInv: { value: 1 },
+          uXray: { value: 0.6 },
+        },
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(edges.pos, 3));
+    geo.setAttribute('aTier', new THREE.BufferAttribute(Float32Array.from(edges.tier), 1));
+    geo.setAttribute('aKind', new THREE.BufferAttribute(Float32Array.from(edges.kind), 1));
+    const points = new THREE.Points(geo, this.edgeMat);
+    points.frustumCulled = false;
+    points.matrixAutoUpdate = false;
+    this.edgePoints = points;
+    this.edgeScene.add(points);
+  }
+
   setPocket(meshes: readonly MeshData[] | null): void {
     // Другое место — другая память: прежняя к нему не относится.
     this.memLive = false;
@@ -1856,6 +1908,7 @@ export class GameRenderer {
     const gc = v.gazeCone ?? [52, 25];
     (wu.uGazeCone!.value as THREE.Vector2).set(Math.cos((gc[0] * Math.PI) / 180), Math.cos((gc[1] * Math.PI) / 180));
     wu.uGazeTall!.value = gazeTall(this.camera.aspect);
+    this.lightU.uBeamTall!.value = gazeTall(this.camera.aspect);
     const wind = v.wind;
     if (wind) (wu.uWind!.value as THREE.Vector4).set(wind.t, wind.amp, wind.dir[0], wind.dir[1]);
     else (wu.uWind!.value as THREE.Vector4).y = 0;
@@ -2050,6 +2103,21 @@ export class GameRenderer {
       pu0.tMem!.value = memNow.texture;
       r.autoClear = false;
       r.render(this.clouds.scene, cam);
+      r.autoClear = true;
+    }
+    // Тихий слой: точки по рёбрам и углам — план держится, даже когда стены не собраны; волна сонара.
+    if (this.edgePoints && this.edgeMat && ((v.quiet ?? 0) > 0 || (v.sonar?.[4] ?? 0) > 0)) {
+      const eu = this.edgeMat.uniforms;
+      eu.tDepth!.value = this.sceneRT.depthTexture;
+      (eu.uTiers!.value as THREE.Vector2).set(lo, hi);
+      const sn = v.sonar;
+      (eu.uSonar!.value as THREE.Vector4).set(sn ? sn[0] : 0, sn ? sn[1] : 0, sn ? sn[2] : 0, sn ? sn[3] : -100);
+      eu.uSonarK!.value = sn ? sn[4] : 0;
+      eu.uQuiet!.value = v.quiet ?? 0;
+      eu.uGainInv!.value = 1 / Math.max(1, v.gain);
+      eu.uXray!.value = 0.15 + 0.5 * (1 - smoothstep(0.05, 0.5, v.lightIntensity * v.lightScale));
+      r.autoClear = false;
+      r.render(this.edgeScene, cam);
       r.autoClear = true;
     }
     // Пыль тронутых вещей — теми же точками, поверх точек мира.

@@ -153,6 +153,7 @@ src/
   gen/                         layout (план по сиду и миру: убежище с домашними комнатами и
                                опасностями, офис, жёлтые комнаты), ascii (карта текстом)
   world/                       kit (сборщик геометрии), shell (клетки 3 м → стены, пол, потолок),
+                               edges (тихий слой: точки по рёбрам и углам стен — план держится),
                                props, props_bunker, props_more (реквизит убежища и реестр PROPS),
                                props_home (домашний реквизит, HOME_PROPS), props_office (офисный,
                                OFFICE_PROPS), props_models + models + models_data (готовые модели

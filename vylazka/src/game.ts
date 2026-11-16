@@ -191,6 +191,16 @@ const TIMING: Record<JumpStyle, readonly [number, number]> = { cut: [0.18, 0.45]
 const POCKET_ORIGIN: Vec3 = [400, 0, 0];
 /** Сколько самое меньшее длится лимбо, с. */
 const LIMBO_MIN = 7;
+/**
+ * Тихий слой и сонар (вариант A; слова партнёра: «Тихий слой, это точки по ребрам и углам, иногда
+ * пробегает сонар, чтобы игрок понимал хоть какой-то план»). Волна идёт от игрока со скоростью
+ * SONAR_SPEED м/с до SONAR_REACH м; приходит раз в SONAR_EVERY с и вскоре после того, как игрок попал в место.
+ */
+export const SONAR_SPEED = 9;
+export const SONAR_REACH = 24;
+export const SONAR_EVERY: readonly [number, number] = [24, 40];
+/** Сила тихого слоя: точки по рёбрам видны в темноте, но не спорят с тем, что собрал свет. */
+export const QUIET = 0.3;
 /** Мелочь, которой сон засоряет столы и полки, и крупные вещи посреди коридоров. */
 const SMALL_THINGS = ['mug', 'slippers', 'ball', 'teddy', 'alarm_clock', 'remote', 'photo_frame', 'night_light', 'school_bag', 'goldfish_bowl', 'keys', 'phone'];
 const BIG_THINGS: readonly (readonly [string, PocketKind | null])[] = [
@@ -406,6 +416,11 @@ export class Game {
   private stillFor = 0;
   /** 0..1: Осыпь за спиной — впереди виден её призрак. */
   ghost = 0;
+  /** Сонар: когда пойдёт следующая волна, когда пошла нынешняя (−1 — волны нет), откуда, и сколько их было. */
+  private sonarAt = 2.5;
+  private sonarT0 = -1;
+  private sonarPos: Vec3 = [0, 0, 0];
+  private sonarN = 0;
   private darkFor = 0;
   private darkShifts = 0;
   private detailShifts = 0;
@@ -512,6 +527,10 @@ export class Game {
     this.bakeContact();
     this.spawn = level.spawn;
     this.renderer.setWorld(level.chunks, level.stairs);
+    this.renderer.setEdges(level.edges ?? null);
+    // В новом месте волна идёт вскоре: план виден сразу.
+    this.sonarT0 = -1;
+    this.sonarAt = this.time + 2.5;
     // Батарейка в сессии не садится: фонарь глохнет от контакта, а не от заряда.
     this.light = new Flashlight(this.rng, { ...DEFAULT_FLASHLIGHT, drainSeconds: Infinity, ...this.lightCfg });
     const rank = level.layout?.rank ?? 1;
@@ -1412,6 +1431,35 @@ export class Game {
     this.pending = { level, dream };
   }
 
+  /** Сонар: изредка волна от игрока проходит по тихому слою и на миг показывает план — и сквозь стены. */
+  private stepSonar(): void {
+    if (this.sonarT0 >= 0 && (this.time - this.sonarT0) * SONAR_SPEED > SONAR_REACH) this.sonarT0 = -1;
+    if (this.where !== 'main' || this.transition || !this.level?.edges) return;
+    if (this.sonarT0 < 0 && this.time >= this.sonarAt) {
+      const b = this.body;
+      this.sonarPos = [b.x, b.y + 1.2, b.z];
+      this.sonarT0 = this.time;
+      this.sonarN += 1;
+      // Свой счёт, не общий генератор игры: волна не сдвигает ни вещей, ни Осыпи.
+      const k = hash01(this.sonarN, 0x50a7, this.dreamSeed ^ 0x5011a2);
+      this.sonarAt = this.time + SONAR_EVERY[0] + k * (SONAR_EVERY[1] - SONAR_EVERY[0]);
+    }
+  }
+
+  /** Волна для рендера: откуда, радиус и сила; null — волны нет. */
+  private sonarView(): readonly [number, number, number, number, number] | null {
+    if (this.sonarT0 < 0 || this.where !== 'main') return null;
+    const r = (this.time - this.sonarT0) * SONAR_SPEED;
+    if (r > SONAR_REACH) return null;
+    return [this.sonarPos[0], this.sonarPos[1], this.sonarPos[2], r, 1 - smoothstep(SONAR_REACH * 0.6, SONAR_REACH, r)];
+  }
+
+  /** Отладка и проверки: пустить волну сонара на ближайшем шаге. */
+  pingSonar(): void {
+    this.sonarT0 = -1;
+    this.sonarAt = this.time;
+  }
+
   /** Отладка: немедленно вернуться в убежище (карманное пространство и идущий скачок сбрасываются). */
   debugHome(): void {
     if (this.where === 'limbo') return;
@@ -1564,10 +1612,15 @@ export class Game {
       return;
     }
     // Вещи: в лимбо — всё, что игрок вспомнил раньше; на лугу и в домике — пара случайных мелочей.
+    // Вспомненное в лимбо — экспонаты: под взглядом не растёт и не рассыпается в точки. Вещь памяти —
+    // та, что проработана сильнее всего (ideas.md, V-33); её разглядывают, а не проходят насквозь
+    // (противоречие 109). Строку она не повторяет: вспышка легла бы на строки лимбо.
     const kinds = limbo ? this.archive.map((id) => MEMORY_THING[id] ?? id) : [SMALL_THINGS[Math.floor(this.rng() * SMALL_THINGS.length)]!, SMALL_THINGS[Math.floor(this.rng() * SMALL_THINGS.length)]!];
     kinds.slice(0, p.spots.length).forEach((kind, i) => {
       const sp = p.spots[i]!;
-      this.pocketThings.push(this.addThing(kind, sp, this.rng() * Math.PI * 2, limbo ? 'grow' : SMALL_FATES[i % SMALL_FATES.length]!));
+      const t = this.addThing(kind, sp, this.rng() * Math.PI * 2, limbo ? 'dust' : SMALL_FATES[i % SMALL_FATES.length]!);
+      t.still = limbo;
+      this.pocketThings.push(t);
     });
   }
 
@@ -1593,8 +1646,8 @@ export class Game {
         this.pocketStay = Math.min(this.pocketStay, this.pocketAge + 14);
       }
     }
-    if (p.kind === 'void') {
-      // Экспонат «звучит», когда на него посмотрели подольше; каждый — один раз за заход.
+    if (p.kind === 'void' && this.where !== 'limbo') {
+      // Экспонат «звучит», когда на него посмотрели подольше; каждый — один раз за заход. В лимбо — нет.
       const seen = this.pocketThings.find((t) => t.still && t.gaze >= 1 && !this.heard.has(t.id)) ?? null;
       if (seen !== this.holdThing) {
         this.holdThing = seen;
@@ -1638,6 +1691,8 @@ export class Game {
       this.leavePocket();
       this.where = 'main';
       this.env = this.worldEnv;
+      // После скачка план показывает волна: где я теперь.
+      this.sonarAt = Math.min(this.sonarAt, this.time + 1.2);
       if (plan.dest === 'start') {
         // Осыпь возвращает в начало: игрок снова там, где вылазка началась, лицом туда же. Искомая вещь
         // остаётся, где была, — до неё надо дойти заново. Сама Осыпь остаётся там, где дотянулась, и
@@ -1870,6 +1925,7 @@ export class Game {
 
   step(dt: number, input: InputFrame): StepEvents {
     this.time += dt;
+    this.stepSonar();
     this.fade = approach(this.fade, this.fadeTo, this.fadeTo > this.fade ? 0.5 : 0.25, dt);
     this.quake = Math.max(0, this.quake - dt * 1.4);
     const s = this.session;
@@ -2500,6 +2556,9 @@ export class Game {
       flash,
       echo: this.where === 'main' && this.echo.count > 0 ? this.echo.data : null,
       ghost: this.ghost,
+      sonar: this.sonarView(),
+      // План держится, но и он к концу петли редеет: на последнем круге он не целее самого места.
+      quiet: this.where === 'main' && this.level?.edges ? QUIET * (1 - 0.35 * clamp(this.wear, 0, 1)) : 0,
       cells: cl ? { data: cl.data, origin: CELL_ORIGIN, step: 3, size: cl.size } : null,
       ambientLocal: this.ambientLocal,
     };
