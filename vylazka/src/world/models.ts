@@ -7,6 +7,7 @@ import type { Vec3 } from '../core/types';
 import { MAT, MAT_DEFS, hexToLinear } from './materials';
 import type { Xf } from './props';
 import { MODEL_DATA } from './models_data';
+import type { ModelRecord } from './models_data';
 
 export interface DecodedModel {
   /** Позиции, м, по три числа на вершину. */
@@ -49,6 +50,13 @@ export function decodeModel(name: string): DecodedModel {
   if (hit) return hit;
   const r = MODEL_DATA[name];
   if (!r) throw new Error(`нет такой модели: ${name}`);
+  const m = decodeRecord(r);
+  cache.set(name, m);
+  return m;
+}
+
+/** Разобрать запись модели (формат models_data.ts): её же пишет лепка (tools/sculpt). */
+export function decodeRecord(r: ModelRecord): DecodedModel {
   const pos = bytes(r.pos);
   const nrm = bytes(r.nrm);
   const col = bytes(r.col);
@@ -72,9 +80,7 @@ export function decodeModel(name: string): DecodedModel {
     normal[i * 3 + 1] = normal[i * 3 + 1]! / l;
     normal[i * 3 + 2] = normal[i * 3 + 2]! / l;
   }
-  const m: DecodedModel = { position, normal, color, index: new Uint16Array(iq), min: [...r.min], max: [...r.max] };
-  cache.set(name, m);
-  return m;
+  return { position, normal, color, index: new Uint16Array(iq), min: [...r.min], max: [...r.max] };
 }
 
 /** Габарит модели (min/max в координатах реквизита, м). */
