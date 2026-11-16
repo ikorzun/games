@@ -72,8 +72,11 @@ export interface VzDebugApi {
   things(): Array<Record<string, unknown>>;
   /** Встать перед вещью лицом к ней. */
   gotoThing(id: number, distance?: number): boolean;
-  /** Поставить вещь прямо перед камерой на полу (на distance метров) с заданной судьбой; вернуть её номер. */
-  spawnThing(kind: string, fate: 'shrink' | 'dust' | 'grow' | 'jump', distance?: number): number;
+  /**
+   * Поставить вещь прямо перед камерой на полу (на distance метров) с заданной судьбой; вернуть её номер.
+   * facing — повернуть вещь лицом к игроку (иначе она смотрит вдоль +z мира).
+   */
+  spawnThing(kind: string, fate: 'shrink' | 'dust' | 'grow' | 'jump', distance?: number, facing?: boolean): number;
   /**
    * Поставить фигуру перед игроком (как партнёр ставит в инструменте): материал, поза-заготовка, на
    * сколько впереди, на какой высоте, повернуть (град; 0 — лицом к игроку). Вернёт номер фигуры в списке.
@@ -87,6 +90,11 @@ export interface VzDebugApi {
   memory(): { id: string; thing: number; pos: number[] } | null;
   /** Поторопить следующее воспоминание: оно придёт на ближайшем шаге. */
   reveal(): void;
+  /**
+   * Свет памяти (world/memory_light.ts) у вещи с этим номером, даже если её не ищут; null — снять. false — такой
+   * вещи нет. Вещь при этом перестаёт меняться под взглядом, как экспонат лимбо.
+   */
+  memLight(id: number | null): boolean;
   /** Встать перед вещью искомого воспоминания. */
   gotoMemory(): boolean;
   /**
@@ -379,13 +387,13 @@ export function installDebug(app: App): void {
       return false;
     },
     things: () => game().things.list.map((t) => ({ id: t.id, kind: t.kind, state: t.state, fate: t.fate, memory: t.memory, gaze: t.gaze, scale: t.scale, dissolve: t.dissolve, form: t.form, pos: [...t.pos] })),
-    spawnThing: (kind, fate, distance = 2.5) => {
+    spawnThing: (kind, fate, distance = 2.5, facing = false) => {
       const g = game();
       const st = g.snapshot() as { pos: number[]; aim: number[] };
       const yaw = st.aim[0]!;
       const x = st.pos[0]! - Math.sin(yaw) * distance;
       const z = st.pos[2]! - Math.cos(yaw) * distance;
-      return g.addThing(kind, [x, st.pos[1]!, z], 0, fate).id;
+      return g.addThing(kind, [x, st.pos[1]!, z], facing ? yaw : 0, fate).id;
     },
     figure: (material, pose = 'stand', distance = 2.5, lift = 0, turn = 0) => {
       const g = game();
@@ -458,6 +466,14 @@ export function installDebug(app: App): void {
     },
     reveal: () => {
       game().session?.rush();
+    },
+    memLight: (id) => {
+      const g = game();
+      const t = id === null ? null : (g.things.list.find((x) => x.id === id) ?? null);
+      // Под взглядом такая вещь не меняется (как экспонат лимбо): иначе разглядывание её и рассыпает.
+      if (t) t.still = true;
+      g.memLightDebug = t;
+      return id === null || t !== null;
     },
     gotoMemory: () => {
       const t = game().things.list.find((x) => x.memory);

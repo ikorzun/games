@@ -22,6 +22,7 @@ import { ENV_BUNKER, ENV_OFFICE, ENV_YELLOW } from '../src/world/pockets';
 import { ALL_PROPS } from '../src/world/props_all';
 import { DOOR_IMAGE, DOOR_NAME, SCREEN_IMAGES } from '../src/world/screens';
 import { setThingRegistry } from '../src/world/thing_mesh';
+import { MEM_LIGHT_KIND, MEMORY_LIGHT } from '../src/world/memory_light';
 
 const SEED = 20041113;
 
@@ -41,6 +42,11 @@ class FakeRenderer {
     this.edges = e ? e.count : 0;
   }
   setGlow(): void {}
+  /** Свет памяти в последнем кадре (world/memory_light.ts): где, какого рода и насколько разгорелся; null — нет. */
+  memLight: { pos: number[]; kind: number; strength: number } | null = null;
+  setMemLight(v: { pos: readonly [number, number, number]; kind: number; strength: number } | null): void {
+    this.memLight = v && v.strength > 0 ? { pos: [...v.pos], kind: v.kind, strength: v.strength } : null;
+  }
   /** Осыпь в последнем кадре: плотность и середина тела. */
   swarm = { alpha: 0, center: [0, 0, 0] as Vec3 };
   setSwarm(heads: Float32Array, _dirs: Float32Array, _params: Float32Array, alpha: number): void {
@@ -321,6 +327,35 @@ describe('игра целиком: цикл сессии', () => {
     expect(h.until(() => h.count('recall') > 1, 4)).toBe(true);
     expect(h.until(() => g.where === 'limbo', 10)).toBe(true);
     expect(h.dreamCount('begin')).toBe(1);
+  });
+
+  it('свет памяти: искомая вещь приносит свой свет, он разгорается у неё; вспомнил — гаснет вместе с вещью', () => {
+    // Офис со второй вещи цепочки: кресло у начальника — свет окна (world/memory_light.ts).
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 } });
+    const g = h.game;
+    const office = buildLevel(generateLayout(SEED + 5, 1, 'office'), { wear: 0 });
+    g.loadLevel(office, { seed: 11, known: new Set(), chainAt: 1 });
+    expect(g.session!.memories.map((m) => m.def.thing)).toEqual(['office_chair']);
+    expect(h.until(() => g.session!.active !== null, 4)).toBe(true);
+    const t = g.things.list.find((x) => x.memory)!;
+    // Свет разгорается не сразу, а у самой вещи.
+    expect(h.until(() => (h.r.memLight?.strength ?? 0) > MEMORY_LIGHT.office_chair!.strength * 0.95, 4)).toBe(true);
+    expect(h.r.memLight!.kind).toBe(MEM_LIGHT_KIND.window);
+    expect(h.r.memLight!.pos).toEqual([...t.pos]);
+    // Вспомнил — свет уходит вместе с вещью, не мгновенно, но за пару секунд.
+    expect(h.standBefore(t.id)).toBe(true);
+    expect(h.until(() => h.count('recall') > 0, 4)).toBe(true);
+    expect(h.until(() => h.r.memLight === null, 3)).toBe(true);
+  });
+
+  it('свет памяти: у вещи без своего света его нет; в лимбо и карманах — тоже', () => {
+    // Убежище с первой вещи: будильник — своего света у него пока нет.
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 } });
+    const g = h.game;
+    expect(g.session!.memories[0]!.def.thing).toBe('alarm_clock');
+    expect(h.until(() => g.session!.active !== null, 4)).toBe(true);
+    h.run(2);
+    expect(h.r.memLight).toBeNull();
   });
 
   it('сон из сцен: цепочка места начинается с заданной вещи и замыкается по кругу', () => {

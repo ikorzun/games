@@ -703,6 +703,9 @@ export class GameRenderer {
         uRoofBox: { value: new THREE.Vector4(0, 0, 0, 0) },
         uRoofY: { value: 0 },
         uKeyDirW: { value: new THREE.Vector3(0, 1, 0) },
+        uRecallPos: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uRecallColor: { value: new THREE.Vector4(1, 1, 1, 0) },
+        uRecallDir: { value: new THREE.Vector4(0, 1, 1, 1) },
         uContact: { value: this.contactTex },
         uContactGrid: { value: new THREE.Vector3(0, 0, 0) },
         uCaustic: { value: 0 },
@@ -2029,6 +2032,23 @@ export class GameRenderer {
   setChunkVisible(id: string, on: boolean): void {
     if (on) this.hiddenIds.delete(id);
     else this.hiddenIds.add(id);
+  }
+
+  /**
+   * Свет памяти у искомой вещи (world/memory_light.ts): где она стоит и куда смотрит, род света, цвет,
+   * сила (0 — погас), высота источника над вещью и докуда он светит. null — света нет.
+   */
+  setMemLight(v: { pos: readonly [number, number, number]; yaw: number; kind: number; color: readonly [number, number, number]; strength: number; height: number; radius: number } | null): void {
+    const u = this.worldMat.uniforms;
+    const pos = u.uRecallPos!.value as THREE.Vector4;
+    if (!v || v.strength <= 0) {
+      pos.w = 0;
+      return;
+    }
+    pos.set(v.pos[0], v.pos[1], v.pos[2], v.strength);
+    (u.uRecallColor!.value as THREE.Vector4).set(v.color[0], v.color[1], v.color[2], v.kind);
+    // Вещь смотрит вдоль своей оси +z, повёрнутой на yaw (как стоит сетка вещи в setThing).
+    (u.uRecallDir!.value as THREE.Vector4).set(Math.sin(v.yaw), v.height, Math.cos(v.yaw), v.radius);
   }
 
   /** Яркость фосфорных надписей: 1 — обычная, 0 — погасли, больше — вспышка. */

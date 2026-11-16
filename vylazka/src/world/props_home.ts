@@ -952,8 +952,39 @@ function doorDown(xf: Xf, seed: number): void {
 
 // ───────────────────────────── мелочь ─────────────────────────────
 
-/** Эмалированный чайник: бочок, крышка с шишкой, носик, дужка. */
+/** Высота конфорки под чайником, м: чайник стоит на её решётке. */
+const KETTLE_LIFT = 0.04;
+
+/**
+ * Чайник на конфорке без плиты: плиты нет, а синий венец газа горит — «the kettle. you left it on.» Это
+ * его главная деталь, видная издалека; синий свет на пол вокруг даёт свет памяти (world/memory_light.ts).
+ */
 function kettle(xf: Xf, seed: number): void {
+  burner(xf);
+  kettleBody(xf.child(0, KETTLE_LIFT, 0, 0), seed);
+}
+
+/** Чугунная горелка: чашка, рассекатель, решётка из четырёх лап и двенадцать язычков газа. */
+function burner(xf: Xf): void {
+  const iron: Vec3 = [0.55, 0.55, 0.58];
+  xf.cyl([0, 0, 0], 'y', 0.014, 0.05, MAT.castIron, { segments: 10, tint: iron });
+  xf.cyl([0, 0.014, 0], 'y', 0.006, 0.042, MAT.castIron, { segments: 10, tint: [0.4, 0.4, 0.42] });
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2 + Math.PI / 4;
+    const c = Math.cos(a);
+    const sn = Math.sin(a);
+    beam(xf, [c * 0.052, KETTLE_LIFT - 0.006, sn * 0.052], [c * 0.125, KETTLE_LIFT - 0.006, sn * 0.125], 0.012, 0.012, MAT.castIron, iron);
+    beam(xf, [c * 0.125, KETTLE_LIFT - 0.006, sn * 0.125], [c * 0.132, 0, sn * 0.132], 0.012, 0.012, MAT.castIron, iron);
+  }
+  // Венец: язычки из света (светятся сами, видны и без фонаря), у основания голубее.
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    xf.cyl([Math.cos(a) * 0.046, 0.017, Math.sin(a) * 0.046], 'y', 0.028, 0.0075, MAT.glow, { segments: 4, tint: [3.5, 7, 14], radiusEnd: 0.0012, caps: false });
+  }
+}
+
+/** Эмалированный чайник: бочок, крышка с шишкой, носик, дужка. */
+function kettleBody(xf: Xf, seed: number): void {
   const rnd = rng(seed);
   // Корпус всегда светлый (на тёмном полу читается), цвет — в поясе и крышке.
   const body: Vec3 = rnd() < 0.5 ? [1.45, 1.4, 1.2] : [1.2, 1.4, 1.35];
@@ -1277,7 +1308,7 @@ export const HOME_PROPS: Record<string, PropSpec> = {
   christmas_tree: { w: 1.0, d: 1.0, h: 1.8, mount: 'floor', ru: 'ёлка с шарами, звездой и подарками', build: christmasTree },
   door_leaf_lean: { w: 0.95, d: 0.3, h: 2.05, mount: 'floor', ru: 'сорванная дверная створка, прислонена к стене', build: doorLean },
   door_leaf_down: { w: 0.9, d: 2.0, h: 0.08, mount: 'free', ru: 'дверная створка лежит на полу', build: doorDown },
-  kettle: { w: 0.3, d: 0.22, h: 0.3, mount: 'free', ru: 'эмалированный чайник', build: kettle },
+  kettle: { w: 0.3, d: 0.27, h: 0.34, mount: 'free', ru: 'эмалированный чайник на конфорке без плиты, газ горит', build: kettle },
   iron: { w: 0.3, d: 0.14, h: 0.18, mount: 'free', ru: 'утюг со шнуром', build: iron },
   phone: { w: 0.11, d: 0.2, h: 0.02, mount: 'free', ru: 'смартфон экраном вверх, экран светится', build: (xf) => phone(xf) },
   keys: { w: 0.16, d: 0.1, h: 0.03, mount: 'free', ru: 'связка ключей с брелоком', build: keys },

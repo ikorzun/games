@@ -65,6 +65,8 @@ import { buildPocket, ENV_BUNKER, WORLD_ENV } from './world/pockets';
 import type { Env, ModelCell, PocketContext, PocketKind, PocketSpace } from './world/pockets';
 import { formMesh } from './world/forms';
 import { thingMesh } from './world/thing_mesh';
+import { MEM_LIGHT_KIND, memLightStep, memoryLightOf } from './world/memory_light';
+import type { MemLightDef } from './world/memory_light';
 
 export const STEP = 1 / 60;
 const WALK_SPEED = 2.3;
@@ -493,6 +495,14 @@ export class Game {
   /** Вещи, живущие только в текущем карманном пространстве. */
   private pocketThings: Thing[] = [];
   private memoryThing: Thing | null = null;
+  /**
+   * Свет памяти (world/memory_light.ts): у какой вещи он горит и насколько разгорелся. Вещь вспомнили —
+   * свет гаснет вместе с ней, поэтому он держится за вещь, а не за memoryThing (тот обнуляется сразу).
+   */
+  private memLit: { t: Thing; def: MemLightDef } | null = null;
+  private memLitK = 0;
+  /** Отладка: свет памяти у любой вещи (__vz.memLight), даже если её не ищут. */
+  memLightDebug: Thing | null = null;
   /** Иллюзорные предметы обстановки: чего коснулся игрок, то растворяется (systems/illusions.ts). */
   illusions: Illusions | null = null;
   /** Хозяева преград и датчиков, которых игрок коснулся за шаг: объект уровня — плюс, вещь сна — минус. */
@@ -1484,6 +1494,10 @@ export class Game {
     this.things.clear();
     this.pocketThings = [];
     this.memoryThing = null;
+    // Свет памяти уходит с вещами: в новом месте он не догорает.
+    this.memLit = null;
+    this.memLitK = 0;
+    this.memLightDebug = null;
   }
 
   /** Фигура по ключу: из списка игры или поставленная отладкой. */
@@ -2325,6 +2339,31 @@ export class Game {
     if (this.anomalies) this.applyAnomalies(this.anomalies.update(pos, node >= 0 ? this.level!.nav[node]!.room : -1, this.swarmNear > 0.2));
   }
 
+  /**
+   * Свет памяти: искомая вещь приносит свет, в котором её запомнили (world/memory_light.ts). Разгорается,
+   * когда вещь появилась, гаснет, когда её вспомнили (вместе с её распадом); в карманах и лимбо его нет —
+   * вещь осталась в месте.
+   */
+  private stepMemLight(dt: number): void {
+    const want = this.memLightDebug ?? this.memoryThing;
+    const def = want ? memoryLightOf(want.kind) : undefined;
+    if (want && def && this.memLit?.t !== want) {
+      this.memLit = { t: want, def };
+      this.memLitK = 0;
+    }
+    const lit = this.memLit;
+    const on = lit !== null && lit.t === want && this.where === 'main' && lit.t.state !== 'gone';
+    this.memLitK = memLightStep(this.memLitK, on ? 1 - lit.t.dissolve : 0, dt);
+    if (!lit || this.memLitK <= 1e-3) {
+      if (!on) this.memLit = null;
+      this.renderer.setMemLight(null);
+      return;
+    }
+    const t = lit.t;
+    const s = t.scale;
+    this.renderer.setMemLight({ pos: t.pos, yaw: t.yaw, kind: MEM_LIGHT_KIND[lit.def.kind], color: lit.def.color, strength: lit.def.strength * this.memLitK, height: lit.def.height * s, radius: lit.def.radius * Math.max(1, s) });
+  }
+
   /** Фосфорные надписи: вспышка и темнота по событию; рядом с охотящимся роем гаснут. */
   private stepGlow(dt: number): void {
     let target = this.swarm?.mode === 'hunt' ? 0 : 1;
@@ -2621,6 +2660,7 @@ export class Game {
       }
       this.renderer.setThing(id, { x: t.pos[0], y: t.pos[1], z: t.pos[2], yaw: t.yaw, scale: t.scale, dissolve: t.dissolve, wire: w, xray, visible: t.state !== 'gone' && (d < 40 || xray), dots: Things.dots(t) });
     }
+    this.stepMemLight(dt);
     // Фигуры партнёра: части растворяются каждая в свой черёд; дымная из редких точек и медленно ходит вверх-вниз.
     for (const [f, ids] of this.figureRender) {
       const d = Math.hypot(f.core[0] - rig.camPos[0], f.core[1] - rig.camPos[1], f.core[2] - rig.camPos[2]);

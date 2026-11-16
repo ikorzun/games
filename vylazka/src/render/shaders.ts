@@ -322,6 +322,9 @@ uniform vec3 uBurnTint;   // цвет кромки распада: красны�
 uniform vec4 uRoofBox;    // зал ожидания: прямоугольник стеклянной крыши в мире (minX, minZ, maxX, maxZ)
 uniform float uRoofY;     // высота её переплёта, м; 0 — крыши нет
 uniform vec3 uKeyDirW;    // направление на прямой свет в мире
+uniform vec4 uRecallPos;     // свет памяти (world/memory_light.ts): xyz — где искомая вещь (мир), w — сила; 0 — света нет
+uniform vec4 uRecallColor;   // rgb — его цвет, w — род: 0 пламя у пола, 1 окно перед вещью, 2 лампа сверху, 3 зимний свет сверху
+uniform vec4 uRecallDir;     // xz — куда смотрит вещь (мир), y — высота источника над вещью, м, w — докуда светит, м
 uniform sampler2D uContact;   // тени-пятна под обстановкой (render/contact.ts): по каналу на ярус, 1 — темно
 uniform vec3 uContactGrid;    // xy — угол карты в мире (x, z), z — её сторона, м; 0 — карты нет
 uniform float uTierDrop;
@@ -452,6 +455,57 @@ float roofShade() {
   float fz = clamp((0.1 + pen - bz) / (2.0 * pen), 0.0, min(1.0, 0.1 / pen));
   float fx = clamp((0.045 + pen - bx) / (2.0 * pen), 0.0, min(1.0, 0.045 / pen));
   return smoothstep(-pen, pen, inside) * (1.0 - fz) * (1.0 - fx);
+}
+
+/**
+ * Свет памяти: искомая вещь приносит свет, в котором её запомнили (world/memory_light.ts). Чайник —
+ * синее пламя у самого пола; кресло — окно перед ним: окна нет, а солнце из него ложится рамой крестом
+ * на кресло и пол; билет — круг лампы сверху; пальто — зимний свет сверху, пятнами, как сквозь снег на
+ * стекле. Возвращает направление на свет (пространство камеры) и силу без учёта наклона поверхности.
+ * Теней у этого света нет: он из памяти, а не из комнаты.
+ */
+vec4 memLight() {
+  if (uRecallPos.w <= 0.0) return vec4(0.0, 1.0, 0.0, 0.0);
+  vec3 d = vWorld - uRecallPos.xyz;
+  float dist = length(d);
+  float R = uRecallDir.w;
+  if (dist > R) return vec4(0.0, 1.0, 0.0, 0.0);
+  float kind = uRecallColor.w;
+  vec3 Lw;
+  float k;
+  if (kind < 0.5) {
+    // Пламя: точка над конфоркой; рядом ярко, к краю круга сходит на нет; дрожит.
+    vec3 toL = uRecallPos.xyz + vec3(0.0, uRecallDir.y, 0.0) - vWorld;
+    float dl = max(length(toL), 0.05);
+    Lw = toL / dl;
+    float fall = 1.0 - smoothstep(0.0, R, dl);
+    k = fall * (0.35 + 0.65 / (1.0 + 4.0 * dl * dl)) * (0.85 + 0.15 * sin(uSlide.w * 17.0) * sin(uSlide.w * 6.3 + 1.7));
+  } else if (kind < 1.5) {
+    // Окно стоит в 2,3 м перед вещью, середина на высоте источника; рама 1,1 × 1,3 м с крестом
+    // переплёта чуть выше середины. Солнце низкое (31°): пятно рамы ложится на кресло и пол у него.
+    vec3 F = normalize(vec3(uRecallDir.x, 0.0, uRecallDir.z) + vec3(1e-4, 0.0, 0.0));
+    Lw = normalize(F * 0.857 + vec3(0.0, 0.515, 0.0));
+    vec3 Wc = uRecallPos.xyz + F * 2.3 + vec3(0.0, uRecallDir.y, 0.0);
+    float t = dot(Wc - vWorld, F) / 0.857;
+    if (t < 0.0) return vec4(0.0, 1.0, 0.0, 0.0);
+    vec3 Q = vWorld + Lw * t;
+    float u = dot(Q - Wc, vec3(F.z, 0.0, -F.x));
+    float v = Q.y - Wc.y;
+    // Полутень шире, чем дальше от окна.
+    float soft = 0.025 + 0.018 * t;
+    float rect = (1.0 - smoothstep(0.55 - soft, 0.55 + soft, abs(u))) * (1.0 - smoothstep(0.65 - soft, 0.65 + soft, abs(v)));
+    float bars = smoothstep(0.018, 0.018 + soft, abs(u)) * smoothstep(0.018, 0.018 + soft, abs(v - 0.14));
+    k = rect * bars * (1.0 - smoothstep(R * 0.55, R, dist));
+  } else {
+    // Сверху: лампа (2) — тесный тёплый круг; зимний свет (3) — шире, холоднее и пятнами.
+    vec3 toL = uRecallPos.xyz + vec3(0.0, uRecallDir.y, 0.0) - vWorld;
+    float dl = max(length(toL), 0.05);
+    Lw = toL / dl;
+    bool lampK = kind < 2.5;
+    k = smoothstep(lampK ? 0.899 : 0.743, lampK ? 0.961 : 0.883, Lw.y) * (1.0 - smoothstep(R * 0.6, R, dist));
+    if (!lampK) k *= 0.6 + 0.4 * softNoise(vWorld * 2.7 + 1.3);
+  }
+  return vec4(normalize(mat3(viewMatrix) * Lw), k * uRecallPos.w);
 }
 
 #ifdef HEXTILE
@@ -858,6 +912,9 @@ void main() {
   if (uKeyCells > 0.0) shadowKey *= smoothstep(0.7, 0.95, cell / uKeyCells);
   vec3 amb = uAmbient * cell;
   float eAmb = dot(amb, vec3(0.3333));
+  // Свет памяти у искомой вещи: сколько его здесь (с наклоном поверхности) — для сборки точек.
+  vec4 ml = memLight();
+  float eMem = ml.w * max(dot(Ng, ml.xyz), 0.0) * dot(uRecallColor.rgb, vec3(0.3333));
   // Светильник светится, только пока свет в его клетке включён.
   float glowK = mi == 37 ? cell : 1.0;
   // Сетка давления светится сама: её видно и там, куда фонарь не достаёт.
@@ -904,7 +961,9 @@ void main() {
   float angG = acos(clamp(cosG, -1.0, 1.0));
   float gazeK = mix(1.0, 1.0 - smoothstep(acos(uGazeCone.y) * 0.85, acos(uGazeCone.x) * (1.08 + 0.13 * rag), angG), uGaze);
   vec2 rangeV = uScanRange * mix(1.0, 1.7, floorK);
-  float hEnv = uScan.z * (min(1.0, eGlow * 4.0) + min(1.0, eAmb * 8.0) * (0.72 + 0.28 * keyK) * back * gazeK * (1.0 - smoothstep(rangeV.x, rangeV.y, distV)));
+  // Свет памяти собирает своё пятно издалека — дальность сборки его не режет; вне взгляда он собран
+  // вполовину (россыпью), во взгляде — сплошь: вещь видна издалека, но правило взгляда остаётся.
+  float hEnv = uScan.z * (min(1.0, eGlow * 4.0) + min(1.0, eAmb * 8.0) * (0.72 + 0.28 * keyK) * back * gazeK * (1.0 - smoothstep(rangeV.x, rangeV.y, distV)) + min(1.0, eMem * 5.0) * back * mix(0.5, 1.0, gazeK));
   // Пространство, чьё время выходит, редеет; светящееся (красный контур выхода, небо) держится до конца.
   float hScan = min(uScan.z, max(uScan.x, hLit + hEnv)) * mix(mix(0.06, 1.0, uScanFade), 1.0, step(0.004, eGlow));
   // Число замеров уходит в альфу кадра: по нему следующий проход решает, показать ли саму поверхность
@@ -931,7 +990,7 @@ void main() {
     return;
   }
   // Туда, где света почти нет, фактуры не нужны: поверхность — просто цвет материала.
-  if (hLit < 0.1 && eGlow < 0.004 && eAmb < 0.02) {
+  if (hLit < 0.1 && eGlow < 0.004 && eAmb < 0.02 && eMem < 0.004) {
     vec3 flat_ = uMatBase[mi] * vColor.rgb * ao;
     vec3 colG = flat_ * (amb * (0.66 + 0.34 * up) + uLightColor * (eLight * 0.45 + bounce0 * bounceTint));
     colG += uBurnTint * burn;
@@ -1136,6 +1195,8 @@ void main() {
   // Рассеянный свет пространства идёт больше сверху (небо, потолок), чем снизу; прямой — от солнца или лампы.
   vec3 skyLit = amb * (0.66 + 0.34 * up) + uKeyColor * (max(dot(N, uKeyDirV), 0.0) * shadowKey);
   col += base * tint * ao * (skyLit * lit + uLightColor * bounceTint * bounce);
+  // Свет памяти — как рассеянный, но со своей стороны и своего цвета (на экранах и табличках его нет).
+  if (ml.w > 0.0) col += base * tint * ao * uRecallColor.rgb * (ml.w * max(dot(N, ml.xyz), 0.0) * lit);
   // То же на просвет: солнце за листом, отсвет от стены позади него и свет потолка сквозь лепесток,
   // на который смотрят снизу.
   if (thin > 0.0) col += glowThrough * thin * (uKeyColor * (max(-dot(N, uKeyDirV), 0.0) * shadowKey) + uLightColor * bounceTint * (bounce0 * 0.65 * max(-dot(N, toB / max(db, 1e-3)), 0.0)) + amb * (0.9 * ao * lit * max(-up, 0.0)));
