@@ -1,0 +1,155 @@
+<title>Мебель Untitled Session</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Тёмная мастерская: слева — опись вещей карточками, справа — стенд, где вещь стоит под светом и её крутят. */
+:root {
+  --bg: #121417;
+  --panel: #191c20;
+  --raise: #20242a;
+  --line: #2c3138;
+  --fg: #e8e6e0;
+  --muted: #9aa1a9;
+  --accent: #e3b25e;
+  --v-keep: #86b98c;
+  --v-real: #e3b25e;
+  --v-replace: #7eaedb;
+  --v-remove: #dc7f73;
+  --toy: #c97cc0;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 18px 28px;
+}
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin-bottom: 14px; }
+h1 { font: 600 22px/1.2 var(--font-body); margin: 0; letter-spacing: 0.01em; }
+.lead { color: var(--muted); margin: 0; max-width: 72ch; flex: 1 1 420px; min-width: 0; }
+.stats { font: 13px var(--font-mono); color: var(--muted); }
+.stats b { color: var(--accent); font-weight: 600; }
+.filters { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-bottom: 14px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex-wrap: wrap; }
+.seg button { background: transparent; color: var(--muted); border: 0; padding: 6px 11px; font: 13px var(--font-body); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.is-on { background: var(--raise); color: var(--fg); }
+.seg button:focus-visible, .card:focus-visible, .verdict:focus-visible, .btn:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#q { background: var(--panel); border: 1px solid var(--line); color: var(--fg); border-radius: 8px; padding: 6px 10px; font: 13px var(--font-body); min-width: 0; flex: 1 1 160px; max-width: 260px; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 18px; align-items: start; }
+#list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; min-width: 0; }
+.card { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; align-items: center; text-align: left; background: var(--panel); border: 1px solid var(--line); color: var(--fg); border-radius: 10px; padding: 6px; cursor: pointer; font: inherit; }
+.card:hover { border-color: #3b424b; }
+.card.is-current { border-color: var(--accent); background: var(--raise); }
+.card img { width: 76px; height: 76px; border-radius: 6px; background: #16191d; display: block; object-fit: cover; }
+.card__text { display: grid; gap: 2px; min-width: 0; }
+.card__ru { font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; }
+.card__meta { font: 12px var(--font-mono); color: var(--muted); }
+.card__tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.tag { font: 11px var(--font-mono); padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+.tag--toy { color: var(--toy); border-color: color-mix(in srgb, var(--toy) 45%, transparent); }
+.tag--new { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.tag--v-keep { color: var(--v-keep); border-color: currentColor; }
+.tag--v-real { color: var(--v-real); border-color: currentColor; }
+.tag--v-replace { color: var(--v-replace); border-color: currentColor; }
+.tag--v-remove { color: var(--v-remove); border-color: currentColor; }
+.empty { color: var(--muted); grid-column: 1 / -1; }
+#panel { position: sticky; top: max(12px, env(safe-area-inset-top, 0px)); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-width: 0; }
+#view { width: 100%; aspect-ratio: 4 / 3.2; max-width: 100%; background: #121417; touch-action: none; }
+#view canvas { display: block; width: 100%; height: 100%; }
+.hint { font: 12px var(--font-mono); color: var(--muted); padding: 6px 14px 0; margin: 0; }
+.info { padding: 10px 14px 4px; display: grid; gap: 8px; }
+.info h2 { font: 600 17px/1.3 var(--font-body); margin: 0; overflow-wrap: anywhere; }
+.code { font: 12px var(--font-mono); color: var(--muted); }
+dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; margin: 0; font-size: 13px; }
+dt { color: var(--muted); }
+dd { margin: 0; overflow-wrap: anywhere; }
+.links { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; background: var(--raise); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; font: 13px var(--font-body); text-decoration: none; cursor: pointer; }
+.btn:hover { border-color: #3b424b; }
+.mark { padding: 8px 14px 14px; display: grid; gap: 8px; border-top: 1px solid var(--line); margin-top: 8px; }
+.mark h3 { font: 600 13px var(--font-body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 6px 0 0; }
+#verdicts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.verdict { display: grid; gap: 1px; text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; color: var(--fg); cursor: pointer; font: 500 13px var(--font-body); }
+.verdict small { font: 11px var(--font-body); color: var(--muted); }
+.verdict:disabled { opacity: 0.55; cursor: default; }
+.verdict--keep.is-on { border-color: var(--v-keep); box-shadow: inset 3px 0 0 var(--v-keep); }
+.verdict--real.is-on { border-color: var(--v-real); box-shadow: inset 3px 0 0 var(--v-real); }
+.verdict--replace.is-on { border-color: var(--v-replace); box-shadow: inset 3px 0 0 var(--v-replace); }
+.verdict--remove.is-on { border-color: var(--v-remove); box-shadow: inset 3px 0 0 var(--v-remove); }
+textarea { width: 100%; min-height: 76px; resize: vertical; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 14px/1.45 var(--font-body); }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+#status { font: 12px var(--font-mono); color: var(--muted); min-height: 1.4em; }
+.how { margin: 22px 0 0; color: var(--muted); font-size: 13px; max-width: 80ch; }
+.how b { color: var(--fg); font-weight: 500; }
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  #panel { position: static; order: -1; }
+  #list { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<header>
+  <h1>Мебель</h1>
+  <p class="lead">Каждая вещь собрана тем же кодом, что в игре. Покрутите её, сравните с ростом человека и отметьте, что с ней делать. Отметки сохраняются здесь же, я их читаю и переделываю вещи.</p>
+  <span class="stats">показано <b id="count">—</b> · отмечено <b id="marked">0</b></span>
+</header>
+
+<div class="filters">
+  <div class="seg" id="f-what" role="group" aria-label="Что показывать">
+    <button type="button" class="is-on" aria-pressed="true" data-val="furniture">Мебель</button>
+    <button type="button" aria-pressed="false" data-val="used">Всё, что стоит в игре</button>
+    <button type="button" aria-pressed="false" data-val="all">Весь реестр</button>
+  </div>
+  <div class="seg" id="f-world" role="group" aria-label="Место">
+    <button type="button" class="is-on" aria-pressed="true" data-val="all">Все места</button>
+    <button type="button" aria-pressed="false" data-val="shelter">Убежище</button>
+    <button type="button" aria-pressed="false" data-val="office">Офис</button>
+    <button type="button" aria-pressed="false" data-val="yellow">Жёлтые комнаты</button>
+    <button type="button" aria-pressed="false" data-val="station">Зал ожидания</button>
+  </div>
+  <div class="seg" id="f-mark" role="group" aria-label="Отметки">
+    <button type="button" class="is-on" aria-pressed="true" data-val="all">Все</button>
+    <button type="button" aria-pressed="false" data-val="none">Без отметки</button>
+    <button type="button" aria-pressed="false" data-val="marked">Отмеченные</button>
+  </div>
+  <input id="q" type="search" placeholder="Поиск: стул, шкаф…" aria-label="Поиск по названию">
+</div>
+
+<div class="layout">
+  <div id="list" aria-label="Вещи"></div>
+  <aside id="panel" aria-label="Выбранная вещь">
+    <div id="view"></div>
+    <p class="hint">тянуть — повернуть · колесо или два пальца — ближе · серый силуэт — человек 175 см</p>
+    <div class="info">
+      <h2 id="p-ru">—</h2>
+      <span class="code" id="p-name">—</span>
+      <dl>
+        <dt>Размер</dt><dd id="p-size">—</dd>
+        <dt>Сделана</dt><dd id="p-source">—</dd>
+        <dt>На уровне</dt><dd id="p-where">—</dd>
+        <dt>Где чаще</dt><dd id="p-rooms">—</dd>
+      </dl>
+      <div class="links"><a class="btn" id="p-game" href="#" target="_blank" rel="noopener">Посмотреть в игре под фонарём ↗</a></div>
+    </div>
+    <div class="mark">
+      <h3>Что с ней делать</h3>
+      <div id="verdicts"></div>
+      <label for="note" class="code">Что не так и какой она должна быть (можно ссылку на фото)</label>
+      <textarea id="note" placeholder="Например: ножки тоньше, сиденье из кожзама, как в поликлинике"></textarea>
+      <div class="row"><button type="button" class="btn" id="save-note">Сохранить заметку</button><span id="status" role="status"></span></div>
+    </div>
+  </aside>
+</div>
+
+<p class="how"><b>Как это работает.</b> Вещи бывают двух видов: собранные кодом в игре (их я меняю прямо в коде: пропорции, материал, детали) и готовые модели из бесплатного набора KayKit — он нарочно игрушечный, такие лучше заменять целиком. Ставьте отметку и пишите заметку — после следующей сборки здесь появится новая версия вещи, а отметки останутся. Кнопка «Посмотреть в игре» открывает вещь в игре, в той картинке, какой её видит игрок.</p>
+
+<!--SCRIPT-->

@@ -286,7 +286,7 @@ export class App {
     renderer.brightness = BRIGHT[this.profile.bright];
     setThingRegistry(ALL_PROPS);
     // level=test — коридор технического среза, level=show — витрина реквизита.
-    this.testLevel = p.get('level') === 'test' || p.get('level') === 'show' || (p.get('level') ?? '').startsWith('pocket_');
+    this.testLevel = p.get('level') === 'test' || p.get('level') === 'show' || (p.get('level') ?? '').startsWith('pocket_') || this.showParam() !== null;
     const failAt = Number(p.get('fail') ?? '');
     this.game = new Game(renderer, mulberry32(baseSeed), {
       // Первый отказ фонаря — принудительный и скорый: игрок должен сразу узнать, что фонарь надо трясти.
@@ -359,6 +359,18 @@ export class App {
   }
 
   /**
+   * Вещь из адреса после решётки (#show-chair-bent): витрина с одной этой вещью под фонарём. Так
+   * каталог мебели открывает вещь «в игре» на странице по ссылке, где у адреса нет параметров, а
+   * проходит только #имя из букв, цифр и дефисов (подчёркивания имени — дефисами).
+   */
+  private showParam(): string | null {
+    const m = /^#show-([a-z0-9-]+)$/.exec(typeof location === 'undefined' ? '' : location.hash);
+    if (!m) return null;
+    const want = m[1]!;
+    return Object.keys(ALL_PROPS).find((n) => n.replace(/_/g, '-') === want) ?? null;
+  }
+
+  /**
    * Круг из адреса после решётки (#lap5): посмотреть место на любом круге петли там, где у адреса нет
    * параметров, — на странице, встроенной по ссылке. Круги считаются с первого.
    */
@@ -391,7 +403,8 @@ export class App {
     this.rank = mem.rank;
     const wear = this.wearParam() ?? mem.wear;
     if (this.testLevel) {
-      const name = this.params.get('level') ?? '';
+      const shown = this.showParam();
+      const name = shown !== null ? 'show' : (this.params.get('level') ?? '');
       if (name.startsWith('pocket_')) {
         // Просмотр карманного пространства: ?level=pocket_void | pocket_meadow | pocket_dollhouse.
         const pocket = buildPocket(name.slice(7) as PocketKind, this.seed, [0, 0, 0]);
@@ -402,7 +415,7 @@ export class App {
         this.game.env = pocket.env;
         this.game.renderer.cullDistance = 400;
       } else {
-        this.level = name === 'show' ? buildShowcase(this.params.get('props')?.split(',') ?? null, this.params.get('flat') === '1') : buildTestLevel();
+        this.level = name === 'show' ? buildShowcase(shown !== null ? [shown] : (this.params.get('props')?.split(',') ?? null), this.params.get('flat') === '1') : buildTestLevel();
         this.game.loadLevel(this.level, null);
       }
     } else {

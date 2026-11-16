@@ -605,8 +605,8 @@ async function scenarioWorlds(browser, baseUrl) {
     await vz(page, () => window.__vz.reveal());
     st = await vz(page, () => window.__vz.step(10));
     const active = st.session.memories.find((m) => m.state === 'active');
-    const officeIds = ['terminal', 'deskphone', 'report', 'cactus', 'wallclock', 'desklamp', 'chair', 'cooler'];
-    check('воспоминание в офисе — офисное, со своей строкой', !!active && officeIds.includes(active.id) && (await page.textContent('.vz-hud__flash')) === RU[`mem.${active.id}.flash`], JSON.stringify(active));
+    // Вещи офиса идут цепочкой (systems/session.ts, OFFICE_CHAIN): у всех id начинается на of_, первая — терминал.
+    check('воспоминание в офисе — офисное, первое в цепочке, со своей строкой', !!active && active.id === 'of_terminal' && (await page.textContent('.vz-hud__flash')) === RU[`mem.${active.id}.flash`], JSON.stringify(active));
     check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0);
     // Давление: потолок помещения опускается, камера пригибается сама; вышел — отпускает.
     {
@@ -1166,7 +1166,12 @@ async function scenarioIllusions(browser, baseUrl) {
     let cobjs = objs;
     let flats = await vz(page, () => window.__vz.flats());
     let stand = flats.findIndex((f) => f.kind === 'standee');
+    // Первая страница закрывается до того, как открыть вторую: две страницы разом в программной
+    // отрисовке не успевают загрузиться (в смоуке 16.11 вторая не дождалась готовности за 90 с).
+    let firstErrs = null;
     if (stand < 0) {
+      firstErrs = { errors: [...log.errors], warnings: [...log.warnings] };
+      await context.close();
       extra = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=3');
       cp = extra.page;
       await cp.click('.vz-overlay');
@@ -1212,12 +1217,13 @@ async function scenarioIllusions(browser, baseUrl) {
       const light2 = (await vz(cp, () => window.__vz.things())).filter((t) => t.kind === so.name && t.form === 2).length;
       check('после выкл/вкл фонаря картонка вернулась на ступень хуже — проекцией (картинкой из света)', back.state === 'left' && light2 >= 1, `${back.state}, проекций этого предмета ${light2}`);
     }
-    const errs = [...log.errors, ...(extra?.log.errors ?? [])];
+    const first = firstErrs ?? log;
+    const errs = [...first.errors, ...(extra?.log.errors ?? [])];
     check('убежище: нет ошибок в консоли', errs.length === 0, errs.join(' | ').slice(0, 300));
-    const warns = [...log.warnings, ...(extra?.log.warnings ?? [])].filter((w) => !benign(w));
+    const warns = [...first.warnings, ...(extra?.log.warnings ?? [])].filter((w) => !benign(w));
     check('убежище: нет предупреждений в консоли', warns.length === 0, `${warns.length}: ${[...new Set(warns)].join(' | ').slice(0, 300)}`);
-    await extra?.context.close();
-    await context.close();
+    if (extra) await extra.context.close();
+    else await context.close();
   }
 
   // Офис: фонаря нет, темноту делает замершее тело.

@@ -126,8 +126,9 @@ function reception(ctx: RoomCtx): void {
     landmark(ctx, 'reception', desk.s.xf, desk.x, 1.0, 0.4);
     spot(ctx, desk.s.xf, desk.x + 0.7, 1.12, 0.62, 'table');
   }
-  // Напротив — стулья для тех, кто ждёт, и кактус между ними.
-  wall(ctx, ['kk_chair_a', -0.75], ['kk_chair_a', 0.75], ['kk_cactus_small', 0, 0]);
+  // Напротив — стулья для тех, кто ждёт, и кактус между ними. Стул — настоящий, из гнутой фанеры на
+  // трубе (props_seating.ts): игрушечный из набора KayKit партнёру не понравился.
+  wall(ctx, ['chair_bent', -0.75], ['chair_bent', 0.75], ['kk_cactus_small', 0, 0]);
   // Экран в приёмной: лес вместо окна.
   leanScreens(ctx, 1, 1, NATURE);
   floorSpots(ctx, 1);
@@ -266,7 +267,7 @@ function breakroom(ctx: RoomCtx): void {
   wall(ctx, ['vending_machine']);
   wall(ctx, ['water_cooler', -0.4], ['trash_bin', 0.35]);
   // Столик у стены и два стула по бокам.
-  const t = wall(ctx, ['kk_table_small'], ['kk_chair_a', -0.85], ['kk_chair_a', 0.85]);
+  const t = wall(ctx, ['kk_table_small'], ['chair_bent', -0.85], ['chair_bent', 0.85]);
   if (t) spot(ctx, t.s.xf, t.x, 0.72, 0.35, 'table');
   floorSpots(ctx, 2);
   // Телевизор в комнате отдыха — единственный экран офиса, где не природа, а то, что смотрели все:
@@ -381,7 +382,7 @@ function leftovers(ctx: RoomCtx, rate: number): void {
     if (r < rate * 0.35) put(ctx, 'office_chair', c.xf.child(ox, 0, oz, rot));
     else if (r < rate * 0.6) put(ctx, 'wet_floor_sign', c.xf.child(ox, 0, oz, rot));
     else if (r < rate * 0.75) put(ctx, 'partition', c.xf.child(ox, 0, oz, rot));
-    else if (r < rate * 0.9) put(ctx, 'kk_chair_a', c.xf.child(ox, 0, oz - 0.3, rot));
+    else if (r < rate * 0.9) put(ctx, 'chair_bent', c.xf.child(ox, 0, oz - 0.3, rot));
     else if (r < rate) put(ctx, 'trash_bin', c.xf.child(ox, 0, oz));
   }
 }
