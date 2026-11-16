@@ -18,6 +18,9 @@ import { MAX_WORMS } from '../swarm/body';
 import type { EdgePoints } from '../world/edges';
 import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, ECHO_FRAG, EDGE_FRAG, EDGE_VERT, GRAIN_VERT, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, ENTITY_VERT, GLASS_FRAG, GLASS_VERT, SPOT_FRAG, STAR_FRAG, STAR_VERT, TRAIL_FRAG, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
 import { newGrainLife, objectTriangles, sowGrains, steerGrains, stepGrains } from './grains';
+import { GRADE_DEFAULT, RINGS_DEFAULT } from './grade';
+import type { Grade } from './grade';
+export type { Grade } from './grade';
 import type { GrainLife, Grains } from './grains';
 import { smoothstep } from '../core/math';
 import { ECHO_MAX, ECHO_STRIDE } from '../systems/echo';
@@ -179,6 +182,15 @@ export interface FrameView {
   burnTint?: Vec3;
   /** Кадр не идёт в память света (переход): после него память начинается с чистого кадра. */
   memHold?: boolean;
+  /**
+   * Цвет «камеры» у места: lo — оттенок теней, hi — оттенок светов, sat — сколько цвета остаётся (1 — весь).
+   * Нет поля — цвет убежища (GRADE_DEFAULT).
+   */
+  grade?: Grade;
+  /** Сила колец дешёвого отражателя вокруг пятна фонаря. Нет поля — как в убежище (0,08). */
+  rings?: number;
+  /** Падающая звезда по знаку игры: азимут и высота над горизонтом, рад, и сколько секунд как пошла. null — нет. */
+  fall?: readonly [number, number, number] | null;
   /**
    * Свет потолочных панелей по клеткам уровня (офис, жёлтые комнаты): data — size × size точек RGBA
    * (r — сколько рассеянного света в клетке, g — номер помещения), origin — угол сетки в мире (x, z),
@@ -614,6 +626,7 @@ export class GameRenderer {
       // Яркое пятно 7–13°, ореол до 25°, слабая засветка до 52°.
       uCone: { value: new THREE.Vector4(deg(7), deg(13), deg(25), deg(52)) },
       uBeamTall: { value: 1 },
+      uRings: { value: RINGS_DEFAULT },
     };
     const defOf = (i: number): (typeof MAT_DEFS)[number] => MAT_DEFS[i] ?? MAT_DEFS[0]!;
     // Массивы в шейдере — на MAT_SLOTS мест: three.js заливает их целиком, поэтому хвост заполняется нулями.
@@ -667,6 +680,7 @@ export class GameRenderer {
         uScanRange: { value: new THREE.Vector2(4, 15) },
         uSlide: { value: new THREE.Vector4(SLIDE.washFrom, SLIDE.washTo, SLIDE.gain, 0) },
         uErase: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uCeilTile: { value: 0 },
         uBurnTint: { value: new THREE.Vector3(0.9, 0.07, 0.03) },
         uKeyCells: { value: 0 },
         uGaze: { value: 1 },
@@ -745,7 +759,7 @@ export class GameRenderer {
     this.starMat = new THREE.ShaderMaterial({
       vertexShader: STAR_VERT,
       fragmentShader: STAR_FRAG,
-      uniforms: { uTime: { value: 0 }, uCamPos: { value: new THREE.Vector3() }, uBright: { value: 0 }, uPx: { value: 1 } },
+      uniforms: { uTime: { value: 0 }, uCamPos: { value: new THREE.Vector3() }, uBright: { value: 0 }, uPx: { value: 1 }, uFall: { value: new THREE.Vector4(0, 0, -100, 0) } },
       blending: THREE.AdditiveBlending,
       transparent: true,
       depthWrite: false,
@@ -754,7 +768,8 @@ export class GameRenderer {
       const FAR = 5200;
       const NEAR = 520;
       const TAIL = 16;
-      const total = FAR + NEAR + 3 * TAIL;
+      // Падающих четыре: три по своим срокам и одна по знаку игры (uFall).
+      const total = FAR + NEAR + 4 * TAIL;
       const pos = new Float32Array(total * 3);
       const star = new Float32Array(total * 4);
       // Без Math.random: небо одно и то же от запуска к запуску.
@@ -767,26 +782,28 @@ export class GameRenderer {
         const far = i < FAR;
         let x = rnd() * 2 - 1;
         let z = rnd() * 2 - 1;
-        // Треть дальних звёзд собрана в полосу поперёк неба.
-        if (far && rnd() < 0.34) z = Math.max(-1, Math.min(1, 0.45 * x + (rnd() + rnd() + rnd() - 1.5) * 0.16));
+        // Две пятых дальних звёзд собраны в полосу поперёк неба: она гуще и уже — её видно и в щель потолка.
+        if (far && rnd() < 0.42) z = Math.max(-1, Math.min(1, 0.45 * x + (rnd() + rnd() + rnd() - 1.5) * 0.12));
         pos[i * 3] = x;
         pos[i * 3 + 1] = rnd();
         pos[i * 3 + 2] = z;
         // Ярких мало, тусклых много.
         const m = rnd();
         star[i * 4] = far ? 0.07 + 0.93 * m * m * m * m : 0.08 + 0.3 * m * m;
-        star[i * 4 + 1] = far ? 1.3 + 2.2 * m * m : 1.2 + 1.2 * m;
+        // Размер: у дальних от точки до крупной звезды с ореолом (каждая тридцатая).
+        star[i * 4 + 1] = far ? (m > 0.967 ? 4.6 + 1.4 * rnd() : 1.3 + 2.2 * m * m) : 1.2 + 1.2 * m;
         star[i * 4 + 2] = rnd();
         star[i * 4 + 3] = far ? 0 : 1;
       }
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < 4; k++) {
         for (let j = 0; j < TAIL; j++) {
           const i = FAR + NEAR + k * TAIL + j;
           pos[i * 3] = j / (TAIL - 1);
           star[i * 4] = 1;
           star[i * 4 + 1] = 3.2 - 2.0 * (j / (TAIL - 1));
-          star[i * 4 + 2] = rnd();
-          star[i * 4 + 3] = 2 + k;
+          // У хвоста падающей — холодный оттенок (а не тёплый, как у каждой пятой звезды).
+          star[i * 4 + 2] = rnd() * 0.2;
+          star[i * 4 + 3] = k < 3 ? 2 + k : 5;
         }
       }
       const g = new THREE.BufferGeometry();
@@ -856,6 +873,8 @@ export class GameRenderer {
         uEcho: { value: 0 },
         uFmt: { value: 1 },
         uLodFine: { value: 0 },
+        uGradeLo: { value: new THREE.Vector4(...GRADE_DEFAULT.lo, GRADE_DEFAULT.sat) },
+        uGradeHi: { value: new THREE.Vector3(...GRADE_DEFAULT.hi) },
       },
       depthTest: false,
       depthWrite: false,
@@ -931,6 +950,7 @@ export class GameRenderer {
         uMemColor: { value: new THREE.Vector3(0.87, 1.02, 1.27) },
         uMemGain: { value: 1 },
         uAmbientScan: { value: 0 },
+        uFogColor: this.worldMat.uniforms.uFogColor!,
         uHMax: { value: SCAN.max },
         uCone: this.lightU.uCone!,
         uDissolve: this.worldMat.uniforms.uDissolve!,
@@ -1051,7 +1071,7 @@ export class GameRenderer {
     this.trailMat = new THREE.ShaderMaterial({
       vertexShader: POST_VERT,
       fragmentShader: TRAIL_FRAG,
-      uniforms: { tNow: { value: null }, tPrev: { value: null }, uKeep: { value: 0 }, uMosh: { value: 0 }, uMoshShift: { value: new THREE.Vector2() }, uFmt: this.postMat.uniforms.uFmt! },
+      uniforms: { tNow: { value: null }, tPrev: { value: null }, tDepth: { value: null }, uKeep: { value: 0 }, uMosh: { value: 0 }, uMoshShift: { value: new THREE.Vector2() }, uFmt: this.postMat.uniforms.uFmt! },
       depthTest: false,
       depthWrite: false,
     });
@@ -1421,8 +1441,10 @@ export class GameRenderer {
    * совсем, стены и пол остаются кружевом. Карманным пространствам стирание не положено — там нули.
    * wear — сама стёртость места, 0..1: по ней блёкнут листы бумаги (лица и буквы уходят первыми).
    */
-  setErase(ceiling: number, walls: number, floor: number, wear = 0): void {
+  /** Стирание места; tile — шаг плиток подвесного потолка, м (0 — потолок цельный): он выпадает плитками. */
+  setErase(ceiling: number, walls: number, floor: number, wear = 0, tile = 0): void {
     (this.worldMat.uniforms.uErase!.value as THREE.Vector4).set(ceiling, walls, floor, wear);
+    this.worldMat.uniforms.uCeilTile!.value = tile;
   }
 
   /** Посеять пыль объекта уровня: его треугольники — в сетке одного из кусков. */
@@ -1950,6 +1972,7 @@ export class GameRenderer {
     (wu.uGazeCone!.value as THREE.Vector2).set(Math.cos((gc[0] * Math.PI) / 180), Math.cos((gc[1] * Math.PI) / 180));
     wu.uGazeTall!.value = gazeTall(this.camera.aspect);
     this.lightU.uBeamTall!.value = gazeTall(this.camera.aspect);
+    this.lightU.uRings!.value = v.rings ?? RINGS_DEFAULT;
     const wind = v.wind;
     if (wind) (wu.uWind!.value as THREE.Vector4).set(wind.t, wind.amp, wind.dir[0], wind.dir[1]);
     else (wu.uWind!.value as THREE.Vector4).y = 0;
@@ -2094,6 +2117,8 @@ export class GameRenderer {
       su.uTime!.value = v.time;
       su.uBright!.value = v.stars ?? 0;
       (su.uCamPos!.value as THREE.Vector3).copy(cam.position);
+      const fall = v.fall ?? null;
+      (su.uFall!.value as THREE.Vector4).set(fall ? fall[0] : 0, fall ? fall[1] : 0, fall ? v.time - fall[2] : -100, fall ? 1 : 0);
     }
     (this.dustMat.uniforms.uCamPos!.value as THREE.Vector3).copy(cam.position);
 
@@ -2237,6 +2262,7 @@ export class GameRenderer {
     const tu = this.trailMat.uniforms;
     tu.tNow!.value = this.rawRT.texture;
     tu.tPrev!.value = this.compPrevRT.texture;
+    tu.tDepth!.value = this.sceneRT.depthTexture;
     // След хранится без усиления камеры; когда оно растёт, след тускнеет на столько же — на экране
     // он только гаснет.
     const gainNow = Math.max(v.gain, 1e-3);
@@ -2284,6 +2310,9 @@ export class GameRenderer {
     (pu.uBeam!.value as THREE.Vector3).set(ndc.x * 0.5 + 0.5, ndc.y * 0.5 + 0.5, visible ? 0.018 * v.lightIntensity * v.lightScale : 0);
     pu.uCrt!.value = v.crt;
     pu.uFlash!.value = v.flash;
+    const gr = v.grade ?? GRADE_DEFAULT;
+    (pu.uGradeLo!.value as THREE.Vector4).set(gr.lo[0], gr.lo[1], gr.lo[2], gr.sat);
+    (pu.uGradeHi!.value as THREE.Vector3).set(gr.hi[0], gr.hi[1], gr.hi[2]);
     pu.tScene!.value = this.compRT.texture;
     pu.tEcho!.value = this.echoRT.texture;
     pu.uEcho!.value = echoOn ? 1 : 0;

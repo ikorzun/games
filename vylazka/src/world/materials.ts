@@ -56,6 +56,13 @@ export type MatId = (typeof MAT)[keyof typeof MAT];
 export const MAT_COUNT = 40;
 
 /** Номера слоёв фактур; совпадают с DETAIL в render/detail.ts (тест следит). */
+/**
+ * Шаг плиток подвесного потолка (офис, жёлтые комнаты), м. В слое фактуры «плитка» 8 плиток на повтор
+ * (render/detail.ts), поэтому повтор потолочной плиты — восемь шагов. Стирание места выбивает потолок
+ * плитками по этой же сетке (render/shaders.ts, archGone): швы рисунка и края выпавших плиток совпадают.
+ */
+export const CEIL_TILE = 0.6;
+
 const L = { concrete: 0, plaster: 1, paint: 2, rust: 3, metal: 4, wood: 5, fabric: 6, tile: 7, floor: 8, plastic: 9, paper: 10, brick: 11, dirt: 12, lagging: 13, zinc: 14, smooth: 15, wallpaper: 17, parquet: 18, linoleum: 19, veneer: 20, upholstery: 21 } as const;
 
 /** Род запустения: что шейдер делает с поверхностью со временем. */
@@ -156,7 +163,7 @@ export const MAT_DEFS: readonly MatDef[] = [
   // плита — рисунок плитки с шагом 0,6 м (в слое 8 плиток на повтор).
   { name: 'lamp', color: '#e9e8dc', rough: 1.0, spec: 0.0, grime: 0.1, glow: 0.012, layer: L.smooth, tile: 0.5, bump: 0.0005, decay: DECAY.none },
   { name: 'carpet', color: '#6b7068', rough: 1.0, spec: 0.0, sheen: 0.45, grime: 0.65, layer: L.upholstery, tile: 0.45, bump: 0.003, decay: DECAY.organic },
-  { name: 'ceil_tile', color: '#d4d2c8', rough: 1.0, spec: 0.05, grime: 0.7, layer: L.tile, tile: 4.8, bump: 0.003, decay: DECAY.mineral, alt: 0 },
+  { name: 'ceil_tile', color: '#d4d2c8', rough: 1.0, spec: 0.05, grime: 0.7, layer: L.tile, tile: CEIL_TILE * 8, bump: 0.003, decay: DECAY.mineral, alt: 0 },
 ];
 
 /** sRGB-hex → линейный цвет. */

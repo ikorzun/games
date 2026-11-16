@@ -17,7 +17,7 @@ import { nodesInRange } from '../src/swarm/ai';
 import type { ColliderSet } from '../src/world/colliders';
 import type { FlatMark } from '../src/world/flat';
 import type { BuiltLevel } from '../src/world/level';
-import { buildLevel } from '../src/world/level_build';
+import { buildLevel, cellToWorld, tierFloor } from '../src/world/level_build';
 import { ENV_BUNKER, ENV_OFFICE, ENV_YELLOW } from '../src/world/pockets';
 import { ALL_PROPS } from '../src/world/props_all';
 import { DOOR_IMAGE, DOOR_NAME, SCREEN_IMAGES } from '../src/world/screens';
@@ -2430,6 +2430,32 @@ describe('собрано только там, куда смотрит герой
     h.game.flow!.seek(h.game.flow!.cfg.day * 0.96);
     h.run(0.5);
     expect(h.r.frames.at(-1)!.stars).toBeGreaterThan(0.4);
+  });
+
+  it('под небом первый взгляд вверх встречает падающую звезду — там, куда смотрит герой, и одну на вход', () => {
+    // Аудит мест (16.11): небо и несобранный потолок выглядели одинаково — чёрное в белых точках.
+    const level = buildLevel(generateLayout(20041113, 2, 'shelter'));
+    const room = level.layout!.rooms[level.skyRoom!]!;
+    const [cx, cz] = room.cells[0]!;
+    const h = new Harness(level);
+    h.until(() => h.game.transition === null, 8);
+    // Под небом, но взгляд прямо — звезды нет.
+    h.game.teleport(cellToWorld(cx), tierFloor(room.tier), cellToWorld(cz), 0, 0);
+    h.run(0.5);
+    expect(h.r.frames.at(-1)!.fall ?? null).toBeNull();
+    // Поднял взгляд — летит: начинается чуть левее того, куда смотрит камера (рыскание 0 — это −z).
+    h.game.teleport(cellToWorld(cx), tierFloor(room.tier), cellToWorld(cz), 0, 0.6);
+    h.run(0.3);
+    const f = h.r.frames.at(-1)!.fall;
+    expect(f).toBeTruthy();
+    expect(f![0]).toBeCloseTo(-Math.PI / 2 - 0.45, 1);
+    expect(f![1]).toBeGreaterThan(0.6);
+    // Второй раз подряд не бывает: звезда одна на вход под небо.
+    h.run(2.5);
+    expect(h.r.frames.at(-1)!.fall ?? null).toBeNull();
+    h.game.teleport(cellToWorld(cx), tierFloor(room.tier), cellToWorld(cz), 1, 0.7);
+    h.run(0.5);
+    expect(h.r.frames.at(-1)!.fall ?? null).toBeNull();
   });
 
   it('под звёздным небом ничего не давит и нет строба, темноты и сетки', () => {

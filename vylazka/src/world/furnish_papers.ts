@@ -26,6 +26,7 @@
 import { hash01 } from '../core/rng';
 import type { RoomType, WorldKind } from '../gen/layout';
 import type { RoomCtx, Slot } from './furnish';
+import { hanging } from './objects';
 import { ALL_PROPS } from './props_all';
 
 interface Rule {
@@ -175,7 +176,8 @@ function overBed(ctx: RoomCtx, name: string, salt: number): boolean {
   const dx = mark && c.xf.rot === 0 ? mark.x - c.xf.ox : 0;
   const dz = mark && c.xf.rot === 0 ? mark.z - c.xf.oz : 0;
   // Предмет реестра лежит от z = 0 до z = d: сдвиг на полглубины ставит его середину над приметой.
-  p.build(c.xf.child(dx, ctx.h, dz - p.d / 2), seedOf(ctx, salt));
+  const seed = seedOf(ctx, salt);
+  hanging(c.xf, () => p.build(c.xf.child(dx, ctx.h, dz - p.d / 2), seed));
   return true;
 }
 

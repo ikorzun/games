@@ -5,6 +5,7 @@ import { GROVE } from '../src/world/furnish_office';
 import type { BuiltLevel } from '../src/world/level';
 import { buildLevel } from '../src/world/level_build';
 import { MAT } from '../src/world/materials';
+import { HANG_OBJ } from '../src/world/objects';
 import type { LevelObject } from '../src/world/objects';
 import { ALL_PROPS } from '../src/world/props_all';
 import { decayAt } from '../src/systems/decay';
@@ -45,7 +46,8 @@ function decor(l: BuiltLevel, mat: number, keep: (p: readonly [number, number, n
     for (let t = 0; t < g.index.length; t += 3) {
       const v = [g.index[t]!, g.index[t + 1]!, g.index[t + 2]!];
       if (g.mat[v[0]!] !== mat) continue;
-      if (g.obj && v.some((i) => g.obj![i] !== 0)) continue;
+      // Не часть вещи: ничьё или подвешенное к потолку (оно уходит вместе с потолком, а не со стволом).
+      if (g.obj && v.some((i) => g.obj![i] !== 0 && g.obj![i] !== HANG_OBJ)) continue;
       if (keep(v.map((i) => [g.position[i * 3]!, g.position[i * 3 + 1]!, g.position[i * 3 + 2]!] as const))) n += 1;
     }
   }

@@ -14,7 +14,7 @@
  * Ставится после обычной обстановки, на свободные участки стен; чего не поместилось — того нет.
  */
 import { MAT } from './materials';
-import { asObject } from './objects';
+import { asObject, hanging } from './objects';
 import { ALL_PROPS } from './props_all';
 import type { CellInfo, RoomCtx, Slot } from './furnish';
 import { landmark } from './furnish';
@@ -116,7 +116,7 @@ function garden(ctx: RoomCtx): void {
     const jz = (ctx.rng() - 0.5) * 1.2;
     const top = ctx.h - drop;
     // Нить от потолка до подвеса.
-    if (drop > 0.05) c.xf.cyl([jx, top, jz], 'y', drop, 0.004, MAT.paper, { tint: [1.1, 1.08, 1.0], segments: 4, caps: false });
+    if (drop > 0.05) hanging(c.xf, () => c.xf.cyl([jx, top, jz], 'y', drop, 0.004, MAT.paper, { tint: [1.1, 1.08, 1.0], segments: 4, caps: false }));
     // У подвесного предмета начало координат — у края (z от 0 до d): сдвигаем, чтобы головка была под нитью.
     const at = c.xf.child(jx, top, jz, Math.floor(ctx.rng() * 4) as 0 | 1 | 2 | 3).child(0, 0, -hang.d / 2);
     const seed = seedOf(ctx);

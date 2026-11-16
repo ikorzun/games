@@ -19,6 +19,7 @@ import type { CellInfo, HomeItem, RoomCtx, Slot } from './furnish';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
 import { ceilingBreak } from './props_office';
+import { hanging } from './objects';
 import type { Xf } from './props';
 import type { ScreenKind } from './screens';
 
@@ -58,7 +59,7 @@ function panels(ctx: RoomCtx): void {
     const p = ALL_PROPS[name];
     // Под звёздным небом потолочных панелей нет (сид всё равно берётся: остальная обстановка от него не едет).
     const seed = seedOf(ctx);
-    if (p && !ctx.sky) p.build(c.xf.child(0, ctx.h, -p.d / 2), seed);
+    if (p && !ctx.sky) hanging(c.xf, () => p.build(c.xf.child(0, ctx.h, -p.d / 2), seed));
   }
 }
 
@@ -102,7 +103,7 @@ function corridor(ctx: RoomCtx): void {
   }
   // Вентиляция — в каждой третьей клетке, в стороне от панели.
   ctx.cells.forEach((c, i) => {
-    if (i % 3 === 1 && !ctx.sky) put(ctx, 'ceiling_vent', c.xf.child(0.95, ctx.h, -0.3));
+    if (i % 3 === 1 && !ctx.sky) hanging(c.xf, () => put(ctx, 'ceiling_vent', c.xf.child(0.95, ctx.h, -0.3)));
   });
   // Экраны с природой у стен: то, чем офис заменяет окна.
   leanScreens(ctx, 3, 0.05, NATURE);
@@ -218,7 +219,7 @@ function grove(ctx: RoomCtx, m: { c: CellInfo; dx: number; dz: number }): void {
     const at = m.c.xf.child(p.x, 0, p.z, Math.floor(ctx.rng() * 4) as 0 | 1 | 2 | 3);
     const seed = seedOf(ctx);
     if (i >= grown) return;
-    ceilingBreak(at, ctx.h, seed);
+    hanging(at, () => ceilingBreak(at, ctx.h, seed));
     tree.build(at, seed);
     if (i === 0) landmark(ctx, 'grove', m.c.xf, p.x, 1.2, p.z);
   });

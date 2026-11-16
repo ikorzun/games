@@ -8,6 +8,8 @@
  * Цвет выходит линейным: буфер сцены — sRGB8, кодирование делает сама видеокарта.
  */
 
+import { HANG_OBJ } from '../world/objects';
+
 /** Общая часть: профиль луча и затухание. Используется миром, пылью и роем. */
 export const BEAM_GLSL = /* glsl */ `
 uniform vec3 uLightPosV;
@@ -15,6 +17,7 @@ uniform vec3 uLightDirV;
 uniform vec3 uLightColor;
 uniform vec4 uCone;
 uniform float uBeamTall;  // 1 — пятно круглое; меньше — вытянуто по вертикали кадра (высокий кадр)
+uniform float uRings;     // сила колец дешёвого отражателя: в убежище заметны, в чистых местах едва видны
 
 /** Яркость луча в точке (пространство камеры) без тени: xyz — направление на фонарь, w — освещённость. */
 vec4 beamAt(vec3 posV) {
@@ -31,9 +34,16 @@ vec4 beamAt(vec3 posV) {
   float corona = smoothstep(uCone.z, uCone.y, cosA);
   float spill = smoothstep(uCone.w, uCone.z, cosA);
   float beam = hot * 0.78 + corona * 0.19 + spill * 0.03;
-  // Кольца дешёвого отражателя вокруг яркого пятна.
-  float ang = acos(clamp(cosA, -1.0, 1.0));
-  beam *= 1.0 + 0.08 * sin(ang * 85.0) * corona * (1.0 - hot);
+  // Кольца дешёвого отражателя вокруг яркого пятна. Неровные: шаг кольца гуляет по кругу, кое-где кольцо
+  // рвётся. Ровные концентрические ступени на гладкой стене читались полосами градиента (аудит мест, 16.11).
+  if (uRings > 0.0) {
+    float ang = acos(clamp(cosA, -1.0, 1.0));
+    vec3 t1 = normalize(cross(uLightDirV, vec3(0.0, 1.0, 0.0)) + vec3(1e-4, 0.0, 0.0));
+    float az = atan(dot(rel, cross(t1, uLightDirV)), dot(rel, t1));
+    float wob = 0.9 * sin(az * 3.0 + 1.7) + 0.5 * sin(az * 7.0 + 0.4);
+    float brk = 0.55 + 0.45 * sin(az * 5.0 + 2.3);
+    beam *= 1.0 + uRings * sin(ang * 85.0 + wob) * brk * corona * (1.0 - hot);
+  }
   float atten = 1.0 / (1.0 + 0.07 * d * d);
   return vec4(L, beam * atten);
 }
@@ -198,9 +208,11 @@ void main() {
   wp.xyz = windSway(wp.xyz);
   vec3 wn = normalize(mat3(modelMatrix) * (mat3(im) * normal));
 #endif
+  // Подвешенное к потолку (светильник, короб, вывеска): часть потолка, своим номером вершин (HANG_OBJ).
+  bool hangV = abs(aObj - ${HANG_OBJ}.0) < 0.5;
   // Давление: потолок помещения провисает, как брюхо (systems/pressure.ts). У стен он остаётся на месте —
-  // двери не закрывает; двигаются только вершины самого потолка, не предметы под ним.
-  if (uPressY.z > 0.0 && aObj < 0.5 && uThing.z < 0.5 && wn.y < -0.5 && abs(wp.y - uPressY.y) < 0.3) {
+  // двери не закрывает; двигаются только вершины самого потолка и то, что на нём висит, — не предметы под ним.
+  if (uPressY.z > 0.0 && uThing.z < 0.5 && ((aObj < 0.5 && wn.y < -0.5 && abs(wp.y - uPressY.y) < 0.3) || (hangV && wp.y > uPressY.y - 0.8 && wp.y < uPressY.y + 0.1))) {
     float pd = min(min(wp.x - uPressBox.x, uPressBox.z - wp.x), min(wp.z - uPressBox.y, uPressBox.w - wp.z));
     if (pd > 0.0) wp.y -= uPressY.z * smoothstep(0.0, 0.9, pd);
   }
@@ -212,8 +224,9 @@ void main() {
   vLace = max(uThing.y, os.y);
   // uThing.z = 2 — вещь чуть светится сама (грибы: их видно и на краю луча, как знак).
   vTone = os.zw + vec2(0.0, uThing.z > 1.5 ? 0.3 : 0.0);
-  // Архитектура — всё, что не предмет и не отдельная вещь: стены, пол, потолок, трубы на них.
-  vArch = (aObj < 0.5 && uThing.z < 0.5) ? 1.0 : 0.0;
+  // Архитектура — всё, что не предмет и не отдельная вещь: стены, пол, потолок, трубы на них (1). Висящее у
+  // потолка — тоже архитектура, но стирается вместе с потолком над собой (2).
+  vArch = uThing.z < 0.5 ? (aObj < 0.5 ? 1.0 : (hangV ? 2.0 : 0.0)) : 0.0;
   vec4 mv = viewMatrix * vec4(crumble(wp.xyz, vDis), 1.0);
   vPosV = mv.xyz;
   vNrmV = mat3(viewMatrix) * wn;
@@ -294,6 +307,7 @@ uniform vec4 uPressBox;   // давление: прямоугольник пом
 uniform vec4 uPress;      // xy — откуда идёт провал, z — радиус рассыпавшегося пола, w — яркость красной сетки
 uniform vec3 uPressY;     // x — пол помещения, y — его потолок, z — на сколько метров потолок провис
 uniform vec4 uErase;      // стирание места (systems/decay.ts): x — потолок, y — стены, z — пол; 0 — цело, 1 — стёрто
+uniform float uCeilTile;  // шаг плиток подвесного потолка, м (офис, жёлтые комнаты); 0 — потолок цельный
 uniform vec3 uBurnTint;   // цвет кромки распада: красный системы в тёмных местах, тёплый белый в светлых
 uniform vec4 uRoofBox;    // зал ожидания: прямоугольник стеклянной крыши в мире (minX, minZ, maxX, maxZ)
 uniform float uRoofY;     // высота её переплёта, м; 0 — крыши нет
@@ -343,13 +357,42 @@ float laceDist(vec2 q) {
 }
 
 /**
+ * Шум, по которому выпадает потолок, в точке p мира. Подвесной потолок выпадает плитками: у плитки одно
+ * число на всю — плавный шум в её середине и немного случая, чтобы край дыры шёл ступенями плиток.
+ */
+float ceilNoise(vec3 p) {
+  if (uCeilTile > 0.0) {
+    vec2 tc = floor(p.xz / uCeilTile);
+    vec3 c = vec3((tc.x + 0.5) * uCeilTile, p.y, (tc.y + 0.5) * uCeilTile);
+    return softNoise(c * 0.9 + 3.1) * 0.8 + cellHash(vec3(tc, 41.0)) * 0.2;
+  }
+  return softNoise(p * 0.9 + 3.1);
+}
+
+/**
  * Насколько стёрто это место архитектуры: 0 — цело, 1 — стёрто. Между ними — кромка, где поверхность
  * уже редеет. Стирается пятнами около метра; стена — сверху вниз.
  */
 float archGone() {
   if (vArch < 0.5) return 0.0;
-  float amount = vSurf.x > 0.5 ? uErase.y : (vSurf.y < -0.5 ? uErase.x : (vSurf.y > 0.5 ? uErase.z : uErase.y));
+  // Висящее у потолка уходит целиком и вместе с потолком над серединой своей клетки (3 м): раньше его бока
+  // стирались как стены, позже потолка, и светильник висел в дыре (аудит мест, 16.11). Высота выборки —
+  // одна на ярус: у всей вещи одно число.
+  if (vArch > 1.5) {
+    if (uErase.x <= 0.0) return 0.0;
+    vec2 cc = floor(vWorld.xz / 3.0 + 0.5) * 3.0;
+    return step(0.0, uErase.x * 1.14 - 0.06 - ceilNoise(vec3(cc.x, vWorld.y - vSurf.z + 2.7, cc.y)));
+  }
+  bool ceil_ = vSurf.x < 0.5 && vSurf.y < -0.5;
+  float amount = vSurf.x > 0.5 ? uErase.y : (ceil_ ? uErase.x : (vSurf.y > 0.5 ? uErase.z : uErase.y));
   if (amount <= 0.0) return 0.0;
+  if (ceil_ && uCeilTile > 0.0) {
+    // Подвесной потолок выпадает плитками целиком, а рама — по 1,2 см от шва — остаётся висеть решёткой
+    // (было: дыра — гладкий чёрный овал, «как прожог»).
+    vec2 f = abs(fract(vWorld.xz / uCeilTile) - 0.5);
+    if ((0.5 - max(f.x, f.y)) * uCeilTile < 0.012) return 0.0;
+    return step(0.0, amount * 1.14 - 0.06 - ceilNoise(vWorld));
+  }
   float n = softNoise(vWorld * 0.9 + 3.1);
   if (vSurf.x > 0.5) n = n * 0.65 + (1.0 - clamp(vSurf.z / 2.7, 0.0, 1.0)) * 0.35;
   return clamp((amount * 1.14 - 0.06 - n) / 0.08, 0.0, 1.0);
@@ -620,7 +663,7 @@ void main() {
   float laceK = step(0.5, vLace);
   float gone = archGone();
   if (gone > 0.0) {
-    bool ceil_ = vSurf.x < 0.5 && vSurf.y < -0.5;
+    bool ceil_ = (vSurf.x < 0.5 && vSurf.y < -0.5) || vArch > 1.5;
     if (gone >= 1.0) {
       if (ceil_) discard;
       laceK = 1.0;
@@ -828,8 +871,17 @@ void main() {
   // же, где низ широкого (gazeTall в render/renderer.ts): пол под ногами собран, а края — не сплошь.
   vec3 gzP = vec3(vPosV.x, vPosV.y * uGazeTall, vPosV.z);
   vec3 gzL = vec3(uLightDirV.x, uLightDirV.y * uGazeTall, uLightDirV.z);
-  float cosG = dot(normalize(gzP), normalize(gzL));
-  float gazeK = mix(1.0, smoothstep(uGazeCone.x, uGazeCone.y, cosG), uGaze);
+  vec3 gzD = normalize(gzL);
+  vec3 gzQ = normalize(gzP);
+  float cosG = dot(gzQ, gzD);
+  // Край взгляда — не ровный круг: он рвётся и гуляет по кругу, как край пятна дешёвого фонаря, и переход
+  // к пустоте вдвое шире. Ровный круг на широком экране читался подзорной трубой: внутри собрано, по краю
+  // плотная кайма точек, углы чёрные (аудит мест, 16.11). Узор неровности стоит в кадре, а не в мире.
+  vec3 gz1 = normalize(cross(gzD, vec3(0.0, 1.0, 0.0)) + vec3(1e-4, 0.0, 0.0));
+  float gzA = atan(dot(gzQ, cross(gz1, gzD)), dot(gzQ, gz1));
+  float rag = 0.5 * sin(gzA * 3.0 + 0.7) + 0.3 * sin(gzA * 7.0 + 2.1) + 0.2 * sin(gzA * 13.0 + 4.4);
+  float angG = acos(clamp(cosG, -1.0, 1.0));
+  float gazeK = mix(1.0, 1.0 - smoothstep(acos(uGazeCone.y) * 0.85, acos(uGazeCone.x) * (1.08 + 0.13 * rag), angG), uGaze);
   vec2 rangeV = uScanRange * mix(1.0, 1.7, floorK);
   float hEnv = uScan.z * (min(1.0, eGlow * 4.0) + min(1.0, eAmb * 8.0) * (0.72 + 0.28 * keyK) * back * gazeK * (1.0 - smoothstep(rangeV.x, rangeV.y, distV)));
   // Пространство, чьё время выходит, редеет; светящееся (красный контур выхода, небо) держится до конца.
@@ -1067,6 +1119,9 @@ void main() {
   if (paintK > 0.0) col = mix(col, vec3(dot(col, vec3(0.3, 0.59, 0.11))), paintK * 0.7);
   voidTouch(col, hOut);
   col = mix(uFogColor, col, exp(-uFog * distV));
+  // Буфер сцены восьмибитный: плавный свет на гладкой стене ложится ступенями. Неподвижное зерно в
+  // полшага (±1 %) их разбивает.
+  col *= 1.0 + (cellHash(vec3(floor(gl_FragCoord.xy), 7.0)) - 0.5) * 0.02;
   gl_FragColor = vec4(col, hOut);
 }
 `;
@@ -1562,6 +1617,7 @@ uniform sampler2D tMem;     // память света: rgb — каким ме�
 uniform vec3 uMemColor;     // во что остывает цвет точки, пока память стареет
 uniform float uMemGain;     // яркость точек памяти: не растёт, когда камера в темноте поднимает усиление
 uniform float uAmbientScan; // 0..1: пространство «сканирует» рассеянный свет, фонарь для сборки не нужен
+uniform vec3 uFogColor;     // во что уходит даль (тот же цвет, что у мира)
 uniform float uHMax;
 uniform vec4 uCone;
 uniform float uDissolve;
@@ -1723,7 +1779,17 @@ void main() {
   float edl = 1.0;
 #endif
   // Что ярче: в полутьме сразу после света точка не должна провалиться в черноту.
-  vCol = vec4(max(old * aMem, lit * smoothstep(0.0, 0.3, hk)) * edl, alpha);
+  vec3 pcol = max(old * aMem, lit * smoothstep(0.0, 0.3, hk)) * edl;
+  // В светлых местах несобранное уходит в цвет тумана, а не темнеет: точка при свете — тем ближе к туману,
+  // чем меньше у неё замеров; точка памяти — свежая цвета места, старая цвета тумана. Иначе на ходу дальние
+  // стены зала ожидания покрывались тёмной крупой по белому туману — «телевизионный снег», а не «уходит в
+  // белое» (аудит мест, 16.11).
+  if (uAmbientScan > 0.0) {
+    vec3 memB = mix(uFogColor, kept * uMemGain, fresh);
+    vec3 litB = mix(uFogColor, lit, smoothstep(0.25, 1.0, hk));
+    pcol = mix(pcol, (aMem > aLit ? memB : litB) * edl, uAmbientScan);
+  }
+  vCol = vec4(pcol, alpha);
   gl_Position = pc;
 }
 `;
@@ -1823,6 +1889,7 @@ export const TRAIL_FRAG = /* glsl */ `
 precision highp float;
 uniform sampler2D tNow;    // кадр без выдержки: поверхности и точки
 uniform sampler2D tPrev;   // прошлый кадр — уже со следами
+uniform highp sampler2D tDepth; // глубина мира этого кадра: где она пуста, там небо
 uniform float uKeep;       // какая доля яркости прошлого кадра остаётся (0 — выдержки нет)
 uniform float uMosh;       // 0..1: разрыв кадра — какая доля блоков ещё не обновилась
 uniform vec2 uMoshShift;   // на сколько кадр сдвинулся с прошлого раза, доли экрана
@@ -1849,6 +1916,9 @@ void main() {
   vec3 now = texture2D(tNow, vUv).rgb;
   // Малый вычет — чтобы след гас до конца, а не застревал на шаге 1/255.
   vec3 was = max(texture2D(tPrev, vUv).rgb * uKeep - 0.0015, 0.0) * step(0.001, uKeep);
+  // Небо в выдержку не идёт: звёзды от лёгкого покачивания камеры тянулись вертикальными штрихами, как
+  // дождь (аудит мест, 16.11). Кроме звёзд, там ничего нет — следа там и не бывает.
+  if (texture2D(tDepth, vUv).r > 0.99999) was = vec3(0.0);
   gl_FragColor = vec4(max(now, was), 1.0);
 }
 `;
@@ -1991,6 +2061,8 @@ uniform float uEcho;      // 1 — слой эха есть в этом кадр
 // пикселя буфера, а период у строк тот же, что на обычном высоком качестве).
 uniform float uFmt;
 uniform float uLodFine;   // на сколько ступеней уменьшенных копий сдвинут ореол: буфер крупнее — ширина ореола на экране та же
+uniform vec4 uGradeLo;    // цвет камеры у места: xyz — оттенок теней, w — сколько цвета остаётся (1 — весь)
+uniform vec3 uGradeHi;    // оттенок светов
 
 varying vec2 vUv;
 
@@ -2112,9 +2184,10 @@ void main() {
   col *= mix(1.0, smoothstep(1.12, 0.3, r), uVignette);
   col *= 1.0 - uTunnel * smoothstep(0.25, 0.95, r);
 
-  // Цвет дешёвой камеры: приглушённая насыщенность, тени уходят в болотную зелень, света — в желтизну.
+  // Цвет дешёвой камеры — у каждого места свой. В убежище насыщенность приглушена, тени уходят в болотную
+  // зелень, света — в желтизну; в жёлтых комнатах жёлтый держится, в зале ожидания тени без зелени.
   float l = dot(col, vec3(0.299, 0.587, 0.114));
-  col = mix(vec3(l), col, 0.74) * mix(vec3(0.9, 1.0, 0.93), vec3(1.03, 1.0, 0.92), smoothstep(0.05, 0.6, l));
+  col = mix(vec3(l), col, uGradeLo.w) * mix(uGradeLo.xyz, uGradeHi, smoothstep(0.05, 0.6, l));
   // Провал в тенях: тёмное остаётся тёмным, а не серым.
   col *= smoothstep(-0.02, 0.09, l) * 0.35 + 0.65;
 
@@ -2151,8 +2224,10 @@ uniform float uTime;
 uniform vec3 uCamPos;
 uniform float uBright;   // 0..1: насколько небо видно (днём в зале ожидания — 0)
 uniform float uPx;       // пикселей буфера на «пиксель» звезды при 720 строках
-attribute vec4 aStar;    // x — яркость, y — размер, z — случайное число, w — 0 дальняя, 1 ближняя, 2..4 — падающая
+uniform vec4 uFall;      // падающая звезда по знаку игры: x — азимут, y — высота над горизонтом, рад; z — когда пошла; w — 1 есть
+attribute vec4 aStar;    // x — яркость, y — размер, z — случайное число, w — 0 дальняя, 1 ближняя, 2..4 — падающая, 5 — по знаку
 varying vec3 vCol;
+varying float vBig;      // 0..1: крупная звезда — с ореолом
 
 float hash1(float n) {
   return fract(sin(n * 127.1 + 3.7) * 43758.5453);
@@ -2172,6 +2247,18 @@ void main() {
     p = vec3(uCamPos.x + xz.x, y, uCamPos.z + xz.y);
     // Мерцание: у каждой своя частота.
     b *= 0.72 + 0.28 * sin(uTime * (0.6 + 2.6 * fract(aStar.z * 7.31)) + aStar.z * 6.2832);
+  } else if (aStar.w > 4.5) {
+    // Падающая звезда по знаку игры: когда герой под небом впервые поднимает взгляд — там, куда он
+    // смотрит. Тогда небо не спутать с несобранным потолком: тот тоже чёрный в белых точках (аудит мест).
+    float ph = uTime - uFall.z;
+    float dur = 1.4;
+    vec3 start = uCamPos + vec3(cos(uFall.x) * cos(uFall.y), sin(uFall.y), sin(uFall.x) * cos(uFall.y)) * 150.0;
+    float az2 = uFall.x + 1.5708;
+    vec3 dir = normalize(vec3(cos(az2), -0.32, sin(az2)));
+    float t = ph - position.x * 0.2;
+    p = start + dir * (110.0 * t);
+    float life = clamp(ph / dur, 0.0, 1.0);
+    b = (uFall.w > 0.5 && t > 0.0 && ph < dur) ? (1.0 - position.x) * (1.0 - position.x) * sin(life * 3.1416) * 2.6 : 0.0;
   } else {
     float k = aStar.w - 1.0;
     // Падают изредка: у трёх «мест» сроки 32, 45 и 58 секунд, по всему небу — раз в четверть минуты.
@@ -2195,20 +2282,31 @@ void main() {
   }
   vec4 mv = viewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
+  // Звезда — на дальней плоскости камеры: место на экране то же, стены и потолок её закрывают. Дальняя
+  // плоскость у камеры — 70 м, а дальние и падающие звёзды висят в 150–430 м: без этого видеокарта их
+  // отсекала, и на небе оставались только ближние — без полосы и без падающих (аудит мест, 16.11).
+  gl_Position.z = gl_Position.w * 0.99999;
   gl_PointSize = max(1.0, aStar.y * uPx);
   float v = b * uBright;
   if (v < 0.004) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
-  vCol = mix(vec3(0.8, 0.87, 1.0), vec3(1.0, 0.92, 0.8), fract(aStar.z * 3.7)) * v;
+  // Звёзды холоднее точек скана и разного размера: крупные — с ореолом. Тёплая — каждая пятая.
+  float hue = fract(aStar.z * 3.7);
+  vCol = (hue < 0.8 ? mix(vec3(0.66, 0.8, 1.0), vec3(0.86, 0.92, 1.0), hue * 1.25) : vec3(1.0, 0.9, 0.78)) * v;
+  vBig = smoothstep(3.0, 4.6, aStar.y);
 }
 `;
 
 export const STAR_FRAG = /* glsl */ `
 precision highp float;
 varying vec3 vCol;
+varying float vBig;
 
 void main() {
   vec2 c = gl_PointCoord - 0.5;
-  float a = smoothstep(0.5, 0.04, length(c));
+  float r = length(c);
+  float a = smoothstep(0.5, 0.04, r);
+  // У крупной звезды — яркое ядро и мягкий ореол, а не ровный диск, как у точки скана.
+  if (vBig > 0.0) a = mix(a, max(smoothstep(0.2, 0.02, r), exp(-r * r * 16.0) * 0.45), vBig);
   gl_FragColor = vec4(vCol * a, 1.0);
 }
 `;

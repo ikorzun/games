@@ -11,6 +11,7 @@
 import { floorSpots, free, homeStack, landmark, spot } from './furnish';
 import type { CellInfo, HomeItem, RoomCtx, Slot } from './furnish';
 import { ALL_PROPS } from './props_all';
+import { hanging } from './objects';
 import type { Xf } from './props';
 
 const seedOf = (ctx: RoomCtx): number => Math.floor(ctx.rng() * 1e6);
@@ -156,7 +157,7 @@ function buffet(ctx: RoomCtx): void {
 /** Переход к перрону: тесно и пусто. Указатель под потолком, изредка таксофон. */
 function passage(ctx: RoomCtx): void {
   ctx.cells.forEach((c, i) => {
-    if (i % 2 === 0) put(ctx, 'st_sign', c.xf.child(0, ctx.h, 0));
+    if (i % 2 === 0) hanging(c.xf, () => put(ctx, 'st_sign', c.xf.child(0, ctx.h, 0)));
   });
   if (ctx.rng() < 0.5) wall(ctx, ['st_phone']);
 }
@@ -180,7 +181,7 @@ function platform(ctx: RoomCtx): void {
   put(ctx, 'st_suitcase', m.c.xf.child(m.dx - 5.5, 0, m.dz + 0.4));
   // Указатели под навесом.
   ctx.cells.forEach((c, i) => {
-    if (i % 6 === 2) put(ctx, 'st_sign', c.xf.child(0, ctx.h, 0));
+    if (i % 6 === 2) hanging(c.xf, () => put(ctx, 'st_sign', c.xf.child(0, ctx.h, 0)));
   });
 }
 

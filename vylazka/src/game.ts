@@ -16,6 +16,8 @@ import { CameraRig, dirFromAngles } from './player/rig';
 import type { RigOutput } from './player/rig';
 import { ShakeMeter } from './player/shake';
 import { AutoExposure, beamAtten } from './render/exposure';
+import { GRADE_DEFAULT } from './render/grade';
+import type { Grade } from './render/grade';
 import type { FrameView, GameRenderer } from './render/renderer';
 import { nodesInRange, SwarmAI } from './swarm/ai';
 import { SwarmBody } from './swarm/body';
@@ -52,7 +54,7 @@ import { ALL_PROPS } from './world/props_all';
 import { CEIL_H, DX, DZ } from './gen/layout';
 import type { WorldKind } from './gen/layout';
 import type { BuiltLevel } from './world/level';
-import { cellToWorld, STAIR_RISE, STAIR_RUN, STAIR_STEPS, tierFloor } from './world/level_build';
+import { ceilTileOf, cellToWorld, STAIR_RISE, STAIR_RUN, STAIR_STEPS, tierFloor } from './world/level_build';
 import { CELL } from './world/shell';
 import { buildPocket, ENV_BUNKER, WORLD_ENV } from './world/pockets';
 import type { Env, ModelCell, PocketContext, PocketKind, PocketSpace } from './world/pockets';
@@ -243,6 +245,22 @@ const PRESSURE_KINDS: Record<WorldKind, readonly PressureKind[]> = { shelter: ['
  */
 const POLAR: Record<WorldKind, number> = { shelter: 0, yellow: 0, office: 1, station: 1 };
 
+/**
+ * Цвет «камеры» у мест (аудит мест, 16.11). Один на всех, он был подобран под убежище: снимал четверть
+ * цвета и уводил тени в болотную зелень — жёлтых комнат не было видно жёлтыми, а светлый зал уходил в
+ * серо-зелёную муть. Теперь: убежище — как было; офис — ровный холодный свет без зелени; жёлтые
+ * комнаты — жёлтый держится и в свете, и в тени; зал ожидания — тёплые середины, тени без зелени.
+ * Карманные пространства — как убежище.
+ */
+export const GRADE: Record<WorldKind, Grade> = {
+  shelter: GRADE_DEFAULT,
+  office: { lo: [0.94, 0.99, 1.02], hi: [1.0, 1.0, 0.97], sat: 0.8 },
+  yellow: { lo: [1.0, 0.94, 0.78], hi: [1.06, 1.0, 0.76], sat: 1.0 },
+  station: { lo: [0.97, 0.98, 1.02], hi: [1.04, 1.0, 0.93], sat: 0.92 },
+};
+/** Кольца отражателя вокруг пятна фонаря: в убежище — дешёвый фонарь, как был; на гладких стенах чистых мест — едва. */
+export const RINGS: Record<WorldKind, number> = { shelter: 0.08, office: 0.025, yellow: 0.02, station: 0.02 };
+
 /** Сколько голубей под крышей зала ожидания на первом круге; круг за кругом их меньше (systems/birds.ts, flockSize). */
 const FLOCK_BASE = 6;
 
@@ -380,6 +398,15 @@ export class Game {
   private swarmFlow: { path: Vec3[]; t: number } | null = null;
   /** Мир вылазки и его окружение: убежище, офис или жёлтые комнаты. */
   world: WorldKind = 'shelter';
+  /**
+   * Падающая звезда по знаку: под небом, когда герой впервые поднимает взгляд, — там, куда он смотрит.
+   * Взводится, когда он уходит из-под неба; чаще раза в 20 с не бывает.
+   */
+  private fallArmed = true;
+  private fallT0 = -1e9;
+  private fallAim: [number, number] = [0, 0];
+  /** Цвет камеры сейчас: идёт к цвету места (GRADE). */
+  private readonly grade: Grade = { lo: [...GRADE_DEFAULT.lo], hi: [...GRADE_DEFAULT.hi], sat: GRADE_DEFAULT.sat };
   private worldEnv: Env = ENV_BUNKER;
   /** Свет потолочных панелей по клеткам (офис, жёлтые комнаты); в убежище его нет. */
   cellLights: CellLights | null = null;
@@ -2337,6 +2364,25 @@ export class Game {
     // Полярность Осыпи — свойство места, а не света там, где она сейчас: она сама гасит свет вокруг себя
     // и мигала бы на каждом пороге.
     this.polar += ((this.where === 'main' ? POLAR[this.world] : 0) - this.polar) * Math.min(1, dt * 1.5);
+    // Падающая звезда по знаку (аудит мест: небо и несобранный потолок выглядели одинаково — чёрное в
+    // белых точках). Под небом — в комнате без потолка — первый взгляд вверх встречает падающую звезду.
+    const underSky = this.where === 'main' && this.level?.skyRoom !== undefined && this.room === this.level.skyRoom;
+    if (!underSky) this.fallArmed = true;
+    else if (this.fallArmed && rig.camPitch > 0.3 && this.time - this.fallT0 > 20) {
+      this.fallArmed = false;
+      this.fallT0 = this.time;
+      // Азимут неба (от +x к +z) — тот, куда смотрит камера, чуть левее: звезда пролетит через кадр слева направо.
+      this.fallAim = [Math.atan2(-Math.cos(rig.camYaw), -Math.sin(rig.camYaw)) - 0.45, clamp(rig.camPitch + 0.22, 0.55, 1.3)];
+    }
+    // Цвет камеры переходит к цвету места за пару секунд: смену прячет переход, но не обрывает её.
+    const gT = this.where === 'main' ? GRADE[this.world] : GRADE_DEFAULT;
+    const gk = Math.min(1, dt * 1.5);
+    const g0 = this.grade;
+    for (let i = 0; i < 3; i++) {
+      g0.lo[i] = g0.lo[i]! + (gT.lo[i]! - g0.lo[i]!) * gk;
+      g0.hi[i] = g0.hi[i]! + (gT.hi[i]! - g0.hi[i]!) * gk;
+    }
+    g0.sat += (gT.sat - g0.sat) * gk;
     // Яркость кадра для автоэкспозиции: центр луча и четыре луча по ореолу — берём самое светлое место.
     let lum = beamAtten(this.beamDist);
     const yaw = Math.atan2(-rig.lightDir[0], -rig.lightDir[2]);
@@ -2561,6 +2607,9 @@ export class Game {
       ghost: this.ghost,
       sonar: this.sonarView(),
       burnTint: [lerp(0.9, 0.86, this.polar), lerp(0.07, 0.82, this.polar), lerp(0.03, 0.74, this.polar)],
+      grade: this.grade,
+      fall: this.time - this.fallT0 < 2 ? [this.fallAim[0], this.fallAim[1], this.time - this.fallT0] : null,
+      rings: this.where === 'main' ? RINGS[this.world] : RINGS.shelter,
       memHold: tr !== null && tr.plan.style === 'dissolve',
       // План держится, но и он к концу петли редеет: на последнем круге он не целее самого места.
       quiet: this.where === 'main' && this.level?.edges ? QUIET * (1 - 0.35 * clamp(this.wear, 0, 1)) : 0,
@@ -2569,7 +2618,7 @@ export class Game {
     };
     // Стирание места: потолок выпадает, стены и пол редеют до кружева. В карманных пространствах его нет.
     const d = this.where === 'main' && this.level?.layout ? this.decay : null;
-    this.renderer.setErase(d ? d.ceiling : 0, d ? d.walls : 0, d ? d.floor : 0, d ? this.wear : 0);
+    this.renderer.setErase(d ? d.ceiling : 0, d ? d.walls : 0, d ? d.floor : 0, d ? this.wear : 0, d ? ceilTileOf(this.world) : 0);
     if (present) this.renderer.render(view);
   }
 

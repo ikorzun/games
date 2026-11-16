@@ -172,9 +172,11 @@ function cubicle(xf: Xf, seed: number): void {
 /** Одна панель перегородки 1,5 × 0,3 × 1,45 на двух ножках. */
 function partition(xf: Xf, seed: number): void {
   const fab = fabricOf(rng(seed));
-  bx(xf, [-0.75, 0.08, -0.03], [0.75, 1.42, 0.03], MAT.upholstery, fab);
+  bx(xf, [-0.74, 0.08, -0.03], [0.74, 1.42, 0.03], MAT.upholstery, fab);
   bx(xf, [-0.755, 1.42, -0.035], [0.755, 1.45, 0.035], MAT.metalGrey, METAL);
   bx(xf, [-0.755, 0.05, -0.035], [0.755, 0.08, 0.035], MAT.metalGrey, METAL_DK);
+  // Кант по бокам: без него панель читалась гладкой плитой (аудит мест, 16.11).
+  for (const x of [-0.755, 0.74]) bx(xf, [x, 0.08, -0.035], [x + 0.015, 1.42, 0.035], MAT.metalGrey, METAL);
   for (const x of [-0.6, 0.5]) bx(xf, [x, 0, -0.15], [x + 0.1, 0.06, 0.15], MAT.metalGrey, METAL, { aoBottom: 0.6 });
   xf.collider([-0.75, 0, -0.03], [0.75, 1.45, 0.03]);
 }

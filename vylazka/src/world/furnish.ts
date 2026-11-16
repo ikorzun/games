@@ -17,7 +17,7 @@ import type { Decay } from '../systems/decay';
 import type { ItemSpot, Landmark } from './level';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
-import { asObject } from './objects';
+import { asObject, hanging } from './objects';
 import { barrel, bunk, cables, cageLamp, crate, locker, pipeRun, rubble, signPlate, stool, table, valve, ventGrille } from './props';
 import { buildDisplay, DISPLAY_SIZE } from './props_screens';
 import type { DisplayShape } from './props_screens';
@@ -165,7 +165,7 @@ export function fit(s: Slot, w: number, depth: number): number {
 function lamps(ctx: RoomCtx, every = 1): void {
   if (ctx.sky) return;
   ctx.cells.forEach((c, i) => {
-    if (i % every === 0) cageLamp(c.xf.child(0, ctx.h, 0));
+    if (i % every === 0) hanging(c.xf, () => cageLamp(c.xf.child(0, ctx.h, 0)));
   });
 }
 
@@ -193,7 +193,7 @@ function clutter(ctx: RoomCtx, s: Slot, wet = false): void {
 function corridor(ctx: RoomCtx): void {
   const tier = ctx.room.tier;
   ctx.cells.forEach((c) => {
-    if ((c.cx + c.cz) % 2 === 0) cageLamp(c.xf.child(0, ctx.h, 0));
+    if ((c.cx + c.cz) % 2 === 0) hanging(c.xf, () => cageLamp(c.xf.child(0, ctx.h, 0)));
   });
   for (const s of ctx.slots) {
     // Трубы идут по западным и северным стенам, кабели — по восточным и южным: так они тянутся непрерывно.
@@ -401,7 +401,7 @@ function fvu(ctx: RoomCtx): void {
     landmark(ctx, 'panel', p.xf, x, 1.3, 0.4);
   }
   for (const s of free(ctx, false).slice(0, 3)) {
-    duct(s.xf.child(0, ctx.h - 0.42, 0), -1.5, 1.5);
+    hanging(s.xf, () => duct(s.xf.child(0, ctx.h - 0.42, 0), -1.5, 1.5));
     if (ctx.rng() < 0.5) valve(s.xf.child((ctx.rng() - 0.5) * 1.2, 1.3, 0.05));
     s.used = true;
   }
@@ -725,8 +725,8 @@ function living(ctx: RoomCtx): void {
   const centre = homeCentre(ctx);
   ctx.cells.forEach((c, i) => {
     if (ctx.sky) return;
-    if (c === centre) ALL_PROPS.chandelier!.build(c.xf.child(0, ctx.h, 0), 0);
-    else if (i % 2 === 0) cageLamp(c.xf.child(0, ctx.h, 0));
+    if (c === centre) hanging(c.xf, () => ALL_PROPS.chandelier!.build(c.xf.child(0, ctx.h, 0), 0));
+    else if (i % 2 === 0) hanging(c.xf, () => cageLamp(c.xf.child(0, ctx.h, 0)));
   });
   const sofa = homeStack(ctx, [['sofa'], ['wall_carpet']]);
   if (sofa) landmark(ctx, 'living', sofa.s.xf, sofa.x, 0.6, 0.45);

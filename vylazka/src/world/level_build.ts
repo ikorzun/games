@@ -20,7 +20,7 @@ import type { CellInfo, RoomCtx, Slot } from './furnish';
 import { MeshBuilder } from './kit';
 import type { SheetMark } from './kit';
 import type { BuiltLevel, CollapseSpec, ItemSpot, Landmark, LevelChunk, NavNode, RoomVariant, StairLink, Zone } from './level';
-import { MAT } from './materials';
+import { CEIL_TILE, MAT } from './materials';
 import { hermoDoor, stairsDown, Xf } from './props';
 import { doorFrame, doorLeaf, collapse, pit, warningSign, waterSheet } from './props_bunker';
 import { ALL_PROPS } from './props_all';
@@ -163,6 +163,12 @@ const STATION_ROOMS: Partial<Record<RoomType, Partial<WallStyle>>> = {
 const STATION_CEIL: Partial<Record<RoomType, number>> = { concourse: 6.3, corridor: 2.5, platform: 3.6, track: 5.2, vestibule: 3.2 };
 /** Пути: насколько они ниже перрона и на сколько от его края начинается пустота, м. */
 const TRACK_DROP = 1.2;
+
+/** Шаг плиток подвесного потолка у места, м (0 — потолок цельный): стирание выбивает такой потолок плитками. */
+export function ceilTileOf(world: WorldKind): number {
+  const st = world === 'office' ? OFFICE_STYLE : world === 'yellow' ? YELLOW_STYLE : world === 'station' ? STATION_STYLE : STYLE_CORRIDOR;
+  return st.ceil === MAT.ceilTile ? CEIL_TILE : 0;
+}
 
 function styleFor(room: GenRoom, world: WorldKind): WallStyle {
   if (world === 'office') return { ...OFFICE_STYLE, ...(OFFICE_ROOMS[room.type] ?? {}) };
