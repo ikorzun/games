@@ -685,7 +685,6 @@ export class GameRenderer {
         uBurnTint: { value: new THREE.Vector3(0.9, 0.07, 0.03) },
         uKeyCells: { value: 0 },
         uGaze: { value: 1 },
-        uGazeMode: { value: 0 },
         uGazeCone: { value: new THREE.Vector2(Math.cos((52 * Math.PI) / 180), Math.cos((25 * Math.PI) / 180)) },
         uGazeTall: { value: 1 },
         uPressBox: { value: new THREE.Vector4(0, 0, 0, 0) },
@@ -1326,6 +1325,38 @@ export class GameRenderer {
   }
 
   /**
+   * Проверка «как в Safari» (смоук, __vz.geometryAudit): у каждой сетки на сценах хватает данных каждого
+   * канала на все вершины, до которых дотягиваются её индексы. Safari проверяет это перед каждым вызовом
+   * отрисовки и при нехватке не рисует сетку целиком, Chrome подставляет нули — поэтому на компьютере
+   * такую ошибку не видно (так на iPhone пропадал зал ожидания). Пусто — всё в порядке.
+   */
+  geometryAudit(): string[] {
+    const bad: string[] = [];
+    const seen = new Set<THREE.BufferGeometry>();
+    const scenes = [this.scene, this.clouds.scene, this.edgeScene, this.grainScene, this.swarmScene, this.echoScene, this.trailScene, this.memScene, this.composeScene, this.hazeScene, this.spotScene, this.postScene];
+    for (const s of scenes) {
+      s.traverse((o) => {
+        const g = (o as THREE.Mesh).geometry as THREE.BufferGeometry | undefined;
+        if (!g || seen.has(g)) return;
+        seen.add(g);
+        const idx = g.getIndex();
+        let need = g.getAttribute('position')?.count ?? 0;
+        if (idx) {
+          let m = -1;
+          const a = idx.array;
+          for (let i = 0; i < a.length; i++) if (a[i]! > m) m = a[i]!;
+          need = m + 1;
+        }
+        for (const [name, attr] of Object.entries(g.attributes)) {
+          if ((attr as THREE.InstancedBufferAttribute).isInstancedBufferAttribute) continue;
+          if (attr.count < need) bad.push(`${o.type}${o.name ? ` ${o.name}` : ''} ${name}: ${attr.count} < ${need}`);
+        }
+      });
+    }
+    return bad;
+  }
+
+  /**
    * Проверка на устройстве: что процессор отдал шейдеру мира — для сверки с тем, что видит видеокарта
    * (служебный кадр 3 пишет номер клетки, а здесь лежит свет этой клетки в текстуре).
    */
@@ -1351,8 +1382,6 @@ export class GameRenderer {
    * поверхности (r — взгляд, g — рассеянный свет, b — дальность, a — итог). Только для строки проверки.
    */
   debugView = 0;
-  /** Пробная сборка для телефона: 0 — взгляд как сейчас, 1 — как до 16.11 (простой конус), 2 — без взгляда. */
-  gazeMode = 0;
 
   /** Облако точек сейчас включено (выключенное — мир сплошными поверхностями). */
   get scanOn(): boolean {
@@ -1625,8 +1654,18 @@ export class GameRenderer {
     g.setAttribute('aColor', new THREE.BufferAttribute(data.color, 4));
     g.setAttribute('aMat', new THREE.BufferAttribute(data.mat, 1));
     // Номер объекта у вершины: по нему шейдер растворяет отдельный предмет в общей сетке помещения.
-    if (data.obj) g.setAttribute('aObj', new THREE.BufferAttribute(data.obj, 1));
-    if (data.sway) g.setAttribute('aSway', new THREE.BufferAttribute(data.sway, 1));
+    // Необязательный канал, длина которого не сходится с числом вершин, лучше не ставить вовсе: Safari
+    // такую сетку не рисует целиком (проверяет, хватает ли данных на каждую вершину), а без канала шейдер
+    // читает ноль — помещение остаётся на месте, только без ветра или без растворения своих предметов.
+    const n = data.position.length / 3;
+    const fits = (a: ArrayLike<number> | undefined, name: string): boolean => {
+      if (!a) return false;
+      if (a.length === n) return true;
+      console.error(`[render] ${name}: ${a.length} значений на ${n} вершин — канал пропущен`);
+      return false;
+    };
+    if (fits(data.obj, 'aObj')) g.setAttribute('aObj', new THREE.BufferAttribute(data.obj!, 1));
+    if (fits(data.sway, 'aSway')) g.setAttribute('aSway', new THREE.BufferAttribute(data.sway!, 1));
     g.setIndex(new THREE.BufferAttribute(data.index, 1));
     g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, this.worldMat);
@@ -2031,7 +2070,6 @@ export class GameRenderer {
     (wu.uScanRange!.value as THREE.Vector2).set(v.scanRange[0], v.scanRange[1]);
     wu.uKeyCells!.value = v.keyCells ?? 0;
     wu.uGaze!.value = v.gaze ?? 1;
-    wu.uGazeMode!.value = this.gazeMode;
     const gc = v.gazeCone ?? [52, 25];
     (wu.uGazeCone!.value as THREE.Vector2).set(Math.cos((gc[0] * Math.PI) / 180), Math.cos((gc[1] * Math.PI) / 180));
     wu.uGazeTall!.value = gazeTall(this.camera.aspect);

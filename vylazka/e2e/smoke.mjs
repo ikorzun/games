@@ -737,6 +737,21 @@ async function scenarioWorlds(browser, baseUrl) {
     if (wantShots) await saveShot(page, 'world_station.png');
     await context.close();
   }
+
+  // Как в Safari: у каждой сетки на сценах хватает каждого канала на все вершины. Safari проверяет это
+  // перед отрисовкой и при нехватке не рисует сетку целиком, Chrome подставляет нули — так на iPhone
+  // партнёра пропадал весь зал ожидания и половина комнат убежища, а здесь всё было видно.
+  for (const world of ['shelter', 'office', 'yellow', 'station']) {
+    const { page, context, log } = await openPage(browser, baseUrl, `?q=low&fail=0&lang=ru&touch=0&seed=20041113&world=${world}`);
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    for (let i = 0; i < 6; i++) await vz(page, () => window.__vz.step(6));
+    const bad = await vz(page, () => window.__vz.geometryAudit());
+    check(`${world}: у каждой сетки хватает каждого канала на все вершины (иначе Safari её не рисует)`, bad.length === 0, bad.slice(0, 4).join(' | '));
+    check(`${world}: нет ошибок в консоли`, log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    await context.close();
+  }
 }
 
 /** Средняя яркость середины кадра (сетка 32×18): столбцы 12–19, строки 5–12. */

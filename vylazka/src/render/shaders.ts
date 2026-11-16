@@ -305,7 +305,6 @@ varying float vSeed;      // чей узор кружева (0 — архите�
 varying float vShell;     // мох слоями: уровень слоя, 0 — не мох
 uniform float uKeyCells;  // > 0 — прямой свет есть только там, где клетка светлая: множитель рассеянного света клеток
 uniform float uGaze;      // 0..1: рассеянный свет собирает место только там, куда смотрит герой
-uniform float uGazeMode;  // пробная сборка для телефона: 0 — взгляд как сейчас, 1 — как до 16.11 (простой конус), 2 — без взгляда
 uniform vec2 uGazeCone;   // косинусы края взгляда (за ним ничего не собрано) и его середины (собрано сплошь)
 uniform float uGazeTall;  // во сколько раз сжать вертикаль при счёте угла взгляда: 1 — кадр широкий, меньше — высокий
 uniform vec4 uPressBox;   // давление: прямоугольник помещения (minX, minZ, maxX, maxZ)
@@ -895,10 +894,6 @@ void main() {
   float rag = 0.5 * sin(gzA * 3.0 + 0.7) + 0.3 * sin(gzA * 7.0 + 2.1) + 0.2 * sin(gzA * 13.0 + 4.4);
   float angG = acos(clamp(cosG, -1.0, 1.0));
   float gazeK = mix(1.0, 1.0 - smoothstep(acos(uGazeCone.y) * 0.85, acos(uGazeCone.x) * (1.08 + 0.13 * rag), angG), uGaze);
-  // Пробные сборки для телефона партнёра (пол зала ожидания на iPhone не собирается): взгляд как до 16.11
-  // или без взгляда вовсе — по ним видно, виноват ли новый счёт взгляда.
-  if (uGazeMode > 1.5) gazeK = 1.0;
-  else if (uGazeMode > 0.5) gazeK = mix(1.0, smoothstep(uGazeCone.x, uGazeCone.y, dot(normalize(vPosV), uLightDirV)), uGaze);
   vec2 rangeV = uScanRange * mix(1.0, 1.7, floorK);
   float hEnv = uScan.z * (min(1.0, eGlow * 4.0) + min(1.0, eAmb * 8.0) * (0.72 + 0.28 * keyK) * back * gazeK * (1.0 - smoothstep(rangeV.x, rangeV.y, distV)));
   // Пространство, чьё время выходит, редеет; светящееся (красный контур выхода, небо) держится до конца.

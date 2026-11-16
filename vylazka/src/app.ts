@@ -113,7 +113,7 @@ export class App {
   private playTime = 0;
   private slowTime = 0;
   private showFps = false;
-  /** Пробная сборка: 'oldgaze' — взгляд как до 16.11, 'nogaze' — без взгляда, 'solid' — без сборки из точек. */
+  /** Пробная сборка для телефона (страница с __vzVariant): 'probe' — строка проверки включена с самого начала. */
   private variant = '';
   /** Проверка на устройстве (#diag): строка с видеокартой и тем, что в кадре на полу, и кнопка «сплошь». */
   private diagText: HTMLElement | null = null;
@@ -167,8 +167,8 @@ export class App {
     if (p.get('pseudo') === '1') i18n.setPseudo(true);
     // Счётчик кадров: ?fps=1 или #fps — на странице по ссылке параметров адреса нет, проходит только #имя.
     this.showFps = p.get('fps') === '1' || (typeof location !== 'undefined' && location.hash === '#fps');
-    // Пробная сборка для телефона (scripts: страница с __vzVariant): что в ней отключено, видно в строке проверки.
-    // Проба «probe» ничего не отключает: строка проверки в ней включена сразу — нужен один снимок экрана.
+    // Пробная сборка для телефона (страница с __vzVariant): «probe» ничего не меняет в игре, только включает
+    // строку проверки с самого начала — нужен один снимок экрана.
     this.variant = String((globalThis as { __vzVariant?: unknown }).__vzVariant ?? '');
     if (this.variant === 'probe' || p.get('diag') === '1' || (typeof location !== 'undefined' && location.hash === '#diag') || App.diagSaved()) this.makeDiag();
 
@@ -299,9 +299,6 @@ export class App {
     // Телефон и планшет: тень от солнца — формулой (см. keyShadowByFormula в render/renderer.ts).
     renderer.keyShadowByFormula = this.touchMode;
     // Пробная сборка: одна часть сборки места отключена, чтобы на телефоне найти, какая ломает пол.
-    if (this.variant === 'oldgaze') renderer.gazeMode = 1;
-    else if (this.variant === 'nogaze') renderer.gazeMode = 2;
-    else if (this.variant === 'solid') renderer.debugScan(false);
     setThingRegistry(ALL_PROPS);
     // level=test — коридор технического среза, level=show — витрина реквизита.
     this.testLevel = p.get('level') === 'test' || p.get('level') === 'show' || (p.get('level') ?? '').startsWith('pocket_') || this.showParam() !== null;

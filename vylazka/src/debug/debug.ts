@@ -118,6 +118,8 @@ export interface VzDebugApi {
   shadows(on: boolean): void;
   /** Облако точек вкл/выкл: выкл — мир рисуется сплошными поверхностями (для сравнения кадров). */
   scan(on: boolean): void;
+  /** Проверка «как в Safari»: у каждой сетки на сценах хватает каждого канала на все вершины (пусто — всё в порядке). */
+  geometryAudit(): string[];
   /** Плоские вещи уровня: картонки (standee) и проекции (veil) — что изображено, где стоит и куда смотрит. */
   flats(): Array<Record<string, unknown>>;
   /**
@@ -536,6 +538,7 @@ export function installDebug(app: App): void {
       game().renderer.debugShadowsOff = !on;
     },
     scan: (on) => game().renderer.debugScan(on),
+    geometryAudit: () => game().renderer.geometryAudit(),
     probe: () => {
       game().draw(1, 0);
       return game().renderer.probe();

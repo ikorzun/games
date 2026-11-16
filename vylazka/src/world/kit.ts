@@ -151,16 +151,12 @@ export class MeshBuilder {
       [u1, v1],
       [u0, v1],
     ];
-    const first = this.pos.length / 3;
-    for (let i = 0; i < 4; i++) {
-      const q = p[i]!;
-      this.pos.push(q[0], q[1], q[2]);
-      this.nrm.push(n[0], n[1], n[2]);
-      this.col.push(tint[0], tint[1], tint[2], ao);
-      this.mats.push(mat);
-      this.objs.push(this.obj);
-      this.uvs.push(corners[i]![0], corners[i]![1]);
-    }
+    // Через vertexUv, как и всё остальное: у вершины должны быть все каналы, в том числе качание. Здесь
+    // его не клали — массив качания выходил короче вершин, и Safari (на iPhone) отказывался рисовать
+    // сетку помещения целиком: в зале ожидания пропадал весь зал, в убежище — половина комнат
+    // (Chrome молча подставлял нули, поэтому на компьютере всё было видно).
+    const first = this.vertexUv(p[0], n, mat, tint, ao, corners[0]!);
+    for (let i = 1; i < 4; i++) this.vertexUv(p[i]!, n, mat, tint, ao, corners[i]!);
     this.idx.push(first, first + 1, first + 2, first, first + 2, first + 3);
   }
 
