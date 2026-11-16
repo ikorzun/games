@@ -160,7 +160,8 @@ export class App {
     // Язык по умолчанию — английский (решение партнёра); выбор игрока хранится в профиле.
     this.setLang(normalizeLang(p.get('lang') ?? 'en'), true);
     if (p.get('pseudo') === '1') i18n.setPseudo(true);
-    this.showFps = p.get('fps') === '1';
+    // Счётчик кадров: ?fps=1 или #fps — на странице по ссылке параметров адреса нет, проходит только #имя.
+    this.showFps = p.get('fps') === '1' || (typeof location !== 'undefined' && location.hash === '#fps');
 
     const device = this.platform.deviceType();
     // Площадка может ошибиться с типом устройства, поэтому смотрим и на сам указатель;
