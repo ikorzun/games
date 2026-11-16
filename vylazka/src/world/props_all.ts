@@ -35,6 +35,15 @@ function tracked(name: string, spec: PropSpec): PropSpec {
   return { ...spec, build: (xf, seed) => asObject(xf, name, () => spec.build(xf, seed)) };
 }
 
+/**
+ * Наборы реквизита по отдельности. Имя предмета должно быть единственным во всех наборах: при сборке
+ * ALL_PROPS поздний набор молча перекрыл бы ранний (так новый торшер однажды заменил домашний везде).
+ */
+export const PROP_SETS: Readonly<Record<string, Record<string, PropSpec>>> = {
+  PROPS, HOME_PROPS, OFFICE_PROPS, MODEL_PROPS, SCREEN_PROPS, CRAFT_PROPS, BIRD_PROPS, STATION_PROPS,
+  LUGGAGE_PROPS, PAPER_PROPS, FOUND_PROPS, SEATING_PROPS, REAL_PROPS,
+};
+
 export const ALL_PROPS: Record<string, PropSpec> = Object.fromEntries(
-  Object.entries({ ...PROPS, ...HOME_PROPS, ...OFFICE_PROPS, ...MODEL_PROPS, ...SCREEN_PROPS, ...CRAFT_PROPS, ...BIRD_PROPS, ...STATION_PROPS, ...LUGGAGE_PROPS, ...PAPER_PROPS, ...FOUND_PROPS, ...SEATING_PROPS, ...REAL_PROPS }).map(([name, spec]) => [name, tracked(name, spec)]),
+  Object.values(PROP_SETS).flatMap((set) => Object.entries(set)).map(([name, spec]) => [name, tracked(name, spec)]),
 );

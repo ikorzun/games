@@ -294,7 +294,7 @@ function manager(ctx: RoomCtx): void {
   wall(ctx, ['armchair_visitor']);
   wall(ctx, ['binder_shelf']);
   wall(ctx, ['print_large']);
-  wall(ctx, ['floor_lamp']);
+  wall(ctx, ['floor_lamp_brass']);
   corner(ctx, 'cactus_column');
   put(ctx, 'rug_wool', homeCentre(ctx).xf.child(0, 0, 0));
   floorSpots(ctx, 2);

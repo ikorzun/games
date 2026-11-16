@@ -348,7 +348,7 @@ function woolRug(xf: Xf, seed: number): void {
 export const REAL_PROPS: Record<string, PropSpec> = {
   table_cafe: { w: 0.7, d: 0.72, h: 0.74, mount: 'floor', ru: 'столик: пластик под дерево на трубчатых ножках', build: cafeTable },
   armchair_visitor: { w: 0.72, d: 0.74, h: 0.86, mount: 'floor', ru: 'кресло для посетителей: обивка, деревянные подлокотники', build: visitorArmchair },
-  floor_lamp: { w: 0.48, d: 0.6, h: 1.64, mount: 'floor', ru: 'торшер: латунная стойка, тканевый абажур', build: floorLamp },
+  floor_lamp_brass: { w: 0.48, d: 0.6, h: 1.64, mount: 'floor', ru: 'торшер: латунная стойка, тканевый абажур', build: floorLamp },
   cactus_column: { w: 0.24, d: 0.24, h: 0.56, mount: 'free', ru: 'кактус-колонна с отростком в глиняном горшке', build: cactusColumn },
   cactus_round: { w: 0.14, d: 0.14, h: 0.21, mount: 'free', ru: 'круглый кактус в горшочке', build: cactusRound },
   print_large: { w: 0.7, d: 0.025, h: 0.84, mount: 'wall', y: 1.4, ru: 'репродукция пейзажа в раме с паспарту, большая', build: (xf, seed) => framedPrint(xf, seed, 0.7, 0.84) },
@@ -361,7 +361,7 @@ export const KAYKIT_SWAPS: readonly { from: string; to: string }[] = [
   { from: 'kk_chair_a', to: 'chair_bent' },
   { from: 'kk_table_small', to: 'table_cafe' },
   { from: 'kk_armchair', to: 'armchair_visitor' },
-  { from: 'kk_lamp_standing', to: 'floor_lamp' },
+  { from: 'kk_lamp_standing', to: 'floor_lamp_brass' },
   { from: 'kk_cactus', to: 'cactus_column' },
   { from: 'kk_cactus_small', to: 'cactus_round' },
   { from: 'kk_picture_large', to: 'print_large' },

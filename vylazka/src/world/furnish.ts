@@ -620,7 +620,7 @@ export const FLAT_OK: ReadonlySet<string> = new Set([
   'vending_machine',
   'server_rack',
   'armchair_visitor',
-  'floor_lamp',
+  'floor_lamp_brass',
 ]);
 
 /**
