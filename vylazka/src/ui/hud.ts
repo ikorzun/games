@@ -66,8 +66,10 @@ export class Hud {
     this.el.className = 'vz-hud';
     this.el.innerHTML =
       '<div class="vz-hud__top">' +
-      '<div class="vz-hud__tl"><span class="vz-hud__dot"></span><span class="vz-hud__rec"></span><span class="vz-hud__cam"></span><span class="vz-hud__lap"></span></div>' +
-      '<div class="vz-hud__tr"><span class="vz-hud__clock"></span><span class="vz-hud__fps"></span></div>' +
+      '<div class="vz-hud__tl"><span class="vz-hud__dot"></span><span class="vz-hud__rec"></span><span class="vz-hud__cam"></span></div>' +
+      // Номер круга — под временем записи: слева на телефоне под строкой REC стоит кнопка паузы, и
+      // вторая строка там упиралась в неё (смоук, матрица раскладки с длинным переводом).
+      '<div class="vz-hud__tr"><span class="vz-hud__clock"></span><span class="vz-hud__lap"></span><span class="vz-hud__fps"></span></div>' +
       '</div>' +
       '<div class="vz-hud__goals"></div>' +
       '<div class="vz-hud__toast"></div>' +

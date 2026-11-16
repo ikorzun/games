@@ -1310,7 +1310,9 @@ async function scenarioIllusions(browser, baseUrl) {
       }
     }
     const w = await vz(page, () => window.__vz.wear());
-    check('стёртый офис: часть предметов — кружево, части нет; потолка почти нет, стены редеют', (w.forms['3'] ?? 0) >= 5 && (w.forms['4'] ?? 0) >= 5 && w.decay.ceiling > 0.9 && w.decay.walls > 0.5 && w.decay.floor === 0, JSON.stringify({ forms: w.forms, ceiling: w.decay.ceiling, walls: w.decay.walls }));
+    // Вариант A (слова партнёра «A… Тихий слой…»): потолок выпадает дырами не больше чем наполовину, стены
+    // редеют пятнами до трети, пол держится (systems/decay.ts: CEIL_MAX 0,55, WALLS_MAX 0,3).
+    check('стёртый офис: часть предметов — кружево, части нет; потолок выпал до предела — наполовину, стены редеют, пол держится', (w.forms['3'] ?? 0) >= 5 && (w.forms['4'] ?? 0) >= 5 && w.decay.ceiling > 0.5 && w.decay.ceiling <= 0.55 + 1e-6 && w.decay.walls > 0.15 && w.decay.walls <= 0.3 + 1e-6 && w.decay.floor === 0, JSON.stringify({ forms: w.forms, ceiling: w.decay.ceiling, walls: w.decay.walls }));
     check('стёртый офис: нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
     const warns = log.warnings.filter((x) => !benign(x));
     check('стёртый офис: нет предупреждений в консоли', warns.length === 0, `${warns.length}: ${[...new Set(warns)].join(' | ').slice(0, 300)}`);
@@ -1328,7 +1330,7 @@ async function scenarioIllusions(browser, baseUrl) {
     const lvl = await vz(page, () => window.__vz.level());
     const w = await vz(page, () => window.__vz.wear());
     const mounds = lvl.landmarks.filter((m) => m.id === 'mound').length;
-    check('убежище на пятом круге (стёртость 0,56): от части вещей осталось кружево, части уже нет; потолок выпадает; у начала выросла гора', Math.abs(lvl.wear - 0.56) < 1e-6 && (w.forms['3'] ?? 0) >= 5 && (w.forms['4'] ?? 0) >= 2 && w.decay.ceiling > 0.5 && w.decay.walls > 0 && mounds === 1 && w.decay.mound === 2, JSON.stringify({ wear: lvl.wear, forms: w.forms, ceiling: +w.decay.ceiling.toFixed(2), walls: +w.decay.walls.toFixed(2), mounds }));
+    check('убежище на пятом круге (стёртость 0,56): от части вещей осталось кружево, части уже нет; потолок выпадает; у начала выросла гора', Math.abs(lvl.wear - 0.56) < 1e-6 && (w.forms['3'] ?? 0) >= 5 && (w.forms['4'] ?? 0) >= 2 && w.decay.ceiling > 0.3 && w.decay.walls > 0 && mounds === 1 && w.decay.mound === 2, JSON.stringify({ wear: lvl.wear, forms: w.forms, ceiling: +w.decay.ceiling.toFixed(2), walls: +w.decay.walls.toFixed(2), mounds }));
     if (wantShots) await saveShot(page, 'world_shelter_worn.png');
 
     // Бумажные цветы: тусклые; подошёл со светом — расцвели и рассыпались; вернулись кружевом.
@@ -1622,7 +1624,9 @@ async function scenarioRooms(browser, baseUrl) {
   const dg = await vz(page, () => window.__vz.probe());
   const dc = await vz(page, () => window.__vz.probeColor());
   check('тёмное помещение: фонарь включён, но не светит — центр кадра темнее, чем в обычном помещении', darkRoom && st.roomFx === 'dark' && st.light.state === 'on' && st.fx.light < 0.1 && center(dg) < normCenter * 0.8, `центр ${center(dg).toFixed(1)} против ${normCenter.toFixed(1)}, свет помещения ${st.fx.light.toFixed(2)}`);
-  check('в тёмном помещении проступает красная сетка', dc.red > 0.01 && dc.red > normRed * 5, `красного ${dc.red.toFixed(4)} против ${normRed.toFixed(4)}`);
+  // Сетка — только изломы и края, без диагоналей треугольников (аудит мест: все рёбра читались знаком «нет
+  // картинки»), поэтому красных точек в кадре меньше, чем было: порог по доле — 0,4 %.
+  check('в тёмном помещении проступает красная сетка', dc.red > 0.004 && dc.red > normRed * 5, `красного ${dc.red.toFixed(4)} против ${normRed.toFixed(4)}`);
 
   // Красная сетка без темноты.
   const wireRoom = await vz(page, () => window.__vz.gotoFx('wire'));
