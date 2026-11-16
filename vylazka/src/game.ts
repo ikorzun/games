@@ -24,7 +24,7 @@ import { SwarmBody } from './swarm/body';
 import { Anomalies } from './systems/anomalies';
 import type { AnomalyEvent, AnomalyState } from './systems/anomalies';
 import { CellLights } from './systems/cell_lights';
-import { Director } from './systems/director';
+import { DEFAULT_DIRECTOR, Director, FIRST_DIRECTOR } from './systems/director';
 import { behindness, Echo, ECHO_DRIFT, ECHO_STEP } from './systems/echo';
 import type { ScareId } from './systems/director';
 import { DEFAULT_FLASHLIGHT, Flashlight } from './systems/flashlight';
@@ -289,6 +289,9 @@ const WIND: Record<WorldKind, number> = { shelter: 0.022, office: 0.014, yellow:
 
 const STATION_LIGHT: Partial<Record<string, number>> = { concourse: 1, platform: 0.92, track: 0.92, vestibule: 0.7, buffet: 0.6, tickets: 0.55, lockers: 0.5, washroom: 0.5, storage: 0.36, corridor: 0.3 };
 
+/** Сколько Осыпь молчит после того, как поймала, с: в первой сессии игрока и потом. */
+const SWARM_REST = { first: 60, later: 20 } as const;
+
 const WORLD_THINGS: Record<WorldKind, { small: readonly string[]; big: readonly (readonly [string, PocketKind | null])[] }> = {
   shelter: { small: SMALL_THINGS, big: BIG_THINGS },
   // Зал ожидания: то, что оставляют на сиденьях и у стен те, кто ушёл.
@@ -498,6 +501,13 @@ export class Game {
   /** Принудительный первый отказ фонаря уже был в этой игре: в следующих сессиях и сценах его нет. */
   private failTaught = false;
   /**
+   * Первая сессия игрока (ни одной законченной): Осыпь мягче — выходит на охоту только по времени и после
+   * поимки затихает надолго (слова партнёра 16.11 23:41). Ставит приложение по профилю.
+   */
+  firstSession = false;
+  /** Когда затихшая после поимки Осыпь выйдет снова, с игрового времени; 0 — не ждёт. */
+  private swarmWakeAt = 0;
+  /**
    * Свет памяти (world/memory_light.ts): у какой вещи он горит и насколько разгорелся. Вещь вспомнили —
    * свет гаснет вместе с ней, поэтому он держится за вещь, а не за memoryThing (тот обнуляется сразу).
    */
@@ -599,11 +609,13 @@ export class Game {
     // В новом месте волна идёт вскоре: план виден сразу.
     this.sonarT0 = -1;
     this.sonarAt = this.time + 2.5;
-    // Батарейка в сессии не садится: фонарь глохнет от контакта, а не от заряда. Первый отказ —
-    // принудительный, чтобы научить трясти; он один на игру: в каждой новой сессии или сцене сна его нет
-    // (сцена сна короче минуты, и отказ приходился бы почти на каждую вспышку воспоминания).
+    // Батарейка в сессии садится (слова партнёра 16.11 23:41: «дать возможность трясти его до полного
+    // истощения батареи»): фонарь глохнет от контакта, тряска его оживляет, пока в батарейке есть заряд;
+    // севшая отдыхает в темноте, вспомненная вещь заряжает её полностью. Полного заряда хватает на ~12 минут
+    // света. Первый отказ — принудительный, чтобы научить трясти; он один на игру: в каждой новой сессии
+    // или сцене сна его нет (сцена сна короче минуты, и отказ приходился бы почти на каждую вспышку).
     this.failTaught ||= this.light?.taught ?? false;
-    this.light = new Flashlight(this.rng, { ...DEFAULT_FLASHLIGHT, drainSeconds: Infinity, ...this.lightCfg, ...(this.failTaught ? { firstFailAt: 0 } : {}) });
+    this.light = new Flashlight(this.rng, { ...DEFAULT_FLASHLIGHT, ...this.lightCfg, ...(this.failTaught ? { firstFailAt: 0 } : {}) });
     const rank = level.layout?.rank ?? 1;
     this.session = dream ? new Session(level, dream.seed, dream.known, this.sessionCfg, dream.chainAt ?? 0) : null;
     // Новая сцена или сессия: прежняя очередь сцен не в счёт — следующую поставит приложение.
@@ -621,7 +633,8 @@ export class Game {
       this.dreamSeed = dream.seed;
       this.swarm = new SwarmAI(level.nav, this.rng);
       this.spores = new Spores(level.nav, dream.seed);
-      this.director = new Director(this.rng);
+      this.director = new Director(this.rng, this.firstSession ? FIRST_DIRECTOR : DEFAULT_DIRECTOR);
+      this.swarmWakeAt = 0;
       this.jumps = new Jumps(this.rng);
       // Лестница на нижний ярус удлиняется дважды — только на объектах, где есть «неправильный» ярус.
       const stair = rank >= 2 && tiers >= 3 ? (level.stairs.find((st) => st.upperTier === tiers - 2) ?? null) : null;
@@ -1835,12 +1848,20 @@ export class Game {
         // теряет игрока; если это было ближе шести клеток пути от начала — отходит, чтобы не поймать тут же снова.
         this.respawn();
         const sw = this.swarm;
-        const home = this.playerNodeAtSpawn();
-        if (sw && home >= 0) {
-          const hops = sw.node >= 0 ? sw.route(sw.node, home).length - 1 : -1;
-          const away = hops >= 0 && hops < 6 ? sw.nodeAround(home, 8, 14) : sw.node;
-          sw.activate(away >= 0 ? away : sw.nodeAround(home, 4, 30));
+        if (sw && plan.cause === 'caught') {
+          // Поймав, Осыпь затихает: в первой сессии на минуту, потом на 20 с, — и выходит снова далеко от
+          // игрока (stepFear). Раньше она выходила сразу и ловила снова, едва игрок отошёл от начала.
+          sw.rest();
           this.swarmBody.snap(sw.pos, 0);
+          this.swarmWakeAt = this.time + (this.firstSession ? SWARM_REST.first : SWARM_REST.later);
+        } else if (sw && sw.active) {
+          const home = this.playerNodeAtSpawn();
+          const hops = home >= 0 && sw.node >= 0 ? sw.route(sw.node, home).length - 1 : -1;
+          if (hops >= 0 && hops < 6) {
+            const away = sw.nodeAround(home, 8, 14);
+            sw.activate(away >= 0 ? away : sw.nodeAround(home, 4, 30));
+            this.swarmBody.snap(sw.pos, 0);
+          }
         }
       } else {
         // Проём выводит туда, куда обещал (обратно или к искомой вещи); если пространство отпустило само —
@@ -2292,6 +2313,13 @@ export class Game {
     // Шум игрока: бег, тряска заглохшего фонаря, паническое дыхание, плеск воды.
     const noise = Math.max(input.run && moving > 3 ? 0.6 : moving > 1 ? 0.12 : 0, this.light.state === 'dead' ? shakeLevel * 0.9 : shakeLevel * 0.4, s.panic > 0.6 ? 0.35 : 0, s.inWater && moving > 0.5 ? 0.5 : 0);
 
+    if (sw && this.swarmWakeAt > 0 && this.time >= this.swarmWakeAt && !sw.active) {
+      // Затихшая после поимки Осыпь выходит снова — подальше от игрока — и ищет его заново.
+      this.swarmWakeAt = 0;
+      const n = sw.nodeAround(node, 8, 14);
+      sw.activate(n >= 0 ? n : sw.nodeAround(node, 4, 30));
+      this.swarmBody.snap(sw.pos, 0);
+    }
     if (sw) {
       const res = sw.update(dt, { player: pos, playerNode: node, lightOn: this.light.intensity > 0.3 || this.ambientHere > 0.1, beamOnSwarm: this.beamOnSwarm(), noise });
       if (res.cohered) {
@@ -2392,6 +2420,8 @@ export class Game {
       // Вспышка воспоминания: кадр на миг рвётся.
       this.glitch = Math.max(this.glitch, 0.5);
     } else if (e.type === 'recall') {
+      // Вспомнил — свет вернулся: батарейка фонаря снова полная.
+      this.light.recharge();
       const t = this.memoryThing;
       this.memoryThing = null;
       if (t) {

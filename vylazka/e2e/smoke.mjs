@@ -1730,7 +1730,9 @@ async function scenarioSession(browser, baseUrl) {
   await vz(page, () => window.__vz.calm(true));
   st = await vz(page, () => window.__vz.step(5 * 60));
   check('сессия началась; первые секунды заданий нет: ни воспоминаний, ни строк, ни вспышки', st.screen === 'play' && st.profile.sorties === 1 && st.session.memories.length === 5 && st.session.memories.every((m) => m.state === 'hidden') && (await page.evaluate(() => !document.querySelector('.vz-hud__goals').classList.contains('is-on') && !document.querySelector('.vz-hud__flash').classList.contains('is-on'))), JSON.stringify(st.session.memories.map((m) => m.state)));
-  check('на ПК нет кнопок действия и списка на экране', await page.evaluate(() => !document.querySelector('.vz-touch') && !document.querySelector('.vz-hud__act.is-on') && !document.querySelector('.vz-hud__bat.is-on')));
+  check('на ПК нет кнопок действия и списка на экране', await page.evaluate(() => !document.querySelector('.vz-touch') && !document.querySelector('.vz-hud__act.is-on')));
+  // Заряд батарейки фонаря на экране — там, где фонарь есть (слова партнёра 16.11 23:41: трясти до полного истощения батареи).
+  check('заряд батарейки виден, пока у места есть фонарь', (await page.evaluate(() => !!document.querySelector('.vz-hud__bat.is-on'))) === (st.hasLight === true), JSON.stringify({ hasLight: st.hasLight }));
   const ids1 = st.session.memories.map((m) => m.id);
 
   // Клавиши E, R, Tab ничего не делают — ни без воспоминания, ни рядом с ним.

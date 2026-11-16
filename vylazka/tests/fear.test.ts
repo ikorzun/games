@@ -6,7 +6,7 @@ import { SwarmAI } from '../src/swarm/ai';
 import type { SwarmInput } from '../src/swarm/ai';
 import { MAX_WORMS, SwarmBody } from '../src/swarm/body';
 import { Anomalies } from '../src/systems/anomalies';
-import { Director } from '../src/systems/director';
+import { DEFAULT_DIRECTOR, Director, FIRST_DIRECTOR } from '../src/systems/director';
 import type { DirectorEvent } from '../src/systems/director';
 import type { NavNode } from '../src/world/level';
 import { buildLevel, STAIR_RISE, STAIR_RUN, STAIR_STEPS } from '../src/world/level_build';
@@ -305,6 +305,31 @@ describe('режиссёр страха', () => {
     expect(scares.some((s) => s.id === 'signs')).toBe(false);
     const deep = play(900, () => 1, 0, 5).events.filter((e) => e.type === 'scare') as Array<{ id: string }>;
     expect(deep.some((s) => s.id === 'signs')).toBe(true);
+  });
+});
+
+describe('режиссёр страха: первая сессия игрока', () => {
+  it('спуск на нижний ярус и взятая цель рой не торопят: явления с третьей минуты, охота — с пятой', () => {
+    const d = new Director(mulberry32(3), FIRST_DIRECTOR);
+    const events: Array<DirectorEvent & { t: number }> = [];
+    let busy = false;
+    // Сразу спустился на второй, последний ярус двухъярусного убежища и взял цель.
+    for (let t = 0; t < 400; t += 0.5) {
+      for (const e of d.update({ time: t, tier: 1, goalsDone: 1, swarmBusy: busy, tiers: 2 })) {
+        events.push({ ...e, t });
+        if (e.type === 'release') busy = true;
+      }
+    }
+    const release = events.find((e) => e.type === 'release');
+    expect(release?.t).toBeGreaterThanOrEqual(FIRST_DIRECTOR.releaseAt);
+    const glimpse = events.find((e) => e.type === 'apparition');
+    expect(glimpse === undefined || glimpse.t >= FIRST_DIRECTOR.glimpseAt).toBe(true);
+    // Обычная сессия на той же глубине выпускает рой почти сразу.
+    const d2 = new Director(mulberry32(3), DEFAULT_DIRECTOR);
+    let released = -1;
+    for (let t = 0; t < 60 && released < 0; t += 0.5) for (const e of d2.update({ time: t, tier: 1, goalsDone: 1, swarmBusy: false, tiers: 2 })) if (e.type === 'release') released = t;
+    expect(released).toBeGreaterThanOrEqual(0);
+    expect(released).toBeLessThan(5);
   });
 });
 

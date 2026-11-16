@@ -40,9 +40,18 @@ export interface DirectorConfig {
   releaseAt: number;
   /** Пауза между пугалками, от и до, с. */
   scareGap: [number, number];
+  /** Глубина и взятые цели торопят рой (спуск на нижний ярус выпускает его сразу). false — только время. */
+  byDepth: boolean;
 }
 
-export const DEFAULT_DIRECTOR: DirectorConfig = { glimpseAt: 75, releaseAt: 210, scareGap: [28, 55] };
+export const DEFAULT_DIRECTOR: DirectorConfig = { glimpseAt: 75, releaseAt: 210, scareGap: [28, 55], byDepth: true };
+
+/**
+ * Первая сессия игрока — мягче (слова партнёра 16.11 23:41: «Монстр сильно часто нападает в первой сессии,
+ * сложно найти предметы»): рой мелькает с третьей минуты и выходит на охоту только с пятой — по времени, а не
+ * по спуску (в первой сессии убежище двухъярусное, и спуск на второй ярус выпускал рой сразу).
+ */
+export const FIRST_DIRECTOR: DirectorConfig = { glimpseAt: 150, releaseAt: 300, scareGap: [28, 55], byDepth: false };
 
 export class Director {
   /** 0 — только ложные события, 1 — рой мелькает, 2 — рой охотится. */
@@ -75,12 +84,12 @@ export class Director {
     const ev: DirectorEvent[] = [];
     const c = this.cfg;
     const deep = inp.tier >= 1;
-    if (this.phase === 0 && (inp.time >= c.glimpseAt || deep)) {
+    if (this.phase === 0 && (inp.time >= c.glimpseAt || (deep && c.byDepth))) {
       this.phase = 1;
       this.nextGlimpse = inp.time + 8 + this.rng() * 14;
     }
     // На охоту рой выходит по времени, по глубине или когда игрок, спустившись, взял первую цель.
-    if (this.phase === 1 && (inp.time >= c.releaseAt || inp.tier >= Math.max(1, inp.tiers - 1) || (deep && inp.goalsDone >= 1))) this.phase = 2;
+    if (this.phase === 1 && (inp.time >= c.releaseAt || (c.byDepth && (inp.tier >= Math.max(1, inp.tiers - 1) || (deep && inp.goalsDone >= 1))))) this.phase = 2;
 
     if (this.phase === 1 && inp.time >= this.nextGlimpse && !inp.swarmBusy) {
       ev.push({ type: 'apparition' });

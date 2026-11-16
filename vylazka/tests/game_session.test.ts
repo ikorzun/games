@@ -462,42 +462,43 @@ describe('игра целиком: провал, газ и Осыпь не ко�
     expect(h.until(() => h.count('recall') > 0, 5)).toBe(true);
   });
 
-  it('поймав у самого начала, Осыпь отходит и теряет игрока; поймав далеко — остаётся там, где дотянулась', () => {
-    // У начала: игрок пойман там же, где появился.
+  it('поймав, Осыпь затихает (потом — на 20 с) и выходит снова далеко от игрока, не зная, где он', () => {
+    // Слова партнёра 16.11 23:41: «Монстр сильно часто нападает в первой сессии». Раньше она выходила
+    // снова сразу и ловила игрока, едва тот отходил от начала.
     const near = caught(6);
     const g = near.h.game;
     expect(near.h.until(() => g.transition === null, 4)).toBe(true);
     const sw = g.swarm!;
-    const home = g.playerNode();
+    expect(sw.active).toBe(false);
+    near.h.run(15);
+    expect(sw.active).toBe(false);
+    expect(near.h.until(() => sw.active, 8)).toBe(true);
     expect(sw.mode).toBe('roam');
-    expect(sw.awareness).toBe(0);
-    expect(sw.route(sw.node, home).length - 1).toBeGreaterThanOrEqual(8);
+    expect(sw.awareness).toBeLessThan(0.2);
+    expect(sw.route(sw.node, g.playerNode()).length - 1).toBeGreaterThanOrEqual(7);
+  });
 
-    // Далеко от начала: игрок стоит у искомой вещи (не ближе семи клеток пути), Осыпь ловит его там.
-    const h = new Harness(levelOf(SEED), { calm: false, seed: 6 });
-    const g2 = h.game;
+  it('первая сессия игрока: поймав, Осыпь молчит минуту', () => {
+    // Фонарь не глохнет и случайных скачков нет: в кармане время Осыпи не идёт, а проверяем только её.
+    const h = new Harness(levelOf(SEED), { calm: false, seed: 6, light: { meanFailInterval: 1e9 } });
+    const g = h.game;
+    g.firstSession = true;
+    g.jumps!.cooldown = 1e9;
     h.run(2);
-    const { id } = h.reveal();
-    expect(h.standBefore(id)).toBe(true);
-    const at = g2.playerNode();
-    const sw2 = g2.swarm!;
-    expect(sw2.route(at, g2.playerNodeAtSpawn()).length - 1).toBeGreaterThanOrEqual(6);
-    const start = sw2.nodeAround(at, 3, 4);
-    expect(start).toBeGreaterThanOrEqual(0);
-    sw2.activate(start);
-    sw2.mode = 'hunt';
-    sw2.cohesion = 1;
-    sw2.awareness = 1;
-    const b = g2.body;
-    g2.aimAt(2 * b.x - sw2.pos[0], b.y + 1.4, 2 * b.z - sw2.pos[2]);
-    // Отвернувшись от вещи, игрок её не вспомнит раньше, чем его поймают.
+    h.reveal();
+    const sw = g.swarm!;
+    const near = sw.nodeAround(g.playerNode(), 3, 4);
+    sw.activate(near);
+    sw.mode = 'hunt';
+    sw.cohesion = 1;
+    sw.awareness = 1;
+    const b = g.body;
+    g.aimAt(2 * b.x - sw.pos[0], b.y + 1.4, 2 * b.z - sw.pos[2]);
     expect(h.until(() => h.log.fear.some((e) => e.type === 'swarm' && e.what === 'caught'), 25), 'Осыпь не поймала').toBe(true);
-    expect(h.until(() => g2.transition === null, 4)).toBe(true);
-    const spawn = levelOf(SEED).spawn;
-    expect(Math.hypot(g2.body.x - spawn.pos[0], g2.body.z - spawn.pos[2])).toBeLessThan(0.3);
-    // Она осталась у места поимки: не дальше двух клеток пути от него.
-    expect(sw2.route(sw2.node, at).length - 1).toBeLessThanOrEqual(2);
-    expect(sw2.mode).toBe('roam');
+    expect(h.until(() => g.transition === null, 4)).toBe(true);
+    h.run(45);
+    expect(sw.active).toBe(false);
+    expect(h.until(() => sw.active, 20)).toBe(true);
   });
 
   it('провал в яму: fall, forgot, карман; по краю пространства игру возвращает в убежище', () => {

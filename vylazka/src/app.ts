@@ -462,6 +462,8 @@ export class App {
     } else {
       this.level = buildLevel(generateLayout(this.seed, this.rank, this.world), { wear });
       if (this.scenes) this.game.sessionCfg = SCENE_SESSION;
+      // Первая сессия игрока (ни одной законченной) — Осыпь мягче (слова партнёра 16.11 23:41).
+      this.game.firstSession = this.profile.successes === 0;
       this.game.loadLevel(this.level, { seed: this.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
       if (this.scenes) {
         // Сон начинается с места заставки; места, пролистанные кнопкой «Место», не «снились».
@@ -556,6 +558,7 @@ export class App {
       this.memory = mem;
       const level = buildLevel(generateLayout(mem.seed, mem.rank, this.world), { wear: this.wearParam() ?? mem.wear });
       this.next = { level, seed: mem.seed, rank: mem.rank };
+      this.game.firstSession = this.profile.successes === 0;
       this.game.queueSession(level, { seed: mem.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
     }, 500);
   }
@@ -1015,7 +1018,8 @@ export class App {
     this.touch?.setLit(light.state === 'on');
     // Где фонаря нет (офис), нет и его кнопки.
     this.touch?.setLightHidden(!g.hasLight);
-    this.hud.setBattery(1, 0, true);
+    // Заряд батарейки фонаря — там, где фонарь есть: трясти его можно, пока батарейка не села совсем.
+    this.hud.setBattery(light.charge, 0, !g.hasLight || g.where !== 'main' || this.screen !== 'play');
     this.hud.setAction('', 0);
     // В светлом пространстве светлые надписи не видны: переключаем их на тёмные.
     this.hud.el.classList.toggle('is-bright', bright);

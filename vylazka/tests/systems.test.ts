@@ -8,13 +8,63 @@ import { bakeGrime } from '../src/render/grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from '../src/render/matcap_atlas';
 import { fineOf, gazeTall, internalSize, QUALITY, verticalFov } from '../src/render/renderer';
 import { WORLD_FRAG } from '../src/render/shaders';
-import { CALM_ENV, DEFAULT_FLASHLIGHT, Flashlight } from '../src/systems/flashlight';
+import { CALM_ENV, DEFAULT_FLASHLIGHT, Flashlight, LIGHT_LONGER, REVIVE_MIN } from '../src/systems/flashlight';
 import { recTimestamp } from '../src/ui/hud';
 import { DECAY, MAT, MAT_COUNT, MAT_DEFS } from '../src/world/materials';
 
 const DT = 1 / 60;
 
 describe('фонарь', () => {
+  it('светит до отказа на 30 % дольше прежнего: промежуток между отказами, передышка и заряд ×1,3', () => {
+    expect(LIGHT_LONGER).toBe(1.3);
+    expect(DEFAULT_FLASHLIGHT.meanFailInterval).toBeCloseTo(104, 6);
+    expect(DEFAULT_FLASHLIGHT.graceAfterRevive).toBeCloseTo(18.2, 6);
+    expect(DEFAULT_FLASHLIGHT.drainSeconds).toBeCloseTo(702, 6);
+  });
+
+  it('трясти можно до полного истощения батарейки; севшая до нуля не оживает, пока не отдохнёт', () => {
+    // Короткая батарейка и без случайных отказов: светит, садится, гаснет.
+    const f = new Flashlight(mulberry32(5), { ...DEFAULT_FLASHLIGHT, meanFailInterval: 1e9, drainSeconds: 6 });
+    let t = 0;
+    while (f.state === 'on' && t < 10) {
+      f.update(DT, CALM_ENV);
+      t += DT;
+    }
+    expect(f.state).toBe('dead');
+    expect(f.charge).toBeLessThan(REVIVE_MIN);
+    // Энергичная тряска сразу после того, как села, не помогает: заряда нет.
+    for (let i = 0; i < 60; i++) f.update(DT, { ...CALM_ENV, shake: 1 });
+    expect(f.state).toBe('dead');
+    // Батарейка отдыхает в темноте и набирает немного заряда; тряска снова оживляет фонарь.
+    for (let i = 0; i < 60 * 30; i++) f.update(DT, CALM_ENV);
+    expect(f.charge).toBeCloseTo(DEFAULT_FLASHLIGHT.rest, 3);
+    let revived = false;
+    for (let i = 0; i < 60 * 3 && !revived; i++) revived = f.update(DT, { ...CALM_ENV, shake: 1 }).revived;
+    expect(revived).toBe(true);
+    expect(f.state).toBe('on');
+  });
+
+  it('пока в батарейке есть заряд, тряска оживает фонарь после каждого отказа', () => {
+    const f = new Flashlight(mulberry32(9), { ...DEFAULT_FLASHLIGHT, meanFailInterval: 0.5, graceAfterRevive: 0.5, drainSeconds: 60 });
+    let revives = 0;
+    for (let i = 0; i < 60 * 50; i++) {
+      const ev = f.update(DT, { ...CALM_ENV, shake: f.state === 'dead' ? 1 : 0 });
+      if (ev.revived) revives += 1;
+    }
+    expect(revives).toBeGreaterThan(10);
+  });
+
+  it('вспомненная вещь заряжает батарейку полностью, не трогая состояние фонаря', () => {
+    const f = new Flashlight(mulberry32(2), { ...DEFAULT_FLASHLIGHT, meanFailInterval: 1e9, drainSeconds: 10 });
+    for (let i = 0; i < 60 * 5; i++) f.update(DT, CALM_ENV);
+    expect(f.charge).toBeLessThan(0.6);
+    f.toggle();
+    expect(f.state).toBe('off');
+    f.recharge();
+    expect(f.charge).toBe(1);
+    expect(f.state).toBe('off');
+  });
+
   it('первый отказ приходит в заданное время: сначала мерцание, потом темнота', () => {
     const f = new Flashlight(mulberry32(1), { ...DEFAULT_FLASHLIGHT, firstFailAt: 5 });
     let failedAt = -1;

@@ -129,6 +129,18 @@ export class SwarmAI {
     this.goal = -1;
   }
 
+  /**
+   * Затихнуть: поймав, Осыпь насыщается и уходит в пол — её нет, пока игра не выпустит её снова
+   * (activate). Так игрок, вернувшись в начало, успевает отойти от него.
+   */
+  rest(): void {
+    this.mode = 'dormant';
+    this.cohesion = 0;
+    this.awareness = 0;
+    this.burn = 0;
+    this.path = [];
+  }
+
   /** Навести рой на узел: он «знает», что игрок там (сценарий, отладка). */
   alert(node: number, awareness = 0.8): void {
     if (this.mode === 'dormant' || node < 0) return;

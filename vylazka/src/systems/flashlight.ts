@@ -23,14 +23,32 @@ export interface FlashlightConfig {
   reviveNeed: [number, number];
   /** За сколько секунд горения садится полный заряд. */
   drainSeconds: number;
+  /**
+   * Севшая батарейка отдыхает: пока фонарь не горит и его не трясут, заряд сам поднимается до rest (доля)
+   * со скоростью restRate в секунду — как у настоящей батарейки, которой дали полежать. 0 — не отдыхает.
+   */
+  rest: number;
+  restRate: number;
 }
 
+/**
+ * Фонарь светит до отказа на 30 % дольше прежнего (слова партнёра 16.11 23:41: «Действие фонаря нужно
+ * удлинить на 30%»): средний промежуток между отказами, передышка после оживления и заряд батарейки — ×1,3.
+ */
+export const LIGHT_LONGER = 1.3;
+
+/** Меньше этого заряда тряска не поможет: батарейка села до конца — ей надо полежать (FlashlightConfig.rest). */
+export const REVIVE_MIN = 0.02;
+
 export const DEFAULT_FLASHLIGHT: FlashlightConfig = {
-  meanFailInterval: 80,
-  graceAfterRevive: 14,
+  meanFailInterval: 80 * LIGHT_LONGER,
+  graceAfterRevive: 14 * LIGHT_LONGER,
   firstFailAt: 0,
   reviveNeed: [0.6, 1.5],
-  drainSeconds: 540,
+  drainSeconds: 540 * LIGHT_LONGER,
+  // Севшая до нуля за полминуты темноты набирает 15 % — ещё на пару минут тусклого света.
+  rest: 0.15,
+  restRate: 0.005,
 };
 
 export interface FlashlightEnv {
@@ -90,7 +108,7 @@ export class Flashlight {
   toggle(): void {
     if (this.state === 'on') this.state = 'off';
     else if (this.state === 'off') {
-      this.state = this.charge > 0 ? 'on' : 'dead';
+      this.state = this.charge >= REVIVE_MIN ? 'on' : 'dead';
       if (this.state === 'dead') this.beginDead();
     }
   }
@@ -110,12 +128,17 @@ export class Flashlight {
     if (this.state === 'on') this.unstable = Math.max(this.unstable, seconds);
   }
 
-  /** Батарейка села: тряска не поможет, нужна замена. */
   /** Принудительный первый отказ уже был: игрок знает, что фонарь трясут. */
   get taught(): boolean {
     return this.firstFailDone;
   }
 
+  /** Зарядить батарейку полностью, не трогая состояние фонаря (вспомненная вещь возвращает свет). */
+  recharge(): void {
+    this.charge = 1;
+  }
+
+  /** Батарейка села до нуля: тряска не поможет, пока она не отдохнёт. */
   get empty(): boolean {
     return this.charge <= 0;
   }
@@ -176,18 +199,24 @@ export class Flashlight {
           this.dying = 0.5 + this.rng() * 0.9;
         }
       }
-    } else if (this.state === 'dead') {
+    }
+    // Отдых: пока фонарь не горит и его не трясут, севшая батарейка понемногу приходит в себя (ей надо
+    // полежать). Трясти севшую — только мешать ей.
+    if (this.state !== 'on' && env.shake <= 0.05 && this.charge < this.cfg.rest) this.charge = Math.min(this.cfg.rest, this.charge + this.cfg.restRate * dt);
+    if (this.state === 'dead') {
+      // Трясти можно до последнего: пока в батарейке есть хоть что-то, тряска фонарь оживит. Севшая до нуля
+      // только дребезжит и искрит — оживлять нечего.
       if (env.shake > 0.05) {
         ev.rattle = env.shake;
         // Вялая тряска почти не помогает: вклад растёт быстрее уровня.
-        this.work += Math.pow(env.shake, 1.3) * dt;
+        if (this.charge >= REVIVE_MIN) this.work += Math.pow(env.shake, 1.3) * dt;
         if (this.sparkLeft <= 0 && this.rng() < env.shake * 9 * dt) {
           this.sparkLeft = 0.04 + this.rng() * 0.07;
           ev.spark = true;
         }
       }
       this.reviveProgress = clamp01(this.work / this.need);
-      if (this.work >= this.need && this.charge > 0) {
+      if (this.work >= this.need && this.charge >= REVIVE_MIN) {
         this.state = 'on';
         this.sinceRevive = 0;
         this.unstable = 0.5;
