@@ -242,6 +242,12 @@ void main() {
   gl_Position = projectionMatrix * mv;
   // Растворённого предмета нет вовсе: его треугольники не доходят до растеризации.
   if (od > 0.995) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+#ifdef LACE_EDGE
+  // Нити по рёбрам кружева (renderer: laceEdges): линии изломов и краёв вещи. Рисуются только у того,
+  // что сейчас кружево, и чуть ближе к камере, чтобы не тонуть в собственной сетке.
+  gl_Position.z -= 0.0008 * gl_Position.w;
+  if (vLace < 0.5) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+#endif
 }
 `;
 
@@ -673,6 +679,8 @@ void main() {
       laceK = 1.0;
     } else if (cellHash(floor(vWorld * 48.0) + 17.0) < gone) laceK = 1.0;
   }
+  // Линия-нить по ребру (LACE_EDGE) — сама нить: сетка по граням к ней не относится.
+#ifndef LACE_EDGE
   if (laceK > 0.5) {
     vec3 gn = abs(normalize(cross(dFdx(vWorld), dFdy(vWorld))));
     vec2 q = gn.y > 0.6 ? vWorld.xz : (gn.x > gn.z ? vWorld.zy : vWorld.xy);
@@ -688,6 +696,7 @@ void main() {
     }
     if (laceDist(q) * ls > max(0.0035, 0.75 * px)) discard;
   }
+#endif
   vec3 Ng = normalize(vNrmV);
 #ifdef SLIDE
   // Проекция — не вещь, а свет на том, что позади: комната, которой нет. В темноте она светится сама,
@@ -1059,7 +1068,12 @@ void main() {
   alb = mix(alb, 0.55 + 0.9 * d1.g, k);
 #ifdef DETAIL
   H = mix(H, d1.r * uMatB[mj].x - 0.002, k);
+#ifdef LACE_EDGE
+  // На линии экранные производные вырождены: рельефа у нити нет.
+  vec3 N = Ng;
+#else
   vec3 N = perturb(Ng, vPosV, H);
+#endif
   float dirt = mix(1.0, (0.62 + 0.5 * g2.r) * (0.8 + 0.4 * g1.g), grimeK);
 #else
   vec3 N = Ng;

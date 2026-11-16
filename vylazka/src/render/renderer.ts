@@ -235,6 +235,8 @@ interface Thing {
   look: ThingLook;
   /** Последний распад, о котором сообщила игра: по нему заводится облако пыли. */
   dis: number;
+  /** Кружевная вещь: материал её нитей по рёбрам (LACE_EDGE); у остальных — null. */
+  edgeMat: THREE.ShaderMaterial | null;
 }
 
 /** Пыль кружева — цвета нитей, а не того, чем вещь была. */
@@ -441,6 +443,13 @@ export class GameRenderer {
   private readonly worldMat: THREE.ShaderMaterial;
   /** Проекции (world/flat.ts): тот же шейдер мира с веткой SLIDE — картинка из света, которую свет смывает. */
   private readonly slideMat: THREE.ShaderMaterial;
+  /**
+   * Нити по рёбрам кружева (аудит мест: «кружево — одна машинная сетка»): материал мира с LACE_EDGE —
+   * линии изломов и краёв вещи тем же светом, сборкой и памятью, что сама вещь. Сетка по граням остаётся.
+   */
+  private readonly laceEdgeMat: THREE.ShaderMaterial;
+  /** Куски уровня, у которых сменился состав кружевных предметов: нити перестраиваются перед кадром. */
+  private readonly laceDirty = new Set<number>();
   /** Отладка: проекции скрыты (чтобы сравнить кадр с ними и без них). */
   debugSlidesOff = false;
   private signsTex: THREE.Texture;
@@ -707,6 +716,7 @@ export class GameRenderer {
     this.depthMat = new THREE.ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, side: THREE.BackSide, colorWrite: false, uniforms: { uObjState: { value: this.objTex }, uWind: this.worldMat.uniforms.uWind! } });
     // Проекции: всё общее — теми же uniform-объектами, что у мира.
     this.slideMat = this.worldLike();
+    this.laceEdgeMat = this.worldLike();
     // Красная сетка: распад берёт у мира (одни и те же uniform-объекты), яркость своя.
     this.wireMat = new THREE.ShaderMaterial({
       vertexShader: WIRE_VERT,
@@ -1141,9 +1151,15 @@ export class GameRenderer {
     this.worldMat.needsUpdate = true;
     this.slideMat.defines = { ...this.worldMat.defines, SLIDE: '' };
     this.slideMat.needsUpdate = true;
+    this.laceEdgeMat.defines = { ...this.worldMat.defines, LACE_EDGE: '' };
+    this.laceEdgeMat.needsUpdate = true;
     for (const t of this.things.values()) {
       t.mat.defines = { ...this.worldMat.defines };
       t.mat.needsUpdate = true;
+      if (t.edgeMat) {
+        t.edgeMat.defines = { ...this.worldMat.defines, LACE_EDGE: '' };
+        t.edgeMat.needsUpdate = true;
+      }
     }
     // Объём для точек — только на высоком качестве: четыре лишние выборки глубины на каждую точку.
     this.splatMat.defines = q.edl ? { EDL: '' } : {};
@@ -1534,6 +1550,57 @@ export class GameRenderer {
     if (this.objData[id * 4 + 1] === v) return;
     this.objData[id * 4 + 1] = v;
     this.objTex.needsUpdate = true;
+    // Нити по рёбрам: кусок, в котором лежит предмет, перестроит их перед следующим кадром.
+    for (let c = 0; c < this.chunkData.length; c++) {
+      let map = this.chunkTris[c];
+      if (!map) this.chunkTris[c] = map = objectTriangles(this.chunkData[c]!);
+      if (map.has(id)) this.laceDirty.add(c);
+    }
+  }
+
+  /**
+   * Нити по рёбрам кружевных предметов куска c: линии изломов и краёв только тех предметов, что сейчас
+   * кружево. Каналы — те же, что у сетки куска (общие буферы), своё только перечисление рёбер.
+   */
+  private buildLaceEdges(c: number): void {
+    const m = this.chunks[c];
+    const data = this.chunkData[c];
+    if (!m || !data) return;
+    let map = this.chunkTris[c];
+    if (!map) this.chunkTris[c] = map = objectTriangles(data);
+    const tri: number[] = [];
+    for (const [id, list] of map) {
+      if (this.objData[id * 4 + 1]! === 0) continue;
+      for (const t of list) tri.push(data.index[t * 3]!, data.index[t * 3 + 1]!, data.index[t * 3 + 2]!);
+    }
+    const old = m.userData.laceEdges as THREE.LineSegments | undefined;
+    if (tri.length === 0) {
+      if (old) old.visible = false;
+      return;
+    }
+    const idx = new THREE.BufferAttribute(edgeIndex(tri, data.position, data.position.length / 3), 1);
+    if (old) {
+      // Каналы общие с куском: геометрию не выбрасываем (это освободило бы и его буферы), меняем рёбра.
+      old.geometry.setIndex(idx);
+      old.visible = true;
+      return;
+    }
+    const lines = this.edgeLines(m.geometry, idx, this.laceEdgeMat);
+    m.add(lines);
+    m.userData.laceEdges = lines;
+  }
+
+  /** Линии рёбер поверх сетки: все каналы — её же (общие буферы), своё — только перечисление рёбер. */
+  private edgeLines(src: THREE.BufferGeometry, idx: THREE.BufferAttribute, mat: THREE.ShaderMaterial): THREE.LineSegments {
+    const g = new THREE.BufferGeometry();
+    for (const [name, attr] of Object.entries(src.attributes)) g.setAttribute(name, attr);
+    g.setIndex(idx);
+    g.boundingSphere = src.boundingSphere;
+    const lines = new THREE.LineSegments(g, mat);
+    lines.matrixAutoUpdate = false;
+    // Тень нити не нужна: в карту теней идёт сама вещь.
+    lines.layers.set(1);
+    return lines;
   }
 
   /**
@@ -1636,6 +1703,7 @@ export class GameRenderer {
     for (const key of [...this.bursts.keys()]) this.dropBurst(key);
     this.chunkData = chunks.map((c) => c.mesh);
     this.chunkTris = chunks.map(() => null);
+    this.laceDirty.clear();
     for (const chunk of chunks) {
       const mesh = this.makeMesh(chunk.mesh, chunk.tierMin, chunk.tierMax);
       if (chunk.id) mesh.userData.id = chunk.id;
@@ -1689,6 +1757,7 @@ export class GameRenderer {
     this.clouds.remove(m);
     const w = m.userData.wire as THREE.LineSegments | undefined;
     if (w) w.geometry.dispose();
+    (m.userData.laceEdges as THREE.LineSegments | undefined)?.geometry.dispose();
     (m.userData.slide as THREE.Mesh | undefined)?.geometry.dispose();
     this.scene.remove(m);
     m.geometry.dispose();
@@ -1800,8 +1869,20 @@ export class GameRenderer {
     if (look !== 'matter') mesh.layers.set(1);
     this.scene.add(mesh);
     if (look !== 'light') this.clouds.add(mesh, data, { follow: true });
+    // Кружевная вещь — ещё и нити по своим рёбрам: силуэт и изломы читаются, а не тонут в ровной сетке.
+    let edgeMat: THREE.ShaderMaterial | null = null;
+    if (look === 'lace') {
+      edgeMat = this.worldLike();
+      edgeMat.uniforms.uThing = mat.uniforms.uThing!;
+      edgeMat.uniforms.uDots = mat.uniforms.uDots!;
+      edgeMat.defines = { ...this.worldMat.defines, LACE_EDGE: '' };
+      const idx = new THREE.BufferAttribute(edgeIndex(data.index, data.position, data.position.length / 3), 1);
+      const lines = this.edgeLines(mesh.geometry, idx, edgeMat);
+      mesh.add(lines);
+      mesh.userData.laceEdges = lines;
+    }
     const id = this.nextThing++;
-    this.things.set(id, { mesh, mat, wire: null, wireMat: null, radius: mesh.geometry.boundingSphere?.radius ?? 0.5, data, seed, look, dis: 0 });
+    this.things.set(id, { mesh, mat, wire: null, wireMat: null, radius: mesh.geometry.boundingSphere?.radius ?? 0.5, data, seed, look, dis: 0, edgeMat });
     return id;
   }
 
@@ -1858,6 +1939,7 @@ export class GameRenderer {
     if (b && (b.life.coming || b.life.go < 1)) this.dropBurst(`t${id}`);
     this.dropMesh(t.mesh);
     t.mat.dispose();
+    t.edgeMat?.dispose();
     t.wireMat?.dispose();
     this.things.delete(id);
   }
@@ -2002,6 +2084,9 @@ export class GameRenderer {
       if (s.upperTier === base && near(s.top)) hi = Math.max(hi, base + 1);
       if (s.upperTier + 1 === base && near(s.bottom)) lo = Math.min(lo, base - 1);
     }
+    // Нити по рёбрам кружевных предметов: перестраиваются там, где сменился состав (раз на уровень).
+    for (const c of this.laceDirty) this.buildLaceEdges(c);
+    this.laceDirty.clear();
     for (const m of this.chunks) {
       const sphere = m.geometry.boundingSphere;
       const far = sphere ? cam.position.distanceTo(sphere.center) - sphere.radius > this.cullDistance : false;
