@@ -152,6 +152,7 @@ varying float vObj;
 varying float vLace;
 varying float vArch;
 varying vec2 vTone;
+varying float vSeed;      // чей узор кружева: номер предмета или сид вещи (0 — архитектура)
 ${CRUMBLE_GLSL}
 ${WIND_GLSL}
 #ifdef BIRD
@@ -227,6 +228,7 @@ void main() {
   // Архитектура — всё, что не предмет и не отдельная вещь: стены, пол, потолок, трубы на них (1). Висящее у
   // потолка — тоже архитектура, но стирается вместе с потолком над собой (2).
   vArch = uThing.z < 0.5 ? (aObj < 0.5 ? 1.0 : (hangV ? 2.0 : 0.0)) : 0.0;
+  vSeed = uThing.z > 0.5 ? 1.0 + uThing.w * 7.0 : aObj;
   vec4 mv = viewMatrix * vec4(crumble(wp.xyz, vDis), 1.0);
   vPosV = mv.xyz;
   vNrmV = mat3(viewMatrix) * wn;
@@ -298,6 +300,7 @@ varying float vObj;
 varying float vLace;
 varying float vArch;
 varying vec2 vTone;       // x — предмет выцвел, y — светится своим цветом
+varying float vSeed;      // чей узор кружева (0 — архитектура: общий узор)
 varying float vShell;     // мох слоями: уровень слоя, 0 — не мох
 uniform float uKeyCells;  // > 0 — прямой свет есть только там, где клетка светлая: множитель рассеянного света клеток
 uniform float uGaze;      // 0..1: рассеянный свет собирает место только там, куда смотрит герой
@@ -674,7 +677,15 @@ void main() {
     vec2 q = gn.y > 0.6 ? vWorld.xz : (gn.x > gn.z ? vWorld.zy : vWorld.xy);
     // Нить не тоньше полутора точек кадра: вдали кружево не пропадает, а сливается в дымку.
     float px = length(fwidth(q));
-    if (laceDist(q) > max(0.0035, 0.75 * px)) discard;
+    // Узор свой у каждой вещи (аудит мест: «кружево — одна машинная сетка»): поворот и шаг сети — от
+    // номера предмета или сида вещи; у стен и пола — общий.
+    float ls = 1.0;
+    if (vSeed > 0.5) {
+      float a = cellHash(vec3(floor(vSeed + 0.5), 5.0, 11.0)) * 3.14159;
+      ls = 0.8 + 0.45 * cellHash(vec3(floor(vSeed + 0.5), 9.0, 2.0));
+      q = mat2(cos(a), sin(a), -sin(a), cos(a)) * q / ls;
+    }
+    if (laceDist(q) * ls > max(0.0035, 0.75 * px)) discard;
   }
   vec3 Ng = normalize(vNrmV);
 #ifdef SLIDE
