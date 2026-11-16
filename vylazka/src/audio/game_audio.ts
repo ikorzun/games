@@ -167,6 +167,8 @@ export class GameAudio {
         this.wake(game.listener(), 7);
       }
       else if (e.type === 'begin') a.play((game.world ?? 'shelter') === 'shelter' ? 'hatch' : 'lift', { volume: 0.8 });
+      // Волна сонара — тихий пинг от самого игрока (слова партнёра: «Сонар тихий пинг»).
+      else if (e.type === 'sonar') a.play('sonar_ping', { rate: this.jitter(0.03) });
       // Всё иллюзорно: тронутая вещь рассыпается в пыль, после темноты собирается из неё.
       else if (e.type === 'touch') a.play(e.what === 'gone' ? 'dissolve' : 'assemble', { rate: this.jitter(0.1), volume: e.what === 'gone' ? 1 : 0.7 });
       // Птица сорвалась с места — хлопки крыльев оттуда, где она сидела; воркование — редкое и тихое.

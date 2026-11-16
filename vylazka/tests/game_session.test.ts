@@ -529,7 +529,8 @@ describe('игра целиком: особенности помещений и 
       const ev = game.step(STEP, emptyInput());
       game.draw(1, STEP);
       expect(ev.session).toEqual([]);
-      expect(ev.dream).toEqual([]);
+      // Волна сонара — свойство места (вариант A), а не сессии: она идёт и в свободной прогулке.
+      expect(ev.dream.filter((e) => e.type !== 'sonar')).toEqual([]);
     }
     expect(game.things.list.length).toBe(0);
   });
@@ -543,6 +544,9 @@ describe('тихий слой и сонар (вариант A)', () => {
     h.run(0.5);
     expect(view()!.quiet).toBeGreaterThan(0);
     expect(h.until(() => (view()?.sonar ?? null) !== null, 4)).toBe(true);
+    // Пошла волна — событие сна «sonar»: по нему звучит тихий пинг (слова партнёра: «Сонар тихий пинг»).
+    const pings = (): number => h.log.dream.filter((e) => e.type === 'sonar').length;
+    expect(pings()).toBe(1);
     const a = view()!.sonar!;
     h.run(1);
     const b = view()!.sonar!;
@@ -551,6 +555,8 @@ describe('тихий слой и сонар (вариант A)', () => {
     // Волна гаснет к концу пути, следующая приходит не позже чем через SONAR_EVERY[1] с.
     expect(h.until(() => (view()?.sonar ?? null) === null, SONAR_REACH / SONAR_SPEED + 1)).toBe(true);
     expect(h.until(() => (view()?.sonar ?? null) !== null, SONAR_EVERY[1] + 1)).toBe(true);
+    // Одна волна — один пинг.
+    expect(pings()).toBe(2);
     // Карман — не место: ни тихого слоя, ни волны.
     enter(h, 'meadow');
     h.run(1);

@@ -167,6 +167,7 @@ describe('привязка звуков к игре', () => {
       { type: 'touch', name: 'locker', what: 'back', how: 'same' },
       { type: 'limbo' },
       { type: 'begin' },
+      { type: 'sonar' },
     ] as unknown as StepEvents['dream'];
     ev.fear = [
       { type: 'scare', id: 'steps', pos: [0, 0, 4] },
@@ -180,7 +181,9 @@ describe('привязка звуков к игре', () => {
       { type: 'swarm', what: 'release' },
     ];
     a.onStep(ev, w);
-    expect(r.ids_()).toEqual(['camera_hold', 'camera_beep', 'collapse', 'cough', 'fall', 'flash_spark', 'whiteout', 'dissolve', 'assemble', 'ui_report', 'wake_street', 'hatch', 'scare_steps', 'scare_knock', 'scare_radio', 'flash_spark', 'swarm_cohere', 'swarm_scatter', 'swarm_catch']);
+    expect(r.ids_()).toEqual(['camera_hold', 'camera_beep', 'collapse', 'cough', 'fall', 'flash_spark', 'whiteout', 'dissolve', 'assemble', 'ui_report', 'wake_street', 'hatch', 'sonar_ping', 'scare_steps', 'scare_knock', 'scare_radio', 'flash_spark', 'swarm_cohere', 'swarm_scatter', 'swarm_catch']);
+    // Пинг сонара — от самого игрока, не из мира.
+    expect(r.plays.find((p) => p.id === 'sonar_ping')!.pos).toBeUndefined();
     // Рывок слышно только в момент смены места, а не в начале ухода: одна искра (вторая — мигание фонаря).
     // Выбеливание слышно с самого начала — оно нарастает; искры у него нет.
     expect(r.plays.filter((p) => p.id === 'flash_spark').length).toBe(2);

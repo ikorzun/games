@@ -552,6 +552,16 @@
       "ru": "явь: тихая узкая улица и далёкий напев — запись партнёра (не сгенерирована); изредка и глухо сквозь сон, в лимбо — каждый раз"
     },
     {
+      "id": "sonar_ping",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 2.0,
+      "volume": 0.3,
+      "prompt": "Single clean sonar ping recorded at full level: one clear bell-like sine tone with a soft attack, a long shimmering decay and one faint distant echo, like a pulse travelling through an empty building. Dry and close, no music, no voice, no background noise.",
+      "ru": "сонар: тихий пинг, когда от игрока расходится волна по тихому слою (слова партнёра: «Сонар тихий пинг»); тихим его делает игра — громкость 0,3"
+    },
+    {
       "id": "bird_wings",
       "bus": "sfx",
       "variants": 3,

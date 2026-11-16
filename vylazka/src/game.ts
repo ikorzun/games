@@ -114,6 +114,8 @@ export type DreamEvent =
   | { type: 'pressure'; kind: PressureKind; what: 'start' | 'fall' | 'woke'; at: Vec3 }
   /** Сессия кончилась, игрок в лимбо: пора готовить следующую (queueSession). */
   | { type: 'limbo' }
+  /** От игрока пошла волна сонара (вариант A): звук — тихий пинг (слова партнёра: «Сонар тихий пинг»). */
+  | { type: 'sonar' }
   /** Началась новая сессия. */
   | { type: 'begin' };
 
@@ -448,6 +450,8 @@ export class Game {
   private sonarT0 = -1;
   private sonarPos: Vec3 = [0, 0, 0];
   private sonarN = 0;
+  /** Волна только что пошла: событие уйдёт в события сна этого шага. */
+  private sonarFresh = false;
   private darkFor = 0;
   private darkShifts = 0;
   private detailShifts = 0;
@@ -1469,6 +1473,7 @@ export class Game {
       this.sonarPos = [b.x, b.y + 1.2, b.z];
       this.sonarT0 = this.time;
       this.sonarN += 1;
+      this.sonarFresh = true;
       // Свой счёт, не общий генератор игры: волна не сдвигает ни вещей, ни Осыпи.
       const k = hash01(this.sonarN, 0x50a7, this.dreamSeed ^ 0x5011a2);
       this.sonarAt = this.time + SONAR_EVERY[0] + k * (SONAR_EVERY[1] - SONAR_EVERY[0]);
@@ -2025,6 +2030,10 @@ export class Game {
     const out: SessionEvent[] = [];
     const fear: FearEvent[] = [];
     const dream: DreamEvent[] = [];
+    if (this.sonarFresh) {
+      this.sonarFresh = false;
+      dream.push({ type: 'sonar' });
+    }
     const eye: Vec3 = this.lastRig ? this.lastRig.camPos : [b.x, b.y + 1.42, b.z];
     const aim: Vec3 = this.lastRig ? this.lastRig.lightDir : dirFromAngles(this.aimYaw, this.aimPitch);
     const los = (from: Vec3, to: Vec3): number => {
