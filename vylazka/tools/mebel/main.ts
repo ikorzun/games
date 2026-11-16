@@ -14,6 +14,7 @@ import { MAT_DEFS, hexToLinear } from '../../src/world/materials';
 import { Xf } from '../../src/world/props';
 import { ALL_PROPS } from '../../src/world/props_all';
 import { ALL_MEMORIES } from '../../src/systems/session';
+import { KAYKIT_SWAPS } from '../../src/world/props_real';
 import RU from '../../locales/ru/ui.json';
 
 type Usage = Record<string, { worlds: Record<string, number>; rooms: Record<string, number> }>;
@@ -30,14 +31,19 @@ const ROOM_RU: Record<string, string> = {
   tickets: 'касса', lockers: 'камеры хранения', buffet: 'буфет', platform: 'перрон', lift: 'лифт', track: 'пути',
 };
 
-type Kind = 'furniture' | 'memory' | 'other';
-type Verdict = 'redo1' | 'redo2' | 'keep' | 'remove' | 'detail1' | 'detail2';
+type Kind = 'pair' | 'furniture' | 'memory' | 'other';
+type Verdict = 'redo1' | 'redo2' | 'keep' | 'remove' | 'detail1' | 'detail2' | 'swap' | 'swapfix';
 interface Choice {
   id: Verdict;
   label: string;
   hint: string;
 }
 const CHOICES: Record<Kind, Choice[]> = {
+  pair: [
+    { id: 'swap', label: 'Менять на новую', hint: 'новая встаёт везде вместо старой' },
+    { id: 'swapfix', label: 'Менять, но доработать', hint: 'напишите, что поправить' },
+    { id: 'keep', label: 'Оставить как есть', hint: 'старая лучше' },
+  ],
   furniture: [
     { id: 'redo1', label: 'Переделать, как стул — первым', hint: 'настоящие пропорции и материалы' },
     { id: 'redo2', label: 'Переделать — потом', hint: 'когда дойдут руки' },
@@ -75,8 +81,13 @@ for (const m of ALL_MEMORIES) {
   MEMORY.set(m.thing, list);
 }
 
+const SWAP = new Map(KAYKIT_SWAPS.map((x) => [x.from, x.to]));
+const ALT = new Set(KAYKIT_SWAPS.map((x) => x.to));
+
 interface Item {
   kind: Kind;
+  /** У пары: имя замены. */
+  alt?: string;
   advice: string;
   name: string;
   ru: string;
@@ -98,12 +109,17 @@ const ITEMS: Item[] = Object.keys(ALL_PROPS)
     const u = USAGE[name];
     const toy = name.startsWith('kk_');
     const used = Object.keys(u?.worlds ?? {}).length > 0;
-    const kind: Kind = MEMORY.has(name) ? 'memory' : FURNITURE.test(p.ru) && used ? 'furniture' : 'other';
+    const alt = SWAP.get(name);
+    const kind: Kind = alt ? 'pair' : MEMORY.has(name) ? 'memory' : ALT.has(name) && name !== 'chair_bent' ? 'other' : FURNITURE.test(p.ru) && used ? 'furniture' : 'other';
     // Моё предложение — чтобы было с чем спорить; решает партнёр.
     // Чаще на глазах — раньше переделывать: сколько штук в среднем на уровень в том месте, где их больше.
     const most = Math.max(0, ...Object.values(u?.worlds ?? {}));
     const advice =
-      name === 'chair_bent'
+      name === 'kk_chair_a'
+        ? 'уже заменён по вашему слову'
+        : kind === 'pair'
+          ? 'менять на новую'
+          : name === 'chair_bent'
         ? 'уже как надо'
         : kind === 'memory'
           ? 'детальнее — первой: её ищут'
@@ -116,6 +132,7 @@ const ITEMS: Item[] = Object.keys(ALL_PROPS)
                 : 'переделать потом: встречается реже';
     return {
       kind,
+      ...(alt ? { alt } : {}),
       advice,
       name,
       ru: p.ru,
@@ -132,7 +149,7 @@ const ITEMS: Item[] = Object.keys(ALL_PROPS)
     };
   })
   .sort((a, b) => Number(b.toy) - Number(a.toy) || a.ru.localeCompare(b.ru, 'ru'));
-const RANK: Record<Kind, number> = { memory: 0, furniture: 1, other: 2 };
+const RANK: Record<Kind, number> = { pair: 0, memory: 1, furniture: 2, other: 3 };
 
 // ───────────────────────────── геометрия ─────────────────────────────
 
@@ -197,22 +214,36 @@ function person(): THREE.Group {
   return g;
 }
 
-function place(holder: THREE.Group, name: string, withPerson: boolean): THREE.Box3 {
+/** Поставить вещь (а у пары — две рядом: слева та, что сейчас, справа замена). */
+function place(holder: THREE.Group, name: string, withPerson: boolean, alt?: string): THREE.Box3 {
   holder.clear();
-  const g = geometryOf(name);
-  const mesh = new THREE.Mesh(g, material);
-  const box = g.boundingBox!.clone();
-  const cx = (box.min.x + box.max.x) / 2;
-  const cz = (box.min.z + box.max.z) / 2;
-  mesh.position.set(-cx, 0, -cz);
-  holder.add(mesh);
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(Math.max(0.8, (box.max.x - box.min.x) * 0.9), 48), new THREE.MeshStandardMaterial({ color: 0x24272b, roughness: 1 }));
+  const names = alt ? [name, alt] : [name];
+  const boxes = names.map((n) => geometryOf(n).boundingBox!.clone());
+  const widths = boxes.map((b) => b.max.x - b.min.x);
+  const gap = alt ? Math.max(0.25, 0.25 * Math.max(...widths)) : 0;
+  const total = widths.reduce((a, b) => a + b, 0) + gap;
+  const box = new THREE.Box3();
+  let x = -total / 2;
+  names.forEach((n, k) => {
+    const g = geometryOf(n);
+    const b = boxes[k]!;
+    const mesh = new THREE.Mesh(g, material);
+    const ox = x - b.min.x;
+    const cz = (b.min.z + b.max.z) / 2;
+    mesh.position.set(ox, 0, -cz);
+    holder.add(mesh);
+    box.union(b.clone().translate(new THREE.Vector3(ox, 0, -cz)));
+    x += widths[k]! + gap;
+  });
+  const cx = 0;
+  const cz = 0;
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(Math.max(0.8, total * 0.75), 48), new THREE.MeshStandardMaterial({ color: 0x24272b, roughness: 1 }));
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -0.002;
   holder.add(floor);
   if (withPerson) {
     const p = person();
-    p.position.set(-(box.max.x - box.min.x) / 2 - 0.45, 0, 0);
+    p.position.set(box.min.x - 0.45, 0, 0);
     holder.add(p);
   }
   box.translate(new THREE.Vector3(-cx, 0, -cz));
@@ -229,6 +260,10 @@ const thumbCam = new THREE.PerspectiveCamera(32, 1, 0.01, 50);
 
 function renderThumb(name: string): string {
   const box = place(thumb.holder, name, false);
+  return snap(box);
+}
+
+function snap(box: THREE.Box3): string {
   const size = box.getSize(new THREE.Vector3());
   const r = Math.max(size.x, size.y, size.z) * 0.5 + 0.05;
   const c = box.getCenter(new THREE.Vector3());
@@ -262,7 +297,7 @@ function resize(): void {
 new ResizeObserver(resize).observe(viewEl);
 
 function show(name: string): void {
-  const box = place(view.holder, name, true);
+  const box = place(view.holder, name, true, ITEMS.find((i) => i.name === name)?.alt);
   const size = box.getSize(new THREE.Vector3());
   const c = box.getCenter(new THREE.Vector3());
   const r = Math.max(size.x, size.y, size.z, 1.2) * 0.6;
@@ -350,14 +385,15 @@ async function save(name: string, patch: Mark): Promise<void> {
 
 // ───────────────────────────── список и панель ─────────────────────────────
 
-const filter = { what: 'furniture', world: 'all', mark: 'all', q: '' };
-let current = ITEMS.find((i) => i.name === 'chair_bent')?.name ?? ITEMS[0]!.name;
+const filter = { what: 'pairs', world: 'all', mark: 'all', q: '' };
+let current = ITEMS.find((i) => i.name === 'kk_table_small')?.name ?? ITEMS[0]!.name;
 const listEl = document.getElementById('list')!;
 const thumbs = new Map<string, string>();
 
 function visible(): Item[] {
   const q = filter.q.trim().toLowerCase();
   return ITEMS.slice().sort((a, b) => RANK[a.kind] - RANK[b.kind]).filter((i) => {
+    if (filter.what === 'pairs' && i.kind !== 'pair') return false;
     if (filter.what === 'furniture' && i.kind !== 'furniture') return false;
     if (filter.what === 'memory' && i.kind !== 'memory') return false;
     const worlds = i.kind === 'memory' ? MEMORY.get(i.name)!.map((m) => m.world) : Object.keys(i.worlds);
@@ -386,6 +422,7 @@ const io = new IntersectionObserver(
 
 function where(i: Item): string {
   if (i.kind === 'memory') return 'вещь памяти: ' + MEMORY.get(i.name)!.map((m) => WORLD_RU[m.world] ?? m.world).join(', ');
+  if (i.name === 'kk_chair_a') return 'уже заменён: офис, жёлтые комнаты';
   const w = Object.entries(i.worlds);
   if (w.length === 0) return 'на уровнях не стоит';
   return w.map(([k, v]) => `${WORLD_RU[k] ?? k}: ${v}`).join(' · ');
@@ -410,18 +447,23 @@ function render(): void {
     b.type = 'button';
     b.className = 'card' + (i.name === current ? ' is-current' : '');
     b.setAttribute('aria-pressed', String(i.name === current));
-    const img = document.createElement('img');
-    img.alt = '';
-    img.dataset.name = i.name;
-    img.width = 110;
-    img.height = 110;
-    if (thumbs.has(i.name)) img.src = thumbs.get(i.name)!;
-    else io.observe(img);
+    const pics = document.createElement('span');
+    pics.className = 'card__pics' + (i.alt ? ' is-pair' : '');
+    for (const n of i.alt ? [i.name, i.alt] : [i.name]) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.dataset.name = n;
+      img.width = 110;
+      img.height = 110;
+      if (thumbs.has(n)) img.src = thumbs.get(n)!;
+      else io.observe(img);
+      pics.appendChild(img);
+    }
     const t = document.createElement('div');
     t.className = 'card__text';
     const ru = document.createElement('span');
     ru.className = 'card__ru';
-    ru.textContent = i.ru;
+    ru.textContent = i.alt ? `${i.ru} → ${ALL_PROPS[i.alt]!.ru}` : i.ru;
     const meta = document.createElement('span');
     meta.className = 'card__meta';
     meta.textContent = where(i);
@@ -429,13 +471,13 @@ function render(): void {
     const tags = document.createElement('span');
     tags.className = 'card__tags';
     if (i.kind === 'memory') tags.appendChild(tag('вещь памяти', 'mem'));
-    if (i.toy) tags.appendChild(tag('игрушечный набор', 'toy'));
+    if (i.toy && i.kind !== 'pair') tags.appendChild(tag('игрушечный набор', 'toy'));
     if (i.name === 'chair_bent') tags.appendChild(tag('новый, 16.11', 'new'));
     const v = marks.get(i.name)?.verdict;
     if (v) tags.appendChild(tag(LABEL[v] ?? v, `v-${v}`));
     else if (i.advice) tags.appendChild(tag(`моё предложение: ${i.advice}`, 'advice'));
     t.appendChild(tags);
-    b.append(img, t);
+    b.append(pics, t);
     b.addEventListener('click', () => {
       current = i.name;
       render();
@@ -458,10 +500,12 @@ const noteEl = document.getElementById('note') as HTMLTextAreaElement;
 
 function renderPanel(): void {
   const i = ITEMS.find((x) => x.name === current)!;
-  document.getElementById('p-ru')!.textContent = i.ru;
-  document.getElementById('p-name')!.textContent = i.name;
+  const alt = i.alt ? ALL_PROPS[i.alt]! : null;
+  document.getElementById('p-ru')!.textContent = alt ? `Слева — сейчас: ${i.ru}. Справа — замена: ${alt.ru}.` : i.ru;
+  document.getElementById('p-name')!.textContent = alt ? `${i.name} → ${i.alt}` : i.name;
   document.getElementById('p-size')!.textContent = `${Math.round(i.w * 100)} × ${Math.round(i.d * 100)} × ${Math.round(i.h * 100)} см${i.mount === 'wall' ? `, висит на высоте ${Math.round(i.y * 100)} см` : ''}`;
-  document.getElementById('p-source')!.textContent = i.source;
+  document.getElementById('p-source')!.textContent = alt ? 'сейчас — готовая модель из набора KayKit; замена — собрана кодом, как стул' : i.source;
+  if (alt) document.getElementById('p-size')!.textContent += ` → ${Math.round(alt.w * 100)} × ${Math.round(alt.d * 100)} × ${Math.round(alt.h * 100)} см`;
   document.getElementById('p-where')!.textContent = where(i);
   const rooms = i.rooms.slice(0, 4).map(([k]) => {
     const [w, r] = k.split(':');
@@ -471,10 +515,11 @@ function renderPanel(): void {
     i.kind === 'memory' ? MEMORY.get(i.name)!.map((m) => `«${m.line}» (${WORLD_RU[m.world] ?? m.world})`).join('; ') : rooms.length ? rooms.join(', ') : '—';
   document.getElementById('p-rooms-dt')!.textContent = i.kind === 'memory' ? 'Задание' : 'Где чаще';
   document.getElementById('p-advice')!.textContent = i.advice ? `Моё предложение: ${i.advice}.` : '';
-  document.getElementById('p-ask')!.textContent = i.kind === 'memory' ? 'Насколько проработать' : 'Что с ней делать';
+  document.getElementById('p-ask')!.textContent = i.kind === 'memory' ? 'Насколько проработать' : i.kind === 'pair' ? 'Менять или оставить' : 'Что с ней делать';
   buildChoices(i.kind);
   const game = document.getElementById('p-game') as HTMLAnchorElement;
-  game.href = `${__GAME_URL__}#show-${i.name.replace(/_/g, '-')}`;
+  game.href = `${__GAME_URL__}#show-${(i.alt ?? i.name).replace(/_/g, '-')}`;
+  game.textContent = i.alt ? 'Замена в игре под фонарём ↗' : 'Посмотреть в игре под фонарём ↗';
   const m = marks.get(i.name) ?? {};
   for (const btn of document.querySelectorAll<HTMLButtonElement>('#verdicts .verdict')) {
     const on = btn.dataset.v === m.verdict;
