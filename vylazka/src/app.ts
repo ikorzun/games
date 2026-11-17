@@ -2,6 +2,8 @@
  * Приложение: заставка → сессии одна за другой через лимбо; пауза, ввод с устройств, профиль
  * и главный цикл. Игровая логика — в game.ts и systems/.
  */
+import { Analytics } from './analytics/events';
+import type { PlayContext } from './analytics/events';
 import { allSoundFiles, AudioEngine } from './audio/engine';
 import { GameAudio, LOAD_FIRST } from './audio/game_audio';
 import { i18n, normalizeLang, t } from './core/i18n';
@@ -47,6 +49,7 @@ import { buildShowcase } from './world/showcase';
 import { buildTestLevel } from './world/test_level';
 import { setThingRegistry } from './world/thing_mesh';
 import { guardTouch, RESIZE_SETTLE_MS, ScreenAwake } from './platform/mobile_guard';
+import { AdBreaks } from './platform/ads';
 
 const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
@@ -98,6 +101,9 @@ export class App {
   /** Звук: движок и привязка звуков к событиям игры. */
   readonly sound: AudioEngine;
   readonly audio: GameAudio;
+  /** Аналитика площадки (analytics/events.ts) и крючок рекламы в лимбо (platform/ads.ts; рекламы сейчас нет). */
+  readonly analytics: Analytics;
+  private readonly ads: AdBreaks;
   game!: Game;
   /** Текущий уровень (геометрия уже отдана рендеру; здесь — игровые точки и граф). */
   level!: BuiltLevel;
@@ -195,19 +201,38 @@ export class App {
     const local = dir !== null && /^[a-z0-9_./-]+$/i.test(dir) && !dir.includes('//') ? dir.replace(/\/?$/, '/') : null;
     this.sound = local ? new AudioEngine(local, allSoundFiles()) : new AudioEngine();
     this.audio = new GameAudio(this.sound);
+    this.analytics = new Analytics(platform, this.lifecycle, () => this.playContext());
+    this.ads = new AdBreaks(platform);
+  }
+
+  /** Что аналитика знает об игре сейчас: место, круг, ступень, номер сессии, качество, настройки игрока. */
+  private playContext(): PlayContext {
+    const p = this.profile;
+    return {
+      world: this.world,
+      laps: this.memory?.laps ?? 0,
+      stage: this.game?.stage ?? 0,
+      n: p?.sorties ?? 0,
+      scenes: this.scenes,
+      test: this.testLevel,
+      quality: this.game?.renderer.quality ?? '',
+      settings: p ? { sound: !p.muted, lang: p.lang ?? 'auto', sens: p.sens, bright: p.bright, flash: p.calm ? 'reduced' : 'full', place: p.place } : {},
+    };
   }
 
   async init(): Promise<void> {
     const p = this.params;
-    // Язык по умолчанию — английский (решение партнёра); выбор игрока хранится в профиле.
-    this.setLang(normalizeLang(p.get('lang') ?? 'en'), true);
+    // Язык по умолчанию — английский (решение партнёра); выбор игрока хранится в профиле. На Playgama — язык площадки,
+    // если игра его знает (обязательный шаг 3 Bridge, пункт 3.4.2: язык берётся только из bridge.platform.language).
+    this.setLang(normalizeLang(p.get('lang') ?? (this.platform.id === 'playgama' ? this.platform.language() : 'en')), true);
     if (p.get('pseudo') === '1') i18n.setPseudo(true);
     // Счётчик кадров: ?fps=1 или #fps — на странице по ссылке параметров адреса нет, проходит только #имя.
     this.showFps = p.get('fps') === '1' || (typeof location !== 'undefined' && location.hash === '#fps');
     // Пробная сборка для телефона (страница с __vzVariant): «probe» ничего не меняет в игре, только включает
     // строку проверки с самого начала — нужен один снимок экрана.
     this.variant = String((globalThis as { __vzVariant?: unknown }).__vzVariant ?? '');
-    if (this.variant === 'probe' || p.get('diag') === '1' || (typeof location !== 'undefined' && location.hash === '#diag') || App.diagSaved()) this.makeDiag();
+    // Помнить строку проверки между запусками — только вне Playgama: там мимо Bridge игра ничего не хранит (пункт 3.2.1).
+    if (this.variant === 'probe' || p.get('diag') === '1' || (typeof location !== 'undefined' && location.hash === '#diag') || (this.platform.id !== 'playgama' && App.diagSaved())) this.makeDiag();
     this.scenes = this.variant === 'scenes' || p.get('scenes') === '1' || (typeof location !== 'undefined' && location.hash === '#scenes');
 
     const device = this.platform.deviceType();
@@ -261,6 +286,7 @@ export class App {
       renderer = new GameRenderer(this.canvas, quality);
     } catch (e) {
       console.error('[vylazka] WebGL2 недоступен:', e);
+      this.analytics.webgl('unavailable');
       this.overlay.show('error', t('ui.error.webgl'));
       this.platform.ready();
       return;
@@ -313,9 +339,13 @@ export class App {
       this.drawPaperStack(this.game.renderer.quality);
       this.redraw();
     });
-    renderer.onContextLost = () => this.lifecycle.set('context', true);
+    renderer.onContextLost = () => {
+      this.lifecycle.set('context', true);
+      this.analytics.webgl('lost');
+    };
     renderer.onContextRestored = () => {
       this.lifecycle.set('context', false);
+      this.analytics.webgl('restored');
       this.redraw();
     };
     this.overlay.setQuality(quality);
@@ -398,6 +428,7 @@ export class App {
 
     this.platform.onPause((paused) => this.lifecycle.set('platform', paused));
     this.platform.onAudio((enabled) => this.sound.setEnabled(enabled));
+    this.platform.onAd((open) => this.lifecycle.set('ad', open));
     document.addEventListener('visibilitychange', () => {
       this.lifecycle.set('hidden', document.hidden);
       if (!document.hidden) this.awake.visible();
@@ -414,6 +445,7 @@ export class App {
     this.lifecycle.set('boot', false);
     this.overlay.show('start');
     this.platform.ready();
+    this.analytics.ready();
     this.ready = true;
     // Звук грузится в фоне уже после первого кадра: игра его не ждёт.
     this.sound.preload(LOAD_FIRST);
@@ -548,7 +580,7 @@ export class App {
       this.hud.toast(t('session.begin', { n: this.sessionNumber() }), 4200);
       this.sayLap();
     }
-    this.platform.track('level_started', { world: 'session', level: this.testLevel ? 'test' : `seed_${this.seed}` });
+    this.analytics.sessionStarted();
     if (this.touchMode && !MotionSensor.needsPermission()) void this.enableMotion();
     this.resumePlay();
   }
@@ -588,7 +620,11 @@ export class App {
     // Место стёрто до конца — миг: запись обрывается.
     if (this.wasErased) this.moment();
     this.saveProfile();
-    this.platform.track('level_completed', { world: 'session', level: `seed_${this.seed}` });
+    this.analytics.sessionCompleted();
+    // Лимбо — естественная пауза между сессиями, место для рекламы (platform/ads.ts). Сейчас рекламы нет по решению
+    // партнёра: ad — null, и всё идёт как раньше. Если её включат, следующая сессия встанет в очередь только после
+    // ответа на просьбу о рекламе, а миг стёртого места реклама не перебьёт.
+    const ad = this.ads.limbo(this.wasErased ? MOMENT_MS : 0);
     // Сон из сцен: следующая сессия начнётся в месте, которое давно не снилось (не в том, где кончилась).
     if (this.scenes && !this.testLevel) this.world = this.sceneWorld();
     // Сборку откладываем на полсекунды: лимбо уже на экране, и заминка не выглядит зависшим переходом.
@@ -599,7 +635,9 @@ export class App {
       this.next = { level, seed: mem.seed, rank: mem.rank };
       this.game.stage = this.stageFor();
       this.game.gentle = this.profile.successes === 0 || this.scenes || this.game.stage === 3;
-      this.game.queueSession(level, { seed: mem.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
+      const queue = (): void => this.game.queueSession(level, { seed: mem.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
+      if (ad) void ad.then(queue);
+      else queue();
     }, 500);
   }
 
@@ -714,6 +752,7 @@ export class App {
   moment(): void {
     this.hud.cut(MOMENT_MS);
     this.sound.cut(MOMENT_MS / 1000);
+    this.analytics.placeErased();
   }
 
   private onBegin(scene = false): void {
@@ -733,7 +772,7 @@ export class App {
     this.mapHint = null;
     this.keepMemory();
     this.saveProfile();
-    this.platform.track('level_started', { world: 'session', level: `seed_${this.seed}` });
+    this.analytics.sessionStarted();
     this.hud.toast(t('session.begin', { n: this.sessionNumber() }), 4200);
     // Прежнее место стёрлось до конца: это уже другое.
     if (this.wasErased) this.hud.flash(t('session.erased'), 6200);
@@ -910,6 +949,7 @@ export class App {
 
   setQuality(q: Quality): void {
     this.game.renderer.setQuality(q);
+    this.analytics.qualityChanged(q, !this.qualityManual);
     this.overlay.setQuality(q);
     this.drawPaperStack(q);
     this.redraw();
@@ -990,6 +1030,7 @@ export class App {
   /** Реакция на события шага: вспышки воспоминаний, вибрация, профиль, смена сессий. */
   handleEvents(ev: StepEvents): void {
     this.audio.onStep(ev, this.game);
+    this.analytics.onStep(ev);
     const buzz = this.touchMode && typeof navigator.vibrate === 'function';
     if (buzz) {
       // Полный заряд — толчок подлиннее, как щелчок, которым загорается свет; пока заряжают — мелкая дрожь.
@@ -1010,7 +1051,6 @@ export class App {
         const id = e.memory.def.id;
         this.hud.flash(wornLine(t(`mem.${id}.done`), this.game.wearBase));
         if (!this.profile.archive.includes(id)) this.profile.archive.push(id);
-        this.platform.track('goal_done', { type: 'memory', tier: e.memory.spot?.tier ?? 0 });
         this.saveProfile();
         if (buzz) navigator.vibrate(60);
         if (this.mapHint?.memory === id) this.mapHint = null;
@@ -1072,12 +1112,14 @@ export class App {
     if (this.screen === 'play' && this.game && this.game.wearGain > 0) this.keepMemory();
     const profile = { ...this.profile, archive: [...this.profile.archive], memories: { ...this.profile.memories } };
     this.saving = this.saving.then(() => writeProfile(this.platform, profile));
+    this.analytics.saved();
   }
 
   /** Подсказка обучения: показывается один раз за сессию. */
   private teach(id: string, text: string, ms = 5000): void {
     if (this.taught.has(id)) return;
     this.taught.add(id);
+    this.analytics.hint(id);
     this.hud.toast(text, ms);
   }
 
@@ -1186,8 +1228,10 @@ export class App {
   private toggleDiag(): void {
     const on = !this.diagText;
     try {
-      if (on) globalThis.localStorage?.setItem('vylazka:diag', '1');
-      else globalThis.localStorage?.removeItem('vylazka:diag');
+      // На Playgama — только до перезагрузки: мимо Bridge игра ничего не пишет (пункт 3.2.1).
+      const store = this.platform.id === 'playgama' ? null : globalThis.localStorage;
+      if (on) store?.setItem('vylazka:diag', '1');
+      else store?.removeItem('vylazka:diag');
     } catch {
       // без хранилища — только до перезагрузки
     }
