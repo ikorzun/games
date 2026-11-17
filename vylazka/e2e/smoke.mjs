@@ -132,6 +132,9 @@ async function openPage(browser, baseUrl, query, ctxOpts = {}, onConsole = null,
   if (!realLock) await context.addInitScript(FAKE_LOCK);
   if (prepare) await prepare(context);
   const page = await context.newPage();
+  // На CI три прогона идут разом, и SwiftShader под нагрузкой медленный: 30 с по умолчанию на клик по заставке не хватало
+  // (сценарий страха, CI 17.11 на b2f88ef). Ожидания самой игры — свои, длиннее.
+  page.setDefaultTimeout(90000);
   const origin = new URL(baseUrl).origin;
   const log = { errors: [], warnings: [], external: [], failed: [] };
   page.on('console', (m) => {
@@ -2045,7 +2048,9 @@ async function scenarioThings(browser, baseUrl) {
     if (seen.at(-1)?.slice(mark.indexOf(':')) !== mark.slice(mark.indexOf(':'))) seen.push(mark);
   }
   const waited = st.time - tIn;
-  check('можно просто подождать: карман отпускает, как только выходит его срок (46–60 с)', st.where === 'main' && stay >= 46 && stay <= 60 && waited >= stay + 2.7 && waited < stay + 2.8 + 1.4, `срок ${stay.toFixed(1)} с, прошло ${waited.toFixed(1)} с, ${st.where}; ${seen.join(' ')}`);
+  // Окно сверху: возврат (2,8 с) плюс шаг наблюдения (1,25 с) и запас 0,6 с — на CI возврат увидели через 4,2 с после срока
+  // (окно было 4,2 — на шаг наблюдения оставалось 0,15 с запаса, CI 17.11 на 29816e4).
+  check('можно просто подождать: карман отпускает, как только выходит его срок (46–60 с)', st.where === 'main' && stay >= 46 && stay <= 60 && waited >= stay + 2.7 && waited < stay + 2.8 + 1.25 + 0.6, `срок ${stay.toFixed(1)} с, прошло ${waited.toFixed(1)} с, ${st.where}; ${seen.join(' ')}`);
 
   // Скачки в каждое пространство: картинка есть и не чёрная.
   for (const [to, style] of [['void', 'whiteout'], ['meadow', 'dissolve'], ['dollhouse', 'blackout']]) {

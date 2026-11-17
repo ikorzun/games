@@ -11,6 +11,8 @@ import { normalizeLang } from '../core/i18n';
 import type { App } from '../app';
 import { STEP } from '../game';
 import { emptyInput } from '../player/input';
+import { DEFAULT_CONTROLLER } from '../player/controller';
+import type { Aabb } from '../world/colliders';
 import type { InputFrame } from '../player/input';
 import type { Quality } from '../render/renderer';
 import { FIGURE_MATERIALS } from '../world/figures';
@@ -444,10 +446,19 @@ export function installDebug(app: App): void {
       if (!t) return false;
       const [x, y, z] = t.pos;
       const aimY = y + Math.max(0.2, t.radius * 0.6);
+      // Тело игрока на пробе не должно задевать мебель: упёрся в стол — коснулся его, стол растворился вместе со всем,
+      // что на нём лежит, — и с искомой вещью (так падала проверка CI 17.11: вещь «gone» в 1,6 м от игрока).
+      const R = DEFAULT_CONTROLLER.radius + 0.06;
+      const boxes: Aabb[] = [];
+      const free = (px: number, py: number, pz: number): boolean =>
+        !g.colliders
+          .query(px - R, pz - R, px + R, pz + R, boxes)
+          .some((b) => !b.off && !b.gone && b.maxY > py + 0.08 && b.minY < py + DEFAULT_CONTROLLER.height && b.maxX > px - R && b.minX < px + R && b.maxZ > pz - R && b.minZ < pz + R);
       const tryFrom = (px: number, py: number, pz: number): boolean => {
         // Встать можно только туда, где есть пол: точка за стеной уровня — не место (вещь у самой стены
         // «видна» и оттуда — в пределах допуска на мебель, — но игрок там падает).
         if (g.colliders.raycast(px, py + 1, pz, 0, -1, 0, 1.6) >= 1.6) return false;
+        if (!free(px, py, pz)) return false;
         g.teleport(px, py, pz);
         app.advance(emptyInput(), 2, 1, STEP);
         g.aimAt(x, aimY, z);
