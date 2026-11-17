@@ -552,6 +552,8 @@ export class Game {
   private darkFor = 0;
   private darkShifts = 0;
   private detailShifts = 0;
+  /** Куда переедет забытая вещь, когда скачок закроет кадр («…где же оно?»). */
+  private forgotTo: Vec3 | null = null;
   /** Клетка «ярус,x,z» → узел навигации. */
   private readonly nodeAt = new Map<string, number>();
   private prevX = 0;
@@ -805,6 +807,7 @@ export class Game {
     this.darkFor = 0;
     this.darkShifts = 0;
     this.detailShifts = 0;
+    this.forgotTo = null;
     this.swarmFlow = null;
     this.echo.clear();
     this.driftPulse = 0;
@@ -2032,6 +2035,11 @@ export class Game {
 
   /** Исполнить скачок: переставить игрока и сменить место. */
   private switchPlace(plan: JumpPlan, dream: DreamEvent[]): void {
+    // Кадр закрыт: забытая вещь переезжает сейчас.
+    if (this.forgotTo) {
+      if (this.memoryThing) this.memoryThing.pos = this.forgotTo;
+      this.forgotTo = null;
+    }
     const to = plan.to;
     if (to === 'session') {
       const next = this.pending;
@@ -2742,8 +2750,13 @@ export class Game {
       }
       if (!this.archive.includes(e.memory.def.id)) this.archive.push(e.memory.def.id);
     } else if (e.type === 'forgot') {
+      // «…где же оно?»: вещь переезжает, когда кадр уже закрыт скачком, — не в первый миг падения, пока её контур ещё
+      // виден сквозь стены (аудит K-21, 17.11). Без скачка — сразу.
       const sp = e.memory.spot!;
-      if (this.memoryThing) this.memoryThing.pos = [sp.x, sp.y, sp.z];
+      if (this.memoryThing) {
+        if (this.transition && !this.transition.switched) this.forgotTo = [sp.x, sp.y, sp.z];
+        else this.memoryThing.pos = [sp.x, sp.y, sp.z];
+      }
     } else if (e.type === 'all-done') this.endIn = 3.5;
     else if (e.type === 'collapse') {
       for (const bx of e.spec.boxes) this.colliders.add(bx);

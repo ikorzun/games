@@ -550,6 +550,8 @@ describe('игра целиком: провал, газ и Осыпь не ко�
     h.tick();
     expect(h.count('fall')).toBe(1);
     expect(h.count('forgot')).toBe(1);
+    // Вещь переезжает, только когда скачок закрыл кадр, — не в первый миг падения (аудит K-21, 17.11).
+    expect(g.things.list.find((t) => t.id === id)!.pos).toEqual(was);
     expect(g.transition?.plan).toMatchObject({ cause: 'fall', style: 'whiteout' });
     expect(['void', 'meadow', 'dollhouse']).toContain(g.transition!.plan.to);
     expect(h.until(() => g.where === 'pocket', 4)).toBe(true);
