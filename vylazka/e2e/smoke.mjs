@@ -191,7 +191,16 @@ async function scenarioPlay(browser, baseUrl) {
 
   // Заставка: по умолчанию английская (игра не следует языку площадки), с ?lang=ru — русская;
   // предупреждение о вспышках и настройки на месте, выбор запоминается.
-  {
+  // На сборке площадки (window.bridge) язык заставки — язык площадки (обязательный шаг 3 Bridge, пункт 3.4.2): там
+  // английского по умолчанию нет, и этот блок не для неё — язык площадки проверяет сценарий Bridge (scenarioBridge).
+  const plainBuild = await (async () => {
+    const t = await openPage(browser, baseUrl, '?q=low&fail=0&touch=0&level=test');
+    const has = await t.page.evaluate(() => !!window.bridge);
+    await t.context.close();
+    return !has;
+  })();
+  if (!plainBuild) console.log('  (сборка площадки: язык заставки — язык площадки; блок «английский по умолчанию» пропущен)');
+  if (plainBuild) {
     const t = await openPage(browser, baseUrl, '?q=low&fail=0&touch=0&level=test', { locale: 'ru-RU' });
     const tp = t.page;
     const opt = (name) => tp.textContent(`.vz-overlay__opt--${name}`).then((x) => x?.trim());
