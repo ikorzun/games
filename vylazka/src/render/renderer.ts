@@ -22,7 +22,7 @@ import { GRADE_DEFAULT, RINGS_DEFAULT } from './grade';
 import type { Grade } from './grade';
 export type { Grade } from './grade';
 import type { GrainLife, Grains } from './grains';
-import { smoothstep } from '../core/math';
+import { clamp01, smoothstep } from '../core/math';
 import { ECHO_MAX, ECHO_STRIDE } from '../systems/echo';
 import type { PressureView } from '../systems/pressure';
 import { SplatClouds } from './splats';
@@ -163,6 +163,12 @@ export interface FrameView {
   contact?: boolean;
   /** Звёздное небо, 0..1: насколько оно видно (0 — неба нет: карманные пространства, день в зале ожидания). */
   stars?: number;
+  /**
+   * 0..1: насколько небо видно сквозь несобранное. 1 — игрок в комнате под небом: её стены и всё, что свет не собрал,
+   * бесконечность не режут (партнёр 17.11: «звездное небо должно быть полностью видно, это бесконечность»). 0 — небо
+   * только там, где нет ничего (как было).
+   */
+  skyOpen?: number;
   /** Множитель «бочки» объектива: больше единицы — кадр растянут по краям, меньше — сжат. */
   lens?: number;
   /** Множитель углов луча фонаря (кривая ощущений, systems/feel.ts): меньше единицы — луч уже. Нет поля — как есть. */
@@ -497,6 +503,8 @@ export class GameRenderer {
   /** Звёздное небо над уровнем: видно там, где нет потолка (STAR_VERT). */
   private readonly stars: THREE.Points;
   private readonly starMat: THREE.ShaderMaterial;
+  /** Небо — своим проходом поверх готового кадра: его закрывает только собранное (STAR_FRAG). */
+  private readonly skyScene = new THREE.Scene();
   private readonly dustMat: THREE.ShaderMaterial;
   private readonly swarmMat: THREE.ShaderMaterial;
   private readonly swarmGeo: THREE.InstancedBufferGeometry;
@@ -791,9 +799,21 @@ export class GameRenderer {
     this.starMat = new THREE.ShaderMaterial({
       vertexShader: STAR_VERT,
       fragmentShader: STAR_FRAG,
-      uniforms: { uTime: { value: 0 }, uCamPos: { value: new THREE.Vector3() }, uBright: { value: 0 }, uPx: { value: 1 }, uFall: { value: new THREE.Vector4(0, 0, -100, 0) } },
+      uniforms: {
+        uTime: { value: 0 },
+        uCamPos: { value: new THREE.Vector3() },
+        uBright: { value: 0 },
+        uPx: { value: 1 },
+        uFall: { value: new THREE.Vector4(0, 0, -100, 0) },
+        tDepth: { value: null },
+        tScene: { value: null },
+        tMem: { value: null },
+        uRes: { value: new THREE.Vector2(1, 1) },
+        uThrough: { value: 0 },
+      },
       blending: THREE.AdditiveBlending,
       transparent: true,
+      depthTest: false,
       depthWrite: false,
     });
     {
@@ -846,7 +866,9 @@ export class GameRenderer {
       // Слой 1: в карту теней звёзды не идут.
       this.stars.layers.set(1);
       this.stars.visible = false;
-      this.scene.add(this.stars);
+      // Не в сцену мира: небо рисуется своим проходом после сведения кадра, иначе его закрывала бы любая стена —
+      // и несобранная тоже.
+      this.skyScene.add(this.stars);
     }
     // Осыпь: прядь из точек, размноженная инстансами (у каждой пряди своя голова и направление).
     // Точек в пряди — с запасом на высокое качество при самом мелком зерне; сколько из них рисовать, решает качество.
@@ -2377,6 +2399,7 @@ export class GameRenderer {
       (su.uCamPos!.value as THREE.Vector3).copy(cam.position);
       const fall = v.fall ?? null;
       (su.uFall!.value as THREE.Vector4).set(fall ? fall[0] : 0, fall ? fall[1] : 0, fall ? v.time - fall[2] : -100, fall ? 1 : 0);
+      su.uThrough!.value = this.debugScanOff ? 0 : clamp01(v.skyOpen ?? 0);
     }
     (this.dustMat.uniforms.uCamPos!.value as THREE.Vector3).copy(cam.position);
 
@@ -2515,6 +2538,21 @@ export class GameRenderer {
         r.render(this.echoScene, this.postCam);
         echoOn = true;
       }
+    }
+    // Звёздное небо — в тот же слой, что эхо: «камера» прибавит его поверх кадра, выдержка его не смажет. Где мир
+    // собран, неба не видно; где нет ничего — видно всегда; сквозь несобранное — по skyOpen (STAR_FRAG).
+    if (starsOn && !probe) {
+      const su = this.starMat.uniforms;
+      su.tDepth!.value = this.sceneRT.depthTexture;
+      su.tScene!.value = this.sceneRT.texture;
+      su.tMem!.value = memNow.texture;
+      (su.uRes!.value as THREE.Vector2).set(this.echoRT.width, this.echoRT.height);
+      r.setRenderTarget(this.echoRT);
+      if (!echoOn) r.clear();
+      r.autoClear = false;
+      r.render(this.skyScene, cam);
+      r.autoClear = true;
+      echoOn = true;
     }
 
     // Длинная выдержка: без фонаря яркое оставляет след, и при повороте кадр смазывается. Чем темнее,

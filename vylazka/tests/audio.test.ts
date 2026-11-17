@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { allSoundFiles, AudioEngine, SOUNDS, spatialize } from '../src/audio/engine';
-import { GameAudio, TRACE_SAND, WAKE_FIRST, WAKING } from '../src/audio/game_audio';
+import { GameAudio, LOAD_FIRST, loadFirst, PLACE_TONE, TRACE_SAND, WAKE_FIRST, WAKING } from '../src/audio/game_audio';
 import type { AudioWorld, SoundSink } from '../src/audio/game_audio';
 import type { Vec3 } from '../src/core/types';
 import type { StepEvents } from '../src/game';
@@ -119,6 +119,126 @@ describe('движок без браузера и без файлов', () => {
     expect(e.status().asked).toEqual({ ui_click: 1, hatch: 1 });
     expect(e.status().played).toEqual({});
     expect(() => e.play('no_such_sound')).toThrow();
+  });
+});
+
+/** Браузерный звук без браузера: контекст запускается не в миг нажатия (так в Safari и на iOS), файлы приходят по сети. */
+function fakeAudio(opts: { startMs: number; network?: 'instant' | 'never' }) {
+  const param = () => ({ value: 0, setTargetAtTime() {}, cancelScheduledValues() {}, setValueAtTime() {}, setValueCurveAtTime() {} });
+  const node = () => ({ connect() {}, disconnect() {} });
+  const decode = (_d: ArrayBuffer, ok: (b: unknown) => void): void => ok({ duration: 1 });
+  class Ctx {
+    state = 'suspended';
+    currentTime = 0;
+    destination = node();
+    onstatechange: (() => void) | null = null;
+    resume(): Promise<void> {
+      return new Promise((ok) =>
+        setTimeout(() => {
+          this.state = 'running';
+          this.onstatechange?.();
+          ok();
+        }, opts.startMs),
+      );
+    }
+    suspend(): Promise<void> {
+      this.state = 'suspended';
+      return Promise.resolve();
+    }
+    createGain = () => ({ ...node(), gain: param() });
+    createBufferSource = () => ({ ...node(), buffer: null, playbackRate: param(), onended: null, start() {}, stop() {} });
+    createBiquadFilter = () => ({ ...node(), type: '', frequency: param() });
+    createStereoPanner = () => ({ ...node(), pan: param() });
+    decodeAudioData = decode;
+  }
+  class Offline {
+    decodeAudioData = decode;
+  }
+  vi.stubGlobal('window', { AudioContext: Ctx, OfflineAudioContext: Offline });
+  vi.stubGlobal('fetch', (): Promise<unknown> =>
+    opts.network === 'never' ? new Promise(() => undefined) : Promise.resolve({ ok: true, headers: { get: () => 'audio/mpeg' }, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
+  );
+}
+
+const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+describe('звук с первого нажатия (партнёр 17.11: «почему-то звук не срабатывает сразу»)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('звук, попрошенный, пока контекст ещё запускается, звучит, как только он пошёл, — а не пропадает', async () => {
+    fakeAudio({ startMs: 30 });
+    const e = new AudioEngine('./audio/', ['ui_start_1.mp3', 'hatch_1.mp3', 'ui_click_1.mp3']);
+    e.preload(['ui_start', 'hatch']);
+    await wait(5);
+    expect(e.status().loaded).toBe(3);
+    e.unlock();
+    expect(e.status().state).toBe('suspended');
+    e.play('ui_start', { late: 2 });
+    e.play('hatch', { late: 4 });
+    e.play('ui_click');
+    expect(e.status().played).toEqual({});
+    await wait(60);
+    expect(e.status().state).toBe('running');
+    expect(e.status().played).toEqual({ ui_start: 1, hatch: 1, ui_click: 1 });
+  });
+
+  it('опоздавший звук не звучит: щелчок ждёт меньше полсекунды, люк — свои четыре', async () => {
+    fakeAudio({ startMs: 600 });
+    const e = new AudioEngine('./audio/', ['hatch_1.mp3', 'ui_click_1.mp3']);
+    e.preload([]);
+    await wait(5);
+    e.unlock();
+    e.play('ui_click');
+    e.play('hatch', { late: 4 });
+    await wait(700);
+    expect(e.status().state).toBe('running');
+    expect(e.status().played).toEqual({ hatch: 1 });
+  });
+
+  it('на паузе звук не копится: попрошенное на паузе не звучит и после неё', async () => {
+    fakeAudio({ startMs: 20 });
+    const e = new AudioEngine('./audio/', ['flash_click_1.mp3']);
+    e.preload([]);
+    await wait(5);
+    e.setPaused(true);
+    e.unlock();
+    e.play('flash_click');
+    e.setPaused(false);
+    await wait(60);
+    expect(e.status().state).toBe('running');
+    expect(e.status().played).toEqual({});
+  });
+
+  it('загрузка начинается с гула своего места и звука прихода; гул чужих мест — позже', () => {
+    for (const world of ['shelter', 'office', 'yellow', 'station']) {
+      const order = loadFirst(world);
+      const tone = order.indexOf(PLACE_TONE[world]!);
+      expect(tone).toBe(1);
+      for (const other of Object.values(PLACE_TONE)) if (other !== PLACE_TONE[world]) expect(order.indexOf(other)).toBeGreaterThan(order.indexOf('voices_murmur'));
+      // Всё, что раньше грузилось первым, по-прежнему в начале — просто в другом порядке.
+      for (const id of LOAD_FIRST) expect(order).toContain(id);
+      expect(new Set(order).size).toBe(order.length);
+    }
+    expect(loadFirst('shelter').slice(0, 3)).toEqual(['ui_start', 'amb_bunker', 'hatch']);
+    expect(loadFirst('office').slice(0, 3)).toEqual(['ui_start', 'amb_office', 'lift']);
+    expect(loadFirst('station').slice(0, 3)).toEqual(['ui_start', 'amb_station', 'still_tone']);
+  });
+
+  it('файлы грузятся по шесть разом в порядке места; место следующей сцены можно поднять вперёд очереди', () => {
+    fakeAudio({ startMs: 5, network: 'never' });
+    const e = new AudioEngine('./audio/', allSoundFiles());
+    e.preload(loadFirst('station'));
+    const q = e.queued();
+    // Шесть уже в пути: нажатие, гул зала, ровный тон, щелчок интерфейса, два щелчка фонаря.
+    expect(q).not.toContain('amb_station_1.mp3');
+    expect(q).not.toContain('flash_click_2.mp3');
+    expect(q[0]).toBe('breath_calm_1.mp3');
+    expect(q.indexOf('amb_bunker_1.mp3')).toBeGreaterThan(q.indexOf('voices_murmur_1.mp3'));
+    e.want(['amb_office', 'lift']);
+    expect(e.queued().slice(0, 2)).toEqual(['amb_office_1.mp3', 'lift_1.mp3']);
+    expect(e.queued().filter((f) => f === 'amb_office_1.mp3')).toHaveLength(1);
   });
 });
 

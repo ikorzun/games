@@ -2765,6 +2765,27 @@ describe('собрано только там, куда смотрит герой
     expect(h.r.frames.at(-1)!.stars).toBeGreaterThan(0.4);
   });
 
+  it('в комнате под небом небо видно целиком: несобранное его не режет; вышел — как было (партнёр 17.11)', () => {
+    const level = buildLevel(generateLayout(20041113, 2, 'shelter'));
+    const room = level.layout!.rooms[level.skyRoom!]!;
+    const [cx, cz] = room.cells[0]!;
+    const h = new Harness(level);
+    h.until(() => h.game.transition === null, 8);
+    h.run(0.5);
+    expect(h.r.frames.at(-1)!.skyOpen ?? 0).toBeLessThan(0.05);
+    h.game.teleport(cellToWorld(cx), tierFloor(room.tier), cellToWorld(cz), 0, 0.4);
+    h.run(0.3);
+    const opening = h.r.frames.at(-1)!.skyOpen ?? 0;
+    expect(opening).toBeGreaterThan(0.2);
+    expect(opening).toBeLessThan(0.95);
+    h.run(2);
+    expect(h.r.frames.at(-1)!.skyOpen ?? 0).toBeGreaterThan(0.95);
+    const [sx, sy, sz] = level.spawn.pos;
+    h.game.teleport(sx, sy, sz);
+    h.run(3);
+    expect(h.r.frames.at(-1)!.skyOpen ?? 0).toBeLessThan(0.05);
+  });
+
   it('под небом первый взгляд вверх встречает падающую звезду — там, куда смотрит герой, и одну на вход', () => {
     // Аудит мест (16.11): небо и несобранный потолок выглядели одинаково — чёрное в белых точках.
     const level = buildLevel(generateLayout(20041113, 2, 'shelter'));
@@ -2789,6 +2810,36 @@ describe('собрано только там, куда смотрит герой
     h.game.teleport(cellToWorld(cx), tierFloor(room.tier), cellToWorld(cz), 1, 0.7);
     h.run(0.5);
     expect(h.r.frames.at(-1)!.fall ?? null).toBeNull();
+  });
+
+  it('при входе в помещение с красной сеткой игроку говорят, что это, — раз на помещение (партнёр 17.11)', () => {
+    let seen = 0;
+    for (const seed of [SEED, 101, 202, 303]) {
+      const level = levelOf(seed);
+      const h = new Harness(level, { seed });
+      const g = h.game;
+      h.until(() => g.transition === null, 8);
+      const rooms = level.layout!.rooms;
+      for (const fx of ['dark', 'wire'] as const) {
+        const id = [...g.roomFx].find(([, f]) => f === fx)?.[0];
+        if (id === undefined) continue;
+        const room = rooms[id]!;
+        const [cx, cz] = room.cells[0]!;
+        const said = (): number => h.log.dream.filter((e) => e.type === 'room' && e.fx === fx).length;
+        g.teleport(cellToWorld(cx), tierFloor(room.tier), cellToWorld(cz));
+        h.run(0.3);
+        expect(said(), `сид ${seed}: ${fx}`).toBe(1);
+        // Вышел и вернулся — второй раз не говорят.
+        const [sx, sy, sz] = level.spawn.pos;
+        g.teleport(sx, sy, sz);
+        h.run(0.3);
+        g.teleport(cellToWorld(cx), tierFloor(room.tier), cellToWorld(cz));
+        h.run(0.3);
+        expect(said(), `сид ${seed}: ${fx}, второй вход`).toBe(1);
+        seen += 1;
+      }
+    }
+    expect(seen).toBeGreaterThanOrEqual(3);
   });
 
   it('под звёздным небом ничего не давит и нет строба, темноты и сетки', () => {

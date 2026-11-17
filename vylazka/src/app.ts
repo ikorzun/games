@@ -5,7 +5,7 @@
 import { Analytics } from './analytics/events';
 import type { PlayContext } from './analytics/events';
 import { allSoundFiles, AudioEngine } from './audio/engine';
-import { GameAudio, LOAD_FIRST } from './audio/game_audio';
+import { GameAudio, loadFirst } from './audio/game_audio';
 import { i18n, normalizeLang, t } from './core/i18n';
 import { mulberry32 } from './core/rng';
 import { loadSave, memoryFor, rankFor, writeProfile } from './core/save';
@@ -384,9 +384,13 @@ export class App {
     // Место вылазки: из адреса (?world=office); в сне из сцен — первая сессия в убежище, дальше то, куда сон ушёл в прошлый
     // раз (onLimbo); в петле одного места — то, что выбрано кнопкой «Место».
     const asked = p.get('world');
-    const first: WorldKind = this.scenes && this.profile.successes === 0 ? 'shelter' : this.profile.place;
+    // Закреплённый сид (?seed=) — петля одного места (сна из сцен там нет, см. ниже): там место — то, что выбрано кнопкой.
+    const first: WorldKind = this.scenes && p.get('seed') === null && this.profile.successes === 0 ? 'shelter' : this.profile.place;
     this.world = (WORLD_KINDS as readonly string[]).includes(asked ?? '') ? (asked as WorldKind) : first;
     this.overlay.setPlace(this.world);
+    // Звук грузится с этой минуты, пока строится место: сеть свободна, файлы разбираются вне главного потока, а гул
+    // места должен звучать с первого шага (раньше загрузка начиналась только после первого кадра).
+    this.sound.preload(loadFirst(this.world));
     if (p.get('lang') === null && this.profile.lang) this.setLang(normalizeLang(this.profile.lang), true);
     renderer.brightness = BRIGHT[this.profile.bright];
     // Пробная сборка: одна часть сборки места отключена, чтобы на телефоне найти, какая ломает пол.
@@ -474,8 +478,6 @@ export class App {
     this.platform.ready();
     this.analytics.ready();
     this.ready = true;
-    // Звук грузится в фоне уже после первого кадра: игра его не ждёт.
-    this.sound.preload(LOAD_FIRST);
     if (p.get('autostart') === '1') this.start();
     this.last = performance.now();
     requestAnimationFrame(this.loop);
@@ -667,6 +669,7 @@ export class App {
     // перезагрузки страницы — тоже там.
     if (this.scenes && !this.testLevel) {
       this.world = this.sceneWorld();
+      this.hearPlace(this.world);
       this.profile.place = this.world;
       this.saveProfile();
     }
@@ -734,6 +737,11 @@ export class App {
    * Сон из сцен: собрать следующую сцену заранее (другое место), пока идёт эта: туда унесёт скачок или «вспомнил».
    * Когда вспомнена последняя вещь сна, следующей нет: после неё — лимбо.
    */
+  /** Звук места, в которое сон вот-вот унесёт: его гул и звук прихода — вперёд очереди загрузки. */
+  private hearPlace(world: WorldKind): void {
+    this.sound.want(loadFirst(world).slice(0, 4));
+  }
+
   private queueNextScene(): void {
     if (this.sceneTimer !== undefined) clearTimeout(this.sceneTimer);
     this.sceneTimer = undefined;
@@ -743,6 +751,7 @@ export class App {
       return;
     }
     const world = this.sceneWorld();
+    this.hearPlace(world);
     // Сборка — с паузой: сцена уже идёт, и игрок не заметит, что следующая собирается.
     this.sceneTimer = setTimeout(() => {
       this.sceneTimer = undefined;
@@ -898,6 +907,7 @@ export class App {
   /** Сменить место вылазки. На заставке уровень пересобирается сразу; выбор запоминается. */
   setPlace(world: WorldKind): void {
     this.world = world;
+    this.hearPlace(world);
     this.profile.place = world;
     this.overlay.setPlace(world);
     this.audio.ui('ui_click');
@@ -1157,6 +1167,8 @@ export class App {
         this.clockSkew += 4 + Math.random() * 37;
       }
       else if (e.type === 'pocket') this.onPocket(e);
+      // Красная сетка: в тёмном помещении фонарь бессилен — идти по линиям; в «сеточном» место сбоит — не задерживаться.
+      else if (e.type === 'room') this.hud.toast(t(`toast.room.${e.fx}`), 4200);
       // Первое касание: вещь рассыпалась — сказать, что это правило, и как её вернуть. Только после настоящего касания:
       // обвал пола и бумажный цветок рассыпают вещи сами, и строка «здесь ничего нельзя потрогать» там лишняя (аудит 17.11).
       else if (e.type === 'touch' && e.what === 'gone' && e.first !== undefined && !e.self) this.teach('touch', t(this.game.flow ? 'teach.touch.station' : this.game.hasLight ? 'teach.touch' : 'teach.touch.still'), 7000);

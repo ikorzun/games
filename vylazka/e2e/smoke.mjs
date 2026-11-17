@@ -2301,6 +2301,19 @@ async function scenarioPockets(browser, baseUrl) {
   // Не дальше 4 клеток пути: клетка 3 м, четыре шага — до 12 м по горизонтали плюс разброс вещи в клетке
   // (точный путь по графу проверяют юнит-тесты, здесь — что дверь вообще привела к вещи, а не «подальше»).
   check('дверь луга выводит рядом с искомой вещью: не дальше 4 клеток пути', door.ok && door.s.where === 'main' && dxz <= 15 && Math.abs(door.s.pos[1] - mem.pos[1]) <= 9, JSON.stringify({ dxz: +dxz.toFixed(1), dy: door.s.pos[1] - mem.pos[1] }));
+  // Цела ли искомая вещь после двери: в CI она не раз оказывалась растворённой к следующей проверке (вещь «gone»), а
+  // здесь — нет. Строка показывает, кто виноват: дверь (тело село рядом и задело мебель), давление пола или что-то ещё.
+  const afterDoor = await vz(
+    page,
+    (id) => {
+      const s = window.__vz.state();
+      const t = s.things.find((x) => x.id === id);
+      const p = window.__vz.pressure();
+      return { thing: t ? t.state : null, at: t ? t.pos.map((v) => +v.toFixed(2)) : null, me: s.pos.map((v) => +v.toFixed(2)), room: s.room, pressure: p ? { count: p.count, active: p.active?.kind ?? null, room: p.active?.room ?? null } : null };
+    },
+    mem.thing,
+  );
+  check('после двери луга искомая вещь цела', afterDoor.thing === 'idle', JSON.stringify(afterDoor));
 
   // ── Белое нигде: вспомненное и болванки ──
   // Вспоминаем текущее воспоминание и сразу уходим в белое нигде: следующее ещё не пришло.
@@ -2331,7 +2344,7 @@ async function scenarioPockets(browser, baseUrl) {
   );
   st = held.s;
   const first = mem.id;
-  check('вспомнено одно воспоминание, нового пока нет', st.session.done === 1 && (await vz(page, () => window.__vz.memory())) === null, JSON.stringify({ done: st.session.done, went, light: before.light, from: before.pos, trace: held.trace }));
+  check('вспомнено одно воспоминание, нового пока нет', st.session.done === 1 && (await vz(page, () => window.__vz.memory())) === null, JSON.stringify({ done: st.session.done, went, light: before.light, from: before.pos, afterDoor, trace: held.trace }));
   const nodeVoid = st.node;
   r = await enter('void');
   check('белое нигде: строка при входе «это то, что ты сохранил»', r.flash.on && r.flash.text === RU['pocket.void.enter'], JSON.stringify(r.flash));

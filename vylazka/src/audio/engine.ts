@@ -93,6 +93,24 @@ const LOOP_TAU = 0.25;
 
 type OfflineCtor = new (channels: number, length: number, rate: number) => BaseAudioContext;
 
+/** Сколько файлов грузится разом: мелких файлов много, и по сети с задержкой каждый ждёт своей очереди. */
+const PARALLEL = 6;
+/**
+ * Сколько секунд разовый звук ждёт запуска контекста. Safari и iOS запускают его не в тот же миг, что нажатие:
+ * без ожидания первые звуки (старт, люк, щелчок) проглатывались — «звук не срабатывает сразу» (партнёр 17.11).
+ */
+const START_GRACE = 0.4;
+
+const clockMs = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+interface Waiting {
+  def: SoundDef;
+  buf: AudioBuffer;
+  opts: PlayOptions;
+  /** До какого мига (мс, часы страницы) звук ещё уместен. */
+  until: number;
+}
+
 export class AudioEngine {
   /** Файлы, которых не оказалось на месте (для отладки и смоука). */
   readonly missing = new Set<string>();
@@ -117,6 +135,8 @@ export class AudioEngine {
   /** Сколько раз игра просила звук и сколько раз он действительно прозвучал (для отладки и смоука). */
   readonly asked = new Map<string, number>();
   readonly played = new Map<string, number>();
+  /** Разовые звуки, которые попросили, пока контекст ещё запускался: прозвучат, как только он пойдёт. */
+  private readonly waiting: Waiting[] = [];
 
   private readonly files: ReadonlySet<string>;
 
@@ -179,8 +199,32 @@ export class AudioEngine {
     };
     const sorted = [...SOUNDS].sort((a, b) => rank(a.id) - rank(b.id));
     for (const s of sorted) for (let v = 1; v <= s.variants; v++) if (this.files.has(soundFile(s.id, v))) this.queue.push([s.id, v]);
-    // Грузим по три файла разом: полсотни одновременных декодирований подвесили бы телефон на старте.
-    for (let i = 0; i < 3; i++) this.pump();
+    // Грузим по нескольку файлов разом: полсотни одновременных декодирований подвесили бы телефон на старте.
+    for (let i = 0; i < PARALLEL; i++) this.pump();
+  }
+
+  /**
+   * Поднять звуки в начало очереди загрузки: они понадобятся вот-вот (гул места, в которое уносит следующая сцена).
+   * Уже загруженные и грузящиеся не трогаются. До начала загрузки — меняет её порядок.
+   */
+  want(ids: readonly string[]): void {
+    if (!this.loadingBegun) {
+      this.order = [...ids, ...this.order.filter((id) => !ids.includes(id))];
+      return;
+    }
+    const picked: [string, number][] = [];
+    for (const id of ids) {
+      for (let i = 0; i < this.queue.length; ) {
+        if (this.queue[i]![0] === id) picked.push(...this.queue.splice(i, 1));
+        else i += 1;
+      }
+    }
+    this.queue.unshift(...picked);
+  }
+
+  /** Какие файлы ещё ждут своей загрузки, по порядку (для отладки и тестов). */
+  queued(): string[] {
+    return this.queue.map(([id, v]) => soundFile(id, v));
   }
 
   /**
@@ -194,13 +238,31 @@ export class AudioEngine {
       // Звук и в беззвучном режиме iPhone, как у плеера (слова партнёра 17.11: «Да, звук нужен»): до первого звука.
       playThroughSilentSwitch();
       this.ctx = new Ctor();
+      this.ctx.onstatechange = () => this.flush();
       this.master = this.ctx.createGain();
       this.master.connect(this.ctx.destination);
       this.applyMaster();
       this.beginLoad();
     }
     // «interrupted» бывает на iOS после звонка: будим так же, как после паузы.
-    if (this.ctx.state !== 'running' && !this.paused) void this.ctx.resume();
+    if (this.ctx.state !== 'running' && !this.paused) this.wake();
+  }
+
+  /** Запустить контекст; отказ (нажатие не засчитано как жест) не ошибка: следующее нажатие попробует снова. */
+  private wake(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    void ctx.resume().then(
+      () => this.flush(),
+      () => undefined,
+    );
+  }
+
+  /** Контекст пошёл: отыграть разовые звуки, которые его ждали и ещё не опоздали. */
+  private flush(): void {
+    if (this.ctx?.state !== 'running' || this.waiting.length === 0) return;
+    const now = clockMs();
+    for (const w of this.waiting.splice(0)) if (now <= w.until) this.start(w.def, w.buf, w.opts);
   }
 
   private pump(): void {
@@ -264,9 +326,10 @@ export class AudioEngine {
   /** Пауза игры: звук останавливается целиком. */
   setPaused(on: boolean): void {
     this.paused = on;
+    if (on) this.waiting.length = 0;
     if (!this.ctx) return;
     if (on && this.ctx.state === 'running') void this.ctx.suspend();
-    else if (!on && this.ctx.state === 'suspended') void this.ctx.resume();
+    else if (!on && this.ctx.state !== 'running') this.wake();
   }
 
   setListener(pos: Vec3, yaw: number): void {
@@ -293,16 +356,25 @@ export class AudioEngine {
     if (!ctx || !this.master) return;
     const variant = this.pickVariant(def);
     const buf = this.buffers.get(soundFile(id, variant));
+    // До какого мига звук уместен: свой срок у тех, что нельзя проглотить (late), у остальных — пока запускается контекст.
+    const until = clockMs() + 1000 * Math.max(opts.late ?? 0, START_GRACE);
     if (buf) {
-      if (ctx.state === 'running') this.start(def, buf, opts);
+      this.startOrWait(def, buf, opts, until);
       return;
     }
     if (!opts.late) return;
     // Файл ещё в пути: берём его вне очереди и играем, если успел.
-    const deadline = ctx.currentTime + opts.late;
     void this.load(id, variant).then((ready) => {
-      if (ready && this.ctx === ctx && ctx.state === 'running' && ctx.currentTime <= deadline) this.start(def, ready, opts);
+      if (ready && this.ctx === ctx) this.startOrWait(def, ready, opts, until);
     });
+  }
+
+  /** Сыграть сейчас, а если контекст ещё не пошёл (первое нажатие в Safari и на iOS) — как только пойдёт. */
+  private startOrWait(def: SoundDef, buf: AudioBuffer, opts: PlayOptions, until: number): void {
+    const ctx = this.ctx;
+    if (!ctx || clockMs() > until) return;
+    if (ctx.state === 'running') this.start(def, buf, opts);
+    else if (!this.paused) this.waiting.push({ def, buf, opts, until });
   }
 
   private start(def: SoundDef, buf: AudioBuffer, opts: PlayOptions): void {

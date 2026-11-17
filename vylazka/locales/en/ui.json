@@ -169,6 +169,8 @@
   "limbo.line.5": "skip intro? you can't. you are the intro.",
   "toast.forgot": "…where was it?",
   "toast.caught": "…back where you started.",
+  "toast.room.dark": "Your light does not reach in here. Walk by the red lines.",
+  "toast.room.wire": "Red lines: this place is coming apart. Keep moving.",
   "teach.dark": "Light off: what you are looking for shows through the walls.",
   "teach.thing": "Things do not like being stared at.",
   "teach.dark.still": "Stand still: the lights go out, and what you are looking for shows through the walls.",

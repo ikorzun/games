@@ -59,6 +59,23 @@ export const TRACE_SAND = 0.8;
 /** Что грузить раньше остального: первые секунды вылазки и экран задания. */
 export const LOAD_FIRST: readonly string[] = ['ui_click', 'ui_start', 'hatch', 'lift', 'amb_bunker', 'amb_office', 'amb_yellow', 'amb_station', 'still_tone', 'breath_calm', 'step_concrete', 'step_carpet', 'flash_click', 'flash_die', 'flash_rattle', 'flash_spark', 'music_menu'];
 
+/** Гул места — звук, с которого место начинается. */
+export const PLACE_TONE: Readonly<Record<string, string>> = { shelter: 'amb_bunker', office: 'amb_office', yellow: 'amb_yellow', station: 'amb_station' };
+
+/**
+ * Порядок загрузки для места: сначала то, что прозвучит в первую секунду именно здесь (нажатие «старт», гул места,
+ * люк или лифт, шаги, дыхание, разговор за стеной), потом остальное из LOAD_FIRST. Гул чужого места раньше своего
+ * (как было: убежище, офис, жёлтые, зал) задерживал звук на секунды там, где сеть медленная (партнёр 17.11:
+ * «звук не срабатывает сразу»).
+ */
+export function loadFirst(world: string): string[] {
+  const place = PLACE_TONE[world] ? world : 'shelter';
+  const arrival = place === 'shelter' ? ['hatch'] : place === 'station' ? ['still_tone'] : ['lift'];
+  const steps = place === 'shelter' ? 'step_concrete' : 'step_carpet';
+  const head = ['ui_start', PLACE_TONE[place]!, ...arrival, 'ui_click', 'flash_click', 'breath_calm', steps, 'voices_murmur'];
+  return [...head, ...LOAD_FIRST.filter((id) => !head.includes(id))];
+}
+
 /**
  * Следы людей (слова партнёра: «лёгкий фоновый шёпот, смех, тихий неразличимый разговор людей»).
  * Это не пугалки и не события: так звучит место, в котором кто-то жил. Что слышно — зависит от места:

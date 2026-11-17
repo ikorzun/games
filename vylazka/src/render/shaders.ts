@@ -2453,8 +2453,19 @@ void main() {
 }
 `;
 
+/**
+ * Небо рисуется своим проходом поверх сведённого кадра (слой эха, renderer.ts): его закрывает только собранное — то,
+ * что сейчас видно сплошным или ещё держится в памяти света (те же пороги, что в COMPOSE_FRAG). Где мира нет, небо
+ * видно всегда; сквозь несобранную стену или потолок — настолько, насколько велико uThrough: в комнате под небом её
+ * стены бесконечность не режут (партнёр 17.11: «звездное небо должно быть полностью видно, это бесконечность»).
+ */
 export const STAR_FRAG = /* glsl */ `
 precision highp float;
+uniform highp sampler2D tDepth; // глубина мира этого кадра
+uniform sampler2D tScene;       // альфа — число замеров: сколько поверхности собрано сейчас
+uniform sampler2D tMem;         // память света: собранное недавно
+uniform vec2 uRes;              // размер буфера, в который рисуется небо
+uniform float uThrough;         // 0..1: насколько небо видно сквозь несобранное
 varying vec3 vCol;
 varying float vBig;
 
@@ -2464,7 +2475,15 @@ void main() {
   float a = smoothstep(0.5, 0.04, r);
   // У крупной звезды — яркое ядро и мягкий ореол, а не ровный диск, как у точки скана.
   if (vBig > 0.0) a = mix(a, max(smoothstep(0.2, 0.02, r), exp(-r * r * 16.0) * 0.45), vBig);
-  gl_FragColor = vec4(vCol * a, 1.0);
+  vec2 uv = gl_FragCoord.xy / uRes;
+  float open = 1.0;
+  if (texture2D(tDepth, uv).r < 0.99999) {
+    vec4 m = texture2D(tMem, uv);
+    float now = smoothstep(0.22, 0.85, texture2D(tScene, uv).a);
+    float kept = smoothstep(0.86, 1.0, m.a) * smoothstep(0.1, 0.4, dot(m.rgb, vec3(0.3, 0.59, 0.11)));
+    open = uThrough * (1.0 - max(now, kept));
+  }
+  gl_FragColor = vec4(vCol * a * open, 1.0);
 }
 `;
 

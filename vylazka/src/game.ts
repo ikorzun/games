@@ -124,6 +124,12 @@ export type DreamEvent =
    * двинулся); fall — пол ушёл из-под ног; woke — не успел и проснулся в начале.
    */
   | { type: 'pressure'; kind: PressureKind; what: 'start' | 'fall' | 'woke'; at: Vec3 }
+  /**
+   * Игрок вошёл в помещение с красной сеткой: «полная темнота» (фонарь там не светит, видна только сетка) или «сетка»
+   * (место сбоит). Раз на помещение за сессию: строка говорит, что это и что делать (партнёр 17.11: «при входе в
+   * помещение с красной сеткой, нужно что-то говорить игроку»).
+   */
+  | { type: 'room'; fx: 'dark' | 'wire' }
   /** Сессия кончилась, игрок в лимбо: пора готовить следующую (queueSession). */
   | { type: 'limbo' }
   /** От игрока пошла волна сонара (вариант A): звук — тихий пинг (слова партнёра: «Сонар тихий пинг»). */
@@ -512,6 +518,8 @@ export class Game {
    * Взводится, когда он уходит из-под неба; чаще раза в 20 с не бывает.
    */
   private fallArmed = true;
+  /** 0..1: игрок в комнате под небом — её стены и всё несобранное неба не закрывают (FrameView.skyOpen). Плавно. */
+  private skyOpen = 0;
   private fallT0 = -1e9;
   private fallAim: [number, number] = [0, 0];
   /** Цвет камеры сейчас: идёт к цвету места (GRADE). */
@@ -702,6 +710,8 @@ export class Game {
   /** Через сколько секунд после «всё вспомнено» место рассыплется. */
   private endIn = -1;
   private readonly thinUsed = new Set<number>();
+  /** Помещения с красной сеткой, о которых игроку уже сказали в эту сессию (DreamEvent 'room'). */
+  private readonly wireSaid = new Set<number>();
   private thinTime = 0;
   /** Откуда игрок ушёл в карманное пространство. */
   private returnNode = -1;
@@ -778,6 +788,7 @@ export class Game {
     const tiers = level.layout?.tierCount ?? 1;
     this.roomFx.clear();
     this.thinUsed.clear();
+    this.wireSaid.clear();
     if (dream) {
       this.dreamSeed = dream.seed;
       this.swarm = new SwarmAI(level.nav, this.rng);
@@ -2568,6 +2579,12 @@ export class Game {
     const look: Look = { eye, aim, light: this.seeing };
     const node = this.where === 'main' ? this.playerNode() : -1;
     this.room = node >= 0 ? this.level!.nav[node]!.room : -1;
+    // Вошёл в помещение с красной сеткой — сказать, что это (раз на помещение за сессию; в переходе — нет).
+    const fxHere = this.room >= 0 && !this.transition ? this.roomFx.get(this.room) : undefined;
+    if ((fxHere === 'dark' || fxHere === 'wire') && !this.wireSaid.has(this.room)) {
+      this.wireSaid.add(this.room);
+      dream.push({ type: 'room', fx: fxHere });
+    }
 
     // Всё иллюзорно: чего коснулся — растворяется; что растворилось — вернётся, когда свет погаснет и зажжётся.
     if (this.where === 'main') this.stepIllusions(wdt, dream);
@@ -2997,6 +3014,8 @@ export class Game {
     // Падающая звезда по знаку (аудит мест: небо и несобранный потолок выглядели одинаково — чёрное в
     // белых точках). Под небом — в комнате без потолка — первый взгляд вверх встречает падающую звезду.
     const underSky = this.where === 'main' && this.level?.skyRoom !== undefined && this.room === this.level.skyRoom;
+    // Вошёл под небо — за секунду стены перестают его резать; вышел — так же закрываются.
+    this.skyOpen += ((underSky ? 1 : 0) - this.skyOpen) * Math.min(1, dt * 2.2);
     if (!underSky) this.fallArmed = true;
     else if (this.fallArmed && rig.camPitch > 0.3 && this.time - this.fallT0 > 20) {
       this.fallArmed = false;
@@ -3236,6 +3255,8 @@ export class Game {
       // Яркость делится на усиление камеры: и в тёмном убежище, и в светлом офисе звёзды видны одинаково.
       // Где неба не увидеть (потолок везде цел и комнаты под небом нет), оно и не рисуется.
       stars: (this.where !== 'main' || !this.openSky ? 0 : fl ? smoothstep(0.7, 0.97, clamp(fl.viewT / fl.cfg.day, 0, 1)) : 1) * clamp(3.2 / gain, 0.5, 4),
+      // Небо — бесконечность: в комнате под небом его не режут ни её стены, ни что-либо ещё, пока свет это не собрал.
+      skyOpen: this.where === 'main' ? this.skyOpen : 0,
       // Собрано только там, куда смотрит герой, — в светлых местах тоже. Вспышка строба показывает всё.
       gaze: 1 - clamp(strobe, 0, 1),
       // В зале ожидания взгляд стоящего раскрывается, идущего — узок, как луч. К концу сессии конус взгляда у
