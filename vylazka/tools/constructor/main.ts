@@ -31,7 +31,8 @@ import type { BuiltLevel } from '../../src/world/level';
 import { MAT_DEFS, hexToLinear } from '../../src/world/materials';
 import { placeable, placedProblems } from '../../src/world/placed';
 import type { PlacedSpec } from '../../src/world/placed';
-import { checkSpot, fitThing, HEADROOM, roomDoors, rotOf, throatBox } from '../../src/world/placed_place';
+import { checkSpot, fitThing, HEADROOM, placeThings, roomDoors, rotOf, throatBox } from '../../src/world/placed_place';
+import { placeFigures } from '../../src/world/figure_place';
 import type { Turn } from '../../src/world/placed_place';
 import { Xf } from '../../src/world/props';
 import { ALL_PROPS, FIXED } from '../../src/world/props_all';
@@ -988,6 +989,44 @@ function syncPanel(): void {
   $('summary').textContent = `${where} · ${rooms} · ${ANCHOR_RU[c.spec.rule.anchor]}, ${FACING_RU[c.spec.rule.facing]}${turnTxt} · ${c.spec.rule.lift > 0 ? `${c.spec.rule.lift.toFixed(2)} м над полом · ` : ''}${c.spec.rule.count} шт. на место`;
   renderSaved();
   renderProblems();
+  coverageSoon();
+}
+
+/**
+ * Встанет ли правило в игре: тот же расчёт, что при сборке уровня, по пяти планам каждого места правила
+ * (замечание куратора, пачка 38: «партнёр не видит, на скольких сидах правило не встанет»). Считается после
+ * того, как правка утихла, — планы строятся один раз и дальше берутся из запаса.
+ */
+let covTimer = 0;
+function coverageSoon(): void {
+  window.clearTimeout(covTimer);
+  $('coverage').textContent = 'считаю, где встанет…';
+  covTimer = window.setTimeout(coverage, 350);
+}
+function coverage(): void {
+  if (!cur) return;
+  const c = cur;
+  let levels = 0;
+  let hit = 0;
+  let pieces = 0;
+  for (const w of c.spec.rule.worlds) {
+    for (const seed of SEEDS) {
+      const l = levelOf(seed, w);
+      if (!l.placeWorld) continue;
+      levels += 1;
+      const n = c.kind === 'thing' ? placeThings([c.spec], l.placeWorld, ALL_PROPS).length : placeFigures([c.spec], l.placeWorld).length;
+      if (n > 0) hit += 1;
+      pieces += n;
+    }
+  }
+  const el = $('coverage');
+  el.classList.toggle('is-bad', hit === 0);
+  el.textContent =
+    levels === 0
+      ? ''
+      : hit === 0
+        ? `в игре не встанет ни на одном из ${levels} планов: правило нигде не выполнимо — сдвинь вещь или выбери другой край, помещения`
+        : `в игре встанет на ${hit} из ${levels} планов${pieces > hit ? `, всего ${pieces} шт.` : ''}`;
 }
 
 /** Что мешает: данные (как у игры) и это место (точка в показанном помещении). */

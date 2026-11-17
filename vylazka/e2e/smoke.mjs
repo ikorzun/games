@@ -609,7 +609,11 @@ async function scenarioWorlds(browser, baseUrl) {
     // Кадр и экспозиция глаза успевают за светом не сразу: даём полсекунды.
     for (let i = 0; i < 5 && st.jump?.cause !== 'caught'; i++) st = await vz(page, (w) => window.__vz.step(6, w), wiggle);
     const dark = await vz(page, () => window.__vz.probe());
-    check('Осыпь подошла — панели вокруг неё гаснут, у игрока темно', came && st.ambientLocal < 0.1 && mean(dark) < mean(lit) * 0.5, `свет над игроком ${st.ambientLocal.toFixed(2)}, среднее ${mean(lit).toFixed(1)} → ${mean(dark).toFixed(1)}, Осыпь ${st.swarm.mode}`);
+    // Темноту решает игра — свет панелей над игроком. Яркость кадра здесь не мерило: вплотную к Осыпи камеру
+    // рвут помехи (серая рябь, тем сильнее, чем она ближе), и среднее кадра скачет от прогона к прогону (CI 17.11:
+    // 70 и 158 при той же темноте). Кадр — в e2e/out, смотреть глазами.
+    await saveShot(page, 'world_office_swarm_dark.png');
+    check('Осыпь подошла — панели вокруг неё гаснут, у игрока темно', came && st.ambientLocal < 0.1, `свет над игроком ${st.ambientLocal.toFixed(2)}, среднее кадра ${mean(lit).toFixed(1)} → ${mean(dark).toFixed(1)}, Осыпь ${st.swarm.mode}`);
     await vz(page, () => window.__vz.calm(true));
     st = await stepUntil(page, (x) => x.jump === null, 10, 30);
     // Воспоминание — из офисного набора.
@@ -1337,8 +1341,9 @@ async function scenarioIllusions(browser, baseUrl) {
     }
     const w = await vz(page, () => window.__vz.wear());
     // Вариант A (слова партнёра «A… Тихий слой…»): потолок выпадает дырами не больше чем наполовину, стены
-    // редеют пятнами до трети, пол держится (systems/decay.ts: CEIL_MAX 0,55, WALLS_MAX 0,3).
-    check('стёртый офис: часть предметов — кружево, части нет; потолок выпал до предела — наполовину, стены редеют, пол держится', (w.forms['3'] ?? 0) >= 5 && (w.forms['4'] ?? 0) >= 5 && w.decay.ceiling > 0.5 && w.decay.ceiling <= 0.55 + 1e-6 && w.decay.walls > 0.15 && w.decay.walls <= 0.3 + 1e-6 && w.decay.floor === 0, JSON.stringify({ forms: w.forms, ceiling: w.decay.ceiling, walls: w.decay.walls }));
+    // редеют пятнами, пол держится (systems/decay.ts: CEIL_MAX 0,55). Квиз 17.11 «Стены почти уходят»: на двух
+    // последних кругах стены уходят дальше трети (WALLS_MAX 0,3 + WALLS_LATE 0,6) — седьмой круг уже за 0,3.
+    check('стёртый офис: часть предметов — кружево, части нет; потолок выпал до предела — наполовину, стены редеют, пол держится', (w.forms['3'] ?? 0) >= 5 && (w.forms['4'] ?? 0) >= 5 && w.decay.ceiling > 0.5 && w.decay.ceiling <= 0.55 + 1e-6 && w.decay.walls > 0.15 && w.decay.walls <= 0.9 + 1e-6 && w.decay.floor === 0, JSON.stringify({ forms: w.forms, ceiling: w.decay.ceiling, walls: w.decay.walls }));
     check('стёртый офис: нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
     const warns = log.warnings.filter((x) => !benign(x));
     check('стёртый офис: нет предупреждений в консоли', warns.length === 0, `${warns.length}: ${[...new Set(warns)].join(' | ').slice(0, 300)}`);
@@ -1547,10 +1552,10 @@ async function scenarioFear(browser, baseUrl) {
   check('рой выпущен в пяти клетках и знает, где игрок', ok && (st.swarm.mode === 'stalk' || st.swarm.mode === 'cohere') && st.swarm.awareness > 0.5, st.swarm.mode);
   for (let i = 0; i < 60 && st.swarm.mode !== 'hunt'; i++) st = await vz(page, () => window.__vz.step(20));
   check('рой подошёл на свет и собрался в фигуру', st.swarm.mode === 'hunt' && st.swarm.cohesion === 1 && st.swarm.near > 0.15, `${st.swarm.mode}, сцепление ${st.swarm.cohesion.toFixed(2)}, близость ${st.swarm.near.toFixed(2)}`);
-  // Подсказка не ложится на вспышку воспоминания: если та ещё горит или гаснет, подсказка ждёт её конца
-  // (кадр партнёра с телефона: подсказка про касание поверх строки «it only looks still.»).
-  const beamHint = await page.waitForFunction(() => document.querySelector('.vz-hud__toast.is-on')?.textContent?.includes('луч') === true && !document.querySelector('.vz-hud__flash')?.classList.contains('is-on'), null, { timeout: 12000 }).then(() => true, () => false);
-  check('подсказка про луч показана один раз — после вспышки, не поверх неё', beamHint);
+  // Аудит объяснений (квиз 17.11): с фонарём подсказки про Осыпь нет — луч объясняет себя сам (она отступает
+  // и рассыпается под ним). Подсказка «взгляд держит её» — только у того, у кого света нет (app.ts, teach).
+  const swarmHint = await page.waitForFunction(() => /Взгляд держит/.test(document.querySelector('.vz-hud__toast.is-on')?.textContent ?? ''), null, { timeout: 6000 }).then(() => true, () => false);
+  check('с фонарём подсказки про Осыпь нет: луч объясняет себя сам', !swarmHint);
   // Грибы («Когда он появляется, все начинает прорастать грибами вокруг… в углах как знак»).
   {
     const grown = await vz(page, () => window.__vz.spores());

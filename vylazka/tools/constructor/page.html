@@ -68,6 +68,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .note b { color: var(--fg); font-weight: 500; }
 #what { font-weight: 500; }
 #summary { font: 12.5px/1.45 var(--font-mono); color: var(--accent); }
+#coverage { font: 12.5px/1.45 var(--font-mono); color: var(--ok); }
+#coverage.is-bad { color: var(--warn); }
 #problems { margin: 0; padding-left: 18px; color: var(--warn); font-size: 13px; }
 #problems:empty { display: none; }
 #status { font: 12px var(--font-mono); color: var(--muted); min-height: 1.2em; }
@@ -120,6 +122,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     <div class="box" id="rule" hidden>
       <h2>Правило для игры</h2>
       <div id="summary"></div>
+      <div id="coverage"></div>
       <div class="row" id="worlds"></div>
       <div class="row" id="rooms"></div>
       <div class="row" id="anchors"></div>
