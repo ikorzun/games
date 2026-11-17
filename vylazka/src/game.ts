@@ -3033,7 +3033,8 @@ export class Game {
       // 17.11: «Грани точками у мира должны появляться только на уровне поздних кругов, когда уже почти нет стен и
       // пространство стерто и только в таких местах»). Где именно — решает шейдер точек по маске стирания стен; пока
       // стены целы, слой не рисуется вовсе (волна сонара — своя, она идёт по-прежнему).
-      quiet: this.where === 'main' && this.level?.edges && this.decay.walls > 0 ? QUIET : 0,
+      // Порог — из маски шейдера (wallGoneAt): пока сила стирания стен × 1,14 не больше 0,06, ни одна точка не видна.
+      quiet: this.where === 'main' && this.level?.edges && this.decay.walls * 1.14 > 0.06 ? QUIET : 0,
       cells: cl ? { data: cl.data, origin: CELL_ORIGIN, step: 3, size: cl.size } : null,
       ambientLocal: this.ambientLocal,
     };

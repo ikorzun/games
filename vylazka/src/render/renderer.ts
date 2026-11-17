@@ -2422,7 +2422,8 @@ export class GameRenderer {
       r.render(this.clouds.scene, cam);
       r.autoClear = true;
     }
-    // Тихий слой: точки по рёбрам и углам — план держится, даже когда стены не собраны; волна сонара.
+    // Тихий слой: точки по рёбрам и углам — только там, где стена уже стёрта (поздние круги; маска — в шейдере точек);
+    // волна сонара — на любом круге.
     if (this.edgePoints && this.edgeMat && ((v.quiet ?? 0) > 0 || (v.sonar?.[4] ?? 0) > 0)) {
       const eu = this.edgeMat.uniforms;
       eu.tDepth!.value = this.sceneRT.depthTexture;
