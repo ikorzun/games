@@ -360,6 +360,32 @@ describe('игра целиком: цикл сессии', () => {
     expect(g.playerNodeAtSpawn()).toBe(g.playerNode());
   });
 
+  it('сон из сцен: часы Осыпи идут через сцены — вышедшая на охоту Осыпь выходит и в новом месте (противоречие 218)', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 }, calm: false });
+    const g = h.game;
+    const office = buildLevel(generateLayout(SEED + 5, 1, 'office'), { wear: 0 });
+    g.queueScene(office, { seed: 11, known: new Set(), chainAt: 0 });
+    h.run(2);
+    // Спуститься на самый нижний ярус: на полной ступени Осыпь выходит по глубине, не дожидаясь часов.
+    const bottom = Math.max(...g.level!.nav.map((n) => n.tier));
+    const deep = g.level!.nav.find((n) => n.tier === bottom && n.links.length > 1 && n.links.every((l) => Math.abs(g.level!.nav[l]!.y - n.y) < 0.2));
+    expect(deep).toBeDefined();
+    g.teleport(deep!.x, deep!.y, deep!.z);
+    expect(h.until(() => (g.snapshot() as { director: { released: boolean } }).director.released, 6)).toBe(true);
+    const before = (g.snapshot() as { director: { clock: number } }).director.clock;
+    expect(g.beginJump({ cause: 'light', style: 'cut', to: 'elsewhere' }, [])).toBe(true);
+    expect(h.until(() => h.dreamCount('begin') > 0, 4)).toBe(true);
+    expect(g.level).toBe(office);
+    const after = g.snapshot() as { director: { phase: number; released: boolean; clock: number }; swarm: { mode: string } };
+    // Режиссёр тот же: охота уже была, часы сна не обнулились.
+    expect(after.director.released).toBe(true);
+    expect(after.director.phase).toBe(2);
+    expect(after.director.clock).toBeGreaterThanOrEqual(before);
+    // В новом месте Осыпь выходит не сразу, а через полминуты — и выходит.
+    expect(g.swarm!.active).toBe(false);
+    expect(h.until(() => g.swarm!.active, 30)).toBe(true);
+  });
+
   it('сон из сцен: проём, который обещал «назад», и Осыпь, которая будит в начале, места не меняют', () => {
     const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 } });
     const g = h.game;

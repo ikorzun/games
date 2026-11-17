@@ -325,6 +325,9 @@ const SWARM_REST_LATER = 20;
  * Мягкий режим — один набор настроек (первая сессия игрока и сон из сцен): Осыпь мелькает с третьей минуты и
  * охотится с пятой, только по времени; поймав, молчит минуту; ожившие фонари реже уносят в карман.
  */
+/** Сон из сцен: через сколько секунд после смены места Осыпь, уже выходившая на охоту, выходит снова — в новом месте. */
+const SCENE_SWARM_BACK = 25;
+
 const GENTLE = {
   director: FIRST_DIRECTOR,
   rest: 60,
@@ -607,6 +610,11 @@ export class Game {
    * по одной вещи; Session у каждой своя). Сбрасываются только с новой сессией игрока.
    */
   private feelClock = 0;
+  /**
+   * Часы сна для режиссёра страха: идут, как часы сессии (Session.time), но сцена сна из сцен их не обнуляет — только новая
+   * сессия игрока. В петле одного места это ровно часы сессии.
+   */
+  private sleepTime = 0;
   private feelDone = 0;
   /** Сколько вещей во всей сессии игрока и за сколько секунд её время доходит до конца; 0 — как у Session и по умолчанию. Ставит приложение. */
   sessionThings = 0;
@@ -749,6 +757,7 @@ export class Game {
       this.feel.reset();
       this.feelClock = 0;
       this.feelDone = 0;
+      this.sleepTime = 0;
     }
     const rank = level.layout?.rank ?? 1;
     this.session = dream ? new Session(level, dream.seed, dream.known, this.sessionCfg, dream.chainAt ?? 0) : null;
@@ -769,8 +778,14 @@ export class Game {
       this.swarm = new SwarmAI(level.nav, this.rng);
       this.spores = new Spores(level.nav, dream.seed);
       const stage = this.stage;
-      this.director = new Director(this.rng, stage === 0 ? QUIET_DIRECTOR : stage <= 2 ? SIGNS_DIRECTOR[stage - 1]! : stage === 3 ? FIRST_HUNT_DIRECTOR : this.gentle ? GENTLE.director : DEFAULT_DIRECTOR);
-      this.swarmWakeAt = 0;
+      // Сон из сцен: режиссёр страха — один на весь сон, его часы — часы сна (sleepTime), а не сцены: сцена идёт минуту, и
+      // с новыми часами в каждой Осыпь не доживала бы до своего выхода (куратор, пачка 39, противоречие 218). Если она уже
+      // охотилась, в новом месте выходит снова — не сразу, через SCENE_SWARM_BACK секунд (она не житель места, а тревога:
+      // pressure.md §4.4).
+      const keep = this.loadingScene && this.director !== null;
+      const hunted = keep && this.director!.wasReleased;
+      if (!keep) this.director = new Director(this.rng, stage === 0 ? QUIET_DIRECTOR : stage <= 2 ? SIGNS_DIRECTOR[stage - 1]! : stage === 3 ? FIRST_HUNT_DIRECTOR : this.gentle ? GENTLE.director : DEFAULT_DIRECTOR);
+      this.swarmWakeAt = hunted ? SCENE_SWARM_BACK : 0;
       // Скачков (кроме поставленного холодного старта и вынужденных) на ступенях 0–1 нет; на 2–3 — мягкие.
       this.jumps = new Jumps(this.rng, stage <= 1 ? { ...DEFAULT_JUMPS, maxPerSession: 0 } : stage <= 3 || this.gentle ? GENTLE.jumps : DEFAULT_JUMPS);
       // Лестница на нижний ярус удлиняется дважды — только на объектах, где есть «неправильный» ярус.
@@ -2567,6 +2582,7 @@ export class Game {
       // В зале ожидания вспомнить можно только стоя, на снимке: взгляд держит вещь настоящее время, пока игрок стоит.
       const hold = fl ? { holdDt: fl.frozen ? dt : 0 } : {};
       out.push(...s.update(wdt, { pos: [b.x, b.y, b.z], eye, aim, light: look.light, node, swarm: this.swarmNear, observed: this.observed, landed: res.landed, hidden: this.memoryThing !== null && this.memoryThing.state !== 'idle', seen: (p) => this.seen(p, 0.4), ...hold }, los));
+      this.sleepTime += wdt;
       this.observed = false;
     }
     for (let i = 0; i < out.length; i++) this.applySessionEvent(out[i]!, out, dream, node);
@@ -2735,7 +2751,7 @@ export class Game {
     const dir = this.director;
     if (dir) {
       const tiers = this.level?.layout?.tierCount ?? 1;
-      for (const e of dir.update({ time: s.time, tier: Math.max(0, Math.round(-b.y / 4.5)), goalsDone: s.doneCount, swarmBusy: sw?.active ?? true, tiers })) {
+      for (const e of dir.update({ time: this.sleepTime, tier: Math.max(0, Math.round(-b.y / 4.5)), goalsDone: s.doneCount, swarmBusy: sw?.active ?? true, tiers })) {
         if (e.type === 'scare') {
           this.applyScare(e.id);
           const src = this.scareSource(e.id, node);
@@ -3317,7 +3333,7 @@ export class Game {
       jumps: this.jumps ? { count: this.jumps.count, cooldown: this.jumps.cooldown } : null,
       archive: [...this.archive],
       swarm: this.swarm ? { mode: this.swarm.mode, pos: [...this.swarm.pos], node: this.swarm.node, cohesion: this.swarm.cohesion, awareness: this.swarm.awareness, aggravation: this.swarm.aggravation, near: this.swarmNear, growth: Math.min(1, (this.session?.doneCount ?? 0) / SWARM_GROWN), flow: this.swarmFlow ? this.swarmFlow.t : null } : null,
-      director: this.director ? { phase: this.director.phase } : null,
+      director: this.director ? { phase: this.director.phase, released: this.director.wasReleased, clock: this.sleepTime } : null,
       anomalies: this.anomalies ? this.anomalies.state() : null,
       node: this.playerNode(),
     };
