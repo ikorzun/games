@@ -2019,6 +2019,38 @@ async function scenarioScenes(browser, baseUrl) {
   check('за сон побывали минимум в трёх разных местах', new Set(seen).size >= 3, JSON.stringify(seen));
   check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
   await context.close();
+
+  // Сцена — кусок места (квиз 17.11, поздний вечер; world/piece.ts). В первом сне куска нет (он учит во всём убежище) — ?piece=1
+  // включает его сразу: страница своя, после закрытия прошлой (две разом программная отрисовка не тянет).
+  {
+    const pp = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&piece=1');
+    await pp.page.click('.vz-overlay');
+    await sleep(300);
+    await vz(pp.page, () => window.__vz.freeze(true));
+    await vz(pp.page, () => window.__vz.calm(true));
+    // Переход начала сессии (1,6 с) должен кончиться: пока он идёт, край не проверяется.
+    await vz(pp.page, () => window.__vz.step(150));
+    const piece = await vz(pp.page, () => window.__vz.piece());
+    check('сцена — кусок места: помнится от одной до шести комнат и есть край, за которым память обрывается', !!piece && piece.rooms >= 1 && piece.rooms <= 6 && piece.cells > 4 && piece.edge.length > 0, JSON.stringify(piece && { rooms: piece.rooms, cells: piece.cells, edge: piece.edge.length }));
+    if (piece && piece.edge.length > 0) {
+      // Встать на край лицом к обрыву: строка «дальше не помню».
+      const e = piece.edge[0];
+      const yaw = Math.atan2(-(e.to[0] - e.at[0]), -(e.to[2] - e.at[2]));
+      await vz(pp.page, ([p, y]) => window.__vz.teleport(p[0], p[1], p[2], y, -0.1), [e.at, yaw]);
+      await vz(pp.page, () => window.__vz.step(30));
+      // Строка ждёт, пока горит вспышка начала сессии (hud.toast): ждём её по условию, а не по времени.
+      const said = await pp.page.waitForFunction((want) => document.querySelector('.vz-hud__toast.is-on')?.textContent === want, RU['toast.edge'], { timeout: 12000 }).then(() => true, () => false);
+      const toast = await pp.page.$eval('.vz-hud__toast', (el) => el.textContent ?? '').catch(() => '');
+      check('у края, глядя в обрыв, — строка «…дальше не помню»', said, toast);
+      // Шаг за край обрывает сцену: следующей сцены в первом сне нет — память возвращает в кусок.
+      await vz(pp.page, ([p]) => window.__vz.teleport(p[0], p[1], p[2]), [e.to]);
+      const after = await stepUntil(pp.page, (x) => x.where === 'main' && x.jump === null, 20, 30);
+      const back = await vz(pp.page, () => window.__vz.piece());
+      check('шаг за край памяти — скачок; следующей сцены нет — игрок снова в куске, картинка есть', after.where === 'main' && !!back && Math.max(...(await vz(pp.page, () => window.__vz.probe()))) > 10, JSON.stringify({ where: after.where, jump: after.jump }));
+    }
+    check('кусок места: нет ошибок в консоли (шейдеры маски собрались)', pp.log.errors.length === 0, pp.log.errors.join(' | ').slice(0, 400));
+    await pp.context.close();
+  }
 }
 
 /** Вещи под взглядом и скачки в карманные пространства. */

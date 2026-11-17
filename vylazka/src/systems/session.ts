@@ -317,11 +317,22 @@ export class Session {
     return dist;
   }
 
+  /**
+   * Сцена — кусок места (world/piece.ts): вещь появляется только в том, что помнится. null — во всём месте. Места вне куска
+   * не берутся, даже если в куске мест не осталось: вещь за краем памяти найти нельзя.
+   */
+  private region: ReadonlySet<number> | null = null;
+
+  setRegion(nodes: ReadonlySet<number> | null): void {
+    this.region = nodes;
+  }
+
   /** Место для вещи: в стольких клетках пути от игрока, чтобы за ней пришлось идти, но не через весь объект. */
   private pickSpot(from: number, rooms?: readonly RoomType[], seen?: (p: Vec3) => boolean): ItemSpot | null {
     const dist = this.distances(from);
     const c = this.cfg;
-    const all = this.level.spots.filter((s) => !this.usedSpots.has(s));
+    const region = this.region;
+    const all = this.level.spots.filter((s) => !this.usedSpots.has(s) && (!region || region.has(this.spotNode.get(s) ?? -1)));
     // Сначала — места не на виду; если таких нет, любое (вещь всё равно нужна).
     const out = seen ? all.filter((s) => !seen([s.x, s.y + 0.3, s.z])) : all;
     const free = out.length > 0 ? out : all;

@@ -567,7 +567,7 @@ export class App {
       this.game.stage = this.stageFor();
       this.game.gentle = this.profile.successes === 0 || this.game.stage === 3;
       this.clockSkew = 0;
-      this.game.loadLevel(this.level, { seed: this.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
+      this.game.loadLevel(this.level, { seed: this.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0, piece: this.pieces } : {}) });
       if (this.scenes) {
         // Сон начинается с места заставки.
         for (const w of WORLD_KINDS) delete this.dreamt[w];
@@ -686,7 +686,7 @@ export class App {
       this.next = { level, seed: mem.seed, rank: mem.rank };
       this.game.stage = this.stageFor();
       this.game.gentle = this.profile.successes === 0 || this.game.stage === 3;
-      const queue = (): void => this.game.queueSession(level, { seed: mem.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
+      const queue = (): void => this.game.queueSession(level, { seed: mem.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0, piece: this.pieces } : {}) });
       if (ad) void ad.then(queue);
       else queue();
     }, 500);
@@ -710,6 +710,17 @@ export class App {
   /** Первый сон игрока: одна сцена убежища с тремя вещами, без смены мест. */
   private get firstSleep(): boolean {
     return this.scenes && !this.testLevel && this.profile.successes === 0;
+  }
+
+  /**
+   * Сцена — кусок места (квиз 17.11, поздний вечер: «Сцена — кусок места (советую)»; world/piece.ts): со второго сна каждая
+   * сцена помнит 3–6 комнат вокруг того места, куда уронил сон, дальше память обрывается. Первый сон учит закону во всём
+   * убежище; зал ожидания — сцена целиком (game.ts, setupPiece).
+   */
+  private get pieces(): boolean {
+    // ?piece=1 или #piece в конце ссылки — кусок и в первом сне: посмотреть край памяти, не проходя первый сон (проверки, партнёр).
+    const asked = this.params.get('piece') === '1' || (typeof location !== 'undefined' && location.hash === '#piece');
+    return this.scenes && !this.testLevel && (asked || !this.firstSleep);
   }
 
   /** Сон из сцен: отметить, что место снилось сейчас. */
@@ -764,7 +775,7 @@ export class App {
       const memory = memoryFor(this.profile, world);
       const level = buildLevel(generateLayout(memory.seed, memory.rank, world), { wear: this.wearParam() ?? memory.wear });
       this.sceneNext = { world, level, memory };
-      this.game.queueScene(level, { seed: memory.seed, known: new Set(this.profile.archive), chainAt: memory.chain ?? 0 });
+      this.game.queueScene(level, { seed: memory.seed, known: new Set(this.profile.archive), chainAt: memory.chain ?? 0, piece: this.pieces });
     }, 700);
   }
 
@@ -1177,6 +1188,11 @@ export class App {
       else if (e.type === 'room' && !this.roomSaid.has(e.fx)) {
         this.roomSaid.add(e.fx);
         this.hud.toast(t(`toast.room.${e.fx}`), 4200);
+      }
+      // Сцена — кусок места: игрок у края, глядит туда, где память обрывается, — раз за сон; дальше край объясняет себя сам.
+      else if (e.type === 'edge' && !this.roomSaid.has('edge')) {
+        this.roomSaid.add('edge');
+        this.hud.toast(t('toast.edge'), 4200);
       }
       // Первое касание: вещь рассыпалась — сказать, что это правило, и как её вернуть. Только после настоящего касания:
       // обвал пола и бумажный цветок рассыпают вещи сами, и строка «здесь ничего нельзя потрогать» там лишняя (аудит 17.11).

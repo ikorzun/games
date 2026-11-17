@@ -71,6 +71,8 @@ import { formMesh } from './world/forms';
 import { thingMesh } from './world/thing_mesh';
 import { MEM_LIGHT_KIND, memLightMod, memLightStep, memoryLightOf } from './world/memory_light';
 import type { MemLightDef } from './world/memory_light';
+import { pieceMask, scenePiece } from './world/piece';
+import type { ScenePiece } from './world/piece';
 
 export const STEP = 1 / 60;
 const WALK_SPEED = 2.3;
@@ -130,6 +132,11 @@ export type DreamEvent =
    * помещение с красной сеткой, нужно что-то говорить игроку»).
    */
   | { type: 'room'; fx: 'dark' | 'wire' }
+  /**
+   * Сцена — кусок места (world/piece.ts): игрок дошёл до края того, что помнится; дальше — шаг, и сцена оборвётся. Раз за
+   * сцену; строку говорит приложение (раз за сон).
+   */
+  | { type: 'edge' }
   /** Сессия кончилась, игрок в лимбо: пора готовить следующую (queueSession). */
   | { type: 'limbo' }
   /** От игрока пошла волна сонара (вариант A): звук — тихий пинг (слова партнёра: «Сонар тихий пинг»). */
@@ -176,6 +183,11 @@ export interface DreamSeed {
   known: ReadonlySet<string>;
   /** Сон из сцен: с какой вещи цепочки места начать (Session, start). */
   chainAt?: number;
+  /**
+   * Сцена — кусок места (квиз 17.11: «Сцена — кусок места»; world/piece.ts): помнится только кусок вокруг начала сцены —
+   * 3–6 комнат и проходы между ними, дальше память обрывается. Нет — помнится всё место (первый сон, зал ожидания, проверки).
+   */
+  piece?: boolean;
 }
 
 interface Transition {
@@ -718,6 +730,15 @@ export class Game {
    */
   private sceneNext: { level: BuiltLevel; dream: DreamSeed } | null = null;
   /**
+   * Сцена — кусок места (world/piece.ts): что из места помнится в этой сцене; null — всё место. За краем мир не собирается,
+   * шаг туда обрывает сцену (скачок edge), вещь сцены и выходы скачков — только внутри.
+   */
+  piece: ScenePiece | null = null;
+  /** Помнить ли кусок, а не всё место (DreamSeed.piece этой загрузки). */
+  private pieceWanted = false;
+  /** Игрок дошёл до края куска в этой сцене (событие edge — раз). */
+  private edgeMet = false;
+  /**
    * Стёртость, набранная в сцене, которую сон только что оставил: новая сцена начинает свой счёт с нуля, а приложение
    * записывает эту — в память оставленного места (app.ts, onScene).
    */
@@ -793,6 +814,7 @@ export class Game {
     }
     const rank = level.layout?.rank ?? 1;
     this.session = dream ? new Session(level, dream.seed, dream.known, this.sessionCfg, dream.chainAt ?? 0) : null;
+    this.pieceWanted = dream?.piece === true;
     // Новая сцена или сессия: прежняя очередь сцен не в счёт — следующую поставит приложение.
     this.sceneNext = null;
     this.sleepEnds = false;
@@ -899,7 +921,22 @@ export class Game {
     this.quake = 0;
     this.gasView = 0;
     this.shake.reset();
+    this.setupPiece();
     this.respawn();
+  }
+
+  /**
+   * Сцена — кусок места: собрать его вокруг начала сцены (spawn) — 3–6 комнат и проходы между ними (world/piece.ts). Вещь
+   * сцены — только в нём; рендер не собирает того, что за краем. Зал ожидания — сцена целиком (у него свой закон времени).
+   */
+  private setupPiece(): void {
+    const level = this.level;
+    this.piece = null;
+    this.edgeMet = false;
+    const start = level?.layout && this.pieceWanted && this.world !== 'station' ? this.playerNodeAt(this.spawn.pos) : -1;
+    if (level?.layout && start >= 0) this.piece = scenePiece(level.nav, level.layout, start, (this.dreamSeed ^ Math.imul(this.loads, 0x9e3779b1)) >>> 0);
+    this.session?.setRegion(this.piece ? this.piece.nodes : null);
+    this.renderer.setPiece(level?.layout && this.piece ? pieceMask(level.nav, level.layout, this.piece) : null);
   }
 
   /**
@@ -1947,6 +1984,8 @@ export class Game {
     const far = start >= 0 ? nodesInRange(nav, start, 6, 40) : [];
     const pool = (far.length > 0 ? far : nav.map((n) => n.id)).filter((id) => {
       const n = nav[id]!;
+      // Сцена — кусок места: за край памяти скачок не выводит.
+      if (this.piece && !this.piece.nodes.has(id)) return false;
       // Не на лестничный марш и не в яму.
       if (n.links.some((l) => Math.abs(nav[l]!.y - n.y) > 0.2)) return false;
       return !this.level!.zones.some((z) => z.kind === 'pit' && n.x >= z.minX - 1 && n.x <= z.maxX + 1 && n.z >= z.minZ - 1 && n.z <= z.maxZ + 1 && Math.abs(n.y - z.minY) < 3);
@@ -2038,6 +2077,7 @@ export class Game {
     const gas = new Set(this.level?.layout?.hazards.gasRooms ?? []);
     const pool = nodesInRange(nav, at, 2, 4).filter((id) => {
       const n = nav[id]!;
+      if (this.piece && !this.piece.nodes.has(id)) return false;
       return !gas.has(n.room) && !this.roomFx.has(n.room) && !this.level!.zones.some((z) => n.x >= z.minX - 1.2 && n.x <= z.maxX + 1.2 && n.z >= z.minZ - 1.2 && n.z <= z.maxZ + 1.2 && Math.abs(n.y - z.minY) < 3);
     });
     return pool.length > 0 ? pool[Math.floor(this.rng() * pool.length)]! : at;
@@ -2269,7 +2309,25 @@ export class Game {
     const l = nav[n.links[Math.floor(this.rng() * n.links.length)]!]!;
     const [fx, fz] = this.freeSpot(n.x, n.y, n.z);
     this.spawn = { pos: [fx, n.y, fz], yaw: Math.atan2(-(l.x - fx), -(l.z - fz)) };
+    this.setupPiece();
     this.respawn();
+  }
+
+  /** Игрок на краю куска и смотрит туда, где память обрывается: сосед снаружи — в пределах взгляда. */
+  private facesVoid(node: number, piece: ScenePiece): boolean {
+    const nav = this.level?.nav ?? [];
+    const n = nav[node];
+    if (!n) return false;
+    const fx = -Math.sin(this.aimYaw);
+    const fz = -Math.cos(this.aimYaw);
+    return n.links.some((l) => {
+      if (piece.nodes.has(l)) return false;
+      const o = nav[l]!;
+      const dx = o.x - this.body.x;
+      const dz = o.z - this.body.z;
+      const d = Math.hypot(dx, dz);
+      return d > 0.3 && d < 4.5 && (dx * fx + dz * fz) / d > 0.6;
+    });
   }
 
   /** Узел навигации, в клетке которого стоит игрок (−1 — вне графа). */
@@ -2716,6 +2774,19 @@ export class Game {
     }
     // Свет снова горит: поиск в темноте кончился.
     if (this.light.state === 'on' && !xraySeen) this.darkSearch = false;
+
+    // Сцена — кусок места (world/piece.ts): шаг за край памяти обрывает сцену — уносит в другое место, как скачок без цели
+    // (следующей сцены ещё нет — в другую точку того же куска). У края, глядя в обрыв, — раз за сцену событие edge: строку
+    // говорит приложение. Не правило страха, а устройство сна: работает и в мягком режиме.
+    const piece = this.piece;
+    if (piece && this.where === 'main' && !this.transition && s && !s.over) {
+      const node = this.playerNode();
+      if (node >= 0 && !piece.nodes.has(node)) this.beginJump({ cause: 'edge', style: 'dissolve', to: 'elsewhere' }, dream);
+      else if (node >= 0 && !this.edgeMet && this.facesVoid(node, piece)) {
+        this.edgeMet = true;
+        dream.push({ type: 'edge' });
+      }
+    }
 
     // Всё вспомнено: чуть погодя место рассыпается, игрок попадает в лимбо.
     if (this.endIn >= 0 && !this.transition) {
@@ -3292,6 +3363,7 @@ export class Game {
       // Небо — бесконечность: в комнате под небом его не режут ни её стены, ни что-либо ещё, пока свет это не собрал.
       skyOpen: this.where === 'main' ? this.skyOpen : 0,
       skySeed: this.skySeed,
+      piece: this.piece !== null && this.where === 'main',
       // Собрано только там, куда смотрит герой, — в светлых местах тоже. Вспышка строба показывает всё.
       gaze: 1 - clamp(strobe, 0, 1),
       // В зале ожидания взгляд стоящего раскрывается, идущего — узок, как луч. К концу сессии конус взгляда у

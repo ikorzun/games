@@ -7,7 +7,7 @@
 import type { Rng } from '../core/rng';
 import type { PocketKind } from '../world/pockets';
 
-export type JumpCause = 'gaze' | 'thin' | 'light' | 'revive' | 'dark' | 'fall' | 'faint' | 'caught' | 'door' | 'return' | 'end' | 'begin';
+export type JumpCause = 'gaze' | 'thin' | 'light' | 'revive' | 'dark' | 'fall' | 'faint' | 'caught' | 'door' | 'return' | 'end' | 'begin' | 'edge';
 
 /**
  * Как выглядит переход: cut — рывок с помехами; dissolve — место рассыпается в пыль;

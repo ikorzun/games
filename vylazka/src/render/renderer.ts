@@ -16,6 +16,7 @@ import { bakeGrime } from './grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from './matcap_atlas';
 import { MAX_WORMS } from '../swarm/body';
 import type { EdgePoints } from '../world/edges';
+import type { PieceMask } from '../world/piece';
 import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, ECHO_FRAG, EDGE_FRAG, EDGE_VERT, GRAIN_VERT, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, ENTITY_VERT, GLASS_FRAG, GLASS_VERT, SPOT_FRAG, STAR_FRAG, STAR_VERT, TRAIL_FRAG, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
 import { newGrainLife, objectTriangles, sowGrains, steerGrains, stepGrains } from './grains';
 import { GRADE_DEFAULT, RINGS_DEFAULT } from './grade';
@@ -172,6 +173,8 @@ export interface FrameView {
   skyOpen?: number;
   /** Зерно неба (render/sky.ts): у каждой загрузки места своё — звёзды, млечный путь и туманности каждый раз другие. */
   skySeed?: number;
+  /** Сцена — кусок места: игрок на месте (не в кармане), и помнится только кусок (setPiece). Нет поля — помнится всё. */
+  piece?: boolean;
   /** Множитель «бочки» объектива: больше единицы — кадр растянут по краям, меньше — сжат. */
   lens?: number;
   /** Множитель углов луча фонаря (кривая ощущений, systems/feel.ts): меньше единицы — луч уже. Нет поля — как есть. */
@@ -470,6 +473,17 @@ export class GameRenderer {
   private focusTime = -1;
   private shadowRT: THREE.WebGLRenderTarget | null = null;
   private readonly worldMat: THREE.ShaderMaterial;
+  /**
+   * Сцена — кусок места (world/piece.ts): маска того, что помнится, — одни и те же uniform-объекты у мира, теней, точек,
+   * красной сетки и тихого слоя. Пока маски нет или игрок в кармане — выключена.
+   */
+  private pieceTex = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+  private readonly pieceU = {
+    uPiece: { value: null as THREE.DataTexture | null },
+    uPieceGrid: { value: new THREE.Vector4(0, 0, 1, 1) },
+    uPieceOn: { value: new THREE.Vector3(0, 1, 4.5) },
+  };
+  private pieceReady = false;
   /** Проекции (world/flat.ts): тот же шейдер мира с веткой SLIDE — картинка из света, которую свет смывает. */
   private readonly slideMat: THREE.ShaderMaterial;
   /**
@@ -686,11 +700,16 @@ export class GameRenderer {
     this.contactTex.magFilter = THREE.LinearFilter;
     this.contactTex.minFilter = THREE.LinearFilter;
     this.contactTex.needsUpdate = true;
+    this.pieceTex.magFilter = THREE.NearestFilter;
+    this.pieceTex.minFilter = THREE.NearestFilter;
+    this.pieceTex.needsUpdate = true;
+    this.pieceU.uPiece.value = this.pieceTex;
     this.worldMat = new THREE.ShaderMaterial({
       vertexShader: WORLD_VERT,
       fragmentShader: WORLD_FRAG,
       uniforms: {
         ...this.lightU,
+        ...this.pieceU,
         uCellLight: { value: this.cellTex },
         uCellGrid: { value: new THREE.Vector4(0, 0, 3, 0) },
         uAtlas: { value: atlasTex },
@@ -757,7 +776,7 @@ export class GameRenderer {
         uMatBase: { value: Array.from({ length: MAT_SLOTS }, (_, i) => new THREE.Vector3(...(atlas.base[i] ?? [0.5, 0.5, 0.5]))) },
       },
     });
-    this.depthMat = new THREE.ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, side: THREE.BackSide, colorWrite: false, uniforms: { uObjState: { value: this.objTex }, uWind: this.worldMat.uniforms.uWind! } });
+    this.depthMat = new THREE.ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, side: THREE.BackSide, colorWrite: false, uniforms: { uObjState: { value: this.objTex }, uWind: this.worldMat.uniforms.uWind!, ...this.pieceU } });
     // Проекции: всё общее — теми же uniform-объектами, что у мира.
     this.slideMat = this.worldLike();
     this.laceEdgeMat = this.worldLike();
@@ -772,6 +791,7 @@ export class GameRenderer {
         uObjState: { value: this.objTex },
         uWireAlpha: { value: 0 },
         uTime: { value: 0 },
+        ...this.pieceU,
       },
       blending: THREE.AdditiveBlending,
       transparent: true,
@@ -970,6 +990,7 @@ export class GameRenderer {
       vertexShader: SPLAT_VERT,
       fragmentShader: SPLAT_FRAG,
       uniforms: {
+        ...this.pieceU,
         tScene: { value: null },
         tDepth: { value: null },
         uNearFar: { value: new THREE.Vector2(0.05, 70) },
@@ -1464,6 +1485,27 @@ export class GameRenderer {
    * Тени-пятна уровня (render/contact.ts): карта size × size, по каналу на ярус, 255 — темно; origin — её
    * угол в мире (x, z), span — сторона, м. null — карты нет.
    */
+  /**
+   * Сцена — кусок места: маска того, что помнится (world/piece.ts, pieceMask); null — помнится всё место. Включается в кадре,
+   * пока игрок на месте, а не в кармане (FrameView.piece).
+   */
+  setPiece(mask: PieceMask | null): void {
+    this.pieceReady = mask !== null;
+    if (!mask) return;
+    const rows = mask.h * mask.tiers;
+    const img = this.pieceTex.image as { data: Uint8Array; width: number; height: number };
+    if (img.width !== mask.w || img.height !== rows) {
+      this.pieceTex.dispose();
+      this.pieceTex = new THREE.DataTexture(new Uint8Array(mask.data), mask.w, rows, THREE.RGBAFormat, THREE.UnsignedByteType);
+      this.pieceTex.magFilter = THREE.NearestFilter;
+      this.pieceTex.minFilter = THREE.NearestFilter;
+      this.pieceU.uPiece.value = this.pieceTex;
+    } else img.data.set(mask.data);
+    this.pieceTex.needsUpdate = true;
+    this.pieceU.uPieceGrid.value.set(mask.offX, mask.offZ, mask.w, mask.h);
+    this.pieceU.uPieceOn.value.y = mask.tiers;
+  }
+
   setContact(map: { data: Uint8Array; size: number; origin: readonly [number, number]; span: number } | null): void {
     if (!map) {
       this.contactSpan = 0;
@@ -1837,6 +1879,7 @@ export class GameRenderer {
         vertexShader: EDGE_VERT,
         fragmentShader: EDGE_FRAG,
         uniforms: {
+          ...this.pieceU,
           tDepth: { value: null },
           uNearFar: this.splatMat.uniforms.uNearFar!,
           uProj: this.splatMat.uniforms.uProj!,
@@ -2401,6 +2444,8 @@ export class GameRenderer {
       if (v.skySeed !== undefined && v.skySeed !== this.skySeedNow) this.setSky(v.skySeed);
     }
     (this.dustMat.uniforms.uCamPos!.value as THREE.Vector3).copy(cam.position);
+    // Сцена — кусок места: маска действует, пока игрок на месте; в кармане и в лимбо — нет (там своя геометрия).
+    this.pieceU.uPieceOn.value.x = this.pieceReady && v.piece === true ? 1 : 0;
 
     // Мир прошлого кадра остаётся: по его глубине память света переносится в новый кадр.
     const older = this.scenePrevRT;

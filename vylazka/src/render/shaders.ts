@@ -43,6 +43,34 @@ float wallGoneAt(vec3 p, float h, float amount) {
 }
 `;
 
+/**
+ * Сцена — кусок места (world/piece.ts, pieceMask): что из места помнится в этой сцене. Тексель на клетку плана, ярусы
+ * друг под другом; каналы — стороны клетки (−x, +x, −z, +z): 0 — клетка не помнится; 0,5 — сторона закрыта; 0,75 — дверь
+ * в забытое (рвётся только проём); 1 — проход в забытое (обрывается вся сторона). pieceKeep: 1 — помнится, 0 — нет; у
+ * стороны, открытой в забытое, убывает к ней — за полклетки (1,5 м).
+ */
+export const PIECE_GLSL = /* glsl */ `
+uniform highp sampler2D uPiece;
+uniform vec4 uPieceGrid;   // xy — сдвиг: клетка = мир / 3 + xy; z, w — клеток по x и по z на ярус
+uniform vec3 uPieceOn;     // x — 1: сцена — кусок места; y — ярусов; z — на сколько метров ярус ниже соседнего
+float pieceKeep(vec3 p) {
+  if (uPieceOn.x < 0.5) return 1.0;
+  float t = clamp(floor((3.5 - p.y) / uPieceOn.z), 0.0, uPieceOn.y - 1.0);
+  vec2 c = p.xz / 3.0 + uPieceGrid.xy;
+  vec2 ci = floor(c + 0.5);
+  vec2 f = c - ci;
+  if (ci.x < 0.0 || ci.y < 0.0 || ci.x >= uPieceGrid.z || ci.y >= uPieceGrid.w) return 0.0;
+  vec4 s = texelFetch(uPiece, ivec2(int(ci.x), int(t * uPieceGrid.w + ci.y)), 0);
+  if (max(max(s.r, s.g), max(s.b, s.a)) < 0.25) return 0.0;
+  float d = 0.5;
+  if (s.r > 0.6 && (s.r > 0.9 || abs(f.y) < 0.24)) d = min(d, f.x + 0.5);
+  if (s.g > 0.6 && (s.g > 0.9 || abs(f.y) < 0.24)) d = min(d, 0.5 - f.x);
+  if (s.b > 0.6 && (s.b > 0.9 || abs(f.x) < 0.24)) d = min(d, f.y + 0.5);
+  if (s.a > 0.6 && (s.a > 0.9 || abs(f.x) < 0.24)) d = min(d, 0.5 - f.y);
+  return clamp(d * 2.0, 0.0, 1.0);
+}
+`;
+
 export const BEAM_GLSL = /* glsl */ `
 uniform vec3 uLightPosV;
 uniform vec3 uLightDirV;
@@ -374,6 +402,7 @@ ${BEAM_GLSL}
 ${SCAN_GLSL}
 
 ${SOFT_NOISE_GLSL}
+${PIECE_GLSL}
 
 /**
  * Кружево: то, что остаётся от поверхности, когда вещество ушло, — нити. Возвращает расстояние от
@@ -692,6 +721,9 @@ vec3 perturb(vec3 N, vec3 p, float h) {
 }
 
 void main() {
+  // Сцена — кусок места: того, что за краем памяти, нет; у края, открытого в забытое (обрезанный коридор, дверь в комнату,
+  // которой сцена не помнит), поверхность рвётся неровной кромкой раньше, чем редеют точки, — память обрывается в точки.
+  if (uPieceOn.x > 0.5 && pieceKeep(vWorld) < 0.5 + 0.3 * (softNoise(vWorld * 1.9) - 0.5) + 0.22 * (cellHash(floor(vWorld * 11.0)) - 0.5)) discard;
   // Распад мира: поверхность выгорает клетками по 9 см; кромка дыры светится красным.
   float burn = 0.0;
   if (vDis > 0.0) {
@@ -1278,6 +1310,7 @@ void main() {
 export const WIRE_VERT = /* glsl */ `
 varying float vDist;
 ${CRUMBLE_GLSL}
+${PIECE_GLSL}
 
 void main() {
   vec4 wp = modelMatrix * vec4(position, 1.0);
@@ -1287,8 +1320,8 @@ void main() {
   gl_Position = projectionMatrix * mv;
   // Чуть к камере, чтобы линия не тонула в своей же поверхности.
   gl_Position.z -= 0.0012 * gl_Position.w;
-  // У растворённого предмета нет и сетки.
-  if (od > 0.6) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+  // У растворённого предмета нет и сетки; у забытого (сцена — кусок места) — тоже.
+  if (od > 0.6 || (uPieceOn.x > 0.5 && pieceKeep(wp.xyz) < 0.5)) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
 }
 `;
 
@@ -1310,6 +1343,7 @@ export const DEPTH_VERT = /* glsl */ `
 attribute float aMat;
 attribute float aObj;
 uniform highp sampler2D uObjState;
+varying vec3 vPieceW;
 ${WIND_GLSL}
 void main() {
   // Растворяющийся предмет тени не отбрасывает (как и отдельная вещь).
@@ -1333,12 +1367,17 @@ void main() {
   vec4 wp = modelMatrix * vec4(position, 1.0);
   wp.xyz = windSway(wp.xyz);
 #endif
+  vPieceW = wp.xyz;
   gl_Position = projectionMatrix * viewMatrix * wp;
 }
 `;
 
 export const DEPTH_FRAG = /* glsl */ `
+varying vec3 vPieceW;
+${PIECE_GLSL}
 void main() {
+  // Забытое тени не отбрасывает (сцена — кусок места).
+  if (uPieceOn.x > 0.5 && pieceKeep(vPieceW) < 0.5) discard;
   gl_FragColor = vec4(1.0);
 }
 `;
@@ -1618,6 +1657,7 @@ uniform float uTierDrop;  // на сколько метров ярус ниже 
 varying vec3 vCol;
 
 ${SOFT_NOISE_GLSL}
+${PIECE_GLSL}
 
 float linDepth(float d) {
   return (2.0 * uNearFar.x * uNearFar.y) / (uNearFar.y + uNearFar.x - (d * 2.0 - 1.0) * (uNearFar.y - uNearFar.x));
@@ -1628,6 +1668,7 @@ void main() {
   gl_PointSize = 1.0;
   gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
   if (aTier < uTiers.x - 0.5 || aTier > uTiers.y + 0.5) return;
+  if (uPieceOn.x > 0.5 && pieceKeep(position) < 0.5) return;
   vec4 pv = viewMatrix * vec4(position, 1.0);
   float dist = -pv.z;
   if (dist < 0.08) return;
@@ -1790,6 +1831,7 @@ uniform float uFocusOn;
 uniform vec3 uEdl;          // объём для точек: xy — шаг выборок глубины (доли экрана), z — сила
 uniform float uBuild;       // проба «свет приносит точки»: точки прилетают вдоль луча и оседают
 varying vec4 vCol;          // rgb — цвет, a — непрозрачность
+${PIECE_GLSL}
 varying vec3 vShape;        // xy — ось сжатия на экране, z — во сколько раз диск сжат вдоль неё
 
 vec3 cellJitter(vec3 p) {
@@ -1820,6 +1862,9 @@ void main() {
   gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
 
   vec4 wp = modelMatrix * vec4(position, 1.0);
+  // Сцена — кусок места: за краем памяти точек нет; у края, открытого в забытое, они редеют до самой кромки — поверхность
+  // там уже порвалась (шейдер мира), и память обрывается в точки.
+  if (uPieceOn.x > 0.5 && pieceKeep(wp.xyz) < aSeed.x * 0.85 + 0.08) return;
   vec3 wn = normalize(mat3(modelMatrix) * aNrm.xyz);
   vec3 home = crumble(wp.xyz, uDissolve);
   vec4 hv = viewMatrix * vec4(home, 1.0);

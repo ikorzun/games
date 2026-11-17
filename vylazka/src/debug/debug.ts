@@ -69,6 +69,11 @@ export interface VzDebugApi {
   loseContext(ms?: number): void;
   /** Сводка уровня: помещения, приметы, число мест для находок. */
   level(): Record<string, unknown>;
+  /**
+   * Сцена — кусок места (world/piece.ts): сколько в нём комнат и клеток, где край — клетки куска, из которых есть ход в
+   * забытое, и куда этот ход (центр соседней клетки); null — помнится всё место.
+   */
+  piece(): { rooms: number; cells: number; edge: { at: [number, number, number]; to: [number, number, number] }[] } | null;
   /** Встать в помещении рядом с приметой (по её id и номеру среди одноимённых) лицом к ней. false — такой нет. */
   gotoLandmark(id: string, index?: number, distance?: number): boolean;
   /** Встать в центр клетки помещения. */
@@ -338,6 +343,22 @@ export function installDebug(app: App): void {
         landmarks: l.landmarks.map((m) => ({ id: m.id, room: m.room, tier: m.tier })),
         flats: (l.flats ?? []).map((f) => ({ kind: f.kind, what: f.what, room: f.room, tier: f.tier })),
       };
+    },
+    piece: () => {
+      const g = game();
+      const p = g.piece;
+      const nav = g.level?.nav ?? [];
+      if (!p) return null;
+      const edge: { at: [number, number, number]; to: [number, number, number] }[] = [];
+      for (const id of p.edge) {
+        const n = nav[id]!;
+        for (const l of n.links) {
+          const o = nav[l]!;
+          if (p.nodes.has(l) || o.tier !== n.tier || Math.abs(o.y - n.y) > 0.2) continue;
+          edge.push({ at: [n.x, n.y, n.z], to: [o.x, o.y, o.z] });
+        }
+      }
+      return { rooms: p.count, cells: p.nodes.size, edge };
     },
     flats: () => (app.level.flats ?? []).map((f) => ({ ...f, at: [...f.at], n: [...f.n] })),
     gotoFlat: (index, distance = 3, side = 0) => {

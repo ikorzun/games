@@ -26,6 +26,8 @@ import { DOOR_IMAGE, DOOR_NAME, SCREEN_IMAGES } from '../src/world/screens';
 import { setThingRegistry } from '../src/world/thing_mesh';
 import { MEM_LIGHT_KIND, MEMORY_LIGHT } from '../src/world/memory_light';
 import type { FlashlightConfig } from '../src/systems/flashlight';
+import { PIECE_MAX_ROOMS } from '../src/world/piece';
+import type { PieceMask } from '../src/world/piece';
 
 const SEED = 20041113;
 
@@ -63,6 +65,11 @@ class FakeRenderer {
     this.swarm = { alpha, center: c };
   }
   setChunkVisible(): void {}
+  /** Маска куска места (сцена — кусок места): последняя отданная; null — помнится всё. */
+  piece: PieceMask | null = null;
+  setPiece(m: PieceMask | null): void {
+    this.piece = m;
+  }
   /** Насколько растворён каждый объект уровня (0 — стоит, 1 — его нет). */
   readonly objects = new Map<number, number>();
   setObjectState(id: number, dis: number): void {
@@ -146,13 +153,13 @@ class Harness {
 
   constructor(
     level: BuiltLevel,
-    opts: { calm?: boolean; seed?: number; known?: ReadonlySet<string>; cfg?: typeof QUICK; light?: Partial<FlashlightConfig>; stage?: number } = {},
+    opts: { calm?: boolean; seed?: number; known?: ReadonlySet<string>; cfg?: typeof QUICK; light?: Partial<FlashlightConfig>; stage?: number; piece?: boolean } = {},
   ) {
     this.game = new Game(this.r as unknown as GameRenderer, mulberry32(opts.seed ?? 7), opts.light ?? {});
     this.game.calm = opts.calm ?? true;
     this.game.stage = opts.stage ?? STAGE_ALL;
     this.game.sessionCfg = opts.cfg ?? QUICK;
-    this.game.loadLevel(level, { seed: opts.seed ?? 7, known: opts.known ?? new Set() });
+    this.game.loadLevel(level, { seed: opts.seed ?? 7, known: opts.known ?? new Set(), ...(opts.piece ? { piece: true } : {}) });
   }
 
   /** Один шаг симуляции и кадр, как оборот главного цикла приложения. */
@@ -331,6 +338,93 @@ describe('игра целиком: цикл сессии', () => {
     expect(h.until(() => h.count('recall') > 1, 4)).toBe(true);
     expect(h.until(() => g.where === 'limbo', 10)).toBe(true);
     expect(h.dreamCount('begin')).toBe(1);
+  });
+
+  it('сцена — кусок места: помнится 3–6 комнат вокруг начала; вещь сцены — только в куске; рендеру отдана маска (квиз 17.11)', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 }, piece: true });
+    const g = h.game;
+    const p = g.piece!;
+    expect(p).not.toBeNull();
+    expect(p.count).toBeGreaterThanOrEqual(1);
+    expect(p.count).toBeLessThanOrEqual(PIECE_MAX_ROOMS);
+    expect(p.nodes.has(g.playerNodeAtSpawn())).toBe(true);
+    expect(p.nodes.size).toBeLessThan(g.level!.nav.length);
+    expect(h.r.piece).not.toBeNull();
+    // Маска: клетка начала помнится, клетка за краем — нет.
+    const m = h.r.piece!;
+    const texel = (id: number): number[] => {
+      const n = g.level!.nav[id]!;
+      // Клетка cx — индекс cx + offX − 8 (pieceMask: i = cx − minX + 1, offX = 9 − minX).
+      const k = ((n.tier * m.h + (n.cz + m.offZ - 8)) * m.w + (n.cx + m.offX - 8)) * 4;
+      return [...m.data.subarray(k, k + 4)];
+    };
+    expect(Math.max(...texel(g.playerNodeAtSpawn()))).toBeGreaterThan(0);
+    const out = g.level!.nav.find((n) => !p.nodes.has(n.id) && n.tier === 0)!;
+    expect(texel(out.id)).toEqual([0, 0, 0, 0]);
+    // Вещь сцены появляется в куске.
+    const s = g.session!;
+    s.rush();
+    expect(h.until(() => s.active !== null, 3)).toBe(true);
+    const spot = s.active!.spot!;
+    const at = g.level!.nav.reduce((best, n) => (n.tier === spot.tier && Math.hypot(n.x - spot.x, n.z - spot.z) < Math.hypot(g.level!.nav[best]!.x - spot.x, g.level!.nav[best]!.z - spot.z) ? n.id : best), p.edge[0]!);
+    expect(p.nodes.has(at)).toBe(true);
+    // Кадр знает, что маска действует, пока игрок на месте.
+    expect(h.r.frames.at(-1)!.piece).toBe(true);
+  });
+
+  it('сцена — кусок места: шаг за край памяти обрывает сцену — уносит в следующую (другое место), вещь остаётся ждать в цепочке', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 }, piece: true });
+    const g = h.game;
+    const office = buildLevel(generateLayout(SEED + 5, 1, 'office'), { wear: 0 });
+    g.queueScene(office, { seed: 11, known: new Set(), chainAt: 2, piece: true });
+    h.run(2);
+    const p = g.piece!;
+    // Узел за краем, соседний с краем куска (как будто игрок прошёл в проём).
+    const nav = g.level!.nav;
+    const edge = p.edge.find((e) => nav[e]!.links.some((l) => !p.nodes.has(l) && nav[l]!.tier === nav[e]!.tier && Math.abs(nav[l]!.y - nav[e]!.y) < 0.2))!;
+    const beyond = nav[nav[edge]!.links.find((l) => !p.nodes.has(l) && nav[l]!.tier === nav[edge]!.tier)!]!;
+    g.teleport(beyond.x, beyond.y, beyond.z);
+    expect(h.until(() => h.log.dream.some((e) => e.type === 'jump' && e.phase === 'start' && e.plan.cause === 'edge'), 1)).toBe(true);
+    expect(h.until(() => h.dreamCount('begin') > 0, 4)).toBe(true);
+    expect(h.log.dream.filter((e) => e.type === 'begin')).toEqual([{ type: 'begin', scene: true, recalled: false }]);
+    expect(g.level).toBe(office);
+    // В новой сцене — свой кусок, вокруг её начала.
+    expect(g.piece).not.toBeNull();
+    expect(g.piece!.nodes.has(g.playerNodeAtSpawn())).toBe(true);
+  });
+
+  it('сцена — кусок места: следующей сцены нет — шаг за край возвращает в кусок; у края, глядя в обрыв, — событие edge, раз', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 }, piece: true });
+    const g = h.game;
+    h.run(2);
+    const p = g.piece!;
+    const nav = g.level!.nav;
+    const edge = p.edge.find((e) => nav[e]!.links.some((l) => !p.nodes.has(l) && nav[l]!.tier === nav[e]!.tier && Math.abs(nav[l]!.y - nav[e]!.y) < 0.2))!;
+    const e = nav[edge]!;
+    const beyond = nav[e.links.find((l) => !p.nodes.has(l) && nav[l]!.tier === e.tier)!]!;
+    // Встать на краю лицом к обрыву.
+    g.teleport(e.x, e.y, e.z);
+    g.aimAt(beyond.x, beyond.y + 1.2, beyond.z);
+    h.run(0.3);
+    expect(h.log.dream.filter((x) => x.type === 'edge')).toHaveLength(1);
+    h.run(0.5);
+    expect(h.log.dream.filter((x) => x.type === 'edge')).toHaveLength(1);
+    g.teleport(beyond.x, beyond.y, beyond.z);
+    expect(h.until(() => h.log.dream.some((x) => x.type === 'jump' && x.phase === 'start' && x.plan.cause === 'edge'), 1)).toBe(true);
+    expect(h.until(() => g.transition === null, 6)).toBe(true);
+    expect(g.where).toBe('main');
+    expect(g.level).toBe(levelOf(SEED));
+    expect(p.nodes.has(g.playerNode())).toBe(true);
+  });
+
+  it('без куска (первый сон, проверки) и в зале ожидания помнится всё место', () => {
+    const whole = new Harness(levelOf(SEED), { seed: 3 });
+    expect(whole.game.piece).toBeNull();
+    expect(whole.r.piece).toBeNull();
+    whole.run(0.2);
+    expect(whole.r.frames.at(-1)!.piece).toBe(false);
+    const station = new Harness(buildLevel(generateLayout(SEED, 1, 'station'), { wear: 0 }), { seed: 3, piece: true });
+    expect(station.game.piece).toBeNull();
   });
 
   it('сон из сцен: скачок «куда-нибудь» уносит в другое место — вещь сцены остаётся невспомненной, новая сцена начинается посреди места', () => {
