@@ -333,6 +333,9 @@ const SWARM_REST_LATER = 20;
  */
 /** Сон из сцен: через сколько секунд после смены места Осыпь, уже выходившая на охоту, выходит снова — в новом месте. */
 const SCENE_SWARM_BACK = 25;
+/** «Сеточное» помещение: сколько секунд можно простоять, пока пол не пошёл; медленнее этого (м/с) — «стоит». */
+export const WIRE_STILL = 3.5;
+const WIRE_STILL_SPEED = 0.4;
 
 const GENTLE = {
   director: FIRST_DIRECTOR,
@@ -545,6 +548,13 @@ export class Game {
   pressureAuto = true;
   /** Помещения, где событие возможно: прямоугольные, без своих странностей и опасностей. */
   readonly pressureRooms = new Map<number, PressureRoom>();
+  /**
+   * «Сеточные» помещения (красная сетка при горящем фонаре), где можно расходиться полу (квиз 17.11, ночь: «Опасно, если
+   * стоять»): постоял — пол уходит, как при провале.
+   */
+  readonly wireRooms = new Map<number, PressureRoom>();
+  /** Сколько игрок простоял в «сеточном» помещении, с. */
+  private wireStill = 0;
   /** Предметы помещения, в котором идёт провал: фронт забирает их по очереди. */
   private pressureObjects: { id: number; d: number }[] = [];
   /** Что случилось с давлением с прошлого шага: уходит в события сна (звук, подсказки). */
@@ -1301,6 +1311,8 @@ export class Game {
    */
   private setupPressure(level: BuiltLevel): void {
     this.pressureRooms.clear();
+    this.wireRooms.clear();
+    this.wireStill = 0;
     this.pressureObjects = [];
     this.pressure = null;
     const layout = level.layout;
@@ -1320,7 +1332,10 @@ export class Game {
     const H = CELL / 2;
     for (const r of layout.rooms) {
       // Под звёздным небом ничего не давит: потолка там нет, и место это тихое.
-      if (skip.includes(r.type) || r.cells.length < 2 || r.id === startRoom || r.id === level.skyRoom || gas.has(r.id) || this.roomFx.has(r.id)) continue;
+      if (r.cells.length < 2 || r.id === startRoom || r.id === level.skyRoom || gas.has(r.id)) continue;
+      // «Сеточное» — своё правило (wireRooms): пол уходит, если в нём стоять; остальные особые помещения — без давления.
+      const wire = this.roomFx.get(r.id) === 'wire' && !['corridor', 'stairwell', 'lift', 'entrance', 'airlock'].includes(r.type);
+      if (!wire && (skip.includes(r.type) || this.roomFx.has(r.id))) continue;
       const xs = r.cells.map((c) => c[0]);
       const zs = r.cells.map((c) => c[1]);
       const x0 = Math.min(...xs);
@@ -1344,7 +1359,7 @@ export class Game {
       }
       if (exits.length === 0) continue;
       room.exits = exits;
-      this.pressureRooms.set(r.id, room);
+      (wire ? this.wireRooms : this.pressureRooms).set(r.id, room);
     }
     this.pressure = new Pressure(layout.seed);
   }
@@ -1534,6 +1549,16 @@ export class Game {
     const early = lap <= 2;
     // Давление — тоже правило: до второй ступени погружения его нет.
     const kinds = !this.pressureAuto || this.stage < 2 ? [] : early && all.includes('collapse') ? (['collapse'] as const) : all;
+    // «Сеточное» помещение опасно, если в нём стоять (квиз 17.11, ночь): простоял WIRE_STILL секунд — пол начинает
+    // расходиться, как при провале (красная сетка — иди). Идущему ничего не грозит; в спокойном режиме — тоже.
+    const wr = !this.transition && !pr.active && !this.calm ? this.wireRooms.get(this.room) : undefined;
+    if (!wr) this.wireStill = 0;
+    else if (Math.hypot(b.vx, b.vz) < WIRE_STILL_SPEED) this.wireStill += dt;
+    else this.wireStill = Math.max(0, this.wireStill - dt * 2);
+    if (wr && this.wireStill >= WIRE_STILL) {
+      this.wireStill = 0;
+      this.beginPressure('collapse', wr);
+    }
     const was = pr.active;
     const out = pr.update(dt, { time: this.time, pos: [b.x, b.z], room: this.transition ? null : (this.pressureRooms.get(this.room) ?? null), quiet: quiet || this.calm || this.swarmNear > 0.25, limit: early ? 1 : 3, kinds });
     if (!was && pr.active) this.onPressureStart();

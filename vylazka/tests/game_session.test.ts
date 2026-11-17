@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { mulberry32 } from '../src/core/rng';
 import type { Vec3 } from '../src/core/types';
 import { generateLayout } from '../src/gen/layout';
-import { Game, SONAR_EVERY, SONAR_REACH, SONAR_SPEED, STAGE_ALL, STEP } from '../src/game';
+import { Game, SONAR_EVERY, SONAR_REACH, SONAR_SPEED, STAGE_ALL, STEP, WIRE_STILL } from '../src/game';
 import type { DreamEvent, FearEvent, StepEvents } from '../src/game';
 import { DEFAULT_CONTROLLER } from '../src/player/controller';
 import { emptyInput } from '../src/player/input';
@@ -2619,6 +2619,45 @@ describe('давление помимо Осыпи: пол рассыпаетс�
       }
     }
     expect(new Harness(buildLevel(generateLayout(7, 2, 'station'))).game.pressure).toBeNull();
+  });
+
+  it('«сеточное» помещение опасно, если стоять: простоял — пол пошёл, как при провале; идущий цел (квиз 17.11, ночь)', () => {
+    let tried = 0;
+    for (const seed of [SEED, 101, 202, 303, 404, 505, 606, 707]) {
+      const level = levelOf(seed);
+      const h = new Harness(level, { seed, calm: false });
+      const g = h.game;
+      h.until(() => g.transition === null, 8);
+      const entry = [...g.wireRooms][0];
+      if (!entry) continue;
+      const [id, room] = entry;
+      expect(g.roomFx.get(id)).toBe('wire');
+      expect(g.pressureRooms.has(id)).toBe(false);
+      tried += 1;
+      g.teleport((room.minX + room.maxX) / 2, room.floorY, (room.minZ + room.maxZ) / 2);
+      h.run(WIRE_STILL - 1);
+      expect(g.pressure!.active, `сид ${seed}: рано`).toBeNull();
+      expect(h.until(() => g.pressure!.active !== null, 2.5), `сид ${seed}: стоял, а пол не пошёл`).toBe(true);
+      expect(g.pressure!.active!.kind).toBe('collapse');
+      expect(g.pressure!.active!.room.id).toBe(id);
+    }
+    expect(tried).toBeGreaterThanOrEqual(2);
+    // Идущему по помещению ничего не грозит: ходим по кругу дольше, чем можно стоять.
+    for (const seed of [SEED, 101, 202, 303, 404, 505, 606, 707]) {
+      const h = new Harness(levelOf(seed), { seed, calm: false });
+      const g = h.game;
+      h.until(() => g.transition === null, 8);
+      const entry = [...g.wireRooms][0];
+      if (!entry) continue;
+      const room = entry[1];
+      g.teleport((room.minX + room.maxX) / 2, room.floorY, (room.minZ + room.maxZ) / 2);
+      for (let t = 0; t < (WIRE_STILL * 2) / STEP; t++) {
+        g.look(0.02, 0);
+        h.tick({ ...emptyInput(), moveZ: 1 });
+      }
+      expect(g.pressure!.active?.room.id === entry[0], `сид ${seed}: шёл, а пол пошёл`).toBe(false);
+      break;
+    }
   });
 
   it('провал: остался стоять — пол ушёл, упал, проснулся в начале; искомое остаётся искомым', () => {
