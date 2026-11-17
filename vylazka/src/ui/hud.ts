@@ -40,6 +40,9 @@ export interface GoalLine {
   done: boolean;
 }
 
+/** Сколько миллисекунд после смены места рядом с номером камеры видно имя места. */
+const CAM_CAPTION_MS = 5200;
+
 export class Hud {
   readonly el: HTMLElement;
   private readonly rec: HTMLElement;
@@ -47,6 +50,10 @@ export class Hud {
   /** Номер круга петли рядом с камерой (вариант A; партнёр: «Да» — номер круга виден на экране). */
   private readonly lapEl: HTMLElement;
   private lapN: number | null = null;
+  /** Камера места: какое место, до какого мига рядом с номером видно имя места и видно ли сейчас. */
+  private camWorld = '';
+  private camUntil = 0;
+  private camOn = false;
   private readonly clock: HTMLElement;
   private readonly hint: HTMLElement;
   private readonly prompt: HTMLElement;
@@ -134,8 +141,24 @@ export class Hud {
 
   relabel(): void {
     this.rec.textContent = t('hud.rec');
-    this.cam.textContent = t('hud.cam');
+    this.renderCam();
     this.lapEl.textContent = this.lapN === null ? '' : t('hud.lap', { n: this.lapN });
+  }
+
+  /**
+   * Камера места (связка куратора «Камера переключилась», пачка 39): у каждого места свой номер камеры; announce — место
+   * сменилось, и несколько секунд рядом с номером видно его имя. Это подпись записи, а не заголовок уровня.
+   */
+  setCamera(world: string, announce: boolean): void {
+    this.camWorld = world;
+    this.camUntil = announce ? performance.now() + CAM_CAPTION_MS : 0;
+    this.renderCam();
+  }
+
+  private renderCam(): void {
+    const cam = this.camWorld ? t(`hud.cam.${this.camWorld}`) : t('hud.cam');
+    this.camOn = performance.now() < this.camUntil;
+    this.cam.textContent = this.camOn ? t('hud.cam.with', { cam, place: t(`cam.place.${this.camWorld}`) }) : cam;
   }
 
   /** Номер круга петли места; null — не показывать (меню, карманы до первой сессии). */
@@ -145,6 +168,8 @@ export class Hud {
   }
 
   setTime(seconds: number): void {
+    // Имя места у номера камеры гаснет само.
+    if (this.camOn && performance.now() >= this.camUntil) this.renderCam();
     if (Date.now() < this.cutUntil) return;
     const s = recTimestamp(towardMidnight(seconds));
     if (s !== this.lastClock) {

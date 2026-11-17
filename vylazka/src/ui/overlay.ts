@@ -308,7 +308,8 @@ export class Overlay {
     this.placeBtn.textContent = t(`ui.place.${this.place}`);
     this.placeBtn.hidden = m !== 'start' || !this.placePick;
     const armed = performance.now() - this.restartArmed < 4000;
-    this.restartBtn.textContent = t(armed ? 'ui.restart.sure' : 'ui.restart');
+    // Место на заставке не выбирают — кнопка говорит, какое место начнётся заново (куратор, противоречие 223).
+    this.restartBtn.textContent = armed ? t('ui.restart.sure') : t('ui.restart.place', { place: t(`cam.place.${this.place}`) });
     this.restartBtn.hidden = m !== 'start' || !this.canRestart;
     this.rotate.textContent = t('ui.rotate');
   }

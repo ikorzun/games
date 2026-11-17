@@ -1975,6 +1975,12 @@ async function scenarioScenes(browser, baseUrl) {
   await vz(page, () => window.__vz.jump('elsewhere', 'cut'));
   st = await stepUntil(page, (s) => s.scenes.scene === 1, 20, 30);
   const w1 = await world();
+  // Камера переключилась: у нового места свой номер камеры, и несколько секунд рядом с ним — имя места (не заголовок уровня).
+  {
+    const cam = await page.evaluate(() => document.querySelector('.vz-hud__cam')?.textContent ?? '');
+    const want = RU['hud.cam.with'].replace('{cam}', RU[`hud.cam.${w1}`]).replace('{place}', RU[`cam.place.${w1}`]);
+    check('камера переключилась: номер камеры нового места и его имя рядом', cam === want, JSON.stringify({ cam, want }));
+  }
   check('скачок унёс в другое место: следующая сцена сна; вещь убежища ждёт в его цепочке', st.scenes.scene === 1 && w1 === want && st.scenes.done === 0 && (st.profile.memories.shelter?.chain ?? 0) === chain0 && st.where === 'main', JSON.stringify({ w1, want, ...st.scenes, chain: st.profile.memories.shelter?.chain, where: st.where }));
   // Три вещи сна: каждая вспомненная уносит в другое место; строка задания называет место.
   const seen = [w0, w1];
@@ -1983,9 +1989,6 @@ async function scenarioScenes(browser, baseUrl) {
     await vz(page, () => window.__vz.reveal());
     st = await stepUntil(page, (s) => s.session.memories.some((m) => m.state === 'active'), 10, 30);
     const here = await world();
-    await vz(page, () => window.__vz.step(2));
-    const title = await page.evaluate(() => document.querySelector('.vz-hud__goals-title')?.textContent ?? '');
-    if (k === 1) check('строка задания называет место, где ты сейчас', title === RU[`goal.place.${here}`], JSON.stringify({ title, here }));
     const near = await vz(page, () => window.__vz.gotoMemory());
     // Взгляд держит вещь и чуть водит из стороны в сторону: в офисе и жёлтых комнатах панели гаснут над тем, кто замер.
     for (let i = 0; i < 40 && st.scenes.done < k; i++) st = await vz(page, (d) => window.__vz.step(6, { lookYaw: d }), i % 2 ? 0.02 : -0.02);

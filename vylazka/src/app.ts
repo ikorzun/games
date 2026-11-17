@@ -555,10 +555,11 @@ export class App {
         this.game.sessionThings = SCENES;
         this.game.sessionSpan = SCENES * 70;
       }
-      // Мягкий режим Осыпи: первая сессия игрока (ни одной законченной) и сон из сцен (слова партнёра 16.11 23:41);
-      // ступень погружения — по числу законченных сессий (game.ts, STAGE_ALL).
+      // Мягкий режим Осыпи: первая сессия игрока (ни одной законченной; слова партнёра 16.11 23:41) и ступень 3. Во сне из сцен
+      // он больше не включён всегда: его довод «сцена короче минуты» ушёл вместе с часами сцены — часы Осыпи теперь часы сна
+      // (куратор, пачка 39, 218). Ступень погружения — по числу законченных сессий (game.ts, STAGE_ALL).
       this.game.stage = this.stageFor();
-      this.game.gentle = this.profile.successes === 0 || this.scenes || this.game.stage === 3;
+      this.game.gentle = this.profile.successes === 0 || this.game.stage === 3;
       this.clockSkew = 0;
       this.game.loadLevel(this.level, { seed: this.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
       if (this.scenes) {
@@ -607,6 +608,7 @@ export class App {
       this.saveProfile();
       this.hud.toast(t('session.begin', { n: this.sessionNumber() }), 4200);
       this.sayLap();
+      this.hud.setCamera(this.world, this.scenes);
     }
     this.analytics.sessionStarted();
     if (this.touchMode && !MotionSensor.needsPermission()) void this.enableMotion();
@@ -675,7 +677,7 @@ export class App {
       const level = buildLevel(generateLayout(mem.seed, mem.rank, this.world), { wear: this.wearParam() ?? mem.wear });
       this.next = { level, seed: mem.seed, rank: mem.rank };
       this.game.stage = this.stageFor();
-      this.game.gentle = this.profile.successes === 0 || this.scenes || this.game.stage === 3;
+      this.game.gentle = this.profile.successes === 0 || this.game.stage === 3;
       const queue = (): void => this.game.queueSession(level, { seed: mem.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
       if (ad) void ad.then(queue);
       else queue();
@@ -715,10 +717,17 @@ export class App {
    */
   private sceneWorld(): WorldKind {
     const pool = WORLD_KINDS.filter((w) => w !== this.world);
-    const age = (w: WorldKind): number => this.dreamt[w] ?? -1;
-    const oldest = Math.min(...pool.map(age));
-    const cands = pool.filter((w) => age(w) === oldest);
-    return cands[(this.seed + this.sceneIndex * 7 + this.profile.sorties) % cands.length]!;
+    // Давность: сколько сцен назад место снилось; не снившееся — давнее всех. Жребий с весом давности, а не строго самое
+    // давнее: строгий порядок шёл по кругу, и его угадывали (куратор, противоречие 157).
+    const age = (w: WorldKind): number => (this.dreamt[w] === undefined ? this.dreamtCount + 4 : this.dreamtCount - this.dreamt[w]!);
+    const weight = pool.map((w) => age(w) * age(w));
+    const sum = weight.reduce((a, b) => a + b, 0);
+    let r = mulberry32((this.seed ^ Math.imul(this.sceneIndex + 1, 0x9e3779b1) ^ Math.imul(this.profile.sorties + 1, 0x85ebca6b)) >>> 0)() * sum;
+    for (let i = 0; i < pool.length; i++) {
+      r -= weight[i]!;
+      if (r < 0) return pool[i]!;
+    }
+    return pool[pool.length - 1]!;
   }
 
   /**
@@ -771,6 +780,9 @@ export class App {
     // только когда сцену сменило «вспомнил»: скачки уносят часто, и фраза на каждый была бы болтовнёй; номер — всегда.
     if (gone) this.hud.flash(t('session.erased'), 6200);
     else this.sayLap(!recalled);
+    // Камера переключилась (куратор, связка 39): у каждого места свой номер камеры, и несколько секунд рядом с ним — имя места.
+    // Не заголовок уровня (места — не уровни, Z-12), а подпись записи: где ты, видно, а сон переход не объявляет.
+    this.hud.setCamera(this.world, true);
     this.queueNextScene();
   }
 
@@ -835,6 +847,7 @@ export class App {
     if (this.wasErased) this.hud.flash(t('session.erased'), 6200);
     else this.sayLap();
     this.wasErased = false;
+    this.hud.setCamera(this.world, this.scenes);
     // Сон из сцен: новая сессия — снова первая сцена; следующую собираем заранее.
     if (this.scenes) {
       this.sceneIndex = 0;
@@ -1234,9 +1247,7 @@ export class App {
       const lines = s.memories
         .filter((m) => m.state !== 'hidden')
         .map((m) => ({ text: t(`mem.${m.def.id}.task`) + (m.state === 'active' && this.mapHint?.memory === m.def.id ? ` · ${t(`room.${this.mapHint.room}`)}` : ''), done: m.state === 'done' }));
-      // Сон из сцен: над заданием — где ты сейчас (риск «где я и где вещь», pressure.md §4.6): сон переход не объявляет,
-      // но строка задания называет место.
-      this.hud.setGoals(this.scenes ? t(`goal.place.${g.world}`) : '', lines, lines.length > 0);
+      this.hud.setGoals('', lines, lines.length > 0);
       // Рамка — на том, во что игрок всматривается: искомая вещь или любая «неустойчивая».
       const act = s.active;
       const focus = g.things.focus;

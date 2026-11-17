@@ -617,6 +617,8 @@ export class Game {
   private sleepTime = 0;
   /** Во время этой темноты искомая вещь была видна сквозь стены: зажжённый после неё свет не уносит скачком. */
   private darkSearch = false;
+  /** День зала ожидания в этом сне: к нему возвращаются в тот же час (сон из сцен). */
+  private sleepFlow: { seed: number; flow: Flow } | null = null;
   private feelDone = 0;
   /** Сколько вещей во всей сессии игрока и за сколько секунд её время доходит до конца; 0 — как у Session и по умолчанию. Ставит приложение. */
   sessionThings = 0;
@@ -760,6 +762,7 @@ export class Game {
       this.feelClock = 0;
       this.feelDone = 0;
       this.sleepTime = 0;
+      this.sleepFlow = null;
     }
     const rank = level.layout?.rank ?? 1;
     this.session = dream ? new Session(level, dream.seed, dream.known, this.sessionCfg, dream.chainAt ?? 0) : null;
@@ -814,7 +817,14 @@ export class Game {
     this.env = this.worldEnv;
     // Свет панелей: в офисе его включают датчики, в жёлтых комнатах он гудит сам. «Тёмные» помещения — без света.
     this.cellLights = this.worldEnv.cells ? new CellLights(level.nav, this.worldEnv.cells, level.layout?.seed ?? 0) : null;
-    this.flow = this.world === 'station' ? new Flow(level.layout?.seed ?? 0) : null;
+    // Зал ожидания: день места идёт через весь сон — вернувшись в зал в том же сне, игрок застаёт его в тот же час, а не снова
+    // в полдень (куратор, противоречие 158). Новая сессия игрока начинает день заново.
+    const flowSeed = level.layout?.seed ?? 0;
+    if (this.world === 'station') {
+      const kept = this.loadingScene && this.sleepFlow?.seed === flowSeed ? this.sleepFlow.flow : null;
+      this.flow = kept ?? new Flow(flowSeed);
+      this.sleepFlow = { seed: flowSeed, flow: this.flow };
+    } else this.flow = null;
     this.lastTear = 0;
     if (this.cellLights) {
       for (const r of level.layout?.rooms ?? []) {
