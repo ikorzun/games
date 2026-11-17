@@ -204,6 +204,8 @@ export class App {
   /** Загруженные слои бумаги и размер, в котором из них собрана стопка (0 — ещё не собрана). */
   private paperImages: Record<string, HTMLImageElement> | null = null;
   private paperScale = 0;
+  /** О каких помещениях с красной сеткой уже сказали за этот сон (строка — раз за сон на каждый вид). */
+  private readonly roomSaid = new Set<string>();
   /** Подсказка из кукольного домика: в каком помещении лежит искомая вещь (до тех пор, пока её не вспомнили или не «забыли»). */
   private mapHint: { memory: string; room: string } | null = null;
 
@@ -651,6 +653,7 @@ export class App {
 
   /** Сессия кончилась, игрок в лимбо: записать итог и собрать следующую — то же место, круг спустя. */
   private onLimbo(): void {
+    this.roomSaid.clear();
     this.profile.successes += 1;
     // Сон из сцен: вещь последней сцены вспомнена — цепочка её места шагнула; круг места — пять его вещей. В первом сне
     // сцена одна, и вещей в ней три.
@@ -1167,8 +1170,12 @@ export class App {
         this.clockSkew += 4 + Math.random() * 37;
       }
       else if (e.type === 'pocket') this.onPocket(e);
-      // Красная сетка: в тёмном помещении фонарь бессилен — идти по линиям; в «сеточном» место сбоит — не задерживаться.
-      else if (e.type === 'room') this.hud.toast(t(`toast.room.${e.fx}`), 4200);
+      // Красная сетка: в тёмном помещении свет не сохранился — только линии; в «сеточном» комната перестала притворяться.
+      // Раз за сон на каждый вид: во сне из сцен уровень новый каждую минуту, и строка звучала бы в каждой сцене (куратор, 229).
+      else if (e.type === 'room' && !this.roomSaid.has(e.fx)) {
+        this.roomSaid.add(e.fx);
+        this.hud.toast(t(`toast.room.${e.fx}`), 4200);
+      }
       // Первое касание: вещь рассыпалась — сказать, что это правило, и как её вернуть. Только после настоящего касания:
       // обвал пола и бумажный цветок рассыпают вещи сами, и строка «здесь ничего нельзя потрогать» там лишняя (аудит 17.11).
       else if (e.type === 'touch' && e.what === 'gone' && e.first !== undefined && !e.self) this.teach('touch', t(this.game.flow ? 'teach.touch.station' : this.game.hasLight ? 'teach.touch' : 'teach.touch.still'), 7000);

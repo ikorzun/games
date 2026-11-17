@@ -240,6 +240,21 @@ function clear(col: ColliderSet, pts: readonly Vec3[], core: number, floor: numb
  * Расставить фигуры по уровню. Фигура встаёт, только если её место в правиле (rule.worlds) и есть
  * помещение нужного типа; сколько — rule.count, по возможности в разных помещениях.
  */
+/**
+ * Где в помещении точка: доли его рамки по x и z (0…1). Так «у какой стены партнёр отпустил вещь или фигуру» переносится
+ * на помещения другой формы и размера (PlacedSpec.near, FigureSpec.near).
+ */
+export function roomNear(room: GenRoom, x: number, z: number): [number, number] {
+  const xs = room.cells.map((c) => (c[0] - HALF) * CELL);
+  const zs = room.cells.map((c) => (c[1] - HALF) * CELL);
+  const x0 = Math.min(...xs) - CELL / 2;
+  const x1 = Math.max(...xs) + CELL / 2;
+  const z0 = Math.min(...zs) - CELL / 2;
+  const z1 = Math.max(...zs) + CELL / 2;
+  const f = (v: number, a: number, b: number): number => Math.max(0, Math.min(1, (v - a) / (b - a)));
+  return [Math.round(f(x, x0, x1) * 1000) / 1000, Math.round(f(z, z0, z1) * 1000) / 1000];
+}
+
 export function placeFigures(specs: readonly FigureSpec[], w: PlaceWorld): FigureSpot[] {
   const out: FigureSpot[] = [];
   const world = w.layout.world;
@@ -253,10 +268,17 @@ export function placeFigures(specs: readonly FigureSpec[], w: PlaceWorld): Figur
     const local: Vec3[] = [sk.pelvis, sk.waist, sk.chestC, sk.neckBase, pts[17]!, ...pts.filter((_, i) => i !== 0 && i !== 1 && i !== 2 && i !== 3 && i !== 17)];
     const top = Math.max(...pts.map((p) => p[1]));
     const h = idHash(spec.id);
-    const cands = rooms.flatMap((r) => anchorSpots(r, spec.rule.anchor, w));
+    const cands = rooms.flatMap((r) => anchorSpots(r, spec.rule.anchor, w).map((a) => ({ a, r })));
     const used = new Set<number>();
+    // Сначала край, ближайший к тому, где фигуру поставили (near; в каждом помещении — у того же его края), потом — по жребию.
+    const near = spec.near;
+    const cost = (a: AnchorSpot, r: GenRoom): number => {
+      if (!near) return 0;
+      const [u, v] = roomNear(r, a.x, a.z);
+      return Math.round(Math.hypot(u - near[0], v - near[1]) * 1000) / 1000;
+    };
     for (let k = 0; k < spec.rule.count; k++) {
-      const order = cands.map((a, i) => ({ a, r: hash01(i * 7 + 1, k * 131 + 17, hash2(w.layout.seed, h, 0x5f19)) })).sort((p, q) => p.r - q.r);
+      const order = cands.map(({ a, r }, i) => ({ a, d: cost(a, r), r: hash01(i * 7 + 1, k * 131 + 17, hash2(w.layout.seed, h, 0x5f19)) })).sort((p, q) => p.d - q.d || p.r - q.r);
       let pick: FigureSpot | null = null;
       for (const pass of [0, 1]) {
         for (const { a } of order) {

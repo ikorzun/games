@@ -111,6 +111,7 @@ import { FIGURES } from '../src/world/figures_data';
 import { buildLevel } from '../src/world/level_build';
 import { MAT } from '../src/world/materials';
 import { CELL } from '../src/world/shell';
+import { roomNear } from '../src/world/figure_place';
 import type { BuiltLevel } from '../src/world/level';
 import type { FigureAnchor, FigureFacing, FigureMaterial } from '../src/world/figures';
 
@@ -172,6 +173,32 @@ describe('расстановка по правилу', () => {
   it('пока партнёр не сохранил ни одной фигуры, на уровнях их нет', () => {
     expect(FIGURES.length).toBe(0);
     expect(buildLevel(layout).figures).toBeUndefined();
+  });
+
+  it('near: фигура встаёт у того края помещения, где её поставили в конструкторе, а не по жребию (партнёр 17.11)', () => {
+    // Помещение одного типа, его углы; ставим «у дальнего угла» и «у ближнего» — фигура выбирает соответствующий.
+    const kitchens = layout.rooms.filter((r) => r.type === 'kitchen');
+    expect(kitchens.length).toBeGreaterThan(0);
+    const base = fig('wood', 'corner', 'room', { rooms: ['kitchen'], worlds: ['shelter'] }, 'near_fig');
+    const at = (near: [number, number]): number[] => {
+      const l = lvl([{ ...base, near }]);
+      const f = l.figures!.find((x) => x.id === 'near_fig');
+      expect(f, JSON.stringify(near)).toBeTruthy();
+      return f!.at;
+    };
+    const room = kitchens.find((r) => r.id === lvl([{ ...base, near: [0, 0] }]).figures![0]!.room)!;
+    const a = at([0, 0]);
+    const b = at([1, 1]);
+    // Разные углы — разные места; каждый ближе к своей стороне рамки помещения.
+    expect(Math.hypot(a[0]! - b[0]!, a[2]! - b[2]!)).toBeGreaterThan(1);
+    const [ua, va] = roomNear(room, a[0]!, a[2]!);
+    const [ub, vb] = roomNear(room, b[0]!, b[2]!);
+    expect(ua + va).toBeLessThan(ub + vb);
+    // Без near — по-прежнему по жребию, но повторяемо.
+    const plain = lvl([base]).figures!.find((x) => x.id === 'near_fig')!;
+    expect(lvl([base]).figures!.find((x) => x.id === 'near_fig')!.at).toEqual(plain.at);
+    expect(figureProblems({ ...base, near: [0.2, 1.4] }).join()).toContain('где в помещении');
+    expect(figureProblems({ ...base, near: [0.2, 0.4] })).toEqual([]);
   });
 
   it('у стены лицом в стену — стена в полуметре; лицом в комнату — простор', () => {

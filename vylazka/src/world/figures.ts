@@ -55,6 +55,12 @@ export interface FigureSpec {
   yaw: number;
   /** Сдвиг от точки правила, м: x — вбок вдоль стены, z — от стены в комнату. */
   offset: [number, number];
+  /**
+   * Где в помещении её поставили — доли рамки помещения по x и z (0…1), как у вещей (PlacedSpec.near): игра берёт край,
+   * ближайший к этой точке, а не любой по жребию; в помещении другой формы — у того же его края (партнёр 17.11:
+   * «конструктор должен запоминать размещённые или передвинутые объекты для каждой комнаты»).
+   */
+  near?: [number, number];
   /** Кто и когда сохранил (из инструмента). */
   at?: string;
 }
@@ -123,6 +129,8 @@ export function figureProblems(x: unknown): string[] {
   if (!num(f.yaw) || Math.abs(f.yaw) > 360) bad.push('поворот');
   const off = f.offset as unknown;
   if (!Array.isArray(off) || off.length !== 2 || !off.every((v) => within(v, [-3, 3]))) bad.push('сдвиг');
+  const near = f.near as unknown;
+  if (near !== undefined && (!Array.isArray(near) || near.length !== 2 || !near.every((v) => within(v, [0, 1])))) bad.push('где в помещении: две доли от 0 до 1');
   const r = f.rule as Record<string, unknown> | undefined;
   if (!r) bad.push('правило места');
   else {

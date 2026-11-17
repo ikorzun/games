@@ -27,7 +27,9 @@ import type { Vec3 } from '../core/types';
 import { GRID, TIER_DROP } from '../gen/layout';
 import type { GenLayout, GenRoom } from '../gen/layout';
 import type { Aabb } from './colliders';
-import { anchorSpots } from './figure_place';
+import { anchorSpots, roomNear } from './figure_place';
+
+export { roomNear };
 import type { AnchorSpot, PlaceWorld } from './figure_place';
 import type { FigureFacing } from './figures';
 import type { LevelObject } from './objects';
@@ -258,21 +260,6 @@ function idHash(id: string): number {
 export function roomsFor(spec: Pick<PlacedSpec, 'rule'>, w: PlaceWorld): GenRoom[] {
   if (!spec.rule.worlds.includes(w.layout.world)) return [];
   return w.layout.rooms.filter((r) => !w.skip.has(r.id) && !NEVER.has(r.type) && (spec.rule.rooms.length === 0 || spec.rule.rooms.includes(r.type)));
-}
-
-/**
- * Где в помещении точка: доли его рамки по x и z (0…1). Так «у какой стены партнёр отпустил вещь» переносится на помещения
- * другой формы и размера (PlacedSpec.near).
- */
-export function roomNear(room: GenRoom, x: number, z: number): [number, number] {
-  const xs = room.cells.map((c) => (c[0] - HALF) * CELL);
-  const zs = room.cells.map((c) => (c[1] - HALF) * CELL);
-  const x0 = Math.min(...xs) - CELL / 2;
-  const x1 = Math.max(...xs) + CELL / 2;
-  const z0 = Math.min(...zs) - CELL / 2;
-  const z1 = Math.max(...zs) + CELL / 2;
-  const f = (v: number, a: number, b: number): number => Math.max(0, Math.min(1, (v - a) / (b - a)));
-  return [Math.round(f(x, x0, x1) * 1000) / 1000, Math.round(f(z, z0, z1) * 1000) / 1000];
 }
 
 /** Насколько край далёк от того, где вещь отпустили (в долях рамки помещения); без near — 0: решает жребий. */

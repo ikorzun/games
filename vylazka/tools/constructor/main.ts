@@ -101,7 +101,8 @@ let seq = 0;
 const stamp = (): string => `${Date.now().toString(36)}${(seq++ % 36).toString(36)}`;
 let cur: Item | null = null;
 /** Шаг отмены: правка (что было в работе) или запись базы (добавлена или удалена). */
-type UndoStep = { t: 'cur'; json: string } | { t: 'rec'; coll: 'things' | 'removed'; add: boolean; spec: PlacedSpec | RemovedSpec };
+type Coll3 = 'things' | 'removed' | 'figures';
+type UndoStep = { t: 'cur'; json: string } | { t: 'rec'; coll: Coll3; add: boolean; spec: PlacedSpec | RemovedSpec | FigureSpec };
 const undo: UndoStep[] = [];
 const pushStep = (s: UndoStep): void => {
   undo.push(s);
@@ -464,6 +465,8 @@ function derive(it: Item): void {
   } else {
     const deg = ((((it.yaw - yawFor(a, it.spec.rule.facing)) * 180) / Math.PI + 540) % 360) - 180;
     it.spec.yaw = Math.round(deg);
+    // У какого края её поставили — как у вещей: игра возьмёт ближайший такой край (FigureSpec.near).
+    it.spec.near = roomNear(room, a.x, a.z);
   }
 }
 
@@ -477,11 +480,29 @@ function settle(it: Item): void {
     it.at = [mid.x, mid.floor, mid.z];
     return;
   }
-  // Край, ближе всего к середине помещения: так вещь видна целиком.
-  const rects = cellRects(room);
-  const mx = rects.reduce((s, r) => s + (r.x0 + r.x1) / 2, 0) / rects.length;
-  const mz = rects.reduce((s, r) => s + (r.z0 + r.z1) / 2, 0) / rects.length;
-  const a = nearest(spots, mx, mz)!.a;
+  // Край — тот, у которого её поставили (near: доли рамки помещения, как в игре), — в этом помещении это тот самый край,
+  // в другом — у того же его края. Без near — край, ближе всего к середине помещения: так вещь видна целиком.
+  // (Раньше сохранённое всегда вставало к середине — «конструктор не запоминает, где я поставил», партнёр 17.11.)
+  const near = it.kind === 'thing' ? (it.spec.replaces ? undefined : it.spec.near) : it.spec.near;
+  let a: AnchorSpot;
+  if (near) {
+    let best = spots[0]!;
+    let bd = Infinity;
+    for (const sp of spots) {
+      const [u, v] = roomNear(room, sp.x, sp.z);
+      const d = Math.hypot(u - near[0], v - near[1]);
+      if (d < bd - 1e-9) {
+        bd = d;
+        best = sp;
+      }
+    }
+    a = best;
+  } else {
+    const rects = cellRects(room);
+    const mx = rects.reduce((s, r) => s + (r.x0 + r.x1) / 2, 0) / rects.length;
+    const mz = rects.reduce((s, r) => s + (r.z0 + r.z1) / 2, 0) / rects.length;
+    a = nearest(spots, mx, mz)!.a;
+  }
   if (it.kind === 'thing') {
     const p = ALL_PROPS[it.spec.prop]!;
     const f = fitThing(it.spec, a, p);
@@ -903,6 +924,22 @@ function cellOf(x: number, z: number): { noFloor?: boolean } | undefined {
 // Призраки: уже сохранённые вещи, правило которых пускает их в это помещение; передвинутые вещи игры — там, где их
 // поставит игра; убранные — бледные красные рамки на их месте.
 const ghosts = new THREE.Group();
+/** Манекен-призрак: светлый полупрозрачный, сетка — по позе (запоминается, пока поза та же). */
+const figGhostMat = new THREE.MeshStandardMaterial({ color: 0xd9cbb6, roughness: 0.85, transparent: true, opacity: 0.5, depthWrite: false });
+const figGhostCache = new Map<string, THREE.BufferGeometry>();
+function figGhostGeo(f: FigureSpec): THREE.BufferGeometry {
+  const key = `${f.id}:${JSON.stringify(f.pose)}`;
+  let g = figGhostCache.get(key);
+  if (!g) {
+    for (const [k, old] of figGhostCache) if (k.startsWith(`${f.id}:`)) {
+      old.dispose();
+      figGhostCache.delete(k);
+    }
+    g = figure(f.pose, 2);
+    figGhostCache.set(key, g);
+  }
+  return g;
+}
 scene.add(ghosts);
 const frames = new THREE.Group();
 scene.add(frames);
@@ -930,6 +967,19 @@ function renderGhosts(): void {
     mesh.position.set(m.spot.at[0], m.spot.at[1], m.spot.at[2]);
     mesh.rotation.y = (m.spot.rot * Math.PI) / 2;
     mesh.userData.ghost = m.spec.id;
+    ghosts.add(mesh);
+  }
+  // Сохранённые манекены — тоже призраками: их видно в каждом помещении, куда их пускает правило, и их можно выбрать
+  // щелчком (раньше вне правки их не было видно вовсе — ни выделить, ни удалить).
+  for (const f of savedFigs.values()) {
+    if (cur && cur.kind === 'figure' && cur.spec.id === f.id) continue;
+    if (!f.rule.worlds.includes(world) || (f.rule.rooms.length > 0 && !f.rule.rooms.includes(roomType))) continue;
+    const it: FigItem = { kind: 'figure', spec: JSON.parse(JSON.stringify(f)) as FigureSpec, at: [0, 0, 0], yaw: 0 };
+    settle(it);
+    const mesh = new THREE.Mesh(figGhostGeo(f), figGhostMat);
+    mesh.position.set(it.at[0], it.at[1], it.at[2]);
+    mesh.rotation.y = it.yaw;
+    mesh.userData.ghost = f.id;
     ghosts.add(mesh);
   }
   for (const r of edits.removed) {
@@ -1032,11 +1082,14 @@ renderer.domElement.addEventListener(
     const dr = r ? r.d : Infinity;
     const dobj = o ? o.d : Infinity;
     if (g && dg <= dr && dg <= dobj) {
-      const s = savedThings.get(g.object.userData.ghost as string);
-      if (s) {
+      const id = g.object.userData.ghost as string;
+      const s = savedThings.get(id);
+      const f = savedFigs.get(id);
+      if (s || f) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        openThing(s);
+        if (s) openThing(s);
+        else if (f) openFigure(f);
       }
       return;
     }
@@ -1261,6 +1314,13 @@ window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
     if (undoStep()) e.preventDefault();
+    return;
+  }
+  if (e.code === 'Delete' || e.code === 'Backspace') {
+    if (cur || gameSel) {
+      e.preventDefault();
+      void deleteSelected();
+    }
     return;
   }
   if (e.code === 'KeyQ') turn(-1);
@@ -2001,8 +2061,9 @@ function editsChanged(): void {
 }
 
 /** Положить запись в коллекцию (things — вещи и передвинутые, removed — убранные): сразу в память, потом в базу. */
-async function putRecord(coll: 'things' | 'removed', spec: PlacedSpec | RemovedSpec): Promise<void> {
+async function putRecord(coll: Coll3, spec: PlacedSpec | RemovedSpec | FigureSpec): Promise<void> {
   if (coll === 'things') savedThings.set(spec.id, spec as PlacedSpec);
+  else if (coll === 'figures') savedFigs.set(spec.id, spec as FigureSpec);
   else savedRemoved.set(spec.id, spec as RemovedSpec);
   editsChanged();
   if (!db) return;
@@ -2017,8 +2078,9 @@ async function putRecord(coll: 'things' | 'removed', spec: PlacedSpec | RemovedS
   }
 }
 /** Убрать запись из коллекции. */
-async function dropRecord(coll: 'things' | 'removed', spec: PlacedSpec | RemovedSpec): Promise<void> {
+async function dropRecord(coll: Coll3, spec: PlacedSpec | RemovedSpec | FigureSpec): Promise<void> {
   if (coll === 'things') savedThings.delete(spec.id);
+  else if (coll === 'figures') savedFigs.delete(spec.id);
   else savedRemoved.delete(spec.id);
   editsChanged();
   if (!db || !canWrite) return;
@@ -2144,6 +2206,8 @@ async function connect(): Promise<void> {
         if (f && figureProblems(f).length === 0) savedFigs.set(d.id, f);
       }
       renderSaved();
+      renderGhosts();
+      dirty = true;
     },
     () => setStatus('Сохранённые фигуры не загрузились. Обнови страницу позже.'),
   );
@@ -2196,19 +2260,10 @@ $('save').addEventListener('click', async () => {
     return;
   }
   const spec: FigureSpec = { ...(cur.spec as FigureSpec), name: named.name, at: new Date().toISOString() };
-  savedFigs.set(spec.id, spec);
-  renderSaved();
-  if (!db) {
-    setStatus(`Сохранено: «${named.name}».${local}`);
-    return;
-  }
+  cur.spec = JSON.parse(JSON.stringify(spec)) as FigureSpec;
   setStatus('Сохраняю…');
-  try {
-    await db.collection('figures').doc(spec.id).set(spec as unknown as Record<string, unknown>);
-    setStatus(`Сохранено: «${named.name}».`);
-  } catch {
-    setStatus('Не сохранилось. Попробуй ещё раз через минуту.');
-  }
+  await putRecord('figures', spec);
+  setStatus(`Сохранено: «${named.name}».${local}`);
 });
 
 $('fresh').addEventListener('click', () => {
@@ -2220,54 +2275,41 @@ $('fresh').addEventListener('click', () => {
   setStatus('Перетащи вещь или манекен с полки в помещение — или потяни вещь игры.');
 });
 
-// Удаление — вторым нажатием: окна подтверждения на странице нет.
-let dropArmed = 0;
-$('drop').addEventListener('click', async () => {
-  const btn = $<HTMLButtonElement>('drop');
-  if (!cur) return;
-  const savedHere = cur.kind === 'thing' ? savedThings.has(cur.spec.id) : savedFigs.has(cur.spec.id);
-  if (!savedHere) {
-    pushUndo();
-    cur = null;
+/**
+ * Удалить то, что выделено: правку в работе (сохранённую — из базы) или вещь игры (убрать её). Одним нажатием — кнопкой
+ * «Удалить» или клавишей Delete / Backspace; вернуть — ⌘Z (партнёр 17.11: «Конструктор не удаляет добавленные мной
+ * объекты»: удаление было вторым нажатием, а манекены вне правки и выделить было нельзя).
+ */
+async function deleteSelected(): Promise<boolean> {
+  if (!cur) {
+    if (!gameSel) return false;
+    removeGame(gameSel);
+    return true;
+  }
+  const name = cur.spec.name || (cur.kind === 'thing' ? ruShort(cur.spec.prop) : 'манекен');
+  const coll: Coll3 = cur.kind === 'thing' ? 'things' : 'figures';
+  const saved = cur.kind === 'thing' ? savedThings.get(cur.spec.id) : savedFigs.get(cur.spec.id);
+  pushUndo();
+  cur = null;
+  if (!saved) {
     dirty = true;
     syncPanel();
-    setStatus('Убрано (сохранено не было).');
-    return;
+    renderGhosts();
+    setStatus('Убрано (сохранено не было). ⌘Z — вернуть.');
+    return true;
   }
-  if (Date.now() - dropArmed > 4000) {
-    dropArmed = Date.now();
-    btn.textContent = 'Точно? Нажми ещё раз';
-    window.setTimeout(() => (btn.textContent = 'Удалить'), 4000);
-    return;
+  if (db && !canWrite) {
+    setStatus('Удалить не выйдет: право правки есть не у всех.');
+    return true;
   }
-  dropArmed = 0;
-  btn.textContent = 'Удалить';
-  if (db && !canWrite) return;
-  const name = cur.spec.name;
-  if (cur.kind === 'thing') {
-    const spec = savedThings.get(cur.spec.id)!;
-    pushUndo();
-    cur = null;
-    pushStep({ t: 'rec', coll: 'things', add: false, spec });
-    await dropRecord('things', spec);
-  } else {
-    const id = cur.spec.id;
-    cur = null;
-    savedFigs.delete(id);
-    if (db) {
-      try {
-        await db.collection('figures').doc(id).delete();
-      } catch {
-        setStatus('Не удалилось. Попробуй ещё раз через минуту.');
-        return;
-      }
-    }
-  }
-  setStatus(`Удалено: «${name}».`);
-  renderGhosts();
+  pushStep({ t: 'rec', coll, add: false, spec: saved });
+  await dropRecord(coll, saved);
+  setStatus(`Удалено: «${name}». ⌘Z — вернуть.`);
   dirty = true;
   syncPanel();
-});
+  return true;
+}
+$('drop').addEventListener('click', () => void deleteSelected());
 $('nextroom').addEventListener('click', () => enterRoom(world, roomType, roomPick + 1));
 
 renderKinds();
@@ -2344,6 +2386,19 @@ const gameInfo = (o: LevelObject) => ({
   /** Стрелка: ax — вбок (+1 вправо), az — от себя (+1); shift/alt — шаг 50 / 2 см. */
   nudge: (ax: number, az: number, shift = false, alt = false) => nudge(ax, az, { shiftKey: shift, altKey: alt }) && cur ? { at: cur.at, rot: cur.kind === 'thing' ? cur.rot : null } : null,
   save: () => $('save').click(),
+  fresh: () => $('fresh').click(),
+  /** Удалить выделенное (как Delete). */
+  del: () => deleteSelected(),
+  /** Призраки в показанном помещении: чей и где стоит. */
+  ghosts: () => ghosts.children.map((m) => ({ id: m.userData.ghost as string, at: [m.position.x, m.position.y, m.position.z] })),
+  /** Открыть сохранённое (как щелчок по призраку). */
+  open: (id: string) => {
+    const s = savedThings.get(id);
+    const f = savedFigs.get(id);
+    if (s) openThing(s);
+    else if (f) openFigure(f);
+    return cur ? { id: cur.spec.id, at: cur.at } : null;
+  },
   undo: () => undoStep(),
   card: (name: string) => {
     openCard(name, 'shelf');
@@ -2358,7 +2413,7 @@ const gameInfo = (o: LevelObject) => ({
     return shelfEl.childElementCount;
   },
   edits: () => ({ removed: edits.removed.map((r) => ({ id: r.spec.id, obj: r.o.id })), moved: edits.moved.map((m) => ({ id: m.spec.id, obj: m.o.id, spot: m.spot })) }),
-  saved: () => ({ things: [...savedThings.values()], removed: [...savedRemoved.values()], marks: Object.fromEntries(marks) }),
+  saved: () => ({ things: [...savedThings.values()], removed: [...savedRemoved.values()], figures: [...savedFigs.values()], marks: Object.fromEntries(marks) }),
   hidden: () => [...hidden],
   coverage: () => $('coverage').textContent,
 };

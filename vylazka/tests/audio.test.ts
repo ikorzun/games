@@ -226,19 +226,48 @@ describe('звук с первого нажатия (партнёр 17.11: «п�
     expect(loadFirst('station').slice(0, 3)).toEqual(['ui_start', 'amb_station', 'still_tone']);
   });
 
-  it('файлы грузятся по шесть разом в порядке места; место следующей сцены можно поднять вперёд очереди', () => {
+  it('первые файлы грузятся по два (гул места не делит канал с мелочью), потом по шесть; место следующей сцены — вперёд очереди', async () => {
     fakeAudio({ startMs: 5, network: 'never' });
     const e = new AudioEngine('./audio/', allSoundFiles());
     e.preload(loadFirst('station'));
-    const q = e.queued();
-    // Шесть уже в пути: нажатие, гул зала, ровный тон, щелчок интерфейса, два щелчка фонаря.
+    let q = e.queued();
+    // В пути двое: нажатие и гул зала; ровный тон ждёт первым.
+    expect(q).not.toContain('ui_start_1.mp3');
     expect(q).not.toContain('amb_station_1.mp3');
-    expect(q).not.toContain('flash_click_2.mp3');
-    expect(q[0]).toBe('breath_calm_1.mp3');
+    expect(q[0]).toBe('still_tone_1.mp3');
     expect(q.indexOf('amb_bunker_1.mp3')).toBeGreaterThan(q.indexOf('voices_murmur_1.mp3'));
     e.want(['amb_office', 'lift']);
-    expect(e.queued().slice(0, 2)).toEqual(['amb_office_1.mp3', 'lift_1.mp3']);
-    expect(e.queued().filter((f) => f === 'amb_office_1.mp3')).toHaveLength(1);
+    q = e.queued();
+    expect(q.slice(0, 2)).toEqual(['amb_office_1.mp3', 'lift_1.mp3']);
+    expect(q.filter((f) => f === 'amb_office_1.mp3')).toHaveLength(1);
+  });
+
+  it('когда первые четыре файла пришли, грузится по шесть разом', async () => {
+    fakeAudio({ startMs: 5 });
+    let open = 0;
+    let most = 0;
+    const waiting: (() => void)[] = [];
+    vi.stubGlobal('fetch', () => {
+      open += 1;
+      most = Math.max(most, open);
+      return new Promise((ok) =>
+        waiting.push(() => {
+          open -= 1;
+          ok({ ok: true, headers: { get: () => 'audio/mpeg' }, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) });
+        }),
+      );
+    });
+    const e = new AudioEngine('./audio/', allSoundFiles());
+    e.preload(loadFirst('shelter'));
+    expect(open).toBe(2);
+    // Отпускаем по одному: пока первые четыре не пришли, разом не больше двух.
+    for (let i = 0; i < 4; i++) {
+      waiting.shift()!();
+      await wait(1);
+      if (i < 3) expect(open).toBeLessThanOrEqual(2);
+    }
+    expect(open).toBe(6);
+    expect(most).toBe(6);
   });
 });
 

@@ -96,6 +96,12 @@ type OfflineCtor = new (channels: number, length: number, rate: number) => BaseA
 /** Сколько файлов грузится разом: мелких файлов много, и по сети с задержкой каждый ждёт своей очереди. */
 const PARALLEL = 6;
 /**
+ * Первые файлы (нажатие, гул места, люк или лифт) грузятся по два: на медленной сети шесть загрузок делят канал, и
+ * большой файл гула шёл последним, хотя стоял вторым (замер 17.11: 8 с на 2 Мбит/с).
+ */
+const FIRST_PARALLEL = 2;
+const FIRST_FILES = 4;
+/**
  * Сколько секунд разовый звук ждёт запуска контекста. Safari и iOS запускают его не в тот же миг, что нажатие:
  * без ожидания первые звуки (старт, люк, щелчок) проглатывались — «звук не срабатывает сразу» (партнёр 17.11).
  */
@@ -131,6 +137,9 @@ export class AudioEngine {
   /** Декодер до первого нажатия: настоящий контекст браузер без жеста не запустит, а разобрать файлы можно. */
   private offline: BaseAudioContext | null = null;
   private loadingBegun = false;
+  /** Сколько загрузок идёт сейчас и сколько первых файлов ещё не догружено (пока их больше нуля — по два разом). */
+  private inFlight = 0;
+  private firstLeft = 0;
   private order: readonly string[] = [];
   /** Сколько раз игра просила звук и сколько раз он действительно прозвучал (для отладки и смоука). */
   readonly asked = new Map<string, number>();
@@ -199,8 +208,8 @@ export class AudioEngine {
     };
     const sorted = [...SOUNDS].sort((a, b) => rank(a.id) - rank(b.id));
     for (const s of sorted) for (let v = 1; v <= s.variants; v++) if (this.files.has(soundFile(s.id, v))) this.queue.push([s.id, v]);
-    // Грузим по нескольку файлов разом: полсотни одновременных декодирований подвесили бы телефон на старте.
-    for (let i = 0; i < PARALLEL; i++) this.pump();
+    this.firstLeft = Math.min(FIRST_FILES, this.queue.length);
+    this.pump();
   }
 
   /**
@@ -265,9 +274,22 @@ export class AudioEngine {
     for (const w of this.waiting.splice(0)) if (now <= w.until) this.start(w.def, w.buf, w.opts);
   }
 
+  /**
+   * Запустить загрузки из очереди, сколько можно разом: сначала по два (первые файлы), потом по шесть. Полсотни
+   * одновременных декодирований подвесили бы телефон на старте.
+   */
   private pump(): void {
-    const next = this.queue.shift();
-    if (next) void this.load(next[0], next[1]).then(() => this.pump());
+    while (this.inFlight < (this.firstLeft > 0 ? FIRST_PARALLEL : PARALLEL)) {
+      const next = this.queue.shift();
+      if (!next) return;
+      const first = this.firstLeft > 0;
+      this.inFlight += 1;
+      void this.load(next[0], next[1]).then(() => {
+        this.inFlight -= 1;
+        if (first) this.firstLeft = Math.max(0, this.firstLeft - 1);
+        this.pump();
+      });
+    }
   }
 
   private load(id: string, variant: number): Promise<AudioBuffer | null> {
