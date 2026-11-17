@@ -2652,7 +2652,8 @@ async function scenarioBridge(browser, baseUrl) {
       sdk.push({ text, vals });
     });
   };
-  // Язык браузера русский, а игра по умолчанию английская: площадка язык игре не навязывает.
+  // Язык браузера русский. На mock-площадке bridge.platform.language берётся из него — игра должна начать на нём
+  // (обязательный шаг 3 Bridge, пункт 3.4.2); сам по себе язык браузера игра не читает.
   const { page, context, log } = await openPage(browser, baseUrl, '?debug=1&q=low&fail=0&rank=1', { locale: 'ru-RU' }, onConsole);
   const hasBridge = await page.evaluate(() => !!window.bridge);
   if (!hasBridge) {
@@ -2671,13 +2672,49 @@ async function scenarioBridge(browser, baseUrl) {
   check('игра работает через адаптер playgama', (await state(page)).platform === 'playgama');
   const gets = sdk.filter((c) => /\[storage\] get\(\)$/.test(c.text));
   check('хранилище читается одним вызовом, ключ один — профиль', gets.length === 1 && JSON.stringify(gets[0].vals[0]) === JSON.stringify(['profile']), JSON.stringify(gets.map((g) => g.vals[0])));
-  check('игра на заставке английская, хотя браузер русский', (await page.textContent('.vz-overlay__title')) === 'UNTITLED SESSION' && (await page.textContent('.vz-overlay__prompt')) === 'Click to begin' && (await page.evaluate(() => document.documentElement.lang)) === 'en');
+  const platformLang = await page.evaluate(() => window.bridge.platform.language);
+  const want = platformLang === 'ru' ? 'ru' : 'en';
+  const dict = want === 'ru' ? RU : EN;
+  check(
+    `язык заставки — язык площадки (bridge.platform.language = ${platformLang} → ${want})`,
+    (await page.textContent('.vz-overlay__title')) === dict['ui.title'] && (await page.textContent('.vz-overlay__prompt')) === dict['ui.start'] && (await page.evaluate(() => document.documentElement.lang)) === want,
+  );
   check('game_ready отправлен ровно один раз', messages('game_ready').length === 1, `отправлено ${messages('game_ready').length}`);
   check('до нажатия «начать» level_started не уходит', messages('level_started').length === 0);
+  // Конфиг Bridge лежит рядом с index.html и это JSON-объект (обязательный шаг 1).
+  const config = await page.evaluate(async () => {
+    const r = await fetch('./playgama-bridge-config.json');
+    const j = r.ok ? await r.json() : null;
+    return { ok: r.ok, object: !!j && typeof j === 'object' && !Array.isArray(j) };
+  });
+  check('playgama-bridge-config.json рядом с index.html, JSON-объект', config.ok && config.object, JSON.stringify(config));
+  // Порядок загрузки (обязательный шаг 2): SDK — первым скриптом, код игры — только после того, как Bridge прочёл свой конфиг.
+  const order = await page.evaluate(() => {
+    const res = performance.getEntriesByType('resource');
+    const find = (re) => res.find((e) => re.test(new URL(e.name).pathname));
+    const sdk = find(/\/playgama-bridge\.js$/);
+    const cfg = find(/\/playgama-bridge-config\.json$/);
+    const game = find(/\/assets\/index-[^/]+\.js$/);
+    const first = document.head.querySelector('script');
+    return { sdkFirst: !!first && /playgama-bridge\.js$/.test(first.getAttribute('src') ?? ''), sdk: sdk?.startTime ?? -1, cfgEnd: cfg?.responseEnd ?? -1, game: game?.startTime ?? -1 };
+  });
+  check('SDK — первый скрипт в <head>; код игры запрошен после SDK и его конфига', order.sdkFirst && order.sdk >= 0 && order.cfgEnd > 0 && order.game >= order.cfgEnd, JSON.stringify(order));
   await page.click('.vz-overlay');
   await sleep(600);
   await queue;
-  check('level_started отправлен при старте', messages('level_started').length === 1 && !!messages('level_started')[0].vals[1]?.level, JSON.stringify(messages('level_started').map((m) => m.vals[1])));
+  const started = messages('level_started')[0]?.vals[1] ?? {};
+  check('level_started при старте: world — место, level — номер сессии', messages('level_started').length === 1 && ['shelter', 'office', 'yellow', 'station'].includes(started.world) && started.level === '1', JSON.stringify(messages('level_started').map((m) => m.vals[1])));
+  // События аналитики игры — из того же журнала SDK: [analytics] send() с именем и данными.
+  const sent = sdk.filter((c) => /\[analytics\] send\(\)$/.test(c.text)).map((c) => [c.vals[0], c.vals[1] ?? null]);
+  const sentNames = sent.map((s) => s[0]);
+  const prog = sent.find((s) => s[0] === 'progression_started')?.[1];
+  check('аналитика: first_input и progression_started (место, номер, ступень, круг)', sentNames.includes('first_input') && !!prog && prog.step_id === started.world && prog.step_index === 1 && Number.isInteger(prog.stage) && prog.lap >= 1, JSON.stringify(sent).slice(0, 300));
+  const lifecycle = sdk.filter((c) => /\[platform\] sendMessage\(\)$/.test(c.text)).map((c) => [c.vals[0], c.vals[1] ?? null]);
+  check(
+    'в событиях и lifecycle-сообщениях нет сида и текста: значения — числа, флаги и короткие слова',
+    sent.length > 0 && [...sent, ...lifecycle].every(([e, d]) => /^[a-z_]+$/.test(e) && Object.entries(d ?? {}).every(([k, v]) => !/seed/.test(k) && (typeof v !== 'string' || /^[a-z0-9_.+-]{1,40}$/.test(v)))),
+    JSON.stringify([...sent, ...lifecycle]).slice(0, 300),
+  );
   const firstGet = sdk.findIndex((c) => /\[storage\] get\(\)$/.test(c.text));
   const sets = sdk.slice(firstGet + 1).filter((c) => /\[storage\] set\(\)$/.test(c.text));
   check('запись хранилища пакетная: только профиль, и только по событию', sets.length >= 1 && sets.length <= 2 && sets.every((c) => JSON.stringify(c.vals[0]) === JSON.stringify(['profile'])), `записей ${sets.length}: ${JSON.stringify(sets.map((c) => c.vals[0]))}`);
@@ -2702,6 +2739,7 @@ async function scenarioBridge(browser, baseUrl) {
   check('нажатие возвращает в игру', (await state(page)).paused === false);
   await sleep(300);
   await queue;
+  check('пауза сессии — площадке: level_paused и level_resumed по разу', messages('level_paused').length === 1 && messages('level_resumed').length === 1, `paused ${messages('level_paused').length}, resumed ${messages('level_resumed').length}`);
   check('game_ready так и остался один', messages('game_ready').length === 1);
   check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
   check('нет внешних запросов', log.external.length === 0, log.external.join(', ').slice(0, 300));

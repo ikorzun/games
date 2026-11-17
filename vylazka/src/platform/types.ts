@@ -26,16 +26,25 @@ export interface IPlatform {
   save(keys: string[], values: unknown[]): Promise<void>;
   /** Пакетное чтение; для отсутствующего ключа — null. */
   load(keys: string[]): Promise<unknown[]>;
-  /** true — реклама была показана и закрыта. Только между вылазками. */
+  /** true — реклама была показана и закрыта. Только в лимбо между сессиями (platform/ads.ts). */
   showInterstitial(placement?: string): Promise<boolean>;
   /** true — игрок досмотрел и получил награду. */
   showRewarded(placement?: string): Promise<boolean>;
-  /** Пауза платформы (реклама, вкладка в фоне). Возвращает функцию отписки. */
+  /** Пауза платформы (реклама, вкладка в фоне). Если площадка уже стоит на паузе, колбэк вызывается сразу. Возвращает функцию отписки. */
   onPause(cb: (paused: boolean) => void): () => void;
   /** Разрешён ли звук платформой; колбэк вызывается сразу с текущим значением. */
   onAudio(cb: (enabled: boolean) => void): () => void;
+  /**
+   * Открыта ли полноэкранная реклама — и та, что просила игра, и та, что площадка показала сама. Если она
+   * открыта уже на старте, колбэк вызывается сразу. Возвращает функцию отписки.
+   */
+  onAd(cb: (open: boolean) => void): () => void;
   /** Первый играбельный кадр показан (Playgama: game_ready). Вызывать один раз. */
   ready(): void;
-  /** Аналитика и lifecycle: level_started, level_completed, level_failed, … */
+  /**
+   * Аналитика и lifecycle (план событий — analytics/events.ts): level_started, level_completed, level_paused,
+   * level_resumed уходят lifecycle-сообщениями площадки (из данных — только world и level), остальное —
+   * событиями аналитики.
+   */
   track(event: string, data?: TrackData): void;
 }

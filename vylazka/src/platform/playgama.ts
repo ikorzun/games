@@ -6,12 +6,17 @@
  *   - сейвы только через bridge.storage.get/set с массивом ключей (localStorage не трогаем);
  *   - game_ready через bridge.platform.sendMessage — один раз, после первого играбельного кадра;
  *   - PAUSE_STATE_CHANGED / AUDIO_STATE_CHANGED — единый обработчик паузы и звука; начальное
- *     состояние звука читаем вручную (событие приходит только при изменениях);
- *   - interstitial — только между вылазками, rewarded — по желанию
- *     игрока, награда выдаётся ТОЛЬКО в состоянии `rewarded`;
- *   - аналитика только через bridge.analytics.send и lifecycle-сообщения платформы.
+ *     состояние звука и паузы читаем вручную (события приходят только при изменениях). Bridge ≥ 2.4 сам
+ *     складывает в них скрытую вкладку, рекламу и паузу площадки;
+ *   - состояние рекламы (INTERSTITIAL_STATE_CHANGED, REWARDED_STATE_CHANGED и interstitialState на старте) —
+ *     отдельный сигнал onAd: реклама, открытая площадкой ещё до подписки, тоже ставит игру на паузу;
+ *   - рекламы сейчас нет (решение партнёра, platform/ads.ts); если её включат — interstitial только в лимбо
+ *     между сессиями, rewarded — по желанию игрока, награда выдаётся ТОЛЬКО в состоянии `rewarded`;
+ *   - аналитика только через bridge.analytics.send и lifecycle-сообщения платформы (план — analytics/events.ts).
  * Bridge подключается снаружи (скрипт или @playgama/bridge) — игра лишь проверяет window.bridge.
+ * На Playgama код игры грузится только после bridge.initialize() (vite.config.ts, bridgeFirstPlugin).
  */
+import { BUILD_VERSION } from '../core/build';
 import { normalizeLang } from '../core/i18n';
 import type { Lang } from '../core/types';
 import type { DeviceType, IPlatform, PlatformCapabilities, TrackData } from './types';
@@ -21,6 +26,8 @@ type Listener<T> = (value: T) => void;
 /** Минимальная часть Bridge, которую мы используем (структурная типизация, без зависимости от пакета). */
 export interface BridgeLike {
   initialize?(): Promise<unknown>;
+  /** Версия игры: Bridge кладёт её в каждое своё событие аналитики (game_version). */
+  gameVersion?: string | null;
   EVENT_NAME: {
     PAUSE_STATE_CHANGED: string;
     AUDIO_STATE_CHANGED: string;
@@ -30,6 +37,8 @@ export interface BridgeLike {
   platform: {
     language: string;
     isAudioEnabled?: boolean;
+    /** Пауза площадки сейчас (Bridge ≥ 2.4: вкладка, реклама, площадка). */
+    isPaused?: boolean;
     sendMessage(message: string, data?: Record<string, string>): void;
     sendCustomMessage?(id: string): void;
     on(event: string, cb: Listener<boolean>): void;
@@ -42,6 +51,10 @@ export interface BridgeLike {
   advertisement: {
     isInterstitialSupported?: boolean;
     isRewardedSupported?: boolean;
+    /** loading | opened | closed | failed */
+    interstitialState?: string;
+    /** loading | opened | rewarded | closed | failed */
+    rewardedState?: string;
     showInterstitial(placement?: string): void;
     showRewarded(placement?: string): void;
     on(event: string, cb: Listener<string>): void;
@@ -91,6 +104,12 @@ export class PlaygamaPlatform implements IPlatform {
   /** Дождаться инициализации Bridge и вернуть адаптер. */
   static async create(bridge: BridgeLike): Promise<PlaygamaPlatform> {
     if (typeof bridge.initialize === 'function') await bridge.initialize();
+    // Только после инициализации: до неё SDK не трогаем (обязательный шаг 2).
+    try {
+      bridge.gameVersion = BUILD_VERSION;
+    } catch (e) {
+      console.warn('[playgama] gameVersion:', e);
+    }
     return new PlaygamaPlatform(bridge);
   }
 
@@ -205,8 +224,39 @@ export class PlaygamaPlatform implements IPlatform {
 
   onPause(cb: (paused: boolean) => void): () => void {
     const { platform, EVENT_NAME } = this.bridge;
+    // Как со звуком: событие приходит только при изменениях, а площадка могла встать на паузу раньше подписки.
+    if (platform.isPaused === true) cb(true);
     platform.on(EVENT_NAME.PAUSE_STATE_CHANGED, cb);
     return () => platform.off?.(EVENT_NAME.PAUSE_STATE_CHANGED, cb);
+  }
+
+  onAd(cb: (open: boolean) => void): () => void {
+    const { advertisement: ad, EVENT_NAME } = this.bridge;
+    // Реклама открыта: межстраничная — в `opened`, наградная — в `opened` и `rewarded` (до `closed`/`failed`).
+    let inter = ad.interstitialState === 'opened';
+    let reward = ad.rewardedState === 'opened' || ad.rewardedState === 'rewarded';
+    let open = inter || reward;
+    const emit = (): void => {
+      if (inter || reward) {
+        if (!open) cb((open = true));
+      } else if (open) cb((open = false));
+    };
+    const onInter = (state: string): void => {
+      inter = state === 'opened';
+      emit();
+    };
+    const onReward = (state: string): void => {
+      reward = state === 'opened' || state === 'rewarded';
+      emit();
+    };
+    // Вики Bridge (Interstitial State): реклама, открытая уже на старте, сразу глушит и останавливает игру.
+    if (open) cb(true);
+    ad.on(EVENT_NAME.INTERSTITIAL_STATE_CHANGED, onInter);
+    ad.on(EVENT_NAME.REWARDED_STATE_CHANGED, onReward);
+    return () => {
+      ad.off?.(EVENT_NAME.INTERSTITIAL_STATE_CHANGED, onInter);
+      ad.off?.(EVENT_NAME.REWARDED_STATE_CHANGED, onReward);
+    };
   }
 
   onAudio(cb: (enabled: boolean) => void): () => void {
@@ -230,8 +280,11 @@ export class PlaygamaPlatform implements IPlatform {
   track(event: string, data?: TrackData): void {
     try {
       if (PLATFORM_MESSAGES.has(event)) {
+        // Площадки знают у lifecycle-сообщений только world и level (строки; кое-где level читается как число),
+        // и аналитика Bridge пишет только их: прочие поля сюда не передаём.
         const flat: Record<string, string> = {};
-        for (const [k, v] of Object.entries(data ?? {})) flat[k] = String(v);
+        if (data?.world !== undefined) flat.world = String(data.world);
+        if (data?.level !== undefined) flat.level = String(data.level);
         this.bridge.platform.sendMessage(event, flat);
       } else if (CUSTOM_MESSAGES.has(event)) {
         this.bridge.platform.sendCustomMessage?.(event);

@@ -126,6 +126,11 @@ export class WebPlainPlatform implements IPlatform {
     return () => undefined;
   }
 
+  /** Рекламы вне площадки нет. */
+  onAd(_cb: (open: boolean) => void): () => void {
+    return () => undefined;
+  }
+
   ready(): void {
     if (import.meta.env.DEV) console.debug('[web-plain] ready (на Playgama здесь уходит game_ready)');
   }
