@@ -70,6 +70,7 @@ export class Overlay {
   private canRestart = false;
   private restartArmed = 0;
   private place = 'shelter';
+  private placePick = true;
   private calm = false;
   private sens = 1;
   private bright = 1;
@@ -244,6 +245,15 @@ export class Overlay {
     this.refresh();
   }
 
+  /**
+   * Можно ли выбрать место кнопкой. Место игрок не выбирает (решение партнёра 16.11): кнопка — только в петле одного места,
+   * для проверок (знак #place, ?loop=1).
+   */
+  setPlacePick(on: boolean): void {
+    this.placePick = on;
+    this.refresh();
+  }
+
   /** Есть ли что начинать заново: у места есть пройденные круги или стёртость. */
   setRestart(can: boolean): void {
     this.canRestart = can;
@@ -294,9 +304,9 @@ export class Overlay {
     this.flashBtn.hidden = this.qualityBtn.hidden;
     this.langBtn.textContent = `${t('ui.lang')}: ${t('ui.lang.name')}`;
     this.langBtn.hidden = this.qualityBtn.hidden;
-    // Место выбирают до начала: посреди вылазки его не сменить.
+    // Место выбирают до начала: посреди вылазки его не сменить. И только в петле одного места: сон выбирает сам.
     this.placeBtn.textContent = t(`ui.place.${this.place}`);
-    this.placeBtn.hidden = m !== 'start';
+    this.placeBtn.hidden = m !== 'start' || !this.placePick;
     const armed = performance.now() - this.restartArmed < 4000;
     this.restartBtn.textContent = t(armed ? 'ui.restart.sure' : 'ui.restart');
     this.restartBtn.hidden = m !== 'start' || !this.canRestart;

@@ -223,6 +223,7 @@ export function installDebug(app: App): void {
       touch: app.touchMode,
       drag: app.dragMode,
       motion: app.motion.state,
+      scenes: app.dreamView,
     }),
     freeze: (on) => {
       app.frozen = on;

@@ -133,8 +133,11 @@ export type DreamEvent =
    * от касания) или вернулась (systems/figures.ts).
    */
   | { type: 'figure'; id: string; material: FigureMaterial; what: 'gone' | 'back'; at: Vec3 }
-  /** Началась новая сессия; scene — не сессия, а следующая сцена того же сна (другое место). */
-  | { type: 'begin'; scene?: boolean };
+  /**
+   * Началась новая сессия; scene — не сессия, а следующая сцена того же сна (другое место); recalled — сцену сменило
+   * «вспомнил» (вещь сцены вспомнена), а не скачок, который унёс от неё.
+   */
+  | { type: 'begin'; scene?: boolean; recalled?: boolean };
 
 export interface StepEvents {
   lightFailed: boolean;
@@ -336,9 +339,10 @@ const GENTLE = {
  *   1 — фонарь глохнет (обучающий отказ), темнота переставляет вещи; скачков и давления нет; Осыпи не видно —
  *       только её приметы (сначала приметы, потом тело — K-18, ответ партнёра в квизе 17.11): она проходит по месту
  *       вдали, в углах у её пути проступают грибы, издалека слышен её песок; редко;
- *   2 — скачки (мягко) и давление: пространства перемешиваются; приметы Осыпи — чаще, тела по-прежнему нет;
+ *   2 — скачки (мягко) и давление: пространства перемешиваются — скачок уносит в другое место (сон из сцен, 17.11, вечер);
+ *       приметы Осыпи — чаще, тела по-прежнему нет;
  *   3 — Осыпь: сначала силуэт на краю луча, охота с пятой минуты и мягко;
- *   4 — всё как есть (опытный игрок, сон из сцен, проверки).
+ *   4 — всё как есть (опытный игрок, проверки).
  * Ставит приложение по числу законченных сессий.
  */
 export const STAGE_ALL = 4;
@@ -410,7 +414,7 @@ const BIG_FATES: readonly Fate[] = ['jump', 'grow', 'dust', 'jump', 'shrink', 'g
 /** Воспоминание → вещь-образ. */
 const MEMORY_THING: Readonly<Record<string, string>> = MEMORY_THINGS;
 /** Цвет дали там, куда ведёт скачок: уходящее место растворяется в этот цвет. */
-const DEST_FOG: Record<string, Vec3> = { void: [0.86, 0.86, 0.86], limbo: [0.86, 0.86, 0.86], meadow: [0.62, 0.74, 0.88], dollhouse: [0.03, 0.02, 0.03], elsewhere: [0, 0, 0], session: [0, 0, 0] };
+const DEST_FOG: Record<string, Vec3> = { void: [0.86, 0.86, 0.86], limbo: [0.86, 0.86, 0.86], meadow: [0.62, 0.74, 0.88], dollhouse: [0.03, 0.02, 0.03], elsewhere: [0, 0, 0], scene: [0, 0, 0], session: [0, 0, 0] };
 
 export class Game {
   readonly shake = new ShakeMeter();
@@ -671,12 +675,18 @@ export class Game {
   /** Следующая сессия, собранная за время лимбо. */
   private pending: { level: BuiltLevel; dream: DreamSeed } | null = null;
   /**
-   * Сон из сцен (docs/vylazka/pressure.md, §4.6): следующая сцена уже собрана — другое место. Когда в
-   * этой сцене вспомнено всё, свет гаснет, и игрок оказывается там, а не в лимбо.
+   * Сон из сцен (docs/vylazka/pressure.md, §4.6–4.7): следующая сцена уже собрана — другое место. Туда уносит любой
+   * скачок «куда-нибудь» (свет погас и зажёгся, ожил фонарь, постоял в темноте, карман отпустил сам), а когда вещь
+   * сцены вспомнена — свет гаснет, и игрок оказывается там же, а не в лимбо.
    */
   private sceneNext: { level: BuiltLevel; dream: DreamSeed } | null = null;
-  /** Идущий скачок ведёт в следующую сцену (а не в новую сессию): так и скажет событие begin. */
-  private sceneSwitch = false;
+  /**
+   * Стёртость, набранная в сцене, которую сон только что оставил: новая сцена начинает свой счёт с нуля, а приложение
+   * записывает эту — в память оставленного места (app.ts, onScene).
+   */
+  leftGain = 0;
+  /** Сон кончается на этой сцене (отладка: «считать всё вспомненным»): следующей сцены нет, дальше лимбо. */
+  private sleepEnds = false;
   /** Через сколько секунд после «всё вспомнено» место рассыплется. */
   private endIn = -1;
   private readonly thinUsed = new Set<number>();
@@ -744,6 +754,7 @@ export class Game {
     this.session = dream ? new Session(level, dream.seed, dream.known, this.sessionCfg, dream.chainAt ?? 0) : null;
     // Новая сцена или сессия: прежняя очередь сцен не в счёт — следующую поставит приложение.
     this.sceneNext = null;
+    this.sleepEnds = false;
     this.nodeAt.clear();
     for (const n of level.nav) this.nodeAt.set(`${n.tier},${n.cx},${n.cz}`, n.id);
     this.wearBase = Math.max(0, Math.min(1, level.wear ?? 0));
@@ -1783,7 +1794,7 @@ export class Game {
    * туда, а не в лимбо. null — сцен больше нет: дальше лимбо.
    */
   queueScene(level: BuiltLevel | null, dream: DreamSeed | null = null): void {
-    this.sceneNext = level && dream ? { level, dream } : null;
+    this.sceneNext = level && dream && !this.sleepEnds ? { level, dream } : null;
   }
 
   /** Есть ли готовая следующая сцена (для проверок). */
@@ -1830,10 +1841,12 @@ export class Game {
     this.transition = null;
   }
 
-  /** Отладка: считать всё вспомненным — через полсекунды место рассыплется. */
+  /** Отладка: считать всё вспомненным — через полсекунды место рассыплется; в сне из сцен — и весь сон: дальше лимбо. */
   debugFinish(): void {
     const s = this.session;
     if (!s || s.over) return;
+    this.sceneNext = null;
+    this.sleepEnds = true;
     for (const m of s.memories) m.state = 'done';
     s.over = true;
     if (this.memoryThing) {
@@ -2069,15 +2082,21 @@ export class Game {
       this.forgotTo = null;
     }
     const to = plan.to;
+    // Сон из сцен: скачок «куда-нибудь» — без цели, которую обещал проём или Осыпь, — уносит в другое место, в следующую
+    // сцену (слова партнёра 16.11: «перемешивать пространства при каждом скачке»). Проём кармана, который обещал «назад»
+    // или «к вещи», и пробуждение в начале сцены ведут куда обещали.
+    const mix = to === 'elsewhere' && plan.dest === undefined && this.sceneNext !== null;
+    if (to === 'scene' || mix) {
+      this.enterScene(to === 'scene' && plan.cause === 'end', dream);
+      this.observed = true;
+      dream.push({ type: 'jump', plan: mix ? { ...plan, to: 'scene' } : plan, phase: 'switch' });
+      return;
+    }
     if (to === 'session') {
       const next = this.pending;
       if (next) {
-        const scene = this.sceneSwitch;
-        this.sceneSwitch = false;
-        this.loadingScene = scene;
         this.loadLevel(next.level, next.dream);
-        this.loadingScene = false;
-        dream.push(scene ? { type: 'begin', scene: true } : { type: 'begin' });
+        dream.push({ type: 'begin' });
       }
     } else if (to === 'limbo') {
       // Вещи убежища больше не нужны: сессия кончилась.
@@ -2135,6 +2154,50 @@ export class Game {
     }
     this.observed = true;
     dream.push({ type: 'jump', plan, phase: 'switch' });
+  }
+
+  /**
+   * Сон из сцен: перейти в следующую сцену — другое место, уже собранное приложением. Та же сессия игрока (кривая
+   * ощущений не сбрасывается); стёртость, набранная в оставленной сцене, ждёт приложение в leftGain. recalled — сцену
+   * сменило «вспомнил», а не скачок.
+   */
+  private enterScene(recalled: boolean, dream: DreamEvent[]): void {
+    const next = this.sceneNext;
+    if (!next) return;
+    this.sceneNext = null;
+    this.leftGain = this.wearGain;
+    this.loadingScene = true;
+    this.loadLevel(next.level, next.dream);
+    this.loadingScene = false;
+    this.sceneStart();
+    dream.push({ type: 'begin', scene: true, recalled });
+  }
+
+  /**
+   * Сон из сцен: сцена посреди сна начинается не у входа места, а там, куда сон уронил, — в узле посреди плана, подальше
+   * от входа (прыжок в середину воспоминания, pressure.md §4.7). Не на марше лестницы, не у ямы и не в газу. Это и есть
+   * начало сцены: сюда же будит Осыпь.
+   */
+  private sceneStart(): void {
+    const nav = this.level?.nav ?? [];
+    if (nav.length === 0) return;
+    const home = this.playerNodeAt(this.spawn.pos);
+    const gas = new Set(this.level?.layout?.hazards.gasRooms ?? []);
+    const zones = this.level?.zones ?? [];
+    const ok = (id: number): boolean => {
+      const n = nav[id];
+      if (!n || n.links.length === 0 || gas.has(n.room)) return false;
+      if (n.links.some((l) => Math.abs(nav[l]!.y - n.y) > 0.2)) return false;
+      return !zones.some((z) => n.x >= z.minX - 1.5 && n.x <= z.maxX + 1.5 && n.z >= z.minZ - 1.5 && n.z <= z.maxZ + 1.5 && Math.abs(n.y - z.minY) < 3);
+    };
+    const far = home >= 0 ? nodesInRange(nav, home, 5, 40).filter(ok) : [];
+    const pool = far.length > 0 ? far : nav.map((n) => n.id).filter(ok);
+    if (pool.length === 0) return;
+    const n = nav[pool[Math.floor(this.rng() * pool.length)]!]!;
+    const l = nav[n.links[Math.floor(this.rng() * n.links.length)]!]!;
+    const [fx, fz] = this.freeSpot(n.x, n.y, n.z);
+    this.spawn = { pos: [fx, n.y, fz], yaw: Math.atan2(-(l.x - fx), -(l.z - fz)) };
+    this.respawn();
   }
 
   /** Узел навигации, в клетке которого стоит игрок (−1 — вне графа). */
@@ -2571,13 +2634,8 @@ export class Game {
       this.endIn -= dt;
       if (this.endIn < 0) {
         // Сон из сцен: следующая сцена готова — свет гаснет, и вокруг уже другое место. Иначе — лимбо.
-        const next = this.sceneNext;
-        if (next) {
-          this.pending = next;
-          this.sceneNext = null;
-          this.sceneSwitch = true;
-          this.beginJump({ cause: 'end', style: 'blackout', to: 'session' }, dream);
-        } else this.beginJump({ cause: 'end', style: 'dissolve', to: 'limbo' }, dream);
+        if (this.sceneNext) this.beginJump({ cause: 'end', style: 'blackout', to: 'scene' }, dream);
+        else this.beginJump({ cause: 'end', style: 'dissolve', to: 'limbo' }, dream);
       }
     }
 

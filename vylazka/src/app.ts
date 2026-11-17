@@ -69,7 +69,10 @@ const isQuality = (v: string | null): v is Quality => v === 'low' || v === 'med'
 const PROBE = { highMs: 5, fineMs: 11, minMs: 0.3, settleMs: 700, fpsFloor: 45, slowFor: 2.5 } as const;
 /** Множители обзора и яркости для уровней «ниже / средне / выше». */
 const SENS = [0.6, 1, 1.6] as const;
-/** Сон из сцен: сцен в сессии (каждая — другое место). */
+/**
+ * Сон из сцен: сколько вещей вспомнить за сон (сессию). Каждая — в своей сцене; сцен бывает и больше: любой скачок
+ * «куда-нибудь» уносит в другое место, не дав вспомнить вещь (docs/vylazka/pressure.md, §4.7).
+ */
 const SCENES = 3;
 /** Через сколько секунд поисков без вещи в луче игрок считается застрявшим: тогда — одна подсказка, как искать. */
 const STUCK_AFTER = 45;
@@ -156,14 +159,20 @@ export class App {
   /** Следующая сессия, собранная за время лимбо. */
   private next: { level: BuiltLevel; seed: number; rank: 1 | 2 | 3 } | null = null;
   /**
-   * Сон из сцен — прототип (docs/vylazka/pressure.md, §4.6): знак #scenes в конце ссылки, ?scenes=1 или
-   * проба __vzVariant = 'scenes'. Сессия — три сцены из разных мест, в каждой одна вещь цепочки этого
-   * места; вспомнил — свет гаснет, и вокруг уже другое место; после третьей — лимбо. Без знака игра
-   * прежняя: сессия — пять вещей одного места.
+   * Сон из сцен — сама игра (docs/vylazka/pressure.md, §4.6–4.7; слова партнёра 16.11: «перемешивать пространства при
+   * каждом скачке… игрок не может выбирать локацию»; 17.11, вечер: «Делай перемешивание пространств»). Сессия — сон:
+   * три вещи, каждая в своей сцене; сцена — одно место, в ней одна вещь цепочки этого места. Вспомнил — свет гаснет, и
+   * вокруг другое место; скачок «куда-нибудь» уносит в другое место раньше, чем вещь вспомнена. Первая сессия игрока —
+   * вся в убежище: оно учит закону. Прежняя петля одного места (пять вещей) — для проверок: ?loop=1, #loop, знак #place
+   * (смотреть места руками, с кнопкой «Место»), закреплённый сид (?seed=) и уровни-витрины.
    */
-  private scenes = false;
+  private scenes = true;
   /** Какая по счёту сцена идёт в этой сессии (0 — первая). */
   private sceneIndex = 0;
+  /** Сколько вещей сна уже вспомнено в этой сессии: сон кончается на SCENES. */
+  private sceneDone = 0;
+  /** Кнопка «Место» на заставке: только для проверок (знак #place, ?place=1 или петля одного места). */
+  private placePick = false;
   /** Следующая сцена, уже собранная: место, уровень и его воспоминание. */
   private sceneNext: { world: WorldKind; level: BuiltLevel; memory: PlaceMemory } | null = null;
   private sceneTimer: ReturnType<typeof setTimeout> | undefined;
@@ -207,6 +216,11 @@ export class App {
     this.ads = new AdBreaks(platform);
   }
 
+  /** Сон из сцен для проверок: идёт ли, какая сцена, сколько вещей сна вспомнено, готова ли следующая сцена и где она. */
+  get dreamView(): { on: boolean; scene: number; done: number; queued: boolean; next: WorldKind | null; world: WorldKind } {
+    return { on: this.scenes, scene: this.sceneIndex, done: this.sceneDone, queued: this.game?.sceneQueued ?? false, next: this.sceneNext?.world ?? null, world: this.world };
+  }
+
   /** Что аналитика знает об игре сейчас: место, круг, ступень, номер сессии, качество, настройки игрока. */
   private playContext(): PlayContext {
     const p = this.profile;
@@ -235,7 +249,9 @@ export class App {
     this.variant = String((globalThis as { __vzVariant?: unknown }).__vzVariant ?? '');
     // Помнить строку проверки между запусками — только вне Playgama: там мимо Bridge игра ничего не хранит (пункт 3.2.1).
     if (this.variant === 'probe' || p.get('diag') === '1' || (typeof location !== 'undefined' && location.hash === '#diag') || (this.platform.id !== 'playgama' && App.diagSaved())) this.makeDiag();
-    this.scenes = this.variant === 'scenes' || p.get('scenes') === '1' || (typeof location !== 'undefined' && location.hash === '#scenes');
+    const hash = typeof location === 'undefined' ? '' : location.hash;
+    this.placePick = p.get('place') === '1' || hash === '#place';
+    this.scenes = !(this.placePick || p.get('loop') === '1' || p.get('scenes') === '0' || hash === '#loop');
 
     const device = this.platform.deviceType();
     // Площадка может ошибиться с типом устройства, поэтому смотрим и на сам указатель;
@@ -360,9 +376,11 @@ export class App {
     this.overlay.setSound(!this.profile.muted);
     this.overlay.setLevels(this.profile.sens, this.profile.bright);
     this.overlay.setFlash(this.profile.calm);
-    // Место вылазки: из адреса (?world=office) или то, что игрок выбрал на заставке в прошлый раз.
+    // Место вылазки: из адреса (?world=office); в сне из сцен — первая сессия в убежище, дальше то, куда сон ушёл в прошлый
+    // раз (onLimbo); в петле одного места — то, что выбрано кнопкой «Место».
     const asked = p.get('world');
-    this.world = (WORLD_KINDS as readonly string[]).includes(asked ?? '') ? (asked as WorldKind) : this.profile.place;
+    const first: WorldKind = this.scenes && this.profile.successes === 0 ? 'shelter' : this.profile.place;
+    this.world = (WORLD_KINDS as readonly string[]).includes(asked ?? '') ? (asked as WorldKind) : first;
     this.overlay.setPlace(this.world);
     if (p.get('lang') === null && this.profile.lang) this.setLang(normalizeLang(this.profile.lang), true);
     renderer.brightness = BRIGHT[this.profile.bright];
@@ -402,7 +420,9 @@ export class App {
     // (?seed=) закрепляет место на всё время страницы и в профиль не пишется.
     this.pinned = p.get('seed') !== null ? { seed: baseSeed >>> 0, rank: this.rankParam() ?? rankFor(this.profile), wear: 0, laps: 0 } : null;
     // Место закреплено адресом — снится только оно: сна из сцен нет (иначе закреплённая память уехала бы в другое место).
-    if (this.pinned) this.scenes = false;
+    if (this.pinned || this.testLevel) this.scenes = false;
+    // Место игрок не выбирает (решение партнёра 16.11): кнопка «Место» — только в петле одного места, для проверок.
+    this.overlay.setPlacePick(!this.scenes);
     this.prepare();
 
     const resize = (): void => {
@@ -537,10 +557,11 @@ export class App {
       this.clockSkew = 0;
       this.game.loadLevel(this.level, { seed: this.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
       if (this.scenes) {
-        // Сон начинается с места заставки; места, пролистанные кнопкой «Место», не «снились».
+        // Сон начинается с места заставки.
         for (const w of WORLD_KINDS) delete this.dreamt[w];
         this.dreamtCount = 0;
         this.sceneIndex = 0;
+        this.sceneDone = 0;
         this.markDreamt(this.world);
         this.queueNextScene();
       }
@@ -597,14 +618,19 @@ export class App {
    * одна вспомненная вещь — пятая часть круга её места); newLap — счётчик кругов шагает (в сне из сцен —
    * только когда цепочка места замкнулась).
    */
-  private keepMemory(lap = false, share = 1, newLap = lap): boolean {
+  private keepMemory(lap = false, share = 1, newLap = lap, gain?: number): boolean {
     const m = this.memory;
     if (!m || this.testLevel) return false;
-    // Стёртость из адреса — только посмотреть: в воспоминание она не идёт.
-    const gained = this.game.wearGain + (lap ? WEAR.lap * share : 0);
+    // Стёртость из адреса — только посмотреть: в воспоминание она не идёт. gain — стёртость, набранная в сцене, которую сон
+    // уже оставил (game.leftGain): игра к этому мигу живёт новой сценой, и её счёт не трогаем.
+    let g = gain;
+    if (g === undefined) {
+      g = this.game.wearGain;
+      this.game.wearBase += g;
+      this.game.wearGain = 0;
+    }
+    const gained = g + (lap ? WEAR.lap * share : 0);
     m.wear = Math.min(1, m.wear + gained);
-    this.game.wearBase += this.game.wearGain;
-    this.game.wearGain = 0;
     if (newLap) m.laps += 1;
     const gone = erased(m.wear);
     if (this.pinned) {
@@ -627,8 +653,13 @@ export class App {
     // партнёра: ad — null, и всё идёт как раньше. Если её включат, следующая сессия встанет в очередь только после
     // ответа на просьбу о рекламе, а миг стёртого места реклама не перебьёт.
     const ad = this.ads.limbo(this.wasErased ? MOMENT_MS : 0);
-    // Сон из сцен: следующая сессия начнётся в месте, которое давно не снилось (не в том, где кончилась).
-    if (this.scenes && !this.testLevel) this.world = this.sceneWorld();
+    // Сон из сцен: следующая сессия начнётся в месте, которое давно не снилось (не в том, где кончилась); и после
+    // перезагрузки страницы — тоже там.
+    if (this.scenes && !this.testLevel) {
+      this.world = this.sceneWorld();
+      this.profile.place = this.world;
+      this.saveProfile();
+    }
     // Сборку откладываем на полсекунды: лимбо уже на экране, и заминка не выглядит зависшим переходом.
     setTimeout(() => {
       const mem = this.place();
@@ -648,12 +679,12 @@ export class App {
    * Круг места — пять его вещей, хоть и вспомненных в разных снах: вещь прибавляет пятую часть стёртости
    * круга, а номер круга шагает, когда цепочка замкнулась. Возвращает: место стёрто до конца.
    */
-  private keepSceneMemory(): boolean {
+  private keepSceneMemory(gain?: number): boolean {
     const m = this.memory;
     const len = WORLD_MEMORIES[this.world].length;
     if (m) m.chain = (m.chain ?? 0) + 1;
     const wrapped = m !== null && (m.chain ?? 0) % len === 0;
-    return this.keepMemory(true, 1 / len, wrapped);
+    return this.keepMemory(true, 1 / len, wrapped, gain);
   }
 
   /** Сон из сцен: отметить, что место снилось сейчас. */
@@ -665,8 +696,10 @@ export class App {
   /**
    * Сон из сцен: место следующей сцены — не нынешнее, и из остальных то, что снилось давнее всех
    * (ещё не снившееся — первым). При равенстве решает сид сна: от сессии к сессии порядок разный.
+   * Первая сессия игрока — вся в убежище (pressure.md, §4.6, п. 1): оно учит закону.
    */
   private sceneWorld(): WorldKind {
+    if (this.profile.successes === 0) return 'shelter';
     const pool = WORLD_KINDS.filter((w) => w !== this.world);
     const age = (w: WorldKind): number => this.dreamt[w] ?? -1;
     const oldest = Math.min(...pool.map(age));
@@ -675,14 +708,14 @@ export class App {
   }
 
   /**
-   * Сон из сцен: собрать следующую сцену заранее (другое место), пока идёт эта. Последняя сцена сессии
-   * следующей не имеет: после неё — лимбо.
+   * Сон из сцен: собрать следующую сцену заранее (другое место), пока идёт эта: туда унесёт скачок или «вспомнил».
+   * Когда вспомнена последняя вещь сна, следующей нет: после неё — лимбо.
    */
   private queueNextScene(): void {
     if (this.sceneTimer !== undefined) clearTimeout(this.sceneTimer);
     this.sceneTimer = undefined;
     this.sceneNext = null;
-    if (!this.scenes || this.testLevel || this.sceneIndex >= SCENES - 1) {
+    if (!this.scenes || this.testLevel || this.sceneDone >= SCENES) {
       this.game.queueScene(null);
       return;
     }
@@ -690,6 +723,7 @@ export class App {
     // Сборка — с паузой: сцена уже идёт, и игрок не заметит, что следующая собирается.
     this.sceneTimer = setTimeout(() => {
       this.sceneTimer = undefined;
+      if (this.sceneDone >= SCENES) return;
       const memory = memoryFor(this.profile, world);
       const level = buildLevel(generateLayout(memory.seed, memory.rank, world), { wear: this.wearParam() ?? memory.wear });
       this.sceneNext = { world, level, memory };
@@ -698,11 +732,13 @@ export class App {
   }
 
   /**
-   * Сон из сцен: свет погас, и вокруг другое место. Прежнее: его вещь вспомнена — цепочка шагнула, круг
-   * засчитан. Нынешнее становится местом игры: его стёртость, его круг на экране. Объявлений нет — как во сне.
+   * Сон из сцен: свет погас, и вокруг другое место. Прежнее: его вещь вспомнена (recalled) — цепочка шагнула, круг
+   * засчитан долей; унесло скачком — вещь осталась ждать в его цепочке, записано только стёртое касаниями. Нынешнее
+   * становится местом игры: его стёртость, его круг на экране. Объявлений нет — как во сне.
    */
-  private onScene(): void {
-    const gone = this.keepSceneMemory();
+  private onScene(recalled: boolean): void {
+    const gain = this.game.leftGain;
+    const gone = recalled ? this.keepSceneMemory(gain) : this.keepMemory(false, 1, false, gain);
     if (gone) this.moment();
     const n = this.sceneNext;
     if (n) {
@@ -717,16 +753,18 @@ export class App {
     this.markDreamt(this.world);
     this.mapHint = null;
     this.saveProfile();
-    // Прежнее место стёрто до конца — об этом строка, как после лимбо; иначе — номер круга нового места.
+    // Прежнее место стёрто до конца — об этом строка, как после лимбо; иначе — номер круга нового места. Строка круга —
+    // только когда сцену сменило «вспомнил»: скачки уносят часто, и фраза на каждый была бы болтовнёй; номер — всегда.
     if (gone) this.hud.flash(t('session.erased'), 6200);
-    else this.sayLap();
+    else this.sayLap(!recalled);
     this.queueNextScene();
   }
 
   /** Лимбо отпустило: началась следующая сессия (scene — нет: следующая сцена того же сна). */
   /**
    * Ступень погружения (game.ts, STAGE_ALL): по числу законченных сессий — каждая из первых открывает одно правило сна.
-   * Сон из сцен и проверки (в адресе fail=, level=, seed=) — всё сразу. #stage0…#stage4 в конце ссылки или ?stage= —
+   * Проверки (в адресе fail=, level=, seed=) — всё сразу; сон из сцен, раз он теперь сама игра, идёт по ступеням, как шла
+   * петля (17.11, вечер). #stage0…#stage4 в конце ссылки или ?stage= —
    * посмотреть ступень руками (партнёру: свои сессии он уже прошёл, и первых ступеней иначе не увидит).
    */
   private stageFor(): number {
@@ -734,7 +772,7 @@ export class App {
     const raw = m ? m[1]! : this.params.get('stage');
     const asked = raw === null ? NaN : Number(raw);
     if (Number.isInteger(asked) && asked >= 0 && asked <= STAGE_ALL) return asked;
-    if (this.scenes || this.testLevel || this.pinned || this.params.get('fail') !== null) return STAGE_ALL;
+    if (this.testLevel || this.pinned || this.params.get('fail') !== null) return STAGE_ALL;
     return Math.min(this.profile.successes, STAGE_ALL);
   }
 
@@ -760,10 +798,10 @@ export class App {
     this.analytics.placeErased();
   }
 
-  private onBegin(scene = false): void {
+  private onBegin(scene = false, recalled = false): void {
     this.clockSkew = 0;
     if (scene) {
-      this.onScene();
+      this.onScene(recalled);
       return;
     }
     const n = this.next;
@@ -786,6 +824,7 @@ export class App {
     // Сон из сцен: новая сессия — снова первая сцена; следующую собираем заранее.
     if (this.scenes) {
       this.sceneIndex = 0;
+      this.sceneDone = 0;
       this.markDreamt(this.world);
       this.queueNextScene();
     }
@@ -795,9 +834,10 @@ export class App {
    * Строка петли: в начале каждого круга, кроме первого, игра говорит одну фразу — по ней игрок
    * понимает, что место то же и что его становится меньше (docs/vylazka/story.md, §5).
    */
-  private sayLap(): void {
+  private sayLap(quiet = false): void {
     const lap = this.lapParam() ?? (this.memory?.laps ?? 0) + 1;
     this.hud.setLap(lap);
+    if (quiet) return;
     // Зал ожидания на первом круге говорит свой закон — одной строкой, как всё здесь.
     const line = lap < 2 ? (this.world === 'station' ? 'station.law' : null) : `loop.lap.${Math.min(8, lap)}`;
     if (!line) return;
@@ -1057,6 +1097,11 @@ export class App {
         this.hud.flash(wornLine(t(`mem.${id}.done`), this.game.wearBase));
         if (!this.profile.archive.includes(id)) this.profile.archive.push(id);
         this.saveProfile();
+        // Сон из сцен: последняя вещь сна вспомнена — следующей сцены нет, после этой — лимбо.
+        if (this.scenes && !this.testLevel) {
+          this.sceneDone += 1;
+          if (this.sceneDone >= SCENES) this.queueNextScene();
+        }
         if (buzz) navigator.vibrate(60);
         if (this.mapHint?.memory === id) this.mapHint = null;
       } else if (e.type === 'forgot') {
@@ -1075,7 +1120,7 @@ export class App {
     }
     for (const e of ev.dream) {
       if (e.type === 'limbo') this.onLimbo();
-      else if (e.type === 'begin') this.onBegin(e.scene === true);
+      else if (e.type === 'begin') this.onBegin(e.scene === true, e.recalled === true);
       else if (e.type === 'thing' && e.what === 'changing' && e.thing.fate !== 'dust') this.teach('thing', t('teach.thing'));
       else if (e.type === 'jump' && e.phase === 'switch') {
         // Осыпь вернула в начало: об этом говорит строка, иначе непонятно, почему место другое.
@@ -1175,7 +1220,9 @@ export class App {
       const lines = s.memories
         .filter((m) => m.state !== 'hidden')
         .map((m) => ({ text: t(`mem.${m.def.id}.task`) + (m.state === 'active' && this.mapHint?.memory === m.def.id ? ` · ${t(`room.${this.mapHint.room}`)}` : ''), done: m.state === 'done' }));
-      this.hud.setGoals('', lines, lines.length > 0);
+      // Сон из сцен: над заданием — где ты сейчас (риск «где я и где вещь», pressure.md §4.6): сон переход не объявляет,
+      // но строка задания называет место.
+      this.hud.setGoals(this.scenes ? t(`goal.place.${g.world}`) : '', lines, lines.length > 0);
       // Рамка — на том, во что игрок всматривается: искомая вещь или любая «неустойчивая».
       const act = s.active;
       const focus = g.things.focus;

@@ -15,17 +15,21 @@ export type JumpCause = 'gaze' | 'thin' | 'light' | 'revive' | 'dark' | 'fall' |
  */
 export type JumpStyle = 'cut' | 'dissolve' | 'blackout' | 'whiteout';
 
-export type JumpTarget = PocketKind | 'elsewhere' | 'limbo' | 'session';
+export type JumpTarget = PocketKind | 'elsewhere' | 'scene' | 'limbo' | 'session';
 
 export interface JumpPlan {
   cause: JumpCause;
   style: JumpStyle;
-  /** Куда: карманное пространство, другое место убежища, лимбо между сессиями или новая сессия. */
+  /**
+   * Куда: карманное пространство, другое место убежища, следующая сцена сна (другое место — сон из сцен), лимбо
+   * между сессиями или новая сессия.
+   */
   to: JumpTarget;
   /**
    * Для возврата в убежище (to: 'elsewhere') — куда именно: back — туда, откуда унесло; thing — поближе
    * к искомой вещи (дверь на лугу); far — подальше; start — в начало, туда, где вылазка началась
-   * (так возвращает Осыпь). Не задано — решает случай.
+   * (так возвращает Осыпь). Не задано — решает случай; в сне из сцен такой скачок уносит в другое место
+   * (следующую сцену), если она готова (docs/vylazka/pressure.md, §4.7).
    */
   dest?: 'back' | 'thing' | 'far' | 'start';
 }

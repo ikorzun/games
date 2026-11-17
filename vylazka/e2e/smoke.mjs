@@ -1741,8 +1741,9 @@ const memText = (lang, id, kind) => lang[`mem.${id}.${kind}`];
 
 async function scenarioSession(browser, baseUrl) {
   section('Сессия: вспышки воспоминаний, «вспомнил», лимбо, следующая сессия, перезагрузка');
-  // Без сида в адресе: место берётся из профиля и в нём же запоминается — так проверяется петля.
-  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&rank=1');
+  // Без сида в адресе: место берётся из профиля и в нём же запоминается — так проверяется петля одного места (loop=1: сама игра
+  // теперь — сон из сцен, его проверяет scenarioScenes).
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&rank=1&loop=1');
   let st = await state(page);
   const lv1 = await vz(page, () => window.__vz.level());
   const lines0 = await page.$$eval('.vz-overlay__line', (els) => els.map((e) => e.textContent));
@@ -1927,6 +1928,81 @@ async function scenarioHonest(browser, baseUrl) {
   st = await vz(page, () => window.__vz.step(130));
   check('честный прогон: вспомнил — за сорок секунд симуляции', st.session.done === 1 && st.time < 40, `${st.time.toFixed(1)} с, вспомнено ${st.session.done}`);
   check('честный прогон: нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  await context.close();
+}
+
+/**
+ * Сон из сцен — сама игра (17.11, вечер: «Делай перемешивание пространств»; 16.11: «перемешивать пространства при каждом
+ * скачке… игрок не может выбирать локацию»): кнопки «Место» нет; скачок «куда-нибудь» уносит в другое место, вещь
+ * оставленного ждёт в его цепочке; вспомнил — другое место; три вещи сна — лимбо, и следующий сон начнётся в другом месте.
+ */
+async function scenarioScenes(browser, baseUrl) {
+  section('Сон из сцен: место не выбирают; скачок уносит в другое место; вспомнил — другое место; три вещи — лимбо');
+  // Вторая сессия игрока: первая — вся в убежище (учит закону), со второй места перемешиваются.
+  const profile = { v: 1, sorties: 1, successes: 1, archive: [], baseSeed: 20041113, muted: false, sens: 1, bright: 1, calm: false, lang: null, place: 'shelter', memories: {} };
+  const prepare = (ctx) =>
+    ctx.addInitScript((p) => {
+      try {
+        localStorage.setItem('vylazka:profile', JSON.stringify(p));
+      } catch {
+        /* без хранилища — профиль по умолчанию */
+      }
+    }, profile);
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&rank=1', {}, null, prepare);
+  let st = await state(page);
+  check('заставка: кнопки «Место» нет — место выбирает сон', st.scenes.on && !(await page.isVisible('.vz-overlay__opt--place')), JSON.stringify(st.scenes));
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  // Следующая сцена собирается в фоне, по настоящим часам.
+  // Место собирается вокруг игрока 1,6 с — пока идёт этот переход, скачок не начинается: шагаем две секунды.
+  const queued = async () => {
+    let s = await vz(page, () => window.__vz.step(120));
+    for (let i = 0; i < 60 && !s.scenes.queued; i++) {
+      await sleep(250);
+      s = await state(page);
+    }
+    return s;
+  };
+  st = await queued();
+  const world = async () => (await vz(page, () => window.__vz.level())).world;
+  const w0 = await world();
+  check('сон начался в убежище; следующая сцена уже собрана — в другом месте', w0 === 'shelter' && st.scenes.queued && st.scenes.next !== null && st.scenes.next !== 'shelter' && st.session.memories.length === 1, JSON.stringify({ w0, ...st.scenes }));
+  const chain0 = st.profile.memories.shelter?.chain ?? 0;
+  // Скачок «куда-нибудь» (как погасил и зажёг свет) — вокруг другое место; вещь убежища не вспомнена и ждёт.
+  const want = st.scenes.next;
+  await vz(page, () => window.__vz.jump('elsewhere', 'cut'));
+  st = await stepUntil(page, (s) => s.scenes.scene === 1, 20, 30);
+  const w1 = await world();
+  check('скачок унёс в другое место: следующая сцена сна; вещь убежища ждёт в его цепочке', st.scenes.scene === 1 && w1 === want && st.scenes.done === 0 && (st.profile.memories.shelter?.chain ?? 0) === chain0 && st.where === 'main', JSON.stringify({ w1, want, ...st.scenes, chain: st.profile.memories.shelter?.chain, where: st.where }));
+  // Три вещи сна: каждая вспомненная уносит в другое место; строка задания называет место.
+  const seen = [w0, w1];
+  for (let k = 1; k <= 3; k++) {
+    st = await queued();
+    await vz(page, () => window.__vz.reveal());
+    st = await stepUntil(page, (s) => s.session.memories.some((m) => m.state === 'active'), 10, 30);
+    const here = await world();
+    await vz(page, () => window.__vz.step(2));
+    const title = await page.evaluate(() => document.querySelector('.vz-hud__goals-title')?.textContent ?? '');
+    if (k === 1) check('строка задания называет место, где ты сейчас', title === RU[`goal.place.${here}`], JSON.stringify({ title, here }));
+    const near = await vz(page, () => window.__vz.gotoMemory());
+    // Взгляд держит вещь и чуть водит из стороны в сторону: в офисе и жёлтых комнатах панели гаснут над тем, кто замер.
+    for (let i = 0; i < 40 && st.scenes.done < k; i++) st = await vz(page, (d) => window.__vz.step(6, { lookYaw: d }), i % 2 ? 0.02 : -0.02);
+    check(`вещь сна ${k} вспомнена (${here})`, near && st.scenes.done === k, JSON.stringify({ near, ...st.scenes, hold: st.session.hold }));
+    if (k < 3) {
+      st = await stepUntil(page, (s) => s.scenes.scene === seen.length, 20, 40);
+      const w = await world();
+      check(`вспомнил — свет погас, и вокруг другое место (${here} → ${w})`, w !== here && st.where === 'main', JSON.stringify({ here, w, ...st.scenes }));
+      seen.push(w);
+    }
+  }
+  st = await stepUntil(page, (s) => s.where === 'limbo', 20, 40);
+  // Лимбо просит следующую сессию, когда переход в него закончился: тогда же записывается, где начнётся следующий сон.
+  st = await stepUntil(page, (s) => s.profile.successes === 2, 20, 30);
+  check('три вещи сна — лимбо; следующий сон — в другом месте, и это записано', st.where === 'limbo' && st.profile.successes === 2 && st.scenes.world !== seen[seen.length - 1], JSON.stringify({ where: st.where, successes: st.profile.successes, next: st.scenes.world, seen }));
+  check('за сон побывали минимум в трёх разных местах', new Set(seen).size >= 3, JSON.stringify(seen));
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
   await context.close();
 }
 
@@ -2484,7 +2560,7 @@ async function scenarioTouchSession(browser, baseUrl) {
     ['ландшафт 915×412', 915, 412],
     ['портрет 390×844', 390, 844],
   ]) {
-    const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&rank=1', { viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&rank=1&loop=1', { viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
     let bad = await page.evaluate(layoutProbe);
     const lines = await page.$$eval('.vz-overlay__line', (els) => els.map((e) => e.textContent));
     check(`${name}: заставка с предупреждением и настройками помещается на экране`, bad.length === 0 && lines.includes(RU['title.warn']) && (await page.isVisible('.vz-overlay__opt--flash')) && (await page.isVisible('.vz-overlay__opt--lang')), bad.join('; '));
@@ -3056,6 +3132,7 @@ try {
   if (only?.includes('pockets')) await run('pockets', scenarioPockets);
   if (only?.includes('things')) await run('things', scenarioThings);
   if (wants('stages')) await run('stages', scenarioStages);
+  if (wants('scenes')) await run('scenes', scenarioScenes);
   if (wants('fear')) await run('fear', scenarioFear);
   if (wants('audio')) await run('audio', scenarioAudio);
   if (wants('frame')) await run('frame', scenarioFrame);

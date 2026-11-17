@@ -313,8 +313,8 @@ describe('игра целиком: цикл сессии', () => {
     expect(h.count('all-done')).toBe(1);
     // Не лимбо, а темнота — и другое место.
     expect(h.until(() => h.dreamCount('begin') > 0, 10)).toBe(true);
-    expect(h.log.dream.filter((e) => e.type === 'begin')).toEqual([{ type: 'begin', scene: true }]);
-    expect(h.log.dream.some((e) => e.type === 'jump' && e.phase === 'start' && e.plan.cause === 'end' && e.plan.style === 'blackout' && e.plan.to === 'session')).toBe(true);
+    expect(h.log.dream.filter((e) => e.type === 'begin')).toEqual([{ type: 'begin', scene: true, recalled: true }]);
+    expect(h.log.dream.some((e) => e.type === 'jump' && e.phase === 'start' && e.plan.cause === 'end' && e.plan.style === 'blackout' && e.plan.to === 'scene')).toBe(true);
     expect(h.dreamCount('limbo')).toBe(0);
     expect(g.where).toBe('main');
     expect(g.level).toBe(office);
@@ -330,6 +330,62 @@ describe('игра целиком: цикл сессии', () => {
     expect(h.until(() => h.count('recall') > 1, 4)).toBe(true);
     expect(h.until(() => g.where === 'limbo', 10)).toBe(true);
     expect(h.dreamCount('begin')).toBe(1);
+  });
+
+  it('сон из сцен: скачок «куда-нибудь» уносит в другое место — вещь сцены остаётся невспомненной, новая сцена начинается посреди места', () => {
+    // Слова партнёра 16.11: «перемешивать пространства при каждом скачке» (pressure.md, §4.7).
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 } });
+    const g = h.game;
+    const office = buildLevel(generateLayout(SEED + 5, 1, 'office'), { wear: 0 });
+    g.queueScene(office, { seed: 11, known: new Set(), chainAt: 2 });
+    const first = g.session!;
+    // Немного стёртости в оставленной сцене: приложение запишет её в память убежища. Сперва место собирается вокруг (1,6 с).
+    h.run(2);
+    g.wearGain = 0.03;
+    expect(g.beginJump({ cause: 'light', style: 'cut', to: 'elsewhere' }, [])).toBe(true);
+    expect(h.until(() => h.dreamCount('begin') > 0, 4)).toBe(true);
+    expect(h.log.dream.filter((e) => e.type === 'begin')).toEqual([{ type: 'begin', scene: true, recalled: false }]);
+    // Событие скачка говорит, куда на самом деле унесло: в сцену, а не в другую точку того же места.
+    expect(h.log.dream.some((e) => e.type === 'jump' && e.phase === 'switch' && e.plan.cause === 'light' && e.plan.to === 'scene')).toBe(true);
+    expect(g.level).toBe(office);
+    expect(g.world).toBe('office');
+    expect(g.leftGain).toBeCloseTo(0.03, 5);
+    expect(g.wearGain).toBe(0);
+    expect(first.doneCount).toBe(0);
+    expect(g.session).not.toBe(first);
+    // Не у входа: сон уронил посреди плана — и туда же разбудит Осыпь.
+    const at = g.snapshot() as { pos: Vec3 };
+    expect(Math.hypot(at.pos[0] - office.spawn.pos[0], at.pos[2] - office.spawn.pos[2])).toBeGreaterThan(3);
+    expect(g.playerNode()).toBeGreaterThanOrEqual(0);
+    expect(g.playerNodeAtSpawn()).toBe(g.playerNode());
+  });
+
+  it('сон из сцен: проём, который обещал «назад», и Осыпь, которая будит в начале, места не меняют', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 } });
+    const g = h.game;
+    const shelter = g.level;
+    const office = buildLevel(generateLayout(SEED + 5, 1, 'office'), { wear: 0 });
+    g.queueScene(office, { seed: 11, known: new Set(), chainAt: 0 });
+    h.run(2);
+    expect(g.beginJump({ cause: 'faint', style: 'blackout', to: 'elsewhere', dest: 'start' }, [])).toBe(true);
+    h.run(2.5);
+    expect(g.level).toBe(shelter);
+    expect(g.sceneQueued).toBe(true);
+    expect(g.beginJump({ cause: 'gaze', style: 'cut', to: 'void' }, [])).toBe(true);
+    expect(h.until(() => g.where === 'pocket', 3)).toBe(true);
+    h.run(1);
+    expect(g.beginJump({ cause: 'return', style: 'whiteout', to: 'elsewhere', dest: 'back' }, [])).toBe(true);
+    expect(h.until(() => g.where === 'main' && !g.jumping, 4)).toBe(true);
+    expect(g.level).toBe(shelter);
+    expect(h.dreamCount('begin')).toBe(0);
+    // А карман, отпустивший сам (без обещания), уносит в другое место.
+    expect(g.beginJump({ cause: 'gaze', style: 'cut', to: 'meadow' }, [])).toBe(true);
+    expect(h.until(() => g.where === 'pocket', 3)).toBe(true);
+    h.run(1);
+    expect(g.beginJump({ cause: 'return', style: 'dissolve', to: 'elsewhere' }, [])).toBe(true);
+    expect(h.until(() => h.dreamCount('begin') > 0, 4)).toBe(true);
+    expect(g.level).toBe(office);
+    expect(g.where).toBe('main');
   });
 
   it('свет памяти: искомая вещь приносит свой свет, он разгорается у неё; вспомнил — гаснет вместе с вещью', () => {
