@@ -111,8 +111,8 @@
 | Безопасные зоны для HUD, кнопки фонаря, паузы | есть | styles.css:57, 343–344, 411, 534 |
 | Pointer Events, `pointercancel` как отпускание, `setPointerCapture`, `contextmenu` гасится | есть | touch_controls.ts:85–90, 141 |
 | `preventDefault()` на `pointerdown` | есть, но на прокрутку не действует (по WebKit 198560) | touch_controls.ts:139 |
-| Закрыть краевой свайп iOS (не-пассивный `touchstart`, края 10–20 px) | нет | — (единственный `touchstart` — пассивный, app.ts:1148) |
-| Запрет масштаба по `gesturestart` | нет | — |
+| Закрыть краевой свайп iOS (не-пассивный `touchstart`, края 10–20 px) | есть с 17.11 (полоса 24 px, кнопки не трогаются) | platform/mobile_guard.ts: `guardTouch` |
+| Запрет масштаба по `gesturestart` | есть с 17.11 | platform/mobile_guard.ts: `guardTouch` |
 | Шаг по тапу (<260 мс, <12 px), ходьба удержанием (180 мс), стик слева, луч справа | есть | touch_gestures.ts:12–22, 60–97 |
 | Многопальцевость: стик одним пальцем, луч другим; предел 5 касаний не обрабатывается | частично | touch_gestures.ts:60–64 |
 | Фонарь: удержание дольше 0,25 с заряжает (slop 30 px, grace 600 мс), короткий тап (< 0,25 с, < 14 px, по отпусканию) — выключатель | есть (после разбора: смахивание заменено тапом по словам партнёра 09:23 и 10:04) | touch_controls.ts: `TAP`, `HOLD`, `lightTapped`, `lightHeld` |
@@ -123,17 +123,17 @@
 | Вибрация `navigator.vibrate` только на тач-режиме с проверкой наличия | есть | app.ts:921–988 |
 | Обход вибрации для iOS (`switch`-чекбокс) | нет | — |
 | Разблокировка звука на `pointerdown/up`, `touchend`, `keydown` | есть | app.ts:233–234, engine.ts:187–198 |
-| `navigator.audioSession.type = 'playback'` | нет | — (поиск по `audioSession` пуст) |
+| `navigator.audioSession.type = 'playback'` | есть с 17.11 (по слову партнёра «Да, звук нужен») | platform/mobile_guard.ts: `playThroughSilentSwitch`, вызов в audio/engine.ts `unlock` |
 | Пауза по `visibilitychange`, по событию платформы, по потере контекста | есть | app.ts:305, 380–384, lifecycle |
 | Потеря WebGL-контекста: `preventDefault`, восстановление | есть | renderer.ts:589–593, app.ts:305–307 |
 | `setPixelRatio(1)`, внутренний размер от `devicePixelRatio` и качества | есть | renderer.ts:585, 1224–1231 |
-| Пересборка целей рендера при каждом ресайзе | есть, при смене размера (риск на iOS при частых ресайзах: адресная строка, поворот) | renderer.ts:1221–1238 |
+| Пересборка целей рендера при каждом ресайзе | на телефоне с 17.11 — только когда размер успокоится (160 мс) | app.ts (ResizeObserver), platform/mobile_guard.ts: `RESIZE_SETTLE_MS` |
 | Размер по `ResizeObserver` на корне | есть | app.ts:365–372 |
 | `dvh`, `svh`, `visualViewport` | нет (корень fixed inset:0) | — |
 | Просьба повернуть в портрете (только `pointer: coarse`) | есть | styles.css:274–278, overlay.ts:303 |
 | Блокировка ориентации `screen.orientation.lock`, обработка `orientationchange` | нет | — |
 | Полноэкранный режим (элемент), «на экран Домой», манифест | нет | — |
-| Screen Wake Lock | нет | — |
+| Screen Wake Lock | есть с 17.11: на время игры, отпускается на паузе | platform/mobile_guard.ts: `ScreenAwake` |
 | Подсказка поворота показывается и при смене ориентации во время игры | не проверено в коде (только CSS-медиазапрос) | styles.css:274 |
 | Режим энергосбережения/30 fps: шаг по реальному времени кадра | не проверено в этом разборе | — |
 | Чувствительность обзора (3 уровня), настройка в меню | есть (`sens`) | app.ts:229 |

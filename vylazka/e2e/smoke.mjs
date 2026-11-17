@@ -2264,6 +2264,20 @@ async function scenarioTouch(browser, baseUrl) {
     check(`${name}: касание запускает игру`, st.paused === false);
     await vz(page, () => window.__vz.freeze(true));
     check(`${name}: кнопки фонаря и паузы видны и достаточно велики`, await page.evaluate(() => [...document.querySelectorAll('.vz-touch__btn')].filter((b) => !b.hidden).every((b) => b.getBoundingClientRect().width >= 44 && b.getBoundingClientRect().height >= 44)));
+    // Свайп от края экрана (Safari «назад») браузеру не отдаётся, касание в середине — его; у кнопки паузы — не трогаем
+    // (слова партнёра 17.11: «Защита от свайпа нужна»; platform/mobile_guard.ts).
+    {
+      const guard = await page.evaluate(() => {
+        const fire = (x, y, sel) => {
+          const target = (sel && document.querySelector(sel)) || document.querySelector('.vz-canvas') || document.body;
+          const t = new Touch({ identifier: 9, target, clientX: x, clientY: y });
+          return !target.dispatchEvent(new TouchEvent('touchstart', { cancelable: true, bubbles: true, touches: [t], changedTouches: [t] }));
+        };
+        const p = document.querySelector('.vz-touch__btn--pause').getBoundingClientRect();
+        return { left: fire(4, innerHeight / 2), mid: fire(innerWidth / 2, innerHeight / 2), right: fire(innerWidth - 4, innerHeight / 2), pause: fire(p.left + 2, p.top + p.height / 2, '.vz-touch__btn--pause') };
+      });
+      check(`${name}: касание у края экрана браузеру не отдаётся (свайп «назад»), в середине и на кнопке паузы — отдаётся`, guard.left && guard.right && !guard.mid && !guard.pause, JSON.stringify(guard));
+    }
     // Заряд фонаря на телефоне — обводкой вокруг кнопки фонаря; отдельного значка заряда нет.
     {
       const c = await page.evaluate(() => ({ ring: document.querySelector('.vz-touch__btn--light')?.style.getPropertyValue('--vz-charge') ?? '', hud: getComputedStyle(document.querySelector('.vz-hud__bat')).display }));

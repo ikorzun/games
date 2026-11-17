@@ -46,6 +46,7 @@ import { ALL_PROPS } from './world/props_all';
 import { buildShowcase } from './world/showcase';
 import { buildTestLevel } from './world/test_level';
 import { setThingRegistry } from './world/thing_mesh';
+import { guardTouch, RESIZE_SETTLE_MS, ScreenAwake } from './platform/mobile_guard';
 
 const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
@@ -118,6 +119,8 @@ export class App {
   private touch: TouchControls | null = null;
   /** Когда телефон последний раз дрогнул под пальцем, заряжающим фонарь, мс. */
   private crankBuzz = 0;
+  /** Экран не гаснет, пока идёт игра (platform/mobile_guard.ts). */
+  private readonly awake = new ScreenAwake();
   private last = 0;
   private acc = 0;
   private qualityManual = false;
@@ -368,7 +371,15 @@ export class App {
       this.overlay.setFineStep(!this.touchMode && renderer.fineFor('ultra') >= 1.25);
       this.redraw();
     };
-    new ResizeObserver(resize).observe(this.root);
+    // На телефоне адресная строка Safari прячется и выезжает плавно — размер меняется десятки раз подряд, а
+    // пересоздавать буферы кадра на каждый шаг — известный путь к потере контекста на iOS (исследование
+    // mobile_controls.md, §7). Там новый размер берётся, когда он успокоится; на компьютере — сразу.
+    let settle = 0;
+    new ResizeObserver(() => {
+      if (!this.touchMode) return resize();
+      window.clearTimeout(settle);
+      settle = window.setTimeout(resize, RESIZE_SETTLE_MS);
+    }).observe(this.root);
     resize();
     // Круг сменили в адресе (#lap5), пока открыта заставка: место пересобирается на этом круге.
     window.addEventListener('hashchange', () => {
@@ -379,7 +390,10 @@ export class App {
 
     this.platform.onPause((paused) => this.lifecycle.set('platform', paused));
     this.platform.onAudio((enabled) => this.sound.setEnabled(enabled));
-    document.addEventListener('visibilitychange', () => this.lifecycle.set('hidden', document.hidden));
+    document.addEventListener('visibilitychange', () => {
+      this.lifecycle.set('hidden', document.hidden);
+      if (!document.hidden) this.awake.visible();
+    });
     this.lifecycle.onChange((paused) => this.onPauseChange(paused));
     this.lifecycle.onReasons(() => this.syncAudio());
 
@@ -817,6 +831,8 @@ export class App {
     if (this.touch) return;
     this.touchMode = true;
     this.root.classList.add('is-touch');
+    // Свайп от края экрана (Safari «назад») и щипок игре не нужны (слова партнёра 17.11: «Защита от свайпа нужна»).
+    guardTouch();
     this.touch = new TouchControls(this.root);
     this.touch.setVisible(this.screen === 'play' && !this.lifecycle.paused);
     this.overlay.setTouch(true);
@@ -1284,6 +1300,8 @@ export class App {
     this.last = now;
     // Звук считается и на паузе: в меню игра стоит, а музыка идёт.
     if (this.game) this.audio.frame(this.game, dt, !this.lifecycle.paused);
+    // Пока идёт игра, экран не гаснет: игрок может долго стоять в темноте и слушать.
+    this.awake.want(this.screen === 'play' && !this.lifecycle.paused);
     if (this.frozen || this.lifecycle.paused) return;
     if (dt > 0) this.fps += (1 / dt - this.fps) * 0.08;
 

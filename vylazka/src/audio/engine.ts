@@ -8,6 +8,7 @@
  * просто не играет; о неполном наборе файлов сообщает проверка сборки. Какие файлы есть, сборка
  * знает заранее (`__VZ_AUDIO__` из vite.config.ts), поэтому отсутствующие даже не запрашиваются.
  */
+import { playThroughSilentSwitch } from '../platform/mobile_guard';
 import type { Vec3 } from '../core/types';
 import manifest from '../../audio/manifest.json';
 
@@ -188,6 +189,8 @@ export class AudioEngine {
     if (!this.ctx) {
       const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctor) return;
+      // Звук и в беззвучном режиме iPhone, как у плеера (слова партнёра 17.11: «Да, звук нужен»): до первого звука.
+      playThroughSilentSwitch();
       this.ctx = new Ctor();
       this.master = this.ctx.createGain();
       this.master.connect(this.ctx.destination);
