@@ -73,6 +73,11 @@ export interface VzDebugApi {
   /** Вещи сна: что стоит, что с ним станет под взглядом, в каком оно состоянии. */
   things(): Array<Record<string, unknown>>;
   /**
+   * Кривая ощущений за сессию (systems/feel.ts): без аргумента — прочитать; level — поставить уровень кривой 0..1
+   * (она дальше пойдёт к своей цели сама), breath — выдох 0..1. Для снимков «начало сессии против её конца».
+   */
+  feel(level?: number, breath?: number): { level: number; breath: number; view: Record<string, number> };
+  /**
    * Встать перед вещью лицом к ней — не ближе, чем достаёт тело (иначе вещь растворится от касания). false — места не
    * нашлось или вещь, стоявшая целой, при пробах всё-таки растворилась.
    */
@@ -395,6 +400,12 @@ export function installDebug(app: App): void {
         if (dist > 0.6 && dist < 6 && st.beamDist >= dist - 1.2) return true;
       }
       return false;
+    },
+    feel: (level, breath) => {
+      const f = game().feel;
+      if (level !== undefined) f.level = Math.max(0, Math.min(1, level));
+      if (breath !== undefined) f.breath = Math.max(0, Math.min(1, breath));
+      return { level: f.level, breath: f.breath, view: { ...game().feelNow } };
     },
     things: () => game().things.list.map((t) => ({ id: t.id, kind: t.kind, state: t.state, fate: t.fate, memory: t.memory, still: t.still, gaze: t.gaze, scale: t.scale, dissolve: t.dissolve, form: t.form, pos: [...t.pos] })),
     spawnThing: (kind, fate, distance = 2.5, facing = false) => {

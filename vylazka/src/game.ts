@@ -41,6 +41,8 @@ import { BIRD_STRIDE, BIRDS_MAX, DEFAULT_BIRDS, Flock, flockSize, Leaver, packBi
 import type { Perch } from './systems/birds';
 import { Flow } from './systems/flow';
 import { Pressure } from './systems/pressure';
+import { FEEL_NEUTRAL, SessionFeel } from './systems/feel';
+import type { FeelView } from './systems/feel';
 import type { PressureKind, PressureRoom } from './systems/pressure';
 import { Spores } from './systems/spores';
 import type { Comeback, ComebackOptions, Form, Mount } from './systems/illusions';
@@ -215,6 +217,8 @@ function pointAlong(path: readonly Vec3[], s: number): Vec3 {
 }
 
 const TIMING: Record<JumpStyle, readonly [number, number]> = { cut: [0.18, 0.45], dissolve: [1.6, 1.2], blackout: [0.55, 0.9], whiteout: [0.4, 1.2] };
+/** Телефон: белая вспышка скачка вдвое короче — экран близко к глазам и часто в тёмной комнате (предложение 17.11, T-22). */
+const WHITEOUT_PHONE: readonly [number, number] = [0.3, 0.6];
 /** Где собираются карманные пространства: далеко в стороне от убежища. */
 const POCKET_ORIGIN: Vec3 = [400, 0, 0];
 /** Сколько самое меньшее длится лимбо, с. */
@@ -336,6 +340,10 @@ const FIRST_HUNT_DIRECTOR: DirectorConfig = { glimpseAt: 35, releaseAt: 300, sca
 const COLD_OPEN = { at: 16, stay: 20, near: 4.5, far: 9, cone: 0.5 } as const;
 /** Вспышка света памяти, когда вещь вспомнили: во сколько раз ярче и шире в пике и за сколько секунд гаснет. */
 const BLOOM = { strength: 3.5, radius: 1.6, fade: 3.2, calm: 1.6 } as const;
+/** Конус взгляда по умолчанию, градусы: [край, середина] — как у луча фонаря (render/renderer.ts, FrameView.gazeCone). */
+const GAZE_CONE: readonly [number, number] = [52, 25];
+/** Конус взгляда, сжатый или раскрытый кривой ощущений. */
+const gazeConeOf = (c: readonly [number, number], k: number): readonly [number, number] => (k === 1 ? c : [c[0] * k, c[1] * k]);
 /** Липкий луч (телефон): в каком конусе вокруг искомой вещи палец замедляется, рад, во сколько раз в середине, на какой дальности, м. */
 const STICKY = { cone: 0.1, slow: 0.4, range: 9 } as const;
 
@@ -561,9 +569,15 @@ export class Game {
   private shortStay = false;
   /** Вспышка света памяти при «вспомнил», 1 → 0, и вещь, у которой она горит. */
   private memBloom = 0;
+  /** Кривая ощущений за сессию (systems/feel.ts, K-11): к концу мир сжимается и плывёт, вспомнил — выдох. */
+  readonly feel = new SessionFeel();
+  /** Что кривая ощущений делает с кадром в этот миг (для отладки и проверок). */
+  feelNow: FeelView = FEEL_NEUTRAL;
   private bloomThing: Thing | null = null;
   /** Телефон: луч чуть «липнет» к искомой вещи — пальцем удержать её в луче трудно. Ставит приложение. */
   stickyAim = false;
+  /** Игра на телефоне (тач-управление): белые вспышки скачков короче. Ставит приложение. */
+  phone = false;
   /** Когда затихшая после поимки Осыпь выйдет снова, с игрового времени; 0 — не ждёт. */
   private swarmWakeAt = 0;
   /**
@@ -682,6 +696,8 @@ export class Game {
     this.shortStay = false;
     this.memBloom = 0;
     this.bloomThing = null;
+    // Каждая сессия начинается с мира, который почти не дышит; карман и возврат в то же место её не сбрасывают.
+    if (dream) this.feel.reset();
     const rank = level.layout?.rank ?? 1;
     this.session = dream ? new Session(level, dream.seed, dream.known, this.sessionCfg, dream.chainAt ?? 0) : null;
     // Новая сцена или сессия: прежняя очередь сцен не в счёт — следующую поставит приложение.
@@ -1749,7 +1765,7 @@ export class Game {
   beginJump(plan: JumpPlan, dream: DreamEvent[]): boolean {
     if (this.transition) return false;
     this.swarmCaught = false;
-    const [out, back] = TIMING[plan.style];
+    const [out, back] = this.phone && plan.style === 'whiteout' ? WHITEOUT_PHONE : TIMING[plan.style];
     this.transition = { plan, t: 0, out, back, switched: false };
     dream.push({ type: 'jump', plan, phase: 'start' });
     return true;
@@ -2344,6 +2360,8 @@ export class Game {
       this.observed = false;
     }
     for (let i = 0; i < out.length; i++) this.applySessionEvent(out[i]!, out, dream, node);
+    // Кривая ощущений: идёт, пока игрок в своём месте и сессия не кончилась; в кармане и в лимбо отпускает.
+    if (s) this.feel.update(wdt, { time: s.time, done: s.doneCount, count: s.memories.length, active: this.where === 'main' && !s.over });
 
     const quiet = this.where !== 'main' || this.transition !== null;
     if (s && !s.over && !this.calm && !quiet) this.stepFear(wdt, input, level, fear, dream);
@@ -2589,8 +2607,10 @@ export class Game {
       this.memoryThing = null;
       if (t) {
         t.memory = false;
-        // Мир отвечает: свет памяти вспыхивает на всю комнату и гаснет вместе с вещью.
+        // Мир отвечает: свет памяти вспыхивает на всю комнату и гаснет вместе с вещью, а сжатый к концу сессии мир
+        // делает выдох — луч и взгляд на несколько секунд шире обычного.
         this.memBloom = 1;
+        this.feel.exhale();
         this.bloomThing = t;
         if (this.things.change(t, 'dust')) dream.push({ type: 'thing', thing: t, what: 'changing' });
       }
@@ -2875,10 +2895,13 @@ export class Game {
         this.renderer.setThing(ids[i]!, { x: f.at[0], y: f.at[1] + f.bob, z: f.at[2], yaw: f.yaw, scale: 1, dissolve: p.dissolve, wire: 0, xray: false, visible: show && p.dissolve < 0.999, dots: f.dots > 0 ? f.dots + (1 - f.dots) * p.dissolve : 0 });
       }
     }
-    // Кинескоп заметнее на ходу, под взглядом на вещь, рядом с искомым и в момент скачка.
+    // Кривая ощущений за сессию (systems/feel.ts): только в своём месте; в кармане и в лимбо кадр её не знает.
+    const fv = this.where === 'main' && this.session ? this.feel.view(this.wear) : FEEL_NEUTRAL;
+    this.feelNow = fv;
+    // Кинескоп заметнее на ходу, под взглядом на вещь, рядом с искомым и в момент скачка; к концу сессии строки дрожат.
     const speed = Math.hypot(b.vx, b.vz);
     const hold = this.session?.hold ?? 0;
-    const crt = clamp(0.1 + 0.2 * (speed / RUN_SPEED) + 0.5 * Math.max(focus?.gaze ?? 0, hold) + 0.3 * Math.max(0, memNear) + (tr ? 0.45 : 0), 0, 1);
+    const crt = clamp(0.1 + 0.2 * (speed / RUN_SPEED) + 0.5 * Math.max(focus?.gaze ?? 0, hold) + 0.3 * Math.max(0, memNear) + (tr ? 0.45 : 0) + 0.35 * fv.rattle, 0, 1);
 
     // Глубина 0…1: от входа до нижнего яруса.
     const depth = clamp(-(rig.camPos[1] - 1.42) / 9, 0, 1);
@@ -2910,7 +2933,8 @@ export class Game {
       gain,
       noise: this.exposure.noise(),
       glitch: (this.staticLevel = Math.max(this.glitch, static_)),
-      tunnel: clamp(this.panic * 0.6, 0, 0.95),
+      // Края кадра темнеют от паники и к концу сессии (кривая ощущений) — берётся сильнейшее, не сумма.
+      tunnel: clamp(Math.max(this.panic * 0.6, fv.tunnel), 0, 0.95),
       gas: this.gasView,
       decay: bunker ? 0.25 + 0.6 * depth : this.env.decay,
       plain: this.env.plain === true,
@@ -2944,8 +2968,12 @@ export class Game {
       stars: (this.where !== 'main' || !this.openSky ? 0 : fl ? smoothstep(0.7, 0.97, clamp(fl.viewT / fl.cfg.day, 0, 1)) : 1) * clamp(3.2 / gain, 0.5, 4),
       // Собрано только там, куда смотрит герой, — в светлых местах тоже. Вспышка строба показывает всё.
       gaze: 1 - clamp(strobe, 0, 1),
-      // В зале ожидания взгляд стоящего раскрывается, идущего — узок, как луч.
-      ...(fl ? { gazeCone: fl.gaze() } : {}),
+      // В зале ожидания взгляд стоящего раскрывается, идущего — узок, как луч. К концу сессии конус взгляда у
+      // любого места сжимается, на выдохе после воспоминания — раскрывается (кривая ощущений).
+      ...(fl || fv.gaze !== 1 ? { gazeCone: gazeConeOf(fl ? fl.gaze() : GAZE_CONE, fv.gaze) } : {}),
+      beamCone: fv.beam,
+      // Кадр плывёт: разлёт цветов медленно дышит (период около 7,5 с) — кадр, а не голова: камеру не качаем.
+      drift: fv.drift * (0.55 + 0.45 * Math.sin(this.time * 0.83)),
       lens,
       scanRange: fl ? fl.scan() : (this.env.scan ?? [4, 15]),
       // Тени прямого света — в квадрате вокруг игрока, сдвинутом вперёд по взгляду: позади они не нужны.

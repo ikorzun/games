@@ -165,6 +165,10 @@ export interface FrameView {
   stars?: number;
   /** Множитель «бочки» объектива: больше единицы — кадр растянут по краям, меньше — сжат. */
   lens?: number;
+  /** Множитель углов луча фонаря (кривая ощущений, systems/feel.ts): меньше единицы — луч уже. Нет поля — как есть. */
+  beamCone?: number;
+  /** 0..1: кадр плывёт — цвета расходятся сильнее обычного (кривая ощущений; волну во времени накладывает игра). */
+  drift?: number;
   /** 0..1: мир рассыпается в пыль. */
   dissolve: number;
   /** 0..1: красная полигонная сетка на всём, что видно. */
@@ -554,6 +558,8 @@ export class GameRenderer {
   private lastTris = 0;
   /** Яркость картинки по выбору игрока: множитель усиления камеры. */
   brightness = 1;
+  /** Множитель углов луча, с которым сейчас стоит uCone (меняется только когда кривая ощущений его сдвинула). */
+  private beamConeNow = 1;
   /** Отладка: временно выключить тень, не меняя качество (сравнение «тень вкл/выкл»). */
   debugShadowsOff = false;
   /**
@@ -882,6 +888,7 @@ export class GameRenderer {
         uVignette: { value: 1 },
         uGlitch: { value: 0 },
         uTunnel: { value: 0 },
+        uDrift: { value: 0 },
         uFade: { value: 1 },
         uGas: { value: 0 },
         uBeam: { value: new THREE.Vector3(0.5, 0.5, 0) },
@@ -2097,6 +2104,13 @@ export class GameRenderer {
     const r = this.renderer;
     r.info.reset();
 
+    // Луч фонаря: кривая ощущений сужает его к концу сессии и раскрывает на выдохе (systems/feel.ts).
+    const bc = v.beamCone ?? 1;
+    if (bc !== this.beamConeNow) {
+      this.beamConeNow = bc;
+      (this.lightU.uCone!.value as THREE.Vector4).set(deg(7 * bc), deg(13 * bc), deg(25 * bc), deg(Math.min(80, 52 * bc)));
+    }
+
     const cam = this.camera;
     cam.position.set(v.camPos[0], v.camPos[1], v.camPos[2]);
     cam.rotation.set(v.camPitch, v.camYaw, v.camRoll);
@@ -2555,6 +2569,7 @@ export class GameRenderer {
     pu.uNoise!.value = v.noise;
     pu.uGlitch!.value = v.glitch;
     pu.uTunnel!.value = v.tunnel;
+    pu.uDrift!.value = v.drift ?? 0;
     pu.uBarrel!.value = BARREL * (v.lens ?? 1);
     pu.uGas!.value = v.gas;
     pu.uFade!.value = v.fade;

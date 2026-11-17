@@ -39,6 +39,8 @@ export interface AudioWorld {
   body: { y: number; vx: number; vz: number };
   swarmNear: number;
   staticLevel: number;
+  /** Кривая ощущений за сессию (systems/feel.ts): hum — насколько густеет гул места, 0..1. Нет поля — гул как есть. */
+  feelNow?: { hum: number };
   listener(): { pos: Vec3; yaw: number };
   consumeFootstep(): boolean;
 }
@@ -247,10 +249,13 @@ export class GameAudio {
     // Вне убежища его звуки стихают; помехи остаются.
     const live = over ? 0 : 1;
     // Тон места: у каждого мира и у каждого пространства свой.
-    a.loop('amb_bunker', place === 'shelter' ? live * (1 - depth * 0.7) : 0);
-    a.loop('amb_deep', place === 'shelter' ? live * depth : 0);
-    a.loop('amb_office', place === 'office' ? live : 0);
-    a.loop('amb_yellow', place === 'yellow' ? live : 0);
+    // Кривая ощущений (K-11): к концу сессии гул места густеет — в убежище в него вплетается нижний, давящий.
+    const hum = over ? 0 : (game.feelNow?.hum ?? 0);
+    const deep = Math.max(depth, 0.6 * hum);
+    a.loop('amb_bunker', place === 'shelter' ? live * (1 - deep * 0.7) : 0);
+    a.loop('amb_deep', place === 'shelter' ? live * deep : 0);
+    a.loop('amb_office', place === 'office' ? live * (1 + 0.4 * hum) : 0);
+    a.loop('amb_yellow', place === 'yellow' ? live * (1 + 0.4 * hum) : 0);
     // Зал ожидания: на ходу — шум зала; встал — он уходит в один ровный тон (запись партнёра), а когда
     // снимок расходится с местом, тон начинает дрожать. Поезд слышно, когда он проходит за окнами.
     const fl = !over && place === 'station' ? (game.flow ?? null) : null;

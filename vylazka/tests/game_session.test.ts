@@ -3230,3 +3230,65 @@ describe('ступени погружения: каждая из первых с
   });
 });
 
+
+describe('кривая ощущений в игре (K-11): к концу сессии мир сжимается и плывёт, вспомнил — выдох', () => {
+  it('к концу сессии луч и взгляд уже, края кадра темнее, цвета плывут; в кармане кадр её не знает', () => {
+    const h = new Harness(levelOf(SEED));
+    h.game.jumps!.cooldown = 1e6;
+    h.run(2);
+    const v0 = h.r.frames.at(-1)!;
+    expect(v0.beamCone).toBeCloseTo(1, 2);
+    expect(v0.drift ?? 0).toBe(0);
+    // Поздняя сессия: прошло десять минут, четыре вещи из пяти вспомнены.
+    const s = h.game.session!;
+    s.time = 600;
+    for (const m of s.memories.slice(0, 4)) m.state = 'done';
+    h.run(25);
+    const v = h.r.frames.at(-1)!;
+    expect(v.beamCone!).toBeLessThan(0.9);
+    expect(v.gazeCone![0]).toBeLessThan(52 * 0.85);
+    expect(v.tunnel).toBeGreaterThan(0.1);
+    // Плывёт кадр, а не голова: строки кинескопа дрожат сильнее, камера сама не качается (укачивание −30 %, 17.11).
+    expect(h.game.feelNow.drift).toBeGreaterThan(0.3);
+    expect(v.crt).toBeGreaterThan(0.3);
+    enter(h, 'meadow');
+    h.run(1);
+    const p = h.r.frames.at(-1)!;
+    expect(p.beamCone).toBe(1);
+    expect(p.drift ?? 0).toBe(0);
+  });
+
+  it('вспомнил вещь — выдох: на несколько секунд луч и взгляд шире обычного', () => {
+    const h = new Harness(levelOf(SEED));
+    const s = h.game.session!;
+    s.time = 600;
+    const { id } = h.reveal();
+    expect(h.standBefore(id)).toBe(true);
+    let wide = 0;
+    while (h.count('recall') === 0 && s.time < 660) h.tick();
+    expect(h.count('recall')).toBe(1);
+    for (let i = 0; i < Math.round(1 / STEP); i++) {
+      h.tick();
+      wide = Math.max(wide, h.r.frames.at(-1)!.beamCone ?? 1);
+    }
+    expect(wide).toBeGreaterThan(1.1);
+  });
+});
+
+describe('телефон: белая вспышка скачка короче (предложение 17.11, T-22)', () => {
+  it('на телефоне выбеливание вдвое короче, на компьютере — как было', () => {
+    const ready = (h: Harness): Harness => (expect(h.until(() => h.game.transition === null, 5)).toBe(true), h);
+    const pc = ready(new Harness(levelOf(SEED)));
+    expect(pc.game.beginJump({ cause: 'gaze', style: 'whiteout', to: 'meadow' }, [])).toBe(true);
+    expect([pc.game.transition!.out, pc.game.transition!.back]).toEqual([0.4, 1.2]);
+    const phone = ready(new Harness(levelOf(SEED)));
+    phone.game.phone = true;
+    expect(phone.game.beginJump({ cause: 'gaze', style: 'whiteout', to: 'meadow' }, [])).toBe(true);
+    expect([phone.game.transition!.out, phone.game.transition!.back]).toEqual([0.3, 0.6]);
+    // Остальные виды скачка на телефоне не меняются.
+    const cut = ready(new Harness(levelOf(SEED)));
+    cut.game.phone = true;
+    expect(cut.game.beginJump({ cause: 'gaze', style: 'cut', to: 'meadow' }, [])).toBe(true);
+    expect([cut.game.transition!.out, cut.game.transition!.back]).toEqual([0.18, 0.45]);
+  });
+});

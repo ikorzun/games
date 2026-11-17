@@ -2155,6 +2155,7 @@ uniform float uBarrel;
 uniform float uVignette;
 uniform float uGlitch;
 uniform float uTunnel;
+uniform float uDrift;     // 0..1: кадр плывёт — цвета расходятся сильнее (кривая ощущений за сессию)
 uniform float uGas;
 uniform float uFade;
 uniform vec3 uBeam;      // xy — где на экране центр луча, z — сила свечения пыльного воздуха
@@ -2237,7 +2238,8 @@ void main() {
   // каждую в радужный штрих.
   // При мелком зерне точка занимает те же два-три пикселя, но уже более крупного буфера, поэтому разлёт
   // в долях кадра вдвое меньше — в пикселях он тот же.
-  float spread = 0.025 / uFmt;
+  // К концу сессии кадр плывёт: разлёт медленно растёт и спадает (волну задаёт игра), втрое больше обычного на пике.
+  float spread = (0.025 + 0.05 * uDrift) / uFmt;
   col.r = sampleScene(distort(uv, uBarrel * (1.0 + spread))).r;
   col.g = sampleScene(distort(uv, uBarrel)).g;
   col.b = sampleScene(distort(uv, uBarrel * (1.0 - spread))).b;
