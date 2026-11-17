@@ -23,6 +23,7 @@ import type { Grade } from './grade';
 export type { Grade } from './grade';
 import type { GrainLife, Grains } from './grains';
 import { clamp01, smoothstep } from '../core/math';
+import { fillSky, skyLook, SKY_TOTAL } from './sky';
 import { ECHO_MAX, ECHO_STRIDE } from '../systems/echo';
 import type { PressureView } from '../systems/pressure';
 import { SplatClouds } from './splats';
@@ -169,6 +170,8 @@ export interface FrameView {
    * только там, где нет ничего (как было).
    */
   skyOpen?: number;
+  /** Зерно неба (render/sky.ts): у каждой загрузки места своё — звёзды, млечный путь и туманности каждый раз другие. */
+  skySeed?: number;
   /** Множитель «бочки» объектива: больше единицы — кадр растянут по краям, меньше — сжат. */
   lens?: number;
   /** Множитель углов луча фонаря (кривая ощущений, systems/feel.ts): меньше единицы — луч уже. Нет поля — как есть. */
@@ -505,6 +508,8 @@ export class GameRenderer {
   private readonly starMat: THREE.ShaderMaterial;
   /** Небо — своим проходом поверх готового кадра: его закрывает только собранное (STAR_FRAG). */
   private readonly skyScene = new THREE.Scene();
+  /** Зерно неба, по которому заполнены буферы звёзд (FrameView.skySeed); 1 — небо по умолчанию. */
+  private skySeedNow = 1;
   private readonly dustMat: THREE.ShaderMaterial;
   private readonly swarmMat: THREE.ShaderMaterial;
   private readonly swarmGeo: THREE.InstancedBufferGeometry;
@@ -810,6 +815,7 @@ export class GameRenderer {
         tMem: { value: null },
         uRes: { value: new THREE.Vector2(1, 1) },
         uThrough: { value: 0 },
+        uWarm: { value: skyLook(1).warm },
       },
       blending: THREE.AdditiveBlending,
       transparent: true,
@@ -817,47 +823,10 @@ export class GameRenderer {
       depthWrite: false,
     });
     {
-      const FAR = 5200;
-      const NEAR = 520;
-      const TAIL = 16;
-      // Падающих четыре: три по своим срокам и одна по знаку игры (uFall).
-      const total = FAR + NEAR + 4 * TAIL;
-      const pos = new Float32Array(total * 3);
-      const star = new Float32Array(total * 4);
-      // Без Math.random: небо одно и то же от запуска к запуску.
-      let seed = 0x5eed57a1;
-      const rnd = (): number => {
-        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-        return seed / 4294967296;
-      };
-      for (let i = 0; i < FAR + NEAR; i++) {
-        const far = i < FAR;
-        let x = rnd() * 2 - 1;
-        let z = rnd() * 2 - 1;
-        // Две пятых дальних звёзд собраны в полосу поперёк неба: она гуще и уже — её видно и в щель потолка.
-        if (far && rnd() < 0.42) z = Math.max(-1, Math.min(1, 0.45 * x + (rnd() + rnd() + rnd() - 1.5) * 0.12));
-        pos[i * 3] = x;
-        pos[i * 3 + 1] = rnd();
-        pos[i * 3 + 2] = z;
-        // Ярких мало, тусклых много.
-        const m = rnd();
-        star[i * 4] = far ? 0.07 + 0.93 * m * m * m * m : 0.08 + 0.3 * m * m;
-        // Размер: у дальних от точки до крупной звезды с ореолом (каждая тридцатая).
-        star[i * 4 + 1] = far ? (m > 0.967 ? 4.6 + 1.4 * rnd() : 1.3 + 2.2 * m * m) : 1.2 + 1.2 * m;
-        star[i * 4 + 2] = rnd();
-        star[i * 4 + 3] = far ? 0 : 1;
-      }
-      for (let k = 0; k < 4; k++) {
-        for (let j = 0; j < TAIL; j++) {
-          const i = FAR + NEAR + k * TAIL + j;
-          pos[i * 3] = j / (TAIL - 1);
-          star[i * 4] = 1;
-          star[i * 4 + 1] = 3.2 - 2.0 * (j / (TAIL - 1));
-          // У хвоста падающей — холодный оттенок (а не тёплый, как у каждой пятой звезды).
-          star[i * 4 + 2] = rnd() * 0.2;
-          star[i * 4 + 3] = k < 3 ? 2 + k : 5;
-        }
-      }
+      // Небо — у каждого сна своё (render/sky.ts): буферы постоянного размера, заполняются по зерну, которое даёт игра.
+      const pos = new Float32Array(SKY_TOTAL * 3);
+      const star = new Float32Array(SKY_TOTAL * 4);
+      fillSky(1, pos, star);
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       g.setAttribute('aStar', new THREE.BufferAttribute(star, 4));
@@ -1155,6 +1124,18 @@ export class GameRenderer {
     // sRGB8: в тёмных градиентах нет полос, шейдер пишет линейный цвет, выборка возвращает линейный.
     rt.texture.colorSpace = THREE.SRGBColorSpace;
     return rt;
+  }
+
+  /** Перезаполнить небо по зерну (render/sky.ts): другие звёзды, млечный путь, туманности. */
+  private setSky(seed: number): void {
+    this.skySeedNow = seed;
+    const g = this.stars.geometry;
+    const pos = g.getAttribute('position') as THREE.BufferAttribute;
+    const star = g.getAttribute('aStar') as THREE.BufferAttribute;
+    const look = fillSky(seed, pos.array as Float32Array, star.array as Float32Array);
+    pos.needsUpdate = true;
+    star.needsUpdate = true;
+    this.starMat.uniforms.uWarm!.value = look.warm;
   }
 
   private makeMemRT(w: number, h: number): THREE.WebGLRenderTarget {
@@ -2400,6 +2381,7 @@ export class GameRenderer {
       const fall = v.fall ?? null;
       (su.uFall!.value as THREE.Vector4).set(fall ? fall[0] : 0, fall ? fall[1] : 0, fall ? v.time - fall[2] : -100, fall ? 1 : 0);
       su.uThrough!.value = this.debugScanOff ? 0 : clamp01(v.skyOpen ?? 0);
+      if (v.skySeed !== undefined && v.skySeed !== this.skySeedNow) this.setSky(v.skySeed);
     }
     (this.dustMat.uniforms.uCamPos!.value as THREE.Vector3).copy(cam.position);
 

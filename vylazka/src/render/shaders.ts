@@ -2382,9 +2382,21 @@ uniform vec3 uCamPos;
 uniform float uBright;   // 0..1: насколько небо видно (днём в зале ожидания — 0)
 uniform float uPx;       // пикселей буфера на «пиксель» звезды при 720 строках
 uniform vec4 uFall;      // падающая звезда по знаку игры: x — азимут, y — высота над горизонтом, рад; z — когда пошла; w — 1 есть
-attribute vec4 aStar;    // x — яркость, y — размер, z — случайное число, w — 0 дальняя, 1 ближняя, 2..4 — падающая, 5 — по знаку
+uniform float uWarm;     // доля тёплых звёзд у этого неба (render/sky.ts)
+attribute vec4 aStar;    // x — яркость, y — размер, z — случайное число (у туманности — оттенок), w — 0 дальняя, 1 ближняя, 2..4 — падающая, 5 — по знаку, 6 — туманность
 varying vec3 vCol;
 varying float vBig;      // 0..1: крупная звезда — с ореолом
+varying float vSoft;     // 1 — точка туманности: мягкое пятно без ядра
+
+// Оттенки туманностей (render/sky.ts, NEBULA_HUES): фиолетовая, бирюзовая, розовая, янтарная, синяя.
+vec3 nebulaHue(float z) {
+  int k = int(z * 8.0);
+  if (k == 0) return vec3(0.62, 0.42, 1.0);
+  if (k == 1) return vec3(0.3, 0.85, 0.85);
+  if (k == 2) return vec3(1.0, 0.42, 0.62);
+  if (k == 3) return vec3(1.0, 0.72, 0.38);
+  return vec3(0.42, 0.58, 1.0);
+}
 
 float hash1(float n) {
   return fract(sin(n * 127.1 + 3.7) * 43758.5453);
@@ -2393,17 +2405,19 @@ float hash1(float n) {
 void main() {
   vec3 p;
   float b = aStar.x;
-  if (aStar.w < 1.5) {
-    // Дальние — в ящике со стороной 440 м и на высоте до 430 м; ближние — в ящике 90 м, от 5 до 45 м.
-    float R = aStar.w < 0.5 ? 220.0 : 45.0;
-    float y = aStar.w < 0.5 ? 26.0 + position.y * position.y * 400.0 : 5.0 + position.y * 40.0;
+  bool nebula = aStar.w > 5.5;
+  if (aStar.w < 1.5 || nebula) {
+    // Дальние и туманности — в ящике со стороной 440 м и на высоте до 430 м; ближние — в ящике 90 м, от 5 до 45 м.
+    bool deep = aStar.w < 0.5 || nebula;
+    float R = deep ? 220.0 : 45.0;
+    float y = deep ? 26.0 + position.y * position.y * 400.0 : 5.0 + position.y * 40.0;
     vec2 xz = position.xz * R;
     xz = mod(xz - uCamPos.xz + R, 2.0 * R) - R;
     // К краю своего ящика звезда гаснет: перескок на другую сторону не виден.
     b *= 1.0 - smoothstep(0.72 * R, 0.98 * R, max(abs(xz.x), abs(xz.y)));
     p = vec3(uCamPos.x + xz.x, y, uCamPos.z + xz.y);
-    // Мерцание: у каждой своя частота.
-    b *= 0.72 + 0.28 * sin(uTime * (0.6 + 2.6 * fract(aStar.z * 7.31)) + aStar.z * 6.2832);
+    // Мерцание: у каждой звезды своя частота; туманность не мерцает.
+    if (!nebula) b *= 0.72 + 0.28 * sin(uTime * (0.6 + 2.6 * fract(aStar.z * 7.31)) + aStar.z * 6.2832);
   } else if (aStar.w > 4.5) {
     // Падающая звезда по знаку игры: когда герой под небом впервые поднимает взгляд — там, куда он
     // смотрит. Тогда небо не спутать с несобранным потолком: тот тоже чёрный в белых точках (аудит мест).
@@ -2446,10 +2460,13 @@ void main() {
   gl_PointSize = max(1.0, aStar.y * uPx);
   float v = b * uBright;
   if (v < 0.004) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
-  // Звёзды холоднее точек скана и разного размера: крупные — с ореолом. Тёплая — каждая пятая.
+  // Звёзды холоднее точек скана и разного размера: крупные — с ореолом. Сколько тёплых — у каждого неба своё (uWarm).
   float hue = fract(aStar.z * 3.7);
-  vCol = (hue < 0.8 ? mix(vec3(0.66, 0.8, 1.0), vec3(0.86, 0.92, 1.0), hue * 1.25) : vec3(1.0, 0.9, 0.78)) * v;
-  vBig = smoothstep(3.0, 4.6, aStar.y);
+  float cold = 1.0 - uWarm;
+  vec3 starCol = hue < cold ? mix(vec3(0.66, 0.8, 1.0), vec3(0.86, 0.92, 1.0), hue / max(cold, 0.01)) : vec3(1.0, 0.9, 0.78);
+  vCol = (nebula ? nebulaHue(aStar.z) : starCol) * v;
+  vBig = nebula ? 0.0 : smoothstep(3.0, 4.6, aStar.y);
+  vSoft = nebula ? 1.0 : 0.0;
 }
 `;
 
@@ -2468,6 +2485,7 @@ uniform vec2 uRes;              // размер буфера, в который 
 uniform float uThrough;         // 0..1: насколько небо видно сквозь несобранное
 varying vec3 vCol;
 varying float vBig;
+varying float vSoft;
 
 void main() {
   vec2 c = gl_PointCoord - 0.5;
@@ -2475,6 +2493,8 @@ void main() {
   float a = smoothstep(0.5, 0.04, r);
   // У крупной звезды — яркое ядро и мягкий ореол, а не ровный диск, как у точки скана.
   if (vBig > 0.0) a = mix(a, max(smoothstep(0.2, 0.02, r), exp(-r * r * 16.0) * 0.45), vBig);
+  // Туманность — мягкие пятна: сливаясь, они дают облако, а не россыпь дисков.
+  if (vSoft > 0.5) a = exp(-r * r * 7.0) * smoothstep(0.5, 0.25, r);
   vec2 uv = gl_FragCoord.xy / uRes;
   float open = 1.0;
   if (texture2D(tDepth, uv).r < 0.99999) {

@@ -2786,6 +2786,22 @@ describe('собрано только там, куда смотрит герой
     expect(h.r.frames.at(-1)!.skyOpen ?? 0).toBeLessThan(0.05);
   });
 
+  it('у каждой загрузки места своё небо: зерно неба меняется и при том же уровне (партнёр 17.11)', () => {
+    const level = buildLevel(generateLayout(20041113, 2, 'shelter'));
+    const h = new Harness(level);
+    h.run(0.2);
+    const first = h.r.frames.at(-1)!.skySeed;
+    expect(first).toBeGreaterThan(0);
+    h.game.loadLevel(level, { seed: 7, known: new Set() });
+    h.run(0.2);
+    const second = h.r.frames.at(-1)!.skySeed;
+    expect(second).not.toBe(first);
+    // Повторяемо: та же история загрузок — то же небо.
+    const again = new Harness(level);
+    again.run(0.2);
+    expect(again.r.frames.at(-1)!.skySeed).toBe(first);
+  });
+
   it('под небом первый взгляд вверх встречает падающую звезду — там, куда смотрит герой, и одну на вход', () => {
     // Аудит мест (16.11): небо и несобранный потолок выглядели одинаково — чёрное в белых точках.
     const level = buildLevel(generateLayout(20041113, 2, 'shelter'));

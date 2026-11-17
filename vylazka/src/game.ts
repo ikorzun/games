@@ -520,6 +520,13 @@ export class Game {
   private fallArmed = true;
   /** 0..1: игрок в комнате под небом — её стены и всё несобранное неба не закрывают (FrameView.skyOpen). Плавно. */
   private skyOpen = 0;
+  /**
+   * Зерно неба этой загрузки места (render/sky.ts): звёзды, млечный путь и туманности у каждой загрузки свои — новая
+   * сцена, новая сессия, скачок в другое место (партнёр 17.11: «звездное небо и космос должны быть разными каждый раз»).
+   */
+  private skySeed = 1;
+  /** Сколько раз загружалось место: зерно неба меняется и при том же сиде уровня. */
+  private loads = 0;
   private fallT0 = -1e9;
   private fallAim: [number, number] = [0, 0];
   /** Цвет камеры сейчас: идёт к цвету места (GRADE). */
@@ -789,6 +796,8 @@ export class Game {
     this.roomFx.clear();
     this.thinUsed.clear();
     this.wireSaid.clear();
+    this.loads += 1;
+    this.skySeed = (hash2(dream?.seed ?? level.layout?.seed ?? 1, this.loads, 0x5c7) >>> 0) || 1;
     if (dream) {
       this.dreamSeed = dream.seed;
       this.swarm = new SwarmAI(level.nav, this.rng);
@@ -3257,6 +3266,7 @@ export class Game {
       stars: (this.where !== 'main' || !this.openSky ? 0 : fl ? smoothstep(0.7, 0.97, clamp(fl.viewT / fl.cfg.day, 0, 1)) : 1) * clamp(3.2 / gain, 0.5, 4),
       // Небо — бесконечность: в комнате под небом его не режут ни её стены, ни что-либо ещё, пока свет это не собрал.
       skyOpen: this.where === 'main' ? this.skyOpen : 0,
+      skySeed: this.skySeed,
       // Собрано только там, куда смотрит герой, — в светлых местах тоже. Вспышка строба показывает всё.
       gaze: 1 - clamp(strobe, 0, 1),
       // В зале ожидания взгляд стоящего раскрывается, идущего — узок, как луч. К концу сессии конус взгляда у
