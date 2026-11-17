@@ -86,6 +86,11 @@ const MOMENT_MS = 3200;
  * же последняя, и правило держало бы вспышку до конца срока, а сцена стояла бы пустой.
  */
 const SCENE_SESSION: SessionConfig = { ...DEFAULT_SESSION, count: 1, firstDelay: 10, fallback: 18, minLength: 0 };
+/**
+ * Первый сон игрока — одна сцена убежища с тремя вещами (pressure.md, §4.6, п. 1, и §4.7): убежище учит закону, и место не
+ * меняется. Три сцены одного места подряд пришлось бы собирать заново из устаревшей копии памяти места — та же вещь трижды.
+ */
+const FIRST_SLEEP: SessionConfig = { ...SCENE_SESSION, count: SCENES };
 const BRIGHT = [0.78, 1, 1.35] as const;
 
 type Screen = 'boot' | 'title' | 'play';
@@ -545,7 +550,7 @@ export class App {
     } else {
       this.level = buildLevel(generateLayout(this.seed, this.rank, this.world), { wear });
       if (this.scenes) {
-        this.game.sessionCfg = SCENE_SESSION;
+        this.game.sessionCfg = this.firstSleep ? FIRST_SLEEP : SCENE_SESSION;
         // Кривая ощущений идёт через все сцены сессии: три вещи, около трёх минут.
         this.game.sessionThings = SCENES;
         this.game.sessionSpan = SCENES * 70;
@@ -643,8 +648,11 @@ export class App {
   /** Сессия кончилась, игрок в лимбо: записать итог и собрать следующую — то же место, круг спустя. */
   private onLimbo(): void {
     this.profile.successes += 1;
-    // Сон из сцен: вещь последней сцены вспомнена — цепочка её места шагнула; круг места — пять его вещей.
-    this.wasErased = this.scenes ? this.keepSceneMemory() : this.keepMemory(true);
+    // Сон из сцен: вещь последней сцены вспомнена — цепочка её места шагнула; круг места — пять его вещей. В первом сне
+    // сцена одна, и вещей в ней три.
+    this.wasErased = this.scenes ? this.keepSceneMemory(undefined, Math.max(1, this.game.session?.doneCount ?? 1)) : this.keepMemory(true);
+    // Первый сон кончился: дальше — сцены по одной вещи.
+    if (this.scenes) this.game.sessionCfg = SCENE_SESSION;
     // Место стёрто до конца — миг: запись обрывается.
     if (this.wasErased) this.moment();
     this.saveProfile();
@@ -679,12 +687,19 @@ export class App {
    * Круг места — пять его вещей, хоть и вспомненных в разных снах: вещь прибавляет пятую часть стёртости
    * круга, а номер круга шагает, когда цепочка замкнулась. Возвращает: место стёрто до конца.
    */
-  private keepSceneMemory(gain?: number): boolean {
+  private keepSceneMemory(gain?: number, steps = 1): boolean {
     const m = this.memory;
     const len = WORLD_MEMORIES[this.world].length;
-    if (m) m.chain = (m.chain ?? 0) + 1;
-    const wrapped = m !== null && (m.chain ?? 0) % len === 0;
-    return this.keepMemory(true, 1 / len, wrapped, gain);
+    const was = m?.chain ?? 0;
+    if (m) m.chain = was + steps;
+    // Круг шагает, когда цепочка перешла через своё начало (первый сон вспоминает три вещи за одну сцену).
+    const wrapped = m !== null && Math.floor((was + steps) / len) > Math.floor(was / len);
+    return this.keepMemory(true, steps / len, wrapped, gain);
+  }
+
+  /** Первый сон игрока: одна сцена убежища с тремя вещами, без смены мест. */
+  private get firstSleep(): boolean {
+    return this.scenes && !this.testLevel && this.profile.successes === 0;
   }
 
   /** Сон из сцен: отметить, что место снилось сейчас. */
@@ -696,10 +711,9 @@ export class App {
   /**
    * Сон из сцен: место следующей сцены — не нынешнее, и из остальных то, что снилось давнее всех
    * (ещё не снившееся — первым). При равенстве решает сид сна: от сессии к сессии порядок разный.
-   * Первая сессия игрока — вся в убежище (pressure.md, §4.6, п. 1): оно учит закону.
+   * Первый сон игрока сюда не попадает: он — одна сцена убежища (FIRST_SLEEP).
    */
   private sceneWorld(): WorldKind {
-    if (this.profile.successes === 0) return 'shelter';
     const pool = WORLD_KINDS.filter((w) => w !== this.world);
     const age = (w: WorldKind): number => this.dreamt[w] ?? -1;
     const oldest = Math.min(...pool.map(age));
@@ -715,7 +729,7 @@ export class App {
     if (this.sceneTimer !== undefined) clearTimeout(this.sceneTimer);
     this.sceneTimer = undefined;
     this.sceneNext = null;
-    if (!this.scenes || this.testLevel || this.sceneDone >= SCENES) {
+    if (!this.scenes || this.testLevel || this.sceneDone >= SCENES || this.firstSleep) {
       this.game.queueScene(null);
       return;
     }

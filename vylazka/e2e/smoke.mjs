@@ -2019,6 +2019,13 @@ async function scenarioStages(browser, baseUrl) {
   await sleep(300);
   await vz(page, () => window.__vz.freeze(true));
   let st = await vz(page, () => window.__vz.step(30));
+  // Первый сон игрока — одна сцена убежища с тремя вещами: место не меняется, следующую сцену не собирают (pressure.md §4.7).
+  await sleep(1500);
+  {
+    const first = await state(page);
+    const world = (await vz(page, () => window.__vz.level())).world;
+    check('первый сон: убежище, одна сцена с тремя вещами, следующая сцена не собирается', world === 'shelter' && first.scenes.on && first.session.memories.length === 3 && !first.scenes.queued, JSON.stringify({ world, scenes: first.scenes, n: first.session.memories.length }));
+  }
   const cold = (await vz(page, () => window.__vz.things())).find((t) => t.fate === 'jump' && t.still);
   check('нулевая ступень: впереди входа стоит вещь, ведущая на луг, и пока только стоит', !!cold && st.where === 'main', JSON.stringify(cold ?? null));
   if (cold) {
