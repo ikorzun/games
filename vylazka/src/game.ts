@@ -615,6 +615,8 @@ export class Game {
    * сессия игрока. В петле одного места это ровно часы сессии.
    */
   private sleepTime = 0;
+  /** Во время этой темноты искомая вещь была видна сквозь стены: зажжённый после неё свет не уносит скачком. */
+  private darkSearch = false;
   private feelDone = 0;
   /** Сколько вещей во всей сессии игрока и за сколько секунд её время доходит до конца; 0 — как у Session и по умолчанию. Ставит приложение. */
   sessionThings = 0;
@@ -2623,16 +2625,23 @@ export class Game {
       this.beginJump(this.jumps.forced('caught'), dream);
     }
 
+    // Поиск в темноте — то, чему учит подсказка игры («без света то, что вы ищете, проступает сквозь стены»): пока искомая
+    // вещь видна сеткой сквозь стены (как в draw: темно на самом деле и ближе 45 м), темнота — инструмент, а не повод для
+    // скачка; и свет, зажжённый после такого поиска, никуда не уносит. Иначе во сне из сцен подсказка вела бы прямо к потере
+    // вещи: скачок уносит в другое место (куратор, пачка 39).
+    const mt = this.memoryThing;
+    const xraySeen = mt !== null && mt.state !== 'gone' && look.light < 0.15 && this.ambientHere < 0.08 && Math.hypot(mt.pos[0] - b.x, mt.pos[1] - b.y, mt.pos[2] - b.z) < 45;
+    if (xraySeen) this.darkSearch = true;
     // Поводы для скачка: простые действия и наблюдения.
     const jumps = this.jumps;
     if (jumps && s && !s.over && !this.calm && !quiet) {
       jumps.update(wdt);
       let plan: JumpPlan | null = null;
       // Свет зажёгся после того, как его гасили: щелчком (компьютер) или зарядкой удержанием (телефон).
-      if ((toggled || ev.charged) && wasOff && this.light.state === 'on') plan = jumps.onLightOn();
-      if (!plan && ev.revived) plan = jumps.onRevive();
+      if ((toggled || ev.charged) && wasOff && this.light.state === 'on' && !this.darkSearch) plan = jumps.onLightOn();
+      if (!plan && ev.revived && !this.darkSearch) plan = jumps.onRevive();
       // Батарейка села и отлёживается — стоять в темноте приходится не по своей воле: скачка за это нет.
-      if (!plan) plan = jumps.onDark(dt, look.light < 0.05 && this.ambientHere < 0.05 && !this.light.exhausted, Math.hypot(b.vx, b.vz) < 0.3);
+      if (!plan) plan = jumps.onDark(dt, look.light < 0.05 && this.ambientHere < 0.05 && !this.light.exhausted && !xraySeen, Math.hypot(b.vx, b.vz) < 0.3);
       if (!plan) {
         // «Тонкое» помещение: постоял в нём — оно рассыпается.
         const thin = this.roomFx.get(this.room) === 'thin' && !this.thinUsed.has(this.room);
@@ -2644,6 +2653,8 @@ export class Game {
       }
       if (plan) this.beginJump(plan, dream);
     }
+    // Свет снова горит: поиск в темноте кончился.
+    if (this.light.state === 'on' && !xraySeen) this.darkSearch = false;
 
     // Всё вспомнено: чуть погодя место рассыпается, игрок попадает в лимбо.
     if (this.endIn >= 0 && !this.transition) {

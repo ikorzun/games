@@ -15,6 +15,7 @@ import { DEFAULT_SESSION, OFFICE_CHAIN, YELLOW_CHAIN } from '../src/systems/sess
 import type { SessionEvent } from '../src/systems/session';
 import { DEFAULT_THINGS, looksAt, Things } from '../src/systems/things';
 import { nodesInRange } from '../src/swarm/ai';
+import { DEFAULT_JUMPS, Jumps } from '../src/systems/jumps';
 import type { ColliderSet } from '../src/world/colliders';
 import type { FlatMark } from '../src/world/flat';
 import type { BuiltLevel } from '../src/world/level';
@@ -386,6 +387,44 @@ describe('игра целиком: цикл сессии', () => {
     expect(h.until(() => g.swarm!.active, 30)).toBe(true);
   });
 
+  it('поиск в темноте не уносит: пока искомая вещь видна сквозь стены, ни стояние в темноте, ни зажжённый свет скачка не дают', () => {
+    // Подсказка игры: «без света то, что вы ищете, проступает сквозь стены». Во сне из сцен скачок уносит в другое место — и
+    // следовать подсказке значило бы терять вещь (куратор, пачка 39).
+    const setup = (late = false): Harness => {
+      // late — искомая вещь не приходит вовсе (для сравнения: та же темнота без вещи).
+      const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1, ...(late ? { firstDelay: 999, fallback: 999 } : {}) }, calm: false });
+      h.run(2);
+      // Скачок наверняка: сразу, по каждому зажжённому свету и через секунду темноты.
+      h.game.jumps = new Jumps(mulberry32(5), { ...DEFAULT_JUMPS, firstAfter: 0, lightChance: 1, darkIdle: 1 });
+      return h;
+    };
+    const darkThenLight = (h: Harness): void => {
+      h.tick({ ...emptyInput(), light: true });
+      h.run(2.5);
+      h.tick({ ...emptyInput(), light: true });
+      h.run(0.5);
+    };
+    // Без искомой вещи та же темнота уносит.
+    const plain = setup(true);
+    darkThenLight(plain);
+    expect(plain.game.session!.active).toBeNull();
+    expect(plain.dreamCount('jump', 'start')).toBeGreaterThan(0);
+    // С искомой вещью рядом (сквозь стены видна) — нет.
+    const h = setup();
+    const g = h.game;
+    const { id } = h.reveal();
+    const t = g.things.list.find((x) => x.id === id)!;
+    const nav = g.level!.nav;
+    const near = nav.filter((n) => Math.abs(n.y - t.pos[1]) < 1 && Math.hypot(n.x - t.pos[0], n.z - t.pos[2]) > 4 && Math.hypot(n.x - t.pos[0], n.z - t.pos[2]) < 12)[0]!;
+    g.teleport(near.x, near.y, near.z);
+    // Смотреть от вещи: её собственный свет не должен считаться светом.
+    g.aimAt(near.x - (t.pos[0] - near.x), near.y + 1.5, near.z - (t.pos[2] - near.z));
+    h.run(0.3);
+    darkThenLight(h);
+    expect(h.dreamCount('jump', 'start')).toBe(0);
+    expect(g.light.state).toBe('on');
+  });
+
   it('сон из сцен: проём, который обещал «назад», и Осыпь, которая будит в начале, места не меняют', () => {
     const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 } });
     const g = h.game;
@@ -704,7 +743,8 @@ describe('игра целиком: особенности помещений и 
   it('calm = true выключает случайные скачки и рой; без него — тот же сценарий кончается скачком', () => {
     const level = levelOf(SEED);
     const scenario = (calm: boolean): Harness => {
-      const h = new Harness(level, { calm, seed: 12 });
+      // Искомая вещь не приходит: темнота рядом с ней — поиск, а не повод для скачка (поиск в темноте не уносит).
+      const h = new Harness(level, { calm, seed: 12, cfg: { ...QUICK, firstDelay: 999, fallback: 999 } });
       h.run(2);
       // Игрок стоит в полной темноте: фонарь выключен. Паузу до первого случайного скачка снимаем.
       h.game.jumps!.cooldown = 0;
