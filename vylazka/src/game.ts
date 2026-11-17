@@ -326,8 +326,8 @@ const GENTLE = {
 export const STAGE_ALL = 4;
 /** Ступени 0–2: Осыпи нет вовсе, ложные события редкие и не в первую минуту. */
 const QUIET_DIRECTOR: DirectorConfig = { glimpseAt: Infinity, releaseAt: Infinity, scareGap: [45, 90], byDepth: false, firstScare: 70 };
-/** Ступень 3 — знакомство с Осыпью: силуэт на краю луча с первой минуты, охота — с третьей, только по времени. */
-const FIRST_HUNT_DIRECTOR: DirectorConfig = { glimpseAt: 35, releaseAt: 180, scareGap: [28, 55], byDepth: false };
+/** Ступень 3 — знакомство с Осыпью: силуэт на краю луча с первой минуты, охота — с пятой, только по времени (как прежняя мягкая первая сессия, слово партнёра 16.11 23:41). */
+const FIRST_HUNT_DIRECTOR: DirectorConfig = { glimpseAt: 35, releaseAt: 300, scareGap: [28, 55], byDepth: false };
 /**
  * Холодный старт (ступень 0): крупная вещь в 4,5–9 м впереди входа, в луче с первого кадра. До at секунд она только
  * стоит (первые секунды — обычная жизнь), потом отзывается на взгляд: растёт навстречу и уносит на луг. Луг после
@@ -335,7 +335,7 @@ const FIRST_HUNT_DIRECTOR: DirectorConfig = { glimpseAt: 35, releaseAt: 180, sca
  */
 const COLD_OPEN = { at: 16, stay: 20, near: 4.5, far: 9, cone: 0.5 } as const;
 /** Вспышка света памяти, когда вещь вспомнили: во сколько раз ярче и шире в пике и за сколько секунд гаснет. */
-const BLOOM = { strength: 3.5, radius: 1.6, fade: 3.2 } as const;
+const BLOOM = { strength: 3.5, radius: 1.6, fade: 3.2, calm: 1.6 } as const;
 /** Липкий луч (телефон): в каком конусе вокруг искомой вещи палец замедляется, рад, во сколько раз в середине, на какой дальности, м. */
 const STICKY = { cone: 0.1, slow: 0.4, range: 9 } as const;
 
@@ -676,7 +676,7 @@ export class Game {
     this.failTaught ||= this.light?.taught ?? false;
     // Ступени погружения: на нулевой фонарь сам не глохнет вовсе (правило ещё не открыто), обучающий отказ — на первой,
     // на второй и третьей он уже не нужен; на четвёртой — как было (один на игру).
-    const stageLight = this.stage === 0 ? { firstFailAt: 0, meanFailInterval: Infinity } : this.stage === 2 || this.stage === 3 ? { firstFailAt: 0 } : {};
+    const stageLight = this.stage === 0 ? { firstFailAt: 0, meanFailInterval: Infinity, drainSeconds: Infinity } : this.stage === 2 || this.stage === 3 ? { firstFailAt: 0 } : {};
     this.light = new Flashlight(this.rng, { ...DEFAULT_FLASHLIGHT, ...this.lightCfg, ...stageLight, ...(this.failTaught ? { firstFailAt: 0 } : {}) });
     this.coldOpen = null;
     this.shortStay = false;
@@ -2196,6 +2196,9 @@ export class Game {
     // Допуск растёт с угловым размером вещи: крупную и близкую держать проще.
     const cone = STICKY.cone + Math.atan2(t.radius, d);
     if (off >= cone) return 1;
+    // Только видимая вещь: за стеной луч не липнет, иначе палец нащупывал бы спрятанное — компас, которого нет у мыши.
+    const reach = d - Math.max(0.15, t.radius * 0.8);
+    if (reach > 0 && this.colliders.raycast(rig.camPos[0], rig.camPos[1], rig.camPos[2], tx / d, ty / d, tz / d, reach) < reach - 1e-3) return 1;
     return STICKY.slow + (1 - STICKY.slow) * smoothstep(0, cone, off);
   }
 
@@ -2554,7 +2557,7 @@ export class Game {
     const life = memLightMod(lit.def.mod, this.time);
     // Вспышка «вспомнил»: в пике свет в BLOOM.strength раз ярче и в BLOOM.radius раз шире, потом гаснет.
     const b = bloomOn ? this.memBloom * this.memBloom : 0;
-    this.renderer.setMemLight({ pos: t.pos, yaw: t.yaw, kind: MEM_LIGHT_KIND[lit.def.kind], color: lit.def.color, strength: lit.def.strength * this.memLitK * life * (1 + (BLOOM.strength - 1) * b), height: lit.def.height * s, radius: lit.def.radius * Math.max(1, s) * (1 + (BLOOM.radius - 1) * b) });
+    this.renderer.setMemLight({ pos: t.pos, yaw: t.yaw, kind: MEM_LIGHT_KIND[lit.def.kind], color: lit.def.color, strength: lit.def.strength * this.memLitK * life * (1 + ((this.calmFlash ? BLOOM.calm : BLOOM.strength) - 1) * b), height: lit.def.height * s, radius: lit.def.radius * Math.max(1, s) * (1 + (BLOOM.radius - 1) * b) });
   }
 
   /** Фосфорные надписи: вспышка и темнота по событию; рядом с охотящимся роем гаснут. */

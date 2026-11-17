@@ -1021,8 +1021,9 @@ export class App {
   private onPocket(e: Extract<StepEvents['dream'][number], { type: 'pocket' }>): void {
     const task = e.memory ? t(`mem.${e.memory}.task`) : '';
     if (e.what === 'enter') {
-      // В кукольном домике и в белом нигде строка зависит от того, ищет ли игрок что-нибудь прямо сейчас.
-      const idle = !e.memory && e.kind === 'dollhouse' ? '.idle' : '';
+      // В кукольном домике и на лугу строка зависит от того, ищет ли игрок что-нибудь прямо сейчас: дверь луга ведёт
+      // к искомой вещи, а когда искать нечего (холодный старт) — обратно.
+      const idle = !e.memory && (e.kind === 'dollhouse' || e.kind === 'meadow') ? '.idle' : '';
       this.hud.flash(t(`pocket.${e.kind}.enter${idle}`), 6200);
     } else if (e.what === 'map') {
       if (e.memory && e.room !== undefined) {

@@ -3123,6 +3123,8 @@ describe('ступени погружения: каждая из первых с
       if (g.light.state === 'dead') dead += 1;
     }
     expect(dead).toBe(0);
+    // И батарейка не садится: севший фонарь — правило, которое новичку ещё не показали (замечание куратора).
+    expect(g.light.charge).toBeGreaterThan(0.99);
     expect(releases(h)).toBe(0);
     expect(glimpses(h)).toBe(0);
     expect(h.dreamCount('jump', 'start')).toBe(0);
@@ -3150,16 +3152,16 @@ describe('ступени погружения: каждая из первых с
       expect(at(stage).director!.cfg.releaseAt).toBe(Infinity);
       expect(at(stage).director!.cfg.glimpseAt).toBe(Infinity);
     }
-    expect(at(3).director!.cfg.releaseAt).toBe(180);
+    expect(at(3).director!.cfg.releaseAt).toBe(300);
   });
 
-  it('ступень 3: Осыпь сначала мелькает силуэтом (в первую минуту), охотится не раньше третьей минуты', () => {
+  it('ступень 3: Осыпь сначала мелькает силуэтом (в первую минуту), охотится не раньше пятой минуты', () => {
     const h = new Harness(levelOf(SEED), { stage: 3, calm: false });
     // Скачки на этой ступени есть, но здесь проверяется Осыпь: в кармане режиссёр стоит, и стоящего игрока не уносим.
     h.game.jumps!.cooldown = 1e6;
     expect(h.until(() => glimpses(h) > 0, 75), 'силуэта нет').toBe(true);
     expect(releases(h)).toBe(0);
-    h.run(Math.max(0, 175 - h.game.session!.time));
+    h.run(Math.max(0, 295 - h.game.session!.time));
     expect(releases(h)).toBe(0);
     expect(h.until(() => releases(h) > 0, 30), 'охоты нет').toBe(true);
   });
@@ -3206,6 +3208,18 @@ describe('ступени погружения: каждая из первых с
     expect(near).toBeLessThan(0.01 * 0.75);
     expect(near).toBeGreaterThan(0);
     expect(far).toBeCloseTo(0.01, 9);
+    // За стеной не липнет: иначе палец нащупывал бы спрятанную вещь — компас, которого у мыши нет (замечание куратора).
+    g.aimYaw -= 1.4;
+    h.tick();
+    const cam = (g as unknown as { lastRig: { camPos: number[] } }).lastRig.camPos;
+    const tp = g.things.list.find((x) => x.id === id)!.pos;
+    const mid = [0, 1, 2].map((k) => cam[k]! + (tp[k]! + (k === 1 ? 0.3 : 0) - cam[k]!) * 0.5);
+    g.colliders.addBox(mid[0]! - 0.3, mid[1]! - 0.6, mid[2]! - 0.3, mid[0]! + 0.3, mid[1]! + 0.6, mid[2]! + 0.3);
+    h.tick();
+    const yw = g.aimYaw;
+    g.look(0.01, 0);
+    expect(g.aimYaw - yw).toBeCloseTo(0.01, 9);
+    g.aimYaw += 1.4;
     // Без липкого луча (компьютер) — всегда как есть.
     g.stickyAim = false;
     g.aimYaw -= 1.4;
