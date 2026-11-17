@@ -37,7 +37,7 @@ export class Hud {
   private readonly fps: HTMLElement;
   private readonly goals: HTMLElement;
   private readonly bat: HTMLElement;
-  private readonly batFill: HTMLElement;
+  private readonly batArc: HTMLElement;
   private readonly batSpare: HTMLElement;
   private readonly act: HTMLElement;
   private readonly actText: HTMLElement;
@@ -78,7 +78,13 @@ export class Hud {
       '<div class="vz-hud__mark"></div>' +
       '<div class="vz-hud__prompt"><span class="vz-hud__prompt-text"></span><span class="vz-hud__bar"><i></i></span></div>' +
       '<div class="vz-hud__act"><span class="vz-hud__act-text"></span><span class="vz-hud__bar"><i></i></span></div>' +
-      '<div class="vz-hud__bat"><span class="vz-hud__bat-cell"><i></i></span><span class="vz-hud__bat-spare"></span></div>' +
+      // Заряд фонаря — обводкой вокруг его значка (слова партнёра 17.11 08:19): дуга кольца — доля заряда.
+      '<div class="vz-hud__bat"><svg class="vz-hud__bat-ring" viewBox="0 0 48 48" aria-hidden="true">' +
+      '<circle class="vz-hud__bat-track" cx="24" cy="24" r="21"/>' +
+      '<circle class="vz-hud__bat-arc" cx="24" cy="24" r="21" pathLength="100" transform="rotate(-90 24 24)"/>' +
+      '<g transform="translate(10.5 11) scale(0.54)"><path d="M5 19h15l8-6h5v22h-5l-8-6H5z" fill="currentColor"/>' +
+      '<path d="M38 15l5-3M39 24h6M38 33l5 3" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none"/></g>' +
+      '</svg><span class="vz-hud__bat-spare"></span></div>' +
       '<div class="vz-hud__hint"></div>';
     parent.append(this.el);
     const q = (sel: string): HTMLElement => this.el.querySelector(sel) as HTMLElement;
@@ -92,7 +98,7 @@ export class Hud {
     this.fps = q('.vz-hud__fps');
     this.goals = q('.vz-hud__goals');
     this.bat = q('.vz-hud__bat');
-    this.batFill = q('.vz-hud__bat-cell i');
+    this.batArc = q('.vz-hud__bat-arc');
     this.batSpare = q('.vz-hud__bat-spare');
     this.act = q('.vz-hud__act');
     this.actText = q('.vz-hud__act-text');
@@ -164,15 +170,20 @@ export class Hud {
     this.goals.classList.toggle('is-on', visible && lines.length > 0);
   }
 
-  /** Заряд фонаря (0..1) и число запасных батареек. hidden — не показывать вовсе. */
+  /**
+   * Заряд фонаря (0..1) и число запасных батареек. hidden — не показывать вовсе. Заряд — дуга кольца вокруг
+   * значка фонаря (по процентам: кольцо убывает плавно); на последней четверти (там же, где свет тускнеет
+   * и отказы учащаются) — красная и мигает.
+   */
   setBattery(charge: number, spares: number, hidden = false): void {
-    const level = Math.max(0, Math.min(5, Math.ceil(charge * 5)));
-    const key = `${hidden ? 'h' : ''}${level}:${spares}`;
+    const pct = Math.max(0, Math.min(100, Math.round(charge * 100)));
+    const key = `${hidden ? 'h' : ''}${pct}:${spares}`;
     if (key === this.lastBat) return;
     this.lastBat = key;
     this.bat.classList.toggle('is-on', !hidden);
-    this.bat.classList.toggle('is-low', level <= 1);
-    this.batFill.style.width = `${level * 20}%`;
+    this.bat.classList.toggle('is-low', pct <= 25);
+    this.bat.dataset.charge = String(pct);
+    this.batArc.style.strokeDasharray = `${pct} 100`;
     this.batSpare.textContent = spares > 0 ? `+${spares}` : '';
   }
 

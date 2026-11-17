@@ -27,6 +27,7 @@ export class TouchControls implements InputSource {
   /** Кольцо под пальцем, который идёт удержанием. */
   private readonly holdMark: HTMLElement;
   private readonly lightBtn: HTMLButtonElement;
+  private lastCharge = -1;
   private readonly pauseBtn: HTMLButtonElement;
   private readonly gestures = new TouchGestures();
   private readonly lightPointers = new Map<number, LightPointer>();
@@ -90,6 +91,18 @@ export class TouchControls implements InputSource {
 
   setLit(on: boolean): void {
     this.lightBtn.classList.toggle('is-lit', on);
+  }
+
+  /**
+   * Заряд фонаря (0..1) — обводкой вокруг кнопки фонаря (слова партнёра 17.11 08:19): дуга кольца — доля заряда,
+   * на последней четверти — красная. Пока фонарь надо трясти, кольцо показывает тряску (setShakePrompt).
+   */
+  setCharge(charge: number): void {
+    const pct = Math.max(0, Math.min(100, Math.round(charge * 100)));
+    if (pct === this.lastCharge) return;
+    this.lastCharge = pct;
+    this.lightBtn.style.setProperty('--vz-charge', String(pct));
+    this.lightBtn.classList.toggle('is-low', pct <= 25);
   }
 
   private down(e: PointerEvent): void {

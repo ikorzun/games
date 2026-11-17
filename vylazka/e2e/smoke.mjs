@@ -1748,6 +1748,32 @@ async function scenarioSession(browser, baseUrl) {
   check('на ПК нет кнопок действия и списка на экране', await page.evaluate(() => !document.querySelector('.vz-touch') && !document.querySelector('.vz-hud__act.is-on')));
   // Заряд батарейки фонаря на экране — там, где фонарь есть (слова партнёра 16.11 23:41: трясти до полного истощения батареи).
   check('заряд батарейки виден, пока у места есть фонарь', (await page.evaluate(() => !!document.querySelector('.vz-hud__bat.is-on'))) === (st.hasLight === true), JSON.stringify({ hasLight: st.hasLight }));
+  // Заряд — обводкой вокруг значка фонаря (слова партнёра 17.11): дуга кольца — доля заряда.
+  {
+    const ring = await page.evaluate(() => {
+      const el = document.querySelector('.vz-hud__bat');
+      const arc = el?.querySelector('.vz-hud__bat-arc');
+      return { charge: el?.dataset.charge ?? null, dash: arc ? getComputedStyle(arc).strokeDasharray : null, icon: !!el?.querySelector('.vz-hud__bat-ring path') };
+    });
+    const want = String(Math.round(st.light.charge * 100));
+    check('заряд фонаря — дуга кольца вокруг его значка', ring.icon && ring.charge === want && (ring.dash ?? '').startsWith(want), JSON.stringify({ ...ring, want }));
+    // Заряд убывает — дуга короче; на последней четверти кольцо красное (is-low). Потом заряд как был.
+    const at = (x) =>
+      vz(
+        page,
+        (v) => {
+          window.__vz.charge(v);
+          window.__vz.step(2);
+          const el = document.querySelector('.vz-hud__bat');
+          return { charge: el.dataset.charge, low: el.classList.contains('is-low') };
+        },
+        x,
+      );
+    const mid = await at(0.4);
+    const low = await at(0.15);
+    await at(st.light.charge);
+    check('заряд убывает — дуга кольца короче; на последней четверти кольцо красное', mid.charge === '40' && !mid.low && low.charge === '15' && low.low, JSON.stringify({ mid, low }));
+  }
   const ids1 = st.session.memories.map((m) => m.id);
 
   // Клавиши E, R, Tab ничего не делают — ни без воспоминания, ни рядом с ним.
@@ -1956,10 +1982,13 @@ async function scenarioThings(browser, baseUrl) {
   st = await vz(page, () => window.__vz.step(165));
   cur = now(st, w.t);
   check(`вещь «${w.t.kind}» под долгим взглядом растёт`, w.near && cur.state === 'changing' && cur.scale > 1.1, JSON.stringify(cur));
-  st = await vz(page, () => window.__vz.step(200));
+  st = await vz(page, () => window.__vz.step(230));
   cur = now(st, w.t);
-  check('и остаётся огромной', cur.state === 'giant' && cur.scale > 6.5 && st.where === 'main', JSON.stringify(cur));
+  // Выросшая вещь не остаётся: огромная, она рассыпается в пыль и растворяется частицами (слова партнёра 17.11).
+  check('выросла — и рассыпается в пыль: огромная, а частицы уже уходят', cur.state === 'changing' && cur.scale > 6.5 && cur.dissolve > 0.1 && cur.dissolve < 1 && st.where === 'main', JSON.stringify(cur));
   if (wantShots) await saveShot(page, 'session_giant.png');
+  st = await vz(page, () => window.__vz.step(150));
+  check('и растворяется совсем', now(st, w.t).state === 'gone' && now(st, w.t).dissolve === 1 && st.where === 'main', JSON.stringify(now(st, w.t)));
 
   // Вещь с судьбой jump вырастает и утягивает в карманное пространство.
   w = await watch('jump');
@@ -1977,12 +2006,18 @@ async function scenarioThings(browser, baseUrl) {
   st = await stepUntil(page, (s) => s.where === 'pocket', 20, 20);
   // Срок пространства — 46–60 с, выбирается случайно при входе; когда он вышел, место рассыпается и
   // возвращает в убежище (1,6 + 1,2 с). Срок читается из состояния: проверка не зависит от того, какой
-  // он выпал. Ожидание идёт шагами по 5 с игрового времени — возврат замечается с опозданием до 5 с.
+  // он выпал. Ожидание идёт шагами по 1,25 с игрового времени: шагами по 5 с возврат замечался поздно, а
+  // за эти секунды убежище могло законно унести снова (тонкая комната, темнота) — и проверка видела карман.
   const tIn = st.time - st.pocketInfo.age;
   const stay = st.pocketInfo.stay;
-  st = await stepUntil(page, (s) => s.where === 'main' && s.jump === null, 300, 16);
+  const seen = [];
+  for (let i = 0; i < 64 && !(st.where === 'main' && st.jump === null); i++) {
+    st = await vz(page, () => window.__vz.step(75));
+    const mark = `${st.time.toFixed(1)}:${st.where}${st.jump ? `/${st.jump.cause}` : ''}`;
+    if (seen.at(-1)?.slice(mark.indexOf(':')) !== mark.slice(mark.indexOf(':'))) seen.push(mark);
+  }
   const waited = st.time - tIn;
-  check('можно просто подождать: карман отпускает, как только выходит его срок (46–60 с)', st.where === 'main' && stay >= 46 && stay <= 60 && waited >= stay + 2.7 && waited < stay + 2.8 + 5.1, `срок ${stay.toFixed(1)} с, прошло ${waited.toFixed(1)} с, ${st.where}`);
+  check('можно просто подождать: карман отпускает, как только выходит его срок (46–60 с)', st.where === 'main' && stay >= 46 && stay <= 60 && waited >= stay + 2.7 && waited < stay + 2.8 + 1.4, `срок ${stay.toFixed(1)} с, прошло ${waited.toFixed(1)} с, ${st.where}; ${seen.join(' ')}`);
 
   // Скачки в каждое пространство: картинка есть и не чёрная.
   for (const [to, style] of [['void', 'whiteout'], ['meadow', 'dissolve'], ['dollhouse', 'blackout']]) {
@@ -2229,6 +2264,21 @@ async function scenarioTouch(browser, baseUrl) {
     check(`${name}: касание запускает игру`, st.paused === false);
     await vz(page, () => window.__vz.freeze(true));
     check(`${name}: кнопки фонаря и паузы видны и достаточно велики`, await page.evaluate(() => [...document.querySelectorAll('.vz-touch__btn')].filter((b) => !b.hidden).every((b) => b.getBoundingClientRect().width >= 44 && b.getBoundingClientRect().height >= 44)));
+    // Заряд фонаря на телефоне — обводкой вокруг кнопки фонаря; отдельного значка заряда нет.
+    {
+      const c = await page.evaluate(() => ({ ring: document.querySelector('.vz-touch__btn--light')?.style.getPropertyValue('--vz-charge') ?? '', hud: getComputedStyle(document.querySelector('.vz-hud__bat')).display }));
+      const want = String(Math.round(st.light.charge * 100));
+      const half = await vz(page, () => {
+        const was = window.__vz.charge();
+        window.__vz.charge(0.4);
+        window.__vz.step(2);
+        const v = document.querySelector('.vz-touch__btn--light').style.getPropertyValue('--vz-charge');
+        window.__vz.charge(was);
+        window.__vz.step(2);
+        return v;
+      });
+      check(`${name}: заряд фонаря — обводкой вокруг кнопки фонаря, отдельного значка нет`, c.ring === want && half === '40' && c.hud === 'none', JSON.stringify({ ...c, want, half }));
+    }
 
     // Стик слева: палец вверх — вперёд.
     const sx = width * 0.2;
@@ -2871,8 +2921,9 @@ try {
   if (wants('flats')) await run('flats', scenarioFlats);
   if (wants('illusions')) await run('illusions', scenarioIllusions);
   if (wants('session')) await run('session', scenarioSession);
-  // Только карманные пространства (быстрый прогон; в полный session они уже входят).
+  // Только карманные пространства или только вещи сна (быстрый прогон; в полный session они уже входят).
   if (only?.includes('pockets')) await run('pockets', scenarioPockets);
+  if (only?.includes('things')) await run('things', scenarioThings);
   if (wants('fear')) await run('fear', scenarioFear);
   if (wants('audio')) await run('audio', scenarioAudio);
   if (wants('frame')) await run('frame', scenarioFrame);

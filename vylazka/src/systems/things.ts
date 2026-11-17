@@ -17,8 +17,11 @@ export interface Thing {
   /** Радиус для проверки взгляда, м. */
   radius: number;
   fate: Fate;
-  /** idle — стоит; changing — меняется; giant — выросла и осталась; gone — её больше нет; coming — собирается заново. */
-  state: 'idle' | 'changing' | 'giant' | 'gone' | 'coming';
+  /**
+   * idle — стоит; changing — меняется (выросшая и рассыпается в пыль — тоже changing); gone — её больше нет;
+   * coming — собирается заново.
+   */
+  state: 'idle' | 'changing' | 'gone' | 'coming';
   /** Вещь — цель воспоминания: сама под взглядом не меняется, её судьбу решает сессия. */
   memory: boolean;
   /** Вещь-экспонат (вспомненное в белом нигде): под взглядом не меняется, игра только знает, что на неё смотрят. */
@@ -73,12 +76,19 @@ export interface ThingsConfig {
   growTime: number;
   /** Во сколько раз вырастает вещь. */
   growScale: number;
+  /**
+   * Выросшая вещь рассыпается в пыль и растворяется частицами за столько секунд (слова партнёра 17.11 08:19:
+   * «превращать ее после увеличения в пыль и пусть она полностью растворяется через частицы»).
+   */
+  giantDustTime: number;
+  /** Сколько выросшая вещь стоит огромной, прежде чем рассыпаться, с: рост должен успеть прочитаться. */
+  giantHold: number;
   /** За сколько растворяется вещь, которой коснулись, и за сколько она собирается заново, с. */
   touchTime: number;
   comeTime: number;
 }
 
-export const DEFAULT_THINGS: ThingsConfig = { range: 7, gazeTime: 2.4, shrinkTime: 1.1, dustTime: 1.5, growTime: 2.6, growScale: 7, touchTime: 0.9, comeTime: 0.9 };
+export const DEFAULT_THINGS: ThingsConfig = { range: 7, gazeTime: 2.4, shrinkTime: 1.1, dustTime: 1.5, growTime: 2.6, growScale: 7, giantDustTime: 2.4, giantHold: 0.6, touchTime: 0.9, comeTime: 0.9 };
 
 const ease = (t: number): number => t * t * (3 - 2 * t);
 
@@ -193,7 +203,6 @@ export class Things {
         }
         continue;
       }
-      if (t.state === 'giant') continue;
       // Превращение.
       t.t += dt;
       t.gaze = Math.max(0, t.gaze - dt);
@@ -216,24 +225,28 @@ export class Things {
             ev.push({ type: 'engulf', thing: t });
             this.settle(t, 'gone', ev);
           }
-        } else if (k >= 1) this.settle(t, 'giant', ev);
+        } else if (k >= 1) {
+          // Выросла — миг стоит огромной и рассыпается: растворяется частицами и пропадает совсем.
+          t.dissolve = Math.min(1, Math.max(0, t.t - c.growTime - c.giantHold) / c.giantDustTime);
+          if (t.dissolve >= 1) this.settle(t, 'gone', ev);
+        }
       }
     }
     return ev;
   }
 
   /**
-   * Насколько вещь — облако точек, 0..1. Вещь, которая растёт под взглядом и остаётся великаном (fate
-   * 'grow'), по мере роста рассыпается на точки: сквозь неё проходят, и это должно быть видно (слова
-   * партнёра). Вещь, что растёт навстречу и накрывает ('jump'), остаётся плотной — она угроза.
+   * Насколько вещь — облако точек, 0..1. Вещь, которая растёт под взглядом (fate 'grow'), по мере роста
+   * рассыпается на точки: сквозь неё проходят, и это должно быть видно (слова партнёра); выросшая, она
+   * растворяется частицами. Вещь, что растёт навстречу и накрывает ('jump'), остаётся плотной — она угроза.
    */
   static dots(t: Pick<Thing, 'fate' | 'state' | 'scale'>, cfg: ThingsConfig = DEFAULT_THINGS): number {
-    if (t.fate !== 'grow' || (t.state !== 'changing' && t.state !== 'giant')) return 0;
+    if (t.fate !== 'grow' || t.state !== 'changing') return 0;
     const k = Math.max(0, Math.min(1, (t.scale - 1) / Math.max(1e-6, (cfg.growScale - 1) * 0.45)));
     return k * k * (3 - 2 * k);
   }
 
-  private settle(t: Thing, state: 'gone' | 'giant' | 'idle', ev: ThingEvent[]): void {
+  private settle(t: Thing, state: 'gone' | 'idle', ev: ThingEvent[]): void {
     t.state = state;
     ev.push({ type: 'settled', thing: t });
   }

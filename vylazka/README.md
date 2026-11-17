@@ -266,7 +266,7 @@ src/
 
 Добавились (интерфейс `VzDebugApi` в `src/debug/debug.ts`): `look(yaw, pitch)`, `toggleLight()`,
 `start()`, `pause(on)`, `render()`, `things()` (вещи сна и их состояние), `gotoThing(id)`, `sees(id)`
-(почему вещь видна или нет), `memory()` (искомое воспоминание), `reveal()` (поторопить следующее), `memLight(id | null)` (свет памяти у любой вещи — `docs/vylazka/design.md` §21), `spawnThing(kind, fate, distance?, facing?)` (поставить вещь перед камерой; `facing` — лицом к игроку),
+(почему вещь видна или нет), `memory()` (искомое воспоминание), `reveal()` (поторопить следующее), `memLight(id | null)` (свет памяти у любой вещи — `docs/vylazka/design.md` §21), `charge(x?)` (заряд батарейки фонаря 0..1: задать и прочитать — кольцо заряда вокруг значка фонаря), `spawnThing(kind, fate, distance?, facing?)` (поставить вещь перед камерой; `facing` — лицом к игроку),
 `gotoMemory()`, `gotoPocket('exit' | 'focus', distance?)` (в карманном пространстве встать перед красным проёмом выхода или перед макетом в домике и посмотреть на него), `jump(to, style)` (начать скачок), `gotoFx(fx)` (встать в помещение с особенностью
 `strobe`, `dark`, `wire`, `thin`), `finish()` (считать всё вспомненным), `calmFlash(on)` (мягкие
 вспышки), `probeColor()` (средний цвет кадра и доля красных точек), `missingKeys()`, `showcase()`,

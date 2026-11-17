@@ -1022,6 +1022,7 @@ export class App {
     this.hud.setHint(hint);
     this.touch?.setShakePrompt(dead && !bright && !light.exhausted, light.reviveProgress);
     this.touch?.setLit(light.state === 'on');
+    this.touch?.setCharge(light.charge);
     // Где фонаря нет (офис), нет и его кнопки.
     this.touch?.setLightHidden(!g.hasLight);
     // Заряд батарейки фонаря — там, где фонарь есть: трясти его можно, пока батарейка не села совсем.

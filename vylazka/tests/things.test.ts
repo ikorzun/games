@@ -109,19 +109,31 @@ describe('вещи: судьбы', () => {
     expect(t.dissolve).toBe(1);
   });
 
-  it('grow: вырастает в growScale раз за growTime и остаётся гигантом (giant)', () => {
+  it('grow: вырастает в growScale раз за growTime, потом рассыпается в пыль и растворяется частицами совсем', () => {
     const { th, t } = make('grow');
     run(th, DEFAULT_THINGS.gazeTime + 0.05, onThing(t));
     run(th, DEFAULT_THINGS.growTime / 2, away());
     expect(t.scale).toBeGreaterThan(2);
     expect(t.scale).toBeLessThan(DEFAULT_THINGS.growScale - 1);
-    const ev = run(th, DEFAULT_THINGS.growTime, away());
-    expect(kinds(ev)).toEqual(['settled']);
-    expect(t.state).toBe('giant');
+    expect(t.dissolve).toBe(0);
+    // Выросла до конца — миг стоит огромной, целая: рост должен успеть прочитаться.
+    run(th, DEFAULT_THINGS.growTime / 2 + DEFAULT_THINGS.giantHold * 0.8, away());
+    expect(t.state).toBe('changing');
     expect(t.scale).toBeCloseTo(DEFAULT_THINGS.growScale, 5);
-    // Гигант больше не меняется и не шлёт событий.
+    expect(t.dissolve).toBe(0);
+    // И рассыпается: огромная, а растворение идёт (слова партнёра 17.11 08:19).
+    expect(kinds(run(th, DEFAULT_THINGS.giantHold * 0.2 + DEFAULT_THINGS.giantDustTime / 2, away()))).toEqual([]);
+    expect(t.state).toBe('changing');
+    expect(t.scale).toBeCloseTo(DEFAULT_THINGS.growScale, 5);
+    expect(t.dissolve).toBeGreaterThan(0.3);
+    expect(t.dissolve).toBeLessThan(0.7);
+    // Растворилась совсем: одно событие settled, вещи больше нет, и дальше она ничего не шлёт.
+    const ev = run(th, DEFAULT_THINGS.giantDustTime, away());
+    expect(kinds(ev)).toEqual(['settled']);
+    expect(t.state).toBe('gone');
+    expect(t.dissolve).toBe(1);
     expect(kinds(run(th, 5, onThing(t)))).toEqual([]);
-    expect(t.state).toBe('giant');
+    expect(t.state).toBe('gone');
   });
 
   it('выросшая вещь — облако точек (её проходят насквозь); пока стоит — нет; растущая навстречу — плотная', () => {
@@ -135,7 +147,8 @@ describe('вещи: судьбы', () => {
       expect(d).toBeGreaterThanOrEqual(prev);
       prev = d;
     }
-    expect(t.state).toBe('giant');
+    // Выросла: облако точек целиком — и уже рассыпается (растворение идёт по тем же точкам).
+    expect(t.state).toBe('changing');
     expect(Things.dots(t)).toBe(1);
     // Растущая навстречу (jump) накрывает — она остаётся плотной.
     const j = make('jump');
@@ -297,12 +310,13 @@ describe('вещи: прикосновение — всё иллюзорно', (
     expect(gone.th.touch(gone.t)).toBeNull();
     expect(gone.t.touched).toBe(false);
 
-    const giant = make('grow');
-    run(giant.th, DEFAULT_THINGS.gazeTime + 0.05, onThing(giant.t));
-    run(giant.th, DEFAULT_THINGS.growTime + 0.2, away());
-    expect(giant.t.state).toBe('giant');
-    expect(giant.th.touch(giant.t)).toBeNull();
-    expect(giant.t.touched).toBe(false);
+    // Выросшая и рассыпающаяся — тоже: касание её не перезапускает.
+    const grown = make('grow');
+    run(grown.th, DEFAULT_THINGS.gazeTime + 0.05, onThing(grown.t));
+    run(grown.th, DEFAULT_THINGS.growTime + 0.2, away());
+    expect(grown.t.state).toBe('changing');
+    expect(grown.th.touch(grown.t)).toBeNull();
+    expect(grown.t.touched).toBe(false);
 
     // Дважды коснулись — растворение не перезапускается.
     const twice = make('dust');

@@ -80,6 +80,12 @@ const STRAND_MAX = 440;
  */
 const SOW_FINE_MAX = 1.5;
 
+/**
+ * Во сколько раз гуще сеется пыль выросшей вещи (не больше): площадь у неё в scale² раз больше, а при
+ * scale 7 это ×49 — столько точек телефон не вытянет; ×6 уже читается как плотное облако.
+ */
+const GIANT_GRAINS = 6;
+
 /** Всё, что нужно для одного кадра. */
 export interface FrameView {
   camPos: Vec3;
@@ -1912,7 +1918,9 @@ export class GameRenderer {
     if (Math.abs(v.dissolve - t.dis) > 1e-4) {
       this.grainsFor(`t${id}`, t.dis, v.dissolve, () => {
         t.mesh.updateMatrix();
-        const grains = sowGrains(t.data, null, t.seed * 31 + 7, this.grainDensity);
+        // Посев идёт по сетке без масштаба: у выросшей вещи площадь в scale² раз больше, и пыли ей нужно
+        // больше, иначе огромная вещь рассыпается редкими точками. Предел — чтобы телефон не захлебнулся.
+        const grains = sowGrains(t.data, null, t.seed * 31 + 7, this.grainDensity * Math.min(v.scale * v.scale, GIANT_GRAINS));
         // Кружево осыпается своим цветом — цветом нитей.
         if (t.look === 'lace') threadDust(grains);
         return { grains, matrix: t.mesh.matrix };

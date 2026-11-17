@@ -22,7 +22,17 @@ export interface RigParams {
   hand: Vec3;
   /** Шагов на метр пути. */
   stepsPerMeter: number;
+  /**
+   * Сила шаговой качки: вертикальный шаг, боковой ход корпуса с поворотом и креном, качание руки с фонарём
+   * (1 — прежняя). Дыхание, дрожь в панике и болтанка при тряске фонаря — не ходьба, их это не касается.
+   */
+  walkMotion: number;
 }
+
+/**
+ * Шаговая качка на 30 % слабее прежней (слова партнёра 17.11 08:19: «Уменьшит укачивание при ходьбе на 30%»).
+ */
+export const WALK_MOTION = 0.7;
 
 export const DEFAULT_RIG: RigParams = {
   chestHeight: 1.42,
@@ -31,6 +41,7 @@ export const DEFAULT_RIG: RigParams = {
   maxLeadPitch: 0.27,
   hand: [0.27, -0.42, 0.18],
   stepsPerMeter: 0.72,
+  walkMotion: WALK_MOTION,
 };
 
 export interface RigInput {
@@ -120,8 +131,9 @@ export class CameraRig {
     const footstep = Math.floor(this.stepPhase) !== before && moving > 0.2;
     const ph = this.stepPhase * Math.PI * 2;
     const runK = clamp01((input.speed - 2.4) / 2);
-    const bobY = -Math.abs(Math.sin(ph * 0.5)) * (0.028 + 0.03 * runK) * this.bobAmp;
-    const sway = Math.sin(ph * 0.5) * (0.022 + 0.02 * runK) * this.bobAmp;
+    const walk = this.bobAmp * p.walkMotion;
+    const bobY = -Math.abs(Math.sin(ph * 0.5)) * (0.028 + 0.03 * runK) * walk;
+    const sway = Math.sin(ph * 0.5) * (0.022 + 0.02 * runK) * walk;
 
     // Дыхание и дрожь: спокойные в покое, частые и крупные в панике.
     const breathRate = 1.5 + 3.2 * input.panic;
@@ -144,7 +156,7 @@ export class CameraRig {
     const fwd = dirFromAngles(input.aimYaw, 0);
     const aimRightX = Math.cos(input.aimYaw);
     const aimRightZ = -Math.sin(input.aimYaw);
-    const handBob = Math.sin(ph) * 0.012 * this.bobAmp + wobble(t * 25, 8.8) * 0.05 * shakeK;
+    const handBob = Math.sin(ph) * 0.012 * walk + wobble(t * 25, 8.8) * 0.05 * shakeK;
     const lightPos: Vec3 = [
       camPos[0] + aimRightX * p.hand[0] + fwd[0] * p.hand[2],
       camPos[1] + p.hand[1] + handBob,

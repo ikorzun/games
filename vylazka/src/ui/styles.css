@@ -342,8 +342,29 @@ body {
 .vz-touch__btn--light {
   right: max(26px, calc(env(safe-area-inset-right) + 14px));
   bottom: max(34px, calc(env(safe-area-inset-bottom) + 20px));
-  width: 86px;
-  height: 86px;
+  /* Обводка кнопки — заряд фонаря (слова партнёра 17.11): тонкое кольцо по краю, его дуга — доля заряда.
+     Рамки нет, размер тот же, что был с рамкой. */
+  width: 90px;
+  height: 90px;
+  border: 0;
+}
+.vz-touch__btn--light::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(rgba(240, 238, 228, 0.82) calc(var(--vz-charge, 100) * 1%), rgba(255, 255, 255, 0.18) 0);
+  /* Маска оставляет только кольцо шириной 4 px: середина кнопки остаётся прежней. */
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+}
+.vz-touch__btn--light.is-low::before {
+  background: conic-gradient(#e0362c calc(var(--vz-charge, 100) * 1%), rgba(255, 255, 255, 0.18) 0);
+}
+/* Пока фонарь надо трясти, кнопка показывает тряску (ниже), а не заряд. */
+.vz-touch__btn--light.is-dead::before {
+  display: none;
 }
 .vz-touch__btn svg {
   position: absolute;
@@ -507,40 +528,34 @@ body {
   display: flex;
 }
 .vz-root.is-touch .vz-hud__bat {
-  /* У тача низ слева — зона стика: заряд переезжает под цели. */
-  top: calc(max(12px, env(safe-area-inset-top)) + 2.2em);
-  bottom: auto;
-  left: auto;
-  right: max(14px, env(safe-area-inset-right));
+  /* На таче заряд — обводка самой кнопки фонаря: отдельный значок не нужен. */
+  display: none;
 }
-.vz-hud__bat-cell {
-  position: relative;
-  width: 2.6em;
-  height: 1.05em;
-  border: 1px solid rgba(240, 238, 228, 0.8);
-  border-radius: 2px;
-  box-sizing: border-box;
-  padding: 2px;
+/* Значок фонаря в кольце: дуга кольца — заряд (слова партнёра 17.11). */
+.vz-hud__bat-ring {
+  width: 2.9em;
+  height: 2.9em;
+  color: rgba(240, 238, 228, 0.85);
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
 }
-.vz-hud__bat-cell::after {
-  content: '';
-  position: absolute;
-  right: -4px;
-  top: 25%;
-  width: 3px;
-  height: 50%;
-  background: rgba(240, 238, 228, 0.8);
-  border-radius: 0 1px 1px 0;
+.vz-hud__bat-track,
+.vz-hud__bat-arc {
+  fill: none;
+  stroke-width: 3;
 }
-.vz-hud__bat-cell i {
-  display: block;
-  height: 100%;
-  background: rgba(240, 238, 228, 0.85);
+.vz-hud__bat-track {
+  stroke: rgba(240, 238, 228, 0.18);
 }
-.vz-hud__bat.is-low .vz-hud__bat-cell i {
-  background: #e0362c;
+.vz-hud__bat-arc {
+  stroke: rgba(240, 238, 228, 0.85);
+  stroke-linecap: round;
+  stroke-dasharray: 100 100;
+  transition: stroke-dasharray 0.4s linear;
 }
-.vz-hud__bat.is-low .vz-hud__bat-cell {
+.vz-hud__bat.is-low .vz-hud__bat-arc {
+  stroke: #e0362c;
+}
+.vz-hud__bat.is-low .vz-hud__bat-ring {
   animation: vz-blink 1s steps(1) infinite;
 }
 .vz-hud__mark {

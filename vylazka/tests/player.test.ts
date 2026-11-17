@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createBody, DEFAULT_CONTROLLER, stepPlayer } from '../src/player/controller';
 import type { PlayerBody } from '../src/player/controller';
-import { CameraRig, dirFromAngles } from '../src/player/rig';
+import { CameraRig, DEFAULT_RIG, dirFromAngles, WALK_MOTION } from '../src/player/rig';
 import { MOUSE_SCALE, ShakeMeter, TOUCH_SCALE } from '../src/player/shake';
 import { ColliderSet } from '../src/world/colliders';
 import { buildTestLevel } from '../src/world/test_level';
@@ -258,6 +258,36 @@ describe('нагрудная камера', () => {
     expect(dirFromAngles(0, 0)).toEqual([-0, 0, -1]);
     expect(dirFromAngles(Math.PI / 2, 0)[0]).toBeCloseTo(-1);
     expect(dirFromAngles(0, Math.PI / 2)[1]).toBeCloseTo(1);
+  });
+
+  it('шаговая качка на 30 % слабее прежней: вертикальный шаг, боковой ход и крен (слова партнёра 17.11)', () => {
+    expect(WALK_MOTION).toBe(0.7);
+    // Размах за пять секунд ходьбы с прежней силой качки (1) и с нынешней. Из идущей камеры вычитается такая же
+    // стоящая: дыхание и дрожь у них одинаковые, остаётся только то, что даёт шаг.
+    const swing = (walkMotion: number): { y: number; side: number; roll: number } => {
+      const rig = new CameraRig({ ...DEFAULT_RIG, walkMotion });
+      const still = new CameraRig({ ...DEFAULT_RIG, walkMotion });
+      rig.snap({ ...base, aimYaw: 0 });
+      still.snap({ ...base, aimYaw: 0 });
+      const ys: number[] = [];
+      const xs: number[] = [];
+      const rolls: number[] = [];
+      for (let i = 0; i < 300; i++) {
+        const out = rig.update({ ...base, aimYaw: 0, speed: 2.3 }, DT);
+        const rest = still.update({ ...base, aimYaw: 0 }, DT);
+        if (i < 60) continue;
+        ys.push(out.camPos[1] - rest.camPos[1]);
+        xs.push(out.camPos[0] - rest.camPos[0]);
+        rolls.push(out.camRoll - rest.camRoll);
+      }
+      const span = (v: number[]): number => Math.max(...v) - Math.min(...v);
+      return { y: span(ys), side: span(xs), roll: span(rolls) };
+    };
+    const was = swing(1);
+    const now = swing(DEFAULT_RIG.walkMotion);
+    expect(now.y / was.y).toBeCloseTo(0.7, 1);
+    expect(now.side / was.side).toBeCloseTo(0.7, 1);
+    expect(now.roll / was.roll).toBeCloseTo(0.7, 1);
   });
 
   it('шаги отмечаются при ходьбе и не отмечаются на месте', () => {

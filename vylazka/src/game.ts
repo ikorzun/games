@@ -2703,7 +2703,8 @@ export class Game {
       const d = Math.hypot(t.pos[0] - rig.camPos[0], t.pos[1] - rig.camPos[1], t.pos[2] - rig.camPos[2]);
       // Красная сетка — знак системы: она на вещи, которую «измеряет» взгляд. Тронутая вещь уходит и
       // возвращается без неё — одними точками («память — пыль»).
-      let w = t.state === 'changing' && !t.touched ? 0.8 : t.state === 'idle' ? t.gaze * (0.45 + 0.35 * Math.sin(this.time * 23)) : 0;
+      // Сетка гаснет вместе с растворением: у вещи, что рассыпается, клетка не висит в воздухе.
+      let w = t.state === 'changing' && !t.touched ? 0.8 * (1 - t.dissolve) : t.state === 'idle' ? t.gaze * (0.45 + 0.35 * Math.sin(this.time * 23)) : 0;
       let xray = false;
       if (t.memory) {
         memNear = Math.max(memNear, 1 - d / 8);

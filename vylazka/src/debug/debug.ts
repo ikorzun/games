@@ -36,6 +36,8 @@ export interface VzDebugApi {
   look(yaw: number, pitch: number): void;
   /** Заглушить фонарь. */
   fail(): void;
+  /** Заряд батарейки фонаря 0..1: задать (для проверок и кадров) и/или прочитать. */
+  charge(value?: number): number;
   /** Трясти фонарь с уровнем level в течение seconds игрового времени. */
   shake(level: number, seconds: number): Record<string, unknown>;
   toggleLight(): void;
@@ -230,6 +232,11 @@ export function installDebug(app: App): void {
     teleport: (x, y, z, yaw, pitch) => game().teleport(x, y, z, yaw, pitch),
     look: (yaw, pitch) => game().look(yaw, pitch),
     fail: () => game().light.forceFail(),
+    charge: (value) => {
+      const l = game().light;
+      if (value !== undefined) l.charge = Math.max(0, Math.min(1, value));
+      return l.charge;
+    },
     shake: (level, seconds) => {
       const steps = Math.round(seconds / STEP);
       for (let i = 0; i < steps; i++) {

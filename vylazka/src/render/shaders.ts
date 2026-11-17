@@ -1517,7 +1517,9 @@ void main() {
   vec3 wn = normalize(mat3(modelMatrix) * aNrm);
   // Отходит от поверхности и чуть всплывает — с торможением, как в воде, и никуда не падает.
   float lift = 1.0 - (1.0 - phi) * (1.0 - phi);
-  vec3 p = wp.xyz + wn * ((0.04 + 0.12 * aRnd.w) * lift) + vec3(0.0, 0.05 * aRnd.z * lift, 0.0);
+  // Пыль большой вещи разлетается шире: масштаб выросшей вещи сидит в её матрице (у стен и мелочи он 1).
+  float spread = sqrt(max(1.0, length(modelMatrix[0].xyz)));
+  vec3 p = wp.xyz + wn * ((0.04 + 0.12 * aRnd.w) * lift * spread) + vec3(0.0, 0.05 * aRnd.z * lift * spread, 0.0);
   float t = uTime * (1.3 + aRnd.y) + aRnd.z * 6.2832;
   p += vec3(sin(t), 0.0, cos(t * 0.8)) * (0.015 * lift);
 
