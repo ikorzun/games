@@ -3014,15 +3014,17 @@ describe('птицы, Осыпь по полярности, эффекты ка�
   });
 });
 
-describe('телефон: фонарь заряжают пальцем, гасят тапом (слова партнёра 17.11 08:42 и 09:23)', () => {
-  it('тап — погас; тап по погашенному — ничего; держит палец — заряжается, на полном вспышка, потом обычный свет', () => {
+describe('телефон: тап — выключатель, палец на кнопке заряжает (слова партнёра 17.11 08:42, 09:23 и 10:04)', () => {
+  it('тап — погас, второй тап — зажёгся; держит палец — заряжается, на полном вспышка, потом обычный свет', () => {
     const h = new Harness(levelOf(SEED), { light: { meanFailInterval: 1e9 } });
     const g = h.game;
     h.run(0.5);
     expect(g.light.state).toBe('on');
-    expect(h.tick({ ...emptyInput(), lightOff: true }).lightToggled).toBe(true);
+    expect(h.tick({ ...emptyInput(), light: true }).lightToggled).toBe(true);
     expect(g.light.state).toBe('off');
-    h.tick({ ...emptyInput(), lightOff: true });
+    h.tick({ ...emptyInput(), light: true });
+    expect(g.light.state).toBe('on');
+    h.tick({ ...emptyInput(), light: true });
     expect(g.light.state).toBe('off');
     // Палец на кнопке: заряд растёт, свет — только на полном, со вспышкой в луче и в кадре.
     g.light.charge = 0.5;
@@ -3046,12 +3048,25 @@ describe('телефон: фонарь заряжают пальцем, гася
     expect(after.flash).toBe(0);
   });
 
+  it('заглохший фонарь тапом не оживить — только удержанием (тап — выключатель, а не тряска)', () => {
+    const h = new Harness(levelOf(SEED), { light: { meanFailInterval: 1e9 } });
+    const g = h.game;
+    h.run(0.5);
+    g.light.forceFail();
+    h.tick();
+    expect(g.light.state).toBe('dead');
+    for (let i = 0; i < 6; i++) h.tick({ ...emptyInput(), light: true });
+    expect(g.light.state).toBe('dead');
+    h.run(1.2, { ...emptyInput(), crank: true });
+    expect(g.light.state).toBe('on');
+  });
+
   it('без вспышек (настройка заставки): луч ярче обычного не больше чем на треть, кадр не выбеливается', () => {
     const h = new Harness(levelOf(SEED), { light: { meanFailInterval: 1e9 } });
     const g = h.game;
     g.calmFlash = true;
     h.run(0.5);
-    h.tick({ ...emptyInput(), lightOff: true });
+    h.tick({ ...emptyInput(), light: true });
     let top = 0;
     let white = 0;
     for (let i = 0; i < Math.round(2 / STEP); i++) {

@@ -4,8 +4,9 @@
  * каждое касание, решает player/touch_gestures.ts; здесь — экран: стик, отметка удержания, кнопки.
  * Кнопка фонаря (слова партнёра 17.11 08:42): палец держат на кнопке — фонарь заряжается, кольцо заряда вокруг кнопки
  * становится больше, чтобы его было видно из-под пальца; полный заряд — вспышка и обычный свет (systems/flashlight.ts).
- * Короткий тап только гасит (слова партнёра 09:23: «Один тап на фонарик гасит его, свайп не нужен, это не удобно»):
- * включает одна зарядка, поэтому тапы больше не путают, горит фонарь или нет.
+ * Короткий тап — выключатель (слова партнёра 10:04: «Тап на фонарик должен его и гасить и зажигать»; 09:23: «свайп
+ * не нужен»). Тап только щёлкает выключателем, не трясёт и не заряжает: от тапов-тряски «все сильно перемешивается»
+ * (08:42) — теперь оживляет заглохший только удержание.
  */
 import { t } from '../core/i18n';
 import { emptyInput } from '../player/input';
@@ -24,8 +25,8 @@ export interface LightPointer {
 }
 
 /**
- * Тап по кнопке фонаря — погасить: палец отпущен быстрее чем за ms миллисекунд и почти не сдвинулся (меньше slop
- * пикселей CSS). Считается по отпусканию: иначе каждое удержание начиналось бы с темноты.
+ * Тап по кнопке фонаря — включить или погасить: палец отпущен быстрее чем за ms миллисекунд и почти не сдвинулся
+ * (меньше slop пикселей CSS). Считается по отпусканию: иначе каждое удержание начиналось бы со щелчка.
  */
 export const TAP = { ms: 250, slop: 14 } as const;
 /**
@@ -63,7 +64,7 @@ export class TouchControls implements InputSource {
   private readonly pauseBtn: HTMLButtonElement;
   private readonly gestures = new TouchGestures();
   private readonly lightPointers = new Map<number, LightPointer>();
-  private off = false;
+  private tap = false;
   private pause = false;
 
   constructor(parent: HTMLElement) {
@@ -175,8 +176,8 @@ export class TouchControls implements InputSource {
       this.lightPointers.delete(e.pointerId);
       p.x = e.clientX;
       p.y = e.clientY;
-      // Тап гасит фонарь; удержание (зарядка) при отпускании ничего не делает.
-      if (lightTapped(p, performance.now())) this.off = true;
+      // Тап — выключатель; удержание (зарядка) при отпускании ничего не делает.
+      if (lightTapped(p, performance.now())) this.tap = true;
       return;
     }
     this.gestures.up(e.pointerId, performance.now());
@@ -192,9 +193,9 @@ export class TouchControls implements InputSource {
     f.lookPitch = g.lookPitch;
     const now = performance.now();
     for (const p of this.lightPointers.values()) if (lightHeld(p, now)) f.crank = true;
-    f.lightOff = this.off;
+    f.light = this.tap;
     f.pause = this.pause;
-    this.off = false;
+    this.tap = false;
     this.pause = false;
     // Палец на кнопке — кольцо заряда больше: его видно из-под пальца.
     this.lightBtn.classList.toggle('is-held', f.crank);
@@ -217,7 +218,7 @@ export class TouchControls implements InputSource {
   release(): void {
     this.gestures.release();
     this.lightPointers.clear();
-    this.off = false;
+    this.tap = false;
     this.lightBtn.classList.remove('is-held');
     this.stickBase.classList.remove('is-on', 'is-walk');
     this.holdMark.classList.remove('is-on');

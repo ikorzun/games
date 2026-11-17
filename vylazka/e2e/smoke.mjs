@@ -2338,8 +2338,8 @@ async function scenarioTouch(browser, baseUrl) {
     check(`${name}: повёл пальцем сразу — луч повернулся, а игрок стоит`, Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]) < 0.05, `сдвиг ${Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]).toFixed(2)} м`);
     st = await vz(page, () => window.__vz.tick(10));
 
-    // Кнопка фонаря (слова партнёра 17.11 08:42 и 09:23): короткий тап гасит; палец держат — фонарь заряжается, кольцо
-    // заряда больше, на полном — вспышка и обычный свет. Смахивания нет.
+    // Кнопка фонаря (слова партнёра 17.11 08:42, 09:23, 10:04): короткий тап — выключатель (гасит и зажигает); палец
+    // держат — фонарь заряжается, кольцо заряда больше, на полном — вспышка и обычный свет. Смахивания нет.
     const btn = await page.evaluate(() => {
       const r = document.querySelector('.vz-touch__btn--light').getBoundingClientRect();
       return [r.left + r.width / 2, r.top + r.height / 2];
@@ -2356,7 +2356,10 @@ async function scenarioTouch(browser, baseUrl) {
     await finger(page, 'pointerdown', 3, btn[0], btn[1]);
     await finger(page, 'pointerup', 3, btn[0], btn[1]);
     st = await vz(page, () => window.__vz.tick(2));
-    check(`${name}: тап по погашенному его не включает — включает только зарядка`, st.light.state === 'off', st.light.state);
+    check(`${name}: второй тап — фонарь снова горит`, st.light.state === 'on', st.light.state);
+    await finger(page, 'pointerdown', 3, btn[0], btn[1]);
+    await finger(page, 'pointerup', 3, btn[0], btn[1]);
+    st = await vz(page, () => window.__vz.tick(2));
     // Держать палец: заряд задан пониже, чтобы было видно, как он растёт.
     await vz(page, () => window.__vz.charge(0.55));
     await finger(page, 'pointerdown', 8, btn[0], btn[1]);

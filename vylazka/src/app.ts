@@ -910,7 +910,6 @@ export class App {
       lookPitch: a.lookPitch + b.lookPitch,
       light: a.light || b.light,
       crank: a.crank || b.crank,
-      lightOff: a.lightOff || b.lightOff,
       pause: a.pause || b.pause,
     };
   }
@@ -1274,7 +1273,6 @@ export class App {
     for (let i = 0; i < steps; i++) {
       this.handleEvents(this.game.step(STEP, input));
       input.light = false;
-      input.lightOff = false;
     }
     this.game.draw(alpha, dt, present);
     this.updateHud();

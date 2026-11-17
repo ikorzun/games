@@ -10,21 +10,19 @@ export interface InputFrame {
   /** Поворот луча за кадр, радианы: yaw — влево положительный, pitch — вверх положительный. */
   lookYaw: number;
   lookPitch: number;
-  /** Кнопка фонаря нажата в этом кадре (компьютер: включить или выключить). */
+  /** Выключатель фонаря нажат в этом кадре: компьютер — F, телефон — короткий тап по кнопке фонаря. */
   light: boolean;
   /**
    * Палец держат на кнопке фонаря (телефон; не нажатие, а состояние): пока держат, фонарь заряжается, полный —
    * вспышка и свет (слова партнёра 17.11 08:42).
    */
   crank: boolean;
-  /** Погасить фонарь в этом кадре (телефон: короткий тап по кнопке фонаря). Включить так нельзя — включает зарядка. */
-  lightOff: boolean;
   /** Запрошена пауза. */
   pause: boolean;
 }
 
 export function emptyInput(): InputFrame {
-  return { moveX: 0, moveZ: 0, run: false, lookYaw: 0, lookPitch: 0, light: false, crank: false, lightOff: false, pause: false };
+  return { moveX: 0, moveZ: 0, run: false, lookYaw: 0, lookPitch: 0, light: false, crank: false, pause: false };
 }
 
 export interface InputSource {

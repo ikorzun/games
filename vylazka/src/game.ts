@@ -2150,12 +2150,9 @@ export class Game {
     this.light.suspended = !this.hasLight;
     const wasOff = this.light.state === 'off';
     const toggled = input.light && this.hasLight;
-    // Щелчок фонаря волну эха не пускает (решение партнёра: эхо — только без фонаря и на ходу).
+    // Щелчок фонаря волну эха не пускает (решение партнёра: эхо — только без фонаря и на ходу). На телефоне выключатель —
+    // короткий тап по кнопке (слова партнёра 17.11 10:04), а палец на кнопке заряжает (08:42).
     if (toggled) this.light.toggle();
-    // Телефон: короткий тап по кнопке фонаря его гасит (слова партнёра 17.11 09:23), включает только зарядка
-    // удержанием (08:42: от тапов-переключателей «все сильно перемешивается и потом не понятно включен он или нет»).
-    const doused = input.lightOff && this.hasLight && this.light.state === 'on';
-    if (doused) this.light.toggle();
     this.light.crank(input.crank && this.hasLight);
     const level = this.shake.update(dt);
     const ev = this.light.update(dt, { panic: this.panic, wet: s?.inWater ? 1 : 0, swarm: this.swarmNear, shake: level, needed: this.ambientHere <= SELF_LIT });
@@ -2327,7 +2324,7 @@ export class Game {
     }
 
     this.stepGlow(dt);
-    return { lightFailed: ev.failed, lightRevived: ev.revived, lightToggled: toggled || doused, lightCharged: ev.charged, crank: this.light.cranking ? this.light.charge : -1, spark: ev.spark, strokes, fellOut: res.fellOut, session: out, fear, dream };
+    return { lightFailed: ev.failed, lightRevived: ev.revived, lightToggled: toggled, lightCharged: ev.charged, crank: this.light.cranking ? this.light.charge : -1, spark: ev.spark, strokes, fellOut: res.fellOut, session: out, fear, dream };
   }
 
   /** Рой, режиссёр и аномалии за шаг. */
