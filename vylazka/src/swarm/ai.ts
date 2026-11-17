@@ -133,6 +133,12 @@ export class SwarmAI {
     readonly cfg: SwarmConfig = DEFAULT_SWARM,
   ) {}
 
+  /**
+   * Сцена — кусок места (world/piece.ts): Осыпь ходит только там, что помнится, — не выходит к игроку из забытого и не
+   * появляется в нём. null — всё место.
+   */
+  allowed: ReadonlySet<number> | null = null;
+
   get active(): boolean {
     return this.mode !== 'dormant';
   }
@@ -238,7 +244,7 @@ export class SwarmAI {
     for (let h = 0; h < q.length; h++) {
       const cur = q[h]!;
       for (const n of this.nav[cur]!.links) {
-        if (seen[n]) continue;
+        if (seen[n] || (this.allowed && !this.allowed.has(n) && n !== to)) continue;
         seen[n] = 1;
         prev[n] = cur;
         if (n === to) {
@@ -254,7 +260,8 @@ export class SwarmAI {
 
   /** Узел на расстоянии от lo до hi переходов от игрока; из подходящих — случайный. */
   nodeAround(from: number, lo: number, hi: number): number {
-    const ok = nodesInRange(this.nav, from, lo, hi);
+    const all = nodesInRange(this.nav, from, lo, hi);
+    const ok = this.allowed ? all.filter((id) => this.allowed!.has(id)) : all;
     return ok.length > 0 ? ok[Math.floor(this.rng() * ok.length)]! : -1;
   }
 

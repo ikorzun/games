@@ -936,6 +936,7 @@ export class Game {
     const start = level?.layout && this.pieceWanted && this.world !== 'station' ? this.playerNodeAt(this.spawn.pos) : -1;
     if (level?.layout && start >= 0) this.piece = scenePiece(level.nav, level.layout, start, (this.dreamSeed ^ Math.imul(this.loads, 0x9e3779b1)) >>> 0);
     this.session?.setRegion(this.piece ? this.piece.nodes : null);
+    if (this.swarm) this.swarm.allowed = this.piece ? this.piece.nodes : null;
     this.renderer.setPiece(level?.layout && this.piece ? pieceMask(level.nav, level.layout, this.piece) : null);
   }
 

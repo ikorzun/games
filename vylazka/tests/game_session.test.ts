@@ -370,6 +370,16 @@ describe('игра целиком: цикл сессии', () => {
     expect(p.nodes.has(at)).toBe(true);
     // Кадр знает, что маска действует, пока игрок на месте.
     expect(h.r.frames.at(-1)!.piece).toBe(true);
+    // Осыпь ходит и выходит только там, что помнится: не появляется в забытом и не идёт к игроку через него.
+    const sw = g.swarm!;
+    expect(sw.allowed).toBe(p.nodes);
+    const home = g.playerNodeAtSpawn();
+    for (let i = 0; i < 20; i++) {
+      const n = sw.nodeAround(home, 2, 30);
+      if (n >= 0) expect(p.nodes.has(n)).toBe(true);
+    }
+    const far = [...p.nodes].find((id) => sw.route(home, id).length > 4)!;
+    expect(sw.route(home, far).every((id) => p.nodes.has(id))).toBe(true);
   });
 
   it('сцена — кусок места: шаг за край памяти обрывает сцену — уносит в следующую (другое место), вещь остаётся ждать в цепочке', () => {
