@@ -3239,10 +3239,10 @@ describe('кривая ощущений в игре (K-11): к концу сес
     const v0 = h.r.frames.at(-1)!;
     expect(v0.beamCone).toBeCloseTo(1, 2);
     expect(v0.drift ?? 0).toBe(0);
-    // Поздняя сессия: прошло десять минут, четыре вещи из пяти вспомнены.
-    const s = h.game.session!;
-    s.time = 600;
-    for (const m of s.memories.slice(0, 4)) m.state = 'done';
+    // Поздняя сессия: прошло десять минут, четыре вещи из пяти вспомнены (счёт сессии игрока — у игры).
+    const raw = h.game as unknown as { feelClock: number; feelDone: number };
+    raw.feelClock = 600;
+    raw.feelDone = 4;
     h.run(25);
     const v = h.r.frames.at(-1)!;
     expect(v.beamCone!).toBeLessThan(0.9);
@@ -3261,7 +3261,6 @@ describe('кривая ощущений в игре (K-11): к концу сес
   it('вспомнил вещь — выдох: на несколько секунд луч и взгляд шире обычного', () => {
     const h = new Harness(levelOf(SEED));
     const s = h.game.session!;
-    s.time = 600;
     const { id } = h.reveal();
     expect(h.standBefore(id)).toBe(true);
     let wide = 0;
@@ -3272,6 +3271,41 @@ describe('кривая ощущений в игре (K-11): к концу сес
       wide = Math.max(wide, h.r.frames.at(-1)!.beamCone ?? 1);
     }
     expect(wide).toBeGreaterThan(1.1);
+  });
+
+  it('новичку кривая мягче: на ступенях 0–1 сжатие вдвое слабее — ему и так трудно находить вещи (M-20)', () => {
+    const at = (stage: number): number => {
+      const h = new Harness(levelOf(SEED), { stage });
+      const raw = h.game as unknown as { feelClock: number; feelDone: number };
+      raw.feelClock = 600;
+      raw.feelDone = 5;
+      h.run(30);
+      return 1 - h.game.feelNow.gaze;
+    };
+    const full = at(STAGE_ALL);
+    expect(full).toBeGreaterThan(0.2);
+    // Ступень 1: холодного старта нет — луг не уносит игрока посреди замера (на ступени 0 он здесь бы и случился).
+    expect(at(1)).toBeCloseTo(full / 2, 2);
+  });
+
+  it('сон из сцен: кривая копится через все сцены сессии и сбрасывается только с новой сессией игрока (противоречие 196)', () => {
+    const h = new Harness(levelOf(SEED));
+    const g = h.game;
+    const raw = g as unknown as { feelClock: number; feelDone: number; loadingScene: boolean };
+    raw.feelClock = 200;
+    raw.feelDone = 2;
+    g.feel.level = 0.6;
+    // Следующая сцена — та же сессия игрока.
+    raw.loadingScene = true;
+    g.loadLevel(levelOf(SEED + 1), { seed: SEED + 1, known: new Set() });
+    raw.loadingScene = false;
+    expect(g.feel.level).toBe(0.6);
+    expect(raw.feelDone).toBe(2);
+    // Новая сессия игрока — с чистого листа.
+    g.loadLevel(levelOf(SEED + 2), { seed: SEED + 2, known: new Set() });
+    expect(g.feel.level).toBe(0);
+    expect(raw.feelClock).toBe(0);
+    expect(raw.feelDone).toBe(0);
   });
 });
 

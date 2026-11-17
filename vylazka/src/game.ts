@@ -573,6 +573,17 @@ export class Game {
   readonly feel = new SessionFeel();
   /** Что кривая ощущений делает с кадром в этот миг (для отладки и проверок). */
   feelNow: FeelView = FEEL_NEUTRAL;
+  /**
+   * Сессия игрока для кривой ощущений: секунды и вспомненные вещи через все сцены (в сне из сцен сессия — три сцены
+   * по одной вещи; Session у каждой своя). Сбрасываются только с новой сессией игрока.
+   */
+  private feelClock = 0;
+  private feelDone = 0;
+  /** Сколько вещей во всей сессии игрока и за сколько секунд её время доходит до конца; 0 — как у Session и по умолчанию. Ставит приложение. */
+  sessionThings = 0;
+  sessionSpan = 0;
+  /** Идёт загрузка следующей сцены сна из сцен — это та же сессия игрока. */
+  private loadingScene = false;
   private bloomThing: Thing | null = null;
   /** Телефон: луч чуть «липнет» к искомой вещи — пальцем удержать её в луче трудно. Ставит приложение. */
   stickyAim = false;
@@ -696,8 +707,13 @@ export class Game {
     this.shortStay = false;
     this.memBloom = 0;
     this.bloomThing = null;
-    // Каждая сессия начинается с мира, который почти не дышит; карман и возврат в то же место её не сбрасывают.
-    if (dream) this.feel.reset();
+    // Каждая сессия игрока начинается с мира, который почти не дышит; карман, возврат в то же место и следующая сцена
+    // сна из сцен её не сбрасывают.
+    if (dream && !this.loadingScene) {
+      this.feel.reset();
+      this.feelClock = 0;
+      this.feelDone = 0;
+    }
     const rank = level.layout?.rank ?? 1;
     this.session = dream ? new Session(level, dream.seed, dream.known, this.sessionCfg, dream.chainAt ?? 0) : null;
     // Новая сцена или сессия: прежняя очередь сцен не в счёт — следующую поставит приложение.
@@ -1962,7 +1978,9 @@ export class Game {
       if (next) {
         const scene = this.sceneSwitch;
         this.sceneSwitch = false;
+        this.loadingScene = scene;
         this.loadLevel(next.level, next.dream);
+        this.loadingScene = false;
         dream.push(scene ? { type: 'begin', scene: true } : { type: 'begin' });
       }
     } else if (to === 'limbo') {
@@ -2361,7 +2379,17 @@ export class Game {
     }
     for (let i = 0; i < out.length; i++) this.applySessionEvent(out[i]!, out, dream, node);
     // Кривая ощущений: идёт, пока игрок в своём месте и сессия не кончилась; в кармане и в лимбо отпускает.
-    if (s) this.feel.update(wdt, { time: s.time, done: s.doneCount, count: s.memories.length, active: this.where === 'main' && !s.over });
+    if (s) {
+      const going = this.where === 'main' && !s.over;
+      if (going) this.feelClock += wdt;
+      this.feel.update(wdt, {
+        time: this.feelClock,
+        done: this.feelDone,
+        count: this.sessionThings || s.memories.length,
+        active: going,
+        ...(this.sessionSpan ? { span: this.sessionSpan } : {}),
+      });
+    }
 
     const quiet = this.where !== 'main' || this.transition !== null;
     if (s && !s.over && !this.calm && !quiet) this.stepFear(wdt, input, level, fear, dream);
@@ -2611,6 +2639,7 @@ export class Game {
         // делает выдох — луч и взгляд на несколько секунд шире обычного.
         this.memBloom = 1;
         this.feel.exhale();
+        this.feelDone += 1;
         this.bloomThing = t;
         if (this.things.change(t, 'dust')) dream.push({ type: 'thing', thing: t, what: 'changing' });
       }
@@ -2896,12 +2925,15 @@ export class Game {
       }
     }
     // Кривая ощущений за сессию (systems/feel.ts): только в своём месте; в кармане и в лимбо кадр её не знает.
-    const fv = this.where === 'main' && this.session ? this.feel.view(this.wear) : FEEL_NEUTRAL;
+    // Новичку кривая мягче (ступени 0–1 — вдвое, 2–3 — на четверть): ему и так трудно находить вещи (слова партнёра 16.11
+    // 23:41, M-20 в реестре), а последнюю вещь сессии ищут, когда мир уже сжат.
+    const feelAmp = this.stage <= 1 ? 0.5 : this.stage <= 3 ? 0.75 : 1;
+    const fv = this.where === 'main' && this.session ? this.feel.view(this.wear, feelAmp) : FEEL_NEUTRAL;
     this.feelNow = fv;
     // Кинескоп заметнее на ходу, под взглядом на вещь, рядом с искомым и в момент скачка; к концу сессии строки дрожат.
     const speed = Math.hypot(b.vx, b.vz);
     const hold = this.session?.hold ?? 0;
-    const crt = clamp(0.1 + 0.2 * (speed / RUN_SPEED) + 0.5 * Math.max(focus?.gaze ?? 0, hold) + 0.3 * Math.max(0, memNear) + (tr ? 0.45 : 0) + 0.35 * fv.rattle, 0, 1);
+    const crt = clamp(0.1 + 0.2 * (speed / RUN_SPEED) + 0.5 * Math.max(focus?.gaze ?? 0, hold) + 0.3 * Math.max(0, memNear) + (tr ? 0.45 : 0) + 0.35 * fv.rattle * (this.calmFlash ? 0.4 : 1), 0, 1);
 
     // Глубина 0…1: от входа до нижнего яруса.
     const depth = clamp(-(rig.camPos[1] - 1.42) / 9, 0, 1);
@@ -2973,7 +3005,8 @@ export class Game {
       ...(fl || fv.gaze !== 1 ? { gazeCone: gazeConeOf(fl ? fl.gaze() : GAZE_CONE, fv.gaze) } : {}),
       beamCone: fv.beam,
       // Кадр плывёт: разлёт цветов медленно дышит (период около 7,5 с) — кадр, а не голова: камеру не качаем.
-      drift: fv.drift * (0.55 + 0.45 * Math.sin(this.time * 0.83)),
+      // С настройкой «меньше вспышек» цвета плывут и строки дрожат слабее.
+      drift: fv.drift * (this.calmFlash ? 0.4 : 1) * (0.55 + 0.45 * Math.sin(this.time * 0.83)),
       lens,
       scanRange: fl ? fl.scan() : (this.env.scan ?? [4, 15]),
       // Тени прямого света — в квадрате вокруг игрока, сдвинутом вперёд по взгляду: позади они не нужны.

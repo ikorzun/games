@@ -484,7 +484,12 @@ export class App {
       }
     } else {
       this.level = buildLevel(generateLayout(this.seed, this.rank, this.world), { wear });
-      if (this.scenes) this.game.sessionCfg = SCENE_SESSION;
+      if (this.scenes) {
+        this.game.sessionCfg = SCENE_SESSION;
+        // Кривая ощущений идёт через все сцены сессии: три вещи, около трёх минут.
+        this.game.sessionThings = SCENES;
+        this.game.sessionSpan = SCENES * 70;
+      }
       // Мягкий режим Осыпи: первая сессия игрока (ни одной законченной) и сон из сцен (слова партнёра 16.11 23:41);
       // ступень погружения — по числу законченных сессий (game.ts, STAGE_ALL).
       this.game.stage = this.stageFor();
