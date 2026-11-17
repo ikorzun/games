@@ -40,6 +40,8 @@ export interface FigureLive {
   t: number;
   /** После того как она ушла, свет уже гас: зажжётся — вернётся. */
   dark: boolean;
+  /** Сколько секунд подряд темно на её месте (мигание фонаря — не «свет погас»). */
+  darkT: number;
   /** Подъём над точкой, м: дымная медленно ходит вверх-вниз. */
   bob: number;
   /** Редкость точек дымной (0 — сплошная). */
@@ -65,6 +67,8 @@ export interface FiguresConfig {
   /** Вернувшаяся после темноты собирается за comeTime, с; только если игрок не ближе comeAway, м. */
   comeTime: number;
   comeAway: number;
+  /** Сколько секунд темнота должна продержаться, чтобы считаться «свет погас» (аудит K-21). */
+  darkArm: number;
   /** Покачивание дымной: размах, м, и период, с. */
   bobAmp: number;
   bobPeriod: number;
@@ -82,6 +86,7 @@ export const DEFAULT_FIGURES: FiguresConfig = {
   goTime: 0.9,
   comeTime: 1.6,
   comeAway: 3,
+  darkArm: 0.4,
   bobAmp: 0.035,
   bobPeriod: 5.3,
 };
@@ -114,6 +119,7 @@ export class Figures {
       state: 'here',
       t: 0,
       dark: false,
+      darkT: 0,
       bob: 0,
       dots,
       phase: ((k * 0.61 + id.length * 0.37) % 1) * Math.PI * 2,
@@ -171,6 +177,7 @@ export class Figures {
           f.state = 'gone';
           f.t = 0;
           f.dark = false;
+          f.darkT = 0;
         }
       } else if (f.state === 'gone') {
         if (smoke) {
@@ -181,11 +188,16 @@ export class Figures {
           }
         } else {
           const l = light(f);
-          if (l < 0.08) f.dark = true;
-          else if (f.dark && l > 0.45 && d > cfg.comeAway) {
-            f.state = 'coming';
-            f.t = 0;
-            ev.push({ figure: f, what: 'back' });
+          if (l < 0.08) {
+            f.darkT += dt;
+            if (f.darkT >= cfg.darkArm) f.dark = true;
+          } else {
+            f.darkT = 0;
+            if (f.dark && l > 0.45 && d > cfg.comeAway) {
+              f.state = 'coming';
+              f.t = 0;
+              ev.push({ figure: f, what: 'back' });
+            }
           }
         }
       } else if (f.state === 'coming') {

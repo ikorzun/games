@@ -193,6 +193,11 @@ export interface SessionInput {
   /** Искомой вещи сейчас нет на месте (её коснулись, и она растворилась): вспомнить её нельзя. */
   hidden?: boolean;
   /**
+   * На виду ли точка (в кадре и не за стеной): новая искомая вещь появляется там, где её не видно, — в кадре она бы
+   * возникла из воздуха (K-21: следствие, а не событие; аудит 17.11). Не задано — проверки нет.
+   */
+  seen?: (p: Vec3) => boolean;
+  /**
    * Сколько времени взгляд держал вещь в этом шаге (не задано — весь шаг). В зале ожидания время места
    * идёт не так, как настоящее, а вспомнить можно только стоя: игра передаёт сюда настоящее время,
    * пока игрок стоит, и ноль, пока идёт.
@@ -313,10 +318,13 @@ export class Session {
   }
 
   /** Место для вещи: в стольких клетках пути от игрока, чтобы за ней пришлось идти, но не через весь объект. */
-  private pickSpot(from: number, rooms?: readonly RoomType[]): ItemSpot | null {
+  private pickSpot(from: number, rooms?: readonly RoomType[], seen?: (p: Vec3) => boolean): ItemSpot | null {
     const dist = this.distances(from);
     const c = this.cfg;
-    const free = this.level.spots.filter((s) => !this.usedSpots.has(s));
+    const all = this.level.spots.filter((s) => !this.usedSpots.has(s));
+    // Сначала — места не на виду; если таких нет, любое (вещь всё равно нужна).
+    const out = seen ? all.filter((s) => !seen([s.x, s.y + 0.3, s.z])) : all;
+    const free = out.length > 0 ? out : all;
     const d = (s: ItemSpot): number => {
       const n = this.spotNode.get(s) ?? -1;
       return n >= 0 ? dist[n]! : -1;
@@ -433,7 +441,7 @@ export class Session {
       // Последнее воспоминание ждёт minLength: сессия не кончается раньше, как бы быстро ни шёл игрок.
       const early = hidden.length === 1 && !this.rushed && this.time < this.cfg.minLength;
       if (next && !early && this.since >= wait && (inp.observed || this.since >= wait + this.cfg.fallback)) {
-        const spot = this.pickSpot(inp.node, next.def.rooms);
+        const spot = this.pickSpot(inp.node, next.def.rooms, inp.seen);
         if (spot) {
           next.state = 'active';
           next.spot = spot;

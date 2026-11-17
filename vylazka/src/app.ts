@@ -68,6 +68,10 @@ const PROBE = { highMs: 5, fineMs: 11, minMs: 0.3, settleMs: 700, fpsFloor: 45, 
 const SENS = [0.6, 1, 1.6] as const;
 /** Сон из сцен: сцен в сессии (каждая — другое место). */
 const SCENES = 3;
+/** Через сколько секунд поисков без вещи в луче игрок считается застрявшим: тогда — одна подсказка, как искать. */
+const STUCK_AFTER = 45;
+/** Миг: сколько длится обрыв записи, мс (чернота, часы на 00:00:00, тишина). */
+const MOMENT_MS = 3200;
 /**
  * Сцена короче сессии: одна вещь вместо пяти. Вспышка — секунд через десять: место успевает показаться.
  * Правило «последнее воспоминание не раньше пятой минуты» (minLength) здесь не годится: вещь сцены — она
@@ -581,6 +585,8 @@ export class App {
     this.profile.successes += 1;
     // Сон из сцен: вещь последней сцены вспомнена — цепочка её места шагнула; круг места — пять его вещей.
     this.wasErased = this.scenes ? this.keepSceneMemory() : this.keepMemory(true);
+    // Место стёрто до конца — миг: запись обрывается.
+    if (this.wasErased) this.moment();
     this.saveProfile();
     this.platform.track('level_completed', { world: 'session', level: `seed_${this.seed}` });
     // Сон из сцен: следующая сессия начнётся в месте, которое давно не снилось (не в том, где кончилась).
@@ -657,6 +663,7 @@ export class App {
    */
   private onScene(): void {
     const gone = this.keepSceneMemory();
+    if (gone) this.moment();
     const n = this.sceneNext;
     if (n) {
       this.world = n.world;
@@ -693,10 +700,20 @@ export class App {
 
   /**
    * Время на камере: каждая следующая сессия начинается на 75 с позже — запись подходит к какому-то мигу (сквозная
-   * загадка; что в этот миг — вопрос партнёру). После четырнадцатой — 23:58:37, дальше не сдвигается.
+   * загадка). После четырнадцатой — 23:58:37, дальше не сдвигается; последние две минуты до полуночи часы тянутся всё
+   * медленнее и сами её не достигают (hud.ts, towardMidnight). Миг наступает, когда место стёрто до конца (moment).
    */
   private clockStart(): number {
     return Math.min(this.profile.successes, 14) * 75;
+  }
+
+  /**
+   * Миг (ответ партнёра в квизе 17.11: «Запись обрывается» — миг приходит вместе с полным стиранием места: кадр гаснет,
+   * REC пропадает; словами ничего не объясняем). Часы встают на 00:00:00, кадр и звук обрываются разом.
+   */
+  moment(): void {
+    this.hud.cut(MOMENT_MS);
+    this.sound.cut(MOMENT_MS / 1000);
   }
 
   private onBegin(scene = false): void {
@@ -1005,8 +1022,10 @@ export class App {
       else if (e.type === 'gas-enter') this.hud.toast(t('toast.gas'), 3000);
     }
     for (const e of ev.fear) {
-      // Чем её держат, зависит от места: в тёмном — лучом, в светлом — взглядом (в зале ожидания — только на ходу).
-      if (e.type === 'swarm' && e.what === 'cohered') this.teach('swarm', t(this.game.hasLight ? 'teach.swarm' : this.game.flow ? 'teach.swarm.walk' : 'teach.swarm.gaze'), 6000);
+      // Чем её держат, зависит от места: в тёмном — лучом, в светлом — взглядом (в зале ожидания — только на ходу). Про луч
+      // не говорим (аудит объяснений 17.11, урок Frictional Games: понятный враг — система с дырой, её выучивают): светить на
+      // то, что пугает, игрок станет и сам. Про взгляд — говорим: без фонаря это не догадаться.
+      if (e.type === 'swarm' && e.what === 'cohered' && !this.game.hasLight) this.teach('swarm', t(this.game.flow ? 'teach.swarm.walk' : 'teach.swarm.gaze'), 6000);
       if (buzz && (e.type === 'scare' || e.what === 'cohered')) navigator.vibrate(e.type === 'scare' ? 25 : [40, 60, 40]);
     }
     for (const e of ev.dream) {
@@ -1021,8 +1040,9 @@ export class App {
         this.clockSkew += 4 + Math.random() * 37;
       }
       else if (e.type === 'pocket') this.onPocket(e);
-      // Первое касание: вещь рассыпалась — сказать, что это правило, и как её вернуть.
-      else if (e.type === 'touch' && e.what === 'gone') this.teach('touch', t(this.game.flow ? 'teach.touch.station' : this.game.hasLight ? 'teach.touch' : 'teach.touch.still'), 7000);
+      // Первое касание: вещь рассыпалась — сказать, что это правило, и как её вернуть. Только после настоящего касания:
+      // обвал пола и бумажный цветок рассыпают вещи сами, и строка «здесь ничего нельзя потрогать» там лишняя (аудит 17.11).
+      else if (e.type === 'touch' && e.what === 'gone' && e.first !== undefined && !e.self) this.teach('touch', t(this.game.flow ? 'teach.touch.station' : this.game.hasLight ? 'teach.touch' : 'teach.touch.still'), 7000);
     }
   }
 
@@ -1123,9 +1143,10 @@ export class App {
         this.seeking = id;
         this.seekingSince = g.time;
       }
-      if (act && s.hold > 0.05) this.teach('look', t('teach.look'));
-      if (act && g.time - this.seekingSince > 25) this.teach('dark', t(g.flow ? 'teach.dark.station' : g.hasLight ? 'teach.dark' : 'teach.dark.still'), 7000);
-      if (s.inWater) this.teach('water', t('teach.water'));
+      // Подсказка, как искать, — только застрявшему: 45 секунд поисков, и вещи в луче нет (аудит объяснений 17.11; строку
+      // оставляем — партнёру трудно находить вещи, M-20). «Держите в луче» и «в воде медленнее» убраны: первую видел тот,
+      // кто уже держит, вторая объясняет то, что видно и так.
+      if (act && g.time - this.seekingSince > STUCK_AFTER && s.hold <= 0.05) this.teach('dark', t(g.flow ? 'teach.dark.station' : g.hasLight ? 'teach.dark' : 'teach.dark.still'), 7000);
     } else {
       this.hud.setGoals('', [], false);
       this.hud.setMarker(0, 0, false);

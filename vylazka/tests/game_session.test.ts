@@ -3129,6 +3129,9 @@ describe('ступени погружения: каждая из первых с
     expect(g.light.charge).toBeGreaterThan(0.99);
     expect(releases(h)).toBe(0);
     expect(glimpses(h)).toBe(0);
+    // И примет Осыпи на нулевой ступени нет: её здесь нет вовсе.
+    expect(g.director!.cfg.traceAt).toBeUndefined();
+    expect(g.swarm!.mode).toBe('dormant');
     expect(h.dreamCount('jump', 'start')).toBe(0);
     expect(h.dreamCount('pressure')).toBe(0);
   });
@@ -3145,7 +3148,7 @@ describe('ступени погружения: каждая из первых с
     expect(failsBy(3)).toBe(false);
   });
 
-  it('ступени 0–1 без скачков, 2–3 — мягкие скачки; Осыпи до третьей ступени нет вовсе', () => {
+  it('ступени 0–1 без скачков, 2–3 — мягкие скачки; тела Осыпи до третьей ступени нет', () => {
     const at = (stage: number) => new Harness(levelOf(SEED), { stage }).game;
     expect(at(0).jumps!.cfg.maxPerSession).toBe(0);
     expect(at(1).jumps!.cfg.maxPerSession).toBe(0);
@@ -3155,6 +3158,55 @@ describe('ступени погружения: каждая из первых с
       expect(at(stage).director!.cfg.glimpseAt).toBe(Infinity);
     }
     expect(at(3).director!.cfg.releaseAt).toBe(300);
+    // Приметы — на 1 и 2 (на второй чаще), на 0 и 3 их нет.
+    expect(at(0).director!.cfg.traceAt).toBeUndefined();
+    expect(at(3).director!.cfg.traceAt).toBeUndefined();
+    expect(at(2).director!.cfg.traceAt!).toBeLessThan(at(1).director!.cfg.traceAt!);
+  });
+
+  it('ступени 1–2: сначала приметы, потом тело — Осыпь проходит вдали за стенами, в углах у её пути грибы; тела не видно, фонарь от неё не глохнет', () => {
+    for (const stage of [1, 2]) {
+      const h = new Harness(levelOf(SEED), { stage, calm: false });
+      const g = h.game;
+      g.jumps!.cooldown = 1e6;
+      expect(h.until(() => g.swarm!.mode === 'trace', 130), `ступень ${stage}: приметы нет`).toBe(true);
+      const sw = g.swarm!;
+      // Она вдали: не ближе четырёх узлов пути от игрока.
+      expect(sw.route(sw.node, g.playerNode()).length - 1, `ступень ${stage}`).toBeGreaterThanOrEqual(4);
+      let shown = 0;
+      let body = 0;
+      let near = 0;
+      for (let i = 0; i < 30 * 60; i++) {
+        h.tick();
+        expect(['dormant', 'trace']).toContain(sw.mode);
+        if (sw.mode !== 'trace') continue;
+        shown += 1;
+        if (h.r.swarm.alpha > 0) body += 1;
+        if (g.swarmNear > 0) near += 1;
+      }
+      expect(shown).toBeGreaterThan(0);
+      expect(body, `ступень ${stage}: у приметы нарисовано тело`).toBe(0);
+      expect(near, `ступень ${stage}: примета близко`).toBe(0);
+      expect(g.spores!.sites.some((q) => q.kind === 'corner' && q.grow > 0.1), `ступень ${stage}: грибов в углах нет`).toBe(true);
+      expect(releases(h) + glimpses(h)).toBe(0);
+    }
+  });
+
+  it('примета у начала не становится настоящей Осыпью, когда игрока возвращает в начало', () => {
+    const h = new Harness(levelOf(SEED), { stage: 2 });
+    const g = h.game;
+    g.jumps!.cooldown = 1e6;
+    h.until(() => g.transition === null, 6);
+    h.run(1);
+    const sw = g.swarm!;
+    const home = g.playerNode();
+    sw.trace(sw.nodeAround(home, 2, 4), 26);
+    expect(sw.mode).toBe('trace');
+    expect(g.beginJump({ cause: 'faint', style: 'blackout', to: 'elsewhere', dest: 'start' }, [])).toBe(true);
+    expect(h.until(() => g.transition === null, 6)).toBe(true);
+    expect(sw.mode).toBe('dormant');
+    h.run(5);
+    expect(['dormant', 'trace']).toContain(sw.mode);
   });
 
   it('ступень 3: Осыпь сначала мелькает силуэтом (в первую минуту), охотится не раньше пятой минуты', () => {
@@ -3347,6 +3399,54 @@ describe('тихий слой точек по рёбрам — только на
     lap6.run(2);
     expect(lap6.game.decay.walls).toBeGreaterThan(0.1);
     expect(lap6.r.frames.at(-1)!.quiet!).toBeGreaterThan(0);
+  });
+});
+
+describe('в темноте вещь меняется только вне кадра (K-21; уроки Frictional Games — следствие, а не событие; аудит 17.11)', () => {
+  it('в темноте мелочи переставляются, но та, на которую смотрят, стоит как стояла', () => {
+    const h = new Harness(levelOf(SEED));
+    const g = h.game;
+    g.jumps!.cooldown = 1e6;
+    h.run(1);
+    const small = g.things.list.filter((x) => !x.memory && !x.still && x.state === 'idle' && x.collider < 0);
+    const target = small.find((x) => h.standBefore(x.id));
+    expect(target, 'не нашлось мелочи, перед которой можно встать').toBeTruthy();
+    const t = target!;
+    expect(g.seen([t.pos[0], t.pos[1] + t.radius * 0.6, t.pos[2]], t.radius)).toBe(true);
+    const before = new Map(g.things.list.map((x) => [x.id, { pos: [...x.pos], yaw: x.yaw }]));
+    // Погасить фонарь и стоять в темноте: перестановки идут на 7-й и 16-й секунде.
+    h.tick({ ...emptyInput(), light: true });
+    expect(g.light.state).toBe('off');
+    h.run(18);
+    expect(t.pos).toEqual(before.get(t.id)!.pos);
+    expect(t.yaw).toBe(before.get(t.id)!.yaw);
+    // А вне кадра место за это время поменялось.
+    const moved = g.things.list.filter((x) => x.id !== t.id && (x.yaw !== before.get(x.id)?.yaw || x.pos.some((v, i) => v !== before.get(x.id)?.pos[i])));
+    expect(moved.length, 'вне кадра ничего не поменялось').toBeGreaterThan(0);
+  });
+
+  it('мигание фонаря — не «свет погас»: тронутая вещь не собирается от кадра темноты, а от настоящей темноты — собирается', () => {
+    const h = new Harness(levelOf(SEED));
+    const g = h.game;
+    g.jumps!.cooldown = 1e6;
+    h.run(1);
+    const t = g.things.list.find((x) => !x.memory && !x.still && x.state === 'idle' && x.collider < 0 && h.standBefore(x.id))!;
+    expect(t).toBeTruthy();
+    g.things.touch(t);
+    t.touched = true;
+    h.until(() => t.state === 'gone', 4);
+    expect(t.state).toBe('gone');
+    // Кадр темноты (мигание) — вещь не вернулась.
+    g.light.toggle();
+    h.tick();
+    g.light.toggle();
+    h.run(1.5);
+    expect(t.state).toBe('gone');
+    // Темнота на полсекунды и свет — вернулась.
+    g.light.toggle();
+    h.run(0.6);
+    g.light.toggle();
+    expect(h.until(() => t.state !== 'gone', 2), 'после темноты вещь не вернулась').toBe(true);
   });
 });
 

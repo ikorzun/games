@@ -19,7 +19,9 @@ export type DirectorEvent =
   /** Показать фигуру роя вдалеке (без охоты). */
   | { type: 'apparition' }
   /** Выпустить рой на охоту. */
-  | { type: 'release' };
+  | { type: 'release' }
+  /** Примета без тела: Осыпь проходит по месту вдали — грибы в углах у её пути, далёкий песок (ступени 1–2). */
+  | { type: 'trace' };
 
 export interface DirectorInput {
   /** Время вылазки, с. */
@@ -44,6 +46,12 @@ export interface DirectorConfig {
   byDepth: boolean;
   /** Первая пугалка не раньше этого, с; не задано — через 18–32 с (дать осмотреться). */
   firstScare?: number;
+  /**
+   * Приметы без тела (K-18): первая — в эту секунду, дальше — с такой паузой, от и до. Только пока рой не мелькал
+   * и не охотился; не задано — примет нет.
+   */
+  traceAt?: number;
+  traceGap?: [number, number];
 }
 
 export const DEFAULT_DIRECTOR: DirectorConfig = { glimpseAt: 75, releaseAt: 210, scareGap: [28, 55], byDepth: true };
@@ -62,6 +70,7 @@ export class Director {
   private nextGlimpse = Infinity;
   private last: ScareId | null = null;
   private released = false;
+  private nextTrace: number;
 
   constructor(
     private readonly rng: Rng,
@@ -69,11 +78,13 @@ export class Director {
   ) {
     // Первая пугалка — не сразу: дать осмотреться.
     this.nextScare = cfg.firstScare ?? 18 + rng() * 14;
+    this.nextTrace = cfg.traceAt ?? Infinity;
   }
 
   /** Продолжить после загрузки сохранения: пугалки не сыплются разом; released — рой уже был на охоте и выйдет снова. */
   restore(time: number, released: boolean): void {
     this.nextScare = time + 10 + this.rng() * 15;
+    if (this.cfg.traceAt !== undefined) this.nextTrace = Math.max(this.cfg.traceAt, time + 20);
     if (released) this.phase = 2;
   }
 
@@ -100,6 +111,11 @@ export class Director {
     if (this.phase === 2 && !this.released && !inp.swarmBusy) {
       this.released = true;
       ev.push({ type: 'release' });
+    }
+    if (this.phase === 0 && inp.time >= this.nextTrace && !inp.swarmBusy) {
+      ev.push({ type: 'trace' });
+      const [lo, hi] = this.cfg.traceGap ?? [90, 140];
+      this.nextTrace = inp.time + lo + this.rng() * (hi - lo);
     }
     if (inp.time >= this.nextScare) {
       // Не повторяем одно и то же подряд; «гаснущие надписи» — только на нижних ярусах.

@@ -118,6 +118,53 @@ describe('рой: поведение', () => {
     expect(back2).toBeLessThan(back1);
   });
 
+  it('луч держит её всё хуже: в первый раз за сессию рассыпается за 1,5 с, потом за 2, потом за 3 (K-20, квиз 17.11)', () => {
+    const sw = new SwarmAI(line(40), mulberry32(9));
+    sw.activate(10);
+    const took: number[] = [];
+    for (let k = 0; k < 4; k++) {
+      sw.mode = 'hunt';
+      sw.cohesion = 1;
+      sw.awareness = 1;
+      let t = 0;
+      // Игрок далеко: под лучом она не дотянется, пока её держат.
+      while (sw.mode === 'hunt' && t < 10) {
+        sw.update(DT, at(30, { beamOnSwarm: true }));
+        t += DT;
+      }
+      expect(sw.mode).toBe('scatter');
+      took.push(t);
+    }
+    expect(took[0]).toBeCloseTo(1.5, 1);
+    expect(took[1]).toBeCloseTo(2, 1);
+    expect(took[2]).toBeCloseTo(3, 1);
+    // Дальше — не дольше трёх секунд: держать её всё ещё можно.
+    expect(took[3]).toBeCloseTo(3, 1);
+  });
+
+  it('примета без тела (ступени 1–2): идёт вдали, не охотится и не ловит, рядом её не бывает; подошёл или прошла своё — её нет', () => {
+    const sw = new SwarmAI(line(40), mulberry32(10));
+    sw.trace(30, 26);
+    expect(sw.active).toBe(true);
+    // Игрок стоит в узле 10 в темноте и шумит — Осыпь-примета на него не идёт: 20 с она всё ещё примета вдали.
+    for (let i = 0; i < 20 * 60; i++) {
+      const o = sw.update(DT, at(10, { lightOn: false, noise: 0.8 }));
+      expect(o.caught).toBe(false);
+      expect(sw.mode).toBe('trace');
+      expect(sw.cohesion).toBe(0);
+      expect(sw.proximity([sw.pos[0] + 1, 0, 0])).toBe(0);
+    }
+    expect(sw.route(sw.node, 10).length - 1).toBeGreaterThanOrEqual(sw.cfg.traceKeep);
+    // Подошёл — там уже пусто.
+    sw.update(DT, at(sw.node - 1));
+    expect(sw.mode).toBe('dormant');
+    // Прошла своё — тоже.
+    const gone = new SwarmAI(line(40), mulberry32(10));
+    gone.trace(30, 5);
+    run(gone, 5.5, at(10));
+    expect(gone.mode).toBe('dormant');
+  });
+
   it('под лучом ползёт медленно; в темноте охотится быстрее, чем на свету', () => {
     const dist = (extra: Partial<SwarmInput>): number => {
       const sw = new SwarmAI(line(40), mulberry32(5));
@@ -305,6 +352,33 @@ describe('режиссёр страха', () => {
     expect(scares.some((s) => s.id === 'signs')).toBe(false);
     const deep = play(900, () => 1, 0, 5).events.filter((e) => e.type === 'scare') as Array<{ id: string }>;
     expect(deep.some((s) => s.id === 'signs')).toBe(true);
+  });
+});
+
+describe('режиссёр страха: приметы без тела (ступени 1–2; K-18, квиз 17.11)', () => {
+  const quiet = { glimpseAt: Infinity, releaseAt: Infinity, scareGap: [45, 90] as [number, number], byDepth: false, firstScare: 70 };
+  const traces = (d: Director, until: number, busy = false): number[] => {
+    const out: number[] = [];
+    for (let t = 0; t <= until; t += 0.5) for (const e of d.update({ time: t, tier: 0, goalsDone: 0, swarmBusy: busy, tiers: 2 })) if (e.type === 'trace') out.push(t);
+    return out;
+  };
+
+  it('первая примета — в traceAt, дальше — с паузой traceGap; явлений и охоты нет', () => {
+    const d = new Director(mulberry32(3), { ...quiet, traceAt: 60, traceGap: [75, 115] });
+    const at = traces(d, 600);
+    expect(at[0]).toBe(60);
+    expect(at.length).toBeGreaterThanOrEqual(5);
+    for (let i = 1; i < at.length; i++) {
+      expect(at[i]! - at[i - 1]!).toBeGreaterThanOrEqual(75);
+      expect(at[i]! - at[i - 1]!).toBeLessThanOrEqual(115.5);
+    }
+    expect(d.phase).toBe(0);
+  });
+
+  it('пока Осыпь в мире — новой приметы нет; без traceAt (ступени 0, 3, 4) примет нет вовсе', () => {
+    expect(traces(new Director(mulberry32(3), { ...quiet, traceAt: 10 }), 200, true)).toEqual([]);
+    expect(traces(new Director(mulberry32(3), quiet), 600)).toEqual([]);
+    expect(traces(new Director(mulberry32(3), DEFAULT_DIRECTOR), 600)).toEqual([]);
   });
 });
 

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { allSoundFiles, AudioEngine, SOUNDS, spatialize } from '../src/audio/engine';
-import { GameAudio, WAKE_FIRST, WAKING } from '../src/audio/game_audio';
+import { GameAudio, TRACE_SAND, WAKE_FIRST, WAKING } from '../src/audio/game_audio';
 import type { AudioWorld, SoundSink } from '../src/audio/game_audio';
 import type { Vec3 } from '../src/core/types';
 import type { StepEvents } from '../src/game';
@@ -417,6 +417,20 @@ describe('привязка звуков к игре', () => {
     expect(r.loops.get('gas_hiss')).toBe(1);
     expect(r.loops.get('swarm_loop')).toBe(1);
     expect(r.loops.get('signal_static')).toBeGreaterThan(0.5);
+  });
+
+  it('Осыпь-примета (ступени 1–2): тела нет, но её песок слышен — громче, чем рассеянная Осыпь рядом; глушит его расстояние', () => {
+    const r = new Recorder();
+    const a = new GameAudio(r);
+    a.setScene('play');
+    const w = world();
+    w.swarm = { pos: [14, 0, 0], active: true, cohesion: 0, mode: 'trace' };
+    a.frame(w, 0.016, true);
+    expect(r.loops.get('swarm_loop')).toBe(TRACE_SAND);
+    expect(TRACE_SAND).toBeGreaterThan(0.55);
+    w.swarm = { pos: [14, 0, 0], active: true, cohesion: 0, mode: 'roam' };
+    a.frame(w, 0.016, true);
+    expect(r.loops.get('swarm_loop')).toBeCloseTo(0.55);
   });
 
   it('лимбо и карман: гул убежища, дыхание, газ и рой стихают, помехи остаются', () => {

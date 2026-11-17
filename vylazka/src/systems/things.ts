@@ -41,6 +41,8 @@ export interface Thing {
   touched: boolean;
   /** После того как она растворилась, свет уже гас: зажжётся — вернётся. */
   dark: boolean;
+  /** Сколько секунд подряд темно на её месте: «свет погас» — только если темнота продержалась (мигание фонаря не в счёт). */
+  darkT: number;
   /**
    * Ступень доверия (systems/illusions.ts): 0 — настоящая, 1 — картонка, 2 — проекция, 3 — кружево.
    * Каждое касание стирает вещь на ступень: вернётся она хуже, чем была.
@@ -116,7 +118,7 @@ export class Things {
   constructor(readonly cfg: ThingsConfig = DEFAULT_THINGS) {}
 
   add(kind: string, pos: Vec3, yaw: number, fate: Fate, radius = 0.3, memory = false, still = false): Thing {
-    const t: Thing = { id: this.nextId++, kind, pos, yaw, radius, fate, state: 'idle', memory, still, gaze: 0, t: 0, scale: 1, dissolve: 0, collider: -1, touched: false, dark: false, form: 0 };
+    const t: Thing = { id: this.nextId++, kind, pos, yaw, radius, fate, state: 'idle', memory, still, gaze: 0, t: 0, scale: 1, dissolve: 0, collider: -1, touched: false, dark: false, darkT: 0, form: 0 };
     this.list.push(t);
     return t;
   }
@@ -151,6 +153,7 @@ export class Things {
     thing.t = 0;
     thing.touched = true;
     thing.dark = false;
+    thing.darkT = 0;
     return { type: 'changing', thing };
   }
 
@@ -163,6 +166,7 @@ export class Things {
     thing.gaze = 0;
     thing.touched = false;
     thing.dark = false;
+    thing.darkT = 0;
   }
 
   /** Самый «насмотренный» взгляд сейчас, 0..1 (для кинескопа и рамки). */

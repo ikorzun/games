@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CEIL_MAX, decayAt, erased, FLOOR_MAX, keepsClutter, lapsLeft, startForm, strength, WALLS_MAX, WEAR } from '../src/systems/decay';
+import { CEIL_MAX, decayAt, erased, FLOOR_MAX, keepsClutter, lapsLeft, startForm, strength, WALLS_LATE, WALLS_MAX, WEAR } from '../src/systems/decay';
 import { FORM_GONE, FORM_LACE, FORM_REAL } from '../src/systems/illusions';
 
 const STEPS = Array.from({ length: 101 }, (_, i) => i / 100);
@@ -13,7 +13,8 @@ describe('стирание: кривая деградации', () => {
     // Слова партнёра 16.11: «A…» — потолок уходит дырами, не больше половины; стены — пятнами кружева,
     // не больше трети; пол держится. Раньше в стёртом месте не оставалось ни потолка, ни стен, ни пола.
     expect(end.ceiling).toBe(CEIL_MAX);
-    expect(end.walls).toBe(WALLS_MAX);
+    // Стены — до трети, кроме двух последних кругов: там они уходят большей частью (квиз 17.11).
+    expect(end.walls).toBeCloseTo(WALLS_MAX + WALLS_LATE);
     expect(end.floor).toBe(FLOOR_MAX);
     expect(CEIL_MAX).toBeLessThanOrEqual(0.6);
     expect(WALLS_MAX).toBeLessThanOrEqual(1 / 3);
@@ -47,7 +48,7 @@ describe('стирание: кривая деградации', () => {
       const d = decayAt(w);
       if (k === 'clutter') return 1 - d.clutter;
       if (k === 'ceiling') return d.ceiling / CEIL_MAX;
-      if (k === 'walls') return d.walls / WALLS_MAX;
+      if (k === 'walls') return d.walls / (WALLS_MAX + WALLS_LATE);
       if (k === 'floor') return d.floor / FLOOR_MAX;
       return d[k];
     };
@@ -61,7 +62,18 @@ describe('стирание: кривая деградации', () => {
     expect(decayAt(0.44).walls).toBe(0);
     expect(rel('ceiling', 0.44)).toBeGreaterThan(0.25);
     expect(decayAt(0.84).floor).toBe(0);
-    expect(rel('walls', 0.84)).toBeGreaterThan(0.8);
+    expect(rel('walls', 0.84)).toBeGreaterThan(0.6);
+  });
+
+  it('стены: на кругах 1–6 — не больше трети пятнами; на 7–8 уходят большей частью (ответ партнёра в квизе 17.11)', () => {
+    const lap = (n: number): number => decayAt((n - 1) * WEAR.lap).walls;
+    for (let n = 1; n <= 6; n++) expect(lap(n), `круг ${n}`).toBeLessThanOrEqual(WALLS_MAX * 0.5);
+    // Круги 1–6 — как было (вариант A): поздняя кривая до них не дотягивается.
+    expect(decayAt(0.7).walls).toBeCloseTo(decayAt(0.7).walls - WALLS_LATE * 0, 6);
+    expect(lap(6)).toBeCloseTo(0.125, 2);
+    expect(lap(7)).toBeGreaterThan(0.5);
+    expect(lap(8)).toBeGreaterThan(0.8);
+    expect(WALLS_MAX + WALLS_LATE).toBeLessThan(0.9);
   });
 
   it('кривая S-образная: первые круги место почти цело, середина рушится быстрее всего', () => {

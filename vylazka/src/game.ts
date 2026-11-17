@@ -110,7 +110,8 @@ export type DreamEvent =
    * Коснулись вещи (gone), она вернулась (back; form — на какой ступени: 1 — картонка, 2 — проекция,
    * 3 — кружево; moved — встала на другое место) или стёрта совсем и больше не вернётся (erased).
    */
-  | { type: 'touch'; name: string; what: 'gone' | 'back' | 'erased'; first?: boolean; how?: Comeback['how']; form?: number; moved?: boolean }
+  /** self — вещь рассыпалась сама (бумажный цветок), а не от касания игрока. */
+  | { type: 'touch'; name: string; what: 'gone' | 'back' | 'erased'; first?: boolean; self?: boolean; how?: Comeback['how']; form?: number; moved?: boolean }
   /**
    * Карманное пространство сделало своё дело: enter — игрок вошёл; map — прочёл макет в кукольном домике
    * (room и tier — где лежит искомое; без memory — искать пока нечего); next — в белом нигде вызвал следующее
@@ -182,6 +183,11 @@ interface Transition {
  * место успевает раствориться — см. SCAN.hold в рендере), как часто повторяется и как далеко достаёт, м.
  */
 const DARK_SHIFT = { first: 7, every: 9, range: 14 } as const;
+/**
+ * «На виду» (правило «показывать следствие, а не событие», K-21; аудит 17.11): полуугол от оси камеры, рад — шире кадра
+ * (по горизонтали 106°) с запасом на край экрана и наклон головы.
+ */
+const SEEN_HALF = (70 * Math.PI) / 180;
 /** Сколько воспоминаний нужно, чтобы фигура Осыпи выросла в полный рост. */
 const SWARM_GROWN = 4;
 /** Сколько гроздей грибов показывается разом (ближайшие к игроку). */
@@ -326,15 +332,24 @@ const GENTLE = {
  * основной модели 17.11; партнёр: «Далее делай предложенные рекомендации по гемплею»; `design.md` §24).
  *   0 — вещи отвечают на взгляд; в начале — поставленный скачок на луг (холодный старт). Ни отказов фонаря, ни
  *       скачков, ни Осыпи, ни давления: первая минута — почти обычная жизнь;
- *   1 — фонарь глохнет (обучающий отказ), темнота переставляет вещи; скачков, Осыпи и давления нет;
- *   2 — скачки (мягко) и давление: пространства перемешиваются; Осыпи нет;
+ *   1 — фонарь глохнет (обучающий отказ), темнота переставляет вещи; скачков и давления нет; Осыпи не видно —
+ *       только её приметы (сначала приметы, потом тело — K-18, ответ партнёра в квизе 17.11): она проходит по месту
+ *       вдали, в углах у её пути проступают грибы, издалека слышен её песок; редко;
+ *   2 — скачки (мягко) и давление: пространства перемешиваются; приметы Осыпи — чаще, тела по-прежнему нет;
  *   3 — Осыпь: сначала силуэт на краю луча, охота с пятой минуты и мягко;
  *   4 — всё как есть (опытный игрок, сон из сцен, проверки).
  * Ставит приложение по числу законченных сессий.
  */
 export const STAGE_ALL = 4;
-/** Ступени 0–2: Осыпи нет вовсе, ложные события редкие и не в первую минуту. */
+/** Ступень 0: Осыпи нет вовсе, ложные события редкие и не в первую минуту. */
 const QUIET_DIRECTOR: DirectorConfig = { glimpseAt: Infinity, releaseAt: Infinity, scareGap: [45, 90], byDepth: false, firstScare: 70 };
+/** Ступени 1–2: тела Осыпи нет, только приметы — на первой реже, на второй чаще. */
+const SIGNS_DIRECTOR: readonly [DirectorConfig, DirectorConfig] = [
+  { ...QUIET_DIRECTOR, traceAt: 100, traceGap: [120, 170] },
+  { ...QUIET_DIRECTOR, traceAt: 60, traceGap: [75, 115] },
+];
+/** Сколько секунд Осыпь-примета идёт по месту. */
+const TRACE_SECONDS = 26;
 /** Ступень 3 — знакомство с Осыпью: силуэт на краю луча с первой минуты, охота — с пятой, только по времени (как прежняя мягкая первая сессия, слово партнёра 16.11 23:41). */
 const FIRST_HUNT_DIRECTOR: DirectorConfig = { glimpseAt: 35, releaseAt: 300, scareGap: [28, 55], byDepth: false };
 /**
@@ -737,7 +752,7 @@ export class Game {
       this.swarm = new SwarmAI(level.nav, this.rng);
       this.spores = new Spores(level.nav, dream.seed);
       const stage = this.stage;
-      this.director = new Director(this.rng, stage <= 2 ? QUIET_DIRECTOR : stage === 3 ? FIRST_HUNT_DIRECTOR : this.gentle ? GENTLE.director : DEFAULT_DIRECTOR);
+      this.director = new Director(this.rng, stage === 0 ? QUIET_DIRECTOR : stage <= 2 ? SIGNS_DIRECTOR[stage - 1]! : stage === 3 ? FIRST_HUNT_DIRECTOR : this.gentle ? GENTLE.director : DEFAULT_DIRECTOR);
       this.swarmWakeAt = 0;
       // Скачков (кроме поставленного холодного старта и вынужденных) на ступенях 0–1 нет; на 2–3 — мягкие.
       this.jumps = new Jumps(this.rng, stage <= 1 ? { ...DEFAULT_JUMPS, maxPerSession: 0 } : stage <= 3 || this.gentle ? GENTLE.jumps : DEFAULT_JUMPS);
@@ -934,7 +949,7 @@ export class Game {
       f.k = Math.min(1, f.k + dt / FLOWER.bloom);
       if (f.k >= 1) f.hold += dt;
       this.renderer.setObjectTone(id, 1 - f.k, f.k);
-      if (f.hold >= FLOWER.hold) this.touchObject(id, dream);
+      if (f.hold >= FLOWER.hold) this.touchObject(id, dream, true);
     }
   }
 
@@ -965,7 +980,7 @@ export class Game {
   }
 
   /** Игрок коснулся предмета обстановки: тот растворяется, и всё, что на нём лежало, — вместе с ним. */
-  private touchObject(id: number, dream: DreamEvent[]): void {
+  private touchObject(id: number, dream: DreamEvent[], self = false): void {
     const ill = this.illusions;
     if (!ill || !ill.touch(id)) return;
     const o = ill.get(id)!.obj;
@@ -974,7 +989,7 @@ export class Game {
     if (o.name === DOOR_NAME) this.doorway = id;
     this.touchCount += 1;
     this.wearGain += WEAR.touch;
-    dream.push({ type: 'touch', name: o.name, what: 'gone', first: this.touchCount === 1 });
+    dream.push({ type: 'touch', name: o.name, what: 'gone', first: this.touchCount === 1, ...(self ? { self } : {}) });
     for (const t of this.things.list) if (t.state === 'idle' && !t.still && this.restsOn(t.pos, o)) this.touchThing(t, dream);
   }
 
@@ -1200,10 +1215,16 @@ export class Game {
       if (t.touched && t.state === 'changing' && t.collider >= 0) this.colliders.boxes[t.collider]!.gone = t.dissolve >= DEFAULT_ILLUSIONS.yield;
       if (t.state !== 'gone' || !t.touched) continue;
       const l = this.lightAt(this.playerNodeAt(t.pos));
-      if (l < 0.08) t.dark = true;
-      else if (t.dark && l > 0.45) {
-        const r = t.radius + 0.35;
-        if (!this.standsIn([t.pos[0] - r, t.pos[1], t.pos[2] - r], [t.pos[0] + r, t.pos[1] + 2, t.pos[2] + r], 0)) this.returnThing(t, dream);
+      if (l < 0.08) {
+        // «Свет погас» — только если темнота продержалась: мигание фонаря длится сотые доли секунды (аудит K-21).
+        t.darkT += dt;
+        if (t.darkT >= DEFAULT_ILLUSIONS.darkArm) t.dark = true;
+      } else {
+        t.darkT = 0;
+        if (t.dark && l > 0.45) {
+          const r = t.radius + 0.35;
+          if (!this.standsIn([t.pos[0] - r, t.pos[1], t.pos[2] - r], [t.pos[0] + r, t.pos[1] + 2, t.pos[2] + r], 0)) this.returnThing(t, dream);
+        }
       }
     }
   }
@@ -1599,6 +1620,39 @@ export class Game {
   }
 
   /**
+   * На виду ли точка: в кадре (с запасом по краям) и не закрыта стеной. В темноте вещь меняется только вне кадра (K-21):
+   * на экране её может быть видно и без фонаря — своё свечение, свет памяти, строб, эхо шагов, освещённая соседняя клетка,
+   * красная сетка тёмной комнаты.
+   */
+  seen(p: Vec3, radius = 0.5): boolean {
+    const rig = this.lastRig;
+    if (!rig) return false;
+    const [cx, cy, cz] = rig.camPos;
+    const dx = p[0] - cx;
+    const dy = p[1] - cy;
+    const dz = p[2] - cz;
+    const d = Math.hypot(dx, dy, dz);
+    if (d < radius + 0.3) return true;
+    const f = dirFromAngles(rig.camYaw, rig.camPitch);
+    const ang = Math.acos(Math.max(-1, Math.min(1, (dx * f[0] + dy * f[1] + dz * f[2]) / d)));
+    if (ang > SEEN_HALF + Math.atan2(radius, d)) return false;
+    return this.colliders.raycast(cx, cy, cz, dx / d, dy / d, dz / d, d) >= d - radius - 0.2;
+  }
+
+  /** На виду ли помещение: хоть одна его клетка (на высоте колена или глаз) в кадре и не за стеной. */
+  roomSeen(room: number): boolean {
+    const r = this.level?.layout?.rooms.find((x) => x.id === room);
+    if (!r || !this.level) return false;
+    for (const [cx, cz] of r.cells) {
+      const n = this.nodeAt.get(`${r.tier},${cx},${cz}`);
+      const node = n === undefined ? undefined : this.level.nav[n];
+      if (!node) continue;
+      if (this.seen([node.x, node.y + 0.5, node.z], 1.2) || this.seen([node.x, node.y + 1.6, node.z], 1.2)) return true;
+    }
+    return false;
+  }
+
+  /**
    * Сменить детали места, пока его не видно: мелкие вещи меняются местами и поворачиваются, крупные
    * встают задом наперёд (место и преграда у них те же), комната-аномалия неподалёку меняет
    * обстановку. Вещи воспоминаний и то, что уже меняется, не трогаются. Возвращает, сколько вещей изменилось.
@@ -1606,7 +1660,8 @@ export class Game {
   private shiftDetails(): number {
     const b = this.body;
     const dist = (t: Thing): number => Math.hypot(t.pos[0] - b.x, t.pos[2] - b.z);
-    const near = this.things.list.filter((t) => t.state === 'idle' && !t.memory && !t.still && dist(t) < DARK_SHIFT.range && Math.abs(t.pos[1] - b.y) < 3);
+    // Только то, чего нет в кадре: в темноте вещь меняется вне кадра — игрок видит следствие, а не событие (K-21).
+    const near = this.things.list.filter((t) => t.state === 'idle' && !t.memory && !t.still && dist(t) < DARK_SHIFT.range && Math.abs(t.pos[1] - b.y) < 3 && !this.seen([t.pos[0], t.pos[1] + t.radius * 0.6, t.pos[2]], t.radius));
     const small = near.filter((t) => t.collider < 0);
     let changed = 0;
     if (small.length >= 2) {
@@ -1630,7 +1685,7 @@ export class Game {
     }
     if (this.anomalies) {
       const node = this.playerNode();
-      this.applyAnomalies(this.anomalies.flipInDark([b.x, b.y, b.z], node >= 0 ? this.level!.nav[node]!.room : -1));
+      this.applyAnomalies(this.anomalies.flipInDark([b.x, b.y, b.z], node >= 0 ? this.level!.nav[node]!.room : -1, (room) => this.roomSeen(room)));
     }
     return changed;
   }
@@ -2012,6 +2067,9 @@ export class Game {
           sw.rest();
           this.swarmBody.snap(sw.pos, 0);
           this.swarmWakeAt = this.time + (this.gentle ? GENTLE.rest : SWARM_REST_LATER);
+        } else if (sw && sw.mode === 'trace') {
+          // Примета без тела (ступени 1–2) не переселяется выпуском: иначе она стала бы настоящей Осыпью раньше срока.
+          sw.rest();
         } else if (sw && sw.active) {
           const home = this.playerNodeAtSpawn();
           const hops = home >= 0 && sw.node >= 0 ? sw.route(sw.node, home).length - 1 : -1;
@@ -2147,6 +2205,30 @@ export class Game {
       return n;
     }
     return -1;
+  }
+
+  /**
+   * Узел для приметы Осыпи: в 5–9 клетках от игрока (если места мало — в 4–14) и не на виду — за стеной или за
+   * поворотом. −1 — подходящего нет.
+   */
+  traceNode(from: number): number {
+    const sw = this.swarm;
+    const rig = this.lastRig;
+    if (!sw || from < 0 || !this.level) return -1;
+    let any = -1;
+    for (let i = 0; i < 10; i++) {
+      const n = i < 7 ? sw.nodeAround(from, 5, 9) : sw.nodeAround(from, 4, 14);
+      const node = this.level.nav[n];
+      if (!node) continue;
+      if (any < 0) any = n;
+      if (!rig) return n;
+      const dx = node.x - rig.camPos[0];
+      const dy = node.y + 0.5 - rig.camPos[1];
+      const dz = node.z - rig.camPos[2];
+      const d = Math.hypot(dx, dy, dz);
+      if (d > 0.5 && this.colliders.raycast(rig.camPos[0], rig.camPos[1], rig.camPos[2], dx / d, dy / d, dz / d, d) < d - 0.5) return n;
+    }
+    return any;
   }
 
   /**
@@ -2382,7 +2464,7 @@ export class Game {
     if (s && this.where !== 'limbo') {
       // В зале ожидания вспомнить можно только стоя, на снимке: взгляд держит вещь настоящее время, пока игрок стоит.
       const hold = fl ? { holdDt: fl.frozen ? dt : 0 } : {};
-      out.push(...s.update(wdt, { pos: [b.x, b.y, b.z], eye, aim, light: look.light, node, swarm: this.swarmNear, observed: this.observed, landed: res.landed, hidden: this.memoryThing !== null && this.memoryThing.state !== 'idle', ...hold }, los));
+      out.push(...s.update(wdt, { pos: [b.x, b.y, b.z], eye, aim, light: look.light, node, swarm: this.swarmNear, observed: this.observed, landed: res.landed, hidden: this.memoryThing !== null && this.memoryThing.state !== 'idle', seen: (p) => this.seen(p, 0.4), ...hold }, los));
       this.observed = false;
     }
     for (let i = 0; i < out.length; i++) this.applySessionEvent(out[i]!, out, dream, node);
@@ -2568,6 +2650,13 @@ export class Game {
             this.swarmBody.snap(sw.pos, sw.cohesion);
             fear.push({ type: 'swarm', what: 'apparition' });
           }
+        } else if (e.type === 'trace' && sw) {
+          // Примета: Осыпь проходит вдали, за стенами; тела не видно.
+          const n = this.traceNode(node);
+          if (n >= 0) {
+            sw.trace(n, TRACE_SECONDS);
+            this.swarmBody.snap(sw.pos, 0);
+          }
         } else if (e.type === 'release' && sw) {
           // Рой выходит подальше от игрока и сам его ищет.
           const n = sw.nodeAround(node, 8, 14);
@@ -2578,7 +2667,7 @@ export class Game {
       }
     }
 
-    if (this.anomalies) this.applyAnomalies(this.anomalies.update(pos, node >= 0 ? this.level!.nav[node]!.room : -1, this.swarmNear > 0.2));
+    if (this.anomalies) this.applyAnomalies(this.anomalies.update(pos, node >= 0 ? this.level!.nav[node]!.room : -1, this.swarmNear > 0.2, (room) => this.roomSeen(room)));
   }
 
   /**
@@ -2839,7 +2928,8 @@ export class Game {
       if (live) this.spores.update(fl?.frozen ? 0 : dt, sw ? { pos: sw.pos, active: sw.active && sw.mode !== 'scatter', cohesion: sw.cohesion, hunting: sw.mode === 'hunt' || sw.mode === 'cohere' } : null, this.regret);
       this.renderer.setSpores(this.sporeBuf, live ? this.spores.visible([x, y, z], SPORES_SHOWN, this.sporeBuf) : 0);
     } else this.renderer.setSpores(this.sporeBuf, 0);
-    if (sw && sw.active && this.where === 'main') {
+    // Примета без тела (trace) не рисуется: видны только грибы в углах у её пути.
+    if (sw && sw.active && sw.mode !== 'trace' && this.where === 'main') {
       // Чем больше вспомнено и чем больше стёрто, тем выше и определённее фигура: она растёт из тронутого.
       const growth = Math.min(1, (this.session?.doneCount ?? 0) / SWARM_GROWN + this.regret * 0.6);
       if (flow) {
@@ -2866,11 +2956,12 @@ export class Game {
       const dist = Math.hypot(sw.pos[0] - x, sw.pos[1] - y, sw.pos[2] - z);
       this.driftPulse -= dt;
       if (this.driftPulse <= 0 && dist < ECHO_HEAR) {
-        const loud = sw.mode === 'hunt' || sw.mode === 'cohere' ? 1 : sw.mode === 'stalk' ? 0.7 : 0.45;
-        this.driftPulse = sw.mode === 'hunt' || sw.mode === 'cohere' ? 0.9 : sw.mode === 'stalk' ? 1.5 : 2.6;
+        const loud = sw.mode === 'hunt' || sw.mode === 'cohere' ? 1 : sw.mode === 'stalk' ? 0.7 : sw.mode === 'trace' ? 0.3 : 0.45;
+        this.driftPulse = sw.mode === 'hunt' || sw.mode === 'cohere' ? 0.9 : sw.mode === 'stalk' ? 1.5 : sw.mode === 'trace' ? 3.2 : 2.6;
         this.echo.emit([sw.pos[0], sw.pos[1] + 0.6, sw.pos[2]], ECHO_DRIFT, loud);
       }
-      const behind = behindness(rig.camPos, rig.camYaw, sw.pos, GHOST.half);
+      // Призрак из-за спины — это уже её тело: у приметы его нет.
+      const behind = sw.mode === 'trace' ? 0 : behindness(rig.camPos, rig.camYaw, sw.pos, GHOST.half);
       if (behind > 0 && dist < GHOST.range) {
         const eye: Vec3 = [rig.camPos[0], rig.camPos[1], rig.camPos[2]];
         const to: Vec3 = [sw.pos[0] - eye[0], sw.pos[1] + 1 - eye[1], sw.pos[2] - eye[2]];

@@ -387,6 +387,8 @@ const SCAN = { perLight: 24, max: 3.5, hold: 7, lodDist: 3.5, far: 28, sow: 45, 
  * трёх метрах около 0,6, в ореоле — 0,1, в дальнем разливе — 0,015); gain — её яркость.
  */
 const SLIDE = { washFrom: 0.012, washTo: 0.11, gain: 0.085 } as const;
+/** Яркость скана сонара по целым стенам (WORLD_FRAG, uSonarTint): кольцо из точек, видное и в полной темноте. */
+const SONAR_SCAN = 1.2;
 /** Сколько гроздей грибов рисуется разом. */
 export const SPORES_MAX = 240;
 
@@ -725,6 +727,8 @@ export class GameRenderer {
         uCaustic: { value: 0 },
         uVoid: { value: new THREE.Vector4(0, 0, 0, 0) },
         uVoidK: { value: new THREE.Vector2(0, 0) },
+        uSonarW: { value: new THREE.Vector4(0, 0, 0, -100) },
+        uSonarTint: { value: new THREE.Vector4(0, 0, 0, 0) },
         uMatA: { value: matA },
         uMatB: { value: matB },
         uMatBase: { value: Array.from({ length: MAT_SLOTS }, (_, i) => new THREE.Vector3(...(atlas.base[i] ?? [0.5, 0.5, 0.5]))) },
@@ -2246,6 +2250,16 @@ export class GameRenderer {
     const asLight = Math.max(0, 1 - polar * 2);
     (wu.uVoidK!.value as THREE.Vector2).set(asDark > 0 ? asDark * here : -(asLight * here * 1.3) / Math.sqrt(Math.max(1, v.gain)), here * Math.max(asDark, asLight));
     (wu.uContactGrid!.value as THREE.Vector3).set(this.contactOrigin[0], this.contactOrigin[1], v.contact ? this.contactSpan : 0);
+    // Сонар по целым стенам — скан (WORLD_FRAG): холодный, как точки плана; в темноте — ярко, при фонаре — едва. Усиление
+    // камеры его не разгоняет: он светит поверх кадра, как точки тихого слоя.
+    {
+      const sn = v.sonar;
+      const k = sn ? sn[4] : 0;
+      (wu.uSonarW!.value as THREE.Vector4).set(sn ? sn[0] : 0, sn ? sn[1] : 0, sn ? sn[2] : 0, sn ? sn[3] : -100);
+      const xray = 0.25 + 0.75 * (1 - smoothstep(0.05, 0.5, v.lightIntensity * v.lightScale));
+      const g = (SONAR_SCAN * xray) / Math.max(1, v.gain);
+      (wu.uSonarTint!.value as THREE.Vector4).set(0.5 * g, 0.72 * g, 0.84 * g, k);
+    }
     const pv = v.press ?? null;
     if (pv) {
       (wu.uPressBox!.value as THREE.Vector4).set(pv.box[0], pv.box[1], pv.box[2], pv.box[3]);
@@ -2422,9 +2436,10 @@ export class GameRenderer {
       r.render(this.clouds.scene, cam);
       r.autoClear = true;
     }
-    // Тихий слой: точки по рёбрам и углам — только там, где стена уже стёрта (поздние круги; маска — в шейдере точек);
-    // волна сонара — на любом круге.
-    if (this.edgePoints && this.edgeMat && ((v.quiet ?? 0) > 0 || (v.sonar?.[4] ?? 0) > 0)) {
+    // Тихий слой: точки по рёбрам и углам — только там, где стена уже стёрта (поздние круги; маска — в шейдере точек).
+    // Волна сонара зажигает их там же; по целым стенам она идёт сканом в шейдере мира — пока стены целы, этот проход не нужен.
+    const wallsGone = ((this.worldMat.uniforms.uErase!.value as THREE.Vector4).y * 1.14 > 0.06);
+    if (this.edgePoints && this.edgeMat && ((v.quiet ?? 0) > 0 || ((v.sonar?.[4] ?? 0) > 0 && wallsGone))) {
       const eu = this.edgeMat.uniforms;
       eu.tDepth!.value = this.sceneRT.depthTexture;
       (eu.uTiers!.value as THREE.Vector2).set(lo, hi);

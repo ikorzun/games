@@ -57,6 +57,8 @@ export interface Illusion {
   dis: number;
   /** После того как она пропала, свет на её месте уже гас. */
   dark: boolean;
+  /** Сколько секунд подряд темно на её месте (мигание фонаря — не «свет погас»). */
+  darkT: number;
   /** В который раз она возвращается. */
   turns: number;
   /** На какой ступени она сейчас (картонка, запечённая в уровень, начинает с первой). */
@@ -80,6 +82,11 @@ export interface IllusionsConfig {
   /** Темно — свет ниже этого; светло — выше этого. Между ними ничего не решается. */
   darkBelow: number;
   litAbove: number;
+  /**
+   * Сколько секунд темнота должна продержаться, чтобы считаться «свет погас»: мигание садящегося фонаря длится сотые доли
+   * секунды, и без порога вещь собиралась прямо под взглядом, хотя свет никто не гасил (аудит K-21, 17.11).
+   */
+  darkArm: number;
   /** Доля возвращений «в другом месте» (если свободные места есть). */
   place: number;
   /**
@@ -90,7 +97,7 @@ export interface IllusionsConfig {
   yield: number;
 }
 
-export const DEFAULT_ILLUSIONS: IllusionsConfig = { goTime: 0.9, comeTime: 0.9, darkBelow: 0.08, litAbove: 0.45, place: 0.25, yield: 0.38 };
+export const DEFAULT_ILLUSIONS: IllusionsConfig = { goTime: 0.9, comeTime: 0.9, darkBelow: 0.08, litAbove: 0.45, darkArm: 0.4, place: 0.25, yield: 0.38 };
 
 /** Из чего выбирать возвращение. */
 export interface ComebackOptions {
@@ -112,7 +119,7 @@ export class Illusions {
     private readonly seed: number,
     readonly cfg: IllusionsConfig = DEFAULT_ILLUSIONS,
   ) {
-    this.list = objects.map((obj) => ({ obj, state: 'here', dis: 0, dark: false, turns: 0, form: obj.flat ? FORM_CARD : FORM_REAL }));
+    this.list = objects.map((obj) => ({ obj, state: 'here', dis: 0, dark: false, darkT: 0, turns: 0, form: obj.flat ? FORM_CARD : FORM_REAL }));
   }
 
   get(id: number): Illusion | undefined {
@@ -132,6 +139,7 @@ export class Illusions {
     if (!i || i.state !== 'here') return false;
     i.state = 'going';
     i.dark = false;
+    i.darkT = 0;
     this.dirty.add(id);
     return true;
   }
@@ -162,8 +170,13 @@ export class Illusions {
       }
       // gone: ждёт темноты, потом света.
       const l = light(i.obj);
-      if (l < c.darkBelow) i.dark = true;
-      else if (i.dark && l > c.litAbove && !blocked(i.obj)) out.push(this.decide(i, options(i.obj)));
+      if (l < c.darkBelow) {
+        i.darkT += dt;
+        if (i.darkT >= c.darkArm) i.dark = true;
+      } else {
+        i.darkT = 0;
+        if (i.dark && l > c.litAbove && !blocked(i.obj)) out.push(this.decide(i, options(i.obj)));
+      }
     }
     return out;
   }
@@ -186,6 +199,7 @@ export class Illusions {
     if (!i || i.state !== 'gone') return;
     i.state = 'coming';
     i.dark = false;
+    i.darkT = 0;
     i.turns += 1;
     this.dirty.add(id);
   }
@@ -199,6 +213,7 @@ export class Illusions {
     if (!i || i.state !== 'gone') return;
     i.state = 'left';
     i.dark = false;
+    i.darkT = 0;
     i.turns += 1;
     i.form = form;
   }

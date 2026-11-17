@@ -124,8 +124,13 @@ export interface VzDebugApi {
   calmFlash(on: boolean): void;
   /** Зоны среды и обвалы уровня. */
   hazards(): Record<string, unknown>;
-  /** Выпустить рой в hops клетках от игрока (сразу настороже) либо показать его фигурой без охоты. */
-  swarm(cmd: 'release' | 'appear' | 'sleep', hops?: number): boolean;
+  /** Миг: место будто стёрто до конца — часы встают на 00:00:00, кадр и звук обрываются (для снимков и проверок). */
+  moment(): void;
+  /**
+   * Выпустить рой в hops клетках от игрока (сразу настороже), показать его фигурой без охоты либо пустить приметой
+   * без тела (trace: вдали, за стеной — грибы в углах у её пути и далёкий песок; hops не нужен).
+   */
+  swarm(cmd: 'release' | 'appear' | 'sleep' | 'trace', hops?: number): boolean;
   /** Поставить фазу режиссёра страха: 0 — ложные события, 1 — рой мелькает, 2 — охотится. */
   phase(n: 0 | 1 | 2): void;
   /** Лестницы уровня и комнаты-аномалии. */
@@ -554,6 +559,13 @@ export function installDebug(app: App): void {
         sw.cohesion = 0;
         return true;
       }
+      if (cmd === 'trace') {
+        const t = g.traceNode(g.playerNode());
+        if (t < 0) return false;
+        sw.trace(t, 26);
+        g.swarmBody.snap(sw.pos, 0);
+        return true;
+      }
       const n = sw.nodeAround(g.playerNode(), hops, hops);
       if (n < 0) return false;
       if (cmd === 'appear') sw.appear(n, 8);
@@ -570,6 +582,9 @@ export function installDebug(app: App): void {
     },
     sonar: () => {
       game().pingSonar();
+    },
+    moment: () => {
+      app.moment();
     },
     calm: (on) => {
       game().calm = on;

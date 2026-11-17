@@ -10,8 +10,25 @@ const pad = (n: number): string => String(n).padStart(2, '0');
 const FLASH_FADE_MS = 1600;
 
 /** Дата и время записи: старт 13 ноября 2004, 23:41:07, дальше идут игровые секунды. */
+/** С какой секунды суток идёт запись: 23:41:07. */
+const REC_START = 23 * 3600 + 41 * 60 + 7;
+/** Сколько секунд записи от её начала до полуночи — до мига. */
+export const MIDNIGHT = 24 * 3600 - REC_START;
+
+/**
+ * Время на камере подходит к мигу и само до него не доходит: последние две минуты (slow) секунды тянутся всё дольше, часы
+ * замирают на 23:59:5x. Наступает миг, только когда место стирается до конца, — тогда запись обрывается (ответ партнёра
+ * в квизе 17.11: «Запись обрывается»; Hud.cut).
+ */
+export function towardMidnight(seconds: number, slow = 120): number {
+  const d = MIDNIGHT - seconds;
+  if (d >= slow) return seconds;
+  // Не ближе миллисекунды: в плавающей точке хвост кривой иначе сливается с самой полуночью.
+  return Math.min(MIDNIGHT - 1e-3, MIDNIGHT - slow * Math.exp((d - slow) / slow));
+}
+
 export function recTimestamp(seconds: number): string {
-  const start = 23 * 3600 + 41 * 60 + 7;
+  const start = REC_START;
   const total = start + Math.floor(seconds);
   const day = 13 + Math.floor(total / 86400);
   const s = total % 86400;
@@ -60,6 +77,9 @@ export class Hud {
   private toastPending: { text: string; ms: number } | null = null;
   /** До какого времени (Date.now) горит или гаснет вспышка. */
   private flashUntil = 0;
+  /** Миг: до какого времени (Date.now) кадр чёрный и часы стоят на 00:00:00. */
+  private cutUntil = 0;
+  private cutTimers: ReturnType<typeof setTimeout>[] = [];
 
   constructor(parent: HTMLElement) {
     this.el = document.createElement('div');
@@ -85,7 +105,9 @@ export class Hud {
       '<g transform="translate(10.5 11) scale(0.54)"><path d="M5 19h15l8-6h5v22h-5l-8-6H5z" fill="currentColor"/>' +
       '<path d="M38 15l5-3M39 24h6M38 33l5 3" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none"/></g>' +
       '</svg><span class="vz-hud__bat-spare"></span></div>' +
-      '<div class="vz-hud__hint"></div>';
+      '<div class="vz-hud__hint"></div>' +
+      // Миг: чёрный кадр поверх всего, кроме часов.
+      '<div class="vz-hud__cut"></div>';
     parent.append(this.el);
     const q = (sel: string): HTMLElement => this.el.querySelector(sel) as HTMLElement;
     this.rec = q('.vz-hud__rec');
@@ -123,11 +145,37 @@ export class Hud {
   }
 
   setTime(seconds: number): void {
-    const s = recTimestamp(seconds);
+    if (Date.now() < this.cutUntil) return;
+    const s = recTimestamp(towardMidnight(seconds));
     if (s !== this.lastClock) {
       this.lastClock = s;
       this.clock.textContent = s;
     }
+  }
+
+  /**
+   * Миг (ответ партнёра в квизе 17.11): место стёрто до конца — часы встают на 00:00:00, REC гаснет, кадр обрывается в
+   * черноту; через миг гаснут и часы, потом чернота сходит. Словами ничего не объясняется.
+   */
+  cut(ms: number): void {
+    for (const id of this.cutTimers) clearTimeout(id);
+    this.cutUntil = Date.now() + ms;
+    this.lastClock = recTimestamp(MIDNIGHT);
+    this.clock.textContent = this.lastClock;
+    this.el.classList.add('is-cut');
+    this.el.classList.remove('is-cut-dark');
+    this.cutTimers = [
+      setTimeout(() => this.el.classList.add('is-cut-dark'), Math.round(ms * 0.55)),
+      setTimeout(() => {
+        this.el.classList.remove('is-cut', 'is-cut-dark');
+        this.cutUntil = 0;
+      }, ms),
+    ];
+  }
+
+  /** Идёт ли миг (для проверок). */
+  get cutting(): boolean {
+    return this.el.classList.contains('is-cut');
   }
 
   /** Подсказка внизу кадра; пустая строка — скрыть. */

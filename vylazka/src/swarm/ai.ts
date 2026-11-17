@@ -3,19 +3,27 @@
  *
  *   dormant ─(режиссёр)→ roam ─(почуяла свет, шум или темноту рядом с игроком)→ stalk ─(подошла)→ cohere → hunt
  *   hunt ─(луч держали на ней)→ scatter ─(переждала)→ stalk …      hunt ─(дотянулась)→ поймала
+ *   dormant ─(режиссёр, ступени 1–2)→ trace ─(прошла или игрок подошёл)→ dormant
  *
  * Осыпь — то, что свет отпустил: точки мест, с которых он ушёл. Она тянется к тому, кто несёт
  * фонарь: идёт на свет и на шум, а темнота рядом с игроком зовёт её сильнее всего — погасить фонарь
  * поблизости значит не спрятаться, а позвать. Издалека, в темноте и тишине, она игрока теряет.
  * Прямой луч держит её на месте: под ним она почти не движется, а если держать дольше — «проявляется»
- * до конца, рассыпается и собирается снова поблизости, с каждым разом быстрее. Тряска фонаря шумит.
+ * до конца, рассыпается и собирается снова поблизости, с каждым разом быстрее. И с каждым разом луч
+ * держит её хуже: в первый раз за сессию она рассыпается за 1,5 с, потом за 2, потом за 3 — одна встреча
+ * не учит её «выключать» (урок Frictional Games: понятный враг — система с дырой; K-20, ответ партнёра
+ * в квизе 17.11). Тряска фонаря шумит.
+ *
+ * Сначала приметы, потом тело (K-18, ответ партнёра в квизе 17.11): во 2-й и 3-й сессиях игрока её не видно
+ * вовсе — она проходит по месту вдали, за стенами (режим trace): в углах у её пути проступают грибы, издалека
+ * слышен её песок; подошёл — её там уже нет. Тело — с четвёртой сессии.
  */
 import { clamp01 } from '../core/math';
 import type { Rng } from '../core/rng';
 import type { Vec3 } from '../core/types';
 import type { NavNode } from '../world/level';
 
-export type SwarmMode = 'dormant' | 'roam' | 'stalk' | 'cohere' | 'hunt' | 'scatter' | 'apparition';
+export type SwarmMode = 'dormant' | 'roam' | 'stalk' | 'cohere' | 'hunt' | 'scatter' | 'apparition' | 'trace';
 
 export interface SwarmConfig {
   roamSpeed: number;
@@ -24,8 +32,10 @@ export interface SwarmConfig {
   huntDark: number;
   huntLit: number;
   huntBeam: number;
-  /** Сколько секунд прямого луча разваливает рой. */
+  /** Сколько секунд прямого луча разваливает рой в первый раз за сессию. */
   burnTime: number;
+  /** И в следующие разы за сессию, по порядку; дальше — последнее. Луч держит её всё хуже. */
+  burnLater: readonly number[];
   /** С какого расстояния рой дотягивается до игрока, м. */
   catchDist: number;
   /** Сколько узлов пути рой видит свет фонаря. */
@@ -34,6 +44,12 @@ export interface SwarmConfig {
   forgetTime: number;
   /** На сколько узлов пути чувствуется темнота вокруг игрока, когда его фонарь не светит. */
   darkNodes: number;
+  /**
+   * Примета без тела (trace): не ближе скольких узлов пути к игроку она держится и с какого расстояния (в узлах)
+   * её уже нет — игрок подошёл, а там пусто.
+   */
+  traceKeep: number;
+  traceGone: number;
 }
 
 export const DEFAULT_SWARM: SwarmConfig = {
@@ -43,10 +59,13 @@ export const DEFAULT_SWARM: SwarmConfig = {
   huntLit: 1.9,
   huntBeam: 0.12,
   burnTime: 1.5,
+  burnLater: [2, 3],
   catchDist: 0.95,
   sightNodes: 9,
   forgetTime: 8,
   darkNodes: 6,
+  traceKeep: 4,
+  traceGone: 2,
 };
 
 export interface SwarmInput {
@@ -118,6 +137,13 @@ export class SwarmAI {
     return this.mode !== 'dormant';
   }
 
+  /** Сколько прямого луча нужно, чтобы развалить её сейчас: в первый раз за сессию — burnTime, дальше — всё дольше. */
+  get burnNeed(): number {
+    const later = this.cfg.burnLater;
+    if (this.aggravation <= 0 || later.length === 0) return this.cfg.burnTime;
+    return later[Math.min(this.aggravation, later.length) - 1]!;
+  }
+
   /** Выпустить рой в узле графа. */
   activate(node: number): void {
     const n = this.nav[node];
@@ -159,6 +185,32 @@ export class SwarmAI {
     this.burn = 0;
   }
 
+  /**
+   * Примета без тела: Осыпь проходит по месту вдали от игрока seconds секунд — её не видно, в углах у её пути
+   * проступают грибы, издалека слышен песок. Не охотится и не ловит.
+   */
+  trace(node: number, seconds: number): void {
+    if (!this.nav[node]) return;
+    this.place(node);
+    this.mode = 'trace';
+    this.cohesion = 0;
+    this.awareness = 0;
+    this.timer = seconds;
+    this.burn = 0;
+    this.goal = -1;
+  }
+
+  /** Куда идти примете: в 2–5 узлах от неё и не ближе traceKeep к игроку; не нашлось — куда-нибудь рядом. */
+  private traceGoal(playerNode: number): number {
+    for (let i = 0; i < 6; i++) {
+      const n = this.nodeAround(this.node, 2, 5);
+      if (n < 0) break;
+      const hops = playerNode >= 0 ? this.route(n, playerNode).length - 1 : 99;
+      if (hops < 0 || hops >= this.cfg.traceKeep) return n;
+    }
+    return this.nodeAround(this.node, 1, 3);
+  }
+
   private place(node: number): void {
     const n = this.nav[node]!;
     this.node = node;
@@ -168,7 +220,8 @@ export class SwarmAI {
 
   /** Близость роя к игроку 0..1 (1 — вплотную): глушит фонарь, пугает, рвёт сигнал. */
   proximity(player: Vec3): number {
-    if (this.mode === 'dormant' || (this.mode === 'scatter' && this.cohesion < 0.05)) return 0;
+    // Примета без тела рядом не бывает: фонарь от неё не глохнет и сигнал не рвётся.
+    if (this.mode === 'dormant' || this.mode === 'trace' || (this.mode === 'scatter' && this.cohesion < 0.05)) return 0;
     // Сквозь пол её почти не слышно: высота весит втрое (с яруса прямо под игроком близость была ×6 к отказам фонаря).
     const d = Math.hypot(player[0] - this.pos[0], (player[1] - this.pos[1]) * 3, player[2] - this.pos[2]);
     return clamp01(1 - (d - 3) / 11);
@@ -269,6 +322,20 @@ export class SwarmAI {
       return out;
     }
 
+    if (this.mode === 'trace') {
+      // Примета: идёт по месту вдали; прошла своё — или игрок подошёл близко — и её нет.
+      this.cohesion = 0;
+      this.timer -= dt;
+      if (this.timer <= 0 || (hops >= 0 && hops <= c.traceGone)) {
+        this.mode = 'dormant';
+        this.path = [];
+        return out;
+      }
+      if (this.goal < 0 || this.node === this.goal) this.goal = this.traceGoal(inp.playerNode);
+      this.moveTo(this.goal, c.roamSpeed * 0.7, dt, null);
+      return out;
+    }
+
     // ── Что рой знает об игроке ──
     const sees = inp.lightOn && hops >= 0 && hops <= c.sightNodes;
     const hears = inp.noise > 0.05 && hops >= 0 && hops <= Math.round(2 + inp.noise * 4);
@@ -305,7 +372,7 @@ export class SwarmAI {
     } else if (this.mode === 'hunt') {
       this.cohesion = 1;
       this.burn = inp.beamOnSwarm ? this.burn + dt : Math.max(0, this.burn - dt * 0.5);
-      if (this.burn >= c.burnTime) {
+      if (this.burn >= this.burnNeed) {
         // Луч развалил рой: он утекает и соберётся снова неподалёку.
         this.mode = 'scatter';
         this.aggravation += 1;

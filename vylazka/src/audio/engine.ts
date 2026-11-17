@@ -236,6 +236,17 @@ export class AudioEngine {
     if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.muted || !this.enabled ? 0 : 1, this.ctx.currentTime, 0.03);
   }
 
+  /** Миг: звук обрывается разом и возвращается через seconds секунд (запись оборвалась). */
+  cut(seconds: number): void {
+    const ctx = this.ctx;
+    const m = this.master;
+    if (!ctx || !m) return;
+    const now = ctx.currentTime;
+    m.gain.cancelScheduledValues(now);
+    m.gain.setValueAtTime(0, now);
+    m.gain.setTargetAtTime(this.muted || !this.enabled ? 0 : 1, now + seconds, 0.35);
+  }
+
   /** Выключатель звука игрока. */
   setMuted(on: boolean): void {
     this.muted = on;

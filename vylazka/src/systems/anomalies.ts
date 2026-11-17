@@ -62,13 +62,15 @@ export class Anomalies {
 
   /**
    * Темнота: пока свет не горит, место никто не держит, и комната неподалёку (не та, где стоит
-   * игрок, и на его ярусе) меняет обстановку — вернётся свет, и она окажется другой.
+   * игрок, и на его ярусе) меняет обстановку — вернётся свет, и она окажется другой. seen — комната на виду: она не
+   * меняется (K-21: в темноте меняется только то, чего нет в кадре).
    */
-  flipInDark(pos: Vec3, room: number): AnomalyEvent[] {
+  flipInDark(pos: Vec3, room: number, seen: (room: number) => boolean = () => false): AnomalyEvent[] {
     const ev: AnomalyEvent[] = [];
     for (const v of this.variants) {
       if (room === v.room) continue;
       if (Math.hypot(pos[0] - v.center[0], pos[2] - v.center[2]) > 24 || Math.abs(pos[1] - v.center[1]) > 2) continue;
+      if (seen(v.room)) continue;
       const alt = !this.alt.has(v.room);
       if (alt) this.alt.add(v.room);
       else this.alt.delete(v.room);
@@ -80,9 +82,10 @@ export class Anomalies {
 
   /**
    * Шаг. pos — ступни игрока; room — id помещения, в котором он стоит (−1 — неизвестно);
-   * blocked — рядом рой: аномалии не срабатывают, чтобы не сломать погоню.
+   * blocked — рядом рой: аномалии не срабатывают, чтобы не сломать погоню; seen — комната на виду (издалека, сквозь
+   * проём): она меняется, только когда её не видно (K-21).
    */
-  update(pos: Vec3, room: number, blocked: boolean): AnomalyEvent[] {
+  update(pos: Vec3, room: number, blocked: boolean, seen: (room: number) => boolean = () => false): AnomalyEvent[] {
     const ev: AnomalyEvent[] = [];
 
     // ── Лестница ──
@@ -113,8 +116,8 @@ export class Anomalies {
       }
       if (!this.visited.has(v.room) || blocked) continue;
       const d = Math.hypot(pos[0] - v.center[0], pos[2] - v.center[2]);
-      // Ушёл за угол и далеко (или на другой ярус) — комнату уже не видно.
-      if (d > 13 || Math.abs(pos[1] - v.center[1]) > 2) {
+      // Ушёл за угол и далеко (или на другой ярус) — комнату уже не видно; проверяем и глазами камеры.
+      if ((d > 13 || Math.abs(pos[1] - v.center[1]) > 2) && !seen(v.room)) {
         this.visited.delete(v.room);
         const alt = !this.alt.has(v.room);
         if (alt) this.alt.add(v.room);

@@ -10,7 +10,7 @@ import { fineOf, gazeTall, internalSize, QUALITY, verticalFov } from '../src/ren
 import { WORLD_FRAG } from '../src/render/shaders';
 import { CALM_ENV, CRANK_NOISE, DEFAULT_FLASHLIGHT, Flashlight, LIGHT_LONGER, REVIVE_MIN } from '../src/systems/flashlight';
 import type { FlashlightEvents } from '../src/systems/flashlight';
-import { recTimestamp } from '../src/ui/hud';
+import { MIDNIGHT, recTimestamp, towardMidnight } from '../src/ui/hud';
 import { DECAY, MAT, MAT_COUNT, MAT_DEFS } from '../src/world/materials';
 
 const DT = 1 / 60;
@@ -649,5 +649,25 @@ describe('обвязка', () => {
     expect(recTimestamp(0)).toBe('2004-11-13 23:41:07');
     expect(recTimestamp(59.9)).toBe('2004-11-13 23:42:06');
     expect(recTimestamp(20 * 60)).toBe('2004-11-14 00:01:07');
+    expect(recTimestamp(MIDNIGHT)).toBe('2004-11-14 00:00:00');
+  });
+
+  it('на камере время подходит к мигу и само до него не доходит: последние две минуты тянутся всё дольше (квиз 17.11)', () => {
+    // До последних двух минут — как есть.
+    expect(towardMidnight(0)).toBe(0);
+    expect(towardMidnight(MIDNIGHT - 121)).toBe(MIDNIGHT - 121);
+    // Без скачка на сгибе и только вперёд.
+    expect(towardMidnight(MIDNIGHT - 119.999)).toBeCloseTo(MIDNIGHT - 119.999, 2);
+    let prev = -1;
+    for (let x = MIDNIGHT - 300; x < MIDNIGHT + 7200; x += 7) {
+      const y = towardMidnight(x);
+      expect(y).toBeGreaterThanOrEqual(prev);
+      expect(y).toBeLessThan(MIDNIGHT);
+      prev = y;
+    }
+    // Через пять минут после «полуночи» часы ещё на 23:59:5x; через два часа — на 23:59:59.
+    expect(recTimestamp(towardMidnight(MIDNIGHT + 300))).toMatch(/^2004-11-13 23:59:5\d$/);
+    expect(recTimestamp(towardMidnight(MIDNIGHT + 7200))).toBe('2004-11-13 23:59:59');
+    expect(recTimestamp(towardMidnight(MIDNIGHT + 1e7))).toBe('2004-11-13 23:59:59');
   });
 });

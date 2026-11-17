@@ -1950,6 +1950,19 @@ async function scenarioStages(browser, baseUrl) {
     st = await stepUntil(page, (s) => s.where === 'main' && s.jump === null, 60, 30);
     check('луг после холодного старта отпускает быстро (около 20 с)', st.where === 'main', JSON.stringify({ where: st.where, stay: st.pocketInfo?.stay }));
   }
+  // Миг (квиз 17.11): место стёрто до конца — часы встают на 00:00:00, REC гаснет, кадр обрывается в черноту и возвращается.
+  await vz(page, () => window.__vz.moment());
+  await sleep(250);
+  const cut = await page.evaluate(() => ({
+    on: document.querySelector('.vz-hud')?.classList.contains('is-cut') ?? false,
+    clock: document.querySelector('.vz-hud__clock')?.textContent ?? '',
+    rec: getComputedStyle(document.querySelector('.vz-hud__rec')).visibility,
+    black: getComputedStyle(document.querySelector('.vz-hud__cut')).opacity,
+  }));
+  check('миг: часы на 00:00:00, REC погас, кадр чёрный', cut.on && cut.clock.endsWith('00:00:00') && cut.rec === 'hidden' && cut.black === '1', JSON.stringify(cut));
+  await sleep(3400);
+  const back = await page.evaluate(() => document.querySelector('.vz-hud')?.classList.contains('is-cut') ?? true);
+  check('после мига кадр возвращается', !back, String(back));
   check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
   await context.close();
 }

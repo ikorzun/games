@@ -21,7 +21,8 @@ export interface SoundSink {
 /** Что звуку нужно знать об игре (Game подходит как есть). */
 export interface AudioWorld {
   light: { state: string };
-  swarm: { pos: Vec3; active: boolean; cohesion: number } | null;
+  /** Осыпь; mode 'trace' — примета без тела (ступени 1–2): её песок слышен издалека. */
+  swarm: { pos: Vec3; active: boolean; cohesion: number; mode?: string } | null;
   session: { inWater: boolean; inGas: boolean; panic: number; hold: number } | null;
   /** Где игрок: в убежище, в карманном пространстве или в лимбо. */
   where: string;
@@ -49,6 +50,8 @@ export interface AudioWorld {
 export type AudioScene = 'silent' | 'menu' | 'play';
 
 const MUSIC = 'music_menu';
+/** Громкость песка Осыпи, пока она — примета без тела (ступени 1–2, K-18): слышна только издалека. */
+export const TRACE_SAND = 1;
 
 /** Что грузить раньше остального: первые секунды вылазки и экран задания. */
 export const LOAD_FIRST: readonly string[] = ['ui_click', 'ui_start', 'hatch', 'lift', 'amb_bunker', 'amb_office', 'amb_yellow', 'amb_station', 'still_tone', 'breath_calm', 'step_concrete', 'step_carpet', 'flash_click', 'flash_die', 'flash_rattle', 'flash_spark', 'music_menu'];
@@ -276,7 +279,9 @@ export class GameAudio {
     a.loop('gas_hiss', s?.inGas ? live : 0);
     a.loop('signal_static', clamp01(game.staticLevel * 1.4));
     const sw = game.swarm;
-    if (sw?.active && !over) a.loop('swarm_loop', 0.55 + 0.45 * sw.cohesion, sw.pos);
+    // Примета без тела — громче, чем рассеянная Осыпь рядом: её слышно только издалека (затухание по расстоянию даёт
+    // звук), и это единственное, что от неё есть, кроме грибов в углах.
+    if (sw?.active && !over) a.loop('swarm_loop', sw.mode === 'trace' ? TRACE_SAND : 0.55 + 0.45 * sw.cohesion, sw.pos);
     else a.loop('swarm_loop', 0);
 
     // Следы людей. Разговор за стеной слышен, пока спокойно; чем ближе Осыпь и чем сильнее паника,

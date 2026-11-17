@@ -103,6 +103,35 @@ body {
 .vz-hud__cam {
   opacity: 0.7;
 }
+/* Миг: место стёрто до конца — запись обрывается. Чёрный кадр без перехода, REC гаснет, часы стоят на 00:00:00; потом
+   гаснут и они, и чернота сходит. */
+.vz-hud__cut {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.7s linear;
+  z-index: 0;
+}
+.vz-hud.is-cut .vz-hud__cut {
+  opacity: 1;
+  transition: none;
+}
+.vz-hud.is-cut .vz-hud__top {
+  position: relative;
+  z-index: 1;
+}
+.vz-hud.is-cut .vz-hud__dot,
+.vz-hud.is-cut .vz-hud__rec,
+.vz-hud.is-cut .vz-hud__cam,
+.vz-hud.is-cut .vz-hud__lap,
+.vz-hud.is-cut-dark .vz-hud__clock {
+  visibility: hidden;
+}
+.vz-hud.is-cut > :not(.vz-hud__top):not(.vz-hud__cut) {
+  visibility: hidden;
+}
 /* Номер круга — под временем записи, тише его. */
 .vz-hud__lap {
   font-size: 0.86em;

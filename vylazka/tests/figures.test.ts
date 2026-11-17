@@ -289,7 +289,11 @@ describe('поведение фигур', () => {
     // Свет горит — не возвращается; погас и зажёгся — возвращается (игрок отошёл).
     for (let i = 0; i < 2 / STEP; i++) fs.update(STEP, [0, 1.6, 5], (t += STEP), lightOn);
     expect(f.state).toBe('gone');
+    // Мигание фонаря (кадр темноты) — не «свет погас» (аудит K-21, 17.11): фигура не собирается.
     fs.update(STEP, [0, 1.6, 5], (t += STEP), () => 0);
+    fs.update(STEP, [0, 1.6, 5], (t += STEP), lightOn);
+    expect(f.state).toBe('gone');
+    for (let i = 0; i < 0.5 / STEP; i++) fs.update(STEP, [0, 1.6, 5], (t += STEP), () => 0);
     fs.update(STEP, [0, 1.6, 5], (t += STEP), lightOn);
     expect(f.state).toBe('coming');
     for (let i = 0; i < 0.5 / STEP; i++) fs.update(STEP, [0, 1.6, 5], (t += STEP), lightOn);
@@ -309,7 +313,7 @@ describe('поведение фигур', () => {
     expect(f.state).toBe('going');
     for (let i = 0; i < 2 / STEP; i++) fs.update(STEP, [0, 1.45, 0.5], (t += STEP), lightOn);
     expect(f.state).toBe('gone');
-    fs.update(STEP, [0, 1.45, 5], (t += STEP), () => 0);
+    for (let i = 0; i < 0.5 / STEP; i++) fs.update(STEP, [0, 1.45, 5], (t += STEP), () => 0);
     fs.update(STEP, [0, 1.45, 5], (t += STEP), lightOn);
     for (let i = 0; i < 0.8 / STEP; i++) fs.update(STEP, [0, 1.45, 5], (t += STEP), lightOn);
     const mid = f.pieces[0]!.dissolve;
