@@ -35,8 +35,24 @@ export interface PlacedSpec {
   turn: 0 | 1 | 2 | 3;
   /** Сдвиг от точки правила, м: x — вбок вдоль стены, z — от стены в комнату. */
   offset: [number, number];
+  /**
+   * Вместо какой вещи игры (имя в ALL_PROPS; квиз 17.11: «Заменять» — «в этой кухне вместо дивана игры — мой»).
+   * Тогда край, сдвиг и поворот правила не нужны: вещь встаёт туда, где игра поставила бы заменяемую, и так же
+   * повёрнута — в помещениях правила, не больше count на место.
+   */
+  replaces?: string;
   /** Кто и когда сохранил (из инструмента). */
   at?: string;
+}
+
+/** Запас по ширине и глубине, м: заменяющая вещь может быть чуть крупнее заменяемой, но не врастать в соседей. */
+export const SWAP_SLACK = 0.3;
+
+/** Годится ли вещь to на место вещи from: опоры совместимы (настенная — на стену), по размеру — с запасом. */
+export function swapFits(from: PropSpec, to: PropSpec): boolean {
+  const wall = (p: PropSpec): boolean => p.mount === 'wall';
+  if (wall(from) !== wall(to) || from.mount === 'ceiling' || to.mount === 'ceiling') return false;
+  return to.w <= from.w + SWAP_SLACK && to.d <= from.d + SWAP_SLACK;
 }
 
 /** Сколько одинаковых вещей по одному правилу на месте. */
@@ -75,6 +91,12 @@ export function placedProblems(x: unknown, props: Readonly<Record<string, PropSp
   if (!p) bad.push('вещь: такой нет в игре');
   else if (!placeable(f.prop as string, p, fixed)) bad.push('вещь: эту руками не ставят');
   if (!Number.isInteger(f.turn) || (f.turn as number) < 0 || (f.turn as number) > 3) bad.push('поворот: четвертями, 0–3');
+  if (f.replaces !== undefined) {
+    const from = typeof f.replaces === 'string' ? props[f.replaces] : undefined;
+    if (!from) bad.push('замена: такой вещи игры нет');
+    else if (fixed.has(f.replaces as string) || from.mount === 'ceiling') bad.push('замена: эту вещь игры не заменяют');
+    else if (p && !swapFits(from, p)) bad.push('замена: не встанет на её место (опора или размер)');
+  }
   const off = f.offset as unknown;
   if (!Array.isArray(off) || off.length !== 2 || !off.every((v) => within(v, PLACED_OFFSET))) bad.push('сдвиг: не дальше 3 м от края');
   const r = f.rule as Record<string, unknown> | undefined;

@@ -101,7 +101,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     <div class="sand">Вещи из Sand3D встанут на эту полку, как только у игры появится доступ к Hugging Face: каждая программа превращается в вещь игры.</div>
     <div id="shelf"></div>
   </aside>
-  <div id="view"><div class="hint"><b>тяни вещь</b> — двигать по полу, у стены встаёт вплотную · <b>Q / E</b> — повернуть · пустое место — крутить вид · <b>⌘Z</b> — отменить · у манекена <b>шарики</b> — гнуть, таз с <b>⌥</b> — в воздух · красные пятна у проёмов — проход</div></div>
+  <div id="view"><div class="hint"><b>тяни вещь</b> — двигать по полу, у стены встаёт вплотную · отпусти на <b>вещь игры</b> — встанет вместо неё · <b>Q / E</b> — повернуть · пустое место — крутить вид · <b>⌘Z</b> — отменить · у манекена <b>шарики</b> — гнуть, таз с <b>⌥</b> — в воздух · красные пятна у проёмов — проход</div></div>
   <div id="panel">
     <div class="box">
       <h2>Что стоит</h2>
@@ -123,6 +123,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
       <h2>Правило для игры</h2>
       <div id="summary"></div>
       <div id="coverage"></div>
+      <div class="row" id="replace" hidden><span id="replacetext"></span><button class="btn" id="unreplace" type="button">Не заменять</button></div>
       <div class="row" id="worlds"></div>
       <div class="row" id="rooms"></div>
       <div class="row" id="anchors"></div>

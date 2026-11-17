@@ -122,3 +122,37 @@ describe('расстановка партнёра: на уровне', () => {
     expect(spots).toEqual([]);
   });
 });
+
+describe('замена вещей игры (квиз 17.11: «Заменять»)', () => {
+  const office = () => buildLevel(generateLayout(20041113, 2, 'office'), { wear: 0, figures: [], placed: [] });
+
+  it('проверка данных: замена — существующая вещь игры с той же опорой и не крупнее с запасом', () => {
+    const base = spec({ replaces: 'kk_chair_a', prop: 'kk_stool' });
+    expect(placedProblems(base, ALL_PROPS, FIXED)).toEqual([]);
+    expect(placedProblems({ ...base, replaces: 'no_such' }, ALL_PROPS, FIXED).join()).toContain('замена');
+    const wallProp = Object.entries(ALL_PROPS).find(([n, p]) => p.mount === 'wall' && !FIXED.has(n))![0];
+    expect(placedProblems({ ...base, replaces: wallProp }, ALL_PROPS, FIXED).join()).toContain('не встанет');
+  });
+
+  it('вещь игры уступает место вещи партнёра: там же, так же повёрнута, не больше count', () => {
+    const plain = office();
+    const count = new Map<string, number>();
+    for (const o of plain.objects ?? []) count.set(o.name, (count.get(o.name) ?? 0) + 1);
+    // Самая частая напольная вещь офиса, на место которой встаёт табурет.
+    const target = [...count.entries()]
+      .filter(([n]) => ALL_PROPS[n] && !FIXED.has(n) && ALL_PROPS[n]!.mount !== 'wall' && ALL_PROPS[n]!.mount !== 'ceiling' && ALL_PROPS[n]!.w >= 0.4 && ALL_PROPS[n]!.d >= 0.4)
+      .sort((a, b) => b[1] - a[1])[0]!;
+    const [name, before] = target;
+    expect(before).toBeGreaterThan(1);
+    const swapped = buildLevel(generateLayout(20041113, 2, 'office'), { wear: 0, figures: [], placed: [spec({ id: 'pl_swap', replaces: name, prop: 'kk_stool' }, { count: 2 })] });
+    const after = (swapped.objects ?? []).filter((o) => o.name === name).length;
+    const stools = (swapped.objects ?? []).filter((o) => o.name === 'kk_stool');
+    const plainStools = (plain.objects ?? []).filter((o) => o.name === 'kk_stool').length;
+    expect(stools.length - plainStools).toBe(2);
+    expect(before - after).toBe(2);
+    // Хотя бы одна новая вещь стоит там, где стояла заменённая, и так же повёрнута.
+    const olds = (plain.objects ?? []).filter((o) => o.name === name);
+    const hit = stools.some((s) => olds.some((o) => o.rot === s.rot && Math.hypot(o.at[0] - s.at[0], o.at[2] - s.at[2]) < 0.6));
+    expect(hit).toBe(true);
+  });
+});

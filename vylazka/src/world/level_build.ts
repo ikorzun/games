@@ -23,7 +23,8 @@ import type { BuiltLevel, CollapseSpec, ItemSpot, Landmark, LevelChunk, NavNode,
 import { CEIL_TILE, MAT } from './materials';
 import { hermoDoor, stairsDown, Xf } from './props';
 import { doorFrame, doorLeaf, collapse, pit, warningSign, waterSheet } from './props_bunker';
-import { ALL_PROPS } from './props_all';
+import { ALL_PROPS, withSwap } from './props_all';
+import type { PropSwap } from './props_all';
 import { ObjectLog } from './objects';
 import { DOOR_IMAGE, SCREEN_IMAGES } from './screens';
 import type { FreeSlot } from './objects';
@@ -34,6 +35,7 @@ import type { FigureSpec } from './figures';
 import { FIGURES } from './figures_data';
 import { placeThings } from './placed_place';
 import type { PlacedSpec } from './placed';
+import { swapFits } from './placed';
 import { PLACED } from './placed_data';
 import type { ShellCell, WallStyle } from './shell';
 
@@ -231,7 +233,37 @@ export interface BuildOptions {
   keepPlaceWorld?: boolean;
 }
 
+/**
+ * Замены вещей игры вещами партнёра (world/placed.ts, replaces): хук сборки (world/props_all.ts, withSwap). Вещь игры
+ * с именем замены в помещении правила уступает место вещи партнёра — по порядку сборки, не больше count на место;
+ * если вещь партнёра не встаёт на её место (swapFits), остаётся вещь игры. Помещение точки — по её клетке и ярусу.
+ */
+function swapFor(layout: GenLayout, specs: readonly PlacedSpec[]): PropSwap | null {
+  const list = specs.filter((s) => s.replaces && s.rule.worlds.includes(layout.world) && ALL_PROPS[s.prop] && ALL_PROPS[s.replaces] && swapFits(ALL_PROPS[s.replaces]!, ALL_PROPS[s.prop]!));
+  if (list.length === 0) return null;
+  const cellRoom = new Map<string, GenRoom>();
+  for (const r of layout.rooms) for (const [x, z] of r.cells) cellRoom.set(`${r.tier},${x},${z}`, r);
+  const used = new Map<string, number>();
+  return (name, xf) => {
+    for (const s of list) {
+      if (s.replaces !== name) continue;
+      const n = used.get(s.id) ?? 0;
+      if (n >= s.rule.count) continue;
+      const tier = -Math.floor((xf.oy + 0.2) / TIER_DROP);
+      const room = cellRoom.get(`${tier},${Math.round(xf.ox / CELL) + GRID / 2},${Math.round(xf.oz / CELL) + GRID / 2}`);
+      if (!room || (s.rule.rooms.length > 0 && !s.rule.rooms.includes(room.type))) continue;
+      used.set(s.id, n + 1);
+      return s.prop;
+    }
+    return null;
+  };
+}
+
 export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLevel {
+  return withSwap(swapFor(layout, opts.placed ?? PLACED), () => buildLevelInner(layout, opts));
+}
+
+function buildLevelInner(layout: GenLayout, opts: BuildOptions): BuiltLevel {
   const decay = decayAt(opts.wear ?? 0);
   const col = new ColliderSet();
   const chunks = new Map<string, ChunkBuild>();

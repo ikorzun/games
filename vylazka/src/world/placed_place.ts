@@ -236,6 +236,8 @@ export function placeThings(specs: readonly PlacedSpec[], w: PlaceWorld, props: 
   const out: PlacedSpot[] = [];
   const boxes: Box[] = [];
   for (const spec of specs) {
+    // Замены ставит сама сборка уровня, на место вещи игры (world/props_all.ts, withSwap).
+    if (spec.replaces) continue;
     const p = props[spec.prop];
     if (!p) continue;
     const rooms = roomsFor(spec, w);

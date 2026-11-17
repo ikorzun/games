@@ -8,6 +8,7 @@
  * не становится то, чего не коснуться (потолочное), и то, что держит место на себе (FIXED).
  */
 import { asObject } from './objects';
+import type { Xf } from './props';
 import { BIRD_PROPS, CRAFT_PROPS } from './props_craft';
 import { SEATING_PROPS } from './props_seating';
 import { REAL_PROPS } from './props_real';
@@ -31,9 +32,50 @@ import { STATION_PROPS } from './props_station';
  */
 export const FIXED: ReadonlySet<string> = new Set(['coaming', 'elevator_doors', 'mound_small', 'mound', 'mound_big', 'st_column']);
 
+/**
+ * Замена вещей игры вещами партнёра (квиз 17.11, вечер: «Заменять» — «в этой кухне вместо дивана игры — мой»).
+ * Пока собирается уровень, сборка может поставить хук: для каждой вещи обстановки он отвечает, не стоит ли на её месте
+ * другая (world/level_build.ts по правилам world/placed.ts). Тогда строится та, другая, в той же точке и так же повёрнутая;
+ * объект уровня получает её имя. Разные опоры (у стены — спина в z = 0; посреди пола — середина в начале) выравниваются
+ * сдвигом на полглубины.
+ */
+export type PropSwap = (name: string, xf: Xf) => string | null;
+let swap: PropSwap | null = null;
+
+/** Выполнить body с хуком замены (на время сборки уровня). */
+export function withSwap<T>(fn: PropSwap | null, body: () => T): T {
+  const prev = swap;
+  swap = fn;
+  try {
+    return body();
+  } finally {
+    swap = prev;
+  }
+}
+
+/** Точка сборки заменяющей вещи: у разных опор начало координат в разном месте. */
+function swapXf(xf: Xf, from: PropSpec, to: PropSpec): Xf {
+  if (from.mount === to.mount) return xf;
+  if (from.mount === 'floor' && to.mount === 'free') return xf.child(0, 0, to.d / 2);
+  if (from.mount === 'free' && to.mount === 'floor') return xf.child(0, 0, -from.d / 2);
+  return xf;
+}
+
 function tracked(name: string, spec: PropSpec): PropSpec {
   if (spec.mount === 'ceiling' || FIXED.has(name)) return spec;
-  return { ...spec, build: (xf, seed) => asObject(xf, name, () => spec.build(xf, seed)) };
+  return {
+    ...spec,
+    build: (xf, seed) => {
+      const sub = swap ? swap(name, xf) : null;
+      const other = sub && sub !== name ? RAW[sub] : undefined;
+      if (other) {
+        const at = swapXf(xf, spec, other);
+        asObject(at, sub!, () => other.build(at, seed));
+        return;
+      }
+      asObject(xf, name, () => spec.build(xf, seed));
+    },
+  };
 }
 
 /**
@@ -44,6 +86,9 @@ export const PROP_SETS: Readonly<Record<string, Record<string, PropSpec>>> = {
   PROPS, HOME_PROPS, OFFICE_PROPS, MODEL_PROPS, SCREEN_PROPS, CRAFT_PROPS, BIRD_PROPS, STATION_PROPS,
   LUGGAGE_PROPS, PAPER_PROPS, FOUND_PROPS, SEATING_PROPS, REAL_PROPS, PEOPLE_PROPS,
 };
+
+/** Реквизит без обёртки объекта — для замены (обёртку даёт tracked той вещи, что заменяется). */
+const RAW: Record<string, PropSpec> = Object.fromEntries(Object.values(PROP_SETS).flatMap((set) => Object.entries(set)));
 
 export const ALL_PROPS: Record<string, PropSpec> = Object.fromEntries(
   Object.values(PROP_SETS).flatMap((set) => Object.entries(set)).map(([name, spec]) => [name, tracked(name, spec)]),

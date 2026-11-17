@@ -29,7 +29,8 @@ import { MeshBuilder } from '../../src/world/kit';
 import { buildLevel } from '../../src/world/level_build';
 import type { BuiltLevel } from '../../src/world/level';
 import { MAT_DEFS, hexToLinear } from '../../src/world/materials';
-import { placeable, placedProblems } from '../../src/world/placed';
+import { placeable, placedProblems, swapFits } from '../../src/world/placed';
+import type { LevelObject } from '../../src/world/objects';
 import type { PlacedSpec } from '../../src/world/placed';
 import { checkSpot, fitThing, HEADROOM, placeThings, roomDoors, rotOf, throatBox } from '../../src/world/placed_place';
 import { placeFigures } from '../../src/world/figure_place';
@@ -182,8 +183,11 @@ function cellRects(r: GenRoom): { x0: number; x1: number; z0: number; z1: number
   });
 }
 
+/** Номер объекта уровня, который в показанном помещении скрыт: его заменяет вещь партнёра. */
+let hiddenObj = 0;
+
 /** Показать помещение: только его треугольники (с кромкой стен), без потолка — чтобы смотреть сверху. */
-function showRoom(): void {
+function showRoom(keepView = false): void {
   for (const c of [...roomGroup.children]) {
     roomGroup.remove(c);
     (c as THREE.Mesh).geometry?.dispose();
@@ -203,6 +207,8 @@ function showRoom(): void {
       const cy = (m.position[a * 3 + 1]! + m.position[b * 3 + 1]! + m.position[c * 3 + 1]!) / 3 - floorY;
       const cz = (m.position[a * 3 + 2]! + m.position[b * 3 + 2]! + m.position[c * 3 + 2]!) / 3;
       if (!inside(cx, cz) || cy < -0.4 || cy > ceilY - floorY + 0.4) continue;
+      // Заменяемая вещь игры не рисуется: на её месте — вещь партнёра.
+      if (hiddenObj > 0 && m.obj && m.obj[a] === hiddenObj) continue;
       // Потолок и то, что под ним, — срезаны: помещение видно сверху, как макет.
       const ny = (m.normal[a * 3 + 1]! + m.normal[b * 3 + 1]! + m.normal[c * 3 + 1]!) / 3;
       if (cy > 2.3 && ny < -0.5) continue;
@@ -238,15 +244,18 @@ function showRoom(): void {
   const cx = (Math.min(...xs.map((r) => r.x0)) + Math.max(...xs.map((r) => r.x1))) / 2;
   const cz = (Math.min(...xs.map((r) => r.z0)) + Math.max(...xs.map((r) => r.z1))) / 2;
   const span = Math.max(Math.max(...xs.map((r) => r.x1)) - Math.min(...xs.map((r) => r.x0)), Math.max(...xs.map((r) => r.z1)) - Math.min(...xs.map((r) => r.z0)));
-  controls.target.set(cx, floorY + 0.8, cz);
-  cam.position.set(cx + span * 0.55, floorY + span * 0.95 + 2.2, cz + span * 0.85);
-  controls.update();
+  if (!keepView) {
+    controls.target.set(cx, floorY + 0.8, cz);
+    cam.position.set(cx + span * 0.55, floorY + span * 0.95 + 2.2, cz + span * 0.85);
+    controls.update();
+  }
   renderGhosts();
 }
 const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
 /** Выбрать место, тип помещения и номер; собрать уровень. */
 function enterRoom(w: WorldKind, type: string, pick = 0): void {
+  hiddenObj = 0;
   const all = roomsOfType(w, type);
   if (all.length === 0) return;
   world = w;
@@ -463,11 +472,56 @@ const figMeshes: THREE.Mesh[] = [];
 
 let problems: string[] = [];
 let dirty = true;
+/** Вещь игры, вместо которой встаёт вещь партнёра (замена, квиз 17.11), — её рамка в помещении. */
+const swapHelper = new THREE.Box3Helper(new THREE.Box3(), 0xe3b25e);
+swapHelper.visible = false;
+scene.add(swapHelper);
+let swapBox: [Vec3, Vec3] | null = null;
+
+/** Скрыть вещь игры (0 — показать все) и перерисовать помещение, не сбивая вид. */
+function hideObj(id: number): void {
+  if (hiddenObj === id) return;
+  hiddenObj = id;
+  showRoom(true);
+}
+
+/** Вещи игры в показанном помещении (объекты уровня), которые можно заменить вещью prop. */
+function swappable(prop: string): LevelObject[] {
+  const rects = cellRects(room);
+  const to = ALL_PROPS[prop];
+  if (!to) return [];
+  return (lvl.objects ?? []).filter((o) => {
+    const from = ALL_PROPS[o.name];
+    if (!from || o.flat || !placeable(o.name, from, FIXED) || !swapFits(from, to)) return false;
+    return Math.abs(o.at[1] - floorY) < 2.6 && rects.some((r) => o.at[0] >= r.x0 && o.at[0] <= r.x1 && o.at[2] >= r.z0 && o.at[2] <= r.z1);
+  });
+}
+
+/** Вещь игры под курсором (по её габариту), которую можно заменить вещью prop. */
+function swapTarget(e: PointerEvent, prop: string): LevelObject | null {
+  setNdc(e);
+  ray.setFromCamera(ndc, cam);
+  let best: LevelObject | null = null;
+  let bd = Infinity;
+  const hit = new THREE.Vector3();
+  for (const o of swappable(prop)) {
+    const box = new THREE.Box3(new THREE.Vector3(...o.min), new THREE.Vector3(...o.max));
+    if (!ray.ray.intersectBox(box, hit)) continue;
+    const d = hit.distanceTo(ray.ray.origin);
+    if (d < bd) {
+      bd = d;
+      best = o;
+    }
+  }
+  return best;
+}
+
 function refresh(): void {
   holder.clear();
   figGroup.visible = false;
   boxHelper.visible = false;
   arrow.visible = false;
+  swapHelper.visible = false;
   if (!cur) return;
   if (cur.kind === 'thing') {
     const mesh = new THREE.Mesh(geometryOf(cur.spec.prop), thingMat);
@@ -478,7 +532,10 @@ function refresh(): void {
     const p = ALL_PROPS[cur.spec.prop]!;
     const cell = cellOf(cur.at[0], cur.at[2]);
     const chk = checkSpot(p, cur.at, cur.rot, room, { floor: floorY, ceil: ceilY, pit: cell?.noFloor === true, tier: room.tier }, pw);
-    problems = chk.problems;
+    // Замена встаёт на место вещи игры — проверки места её не касаются (там уже стояла вещь).
+    problems = cur.spec.replaces ? [] : chk.problems;
+    swapHelper.visible = !!cur.spec.replaces && swapBox !== null;
+    if (swapHelper.visible && swapBox) swapHelper.box.set(new THREE.Vector3(...swapBox[0]), new THREE.Vector3(...swapBox[1]));
     boxHelper.box.set(new THREE.Vector3(chk.box.minX, chk.box.minY, chk.box.minZ), new THREE.Vector3(chk.box.maxX, chk.box.maxY, chk.box.maxZ));
     (boxHelper.material as THREE.LineBasicMaterial).color.set(problems.length > 0 ? 0xdc7f73 : 0x86b98c);
     boxHelper.visible = true;
@@ -624,6 +681,10 @@ renderer.domElement.addEventListener('pointermove', (e) => {
     const q = floorHit(e);
     carryMesh.visible = !!q;
     if (q) carryMesh.position.set(q.x, floorY, q.z);
+    // Над вещью игры, которую можно заменить, — её рамка: отпустишь — встанет вместо неё.
+    const t = 'prop' in carry ? swapTarget(e, carry.prop) : null;
+    swapHelper.visible = !!t;
+    if (t) swapHelper.box.set(new THREE.Vector3(...t.min), new THREE.Vector3(...t.max));
     return;
   }
   if (!drag) {
@@ -640,6 +701,12 @@ renderer.domElement.addEventListener('pointermove', (e) => {
   if (drag.what === 'thing' && cur.kind === 'thing') {
     const q = floorHit(e);
     if (!q) return;
+    if (cur.spec.replaces) {
+      delete cur.spec.replaces;
+      swapBox = null;
+      hideObj(0);
+      setStatus('Уже не замена: вещь стоит сама по себе. Чтобы заменить снова — отпусти вещь с полки на вещь игры.');
+    }
     const p = ALL_PROPS[cur.spec.prop]!;
     const s = snapToWall(p, q.x, q.z, cur.rot);
     cur.at = [Math.round(s.x * 100) / 100, cur.at[1], Math.round(s.z * 100) / 100];
@@ -680,7 +747,9 @@ renderer.domElement.addEventListener('pointerup', (e) => {
     carry = null;
     carryMesh.visible = false;
     document.body.classList.remove('is-carrying');
-    if (q) drop(what, q.x, q.z);
+    const t = 'prop' in what ? swapTarget(e, what.prop) : null;
+    if (t && 'prop' in what) dropSwap(what.prop, t);
+    else if (q) drop(what, q.x, q.z);
     return;
   }
   endDrag();
@@ -727,9 +796,35 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+/** Вещь с полки — вместо вещи игры (замена): там же и так же повёрнута, правило — «вместо такой-то». */
+function dropSwap(prop: string, o: LevelObject): void {
+  pushUndo();
+  const p = ALL_PROPS[prop]!;
+  const from = ALL_PROPS[o.name]!;
+  // Разные опоры — сдвиг на полглубины вдоль «лица», как при сборке уровня (world/props_all.ts, swapXf).
+  const f: [number, number] = [[0, 1], [1, 0], [0, -1], [-1, 0]][o.rot] as [number, number];
+  const k = from.mount === 'floor' && p.mount === 'free' ? p.d / 2 : from.mount === 'free' && p.mount === 'floor' ? -from.d / 2 : 0;
+  const it: ThingItem = {
+    kind: 'thing',
+    spec: { id: `pl_${stamp()}`, name: `${p.ru.split(',')[0]!.slice(0, 40)} вместо ${from.ru.split(',')[0]!.slice(0, 30)}`, prop, rule: { worlds: [world], rooms: [roomType], anchor: 'wall', facing: 'room', lift: 0, count: 1 }, turn: 0, offset: [0, 0], replaces: o.name },
+    at: [o.at[0] + f[0] * k, o.at[1], o.at[2] + f[1] * k],
+    rot: o.rot,
+  };
+  derive(it);
+  it.spec.replaces = o.name;
+  swapBox = [o.min, o.max];
+  hideObj(o.id);
+  cur = it;
+  setStatus(`Вместо «${from.ru.split(',')[0]}» — «${p.ru.split(',')[0]}». В игре так будет в помещениях правила, сколько указано.`);
+  dirty = true;
+  syncPanel();
+}
+
 /** Новая вещь (фигура) там, где её отпустили. */
 function drop(what: { prop: string } | { figure: true }, x: number, z: number): void {
   pushUndo();
+  hideObj(0);
+  swapBox = null;
   if ('prop' in what) {
     const p = ALL_PROPS[what.prop]!;
     const s = snapToWall(p, x, z, 0);
@@ -911,6 +1006,14 @@ nameEl.addEventListener('input', () => {
   if (cur) cur.spec.name = nameEl.value;
   renderProblems();
 });
+$('unreplace').addEventListener('click', () =>
+  change(() => {
+    if (cur?.kind === 'thing') delete cur.spec.replaces;
+    swapBox = null;
+    hideObj(0);
+    if (cur) derive(cur);
+  }),
+);
 $('turnl').addEventListener('click', () => turn(-1));
 $('turnr').addEventListener('click', () => turn(1));
 
@@ -977,6 +1080,11 @@ function syncPanel(): void {
       settle(c);
     }),
   );
+  const rp = c.kind === 'thing' ? c.spec.replaces : undefined;
+  $('replace').toggleAttribute('hidden', !rp);
+  if (rp) $('replacetext').textContent = `вместо вещи игры: ${ALL_PROPS[rp]?.ru.split(',')[0] ?? rp}`;
+  $('anchors').toggleAttribute('hidden', !!rp);
+  $('facings').toggleAttribute('hidden', !!rp);
   liftEl.value = String(c.spec.rule.lift);
   $('liftv').textContent = `${c.spec.rule.lift.toFixed(2)} м`;
   countEl.value = String(c.spec.rule.count);
@@ -986,7 +1094,9 @@ function syncPanel(): void {
   const rooms = c.spec.rule.rooms.length === 0 ? 'любые помещения' : c.spec.rule.rooms.map((r) => ROOM_RU[r] ?? r).join(', ');
   const TURN_RU = ['', ', и ещё на четверть вправо', ', и ещё задом наперёд', ', и ещё на четверть влево'];
   const turnTxt = c.kind === 'thing' ? TURN_RU[c.spec.turn]! : c.spec.yaw ? `, доворот ${c.spec.yaw}°` : '';
-  $('summary').textContent = `${where} · ${rooms} · ${ANCHOR_RU[c.spec.rule.anchor]}, ${FACING_RU[c.spec.rule.facing]}${turnTxt} · ${c.spec.rule.lift > 0 ? `${c.spec.rule.lift.toFixed(2)} м над полом · ` : ''}${c.spec.rule.count} шт. на место`;
+  $('summary').textContent = rp
+    ? `${where} · ${rooms} · вместо «${ALL_PROPS[rp]?.ru.split(',')[0] ?? rp}» — там же и так же повёрнута · до ${c.spec.rule.count} шт. на место`
+    : `${where} · ${rooms} · ${ANCHOR_RU[c.spec.rule.anchor]}, ${FACING_RU[c.spec.rule.facing]}${turnTxt} · ${c.spec.rule.lift > 0 ? `${c.spec.rule.lift.toFixed(2)} м над полом · ` : ''}${c.spec.rule.count} шт. на место`;
   renderSaved();
   renderProblems();
   coverageSoon();
@@ -1003,6 +1113,21 @@ function coverageSoon(): void {
   $('coverage').textContent = 'считаю, где встанет…';
   covTimer = window.setTimeout(coverage, 350);
 }
+/** Сколько замен встанет на плане: вещи игры этого имени в помещениях правила, не больше count. */
+function swapsIn(l: BuiltLevel, spec: PlacedSpec): number {
+  const layout = l.layout!;
+  const byCell = new Map<string, GenRoom>();
+  for (const r of layout.rooms) for (const [x, z] of r.cells) byCell.set(`${r.tier},${x},${z}`, r);
+  let n = 0;
+  for (const o of l.objects ?? []) {
+    if (o.name !== spec.replaces) continue;
+    const tier = -Math.floor((o.at[1] + 0.2) / 4.5);
+    const r = byCell.get(`${tier},${Math.round(o.at[0] / CELL) + HALF},${Math.round(o.at[2] / CELL) + HALF}`);
+    if (r && (spec.rule.rooms.length === 0 || spec.rule.rooms.includes(r.type))) n += 1;
+  }
+  return Math.min(n, spec.rule.count);
+}
+
 function coverage(): void {
   if (!cur) return;
   const c = cur;
@@ -1014,7 +1139,7 @@ function coverage(): void {
       const l = levelOf(seed, w);
       if (!l.placeWorld) continue;
       levels += 1;
-      const n = c.kind === 'thing' ? placeThings([c.spec], l.placeWorld, ALL_PROPS).length : placeFigures([c.spec], l.placeWorld).length;
+      const n = c.kind === 'thing' && c.spec.replaces ? swapsIn(l, c.spec) : c.kind === 'thing' ? placeThings([c.spec], l.placeWorld, ALL_PROPS).length : placeFigures([c.spec], l.placeWorld).length;
       if (n > 0) hit += 1;
       pieces += n;
     }
@@ -1078,6 +1203,15 @@ function openThing(s: PlacedSpec): void {
   goTo(s.rule);
   const it: ThingItem = { kind: 'thing', spec: JSON.parse(JSON.stringify(s)) as PlacedSpec, at: [0, 0, 0], rot: 0 };
   settle(it);
+  swapBox = null;
+  // Замена — на место первой такой вещи игры в показанном помещении, если она здесь есть.
+  const o = s.replaces ? swappable(s.prop).find((x) => x.name === s.replaces) : undefined;
+  if (o) {
+    it.at = [o.at[0], o.at[1], o.at[2]];
+    it.rot = o.rot;
+    swapBox = [o.min, o.max];
+  }
+  hideObj(o ? o.id : 0);
   cur = it;
   renderGhosts();
   dirty = true;
@@ -1242,6 +1376,12 @@ void connect();
   },
   drop: (prop: string, x: number, z: number) => drop({ prop }, x, z),
   dropFigure: (x: number, z: number) => drop({ figure: true }, x, z),
+  swappable: (prop: string) => swappable(prop).map((o) => ({ name: o.name, at: o.at })),
+  dropOnto: (prop: string, name: string) => {
+    const o = swappable(prop).find((x) => x.name === name);
+    if (o) dropSwap(prop, o);
+    return !!o;
+  },
   doors: () => roomDoors(room, pw),
   enter: (w: WorldKind, t: string, k = 0) => enterRoom(w, t, k),
   turn,
