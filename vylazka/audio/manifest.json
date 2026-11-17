@@ -1,5 +1,5 @@
 {
-  "note": "Звуки игры. prompt — инструкция генеративной модели (по-английски), ru — что это и где звучит. Файлы: public/audio/<id>_<n>.mp3, n от 1 до variants. xfade — сколько секунд конец петли перетекает в её начало: шумовым петлям побольше, ритмичным (дыхание, сердце) — только чтобы не щёлкало. Шина voices — следы людей: шёпот, смех, разговор за стеной (просьба партнёра от 15.11).",
+  "note": "Звуки игры. prompt — инструкция генеративной модели (по-английски), ru — что это и где звучит. Файлы: public/audio/<id>_<n>.mp3, n от 1 до variants. xfade — сколько секунд конец петли перетекает в её начало: шумовым петлям побольше, ритмичным (дыхание, сердце) — только чтобы не щёлкало. Шина voices — следы людей: шёпот, смех, разговор за стеной (просьба партнёра от 15.11). rate — частота, в которой звук разбирается в память (по умолчанию 44100): 22050 — у гулов, в записи которых выше 10 кГц ничего нет (замер 17.11: на 40–77 дБ тише остального), вдвое меньше памяти телефона.",
   "sounds": [
     {
       "id": "step_concrete",
@@ -151,6 +151,7 @@
       "loop": true,
       "seconds": 30,
       "xfade": 2.0,
+      "rate": 22050,
       "volume": 0.3,
       "prompt": "Deep hollow drone of air moving through long underground concrete tunnels, low rumbling resonance like wind inside a huge pipe, constant and loud, close microphone, no events, no drips, no voices, no music, seamless loop",
       "ru": "тишина заброшенного убежища: гул воздуха"
@@ -162,6 +163,7 @@
       "loop": true,
       "seconds": 30,
       "xfade": 2.0,
+      "rate": 22050,
       "volume": 0.35,
       "prompt": "Deep underground room tone: oppressive low rumble, faint metallic resonance in pipes, slow distant drips, claustrophobic, no music, seamless loop",
       "ru": "нижние ярусы: давящий низкий гул и резонанс труб"
@@ -358,6 +360,7 @@
       "seconds": 20,
       "volume": 0.3,
       "xfade": 2.0,
+      "rate": 22050,
       "prompt": "Low steady electrical transformer hum inside the walls of a huge empty carpeted room, dull 50 Hz drone with a thin high whine and muffled air pressure, close microphone, full recording level, completely static, no events, no voices, no music, seamless loop",
       "ru": "тон жёлтых комнат: почти тишина и слабое электрическое гудение"
     },
@@ -391,6 +394,7 @@
       "seconds": 20,
       "volume": 0.22,
       "xfade": 1.5,
+      "rate": 22050,
       "prompt": "Indistinct conversation of several people in the next room heard through a wall: steady calm murmur of men and women talking, muffled and dull, no intelligible words, clearly audible, full recording level, no music, seamless loop",
       "ru": "тихий неразборчивый разговор за стеной"
     },
@@ -504,6 +508,7 @@
       "seconds": 22,
       "volume": 0.3,
       "xfade": 2.0,
+      "rate": 22050,
       "prompt": "Ambience of a huge empty railway station waiting hall recorded at high gain: vast reverberant stone room, steady low air rumble, distant ventilation, far echoing footsteps and a faint metallic clank now and then, constant, full recording level, no announcements, no voices, no music, seamless loop",
       "ru": "тон зала ожидания: гулкий пустой зал"
     },

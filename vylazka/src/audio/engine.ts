@@ -7,6 +7,11 @@
  * Звука, синтезированного в коде, в игре нет: площадка такой не принимает. Если файла нет, звук
  * просто не играет; о неполном наборе файлов сообщает проверка сборки. Какие файлы есть, сборка
  * знает заранее (`__VZ_AUDIO__` из vite.config.ts), поэтому отсутствующие даже не запрашиваются.
+ *
+ * Память (критика куратора 237): разобранный звук — четыре байта на отсчёт, весь набор занимал около 90 МБ, а телефон
+ * держит его вместе с WebGL. Поэтому файлы разбираются своим декодером в своей частоте (rate в манифесте: глухие гулы —
+ * в 22 кГц), а большие петли (от 20 с: гулы мест, музыка меню) хранятся сжатыми и выгружаются, когда их полминуты
+ * не слышно и игра их не ждёт (want), — и разбираются снова из тех же байтов, без новой загрузки.
  */
 import { playThroughSilentSwitch } from '../platform/mobile_guard';
 import type { Vec3 } from '../core/types';
@@ -21,7 +26,26 @@ export interface SoundDef {
   volume: number;
   /** Для петель: сколько секунд конец перетекает в начало. */
   xfade?: number;
+  /** В какой частоте звук разбирается в память; по умолчанию FULL_RATE. Глухим гулам хватает половины. */
+  rate?: number;
 }
+
+/** Частота разбора по умолчанию: одна для всех, а не частота контекста (на iOS это 48 кГц — ещё на 9 % больше памяти). */
+export const FULL_RATE = 44100;
+/** Петли не короче этого (с) хранятся сжатыми и выгружаются, пока не нужны. */
+export const UNLOAD_SECONDS = 20;
+/** Сколько (мс) большую петлю не слышно, прежде чем её выгрузить. */
+export const UNLOAD_AFTER_MS = 30000;
+/**
+ * Сколько (мс) держится просьба игры «скоро понадобится» (want: место следующей сцены, своё место после скачка). Дольше —
+ * гул чужого места лежал бы в памяти всю сцену; не успели — гул разберётся при входе, за долю секунды, пока идёт скачок.
+ */
+export const WANT_HOLD_MS = 60000;
+/** Как часто (мс) искать, что выгрузить. */
+const SWEEP_MS = 1000;
+
+/** Хранится ли звук сжатым и выгружается ли, пока не нужен: большие петли. */
+export const unloadable = (def: Pick<SoundDef, 'loop' | 'seconds'>): boolean => def.loop && def.seconds >= UNLOAD_SECONDS;
 
 export const SOUNDS: readonly SoundDef[] = manifest.sounds;
 
@@ -122,8 +146,20 @@ export class AudioEngine {
   readonly missing = new Set<string>();
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  /** Разобранные файлы: то, что сейчас занимает память. */
   private readonly buffers = new Map<string, AudioBuffer>();
-  private readonly loading = new Map<string, Promise<AudioBuffer | null>>();
+  /** Сжатые байты больших петель: из них петлю разбирают снова после выгрузки. */
+  private readonly raw = new Map<string, ArrayBuffer>();
+  /** Какие файлы пришли по сети; загрузки и разборы, которые идут сейчас. */
+  private readonly fetched = new Set<string>();
+  private readonly fetching = new Map<string, Promise<ArrayBuffer | null>>();
+  private readonly decoding = new Map<string, Promise<AudioBuffer | null>>();
+  /** Когда (часы страницы, мс) звук последний раз звучал и когда игра попросила его держать наготове. */
+  private readonly heardAt = new Map<string, number>();
+  private readonly wantedAt = new Map<string, number>();
+  private lastSweep = -Infinity;
+  /** Декодеры по частоте разбора; null — такой частоты браузер не дал. */
+  private readonly decoders = new Map<number, BaseAudioContext | null>();
   private readonly defs = new Map(SOUNDS.map((s) => [s.id, s]));
   private readonly lastVariant = new Map<string, number>();
   private readonly loops = new Map<string, LoopVoice>();
@@ -134,8 +170,6 @@ export class AudioEngine {
   private paused = false;
   private seed = 1;
   private readonly queue: [string, number][] = [];
-  /** Декодер до первого нажатия: настоящий контекст браузер без жеста не запустит, а разобрать файлы можно. */
-  private offline: BaseAudioContext | null = null;
   private loadingBegun = false;
   /** Сколько загрузок идёт сейчас и сколько первых файлов ещё не догружено (пока их больше нуля — по два разом). */
   private inFlight = 0;
@@ -161,13 +195,23 @@ export class AudioEngine {
     return this.ctx !== null;
   }
 
-  /** Сколько файлов уже загружено и сколько должно быть. */
-  status(): { loaded: number; total: number; known: number; missing: number; state: string; muted: boolean; enabled: boolean; loops: string[]; asked: Record<string, number>; played: Record<string, number> } {
+  /**
+   * Сколько файлов уже загружено и сколько должно быть; сколько разобрано и сколько это занимает памяти (МБ, по
+   * четыре байта на отсчёт).
+   */
+  status(): { loaded: number; total: number; known: number; missing: number; decoded: number; mb: number; resident: string[]; state: string; muted: boolean; enabled: boolean; loops: string[]; asked: Record<string, number>; played: Record<string, number> } {
+    let bytes = 0;
+    for (const b of this.buffers.values()) bytes += (b.length ?? 0) * (b.numberOfChannels ?? 1) * 4;
+    /** Большие петли, которые сейчас разобраны (остальные лежат сжатыми). */
+    const resident = SOUNDS.filter((s) => unloadable(s) && this.buffers.has(soundFile(s.id, 1))).map((s) => s.id);
     return {
-      loaded: this.buffers.size,
+      loaded: this.fetched.size,
       total: SOUNDS.reduce((n, s) => n + s.variants, 0),
       known: this.files.size,
       missing: this.missing.size,
+      decoded: this.buffers.size,
+      mb: Math.round((bytes / 1048576) * 10) / 10,
+      resident,
       state: this.ctx?.state ?? 'locked',
       muted: this.muted,
       enabled: this.enabled,
@@ -187,16 +231,52 @@ export class AudioEngine {
    */
   preload(first: readonly string[] = []): void {
     this.order = first;
+    // Первые звуки — гул своего места, звук прихода — нужны сразу: их большие петли разбираются, как только придут.
+    this.markWanted(first.slice(0, FIRST_FILES));
     if (typeof window === 'undefined' || this.loadingBegun) return;
-    const Offline = (window as unknown as { OfflineAudioContext?: OfflineCtor; webkitOfflineAudioContext?: OfflineCtor }).OfflineAudioContext ?? (window as unknown as { webkitOfflineAudioContext?: OfflineCtor }).webkitOfflineAudioContext;
     // Без отдельного декодера (очень старые браузеры) загрузка начнётся с первым нажатием.
-    if (!Offline) return;
-    try {
-      this.offline = new Offline(1, 1, 44100);
-    } catch {
-      return;
-    }
+    if (!this.decoderAt(FULL_RATE)) return;
     this.beginLoad();
+  }
+
+  /** Конструктор декодера без звука: им можно разбирать файлы до первого нажатия и в любой частоте. */
+  private offlineCtor(): OfflineCtor | null {
+    if (typeof window === 'undefined') return null;
+    const w = window as unknown as { OfflineAudioContext?: OfflineCtor; webkitOfflineAudioContext?: OfflineCtor };
+    return w.OfflineAudioContext ?? w.webkitOfflineAudioContext ?? null;
+  }
+
+  /** Декодер частоты rate (создаётся один раз); null — браузер такой частоты не дал. */
+  private decoderAt(rate: number): BaseAudioContext | null {
+    if (this.decoders.has(rate)) return this.decoders.get(rate)!;
+    const Offline = this.offlineCtor();
+    let d: BaseAudioContext | null = null;
+    try {
+      d = Offline ? new Offline(1, 1, rate) : null;
+    } catch {
+      d = null;
+    }
+    this.decoders.set(rate, d);
+    return d;
+  }
+
+  /** Чем разбирать звук: декодер его частоты, иначе обычный, иначе сам контекст (очень старые браузеры). */
+  private decoderFor(def: SoundDef | undefined): BaseAudioContext | null {
+    const rate = def?.rate ?? FULL_RATE;
+    return (rate !== FULL_RATE ? this.decoderAt(rate) : null) ?? this.decoderAt(FULL_RATE) ?? this.ctx;
+  }
+
+  private markWanted(ids: readonly string[]): void {
+    const now = clockMs();
+    for (const id of ids) {
+      const def = this.defs.get(id);
+      if (def && unloadable(def)) this.wantedAt.set(id, now);
+    }
+  }
+
+  /** Нужна ли большая петля сейчас: игра её ждёт или она звучала недавно. */
+  private needed(id: string, now: number): boolean {
+    return now - (this.wantedAt.get(id) ?? -Infinity) < WANT_HOLD_MS || now - (this.heardAt.get(id) ?? -Infinity) < UNLOAD_AFTER_MS;
   }
 
   private beginLoad(): void {
@@ -217,9 +297,16 @@ export class AudioEngine {
    * Уже загруженные и грузящиеся не трогаются. До начала загрузки — меняет её порядок.
    */
   want(ids: readonly string[]): void {
+    this.markWanted(ids);
     if (!this.loadingBegun) {
       this.order = [...ids, ...this.order.filter((id) => !ids.includes(id))];
       return;
+    }
+    // Выгруженная большая петля разбирается заново из своих байтов (или как только они придут) — к приходу в место она
+    // готова. Ещё не запрошенную разберёт очередь: она уже нужна.
+    for (const id of ids) {
+      const file = soundFile(id, 1);
+      if (this.raw.has(file) || this.fetching.has(file)) void this.decodeFile(id, 1);
     }
     const picked: [string, number][] = [];
     for (const id of ids) {
@@ -292,30 +379,87 @@ export class AudioEngine {
     }
   }
 
-  private load(id: string, variant: number): Promise<AudioBuffer | null> {
+  /** Загрузка из очереди: большая петля, которая пока не нужна, только приходит и ждёт сжатой; остальное разбирается. */
+  private load(id: string, variant: number): Promise<unknown> {
+    const def = this.defs.get(id);
+    if (def && unloadable(def) && !this.needed(id, clockMs())) return this.fetchFile(id, variant);
+    return this.decodeFile(id, variant);
+  }
+
+  /** Байты файла: сжатые байты большой петли — из памяти, остальное — по сети, один раз. */
+  private fetchFile(id: string, variant: number): Promise<ArrayBuffer | null> {
     const file = soundFile(id, variant);
-    const known = this.loading.get(file);
+    const kept = this.raw.get(file);
+    if (kept) return Promise.resolve(kept);
+    const known = this.fetching.get(file);
     if (known) return known;
-    const decoder = this.ctx ?? this.offline;
-    if (!decoder || !this.files.has(file)) return Promise.resolve(null);
+    if (!this.files.has(file) || this.missing.has(file)) return Promise.resolve(null);
+    const def = this.defs.get(id);
     const p = fetch(this.baseUrl + file)
       .then((r) => {
         // Сервер разработки на несуществующий файл отвечает страницей игры: проверяем тип.
         if (!r.ok || !(r.headers.get('content-type') ?? '').startsWith('audio')) throw new Error(String(r.status));
         return r.arrayBuffer();
       })
-      // Форма с колбэками: старый Safari промис из decodeAudioData не возвращает.
-      .then((data) => new Promise<AudioBuffer>((resolve, reject) => void decoder.decodeAudioData(data, resolve, reject)))
-      .then((buf) => {
-        this.buffers.set(file, buf);
-        return buf;
-      })
-      .catch(() => {
-        this.missing.add(file);
-        return null;
-      });
-    this.loading.set(file, p);
+      .then(
+        (data) => {
+          this.fetched.add(file);
+          if (def && unloadable(def)) this.raw.set(file, data);
+          this.fetching.delete(file);
+          return data;
+        },
+        () => {
+          this.missing.add(file);
+          this.fetching.delete(file);
+          return null;
+        },
+      );
+    this.fetching.set(file, p);
     return p;
+  }
+
+  /** Разобрать файл в память (или взять уже разобранный). */
+  private decodeFile(id: string, variant: number): Promise<AudioBuffer | null> {
+    const file = soundFile(id, variant);
+    const have = this.buffers.get(file);
+    if (have) return Promise.resolve(have);
+    const known = this.decoding.get(file);
+    if (known) return known;
+    const def = this.defs.get(id);
+    const done = (buf: AudioBuffer | null): AudioBuffer | null => {
+      if (buf) this.buffers.set(file, buf);
+      this.decoding.delete(file);
+      return buf;
+    };
+    const p = this.fetchFile(id, variant).then((data) => {
+      const decoder = this.decoderFor(def);
+      if (!data || !decoder) return done(null);
+      // decodeAudioData забирает байты себе; байты большой петли нужны для следующего разбора — ей отдаём копию.
+      const input = def && unloadable(def) ? data.slice(0) : data;
+      // Форма с колбэками: старый Safari промис из decodeAudioData не возвращает.
+      return new Promise<AudioBuffer>((resolve, reject) => void decoder.decodeAudioData(input, resolve, reject)).then(done, () => {
+        this.missing.add(file);
+        return done(null);
+      });
+    });
+    this.decoding.set(file, p);
+    return p;
+  }
+
+  /**
+   * Выгрузить большие петли, которые полминуты не звучали и которых игра не ждёт: их место в памяти нужнее. Звучащая
+   * петля не выгружается; байты остаются — разбор снова не требует сети.
+   */
+  private sweep(now: number): void {
+    if (now - this.lastSweep < SWEEP_MS) return;
+    this.lastSweep = now;
+    for (const def of SOUNDS) {
+      if (!unloadable(def)) continue;
+      const file = soundFile(def.id, 1);
+      const buf = this.buffers.get(file);
+      if (!buf || !this.raw.has(file) || this.needed(def.id, now) || this.loops.get(def.id)?.buf === buf) continue;
+      this.buffers.delete(file);
+    }
   }
 
   private applyMaster(): void {
@@ -386,7 +530,7 @@ export class AudioEngine {
     }
     if (!opts.late) return;
     // Файл ещё в пути: берём его вне очереди и играем, если успел.
-    void this.load(id, variant).then((ready) => {
+    void this.decodeFile(id, variant).then((ready) => {
       if (ready && this.ctx === ctx) this.startOrWait(def, ready, opts, until);
     });
   }
@@ -443,10 +587,17 @@ export class AudioEngine {
     const sp = pos ? spatialize(this.listener, this.yaw, pos) : null;
     const target = def.volume * Math.max(0, gain) * (sp ? sp.gain : 1);
     const silent = target <= 0.001;
+    const now = clockMs();
+    if (!silent) this.heardAt.set(id, now);
+    this.sweep(now);
     if (!voice) {
       if (silent) return;
       const buf = this.buffers.get(soundFile(id, 1));
-      if (!buf) return;
+      if (!buf) {
+        // Выгруженная большая петля: разобрать из её байтов; зазвучит, как только будет готова (через кадр-другой).
+        if (this.raw.has(soundFile(id, 1))) void this.decodeFile(id, 1);
+        return;
+      }
       const g = ctx.createGain();
       g.gain.value = 0;
       const pan = typeof ctx.createStereoPanner === 'function' ? ctx.createStereoPanner() : null;

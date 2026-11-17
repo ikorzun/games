@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { allSoundFiles, AudioEngine, SOUNDS, spatialize } from '../src/audio/engine';
+import { allSoundFiles, AudioEngine, FULL_RATE, SOUNDS, spatialize, unloadable } from '../src/audio/engine';
 import { GameAudio, LOAD_FIRST, loadFirst, PLACE_TONE, TRACE_SAND, WAKE_FIRST, WAKING } from '../src/audio/game_audio';
 import type { AudioWorld, SoundSink } from '../src/audio/game_audio';
 import type { Vec3 } from '../src/core/types';
@@ -268,6 +268,168 @@ describe('звук с первого нажатия (партнёр 17.11: «п�
     }
     expect(open).toBe(6);
     expect(most).toBe(6);
+  });
+});
+
+/**
+ * Звук без браузера, но с памятью: декодер помнит свою частоту, файл несёт своё имя в байтах (копия байтов — тоже),
+ * часы страницы и часы звука идут по команде теста.
+ */
+function fakeMemoryAudio() {
+  const clock = { t: 1000 };
+  vi.stubGlobal('performance', { now: () => clock.t });
+  const param = () => ({ value: 0, setTargetAtTime() {}, cancelScheduledValues() {}, setValueAtTime() {}, setValueCurveAtTime() {} });
+  const node = () => ({ connect() {}, disconnect() {} });
+  const decoded: { file: string; rate: number }[] = [];
+  const fetched: string[] = [];
+  const nameOf = (d: ArrayBuffer): string => new TextDecoder().decode(d);
+  const buffer = (rate: number) => ({ duration: 30, length: 30 * rate, numberOfChannels: 1, sampleRate: rate });
+  class Ctx {
+    state = 'running';
+    destination = node();
+    onstatechange: (() => void) | null = null;
+    get currentTime(): number {
+      return clock.t / 1000;
+    }
+    resume(): Promise<void> {
+      return Promise.resolve();
+    }
+    suspend(): Promise<void> {
+      return Promise.resolve();
+    }
+    createGain = () => ({ ...node(), gain: param() });
+    createBufferSource = () => ({ ...node(), buffer: null, playbackRate: param(), onended: null, start() {}, stop() {} });
+    createBiquadFilter = () => ({ ...node(), type: '', frequency: param() });
+    createStereoPanner = () => ({ ...node(), pan: param() });
+    decodeAudioData(d: ArrayBuffer, ok: (b: unknown) => void): void {
+      decoded.push({ file: nameOf(d), rate: 48000 });
+      ok(buffer(48000));
+    }
+  }
+  class Offline {
+    constructor(
+      _channels: number,
+      _length: number,
+      readonly rate: number,
+    ) {}
+    decodeAudioData(d: ArrayBuffer, ok: (b: unknown) => void): void {
+      decoded.push({ file: nameOf(d), rate: this.rate });
+      ok(buffer(this.rate));
+    }
+  }
+  vi.stubGlobal('window', { AudioContext: Ctx, OfflineAudioContext: Offline });
+  vi.stubGlobal('fetch', (url: string): Promise<unknown> => {
+    fetched.push(url);
+    const name = url.slice(url.lastIndexOf('/') + 1);
+    return Promise.resolve({ ok: true, headers: { get: () => 'audio/mpeg' }, arrayBuffer: () => Promise.resolve(new TextEncoder().encode(name).buffer) });
+  });
+  const times = (file: string): { fetched: number; decoded: number } => ({ fetched: fetched.filter((u) => u.endsWith(`/${file}`)).length, decoded: decoded.filter((d) => d.file === file).length });
+  return { clock, decoded, fetched, times };
+}
+
+describe('звук и память телефона (критика куратора 237: весь звук в памяти — около 90 МБ)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('глухие гулы разбираются в 22 кГц, остальное — в 44,1; и после разблокировки — не в частоте контекста (на iOS 48 кГц)', async () => {
+    const c = fakeMemoryAudio();
+    const light = SOUNDS.filter((s) => s.rate === 22050).map((s) => s.id);
+    expect(light.sort()).toEqual(['amb_bunker', 'amb_deep', 'amb_station', 'amb_yellow', 'voices_murmur']);
+    // У шипящих петель и записей партнёра верха есть (замер 17.11) — им полная частота.
+    for (const id of ['amb_office', 'amb_meadow', 'amb_void', 'still_tone', 'gas_hiss', 'wake_street', 'wake_pass', 'music_menu']) expect(SOUNDS.find((s) => s.id === id)!.rate).toBeUndefined();
+    const e = new AudioEngine('./audio/', ['ui_start_1.mp3', 'amb_bunker_1.mp3', 'hatch_1.mp3', 'ui_click_1.mp3']);
+    // Без загрузки заранее: всё разбирается уже после нажатия, когда есть контекст.
+    e.unlock();
+    e.want(['amb_bunker']);
+    await wait(5);
+    expect(c.decoded).toContainEqual({ file: 'amb_bunker_1.mp3', rate: 22050 });
+    expect(c.decoded).toContainEqual({ file: 'hatch_1.mp3', rate: 44100 });
+    expect(c.decoded.some((d) => d.rate === 48000)).toBe(false);
+  });
+
+  it('большая петля приходит и ждёт сжатой, пока не нужна; нужна — разобрана; полминуты тишины — выгружена; снова нужна — разобрана из тех же байтов, без новой загрузки', async () => {
+    const c = fakeMemoryAudio();
+    const e = new AudioEngine('./audio/', ['ui_start_1.mp3', 'amb_bunker_1.mp3', 'hatch_1.mp3', 'ui_click_1.mp3', 'amb_office_1.mp3', 'music_menu_1.mp3']);
+    e.preload(loadFirst('shelter'));
+    await wait(5);
+    // Пришло всё; гул своего места разобран сразу, гул чужого и музыка меню — лежат сжатыми.
+    expect(e.status().loaded).toBe(6);
+    expect(e.status().resident).toEqual(['amb_bunker']);
+    e.unlock();
+    // Меню: музыка нужна — разбирается и со следующего кадра звучит.
+    e.loop('music_menu', 1);
+    await wait(5);
+    e.loop('music_menu', 1);
+    expect(e.status().loops).toContain('music_menu');
+    expect(e.status().resident).toContain('music_menu');
+    // Сон начался: музыка стихла и остановилась, гул убежища звучит.
+    for (let i = 0; i < 4; i++) {
+      c.clock.t += 500;
+      e.loop('music_menu', 0);
+      e.loop('amb_bunker', 1);
+    }
+    expect(e.status().loops).not.toContain('music_menu');
+    // Через полминуты тишины музыка выгружена; гул убежища звучит — он на месте.
+    for (let i = 0; i < 32; i++) {
+      c.clock.t += 1000;
+      e.loop('music_menu', 0);
+      e.loop('amb_bunker', 1);
+    }
+    expect(e.status().resident).toEqual(['amb_bunker']);
+    expect(e.status().loops).toContain('amb_bunker');
+    // Снова меню: музыка разбирается из тех же байтов — второй раз разобрана, но загружена один раз.
+    e.loop('music_menu', 1);
+    await wait(5);
+    e.loop('music_menu', 1);
+    expect(e.status().loops).toContain('music_menu');
+    expect(c.times('music_menu_1.mp3')).toEqual({ fetched: 1, decoded: 2 });
+    expect(c.times('amb_bunker_1.mp3')).toEqual({ fetched: 1, decoded: 1 });
+  });
+
+  it('гул места следующей сцены (want) разбирается заранее и держится минуту; не понадобился — выгружен', async () => {
+    const c = fakeMemoryAudio();
+    const e = new AudioEngine('./audio/', ['ui_start_1.mp3', 'amb_bunker_1.mp3', 'hatch_1.mp3', 'ui_click_1.mp3', 'amb_office_1.mp3']);
+    e.preload(loadFirst('shelter'));
+    await wait(5);
+    e.unlock();
+    expect(e.status().resident).toEqual(['amb_bunker']);
+    e.want(loadFirst('office').slice(0, 4));
+    await wait(5);
+    expect(e.status().resident).toEqual(['amb_bunker', 'amb_office']);
+    // Сцена в офисе так и не пришла: через минуту с лишним офисный гул выгружен, свой — звучит и на месте.
+    for (let i = 0; i < 62; i++) {
+      c.clock.t += 1000;
+      e.loop('amb_bunker', 1);
+      e.loop('amb_office', 0);
+    }
+    expect(e.status().resident).toEqual(['amb_bunker']);
+    expect(c.times('amb_office_1.mp3')).toEqual({ fetched: 1, decoded: 1 });
+  });
+
+  it('памяти под звук — около половины прежнего: большие петли сжаты, глухие гулы — в половинной частоте', () => {
+    // По манифесту: сколько МБ разобранного звука держит игра в сцене убежища (гул убежища и глубины, разговор за
+    // стеной) против прежнего «всё разобрано в 44,1 кГц». Длины — номинальные, из манифеста.
+    const mb = (s: (typeof SOUNDS)[number], rate: number): number => (s.seconds * s.variants * rate * 4 * (s.id === 'music_menu' ? 2 : 1)) / 1048576;
+    const before = SOUNDS.reduce((n, s) => n + mb(s, 44100), 0);
+    const inShelter = new Set(['amb_bunker', 'amb_deep', 'voices_murmur']);
+    const after = SOUNDS.reduce((n, s) => n + (!unloadable(s) || inShelter.has(s.id) ? mb(s, s.rate ?? FULL_RATE) : 0), 0);
+    expect(after).toBeLessThan(before * 0.55);
+  });
+
+  it('звучащая петля не выгружается, сколько бы ни звучала', async () => {
+    const c = fakeMemoryAudio();
+    const e = new AudioEngine('./audio/', ['amb_office_1.mp3']);
+    e.unlock();
+    await wait(5);
+    e.loop('amb_office', 1);
+    await wait(5);
+    for (let i = 0; i < 200; i++) {
+      c.clock.t += 1000;
+      e.loop('amb_office', 1);
+    }
+    expect(e.status().loops).toEqual(['amb_office']);
+    expect(e.status().resident).toEqual(['amb_office']);
   });
 });
 

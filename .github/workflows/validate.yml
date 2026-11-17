@@ -15,6 +15,12 @@ on:
       - ".github/workflows/validate.yml"
   pull_request:
 
+# Новая отправка в PR отменяет проверку прошлой: полный смоук идёт больше часа, и проверки нескольких отправок подряд
+# шли разом, присылая письмо о каждой устаревшей. Проверки основных веток не отменяются.
+concurrency:
+  group: validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint-episodes:
     runs-on: ubuntu-latest

@@ -1396,21 +1396,24 @@ async function scenarioIllusions(browser, baseUrl) {
       check('после темноты цветок вернулся тусклым, как кружево (ступень «кружево»)', back.state === 'left' && lace >= 1, `${back.state}, кружевных цветков этого вида ${lace}`);
     }
     check('стёртое убежище: нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
-    // Круг можно задать и после решётки (#lap5) — для страницы по ссылке, у адреса которой нет параметров.
-    {
-      const hp = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113#lap5');
-      const lv5 = await vz(hp.page, () => window.__vz.level());
-      await hp.page.evaluate(() => {
-        location.hash = '#lap3';
-      });
-      await sleep(400);
-      const lv3 = await vz(hp.page, () => window.__vz.level());
-      check('адрес с #lap5 открывает место на пятом круге (стёртость 0,56); сменили на #lap3 на заставке — место пересобрано (0,28)', Math.abs(lv5.wear - 0.56) < 1e-6 && Math.abs(lv3.wear - 0.28) < 1e-6 && lv3.seed === lv5.seed, JSON.stringify({ lap5: lv5.wear, lap3: lv3.wear }));
-      await hp.context.close();
-    }
     const warns = log.warnings.filter((x) => !benign(x));
     check('стёртое убежище: нет предупреждений в консоли', warns.length === 0, `${warns.length}: ${[...new Set(warns)].join(' | ').slice(0, 300)}`);
     await context.close();
+  }
+
+  // Круг можно задать и после решётки (#lap5) — для страницы по ссылке, у адреса которой нет параметров. Своя страница —
+  // после того, как стёртое убежище закрыто: две страницы разом в программной отрисовке не успевают загрузиться (CI 17.11:
+  // эта, открытая рядом с ним, не дождалась готовности за 90 с).
+  {
+    const hp = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113#lap5');
+    const lv5 = await vz(hp.page, () => window.__vz.level());
+    await hp.page.evaluate(() => {
+      location.hash = '#lap3';
+    });
+    await sleep(400);
+    const lv3 = await vz(hp.page, () => window.__vz.level());
+    check('адрес с #lap5 открывает место на пятом круге (стёртость 0,56); сменили на #lap3 на заставке — место пересобрано (0,28)', Math.abs(lv5.wear - 0.56) < 1e-6 && Math.abs(lv3.wear - 0.28) < 1e-6 && lv3.seed === lv5.seed, JSON.stringify({ lap5: lv5.wear, lap3: lv3.wear }));
+    await hp.context.close();
   }
 }
 
@@ -2895,7 +2898,8 @@ async function scenarioAudio(browser, baseUrl) {
   await page.waitForFunction(() => window.__vz.audio().loaded === window.__vz.audio().total, null, { timeout: 30000 }).catch(() => undefined);
   let au = await vz(page, () => window.__vz.audio());
   check('до первого нажатия звук заперт, а набор уже загружен целиком', au.state === 'locked' && au.known === au.total && au.total >= 50 && au.loaded === au.total && au.missing === 0, JSON.stringify({ state: au.state, known: au.known, total: au.total, loaded: au.loaded, missing: au.missing }));
-  check('каждый файл запрошен один раз, первыми — нужные в начале вылазки', asked.length === au.total && new Set(asked).size === au.total && asked.slice(0, 3).join() === 'ui_click_1.mp3,ui_start_1.mp3,hatch_1.mp3', `${asked.length} запросов, первые: ${asked.slice(0, 3).join(', ')}`);
+  // Порядок — loadFirst('shelter') (17.11, «звук не срабатывает сразу»): нажатие «старт», гул своего места, люк.
+  check('каждый файл запрошен один раз, первыми — нужные в начале вылазки: старт, гул убежища, люк', asked.length === au.total && new Set(asked).size === au.total && asked.slice(0, 3).join() === 'ui_start_1.mp3,amb_bunker_1.mp3,hatch_1.mp3', `${asked.length} запросов, первые: ${asked.slice(0, 3).join(', ')}`);
   check('на карточке задания есть кнопка звука', (await page.textContent('.vz-overlay__opt--sound'))?.trim() === 'Звук: вкл');
 
   await page.click('.vz-overlay');
