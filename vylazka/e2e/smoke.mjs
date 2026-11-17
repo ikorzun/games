@@ -1701,6 +1701,12 @@ async function scenarioRooms(browser, baseUrl) {
   // Промежуток теперь не чёрный: без света место держится в памяти и тянет след (длинная выдержка),
   // поэтому вспышка не обрывается, а гаснет. Снимаем три кадра: вспышка, сразу после неё и через
   // четверть секунды (если следующая вспышка ещё не началась).
+  // Фонарь на это время выключен: след бывает только без света (при свете длинной выдержки нет), а луч между
+  // вспышками держит кадр ровным — в CI при горящем фонаре сразу после вспышки 38, через четверть секунды 37.
+  // Раньше к этому месту фонарь мог заглохнуть сам; в режиме проверок (?fail=0) случайных отказов больше нет.
+  const lit = (await state(page)).light.state === 'on';
+  if (lit) await vz(page, () => window.__vz.toggleLight());
+  await vz(page, () => window.__vz.step(30));
   const pairs = [];
   for (let i = 0; i < 3; i++) {
     const on = await frameWhen((v) => v > 0.5);
@@ -1713,6 +1719,7 @@ async function scenarioRooms(browser, baseUrl) {
     }
     pairs.push([on, early, late]);
   }
+  if (lit) await vz(page, () => window.__vz.toggleLight());
   const show = pairs.map(([on, early, late]) => `${on?.toFixed(1)} / ${early?.toFixed(1)} / ${late?.toFixed(1)}`).join('; ');
   check('строб: во вспышке кадр светлеет целиком', pairs.every(([on, , late]) => on !== null && late !== null && on > late * 1.2 && on - late > 12), show);
   check('строб: вспышка не обрывается, а гаснет — сразу после неё кадр ярче, чем через четверть секунды', pairs.every(([on, early, late]) => early !== null && late !== null && early > late * 1.1 && early <= on * 1.02), show);
