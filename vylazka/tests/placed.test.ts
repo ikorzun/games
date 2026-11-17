@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { generateLayout } from '../src/gen/layout';
 import type { WorldKind } from '../src/gen/layout';
 import { buildLevel } from '../src/world/level_build';
-import { placeable, placedProblems } from '../src/world/placed';
-import type { PlacedSpec } from '../src/world/placed';
-import { HEADROOM, placeThings, roomDoors, rotOf, throatBox, worldBox } from '../src/world/placed_place';
+import type { BuiltLevel } from '../src/world/level';
+import type { LevelObject } from '../src/world/objects';
+import { placeable, placedProblems, removedProblems } from '../src/world/placed';
+import type { PlacedSpec, RemovedSpec } from '../src/world/placed';
+import { gameNth, HEADROOM, placeThings, roomDoors, roomIndex, rotOf, throatBox, worldBox } from '../src/world/placed_place';
 import type { Box } from '../src/world/placed_place';
 import { ALL_PROPS, FIXED } from '../src/world/props_all';
 
@@ -154,5 +156,180 @@ describe('замена вещей игры (квиз 17.11: «Заменять»
     const olds = (plain.objects ?? []).filter((o) => o.name === name);
     const hit = stools.some((s) => olds.some((o) => o.rot === s.rot && Math.hypot(o.at[0] - s.at[0], o.at[2] - s.at[2]) < 0.6));
     expect(hit).toBe(true);
+  });
+});
+
+// ───────────────── вещи игры: убрать и передвинуть (партнёр 17.11, 19:15) ─────────────────
+
+const removedSpec = (over: Partial<RemovedSpec> = {}): RemovedSpec => ({
+  id: 'rm_test',
+  name: 'Шкаф — убран',
+  what: { thing: 'filing_cabinet', nth: 0 },
+  worlds: ['office'],
+  rooms: ['files'],
+  ...over,
+});
+/** Точка объекта — ключ для сравнения уровней (номера объектов после убранной вещи сдвигаются). */
+const where = (o: Pick<LevelObject, 'name' | 'at' | 'rot'>): string => `${o.name}@${o.at.map((v) => v.toFixed(3)).join(',')}/${o.rot}`;
+/** Сколько объектов в каждой точке. */
+const census = (objs: readonly LevelObject[]): Map<string, number> => {
+  const m = new Map<string, number>();
+  for (const o of objs) m.set(where(o), (m.get(where(o)) ?? 0) + 1);
+  return m;
+};
+
+describe('вещи игры, убранные и передвинутые: данные', () => {
+  it('убранная: годная проходит; ловит ключ, имя, вещь, номер, места, помещения', () => {
+    expect(removedProblems(removedSpec(), ALL_PROPS, FIXED)).toEqual([]);
+    expect(removedProblems(removedSpec({ id: 'Плохо' }), ALL_PROPS, FIXED).join()).toContain('ключ');
+    expect(removedProblems(removedSpec({ name: ' ' }), ALL_PROPS, FIXED).join()).toContain('имя');
+    expect(removedProblems(removedSpec({ what: { thing: 'no_such', nth: 0 } }), ALL_PROPS, FIXED).join()).toContain('такой нет');
+    const fixedName = [...FIXED].find((n) => ALL_PROPS[n])!;
+    expect(removedProblems(removedSpec({ what: { thing: fixedName, nth: 0 } }), ALL_PROPS, FIXED).join()).toContain('не убирают');
+    const ceiling = Object.entries(ALL_PROPS).find(([, p]) => p.mount === 'ceiling')![0];
+    expect(removedProblems(removedSpec({ what: { thing: ceiling, nth: 0 } }), ALL_PROPS, FIXED).join()).toContain('не убирают');
+    expect(removedProblems(removedSpec({ what: { thing: 'filing_cabinet', nth: 32 } }), ALL_PROPS, FIXED).join()).toContain('номер');
+    expect(removedProblems(removedSpec({ what: { thing: 'filing_cabinet', nth: 0.5 } }), ALL_PROPS, FIXED).join()).toContain('номер');
+    expect(removedProblems(removedSpec({ worlds: [] }), ALL_PROPS, FIXED).join()).toContain('места');
+    expect(removedProblems(removedSpec({ rooms: ['Кухня'] }), ALL_PROPS, FIXED).join()).toContain('помещения');
+    expect(removedProblems(null, ALL_PROPS, FIXED)).toEqual(['не объект']);
+  });
+
+  it('передвинутая: та же вещь, что двигают, её можно ставить руками, номер 0–31, не вместе с заменой', () => {
+    const moved = spec({ prop: 'filing_cabinet', moves: { thing: 'filing_cabinet', nth: 1 } });
+    expect(placedProblems(moved, ALL_PROPS, FIXED)).toEqual([]);
+    expect(placedProblems({ ...moved, moves: { thing: 'kk_stool', nth: 1 } }, ALL_PROPS, FIXED).join()).toContain('та же, что двигают');
+    expect(placedProblems({ ...moved, moves: { thing: 'filing_cabinet', nth: -1 } }, ALL_PROPS, FIXED).join()).toContain('номер');
+    expect(placedProblems({ ...moved, moves: { thing: 'filing_cabinet', nth: 40 } }, ALL_PROPS, FIXED).join()).toContain('номер');
+    expect(placedProblems({ ...moved, moves: { thing: 'no_such', nth: 0 } }, ALL_PROPS, FIXED).join()).toContain('такой вещи игры нет');
+    const fixedName = [...FIXED].find((n) => ALL_PROPS[n])!;
+    expect(placedProblems({ ...moved, prop: fixedName, moves: { thing: fixedName, nth: 0 } }, ALL_PROPS, FIXED).join()).toContain('руками не двигают');
+    expect(placedProblems({ ...moved, replaces: 'kk_chair_a' }, ALL_PROPS, FIXED).join()).toContain('одно из двух');
+    expect(placedProblems({ ...moved, moves: 'шкаф' }, ALL_PROPS, FIXED).join()).toContain('какая вещь игры');
+  });
+});
+
+describe('вещи игры, убранные и передвинутые: на уровне', () => {
+  const layout = generateLayout(20041113, 2, 'office');
+  const make = (placed: readonly PlacedSpec[] = [], removed: readonly RemovedSpec[] = []): BuiltLevel => buildLevel(layout, { wear: 0, figures: [], placed, removed, keepPlaceWorld: true });
+  const plain = make();
+  const roomAt = roomIndex(layout);
+  const roomOf = (o: Pick<LevelObject, 'at'>) => roomAt(o.at[0], o.at[1], o.at[2]);
+  /** Вещи X в помещениях: номер помещения → объекты в порядке сборки. */
+  const byRoom = (lvl: BuiltLevel, x: string): Map<number, LevelObject[]> => {
+    const m = new Map<number, LevelObject[]>();
+    for (const o of lvl.objects ?? []) {
+      const r = roomOf(o);
+      if (o.name !== x || !r) continue;
+      m.set(r.id, [...(m.get(r.id) ?? []), o]);
+    }
+    return m;
+  };
+
+  it('без записей уровень тот же, что с пустыми списками', () => {
+    const def = buildLevel(layout, { wear: 0, figures: [], keepPlaceWorld: true });
+    expect(census(def.objects ?? [])).toEqual(census(plain.objects ?? []));
+  });
+
+  it('убранная: в каждом помещении типа — на одну меньше, пропала первая по порядку сборки; в других помещениях — как было', () => {
+    const X = 'filing_cabinet';
+    const T = 'files';
+    const before = byRoom(plain, X);
+    const inT = [...before.keys()].filter((id) => layout.rooms[id]!.type === T);
+    const elsewhere = [...before.keys()].filter((id) => layout.rooms[id]!.type !== T);
+    expect(inT.length).toBeGreaterThan(1);
+    expect(elsewhere.length).toBeGreaterThan(0);
+    const after = byRoom(make([], [removedSpec()]), X);
+    for (const id of inT) {
+      const was = before.get(id)!;
+      const now = after.get(id) ?? [];
+      expect(now.length).toBe(was.length - 1);
+      // Пропала именно первая по порядку сборки: остальные стоят, где стояли.
+      expect(now.map(where).sort()).toEqual(was.slice(1).map(where).sort());
+    }
+    for (const id of elsewhere) expect((after.get(id) ?? []).map(where)).toEqual(before.get(id)!.map(where));
+    // Номер больше числа таких вещей — ничего не меняется.
+    const most = Math.max(...[...before.values()].map((l) => l.length));
+    const none = make([], [removedSpec({ what: { thing: X, nth: most } })]);
+    expect(census(none.objects ?? [])).toEqual(census(plain.objects ?? []));
+  });
+
+  it('номер в инструменте = номер в игре: убранная по номеру из объектов уровня пропадает ровно там', () => {
+    const objs = plain.objects ?? [];
+    // По одной вещи разных имён с номером больше нуля (среди них — картонка, если есть): номер считается как в конструкторе.
+    const picks: LevelObject[] = [];
+    for (const o of objs) {
+      if (!placeable(o.name, ALL_PROPS[o.name]!, FIXED) || o.name.startsWith('display_') || !roomOf(o)) continue;
+      if (gameNth(objs, o, roomAt) < 1 || picks.some((p) => p.name === o.name)) continue;
+      if (picks.length < 3 || (o.flat && !picks.some((p) => p.flat))) picks.push(o);
+    }
+    expect(picks.length).toBeGreaterThanOrEqual(3);
+    for (const o of picks) {
+      const nth = gameNth(objs, o, roomAt);
+      const type = roomOf(o)!.type;
+      const lvl = make([], [removedSpec({ what: { thing: o.name, nth }, rooms: [type] })]);
+      // Пропадают ровно вещи этого имени с этим номером в помещениях этого типа; остальные такие — на месте.
+      const gone = objs.filter((q) => q.name === o.name && roomOf(q)?.type === type && gameNth(objs, q, roomAt) === nth);
+      expect(gone.map(where)).toContain(where(o));
+      const want = census(objs.filter((q) => q.name === o.name && !gone.includes(q)));
+      expect(census((lvl.objects ?? []).filter((q) => q.name === o.name)), `${o.name} №${nth}`).toEqual(want);
+    }
+  });
+
+  it('передвинутая: такая же вещь в том же помещении, по правилу, не в проходе и не в мебели', () => {
+    const X = 'filing_cabinet';
+    const T = 'cubicles';
+    const move = spec({ id: 'pl_move', prop: X, moves: { thing: X, nth: 1 }, offset: [0, -0.29] }, { worlds: ['office'], rooms: [T], anchor: 'wall', count: 1 });
+    expect(placedProblems(move, ALL_PROPS, FIXED)).toEqual([]);
+    const before = byRoom(plain, X);
+    const lvl = make([move]);
+    const after = byRoom(lvl, X);
+    const rooms = [...before.keys()].filter((id) => layout.rooms[id]!.type === T && before.get(id)!.length > 1);
+    expect(rooms.length).toBeGreaterThan(0);
+    const moved = (lvl.placed ?? []).filter((s) => s.moved);
+    expect(moved.length).toBe(rooms.length);
+    for (const id of rooms) {
+      expect(after.get(id)!.length).toBe(before.get(id)!.length);
+      // Первая такая — на месте; вторая — переехала: её прежней точки больше нет.
+      const now = after.get(id)!.map(where);
+      expect(now).toContain(where(before.get(id)![0]!));
+      expect(now).not.toContain(where(before.get(id)![1]!));
+      const s = moved.find((q) => q.room === id)!;
+      expect(s, `помещение ${id}`).toBeDefined();
+      const room = layout.rooms[id]!;
+      expect(roomAt(s.at[0], s.at[1], s.at[2])?.id).toBe(id);
+      const box = worldBox(ALL_PROPS[X]!, s.at, s.rot);
+      const floor = lvl.placeWorld!.shells[room.tier]!.get(room.cells[0]![0] - 8, room.cells[0]![1] - 8)!.floorY;
+      for (const d of roomDoors(room, lvl.placeWorld!)) expect(overlap(box, throatBox(d, floor))).toBe(false);
+      // Не врастает в мебель: преграды чужих объектов её коробку не задевают.
+      const self = (lvl.objects ?? []).find((o) => o.name === X && Math.hypot(o.at[0] - s.at[0], o.at[2] - s.at[2]) < 0.01)!;
+      expect(self).toBeDefined();
+      const skin = 0.03;
+      const hit = lvl.colliders.boxes.some((b) => b.owner !== self.id && !b.off && b.maxY > floor + 0.02 && box.minX < b.maxX - skin && box.maxX > b.minX + skin && box.minZ < b.maxZ - skin && box.maxZ > b.minZ + skin && box.minY < b.maxY - skin && box.maxY > b.minY + skin);
+      expect(hit).toBe(false);
+    }
+    // В помещениях других типов — как было.
+    for (const [id, list] of before) if (layout.rooms[id]!.type !== T) expect(after.get(id)!.map(where)).toEqual(list.map(where));
+  });
+
+  it('передвинутая без места по правилу стоит, где поставила игра', () => {
+    const X = 'filing_cabinet';
+    // В проёме низкая вещь не встаёт никогда: проход остаётся свободным.
+    const move = spec({ id: 'pl_nowhere', prop: X, moves: { thing: X, nth: 0 } }, { worlds: ['office'], rooms: ['files'], anchor: 'door', count: 1 });
+    const lvl = make([move]);
+    expect((lvl.placed ?? []).filter((s) => s.moved)).toEqual([]);
+    // Те же точки, что без записи; картонка, которую двигали, возвращается на своё место настоящей вещью.
+    const objs = plain.objects ?? [];
+    const moving = (o: LevelObject): boolean => roomOf(o)?.type === 'files' && gameNth(objs, o, roomAt) === 0;
+    expect(census((lvl.objects ?? []).filter((o) => o.name === X))).toEqual(census(objs.filter((o) => o.name === X)));
+    expect(census((lvl.objects ?? []).filter((o) => o.name === X && !o.flat))).toEqual(census(objs.filter((o) => o.name === X && (!o.flat || moving(o)))));
+  });
+
+  it('тот же сид — та же расстановка; новая запись не сдвигает передвинутую', () => {
+    const move = spec({ id: 'pl_move', prop: 'filing_cabinet', moves: { thing: 'filing_cabinet', nth: 1 }, offset: [0, -0.29] }, { worlds: ['office'], rooms: ['cubicles'], anchor: 'wall', count: 1 });
+    const a = make([move]).placed;
+    expect(make([move]).placed).toEqual(a);
+    const b = make([move], [removedSpec({ id: 'rm_other', what: { thing: 'water_cooler', nth: 0 }, rooms: ['corridor'] })]).placed;
+    expect(b).toEqual(a);
   });
 });

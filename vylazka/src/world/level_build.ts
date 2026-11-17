@@ -33,10 +33,11 @@ import { EdgeBuilder } from './edges';
 import { placeFigures } from './figure_place';
 import type { FigureSpec } from './figures';
 import { FIGURES } from './figures_data';
-import { placeThings } from './placed_place';
-import type { PlacedSpec } from './placed';
+import { moveSpot, NEVER, placeThings, roomIndex } from './placed_place';
+import type { Box, PlacedSpot } from './placed_place';
+import type { PlacedSpec, RemovedSpec } from './placed';
 import { swapFits } from './placed';
-import { PLACED } from './placed_data';
+import { PLACED, REMOVED } from './placed_data';
 import type { ShellCell, WallStyle } from './shell';
 
 const HALF = GRID / 2;
@@ -225,6 +226,8 @@ export interface BuildOptions {
   figures?: readonly FigureSpec[];
   /** Вещи партнёра (world/placed_data.ts); не задано — те, что стоят в игре. */
   placed?: readonly PlacedSpec[];
+  /** Вещи игры, которые партнёр убрал (world/placed_data.ts, REMOVED); не задано — те, что убраны в игре. */
+  removed?: readonly RemovedSpec[];
   /**
    * Отдать в уровне то, по чему расставляются фигуры и вещи (скорлупа ярусов, преграды, начало места): нужно
    * конструктору (tools/constructor) и тестам. Игре не нужно — уровень идёт к ней из Worker, а скорлупа
@@ -233,37 +236,81 @@ export interface BuildOptions {
   keepPlaceWorld?: boolean;
 }
 
+/** Передвинутая вещь игры, которую сборка не поставила, где собиралась: запись, помещение, точка и сид той вещи. */
+interface MovedCall {
+  spec: PlacedSpec;
+  room: GenRoom;
+  xf: Xf;
+  seed: number;
+}
+
 /**
- * Замены вещей игры вещами партнёра (world/placed.ts, replaces): хук сборки (world/props_all.ts, withSwap). Вещь игры
- * с именем замены в помещении правила уступает место вещи партнёра — по порядку сборки, не больше count на место;
- * если вещь партнёра не встаёт на её место (swapFits), остаётся вещь игры. Помещение точки — по её клетке и ярусу.
+ * Что сборка делает с вещами игры по записям партнёра (world/placed.ts) — хук сборки (world/props_all.ts, withSwap).
+ *
+ * Хук видит каждую вещь обстановки, которая становится объектом уровня (картонки — тоже), находит её помещение по клетке и
+ * ярусу точки и считает: эта вещь — nth-я такая в этом помещении (с нуля, по порядку сборки; считаются все, в том числе
+ * заменённые, убранные и передвинутые, — номера устойчивы и совпадают с тем, как их считает конструктор, placed_place.ts,
+ * gameNth). Дальше по порядку:
+ * - убрана (RemovedSpec: эта вещь, этот номер, место и тип помещения подходят) — не строится;
+ * - передвинута (PlacedSpec с moves) — не строится здесь: сборка запоминает её и после всей обстановки ставит по правилу
+ *   записи в том же помещении (buildLevelInner, moveSpot); в комнате-аномалии и там, где вещи не ставят, не двигается;
+ * - заменена (PlacedSpec с replaces) — на её месте вещь партнёра, по порядку сборки, не больше count на место; если вещь
+ *   партнёра не встаёт на её место (swapFits), остаётся вещь игры. Картонку не заменяют.
+ * Записей для этого места нет — хука нет: уровень собирается ровно как без них.
  */
-function swapFor(layout: GenLayout, specs: readonly PlacedSpec[]): PropSwap | null {
-  const list = specs.filter((s) => s.replaces && s.rule.worlds.includes(layout.world) && ALL_PROPS[s.prop] && ALL_PROPS[s.replaces] && swapFits(ALL_PROPS[s.replaces]!, ALL_PROPS[s.prop]!));
-  if (list.length === 0) return null;
-  const cellRoom = new Map<string, GenRoom>();
-  for (const r of layout.rooms) for (const [x, z] of r.cells) cellRoom.set(`${r.tier},${x},${z}`, r);
+interface GameEdits {
+  hook: PropSwap;
+  /** Передвинутые: заполняет хук во время сборки обстановки. */
+  moved: MovedCall[];
+  /** Помещения, где вещи игры не двигают (комната-аномалия, нижние части шахт): задаёт сборка до обстановки. */
+  still: Set<number>;
+}
+
+function editsFor(layout: GenLayout, placed: readonly PlacedSpec[], removed: readonly RemovedSpec[]): GameEdits | null {
+  const here = (worlds: readonly WorldKind[]): boolean => worlds.includes(layout.world);
+  const swaps = placed.filter((s) => s.replaces && !s.moves && here(s.rule.worlds) && ALL_PROPS[s.prop] && ALL_PROPS[s.replaces] && swapFits(ALL_PROPS[s.replaces]!, ALL_PROPS[s.prop]!));
+  const moves = placed.filter((s) => s.moves && !s.replaces && s.moves.thing === s.prop && ALL_PROPS[s.prop] && here(s.rule.worlds));
+  const gone = removed.filter((r) => here(r.worlds) && ALL_PROPS[r.what.thing]);
+  if (swaps.length + moves.length + gone.length === 0) return null;
+  const roomAt = roomIndex(layout);
+  const fits = (rooms: readonly string[], room: GenRoom): boolean => rooms.length === 0 || rooms.includes(room.type);
+  /** Сколько вещей каждого имени уже встретилось в помещении: «номер помещения:имя». */
+  const seen = new Map<string, number>();
   const used = new Map<string, number>();
-  return (name, xf) => {
-    for (const s of list) {
-      if (s.replaces !== name) continue;
+  const edits: GameEdits = { hook: () => null, moved: [], still: new Set() };
+  edits.hook = (name, xf, seed, flat = false) => {
+    const room = roomAt(xf.ox, xf.oy, xf.oz);
+    if (!room) return null;
+    const key = `${room.id}:${name}`;
+    const nth = seen.get(key) ?? 0;
+    seen.set(key, nth + 1);
+    if (gone.some((r) => r.what.thing === name && r.what.nth === nth && fits(r.rooms, room))) return '';
+    if (!edits.still.has(room.id) && !NEVER.has(room.type)) {
+      const m = moves.find((s) => s.moves!.thing === name && s.moves!.nth === nth && fits(s.rule.rooms, room));
+      if (m) {
+        edits.moved.push({ spec: m, room, xf, seed });
+        return '';
+      }
+    }
+    if (flat) return null;
+    for (const s of swaps) {
+      if (s.replaces !== name || !fits(s.rule.rooms, room)) continue;
       const n = used.get(s.id) ?? 0;
       if (n >= s.rule.count) continue;
-      const tier = -Math.floor((xf.oy + 0.2) / TIER_DROP);
-      const room = cellRoom.get(`${tier},${Math.round(xf.ox / CELL) + GRID / 2},${Math.round(xf.oz / CELL) + GRID / 2}`);
-      if (!room || (s.rule.rooms.length > 0 && !s.rule.rooms.includes(room.type))) continue;
       used.set(s.id, n + 1);
       return s.prop;
     }
     return null;
   };
+  return edits;
 }
 
 export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLevel {
-  return withSwap(swapFor(layout, opts.placed ?? PLACED), () => buildLevelInner(layout, opts));
+  const edits = editsFor(layout, opts.placed ?? PLACED, opts.removed ?? REMOVED);
+  return withSwap(edits?.hook ?? null, () => buildLevelInner(layout, opts, edits));
 }
 
-function buildLevelInner(layout: GenLayout, opts: BuildOptions): BuiltLevel {
+function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits | null): BuiltLevel {
   const decay = decayAt(opts.wear ?? 0);
   const col = new ColliderSet();
   const chunks = new Map<string, ChunkBuild>();
@@ -298,6 +345,14 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions): BuiltLevel {
 
   const hz = layout.hazards;
   const pitAt = new Set(hz.pits.map((p) => `${p.tier},${p.x},${p.z}`));
+  // Комната-аномалия: одно помещение нижнего яруса получает два варианта обстановки (ниже, «Обстановка»).
+  const lastTier = layout.tierCount - 1;
+  const variantRoom =
+    layout.rank >= 2 && lastTier >= 2
+      ? layout.rooms.filter((r) => r.tier === lastTier && VARIANT_ROOMS.has(r.type) && r.cells.length >= 2 && !hz.gasRooms.includes(r.id)).sort((a, b) => b.cells.length - a.cells.length || a.id - b.id)[0]
+      : undefined;
+  // Вещи игры партнёр не двигает там, где обстановка меняется за спиной (комната-аномалия), и там, где её нет (низ шахты).
+  if (edits) for (const id of [...lowerWells, ...(variantRoom ? [variantRoom.id] : [])]) edits.still.add(id);
 
   // ── Помещения под то, что стоит поверх обычной обстановки (world/furnish_extras.ts) ──
   // Выбор — по сиду уровня, а не по ГСЧ помещений: остальная обстановка от него не сдвигается.
@@ -604,14 +659,9 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions): BuiltLevel {
   const spots: ItemSpot[] = [];
   const landmarks: Landmark[] = [];
   const flats: FlatMark[] = [];
-  // Комната-аномалия: одно помещение нижнего яруса получает два варианта обстановки. Находок и целей
-  // в ней нет — иначе после подмены они повисли бы в воздухе.
+  // Комната-аномалия (variantRoom, выбрана выше): два варианта обстановки. Находок и целей в ней нет — иначе после
+  // подмены они повисли бы в воздухе.
   const variants: RoomVariant[] = [];
-  const lastTier = layout.tierCount - 1;
-  const variantRoom =
-    layout.rank >= 2 && lastTier >= 2
-      ? layout.rooms.filter((r) => r.tier === lastTier && VARIANT_ROOMS.has(r.type) && r.cells.length >= 2 && !hz.gasRooms.includes(r.id)).sort((a, b) => b.cells.length - a.cells.length || a.id - b.id)[0]
-      : undefined;
 
   // Откуда начинается вылазка: рядом с началом обманок не ставим.
   const startRoom = layout.rooms[layout.entranceRoom]!;
@@ -772,17 +822,37 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions): BuiltLevel {
     spawnTier: ent0.tier,
   };
   const figures = placeFigures(opts.figures ?? FIGURES, placeWorld);
-  // Вещи партнёра (world/placed_place.ts): после фигур и всей обстановки — не врастают ни во что, проходы
-  // оставляют свободными. Строятся как обычная обстановка: в сетку своего помещения, с преградами, объектом
-  // уровня (растворяется от касания и возвращается, как всё).
-  const placed = placeThings(opts.placed ?? PLACED, placeWorld, ALL_PROPS);
-  for (const p of placed) {
-    const room = layout.rooms[p.room]!;
-    const gx = Math.round(p.at[0] / CELL) + GRID / 2;
-    const gz = Math.round(p.at[2] / CELL) + GRID / 2;
-    const ch = chunkFor(room, gx, gz);
-    ALL_PROPS[p.prop]!.build(new Xf(ch.mb, col, p.at[0], p.at[1], p.at[2], p.rot, ch.sl), (hash2(layout.seed, p.k + 1, p.id.length * 977) >>> 0) % 1000003);
-  }
+  // Дальше строятся вещи по записям партнёра — мимо хука: они не вещи игры, считать и трогать их ему нечего.
+  const placed: PlacedSpot[] = [];
+  withSwap(null, () => {
+    // Передвинутые вещи игры (партнёр 17.11, 19:15: «текущую расстановку мебели я тоже должен уметь двигать и удалять»):
+    // после всей обстановки и фигур, каждая в своём помещении по правилу записи (world/placed_place.ts, moveSpot) — не в
+    // проход, не в мебель и не в другую передвинутую. Места по правилу нет — стоит, где её поставила игра (с преградами:
+    // у картонки их нет, а вернётся она настоящей вещью).
+    const taken: Box[] = [];
+    for (const m of edits?.moved ?? []) {
+      const p = ALL_PROPS[m.spec.prop]!;
+      const fit = moveSpot(m.spec, m.room, placeWorld, ALL_PROPS, taken);
+      if (fit) {
+        const s = fit.spot;
+        const ch = chunkFor(m.room, Math.round(s.at[0] / CELL) + GRID / 2, Math.round(s.at[2] / CELL) + GRID / 2);
+        p.build(new Xf(ch.mb, col, s.at[0], s.at[1], s.at[2], s.rot, ch.sl), m.seed);
+        taken.push(fit.box);
+        placed.push(s);
+      } else p.build(new Xf(m.xf.mb, col, m.xf.ox, m.xf.oy, m.xf.oz, m.xf.rot, m.xf.sl), m.seed);
+    }
+    // Вещи партнёра (world/placed_place.ts): после фигур и всей обстановки — не врастают ни во что, проходы
+    // оставляют свободными. Строятся как обычная обстановка: в сетку своего помещения, с преградами, объектом
+    // уровня (растворяется от касания и возвращается, как всё).
+    for (const p of placeThings(opts.placed ?? PLACED, placeWorld, ALL_PROPS)) {
+      const room = layout.rooms[p.room]!;
+      const gx = Math.round(p.at[0] / CELL) + GRID / 2;
+      const gz = Math.round(p.at[2] / CELL) + GRID / 2;
+      const ch = chunkFor(room, gx, gz);
+      ALL_PROPS[p.prop]!.build(new Xf(ch.mb, col, p.at[0], p.at[1], p.at[2], p.rot, ch.sl), (hash2(layout.seed, p.k + 1, p.id.length * 977) >>> 0) % 1000003);
+      placed.push(p);
+    }
+  });
   // Свободные участки стен — в порядке помещений уровня: туда вещь может вернуться «в другом месте».
   for (const { room, ctx } of furnished) for (const s of ctx.slots) if (!s.used && !s.hazard && s.deep) freeSlots.push({ at: [s.xf.ox, s.xf.oy, s.xf.oz], rot: s.xf.rot, room: room.id, tier: room.tier });
 

@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Конструктор: слева полка вещей, посередине настоящее помещение места, справа — правило, по которому
-   вещь встанет в игре. Тёмная мастерская, как у инструмента фигур. */
+/* Конструктор: слева полка вещей, посередине настоящее помещение места, справа — карточка вещи, вещь игры и правило, по
+   которому вещь встанет в игре. Тёмная мастерская, как у инструмента фигур. */
 :root {
   --bg: #121417;
   --panel: #191c20;
@@ -15,6 +15,11 @@
   --accent: #e3b25e;
   --warn: #dc7f73;
   --ok: #86b98c;
+  --v-keep: #86b98c;
+  --v-real: #e3b25e;
+  --v-replace: #7eaedb;
+  --v-remove: #dc7f73;
+  --toy: #c97cc0;
   --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
   color-scheme: dark;
@@ -33,7 +38,7 @@ body {
 body.is-carrying, body.is-carrying * { cursor: grabbing !important; }
 header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin-bottom: 10px; }
 h1 { font: 600 22px/1.2 var(--font-body); margin: 0; letter-spacing: 0.01em; }
-.lead { color: var(--muted); margin: 0; max-width: 92ch; flex: 1 1 420px; min-width: 0; font-size: 14px; }
+.lead { color: var(--muted); margin: 0; max-width: 100ch; flex: 1 1 420px; min-width: 0; font-size: 14px; }
 .places { display: grid; gap: 6px; margin-bottom: 10px; }
 .layout { display: grid; grid-template-columns: minmax(0, 270px) minmax(0, 1fr) minmax(0, 360px); gap: 14px; align-items: start; }
 #view { position: relative; height: min(76vh, 760px); min-height: 380px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #0e1012; touch-action: none; }
@@ -41,25 +46,45 @@ h1 { font: 600 22px/1.2 var(--font-body); margin: 0; letter-spacing: 0.01em; }
 .hint { position: absolute; left: 12px; bottom: 10px; right: 12px; font: 12px/1.45 var(--font-mono); color: var(--muted); pointer-events: none; text-shadow: 0 1px 2px #000; }
 .hint b { color: var(--accent); font-weight: 600; }
 .shelf { display: grid; gap: 8px; min-width: 0; }
-#shelf { display: grid; gap: 4px; max-height: min(66vh, 660px); overflow: auto; padding-right: 4px; }
+.kinds { display: flex; flex-wrap: wrap; gap: 4px; }
+.kinds .chip { padding: 2px 8px; font-size: 12.5px; }
+#shelf { display: grid; gap: 4px; max-height: min(62vh, 620px); overflow: auto; padding-right: 4px; }
 .shelf__item { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; align-items: center; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; color: var(--fg); font: 13px/1.25 var(--font-body); cursor: grab; touch-action: none; user-select: none; }
 .shelf__item:hover { border-color: var(--accent); }
+.shelf__item.is-current { border-color: var(--accent); background: var(--raise); }
+.shelf__item--card { cursor: pointer; }
 .shelf__item--fig { border-color: #4a4130; }
 .shelf__thumb { width: 56px; height: 56px; border-radius: 6px; background: #16191d; display: block; object-fit: cover; }
 .shelf__thumb--fig { display: grid; place-items: center; font-size: 26px; color: var(--accent); }
-.shelf__text { display: grid; min-width: 0; }
+.shelf__text { display: grid; min-width: 0; gap: 1px; }
 .shelf__text b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .shelf__text small { color: var(--muted); font-size: 11.5px; }
+.tags { display: flex; flex-wrap: wrap; gap: 3px; }
+.tag { font: 10.5px/1.3 var(--font-mono); padding: 0 5px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.tag--card { border-style: dashed; }
+.tag--toy { color: var(--toy); border-color: color-mix(in srgb, var(--toy) 45%, transparent); }
+.tag--mem { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.tag--advice { border-style: dashed; white-space: normal; }
+.tag--v-keep { color: var(--v-keep); border-color: currentColor; }
+.tag--v-redo1, .tag--v-detail1, .tag--v-swap { color: var(--v-real); border-color: currentColor; }
+.tag--v-redo2, .tag--v-detail2, .tag--v-swapfix { color: var(--v-replace); border-color: currentColor; }
+.tag--v-remove { color: var(--v-remove); border-color: currentColor; }
 #panel { display: grid; gap: 10px; min-width: 0; }
-.box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; min-width: 0; }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
 .box h2 { margin: 0; font: 600 12px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.box__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.box__head h2 { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.box__head .row { flex-wrap: nowrap; }
 .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .chip { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px; font: 13px/1.3 var(--font-body); cursor: pointer; }
 .chip.is-on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); background: var(--raise); }
-.chip:focus-visible, .btn:focus-visible, input:focus-visible, .shelf__item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.btn { background: var(--raise); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font: 500 14px var(--font-body); cursor: pointer; }
+.chip:focus-visible, .btn:focus-visible, input:focus-visible, textarea:focus-visible, .shelf__item:focus-visible, .verdict:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn { background: var(--raise); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font: 500 14px var(--font-body); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+.btn:disabled { opacity: 0.55; cursor: default; }
 .btn--main { background: var(--accent); color: #1a1408; border-color: var(--accent); }
 .btn--warn { color: var(--warn); }
+.btn--small { padding: 3px 9px; font-size: 13px; }
+.btn--x { padding: 0 8px; font-size: 18px; line-height: 26px; }
 input[type="text"], input[type="search"] { width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--fg); border-radius: 8px; padding: 7px 10px; font: 14px var(--font-body); }
 label.slider { display: grid; grid-template-columns: 8.5em minmax(0, 1fr) 4.2em; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
 label.slider output { font: 12px var(--font-mono); color: var(--fg); text-align: right; }
@@ -68,27 +93,67 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .note b { color: var(--fg); font-weight: 500; }
 #what { font-weight: 500; }
 #summary { font: 12.5px/1.45 var(--font-mono); color: var(--accent); }
-#coverage { font: 12.5px/1.45 var(--font-mono); color: var(--ok); }
-#coverage.is-bad { color: var(--warn); }
+#coverage, #gcover { font: 12.5px/1.45 var(--font-mono); color: var(--ok); }
+#coverage.is-bad, #gcover.is-bad { color: var(--warn); }
 #problems { margin: 0; padding-left: 18px; color: var(--warn); font-size: 13px; }
 #problems:empty { display: none; }
-#status { font: 12px var(--font-mono); color: var(--muted); min-height: 1.2em; }
+#status { font: 12px/1.45 var(--font-mono); color: var(--muted); min-height: 1.45em; }
 #saved { display: flex; flex-wrap: wrap; gap: 6px; }
 #saved:empty::after { content: "Пока ничего не сохранено."; color: var(--muted); font-size: 13px; }
 .sand { border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; color: var(--muted); }
+/* Вещь игры: выбранная в помещении. */
+#gamebox { border-color: #4a4130; }
+#gname { font-weight: 500; }
+#gnth { font: 12.5px/1.45 var(--font-mono); color: var(--accent); }
+#gstate { font-size: 13px; }
+#gstate.is-gone { color: var(--warn); }
+#movenote { font-size: 13px; color: var(--accent); }
+/* Карточка вещи (бывший «Опросник мебели»). */
+#card .card__body { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.card__look, .card__info, .card__mark { display: grid; gap: 6px; min-width: 0; }
+#card.is-folded .card__body { display: none; }
+#c-title { text-transform: none; letter-spacing: 0; color: var(--fg); font: 500 13px var(--font-body); }
+#card:not(.is-folded) #c-title { display: none; }
+#cardview { width: 100%; height: 180px; border-radius: 8px; overflow: hidden; background: #121417; touch-action: none; }
+#cardview canvas { display: block; width: 100%; height: 100%; }
+.card__hint { font: 11.5px var(--font-mono); color: var(--muted); margin: 0; }
+#c-ru { margin: 0; font: 600 15px/1.3 var(--font-body); overflow-wrap: anywhere; }
+.code { font: 12px var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+#card dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 10px; margin: 0; font-size: 13px; }
+#card dt { color: var(--muted); }
+#card dd { margin: 0; overflow-wrap: anywhere; }
+#c-advice { margin: 0; color: var(--muted); font-size: 13px; }
+#c-advice:empty { display: none; }
+#c-ask { font: 600 12px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 2px 0 0; }
+#c-verdicts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.verdict { display: grid; gap: 1px; align-content: start; text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; color: var(--fg); cursor: pointer; font: 500 13px/1.3 var(--font-body); }
+.verdict small { font: 11px/1.3 var(--font-body); color: var(--muted); }
+.verdict:disabled { opacity: 0.55; cursor: default; }
+.verdict--keep.is-on { border-color: var(--v-keep); box-shadow: inset 3px 0 0 var(--v-keep); }
+.verdict--redo1.is-on, .verdict--detail1.is-on, .verdict--swap.is-on { border-color: var(--v-real); box-shadow: inset 3px 0 0 var(--v-real); }
+.verdict--redo2.is-on, .verdict--detail2.is-on, .verdict--swapfix.is-on { border-color: var(--v-replace); box-shadow: inset 3px 0 0 var(--v-replace); }
+.verdict--remove.is-on { border-color: var(--v-remove); box-shadow: inset 3px 0 0 var(--v-remove); }
+#c-note { width: 100%; min-height: 48px; resize: vertical; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: 13.5px/1.45 var(--font-body); }
 @media (max-width: 1180px) {
   .layout { grid-template-columns: minmax(0, 240px) minmax(0, 1fr); }
-  #panel { grid-column: 1 / -1; }
+  #panel { grid-column: 1 / -1; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); grid-auto-flow: row dense; align-items: start; }
+  #panel > #status, #panel > #card { grid-column: 1 / -1; }
+  #card .card__body { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); }
+  .card__look { grid-row: span 2; }
+  #cardview { height: 230px; }
 }
 @media (max-width: 760px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
   #view { height: 58vh; }
   #shelf { max-height: 34vh; }
+  #card .card__body { grid-template-columns: minmax(0, 1fr); }
+  .card__look { grid-row: auto; }
+  #cardview { height: 200px; }
 }
 </style>
 <header>
   <h1>Конструктор</h1>
-  <p class="lead">Перетащи вещь с полки в помещение и поставь. Помещение настоящее — собрано тем же кодом, что в игре, со своей обстановкой. Конструктор сам видит, у чего вещь стоит и куда смотрит; в игре план места каждый раз новый, и вещь встанет в помещения того же типа у такого же края. Красное — то, чего игра не допустит.</p>
+  <p class="lead">Перетащи вещь с полки в помещение и поставь. Помещение настоящее — собрано тем же кодом, что в игре; в игре план места каждый раз новый, и вещь встанет в помещения того же типа у такого же края. Вещи игры тоже твои: щёлкни — карточка, тяни — передвинешь, «Убрать отсюда» — уберёшь. Щелчок по вещи на полке — её карточка с отметкой «оставить / реальнее / заменить / убрать». Красное — то, чего игра не допустит.</p>
 </header>
 <div class="places">
   <div class="row" id="worldpick"></div>
@@ -97,21 +162,63 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 <div class="layout">
   <aside class="shelf">
     <input type="search" id="search" placeholder="Найти: стул, часы, чемодан…" aria-label="Найти вещь">
-    <p class="note">Вещи игры: <span id="shelfcount"></span>. Тяни мышью в помещение.</p>
+    <div class="kinds" id="kinds" role="group" aria-label="Какие вещи показывать"></div>
+    <p class="note">Вещей: <span id="shelfcount"></span> · отмечено <span id="marked"></span>. Щелчок — карточка, тяни — в помещение.</p>
     <div class="sand">Вещи из Sand3D встанут на эту полку, как только у игры появится доступ к Hugging Face: каждая программа превращается в вещь игры.</div>
     <div id="shelf"></div>
   </aside>
-  <div id="view"><div class="hint"><b>тяни вещь</b> — двигать по полу, у стены встаёт вплотную · отпусти на <b>вещь игры</b> — встанет вместо неё · <b>Q / E</b> — повернуть · пустое место — крутить вид · <b>⌘Z</b> — отменить · у манекена <b>шарики</b> — гнуть, таз с <b>⌥</b> — в воздух · красные пятна у проёмов — проход</div></div>
+  <div id="view"><div class="hint"><b>щелчок</b> — карточка · <b>тяни</b> — двигать, и вещь игры тоже · с полки на <b>вещь игры</b> — заменить · <b>Q / E</b> — поворот · <b>⌘Z</b> — отмена · пустое место — крутить вид · у манекена <b>шарики</b> — гнуть, таз с <b>⌥</b> — вверх · красное у проёмов — проход, красная рамка — убранная</div></div>
   <div id="panel">
+    <div id="status" role="status"></div>
+    <div class="box" id="gamebox" hidden>
+      <h2>Вещь игры</h2>
+      <div id="gname"></div>
+      <div id="gnth"></div>
+      <div id="gstate"></div>
+      <div id="gcover"></div>
+      <div class="row">
+        <button class="btn btn--warn" id="gremove" type="button">Убрать отсюда</button>
+        <button class="btn" id="grestore" type="button">Вернуть</button>
+        <button class="btn" id="gedit" type="button">Править правило</button>
+        <button class="btn" id="gunmove" type="button">Вернуть на место игры</button>
+        <button class="btn btn--small" id="gcard" type="button">Карточка</button>
+      </div>
+      <p class="note" id="ghint">Тяни её — передвинешь: в игре она встанет по твоему правилу в каждом таком помещении. «Убрать отсюда» — только из помещений этого типа; отметка «Убрать из игры» в карточке — просьба убрать такую вещь из игры совсем. Номер «такая по счёту» — для игры: план каждый раз новый, а порядок вещей в помещении тот же.</p>
+    </div>
+    <div class="box" id="card" hidden>
+      <div class="box__head"><h2>Карточка вещи <span id="c-title"></span></h2><span class="row"><button class="btn btn--small" id="c-fold" type="button" aria-expanded="true">свернуть</button><button class="btn btn--x" id="c-close" type="button" aria-label="Закрыть карточку">×</button></span></div>
+      <div class="card__body">
+        <div class="card__look">
+          <div id="cardview"></div>
+          <p class="card__hint">тянуть — повернуть · колесо — ближе · серый силуэт — человек 1,75 м</p>
+        </div>
+        <div class="card__info">
+          <h3 id="c-ru"></h3>
+          <div class="code" id="c-name"></div>
+          <dl>
+            <dt>Размер</dt><dd id="c-size"></dd>
+            <dt>Сделана</dt><dd id="c-source"></dd>
+            <dt>На уровне</dt><dd id="c-where"></dd>
+            <dt id="c-rooms-dt">Где чаще</dt><dd id="c-rooms"></dd>
+          </dl>
+          <p id="c-advice"></p>
+        </div>
+        <div class="card__mark">
+          <h3 id="c-ask">Что с ней делать</h3>
+          <div id="c-verdicts"></div>
+          <textarea id="c-note" placeholder="Что не так и какой она должна быть — например: ножки тоньше, сиденье из кожзама, как в поликлинике" aria-label="Заметка к вещи"></textarea>
+          <div class="row"><button class="btn btn--small" id="c-savenote" type="button">Сохранить заметку</button><a class="btn btn--small" id="c-game" href="#" target="_blank" rel="noopener">Посмотреть в игре ↗</a></div>
+        </div>
+      </div>
+    </div>
     <div class="box">
       <h2>Что стоит</h2>
-      <div id="what"></div>
+      <div class="row"><span id="what"></span><button class="btn btn--small" id="curcard" type="button" hidden>Карточка</button></div>
       <input type="text" id="name" maxlength="80" placeholder="Как назовёшь — например, «стул спиной к двери»">
       <div class="row" id="turns"><button class="btn" id="turnl">⟲ Q</button><button class="btn" id="turnr">E ⟳</button></div>
       <div class="row"><button class="btn btn--main" id="save">Сохранить</button><button class="btn" id="fresh">Новая</button><button class="btn btn--warn" id="drop">Удалить</button></div>
       <ul id="problems"></ul>
       <p class="note" id="spotnote" hidden>Здесь вещь в таком виде не встанет. Сохранить можно: в других помещениях этого типа игра поставит её у такого же края, где правило выполнимо.</p>
-      <div id="status"></div>
     </div>
     <div class="box" id="figbox" hidden>
       <h2>Манекен</h2>
@@ -124,18 +231,19 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
       <div id="summary"></div>
       <div id="coverage"></div>
       <div class="row" id="replace" hidden><span id="replacetext"></span><button class="btn" id="unreplace" type="button">Не заменять</button></div>
+      <div class="row" id="moved" hidden><span id="movenote"></span><button class="btn" id="unmove" type="button">Вернуть на место игры</button></div>
       <div class="row" id="worlds"></div>
       <div class="row" id="rooms"></div>
       <div class="row" id="anchors"></div>
       <div class="row" id="facings"></div>
       <label class="slider">Над полом<input type="range" id="lift" min="0" max="2.6" step="0.05"><output id="liftv"></output></label>
-      <label class="slider">Сколько в месте<input type="range" id="count" min="1" max="3" step="1"><output id="countv"></output></label>
+      <label class="slider" id="countrow">Сколько в месте<input type="range" id="count" min="1" max="3" step="1"><output id="countv"></output></label>
       <p class="note">В игре вещь — как всё вокруг: растворяется от касания и возвращается, когда свет погаснет и зажжётся; в темноте меняется только вне кадра; на поздних кругах стирается вместе с местом. Поворот — четвертями: обстановка игры стоит по сторонам света.</p>
     </div>
     <div class="box">
       <h2>Сохранённое</h2>
       <div id="saved"></div>
-      <p class="note">Сохранённые вещи видны в подходящих помещениях полупрозрачными — щёлкни, чтобы править.</p>
+      <p class="note">Сохранённые вещи видны в подходящих помещениях полупрозрачными — щёлкни, чтобы править. Убранные вещи игры — в красной рамке: щёлкни рамку, чтобы вернуть.</p>
     </div>
   </div>
 </div>

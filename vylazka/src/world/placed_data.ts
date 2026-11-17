@@ -6,6 +6,13 @@
  *
  * Пока партнёр ни одной не сохранил — список пуст, и на уровнях их нет.
  */
-import type { PlacedSpec } from './placed';
+import type { PlacedSpec, RemovedSpec } from './placed';
 
 export const PLACED: readonly PlacedSpec[] = [];
+
+/**
+ * Вещи игры, которые партнёр убрал (конструктор, коллекция removed; его слова 17.11, 19:15: «текущую расстановку мебели я
+ * тоже должен уметь двигать и удалять»). Передвинутые лежат в PLACED — запись с полем moves. Переносит основная модель,
+ * проверив removedProblems (world/placed.ts). Пока пусто — игра ставит всё, как ставила.
+ */
+export const REMOVED: readonly RemovedSpec[] = [];

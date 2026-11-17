@@ -460,7 +460,7 @@ export const REAL_PROPS: Record<string, PropSpec> = {
   rug_wool: { w: 2.15, d: 1.4, h: 0.01, mount: 'free', ru: 'шерстяной ковёр с медальоном и бахромой', build: woolRug },
 };
 
-/** Пары «вещь из набора KayKit → реалистичная замена»: на уровнях стоит замена; опросник (tools/mebel) показывает обе. */
+/** Пары «вещь из набора KayKit → реалистичная замена»: на уровнях стоит замена; карточка вещи в конструкторе (tools/constructor) показывает обе. */
 export const KAYKIT_SWAPS: readonly { from: string; to: string }[] = [
   { from: 'kk_chair_a', to: 'chair_bent' },
   { from: 'kk_table_small', to: 'table_cafe' },

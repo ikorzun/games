@@ -82,6 +82,15 @@ export class ObjectLog {
   private open = 0;
 
   /**
+   * Станет ли вещь, которую сейчас начнут собирать, своим объектом журнала: не внутри другого объекта (журнал не занят) и
+   * номера не кончились. Только такие вещи видит хук сборки уровня (world/props_all.ts, withSwap): им соответствуют объекты
+   * уровня, по ним партнёр в конструкторе считает номер вещи в помещении.
+   */
+  get takes(): boolean {
+    return this.open === 0 && this.list.length < MAX_OBJECTS;
+  }
+
+  /**
    * Собрать предмет как объект: всё, что build положит в сетку, в проекции и в преграды, будет помечено
    * его номером. Внутри другого объекта (или когда номера кончились) — просто собрать.
    */
@@ -125,9 +134,30 @@ export class ObjectLog {
   }
 }
 
+/**
+ * Хук сборки уровня для картонок: true — картонку не собирать. Картонка (world/furnish.ts) — снимок настоящей вещи, она
+ * собирается в обход реестра и мимо хука замены (world/props_all.ts). Но для партнёра это та же вещь игры (её имя, её место):
+ * убранная или передвинутая им вещь не должна возвращаться снимком на поздних кругах, а номера вещей в помещении — сбиваться
+ * от того, сколько из них стоят картонками. Ставит хук withSwap (world/props_all.ts) на время сборки уровня.
+ */
+export type FlatHook = (name: string, xf: Xf) => boolean;
+let flatHook: FlatHook | null = null;
+
+/** Выполнить body с хуком картонок. */
+export function withFlatHook<T>(fn: FlatHook | null, body: () => T): T {
+  const prev = flatHook;
+  flatHook = fn;
+  try {
+    return body();
+  } finally {
+    flatHook = prev;
+  }
+}
+
 /** Собрать предмет как объект уровня, если у этой сетки есть журнал объектов; иначе — просто собрать. */
 export function asObject(xf: Xf, name: string, build: () => void, flat = false): void {
   const log = xf.mb.log;
+  if (flat && flatHook && log?.takes && flatHook(name, xf)) return;
   if (log) log.wrap(xf, name, build, flat);
   else build();
 }

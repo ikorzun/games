@@ -17,16 +17,20 @@
  * Помещения и края перебираются по сиду уровня и ключу расстановки: тот же сид — те же места; правка одной
  * расстановки не сдвигает остальные.
  *
+ * Здесь же — вещи игры, которые партнёр передвинул (placed.ts, moves): куда такая встаёт в своём помещении (moveSpot), и как
+ * найти помещение точки и номер вещи в нём (roomIndex, gameNth) — одинаково в сборке уровня и в инструменте.
+ *
  * Чистый TS: работает в сборке уровня (Worker), в инструменте и в тестах.
  */
 import { hash01, hash2 } from '../core/rng';
 import type { Vec3 } from '../core/types';
-import { GRID } from '../gen/layout';
-import type { GenRoom } from '../gen/layout';
+import { GRID, TIER_DROP } from '../gen/layout';
+import type { GenLayout, GenRoom } from '../gen/layout';
 import type { Aabb } from './colliders';
 import { anchorSpots } from './figure_place';
 import type { AnchorSpot, PlaceWorld } from './figure_place';
 import type { FigureFacing } from './figures';
+import type { LevelObject } from './objects';
 import type { PlacedSpec } from './placed';
 import type { PropSpec } from './props_more';
 import { CELL, DIRS } from './shell';
@@ -42,8 +46,8 @@ const SPAWN_CLEAR = 3.2;
 /** Зазор до преград, м: вещь может касаться стены спиной, но не входить в неё. */
 const SKIN = 0.03;
 
-/** Помещения, куда вещи не ставятся: лестничные марши, лифт, пути под перроном (как у фигур). */
-const NEVER: ReadonlySet<string> = new Set(['stairwell', 'lift', 'track']);
+/** Помещения, куда вещи не ставятся: лестничные марши, лифт, пути под перроном (как у фигур). Вещи игры там не двигают. */
+export const NEVER: ReadonlySet<string> = new Set(['stairwell', 'lift', 'track']);
 
 export type Turn = 0 | 1 | 2 | 3;
 
@@ -56,6 +60,34 @@ export interface PlacedSpot {
   rot: Turn;
   room: number;
   tier: number;
+  /** Передвинутая вещь игры (placed.ts, moves): встала по правилу записи в своём помещении. */
+  moved?: true;
+}
+
+/**
+ * Помещение точки: по её клетке и ярусу (ярус — по высоте: пол яруса t на −4,5·t м, вещь стоит на нём или висит на стене).
+ * Так помещение вещи игры находят и сборка уровня (хук записей партнёра, level_build.ts), и инструмент — одинаково.
+ */
+export function roomIndex(layout: GenLayout): (x: number, y: number, z: number) => GenRoom | undefined {
+  const byCell = new Map<string, GenRoom>();
+  for (const r of layout.rooms) for (const [x, z] of r.cells) byCell.set(`${r.tier},${x},${z}`, r);
+  return (x, y, z) => byCell.get(`${-Math.floor((y + 0.2) / TIER_DROP)},${Math.round(x / CELL) + HALF},${Math.round(z / CELL) + HALF}`);
+}
+
+/**
+ * Номер вещи игры в её помещении (placed.ts, GameThing) — так, как его считает сборка уровня: среди объектов уровня с тем же
+ * именем в том же помещении, по порядку сборки (номеру объекта), с нуля. objects — объекты уровня, собранного без записей
+ * партнёра; roomAt — roomIndex того же плана. Вещи вне помещений — −1.
+ */
+export function gameNth(objects: readonly LevelObject[], o: LevelObject, roomAt: (x: number, y: number, z: number) => GenRoom | undefined): number {
+  const room = roomAt(o.at[0], o.at[1], o.at[2]);
+  if (!room) return -1;
+  let n = 0;
+  for (const q of objects) {
+    if (q.id >= o.id) break;
+    if (q.name === o.name && roomAt(q.at[0], q.at[1], q.at[2]) === room) n += 1;
+  }
+  return n;
 }
 
 /** Коробка в мире (без меток коллайдера). */
@@ -236,8 +268,9 @@ export function placeThings(specs: readonly PlacedSpec[], w: PlaceWorld, props: 
   const out: PlacedSpot[] = [];
   const boxes: Box[] = [];
   for (const spec of specs) {
-    // Замены ставит сама сборка уровня, на место вещи игры (world/props_all.ts, withSwap).
-    if (spec.replaces) continue;
+    // Замены ставит сама сборка уровня, на место вещи игры (world/props_all.ts, withSwap); передвинутые вещи игры — тоже она,
+    // в их помещениях (moveSpot).
+    if (spec.replaces || spec.moves) continue;
     const p = props[spec.prop];
     if (!p) continue;
     const rooms = roomsFor(spec, w);
@@ -268,4 +301,26 @@ export function placeThings(specs: readonly PlacedSpec[], w: PlaceWorld, props: 
     }
   }
   return out;
+}
+
+/**
+ * Куда встанет передвинутая вещь игры (placed.ts, moves) в помещении room: по правилу записи — те же края, точка и проверки,
+ * что у вещей партнёра (placeThings: не в проход, не в мебель, под потолком). Края помещения перебираются по хешу сида, ключа
+ * записи и номера помещения: тот же сид — та же точка, другие записи её не сдвигают (кроме тех, что уже встали рядом: others —
+ * их коробки). Места нет — null: вещь стоит, где её поставила игра.
+ */
+export function moveSpot(spec: PlacedSpec, room: GenRoom, w: PlaceWorld, props: Readonly<Record<string, PropSpec>>, others: readonly Box[] = []): { spot: PlacedSpot; box: Box } | null {
+  const p = props[spec.prop];
+  if (!p || NEVER.has(room.type) || w.skip.has(room.id)) return null;
+  const h = hash2(w.layout.seed, idHash(spec.id), room.id);
+  const order = anchorSpots(room, spec.rule.anchor, w)
+    .map((a, i) => ({ a, q: hash01(i * 7 + 1, 0x3a7, h) }))
+    .sort((x, y) => x.q - y.q);
+  for (const { a } of order) {
+    const { at, rot } = fitThing(spec, a, p);
+    const { box, problems } = checkSpot(p, at, rot, room, a, w, others);
+    if (problems.length > 0) continue;
+    return { spot: { id: spec.id, k: 0, prop: spec.prop, at, rot, room: room.id, tier: room.tier, moved: true }, box };
+  }
+  return null;
 }
