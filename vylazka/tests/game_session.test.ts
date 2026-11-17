@@ -4,6 +4,7 @@ import type { Vec3 } from '../src/core/types';
 import { generateLayout } from '../src/gen/layout';
 import { Game, SONAR_EVERY, SONAR_REACH, SONAR_SPEED, STAGE_ALL, STEP } from '../src/game';
 import type { DreamEvent, FearEvent, StepEvents } from '../src/game';
+import { DEFAULT_CONTROLLER } from '../src/player/controller';
 import { emptyInput } from '../src/player/input';
 import type { InputFrame } from '../src/player/input';
 import type { FrameView, GameRenderer, ThingView } from '../src/render/renderer';
@@ -1046,6 +1047,33 @@ describe('игра целиком: карманные пространства �
       if (thing.state !== 'idle' || d < 1.2) bad.push(`сид ${seed}: вещь ${thing.state}, до неё ${d.toFixed(2)} м`);
     }
     expect(tried).toBeGreaterThan(20);
+    expect(bad).toEqual([]);
+  });
+
+  it('скачок к вещи ставит тело на свободное место: оно не задевает мебель, и стол с искомой вещью цел (CI 17.11, другой уровень)', () => {
+    const bad: string[] = [];
+    let tried = 0;
+    for (const lv of [SEED + 1, SEED + 2, SEED + 3]) {
+      const level = levelOf(lv);
+      for (let seed = 50; seed < 62; seed++) {
+        const h = new Harness(level, { seed });
+        const g = h.game;
+        h.run(1);
+        h.reveal();
+        const thing = g.session!.active ? g.things.list.find((t) => t.memory) : undefined;
+        if (!thing) continue;
+        enter(h, 'meadow');
+        stepInto(h);
+        if (!h.until(() => g.where === 'main' && g.transition === null, 9)) continue;
+        tried += 1;
+        const R = DEFAULT_CONTROLLER.radius;
+        const b = g.body;
+        const hit = g.colliders.boxes.find((x) => !x.off && !x.gone && x.maxY > b.y + 0.08 && x.minY < b.y + DEFAULT_CONTROLLER.height && x.maxX > b.x - R && x.minX < b.x + R && x.maxZ > b.z - R && x.minZ < b.z + R);
+        h.run(0.5);
+        if (hit || thing.state !== 'idle') bad.push(`уровень ${lv}, сид ${seed}: ${hit ? 'тело в мебели' : ''} вещь ${thing.state}`);
+      }
+    }
+    expect(tried).toBeGreaterThan(15);
     expect(bad).toEqual([]);
   });
 

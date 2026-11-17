@@ -50,8 +50,11 @@ export interface AudioWorld {
 export type AudioScene = 'silent' | 'menu' | 'play';
 
 const MUSIC = 'music_menu';
-/** Громкость песка Осыпи, пока она — примета без тела (ступени 1–2, K-18): слышна только издалека. */
-export const TRACE_SAND = 1;
+/**
+ * Громкость песка Осыпи, пока она — примета без тела (ступени 1–2, K-18): слышна только издалека — затихает и глохнет
+ * с расстоянием (движок звука), поэтому чуть громче рассеянной Осыпи рядом, но не как охота.
+ */
+export const TRACE_SAND = 0.8;
 
 /** Что грузить раньше остального: первые секунды вылазки и экран задания. */
 export const LOAD_FIRST: readonly string[] = ['ui_click', 'ui_start', 'hatch', 'lift', 'amb_bunker', 'amb_office', 'amb_yellow', 'amb_station', 'still_tone', 'breath_calm', 'step_concrete', 'step_carpet', 'flash_click', 'flash_die', 'flash_rattle', 'flash_spark', 'music_menu'];

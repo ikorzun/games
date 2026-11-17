@@ -71,6 +71,8 @@ interface LoopVoice {
   live: Set<AudioBufferSourceNode>;
   gain: GainNode;
   pan: StereoPannerNode | null;
+  /** Глушит верха, как стены у далёкого звука (только у петель с точкой в мире). */
+  lp: BiquadFilterNode | null;
   target: number;
   /** Когда затихшую петлю можно остановить (время контекста); null — петля звучит. */
   stopAt: number | null;
@@ -355,9 +357,17 @@ export class AudioEngine {
       g.gain.value = 0;
       const pan = typeof ctx.createStereoPanner === 'function' ? ctx.createStereoPanner() : null;
       if (pan) pan.connect(g);
+      // Далёкая петля глуше, как разовый звук (start): стены съедают верха. Без этого песок Осыпи-приметы за стенкой
+      // звучал так же ясно, как охота рядом (критика куратора 17.11).
+      const lp = pos && typeof ctx.createBiquadFilter === 'function' ? ctx.createBiquadFilter() : null;
+      if (lp) {
+        lp.type = 'lowpass';
+        lp.frequency.value = 18000 - (sp ? sp.muffle : 0) * 16500;
+        lp.connect(pan ?? g);
+      }
       g.connect(this.master);
       // Стык не длиннее 40 % файла: нарастание и спад одного прохода не должны встретиться.
-      voice = { buf, live: new Set(), gain: g, pan, target: 0, stopAt: null, nextAt: ctx.currentTime, xfade: Math.min(def.xfade ?? 0.1, buf.duration * 0.4) };
+      voice = { buf, live: new Set(), gain: g, pan, lp, target: 0, stopAt: null, nextAt: ctx.currentTime, xfade: Math.min(def.xfade ?? 0.1, buf.duration * 0.4) };
       this.loops.set(id, voice);
       this.played.set(id, (this.played.get(id) ?? 0) + 1);
       this.pass(voice, ctx.currentTime, true);
@@ -365,6 +375,7 @@ export class AudioEngine {
     // Следующие проходы ставим заранее и точно по часам звука, а не по кадрам.
     for (let i = 0; i < 8 && voice.nextAt <= ctx.currentTime + LOOP_AHEAD; i++) this.pass(voice, Math.max(voice.nextAt, ctx.currentTime), false);
     if (sp && voice.pan) voice.pan.pan.setTargetAtTime(sp.pan, ctx.currentTime, 0.1);
+    if (sp && voice.lp) voice.lp.frequency.setTargetAtTime(18000 - sp.muffle * 16500, ctx.currentTime, 0.1);
     if (Math.abs(target - voice.target) > 0.002 || (silent && voice.target !== 0)) {
       voice.target = silent ? 0 : target;
       voice.gain.gain.setTargetAtTime(voice.target, ctx.currentTime, LOOP_TAU);
@@ -391,7 +402,7 @@ export class AudioEngine {
     if (!first) g.gain.setValueCurveAtTime(FADE_IN, when, v.xfade);
     g.gain.setValueCurveAtTime(FADE_OUT, when + d - v.xfade, v.xfade);
     src.connect(g);
-    g.connect(v.pan ?? v.gain);
+    g.connect(v.lp ?? v.pan ?? v.gain);
     src.onended = () => {
       g.disconnect();
       v.live.delete(src);

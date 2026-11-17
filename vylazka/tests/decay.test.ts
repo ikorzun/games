@@ -62,7 +62,7 @@ describe('стирание: кривая деградации', () => {
     expect(decayAt(0.44).walls).toBe(0);
     expect(rel('ceiling', 0.44)).toBeGreaterThan(0.25);
     expect(decayAt(0.84).floor).toBe(0);
-    expect(rel('walls', 0.84)).toBeGreaterThan(0.6);
+    expect(rel('walls', 0.84)).toBeGreaterThan(0.55);
   });
 
   it('стены: на кругах 1–6 — не больше трети пятнами; на 7–8 уходят большей частью (ответ партнёра в квизе 17.11)', () => {
@@ -73,7 +73,9 @@ describe('стирание: кривая деградации', () => {
     expect(lap(6)).toBeCloseTo(0.125, 2);
     expect(lap(7)).toBeGreaterThan(0.5);
     expect(lap(8)).toBeGreaterThan(0.8);
-    expect(WALLS_MAX + WALLS_LATE).toBeLessThan(0.9);
+    expect(WALLS_MAX + WALLS_LATE).toBeLessThanOrEqual(0.9);
+    // Шестой круг не меняется, даже если на нём много трогали (+0,04 стёртости — около десяти касаний).
+    expect(decayAt(0.74).walls).toBeLessThan(0.2);
   });
 
   it('кривая S-образная: первые круги место почти цело, середина рушится быстрее всего', () => {

@@ -164,10 +164,13 @@ export class Hud {
     this.clock.textContent = this.lastClock;
     this.el.classList.add('is-cut');
     this.el.classList.remove('is-cut-dark');
+    // Кнопки телефона лежат поверх HUD — в миг их не видно (критика куратора 17.11).
+    document.documentElement.classList.add('vz-cutting');
     this.cutTimers = [
       setTimeout(() => this.el.classList.add('is-cut-dark'), Math.round(ms * 0.55)),
       setTimeout(() => {
         this.el.classList.remove('is-cut', 'is-cut-dark');
+        document.documentElement.classList.remove('vz-cutting');
         this.cutUntil = 0;
       }, ms),
     ];

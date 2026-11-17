@@ -2001,7 +2001,10 @@ async function scenarioThings(browser, baseUrl) {
   }
 
   const watch = async (fate) => {
-    const t = things.find((x) => x.fate === fate && !x.memory && SMALL_THINGS.includes(x.kind)) ?? things.find((x) => x.fate === fate && !x.memory);
+    // Берём вещь, на которую ещё не смотрели: после темноты та, что была в кадре, остаётся на месте (в темноте меняется
+    // только то, чего нет в кадре, — K-21), и когда свет вернулся, она уже копит взгляд.
+    const fresh = (await vz(page, () => window.__vz.things())).filter((x) => x.state === 'idle' && x.gaze < 0.05);
+    const t = fresh.find((x) => x.fate === fate && !x.memory && SMALL_THINGS.includes(x.kind)) ?? fresh.find((x) => x.fate === fate && !x.memory);
     if (!t) return null;
     const near = await vz(page, (id) => window.__vz.gotoThing(id, 2.4), t.id);
     return { t, near };

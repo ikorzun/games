@@ -1915,6 +1915,30 @@ export class Game {
     return { cells, target: spot ? cellOf(this.playerNodeAt([spot.x, spot.y, spot.z])) : null, here: cellOf(this.returnNode), limbo };
   }
 
+  /**
+   * Свободное место для тела у точки (в пределах её клетки): там, где игрок не задевает ни одной коробки мебели. Без этого
+   * скачок ставил тело в середину клетки впритык к столу — коснулся, растворилось, и вместе со столом пропадала искомая вещь
+   * на нём (CI 17.11: дверь луга выводила к вещи, а та уже рассыпалась).
+   */
+  private freeSpot(x: number, y: number, z: number): [number, number] {
+    const R = DEFAULT_CONTROLLER.radius + 0.06;
+    const boxes: Aabb[] = [];
+    const free = (px: number, pz: number): boolean =>
+      !this.colliders
+        .query(px - R, pz - R, px + R, pz + R, boxes)
+        .some((b) => !b.off && !b.gone && b.maxY > y + 0.08 && b.minY < y + DEFAULT_CONTROLLER.height && b.maxX > px - R && b.minX < px + R && b.maxZ > pz - R && b.minZ < pz + R);
+    if (free(x, z)) return [x, z];
+    for (const r of [0.45, 0.8, 1.1]) {
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4;
+        const px = x + Math.cos(a) * r;
+        const pz = z + Math.sin(a) * r;
+        if (free(px, pz)) return [px, pz];
+      }
+    }
+    return [x, z];
+  }
+
   /** Узел в двух-четырёх клетках пути от искомой вещи: туда выводит дверь на лугу. −1 — искать нечего. */
   private nodeNearThing(): number {
     const spot = this.session?.active?.spot;
@@ -2096,7 +2120,8 @@ export class Game {
         const n = this.level?.nav[id];
         if (n) {
           const l = this.level!.nav[n.links[Math.floor(this.rng() * n.links.length)] ?? n.id]!;
-          this.teleport(n.x, n.y, n.z, l === n ? this.aimYaw : Math.atan2(-(l.x - n.x), -(l.z - n.z)), 0);
+          const [fx, fz] = this.freeSpot(n.x, n.y, n.z);
+          this.teleport(fx, n.y, fz, l === n ? this.aimYaw : Math.atan2(-(l.x - fx), -(l.z - fz)), 0);
         } else this.respawn();
       }
     } else {
@@ -2938,7 +2963,7 @@ export class Game {
     this.renderer.setBirds(this.birdBuf, nb);
     if (this.spores) {
       const live = this.where === 'main';
-      if (live) this.spores.update(fl?.frozen ? 0 : dt, sw ? { pos: sw.pos, active: sw.active && sw.mode !== 'scatter', cohesion: sw.cohesion, hunting: sw.mode === 'hunt' || sw.mode === 'cohere' } : null, this.regret);
+      if (live) this.spores.update(fl?.frozen ? 0 : dt, sw ? { pos: sw.pos, active: sw.active && sw.mode !== 'scatter', cohesion: sw.cohesion, hunting: sw.mode === 'hunt' || sw.mode === 'cohere', faint: sw.mode === 'trace' } : null, this.regret);
       this.renderer.setSpores(this.sporeBuf, live ? this.spores.visible([x, y, z], SPORES_SHOWN, this.sporeBuf) : 0);
     } else this.renderer.setSpores(this.sporeBuf, 0);
     // Примета без тела (trace) не рисуется: видны только грибы в углах у её пути.

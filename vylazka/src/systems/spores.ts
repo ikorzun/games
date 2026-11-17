@@ -66,6 +66,8 @@ export interface SporeSource {
   /** Насколько она собрана в фигуру, 0..1, и охотится ли. */
   cohesion: number;
   hunting: boolean;
+  /** Примета без тела (ступени 1–2): след в углу остаётся, только где она прошла вплотную, — не по всему месту. */
+  faint?: boolean;
 }
 
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
@@ -150,7 +152,7 @@ export class Spores {
           // Знак приближения: от нуля на краю слышимости до полного роста вплотную.
           if (d < cornerRange) target = clamp01(1 - d / cornerRange) ** 0.7;
           if (d < 2.5) s.trace = Math.max(s.trace, c.trace);
-          else if (d < cornerRange * 0.5) s.trace = Math.max(s.trace, c.trace * 0.5);
+          else if (d < cornerRange * 0.5 && !src.faint) s.trace = Math.max(s.trace, c.trace * 0.5);
         } else if (formed && d < fieldRange) target = clamp01(1.15 - d / fieldRange);
       }
       target = Math.max(target, s.trace);

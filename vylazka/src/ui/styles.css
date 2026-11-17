@@ -132,6 +132,9 @@ body {
 .vz-hud.is-cut > :not(.vz-hud__top):not(.vz-hud__cut) {
   visibility: hidden;
 }
+.vz-cutting .vz-touch {
+  visibility: hidden;
+}
 /* Номер круга — под временем записи, тише его. */
 .vz-hud__lap {
   font-size: 0.86em;
