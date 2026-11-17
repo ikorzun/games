@@ -349,11 +349,12 @@ describe('игра целиком: цикл сессии', () => {
     expect(h.until(() => h.r.memLight === null, 3)).toBe(true);
   });
 
-  it('свет памяти: у вещи без своего света его нет; в лимбо и карманах — тоже', () => {
-    // Убежище с первой вещи: будильник — своего света у него пока нет.
+  it('свет памяти: у вещи без своего света его нет', () => {
+    // Убежище с третьей вещи цепочки: пульт — своего света у него пока нет.
     const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 } });
     const g = h.game;
-    expect(g.session!.memories[0]!.def.thing).toBe('alarm_clock');
+    g.loadLevel(levelOf(SEED), { seed: 3, known: new Set(), chainAt: 2 });
+    expect(g.session!.memories[0]!.def.thing).toBe('remote');
     expect(h.until(() => g.session!.active !== null, 4)).toBe(true);
     h.run(2);
     expect(h.r.memLight).toBeNull();
@@ -482,7 +483,7 @@ describe('игра целиком: провал, газ и Осыпь не ко�
     // Фонарь не глохнет и случайных скачков нет: в кармане время Осыпи не идёт, а проверяем только её.
     const h = new Harness(levelOf(SEED), { calm: false, seed: 6, light: { meanFailInterval: 1e9 } });
     const g = h.game;
-    g.firstSession = true;
+    g.gentle = true;
     g.jumps!.cooldown = 1e9;
     h.run(2);
     h.reveal();
@@ -499,6 +500,32 @@ describe('игра целиком: провал, газ и Осыпь не ко�
     h.run(45);
     expect(sw.active).toBe(false);
     expect(h.until(() => sw.active, 20)).toBe(true);
+  });
+
+  it('«проснулся» не от Осыпи (провал, край перрона) её не усыпляет и не будит: не выпущенная — так и молчит', () => {
+    const h = new Harness(levelOf(SEED), { calm: false, seed: 6, light: { meanFailInterval: 1e9 } });
+    const g = h.game;
+    g.gentle = true;
+    g.loadLevel(levelOf(SEED), { seed: 6, known: new Set() });
+    g.jumps!.cooldown = 1e9;
+    h.run(2);
+    expect(g.beginJump(g.jumps!.forced('caught'), [])).toBe(true);
+    expect(h.until(() => g.transition === null, 4)).toBe(true);
+    // Режиссёр мягкого режима выпускает её только с пятой минуты; таймер пробуждения не должен её выпустить раньше.
+    h.run(75);
+    expect(g.swarm!.active).toBe(false);
+  });
+
+  it('пока батарейка села и отлёживается, стоять в темноте можно: скачка «темнота» нет', () => {
+    const h = new Harness(levelOf(SEED), { calm: false, seed: 6, light: { meanFailInterval: 1e9, drainSeconds: 2 } });
+    const g = h.game;
+    g.gentle = true;
+    g.loadLevel(levelOf(SEED), { seed: 6, known: new Set() });
+    g.jumps!.cooldown = 0;
+    h.run(4);
+    expect(g.light.exhausted).toBe(true);
+    h.run(20);
+    expect(h.log.dream.some((e) => e.type === 'jump' && e.phase === 'start' && e.plan.cause === 'dark')).toBe(false);
   });
 
   it('провал в яму: fall, forgot, карман; по краю пространства игру возвращает в убежище', () => {

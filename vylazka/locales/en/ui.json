@@ -39,6 +39,7 @@
   "hint.shake.desktop": "The flashlight died. Shake the mouse side to side or tap F",
   "hint.shake.touch": "The flashlight died. Rub the flashlight button quickly",
   "hint.shake.motion": "The flashlight died. Shake the phone or rub the flashlight button",
+  "hint.battery": "The battery is flat. Leave the flashlight alone for a while — it will come back a little.",
   "hint.pause.desktop": "P — pause",
   "touch.light": "Light",
   "touch.pause": "Pause",

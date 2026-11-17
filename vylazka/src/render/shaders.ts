@@ -323,7 +323,7 @@ uniform vec4 uRoofBox;    // зал ожидания: прямоугольник
 uniform float uRoofY;     // высота её переплёта, м; 0 — крыши нет
 uniform vec3 uKeyDirW;    // направление на прямой свет в мире
 uniform vec4 uRecallPos;     // свет памяти (world/memory_light.ts): xyz — где искомая вещь (мир), w — сила; 0 — света нет
-uniform vec4 uRecallColor;   // rgb — его цвет, w — род: 0 пламя у пола, 1 окно перед вещью, 2 лампа сверху, 3 зимний свет сверху
+uniform vec4 uRecallColor;   // rgb — его цвет, w — род: 0 пламя у пола, 1 окно перед вещью, 2 лампа сверху, 3 зимний свет сверху, 4 ровная точка (циферблат)
 uniform vec4 uRecallDir;     // xz — куда смотрит вещь (мир), y — высота источника над вещью, м, w — докуда светит, м
 uniform sampler2D uContact;   // тени-пятна под обстановкой (render/contact.ts): по каналу на ярус, 1 — темно
 uniform vec3 uContactGrid;    // xy — угол карты в мире (x, z), z — её сторона, м; 0 — карты нет
@@ -473,13 +473,14 @@ vec4 memLight() {
   float kind = uRecallColor.w;
   vec3 Lw;
   float k;
-  if (kind < 0.5) {
-    // Пламя: точка над конфоркой; рядом ярко, к краю круга сходит на нет; дрожит.
+  if (kind < 0.5 || kind > 3.5) {
+    // Точка: пламя над конфоркой (0) — дрожит; циферблат (4) — ровный. Рядом ярко, к краю круга сходит на нет.
     vec3 toL = uRecallPos.xyz + vec3(0.0, uRecallDir.y, 0.0) - vWorld;
     float dl = max(length(toL), 0.05);
     Lw = toL / dl;
     float fall = 1.0 - smoothstep(0.0, R, dl);
-    k = fall * (0.35 + 0.65 / (1.0 + 4.0 * dl * dl)) * (0.85 + 0.15 * sin(uSlide.w * 17.0) * sin(uSlide.w * 6.3 + 1.7));
+    float flick = kind < 0.5 ? 0.85 + 0.15 * sin(uSlide.w * 17.0) * sin(uSlide.w * 6.3 + 1.7) : 1.0;
+    k = fall * (0.35 + 0.65 / (1.0 + 4.0 * dl * dl)) * flick;
   } else if (kind < 1.5) {
     // Окно стоит в 2,3 м перед вещью, середина на высоте источника; рама 1,1 × 1,3 м с крестом
     // переплёта чуть выше середины. Солнце низкое (31°): пятно рамы ложится на кресло и пол у него.

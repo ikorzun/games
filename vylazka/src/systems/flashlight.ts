@@ -85,6 +85,11 @@ export class Flashlight {
   /** Фонарь разобран (идёт замена батарейки): света нет, время не идёт. */
   suspended = false;
 
+  /**
+   * Батарейка села до нуля: тряска не поможет, пока она не отлежится до rest. Пока она «села», искр нет и
+   * подсказка просит оставить фонарь в покое.
+   */
+  private flat = false;
   private sinceRevive = 0;
   private litTime = 0;
   private firstFailDone = false;
@@ -108,7 +113,7 @@ export class Flashlight {
   toggle(): void {
     if (this.state === 'on') this.state = 'off';
     else if (this.state === 'off') {
-      this.state = this.charge >= REVIVE_MIN ? 'on' : 'dead';
+      this.state = !this.flat && this.charge >= REVIVE_MIN ? 'on' : 'dead';
       if (this.state === 'dead') this.beginDead();
     }
   }
@@ -116,6 +121,7 @@ export class Flashlight {
   /** Вставить свежую батарейку: полный заряд, фонарь горит. */
   replaceBattery(): void {
     this.charge = 1;
+    this.flat = false;
     this.state = 'on';
     this.dying = 0;
     this.sinceRevive = 0;
@@ -136,11 +142,17 @@ export class Flashlight {
   /** Зарядить батарейку полностью, не трогая состояние фонаря (вспомненная вещь возвращает свет). */
   recharge(): void {
     this.charge = 1;
+    this.flat = false;
   }
 
   /** Батарейка села до нуля: тряска не поможет, пока она не отдохнёт. */
   get empty(): boolean {
     return this.charge <= 0;
+  }
+
+  /** Батарейка села и ещё не отлежалась: тряска не поможет, нужен покой. */
+  get exhausted(): boolean {
+    return this.flat;
   }
 
   /** Принудительный отказ (отладка, сценарные события). */
@@ -160,9 +172,12 @@ export class Flashlight {
     this.need = lo + (hi - lo) * this.rng();
   }
 
-  /** Вероятность отказа в секунду при данных условиях. */
+  /**
+   * Вероятность отказа в секунду при данных условиях. Садящаяся батарейка учащает отказы только на последней
+   * четверти заряда, там же, где свет тускнеет: иначе обещанные «+30 % до отказа» таяли бы уже с полной.
+   */
   hazard(env: FlashlightEnv): number {
-    const low = 1 - clamp01(this.charge);
+    const low = 1 - clamp01(this.charge / 0.25);
     return (1 / this.cfg.meanFailInterval) * (1 + 2.5 * low * low) * (1 + 2 * env.wet) * (1 + 1.5 * env.panic) * (1 + 6 * env.swarm);
   }
 
@@ -182,6 +197,7 @@ export class Flashlight {
       this.litTime += dt;
       this.charge = Math.max(0, this.charge - dt / this.cfg.drainSeconds);
       if (this.charge <= 0) {
+        this.flat = this.cfg.rest > 0;
         this.beginDead();
         ev.failed = true;
       } else if (this.dying > 0) {
@@ -203,20 +219,23 @@ export class Flashlight {
     // Отдых: пока фонарь не горит и его не трясут, севшая батарейка понемногу приходит в себя (ей надо
     // полежать). Трясти севшую — только мешать ей.
     if (this.state !== 'on' && env.shake <= 0.05 && this.charge < this.cfg.rest) this.charge = Math.min(this.cfg.rest, this.charge + this.cfg.restRate * dt);
+    // Отлежалась — снова можно трясти.
+    if (this.flat && this.charge >= this.cfg.rest - 1e-9) this.flat = false;
     if (this.state === 'dead') {
       // Трясти можно до последнего: пока в батарейке есть хоть что-то, тряска фонарь оживит. Севшая до нуля
-      // только дребезжит и искрит — оживлять нечего.
+      // только дребезжит, без искр, — оживлять нечего, пока она не отлежится.
+      const can = !this.flat && this.charge >= REVIVE_MIN;
       if (env.shake > 0.05) {
         ev.rattle = env.shake;
         // Вялая тряска почти не помогает: вклад растёт быстрее уровня.
-        if (this.charge >= REVIVE_MIN) this.work += Math.pow(env.shake, 1.3) * dt;
-        if (this.sparkLeft <= 0 && this.rng() < env.shake * 9 * dt) {
+        if (can) this.work += Math.pow(env.shake, 1.3) * dt;
+        if (can && this.sparkLeft <= 0 && this.rng() < env.shake * 9 * dt) {
           this.sparkLeft = 0.04 + this.rng() * 0.07;
           ev.spark = true;
         }
       }
       this.reviveProgress = clamp01(this.work / this.need);
-      if (this.work >= this.need && this.charge >= REVIVE_MIN) {
+      if (can && this.work >= this.need) {
         this.state = 'on';
         this.sinceRevive = 0;
         this.unstable = 0.5;

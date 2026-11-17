@@ -29,7 +29,7 @@ import { behindness, Echo, ECHO_DRIFT, ECHO_STEP } from './systems/echo';
 import type { ScareId } from './systems/director';
 import { DEFAULT_FLASHLIGHT, Flashlight } from './systems/flashlight';
 import type { FlashlightConfig } from './systems/flashlight';
-import { Jumps } from './systems/jumps';
+import { DEFAULT_JUMPS, Jumps } from './systems/jumps';
 import type { JumpPlan, JumpStyle } from './systems/jumps';
 import { DEFAULT_SESSION, MEMORY_THINGS, Session } from './systems/session';
 import type { SessionConfig, SessionEvent } from './systems/session';
@@ -289,8 +289,18 @@ const WIND: Record<WorldKind, number> = { shelter: 0.022, office: 0.014, yellow:
 
 const STATION_LIGHT: Partial<Record<string, number>> = { concourse: 1, platform: 0.92, track: 0.92, vestibule: 0.7, buffet: 0.6, tickets: 0.55, lockers: 0.5, washroom: 0.5, storage: 0.36, corridor: 0.3 };
 
-/** Сколько Осыпь молчит после того, как поймала, с: в первой сессии игрока и потом. */
-const SWARM_REST = { first: 60, later: 20 } as const;
+/** Сколько Осыпь молчит после того, как поймала, с (вне мягкого режима). */
+const SWARM_REST_LATER = 20;
+
+/**
+ * Мягкий режим — один набор настроек (первая сессия игрока и сон из сцен): Осыпь мелькает с третьей минуты и
+ * охотится с пятой, только по времени; поймав, молчит минуту; ожившие фонари реже уносят в карман.
+ */
+const GENTLE = {
+  director: FIRST_DIRECTOR,
+  rest: 60,
+  jumps: { ...DEFAULT_JUMPS, reviveChance: 0.15 },
+} as const;
 
 const WORLD_THINGS: Record<WorldKind, { small: readonly string[]; big: readonly (readonly [string, PocketKind | null])[] }> = {
   shelter: { small: SMALL_THINGS, big: BIG_THINGS },
@@ -501,10 +511,11 @@ export class Game {
   /** Принудительный первый отказ фонаря уже был в этой игре: в следующих сессиях и сценах его нет. */
   private failTaught = false;
   /**
-   * Первая сессия игрока (ни одной законченной): Осыпь мягче — выходит на охоту только по времени и после
-   * поимки затихает надолго (слова партнёра 16.11 23:41). Ставит приложение по профилю.
+   * Мягкий режим (GENTLE): первая сессия игрока — ни одной законченной — и сон из сцен (сцены короче минуты,
+   * а режиссёр в каждой начинается заново). Слова партнёра 16.11 23:41: «Монстр сильно часто нападает в первой
+   * сессии, сложно найти предметы». Ставит приложение по профилю.
    */
-  firstSession = false;
+  gentle = false;
   /** Когда затихшая после поимки Осыпь выйдет снова, с игрового времени; 0 — не ждёт. */
   private swarmWakeAt = 0;
   /**
@@ -633,9 +644,9 @@ export class Game {
       this.dreamSeed = dream.seed;
       this.swarm = new SwarmAI(level.nav, this.rng);
       this.spores = new Spores(level.nav, dream.seed);
-      this.director = new Director(this.rng, this.firstSession ? FIRST_DIRECTOR : DEFAULT_DIRECTOR);
+      this.director = new Director(this.rng, this.gentle ? GENTLE.director : DEFAULT_DIRECTOR);
       this.swarmWakeAt = 0;
-      this.jumps = new Jumps(this.rng);
+      this.jumps = new Jumps(this.rng, this.gentle ? GENTLE.jumps : DEFAULT_JUMPS);
       // Лестница на нижний ярус удлиняется дважды — только на объектах, где есть «неправильный» ярус.
       const stair = rank >= 2 && tiers >= 3 ? (level.stairs.find((st) => st.upperTier === tiers - 2) ?? null) : null;
       this.anomalies = new Anomalies(stair, { run: STAIR_RUN, rise: STAIR_RISE, steps: STAIR_STEPS }, level.variants, 2);
@@ -1848,12 +1859,13 @@ export class Game {
         // теряет игрока; если это было ближе шести клеток пути от начала — отходит, чтобы не поймать тут же снова.
         this.respawn();
         const sw = this.swarm;
-        if (sw && plan.cause === 'caught') {
-          // Поймав, Осыпь затихает: в первой сессии на минуту, потом на 20 с, — и выходит снова далеко от
-          // игрока (stepFear). Раньше она выходила сразу и ловила снова, едва игрок отошёл от начала.
+        if (sw && plan.cause === 'caught' && this.swarmCaught) {
+          // Поймав, Осыпь затихает: в мягком режиме на минуту, потом на 20 с, — и выходит снова далеко от
+          // игрока (stepFear). Раньше она выходила сразу и ловила снова, едва игрок отошёл от начала. Только
+          // если поймала она: «проснулся» от провала пола или края перрона её не будит и не усыпляет.
           sw.rest();
           this.swarmBody.snap(sw.pos, 0);
-          this.swarmWakeAt = this.time + (this.firstSession ? SWARM_REST.first : SWARM_REST.later);
+          this.swarmWakeAt = this.time + (this.gentle ? GENTLE.rest : SWARM_REST_LATER);
         } else if (sw && sw.active) {
           const home = this.playerNodeAtSpawn();
           const hops = home >= 0 && sw.node >= 0 ? sw.route(sw.node, home).length - 1 : -1;
@@ -2224,7 +2236,8 @@ export class Game {
       let plan: JumpPlan | null = null;
       if (toggled && wasOff && this.light.state === 'on') plan = jumps.onLightOn();
       if (!plan && ev.revived) plan = jumps.onRevive();
-      if (!plan) plan = jumps.onDark(dt, look.light < 0.05 && this.ambientHere < 0.05, Math.hypot(b.vx, b.vz) < 0.3);
+      // Батарейка села и отлёживается — стоять в темноте приходится не по своей воле: скачка за это нет.
+      if (!plan) plan = jumps.onDark(dt, look.light < 0.05 && this.ambientHere < 0.05 && !this.light.exhausted, Math.hypot(b.vx, b.vz) < 0.3);
       if (!plan) {
         // «Тонкое» помещение: постоял в нём — оно рассыпается.
         const thin = this.roomFx.get(this.room) === 'thin' && !this.thinUsed.has(this.room);

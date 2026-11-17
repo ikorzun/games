@@ -462,8 +462,8 @@ export class App {
     } else {
       this.level = buildLevel(generateLayout(this.seed, this.rank, this.world), { wear });
       if (this.scenes) this.game.sessionCfg = SCENE_SESSION;
-      // Первая сессия игрока (ни одной законченной) — Осыпь мягче (слова партнёра 16.11 23:41).
-      this.game.firstSession = this.profile.successes === 0;
+      // Мягкий режим Осыпи: первая сессия игрока (ни одной законченной) и сон из сцен (слова партнёра 16.11 23:41).
+      this.game.gentle = this.profile.successes === 0 || this.scenes;
       this.game.loadLevel(this.level, { seed: this.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
       if (this.scenes) {
         // Сон начинается с места заставки; места, пролистанные кнопкой «Место», не «снились».
@@ -558,7 +558,7 @@ export class App {
       this.memory = mem;
       const level = buildLevel(generateLayout(mem.seed, mem.rank, this.world), { wear: this.wearParam() ?? mem.wear });
       this.next = { level, seed: mem.seed, rank: mem.rank };
-      this.game.firstSession = this.profile.successes === 0;
+      this.game.gentle = this.profile.successes === 0 || this.scenes;
       this.game.queueSession(level, { seed: mem.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
     }, 500);
   }
@@ -999,7 +999,8 @@ export class App {
     const env = g.env.ambient;
     const key = g.env.key?.color ?? [0, 0, 0];
     const bright = (env[0] + env[1] + env[2]) / 3 + (key[0] + key[1] + key[2]) / 6 > 0.3;
-    this.hud.setShakePrompt(dead && !bright ? t(`hint.shake.${kind}`) : '', light.reviveProgress);
+    // Батарейка села до нуля: трясти бесполезно и даже вредно (ей надо отлежаться) — подсказка говорит об этом.
+    this.hud.setShakePrompt(dead && !bright ? t(light.exhausted ? 'hint.battery' : `hint.shake.${kind}`) : '', light.reviveProgress);
     const base = this.touchMode ? 'touch' : 'desktop';
     let hint = '';
     if (!dead && this.screen === 'play' && g.where === 'main' && this.profile.successes === 0) {
@@ -1014,7 +1015,7 @@ export class App {
     const info = g.where === 'pocket' ? g.pocketFade : 1;
     if ((!dead || bright) && this.screen === 'play' && g.where === 'pocket' && !g.jumping) hint = info < 0.75 ? t('pocket.hint.fading') : t('pocket.hint.exit');
     this.hud.setHint(hint);
-    this.touch?.setShakePrompt(dead && !bright, light.reviveProgress);
+    this.touch?.setShakePrompt(dead && !bright && !light.exhausted, light.reviveProgress);
     this.touch?.setLit(light.state === 'on');
     // Где фонаря нет (офис), нет и его кнопки.
     this.touch?.setLightHidden(!g.hasLight);

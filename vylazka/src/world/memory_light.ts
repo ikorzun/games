@@ -10,8 +10,8 @@
  */
 import type { Vec3 } from '../core/types';
 
-/** Род света: точка у пола (пламя), окно перед вещью, лампа сверху, зимний свет сверху. */
-export type MemLightKind = 'flame' | 'window' | 'lamp' | 'winter';
+/** Род света: точка у пола (пламя), окно перед вещью, лампа сверху, зимний свет сверху, ровная точка (циферблат). */
+export type MemLightKind = 'flame' | 'window' | 'lamp' | 'winter' | 'dial';
 
 export interface MemLightDef {
   kind: MemLightKind;
@@ -29,7 +29,7 @@ export interface MemLightDef {
 }
 
 /** Номер рода света в шейдере (uMemColor.w). */
-export const MEM_LIGHT_KIND: Readonly<Record<MemLightKind, number>> = { flame: 0, window: 1, lamp: 2, winter: 3 };
+export const MEM_LIGHT_KIND: Readonly<Record<MemLightKind, number>> = { flame: 0, window: 1, lamp: 2, winter: 3, dial: 4 };
 
 /**
  * Свет у вещей памяти — по роду вещи (thing в цепочках systems/session.ts). Первыми — вещи, что стоят
@@ -45,6 +45,9 @@ export const MEMORY_LIGHT: Readonly<Record<string, MemLightDef>> = {
   st_ticket: { kind: 'lamp', color: [1.0, 0.78, 0.48], strength: 3.2, radius: 2.0, height: 2.3 },
   // «it smells of a station.» Пальто принесли с зимней улицы: холодный свет сверху, снег на плечах.
   st_coat: { kind: 'winter', color: [0.62, 0.75, 1.0], strength: 1.8, radius: 2.2, height: 2.8 },
+  // Первая вещь убежища (её ищут в первой сессии): будильник светится зелёным фосфором циферблата, как
+  // таблички ГО, — «it rang. nobody got up.» Свет ровный, без дрожи.
+  alarm_clock: { kind: 'dial', color: [0.45, 1.0, 0.55], strength: 1.4, radius: 2.2, height: 0.3 },
 };
 
 /** Свет вещи памяти этого рода (нет — undefined: вещь без своего света). */

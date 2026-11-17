@@ -30,10 +30,14 @@ describe('свет памяти', () => {
     }
   });
 
-  it('роды света различны и укладываются в то, что знает шейдер (0–3)', () => {
+  it('роды света различны и укладываются в то, что знает шейдер (0–4)', () => {
     const v = Object.values(MEM_LIGHT_KIND);
     expect(new Set(v).size).toBe(v.length);
-    for (const k of v) expect(k >= 0 && k <= 3).toBe(true);
+    for (const k of v) expect(k >= 0 && k <= 4).toBe(true);
+  });
+
+  it('первая вещь убежища — та, что ищут в первой сессии, — со своим светом', () => {
+    expect(memoryLightOf(WORLD_MEMORIES.shelter[0]!.thing)?.kind).toBe('dial');
   });
 
   it('загорается за MEM_LIGHT_FADE.in, гаснет быстрее и не перелетает цель', () => {

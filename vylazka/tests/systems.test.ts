@@ -44,6 +44,32 @@ describe('фонарь', () => {
     expect(f.state).toBe('on');
   });
 
+  it('садящаяся батарейка учащает отказы только на последней четверти заряда', () => {
+    const f = new Flashlight(mulberry32(4));
+    f.charge = 1;
+    const full = f.hazard(CALM_ENV);
+    f.charge = 0.3;
+    expect(f.hazard(CALM_ENV)).toBeCloseTo(full, 9);
+    f.charge = 0.1;
+    expect(f.hazard(CALM_ENV)).toBeGreaterThan(full * 1.5);
+  });
+
+  it('севшая до нуля батарейка: тряска не оживляет и не искрит; отлежится — снова можно', () => {
+    const f = new Flashlight(mulberry32(8), { ...DEFAULT_FLASHLIGHT, meanFailInterval: 1e9, drainSeconds: 2 });
+    for (let i = 0; i < 60 * 3; i++) f.update(DT, CALM_ENV);
+    expect(f.state).toBe('dead');
+    expect(f.exhausted).toBe(true);
+    let sparks = 0;
+    for (let i = 0; i < 60 * 3; i++) if (f.update(DT, { ...CALM_ENV, shake: 1 }).spark) sparks += 1;
+    expect(sparks).toBe(0);
+    expect(f.state).toBe('dead');
+    // Кнопка тоже не помогает, пока не отлежалась.
+    f.toggle();
+    expect(f.state).toBe('dead');
+    for (let i = 0; i < 60 * 31; i++) f.update(DT, CALM_ENV);
+    expect(f.exhausted).toBe(false);
+  });
+
   it('пока в батарейке есть заряд, тряска оживает фонарь после каждого отказа', () => {
     const f = new Flashlight(mulberry32(9), { ...DEFAULT_FLASHLIGHT, meanFailInterval: 0.5, graceAfterRevive: 0.5, drainSeconds: 60 });
     let revives = 0;
@@ -143,7 +169,10 @@ describe('фонарь', () => {
     expect(f.hazard({ ...CALM_ENV, wet: 1 })).toBeGreaterThan(base * 2.5);
     expect(f.hazard({ ...CALM_ENV, panic: 1 })).toBeGreaterThan(base * 2);
     expect(f.hazard({ ...CALM_ENV, swarm: 1 })).toBeGreaterThan(base * 6);
+    // Садящаяся батарейка — только на последней четверти заряда (16.11: «+30 % до отказа» не тают с полной).
     f.charge = 0.1;
+    expect(f.hazard(CALM_ENV)).toBeGreaterThan(base * 1.5);
+    f.charge = 0.02;
     expect(f.hazard(CALM_ENV)).toBeGreaterThan(base * 2.5);
   });
 

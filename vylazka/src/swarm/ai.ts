@@ -169,7 +169,8 @@ export class SwarmAI {
   /** Близость роя к игроку 0..1 (1 — вплотную): глушит фонарь, пугает, рвёт сигнал. */
   proximity(player: Vec3): number {
     if (this.mode === 'dormant' || (this.mode === 'scatter' && this.cohesion < 0.05)) return 0;
-    const d = Math.hypot(player[0] - this.pos[0], player[1] - this.pos[1], player[2] - this.pos[2]);
+    // Сквозь пол её почти не слышно: высота весит втрое (с яруса прямо под игроком близость была ×6 к отказам фонаря).
+    const d = Math.hypot(player[0] - this.pos[0], (player[1] - this.pos[1]) * 3, player[2] - this.pos[2]);
     return clamp01(1 - (d - 3) / 11);
   }
 
