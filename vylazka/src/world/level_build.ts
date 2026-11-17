@@ -32,6 +32,9 @@ import { EdgeBuilder } from './edges';
 import { placeFigures } from './figure_place';
 import type { FigureSpec } from './figures';
 import { FIGURES } from './figures_data';
+import { placeThings } from './placed_place';
+import type { PlacedSpec } from './placed';
+import { PLACED } from './placed_data';
 import type { ShellCell, WallStyle } from './shell';
 
 const HALF = GRID / 2;
@@ -218,6 +221,14 @@ export interface BuildOptions {
   wear?: number;
   /** Фигуры партнёра (world/figures_data.ts); не задано — те, что стоят в игре. */
   figures?: readonly FigureSpec[];
+  /** Вещи партнёра (world/placed_data.ts); не задано — те, что стоят в игре. */
+  placed?: readonly PlacedSpec[];
+  /**
+   * Отдать в уровне то, по чему расставляются фигуры и вещи (скорлупа ярусов, преграды, начало места): нужно
+   * конструктору (tools/constructor) и тестам. Игре не нужно — уровень идёт к ней из Worker, а скорлупа
+   * при пересылке теряет методы.
+   */
+  keepPlaceWorld?: boolean;
 }
 
 export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLevel {
@@ -720,14 +731,26 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
   // Фигуры партнёра (world/figure_place.ts): последними, по уже стоящей обстановке — чтобы не врасти в
   // мебель. Сеток в уровень не добавляют: фигура — отдельная вещь рендера (game.ts).
   const ent0 = layout.rooms[layout.entranceRoom]!;
-  const figures = placeFigures(opts.figures ?? FIGURES, {
+  const placeWorld = {
     layout,
     shells,
     col,
     skip: new Set([...lowerWells, ...(variantRoom ? [variantRoom.id] : [])]),
-    spawn: [cellToWorld(ent0.cells[0]![0]), tierFloor(ent0.tier), cellToWorld(ent0.cells[0]![1]) + 0.4],
+    spawn: [cellToWorld(ent0.cells[0]![0]), tierFloor(ent0.tier), cellToWorld(ent0.cells[0]![1]) + 0.4] as Vec3,
     spawnTier: ent0.tier,
-  });
+  };
+  const figures = placeFigures(opts.figures ?? FIGURES, placeWorld);
+  // Вещи партнёра (world/placed_place.ts): после фигур и всей обстановки — не врастают ни во что, проходы
+  // оставляют свободными. Строятся как обычная обстановка: в сетку своего помещения, с преградами, объектом
+  // уровня (растворяется от касания и возвращается, как всё).
+  const placed = placeThings(opts.placed ?? PLACED, placeWorld, ALL_PROPS);
+  for (const p of placed) {
+    const room = layout.rooms[p.room]!;
+    const gx = Math.round(p.at[0] / CELL) + GRID / 2;
+    const gz = Math.round(p.at[2] / CELL) + GRID / 2;
+    const ch = chunkFor(room, gx, gz);
+    ALL_PROPS[p.prop]!.build(new Xf(ch.mb, col, p.at[0], p.at[1], p.at[2], p.rot, ch.sl), (hash2(layout.seed, p.k + 1, p.id.length * 977) >>> 0) % 1000003);
+  }
   // Свободные участки стен — в порядке помещений уровня: туда вещь может вернуться «в другом месте».
   for (const { room, ctx } of furnished) for (const s of ctx.slots) if (!s.used && !s.hazard && s.deep) freeSlots.push({ at: [s.xf.ox, s.xf.oy, s.xf.oz], rot: s.xf.rot, room: room.id, tier: room.tier });
 
@@ -821,5 +844,7 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
     world,
     edges,
     ...(figures.length > 0 ? { figures } : {}),
+    ...(placed.length > 0 ? { placed } : {}),
+    ...(opts.keepPlaceWorld ? { placeWorld } : {}),
   };
 }

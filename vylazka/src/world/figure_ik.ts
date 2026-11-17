@@ -8,7 +8,7 @@
  * наименьшими квадратами (Левенберг — Марквардт) по прямой кинематике skeleton(). Углы всё время держатся
  * в пределах суставов (world/figures.ts, LIMITS): рука не вывернется, колено не согнётся назад.
  *
- * Чистый TS: инструмент фигур (tools/figures) и тесты.
+ * Чистый TS: конструктор (tools/constructor) и тесты.
  */
 import type { Vec3 } from '../core/types';
 import { clampTo, LIMITS } from './figures';

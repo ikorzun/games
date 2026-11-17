@@ -8,7 +8,8 @@ import type { MeshData, SheetMark } from './kit';
 import type { Perch } from '../systems/birds';
 import type { FreeSlot, LevelObject } from './objects';
 import type { EdgePoints } from './edges';
-import type { FigureSpot } from './figure_place';
+import type { FigureSpot, PlaceWorld } from './figure_place';
+import type { PlacedSpot } from './placed_place';
 
 /** Кусок геометрии, рисуемый одним вызовом. Ярусы — чтобы не рисовать этажи, которых не видно. */
 export interface LevelChunk {
@@ -152,4 +153,8 @@ export interface BuiltLevel {
   edges?: EdgePoints;
   /** Фигуры партнёра, вставшие на уровне по своим правилам (world/figure_place.ts). Нет — ни одной. */
   figures?: FigureSpot[];
+  /** Вещи партнёра, где они встали (world/placed_place.ts). */
+  placed?: PlacedSpot[];
+  /** То, по чему расставляются фигуры и вещи; только по просьбе (BuildOptions.keepPlaceWorld). */
+  placeWorld?: PlaceWorld;
 }

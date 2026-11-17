@@ -26,6 +26,7 @@ npm run dev      # dev-сервер с контентом из ../episodes и ..
 # Вторая игра — «Untitled Session» (первое лицо, фонарь, three.js): отдельный пакет, см. vylazka/README.md
 cd vylazka && npm install && npm run typecheck && npm test && npm run build && npm run smoke
 node e2e/shots.mjs   # скриншоты фиксированных ракурсов — смотреть картинку глазами
+node tools/constructor/build.mjs <out.html>   # конструктор партнёра: вещи и манекены по местам (сохраняет в базу страницы)
 ```
 
 ## Конвенции

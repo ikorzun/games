@@ -1,0 +1,138 @@
+<title>Конструктор</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Конструктор: слева полка вещей, посередине настоящее помещение места, справа — правило, по которому
+   вещь встанет в игре. Тёмная мастерская, как у инструмента фигур. */
+:root {
+  --bg: #121417;
+  --panel: #191c20;
+  --raise: #20242a;
+  --line: #2c3138;
+  --fg: #e8e6e0;
+  --muted: #9aa1a9;
+  --accent: #e3b25e;
+  --warn: #dc7f73;
+  --ok: #86b98c;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 14px 24px;
+}
+body.is-carrying, body.is-carrying * { cursor: grabbing !important; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin-bottom: 10px; }
+h1 { font: 600 22px/1.2 var(--font-body); margin: 0; letter-spacing: 0.01em; }
+.lead { color: var(--muted); margin: 0; max-width: 92ch; flex: 1 1 420px; min-width: 0; font-size: 14px; }
+.places { display: grid; gap: 6px; margin-bottom: 10px; }
+.layout { display: grid; grid-template-columns: minmax(0, 270px) minmax(0, 1fr) minmax(0, 360px); gap: 14px; align-items: start; }
+#view { position: relative; height: min(76vh, 760px); min-height: 380px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #0e1012; touch-action: none; }
+#view canvas { display: block; width: 100%; height: 100%; }
+.hint { position: absolute; left: 12px; bottom: 10px; right: 12px; font: 12px/1.45 var(--font-mono); color: var(--muted); pointer-events: none; text-shadow: 0 1px 2px #000; }
+.hint b { color: var(--accent); font-weight: 600; }
+.shelf { display: grid; gap: 8px; min-width: 0; }
+#shelf { display: grid; gap: 4px; max-height: min(66vh, 660px); overflow: auto; padding-right: 4px; }
+.shelf__item { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; align-items: center; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; color: var(--fg); font: 13px/1.25 var(--font-body); cursor: grab; touch-action: none; user-select: none; }
+.shelf__item:hover { border-color: var(--accent); }
+.shelf__item--fig { border-color: #4a4130; }
+.shelf__thumb { width: 56px; height: 56px; border-radius: 6px; background: #16191d; display: block; object-fit: cover; }
+.shelf__thumb--fig { display: grid; place-items: center; font-size: 26px; color: var(--accent); }
+.shelf__text { display: grid; min-width: 0; }
+.shelf__text b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.shelf__text small { color: var(--muted); font-size: 11.5px; }
+#panel { display: grid; gap: 10px; min-width: 0; }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; min-width: 0; }
+.box h2 { margin: 0; font: 600 12px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px; font: 13px/1.3 var(--font-body); cursor: pointer; }
+.chip.is-on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); background: var(--raise); }
+.chip:focus-visible, .btn:focus-visible, input:focus-visible, .shelf__item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn { background: var(--raise); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font: 500 14px var(--font-body); cursor: pointer; }
+.btn--main { background: var(--accent); color: #1a1408; border-color: var(--accent); }
+.btn--warn { color: var(--warn); }
+input[type="text"], input[type="search"] { width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--fg); border-radius: 8px; padding: 7px 10px; font: 14px var(--font-body); }
+label.slider { display: grid; grid-template-columns: 8.5em minmax(0, 1fr) 4.2em; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+label.slider output { font: 12px var(--font-mono); color: var(--fg); text-align: right; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.note { margin: 0; font-size: 13px; color: var(--muted); }
+.note b { color: var(--fg); font-weight: 500; }
+#what { font-weight: 500; }
+#summary { font: 12.5px/1.45 var(--font-mono); color: var(--accent); }
+#problems { margin: 0; padding-left: 18px; color: var(--warn); font-size: 13px; }
+#problems:empty { display: none; }
+#status { font: 12px var(--font-mono); color: var(--muted); min-height: 1.2em; }
+#saved { display: flex; flex-wrap: wrap; gap: 6px; }
+#saved:empty::after { content: "Пока ничего не сохранено."; color: var(--muted); font-size: 13px; }
+.sand { border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; color: var(--muted); }
+@media (max-width: 1180px) {
+  .layout { grid-template-columns: minmax(0, 240px) minmax(0, 1fr); }
+  #panel { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  #view { height: 58vh; }
+  #shelf { max-height: 34vh; }
+}
+</style>
+<header>
+  <h1>Конструктор</h1>
+  <p class="lead">Перетащи вещь с полки в помещение и поставь. Помещение настоящее — собрано тем же кодом, что в игре, со своей обстановкой. Конструктор сам видит, у чего вещь стоит и куда смотрит; в игре план места каждый раз новый, и вещь встанет в помещения того же типа у такого же края. Красное — то, чего игра не допустит.</p>
+</header>
+<div class="places">
+  <div class="row" id="worldpick"></div>
+  <div class="row"><span class="row" id="roompick"></span><button class="btn" id="nextroom" title="Другое помещение того же типа">Другое такое <span id="roomnum"></span></button></div>
+</div>
+<div class="layout">
+  <aside class="shelf">
+    <input type="search" id="search" placeholder="Найти: стул, часы, чемодан…" aria-label="Найти вещь">
+    <p class="note">Вещи игры: <span id="shelfcount"></span>. Тяни мышью в помещение.</p>
+    <div class="sand">Вещи из Sand3D встанут на эту полку, как только у игры появится доступ к Hugging Face: каждая программа превращается в вещь игры.</div>
+    <div id="shelf"></div>
+  </aside>
+  <div id="view"><div class="hint"><b>тяни вещь</b> — двигать по полу, у стены встаёт вплотную · <b>Q / E</b> — повернуть · пустое место — крутить вид · <b>⌘Z</b> — отменить · у манекена <b>шарики</b> — гнуть, таз с <b>⌥</b> — в воздух · красные пятна у проёмов — проход</div></div>
+  <div id="panel">
+    <div class="box">
+      <h2>Что стоит</h2>
+      <div id="what"></div>
+      <input type="text" id="name" maxlength="80" placeholder="Как назовёшь — например, «стул спиной к двери»">
+      <div class="row" id="turns"><button class="btn" id="turnl">⟲ Q</button><button class="btn" id="turnr">E ⟳</button></div>
+      <div class="row"><button class="btn btn--main" id="save">Сохранить</button><button class="btn" id="fresh">Новая</button><button class="btn btn--warn" id="drop">Удалить</button></div>
+      <ul id="problems"></ul>
+      <p class="note" id="spotnote" hidden>Здесь вещь в таком виде не встанет. Сохранить можно: в других помещениях этого типа игра поставит её у такого же края, где правило выполнимо.</p>
+      <div id="status"></div>
+    </div>
+    <div class="box" id="figbox" hidden>
+      <h2>Манекен</h2>
+      <div class="row" id="poses"></div>
+      <div class="row" id="mats"></div>
+      <p class="note" id="matnote"></p>
+    </div>
+    <div class="box" id="rule" hidden>
+      <h2>Правило для игры</h2>
+      <div id="summary"></div>
+      <div class="row" id="worlds"></div>
+      <div class="row" id="rooms"></div>
+      <div class="row" id="anchors"></div>
+      <div class="row" id="facings"></div>
+      <label class="slider">Над полом<input type="range" id="lift" min="0" max="2.6" step="0.05"><output id="liftv"></output></label>
+      <label class="slider">Сколько в месте<input type="range" id="count" min="1" max="3" step="1"><output id="countv"></output></label>
+      <p class="note">В игре вещь — как всё вокруг: растворяется от касания и возвращается, когда свет погаснет и зажжётся; в темноте меняется только вне кадра; на поздних кругах стирается вместе с местом. Поворот — четвертями: обстановка игры стоит по сторонам света.</p>
+    </div>
+    <div class="box">
+      <h2>Сохранённое</h2>
+      <div id="saved"></div>
+      <p class="note">Сохранённые вещи видны в подходящих помещениях полупрозрачными — щёлкни, чтобы править.</p>
+    </div>
+  </div>
+</div>
+<!--SCRIPT-->
