@@ -60,6 +60,12 @@ export interface FlashlightEnv {
   swarm: number;
   /** 0..1: уровень тряски из ShakeMeter. */
   shake: number;
+  /**
+   * Нужен ли здесь фонарь. false — место светло само (карманные пространства, лимбо): там фонарь сам не глохнет —
+   * ни случайно, ни первым, обучающим отказом. Отказ, которого не видно, — не страх, а ловушка: игрок возвращается
+   * в темноту с мёртвым фонарём и не знает, когда тот погас. Не задано — нужен.
+   */
+  needed?: boolean;
 }
 
 export const CALM_ENV: FlashlightEnv = { panic: 0, wet: 0, swarm: 0, shake: 0 };
@@ -177,6 +183,7 @@ export class Flashlight {
    * четверти заряда, там же, где свет тускнеет: иначе обещанные «+30 % до отказа» таяли бы уже с полной.
    */
   hazard(env: FlashlightEnv): number {
+    if (env.needed === false) return 0;
     const low = 1 - clamp01(this.charge / 0.25);
     return (1 / this.cfg.meanFailInterval) * (1 + 2.5 * low * low) * (1 + 2 * env.wet) * (1 + 1.5 * env.panic) * (1 + 6 * env.swarm);
   }
@@ -207,8 +214,9 @@ export class Flashlight {
           ev.failed = true;
         }
       } else {
-        // Принудительный первый отказ (обучение) передышку не ждёт; случайные — только после неё.
-        const forced = !this.firstFailDone && this.cfg.firstFailAt > 0 && this.litTime >= this.cfg.firstFailAt;
+        // Принудительный первый отказ (обучение) передышку не ждёт; случайные — только после неё. Где светло и без
+        // фонаря, обучающий отказ ждёт темноты: его надо увидеть.
+        const forced = !this.firstFailDone && this.cfg.firstFailAt > 0 && this.litTime >= this.cfg.firstFailAt && env.needed !== false;
         const random = this.sinceRevive >= this.cfg.graceAfterRevive && this.rng() < this.hazard(env) * dt;
         if (forced || random) {
           this.firstFailDone = true;

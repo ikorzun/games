@@ -44,6 +44,20 @@ describe('фонарь', () => {
     expect(f.state).toBe('on');
   });
 
+  it('где светло и без фонаря, он сам не глохнет — ни случайно, ни первым отказом; в темноте обучающий отказ приходит', () => {
+    // Отказы очень часты и первый — на пятой секунде: в светлом месте за минуту не случается ни одного.
+    const f = new Flashlight(mulberry32(11), { ...DEFAULT_FLASHLIGHT, meanFailInterval: 2, graceAfterRevive: 0, firstFailAt: 5 });
+    const bright = { ...CALM_ENV, needed: false };
+    expect(f.hazard(bright)).toBe(0);
+    for (let i = 0; i < 60 * 60; i++) expect(f.update(DT, bright).failed).toBe(false);
+    expect(f.state).toBe('on');
+    // Шагнул в темноту: обучающий отказ своё время уже отсчитал и приходит сразу (после мерцания-предупреждения).
+    let failed = false;
+    for (let i = 0; i < 60 * 2 && !failed; i++) failed = f.update(DT, CALM_ENV).failed;
+    expect(failed).toBe(true);
+    expect(f.state).toBe('dead');
+  });
+
   it('садящаяся батарейка учащает отказы только на последней четверти заряда', () => {
     const f = new Flashlight(mulberry32(4));
     f.charge = 1;

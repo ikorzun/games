@@ -181,6 +181,11 @@ const ECHO_HEAR = 24;
 /** Сила эха при свете: без света оно видно в полную силу, со светом — лишь за краем луча. */
 const ECHO_LIT = 0.35;
 /**
+ * Рассеянный свет места (среднее по каналам), выше которого место светло само и фонарь не нужен: вещи видны и
+ * без него, и сам он здесь не глохнет (FlashlightEnv.needed).
+ */
+const SELF_LIT = 0.2;
+/**
  * Призрак Осыпи из-за спины: half — половина поля зрения, рад (дальше от оси — «за спиной»);
  * range — докуда он виден, м; open и hidden — плотность, когда между игроком и ней нет стены и когда есть.
  */
@@ -2089,7 +2094,7 @@ export class Game {
   private get seeing(): number {
     // Рассеянный свет — тот, что есть здесь на самом деле: под погасшей панелью офиса его нет.
     const amb = ((this.env.ambient[0] + this.env.ambient[1] + this.env.ambient[2]) / 3) * this.ambientLocal;
-    return Math.max(this.light.intensity * this.env.light * this.fxLight, amb > 0.2 ? 1 : 0);
+    return Math.max(this.light.intensity * this.env.light * this.fxLight, amb > SELF_LIT ? 1 : 0);
   }
 
   step(dt: number, input: InputFrame): StepEvents {
@@ -2144,7 +2149,7 @@ export class Game {
     // Щелчок фонаря волну эха не пускает (решение партнёра: эхо — только без фонаря и на ходу).
     if (toggled) this.light.toggle();
     const level = this.shake.update(dt);
-    const ev = this.light.update(dt, { panic: this.panic, wet: s?.inWater ? 1 : 0, swarm: this.swarmNear, shake: level });
+    const ev = this.light.update(dt, { panic: this.panic, wet: s?.inWater ? 1 : 0, swarm: this.swarmNear, shake: level, needed: this.ambientHere <= SELF_LIT });
     const strokes = this.shake.strokes - this.lastStrokes;
     this.lastStrokes = this.shake.strokes;
 

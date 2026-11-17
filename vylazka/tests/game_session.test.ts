@@ -759,6 +759,23 @@ function recallActive(h: Harness): void {
 }
 
 describe('игра целиком: карманные пространства обретают смысл', () => {
+  it('в светлом пространстве фонарь сам не глохнет; в темноте убежища — снова может', () => {
+    // Передышка 6 с, дальше отказы почти сразу: в белое нигде входим, пока фонарь цел, и стоим там дольше передышки.
+    const h = new Harness(levelOf(SEED), { seed: 21, cfg: NOTHING, light: { meanFailInterval: 0.5, graceAfterRevive: 6 } });
+    const g = h.game;
+    enter(h, 'void');
+    expect(g.light.state).toBe('on');
+    let died = false;
+    for (let i = 0; i < Math.round(20 / STEP); i++) {
+      h.tick();
+      if (g.light.state === 'dead') died = true;
+    }
+    expect(died, 'отказ там, где его не видно').toBe(false);
+    stepInto(h);
+    expect(h.until(() => g.where === 'main' && g.transition === null, 5)).toBe(true);
+    expect(h.until(() => g.light.state === 'dead', 5), 'в темноте фонарь снова глохнет').toBe(true);
+  });
+
   it('вход в кукольный домик даёт событие enter: с искомым воспоминанием, если оно идёт, и без — если нет', () => {
     const idle = new Harness(levelOf(SEED), { seed: 21, cfg: NOTHING });
     idle.run(0.3);
