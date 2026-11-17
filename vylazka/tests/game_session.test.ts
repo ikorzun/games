@@ -349,15 +349,24 @@ describe('игра целиком: цикл сессии', () => {
     expect(h.until(() => h.r.memLight === null, 3)).toBe(true);
   });
 
-  it('свет памяти: у вещи без своего света его нет', () => {
-    // Убежище с третьей вещи цепочки: пульт — своего света у него пока нет.
+  it('свет памяти живёт во времени: у пульта мерцает экран, которого нет, — но не гаснет', () => {
+    // Убежище с третьей вещи цепочки: пульт, свет — мерцание телевизора (mod 'tv').
     const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 } });
     const g = h.game;
     g.loadLevel(levelOf(SEED), { seed: 3, known: new Set(), chainAt: 2 });
     expect(g.session!.memories[0]!.def.thing).toBe('remote');
     expect(h.until(() => g.session!.active !== null, 4)).toBe(true);
+    // Разгорелся (MEM_LIGHT_FADE.in) — дальше сила меняется от кадра к кадру в пределах жизни света.
     h.run(2);
-    expect(h.r.memLight).toBeNull();
+    const seen = new Set<string>();
+    for (let i = 0; i < Math.round(2 / STEP); i++) {
+      h.tick();
+      const s = h.r.memLight?.strength ?? 0;
+      expect(s).toBeGreaterThan(MEMORY_LIGHT.remote!.strength * 0.3);
+      expect(s).toBeLessThanOrEqual(MEMORY_LIGHT.remote!.strength + 1e-9);
+      seen.add(s.toFixed(3));
+    }
+    expect(seen.size).toBeGreaterThan(10);
   });
 
   it('принудительный отказ фонаря — один на игру: в следующей сессии или сцене его нет', () => {

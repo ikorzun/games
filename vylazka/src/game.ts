@@ -65,7 +65,7 @@ import { buildPocket, ENV_BUNKER, WORLD_ENV } from './world/pockets';
 import type { Env, ModelCell, PocketContext, PocketKind, PocketSpace } from './world/pockets';
 import { formMesh } from './world/forms';
 import { thingMesh } from './world/thing_mesh';
-import { MEM_LIGHT_KIND, memLightStep, memoryLightOf } from './world/memory_light';
+import { MEM_LIGHT_KIND, memLightMod, memLightStep, memoryLightOf } from './world/memory_light';
 import type { MemLightDef } from './world/memory_light';
 
 export const STEP = 1 / 60;
@@ -2412,7 +2412,9 @@ export class Game {
     }
     const t = lit.t;
     const s = t.scale;
-    this.renderer.setMemLight({ pos: t.pos, yaw: t.yaw, kind: MEM_LIGHT_KIND[lit.def.kind], color: lit.def.color, strength: lit.def.strength * this.memLitK, height: lit.def.height * s, radius: lit.def.radius * Math.max(1, s) });
+    // Жизнь света во времени (мерцание экрана, мигание лампочки, проходящий поезд) — по времени игры.
+    const life = memLightMod(lit.def.mod, this.time);
+    this.renderer.setMemLight({ pos: t.pos, yaw: t.yaw, kind: MEM_LIGHT_KIND[lit.def.kind], color: lit.def.color, strength: lit.def.strength * this.memLitK * life, height: lit.def.height * s, radius: lit.def.radius * Math.max(1, s) });
   }
 
   /** Фосфорные надписи: вспышка и темнота по событию; рядом с охотящимся роем гаснут. */
