@@ -19,7 +19,7 @@ import type { WorldKind } from './gen/layout';
 import { Lifecycle } from './lifecycle';
 import { detectCoarsePointer } from './platform';
 import type { IPlatform } from './platform';
-import { emptyInput } from './player/input';
+import { emptyInput, PressCarry } from './player/input';
 import type { InputFrame } from './player/input';
 import { DesktopInput } from './player/input_desktop';
 import { MotionSensor } from './player/motion';
@@ -125,6 +125,8 @@ export class App {
   private clockSkew = 0;
   private last = 0;
   private acc = 0;
+  /** Щелчок фонаря, пришедший в кадр без шага игры, — до следующего кадра (player/input.ts, PressCarry). */
+  private readonly lightPress = new PressCarry();
   private qualityManual = false;
   private playTime = 0;
   private slowTime = 0;
@@ -1327,6 +1329,8 @@ export class App {
 
   /** Один оборот игры: шаги симуляции, кадр, надписи. Отладочный API вызывает то же самое вручную. */
   advance(input: InputFrame, steps: number, alpha: number, dt: number, present = true): void {
+    // Щелчок фонаря ждёт ближайшего шага игры, а не пропадает в кадре без шага (экран 120 Гц).
+    input.light = this.lightPress.take(input.light, steps);
     for (let i = 0; i < steps; i++) {
       this.handleEvents(this.game.step(STEP, input));
       input.light = false;

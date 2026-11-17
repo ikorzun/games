@@ -20,6 +20,15 @@ export const LOCK_QUIET_MS = 250;
  * сравнение бессмысленно — и пусть тогда окно не сработает вовсе, чем мышь перестанет вести луч.
  */
 const QUIET_REACH_MS = 60000;
+/** Клик-выключатель без захвата мыши: не дольше стольких миллисекунд и не дальше стольких пикселей. */
+const CLICK_MS = 300;
+const CLICK_SLOP = 6;
+
+/** Нажали на кнопку интерфейса (пауза и т. п.) — это не клик по миру. */
+function onButton(t: EventTarget | null): boolean {
+  const el = t as Element | null;
+  return !!el && typeof el.closest === 'function' && el.closest('button, a, input, label, [role="button"]') !== null;
+}
 
 export class DesktopInput implements InputSource {
   private readonly keys = new Set<string>();
@@ -37,6 +46,8 @@ export class DesktopInput implements InputSource {
   private quietUntil = -Infinity;
   /** Захват мыши, каким мы видели его в последний раз. */
   private lockSeen = false;
+  /** Где и когда нажата левая кнопка (для клика-выключателя без захвата мыши). */
+  private downAt: { x: number; y: number; t: number; drag: boolean } | null = null;
 
   constructor(
     private readonly target: HTMLElement,
@@ -51,11 +62,7 @@ export class DesktopInput implements InputSource {
       if (e.repeat) return;
       if (this.lifecycle.paused) return;
       this.keys.add(e.code);
-      if (e.code === 'KeyF') {
-        this.light = true;
-        // «Стукнуть ладонью»: каждое нажатие — толчок детектору тряски.
-        this.shake.pushImpulse(0.3);
-      }
+      if (e.code === 'KeyF') this.press();
       if (e.code === 'KeyP') this.pause = true;
       if (e.code.startsWith('Arrow') || e.code === 'Space' || e.code === 'Tab') e.preventDefault();
     });
@@ -86,11 +93,21 @@ export class DesktopInput implements InputSource {
       this.lookPitch -= e.movementY * SENS;
       this.shake.pushMotion(e.movementX, e.movementY);
     });
-    on(this.target, 'mousedown', () => {
+    on(this.target, 'mousedown', (e) => {
+      // Левая кнопка мыши — тот же выключатель фонаря, что F (слова партнёра 17.11: «кнопка включения и выключения фонаря
+      // должна работать по 1 нажатию на клавишу F и дублируется левой кнопкой мыши»). Клик, которым мышь захватывают,
+      // фонарь не трогает: щёлкает только клик по уже захваченной мыши.
+      if (e.button === 0 && !this.lifecycle.paused && document.pointerLockElement === this.target) this.press();
       this.dragging = true;
+      this.downAt = { x: e.clientX, y: e.clientY, t: e.timeStamp, drag: this.dragLook };
       this.capture();
     });
-    on(window, 'mouseup', () => {
+    on(window, 'mouseup', (e) => {
+      // Без захвата мыши (песочница iframe) левая кнопка ведёт луч, пока зажата; короткий клик на месте — выключатель.
+      const d = this.downAt;
+      // Клик, на котором выяснилось, что захвата нет, — не выключатель: им игрок только входил в игру.
+      if (this.dragLook && d && d.drag && e.button === 0 && !this.lifecycle.paused && e.timeStamp - d.t < CLICK_MS && Math.hypot(e.clientX - d.x, e.clientY - d.y) < CLICK_SLOP && !onButton(e.target)) this.press();
+      this.downAt = null;
       this.dragging = false;
     });
     on(document, 'pointerlockchange', (e) => {
@@ -101,6 +118,15 @@ export class DesktopInput implements InputSource {
       if (!locked && !this.dragLook) this.lifecycle.set('pointer', true);
     });
     on(document, 'pointerlockerror', () => this.lockFailed());
+  }
+
+  /**
+   * Выключатель фонаря: F или левая кнопка мыши, одно нажатие — одно переключение. Заглохший фонарь нажатием не включается —
+   * его трясут; поэтому нажатие заодно и «стук ладонью»: толчок детектору тряски.
+   */
+  private press(): void {
+    this.light = true;
+    this.shake.pushImpulse(0.3);
   }
 
   /** Захват мыши недоступен: луч ведётся мышью с зажатой кнопкой (игроку об этом говорит подсказка). */

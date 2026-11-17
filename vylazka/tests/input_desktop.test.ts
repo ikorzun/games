@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Lifecycle } from '../src/lifecycle';
 import { DesktopInput, LOCK_QUIET_MS } from '../src/player/input_desktop';
+import { PressCarry } from '../src/player/input';
 import { ShakeMeter } from '../src/player/shake';
 
 /** Источник событий вместо document, window и элемента игры: в тестах браузера нет. */
@@ -275,3 +276,67 @@ describe('мышь на ПК', () => {
     expect(doc.listeners + win.listeners + el.listeners).toBe(0);
   });
 });
+
+describe('выключатель фонаря на ПК: F и левая кнопка мыши, одно нажатие — одно переключение (слова партнёра 17.11)', () => {
+  const key = (code: string): void => win.emit('keydown', { code, repeat: false });
+  const click = (x: number, y: number, t: number, ms = 80, dx = 0, button = 0, target: unknown = null): void => {
+    el.emit('mousedown', { button, clientX: x, clientY: y, timeStamp: t });
+    win.emit('mouseup', { button, clientX: x + dx, clientY: y, timeStamp: t + ms, target });
+  };
+
+  it('F: одно нажатие — один щелчок, следующий кадр уже без него', () => {
+    key('KeyF');
+    expect(input.poll().light).toBe(true);
+    expect(input.poll().light).toBe(false);
+  });
+
+  it('левая кнопка по захваченной мыши — тот же щелчок; клик, которым мышь захватывают, фонарь не трогает; правая — нет', () => {
+    el.emit('mousedown', { button: 0, clientX: 5, clientY: 5, timeStamp: 1000 });
+    win.emit('mouseup', { button: 0, clientX: 5, clientY: 5, timeStamp: 1050 });
+    doc.emit('pointerlockchange', { timeStamp: 1000 });
+    expect(doc.pointerLockElement).toBe(el);
+    expect(input.poll().light).toBe(false);
+    click(5, 5, 2000);
+    expect(input.poll().light).toBe(true);
+    click(5, 5, 3000, 80, 0, 2);
+    expect(input.poll().light).toBe(false);
+  });
+
+  it('без захвата мыши (песочница iframe): короткий клик на месте — щелчок; протяжка, долгое нажатие, кнопка интерфейса и первый клик — нет', async () => {
+    el.lockAllowed = false;
+    // Первый клик: на нём выясняется, что захвата нет, — им игрок только входит в игру.
+    click(10, 10, 100);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(input.dragMode).toBe(true);
+    expect(input.poll().light).toBe(false);
+    click(50, 50, 1000, 90, 2);
+    expect(input.poll().light).toBe(true);
+    click(50, 50, 2000, 90, 40);
+    expect(input.poll().light).toBe(false);
+    click(50, 50, 3000, 500);
+    expect(input.poll().light).toBe(false);
+    click(50, 50, 4000, 80, 0, 0, { closest: (sel: string) => (sel.includes('button') ? {} : null) });
+    expect(input.poll().light).toBe(false);
+  });
+});
+
+describe('щелчок доживает до шага игры: экран 120 Гц рисует вдвое чаще, чем идут шаги (PressCarry)', () => {
+  it('нажатие в кадре без шага не пропадает и не удваивается в кадре с двумя шагами', () => {
+    const c = new PressCarry();
+    // Кадр без шага: нажатие ждёт.
+    expect(c.take(true, 0)).toBe(false);
+    // Следующий кадр с шагом: щёлкнуло ровно один раз.
+    expect(c.take(false, 1)).toBe(true);
+    expect(c.take(false, 1)).toBe(false);
+    // Обычный кадр с шагом — сразу.
+    expect(c.take(true, 2)).toBe(true);
+    expect(c.take(false, 0)).toBe(false);
+    expect(c.take(false, 1)).toBe(false);
+    // 120 Гц: шаги 0,1,0,1… — каждое из десяти нажатий срабатывает ровно один раз.
+    let fired = 0;
+    for (let i = 0; i < 20; i++) if (c.take(i % 2 === 0, i % 2)) fired += 1;
+    expect(fired).toBe(10);
+  });
+});
+
