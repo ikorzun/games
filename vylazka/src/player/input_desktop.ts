@@ -21,8 +21,8 @@ export const LOCK_QUIET_MS = 250;
  */
 const QUIET_REACH_MS = 60000;
 /** Клик-выключатель без захвата мыши: не дольше стольких миллисекунд и не дальше стольких пикселей. */
-const CLICK_MS = 300;
-const CLICK_SLOP = 6;
+const CLICK_MS = 250;
+const CLICK_SLOP = 4;
 
 /** Нажали на кнопку интерфейса (пауза и т. п.) — это не клик по миру. */
 function onButton(t: EventTarget | null): boolean {

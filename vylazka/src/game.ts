@@ -139,6 +139,11 @@ export interface StepEvents {
   lightRevived: boolean;
   /** Игрок щёлкнул выключателем фонаря. */
   lightToggled: boolean;
+  /**
+   * Нажали выключатель заглохшего фонаря: он не включается — его трясут. Звучит стуком по корпусу, а не щелчком:
+   * одинаковый щелчок без света выглядел бы как «кнопка сработала через раз» (замечание куратора к слову партнёра 17.11 12:15).
+   */
+  lightKnock?: boolean;
   /** Зарядка удержанием дошла до полного: вспышка, дальше обычный свет (телефон). */
   lightCharged: boolean;
   /** Фонарь заряжают (палец на кнопке): заряд 0..1 для тона треска; −1 — не заряжают. */
@@ -2306,7 +2311,10 @@ export class Game {
     // Фонарь. Там, где его нет (офис: свет даёт место), кнопка ничего не делает и глохнуть нечему.
     this.light.suspended = !this.hasLight;
     const wasOff = this.light.state === 'off';
-    const toggled = input.light && this.hasLight;
+    const pressed = input.light && this.hasLight;
+    // Заглохший фонарь нажатием не включается: нажатие по нему — стук, а не щелчок выключателя.
+    const knock = pressed && this.light.state === 'dead';
+    const toggled = pressed && !knock;
     // Щелчок фонаря волну эха не пускает (решение партнёра: эхо — только без фонаря и на ходу). На телефоне выключатель —
     // короткий тап по кнопке (слова партнёра 17.11 10:04), а палец на кнопке заряжает (08:42).
     if (toggled) this.light.toggle();
@@ -2499,7 +2507,7 @@ export class Game {
     }
 
     this.stepGlow(dt);
-    return { lightFailed: ev.failed, lightRevived: ev.revived, lightToggled: toggled, lightCharged: ev.charged, crank: this.light.cranking ? this.light.charge : -1, spark: ev.spark, strokes, fellOut: res.fellOut, session: out, fear, dream };
+    return { lightFailed: ev.failed, lightRevived: ev.revived, lightToggled: toggled, lightKnock: knock, lightCharged: ev.charged, crank: this.light.cranking ? this.light.charge : -1, spark: ev.spark, strokes, fellOut: res.fellOut, session: out, fear, dream };
   }
 
   /** Рой, режиссёр и аномалии за шаг. */

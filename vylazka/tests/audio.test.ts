@@ -139,6 +139,15 @@ describe('привязка звуков к игре', () => {
     expect(r.ids_()).toEqual(['flash_click', 'flash_die', 'flash_rattle', 'flash_spark', 'flash_rattle', 'flash_click']);
   });
 
+  it('нажатие по заглохшему фонарю — стук (брякнули батарейки), а не щелчок выключателя (17.11 12:15)', () => {
+    const r = new Recorder();
+    const a = new GameAudio(r);
+    a.setScene('play');
+    const w = world({ light: { state: 'dead' } });
+    a.onStep({ ...quiet(), lightKnock: true }, w);
+    expect(r.ids_()).toEqual(['flash_rattle']);
+  });
+
   it('события сессии, сна и страха находят свой звук', () => {
     const r = new Recorder();
     const a = new GameAudio(r);

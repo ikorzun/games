@@ -3349,3 +3349,24 @@ describe('тихий слой точек по рёбрам — только на
     expect(lap6.r.frames.at(-1)!.quiet!).toBeGreaterThan(0);
   });
 });
+
+describe('выключатель по заглохшему фонарю (17.11 12:15)', () => {
+  it('нажатие по заглохшему фонарю — стук: щелчка выключателя нет, фонарь не включается, тряска получила толчок', () => {
+    const h = new Harness(levelOf(SEED));
+    h.run(1);
+    h.game.light.forceFail();
+    expect(h.game.light.state).toBe('dead');
+    const ev = h.game.step(STEP, { ...emptyInput(), light: true });
+    expect(ev.lightToggled).toBe(false);
+    expect(ev.lightKnock).toBe(true);
+    expect(h.game.light.state).toBe('dead');
+    // Горящий — обычный щелчок.
+    const g = new Harness(levelOf(SEED));
+    g.run(1);
+    expect(g.game.light.state).toBe('on');
+    const on = g.game.step(STEP, { ...emptyInput(), light: true });
+    expect(on.lightToggled).toBe(true);
+    expect(on.lightKnock).toBe(false);
+    expect(g.game.light.state).toBe('off');
+  });
+});

@@ -36,7 +36,7 @@
   "hint.look.touch": "Hold to walk, drag to look",
   "hint.light.desktop": "F or left click — flashlight",
   "hint.light.touch": "Tap the flashlight button to switch it on or off · hold it to charge it",
-  "hint.shake.desktop": "The flashlight died. Shake the mouse side to side or tap F",
+  "hint.shake.desktop": "The flashlight died. Shake the mouse side to side or knock: F or left click",
   "hint.shake.touch": "The flashlight died. Hold your finger on its button",
   "hint.shake.motion": "The flashlight died. Hold your finger on its button or shake the phone",
   "hint.battery": "The battery is flat. Leave the flashlight alone for a while — it will come back a little.",

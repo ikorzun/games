@@ -143,6 +143,8 @@ export class GameAudio {
   onStep(ev: StepEvents, game: AudioWorld): void {
     const a = this.engine;
     if (ev.lightToggled) a.play('flash_click', { rate: this.jitter(0.04) });
+    // Нажатие по заглохшему фонарю — стук по корпусу (батарейки брякнули), не щелчок: свет от него не загорится.
+    else if (ev.lightKnock) a.play('flash_rattle', { rate: this.jitter(0.08) * 0.7, volume: 0.8 });
     if (ev.lightFailed) a.play('flash_die');
     if (ev.lightRevived) a.play('flash_click', { rate: 1.12, volume: 1.1 });
     if (ev.spark) a.play('flash_spark', { rate: this.jitter(0.1) });
