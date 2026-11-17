@@ -2113,11 +2113,34 @@ async function scenarioPockets(browser, baseUrl) {
 
   // ── Белое нигде: вспомненное и болванки ──
   // Вспоминаем текущее воспоминание и сразу уходим в белое нигде: следующее ещё не пришло.
-  await vz(page, () => window.__vz.gotoMemory());
-  await vz(page, () => window.__vz.step(20));
-  st = await vz(page, () => window.__vz.step(140));
+  const before = await state(page);
+  const went = await vz(page, () => window.__vz.gotoMemory());
+  // Держим вещь в луче, пока она не вспомнится (обычно за 1,6 с), но не дольше 6 с; потом добираем до прежних
+  // 160 кадров, чтобы дальше всё шло как раньше. Каждые полсекунды — след: если вещь не вспомнилась, по нему видно
+  // почему (горел ли фонарь, в луче ли вещь и не заслонена ли, не растворилась ли она, не унесло ли игрока).
+  const held = await vz(
+    page,
+    (id) => {
+      const trace = [];
+      let s = window.__vz.state();
+      let used = 0;
+      for (let i = 0; i < 36 && s.session.done < 1; i++) {
+        s = window.__vz.step(10);
+        used += 10;
+        if (i % 3 === 2) {
+          const v = window.__vz.sees(id);
+          const t = s.things.find((x) => x.id === id);
+          trace.push({ t: +s.time.toFixed(1), hold: +s.session.hold.toFixed(2), light: +s.light.intensity.toFixed(2), thing: t ? t.state : null, dot: v && +v.dot.toFixed(3), need: v && +v.need.toFixed(3), los: v && +v.los.toFixed(2), d: v && +v.d.toFixed(2), where: s.where });
+        }
+      }
+      if (s.session.done >= 1 && used < 160) s = window.__vz.step(160 - used);
+      return { s, trace };
+    },
+    mem.thing,
+  );
+  st = held.s;
   const first = mem.id;
-  check('вспомнено одно воспоминание, нового пока нет', st.session.done === 1 && (await vz(page, () => window.__vz.memory())) === null, JSON.stringify({ done: st.session.done }));
+  check('вспомнено одно воспоминание, нового пока нет', st.session.done === 1 && (await vz(page, () => window.__vz.memory())) === null, JSON.stringify({ done: st.session.done, went, light: before.light, from: before.pos, trace: held.trace }));
   const nodeVoid = st.node;
   r = await enter('void');
   check('белое нигде: строка при входе «это то, что ты сохранил»', r.flash.on && r.flash.text === RU['pocket.void.enter'], JSON.stringify(r.flash));
@@ -2128,6 +2151,8 @@ async function scenarioPockets(browser, baseUrl) {
   check('перед игроком дугой пять экспонатов: одна вещь и четыре белые болванки', exhibits.length === 5 && blanks.length === 4 && exhibits.filter((t) => t.kind === 'blank').length === 4 && exhibits.every((t) => (t.kind === 'blank') === blanks.includes(t.id)), JSON.stringify({ n: exhibits.length, blanks: blanks.length }));
   if (wantShots) await saveShot(page, 'session_pocket_void_exhibits.png');
   const mine = exhibits.find((t) => t.kind !== 'blank');
+  // Без вспомненной вещи остальные проверки белого нигде бессмысленны: сценарий кончается здесь, с понятной причиной.
+  if (!mine) throw new Error('в белом нигде нет вспомненной вещи — дальше карманы не проверить');
   const replay = await lookUntilDone('thing', mine.id);
   check('взгляд на вспомненное повторяет его строку, пространство при этом ничего не вызывает', replay.near && replay.flash.on && replay.flash.text === RU[`mem.${first}.done`] && replay.done === false, JSON.stringify(replay));
   // Контроль: без взгляда на болванку само следующее воспоминание не приходит (пауза 40 с).
@@ -2819,25 +2844,35 @@ const browser = await launchBrowser();
 // «HeadlessChrome/…» — chromium-headless-shell, «Chrome/…» — полный Chromium: по логу видно, кто гонял тест.
 const product = await browser.newBrowserCDPSession().then((cdp) => cdp.send('Browser.getVersion')).then((v) => v.product).catch(() => browser.version());
 console.log(`Смоук: ${remoteUrl ?? distDir} → ${server.url}; браузер ${product}`);
+/**
+ * Сценарий целиком. Исключение в одном сценарии не обрывает остальные: раньше один провал в карманах
+ * (дальше — обращение к несуществующей вещи) снимал с прогона страх, звук, касания, мост и матрицу, и их
+ * провалы не были видны.
+ */
+const run = async (name, scenario) => {
+  try {
+    await scenario(browser, server.url);
+  } catch (e) {
+    failures.push(`исключение в сценарии ${name}: ${e.message}`);
+    console.error(e);
+  }
+};
 try {
-  if (wants('play')) await scenarioPlay(browser, server.url);
-  if (wants('gen')) await scenarioGen(browser, server.url);
-  if (wants('worlds')) await scenarioWorlds(browser, server.url);
-  if (wants('flats')) await scenarioFlats(browser, server.url);
-  if (wants('illusions')) await scenarioIllusions(browser, server.url);
-  if (wants('session')) await scenarioSession(browser, server.url);
+  if (wants('play')) await run('play', scenarioPlay);
+  if (wants('gen')) await run('gen', scenarioGen);
+  if (wants('worlds')) await run('worlds', scenarioWorlds);
+  if (wants('flats')) await run('flats', scenarioFlats);
+  if (wants('illusions')) await run('illusions', scenarioIllusions);
+  if (wants('session')) await run('session', scenarioSession);
   // Только карманные пространства (быстрый прогон; в полный session они уже входят).
-  if (only?.includes('pockets')) await scenarioPockets(browser, server.url);
-  if (wants('fear')) await scenarioFear(browser, server.url);
-  if (wants('audio')) await scenarioAudio(browser, server.url);
-  if (wants('frame')) await scenarioFrame(browser, server.url);
-  if (wants('touch')) await scenarioTouch(browser, server.url);
-  if (wants('touch')) await scenarioTouchSession(browser, server.url);
-  if (wants('bridge')) await scenarioBridge(browser, server.url);
-  if (wantMatrix && wants('matrix')) await scenarioMatrix(browser, server.url);
-} catch (e) {
-  failures.push(`исключение: ${e.message}`);
-  console.error(e);
+  if (only?.includes('pockets')) await run('pockets', scenarioPockets);
+  if (wants('fear')) await run('fear', scenarioFear);
+  if (wants('audio')) await run('audio', scenarioAudio);
+  if (wants('frame')) await run('frame', scenarioFrame);
+  if (wants('touch')) await run('touch', scenarioTouch);
+  if (wants('touch')) await run('touch', scenarioTouchSession);
+  if (wants('bridge')) await run('bridge', scenarioBridge);
+  if (wantMatrix && wants('matrix')) await run('matrix', scenarioMatrix);
 } finally {
   await browser.close();
   await server.close();
