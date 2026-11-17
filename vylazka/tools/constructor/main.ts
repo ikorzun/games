@@ -1180,6 +1180,50 @@ window.addEventListener('pointerup', () => {
   }
 });
 
+/**
+ * Стрелки (партнёр 17.11: «добавь возможность перемещать объекты в редакторе стрелками»): сдвиг по полу по оси мира, ближайшей
+ * к взгляду камеры: ↑ — от себя, ↓ — к себе, ← → — вбок. Шаг 10 см, с Shift — 50 см, с Alt — 2 см. Вещь, что спиной к стене,
+ * по стене скользит и в стену не уходит, а стрелкой от стены отходит (прилипание при перетаскивании её бы не отпускало).
+ * Выбранная вещь игры от стрелки становится передвинутой. Серия нажатий подряд — один шаг отмены.
+ */
+let nudgeAt = 0;
+function nudge(ax: number, az: number, e: { shiftKey: boolean; altKey: boolean }): boolean {
+  // Выбрана вещь игры, но ещё не тронута — стрелка начинает её передвигать (как если бы её потянули).
+  if (gameSel) {
+    const o = objById(gameSel);
+    if (!o || !gameOk(o)) return false;
+    beginGameDrag(o);
+    nudgeAt = performance.now();
+  } else if (!cur) return false;
+  else if (performance.now() - nudgeAt > 700) pushUndo();
+  nudgeAt = performance.now();
+  const it = cur!;
+  const step = e.shiftKey ? 0.5 : e.altKey ? 0.02 : 0.1;
+  const f = cam.getWorldDirection(new THREE.Vector3());
+  const fwd: [number, number] = Math.abs(f.x) > Math.abs(f.z) ? [Math.sign(f.x), 0] : [0, Math.sign(f.z)];
+  const right: [number, number] = [-fwd[1], fwd[0]];
+  const dx = (az * fwd[0] + ax * right[0]) * step;
+  const dz = (az * fwd[1] + ax * right[1]) * step;
+  const x = it.at[0] + dx;
+  const z = it.at[2] + dz;
+  if (it.kind === 'thing') {
+    const p = ALL_PROPS[it.spec.prop]!;
+    const wall = p.mount === 'free' ? null : nearest(spotsOf('wall'), x, z);
+    // От стены в комнату — без прилипания; вдоль стены и в стену — прилипает (вплотную, не сквозь).
+    const away = wall !== null && dx * Math.sin(wall.a.phi) + dz * Math.cos(wall.a.phi) > 1e-6;
+    if (away) {
+      it.at = [Math.round(x * 100) / 100, it.at[1], Math.round(z * 100) / 100];
+      derive(it);
+    } else moveCurTo(x, z);
+  } else {
+    it.at = [Math.round(x * 100) / 100, it.at[1], Math.round(z * 100) / 100];
+    derive(it);
+  }
+  dirty = true;
+  syncPanel();
+  return true;
+}
+
 /** Повернуть вещь на четверть (фигуру — на 15°). */
 function turn(dir: 1 | -1): void {
   if (!cur) return;
@@ -1221,6 +1265,12 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.code === 'KeyQ') turn(-1);
   else if (e.code === 'KeyE') turn(1);
+  else if (e.code === 'ArrowUp' || e.code === 'ArrowDown' || e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+    const ax = e.code === 'ArrowRight' ? 1 : e.code === 'ArrowLeft' ? -1 : 0;
+    const az = e.code === 'ArrowUp' ? 1 : e.code === 'ArrowDown' ? -1 : 0;
+    // Сдвинули — странице не прокручиваться.
+    if (nudge(ax, az, e)) e.preventDefault();
+  }
   else if (e.code === 'Escape') {
     if (carry) {
       carry = null;
@@ -2291,6 +2341,8 @@ const gameInfo = (o: LevelObject) => ({
     return cur;
   },
   unmove: () => cur?.kind === 'thing' && cur.spec.moves && unmove(cur.spec),
+  /** Стрелка: ax — вбок (+1 вправо), az — от себя (+1); shift/alt — шаг 50 / 2 см. */
+  nudge: (ax: number, az: number, shift = false, alt = false) => nudge(ax, az, { shiftKey: shift, altKey: alt }) && cur ? { at: cur.at, rot: cur.kind === 'thing' ? cur.rot : null } : null,
   save: () => $('save').click(),
   undo: () => undoStep(),
   card: (name: string) => {
