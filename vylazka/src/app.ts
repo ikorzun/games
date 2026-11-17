@@ -395,6 +395,8 @@ export class App {
     this.sound.preload(loadFirst(this.world));
     if (p.get('lang') === null && this.profile.lang) this.setLang(normalizeLang(this.profile.lang), true);
     renderer.brightness = BRIGHT[this.profile.bright];
+    // Проба «свет приносит точки» (квиз 17.11, ночь): ?build=1, #build или страница пробы (__vzVariant = 'build').
+    renderer.beamBuild = p.get('build') === '1' || (typeof location !== 'undefined' && location.hash === '#build') || this.variant === 'build';
     // Пробная сборка: одна часть сборки места отключена, чтобы на телефоне найти, какая ломает пол.
     setThingRegistry(ALL_PROPS);
     // level=test — коридор технического среза, level=show — витрина реквизита.

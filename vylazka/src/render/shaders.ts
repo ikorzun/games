@@ -149,6 +149,10 @@ uniform vec4 uScan;       // x — h без света, y — h на едини�
 uniform float uScanFade;  // 1 — пространство держится; меньше — редеет (его время выходит)
 uniform vec2 uScanRange;  // докуда рассеянный свет «сканирует»: плотно до x, россыпь после y, м
 uniform float uDebugView; // проверка на устройстве (#diag, «факторы»): 1 — вместо цвета то, из чего сложилась сборка
+uniform float uBuild;     // проба «свет приносит точки»: 1 — замеры поверхности идут за вниманием скана (render/renderer.ts, beamBuild)
+uniform vec3 uBuildFocus; // внимание скана в мире: откуда (рука) и куда (луч с запаздыванием), насколько горит
+uniform vec3 uBuildDir;
+uniform float uBuildOn;
 `;
 
 /**
@@ -953,6 +957,9 @@ void main() {
   // Прямой свет пространства тоже «сканирует»: освещённая сторона плотнее теневой.
   float keyLit = (max(dot(Ng, uKeyDirV), 0.0) + thin * 0.7 * max(-dot(Ng, uKeyDirV), 0.0)) * dot(uKeyColor, vec3(0.3333)) * shadowKey;
   float hLit = (eLight + bounce0 * 1.2) * uScan.y * back;
+  // Проба «свет приносит точки» (квиз 17.11, ночь): поверхность набирает замеры вслед за вниманием скана (лучом с
+  // запаздыванием), а не в миг света: сначала к ней летят точки, сплошной она становится последней.
+  if (uBuild > 0.5) hLit *= uBuildOn * smoothstep(uCone.w, mix(uCone.w, uCone.z, 0.45), dot(normalize(vWorld - uBuildFocus), uBuildDir));
   // На лугу и у лампы тень реже освещённой стороны. В зале ожидания (uKeyCells > 0) почти всё стоит
   // под крышей, в тени; там место собирает не солнце, а неподвижность — тень собрана так же плотно.
   float keyK = uKeyCells > 0.0 ? 1.0 : min(1.0, keyLit * 3.0 + step(dot(uKeyColor, vec3(1.0)), 0.001));
@@ -1781,6 +1788,7 @@ uniform vec3 uFocusPosV;
 uniform vec3 uFocusDirV;
 uniform float uFocusOn;
 uniform vec3 uEdl;          // объём для точек: xy — шаг выборок глубины (доли экрана), z — сила
+uniform float uBuild;       // проба «свет приносит точки»: точки прилетают вдоль луча и оседают
 varying vec4 vCol;          // rgb — цвет, a — непрозрачность
 varying vec3 vShape;        // xy — ось сжатия на экране, z — во сколько раз диск сжат вдоль неё
 
@@ -1869,6 +1877,14 @@ void main() {
   // Насколько точку держит память: свежая — на месте, с истекающим сроком — отпущена.
   float held = life > 0.0 ? 1.0 - relax : 0.0;
   float s = (1.0 - a) * (1.0 - held);
+  // Проба «свет приносит точки» (квиз 17.11, ночь): точка прилетает к месту по очереди (rank) — пока внимание скана
+  // доходит до неё; что уже держит память, стоит на месте. Ещё не позванная — не видна.
+  float arrive = 1.0;
+  if (uBuild > 0.5) {
+    arrive = max(smoothstep(rank * 0.55, rank * 0.55 + 0.45, a), held);
+    alpha *= smoothstep(0.0, 0.06, arrive);
+    if (alpha <= 0.004) return;
+  }
 
   // Разлёт: вне сборки точка висит у своей поверхности и медленно кружит; пока летит к месту — отходит дальше.
   float t = uTime * (0.25 + 0.35 * aSeed.z) + aSeed.y * 6.2832;
@@ -1884,6 +1900,12 @@ void main() {
   vec3 p = home + wn * (rest * s + burst) + rnd * (0.04 * s + burst * 0.55) + swirl * (0.018 * s + 0.05 * burst) + slip;
 
   vec4 pv = viewMatrix * vec4(p, 1.0);
+  if (uBuild > 0.5 && arrive < 1.0) {
+    // Летит с луча: из точки между фонарём и своим местом (у каждой своя), чуть в стороне — и тормозит, садясь.
+    vec3 src = mix(uFocusPosV, pv.xyz, 0.2 + 0.55 * aSeed.y) + (aSeed.wzy * 2.0 - 1.0) * 0.08;
+    float e = 1.0 - (1.0 - arrive) * (1.0 - arrive) * (1.0 - arrive);
+    pv.xyz = mix(src, pv.xyz, e);
+  }
   vec4 pc = projectionMatrix * pv;
   if (pc.w <= 0.0) return;
   // За стеной точки не видно.
@@ -1914,6 +1936,8 @@ void main() {
   float lum = max(dot(col, W), 1e-3);
   float lift = clamp((0.06 + 0.2 * smoothstep(0.0, 1.6, h)) / lum, 1.0, 7.0);
   vec3 lit = col * mix(lift, 1.0, smoothstep(1.6, 3.0, h));
+  // В полёте точка серая — цвет места она берёт, только садясь на него (проба «свет приносит точки»).
+  if (uBuild > 0.5) lit = mix(vec3(dot(lit, W)) * 0.8, lit, smoothstep(0.75, 1.0, arrive));
   // Цвет в памяти — оттенок, каким место было при свете; яркость — по свежести и по тому, насколько
   // ярким место запомнилось: середина луча держится в памяти ярче его краёв. Старея, точка остывает
   // и тускнеет.

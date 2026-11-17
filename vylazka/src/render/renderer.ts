@@ -388,7 +388,7 @@ export function verticalFov(aspect: number): number {
  * (в долях высоты буфера). follow — как быстро «внимание скана» догоняет луч (1/с). smear — за
  * сколько секунд гаснет след яркого в кадре, когда фонарь не горит (длинная выдержка, TRAIL_FRAG).
  */
-const SCAN = { perLight: 24, max: 3.5, hold: 7, lodDist: 3.5, far: 28, sow: 45, size: 0.7, maxPx: 0.013, follow: 8, smear: 0.55 } as const;
+const SCAN = { perLight: 24, max: 3.5, hold: 7, lodDist: 3.5, far: 28, sow: 45, size: 0.7, maxPx: 0.013, follow: 8, followBuild: 2.2, smear: 0.55 } as const;
 
 /**
  * Проекции — картинки из света (world/flat.ts). washFrom…washTo — при каком свете в точке картинка
@@ -459,6 +459,12 @@ export class GameRenderer {
   private readonly clouds: SplatClouds;
   /** «Внимание скана»: луч фонаря с запаздыванием — туда собираются точки. */
   private readonly focusPos = new THREE.Vector3();
+  /**
+   * Проба «свет приносит точки» (квиз 17.11, ночь): поверхность набирает замеры вслед за вниманием скана, а не в миг света;
+   * точки прилетают вдоль луча от фонаря и оседают на место — сначала серыми, потом цвета места. Включает приложение
+   * (?build=1, #build, страница пробы).
+   */
+  beamBuild = false;
   private readonly focusDir = new THREE.Vector3(0, 0, -1);
   private focusOn = 0;
   private focusTime = -1;
@@ -715,6 +721,10 @@ export class GameRenderer {
         uDots: { value: 0 },
         uScan: { value: new THREE.Vector4(0, SCAN.perLight, SCAN.max, 0) },
         uScanFade: { value: 1 },
+        uBuild: { value: 0 },
+        uBuildFocus: { value: new THREE.Vector3() },
+        uBuildDir: { value: new THREE.Vector3(0, 0, -1) },
+        uBuildOn: { value: 0 },
         uDebugView: { value: 0 },
         uScanRange: { value: new THREE.Vector2(4, 15) },
         uSlide: { value: new THREE.Vector4(SLIDE.washFrom, SLIDE.washTo, SLIDE.gain, 0) },
@@ -982,6 +992,7 @@ export class GameRenderer {
         uFocusPosV: { value: new THREE.Vector3() },
         uFocusDirV: { value: new THREE.Vector3(0, 0, -1) },
         uFocusOn: { value: 0 },
+        uBuild: { value: 0 },
         uEdl: { value: new THREE.Vector3(0.005, 0.008, 2) },
       },
       // Сплаты полупрозрачны и накладываются друг на друга; за стеной точку отсекает сам шейдер.
@@ -2279,7 +2290,7 @@ export class GameRenderer {
     this.focusTime = v.time;
     const lp = this.tmpV.set(v.lightPos[0], v.lightPos[1], v.lightPos[2]);
     const snap = dt > 0.3 || this.focusPos.distanceToSquared(lp) > 9;
-    const f = snap ? 1 : 1 - Math.exp(-dt * SCAN.follow);
+    const f = snap ? 1 : 1 - Math.exp(-dt * (this.beamBuild ? SCAN.followBuild : SCAN.follow));
     // Рука идёт вместе с игроком: место догоняется втрое быстрее направления.
     this.focusPos.lerp(lp, Math.min(1, f * 3));
     this.focusDir.lerp(this.tmpV.set(v.lightDir[0], v.lightDir[1], v.lightDir[2]), f).normalize();
@@ -2288,6 +2299,12 @@ export class GameRenderer {
     (fu.uFocusPosV!.value as THREE.Vector3).copy(this.focusPos).applyMatrix4(cam.matrixWorldInverse);
     (fu.uFocusDirV!.value as THREE.Vector3).copy(this.focusDir).transformDirection(cam.matrixWorldInverse);
     fu.uFocusOn!.value = this.focusOn;
+    fu.uBuild!.value = this.beamBuild ? 1 : 0;
+    const bu = this.worldMat.uniforms;
+    bu.uBuild!.value = this.beamBuild ? 1 : 0;
+    (bu.uBuildFocus!.value as THREE.Vector3).copy(this.focusPos);
+    (bu.uBuildDir!.value as THREE.Vector3).copy(this.focusDir);
+    bu.uBuildOn!.value = this.focusOn;
     // Объём для точек: глубину смотрим в шести точках буфера от самой точки.
     (fu.uEdl!.value as THREE.Vector3).set(6 / Math.max(1, this.width), 6 / Math.max(1, this.height), 2);
 
