@@ -42,6 +42,8 @@ export interface DirectorConfig {
   scareGap: [number, number];
   /** Глубина и взятые цели торопят рой (спуск на нижний ярус выпускает его сразу). false — только время. */
   byDepth: boolean;
+  /** Первая пугалка не раньше этого, с; не задано — через 18–32 с (дать осмотреться). */
+  firstScare?: number;
 }
 
 export const DEFAULT_DIRECTOR: DirectorConfig = { glimpseAt: 75, releaseAt: 210, scareGap: [28, 55], byDepth: true };
@@ -66,7 +68,7 @@ export class Director {
     readonly cfg: DirectorConfig = DEFAULT_DIRECTOR,
   ) {
     // Первая пугалка — не сразу: дать осмотреться.
-    this.nextScare = 18 + rng() * 14;
+    this.nextScare = cfg.firstScare ?? 18 + rng() * 14;
   }
 
   /** Продолжить после загрузки сохранения: пугалки не сыплются разом; released — рой уже был на охоте и выйдет снова. */

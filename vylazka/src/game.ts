@@ -25,6 +25,7 @@ import { Anomalies } from './systems/anomalies';
 import type { AnomalyEvent, AnomalyState } from './systems/anomalies';
 import { CellLights } from './systems/cell_lights';
 import { DEFAULT_DIRECTOR, Director, FIRST_DIRECTOR } from './systems/director';
+import type { DirectorConfig } from './systems/director';
 import { behindness, Echo, ECHO_DRIFT, ECHO_STEP } from './systems/echo';
 import type { ScareId } from './systems/director';
 import { CRANK_NOISE, DEFAULT_FLASHLIGHT, Flashlight } from './systems/flashlight';
@@ -311,6 +312,33 @@ const GENTLE = {
   jumps: { ...DEFAULT_JUMPS, reviveChance: 0.15 },
 } as const;
 
+/**
+ * Ступень погружения: каждая из первых сессий открывает одно правило сна — событием, а не текстом (предложение
+ * основной модели 17.11; партнёр: «Далее делай предложенные рекомендации по гемплею»; `design.md` §24).
+ *   0 — вещи отвечают на взгляд; в начале — поставленный скачок на луг (холодный старт). Ни отказов фонаря, ни
+ *       скачков, ни Осыпи, ни давления: первая минута — почти обычная жизнь;
+ *   1 — фонарь глохнет (обучающий отказ), темнота переставляет вещи; скачков, Осыпи и давления нет;
+ *   2 — скачки (мягко) и давление: пространства перемешиваются; Осыпи нет;
+ *   3 — Осыпь: сначала силуэт на краю луча, охота с третьей минуты и мягко;
+ *   4 — всё как есть (опытный игрок, сон из сцен, проверки).
+ * Ставит приложение по числу законченных сессий.
+ */
+export const STAGE_ALL = 4;
+/** Ступени 0–2: Осыпи нет вовсе, ложные события редкие и не в первую минуту. */
+const QUIET_DIRECTOR: DirectorConfig = { glimpseAt: Infinity, releaseAt: Infinity, scareGap: [45, 90], byDepth: false, firstScare: 70 };
+/** Ступень 3 — знакомство с Осыпью: силуэт на краю луча с первой минуты, охота — с третьей, только по времени. */
+const FIRST_HUNT_DIRECTOR: DirectorConfig = { glimpseAt: 35, releaseAt: 180, scareGap: [28, 55], byDepth: false };
+/**
+ * Холодный старт (ступень 0): крупная вещь в 4,5–9 м впереди входа, в луче с первого кадра. До at секунд она только
+ * стоит (первые секунды — обычная жизнь), потом отзывается на взгляд: растёт навстречу и уносит на луг. Луг после
+ * неё отпускает через stay секунд — дальше сессия идёт своим чередом.
+ */
+const COLD_OPEN = { at: 16, stay: 20, near: 4.5, far: 9, cone: 0.5 } as const;
+/** Вспышка света памяти, когда вещь вспомнили: во сколько раз ярче и шире в пике и за сколько секунд гаснет. */
+const BLOOM = { strength: 3.5, radius: 1.6, fade: 3.2 } as const;
+/** Липкий луч (телефон): в каком конусе вокруг искомой вещи палец замедляется, рад, во сколько раз в середине, на какой дальности, м. */
+const STICKY = { cone: 0.1, slow: 0.4, range: 9 } as const;
+
 const WORLD_THINGS: Record<WorldKind, { small: readonly string[]; big: readonly (readonly [string, PocketKind | null])[] }> = {
   shelter: { small: SMALL_THINGS, big: BIG_THINGS },
   // Зал ожидания: то, что оставляют на сиденьях и у стен те, кто ушёл.
@@ -525,6 +553,17 @@ export class Game {
    * сессии, сложно найти предметы». Ставит приложение по профилю.
    */
   gentle = false;
+  /** Ступень погружения 0–4 (STAGE_ALL — всё сразу); ставит приложение до загрузки уровня. */
+  stage = STAGE_ALL;
+  /** Холодный старт: вещь у входа, которая на ступени 0 уносит на луг; null — нет. */
+  private coldOpen: Thing | null = null;
+  /** Следующее карманное пространство отпустит быстро (после холодного старта). */
+  private shortStay = false;
+  /** Вспышка света памяти при «вспомнил», 1 → 0, и вещь, у которой она горит. */
+  private memBloom = 0;
+  private bloomThing: Thing | null = null;
+  /** Телефон: луч чуть «липнет» к искомой вещи — пальцем удержать её в луче трудно. Ставит приложение. */
+  stickyAim = false;
   /** Когда затихшая после поимки Осыпь выйдет снова, с игрового времени; 0 — не ждёт. */
   private swarmWakeAt = 0;
   /**
@@ -635,7 +674,14 @@ export class Game {
     // света. Первый отказ — принудительный, чтобы научить трясти; он один на игру: в каждой новой сессии
     // или сцене сна его нет (сцена сна короче минуты, и отказ приходился бы почти на каждую вспышку).
     this.failTaught ||= this.light?.taught ?? false;
-    this.light = new Flashlight(this.rng, { ...DEFAULT_FLASHLIGHT, ...this.lightCfg, ...(this.failTaught ? { firstFailAt: 0 } : {}) });
+    // Ступени погружения: на нулевой фонарь сам не глохнет вовсе (правило ещё не открыто), обучающий отказ — на первой,
+    // на второй и третьей он уже не нужен; на четвёртой — как было (один на игру).
+    const stageLight = this.stage === 0 ? { firstFailAt: 0, meanFailInterval: Infinity } : this.stage === 2 || this.stage === 3 ? { firstFailAt: 0 } : {};
+    this.light = new Flashlight(this.rng, { ...DEFAULT_FLASHLIGHT, ...this.lightCfg, ...stageLight, ...(this.failTaught ? { firstFailAt: 0 } : {}) });
+    this.coldOpen = null;
+    this.shortStay = false;
+    this.memBloom = 0;
+    this.bloomThing = null;
     const rank = level.layout?.rank ?? 1;
     this.session = dream ? new Session(level, dream.seed, dream.known, this.sessionCfg, dream.chainAt ?? 0) : null;
     // Новая сцена или сессия: прежняя очередь сцен не в счёт — следующую поставит приложение.
@@ -653,9 +699,11 @@ export class Game {
       this.dreamSeed = dream.seed;
       this.swarm = new SwarmAI(level.nav, this.rng);
       this.spores = new Spores(level.nav, dream.seed);
-      this.director = new Director(this.rng, this.gentle ? GENTLE.director : DEFAULT_DIRECTOR);
+      const stage = this.stage;
+      this.director = new Director(this.rng, stage <= 2 ? QUIET_DIRECTOR : stage === 3 ? FIRST_HUNT_DIRECTOR : this.gentle ? GENTLE.director : DEFAULT_DIRECTOR);
       this.swarmWakeAt = 0;
-      this.jumps = new Jumps(this.rng, this.gentle ? GENTLE.jumps : DEFAULT_JUMPS);
+      // Скачков (кроме поставленного холодного старта и вынужденных) на ступенях 0–1 нет; на 2–3 — мягкие.
+      this.jumps = new Jumps(this.rng, stage <= 1 ? { ...DEFAULT_JUMPS, maxPerSession: 0 } : stage <= 3 || this.gentle ? GENTLE.jumps : DEFAULT_JUMPS);
       // Лестница на нижний ярус удлиняется дважды — только на объектах, где есть «неправильный» ярус.
       const stair = rank >= 2 && tiers >= 3 ? (level.stairs.find((st) => st.upperTier === tiers - 2) ?? null) : null;
       this.anomalies = new Anomalies(stair, { run: STAIR_RUN, rise: STAIR_RISE, steps: STAIR_STEPS }, level.variants, 2);
@@ -1361,7 +1409,8 @@ export class Game {
     const all = PRESSURE_KINDS[this.world];
     // Первые два круга — не больше одного события за сессию и только провал (он учит знаку красной сетки).
     const early = lap <= 2;
-    const kinds = !this.pressureAuto ? [] : early && all.includes('collapse') ? (['collapse'] as const) : all;
+    // Давление — тоже правило: до второй ступени погружения его нет.
+    const kinds = !this.pressureAuto || this.stage < 2 ? [] : early && all.includes('collapse') ? (['collapse'] as const) : all;
     const was = pr.active;
     const out = pr.update(dt, { time: this.time, pos: [b.x, b.z], room: this.transition ? null : (this.pressureRooms.get(this.room) ?? null), quiet: quiet || this.calm || this.swarmNear > 0.25, limit: early ? 1 : 3, kinds });
     if (!was && pr.active) this.onPressureStart();
@@ -1463,6 +1512,52 @@ export class Game {
       const fate = BIG_FATES[chosen.length % BIG_FATES.length]!;
       const t = this.addThing(kind, pos, Math.floor(rng() * 4) * (Math.PI / 2), fate, false, true);
       this.thingPocket.set(t.id, pocket);
+    }
+    if (this.stage === 0) this.placeColdOpen();
+  }
+
+  /**
+   * Холодный старт (ступень 0): крупная вещь, ведущая на луг (в убежище — комнатное растение), — в 4,5–9 м впереди
+   * входа и видна с первого кадра. До COLD_OPEN.at секунд она «экспонат» (взгляд копится, но она не меняется).
+   */
+  private placeColdOpen(): void {
+    const level = this.level;
+    if (!level) return;
+    const kind = WORLD_THINGS[level.world ?? 'shelter'].big.find(([, p]) => p === 'meadow')?.[0];
+    if (!kind) return;
+    const [sx, sy, sz] = level.spawn.pos;
+    const fx = -Math.sin(level.spawn.yaw);
+    const fz = -Math.cos(level.spawn.yaw);
+    const eye = sy + 1.42;
+    for (const cone of [COLD_OPEN.cone, COLD_OPEN.cone * 2]) {
+      let best: (typeof level.nav)[number] | null = null;
+      let bestScore = Infinity;
+      for (const n of level.nav) {
+        if (Math.abs(n.y - sy) > 0.3) continue;
+        const dx = n.x - sx;
+        const dz = n.z - sz;
+        const d = Math.hypot(dx, dz);
+        if (d < COLD_OPEN.near || d > COLD_OPEN.far) continue;
+        const off = Math.acos(clamp((dx * fx + dz * fz) / d, -1, 1));
+        if (off > cone) continue;
+        if (level.zones.some((z) => n.x >= z.minX - 1.5 && n.x <= z.maxX + 1.5 && n.z >= z.minZ - 1.5 && n.z <= z.maxZ + 1.5 && Math.abs(n.y - z.minY) < 3)) continue;
+        if (this.things.list.some((t) => Math.hypot(t.pos[0] - n.x, t.pos[2] - n.z) < 1.6 && Math.abs(t.pos[1] - n.y) < 1)) continue;
+        // Видна от входа: луч от глаз до середины вещи ничем не заслонён.
+        const dy = n.y + 0.8 - eye;
+        const dist = Math.hypot(dx, dy, dz);
+        if (this.colliders.raycast(sx, eye, sz, dx / dist, dy / dist, dz / dist, dist) < dist - 0.6) continue;
+        const score = Math.abs(d - 6) + off * 4;
+        if (score < bestScore) {
+          bestScore = score;
+          best = n;
+        }
+      }
+      if (!best) continue;
+      const t = this.addThing(kind, [best.x, best.y, best.z], level.spawn.yaw + Math.PI, 'jump', false, true);
+      t.still = true;
+      this.thingPocket.set(t.id, 'meadow');
+      this.coldOpen = t;
+      return;
     }
   }
 
@@ -1751,7 +1846,10 @@ export class Game {
     this.where = limbo ? 'limbo' : 'pocket';
     this.env = p.env;
     this.pocketAge = 0;
-    this.pocketStay = 46 + this.rng() * 14;
+    const stayRoll = this.rng();
+    // После холодного старта луг отпускает быстро: дальше сессия идёт своим чередом.
+    this.pocketStay = this.shortStay ? COLD_OPEN.stay : 46 + stayRoll * 14;
+    this.shortStay = false;
     this.pocketDone = false;
     this.focusGaze = 0;
     this.holdThing = null;
@@ -2075,8 +2173,30 @@ export class Game {
 
   /** Поворот луча: применяется сразу, без ожидания шага симуляции. */
   look(yaw: number, pitch: number): void {
-    this.aimYaw += yaw;
-    this.aimPitch = clamp(this.aimPitch + pitch, -MAX_PITCH, MAX_PITCH);
+    const k = this.stickyAim ? this.stickiness() : 1;
+    this.aimYaw += yaw * k;
+    this.aimPitch = clamp(this.aimPitch + pitch * k, -MAX_PITCH, MAX_PITCH);
+  }
+
+  /**
+   * Липкий луч (телефон): когда луч почти на искомой вещи, палец ведёт его медленнее — до STICKY.slow у самой вещи.
+   * Вспоминают, удерживая вещь в луче; пальцем это труднее, чем мышью (предложение основной модели 17.11).
+   */
+  stickiness(): number {
+    const t = this.memoryThing;
+    const rig = this.lastRig;
+    if (!t || t.state !== 'idle' || !rig || this.where !== 'main') return 1;
+    const tx = t.pos[0] - rig.camPos[0];
+    const ty = t.pos[1] + Math.max(0.2, t.radius * 0.6) - rig.camPos[1];
+    const tz = t.pos[2] - rig.camPos[2];
+    const d = Math.hypot(tx, ty, tz);
+    if (d > STICKY.range || d < 0.3) return 1;
+    const aim = dirFromAngles(this.aimYaw, this.aimPitch);
+    const off = Math.acos(clamp((tx * aim[0] + ty * aim[1] + tz * aim[2]) / d, -1, 1));
+    // Допуск растёт с угловым размером вещи: крупную и близкую держать проще.
+    const cone = STICKY.cone + Math.atan2(t.radius, d);
+    if (off >= cone) return 1;
+    return STICKY.slow + (1 - STICKY.slow) * smoothstep(0, cone, off);
   }
 
   /** Идёт скачок: кадр рвётся или растворяется, игроку не до подсказок. */
@@ -2197,6 +2317,9 @@ export class Game {
     if (this.where === 'main') this.stepIllusions(wdt, dream);
 
     // Вещи: под взглядом уменьшаются, рассыпаются, растут.
+    // Холодный старт: вещь у входа начинает отзываться на взгляд через COLD_OPEN.at секунд сессии.
+    const co = this.coldOpen;
+    if (co && co.still && s && s.time >= COLD_OPEN.at) co.still = false;
     for (const e of this.things.update(wdt, look, [b.x, b.y, b.z], los)) {
       const t = e.thing;
       if (e.type === 'noticed') this.observed = true;
@@ -2204,7 +2327,10 @@ export class Game {
         if (t.collider >= 0) this.colliders.boxes[t.collider]!.off = true;
         dream.push({ type: 'thing', thing: t, what: 'changing' });
       } else if (e.type === 'settled') dream.push({ type: 'thing', thing: t, what: 'settled' });
-      else if (this.jumps && s && !s.over) this.beginJump(this.jumps.onEngulf(this.thingPocket.get(t.id) ?? null), dream);
+      else if (this.jumps && s && !s.over) {
+        if (t === this.coldOpen) this.shortStay = true;
+        this.beginJump(this.jumps.onEngulf(this.thingPocket.get(t.id) ?? null), dream);
+      }
     }
 
     // Сессия: воспоминания и среда.
@@ -2411,8 +2537,12 @@ export class Game {
       this.memLitK = 0;
     }
     const lit = this.memLit;
-    const on = lit !== null && lit.t === want && this.where === 'main' && lit.t.state !== 'gone';
-    this.memLitK = memLightStep(this.memLitK, on ? 1 - lit.t.dissolve : 0, dt);
+    // Вспомненную вещь свет держит, пока идёт вспышка: она гаснет вместе с вещью, а не обрывается.
+    this.memBloom = Math.max(0, this.memBloom - dt / BLOOM.fade);
+    if (this.memBloom <= 0) this.bloomThing = null;
+    const bloomOn = lit !== null && lit.t === this.bloomThing && this.memBloom > 0;
+    const on = lit !== null && (lit.t === want || bloomOn) && this.where === 'main' && lit.t.state !== 'gone';
+    this.memLitK = memLightStep(this.memLitK, on ? (bloomOn ? 1 : 1 - lit.t.dissolve) : 0, dt);
     if (!lit || this.memLitK <= 1e-3) {
       if (!on) this.memLit = null;
       this.renderer.setMemLight(null);
@@ -2422,7 +2552,9 @@ export class Game {
     const s = t.scale;
     // Жизнь света во времени (мерцание экрана, мигание лампочки, проходящий поезд) — по времени игры.
     const life = memLightMod(lit.def.mod, this.time);
-    this.renderer.setMemLight({ pos: t.pos, yaw: t.yaw, kind: MEM_LIGHT_KIND[lit.def.kind], color: lit.def.color, strength: lit.def.strength * this.memLitK * life, height: lit.def.height * s, radius: lit.def.radius * Math.max(1, s) });
+    // Вспышка «вспомнил»: в пике свет в BLOOM.strength раз ярче и в BLOOM.radius раз шире, потом гаснет.
+    const b = bloomOn ? this.memBloom * this.memBloom : 0;
+    this.renderer.setMemLight({ pos: t.pos, yaw: t.yaw, kind: MEM_LIGHT_KIND[lit.def.kind], color: lit.def.color, strength: lit.def.strength * this.memLitK * life * (1 + (BLOOM.strength - 1) * b), height: lit.def.height * s, radius: lit.def.radius * Math.max(1, s) * (1 + (BLOOM.radius - 1) * b) });
   }
 
   /** Фосфорные надписи: вспышка и темнота по событию; рядом с охотящимся роем гаснут. */
@@ -2454,6 +2586,9 @@ export class Game {
       this.memoryThing = null;
       if (t) {
         t.memory = false;
+        // Мир отвечает: свет памяти вспыхивает на всю комнату и гаснет вместе с вещью.
+        this.memBloom = 1;
+        this.bloomThing = t;
         if (this.things.change(t, 'dust')) dream.push({ type: 'thing', thing: t, what: 'changing' });
       }
       if (!this.archive.includes(e.memory.def.id)) this.archive.push(e.memory.def.id);

@@ -396,7 +396,7 @@ export function installDebug(app: App): void {
       }
       return false;
     },
-    things: () => game().things.list.map((t) => ({ id: t.id, kind: t.kind, state: t.state, fate: t.fate, memory: t.memory, gaze: t.gaze, scale: t.scale, dissolve: t.dissolve, form: t.form, pos: [...t.pos] })),
+    things: () => game().things.list.map((t) => ({ id: t.id, kind: t.kind, state: t.state, fate: t.fate, memory: t.memory, still: t.still, gaze: t.gaze, scale: t.scale, dissolve: t.dissolve, form: t.form, pos: [...t.pos] })),
     spawnThing: (kind, fate, distance = 2.5, facing = false) => {
       const g = game();
       const st = g.snapshot() as { pos: number[]; aim: number[] };

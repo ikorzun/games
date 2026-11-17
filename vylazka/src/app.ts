@@ -12,7 +12,7 @@ import { erased, WEAR } from './systems/decay';
 import type { Level3, Profile } from './core/save';
 import { LANGS } from './core/types';
 import type { Lang } from './core/types';
-import { Game, STEP } from './game';
+import { Game, STAGE_ALL, STEP } from './game';
 import type { StepEvents } from './game';
 import { generateLayout, WORLD_KINDS } from './gen/layout';
 import type { WorldKind } from './gen/layout';
@@ -121,6 +121,8 @@ export class App {
   private crankBuzz = 0;
   /** Экран не гаснет, пока идёт игра (platform/mobile_guard.ts). */
   private readonly awake = new ScreenAwake();
+  /** Время на камере сбито скачками в этой сессии, с: каждый скачок сдвигает его вперёд. */
+  private clockSkew = 0;
   private last = 0;
   private acc = 0;
   private qualityManual = false;
@@ -483,8 +485,11 @@ export class App {
     } else {
       this.level = buildLevel(generateLayout(this.seed, this.rank, this.world), { wear });
       if (this.scenes) this.game.sessionCfg = SCENE_SESSION;
-      // Мягкий режим Осыпи: первая сессия игрока (ни одной законченной) и сон из сцен (слова партнёра 16.11 23:41).
-      this.game.gentle = this.profile.successes === 0 || this.scenes;
+      // Мягкий режим Осыпи: первая сессия игрока (ни одной законченной) и сон из сцен (слова партнёра 16.11 23:41);
+      // ступень погружения — по числу законченных сессий (game.ts, STAGE_ALL).
+      this.game.stage = this.stageFor();
+      this.game.gentle = this.profile.successes === 0 || this.scenes || this.game.stage === 3;
+      this.clockSkew = 0;
       this.game.loadLevel(this.level, { seed: this.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
       if (this.scenes) {
         // Сон начинается с места заставки; места, пролистанные кнопкой «Место», не «снились».
@@ -579,7 +584,8 @@ export class App {
       this.memory = mem;
       const level = buildLevel(generateLayout(mem.seed, mem.rank, this.world), { wear: this.wearParam() ?? mem.wear });
       this.next = { level, seed: mem.seed, rank: mem.rank };
-      this.game.gentle = this.profile.successes === 0 || this.scenes;
+      this.game.stage = this.stageFor();
+      this.game.gentle = this.profile.successes === 0 || this.scenes || this.game.stage === 3;
       this.game.queueSession(level, { seed: mem.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0 } : {}) });
     }, 500);
   }
@@ -664,7 +670,30 @@ export class App {
   }
 
   /** Лимбо отпустило: началась следующая сессия (scene — нет: следующая сцена того же сна). */
+  /**
+   * Ступень погружения (game.ts, STAGE_ALL): по числу законченных сессий — каждая из первых открывает одно правило сна.
+   * Сон из сцен и проверки (в адресе fail=, level=, seed=) — всё сразу. #stage0…#stage4 в конце ссылки или ?stage= —
+   * посмотреть ступень руками (партнёру: свои сессии он уже прошёл, и первых ступеней иначе не увидит).
+   */
+  private stageFor(): number {
+    const m = /^#stage([0-4])$/.exec(typeof location === 'undefined' ? '' : location.hash);
+    const raw = m ? m[1]! : this.params.get('stage');
+    const asked = raw === null ? NaN : Number(raw);
+    if (Number.isInteger(asked) && asked >= 0 && asked <= STAGE_ALL) return asked;
+    if (this.scenes || this.testLevel || this.pinned || this.params.get('fail') !== null) return STAGE_ALL;
+    return Math.min(this.profile.successes, STAGE_ALL);
+  }
+
+  /**
+   * Время на камере: каждая следующая сессия начинается на 75 с позже — запись подходит к какому-то мигу (сквозная
+   * загадка; что в этот миг — вопрос партнёру). После четырнадцатой — 23:58:37, дальше не сдвигается.
+   */
+  private clockStart(): number {
+    return Math.min(this.profile.successes, 14) * 75;
+  }
+
   private onBegin(scene = false): void {
+    this.clockSkew = 0;
     if (scene) {
       this.onScene();
       return;
@@ -830,6 +859,8 @@ export class App {
   private enableTouch(): void {
     if (this.touch) return;
     this.touchMode = true;
+    // Пальцем удержать вещь в луче труднее, чем мышью: луч чуть «липнет» к искомой вещи.
+    this.game.stickyAim = true;
     this.root.classList.add('is-touch');
     // Свайп от края экрана (Safari «назад») и щипок игре не нужны (слова партнёра 17.11: «Защита от свайпа нужна»).
     guardTouch();
@@ -977,6 +1008,8 @@ export class App {
         // Осыпь вернула в начало: об этом говорит строка, иначе непонятно, почему место другое.
         if (e.plan.cause === 'caught') this.hud.toast(t('toast.caught'), 3400);
         if (buzz) navigator.vibrate(35);
+        // Скачок сбивает время на камере: оно прыгает вперёд — «меня перенесло» видно и без строки.
+        this.clockSkew += 4 + Math.random() * 37;
       }
       else if (e.type === 'pocket') this.onPocket(e);
       // Первое касание: вещь рассыпалась — сказать, что это правило, и как её вернуть.
@@ -1022,7 +1055,7 @@ export class App {
     const g = this.game;
     const s = g.session;
     const light = g.light;
-    this.hud.setTime(g.time);
+    this.hud.setTime(g.time + this.clockStart() + this.clockSkew);
     const dead = light.state === 'dead';
     const kind = this.touchMode ? (this.motion?.state === 'active' ? 'motion' : 'touch') : 'desktop';
     // В светлом пространстве (луг, белое нигде, лимбо) фонарь не нужен: о том, что он заглох, молчим.

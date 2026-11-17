@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { mulberry32 } from '../src/core/rng';
 import type { Vec3 } from '../src/core/types';
 import { generateLayout } from '../src/gen/layout';
-import { Game, SONAR_EVERY, SONAR_REACH, SONAR_SPEED, STEP } from '../src/game';
+import { Game, SONAR_EVERY, SONAR_REACH, SONAR_SPEED, STAGE_ALL, STEP } from '../src/game';
 import type { DreamEvent, FearEvent, StepEvents } from '../src/game';
 import { emptyInput } from '../src/player/input';
 import type { InputFrame } from '../src/player/input';
@@ -144,10 +144,11 @@ class Harness {
 
   constructor(
     level: BuiltLevel,
-    opts: { calm?: boolean; seed?: number; known?: ReadonlySet<string>; cfg?: typeof QUICK; light?: Partial<FlashlightConfig> } = {},
+    opts: { calm?: boolean; seed?: number; known?: ReadonlySet<string>; cfg?: typeof QUICK; light?: Partial<FlashlightConfig>; stage?: number } = {},
   ) {
     this.game = new Game(this.r as unknown as GameRenderer, mulberry32(opts.seed ?? 7), opts.light ?? {});
     this.game.calm = opts.calm ?? true;
+    this.game.stage = opts.stage ?? STAGE_ALL;
     this.game.sessionCfg = opts.cfg ?? QUICK;
     this.game.loadLevel(level, { seed: opts.seed ?? 7, known: opts.known ?? new Set() });
   }
@@ -3079,3 +3080,139 @@ describe('телефон: тап — выключатель, палец на к�
     expect(white).toBe(0);
   });
 });
+
+describe('ступени погружения: каждая из первых сессий открывает одно правило (предложения 17.11; партнёр: «Далее делай…»)', () => {
+  const coldOpenOf = (g: Game) => g.things.list.find((t) => t.fate === 'jump' && t.still);
+  const releases = (h: Harness) => h.log.fear.filter((e) => e.type === 'swarm' && (e as { what?: string }).what === 'release').length;
+  const glimpses = (h: Harness) => h.log.fear.filter((e) => e.type === 'swarm' && (e as { what?: string }).what === 'apparition').length;
+
+  it('ступень 0: впереди входа — вещь, ведущая на луг; первые секунды стоит, потом от взгляда уносит на луг, и луг отпускает быстро', () => {
+    const h = new Harness(levelOf(SEED), { stage: 0 });
+    const g = h.game;
+    const t = coldOpenOf(g);
+    expect(t, 'вещи холодного старта нет').toBeTruthy();
+    const [sx, , sz] = g.level!.spawn.pos;
+    const d = Math.hypot(t!.pos[0] - sx, t!.pos[2] - sz);
+    expect(d).toBeGreaterThanOrEqual(4.5);
+    expect(d).toBeLessThanOrEqual(9);
+    // Смотрим на неё с самого начала: первые секунды она только стоит — обычная жизнь.
+    g.aimAt(t!.pos[0], t!.pos[1] + 0.8, t!.pos[2]);
+    h.run(14);
+    expect(t!.state).toBe('idle');
+    expect(g.where).toBe('main');
+    // Потом — растёт навстречу и уносит на луг.
+    expect(h.until(() => g.where === 'pocket', 12), 'холодный старт не унёс').toBe(true);
+    expect(g.pocket!.kind).toBe('meadow');
+    // Луг после неё отпускает через ~20 с, а не через 46–60.
+    expect(h.until(() => g.where === 'main' && g.transition === null, 26), 'луг не отпустил').toBe(true);
+  });
+
+  it('ступени 1–4 холодного старта нет', () => {
+    for (const stage of [1, 2, 3, STAGE_ALL]) expect(coldOpenOf(new Harness(levelOf(SEED), { stage }).game), `ступень ${stage}`).toBeUndefined();
+  });
+
+  it('ступень 0: четыре минуты без Осыпи, без случайных скачков, без отказа фонаря и без давления', () => {
+    const h = new Harness(levelOf(SEED), { stage: 0, calm: false, light: { firstFailAt: 30, meanFailInterval: 20 } });
+    const g = h.game;
+    // Вещь холодного старта остаётся за спиной: здесь проверяется, что сама сессия тихая.
+    const [sx, , sz] = g.level!.spawn.pos;
+    g.aimAt(sx, 1.4, sz + 20);
+    let dead = 0;
+    for (let i = 0; i < 240; i++) {
+      h.run(1);
+      if (g.light.state === 'dead') dead += 1;
+    }
+    expect(dead).toBe(0);
+    expect(releases(h)).toBe(0);
+    expect(glimpses(h)).toBe(0);
+    expect(h.dreamCount('jump', 'start')).toBe(0);
+    expect(h.dreamCount('pressure')).toBe(0);
+  });
+
+  it('обучающий отказ фонаря — только на ступени 1 (и на 4, как было); на 0, 2 и 3 его нет', () => {
+    const failsBy = (stage: number): boolean => {
+      const h = new Harness(levelOf(SEED), { stage, light: { firstFailAt: 10, meanFailInterval: 1e9 } });
+      return h.until(() => h.game.light.state === 'dead', 14);
+    };
+    expect(failsBy(1)).toBe(true);
+    expect(failsBy(STAGE_ALL)).toBe(true);
+    expect(failsBy(0)).toBe(false);
+    expect(failsBy(2)).toBe(false);
+    expect(failsBy(3)).toBe(false);
+  });
+
+  it('ступени 0–1 без скачков, 2–3 — мягкие скачки; Осыпи до третьей ступени нет вовсе', () => {
+    const at = (stage: number) => new Harness(levelOf(SEED), { stage }).game;
+    expect(at(0).jumps!.cfg.maxPerSession).toBe(0);
+    expect(at(1).jumps!.cfg.maxPerSession).toBe(0);
+    expect(at(2).jumps!.cfg.maxPerSession).toBeGreaterThan(0);
+    for (const stage of [0, 1, 2]) {
+      expect(at(stage).director!.cfg.releaseAt).toBe(Infinity);
+      expect(at(stage).director!.cfg.glimpseAt).toBe(Infinity);
+    }
+    expect(at(3).director!.cfg.releaseAt).toBe(180);
+  });
+
+  it('ступень 3: Осыпь сначала мелькает силуэтом (в первую минуту), охотится не раньше третьей минуты', () => {
+    const h = new Harness(levelOf(SEED), { stage: 3, calm: false });
+    // Скачки на этой ступени есть, но здесь проверяется Осыпь: в кармане режиссёр стоит, и стоящего игрока не уносим.
+    h.game.jumps!.cooldown = 1e6;
+    expect(h.until(() => glimpses(h) > 0, 75), 'силуэта нет').toBe(true);
+    expect(releases(h)).toBe(0);
+    h.run(Math.max(0, 175 - h.game.session!.time));
+    expect(releases(h)).toBe(0);
+    expect(h.until(() => releases(h) > 0, 30), 'охоты нет').toBe(true);
+  });
+
+  it('вспомнил — свет памяти вспыхивает на всю комнату и гаснет вместе с вещью', () => {
+    const h = new Harness(levelOf(SEED));
+    const { id } = h.reveal();
+    expect(h.standBefore(id)).toBe(true);
+    const pos = [...h.game.things.list.find((x) => x.id === id)!.pos];
+    let base = 0;
+    while (h.count('recall') === 0 && h.game.session!.time < 60) {
+      h.tick();
+      if (h.count('recall') === 0) base = Math.max(base, h.r.memLight?.strength ?? 0);
+    }
+    expect(h.count('recall')).toBe(1);
+    expect(base).toBeGreaterThan(0);
+    let peak = 0;
+    for (let i = 0; i < Math.round(1.5 / STEP); i++) {
+      h.tick();
+      peak = Math.max(peak, h.r.memLight?.strength ?? 0);
+    }
+    expect(peak).toBeGreaterThan(base * 2);
+    // Через несколько секунд вспышка прошла и свет у вспомненной вещи погас (у следующей искомой вещи он может гореть).
+    h.run(6);
+    const now = h.r.memLight;
+    expect(now === null || Math.hypot(now.pos[0]! - pos[0]!, now.pos[2]! - pos[2]!) > 0.5).toBe(true);
+  });
+
+  it('телефон: луч чуть липнет к искомой вещи — у вещи палец ведёт его медленнее, вдали — как обычно', () => {
+    const h = new Harness(levelOf(SEED));
+    const g = h.game;
+    const { id } = h.reveal();
+    expect(h.standBefore(id)).toBe(true);
+    h.tick();
+    g.stickyAim = true;
+    const y0 = g.aimYaw;
+    g.look(0.01, 0);
+    const near = g.aimYaw - y0;
+    g.aimYaw += 1.4;
+    h.tick();
+    const y1 = g.aimYaw;
+    g.look(0.01, 0);
+    const far = g.aimYaw - y1;
+    expect(near).toBeLessThan(0.01 * 0.75);
+    expect(near).toBeGreaterThan(0);
+    expect(far).toBeCloseTo(0.01, 9);
+    // Без липкого луча (компьютер) — всегда как есть.
+    g.stickyAim = false;
+    g.aimYaw -= 1.4;
+    h.tick();
+    const y2 = g.aimYaw;
+    g.look(0.01, 0);
+    expect(g.aimYaw - y2).toBeCloseTo(0.01, 9);
+  });
+});
+

@@ -1923,6 +1923,34 @@ async function scenarioHonest(browser, baseUrl) {
 }
 
 /** Вещи под взглядом и скачки в карманные пространства. */
+/**
+ * Ступени погружения (предложения 17.11, партнёр: «Далее делай предложенные рекомендации по гемплею»): на нулевой ступени
+ * впереди входа стоит вещь, ведущая на луг; первые секунды она только стоит, потом от взгляда уносит на луг, и луг
+ * отпускает быстро. Ступень задаётся адресом (?stage=0), как и #stage0 в ссылке у партнёра.
+ */
+async function scenarioStages(browser, baseUrl) {
+  section('Ступени погружения: холодный старт на нулевой ступени');
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&stage=0');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  let st = await vz(page, () => window.__vz.step(30));
+  const cold = (await vz(page, () => window.__vz.things())).find((t) => t.fate === 'jump' && t.still);
+  check('нулевая ступень: впереди входа стоит вещь, ведущая на луг, и пока только стоит', !!cold && st.where === 'main', JSON.stringify(cold ?? null));
+  if (cold) {
+    const near = await vz(page, (id) => window.__vz.gotoThing(id, 3), cold.id);
+    st = await vz(page, () => window.__vz.step(10 * 60));
+    const still = (await vz(page, () => window.__vz.things())).find((t) => t.id === cold.id);
+    check('первые секунды — обычная жизнь: вещь в луче, но не меняется', near && st.where === 'main' && still?.state === 'idle' && still.gaze > 0.9, JSON.stringify({ near, where: st.where, thing: still }));
+    st = await stepUntil(page, (s) => s.where === 'pocket', 30, 30);
+    check('потом от взгляда она растёт и уносит на луг', st.where === 'pocket' && st.pocket === 'meadow', JSON.stringify({ where: st.where, pocket: st.pocket }));
+    st = await stepUntil(page, (s) => s.where === 'main' && s.jump === null, 60, 30);
+    check('луг после холодного старта отпускает быстро (около 20 с)', st.where === 'main', JSON.stringify({ where: st.where, stay: st.pocketInfo?.stay }));
+  }
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+  await context.close();
+}
+
 async function scenarioThings(browser, baseUrl) {
   const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=2');
   await page.click('.vz-overlay');
@@ -2963,6 +2991,7 @@ try {
   // Только карманные пространства или только вещи сна (быстрый прогон; в полный session они уже входят).
   if (only?.includes('pockets')) await run('pockets', scenarioPockets);
   if (only?.includes('things')) await run('things', scenarioThings);
+  if (wants('stages')) await run('stages', scenarioStages);
   if (wants('fear')) await run('fear', scenarioFear);
   if (wants('audio')) await run('audio', scenarioAudio);
   if (wants('frame')) await run('frame', scenarioFrame);
