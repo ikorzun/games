@@ -261,6 +261,28 @@ export function roomsFor(spec: Pick<PlacedSpec, 'rule'>, w: PlaceWorld): GenRoom
 }
 
 /**
+ * Где в помещении точка: доли его рамки по x и z (0…1). Так «у какой стены партнёр отпустил вещь» переносится на помещения
+ * другой формы и размера (PlacedSpec.near).
+ */
+export function roomNear(room: GenRoom, x: number, z: number): [number, number] {
+  const xs = room.cells.map((c) => (c[0] - HALF) * CELL);
+  const zs = room.cells.map((c) => (c[1] - HALF) * CELL);
+  const x0 = Math.min(...xs) - CELL / 2;
+  const x1 = Math.max(...xs) + CELL / 2;
+  const z0 = Math.min(...zs) - CELL / 2;
+  const z1 = Math.max(...zs) + CELL / 2;
+  const f = (v: number, a: number, b: number): number => Math.max(0, Math.min(1, (v - a) / (b - a)));
+  return [Math.round(f(x, x0, x1) * 1000) / 1000, Math.round(f(z, z0, z1) * 1000) / 1000];
+}
+
+/** Насколько край далёк от того, где вещь отпустили (в долях рамки помещения); без near — 0: решает жребий. */
+function nearCost(spec: PlacedSpec, room: GenRoom, a: AnchorSpot): number {
+  if (!spec.near) return 0;
+  const [u, v] = roomNear(room, a.x, a.z);
+  return Math.hypot(u - spec.near[0], v - spec.near[1]);
+}
+
+/**
  * Расставить вещи по уровню. Вещь встаёт, только если её место в правиле и есть помещение нужного типа;
  * сколько — rule.count, по возможности в разных помещениях. Вещи, которой нет в реестре, нет и на уровне.
  */
@@ -276,10 +298,11 @@ export function placeThings(specs: readonly PlacedSpec[], w: PlaceWorld, props: 
     const rooms = roomsFor(spec, w);
     if (rooms.length === 0) continue;
     const h = idHash(spec.id);
-    const cands = rooms.flatMap((r) => anchorSpots(r, spec.rule.anchor, w).map((a) => ({ a, r })));
+    const cands = rooms.flatMap((r) => anchorSpots(r, spec.rule.anchor, w).map((a) => ({ a, r, d: nearCost(spec, r, a) })));
     const used = new Set<number>();
     for (let k = 0; k < spec.rule.count; k++) {
-      const order = cands.map((c, i) => ({ ...c, q: hash01(i * 7 + 1, k * 131 + 17, hash2(w.layout.seed, h, 0x7a11)) })).sort((x, y) => x.q - y.q);
+      // Сначала край, ближайший к тому, где вещь отпустили (near; в каждом помещении — у того же его края), потом — по жребию.
+      const order = cands.map((c, i) => ({ ...c, q: hash01(i * 7 + 1, k * 131 + 17, hash2(w.layout.seed, h, 0x7a11)) })).sort((x, y) => x.d - y.d || x.q - y.q);
       let pick: PlacedSpot | null = null;
       let pickBox: Box | null = null;
       for (const pass of [0, 1]) {
@@ -313,9 +336,10 @@ export function moveSpot(spec: PlacedSpec, room: GenRoom, w: PlaceWorld, props: 
   const p = props[spec.prop];
   if (!p || NEVER.has(room.type) || w.skip.has(room.id)) return null;
   const h = hash2(w.layout.seed, idHash(spec.id), room.id);
+  // Сначала край, ближайший к тому, где вещь отпустили (near), потом — по жребию.
   const order = anchorSpots(room, spec.rule.anchor, w)
-    .map((a, i) => ({ a, q: hash01(i * 7 + 1, 0x3a7, h) }))
-    .sort((x, y) => x.q - y.q);
+    .map((a, i) => ({ a, d: nearCost(spec, room, a), q: hash01(i * 7 + 1, 0x3a7, h) }))
+    .sort((x, y) => x.d - y.d || x.q - y.q);
   for (const { a } of order) {
     const { at, rot } = fitThing(spec, a, p);
     const { box, problems } = checkSpot(p, at, rot, room, a, w, others);

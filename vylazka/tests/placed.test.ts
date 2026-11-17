@@ -6,7 +6,8 @@ import type { BuiltLevel } from '../src/world/level';
 import type { LevelObject } from '../src/world/objects';
 import { placeable, placedProblems, removedProblems } from '../src/world/placed';
 import type { PlacedSpec, RemovedSpec } from '../src/world/placed';
-import { gameNth, HEADROOM, placeThings, roomDoors, roomIndex, rotOf, throatBox, worldBox } from '../src/world/placed_place';
+import { checkSpot, fitThing, gameNth, HEADROOM, moveSpot, NEVER, placeThings, roomDoors, roomIndex, roomNear, rotOf, throatBox, worldBox } from '../src/world/placed_place';
+import { anchorSpots } from '../src/world/figure_place';
 import type { Box } from '../src/world/placed_place';
 import { ALL_PROPS, FIXED } from '../src/world/props_all';
 
@@ -310,6 +311,32 @@ describe('вещи игры, убранные и передвинутые: на 
     }
     // В помещениях других типов — как было.
     for (const [id, list] of before) if (layout.rooms[id]!.type !== T) expect(after.get(id)!.map(where)).toEqual(list.map(where));
+  });
+
+  it('near: из свободных краёв правила берётся тот, где вещь отпустили (агент конструктора, 17.11)', () => {
+    const pw = plain.placeWorld!;
+    const X = 'filing_cabinet';
+    const p = ALL_PROPS[X]!;
+    const base = spec({ id: 'pl_near', prop: X, moves: { thing: X, nth: 0 }, offset: [0, -0.29] }, { worlds: ['office'], rooms: [], anchor: 'wall', count: 1 });
+    let checked = 0;
+    for (const room of layout.rooms) {
+      if (NEVER.has(room.type) || pw.skip.has(room.id)) continue;
+      const valid = anchorSpots(room, 'wall', pw).filter((a) => {
+        const { at, rot } = fitThing(base, a, p);
+        return checkSpot(p, at, rot, room, a, pw, []).problems.length === 0;
+      });
+      if (valid.length < 2) continue;
+      // Куда бы её ни отпустили — у свободного края, — там она и встаёт.
+      for (const target of valid) {
+        const got = moveSpot({ ...base, near: roomNear(room, target.x, target.z) }, room, pw, ALL_PROPS);
+        expect(got).not.toBeNull();
+        const want = fitThing(base, target, p).at;
+        expect(Math.hypot(got!.spot.at[0] - want[0], got!.spot.at[2] - want[2])).toBeLessThan(0.05);
+      }
+      if (++checked >= 3) break;
+    }
+    expect(checked).toBeGreaterThan(0);
+    expect(placedProblems({ ...base, near: [0.2, 1.4] }, ALL_PROPS, FIXED).join()).toContain('где в помещении');
   });
 
   it('передвинутая без места по правилу стоит, где поставила игра', () => {

@@ -42,7 +42,7 @@ import { placeable, placedProblems, removedProblems, swapFits } from '../../src/
 import type { Aabb } from '../../src/world/colliders';
 import type { LevelObject } from '../../src/world/objects';
 import type { PlacedSpec, RemovedSpec } from '../../src/world/placed';
-import { checkSpot, fitThing, gameNth, moveSpot, NEVER, placeThings, roomDoors, roomIndex, rotOf, throatBox, worldBox } from '../../src/world/placed_place';
+import { checkSpot, fitThing, gameNth, moveSpot, NEVER, placeThings, roomDoors, roomIndex, roomNear, rotOf, throatBox, worldBox } from '../../src/world/placed_place';
 import type { Box, PlacedSpot } from '../../src/world/placed_place';
 import { placeFigures } from '../../src/world/figure_place';
 import type { Turn } from '../../src/world/placed_place';
@@ -449,6 +449,9 @@ function derive(it: Item): void {
   it.spec.offset = offsetFrom(a, it.at[0], it.at[2]);
   it.spec.rule.lift = Math.round(Math.min(2.6, lift) * 100) / 100;
   if (it.kind === 'thing') {
+    // У какого края помещения её отпустили — в долях его рамки: игра возьмёт ближайший такой край (PlacedSpec.near), а не
+    // любой по жребию; в помещении другой формы — тот, что у того же его края.
+    if (!it.spec.replaces) it.spec.near = roomNear(room, a.x, a.z);
     // Куда смотрит: первое из «в комнату, в стену, на дверь, навстречу», что совпадает с поворотом; иначе — доворот.
     const match = FIGURE_FACINGS.find((f) => rotOf(yawFor(a, f)) === it.rot);
     if (match) {

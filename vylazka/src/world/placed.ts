@@ -66,6 +66,12 @@ export interface PlacedSpec {
    * rule.count для передвинутой не действует.
    */
   moves?: GameThing;
+  /**
+   * Где в помещении партнёр её поставил: доли рамки помещения по x и z (0…1; placed_place.ts, roomNear). Из краёв правила
+   * игра берёт ближайший к этой доле: в том же помещении — тот самый, куда отпустили, в помещении другой формы — тот, что у
+   * того же его края. Нет — край по жребию (агент конструктора, 17.11: иначе передвинутая вещь вставала не у той стены).
+   */
+  near?: [number, number];
   /** Кто и когда сохранил (из инструмента). */
   at?: string;
 }
@@ -151,6 +157,8 @@ export function placedProblems(x: unknown, props: Readonly<Record<string, PropSp
     }
     if (f.replaces !== undefined) bad.push('передвинутая не заменяет: одно из двух');
   }
+  const near = f.near as unknown;
+  if (near !== undefined && !(Array.isArray(near) && near.length === 2 && near.every((v) => within(v, [0, 1])))) bad.push('где в помещении: две доли от 0 до 1');
   const off = f.offset as unknown;
   if (!Array.isArray(off) || off.length !== 2 || !off.every((v) => within(v, PLACED_OFFSET))) bad.push('сдвиг: не дальше 3 м от края');
   const r = f.rule as Record<string, unknown> | undefined;
