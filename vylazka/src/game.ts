@@ -231,7 +231,7 @@ const LIMBO_MIN = 7;
 export const SONAR_SPEED = 9;
 export const SONAR_REACH = 24;
 export const SONAR_EVERY: readonly [number, number] = [24, 40];
-/** Сила тихого слоя: точки по рёбрам видны в темноте, но не спорят с тем, что собрал свет. */
+/** Сила тихого слоя: точки по рёбрам там, где стены уже стёрты (поздние круги), видны в темноте, но не спорят с тем, что собрал свет. */
 export const QUIET = 0.3;
 /** Мелочь, которой сон засоряет столы и полки, и крупные вещи посреди коридоров. */
 const SMALL_THINGS = ['mug', 'slippers', 'ball', 'teddy', 'alarm_clock', 'remote', 'photo_frame', 'night_light', 'school_bag', 'goldfish_bowl', 'keys', 'phone'];
@@ -3029,8 +3029,11 @@ export class Game {
       fall: this.time - this.fallT0 < 2 ? [this.fallAim[0], this.fallAim[1], this.time - this.fallT0] : null,
       rings: this.where === 'main' ? RINGS[this.world] : RINGS.shelter,
       memHold: tr !== null && tr.plan.style === 'dissolve',
-      // План держится, но и он к концу петли редеет: на последнем круге он не целее самого места.
-      quiet: this.where === 'main' && this.level?.edges ? QUIET * (1 - 0.35 * clamp(this.wear, 0, 1)) : 0,
+      // Тихий слой — точки по рёбрам и углам — только на поздних кругах и только там, где стены уже стёрты (слова партнёра
+      // 17.11: «Грани точками у мира должны появляться только на уровне поздних кругов, когда уже почти нет стен и
+      // пространство стерто и только в таких местах»). Где именно — решает шейдер точек по маске стирания стен; пока
+      // стены целы, слой не рисуется вовсе (волна сонара — своя, она идёт по-прежнему).
+      quiet: this.where === 'main' && this.level?.edges && this.decay.walls > 0 ? QUIET : 0,
       cells: cl ? { data: cl.data, origin: CELL_ORIGIN, step: 3, size: cl.size } : null,
       ambientLocal: this.ambientLocal,
     };

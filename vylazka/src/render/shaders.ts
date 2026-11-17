@@ -11,6 +11,38 @@
 import { HANG_OBJ } from '../world/objects';
 
 /** Общая часть: профиль луча и затухание. Используется миром, пылью и роем. */
+/**
+ * Шум стирания места — один на мир и на тихий слой точек: случайное число клетки мира (целочисленный хеш, одинаковый на
+ * любом устройстве) и плавный шум из него. Маска стёртой стены — та же формула, что в archGone() шейдера мира:
+ * стирается пятнами около метра, стена — сверху вниз.
+ */
+export const SOFT_NOISE_GLSL = /* glsl */ `
+/** Случайное число клетки мира (для дыр распада): целочисленный хеш, одинаковый на любом устройстве. */
+float cellHash(vec3 p) {
+  ivec3 q = ivec3(floor(p)) + 32768;
+  uint n = uint(q.x) * 0x27d4eb2du ^ uint(q.y) * 0x165667b1u ^ uint(q.z) * 0x9e3779b1u;
+  n ^= n >> 15; n *= 0x2c1b3c6du; n ^= n >> 12; n *= 0x297a2d39u; n ^= n >> 15;
+  return float(n & 0xffffu) / 65535.0;
+}
+
+/** Плавный шум 0..1: случайные числа клеток мира, сглаженные между соседями. */
+float softNoise(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = mix(mix(cellHash(i), cellHash(i + vec3(1.0, 0.0, 0.0)), f.x), mix(cellHash(i + vec3(0.0, 1.0, 0.0)), cellHash(i + vec3(1.0, 1.0, 0.0)), f.x), f.y);
+  float b = mix(mix(cellHash(i + vec3(0.0, 0.0, 1.0)), cellHash(i + vec3(1.0, 0.0, 1.0)), f.x), mix(cellHash(i + vec3(0.0, 1.0, 1.0)), cellHash(i + vec3(1.0, 1.0, 1.0)), f.x), f.y);
+  return mix(a, b, f.z);
+}
+
+/** Насколько стёрта стена в точке p мира на высоте h над своим полом: 0 — цела, 1 — стёрта (amount — uErase.y). */
+float wallGoneAt(vec3 p, float h, float amount) {
+  if (amount <= 0.0) return 0.0;
+  float n = softNoise(p * 0.9 + 3.1) * 0.65 + (1.0 - clamp(h / 2.7, 0.0, 1.0)) * 0.35;
+  return clamp((amount * 1.14 - 0.06 - n) / 0.08, 0.0, 1.0);
+}
+`;
+
 export const BEAM_GLSL = /* glsl */ `
 uniform vec3 uLightPosV;
 uniform vec3 uLightDirV;
@@ -335,23 +367,7 @@ uniform vec2 uVoidK;      // x > 0 — она темнота и поглощае
 ${BEAM_GLSL}
 ${SCAN_GLSL}
 
-/** Случайное число клетки мира (для дыр распада): целочисленный хеш, одинаковый на любом устройстве. */
-float cellHash(vec3 p) {
-  ivec3 q = ivec3(floor(p)) + 32768;
-  uint n = uint(q.x) * 0x27d4eb2du ^ uint(q.y) * 0x165667b1u ^ uint(q.z) * 0x9e3779b1u;
-  n ^= n >> 15; n *= 0x2c1b3c6du; n ^= n >> 12; n *= 0x297a2d39u; n ^= n >> 15;
-  return float(n & 0xffffu) / 65535.0;
-}
-
-/** Плавный шум 0..1: случайные числа клеток мира, сглаженные между соседями. */
-float softNoise(vec3 p) {
-  vec3 i = floor(p);
-  vec3 f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  float a = mix(mix(cellHash(i), cellHash(i + vec3(1.0, 0.0, 0.0)), f.x), mix(cellHash(i + vec3(0.0, 1.0, 0.0)), cellHash(i + vec3(1.0, 1.0, 0.0)), f.x), f.y);
-  float b = mix(mix(cellHash(i + vec3(0.0, 0.0, 1.0)), cellHash(i + vec3(1.0, 0.0, 1.0)), f.x), mix(cellHash(i + vec3(0.0, 1.0, 1.0)), cellHash(i + vec3(1.0, 1.0, 1.0)), f.x), f.y);
-  return mix(a, b, f.z);
-}
+${SOFT_NOISE_GLSL}
 
 /**
  * Кружево: то, что остаётся от поверхности, когда вещество ушло, — нити. Возвращает расстояние от
@@ -1556,8 +1572,8 @@ void main() {
 /**
  * Тихий слой архитектуры: точки по рёбрам и углам стен (world/edges.ts; вариант A, слова партнёра:
  * «Тихий слой, это точки по ребрам и углам, иногда пробегает сонар, чтобы игрок понимал хоть какой-то план»).
- * Видны всегда, даже в темноте, но тихо и только то, что не закрыто стеной (глубина готового кадра);
- * дальше 7 м гаснут. Сонар — волна от игрока: её фронт зажигает точки ярче, за ним они остывают, а на
+ * Видны только там, где стена уже стёрта (поздние круги петли; слова партнёра 17.11), зато и в темноте, тихо и только то,
+ * что не закрыто стеной (глубина готового кадра); дальше 8–22 м гаснут. Сонар — волна от игрока: её фронт зажигает точки ярче, за ним они остывают, а на
  * миг волна показывает план и сквозь стены — в темноте; при фонаре едва (у темноты остаётся её смысл).
  * Свет пишется поверх кадра; усиление камеры его не разгоняет.
  */
@@ -1573,7 +1589,11 @@ uniform float uSonarK;    // 0..1: сила волны (гаснет к конц
 uniform float uQuiet;     // 0..1: сила тихого слоя
 uniform float uGainInv;   // 1 / усиление камеры
 uniform float uXray;      // насколько волна видна сквозь стены: в темноте — сильно, при фонаре — едва
+uniform vec4 uErase;      // стирание места (тот же, что у мира): y — стены, 0 — целы
+uniform float uTierDrop;  // на сколько метров ярус ниже соседнего: пол яруса t — на высоте −t·uTierDrop
 varying vec3 vCol;
+
+${SOFT_NOISE_GLSL}
 
 float linDepth(float d) {
   return (2.0 * uNearFar.x * uNearFar.y) / (uNearFar.y + uNearFar.x - (d * 2.0 - 1.0) * (uNearFar.y - uNearFar.x));
@@ -1596,7 +1616,11 @@ void main() {
   float front = exp(-dr * dr / 0.8);
   float after = dr < 0.0 ? exp(dr / 4.0) : 0.0;
   float sonar = uSonarK * (1.3 * front + 0.4 * after);
-  float quiet = hidden ? 0.0 : uQuiet * (1.0 - smoothstep(8.0, 22.0, dist));
+  // Слова партнёра 17.11: «Грани точками у мира должны появляться только на уровне поздних кругов, когда уже почти нет
+  // стен и пространство стерто и только в таких местах». Точка видна там, где стена у неё уже стёрта, — по той же маске,
+  // по которой стену стирает шейдер мира; пока стены целы (до пятого круга), тихого слоя нет вовсе.
+  float gone = wallGoneAt(position, position.y + aTier * uTierDrop, uErase.y);
+  float quiet = hidden ? 0.0 : uQuiet * gone * (1.0 - smoothstep(8.0, 22.0, dist));
   float a = max(quiet, sonar * (hidden ? uXray : 1.0));
   // План читается по углам и проёмам: их точки чуть ярче.
   a *= aKind > 1.5 ? 1.3 : 1.0;

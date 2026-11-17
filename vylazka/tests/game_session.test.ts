@@ -669,12 +669,14 @@ describe('игра целиком: особенности помещений и 
 });
 
 describe('тихий слой и сонар (вариант A)', () => {
-  it('в месте: точки по рёбрам отданы рендеру, тихий слой включён; волна вскоре после прихода, бежит со своей скоростью, гаснет и приходит снова; в кармане их нет', () => {
+  it('в месте: точки по рёбрам отданы рендеру; волна вскоре после прихода, бежит со своей скоростью, гаснет и приходит снова; в кармане её нет', () => {
     const h = new Harness(levelOf(SEED), { seed: 31 });
     const view = (): ReturnType<FakeRenderer['frames']['at']> => h.r.frames.at(-1);
     expect(h.r.edges).toBeGreaterThan(1000);
     h.run(0.5);
-    expect(view()!.quiet).toBeGreaterThan(0);
+    // Сам тихий слой на первом круге выключен: точечные грани — только на поздних кругах, где стены стёрты (слова
+    // партнёра 17.11; отдельный тест ниже). Точки по рёбрам при этом отданы рендеру — по ним бежит волна сонара.
+    expect(view()!.quiet ?? 0).toBe(0);
     expect(h.until(() => (view()?.sonar ?? null) !== null, 4)).toBe(true);
     // Пошла волна — событие сна «sonar»: по нему звучит тихий пинг (слова партнёра: «Сонар тихий пинг»).
     const pings = (): number => h.log.dream.filter((e) => e.type === 'sonar').length;
@@ -3324,5 +3326,26 @@ describe('телефон: белая вспышка скачка короче (�
     cut.game.phone = true;
     expect(cut.game.beginJump({ cause: 'gaze', style: 'cut', to: 'meadow' }, [])).toBe(true);
     expect([cut.game.transition!.out, cut.game.transition!.back]).toEqual([0.18, 0.45]);
+  });
+});
+
+describe('тихий слой точек по рёбрам — только на поздних кругах, где стены уже стёрты (слова партнёра 17.11)', () => {
+  it('пока стены целы, точечных граней нет вовсе; когда петля стёрла стены — слой есть (где именно — решает маска стирания в шейдере)', () => {
+    const fresh = new Harness(levelOf(SEED));
+    fresh.run(2);
+    expect(fresh.game.decay.walls).toBe(0);
+    expect(fresh.r.frames.at(-1)!.quiet ?? 0).toBe(0);
+    // Четвёртый круг: потолок уже выпадает, стены ещё целы — граней нет.
+    const lap4 = new Harness(levelOf(SEED));
+    lap4.game.wearBase = 0.42;
+    lap4.run(2);
+    expect(lap4.game.decay.walls).toBe(0);
+    expect(lap4.r.frames.at(-1)!.quiet ?? 0).toBe(0);
+    // Шестой круг: стены наполовину в кружево — точки проступают там, где стен уже нет.
+    const lap6 = new Harness(levelOf(SEED));
+    lap6.game.wearBase = 0.7;
+    lap6.run(2);
+    expect(lap6.game.decay.walls).toBeGreaterThan(0.1);
+    expect(lap6.r.frames.at(-1)!.quiet!).toBeGreaterThan(0);
   });
 });

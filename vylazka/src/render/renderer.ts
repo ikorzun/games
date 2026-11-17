@@ -1828,6 +1828,9 @@ export class GameRenderer {
           uQuiet: { value: 0 },
           uGainInv: { value: 1 },
           uXray: { value: 0.6 },
+          // Стирание места и высота яруса — те же объекты, что у мира: точки видны там, где стена уже стёрта.
+          uErase: this.worldMat.uniforms.uErase!,
+          uTierDrop: this.worldMat.uniforms.uTierDrop!,
         },
         blending: THREE.AdditiveBlending,
         transparent: true,
