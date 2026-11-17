@@ -39,6 +39,7 @@ import type { PlacedSpec, RemovedSpec } from './placed';
 import { swapFits } from './placed';
 import { PLACED, REMOVED } from './placed_data';
 import type { ShellCell, WallStyle } from './shell';
+import { inVariant, slotFor, variantPicker } from './variants';
 
 const HALF = GRID / 2;
 /** Клетка сетки → координата её центра в мире. */
@@ -266,14 +267,30 @@ interface GameEdits {
   still: Set<number>;
 }
 
-function editsFor(layout: GenLayout, placed: readonly PlacedSpec[], removed: readonly RemovedSpec[]): GameEdits | null {
+function editsFor(layout: GenLayout, placed: readonly PlacedSpec[], removed: readonly RemovedSpec[], pick: (room: GenRoom) => string | null): GameEdits | null {
   const here = (worlds: readonly WorldKind[]): boolean => worlds.includes(layout.world);
   const swaps = placed.filter((s) => s.replaces && !s.moves && here(s.rule.worlds) && ALL_PROPS[s.prop] && ALL_PROPS[s.replaces] && swapFits(ALL_PROPS[s.replaces]!, ALL_PROPS[s.prop]!));
   const moves = placed.filter((s) => s.moves && !s.replaces && s.moves.thing === s.prop && ALL_PROPS[s.prop] && here(s.rule.worlds));
   const gone = removed.filter((r) => here(r.worlds) && ALL_PROPS[r.what.thing]);
   if (swaps.length + moves.length + gone.length === 0) return null;
   const roomAt = roomIndex(layout);
-  const fits = (rooms: readonly string[], room: GenRoom): boolean => rooms.length === 0 || rooms.includes(room.type);
+  // Вариант расстановки (world/variants.ts): запись варианта действует только там, где он выпал; запись без варианта — везде,
+  // кроме вещи игры, которую выпавший вариант двигает или убирает сам.
+  const ownTarget = (chosen: string | null, name: string, nth: number): boolean =>
+    chosen !== null &&
+    (gone.some((r) => slotFor(r.slot, r.rooms) === chosen && r.what.thing === name && r.what.nth === nth) ||
+      moves.some((s) => slotFor(s.slot, s.rule.rooms) === chosen && s.moves!.thing === name && s.moves!.nth === nth));
+  const fitsRoom = (rooms: readonly string[], room: GenRoom): boolean => rooms.length === 0 || rooms.includes(room.type);
+  let chosenRoom: GenRoom | null = null;
+  let chosen: string | null = null;
+  const variantOk = (slot: string | undefined, room: GenRoom, name?: string, nth?: number): boolean => {
+    if (chosenRoom !== room) {
+      chosenRoom = room;
+      chosen = pick(room);
+    }
+    if (slot !== undefined) return slot === chosen;
+    return name === undefined || !ownTarget(chosen, name, nth ?? 0);
+  };
   /** Сколько вещей каждого имени уже встретилось в помещении: «номер помещения:имя». */
   const seen = new Map<string, number>();
   const used = new Map<string, number>();
@@ -284,9 +301,9 @@ function editsFor(layout: GenLayout, placed: readonly PlacedSpec[], removed: rea
     const key = `${room.id}:${name}`;
     const nth = seen.get(key) ?? 0;
     seen.set(key, nth + 1);
-    if (gone.some((r) => r.what.thing === name && r.what.nth === nth && fits(r.rooms, room))) return '';
+    if (gone.some((r) => r.what.thing === name && r.what.nth === nth && fitsRoom(r.rooms, room) && variantOk(slotFor(r.slot, r.rooms), room, name, nth))) return '';
     if (!edits.still.has(room.id) && !NEVER.has(room.type)) {
-      const m = moves.find((s) => s.moves!.thing === name && s.moves!.nth === nth && fits(s.rule.rooms, room));
+      const m = moves.find((s) => s.moves!.thing === name && s.moves!.nth === nth && fitsRoom(s.rule.rooms, room) && variantOk(slotFor(s.slot, s.rule.rooms), room, name, nth));
       if (m) {
         edits.moved.push({ spec: m, room, xf, seed });
         return '';
@@ -294,7 +311,7 @@ function editsFor(layout: GenLayout, placed: readonly PlacedSpec[], removed: rea
     }
     if (flat) return null;
     for (const s of swaps) {
-      if (s.replaces !== name || !fits(s.rule.rooms, room)) continue;
+      if (s.replaces !== name || !fitsRoom(s.rule.rooms, room) || !variantOk(slotFor(s.slot, s.rule.rooms), room)) continue;
       const n = used.get(s.id) ?? 0;
       if (n >= s.rule.count) continue;
       used.set(s.id, n + 1);
@@ -306,11 +323,21 @@ function editsFor(layout: GenLayout, placed: readonly PlacedSpec[], removed: rea
 }
 
 export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLevel {
-  const edits = editsFor(layout, opts.placed ?? PLACED, opts.removed ?? REMOVED);
-  return withSwap(edits?.hook ?? null, () => buildLevelInner(layout, opts, edits));
+  const placed = opts.placed ?? PLACED;
+  const removed = opts.removed ?? REMOVED;
+  const figures = opts.figures ?? FIGURES;
+  // Варианты расстановки (world/variants.ts): какой из вариантов партнёра достался каждому помещению этого уровня.
+  const here = (worlds: readonly WorldKind[]): boolean => worlds.includes(layout.world);
+  const pick = variantPicker(layout, [
+    ...placed.filter((s) => here(s.rule.worlds)).map((s) => slotFor(s.slot, s.rule.rooms)),
+    ...removed.filter((r) => here(r.worlds)).map((r) => slotFor(r.slot, r.rooms)),
+    ...figures.filter((f) => here(f.rule.worlds)).map((f) => slotFor(f.slot, f.rule.rooms)),
+  ]);
+  const edits = editsFor(layout, placed, removed, pick);
+  return withSwap(edits?.hook ?? null, () => buildLevelInner(layout, opts, edits, pick));
 }
 
-function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits | null): BuiltLevel {
+function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits | null, pick: (room: GenRoom) => string | null): BuiltLevel {
   const decay = decayAt(opts.wear ?? 0);
   const col = new ColliderSet();
   const chunks = new Map<string, ChunkBuild>();
@@ -821,7 +848,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     spawn: [cellToWorld(ent0.cells[0]![0]), tierFloor(ent0.tier), cellToWorld(ent0.cells[0]![1]) + 0.4] as Vec3,
     spawnTier: ent0.tier,
   };
-  const figures = placeFigures(opts.figures ?? FIGURES, placeWorld);
+  const figures = placeFigures(opts.figures ?? FIGURES, placeWorld, (f, r) => inVariant(slotFor(f.slot, f.rule.rooms), pick(r)));
   // Дальше строятся вещи по записям партнёра — мимо хука: они не вещи игры, считать и трогать их ему нечего.
   const placed: PlacedSpot[] = [];
   withSwap(null, () => {
@@ -844,7 +871,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     // Вещи партнёра (world/placed_place.ts): после фигур и всей обстановки — не врастают ни во что, проходы
     // оставляют свободными. Строятся как обычная обстановка: в сетку своего помещения, с преградами, объектом
     // уровня (растворяется от касания и возвращается, как всё).
-    for (const p of placeThings(opts.placed ?? PLACED, placeWorld, ALL_PROPS)) {
+    for (const p of placeThings(opts.placed ?? PLACED, placeWorld, ALL_PROPS, (sp, r) => inVariant(slotFor(sp.slot, sp.rule.rooms), pick(r)))) {
       const room = layout.rooms[p.room]!;
       const gx = Math.round(p.at[0] / CELL) + GRID / 2;
       const gz = Math.round(p.at[2] / CELL) + GRID / 2;

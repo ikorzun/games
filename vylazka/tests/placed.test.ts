@@ -10,6 +10,7 @@ import { checkSpot, fitThing, gameNth, HEADROOM, moveSpot, NEVER, placeThings, r
 import { anchorSpots } from '../src/world/figure_place';
 import type { Box } from '../src/world/placed_place';
 import { ALL_PROPS, FIXED } from '../src/world/props_all';
+import { variantPicker } from '../src/world/variants';
 
 const spec = (over: Partial<PlacedSpec> = {}, rule: Partial<PlacedSpec['rule']> = {}): PlacedSpec => ({
   id: 'pl_test',
@@ -275,6 +276,56 @@ describe('вещи игры, убранные и передвинутые: на 
       const want = census(objs.filter((q) => q.name === o.name && !gone.includes(q)));
       expect(census((lvl.objects ?? []).filter((q) => q.name === o.name)), `${o.name} №${nth}`).toEqual(want);
     }
+  });
+
+  it('варианты (квиз 17.11, ночь: «Свой вариант на каждую»): убранная варианта пропадает только там, где выпал её вариант; два варианта делят помещения', () => {
+    const X = 'filing_cabinet';
+    const T = 'files';
+    const before = byRoom(plain, X);
+    const inT = [...before.keys()].filter((id) => layout.rooms[id]!.type === T);
+    expect(inT.length).toBeGreaterThan(1);
+    const pick = variantPicker(layout, [`${T}.0`, `${T}.3`]);
+    const got = new Set(inT.map((id) => pick(layout.rooms[id]!)));
+    // Жребий повторяем и делит помещения типа между вариантами (на этом сиде достаются оба).
+    expect([...got].every((v) => v === `${T}.0` || v === `${T}.3`)).toBe(true);
+    expect(got.size).toBe(2);
+    expect(inT.map((id) => pick(layout.rooms[id]!))).toEqual(inT.map((id) => variantPicker(layout, [`${T}.3`, `${T}.0`])(layout.rooms[id]!)));
+    // Убранная во втором варианте и пустой первый вариант (манекен-заглушка не нужен: вариант задаёт любая запись типа).
+    const only3 = removedSpec({ slot: `${T}.3` });
+    const blank0 = removedSpec({ id: 'rm_blank', what: { thing: X, nth: 40 }, slot: `${T}.0` });
+    const after = byRoom(make([], [only3, blank0]), X);
+    for (const id of inT) {
+      const was = before.get(id)!.length;
+      const now = (after.get(id) ?? []).length;
+      expect(now, `помещение ${id}: вариант ${pick(layout.rooms[id]!)}`).toBe(pick(layout.rooms[id]!) === `${T}.3` ? was - 1 : was);
+    }
+    // Один вариант на тип — все помещения типа получают его, как было до вариантов.
+    const one = byRoom(make([], [only3]), X);
+    for (const id of inT) expect((one.get(id) ?? []).length).toBe(before.get(id)!.length - 1);
+  });
+
+  it('варианты: запись до вариантов — первый вариант своего типа; общая (на любые помещения) — везде, кроме вещи, которую выпавший вариант трогает сам', () => {
+    const X = 'filing_cabinet';
+    const T = 'files';
+    const before = byRoom(plain, X);
+    const inT = [...before.keys()].filter((id) => layout.rooms[id]!.type === T);
+    const pick = variantPicker(layout, [`${T}.0`, `${T}.1`]);
+    // Старая (без варианта) убирает первую такую везде; вариант 1 вместо этого убирает вторую; вариант 0 ничего не трогает.
+    const old = removedSpec({ id: 'rm_old' });
+    const v1 = removedSpec({ id: 'rm_v1', what: { thing: X, nth: 0 }, slot: `${T}.1` });
+    const v0 = removedSpec({ id: 'rm_v0', what: { thing: X, nth: 40 }, slot: `${T}.0` });
+    const after = byRoom(make([], [old, v1, v0]), X);
+    for (const id of inT) {
+      // В обоих вариантах пропадает ровно одна: в варианте 1 — его собственная запись перекрыла старую (та же вещь), в 0 — старая.
+      expect((after.get(id) ?? []).length, `помещение ${id}: ${pick(layout.rooms[id]!)}`).toBe(before.get(id)!.length - 1);
+    }
+    // Общая — на любые помещения: в варианте 1 её вещь убирает сам вариант (та же вещь), в остальных — она.
+    const general = removedSpec({ id: 'rm_general', rooms: [] });
+    const both = byRoom(make([], [general, v1]), X);
+    for (const id of inT) expect((both.get(id) ?? []).length, `помещение ${id}`).toBe(before.get(id)!.length - 1);
+    expect(removedProblems({ ...old, slot: 'files.x' }, ALL_PROPS, FIXED).join()).toContain('вариант');
+    expect(placedProblems({ ...spec(), slot: 'kitchen' }, ALL_PROPS, FIXED).join()).toContain('вариант');
+    expect(placedProblems({ ...spec(), slot: 'kitchen.2' }, ALL_PROPS, FIXED)).toEqual([]);
   });
 
   it('передвинутая: такая же вещь в том же помещении, по правилу, не в проходе и не в мебели', () => {

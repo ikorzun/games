@@ -24,6 +24,7 @@ import { FIGURE_ANCHORS, FIGURE_FACINGS, FIGURE_WORLDS, ID_RE } from './figures'
 import type { FigureAnchor, FigureFacing } from './figures';
 import type { PropSpec } from './props_more';
 import type { WorldKind } from '../gen/layout';
+import { SLOT_RE } from './variants';
 
 /** Правило места у вещи — то же, что у фигуры. */
 export type PlaceRule = FigureRule;
@@ -72,6 +73,11 @@ export interface PlacedSpec {
    * того же его края. Нет — край по жребию (агент конструктора, 17.11: иначе передвинутая вещь вставала не у той стены).
    */
   near?: [number, number];
+  /**
+   * Вариант расстановки (world/variants.ts; квиз 17.11, ночь: «Свой вариант на каждую»): «тип.номер» помещения конструктора,
+   * где запись сделана. В игре действует только в помещениях, которым выпал этот вариант; нет — везде.
+   */
+  slot?: string;
   /** Кто и когда сохранил (из инструмента). */
   at?: string;
 }
@@ -87,6 +93,8 @@ export interface RemovedSpec {
   worlds: WorldKind[];
   /** Типы помещений; пусто — любые. */
   rooms: string[];
+  /** Вариант расстановки (как у PlacedSpec.slot). */
+  slot?: string;
   /** Кто и когда сохранил (из инструмента). */
   at?: string;
 }
@@ -159,6 +167,7 @@ export function placedProblems(x: unknown, props: Readonly<Record<string, PropSp
   }
   const near = f.near as unknown;
   if (near !== undefined && !(Array.isArray(near) && near.length === 2 && near.every((v) => within(v, [0, 1])))) bad.push('где в помещении: две доли от 0 до 1');
+  if (f.slot !== undefined && !(typeof f.slot === 'string' && SLOT_RE.test(f.slot))) bad.push('вариант: «тип.номер»');
   const off = f.offset as unknown;
   if (!Array.isArray(off) || off.length !== 2 || !off.every((v) => within(v, PLACED_OFFSET))) bad.push('сдвиг: не дальше 3 м от края');
   const r = f.rule as Record<string, unknown> | undefined;
@@ -195,5 +204,6 @@ export function removedProblems(x: unknown, props: Readonly<Record<string, PropS
   }
   if (!Array.isArray(f.worlds) || f.worlds.length === 0 || !f.worlds.every((v) => FIGURE_WORLDS.includes(v as WorldKind))) bad.push('места');
   if (!Array.isArray(f.rooms) || !f.rooms.every((t) => typeof t === 'string' && /^[a-z_]+$/.test(t))) bad.push('помещения');
+  if (f.slot !== undefined && !(typeof f.slot === 'string' && SLOT_RE.test(f.slot))) bad.push('вариант: «тип.номер»');
   return bad;
 }

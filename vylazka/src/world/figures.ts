@@ -16,6 +16,7 @@
  */
 import type { WorldKind } from '../gen/layout';
 import type { Pose } from './props_people';
+import { SLOT_RE } from './variants';
 
 export const FIGURE_MATERIALS = ['wood', 'smoke', 'hair', 'stone', 'metal', 'coal', 'skin', 'plastic'] as const;
 export type FigureMaterial = (typeof FIGURE_MATERIALS)[number];
@@ -61,6 +62,8 @@ export interface FigureSpec {
    * «конструктор должен запоминать размещённые или передвинутые объекты для каждой комнаты»).
    */
   near?: [number, number];
+  /** Вариант расстановки (world/variants.ts): «тип.номер» помещения конструктора, где манекен поставлен; нет — везде. */
+  slot?: string;
   /** Кто и когда сохранил (из инструмента). */
   at?: string;
 }
@@ -131,6 +134,7 @@ export function figureProblems(x: unknown): string[] {
   if (!Array.isArray(off) || off.length !== 2 || !off.every((v) => within(v, [-3, 3]))) bad.push('сдвиг');
   const near = f.near as unknown;
   if (near !== undefined && (!Array.isArray(near) || near.length !== 2 || !near.every((v) => within(v, [0, 1])))) bad.push('где в помещении: две доли от 0 до 1');
+  if (f.slot !== undefined && !(typeof f.slot === 'string' && SLOT_RE.test(f.slot))) bad.push('вариант: «тип.номер»');
   const r = f.rule as Record<string, unknown> | undefined;
   if (!r) bad.push('правило места');
   else {

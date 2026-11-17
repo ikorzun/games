@@ -273,7 +273,10 @@ function nearCost(spec: PlacedSpec, room: GenRoom, a: AnchorSpot): number {
  * Расставить вещи по уровню. Вещь встаёт, только если её место в правиле и есть помещение нужного типа;
  * сколько — rule.count, по возможности в разных помещениях. Вещи, которой нет в реестре, нет и на уровне.
  */
-export function placeThings(specs: readonly PlacedSpec[], w: PlaceWorld, props: Readonly<Record<string, PropSpec>>): PlacedSpot[] {
+/**
+ * roomOk — пускает ли запись в помещение сверх её правила (вариант расстановки, world/variants.ts); нет — пускает.
+ */
+export function placeThings(specs: readonly PlacedSpec[], w: PlaceWorld, props: Readonly<Record<string, PropSpec>>, roomOk?: (spec: PlacedSpec, room: GenRoom) => boolean): PlacedSpot[] {
   const out: PlacedSpot[] = [];
   const boxes: Box[] = [];
   for (const spec of specs) {
@@ -282,7 +285,7 @@ export function placeThings(specs: readonly PlacedSpec[], w: PlaceWorld, props: 
     if (spec.replaces || spec.moves) continue;
     const p = props[spec.prop];
     if (!p) continue;
-    const rooms = roomsFor(spec, w);
+    const rooms = roomsFor(spec, w).filter((r) => !roomOk || roomOk(spec, r));
     if (rooms.length === 0) continue;
     const h = idHash(spec.id);
     const cands = rooms.flatMap((r) => anchorSpots(r, spec.rule.anchor, w).map((a) => ({ a, r, d: nearCost(spec, r, a) })));

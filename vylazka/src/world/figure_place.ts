@@ -255,12 +255,13 @@ export function roomNear(room: GenRoom, x: number, z: number): [number, number] 
   return [Math.round(f(x, x0, x1) * 1000) / 1000, Math.round(f(z, z0, z1) * 1000) / 1000];
 }
 
-export function placeFigures(specs: readonly FigureSpec[], w: PlaceWorld): FigureSpot[] {
+/** roomOk — пускает ли фигуру в помещение сверх её правила (вариант расстановки, world/variants.ts); нет — пускает. */
+export function placeFigures(specs: readonly FigureSpec[], w: PlaceWorld, roomOk?: (spec: FigureSpec, room: GenRoom) => boolean): FigureSpot[] {
   const out: FigureSpot[] = [];
   const world = w.layout.world;
   for (const spec of specs) {
     if (!spec.rule.worlds.includes(world)) continue;
-    const rooms = w.layout.rooms.filter((r) => !w.skip.has(r.id) && !NEVER.has(r.type) && (spec.rule.rooms.length === 0 || spec.rule.rooms.includes(r.type)));
+    const rooms = w.layout.rooms.filter((r) => !w.skip.has(r.id) && !NEVER.has(r.type) && (spec.rule.rooms.length === 0 || spec.rule.rooms.includes(r.type)) && (!roomOk || roomOk(spec, r)));
     if (rooms.length === 0) continue;
     // Тело — таз, поясница, грудь, основание шеи, макушка; остальное — руки и ноги.
     const sk = skeleton(spec.pose);

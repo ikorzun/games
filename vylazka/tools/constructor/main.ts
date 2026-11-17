@@ -58,6 +58,7 @@ import { figure, materialFor, matcap, PAINTS } from '../matcaps/look';
 import { asked, CHOICES, gameLink, ITEM, ITEMS, LABEL, MEMORY, ROOM_RU, roomsText, SHORT, sizeText, whereText, WORLD_RU } from './catalog';
 import type { Item as Entry, Kind, Mark, Verdict } from './catalog';
 import { cardView } from './card';
+import { slotFor, slotNumber, slotOf, slotType } from '../../src/world/variants';
 
 setThingRegistry(ALL_PROPS);
 const HALF = GRID / 2;
@@ -100,6 +101,20 @@ type Item = ThingItem | FigItem;
 let seq = 0;
 const stamp = (): string => `${Date.now().toString(36)}${(seq++ % 36).toString(36)}`;
 let cur: Item | null = null;
+/**
+ * Вариант показанного помещения (world/variants.ts; квиз 17.11, ночь: «Свой вариант на каждую»): «тип.номер» — номер
+ * «другого такого». Что поставлено, передвинуто или убрано здесь, — его; в игре каждое такое помещение берёт один из вариантов.
+ */
+const slotNow = (): string => slotOf(roomType, roomPick);
+/** Видна ли запись в показанном помещении: своего варианта или общая (на несколько типов или любые помещения). */
+function mine(slot: string | undefined, rooms: readonly string[]): boolean {
+  const s = slotFor(slot, rooms);
+  return s === undefined || s === slotNow();
+}
+/** Своего варианта (не общая): такие идут первыми — перекрывают общую запись о той же вещи игры. */
+const ownFirst = <T>(list: Iterable<T>, slot: (x: T) => string | undefined): T[] => [...list].sort((a, b) => Number(slot(b) === slotNow()) - Number(slot(a) === slotNow()));
+/** Как назвать вариант для партнёра: «кухня 2». */
+const slotLabel = (slot: string): string => `${(ROOM_RU[slotType(slot)] ?? slotType(slot)).toLowerCase()} ${slotNumber(slot) + 1}`;
 /** Шаг отмены: правка (что было в работе) или запись базы (добавлена или удалена). */
 type Coll3 = 'things' | 'removed' | 'figures';
 type UndoStep = { t: 'cur'; json: string } | { t: 'rec'; coll: Coll3; add: boolean; spec: PlacedSpec | RemovedSpec | FigureSpec };
@@ -563,14 +578,14 @@ const applies = (worlds: readonly WorldKind[], rooms: readonly string[]): boolea
 /** Какие сохранённые записи о вещах игры касаются показанного помещения (как их применит сборка: сперва убранные). */
 function computeEdits(): void {
   const removed: RemovedHere[] = [];
-  for (const spec of savedRemoved.values()) {
-    if (!applies(spec.worlds, spec.rooms)) continue;
+  for (const spec of ownFirst(savedRemoved.values(), (r) => slotFor(r.slot, r.rooms))) {
+    if (!applies(spec.worlds, spec.rooms) || !mine(spec.slot, spec.rooms)) continue;
     const o = findGame(lvl, room, spec.what.thing, spec.what.nth);
     if (o && !removed.some((r) => r.o.id === o.id)) removed.push({ spec, o });
   }
   const moved: MovedHere[] = [];
-  for (const spec of savedThings.values()) {
-    if (!spec.moves || !applies(spec.rule.worlds, spec.rule.rooms)) continue;
+  for (const spec of ownFirst(savedThings.values(), (t) => slotFor(t.slot, t.rule.rooms))) {
+    if (!spec.moves || !applies(spec.rule.worlds, spec.rule.rooms) || !mine(spec.slot, spec.rule.rooms)) continue;
     const o = findGame(lvl, room, spec.moves.thing, spec.moves.nth);
     if (!o || removed.some((r) => r.o.id === o.id) || moved.some((m) => m.o.id === o.id)) continue;
     moved.push({ spec, o, spot: null });
@@ -787,7 +802,7 @@ const localNote = (): string => (db ? '' : ' Только на этой стра
 function removeGame(id: number): RemovedSpec | null {
   const o = objById(id);
   if (!o || !gameOk(o)) return null;
-  const spec: RemovedSpec = { id: `rm_${stamp()}`, name: `${ruShort(o.name)} — убрана`.slice(0, 80), what: { thing: o.name, nth: nthOf(lvl, o) }, worlds: [world], rooms: [roomType], at: new Date().toISOString() };
+  const spec: RemovedSpec = { id: `rm_${stamp()}`, name: `${ruShort(o.name)} — убрана`.slice(0, 80), what: { thing: o.name, nth: nthOf(lvl, o) }, worlds: [world], rooms: [roomType], slot: slotNow(), at: new Date().toISOString() };
   const bad = removedProblems(spec, ALL_PROPS, FIXED);
   if (bad.length > 0) {
     setStatus(`Не убрано: ${bad.join('; ')}.`);
@@ -796,7 +811,7 @@ function removeGame(id: number): RemovedSpec | null {
   gameSel = id;
   pushStep({ t: 'rec', coll: 'removed', add: true, spec });
   void putRecord('removed', spec);
-  setStatus(`Убрана: ${spec.what.nth + 1}-я «${ruShort(o.name)}» — в игре её не будет в помещениях «${ROOM_RU[roomType] ?? roomType}» (${WORLD_RU[world]}). ⌘Z или «Вернуть» — отменить.${localNote()}`);
+  setStatus(`Убрана: ${spec.what.nth + 1}-я «${ruShort(o.name)}» — в варианте «${slotLabel(spec.slot!)}» (${WORLD_RU[world]}). ⌘Z или «Вернуть» — отменить.${localNote()}`);
   return spec;
 }
 /** Вернуть убранную вещь игры: удалить запись. */
@@ -814,7 +829,7 @@ function beginGameDrag(o: LevelObject): void {
   const nth = nthOf(lvl, o);
   const it: ThingItem = {
     kind: 'thing',
-    spec: { id: `pl_${stamp()}`, name: `${ruShort(o.name)} — передвинута`.slice(0, 80), prop: o.name, rule: { worlds: [world], rooms: [roomType], anchor: 'wall', facing: 'room', lift: 0, count: 1 }, turn: 0, offset: [0, 0], moves: { thing: o.name, nth } },
+    spec: { id: `pl_${stamp()}`, name: `${ruShort(o.name)} — передвинута`.slice(0, 80), prop: o.name, rule: { worlds: [world], rooms: [roomType], anchor: 'wall', facing: 'room', lift: 0, count: 1 }, turn: 0, offset: [0, 0], moves: { thing: o.name, nth }, slot: slotNow() },
     at: [o.at[0], o.at[1], o.at[2]],
     rot: o.rot,
   };
@@ -950,7 +965,7 @@ function renderGhosts(): void {
   for (const s of savedThings.values()) {
     if (cur && cur.kind === 'thing' && cur.spec.id === s.id) continue;
     if (s.moves) continue;
-    if (!s.rule.worlds.includes(world) || (s.rule.rooms.length > 0 && !s.rule.rooms.includes(roomType))) continue;
+    if (!s.rule.worlds.includes(world) || (s.rule.rooms.length > 0 && !s.rule.rooms.includes(roomType)) || !mine(s.slot, s.rule.rooms)) continue;
     const p = ALL_PROPS[s.prop];
     if (!p) continue;
     const it: ThingItem = { kind: 'thing', spec: JSON.parse(JSON.stringify(s)) as PlacedSpec, at: [0, 0, 0], rot: 0 };
@@ -973,7 +988,7 @@ function renderGhosts(): void {
   // щелчком (раньше вне правки их не было видно вовсе — ни выделить, ни удалить).
   for (const f of savedFigs.values()) {
     if (cur && cur.kind === 'figure' && cur.spec.id === f.id) continue;
-    if (!f.rule.worlds.includes(world) || (f.rule.rooms.length > 0 && !f.rule.rooms.includes(roomType))) continue;
+    if (!f.rule.worlds.includes(world) || (f.rule.rooms.length > 0 && !f.rule.rooms.includes(roomType)) || !mine(f.slot, f.rule.rooms)) continue;
     const it: FigItem = { kind: 'figure', spec: JSON.parse(JSON.stringify(f)) as FigureSpec, at: [0, 0, 0], yaw: 0 };
     settle(it);
     const mesh = new THREE.Mesh(figGhostGeo(f), figGhostMat);
@@ -1354,7 +1369,7 @@ function dropSwap(prop: string, o: LevelObject): void {
   const k = from.mount === 'floor' && p.mount === 'free' ? p.d / 2 : from.mount === 'free' && p.mount === 'floor' ? -from.d / 2 : 0;
   const it: ThingItem = {
     kind: 'thing',
-    spec: { id: `pl_${stamp()}`, name: `${p.ru.split(',')[0]!.slice(0, 40)} вместо ${from.ru.split(',')[0]!.slice(0, 30)}`, prop, rule: { worlds: [world], rooms: [roomType], anchor: 'wall', facing: 'room', lift: 0, count: 1 }, turn: 0, offset: [0, 0], replaces: o.name },
+    spec: { id: `pl_${stamp()}`, name: `${p.ru.split(',')[0]!.slice(0, 40)} вместо ${from.ru.split(',')[0]!.slice(0, 30)}`, prop, rule: { worlds: [world], rooms: [roomType], anchor: 'wall', facing: 'room', lift: 0, count: 1 }, turn: 0, offset: [0, 0], replaces: o.name, slot: slotNow() },
     at: [o.at[0] + f[0] * k, o.at[1], o.at[2] + f[1] * k],
     rot: o.rot,
   };
@@ -1376,7 +1391,7 @@ function drop(what: { prop: string } | { figure: true }, x: number, z: number): 
     const lift = p.mount === 'wall' ? (p.y ?? 1.2) : 0;
     const it: ThingItem = {
       kind: 'thing',
-      spec: { id: `pl_${stamp()}`, name: p.ru.split(',')[0]!.slice(0, 60), prop: what.prop, rule: { worlds: [world], rooms: [roomType], anchor: 'wall', facing: 'room', lift, count: 1 }, turn: 0, offset: [0, 0] },
+      spec: { id: `pl_${stamp()}`, name: p.ru.split(',')[0]!.slice(0, 60), prop: what.prop, rule: { worlds: [world], rooms: [roomType], anchor: 'wall', facing: 'room', lift, count: 1 }, turn: 0, offset: [0, 0], slot: slotNow() },
       at: [s.x, floorY + lift, s.z],
       rot: s.rot,
     };
@@ -1388,7 +1403,7 @@ function drop(what: { prop: string } | { figure: true }, x: number, z: number): 
   } else {
     const it: FigItem = {
       kind: 'figure',
-      spec: { id: `fig_${stamp()}`, name: '', pose: clonePose(POSES.stand as Pose), material: 'wood', rule: { worlds: [world], rooms: [roomType], anchor: 'middle', facing: 'room', lift: 0, count: 1 }, yaw: 0, offset: [0, 0] },
+      spec: { id: `fig_${stamp()}`, name: '', pose: clonePose(POSES.stand as Pose), material: 'wood', rule: { worlds: [world], rooms: [roomType], anchor: 'middle', facing: 'room', lift: 0, count: 1 }, yaw: 0, offset: [0, 0], slot: slotNow() },
       at: [x, floorY, z],
       yaw: anchorAt(x, z, 0, false).a.phi,
     };
@@ -1823,7 +1838,8 @@ function syncPanel(): void {
   chips($('worldpick'), FIGURE_WORLDS, (w) => WORLD_RU[w]!, (w) => w === world, (w) => enterRoom(w, roomTypes(w).includes(roomType) ? roomType : roomTypes(w)[0]!, 0));
   chips($('roompick'), roomTypes(world), (r) => ROOM_RU[r] ?? r, (r) => r === roomType, (r) => enterRoom(world, r, 0));
   const total = roomsOfType(world, roomType).length;
-  $('roomnum').textContent = `${roomPick + 1} из ${total}`;
+  const own = [...savedThings.values()].some((t) => slotFor(t.slot, t.rule.rooms) === slotNow()) || [...savedFigs.values()].some((f) => slotFor(f.slot, f.rule.rooms) === slotNow()) || [...savedRemoved.values()].some((r) => slotFor(r.slot, r.rooms) === slotNow());
+  $('roomnum').textContent = `${roomPick + 1} из ${total}${own ? ' · свой вариант' : ''}`;
   syncGame();
   const has = !!cur;
   $('rule').toggleAttribute('hidden', !has);
@@ -2102,9 +2118,13 @@ function renderSaved(): void {
     rows.push(b);
   };
   const byAt = <T extends { at?: string }>(a: T, b: T): number => String(a.at ?? '').localeCompare(String(b.at ?? ''));
-  for (const s of [...savedThings.values()].sort(byAt)) add(s.moves ? (/передвин/.test(s.name) ? s.name : `${s.name} · передвинута`) : `${s.name} · ${ALL_PROPS[s.prop]?.ru.split(',')[0] ?? s.prop}`, cur?.spec.id === s.id, () => openThing(s));
-  for (const f of [...savedFigs.values()].sort(byAt)) add(`${f.name} · манекен, ${MAT_RU[f.material]}`, cur?.spec.id === f.id, () => openFigure(f));
-  for (const r of [...savedRemoved.values()].sort(byAt)) add(/убран/.test(r.name) ? r.name : `${r.name} · убрана`, gameSel !== 0 && removedOf(gameSel)?.spec.id === r.id, () => openRemoved(r));
+  const where = (slot: string | undefined, rooms: readonly string[]): string => {
+    const s = slotFor(slot, rooms);
+    return s ? ` · ${slotLabel(s)}` : ' · везде';
+  };
+  for (const s of [...savedThings.values()].sort(byAt)) add((s.moves ? (/передвин/.test(s.name) ? s.name : `${s.name} · передвинута`) : `${s.name} · ${ALL_PROPS[s.prop]?.ru.split(',')[0] ?? s.prop}`) + where(s.slot, s.rule.rooms), cur?.spec.id === s.id, () => openThing(s));
+  for (const f of [...savedFigs.values()].sort(byAt)) add(`${f.name} · манекен, ${MAT_RU[f.material]}${where(f.slot, f.rule.rooms)}`, cur?.spec.id === f.id, () => openFigure(f));
+  for (const r of [...savedRemoved.values()].sort(byAt)) add((/убран/.test(r.name) ? r.name : `${r.name} · убрана`) + where(r.slot, r.rooms), gameSel !== 0 && removedOf(gameSel)?.spec.id === r.id, () => openRemoved(r));
   savedEl.replaceChildren(...rows);
 }
 /** Открыть сохранённое: в помещении, куда его пускает правило. */
@@ -2132,9 +2152,22 @@ function goToGame(worlds: readonly WorldKind[], rooms: readonly string[], thing:
   }
   goTo({ worlds: [...worlds], rooms: [...rooms], anchor: 'wall', facing: 'room', lift: 0, count: 1 });
 }
+/** Открыть помещение варианта записи (там она сделана); false — запись общая, варианта нет. */
+function goToSlot(slot: string | undefined, rooms: readonly string[], worlds: readonly WorldKind[]): boolean {
+  const s = slotFor(slot, rooms);
+  if (!s) return false;
+  const w = worlds.includes(world) ? world : worlds[0]!;
+  const t = slotType(s);
+  const k = slotNumber(s);
+  if (roomsOfType(w, t).length === 0) return false;
+  if (w !== world || t !== roomType || k !== roomPick) enterRoom(w, t, k);
+  return true;
+}
 function openThing(s: PlacedSpec): void {
   pushUndo();
-  if (s.moves) goToGame(s.rule.worlds, s.rule.rooms, s.moves.thing, s.moves.nth);
+  if (goToSlot(s.slot, s.rule.rooms, s.rule.worlds)) {
+    /* уже в помещении её варианта */
+  } else if (s.moves) goToGame(s.rule.worlds, s.rule.rooms, s.moves.thing, s.moves.nth);
   else goTo(s.rule);
   const it: ThingItem = { kind: 'thing', spec: JSON.parse(JSON.stringify(s)) as PlacedSpec, at: [0, 0, 0], rot: 0 };
   // Передвинутая — туда, где её поставит игра в этом помещении; замена — на место первой такой вещи игры здесь.
@@ -2151,7 +2184,7 @@ function openThing(s: PlacedSpec): void {
 }
 function openFigure(f: FigureSpec): void {
   pushUndo();
-  goTo(f.rule);
+  if (!goToSlot(f.slot, f.rule.rooms, f.rule.worlds)) goTo(f.rule);
   const it: FigItem = { kind: 'figure', spec: JSON.parse(JSON.stringify(f)) as FigureSpec, at: [0, 0, 0], yaw: 0 };
   settle(it);
   cur = it;
@@ -2159,7 +2192,7 @@ function openFigure(f: FigureSpec): void {
   syncPanel();
 }
 function openRemoved(r: RemovedSpec): void {
-  goToGame(r.worlds, r.rooms, r.what.thing, r.what.nth);
+  if (!goToSlot(r.slot, r.rooms, r.worlds)) goToGame(r.worlds, r.rooms, r.what.thing, r.what.nth);
   const o = findGame(lvl, room, r.what.thing, r.what.nth);
   if (o) selectGame(o.id);
 }
@@ -2252,18 +2285,19 @@ $('save').addEventListener('click', async () => {
   const where = problems.length > 0 ? ' Здесь вещь не встанет, но в других помещениях — где правило выполнимо.' : '';
   const local = db ? '' : ' Только на этой странице: база недоступна, после перезагрузки пропадёт.';
   if (cur.kind === 'thing') {
-    const spec: PlacedSpec = { ...(cur.spec as PlacedSpec), name: named.name, at: new Date().toISOString() };
+    // Запись живёт в том варианте, где её сохранили (квиз 17.11, ночь: «Свой вариант на каждую»).
+    const spec: PlacedSpec = { ...(cur.spec as PlacedSpec), name: named.name, at: new Date().toISOString(), slot: slotNow() };
     cur.spec = JSON.parse(JSON.stringify(spec)) as PlacedSpec;
     setStatus('Сохраняю…');
     await putRecord('things', spec);
-    setStatus(`Сохранено: «${named.name}».${where}${local}`);
+    setStatus(`Сохранено в вариант «${slotLabel(spec.slot!)}»: «${named.name}».${where}${local}`);
     return;
   }
-  const spec: FigureSpec = { ...(cur.spec as FigureSpec), name: named.name, at: new Date().toISOString() };
+  const spec: FigureSpec = { ...(cur.spec as FigureSpec), name: named.name, at: new Date().toISOString(), slot: slotNow() };
   cur.spec = JSON.parse(JSON.stringify(spec)) as FigureSpec;
   setStatus('Сохраняю…');
   await putRecord('figures', spec);
-  setStatus(`Сохранено: «${named.name}».${local}`);
+  setStatus(`Сохранено в вариант «${slotLabel(spec.slot!)}»: «${named.name}».${local}`);
 });
 
 $('fresh').addEventListener('click', () => {
@@ -2310,7 +2344,10 @@ async function deleteSelected(): Promise<boolean> {
   return true;
 }
 $('drop').addEventListener('click', () => void deleteSelected());
-$('nextroom').addEventListener('click', () => enterRoom(world, roomType, roomPick + 1));
+$('nextroom').addEventListener('click', () => {
+  enterRoom(world, roomType, roomPick + 1);
+  setStatus(`«${ROOM_RU[roomType] ?? roomType}» ${roomPick + 1} — свой вариант: что поставишь, передвинешь или уберёшь здесь, будет только в ней. В игре каждая такая комната берёт один из твоих вариантов по жребию.`);
+});
 
 renderKinds();
 enterRoom('shelter', 'kitchen', 0);
