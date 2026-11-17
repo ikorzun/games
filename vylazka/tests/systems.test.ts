@@ -8,7 +8,8 @@ import { bakeGrime } from '../src/render/grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from '../src/render/matcap_atlas';
 import { fineOf, gazeTall, internalSize, QUALITY, verticalFov } from '../src/render/renderer';
 import { WORLD_FRAG } from '../src/render/shaders';
-import { CALM_ENV, DEFAULT_FLASHLIGHT, Flashlight, LIGHT_LONGER, REVIVE_MIN } from '../src/systems/flashlight';
+import { CALM_ENV, CRANK_NOISE, DEFAULT_FLASHLIGHT, Flashlight, LIGHT_LONGER, REVIVE_MIN } from '../src/systems/flashlight';
+import type { FlashlightEvents } from '../src/systems/flashlight';
 import { recTimestamp } from '../src/ui/hud';
 import { DECAY, MAT, MAT_COUNT, MAT_DEFS } from '../src/world/materials';
 
@@ -205,6 +206,159 @@ describe('фонарь', () => {
     expect(ev.failed).toBe(true);
     for (let i = 0; i < 600; i++) f.update(DT, { ...CALM_ENV, shake: 1 });
     expect(f.state).toBe('dead');
+  });
+
+  describe('зарядка удержанием (телефон; слова партнёра 17.11 08:42)', () => {
+    const QUIET = { ...DEFAULT_FLASHLIGHT, meanFailInterval: 1e9 };
+    const RATE = DEFAULT_FLASHLIGHT.crankRate;
+    /** Держать палец seconds секунд (on = false — палец убран); события и яркость каждого шага. */
+    const hold = (f: Flashlight, seconds: number, on = true): { ev: FlashlightEvents; light: number }[] => {
+      const out: { ev: FlashlightEvents; light: number }[] = [];
+      f.crank(on);
+      for (let i = 0; i < Math.round(seconds / DT); i++) {
+        const ev = f.update(DT, CALM_ENV);
+        out.push({ ev, light: f.intensity });
+      }
+      return out;
+    };
+
+    it('заглохший фонарь под пальцем заряжается; свет — только на полном, и сначала секундная вспышка', () => {
+      const f = new Flashlight(mulberry32(3), QUIET);
+      f.charge = 0.3;
+      f.forceFail();
+      f.update(DT);
+      expect(f.state).toBe('dead');
+      // Секунду держат: заряд растёт на crankRate, света нет, фонарь «заряжают».
+      hold(f, 1);
+      expect(f.charge).toBeCloseTo(0.3 + RATE, 2);
+      expect(f.state).toBe('dead');
+      expect(f.cranking).toBe(true);
+      // Дошёл до полного: одна вспышка, фонарь горит, палец дальше ничего не делает.
+      const run = hold(f, (1 - f.charge) / RATE + 0.1);
+      const at = run.findIndex((x) => x.ev.charged);
+      expect(at).toBeGreaterThan(0);
+      expect(run.filter((x) => x.ev.charged)).toHaveLength(1);
+      expect(run.filter((x) => x.ev.revived)).toHaveLength(1);
+      expect(run.slice(0, at).every((x) => x.light < 0.8)).toBe(true);
+      expect(f.state).toBe('on');
+      expect(f.charge).toBeGreaterThan(0.999);
+      expect(f.cranking).toBe(false);
+      // Вспышка: в первый миг луч в flashPeak раз ярче, за секунду — обычный.
+      expect(run[at]!.light).toBeGreaterThan(DEFAULT_FLASHLIGHT.flashPeak * 0.9);
+      const after = hold(f, DEFAULT_FLASHLIGHT.flashTime + 0.1);
+      expect(after.at(-1)!.light).toBeLessThan(1.05);
+      expect(after.at(-1)!.light).toBeGreaterThan(0.85);
+      expect(after.every((x) => !x.ev.charged)).toBe(true);
+      // Вспышка гаснет плавно, не рывком.
+      for (let i = 1; i < after.length; i++) expect(after[i]!.light).toBeLessThan(after[i - 1]!.light + 0.2);
+    });
+
+    it('отпустил раньше — фонарь как был, а набранный заряд остался', () => {
+      const f = new Flashlight(mulberry32(4), QUIET);
+      f.charge = 0.2;
+      f.forceFail();
+      f.update(DT);
+      hold(f, 0.8);
+      hold(f, 0.5, false);
+      expect(f.state).toBe('dead');
+      expect(f.charge).toBeCloseTo(0.2 + 0.8 * RATE, 2);
+      expect(f.cranking).toBe(false);
+      // Новое нажатие продолжает с набранного.
+      const run = hold(f, (1 - f.charge) / RATE + 0.1);
+      expect(run.some((x) => x.ev.charged)).toBe(true);
+      expect(f.state).toBe('on');
+    });
+
+    it('короткое касание ничего не включает и не выключает, даже с полной батарейкой', () => {
+      const off = new Flashlight(mulberry32(5), QUIET);
+      off.toggle();
+      off.update(DT);
+      expect(off.state).toBe('off');
+      hold(off, DEFAULT_FLASHLIGHT.crankMin * 0.5);
+      hold(off, 0.3, false);
+      expect(off.state).toBe('off');
+      const on = new Flashlight(mulberry32(6), QUIET);
+      on.update(DT);
+      hold(on, 0.2);
+      hold(on, 0.3, false);
+      expect(on.state).toBe('on');
+    });
+
+    it('погашенный фонарь зажигает зарядка: с полной батарейкой — через crankMin и тоже со вспышкой', () => {
+      const f = new Flashlight(mulberry32(7), QUIET);
+      f.toggle();
+      f.update(DT);
+      const run = hold(f, DEFAULT_FLASHLIGHT.crankMin + 0.1);
+      const at = run.findIndex((x) => x.ev.charged);
+      expect(at * DT).toBeGreaterThan(DEFAULT_FLASHLIGHT.crankMin - 2 * DT);
+      expect(f.state).toBe('on');
+      expect(run.some((x) => x.ev.revived)).toBe(false);
+      expect(run[at]!.light).toBeGreaterThan(2);
+    });
+
+    it('горящий фонарь под пальцем не гаснет и подзаряжается; полный и горящий — касание ничего не делает', () => {
+      const f = new Flashlight(mulberry32(8), QUIET);
+      f.charge = 0.6;
+      f.update(DT);
+      const run = hold(f, (1 - 0.6) / RATE + 0.2);
+      expect(run.every((x) => x.light > 0.5)).toBe(true);
+      expect(run.filter((x) => x.ev.charged)).toHaveLength(1);
+      expect(f.charge).toBeGreaterThan(0.999);
+      hold(f, 0.2, false);
+      // Полный и горящий: зарядить нечего — ни вспышки, ни шума.
+      const again = hold(f, 1.5);
+      expect(again.some((x) => x.ev.charged)).toBe(false);
+      expect(f.cranking).toBe(false);
+      expect(again.every((x) => x.ev.rattle === 0)).toBe(true);
+    });
+
+    it('фонарь заглох под лежащим пальцем — зарядка начинается снова, отпускать не нужно (нашёл куратор)', () => {
+      const f = new Flashlight(mulberry32(13), QUIET);
+      f.charge = 0.7;
+      f.update(DT);
+      // Держат: дозарядили до полного, вспышка; палец так и лежит.
+      const first = hold(f, (1 - 0.7) / RATE + 0.2);
+      expect(first.some((x) => x.ev.charged)).toBe(true);
+      expect(f.cranking).toBe(false);
+      // Отказ под пальцем: фонарь заглох, а палец всё ещё на кнопке.
+      f.forceFail();
+      f.update(DT);
+      expect(f.state).toBe('dead');
+      const again = hold(f, DEFAULT_FLASHLIGHT.crankMin + 0.2);
+      expect(again.filter((x) => x.ev.charged)).toHaveLength(1);
+      expect(again.some((x) => x.ev.revived)).toBe(true);
+      expect(f.state).toBe('on');
+    });
+
+    it('севшей до нуля отлёживаться не нужно — её заряжают', () => {
+      const f = new Flashlight(mulberry32(9), { ...QUIET, drainSeconds: 2 });
+      for (let i = 0; i < 200 && f.state === 'on'; i++) f.update(DT);
+      expect(f.exhausted).toBe(true);
+      const run = hold(f, 1 / RATE + 0.2);
+      expect(run.some((x) => x.ev.charged)).toBe(true);
+      expect(f.state).toBe('on');
+      expect(f.exhausted).toBe(false);
+    });
+
+    it('зарядка трещит — её слышит Осыпь; не горящий фонарь под пальцем искрит; мерцание перед отказом обрывается', () => {
+      const f = new Flashlight(mulberry32(10), QUIET);
+      f.charge = 0.1;
+      f.forceFail();
+      f.update(DT);
+      const run = hold(f, 1.5);
+      expect(run.every((x) => x.ev.rattle === CRANK_NOISE)).toBe(true);
+      expect(run.filter((x) => x.ev.spark).length).toBeGreaterThan(2);
+      // Палец на кнопке во время предупреждающего мерцания: отказа не будет.
+      const g = new Flashlight(mulberry32(12), { ...DEFAULT_FLASHLIGHT, meanFailInterval: 0.01, graceAfterRevive: 0 });
+      let dying = false;
+      for (let i = 0; i < 600 && !dying; i++) {
+        g.update(DT);
+        dying = g.state === 'on' && g.intensity < 0.6;
+      }
+      g.charge = 0.5;
+      const kept = hold(g, 1.2);
+      expect(kept.some((x) => x.ev.failed)).toBe(false);
+    });
   });
 
   it('один сид — одна и та же история', () => {

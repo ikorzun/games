@@ -2,22 +2,54 @@
  * Тач-управление. Коснулся и отпустил — шаг вперёд; держишь палец — идёшь вперёд; ведёшь пальцем —
  * в левой половине экрана это стик ходьбы (появляется под пальцем), в правой — луч. Что значит
  * каждое касание, решает player/touch_gestures.ts; здесь — экран: стик, отметка удержания, кнопки.
- * Кнопка фонаря: короткий тап — включить или выключить; если фонарь заглох — её быстро трут пальцем
- * (это основной жест тряски на телефоне), тап тоже считается ударом.
+ * Кнопка фонаря (слова партнёра 17.11 08:42): палец держат на кнопке — фонарь заряжается, кольцо заряда вокруг кнопки
+ * становится больше, чтобы его было видно из-под пальца; полный заряд — вспышка и обычный свет (systems/flashlight.ts).
+ * Короткий тап только гасит (слова партнёра 09:23: «Один тап на фонарик гасит его, свайп не нужен, это не удобно»):
+ * включает одна зарядка, поэтому тапы больше не путают, горит фонарь или нет.
  */
 import { t } from '../core/i18n';
 import { emptyInput } from '../player/input';
 import type { InputFrame, InputSource } from '../player/input';
-import { TOUCH_SCALE } from '../player/shake';
-import type { ShakeMeter } from '../player/shake';
 import { TouchGestures } from '../player/touch_gestures';
 
-/** Палец на кнопке фонаря: тап или тряска. Остальные касания ведёт TouchGestures. */
-interface LightPointer {
+/** Палец на кнопке фонаря: где сел, где сейчас и когда. Остальные касания ведёт TouchGestures. */
+export interface LightPointer {
+  x0: number;
+  y0: number;
   x: number;
   y: number;
   t0: number;
-  travel: number;
+  /** Палец уехал с места раньше, чем стал удержанием: это протяжка, а не зарядка — до конца касания (нашёл куратор). */
+  slid?: boolean;
+}
+
+/**
+ * Тап по кнопке фонаря — погасить: палец отпущен быстрее чем за ms миллисекунд и почти не сдвинулся (меньше slop
+ * пикселей CSS). Считается по отпусканию: иначе каждое удержание начиналось бы с темноты.
+ */
+export const TAP = { ms: 250, slop: 14 } as const;
+/**
+ * Удержание — зарядка: палец на кнопке дольше TAP.ms и почти на месте. Пока не прошло TAP.ms, неизвестно, тап это
+ * или удержание, — кольцо не растёт и заряд не идёт. Уехавший дальше slop в первые grace мс — не удержание; после
+ * grace палец может немного ползти — держать долго ровно трудно.
+ */
+export const HOLD = { slop: 30, grace: 600 } as const;
+
+const moved = (p: LightPointer): number => Math.hypot(p.x - p.x0, p.y - p.y0);
+
+/** Что значит палец на кнопке фонаря сейчас: держат (зарядка) или нет. Чистая функция — проверяется тестами. */
+export function lightHeld(p: LightPointer, now: number): boolean {
+  return !p.slid && now - p.t0 >= TAP.ms && (moved(p) < HOLD.slop || now - p.t0 > HOLD.grace);
+}
+
+/** Отметить протяжку: палец ушёл дальше slop, пока ещё не стал удержанием. */
+export function markSlid(p: LightPointer, now: number): void {
+  if (!p.slid && now - p.t0 <= HOLD.grace && moved(p) >= HOLD.slop) p.slid = true;
+}
+
+/** Отпущенный палец был тапом: коротко и на месте. */
+export function lightTapped(p: LightPointer, now: number): boolean {
+  return now - p.t0 < TAP.ms && moved(p) < TAP.slop;
 }
 
 export class TouchControls implements InputSource {
@@ -31,13 +63,10 @@ export class TouchControls implements InputSource {
   private readonly pauseBtn: HTMLButtonElement;
   private readonly gestures = new TouchGestures();
   private readonly lightPointers = new Map<number, LightPointer>();
-  private light = false;
+  private off = false;
   private pause = false;
 
-  constructor(
-    parent: HTMLElement,
-    private readonly shake: ShakeMeter,
-  ) {
+  constructor(parent: HTMLElement) {
     this.el = document.createElement('div');
     this.el.className = 'vz-touch';
     this.stickBase = document.createElement('div');
@@ -78,10 +107,19 @@ export class TouchControls implements InputSource {
     this.pauseBtn.setAttribute('aria-label', t('touch.pause'));
   }
 
-  /** Подсветить кнопку фонаря, когда его надо трясти; progress 0..1. */
-  setShakePrompt(on: boolean, progress: number): void {
+  /** Позвать к кнопке фонаря: он заглох — держите на ней палец. */
+  setShakePrompt(on: boolean): void {
     this.lightBtn.classList.toggle('is-dead', on);
-    this.lightBtn.style.setProperty('--vz-progress', String(Math.round(progress * 100)));
+  }
+
+  /**
+   * Зарядка и вспышка на кнопке: пока заряжают — кольцо светлое и дышит; вспышка полного заряда (flash 1 → 0 за
+   * секунду) — кнопка на миг загорается вместе с лучом.
+   */
+  setCrank(charging: boolean, flash: number): void {
+    this.lightBtn.classList.toggle('is-charging', charging);
+    this.lightBtn.classList.toggle('is-flash', flash > 0);
+    this.lightBtn.style.setProperty('--vz-flash', flash > 0 ? flash.toFixed(2) : '0');
   }
 
   /** Спрятать кнопку фонаря: там, где фонаря нет (офис), нажимать нечего. */
@@ -95,7 +133,7 @@ export class TouchControls implements InputSource {
 
   /**
    * Заряд фонаря (0..1) — обводкой вокруг кнопки фонаря (слова партнёра 17.11 08:19): дуга кольца — доля заряда,
-   * на последней четверти — красная. Пока фонарь надо трясти, кольцо показывает тряску (setShakePrompt).
+   * на последней четверти — красная. Пока палец на кнопке, кольцо больше (класс is-held).
    */
   setCharge(charge: number): void {
     const pct = Math.max(0, Math.min(100, Math.round(charge * 100)));
@@ -114,7 +152,7 @@ export class TouchControls implements InputSource {
       /* указатель уже отпущен */
     }
     if (e.target === this.lightBtn) {
-      this.lightPointers.set(e.pointerId, { x: e.clientX, y: e.clientY, t0: performance.now(), travel: 0 });
+      this.lightPointers.set(e.pointerId, { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t0: performance.now() });
       return;
     }
     this.gestures.down(e.pointerId, e.clientX, e.clientY, performance.now(), e.clientX < this.el.clientWidth / 2);
@@ -123,12 +161,9 @@ export class TouchControls implements InputSource {
   private move(e: PointerEvent): void {
     const p = this.lightPointers.get(e.pointerId);
     if (p) {
-      const dx = e.clientX - p.x;
-      const dy = e.clientY - p.y;
       p.x = e.clientX;
       p.y = e.clientY;
-      p.travel += Math.abs(dx) + Math.abs(dy);
-      this.shake.pushMotion(dx, dy, TOUCH_SCALE);
+      markSlid(p, performance.now());
       return;
     }
     this.gestures.move(e.pointerId, e.clientX, e.clientY, performance.now());
@@ -138,11 +173,10 @@ export class TouchControls implements InputSource {
     const p = this.lightPointers.get(e.pointerId);
     if (p) {
       this.lightPointers.delete(e.pointerId);
-      // Короткое касание без движения — нажатие кнопки; протяжка — тряска.
-      if (p.travel < 14 && performance.now() - p.t0 < 400) {
-        this.light = true;
-        this.shake.pushImpulse(0.3);
-      }
+      p.x = e.clientX;
+      p.y = e.clientY;
+      // Тап гасит фонарь; удержание (зарядка) при отпускании ничего не делает.
+      if (lightTapped(p, performance.now())) this.off = true;
       return;
     }
     this.gestures.up(e.pointerId, performance.now());
@@ -156,10 +190,14 @@ export class TouchControls implements InputSource {
     f.run = g.run;
     f.lookYaw = g.lookYaw;
     f.lookPitch = g.lookPitch;
-    f.light = this.light;
+    const now = performance.now();
+    for (const p of this.lightPointers.values()) if (lightHeld(p, now)) f.crank = true;
+    f.lightOff = this.off;
     f.pause = this.pause;
-    this.light = false;
+    this.off = false;
     this.pause = false;
+    // Палец на кнопке — кольцо заряда больше: его видно из-под пальца.
+    this.lightBtn.classList.toggle('is-held', f.crank);
     // Стик — под пальцем левой половины; кольцо — под пальцем, который идёт удержанием.
     this.stickBase.classList.toggle('is-on', g.stick !== null);
     if (g.stick) {
@@ -179,7 +217,8 @@ export class TouchControls implements InputSource {
   release(): void {
     this.gestures.release();
     this.lightPointers.clear();
-    this.light = false;
+    this.off = false;
+    this.lightBtn.classList.remove('is-held');
     this.stickBase.classList.remove('is-on', 'is-walk');
     this.holdMark.classList.remove('is-on');
   }

@@ -1020,6 +1020,30 @@ describe('игра целиком: карманные пространства �
     }
   });
 
+  it('дверь луга не ставит игрока на искомую вещь: она цела, и он не в её клетке (нашла проверка CI 17.11)', () => {
+    const level = levelOf(SEED);
+    const bad: string[] = [];
+    let tried = 0;
+    for (let seed = 40; seed < 80; seed++) {
+      const h = new Harness(level, { seed });
+      const g = h.game;
+      h.run(1);
+      h.reveal();
+      // Вещь идущего воспоминания — единственная вещь-цель на уровне (как её ищет и __vz.memory()).
+      const thing = g.session!.active ? g.things.list.find((t) => t.memory) : undefined;
+      if (!thing) continue;
+      enter(h, 'meadow');
+      stepInto(h);
+      if (!h.until(() => g.where === 'main' && g.transition === null, 9)) continue;
+      tried += 1;
+      h.run(0.5);
+      const d = Math.hypot(thing.pos[0] - g.body.x, thing.pos[2] - g.body.z);
+      if (thing.state !== 'idle' || d < 1.2) bad.push(`сид ${seed}: вещь ${thing.state}, до неё ${d.toFixed(2)} м`);
+    }
+    expect(tried).toBeGreaterThan(20);
+    expect(bad).toEqual([]);
+  });
+
   it('дверь луга без идущего воспоминания возвращает обратно', () => {
     const h = new Harness(levelOf(SEED), { seed: 37, cfg: NOTHING });
     h.run(0.3);
@@ -2987,5 +3011,56 @@ describe('птицы, Осыпь по полярности, эффекты ка�
       expect(h.r.contactBakes).toBeGreaterThan(bakes);
       expect(mapAt(h.r.contact!, cx, cz)).toBeLessThan(before);
     });
+  });
+});
+
+describe('телефон: фонарь заряжают пальцем, гасят тапом (слова партнёра 17.11 08:42 и 09:23)', () => {
+  it('тап — погас; тап по погашенному — ничего; держит палец — заряжается, на полном вспышка, потом обычный свет', () => {
+    const h = new Harness(levelOf(SEED), { light: { meanFailInterval: 1e9 } });
+    const g = h.game;
+    h.run(0.5);
+    expect(g.light.state).toBe('on');
+    expect(h.tick({ ...emptyInput(), lightOff: true }).lightToggled).toBe(true);
+    expect(g.light.state).toBe('off');
+    h.tick({ ...emptyInput(), lightOff: true });
+    expect(g.light.state).toBe('off');
+    // Палец на кнопке: заряд растёт, свет — только на полном, со вспышкой в луче и в кадре.
+    g.light.charge = 0.5;
+    let charged = -1;
+    let cranking = 0;
+    for (let i = 0; i < Math.round(2 / STEP) && charged < 0; i++) {
+      const ev = h.tick({ ...emptyInput(), crank: true });
+      if (ev.crank >= 0) cranking += 1;
+      if (ev.lightCharged) charged = i;
+    }
+    expect(charged).toBeGreaterThan(0);
+    expect(cranking).toBeGreaterThan(Math.round(1 / STEP));
+    expect(g.light.state).toBe('on');
+    const flashView = h.r.frames.at(-1)!;
+    expect(flashView.lightIntensity).toBeGreaterThan(2);
+    expect(flashView.flash).toBeGreaterThan(0.2);
+    // Секунду спустя — обычный свет, кадр не выбелен.
+    h.run(1.1, { ...emptyInput(), crank: true });
+    const after = h.r.frames.at(-1)!;
+    expect(after.lightIntensity).toBeLessThan(1.1);
+    expect(after.flash).toBe(0);
+  });
+
+  it('без вспышек (настройка заставки): луч ярче обычного не больше чем на треть, кадр не выбеливается', () => {
+    const h = new Harness(levelOf(SEED), { light: { meanFailInterval: 1e9 } });
+    const g = h.game;
+    g.calmFlash = true;
+    h.run(0.5);
+    h.tick({ ...emptyInput(), lightOff: true });
+    let top = 0;
+    let white = 0;
+    for (let i = 0; i < Math.round(2 / STEP); i++) {
+      h.tick({ ...emptyInput(), crank: true });
+      top = Math.max(top, h.r.frames.at(-1)!.lightIntensity);
+      white = Math.max(white, h.r.frames.at(-1)!.flash);
+    }
+    expect(g.light.state).toBe('on');
+    expect(top).toBeLessThanOrEqual(1.3);
+    expect(white).toBe(0);
   });
 });

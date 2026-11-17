@@ -27,7 +27,7 @@ import { CellLights } from './systems/cell_lights';
 import { DEFAULT_DIRECTOR, Director, FIRST_DIRECTOR } from './systems/director';
 import { behindness, Echo, ECHO_DRIFT, ECHO_STEP } from './systems/echo';
 import type { ScareId } from './systems/director';
-import { DEFAULT_FLASHLIGHT, Flashlight } from './systems/flashlight';
+import { CRANK_NOISE, DEFAULT_FLASHLIGHT, Flashlight } from './systems/flashlight';
 import type { FlashlightConfig } from './systems/flashlight';
 import { DEFAULT_JUMPS, Jumps } from './systems/jumps';
 import type { JumpPlan, JumpStyle } from './systems/jumps';
@@ -136,6 +136,10 @@ export interface StepEvents {
   lightRevived: boolean;
   /** Игрок щёлкнул выключателем фонаря. */
   lightToggled: boolean;
+  /** Зарядка удержанием дошла до полного: вспышка, дальше обычный свет (телефон). */
+  lightCharged: boolean;
+  /** Фонарь заряжают (палец на кнопке): заряд 0..1 для тона треска; −1 — не заряжают. */
+  crank: number;
   spark: boolean;
   /** Засчитанных ходов тряски за шаг (для вибрации и звука дребезга). */
   strokes: number;
@@ -2148,6 +2152,11 @@ export class Game {
     const toggled = input.light && this.hasLight;
     // Щелчок фонаря волну эха не пускает (решение партнёра: эхо — только без фонаря и на ходу).
     if (toggled) this.light.toggle();
+    // Телефон: короткий тап по кнопке фонаря его гасит (слова партнёра 17.11 09:23), включает только зарядка
+    // удержанием (08:42: от тапов-переключателей «все сильно перемешивается и потом не понятно включен он или нет»).
+    const doused = input.lightOff && this.hasLight && this.light.state === 'on';
+    if (doused) this.light.toggle();
+    this.light.crank(input.crank && this.hasLight);
     const level = this.shake.update(dt);
     const ev = this.light.update(dt, { panic: this.panic, wet: s?.inWater ? 1 : 0, swarm: this.swarmNear, shake: level, needed: this.ambientHere <= SELF_LIT });
     const strokes = this.shake.strokes - this.lastStrokes;
@@ -2239,7 +2248,8 @@ export class Game {
     if (jumps && s && !s.over && !this.calm && !quiet) {
       jumps.update(wdt);
       let plan: JumpPlan | null = null;
-      if (toggled && wasOff && this.light.state === 'on') plan = jumps.onLightOn();
+      // Свет зажёгся после того, как его гасили: щелчком (компьютер) или зарядкой удержанием (телефон).
+      if ((toggled || ev.charged) && wasOff && this.light.state === 'on') plan = jumps.onLightOn();
       if (!plan && ev.revived) plan = jumps.onRevive();
       // Батарейка села и отлёживается — стоять в темноте приходится не по своей воле: скачка за это нет.
       if (!plan) plan = jumps.onDark(dt, look.light < 0.05 && this.ambientHere < 0.05 && !this.light.exhausted, Math.hypot(b.vx, b.vz) < 0.3);
@@ -2317,7 +2327,7 @@ export class Game {
     }
 
     this.stepGlow(dt);
-    return { lightFailed: ev.failed, lightRevived: ev.revived, lightToggled: toggled, spark: ev.spark, strokes, fellOut: res.fellOut, session: out, fear, dream };
+    return { lightFailed: ev.failed, lightRevived: ev.revived, lightToggled: toggled || doused, lightCharged: ev.charged, crank: this.light.cranking ? this.light.charge : -1, spark: ev.spark, strokes, fellOut: res.fellOut, session: out, fear, dream };
   }
 
   /** Рой, режиссёр и аномалии за шаг. */
@@ -2329,7 +2339,8 @@ export class Game {
     const pos: Vec3 = [b.x, b.y, b.z];
     const moving = Math.hypot(b.vx, b.vz);
     // Шум игрока: бег, тряска заглохшего фонаря, паническое дыхание, плеск воды.
-    const noise = Math.max(input.run && moving > 3 ? 0.6 : moving > 1 ? 0.12 : 0, this.light.state === 'dead' ? shakeLevel * 0.9 : shakeLevel * 0.4, s.panic > 0.6 ? 0.35 : 0, s.inWater && moving > 0.5 ? 0.5 : 0);
+    // Зарядка удержанием трещит, как тряска: Осыпь её слышит.
+    const noise = Math.max(input.run && moving > 3 ? 0.6 : moving > 1 ? 0.12 : 0, this.light.state === 'dead' ? shakeLevel * 0.9 : shakeLevel * 0.4, this.light.cranking ? CRANK_NOISE : 0, s.panic > 0.6 ? 0.35 : 0, s.inWater && moving > 0.5 ? 0.5 : 0);
 
     if (sw && this.swarmWakeAt > 0 && this.time >= this.swarmWakeAt && !sw.active) {
       // Затихшая после поимки Осыпь выходит снова — подальше от игрока — и ищет его заново.
@@ -2548,6 +2559,9 @@ export class Game {
       else flash = k;
     }
 
+    // Вспышка полного заряда: кадр на миг выбеливается и за секунду возвращается (без вспышек — не выбеливается).
+    if (!this.calmFlash && this.light.flash > 0) flash = Math.max(flash, 0.28 * this.light.flash * this.light.flash);
+
     const [lx, ly, lz] = rig.lightPos;
     this.beamDist = this.colliders.raycast(lx, ly, lz, rig.lightDir[0], rig.lightDir[1], rig.lightDir[2], 30);
     // Луч упёрся в воду — от неё по стенам идут зайчики (блики ряби). Разгораются и гаснут за полсекунды.
@@ -2703,8 +2717,8 @@ export class Game {
       const d = Math.hypot(t.pos[0] - rig.camPos[0], t.pos[1] - rig.camPos[1], t.pos[2] - rig.camPos[2]);
       // Красная сетка — знак системы: она на вещи, которую «измеряет» взгляд. Тронутая вещь уходит и
       // возвращается без неё — одними точками («память — пыль»).
-      // Сетка гаснет вместе с растворением: у вещи, что рассыпается, клетка не висит в воздухе.
-      let w = t.state === 'changing' && !t.touched ? 0.8 * (1 - t.dissolve) : t.state === 'idle' ? t.gaze * (0.45 + 0.35 * Math.sin(this.time * 23)) : 0;
+      // Сетка гаснет вместе с растворением и быстрее его: у вещи, что рассыпается, клетка не висит в воздухе.
+      let w = t.state === 'changing' && !t.touched ? 0.8 * (1 - t.dissolve) * (1 - t.dissolve) : t.state === 'idle' ? t.gaze * (0.45 + 0.35 * Math.sin(this.time * 23)) : 0;
       let xray = false;
       if (t.memory) {
         memNear = Math.max(memNear, 1 - d / 8);
@@ -2754,7 +2768,8 @@ export class Game {
       camRoll: rig.camRoll + rattle * 0.5 * Math.sin(this.time * 43.1 + 2.2),
       lightPos: rig.lightPos,
       lightDir: rig.lightDir,
-      lightIntensity: this.light.intensity,
+      // Вспышка полного заряда: без вспышек (настройка заставки) луч ярче обычного не больше чем на треть.
+      lightIntensity: this.calmFlash ? Math.min(this.light.intensity, 1.3) : this.light.intensity,
       lightWarmth: 0,
       beamDist: this.beamDist,
       gain,

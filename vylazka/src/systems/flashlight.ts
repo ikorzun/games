@@ -3,6 +3,7 @@
  *
  *   on ──(отказ: сначала предупреждающее мерцание)──▶ dead ──(тряска набрала нужное)──▶ on
  *   on ◀──(кнопка)──▶ off
+ *   dead, off ──(палец держат на кнопке, заряд дошёл до полного)──▶ вспышка ──▶ on      (телефон)
  *
  * Отказы чаще при низком заряде, в сырости, в панике и особенно рядом с роем: частое мерцание
  * и есть предупреждение игроку. Тряска шумит — об этом сообщает событие rattle.
@@ -29,6 +30,19 @@ export interface FlashlightConfig {
    */
   rest: number;
   restRate: number;
+  /**
+   * Зарядка удержанием (телефон; слова партнёра 17.11 08:42: «на нем нужно удерживать палец для зарядки»): пока
+   * палец на кнопке фонаря, заряд растёт на crankRate в секунду. Свет зажигается, только когда заряд полный и палец
+   * держат не меньше crankMin секунд — случайное касание ничего не включает и не выключает.
+   */
+  crankRate: number;
+  crankMin: number;
+  /**
+   * Вспышка на полном заряде («после того как полностью заряжается, есть на секунду вспышка света и уже стандартный
+   * свет»): сколько длится, с, и во сколько раз луч ярче обычного в первый миг.
+   */
+  flashTime: number;
+  flashPeak: number;
 }
 
 /**
@@ -49,7 +63,21 @@ export const DEFAULT_FLASHLIGHT: FlashlightConfig = {
   // Севшая до нуля за полминуты темноты набирает 15 % — ещё на пару минут тусклого света.
   rest: 0.15,
   restRate: 0.005,
+  // С нуля до полного — меньше трёх секунд темноты и шума; после обычного отказа — около секунды.
+  crankRate: 0.35,
+  crankMin: 0.6,
+  flashTime: 1,
+  flashPeak: 2.6,
 };
+
+/** Шум зарядки, 0..1: палец на кнопке трещит динамо — это слышит Осыпь, как тряску. */
+export const CRANK_NOISE = 0.5;
+
+/**
+ * Горящему фонарю с зарядом выше этого заряжать нечего: касание ничего не меняет. Ровно 1 не годится — горящий
+ * садится с первого же шага, и только что заряженный фонарь вспыхивал бы снова от каждого касания.
+ */
+export const CRANK_FULL = 0.98;
 
 export interface FlashlightEnv {
   /** 0..1. */
@@ -75,6 +103,8 @@ export interface FlashlightEvents {
   revived: boolean;
   /** Короткая вспышка-искра при тряске заглохшего фонаря. */
   spark: boolean;
+  /** Зарядка удержанием дошла до полного: вспышка, дальше обычный свет. */
+  charged: boolean;
   clicked: boolean;
   /** Громкость дребезга за шаг, 0..1 (шум, который слышит рой). */
   rattle: number;
@@ -109,6 +139,14 @@ export class Flashlight {
   private unstable = 0;
   private flickerValue = 1;
   private flickerHold = 0;
+  /** Палец на кнопке фонаря (телефон). */
+  private holding = false;
+  /** Сколько держат палец в этом нажатии, с. */
+  private crankT = 0;
+  /** Это нажатие уже кончилось вспышкой (или заряжать было нечего): дальше палец ничего не делает. */
+  private crankDone = false;
+  /** Остаток вспышки полного заряда, с. */
+  private flashLeft = 0;
 
   constructor(
     private readonly rng: Rng,
@@ -122,6 +160,29 @@ export class Flashlight {
       this.state = !this.flat && this.charge >= REVIVE_MIN ? 'on' : 'dead';
       if (this.state === 'dead') this.beginDead();
     }
+  }
+
+  /**
+   * Палец держат на кнопке фонаря (телефон; зовётся каждый шаг). Пока держат, фонарь заряжается; полный — вспышка
+   * и обычный свет. Горит он при этом или нет, палец его не гасит: гасят отдельным жестом.
+   */
+  crank(on: boolean): void {
+    if (on && !this.holding) {
+      this.crankT = 0;
+      // Горящему полному фонарю заряжать нечего: касание ничего не меняет, вспышки нет.
+      this.crankDone = this.state === 'on' && this.charge >= CRANK_FULL;
+    }
+    this.holding = on;
+  }
+
+  /** Фонарь сейчас заряжают: палец на кнопке, а полного заряда с вспышкой ещё не было. */
+  get cranking(): boolean {
+    return this.holding && !this.crankDone && !this.suspended;
+  }
+
+  /** Вспышка полного заряда, 0..1: 1 — только что, 0 — прошла. */
+  get flash(): number {
+    return this.flashLeft / this.cfg.flashTime;
   }
 
   /** Вставить свежую батарейку: полный заряд, фонарь горит. */
@@ -189,7 +250,7 @@ export class Flashlight {
   }
 
   update(dt: number, env: FlashlightEnv = CALM_ENV): FlashlightEvents {
-    const ev: FlashlightEvents = { failed: false, revived: false, spark: false, clicked: false, rattle: 0 };
+    const ev: FlashlightEvents = { failed: false, revived: false, spark: false, charged: false, clicked: false, rattle: 0 };
     if (this.suspended) {
       this.intensity = 0;
       return ev;
@@ -198,6 +259,37 @@ export class Flashlight {
     if (this.forced) {
       this.forced = false;
       ev.failed = true;
+    }
+
+    // Фонарь заглох под лежащим пальцем (отказ после вспышки, обучающий отказ): зарядка начинается снова, отпускать и
+    // нажимать заново не нужно — палец уже там, куда зовёт подсказка (нашёл куратор).
+    if (this.holding && this.crankDone && this.state !== 'on' && !this.suspended) {
+      this.crankDone = false;
+      this.crankT = 0;
+    }
+    // Зарядка удержанием. Палец на кнопке держит и контакт: мерцание перед отказом обрывается. Севшей до нуля
+    // батарейке отлёживаться не нужно — её заряжают. Не горящий фонарь под пальцем искрит, как динамо.
+    if (this.cranking) {
+      this.crankT += dt;
+      this.flat = false;
+      this.dying = 0;
+      this.charge = Math.min(1, this.charge + this.cfg.crankRate * dt);
+      ev.rattle = CRANK_NOISE;
+      if (this.state !== 'on' && this.sparkLeft <= 0 && this.rng() < 5 * dt) {
+        this.sparkLeft = 0.03 + this.rng() * 0.05;
+        ev.spark = true;
+      }
+      if (this.charge >= 1 && this.crankT >= this.cfg.crankMin) {
+        this.crankDone = true;
+        if (this.state === 'dead') ev.revived = true;
+        this.state = 'on';
+        this.sinceRevive = 0;
+        this.unstable = 0;
+        this.work = 0;
+        this.reviveProgress = 0;
+        this.flashLeft = this.cfg.flashTime;
+        ev.charged = true;
+      }
     }
 
     if (this.state === 'on') {
@@ -259,6 +351,9 @@ export class Flashlight {
   private updateIntensity(dt: number, env: FlashlightEnv): void {
     this.sparkLeft = Math.max(0, this.sparkLeft - dt);
     this.unstable = Math.max(0, this.unstable - dt);
+    // Вспышка начинается с полного шага: первый кадр после заряда — самый яркий.
+    const flash = this.flash;
+    this.flashLeft = Math.max(0, this.flashLeft - dt);
     if (this.state === 'off') {
       this.intensity = 0;
       return;
@@ -278,6 +373,7 @@ export class Flashlight {
       this.flickerValue = this.rng() < chance ? 1 - depth * this.rng() : 1;
       this.flickerHold = 0.02 + this.rng() * (strong ? 0.07 : 0.12);
     }
-    this.intensity = base * this.flickerValue;
+    // Вспышка полного заряда: в первый миг луч в flashPeak раз ярче и за секунду спадает к обычному.
+    this.intensity = base * this.flickerValue * (1 + (this.cfg.flashPeak - 1) * flash * flash);
   }
 }

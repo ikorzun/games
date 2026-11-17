@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { HOLD_MS, LOOK_SENS, SLOP, STICK_R, TAP_MS, TAP_WALK_MS, TouchGestures } from '../src/player/touch_gestures';
+import { HOLD, lightHeld, lightTapped, markSlid, TAP } from '../src/ui/touch_controls';
+import type { LightPointer } from '../src/ui/touch_controls';
 
 describe('жесты на телефоне: тап — шаг, удержание — идти, ведение — луч или стик', () => {
   it('тап: коснулся и отпустил — идёт вперёд около секунды и останавливается', () => {
@@ -168,5 +170,53 @@ describe('жесты на телефоне: тап — шаг, удержани�
   it('пороги согласованы: удержание начинается раньше, чем касание перестаёт быть тапом', () => {
     expect(HOLD_MS).toBeLessThan(TAP_MS);
     expect(TAP_WALK_MS).toBeGreaterThan(500);
+  });
+});
+
+describe('кнопка фонаря на телефоне: держат — зарядка, короткий тап — погасить (слова партнёра 17.11 08:42 и 09:23)', () => {
+  const at = (x0: number, y0: number, x: number, y: number, t0 = 0): LightPointer => ({ x0, y0, x, y, t0 });
+
+  it('пока не прошло время тапа, это ещё не удержание: кольцо не растёт и заряд не идёт', () => {
+    expect(lightHeld(at(100, 100, 100, 100), TAP.ms - 20)).toBe(false);
+    expect(lightHeld(at(100, 100, 100, 100), TAP.ms + 10)).toBe(true);
+  });
+
+  it('палец на месте или чуть сполз — держат', () => {
+    expect(lightHeld(at(100, 100, 112, 108), TAP.ms + 100)).toBe(true);
+  });
+
+  it('палец быстро уехал далеко — не удержание; после grace удержания ползти можно', () => {
+    expect(lightHeld(at(100, 100, 100, 100 + HOLD.slop + 4), TAP.ms + 100)).toBe(false);
+    expect(lightHeld(at(100, 100, 100, 100 + HOLD.slop + 4), HOLD.grace + 50)).toBe(true);
+  });
+
+  it('палец уехал рано — это протяжка до конца касания: зарядкой она не станет и после grace', () => {
+    const p = at(100, 100, 100, 100);
+    p.x = 100 + HOLD.slop + 10;
+    markSlid(p, TAP.ms + 50);
+    expect(p.slid).toBe(true);
+    // Вернулся на место и держит — всё равно не зарядка: касание началось протяжкой.
+    p.x = 100;
+    expect(lightHeld(p, HOLD.grace + 400)).toBe(false);
+    // А палец, который сначала держали и только потом он пополз, протяжкой не становится.
+    const q = at(100, 100, 100, 100);
+    q.y = 100 + HOLD.slop + 10;
+    markSlid(q, HOLD.grace + 100);
+    expect(q.slid).toBeUndefined();
+    expect(lightHeld(q, HOLD.grace + 100)).toBe(true);
+  });
+
+  it('короткий тап на месте — погасить; долгое касание, протяжка и смахивание — нет', () => {
+    expect(lightTapped(at(100, 100, 103, 102), 120)).toBe(true);
+    expect(lightTapped(at(100, 100, 100, 100), TAP.ms + 30)).toBe(false);
+    expect(lightTapped(at(100, 100, 100, 100 + TAP.slop + 6), 150)).toBe(false);
+    expect(lightTapped(at(100, 100, 100, 150), 200)).toBe(false);
+  });
+
+  it('тап и удержание не пересекаются: коснулся коротко — не держат; держат — уже не тап', () => {
+    for (const t of [50, 150, TAP.ms - 1, TAP.ms, TAP.ms + 200, 1500]) {
+      const p = at(100, 100, 102, 101);
+      expect(lightTapped(p, t) && lightHeld(p, t)).toBe(false);
+    }
   });
 });

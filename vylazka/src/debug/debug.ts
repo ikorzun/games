@@ -72,7 +72,10 @@ export interface VzDebugApi {
   gotoRoom(roomId: number, yawDeg?: number): boolean;
   /** Вещи сна: что стоит, что с ним станет под взглядом, в каком оно состоянии. */
   things(): Array<Record<string, unknown>>;
-  /** Встать перед вещью лицом к ней. */
+  /**
+   * Встать перед вещью лицом к ней — не ближе, чем достаёт тело (иначе вещь растворится от касания). false — места не
+   * нашлось или вещь, стоявшая целой, при пробах всё-таки растворилась.
+   */
   gotoThing(id: number, distance?: number): boolean;
   /**
    * Поставить вещь прямо перед камерой на полу (на distance метров) с заданной судьбой; вернуть её номер.
@@ -444,11 +447,16 @@ export function installDebug(app: App): void {
       };
       // Пол яруса (или карманного пространства) под вещью.
       const floor = Math.floor((y + 0.3) / 4.5) * 4.5;
-      // Сначала вплотную с разных сторон, потом — с расстояния: вещь может стоять среди мебели.
-      for (const r of [1.1, distance, 1.7, 3]) {
+      // Не ближе, чем достаёт тело: каждая проба — это шаги игры, и вставший вплотную к крупной вещи задевает её —
+      // по правилу «коснулся — растворилось» она уходит. Так проба мест сама губила цель воспоминания, и вспоминать
+      // было нечего (нашла проверка CI 17.11: вещь «gone», игрок смотрит прямо на неё).
+      const near = Math.max(1.1, t.radius + 0.9);
+      const wasIdle = t.state === 'idle';
+      // Сначала поближе с разных сторон, потом — с расстояния: вещь может стоять среди мебели.
+      for (const r of [near, Math.max(near, distance), Math.max(near, 1.7), Math.max(near, 3)]) {
         for (let i = 0; i < 12; i++) {
           const a = (i * Math.PI) / 6;
-          if (tryFrom(x + Math.cos(a) * r, floor, z + Math.sin(a) * r)) return true;
+          if (tryFrom(x + Math.cos(a) * r, floor, z + Math.sin(a) * r)) return !wasIdle || t.state === 'idle';
         }
       }
       return false;

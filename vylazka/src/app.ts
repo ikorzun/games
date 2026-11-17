@@ -116,6 +116,8 @@ export class App {
   private canvas!: HTMLCanvasElement;
   private desktop: DesktopInput | null = null;
   private touch: TouchControls | null = null;
+  /** Когда телефон последний раз дрогнул под пальцем, заряжающим фонарь, мс. */
+  private crankBuzz = 0;
   private last = 0;
   private acc = 0;
   private qualityManual = false;
@@ -815,7 +817,7 @@ export class App {
     if (this.touch) return;
     this.touchMode = true;
     this.root.classList.add('is-touch');
-    this.touch = new TouchControls(this.root, this.game.shake);
+    this.touch = new TouchControls(this.root);
     this.touch.setVisible(this.screen === 'play' && !this.lifecycle.paused);
     this.overlay.setTouch(true);
     this.refreshMotionButton();
@@ -907,6 +909,8 @@ export class App {
       lookYaw: a.lookYaw + b.lookYaw,
       lookPitch: a.lookPitch + b.lookPitch,
       light: a.light || b.light,
+      crank: a.crank || b.crank,
+      lightOff: a.lightOff || b.lightOff,
       pause: a.pause || b.pause,
     };
   }
@@ -916,8 +920,15 @@ export class App {
     this.audio.onStep(ev, this.game);
     const buzz = this.touchMode && typeof navigator.vibrate === 'function';
     if (buzz) {
-      if (ev.lightRevived) navigator.vibrate(45);
+      // Полный заряд — толчок подлиннее, как щелчок, которым загорается свет; пока заряжают — мелкая дрожь.
+      const now = performance.now();
+      if (ev.lightCharged) navigator.vibrate(60);
+      else if (ev.lightRevived) navigator.vibrate(45);
       else if (ev.strokes > 0 && this.game.light.state === 'dead') navigator.vibrate(10);
+      else if (ev.crank >= 0 && now - this.crankBuzz > 160) {
+        this.crankBuzz = now;
+        navigator.vibrate(6);
+      }
     }
     for (const e of ev.session) {
       if (e.type === 'reveal') {
@@ -1004,8 +1015,9 @@ export class App {
     const env = g.env.ambient;
     const key = g.env.key?.color ?? [0, 0, 0];
     const bright = (env[0] + env[1] + env[2]) / 3 + (key[0] + key[1] + key[2]) / 6 > 0.3;
-    // Батарейка села до нуля: трясти бесполезно и даже вредно (ей надо отлежаться) — подсказка говорит об этом.
-    this.hud.setShakePrompt(dead && !bright ? t(light.exhausted ? 'hint.battery' : `hint.shake.${kind}`) : '', light.reviveProgress);
+    // Батарейка села до нуля: трясти бесполезно и даже вредно (ей надо отлежаться) — подсказка говорит об этом. На
+    // телефоне фонарь заряжают пальцем, и севшая батарейка тоже заряжается: там подсказка одна — держать кнопку.
+    this.hud.setShakePrompt(dead && !bright ? t(light.exhausted && !this.touchMode ? 'hint.battery' : `hint.shake.${kind}`) : '', this.touchMode ? 0 : light.reviveProgress);
     const base = this.touchMode ? 'touch' : 'desktop';
     let hint = '';
     if (!dead && this.screen === 'play' && g.where === 'main' && this.profile.successes === 0) {
@@ -1020,7 +1032,9 @@ export class App {
     const info = g.where === 'pocket' ? g.pocketFade : 1;
     if ((!dead || bright) && this.screen === 'play' && g.where === 'pocket' && !g.jumping) hint = info < 0.75 ? t('pocket.hint.fading') : t('pocket.hint.exit');
     this.hud.setHint(hint);
-    this.touch?.setShakePrompt(dead && !bright && !light.exhausted, light.reviveProgress);
+    // Заглохший фонарь зовёт к кнопке, пока её не держат: под пальцем он уже заряжается.
+    this.touch?.setShakePrompt(dead && !bright && !light.cranking);
+    this.touch?.setCrank(light.cranking, light.flash);
     this.touch?.setLit(light.state === 'on');
     this.touch?.setCharge(light.charge);
     // Где фонаря нет (офис), нет и его кнопки.
@@ -1260,6 +1274,7 @@ export class App {
     for (let i = 0; i < steps; i++) {
       this.handleEvents(this.game.step(STEP, input));
       input.light = false;
+      input.lightOff = false;
     }
     this.game.draw(alpha, dt, present);
     this.updateHud();

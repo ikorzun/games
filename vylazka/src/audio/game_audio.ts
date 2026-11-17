@@ -83,6 +83,7 @@ export class GameAudio {
   private trains = 0;
   private scene: AudioScene = 'silent';
   private rattleAt = 0;
+  private crankAt = 0;
   private dripAt = 6;
   private voiceAt = 18;
   private voiceAngle = 0;
@@ -143,6 +144,15 @@ export class GameAudio {
     if (ev.lightFailed) a.play('flash_die');
     if (ev.lightRevived) a.play('flash_click', { rate: 1.12, volume: 1.1 });
     if (ev.spark) a.play('flash_spark', { rate: this.jitter(0.1) });
+    // Зарядка удержанием (телефон): треск динамо всё выше, пока заряд растёт; полный — щелчок и искра вспышки.
+    if (ev.crank >= 0 && this.clock >= this.crankAt) {
+      this.crankAt = this.clock + 0.13;
+      a.play('flash_rattle', { rate: 0.8 + 0.6 * ev.crank, volume: 0.55 });
+    }
+    if (ev.lightCharged) {
+      a.play('flash_click', { rate: 0.92, volume: 1.2 });
+      a.play('flash_spark', { rate: 0.75 });
+    }
     // Тряска: батарейки гремят на каждый рывок, но не чаще восьми раз в секунду.
     if (ev.strokes > 0 && this.clock >= this.rattleAt) {
       this.rattleAt = this.clock + 0.12;

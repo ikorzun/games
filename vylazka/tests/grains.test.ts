@@ -198,3 +198,23 @@ describe('пыль вещи: точки растворяются в воздух
     expect(GRAIN_VERT).toContain('if (phi >= 1.0) return;');
   });
 });
+
+describe('пыль выросшей вещи', () => {
+  it('сеется по настоящей площади (× scale²), но не больше потолка вызывающего', () => {
+    const sow = sowGrains;
+    // Квадрат 1×1 м из двух треугольников.
+    const data = {
+      position: new Float32Array([0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1]),
+      normal: new Float32Array([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]),
+      color: new Float32Array(16).fill(1),
+      mat: new Float32Array(4),
+      index: new Uint32Array([0, 1, 2, 0, 2, 3]),
+    } as unknown as Parameters<typeof sow>[0];
+    const plain = sow(data, null, 1, 1);
+    const grown = sow(data, null, 1, 49);
+    const capped = sow(data, null, 1, 49, 9000);
+    expect(plain.count).toBe(650);
+    expect(grown.count).toBeGreaterThan(plain.count * 30);
+    expect(capped.count).toBe(9000);
+  });
+});

@@ -1519,7 +1519,10 @@ void main() {
   float lift = 1.0 - (1.0 - phi) * (1.0 - phi);
   // Пыль большой вещи разлетается шире: масштаб выросшей вещи сидит в её матрице (у стен и мелочи он 1).
   float spread = sqrt(max(1.0, length(modelMatrix[0].xyz)));
-  vec3 p = wp.xyz + wn * ((0.04 + 0.12 * aRnd.w) * lift * spread) + vec3(0.0, 0.05 * aRnd.z * lift * spread, 0.0);
+  // И сыплется в обе стороны: выросшую вещь чаще видно изнутри, а пыль, что уходит только наружу, прячется за
+  // уцелевшей поверхностью — растворение было не видно. Половина её летит внутрь, на игрока.
+  float side = spread > 1.01 && aRnd.y < 0.5 ? -1.0 : 1.0;
+  vec3 p = wp.xyz + wn * ((0.04 + 0.12 * aRnd.w) * lift * spread * side) + vec3(0.0, 0.05 * aRnd.z * lift * spread, 0.0);
   float t = uTime * (1.3 + aRnd.y) + aRnd.z * 6.2832;
   p += vec3(sin(t), 0.0, cos(t * 0.8)) * (0.015 * lift);
 
@@ -1533,7 +1536,8 @@ void main() {
   // Гаснет на ходу и мельчает: к концу пути её нет.
   float alpha = (1.0 - smoothstep(0.1, 1.0, phi)) * out_ * uFade * (0.6 + 0.4 * aRnd.y);
   if (alpha <= 0.004) return;
-  float px = uSize * uProj / max(-pv.z, 0.05) * mix(1.4, 0.5, phi);
+  // Пылинки большой вещи крупнее: хлопья, а не мука (у остальных множитель 1).
+  float px = uSize * uProj / max(-pv.z, 0.05) * mix(1.4, 0.5, phi) * mix(1.0, spread, 0.5);
   if (px < 1.6) {
     alpha *= px * px / 2.56;
     px = 1.6;

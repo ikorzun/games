@@ -130,9 +130,10 @@ body {
 .vz-hud__hint.is-on {
   opacity: 0.85;
 }
-/* На тач-устройствах низ экрана занят кнопкой фонаря — подсказка встаёт над ней. */
+/* На тач-устройствах низ экрана занят кнопкой фонаря — подсказка встаёт над ней, и над кольцом, которое под пальцем
+   больше кнопки в 1,55 раза (иначе оно заходило на строку примерно на 15 px — нашёл куратор). */
 .vz-root.is-touch .vz-hud__hint {
-  bottom: calc(max(34px, env(safe-area-inset-bottom) + 20px) + 100px);
+  bottom: calc(max(34px, env(safe-area-inset-bottom) + 20px) + 124px);
 }
 .vz-hud__prompt {
   position: absolute;
@@ -358,13 +359,29 @@ body {
   /* Маска оставляет только кольцо шириной 4 px: середина кнопки остаётся прежней. */
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  transition: transform 0.18s ease-out;
 }
 .vz-touch__btn--light.is-low::before {
   background: conic-gradient(#e0362c calc(var(--vz-charge, 100) * 1%), rgba(255, 255, 255, 0.18) 0);
 }
-/* Пока фонарь надо трясти, кнопка показывает тряску (ниже), а не заряд. */
-.vz-touch__btn--light.is-dead::before {
-  display: none;
+/* Палец на кнопке (слова партнёра 17.11 08:42: «окружность индикатора зарядки увеличивается (чтобы видно было)»):
+   кольцо больше кнопки и толще — его видно вокруг пальца. 1,55 — чтобы у края экрана оно не срезалось. */
+.vz-touch__btn--light.is-held::before {
+  transform: scale(1.55);
+}
+/* Заряжают: дуга светлая и тёплая и дышит, пока заряд растёт. */
+.vz-touch__btn--light.is-charging::before {
+  background: conic-gradient(#fff3d2 calc(var(--vz-charge, 100) * 1%), rgba(255, 255, 255, 0.22) 0);
+  animation: vz-crank 0.5s ease-in-out infinite;
+}
+@keyframes vz-crank {
+  50% {
+    opacity: 0.68;
+  }
+}
+/* Вспышка полного заряда: кнопка на миг загорается вместе с лучом и за секунду гаснет. */
+.vz-touch__btn--light.is-flash {
+  box-shadow: 0 0 calc(var(--vz-flash, 0) * 46px) calc(var(--vz-flash, 0) * 14px) rgba(255, 246, 220, calc(var(--vz-flash, 0) * 0.85));
 }
 .vz-touch__btn svg {
   position: absolute;
@@ -380,11 +397,10 @@ body {
 .vz-touch__btn--light.is-dead svg {
   opacity: 0.95;
 }
+/* Заглох: кнопка зовёт держать на ней палец — подрагивает и светится; кольцо заряда остаётся видно. */
 .vz-touch__btn--light.is-dead {
-  border-color: #f3d98a;
-  background:
-    radial-gradient(circle, rgba(20, 20, 20, 0.75) 0 58%, transparent 59%),
-    conic-gradient(#f3d98a calc(var(--vz-progress, 0) * 1%), rgba(255, 255, 255, 0.14) 0);
+  background: rgba(70, 60, 30, 0.55);
+  box-shadow: 0 0 18px 2px rgba(243, 217, 138, 0.45);
   animation: vz-nudge 0.5s ease-in-out infinite;
 }
 @keyframes vz-nudge {

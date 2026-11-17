@@ -29,7 +29,7 @@ class Recorder implements SoundSink {
   }
 }
 
-const quiet = (): StepEvents => ({ lightFailed: false, lightRevived: false, lightToggled: false, spark: false, strokes: 0, fellOut: false, session: [], fear: [], dream: [] });
+const quiet = (): StepEvents => ({ lightFailed: false, lightRevived: false, lightToggled: false, lightCharged: false, crank: -1, spark: false, strokes: 0, fellOut: false, session: [], fear: [], dream: [] });
 
 function world(over: Partial<AudioWorld> = {}): AudioWorld & { steps: number } {
   const w = {

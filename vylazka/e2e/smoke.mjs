@@ -2338,34 +2338,56 @@ async function scenarioTouch(browser, baseUrl) {
     check(`${name}: повёл пальцем сразу — луч повернулся, а игрок стоит`, Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]) < 0.05, `сдвиг ${Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]).toFixed(2)} м`);
     st = await vz(page, () => window.__vz.tick(10));
 
-    // Кнопка фонаря: тап выключает и включает.
+    // Кнопка фонаря (слова партнёра 17.11 08:42 и 09:23): короткий тап гасит; палец держат — фонарь заряжается, кольцо
+    // заряда больше, на полном — вспышка и обычный свет. Смахивания нет.
     const btn = await page.evaluate(() => {
       const r = document.querySelector('.vz-touch__btn--light').getBoundingClientRect();
       return [r.left + r.width / 2, r.top + r.height / 2];
     });
+    const lightBtn = () =>
+      page.evaluate(() => {
+        const b = document.querySelector('.vz-touch__btn--light');
+        return { held: b.classList.contains('is-held'), charging: b.classList.contains('is-charging'), flash: b.classList.contains('is-flash'), dead: b.classList.contains('is-dead'), scale: new DOMMatrix(getComputedStyle(b, '::before').transform).a };
+      });
     await finger(page, 'pointerdown', 3, btn[0], btn[1]);
     await finger(page, 'pointerup', 3, btn[0], btn[1]);
     st = await vz(page, () => window.__vz.tick(2));
-    check(`${name}: тап по кнопке выключает фонарь`, st.light.state === 'off');
+    check(`${name}: короткий тап по кнопке — фонарь гаснет`, st.light.state === 'off', st.light.state);
     await finger(page, 'pointerdown', 3, btn[0], btn[1]);
     await finger(page, 'pointerup', 3, btn[0], btn[1]);
     st = await vz(page, () => window.__vz.tick(2));
-    check(`${name}: второй тап включает`, st.light.state === 'on');
+    check(`${name}: тап по погашенному его не включает — включает только зарядка`, st.light.state === 'off', st.light.state);
+    // Держать палец: заряд задан пониже, чтобы было видно, как он растёт.
+    await vz(page, () => window.__vz.charge(0.55));
+    await finger(page, 'pointerdown', 8, btn[0], btn[1]);
+    // Кольцо растёт плавно (0,18 с), а кадры программного рендера медленные и неровные: время перехода зависит
+    // от загрузки машины. Замер — без перехода: проверяется само правило «под пальцем кольцо больше».
+    await page.addStyleTag({ content: '.vz-touch__btn--light::before { transition: none !important; }' });
+    // Удержанием палец становится через четверть секунды (раньше это может быть тап).
+    await sleep(320);
+    st = await vz(page, () => window.__vz.tick(30));
+    let ring = await lightBtn();
+    check(`${name}: палец на кнопке — кольцо заряда больше, заряд растёт, а свет ещё не горит`, ring.held && ring.charging && ring.scale > 1.3 && st.light.charge > 0.6 && st.light.state === 'off', JSON.stringify({ ...ring, charge: st.light.charge, state: st.light.state }));
+    for (let i = 0; i < 60 && st.light.state !== 'on'; i++) st = await vz(page, () => window.__vz.tick(3));
+    ring = await lightBtn();
+    check(`${name}: заряд полный — вспышка (луч ярче обычного, кнопка светится) и свет`, st.light.state === 'on' && st.light.intensity > 1.6 && ring.flash, JSON.stringify({ state: st.light.state, intensity: st.light.intensity, flash: ring.flash }));
+    st = await vz(page, () => window.__vz.tick(70));
+    check(`${name}: через секунду — обычный свет`, st.light.state === 'on' && st.light.intensity > 0.5 && st.light.intensity < 1.1, `яркость ${st.light.intensity.toFixed(2)}`);
+    await finger(page, 'pointerup', 8, btn[0], btn[1]);
+    st = await vz(page, () => window.__vz.tick(2));
+    ring = await lightBtn();
+    check(`${name}: палец убран — кольцо прежнего размера, свет горит`, !ring.held && !ring.charging && st.light.state === 'on', JSON.stringify(ring));
 
-    // Отказ: кнопку трут пальцем.
+    // Отказ: кнопка зовёт держать палец; держат — заряжается и загорается.
     await vz(page, () => window.__vz.fail());
     st = await vz(page, () => window.__vz.step(5));
-    check(`${name}: у заглохшего фонаря кнопка подсвечена, подсказка про палец`, (await page.evaluate(() => document.querySelector('.vz-touch__btn--light').classList.contains('is-dead'))) && (await page.textContent('.vz-hud__prompt-text'))?.includes('трите') === true);
-    await finger(page, 'pointerdown', 4, btn[0], btn[1]);
-    for (let i = 0; i < 70; i++) {
-      await finger(page, 'pointermove', 4, btn[0] + (i % 2 === 0 ? 26 : -26), btn[1]);
-      st = await vz(page, () => window.__vz.tick(4));
-      if (st.light.state === 'on') break;
-    }
-    await finger(page, 'pointerup', 4, btn[0], btn[1]);
-    check(`${name}: растирание кнопки оживляет фонарь`, st.light.state === 'on', `состояние ${st.light.state}, прогресс ${st.light.revive.toFixed(2)}`);
-    st = await vz(page, () => window.__vz.tick(2));
-    check(`${name}: протяжка по кнопке не считается нажатием`, st.light.state === 'on');
+    ring = await lightBtn();
+    check(`${name}: у заглохшего фонаря кнопка зовёт, подсказка — держать на ней палец`, ring.dead && (await page.textContent('.vz-hud__prompt-text'))?.includes('Держите') === true, JSON.stringify(ring));
+    await finger(page, 'pointerdown', 9, btn[0], btn[1]);
+    await sleep(320);
+    for (let i = 0; i < 80 && st.light.state !== 'on'; i++) st = await vz(page, () => window.__vz.tick(4));
+    await finger(page, 'pointerup', 9, btn[0], btn[1]);
+    check(`${name}: палец на кнопке оживляет заглохший фонарь`, st.light.state === 'on', `состояние ${st.light.state}, заряд ${st.light.charge.toFixed(2)}`);
 
     const grid = await vz(page, () => window.__vz.probe());
     check(`${name}: картинка есть`, Math.max(...grid) > 40, `максимум ${Math.max(...grid).toFixed(1)}`);
