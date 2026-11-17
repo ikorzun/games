@@ -301,7 +301,13 @@ export function buildShell(shell: Shell, target: MeshBuilder | ((cell: ShellCell
         if (alongZ) col.addBox(line - T, y0, a0, line + T, y1, a1);
         else col.addBox(a0, y0, line - T, a1, y1, line + T);
       };
-      if (kind === 'wall') box(e0, e1, lo, hi);
+      if (kind === 'wall') {
+        // Стена между двумя клетками с одним полом может на поздних кругах прорваться там, где стёрта (world/wall_gone.ts):
+        // метка на преграде — откуда считать прорехи. Наружная стена (соседа нет), шахты и провалы держат.
+        const cut = other && Math.abs(other.floorY - f) < 1e-6 && !c.noFloor && !other.noFloor ? { alongZ, line, t: T, a0: e0, a1: e1, lo, hi, floor: f } : undefined;
+        if (cut) col.add(alongZ ? { minX: line - T, minY: lo, minZ: e0, maxX: line + T, maxY: hi, maxZ: e1, cut } : { minX: e0, minY: lo, minZ: line - T, maxX: e1, maxY: hi, maxZ: line + T, cut });
+        else box(e0, e1, lo, hi);
+      }
       else {
         const mid = (s0 + s1) / 2;
         box(e0, mid - DOOR_W / 2, lo, hi);

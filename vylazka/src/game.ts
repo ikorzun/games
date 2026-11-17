@@ -52,6 +52,7 @@ import { looksAt, Things } from './systems/things';
 import type { Fate, Look, Thing } from './systems/things';
 import { bakeContact } from './world/contact';
 import { ColliderSet } from './world/colliders';
+import { WallCuts } from './world/wall_gone';
 import type { Aabb } from './world/colliders';
 import { DOOR_NAME } from './world/screens';
 import type { LevelObject } from './world/objects';
@@ -417,6 +418,8 @@ export class Game {
   readonly rig = new CameraRig();
   readonly exposure = new AutoExposure();
   colliders = new ColliderSet();
+  /** Прорехи в стёртых стенах (квиз 17.11: «Пусто: можно пройти»): преграды стен следуют за маской стирания. */
+  private wallCuts = new WallCuts();
   level: BuiltLevel | null = null;
   /** Текущая сессия; null — свободная прогулка (тестовый коридор, витрина, просмотр пространства). */
   session: Session | null = null;
@@ -706,6 +709,7 @@ export class Game {
     this.level = level;
     this.setupFigures(level);
     this.colliders = level.colliders;
+    this.wallCuts = new WallCuts();
     this.setupIllusions(level);
     this.contactGone.clear();
     this.bakeContact();
@@ -2381,6 +2385,8 @@ export class Game {
   step(dt: number, input: InputFrame): StepEvents {
     this.time += dt;
     this.stepSonar();
+    // Стёртое проходимо: прорехи в стенах между клетками — там, где стена стёрта на весь рост (world/wall_gone.ts).
+    if (this.where === 'main' && this.level?.layout) this.wallCuts.apply(this.colliders, this.decay.walls);
     this.fade = approach(this.fade, this.fadeTo, this.fadeTo > this.fade ? 0.5 : 0.25, dt);
     this.quake = Math.max(0, this.quake - dt * 1.4);
     const s = this.session;

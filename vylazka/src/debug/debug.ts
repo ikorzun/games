@@ -2,6 +2,7 @@
  * Отладочный API window.__vz. Ставится и в боевой сборке: смоук в Chromium гоняет именно её.
  * Симуляцию можно заморозить и шагать вручную — так тесты не зависят от скорости машины.
  */
+import { wallGaps } from '../world/wall_gone';
 import type { Decay } from '../systems/decay';
 import type { RoomFx } from '../game';
 import type { JumpStyle, JumpTarget } from '../systems/jumps';
@@ -139,6 +140,8 @@ export interface VzDebugApi {
   calm(on: boolean): void;
   /** Пустить волну сонара на ближайшем шаге (вариант A): по тихому слою пробегает план. */
   sonar(): void;
+  /** Прорехи в стёртых стенах сейчас (world/wall_gone.ts): середина прорехи, ось стены, где за стеной и пол. */
+  wallGaps(): { at: [number, number, number]; normal: [number, number]; width: number }[];
   /** Включить или выключить тень фонаря (для сравнения кадров). */
   shadows(on: boolean): void;
   /** Облако точек вкл/выкл: выкл — мир рисуется сплошными поверхностями (для сравнения кадров). */
@@ -582,6 +585,18 @@ export function installDebug(app: App): void {
     },
     sonar: () => {
       game().pingSonar();
+    },
+    wallGaps: () => {
+      const g = game();
+      const out: { at: [number, number, number]; normal: [number, number]; width: number }[] = [];
+      for (const b of g.colliders.boxes) {
+        if (!b.cut || !b.off) continue;
+        for (const [a0, a1] of wallGaps(b.cut, g.decay.walls)) {
+          const m = (a0 + a1) / 2;
+          out.push({ at: b.cut.alongZ ? [b.cut.line, b.cut.floor, m] : [m, b.cut.floor, b.cut.line], normal: b.cut.alongZ ? [1, 0] : [0, 1], width: a1 - a0 });
+        }
+      }
+      return out;
     },
     moment: () => {
       app.moment();
