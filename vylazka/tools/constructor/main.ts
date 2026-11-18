@@ -27,6 +27,7 @@
 import './sand3d_all';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { generateLayout } from '../../src/gen/layout';
 import type { GenRoom, WorldKind } from '../../src/gen/layout';
 import type { Vec3 } from '../../src/core/types';
@@ -58,6 +59,8 @@ import type { Pose, PoseName } from '../../src/world/props_people';
 import { GRID } from '../../src/gen/layout';
 import { CELL } from '../../src/world/shell';
 import { setThingRegistry } from '../../src/world/thing_mesh';
+import { isTilted, mul, tiltMat, tiltPoint, tiltPose } from '../../src/world/tilt';
+import type { Tilt } from '../../src/world/tilt';
 import { figure, materialFor, matcap, PAINTS } from '../matcaps/look';
 import { asked, CHOICES, gameLink, ITEM, ITEMS, LABEL, MEMORY, ROOM_RU, roomsText, SHORT, sizeText, whereText, WORLD_RU } from './catalog';
 import type { Item as Entry, Kind, Mark, Verdict } from './catalog';
@@ -359,7 +362,15 @@ function enterRoom(w: WorldKind, type: string, pick = 0): void {
   ceilY = cell.ceilY;
   gameSel = 0;
   hover = 0;
-  if (cur) placeInRoom(cur);
+  // Выбранное остаётся в своём помещении (оно сохранено): в другое помещение переходят с пустыми руками.
+  flushSave();
+  cur = null;
+  setReplace(0);
+  try {
+    localStorage.setItem('ctor.view', JSON.stringify({ world: w, type, pick: roomPick }));
+  } catch {
+    /* браузер не даёт хранить — откроется кухня убежища */
+  }
   computeEdits();
   layoutEdits();
   showRoom();
@@ -423,11 +434,49 @@ function canOpen(name: string): boolean {
 /** Как оставлено показанное помещение (furnish.ts, roomOpenness): доля вещей с чем-нибудь открытым. */
 const roomShare = (): number => roomOpenness(world, lvl.layout!.seed, room.id);
 /** Сетка вещи партнёра в этом помещении — так, как её поставит игра: первая копия на этом плане (сборка уровня, placedSeed). */
-const thingGeo = (s: Pick<PlacedSpec, 'id' | 'prop' | 'open'>): THREE.BufferGeometry => geometryOf(s.prop, s.open, roomShare(), placedSeed(lvl.layout!.seed, 0, s.id));
+const tiltCache = new Map<string, THREE.BufferGeometry>();
+/**
+ * Сетка, повёрнутая доворотом записи по всем осям (партнёр 18.11, 16:19; world/tilt.ts): та же поза, что у сборки уровня, —
+ * вокруг середины собранного и на свою опору.
+ */
+function tilted(g: THREE.BufferGeometry, t: Tilt | undefined, mount: PropSpec['mount']): THREE.BufferGeometry {
+  if (!isTilted(t)) return g;
+  const key = `${g.uuid}|${t.join(',')}`;
+  const hit = tiltCache.get(key);
+  if (hit) return hit;
+  const pos = g.getAttribute('position');
+  const nrm = g.getAttribute('normal');
+  const pose = tiltPose(pos.array as ArrayLike<number>, t, mount);
+  const m = tiltMat(t);
+  const P = new Float32Array(pos.count * 3);
+  const N = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    P.set(tiltPoint(pose, [pos.getX(i), pos.getY(i), pos.getZ(i)]), i * 3);
+    N.set(mul(m, [nrm.getX(i), nrm.getY(i), nrm.getZ(i)]), i * 3);
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(P, 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(N, 3));
+  out.setAttribute('color', g.getAttribute('color'));
+  out.setIndex(g.getIndex());
+  out.computeBoundingBox();
+  out.computeBoundingSphere();
+  // Запас небольшой: крутят одну вещь, по градусу за раз.
+  if (tiltCache.size > 48) tiltCache.delete(tiltCache.keys().next().value!);
+  tiltCache.set(key, out);
+  return out;
+}
+const thingGeo = (s: Pick<PlacedSpec, 'id' | 'prop' | 'open' | 'tilt'>): THREE.BufferGeometry => tilted(geometryOf(s.prop, s.open, roomShare(), placedSeed(lvl.layout!.seed, 0, s.id)), s.tilt, ALL_PROPS[s.prop]!.mount);
 const thingMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.05, side: THREE.DoubleSide });
+/** Вещь, которую несут с полки: полупрозрачная, пока её не отпустили. */
 const ghostMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, transparent: true, opacity: 0.38, depthWrite: false });
-/** Передвинутая вещь игры (сохранённая запись): плотнее призрака — это вещь игры, просто в другом месте. */
-const movedMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, transparent: true, opacity: 0.72, depthWrite: false });
+/**
+ * Поставленные вещи (сохранённые записи) — как настоящие: в простом редакторе поставленное стоит, а выбранное — в рамке
+ * (партнёр 18.11: «интерфейс как в простых и понятных 3D-редакторах»).
+ */
+const savedMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
+/** Передвинутая вещь игры (сохранённая запись) — тоже как настоящая. */
+const movedMat = savedMat;
 
 // ───────────────────────────── правило из положения ─────────────────────────────
 
@@ -508,6 +557,8 @@ function derive(it: Item): void {
     // У какого края её поставили — как у вещей: игра возьмёт ближайший такой край (FigureSpec.near).
     it.spec.near = roomNear(room, a.x, a.z);
   }
+  // Правка выбранного — сразу в сохранение (через полсекунды тишины).
+  if (it === cur) scheduleSave();
 }
 
 /** Поставить вещь (фигуру) в показанное помещение по её правилу: тот же расчёт, что в игре. */
@@ -725,6 +776,80 @@ selHelper.visible = false;
 scene.add(selHelper);
 const box3 = (o: Pick<LevelObject, 'min' | 'max'>): THREE.Box3 => new THREE.Box3(new THREE.Vector3(...o.min), new THREE.Vector3(...o.max));
 
+// ───────────────────────────── инструменты: двигать и крутить ─────────────────────────────
+
+/**
+ * Что мышь делает с выбранной вещью (партнёр 18.11, 16:19: «интерфейс как в простых и понятных 3D-редакторах», «крутить
+ * объекты по всем осям»): «двигать» — тянуть по полу (G), «крутить» — кольца по трём осям вокруг её середины (R). Q и E —
+ * как раньше, на четверть.
+ */
+type Tool = 'move' | 'rotate';
+let tool: Tool = 'move';
+/** Точка вращения выбранной вещи — середина её габарита. Кольца крутят её; в записи — доворот (PlacedSpec.tilt). */
+const pivot = new THREE.Object3D();
+scene.add(pivot);
+const gizmo = new TransformControls(cam, renderer.domElement);
+gizmo.setMode('rotate');
+gizmo.setSpace('local');
+gizmo.setSize(0.85);
+/** Кольца щёлкают по 15°; с Shift — свободно. */
+const SNAP = THREE.MathUtils.degToRad(15);
+gizmo.setRotationSnap(SNAP);
+scene.add(gizmo.getHelper());
+gizmo.addEventListener('dragging-changed', (e) => {
+  const on = (e as unknown as { value: boolean }).value;
+  controls.enabled = !on;
+  if (on) pushUndo();
+  else scheduleSave();
+});
+gizmo.addEventListener('objectChange', () => onGizmo());
+/** Кольца повернули точку вращения — доворот выбранной вещи; у манекена — только вокруг вертикали. */
+function onGizmo(): void {
+  if (!cur) return;
+  if (cur.kind === 'thing') {
+    const base = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (cur.rot * Math.PI) / 2);
+    const e = new THREE.Euler().setFromQuaternion(base.invert().multiply(pivot.quaternion), 'XYZ');
+    const t = [e.x, e.y, e.z].map((v) => Math.round(THREE.MathUtils.radToDeg(v) * 2) / 2 + 0) as [number, number, number];
+    if (isTilted(t)) cur.spec.tilt = t;
+    else delete cur.spec.tilt;
+  } else {
+    cur.yaw = new THREE.Euler().setFromQuaternion(pivot.quaternion, 'YXZ').y;
+    derive(cur);
+  }
+  dirty = true;
+  syncPanel();
+}
+/** Поставить точку вращения на выбранную вещь (пока кольца не тянут — тогда её ведут они). */
+function placePivot(geo: THREE.BufferGeometry | null): void {
+  if (!cur || gizmo.dragging) return;
+  if (cur.kind === 'thing') {
+    const bb = (geo ?? thingGeo(cur.spec)).boundingBox!;
+    const c = bb.getCenter(new THREE.Vector3());
+    const yaw = (cur.rot * Math.PI) / 2;
+    pivot.position.set(cur.at[0], cur.at[1], cur.at[2]).add(c.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw));
+    const t = cur.spec.tilt ?? [0, 0, 0];
+    const qt = new THREE.Quaternion().setFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(t[0]), THREE.MathUtils.degToRad(t[1]), THREE.MathUtils.degToRad(t[2]), 'XYZ'));
+    pivot.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw).multiply(qt);
+  } else {
+    pivot.position.set(cur.at[0], cur.at[1] + 0.9, cur.at[2]);
+    pivot.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), cur.yaw);
+  }
+}
+/** Кольца видны, когда выбран инструмент «крутить» и есть что крутить. */
+function syncGizmo(): void {
+  if (tool === 'rotate' && cur) {
+    if (gizmo.object !== pivot) gizmo.attach(pivot);
+    const full = cur.kind === 'thing';
+    gizmo.showX = full;
+    gizmo.showZ = full;
+  } else if (gizmo.object) gizmo.detach();
+}
+function setTool(t: Tool): void {
+  tool = t;
+  for (const [id, k] of [['tool-move', 'move'], ['tool-rotate', 'rotate']] as const) $(id).classList.toggle('is-on', tool === k);
+  dirty = true;
+}
+
 /** Вещи игры в показанном помещении (объекты уровня), которые можно заменить вещью prop. */
 function swappable(prop: string): LevelObject[] {
   const rects = cellRects(room);
@@ -812,6 +937,12 @@ function removedAt(e: { clientX: number; clientY: number }): { r: RemovedHere; d
 function selectGame(id: number): void {
   const o = objById(id);
   if (!o) return;
+  // Выбор один, как в редакторе: выбранная раньше вещь партнёра отпускается (она сохранена).
+  if (cur) {
+    flushSave();
+    cur = null;
+    renderGhosts();
+  }
   gameSel = id;
   openCard(o.name, 'room');
   dirty = true;
@@ -853,6 +984,7 @@ function restoreGame(id: number): void {
 
 /** Начать тянуть вещь игры: появляется передвинутая запись, оригинал прячется. */
 function beginGameDrag(o: LevelObject): void {
+  flushSave();
   pushUndo();
   const nth = nthOf(lvl, o);
   const it: ThingItem = {
@@ -861,12 +993,12 @@ function beginGameDrag(o: LevelObject): void {
     at: [o.at[0], o.at[1], o.at[2]],
     rot: o.rot,
   };
-  derive(it);
   cur = it;
+  derive(it);
   gameSel = 0;
   hover = 0;
   followCard(o.name);
-  setStatus(`Тянешь ${nth + 1}-ю «${ruShort(o.name)}». Отпусти — и в игре она встанет так в каждом помещении этого типа. Q и E — повернуть.`);
+  pushStep({ t: 'rec', coll: 'things', add: true, spec: it.spec });
   dirty = true;
   syncPanel();
 }
@@ -906,6 +1038,7 @@ function refresh(): void {
   const so = gameSel ? objById(gameSel) : undefined;
   selHelper.visible = !!so;
   if (so) selHelper.box.copy(box3(so));
+  syncGizmo();
   if (!cur) {
     problems = [];
     return;
@@ -913,7 +1046,9 @@ function refresh(): void {
   if (cur.kind === 'thing') {
     const chk = curCheck(cur);
     // Как выпадет, а открытым дверцам здесь тесно — в игре эта копия закрыта: так её и показать.
-    const mesh = new THREE.Mesh(thingGeo(!cur.spec.replaces && chk.open === 'shut' ? { ...cur.spec, open: 'shut' } : cur.spec), thingMat);
+    const geo = thingGeo(!cur.spec.replaces && chk.open === 'shut' ? { ...cur.spec, open: 'shut' } : cur.spec);
+    placePivot(geo);
+    const mesh = new THREE.Mesh(geo, thingMat);
     mesh.position.set(cur.at[0], cur.at[1], cur.at[2]);
     mesh.rotation.y = (cur.rot * Math.PI) / 2;
     mesh.userData.pick = true;
@@ -951,6 +1086,7 @@ function refresh(): void {
     figGroup.position.set(cur.at[0], cur.at[1], cur.at[2]);
     figGroup.rotation.y = cur.yaw;
     figGroup.visible = true;
+    placePivot(null);
     arrow.position.set(cur.at[0], floorY + 0.02, cur.at[2]);
     arrow.setDirection(new THREE.Vector3(Math.sin(cur.yaw), 0, Math.cos(cur.yaw)));
     arrow.visible = true;
@@ -976,7 +1112,7 @@ function cellOf(x: number, z: number): { noFloor?: boolean } | undefined {
 // поставит игра; убранные — бледные красные рамки на их месте.
 const ghosts = new THREE.Group();
 /** Манекен-призрак: светлый полупрозрачный, сетка — по позе (запоминается, пока поза та же). */
-const figGhostMat = new THREE.MeshStandardMaterial({ color: 0xd9cbb6, roughness: 0.85, transparent: true, opacity: 0.5, depthWrite: false });
+const figGhostMat = new THREE.MeshStandardMaterial({ color: 0xd9cbb6, roughness: 0.85 });
 const figGhostCache = new Map<string, THREE.BufferGeometry>();
 function figGhostGeo(f: FigureSpec): THREE.BufferGeometry {
   const key = `${f.id}:${JSON.stringify(f.pose)}`;
@@ -1006,7 +1142,7 @@ function renderGhosts(): void {
     if (!p) continue;
     const it: ThingItem = { kind: 'thing', spec: JSON.parse(JSON.stringify(s)) as PlacedSpec, at: [0, 0, 0], rot: 0 };
     settle(it);
-    const mesh = new THREE.Mesh(thingGeo(s), ghostMat);
+    const mesh = new THREE.Mesh(thingGeo(s), savedMat);
     mesh.position.set(it.at[0], it.at[1], it.at[2]);
     mesh.rotation.y = (it.rot * Math.PI) / 2;
     mesh.userData.ghost = s.id;
@@ -1016,7 +1152,7 @@ function renderGhosts(): void {
     if (!m.spot || (cur && cur.kind === 'thing' && cur.spec.id === m.spec.id)) continue;
     // Передвинутая — с дверцами по записи (или закрытая, если открытым тесно); как выпадет — с долей помещения (сид её места в
     // игре здесь не известен — пример).
-    const mesh = new THREE.Mesh(geometryOf(m.spec.prop, m.spot.open, roomShare()), movedMat);
+    const mesh = new THREE.Mesh(tilted(geometryOf(m.spec.prop, m.spot.open, roomShare()), m.spec.tilt, ALL_PROPS[m.spec.prop]!.mount), movedMat);
     mesh.position.set(m.spot.at[0], m.spot.at[1], m.spot.at[2]);
     mesh.rotation.y = (m.spot.rot * Math.PI) / 2;
     mesh.userData.ghost = m.spec.id;
@@ -1092,6 +1228,11 @@ renderer.domElement.addEventListener(
   'pointerdown',
   (e) => {
     if (carry || e.button !== 0) return;
+    // Кольца поворота под курсором — их ведёт TransformControls; вид при этом не крутится.
+    if (gizmo.axis) {
+      controls.enabled = false;
+      return;
+    }
     setNdc(e);
     ray.setFromCamera(ndc, cam);
     const take = (): void => {
@@ -1117,7 +1258,7 @@ renderer.domElement.addEventListener(
         return;
       }
     }
-    if (cur?.kind === 'thing') {
+    if (cur?.kind === 'thing' && tool === 'move') {
       const hit = ray.intersectObjects(holder.children, false)[0];
       if (hit) {
         take();
@@ -1169,8 +1310,9 @@ renderer.domElement.addEventListener('pointermove', (e) => {
     const q = floorHit(e);
     carryMesh.visible = !!q;
     if (q) carryMesh.position.set(q.x, floorY, q.z);
-    // Над вещью игры, которую можно заменить, — её рамка: отпустишь — встанет вместо неё.
-    const t = 'prop' in carry ? swapTarget(e, carry.prop) : null;
+    // Отпущенная вещь добавляется (партнёр 18.11: «добавлять новые вещи и людей, а не заменять их»); заменить — с ⌥ (Alt):
+    // тогда над вещью игры её рамка, и отпущенная встанет вместо неё.
+    const t = 'prop' in carry && e.altKey ? swapTarget(e, carry.prop) : null;
     swapHelper.visible = !!t;
     if (t) swapHelper.box.copy(box3(t));
     return;
@@ -1237,10 +1379,8 @@ const endDrag = (): void => {
   const was = drag;
   drag = null;
   renderer.domElement.style.cursor = '';
-  if (was.what === 'thing' && cur?.kind === 'thing' && cur.spec.moves) {
-    const m = cur.spec.moves;
-    setStatus(`Передвинута ${m.nth + 1}-я «${ruShort(m.thing)}». «Сохранить» — и в игре так будет в помещениях правила; «Вернуть на место игры» — передумал.`);
-  }
+  scheduleSave();
+  if (was.what === 'thing' && cur?.kind === 'thing' && cur.spec.moves) setStatus(`Передвинута: ${ruShort(cur.spec.moves.thing)}.`);
   dirty = true;
   syncPanel();
 };
@@ -1251,7 +1391,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
     carry = null;
     carryMesh.visible = false;
     document.body.classList.remove('is-carrying');
-    const t = 'prop' in what ? swapTarget(e, what.prop) : null;
+    const t = 'prop' in what && e.altKey ? swapTarget(e, what.prop) : null;
     if (t && 'prop' in what) dropSwap(what.prop, t);
     else if (q) drop(what, q.x, q.z);
     return;
@@ -1264,11 +1404,9 @@ renderer.domElement.addEventListener('pointerup', (e) => {
     selectGame(o.id);
     return;
   }
-  if (blank && Math.hypot(e.clientX - blank.x, e.clientY - blank.y) < 5 && gameSel) {
-    gameSel = 0;
-    dirty = true;
-    syncPanel();
-  }
+  // Щелчок в пустоту (не поворот вида): выделение снимается, вещь остаётся, где стоит, — она уже сохранена (партнёр 18.11:
+  // «вещь остается на месте, а выделение с нее снимается, чтобы выбрать другую»).
+  if (blank && Math.hypot(e.clientX - blank.x, e.clientY - blank.y) < 5) deselect();
   blank = null;
   endDrag();
 });
@@ -1346,11 +1484,20 @@ function turn(dir: 1 | -1): void {
 function undoStep(): boolean {
   const s = undo.pop();
   if (!s) return false;
+  window.clearTimeout(saveTimer);
+  saveTimer = 0;
   if (s.t === 'cur') {
     cur = JSON.parse(s.json) as Item | null;
-    if (cur) placeIfElsewhere(cur);
-  } else if (s.add) void dropRecord(s.coll, s.spec);
-  else void putRecord(s.coll, s.spec);
+    if (cur) {
+      placeIfElsewhere(cur);
+      // Вернуть и в базе: выбранное там уже сохранено в новом виде.
+      if (savedThings.has(cur.spec.id) || savedFigs.has(cur.spec.id)) scheduleSave();
+    }
+  } else if (s.add) {
+    if (cur?.spec.id === s.spec.id) cur = null;
+    void dropRecord(s.coll, s.spec);
+  } else void putRecord(s.coll, s.spec);
+  renderGhosts();
   setStatus('Отменено.');
   dirty = true;
   syncPanel();
@@ -1389,12 +1536,18 @@ window.addEventListener('keydown', (e) => {
       carry = null;
       carryMesh.visible = false;
       document.body.classList.remove('is-carrying');
-    } else if (gameSel) {
-      gameSel = 0;
-      dirty = true;
-      syncPanel();
-    }
+    } else if (replaceFor) setReplace(0);
+    else deselect();
+  } else if (e.code === 'KeyG') setTool('move');
+  else if (e.code === 'KeyR') setTool('rotate');
+  else if (e.code === 'KeyD' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    duplicate();
   }
+  if (e.key === 'Shift') gizmo.setRotationSnap(null);
+});
+window.addEventListener('keyup', (e) => {
+  if (e.key === 'Shift') gizmo.setRotationSnap(SNAP);
 });
 
 /** Подпись замены: «диван вместо кушетки»; одинаковые названия («картотечный шкаф» вместо «картотечного шкафа») — «новый вместо прежнего». */
@@ -1406,6 +1559,7 @@ function swapName(to: string, from: string): string {
 
 /** Вещь с полки — вместо вещи игры (замена): там же и так же повёрнута, правило — «вместо такой-то». */
 function dropSwap(prop: string, o: LevelObject): void {
+  flushSave();
   pushUndo();
   const p = ALL_PROPS[prop]!;
   const from = ALL_PROPS[o.name]!;
@@ -1418,17 +1572,22 @@ function dropSwap(prop: string, o: LevelObject): void {
     at: [o.at[0] + f[0] * k, o.at[1], o.at[2] + f[1] * k],
     rot: o.rot,
   };
+  cur = it;
   derive(it);
   it.spec.replaces = o.name;
   it.obj = o.id;
-  cur = it;
-  setStatus(`Вместо «${from.ru.split(',')[0]}» — «${p.ru.split(',')[0]}». В игре — в помещениях правила, сколько указано; «везде, где она стоит» справа — каждая такая во всех местах.`);
+  gameSel = 0;
+  setStatus(`Вместо «${from.ru.split(',')[0]}» — «${p.ru.split(',')[0]}».`);
+  pushStep({ t: 'rec', coll: 'things', add: true, spec: it.spec });
+  void saveCur();
   dirty = true;
   syncPanel();
 }
 
 /** Новая вещь (фигура) там, где её отпустили. */
 function drop(what: { prop: string } | { figure: true }, x: number, z: number): void {
+  // Прежняя вещь уже стоит и сохранена — новая добавляется рядом с ней, а не вместо (партнёр 18.11).
+  flushSave();
   pushUndo();
   if ('prop' in what) {
     const p = ALL_PROPS[what.prop]!;
@@ -1442,9 +1601,9 @@ function drop(what: { prop: string } | { figure: true }, x: number, z: number): 
     };
     // Не у стены — лицом в комнату (от ближайшего проёма), как стоят вещи у края «посреди».
     if (s.x === x && s.z === z) it.rot = rotOf(anchorAt(x, z, lift, false).a.phi);
-    derive(it);
     cur = it;
-    setStatus(`Поставлено: ${p.ru}. Двигай мышью, Q и E — повернуть.`);
+    derive(it);
+    setStatus(`Поставлено: ${ruShort(what.prop)}.`);
   } else {
     const it: FigItem = {
       kind: 'figure',
@@ -1452,10 +1611,12 @@ function drop(what: { prop: string } | { figure: true }, x: number, z: number): 
       at: [x, floorY, z],
       yaw: anchorAt(x, z, 0, false).a.phi,
     };
-    derive(it);
     cur = it;
-    setStatus('Манекен поставлен: тяни шарики — гнутся руки и ноги; таз — ходит по полу, с ⌥ — в воздух.');
+    derive(it);
+    setStatus('Человек поставлен: шарики — гнуть руки и ноги, таз с ⌥ — поднять.');
   }
+  pushStep({ t: 'rec', coll: cur.kind === 'thing' ? 'things' : 'figures', add: true, spec: cur.spec });
+  void saveCur();
   dirty = true;
   syncPanel();
 }
@@ -1636,8 +1797,16 @@ window.addEventListener('pointerup', () => {
   if (!shelfPress) return;
   const name = shelfPress.name;
   shelfPress = null;
+  // «Заменить…» у вещи игры: щелчок по вещи полки ставит её вместо той.
+  if (replaceFor && name) {
+    const o = objById(replaceFor);
+    setReplace(0);
+    if (o && swappable(name).some((x) => x.id === o.id)) dropSwap(name, o);
+    else setStatus(`«${ruShort(name)}» на это место не встанет: другая опора или слишком большая.`);
+    return;
+  }
   if (name) openCard(name, 'shelf');
-  else setStatus('Манекен: тяни его с полки в помещение.');
+  else setStatus('Человека — тяни с полки в помещение.');
 });
 function startCarry(what: { prop: string } | { figure: true }): void {
   carry = what;
@@ -1817,6 +1986,7 @@ const change = (fn: () => void): void => {
   pushUndo();
   fn();
   dirty = true;
+  scheduleSave();
   syncPanel();
 };
 const liftEl = $<HTMLInputElement>('lift');
@@ -1832,6 +2002,7 @@ liftEl.addEventListener('input', () => {
 countEl.addEventListener('input', () => change(() => cur && (cur.spec.rule.count = Number(countEl.value))));
 nameEl.addEventListener('input', () => {
   if (cur) cur.spec.name = nameEl.value;
+  scheduleSave();
   renderProblems();
 });
 $('unreplace').addEventListener('click', () =>
@@ -1864,6 +2035,32 @@ $('gedit').addEventListener('click', () => {
 $('gunmove').addEventListener('click', () => {
   const m = gameSel ? movedOf(gameSel) : undefined;
   if (m) unmove(m.spec);
+});
+$('greplace').addEventListener('click', () => {
+  if (gameSel) setReplace(gameSel);
+});
+$('tool-move').addEventListener('click', () => setTool('move'));
+$('tool-rotate').addEventListener('click', () => setTool('rotate'));
+$('tool-undo').addEventListener('click', () => void undoStep());
+$('tool-dup').addEventListener('click', () => duplicate());
+$('tool-help').addEventListener('click', () => $('help').toggleAttribute('hidden'));
+for (const [id, k] of [['tilt-x', 0], ['tilt-y', 1], ['tilt-z', 2]] as const) {
+  $<HTMLInputElement>(id).addEventListener('change', (e) => {
+    if (cur?.kind !== 'thing') return;
+    const c = cur;
+    const v = Math.max(-180, Math.min(180, Number((e.target as HTMLInputElement).value) || 0));
+    change(() => {
+      const t = [...(c.spec.tilt ?? [0, 0, 0])] as [number, number, number];
+      t[k] = v;
+      if (isTilted(t)) c.spec.tilt = t;
+      else delete c.spec.tilt;
+    });
+  });
+}
+$('tilt-0').addEventListener('click', () => {
+  if (cur?.kind !== 'thing' || !cur.spec.tilt) return;
+  const c = cur;
+  change(() => delete c.spec.tilt);
 });
 $('gcard').addEventListener('click', () => {
   const o = gameSel ? objById(gameSel) : undefined;
@@ -1906,8 +2103,16 @@ function syncPanel(): void {
   $('figbox').toggleAttribute('hidden', cur?.kind !== 'figure');
   $('turns').toggleAttribute('hidden', !has);
   $('curcard').toggleAttribute('hidden', cur?.kind !== 'thing');
+  $('tiltrow').toggleAttribute('hidden', cur?.kind !== 'thing');
+  if (cur?.kind === 'thing') {
+    const t = cur.spec.tilt ?? [0, 0, 0];
+    for (const [id, k] of [['tilt-x', 0], ['tilt-y', 1], ['tilt-z', 2]] as const) {
+      const el = $<HTMLInputElement>(id);
+      if (document.activeElement !== el) el.value = String(t[k]);
+    }
+  }
   if (!cur) {
-    $('what').textContent = 'Перетащи вещь с полки в помещение — или потяни вещь игры.';
+    $('what').textContent = 'Ничего не выбрано: тяни вещь с полки или щёлкни поставленную.';
     if (document.activeElement !== nameEl) nameEl.value = '';
     renderSaved();
     renderProblems();
@@ -2162,6 +2367,8 @@ const savedFigs = new Map<string, FigureSpec>();
 /** Убранные вещи игры (коллекция removed). */
 const savedRemoved = new Map<string, RemovedSpec>();
 
+/** Подпись набора записей: тот же набор — та же строка. */
+const sigOf = (m: ReadonlyMap<string, unknown>): string => JSON.stringify([...m.entries()].sort((a, b) => a[0].localeCompare(b[0])));
 /** Записи о вещах игры поменялись: пересчитать, что здесь скрыто, и перерисовать. */
 function editsChanged(): void {
   computeEdits();
@@ -2173,20 +2380,27 @@ function editsChanged(): void {
 }
 
 /** Положить запись в коллекцию (things — вещи и передвинутые, removed — убранные): сразу в память, потом в базу. */
-async function putRecord(coll: Coll3, spec: PlacedSpec | RemovedSpec | FigureSpec): Promise<void> {
+async function putRecord(coll: Coll3, spec: PlacedSpec | RemovedSpec | FigureSpec): Promise<boolean> {
   if (coll === 'things') savedThings.set(spec.id, spec as PlacedSpec);
   else if (coll === 'figures') savedFigs.set(spec.id, spec as FigureSpec);
   else savedRemoved.set(spec.id, spec as RemovedSpec);
-  editsChanged();
-  if (!db) return;
-  if (!canWrite) {
-    setStatus('Можно смотреть; сохранять может только тот, у кого есть право правки.');
-    return;
+  // Убранная и передвинутая меняют, что видно из вещей игры, — помещение пересобирается; прочее — только список и призраки.
+  if (coll === 'removed' || (spec as PlacedSpec).moves) editsChanged();
+  else {
+    renderGhosts();
+    renderSaved();
+    dirty = true;
   }
+  // Сперва — в браузер: вкладку закроют, связь пропадёт — правка дождётся.
+  keepDraft({ coll, id: spec.id, spec });
+  if (!db || !canWrite) return false;
   try {
     await db.collection(coll).doc(spec.id).set(spec as unknown as Record<string, unknown>);
+    dropDraft(coll, spec.id);
+    return true;
   } catch {
-    setStatus('Не сохранилось. Попробуй ещё раз через минуту.');
+    setStatus('База не ответила — правка лежит в браузере и уйдёт в базу при следующем открытии.');
+    return false;
   }
 }
 /** Убрать запись из коллекции. */
@@ -2195,11 +2409,13 @@ async function dropRecord(coll: Coll3, spec: PlacedSpec | RemovedSpec | FigureSp
   else if (coll === 'figures') savedFigs.delete(spec.id);
   else savedRemoved.delete(spec.id);
   editsChanged();
+  keepDraft({ coll, id: spec.id });
   if (!db || !canWrite) return;
   try {
     await db.collection(coll).doc(spec.id).delete();
+    dropDraft(coll, spec.id);
   } catch {
-    setStatus('Не удалилось. Попробуй ещё раз через минуту.');
+    setStatus('База не ответила — удаление уйдёт в базу при следующем открытии.');
   }
 }
 
@@ -2219,11 +2435,45 @@ function renderSaved(): void {
     return s ? ` · ${slotLabel(s)}` : ' · везде';
   };
   const doors = (o: PlacedOpen | undefined): string => (o ? ` · ${DOORS_RU[o]}` : '');
-  for (const s of [...savedThings.values()].sort(byAt)) add((s.moves ? (/передвин/.test(s.name) ? s.name : `${s.name} · передвинута`) : `${s.name} · ${ALL_PROPS[s.prop]?.ru.split(',')[0] ?? s.prop}`) + doors(s.open) + where(s.slot, s.rule.rooms), cur?.spec.id === s.id, () => openThing(s));
-  for (const f of [...savedFigs.values()].sort(byAt)) add(`${f.name} · манекен, ${MAT_RU[f.material]}${where(f.slot, f.rule.rooms)}`, cur?.spec.id === f.id, () => openFigure(f));
-  for (const r of [...savedRemoved.values()].sort(byAt)) add((/убран/.test(r.name) ? r.name : `${r.name} · убрана`) + where(r.slot, r.rooms), gameSel !== 0 && removedOf(gameSel)?.spec.id === r.id, () => openRemoved(r));
+  // Сначала — что видно в этом помещении (его вариант или общее); остальное — по кнопке «ещё».
+  const here = (worlds: readonly WorldKind[], rooms: readonly string[], slot: string | undefined): boolean => applies(worlds, rooms) && mine(slot, rooms);
+  let rest = 0;
+  for (const s of [...savedThings.values()].sort(byAt)) {
+    if (!savedAll && !here(s.rule.worlds, s.rule.rooms, s.slot)) {
+      rest += 1;
+      continue;
+    }
+    add((s.moves ? (/передвин/.test(s.name) ? s.name : `${s.name} · передвинута`) : s.name) + doors(s.open) + (savedAll ? where(s.slot, s.rule.rooms) : ''), cur?.spec.id === s.id, () => openThing(s));
+  }
+  for (const f of [...savedFigs.values()].sort(byAt)) {
+    if (!savedAll && !here(f.rule.worlds, f.rule.rooms, f.slot)) {
+      rest += 1;
+      continue;
+    }
+    add(`${f.name} · ${MAT_RU[f.material]}${savedAll ? where(f.slot, f.rule.rooms) : ''}`, cur?.spec.id === f.id, () => openFigure(f));
+  }
+  for (const r of [...savedRemoved.values()].sort(byAt)) {
+    if (!savedAll && !here(r.worlds, r.rooms, r.slot)) {
+      rest += 1;
+      continue;
+    }
+    add((/убран/.test(r.name) ? r.name : `${r.name} · убрана`) + (savedAll ? where(r.slot, r.rooms) : ''), gameSel !== 0 && removedOf(gameSel)?.spec.id === r.id, () => openRemoved(r));
+  }
+  if (rest > 0 || savedAll) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn btn--small';
+    b.textContent = savedAll ? 'только это помещение' : `ещё ${rest} в других помещениях`;
+    b.addEventListener('click', () => {
+      savedAll = !savedAll;
+      renderSaved();
+    });
+    rows.push(b);
+  }
   savedEl.replaceChildren(...rows);
 }
+/** «Поставлено»: всё сохранённое, а не только это помещение. */
+let savedAll = false;
 /** Открыть сохранённое: в помещении, куда его пускает правило. */
 function goTo(rule: PlacedSpec['rule']): void {
   if (rule.worlds.includes(world) && (rule.rooms.length === 0 || rule.rooms.includes(roomType))) return;
@@ -2261,6 +2511,7 @@ function goToSlot(slot: string | undefined, rooms: readonly string[], worlds: re
   return true;
 }
 function openThing(s: PlacedSpec): void {
+  flushSave();
   pushUndo();
   if (goToSlot(s.slot, s.rule.rooms, s.rule.worlds)) {
     /* уже в помещении её варианта */
@@ -2280,6 +2531,7 @@ function openThing(s: PlacedSpec): void {
   syncPanel();
 }
 function openFigure(f: FigureSpec): void {
+  flushSave();
   pushUndo();
   if (!goToSlot(f.slot, f.rule.rooms, f.rule.worlds)) goTo(f.rule);
   const it: FigItem = { kind: 'figure', spec: JSON.parse(JSON.stringify(f)) as FigureSpec, at: [0, 0, 0], yaw: 0 };
@@ -2297,18 +2549,21 @@ function openRemoved(r: RemovedSpec): void {
 async function connect(): Promise<void> {
   const claude = (window as unknown as { claude?: { use(n: string): Promise<unknown> } }).claude;
   if (!claude?.use) {
-    setStatus('Расстановки и отметки не сохраняются: страница открыта не в Claude — они живут, пока она открыта. Ставить и смотреть можно и так.');
+    restoreDrafts();
+    setSave('local');
     return;
   }
   db = (await claude.use('db')) as DbNs | null;
   const user = (await claude.use('user')) as { can?(n: string): Promise<boolean | null> } | null;
   if (!db) {
-    setStatus('Сохранять сейчас нельзя: войди в Claude. Ставить и смотреть можно и так.');
+    restoreDrafts();
+    setSave('local');
     return;
   }
   const can = user?.can ? await user.can('data.write') : null;
   canWrite = can !== false;
   if (!canWrite) setStatus('Можно смотреть; сохранять может только тот, у кого есть право правки.');
+  void flushDrafts();
   renderCard();
   const timer = window.setTimeout(() => setStatus('Сохранённое пока не загрузилось — проверь связь.'), 10000);
   const done = (): void => {
@@ -2318,11 +2573,15 @@ async function connect(): Promise<void> {
   db.collection('things').onSnapshot(
     (snap) => {
       if (!snap.metadata.fromCache) done();
-      savedThings.clear();
+      const next = new Map<string, PlacedSpec>();
       for (const d of snap.docs) {
         const s = d.data() as unknown as PlacedSpec | undefined;
-        if (s && placedProblems(s, ALL_PROPS, FIXED).length === 0) savedThings.set(d.id, s);
+        if (s && placedProblems(s, ALL_PROPS, FIXED).length === 0) next.set(d.id, s);
       }
+      // Своя же запись, вернувшаяся из базы, ничего не меняет — помещение не пересобирать.
+      if (sigOf(next) === sigOf(savedThings)) return;
+      savedThings.clear();
+      for (const [k, v] of next) savedThings.set(k, v);
       editsChanged();
     },
     () => setStatus('Сохранённые вещи не загрузились. Обнови страницу позже.'),
@@ -2344,11 +2603,14 @@ async function connect(): Promise<void> {
   db.collection('removed').onSnapshot(
     (snap) => {
       if (!snap.metadata.fromCache) done();
-      savedRemoved.clear();
+      const next = new Map<string, RemovedSpec>();
       for (const d of snap.docs) {
         const r = d.data() as unknown as RemovedSpec | undefined;
-        if (r && removedProblems(r, ALL_PROPS, FIXED).length === 0) savedRemoved.set(d.id, r);
+        if (r && removedProblems(r, ALL_PROPS, FIXED).length === 0) next.set(d.id, r);
       }
+      if (sigOf(next) === sigOf(savedRemoved)) return;
+      savedRemoved.clear();
+      for (const [k, v] of next) savedRemoved.set(k, v);
       editsChanged();
     },
     () => setStatus('Убранные вещи игры не загрузились. Обнови страницу позже.'),
@@ -2365,46 +2627,161 @@ async function connect(): Promise<void> {
   );
 }
 
-$('save').addEventListener('click', async () => {
+// ───────────────────────────── автосохранение ─────────────────────────────
+
+/**
+ * Автосохранение (партнёр 18.11: «нужны автосохранения, если случайно вышел или вылетел»). Кнопки «Сохранить» больше нет:
+ * поставленная вещь сохраняется сразу, правка — через полсекунды после последнего движения, и перед тем как выбрать другое.
+ * Что не дошло до базы (вне Claude её нет, бывает, что нет связи), лежит в браузере (localStorage, черновики) и уходит в базу при
+ * следующем открытии; вне Claude из черновиков же и показывается. Вид — место, помещение и его номер — тоже запоминается.
+ */
+type SaveState = 'saved' | 'pending' | 'local' | 'bad';
+let saveTimer = 0;
+function setSave(st: SaveState, why = ''): void {
+  const el = document.getElementById('savestate');
+  if (!el) return;
+  el.dataset.state = st;
+  el.textContent = st === 'saved' ? 'сохранено' : st === 'pending' ? 'сохраняю…' : st === 'local' ? 'сохранено в браузере' : `не сохраняется${why ? `: ${why}` : ''}`;
+}
+function scheduleSave(): void {
   if (!cur) return;
-  if (!cur.spec.name.trim()) cur.spec.name = cur.kind === 'thing' ? (ALL_PROPS[cur.spec.prop]?.ru.split(',')[0] ?? 'вещь') : `Фигура ${savedFigs.size + 1}`;
-  nameEl.value = cur.spec.name;
-  const named = { ...cur.spec, name: cur.spec.name.trim() };
-  const bad = cur.kind === 'thing' ? placedProblems(named, ALL_PROPS, FIXED) : figureProblems(named);
+  window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(() => void saveCur(), 450);
+  setSave('pending');
+}
+/** Сохранить выбранное сейчас: перед новой вещью, другим выбором, другим помещением. */
+function flushSave(): void {
+  if (!saveTimer) return;
+  window.clearTimeout(saveTimer);
+  saveTimer = 0;
+  void saveCur();
+}
+const defaultName = (c: Item): string => (c.kind === 'thing' ? ruShort(c.spec.prop) : `Фигура ${savedFigs.size + 1}`);
+/** Годится ли выбранное для записи: пусто — да. */
+const curBad = (c: Item): string[] => (c.kind === 'thing' ? placedProblems({ ...c.spec, name: c.spec.name.trim() || defaultName(c) }, ALL_PROPS, FIXED) : figureProblems({ ...c.spec, name: c.spec.name.trim() || defaultName(c) }));
+async function saveCur(): Promise<void> {
+  window.clearTimeout(saveTimer);
+  saveTimer = 0;
+  const c = cur;
+  if (!c) return;
+  if (!c.spec.name.trim()) c.spec.name = defaultName(c);
+  const bad = curBad(c);
   if (bad.length > 0) {
-    setStatus('Не сохранено: поправь то, что красным.');
+    setSave('bad', bad[0]);
     return;
   }
   if (db && !canWrite) {
-    setStatus('Сохранить не выйдет: право правки есть не у всех.');
+    setSave('bad', 'нет права правки');
     return;
   }
-  const where = problems.length > 0 ? ' Здесь вещь не встанет, но в других помещениях — где правило выполнимо.' : '';
-  const local = db ? '' : ' Только на этой странице: база недоступна, после перезагрузки пропадёт.';
-  if (cur.kind === 'thing') {
-    // Запись живёт в том варианте, где её сохранили (квиз 17.11, ночь: «Свой вариант на каждую»).
-    const spec: PlacedSpec = { ...(cur.spec as PlacedSpec), name: named.name, at: new Date().toISOString(), slot: slotNow() };
-    cur.spec = JSON.parse(JSON.stringify(spec)) as PlacedSpec;
-    setStatus('Сохраняю…');
-    await putRecord('things', spec);
-    setStatus(`Сохранено в вариант «${slotLabel(spec.slot!)}»: «${named.name}».${where}${local}`);
-    return;
-  }
-  const spec: FigureSpec = { ...(cur.spec as FigureSpec), name: named.name, at: new Date().toISOString(), slot: slotNow() };
-  cur.spec = JSON.parse(JSON.stringify(spec)) as FigureSpec;
-  setStatus('Сохраняю…');
-  await putRecord('figures', spec);
-  setStatus(`Сохранено в вариант «${slotLabel(spec.slot!)}»: «${named.name}».${local}`);
-});
+  // Запись живёт в том варианте помещения, где её поставили (квиз 17.11, ночь: «Свой вариант на каждую»).
+  c.spec.name = c.spec.name.trim();
+  c.spec.at = new Date().toISOString();
+  c.spec.slot = slotNow();
+  const spec = JSON.parse(JSON.stringify(c.spec)) as PlacedSpec | FigureSpec;
+  const ok = await putRecord(c.kind === 'thing' ? 'things' : 'figures', spec);
+  if (cur === c && !saveTimer) setSave(ok ? 'saved' : 'local');
+}
 
-$('fresh').addEventListener('click', () => {
-  pushUndo();
+/** Черновики: записи, которые ещё не дошли до базы (spec нет — удаление). */
+const DRAFTS = 'ctor.drafts.v1';
+type Draft = { coll: Coll3; id: string; spec?: PlacedSpec | RemovedSpec | FigureSpec };
+function readDrafts(): Draft[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(DRAFTS) ?? '[]') as unknown;
+    return Array.isArray(v) ? (v as Draft[]) : [];
+  } catch {
+    return [];
+  }
+}
+function writeDrafts(list: readonly Draft[]): void {
+  try {
+    localStorage.setItem(DRAFTS, JSON.stringify(list));
+  } catch {
+    /* браузер не даёт хранить: правка живёт, пока страница открыта */
+  }
+}
+function keepDraft(d: Draft): void {
+  writeDrafts([...readDrafts().filter((x) => !(x.coll === d.coll && x.id === d.id)), d]);
+}
+function dropDraft(coll: Coll3, id: string): void {
+  const list = readDrafts();
+  const rest = list.filter((x) => !(x.coll === coll && x.id === id));
+  if (rest.length !== list.length) writeDrafts(rest);
+}
+/** Вне Claude: что сделано на этой странице раньше, — из черновиков. */
+function restoreDrafts(): void {
+  const list = readDrafts();
+  if (list.length === 0) return;
+  for (const d of list) {
+    const map = d.coll === 'things' ? savedThings : d.coll === 'figures' ? savedFigs : savedRemoved;
+    if (d.spec) (map as Map<string, unknown>).set(d.id, d.spec);
+    else map.delete(d.id);
+  }
+  editsChanged();
+}
+/** База появилась: черновики — в неё. */
+async function flushDrafts(): Promise<void> {
+  if (!db || !canWrite) return;
+  for (const d of readDrafts()) {
+    try {
+      if (d.spec) await db.collection(d.coll).doc(d.id).set(d.spec as unknown as Record<string, unknown>);
+      else await db.collection(d.coll).doc(d.id).delete();
+      dropDraft(d.coll, d.id);
+    } catch {
+      /* связи нет — попробуем при следующем открытии */
+    }
+  }
+}
+
+/** Снять выделение: вещь остаётся, где стоит, — она сохранена (несохранимую не отпускаем: скажем, что не так). */
+function deselect(): void {
+  if (cur && curBad(cur).length > 0) {
+    setStatus(`Не сохраняется: ${curBad(cur)[0]}. Поправь или удали (Delete).`);
+    return;
+  }
+  flushSave();
+  if (!cur && !gameSel && !replaceFor) return;
   cur = null;
+  gameSel = 0;
+  setReplace(0);
   renderGhosts();
   dirty = true;
   syncPanel();
-  setStatus('Перетащи вещь или манекен с полки в помещение — или потяни вещь игры.');
-});
+}
+
+/** Копия выбранного (⌘D): рядом, своя запись. */
+function duplicate(): void {
+  if (!cur) return;
+  flushSave();
+  pushUndo();
+  const c = JSON.parse(JSON.stringify(cur)) as Item;
+  c.spec.id = `${c.kind === 'thing' ? 'pl' : 'fig'}_${stamp()}`;
+  c.spec.name = `${c.spec.name.trim() || defaultName(c)} — копия`.slice(0, 80);
+  if (c.kind === 'thing') {
+    delete c.spec.moves;
+    delete c.spec.replaces;
+    delete c.spec.everywhere;
+    delete c.obj;
+  }
+  c.at = [c.at[0] + 0.4, c.at[1], c.at[2] + 0.4];
+  derive(c);
+  cur = c;
+  pushStep({ t: 'rec', coll: c.kind === 'thing' ? 'things' : 'figures', add: true, spec: c.spec });
+  void saveCur();
+  renderGhosts();
+  dirty = true;
+  syncPanel();
+}
+
+/** Заменить выбранную вещь игры: следующий щелчок по вещи на полке ставит её вместо этой (0 — не заменять). */
+let replaceFor = 0;
+function setReplace(id: number): void {
+  replaceFor = id;
+  document.body.classList.toggle('is-replacing', id !== 0);
+  const o = id ? objById(id) : undefined;
+  if (o) setStatus(`Выбери на полке, чем заменить «${ruShort(o.name)}». Esc — отмена.`);
+}
 
 /**
  * Удалить то, что выделено: правку в работе (сохранённую — из базы) или вещь игры (убрать её). Одним нажатием — кнопкой
@@ -2447,7 +2824,19 @@ $('nextroom').addEventListener('click', () => {
 });
 
 renderKinds();
-enterRoom('shelter', 'kitchen', 0);
+{
+  // Где был в прошлый раз (вкладку закрыли, браузер вылетел) — там и открыться.
+  let v: { world?: WorldKind; type?: string; pick?: number } = {};
+  try {
+    v = JSON.parse(localStorage.getItem('ctor.view') ?? '{}') as typeof v;
+  } catch {
+    v = {};
+  }
+  const w = v.world && FIGURE_WORLDS.includes(v.world) ? v.world : 'shelter';
+  const t = v.type && roomTypes(w).includes(v.type) ? v.type : roomTypes(w).includes('kitchen') ? 'kitchen' : roomTypes(w)[0]!;
+  enterRoom(w, t, typeof v.pick === 'number' ? v.pick : 0);
+}
+setTool('move');
 loop();
 void connect();
 
@@ -2519,8 +2908,26 @@ const gameInfo = (o: LevelObject) => ({
   unmove: () => cur?.kind === 'thing' && cur.spec.moves && unmove(cur.spec),
   /** Стрелка: ax — вбок (+1 вправо), az — от себя (+1); shift/alt — шаг 50 / 2 см. */
   nudge: (ax: number, az: number, shift = false, alt = false) => nudge(ax, az, { shiftKey: shift, altKey: alt }) && cur ? { at: cur.at, rot: cur.kind === 'thing' ? cur.rot : null } : null,
-  save: () => $('save').click(),
-  fresh: () => $('fresh').click(),
+  save: () => saveCur(),
+  fresh: () => deselect(),
+  tool: (t: Tool) => setTool(t),
+  /** Доворот выбранной вещи по всем осям, градусы (как кольцами). */
+  tilt: (t: [number, number, number] | null) => {
+    if (cur?.kind !== 'thing') return null;
+    change(() => {
+      if (t && isTilted(t)) (cur as ThingItem).spec.tilt = t;
+      else delete (cur as ThingItem).spec.tilt;
+    });
+    return (cur as ThingItem).spec.tilt ?? null;
+  },
+  duplicate: () => duplicate(),
+  replaceWith: (id: number, prop: string) => {
+    const o = objById(id);
+    if (!o || !swappable(prop).some((x) => x.id === id)) return false;
+    dropSwap(prop, o);
+    return true;
+  },
+  drafts: () => readDrafts(),
   /** Удалить выделенное (как Delete). */
   del: () => deleteSelected(),
   /** Призраки в показанном помещении: чей и где стоит. */

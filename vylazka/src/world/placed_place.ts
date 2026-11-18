@@ -22,6 +22,8 @@
  *
  * Чистый TS: работает в сборке уровня (Worker), в инструменте и в тестах.
  */
+import { isTilted, tiltBox, tiltPose } from './tilt';
+import type { Tilt } from './tilt';
 import { hash01, hash2 } from '../core/rng';
 import type { Vec3 } from '../core/types';
 import { GRID, TIER_DROP } from '../gen/layout';
@@ -69,6 +71,8 @@ export interface PlacedSpot {
    * тесно (doorsAt); нет — как выпадет.
    */
   open?: PlacedOpen;
+  /** Доворот по всем осям (placed.ts, PlacedSpec.tilt; world/tilt.ts): сборка уровня поворачивает собранное. */
+  tilt?: Tilt;
 }
 
 /**
@@ -125,11 +129,11 @@ export function propBox(p: PropSpec, reach = 0): { min: Vec3; max: Vec3 } {
  * не в стену); не хватает — здесь она закрыта (open: 'shut'), как вещи игры у проёмов, а хватает — место для дверец за ней
  * держится (коробка с вылетом). others — коробки уже поставленных вещей.
  */
-export function doorsAt(spec: Pick<PlacedSpec, 'open'>, p: PropSpec, at: Vec3, rot: Turn, room: GenRoom, a: Pick<AnchorSpot, 'floor' | 'ceil' | 'pit' | 'tier'>, w: PlaceWorld, others: readonly Box[] = []): SpotCheck & { open?: PlacedOpen } {
-  const chk = checkSpot(p, at, rot, room, a, w, others, reachOf(p, spec.open));
+export function doorsAt(spec: Pick<PlacedSpec, 'open' | 'tilt'>, p: PropSpec, at: Vec3, rot: Turn, room: GenRoom, a: Pick<AnchorSpot, 'floor' | 'ceil' | 'pit' | 'tier'>, w: PlaceWorld, others: readonly Box[] = []): SpotCheck & { open?: PlacedOpen } {
+  const chk = checkSpot(p, at, rot, room, a, w, others, reachOf(p, spec.open), spec.tilt);
   if (spec.open) return { ...chk, open: spec.open };
   if (chk.problems.length > 0 || !((p.reach ?? 0) > 0)) return chk;
-  const wide = checkSpot(p, at, rot, room, a, w, others, p.reach);
+  const wide = checkSpot(p, at, rot, room, a, w, others, p.reach, spec.tilt);
   return wide.problems.length > 0 ? { ...chk, open: 'shut' } : wide;
 }
 
@@ -147,9 +151,17 @@ function turnPt(x: number, z: number, rot: Turn): [number, number] {
   return [x, z];
 }
 
-/** Коробка вещи в мире: точка at (низ), поворот rot; reach — вылет открытых дверец (propBox). */
-export function worldBox(p: PropSpec, at: Vec3, rot: Turn, reach = 0): Box {
-  const { min, max } = propBox(p, reach);
+/**
+ * Коробка вещи в мире: точка at (низ), поворот rot; reach — вылет открытых дверец (propBox); tilt — доворот по всем осям
+ * (world/tilt.ts): тогда габарит повёрнутой коробки, легшей на опору.
+ */
+export function worldBox(p: PropSpec, at: Vec3, rot: Turn, reach = 0, tilt?: Tilt): Box {
+  let { min, max } = propBox(p, reach);
+  if (isTilted(tilt)) {
+    const pts: number[] = [];
+    for (let k = 0; k < 8; k++) pts.push(k & 1 ? max[0] : min[0], k & 2 ? max[1] : min[1], k & 4 ? max[2] : min[2]);
+    [min, max] = tiltBox(tiltPose(pts, tilt, p.mount), min, max);
+  }
   const [ax, az] = turnPt(min[0], min[2], rot);
   const [bx, bz] = turnPt(max[0], max[2], rot);
   return { minX: at[0] + Math.min(ax, bx), maxX: at[0] + Math.max(ax, bx), minY: at[1] + min[1], maxY: at[1] + max[1], minZ: at[2] + Math.min(az, bz), maxZ: at[2] + Math.max(az, bz) };
@@ -220,8 +232,8 @@ const scratch: Aabb[] = [];
  * Проверка одной точки: те же правила, по которым игра ищет место (их же видит партнёр в инструменте).
  * others — коробки уже поставленных вещей; reach — вылет открытых дверец (reachOf).
  */
-export function checkSpot(p: PropSpec, at: Vec3, rot: Turn, room: GenRoom, a: Pick<AnchorSpot, 'floor' | 'ceil' | 'pit' | 'tier'>, w: PlaceWorld, others: readonly Box[] = [], reach = 0): SpotCheck {
-  const box = worldBox(p, at, rot, reach);
+export function checkSpot(p: PropSpec, at: Vec3, rot: Turn, room: GenRoom, a: Pick<AnchorSpot, 'floor' | 'ceil' | 'pit' | 'tier'>, w: PlaceWorld, others: readonly Box[] = [], reach = 0, tilt?: Tilt): SpotCheck {
+  const box = worldBox(p, at, rot, reach, tilt);
   const problems: string[] = [];
   const lift = at[1] - a.floor;
   if (box.maxY > a.ceil - 0.01) problems.push('не помещается под потолком');
@@ -329,7 +341,7 @@ export function placeThings(specs: readonly PlacedSpec[], w: PlaceWorld, props: 
           const { at, rot } = fitThing(spec, a, p);
           const { box, problems, open } = doorsAt(spec, p, at, rot, r, a, w, boxes);
           if (problems.length > 0) continue;
-          pick = { id: spec.id, k, prop: spec.prop, at, rot, room: a.room, tier: a.tier, ...(open ? { open } : {}) };
+          pick = { id: spec.id, k, prop: spec.prop, at, rot, room: a.room, tier: a.tier, ...(open ? { open } : {}), ...(isTilted(spec.tilt) ? { tilt: spec.tilt } : {}) };
           pickBox = box;
           break;
         }
@@ -362,7 +374,7 @@ export function moveSpot(spec: PlacedSpec, room: GenRoom, w: PlaceWorld, props: 
     const { at, rot } = fitThing(spec, a, p);
     const { box, problems, open } = doorsAt(spec, p, at, rot, room, a, w, others);
     if (problems.length > 0) continue;
-    return { spot: { id: spec.id, k: 0, prop: spec.prop, at, rot, room: room.id, tier: room.tier, moved: true, ...(open ? { open } : {}) }, box };
+    return { spot: { id: spec.id, k: 0, prop: spec.prop, at, rot, room: room.id, tier: room.tier, moved: true, ...(open ? { open } : {}), ...(isTilted(spec.tilt) ? { tilt: spec.tilt } : {}) }, box };
   }
   return null;
 }

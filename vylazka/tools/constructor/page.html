@@ -138,6 +138,28 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .verdict--redo2.is-on, .verdict--detail2.is-on, .verdict--swapfix.is-on, .verdict--fix.is-on { border-color: var(--v-replace); box-shadow: inset 3px 0 0 var(--v-replace); }
 .verdict--remove.is-on, .verdict--drop.is-on { border-color: var(--v-remove); box-shadow: inset 3px 0 0 var(--v-remove); }
 #c-note { width: 100%; min-height: 48px; resize: vertical; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: 13.5px/1.45 var(--font-body); }
+/* Панель инструментов над сценой — как в простых 3D-редакторах: двигать, крутить, отменить, копия, клавиши. */
+.tools { position: absolute; left: 10px; top: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; z-index: 2; }
+.tool { background: color-mix(in srgb, var(--panel) 92%, transparent); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; font: 500 13px/1.2 var(--font-body); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.tool kbd { font: 11px var(--font-mono); color: var(--muted); }
+.tool.is-on { border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+.tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.help { position: absolute; left: 10px; top: 52px; z-index: 3; max-width: min(420px, calc(100% - 20px)); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 12.5px/1.6 var(--font-mono); color: var(--muted); }
+.help b { color: var(--fg); font-weight: 600; }
+.save { font: 12px var(--font-mono); color: var(--ok); padding: 2px 8px; border-radius: 6px; border: 1px solid transparent; white-space: nowrap; }
+.save[data-state="pending"] { color: var(--muted); }
+.save[data-state="local"] { color: var(--accent); }
+.save[data-state="bad"] { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); white-space: normal; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-bottom: 10px; }
+.top h1 { font-size: 18px; }
+.count { margin: 0; font: 12px var(--font-mono); color: var(--muted); }
+.tiltrow { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)) auto; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.tiltrow input { width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--fg); border-radius: 6px; padding: 4px 6px; font: 13px var(--font-mono); }
+details.box > summary { cursor: pointer; list-style: none; font: 600 12px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+details.box > summary::-webkit-details-marker { display: none; }
+details.box > summary::before { content: "▸ "; }
+details.box[open] > summary::before { content: "▾ "; }
+body.is-replacing .shelf__item { border-color: var(--v-replace); }
 @media (max-width: 1180px) {
   .layout { grid-template-columns: minmax(0, 240px) minmax(0, 1fr); }
   #panel { grid-column: 1 / -1; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); grid-auto-flow: row dense; align-items: start; }
@@ -155,23 +177,37 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   #cardview { height: 200px; }
 }
 </style>
-<header>
+<header class="top">
   <h1>Конструктор</h1>
-  <p class="lead">Перетащи вещь с полки в помещение и поставь. Помещение настоящее — собрано тем же кодом, что в игре; в игре план места каждый раз новый, и вещь встанет в помещения того же типа у такого же края. Вещи игры тоже твои: щёлкни — карточка, тяни — передвинешь, «Убрать отсюда» — уберёшь. Щелчок по вещи на полке — её карточка с отметкой «оставить / реальнее / заменить / убрать». Красное — то, чего игра не допустит.</p>
+  <div class="row" id="worldpick"></div>
+  <span class="save" id="savestate" data-state="saved" role="status">сохранено</span>
 </header>
 <div class="places">
-  <div class="row" id="worldpick"></div>
-  <div class="row"><span class="row" id="roompick"></span><button class="btn" id="nextroom" title="Другое помещение того же типа">Другое такое <span id="roomnum"></span></button></div>
+  <div class="row"><span class="row" id="roompick"></span><button class="btn" id="nextroom" title="Другое помещение того же типа — у него своя расстановка">Другое такое <span id="roomnum"></span></button></div>
 </div>
 <div class="layout">
   <aside class="shelf">
     <input type="search" id="search" placeholder="Найти: стул, часы, чемодан…" aria-label="Найти вещь">
     <div class="kinds" id="kinds" role="group" aria-label="Какие вещи показывать"></div>
-    <p class="note">Вещей: <span id="shelfcount"></span> · отмечено <span id="marked"></span>. Щелчок — карточка, тяни — в помещение.</p>
-    <div class="sand">Кнопка «Sand3D» — настоящая мебель из каталога Sandflow, 38 вещей. С 18.11 вся мебель игры собрана из неё: диван игры — один из диванов полки, кабинка — стол и кресло полки. Тяни вещь полки в помещение — встанет рядом; на вещь игры — вместо неё. В карточке — авторство и где она уже стоит.</div>
+    <p class="count"><span id="shelfcount"></span> · отмечено <span id="marked"></span></p>
     <div id="shelf"></div>
   </aside>
-  <div id="view"><div class="hint"><b>щелчок</b> — карточка · <b>тяни</b> — двигать, и вещь игры тоже · с полки на <b>вещь игры</b> — заменить · <b>Q / E</b> — поворот · <b>стрелки</b> — сдвиг на 10 см (⇧ — 50, ⌥ — 2) · <b>Delete</b> — удалить выделенное · <b>⌘Z</b> — отмена · пустое место — крутить вид · у манекена <b>шарики</b> — гнуть, таз с <b>⌥</b> — вверх · красное у проёмов — проход, красная рамка — убранная</div></div>
+  <div id="view">
+    <div class="tools" role="toolbar" aria-label="Инструменты">
+      <button class="tool is-on" id="tool-move" type="button" title="Двигать: тяни вещь по полу">Двигать <kbd>G</kbd></button>
+      <button class="tool" id="tool-rotate" type="button" title="Крутить по всем осям: кольца вокруг вещи; ⇧ — без щелчков по 15°">Крутить <kbd>R</kbd></button>
+      <button class="tool" id="tool-dup" type="button" title="Копия выбранного">Копия <kbd>⌘D</kbd></button>
+      <button class="tool" id="tool-undo" type="button" title="Отменить">Отменить <kbd>⌘Z</kbd></button>
+      <button class="tool" id="tool-help" type="button" aria-label="Клавиши" title="Клавиши">?</button>
+    </div>
+    <div class="help" id="help" hidden>
+      <b>щелчок</b> — выбрать · <b>по пустому</b> — снять выбор · <b>тяни пустое</b> — крутить вид<br>
+      <b>с полки</b> — добавить · <b>с полки с ⌥</b> на вещь игры — заменить<br>
+      <b>G</b> — двигать · <b>R</b> — крутить (кольца, ⇧ — свободно) · <b>Q / E</b> — на четверть<br>
+      <b>стрелки</b> — сдвиг 10 см (⇧ 50, ⌥ 2) · <b>⌘D</b> — копия · <b>Delete</b> — удалить · <b>⌘Z</b> — отмена · <b>Esc</b> — снять выбор<br>
+      у человека <b>шарики</b> — гнуть, таз с <b>⌥</b> — вверх · красное у проёмов — проход
+    </div>
+  </div>
   <div id="panel">
     <div id="status" role="status"></div>
     <div class="box" id="gamebox" hidden>
@@ -181,20 +217,21 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
       <div id="gstate"></div>
       <div id="gcover"></div>
       <div class="row">
-        <button class="btn btn--warn" id="gremove" type="button">Убрать отсюда</button>
+        <button class="btn btn--warn" id="gremove" type="button">Убрать</button>
         <button class="btn" id="grestore" type="button">Вернуть</button>
+        <button class="btn" id="greplace" type="button" title="Потом щёлкни вещь на полке">Заменить…</button>
         <button class="btn" id="gedit" type="button">Править правило</button>
         <button class="btn" id="gunmove" type="button">Вернуть на место игры</button>
         <button class="btn btn--small" id="gcard" type="button">Карточка</button>
       </div>
-      <p class="note" id="ghint">Тяни её — передвинешь: в игре она встанет по твоему правилу в каждом таком помещении. «Убрать отсюда» — только из помещений этого типа; отметка «Убрать из игры» в карточке — просьба убрать такую вещь из игры совсем. Номер «такая по счёту» — для игры: план каждый раз новый, а порядок вещей в помещении тот же.</p>
+      <p class="note" id="ghint">Тяни — передвинешь. Так будет во всех таких помещениях этого варианта.</p>
     </div>
     <div class="box" id="card" hidden>
       <div class="box__head"><h2>Карточка вещи <span id="c-title"></span></h2><span class="row"><button class="btn btn--small" id="c-fold" type="button" aria-expanded="true">свернуть</button><button class="btn btn--x" id="c-close" type="button" aria-label="Закрыть карточку">×</button></span></div>
       <div class="card__body">
         <div class="card__look">
           <div id="cardview"></div>
-          <p class="card__hint">тянуть — повернуть · колесо — ближе · серый силуэт — человек 1,75 м</p>
+          <p class="card__hint">тянуть — повернуть · колесо — ближе · силуэт — 1,75 м</p>
         </div>
         <div class="card__info">
           <h3 id="c-ru"></h3>
@@ -210,21 +247,21 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
         <div class="card__mark">
           <h3 id="c-ask">Что с ней делать</h3>
           <div id="c-verdicts"></div>
-          <textarea id="c-note" placeholder="Что не так и какой она должна быть — например: ножки тоньше, сиденье из кожзама, как в поликлинике" aria-label="Заметка к вещи"></textarea>
+          <textarea id="c-note" placeholder="Что не так и какой она должна быть" aria-label="Заметка к вещи"></textarea>
           <div class="row"><button class="btn btn--small" id="c-savenote" type="button">Сохранить заметку</button><a class="btn btn--small" id="c-game" href="#" target="_blank" rel="noopener">Посмотреть в игре ↗</a></div>
         </div>
       </div>
     </div>
     <div class="box">
-      <h2>Что стоит</h2>
+      <h2>Выбрано</h2>
       <div class="row"><span id="what"></span><button class="btn btn--small" id="curcard" type="button" hidden>Карточка</button></div>
-      <input type="text" id="name" maxlength="80" placeholder="Как назовёшь — например, «стул спиной к двери»">
-      <div class="row" id="turns"><button class="btn" id="turnl">⟲ Q</button><button class="btn" id="turnr">E ⟳</button></div>
-      <div class="row" id="doors" hidden title="Дверцы и ящики этой вещи в игре. Как выпадет — как у вещей игры в том же помещении: из одних комнат уходили второпях, другие прибраны."></div>
+      <input type="text" id="name" maxlength="80" placeholder="Название (можно не трогать)">
+      <div class="row" id="turns"><button class="btn" id="turnl" title="На четверть влево">⟲ Q</button><button class="btn" id="turnr" title="На четверть вправо">E ⟳</button><button class="btn btn--warn" id="drop" type="button" title="Delete">Удалить</button></div>
+      <div class="tiltrow" id="tiltrow" hidden><span>Наклон°</span><input type="number" id="tilt-x" min="-180" max="180" step="5" aria-label="Наклон вокруг X, градусы" title="x — вперёд-назад"><input type="number" id="tilt-y" min="-180" max="180" step="5" aria-label="Поворот вокруг Y, градусы" title="y — вокруг вертикали"><input type="number" id="tilt-z" min="-180" max="180" step="5" aria-label="Наклон вокруг Z, градусы" title="z — на бок"><button class="btn btn--small" id="tilt-0" type="button" title="Поставить прямо">Прямо</button></div>
+      <div class="row" id="doors" hidden title="Дверцы и ящики этой вещи в игре. Как выпадет — как у вещей игры в том же помещении."></div>
       <p class="note" id="doorsnote" hidden></p>
-      <div class="row"><button class="btn btn--main" id="save">Сохранить</button><button class="btn" id="fresh">Новая</button><button class="btn btn--warn" id="drop">Удалить</button></div>
       <ul id="problems"></ul>
-      <p class="note" id="spotnote" hidden>Здесь вещь в таком виде не встанет. Сохранить можно: в других помещениях этого типа игра поставит её у такого же края, где правило выполнимо.</p>
+      <p class="note" id="spotnote" hidden>Здесь не встанет; в других таких помещениях — у такого же края.</p>
     </div>
     <div class="box" id="figbox" hidden>
       <h2>Манекен</h2>
@@ -232,8 +269,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
       <div class="row" id="mats"></div>
       <p class="note" id="matnote"></p>
     </div>
-    <div class="box" id="rule" hidden>
-      <h2>Правило для игры</h2>
+    <details class="box" id="rule" hidden>
+      <summary>В игре — правило</summary>
       <div id="summary"></div>
       <div id="coverage"></div>
       <div class="row" id="replace" hidden><span id="replacetext"></span><button class="btn" id="unreplace" type="button">Не заменять</button></div>
@@ -245,12 +282,10 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
       <div class="row" id="facings"></div>
       <label class="slider">Над полом<input type="range" id="lift" min="0" max="2.6" step="0.05"><output id="liftv"></output></label>
       <label class="slider" id="countrow">Сколько в месте<input type="range" id="count" min="1" max="3" step="1"><output id="countv"></output></label>
-      <p class="note">В игре вещь — как всё вокруг: растворяется от касания и возвращается, когда свет погаснет и зажжётся; в темноте меняется только вне кадра; на поздних кругах стирается вместе с местом. Поворот — четвертями: обстановка игры стоит по сторонам света.</p>
-    </div>
+    </details>
     <div class="box">
-      <h2>Сохранённое</h2>
+      <h2>Поставлено</h2>
       <div id="saved"></div>
-      <p class="note">Сохранённые вещи видны в подходящих помещениях полупрозрачными — щёлкни, чтобы править. Убранные вещи игры — в красной рамке: щёлкни рамку, чтобы вернуть.</p>
     </div>
   </div>
 </div>

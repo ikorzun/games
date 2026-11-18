@@ -19,6 +19,8 @@
  *
  * Чистый TS: читают игра, инструмент и тесты.
  */
+import { tiltProblems } from './tilt';
+import type { Tilt } from './tilt';
 import type { FigureRule } from './figures';
 import { FIGURE_ANCHORS, FIGURE_FACINGS, FIGURE_WORLDS, ID_RE } from './figures';
 import type { FigureAnchor, FigureFacing } from './figures';
@@ -98,6 +100,12 @@ export interface PlacedSpec {
    * вещи место ищется с вылетом дверец (PropSpec.reach): распахнутая не перекроет проход и не войдёт в соседа.
    */
   open?: PlacedOpen;
+  /**
+   * Доворот по всем осям (партнёр 18.11, 16:19: «разрешить крутить объекты по всем осям»): градусы вокруг осей вещи x, y, z,
+   * порядок XYZ, поверх четверти оборота правила. Вещь вращается вокруг своей середины и ложится на опору (world/tilt.ts).
+   * Нет поля или нули — стоит прямо.
+   */
+  tilt?: Tilt;
   /** Кто и когда сохранил (из инструмента). */
   at?: string;
 }
@@ -193,6 +201,7 @@ export function placedProblems(x: unknown, props: Readonly<Record<string, PropSp
   if (near !== undefined && !(Array.isArray(near) && near.length === 2 && near.every((v) => within(v, [0, 1])))) bad.push('где в помещении: две доли от 0 до 1');
   if (f.slot !== undefined && !(typeof f.slot === 'string' && SLOT_RE.test(f.slot))) bad.push('вариант: «тип.номер»');
   if (f.open !== undefined && !PLACED_OPEN.includes(f.open as PlacedOpen)) bad.push('дверцы: как выпадет, закрыто или открыто');
+  bad.push(...tiltProblems(f.tilt));
   const off = f.offset as unknown;
   if (!Array.isArray(off) || off.length !== 2 || !off.every((v) => within(v, PLACED_OFFSET))) bad.push('сдвиг: не дальше 3 м от края');
   const r = f.rule as Record<string, unknown> | undefined;

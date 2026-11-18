@@ -2,6 +2,7 @@
  * Сборка уровня из плана генератора: скорлупа по ярусам, лестничные марши, двери, обстановка,
  * места для находок, приметные объекты и навигационный граф. Чистый TS: работает в тестах и в Worker.
  */
+import { applyTilt, isTilted, tiltMark } from './tilt';
 import type { Perch } from '../systems/birds';
 import { hash01, hash2, mulberry32 } from '../core/rng';
 import type { Vec3 } from '../core/types';
@@ -319,7 +320,7 @@ function editsFor(layout: GenLayout, placed: readonly PlacedSpec[], removed: rea
     }
     if (flat) return null;
     // Дверцы по записи (квиз 18.11): закрыто или открыто всё; нет — как выпадет, с долей помещения.
-    const to = (s: PlacedSpec): string | SwapTo => (s.open ? { prop: s.prop, open: s.open } : s.prop);
+    const to = (s: PlacedSpec): string | SwapTo => (s.open || isTilted(s.tilt) ? { prop: s.prop, ...(s.open ? { open: s.open } : {}), ...(isTilted(s.tilt) ? { tilt: s.tilt } : {}) } : s.prop);
     for (const s of swaps) {
       if (s.replaces !== name) continue;
       if (s.everywhere === true) return to(s);
@@ -893,10 +894,19 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       if (fit) {
         const s = fit.spot;
         const ch = chunkFor(m.room, Math.round(s.at[0] / CELL) + GRID / 2, Math.round(s.at[2] / CELL) + GRID / 2);
-        withOpenMode(s.open, () => p.build(new Xf(ch.mb, col, s.at[0], s.at[1], s.at[2], s.rot, ch.sl), m.seed), share(m.room.id));
+        const xf = new Xf(ch.mb, col, s.at[0], s.at[1], s.at[2], s.rot, ch.sl);
+        const mk = tiltMark(xf);
+        withOpenMode(s.open, () => p.build(xf, m.seed), share(m.room.id));
+        // Доворот по всем осям (world/tilt.ts): собранное поворачивается вокруг середины и ложится на опору.
+        if (s.tilt) applyTilt(xf, mk, s.tilt, p.mount);
         taken.push(fit.box);
         placed.push(s);
-      } else withOpenMode(m.spec.open, () => p.build(new Xf(m.xf.mb, col, m.xf.ox, m.xf.oy, m.xf.oz, m.xf.rot, m.xf.sl), m.seed), m.share);
+      } else {
+        const xf = new Xf(m.xf.mb, col, m.xf.ox, m.xf.oy, m.xf.oz, m.xf.rot, m.xf.sl);
+        const mk = tiltMark(xf);
+        withOpenMode(m.spec.open, () => p.build(xf, m.seed), m.share);
+        if (isTilted(m.spec.tilt)) applyTilt(xf, mk, m.spec.tilt, p.mount);
+      }
     }
     // Вещи партнёра (world/placed_place.ts): после фигур и всей обстановки — не врастают ни во что, проходы
     // оставляют свободными. Строятся как обычная обстановка: в сетку своего помещения, с преградами, объектом
@@ -906,7 +916,11 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       const gx = Math.round(p.at[0] / CELL) + GRID / 2;
       const gz = Math.round(p.at[2] / CELL) + GRID / 2;
       const ch = chunkFor(room, gx, gz);
-      withOpenMode(p.open, () => ALL_PROPS[p.prop]!.build(new Xf(ch.mb, col, p.at[0], p.at[1], p.at[2], p.rot, ch.sl), placedSeed(layout.seed, p.k, p.id)), share(p.room));
+      const spec = ALL_PROPS[p.prop]!;
+      const xf = new Xf(ch.mb, col, p.at[0], p.at[1], p.at[2], p.rot, ch.sl);
+      const mk = tiltMark(xf);
+      withOpenMode(p.open, () => spec.build(xf, placedSeed(layout.seed, p.k, p.id)), share(p.room));
+      if (p.tilt) applyTilt(xf, mk, p.tilt, spec.mount);
       placed.push(p);
     }
   }));

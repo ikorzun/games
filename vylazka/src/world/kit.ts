@@ -359,6 +359,34 @@ export class MeshBuilder {
   }
 
   /** Габариты вершин, добавленных начиная с номера from; null — их нет. */
+  /** Пройти по точкам вершин с номера from (world/tilt.ts: середина и опора повёрнутой вещи). */
+  eachPosition(from: number, fn: (p: Vec3) => void): void {
+    const n = this.pos.length / 3;
+    for (let i = from; i < n; i++) fn([this.pos[i * 3]!, this.pos[i * 3 + 1]!, this.pos[i * 3 + 2]!]);
+  }
+
+  /**
+   * Перенести вершины с номера from и листы с номера sheetFrom: точки — через pos, нормали — через nrm (поворот без сдвига).
+   * Вещь партнёра, повёрнутая по всем осям (world/tilt.ts).
+   */
+  transformFrom(from: number, sheetFrom: number, pos: (p: Vec3) => Vec3, nrm: (n: Vec3) => Vec3): void {
+    const n = this.pos.length / 3;
+    for (let i = from; i < n; i++) {
+      const p = pos([this.pos[i * 3]!, this.pos[i * 3 + 1]!, this.pos[i * 3 + 2]!]);
+      const q = nrm([this.nrm[i * 3]!, this.nrm[i * 3 + 1]!, this.nrm[i * 3 + 2]!]);
+      this.pos[i * 3] = p[0];
+      this.pos[i * 3 + 1] = p[1];
+      this.pos[i * 3 + 2] = p[2];
+      this.nrm[i * 3] = q[0];
+      this.nrm[i * 3 + 1] = q[1];
+      this.nrm[i * 3 + 2] = q[2];
+    }
+    for (let i = sheetFrom; i < this.sheets.length; i++) {
+      const s = this.sheets[i]!;
+      this.sheets[i] = { ...s, at: pos(s.at), n: nrm(s.n) };
+    }
+  }
+
   bounds(from: number): [Vec3, Vec3] | null {
     const n = this.pos.length / 3;
     if (from >= n) return null;

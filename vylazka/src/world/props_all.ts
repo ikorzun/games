@@ -14,6 +14,8 @@ import { hash2 } from '../core/rng';
 import { withOpenMode } from './furniture';
 import { asObject, markBuild, rewindBuild, withFlatHook } from './objects';
 import type { PlacedOpen } from './placed';
+import { applyTilt, tiltMark } from './tilt';
+import type { Tilt } from './tilt';
 import type { Xf } from './props';
 import { BIRD_PROPS, CRAFT_PROPS } from './props_craft';
 import { SEATING_PROPS } from './props_seating';
@@ -65,7 +67,9 @@ export type PropSwap = ((name: string, xf: Xf, seed: number, flat?: boolean) => 
 /** Вещь на месте вещи игры с дверцами по записи партнёра: 'shut' — всё закрыто, 'open' — всё открыто. */
 export interface SwapTo {
   prop: string;
-  open: PlacedOpen;
+  open?: PlacedOpen;
+  /** Доворот по всем осям (world/tilt.ts): замена, повёрнутая партнёром. */
+  tilt?: Tilt;
 }
 let swap: PropSwap | null = null;
 
@@ -123,14 +127,19 @@ function tracked(name: string, spec: PropSpec): PropSpec {
       const sub = typeof got === 'string' ? got : got.prop;
       // Дверцы по записи; нет записи — как выпадет: доля открытого у помещения, которое обставляется (furnish.ts).
       const mode = typeof got === 'object' ? got.open : undefined;
+      // Доворот по всем осям (world/tilt.ts): собранную замену сборка поворачивает вокруг её середины.
+      const tilt = typeof got === 'object' ? got.tilt : undefined;
       const other = sub !== name ? RAW[sub] : undefined;
       // Замену выбрал партнёр (её место — место вещи игры): проверку «не врастать» она не проходит, и её преграды проверка не
       // видит — остальная обстановка встаёт, как при вещи игры.
-      if (other) {
-        const at = swapXf(xf, spec, other);
-        return asObject(at, sub, () => withOpenMode(mode, () => other.build(at, seed)), false, false, true);
-      }
-      return asObject(xf, name, () => withOpenMode(mode, () => spec.build(xf, seed)), false, false, true);
+      const put = (at: Xf, n: string, sp: PropSpec): boolean => {
+        const mk = tiltMark(at);
+        const ok = asObject(at, n, () => withOpenMode(mode, () => sp.build(at, seed)), false, false, true);
+        if (ok && tilt) applyTilt(at, mk, tilt, sp.mount);
+        return ok;
+      };
+      if (other) return put(swapXf(xf, spec, other), sub, other);
+      return put(xf, name, spec);
     },
   };
 }
