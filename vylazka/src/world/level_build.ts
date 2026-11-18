@@ -11,7 +11,7 @@ import { mossCushion } from './moss';
 import { ColliderSet } from './colliders';
 import type { FlatMark } from './flat';
 import { decayAt } from '../systems/decay';
-import { doorSign, furnishRoom, roomOpenness } from './furnish';
+import { doorSign, dropBuried, furnishRoom, roomOpenness } from './furnish';
 import { furnishExtras, GARDEN_H, NO_EXTRAS } from './furnish_extras';
 import { furnishPapers, newPaperState } from './furnish_papers';
 import { growWear } from './wear_growth';
@@ -896,6 +896,8 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       placed.push(p);
     }
   });
+  // Места для вещей внутри преград — прочь: вся обстановка уже стоит, и вещи партнёра тоже (furnish.ts, dropBuried).
+  dropBuried(spots, col);
   // Свободные участки стен — в порядке помещений уровня: туда вещь может вернуться «в другом месте».
   for (const { room, ctx } of furnished) for (const s of ctx.slots) if (!s.used && !s.hazard && s.deep) freeSlots.push({ at: [s.xf.ox, s.xf.oy, s.xf.oz], rot: s.xf.rot, room: room.id, tier: room.tier });
 

@@ -14,6 +14,7 @@ import type { PaperHold, PaperState } from './furnish_papers';
 import { furnishOffice, furnishYellow } from './furnish_office';
 import { furnishStation } from './furnish_station';
 import type { Decay } from '../systems/decay';
+import type { Aabb, ColliderSet } from './colliders';
 import type { ItemSpot, Landmark } from './level';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
@@ -143,6 +144,27 @@ export function take(ctx: RoomCtx, deep = true): Slot | null {
 export function spot(ctx: RoomCtx, xf: Xf, x: number, y: number, z: number, kind: ItemSpot['kind']): void {
   const p = xf.pt(x, y, z);
   ctx.spots.push({ x: p[0], y: p[1], z: p[2], room: ctx.room.id, tier: ctx.room.tier, kind });
+}
+
+/** Насколько вещь на сиденье, полке или стойке может уйти в коробку преграды, м: у её края (взгляд игры прощает 0,6). */
+export const BURIED = 0.3;
+
+/**
+ * Убрать места для вещей, оказавшиеся внутри преграды (CI 18.11: фотография воспоминания лежала на нижней койке нар, внутри
+ * сплошной коробки модели, — ни взгляд, ни луч до неё не доходили; так же — места на полу под столом переговорной, в дизеле
+ * и баках, под рабочим столом, вставшим после). Вещь на полу преград не касается; на сиденье, полке, стойке может лежать чуть
+ * внутри коробки, у её края, — не глубже BURIED. Звать после всей обстановки уровня: мебель ставится и после мест.
+ */
+export function dropBuried(spots: ItemSpot[], col: ColliderSet): void {
+  const near: Aabb[] = [];
+  let keep = 0;
+  for (const s of spots) {
+    const y = s.y + 0.06;
+    const limit = s.kind === 'floor' ? 0 : BURIED;
+    const buried = col.query(s.x, s.z, s.x, s.z, near).some((b) => y > b.minY && y < b.maxY && Math.min(s.x - b.minX, b.maxX - s.x, s.z - b.minZ, b.maxZ - s.z) > limit);
+    if (!buried) spots[keep++] = s;
+  }
+  spots.length = keep;
 }
 
 export function landmark(ctx: RoomCtx, id: string, xf: Xf, x: number, y: number, z: number): void {
@@ -763,11 +785,14 @@ export function floorSpots(ctx: RoomCtx, n: number): void {
     [0.45, -0.5],
   ];
   const cells = ctx.cells;
-  for (let i = 0; i < n; i++) {
+  let made = 0;
+  for (let i = 0; made < n && i < n + cells.length * offsets.length; i++) {
     const c = cells[i % cells.length]!;
-    // Не под выдвинутым ящиком и не в распахнутой дверце: из четырёх точек клетки — первая свободная от преград.
+    // Не под мебелью, не под выдвинутым ящиком и не в распахнутой дверце: из четырёх точек клетки — первая свободная от
+    // преград. Свободной нет (клетку занял стол переговорной, кабинка) — эту клетку пропустить: вещь внутри преграды не видна
+    // ни взгляду, ни лучу (CI 18.11).
     const k0 = Math.floor(i / cells.length) % offsets.length;
-    let k = k0;
+    let k = -1;
     for (let j = 0; j < offsets.length; j++) {
       const [x, z] = offsets[(k0 + j) % offsets.length]!;
       if (!blocked(c.xf, x, z)) {
@@ -775,8 +800,10 @@ export function floorSpots(ctx: RoomCtx, n: number): void {
         break;
       }
     }
+    if (k < 0) continue;
     const [ox, oz] = offsets[k]!;
     spot(ctx, c.xf, ox, 0.03, oz, 'floor');
+    made += 1;
   }
 }
 

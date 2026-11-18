@@ -8,7 +8,7 @@ import { generateLayout } from '../src/gen/layout';
 import type { WorldKind } from '../src/gen/layout';
 import { ColliderSet } from '../src/world/colliders';
 import { FURNITURE_FROM, furnished, jitter, openOf, pickOf, recordS3, s3Bounds, s3Parts, s3Put, s3Reach, s3Size, S3_BED, S3_SEAT, S3_SHELVES, S3_TOP, S3_WORKTOP, withOpenMode } from '../src/world/furniture';
-import { roomOpenness } from '../src/world/furnish';
+import { BURIED, roomOpenness } from '../src/world/furnish';
 import type { BuiltLevel } from '../src/world/level';
 import type { LevelObject } from '../src/world/objects';
 import { PLACED_OPEN } from '../src/world/placed';
@@ -498,6 +498,43 @@ describe('дверцы у вещей партнёра (квиз 18.11: «как 
       const spots = (moved.placed ?? []).filter((s) => s.moved);
       expect(spots.length, open).toBeGreaterThan(0);
       for (const s of spots) expect(boxesOf(moved, objAt(moved, s)!.id) > 1, open).toBe(open === 'open');
+    }
+  });
+});
+
+describe('вещь не лежит внутри преграды (CI 18.11: фотография на нижней койке нар)', () => {
+  it('у нар и кроватей сплошное — только до лежанки, выше — спинки у торцов; вещь на нижней койке видна спереди', () => {
+    for (const [name, bed] of Object.entries(S3_BED)) {
+      const col = new ColliderSet();
+      s3Put(new Xf(new MeshBuilder(), col, 0, 0, 0), name);
+      const g = s3Size(name);
+      expect(col.boxes.length, name).toBe(3);
+      for (const b of col.boxes) expect(b.minY, name).toBeCloseTo(0, 5);
+      expect(Math.min(...col.boxes.map((b) => b.maxY)), name).toBeCloseTo(bed, 5);
+      expect(Math.max(...col.boxes.map((b) => b.maxY)), name).toBeCloseTo(g.h, 5);
+      // Глаз стоящего в двух метрах перед кроватью — до вещи на лежанке (середина глубины, чуть выше матраса) ничего нет.
+      const to: Vec3 = [0.3, bed + 0.2, 0.42];
+      const eye: Vec3 = [0.1, 1.55, g.d + 2];
+      const d = Math.hypot(to[0] - eye[0], to[1] - eye[1], to[2] - eye[2]);
+      const hit = col.raycast(eye[0], eye[1], eye[2], (to[0] - eye[0]) / d, (to[1] - eye[1]) / d, (to[2] - eye[2]) / d, d);
+      expect(hit, name).toBeGreaterThan(d - 0.05);
+    }
+  });
+
+  it('места для вещей во всех четырёх местах: на полу — вне преград, на сиденье, полке, стойке — не глубже края коробки', () => {
+    for (const w of ['shelter', 'office', 'yellow', 'station'] as const) {
+      for (const seed of [20041113, 7, 42]) {
+        const lvl = buildLevel(generateLayout(seed, 2, w), { wear: 0, figures: [] });
+        expect(lvl.spots.length, w).toBeGreaterThan(10);
+        for (const s of lvl.spots) {
+          const y = s.y + 0.06;
+          for (const b of lvl.colliders.boxes) {
+            if (b.off || b.gone || y <= b.minY || y >= b.maxY) continue;
+            const depth = Math.min(s.x - b.minX, b.maxX - s.x, s.z - b.minZ, b.maxZ - s.z);
+            expect(depth, `${w} ${seed}: ${s.kind} ${[s.x, s.y, s.z].map((v) => v.toFixed(2)).join(', ')}`).toBeLessThanOrEqual(s.kind === 'floor' ? 0 : BURIED);
+          }
+        }
+      }
     }
   });
 });

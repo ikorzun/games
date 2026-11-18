@@ -203,8 +203,21 @@ export function s3Put(xf: Xf, name: string, opts: S3Opts = {}): void {
     // Открытая дверца и выдвинутый ящик — тоже преграда: стоит на полу (под ящиком не пройти), чтобы не проходить сквозь них.
     if (opts.collide !== false) for (const [a, b] of moved) at.collider([a[0], 0, a[2]], b);
   } else xf.box(lo, hi, MAT.paper, opts.tint ? { tint: opts.tint } : {});
-  if (opts.collide !== false) xf.collider(lo, hi);
+  if (opts.collide === false) return;
+  const bed = opts.tip ? undefined : S3_BED[name];
+  if (bed === undefined) {
+    xf.collider(lo, hi);
+    return;
+  }
+  // Лежанка открыта сверху (CI 18.11: фотография на нижней койке нар лежала внутри сплошной коробки — ни взгляд, ни луч до неё
+  // не доходили): сплошное — до лежанки, выше — только спинки у торцов. Пройти внутрь не даёт низ: он выше шага (0,36 м).
+  xf.collider(lo, [hi[0], bed, hi[2]]);
+  xf.collider(lo, [lo[0] + BED_END, hi[1], hi[2]]);
+  xf.collider([hi[0] - BED_END, lo[1], lo[2]], hi);
 }
+
+/** Толщина спинки кровати и торца нар у преграды, м. */
+const BED_END = 0.06;
 
 /** Модель полки на месте вещи с опорой mount: у стены — спиной к z = 0, посреди — серединой в начале координат. */
 export function s3As(xf: Xf, name: string, mount: S3Mount, opts: S3Opts = {}): void {
@@ -343,7 +356,10 @@ export const S3_SEAT: Readonly<Record<string, number>> = {
   s3_chair_carved: 0.42,
 };
 
-/** Высота лежанки (матрас, одеяло; у нар — нижний ярус), м: на неё кладут вещь. */
+/**
+ * Высота лежанки (матрас, одеяло; у нар — нижний ярус), м: на неё кладут вещь. До неё же сплошная преграда модели (s3Put),
+ * выше — только спинки у торцов: вещь на лежанке видна и освещается.
+ */
 export const S3_BED: Readonly<Record<string, number>> = {
   s3_bunk_black: 0.56,
   s3_bunk_mattress: 0.45,
