@@ -112,7 +112,7 @@ async function evictOld(port) {
 /**
  * Собрать страницу и поднять сервер. port — желаемый (занят чужим — следующий свободный; занят старым конструктором —
  * если replaceOld, старый уходит, порт тот же: на нём живут черновики окна). note — что сказать в окне при открытии.
- * Ответ: адрес, когда окно последний раз давало о себе знать (lastPing), и close.
+ * Ответ: адрес, когда окно последний раз давало о себе знать (lastPing), setNote — сказать в окне, close.
  */
 export async function startServer({ port = 5199, replaceOld = false, note = '' } = {}) {
   const page = await buildPage({ local: true });
@@ -127,7 +127,7 @@ export async function startServer({ port = 5199, replaceOld = false, note = '' }
       if (req.method === 'GET' && p === '/api/hello') return send(res, 200, { app: 'constructor', note });
       if (req.method === 'POST' && p === '/api/ping') {
         lastPing = Date.now();
-        return send(res, 200, { ok: true });
+        return send(res, 200, { ok: true, note });
       }
       if (req.method === 'POST' && p === '/api/push') return send(res, 200, await pushAll());
       if (req.method === 'POST' && p === '/api/token') {
@@ -218,7 +218,16 @@ export async function startServer({ port = 5199, replaceOld = false, note = '' }
       bound++;
     }
   }
-  return { url: `http://127.0.0.1:${bound}/`, port: bound, lastPing: () => lastPing, close: () => server.close() };
+  return {
+    url: `http://127.0.0.1:${bound}/`,
+    port: bound,
+    lastPing: () => lastPing,
+    /** Заметка в окне: окно спрашивает её раз в 15 с (/api/ping). */
+    setNote: (text) => {
+      note = text;
+    },
+    close: () => server.close(),
+  };
 }
 
 async function main() {

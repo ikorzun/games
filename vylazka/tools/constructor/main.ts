@@ -67,6 +67,16 @@ import type { Item as Entry, Kind, Mark, Verdict } from './catalog';
 import { cardView } from './card';
 import { slotFor, slotNumber, slotOf, slotType } from '../../src/world/variants';
 
+/**
+ * Программа «Конструктор» на Mac (оболочка mac/main.swift с SHELL_VERSION 2): она даёт странице канал ctor. Тогда место,
+ * помещение, вариант, инструменты, «Отменить / Копия / Удалить» и «Залить в игру» живут в настоящей панели окна macOS, а
+ * страница оформлена по Apple HIG (партнёр 18.11, 22:36: «Перестрой весь интерфейс конструктора следуя четким правилам Apple
+ * HIG и на нативных элементах macos»). Без оболочки (браузер, страница в Claude) — всё по-прежнему.
+ */
+type NativeHandler = { postMessage(s: string): void };
+const nativeHandler: NativeHandler | null = (window as unknown as { webkit?: { messageHandlers?: { ctor?: NativeHandler } } }).webkit?.messageHandlers?.ctor ?? null;
+if (nativeHandler) document.documentElement.classList.add('native');
+
 setThingRegistry(ALL_PROPS);
 const HALF = GRID / 2;
 
@@ -170,9 +180,14 @@ function findGame(l: BuiltLevel, r: GenRoom, thing: string, nth: number): LevelO
 }
 
 /** Все помещения типа по сидам: [сид, номер помещения]. */
+const roomsCache = new Map<string, [number, number][]>();
 function roomsOfType(w: WorldKind, type: string): [number, number][] {
+  const key = `${w}|${type}`;
+  const have = roomsCache.get(key);
+  if (have) return have;
   const out: [number, number][] = [];
   for (const seed of SEEDS) for (const r of generateLayout(seed, 2, w).rooms) if (r.type === type) out.push([seed, r.id]);
+  roomsCache.set(key, out);
   return out;
 }
 const typesCache = new Map<WorldKind, string[]>();
@@ -2275,12 +2290,18 @@ function syncGame(): void {
   cov.textContent = r ? removedCoverage(r.spec) : '';
 }
 
+/** У показанного варианта помещения есть свои вещи, перестановки или убранное. */
+function ownVariant(): boolean {
+  const here = slotNow();
+  return [...savedThings.values()].some((t) => slotFor(t.slot, t.rule.rooms) === here) || [...savedFigs.values()].some((f) => slotFor(f.slot, f.rule.rooms) === here) || [...savedRemoved.values()].some((r) => slotFor(r.slot, r.rooms) === here);
+}
+const OWN_NOTE = (): string =>
+  `«${ROOM_RU[roomType] ?? roomType}» ${roomPick + 1} — свой вариант: что поставишь, передвинешь или уберёшь здесь, будет только в ней. В игре каждая такая комната берёт один из твоих вариантов по жребию.`;
 function syncPanel(): void {
   chips($('worldpick'), FIGURE_WORLDS, (w) => WORLD_RU[w]!, (w) => w === world, (w) => enterRoom(w, roomTypes(w).includes(roomType) ? roomType : roomTypes(w)[0]!, 0));
   chips($('roompick'), roomTypes(world), (r) => ROOM_RU[r] ?? r, (r) => r === roomType, (r) => enterRoom(world, r, 0));
   const total = roomsOfType(world, roomType).length;
-  const own = [...savedThings.values()].some((t) => slotFor(t.slot, t.rule.rooms) === slotNow()) || [...savedFigs.values()].some((f) => slotFor(f.slot, f.rule.rooms) === slotNow()) || [...savedRemoved.values()].some((r) => slotFor(r.slot, r.rooms) === slotNow());
-  $('roomnum').textContent = `${roomPick + 1} из ${total}${own ? ' · свой вариант' : ''}`;
+  $('roomnum').textContent = `${roomPick + 1} из ${total}${ownVariant() ? ' · свой вариант' : ''}`;
   syncGame();
   const has = !!cur;
   $('rule').toggleAttribute('hidden', !has);
@@ -3072,7 +3093,7 @@ async function deleteSelected(): Promise<boolean> {
 $('drop').addEventListener('click', () => void deleteSelected());
 $('nextroom').addEventListener('click', () => {
   enterRoom(world, roomType, roomPick + 1);
-  setStatus(`«${ROOM_RU[roomType] ?? roomType}» ${roomPick + 1} — свой вариант: что поставишь, передвинешь или уберёшь здесь, будет только в ней. В игре каждая такая комната берёт один из твоих вариантов по жребию.`);
+  setStatus(OWN_NOTE());
 });
 
 renderKinds();
@@ -3158,21 +3179,91 @@ function setupPush(): void {
   $('pushclose').addEventListener('click', () => {
     $('pushbox').hidden = true;
   });
-  // Окно живо — серверу слышно (запасная программа без своего окна уходит сама, когда страницу закрыли).
-  const ping = (): void => void fetch('api/ping', POST).catch(() => undefined);
+  // Окно живо — серверу слышно (запасная программа без своего окна уходит сама, когда страницу закрыли). В ответ — заметка
+  // сервера, если есть: «свежее не забрал…», «программа обновилась — открой заново».
+  let shown = '';
+  const ping = (): void =>
+    void fetch('api/ping', POST)
+      .then((r) => r.json() as Promise<{ note?: string }>)
+      .then((h) => {
+        if (h.note && h.note !== shown) {
+          shown = h.note;
+          showPush('note', h.note);
+        }
+      })
+      .catch(() => undefined);
   ping();
   window.setInterval(ping, 15000);
-  void fetch('api/hello')
-    .then((r) => r.json() as Promise<{ note?: string }>)
-    .then((h) => {
-      if (h.note) showPush('note', h.note);
-    })
-    .catch(() => undefined);
+}
+
+/**
+ * Связь с оболочкой программы на Mac. Страница шлёт ей, что показать в панели окна (раз в 150 мс, только если поменялось),
+ * оболочка — команды: window.__ctorNative.cmd(имя, значение).
+ */
+function nativeState(): string {
+  const save = $('savestate');
+  return JSON.stringify({
+    worlds: FIGURE_WORLDS.map((w) => ({ id: w, label: WORLD_RU[w] ?? w })),
+    world,
+    rooms: roomTypes(world).map((t) => ({ id: t, label: ROOM_RU[t] ?? t })),
+    room: roomType,
+    pick: roomPick,
+    picks: roomsOfType(world, roomType).length,
+    own: ownVariant(),
+    tool,
+    canUndo: undo.length > 0,
+    sel: !!cur || gameSel > 0,
+    save: save.textContent ?? '',
+    saveState: save.dataset.state ?? '',
+    pushing: $<HTMLButtonElement>('push').disabled,
+    lib: !document.documentElement.classList.contains('no-lib'),
+    insp: !document.documentElement.classList.contains('no-insp'),
+  });
+}
+function setupNative(): void {
+  const h = nativeHandler;
+  if (!h) return;
+  let last = '';
+  const post = (): void => {
+    const s = nativeState();
+    if (s === last) return;
+    last = s;
+    h.postMessage(s);
+  };
+  const pane = (cls: string): void => {
+    document.documentElement.classList.toggle(cls);
+    resize();
+    dirty = true;
+  };
+  (window as unknown as { __ctorNative: unknown }).__ctorNative = {
+    cmd(name: string, arg?: string | number): void {
+      if (name === 'world' && FIGURE_WORLDS.includes(arg as WorldKind)) {
+        const w = arg as WorldKind;
+        enterRoom(w, roomTypes(w).includes(roomType) ? roomType : roomTypes(w)[0]!, 0);
+      } else if (name === 'room' && typeof arg === 'string' && roomTypes(world).includes(arg)) enterRoom(world, arg, 0);
+      else if (name === 'pick' && typeof arg === 'number' && arg !== roomPick) {
+        enterRoom(world, roomType, arg);
+        setStatus(OWN_NOTE());
+      } else if (name === 'tool' && (arg === 'move' || arg === 'rotate')) setTool(arg);
+      else if (name === 'undo') undoStep();
+      else if (name === 'duplicate') duplicate();
+      else if (name === 'delete') void deleteSelected();
+      else if (name === 'deselect') deselect();
+      else if (name === 'push') void pushNow();
+      else if (name === 'help') $('help').toggleAttribute('hidden');
+      else if (name === 'library') pane('no-lib');
+      else if (name === 'inspector') pane('no-insp');
+      post();
+    },
+  };
+  window.setInterval(post, 150);
+  post();
 }
 
 setTool('move');
 loop();
 setupPush();
+setupNative();
 void connect();
 
 /** Для проверок: что редактируется, где на экране точка мира, и «поставить», «убрать», «отметить» без мыши. */

@@ -121,16 +121,17 @@ function openWindow(url) {
   spawn(cmd, args, { stdio: 'ignore', detached: true }).on('error', () => undefined).unref();
 }
 
-/** Оболочка из старой версии — пересобрать (mac/install.mjs); заработает со следующего запуска. */
+/** Оболочка из старой версии — пересобрать (mac/install.mjs); заработает со следующего запуска. Ответ — пересобрана ли. */
 async function refreshShell() {
   const have = Number(process.env.CONSTRUCTOR_SHELL ?? 0);
   const bundle = process.env.CONSTRUCTOR_BUNDLE;
-  if (process.platform !== 'darwin' || !bundle || !have) return;
+  if (process.platform !== 'darwin' || !bundle || !have) return false;
   const { SHELL_VERSION, refreshApp } = await import('./mac/install.mjs');
-  if (have >= SHELL_VERSION) return;
+  if (have >= SHELL_VERSION) return false;
   log(`оболочка ${have} → ${SHELL_VERSION}: пересобираю ${bundle}`);
   const r = await refreshApp(bundle).catch((e) => ({ ok: false, why: String(e?.message ?? e) }));
   log(r.ok ? 'оболочка пересобрана' : `оболочку пересобрать не вышло: ${r.why}`);
+  return r.ok;
 }
 
 async function main() {
@@ -160,7 +161,11 @@ async function main() {
       if (Date.now() - (last || started) > (last ? 120000 : 180000)) process.exit(0);
     }, 10000);
   }
-  await refreshShell().catch((e) => log(`оболочка: ${String(e?.message ?? e)}`));
+  const fresh = await refreshShell().catch((e) => {
+    log(`оболочка: ${String(e?.message ?? e)}`);
+    return false;
+  });
+  if (fresh) srv.setNote('Программа обновилась. Закрой её (⌘Q) и открой снова — будет новый вид.');
 }
 
 main().catch((e) => say('FAIL', `Не получилось открыть: ${short(e?.stack ?? e)}`));

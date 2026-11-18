@@ -35,20 +35,25 @@ body {
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-block: 14px 24px;
 }
+/* Всё во всю высоту окна (партнёр 18.11, 22:36: «явно можно слева тянуть до конца вниз, как и справа»): страница не
+   прокручивается, полка, сцена и правая панель тянутся до низа, внутри — своя прокрутка. На узком окне — как раньше. */
+body { margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+body > header, body > .places { flex: none; }
 body.is-carrying, body.is-carrying * { cursor: grabbing !important; }
 header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin-bottom: 10px; }
 h1 { font: 600 22px/1.2 var(--font-body); margin: 0; letter-spacing: 0.01em; }
 .lead { color: var(--muted); margin: 0; max-width: 100ch; flex: 1 1 420px; min-width: 0; font-size: 14px; }
 .places { display: grid; gap: 6px; margin-bottom: 10px; }
-.layout { display: grid; grid-template-columns: minmax(0, 270px) minmax(0, 1fr) minmax(0, 360px); gap: 14px; align-items: start; }
-#view { position: relative; height: min(76vh, 760px); min-height: 380px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #0e1012; touch-action: none; }
+.layout { display: grid; grid-template-columns: minmax(0, 270px) minmax(0, 1fr) minmax(0, 360px); grid-template-rows: minmax(0, 1fr); gap: 14px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
+#view { position: relative; min-height: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #0e1012; touch-action: none; }
 #view canvas { display: block; width: 100%; height: 100%; }
 .hint { position: absolute; left: 12px; bottom: 10px; right: 12px; font: 12px/1.45 var(--font-mono); color: var(--muted); pointer-events: none; text-shadow: 0 1px 2px #000; }
 .hint b { color: var(--accent); font-weight: 600; }
-.shelf { display: grid; gap: 8px; min-width: 0; }
+.shelf { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.shelf > * { flex: none; }
 .kinds { display: flex; flex-wrap: wrap; gap: 4px; }
 .kinds .chip { padding: 2px 8px; font-size: 12.5px; }
-#shelf { display: grid; gap: 4px; max-height: min(62vh, 620px); overflow: auto; padding-right: 4px; }
+#shelf { display: grid; gap: 4px; align-content: start; flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 4px; }
 .shelf__item { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; align-items: center; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; color: var(--fg); font: 13px/1.25 var(--font-body); cursor: grab; touch-action: none; user-select: none; }
 .shelf__item:hover { border-color: var(--accent); }
 .shelf__item.is-current { border-color: var(--accent); background: var(--raise); }
@@ -73,7 +78,7 @@ h1 { font: 600 22px/1.2 var(--font-body); margin: 0; letter-spacing: 0.01em; }
 .tag--v-redo1, .tag--v-detail1, .tag--v-swap { color: var(--v-real); border-color: currentColor; }
 .tag--v-redo2, .tag--v-detail2, .tag--v-swapfix { color: var(--v-replace); border-color: currentColor; }
 .tag--v-remove { color: var(--v-remove); border-color: currentColor; }
-#panel { display: grid; gap: 10px; min-width: 0; }
+#panel { display: grid; gap: 10px; min-width: 0; min-height: 0; overflow: auto; align-content: start; }
 .box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
 .box h2 { margin: 0; font: 600 12px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .box__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -179,21 +184,131 @@ body.is-replacing .shelf__item { border-color: var(--v-replace); }
 .shelf__item--cat .btn { justify-self: start; margin-top: 4px; }
 .shelf__item--cat .shelf__thumb { cursor: zoom-in; background: #fff; }
 .btn.is-on { border-color: var(--accent); color: var(--accent); }
+/* ─────────── Программа «Конструктор» на Mac (html.native) — по Apple HIG ───────────
+   Партнёр 18.11, 22:36: «Перестрой весь интерфейс конструктора следуя четким правилам Apple HIG и на нативных элементах
+   macos». Место, помещение, вариант, инструменты, «Отменить / Копия / Удалить» и «Залить в игру» — в настоящей панели окна
+   (mac/main.swift); здесь — полка слева, сцена и инспектор справа во всю высоту. Шрифт и цвета системные (светлая и тёмная
+   тема, цвет акцента — как в настройках Mac), кнопки, поля, поиск и ползунки рисует сам Mac (appearance: auto), полка —
+   прозрачная: под ней полупрозрачный фон боковой панели macOS. Цвета -apple-system-* есть только в WebKit на Mac; для
+   проверок в другом браузере — обычные значения. */
+html.native {
+  color-scheme: light dark;
+  --n-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --fg: #1d1d1f; --muted: #6e6e73; --line: rgb(0 0 0 / .11); --accent: #0a7aff; --warn: #d70015; --ok: #248a3d;
+  --side: #e6e6e8; --insp: #f6f6f6; --pop: #ffffff; --hover: rgb(0 0 0 / .05); --recessed: rgb(0 0 0 / .09); --fill: rgb(0 0 0 / .06);
+  --sel: var(--accent); --sel-fg: #fff; --thumb: rgb(0 0 0 / .06);
+  --bg: var(--insp); --panel: var(--insp); --raise: var(--fill);
+}
+@media (prefers-color-scheme: dark) {
+  html.native {
+    --fg: #f5f5f7; --muted: #98989d; --line: rgb(255 255 255 / .1); --accent: #0a84ff; --warn: #ff453a; --ok: #32d74b;
+    --side: #2a2a2c; --insp: #232325; --pop: #2c2c2e; --hover: rgb(255 255 255 / .06); --recessed: rgb(255 255 255 / .12); --fill: rgb(255 255 255 / .08);
+    --thumb: rgb(255 255 255 / .07);
+  }
+}
+@supports (color: -apple-system-label) {
+  html.native {
+    --fg: -apple-system-label; --muted: -apple-system-secondary-label; --line: -apple-system-separator; --accent: -apple-system-control-accent;
+    --warn: -apple-system-red; --ok: -apple-system-green; --side: transparent;
+    --sel: -apple-system-selected-content-background; --sel-fg: -apple-system-alternate-selected-text;
+  }
+}
+html.native body { padding: 0; background: transparent; color: var(--fg); font: 13px/1.35 var(--n-font); -webkit-user-select: none; user-select: none; cursor: default; }
+html.native header.top, html.native .places, html.native .tools, html.native #push { display: none !important; }
+html.native .layout { gap: 0; grid-template-columns: 264px minmax(0, 1fr) 304px; }
+html.native.no-lib .layout { grid-template-columns: 0 minmax(0, 1fr) 304px; }
+html.native.no-insp .layout { grid-template-columns: 264px minmax(0, 1fr) 0; }
+html.native.no-lib.no-insp .layout { grid-template-columns: 0 minmax(0, 1fr) 0; }
+html.native.no-lib .shelf, html.native.no-insp #panel { display: none; }
+html.native .shelf { grid-column: 1; background: var(--side); border-right: 1px solid var(--line); padding-top: 10px; gap: 8px; }
+html.native #view { grid-column: 2; border: 0; border-radius: 0; }
+html.native #panel { grid-column: 3; background: var(--insp); border-left: 1px solid var(--line); gap: 0; }
+html.native input, html.native textarea, html.native [contenteditable] { -webkit-user-select: text; user-select: text; cursor: auto; }
+/* Полка — боковая панель-библиотека: поиск, полоса фильтров (как в Finder и Почте), список. */
+html.native #search { all: revert; display: block; box-sizing: border-box; width: calc(100% - 20px); margin: 0 10px; font: 13px var(--n-font); }
+html.native .kinds { margin: 0 8px; gap: 2px; }
+html.native .kinds .chip { all: unset; font: 500 11px/1 var(--n-font); padding: 4px 7px; border-radius: 5px; color: var(--muted); }
+html.native .kinds .chip:hover { background: var(--hover); }
+html.native .kinds .chip.is-on { background: var(--recessed); color: var(--fg); font-weight: 600; }
+html.native .count { margin: 0 12px; font: 11px var(--n-font); color: var(--muted); }
+html.native #shelf { gap: 1px; padding: 0 6px 10px; }
+html.native .shelf__item { background: transparent; border: 0; border-radius: 6px; padding: 4px 6px; grid-template-columns: 36px minmax(0, 1fr); gap: 9px; font: 13px/1.25 var(--n-font); color: var(--fg); cursor: default; }
+html.native .shelf__item:hover { border: 0; background: var(--hover); }
+html.native .shelf__item.is-current, html.native .shelf__item.is-current:hover { background: var(--sel); color: var(--sel-fg); }
+html.native .shelf__item.is-current small, html.native .shelf__item.is-current .tag { color: inherit; opacity: .85; }
+html.native .shelf__item--fig { border: 0; }
+html.native .shelf__thumb { width: 36px; height: 36px; border-radius: 6px; background: var(--thumb); }
+html.native .shelf__thumb--fig { font-size: 20px; color: var(--accent); }
+html.native .shelf__text b { font-weight: 400; }
+html.native .shelf__text small { font-size: 11px; color: var(--muted); }
+html.native .tag { border: 0; padding: 0; margin-right: 4px; font: 10px/1.3 var(--n-font); }
+html.native .tag--card { font-style: italic; }
+html.native body.is-replacing .shelf__item { box-shadow: inset 0 0 0 1px var(--accent); }
+/* Инспектор — разделы с заголовками, системные кнопки и поля. */
+html.native #status { padding: 10px 14px 0; font: 11px/1.4 var(--n-font); color: var(--muted); }
+html.native #status:empty { display: none; }
+html.native .box { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 12px 14px 14px; gap: 8px; }
+html.native .box h2, html.native details.box > summary, html.native #c-ask { font: 600 13px/1.3 var(--n-font); letter-spacing: 0; text-transform: none; color: var(--fg); }
+html.native details.box > summary::before { color: var(--muted); font-size: 10px; }
+html.native .box__head h2 { white-space: nowrap; }
+html.native #gamebox { border-color: var(--line); }
+html.native .note, html.native .card__hint, html.native #c-advice { font: 11px/1.4 var(--n-font); color: var(--muted); }
+html.native #gnth, html.native #summary, html.native #coverage, html.native #gcover, html.native .code { font: 11px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
+html.native #gnth, html.native #summary { color: var(--muted); }
+html.native .btn { all: revert; font: 13px var(--n-font); margin: 0; }
+html.native .btn--small, html.native .btn--x { font-size: 11px; }
+html.native .btn--warn { color: var(--warn); }
+html.native a.btn { color: var(--accent); text-decoration: none; cursor: pointer; }
+html.native a.btn:hover { text-decoration: underline; }
+html.native .chip, html.native .verdict { all: unset; box-sizing: border-box; font: 12px/1.25 var(--n-font); padding: 4px 9px; border-radius: 6px; background: var(--fill); color: var(--fg); }
+html.native .chip:hover, html.native .verdict:hover { background: var(--recessed); }
+html.native .chip.is-on, html.native .verdict.is-on { background: var(--accent); color: #fff; box-shadow: none; }
+html.native .verdict { display: grid; gap: 1px; }
+html.native .verdict small { font-size: 10.5px; color: inherit; opacity: .75; }
+html.native .chip:focus-visible, html.native .verdict:focus-visible, html.native .shelf__item:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 0; }
+html.native input[type="text"], html.native input[type="number"], html.native input[type="password"], html.native input[type="range"], html.native textarea { all: revert; box-sizing: border-box; font: 13px var(--n-font); }
+html.native input[type="text"], html.native textarea { width: 100%; }
+html.native textarea { min-height: 52px; resize: vertical; }
+html.native .tiltrow { font: 11px var(--n-font); color: var(--muted); }
+html.native .tiltrow input { width: 100%; font: 12px var(--n-font); }
+html.native label.slider { font: 12px var(--n-font); color: var(--muted); }
+html.native label.slider output { font: 11px var(--n-font); color: var(--fg); }
+html.native #problems { font-size: 12px; color: var(--warn); }
+html.native #saved { flex-direction: column; flex-wrap: nowrap; gap: 0; }
+html.native #saved .chip { background: transparent; border-radius: 6px; padding: 5px 8px; }
+html.native #saved .chip:hover { background: var(--hover); }
+html.native #saved .chip.is-on { background: var(--sel); color: var(--sel-fg); }
+html.native #saved:empty::after { font-size: 12px; }
+html.native #card dl { font-size: 12px; }
+html.native #c-ru { font: 600 13px/1.3 var(--n-font); }
+html.native #cardview { border-radius: 6px; }
+/* Окошки поверх — как поповеры Mac. */
+html.native .pushbox { top: 8px; right: 10px; width: min(380px, calc(100vw - 20px)); background: var(--pop); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 12px; box-shadow: 0 10px 34px rgb(0 0 0 / .28); font: 13px/1.4 var(--n-font); }
+html.native .pushbox__token p, html.native .pushbox__list { font-size: 12px; }
+html.native .pushbox__token input { all: revert; flex: 1; min-width: 0; font: 13px var(--n-font); }
+html.native .help { top: 10px; background: var(--pop); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 34px rgb(0 0 0 / .28); font: 12px/1.7 var(--n-font); color: var(--muted); }
+html.native .help b { color: var(--fg); }
 @media (max-width: 1180px) {
-  .layout { grid-template-columns: minmax(0, 240px) minmax(0, 1fr); }
-  #panel { grid-column: 1 / -1; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); grid-auto-flow: row dense; align-items: start; }
-  #panel > #status, #panel > #card { grid-column: 1 / -1; }
-  #card .card__body { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); }
-  .card__look { grid-row: span 2; }
-  #cardview { height: 230px; }
+  html:not(.native) body { display: block; height: auto; overflow: visible; }
+  html:not(.native) .layout { grid-template-columns: minmax(0, 240px) minmax(0, 1fr); grid-template-rows: none; align-items: start; }
+  html:not(.native) #view { height: min(76vh, 760px); }
+  html:not(.native) #shelf { max-height: min(62vh, 620px); }
+  html:not(.native) #panel { overflow: visible; }
+  html:not(.native) #panel { grid-column: 1 / -1; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); grid-auto-flow: row dense; align-items: start; }
+  html:not(.native) #panel > #status, html:not(.native) #panel > #card { grid-column: 1 / -1; }
+  html:not(.native) #card .card__body { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); }
+  html:not(.native) .card__look { grid-row: span 2; }
+  html:not(.native) #cardview { height: 230px; }
+
 }
 @media (max-width: 760px) {
-  .layout { grid-template-columns: minmax(0, 1fr); }
-  #view { height: 58vh; }
-  #shelf { max-height: 34vh; }
-  #card .card__body { grid-template-columns: minmax(0, 1fr); }
-  .card__look { grid-row: auto; }
-  #cardview { height: 200px; }
+  html:not(.native) .layout { grid-template-columns: minmax(0, 1fr); }
+  html:not(.native) #view { height: 58vh; }
+  html:not(.native) #shelf { max-height: 34vh; }
+  html:not(.native) #card .card__body { grid-template-columns: minmax(0, 1fr); }
+  html:not(.native) .card__look { grid-row: auto; }
+  html:not(.native) #cardview { height: 200px; }
+
 }
 </style>
 <header class="top">
