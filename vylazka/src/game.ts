@@ -1103,12 +1103,13 @@ export class Game {
     this.touchCount += 1;
     this.wearGain += WEAR.touch;
     dream.push({ type: 'touch', name: o.name, what: 'gone', first: this.touchCount === 1, ...(self ? { self } : {}) });
-    for (const t of this.things.list) if (t.state === 'idle' && !t.still && this.restsOn(t.pos, o)) this.touchThing(t, dream);
+    for (const t of this.things.list) if (t.state === 'idle' && !t.still && this.restsOn(t.pos, o)) this.touchThing(t, dream, `on:${o.name}`);
   }
 
-  /** Игрок коснулся вещи сна: она растворяется и вернётся, когда свет погаснет и зажжётся. */
-  private touchThing(t: Thing, dream: DreamEvent[]): void {
+  /** Игрок коснулся вещи сна: она растворяется и вернётся, когда свет погаснет и зажжётся. by — отчего (для проверок). */
+  private touchThing(t: Thing, dream: DreamEvent[], by = 'body'): void {
     if (!this.things.touch(t)) return;
+    t.why = { by, at: +this.time.toFixed(2), from: [+this.body.x.toFixed(2), +this.body.y.toFixed(2), +this.body.z.toFixed(2)] };
     this.touchCount += 1;
     this.wearGain += WEAR.touch;
     dream.push({ type: 'thing', thing: t, what: 'changing' });
@@ -1283,7 +1284,7 @@ export class Game {
       if (id > 0) this.touchObject(id, dream);
       else {
         const t = this.things.list.find((x) => x.id === -id);
-        if (t && !t.still) this.touchThing(t, dream);
+        if (t && !t.still) this.touchThing(t, dream, 'collide');
       }
     }
     // В проём вошли: уносит на луг. Если в этот миг идёт другой переход, вход не теряется — проём ждёт
@@ -3479,7 +3480,7 @@ export class Game {
             collapsed: s.collapsed(),
           }
         : null,
-      things: this.things.list.map((t) => ({ id: t.id, kind: t.kind, state: t.state, fate: t.fate, memory: t.memory, gaze: t.gaze, scale: t.scale, dissolve: t.dissolve, pos: t.pos })),
+      things: this.things.list.map((t) => ({ id: t.id, kind: t.kind, state: t.state, fate: t.fate, memory: t.memory, gaze: t.gaze, scale: t.scale, dissolve: t.dissolve, pos: t.pos, ...(t.why ? { why: t.why } : {}) })),
       jumps: this.jumps ? { count: this.jumps.count, cooldown: this.jumps.cooldown } : null,
       archive: [...this.archive],
       swarm: this.swarm ? { mode: this.swarm.mode, pos: [...this.swarm.pos], node: this.swarm.node, cohesion: this.swarm.cohesion, awareness: this.swarm.awareness, aggravation: this.swarm.aggravation, near: this.swarmNear, growth: Math.min(1, (this.session?.doneCount ?? 0) / SWARM_GROWN), flow: this.swarmFlow ? this.swarmFlow.t : null } : null,

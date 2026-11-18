@@ -1952,10 +1952,14 @@ async function scenarioScenes(browser, baseUrl) {
   section('Сон из сцен: место не выбирают; скачок уносит в другое место; вспомнил — другое место; три вещи — лимбо');
   // Вторая сессия игрока: первая — вся в убежище (учит закону), со второй места перемешиваются.
   const profile = { v: 1, sorties: 1, successes: 1, archive: [], baseSeed: 20041113, muted: false, sens: 1, bright: 1, calm: false, lang: null, place: 'shelter', memories: {} };
+  // Профиль кладётся туда, откуда его читает площадка: web-plain — localStorage с приставкой игры; сборка Playgama — хранилище
+  // Bridge, которое на mock-площадке при первом чтении забирает значение из localStorage по голому ключу («profile»). Без второго
+  // ключа сборка Playgama видела пустой профиль — первый сон игрока, одна сцена убежища (CI, 7a3582d).
   const prepare = (ctx) =>
     ctx.addInitScript((p) => {
       try {
         localStorage.setItem('vylazka:profile', JSON.stringify(p));
+        localStorage.setItem('profile', JSON.stringify(p));
       } catch {
         /* без хранилища — профиль по умолчанию */
       }
@@ -2344,7 +2348,8 @@ async function scenarioPockets(browser, baseUrl) {
       const s = window.__vz.state();
       const t = s.things.find((x) => x.id === id);
       const p = window.__vz.pressure();
-      return { thing: t ? t.state : null, at: t ? t.pos.map((v) => +v.toFixed(2)) : null, me: s.pos.map((v) => +v.toFixed(2)), room: s.room, pressure: p ? { count: p.count, active: p.active?.kind ?? null, room: p.active?.room ?? null } : null };
+      // why — отчего растворилась (Thing.why): кто коснулся, когда (время игры) и где стоял игрок.
+      return { thing: t ? t.state : null, why: t?.why ?? null, at: t ? t.pos.map((v) => +v.toFixed(2)) : null, me: s.pos.map((v) => +v.toFixed(2)), room: s.room, pressure: p ? { count: p.count, active: p.active?.kind ?? null, room: p.active?.room ?? null } : null };
     },
     mem.thing,
   );
