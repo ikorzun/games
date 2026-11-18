@@ -255,7 +255,8 @@ interface MovedCall {
  * - убрана (RemovedSpec: эта вещь, этот номер, место и тип помещения подходят) — не строится;
  * - передвинута (PlacedSpec с moves) — не строится здесь: сборка запоминает её и после всей обстановки ставит по правилу
  *   записи в том же помещении (buildLevelInner, moveSpot); в комнате-аномалии и там, где вещи не ставят, не двигается;
- * - заменена (PlacedSpec с replaces) — на её месте вещь партнёра, по порядку сборки, не больше count на место; если вещь
+ * - заменена (PlacedSpec с replaces) — на её месте вещь партнёра, по порядку сборки, не больше count на место (замена «везде» —
+ *   каждая такая во всех помещениях и местах, после замен «здесь»); если вещь
  *   партнёра не встаёт на её место (swapFits), остаётся вещь игры. Картонку не заменяют.
  * Записей для этого места нет — хука нет: уровень собирается ровно как без них.
  */
@@ -269,7 +270,10 @@ interface GameEdits {
 
 function editsFor(layout: GenLayout, placed: readonly PlacedSpec[], removed: readonly RemovedSpec[], pick: (room: GenRoom) => string | null): GameEdits | null {
   const here = (worlds: readonly WorldKind[]): boolean => worlds.includes(layout.world);
-  const swaps = placed.filter((s) => s.replaces && !s.moves && here(s.rule.worlds) && ALL_PROPS[s.prop] && ALL_PROPS[s.replaces] && swapFits(ALL_PROPS[s.replaces]!, ALL_PROPS[s.prop]!));
+  // Замена «везде» (everywhere) — во всех местах и помещениях, каждая; замены «здесь» идут первыми: в своих помещениях они важнее.
+  const swaps = placed
+    .filter((s) => s.replaces && !s.moves && (s.everywhere === true || here(s.rule.worlds)) && ALL_PROPS[s.prop] && ALL_PROPS[s.replaces] && swapFits(ALL_PROPS[s.replaces]!, ALL_PROPS[s.prop]!))
+    .sort((a, b) => Number(a.everywhere === true) - Number(b.everywhere === true));
   const moves = placed.filter((s) => s.moves && !s.replaces && s.moves.thing === s.prop && ALL_PROPS[s.prop] && here(s.rule.worlds));
   const gone = removed.filter((r) => here(r.worlds) && ALL_PROPS[r.what.thing]);
   if (swaps.length + moves.length + gone.length === 0) return null;
@@ -311,7 +315,9 @@ function editsFor(layout: GenLayout, placed: readonly PlacedSpec[], removed: rea
     }
     if (flat) return null;
     for (const s of swaps) {
-      if (s.replaces !== name || !fitsRoom(s.rule.rooms, room) || !variantOk(slotFor(s.slot, s.rule.rooms), room)) continue;
+      if (s.replaces !== name) continue;
+      if (s.everywhere === true) return s.prop;
+      if (!fitsRoom(s.rule.rooms, room) || !variantOk(slotFor(s.slot, s.rule.rooms), room)) continue;
       const n = used.get(s.id) ?? 0;
       if (n >= s.rule.count) continue;
       used.set(s.id, n + 1);

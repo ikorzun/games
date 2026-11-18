@@ -159,6 +159,42 @@ describe('замена вещей игры (квиз 17.11: «Заменять»
     const hit = stools.some((s) => olds.some((o) => o.rot === s.rot && Math.hypot(o.at[0] - s.at[0], o.at[2] - s.at[2]) < 0.6));
     expect(hit).toBe(true);
   });
+
+  it('замена «везде» (куратор, пачка 41, 239): проверка — только у замены и только да/нет', () => {
+    const base = spec({ replaces: 'kk_chair_a', prop: 'kk_stool' });
+    expect(placedProblems({ ...base, everywhere: true }, ALL_PROPS, FIXED)).toEqual([]);
+    expect(placedProblems({ ...base, everywhere: 'да' }, ALL_PROPS, FIXED).join()).toContain('везде');
+    expect(placedProblems({ ...spec(), everywhere: true }, ALL_PROPS, FIXED).join()).toContain('только у замены');
+  });
+
+  it('замена «везде»: каждая такая вещь игры во всех помещениях, без счёта и мимо мест правила; «здесь» в своих помещениях важнее', () => {
+    const layout = (): ReturnType<typeof generateLayout> => generateLayout(20041113, 2, 'office');
+    const plain = office();
+    const count = new Map<string, number>();
+    for (const o of plain.objects ?? []) if (!o.flat) count.set(o.name, (count.get(o.name) ?? 0) + 1);
+    const target = [...count.entries()]
+      .filter(([n]) => ALL_PROPS[n] && !FIXED.has(n) && ALL_PROPS[n]!.mount === 'floor' && ALL_PROPS[n]!.w >= 0.4 && ALL_PROPS[n]!.d >= 0.4)
+      .sort((a, b) => b[1] - a[1])[0]!;
+    const [name, before] = target;
+    expect(before).toBeGreaterThan(3);
+    const stoolsIn = (l: ReturnType<typeof office>): number => (l.objects ?? []).filter((o) => o.name === 'kk_stool').length;
+    const left = (l: ReturnType<typeof office>): number => (l.objects ?? []).filter((o) => o.name === name && !o.flat).length;
+    // Правило записи — про убежище и одну штуку: «везде» его не слушает.
+    const all = spec({ id: 'pl_all', replaces: name, prop: 'kk_stool', everywhere: true }, { worlds: ['shelter'], rooms: ['kitchen'], count: 1 });
+    const swapped = buildLevel(layout(), { wear: 0, figures: [], placed: [all] });
+    expect(left(swapped)).toBe(0);
+    expect(stoolsIn(swapped) - stoolsIn(plain)).toBe(before);
+    // Рядом замена «здесь» той же вещи на другую — в своих помещениях берёт своё (до count), остальное — «везде».
+    const first = (plain.objects ?? []).find((o) => o.name === name && !o.flat)!;
+    const type = roomIndex(plain.layout!)(first.at[0], first.at[1], first.at[2])?.type;
+    expect(type).toBeDefined();
+    const here = spec({ id: 'pl_here', replaces: name, prop: 'kk_chair_b' }, { worlds: ['office'], rooms: [type!], count: 1 });
+    const both = buildLevel(layout(), { wear: 0, figures: [], placed: [all, here] });
+    const chairs = (both.objects ?? []).filter((o) => o.name === 'kk_chair_b').length - (plain.objects ?? []).filter((o) => o.name === 'kk_chair_b').length;
+    expect(chairs).toBe(1);
+    expect(left(both)).toBe(0);
+    expect(stoolsIn(both) - stoolsIn(plain)).toBe(before - 1);
+  });
 });
 
 // ───────────────── вещи игры: убрать и передвинуть (партнёр 17.11, 19:15) ─────────────────

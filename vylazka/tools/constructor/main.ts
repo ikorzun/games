@@ -1361,6 +1361,13 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+/** Подпись замены: «диван вместо кушетки»; одинаковые названия («картотечный шкаф» вместо «картотечного шкафа») — «новый вместо прежнего». */
+function swapName(to: string, from: string): string {
+  const a = to.split(',')[0]!.slice(0, 40);
+  const b = from.split(',')[0]!.slice(0, 30);
+  return a === b ? `${a}: новый вместо прежнего` : `${a} вместо ${b}`;
+}
+
 /** Вещь с полки — вместо вещи игры (замена): там же и так же повёрнута, правило — «вместо такой-то». */
 function dropSwap(prop: string, o: LevelObject): void {
   pushUndo();
@@ -1371,7 +1378,7 @@ function dropSwap(prop: string, o: LevelObject): void {
   const k = from.mount === 'floor' && p.mount === 'free' ? p.d / 2 : from.mount === 'free' && p.mount === 'floor' ? -from.d / 2 : 0;
   const it: ThingItem = {
     kind: 'thing',
-    spec: { id: `pl_${stamp()}`, name: `${p.ru.split(',')[0]!.slice(0, 40)} вместо ${from.ru.split(',')[0]!.slice(0, 30)}`, prop, rule: { worlds: [world], rooms: [roomType], anchor: 'wall', facing: 'room', lift: 0, count: 1 }, turn: 0, offset: [0, 0], replaces: o.name, slot: slotNow() },
+    spec: { id: `pl_${stamp()}`, name: swapName(p.ru, from.ru), prop, rule: { worlds: [world], rooms: [roomType], anchor: 'wall', facing: 'room', lift: 0, count: 1 }, turn: 0, offset: [0, 0], replaces: o.name, slot: slotNow() },
     at: [o.at[0] + f[0] * k, o.at[1], o.at[2] + f[1] * k],
     rot: o.rot,
   };
@@ -1379,7 +1386,7 @@ function dropSwap(prop: string, o: LevelObject): void {
   it.spec.replaces = o.name;
   it.obj = o.id;
   cur = it;
-  setStatus(`Вместо «${from.ru.split(',')[0]}» — «${p.ru.split(',')[0]}». В игре так будет в помещениях правила, сколько указано.`);
+  setStatus(`Вместо «${from.ru.split(',')[0]}» — «${p.ru.split(',')[0]}». В игре — в помещениях правила, сколько указано; «везде, где она стоит» справа — каждая такая во всех местах.`);
   dirty = true;
   syncPanel();
 }
@@ -1909,9 +1916,23 @@ function syncPanel(): void {
   const mv = c.kind === 'thing' ? c.spec.moves : undefined;
   $('replace').toggleAttribute('hidden', !rp);
   if (rp) $('replacetext').textContent = `вместо вещи игры: ${ALL_PROPS[rp]?.ru.split(',')[0] ?? rp}`;
+  // Замена «везде» (куратор, пачка 41, 239): каждая такая вещь игры во всех местах и помещениях — места, помещения и счёт не нужны.
+  const all = c.kind === 'thing' && !!rp && c.spec.everywhere === true;
+  $('swapscope').toggleAttribute('hidden', !rp);
+  if (rp && c.kind === 'thing') {
+    const spec = c.spec;
+    chips($('swapscope'), ['here', 'all'], (k) => (k === 'all' ? 'везде, где она стоит' : 'только здесь'), (k) => (k === 'all') === all, (k) =>
+      change(() => {
+        if (k === 'all') spec.everywhere = true;
+        else delete spec.everywhere;
+      }),
+    );
+  }
+  $('worlds').toggleAttribute('hidden', all);
+  $('rooms').toggleAttribute('hidden', all);
   $('moved').toggleAttribute('hidden', !mv);
   if (mv) $('movenote').textContent = `вещь игры: ${mv.nth + 1}-я «${ruShort(mv.thing)}» в помещениях правила — встанет по правилу в том же помещении, одна`;
-  $('countrow').toggleAttribute('hidden', !!mv);
+  $('countrow').toggleAttribute('hidden', !!mv || all);
   $('anchors').toggleAttribute('hidden', !!rp);
   $('facings').toggleAttribute('hidden', !!rp);
   liftEl.value = String(c.spec.rule.lift);
@@ -1925,7 +1946,9 @@ function syncPanel(): void {
   const turnTxt = c.kind === 'thing' ? TURN_RU[c.spec.turn]! : c.spec.yaw ? `, доворот ${c.spec.yaw}°` : '';
   const lift = c.spec.rule.lift > 0 ? `${c.spec.rule.lift.toFixed(2)} м над полом · ` : '';
   $('summary').textContent = rp
-    ? `${where} · ${rooms} · вместо «${ALL_PROPS[rp]?.ru.split(',')[0] ?? rp}» — там же и так же повёрнута · до ${c.spec.rule.count} шт. на место`
+    ? all
+      ? `везде: вместо каждой «${ALL_PROPS[rp]?.ru.split(',')[0] ?? rp}» во всех местах и помещениях — там же и так же повёрнута`
+      : `${where} · ${rooms} · вместо «${ALL_PROPS[rp]?.ru.split(',')[0] ?? rp}» — там же и так же повёрнута · до ${c.spec.rule.count} шт. на место`
     : mv
       ? `${where} · ${rooms} · ${mv.nth + 1}-я такая — ${ANCHOR_RU[c.spec.rule.anchor]}, ${FACING_RU[c.spec.rule.facing]}${turnTxt} · ${lift}в своём помещении`
       : `${where} · ${rooms} · ${ANCHOR_RU[c.spec.rule.anchor]}, ${FACING_RU[c.spec.rule.facing]}${turnTxt} · ${lift}${c.spec.rule.count} шт. на место`;
@@ -1945,15 +1968,18 @@ function coverageSoon(): void {
   $('coverage').textContent = 'считаю, где встанет…';
   covTimer = window.setTimeout(coverage, 350);
 }
-/** Сколько замен встанет на плане: вещи игры этого имени в помещениях правила, не больше count (картонку не заменяют). */
+/**
+ * Сколько замен встанет на плане: вещи игры этого имени в помещениях правила, не больше count; у замены «везде» — все такие
+ * на плане (картонку не заменяют).
+ */
 function swapsIn(l: BuiltLevel, spec: PlacedSpec): number {
   let n = 0;
   for (const o of l.objects ?? []) {
     if (o.name !== spec.replaces || o.flat) continue;
     const r = roomOfObj(l, o);
-    if (r && (spec.rule.rooms.length === 0 || spec.rule.rooms.includes(r.type))) n += 1;
+    if (spec.everywhere === true || (r && (spec.rule.rooms.length === 0 || spec.rule.rooms.includes(r.type)))) n += 1;
   }
-  return Math.min(n, spec.rule.count);
+  return spec.everywhere === true ? n : Math.min(n, spec.rule.count);
 }
 /** Помещения правила на плане, где стоит nth-я вещь thing: объект уровня там и само помещение. */
 function gameRooms(l: BuiltLevel, rooms: readonly string[], thing: string, nth: number): { r: GenRoom; o: LevelObject }[] {
@@ -2023,7 +2049,8 @@ function coverage(): void {
     let levels = 0;
     let hit = 0;
     let pieces = 0;
-    for (const w of c.spec.rule.worlds) {
+    // Замена «везде» считается по всем местам: вещь игры может стоять и там, где партнёр её не видел.
+    for (const w of c.kind === 'thing' && c.spec.replaces && c.spec.everywhere === true ? FIGURE_WORLDS : c.spec.rule.worlds) {
       for (const seed of SEEDS) {
         const l = levelOf(seed, w);
         if (!l.placeWorld) continue;
@@ -2039,7 +2066,9 @@ function coverage(): void {
         ? ''
         : hit === 0
           ? `в игре не встанет ни на одном из ${levels} планов: правило нигде не выполнимо — сдвинь вещь или выбери другой край, помещения`
-          : `в игре встанет на ${hit} из ${levels} планов${pieces > hit ? `, всего ${pieces} шт.` : ''}`;
+          : c.kind === 'thing' && c.spec.replaces && c.spec.everywhere === true
+            ? `в игре заменит ${pieces} шт. — на ${hit} из ${levels} планов всех мест (там, где такая вещь стоит)`
+            : `в игре встанет на ${hit} из ${levels} планов${pieces > hit ? `, всего ${pieces} шт.` : ''}`;
   } finally {
     for (const b of gone) b.gone = true;
   }
