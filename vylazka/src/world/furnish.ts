@@ -557,8 +557,14 @@ export function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; 
       // Картонка: стоит там же, где стоял бы настоящий предмет, но это лист — и преграды у неё нет.
       const sheet = new Xf(at.mb, null, at.ox, at.oy, at.oz, at.rot, at.sl);
       let r = { w: p.w, h: p.h, plane: 0 };
-      asObject(sheet, name, () => (r = standee(sheet, p, seed)), true);
-      ctx.flats.push({ kind: 'standee', what: name, at: at.pt(0, Math.min(FLAT_EYE, r.h * 0.6), r.plane), n: at.dir(0, 0, 1), w: r.w, h: r.h, floor: at.oy, room: ctx.room.id, tier: ctx.room.tier });
+      let built = false;
+      asObject(sheet, name, () => {
+        r = standee(sheet, p, seed);
+        built = true;
+      }, true);
+      // Убранную или передвинутую партнёром картонку хук сборки не строит (world/objects.ts): тогда и метки картонки нет —
+      // иначе на её месте осталась бы «картонка», через которую можно пройти, а передвинутая вещь вернулась бы туда настоящей.
+      if (built) ctx.flats.push({ kind: 'standee', what: name, at: at.pt(0, Math.min(FLAT_EYE, r.h * 0.6), r.plane), n: at.dir(0, 0, 1), w: r.w, h: r.h, floor: at.oy, room: ctx.room.id, tier: ctx.room.tier });
     } else p.build(at, seed);
   });
   return { s, x };

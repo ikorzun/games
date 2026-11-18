@@ -272,6 +272,24 @@ describe('плоские вещи в уровне', () => {
     expect(checked).toBeGreaterThan(10);
   });
 
+  it('убранная или передвинутая партнёром картонка не оставляет метки картонки (иначе на её месте «можно пройти» сквозь настоящую вещь)', () => {
+    let checked = 0;
+    for (const seed of SEEDS.slice(0, 14)) {
+      const layout = generateLayout(seed, 2, 'shelter');
+      const plain = buildLevel(layout, { wear: 0, placed: [], removed: [], figures: [] });
+      const f = flats(plain, 'standee')[0];
+      if (!f) continue;
+      const type = layout.rooms.find((r) => r.id === f.room)!.type;
+      // Убраны все такие вещи (номера 0–9) в помещениях этого типа — картонок этой вещи там быть не должно.
+      const removed = Array.from({ length: 10 }, (_, nth) => ({ id: `rm_flat_${nth}`, name: 'картонка убрана', what: { thing: f.what, nth }, worlds: ['shelter' as const], rooms: [type] }));
+      const l = buildLevel(layout, { wear: 0, placed: [], removed, figures: [] });
+      const left = flats(l, 'standee').filter((g) => g.what === f.what && layout.rooms.find((r) => r.id === g.room)?.type === type);
+      expect(left, `${seed}: ${f.what} в ${type}`).toEqual([]);
+      checked += 1;
+    }
+    expect(checked).toBeGreaterThan(3);
+  });
+
   it('один сид — одни и те же плоские вещи', () => {
     for (const world of ['shelter', 'office', 'yellow'] as const) {
       const a = buildLevel(generateLayout(4242, 2, world)).flats!;

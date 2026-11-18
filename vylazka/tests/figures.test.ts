@@ -170,9 +170,12 @@ describe('расстановка по правилу', () => {
   /** Луч по горизонтали от груди фигуры туда, куда она смотрит: до первой преграды, м. */
   const ahead = (l: BuiltLevel, at: number[], yaw: number): number => l.colliders.raycast(at[0]!, at[1]! + 1.25, at[2]!, Math.sin(yaw), 0, Math.cos(yaw), 6);
 
-  it('пока партнёр не сохранил ни одной фигуры, на уровнях их нет', () => {
-    expect(FIGURES.length).toBe(0);
-    expect(buildLevel(layout).figures).toBeUndefined();
+  it('на уровнях — только фигуры, сохранённые партнёром (figures_data.ts): каждая годна, и где правил нет — фигур нет', () => {
+    for (const f of FIGURES) expect(figureProblems(f), f.id).toEqual([]);
+    // Фигуры партнёра стоят в убежище; в офисе их правил нет.
+    expect(FIGURES.every((f) => !f.rule.worlds.includes('office'))).toBe(true);
+    expect(buildLevel(generateLayout(20041113, 2, 'office')).figures).toBeUndefined();
+    expect(buildLevel(layout, { figures: [] }).figures).toBeUndefined();
   });
 
   it('near: фигура встаёт у того края помещения, где её поставили в конструкторе, а не по жребию (партнёр 17.11)', () => {

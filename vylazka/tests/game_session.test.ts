@@ -934,8 +934,10 @@ describe('игра целиком: рендер получает разумны�
     h.run(2);
     const f = h.r.frames.at(-1)!;
     for (const v of [...f.camPos, f.camYaw, f.camPitch, f.gain, f.fade, f.lightScale]) expect(Number.isFinite(v)).toBe(true);
-    expect(h.r.things.size).toBe(h.game.things.list.length);
-    expect(h.r.things.size).toBeGreaterThan(5);
+    // У рендера вещи — это вещи игры и части фигур партнёра (каждая часть растворяется сама).
+    const pieces = h.game.figures.list.reduce((n, f) => n + f.pieces.length, 0);
+    expect(h.r.things.size).toBe(h.game.things.list.length + pieces);
+    expect(h.game.things.list.length).toBeGreaterThan(5);
     h.game.debugFinish();
     expect(h.until(() => h.game.where === 'limbo', 8)).toBe(true);
     h.run(1);
