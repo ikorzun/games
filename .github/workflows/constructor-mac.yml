@@ -70,6 +70,16 @@ jobs:
           path: ${{ runner.temp }}/shots/
           if-no-files-found: ignore
           retention-days: 7
+      - name: Screenshots in the log (the main model cannot reach artifact storage from its sandbox)
+        if: always()
+        run: |
+          for f in "$RUNNER_TEMP"/shots/*-window.png "$RUNNER_TEMP"/shots/ctor-light-page.png; do
+            [ -f "$f" ] || continue
+            sips -s format jpeg -s formatOptions 60 -Z 1500 "$f" --out "$f.jpg" >/dev/null
+            echo "SHOT-BEGIN $(basename "$f")"
+            base64 -b 900 -i "$f.jpg"
+            echo "SHOT-END"
+          done
       - name: The browser fallback builds too
         run: |
           node tools/constructor/mac/install.mjs --to "$RUNNER_TEMP/browser" --browser --no-open
