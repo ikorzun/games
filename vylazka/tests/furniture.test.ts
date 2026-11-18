@@ -7,12 +7,12 @@ import type { Vec3 } from '../src/core/types';
 import { generateLayout } from '../src/gen/layout';
 import type { WorldKind } from '../src/gen/layout';
 import { ColliderSet } from '../src/world/colliders';
-import { FURNITURE_FROM, furnished, jitter, pickOf, recordS3, s3Bounds, s3Put, s3Size, S3_BED, S3_SEAT, S3_SHELVES, S3_TOP, S3_WORKTOP } from '../src/world/furniture';
+import { FURNITURE_FROM, furnished, jitter, openOf, pickOf, recordS3, s3Bounds, s3Parts, s3Put, s3Reach, s3Size, S3_BED, S3_SEAT, S3_SHELVES, S3_TOP, S3_WORKTOP } from '../src/world/furniture';
 import { MeshBuilder } from '../src/world/kit';
 import type { MeshData } from '../src/world/kit';
 import { buildLevel, cellToWorld, tierFloor } from '../src/world/level_build';
 import { CELL } from '../src/world/shell';
-import { decodeModel, registerModels } from '../src/world/models';
+import { decodeModel, placeModel, registerModels } from '../src/world/models';
 import { Xf } from '../src/world/props';
 import { ALL_PROPS } from '../src/world/props_all';
 import type { PropSpec } from '../src/world/props_more';
@@ -157,7 +157,7 @@ describe.each(REFURNISHED.map((n) => [n] as const))('%s — моделью по�
       expect(min[1], `${name}/${seed} y`).toBeGreaterThan(-tol);
       expect(max[1], `${name}/${seed} y`).toBeLessThan(p.h + tol);
       expect(min[2], `${name}/${seed} z`).toBeGreaterThan(z0 - tol);
-      expect(max[2], `${name}/${seed} z`).toBeLessThan(z0 + p.d + tol);
+      expect(max[2], `${name}/${seed} z`).toBeLessThan(z0 + p.d + (p.reach ?? 0) + tol);
     }
   });
 });
@@ -244,6 +244,103 @@ describe('места с мебелью полки собираются', () => {
         checked++;
       }
       expect(checked, w).toBeGreaterThan(0);
+    }
+  });
+});
+
+/** Модель полки сама по себе (без вещи игры), с дверцами и ящиками, открытыми на долю open. */
+function modelMesh(name: string, open?: readonly number[]): MeshData {
+  const mb = new MeshBuilder();
+  placeModel(new Xf(mb, null, 0, 0, 0), name, open ? { open } : {});
+  return mb.build();
+}
+
+describe('дверцы и ящики (партнёр 18.11, 12:32: «открой дверцы и ящики у шкафов»)', () => {
+  const jointed = Object.keys(SAND3D_META).filter((n) => s3Parts(n).length > 0);
+
+  it('у шкафов, картотеки, столов с тумбой, мини-кухни и сейфа есть подвижные детали; у каждой — свой шарнир и свои вершины', () => {
+    for (const n of ['s3_wardrobe_plain', 's3_filing_cabinet', 's3_locker_olive', 's3_cabinet_medical', 's3_desk_office', 's3_desk_green', 's3_kitchenette', 's3_safe_old']) {
+      expect(s3Parts(n).length, n).toBeGreaterThan(0);
+    }
+    for (const n of jointed) {
+      const m = decodeModel(n);
+      expect(m.joints?.length, n).toBe(s3Parts(n).length);
+      expect(m.part?.length, n).toBe(m.position.length / 3);
+      for (let k = 1; k <= m.joints!.length; k++) expect(m.part!.includes(k), `${n}: деталь ${k}`).toBe(true);
+    }
+  });
+
+  it('закрыто — та же сетка, что и без открытия; открыто до предела — детали сдвинулись, всё в габарите «открыто» описи, перед стеной и над полом', () => {
+    for (const n of jointed) {
+      const plain = modelMesh(n);
+      expect(Array.from(modelMesh(n, s3Parts(n).map(() => 0)).position), n).toEqual(Array.from(plain.position));
+      const open = modelMesh(n, s3Parts(n).map(() => 1));
+      const o = SAND3D_META[n]!.open!;
+      let moved = 0;
+      for (let i = 0; i < open.position.length; i += 3) {
+        for (let k = 0; k < 3; k++) {
+          expect(open.position[i + k]!, `${n} ${k}`).toBeGreaterThanOrEqual(o.min[k]! - 1e-3);
+          expect(open.position[i + k]!, `${n} ${k}`).toBeLessThanOrEqual(o.max[k]! + 1e-3);
+        }
+        const d = Math.hypot(open.position[i]! - plain.position[i]!, open.position[i + 1]! - plain.position[i + 1]!, open.position[i + 2]! - plain.position[i + 2]!);
+        if (d > 0.03) moved += 1;
+      }
+      expect(moved, n).toBeGreaterThan(0);
+      expect(o.min[1], n).toBeGreaterThanOrEqual(-1e-3);
+      if (SAND3D_META[n]!.mount === 'floor') expect(o.min[2], n).toBeGreaterThanOrEqual(-1e-3);
+    }
+  });
+
+  it('открытое выходит вперёд не дальше 0,35 м и не шире корпуса', () => {
+    for (const n of jointed) {
+      expect(s3Reach(n), n).toBeLessThanOrEqual(0.36);
+      expect(s3Size(n, true).w, n).toBe(s3Size(n).w);
+    }
+  });
+
+  it('у открытой детали своя преграда — от пола до её верха; у закрытой вещи преграда одна', () => {
+    for (const n of jointed) {
+      const one = new ColliderSet();
+      s3Put(new Xf(new MeshBuilder(), one, 0, 0, 0), n);
+      expect(one.boxes.length, n).toBe(1);
+      const col = new ColliderSet();
+      s3Put(new Xf(new MeshBuilder(), col, 0, 0, 0), n, { open: s3Parts(n).map(() => 1) });
+      expect(col.boxes.length, n).toBe(1 + s3Parts(n).length);
+      for (const b of col.boxes) expect(b.minY, n).toBeCloseTo(0, 5);
+    }
+  });
+
+  it('по сиду: у трёх из четырёх что-то открыто, доли от 0 до 1; у одного сида — одно и то же', () => {
+    const N = 400;
+    let some = 0;
+    for (let seed = 0; seed < N; seed++) {
+      const o = openOf('s3_filing_cabinet', seed);
+      expect(openOf('s3_filing_cabinet', seed)).toEqual(o);
+      if (!o) continue;
+      some += 1;
+      for (const v of o) {
+        expect(v).toBeGreaterThanOrEqual(0);
+        expect(v).toBeLessThanOrEqual(1);
+      }
+      expect(o.some((v) => v > 0)).toBe(true);
+    }
+    expect(some / N).toBeGreaterThan(0.65);
+    expect(some / N).toBeLessThan(0.85);
+    expect(openOf('s3_sofa_grey', 1)).toBeUndefined();
+  });
+
+  it('вещи игры открываются: шкаф, картотека, офисный стол, мини-кухня; вылет — в reach, раскладка — по закрытому габариту', () => {
+    for (const name of ['wardrobe', 'filing_cabinet', 'office_desk', 'kitchenette', 's3_locker_olive', 's3_cabinet_medical', 's3_desk_green']) {
+      const p = ALL_PROPS[name]!;
+      expect(p.reach ?? 0, name).toBeGreaterThan(0.1);
+      let opened = 0;
+      for (let seed = 0; seed < 40; seed++) {
+        const col = new ColliderSet();
+        p.build(new Xf(new MeshBuilder(), col, 0, 0, 0), seed);
+        const base = recordS3(() => p.build(new Xf(new MeshBuilder(), new ColliderSet(), 0, 0, 0), seed));
+        if (base.size > 0 && col.boxes.length > 1 + (name === 'kitchenette' ? 0 : 0)) opened += 1;
+      }
+      expect(opened, name).toBeGreaterThan(5);
     }
   });
 });

@@ -16,7 +16,7 @@ import { MAT } from './materials';
 import type { Xf } from './props';
 import { beam, rng, sheet, WHITE } from './props_more';
 import type { PropSpec } from './props_more';
-import { fillShelves, furnished, jitter, pickOf, s3As, s3Put, s3Size, spanOf, S3_SHELVES, S3_TOP, S3_WORKTOP, turnOf } from './furniture';
+import { fillShelves, furnished, jitter, openOf, pickOf, s3As, s3Put, s3Reach, s3Size, spanOf, S3_SHELVES, S3_TOP, S3_WORKTOP, turnOf } from './furniture';
 
 /** Мебель отдела с полки Sand3D: столы (у отдела — одной модели), кресло, шкафы для папок. */
 const OFFICE_DESKS = ['s3_desk_office_grey', 's3_desk_office'] as const;
@@ -101,7 +101,8 @@ function deskIsland(xf: Xf, seed: number): void {
     for (const sx of [-1, 1]) {
       const d = xf.child(sx * 0.76, 0, row.z, row.rot);
       const k = seed + sx * 3 + row.rot;
-      s3Put(d, D, { tint: jitter(k) });
+      const o = openOf(D, k);
+      s3Put(d, D, { tint: jitter(k), ...(o ? { open: o } : {}) });
       terminal(d.child(-0.2, S3_TOP[D]!, 0.33), seed + sx + row.rot * 5);
       s3As(d.child(-0.2 + (rnd() - 0.5) * 0.1, 0, 0.98, 2), CHAIR, 'free', { tint: jitter(k, 0.07, 2), yaw: turnOf(k, CHAIR_TURN) });
     }
@@ -131,7 +132,8 @@ function cubicle(xf: Xf, seed: number): void {
   panel(-0.9, 0.06, -0.84, 1.7);
   panel(0.84, 0.06, 0.9, 1.7);
   const D = pickOf(OFFICE_DESKS, seed);
-  s3Put(xf.child(0, 0, 0.06), D, { tint: jitter(seed) });
+  const o = openOf(D, seed);
+  s3Put(xf.child(0, 0, 0.06), D, { tint: jitter(seed), ...(o ? { open: o } : {}) });
   terminal(xf.child(0.2, S3_TOP[D]!, 0.38), seed + 1);
   s3As(xf.child(rnd() * 0.2 - 0.1, 0, 1.12, 2), CHAIR, 'free', { tint: jitter(seed, 0.07, 2), yaw: turnOf(seed, CHAIR_TURN) });
 }
@@ -449,7 +451,8 @@ const MICRO = { x0: 0.45, x1: 0.89, h: 0.27 } as const;
  */
 function kitchenette(xf: Xf, seed: number): void {
   const rnd = rng(seed);
-  s3Put(xf, KITCHEN, { tint: jitter(seed, 0.05) });
+  const o = openOf(KITCHEN, seed);
+  s3Put(xf, KITCHEN, { tint: jitter(seed, 0.05), ...(o ? { open: o } : {}) });
   const top = S3_TOP[KITCHEN]!;
   // Микроволновка: кремовый ящик с тёмным окном и панелью.
   bx(xf, [MICRO.x0, top, 0.1], [MICRO.x1, top + MICRO.h, 0.5], MAT.enamel, CREAM, { bevel: 0.008 });
@@ -681,13 +684,13 @@ export function ceilingBreak(xf: Xf, h: number, seed: number): void {
 }
 
 export const OFFICE_PROPS: Record<string, PropSpec> = {
-  office_desk: furnished('floor', OFFICE_DESKS, 'стол офисный: серый или с тумбой на ящики', { pull: 0.03 }),
+  office_desk: furnished('floor', OFFICE_DESKS, 'стол офисный: серый или с тумбой на ящики', { pull: 0.03, open: true }),
   office_terminal: { w: 0.46, d: 0.5, h: 0.42, mount: 'free', ru: 'терминал кинескопный с клавиатурой', build: terminal },
   office_chair: furnished('free', [CHAIR], 'кресло офисное на колёсиках', { turn: CHAIR_TURN }),
   desk_island: { w: 3.0, d: 3.0, h: 1.2, mount: 'free', ru: 'островок отдела: четыре стола, перегородка крестом, терминалы и кресла', build: deskIsland },
   cubicle: { w: 1.8, d: 1.7, h: 1.45, mount: 'floor', ru: 'кабинка с тканевой перегородкой, столом, терминалом и креслом', build: cubicle },
   partition: { w: 1.5, d: 0.3, h: 1.45, mount: 'free', ru: 'панель тканевой перегородки на ножках', build: partition },
-  filing_cabinet: furnished('floor', ['s3_filing_cabinet'], 'картотечный шкаф, три ящика', { pull: 0.03 }),
+  filing_cabinet: furnished('floor', ['s3_filing_cabinet'], 'картотечный шкаф, три ящика', { pull: 0.03, open: true }),
   water_cooler: { w: 0.34, d: 0.34, h: 1.35, mount: 'floor', ru: 'кулер с голубой бутылью', build: waterCooler },
   copier: { w: 1.0, d: 0.65, h: 1.05, mount: 'floor', ru: 'копировальный аппарат с лотком и пультом', build: copier },
   ceiling_panel: { w: 1.2, d: 0.6, h: 0.05, mount: 'ceiling', ru: 'потолочная светящаяся панель', build: ceilingPanel },
@@ -703,7 +706,7 @@ export const OFFICE_PROPS: Record<string, PropSpec> = {
   meeting_table: { w: 2.6, d: 2.42, h: 1.02, mount: 'free', ru: 'переговорный стол с шестью креслами', build: meetingTable },
   server_rack: { w: 0.6, d: 0.9, h: 2.0, mount: 'floor', ru: 'серверная стойка с рядами огоньков', build: serverRack },
   elevator_doors: { w: 1.5, d: 0.14, h: 2.35, mount: 'floor', ru: 'закрытые двери лифта с кнопкой вызова', build: elevatorDoors },
-  kitchenette: { w: s3Size(KITCHEN).w, d: s3Size(KITCHEN).d, h: KITCHEN_CAB[1], mount: 'floor', ru: 'мини-кухня: мойка, плита, микроволновка, верхний шкаф', build: kitchenette },
+  kitchenette: { w: s3Size(KITCHEN).w, d: s3Size(KITCHEN).d, reach: s3Reach(KITCHEN), h: KITCHEN_CAB[1], mount: 'floor', ru: 'мини-кухня: мойка, плита, микроволновка, верхний шкаф', build: kitchenette },
   wet_floor_sign: { w: 0.32, d: 0.4, h: 0.62, mount: 'free', ru: 'жёлтый знак «мокрый пол»', build: wetFloorSign },
   birch: { w: 0.56, d: 0.56, h: 2.72, mount: 'free', ru: 'берёза, проросшая сквозь пол и потолок: белый ствол в чёрных отметинах', build: birch },
   desk_phone: { w: 0.22, d: 0.2, h: 0.1, mount: 'free', ru: 'офисный телефон', build: deskPhone },

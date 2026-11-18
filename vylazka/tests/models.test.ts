@@ -34,9 +34,10 @@ function bounds(m: MeshData): { min: Vec3; max: Vec3 } {
 
 function envelope(p: PropSpec): { min: Vec3; max: Vec3 } {
   const hw = p.w / 2;
-  if (p.mount === 'free') return { min: [-hw, 0, -p.d / 2], max: [hw, p.h, p.d / 2] };
+  // Открытые дверцы и ящики вещей полки выходят вперёд за d на reach (PropSpec.reach).
+  if (p.mount === 'free') return { min: [-hw, 0, -p.d / 2], max: [hw, p.h, p.d / 2 + (p.reach ?? 0)] };
   if (p.mount === 'ceiling') return { min: [-hw, -p.h, 0], max: [hw, 0, p.d] };
-  return { min: [-hw, 0, 0], max: [hw, p.h, p.d] };
+  return { min: [-hw, 0, 0], max: [hw, p.h, p.d + (p.reach ?? 0)] };
 }
 
 /** Коробка после поворота на rot четвертей оборота: (x, z) → (z, −x), (−x, −z), (−z, x), как у Xf.pt. */

@@ -1150,7 +1150,8 @@ export const HOME_PROPS: Record<string, PropSpec> = {
   stove: { w: 0.55, d: 0.58, h: 0.9, mount: 'floor', ru: 'газовая плита с кастрюлей', build: stove },
   kitchen_table: { w: 1.4, d: Math.ceil(kitchenDepth() * 100) / 100, h: 0.87, mount: 'floor', ru: 'кухонный стол на точёных ножках под клеёнкой, табуретка, тарелка, хлебница', build: kitchenTable },
   sink_cabinet: { w: 0.8, d: 0.58, h: 1.35, mount: 'floor', ru: 'мойка-тумба с краном и сушилкой для тарелок', build: sinkCabinet },
-  wardrobe: furnished('floor', ['s3_wardrobe_plain', 's3_wardrobe_grey'], 'платяной шкаф: светлый в две дверцы или серый с ящиками внизу', { pull: 0.03 }),
+  // Дверцы светлого открыты по сиду (у серого они слиты с корпусом — он всегда закрыт).
+  wardrobe: furnished('floor', ['s3_wardrobe_plain', 's3_wardrobe_grey'], 'платяной шкаф: светлый в две дверцы или серый с ящиками внизу', { pull: 0.03, open: true }),
   wall_unit: { w: 2.6, d: 0.46, h: 2.1, mount: 'floor', ru: 'стенка: сервант с хрусталём, книги, телевизор, часы', build: wallUnit },
   bookshelf: { ...spanOf(BOOKCASES), mount: 'floor', ru: 'книжный шкаф или этажерка с пёстрыми книгами', build: bookshelf },
   bed_home: furnished('floor', ['s3_bed_iron_green'], 'железная кровать с зелёным одеялом', { pull: 0.03 }),

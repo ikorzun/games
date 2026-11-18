@@ -34,16 +34,54 @@ export interface S3Size {
   mount: S3Mount;
 }
 
-export function s3Size(name: string): S3Size {
+/**
+ * Габарит модели полки; open — с дверцами и ящиками, открытыми до предела (импорт записывает его в опись): столько места
+ * нужно вещи, у которой что-то открыто (партнёр 18.11, 12:32: «открой дверцы и ящики у шкафов»).
+ */
+export function s3Size(name: string, open = false): S3Size {
   const m = SAND3D_META[name];
   if (!m) throw new Error(`нет такой вещи полки: ${name}`);
   const free = m.mount === 'free';
+  const lo = open && m.open ? m.open.min : m.min;
+  const hi = open && m.open ? m.open.max : m.max;
   return {
-    w: cm(Math.max(-m.min[0], m.max[0]) * 2),
-    d: free ? cm(Math.max(-m.min[2], m.max[2]) * 2) : cm(m.max[2]),
-    h: cm(m.max[1]),
+    w: cm(Math.max(-lo[0], hi[0]) * 2),
+    d: free ? cm(Math.max(-lo[2], hi[2]) * 2) : cm(hi[2]),
+    h: cm(hi[1]),
     mount: m.mount,
   };
+}
+
+/** На сколько, м, открытые до предела дверцы и ящики выходят вперёд за закрытый габарит модели (PropSpec.reach). */
+export function s3Reach(name: string): number {
+  return s3Parts(name).length > 0 ? cm(s3Size(name, true).d - s3Size(name).d) : 0;
+}
+
+/** Дверцы и ящики модели (по порядку шарниров); пусто — у вещи ничего не открывается. */
+export function s3Parts(name: string): ReadonlyArray<'door' | 'drawer'> {
+  return SAND3D_META[name]?.open?.w ?? [];
+}
+
+/** Доля вещей, у которых всё закрыто: остальные оставлены так, как их бросили. */
+const SHUT = 0.25;
+
+/**
+ * Что открыто у экземпляра — по сиду: у трёх из четырёх вещей что-нибудь да открыто. Дверца — чаще, от щели до
+ * распахнутой (предел — импорт); ящик — реже, выдвинут на треть и больше. undefined — вещь закрыта или открывать нечего.
+ */
+export function openOf(name: string, seed: number, salt = 0): number[] | undefined {
+  const parts = s3Parts(name);
+  if (parts.length === 0) return undefined;
+  const r = (k: number): number => hash2(seed, salt * 97 + k, 0x0de) / 4294967296;
+  if (r(0) < SHUT) return undefined;
+  const t = parts.map((kind, i): number => {
+    const a = r(1 + i * 2);
+    const b = r(2 + i * 2);
+    if (kind === 'door') return a < 0.35 ? 0 : 0.2 + 0.8 * b;
+    return a < 0.55 ? 0 : 0.3 + 0.7 * b;
+  });
+  if (!t.some((v) => v > 0)) t[hash2(seed, salt, 0x0df) % t.length] = 0.4 + 0.6 * r(99);
+  return t;
 }
 
 export interface S3Opts {
@@ -58,6 +96,8 @@ export interface S3Opts {
   yaw?: number;
   /** Преграда во весь габарит (по умолчанию есть). */
   collide?: boolean;
+  /** Насколько открыта каждая дверца и выдвинут каждый ящик, 0…1 (openOf); у открытых — своя преграда от пола. */
+  open?: readonly number[];
 }
 
 /** Охват прямоугольника x0…x1 × z0…z1 после поворота на yaw вокруг начала координат: [x0, x1, z0, z1]. */
@@ -83,9 +123,9 @@ function wallGap(lo: Vec3, hi: Vec3, yaw: number): number {
   return yaw !== 0 && lo[2] === 0 ? Math.max(0, -turned(lo[0], hi[0], lo[2], hi[2], yaw)[2]) : 0;
 }
 
-/** Габарит модели в точке xf (в координатах вещи) — с учётом опоры, опрокидывания и доворота. */
-export function s3Bounds(name: string, tip = false, yaw = 0): [Vec3, Vec3] {
-  const g = s3Size(name);
+/** Габарит модели в точке xf (в координатах вещи) — с учётом опоры, опрокидывания и доворота; open — с открытым до предела. */
+export function s3Bounds(name: string, tip = false, yaw = 0, open = false): [Vec3, Vec3] {
+  const g = s3Size(name, open && !tip);
   const z0 = !tip && g.mount === 'free' ? -g.d / 2 : 0;
   const lo: Vec3 = [-g.w / 2, 0, z0];
   const hi: Vec3 = [g.w / 2, tip ? g.d : g.h, tip ? g.h : z0 + g.d];
@@ -123,8 +163,12 @@ export function s3Put(xf: Xf, name: string, opts: S3Opts = {}): void {
   const [l0, h0] = s3Bounds(name, opts.tip);
   const dz = wallGap(l0, h0, yaw);
   const at = dz > 0 ? xf.child(0, 0, dz) : xf;
-  if (hasModel(name)) placeModel(at, name, { ...(opts.tint ? { tint: opts.tint } : {}), ...(opts.tip ? { tip: true } : {}), ...(yaw !== 0 ? { yaw } : {}) });
-  else xf.box(lo, hi, MAT.paper, opts.tint ? { tint: opts.tint } : {});
+  const open = opts.open && !opts.tip ? opts.open : undefined;
+  if (hasModel(name)) {
+    const moved = placeModel(at, name, { ...(opts.tint ? { tint: opts.tint } : {}), ...(opts.tip ? { tip: true } : {}), ...(yaw !== 0 ? { yaw } : {}), ...(open ? { open } : {}) });
+    // Открытая дверца и выдвинутый ящик — тоже преграда: стоит на полу (под ящиком не пройти), чтобы не проходить сквозь них.
+    if (opts.collide !== false) for (const [a, b] of moved) at.collider([a[0], 0, a[2]], b);
+  } else xf.box(lo, hi, MAT.paper, opts.tint ? { tint: opts.tint } : {});
   if (opts.collide !== false) xf.collider(lo, hi);
 }
 
@@ -152,14 +196,15 @@ export function jitter(seed: number, amount = 0.07, salt = 0): Vec3 {
 
 /** Охват нескольких моделей полки (габарит вещи, у которой вид — одна из них). */
 export function spanOf(names: readonly string[]): { w: number; d: number; h: number } {
-  const sizes = names.map(s3Size);
+  const sizes = names.map((n) => s3Size(n));
   return { w: Math.max(...sizes.map((g) => g.w)), d: Math.max(...sizes.map((g) => g.d)), h: Math.max(...sizes.map((g) => g.h)) };
 }
 
-/** Как стоит экземпляр: доворот до ±turn радиан и отступ от стены до pull метров — по сиду. */
+/** Как стоит экземпляр: доворот до ±turn радиан и отступ от стены до pull метров — по сиду; open — дверцы и ящики по сиду. */
 export interface Stance {
   turn?: number;
   pull?: number;
+  open?: boolean;
 }
 
 /** Доворот экземпляра по сиду: от −turn до +turn. */
@@ -173,19 +218,24 @@ export const turnOf = (seed: number, turn: number, salt = 0): number => (hash2(s
 export function furnished(mount: S3Mount, variants: readonly string[], ru: string, stance: Stance = {}): PropSpec {
   const turn = stance.turn ?? 0;
   const pull = mount === 'floor' ? (stance.pull ?? 0) : 0;
+  const open = stance.open === true;
   const span = spanOf(variants);
   // Охват при крайнем довороте: прямоугольник w × d, повёрнутый на turn.
   const w = turn ? Math.max(...variants.map((v) => s3Bounds(v, false, turn)).map(([lo, hi]) => hi[0] - lo[0])) : span.w;
   const d = turn ? Math.max(...variants.map((v) => s3Bounds(v, false, turn)).map(([lo, hi]) => hi[2] - lo[2])) : span.d;
+  const reach = open ? Math.max(0, ...variants.map(s3Reach)) : 0;
   return {
     w: cm(w),
     d: cm(d + pull),
     h: span.h,
     mount,
     ru,
+    ...(reach > 0 ? { reach } : {}),
     build(xf, seed) {
       const z = pull ? (hash2(seed, 0x5e, 0x91) / 4294967296) * pull : 0;
-      s3As(z ? xf.child(0, 0, z) : xf, pickOf(variants, seed), mount, { tint: jitter(seed), ...(turn ? { yaw: turnOf(seed, turn) } : {}) });
+      const v = pickOf(variants, seed);
+      const o = open ? openOf(v, seed) : undefined;
+      s3As(z ? xf.child(0, 0, z) : xf, v, mount, { tint: jitter(seed), ...(turn ? { yaw: turnOf(seed, turn) } : {}), ...(o ? { open: o } : {}) });
     },
   };
 }

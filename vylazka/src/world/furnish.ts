@@ -294,11 +294,11 @@ function dorm(ctx: RoomCtx): void {
   }
   const l = take(ctx);
   if (l) {
-    // Три шкафчика бок о бок; вещь — на полу перед средним.
+    // Три шкафчика бок о бок; вещь — на полу перед средним, дальше, чем достаёт открытая дверца.
     const w = s3Size('s3_locker_olive').w;
     const x0 = fit(l, w * 3, 0.56) - w;
     for (let i = 0; i < 3; i++) s3(l.xf.child(x0 + i * w, 0, 0), 's3_locker_olive');
-    spot(ctx, l.xf, x0 + w, 0.02, 0.85, 'floor');
+    spot(ctx, l.xf, x0 + w, 0.02, s3Size('s3_locker_olive', true).d + 0.12, 'floor');
   }
   const mid = ctx.cells.find((c) => c.doors === 0);
   if (mid) {

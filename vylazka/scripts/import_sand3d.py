@@ -24,6 +24,7 @@ import base64
 import json
 import math
 import os
+import re
 import struct
 import subprocess
 import sys
@@ -93,6 +94,26 @@ SHELF = [
 # Второй подбор: тумба под телевизор у каталога — 0,34 м в глубину (кинескоп глубже), сейф чуть больше ниши командной.
 SCALE = {'s3_sofa_grey': 1.9, 's3_table_kitchen': 1.15, 's3_desk_office_grey': 0.8, 's3_desk_simple': 0.86, 's3_chair_office': 0.85,
          's3_buffet_louvered': 1.15, 's3_safe_old': 0.9}
+
+# Дверцы и ящики (партнёр 18.11, 12:32: «открой дверцы и ящики у шкафов»). Подвижные детали берутся из шарниров каталога
+# (s3d_joint в узлах GLB: тип, ось, пределы; узел шарнира — родитель детали), а где каталог шарниров не дал — по имени детали
+# (MOVERS): ось дверцы — вертикаль у края, дальнего от ручки (или у петель; без них — у внешнего края шкафа), ящик выезжает
+# вперёд. Игра открывает их по сиду (world/furniture.ts) на долю t от 0 до 1; t = 1 — предел, записанный здесь.
+# Открытая деталь выходит вперёд от лица вещи не дальше OPEN_REACH: столько и прибавляется к габариту открываемой вещи,
+# а большая дверца при этом открывается не до упора (дверца шкафа в полметра — примерно на 45°).
+OPEN_REACH = 0.35
+DOOR_MAX = math.radians(95)
+DRAWER_SHARE = 0.8
+# Шарниры каталога: берём дверцы и ящики; ручки, кнопки, крышки замков, ножки стола-трансформера, кран — нет.
+JOINT_TAKE = re.compile(r'door|drawer|slide', re.I)
+JOINT_SKIP = re.compile(r'handle|knob|button|stage|flap|accessory|lock|cover|tap|strainer|paddle|spin', re.I)
+MOVERS = {
+    's3_wardrobe_plain': [('door_panel', 'door'), ('companion_door', 'door')],
+    's3_locker_olive': [('door', 'door')],
+    's3_buffet_louvered': [('shutter_panel', 'door'), ('shutter_panel.001', 'door')],
+    's3_safe_old': [('door_group', 'door')],
+}
+# Тумбочка не здесь: её «ящики» — одни лицевые панели на сплошном корпусе, выдвигать нечего.
 
 # Пресеты материалов sand3d (имя материала начинается с пресета: «walnut #9a6d4c») → материалы игры (world/materials.ts).
 MAT_ID = {'concrete': 0, 'steel': 5, 'rubber': 7, 'wood': 8, 'enamel': 9, 'brass': 10, 'paper': 15, 'metalGrey': 21,
@@ -196,13 +217,18 @@ def game_mat(material):
     return MAT_ID[key], tuple(max(0, min(255, v)) for v in srgb), key
 
 
-def gather(gl, blob):
-    """Все треугольники сцены в мировых координатах: (позиция, нормаль, материал игры, цвет)."""
+def gather(gl, blob, movers=frozenset()):
+    """
+    Все треугольники сцены в мировых координатах: (позиция, нормаль, материал игры, цвет, деталь, узел). Деталь — имя
+    подвижного узла из movers, внутри которого лежит сетка (внешний, если вложены), или None; узел — имя узла сетки.
+    """
     verts, tris, mats_seen = [], [], {}
 
-    def walk(ni, parent):
+    def walk(ni, parent, part):
         n = gl['nodes'][ni]
         m = mat_mul(parent, node_matrix(n))
+        if part is None and n.get('name') in movers:
+            part = n['name']
         if 'mesh' in n:
             for pr in gl['meshes'][n['mesh']]['primitives']:
                 if pr.get('mode', 4) != 4:
@@ -225,19 +251,60 @@ def gather(gl, blob):
                         nz = m[2][0] * q[0] + m[2][1] * q[1] + m[2][2] * q[2]
                     else:
                         nx, ny, nz = 0.0, 1.0, 0.0
-                    verts.append(((x, y, z), (nx, ny, nz), gm, col))
+                    verts.append(((x, y, z), (nx, ny, nz), gm, col, part, n.get('name')))
                 det = (m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
                        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]))
                 for t in range(0, len(I) - 2, 3):
                     a, b, c = first + I[t], first + I[t + 1], first + I[t + 2]
                     tris.append((a, c, b) if det < 0 else (a, b, c))
         for c in n.get('children', []):
+            walk(c, m, part)
+
+    ident = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+    for ni in gl['scenes'][gl.get('scene', 0)]['nodes']:
+        walk(ni, ident, None)
+    return verts, tris, mats_seen
+
+
+def joint_frames(gl):
+    """Шарниры каталога: имя узла → тип, ось и точка оси в мировых координатах (м), пределы."""
+    out = {}
+
+    def walk(ni, parent):
+        n = gl['nodes'][ni]
+        m = mat_mul(parent, node_matrix(n))
+        j = (n.get('extras') or {}).get('s3d_joint')
+        if j and n.get('name') and j.get('type') in ('revolute', 'prismatic') and 'lower' in j and 'upper' in j:
+            ax = j.get('axis', [0, 0, 1])
+            a = [sum(m[r][c] * ax[c] for c in range(3)) for r in range(3)]
+            la = math.sqrt(sum(v * v for v in a)) or 1.0
+            out[n['name']] = {'type': j['type'], 'o': [m[0][3], m[1][3], m[2][3]], 'a': [v / la for v in a],
+                              'lower': j['lower'], 'upper': j['upper']}
+        for c in n.get('children', []):
             walk(c, m)
 
     ident = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
     for ni in gl['scenes'][gl.get('scene', 0)]['nodes']:
         walk(ni, ident)
-    return verts, tris, mats_seen
+    return out
+
+
+def rodrigues(a, th):
+    """Матрица поворота на угол th (рад) вокруг единичной оси a (правый винт)."""
+    c, s_, t = math.cos(th), math.sin(th), 1 - math.cos(th)
+    x, y, z = a
+    return [[c + x * x * t, x * y * t - z * s_, x * z * t + y * s_],
+            [y * x * t + z * s_, c + y * y * t, y * z * t - x * s_],
+            [z * x * t - y * s_, z * y * t + x * s_, c + z * z * t]]
+
+
+def move_point(p, j, t):
+    """Точка детали при открытии шарнира j на долю t: поворот вокруг оси через o или сдвиг вдоль оси."""
+    if j['k'] == 'p':
+        return [p[k] + j['a'][k] * j['hi'] * t for k in range(3)]
+    r = rodrigues(j['a'], j['hi'] * t)
+    d = [p[k] - j['o'][k] for k in range(3)]
+    return [j['o'][k] + sum(r[k][c] * d[c] for c in range(3)) for k in range(3)]
 
 
 def turn_xz(x, z, t):
@@ -246,12 +313,12 @@ def turn_xz(x, z, t):
     return x, z
 
 
-def convert(verts, tris, mount, turn, scale=1.0):
+def convert(verts, tris, mount, turn, scale=1.0, movers=None, name=''):
     out = []
-    for (p, n, gm, col) in verts:
+    for (p, n, gm, col, part, leaf) in verts:
         x, z = turn_xz(p[0] * scale, p[2] * scale, turn)
         nx, nz = turn_xz(n[0], n[2], turn)
-        out.append(((x, p[1] * scale, z), (nx, n[1], nz), gm, col))
+        out.append(((x, p[1] * scale, z), (nx, n[1], nz), gm, col, part, leaf))
     lo = [min(v[0][k] for v in out) for k in range(3)]
     hi = [max(v[0][k] for v in out) for k in range(3)]
     if mount in ('floor', 'wall'):
@@ -263,19 +330,21 @@ def convert(verts, tris, mount, turn, scale=1.0):
     lo = [lo[k] - off[k] for k in range(3)]
     hi = [hi[k] - off[k] for k in range(3)]
     span = [max(hi[k] - lo[k], 1e-9) for k in range(3)]
+    joints, part_of = open_parts(out, off, lo, hi, mount, turn, scale, movers or {}, name)
     table, remap = {}, []
-    pos, nrm, col, mat = [], [], [], []
-    for (p, n, gm, c) in out:
+    pos, nrm, col, mat, prt = [], [], [], [], []
+    for i, (p, n, gm, c, _part, _leaf) in enumerate(out):
         q = tuple(int(round((p[k] - off[k] - lo[k]) / span[k] * 65535)) for k in range(3))
         ln = math.sqrt(n[0] ** 2 + n[1] ** 2 + n[2] ** 2) or 1.0
         qn = tuple(max(-127, min(127, int(round(n[k] / ln * 127)))) for k in range(3))
-        key = (q, qn, gm, c)
+        key = (q, qn, gm, c, part_of[i])
         if key not in table:
             table[key] = len(pos)
             pos.append(q)
             nrm.append(qn)
             col.append(c)
             mat.append(gm)
+            prt.append(part_of[i])
         remap.append(table[key])
     keep = [(remap[a], remap[b], remap[c]) for (a, b, c) in tris]
     keep = [t for t in keep if len(set(t)) == 3]
@@ -285,7 +354,7 @@ def convert(verts, tris, mount, turn, scale=1.0):
     def b64(b):
         return base64.b64encode(b).decode('ascii')
 
-    return {
+    rec = {
         'v': len(pos), 't': len(keep),
         'min': [round(v, 4) for v in lo], 'max': [round(v, 4) for v in hi],
         'pos': b64(struct.pack('<%dH' % (len(pos) * 3), *[c for p in pos for c in p])),
@@ -294,6 +363,103 @@ def convert(verts, tris, mount, turn, scale=1.0):
         'mat': b64(bytes(mat)),
         'idx': b64(struct.pack('<%dH' % len(flat), *flat)),
     }
+    if joints:
+        rec['part'] = b64(bytes(prt))
+        rec['jt'] = [{'k': j['k'], 'o': [round(v, 4) for v in j['o']], 'a': [round(v, 5) for v in j['a']], 'hi': round(j['hi'], 4), 'w': j['w']} for j in joints]
+        # Габарит со всем открытым до предела (t = 1): по нему игра считает место открываемой вещи.
+        olo, ohi = list(lo), list(hi)
+        for i, (p, _n, _gm, _c, _part, _leaf) in enumerate(out):
+            if part_of[i]:
+                q = move_point([p[k] - off[k] for k in range(3)], joints[part_of[i] - 1], 1.0)
+                for k in range(3):
+                    olo[k] = min(olo[k], q[k])
+                    ohi[k] = max(ohi[k], q[k])
+        rec['omin'] = [round(v, 4) for v in olo]
+        rec['omax'] = [round(v, 4) for v in ohi]
+    return rec
+
+
+def open_parts(out, off, lo, hi, mount, turn, scale, movers, name):
+    """
+    Подвижные детали в координатах вещи (после поворота, масштаба и сдвига к опоре): шарниры [{k, o, a, hi, w}] и номер
+    детали каждой вершины (0 — неподвижная). Ящик, который выезжает не в комнату (у стола партнёров — к стене), и дверца на
+    невертикальной оси остаются закрытыми.
+    """
+    def pt(p):
+        x, z = turn_xz(p[0] * scale, p[2] * scale, turn)
+        return [x - off[0], p[1] * scale - off[1], z - off[2]]
+
+    def dr(a):
+        x, z = turn_xz(a[0], a[2], turn)
+        return [x, a[1], z]
+
+    names = []
+    for v in out:
+        if v[4] is not None and v[4] not in names:
+            names.append(v[4])
+    joints, index = [], {}
+    for pn in names:
+        kind, frame = movers[pn]
+        idx = [i for i, v in enumerate(out) if v[4] == pn]
+        P = [[out[i][0][k] - off[k] for k in range(3)] for i in idx]
+        plo = [min(q[k] for q in P) for k in range(3)]
+        phi = [max(q[k] for q in P) for k in range(3)]
+        if kind == 'cat':
+            a = dr(frame['a'])
+            j = {'k': 'r' if frame['type'] == 'revolute' else 'p', 'o': pt(frame['o']), 'a': a}
+            lim = frame['upper'] if abs(frame['upper']) >= abs(frame['lower']) else frame['lower']
+            if j['k'] == 'p':
+                if a[2] < 0.7 and mount != 'free':
+                    continue
+                j['hi'], j['w'] = lim * scale, 'drawer'
+            else:
+                if abs(a[1]) < 0.9:
+                    continue
+                j['hi'], j['w'] = max(-DOOR_MAX, min(DOOR_MAX, lim)), 'door'
+        elif kind == 'drawer':
+            j = {'k': 'p', 'o': [0, 0, 0], 'a': [0, 0, 1], 'hi': DRAWER_SHARE * (phi[2] - plo[2]), 'w': 'drawer'}
+        else:
+            # Ось дверцы: у петель, а нет их — у края, дальнего от ручки, а нет и ручки — у внешнего края шкафа.
+            def centre(pat):
+                Q = [[out[i][0][k] - off[k] for k in range(3)] for i in idx if re.search(pat, out[i][5] or '', re.I)]
+                return sum(q[0] for q in Q) / len(Q) if Q else None
+            hinge, grip = centre(r'hinge|pin'), centre(r'handle|pull|grip|knob')
+            mid = (plo[0] + phi[0]) / 2
+            if hinge is not None:
+                hx = plo[0] if hinge < mid else phi[0]
+            elif grip is not None:
+                hx = phi[0] if grip < mid else plo[0]
+            else:
+                hx = plo[0] if mid < 0 else phi[0]
+            free = phi[0] if hx == plo[0] else plo[0]
+            # Правый винт вокруг +y: точка со сдвигом dx от оси уходит в z на −dx·sin θ; вперёд — θ со знаком, обратным dx.
+            sign = -1.0 if free > hx else 1.0
+            j = {'k': 'r', 'o': [hx, 0, phi[2]], 'a': [0, 1, 0], 'hi': sign * DOOR_MAX, 'w': 'door'}
+        # Не дальше OPEN_REACH вперёд от лица вещи и не вбок за её бока: предел урезается по самим вершинам детали.
+        reach = hi[2] + OPEN_REACH
+        side = (lo[0], hi[0])
+
+        def over(t):
+            Q = [move_point(q, j, t) for q in P]
+            return max(q[2] for q in Q) > reach or min(q[0] for q in Q) < side[0] or max(q[0] for q in Q) > side[1]
+
+        if over(1.0):
+            a_, b_ = 0.0, 1.0
+            for _ in range(30):
+                m_ = (a_ + b_) / 2
+                if over(m_):
+                    b_ = m_
+                else:
+                    a_ = m_
+            j['hi'] *= a_
+        if abs(j['hi']) < 1e-3:
+            continue
+        joints.append(j)
+        index[pn] = len(joints)
+    part_of = [index.get(v[4], 0) for v in out]
+    if joints:
+        print(f'  {name}: подвижных деталей {len(joints)} — ' + ', '.join(f"{j['w']} {j['hi']:.2f}" for j in joints))
+    return joints, part_of
 
 
 def simplify(gltfpack, cache, cid, target, ratio):
@@ -327,8 +493,12 @@ def main():
         # треугольников выходит больше задуманного. Упрощать такие сильнее (-sa) пробовали — съедается корпус, а не ручки;
         # комод остаётся в 3,3 тыс., это в бюджете.
         sgl, sblob = simplify(gltfpack, cache, cid, target, ratio)
-        verts, tris, seen = gather(sgl, sblob)
-        rec = convert(verts, tris, mount, turn, SCALE.get(name, 1.0))
+        # Шарниры — из полного GLB (упрощённый держит имена узлов, но не их extras); детали ищутся по именам узлов.
+        movers = {jn: ('cat', f) for jn, f in joint_frames(gl).items() if JOINT_TAKE.search(jn) and not JOINT_SKIP.search(jn)}
+        for (nn, kind) in MOVERS.get(name, []):
+            movers[nn] = (kind, None)
+        verts, tris, seen = gather(sgl, sblob, frozenset(movers))
+        rec = convert(verts, tris, mount, turn, SCALE.get(name, 1.0), movers, name)
         records[name] = rec
         credits.append({'name': name, 'mount': mount, 'id': cid, 'title': card.get('name'), 'license': lic, 'source': src, 'attribution': card.get('attribution'), 'ru': ru})
         print(f'{name}: {full} → {rec["t"]} треугольников, {rec["v"]} вершин, материалы {seen}, габарит {rec["min"]}…{rec["max"]}', flush=True)
@@ -360,13 +530,21 @@ def write_meta(records, credits):
         "  mount: 'floor' | 'free';",
         '  /** Подпись по-русски. */',
         '  ru: string;',
+        '  /**',
+        '   * Дверцы и ящики (по порядку подвижных деталей записи): что это, и габарит со всем открытым до предела, м. Нет —',
+        '   * у вещи ничего не открывается.',
+        '   */',
+        "  open?: { w: ReadonlyArray<'door' | 'drawer'>; min: [number, number, number]; max: [number, number, number] };",
         '}',
         '',
         'export const SAND3D_META: Record<string, Sand3dMeta> = {',
     ]
     for c in credits:
         r = records[c['name']]
-        lines.append(f"  {c['name']}: {{ v: {r['v']}, t: {r['t']}, min: {json.dumps(r['min'])}, max: {json.dumps(r['max'])}, mount: '{c['mount']}', ru: {ts_str(c['ru'])} }},")
+        op = ''
+        if 'jt' in r:
+            op = f", open: {{ w: {json.dumps([j['w'] for j in r['jt']])}, min: {json.dumps(r['omin'])}, max: {json.dumps(r['omax'])} }}"
+        lines.append(f"  {c['name']}: {{ v: {r['v']}, t: {r['t']}, min: {json.dumps(r['min'])}, max: {json.dumps(r['max'])}, mount: '{c['mount']}', ru: {ts_str(c['ru'])}{op} }},")
     lines.append('};')
     with open(OUT_META, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines) + '\n')
@@ -380,10 +558,13 @@ def write_data(records, credits):
         '// Отдельный кусок сборки: игра грузит его, только когда вещь полки нужна (world/sand3d.ts). Здесь же строки авторства',
         '// (CC-BY-4.0): их показывают конструктор и файл титров сборки, а основному коду игры адреса не нужны.',
         "import type { ModelRecord } from './models_data';",
+        "import type { JointRec } from './models';",
         '',
-        '/** Запись модели полки: материал на вершину. */',
+        '/** Запись модели полки: материал на вершину; у вещей с дверцами и ящиками — деталь на вершину и шарниры. */',
         'export interface Sand3dRecord extends ModelRecord {',
         '  mat: string;',
+        '  part?: string;',
+        '  jt?: readonly JointRec[];',
         '}',
         '',
         'export interface Sand3dCredit {',
@@ -412,6 +593,9 @@ def write_data(records, credits):
         lines.append(f"    v: {r['v']}, t: {r['t']}, min: {json.dumps(r['min'])}, max: {json.dumps(r['max'])},")
         for k in ('pos', 'nrm', 'col', 'mat', 'idx'):
             lines.append(f"    {k}: '{r[k]}',")
+        if 'jt' in r:
+            lines.append(f"    part: '{r['part']}',")
+            lines.append('    jt: [' + ', '.join("{ k: '%s', o: %s, a: %s, hi: %s, w: '%s' }" % (j['k'], json.dumps(j['o']), json.dumps(j['a']), json.dumps(j['hi']), j['w']) for j in r['jt']) + '],')
         lines.append('  },')
     lines.append('};')
     with open(OUT, 'w', encoding='utf-8') as f:

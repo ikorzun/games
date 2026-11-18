@@ -13,8 +13,23 @@ import type { Xf } from './props';
 import { MODEL_DATA } from './models_data';
 import type { ModelRecord } from './models_data';
 
-/** Запись модели; у вещей полки Sand3D ещё и материал игры на каждую вершину (mat: uint8, base64). */
-export type AnyModelRecord = ModelRecord & { mat?: string };
+/**
+ * Шарнир подвижной детали модели полки (scripts/import_sand3d.py): дверца — поворот вокруг оси a через точку o на угол до
+ * hi, рад (знак — в какую сторону открывается); ящик — сдвиг вдоль a на путь до hi, м. Координаты — модели, как у вершин.
+ */
+export interface JointRec {
+  k: 'r' | 'p';
+  o: readonly [number, number, number];
+  a: readonly [number, number, number];
+  hi: number;
+  w: 'door' | 'drawer';
+}
+
+/**
+ * Запись модели; у вещей полки Sand3D ещё и материал игры на каждую вершину (mat: uint8, base64), а у вещей с дверцами и
+ * ящиками — номер подвижной детали на вершину (part: uint8, 0 — неподвижная) и шарниры деталей (jt).
+ */
+export type AnyModelRecord = ModelRecord & { mat?: string; part?: string; jt?: readonly JointRec[] };
 
 export interface DecodedModel {
   /** Позиции, м, по три числа на вершину. */
@@ -26,6 +41,9 @@ export interface DecodedModel {
   index: Uint16Array;
   /** Материал игры на вершину (номера world/materials.ts); нет — один материал на всю модель. */
   mat?: Uint8Array;
+  /** Подвижная деталь вершины (1… — номер шарнира в joints, 0 — неподвижная) и шарниры: дверцы и ящики. */
+  part?: Uint8Array;
+  joints?: readonly JointRec[];
   min: Vec3;
   max: Vec3;
 }
@@ -48,6 +66,24 @@ export interface PlaceOpts {
    * ряду стоят чуть вразнобой, как расставленные руками, а не отпечатанные (куратор, «Ряд сбит, а не отпечатан»).
    */
   yaw?: number;
+  /**
+   * Насколько открыта каждая дверца и выдвинут каждый ящик (по порядку шарниров модели), от 0 — закрыто до 1 — до предела,
+   * записанного импортом (партнёр 18.11, 12:32: «открой дверцы и ящики у шкафов»). Деталь двигается до опрокидывания,
+   * масштаба и доворота — как часть самой вещи.
+   */
+  open?: readonly number[];
+}
+
+/** Габарит сдвинутой детали в координатах вещи (после опрокидывания, масштаба и доворота): [низ, верх]. */
+export type MovedPart = [Vec3, Vec3];
+
+/** Матрица поворота на угол th вокруг единичной оси a (правый винт), по строкам. */
+function rodrigues(a: readonly [number, number, number], th: number): number[] {
+  const c = Math.cos(th);
+  const s = Math.sin(th);
+  const t = 1 - c;
+  const [x, y, z] = a;
+  return [c + x * x * t, x * y * t - z * s, x * z * t + y * s, y * x * t + z * s, c + y * y * t, y * z * t - x * s, z * x * t - y * s, z * y * t + x * s, c + z * z * t];
 }
 
 const cache = new Map<string, DecodedModel>();
@@ -122,6 +158,12 @@ export function decodeRecord(r: AnyModelRecord): DecodedModel {
     if (mat.length !== nv) throw new Error(`материалов ${mat.length} на ${nv} вершин`);
     out.mat = mat;
   }
+  if (r.part !== undefined && r.jt !== undefined) {
+    const part = bytes(r.part);
+    if (part.length !== nv) throw new Error(`деталей ${part.length} на ${nv} вершин`);
+    out.part = part;
+    out.joints = r.jt;
+  }
   return out;
 }
 
@@ -153,8 +195,9 @@ function baseOf(mat: number): Vec3 {
 /**
  * Кладёт модель в сетку xf.mb. Оттенок подобран так, чтобы на выбранном материале вышел собственный цвет модели.
  * Материал — opts.mat на всю модель; не задан — свой у каждой вершины (полка Sand3D) или бумага.
+ * Возвращает габариты сдвинутых деталей (открытых дверец и выдвинутых ящиков) — для их преград.
  */
-export function placeModel(xf: Xf, name: string, opts: PlaceOpts = {}): void {
+export function placeModel(xf: Xf, name: string, opts: PlaceOpts = {}): MovedPart[] {
   const m = decodeModel(name);
   const one = opts.mat ?? (m.mat ? null : MAT.paper);
   const extra = opts.tint ?? [1, 1, 1];
@@ -167,18 +210,69 @@ export function placeModel(xf: Xf, name: string, opts: PlaceOpts = {}): void {
   const y1 = m.max[1];
   const cy = Math.cos(opts.yaw ?? 0);
   const sy = Math.sin(opts.yaw ?? 0);
+  // Открытые дверцы и выдвинутые ящики: поворот (r) вокруг оси через o или сдвиг (d) — по шарниру детали.
+  const moves: Array<{ r: number[] | null; o: readonly number[]; d: Vec3 } | null> = [];
+  if (m.joints && m.part && opts.open) {
+    m.joints.forEach((j, k) => {
+      const t = Math.max(0, Math.min(1, opts.open![k] ?? 0));
+      if (t <= 0) moves.push(null);
+      else if (j.k === 'p') moves.push({ r: null, o: j.o, d: [j.a[0] * j.hi * t, j.a[1] * j.hi * t, j.a[2] * j.hi * t] });
+      else moves.push({ r: rodrigues(j.a, j.hi * t), o: j.o, d: [0, 0, 0] });
+    });
+  }
+  const boxes: MovedPart[] = moves.map(() => [
+    [Infinity, Infinity, Infinity],
+    [-Infinity, -Infinity, -Infinity],
+  ]);
   for (let i = 0; i < n; i++) {
-    const x = m.position[i * 3]!;
-    const y = m.position[i * 3 + 1]!;
-    const z = m.position[i * 3 + 2]!;
+    let x = m.position[i * 3]!;
+    let y = m.position[i * 3 + 1]!;
+    let z = m.position[i * 3 + 2]!;
+    let nx0 = m.normal[i * 3]!;
+    let ny0 = m.normal[i * 3 + 1]!;
+    let nz0 = m.normal[i * 3 + 2]!;
+    const pi = m.part ? m.part[i]! : 0;
+    const mv = pi > 0 ? (moves[pi - 1] ?? null) : null;
+    if (mv) {
+      if (mv.r) {
+        const r = mv.r;
+        const dx = x - mv.o[0]!;
+        const dy = y - mv.o[1]!;
+        const dz = z - mv.o[2]!;
+        x = mv.o[0]! + r[0]! * dx + r[1]! * dy + r[2]! * dz;
+        y = mv.o[1]! + r[3]! * dx + r[4]! * dy + r[5]! * dz;
+        z = mv.o[2]! + r[6]! * dx + r[7]! * dy + r[8]! * dz;
+        const a = nx0;
+        const b = ny0;
+        const c = nz0;
+        nx0 = r[0]! * a + r[1]! * b + r[2]! * c;
+        ny0 = r[3]! * a + r[4]! * b + r[5]! * c;
+        nz0 = r[6]! * a + r[7]! * b + r[8]! * c;
+      } else {
+        x += mv.d[0];
+        y += mv.d[1];
+        z += mv.d[2];
+      }
+    }
     // Опрокидывание, масштаб, затем доворот: (x, z) → (x·cos − z·sin, x·sin + z·cos).
     const px = x * s;
     const py = tip ? (z - z0) * s : y * s;
     const pz = tip ? (y1 - y) * s : z * s;
-    const p = xf.pt(px * cy - pz * sy, py, px * sy + pz * cy);
-    const nx = m.normal[i * 3]!;
-    const ny = tip ? m.normal[i * 3 + 2]! : m.normal[i * 3 + 1]!;
-    const nz = tip ? -m.normal[i * 3 + 1]! : m.normal[i * 3 + 2]!;
+    const ix = px * cy - pz * sy;
+    const iz = px * sy + pz * cy;
+    const p = xf.pt(ix, py, iz);
+    if (mv) {
+      const bb = boxes[pi - 1]!;
+      bb[0][0] = Math.min(bb[0][0], ix);
+      bb[0][1] = Math.min(bb[0][1], py);
+      bb[0][2] = Math.min(bb[0][2], iz);
+      bb[1][0] = Math.max(bb[1][0], ix);
+      bb[1][1] = Math.max(bb[1][1], py);
+      bb[1][2] = Math.max(bb[1][2], iz);
+    }
+    const nx = nx0;
+    const ny = tip ? nz0 : ny0;
+    const nz = tip ? -ny0 : nz0;
     const nn = rotNormal([nx * cy - nz * sy, ny, nx * sy + nz * cy], xf.rot);
     const mat = one ?? m.mat![i]!;
     const base = baseOf(mat);
@@ -187,4 +281,5 @@ export function placeModel(xf: Xf, name: string, opts: PlaceOpts = {}): void {
     xf.mb.vertex(p, nn, mat, tint, 1);
   }
   for (let i = 0; i < m.index.length; i += 3) xf.mb.tri(first + m.index[i]!, first + m.index[i + 1]!, first + m.index[i + 2]!);
+  return boxes.filter((b, k) => moves[k] !== null && b[0][0] <= b[1][0]);
 }

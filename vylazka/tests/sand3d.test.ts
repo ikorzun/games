@@ -46,6 +46,7 @@ describe('полка Sand3D: пока модели не пришли', () => {
     const { mesh, col } = build(p);
     expect(mesh.position.length / 3).toBeGreaterThan(0);
     expect(mesh.position.length / 3).toBeLessThanOrEqual(24);
+    // Коробка — закрытой вещи: открывать у неё нечего, преграда одна.
     expect(col.boxes.length).toBe(1);
     const b = col.boxes[0]!;
     expect(b.maxX - b.minX).toBeCloseTo(p.w, 5);
@@ -206,7 +207,8 @@ describe('полка Sand3D: модели пришли', () => {
     const used = new Set(Array.from(mesh.mat, (v) => Math.round(v)));
     for (const id of [MAT.wood, MAT.steel, MAT.brass, MAT.leather]) expect(used.has(id), String(id)).toBe(true);
     for (let i = 0; i < m.mat!.length; i++) expect(Math.round(mesh.mat[i]!)).toBe(m.mat![i]);
-    expect(col.boxes.length).toBe(1);
+    // Преграда корпуса и по одной у каждого выдвинутого ящика.
+    expect(col.boxes.length).toBeGreaterThanOrEqual(1);
   });
 
   it('вещь не выходит за свой габарит в реестре', () => {
@@ -219,7 +221,7 @@ describe('полка Sand3D: модели пришли', () => {
         expect(mesh.position[i + 1]!, n).toBeGreaterThanOrEqual(-1e-3);
         expect(mesh.position[i + 1]!, n).toBeLessThanOrEqual(p.h + 1e-3);
         expect(mesh.position[i + 2]!, n).toBeGreaterThanOrEqual(z0 - 1e-3);
-        expect(mesh.position[i + 2]!, n).toBeLessThanOrEqual(z0 + p.d + 1e-3);
+        expect(mesh.position[i + 2]!, n).toBeLessThanOrEqual(z0 + p.d + (p.reach ?? 0) + 1e-3);
       }
     }
   });
