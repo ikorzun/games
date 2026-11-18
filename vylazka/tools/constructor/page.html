@@ -160,6 +160,10 @@ details.box > summary::-webkit-details-marker { display: none; }
 details.box > summary::before { content: "▸ "; }
 details.box[open] > summary::before { content: "▾ "; }
 body.is-replacing .shelf__item { border-color: var(--v-replace); }
+.shelf__item--cat { cursor: default; }
+.shelf__item--cat .btn { justify-self: start; margin-top: 4px; }
+.shelf__item--cat .shelf__thumb { cursor: zoom-in; background: #fff; }
+.btn.is-on { border-color: var(--accent); color: var(--accent); }
 @media (max-width: 1180px) {
   .layout { grid-template-columns: minmax(0, 240px) minmax(0, 1fr); }
   #panel { grid-column: 1 / -1; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); grid-auto-flow: row dense; align-items: start; }

@@ -27,6 +27,8 @@ npm run dev      # dev-сервер с контентом из ../episodes и ..
 cd vylazka && npm install && npm run typecheck && npm test && npm run build && npm run smoke
 node e2e/shots.mjs   # скриншоты фиксированных ракурсов — смотреть картинку глазами
 node tools/constructor/build.mjs <out.html>   # конструктор партнёра: вещи, манекены, мебель игры (двигать, убирать) и карточки-опросник (сохраняет в базу страницы)
+npm run constructor        # тот же конструктор на компьютере партнёра: окно, правки сразу в src/world/partner/*.json, поиск по каталогу Sand3D, заявки
+npm run constructor:push   # «залить»: проверка правилами игры, коммит, git push (tools/constructor/README.md)
 ```
 
 ## Конвенции

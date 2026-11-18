@@ -36,8 +36,8 @@ import { EdgeBuilder } from './edges';
 import { placeFigures } from './figure_place';
 import type { FigureSpec } from './figures';
 import { FIGURES } from './figures_data';
-import { moveSpot, NEVER, placedSeed, placeThings, roomIndex } from './placed_place';
-import type { Box, PlacedSpot } from './placed_place';
+import { fitMoved, NEVER, placedSeed, placeThings, roomIndex } from './placed_place';
+import type { PlacedSpot } from './placed_place';
 import type { PlacedSpec, RemovedSpec } from './placed';
 import { swapFits } from './placed';
 import { PLACED, REMOVED } from './placed_data';
@@ -887,10 +887,12 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     // открытым дверцам впереди тесно, точка уже закрыта (placed_place.ts, doorsAt); передвинутая без места по правилу — как её
     // построила бы обстановка на прежнем месте (у проёма — закрытой).
     const share = (room: number): number => roomOpenness(layout.world, layout.seed, room);
-    const taken: Box[] = [];
-    for (const m of edits?.moved ?? []) {
+    // Места передвинутых — все сразу (placed_place.ts, fitMoved): оставшаяся на своём месте занимает его для остальных.
+    const moved = edits?.moved ?? [];
+    const fits = fitMoved(moved.map((m) => ({ spec: m.spec, room: m.room, at: [m.xf.ox, m.xf.oy, m.xf.oz], rot: m.xf.rot })), placeWorld, ALL_PROPS);
+    moved.forEach((m, i) => {
       const p = ALL_PROPS[m.spec.prop]!;
-      const fit = moveSpot(m.spec, m.room, placeWorld, ALL_PROPS, taken);
+      const fit = fits[i];
       if (fit) {
         const s = fit.spot;
         const ch = chunkFor(m.room, Math.round(s.at[0] / CELL) + GRID / 2, Math.round(s.at[2] / CELL) + GRID / 2);
@@ -899,7 +901,6 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
         withOpenMode(s.open, () => p.build(xf, m.seed), share(m.room.id));
         // Доворот по всем осям (world/tilt.ts): собранное поворачивается вокруг середины и ложится на опору.
         if (s.tilt) applyTilt(xf, mk, s.tilt, p.mount);
-        taken.push(fit.box);
         placed.push(s);
       } else {
         const xf = new Xf(m.xf.mb, col, m.xf.ox, m.xf.oy, m.xf.oz, m.xf.rot, m.xf.sl);
@@ -907,7 +908,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
         withOpenMode(m.spec.open, () => p.build(xf, m.seed), m.share);
         if (isTilted(m.spec.tilt)) applyTilt(xf, mk, m.spec.tilt, p.mount);
       }
-    }
+    });
     // Вещи партнёра (world/placed_place.ts): после фигур и всей обстановки — не врастают ни во что, проходы
     // оставляют свободными. Строятся как обычная обстановка: в сетку своего помещения, с преградами, объектом
     // уровня (растворяется от касания и возвращается, как всё).

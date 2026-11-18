@@ -356,6 +356,47 @@ export function placeThings(specs: readonly PlacedSpec[], w: PlaceWorld, props: 
   return out;
 }
 
+/** Передвинутая вещь игры одного уровня: запись, помещение, где её поставила игра (точка и поворот). */
+export interface MovedItem {
+  spec: PlacedSpec;
+  room: GenRoom;
+  at: Vec3;
+  rot: Turn;
+}
+
+/**
+ * Где встанут передвинутые вещи игры одного уровня, в порядке сборки: по правилу записи (moveSpot) — не в проход, не в мебель
+ * и не друг в друга. Вещи, которой места по правилу нет, — null: она стоит, где её поставила игра, и это место занято для
+ * остальных — другая передвинутая по правилу туда не встаёт (тест 18.11: в буфете зала ожидания одна скамья встала по правилу
+ * туда, где осталась вторая, и они вросли друг в друга на 0,62 м). Нашлась новая такая вещь — расчёт с начала: прежние места
+ * могли лечь на её. Тот же расчёт у сборки уровня (level_build.ts) и у конструктора.
+ */
+export function fitMoved(items: readonly MovedItem[], w: PlaceWorld, props: Readonly<Record<string, PropSpec>>): ({ spot: PlacedSpot; box: Box } | null)[] {
+  const stay = new Set<number>();
+  for (;;) {
+    const taken: Box[] = [];
+    for (const i of stay) {
+      const p = props[items[i]!.spec.prop];
+      if (p) taken.push(worldBox(p, items[i]!.at, items[i]!.rot));
+    }
+    const out: ({ spot: PlacedSpot; box: Box } | null)[] = items.map(() => null);
+    let again = false;
+    for (let i = 0; i < items.length && !again; i++) {
+      if (stay.has(i)) continue;
+      const m = items[i]!;
+      const f = moveSpot(m.spec, m.room, w, props, taken);
+      if (f) {
+        out[i] = f;
+        taken.push(f.box);
+      } else {
+        stay.add(i);
+        again = true;
+      }
+    }
+    if (!again) return out;
+  }
+}
+
 /**
  * Куда встанет передвинутая вещь игры (placed.ts, moves) в помещении room: по правилу записи — те же края, точка и проверки,
  * что у вещей партнёра (placeThings: не в проход, не в мебель, под потолком). Края помещения перебираются по хешу сида, ключа

@@ -1,25 +1,16 @@
 /**
  * Вещи партнёра, которые стоят в игре. Партнёр ставит их сам в конструкторе (tools/constructor; его слова:
- * «Это просто конструктор, где можно перетащить вещь в пространство и поставить»), конструктор сохраняет их
- * в свою базу, а основная модель переносит сохранённое сюда, проверив placedProblems (world/placed.ts).
- * Своих расстановок основная модель сюда не добавляет.
+ * «Это просто конструктор, где можно перетащить вещь в пространство и поставить»). Записи лежат в файлах JSON рядом
+ * (world/partner/): их пишет конструктор на компьютере партнёра (квиз 18.11: «Программа на MacBook» — `npm run constructor`,
+ * в игру — `npm run constructor:push`), а то, что сохранено на странице конструктора в Claude, переносит сюда основная
+ * модель. Каждая запись проверяется тестом (tests/partner_data.test.ts: placedProblems, removedProblems). Своих расстановок
+ * основная модель сюда не добавляет.
  *
- * Убрать запись можно в конструкторе (кнопка «Удалить» у сохранённого): при следующем переносе она уйдёт и отсюда.
+ * Передвинутые вещи игры — записи с полем moves; убранные — REMOVED.
  */
 import type { PlacedSpec, RemovedSpec } from './placed';
+import THINGS from './partner/things.json';
+import GONE from './partner/removed.json';
 
-/**
- * Перенесено 18.11 из базы конструктора: сохранения партнёра 17.11, 21:33 — в кухне убежища передвинуты холодильник и
- * батарея (его слова 21:51: «конструктор должен запоминать размещенные или передвинутые объекты»).
- */
-export const PLACED: readonly PlacedSpec[] = [
-  {"id": "pl_mwl57obn8", "moves": {"nth": 0, "thing": "fridge"}, "name": "холодильник с магнитами и запиской — передвинута", "near": [0.088, 0.177], "offset": [-0.22, -0.3], "prop": "fridge", "rule": {"anchor": "corner", "count": 1, "facing": "room", "lift": 0, "rooms": ["kitchen"], "worlds": ["shelter"]}, "turn": 0},
-  {"id": "pl_mwl7m7h71", "moves": {"nth": 0, "thing": "radiator"}, "name": "чугунная батарея — передвинута", "near": [0.912, 0.823], "offset": [0.75, 0.23], "prop": "radiator", "rule": {"anchor": "corner", "count": 1, "facing": "room", "lift": 0.12, "rooms": ["kitchen"], "worlds": ["shelter"]}, "turn": 3},
-];
-
-/**
- * Вещи игры, которые партнёр убрал (конструктор, коллекция removed; его слова 17.11, 19:15: «текущую расстановку мебели я
- * тоже должен уметь двигать и удалять»). Передвинутые лежат в PLACED — запись с полем moves. Переносит основная модель,
- * проверив removedProblems (world/placed.ts). Пока пусто — игра ставит всё, как ставила.
- */
-export const REMOVED: readonly RemovedSpec[] = [];
+export const PLACED: readonly PlacedSpec[] = THINGS as unknown as PlacedSpec[];
+export const REMOVED: readonly RemovedSpec[] = GONE as unknown as RemovedSpec[];

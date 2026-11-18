@@ -13,7 +13,7 @@ import { MeshBuilder } from '../src/world/kit';
 import type { BuiltLevel } from '../src/world/level';
 import { buildLevel } from '../src/world/level_build';
 import { registerModels } from '../src/world/models';
-import type { RemovedSpec } from '../src/world/placed';
+import type { PlacedSpec, RemovedSpec } from '../src/world/placed';
 import { roomIndex } from '../src/world/placed_place';
 import { Xf } from '../src/world/props';
 import { SAND3D_DATA } from '../src/world/sand3d_data';
@@ -103,6 +103,17 @@ describe('откат вещи, которая не встала', () => {
 });
 
 describe('записи партнёра и правило «не врастать»', () => {
+  it('две передвинутые скамьи буфета: одна стоит, где её поставила игра, — другая по правилу туда не встаёт (18.11, 0,62 м)', () => {
+    // Записи партнёра 18.11 (конструктор, буфет зала ожидания): обе скамьи передвинуты; одной места по правилу нет, и раньше вторая
+    // вставала ровно туда, где осталась первая (world/placed_place.ts, fitMoved).
+    const benches = [
+      {"at": "2026-11-18T16:11:59.477Z", "id": "pl_mwmbk5lwe", "moves": {"nth": 1, "thing": "st_seats"}, "name": "скамья: деревянная со спинкой — передвинута", "near": [0.25, 0.075], "offset": [0.7, -0.29], "prop": "st_seats", "rule": {"anchor": "wall", "count": 1, "facing": "room", "lift": 0, "rooms": ["buffet"], "worlds": ["station"]}, "slot": "buffet.0", "turn": 0},
+      {"at": "2026-11-18T16:12:19.682Z", "id": "pl_mwmbk940f", "moves": {"nth": 0, "thing": "st_seats"}, "name": "скамья: деревянная со спинкой — передвинута", "near": [0.075, 0.25], "offset": [-0.4, -0.29], "prop": "st_seats", "rule": {"anchor": "wall", "count": 1, "facing": "room", "lift": 0, "rooms": ["buffet"], "worlds": ["station"]}, "slot": "buffet.0", "turn": 0},
+    ] as unknown as PlacedSpec[];
+    const lvl = buildLevel(generateLayout(42, 2, 'station'), { wear: 0, figures: [], placed: benches, removed: [] });
+    expect(grown(lvl)).toEqual([]);
+  });
+
   it('убранная вещь игры остаётся тенью: вещь, которая без записей не встала бы рядом, не появляется и с записью', () => {
     // Найти помещение, где правило не пустило вещь игры, и убрать ту, что ей мешала, — номера и места остальных те же.
     for (const seed of SEEDS) {

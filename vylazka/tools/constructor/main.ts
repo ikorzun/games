@@ -47,7 +47,7 @@ import { placeable, placedProblems, PLACED_OPEN, removedProblems, swapFits } fro
 import type { Aabb } from '../../src/world/colliders';
 import type { LevelObject } from '../../src/world/objects';
 import type { PlacedOpen, PlacedSpec, RemovedSpec } from '../../src/world/placed';
-import { doorsAt, fitThing, gameNth, moveSpot, NEVER, placedSeed, placeThings, roomDoors, roomIndex, roomNear, rotOf, throatBox } from '../../src/world/placed_place';
+import { doorsAt, fitMoved, fitThing, gameNth, moveSpot, NEVER, placedSeed, placeThings, roomDoors, roomIndex, roomNear, rotOf, throatBox } from '../../src/world/placed_place';
 import type { Box, PlacedSpot } from '../../src/world/placed_place';
 import { placeFigures } from '../../src/world/figure_place';
 import type { Turn } from '../../src/world/placed_place';
@@ -696,13 +696,13 @@ const sameSet = (a: ReadonlySet<number>, b: ReadonlySet<number>): boolean => a.s
  */
 function layoutEdits(): void {
   applyHidden(new Set([...wantHidden(), ...edits.moved.map((m) => m.o.id)]));
-  const taken: Box[] = [];
-  for (const m of edits.moved) {
-    const f = moveSpot(m.spec, room, pw, ALL_PROPS, taken);
+  // Тот же расчёт, что у сборки уровня (placed_place.ts, fitMoved): оставшаяся на своём месте занимает его для остальных.
+  const fits = fitMoved(edits.moved.map((m) => ({ spec: m.spec, room, at: m.o.at, rot: m.o.rot })), pw, ALL_PROPS);
+  edits.moved.forEach((m, i) => {
+    const f = fits[i];
     m.spot = f ? f.spot : null;
     m.box = f?.box;
-    if (f) taken.push(f.box);
-  }
+  });
   applyHidden(wantHidden());
 }
 
@@ -1682,8 +1682,17 @@ function thumbOf(name: string): string {
 const PLACE = new Set(Object.keys(ALL_PROPS).filter((n) => placeable(n, ALL_PROPS[n]!, FIXED)));
 /** Вся опись на полке: что ставится руками и что только с карточкой (бывший «Опросник мебели»). */
 const SHELF = ITEMS.slice().sort((a, b) => a.ru.localeCompare(b.ru, 'ru'));
-type ShelfKind = 'all' | Exclude<Kind, 'other'> | 'unmarked';
+type ShelfKind = 'all' | Exclude<Kind, 'other'> | 'unmarked' | 'catalog' | 'requests';
+/** Конструктор на своём компьютере (квиз 18.11: «Программа на MacBook», tools/constructor/serve.mjs): ставит сборка. */
+declare const __LOCAL__: boolean;
+const LOCAL = typeof __LOCAL__ !== 'undefined' && __LOCAL__;
 const KINDS: readonly [ShelfKind, string, string][] = [
+  ...(LOCAL
+    ? ([
+        ['catalog', 'Каталог', 'все вещи каталога Sand3D (около 106 тыс.): поиск по смыслу, можно по-русски; понравилась — в заявку'],
+        ['requests', 'Заявки', 'вещи каталога, которые основная модель доведёт до игры: лицензия, марки, масштаб, материалы'],
+      ] as [ShelfKind, string, string][])
+    : []),
   ['all', 'Все', 'вся опись игры'],
   ['furniture', 'Мебель', 'на чём сидят, лежат, за чем работают и куда кладут — и стоит на уровнях'],
   ['memory', 'Вещи памяти', 'вещи, которые ищут'],
@@ -1709,14 +1718,22 @@ function shelfVisible(i: Entry, q: string): boolean {
   return i.kind === shelfKind;
 }
 function renderKinds(): void {
-  chips($('kinds'), KINDS.map((k) => k[0]), (k) => KINDS.find((x) => x[0] === k)![1], (k) => k === shelfKind, (k) => {
+  const label = (k: ShelfKind): string => (k === 'requests' && requests.size > 0 ? `Заявки ${requests.size}` : KINDS.find((x) => x[0] === k)![1]);
+  chips($('kinds'), KINDS.map((k) => k[0]), label, (k) => k === shelfKind, (k) => {
+    if (k === 'catalog' && shelfKind !== 'catalog') {
+      catOffset = 0;
+      catQuery = '';
+    }
     shelfKind = k;
+    searchEl.placeholder = k === 'catalog' ? 'Каталог: стул, старое радио, чемодан…' : 'Найти: стул, часы, чемодан…';
     renderKinds();
     renderShelf();
   });
   for (const b of $('kinds').querySelectorAll('button')) b.title = KINDS.find((x) => x[1] === b.textContent)?.[2] ?? '';
 }
 function renderShelf(): void {
+  if (shelfKind === 'catalog') return void renderCatalog();
+  if (shelfKind === 'requests') return renderRequests();
   const q = searchEl.value.trim().toLowerCase();
   // Сначала то, что уже стоит в этом месте (по обстановке показанного уровня), потом остальное.
   const here = new Set((lvl.objects ?? []).map((o) => o.name));
@@ -1820,7 +1837,174 @@ function startCarry(what: { prop: string } | { figure: true }): void {
   }
   setStatus('Отпусти над полом помещения. Esc — передумал.');
 }
-searchEl.addEventListener('input', renderShelf);
+searchEl.addEventListener('input', () => {
+  // Каталог ищет на сервере — не на каждую букву.
+  if (shelfKind === 'catalog') {
+    window.clearTimeout(catTimer);
+    catTimer = window.setTimeout(() => {
+      catOffset = 0;
+      void renderCatalog();
+    }, 450);
+  } else renderShelf();
+});
+
+// ───────────────────────────── каталог Sand3D и заявки (только на своём компьютере) ─────────────────────────────
+
+/**
+ * Каталог (квиз 18.11: «Ищу везде, беру по заявке»): поиск по всем вещам каталога Sand3D через serve.mjs — по смыслу,
+ * можно по-русски; картинка, название, вид. Понравилась — «В заявку»: основная модель доведёт её до игры (лицензия, марки и
+ * надписи, масштаб, материалы), и она появится на полке. В игру идёт только то, что поставлено.
+ */
+interface CatItem {
+  id: string;
+  name: string;
+  family: string;
+  dataset: string;
+  joints?: number;
+}
+interface RequestRow {
+  id: string;
+  name: string;
+  family: string;
+  dataset: string;
+  at: string;
+  note?: string;
+}
+const requests = new Map<string, RequestRow>();
+/**
+ * Русские слова запроса — по-английски: каталог ищет по смыслу и понимает русский, но хуже (на «старый чемодан» он отдаёт
+ * автобусы и самолёты — «путешествие», а на «old suitcase» — чемоданы). Основа слова → английское; чего нет — как есть.
+ */
+const RU_EN: readonly (readonly [string, string])[] = (
+  [
+    ['кухонн', 'kitchen'], ['стар', 'old'], ['древн', 'ancient'], ['деревян', 'wooden'], ['желез', 'iron'], ['металл', 'metal'], ['стеклян', 'glass'],
+    ['пластиков', 'plastic'], ['мягк', 'soft'], ['детск', 'child'], ['офисн', 'office'], ['больнич', 'hospital'], ['медицин', 'medical'], ['советск', 'soviet'],
+    ['ржав', 'rusty'], ['сломан', 'broken'], ['чемодан', 'suitcase'], ['сумк', 'bag'], ['рюкзак', 'backpack'], ['коробк', 'box'], ['ящик', 'crate'],
+    ['сундук', 'chest'], ['ведр', 'bucket'], ['бутыл', 'bottle'], ['банк', 'jar'], ['кастрюл', 'pot'], ['сковород', 'frying pan'], ['чайник', 'kettle'],
+    ['чашк', 'cup'], ['кружк', 'mug'], ['тарелк', 'plate'], ['ложк', 'spoon'], ['вилк', 'fork'], ['нож', 'knife'], ['стул', 'chair'], ['табурет', 'stool'],
+    ['кресл', 'armchair'], ['диван', 'sofa'], ['скамь', 'bench'], ['лавк', 'bench'], ['столик', 'small table'], ['стол', 'table'], ['парт', 'school desk'],
+    ['кроват', 'bed'], ['нары', 'bunk bed'], ['шкафчик', 'locker'], ['шкаф', 'cabinet'], ['гардероб', 'wardrobe'], ['комод', 'dresser'], ['тумб', 'nightstand'],
+    ['полк', 'shelf'], ['стеллаж', 'shelving'], ['вешалк', 'coat rack'], ['зеркал', 'mirror'], ['ковёр', 'rug'], ['ковр', 'rug'], ['штор', 'curtain'],
+    ['картин', 'painting'], ['рамк', 'picture frame'], ['фотограф', 'photo frame'], ['люстр', 'chandelier'], ['светильник', 'lamp'], ['ламп', 'lamp'],
+    ['фонар', 'lantern'], ['свеч', 'candle'], ['будильник', 'alarm clock'], ['часы', 'clock'], ['радио', 'radio'], ['приёмник', 'radio'], ['приемник', 'radio'],
+    ['телевизор', 'television'], ['телефон', 'telephone'], ['магнитофон', 'tape recorder'], ['проигрывател', 'record player'], ['пластинк', 'vinyl record'],
+    ['компьютер', 'computer'], ['монитор', 'monitor'], ['клавиатур', 'keyboard'], ['печатн', 'typewriter'], ['холодильник', 'refrigerator'], ['плит', 'stove'],
+    ['печ', 'stove'], ['раковин', 'sink'], ['ванн', 'bathtub'], ['унитаз', 'toilet'], ['душ', 'shower'], ['игрушк', 'toy'], ['кукл', 'doll'], ['мишк', 'teddy bear'],
+    ['мяч', 'ball'], ['велосипед', 'bicycle'], ['коляск', 'pram'], ['качел', 'swing'], ['лошадк', 'rocking horse'], ['сейф', 'safe'], ['двер', 'door'],
+    ['окн', 'window'], ['батаре', 'radiator'], ['вентилятор', 'fan'], ['огнетушител', 'fire extinguisher'], ['противогаз', 'gas mask'], ['носилк', 'stretcher'],
+    ['каталк', 'gurney'], ['пальто', 'coat'], ['шляп', 'hat'], ['обув', 'shoes'], ['тапк', 'slippers'], ['тапоч', 'slippers'], ['ботин', 'boots'], ['книг', 'book'],
+    ['газет', 'newspaper'], ['папк', 'folder'], ['документ', 'documents'], ['письм', 'letter'], ['открытк', 'postcard'], ['цвет', 'flower'], ['растени', 'plant'],
+    ['горшк', 'flower pot'], ['горшок', 'flower pot'], ['дерев', 'tree'], ['торгов', 'vending'], ['автомат', 'machine'], ['кулер', 'water cooler'], ['урн', 'trash can'],
+    ['мусор', 'trash'], ['табличк', 'sign'], ['знак', 'sign'], ['указател', 'signpost'], ['касс', 'cash register'], ['турникет', 'turnstile'], ['билет', 'ticket'],
+  ] as const
+)
+  .slice()
+  .sort((a, b) => b[0].length - a[0].length);
+function toEnglish(q: string): string {
+  return q
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => {
+      const low = w.toLowerCase();
+      return RU_EN.find(([ru]) => low.startsWith(ru))?.[1] ?? w;
+    })
+    .join(' ');
+}
+let catTimer = 0;
+let catOffset = 0;
+let catTotal = 0;
+let catItems: CatItem[] = [];
+let catQuery = '';
+function catRow(i: CatItem, onReq: () => void): HTMLDivElement {
+  const row = document.createElement('div');
+  row.className = 'shelf__item shelf__item--cat';
+  const img = document.createElement('img');
+  img.className = 'shelf__thumb';
+  img.alt = '';
+  img.loading = 'lazy';
+  img.width = 56;
+  img.height = 56;
+  img.src = `api/catalog/render/${encodeURIComponent(i.id)}.png`;
+  const text = document.createElement('span');
+  text.className = 'shelf__text';
+  const title = document.createElement('b');
+  title.textContent = i.name;
+  const small = document.createElement('small');
+  small.textContent = `${i.family} · ${i.dataset}${i.joints ? ' · двигается' : ''}`;
+  const b = document.createElement('button');
+  b.type = 'button';
+  const have = requests.has(i.id);
+  b.className = `btn btn--small${have ? ' is-on' : ''}`;
+  b.textContent = have ? '✓ в заявке' : 'В заявку';
+  b.addEventListener('click', onReq);
+  text.append(title, small, b);
+  row.append(img, text);
+  // Картинка крупно — по наведению: в 56 px вещь не разглядеть.
+  row.title = `${i.name} — ${i.family}`;
+  img.addEventListener('click', () => window.open(img.src, '_blank'));
+  return row;
+}
+async function toggleRequest(i: CatItem): Promise<void> {
+  if (!db) return;
+  if (requests.has(i.id)) {
+    requests.delete(i.id);
+    await db.collection('requests').doc(i.id).delete();
+    setStatus(`Из заявки убрано: ${i.name}.`);
+  } else {
+    const row: RequestRow = { id: i.id, name: i.name, family: i.family, dataset: i.dataset, at: new Date().toISOString() };
+    requests.set(i.id, row);
+    await db.collection('requests').doc(i.id).set(row as unknown as Record<string, unknown>);
+    setStatus(`В заявке: ${i.name}. Залить — npm run constructor:push.`);
+  }
+  renderShelf();
+  renderKinds();
+}
+async function renderCatalog(): Promise<void> {
+  const q = searchEl.value.trim();
+  if (!q) {
+    const p = Object.assign(document.createElement('p'), { className: 'count', textContent: 'Напиши, что ищешь: «стул», «старое радио», «чемодан» — поиск по смыслу среди 106 тыс. вещей.' });
+    shelfEl.replaceChildren(p);
+    $('shelfcount').textContent = 'каталог Sand3D';
+    return;
+  }
+  if (q !== catQuery || catOffset === 0) {
+    catQuery = q;
+    $('shelfcount').textContent = 'ищу…';
+    try {
+      const r = await fetch(`api/catalog/search?${new URLSearchParams({ q: toEnglish(q), offset: String(catOffset), limit: '40' })}`);
+      const d = (await r.json()) as { total?: number; items?: CatItem[]; error?: string };
+      if (!r.ok || !d.items) throw new Error(d.error ?? String(r.status));
+      catTotal = d.total ?? 0;
+      catItems = catOffset === 0 ? d.items : [...catItems, ...d.items];
+    } catch (e) {
+      shelfEl.replaceChildren(Object.assign(document.createElement('p'), { className: 'count', textContent: `Каталог не ответил: ${String((e as Error).message ?? e)}. Нужен интернет; спейс иногда просыпается минуту.` }));
+      $('shelfcount').textContent = 'каталог Sand3D';
+      return;
+    }
+  }
+  const rows: HTMLElement[] = catItems.map((i) => catRow(i, () => void toggleRequest(i)));
+  if (catItems.length < catTotal) {
+    const more = Object.assign(document.createElement('button'), { type: 'button', className: 'btn btn--small', textContent: 'ещё' });
+    more.addEventListener('click', () => {
+      catOffset = catItems.length;
+      catQuery = '';
+      void renderCatalog();
+    });
+    rows.push(more);
+  }
+  // Что ушло в каталог, если запрос переведён: видно, почему нашлось то, что нашлось.
+  const en = toEnglish(q);
+  if (en !== q) rows.unshift(Object.assign(document.createElement('p'), { className: 'count', textContent: `ищу: ${en}` }));
+  shelfEl.replaceChildren(...rows);
+  $('shelfcount').textContent = `${catItems.length} из ${catTotal.toLocaleString('ru-RU')}`;
+}
+function renderRequests(): void {
+  const list = [...requests.values()].sort((a, b) => a.at.localeCompare(b.at));
+  const rows: HTMLElement[] = list.map((r) => catRow(r, () => void toggleRequest(r)));
+  if (rows.length === 0) rows.push(Object.assign(document.createElement('p'), { className: 'count', textContent: 'Заявок нет: найди вещь во вкладке «Каталог» и нажми «В заявку».' }));
+  shelfEl.replaceChildren(...rows);
+  $('shelfcount').textContent = `заявок: ${list.length}`;
+}
 
 // ───────────────────────────── карточка вещи (бывший «Опросник мебели») ─────────────────────────────
 
@@ -2546,23 +2730,91 @@ function openRemoved(r: RemovedSpec): void {
   if (o) selectGame(o.id);
 }
 
+/**
+ * База конструктора на своём компьютере (квиз 18.11: «Программа на MacBook»): те же коллекции, что у страницы в Claude, но
+ * записи идут в файлы репозитория через serve.mjs (src/world/partner/*.json — их берёт игра; tools/constructor/work — отметки
+ * и заявки). Окно одно, поэтому снимок — то, что загрузили при открытии, плюс свои правки.
+ */
+function localDb(): DbNs {
+  const data = new Map<string, Map<string, Record<string, unknown>>>();
+  const listeners = new Map<string, ((s: Snap) => void)[]>();
+  let loaded: Promise<void> | null = null;
+  const load = (): Promise<void> =>
+    (loaded ??= fetch('api/work')
+      .then((r) => r.json() as Promise<Record<string, Record<string, unknown>[]>>)
+      .then((all) => {
+        for (const [c, rows] of Object.entries(all)) data.set(c, new Map(rows.map((r) => [String(r.id), r])));
+      }));
+  const coll = (c: string): Map<string, Record<string, unknown>> => {
+    let m = data.get(c);
+    if (!m) data.set(c, (m = new Map()));
+    return m;
+  };
+  const emit = (c: string): void => {
+    const snap: Snap = { docs: [...coll(c).entries()].map(([id, d]) => ({ id, data: () => d })), metadata: { fromCache: false } };
+    for (const fn of listeners.get(c) ?? []) fn(snap);
+  };
+  const call = async (c: string, id: string, init: RequestInit): Promise<void> => {
+    const r = await fetch(`api/work/${c}/${encodeURIComponent(id)}`, init);
+    if (!r.ok) throw new Error(`сервер ответил ${r.status}`);
+  };
+  return {
+    collection: (c) => ({
+      doc: (id) => ({
+        set: async (d) => {
+          await call(c, id, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(d) });
+          coll(c).set(id, { ...d, id });
+          emit(c);
+        },
+        delete: async () => {
+          await call(c, id, { method: 'DELETE' });
+          coll(c).delete(id);
+          emit(c);
+        },
+      }),
+      onSnapshot: (next, err) => {
+        const list = listeners.get(c) ?? [];
+        list.push(next);
+        listeners.set(c, list);
+        load().then(
+          () => next({ docs: [...coll(c).entries()].map(([id, d]) => ({ id, data: () => d })), metadata: { fromCache: false } }),
+          () => err?.({ code: 'unavailable' }),
+        );
+        return () => undefined;
+      },
+    }),
+  };
+}
+
 async function connect(): Promise<void> {
-  const claude = (window as unknown as { claude?: { use(n: string): Promise<unknown> } }).claude;
-  if (!claude?.use) {
-    restoreDrafts();
-    setSave('local');
-    return;
+  if (LOCAL) {
+    // Свой компьютер: база — файлы репозитория (serve.mjs); заявки на вещи каталога — своя коллекция.
+    db = localDb();
+    canWrite = true;
+    db.collection('requests').onSnapshot((snap) => {
+      requests.clear();
+      for (const d of snap.docs) requests.set(d.id, d.data() as unknown as RequestRow);
+      renderKinds();
+      if (shelfKind === 'requests') renderShelf();
+    });
+  } else {
+    const claude = (window as unknown as { claude?: { use(n: string): Promise<unknown> } }).claude;
+    if (!claude?.use) {
+      restoreDrafts();
+      setSave('local');
+      return;
+    }
+    db = (await claude.use('db')) as DbNs | null;
+    const user = (await claude.use('user')) as { can?(n: string): Promise<boolean | null> } | null;
+    if (!db) {
+      restoreDrafts();
+      setSave('local');
+      return;
+    }
+    const can = user?.can ? await user.can('data.write') : null;
+    canWrite = can !== false;
+    if (!canWrite) setStatus('Можно смотреть; сохранять может только тот, у кого есть право правки.');
   }
-  db = (await claude.use('db')) as DbNs | null;
-  const user = (await claude.use('user')) as { can?(n: string): Promise<boolean | null> } | null;
-  if (!db) {
-    restoreDrafts();
-    setSave('local');
-    return;
-  }
-  const can = user?.can ? await user.can('data.write') : null;
-  canWrite = can !== false;
-  if (!canWrite) setStatus('Можно смотреть; сохранять может только тот, у кого есть право правки.');
   void flushDrafts();
   renderCard();
   const timer = window.setTimeout(() => setStatus('Сохранённое пока не загрузилось — проверь связь.'), 10000);

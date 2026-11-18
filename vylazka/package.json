@@ -18,7 +18,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "smoke": "node e2e/smoke.mjs",
-    "smoke:matrix": "node e2e/smoke.mjs --matrix"
+    "smoke:matrix": "node e2e/smoke.mjs --matrix",
+    "constructor": "node tools/constructor/serve.mjs",
+    "constructor:push": "node tools/constructor/push.mjs"
   },
   "dependencies": {
     "three": "^0.187.0"
