@@ -18,7 +18,8 @@ import { floorSpots, free, homeCentre, homeStack, landmark, leanScreens, screenA
 import type { CellInfo, HomeItem, RoomCtx, Slot } from './furnish';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
-import { ceilingBreak } from './props_office';
+import { ceilingBreak, officeDeskTop } from './props_office';
+import { S3_TOP } from './furniture';
 import { hanging } from './objects';
 import type { Xf } from './props';
 import type { ScreenKind } from './screens';
@@ -34,7 +35,7 @@ function put(ctx: RoomCtx, name: string, xf: Xf): boolean {
 }
 
 /** Предмет на свободный участок стены. */
-function wall(ctx: RoomCtx, ...items: HomeItem[]): { s: Slot; x: number } | null {
+function wall(ctx: RoomCtx, ...items: HomeItem[]): { s: Slot; x: number; seeds: number[] } | null {
   return homeStack(ctx, items);
 }
 
@@ -127,8 +128,8 @@ function reception(ctx: RoomCtx): void {
     landmark(ctx, 'reception', desk.s.xf, desk.x, 1.0, 0.4);
     spot(ctx, desk.s.xf, desk.x + 0.7, 1.12, 0.62, 'table');
   }
-  // Напротив — стулья для тех, кто ждёт, и кактус между ними. Стул — настоящий, из гнутой фанеры на
-  // трубе (props_seating.ts): игрушечный из набора KayKit партнёру не понравился.
+  // Напротив — стулья для тех, кто ждёт, и кактус между ними. Стул — модель полки Sand3D (world/furniture.ts): игрушечный из
+  // набора KayKit партнёру не понравился, а с 18.11 вся мебель игры — из полки.
   wall(ctx, ['chair_bent', -0.75], ['chair_bent', 0.75], ['cactus_round', 0, 0]);
   // Экран в приёмной: лес вместо окна.
   leanScreens(ctx, 1, 1, NATURE);
@@ -244,7 +245,8 @@ function meeting(ctx: RoomCtx): void {
   const c = homeCentre(ctx);
   if (put(ctx, 'meeting_table', c.xf.child(0, 0, 0))) {
     landmark(ctx, 'meeting', c.xf, 0, 0.8, 0);
-    spot(ctx, c.xf, 0, 0.77, 0, 'table');
+    // На листах посреди стола переговоров (props_office.ts, meetingTable).
+    spot(ctx, c.xf, 0, S3_TOP.s3_table_meeting! + 0.006, 0, 'table');
   }
   wall(ctx, ['whiteboard']);
   wall(ctx, ['office_clock']);
@@ -286,11 +288,13 @@ function manager(ctx: RoomCtx): void {
   const d = wall(ctx, ['office_desk']);
   if (d) {
     const xf = d.s.xf;
-    put(ctx, 'office_terminal', xf.child(d.x - 0.32, 0.75, 0.33));
-    put(ctx, 'desk_phone', xf.child(d.x + 0.2, 0.75, 0.2));
-    put(ctx, 'office_chair', xf.child(d.x - 0.1, 0, 1.15, 2));
+    // Стол — одна из моделей полки: что на него ставится, встаёт на его столешницу.
+    const top = officeDeskTop(d.seeds[0]!);
+    put(ctx, 'office_terminal', xf.child(d.x - 0.32, top, 0.33));
+    put(ctx, 'desk_phone', xf.child(d.x + 0.2, top, 0.2));
+    put(ctx, 'office_chair', xf.child(d.x - 0.1, 0, 1.02, 2));
     landmark(ctx, 'manager', xf, d.x, 0.9, 0.4);
-    spot(ctx, xf, d.x + 0.28, 0.77, 0.52, 'table');
+    spot(ctx, xf, d.x + 0.28, top + 0.005, 0.48, 'table');
   }
   wall(ctx, ['armchair_visitor']);
   wall(ctx, ['binder_shelf']);
@@ -305,7 +309,8 @@ function files(ctx: RoomCtx): void {
   panels(ctx);
   let first = true;
   for (let i = 0; i < ctx.cells.length * 2; i++) {
-    const row = ctx.rng() < 0.6 ? wall(ctx, ['filing_cabinet', -0.52], ['filing_cabinet', 0], ['filing_cabinet', 0.52]) : wall(ctx, ['binder_shelf', -0.55], ['binder_shelf', 0.55]);
+    // Два стеллажа с папками — бок о бок, во всю стену: у стеллажей полки они шире прежних.
+    const row = ctx.rng() < 0.6 ? wall(ctx, ['filing_cabinet', -0.52], ['filing_cabinet', 0], ['filing_cabinet', 0.52]) : wall(ctx, ['binder_shelf', -0.69], ['binder_shelf', 0.69]);
     if (!row) break;
     if (first) landmark(ctx, 'files', row.s.xf, row.x, 1.2, 0.4);
     first = false;
@@ -318,7 +323,8 @@ function copyroom(ctx: RoomCtx): void {
   const c = wall(ctx, ['copier']);
   if (c) {
     landmark(ctx, 'copyroom', c.s.xf, c.x, 1.0, 0.4);
-    spot(ctx, c.s.xf, c.x - 0.15, 1.07, 0.3, 'table');
+    // На крышке копира (её верх — 0,97 м): место висело в воздухе на десять сантиметров выше.
+    spot(ctx, c.s.xf, c.x - 0.15, 0.975, 0.3, 'table');
   }
   wall(ctx, ['binder_shelf', -0.55], ['paper_stack', 0.5]);
   corner(ctx, 'trash_bin');

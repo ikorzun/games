@@ -5,7 +5,7 @@
 import { t } from '../core/i18n';
 import type { Quality } from '../render/renderer';
 
-export type OverlayMode = 'hidden' | 'loading' | 'start' | 'paused' | 'report' | 'error';
+export type OverlayMode = 'hidden' | 'loading' | 'start' | 'paused' | 'report' | 'error' | 'credits';
 
 export interface OverlayHandlers {
   onStart(): void;
@@ -66,6 +66,11 @@ export class Overlay {
   private readonly langBtn: HTMLButtonElement;
   private readonly placeBtn: HTMLButtonElement;
   private readonly restartBtn: HTMLButtonElement;
+  private readonly creditsBtn: HTMLButtonElement;
+  /** Строки авторства моделей (полка Sand3D, CC-BY 4.0): что показывают титры. Пусто — кнопки нет. */
+  private credits: readonly string[] = [];
+  /** С какого экрана открыли титры: туда и возвращает нажатие. */
+  private beforeCredits: OverlayMode = 'start';
   /** Можно ли начать место заново (у места есть круги или стёртость) и ждёт ли кнопка второго нажатия. */
   private canRestart = false;
   private restartArmed = 0;
@@ -103,6 +108,7 @@ export class Overlay {
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--lang"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--place"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--restart"></button>' +
+      '<button type="button" class="vz-overlay__opt vz-overlay__opt--credits"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--motion"></button></div></div>';
     parent.append(this.el);
     const q = (sel: string): HTMLElement => this.el.querySelector(sel) as HTMLElement;
@@ -150,6 +156,13 @@ export class Overlay {
       } else this.restartArmed = now;
       this.refresh();
     });
+    // Титры: авторы моделей мебели (лицензия CC-BY 4.0 требует их назвать). Адреса — простым текстом, не ссылками.
+    this.creditsBtn = q('.vz-overlay__opt--credits') as HTMLButtonElement;
+    this.creditsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this.mode !== 'credits') this.beforeCredits = this.mode;
+      this.show('credits');
+    });
     this.soundBtn = q('.vz-overlay__opt--sound') as HTMLButtonElement;
     this.soundBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -196,6 +209,7 @@ export class Overlay {
       else if (this.mode === 'paused') this.handlers.onResume();
       // Отчёт нельзя пролистнуть случайным нажатием сразу после конца вылазки.
       else if (this.mode === 'report' && performance.now() - this.shownAt > 900) this.handlers.onNext();
+      else if (this.mode === 'credits') this.show(this.beforeCredits);
     });
   }
 
@@ -261,6 +275,12 @@ export class Overlay {
     this.refresh();
   }
 
+  /** Строки авторства для титров (приходят с куском моделей полки, world/sand3d.ts). */
+  setCredits(lines: readonly string[]): void {
+    this.credits = lines;
+    this.refresh();
+  }
+
   setCard(card: Card | null): void {
     this.card = card;
     this.refresh();
@@ -278,17 +298,18 @@ export class Overlay {
     const card = m === 'start' || m === 'report' ? this.card : null;
     this.el.classList.toggle('is-on', m !== 'hidden');
     this.el.dataset.mode = m;
-    this.title.textContent = card ? card.title : m === 'paused' ? t('ui.paused') : t('ui.title');
-    this.sub.textContent = card ? card.sub : m === 'paused' ? '' : t('ui.subtitle');
+    this.title.textContent = card ? card.title : m === 'paused' ? t('ui.paused') : m === 'credits' ? t('ui.credits') : t('ui.title');
+    this.sub.textContent = card ? card.sub : m === 'paused' ? '' : m === 'credits' ? t('ui.credits.sub') : t('ui.subtitle');
     this.body.replaceChildren();
-    for (const line of card?.lines ?? []) {
+    const lines: readonly CardLine[] = m === 'credits' ? this.credits.map((text) => ({ text, kind: 'dim' as const })) : (card?.lines ?? []);
+    for (const line of lines) {
       const row = document.createElement('div');
       row.className = `vz-overlay__line vz-overlay__line--${line.kind ?? 'plain'}`;
       row.textContent = line.text;
       this.body.append(row);
     }
     const sfx = this.touch ? '.touch' : '';
-    this.prompt.textContent = card ? card.prompt : m === 'loading' ? t('ui.loading') : m === 'start' ? t(`ui.start${sfx}`) : m === 'paused' ? t(`ui.resume${sfx}`) : m === 'error' ? this.errorText : '';
+    this.prompt.textContent = card ? card.prompt : m === 'loading' ? t('ui.loading') : m === 'start' ? t(`ui.start${sfx}`) : m === 'paused' ? t(`ui.resume${sfx}`) : m === 'credits' ? t(`ui.credits.back${sfx}`) : m === 'error' ? this.errorText : '';
     this.qualityBtn.textContent = `${t('ui.quality')}: ${t(`ui.quality.${this.quality}`)}`;
     this.qualityBtn.hidden = m !== 'start' && m !== 'paused';
     this.soundBtn.textContent = `${t('ui.sound')}: ${t(this.sound ? 'ui.sound.on' : 'ui.sound.off')}`;
@@ -311,6 +332,8 @@ export class Overlay {
     // Место на заставке не выбирают — кнопка говорит, какое место начнётся заново (куратор, противоречие 223).
     this.restartBtn.textContent = armed ? t('ui.restart.sure') : t('ui.restart.place', { place: t(`cam.place.${this.place}`) });
     this.restartBtn.hidden = m !== 'start' || !this.canRestart;
+    this.creditsBtn.textContent = t('ui.credits');
+    this.creditsBtn.hidden = (m !== 'start' && m !== 'paused') || this.credits.length === 0;
     this.rotate.textContent = t('ui.rotate');
   }
 }

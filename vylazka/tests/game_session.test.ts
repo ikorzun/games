@@ -2091,12 +2091,18 @@ describe('игра целиком: всё иллюзорно', () => {
 
   /**
    * Подойти к предмету с преградой и упереться в него. Возвращает его номер и откуда шли (направление
-   * вдоль оси) — или null, если ни к одному подойти не вышло.
+   * вдоль оси) — или null, если ни к одному подойти не вышло. Подход берётся такой, где на пути и рядом нет других
+   * предметов: иначе по дороге растворился бы ещё и сосед (шкафчик у нар — с 18.11 мебель убежища вся из предметов).
    */
   function bump(h: Harness): { id: number; dx: number; dz: number; face: number } | null {
     const g = h.game;
     const l = g.level!;
     const spawn = l.spawn.pos;
+    const reach = DEFAULT_CONTROLLER.radius + 0.6;
+    const lonely = (id: number, x0: number, z0: number, x1: number, z1: number): boolean =>
+      !g.colliders.boxes.some(
+        (b) => (b.owner ?? 0) !== 0 && b.owner !== id && !b.ghost && b.maxX > Math.min(x0, x1) - reach && b.minX < Math.max(x0, x1) + reach && b.maxZ > Math.min(z0, z1) - reach && b.minZ < Math.max(z0, z1) + reach,
+      );
     const cands = l.objects!
       .filter((o) => o.solid && !o.flat && o.group === undefined && ALL_PROPS[o.name]?.mount === 'floor' && Math.abs(floorOf(o) - spawn[1]) < 0.1)
       .sort((a, b) => Math.hypot(a.at[0] - spawn[0], a.at[2] - spawn[2]) - Math.hypot(b.at[0] - spawn[0], b.at[2] - spawn[2]));
@@ -2109,6 +2115,9 @@ describe('игра целиком: всё иллюзорно', () => {
         // Подходим с противоположной стороны: идём в направлении (dx, dz), встаём в метре от грани.
         const startX = dx === 0 ? cy : dx > 0 ? box.minX - 1 : box.maxX + 1;
         const startZ = dz === 0 ? cz : dz > 0 ? box.minZ - 1 : box.maxZ + 1;
+        const faceX = dx === 0 ? cy : dx > 0 ? box.minX : box.maxX;
+        const faceZ = dz === 0 ? cz : dz > 0 ? box.minZ : box.maxZ;
+        if (!lonely(o.id, startX, startZ, faceX, faceZ)) continue;
         g.teleport(startX, floorOf(o), startZ);
         h.tick();
         if (stateOf(h, o.id) !== 'here') continue;

@@ -25,8 +25,9 @@ interface Want {
 }
 
 const WANT: Record<string, Want> = {
-  st_seats: { mount: 'floor', w: 2.2, d: 0.6, h: 0.85, solid: true, tris: 700 },
-  st_seats_double: { mount: 'free', w: 2.2, d: 1.2, h: 0.85, solid: true, tris: 1400 },
+  // Скамьи — модели полки Sand3D (18.11): у стены одна из трёх (габарит — охват всех), в ряду две деревянные спинка к спинке.
+  st_seats: { mount: 'floor', w: 1.8, d: 0.8, h: 1.05, solid: true, tris: 1500 },
+  st_seats_double: { mount: 'free', w: 1.5, d: 1.6, h: 1.05, solid: true, tris: 2700 },
   st_lockers: { mount: 'floor', w: 1.35, d: 0.5, h: 1.9, solid: true, tris: 1300 },
   st_ticket_window: { mount: 'floor', w: 1.5, d: 0.5, h: 2.1, solid: true, tris: 750 },
   st_board: { mount: 'wall', w: 2.6, d: 0.12, h: 1.2, y: 2.3, solid: false, tris: 600 },

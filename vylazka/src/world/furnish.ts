@@ -3,7 +3,7 @@
  * (предметы ставятся спиной к стене) и центры клеток. Каждая функция обставляет свой тип комнаты,
  * регистрирует места для находок и приметные объекты — цели «снять на камеру».
  */
-import { hash01 } from '../core/rng';
+import { hash01, hash2 } from '../core/rng';
 import type { Rng } from '../core/rng';
 import { dressRoom } from './dress';
 import { FLAT_EYE, standee, veil, VEIL_SCENES } from './flat';
@@ -18,7 +18,8 @@ import type { ItemSpot, Landmark } from './level';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
 import { asObject, hanging } from './objects';
-import { barrel, bunk, cables, cageLamp, crate, locker, pipeRun, rubble, signPlate, stool, table, valve, ventGrille } from './props';
+import { barrel, cables, cageLamp, crate, pipeRun, rubble, signPlate, valve, ventGrille } from './props';
+import { fillShelves, jitter, pickOf, s3Put, s3Size, S3_BED, S3_SHELVES, S3_TOP } from './furniture';
 import { buildDisplay, DISPLAY_SIZE } from './props_screens';
 import type { DisplayShape } from './props_screens';
 import { DOOR_IMAGE, DOOR_NAME, SCREEN_IMAGES, screenFor } from './screens';
@@ -26,13 +27,9 @@ import type { ScreenKind } from './screens';
 import { CELL, WALL_T } from './shell';
 import { Xf } from './props';
 import {
-  bench,
   bucket,
-  chair,
   collapse,
   controlPanel,
-  cot,
-  desk,
   dieselGen,
   duct,
   elCabinet,
@@ -43,12 +40,10 @@ import {
   gasMaskRow,
   ladderShaft,
   mapBoard,
-  medCabinet,
   poster,
   puddle,
   radioSet,
   safe,
-  shelfRack,
   sinkRow,
   stalls,
   wallPhone,
@@ -169,6 +164,40 @@ function lamps(ctx: RoomCtx, every = 1): void {
   });
 }
 
+// ───────────────────────────── мебель полки ─────────────────────────────
+
+/**
+ * Мебель убежища с 18.11 — модели полки Sand3D (world/furniture.ts; партнёр: «замени всю мебель на новую самостоятельно»):
+ * нары, столы, табуреты, стулья, койки, шкафчики, стеллажи. Каждая — предмет уровня, как вся мебель: растворяется от касания,
+ * партнёр может её передвинуть или убрать конструктором. Сид — из точки: общий ход случайностей комнаты не сдвигается.
+ */
+const BENCHES = ['s3_bench_wood', 's3_bench_blue', 's3_bench_cast'] as const;
+const BUNKS = ['s3_bunk_black', 's3_bunk_mattress'] as const;
+const CHAIRS = ['s3_chair_ladder', 's3_chair_carved'] as const;
+const RACK = 's3_rack_metal';
+const pointSeed = (xf: Xf): number => hash2(Math.round(xf.ox * 100), Math.round(xf.oz * 100), 0x53f + Math.round(xf.oy * 10)) % 1000003;
+
+/** Модель полки у стены (спиной к z = 0) — предмет уровня. */
+function s3(xf: Xf, name: string): void {
+  ALL_PROPS[name]!.build(xf, pointSeed(xf));
+}
+
+/** Модель полки серединой в начале координат (стол посреди клетки, стул у стола). */
+function s3c(xf: Xf, name: string): void {
+  const g = s3Size(name);
+  s3(g.mount === 'free' ? xf : xf.child(0, 0, -g.d / 2), name);
+}
+
+/**
+ * Металлический стеллаж полки, на полках — ящики и тюки (кладовая) или кипы бумаги (архив). В пролёте hole оставлен
+ * промежуток под вещь воспоминания; ответ — где она ляжет (x вдоль стены, y полки).
+ */
+function rack(xf: Xf, seed: number, load: 'boxes' | 'papers', hole: { shelf: number; x0: number; x1: number }): { x: number; y: number } {
+  s3(xf, RACK);
+  fillShelves(xf, S3_SHELVES[RACK]!, load, seed, { back: false, hole });
+  return { x: (hole.x0 + hole.x1) / 2, y: S3_SHELVES[RACK]![hole.shelf]!.y + 0.005 };
+}
+
 /** Мелочь у стены: что-нибудь неглубокое, не мешающее проходу. */
 function clutter(ctx: RoomCtx, s: Slot, wet = false): void {
   const r = ctx.rng();
@@ -183,7 +212,7 @@ function clutter(ctx: RoomCtx, s: Slot, wet = false): void {
   else if (r < 0.6) extinguisher(s.xf.child(x, 0.9, 0));
   else if (r < 0.72) poster(s.xf.child(x * 0.5, 1.75, 0), 0.6 + ctx.rng() * 0.4, 0.8, seed);
   else if (r < 0.82) ventGrille(s.xf.child(x * 0.5, 2.15, 0));
-  else if (r < 0.9) bench(s.xf.child(0, 0, 0), 1.6);
+  else if (r < 0.9) s3(s.xf.child(0, 0, 0), pickOf(BENCHES, seed));
   else if (wet) puddle(s.xf.child(x, 0, 0.9), 1.1, 0.7);
   else gasMaskRow(s.xf.child(0, 1.7, 0), 4);
 }
@@ -228,7 +257,10 @@ function entrance(ctx: RoomCtx): void {
   if (g) gasMaskRow(g.xf.child(0, 1.7, 0), 6);
   const b = take(ctx, false);
   if (b) {
-    bench(b.xf, 1.8);
+    // Скамья у входа — не предмет уровня, а часть места: с этой комнаты начинается вылазка, игрок встаёт рядом, и от первого
+    // же шага она растворилась бы.
+    const k = b.cx * 7 + b.cz;
+    s3Put(b.xf, pickOf(BENCHES, k), { tint: jitter(k) });
     signPlate(b.xf.child(0, 2.2, 0), 0.7, 0.18);
   }
 }
@@ -246,30 +278,35 @@ function airlock(ctx: RoomCtx): void {
 
 function dorm(ctx: RoomCtx): void {
   lamps(ctx, 2);
-  const abandoned = ctx.room.tier === 2;
   let beds = 0;
   for (const s of free(ctx)) {
     if (beds >= 4) break;
-    // Нары стоят длинной стороной вдоль стены.
-    bunk(s.xf.child(fit(s, 1.9, 0.75) + 0.95, 0, 0, 3));
-    spot(ctx, s.xf, fit(s, 1.9, 0.75), 0.52, 0.4, 'table');
-    if (beds === 0) landmark(ctx, 'bunks', s.xf, fit(s, 1.9, 0.75), 1.0, 0.75);
+    // Нары стоят длинной стороной вдоль стены; вещь — на нижнем ярусе.
+    const b = pickOf(BUNKS, s.cx * 31 + s.cz * 17 + beds);
+    const g = s3Size(b);
+    const x = fit(s, g.w, g.d);
+    s3(s.xf.child(x, 0, 0), b);
+    spot(ctx, s.xf, x, S3_BED[b]! + 0.005, 0.42, 'table');
+    if (beds === 0) landmark(ctx, 'bunks', s.xf, x, 1.0, 0.75);
     s.used = true;
     beds += 1;
   }
   const l = take(ctx);
   if (l) {
-    const x0 = fit(l, 1.45, 0.5) - 0.48;
-    for (let i = 0; i < 3; i++) locker(l.xf.child(x0 + i * 0.48, 0, 0), abandoned ? i !== 1 : i === 1, [0.85 + i * 0.07, 0.9 + i * 0.04, 0.85 + i * 0.07]);
-    spot(ctx, l.xf, x0 + 0.48, 0.3, 0.3, 'shelf');
+    // Три шкафчика бок о бок; вещь — на полу перед средним.
+    const w = s3Size('s3_locker_olive').w;
+    const x0 = fit(l, w * 3, 0.56) - w;
+    for (let i = 0; i < 3; i++) s3(l.xf.child(x0 + i * w, 0, 0), 's3_locker_olive');
+    spot(ctx, l.xf, x0 + w, 0.02, 0.85, 'floor');
   }
   const mid = ctx.cells.find((c) => c.doors === 0);
   if (mid) {
-    table(mid.xf.child(0, 0, 0));
-    stool(mid.xf.child(-0.3, 0, 0.6));
-    stool(mid.xf.child(0.4, 0, -0.62, 1));
-    spot(ctx, mid.xf, 0, 0.77, 0, 'table');
+    s3c(mid.xf.child(0, 0, 0), 's3_table_work');
+    s3c(mid.xf.child(-0.3, 0, 0.66), 's3_stool_wood');
+    s3c(mid.xf.child(0.38, 0, -0.68, 1), 's3_stool_wood');
+    spot(ctx, mid.xf, 0, S3_TOP.s3_table_work! + 0.005, 0, 'table');
   }
+  const abandoned = ctx.room.tier === 2;
   for (const s of free(ctx, false).slice(0, 2)) {
     clutter(ctx, s, abandoned);
     s.used = true;
@@ -280,13 +317,17 @@ function command(ctx: RoomCtx): void {
   lamps(ctx);
   const d = take(ctx);
   if (d) {
-    const x = fit(d, 1.2, 0.65);
-    desk(d.xf.child(x, 0, 0));
-    radioSet(d.xf.child(x - 0.2, 0.76, 0.3));
-    chair(d.xf.child(x - 0.1, 0, 0.95, 2));
-    wallPhone(d.xf.child(x + 0.95 > 1.2 ? x - 0.95 : x + 0.95, 1.4, 0));
-    landmark(ctx, 'radio', d.xf, x - 0.2, 0.9, 0.3);
-    spot(ctx, d.xf, x + 0.3, 0.77, 0.3, 'table');
+    // Двухтумбовый стол с зелёным сукном, на нём радиостанция; стул полки придвинут к столу.
+    const D = 's3_desk_green';
+    const g = s3Size(D);
+    const x = fit(d, g.w, g.d);
+    const top = S3_TOP[D]!;
+    s3(d.xf.child(x, 0, 0), D);
+    radioSet(d.xf.child(x - 0.3, top, 0.3));
+    s3c(d.xf.child(x - 0.05, 0, g.d + 0.15, 2), pickOf(CHAIRS, d.cx * 5 + d.cz));
+    wallPhone(d.xf.child(x + 1.12 > 1.35 ? x - 1.12 : x + 1.12, 1.4, 0));
+    landmark(ctx, 'radio', d.xf, x - 0.3, top + 0.14, 0.3);
+    spot(ctx, d.xf, x + 0.4, top + 0.005, 0.35, 'table');
   }
   const m = take(ctx, false);
   if (m) {
@@ -302,10 +343,11 @@ function command(ctx: RoomCtx): void {
   }
   const mid = ctx.cells.find((c) => c.doors === 0);
   if (mid) {
-    table(mid.xf.child(0, 0, 0, 1));
-    chair(mid.xf.child(0.6, 0, 0, 3));
-    chair(mid.xf.child(-0.6, 0, 0.2, 1));
-    spot(ctx, mid.xf, 0, 0.77, 0, 'table');
+    // Рабочий стол поперёк клетки и два стула по бокам.
+    s3c(mid.xf.child(0, 0, 0, 1), 's3_table_work');
+    s3c(mid.xf.child(0.66, 0, 0, 3), pickOf(CHAIRS, mid.cx + mid.cz * 3));
+    s3c(mid.xf.child(-0.66, 0, 0.2, 1), pickOf(CHAIRS, mid.cx + mid.cz * 3 + 1));
+    spot(ctx, mid.xf, 0, S3_TOP.s3_table_work! + 0.005, 0, 'table');
   }
   for (const p of free(ctx, false).slice(0, 2)) {
     poster(p.xf.child(0, 1.65, 0), 0.8, 0.9, 7 + p.cx * 13 + p.cz);
@@ -315,15 +357,19 @@ function command(ctx: RoomCtx): void {
 
 function medical(ctx: RoomCtx): void {
   lamps(ctx);
+  const B = 's3_bed_iron_white';
+  const bed = s3Size(B);
   for (const s of free(ctx).slice(0, 2)) {
-    cot(s.xf.child(fit(s, 1.9, 0.7), 0, 0));
-    spot(ctx, s.xf, fit(s, 1.9, 0.7), 0.6, 0.35, 'table');
+    const x = fit(s, bed.w, bed.d);
+    s3(s.xf.child(x, 0, 0), B);
+    spot(ctx, s.xf, x, S3_BED[B]! + 0.005, 0.42, 'table');
     s.used = true;
   }
   const c = take(ctx);
   if (c) {
-    const x = fit(c, 0.64, 0.4);
-    medCabinet(c.xf.child(x, 0, 0));
+    const cab = s3Size('s3_cabinet_medical');
+    const x = fit(c, cab.w, cab.d);
+    s3(c.xf.child(x, 0, 0), 's3_cabinet_medical');
     landmark(ctx, 'cabinet', c.xf, x, 1.2, 0.4);
     spot(ctx, c.xf, x + (x > 0 ? -0.7 : 0.7), 0.02, 0.3, 'floor');
   }
@@ -341,10 +387,12 @@ function storage(ctx: RoomCtx): void {
   for (const s of free(ctx)) {
     if (racks >= 5) break;
     const n = s.cornerL || s.cornerR ? 1 : 2;
+    const w = s3Size(RACK).w;
     for (let i = 0; i < n; i++) {
-      const x = n === 1 ? fit(s, 1.2, 0.5) : -0.63 + i * 1.26;
-      const shelves = shelfRack(s.xf.child(x, 0, 0), s.cx * 31 + s.cz * 17 + i + racks * 7);
-      spot(ctx, s.xf, x + 0.3, shelves[1 + (i % 2)]! + 0.01, 0.38, 'shelf');
+      const x = n === 1 ? fit(s, w, 0.52) : (i - 0.5) * w;
+      // Вещь — на средней полке справа: там пролёт высокий, её видно.
+      const at = rack(s.xf.child(x, 0, 0), s.cx * 31 + s.cz * 17 + i + racks * 7, 'boxes', { shelf: 5, x0: 0.15, x1: 0.45 });
+      spot(ctx, s.xf, x + at.x, at.y, 0.3, 'shelf');
     }
     if (racks === 0) landmark(ctx, 'racks', s.xf, 0, 1.1, 0.5);
     s.used = true;
@@ -488,10 +536,12 @@ function archive(ctx: RoomCtx): void {
   let n = 0;
   for (const s of free(ctx)) {
     const count = s.cornerL || s.cornerR ? 1 : 2;
+    const w = s3Size(RACK).w;
     for (let i = 0; i < count; i++) {
-      const x = count === 1 ? fit(s, 1.2, 0.5) : -0.63 + i * 1.26;
-      const shelves = shelfRack(s.xf.child(x, 0, 0), s.cx * 37 + s.cz * 11 + i, true);
-      if ((n + i) % 2 === 0) spot(ctx, s.xf, x - 0.3, shelves[1]! + 0.3, 0.42, 'shelf');
+      const x = count === 1 ? fit(s, w, 0.52) : (i - 0.5) * w;
+      // Промежуток в кипах на средней полке слева — под вещь (её кладут не в каждый стеллаж).
+      const at = rack(s.xf.child(x, 0, 0), s.cx * 37 + s.cz * 11 + i, 'papers', { shelf: 3, x0: -0.52, x1: -0.26 });
+      if ((n + i) % 2 === 0) spot(ctx, s.xf, x + at.x, at.y, 0.3, 'shelf');
     }
     if (n === 0) landmark(ctx, 'archive', s.xf, 0, 1.2, 0.5);
     s.used = true;
@@ -499,9 +549,12 @@ function archive(ctx: RoomCtx): void {
   }
   const mid = ctx.cells.find((c) => c.doors === 0);
   if (mid) {
-    desk(mid.xf.child(0, 0, -0.3));
-    chair(mid.xf.child(-0.1, 0, 0.65, 2));
-    spot(ctx, mid.xf, -0.2, 0.77, 0, 'table');
+    // Стол архивариуса посреди клетки, стул придвинут.
+    const D = 's3_desk_green';
+    const g = s3Size(D);
+    s3(mid.xf.child(0, 0, -g.d / 2), D);
+    s3c(mid.xf.child(-0.1, 0, g.d / 2 + 0.15, 2), pickOf(CHAIRS, mid.cx * 3 + mid.cz));
+    spot(ctx, mid.xf, -0.2, S3_TOP[D]! + 0.005, 0, 'table');
     // Рассыпанные папки.
     for (let i = 0; i < 5; i++) {
       const x = (ctx.rng() - 0.5) * 2;
@@ -535,7 +588,7 @@ export type HomeItem = readonly [name: string, dx?: number, y?: number];
  * — сначала туда, где нет дверей; в тесных комнатах допускается и у двери, если не глубже 0,75 м.
  * Настенные предметы (ковёр, окно, батарея) вешаются над низкой мебелью на тот же участок.
  */
-export function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; x: number } | null {
+export function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; x: number; seeds: number[] } | null {
   const specs = items.map(([n]) => ALL_PROPS[n]);
   if (specs.some((p) => !p)) return null;
   let depth = 0;
@@ -549,9 +602,11 @@ export function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; 
   if (!s) return null;
   s.used = true;
   const x = fit(s, half * 2, depth);
+  const seeds: number[] = [];
   items.forEach(([name, dx = 0, y], i) => {
     const p = specs[i]!;
     const seed = Math.floor(ctx.rng() * 1e6);
+    seeds.push(seed);
     const at = s.xf.child(x + dx, p.mount === 'wall' ? (y ?? p.y ?? 1.2) : 0, 0);
     if (p.mount === 'floor' && isFlat(ctx, s, name, i)) {
       // Картонка: стоит там же, где стоял бы настоящий предмет, но это лист — и преграды у неё нет.
@@ -567,7 +622,7 @@ export function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; 
       if (built) ctx.flats.push({ kind: 'standee', what: name, at: at.pt(0, Math.min(FLAT_EYE, r.h * 0.6), r.plane), n: at.dir(0, 0, 1), w: r.w, h: r.h, floor: at.oy, room: ctx.room.id, tier: ctx.room.tier });
     } else p.build(at, seed);
   });
-  return { s, x };
+  return { s, x, seeds };
 }
 
 /**
@@ -716,8 +771,8 @@ function kitchen(ctx: RoomCtx): void {
   const table = homeStack(ctx, [['kitchen_table']]);
   if (table) {
     landmark(ctx, 'kitchen', table.s.xf, table.x, 0.7, 0.4);
-    // Свободный край столешницы слева от тарелки.
-    spot(ctx, table.s.xf, table.x - 0.42, 0.67, 0.2, 'table');
+    // Свободный край столешницы слева от тарелки — на клеёнке (props_home.ts, kitchenTable).
+    spot(ctx, table.s.xf, table.x - 0.42, S3_TOP.s3_table_kitchen! + 0.006, 0.2, 'table');
   }
   homeStack(ctx, [['fridge']]);
   homeStack(ctx, [['stove']]);
@@ -773,7 +828,7 @@ function nursery(ctx: RoomCtx): void {
   if (crib) landmark(ctx, 'nursery', crib.s.xf, crib.x, 0.6, 0.35);
   const desk = homeStack(ctx, [['desk_pc']]);
   // Справа от монитора столешница свободна.
-  if (desk) spot(ctx, desk.s.xf, desk.x + 0.45, 0.77, 0.3, 'table');
+  if (desk) spot(ctx, desk.s.xf, desk.x + 0.42, S3_TOP.s3_desk_simple! + 0.004, 0.25, 'table');
   homeStack(ctx, [['toy_heap']]);
   homeStack(ctx, [['bookshelf']]);
   homeStack(ctx, [['window_fake']]);

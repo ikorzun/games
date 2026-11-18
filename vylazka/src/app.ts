@@ -48,8 +48,7 @@ import { ALL_PROPS } from './world/props_all';
 import { buildShowcase } from './world/showcase';
 import { buildTestLevel } from './world/test_level';
 import { setThingRegistry } from './world/thing_mesh';
-import { PLACED } from './world/placed_data';
-import { loadSand3d, needsSand3d } from './world/sand3d';
+import { loadSand3d, sand3dCredits } from './world/sand3d';
 import { guardTouch, RESIZE_SETTLE_MS, ScreenAwake } from './platform/mobile_guard';
 import { AdBreaks } from './platform/ads';
 
@@ -302,6 +301,9 @@ export class App {
     this.overlay.show('loading');
     this.lifecycle.set('boot', true);
 
+    // Модели полки Sand3D — отдельный кусок сборки: из них вся мебель (world/furniture.ts). Качаются сразу, пока ждём
+    // шрифт и сохранение; первая сборка места их дожидается (не пришли — на месте мебели серые коробки её габарита).
+    const furniture = loadSand3d();
     // Шрифт интерфейса: ждём недолго, чтобы первый экран не мигнул системным.
     await Promise.race([document.fonts?.load?.('16px "JetBrains Mono"', 'Убежище Ag').catch(() => undefined) ?? Promise.resolve(), new Promise((r) => setTimeout(r, 1500))]);
 
@@ -438,8 +440,8 @@ export class App {
     if (this.pinned || this.testLevel) this.scenes = false;
     // Место игрок не выбирает (решение партнёра 16.11): кнопка «Место» — только в петле одного места, для проверок.
     this.overlay.setPlacePick(!this.scenes);
-    // Мебель полки Sand3D — отдельный кусок сборки: приходит до первой сборки места, только если странице она нужна.
-    if (this.wantsSand3d()) await loadSand3d();
+    await furniture;
+    this.overlay.setCredits(sand3dCredits());
     this.prepare();
 
     const resize = (): void => {
@@ -506,17 +508,6 @@ export class App {
     if (!m) return null;
     const want = m[1]!;
     return Object.keys(ALL_PROPS).find((n) => n.replace(/_/g, '-') === want) ?? null;
-  }
-
-  /**
-   * Нужны ли странице модели полки Sand3D (world/sand3d.ts): вещь полки поставил партнёр (placed_data.ts) или её смотрят
-   * в витрине — одну по #show-…, списком ?props=… или всю витрину (?level=show без списка).
-   */
-  private wantsSand3d(): boolean {
-    const shown = this.showParam();
-    const listed = this.params.get('props');
-    if (this.params.get('level') === 'show' && shown === null && !listed) return true;
-    return needsSand3d([...PLACED.map((s) => s.prop), ...(shown !== null ? [shown] : []), ...(listed ? listed.split(',') : [])]);
   }
 
   /**

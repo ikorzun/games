@@ -221,6 +221,17 @@ async function scenarioPlay(browser, baseUrl) {
     await tp.click('.vz-overlay__opt--flash');
     await sleep(200);
     check('кнопки работают в обе стороны: снова английский и полные вспышки', (await opt('lang')) === 'Language: English' && (await opt('flash')) === 'Flashing: full');
+    // Титры: авторы моделей мебели (полка Sand3D, CC BY 4.0) — простым текстом, без ссылок; нажатие возвращает на заставку.
+    await tp.click('.vz-overlay__opt--credits');
+    await sleep(150);
+    const credits = await tp.$$eval('.vz-overlay__line', (els) => els.map((e) => e.textContent ?? ''));
+    const links = await tp.$$eval('.vz-overlay a', (els) => els.length);
+    const sc = await state(tp);
+    check('титры: кнопка на заставке, авторы всех моделей полки, ссылок нет, игра не началась', sc.screen === 'title' && credits.length >= 30 && credits.every((x) => /CC-BY|CC BY/.test(x)) && links === 0 && (await tp.textContent('.vz-overlay__title')) === EN['ui.credits'], JSON.stringify({ n: credits.length, links, screen: sc.screen }));
+    await tp.click('.vz-overlay__prompt');
+    await sleep(150);
+    const sb = await state(tp);
+    check('титры: нажатие возвращает на заставку', sb.screen === 'title' && sb.overlay === 'start' && (await tp.textContent('.vz-overlay__title')) === 'UNTITLED SESSION', JSON.stringify({ screen: sb.screen, overlay: sb.overlay }));
     check('заставка: нет ошибок в консоли', t.log.errors.length === 0, t.log.errors.join(' | ').slice(0, 300));
     await t.context.close();
   }

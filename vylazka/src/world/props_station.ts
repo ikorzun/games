@@ -19,6 +19,7 @@ import { hung } from './props';
 import type { Xf } from './props';
 import { beam, ring, rng, sheet, WHITE } from './props_more';
 import type { PropSpec } from './props_more';
+import { furnished, jitter, pickOf, s3Put, s3Size, S3_SEAT } from './furniture';
 
 const UP: Vec3 = [0, 1, 0];
 
@@ -69,46 +70,22 @@ const add3 = (a: Vec3, b: Vec3, k = 1): Vec3 => [a[0] + b[0] * k, a[1] + b[1] * 
 // ───────────────────────────── сиденья ─────────────────────────────
 
 /**
- * Ряд из четырёх литых сидений на общей балке с двумя опорами, спинкой к стене (z = 0). Ширина 2,2, глубина 0,6.
- * beamZ0 — где начинается балка: у стены 0,14, в сдвоенном ряду 0 (две балки сходятся встык).
+ * Скамьи зала — с полки Sand3D (18.11, партнёр: «замени всю мебель на новую самостоятельно»; прежде здесь стояли ряды литых
+ * сидений на балке). Посреди зала — ряды деревянных скамей спинка к спинке, как на старых вокзалах; у стен — какая
+ * придётся: деревянная, синяя или парковая на чугунных ногах, будто их свезли сюда отовсюду.
  */
-function seatRow(xf: Xf, cols: readonly [Vec3, Vec3], beamZ0: number): void {
-  // Балка и две опоры с лапами.
-  bx(xf, [-1.1, 0.28, beamZ0], [1.1, 0.37, 0.36], MAT.metalGreen, STEEL, { bevel: 0.008, skip: beamZ0 === 0 ? ['nz'] : [] });
-  for (const x of [-0.8, 0.8]) {
-    bx(xf, [x - 0.03, 0.015, 0.2], [x + 0.03, 0.28, 0.34], MAT.metalGreen, STEEL_DK, { skip: ['ny'] });
-    bx(xf, [x - 0.07, 0, 0.1], [x + 0.07, 0.015, 0.42], MAT.metalGreen, STEEL_DK, { skip: ['ny'] });
-  }
-  for (let i = 0; i < 4; i++) {
-    const cx = -0.81 + i * 0.54;
-    const c = cols[i % 2]!;
-    // Литое сиденье: тёмная чаша снизу, чашка сверху, спинка с небольшим наклоном.
-    bx(xf, [cx - 0.22, 0.37, 0.16], [cx + 0.22, 0.43, 0.5], MAT.enamel, [c[0] * 0.7, c[1] * 0.7, c[2] * 0.7], { skip: ['ny'] });
-    bx(xf, [cx - 0.25, 0.43, 0.12], [cx + 0.25, 0.47, 0.55], MAT.enamel, c, { bevel: 0.012 });
-    beam(xf, [cx, 0.46, 0.14], [cx, 0.83, 0.08], 0.48, 0.04, MAT.enamel, c, { side: [1, 0, 0] });
-  }
-  // Подлокотники-перегородки между сиденьями и по краям.
-  for (let i = 0; i < 5; i++) {
-    const x = -1.08 + i * 0.54;
-    bx(xf, [x - 0.02, 0.43, 0.12], [x + 0.02, 0.64, 0.5], MAT.metalGreen, STEEL_DK, { bevel: 0.008 });
-  }
+export const WALL_BENCHES = ['s3_bench_wood', 's3_bench_blue', 's3_bench_cast'] as const;
+const ROW_BENCH = 's3_bench_wood';
+
+/** Высота сиденья скамьи, которую с этим сидом поставит st_seats (у стены) или st_seats_double (ряд): на неё кладут вещи. */
+export function benchSeat(name: 'st_seats' | 'st_seats_double', seed: number): number {
+  return S3_SEAT[name === 'st_seats' ? pickOf(WALL_BENCHES, seed) : ROW_BENCH]!;
 }
 
-function seats(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const a = rnd() < 0.5;
-  seatRow(xf, a ? [MUSTARD, TEAL] : [TEAL, MUSTARD], 0.14);
-  xf.collider([-1.1, 0, 0.05], [1.1, 0.86, 0.55]);
-}
-
+/** Две деревянные скамьи полки спинка к спинке — ряд посреди зала; тон у каждой свой. */
 function seatsDouble(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const a = rnd() < 0.5;
-  const cols: readonly [Vec3, Vec3] = a ? [MUSTARD, TEAL] : [TEAL, MUSTARD];
-  seatRow(xf, cols, 0);
-  // Второй ряд — тот же, повёрнутый на полоборота, и цвета в шахматном порядке.
-  seatRow(xf.child(0, 0, 0, 2), [cols[1], cols[0]], 0);
-  xf.collider([-1.1, 0, -0.55], [1.1, 0.86, 0.55]);
+  s3Put(xf, ROW_BENCH, { tint: jitter(seed) });
+  s3Put(xf.child(0, 0, 0, 2), ROW_BENCH, { tint: jitter(seed, 0.07, 1) });
 }
 
 // ───────────────────────────── камеры хранения ─────────────────────────────
@@ -528,8 +505,8 @@ function snow(xf: Xf): void {
 // ───────────────────────────── реестр ─────────────────────────────
 
 export const STATION_PROPS: Record<string, PropSpec> = {
-  st_seats: { w: 2.2, d: 0.6, h: 0.85, mount: 'floor', ru: 'ряд из четырёх литых сидений на общей балке, спинкой к стене', build: seats },
-  st_seats_double: { w: 2.2, d: 1.2, h: 0.85, mount: 'free', ru: 'два ряда литых сидений спинка к спинке', build: seatsDouble },
+  st_seats: furnished('floor', WALL_BENCHES, 'скамья: деревянная со спинкой, синяя или парковая на чугунных ногах'),
+  st_seats_double: { w: s3Size(ROW_BENCH).w, d: s3Size(ROW_BENCH).d * 2, h: s3Size(ROW_BENCH).h, mount: 'free', ru: 'две деревянные скамьи спинка к спинке', build: seatsDouble },
   st_lockers: { w: 1.35, d: 0.5, h: 1.9, mount: 'floor', ru: 'секция камер хранения 3×4, одна дверца приоткрыта', build: lockers },
   st_ticket_window: { w: 1.5, d: 0.5, h: 2.1, mount: 'floor', ru: 'окошко кассы: прилавок, рама со стеклом, полочка для мелочи, узкая стойка', build: (xf) => ticketWindow(xf) },
   st_board: { w: 2.6, d: 0.12, h: 1.2, mount: 'wall', y: 2.3, ru: 'табло отправления с перекидными планками без букв', build: board },

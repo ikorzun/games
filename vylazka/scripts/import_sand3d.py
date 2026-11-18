@@ -70,7 +70,7 @@ SHELF = [
     ('simready-cabinet_file_b02', 's3_cabinet_medical', 'floor', 3, 1000, 'медицинский шкаф, узкий, стеклянный верх'),
     ('articraft-rec_desk_with_drawer_3ae3738970474ecea6bba0547892523d', 's3_desk_office', 'floor', 3, 1200, 'офисный стол с тумбой'),
     ('objaverse-f6852a46d21e47559f6c8a5e73035bed', 's3_desk_office_grey', 'floor', 1, 1000, 'серый офисный стол'),
-    ('objaverse-03b13857f79d4b75889b16fd6c922a61', 's3_chair_office', 'free', 2, 1800, 'офисное кресло на колёсах'),
+    ('objaverse-03b13857f79d4b75889b16fd6c922a61', 's3_chair_office', 'free', 2, 1000, 'офисное кресло на колёсах'),
     ('articraft-rec_drawer_cabinet_with_sliding_drawers_1997a0c3e5264693a49458eecb80d779', 's3_filing_cabinet', 'floor', 3, 900, 'картотечный шкаф, три ящика'),
     ('articraft-rec_drawer_cabinet_with_sliding_drawers_53de4887a6fa4240928b10bd2bfca2f3', 's3_pedestal', 'floor', 2, 900, 'тумба под стол, четыре ящика'),
     ('objaverse-a7830bb1abc348bd9390d126648377fd', 's3_bookcase_office', 'floor', 2, 1000, 'шкаф для бумаг, открытые полки'),
@@ -82,8 +82,10 @@ SHELF = [
 
 # Масштаб, где каталог отдал вещь не в настоящем размере (на глаз по листу рендеров и по росту человека): диван — вдвое
 # меньше настоящего (0,9 м в ширину, сиденье на 0,22 м), кухонный стол — 0,64 м в высоту (у настоящего 0,74), серый
-# офисный стол — 0,96 м (стол «стоя», а он сидячий).
-SCALE = {'s3_sofa_grey': 1.9, 's3_table_kitchen': 1.15, 's3_desk_office_grey': 0.8}
+# офисный стол — 0,96 м (стол «стоя», а он сидячий). 18.11, когда полка встала вместо мебели игры: письменный стол с
+# тумбой — столешница на 0,88 м (у настоящего 0,75), офисное кресло — 0,86 м в ширину по подлокотникам (у настоящего
+# около 0,7; шесть таких вокруг стола переговоров толкались локтями).
+SCALE = {'s3_sofa_grey': 1.9, 's3_table_kitchen': 1.15, 's3_desk_office_grey': 0.8, 's3_desk_simple': 0.86, 's3_chair_office': 0.85}
 
 # Пресеты материалов sand3d (имя материала начинается с пресета: «walnut #9a6d4c») → материалы игры (world/materials.ts).
 MAT_ID = {'concrete': 0, 'steel': 5, 'rubber': 7, 'wood': 8, 'enamel': 9, 'brass': 10, 'paper': 15, 'metalGrey': 21,

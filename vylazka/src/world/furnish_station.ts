@@ -11,21 +11,23 @@
 import { floorSpots, free, homeStack, landmark, spot } from './furnish';
 import type { CellInfo, HomeItem, RoomCtx, Slot } from './furnish';
 import { ALL_PROPS } from './props_all';
+import { benchSeat } from './props_station';
 import { hanging } from './objects';
 import type { Xf } from './props';
 
 const seedOf = (ctx: RoomCtx): number => Math.floor(ctx.rng() * 1e6);
 
-/** Поставить предмет реестра в точку; незнакомое имя пропускается. */
-function put(ctx: RoomCtx, name: string, xf: Xf): boolean {
+/** Поставить предмет реестра в точку; незнакомое имя пропускается. Ответ — сид, с которым он собран (null — не поставлен). */
+function put(ctx: RoomCtx, name: string, xf: Xf): number | null {
   const p = ALL_PROPS[name];
-  if (!p) return false;
-  p.build(xf, seedOf(ctx));
-  return true;
+  if (!p) return null;
+  const seed = seedOf(ctx);
+  p.build(xf, seed);
+  return seed;
 }
 
 /** Предмет (или несколько) на свободный участок стены. */
-function wall(ctx: RoomCtx, ...items: HomeItem[]): { s: Slot; x: number } | null {
+function wall(ctx: RoomCtx, ...items: HomeItem[]): { s: Slot; x: number; seeds: number[] } | null {
   return homeStack(ctx, items);
 }
 
@@ -55,8 +57,11 @@ function middle(ctx: RoomCtx): { c: CellInfo; dx: number; dz: number } {
   return { c, dx: ((x0 + x1) / 2 - c.cx) * 3, dz: ((z0 + z1) / 2 - c.cz) * 3 };
 }
 
-/** Высота сиденья: на неё кладутся записка, стакан, пальто. */
-const SEAT_Y = 0.46;
+/**
+ * Где на скамье лежат записка, стакан, пальто: на 0,42 м от спинки — это сиденье у всех трёх скамей полки (высота у каждой
+ * своя, её отвечает benchSeat по сиду скамьи).
+ */
+const SEAT_Z = 0.42;
 
 // ───────────────────────── помещения ─────────────────────────
 
@@ -83,9 +88,10 @@ function concourse(ctx: RoomCtx): void {
   const rows = [-6.4, -2.6, 1.2, 5.0];
   rows.forEach((z, i) => {
     for (const x of [-1.5, 1.5]) {
-      if (!put(ctx, 'st_seats_double', at(x, z))) continue;
+      const seed = put(ctx, 'st_seats_double', at(x, z));
+      if (seed === null) continue;
       // Места для вещей — на сиденьях: записка лежит там, где кто-то сидел.
-      if ((i + (x > 0 ? 1 : 0)) % 2 === 0) spot(ctx, at(x, z), 0.55, SEAT_Y, 0.3, 'table');
+      if ((i + (x > 0 ? 1 : 0)) % 2 === 0) spot(ctx, at(x, z), 0.55, benchSeat('st_seats_double', seed), SEAT_Z, 'table');
     }
   });
 
@@ -95,7 +101,7 @@ function concourse(ctx: RoomCtx): void {
   // У стен — сиденья, таксофоны, урны.
   for (let i = 0; i < 4; i++) {
     const r = wall(ctx, ['st_seats']);
-    if (r && i % 2 === 0) spot(ctx, r.s.xf, r.x - 0.55, SEAT_Y, 0.3, 'table');
+    if (r && i % 2 === 0) spot(ctx, r.s.xf, r.x - 0.55, benchSeat('st_seats', r.seeds[0]!), SEAT_Z, 'table');
   }
   wall(ctx, ['st_phone']);
   wall(ctx, ['st_phone']);
@@ -117,7 +123,8 @@ function concourse(ctx: RoomCtx): void {
 function tickets(ctx: RoomCtx): void {
   for (let i = 0; i < 2; i++) {
     const r = wall(ctx, ['st_ticket_window']);
-    if (r) spot(ctx, r.s.xf, r.x + 0.25, 1.06, 0.32, 'table');
+    // На прилавке окошка (верх — 0,99 м): место висело над ним на семь сантиметров.
+    if (r) spot(ctx, r.s.xf, r.x + 0.25, 0.995, 0.32, 'table');
   }
   put(ctx, 'st_barrier', ctx.cells[0]!.xf.child(0, 0, 0.5));
   wall(ctx, ['st_clock']);
@@ -131,8 +138,8 @@ function lockers(ctx: RoomCtx): void {
     if (n >= 5) break;
     s.used = true;
     for (const x of [-0.69, 0.69]) put(ctx, 'st_lockers', s.xf.child(x, 0, 0));
-    // Вещь лежит на полу у ячеек или на нижней полке открытой.
-    if (n % 2 === 0) spot(ctx, s.xf, 0.69, 0.5, 0.36, 'shelf');
+    // Вещь лежит на полу у ячеек (прежде место висело перед ними в полуметре над полом).
+    if (n % 2 === 0) spot(ctx, s.xf, 0.69, 0.02, 0.55, 'floor');
     n += 1;
   }
   put(ctx, 'st_suitcase', ctx.cells[0]!.xf.child(0.4, 0, 0.3));
@@ -148,7 +155,7 @@ function buffet(ctx: RoomCtx): void {
   }
   for (let i = 0; i < 2; i++) {
     const r = wall(ctx, ['st_seats']);
-    if (r) spot(ctx, r.s.xf, r.x + 0.55, SEAT_Y, 0.3, 'table');
+    if (r) spot(ctx, r.s.xf, r.x + 0.55, benchSeat('st_seats', r.seeds[0]!), SEAT_Z, 'table');
   }
   put(ctx, 'st_bin', ctx.cells[0]!.xf.child(-0.9, 0, 0.9));
   floorSpots(ctx, 1);
@@ -168,8 +175,8 @@ function platform(ctx: RoomCtx): void {
   back.forEach((s, i) => {
     if (i % 3 === 1) {
       s.used = true;
-      put(ctx, 'st_seats', s.xf.child(0, 0, 0));
-      spot(ctx, s.xf, i % 2 === 0 ? -0.55 : 0.55, SEAT_Y, 0.3, 'table');
+      const seed = put(ctx, 'st_seats', s.xf.child(0, 0, 0));
+      if (seed !== null) spot(ctx, s.xf, i % 2 === 0 ? -0.55 : 0.55, benchSeat('st_seats', seed), SEAT_Z, 'table');
     } else if (i % 3 === 0 && i > 0) {
       s.used = true;
       put(ctx, 'st_bin', s.xf.child(0, 0, 0.3));

@@ -17,6 +17,10 @@ import { hung } from './props';
 import type { Xf } from './props';
 import { beam, ring, rng, sheet, WHITE } from './props_more';
 import type { PropSpec } from './props_more';
+import { fillShelves, furnished, jitter, pickOf, s3Bounds, s3Put, spanOf, S3_SHELVES, S3_TOP } from './furniture';
+
+/** Книжные шкафы полки Sand3D, из которых выбирается стеллаж с книгами. */
+const BOOKCASES = ['s3_bookcase_dark', 's3_etagere'] as const;
 
 /** Оттенок × коэффициент, но не выше 1,5: приглушённость тона держит тест. */
 const dim = (t: Vec3, k: number): Vec3 => [Math.min(1.5, t[0] * k), Math.min(1.5, t[1] * k), Math.min(1.5, t[2] * k)];
@@ -71,45 +75,6 @@ function band(xf: Xf, c: Vec3, r: number, a0: number, a1: number, mat: number, t
 const WOOD_DARK: Vec3 = [0.55, 0.5, 0.45];
 
 // ───────────────────────────── мебель ─────────────────────────────
-
-/** Диван 2,0 × 0,9 × 0,85: подлокотники, плед через спинку, две подушки. */
-function sofa(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const fab: Vec3 = rnd() < 0.5 ? [1.45, 1.0, 0.45] : [0.55, 1.25, 1.1];
-  for (const x of [-0.95, 0.87]) for (const z of [0.08, 0.78]) bx(xf, [x, 0, z], [x + 0.08, 0.12, z + 0.06], MAT.wood, WOOD_DARK, { aoBottom: 0.6 });
-  bx(xf, [-1, 0.1, 0.04], [1, 0.4, 0.9], MAT.upholstery, dim(fab, 0.85), { aoBottom: 0.6 });
-  for (const s of [-1, 1]) bx(xf, [s > 0 ? 0.8 : -1, 0.4, 0.04], [s > 0 ? 1 : -0.8, 0.62, 0.9], MAT.upholstery, dim(fab, 0.95), { bevel: 0.02 });
-  bx(xf, [-0.8, 0.4, 0.04], [0.8, 0.79, 0.3], MAT.upholstery, fab, { bevel: 0.02 });
-  bx(xf, [-0.8, 0.4, 0.3], [-0.005, 0.52, 0.9], MAT.upholstery, dim(fab, 1.12), { bevel: 0.015 });
-  bx(xf, [0.005, 0.4, 0.3], [0.8, 0.52, 0.9], MAT.upholstery, dim(fab, 1.12), { bevel: 0.015 });
-  // Плед в крупную клетку, переброшен через спинку слева.
-  const plaid: Vec3 = [1.1, 0.8, 0.75];
-  bx(xf, [-0.6, 0.79, 0.02], [0, 0.85, 0.32], MAT.paintRed, plaid);
-  bx(xf, [-0.6, 0.42, 0.3], [0, 0.85, 0.34], MAT.paintRed, plaid);
-  bx(xf, [-0.6, 0.42, 0.0], [0, 0.85, 0.04], MAT.paintRed, dim(plaid, 0.8));
-  const stripe: Vec3 = [0.5, 0.45, 0.4];
-  for (const y of [0.52, 0.66]) face(xf, -0.6, y, 0, y + 0.06, 0.342, MAT.bakelite, stripe);
-  for (const x of [-0.5, -0.3, -0.1]) face(xf, x, 0.42, x + 0.05, 0.85, 0.343, MAT.paper, [1.2, 1.1, 0.9]);
-  // Подушки.
-  bx(xf, [0.14, 0.52, 0.3], [0.5, 0.82, 0.42], MAT.paintBlue, [1.2, 1.3, 1.5], { bevel: 0.02 });
-  bx(xf, [0.52, 0.52, 0.32], [0.78, 0.76, 0.43], MAT.paper, [1.3, 1.2, 0.9], { bevel: 0.02 });
-  xf.collider([-1, 0, 0.04], [1, 0.85, 0.9]);
-}
-
-/** Кресло 0,9 × 0,85 × 0,9. */
-function armchair(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const fab: Vec3 = rnd() < 0.5 ? [0.55, 1.35, 0.9] : [1.4, 0.5, 0.45];
-  for (const x of [-0.4, 0.34]) for (const z of [0.08, 0.76]) bx(xf, [x, 0, z], [x + 0.06, 0.12, z + 0.06], MAT.wood, WOOD_DARK, { aoBottom: 0.6 });
-  bx(xf, [-0.45, 0.1, 0.04], [0.45, 0.38, 0.85], MAT.upholstery, dim(fab, 0.85), { aoBottom: 0.6 });
-  for (const s of [-1, 1]) bx(xf, [s > 0 ? 0.33 : -0.45, 0.38, 0.04], [s > 0 ? 0.45 : -0.33, 0.6, 0.85], MAT.upholstery, dim(fab, 0.95), { bevel: 0.02 });
-  bx(xf, [-0.33, 0.38, 0.04], [0.33, 0.9, 0.27], MAT.upholstery, fab, { bevel: 0.02 });
-  bx(xf, [-0.33, 0.38, 0.27], [0.33, 0.5, 0.85], MAT.upholstery, dim(fab, 1.15), { bevel: 0.015 });
-  // Кружевные салфетки на спинке и подлокотниках.
-  face(xf, -0.2, 0.62, 0.2, 0.86, 0.275, MAT.paper, [1.3, 1.25, 1.0]);
-  for (const x of [-0.39, 0.39]) flat(xf, x - 0.05, 0.3, x + 0.05, 0.6, 0.605, MAT.paper, [1.3, 1.25, 1.0]);
-  xf.collider([-0.45, 0, 0.04], [0.45, 0.9, 0.85]);
-}
 
 /** Тумба с кинескопным телевизором 1,1 × 0,5 × 1,15: экран светится, рожки антенны, под тумбой видеомагнитофон. */
 function tvStand(xf: Xf, seed: number): void {
@@ -181,29 +146,41 @@ function stove(xf: Xf, seed: number): void {
   xf.collider([-0.275, 0, 0.02], [0.275, 0.8, 0.58]);
 }
 
-/** Кухонный стол 1,2 × 0,8 × 0,78 под клеёнкой в клетку, табуретка, тарелка, хлебница. */
+/**
+ * Кухонный стол полки (точёные ножки) под клеёнкой в красную клетку — клеёнка свисает по краям; табуретка полки наполовину
+ * выдвинута из-под стола; на клеёнке тарелка с куском и хлебница.
+ */
 function kitchenTable(xf: Xf, seed: number): void {
   const rnd = rng(seed);
-  const top = 0.66;
-  for (const x of [-0.56, 0.5]) for (const z of [0.04, 0.72]) bx(xf, [x, 0, z], [x + 0.06, top - 0.04, z + 0.04], MAT.wood, WOOD_DARK, { aoBottom: 0.6 });
-  bx(xf, [-0.6, top - 0.04, 0], [0.6, top, 0.8], MAT.paper, [1.35, 1.3, 1.1]);
-  // Клетка: красные квадраты в шахматном порядке, 6 × 4.
+  const T = 's3_table_kitchen';
+  s3Put(xf, T, { tint: jitter(seed) });
+  const [lo, hi] = s3Bounds(T);
+  const hw = hi[0] + 0.01;
+  const z0 = lo[2] - 0.005;
+  const z1 = hi[2] + 0.01;
+  const top = S3_TOP[T]!;
+  const y = top + 0.002;
+  // Клеёнка: лист по столешнице и подол на три с половиной сантиметра по краям.
+  const cloth: Vec3 = [1.35, 1.3, 1.1];
+  bx(xf, [-hw, top, z0], [hw, y, z1], MAT.paper, cloth, { skip: ['ny'] });
+  bx(xf, [-hw, top - 0.035, z1 - 0.005], [hw, top, z1], MAT.paper, cloth, { skip: ['ny', 'py', 'nz'] });
+  for (const s of [-1, 1]) bx(xf, [s > 0 ? hw - 0.005 : -hw, top - 0.035, z0], [s > 0 ? hw : -hw + 0.005, top, z1 - 0.005], MAT.paper, cloth, { skip: ['ny', 'py'] });
+  // Клетка: красные квадраты в шахматном порядке, 7 × 4.
   const red: Vec3 = [1.4, 0.9, 0.85];
-  for (let i = 0; i < 6; i++) {
-    for (let j = 0; j < 4; j++) {
-      if ((i + j) % 2 === 0) flat(xf, -0.6 + i * 0.2, j * 0.2, -0.4 + i * 0.2, (j + 1) * 0.2, top + 0.002, MAT.paintRed, red);
-    }
+  const sx = (2 * hw) / 7;
+  const sz = (z1 - z0) / 4;
+  for (let i = 0; i < 7; i++) {
+    for (let j = 0; j < 4; j++) if ((i + j) % 2 === 0) flat(xf, -hw + i * sx, z0 + j * sz, -hw + (i + 1) * sx, z0 + (j + 1) * sz, y + 0.002, MAT.paintRed, red);
   }
-  // Табуретка наполовину выдвинута; сиденье светлое.
-  const st = rnd() < 0.5 ? -0.32 : 0.32;
-  for (const dx of [-0.11, 0.07]) for (const dz of [0.54, 0.74]) bx(xf, [st + dx, 0, dz], [st + dx + 0.04, 0.38, dz + 0.04], MAT.wood, WOOD_DARK, { aoBottom: 0.6 });
-  bx(xf, [st - 0.15, 0.38, 0.5], [st + 0.15, 0.43, 0.8], MAT.wood, [1.4, 1.25, 1.05]);
+  // Табуретка наполовину выдвинута; с какой стороны — по сиду.
+  const st = rnd() < 0.5 ? -0.36 : 0.36;
+  s3Put(xf.child(st, 0, hi[2] - 0.04), 's3_stool_wood', { tint: jitter(seed, 0.07, 1) });
   // Тарелка с куском, хлебница.
-  xf.cyl([-0.1, top, 0.38], 'y', 0.02, 0.13, MAT.enamel, { segments: 8, tint: [1.2, 1.2, 1.2] });
-  bx(xf, [-0.15, top + 0.02, 0.33], [-0.03, top + 0.05, 0.43], MAT.leather, [1.1, 0.9, 0.7]);
-  bx(xf, [0.2, top, 0.22], [0.54, top + 0.11, 0.56], MAT.zinc, [1.3, 1.3, 1.3], { bevel: 0.015 });
-  bx(xf, [0.22, top + 0.11, 0.24], [0.52, top + 0.12, 0.54], MAT.paintOchre, [1.3, 1.2, 0.8]);
-  xf.collider([-0.6, 0, 0], [0.6, top, 0.8]);
+  const ty = y + 0.003;
+  xf.cyl([-0.12, ty, 0.42], 'y', 0.02, 0.13, MAT.enamel, { segments: 8, tint: [1.2, 1.2, 1.2] });
+  bx(xf, [-0.17, ty + 0.02, 0.37], [-0.05, ty + 0.05, 0.47], MAT.leather, [1.1, 0.9, 0.7]);
+  bx(xf, [0.2, ty, 0.24], [0.54, ty + 0.11, 0.58], MAT.zinc, [1.3, 1.3, 1.3], { bevel: 0.015 });
+  bx(xf, [0.22, ty + 0.11, 0.26], [0.52, ty + 0.12, 0.56], MAT.paintOchre, [1.3, 1.2, 0.8]);
 }
 
 /** Мойка-тумба 0,8 × 0,58 × 1,35: кран, над ней сушилка с тарелками. */
@@ -233,75 +210,11 @@ function sinkCabinet(xf: Xf, seed: number): void {
   xf.collider([-0.4, 0, 0], [0.4, 0.84, 0.58]);
 }
 
-/** Платяной шкаф 1,3 × 0,58 × 2,2: левая дверца закрыта, правая распахнута вдоль бока, одежда на плечиках, наверху чемодан. */
-function wardrobe(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const wood: Vec3 = dim([1.05, 0.95, 0.85], 0.9 + rnd() * 0.2);
-  const D = 0.44;
-  for (const x of [-0.52, 0.46]) for (const z of [0.04, 0.34]) bx(xf, [x, 0, z], [x + 0.06, 0.1, z + 0.06], MAT.wood, WOOD_DARK, { aoBottom: 0.6 });
-  // Корпус: задняя стенка тёмная (внутри всегда темно), боковины, крыша и дно, перегородка.
-  bx(xf, [-0.55, 0.1, 0], [0.55, 2.0, 0.03], MAT.veneer, [0.4, 0.37, 0.34]);
-  bx(xf, [-0.55, 0.1, 0.03], [-0.5, 2.0, D], MAT.veneer, wood, { aoBottom: 0.6 });
-  bx(xf, [0.5, 0.1, 0.03], [0.55, 2.0, D], MAT.veneer, wood, { aoBottom: 0.6 });
-  bx(xf, [-0.57, 1.96, 0], [0.57, 2.0, 0.47], MAT.veneer, dim(wood, 1.1));
-  bx(xf, [-0.5, 0.1, 0.03], [0.5, 0.14, D], MAT.veneer, dim(wood, 0.8));
-  bx(xf, [-0.02, 0.14, 0.03], [0.02, 1.96, D], MAT.veneer, wood);
-  // Закрытая дверца с двумя филёнками и латунной ручкой.
-  bx(xf, [-0.5, 0.14, D], [-0.02, 1.96, D + 0.03], MAT.veneer, dim(wood, 1.15));
-  bx(xf, [-0.44, 0.26, D + 0.03], [-0.08, 0.92, D + 0.045], MAT.veneer, dim(wood, 0.85));
-  bx(xf, [-0.44, 1.04, D + 0.03], [-0.08, 1.88, D + 0.045], MAT.veneer, dim(wood, 0.85));
-  xf.cyl([-0.07, 1.0, D + 0.03], 'z', 0.04, 0.025, MAT.brass, { segments: 6, tint: [1.4, 1.3, 1.1] });
-  // Правая дверца распахнута почти на пол-оборота и лежит вдоль правого бока.
-  beam(xf, [0.57, 1.05, D + 0.02], [0.62, 1.05, 0.0], 1.86, 0.035, MAT.veneer, dim(wood, 1.15), { side: UP });
-  // Внутри: штанга, плечики с одеждой, нижняя полка со стопками.
-  bx(xf, [0.02, 1.72, 0.2], [0.5, 1.75, 0.24], MAT.steel, [1.3, 1.3, 1.3]);
-  const cl: Array<[number, number, number, Vec3, number]> = [
-    [0.06, 0.78, 1.72, [1.4, 1.1, 1.1], MAT.paintRed],
-    [0.18, 1.0, 1.72, [1.2, 1.3, 1.5], MAT.paintBlue],
-    [0.3, 0.7, 1.72, [1.5, 1.3, 0.8], MAT.paintOchre],
-    [0.41, 1.1, 1.72, [1.3, 1.3, 1.2], MAT.paper],
-  ];
-  for (const [x, y0, y1, t, m] of cl) bx(xf, [x, y0, 0.14], [x + 0.1, y1, 0.3], m, t);
-  bx(xf, [0.03, 0.48, 0.04], [0.49, 0.51, 0.42], MAT.veneer, dim(wood, 0.9));
-  bx(xf, [0.06, 0.51, 0.1], [0.26, 0.68, 0.38], MAT.paper, [1.3, 1.25, 1.0]);
-  bx(xf, [0.28, 0.51, 0.1], [0.46, 0.62, 0.38], MAT.paintBlue, [1.2, 1.3, 1.5]);
-  // Чемодан наверху: светлая фибра, тёмная ручка, две застёжки.
-  bx(xf, [-0.35, 2.0, 0.07], [0.2, 2.18, 0.4], MAT.cardboard, [1.2, 1.1, 0.95], { bevel: 0.015 });
-  bx(xf, [-0.12, 2.18, 0.2], [0.0, 2.2, 0.27], MAT.bakelite, [1.3, 1.3, 1.3]);
-  for (const x of [-0.27, 0.12]) bx(xf, [x, 2.07, 0.4], [x + 0.06, 2.13, 0.415], MAT.brass, [1.4, 1.3, 1.1]);
-  xf.collider([-0.55, 0, 0], [0.55, 2.0, 0.47]);
-}
-
-/** Стеллаж с книгами 1,0 × 0,32 × 1,9: пять отсеков, пёстрые корешки. */
+/** Книжный шкаф или этажерка полки (по сиду); на полках пёстрые корешки, где низко — книги стопками плашмя. */
 function bookshelf(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const wood: Vec3 = dim([1.0, 0.9, 0.8], 0.9 + rnd() * 0.2);
-  bx(xf, [-0.5, 0, 0.0], [0.5, 1.9, 0.02], MAT.veneer, [0.4, 0.37, 0.34]);
-  for (const s of [-1, 1]) bx(xf, [s > 0 ? 0.47 : -0.5, 0, 0.02], [s > 0 ? 0.5 : -0.47, 1.9, 0.32], MAT.veneer, wood, { aoBottom: 0.6, skip: ['nz'] });
-  const ys = [0.0, 0.38, 0.76, 1.14, 1.52, 1.88];
-  for (const y of ys) bx(xf, [-0.47, y, 0.02], [0.47, y + 0.03, 0.32], MAT.veneer, dim(wood, 0.9), { skip: ['nz'] });
-  const spines: Array<[number, Vec3]> = [
-    [MAT.paintRed, [1.3, 1.1, 1.1]],
-    [MAT.paintBlue, [1.2, 1.3, 1.5]],
-    [MAT.paintGreen, [1.2, 1.4, 1.3]],
-    [MAT.paintOchre, [1.5, 1.3, 0.9]],
-    [MAT.paper, [1.4, 1.35, 1.1]],
-    [MAT.bakelite, [1.5, 1.5, 1.5]],
-  ];
-  for (let r = 0; r < 5; r++) {
-    const y0 = ys[r]! + 0.03;
-    let x = -0.45;
-    const stop = r === 4 ? rnd() * 0.3 : 0;
-    while (x < 0.42 - stop) {
-      const w = 0.055 + rnd() * 0.07;
-      const h = 0.18 + rnd() * 0.14;
-      const [m, t] = spines[Math.floor(rnd() * spines.length)]!;
-      if (x + w > 0.45) break;
-      bx(xf, [x, y0, 0.06], [x + w, y0 + h, 0.28], m, t, { skip: ['ny', 'nz'] });
-      x += w + 0.004;
-    }
-  }
-  xf.collider([-0.5, 0, 0], [0.5, 1.9, 0.32]);
+  const m = pickOf(BOOKCASES, seed);
+  s3Put(xf, m, { tint: jitter(seed) });
+  fillShelves(xf, S3_SHELVES[m]!, 'books', seed, { back: m !== 's3_etagere' });
 }
 
 /** Стрелка часов на передней стороне: из центра в направлении a (градусы по часовой от «12»), длина len, ширина w. */
@@ -423,26 +336,6 @@ function wallUnit(xf: Xf, seed: number): void {
   clockHand(xf, 0, cy, 175, 0.052, 0.008, zf + 0.0005, dark);
   clockHand(xf, 0, cy, 300, 0.078, 0.006, zf + 0.001, dark);
   xf.collider([-1.3, 0, 0], [1.3, 2.1, 0.46]);
-}
-
-/** Кровать 2,0 × 0,95 × 0,75: изголовье и спинка, скомканное одеяло, подушка. */
-function bedHome(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const wood: Vec3 = dim([1.0, 0.9, 0.8], 0.9 + rnd() * 0.2);
-  const blanket: Vec3 = rnd() < 0.5 ? [1.2, 1.3, 1.5] : [1.4, 1.0, 0.9];
-  const bm = blanket[2] > 1.4 ? MAT.paintBlue : MAT.paintRed;
-  for (const x of [-0.98, 0.9]) for (const z of [0.03, 0.87]) bx(xf, [x, 0, z], [x + 0.08, 0.2, z + 0.05], MAT.wood, WOOD_DARK, { aoBottom: 0.6 });
-  bx(xf, [-1, 0.14, 0], [-0.94, 0.75, 0.95], MAT.wood, wood, { aoBottom: 0.6 });
-  bx(xf, [0.94, 0.14, 0], [1, 0.52, 0.95], MAT.wood, wood, { aoBottom: 0.6 });
-  bx(xf, [-0.94, 0.2, 0.0], [0.94, 0.28, 0.95], MAT.wood, dim(wood, 0.8));
-  bx(xf, [-0.94, 0.28, 0.0], [0.94, 0.46, 0.95], MAT.canvas, [1.45, 1.45, 1.35], { bevel: 0.015 });
-  // Одеяло: ком из трёх кусков, один край свисает.
-  bx(xf, [-0.45, 0.46, 0.04], [0.92, 0.56, 0.9], bm, blanket, { bevel: 0.02 });
-  bx(xf, [-0.1, 0.56, 0.18], [0.5, 0.66, 0.7], bm, dim(blanket, 1.1), { bevel: 0.02 });
-  bx(xf, [0.2, 0.3, 0.9], [0.8, 0.56, 0.95], bm, dim(blanket, 0.9));
-  // Подушка и простыня у изголовья.
-  bx(xf, [-0.92, 0.46, 0.2], [-0.46, 0.62, 0.78], MAT.paper, [1.45, 1.4, 1.2], { bevel: 0.025 });
-  xf.collider([-1, 0, 0], [1, 0.6, 0.95]);
 }
 
 /** Ковёр на стене 1,9 × 0,04 × 1,3: бордовое поле, кайма, ромбы-медальоны из плоских листов. */
@@ -585,88 +478,44 @@ function toiletHome(xf: Xf, seed: number): void {
   xf.collider([-0.2, 0, 0], [0.2, 0.82, 0.68]);
 }
 
-/** Вешалка в прихожей 1,0 × 0,35 × 1,85: крючки, две куртки, полка для шапок, внизу обувь. */
+/** Напольная вешалка полки в прихожей; у стены рядом — сапоги, перед ними светлые кеды. */
 function coatRack(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const wood: Vec3 = dim([1.0, 0.9, 0.8], 0.9 + rnd() * 0.2);
-  bx(xf, [-0.5, 0.05, 0], [0.5, 1.85, 0.03], MAT.wood, wood);
-  bx(xf, [-0.5, 1.68, 0.0], [0.5, 1.72, 0.3], MAT.wood, dim(wood, 1.1));
-  // Шапки на полке: красная, синяя, жёлтая.
-  bx(xf, [-0.38, 1.72, 0.08], [-0.16, 1.85, 0.26], MAT.paintRed, [1.5, 1.2, 1.2], { bevel: 0.02 });
-  bx(xf, [-0.06, 1.72, 0.1], [0.16, 1.82, 0.26], MAT.paintBlue, [1.3, 1.4, 1.5], { bevel: 0.02 });
-  bx(xf, [0.26, 1.72, 0.08], [0.46, 1.84, 0.26], MAT.paintOchre, [1.5, 1.3, 0.9], { bevel: 0.02 });
-  // Крючки.
-  for (const x of [-0.4, -0.2, 0.0, 0.2, 0.4]) bx(xf, [x - 0.015, 1.5, 0.03], [x + 0.015, 1.54, 0.12], MAT.brass, [1.4, 1.3, 1.1]);
-  // Куртки: тёмно-зелёная и красная, у каждой рукав сбоку.
-  bx(xf, [-0.4, 0.72, 0.06], [-0.1, 1.5, 0.2], MAT.canvas, [0.7, 1.1, 0.8], { bevel: 0.015 });
-  bx(xf, [-0.46, 0.8, 0.08], [-0.4, 1.35, 0.18], MAT.canvas, [0.7, 1.1, 0.8]);
-  bx(xf, [0.06, 0.78, 0.06], [0.36, 1.5, 0.2], MAT.paintRed, [1.4, 1.1, 1.1], { bevel: 0.015 });
-  bx(xf, [0.36, 0.86, 0.08], [0.42, 1.4, 0.18], MAT.paintRed, [1.4, 1.1, 1.1]);
-  // Внизу поддон и две пары обуви: сапоги и светлые кеды.
-  bx(xf, [-0.45, 0, 0.02], [0.45, 0.04, 0.33], MAT.rubber, [1.3, 1.3, 1.3]);
-  for (const x of [-0.38, -0.24]) {
-    bx(xf, [x - 0.05, 0.04, 0.06], [x + 0.05, 0.12, 0.3], MAT.paintOchre, [1.4, 1.2, 0.8]);
-    bx(xf, [x - 0.05, 0.12, 0.06], [x + 0.05, 0.3, 0.16], MAT.paintOchre, [1.4, 1.2, 0.8]);
+  s3Put(xf.child(-0.2, 0, 0.33), 's3_coat_stand', { tint: jitter(seed) });
+  const boot: Vec3 = [1.4, 1.2, 0.8];
+  for (const x of [0.2, 0.32]) {
+    bx(xf, [x - 0.05, 0, 0.06], [x + 0.05, 0.08, 0.3], MAT.paintOchre, boot, { aoBottom: 0.6 });
+    bx(xf, [x - 0.05, 0.08, 0.06], [x + 0.05, 0.3, 0.16], MAT.paintOchre, boot);
   }
-  for (const x of [0.1, 0.26]) {
-    bx(xf, [x - 0.05, 0.04, 0.06], [x + 0.05, 0.12, 0.3], MAT.paper, [1.45, 1.4, 1.2], { bevel: 0.015 });
-    bx(xf, [x - 0.05, 0.04, 0.28], [x + 0.05, 0.06, 0.3], MAT.rubber);
+  for (const x of [0.24, 0.36]) {
+    bx(xf, [x - 0.05, 0.012, 0.36], [x + 0.05, 0.08, 0.6], MAT.paper, [1.45, 1.4, 1.2], { bevel: 0.015 });
+    bx(xf, [x - 0.052, 0, 0.358], [x + 0.052, 0.012, 0.602], MAT.rubber, [1.3, 1.3, 1.3], { skip: ['ny'] });
   }
-  xf.collider([-0.5, 0, 0], [0.5, 1.85, 0.3]);
 }
 
-/** Письменный стол с компьютером 1,2 × 0,6 × 1,25: ЭЛТ-монитор светится, клавиатура, системный блок. */
+/**
+ * Письменный стол полки (тумба слева) с компьютером: ЭЛТ-монитор светится, клавиатура; системный блок — на полу под
+ * столешницей справа.
+ */
 function deskPc(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const wood: Vec3 = dim([1.05, 0.95, 0.85], 0.9 + rnd() * 0.2);
+  const D = 's3_desk_simple';
+  s3Put(xf, D, { tint: jitter(seed) });
+  const t = S3_TOP[D]!;
   const beige: Vec3 = [1.45, 1.4, 1.15];
-  for (const x of [-0.6, 0.54]) for (const z of [0.0, 0.54]) bx(xf, [x, 0, z], [x + 0.06, 0.72, z + 0.06], MAT.wood, WOOD_DARK, { aoBottom: 0.6 });
-  bx(xf, [-0.6, 0.72, 0], [0.6, 0.76, 0.6], MAT.wood, wood);
-  // Тумба с ящиками справа.
-  bx(xf, [0.3, 0.1, 0.02], [0.54, 0.72, 0.58], MAT.wood, dim(wood, 0.95), { aoBottom: 0.6 });
-  for (const y of [0.15, 0.32, 0.5]) {
-    bx(xf, [0.32, y, 0.58], [0.52, y + 0.15, 0.6], MAT.wood, dim(wood, 1.15));
-    bx(xf, [0.38, y + 0.06, 0.6], [0.46, y + 0.09, 0.62], MAT.brass, [1.4, 1.3, 1.1]);
-  }
-  // Системный блок слева на полу.
-  bx(xf, [-0.5, 0, 0.08], [-0.22, 0.42, 0.52], MAT.enamel, beige, { aoBottom: 0.6 });
-  face(xf, -0.46, 0.28, -0.26, 0.34, 0.521, MAT.bakelite);
-  face(xf, -0.46, 0.18, -0.26, 0.24, 0.521, MAT.bakelite);
-  bx(xf, [-0.34, 0.06, 0.52], [-0.28, 0.1, 0.535], MAT.glow, [3, 12, 3]);
-  // ЭЛТ-монитор: бежевый корпус с горбом, чёрная рамка, светящийся экран.
-  bx(xf, [-0.1, 0.76, 0.14], [0.1, 0.8, 0.34], MAT.enamel, beige);
-  bx(xf, [-0.3, 0.8, 0.3], [0.3, 1.22, 0.47], MAT.enamel, beige);
-  bx(xf, [-0.2, 0.86, 0.06], [0.2, 1.14, 0.3], MAT.enamel, dim(beige, 0.9));
-  bx(xf, [-0.26, 0.84, 0.47], [0.26, 1.18, 0.485], MAT.bakelite, [1.2, 1.2, 1.2]);
-  bx(xf, [-0.22, 0.87, 0.485], [0.22, 1.15, 0.5], MAT.glow, [6, 9, 8]);
-  bx(xf, [0.2, 0.83, 0.47], [0.27, 0.85, 0.49], MAT.glow, [3, 12, 3]);
+  // Системный блок.
+  bx(xf, [0.12, 0, 0.06], [0.4, 0.42, 0.48], MAT.enamel, beige, { aoBottom: 0.6 });
+  face(xf, 0.16, 0.28, 0.36, 0.34, 0.481, MAT.bakelite);
+  face(xf, 0.16, 0.18, 0.36, 0.24, 0.481, MAT.bakelite);
+  bx(xf, [0.28, 0.06, 0.48], [0.34, 0.1, 0.495], MAT.glow, [3, 12, 3]);
+  // ЭЛТ-монитор: подставка, корпус, горб кинескопа к стене, чёрная рамка, светящийся экран.
+  bx(xf, [-0.1, t, 0.12], [0.1, t + 0.04, 0.3], MAT.enamel, beige);
+  bx(xf, [-0.27, t + 0.04, 0.18], [0.27, t + 0.44, 0.35], MAT.enamel, beige);
+  bx(xf, [-0.18, t + 0.1, 0.01], [0.18, t + 0.36, 0.18], MAT.enamel, dim(beige, 0.9));
+  bx(xf, [-0.23, t + 0.08, 0.35], [0.23, t + 0.4, 0.362], MAT.bakelite, [1.2, 1.2, 1.2]);
+  bx(xf, [-0.19, t + 0.11, 0.362], [0.19, t + 0.37, 0.372], MAT.glow, [6, 9, 8]);
+  bx(xf, [0.17, t + 0.07, 0.35], [0.23, t + 0.09, 0.366], MAT.glow, [3, 12, 3]);
   // Клавиатура: светлая плата, тёмный блок клавиш.
-  bx(xf, [-0.3, 0.76, 0.48], [0.14, 0.785, 0.58], MAT.enamel, beige);
-  bx(xf, [-0.27, 0.785, 0.5], [0.11, 0.795, 0.57], MAT.bakelite, [1.4, 1.4, 1.4]);
-  xf.collider([-0.6, 0, 0], [0.6, 0.76, 0.6]);
-}
-
-/** Детская кроватка 1,2 × 0,65 × 0,95: прутья, матрас, одеяльце. */
-function crib(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const wood: Vec3 = dim([1.45, 1.35, 1.15], 0.92 + rnd() * 0.12);
-  const rail = MAT.wood;
-  for (const x of [-0.6, 0.55]) for (const z of [0.0, 0.6]) bx(xf, [x, 0, z], [x + 0.05, 0.95, z + 0.05], rail, wood, { aoBottom: 0.6 });
-  // Верхние и нижние перекладины спереди и на торцах.
-  bx(xf, [-0.6, 0.86, 0.6], [0.6, 0.92, 0.65], rail, wood);
-  bx(xf, [-0.6, 0.26, 0.6], [0.6, 0.32, 0.65], rail, wood);
-  for (const s of [-1, 1]) {
-    bx(xf, [s * 0.575 - 0.025, 0.86, 0.05], [s * 0.575 + 0.025, 0.92, 0.6], rail, wood);
-    bx(xf, [s * 0.575 - 0.025, 0.26, 0.05], [s * 0.575 + 0.025, 0.32, 0.6], rail, wood);
-  }
-  bx(xf, [-0.55, 0.3, 0.0], [0.55, 0.84, 0.03], rail, dim(wood, 0.8));
-  // Прутья: на фасаде через 10 см, на торцах через 12 см.
-  for (let x = -0.5; x < 0.55; x += 0.1) bx(xf, [x - 0.012, 0.32, 0.615], [x + 0.012, 0.86, 0.64], rail, wood, { skip: ['ny', 'py'] });
-  for (const s of [-1, 1]) for (let z = 0.17; z < 0.58; z += 0.14) bx(xf, [s * 0.575 - 0.012, 0.32, z], [s * 0.575 + 0.012, 0.86, z + 0.024], rail, wood, { skip: ['ny', 'py'] });
-  // Матрас, одеяльце, мишка-подушка.
-  bx(xf, [-0.55, 0.3, 0.03], [0.55, 0.38, 0.6], MAT.canvas, [1.45, 1.4, 1.3]);
-  bx(xf, [-0.1, 0.38, 0.1], [0.5, 0.44, 0.55], MAT.paintBlue, [1.3, 1.4, 1.5], { bevel: 0.015 });
-  xf.collider([-0.6, 0, 0], [0.6, 0.95, 0.65]);
+  bx(xf, [-0.24, t, 0.39], [0.18, t + 0.025, 0.5], MAT.enamel, beige);
+  bx(xf, [-0.21, t + 0.025, 0.41], [0.15, t + 0.035, 0.49], MAT.bakelite, [1.4, 1.4, 1.4]);
 }
 
 /** Куча игрушек 1,0 × 0,6 × 0,45: кубики, пирамидка, мяч, машинка. */
@@ -1277,17 +1126,17 @@ function remote(xf: Xf): void {
 // ───────────────────────────── реестр ─────────────────────────────
 
 export const HOME_PROPS: Record<string, PropSpec> = {
-  sofa: { w: 2.0, d: 0.9, h: 0.85, mount: 'floor', ru: 'диван с пледом и двумя подушками', build: sofa },
-  armchair: { w: 0.9, d: 0.85, h: 0.9, mount: 'floor', ru: 'кресло с салфетками', build: armchair },
+  sofa: furnished('floor', ['s3_sofa_olive', 's3_sofa_grey'], 'диван: старый, в оливковой обивке, или с деревянными подлокотниками'),
+  armchair: furnished('floor', ['s3_armchair_round', 's3_armchair_sixties'], 'кресло: с круглой спинкой или шестидесятых, с деревянными подлокотниками'),
   tv_stand: { w: 1.1, d: 0.5, h: 1.15, mount: 'floor', ru: 'тумба с кинескопным телевизором и видеомагнитофоном', build: tvStand },
   fridge: { w: 0.62, d: 0.62, h: 1.7, mount: 'floor', ru: 'холодильник с магнитами и запиской', build: fridge },
   stove: { w: 0.55, d: 0.58, h: 0.9, mount: 'floor', ru: 'газовая плита с кастрюлей', build: stove },
-  kitchen_table: { w: 1.2, d: 0.8, h: 0.78, mount: 'floor', ru: 'кухонный стол под клеёнкой, табуретка, тарелка, хлебница', build: kitchenTable },
+  kitchen_table: { w: 1.4, d: 1.08, h: 0.87, mount: 'floor', ru: 'кухонный стол на точёных ножках под клеёнкой, табуретка, тарелка, хлебница', build: kitchenTable },
   sink_cabinet: { w: 0.8, d: 0.58, h: 1.35, mount: 'floor', ru: 'мойка-тумба с краном и сушилкой для тарелок', build: sinkCabinet },
-  wardrobe: { w: 1.3, d: 0.58, h: 2.2, mount: 'floor', ru: 'платяной шкаф, одна дверца распахнута, чемодан наверху', build: wardrobe },
+  wardrobe: furnished('floor', ['s3_wardrobe_plain', 's3_wardrobe_grey'], 'платяной шкаф: светлый в две дверцы или серый с ящиками внизу'),
   wall_unit: { w: 2.6, d: 0.46, h: 2.1, mount: 'floor', ru: 'стенка: сервант с хрусталём, книги, телевизор, часы', build: wallUnit },
-  bookshelf: { w: 1.0, d: 0.32, h: 1.9, mount: 'floor', ru: 'стеллаж с пёстрыми книгами', build: bookshelf },
-  bed_home: { w: 2.0, d: 0.95, h: 0.75, mount: 'floor', ru: 'кровать с изголовьем, скомканным одеялом и подушкой', build: bedHome },
+  bookshelf: { ...spanOf(BOOKCASES), mount: 'floor', ru: 'книжный шкаф или этажерка с пёстрыми книгами', build: bookshelf },
+  bed_home: furnished('floor', ['s3_bed_iron_green'], 'железная кровать с зелёным одеялом'),
   wall_carpet: { w: 1.9, d: 0.04, h: 1.3, mount: 'wall', y: 0.85, ru: 'ковёр на стене с ромбами', build: (xf) => wallCarpet(xf) },
   rug: { w: 2.0, d: 1.4, h: 0.02, mount: 'free', ru: 'ковёр на полу с орнаментом', build: (xf) => rug(xf) },
   floor_lamp: { w: 0.45, d: 0.45, h: 1.65, mount: 'floor', ru: 'торшер с абажуром', build: floorLamp },
@@ -1295,9 +1144,9 @@ export const HOME_PROPS: Record<string, PropSpec> = {
   bathtub: { w: 1.6, d: 0.72, h: 1.9, mount: 'floor', ru: 'ванна на ножках со шторкой на штанге', build: bathtub },
   washing_machine: { w: 0.6, d: 0.56, h: 0.86, mount: 'floor', ru: 'стиральная машина с круглым люком', build: washingMachine },
   toilet_home: { w: 0.42, d: 0.68, h: 0.82, mount: 'floor', ru: 'унитаз с бачком', build: toiletHome },
-  coat_rack: { w: 1.0, d: 0.35, h: 1.85, mount: 'floor', ru: 'вешалка в прихожей с куртками, шапками и обувью', build: coatRack },
-  desk_pc: { w: 1.2, d: 0.6, h: 1.25, mount: 'floor', ru: 'письменный стол с ЭЛТ-монитором', build: deskPc },
-  crib: { w: 1.2, d: 0.65, h: 0.95, mount: 'floor', ru: 'детская кроватка с прутьями', build: crib },
+  coat_rack: { w: 1.04, d: 0.65, h: 1.8, mount: 'floor', ru: 'напольная вешалка в прихожей, рядом сапоги и кеды', build: coatRack },
+  desk_pc: { w: 1.04, d: 0.52, h: 1.2, mount: 'floor', ru: 'письменный стол с тумбой и ЭЛТ-монитором, системный блок под столом', build: deskPc },
+  crib: furnished('floor', ['s3_crib'], 'детская кроватка'),
   toy_heap: { w: 1.0, d: 0.6, h: 0.45, mount: 'floor', ru: 'кубики, пирамидка, мяч и машинка', build: toyHeap },
   clothes_dryer: { w: 1.4, d: 0.55, h: 1.0, mount: 'floor', ru: 'напольная сушилка с бельём', build: (xf) => clothesDryer(xf) },
   ironing_board: { w: 1.2, d: 0.4, h: 0.9, mount: 'floor', ru: 'гладильная доска с рубашкой', build: (xf) => ironingBoard(xf) },

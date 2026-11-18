@@ -5,38 +5,18 @@
  * Модель кладётся с материалом каждой детали; пока кусок с моделями не пришёл (world/sand3d.ts) — серой коробкой
  * габарита, чтобы и тогда было видно, что там стоит, и обойти её можно было так же.
  *
- * В обстановку игры сами по себе эти вещи не встают: их ставит и ими заменяет вещи игры партнёр — в конструкторе
- * (квиз 18.11: «Полка в конструкторе, меняешь ты»).
+ * Под своими именами в обстановку игры эти вещи не встают: их ставит партнёр конструктором. Но мебель игры с 18.11 строится
+ * ими же (world/furniture.ts; партнёр: «замени всю мебель на новую самостоятельно») — диван игры остаётся «sofa», а выглядит
+ * диваном полки.
  */
-import { MAT } from './materials';
-import { hasModel, placeModel } from './models';
+import { jitter, s3Put, s3Size } from './furniture';
 import type { PropSpec } from './props_more';
 import { SAND3D_META } from './sand3d_meta';
-import type { Sand3dMeta } from './sand3d_meta';
 
-/** Вверх до сантиметра (с запасом на шум плавающей запятой). */
-const cm = (v: number): number => Math.ceil(v * 100 - 1e-6) / 100;
-
-function spec(name: string, m: Sand3dMeta): PropSpec {
-  const free = m.mount === 'free';
-  const w = cm(Math.max(-m.min[0], m.max[0]) * 2);
-  const h = cm(m.max[1]);
-  const d = free ? cm(Math.max(-m.min[2], m.max[2]) * 2) : cm(m.max[2]);
-  const z0 = free ? -d / 2 : 0;
-  const z1 = free ? d / 2 : d;
-  return {
-    w,
-    d,
-    h,
-    mount: m.mount,
-    ru: m.ru,
-    build(xf) {
-      if (hasModel(name)) placeModel(xf, name);
-      else xf.box([-w / 2, 0, z0], [w / 2, h, z1], MAT.paper);
-      // Преграда — весь габарит вещи (как у готовых моделей KayKit).
-      xf.collider([-w / 2, 0, z0], [w / 2, h, z1]);
-    },
-  };
+/** Вещь полки под своим именем; тон чуть гуляет от сида — три шкафчика бок о бок не одного оттиска. */
+function spec(name: string, ru: string): PropSpec {
+  const g = s3Size(name);
+  return { w: g.w, d: g.d, h: g.h, mount: g.mount, ru, build: (xf, seed) => s3Put(xf, name, { tint: jitter(seed, 0.05) }) };
 }
 
-export const SAND3D_PROPS: Record<string, PropSpec> = Object.fromEntries(Object.entries(SAND3D_META).map(([name, m]) => [name, spec(name, m)]));
+export const SAND3D_PROPS: Record<string, PropSpec> = Object.fromEntries(Object.entries(SAND3D_META).map(([name, m]) => [name, spec(name, m.ru)]));

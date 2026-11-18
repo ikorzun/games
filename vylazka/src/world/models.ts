@@ -37,6 +37,12 @@ export interface PlaceOpts {
   tint?: Vec3;
   /** Равномерный масштаб относительно начала координат реквизита. */
   scale?: number;
+  /**
+   * Опрокинуть назад, на спину (поворот на четверть вокруг оси x): верх вещи ложится к z = 0, низ уходит в +z, лицо
+   * смотрит вверх — стул лежит на спинке, стол — набок, ножками в комнату. После поворота габарит такой: x — прежний,
+   * y — от 0 до прежней глубины, z — от 0 до прежней высоты (вещь сдвигается так, чтобы лечь на пол у начала координат).
+   */
+  tip?: boolean;
 }
 
 const cache = new Map<string, DecodedModel>();
@@ -150,9 +156,19 @@ export function placeModel(xf: Xf, name: string, opts: PlaceOpts = {}): void {
   const s = opts.scale ?? 1;
   const first = xf.mb.vertexCount;
   const n = m.position.length / 3;
+  // Опрокинутая: (x, y, z) → (x, z − zmin, ymax − y) — поворот, а не отражение, поэтому обход треугольников прежний.
+  const tip = opts.tip === true;
+  const z0 = m.min[2];
+  const y1 = m.max[1];
   for (let i = 0; i < n; i++) {
-    const p = xf.pt(m.position[i * 3]! * s, m.position[i * 3 + 1]! * s, m.position[i * 3 + 2]! * s);
-    const nn = rotNormal([m.normal[i * 3]!, m.normal[i * 3 + 1]!, m.normal[i * 3 + 2]!], xf.rot);
+    const x = m.position[i * 3]!;
+    const y = m.position[i * 3 + 1]!;
+    const z = m.position[i * 3 + 2]!;
+    const p = tip ? xf.pt(x * s, (z - z0) * s, (y1 - y) * s) : xf.pt(x * s, y * s, z * s);
+    const nx = m.normal[i * 3]!;
+    const ny = m.normal[i * 3 + 1]!;
+    const nz = m.normal[i * 3 + 2]!;
+    const nn = rotNormal(tip ? [nx, nz, -ny] : [nx, ny, nz], xf.rot);
     const mat = one ?? m.mat![i]!;
     const base = baseOf(mat);
     const tint: Vec3 = [0, 0, 0];

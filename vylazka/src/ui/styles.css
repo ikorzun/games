@@ -690,6 +690,17 @@ body {
 .vz-overlay[data-mode='report'] {
   background: rgba(0, 0, 0, 0.94);
 }
+/* Титры: строки авторства моделей — мелко, с прокруткой внутри карточки (их почти сорок). */
+.vz-overlay[data-mode='credits'] {
+  background: rgba(0, 0, 0, 0.94);
+}
+.vz-overlay[data-mode='credits'] .vz-overlay__body {
+  max-height: 52vh;
+  overflow-y: auto;
+  font-size: clamp(10px, 0.6vmin + 7px, 13px);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
 @media (max-height: 460px) {
   .vz-hud__toast {
     top: 46%;

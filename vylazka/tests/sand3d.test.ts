@@ -11,7 +11,7 @@ import { ALL_PROPS, PROP_SETS } from '../src/world/props_all';
 import { Xf } from '../src/world/props';
 import type { PropSpec } from '../src/world/props_more';
 import { SAND3D_PROPS } from '../src/world/props_sand3d';
-import { isSand3d, loadSand3d, needsSand3d, sand3dLoaded } from '../src/world/sand3d';
+import { loadSand3d, sand3dCredits, sand3dLoaded } from '../src/world/sand3d';
 import { SAND3D_CREDITS, SAND3D_DATA } from '../src/world/sand3d_data';
 import { SAND3D_META } from '../src/world/sand3d_meta';
 
@@ -93,12 +93,9 @@ describe('полка Sand3D: опись и авторство', () => {
   it('вещи полки — в реестре реквизита одним набором, имена ни с чем не совпадают', () => {
     expect(PROP_SETS.SAND3D_PROPS).toBe(SAND3D_PROPS);
     for (const n of names) expect(ALL_PROPS[n], n).toBeDefined();
-    expect(needsSand3d(['chair_bent', 's3_crib'])).toBe(true);
-    expect(needsSand3d(['chair_bent', 'kk_chair_a'])).toBe(false);
-    expect(isSand3d('toString')).toBe(false);
   });
 
-  it('проверка сборки: кусок с моделями полки — не ядро (на старте его нет), а основной код — ядро', async () => {
+  it('проверка сборки: кусок с моделями полки — данные, а не ядро; основной код — ядро', async () => {
     const mod = (await import('../scripts/check_dist.mjs' as string)) as { checkDist(dir: string, opts?: Record<string, unknown>): { problems: string[]; stats: { coreBytes: number; assetBytes: number } } };
     const dist = mkdtempSync(join(tmpdir(), 'vz-sand3d-'));
     writeFileSync(join(dist, 'index.html'), '<!doctype html><title>t</title>');
@@ -153,10 +150,14 @@ describe('полка Sand3D: размеры и постановка', () => {
 
 describe('полка Sand3D: модели пришли', () => {
   it('загрузка подключает все модели, повторная — тот же ответ', async () => {
+    expect(sand3dCredits()).toEqual([]);
     expect(await loadSand3d()).toBe(true);
     expect(await loadSand3d()).toBe(true);
     expect(sand3dLoaded()).toBe(true);
     for (const n of names) expect(hasModel(n), n).toBe(true);
+    // Титры игры: строка авторства каждой вещи — как в каталоге, без изменений (CC BY 4.0 требует назвать авторов).
+    expect(sand3dCredits()).toEqual(SAND3D_CREDITS.map((c) => c.attribution));
+    expect(sand3dCredits()).toHaveLength(names.length);
   });
 
   it.each(names)('%s: разбирается, сетка в бюджете, материалы — свои у деталей и существуют', (name) => {

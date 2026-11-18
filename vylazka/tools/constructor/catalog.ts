@@ -9,6 +9,7 @@ import { ALL_MEMORIES } from '../../src/systems/session';
 import { KAYKIT_SWAPS } from '../../src/world/props_real';
 import { swapFits } from '../../src/world/placed';
 import { SAND3D_CREDITS } from '../../src/world/sand3d_data';
+import { FURNITURE_FROM } from '../../src/world/furniture';
 import RU from '../../locales/ru/ui.json';
 
 type Usage = Record<string, { worlds: Record<string, number>; rooms: Record<string, number> }>;
@@ -99,6 +100,12 @@ const ALT = new Set(KAYKIT_SWAPS.map((x) => x.to));
 /** Полка Sand3D: авторство каждой вещи (строка каталога, без изменений). */
 const S3 = new Map(SAND3D_CREDITS.map((c) => [c.name, c]));
 
+/** Подпись вещи коротко: до первой запятой или двоеточия. */
+const head = (ru: string): string => ru.split(/[,:]/)[0]!.trim();
+/** Вещь полки → вещи игры, которые с 18.11 ею и выглядят (world/furniture.ts, FURNITURE_FROM). */
+const IN_GAME = new Map<string, string[]>();
+for (const [game, models] of Object.entries(FURNITURE_FROM)) for (const m of models) IN_GAME.set(m, [...(IN_GAME.get(m) ?? []), game]);
+
 /**
  * Род мебели — по главному слову подписи: первые три слова до запятой или двоеточия («кабинка с тканевой перегородкой,
  * столом…» — кабинка, не стол; «островок отдела: четыре стола» — не стол). Слово ищется с начала слова: «двухтумбовый
@@ -167,28 +174,26 @@ export const ITEMS: Item[] = Object.keys(ALL_PROPS).map((name) => {
   // Чаще на глазах — раньше переделывать: сколько штук в среднем на уровень в том месте, где их больше.
   const most = Math.max(0, ...Object.values(u?.worlds ?? {}));
   const fits = kind === 's3' ? s3Fits(name) : [];
-  const advice =
-    kind === 's3'
-      ? fits.length > 0
+  const usedBy = IN_GAME.get(name);
+  const madeOf = FURNITURE_FROM[name];
+  // Совет основной модели — чтобы было с чем спорить; решает партнёр.
+  const advice = ((): string => {
+    if (kind === 's3') {
+      if (usedBy) return `уже в игре (с 18.11): так выглядят ${[...new Set(usedBy.map((g) => `«${head(ALL_PROPS[g]!.ru)}»`))].join(', ')}`;
+      if (used) return 'уже в игре (с 18.11): стоит в комнатах сама — где, видно ниже';
+      return fits.length > 0
         ? `первой — вместо «${fits[0]!.ru.split(',')[0]}»: по размеру встаёт на её место, а она чаще на глазах`
-        : 'ставить рядом с вещами игры: вместо вещи того же рода не влезает по размеру'
-      : name === 'kk_chair_a'
-      ? 'уже заменён по твоему слову'
-      : kind === 'pair'
-        ? 'заменена 16.11 по твоему слову'
-        : name === 'chair_bent'
-          ? 'уже как надо'
-          : kind === 'memory'
-            ? 'детальнее — первой: её ищут'
-            : kind === 'people'
-              ? 'поза-заготовка; свою позу можно описать словами в заметке'
-              : toy
-                ? 'переделать первым: игрушечный набор'
-                : kind !== 'furniture'
-                  ? ''
-                  : most >= 2
-                    ? `переделать первым: на глазах чаще всего (${String(most).replace('.', ',')} на уровень)`
-                    : 'переделать потом: встречается реже';
+        : 'ставить рядом с вещами игры: вместо вещи того же рода не влезает по размеру';
+    }
+    if (madeOf) return `с 18.11 — модели полки: ${madeOf.map((m) => `«${head(ALL_PROPS[m]?.ru ?? m)}»`).join(', ')}`;
+    if (name === 'kk_chair_a') return 'уже заменён по твоему слову';
+    if (kind === 'pair') return 'заменена 16.11 по твоему слову';
+    if (kind === 'memory') return 'детальнее — первой: её ищут';
+    if (kind === 'people') return 'поза-заготовка; свою позу можно описать словами в заметке';
+    if (toy) return 'переделать первым: игрушечный набор';
+    if (kind !== 'furniture') return '';
+    return most >= 2 ? `переделать первым: на глазах чаще всего (${String(most).replace('.', ',')} на уровень)` : 'переделать потом: встречается реже';
+  })();
   return {
     kind,
     ...(alt ? { alt } : {}),

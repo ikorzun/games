@@ -13,9 +13,14 @@
 import type { Vec3 } from '../core/types';
 import type { Axis } from './kit';
 import { MAT } from './materials';
-import { hung, stool } from './props';
+import { hung } from './props';
 import type { Xf } from './props';
-import { bucket, chair, desk } from './props_bunker';
+import { bucket } from './props_bunker';
+import { furnished, jitter, pickOf, s3Put, S3_TOP } from './furniture';
+
+/** Стулья и табурет полки Sand3D — в составных вещах убежища (стол с машинкой, опрокинутый стол, посуда на табурете). */
+const CHAIRS = ['s3_chair_ladder', 's3_chair_carved'] as const;
+const STOOL = 's3_stool_wood';
 
 export interface PropSpec {
   /** Габариты: ширина вдоль стены, глубина от стены, высота, м. */
@@ -770,59 +775,6 @@ export function washstand(xf: Xf, seed: number): void {
 // ───────────────────────────── жилое и управление ─────────────────────────────
 
 /**
- * Трёхъярусные нары 1,9 × 0,7 × 2,1 м из стальных труб с дощатыми настилами (часть досок выбита);
- * на нижнем ярусе свёрнутый матрас, с верхнего свисает одеяло. Стоят длинной стороной вдоль стены.
- */
-export function bunkTriple(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const paint: Vec3 = dim([0.9, 0.95, 0.9], 0.85 + rnd() * 0.2);
-  const L = 0.93;
-  for (const x of [-L, L]) for (const z of [0.04, 0.66]) xf.cyl([x, 0, z], 'y', 2.1, 0.02, MAT.metalGreen, { segments: 6, tint: paint, ao: 0.9 });
-  for (let t = 0; t < 3; t++) {
-    const y = 0.4 + t * 0.65;
-    for (const z of [0.04, 0.66]) xf.cyl([-L, y, z], 'x', 2 * L, 0.018, MAT.metalGreen, { segments: 6, caps: false, tint: paint });
-    for (const x of [-L, L]) xf.cyl([x, y, 0.04], 'z', 0.62, 0.018, MAT.metalGreen, { segments: 6, caps: false, tint: paint });
-    for (let i = 0; i < 4; i++) {
-      const g = 0.7 + rnd() * 0.25;
-      if (t > 0 && rnd() < 0.15) continue;
-      const z = 0.065 + i * 0.145;
-      xf.box([-L + 0.02, y + 0.018, z], [L - 0.02, y + 0.04, z + 0.135], MAT.wood, { tint: [g, g * 0.97, g * 0.92] });
-    }
-  }
-  // Свёрнутый матрас, перехваченный ремнём.
-  const mx = rnd() < 0.5 ? -0.6 : 0.55;
-  xf.cyl([mx, 0.57, 0.08], 'z', 0.54, 0.13, MAT.canvas, { segments: 10, tint: [0.85, 0.8, 0.72] });
-  xf.cyl([mx, 0.57, 0.33], 'z', 0.03, 0.134, MAT.leather, { segments: 10, caps: false });
-  // Одеяло свесилось с верхнего яруса.
-  xf.box([-mx - 0.2, 1.36, 0.665], [-mx + 0.15, 1.75, 0.68], MAT.canvas, { tint: [0.6, 0.6, 0.62] });
-  xf.collider([-0.95, 0, 0.02], [0.95, 2.1, 0.68]);
-}
-
-/**
- * Панцирная кровать 1,9 × 0,8 м без матраса: трубчатые спинки с прутьями (изголовье выше),
- * царги из уголка, сетка из тонких прутков. Стоит вдоль стены.
- */
-export function bedFrame(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const paint: Vec3 = dim([0.78, 0.82, 0.88], 0.85 + rnd() * 0.25);
-  const flip = rnd() < 0.5 ? 1 : -1;
-  for (const [sx, h] of [
-    [-0.93, 0.95],
-    [0.93, 0.75],
-  ] as const) {
-    const x = sx * flip;
-    for (const z of [0.04, 0.76]) xf.cyl([x, 0, z], 'y', h, 0.018, MAT.metalGrey, { segments: 6, tint: paint, ao: 0.9 });
-    xf.cyl([x, h - 0.02, 0.04], 'z', 0.72, 0.018, MAT.metalGrey, { segments: 6, caps: false, tint: paint });
-    xf.cyl([x, 0.45, 0.04], 'z', 0.72, 0.012, MAT.metalGrey, { segments: 5, caps: false, tint: paint });
-    for (let i = 1; i < 5; i++) xf.cyl([x, 0.45, 0.04 + i * 0.144], 'y', h - 0.47, 0.007, MAT.metalGrey, { segments: 4, caps: false, tint: paint });
-  }
-  for (const z of [0.04, 0.73]) xf.box([-0.93, 0.34, z], [0.93, 0.38, z + 0.03], MAT.steel, { tint: DARK });
-  for (let i = 0; i < 7; i++) xf.cyl([-0.91, 0.35, 0.1 + i * 0.1], 'x', 1.82, 0.004, MAT.steel, { segments: 3, caps: false, tint: GREY });
-  for (let i = 0; i < 9; i++) xf.cyl([-0.8 + i * 0.2, 0.353, 0.07], 'z', 0.66, 0.004, MAT.steel, { segments: 3, caps: false, tint: GREY });
-  xf.collider([-0.95, 0, 0.02], [0.95, 0.5, 0.78]);
-}
-
-/**
  * Вешалка: доска 1,5 м с пятью крюками на высоте 1,6 м; на трёх через один висят плащ ОЗК, сумка
  * противогаза и ватник (в каком порядке — по сиду). y = 0 — подол плаща, 0,4 м над полом.
  */
@@ -1134,27 +1086,19 @@ export function fieldPhone(xf: Xf, seed: number): void {
   xf.box([-0.2, 0.0, 0.262], [-0.17, 0.125, 0.268], MAT.canvas, { tint: [0.8, 0.78, 0.65] });
 }
 
-/** Стул, упавший на спинку: ножки смотрят в +z и кончаются у z = 0, верх спинки — у z = −0,9; высота 0,4 м. */
-function fallenChair(xf: Xf, tint: Vec3): void {
-  xf.box([-0.2, 0, -0.47], [0.2, 0.4, -0.43], MAT.wood, { bevel: 0.01, tint, aoBottom: 0.6 });
-  for (const x of [-0.19, 0.16]) for (const y of [0.01, 0.36]) xf.box([x, y, -0.43], [x + 0.03, y + 0.03, 0], MAT.steel, { tint: DARK });
-  for (const x of [-0.19, 0.16]) xf.box([x, 0, -0.9], [x + 0.03, 0.03, -0.47], MAT.steel, { tint: DARK });
-  xf.box([-0.2, 0, -0.88], [0.2, 0.025, -0.68], MAT.wood, { tint });
-  xf.collider([-0.2, 0, -0.9], [0.2, 0.4, 0]);
-}
-
 /**
- * Письменный стол с пишущей машинкой (в каретке лист), настольной лампой и стопкой папок; рядом
- * вдоль стены лежит опрокинутый стул. Ширина 2,2 м, глубина 0,6 м (стол выступает на 0,63).
+ * Письменный стол полки с пишущей машинкой (в каретке лист), настольной лампой и стопкой папок; рядом
+ * вдоль стены лежит опрокинутый на спинку стул полки. Ширина 2,2 м, глубина 0,6 м.
  */
 export function typewriterDesk(xf: Xf, seed: number): void {
   const rnd = rng(seed);
-  const dx = -0.47;
-  desk(xf.child(dx, 0, 0));
-  const ty = 0.76;
+  const D = 's3_desk_simple';
+  const dx = -0.55;
+  s3Put(xf.child(dx, 0, 0), D, { tint: jitter(seed) });
+  const ty = S3_TOP[D]!;
   // Машинка: корпус, ступень клавиатуры со светлыми клавишами, валик с листом.
-  const tx = dx - 0.1;
-  const tz = 0.32;
+  const tx = dx - 0.06;
+  const tz = 0.27;
   xf.box([tx - 0.17, ty, tz - 0.14], [tx + 0.17, ty + 0.09, tz + 0.1], MAT.castIron, { bevel: 0.012, tint: [1.1, 1.1, 1.1] });
   xf.box([tx - 0.15, ty, tz + 0.1], [tx + 0.15, ty + 0.035, tz + 0.17], MAT.castIron, { tint: [1.1, 1.1, 1.1] });
   xf.box([tx - 0.14, ty + 0.035, tz + 0.105], [tx + 0.14, ty + 0.045, tz + 0.16], MAT.enamel, { tint: [0.72, 0.7, 0.62] });
@@ -1162,8 +1106,8 @@ export function typewriterDesk(xf: Xf, seed: number): void {
   xf.box([tx - 0.105, ty + 0.1, tz - 0.103], [tx + 0.105, ty + 0.29, tz - 0.098], MAT.paper, { tint: [0.92, 0.9, 0.8] });
   xf.box([tx + 0.21, ty + 0.1, tz - 0.09], [tx + 0.24, ty + 0.12, tz - 0.07], MAT.steel, { tint: GREY });
   // Лампа: блин основания, стойка, плечо и абажур раструбом вниз.
-  const lx = dx + 0.43;
-  const lz = 0.2;
+  const lx = dx + 0.37;
+  const lz = 0.14;
   xf.cyl([lx, ty, lz], 'y', 0.02, 0.08, MAT.bakelite, { segments: 8, tint: [1.1, 1.1, 1.1] });
   xf.cyl([lx, ty + 0.02, lz], 'y', 0.31, 0.008, MAT.steel, { segments: 4, caps: false, tint: GREY });
   xf.cyl([lx, ty + 0.325, lz], 'z', 0.13, 0.008, MAT.steel, { segments: 4, caps: false, tint: GREY });
@@ -1173,9 +1117,10 @@ export function typewriterDesk(xf: Xf, seed: number): void {
     const ox = (rnd() - 0.5) * 0.03;
     const oz = (rnd() - 0.5) * 0.03;
     const g = 0.7 + rnd() * 0.3;
-    xf.box([dx - 0.57 + ox, ty + i * 0.022, 0.2 + oz], [dx - 0.36 + ox, ty + i * 0.022 + 0.02, 0.5 + oz], i % 2 ? MAT.paper : MAT.cardboard, { tint: [g, g * 0.95, g * 0.85] });
+    xf.box([dx - 0.49 + ox, ty + i * 0.022, 0.16 + oz], [dx - 0.28 + ox, ty + i * 0.022 + 0.02, 0.46 + oz], i % 2 ? MAT.paper : MAT.cardboard, { tint: [g, g * 0.95, g * 0.85] });
   }
-  fallenChair(xf.child(1.08, 0, 0.36, 1), [0.8, 0.75, 0.7]);
+  // Стул полки лежит на спинке вдоль стены: спинкой к столу, ножками в сторону.
+  s3Put(xf.child(0.1, 0, 0.36, 1), pickOf(CHAIRS, seed), { tip: true, tint: jitter(seed, 0.07, 1) });
 }
 
 /**
@@ -1214,8 +1159,8 @@ export function canteenSet(xf: Xf, seed: number): void {
   const rnd = rng(seed);
   const sx = -0.2;
   const sz = 0.28;
-  stool(xf.child(sx, 0, sz));
-  const y = 0.46;
+  s3Put(xf.child(sx, 0, sz), STOOL, { tint: jitter(seed) });
+  const y = S3_TOP[STOOL]!;
   const blue = rnd() < 0.5;
   const kt: Vec3 = blue ? [0.5, 0.62, 0.8] : [0.88, 0.86, 0.8];
   const white: Vec3 = [0.9, 0.88, 0.82];
@@ -1254,8 +1199,8 @@ export function canteenSet(xf: Xf, seed: number): void {
 export function dosimeterCase(xf: Xf, seed: number): void {
   const rnd = rng(seed);
   const green: Vec3 = dim([0.95, 1.0, 0.92], 0.85 + rnd() * 0.2);
-  stool(xf.child(0, 0, 0.28));
-  const y = 0.46;
+  s3Put(xf.child(0, 0, 0.28), STOOL, { tint: jitter(seed, 0.07, 1) });
+  const y = S3_TOP[STOOL]!;
   xf.box([-0.15, y, 0.19], [0.15, y + 0.12, 0.39], MAT.metalGreen, { bevel: 0.01, tint: green });
   xf.box([-0.15, y + 0.1, 0.165], [0.15, y + 0.3, 0.188], MAT.metalGreen, { tint: dim(green, 0.9) });
   xf.box([-0.135, y + 0.12, 0.2], [0.135, y + 0.125, 0.38], MAT.bakelite, { tint: [1.1, 1.1, 1.1] });
@@ -1272,30 +1217,6 @@ export function dosimeterCase(xf: Xf, seed: number): void {
   xf.cyl([px, 0.1, 0.465], 'y', 0.22, 0.02, MAT.metalGreen, { segments: 6, tint: green });
   xf.cyl([px, 0.12, 0.465], 'y', 0.07, 0.023, MAT.steel, { segments: 6, caps: false, tint: DARK });
   xf.box([-0.172, y - 0.22, 0.27], [-0.156, y + 0.08, 0.31], MAT.canvas, { tint: [0.8, 0.78, 0.65] });
-}
-
-/**
- * Медицинская кушетка 1,9 × 0,6 м: рама из белёных труб, ложе в буром кожзаме, изголовье
- * приподнято на подпорке; обивка прорвана до набивки, посередине тёмное пятно.
- */
-export function medCouch(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const flip = rnd() < 0.5 ? 1 : -1;
-  const paint: Vec3 = dim([0.9, 0.9, 0.86], 0.8 + rnd() * 0.2);
-  const lth: Vec3 = dim([1.0, 0.95, 0.9], 0.85 + rnd() * 0.25);
-  for (const x of [-0.9, 0.9]) {
-    for (const z of [0.05, 0.59]) xf.cyl([x, 0, z], 'y', 0.5, 0.016, MAT.enamel, { segments: 6, tint: paint, ao: 0.9 });
-    xf.cyl([x, 0.48, 0.05], 'z', 0.54, 0.016, MAT.enamel, { segments: 6, caps: false, tint: paint });
-    xf.cyl([x, 0.15, 0.05], 'z', 0.54, 0.012, MAT.enamel, { segments: 6, caps: false, tint: paint });
-  }
-  for (const z of [0.05, 0.59]) xf.cyl([-0.9, 0.48, z], 'x', 1.8, 0.016, MAT.enamel, { segments: 6, caps: false, tint: paint });
-  xf.box([flip * -0.45, 0.5, 0.02], [flip * 0.95, 0.56, 0.62], MAT.leather, { bevel: 0.02, tint: lth });
-  beam(xf, [flip * -0.45, 0.535, 0.32], [flip * -0.93, 0.7, 0.32], 0.6, 0.06, MAT.leather, lth, { side: [0, 0, 1] });
-  xf.box([flip * -0.8, 0.5, 0.09], [flip * -0.78, 0.64, 0.55], MAT.steel, { tint: DARK });
-  // Прореха с набивкой и пятно.
-  xf.box([flip * 0.5, 0.56, 0.2], [flip * 0.68, 0.563, 0.34], MAT.lagging, { tint: [0.9, 0.88, 0.8] });
-  sheet(xf, [flip * -0.1, 0.5615, 0.2], [flip * -0.1, 0.5615, 0.5], [flip * 0.3, 0.5615, 0.5], [flip * 0.3, 0.5615, 0.2], [0, 1, 0], MAT.leather, [0.5, 0.42, 0.4]);
-  xf.collider([-0.95, 0, 0.02], [0.95, 0.6, 0.62]);
 }
 
 // ───────────────────────────── хлам и следы запустения ─────────────────────────────
@@ -1796,20 +1717,15 @@ export function ladderLean(xf: Xf, seed: number): void {
 }
 
 /**
- * Опрокинутый набок стол 1,2 × 0,6 м (столешница стоймя, ножки торчат в комнату) и два стула:
- * один стоит, другой лежит на спинке. Ширина 2,2 м, глубина 0,9 м.
+ * Опрокинутый набок рабочий стол полки (столешница стоймя у стены, ножки торчат в комнату) и два стула полки: один стоит,
+ * другой лежит на спинке ножками в комнату. Ширина 2,2 м, глубина 1,0 м.
  */
 export function overturnedTable(xf: Xf, seed: number): void {
   const rnd = rng(seed);
-  const wood: Vec3 = dim([0.88, 0.83, 0.78], 0.85 + rnd() * 0.2);
   const m = rnd() < 0.5 ? 1 : -1;
-  const tz = 0.1;
-  xf.box([-0.6, 0, tz], [0.6, 0.6, tz + 0.04], MAT.wood, { bevel: 0.01, tint: wood, aoBottom: 0.6 });
-  for (const x of [-0.56, 0.52]) for (const y of [0.04, 0.52]) xf.box([x, y, tz + 0.04], [x + 0.04, y + 0.04, tz + 0.76], MAT.steel, { tint: DARK });
-  for (const y of [0.04, 0.52]) xf.box([-0.52, y, tz + 0.04], [0.52, y + 0.04, tz + 0.14], MAT.steel, { tint: DARK });
-  xf.collider([-0.6, 0, tz], [0.6, 0.6, tz + 0.76]);
-  chair(xf.child(m * 0.9, 0, 0.32, rnd() < 0.5 ? 0 : 1));
-  fallenChair(xf.child(m * -0.9, 0, 0, 2), [0.8, 0.75, 0.7]);
+  s3Put(xf.child(0, 0, 0.1), 's3_table_work', { tip: true, tint: jitter(seed) });
+  s3Put(xf.child(m * 0.9, 0, 0.06), pickOf(CHAIRS, seed, 1), { tint: jitter(seed, 0.07, 1) });
+  s3Put(xf.child(m * -0.9, 0, 0), pickOf(CHAIRS, seed, 2), { tip: true, tint: jitter(seed, 0.07, 2) });
 }
 
 /**
@@ -1905,8 +1821,8 @@ export const PROPS: Record<string, PropSpec> = {
   hand_pump: { w: 1.2, d: 0.45, h: 1.12, mount: 'floor', ru: 'ручной насос с ведром', build: handPump },
   water_drum: { w: 0.75, d: 0.55, h: 1.1, mount: 'floor', ru: 'бачок питьевой воды на тумбе', build: waterDrum },
   washstand: { w: 0.5, d: 0.45, h: 1.65, mount: 'floor', ru: 'рукомойник с тазом и ведром', build: washstand },
-  bunk_triple: { w: 1.9, d: 0.7, h: 2.1, mount: 'floor', ru: 'трёхъярусные нары', build: bunkTriple },
-  bed_frame: { w: 1.9, d: 0.8, h: 0.95, mount: 'floor', ru: 'панцирная кровать без матраса', build: bedFrame },
+  bunk_triple: furnished('floor', ['s3_bunk_black', 's3_bunk_mattress'], 'двухъярусные нары: чёрные железные или с матрасами'),
+  bed_frame: furnished('floor', ['s3_bed_iron_white', 's3_bed_iron_green'], 'железная кровать: белая или с зелёным одеялом'),
   coat_hooks: { w: 1.85, d: 0.15, h: 1.3, mount: 'wall', y: 0.4, ru: 'вешалка: ОЗК, сумка противогаза, ватник', build: coatHooks },
   gasmask_crate: { w: 0.85, d: 0.6, h: 0.9, mount: 'floor', ru: 'ящик с противогазами, крышка откинута', build: gasmaskCrate },
   gasmask_pile: { w: 1.2, d: 0.6, h: 0.3, mount: 'floor', ru: 'груда противогазов', build: gasmaskPile },
@@ -1919,8 +1835,8 @@ export const PROPS: Record<string, PropSpec> = {
   typewriter_desk: { w: 2.2, d: 0.6, h: 1.1, mount: 'floor', ru: 'стол с пишущей машинкой и опрокинутый стул', build: typewriterDesk },
   kerosene_lamp: { w: 0.6, d: 0.5, h: 0.75, mount: 'floor', ru: 'керосиновая лампа на ящике', build: keroseneLamp },
   canteen_set: { w: 0.9, d: 0.6, h: 0.7, mount: 'floor', ru: 'чайник, кружки и миска на табурете, бидон', build: canteenSet },
-  dosimeter_case: { w: 0.4, d: 0.5, h: 0.78, mount: 'floor', ru: 'дозиметр ДП-5 в ящике на табурете', build: dosimeterCase },
-  med_stretcher_bed: { w: 1.9, d: 0.6, h: 0.75, mount: 'floor', ru: 'медицинская кушетка', build: medCouch },
+  dosimeter_case: { w: 0.45, d: 0.51, h: 0.78, mount: 'floor', ru: 'дозиметр ДП-5 в ящике на табурете', build: dosimeterCase },
+  med_stretcher_bed: furnished('floor', ['s3_bed_iron_white'], 'железная кровать, белая, как в медпункте'),
   debris_heap: { w: 1.6, d: 0.6, h: 1.05, mount: 'floor', ru: 'куча строительного мусора', build: debrisHeap },
   brick_pile: { w: 2.1, d: 0.6, h: 0.55, mount: 'floor', ru: 'штабель кирпича и носилки для раствора', build: brickPile },
   board_stack: { w: 2.0, d: 0.6, h: 2.2, mount: 'floor', ru: 'доски у стены и поддон', build: boardStack },
@@ -1932,7 +1848,7 @@ export const PROPS: Record<string, PropSpec> = {
   broken_lamp: { w: 1.45, d: 0.35, h: 1.05, mount: 'ceiling', ru: 'светильник на одной цепи', build: (xf, seed) => hung(xf, 1.05, 0.9, () => brokenLamp(xf, seed)) },
   stalactites: { w: 1.4, d: 0.6, h: 0.35, mount: 'ceiling', ru: 'известковые натёки на потолке', build: stalactites },
   ladder_lean: { w: 0.55, d: 0.6, h: 2.4, mount: 'floor', ru: 'приставная лестница', build: ladderLean },
-  overturned_table: { w: 2.2, d: 0.9, h: 0.92, mount: 'floor', ru: 'опрокинутый стол и два стула', build: overturnedTable },
+  overturned_table: { w: 2.2, d: 1.0, h: 1.0, mount: 'floor', ru: 'опрокинутый стол и два стула', build: overturnedTable },
   boots_helmet: { w: 0.95, d: 0.45, h: 0.4, mount: 'floor', ru: 'сапоги, каска и сумка противогаза', build: bootsHelmet },
   oil_tray: { w: 1.2, d: 0.6, h: 0.22, mount: 'floor', ru: 'поддон с маслом, ветошь, маслёнка', build: oilTray },
 };

@@ -21,57 +21,6 @@ function lcg(seed: number): () => number {
   };
 }
 
-/** Стеллаж 1,2 × 0,45 × 1,9 м с ящиками и коробками. Возвращает высоты полок (для находок). */
-export function shelfRack(xf: Xf, seed: number, paper = false): number[] {
-  const w = 1.2;
-  const d = 0.45;
-  const rnd = lcg(seed);
-  for (const x of [-w / 2, w / 2 - 0.04]) {
-    for (const z of [0.02, d - 0.04]) xf.box([x, 0, z], [x + 0.04, 1.9, z + 0.04], MAT.steel, { tint: GREY, aoBottom: 0.6 });
-  }
-  const shelves = [0.25, 0.7, 1.15, 1.6];
-  for (const y of shelves) {
-    xf.box([-w / 2, y - 0.025, 0.02], [w / 2, y, d], MAT.steel, { tint: [0.5, 0.5, 0.5] });
-    let x = -w / 2 + 0.06;
-    while (x < w / 2 - 0.2) {
-      const bw = paper ? 0.05 + rnd() * 0.07 : 0.2 + rnd() * 0.25;
-      if (rnd() < (paper ? 0.9 : 0.72)) {
-        const bh = paper ? 0.26 + rnd() * 0.1 : 0.12 + rnd() * 0.22;
-        const bd = paper ? 0.24 + rnd() * 0.06 : 0.25 + rnd() * 0.12;
-        const g = 0.7 + rnd() * 0.3;
-        if (paper) xf.box([x, y, 0.08], [Math.min(x + bw, w / 2 - 0.05), y + bh, 0.08 + bd], MAT.paper, { tint: [g, g * (0.85 + rnd() * 0.15), g * 0.8] });
-        else xf.box([x, y, 0.07], [Math.min(x + bw, w / 2 - 0.05), y + bh, 0.07 + bd], rnd() < 0.6 ? MAT.wood : MAT.canvas, { bevel: 0.008, tint: [g, g, g] });
-      }
-      x += bw + (paper ? 0.004 : 0.03 + rnd() * 0.05);
-    }
-  }
-  xf.collider([-w / 2, 0, 0], [w / 2, 1.9, d]);
-  return shelves;
-}
-
-/** Письменный стол 1,2 × 0,6 м с тумбой, спинкой к стене. */
-export function desk(xf: Xf): void {
-  xf.box([-0.6, 0.72, 0.03], [0.6, 0.76, 0.63], MAT.wood, { bevel: 0.01, tint: [0.85, 0.8, 0.75] });
-  xf.box([0.18, 0.08, 0.06], [0.57, 0.72, 0.6], MAT.wood, { bevel: 0.008, tint: [0.75, 0.7, 0.65], aoBottom: 0.6 });
-  for (const y of [0.2, 0.4, 0.58]) {
-    xf.box([0.2, y, 0.6], [0.55, y + 0.15, 0.612], MAT.wood, { tint: [0.9, 0.85, 0.8] });
-    xf.box([0.34, y + 0.06, 0.612], [0.41, y + 0.085, 0.63], MAT.brass);
-  }
-  for (const z of [0.06, 0.56]) xf.box([-0.57, 0, z], [-0.53, 0.72, z + 0.04], MAT.wood, { tint: [0.7, 0.65, 0.6], aoBottom: 0.6 });
-  xf.box([-0.57, 0.3, 0.06], [-0.53, 0.72, 0.6], MAT.wood, { tint: [0.75, 0.7, 0.65] });
-  xf.collider([-0.6, 0, 0.03], [0.6, 0.76, 0.63]);
-}
-
-/** Стул. Начало — центр сиденья на полу, спинка у −z. */
-export function chair(xf: Xf): void {
-  xf.box([-0.2, 0.43, -0.2], [0.2, 0.47, 0.2], MAT.wood, { bevel: 0.01, tint: [0.8, 0.75, 0.7] });
-  for (const x of [-0.19, 0.16]) for (const z of [-0.19, 0.16]) xf.box([x, 0, z], [x + 0.03, 0.43, z + 0.03], MAT.steel, { tint: DARK, aoBottom: 0.6 });
-  xf.box([-0.19, 0.47, -0.2], [-0.16, 0.9, -0.17], MAT.steel, { tint: DARK });
-  xf.box([0.16, 0.47, -0.2], [0.19, 0.9, -0.17], MAT.steel, { tint: DARK });
-  xf.box([-0.2, 0.68, -0.21], [0.2, 0.88, -0.185], MAT.wood, { bevel: 0.008, tint: [0.8, 0.75, 0.7] });
-  xf.collider([-0.2, 0, -0.2], [0.2, 0.47, 0.2]);
-}
-
 /** Радиостанция на столе: ящик с ручками настройки, шкалой и тангентой. Начало — центр на столешнице. */
 export function radioSet(xf: Xf): void {
   xf.box([-0.24, 0, -0.14], [0.24, 0.26, 0.14], MAT.metalGreen, { bevel: 0.012 });
@@ -99,36 +48,6 @@ export function safe(xf: Xf): void {
   xf.box([-0.2, 0.06, 0.47], [0.2, 0.69, 0.485], MAT.metalGreen, { bevel: 0.008, tint: [0.85, 0.9, 0.95] });
   xf.cyl([0.08, 0.38, 0.485], 'z', 0.03, 0.06, MAT.steel, { segments: 10 });
   xf.box([-0.13, 0.36, 0.485], [-0.05, 0.4, 0.52], MAT.brass);
-}
-
-/** Медицинская кушетка 1,9 × 0,65 м вдоль стены. */
-export function cot(xf: Xf): void {
-  for (const x of [-0.92, 0.88]) for (const z of [0.04, 0.62]) xf.box([x, 0, z], [x + 0.035, 0.5, z + 0.035], MAT.enamel, { tint: [0.8, 0.8, 0.78], aoBottom: 0.6 });
-  xf.box([-0.95, 0.46, 0.02], [0.95, 0.5, 0.67], MAT.enamel, { tint: [0.8, 0.8, 0.78] });
-  xf.box([-0.94, 0.5, 0.03], [0.94, 0.58, 0.66], MAT.canvas, { bevel: 0.025, tint: [1.1, 1.05, 0.95] });
-  xf.box([-0.92, 0.58, 0.08], [-0.55, 0.66, 0.6], MAT.canvas, { bevel: 0.03, tint: [1.25, 1.2, 1.1] });
-  xf.collider([-0.95, 0, 0.02], [0.95, 0.58, 0.67]);
-}
-
-/** Медицинский шкаф: белая эмаль, «стеклянный» верх с полками и склянками. */
-export function medCabinet(xf: Xf): void {
-  xf.solid([-0.32, 0, 0.02], [0.32, 1.7, 0.36], MAT.enamel, { bevel: 0.012, aoBottom: 0.6 });
-  xf.box([-0.27, 0.92, 0.36], [0.27, 1.64, 0.366], MAT.steel, { tint: [0.35, 0.42, 0.45] });
-  for (const y of [1.15, 1.4]) xf.box([-0.27, y, 0.366], [0.27, y + 0.012, 0.372], MAT.enamel);
-  for (const [x, y] of [
-    [-0.18, 0.94],
-    [-0.02, 0.94],
-    [0.12, 1.165],
-    [-0.14, 1.415],
-    [0.05, 1.415],
-  ] as const) {
-    xf.cyl([x, y, 0.38], 'y', 0.09, 0.022, MAT.brass, { segments: 6, tint: [0.7, 0.45, 0.25] });
-  }
-  xf.box([-0.27, 0.08, 0.36], [0.27, 0.84, 0.372], MAT.enamel, { bevel: 0.006, tint: [0.95, 0.95, 0.95] });
-  xf.box([-0.03, 0.42, 0.372], [0.03, 0.5, 0.395], MAT.steel);
-  // Красный крест.
-  xf.box([-0.07, 0.6, 0.372], [0.07, 0.64, 0.376], MAT.paintRed);
-  xf.box([-0.02, 0.55, 0.372], [0.02, 0.69, 0.376], MAT.paintRed);
 }
 
 /** Ряд умывальников: n раковин с кранами и общей трубой. Ширина — 0,62 м на раковину. */
@@ -354,13 +273,6 @@ export function extinguisher(xf: Xf): void {
   xf.box([-0.015, 0.47, 0.1], [0.015, 0.5, 0.2], MAT.rubber);
   xf.box([-0.09, 0.2, 0], [0.09, 0.24, 0.1], MAT.steel, { tint: GREY });
   xf.box([-0.05, 0.12, 0.176], [0.05, 0.25, 0.18], MAT.paper, { tint: [0.9, 0.9, 0.8] });
-}
-
-/** Скамья вдоль стены длиной len. */
-export function bench(xf: Xf, len: number): void {
-  xf.box([-len / 2, 0.4, 0.04], [len / 2, 0.44, 0.38], MAT.wood, { bevel: 0.01, tint: [0.8, 0.75, 0.7] });
-  for (const x of [-len / 2 + 0.08, len / 2 - 0.12]) xf.box([x, 0, 0.06], [x + 0.04, 0.4, 0.36], MAT.steel, { tint: DARK, aoBottom: 0.6 });
-  xf.collider([-len / 2, 0, 0.04], [len / 2, 0.44, 0.38]);
 }
 
 /** Настенный телефон. Начало — центр корпуса. */

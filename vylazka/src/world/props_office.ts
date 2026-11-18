@@ -16,6 +16,15 @@ import { MAT } from './materials';
 import type { Xf } from './props';
 import { beam, rng, sheet, WHITE } from './props_more';
 import type { PropSpec } from './props_more';
+import { fillShelves, furnished, jitter, pickOf, s3As, s3Put, spanOf, S3_SHELVES, S3_TOP } from './furniture';
+
+/** Мебель отдела с полки Sand3D: столы (у отдела — одной модели), кресло, шкафы для папок. */
+const OFFICE_DESKS = ['s3_desk_office_grey', 's3_desk_office'] as const;
+const CHAIR = 's3_chair_office';
+const BINDER_SHELVES = ['s3_bookcase_office', 's3_rack_metal'] as const;
+
+/** Высота столешницы стола office_desk с этим сидом (какую модель поставит furnished — та же жеребьёвка). */
+export const officeDeskTop = (seed: number): number => S3_TOP[pickOf(OFFICE_DESKS, seed)]!;
 
 const UP: Vec3 = [0, 1, 0];
 const DOWN: Vec3 = [0, -1, 0];
@@ -27,7 +36,6 @@ const CREAM: Vec3 = [1.2, 1.15, 0.95];
 const METAL: Vec3 = [0.9, 0.92, 0.95];
 const METAL_DK: Vec3 = [0.6, 0.62, 0.65];
 const TEAL: Vec3 = [0.4, 0.95, 0.9];
-const TEAL_DK: Vec3 = [0.45, 0.95, 0.9];
 const BLUEG: Vec3 = [0.7, 0.88, 1.25];
 const PLASTIC_DK: Vec3 = [1.0, 1.0, 1.0];
 
@@ -50,25 +58,6 @@ function flat(xf: Xf, x0: number, z0: number, x1: number, z1: number, y: number,
 const FRONT_ONLY = ['nx', 'px', 'ny', 'nz'] as const;
 
 // ───────────────────────────── стол, терминал, кресло ─────────────────────────────
-
-/** Стол 1,4 × 0,7 × 0,75: белая столешница, серые боковины, справа тумба с тремя ящиками. Пользователь сидит со стороны +z. */
-function desk(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const top: Vec3 = [WHT[0] * (0.95 + rnd() * 0.08), WHT[1] * (0.95 + rnd() * 0.08), WHT[2]];
-  bx(xf, [-0.7, 0.71, 0], [0.7, 0.75, 0.7], MAT.enamel, top, { bevel: 0.008 });
-  // Левая боковина-ножка и низкая панель между ножкой и тумбой.
-  bx(xf, [-0.68, 0, 0.05], [-0.64, 0.71, 0.65], MAT.metalGrey, METAL, { aoBottom: 0.6 });
-  bx(xf, [-0.64, 0.3, 0.04], [0.2, 0.68, 0.06], MAT.metalGrey, METAL_DK);
-  // Тумба: тёмный корпус, светлые фронты ящиков, ручки-планки.
-  bx(xf, [0.2, 0.02, 0.04], [0.68, 0.71, 0.66], MAT.metalGrey, METAL_DK, { aoBottom: 0.6 });
-  const front: Vec3 = [1.1, 1.1, 1.05];
-  for (let i = 0; i < 3; i++) {
-    const y0 = 0.04 + i * 0.22;
-    bx(xf, [0.22, y0, 0.66], [0.66, y0 + 0.205, 0.68], MAT.enamel, front);
-    bx(xf, [0.36, y0 + 0.1, 0.68], [0.52, y0 + 0.125, 0.7], MAT.steel, [0.6, 0.6, 0.6]);
-  }
-  xf.collider([-0.7, 0, 0], [0.7, 0.75, 0.7]);
-}
 
 /** Терминал 0,46 × 0,5 × 0,42: кремовый кинескопный корпус, впалый зелёно-синий экран, клавиатура. Начало — центр основания. */
 function terminal(xf: Xf, seed: number): void {
@@ -93,27 +82,6 @@ function terminal(xf: Xf, seed: number): void {
   bx(xf, [-0.08, 0.047, 0.205], [0.08, 0.052, 0.225], MAT.enamel, CREAM);
 }
 
-/** Кресло 0,6 × 0,6 × 0,95: пятилучевая крестовина на роликах, газ-лифт, сиденье и спинка из тёмно-бирюзовой ткани. Лицом к +z. */
-function chair(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const fab: Vec3 = [TEAL_DK[0] * (0.9 + rnd() * 0.3), TEAL_DK[1] * (0.9 + rnd() * 0.3), TEAL_DK[2] * (0.9 + rnd() * 0.3)];
-  // Пять лучей и ролики.
-  for (let i = 0; i < 5; i++) {
-    const a = (i * 72 + 18) * (Math.PI / 180);
-    const x = Math.sin(a) * 0.27;
-    const z = Math.cos(a) * 0.27;
-    beam(xf, [0, 0.075, 0], [x, 0.075, z], 0.05, 0.035, MAT.metalGrey, [1.15, 1.17, 1.2], { side: UP });
-    bx(xf, [x - 0.03, 0, z - 0.03], [x + 0.03, 0.055, z + 0.03], MAT.bakelite, PLASTIC_DK, { skip: ['ny'] });
-  }
-  xf.cyl([0, 0.06, 0], 'y', 0.04, 0.07, MAT.metalGrey, { tint: METAL, segments: 8 });
-  xf.cyl([0, 0.1, 0], 'y', 0.36, 0.03, MAT.steel, { tint: [0.8, 0.8, 0.8], segments: 6 });
-  // Сиденье и спинка.
-  bx(xf, [-0.22, 0.46, -0.21], [0.22, 0.52, 0.23], MAT.upholstery, fab, { bevel: 0.012, aoBottom: 0.7 });
-  bx(xf, [-0.2, 0.55, -0.27], [0.2, 0.92, -0.2], MAT.upholstery, [fab[0] * 1.1, fab[1] * 1.1, fab[2] * 1.1]);
-  bx(xf, [-0.03, 0.5, -0.22], [0.03, 0.58, -0.17], MAT.metalGrey, METAL_DK);
-  xf.collider([-0.22, 0, -0.27], [0.22, 0.5, 0.23]);
-}
-
 // ───────────────────────────── перегородки и составные места ─────────────────────────────
 
 /** Ткань перегородки: серо-синяя или бирюзовая. */
@@ -121,19 +89,24 @@ function fabricOf(rnd: () => number): Vec3 {
   return rnd() < 0.5 ? BLUEG : TEAL;
 }
 
-/** Островок отдела 3,0 × 3,0 × 1,2: четыре стола спинка к спинке, крестовая перегородка, на каждом терминал, у каждого кресло. */
+/**
+ * Островок отдела 3,0 × 3,0 × 1,2: четыре стола полки спинка к спинке (у отдела столы одной модели), крестовая перегородка,
+ * на каждом столе терминал, у каждого — офисное кресло полки.
+ */
 function deskIsland(xf: Xf, seed: number): void {
   const rnd = rng(seed);
   const fab = fabricOf(rnd);
+  const D = pickOf(OFFICE_DESKS, seed);
   for (const row of [
     { z: 0.03, rot: 0 as const },
     { z: -0.03, rot: 2 as const },
   ]) {
     for (const sx of [-1, 1]) {
-      const d = xf.child(sx * 0.73, 0, row.z, row.rot);
-      desk(d, seed + sx * 3 + row.rot);
-      terminal(d.child(-0.2, 0.75, 0.33), seed + sx + row.rot * 5);
-      chair(d.child(-0.2 + (rnd() - 0.5) * 0.1, 0, 0.82, 2), seed + 11 + sx + row.rot);
+      const d = xf.child(sx * 0.76, 0, row.z, row.rot);
+      const k = seed + sx * 3 + row.rot;
+      s3Put(d, D, { tint: jitter(k) });
+      terminal(d.child(-0.2, S3_TOP[D]!, 0.33), seed + sx + row.rot * 5);
+      s3As(d.child(-0.2 + (rnd() - 0.5) * 0.1, 0, 1.0, 2), CHAIR, 'free', { tint: jitter(k, 0.07, 2) });
     }
   }
   // Крестовая перегородка: ткань в металлической окантовке, поверху планка.
@@ -147,7 +120,7 @@ function deskIsland(xf: Xf, seed: number): void {
   xf.collider([-0.03, 0, -0.73], [0.03, 1.15, 0.73]);
 }
 
-/** Кабинка 1,8 × 1,7 × 1,45: П-образная перегородка, открытая в +z, стол, терминал и кресло. */
+/** Кабинка 1,8 × 1,7 × 1,45: П-образная перегородка, открытая в +z; внутри стол полки с терминалом и офисное кресло полки. */
 function cubicle(xf: Xf, seed: number): void {
   const rnd = rng(seed);
   const fab = fabricOf(rnd);
@@ -160,13 +133,10 @@ function cubicle(xf: Xf, seed: number): void {
   panel(-0.9, 0, 0.9, 0.06);
   panel(-0.9, 0.06, -0.84, 1.7);
   panel(0.84, 0.06, 0.9, 1.7);
-  // Столешница на двух боковинах.
-  bx(xf, [-0.84, 0.72, 0.06], [0.84, 0.76, 0.72], MAT.enamel, WHT, { bevel: 0.008 });
-  bx(xf, [-0.82, 0, 0.1], [-0.78, 0.72, 0.68], MAT.metalGrey, METAL, { aoBottom: 0.6 });
-  bx(xf, [0.78, 0, 0.1], [0.82, 0.72, 0.68], MAT.metalGrey, METAL, { aoBottom: 0.6 });
-  xf.collider([-0.84, 0, 0.06], [0.84, 0.76, 0.72]);
-  terminal(xf.child(0.2, 0.76, 0.38), seed + 1);
-  chair(xf.child(rnd() * 0.2 - 0.1, 0, 1.05, 2), seed + 2);
+  const D = pickOf(OFFICE_DESKS, seed);
+  s3Put(xf.child(0, 0, 0.06), D, { tint: jitter(seed) });
+  terminal(xf.child(0.2, S3_TOP[D]!, 0.38), seed + 1);
+  s3As(xf.child(rnd() * 0.2 - 0.1, 0, 1.12, 2), CHAIR, 'free', { tint: jitter(seed, 0.07, 2) });
 }
 
 /** Одна панель перегородки 1,5 × 0,3 × 1,45 на двух ножках. */
@@ -182,29 +152,6 @@ function partition(xf: Xf, seed: number): void {
 }
 
 // ───────────────────────────── шкафы, техника ─────────────────────────────
-
-/** Картотечный шкаф 0,47 × 0,62 × 1,32: четыре ящика, ручки, держатели табличек; по сиду один ящик выдвинут на 0,2 м. */
-function filingCabinet(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const open = Math.floor(rnd() * 4);
-  bx(xf, [-0.235, 0.02, 0], [0.235, 1.32, 0.4], MAT.metalGrey, METAL_DK, { aoBottom: 0.6 });
-  bx(xf, [-0.23, 0, 0.02], [0.23, 0.03, 0.38], MAT.bakelite, PLASTIC_DK);
-  const h = 0.31;
-  for (let i = 0; i < 4; i++) {
-    const y0 = 0.04 + i * h;
-    const out = i === open ? 0.2 : 0;
-    if (out > 0) {
-      // Выдвинутый ящик: тёмный лоток с папками и передняя панель.
-      bx(xf, [-0.21, y0 + 0.02, 0.3], [0.21, y0 + 0.25, 0.4 + out], MAT.bakelite, [1.3, 1.3, 1.3]);
-      for (const x of [-0.15, -0.04, 0.07]) bx(xf, [x, y0 + 0.25, 0.32], [x + 0.08, y0 + 0.28, 0.4 + out - 0.03], MAT.paper, [1.1, 1.05, 0.9]);
-    }
-    bx(xf, [-0.225, y0, 0.4 + out], [0.225, y0 + h - 0.02, 0.42 + out], MAT.metalGrey, METAL, { bevel: 0.006 });
-    bx(xf, [-0.07, y0 + h - 0.1, 0.42 + out], [0.07, y0 + h - 0.07, 0.44 + out - 0.0], MAT.steel, [0.55, 0.55, 0.55]);
-    bx(xf, [-0.05, y0 + h - 0.2, 0.42 + out], [0.05, y0 + h - 0.15, 0.428 + out], MAT.paper, [1.2, 1.15, 0.95]);
-  }
-  xf.collider([-0.235, 0, 0], [0.235, 1.32, 0.44]);
-  xf.collider([-0.21, 0, 0.44], [0.21, 0.3, 0.62]);
-}
 
 /** Кулер 0,34 × 0,34 × 1,35: белая колонна, голубая бутыль, два краника, поддон. */
 function waterCooler(xf: Xf, seed: number): void {
@@ -435,20 +382,19 @@ function receptionDesk(xf: Xf, seed: number): void {
   xf.collider([-1.05, 0, 0.02], [1.05, 0.72, 0.42]);
 }
 
-/** Переговорная 2,6 × 1,9 × 0,95: длинный стол с торцевыми ножками и шесть кресел по длинным сторонам. */
+/** Переговорная: стол полки для переговоров, на нём листы; шесть офисных кресел полки по длинным сторонам. */
 function meetingTable(xf: Xf, seed: number): void {
   const rnd = rng(seed);
-  bx(xf, [-1.2, 0.7, -0.55], [1.2, 0.74, 0.55], MAT.enamel, WHT, { bevel: 0.01 });
-  for (const s of [-1, 1]) bx(xf, [s > 0 ? 1.0 : -1.06, 0, -0.4], [s > 0 ? 1.06 : -1.0, 0.7, 0.4], MAT.metalGrey, METAL, { aoBottom: 0.6 });
-  bx(xf, [-1.0, 0.45, -0.03], [1.0, 0.68, 0.03], MAT.metalGrey, METAL_DK);
-  bx(xf, [-0.5, 0.74, -0.14], [0.2, 0.745, 0.12], MAT.paper, [1.2, 1.15, 1.0]);
+  const T = 's3_table_meeting';
+  s3Put(xf, T, { tint: jitter(seed) });
+  const top = S3_TOP[T]!;
+  bx(xf, [-0.5, top, -0.14], [0.2, top + 0.005, 0.12], MAT.paper, [1.2, 1.15, 1.0], { skip: ['ny'] });
   for (const side of [-1, 1]) {
-    for (const x of [-0.7, 0, 0.7]) {
-      const jit = (rnd() - 0.5) * 0.12;
-      chair(xf.child(x + (rnd() - 0.5) * 0.08, 0, side * (0.65 + jit), side > 0 ? 2 : 0), seed + side * 7 + Math.round(x * 10));
+    for (const x of [-0.78, 0, 0.78]) {
+      const jit = (rnd() - 0.5) * 0.1;
+      s3As(xf.child(x + (rnd() - 0.5) * 0.04, 0, side * (0.7 + jit), side > 0 ? 2 : 0), CHAIR, 'free', { tint: jitter(seed + side * 7 + Math.round(x * 10), 0.07, 2) });
     }
   }
-  xf.collider([-1.2, 0, -0.55], [1.2, 0.74, 0.55]);
 }
 
 /** Серверная стойка 0,6 × 0,9 × 2,0: чёрный шкаф, дверь из тонких горизонтальных планок, ряды огоньков (зелёные и янтарные). */
@@ -573,33 +519,14 @@ function paperStack(xf: Xf, seed: number): void {
   bx(xf, [0.09, bh, -0.11], [0.15, bh + 0.004, 0.1], MAT.paper, pp);
 }
 
-/** Открытый стеллаж 1,0 × 0,36 × 1,9: пять полок и ряды корешков папок, пропуски по сиду. */
+/**
+ * Шкаф для бумаг или металлический стеллаж полки (по сиду): полки заставлены папками-корешками с пропусками, где пролёт
+ * низкий — архивными коробками торцом вперёд.
+ */
 function binderShelf(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  bx(xf, [-0.5, 0, 0], [-0.48, 1.9, 0.36], MAT.metalGrey, METAL);
-  bx(xf, [0.48, 0, 0], [0.5, 1.9, 0.36], MAT.metalGrey, METAL);
-  bx(xf, [-0.48, 0, 0], [0.48, 1.9, 0.01], MAT.metalGrey, METAL_DK);
-  for (let i = 0; i < 6; i++) bx(xf, [-0.48, i * 0.372, 0.01], [0.48, i * 0.372 + 0.02, 0.36], MAT.metalGrey, METAL);
-  const spines: [number, Vec3][] = [
-    [MAT.cardboard, [0.8, 0.8, 0.82]],
-    [MAT.paintBlue, [0.55, 0.7, 1.05]],
-    [MAT.paper, [1.2, 1.15, 0.95]],
-    [MAT.paintRed, [1.0, 0.55, 0.5]],
-  ];
-  for (let r = 0; r < 5; r++) {
-    const y0 = r * 0.372 + 0.02;
-    let x = -0.46;
-    while (x < 0.44) {
-      if (rnd() < 0.12) {
-        x += 0.05 + rnd() * 0.12;
-        continue;
-      }
-      const [mat, tint] = spines[Math.floor(rnd() * 4)]!;
-      bx(xf, [x, y0, 0.05], [x + 0.045, y0 + 0.27 + rnd() * 0.06, 0.34], mat, tint, { skip: FRONT_ONLY });
-      x += 0.05;
-    }
-  }
-  xf.collider([-0.5, 0, 0], [0.5, 1.9, 0.36]);
+  const m = pickOf(BINDER_SHELVES, seed);
+  s3Put(xf, m, { tint: jitter(seed) });
+  fillShelves(xf, S3_SHELVES[m]!, 'binders', seed, { back: m === 's3_bookcase_office' });
 }
 
 // ───────────────────────────── то, что проросло ─────────────────────────────
@@ -761,13 +688,13 @@ export function ceilingBreak(xf: Xf, h: number, seed: number): void {
 }
 
 export const OFFICE_PROPS: Record<string, PropSpec> = {
-  office_desk: { w: 1.4, d: 0.7, h: 0.75, mount: 'floor', ru: 'стол офисный с тумбой на три ящика', build: desk },
+  office_desk: furnished('floor', OFFICE_DESKS, 'стол офисный: серый или с тумбой на ящики'),
   office_terminal: { w: 0.46, d: 0.5, h: 0.42, mount: 'free', ru: 'терминал кинескопный с клавиатурой', build: terminal },
-  office_chair: { w: 0.6, d: 0.6, h: 0.95, mount: 'free', ru: 'кресло офисное на колёсиках', build: chair },
+  office_chair: furnished('free', [CHAIR], 'кресло офисное на колёсиках'),
   desk_island: { w: 3.0, d: 3.0, h: 1.2, mount: 'free', ru: 'островок отдела: четыре стола, перегородка крестом, терминалы и кресла', build: deskIsland },
   cubicle: { w: 1.8, d: 1.7, h: 1.45, mount: 'floor', ru: 'кабинка с тканевой перегородкой, столом, терминалом и креслом', build: cubicle },
   partition: { w: 1.5, d: 0.3, h: 1.45, mount: 'free', ru: 'панель тканевой перегородки на ножках', build: partition },
-  filing_cabinet: { w: 0.47, d: 0.62, h: 1.32, mount: 'floor', ru: 'картотечный шкаф, один ящик выдвинут', build: filingCabinet },
+  filing_cabinet: furnished('floor', ['s3_filing_cabinet'], 'картотечный шкаф, три ящика'),
   water_cooler: { w: 0.34, d: 0.34, h: 1.35, mount: 'floor', ru: 'кулер с голубой бутылью', build: waterCooler },
   copier: { w: 1.0, d: 0.65, h: 1.05, mount: 'floor', ru: 'копировальный аппарат с лотком и пультом', build: copier },
   ceiling_panel: { w: 1.2, d: 0.6, h: 0.05, mount: 'ceiling', ru: 'потолочная светящаяся панель', build: ceilingPanel },
@@ -779,7 +706,7 @@ export const OFFICE_PROPS: Record<string, PropSpec> = {
   vending_machine: { w: 0.95, d: 0.8, h: 1.83, mount: 'floor', ru: 'торговый автомат с подсвеченной витриной', build: vendingMachine },
   trash_bin: { w: 0.28, d: 0.28, h: 0.32, mount: 'free', ru: 'урна офисная', build: trashBin },
   reception_desk: { w: 2.2, d: 0.8, h: 1.1, mount: 'floor', ru: 'стойка ресепшена с бирюзовой полосой и терминалом', build: receptionDesk },
-  meeting_table: { w: 2.6, d: 1.9, h: 0.95, mount: 'free', ru: 'переговорный стол с шестью креслами', build: meetingTable },
+  meeting_table: { w: 2.4, d: 2.24, h: 1.02, mount: 'free', ru: 'переговорный стол с шестью креслами', build: meetingTable },
   server_rack: { w: 0.6, d: 0.9, h: 2.0, mount: 'floor', ru: 'серверная стойка с рядами огоньков', build: serverRack },
   elevator_doors: { w: 1.5, d: 0.14, h: 2.35, mount: 'floor', ru: 'закрытые двери лифта с кнопкой вызова', build: elevatorDoors },
   kitchenette: { w: 1.8, d: 0.62, h: 2.05, mount: 'floor', ru: 'кухонный уголок: мойка, микроволновка, кофемашина, верхний шкаф', build: kitchenette },
@@ -787,5 +714,5 @@ export const OFFICE_PROPS: Record<string, PropSpec> = {
   birch: { w: 0.56, d: 0.56, h: 2.72, mount: 'free', ru: 'берёза, проросшая сквозь пол и потолок: белый ствол в чёрных отметинах', build: birch },
   desk_phone: { w: 0.22, d: 0.2, h: 0.1, mount: 'free', ru: 'офисный телефон', build: deskPhone },
   paper_stack: { w: 0.32, d: 0.24, h: 0.14, mount: 'free', ru: 'стопка бумаг и папка', build: paperStack },
-  binder_shelf: { w: 1.0, d: 0.36, h: 1.9, mount: 'floor', ru: 'стеллаж с папками-корешками', build: binderShelf },
+  binder_shelf: { ...spanOf(BINDER_SHELVES), mount: 'floor', ru: 'шкаф или стеллаж с папками-корешками', build: binderShelf },
 };
