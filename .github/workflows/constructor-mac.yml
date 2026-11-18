@@ -13,6 +13,9 @@ on:
       - "vylazka/tools/constructor/serve.mjs"
       - "vylazka/tools/constructor/page.mjs"
       - "vylazka/tools/constructor/push_lib.mjs"
+      # Страница в программе: вид программы (html.native) и связь с оболочкой живут в ней.
+      - "vylazka/tools/constructor/main.ts"
+      - "vylazka/tools/constructor/page.html"
       - ".github/workflows/constructor-mac.yml"
   workflow_dispatch:
 

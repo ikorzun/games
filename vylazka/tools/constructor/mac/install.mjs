@@ -18,7 +18,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '../../..');
 /** Версия оболочки: поменялся main.swift — увеличить, и app.mjs пересоберёт программу у партнёра сам. */
-export const SHELL_VERSION = 1;
+export const SHELL_VERSION = 2;
 export const APP_NAME = 'Конструктор';
 const BUNDLE_ID = 'local.untitled-session.constructor';
 

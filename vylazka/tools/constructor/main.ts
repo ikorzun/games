@@ -364,6 +364,9 @@ const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 function enterRoom(w: WorldKind, type: string, pick = 0): void {
   const all = roomsOfType(w, type);
   if (all.length === 0) return;
+  // Строка состояния говорила о прошлом помещении («„кухня“ 2 — свой вариант…»): в новом она врёт. Нужна новая — её
+  // ставит тот, кто сюда привёл (после входа).
+  setStatus('');
   applyHidden(new Set());
   world = w;
   roomType = type;
@@ -1745,19 +1748,59 @@ function shelfVisible(i: Entry, q: string): boolean {
   if (shelfKind === 'unmarked') return asked(i) && !marks.get(i.name)?.verdict;
   return i.kind === shelfKind;
 }
+/** Последний фильтр раздела «Полка» (всё, кроме каталога и заявок): к нему возвращает сегмент «Полка». */
+let shelfFilter: ShelfKind = 'all';
+function setKind(k: ShelfKind): void {
+  if (k === 'catalog' && shelfKind !== 'catalog') {
+    catOffset = 0;
+    catQuery = '';
+  }
+  shelfKind = k;
+  if (k !== 'catalog' && k !== 'requests') shelfFilter = k;
+  searchEl.placeholder = k === 'catalog' ? 'Каталог: стул, старое радио, чемодан…' : 'Найти: стул, часы, чемодан…';
+  renderKinds();
+  renderShelf();
+}
 function renderKinds(): void {
   const label = (k: ShelfKind): string => (k === 'requests' && requests.size > 0 ? `Заявки ${requests.size}` : KINDS.find((x) => x[0] === k)![1]);
-  chips($('kinds'), KINDS.map((k) => k[0]), label, (k) => k === shelfKind, (k) => {
-    if (k === 'catalog' && shelfKind !== 'catalog') {
-      catOffset = 0;
-      catQuery = '';
-    }
-    shelfKind = k;
-    searchEl.placeholder = k === 'catalog' ? 'Каталог: стул, старое радио, чемодан…' : 'Найти: стул, часы, чемодан…';
-    renderKinds();
-    renderShelf();
-  });
+  chips($('kinds'), KINDS.map((k) => k[0]), label, (k) => k === shelfKind, setKind);
   for (const b of $('kinds').querySelectorAll('button')) b.title = KINDS.find((x) => x[1] === b.textContent)?.[2] ?? '';
+  renderSections(label);
+}
+/**
+ * Шапка полки в программе на Mac: сегменты «Полка / Каталог / Заявки» (каталог и заявки — другие виды, а не фильтр) и
+ * всплывающее меню фильтра полки. В браузере их не видно (там чипы), но держатся в том же состоянии.
+ */
+function renderSections(label: (k: ShelfKind) => string): void {
+  const sections = KINDS.filter(([k]) => k === 'catalog' || k === 'requests').map(([k]) => k);
+  if (sections.length === 0) return;
+  const section: ShelfKind = sections.includes(shelfKind) ? shelfKind : 'all';
+  const segs: [ShelfKind, string, string][] = [['all', 'Полка', 'вещи игры и полка Sand3D; фильтр — ниже'], ...sections.map((k): [ShelfKind, string, string] => [k, label(k), KINDS.find((x) => x[0] === k)![2]])];
+  $('seg').replaceChildren(
+    ...segs.map(([k, text, tip]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = k === section ? 'is-on' : '';
+      b.textContent = text;
+      b.title = tip;
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', String(k === section));
+      b.addEventListener('click', () => setKind(k === 'all' ? shelfFilter : k));
+      return b;
+    }),
+  );
+  const sel = $<HTMLSelectElement>('kindsel');
+  if (sel.options.length === 0) {
+    for (const [k, text, tip] of KINDS) {
+      if (sections.includes(k)) continue;
+      const o = new Option(k === 'all' ? 'Все вещи' : text, k);
+      o.title = tip;
+      sel.add(o);
+    }
+    sel.addEventListener('change', () => setKind(sel.value as ShelfKind));
+  }
+  sel.value = shelfFilter;
+  sel.hidden = section !== 'all';
 }
 function renderShelf(): void {
   if (shelfKind === 'catalog') return void renderCatalog();

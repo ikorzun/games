@@ -196,14 +196,14 @@ html.native {
   --n-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
   --fg: #1d1d1f; --muted: #6e6e73; --line: rgb(0 0 0 / .11); --accent: #0a7aff; --warn: #d70015; --ok: #248a3d;
   --side: #e6e6e8; --insp: #f6f6f6; --pop: #ffffff; --hover: rgb(0 0 0 / .05); --recessed: rgb(0 0 0 / .09); --fill: rgb(0 0 0 / .06);
-  --sel: var(--accent); --sel-fg: #fff; --thumb: rgb(0 0 0 / .06);
+  --sel: var(--accent); --sel-fg: #fff; --thumb: rgb(0 0 0 / .06); --seg-on: #ffffff;
   --bg: var(--insp); --panel: var(--insp); --raise: var(--fill);
 }
 @media (prefers-color-scheme: dark) {
   html.native {
     --fg: #f5f5f7; --muted: #98989d; --line: rgb(255 255 255 / .1); --accent: #0a84ff; --warn: #ff453a; --ok: #32d74b;
     --side: #2a2a2c; --insp: #232325; --pop: #2c2c2e; --hover: rgb(255 255 255 / .06); --recessed: rgb(255 255 255 / .12); --fill: rgb(255 255 255 / .08);
-    --thumb: rgb(255 255 255 / .07);
+    --thumb: rgb(255 255 255 / .07); --seg-on: rgb(255 255 255 / .2);
   }
 }
 @supports (color: -apple-system-label) {
@@ -225,6 +225,16 @@ html.native #view { grid-column: 2; border: 0; border-radius: 0; }
 html.native #panel { grid-column: 3; background: var(--insp); border-left: 1px solid var(--line); gap: 0; }
 html.native input, html.native textarea, html.native [contenteditable] { -webkit-user-select: text; user-select: text; cursor: auto; }
 /* Полка — боковая панель-библиотека: поиск, полоса фильтров (как в Finder и Почте), список. */
+/* Шапка полки, как в программах Mac: сегменты «Полка / Каталог / Заявки» и всплывающее меню фильтра (рисует сам Mac,
+   открывается настоящим меню). Чипы фильтра — только в браузере. */
+.seg, .kindsel { display: none; }
+html.native .kinds { display: none; }
+html.native .seg { display: flex; margin: 0 10px; padding: 2px; gap: 2px; border-radius: 8px; background: var(--fill); }
+html.native .seg button { all: unset; flex: 1; min-width: 0; text-align: center; font: 500 12px/1 var(--n-font); padding: 5px 4px; border-radius: 6px; color: var(--fg); cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html.native .seg button.is-on { background: var(--seg-on); box-shadow: 0 .5px 1.5px rgb(0 0 0 / .2), 0 0 0 .5px rgb(0 0 0 / .05); font-weight: 600; }
+html.native .seg button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); }
+html.native .kindsel { all: revert; display: block; box-sizing: border-box; margin: 0 10px; max-width: calc(100% - 20px); font: 12px var(--n-font); }
+html.native .kindsel[hidden] { display: none; }
 html.native #search { all: revert; display: block; box-sizing: border-box; width: calc(100% - 20px); margin: 0 10px; font: 13px var(--n-font); }
 html.native .kinds { margin: 0 8px; gap: 2px; }
 html.native .kinds .chip { all: unset; font: 500 11px/1 var(--n-font); padding: 4px 7px; border-radius: 5px; color: var(--muted); }
@@ -333,7 +343,9 @@ html.native .help b { color: var(--fg); }
 </div>
 <div class="layout">
   <aside class="shelf">
+    <div class="seg" id="seg" role="tablist" aria-label="Что показать на полке"></div>
     <input type="search" id="search" placeholder="Найти: стул, часы, чемодан…" aria-label="Найти вещь">
+    <select class="kindsel" id="kindsel" aria-label="Какие вещи показывать"></select>
     <div class="kinds" id="kinds" role="group" aria-label="Какие вещи показывать"></div>
     <p class="count"><span id="shelfcount"></span> · отмечено <span id="marked"></span></p>
     <div id="shelf"></div>
