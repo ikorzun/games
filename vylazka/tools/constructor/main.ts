@@ -1525,12 +1525,22 @@ function placeIfElsewhere(it: Item): void {
   if (!inRoom) placeInRoom(it);
 }
 
+/** Поле, где печатают (не ползунок и не флажок): в нём ⌘Z, ⌘⌫ и стрелки — тексту. */
+const TEXT_INPUTS = new Set(['', 'text', 'search', 'number', 'password', 'email', 'url', 'tel']);
+function isTextField(el: EventTarget | null): boolean {
+  if (el instanceof HTMLTextAreaElement) return true;
+  if (el instanceof HTMLInputElement) return TEXT_INPUTS.has(el.type);
+  return el instanceof HTMLElement && el.isContentEditable;
+}
+
 window.addEventListener('keydown', (e) => {
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+  const z = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z';
+  // ⌘Z — отменить шаг с вещами (и после ползунка тоже); в поле ввода — тексту. ⇧⌘Z — повтор: у вещей его нет, в поле — тексту.
+  if (z && !e.shiftKey && !isTextField(e.target)) {
     if (undoStep()) e.preventDefault();
     return;
   }
+  if (z || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   if (e.code === 'Delete' || e.code === 'Backspace') {
     if (cur || gameSel) {
       e.preventDefault();
@@ -3221,8 +3231,14 @@ function nativeState(): string {
     pushing: $<HTMLButtonElement>('push').disabled,
     lib: !document.documentElement.classList.contains('no-lib'),
     insp: !document.documentElement.classList.contains('no-insp'),
+    // Курсор в поле ввода: «Отменить» и «Повторить» из меню — тексту, «Копия» и «Удалить» — не трогают вещь.
+    editing: isTextField(document.activeElement),
+    // Оболочка ответила (команда hello): пока нет — она шлёт её на каждое состояние.
+    hello: nativeHello,
   });
 }
+/** Оболочка поняла страницу (прислала hello). Поля nativeState только добавлять: оболочка у партнёра бывает старше страницы. */
+let nativeHello = false;
 function setupNative(): void {
   const h = nativeHandler;
   if (!h) return;
@@ -3233,14 +3249,36 @@ function setupNative(): void {
     last = s;
     h.postMessage(s);
   };
+  const root = document.documentElement;
   const pane = (cls: string): void => {
-    document.documentElement.classList.toggle(cls);
+    root.classList.toggle(cls);
     resize();
     dirty = true;
   };
+  // Оболочка не ответила за 4 с (не поняла состояние — старая или сломалась): вернуть странице её кнопки, иначе в окне
+  // не останется ни места, ни «Залить в игру». Ответит позже — снова вид программы.
+  const fallback = window.setTimeout(() => {
+    if (nativeHello) return;
+    root.classList.remove('native', 'no-lib', 'no-insp');
+    resize();
+    dirty = true;
+  }, 4000);
+  // Правый щелчок: меню WebKit («Перезагрузить», «Назад») программе не нужно; в полях ввода — обычное («Вырезать», «Вставить»).
+  document.addEventListener('contextmenu', (e) => {
+    if (!isTextField(e.target)) e.preventDefault();
+  });
   (window as unknown as { __ctorNative: unknown }).__ctorNative = {
     cmd(name: string, arg?: string | number): void {
-      if (name === 'world' && FIGURE_WORLDS.includes(arg as WorldKind)) {
+      if (name === 'hello') {
+        nativeHello = true;
+        window.clearTimeout(fallback);
+        (window as unknown as { __ctorShell: unknown }).__ctorShell = arg;
+        if (!root.classList.contains('native')) {
+          root.classList.add('native');
+          resize();
+          dirty = true;
+        }
+      } else if (name === 'world' && FIGURE_WORLDS.includes(arg as WorldKind)) {
         const w = arg as WorldKind;
         enterRoom(w, roomTypes(w).includes(roomType) ? roomType : roomTypes(w)[0]!, 0);
       } else if (name === 'room' && typeof arg === 'string' && roomTypes(world).includes(arg)) enterRoom(world, arg, 0);

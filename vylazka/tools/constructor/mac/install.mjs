@@ -56,9 +56,14 @@ function plist(executable) {
     LSMinimumSystemVersion: '11.0',
     LSApplicationCategoryType: 'public.app-category.developer-tools',
     NSPrincipalClass: 'NSApplication',
+    // Программа русская: системные пункты меню (диктовка, эмодзи, «Во весь экран», окно «О программе») — тоже по-русски,
+    // на каком бы языке ни был Mac, а не вперемешку с английскими.
+    CFBundleDevelopmentRegion: 'ru',
+    CFBundleLocalizations: ['ru'],
   };
+  const value = (v) => (Array.isArray(v) ? `<array>${v.map((x) => `<string>${xml(x)}</string>`).join('')}</array>` : `<string>${xml(v)}</string>`);
   const body = Object.entries(entries)
-    .map(([k, v]) => `  <key>${k}</key><string>${xml(v)}</string>`)
+    .map(([k, v]) => `  <key>${k}</key>${value(v)}`)
     .join('\n');
   // Страница конструктора — с этого же компьютера (http://127.0.0.1): разрешить это окну.
   const ats = '  <key>NSHighResolutionCapable</key><true/>\n  <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/><key>NSAllowsArbitraryLoadsInWebContent</key><true/></dict>';
@@ -142,6 +147,8 @@ export async function buildApp({ dir = defaultDir(), name = APP_NAME, browser = 
         writeFileSync(join(app, 'Contents/Info.plist'), plist('constructor'));
         writeFileSync(join(app, 'Contents/PkgInfo'), 'APPL????');
         copyFileSync(join(HERE, 'AppIcon.icns'), join(app, 'Contents/Resources/AppIcon.icns'));
+        mkdirSync(join(app, 'Contents/Resources/ru.lproj'), { recursive: true });
+        writeFileSync(join(app, 'Contents/Resources/ru.lproj/InfoPlist.strings'), `"CFBundleName" = "${APP_NAME}";\n"CFBundleDisplayName" = "${APP_NAME}";\n`);
         kind = 'window';
       } else why = built.why;
     }

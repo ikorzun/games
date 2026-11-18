@@ -27,6 +27,11 @@ func say(_ text: String) {
     fflush(stdout)
 }
 
+/// С заглавной: «убежище» → «Убежище» (пункты меню).
+func capitalized(_ s: String) -> String {
+    return s.prefix(1).uppercased() + s.dropFirst()
+}
+
 /// Текст в HTML.
 func esc(_ s: String) -> String {
     return s.replacingOccurrences(of: "&", with: "&amp;")
@@ -70,6 +75,10 @@ struct PanelState: Decodable {
     let pushing: Bool
     let lib: Bool
     let insp: Bool
+    /// Курсор в поле ввода страницы: «Отменить» и «Повторить» — тексту, «Копия» и «Удалить» вещи — недоступны.
+    let editing: Bool?
+    /// Страница получила ответ оболочки (команду hello); нет — оболочка отвечает на каждое состояние.
+    let hello: Bool?
 }
 
 extension NSToolbarItem.Identifier {
@@ -104,11 +113,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
     let saveLabel = NSTextField(labelWithString: "")
     var toolGroup: NSToolbarItemGroup?
     var pushButton: NSButton?
+    let placeMenu = NSMenu(title: "Место")
+    let roomMenu = NSMenu(title: "Помещение")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let look = ProcessInfo.processInfo.environment["CONSTRUCTOR_APPEARANCE"] {
             NSApp.appearance = NSAppearance(named: look == "dark" ? .darkAqua : .aqua)
         }
+        // Одно окно: без вкладок (и без пунктов про них, которые macOS добавляет в меню сама).
+        NSWindow.allowsAutomaticWindowTabbing = false
         buildMenu()
         let frame = NSRect(x: 0, y: 0, width: 1440, height: 900)
         let config = WKWebViewConfiguration()
@@ -136,6 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
         window.contentView = glass
         window.delegate = self
         window.isReleasedWhenClosed = false
+        window.tabbingMode = .disallowed
         window.minSize = NSSize(width: 980, height: 600)
         let toolbar = NSToolbar(identifier: "constructor.toolbar")
         toolbar.delegate = self
@@ -187,9 +201,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
         main.addItem(fileItem)
 
         let edit = NSMenu(title: "Правка")
-        // Отмена — сначала странице (вещи); в поле ввода — тексту.
-        edit.addItem(item("Отменить", Selector(("undo:")), "z"))
-        edit.addItem(item("Повторить", Selector(("redo:")), "z", [.command, .shift]))
+        // Отмена — шагу с вещами (страница); курсор в поле ввода — тексту.
+        edit.addItem(item("Отменить", #selector(undoAction(_:)), "z", target: self))
+        edit.addItem(item("Повторить", #selector(redoAction(_:)), "z", [.command, .shift], target: self))
         edit.addItem(NSMenuItem.separator())
         edit.addItem(item("Вырезать", #selector(NSText.cut(_:)), "x"))
         edit.addItem(item("Скопировать", #selector(NSText.copy(_:)), "c"))
@@ -217,6 +231,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
         viewItem.submenu = view
         main.addItem(viewItem)
 
+        // «Место» — то же, что всплывающие меню панели окна: места ⌘1…⌘4, помещения, вариант ⌘[ / ⌘]. Пункты мест и
+        // помещений — по состоянию страницы (fillMenus).
+        placeMenu.autoenablesItems = true
+        let placeItem = NSMenuItem()
+        placeItem.submenu = placeMenu
+        main.addItem(placeItem)
+        fillMenus()
+
         let win = NSMenu(title: "Окно")
         win.addItem(item("Свернуть", #selector(NSWindow.performMiniaturize(_:)), "m"))
         win.addItem(item("Масштаб", #selector(NSWindow.performZoom(_:))))
@@ -239,7 +261,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
         let s = state
         guard let action = menuItem.action else { return true }
         switch action {
-        case #selector(duplicateSel(_:)), #selector(deleteSel(_:)): return s?.sel ?? false
+        case #selector(duplicateSel(_:)), #selector(deleteSel(_:)): return (s?.sel ?? false) && s?.editing != true
+        case #selector(undoAction(_:)): return s?.editing == true || (s?.canUndo ?? false)
+        case #selector(redoAction(_:)): return s?.editing == true
+        case #selector(placeMenuChosen(_:)):
+            menuItem.state = (menuItem.representedObject as? String) == s?.world ? .on : .off
+            return s != nil
+        case #selector(roomMenuChosen(_:)):
+            menuItem.state = (menuItem.representedObject as? String) == s?.room ? .on : .off
+            return s != nil
+        case #selector(nextVariant(_:)), #selector(previousVariant(_:)): return (s?.picks ?? 0) > 1
         case #selector(push(_:)): return s != nil && !(s?.pushing ?? true)
         case #selector(toggleLibrary(_:)):
             menuItem.state = (s?.lib ?? true) ? .on : .off
@@ -380,7 +411,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
         if (popup.itemArray.compactMap { $0.representedObject as? String }) != opts.map({ $0.id }) {
             popup.removeAllItems()
             for o in opts {
-                let it = NSMenuItem(title: o.label, action: nil, keyEquivalent: "")
+                let it = NSMenuItem(title: capitalized(o.label), action: nil, keyEquivalent: "")
                 it.representedObject = o.id
                 popup.menu?.addItem(it)
             }
@@ -407,8 +438,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
         }
         variantPopup.selectItem(at: min(s.pick, n - 1))
         variantPopup.isEnabled = on && n > 1
+        fillMenus()
         toolGroup?.selectedIndex = s.tool == "rotate" ? 1 : 0
-        saveLabel.stringValue = s.save.prefix(1).uppercased() + s.save.dropFirst()
+        saveLabel.stringValue = capitalized(s.save)
         saveLabel.toolTip = s.save
         saveLabel.textColor = s.saveState == "bad" ? .systemRed : .secondaryLabelColor
         window.toolbar?.validateVisibleItems()
@@ -418,9 +450,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == "ctor", let text = message.body as? String, let data = text.data(using: .utf8) else { return }
-        guard let s = try? JSONDecoder().decode(PanelState.self, from: data) else { return }
+        let s: PanelState
+        do {
+            s = try JSONDecoder().decode(PanelState.self, from: data)
+        } catch {
+            // Страница новее оболочки и поменяла поле: страница через 4 с вернёт свои кнопки сама, а здесь — след для журнала.
+            let line = "панель окна: не понял состояние страницы — \(error)"
+            tail.append(line)
+            if selfTest { say(line) }
+            return
+        }
         state = s
         syncPanel()
+        if s.hello != true { cmd("hello", Int(shellVersion) ?? 0) }
     }
 
     /// Команда странице: window.__ctorNative.cmd(имя, значение).
@@ -446,6 +488,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
 
     @objc func toolChosen(_ sender: Any?) {
         cmd("tool", (toolGroup?.selectedIndex ?? 0) == 1 ? "rotate" : "move")
+    }
+
+    /// «Отменить»: курсор в поле — тексту (правки текста WebKit кладёт в менеджер отмены окна), иначе — шаг с вещами.
+    @objc func undoAction(_ sender: Any?) {
+        if state?.editing == true {
+            if let um = web.undoManager, um.canUndo { um.undo() }
+        } else {
+            cmd("undo")
+        }
+    }
+
+    /// «Повторить» — только тексту: у вещей повтора нет.
+    @objc func redoAction(_ sender: Any?) {
+        if state?.editing == true, let um = web.undoManager, um.canRedo { um.redo() }
+    }
+
+    /// Меню «Место»: места с ⌘1…⌘9, помещения подменю, вариант ⌘[ / ⌘]. Пересобирается, только если поменялись места или
+    /// помещения; отметки ставит validateMenuItem.
+    func fillMenus() {
+        let worlds = state?.worlds ?? []
+        let rooms = state?.rooms ?? []
+        let have = placeMenu.items.compactMap { $0.representedObject as? String }
+        let haveRooms = roomMenu.items.compactMap { $0.representedObject as? String }
+        if !placeMenu.items.isEmpty && have == worlds.map({ $0.id }) && haveRooms == rooms.map({ $0.id }) { return }
+        placeMenu.removeAllItems()
+        for (i, w) in worlds.enumerated() {
+            let it = item(capitalized(w.label), #selector(placeMenuChosen(_:)), i < 9 ? String(i + 1) : "", target: self)
+            it.representedObject = w.id
+            placeMenu.addItem(it)
+        }
+        if worlds.isEmpty {
+            let wait = NSMenuItem(title: "Конструктор ещё открывается…", action: nil, keyEquivalent: "")
+            wait.isEnabled = false
+            placeMenu.addItem(wait)
+        }
+        placeMenu.addItem(NSMenuItem.separator())
+        roomMenu.removeAllItems()
+        for r in rooms {
+            let it = item(capitalized(r.label), #selector(roomMenuChosen(_:)), target: self)
+            it.representedObject = r.id
+            roomMenu.addItem(it)
+        }
+        let roomsItem = NSMenuItem(title: "Помещение", action: nil, keyEquivalent: "")
+        roomsItem.submenu = roomMenu
+        roomsItem.isEnabled = !rooms.isEmpty
+        placeMenu.addItem(roomsItem)
+        placeMenu.addItem(NSMenuItem.separator())
+        placeMenu.addItem(item("Следующий вариант", #selector(nextVariant(_:)), "]", target: self))
+        placeMenu.addItem(item("Предыдущий вариант", #selector(previousVariant(_:)), "[", target: self))
+    }
+
+    @objc func placeMenuChosen(_ sender: NSMenuItem) {
+        if let id = sender.representedObject as? String { cmd("world", id) }
+    }
+
+    @objc func roomMenuChosen(_ sender: NSMenuItem) {
+        if let id = sender.representedObject as? String { cmd("room", id) }
+    }
+
+    @objc func nextVariant(_ sender: Any?) {
+        guard let s = state, s.picks > 1 else { return }
+        cmd("pick", (s.pick + 1) % s.picks)
+    }
+
+    @objc func previousVariant(_ sender: Any?) {
+        guard let s = state, s.picks > 1 else { return }
+        cmd("pick", (s.pick + s.picks - 1) % s.picks)
     }
 
     @objc func toolMove(_ sender: Any?) { cmd("tool", "move") }
@@ -636,7 +745,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
                 let rooms = self.roomPopup.numberOfItems
                 let report = "\(text) places=\(places) rooms=\(rooms) room=\(self.roomPopup.titleOfSelectedItem ?? "-") save=\(self.saveLabel.stringValue)"
                 if title == "Конструктор" && native && places > 0 && rooms > 0 && (!gl || shelf > 0) {
-                    self.finishTest(true, report)
+                    self.driveTest(report)
                 } else {
                     self.testTries += 1
                     if self.testTries < 40 { self.probe() } else { self.finishTest(false, report) }
@@ -645,14 +754,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
         }
     }
 
+    /// Команда из меню доходит до страницы и возвращается в панель окна: «Следующий вариант» (⌘]) и место из меню «Место».
+    func driveTest(_ report: String) {
+        guard let s = state else { return finishTest(false, report + " нет состояния") }
+        let places = placeMenu.items.filter { $0.representedObject != nil }
+        let target = places.count > 1 ? places[1] : nil
+        if s.picks > 1 { nextVariant(nil) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            let pickOk = s.picks <= 1 || self.state?.pick == (s.pick + 1) % s.picks
+            if let t = target { self.placeMenuChosen(t) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                let want = target?.representedObject as? String
+                let placeOk = want == nil || self.state?.world == want
+                let drive = " menu=\(places.count) pick=\(pickOk ? "ok" : "no") place=\(placeOk ? "ok" : "no")(\(self.placePopup.titleOfSelectedItem ?? "-")/\(self.roomPopup.titleOfSelectedItem ?? "-"))"
+                self.finishTest(pickOk && placeOk && places.count > 0, report + drive)
+            }
+        }
+    }
+
     func finishTest(_ ok: Bool, _ text: String) {
-        // Кадров к снимку — побольше: снимок через 3 с, и в журнал — сколько их было к тому времени.
+        // Кадров к снимку — побольше: снимок через 3 с, и в журнал — сколько их было к тому времени. К этому времени страница
+        // уже 4 с как ждала ответа оболочки: вид программы на месте (html.native) и версия оболочки известна странице.
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            self.web.evaluateJavaScript("String(window.__ctorFrames || 0) + ' ' + document.visibilityState") { result, _ in
-                say("SELFTEST \(ok ? "ok" : "fail") \(text) frames3s=\((result as? String) ?? "-")")
+            let js = "JSON.stringify({ frames: window.__ctorFrames || 0, visible: document.visibilityState, native: document.documentElement.classList.contains('native'), shell: window.__ctorShell === undefined ? null : window.__ctorShell })"
+            self.web.evaluateJavaScript(js) { result, _ in
+                let text2 = (result as? String) ?? "-"
+                var linked = false
+                if let data = text2.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    linked = (o["native"] as? Bool ?? false) && !(o["shell"] is NSNull) && o["shell"] != nil
+                }
+                let pass = ok && linked
+                say("SELFTEST \(pass ? "ok" : "fail") \(text) after3s=\(text2)\(linked ? "" : " — нет ответа оболочки странице")")
                 self.snapshot {
                     self.stopNode()
-                    exit(ok ? 0 : 1)
+                    exit(pass ? 0 : 1)
                 }
             }
         }
