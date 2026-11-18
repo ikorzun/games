@@ -102,6 +102,8 @@ SCALE = {'s3_sofa_grey': 1.9, 's3_table_kitchen': 1.15, 's3_desk_office_grey': 0
 # Открытая деталь выходит вперёд от лица вещи не дальше OPEN_REACH: столько и прибавляется к габариту открываемой вещи,
 # а большая дверца при этом открывается не до упора (дверца шкафа в полметра — примерно на 45°).
 OPEN_REACH = 0.35
+# Платяной шкаф — шире: его дверца в 70 см на общем пределе приоткрылась бы на 30°, а партнёр просил открыть шкафы.
+OPEN_REACH_OF = {'s3_wardrobe_plain': 0.55}
 DOOR_MAX = math.radians(95)
 DRAWER_SHARE = 0.8
 # Шарниры каталога: берём дверцы и ящики; ручки, кнопки, крышки замков, ножки стола-трансформера, кран — нет.
@@ -436,7 +438,7 @@ def open_parts(out, off, lo, hi, mount, turn, scale, movers, name):
             sign = -1.0 if free > hx else 1.0
             j = {'k': 'r', 'o': [hx, 0, phi[2]], 'a': [0, 1, 0], 'hi': sign * DOOR_MAX, 'w': 'door'}
         # Не дальше OPEN_REACH вперёд от лица вещи и не вбок за её бока: предел урезается по самим вершинам детали.
-        reach = hi[2] + OPEN_REACH
+        reach = hi[2] + OPEN_REACH_OF.get(name, OPEN_REACH)
         side = (lo[0], hi[0])
 
         def over(t):

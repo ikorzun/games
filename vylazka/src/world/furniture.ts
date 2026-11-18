@@ -62,25 +62,42 @@ export function s3Parts(name: string): ReadonlyArray<'door' | 'drawer'> {
   return SAND3D_META[name]?.open?.w ?? [];
 }
 
-/** Доля вещей, у которых всё закрыто: остальные оставлены так, как их бросили. */
-const SHUT = 0.25;
+/**
+ * Насколько оставлено открытым помещение, которое сейчас обставляется: доля вещей, у которых что-нибудь открыто. Её задаёт
+ * обстановка помещения (furnish.ts, withOpenness): из одних комнат уходили второпях, другие прибраны (куратор, связка
+ * «Комната, из которой ушли»). Вне помещения (витрина, конструктор) — три из четырёх.
+ */
+let openness = 0.75;
+
+/** Выполнить body, пока доля открытого — share (0 — всё закрыто). */
+export function withOpenness<T>(share: number, body: () => T): T {
+  const prev = openness;
+  openness = share;
+  try {
+    return body();
+  } finally {
+    openness = prev;
+  }
+}
 
 /**
- * Что открыто у экземпляра — по сиду: у трёх из четырёх вещей что-нибудь да открыто. Дверца — чаще, от щели до
- * распахнутой (предел — импорт); ящик — реже, выдвинут на треть и больше. undefined — вещь закрыта или открывать нечего.
+ * Что открыто у экземпляра — по сиду и по тому, как оставили помещение. Дверца — чаще и заметно: от трети до предела
+ * (предел — импорт); ящик — реже, выдвинут на треть и больше. undefined — вещь закрыта или открывать нечего.
  */
 export function openOf(name: string, seed: number, salt = 0): number[] | undefined {
   const parts = s3Parts(name);
-  if (parts.length === 0) return undefined;
+  if (parts.length === 0 || openness <= 0) return undefined;
   const r = (k: number): number => hash2(seed, salt * 97 + k, 0x0de) / 4294967296;
-  if (r(0) < SHUT) return undefined;
+  if (r(0) >= openness) return undefined;
+  const door = 0.4 + 0.5 * openness;
+  const drawer = 0.2 + 0.5 * openness;
   const t = parts.map((kind, i): number => {
     const a = r(1 + i * 2);
     const b = r(2 + i * 2);
-    if (kind === 'door') return a < 0.35 ? 0 : 0.2 + 0.8 * b;
-    return a < 0.55 ? 0 : 0.3 + 0.7 * b;
+    if (kind === 'door') return a < door ? 0.5 + 0.5 * b : 0;
+    return a < drawer ? 0.3 + 0.7 * b : 0;
   });
-  if (!t.some((v) => v > 0)) t[hash2(seed, salt, 0x0df) % t.length] = 0.4 + 0.6 * r(99);
+  if (!t.some((v) => v > 0)) t[hash2(seed, salt, 0x0df) % t.length] = 0.5 + 0.5 * r(99);
   return t;
 }
 

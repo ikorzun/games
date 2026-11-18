@@ -17,7 +17,7 @@ import { hung } from './props';
 import type { Xf } from './props';
 import { beam, ring, rng, sheet, WHITE } from './props_more';
 import type { PropSpec } from './props_more';
-import { fillShelves, furnished, jitter, pickOf, s3Bounds, s3Put, s3Size, spanOf, S3_SHELVES, S3_TOP, turnOf } from './furniture';
+import { fillShelves, furnished, jitter, openOf, pickOf, s3Bounds, s3Put, s3Size, spanOf, S3_SHELVES, S3_TOP, turnOf } from './furniture';
 
 /** Книжные шкафы полки Sand3D, из которых выбирается стеллаж с книгами. */
 const BOOKCASES = ['s3_bookcase_dark', 's3_etagere'] as const;
@@ -89,7 +89,8 @@ const TV_FRONT = 0.49;
 function tvStand(xf: Xf, seed: number): void {
   const rnd = rng(seed);
   const wood: Vec3 = dim([1.05, 0.95, 0.85], 0.9 + rnd() * 0.2);
-  s3Put(xf, TV_STAND, { tint: jitter(seed) });
+  const open = openOf(TV_STAND, seed);
+  s3Put(xf, TV_STAND, { tint: jitter(seed), ...(open ? { open } : {}) });
   // Видеомагнитофон на нижней доске открытой полки: тёмный ящик, светлая щель, красный огонёк.
   const vy = S3_SHELVES[TV_STAND]![0]!.y;
   bx(xf, [-0.25, vy, 0.05], [0.25, vy + 0.1, 0.34], MAT.bakelite, [1.3, 1.3, 1.3]);
@@ -1145,13 +1146,13 @@ function remote(xf: Xf): void {
 export const HOME_PROPS: Record<string, PropSpec> = {
   sofa: furnished('floor', ['s3_sofa_olive', 's3_sofa_grey'], 'диван: старый, в оливковой обивке, или с деревянными подлокотниками', { pull: 0.03 }),
   armchair: furnished('floor', ['s3_armchair_round', 's3_armchair_sixties'], 'кресло: с круглой спинкой или шестидесятых, с деревянными подлокотниками', { turn: 0.07, pull: 0.05 }),
-  tv_stand: { w: s3Size(TV_STAND).w, d: TV_FRONT, h: Math.ceil((S3_TOP[TV_STAND]! + TV_H) * 100) / 100, mount: 'floor', ru: 'тумба с кинескопным телевизором и видеомагнитофоном', build: tvStand },
+  tv_stand: { w: s3Size(TV_STAND).w, d: TV_FRONT, reach: Math.max(0, s3Size(TV_STAND, true).d - TV_FRONT), h: Math.ceil((S3_TOP[TV_STAND]! + TV_H) * 100) / 100, mount: 'floor', ru: 'тумба с кинескопным телевизором и видеомагнитофоном', build: tvStand },
   fridge: { w: 0.62, d: 0.62, h: 1.7, mount: 'floor', ru: 'холодильник с магнитами и запиской', build: fridge },
   stove: { w: 0.55, d: 0.58, h: 0.9, mount: 'floor', ru: 'газовая плита с кастрюлей', build: stove },
   kitchen_table: { w: 1.4, d: Math.ceil(kitchenDepth() * 100) / 100, h: 0.87, mount: 'floor', ru: 'кухонный стол на точёных ножках под клеёнкой, табуретка, тарелка, хлебница', build: kitchenTable },
   sink_cabinet: { w: 0.8, d: 0.58, h: 1.35, mount: 'floor', ru: 'мойка-тумба с краном и сушилкой для тарелок', build: sinkCabinet },
-  // Дверцы светлого открыты по сиду (у серого они слиты с корпусом — он всегда закрыт).
-  wardrobe: furnished('floor', ['s3_wardrobe_plain', 's3_wardrobe_grey'], 'платяной шкаф: светлый в две дверцы или серый с ящиками внизу', { pull: 0.03, open: true }),
+  // Дверцы светлого открыты по сиду (у серого они слиты с корпусом — он всегда закрыт), поэтому светлый — в двух случаях из трёх.
+  wardrobe: furnished('floor', ['s3_wardrobe_plain', 's3_wardrobe_plain', 's3_wardrobe_grey'], 'платяной шкаф: светлый в две дверцы или серый с ящиками внизу', { pull: 0.03, open: true }),
   wall_unit: { w: 2.6, d: 0.46, h: 2.1, mount: 'floor', ru: 'стенка: сервант с хрусталём, книги, телевизор, часы', build: wallUnit },
   bookshelf: { ...spanOf(BOOKCASES), mount: 'floor', ru: 'книжный шкаф или этажерка с пёстрыми книгами', build: bookshelf },
   bed_home: furnished('floor', ['s3_bed_iron_green'], 'железная кровать с зелёным одеялом', { pull: 0.03 }),

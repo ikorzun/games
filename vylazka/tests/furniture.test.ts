@@ -291,9 +291,9 @@ describe('дверцы и ящики (партнёр 18.11, 12:32: «откро�
     }
   });
 
-  it('открытое выходит вперёд не дальше 0,35 м и не шире корпуса', () => {
+  it('открытое выходит вперёд не дальше 0,35 м (платяной шкаф — 0,55) и не шире корпуса', () => {
     for (const n of jointed) {
-      expect(s3Reach(n), n).toBeLessThanOrEqual(0.36);
+      expect(s3Reach(n), n).toBeLessThanOrEqual(n === 's3_wardrobe_plain' ? 0.56 : 0.36);
       expect(s3Size(n, true).w, n).toBe(s3Size(n).w);
     }
   });
@@ -341,6 +341,44 @@ describe('дверцы и ящики (партнёр 18.11, 12:32: «откро�
         if (base.size > 0 && col.boxes.length > 1 + (name === 'kitchenette' ? 0 : 0)) opened += 1;
       }
       expect(opened, name).toBeGreaterThan(5);
+    }
+  });
+});
+
+describe('как оставили помещение: открытость — от комнаты, а не от вещи', () => {
+  it('прибранная комната — всё закрыто; брошенная — открыто почти всё; без комнаты — три из четырёх', async () => {
+    const { withOpenness } = await import('../src/world/furniture');
+    const share = (k: number): number => {
+      let some = 0;
+      for (let seed = 0; seed < 400; seed++) if (openOf('s3_filing_cabinet', seed)) some += 1;
+      return some / 400 + k * 0;
+    };
+    expect(withOpenness(0, () => share(0))).toBe(0);
+    expect(withOpenness(0.95, () => share(0))).toBeGreaterThan(0.9);
+    expect(share(0)).toBeGreaterThan(0.65);
+    expect(share(0)).toBeLessThan(0.85);
+  });
+
+  it('в жёлтых комнатах закрыто всё, в офисе и убежище есть и открытое, и закрытое', () => {
+    for (const w of ['yellow', 'office', 'shelter'] as const) {
+      let opened = 0;
+      let shut = 0;
+      for (const seed of [11, 42, 7]) {
+        const lvl = buildLevel(generateLayout(seed, 1, w), { wear: 0, figures: [] });
+        // Преград у вещи: закрытая — одна (корпус), у открытой — ещё по одной на дверцу или ящик.
+        const boxes = new Map<number, number>();
+        for (const b of lvl.colliders.boxes) if (b.owner) boxes.set(b.owner, (boxes.get(b.owner) ?? 0) + 1);
+        for (const o of lvl.objects ?? []) {
+          if (!ALL_PROPS[o.name]?.reach || o.flat) continue;
+          if ((boxes.get(o.id) ?? 0) > 1) opened += 1;
+          else shut += 1;
+        }
+      }
+      if (w === 'yellow') expect(opened, w).toBe(0);
+      else {
+        expect(opened, w).toBeGreaterThan(0);
+        expect(shut, w).toBeGreaterThan(0);
+      }
     }
   });
 });

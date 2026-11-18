@@ -19,7 +19,7 @@ import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
 import { asObject, hanging } from './objects';
 import { barrel, cables, cageLamp, crate, pipeRun, rubble, signPlate, valve, ventGrille } from './props';
-import { fillShelves, jitter, pickOf, s3Put, s3Size, S3_BED, S3_SHELVES, S3_TOP } from './furniture';
+import { fillShelves, jitter, pickOf, s3Put, s3Size, S3_BED, S3_SHELVES, S3_TOP, withOpenness } from './furniture';
 import { buildDisplay, DISPLAY_SIZE } from './props_screens';
 import type { DisplayShape } from './props_screens';
 import { DOOR_IMAGE, DOOR_NAME, SCREEN_IMAGES, screenFor } from './screens';
@@ -622,7 +622,9 @@ export function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; 
       // Убранную или передвинутую партнёром картонку хук сборки не строит (world/objects.ts): тогда и метки картонки нет —
       // иначе на её месте осталась бы «картонка», через которую можно пройти, а передвинутая вещь вернулась бы туда настоящей.
       if (built) ctx.flats.push({ kind: 'standee', what: name, at: at.pt(0, Math.min(FLAT_EYE, r.h * 0.6), r.plane), n: at.dir(0, 0, 1), w: r.w, h: r.h, floor: at.oy, room: ctx.room.id, tier: ctx.room.tier });
-    } else p.build(at, seed);
+    } else if (s.deep) p.build(at, seed);
+    // У проёма (в клетке с дверью) — закрыто: выдвинутый ящик и распахнутая дверца не заходят в горло прохода.
+    else withOpenness(0, () => p.build(at, seed));
   });
   return { s, x, seeds };
 }
@@ -763,9 +765,27 @@ export function floorSpots(ctx: RoomCtx, n: number): void {
   const cells = ctx.cells;
   for (let i = 0; i < n; i++) {
     const c = cells[i % cells.length]!;
-    const [ox, oz] = offsets[Math.floor(i / cells.length) % offsets.length]!;
+    // Не под выдвинутым ящиком и не в распахнутой дверце: из четырёх точек клетки — первая свободная от преград.
+    const k0 = Math.floor(i / cells.length) % offsets.length;
+    let k = k0;
+    for (let j = 0; j < offsets.length; j++) {
+      const [x, z] = offsets[(k0 + j) % offsets.length]!;
+      if (!blocked(c.xf, x, z)) {
+        k = (k0 + j) % offsets.length;
+        break;
+      }
+    }
+    const [ox, oz] = offsets[k]!;
     spot(ctx, c.xf, ox, 0.03, oz, 'floor');
   }
+}
+
+/** Точка пола (x, z в клетке) под преградой или ближе 15 см к ней. */
+function blocked(xf: Xf, x: number, z: number): boolean {
+  if (!xf.col) return false;
+  const p = xf.pt(x, 0.03, z);
+  const m = 0.15;
+  return xf.col.boxes.some((b) => p[0] > b.minX - m && p[0] < b.maxX + m && p[2] > b.minZ - m && p[2] < b.maxZ + m && b.minY < 0.5 && b.maxY > 0);
 }
 
 function kitchen(ctx: RoomCtx): void {
@@ -881,15 +901,28 @@ const FURNISH: Partial<Record<GenRoom['type'], (ctx: RoomCtx) => void>> = {
 
 /** Обставить помещение. Порядок вызовов и ГСЧ фиксированы: один сид — одна и та же обстановка. */
 export function furnishRoom(ctx: RoomCtx): void {
-  // Стене лиц, карте и стене чемоданов нужна голая стена: их участки отводятся до мебели.
-  reservePapers(ctx);
-  // Офис стерилен, жёлтые комнаты пусты: у них своя обстановка и нет «следов людей» убежища.
-  if (ctx.world === 'office') return furnishOffice(ctx);
-  if (ctx.world === 'yellow') return furnishYellow(ctx);
-  if (ctx.world === 'station') return furnishStation(ctx);
-  FURNISH[ctx.room.type]?.(ctx);
-  // Сначала — то, что положено помещению по назначению, потом — следы людей и времени.
-  dressRoom(ctx);
+  withOpenness(roomOpenness(ctx), () => {
+    // Стене лиц, карте и стене чемоданов нужна голая стена: их участки отводятся до мебели.
+    reservePapers(ctx);
+    // Офис стерилен, жёлтые комнаты пусты: у них своя обстановка и нет «следов людей» убежища.
+    if (ctx.world === 'office') return furnishOffice(ctx);
+    if (ctx.world === 'yellow') return furnishYellow(ctx);
+    if (ctx.world === 'station') return furnishStation(ctx);
+    FURNISH[ctx.room.type]?.(ctx);
+    // Сначала — то, что положено помещению по назначению, потом — следы людей и времени.
+    dressRoom(ctx);
+  });
+}
+
+/**
+ * Как оставили помещение (партнёр 18.11: «открой дверцы и ящики у шкафов»; куратор, «Комната, из которой ушли»): из трети
+ * комнат уходили второпях — открыто почти всё; в половине — как обычно; остальные прибраны, закрыто всё. Жёлтые комнаты
+ * пусты и чисты — там закрыто везде. Доля одна на помещение, а не на вещь: открытое читается комнатой, а не рассыпью.
+ */
+function roomOpenness(ctx: RoomCtx): number {
+  if (ctx.world === 'yellow') return 0;
+  const r = hash2(ctx.seed, ctx.room.id, 0x0e1) / 4294967296;
+  return r < 0.33 ? 0.95 : r < 0.83 ? 0.6 : 0;
 }
 
 /** Подпись-табличка над дверью со стороны коридора (слабое фосфорное свечение помогает ориентироваться). */
