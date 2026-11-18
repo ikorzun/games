@@ -220,6 +220,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
       <div class="row"><span id="what"></span><button class="btn btn--small" id="curcard" type="button" hidden>Карточка</button></div>
       <input type="text" id="name" maxlength="80" placeholder="Как назовёшь — например, «стул спиной к двери»">
       <div class="row" id="turns"><button class="btn" id="turnl">⟲ Q</button><button class="btn" id="turnr">E ⟳</button></div>
+      <div class="row" id="doors" hidden title="Дверцы и ящики этой вещи в игре. Как выпадет — как у вещей игры в том же помещении: из одних комнат уходили второпях, другие прибраны."></div>
+      <p class="note" id="doorsnote" hidden></p>
       <div class="row"><button class="btn btn--main" id="save">Сохранить</button><button class="btn" id="fresh">Новая</button><button class="btn btn--warn" id="drop">Удалить</button></div>
       <ul id="problems"></ul>
       <p class="note" id="spotnote" hidden>Здесь вещь в таком виде не встанет. Сохранить можно: в других помещениях этого типа игра поставит её у такого же края, где правило выполнимо.</p>

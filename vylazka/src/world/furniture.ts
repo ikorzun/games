@@ -17,6 +17,7 @@ import { hash2 } from '../core/rng';
 import type { Vec3 } from '../core/types';
 import { MAT } from './materials';
 import { hasModel, placeModel } from './models';
+import type { PlacedOpen } from './placed';
 import type { Xf } from './props';
 import type { PropSpec } from './props_more';
 import { SAND3D_META } from './sand3d_meta';
@@ -69,6 +70,9 @@ export function s3Parts(name: string): ReadonlyArray<'door' | 'drawer'> {
  */
 let openness = 0.75;
 
+/** Доля открытого сейчас: с ней сборка позже построит вещь, которую обстановка отложила (передвинутая, level_build.ts). */
+export const opennessNow = (): number => openness;
+
 /** Выполнить body, пока доля открытого — share (0 — всё закрыто). */
 export function withOpenness<T>(share: number, body: () => T): T {
   const prev = openness;
@@ -81,13 +85,26 @@ export function withOpenness<T>(share: number, body: () => T): T {
 }
 
 /**
+ * Выполнить body по записи партнёра (world/placed.ts, PlacedSpec.open; квиз 18.11 «Как выпадет + переключатель»): 'shut' —
+ * закрыто всё, 'open' — открыто всё; нет — как выпадет: с долей share (как у вещей игры в том же помещении), без неё — с той,
+ * что сейчас.
+ */
+export function withOpenMode<T>(mode: PlacedOpen | undefined, body: () => T, share?: number): T {
+  if (mode === 'shut') return withOpenness(0, body);
+  if (mode === 'open') return withOpenness(1, body);
+  return share === undefined ? body() : withOpenness(share, body);
+}
+
+/**
  * Что открыто у экземпляра — по сиду и по тому, как оставили помещение. Дверца — чаще и заметно: от трети до предела
- * (предел — импорт); ящик — реже, выдвинут на треть и больше. undefined — вещь закрыта или открывать нечего.
+ * (предел — импорт); ящик — реже, выдвинут на треть и больше. Доля 1 — открыто всё (вещь партнёра, «открыто»): дверцы
+ * распахнуты больше чем наполовину, ящики выдвинуты. undefined — вещь закрыта или открывать нечего.
  */
 export function openOf(name: string, seed: number, salt = 0): number[] | undefined {
   const parts = s3Parts(name);
   if (parts.length === 0 || openness <= 0) return undefined;
   const r = (k: number): number => hash2(seed, salt * 97 + k, 0x0de) / 4294967296;
+  if (openness >= 1) return parts.map((kind, i) => (kind === 'door' ? 0.6 + 0.4 * r(2 + i * 2) : 0.4 + 0.6 * r(2 + i * 2)));
   if (r(0) >= openness) return undefined;
   const door = 0.4 + 0.5 * openness;
   const drawer = 0.2 + 0.5 * openness;

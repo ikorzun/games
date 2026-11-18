@@ -39,6 +39,12 @@ describe('расстановка партнёра: данные', () => {
     expect(placedProblems(spec({}, { worlds: [] }), ALL_PROPS, FIXED).join()).toContain('места');
   });
 
+  it('дверцы (квиз 18.11): поля нет — как выпадет; закрыто или открыто — да; другое — беда', () => {
+    expect(placedProblems(spec({ open: 'shut' }), ALL_PROPS, FIXED)).toEqual([]);
+    expect(placedProblems(spec({ open: 'open' }), ALL_PROPS, FIXED)).toEqual([]);
+    expect(placedProblems(spec({ open: 'ajar' as 'open' }), ALL_PROPS, FIXED).join()).toContain('дверцы');
+  });
+
   it('руками не ставят то, что держит место, и подвесное', () => {
     const fixedName = [...FIXED].find((n) => ALL_PROPS[n]);
     expect(fixedName).toBeDefined();

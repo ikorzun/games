@@ -33,7 +33,7 @@ export { roomNear };
 import type { AnchorSpot, PlaceWorld } from './figure_place';
 import type { FigureFacing } from './figures';
 import type { LevelObject } from './objects';
-import type { PlacedSpec } from './placed';
+import type { PlacedOpen, PlacedSpec } from './placed';
 import type { PropSpec } from './props_more';
 import { CELL, DIRS } from './shell';
 
@@ -64,6 +64,11 @@ export interface PlacedSpot {
   tier: number;
   /** Передвинутая вещь игры (placed.ts, moves): встала по правилу записи в своём помещении. */
   moved?: true;
+  /**
+   * Дверцы и ящики: по записи (placed.ts, PlacedSpec.open); у записи «как выпадет» — 'shut', если открытым дверцам здесь впереди
+   * тесно (doorsAt); нет — как выпадет.
+   */
+  open?: PlacedOpen;
 }
 
 /**
@@ -105,11 +110,34 @@ export interface Box {
 /** Поворот четвертями из угла «лицом куда» (рад; 0 — к +z, как у фигур). Тот же, что у Xf: 1 — лицом к +x. */
 export const rotOf = (yaw: number): Turn => ((((Math.round(yaw / (Math.PI / 2)) % 4) + 4) % 4) as Turn);
 
-/** Коробка вещи в её координатах: у стены — спина в z = 0, посреди пола — середина в начале (world/props_real.ts). */
-export function propBox(p: PropSpec): { min: Vec3; max: Vec3 } {
+/**
+ * Коробка вещи в её координатах: у стены — спина в z = 0, посреди пола — середина в начале (world/props_real.ts). reach — на
+ * сколько вперёд выходят открытые дверцы и ящики (вещь партнёра, открытая по записи: PlacedSpec.open).
+ */
+export function propBox(p: PropSpec, reach = 0): { min: Vec3; max: Vec3 } {
   const free = p.mount === 'free';
-  return { min: [-p.w / 2, 0, free ? -p.d / 2 : 0], max: [p.w / 2, p.h, free ? p.d / 2 : p.d] };
+  return { min: [-p.w / 2, 0, free ? -p.d / 2 : 0], max: [p.w / 2, p.h, (free ? p.d / 2 : p.d) + reach] };
 }
+
+/**
+ * Проверка точки для вещи партнёра с дверцами (квиз 18.11, «Как выпадет + переключатель»): «открыто» — коробка с вылетом;
+ * «как выпадет» у вещи, которой есть что открыть, — открытым дверцам должно хватить места впереди (не в проход, не в соседа,
+ * не в стену); не хватает — здесь она закрыта (open: 'shut'), как вещи игры у проёмов, а хватает — место для дверец за ней
+ * держится (коробка с вылетом). others — коробки уже поставленных вещей.
+ */
+export function doorsAt(spec: Pick<PlacedSpec, 'open'>, p: PropSpec, at: Vec3, rot: Turn, room: GenRoom, a: Pick<AnchorSpot, 'floor' | 'ceil' | 'pit' | 'tier'>, w: PlaceWorld, others: readonly Box[] = []): SpotCheck & { open?: PlacedOpen } {
+  const chk = checkSpot(p, at, rot, room, a, w, others, reachOf(p, spec.open));
+  if (spec.open) return { ...chk, open: spec.open };
+  if (chk.problems.length > 0 || !((p.reach ?? 0) > 0)) return chk;
+  const wide = checkSpot(p, at, rot, room, a, w, others, p.reach);
+  return wide.problems.length > 0 ? { ...chk, open: 'shut' } : wide;
+}
+
+/** Сид k-й копии вещи партнёра на уровне с сидом layoutSeed: с ним её строит сборка (level_build.ts) и показывает конструктор. */
+export const placedSeed = (layoutSeed: number, k: number, id: string): number => (hash2(layoutSeed, k + 1, id.length * 977) >>> 0) % 1000003;
+
+/** Вылет вещи по записи: у открытой — дверцы и ящики до предела (PropSpec.reach), у прочих — ничего (как у вещей игры). */
+export const reachOf = (p: PropSpec, open?: PlacedOpen): number => (open === 'open' ? (p.reach ?? 0) : 0);
 
 /** Точка вещи в мире — тот же поворот, что у Xf.pt. */
 function turnPt(x: number, z: number, rot: Turn): [number, number] {
@@ -119,9 +147,9 @@ function turnPt(x: number, z: number, rot: Turn): [number, number] {
   return [x, z];
 }
 
-/** Коробка вещи в мире: точка at (низ), поворот rot. */
-export function worldBox(p: PropSpec, at: Vec3, rot: Turn): Box {
-  const { min, max } = propBox(p);
+/** Коробка вещи в мире: точка at (низ), поворот rot; reach — вылет открытых дверец (propBox). */
+export function worldBox(p: PropSpec, at: Vec3, rot: Turn, reach = 0): Box {
+  const { min, max } = propBox(p, reach);
   const [ax, az] = turnPt(min[0], min[2], rot);
   const [bx, bz] = turnPt(max[0], max[2], rot);
   return { minX: at[0] + Math.min(ax, bx), maxX: at[0] + Math.max(ax, bx), minY: at[1] + min[1], maxY: at[1] + max[1], minZ: at[2] + Math.min(az, bz), maxZ: at[2] + Math.max(az, bz) };
@@ -190,10 +218,10 @@ const scratch: Aabb[] = [];
 
 /**
  * Проверка одной точки: те же правила, по которым игра ищет место (их же видит партнёр в инструменте).
- * others — коробки уже поставленных вещей.
+ * others — коробки уже поставленных вещей; reach — вылет открытых дверец (reachOf).
  */
-export function checkSpot(p: PropSpec, at: Vec3, rot: Turn, room: GenRoom, a: Pick<AnchorSpot, 'floor' | 'ceil' | 'pit' | 'tier'>, w: PlaceWorld, others: readonly Box[] = []): SpotCheck {
-  const box = worldBox(p, at, rot);
+export function checkSpot(p: PropSpec, at: Vec3, rot: Turn, room: GenRoom, a: Pick<AnchorSpot, 'floor' | 'ceil' | 'pit' | 'tier'>, w: PlaceWorld, others: readonly Box[] = [], reach = 0): SpotCheck {
+  const box = worldBox(p, at, rot, reach);
   const problems: string[] = [];
   const lift = at[1] - a.floor;
   if (box.maxY > a.ceil - 0.01) problems.push('не помещается под потолком');
@@ -299,9 +327,9 @@ export function placeThings(specs: readonly PlacedSpec[], w: PlaceWorld, props: 
         for (const { a, r } of order) {
           if (pass === 0 && used.has(a.room)) continue;
           const { at, rot } = fitThing(spec, a, p);
-          const { box, problems } = checkSpot(p, at, rot, r, a, w, boxes);
+          const { box, problems, open } = doorsAt(spec, p, at, rot, r, a, w, boxes);
           if (problems.length > 0) continue;
-          pick = { id: spec.id, k, prop: spec.prop, at, rot, room: a.room, tier: a.tier };
+          pick = { id: spec.id, k, prop: spec.prop, at, rot, room: a.room, tier: a.tier, ...(open ? { open } : {}) };
           pickBox = box;
           break;
         }
@@ -332,9 +360,9 @@ export function moveSpot(spec: PlacedSpec, room: GenRoom, w: PlaceWorld, props: 
     .sort((x, y) => x.d - y.d || x.q - y.q);
   for (const { a } of order) {
     const { at, rot } = fitThing(spec, a, p);
-    const { box, problems } = checkSpot(p, at, rot, room, a, w, others);
+    const { box, problems, open } = doorsAt(spec, p, at, rot, room, a, w, others);
     if (problems.length > 0) continue;
-    return { spot: { id: spec.id, k: 0, prop: spec.prop, at, rot, room: room.id, tier: room.tier, moved: true }, box };
+    return { spot: { id: spec.id, k: 0, prop: spec.prop, at, rot, room: room.id, tier: room.tier, moved: true, ...(open ? { open } : {}) }, box };
   }
   return null;
 }

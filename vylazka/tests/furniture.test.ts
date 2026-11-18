@@ -7,7 +7,14 @@ import type { Vec3 } from '../src/core/types';
 import { generateLayout } from '../src/gen/layout';
 import type { WorldKind } from '../src/gen/layout';
 import { ColliderSet } from '../src/world/colliders';
-import { FURNITURE_FROM, furnished, jitter, openOf, pickOf, recordS3, s3Bounds, s3Parts, s3Put, s3Reach, s3Size, S3_BED, S3_SEAT, S3_SHELVES, S3_TOP, S3_WORKTOP } from '../src/world/furniture';
+import { FURNITURE_FROM, furnished, jitter, openOf, pickOf, recordS3, s3Bounds, s3Parts, s3Put, s3Reach, s3Size, S3_BED, S3_SEAT, S3_SHELVES, S3_TOP, S3_WORKTOP, withOpenMode } from '../src/world/furniture';
+import { roomOpenness } from '../src/world/furnish';
+import type { BuiltLevel } from '../src/world/level';
+import type { LevelObject } from '../src/world/objects';
+import { PLACED_OPEN } from '../src/world/placed';
+import type { PlacedOpen, PlacedSpec } from '../src/world/placed';
+import { placedSeed, reachOf, roomDoors, throatBox, worldBox } from '../src/world/placed_place';
+import type { PlacedSpot } from '../src/world/placed_place';
 import { MeshBuilder } from '../src/world/kit';
 import type { MeshData } from '../src/world/kit';
 import { buildLevel, cellToWorld, tierFloor } from '../src/world/level_build';
@@ -382,3 +389,116 @@ describe('как оставили помещение: открытость — �
     }
   });
 });
+
+describe('дверцы у вещей партнёра (квиз 18.11: «как выпадет» + переключатель)', () => {
+  const ID = 'pl_cab';
+  const CAB = 's3_filing_cabinet';
+  const cab = (open?: PlacedOpen, over: Partial<PlacedSpec> = {}): PlacedSpec => ({
+    id: ID,
+    name: 'картотека у стены',
+    prop: 'filing_cabinet',
+    rule: { worlds: ['office'], rooms: [], anchor: 'wall', facing: 'room', lift: 0, count: 1 },
+    turn: 0,
+    offset: [0, -0.25],
+    ...(open ? { open } : {}),
+    ...over,
+  });
+  const level = (placed: PlacedSpec[], seed: number): BuiltLevel => buildLevel(generateLayout(seed, 2, 'office'), { wear: 0, figures: [], placed, removed: [], keepPlaceWorld: true });
+  /** Преград у объекта: закрытая вещь — одна (корпус), у открытой — ещё по одной на выдвинутый ящик. */
+  const boxesOf = (lvl: BuiltLevel, id: number): number => lvl.colliders.boxes.filter((b) => b.owner === id).length;
+  const objAt = (lvl: BuiltLevel, s: PlacedSpot): LevelObject | undefined => lvl.objects?.find((o) => o.name === s.prop && Math.hypot(o.at[0] - s.at[0], o.at[2] - s.at[2]) < 0.01);
+
+  it('доля 1 — открыто всё, доля 0 — закрыто всё; переключатель записи сильнее доли помещения', async () => {
+    const { withOpenness } = await import('../src/world/furniture');
+    for (const n of ['s3_wardrobe_plain', CAB, 's3_kitchenette', 's3_desk_office']) {
+      for (let seed = 0; seed < 40; seed++) {
+        const all = withOpenness(1, () => openOf(n, seed));
+        expect(all?.length, n).toBe(s3Parts(n).length);
+        expect(all!.every((v) => v >= 0.4 && v <= 1), n).toBe(true);
+        expect(withOpenness(0, () => openOf(n, seed)), n).toBeUndefined();
+        expect(withOpenness(0, () => withOpenMode('open', () => openOf(n, seed)))).toEqual(all);
+        expect(withOpenness(0.95, () => withOpenMode('shut', () => openOf(n, seed)))).toBeUndefined();
+        expect(withOpenMode(undefined, () => openOf(n, seed), 0)).toBeUndefined();
+      }
+    }
+  });
+
+  it('закрыто — одна преграда; открыто — все ящики выдвинуты и не выходят из коробки, по которой ей искалось место', () => {
+    const p = ALL_PROPS.filing_cabinet!;
+    let n = 0;
+    for (const seed of [20041113, 7, 42, 1234]) {
+      const shut = level([cab('shut')], seed);
+      const open = level([cab('open')], seed);
+      const s0 = shut.placed?.[0];
+      const s1 = open.placed?.[0];
+      if (!s0 || !s1) continue;
+      n += 1;
+      expect(boxesOf(shut, objAt(shut, s0)!.id), `${seed}`).toBe(1);
+      const o = objAt(open, s1)!;
+      expect(boxesOf(open, o.id), `${seed}`).toBe(1 + s3Parts(CAB).length);
+      const box = worldBox(p, s1.at, s1.rot, reachOf(p, 'open'));
+      expect(o.min[0]).toBeGreaterThan(box.minX - 0.02);
+      expect(o.max[0]).toBeLessThan(box.maxX + 0.02);
+      expect(o.min[2]).toBeGreaterThan(box.minZ - 0.02);
+      expect(o.max[2]).toBeLessThan(box.maxZ + 0.02);
+    }
+    expect(n).toBeGreaterThanOrEqual(3);
+  });
+
+  it('как выпадет — как у вещей игры в том же помещении: прибранное — закрыто, брошенное — открыто; где тесно — закрыто', () => {
+    const shares = new Set<number>();
+    let n = 0;
+    for (const seed of [20041113, 7, 42, 1234, 5, 11, 99, 2024, 31, 77]) {
+      const lvl = level([cab()], seed);
+      const s = lvl.placed?.[0];
+      if (!s) continue;
+      n += 1;
+      const share = roomOpenness('office', lvl.layout!.seed, s.room);
+      shares.add(share);
+      expect(s.open === undefined || s.open === 'shut').toBe(true);
+      const want = s.open === 'shut' ? undefined : withOpenMode(undefined, () => openOf(CAB, placedSeed(lvl.layout!.seed, 0, ID)), share);
+      expect(boxesOf(lvl, objAt(lvl, s)!.id) > 1, `${seed}: доля ${share}`).toBe(want !== undefined);
+    }
+    expect(n).toBeGreaterThanOrEqual(8);
+    expect(shares.size, 'помещения оставлены по-разному').toBeGreaterThan(1);
+  });
+
+  it('открытые ящики вещи партнёра не заходят в горло двери и не выходят за коробку, по которой ей искалось место', () => {
+    const p = ALL_PROPS.filing_cabinet!;
+    let opened = 0;
+    for (const open of [undefined, 'open'] as const) {
+      for (const seed of [20041113, 7, 42, 1234, 5, 11, 99, 2024]) {
+        const lvl = level([cab(open, { rule: { worlds: ['office'], rooms: [], anchor: 'wall', facing: 'room', lift: 0, count: 3 } })], seed);
+        const w = lvl.placeWorld!;
+        for (const s of lvl.placed ?? []) {
+          const o = objAt(lvl, s)!;
+          if (boxesOf(lvl, o.id) === 1) continue;
+          opened += 1;
+          const room = lvl.layout!.rooms[s.room]!;
+          const box = worldBox(p, s.at, s.rot, p.reach);
+          expect(o.min[0] > box.minX - 0.02 && o.max[0] < box.maxX + 0.02 && o.min[2] > box.minZ - 0.02 && o.max[2] < box.maxZ + 0.02, `${seed}`).toBe(true);
+          for (const d of roomDoors(room, w)) {
+            const t = throatBox(d, s.at[1]);
+            const inside = o.min[0] < t.maxX - 0.02 && o.max[0] > t.minX + 0.02 && o.min[2] < t.maxZ - 0.02 && o.max[2] > t.minZ + 0.02;
+            expect(inside, `${seed}: ${JSON.stringify(s)}`).toBe(false);
+          }
+        }
+      }
+    }
+    expect(opened).toBeGreaterThan(5);
+  });
+
+  it('замена «везде» и передвинутая слушаются переключателя', () => {
+    for (const open of PLACED_OPEN) {
+      const lvl = level([cab(open, { id: 'pl_swap', replaces: 'filing_cabinet', everywhere: true })], 7);
+      const cabs = (lvl.objects ?? []).filter((o) => o.name === 'filing_cabinet' && !o.flat);
+      expect(cabs.length, open).toBeGreaterThan(2);
+      for (const o of cabs) expect(boxesOf(lvl, o.id) > 1, open).toBe(open === 'open');
+      const moved = level([cab(open, { id: 'pl_move', moves: { thing: 'filing_cabinet', nth: 0 } })], 7);
+      const spots = (moved.placed ?? []).filter((s) => s.moved);
+      expect(spots.length, open).toBeGreaterThan(0);
+      for (const s of spots) expect(boxesOf(moved, objAt(moved, s)!.id) > 1, open).toBe(open === 'open');
+    }
+  });
+});
+

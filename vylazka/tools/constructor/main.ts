@@ -36,15 +36,17 @@ import { clonePose, handlePoint, HANDLES, solve } from '../../src/world/figure_i
 import type { Handle } from '../../src/world/figure_ik';
 import { FIGURE_ANCHORS, FIGURE_FACINGS, FIGURE_MATERIALS, FIGURE_WORLDS, figureProblems } from '../../src/world/figures';
 import type { FigureAnchor, FigureFacing, FigureMaterial, FigureSpec } from '../../src/world/figures';
+import { roomOpenness } from '../../src/world/furnish';
+import { withOpenMode } from '../../src/world/furniture';
 import { MeshBuilder } from '../../src/world/kit';
 import { buildLevel } from '../../src/world/level_build';
 import type { BuiltLevel } from '../../src/world/level';
 import { MAT_DEFS, hexToLinear } from '../../src/world/materials';
-import { placeable, placedProblems, removedProblems, swapFits } from '../../src/world/placed';
+import { placeable, placedProblems, PLACED_OPEN, removedProblems, swapFits } from '../../src/world/placed';
 import type { Aabb } from '../../src/world/colliders';
 import type { LevelObject } from '../../src/world/objects';
-import type { PlacedSpec, RemovedSpec } from '../../src/world/placed';
-import { checkSpot, fitThing, gameNth, moveSpot, NEVER, placeThings, roomDoors, roomIndex, roomNear, rotOf, throatBox, worldBox } from '../../src/world/placed_place';
+import type { PlacedOpen, PlacedSpec, RemovedSpec } from '../../src/world/placed';
+import { doorsAt, fitThing, gameNth, moveSpot, NEVER, placedSeed, placeThings, roomDoors, roomIndex, roomNear, rotOf, throatBox } from '../../src/world/placed_place';
 import type { Box, PlacedSpot } from '../../src/world/placed_place';
 import { placeFigures } from '../../src/world/figure_place';
 import type { Turn } from '../../src/world/placed_place';
@@ -370,15 +372,20 @@ function enterRoom(w: WorldKind, type: string, pick = 0): void {
 // ───────────────────────────── геометрия вещей ─────────────────────────────
 
 const geoCache = new Map<string, THREE.BufferGeometry>();
-/** Сетка вещи из реестра игры, в её координатах (низ y = 0). */
-function geometryOf(name: string): THREE.BufferGeometry {
-  const hit = geoCache.get(name);
+/**
+ * Сетка вещи из реестра игры, в её координатах (низ y = 0). Дверцы и ящики — как их поставит игра (квиз 18.11, «Как выпадет +
+ * переключатель»): по записи open — закрыто или открыто всё; без неё — как выпадет: доля открытого у помещения share (как у вещей
+ * игры в нём) и сид копии seed. Ни того ни другого — пример (полка, перенос): три вещи из четырёх с чем-нибудь открытым.
+ */
+function geometryOf(name: string, open?: PlacedOpen, share?: number, seed = 7): THREE.BufferGeometry {
+  const key = `${name}|${open ?? ''}|${share ?? ''}|${seed}`;
+  const hit = geoCache.get(key);
   if (hit) return hit;
   const p = ALL_PROPS[name]!;
   const mb = new MeshBuilder();
   const sl = new MeshBuilder();
   try {
-    p.build(new Xf(mb, null, 0, 0, 0, 0, sl), 7);
+    withOpenMode(open, () => p.build(new Xf(mb, null, 0, 0, 0, 0, sl), seed), share);
   } catch {
     /* вещь, которой нужен уровень вокруг, показывается тем, что успела собрать */
   }
@@ -398,9 +405,25 @@ function geometryOf(name: string): THREE.BufferGeometry {
   g.computeBoundingBox();
   if (g.boundingBox!.isEmpty()) g.boundingBox!.set(new THREE.Vector3(-0.2, 0, -0.2), new THREE.Vector3(0.2, 0.4, 0.2));
   g.computeBoundingSphere();
-  geoCache.set(name, g);
+  geoCache.set(key, g);
   return g;
 }
+const opensCache = new Map<string, boolean>();
+/** Есть ли у вещи что открыть: закрытая и открытая собираются по-разному (дверцы и ящики моделей полки, world/furniture.ts). */
+function canOpen(name: string): boolean {
+  let v = opensCache.get(name);
+  if (v === undefined) {
+    const a = geometryOf(name, 'shut').getAttribute('position').array;
+    const b = geometryOf(name, 'open').getAttribute('position').array;
+    v = a.length !== b.length || a.some((x, i) => Math.abs(x - b[i]!) > 1e-4);
+    opensCache.set(name, v);
+  }
+  return v;
+}
+/** Как оставлено показанное помещение (furnish.ts, roomOpenness): доля вещей с чем-нибудь открытым. */
+const roomShare = (): number => roomOpenness(world, lvl.layout!.seed, room.id);
+/** Сетка вещи партнёра в этом помещении — так, как её поставит игра: первая копия на этом плане (сборка уровня, placedSeed). */
+const thingGeo = (s: Pick<PlacedSpec, 'id' | 'prop' | 'open'>): THREE.BufferGeometry => geometryOf(s.prop, s.open, roomShare(), placedSeed(lvl.layout!.seed, 0, s.id));
 const thingMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.05, side: THREE.DoubleSide });
 const ghostMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, transparent: true, opacity: 0.38, depthWrite: false });
 /** Передвинутая вещь игры (сохранённая запись): плотнее призрака — это вещь игры, просто в другом месте. */
@@ -573,6 +596,8 @@ interface MovedHere {
   spec: PlacedSpec;
   o: LevelObject;
   spot: PlacedSpot | null;
+  /** Её коробка на новом месте (с местом для дверец, как у сборки уровня) — соседи в неё не врастают. */
+  box?: Box;
 }
 let edits: { removed: RemovedHere[]; moved: MovedHere[] } = { removed: [], moved: [] };
 const applies = (worlds: readonly WorldKind[], rooms: readonly string[]): boolean => worlds.includes(world) && (rooms.length === 0 || rooms.includes(roomType));
@@ -624,6 +649,7 @@ function layoutEdits(): void {
   for (const m of edits.moved) {
     const f = moveSpot(m.spec, room, pw, ALL_PROPS, taken);
     m.spot = f ? f.spot : null;
+    m.box = f?.box;
     if (f) taken.push(f.box);
   }
   applyHidden(wantHidden());
@@ -885,16 +911,13 @@ function refresh(): void {
     return;
   }
   if (cur.kind === 'thing') {
-    const mesh = new THREE.Mesh(geometryOf(cur.spec.prop), thingMat);
+    const chk = curCheck(cur);
+    // Как выпадет, а открытым дверцам здесь тесно — в игре эта копия закрыта: так её и показать.
+    const mesh = new THREE.Mesh(thingGeo(!cur.spec.replaces && chk.open === 'shut' ? { ...cur.spec, open: 'shut' } : cur.spec), thingMat);
     mesh.position.set(cur.at[0], cur.at[1], cur.at[2]);
     mesh.rotation.y = (cur.rot * Math.PI) / 2;
     mesh.userData.pick = true;
     holder.add(mesh);
-    const p = ALL_PROPS[cur.spec.prop]!;
-    const cell = cellOf(cur.at[0], cur.at[2]);
-    // Передвинутые вещи игры здесь (сохранённые) — тоже соседи: в них новая вещь врастать не должна.
-    const others = edits.moved.filter((m) => m.spot && !(cur && m.spec.id === cur.spec.id)).map((m) => worldBox(ALL_PROPS[m.spec.prop]!, m.spot!.at, m.spot!.rot));
-    const chk = checkSpot(p, cur.at, cur.rot, room, { floor: floorY, ceil: ceilY, pit: cell?.noFloor === true, tier: room.tier }, pw, others);
     // Замена встаёт на место вещи игры — проверки места её не касаются (там уже стояла вещь).
     problems = cur.spec.replaces ? [] : chk.problems;
     const so2 = cur.spec.replaces && cur.obj ? objById(cur.obj) : undefined;
@@ -934,6 +957,17 @@ function refresh(): void {
     problems = [];
   }
 }
+/**
+ * Проверка места вещи — как у сборки уровня (placed_place.ts, doorsAt): преграды, проходы, потолок и дверцы — у «открыто» место
+ * с вылетом, у «как выпадет» открытым должно хватить места впереди, иначе здесь она закрыта (open: 'shut'). Соседи — и
+ * передвинутые вещи игры здесь (сохранённые): в них новая вещь врастать не должна.
+ */
+function curCheck(c: ThingItem): ReturnType<typeof doorsAt> {
+  const p = ALL_PROPS[c.spec.prop]!;
+  const cell = cellOf(c.at[0], c.at[2]);
+  const others = edits.moved.filter((m) => m.box && m.spec.id !== c.spec.id).map((m) => m.box!);
+  return doorsAt(c.spec, p, c.at, c.rot, room, { floor: floorY, ceil: ceilY, pit: cell?.noFloor === true, tier: room.tier }, pw, others);
+}
 function cellOf(x: number, z: number): { noFloor?: boolean } | undefined {
   return pw.shells[room.tier]!.get(Math.round(x / CELL), Math.round(z / CELL));
 }
@@ -972,7 +1006,7 @@ function renderGhosts(): void {
     if (!p) continue;
     const it: ThingItem = { kind: 'thing', spec: JSON.parse(JSON.stringify(s)) as PlacedSpec, at: [0, 0, 0], rot: 0 };
     settle(it);
-    const mesh = new THREE.Mesh(geometryOf(s.prop), ghostMat);
+    const mesh = new THREE.Mesh(thingGeo(s), ghostMat);
     mesh.position.set(it.at[0], it.at[1], it.at[2]);
     mesh.rotation.y = (it.rot * Math.PI) / 2;
     mesh.userData.ghost = s.id;
@@ -980,7 +1014,9 @@ function renderGhosts(): void {
   }
   for (const m of edits.moved) {
     if (!m.spot || (cur && cur.kind === 'thing' && cur.spec.id === m.spec.id)) continue;
-    const mesh = new THREE.Mesh(geometryOf(m.spec.prop), movedMat);
+    // Передвинутая — с дверцами по записи (или закрытая, если открытым тесно); как выпадет — с долей помещения (сид её места в
+    // игре здесь не известен — пример).
+    const mesh = new THREE.Mesh(geometryOf(m.spec.prop, m.spot.open, roomShare()), movedMat);
     mesh.position.set(m.spot.at[0], m.spot.at[1], m.spot.at[2]);
     mesh.rotation.y = (m.spot.rot * Math.PI) / 2;
     mesh.userData.ghost = m.spec.id;
@@ -1764,6 +1800,19 @@ function chips<T extends string>(el: HTMLElement, items: readonly T[], label: (x
     }),
   );
 }
+/** Переключатель дверец в карточке: как выпадет (поля нет), закрыто, открыто. */
+type DoorsChip = PlacedOpen | 'roll';
+const DOORS: readonly DoorsChip[] = ['roll', ...PLACED_OPEN];
+const DOORS_RU: Record<DoorsChip, string> = { roll: 'как выпадет', shut: 'закрыто', open: 'открыто' };
+/** Что значит выбранное — с тем, как оставлено показанное помещение (у «как выпадет»). */
+function doorsNote(open: PlacedOpen | undefined, cramped: boolean): string {
+  if (open === 'shut') return 'Закрыто всё — в любом помещении, у каждой копии.';
+  if (open === 'open') return 'Открыто всё: дверцы распахнуты, ящики выдвинуты. Место ей ищется с вылетом дверец — распахнутая не перекроет проход и не войдёт в соседа.';
+  if (cramped) return 'Как выпадет — но здесь открытым дверцам впереди тесно (проход, сосед или стена): в этой точке она закрыта, как вещи игры у дверей. Где просторнее — как у вещей игры рядом.';
+  const share = roomShare();
+  const here = share >= 0.9 ? 'из этого помещения уходили второпях — открыто почти всё' : share > 0 ? 'это помещение как обычно — открыто кое-что' : 'это помещение прибрано — закрыто всё';
+  return `Как у вещей игры рядом: ${here}. Помещения в игре оставлены по-разному, и у каждой копии по-своему — здесь показана одна.`;
+}
 const change = (fn: () => void): void => {
   pushUndo();
   fn();
@@ -1866,6 +1915,20 @@ function syncPanel(): void {
   }
   const c = cur;
   $('what').textContent = c.kind === 'thing' ? (ALL_PROPS[c.spec.prop]?.ru ?? c.spec.prop) : `манекен · ${MAT_RU[c.spec.material]}`;
+  // Дверцы и ящики (квиз 18.11, «Как выпадет + переключатель»): только у вещи, которой есть что открыть.
+  const opens = c.kind === 'thing' && canOpen(c.spec.prop);
+  $('doors').toggleAttribute('hidden', !opens);
+  $('doorsnote').toggleAttribute('hidden', !opens);
+  if (opens && c.kind === 'thing') {
+    const spec = c.spec;
+    chips($('doors'), DOORS, (k) => DOORS_RU[k], (k) => (k === 'roll' ? spec.open === undefined : spec.open === k), (k) =>
+      change(() => {
+        if (k === 'roll') delete spec.open;
+        else spec.open = k;
+      }),
+    );
+    $('doorsnote').textContent = doorsNote(spec.open, !spec.replaces && !spec.open && curCheck(c).open === 'shut');
+  }
   if (c.kind === 'figure') {
     chips($('poses'), Object.keys(POSES) as PoseName[], (p) => POSE_RU[p], () => false, (p) => change(() => (c.spec.pose = clonePose(POSES[p] as Pose))));
     chips($('mats'), FIGURE_MATERIALS, (m) => MAT_RU[m], (m) => c.spec.material === m, (m) =>
@@ -2155,7 +2218,8 @@ function renderSaved(): void {
     const s = slotFor(slot, rooms);
     return s ? ` · ${slotLabel(s)}` : ' · везде';
   };
-  for (const s of [...savedThings.values()].sort(byAt)) add((s.moves ? (/передвин/.test(s.name) ? s.name : `${s.name} · передвинута`) : `${s.name} · ${ALL_PROPS[s.prop]?.ru.split(',')[0] ?? s.prop}`) + where(s.slot, s.rule.rooms), cur?.spec.id === s.id, () => openThing(s));
+  const doors = (o: PlacedOpen | undefined): string => (o ? ` · ${DOORS_RU[o]}` : '');
+  for (const s of [...savedThings.values()].sort(byAt)) add((s.moves ? (/передвин/.test(s.name) ? s.name : `${s.name} · передвинута`) : `${s.name} · ${ALL_PROPS[s.prop]?.ru.split(',')[0] ?? s.prop}`) + doors(s.open) + where(s.slot, s.rule.rooms), cur?.spec.id === s.id, () => openThing(s));
   for (const f of [...savedFigs.values()].sort(byAt)) add(`${f.name} · манекен, ${MAT_RU[f.material]}${where(f.slot, f.rule.rooms)}`, cur?.spec.id === f.id, () => openFigure(f));
   for (const r of [...savedRemoved.values()].sort(byAt)) add((/убран/.test(r.name) ? r.name : `${r.name} · убрана`) + where(r.slot, r.rooms), gameSel !== 0 && removedOf(gameSel)?.spec.id === r.id, () => openRemoved(r));
   savedEl.replaceChildren(...rows);

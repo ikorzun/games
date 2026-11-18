@@ -42,6 +42,14 @@ export interface GameThing {
  */
 export const GAME_NTH: readonly [number, number] = [0, 31];
 
+/**
+ * Дверцы и ящики вещи партнёра (квиз 18.11: «Как выпадет + переключатель»): закрыто всё или открыто всё. Поля нет — как
+ * выпадет: как у вещей игры в этом помещении (из одних комнат уходили второпях, другие прибраны; world/furniture.ts, openOf),
+ * у каждой копии по-своему.
+ */
+export type PlacedOpen = 'shut' | 'open';
+export const PLACED_OPEN: readonly PlacedOpen[] = ['shut', 'open'];
+
 export interface PlacedSpec {
   /** Имя-ключ: [a-z0-9_], уникальное. */
   id: string;
@@ -85,6 +93,11 @@ export interface PlacedSpec {
    * где запись сделана. В игре действует только в помещениях, которым выпал этот вариант; нет — везде.
    */
   slot?: string;
+  /**
+   * Дверцы и ящики (PlacedOpen): закрыто или открыто всё; нет поля — как выпадет. У замены и передвинутой — так же. Открытой
+   * вещи место ищется с вылетом дверец (PropSpec.reach): распахнутая не перекроет проход и не войдёт в соседа.
+   */
+  open?: PlacedOpen;
   /** Кто и когда сохранил (из инструмента). */
   at?: string;
 }
@@ -179,6 +192,7 @@ export function placedProblems(x: unknown, props: Readonly<Record<string, PropSp
   const near = f.near as unknown;
   if (near !== undefined && !(Array.isArray(near) && near.length === 2 && near.every((v) => within(v, [0, 1])))) bad.push('где в помещении: две доли от 0 до 1');
   if (f.slot !== undefined && !(typeof f.slot === 'string' && SLOT_RE.test(f.slot))) bad.push('вариант: «тип.номер»');
+  if (f.open !== undefined && !PLACED_OPEN.includes(f.open as PlacedOpen)) bad.push('дверцы: как выпадет, закрыто или открыто');
   const off = f.offset as unknown;
   if (!Array.isArray(off) || off.length !== 2 || !off.every((v) => within(v, PLACED_OFFSET))) bad.push('сдвиг: не дальше 3 м от края');
   const r = f.rule as Record<string, unknown> | undefined;

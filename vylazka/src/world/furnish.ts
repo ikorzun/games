@@ -901,7 +901,7 @@ const FURNISH: Partial<Record<GenRoom['type'], (ctx: RoomCtx) => void>> = {
 
 /** Обставить помещение. Порядок вызовов и ГСЧ фиксированы: один сид — одна и та же обстановка. */
 export function furnishRoom(ctx: RoomCtx): void {
-  withOpenness(roomOpenness(ctx), () => {
+  withOpenness(roomOpenness(ctx.world, ctx.seed, ctx.room.id), () => {
     // Стене лиц, карте и стене чемоданов нужна голая стена: их участки отводятся до мебели.
     reservePapers(ctx);
     // Офис стерилен, жёлтые комнаты пусты: у них своя обстановка и нет «следов людей» убежища.
@@ -917,11 +917,12 @@ export function furnishRoom(ctx: RoomCtx): void {
 /**
  * Как оставили помещение (партнёр 18.11: «открой дверцы и ящики у шкафов»; куратор, «Комната, из которой ушли»): из трети
  * комнат уходили второпях — открыто почти всё; в половине — как обычно; остальные прибраны, закрыто всё. Жёлтые комнаты
- * пусты и чисты — там закрыто везде. Доля одна на помещение, а не на вещь: открытое читается комнатой, а не рассыпью.
+ * пусты и чисты — там закрыто везде. Доля одна на помещение, а не на вещь: открытое читается комнатой, а не рассыпью. Её же
+ * берут вещи партнёра «как выпадет» и передвинутые вещи игры (world/level_build.ts): они строятся после обстановки.
  */
-function roomOpenness(ctx: RoomCtx): number {
-  if (ctx.world === 'yellow') return 0;
-  const r = hash2(ctx.seed, ctx.room.id, 0x0e1) / 4294967296;
+export function roomOpenness(world: WorldKind, seed: number, room: number): number {
+  if (world === 'yellow') return 0;
+  const r = hash2(seed, room, 0x0e1) / 4294967296;
   return r < 0.33 ? 0.95 : r < 0.83 ? 0.6 : 0;
 }
 

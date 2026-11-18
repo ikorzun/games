@@ -11,7 +11,9 @@
  * не становится то, чего не коснуться (потолочное), и то, что держит место на себе (FIXED).
  */
 import { hash2 } from '../core/rng';
+import { withOpenMode } from './furniture';
 import { asObject, withFlatHook } from './objects';
+import type { PlacedOpen } from './placed';
 import type { Xf } from './props';
 import { BIRD_PROPS, CRAFT_PROPS } from './props_craft';
 import { SEATING_PROPS } from './props_seating';
@@ -48,8 +50,16 @@ export const FIXED: ReadonlySet<string> = new Set(['coaming', 'elevator_doors', 
  * Хук видит только вещи, которые становятся объектами уровня сами по себе (журнал не занят, world/objects.ts): не часть
  * другой вещи и не сборку в стороне — снимок для картонки, проекцию (world/flat.ts). Картонки он видит через хук журнала
  * (flat = true): у них нет своего сида, он выводится из точки.
+ *
+ * Замена с дверцами по записи (placed.ts, PlacedSpec.open) отвечает SwapTo: какую вещь и закрыто или открыто у неё всё.
  */
-export type PropSwap = (name: string, xf: Xf, seed: number, flat?: boolean) => string | null;
+export type PropSwap = (name: string, xf: Xf, seed: number, flat?: boolean) => string | SwapTo | null;
+
+/** Вещь на месте вещи игры с дверцами по записи партнёра: 'shut' — всё закрыто, 'open' — всё открыто. */
+export interface SwapTo {
+  prop: string;
+  open: PlacedOpen;
+}
 let swap: PropSwap | null = null;
 
 /** Сид для картонки, которую сборка поставит настоящей вещью (передвинутая): из точки, где она стояла бы. */
@@ -80,15 +90,18 @@ function tracked(name: string, spec: PropSpec): PropSpec {
   return {
     ...spec,
     build: (xf, seed) => {
-      const sub = swap && xf.mb.log?.takes ? swap(name, xf, seed) : null;
-      if (sub === '') return;
+      const got = swap && xf.mb.log?.takes ? swap(name, xf, seed) : null;
+      if (got === '') return;
+      const sub = typeof got === 'string' ? got : (got?.prop ?? null);
+      // Дверцы по записи; нет записи — как выпадет: доля открытого у помещения, которое обставляется (furnish.ts).
+      const mode = got !== null && typeof got === 'object' ? got.open : undefined;
       const other = sub && sub !== name ? RAW[sub] : undefined;
       if (other) {
         const at = swapXf(xf, spec, other);
-        asObject(at, sub!, () => other.build(at, seed));
+        asObject(at, sub!, () => withOpenMode(mode, () => other.build(at, seed)));
         return;
       }
-      asObject(xf, name, () => spec.build(xf, seed));
+      asObject(xf, name, () => withOpenMode(mode, () => spec.build(xf, seed)));
     },
   };
 }

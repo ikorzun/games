@@ -11,12 +11,13 @@ import { mossCushion } from './moss';
 import { ColliderSet } from './colliders';
 import type { FlatMark } from './flat';
 import { decayAt } from '../systems/decay';
-import { doorSign, furnishRoom } from './furnish';
+import { doorSign, furnishRoom, roomOpenness } from './furnish';
 import { furnishExtras, GARDEN_H, NO_EXTRAS } from './furnish_extras';
 import { furnishPapers, newPaperState } from './furnish_papers';
 import { growWear } from './wear_growth';
 import { NOTE_ID, ROOM_LABEL, SIGN } from './signs';
 import type { CellInfo, RoomCtx, Slot } from './furnish';
+import { opennessNow, withOpenMode } from './furniture';
 import { MeshBuilder } from './kit';
 import type { SheetMark } from './kit';
 import type { BuiltLevel, CollapseSpec, ItemSpot, Landmark, LevelChunk, NavNode, RoomVariant, StairLink, Zone } from './level';
@@ -24,7 +25,7 @@ import { CEIL_TILE, MAT } from './materials';
 import { hermoDoor, stairsDown, Xf } from './props';
 import { doorFrame, doorLeaf, collapse, pit, warningSign, waterSheet } from './props_bunker';
 import { ALL_PROPS, withSwap } from './props_all';
-import type { PropSwap } from './props_all';
+import type { PropSwap, SwapTo } from './props_all';
 import { ObjectLog } from './objects';
 import { DOOR_IMAGE, SCREEN_IMAGES } from './screens';
 import type { FreeSlot } from './objects';
@@ -33,7 +34,7 @@ import { EdgeBuilder } from './edges';
 import { placeFigures } from './figure_place';
 import type { FigureSpec } from './figures';
 import { FIGURES } from './figures_data';
-import { moveSpot, NEVER, placeThings, roomIndex } from './placed_place';
+import { moveSpot, NEVER, placedSeed, placeThings, roomIndex } from './placed_place';
 import type { Box, PlacedSpot } from './placed_place';
 import type { PlacedSpec, RemovedSpec } from './placed';
 import { swapFits } from './placed';
@@ -243,6 +244,8 @@ interface MovedCall {
   room: GenRoom;
   xf: Xf;
   seed: number;
+  /** Доля открытого там, где её поставила игра (у проёма — 0): с ней она строится, если места по правилу нет. */
+  share: number;
 }
 
 /**
@@ -309,19 +312,21 @@ function editsFor(layout: GenLayout, placed: readonly PlacedSpec[], removed: rea
     if (!edits.still.has(room.id) && !NEVER.has(room.type)) {
       const m = moves.find((s) => s.moves!.thing === name && s.moves!.nth === nth && fitsRoom(s.rule.rooms, room) && variantOk(slotFor(s.slot, s.rule.rooms), room, name, nth));
       if (m) {
-        edits.moved.push({ spec: m, room, xf, seed });
+        edits.moved.push({ spec: m, room, xf, seed, share: opennessNow() });
         return '';
       }
     }
     if (flat) return null;
+    // Дверцы по записи (квиз 18.11): закрыто или открыто всё; нет — как выпадет, с долей помещения.
+    const to = (s: PlacedSpec): string | SwapTo => (s.open ? { prop: s.prop, open: s.open } : s.prop);
     for (const s of swaps) {
       if (s.replaces !== name) continue;
-      if (s.everywhere === true) return s.prop;
+      if (s.everywhere === true) return to(s);
       if (!fitsRoom(s.rule.rooms, room) || !variantOk(slotFor(s.slot, s.rule.rooms), room)) continue;
       const n = used.get(s.id) ?? 0;
       if (n >= s.rule.count) continue;
       used.set(s.id, n + 1);
-      return s.prop;
+      return to(s);
     }
     return null;
   };
@@ -862,6 +867,11 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     // после всей обстановки и фигур, каждая в своём помещении по правилу записи (world/placed_place.ts, moveSpot) — не в
     // проход, не в мебель и не в другую передвинутую. Места по правилу нет — стоит, где её поставила игра (с преградами:
     // у картонки их нет, а вернётся она настоящей вещью).
+    // Дверцы и ящики (квиз 18.11, «Как выпадет + переключатель»): по записи — закрыто или открыто всё; без неё — как у вещей
+    // игры в том же помещении (furnish.ts, roomOpenness): эти вещи строятся после обстановки, доли помещения у них уже нет. Где
+    // открытым дверцам впереди тесно, точка уже закрыта (placed_place.ts, doorsAt); передвинутая без места по правилу — как её
+    // построила бы обстановка на прежнем месте (у проёма — закрытой).
+    const share = (room: number): number => roomOpenness(layout.world, layout.seed, room);
     const taken: Box[] = [];
     for (const m of edits?.moved ?? []) {
       const p = ALL_PROPS[m.spec.prop]!;
@@ -869,10 +879,10 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       if (fit) {
         const s = fit.spot;
         const ch = chunkFor(m.room, Math.round(s.at[0] / CELL) + GRID / 2, Math.round(s.at[2] / CELL) + GRID / 2);
-        p.build(new Xf(ch.mb, col, s.at[0], s.at[1], s.at[2], s.rot, ch.sl), m.seed);
+        withOpenMode(s.open, () => p.build(new Xf(ch.mb, col, s.at[0], s.at[1], s.at[2], s.rot, ch.sl), m.seed), share(m.room.id));
         taken.push(fit.box);
         placed.push(s);
-      } else p.build(new Xf(m.xf.mb, col, m.xf.ox, m.xf.oy, m.xf.oz, m.xf.rot, m.xf.sl), m.seed);
+      } else withOpenMode(m.spec.open, () => p.build(new Xf(m.xf.mb, col, m.xf.ox, m.xf.oy, m.xf.oz, m.xf.rot, m.xf.sl), m.seed), m.share);
     }
     // Вещи партнёра (world/placed_place.ts): после фигур и всей обстановки — не врастают ни во что, проходы
     // оставляют свободными. Строятся как обычная обстановка: в сетку своего помещения, с преградами, объектом
@@ -882,7 +892,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       const gx = Math.round(p.at[0] / CELL) + GRID / 2;
       const gz = Math.round(p.at[2] / CELL) + GRID / 2;
       const ch = chunkFor(room, gx, gz);
-      ALL_PROPS[p.prop]!.build(new Xf(ch.mb, col, p.at[0], p.at[1], p.at[2], p.rot, ch.sl), (hash2(layout.seed, p.k + 1, p.id.length * 977) >>> 0) % 1000003);
+      withOpenMode(p.open, () => ALL_PROPS[p.prop]!.build(new Xf(ch.mb, col, p.at[0], p.at[1], p.at[2], p.rot, ch.sl), placedSeed(layout.seed, p.k, p.id)), share(p.room));
       placed.push(p);
     }
   });
