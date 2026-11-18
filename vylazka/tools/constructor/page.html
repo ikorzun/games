@@ -207,7 +207,7 @@ body.is-replacing .shelf__item { border-color: var(--v-replace); }
   <ul class="pushbox__list" id="pushlist" hidden></ul>
   <p class="pushbox__detail" id="pushdetail" hidden></p>
   <form class="pushbox__token" id="tokenform" hidden>
-    <p>Один раз: войти в GitHub. Нажми «Сделать токен» — откроется GitHub с уже отмеченной галочкой <b>repo</b>. Внизу страницы — «Generate token»; скопируй строку <b>ghp_…</b> и вставь сюда. Её хранит связка ключей Mac, больше она никуда не уходит.</p>
+    <p>Один раз: войти в GitHub. «Сделать токен» откроет GitHub — нужная галочка там уже стоит. В поле <b>Expiration</b> выбери <b>No expiration</b>, тогда входить больше не придётся. Внизу — «Generate token»; скопируй строку <b>ghp_…</b> и вставь сюда. Её хранит связка ключей Mac — только для этого проекта, больше она никуда не уходит.</p>
     <div class="row"><a class="btn btn--small" id="tokenlink" href="https://github.com/settings/tokens/new?scopes=repo&amp;description=%D0%9A%D0%BE%D0%BD%D1%81%D1%82%D1%80%D1%83%D0%BA%D1%82%D0%BE%D1%80%20Untitled%20Session" target="_blank" rel="noopener">Сделать токен ↗</a></div>
     <div class="row"><input type="password" id="tokenin" placeholder="ghp_…" autocomplete="off" spellcheck="false" aria-label="Токен GitHub"><button class="btn" type="submit">Войти и залить</button></div>
   </form>

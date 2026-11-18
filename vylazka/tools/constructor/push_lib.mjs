@@ -51,10 +51,10 @@ export function failKind(text) {
   return 'other';
 }
 
-/** Куда отправляем: протокол, хост (с портом) и владелец из адреса origin. */
+/** Куда отправляем: протокол, хост (с портом), путь (владелец/репозиторий) и владелец — из адреса origin. */
 export function parseRemote(url) {
-  const m = String(url).trim().match(/^(https?):\/\/(?:[^@/]+@)?([^/]+)\/([^/]+)\//);
-  return m ? { protocol: m[1], host: m[2], owner: m[3] } : null;
+  const m = String(url).trim().match(/^(https?):\/\/(?:[^@/]+@)?([^/]+)\/(([^/]+)\/[^?#]*?)\/?$/);
+  return m ? { protocol: m[1], host: m[2], path: m[3], owner: m[4] } : null;
 }
 
 const plural = (n, one, few, many) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many}`;
@@ -77,6 +77,43 @@ async function ensureIdentity() {
 const OFFLINE = 'Нет связи с GitHub — проверь интернет и нажми ещё раз. Всё сохранено у тебя.';
 const AUTH = { ok: false, auth: true, message: 'Нужен вход в GitHub — один раз.' };
 
+/**
+ * Ссылка «Сделать токен»: GitHub с уже отмеченной галочкой. Репозиторий открытый — хватает public_repo (токен не видит
+ * закрытых репозиториев партнёра); закрытый или не узнали — repo.
+ */
+export async function tokenUrl() {
+  const remote = parseRemote(await git(['remote', 'get-url', 'origin']).catch(() => ''));
+  let scope = 'repo';
+  if (remote?.host === 'github.com') {
+    try {
+      const r = await fetch(`https://api.github.com/repos/${remote.path.replace(/\.git$/, '')}`, { signal: AbortSignal.timeout(5000), headers: { 'user-agent': 'untitled-session-constructor' } });
+      if (r.ok && (await r.json())?.private === false) scope = 'public_repo';
+    } catch {
+      // не узнали — repo подходит всегда
+    }
+  }
+  return `https://github.com/settings/tokens/new?scopes=${scope}&description=${encodeURIComponent('Конструктор Untitled Session')}`;
+}
+const needLogin = async () => ({ ...AUTH, tokenUrl: await tokenUrl() });
+
+/**
+ * Правки партнёра не сошлись со свежими с GitHub: не тупик — его коммит уходит отдельной веткой partner/constructor-…,
+ * основная модель сводит её сама. Ничего у партнёра не меняется.
+ */
+async function pushAside(detail) {
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  const branch = `partner/constructor-${stamp}`;
+  try {
+    await git(['push', 'origin', `HEAD:refs/heads/${branch}`]);
+  } catch (e) {
+    const kind = failKind(e.stderr || e.message);
+    if (kind === 'auth') return needLogin();
+    if (kind === 'offline') return { ok: false, message: OFFLINE };
+    return { ok: false, message: 'Твои правки не сошлись со свежими с GitHub и отдельно не ушли. Ничего не потеряно — пришли это основной модели.', detail: short(e) };
+  }
+  return { ok: true, aside: branch, message: `Твои правки не сошлись со свежими с GitHub, поэтому ушли отдельно (${branch}). Ничего не потеряно — напиши в чат «залил», основная модель сведёт.`, detail };
+}
+
 /** Забрать свежее перед отправкой; не вышло — вернуть всё как было и сказать почему. */
 async function pullFresh() {
   try {
@@ -86,14 +123,14 @@ async function pullFresh() {
     await git(['rebase', '--abort']).catch(() => undefined);
     const kind = failKind(e.stderr || e.message);
     if (kind === 'offline') return { ok: false, message: OFFLINE };
-    if (kind === 'auth') return AUTH;
-    return { ok: false, message: 'Твои правки не сошлись со свежими с GitHub. Ничего не потеряно — напиши основной модели, она сведёт.', detail: short(e) };
+    if (kind === 'auth') return needLogin();
+    return pushAside(short(e));
   }
 }
 
 function pushFailed(e) {
   const kind = failKind(e.stderr || e.message);
-  if (kind === 'auth') return AUTH;
+  if (kind === 'auth') return needLogin();
   if (kind === 'offline') return { ok: false, message: OFFLINE };
   return { ok: false, message: 'GitHub не принял отправку. Всё сохранено у тебя — пришли это основной модели.', detail: short(e) };
 }
@@ -148,7 +185,9 @@ export const isToken = (t) => /^(ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40
 
 /**
  * Запомнить вход в GitHub: токен уходит помощнику git для паролей — на Mac это связка ключей. Помощник не настроен —
- * настраивается для этой папки (osxkeychain). Старый вход для того же адреса сначала стирается.
+ * настраивается для этой папки (osxkeychain). Вход — только для этого репозитория (credential.useHttpPath: запись в
+ * связке ключей с путём): другие пароли к github.com — например, сохранённый Safari пароль от сайта — не трогаются и не
+ * мешают. Старый вход этого же репозитория сначала стирается.
  */
 export async function saveToken(raw) {
   const token = String(raw ?? '').trim();
@@ -160,8 +199,9 @@ export async function saveToken(raw) {
     if (process.platform !== 'darwin') return { ok: false, message: 'Негде хранить вход: на этом компьютере git не настроен хранить пароли.' };
     await git(['config', 'credential.helper', 'osxkeychain']);
   }
-  const where = `protocol=${remote.protocol}\nhost=${remote.host}\n`;
+  await git(['config', 'credential.useHttpPath', 'true']);
+  const where = `protocol=${remote.protocol}\nhost=${remote.host}\npath=${remote.path}\nusername=${remote.owner}\n`;
   await git(['credential', 'reject'], { input: `${where}\n` }).catch(() => undefined);
-  await git(['credential', 'approve'], { input: `${where}username=${remote.owner}\npassword=${token}\n\n` });
+  await git(['credential', 'approve'], { input: `${where}password=${token}\n\n` });
   return { ok: true };
 }

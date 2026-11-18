@@ -3093,7 +3093,7 @@ renderKinds();
  * терминалом»). То же, что npm run constructor:push: проверка правилами игры, коммит, отправка на GitHub (serve.mjs →
  * push_lib.mjs). Вход в GitHub — один раз, токеном; его хранит связка ключей Mac. Есть только в программе на своём компьютере.
  */
-type PushResult = { ok: boolean; message?: string; problems?: string[]; detail?: string; auth?: boolean; nothing?: boolean };
+type PushResult = { ok: boolean; message?: string; problems?: string[]; detail?: string; auth?: boolean; nothing?: boolean; tokenUrl?: string };
 const POST = { method: 'POST', headers: { 'x-constructor': '1' } } as const;
 function showPush(state: 'busy' | 'ok' | 'bad' | 'note', msg: string, r?: PushResult): void {
   const box = $('pushbox');
@@ -3107,6 +3107,7 @@ function showPush(state: 'busy' | 'ok' | 'bad' | 'note', msg: string, r?: PushRe
   detail.textContent = r?.detail ?? '';
   detail.hidden = !r?.detail;
   $('tokenform').hidden = !r?.auth;
+  if (r?.tokenUrl) $<HTMLAnchorElement>('tokenlink').href = r.tokenUrl;
   if (r?.auth) $<HTMLInputElement>('tokenin').focus();
 }
 const showPushResult = (r: PushResult): void => showPush(r.ok ? 'ok' : 'bad', r.message ?? (r.ok ? 'Готово.' : 'Не получилось.'), r);

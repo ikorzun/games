@@ -11,7 +11,7 @@
 //   node tools/constructor/app.mjs --browser  — запасной путь без оболочки: окно браузера; выходит сам, когда страницу закрыли
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,6 +20,8 @@ const BROWSER = process.argv.includes('--browser');
 const LOG = join(ROOT, 'tools/constructor/work/app.log');
 const LOCK = join(ROOT, 'package-lock.json');
 const STAMP = join(ROOT, 'node_modules/.constructor-lock');
+/** Ставлю пакеты прямо сейчас: остался с прошлого раза — установку прервали, ставить заново. */
+const BUSY = join(ROOT, 'tools/constructor/work/.installing');
 
 function log(line) {
   try {
@@ -48,8 +50,30 @@ function run(cmd, args, { timeout = 120000, env } = {}) {
 const short = (t) => String(t).trim().split('\n').filter(Boolean).slice(-2).join(' ').slice(0, 240);
 const lockHash = () => (existsSync(LOCK) ? createHash('sha1').update(readFileSync(LOCK)).digest('hex') : '');
 
+/**
+ * Перед шагом 1: прошлую отправку могли оборвать (выключили Mac посреди «Отправляю…») — недоделанная пересадка правок
+ * (rebase) или замок .git/index.lock остались бы и ломали всё дальше. Пересадку — отменить (правки партнёра вернутся как
+ * были), замок — снять: при запуске программы git больше никто не держит.
+ */
+async function repair() {
+  const r = await run('git', ['rev-parse', '--absolute-git-dir']);
+  if (!r.ok) return;
+  const dir = r.out.trim();
+  // Сначала замок: без него git ничего, в том числе отмену пересадки, не сделает.
+  if (existsSync(join(dir, 'index.lock'))) {
+    log('замок .git/index.lock остался — снимаю');
+    rmSync(join(dir, 'index.lock'), { force: true });
+  }
+  if (existsSync(join(dir, 'rebase-merge')) || existsSync(join(dir, 'rebase-apply'))) {
+    log('недоделанная пересадка правок — отменяю');
+    const a = await run('git', ['rebase', '--abort']);
+    if (!a.ok) log(`отменить не вышло: ${short(a.err)}`);
+  }
+}
+
 /** Шаг 1: свежее с GitHub. Ответ — что сказать в окне (пусто — всё хорошо). */
 async function update() {
+  await repair();
   // package-lock.json партнёр не правит, а npm на его Mac мог переписать — вернуть как в репозитории, иначе git не обновит.
   await run('git', ['checkout', '--', 'package-lock.json']);
   const r = await run('git', ['pull', '--ff-only'], { timeout: 90000 });
@@ -69,7 +93,7 @@ function npm() {
 /** Шаг 2: пакеты. before — package-lock.json до шага 1. */
 async function packages(before) {
   const now = lockHash();
-  const have = existsSync(join(ROOT, 'node_modules'));
+  const have = existsSync(join(ROOT, 'node_modules')) && !existsSync(BUSY);
   if (have && existsSync(STAMP) && readFileSync(STAMP, 'utf8').trim() === now) return true;
   // Пакеты уже стоят (их ставили руками), а package-lock.json не менялся — переставлять незачем.
   if (have && !existsSync(STAMP) && before === now) {
@@ -77,6 +101,7 @@ async function packages(before) {
     return true;
   }
   say('STATUS', 'Ставлю пакеты — это только после обновлений…');
+  writeFileSync(BUSY, now);
   const [cmd, pre] = npm();
   const r = await run(cmd, [...pre, 'ci', '--no-audit', '--no-fund'], { timeout: 600000, env: { PATH: `${dirname(process.execPath)}:${process.env.PATH ?? ''}` } });
   if (!r.ok) {
@@ -84,6 +109,7 @@ async function packages(before) {
     return false;
   }
   writeFileSync(STAMP, now);
+  rmSync(BUSY, { force: true });
   return true;
 }
 

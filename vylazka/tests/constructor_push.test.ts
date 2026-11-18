@@ -17,10 +17,12 @@ describe('конструктор: «Залить в игру»', () => {
     expect(failKind('error: Your local changes to the following files would be overwritten by merge')).toBe('other');
   });
   it('берёт хост и владельца из адреса origin; путь к папке — не адрес', () => {
-    expect(parseRemote('https://github.com/ikorzun/games.git')).toEqual({ protocol: 'https', host: 'github.com', owner: 'ikorzun' });
-    expect(parseRemote('https://someone@github.com/ikorzun/games')).toEqual({ protocol: 'https', host: 'github.com', owner: 'ikorzun' });
-    expect(parseRemote('http://127.0.0.1:5400/ikorzun/games.git')).toEqual({ protocol: 'http', host: '127.0.0.1:5400', owner: 'ikorzun' });
+    // Путь — ключ входа в связке ключей (credential.useHttpPath): вход только для этого репозитория.
+    expect(parseRemote('https://github.com/ikorzun/games.git')).toEqual({ protocol: 'https', host: 'github.com', path: 'ikorzun/games.git', owner: 'ikorzun' });
+    expect(parseRemote('https://someone@github.com/ikorzun/games/')).toEqual({ protocol: 'https', host: 'github.com', path: 'ikorzun/games', owner: 'ikorzun' });
+    expect(parseRemote('http://127.0.0.1:5400/ikorzun/games.git')).toEqual({ protocol: 'http', host: '127.0.0.1:5400', path: 'ikorzun/games.git', owner: 'ikorzun' });
     expect(parseRemote('/tmp/remote.git')).toBeNull();
+    expect(parseRemote('https://github.com/')).toBeNull();
   });
   it('токен узнаёт по виду, лишнее — нет', () => {
     expect(isToken(`ghp_${'a1B2'.repeat(9)}`)).toBe(true);

@@ -9,3 +9,4 @@ dist-single/
 tools/constructor/work/.cache/
 tools/constructor/work/app.log
 tools/constructor/work/app-build.log
+tools/constructor/work/.installing

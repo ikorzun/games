@@ -135,7 +135,7 @@ export async function startServer({ port = 5199, replaceOld = false, note = '' }
         if (!saved.ok) return send(res, 200, saved);
         const result = await pushAll();
         // Вход сохранён, а GitHub всё равно не пускает — токен не тот (нет галочки repo, истёк, другой аккаунт).
-        if (result.auth) result.message = 'GitHub не принял этот токен. Сделай новый — с галочкой repo — и вставь его.';
+        if (result.auth) result.message = 'GitHub не принял этот токен. Сделай новый (галочка в ссылке уже стоит) и вставь его.';
         return send(res, 200, { ok: true, result });
       }
       if (req.method === 'POST' && p === '/api/quit') {
