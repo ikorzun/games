@@ -7,7 +7,7 @@ import type { Vec3 } from '../src/core/types';
 import { generateLayout } from '../src/gen/layout';
 import type { WorldKind } from '../src/gen/layout';
 import { ColliderSet } from '../src/world/colliders';
-import { FURNITURE_FROM, furnished, jitter, pickOf, recordS3, s3Bounds, s3Put, s3Size, S3_BED, S3_SEAT, S3_SHELVES, S3_TOP } from '../src/world/furniture';
+import { FURNITURE_FROM, furnished, jitter, pickOf, recordS3, s3Bounds, s3Put, s3Size, S3_BED, S3_SEAT, S3_SHELVES, S3_TOP, S3_WORKTOP } from '../src/world/furniture';
 import { MeshBuilder } from '../src/world/kit';
 import type { MeshData } from '../src/world/kit';
 import { buildLevel, cellToWorld, tierFloor } from '../src/world/level_build';
@@ -67,7 +67,7 @@ function upArea(name: string, y: number, tol = 0.012, x0 = -Infinity, x1 = Infin
 
 describe('мебель полки: что знают о моделях те, кто на них кладёт', () => {
   it('столешницы, сиденья и лежанки — настоящие поверхности моделей (машинка и записка не висят в воздухе)', () => {
-    for (const [name, y] of [...Object.entries(S3_TOP), ...Object.entries(S3_SEAT), ...Object.entries(S3_BED)]) {
+    for (const [name, y] of [...Object.entries(S3_TOP), ...Object.entries(S3_WORKTOP), ...Object.entries(S3_SEAT), ...Object.entries(S3_BED)]) {
       expect(name in SAND3D_META, name).toBe(true);
       expect(upArea(name, y), `${name} на ${y}`).toBeGreaterThan(0.1);
     }

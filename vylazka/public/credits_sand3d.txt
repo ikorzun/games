@@ -40,3 +40,7 @@ s3_table_meeting — Bench style three column standing desk: Articraft Data, Mat
 s3_coat_stand — Coatstand: "Coat Rack" by KurtSteiner, https://sketchfab.com/3d-models/df67fa2a371a483b80be5fb62e5fafce, CC-BY-4.0; modified: rewritten as a sand3d program
 s3_bench_blue — Bench: "Model" by felteuks, https://sketchfab.com/3d-models/3f5c609f471146e0bb115e8e2bee63fe, CC-BY-4.0; modified: rewritten as a sand3d program
 s3_bench_cast — Bench: "Bench" by seven.four, https://sketchfab.com/3d-models/26c89011fdbe4f3d8da663dd2ad7887a, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_buffet_louvered — Cabinet: "Buffet-bois" by amigos3d, https://sketchfab.com/3d-models/1bed3d79642943bea0e7a04b289011b4, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_reception_desk — Reception front desk: Articraft Data, Matt Zhou et al., record rec_desk_with_drawer_ba4acc9c90a5440187cd1f98a3bfbabc, CC BY 4.0; modified: rewritten as a sand3d program
+s3_kitchenette — Kitchenette: NVIDIA SimReady assets: "facilitySystem_kitchenette_module_a01" by NVIDIA, https://huggingface.co/datasets/nvidia/simready-assets/tree/653d91e182011f357cf1644013cc94ddf194d349/facilitySystem_kitchenette_module_a01, CC BY 4.0; modified: rewritten as a sand3d program
+s3_safe_old — Safe: "Old safe" by Fayruso, https://sketchfab.com/3d-models/a35cfc0346624133bbc7c4124e444548, CC-BY-4.0; modified: rewritten as a sand3d program

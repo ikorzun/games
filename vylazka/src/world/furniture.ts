@@ -220,6 +220,10 @@ export const FURNITURE_FROM: Readonly<Record<string, readonly string[]>> = {
   overturned_table: ['s3_table_work', 's3_chair_ladder', 's3_chair_carved'],
   st_seats: ['s3_bench_wood', 's3_bench_blue', 's3_bench_cast'],
   st_seats_double: ['s3_bench_wood', 's3_bench_blue'],
+  // Второй подбор 18.11.
+  tv_stand: ['s3_buffet_louvered'],
+  reception_desk: ['s3_reception_desk'],
+  kitchenette: ['s3_kitchenette'],
 };
 
 /** Высота столешницы (или крышки), м: на неё ставится машинка, терминал, тарелка, лампа. */
@@ -233,6 +237,16 @@ export const S3_TOP: Readonly<Record<string, number>> = {
   s3_table_meeting: 0.78,
   s3_stool_wood: 0.434,
   s3_nightstand: 0.6,
+  // Второй подбор: крышка тумбы под телевизор, высокая столешница стойки ресепшена, столешница мини-кухни, верх сейфа.
+  s3_buffet_louvered: 0.74,
+  s3_reception_desk: 1.05,
+  s3_kitchenette: 0.91,
+  s3_safe_old: 0.715,
+};
+
+/** Вторая поверхность модели, ниже главной: рабочая столешница стойки ресепшена (за высокой, со стороны сотрудника). */
+export const S3_WORKTOP: Readonly<Record<string, number>> = {
+  s3_reception_desk: 0.78,
 };
 
 /** Высота сиденья, м: на неё кладутся записка, стакан, пальто. */
@@ -273,6 +287,8 @@ export const S3_SHELVES: Readonly<Record<string, readonly Shelf[]>> = {
   s3_bookcase_dark: row(-0.49, 0.49, 0.06, 0.37, [0.09, 0.23], [0.35, 0.31], [0.69, 0.3], [1.02, 0.3], [1.35, 0.35]),
   s3_etagere: row(-0.46, 0.46, 0.03, 0.33, [0.14, 0.37], [0.93, 0.41], [1.36, 0.33]),
   s3_bookcase_office: row(-0.53, 0.53, 0.04, 0.43, [0.21, 0.27], [0.53, 0.32], [0.93, 0.3], [1.29, 0.33], [1.66, 0.25]),
+  // Открытая полка посередине тумбы под телевизор, между дверцами-жалюзи.
+  s3_buffet_louvered: row(-0.29, 0.29, 0.02, 0.36, [0.11, 0.2], [0.33, 0.36]),
   s3_rack_metal: [
     ...row(-0.63, 0.13, 0.03, 0.49, [0.08, 0.21], [0.3, 0.39]),
     ...row(0.19, 0.63, 0.03, 0.49, [0.08, 0.61]),

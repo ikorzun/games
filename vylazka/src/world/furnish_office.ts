@@ -18,7 +18,7 @@ import { floorSpots, free, homeCentre, homeStack, landmark, leanScreens, screenA
 import type { CellInfo, HomeItem, RoomCtx, Slot } from './furnish';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
-import { ceilingBreak, officeDeskTop } from './props_office';
+import { ceilingBreak, KITCHEN_SPOT, officeDeskTop } from './props_office';
 import { S3_TOP } from './furniture';
 import { hanging } from './objects';
 import type { Xf } from './props';
@@ -126,7 +126,8 @@ function reception(ctx: RoomCtx): void {
   const desk = wall(ctx, ['reception_desk']);
   if (desk) {
     landmark(ctx, 'reception', desk.s.xf, desk.x, 1.0, 0.4);
-    spot(ctx, desk.s.xf, desk.x + 0.7, 1.12, 0.62, 'table');
+    // Высокая столешница стойки (со стороны посетителя: полоса от лицевой стенки внутрь).
+    spot(ctx, desk.s.xf, desk.x + 0.7, S3_TOP.s3_reception_desk! + 0.005, 0.73, 'table');
   }
   // Напротив — стулья для тех, кто ждёт, и кактус между ними. Стул — модель полки Sand3D (world/furniture.ts): игрушечный из
   // набора KayKit партнёру не понравился, а с 18.11 вся мебель игры — из полки.
@@ -265,7 +266,7 @@ function breakroom(ctx: RoomCtx): void {
   const k = wall(ctx, ['kitchenette']);
   if (k) {
     landmark(ctx, 'breakroom', k.s.xf, k.x, 1.0, 0.4);
-    spot(ctx, k.s.xf, k.x - 0.6, 0.94, 0.3, 'table');
+    spot(ctx, k.s.xf, k.x + KITCHEN_SPOT.x, KITCHEN_SPOT.y, 0.3, 'table');
   }
   wall(ctx, ['vending_machine']);
   wall(ctx, ['water_cooler', -0.4], ['trash_bin', 0.35]);

@@ -7,6 +7,7 @@ import { POSTERS, SIGN } from './signs';
 import type { Vec3 } from '../core/types';
 import { MAT } from './materials';
 import type { Xf } from './props';
+import { jitter, s3Put } from './furniture';
 
 const DARK: Vec3 = [0.3, 0.3, 0.3];
 const GREY: Vec3 = [0.6, 0.6, 0.6];
@@ -43,11 +44,10 @@ export function mapBoard(xf: Xf, w = 1.4, h = 0.9): void {
 }
 
 /** Сейф 0,5 × 0,45 × 0,75 м. */
-export function safe(xf: Xf): void {
-  xf.solid([-0.25, 0, 0.02], [0.25, 0.75, 0.47], MAT.metalGreen, { bevel: 0.02, tint: [0.75, 0.8, 0.85], aoBottom: 0.6 });
-  xf.box([-0.2, 0.06, 0.47], [0.2, 0.69, 0.485], MAT.metalGreen, { bevel: 0.008, tint: [0.85, 0.9, 0.95] });
-  xf.cyl([0.08, 0.38, 0.485], 'z', 0.03, 0.06, MAT.steel, { segments: 10 });
-  xf.box([-0.13, 0.36, 0.485], [-0.05, 0.4, 0.52], MAT.brass);
+export const SAFE = 's3_safe_old';
+/** Сейф командной — модель полки Sand3D (старый сейф с кодовым диском и ручкой; второй подбор 18.11). */
+export function safe(xf: Xf, seed = 0): void {
+  s3Put(xf, SAFE, { tint: jitter(seed, 0.05) });
 }
 
 /** Ряд умывальников: n раковин с кранами и общей трубой. Ширина — 0,62 м на раковину. */

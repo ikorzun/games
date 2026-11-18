@@ -44,6 +44,7 @@ import {
   puddle,
   radioSet,
   safe,
+  SAFE,
   sinkRow,
   stalls,
   wallPhone,
@@ -336,10 +337,11 @@ function command(ctx: RoomCtx): void {
   }
   const s = take(ctx);
   if (s) {
-    const x = fit(s, 0.5, 0.5);
-    safe(s.xf.child(x, 0, 0));
+    const g = s3Size(SAFE);
+    const x = fit(s, g.w, g.d);
+    safe(s.xf.child(x, 0, 0), pointSeed(s.xf.child(x, 0, 0)));
     landmark(ctx, 'safe', s.xf, x, 0.4, 0.4);
-    spot(ctx, s.xf, x, 0.76, 0.25, 'table');
+    spot(ctx, s.xf, x, S3_TOP[SAFE]! + 0.005, 0.22, 'table');
   }
   const mid = ctx.cells.find((c) => c.doors === 0);
   if (mid) {

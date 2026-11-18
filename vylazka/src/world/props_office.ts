@@ -16,7 +16,7 @@ import { MAT } from './materials';
 import type { Xf } from './props';
 import { beam, rng, sheet, WHITE } from './props_more';
 import type { PropSpec } from './props_more';
-import { fillShelves, furnished, jitter, pickOf, s3As, s3Put, spanOf, S3_SHELVES, S3_TOP, turnOf } from './furniture';
+import { fillShelves, furnished, jitter, pickOf, s3As, s3Put, s3Size, spanOf, S3_SHELVES, S3_TOP, S3_WORKTOP, turnOf } from './furniture';
 
 /** Мебель отдела с полки Sand3D: столы (у отдела — одной модели), кресло, шкафы для папок. */
 const OFFICE_DESKS = ['s3_desk_office_grey', 's3_desk_office'] as const;
@@ -49,11 +49,6 @@ function bx(xf: Xf, a: Vec3, b: Vec3, mat: number, tint: Vec3 = WHITE, o: BoxOpt
 /** Плоская заплатка на передней стороне (лицом к +z). */
 function face(xf: Xf, x0: number, y0: number, x1: number, y1: number, z: number, mat: number, tint: Vec3 = WHITE): void {
   sheet(xf, [x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z], FRONT, mat, tint);
-}
-
-/** Плоская заплатка, смотрящая вверх. */
-function flat(xf: Xf, x0: number, z0: number, x1: number, z1: number, y: number, mat: number, tint: Vec3 = WHITE): void {
-  sheet(xf, [x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1], UP, mat, tint);
 }
 
 /** Грани коробки, оставляемые только спереди и сверху: для рядов мелких предметов (корешки, пластины). */
@@ -366,22 +361,21 @@ function trashBin(xf: Xf, seed: number): void {
   xf.cyl([0, 0.3, 0], 'y', 0.02, 0.14, MAT.metalGrey, { tint: METAL_DK, segments: 10 });
 }
 
-/** Стойка ресепшена 2,2 × 0,8 × 1,1: высокая белая лицевая стенка с бирюзовой полосой, ниже рабочая столешница с терминалом. */
+const RECEPTION = 's3_reception_desk';
+/** Лицевая стенка модели стойки — на этой глубине (с модели). */
+const RECEPTION_FACE = 0.88;
+
+/**
+ * Стойка ресепшена полки (Г-образная, столешница под дерево, высокая со стороны посетителя) с бирюзовой полосой офиса по
+ * лицевой стенке; на рабочей столешнице за ней — терминал экраном к рабочему месту (к −z) и стакан с ручками.
+ */
 function receptionDesk(xf: Xf, seed: number): void {
-  // Высокая лицевая стенка и широкая верхняя плита.
-  bx(xf, [-1.07, 0, 0.45], [1.07, 1.06, 0.78], MAT.enamel, WHT, { aoBottom: 0.6 });
-  bx(xf, [-1.1, 1.06, 0.42], [1.1, 1.1, 0.8], MAT.enamel, [1.3, 1.3, 1.25], { bevel: 0.01 });
-  bx(xf, [-1.07, 0.3, 0.78], [1.07, 0.62, 0.8], MAT.paintGreen, [0.4, 1.1, 1.0]);
-  bx(xf, [-1.07, 0, 0.78], [1.07, 0.06, 0.8], MAT.bakelite, PLASTIC_DK);
-  // Низкая рабочая столешница сзади на двух тумбах.
-  bx(xf, [-1.05, 0.68, 0.02], [1.05, 0.72, 0.45], MAT.enamel, WHT, { bevel: 0.008 });
-  for (const x of [-1.05, 0.67]) bx(xf, [x, 0, 0.04], [x + 0.38, 0.68, 0.43], MAT.metalGrey, METAL_DK, { aoBottom: 0.6 });
-  bx(xf, [-0.67, 0.4, 0.04], [0.67, 0.66, 0.06], MAT.metalGrey, METAL_DK);
-  // Терминал экраном к рабочему месту (к −z).
-  terminal(xf.child(-0.4, 0.72, 0.22, 2), seed);
-  bx(xf, [0.2, 0.72, 0.12], [0.34, 0.86, 0.3], MAT.bakelite, [1.3, 1.3, 1.3]);
-  xf.collider([-1.1, 0, 0.42], [1.1, 1.1, 0.8]);
-  xf.collider([-1.05, 0, 0.02], [1.05, 0.72, 0.42]);
+  s3Put(xf, RECEPTION, { tint: jitter(seed, 0.05) });
+  const g = s3Size(RECEPTION);
+  bx(xf, [-g.w / 2 + 0.03, 0.3, RECEPTION_FACE], [g.w / 2 - 0.03, 0.62, RECEPTION_FACE + 0.012], MAT.paintGreen, [0.4, 1.1, 1.0]);
+  const work = S3_WORKTOP[RECEPTION]!;
+  terminal(xf.child(-0.2, work, 0.3, 2), seed);
+  bx(xf, [0.03, work, 0.1], [0.11, work + 0.14, 0.2], MAT.bakelite, [1.3, 1.3, 1.3]);
 }
 
 /** Переговорная: стол полки для переговоров, на нём листы; шесть офисных кресел полки по длинным сторонам. */
@@ -443,39 +437,35 @@ function elevatorDoors(xf: Xf, seed: number): void {
   bx(xf, [-0.26, 2.25, 0.135], [0.26, 2.29, 0.14], MAT.glow, [3, 8, 5]);
 }
 
-/** Кухонный уголок 1,8 × 0,62 × 2,05: тумба с раковиной, микроволновка, кофемашина, верхний шкаф. */
+const KITCHEN = 's3_kitchenette';
+/** Верхний шкаф мини-кухни: низ и верх, м. */
+const KITCHEN_CAB: readonly [number, number] = [1.45, 2.05];
+/** Микроволновка на свободном правом краю столешницы (мойка у модели слева, плита посередине): x, ширина и высота. */
+const MICRO = { x0: 0.45, x1: 0.89, h: 0.27 } as const;
+
+/**
+ * Мини-кухня полки (сталь: мойка с краном, плита, шкафчики) — кремовая микроволновка на свободном краю столешницы, плитка над
+ * столешницей и верхний шкаф над мойкой.
+ */
 function kitchenette(xf: Xf, seed: number): void {
   const rnd = rng(seed);
-  // Тумба с фасадами и столешница.
-  bx(xf, [-0.9, 0.05, 0.02], [0.9, 0.9, 0.58], MAT.enamel, WHT, { aoBottom: 0.6 });
-  bx(xf, [-0.9, 0, 0.06], [0.9, 0.05, 0.56], MAT.bakelite, PLASTIC_DK);
-  bx(xf, [-0.9, 0.9, 0.02], [0.9, 0.93, 0.62], MAT.metalGrey, [0.95, 0.97, 1.0], { bevel: 0.006 });
-  for (const x of [-0.9, -0.3, 0.3]) {
-    bx(xf, [x + 0.02, 0.08, 0.58], [x + 0.58, 0.86, 0.6], MAT.enamel, [1.15, 1.15, 1.1]);
-    bx(xf, [x + 0.3, 0.7, 0.6], [x + 0.34, 0.8, 0.625], MAT.steel, [0.6, 0.6, 0.6]);
-  }
-  // Раковина: рамка, тёмная чаша, кран с изливом.
-  bx(xf, [-0.72, 0.93, 0.12], [-0.12, 0.945, 0.5], MAT.steel, [1.0, 1.0, 1.0]);
-  flat(xf, -0.66, 0.18, -0.18, 0.44, 0.946, MAT.bakelite, [0.35, 0.37, 0.4]);
-  xf.cyl([-0.42, 0.945, 0.1], 'y', 0.2, 0.018, MAT.steel, { tint: [1.1, 1.1, 1.1], segments: 6 });
-  beam(xf, [-0.42, 1.14, 0.1], [-0.42, 1.14, 0.26], 0.035, 0.035, MAT.steel, [1.1, 1.1, 1.1], { side: UP });
+  s3Put(xf, KITCHEN, { tint: jitter(seed, 0.05) });
+  const top = S3_TOP[KITCHEN]!;
   // Микроволновка: кремовый ящик с тёмным окном и панелью.
-  bx(xf, [0.05, 0.93, 0.1], [0.55, 1.2, 0.5], MAT.enamel, CREAM, { bevel: 0.008 });
-  bx(xf, [0.09, 0.98, 0.5], [0.38, 1.15, 0.51], MAT.glass, [0.5, 0.55, 0.55]);
-  bx(xf, [0.42, 0.98, 0.5], [0.52, 1.15, 0.51], MAT.bakelite, [1.2, 1.2, 1.2]);
-  bx(xf, [0.44, 1.1, 0.51], [0.5, 1.13, 0.515], MAT.glow, [3 + rnd() * 3, 8, 5]);
-  // Кофемашина: тёмный корпус, носик, стеклянный кофейник.
-  bx(xf, [0.64, 0.93, 0.14], [0.86, 1.32, 0.48], MAT.bakelite, [1.4, 1.4, 1.4], { bevel: 0.008 });
-  bx(xf, [0.66, 0.93, 0.34], [0.84, 1.0, 0.5], MAT.metalGrey, METAL_DK);
-  xf.cyl([0.75, 0.95, 0.42], 'y', 0.13, 0.055, MAT.glass, { tint: [0.9, 0.75, 0.5], segments: 8 });
-  bx(xf, [0.8, 1.22, 0.48], [0.83, 1.25, 0.49], MAT.glow, [11, 5, 1]);
-  // Плитка над столешницей и верхний шкаф.
-  face(xf, -0.9, 0.93, 0.9, 1.45, 0.03, MAT.tile, [1.2, 1.2, 1.15]);
-  bx(xf, [-0.9, 1.45, 0.02], [-0.05, 2.05, 0.34], MAT.enamel, [1.15, 1.15, 1.1], { bevel: 0.008 });
-  face(xf, -0.476, 1.48, -0.474, 2.02, 0.342, MAT.bakelite, [0.6, 0.6, 0.6]);
-  for (const x of [-0.5, -0.45]) bx(xf, [x - 0.01, 1.5, 0.34], [x + 0.01, 1.62, 0.36], MAT.steel, [0.6, 0.6, 0.6]);
-  xf.collider([-0.9, 0, 0.02], [0.9, 0.93, 0.62]);
+  bx(xf, [MICRO.x0, top, 0.1], [MICRO.x1, top + MICRO.h, 0.5], MAT.enamel, CREAM, { bevel: 0.008 });
+  bx(xf, [MICRO.x0 + 0.04, top + 0.05, 0.5], [MICRO.x0 + 0.29, top + 0.22, 0.51], MAT.glass, [0.5, 0.55, 0.55]);
+  bx(xf, [MICRO.x1 - 0.12, top + 0.05, 0.5], [MICRO.x1 - 0.03, top + 0.22, 0.51], MAT.bakelite, [1.2, 1.2, 1.2]);
+  bx(xf, [MICRO.x1 - 0.1, top + 0.17, 0.51], [MICRO.x1 - 0.05, top + 0.2, 0.515], MAT.glow, [3 + rnd() * 3, 8, 5]);
+  // Плитка над столешницей и верхний шкаф над мойкой.
+  const [c0, c1] = KITCHEN_CAB;
+  face(xf, -0.9, top, 0.9, c0, 0.004, MAT.tile, [1.2, 1.2, 1.15]);
+  bx(xf, [-0.9, c0, 0.02], [-0.05, c1, 0.34], MAT.enamel, [1.15, 1.15, 1.1], { bevel: 0.008 });
+  face(xf, -0.476, c0 + 0.03, -0.474, c1 - 0.03, 0.342, MAT.bakelite, [0.6, 0.6, 0.6]);
+  for (const x of [-0.5, -0.45]) bx(xf, [x - 0.01, c0 + 0.05, 0.34], [x + 0.01, c0 + 0.17, 0.36], MAT.steel, [0.6, 0.6, 0.6]);
 }
+
+/** Место для вещи на кухне отдыха — на крыше микроволновки (x и высота от стены). */
+export const KITCHEN_SPOT = { x: (MICRO.x0 + MICRO.x1) / 2, y: S3_TOP[KITCHEN]! + MICRO.h + 0.005 } as const;
 
 /** Знак «мокрый пол» 0,32 × 0,4 × 0,62: жёлтая раскладная стремянка из двух наклонных щитов, без надписей. */
 function wetFloorSign(xf: Xf, seed: number): void {
@@ -708,11 +698,12 @@ export const OFFICE_PROPS: Record<string, PropSpec> = {
   office_clock: { w: 0.34, d: 0.06, h: 0.34, mount: 'wall', y: 2.05, ru: 'настенные часы', build: officeClock },
   vending_machine: { w: 0.95, d: 0.8, h: 1.83, mount: 'floor', ru: 'торговый автомат с подсвеченной витриной', build: vendingMachine },
   trash_bin: { w: 0.28, d: 0.28, h: 0.32, mount: 'free', ru: 'урна офисная', build: trashBin },
-  reception_desk: { w: 2.2, d: 0.8, h: 1.1, mount: 'floor', ru: 'стойка ресепшена с бирюзовой полосой и терминалом', build: receptionDesk },
+  // Высота — по монитору терминала: он выглядывает над высокой столешницей, как у всех ресепшенов.
+  reception_desk: { w: s3Size(RECEPTION).w, d: RECEPTION_FACE + 0.02, h: Math.ceil((S3_WORKTOP[RECEPTION]! + 0.41) * 100) / 100, mount: 'floor', ru: 'стойка ресепшена с бирюзовой полосой и терминалом', build: receptionDesk },
   meeting_table: { w: 2.6, d: 2.42, h: 1.02, mount: 'free', ru: 'переговорный стол с шестью креслами', build: meetingTable },
   server_rack: { w: 0.6, d: 0.9, h: 2.0, mount: 'floor', ru: 'серверная стойка с рядами огоньков', build: serverRack },
   elevator_doors: { w: 1.5, d: 0.14, h: 2.35, mount: 'floor', ru: 'закрытые двери лифта с кнопкой вызова', build: elevatorDoors },
-  kitchenette: { w: 1.8, d: 0.62, h: 2.05, mount: 'floor', ru: 'кухонный уголок: мойка, микроволновка, кофемашина, верхний шкаф', build: kitchenette },
+  kitchenette: { w: s3Size(KITCHEN).w, d: s3Size(KITCHEN).d, h: KITCHEN_CAB[1], mount: 'floor', ru: 'мини-кухня: мойка, плита, микроволновка, верхний шкаф', build: kitchenette },
   wet_floor_sign: { w: 0.32, d: 0.4, h: 0.62, mount: 'free', ru: 'жёлтый знак «мокрый пол»', build: wetFloorSign },
   birch: { w: 0.56, d: 0.56, h: 2.72, mount: 'free', ru: 'берёза, проросшая сквозь пол и потолок: белый ствол в чёрных отметинах', build: birch },
   desk_phone: { w: 0.22, d: 0.2, h: 0.1, mount: 'free', ru: 'офисный телефон', build: deskPhone },
