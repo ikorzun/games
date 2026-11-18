@@ -59,7 +59,7 @@ import type { LevelObject } from './world/objects';
 import { ALL_PROPS } from './world/props_all';
 import { CEIL_H, DX, DZ } from './gen/layout';
 import type { WorldKind } from './gen/layout';
-import type { BuiltLevel } from './world/level';
+import type { BuiltLevel, ItemSpot } from './world/level';
 import { figureMesh } from './world/figure_mesh';
 import type { FigureMaterial, FigureSpec } from './world/figures';
 import { FIGURES } from './world/figures_data';
@@ -814,6 +814,7 @@ export class Game {
     }
     const rank = level.layout?.rank ?? 1;
     this.session = dream ? new Session(level, dream.seed, dream.known, this.sessionCfg, dream.chainAt ?? 0) : null;
+    this.session?.setSpotRank(() => this.spotRanker());
     this.pieceWanted = dream?.piece === true;
     // Новая сцена или сессия: прежняя очередь сцен не в счёт — следующую поставит приложение.
     this.sceneNext = null;
@@ -1092,11 +1093,39 @@ export class Game {
     return Math.max(beam, this.cellLights && node >= 0 ? this.cellLights.at(node) : 0);
   }
 
+  /**
+   * Лежит ли на предмете вещь, которую ищут: такой предмет не растворяется — ни от касания, ни от провала пола, пока
+   * вещь не вспомнили (партнёр 18.11, 16:02: «вещи, которые должен найти игрок, не должны растворяться… если они лежат на
+   * поверхности, которая может раствориться, — её тоже не растворять»).
+   */
+  private holdsMemory(o: LevelObject): boolean {
+    const t = this.memoryThing;
+    return t !== null && t.state !== 'gone' && this.restsOn(t.pos, o);
+  }
+
+  /**
+   * Как оценивать места для вещи воспоминания (Session.setSpotRank; зовётся раз на выбор места). Вещь не появляется на
+   * том, что растворилось или растворяется, и там, где сейчас уходит пол: целую опору под ней касание уже не тронет
+   * (holdsMemory), а тронутую не вернуть. «Сеточное» помещение — только если другого места нет: там пол уходит из-под
+   * стоящего, а вещь разглядывают стоя.
+   */
+  private spotRanker(): (s: ItemSpot) => number {
+    const off = (this.illusions?.list ?? []).filter((i) => i.state !== 'here').map((i) => i.obj);
+    const a = this.pressure?.active;
+    const sinking = a && a.kind === 'collapse' ? a.room.id : -1;
+    return (s) => {
+      const p: Vec3 = [s.x, s.y, s.z];
+      if (s.room === sinking || off.some((o) => this.restsOn(p, o))) return Infinity;
+      return this.wireRooms.has(s.room) ? 1 : 0;
+    };
+  }
+
   /** Игрок коснулся предмета обстановки: тот растворяется, и всё, что на нём лежало, — вместе с ним. */
   private touchObject(id: number, dream: DreamEvent[], self = false): void {
     const ill = this.illusions;
-    if (!ill || !ill.touch(id)) return;
-    const o = ill.get(id)!.obj;
+    const o = ill?.get(id)?.obj;
+    // На нём лежит вещь, которую ищут: предмет держится, пока её не вспомнили.
+    if (!ill || !o || this.holdsMemory(o) || !ill.touch(id)) return;
     // Экран-проём: на нём не картинка, а другое место. Вошёл в него — оказался на лугу; сам экран при
     // этом рассыпается, как всё, чего коснулись, и после темноты встаёт снова.
     if (o.name === DOOR_NAME) this.doorway = id;
@@ -1108,7 +1137,8 @@ export class Game {
 
   /** Игрок коснулся вещи сна: она растворяется и вернётся, когда свет погаснет и зажжётся. by — отчего (для проверок). */
   private touchThing(t: Thing, dream: DreamEvent[], by = 'body'): void {
-    if (!this.things.touch(t)) return;
+    // Вещь, которую ищут, касания не замечает: она уходит, только когда её вспомнили (партнёр 18.11, 16:02).
+    if (t.memory || !this.things.touch(t)) return;
     t.why = { by, at: +this.time.toFixed(2), from: [+this.body.x.toFixed(2), +this.body.y.toFixed(2), +this.body.z.toFixed(2)] };
     this.touchCount += 1;
     this.wearGain += WEAR.touch;
@@ -1587,10 +1617,13 @@ export class Game {
     // Первые два круга — не больше одного события за сессию и только провал (он учит знаку красной сетки).
     const early = lap <= 2;
     // Давление — тоже правило: до второй ступени погружения его нет.
-    const kinds = !this.pressureAuto || this.stage < 2 ? [] : early && all.includes('collapse') ? (['collapse'] as const) : all;
+    // Там, где лежит вещь, которую ищут, пол не уходит (партнёр 18.11, 16:02): ни провала, ни «сеточного» правила.
+    const held = this.room >= 0 && s.active?.spot?.room === this.room;
+    const any = !this.pressureAuto || this.stage < 2 ? [] : early && all.includes('collapse') ? (['collapse'] as const) : all;
+    const kinds = held ? any.filter((k) => k !== 'collapse') : any;
     // «Сеточное» помещение опасно, если в нём стоять (квиз 17.11, ночь): простоял WIRE_STILL секунд — пол начинает
     // расходиться, как при провале (красная сетка — иди). Идущему ничего не грозит; в спокойном режиме — тоже.
-    const wr = !this.transition && !pr.active && !this.calm ? this.wireRooms.get(this.room) : undefined;
+    const wr = !this.transition && !pr.active && !this.calm && !held ? this.wireRooms.get(this.room) : undefined;
     if (!wr) this.wireStill = 0;
     else if (Math.hypot(b.vx, b.vz) < WIRE_STILL_SPEED) this.wireStill += dt;
     else this.wireStill = Math.max(0, this.wireStill - dt * 2);
@@ -1606,6 +1639,10 @@ export class Game {
       // Фронт дошёл до предмета — пол под ним ушёл, и предмет рассыпается (как от касания, но место не стирается).
       while (this.pressureObjects.length > 0 && this.pressureObjects[0]!.d < a.radius) {
         const id = this.pressureObjects.shift()!.id;
+        const o = this.illusions?.get(id)?.obj;
+        // Опора вещи, которую ищут, не уходит и с полом (провал там и не начинается — см. выше; это — на случай, если
+        // вещь легла на неё, когда фронт уже шёл).
+        if (o && this.holdsMemory(o)) continue;
         if (this.illusions?.touch(id)) dream.push({ type: 'touch', name: this.illusions.get(id)!.obj.name, what: 'gone' });
       }
     }

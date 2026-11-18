@@ -254,6 +254,45 @@ describe('сессия: где появляется вещь', () => {
     expect(m.state).toBe('active');
     expect(s.hold).toBe(0);
   });
+
+  it('оценка мест от игры (setSpotRank): негодное не берётся никогда, «хуже» — только когда лучшего нет; нет годных — вещь ждёт', () => {
+    const level = levelOf(SEED, 3);
+    const node = startNode(level);
+    // Годных мест два, «хуже» — каждое третье, остальные нельзя (как место на растворённом предмете).
+    const good = new Set([level.spots[5]!, level.spots[17]!]);
+    const worse = new Set(level.spots.filter((_, i) => i % 3 === 0 && !good.has(level.spots[i]!)));
+    const s = new Session(level, 6, new Set(), DEFAULT_SESSION);
+    let asked = 0;
+    s.setSpotRank(() => {
+      asked += 1;
+      return (sp) => (good.has(sp) ? 0 : worse.has(sp) ? 1 : Infinity);
+    });
+    const got: ItemSpot[] = [];
+    for (let k = 0; k < 5; k++) {
+      s.rush();
+      s.update(DT, idle(level, node), clear);
+      const m = s.active!;
+      got.push(m.spot!);
+      run(s, 2, gaze(m.spot!, node));
+    }
+    // Сначала оба годных (в любом порядке), потом — только из «хуже».
+    expect(new Set(got.slice(0, 2))).toEqual(good);
+    for (const sp of got.slice(2)) expect(worse.has(sp)).toBe(true);
+    // Оценщик берётся заново на каждый выбор места: состояние мира меняется между вспышками.
+    expect(asked).toBe(5);
+    // Негодно всё — вспышки нет, пока не появится годное место.
+    const none = new Session(level, 6, new Set(), DEFAULT_SESSION);
+    let open = false;
+    none.setSpotRank(() => (sp) => (open && sp === level.spots[9] ? 0 : Infinity));
+    none.rush();
+    none.update(DT, idle(level, node), clear);
+    none.update(DT, idle(level, node), clear);
+    expect(none.active).toBeNull();
+    expect(none.forget(node)).toBeNull();
+    open = true;
+    none.update(DT, idle(level, node), clear);
+    expect(none.active?.spot).toBe(level.spots[9]);
+  });
 });
 
 describe('сессия: «вспомнить»', () => {

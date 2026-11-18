@@ -14,11 +14,13 @@ import type { PressureRoom } from '../src/systems/pressure';
 import { DEFAULT_SESSION, OFFICE_CHAIN, YELLOW_CHAIN } from '../src/systems/session';
 import type { SessionEvent } from '../src/systems/session';
 import { DEFAULT_THINGS, looksAt, Things } from '../src/systems/things';
+import type { Thing } from '../src/systems/things';
 import { nodesInRange } from '../src/swarm/ai';
 import { DEFAULT_JUMPS, Jumps } from '../src/systems/jumps';
 import type { ColliderSet } from '../src/world/colliders';
 import type { FlatMark } from '../src/world/flat';
-import type { BuiltLevel } from '../src/world/level';
+import type { BuiltLevel, ItemSpot } from '../src/world/level';
+import type { LevelObject } from '../src/world/objects';
 import { buildLevel, cellToWorld, tierFloor } from '../src/world/level_build';
 import { ENV_BUNKER, ENV_OFFICE, ENV_YELLOW } from '../src/world/pockets';
 import { ALL_PROPS } from '../src/world/props_all';
@@ -232,6 +234,20 @@ class Harness {
     const t = this.game.things.list.find((x) => x.memory)!;
     return { id: t.id, memoryId: s.active!.def.id };
   }
+}
+
+/** Лежит ли точка на предмете — как в игре (Game.restsOn): над ним и в его границах. */
+const restsOn = (p: readonly number[], o: LevelObject): boolean =>
+  p[0]! > o.min[0] - 0.05 && p[0]! < o.max[0] + 0.05 && p[2]! > o.min[2] - 0.05 && p[2]! < o.max[2] + 0.05 && p[1]! > o.min[1] + 0.12 && p[1]! < o.max[1] + 0.15;
+
+/** Вспышка — и вещь воспоминания переложена на место sp (сессия тоже считает, что она там); ждём, пока соберётся. */
+function placeMemory(h: Harness, sp: ItemSpot): Thing {
+  h.reveal();
+  const t = h.game.things.list.find((x) => x.memory)!;
+  h.game.session!.active!.spot = sp;
+  t.pos = [sp.x, sp.y, sp.z];
+  expect(h.until(() => t.state === 'idle', 3), 'вещь не собралась').toBe(true);
+  return t;
 }
 
 beforeAll(() => setThingRegistry(ALL_PROPS));
@@ -2470,6 +2486,140 @@ describe('игра целиком: всё иллюзорно', () => {
     expect(stateOf(h, id)).toBe('gone');
   });
 
+  /**
+   * Встать вплотную к коробке предмета с той стороны, где можно стоять, и идти на него по полторы секунды. true — тело
+   * упёрлось в коробку (касание было), или предмет начал растворяться.
+   */
+  const pushInto = (h: Harness, id: number): boolean => {
+    const g = h.game;
+    const o = g.level!.objects![id - 1]!;
+    const box = g.colliders.boxes.find((b) => b.owner === id && !b.ghost)!;
+    const floor = floorOf(o);
+    const cx = (box.minX + box.maxX) / 2;
+    const cz = (box.minZ + box.maxZ) / 2;
+    const R = DEFAULT_CONTROLLER.radius + 0.02;
+    const sides: [number, number][] = [
+      [box.minX - 0.4, cz],
+      [box.maxX + 0.4, cz],
+      [cx, box.minZ - 0.4],
+      [cx, box.maxZ + 0.4],
+    ];
+    for (const [sx, sz] of sides) {
+      if (g.colliders.raycast(sx, floor + 1, sz, 0, -1, 0, 1.2) >= 1.1) continue;
+      const near: Parameters<ColliderSet['query']>[4] = [];
+      g.colliders.query(sx - R, sz - R, sx + R, sz + R, near);
+      if (near.some((b) => !b.ghost && b.maxY > floor + 0.4 && b.minY < floor + 1.7 && b.minX < sx + R && b.maxX > sx - R && b.minZ < sz + R && b.maxZ > sz - R)) continue;
+      g.teleport(sx, floor, sz);
+      g.aimAt(cx, floor + 1, cz);
+      for (let i = 0; i < 90 && stateOf(h, id) === 'here'; i++) h.tick({ ...emptyInput(), moveZ: 1 });
+      if (stateOf(h, id) !== 'here') return true;
+      const dx = Math.max(box.minX - g.body.x, 0, g.body.x - box.maxX);
+      const dz = Math.max(box.minZ - g.body.z, 0, g.body.z - box.maxZ);
+      if (Math.hypot(dx, dz) - DEFAULT_CONTROLLER.radius < 0.05) return true;
+    }
+    return false;
+  };
+
+  it('вещь, которую ищут, касания не замечает: наступил — она на месте; уходит, только когда её вспомнили (партнёр 18.11, 16:02)', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3 });
+    const g = h.game;
+    const { id } = h.reveal();
+    const t = g.things.list.find((x) => x.id === id)!;
+    expect(h.until(() => t.state === 'idle', 3)).toBe(true);
+    const floor = Math.floor((t.pos[1] + 0.3) / 4.5) * 4.5;
+    g.teleport(t.pos[0], floor, t.pos[2]);
+    h.run(1);
+    expect(t.state).toBe('idle');
+    expect(t.touched).toBe(false);
+    expect(h.log.dream.some((e) => e.type === 'touch' && e.what === 'gone' && e.name === t.kind)).toBe(false);
+    // Вспомнил — и вот теперь она рассыпается.
+    expect(h.standBefore(id)).toBe(true);
+    expect(h.until(() => h.count('recall') > 0, 4)).toBe(true);
+    expect(['changing', 'gone']).toContain(t.state);
+  });
+
+  it('предмет, на котором лежит вещь, которую ищут, держится: упёрся — ни он, ни она не растворились; вспомнил — он снова как всё', () => {
+    // Место для вещи на предмете (стол, полка, тумба), к которому можно подойти и вещь на котором видно.
+    for (const seed of [SEED, 5, 8, 15, 19, 22]) {
+      const level = levelOf(seed);
+      for (const sp of level.spots) {
+        const o = level.objects!.find((q) => q.solid && !q.flat && q.group === undefined && restsOn([sp.x, sp.y, sp.z], q));
+        if (!o || !level.colliders.boxes.some((b) => b.owner === o.id && !b.ghost)) continue;
+        // Следующее воспоминание не торопится: после recall новой вещи нет, и опору ничто не держит.
+        const h = new Harness(level, { seed: 3, cfg: { ...QUICK, delay: 500 } });
+        const g = h.game;
+        const t = placeMemory(h, sp);
+        if (!pushInto(h, o.id)) continue;
+        expect(stateOf(h, o.id), `сид ${seed}: опора вещи растворилась`).toBe('here');
+        expect(t.state).toBe('idle');
+        expect(t.touched).toBe(false);
+        // Вспомнил — запрет снят: упёрся снова — растворился, как всё.
+        if (!h.standBefore(t.id)) continue;
+        expect(h.until(() => h.count('recall') > 0, 4)).toBe(true);
+        h.run(1.5);
+        expect(pushInto(h, o.id)).toBe(true);
+        expect(h.until(() => stateOf(h, o.id) !== 'here', 1)).toBe(true);
+        expect(g.session!.active).toBeNull();
+        return;
+      }
+    }
+    throw new Error('на уровнях нет места для вещи на предмете, к которому можно подойти');
+  });
+
+  it('место для вещи, которую ищут, не берётся на том, что растворилось или растворяется', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: NOTHING });
+    const g = h.game;
+    const level = g.level!;
+    const ill = g.illusions!;
+    const under = level.objects!.filter((o) => o.group === undefined && level.spots.some((sp) => restsOn([sp.x, sp.y, sp.z], o)));
+    expect(under.length).toBeGreaterThan(5);
+    // Каждый второй тронут: растворяется сейчас, а через секунду его нет.
+    const touched = under.filter((_, i) => i % 2 === 0);
+    for (const o of touched) expect(ill.touch(o.id)).toBe(true);
+    const on = (sp: ItemSpot): boolean => touched.some((o) => restsOn([sp.x, sp.y, sp.z], o));
+    const ranker = (): ((s: ItemSpot) => number) => (g as unknown as { spotRanker(): (s: ItemSpot) => number }).spotRanker();
+    for (const rank of [ranker(), (h.run(1.2), ranker())]) {
+      for (const sp of level.spots) if (on(sp)) expect(rank(sp)).toBe(Infinity);
+      // Целые опоры и пол годятся; «сеточные» помещения — только если других мест нет.
+      for (const sp of level.spots) if (!on(sp)) expect(rank(sp)).toBe(g.wireRooms.has(sp.room) ? 1 : 0);
+    }
+    for (const o of touched) expect(stateOf(h, o.id)).toBe('gone');
+    // Сама вспышка: вещь ложится не на растворённое. И когда «забывается» (провал, газ, рой), переезжает тоже не туда —
+    // место каждый раз выбирает сессия, и ни разу из сорока не на тронутом.
+    const s = g.session!;
+    s.rush();
+    expect(h.until(() => s.active !== null, 3)).toBe(true);
+    const t = g.things.list.find((x) => x.memory)!;
+    expect(touched.some((o) => restsOn(t.pos, o))).toBe(false);
+    let moves = 0;
+    for (let k = 0; k < 40 && s.forget(g.playerNode()); k++) {
+      expect(on(s.active!.spot!), `перенос ${k}`).toBe(false);
+      moves += 1;
+    }
+    expect(moves).toBeGreaterThan(10);
+  });
+
+  it('где лежит вещь, которую ищут, пол не уходит: в «сеточном» помещении рядом с ней можно стоять', () => {
+    let tried = 0;
+    for (const seed of [SEED, 101, 202, 303, 404, 505, 606, 707]) {
+      const level = levelOf(seed);
+      const h = new Harness(level, { seed, calm: false });
+      const g = h.game;
+      h.until(() => g.transition === null, 8);
+      const entry = [...g.wireRooms][0];
+      if (!entry) continue;
+      const [id, room] = entry;
+      const sp = level.spots.find((s) => s.room === id);
+      if (!sp) continue;
+      placeMemory(h, sp);
+      tried += 1;
+      g.teleport((room.minX + room.maxX) / 2, room.floorY, (room.minZ + room.maxZ) / 2);
+      h.run(WIRE_STILL + 2);
+      expect(g.pressure!.active?.room.id === id, `сид ${seed}: пол пошёл там, где лежит вещь`).toBe(false);
+    }
+    expect(tried).toBeGreaterThanOrEqual(1);
+  });
+
   it('офис: фонаря нет, кнопка ничего не меняет — ни состояния, ни эха', () => {
     const h = new Harness(buildLevel(generateLayout(SEED, 2, 'office')), { seed: 3 });
     const g = h.game;
@@ -2620,11 +2770,13 @@ describe('игра целиком: всё иллюзорно', () => {
     }
   });
 
-  it('вещь воспоминания, тронутая игроком, возвращается собой и на своё место', () => {
+  it('вещь воспоминания, в которую игрок упёрся, на месте: не растворилась, не тронута, её по-прежнему ищут (партнёр 18.11, 16:02)', () => {
+    // Раньше она рассыпалась и возвращалась собой после темноты; теперь касания не замечает вовсе.
     const h = new Harness(levelOf(SEED), { seed: 3 });
     const g = h.game;
     const { id } = h.reveal();
     const t = g.things.list.find((x) => x.id === id)!;
+    expect(h.until(() => t.state === 'idle', 3)).toBe(true);
     const pos = [...t.pos];
     const kind = t.kind;
     if (t.collider >= 0) {
@@ -2635,18 +2787,14 @@ describe('игра целиком: всё иллюзорно', () => {
     const floor = Math.floor((t.pos[1] + 0.3) / 4.5) * 4.5;
     g.teleport(t.pos[0] - 0.4, floor, t.pos[2]);
     g.aimAt(t.pos[0], floor + 0.5, t.pos[2]);
-    const recalls = h.count('recall');
-    for (let i = 0; i < 60 && t.state === 'idle'; i++) h.tick({ ...emptyInput(), moveZ: 1 });
-    expect(t.state, 'вещь воспоминания не тронулась').not.toBe('idle');
-    expect(t.touched).toBe(true);
-    // Пока её нет, вспомнить её нельзя.
-    h.run(DEFAULT_THINGS.touchTime + 0.3);
-    expect(t.state).toBe('gone');
-    expect(h.count('recall')).toBe(recalls);
+    h.run(1, { ...emptyInput(), moveZ: 1 });
+    expect(t.state).toBe('idle');
+    expect(t.touched).toBe(false);
+    expect(t.dissolve).toBe(0);
+    // И свет выкл/вкл ничего не меняет: возвращать нечего.
     g.teleport(t.pos[0] - 4, floor, t.pos[2]);
-    h.run(2);
     blink(h, 1);
-    h.run(2);
+    h.run(1);
     expect(t.state).toBe('idle');
     expect(t.kind).toBe(kind);
     expect(t.pos).toEqual(pos);
@@ -2871,6 +3019,55 @@ describe('давление помимо Осыпи: пол рассыпаетс�
       expect(h.log.dream.filter((e) => e.type === 'pressure').map((e) => (e as { what: string }).what)).toEqual(['start']);
       if (onFloor.length > 0) expect(onFloor.some((i) => i.state !== 'here'), world).toBe(true);
     }
+  });
+
+  it('провал: фронт забирает то, что стоит на полу, — кроме опоры вещи, которую ищут (партнёр 18.11, 16:02)', () => {
+    for (const world of ['shelter', 'yellow'] as const) {
+      for (const seed of [7, 11, 23, 42]) {
+        const level = buildLevel(generateLayout(seed, 2, world));
+        const h = new Harness(level, { seed });
+        h.until(() => h.game.transition === null, 8);
+        const g = h.game;
+        // Помещение для давления, где на полу стоит предмет с местом для вещи.
+        let found: { room: PressureRoom; o: LevelObject; sp: ItemSpot } | null = null;
+        for (const room of g.pressureRooms.values()) {
+          for (const i of g.illusions!.list) {
+            const o = i.obj;
+            const x = (o.min[0] + o.max[0]) / 2;
+            const z = (o.min[2] + o.max[2]) / 2;
+            if (x < room.minX || x > room.maxX || z < room.minZ || z > room.maxZ || Math.abs(o.min[1] - room.floorY) > 0.3) continue;
+            const sp = level.spots.find((s) => restsOn([s.x, s.y, s.z], o));
+            if (sp) {
+              found = { room, o, sp };
+              break;
+            }
+          }
+          if (found) break;
+        }
+        if (!found) continue;
+        const { room, o, sp } = found;
+        const t = placeMemory(h, sp);
+        const others = g.illusions!.list.filter((i) => {
+          const x = (i.obj.min[0] + i.obj.max[0]) / 2;
+          const z = (i.obj.min[2] + i.obj.max[2]) / 2;
+          return i.obj.id !== o.id && x > room.minX && x < room.maxX && z > room.minZ && z < room.maxZ && Math.abs(i.obj.min[1] - room.floorY) < 0.3 && i.state === 'here';
+        });
+        // Встать в трёх-четырёх метрах от выхода и запустить провал напрямую (отладочный вход правила «здесь вещь» не знает).
+        const n = level.nav.filter((q) => q.room === room.id).sort((a, b) => Math.abs(nearestExit(room, a.x, a.z).dist - 3.6) - Math.abs(nearestExit(room, b.x, b.z).dist - 3.6))[0]!;
+        const exit = nearestExit(room, n.x, n.z).exit!;
+        g.teleport(n.x, n.y, n.z, yawTo(n.x, n.z, exit[0], exit[1]), 0);
+        h.tick();
+        expect(g.startPressure('collapse')).toBe(true);
+        h.run(0.5);
+        walkOut(h, room, exit);
+        expect(h.until(() => g.pressure!.active === null, 40), `${world}, сид ${seed}`).toBe(true);
+        expect(g.illusions!.get(o.id)!.state, `${world}, сид ${seed}: опора ушла с полом`).toBe('here');
+        expect(t.state).toBe('idle');
+        if (others.length > 0) expect(others.some((i) => i.state !== 'here'), `${world}, сид ${seed}: фронт не прошёл`).toBe(true);
+        return;
+      }
+    }
+    throw new Error('нет помещения для провала с местом для вещи на предмете');
   });
 
   it('сжатие: пошёл к выходу из самого дальнего угла — успел', () => {

@@ -327,12 +327,30 @@ export class Session {
     this.region = nodes;
   }
 
+  /**
+   * Годится ли место для вещи прямо сейчас (решает игра; оценщик берётся заново на каждый выбор места): 0 — да, больше —
+   * хуже (берётся, только если лучших нет), Infinity — нельзя. Вещь, которую ищут, не растворяется и не лежит на том, что
+   * растворилось или растворяется (партнёр 18.11, 16:02): опора под ней должна быть на месте, а пол — не уходить.
+   */
+  private spotRank: (() => (s: ItemSpot) => number) | null = null;
+
+  setSpotRank(fn: (() => (s: ItemSpot) => number) | null): void {
+    this.spotRank = fn;
+  }
+
   /** Место для вещи: в стольких клетках пути от игрока, чтобы за ней пришлось идти, но не через весь объект. */
   private pickSpot(from: number, rooms?: readonly RoomType[], seen?: (p: Vec3) => boolean): ItemSpot | null {
     const dist = this.distances(from);
     const c = this.cfg;
     const region = this.region;
-    const all = this.level.spots.filter((s) => !this.usedSpots.has(s) && (!region || region.has(this.spotNode.get(s) ?? -1)));
+    let all = this.level.spots.filter((s) => !this.usedSpots.has(s) && (!region || region.has(this.spotNode.get(s) ?? -1)));
+    const rank = this.spotRank?.();
+    if (rank) {
+      // Сначала — лучшие из годных; негодных не берём совсем, даже если других нет: вещь подождёт.
+      const r = new Map(all.map((s) => [s, rank(s)] as const));
+      const best = Math.min(...r.values());
+      all = Number.isFinite(best) ? all.filter((s) => r.get(s) === best) : [];
+    }
     // Сначала — места не на виду; если таких нет, любое (вещь всё равно нужна).
     const out = seen ? all.filter((s) => !seen([s.x, s.y + 0.3, s.z])) : all;
     const free = out.length > 0 ? out : all;
