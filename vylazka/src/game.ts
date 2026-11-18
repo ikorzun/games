@@ -1103,6 +1103,21 @@ export class Game {
     return t !== null && t.state !== 'gone' && this.restsOn(t.pos, o);
   }
 
+  /** Вещь, которую ищут, переехала («забылась»): преграда крупной едет с ней — на старом месте пусто, на новом держит. */
+  private moveMemory(to: Vec3): void {
+    const t = this.memoryThing;
+    if (!t) return;
+    t.pos = [to[0], to[1], to[2]];
+    if (t.collider < 0) return;
+    const old = this.colliders.boxes[t.collider]!;
+    old.off = true;
+    const id = this.colliders.addBox(to[0] - (old.maxX - old.minX) / 2, to[1], to[2] - (old.maxZ - old.minZ) / 2, to[0] + (old.maxX - old.minX) / 2, to[1] + (old.maxY - old.minY), to[2] + (old.maxZ - old.minZ) / 2);
+    const box = this.colliders.boxes[id]!;
+    box.owner = -t.id;
+    box.clear = true;
+    t.collider = id;
+  }
+
   /**
    * Как оценивать места для вещи воспоминания (Session.setSpotRank; зовётся раз на выбор места). Вещь не появляется на
    * том, что растворилось или растворяется, и там, где сейчас уходит пол: целую опору под ней касание уже не тронет
@@ -1999,6 +2014,7 @@ export class Game {
     s.over = true;
     if (this.memoryThing) {
       this.memoryThing.memory = false;
+      if (this.memoryThing.collider >= 0) this.colliders.boxes[this.memoryThing.collider]!.off = true;
       this.things.change(this.memoryThing, 'dust');
       this.memoryThing = null;
     }
@@ -2237,7 +2253,7 @@ export class Game {
   private switchPlace(plan: JumpPlan, dream: DreamEvent[]): void {
     // Кадр закрыт: забытая вещь переезжает сейчас.
     if (this.forgotTo) {
-      if (this.memoryThing) this.memoryThing.pos = this.forgotTo;
+      if (this.memoryThing) this.moveMemory(this.forgotTo);
       this.forgotTo = null;
     }
     const to = plan.to;
@@ -3025,7 +3041,11 @@ export class Game {
     const s = this.session!;
     if (e.type === 'reveal') {
       const sp = e.memory.spot!;
-      this.memoryThing = this.addThing(e.memory.def.thing, [sp.x, sp.y, sp.z], this.rng() * Math.PI * 2, 'dust', true);
+      // Крупная вещь (кресло, кулер, пальто, табличка) держит, как держит всё настоящее: она не растворяется (партнёр 18.11,
+      // 16:02), значит, сквозь неё не пройти. Взгляд её преграда пропускает (Aabb.clear): вспоминают её глазами.
+      const big = (ALL_PROPS[e.memory.def.thing]?.h ?? 0) > 0.4;
+      this.memoryThing = this.addThing(e.memory.def.thing, [sp.x, sp.y, sp.z], this.rng() * Math.PI * 2, 'dust', true, big);
+      if (this.memoryThing.collider >= 0) this.colliders.boxes[this.memoryThing.collider]!.clear = true;
       // Вспышка воспоминания: кадр на миг рвётся.
       this.glitch = Math.max(this.glitch, 0.5);
     } else if (e.type === 'recall') {
@@ -3035,6 +3055,8 @@ export class Game {
       this.memoryThing = null;
       if (t) {
         t.memory = false;
+        // Вспомнил — вещь уходит, и держать ей больше нечего.
+        if (t.collider >= 0) this.colliders.boxes[t.collider]!.off = true;
         // Мир отвечает: свет памяти вспыхивает на всю комнату и гаснет вместе с вещью, а сжатый к концу сессии мир
         // делает выдох — луч и взгляд на несколько секунд шире обычного.
         this.memBloom = 1;
@@ -3050,7 +3072,7 @@ export class Game {
       const sp = e.memory.spot!;
       if (this.memoryThing) {
         if (this.transition && !this.transition.switched) this.forgotTo = [sp.x, sp.y, sp.z];
-        else this.memoryThing.pos = [sp.x, sp.y, sp.z];
+        else this.moveMemory([sp.x, sp.y, sp.z]);
       }
     } else if (e.type === 'all-done') this.endIn = 3.5;
     else if (e.type === 'collapse') {

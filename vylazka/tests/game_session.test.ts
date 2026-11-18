@@ -17,7 +17,7 @@ import { DEFAULT_THINGS, looksAt, Things } from '../src/systems/things';
 import type { Thing } from '../src/systems/things';
 import { nodesInRange } from '../src/swarm/ai';
 import { DEFAULT_JUMPS, Jumps } from '../src/systems/jumps';
-import type { ColliderSet } from '../src/world/colliders';
+import { ColliderSet } from '../src/world/colliders';
 import type { FlatMark } from '../src/world/flat';
 import type { BuiltLevel, ItemSpot } from '../src/world/level';
 import type { LevelObject } from '../src/world/objects';
@@ -2536,6 +2536,65 @@ describe('игра целиком: всё иллюзорно', () => {
     expect(h.standBefore(id)).toBe(true);
     expect(h.until(() => h.count('recall') > 0, 4)).toBe(true);
     expect(['changing', 'gone']).toContain(t.state);
+  });
+
+  it('крупная вещь, которую ищут, держит, как всё настоящее: сквозь неё не пройти; взгляд и свет её преграда пропускает (куратор, 258)', () => {
+    // Офис: первая вещь цепочки — терминал (выше 0,4 м).
+    const h = new Harness(buildLevel(generateLayout(SEED, 2, 'office')), { seed: 3, cfg: { ...QUICK, delay: 500 } });
+    const g = h.game;
+    const { id } = h.reveal();
+    const t = g.things.list.find((x) => x.id === id)!;
+    expect((ALL_PROPS[t.kind]?.h ?? 0) > 0.4, t.kind).toBe(true);
+    expect(t.collider).toBeGreaterThanOrEqual(0);
+    const box = g.colliders.boxes[t.collider]!;
+    expect(box.ghost).toBeFalsy();
+    expect(box.clear).toBe(true);
+    expect(box.owner).toBe(-t.id);
+    // Луч сквозь её коробку не застревает; та же коробка без метки — остановила бы его у края.
+    const cy = (box.minY + box.maxY) / 2;
+    const cz = (box.minZ + box.maxZ) / 2;
+    const solo = new ColliderSet();
+    solo.add({ ...box });
+    expect(solo.raycast(box.minX - 1, cy, cz, 1, 0, 0, 3)).toBe(3);
+    const plain = new ColliderSet();
+    plain.add({ ...box, clear: false });
+    expect(plain.raycast(box.minX - 1, cy, cz, 1, 0, 0, 3)).toBeCloseTo(1, 5);
+    // Упёрся — стоит у коробки, а не в ней.
+    const floor = Math.floor((t.pos[1] + 0.3) / 4.5) * 4.5;
+    const R = DEFAULT_CONTROLLER.radius;
+    let pressed = false;
+    for (const [sx, sz] of [[box.minX - 0.5, cz], [box.maxX + 0.5, cz], [(box.minX + box.maxX) / 2, box.minZ - 0.5], [(box.minX + box.maxX) / 2, box.maxZ + 0.5]] as [number, number][]) {
+      if (g.colliders.raycast(sx, floor + 1, sz, 0, -1, 0, 1.2) >= 1.1) continue;
+      const near: Parameters<ColliderSet['query']>[4] = [];
+      g.colliders.query(sx - R, sz - R, sx + R, sz + R, near);
+      if (near.some((b) => !b.ghost && !b.off && b.maxY > floor + 0.4 && b.minY < floor + 1.7 && b.minX < sx + R && b.maxX > sx - R && b.minZ < sz + R && b.maxZ > sz - R)) continue;
+      g.teleport(sx, floor, sz);
+      g.aimAt((box.minX + box.maxX) / 2, floor + 0.5, cz);
+      h.run(1.5, { ...emptyInput(), moveZ: 1 });
+      const dx = Math.max(box.minX - g.body.x, 0, g.body.x - box.maxX);
+      const dz = Math.max(box.minZ - g.body.z, 0, g.body.z - box.maxZ);
+      const gap = Math.hypot(dx, dz) - R;
+      expect(gap, 'тело в коробке вещи').toBeGreaterThan(-0.05);
+      if (gap < 0.05) {
+        pressed = true;
+        break;
+      }
+    }
+    expect(pressed, 'к вещи не подойти ни с одной стороны').toBe(true);
+    expect(t.state).toBe('idle');
+    // «Забылась» — преграда переехала вместе с ней.
+    const ev = g.session!.forget(g.playerNode())!;
+    (g as unknown as { applySessionEvent(e: unknown, out: unknown[], dream: unknown[], node: number): void }).applySessionEvent(ev, [], [], g.playerNode());
+    expect(box.off).toBe(true);
+    const moved = g.colliders.boxes[t.collider]!;
+    expect(moved).not.toBe(box);
+    expect(moved.clear).toBe(true);
+    expect((moved.minX + moved.maxX) / 2).toBeCloseTo(t.pos[0], 5);
+    expect((moved.minZ + moved.maxZ) / 2).toBeCloseTo(t.pos[2], 5);
+    // Вспомнил — держать нечего.
+    expect(h.standBefore(t.id)).toBe(true);
+    expect(h.until(() => h.count('recall') > 0, 4)).toBe(true);
+    expect(moved.off).toBe(true);
   });
 
   it('предмет, на котором лежит вещь, которую ищут, держится: упёрся — ни он, ни она не растворились; вспомнил — он снова как всё', () => {

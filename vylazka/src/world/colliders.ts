@@ -28,6 +28,11 @@ export interface Aabb {
   cut?: WallCut;
   /** Преграда вещи, которую поставил партнёр (замена вещи игры): проверка «не врастать» её не видит (world/clearance.ts). */
   partner?: boolean;
+  /**
+   * Лучи проходят насквозь, тело — нет: преграда вещи, которую ищут (партнёр 18.11, 16:02: она не растворяется — значит,
+   * держит, как всё настоящее). Взгляд, свет и проверки видимости на ней не застревают: вспоминают её взглядом.
+   */
+  clear?: boolean;
 }
 
 /**
@@ -153,7 +158,7 @@ export class ColliderSet {
     this.query(Math.min(ox, ex), Math.min(oz, ez), Math.max(ox, ex), Math.max(oz, ez), scratch);
     let best = maxDist;
     for (const b of scratch) {
-      if (b.ghost) continue;
+      if (b.ghost || b.clear) continue;
       const t = rayBox(ox, oy, oz, dx, dy, dz, b);
       if (t >= 0 && t < best) best = t;
     }
