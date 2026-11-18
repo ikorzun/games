@@ -10,7 +10,8 @@ import { ColliderSet } from '../src/world/colliders';
 import { FURNITURE_FROM, furnished, jitter, pickOf, recordS3, s3Bounds, s3Put, s3Size, S3_BED, S3_SEAT, S3_SHELVES, S3_TOP } from '../src/world/furniture';
 import { MeshBuilder } from '../src/world/kit';
 import type { MeshData } from '../src/world/kit';
-import { buildLevel } from '../src/world/level_build';
+import { buildLevel, cellToWorld, tierFloor } from '../src/world/level_build';
+import { CELL } from '../src/world/shell';
 import { decodeModel, registerModels } from '../src/world/models';
 import { Xf } from '../src/world/props';
 import { ALL_PROPS } from '../src/world/props_all';
@@ -180,6 +181,29 @@ describe('места с мебелью полки собираются', () => {
     const names = new Set((l.objects ?? []).map((o) => o.name));
     const furniture = REFURNISHED.filter((n) => names.has(n)).length + [...names].filter((n) => n.startsWith('s3_')).length;
     expect(furniture, `${w}: мебели полки на уровне`).toBeGreaterThan(0);
+  });
+
+  it('мебель не выходит за стены своего помещения: все четыре угла вещи — в клетках того же помещения', () => {
+    for (const w of WORLDS) {
+      const l = level(w);
+      const layout = l.layout!;
+      const roomAt = new Map<string, number>();
+      for (const r of layout.rooms) for (const [cx, cz] of r.cells) roomAt.set(`${r.tier}:${cx}:${cz}`, r.id);
+      const cellOf = (v: number): number => Math.round(v / CELL - cellToWorld(0) / CELL);
+      let checked = 0;
+      for (const o of l.objects ?? []) {
+        const tier = [0, 1, 2].find((t) => Math.abs(tierFloor(t) - o.at[1]) < 0.3);
+        if (tier === undefined) continue;
+        const room = roomAt.get(`${tier}:${cellOf(o.at[0])}:${cellOf(o.at[2])}`);
+        if (room === undefined) continue;
+        const e = 0.05;
+        for (const [x, z] of [[o.min[0] + e, o.min[2] + e], [o.max[0] - e, o.min[2] + e], [o.min[0] + e, o.max[2] - e], [o.max[0] - e, o.max[2] - e]] as const) {
+          expect(roomAt.get(`${tier}:${cellOf(x)}:${cellOf(z)}`), `${w}: ${o.name} в помещении ${room}, угол ${x.toFixed(2)}, ${z.toFixed(2)}`).toBe(room);
+        }
+        checked++;
+      }
+      expect(checked, w).toBeGreaterThan(20);
+    }
   });
 
   it('вещь на столе, скамье или полке лежит на поверхности: под местом в пределах 3 см — грань, смотрящая вверх', () => {
