@@ -1480,11 +1480,19 @@ async function scenarioGen(browser, baseUrl) {
 }
 
 /** Ждать, пока звук придёт в нужное состояние (петли затихают и обрываются по часам звука, не сразу). */
-async function audioUntil(page, cond, ms = 6000) {
+/**
+ * Ждать условия по звуку. Звук затухает и по кадрам игры, и по часам WebAudio, а в проверках игра заморожена (freeze) —
+ * поэтому между опросами идёт и настоящее время, и время игры (три кадра). Раньше ждали только настоящее: на медленной машине
+ * CI затухание, идущее по кадрам, не продвигалось, и «гул стих» не дожидался (d32368f, df6bc8e, 4cb927b).
+ */
+async function audioUntil(page, cond, ms = 9000) {
   let au = await vz(page, () => window.__vz.audio());
   for (let t = 0; t < ms && !cond(au); t += 200) {
     await sleep(200);
-    au = await vz(page, () => window.__vz.audio());
+    au = await vz(page, () => {
+      window.__vz.step(3);
+      return window.__vz.audio();
+    });
   }
   return au;
 }

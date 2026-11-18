@@ -557,6 +557,36 @@ describe('игра целиком: цикл сессии', () => {
     expect(g.where).toBe('main');
   });
 
+  it('вернувшись из кармана в клетку, где лежит вещь, игрок встаёт рядом, а не в неё: вещь не растворяется (CI, «после двери луга»)', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 } });
+    const g = h.game;
+    // Место собирается вокруг игрока 1,6 с — пока идёт этот переход, скачок не начинается.
+    h.run(2);
+    const id = g.playerNode();
+    const n = g.level!.nav[id]!;
+    // Игрок — в той же клетке, но в 1,2 м от её середины (клетка 3 м): вещь в середине он не задевает.
+    const side = ([[1.2, 0], [-1.2, 0], [0, 1.2], [0, -1.2]] as const).find(([dx, dz]) => {
+      g.teleport(n.x + dx, n.y, n.z + dz, 0, 0);
+      h.run(0.1);
+      return g.playerNode() === id && Math.hypot(g.body.x - n.x, g.body.z - n.z) > 1;
+    });
+    expect(side).toBeDefined();
+    // Мелкая вещь без преграды — ровно в середине клетки, куда вернёт проём «назад».
+    const t = g.addThing('kk_book_set', [n.x, n.y, n.z], 0, 'dust');
+    h.run(0.2);
+    expect(t.state).toBe('idle');
+    expect(t.collider).toBeLessThan(0);
+    expect(g.beginJump({ cause: 'gaze', style: 'cut', to: 'void' }, [])).toBe(true);
+    expect(h.until(() => g.where === 'pocket', 3)).toBe(true);
+    h.run(1);
+    expect(g.beginJump({ cause: 'return', style: 'whiteout', to: 'elsewhere', dest: 'back' }, [])).toBe(true);
+    expect(h.until(() => g.where === 'main' && !g.jumping, 4)).toBe(true);
+    h.run(0.5);
+    expect(g.playerNode()).toBe(id);
+    expect(t.state, JSON.stringify(t.why ?? null)).toBe('idle');
+    expect(Math.hypot(g.body.x - t.pos[0], g.body.z - t.pos[2])).toBeGreaterThan(0.5);
+  });
+
   it('свет памяти: искомая вещь приносит свой свет, он разгорается у неё; вспомнил — гаснет вместе с вещью', () => {
     // Офис со второй вещи цепочки: кресло у начальника — свет окна (world/memory_light.ts).
     const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 } });

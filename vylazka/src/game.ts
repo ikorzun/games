@@ -2053,7 +2053,15 @@ export class Game {
   private freeSpot(x: number, y: number, z: number): [number, number] {
     const R = DEFAULT_CONTROLLER.radius + 0.06;
     const boxes: Aabb[] = [];
+    // Вещь сна без преграды растворяется от того, что рядом встали (stepIllusions): приземлиться в неё — значит растворить её,
+    // не дотронувшись. Так на CI искомая вещь пропадала после выхода из кармана: середина клетки, куда возвращает проём, —
+    // ровно её точка (смоук, «после двери луга», Thing.why: body в её же точке).
+    const nearThing = (px: number, pz: number): boolean =>
+      this.things.list.some(
+        (t) => t.state !== 'gone' && !t.still && t.collider < 0 && Math.abs(t.pos[1] - y) < 1.6 && Math.hypot(t.pos[0] - px, t.pos[2] - pz) < Math.min(0.5, t.radius * 0.6) + DEFAULT_CONTROLLER.radius + 0.15,
+      );
     const free = (px: number, pz: number): boolean =>
+      !nearThing(px, pz) &&
       !this.colliders
         .query(px - R, pz - R, px + R, pz + R, boxes)
         .some((b) => !b.off && !b.gone && b.maxY > y + 0.08 && b.minY < y + DEFAULT_CONTROLLER.height && b.maxX > px - R && b.minX < px + R && b.maxZ > pz - R && b.minZ < pz + R);
