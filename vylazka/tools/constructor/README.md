@@ -17,15 +17,22 @@
 1. **Node.js** (версия 22 или новее): скачать с nodejs.org (кнопка LTS) и установить. Или, если стоит Homebrew,
    `brew install node`.
 2. **Git**: в Терминале `git --version`; если его нет, macOS сама предложит поставить инструменты разработчика.
-3. В Терминале:
+3. В Терминале — положить проект в рабочую папку `~/Desktop/Claude/Usession` (слова партнёра 18.11: «теперь это рабочая
+   папка проекта»). Репозиторий ложится прямо в неё, игра — в `Usession/vylazka`. Строки можно вставить разом; запустить
+   их ещё раз не страшно (git ответит «already exists» — так и должно быть):
 
    ```bash
-   git clone https://github.com/ikorzun/games.git
-   cd games
-   git checkout claude/cool-clarke-gdi2gp
+   mkdir -p ~/Desktop/Claude/Usession && cd ~/Desktop/Claude/Usession
+   git init
+   git remote add origin https://github.com/ikorzun/games.git
+   git fetch origin claude/cool-clarke-gdi2gp
+   git checkout -b claude/cool-clarke-gdi2gp --track origin/claude/cool-clarke-gdi2gp
    cd vylazka
    npm install
    ```
+
+   Почему не `git clone`: он не кладёт проект в папку, где уже что-то есть, хотя бы невидимый `.DS_Store` от Finder. Если
+   раньше склонировал по старой инструкции и в папке лежит `games` — её можно удалить.
 
 4. Чтобы «залить» могло отправлять на GitHub, нужен вход: при первой отправке git спросит логин и токен (GitHub →
    Settings → Developer settings → Personal access tokens), либо один раз `gh auth login`, если стоит GitHub CLI.
@@ -35,12 +42,13 @@
 ## Каждый раз
 
 ```bash
-cd games/vylazka
+cd ~/Desktop/Claude/Usession/vylazka
 git pull
 npm run constructor
 ```
 
-Откроется окно. Закрыть программу — `Ctrl+C` в Терминале (правки уже в файлах).
+Откроется окно. Закрыть программу — `Ctrl+C` в Терминале (правки уже в файлах). Если после `git pull` окно пишет, что не
+находит пакет, — `npm install` и снова `npm run constructor`.
 
 ## Залить в игру
 
@@ -56,6 +64,9 @@ npm run constructor:push
 
 ## Для основной модели
 
+- Рабочая папка партнёра — `~/Desktop/Claude/Usession` на MacBook, клон всего репозитория (ветка `claude/cool-clarke-gdi2gp`).
+  Облачная сессия её не видит: свежее туда приходит через `git pull`, правки партнёра — через «залить». Работать прямо в
+  папке может сессия на его компьютере или облачная — если партнёр откроет папку в приложении Claude (Remote Control).
 - `serve.mjs` — сервер окна: страница (`page.mjs`, `local: true`), записи (`GET /api/work`, `PUT`/`DELETE
   /api/work/<коллекция>/<ключ>`), каталог через спейс Sandflow (`/api/catalog/search|facets|object|render`; картинки — в
   `work/.cache`, в репозиторий не идут). В контейнере сеть к спейсу — через прокси:
