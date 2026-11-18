@@ -1,0 +1,65 @@
+name: constructor-mac
+
+# Программа «Конструктор» для Mac (партнёр 18.11: «давай конструктор отдельной простой программой без этих плясок с
+# терминалом»). Её оболочка на Swift собирается на Mac партнёра, а проверить сборку можно только на Mac: здесь она
+# собирается тем же install.mjs, и программа сама проверяет себя — открывает конструктор и смотрит, ожил ли он.
+# Запускается, только когда меняется сама программа: у события push пути считаются по отправленным коммитам
+# (у pull_request — по всему PR, и проверка шла бы при каждой отправке).
+on:
+  push:
+    paths:
+      - "vylazka/tools/constructor/mac/**"
+      - "vylazka/tools/constructor/app.mjs"
+      - "vylazka/tools/constructor/serve.mjs"
+      - "vylazka/tools/constructor/page.mjs"
+      - "vylazka/tools/constructor/push_lib.mjs"
+      - ".github/workflows/constructor-mac.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: constructor-mac-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: vylazka
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vylazka/package-lock.json
+      - run: npm ci
+      - name: Swift on this Mac
+        run: xcrun swiftc --version
+      - name: Build the app (as on the partner's Mac)
+        run: |
+          node tools/constructor/mac/install.mjs --to "$RUNNER_TEMP/app" --no-open
+          cat tools/constructor/work/app-build.log 2>/dev/null || true
+      - name: The app has its own window (not the browser fallback) and is signed
+        run: |
+          app="$RUNNER_TEMP/app/Конструктор.app"
+          test -x "$app/Contents/MacOS/constructor"
+          codesign --verify --verbose "$app"
+          plutil -lint "$app/Contents/Info.plist"
+      - name: Self-test — the window opens the constructor
+        run: |
+          log="$RUNNER_TEMP/selftest.log"
+          CONSTRUCTOR_SELFTEST=1 "$RUNNER_TEMP/app/Конструктор.app/Contents/MacOS/constructor" > "$log" 2>&1 &
+          pid=$!
+          for i in $(seq 1 360); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+          kill "$pid" 2>/dev/null || true
+          cat "$log"
+          grep -q '^SELFTEST ok' "$log"
+      - name: The browser fallback builds too
+        run: |
+          node tools/constructor/mac/install.mjs --to "$RUNNER_TEMP/browser" --browser --no-open
+          test -f "$RUNNER_TEMP/browser/Конструктор.app/Contents/Resources/applet.icns"
+      - name: App log
+        if: always()
+        run: cat tools/constructor/work/app.log 2>/dev/null || true

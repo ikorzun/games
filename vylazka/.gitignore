@@ -7,3 +7,5 @@ dist-props/
 # одна страница для ссылки: npm run build:single
 dist-single/
 tools/constructor/work/.cache/
+tools/constructor/work/app.log
+tools/constructor/work/app-build.log

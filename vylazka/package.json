@@ -20,7 +20,8 @@
     "smoke": "node e2e/smoke.mjs",
     "smoke:matrix": "node e2e/smoke.mjs --matrix",
     "constructor": "node tools/constructor/serve.mjs",
-    "constructor:push": "node tools/constructor/push.mjs"
+    "constructor:push": "node tools/constructor/push.mjs",
+    "constructor:app": "node tools/constructor/mac/install.mjs"
   },
   "dependencies": {
     "three": "^0.187.0"

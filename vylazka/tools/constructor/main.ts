@@ -3088,8 +3088,90 @@ renderKinds();
   const t = v.type && roomTypes(w).includes(v.type) ? v.type : roomTypes(w).includes('kitchen') ? 'kitchen' : roomTypes(w)[0]!;
   enterRoom(w, t, typeof v.pick === 'number' ? v.pick : 0);
 }
+/**
+ * «Залить в игру» прямо из окна (партнёр 18.11: «давай конструктор отдельной простой программой без этих плясок с
+ * терминалом»). То же, что npm run constructor:push: проверка правилами игры, коммит, отправка на GitHub (serve.mjs →
+ * push_lib.mjs). Вход в GitHub — один раз, токеном; его хранит связка ключей Mac. Есть только в программе на своём компьютере.
+ */
+type PushResult = { ok: boolean; message?: string; problems?: string[]; detail?: string; auth?: boolean; nothing?: boolean };
+const POST = { method: 'POST', headers: { 'x-constructor': '1' } } as const;
+function showPush(state: 'busy' | 'ok' | 'bad' | 'note', msg: string, r?: PushResult): void {
+  const box = $('pushbox');
+  box.hidden = false;
+  box.dataset.state = state;
+  $('pushmsg').textContent = msg;
+  const list = $('pushlist');
+  list.replaceChildren(...(r?.problems ?? []).map((p) => Object.assign(document.createElement('li'), { textContent: p })));
+  list.hidden = !r?.problems?.length;
+  const detail = $('pushdetail');
+  detail.textContent = r?.detail ?? '';
+  detail.hidden = !r?.detail;
+  $('tokenform').hidden = !r?.auth;
+  if (r?.auth) $<HTMLInputElement>('tokenin').focus();
+}
+const showPushResult = (r: PushResult): void => showPush(r.ok ? 'ok' : 'bad', r.message ?? (r.ok ? 'Готово.' : 'Не получилось.'), r);
+/** Дождаться, пока последняя правка дойдёт до файла (автосохранение ждёт полсекунды после движения). */
+async function settleSave(): Promise<void> {
+  if (saveTimer) {
+    window.clearTimeout(saveTimer);
+    saveTimer = 0;
+    await saveCur();
+  }
+  for (let i = 0; i < 30 && document.getElementById('savestate')?.dataset.state === 'pending'; i++) await new Promise((r) => setTimeout(r, 100));
+}
+const NO_ANSWER = 'Конструктор не ответил. Закрой программу и открой снова — всё сохранено.';
+async function pushNow(): Promise<void> {
+  const btn = $<HTMLButtonElement>('push');
+  btn.disabled = true;
+  showPush('busy', 'Проверяю и отправляю…');
+  try {
+    await settleSave();
+    showPushResult((await (await fetch('api/push', POST)).json()) as PushResult);
+  } catch {
+    showPush('bad', NO_ANSWER);
+  } finally {
+    btn.disabled = false;
+  }
+}
+async function sendToken(e: Event): Promise<void> {
+  e.preventDefault();
+  const input = $<HTMLInputElement>('tokenin');
+  const token = input.value.trim();
+  if (!token) return;
+  showPush('busy', 'Вхожу в GitHub и отправляю…');
+  try {
+    const init = { ...POST, headers: { ...POST.headers, 'content-type': 'application/json' }, body: JSON.stringify({ token }) };
+    const r = (await (await fetch('api/token', init)).json()) as { ok: boolean; message?: string; result?: PushResult };
+    input.value = '';
+    if (!r.ok) showPush('bad', r.message ?? 'Не вышло.', { ok: false, auth: true });
+    else if (r.result) showPushResult(r.result);
+  } catch {
+    showPush('bad', NO_ANSWER);
+  }
+}
+function setupPush(): void {
+  if (!LOCAL) return;
+  $('push').hidden = false;
+  $('push').addEventListener('click', () => void pushNow());
+  $('tokenform').addEventListener('submit', (e) => void sendToken(e));
+  $('pushclose').addEventListener('click', () => {
+    $('pushbox').hidden = true;
+  });
+  // Окно живо — серверу слышно (запасная программа без своего окна уходит сама, когда страницу закрыли).
+  const ping = (): void => void fetch('api/ping', POST).catch(() => undefined);
+  ping();
+  window.setInterval(ping, 15000);
+  void fetch('api/hello')
+    .then((r) => r.json() as Promise<{ note?: string }>)
+    .then((h) => {
+      if (h.note) showPush('note', h.note);
+    })
+    .catch(() => undefined);
+}
+
 setTool('move');
 loop();
+setupPush();
 void connect();
 
 /** Для проверок: что редактируется, где на экране точка мира, и «поставить», «убрать», «отметить» без мыши. */

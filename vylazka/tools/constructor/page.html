@@ -151,6 +151,21 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .save[data-state="local"] { color: var(--accent); }
 .save[data-state="bad"] { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); white-space: normal; }
 .top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-bottom: 10px; }
+/* «Залить в игру» — только в программе на своём компьютере (сборка local): кнопка справа вверху и окошко под ней. */
+.btn--push { margin-left: auto; background: color-mix(in srgb, var(--accent) 20%, var(--raise)); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.btn--push:disabled { opacity: .6; cursor: progress; }
+.pushbox { position: fixed; top: 52px; right: 16px; z-index: 20; width: min(440px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; box-shadow: 0 12px 32px rgb(0 0 0 / .45); font-size: 14px; }
+.pushbox[data-state="ok"] { border-color: color-mix(in srgb, var(--ok) 55%, transparent); }
+.pushbox[data-state="bad"] { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.pushbox__msg { margin: 0 0 8px; line-height: 1.45; }
+.pushbox[data-state="ok"] .pushbox__msg { color: var(--ok); }
+.pushbox[data-state="bad"] .pushbox__msg { color: var(--warn); }
+.pushbox__list { margin: 0 0 8px; padding-left: 18px; color: var(--muted); font-size: 13px; line-height: 1.5; max-height: 40vh; overflow: auto; }
+.pushbox__detail { margin: 0 0 8px; font: 12px/1.45 var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+.pushbox__token p { margin: 0 0 8px; color: var(--muted); line-height: 1.5; font-size: 13px; }
+.pushbox__token .row { margin-bottom: 8px; flex-wrap: nowrap; }
+.pushbox__token input { flex: 1; min-width: 0; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font: 13px var(--font-mono); }
+.pushbox__foot { justify-content: flex-end; }
 .top h1 { font-size: 18px; }
 .count { margin: 0; font: 12px var(--font-mono); color: var(--muted); }
 .tiltrow { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)) auto; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
@@ -185,7 +200,19 @@ body.is-replacing .shelf__item { border-color: var(--v-replace); }
   <h1>Конструктор</h1>
   <div class="row" id="worldpick"></div>
   <span class="save" id="savestate" data-state="saved" role="status">сохранено</span>
+  <button class="btn btn--push" id="push" type="button" hidden title="Проверить правилами игры и отправить сделанное в игру (на GitHub)">Залить в игру</button>
 </header>
+<div class="pushbox" id="pushbox" hidden role="dialog" aria-label="Залить в игру" aria-live="polite">
+  <p class="pushbox__msg" id="pushmsg"></p>
+  <ul class="pushbox__list" id="pushlist" hidden></ul>
+  <p class="pushbox__detail" id="pushdetail" hidden></p>
+  <form class="pushbox__token" id="tokenform" hidden>
+    <p>Один раз: войти в GitHub. Нажми «Сделать токен» — откроется GitHub с уже отмеченной галочкой <b>repo</b>. Внизу страницы — «Generate token»; скопируй строку <b>ghp_…</b> и вставь сюда. Её хранит связка ключей Mac, больше она никуда не уходит.</p>
+    <div class="row"><a class="btn btn--small" id="tokenlink" href="https://github.com/settings/tokens/new?scopes=repo&amp;description=%D0%9A%D0%BE%D0%BD%D1%81%D1%82%D1%80%D1%83%D0%BA%D1%82%D0%BE%D1%80%20Untitled%20Session" target="_blank" rel="noopener">Сделать токен ↗</a></div>
+    <div class="row"><input type="password" id="tokenin" placeholder="ghp_…" autocomplete="off" spellcheck="false" aria-label="Токен GitHub"><button class="btn" type="submit">Войти и залить</button></div>
+  </form>
+  <div class="row pushbox__foot"><button class="btn btn--small" id="pushclose" type="button">Закрыть</button></div>
+</div>
 <div class="places">
   <div class="row"><span class="row" id="roompick"></span><button class="btn" id="nextroom" title="Другое помещение того же типа — у него своя расстановка">Другое такое <span id="roomnum"></span></button></div>
 </div>

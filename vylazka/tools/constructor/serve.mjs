@@ -1,18 +1,21 @@
-// Конструктор на своём компьютере (квиз 18.11: «Программа на MacBook»): npm run constructor
+// Конструктор на своём компьютере: сервер окна. Его поднимает программа «Конструктор» (app.mjs; партнёр 18.11: «давай
+// конструктор отдельной простой программой без этих плясок с терминалом») или, по-старому, npm run constructor.
 //
-// Открывает конструктор в отдельном окне браузера. Всё, что ставишь, двигаешь и убираешь, сразу пишется в файлы
-// репозитория — src/world/partner/*.json (их берёт игра) и tools/constructor/work/*.json (отметки и заявки на вещи
-// каталога); залить в игру — npm run constructor:push (push.mjs). Сеть нужна только для поиска по каталогу Sand3D
-// (около 106 тыс. вещей, спейс Sandflow): поиск, картинки и карточки идут через этот сервер.
+// Всё, что ставишь, двигаешь и убираешь, сразу пишется в файлы репозитория — src/world/partner/*.json (их берёт игра) и
+// tools/constructor/work/*.json (отметки и заявки на вещи каталога). «Залить в игру» — кнопка в окне (/api/push, push_lib.mjs)
+// или npm run constructor:push. Сеть нужна для поиска по каталогу Sand3D (около 106 тыс. вещей, спейс Sandflow) и для
+// отправки на GitHub.
 //
-//   npm run constructor               — собрать страницу и открыть окно
+//   npm run constructor               — собрать страницу и открыть окно браузера
 //   npm run constructor -- --no-open  — не открывать окно (адрес — в терминале)
 //   npm run constructor -- --port 5300
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { buildPage, ROOT } from './page.mjs';
+import { pushAll, saveToken } from './push_lib.mjs';
 
 const CATALOG = 'https://sandflow-sand3d-explorer.hf.space';
 /** Где лежит каждая коллекция: записи игры — рядом с её кодом, рабочие — у конструктора. */
@@ -79,14 +82,67 @@ async function catalog(path) {
   return r;
 }
 
-async function main() {
-  console.log('[constructor] собираю страницу…');
+/**
+ * Свои ли пришли. Сервер слушает только этот компьютер, но в обычном браузере партнёра может быть открыта чужая страница:
+ * она может прислать запрос на 127.0.0.1 (или прийти под чужим именем, которое указывает сюда же). Поэтому имя хоста — только
+ * наше, менять что-то можно только со своей страницы (Origin), а кнопки сервера (POST) — только с меткой x-constructor:
+ * чужая страница не может поставить её без предварительного спроса, а на него сервер не отвечает.
+ */
+function allowed(req, port) {
+  const host = String(req.headers.host ?? '');
+  if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) return false;
+  if (req.method === 'GET' || req.method === 'HEAD') return true;
+  const origin = req.headers.origin;
+  if (origin !== undefined && origin !== `http://127.0.0.1:${port}` && origin !== `http://localhost:${port}`) return false;
+  return req.method !== 'POST' || req.headers['x-constructor'] === '1';
+}
+
+/** Не наш ли это конструктор на порту (старый запуск, который не закрылся): попросить его уйти. */
+async function evictOld(port) {
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/api/hello`, { signal: AbortSignal.timeout(1500) });
+    if ((await r.json())?.app !== 'constructor') return false;
+    await fetch(`http://127.0.0.1:${port}/api/quit`, { method: 'POST', headers: { 'x-constructor': '1' }, signal: AbortSignal.timeout(1500) }).catch(() => undefined);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Собрать страницу и поднять сервер. port — желаемый (занят чужим — следующий свободный; занят старым конструктором —
+ * если replaceOld, старый уходит, порт тот же: на нём живут черновики окна). note — что сказать в окне при открытии.
+ * Ответ: адрес, когда окно последний раз давало о себе знать (lastPing), и close.
+ */
+export async function startServer({ port = 5199, replaceOld = false, note = '' } = {}) {
   const page = await buildPage({ local: true });
+  let lastPing = 0;
+  let bound = port;
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const p = url.pathname;
     try {
+      if (!allowed(req, bound)) return send(res, 403, { error: 'чужим нельзя' });
       if (req.method === 'GET' && (p === '/' || p === '/index.html')) return send(res, 200, page, 'text/html; charset=utf-8');
+      if (req.method === 'GET' && p === '/api/hello') return send(res, 200, { app: 'constructor', note });
+      if (req.method === 'POST' && p === '/api/ping') {
+        lastPing = Date.now();
+        return send(res, 200, { ok: true });
+      }
+      if (req.method === 'POST' && p === '/api/push') return send(res, 200, await pushAll());
+      if (req.method === 'POST' && p === '/api/token') {
+        const saved = await saveToken(JSON.parse(await readBody(req))?.token);
+        if (!saved.ok) return send(res, 200, saved);
+        const result = await pushAll();
+        // Вход сохранён, а GitHub всё равно не пускает — токен не тот (нет галочки repo, истёк, другой аккаунт).
+        if (result.auth) result.message = 'GitHub не принял этот токен. Сделай новый — с галочкой repo — и вставь его.';
+        return send(res, 200, { ok: true, result });
+      }
+      if (req.method === 'POST' && p === '/api/quit') {
+        send(res, 200, { ok: true });
+        setTimeout(() => process.exit(0), 50);
+        return;
+      }
       if (req.method === 'GET' && p === '/api/work') return send(res, 200, Object.fromEntries(Object.keys(FILES).map((c) => [c, readRows(c)])));
       const w = p.match(/^\/api\/work\/([a-z]+)\/([^/]+)$/);
       if (w) {
@@ -127,22 +183,53 @@ async function main() {
       return send(res, 502, { error: String(e?.message ?? e) });
     }
   });
-  let port = Number(arg('--port') ?? 5199);
-  await new Promise((ok) => {
-    server.on('error', (e) => {
-      if (e.code === 'EADDRINUSE' && port < 5299) server.listen(++port, '127.0.0.1');
-      else throw e;
+  const listen = (at) =>
+    new Promise((ok, bad) => {
+      const fail = (e) => {
+        server.off('listening', done);
+        bad(e);
+      };
+      const done = () => {
+        server.off('error', fail);
+        ok();
+      };
+      server.once('error', fail);
+      server.once('listening', done);
+      server.listen(at, '127.0.0.1');
     });
-    server.listen(port, '127.0.0.1', ok);
-    server.on('listening', ok);
-  });
-  const link = `http://127.0.0.1:${port}/`;
+  for (;;) {
+    try {
+      await listen(bound);
+      break;
+    } catch (e) {
+      if (e.code !== 'EADDRINUSE' || bound >= port + 100) throw e;
+      if (replaceOld && bound === port && (await evictOld(bound))) {
+        // Старый уходит не мгновенно — подождать, пока отпустит порт.
+        let free = false;
+        for (let i = 0; i < 30 && !free; i++) {
+          await new Promise((r) => setTimeout(r, 100));
+          free = await listen(bound).then(
+            () => true,
+            () => false,
+          );
+        }
+        if (free) break;
+      }
+      bound++;
+    }
+  }
+  return { url: `http://127.0.0.1:${bound}/`, port: bound, lastPing: () => lastPing, close: () => server.close() };
+}
+
+async function main() {
+  console.log('[constructor] собираю страницу…');
+  const { url: link } = await startServer({ port: Number(arg('--port') ?? 5199) });
   console.log(`[constructor] открыт: ${link}`);
-  console.log('[constructor] правки сохраняются сами; залить в игру — npm run constructor:push; закрыть — Ctrl+C');
+  console.log('[constructor] правки сохраняются сами; залить в игру — кнопка в окне; закрыть — Ctrl+C');
   if (!process.argv.includes('--no-open')) {
     const cmd = process.platform === 'darwin' ? ['open', [link]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', link]] : ['xdg-open', [link]];
     spawn(cmd[0], cmd[1], { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
   }
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) await main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
