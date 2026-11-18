@@ -106,6 +106,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
     var pushButton: NSButton?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let look = ProcessInfo.processInfo.environment["CONSTRUCTOR_APPEARANCE"] {
+            NSApp.appearance = NSAppearance(named: look == "dark" ? .darkAqua : .aqua)
+        }
         buildMenu()
         let frame = NSRect(x: 0, y: 0, width: 1440, height: 900)
         let config = WKWebViewConfiguration()
@@ -281,11 +284,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
         return it
     }
 
-    func popupItem(_ id: NSToolbarItem.Identifier, _ popup: NSPopUpButton, _ label: String, _ action: Selector) -> NSToolbarItem {
+    func popupItem(_ id: NSToolbarItem.Identifier, _ popup: NSPopUpButton, _ label: String, _ action: Selector, width: CGFloat) -> NSToolbarItem {
         let it = NSToolbarItem(itemIdentifier: id)
         popup.target = self
         popup.action = action
         popup.isEnabled = false
+        popup.translatesAutoresizingMaskIntoConstraints = false
+        popup.widthAnchor.constraint(equalToConstant: width).isActive = true
+        (popup.cell as? NSPopUpButtonCell)?.lineBreakMode = .byTruncatingTail
+        it.visibilityPriority = .high
         it.view = popup
         it.label = label
         it.paletteLabel = label
@@ -296,13 +303,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch itemIdentifier {
         case .library:
-            return button(itemIdentifier, "sidebar.left", "Полка", "Показать или скрыть полку (⌃⌘S)", #selector(toggleLibrary(_:)))
+            let it = button(itemIdentifier, "sidebar.left", "Полка", "Показать или скрыть полку (⌃⌘S)", #selector(toggleLibrary(_:)))
+            it.visibilityPriority = .high
+            return it
         case .place:
-            return popupItem(itemIdentifier, placePopup, "Место", #selector(placeChosen(_:)))
+            return popupItem(itemIdentifier, placePopup, "Место", #selector(placeChosen(_:)), width: 136)
         case .room:
-            return popupItem(itemIdentifier, roomPopup, "Помещение", #selector(roomChosen(_:)))
+            return popupItem(itemIdentifier, roomPopup, "Помещение", #selector(roomChosen(_:)), width: 160)
         case .variant:
-            let it = popupItem(itemIdentifier, variantPopup, "Вариант", #selector(variantChosen(_:)))
+            let it = popupItem(itemIdentifier, variantPopup, "Вариант", #selector(variantChosen(_:)), width: 150)
             it.toolTip = "Другое помещение того же типа — у каждого своя расстановка; в игре помещение берёт один из вариантов по жребию"
             return it
         case .tool:
@@ -311,6 +320,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
             group.paletteLabel = "Инструмент"
             group.toolTip = "Двигать (G) — тянуть вещь по полу; Крутить (R) — кольца по трём осям, ⇧ — без шага 15°"
             group.selectedIndex = 0
+            group.controlRepresentation = .expanded
+            group.visibilityPriority = .high
             toolGroup = group
             return group
         case .undo:
@@ -326,10 +337,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
             saveLabel.alignment = .right
             saveLabel.lineBreakMode = .byTruncatingTail
             saveLabel.translatesAutoresizingMaskIntoConstraints = false
-            saveLabel.widthAnchor.constraint(equalToConstant: 150).isActive = true
+            saveLabel.widthAnchor.constraint(equalToConstant: 104).isActive = true
             it.view = saveLabel
             it.label = "Сохранение"
             it.paletteLabel = "Сохранение"
+            it.visibilityPriority = .low
             return it
         case .push:
             let it = NSToolbarItem(itemIdentifier: itemIdentifier)
@@ -343,9 +355,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
             it.label = "Залить в игру"
             it.paletteLabel = "Залить в игру"
             it.toolTip = "Проверить правилами игры и отправить сделанное в игру (на GitHub)"
+            it.visibilityPriority = .user
             return it
         case .inspector:
-            return button(itemIdentifier, "sidebar.right", "Инспектор", "Показать или скрыть инспектор (⌥⌘I)", #selector(toggleInspector(_:)))
+            let it = button(itemIdentifier, "sidebar.right", "Инспектор", "Показать или скрыть инспектор (⌥⌘I)", #selector(toggleInspector(_:)))
+            it.visibilityPriority = .user
+            return it
         default:
             return nil
         }
@@ -385,7 +400,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
         fill(placePopup, s.worlds, s.world)
         fill(roomPopup, s.rooms, s.room)
         let n = max(s.picks, 1)
-        let variants = (0..<n).map { i in Option(id: String(i), label: "Вариант \(i + 1) из \(n)" + (i == s.pick && s.own ? " · свой" : "")) }
+        let variants = (0..<n).map { i in Option(id: String(i), label: "Вариант \(i + 1)/\(n)" + (i == s.pick && s.own ? " · свой" : "")) }
         if variantPopup.itemTitles != variants.map({ $0.label }) {
             variantPopup.removeAllItems()
             variantPopup.addItems(withTitles: variants.map { $0.label })
@@ -606,7 +621,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
     /// места. Без WebGL (на CI бывает) конструктор не рисует сцену, тогда полку не ждём — оболочка своё дело сделала.
     func probe() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            let js = "JSON.stringify({ title: document.title, native: document.documentElement.classList.contains('native'), shelf: document.querySelectorAll('#shelf > *').length, gl: !!document.createElement('canvas').getContext('webgl2') })"
+            let js = "JSON.stringify({ title: document.title, native: document.documentElement.classList.contains('native'), shelf: document.querySelectorAll('#shelf > *').length, gl: !!document.createElement('canvas').getContext('webgl2'), frames: window.__ctorFrames || 0, visible: document.visibilityState })"
             self.web.evaluateJavaScript(js) { result, error in
                 let text = (result as? String) ?? String(describing: error)
                 var info: [String: Any] = [:]
@@ -631,10 +646,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUI
     }
 
     func finishTest(_ ok: Bool, _ text: String) {
-        say("SELFTEST \(ok ? "ok" : "fail") \(text)")
-        snapshot {
-            self.stopNode()
-            exit(ok ? 0 : 1)
+        // Кадров к снимку — побольше: снимок через 3 с, и в журнал — сколько их было к тому времени.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            self.web.evaluateJavaScript("String(window.__ctorFrames || 0) + ' ' + document.visibilityState") { result, _ in
+                say("SELFTEST \(ok ? "ok" : "fail") \(text) frames3s=\((result as? String) ?? "-")")
+                self.snapshot {
+                    self.stopNode()
+                    exit(ok ? 0 : 1)
+                }
+            }
         }
     }
 

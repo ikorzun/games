@@ -1637,7 +1637,10 @@ function drop(what: { prop: string } | { figure: true }, x: number, z: number): 
 }
 
 /** Кадр: перерисовать, если что-то поменялось. Запускается в самом конце, когда всё готово. */
+/** Сколько кадров нарисовала сцена — для самопроверки программы на Mac (CI смотрит, что сцена рисуется). */
+let frameCount = 0;
 function loop(): void {
+  (window as unknown as { __ctorFrames: number }).__ctorFrames = ++frameCount;
   requestAnimationFrame(loop);
   if (hoverAt && !drag && !carry && !press) {
     const h = gameAt(hoverAt);

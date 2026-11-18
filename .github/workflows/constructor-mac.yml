@@ -51,16 +51,14 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/shots"
           for look in light dark; do
-            if [ "$look" = dark ]; then defaults write -g AppleInterfaceStyle Dark; else defaults delete -g AppleInterfaceStyle 2>/dev/null || true; fi
             log="$RUNNER_TEMP/selftest-$look.log"
-            CONSTRUCTOR_SELFTEST=1 CONSTRUCTOR_SHOT="$RUNNER_TEMP/shots/ctor-$look" "$RUNNER_TEMP/app/Конструктор.app/Contents/MacOS/constructor" > "$log" 2>&1 &
+            CONSTRUCTOR_SELFTEST=1 CONSTRUCTOR_APPEARANCE="$look" CONSTRUCTOR_SHOT="$RUNNER_TEMP/shots/ctor-$look" "$RUNNER_TEMP/app/Конструктор.app/Contents/MacOS/constructor" > "$log" 2>&1 &
             pid=$!
             for i in $(seq 1 360); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
             kill "$pid" 2>/dev/null || true
             cat "$log"
             grep -q '^SELFTEST ok' "$log"
           done
-          defaults delete -g AppleInterfaceStyle 2>/dev/null || true
           ls -la "$RUNNER_TEMP/shots"
       - name: Screenshots
         if: always()
@@ -83,19 +81,10 @@ jobs:
         if: always()
         run: |
           d="$RUNNER_TEMP/shots"
-          for look in light dark; do
-            f="$d/ctor-$look-window.png"
+          for f in "$d"/ctor-light-window.png "$d"/ctor-dark-window.png "$d"/ctor-light-page.png; do
             [ -f "$f" ] || continue
-            sips -s format jpeg -s formatOptions 38 -Z 820 "$f" --out "$d/$look-small.jpg" >/dev/null
-            if [ "$look" = light ]; then
-              sips -Z 1700 "$f" --out "$d/strip.png" >/dev/null
-              sips --cropToHeightWidth 230 1700 --cropOffset 0 0 "$d/strip.png" --out "$d/strip.png" >/dev/null
-              sips -s format jpeg -s formatOptions 45 "$d/strip.png" --out "$d/light-strip.jpg" >/dev/null
-            fi
-          done
-          for f in "$d"/light-strip.jpg "$d"/light-small.jpg "$d"/dark-small.jpg; do
-            [ -f "$f" ] || continue
-            echo "SHOT-BEGIN $(basename "$f")"
-            base64 -b 1000 -i "$f"
+            sips -s format jpeg -s formatOptions 40 -Z 900 "$f" --out "$f.jpg" >/dev/null
+            echo "SHOT-BEGIN $(basename "$f").jpg"
+            base64 -b 1000 -i "$f.jpg"
             echo "SHOT-END"
           done
