@@ -47,6 +47,8 @@ export class Hud {
   readonly el: HTMLElement;
   private readonly rec: HTMLElement;
   private readonly cam: HTMLElement;
+  /** Имя места под временем и кругом — на телефоне (на компьютере оно рядом с номером камеры). */
+  private readonly placeEl: HTMLElement;
   /** Номер круга петли рядом с камерой (вариант A; партнёр: «Да» — номер круга виден на экране). */
   private readonly lapEl: HTMLElement;
   private lapN: number | null = null;
@@ -96,7 +98,8 @@ export class Hud {
       '<div class="vz-hud__tl"><span class="vz-hud__dot"></span><span class="vz-hud__rec"></span><span class="vz-hud__cam"></span></div>' +
       // Номер круга — под временем записи: слева на телефоне под строкой REC стоит кнопка паузы, и
       // вторая строка там упиралась в неё (смоук, матрица раскладки с длинным переводом).
-      '<div class="vz-hud__tr"><span class="vz-hud__clock"></span><span class="vz-hud__lap"></span><span class="vz-hud__fps"></span></div>' +
+      // Имя места на телефоне — тоже здесь, под кругом: рядом с номером камеры оно уходило за край или на кнопку паузы.
+      '<div class="vz-hud__tr"><span class="vz-hud__clock"></span><span class="vz-hud__lap"></span><span class="vz-hud__place"></span><span class="vz-hud__fps"></span></div>' +
       '</div>' +
       '<div class="vz-hud__goals"></div>' +
       '<div class="vz-hud__toast"></div>' +
@@ -119,6 +122,7 @@ export class Hud {
     const q = (sel: string): HTMLElement => this.el.querySelector(sel) as HTMLElement;
     this.rec = q('.vz-hud__rec');
     this.cam = q('.vz-hud__cam');
+    this.placeEl = q('.vz-hud__place');
     this.lapEl = q('.vz-hud__lap');
     this.clock = q('.vz-hud__clock');
     this.hint = q('.vz-hud__hint');
@@ -158,7 +162,12 @@ export class Hud {
   private renderCam(): void {
     const cam = this.camWorld ? t(`hud.cam.${this.camWorld}`) : t('hud.cam');
     this.camOn = performance.now() < this.camUntil;
-    this.cam.textContent = this.camOn ? t('hud.cam.with', { cam, place: t(`cam.place.${this.camWorld}`) }) : cam;
+    const place = this.camOn ? t(`cam.place.${this.camWorld}`) : '';
+    // На телефоне слева под строкой REC — кнопка паузы, а строка «КАМ-12Б · жёлтые комнаты» на 360 px уходила за край
+    // или, перенесённая, на кнопку (CI 17.11, матрица раскладки): там имя места — справа, под временем и кругом.
+    const touch = this.el.closest('.is-touch') !== null;
+    this.cam.textContent = place && !touch ? t('hud.cam.with', { cam, place }) : cam;
+    this.placeEl.textContent = place && touch ? place : '';
   }
 
   /** Номер круга петли места; null — не показывать (меню, карманы до первой сессии). */
