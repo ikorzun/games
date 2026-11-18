@@ -1,7 +1,8 @@
 /**
  * Весь реквизит разом: убежище (PROPS), «дом каждого» (HOME_PROPS), офис (OFFICE_PROPS), готовые
  * модели (MODEL_PROPS), выставочные экраны (SCREEN_PROPS), поделки (CRAFT_PROPS), вокзал (STATION_PROPS), стена чемоданов
- * (LUGGAGE_PROPS), бумага — листы на щитах, в рамах и на потолке (PAPER_PROPS), находки из снимков партнёра (FOUND_PROPS). Витрина и обстановка берут отсюда.
+ * (LUGGAGE_PROPS), бумага — листы на щитах, в рамах и на потолке (PAPER_PROPS), находки из снимков партнёра (FOUND_PROPS), мебель
+ * полки Sand3D (SAND3D_PROPS: её ставит партнёр конструктором, сама обстановка её не берёт). Витрина и обстановка берут отсюда.
  *
  * Здесь же предмет становится объектом уровня (world/objects.ts): всё, что он кладёт в сетку
  * помещения и в преграды, помечается его номером — по нему предмет можно растворить. Объектом
@@ -13,6 +14,7 @@ import type { Xf } from './props';
 import { BIRD_PROPS, CRAFT_PROPS } from './props_craft';
 import { SEATING_PROPS } from './props_seating';
 import { REAL_PROPS } from './props_real';
+import { SAND3D_PROPS } from './props_sand3d';
 import { PEOPLE_PROPS } from './props_people';
 import { FOUND_PROPS } from './props_found';
 import { HOME_PROPS } from './props_home';
@@ -95,7 +97,7 @@ function tracked(name: string, spec: PropSpec): PropSpec {
  */
 export const PROP_SETS: Readonly<Record<string, Record<string, PropSpec>>> = {
   PROPS, HOME_PROPS, OFFICE_PROPS, MODEL_PROPS, SCREEN_PROPS, CRAFT_PROPS, BIRD_PROPS, STATION_PROPS,
-  LUGGAGE_PROPS, PAPER_PROPS, FOUND_PROPS, SEATING_PROPS, REAL_PROPS, PEOPLE_PROPS,
+  LUGGAGE_PROPS, PAPER_PROPS, FOUND_PROPS, SEATING_PROPS, REAL_PROPS, PEOPLE_PROPS, SAND3D_PROPS,
 };
 
 /** Реквизит без обёртки объекта — для замены (обёртку даёт tracked той вещи, что заменяется). */

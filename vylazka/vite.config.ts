@@ -77,17 +77,21 @@ function audioFiles(): string[] {
 
 export default defineConfig(({ mode }) => {
   const playgama = mode === 'playgama';
+  // Сборка под страницу одним файлом (`npm run build:single`, scripts/single_page.mjs): куски, которые игра грузит по
+  // нужде (модели полки Sand3D, world/sand3d.ts), вшиваются в основной код — у страницы одним файлом нет соседних файлов.
+  const single = mode === 'single';
   return {
     define: { __VZ_AUDIO__: JSON.stringify(audioFiles()), __VZ_BUILD__: JSON.stringify(buildVersion()) },
     // Относительные пути: index.html в корне архива, игра работает из любой подпапки.
     base: './',
     plugins: playgama ? [playgamaBridge({ mode: 'local' }), bridgeConfigPlugin(), bridgeFirstPlugin()] : [],
     build: {
-      outDir: playgama ? 'dist-playgama' : 'dist',
+      outDir: playgama ? 'dist-playgama' : single ? 'dist-single/build' : 'dist',
       emptyOutDir: true,
       target: 'es2020',
       sourcemap: false,
       chunkSizeWarningLimit: 1200,
+      ...(single ? { rollupOptions: { output: { inlineDynamicImports: true } } } : {}),
     },
     server: { host: true, port: 5175 },
     preview: { host: true, port: 4175 },

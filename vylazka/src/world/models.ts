@@ -2,12 +2,19 @@
  * Готовые модели в игре: разбор записей из models_data.ts и укладка в сетку реквизита.
  * Модель уже в метрах и в координатах реквизита (пол y = 0, спина z = 0 — см. scripts/import_models.py).
  * Работает и в браузере, и в node (vitest): base64 читаем через atob.
+ *
+ * Кроме встроенных (KayKit, models_data.ts) — подгружаемые: полка Sand3D лежит отдельным куском сборки и
+ * подключается registerModels, когда загрузится (world/sand3d.ts). У её записей ещё и материал на каждую вершину
+ * (mat): дерево сиденья ложится на маткап дерева, сталь ножек — на сталь, обивка — на обивку.
  */
 import type { Vec3 } from '../core/types';
 import { MAT, MAT_DEFS, hexToLinear } from './materials';
 import type { Xf } from './props';
 import { MODEL_DATA } from './models_data';
 import type { ModelRecord } from './models_data';
+
+/** Запись модели; у вещей полки Sand3D ещё и материал игры на каждую вершину (mat: uint8, base64). */
+export type AnyModelRecord = ModelRecord & { mat?: string };
 
 export interface DecodedModel {
   /** Позиции, м, по три числа на вершину. */
@@ -17,6 +24,8 @@ export interface DecodedModel {
   /** Цвет вершины в линейном пространстве, 0…1, по три числа. */
   color: Float32Array;
   index: Uint16Array;
+  /** Материал игры на вершину (номера world/materials.ts); нет — один материал на всю модель. */
+  mat?: Uint8Array;
   min: Vec3;
   max: Vec3;
 }
@@ -31,6 +40,24 @@ export interface PlaceOpts {
 }
 
 const cache = new Map<string, DecodedModel>();
+/** Подгруженные записи (полка Sand3D): имя → запись. */
+const loaded = new Map<string, AnyModelRecord>();
+
+/** Подключить подгруженные модели (кусок сборки пришёл): с этого момента их можно класть по имени. */
+export function registerModels(records: Readonly<Record<string, AnyModelRecord>>): void {
+  for (const [name, r] of Object.entries(records)) loaded.set(name, r);
+}
+
+/** Есть ли модель с таким именем — встроенная или уже подгруженная. */
+export function hasModel(name: string): boolean {
+  return name in MODEL_DATA || loaded.has(name);
+}
+
+function recordOf(name: string): AnyModelRecord {
+  const r = MODEL_DATA[name] ?? loaded.get(name);
+  if (!r) throw new Error(`нет такой модели: ${name}`);
+  return r;
+}
 /** Таблица sRGB (0…255) → линейный, чтобы не считать степень на каждую вершину. */
 const LIN = new Float32Array(256).map((_, i) => {
   const s = i / 255;
@@ -48,15 +75,13 @@ function bytes(b64: string): Uint8Array {
 export function decodeModel(name: string): DecodedModel {
   const hit = cache.get(name);
   if (hit) return hit;
-  const r = MODEL_DATA[name];
-  if (!r) throw new Error(`нет такой модели: ${name}`);
-  const m = decodeRecord(r);
+  const m = decodeRecord(recordOf(name));
   cache.set(name, m);
   return m;
 }
 
 /** Разобрать запись модели (формат models_data.ts): её же пишет лепка (tools/sculpt). */
-export function decodeRecord(r: ModelRecord): DecodedModel {
+export function decodeRecord(r: AnyModelRecord): DecodedModel {
   const pos = bytes(r.pos);
   const nrm = bytes(r.nrm);
   const col = bytes(r.col);
@@ -80,13 +105,18 @@ export function decodeRecord(r: ModelRecord): DecodedModel {
     normal[i * 3 + 1] = normal[i * 3 + 1]! / l;
     normal[i * 3 + 2] = normal[i * 3 + 2]! / l;
   }
-  return { position, normal, color, index: new Uint16Array(iq), min: [...r.min], max: [...r.max] };
+  const out: DecodedModel = { position, normal, color, index: new Uint16Array(iq), min: [...r.min], max: [...r.max] };
+  if (r.mat !== undefined) {
+    const mat = bytes(r.mat);
+    if (mat.length !== nv) throw new Error(`материалов ${mat.length} на ${nv} вершин`);
+    out.mat = mat;
+  }
+  return out;
 }
 
 /** Габарит модели (min/max в координатах реквизита, м). */
 export function modelBounds(name: string): { min: Vec3; max: Vec3 } {
-  const r = MODEL_DATA[name];
-  if (!r) throw new Error(`нет такой модели: ${name}`);
+  const r = recordOf(name);
   return { min: [...r.min], max: [...r.max] };
 }
 
@@ -98,11 +128,24 @@ function rotNormal(n: Vec3, rot: number): Vec3 {
   return n;
 }
 
-/** Кладёт модель в сетку xf.mb. Оттенок подобран так, чтобы на выбранном материале вышел собственный цвет модели. */
+/** Цвет материала в линейном пространстве — основа, на которую делится цвет вершины. */
+const BASE = new Map<number, Vec3>();
+function baseOf(mat: number): Vec3 {
+  let b = BASE.get(mat);
+  if (!b) {
+    b = hexToLinear(MAT_DEFS[mat]!.color);
+    BASE.set(mat, b);
+  }
+  return b;
+}
+
+/**
+ * Кладёт модель в сетку xf.mb. Оттенок подобран так, чтобы на выбранном материале вышел собственный цвет модели.
+ * Материал — opts.mat на всю модель; не задан — свой у каждой вершины (полка Sand3D) или бумага.
+ */
 export function placeModel(xf: Xf, name: string, opts: PlaceOpts = {}): void {
   const m = decodeModel(name);
-  const mat = opts.mat ?? MAT.paper;
-  const base = hexToLinear(MAT_DEFS[mat]!.color);
+  const one = opts.mat ?? (m.mat ? null : MAT.paper);
   const extra = opts.tint ?? [1, 1, 1];
   const s = opts.scale ?? 1;
   const first = xf.mb.vertexCount;
@@ -110,6 +153,8 @@ export function placeModel(xf: Xf, name: string, opts: PlaceOpts = {}): void {
   for (let i = 0; i < n; i++) {
     const p = xf.pt(m.position[i * 3]! * s, m.position[i * 3 + 1]! * s, m.position[i * 3 + 2]! * s);
     const nn = rotNormal([m.normal[i * 3]!, m.normal[i * 3 + 1]!, m.normal[i * 3 + 2]!], xf.rot);
+    const mat = one ?? m.mat![i]!;
+    const base = baseOf(mat);
     const tint: Vec3 = [0, 0, 0];
     for (let k = 0; k < 3; k++) tint[k] = Math.min(2.6, Math.max(0.05, m.color[i * 3 + k]! / base[k]!)) * extra[k]!;
     xf.mb.vertex(p, nn, mat, tint, 1);

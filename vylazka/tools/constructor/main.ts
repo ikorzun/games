@@ -23,6 +23,8 @@
  * игры — removed, отметки — verdicts (документ = имя вещи). Основная модель забирает их оттуда в игру
  * (world/placed_data.ts, world/figures_data.ts). Без базы (страница открыта не в Claude) всё живёт в памяти страницы.
  */
+// Первым: модели полки Sand3D подключаются раньше, чем что-нибудь соберёт вещь полки.
+import './sand3d_all';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { generateLayout } from '../../src/gen/layout';
@@ -1483,6 +1485,7 @@ const KINDS: readonly [ShelfKind, string, string][] = [
   ['memory', 'Вещи памяти', 'вещи, которые ищут'],
   ['people', 'Люди', 'позы манекена'],
   ['pair', 'Пары', 'вещь из набора KayKit и её замена'],
+  ['s3', 'Sand3D', 'настоящая мебель из каталога Sand3D: тяни в помещение — встанет рядом, на вещь игры — вместо неё'],
   ['unmarked', 'Без отметки', 'о чём опросник спрашивал, а отметки ещё нет'],
 ];
 let shelfKind: ShelfKind = 'all';
@@ -1549,6 +1552,7 @@ function renderShelf(): void {
     if (!can) tags.append(tag('только карточка', 'card'));
     if (x.kind === 'memory') tags.append(tag('вещь памяти', 'mem'));
     if (x.toy && x.kind !== 'pair') tags.append(tag('KayKit', 'toy'));
+    if (x.kind === 's3') tags.append(tag('Sand3D', 's3'));
     const v = marks.get(x.name)?.verdict;
     if (v) tags.append(tag(SHORT[v], `v-${v}`));
     text.append(title, small);
@@ -1670,7 +1674,7 @@ function renderCard(): void {
   $('c-rooms-dt').textContent = rt.label;
   $('c-rooms').textContent = rt.text;
   $('c-advice').textContent = i.advice ? `Совет основной модели: ${i.advice}.` : '';
-  $('c-ask').textContent = i.kind === 'memory' ? 'Насколько проработать' : i.kind === 'pair' ? 'Менять или оставить' : i.kind === 'people' ? 'Поза' : 'Что с ней делать';
+  $('c-ask').textContent = i.kind === 'memory' ? 'Насколько проработать' : i.kind === 'pair' ? 'Менять или оставить' : i.kind === 'people' ? 'Поза' : i.kind === 's3' ? 'Годится ли игре' : 'Что с ней делать';
   const m = marks.get(cardName) ?? {};
   const can = !db || canWrite;
   $('c-verdicts').replaceChildren(

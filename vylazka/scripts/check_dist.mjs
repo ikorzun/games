@@ -13,7 +13,8 @@
  *   - бумага: то же для слоёв из assets/papers/<id>.webp (портреты, деньги, карты);
  *   - игровые ассеты (графика и звук: assets/<папка>/… и audio/…) считаются отдельной строкой: больше 40 МБ —
  *     предупреждение (грузить игру станет долго), общий лимит архива 300 МБ — жёсткий.
- *     Файлы бандла Vite лежат в assets/ плоско (assets/index-<хеш>.js) и входят в ядро.
+ *     Файлы бандла Vite лежат в assets/ плоско (assets/index-<хеш>.js) и входят в ядро — кроме кусков кода, которые
+ *     игра грузит по нужде (модели полки Sand3D, assets/sand3d_data-<хеш>.js): на старте их нет, они считаются ассетами.
  * Выход: код 0 — всё в порядке (предупреждения не мешают), 1 — есть нарушения (перечислены в stderr).
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -26,8 +27,10 @@ export const ARCHIVE_BUDGET_BYTES = 300 * 1024 * 1024;
 export const ASSETS_WARN_BYTES = 40 * 1024 * 1024;
 /** Каталоги контента вне «ядра» (у этой игры их нет: уровни процедурные, строки вшиты). */
 const CONTENT_DIRS = [];
-/** Игровой ассет: assets/<папка>/… и звук audio/…; плоские assets/<файл> — бандл Vite, это ядро. */
-const isGameAsset = (rel) => rel.startsWith('audio/') || (rel.startsWith('assets/') && rel.indexOf('/', 'assets/'.length) > 0);
+/** Куски кода, которые игра грузит по нужде, а не на старте (world/sand3d.ts): модели полки Sand3D. */
+const LAZY_CHUNK = /^assets\/sand3d_data-[\w-]+\.js$/;
+/** Игровой ассет: assets/<папка>/…, звук audio/… и куски по нужде; остальные плоские assets/<файл> — бандл Vite, это ядро. */
+const isGameAsset = (rel) => rel.startsWith('audio/') || LAZY_CHUNK.test(rel) || (rel.startsWith('assets/') && rel.indexOf('/', 'assets/'.length) > 0);
 
 /** Какие звуковые файлы обязаны быть в сборке: из audio/manifest.json. */
 function expectedAudio() {

@@ -48,7 +48,7 @@ npm run dev                # dev-сервер, http://localhost:5175
 npm run typecheck && npm test
 npm run build              # dist/ + проверка архива (scripts/check_dist.mjs)
 npm run build:playgama     # dist-playgama/ с Playgama Bridge SDK; архив, события, чеклист — docs/vylazka/playgama.md
-npm run build:single       # dist/ одной страницей (dist-single/untitled_session.html): код, шрифты и плакаты вшиты
+npm run build:single       # одной страницей (dist-single/untitled_session.html): код, мебель полки, шрифты и плакаты вшиты
 npm run smoke              # смоук сборки в Chromium (программный WebGL)
 npm run smoke -- --dist dist-playgama
 npm run smoke -- --shell   # в chromium-headless-shell: тот же браузер, что на CI

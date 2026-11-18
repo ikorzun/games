@@ -7,6 +7,8 @@
 import { ALL_PROPS } from '../../src/world/props_all';
 import { ALL_MEMORIES } from '../../src/systems/session';
 import { KAYKIT_SWAPS } from '../../src/world/props_real';
+import { swapFits } from '../../src/world/placed';
+import { SAND3D_CREDITS } from '../../src/world/sand3d_data';
 import RU from '../../locales/ru/ui.json';
 
 type Usage = Record<string, { worlds: Record<string, number>; rooms: Record<string, number> }>;
@@ -25,9 +27,9 @@ export const ROOM_RU: Record<string, string> = {
   tickets: 'касса', lockers: 'камеры хранения', buffet: 'буфет', platform: 'перрон', lift: 'лифт', track: 'пути', copyroom: 'копировальная', server: 'серверная',
 };
 
-/** Вид вещи в описи: пара KayKit → замена, мебель, вещь памяти, люди (манекены), прочее. */
-export type Kind = 'pair' | 'furniture' | 'memory' | 'people' | 'other';
-export type Verdict = 'redo1' | 'redo2' | 'keep' | 'remove' | 'detail1' | 'detail2' | 'swap' | 'swapfix';
+/** Вид вещи в описи: пара KayKit → замена, мебель, вещь памяти, люди (манекены), полка Sand3D, прочее. */
+export type Kind = 'pair' | 'furniture' | 'memory' | 'people' | 's3' | 'other';
+export type Verdict = 'redo1' | 'redo2' | 'keep' | 'remove' | 'detail1' | 'detail2' | 'swap' | 'swapfix' | 'good' | 'fix' | 'drop';
 export interface Choice {
   id: Verdict;
   label: string;
@@ -51,6 +53,11 @@ export const CHOICES: Record<Kind, Choice[]> = {
     { id: 'detail2', label: 'Детальнее — потом', hint: 'после других' },
     { id: 'keep', label: 'Уже хороша', hint: 'не трогать' },
   ],
+  s3: [
+    { id: 'good', label: 'Годится', hint: 'ставлю её и меняю ею вещи игры' },
+    { id: 'fix', label: 'Годится, но поправить', hint: 'напиши в заметке: размер, цвет, материал, какой стороной стоит' },
+    { id: 'drop', label: 'Убрать с полки', hint: 'игре не подходит' },
+  ],
   people: [
     { id: 'keep', label: 'Поза годится', hint: 'так и ставить' },
     { id: 'swapfix', label: 'Поза — но поправить', hint: 'напиши в заметке: что не так, как должно быть' },
@@ -66,7 +73,7 @@ export const CHOICES: Record<Kind, Choice[]> = {
 /** Подпись отметки (у одинаковых в разных видах — первая). */
 export const LABEL: Record<string, string> = Object.fromEntries(Object.values(CHOICES).flat().map((c) => [c.id, c.label]));
 /** Коротко — для метки на полке. */
-export const SHORT: Record<Verdict, string> = { redo1: 'переделать первым', redo2: 'переделать потом', keep: 'оставить', remove: 'убрать', detail1: 'детальнее первой', detail2: 'детальнее потом', swap: 'менять', swapfix: 'менять, доработать' };
+export const SHORT: Record<Verdict, string> = { redo1: 'переделать первым', redo2: 'переделать потом', keep: 'оставить', remove: 'убрать', detail1: 'детальнее первой', detail2: 'детальнее потом', swap: 'менять', swapfix: 'менять, доработать', good: 'годится', fix: 'поправить', drop: 'убрать с полки' };
 /** Отметка партнёра: коллекция verdicts, документ = имя вещи (как в опроснике). */
 export interface Mark {
   verdict?: Verdict;
@@ -88,6 +95,46 @@ for (const m of ALL_MEMORIES) {
 
 const SWAP = new Map(KAYKIT_SWAPS.map((x) => [x.from, x.to]));
 const ALT = new Set(KAYKIT_SWAPS.map((x) => x.to));
+
+/** Полка Sand3D: авторство каждой вещи (строка каталога, без изменений). */
+const S3 = new Map(SAND3D_CREDITS.map((c) => [c.name, c]));
+
+/**
+ * Род мебели — по главному слову подписи: первые три слова до запятой или двоеточия («кабинка с тканевой перегородкой,
+ * столом…» — кабинка, не стол; «островок отдела: четыре стола» — не стол). Слово ищется с начала слова: «двухтумбовый
+ * стол» — стол, «тумба под стол» — тумба, «мойка-тумба» — не тумба. Кровать меняют на кровать, стол на стол.
+ */
+const GENUS: readonly [RegExp, string][] = [
+  [/(?:^|\s)(?:кроват|нар[ыа]|койк|кушетк)/, 'bed'],
+  [/(?:^|\s)(?:кресл|стул|табурет)/, 'seat'],
+  [/(?:^|\s)(?:диван|скамь|банкетк|ряд)/, 'bench'],
+  [/(?:^|\s)(?:стол|парт|конторк)/, 'table'],
+  [/(?:^|\s)(?:шкаф|комод|тумб|стеллаж|этажерк|картотек|сервант|стенк)/, 'store'],
+  [/(?:^|\s)вешалк/, 'hanger'],
+];
+function genus(ru: string): string | null {
+  const head = ru.split(/[,:]/)[0]!.trim().split(/\s+/).slice(0, 3).join(' ');
+  let best: [number, string] | null = null;
+  for (const [re, g] of GENUS) {
+    const m = re.exec(head);
+    if (m && (best === null || m.index < best[0])) best = [m.index, g];
+  }
+  return best?.[1] ?? null;
+}
+
+/**
+ * Вместо каких вещей игры встаёт вещь полки: того же рода, стоит на уровнях и по размеру влезает на её место
+ * (swapFits — та же проверка, что у замены в игре). Сначала те, что чаще на глазах.
+ */
+export function s3Fits(name: string): { name: string; ru: string; most: number }[] {
+  const me = ALL_PROPS[name];
+  const g = me ? genus(me.ru) : null;
+  if (!me || !g) return [];
+  return Object.keys(ALL_PROPS)
+    .filter((n) => !S3.has(n) && !SWAP.has(n) && genus(ALL_PROPS[n]!.ru) === g && Object.keys(USAGE[n]?.worlds ?? {}).length > 0 && swapFits(ALL_PROPS[n]!, me))
+    .map((n) => ({ name: n, ru: ALL_PROPS[n]!.ru, most: Math.max(0, ...Object.values(USAGE[n]!.worlds)) }))
+    .sort((a, b) => b.most - a.most || a.name.localeCompare(b.name));
+}
 
 export interface Item {
   kind: Kind;
@@ -116,11 +163,16 @@ export const ITEMS: Item[] = Object.keys(ALL_PROPS).map((name) => {
   const toy = name.startsWith('kk_');
   const used = Object.keys(u?.worlds ?? {}).length > 0;
   const alt = SWAP.get(name);
-  const kind: Kind = name.startsWith('mq_') ? 'people' : alt ? 'pair' : MEMORY.has(name) ? 'memory' : ALT.has(name) && name !== 'chair_bent' ? 'other' : FURNITURE.test(p.ru) && used ? 'furniture' : 'other';
+  const kind: Kind = name.startsWith('mq_') ? 'people' : S3.has(name) ? 's3' : alt ? 'pair' : MEMORY.has(name) ? 'memory' : ALT.has(name) && name !== 'chair_bent' ? 'other' : FURNITURE.test(p.ru) && used ? 'furniture' : 'other';
   // Чаще на глазах — раньше переделывать: сколько штук в среднем на уровень в том месте, где их больше.
   const most = Math.max(0, ...Object.values(u?.worlds ?? {}));
+  const fits = kind === 's3' ? s3Fits(name) : [];
   const advice =
-    name === 'kk_chair_a'
+    kind === 's3'
+      ? fits.length > 0
+        ? `первой — вместо «${fits[0]!.ru.split(',')[0]}»: по размеру встаёт на её место, а она чаще на глазах`
+        : 'ставить рядом с вещами игры: вместо вещи того же рода не влезает по размеру'
+      : name === 'kk_chair_a'
       ? 'уже заменён по твоему слову'
       : kind === 'pair'
         ? 'заменена 16.11 по твоему слову'
@@ -149,18 +201,19 @@ export const ITEMS: Item[] = Object.keys(ALL_PROPS).map((name) => {
     h: p.h,
     y: p.mount === 'wall' ? (p.y ?? 1.2) : 0,
     toy,
-    source: toy ? 'готовая модель из набора KayKit (нарочно игрушечный стиль)' : 'собрана кодом в игре',
+    source: kind === 's3' ? `каталог Sand3D (вещь, записанная программой), упрощена для игры; авторство: ${S3.get(name)!.attribution}` : toy ? 'готовая модель из набора KayKit (нарочно игрушечный стиль)' : 'собрана кодом в игре',
     worlds: u?.worlds ?? {},
     rooms: Object.entries(u?.rooms ?? {}).sort((a, b) => b[1] - a[1]),
   };
 });
 export const ITEM = new Map(ITEMS.map((i) => [i.name, i]));
 
-/** О каких вещах опросник спрашивал (у «прочего» отметку можно поставить, но её не ждут). */
-export const asked = (i: Item): boolean => i.kind !== 'other';
+/** О каких вещах опросник спрашивал (у «прочего» и у полки Sand3D отметку можно поставить, но её не ждут). */
+export const asked = (i: Item): boolean => i.kind !== 'other' && i.kind !== 's3';
 
 /** Где стоит вещь: по местам — сколько в среднем на уровень; у вещи памяти — в каких местах её ищут; у пары — где замена. */
 export function whereText(i: Item): string {
+  if (i.kind === 's3') return 'полка Sand3D: сама на уровнях не стоит — встанет там, куда её поставишь';
   if (i.kind === 'memory') return 'вещь памяти: ' + MEMORY.get(i.name)!.map((m) => WORLD_RU[m.world] ?? m.world).join(', ');
   if (i.kind === 'pair') {
     const w = Object.entries(USAGE[i.alt!]?.worlds ?? {});
@@ -173,6 +226,10 @@ export function whereText(i: Item): string {
 
 /** Где чаще (до четырёх помещений) или, у вещи памяти, её задание. */
 export function roomsText(i: Item): { label: string; text: string } {
+  if (i.kind === 's3') {
+    const fits = s3Fits(i.name).slice(0, 5);
+    return { label: 'Можно вместо', text: fits.length ? fits.map((f) => `${f.ru.split(',')[0]} (${String(f.most).replace('.', ',')} на уровень)`).join('; ') : '—' };
+  }
   if (i.kind === 'memory') return { label: 'Задание', text: MEMORY.get(i.name)!.map((m) => `«${m.line}» (${WORLD_RU[m.world] ?? m.world})`).join('; ') };
   const rooms = i.rooms.slice(0, 4).map(([k]) => {
     const [w, r] = k.split(':');
