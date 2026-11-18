@@ -43,6 +43,11 @@ export interface PlaceOpts {
    * y — от 0 до прежней глубины, z — от 0 до прежней высоты (вещь сдвигается так, чтобы лечь на пол у начала координат).
    */
   tip?: boolean;
+  /**
+   * Доворот вокруг вертикали на малый угол, радианы (после опрокидывания и масштаба, вокруг начала координат вещи): вещи в
+   * ряду стоят чуть вразнобой, как расставленные руками, а не отпечатанные (куратор, «Ряд сбит, а не отпечатан»).
+   */
+  yaw?: number;
 }
 
 const cache = new Map<string, DecodedModel>();
@@ -160,15 +165,21 @@ export function placeModel(xf: Xf, name: string, opts: PlaceOpts = {}): void {
   const tip = opts.tip === true;
   const z0 = m.min[2];
   const y1 = m.max[1];
+  const cy = Math.cos(opts.yaw ?? 0);
+  const sy = Math.sin(opts.yaw ?? 0);
   for (let i = 0; i < n; i++) {
     const x = m.position[i * 3]!;
     const y = m.position[i * 3 + 1]!;
     const z = m.position[i * 3 + 2]!;
-    const p = tip ? xf.pt(x * s, (z - z0) * s, (y1 - y) * s) : xf.pt(x * s, y * s, z * s);
+    // Опрокидывание, масштаб, затем доворот: (x, z) → (x·cos − z·sin, x·sin + z·cos).
+    const px = x * s;
+    const py = tip ? (z - z0) * s : y * s;
+    const pz = tip ? (y1 - y) * s : z * s;
+    const p = xf.pt(px * cy - pz * sy, py, px * sy + pz * cy);
     const nx = m.normal[i * 3]!;
-    const ny = m.normal[i * 3 + 1]!;
-    const nz = m.normal[i * 3 + 2]!;
-    const nn = rotNormal(tip ? [nx, nz, -ny] : [nx, ny, nz], xf.rot);
+    const ny = tip ? m.normal[i * 3 + 2]! : m.normal[i * 3 + 1]!;
+    const nz = tip ? -m.normal[i * 3 + 1]! : m.normal[i * 3 + 2]!;
+    const nn = rotNormal([nx * cy - nz * sy, ny, nx * sy + nz * cy], xf.rot);
     const mat = one ?? m.mat![i]!;
     const base = baseOf(mat);
     const tint: Vec3 = [0, 0, 0];

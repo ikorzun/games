@@ -19,7 +19,8 @@ import { hung } from './props';
 import type { Xf } from './props';
 import { beam, ring, rng, sheet, WHITE } from './props_more';
 import type { PropSpec } from './props_more';
-import { furnished, jitter, pickOf, s3Put, s3Size, S3_SEAT } from './furniture';
+import { hash2 } from '../core/rng';
+import { furnished, jitter, pickOf, s3Put, s3Size, S3_SEAT, turnOf } from './furniture';
 
 const UP: Vec3 = [0, 1, 0];
 
@@ -77,15 +78,30 @@ const add3 = (a: Vec3, b: Vec3, k = 1): Vec3 => [a[0] + b[0] * k, a[1] + b[1] * 
 export const WALL_BENCHES = ['s3_bench_wood', 's3_bench_blue', 's3_bench_cast'] as const;
 const ROW_BENCH = 's3_bench_wood';
 
-/** Высота сиденья скамьи, которую с этим сидом поставит st_seats (у стены) или st_seats_double (ряд): на неё кладут вещи. */
-export function benchSeat(name: 'st_seats' | 'st_seats_double', seed: number): number {
-  return S3_SEAT[name === 'st_seats' ? pickOf(WALL_BENCHES, seed) : ROW_BENCH]!;
+/**
+ * Скамьи двойного ряда с этим сидом: лицом в +z и лицом в −z. Ряд сбит, а не отпечатан (куратор): примерно в каждой седьмой
+ * паре одна скамья — чужая, синяя, будто её принесли из другого зала.
+ */
+function rowBenches(seed: number): readonly [string, string] {
+  const odd = hash2(seed, 0x0b, 0x5c) % 7 === 0;
+  const side = hash2(seed, 0x0c, 0x5c) % 2;
+  return [odd && side === 0 ? 's3_bench_blue' : ROW_BENCH, odd && side === 1 ? 's3_bench_blue' : ROW_BENCH];
 }
 
-/** Две деревянные скамьи полки спинка к спинке — ряд посреди зала; тон у каждой свой. */
+/** Высота сиденья скамьи, которую с этим сидом поставит st_seats (у стены) или st_seats_double (ряд, скамья лицом в +z). */
+export function benchSeat(name: 'st_seats' | 'st_seats_double', seed: number): number {
+  return S3_SEAT[name === 'st_seats' ? pickOf(WALL_BENCHES, seed) : rowBenches(seed)[0]]!;
+}
+
+/**
+ * Две скамьи полки спинка к спинке — ряд посреди зала. Каждая стоит по-своему: сдвинута вдоль ряда на несколько сантиметров,
+ * чуть отставлена и довёрнута, тон свой.
+ */
 function seatsDouble(xf: Xf, seed: number): void {
-  s3Put(xf, ROW_BENCH, { tint: jitter(seed) });
-  s3Put(xf.child(0, 0, 0, 2), ROW_BENCH, { tint: jitter(seed, 0.07, 1) });
+  const [front, back] = rowBenches(seed);
+  const r = (salt: number): number => hash2(seed, salt, 0x2d) / 4294967296;
+  s3Put(xf.child((r(1) - 0.5) * 0.1, 0, r(2) * 0.03), front, { tint: jitter(seed), yaw: turnOf(seed, 0.02, 1) });
+  s3Put(xf.child((r(3) - 0.5) * 0.1, 0, -r(4) * 0.03, 2), back, { tint: jitter(seed, 0.07, 1), yaw: turnOf(seed, 0.02, 2) });
 }
 
 // ───────────────────────────── камеры хранения ─────────────────────────────
@@ -505,8 +521,8 @@ function snow(xf: Xf): void {
 // ───────────────────────────── реестр ─────────────────────────────
 
 export const STATION_PROPS: Record<string, PropSpec> = {
-  st_seats: furnished('floor', WALL_BENCHES, 'скамья: деревянная со спинкой, синяя или парковая на чугунных ногах'),
-  st_seats_double: { w: s3Size(ROW_BENCH).w, d: s3Size(ROW_BENCH).d * 2, h: s3Size(ROW_BENCH).h, mount: 'free', ru: 'две деревянные скамьи спинка к спинке', build: seatsDouble },
+  st_seats: furnished('floor', WALL_BENCHES, 'скамья: деревянная со спинкой, синяя или парковая на чугунных ногах', { turn: 0.025, pull: 0.04 }),
+  st_seats_double: { w: 1.6, d: 1.72, h: s3Size(ROW_BENCH).h, mount: 'free', ru: 'две скамьи спинка к спинке, обычно деревянные', build: seatsDouble },
   st_lockers: { w: 1.35, d: 0.5, h: 1.9, mount: 'floor', ru: 'секция камер хранения 3×4, одна дверца приоткрыта', build: lockers },
   st_ticket_window: { w: 1.5, d: 0.5, h: 2.1, mount: 'floor', ru: 'окошко кассы: прилавок, рама со стеклом, полочка для мелочи, узкая стойка', build: (xf) => ticketWindow(xf) },
   st_board: { w: 2.6, d: 0.12, h: 1.2, mount: 'wall', y: 2.3, ru: 'табло отправления с перекидными планками без букв', build: board },

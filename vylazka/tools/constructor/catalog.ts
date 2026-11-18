@@ -187,6 +187,7 @@ export const ITEMS: Item[] = Object.keys(ALL_PROPS).map((name) => {
     }
     if (madeOf) return `с 18.11 — модели полки: ${madeOf.map((m) => `«${head(ALL_PROPS[m]?.ru ?? m)}»`).join(', ')}`;
     if (name === 'kk_chair_a') return 'уже заменён по твоему слову';
+    if (name === 'chair_bent') return 'оставлен по твоему «Отличный стул!»: стоит в офисе и жёлтых комнатах; дома и в убежище — стулья полки';
     if (kind === 'pair') return 'заменена 16.11 по твоему слову';
     if (kind === 'memory') return 'детальнее — первой: её ищут';
     if (kind === 'people') return 'поза-заготовка; свою позу можно описать словами в заметке';

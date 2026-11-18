@@ -302,8 +302,13 @@ export class App {
     this.lifecycle.set('boot', true);
 
     // Модели полки Sand3D — отдельный кусок сборки: из них вся мебель (world/furniture.ts). Качаются сразу, пока ждём
-    // шрифт и сохранение; первая сборка места их дожидается (не пришли — на месте мебели серые коробки её габарита).
-    const furniture = loadSand3d();
+    // шрифт и сохранение; первая сборка места их дожидается, но не дольше 12 с: на медленной сети лучше войти в место
+    // с серыми коробками габарита мебели, чем висеть на загрузке; следующее место соберётся уже с моделями.
+    // Титры — когда бы кусок ни пришёл.
+    const furniture = loadSand3d().then((ok) => {
+      if (ok) this.overlay.setCredits(sand3dCredits());
+      return ok;
+    });
     // Шрифт интерфейса: ждём недолго, чтобы первый экран не мигнул системным.
     await Promise.race([document.fonts?.load?.('16px "JetBrains Mono"', 'Убежище Ag').catch(() => undefined) ?? Promise.resolve(), new Promise((r) => setTimeout(r, 1500))]);
 
@@ -440,8 +445,7 @@ export class App {
     if (this.pinned || this.testLevel) this.scenes = false;
     // Место игрок не выбирает (решение партнёра 16.11): кнопка «Место» — только в петле одного места, для проверок.
     this.overlay.setPlacePick(!this.scenes);
-    await furniture;
-    this.overlay.setCredits(sand3dCredits());
+    await Promise.race([furniture, new Promise((r) => setTimeout(r, 12000))]);
     this.prepare();
 
     const resize = (): void => {

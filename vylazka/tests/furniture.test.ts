@@ -118,11 +118,13 @@ describe('мебель полки: что знают о моделях те, к�
     expect(spec.w).toBe(Math.max(s3Size('s3_sofa_olive').w, s3Size('s3_sofa_grey').w));
   });
 
-  it('скамья вокзала: высота сиденья для места вещи — от той скамьи, что поставит сид', () => {
-    for (let s = 0; s < 40; s++) {
+  it('скамья вокзала: высота сиденья для места вещи — от той скамьи, что поставит сид; в рядах изредка чужая скамья', () => {
+    const rows = new Set<number>();
+    for (let s = 0; s < 200; s++) {
       expect(benchSeat('st_seats', s)).toBe(S3_SEAT[pickOf(WALL_BENCHES, s)]);
-      expect(benchSeat('st_seats_double', s)).toBe(S3_SEAT.s3_bench_wood);
+      rows.add(benchSeat('st_seats_double', s));
     }
+    expect([...rows].sort()).toEqual([S3_SEAT.s3_bench_wood!, S3_SEAT.s3_bench_blue!].sort());
   });
 });
 
@@ -211,9 +213,11 @@ describe('места с мебелью полки собираются', () => {
       const l = level(w);
       const boxes = l.chunks.map((ch) => bounds(ch.mesh));
       let checked = 0;
-      for (const s of l.spots.filter((k) => k.kind !== 'floor')) {
-        // Луч вниз от места: ближайшая грань под ним (смотрящая вверх).
+      for (const s0 of l.spots.filter((k) => k.kind !== 'floor')) {
+        // Луч вниз от места и от четырёх точек в 4 см вокруг (вещь шире щели между рейками скамьи): ближайшая грань под ним.
         let best = Infinity;
+        for (const [ox, oz] of [[0, 0], [0.04, 0], [-0.04, 0], [0, 0.04], [0, -0.04]] as const) {
+        const s = { ...s0, x: s0.x + ox, z: s0.z + oz };
         l.chunks.forEach((ch, ci) => {
           const b = boxes[ci]!;
           if (s.x < b.min[0] || s.x > b.max[0] || s.z < b.min[2] || s.z > b.max[2]) return;
@@ -235,7 +239,8 @@ describe('места с мебелью полки собираются', () => {
             if (gap > -0.012 && gap < best) best = gap;
           }
         });
-        expect(best, `${w}: место ${s.kind} ${s.x.toFixed(2)}, ${s.y.toFixed(3)}, ${s.z.toFixed(2)}`).toBeLessThan(0.03);
+        }
+        expect(best, `${w}: место ${s0.kind} ${s0.x.toFixed(2)}, ${s0.y.toFixed(3)}, ${s0.z.toFixed(2)}`).toBeLessThan(0.03);
         checked++;
       }
       expect(checked, w).toBeGreaterThan(0);

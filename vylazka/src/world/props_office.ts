@@ -16,11 +16,13 @@ import { MAT } from './materials';
 import type { Xf } from './props';
 import { beam, rng, sheet, WHITE } from './props_more';
 import type { PropSpec } from './props_more';
-import { fillShelves, furnished, jitter, pickOf, s3As, s3Put, spanOf, S3_SHELVES, S3_TOP } from './furniture';
+import { fillShelves, furnished, jitter, pickOf, s3As, s3Put, spanOf, S3_SHELVES, S3_TOP, turnOf } from './furniture';
 
 /** Мебель отдела с полки Sand3D: столы (у отдела — одной модели), кресло, шкафы для папок. */
 const OFFICE_DESKS = ['s3_desk_office_grey', 's3_desk_office'] as const;
 const CHAIR = 's3_chair_office';
+/** Офисное кресло редко стоит ровно: доворот до ±26° (у переговорного стола — до ±10°, иначе кресла толкаются). */
+const CHAIR_TURN = 0.45;
 const BINDER_SHELVES = ['s3_bookcase_office', 's3_rack_metal'] as const;
 
 /** Высота столешницы стола office_desk с этим сидом (какую модель поставит furnished — та же жеребьёвка). */
@@ -106,7 +108,7 @@ function deskIsland(xf: Xf, seed: number): void {
       const k = seed + sx * 3 + row.rot;
       s3Put(d, D, { tint: jitter(k) });
       terminal(d.child(-0.2, S3_TOP[D]!, 0.33), seed + sx + row.rot * 5);
-      s3As(d.child(-0.2 + (rnd() - 0.5) * 0.1, 0, 1.0, 2), CHAIR, 'free', { tint: jitter(k, 0.07, 2) });
+      s3As(d.child(-0.2 + (rnd() - 0.5) * 0.1, 0, 0.98, 2), CHAIR, 'free', { tint: jitter(k, 0.07, 2), yaw: turnOf(k, CHAIR_TURN) });
     }
   }
   // Крестовая перегородка: ткань в металлической окантовке, поверху планка.
@@ -136,7 +138,7 @@ function cubicle(xf: Xf, seed: number): void {
   const D = pickOf(OFFICE_DESKS, seed);
   s3Put(xf.child(0, 0, 0.06), D, { tint: jitter(seed) });
   terminal(xf.child(0.2, S3_TOP[D]!, 0.38), seed + 1);
-  s3As(xf.child(rnd() * 0.2 - 0.1, 0, 1.12, 2), CHAIR, 'free', { tint: jitter(seed, 0.07, 2) });
+  s3As(xf.child(rnd() * 0.2 - 0.1, 0, 1.12, 2), CHAIR, 'free', { tint: jitter(seed, 0.07, 2), yaw: turnOf(seed, CHAIR_TURN) });
 }
 
 /** Одна панель перегородки 1,5 × 0,3 × 1,45 на двух ножках. */
@@ -390,9 +392,10 @@ function meetingTable(xf: Xf, seed: number): void {
   const top = S3_TOP[T]!;
   bx(xf, [-0.5, top, -0.14], [0.2, top + 0.005, 0.12], MAT.paper, [1.2, 1.15, 1.0], { skip: ['ny'] });
   for (const side of [-1, 1]) {
-    for (const x of [-0.78, 0, 0.78]) {
+    for (const x of [-0.84, 0, 0.84]) {
       const jit = (rnd() - 0.5) * 0.1;
-      s3As(xf.child(x + (rnd() - 0.5) * 0.04, 0, side * (0.7 + jit), side > 0 ? 2 : 0), CHAIR, 'free', { tint: jitter(seed + side * 7 + Math.round(x * 10), 0.07, 2) });
+      const k = seed + side * 7 + Math.round(x * 10);
+      s3As(xf.child(x + (rnd() - 0.5) * 0.04, 0, side * (0.7 + jit), side > 0 ? 2 : 0), CHAIR, 'free', { tint: jitter(k, 0.07, 2), yaw: turnOf(k, 0.17) });
     }
   }
 }
@@ -688,13 +691,13 @@ export function ceilingBreak(xf: Xf, h: number, seed: number): void {
 }
 
 export const OFFICE_PROPS: Record<string, PropSpec> = {
-  office_desk: furnished('floor', OFFICE_DESKS, 'стол офисный: серый или с тумбой на ящики'),
+  office_desk: furnished('floor', OFFICE_DESKS, 'стол офисный: серый или с тумбой на ящики', { pull: 0.03 }),
   office_terminal: { w: 0.46, d: 0.5, h: 0.42, mount: 'free', ru: 'терминал кинескопный с клавиатурой', build: terminal },
-  office_chair: furnished('free', [CHAIR], 'кресло офисное на колёсиках'),
+  office_chair: furnished('free', [CHAIR], 'кресло офисное на колёсиках', { turn: CHAIR_TURN }),
   desk_island: { w: 3.0, d: 3.0, h: 1.2, mount: 'free', ru: 'островок отдела: четыре стола, перегородка крестом, терминалы и кресла', build: deskIsland },
   cubicle: { w: 1.8, d: 1.7, h: 1.45, mount: 'floor', ru: 'кабинка с тканевой перегородкой, столом, терминалом и креслом', build: cubicle },
   partition: { w: 1.5, d: 0.3, h: 1.45, mount: 'free', ru: 'панель тканевой перегородки на ножках', build: partition },
-  filing_cabinet: furnished('floor', ['s3_filing_cabinet'], 'картотечный шкаф, три ящика'),
+  filing_cabinet: furnished('floor', ['s3_filing_cabinet'], 'картотечный шкаф, три ящика', { pull: 0.03 }),
   water_cooler: { w: 0.34, d: 0.34, h: 1.35, mount: 'floor', ru: 'кулер с голубой бутылью', build: waterCooler },
   copier: { w: 1.0, d: 0.65, h: 1.05, mount: 'floor', ru: 'копировальный аппарат с лотком и пультом', build: copier },
   ceiling_panel: { w: 1.2, d: 0.6, h: 0.05, mount: 'ceiling', ru: 'потолочная светящаяся панель', build: ceilingPanel },
@@ -706,7 +709,7 @@ export const OFFICE_PROPS: Record<string, PropSpec> = {
   vending_machine: { w: 0.95, d: 0.8, h: 1.83, mount: 'floor', ru: 'торговый автомат с подсвеченной витриной', build: vendingMachine },
   trash_bin: { w: 0.28, d: 0.28, h: 0.32, mount: 'free', ru: 'урна офисная', build: trashBin },
   reception_desk: { w: 2.2, d: 0.8, h: 1.1, mount: 'floor', ru: 'стойка ресепшена с бирюзовой полосой и терминалом', build: receptionDesk },
-  meeting_table: { w: 2.4, d: 2.24, h: 1.02, mount: 'free', ru: 'переговорный стол с шестью креслами', build: meetingTable },
+  meeting_table: { w: 2.6, d: 2.42, h: 1.02, mount: 'free', ru: 'переговорный стол с шестью креслами', build: meetingTable },
   server_rack: { w: 0.6, d: 0.9, h: 2.0, mount: 'floor', ru: 'серверная стойка с рядами огоньков', build: serverRack },
   elevator_doors: { w: 1.5, d: 0.14, h: 2.35, mount: 'floor', ru: 'закрытые двери лифта с кнопкой вызова', build: elevatorDoors },
   kitchenette: { w: 1.8, d: 0.62, h: 2.05, mount: 'floor', ru: 'кухонный уголок: мойка, микроволновка, кофемашина, верхний шкаф', build: kitchenette },

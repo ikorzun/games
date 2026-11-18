@@ -51,16 +51,48 @@ export interface S3Opts {
   tint?: Vec3;
   /** Опрокинута на спину (models.ts, PlaceOpts.tip): x — прежний, y от 0 до d, z от 0 до h. */
   tip?: boolean;
+  /**
+   * Доворот вокруг вертикали, радианы: вещь стоит чуть вразнобой (куратор, «Ряд сбит, а не отпечатан»). У стены (спина в
+   * z = 0) вещь при этом отодвигается ровно настолько, чтобы задние углы остались перед стеной.
+   */
+  yaw?: number;
   /** Преграда во весь габарит (по умолчанию есть). */
   collide?: boolean;
 }
 
-/** Габарит модели в точке xf (в координатах вещи) — с учётом опоры и опрокидывания. */
-export function s3Bounds(name: string, tip = false): [Vec3, Vec3] {
+/** Охват прямоугольника x0…x1 × z0…z1 после поворота на yaw вокруг начала координат: [x0, x1, z0, z1]. */
+function turned(x0: number, x1: number, z0: number, z1: number, yaw: number): [number, number, number, number] {
+  const c = Math.cos(yaw);
+  const s = Math.sin(yaw);
+  const out: [number, number, number, number] = [Infinity, -Infinity, Infinity, -Infinity];
+  for (const x of [x0, x1]) {
+    for (const z of [z0, z1]) {
+      const rx = x * c - z * s;
+      const rz = x * s + z * c;
+      out[0] = Math.min(out[0], rx);
+      out[1] = Math.max(out[1], rx);
+      out[2] = Math.min(out[2], rz);
+      out[3] = Math.max(out[3], rz);
+    }
+  }
+  return out;
+}
+
+/** На сколько отодвинуть от стены довёрнутую вещь с этим габаритом (спина в z = 0), чтобы задние углы остались перед стеной. */
+function wallGap(lo: Vec3, hi: Vec3, yaw: number): number {
+  return yaw !== 0 && lo[2] === 0 ? Math.max(0, -turned(lo[0], hi[0], lo[2], hi[2], yaw)[2]) : 0;
+}
+
+/** Габарит модели в точке xf (в координатах вещи) — с учётом опоры, опрокидывания и доворота. */
+export function s3Bounds(name: string, tip = false, yaw = 0): [Vec3, Vec3] {
   const g = s3Size(name);
-  if (tip) return [[-g.w / 2, 0, 0], [g.w / 2, g.d, g.h]];
-  const z0 = g.mount === 'free' ? -g.d / 2 : 0;
-  return [[-g.w / 2, 0, z0], [g.w / 2, g.h, z0 + g.d]];
+  const z0 = !tip && g.mount === 'free' ? -g.d / 2 : 0;
+  const lo: Vec3 = [-g.w / 2, 0, z0];
+  const hi: Vec3 = [g.w / 2, tip ? g.d : g.h, tip ? g.h : z0 + g.d];
+  if (yaw === 0) return [lo, hi];
+  const dz = wallGap(lo, hi, yaw);
+  const [a, b, e, f] = turned(lo[0], hi[0], lo[2], hi[2], yaw);
+  return [[a, 0, e + dz], [b, hi[1], f + dz]];
 }
 
 /** Запись поставленных моделей (для проверки описи FURNITURE_FROM): пока идёт recordS3 — сюда попадает каждое имя. */
@@ -85,8 +117,13 @@ export function recordS3(body: () => void): Set<string> {
  */
 export function s3Put(xf: Xf, name: string, opts: S3Opts = {}): void {
   record?.add(name);
-  const [lo, hi] = s3Bounds(name, opts.tip);
-  if (hasModel(name)) placeModel(xf, name, { ...(opts.tint ? { tint: opts.tint } : {}), ...(opts.tip ? { tip: true } : {}) });
+  const yaw = opts.yaw ?? 0;
+  const [lo, hi] = s3Bounds(name, opts.tip, yaw);
+  // Довёрнутая у стены — отодвинута на столько же, на сколько сдвинут её габарит.
+  const [l0, h0] = s3Bounds(name, opts.tip);
+  const dz = wallGap(l0, h0, yaw);
+  const at = dz > 0 ? xf.child(0, 0, dz) : xf;
+  if (hasModel(name)) placeModel(at, name, { ...(opts.tint ? { tint: opts.tint } : {}), ...(opts.tip ? { tip: true } : {}), ...(yaw !== 0 ? { yaw } : {}) });
   else xf.box(lo, hi, MAT.paper, opts.tint ? { tint: opts.tint } : {});
   if (opts.collide !== false) xf.collider(lo, hi);
 }
@@ -119,17 +156,36 @@ export function spanOf(names: readonly string[]): { w: number; d: number; h: num
   return { w: Math.max(...sizes.map((g) => g.w)), d: Math.max(...sizes.map((g) => g.d)), h: Math.max(...sizes.map((g) => g.h)) };
 }
 
+/** Как стоит экземпляр: доворот до ±turn радиан и отступ от стены до pull метров — по сиду. */
+export interface Stance {
+  turn?: number;
+  pull?: number;
+}
+
+/** Доворот экземпляра по сиду: от −turn до +turn. */
+export const turnOf = (seed: number, turn: number, salt = 0): number => (hash2(seed, salt, 0x7a3) / 4294967296 - 0.5) * 2 * turn;
+
 /**
  * Вещь игры, которую строит модель полки: опора и имя — прежние, вид — одна из моделей variants (решает сид), с разбросом
- * тона. Габарит — охват всех вариантов.
+ * тона. stance — как стоит экземпляр: чуть довёрнут, чуть отодвинут от стены, чтобы ряд одинаковых вещей был сбит, а не
+ * отпечатан. Габарит — охват всех вариантов при крайнем довороте и отступе.
  */
-export function furnished(mount: S3Mount, variants: readonly string[], ru: string): PropSpec {
+export function furnished(mount: S3Mount, variants: readonly string[], ru: string, stance: Stance = {}): PropSpec {
+  const turn = stance.turn ?? 0;
+  const pull = mount === 'floor' ? (stance.pull ?? 0) : 0;
+  const span = spanOf(variants);
+  // Охват при крайнем довороте: прямоугольник w × d, повёрнутый на turn.
+  const w = turn ? Math.max(...variants.map((v) => s3Bounds(v, false, turn)).map(([lo, hi]) => hi[0] - lo[0])) : span.w;
+  const d = turn ? Math.max(...variants.map((v) => s3Bounds(v, false, turn)).map(([lo, hi]) => hi[2] - lo[2])) : span.d;
   return {
-    ...spanOf(variants),
+    w: cm(w),
+    d: cm(d + pull),
+    h: span.h,
     mount,
     ru,
     build(xf, seed) {
-      s3As(xf, pickOf(variants, seed), mount, { tint: jitter(seed) });
+      const z = pull ? (hash2(seed, 0x5e, 0x91) / 4294967296) * pull : 0;
+      s3As(z ? xf.child(0, 0, z) : xf, pickOf(variants, seed), mount, { tint: jitter(seed), ...(turn ? { yaw: turnOf(seed, turn) } : {}) });
     },
   };
 }
@@ -155,7 +211,6 @@ export const FURNITURE_FROM: Readonly<Record<string, readonly string[]>> = {
   filing_cabinet: ['s3_filing_cabinet'],
   meeting_table: ['s3_table_meeting', 's3_chair_office'],
   binder_shelf: ['s3_bookcase_office', 's3_rack_metal'],
-  chair_bent: ['s3_chair_ladder', 's3_chair_carved'],
   bunk_triple: ['s3_bunk_black', 's3_bunk_mattress'],
   bed_frame: ['s3_bed_iron_white', 's3_bed_iron_green'],
   typewriter_desk: ['s3_desk_simple', 's3_chair_ladder', 's3_chair_carved'],
@@ -164,7 +219,7 @@ export const FURNITURE_FROM: Readonly<Record<string, readonly string[]>> = {
   med_stretcher_bed: ['s3_bed_iron_white'],
   overturned_table: ['s3_table_work', 's3_chair_ladder', 's3_chair_carved'],
   st_seats: ['s3_bench_wood', 's3_bench_blue', 's3_bench_cast'],
-  st_seats_double: ['s3_bench_wood'],
+  st_seats_double: ['s3_bench_wood', 's3_bench_blue'],
 };
 
 /** Высота столешницы (или крышки), м: на неё ставится машинка, терминал, тарелка, лампа. */

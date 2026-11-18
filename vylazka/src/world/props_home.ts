@@ -17,7 +17,7 @@ import { hung } from './props';
 import type { Xf } from './props';
 import { beam, ring, rng, sheet, WHITE } from './props_more';
 import type { PropSpec } from './props_more';
-import { fillShelves, furnished, jitter, pickOf, s3Bounds, s3Put, spanOf, S3_SHELVES, S3_TOP } from './furniture';
+import { fillShelves, furnished, jitter, pickOf, s3Bounds, s3Put, spanOf, S3_SHELVES, S3_TOP, turnOf } from './furniture';
 
 /** Книжные шкафы полки Sand3D, из которых выбирается стеллаж с книгами. */
 const BOOKCASES = ['s3_bookcase_dark', 's3_etagere'] as const;
@@ -150,9 +150,17 @@ function stove(xf: Xf, seed: number): void {
  * Кухонный стол полки (точёные ножки) под клеёнкой в красную клетку — клеёнка свисает по краям; табуретка полки наполовину
  * выдвинута из-под стола; на клеёнке тарелка с куском и хлебница.
  */
+const KITCHEN_TABLE = 's3_table_kitchen';
+const KITCHEN_STOOL = 's3_stool_wood';
+/** Табуретка задвинута под край стола на 4 см и довёрнута рукой до 0,6 рад в любую сторону. */
+const KITCHEN_STOOL_IN = 0.04;
+const KITCHEN_STOOL_TURN = 0.6;
+/** Глубина стола с табуреткой: до края табуретки при самом сильном довороте (из габаритов моделей, а не на глаз). */
+const kitchenDepth = (): number => s3Bounds(KITCHEN_TABLE)[1][2] - KITCHEN_STOOL_IN + s3Bounds(KITCHEN_STOOL, false, KITCHEN_STOOL_TURN)[1][2];
+
 function kitchenTable(xf: Xf, seed: number): void {
   const rnd = rng(seed);
-  const T = 's3_table_kitchen';
+  const T = KITCHEN_TABLE;
   s3Put(xf, T, { tint: jitter(seed) });
   const [lo, hi] = s3Bounds(T);
   const hw = hi[0] + 0.01;
@@ -174,7 +182,7 @@ function kitchenTable(xf: Xf, seed: number): void {
   }
   // Табуретка наполовину выдвинута; с какой стороны — по сиду.
   const st = rnd() < 0.5 ? -0.36 : 0.36;
-  s3Put(xf.child(st, 0, hi[2] - 0.04), 's3_stool_wood', { tint: jitter(seed, 0.07, 1) });
+  s3Put(xf.child(st, 0, hi[2] - KITCHEN_STOOL_IN), KITCHEN_STOOL, { tint: jitter(seed, 0.07, 1), yaw: turnOf(seed, KITCHEN_STOOL_TURN) });
   // Тарелка с куском, хлебница.
   const ty = y + 0.003;
   xf.cyl([-0.12, ty, 0.42], 'y', 0.02, 0.13, MAT.enamel, { segments: 8, tint: [1.2, 1.2, 1.2] });
@@ -1126,17 +1134,17 @@ function remote(xf: Xf): void {
 // ───────────────────────────── реестр ─────────────────────────────
 
 export const HOME_PROPS: Record<string, PropSpec> = {
-  sofa: furnished('floor', ['s3_sofa_olive', 's3_sofa_grey'], 'диван: старый, в оливковой обивке, или с деревянными подлокотниками'),
-  armchair: furnished('floor', ['s3_armchair_round', 's3_armchair_sixties'], 'кресло: с круглой спинкой или шестидесятых, с деревянными подлокотниками'),
+  sofa: furnished('floor', ['s3_sofa_olive', 's3_sofa_grey'], 'диван: старый, в оливковой обивке, или с деревянными подлокотниками', { pull: 0.03 }),
+  armchair: furnished('floor', ['s3_armchair_round', 's3_armchair_sixties'], 'кресло: с круглой спинкой или шестидесятых, с деревянными подлокотниками', { turn: 0.07, pull: 0.05 }),
   tv_stand: { w: 1.1, d: 0.5, h: 1.15, mount: 'floor', ru: 'тумба с кинескопным телевизором и видеомагнитофоном', build: tvStand },
   fridge: { w: 0.62, d: 0.62, h: 1.7, mount: 'floor', ru: 'холодильник с магнитами и запиской', build: fridge },
   stove: { w: 0.55, d: 0.58, h: 0.9, mount: 'floor', ru: 'газовая плита с кастрюлей', build: stove },
-  kitchen_table: { w: 1.4, d: 1.08, h: 0.87, mount: 'floor', ru: 'кухонный стол на точёных ножках под клеёнкой, табуретка, тарелка, хлебница', build: kitchenTable },
+  kitchen_table: { w: 1.4, d: Math.ceil(kitchenDepth() * 100) / 100, h: 0.87, mount: 'floor', ru: 'кухонный стол на точёных ножках под клеёнкой, табуретка, тарелка, хлебница', build: kitchenTable },
   sink_cabinet: { w: 0.8, d: 0.58, h: 1.35, mount: 'floor', ru: 'мойка-тумба с краном и сушилкой для тарелок', build: sinkCabinet },
-  wardrobe: furnished('floor', ['s3_wardrobe_plain', 's3_wardrobe_grey'], 'платяной шкаф: светлый в две дверцы или серый с ящиками внизу'),
+  wardrobe: furnished('floor', ['s3_wardrobe_plain', 's3_wardrobe_grey'], 'платяной шкаф: светлый в две дверцы или серый с ящиками внизу', { pull: 0.03 }),
   wall_unit: { w: 2.6, d: 0.46, h: 2.1, mount: 'floor', ru: 'стенка: сервант с хрусталём, книги, телевизор, часы', build: wallUnit },
   bookshelf: { ...spanOf(BOOKCASES), mount: 'floor', ru: 'книжный шкаф или этажерка с пёстрыми книгами', build: bookshelf },
-  bed_home: furnished('floor', ['s3_bed_iron_green'], 'железная кровать с зелёным одеялом'),
+  bed_home: furnished('floor', ['s3_bed_iron_green'], 'железная кровать с зелёным одеялом', { pull: 0.03 }),
   wall_carpet: { w: 1.9, d: 0.04, h: 1.3, mount: 'wall', y: 0.85, ru: 'ковёр на стене с ромбами', build: (xf) => wallCarpet(xf) },
   rug: { w: 2.0, d: 1.4, h: 0.02, mount: 'free', ru: 'ковёр на полу с орнаментом', build: (xf) => rug(xf) },
   floor_lamp: { w: 0.45, d: 0.45, h: 1.65, mount: 'floor', ru: 'торшер с абажуром', build: floorLamp },
@@ -1146,7 +1154,7 @@ export const HOME_PROPS: Record<string, PropSpec> = {
   toilet_home: { w: 0.42, d: 0.68, h: 0.82, mount: 'floor', ru: 'унитаз с бачком', build: toiletHome },
   coat_rack: { w: 1.04, d: 0.65, h: 1.8, mount: 'floor', ru: 'напольная вешалка в прихожей, рядом сапоги и кеды', build: coatRack },
   desk_pc: { w: 1.04, d: 0.52, h: 1.2, mount: 'floor', ru: 'письменный стол с тумбой и ЭЛТ-монитором, системный блок под столом', build: deskPc },
-  crib: furnished('floor', ['s3_crib'], 'детская кроватка'),
+  crib: furnished('floor', ['s3_crib'], 'детская кроватка', { turn: 0.03, pull: 0.04 }),
   toy_heap: { w: 1.0, d: 0.6, h: 0.45, mount: 'floor', ru: 'кубики, пирамидка, мяч и машинка', build: toyHeap },
   clothes_dryer: { w: 1.4, d: 0.55, h: 1.0, mount: 'floor', ru: 'напольная сушилка с бельём', build: (xf) => clothesDryer(xf) },
   ironing_board: { w: 1.2, d: 0.4, h: 0.9, mount: 'floor', ru: 'гладильная доска с рубашкой', build: (xf) => ironingBoard(xf) },
