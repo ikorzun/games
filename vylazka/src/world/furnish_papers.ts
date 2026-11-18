@@ -25,9 +25,11 @@
  */
 import { hash01 } from '../core/rng';
 import type { RoomType, WorldKind } from '../gen/layout';
+import type { Aabb } from './colliders';
 import type { RoomCtx, Slot } from './furnish';
 import { hanging } from './objects';
 import { ALL_PROPS } from './props_all';
+import type { PropSpec } from './props_more';
 
 interface Rule {
   types: readonly RoomType[];
@@ -108,9 +110,10 @@ function candidates(ctx: RoomCtx, name: string, salt: number): Slot[] {
 
 const seedOf = (ctx: RoomCtx, salt: number): number => Math.floor(hash01(ctx.room.id, salt, ctx.seed ^ 0x51ce) * 1e6);
 
-function build(ctx: RoomCtx, name: string, s: Slot, salt: number): void {
+/** Построить предмет на участке s; false — не встал (врастал в соседнюю вещь, world/clearance.ts). */
+function build(ctx: RoomCtx, name: string, s: Slot, salt: number): boolean {
   const p = ALL_PROPS[name]!;
-  p.build(s.xf.child(0, p.mount === 'wall' ? (p.y ?? 1.2) : 0, 0), seedOf(ctx, salt));
+  return p.build(s.xf.child(0, p.mount === 'wall' ? (p.y ?? 1.2) : 0, 0), seedOf(ctx, salt)) !== false;
 }
 
 /**
@@ -129,7 +132,22 @@ export function reservePapers(ctx: RoomCtx): void {
     s.used = true;
     state.left[k]! -= 1;
     (ctx.papers ??= []).push({ rule: k, slot: s });
+    // Место держится тенью (партнёр 18.11: мебель не врастает в соседнюю): мелочь у соседней стены в него не встанет.
+    const p = ALL_PROPS[rule.prop];
+    if (p && s.xf.col) s.xf.col.shadows.push({ box: footprint(s, p), name: rule.prop, key: holdKey(ctx, k) });
   });
+}
+
+/** Ключ тени отведённого места. */
+const holdKey = (ctx: RoomCtx, rule: number): string => `paper:${ctx.room.id}:${rule}`;
+
+/** Коробка вещи реестра на участке стены s — там, где её построит build (у стены — спиной к ней, настенная — на своей высоте). */
+function footprint(s: Slot, p: PropSpec): Aabb {
+  const y = p.mount === 'wall' ? (p.y ?? 1.2) : 0;
+  const z0 = p.mount === 'free' ? -p.d / 2 : 0;
+  const a = s.xf.pt(-p.w / 2, y, z0);
+  const b = s.xf.pt(p.w / 2, y + p.h, z0 + p.d);
+  return { minX: Math.min(a[0], b[0]), minY: a[1], minZ: Math.min(a[2], b[2]), maxX: Math.max(a[0], b[0]), maxY: b[1], maxZ: Math.max(a[2], b[2]) };
 }
 
 /** Поставить предмет на участок стены, оставшийся свободным после обстановки, где он ни во что не упирается. */
@@ -142,9 +160,8 @@ function onWall(ctx: RoomCtx, name: string, salt: number): boolean {
     const box = boxAt(c, p.w, p.d, p.h, y);
     return !taken.some((o) => overlaps(box, o));
   });
-  if (s) {
+  if (s && build(ctx, name, s, salt)) {
     s.used = true;
-    build(ctx, name, s, salt);
     return true;
   }
   // Маленькой вещи на стене (домофон) хватает места сбоку от того, что там уже висит или стоит: у входа
@@ -159,7 +176,7 @@ function onWall(ctx: RoomCtx, name: string, salt: number): boolean {
       if (taken.some((o) => overlaps(box, o, 0))) continue;
       const mid = at.pt(0, y + p.h / 2, 0);
       if (sheets.some((m) => Math.hypot(m.at[0] - mid[0], m.at[1] - mid[1], m.at[2] - mid[2]) < 0.5)) continue;
-      p.build(at.child(0, y, 0), seedOf(ctx, salt));
+      if (p.build(at.child(0, y, 0), seedOf(ctx, salt)) === false) continue;
       return true;
     }
   }
@@ -195,8 +212,13 @@ export function furnishPapers(state: PaperState, rooms: readonly { ctx: RoomCtx 
   for (const { ctx } of rooms) {
     for (const h of ctx.papers ?? []) {
       const rule = rules[h.rule]!;
-      build(ctx, rule.prop, h.slot, h.rule);
-      count(rule.prop);
+      // Тень отведённого места — прочь: теперь на нём встаёт сама вещь.
+      const col = h.slot.xf.col;
+      if (col) {
+        const key = holdKey(ctx, h.rule);
+        for (let i = col.shadows.length - 1; i >= 0; i--) if (col.shadows[i]!.key === key) col.shadows.splice(i, 1);
+      }
+      if (build(ctx, rule.prop, h.slot, h.rule)) count(rule.prop);
     }
   }
   rules.forEach((rule, k) => {

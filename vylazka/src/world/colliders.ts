@@ -26,6 +26,21 @@ export interface Aabb {
   ghost?: boolean;
   /** Стена между клетками, в которой на поздних кругах открываются прорехи (world/wall_gone.ts). */
   cut?: WallCut;
+  /** Преграда вещи, которую поставил партнёр (замена вещи игры): проверка «не врастать» её не видит (world/clearance.ts). */
+  partner?: boolean;
+}
+
+/**
+ * Тень вещи игры, которую партнёр убрал, передвинул или заменил (world/props_all.ts): игроку и лучам её нет, но проверка «не
+ * врастать» (world/clearance.ts) видит её на прежнем месте — чтобы остальная обстановка вставала так же, как в конструкторе,
+ * где этой записи ещё нет, и номера вещей в помещении не съезжали. Тенью же держится место, отведённое заранее под вещь,
+ * которая встанет последним проходом (стена чемоданов, стена лиц; world/furnish_papers.ts).
+ */
+export interface Shadow {
+  box: Aabb;
+  name: string;
+  /** Отведённое место (world/furnish_papers.ts): снимается перед тем, как на нём встанет сама вещь. */
+  key?: string;
 }
 
 const CELL = 2;
@@ -34,6 +49,10 @@ export class ColliderSet {
   readonly boxes: Aabb[] = [];
   /** Кому достаются новые коробки (0 — никому): ставит и снимает world/objects.ts, пока собирается предмет. */
   owner = 0;
+  /** Новые коробки — вещи партнёра (Aabb.partner): ставит и снимает world/objects.ts. */
+  partner = false;
+  /** Тени убранных, передвинутых и заменённых партнёром вещей игры (Shadow). */
+  readonly shadows: Shadow[] = [];
   private readonly grid = new Map<number, number[]>();
   private stamp = 0;
   private readonly seen: number[] = [];
@@ -46,6 +65,7 @@ export class ColliderSet {
   add(box: Aabb): number {
     const id = this.boxes.length;
     if (this.owner !== 0 && box.owner === undefined) box.owner = this.owner;
+    if (this.partner) box.partner = true;
     this.boxes.push(box);
     this.seen.push(0);
     const x0 = Math.floor(box.minX / CELL);
@@ -64,6 +84,30 @@ export class ColliderSet {
       }
     }
     return id;
+  }
+
+  /**
+   * Откатить к n коробкам (вещь, которая не встала, — world/objects.ts): добавленные после — прочь, и из сетки поиска. Номера
+   * растут по порядку добавления, поэтому в списке каждой ячейки последней стоит самая поздняя коробка.
+   */
+  rewind(n: number): void {
+    for (let id = this.boxes.length - 1; id >= n; id--) {
+      const box = this.boxes[id]!;
+      const x0 = Math.floor(box.minX / CELL);
+      const x1 = Math.floor(box.maxX / CELL);
+      const z0 = Math.floor(box.minZ / CELL);
+      const z1 = Math.floor(box.maxZ / CELL);
+      for (let cx = x0; cx <= x1; cx++) {
+        for (let cz = z0; cz <= z1; cz++) {
+          const list = this.grid.get(this.key(cx, cz));
+          if (list && list[list.length - 1] === id) list.pop();
+        }
+      }
+    }
+    if (this.boxes.length > n) {
+      this.boxes.length = n;
+      this.seen.length = n;
+    }
   }
 
   addBox(minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number): number {

@@ -30,8 +30,8 @@ const seedOf = (ctx: RoomCtx): number => Math.floor(ctx.rng() * 1e6);
 function put(ctx: RoomCtx, name: string, xf: Xf): boolean {
   const p = ALL_PROPS[name];
   if (!p) return false;
-  p.build(xf, seedOf(ctx));
-  return true;
+  // false — не встала: врастала в соседнюю мебель (world/clearance.ts).
+  return p.build(xf, seedOf(ctx)) !== false;
 }
 
 /** Предмет на свободный участок стены. */
@@ -221,8 +221,9 @@ function grove(ctx: RoomCtx, m: { c: CellInfo; dx: number; dz: number }): void {
     const at = m.c.xf.child(p.x, 0, p.z, Math.floor(ctx.rng() * 4) as 0 | 1 | 2 | 3);
     const seed = seedOf(ctx);
     if (i >= grown) return;
+    // Сначала ствол, потом пролом над ним: ствол, врастающий в мебель, не встаёт — и дыры в потолке без дерева нет.
+    if (tree.build(at, seed) === false) return;
     hanging(at, () => ceilingBreak(at, ctx.h, seed));
-    tree.build(at, seed);
     if (i === 0) landmark(ctx, 'grove', m.c.xf, p.x, 1.2, p.z);
   });
 }

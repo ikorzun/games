@@ -375,35 +375,52 @@ describe('вещи игры, убранные и передвинутые: на 
     const T = 'cubicles';
     const move = spec({ id: 'pl_move', prop: X, moves: { thing: X, nth: 1 }, offset: [0, -0.29] }, { worlds: ['office'], rooms: [T], anchor: 'wall', count: 1 });
     expect(placedProblems(move, ALL_PROPS, FIXED)).toEqual([]);
-    const before = byRoom(plain, X);
-    const lvl = make([move]);
-    const after = byRoom(lvl, X);
-    const rooms = [...before.keys()].filter((id) => layout.rooms[id]!.type === T && before.get(id)!.length > 1);
-    expect(rooms.length).toBeGreaterThan(0);
-    const moved = (lvl.placed ?? []).filter((s) => s.moved);
-    expect(moved.length).toBe(rooms.length);
-    for (const id of rooms) {
-      expect(after.get(id)!.length).toBe(before.get(id)!.length);
-      // Первая такая — на месте; вторая — переехала: её прежней точки больше нет.
-      const now = after.get(id)!.map(where);
-      expect(now).toContain(where(before.get(id)![0]!));
-      expect(now).not.toContain(where(before.get(id)![1]!));
-      const s = moved.find((q) => q.room === id)!;
-      expect(s, `помещение ${id}`).toBeDefined();
-      const room = layout.rooms[id]!;
-      expect(roomAt(s.at[0], s.at[1], s.at[2])?.id).toBe(id);
-      const box = worldBox(ALL_PROPS[X]!, s.at, s.rot);
-      const floor = lvl.placeWorld!.shells[room.tier]!.get(room.cells[0]![0] - 8, room.cells[0]![1] - 8)!.floorY;
-      for (const d of roomDoors(room, lvl.placeWorld!)) expect(overlap(box, throatBox(d, floor))).toBe(false);
-      // Не врастает в мебель: преграды чужих объектов её коробку не задевают.
-      const self = (lvl.objects ?? []).find((o) => o.name === X && Math.hypot(o.at[0] - s.at[0], o.at[2] - s.at[2]) < 0.01)!;
-      expect(self).toBeDefined();
-      const skin = 0.03;
-      const hit = lvl.colliders.boxes.some((b) => b.owner !== self.id && !b.off && b.maxY > floor + 0.02 && box.minX < b.maxX - skin && box.maxX > b.minX + skin && box.minZ < b.maxZ - skin && box.maxZ > b.minZ + skin && box.minY < b.maxY - skin && box.maxY > b.minY + skin);
-      expect(hit).toBe(false);
+    // Несколько планов: где места по правилу нет (стены заняты), вещь стоит, где поставила игра; где есть — переехала.
+    let movedAll = 0;
+    for (const seed of [20041113, 7, 42, 1234]) {
+      const lay = generateLayout(seed, 2, 'office');
+      const at = roomIndex(lay);
+      const by = (l: BuiltLevel): Map<number, LevelObject[]> => {
+        const m = new Map<number, LevelObject[]>();
+        for (const o of l.objects ?? []) {
+          const r = at(o.at[0], o.at[1], o.at[2]);
+          if (o.name === X && r) m.set(r.id, [...(m.get(r.id) ?? []), o]);
+        }
+        return m;
+      };
+      const before = by(buildLevel(lay, { wear: 0, figures: [], keepPlaceWorld: true }));
+      const lvl = buildLevel(lay, { wear: 0, figures: [], placed: [move], keepPlaceWorld: true });
+      const after = by(lvl);
+      const rooms = [...before.keys()].filter((id) => lay.rooms[id]!.type === T && before.get(id)!.length > 1);
+      const moved = (lvl.placed ?? []).filter((q) => q.moved);
+      movedAll += moved.length;
+      for (const id of rooms) {
+        expect(after.get(id)!.length).toBe(before.get(id)!.length);
+        const now = after.get(id)!.map(where);
+        const s = moved.find((q) => q.room === id);
+        if (!s) {
+          expect(now, `${seed}, помещение ${id}: места нет — как было`).toEqual(before.get(id)!.map(where));
+          continue;
+        }
+        // Первая такая — на месте; вторая — переехала: её прежней точки больше нет.
+        expect(now).toContain(where(before.get(id)![0]!));
+        expect(now).not.toContain(where(before.get(id)![1]!));
+        const room = lay.rooms[id]!;
+        expect(at(s.at[0], s.at[1], s.at[2])?.id).toBe(id);
+        const box = worldBox(ALL_PROPS[X]!, s.at, s.rot);
+        const floor = lvl.placeWorld!.shells[room.tier]!.get(room.cells[0]![0] - 8, room.cells[0]![1] - 8)!.floorY;
+        for (const d of roomDoors(room, lvl.placeWorld!)) expect(overlap(box, throatBox(d, floor))).toBe(false);
+        // Не врастает в мебель: преграды чужих объектов её коробку не задевают.
+        const self = (lvl.objects ?? []).find((o) => o.name === X && Math.hypot(o.at[0] - s.at[0], o.at[2] - s.at[2]) < 0.01)!;
+        expect(self).toBeDefined();
+        const skin = 0.03;
+        const hit = lvl.colliders.boxes.some((b) => b.owner !== self.id && !b.off && b.maxY > floor + 0.02 && box.minX < b.maxX - skin && box.maxX > b.minX + skin && box.minZ < b.maxZ - skin && box.maxZ > b.minZ + skin && box.minY < b.maxY - skin && box.maxY > b.minY + skin);
+        expect(hit).toBe(false);
+      }
+      // В помещениях других типов — как было.
+      for (const [id, list] of before) if (lay.rooms[id]!.type !== T) expect(after.get(id)!.map(where)).toEqual(list.map(where));
     }
-    // В помещениях других типов — как было.
-    for (const [id, list] of before) if (layout.rooms[id]!.type !== T) expect(after.get(id)!.map(where)).toEqual(list.map(where));
+    expect(movedAll, 'хоть где-то переехала').toBeGreaterThan(0);
   });
 
   it('near: из свободных краёв правила берётся тот, где вещь отпустили (агент конструктора, 17.11)', () => {

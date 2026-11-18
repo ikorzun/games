@@ -11,6 +11,8 @@
  * Чистый TS: журнал заполняет сборка уровня, читает игра (systems/illusions.ts) и тесты.
  */
 import type { Vec3 } from '../core/types';
+import type { ColliderSet } from './colliders';
+import type { MeshMark } from './kit';
 import type { Xf } from './props';
 
 export interface LevelObject {
@@ -92,35 +94,51 @@ export class ObjectLog {
 
   /**
    * Собрать предмет как объект: всё, что build положит в сетку, в проекции и в преграды, будет помечено
-   * его номером. Внутри другого объекта (или когда номера кончились) — просто собрать.
+   * его номером. Внутри другого объекта (или когда номера кончились) — просто собрать. guard — проверять ли, не врастает ли
+   * предмет в уже стоящие (withGrowthGuard): врастает — собранное откатывается, объекта нет, ответ false.
    */
-  wrap(xf: Xf, name: string, build: () => void, flat = false): void {
+  wrap(xf: Xf, name: string, build: () => void, flat = false, guard = true, partner = false): boolean {
     if (this.open !== 0 || this.list.length >= MAX_OBJECTS) {
       build();
-      return;
+      return true;
     }
     const id = this.list.length + 1;
     const v0 = xf.mb.vertexCount;
     const s0 = xf.sl ? xf.sl.vertexCount : 0;
     const c0 = xf.col ? xf.col.boxes.length : 0;
+    const m0 = xf.mb.mark();
+    const ms = xf.sl ? xf.sl.mark() : null;
     this.open = id;
     xf.mb.obj = id;
     if (xf.sl) xf.sl.obj = id;
-    if (xf.col) xf.col.owner = id;
+    if (xf.col) {
+      xf.col.owner = id;
+      xf.col.partner = partner;
+    }
     try {
       build();
     } finally {
       this.open = 0;
       xf.mb.obj = 0;
       if (xf.sl) xf.sl.obj = 0;
-      if (xf.col) xf.col.owner = 0;
+      if (xf.col) {
+        xf.col.owner = 0;
+        xf.col.partner = false;
+      }
+    }
+    // Не врастать в соседнюю мебель (партнёр 18.11): врастает — как не собирали.
+    if (guard && growthGuard && xf.col && growthGuard(name, xf.col, c0, this.list)) {
+      xf.mb.rewind(m0);
+      if (xf.sl && ms) xf.sl.rewind(ms);
+      xf.col.rewind(c0);
+      return false;
     }
     const a = xf.mb.bounds(v0);
     const b = xf.sl ? xf.sl.bounds(s0) : null;
     // Предмет, от которого не осталось ни одной вершины, объектом не считается: его преграды — ничьи.
     if (!a && !b) {
       if (xf.col) for (let i = c0; i < xf.col.boxes.length; i++) if (xf.col.boxes[i]!.owner === id) delete xf.col.boxes[i]!.owner;
-      return;
+      return true;
     }
     const lo: Vec3 = a ? [...a[0]] : [...b![0]];
     const hi: Vec3 = a ? [...a[1]] : [...b![1]];
@@ -131,6 +149,7 @@ export class ObjectLog {
       }
     }
     this.list.push({ id, name, at: [xf.ox, xf.oy, xf.oz], rot: xf.rot, min: lo, max: hi, solid: xf.col ? xf.col.boxes.length > c0 : false, flat });
+    return true;
   }
 }
 
@@ -154,10 +173,61 @@ export function withFlatHook<T>(fn: FlatHook | null, body: () => T): T {
   }
 }
 
-/** Собрать предмет как объект уровня, если у этой сетки есть журнал объектов; иначе — просто собрать. */
-export function asObject(xf: Xf, name: string, build: () => void, flat = false): void {
+/**
+ * Проверка «врастает ли вещь в соседнюю» (партнёр 18.11: «убери врастание мебели в соседнюю»; world/clearance.ts): по
+ * преградам, которые вещь только что получила (с номера c0), и журналу стоящих. true — врастает, вещь не ставится. Ставит
+ * сборка уровня на время обстановки (world/level_build.ts); вещам партнёра и фигурам — нет: их место проверено своё.
+ */
+export type GrowthGuard = (name: string, col: ColliderSet, c0: number, objects: readonly LevelObject[]) => boolean;
+let growthGuard: GrowthGuard | null = null;
+
+/** Выполнить body с проверкой «не врастать» (null — без неё). */
+export function withGrowthGuard<T>(fn: GrowthGuard | null, body: () => T): T {
+  const prev = growthGuard;
+  growthGuard = fn;
+  try {
+    return body();
+  } finally {
+    growthGuard = prev;
+  }
+}
+
+/** Отметка для отката группы вещей (стопка у стены): сетка, проекции, преграды и журнал объектов. */
+export interface BuildMark {
+  mb: MeshMark;
+  sl: MeshMark | null;
+  col: number;
+  shadows: number;
+  objects: number;
+}
+
+/** Отметка сборки в точке xf; null — у этой сетки нет журнала (вещь собирается не на уровне — откатывать нечего). */
+export function markBuild(xf: Xf): BuildMark | null {
   const log = xf.mb.log;
-  if (flat && flatHook && log?.takes && flatHook(name, xf)) return;
-  if (log) log.wrap(xf, name, build, flat);
-  else build();
+  if (!log) return null;
+  return { mb: xf.mb.mark(), sl: xf.sl ? xf.sl.mark() : null, col: xf.col ? xf.col.boxes.length : 0, shadows: xf.col ? xf.col.shadows.length : 0, objects: log.list.length };
+}
+
+/** Откатить всё, что собрано в сетку, проекции, преграды и журнал xf после отметки m (группа встала не целиком). */
+export function rewindBuild(xf: Xf, m: BuildMark): void {
+  xf.mb.rewind(m.mb);
+  if (xf.sl && m.sl) xf.sl.rewind(m.sl);
+  if (xf.col) {
+    xf.col.rewind(m.col);
+    xf.col.shadows.length = m.shadows;
+  }
+  if (xf.mb.log) xf.mb.log.list.length = m.objects;
+}
+
+/**
+ * Собрать предмет как объект уровня, если у этой сетки есть журнал объектов; иначе — просто собрать. false — предмет не встал:
+ * врастал в соседний (withGrowthGuard) или это картонка, которую партнёр убрал. guard = false — не проверять; partner — вещь
+ * партнёра (замена): её преграды проверка «не врастать» не видит (world/clearance.ts).
+ */
+export function asObject(xf: Xf, name: string, build: () => void, flat = false, guard = true, partner = false): boolean {
+  const log = xf.mb.log;
+  if (flat && flatHook && log?.takes && flatHook(name, xf)) return false;
+  if (log) return log.wrap(xf, name, build, flat, guard, partner);
+  build();
+  return true;
 }

@@ -39,7 +39,8 @@ export interface PropSpec {
    * в проход; у открытых частей свои преграды.
    */
   reach?: number;
-  build(xf: Xf, seed: number): void;
+  /** false — вещь не встала: врастала в соседнюю (world/clearance.ts); обстановка тогда берёт другое место или обходится без неё. */
+  build(xf: Xf, seed: number): void | boolean;
 }
 
 type Ao = number | readonly [number, number, number, number];

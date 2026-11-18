@@ -2370,7 +2370,8 @@ describe('игра целиком: всё иллюзорно', () => {
       if (Math.abs(t.pos[1] - floor) > 0.1) return false;
       const inside: Parameters<ColliderSet['query']>[4] = [];
       h.game.colliders.query(t.pos[0] - 0.33, t.pos[2] - 0.33, t.pos[0] + 0.33, t.pos[2] + 0.33, inside);
-      return !inside.some((b) => b.maxY > floor + 0.4 && b.minY < floor + 1.7);
+      // query отдаёт коробки по ячейкам сетки поиска (2 м): ближе 0,33 м — только те, что и правда заходят в квадрат.
+      return !inside.some((b) => b.maxY > floor + 0.4 && b.minY < floor + 1.7 && b.minX < t.pos[0] + 0.33 && b.maxX > t.pos[0] - 0.33 && b.minZ < t.pos[2] + 0.33 && b.maxZ > t.pos[2] - 0.33);
     })!;
 
   it('мелкая вещь сна: наступил — растворилась и помечена touched; фонарь выкл/вкл — собралась заново', () => {
@@ -2437,12 +2438,30 @@ describe('игра целиком: всё иллюзорно', () => {
     const o = g.level!.objects![id - 1]!;
     const t = g.things.list.find((x) => x.id === found!.thing)!;
     expect(t.state).toBe('idle');
-    // Касаемся самого предмета: встаём вплотную к его коробке.
+    // Касаемся самого предмета: встаём вплотную к его коробке — с той стороны, где можно стоять (спиной предмет бывает к стене:
+    // за ней соседняя клетка, а то и провал), и идём на него.
     const box = g.colliders.boxes.find((b) => b.owner === id && !b.ghost)!;
     const floor = floorOf(o);
-    g.teleport(box.minX - 0.25, floor, (box.minZ + box.maxZ) / 2);
-    g.aimAt(box.maxX, floor + 1, (box.minZ + box.maxZ) / 2);
-    for (let i = 0; i < 90 && stateOf(h, id) === 'here'; i++) h.tick({ ...emptyInput(), moveZ: 1 });
+    const cx = (box.minX + box.maxX) / 2;
+    const cz = (box.minZ + box.maxZ) / 2;
+    const sides: [number, number][] = [
+      [box.minX - 0.4, cz],
+      [box.maxX + 0.4, cz],
+      [cx, box.minZ - 0.4],
+      [cx, box.maxZ + 0.4],
+    ];
+    for (const [sx, sz] of sides) {
+      // Стоять можно: под ногами пол, вокруг (радиус тела) — ни стены, ни мебели.
+      if (g.colliders.raycast(sx, floor + 1, sz, 0, -1, 0, 1.2) >= 1.1) continue;
+      const near: Parameters<ColliderSet['query']>[4] = [];
+      const R = DEFAULT_CONTROLLER.radius + 0.02;
+      g.colliders.query(sx - R, sz - R, sx + R, sz + R, near);
+      if (near.some((b) => !b.ghost && b.maxY > floor + 0.4 && b.minY < floor + 1.7 && b.minX < sx + R && b.maxX > sx - R && b.minZ < sz + R && b.maxZ > sz - R)) continue;
+      g.teleport(sx, floor, sz);
+      g.aimAt(cx, floor + 1, cz);
+      for (let i = 0; i < 90 && stateOf(h, id) === 'here'; i++) h.tick({ ...emptyInput(), moveZ: 1 });
+      if (stateOf(h, id) !== 'here') break;
+    }
     expect(stateOf(h, id), 'в предмет не упёрлись').not.toBe('here');
     expect(['changing', 'gone']).toContain(t.state);
     expect(t.touched).toBe(true);

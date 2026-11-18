@@ -22,8 +22,8 @@ function put(ctx: RoomCtx, name: string, xf: Xf): number | null {
   const p = ALL_PROPS[name];
   if (!p) return null;
   const seed = seedOf(ctx);
-  p.build(xf, seed);
-  return seed;
+  // null — не встала: врастала в соседнюю (world/clearance.ts).
+  return p.build(xf, seed) === false ? null : seed;
 }
 
 /** Предмет (или несколько) на свободный участок стены. */
@@ -36,8 +36,8 @@ function wallAt(ctx: RoomCtx, dir: number, name: string, y?: number): Slot | nul
   const p = ALL_PROPS[name];
   const s = ctx.slots.find((k) => k.dir === dir && !k.used && (p?.mount === 'wall' || k.deep));
   if (!p || !s) return null;
+  if (p.build(s.xf.child(0, p.mount === 'wall' ? (y ?? p.y ?? 1.2) : 0, 0), seedOf(ctx)) === false) return null;
   s.used = true;
-  p.build(s.xf.child(0, p.mount === 'wall' ? (y ?? p.y ?? 1.2) : 0, 0), seedOf(ctx));
   return s;
 }
 
@@ -137,9 +137,9 @@ function lockers(ctx: RoomCtx): void {
   for (const s of free(ctx, true)) {
     if (n >= 5) break;
     s.used = true;
-    for (const x of [-0.69, 0.69]) put(ctx, 'st_lockers', s.xf.child(x, 0, 0));
-    // Вещь лежит на полу у ячеек (прежде место висело перед ними в полуметре над полом).
-    if (n % 2 === 0) spot(ctx, s.xf, 0.69, 0.02, 0.55, 'floor');
+    // В углу секция врастала в секцию соседней стены (партнёр 18.11) — там её нет; место для вещи — только у той, что встала.
+    const stood = [-0.69, 0.69].map((x) => put(ctx, 'st_lockers', s.xf.child(x, 0, 0)) !== null);
+    if (n % 2 === 0 && stood[1]) spot(ctx, s.xf, 0.69, 0.02, 0.55, 'floor');
     n += 1;
   }
   put(ctx, 'st_suitcase', ctx.cells[0]!.xf.child(0.4, 0, 0.3));

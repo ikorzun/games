@@ -26,7 +26,8 @@ import { hermoDoor, stairsDown, Xf } from './props';
 import { doorFrame, doorLeaf, collapse, pit, warningSign, waterSheet } from './props_bunker';
 import { ALL_PROPS, withSwap } from './props_all';
 import type { PropSwap, SwapTo } from './props_all';
-import { ObjectLog } from './objects';
+import { ObjectLog, withGrowthGuard } from './objects';
+import { grows } from './clearance';
 import { DOOR_IMAGE, SCREEN_IMAGES } from './screens';
 import type { FreeSlot } from './objects';
 import { buildShell, CELL, Shell, STYLE_CORRIDOR, WALL_T } from './shell';
@@ -302,7 +303,7 @@ function editsFor(layout: GenLayout, placed: readonly PlacedSpec[], removed: rea
   const seen = new Map<string, number>();
   const used = new Map<string, number>();
   const edits: GameEdits = { hook: () => null, moved: [], still: new Set() };
-  edits.hook = (name, xf, seed, flat = false) => {
+  const hook: PropSwap = (name, xf, seed, flat = false) => {
     const room = roomAt(xf.ox, xf.oy, xf.oz);
     if (!room) return null;
     const key = `${room.id}:${name}`;
@@ -330,6 +331,17 @@ function editsFor(layout: GenLayout, placed: readonly PlacedSpec[], removed: rea
     }
     return null;
   };
+  // Проба места стопки у стены откатывается целиком — и счёт хука тоже (props_all.ts, PropSwap.save).
+  hook.save = () => ({ seen: new Map(seen), used: new Map(used), moved: edits.moved.length });
+  hook.load = (state) => {
+    const st = state as { seen: Map<string, number>; used: Map<string, number>; moved: number };
+    seen.clear();
+    for (const [k, v] of st.seen) seen.set(k, v);
+    used.clear();
+    for (const [k, v] of st.used) used.set(k, v);
+    edits.moved.length = st.moved;
+  };
+  edits.hook = hook;
   return edits;
 }
 
@@ -345,7 +357,8 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
     ...figures.filter((f) => here(f.rule.worlds)).map((f) => slotFor(f.slot, f.rule.rooms)),
   ]);
   const edits = editsFor(layout, placed, removed, pick);
-  return withSwap(edits?.hook ?? null, () => buildLevelInner(layout, opts, edits, pick));
+  // Мебель не врастает в соседнюю (партнёр 18.11; world/clearance.ts): проверка — на всю обстановку уровня.
+  return withSwap(edits?.hook ?? null, () => withGrowthGuard(grows, () => buildLevelInner(layout, opts, edits, pick)));
 }
 
 function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits | null, pick: (room: GenRoom) => string | null): BuiltLevel {
@@ -862,7 +875,8 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   const figures = placeFigures(opts.figures ?? FIGURES, placeWorld, (f, r) => inVariant(slotFor(f.slot, f.rule.rooms), pick(r)));
   // Дальше строятся вещи по записям партнёра — мимо хука: они не вещи игры, считать и трогать их ему нечего.
   const placed: PlacedSpot[] = [];
-  withSwap(null, () => {
+  // Вещи партнёра и передвинутые — без проверки «не врастать»: их место проверено по правилу записи (placed_place.ts).
+  withSwap(null, () => withGrowthGuard(null, () => {
     // Передвинутые вещи игры (партнёр 17.11, 19:15: «текущую расстановку мебели я тоже должен уметь двигать и удалять»):
     // после всей обстановки и фигур, каждая в своём помещении по правилу записи (world/placed_place.ts, moveSpot) — не в
     // проход, не в мебель и не в другую передвинутую. Места по правилу нет — стоит, где её поставила игра (с преградами:
@@ -895,7 +909,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       withOpenMode(p.open, () => ALL_PROPS[p.prop]!.build(new Xf(ch.mb, col, p.at[0], p.at[1], p.at[2], p.rot, ch.sl), placedSeed(layout.seed, p.k, p.id)), share(p.room));
       placed.push(p);
     }
-  });
+  }));
   // Места для вещей внутри преград — прочь: вся обстановка уже стоит, и вещи партнёра тоже (furnish.ts, dropBuried).
   dropBuried(spots, col);
   // Свободные участки стен — в порядке помещений уровня: туда вещь может вернуться «в другом месте».

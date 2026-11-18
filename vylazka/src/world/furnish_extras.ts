@@ -50,7 +50,8 @@ function stand(ctx: RoomCtx, name: string, s: Slot, dx = 0, off = 0.12): boolean
   const p = ALL_PROPS[name];
   if (!p) return false;
   const z = p.mount === 'free' ? p.d / 2 + off : 0;
-  p.build(s.xf.child(dx, p.mount === 'wall' ? (p.y ?? 1) : 0, z), seedOf(ctx));
+  // Не встала — врастала в мебель (world/clearance.ts): участок остаётся свободным, другое помещение примет её.
+  if (p.build(s.xf.child(dx, p.mount === 'wall' ? (p.y ?? 1) : 0, z), seedOf(ctx)) === false) return false;
   s.used = true;
   return true;
 }

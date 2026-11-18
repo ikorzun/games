@@ -80,6 +80,13 @@ export interface SheetMark {
   n: Vec3;
 }
 
+/** Отметка сетки: сколько вершин, индексов и листов уже собрано (MeshBuilder.mark, rewind). */
+export interface MeshMark {
+  v: number;
+  i: number;
+  s: number;
+}
+
 export class MeshBuilder {
   /** Листы-картинки, повешенные в этой сетке: по ним проверки и отладка находят плакаты на стенах. */
   readonly sheets: SheetMark[] = [];
@@ -109,6 +116,24 @@ export class MeshBuilder {
 
   get triangleCount(): number {
     return this.idx.length / 3;
+  }
+
+  /** Отметка: до неё сетку можно откатить (вещь, которая не встала, — world/objects.ts). */
+  mark(): MeshMark {
+    return { v: this.pos.length / 3, i: this.idx.length, s: this.sheets.length };
+  }
+
+  /** Откатить сетку к отметке: всё, что собрано после неё, — вершины, треугольники, листы, — исчезает. */
+  rewind(m: MeshMark): void {
+    this.pos.length = m.v * 3;
+    this.nrm.length = m.v * 3;
+    this.col.length = m.v * 4;
+    this.mats.length = m.v;
+    this.objs.length = m.v;
+    this.sways.length = m.v;
+    this.uvs.length = m.v * 2;
+    this.idx.length = m.i;
+    this.sheets.length = m.s;
   }
 
   /** Низкоуровневая вершина; возвращает её индекс. */

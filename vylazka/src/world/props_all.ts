@@ -12,7 +12,7 @@
  */
 import { hash2 } from '../core/rng';
 import { withOpenMode } from './furniture';
-import { asObject, withFlatHook } from './objects';
+import { asObject, markBuild, rewindBuild, withFlatHook } from './objects';
 import type { PlacedOpen } from './placed';
 import type { Xf } from './props';
 import { BIRD_PROPS, CRAFT_PROPS } from './props_craft';
@@ -53,7 +53,14 @@ export const FIXED: ReadonlySet<string> = new Set(['coaming', 'elevator_doors', 
  *
  * Замена с дверцами по записи (placed.ts, PlacedSpec.open) отвечает SwapTo: какую вещь и закрыто или открыто у неё всё.
  */
-export type PropSwap = (name: string, xf: Xf, seed: number, flat?: boolean) => string | SwapTo | null;
+export type PropSwap = ((name: string, xf: Xf, seed: number, flat?: boolean) => string | SwapTo | null) & {
+  /**
+   * Состояние хука (счёт вещей по помещениям, израсходованные замены, передвинутые): раскладка пробует место стопки у стены
+   * и откатывает пробу (world/furnish.ts, homeStack) — вместе с ней откатывается и счёт, иначе номера вещей съедут.
+   */
+  save?: () => unknown;
+  load?: (state: unknown) => void;
+};
 
 /** Вещь на месте вещи игры с дверцами по записи партнёра: 'shut' — всё закрыто, 'open' — всё открыто. */
 export interface SwapTo {
@@ -77,6 +84,14 @@ export function withSwap<T>(fn: PropSwap | null, body: () => T): T {
   }
 }
 
+/** Состояние хука сборки (PropSwap.save); undefined — хука нет. */
+export const swapState = (): unknown => swap?.save?.();
+
+/** Вернуть хук к состоянию state (откат пробы раскладки). */
+export function restoreSwap(state: unknown): void {
+  if (state !== undefined) swap?.load?.(state);
+}
+
 /** Точка сборки заменяющей вещи: у разных опор начало координат в разном месте. */
 function swapXf(xf: Xf, from: PropSpec, to: PropSpec): Xf {
   if (from.mount === to.mount) return xf;
@@ -90,18 +105,32 @@ function tracked(name: string, spec: PropSpec): PropSpec {
   return {
     ...spec,
     build: (xf, seed) => {
-      const got = swap && xf.mb.log?.takes ? swap(name, xf, seed) : null;
+      const own = (): boolean => asObject(xf, name, () => spec.build(xf, seed));
+      // Без записей партнёра (хука нет) или внутри другой вещи — как есть: проверка «не врастать» — в asObject.
+      if (!swap || !xf.mb.log?.takes) return own();
+      // Вещь игры сначала встаёт сама, с проверкой «не врастать» (world/clearance.ts): номер в помещении хук считает только
+      // вставшим — так же считает и конструктор, у которого записей нет (world/placed_place.ts, gameNth).
+      const mark = markBuild(xf)!;
+      if (!own()) return false;
+      const got = swap(name, xf, seed);
+      if (got === null) return true;
+      // Убрана, передвинута или заменена: здесь её нет, но для остальной обстановки она стоит — тенью, как в конструкторе.
+      const col = xf.col;
+      const boxes = col ? col.boxes.slice(mark.col).map((b) => ({ ...b })) : [];
+      rewindBuild(xf, mark);
+      if (col) for (const box of boxes) col.shadows.push({ box, name });
       if (got === '') return;
-      const sub = typeof got === 'string' ? got : (got?.prop ?? null);
+      const sub = typeof got === 'string' ? got : got.prop;
       // Дверцы по записи; нет записи — как выпадет: доля открытого у помещения, которое обставляется (furnish.ts).
-      const mode = got !== null && typeof got === 'object' ? got.open : undefined;
-      const other = sub && sub !== name ? RAW[sub] : undefined;
+      const mode = typeof got === 'object' ? got.open : undefined;
+      const other = sub !== name ? RAW[sub] : undefined;
+      // Замену выбрал партнёр (её место — место вещи игры): проверку «не врастать» она не проходит, и её преграды проверка не
+      // видит — остальная обстановка встаёт, как при вещи игры.
       if (other) {
         const at = swapXf(xf, spec, other);
-        asObject(at, sub!, () => withOpenMode(mode, () => other.build(at, seed)));
-        return;
+        return asObject(at, sub, () => withOpenMode(mode, () => other.build(at, seed)), false, false, true);
       }
-      asObject(xf, name, () => withOpenMode(mode, () => spec.build(xf, seed)));
+      return asObject(xf, name, () => withOpenMode(mode, () => spec.build(xf, seed)), false, false, true);
     },
   };
 }
