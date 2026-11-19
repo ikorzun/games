@@ -387,6 +387,26 @@ export class MeshBuilder {
     }
   }
 
+  /**
+   * Грани, смотрящие вверх (средняя нормаль вершин круче 60° к горизонту), из треугольников индексов [i0, i1): по ним ищется,
+   * на что ляжет вещь (objects.ts, ObjectLog.surfaces). Девять чисел на грань: три вершины x, y, z. По нормалям, а не по обходу
+   * вершин: у отражённых вещей обход перевёрнут.
+   */
+  upFaces(i0: number, i1: number): Float32Array {
+    const out: number[] = [];
+    const p = this.pos;
+    const n = this.nrm;
+    const ix = this.idx;
+    for (let t = i0; t + 2 < i1; t += 3) {
+      const a = ix[t]! * 3;
+      const b = ix[t + 1]! * 3;
+      const c = ix[t + 2]! * 3;
+      if (n[a + 1]! + n[b + 1]! + n[c + 1]! < 1.5) continue;
+      out.push(p[a]!, p[a + 1]!, p[a + 2]!, p[b]!, p[b + 1]!, p[b + 2]!, p[c]!, p[c + 1]!, p[c + 2]!);
+    }
+    return new Float32Array(out);
+  }
+
   bounds(from: number): [Vec3, Vec3] | null {
     const n = this.pos.length / 3;
     if (from >= n) return null;

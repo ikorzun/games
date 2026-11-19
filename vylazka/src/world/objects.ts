@@ -12,7 +12,7 @@
  */
 import type { Vec3 } from '../core/types';
 import type { ColliderSet } from './colliders';
-import type { MeshMark } from './kit';
+import type { MeshBuilder, MeshMark } from './kit';
 import type { Xf } from './props';
 
 export interface LevelObject {
@@ -78,10 +78,39 @@ export const GROWTH_OBJ = 4095;
 /** Номер вершин — не вещь журнала, а особая часть места (подвешенное к потолку, своё стирание). */
 export const isSpecialObj = (id: number): boolean => id === HANG_OBJ || id === GROWTH_OBJ;
 
+/**
+ * Высоты граней tris (девять чисел на грань, MeshBuilder.upFaces) прямо над или под точкой (x, z) — между lo и hi: на что
+ * ляжет вещь, опущенная сюда сверху.
+ */
+export function facesAt(tris: Float32Array, x: number, z: number, lo: number, hi: number): number[] {
+  const out: number[] = [];
+  for (let k = 0; k + 8 < tris.length; k += 9) {
+    const ax = tris[k]!;
+    const az = tris[k + 2]!;
+    const bx = tris[k + 3]!;
+    const bz = tris[k + 5]!;
+    const cx = tris[k + 6]!;
+    const cz = tris[k + 8]!;
+    const d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+    if (Math.abs(d) < 1e-12) continue;
+    const u = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / d;
+    const v = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / d;
+    if (u < -1e-6 || v < -1e-6 || u + v > 1 + 1e-6) continue;
+    const y = u * tris[k + 1]! + v * tris[k + 4]! + (1 - u - v) * tris[k + 7]!;
+    if (y >= lo && y <= hi) out.push(y);
+  }
+  return out;
+}
+
 export class ObjectLog {
   readonly list: LevelObject[] = [];
   /** Номер объекта, который сейчас собирается (0 — никакой). */
   private open = 0;
+  /**
+   * Где сетка каждой вещи: отрезок треугольников её сборщика (пока идёт сборка) или уже только её верхние грани (после freeze и
+   * после первого вопроса — сетка мебели к расстановке вещей партнёра готова). По ним — поверхности под точкой (surfaces).
+   */
+  private readonly spans = new Map<number, { mb: MeshBuilder; i0: number; i1: number } | Float32Array>();
 
   /**
    * Станет ли вещь, которую сейчас начнут собирать, своим объектом журнала: не внутри другого объекта (журнал не занят) и
@@ -149,7 +178,27 @@ export class ObjectLog {
       }
     }
     this.list.push({ id, name, at: [xf.ox, xf.oy, xf.oz], rot: xf.rot, min: lo, max: hi, solid: xf.col ? xf.col.boxes.length > c0 : false, flat });
+    if (a) this.spans.set(id, { mb: xf.mb, i0: m0.i, i1: xf.mb.mark().i });
     return true;
+  }
+
+  /**
+   * Высоты верхних граней вещи id над или под точкой (x, z) между lo и hi (столешница, сиденье, крышка тумбы, хлебница на
+   * столе — что именно под точкой). undefined — сетка вещи не известна.
+   */
+  surfaces(id: number, x: number, z: number, lo: number, hi: number): number[] | undefined {
+    let s = this.spans.get(id);
+    if (!s) return undefined;
+    if (!(s instanceof Float32Array)) {
+      s = s.mb.upFaces(s.i0, s.i1);
+      this.spans.set(id, s);
+    }
+    return facesAt(s, x, z, lo, hi);
+  }
+
+  /** После сборки: оставить от сеток только верхние грани (сборщики больше не держать). */
+  freeze(): void {
+    for (const [id, s] of this.spans) if (!(s instanceof Float32Array)) this.spans.set(id, s.mb.upFaces(s.i0, s.i1));
   }
 }
 

@@ -50,6 +50,8 @@ h1 { font: 600 22px/1.2 var(--font-body); margin: 0; letter-spacing: 0.01em; }
 /* Ручка высоты над выбранной вещью в «Двигать» (партнёр 19.11: «нужно перемещение вещи по вертикали»): тянуть вверх-вниз. */
 .lifthandle { position: absolute; left: 0; top: 0; z-index: 4; display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px 4px 7px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: 600 12px/1 system-ui, sans-serif; white-space: nowrap; cursor: ns-resize; user-select: none; -webkit-user-select: none; touch-action: none; box-shadow: 0 2px 10px rgb(0 0 0 / .35); }
 .lifthandle[hidden] { display: none; }
+.check { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--fg); cursor: pointer; }
+.check[hidden] { display: none; }
 .lifthandle svg { flex: none; }
 .lifthandle:hover, body.is-lifting .lifthandle { border-color: var(--accent); color: var(--accent); }
 body.is-lifting, body.is-lifting * { cursor: ns-resize !important; }
@@ -304,6 +306,8 @@ html.native .pushbox__token p, html.native .pushbox__list { font-size: 12px; }
 html.native .pushbox__token input { all: revert; flex: 1; min-width: 0; font: 13px var(--n-font); }
 html.native .help { top: 10px; background: var(--pop); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 34px rgb(0 0 0 / .28); font: 12px/1.7 var(--n-font); color: var(--muted); }
 html.native .help b { color: var(--fg); }
+html.native .check { font: 13px var(--n-font); cursor: default; }
+html.native .check input { all: revert; margin: 0; }
 html.native .lifthandle { background: var(--pop); border-color: var(--line); font: 600 11px/1 var(--n-font); box-shadow: 0 1px 2px rgb(0 0 0 / .18), 0 4px 14px rgb(0 0 0 / .22); }
 @media (max-width: 1180px) {
   html:not(.native) body { display: block; height: auto; overflow: visible; }
@@ -371,7 +375,7 @@ html.native .lifthandle { background: var(--pop); border-color: var(--line); fon
       <b>с полки</b> — добавить · <b>с полки с ⌥</b> на вещь игры — заменить<br>
       <b>G</b> — двигать · <b>R</b> — крутить (кольца, ⇧ — свободно) · <b>Q / E</b> — на четверть<br>
       <b>стрелки</b> — сдвиг 10 см (⇧ 50, ⌥ 2) · <b>⌘D</b> — копия · <b>Delete</b> — удалить · <b>⌘Z</b> — отмена · <b>Esc</b> — снять выбор<br>
-      <b>↕ над вещью</b> или <b>⌥ + тянуть</b> — выше / ниже (шаг 5 см, ⇧ — 1 см, у стола прилипает) · <b>⌘↑ / ⌘↓</b> — на 5 см (⇧ 25, ⌥ 1)<br>
+      <b>↕ над вещью</b> или <b>⌥ + тянуть</b> — выше / ниже (шаг 5 см, ⇧ — 1 см); отпустил — ложится на то, что под ней · <b>⌘↑ / ⌘↓</b> — на опору выше / ниже<br>
       у человека <b>шарики</b> — гнуть, таз с <b>⌥</b> — вверх · красное у проёмов — проход
     </div>
   </div>
@@ -423,6 +427,7 @@ html.native .lifthandle { background: var(--pop); border-color: var(--line); fon
       <h2>Выбрано</h2>
       <div class="row"><span id="what"></span><button class="btn btn--small" id="curcard" type="button" hidden>Карточка</button></div>
       <input type="text" id="name" maxlength="80" placeholder="Название (можно не трогать)">
+      <label class="check" id="hangrow" hidden title="Без отметки поднятая вещь ложится на то, что под ней: стол, полку, тумбу, а нет ничего — на пол. В другом таком же помещении стол может стоять иначе — она ляжет на то, что есть там."><input type="checkbox" id="hang"> Висит в воздухе</label>
       <div class="row" id="turns"><button class="btn" id="turnl" title="На четверть влево">⟲ Q</button><button class="btn" id="turnr" title="На четверть вправо">E ⟳</button><button class="btn btn--warn" id="drop" type="button" title="Delete">Удалить</button></div>
       <div class="tiltrow" id="tiltrow" hidden><span>Наклон°</span><input type="number" id="tilt-x" min="-180" max="180" step="5" aria-label="Наклон вокруг X, градусы" title="x — вперёд-назад"><input type="number" id="tilt-y" min="-180" max="180" step="5" aria-label="Поворот вокруг Y, градусы" title="y — вокруг вертикали"><input type="number" id="tilt-z" min="-180" max="180" step="5" aria-label="Наклон вокруг Z, градусы" title="z — на бок"><button class="btn btn--small" id="tilt-0" type="button" title="Поставить прямо">Прямо</button></div>
       <div class="row" id="doors" hidden title="Дверцы и ящики этой вещи в игре. Как выпадет — как у вещей игры в том же помещении."></div>

@@ -206,8 +206,11 @@ export function throatBox(d: DoorGap, floor: number): Box {
 
 const yawFor = (a: AnchorSpot, f: FigureFacing): number => (f === 'room' ? a.phi : f === 'wall' ? a.wall : f === 'door' ? a.door : a.entry);
 
-/** Точка и поворот вещи по правилу у края a. Как в инструменте: край + сдвиг, повёрнутый по рамке края. */
-export function fitThing(spec: Pick<PlacedSpec, 'rule' | 'turn' | 'offset'>, a: AnchorSpot, p: PropSpec): { at: Vec3; rot: Turn } {
+/**
+ * Точка и поворот вещи по правилу у края a. Как в инструменте: край + сдвиг, повёрнутый по рамке края. С w поднятая вещь без
+ * отметки «висит» ложится на верх того, что под ней (restTop; others — коробки уже поставленных вещей партнёра).
+ */
+export function fitThing(spec: Pick<PlacedSpec, 'rule' | 'turn' | 'offset' | 'hang'>, a: AnchorSpot, p: PropSpec, w?: RestWorld, others: readonly Box[] = []): { at: Vec3; rot: Turn } {
   const c = Math.cos(a.phi);
   const s = Math.sin(a.phi);
   const [ox, oz] = spec.offset;
@@ -216,7 +219,53 @@ export function fitThing(spec: Pick<PlacedSpec, 'rule' | 'turn' | 'offset'>, a: 
   // Под потолком — верхом под самый потолок; иначе — на заданной высоте, но не выше потолка.
   const top = a.ceil - 0.02 - p.h;
   const y = spec.rule.anchor === 'ceiling' ? Math.max(a.floor, top) : Math.max(a.floor, Math.min(a.floor + spec.rule.lift, top));
-  return { at: [x, y, z], rot: (((rotOf(yawFor(a, spec.rule.facing)) + spec.turn) % 4) as Turn) };
+  const rot = ((rotOf(yawFor(a, spec.rule.facing)) + spec.turn) % 4) as Turn;
+  const at: Vec3 = [x, y, z];
+  if (w && rests(spec, p)) at[1] = Math.min(top, restTop(p, at, rot, a.floor, w, others).y);
+  return { at, rot };
+}
+
+/**
+ * Ложится ли вещь на то, что под ней (квиз 19.11): поднята над полом, не помечена «висит», не на стене (её держит стена) и не
+ * под потолком.
+ */
+export function rests(spec: Pick<PlacedSpec, 'rule' | 'hang'>, p: Pick<PropSpec, 'mount'>): boolean {
+  return !spec.hang && spec.rule.lift > 0 && spec.rule.anchor !== 'ceiling' && p.mount !== 'wall';
+}
+
+/** Насколько опора может быть выше низа вещи и всё же поймать её: стол в другой комнате бывает повыше. */
+export const REST_REACH = 0.2;
+
+/** Что нужно знать, чтобы положить вещь на то, что под ней. */
+export type RestWorld = Pick<PlaceWorld, 'objects' | 'objectGone' | 'surfaces'>;
+
+/**
+ * На что ляжет вещь в точке at (низ — at[1]): самая высокая поверхность под её серединой — верхняя грань вещи уровня (по её
+ * сетке: столешница, а не хлебница рядом; сетки нет — верх рамки) или верх уже поставленной вещи партнёра (others), — не выше
+ * низа вещи + REST_REACH. Нет такой — пол. under — вещь уровня, на которой она лежит (для подписи в конструкторе).
+ */
+export function restTop(p: PropSpec, at: Vec3, rot: Turn, floor: number, w: RestWorld, others: readonly Box[] = []): { y: number; under: LevelObject | null } {
+  const b = worldBox(p, at, rot);
+  const cx = (b.minX + b.maxX) / 2;
+  const cz = (b.minZ + b.maxZ) / 2;
+  const limit = at[1] + REST_REACH;
+  let y = floor;
+  let under: LevelObject | null = null;
+  const inside = (minX: number, maxX: number, minZ: number, maxZ: number): boolean => cx > minX + 0.02 && cx < maxX - 0.02 && cz > minZ + 0.02 && cz < maxZ - 0.02;
+  for (const o of w.objects ?? []) {
+    if (o.flat || o.max[1] <= y || o.min[1] > limit || w.objectGone?.(o.id) || !inside(o.min[0], o.max[0], o.min[2], o.max[2])) continue;
+    const hs = w.surfaces?.(o.id, cx, cz, y + 0.005, limit);
+    const t = hs === undefined ? (o.max[1] <= limit ? o.max[1] : -Infinity) : hs.reduce((m, v) => Math.max(m, v), -Infinity);
+    if (t <= y) continue;
+    y = t;
+    under = o;
+  }
+  for (const o of others) {
+    if (o.maxY <= y || o.maxY > limit || !inside(o.minX, o.maxX, o.minZ, o.maxZ)) continue;
+    y = o.maxY;
+    under = null;
+  }
+  return { y, under };
 }
 
 /** Почему вещь не встанет в этой точке — по-русски; пусто — встанет. */
@@ -338,7 +387,7 @@ export function placeThings(specs: readonly PlacedSpec[], w: PlaceWorld, props: 
       for (const pass of [0, 1]) {
         for (const { a, r } of order) {
           if (pass === 0 && used.has(a.room)) continue;
-          const { at, rot } = fitThing(spec, a, p);
+          const { at, rot } = fitThing(spec, a, p, w, boxes);
           const { box, problems, open } = doorsAt(spec, p, at, rot, r, a, w, boxes);
           if (problems.length > 0) continue;
           pick = { id: spec.id, k, prop: spec.prop, at, rot, room: a.room, tier: a.tier, ...(open ? { open } : {}), ...(isTilted(spec.tilt) ? { tilt: spec.tilt } : {}) };
@@ -412,7 +461,7 @@ export function moveSpot(spec: PlacedSpec, room: GenRoom, w: PlaceWorld, props: 
     .map((a, i) => ({ a, d: nearCost(spec, room, a), q: hash01(i * 7 + 1, 0x3a7, h) }))
     .sort((x, y) => x.d - y.d || x.q - y.q);
   for (const { a } of order) {
-    const { at, rot } = fitThing(spec, a, p);
+    const { at, rot } = fitThing(spec, a, p, w, others);
     const { box, problems, open } = doorsAt(spec, p, at, rot, room, a, w, others);
     if (problems.length > 0) continue;
     return { spot: { id: spec.id, k: 0, prop: spec.prop, at, rot, room: room.id, tier: room.tier, moved: true, ...(open ? { open } : {}), ...(isTilted(spec.tilt) ? { tilt: spec.tilt } : {}) }, box };

@@ -47,7 +47,7 @@ import { placeable, placedProblems, PLACED_OPEN, removedProblems, swapFits } fro
 import type { Aabb } from '../../src/world/colliders';
 import type { LevelObject } from '../../src/world/objects';
 import type { PlacedOpen, PlacedSpec, RemovedSpec } from '../../src/world/placed';
-import { doorsAt, fitMoved, fitThing, gameNth, moveSpot, NEVER, placedSeed, placeThings, roomDoors, roomIndex, roomNear, rotOf, throatBox } from '../../src/world/placed_place';
+import { doorsAt, fitMoved, fitThing, gameNth, moveSpot, NEVER, placedSeed, placeThings, rests, restTop, roomDoors, roomIndex, roomNear, rotOf, throatBox } from '../../src/world/placed_place';
 import type { Box, PlacedSpot } from '../../src/world/placed_place';
 import { placeFigures } from '../../src/world/figure_place';
 import type { Turn } from '../../src/world/placed_place';
@@ -374,6 +374,8 @@ function enterRoom(w: WorldKind, type: string, pick = 0): void {
   const [seed, id] = all[roomPick]!;
   lvl = levelOf(seed, w);
   pw = lvl.placeWorld!;
+  // Убранные и передвинутые вещи игры здесь — не опора для поднятой вещи (placed_place.ts, restTop).
+  pw.objectGone = (id) => hidden.has(id);
   room = lvl.layout!.rooms[id]!;
   const cell = pw.shells[room.tier]!.get(room.cells[0]![0] - HALF, room.cells[0]![1] - HALF)!;
   floorY = cell.floorY;
@@ -614,7 +616,7 @@ function settle(it: Item): void {
   }
   if (it.kind === 'thing') {
     const p = ALL_PROPS[it.spec.prop]!;
-    const f = fitThing(it.spec, a, p);
+    const f = fitThing(it.spec, a, p, pw);
     it.at = f.at;
     it.rot = f.rot;
   } else {
@@ -1576,23 +1578,47 @@ function curSpan(): LiftSpan {
  */
 function supportTops(sp: LiftSpan, self = 0): number[] {
   const tops = [floorY];
-  const under = (b: { minX: number; maxX: number; minZ: number; maxZ: number }): boolean =>
-    b.maxX > sp.minX + 0.03 && b.minX < sp.maxX - 0.03 && b.maxZ > sp.minZ + 0.03 && b.minZ < sp.maxZ - 0.03;
+  // Как в игре (placed_place.ts, restTop): что прямо под серединой вещи.
+  const cx = (sp.minX + sp.maxX) / 2;
+  const cz = (sp.minZ + sp.maxZ) / 2;
+  const inside = (minX: number, maxX: number, minZ: number, maxZ: number): boolean => cx > minX + 0.02 && cx < maxX - 0.02 && cz > minZ + 0.02 && cz < maxZ - 0.02;
+  const hi = Math.min(ceilY - 0.3, floorY + LIFT_MAX);
   for (const o of lvl.objects ?? []) {
-    if (o.id === self || o.flat || hidden.has(o.id)) continue;
-    const top = o.max[1];
-    if (top <= floorY + 0.03 || top >= ceilY - 0.3 || o.min[1] > floorY + LIFT_MAX) continue;
-    if (under({ minX: o.min[0], maxX: o.max[0], minZ: o.min[2], maxZ: o.max[2] }) && roomOfObj(lvl, o) === room) tops.push(top);
+    if (o.id === self || o.flat || hidden.has(o.id) || o.max[1] <= floorY + 0.03 || o.min[1] > hi) continue;
+    if (!inside(o.min[0], o.max[0], o.min[2], o.max[2]) || roomOfObj(lvl, o) !== room) continue;
+    // Грани, смотрящие вверх, прямо под серединой: столешница, тарелка, хлебница, сиденье — каждая своей высотой.
+    tops.push(...(pw.surfaces?.(o.id, cx, cz, floorY + 0.03, hi) ?? [o.max[1]]));
   }
   for (const m of edits.moved) {
-    if (m.box && !(cur?.kind === 'thing' && m.spec.id === cur.spec.id) && under(m.box)) tops.push(m.box.maxY);
+    if (m.box && !(cur?.kind === 'thing' && m.spec.id === cur.spec.id) && inside(m.box.minX, m.box.maxX, m.box.minZ, m.box.maxZ)) tops.push(m.box.maxY);
   }
   for (const g of ghosts.children) {
     if (!savedThings.has(g.userData.ghost as string)) continue;
     const bb = new THREE.Box3().setFromObject(g);
-    if (under({ minX: bb.min.x, maxX: bb.max.x, minZ: bb.min.z, maxZ: bb.max.z })) tops.push(bb.max.y);
+    if (inside(bb.min.x, bb.max.x, bb.min.z, bb.max.z)) tops.push(bb.max.y);
   }
-  return tops;
+  return [...new Set(tops.map((t) => Math.round(t * 1000) / 1000))].sort((a, b) => a - b);
+}
+
+/**
+ * Вещь без «висит» ложится на то, что под ней, — как в игре (квиз 19.11; placed_place.ts, restTop): отпустил в воздухе — легла на
+ * стол, полку, тумбу или на пол. Ответ — для строки состояния.
+ */
+function restCur(): string {
+  const c = cur;
+  if (!c || c.kind !== 'thing') return liftText();
+  const p = ALL_PROPS[c.spec.prop]!;
+  if (c.spec.hang) return `Висит в воздухе: ${fmtM(c.at[1] - floorY)} над полом.`;
+  if (!rests(c.spec, p)) return liftText();
+  const r = restTop(p, c.at, c.rot, floorY, pw);
+  if (Math.abs(r.y - c.at[1]) > 1e-4) {
+    c.at = [c.at[0], r.y, c.at[2]];
+    derive(c);
+    dirty = true;
+    syncPanel();
+  }
+  if (r.y - floorY < 0.005) return 'Под ней ничего нет — стоит на полу. Чтобы висела в воздухе, отметь «Висит в воздухе».';
+  return `Лежит на «${ruShort(r.under?.name ?? '')}»: ${fmtM(r.y - floorY)} над полом.`;
 }
 
 /** Поставить выбранное на высоту raw (at[1]): прилипание к опоре, шаг, пол, 2,6 м и потолок. */
@@ -1659,8 +1685,9 @@ function endLift(): void {
   liftDrag = null;
   controls.enabled = true;
   document.body.classList.remove('is-lifting');
+  // Отпустил: без «висит» — ложится на то, что под ней.
+  setStatus(restCur());
   scheduleSave();
-  setStatus(liftText());
   dirty = true;
   syncPanel();
 }
@@ -1674,8 +1701,24 @@ function liftKey(dir: 1 | -1, e: { shiftKey: boolean; altKey: boolean }): boolea
   } else if (!cur) return false;
   else if (performance.now() - liftKeyAt > 700) pushUndo();
   liftKeyAt = performance.now();
+  const c = cur!;
+  const sp = curSpan();
+  // Лежит (без «висит»): на следующую опору под ней — выше или ниже. Висит, манекен, настенная — на шаг.
+  if (c.kind === 'thing' && !c.spec.hang && ALL_PROPS[c.spec.prop]!.mount !== 'wall' && c.spec.rule.anchor !== 'ceiling') {
+    const hi = Math.min(floorY + LIFT_MAX, ceilY - 0.02 - sp.above);
+    const tops = supportTops(sp).map((t) => t + sp.below).filter((t) => t <= hi);
+    const y = c.at[1];
+    const next = dir > 0 ? tops.find((t) => t > y + 0.005) : [...tops].reverse().find((t) => t < y - 0.005);
+    if (next === undefined) {
+      setStatus(dir > 0 ? 'Выше под ней опоры нет. Чтобы поднять в воздух, отметь «Висит в воздухе».' : 'Ниже некуда: стоит на полу.');
+      return true;
+    }
+    setLift(next, { free: true, tops: null, sp });
+    setStatus(restCur());
+    return true;
+  }
   const step = e.shiftKey ? 0.25 : e.altKey ? 0.01 : LIFT_STEP;
-  setLift(cur!.at[1] + dir * step, { free: true, tops: null, sp: curSpan() });
+  setLift(c.at[1] + dir * step, { free: true, tops: null, sp });
   setStatus(liftText());
   return true;
 }
@@ -2472,6 +2515,23 @@ const change = (fn: () => void): void => {
 const liftEl = $<HTMLInputElement>('lift');
 const countEl = $<HTMLInputElement>('count');
 liftEl.addEventListener('pointerdown', pushUndo);
+// Отпустил ползунок: без «висит» вещь ложится на то, что под ней (как ручка ↕).
+liftEl.addEventListener('change', () => {
+  if (!cur) return;
+  setStatus(restCur());
+  scheduleSave();
+});
+const hangEl = $<HTMLInputElement>('hang');
+hangEl.addEventListener('change', () => {
+  if (cur?.kind !== 'thing') return;
+  pushUndo();
+  if (hangEl.checked) cur.spec.hang = true;
+  else delete cur.spec.hang;
+  dirty = true;
+  scheduleSave();
+  setStatus(restCur());
+  syncPanel();
+});
 liftEl.addEventListener('input', () => {
   if (!cur) return;
   cur.at = [cur.at[0], floorY + Number(liftEl.value), cur.at[2]];
@@ -2590,6 +2650,10 @@ function syncPanel(): void {
   $('turns').toggleAttribute('hidden', !has);
   $('curcard').toggleAttribute('hidden', cur?.kind !== 'thing');
   $('tiltrow').toggleAttribute('hidden', cur?.kind !== 'thing');
+  // «Висит в воздухе» — у вещей, что ложатся на опору: не настенных и не под потолком.
+  const hangable = cur?.kind === 'thing' && ALL_PROPS[cur.spec.prop]?.mount !== 'wall' && cur.spec.rule.anchor !== 'ceiling';
+  $('hangrow').toggleAttribute('hidden', !hangable);
+  if (cur?.kind === 'thing') $<HTMLInputElement>('hang').checked = !!cur.spec.hang;
   if (cur?.kind === 'thing') {
     const t = cur.spec.tilt ?? [0, 0, 0];
     for (const [id, k] of [['tilt-x', 0], ['tilt-y', 1], ['tilt-z', 2]] as const) {
@@ -3642,8 +3706,15 @@ const gameInfo = (o: LevelObject) => ({
     return cur;
   },
   unmove: () => cur?.kind === 'thing' && cur.spec.moves && unmove(cur.spec),
-  /** Стрелка: ax — вбок (+1 вправо), az — от себя (+1); shift/alt — шаг 50 / 2 см. */
+  /** Опоры под серединой выбранного (высоты над полом) и отметка «Висит в воздухе». */
   liftTops: () => (cur ? supportTops(curSpan()).map((t) => Math.round((t - floorY) * 1000) / 1000) : null),
+  hang: (on: boolean) => {
+    const el = $<HTMLInputElement>('hang');
+    el.checked = on;
+    el.dispatchEvent(new Event('change'));
+    return cur ? Math.round((cur.at[1] - floorY) * 1000) / 1000 : null;
+  },
+  /** Стрелка: ax — вбок (+1 вправо), az — от себя (+1); shift/alt — шаг 50 / 2 см. */
   nudge: (ax: number, az: number, shift = false, alt = false) => nudge(ax, az, { shiftKey: shift, altKey: alt }) && cur ? { at: cur.at, rot: cur.kind === 'thing' ? cur.rot : null } : null,
   save: () => saveCur(),
   fresh: () => deselect(),

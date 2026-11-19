@@ -20,6 +20,7 @@
  * Чистый TS: работает в сборке уровня (Worker) и в тестах.
  */
 import { hash01, hash2 } from '../core/rng';
+import type { LevelObject } from './objects';
 import type { Vec3 } from '../core/types';
 import { GRID } from '../gen/layout';
 import type { GenLayout, GenRoom } from '../gen/layout';
@@ -81,6 +82,18 @@ export interface PlaceWorld {
   /** Начало места: там фигур нет; к ближайшему от него проходу смотрят фигуры «лицом к игроку». */
   spawn: Vec3;
   spawnTier: number;
+  /**
+   * Вещи уровня, уже собранные к расстановке, с рамками, как их видно (у стола — по столешнице: его преграды ниже): на их верх
+   * ложится поднятая вещь партнёра (placed_place.ts, restTop). Нет — ложится только на пол.
+   */
+  objects?: readonly LevelObject[];
+  /** Вещь уровня скрыта (в конструкторе — убранная или передвинутая): на неё не ложатся. */
+  objectGone?: (id: number) => boolean;
+  /**
+   * Верхние грани вещи уровня id над или под точкой (x, z) между lo и hi (ObjectLog.surfaces): на столешницу, а не на верх
+   * рамки, где стоит хлебница. undefined — сетки нет, тогда — по рамке.
+   */
+  surfaces?: (id: number, x: number, z: number, lo: number, hi: number) => number[] | undefined;
 }
 
 /** Помещения, где фигур не бывает вовсе: лестничные марши, лифт, пути под перроном. */

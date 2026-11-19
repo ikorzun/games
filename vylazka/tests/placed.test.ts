@@ -6,7 +6,9 @@ import type { BuiltLevel } from '../src/world/level';
 import type { LevelObject } from '../src/world/objects';
 import { placeable, placedProblems, removedProblems } from '../src/world/placed';
 import type { PlacedSpec, RemovedSpec } from '../src/world/placed';
-import { checkSpot, fitThing, gameNth, HEADROOM, moveSpot, NEVER, placeThings, roomDoors, roomIndex, roomNear, rotOf, throatBox, worldBox } from '../src/world/placed_place';
+import { checkSpot, fitThing, gameNth, HEADROOM, moveSpot, NEVER, placeThings, REST_REACH, restTop, rests, roomDoors, roomIndex, roomNear, rotOf, throatBox, worldBox } from '../src/world/placed_place';
+import type { AnchorSpot } from '../src/world/figure_place';
+import type { Vec3 } from '../src/core/types';
 import { anchorSpots } from '../src/world/figure_place';
 import type { Box } from '../src/world/placed_place';
 import { ALL_PROPS, FIXED } from '../src/world/props_all';
@@ -468,5 +470,105 @@ describe('вещи игры, убранные и передвинутые: на 
     expect(make([move]).placed).toEqual(a);
     const b = make([move], [removedSpec({ id: 'rm_other', what: { thing: 'water_cooler', nth: 0 }, rooms: ['corridor'] })]).placed;
     expect(b).toEqual(a);
+  });
+});
+
+describe('поднятая вещь ложится на то, что под ней (квиз 19.11)', () => {
+  const stool = ALL_PROPS.kk_stool!;
+  const obj = (id: number, min: Vec3, max: Vec3, flat = false): LevelObject => ({ id, name: 'kitchen_table', at: [min[0], min[1], min[2]], rot: 0, min, max, solid: true, flat });
+  // Большой «стол»: под серединой вещи при любом её устройстве.
+  const table = obj(1, [-5, 0, -5], [5, 0.8, 5]);
+  const w = { objects: [table] };
+
+  it('данные: «висит» — да или нет', () => {
+    expect(placedProblems(spec({ hang: true }), ALL_PROPS, FIXED)).toEqual([]);
+    expect(placedProblems(spec({ hang: 'да' as unknown as boolean }), ALL_PROPS, FIXED).join()).toContain('висит');
+  });
+
+  it('кто ложится: поднятая, без «висит», не на стене и не под потолком', () => {
+    expect(rests(spec({}, { lift: 0.8 }), stool)).toBe(true);
+    expect(rests(spec({}, { lift: 0 }), stool)).toBe(false);
+    expect(rests(spec({ hang: true }, { lift: 0.8 }), stool)).toBe(false);
+    expect(rests(spec({}, { lift: 0.8, anchor: 'ceiling' }), stool)).toBe(false);
+    expect(rests(spec({ prop: 'radiator' }, { lift: 0.12 }), ALL_PROPS.radiator!)).toBe(false);
+  });
+
+  it('опора: верх под серединой не выше низа + запас; ниже стола — пол; не над столом — пол; скрытое и картонка — не опора', () => {
+    expect(restTop(stool, [0, 0.8, 0], 0, 0, w).y).toBeCloseTo(0.8);
+    // Стол в другой комнате повыше — всё равно ловит.
+    expect(restTop(stool, [0, 0.8 - REST_REACH + 0.05, 0], 0, 0, w).y).toBeCloseTo(0.8);
+    // Поднята высоко над столом — опускается на него.
+    expect(restTop(stool, [0, 1.9, 0], 0, 0, w).y).toBeCloseTo(0.8);
+    expect(restTop(stool, [0, 1.9, 0], 0, 0, w).under?.id).toBe(1);
+    // Под столешницей — на пол.
+    expect(restTop(stool, [0, 0.3, 0], 0, 0, w).y).toBe(0);
+    expect(restTop(stool, [20, 0.8, 20], 0, 0, w).y).toBe(0);
+    expect(restTop(stool, [0, 0.8, 0], 0, 0, { ...w, objectGone: () => true }).y).toBe(0);
+    expect(restTop(stool, [0, 0.8, 0], 0, 0, { objects: [obj(2, [-5, 0, -5], [5, 0.8, 5], true)] }).y).toBe(0);
+    // Уже поставленная вещь партнёра — тоже опора.
+    expect(restTop(stool, [0, 1.2, 0], 0, 0, {}, [{ minX: -2, maxX: 2, minZ: -2, maxZ: 2, minY: 0, maxY: 1.1 }]).y).toBeCloseTo(1.1);
+  });
+
+  it('fitThing: без мира — ровно на высоте (как раньше); с миром — ложится; «висит» — на своей высоте; настенная — как есть', () => {
+    const a: AnchorSpot = { anchor: 'middle', x: 0, z: 0, floor: 0, ceil: 3, phi: 0, wall: 0, door: 0, entry: 0, room: 0, tier: 0, pit: false };
+    const lifted = spec({ prop: 'kk_stool', offset: [0, 0] }, { anchor: 'middle', lift: 0.9 });
+    expect(fitThing(lifted, a, stool).at[1]).toBeCloseTo(0.9);
+    expect(fitThing(lifted, a, stool, w).at[1]).toBeCloseTo(0.8);
+    expect(fitThing({ ...lifted, hang: true }, a, stool, w).at[1]).toBeCloseTo(0.9);
+    expect(fitThing({ ...lifted, rule: { ...lifted.rule, lift: 0 } }, a, stool, w).at[1]).toBe(0);
+    const rad = spec({ prop: 'radiator', offset: [0, 0] }, { anchor: 'wall', lift: 0.12 });
+    expect(fitThing(rad, { ...a, anchor: 'wall' }, ALL_PROPS.radiator!, w).at[1]).toBeCloseTo(0.12);
+  });
+
+  it('поверхности по сетке: у кухонного стола — клеёнка на столешнице, тарелка, хлебница, сиденье табуретки — каждая на своей высоте', () => {
+    const lvl = buildLevel(generateLayout(20041113, 2, 'shelter'), { wear: 0, placed: [], figures: [], keepPlaceWorld: true });
+    const t = (lvl.objects ?? []).find((o) => o.name === 'kitchen_table');
+    expect(t).toBeDefined();
+    const pw = lvl.placeWorld!;
+    const floor = t!.at[1];
+    const tops: number[] = [];
+    for (let i = 1; i < 20; i++) {
+      for (let j = 1; j < 20; j++) {
+        const x = t!.min[0] + ((t!.max[0] - t!.min[0]) * i) / 20;
+        const z = t!.min[2] + ((t!.max[2] - t!.min[2]) * j) / 20;
+        const hs = pw.surfaces!(t!.id, x, z, floor + 0.3, floor + 1.2) ?? [];
+        if (hs.length > 0) tops.push(Math.max(...hs) - floor);
+      }
+    }
+    const share = (lo: number, hi: number): number => tops.filter((v) => v >= lo && v <= hi).length;
+    // Столешница s3_table_kitchen — 0,736 м (furniture.ts, S3_TOP), клеёнка и клетка на ней — ещё 4 мм: почти вся площадь стола.
+    expect(share(0.735, 0.745)).toBeGreaterThan(tops.length * 0.6);
+    // Хлебница — выше столешницы на 11–12 см; сиденье выдвинутой табуретки — ниже.
+    expect(share(0.84, 0.87)).toBeGreaterThan(0);
+    expect(share(0.42, 0.46)).toBeGreaterThan(0);
+    // Верх рамки — крышка хлебницы, а не столешница: по рамке чашка повисла бы над клеёнкой.
+    expect(t!.max[1] - floor).toBeGreaterThan(0.85);
+  });
+
+  it('на уровне: поднятая стоит на верхе того, что под её серединой, или на полу; помеченная «висит» — на своей высоте', () => {
+    const build = (placed: readonly PlacedSpec[]) => buildLevel(generateLayout(20041113, 2, 'shelter'), { wear: 0, placed, figures: [], keepPlaceWorld: true });
+    const lifted = spec({ id: 'pl_up', prop: 'kk_stool' }, { worlds: ['shelter'], anchor: 'middle', lift: 0.9, count: 3 });
+    const hung = spec({ id: 'pl_hang', prop: 'kk_stool', hang: true }, { worlds: ['shelter'], anchor: 'wall', lift: 0.9, count: 3 });
+    const lvl = build([lifted, hung]);
+    const spots = lvl.placed ?? [];
+    expect(spots.length).toBeGreaterThan(0);
+    for (const s of spots) {
+      const room = lvl.layout!.rooms[s.room]!;
+      const floor = lvl.placeWorld!.shells[room.tier]!.get(room.cells[0]![0] - 8, room.cells[0]![1] - 8)!.floorY;
+      const b = worldBox(stool, s.at, s.rot);
+      const cx = (b.minX + b.maxX) / 2;
+      const cz = (b.minZ + b.maxZ) / 2;
+      if (s.id === 'pl_hang') {
+        expect(s.at[1] - floor, JSON.stringify(s)).toBeCloseTo(0.9, 2);
+        continue;
+      }
+      const onFloor = Math.abs(s.at[1] - floor) < 0.005;
+      // Лежит на верхней грани чужой вещи прямо под своей серединой (не на верхе рамки — там хлебница, а не столешница).
+      const own = (o: LevelObject): boolean => o.name === 'kk_stool' && Math.hypot(o.at[0] - s.at[0], o.at[2] - s.at[2]) < 0.01;
+      const onThing = (lvl.objects ?? []).some(
+        (o) => !o.flat && !own(o) && cx > o.min[0] && cx < o.max[0] && cz > o.min[2] && cz < o.max[2] && (lvl.placeWorld!.surfaces!(o.id, cx, cz, s.at[1] - 0.002, s.at[1] + 0.002) ?? []).length > 0,
+      );
+      expect(onFloor || onThing, JSON.stringify(s)).toBe(true);
+    }
   });
 });

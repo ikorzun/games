@@ -872,6 +872,9 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     skip: new Set([...lowerWells, ...(variantRoom ? [variantRoom.id] : [])]),
     spawn: [cellToWorld(ent0.cells[0]![0]), tierFloor(ent0.tier), cellToWorld(ent0.cells[0]![1]) + 0.4] as Vec3,
     spawnTier: ent0.tier,
+    // Вся обстановка уже стоит: поднятая вещь партнёра ложится на её верх (placed_place.ts, restTop) — на грань под серединой.
+    objects: objects.list,
+    surfaces: (id: number, x: number, z: number, lo: number, hi: number) => objects.surfaces(id, x, z, lo, hi),
   };
   const figures = placeFigures(opts.figures ?? FIGURES, placeWorld, (f, r) => inVariant(slotFor(f.slot, f.rule.rooms), pick(r)));
   // Дальше строятся вещи по записям партнёра — мимо хука: они не вещи игры, считать и трогать их ему нечего.
@@ -927,6 +930,8 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   }));
   // Места для вещей внутри преград — прочь: вся обстановка уже стоит, и вещи партнёра тоже (furnish.ts, dropBuried).
   dropBuried(spots, col);
+  // Мир расстановки остаётся у конструктора и тестов: от сеток ему — только верхние грани, сборщики не держать.
+  if (opts.keepPlaceWorld) objects.freeze();
   // Свободные участки стен — в порядке помещений уровня: туда вещь может вернуться «в другом месте».
   for (const { room, ctx } of furnished) for (const s of ctx.slots) if (!s.used && !s.hazard && s.deep) freeSlots.push({ at: [s.xf.ox, s.xf.oy, s.xf.oz], rot: s.xf.rot, room: room.id, tier: room.tier });
 
