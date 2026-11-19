@@ -358,32 +358,49 @@ const GENTLE = {
 /**
  * Ступень погружения: каждая из первых сессий открывает одно правило сна — событием, а не текстом (предложение
  * основной модели 17.11; партнёр: «Далее делай предложенные рекомендации по гемплею»; `design.md` §24).
- *   0 — вещи отвечают на взгляд; в начале — поставленный скачок на луг (холодный старт). Ни отказов фонаря, ни
- *       скачков, ни Осыпи, ни давления: первая минута — почти обычная жизнь;
- *   1 — фонарь глохнет (обучающий отказ), темнота переставляет вещи; скачков и давления нет; Осыпи не видно —
- *       только её приметы (сначала приметы, потом тело — K-18, ответ партнёра в квизе 17.11): она проходит по месту
- *       вдали, в углах у её пути проступают грибы, издалека слышен её песок; редко;
+ * Осыпь — на всех ступенях с первой минуты: силуэт в луче издалека, без касания; охотится, когда вспомнена первая вещь
+ * (плейтест партнёра 19.11: «нужно сильнее нагнетать страх, возможно, показать его в первые моменты, но не сталкивать с
+ * игроком»; квиз 19.11 — охота «после первой вещи»). Прежнее «сначала приметы, потом тело» (K-18) этим заменено.
+ *   0 — вещи отвечают на взгляд; Осыпь видна в первую минуту и охотится после первой вещи. Ни отказов фонаря, ни
+ *       скачков, ни давления;
+ *   1 — фонарь глохнет (обучающий отказ), темнота переставляет вещи; скачков и давления нет; кроме самой Осыпи —
+ *       её приметы: она проходит по месту вдали, в углах у её пути проступают грибы, издалека слышен её песок; редко;
  *   2 — скачки (мягко) и давление: пространства перемешиваются — скачок уносит в другое место (сон из сцен, 17.11, вечер);
- *       приметы Осыпи — чаще, тела по-прежнему нет;
- *   3 — Осыпь: сначала силуэт на краю луча, охота с пятой минуты и мягко;
+ *       первый скачок поставлен: вещь впереди входа уносит на луг (прежний «холодный старт» первой сессии — в первой
+ *       сессии необъяснённый перенос путал новичков, плейтест 19.11); приметы Осыпи — чаще;
+ *   3 — охота и с пятой минуты, если вещь всё не найдена;
  *   4 — всё как есть (опытный игрок, проверки).
  * Ставит приложение по числу законченных сессий.
  */
 export const STAGE_ALL = 4;
-/** Ступень 0: Осыпи нет вовсе, ложные события редкие и не в первую минуту. */
-const QUIET_DIRECTOR: DirectorConfig = { glimpseAt: Infinity, releaseAt: Infinity, scareGap: [45, 90], byDepth: false, firstScare: 70 };
-/** Ступени 1–2: тела Осыпи нет, только приметы — на первой реже, на второй чаще. */
+/**
+ * Ступень 0: Осыпь показывается в первую минуту — явление через ~12 с (после завязки, app.ts) и потом изредка; охотится после первой вспомненной
+ * вещи; ложные события редкие и не в первую минуту.
+ */
+const ONBOARD_DIRECTOR: DirectorConfig = { glimpseAt: 8, firstGlimpse: 4, releaseAt: Infinity, releaseAfterGoals: 1, scareGap: [45, 90], byDepth: false, firstScare: 70 };
+/** Ступени 1–2: как на нулевой, и ещё приметы — на первой реже, на второй чаще. */
 const SIGNS_DIRECTOR: readonly [DirectorConfig, DirectorConfig] = [
-  { ...QUIET_DIRECTOR, traceAt: 100, traceGap: [120, 170] },
-  { ...QUIET_DIRECTOR, traceAt: 60, traceGap: [75, 115] },
+  { ...ONBOARD_DIRECTOR, traceAt: 100, traceGap: [120, 170] },
+  { ...ONBOARD_DIRECTOR, traceAt: 60, traceGap: [75, 115] },
 ];
 /** Сколько секунд Осыпь-примета идёт по месту. */
 const TRACE_SECONDS = 26;
-/** Ступень 3 — знакомство с Осыпью: силуэт на краю луча с первой минуты, охота — с пятой, только по времени (как прежняя мягкая первая сессия, слово партнёра 16.11 23:41). */
-const FIRST_HUNT_DIRECTOR: DirectorConfig = { glimpseAt: 35, releaseAt: 300, scareGap: [28, 55], byDepth: false };
+/** Ступень 3: силуэт на краю луча с первой минуты, охота — после первой вещи или с пятой минуты (как прежняя мягкая первая сессия, слово партнёра 16.11 23:41). */
+const FIRST_HUNT_DIRECTOR: DirectorConfig = { glimpseAt: 35, releaseAt: 300, releaseAfterGoals: 1, scareGap: [28, 55], byDepth: false };
+/** Явление Осыпи ищет место впереди: косинус половины конуса взгляда (~35°), и на каком расстоянии лучше, м (конец луча). */
+const APPARITION_CONE = Math.cos(0.6);
+const APPARITION_AT = 9;
+/** Сколько раз (через пару секунд) первое явление ждёт места впереди, прежде чем встать где-нибудь на виду. */
+const FIRST_GLIMPSE_TRIES = 6;
+/** Сколько секунд свет не разгоняет первое явление: его должны успеть увидеть. */
+const FIRST_GLIMPSE_GRACE = 1.2;
+/** Явление встаёт на краю луча, а не в его середине: от 15° до APPARITION_CONE от взгляда (в середине его сразу разгонит свет). */
+const APPARITION_EDGE = 0.26;
+/** На какой ступени первый скачок поставлен (холодный старт ниже): на той, что вводит скачки. */
+const COLD_OPEN_STAGE = 2;
 /**
- * Холодный старт (ступень 0): крупная вещь в 4,5–9 м впереди входа, в луче с первого кадра. До at секунд она только
- * стоит (первые секунды — обычная жизнь), потом отзывается на взгляд: растёт навстречу и уносит на луг. Луг после
+ * Холодный старт (ступень COLD_OPEN_STAGE): крупная вещь в 4,5–9 м впереди входа, в луче с первого кадра. До at секунд
+ * она только стоит, потом отзывается на взгляд: растёт навстречу и уносит на луг — так сон показывает скачок. Луг после
  * неё отпускает через stay секунд — дальше сессия идёт своим чередом.
  */
 const COLD_OPEN = { at: 16, stay: 20, near: 4.5, far: 9, cone: 0.5 } as const;
@@ -669,6 +686,8 @@ export class Game {
   phone = false;
   /** Когда затихшая после поимки Осыпь выйдет снова, с игрового времени; 0 — не ждёт. */
   private swarmWakeAt = 0;
+  /** Сколько раз первое явление не нашло места впереди (apparitionNode). */
+  private glimpseTries = 0;
   /**
    * Свет памяти (world/memory_light.ts): у какой вещи он горит и насколько разгорелся. Вещь вспомнили —
    * свет гаснет вместе с ней, поэтому он держится за вещь, а не за memoryThing (тот обнуляется сразу).
@@ -706,6 +725,12 @@ export class Game {
   private readonly blooms = new Map<number, { k: number; hold: number }>();
   /** Номер экрана-проёма, в который вошли и который ещё не унёс (ждёт конца идущего перехода); 0 — нет. */
   private doorway = 0;
+
+  /** Где искомая вещь, когда её можно услышать (её зов — audio/game_audio.ts): она есть и игрок в месте, а не в кармане. */
+  get memoryCall(): Vec3 | null {
+    const t = this.memoryThing;
+    return t && this.where === 'main' && this.session?.active ? t.pos : null;
+  }
   private pocketGroup = 0;
   private pocketAge = 0;
   private pocketStay = 40;
@@ -842,7 +867,10 @@ export class Game {
       // pressure.md §4.4).
       const keep = this.loadingScene && this.director !== null;
       const hunted = keep && this.director!.wasReleased;
-      if (!keep) this.director = new Director(this.rng, stage === 0 ? QUIET_DIRECTOR : stage <= 2 ? SIGNS_DIRECTOR[stage - 1]! : stage === 3 ? FIRST_HUNT_DIRECTOR : this.gentle ? GENTLE.director : DEFAULT_DIRECTOR);
+      if (!keep) {
+        this.director = new Director(this.rng, stage === 0 ? ONBOARD_DIRECTOR : stage <= 2 ? SIGNS_DIRECTOR[stage - 1]! : stage === 3 ? FIRST_HUNT_DIRECTOR : this.gentle ? GENTLE.director : DEFAULT_DIRECTOR);
+        this.glimpseTries = 0;
+      }
       this.swarmWakeAt = hunted ? SCENE_SWARM_BACK : 0;
       // Скачков (кроме поставленного холодного старта и вынужденных) на ступенях 0–1 нет; на 2–3 — мягкие.
       this.jumps = new Jumps(this.rng, stage <= 1 ? { ...DEFAULT_JUMPS, maxPerSession: 0 } : stage <= 3 || this.gentle ? GENTLE.jumps : DEFAULT_JUMPS);
@@ -1752,7 +1780,8 @@ export class Game {
       const t = this.addThing(kind, pos, Math.floor(rng() * 4) * (Math.PI / 2), fate, false, true);
       this.thingPocket.set(t.id, pocket);
     }
-    if (this.stage === 0) this.placeColdOpen();
+    // Только в первой сцене сна: в следующих сценах он повторялся бы раз за разом (куратор, пачка 48; так уже было — 220).
+    if (this.stage === COLD_OPEN_STAGE && !this.loadingScene) this.placeColdOpen();
   }
 
   /**
@@ -2481,24 +2510,44 @@ export class Game {
     return { path, t: 0 };
   }
 
-  /** Узел для явления роя: в 3–5 клетках, на виду у игрока. −1 — подходящего нет. */
-  private apparitionNode(from: number): number {
+  /**
+   * Узел для явления Осыпи: в 2–8 клетках пути, в 6–16 м и на виду — без стены между камерой и ею. Сначала — впереди, в
+   * конусе взгляда, на краю луча (не в середине: там свет её сразу разгонит) и ближе всего к ~9 м — в конце луча («показать
+   * в первые моменты», плейтест партнёра 19.11); нет такого — любой на виду (ahead — нет: тогда −1, и режиссёр попробует снова
+   * через пару секунд).
+   */
+  private apparitionNode(from: number, ahead = false): number {
     const sw = this.swarm;
     const rig = this.lastRig;
     if (!sw || !rig || from < 0 || !this.level) return -1;
-    for (let i = 0; i < 8; i++) {
-      const n = sw.nodeAround(from, 3, 5);
+    const fx = -Math.sin(rig.camYaw);
+    const fz = -Math.cos(rig.camYaw);
+    let best = -1;
+    let bestMiss = Infinity;
+    let side = -1;
+    for (const n of sw.nodesAround(from, 2, 8)) {
       const node = this.level.nav[n];
       if (!node) continue;
       const dx = node.x - rig.camPos[0];
       const dy = node.y + 1.3 - rig.camPos[1];
       const dz = node.z - rig.camPos[2];
       const d = Math.hypot(dx, dy, dz);
-      if (d < 6 || this.colliders.raycast(rig.camPos[0], rig.camPos[1], rig.camPos[2], dx / d, dy / d, dz / d, d) < d - 0.5) continue;
-      return n;
+      if (d < 6 || d > 16 || this.colliders.raycast(rig.camPos[0], rig.camPos[1], rig.camPos[2], dx / d, dy / d, dz / d, d) < d - 0.5) continue;
+      const flat = Math.hypot(dx, dz);
+      const cos = flat > 1e-3 ? (dx * fx + dz * fz) / flat : -1;
+      if (cos > APPARITION_CONE) {
+        // На краю луча — лучше всего; в самой середине — можно, но хуже: там свет сразу её разгонит.
+        const miss = Math.abs(d - APPARITION_AT) + (Math.acos(Math.min(1, cos)) < APPARITION_EDGE ? 4 : 0);
+        if (miss < bestMiss) {
+          bestMiss = miss;
+          best = n;
+        }
+      } else if (side < 0) side = n;
     }
-    return -1;
+    return best >= 0 ? best : ahead ? -1 : side;
   }
+
+
 
   /**
    * Узел для приметы Осыпи: в 5–9 клетках от игрока (если места мало — в 4–14) и не на виду — за стеной или за
@@ -2963,12 +3012,15 @@ export class Game {
           const src = this.scareSource(e.id, node);
           fear.push(src ? { type: 'scare', id: e.id, pos: src } : { type: 'scare', id: e.id });
         } else if (e.type === 'apparition' && sw) {
-          const n = this.apparitionNode(node);
+          // Первое явление ждёт места впереди, в луче (несколько попыток через пару секунд), — иначе оно встало бы за спиной.
+          const first = dir.glimpsed <= 1 && this.glimpseTries < FIRST_GLIMPSE_TRIES;
+          const n = this.apparitionNode(node, first);
+          if (first && n < 0) this.glimpseTries += 1;
           if (n >= 0) {
-            sw.appear(n, 6);
+            sw.appear(n, 6, dir.glimpsed <= 1 ? FIRST_GLIMPSE_GRACE : 0);
             this.swarmBody.snap(sw.pos, sw.cohesion);
             fear.push({ type: 'swarm', what: 'apparition' });
-          }
+          } else dir.missedGlimpse(this.sleepTime);
         } else if (e.type === 'trace' && sw) {
           // Примета: Осыпь проходит вдали, за стенами; тела не видно.
           const n = this.traceNode(node);

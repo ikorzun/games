@@ -88,10 +88,21 @@ const MOMENT_MS = 3200;
  */
 const SCENE_SESSION: SessionConfig = { ...DEFAULT_SESSION, count: 1, firstDelay: 10, fallback: 18, minLength: 0 };
 /**
+ * Первый сон начинается с завязки (квиз 19.11, «Выбираемся из сна»): две строки посреди кадра — когда (с от начала игры).
+ * Потом показывается Осыпь (game.ts, ONBOARD_DIRECTOR, ~12 с), потом приходит первая вещь (FIRST_ITEM_AT).
+ */
+const INTRO_AT = [0.6, 5.6] as const;
+const INTRO_MS = 4400;
+/**
+ * Когда в первом сне приходит первая вещь, с: после завязки и Осыпи. Следующая — через несколько секунд после «вспомнил»
+ * (раньше — через 40 с: игрок стоял без цели и не понимал, что делать, — плейтест партнёра 19.11).
+ */
+const FIRST_ITEM_AT = 16;
+/**
  * Первый сон игрока — одна сцена убежища с тремя вещами (pressure.md, §4.6, п. 1, и §4.7): убежище учит закону, и место не
  * меняется. Три сцены одного места подряд пришлось бы собирать заново из устаревшей копии памяти места — та же вещь трижды.
  */
-const FIRST_SLEEP: SessionConfig = { ...SCENE_SESSION, count: SCENES };
+const FIRST_SLEEP: SessionConfig = { ...SCENE_SESSION, count: SCENES, firstDelay: FIRST_ITEM_AT, delay: 6, fallback: 3 };
 const BRIGHT = [0.78, 1, 1.35] as const;
 
 type Screen = 'boot' | 'title' | 'play';
@@ -162,6 +173,10 @@ export class App {
   /** Какое воспоминание сейчас ищут и с какого момента (для подсказки «погаси свет»). */
   private seeking = '';
   private seekingSince = 0;
+  /** Сколько строк завязки первого сна уже показано (INTRO_AT). */
+  private introStep = 0;
+  /** Первый сон: игрок уже гасил фонарь при искомой вещи — обязательный момент «погаси фонарь» пройден. */
+  private darkTaught = false;
   /** Следующая сессия, собранная за время лимбо. */
   private next: { level: BuiltLevel; seed: number; rank: 1 | 2 | 3 } | null = null;
   /**
@@ -614,6 +629,9 @@ export class App {
   start(): void {
     if (!this.game || this.screen !== 'title') return;
     this.screen = 'play';
+    // Завязка — с начала сна; продолжение сохранённого посреди сна её не повторяет.
+    this.introStep = this.game.time > 3 ? INTRO_AT.length : 0;
+    this.darkTaught = false;
     this.sound.unlock();
     this.audio.setScene('play');
     this.audio.sortieStart(false, this.game.world);
@@ -1175,16 +1193,27 @@ export class App {
       else if (e.type === 'gas-enter') this.hud.toast(t('toast.gas'), 3000);
     }
     for (const e of ev.fear) {
-      // Чем её держат, зависит от места: в тёмном — лучом, в светлом — взглядом (в зале ожидания — только на ходу). Про луч
-      // не говорим (аудит объяснений 17.11, урок Frictional Games: понятный враг — система с дырой, её выучивают): светить на
-      // то, что пугает, игрок станет и сам. Про взгляд — говорим: без фонаря это не догадаться.
+      // Чем её держат, зависит от места: в тёмном — лучом, в светлом — взглядом (в зале ожидания — только на ходу). Про взгляд
+      // говорим: без фонаря это не догадаться. Про луч молчим (аудит объяснений 17.11: светить на то, что пугает, игрок станет и сам;
+      // куратор, пачка 48: сказанное «держи в луче» за одну встречу выучит «посветил — рассыпалась», и страха не останется) — в
+      // начале охоты одна строка, что она знает, где ты.
       if (e.type === 'swarm' && e.what === 'cohered' && !this.game.hasLight) this.teach('swarm', t(this.game.flow ? 'teach.swarm.walk' : 'teach.swarm.gaze'), 6000);
+      // Первый сон: Осыпь показалась — одна строка, что это (посреди кадра, как завязка); вышла на охоту — как от неё держаться
+      // (плейтест партнёра 19.11: «не понимают… почему»; правило «понятный враг» — луч держит её, и это теперь сказано).
+      if (e.type === 'swarm' && e.what === 'apparition' && this.firstSleep && !this.taught.has('glimpse')) {
+        this.taught.add('glimpse');
+        this.analytics.hint('glimpse');
+        this.hud.flash(t('swarm.first'), 4800);
+      }
+      if (e.type === 'swarm' && e.what === 'release' && this.game.hasLight) this.teach('hunt', t('swarm.hunt'), 6000);
       if (buzz && (e.type === 'scare' || e.what === 'cohered')) navigator.vibrate(e.type === 'scare' ? 25 : [40, 60, 40]);
     }
     for (const e of ev.dream) {
       if (e.type === 'limbo') this.onLimbo();
       else if (e.type === 'begin') this.onBegin(e.scene === true, e.recalled === true);
-      else if (e.type === 'thing' && e.what === 'changing' && e.thing.fate !== 'dust') this.teach('thing', t('teach.thing'));
+      // «Вещи не любят, когда на них долго смотрят» спорит с главным делом первого сна — вспомнить вещь взглядом (куратор, пачка 48):
+      // в первом сне её нет.
+      else if (e.type === 'thing' && e.what === 'changing' && e.thing.fate !== 'dust' && !this.firstSleep) this.teach('thing', t('teach.thing'));
       else if (e.type === 'jump' && e.phase === 'switch') {
         // Осыпь вернула в начало: об этом говорит строка, иначе непонятно, почему место другое.
         if (e.plan.cause === 'caught') this.hud.toast(t('toast.caught'), 3400);
@@ -1251,6 +1280,11 @@ export class App {
     const g = this.game;
     const s = g.session;
     const light = g.light;
+    // Первый сон начинается с завязки: две строки посреди кадра, потом — Осыпь и первая вещь (квиз 19.11).
+    if (this.firstSleep && this.screen === 'play' && g.where === 'main' && this.introStep < INTRO_AT.length && g.time >= INTRO_AT[this.introStep]!) {
+      this.hud.flash(t(`intro.${this.introStep}`), INTRO_MS);
+      this.introStep += 1;
+    }
     this.hud.setTime(g.time + this.clockStart() + this.clockSkew);
     const dead = light.state === 'dead';
     const kind = this.touchMode ? (this.motion?.state === 'active' ? 'motion' : 'touch') : 'desktop';
@@ -1270,6 +1304,19 @@ export class App {
       if (g.time < 7) hint = t(this.dragMode ? `hint.${what}.desktop_drag` : `hint.${what}.${base}`);
       else if (g.time < 12 && g.hasLight) hint = t(`hint.light.${base}`);
       else if (g.time < 16 && !this.touchMode) hint = t('hint.pause.desktop');
+    }
+    // Первый сон: искомая вещь в луче — как её вспомнить: подержать в луче (плейтест 19.11; куратор, пачка 48: это нигде не
+    // сказано). Только до первой вспомненной вещи.
+    const focus0 = g.things.focus;
+    if (this.firstSleep && this.screen === 'play' && g.where === 'main' && s?.active && s.doneCount === 0 && focus0?.memory && !dead && hint === '') hint = t('teach.hold');
+    // Первый сон: как искать — обязательный момент (квиз 19.11, «Звук, свечение, цель»): пока игрок ни разу не погасил фонарь
+    // при искомой вещи, внизу — «погасите фонарь: в темноте искомое видно сквозь стены»; погасил — «вот она».
+    if (this.firstSleep && this.screen === 'play' && g.where === 'main' && g.hasLight && s?.active && !this.darkTaught) {
+      if (light.state === 'off') {
+        this.darkTaught = true;
+        this.analytics.hint('dark.first');
+        this.hud.toast(t('teach.dark.seen'), 5200);
+      } else if (!dead && hint === '' && g.time >= FIRST_ITEM_AT) hint = t(`teach.dark.first.${base}`);
     }
     // В карманном пространстве нижняя строка говорит, как выйти, а под конец — что место уходит само.
     // Заглохший фонарь её не прячет: в светлом пространстве о нём молчат, а строка нужна до самого конца.
@@ -1291,10 +1338,18 @@ export class App {
 
     if (s && g.where !== 'limbo') {
       // Воспоминания, которые уже пришли: что ищем и что вспомнили.
+      // Цель — полной фразой («Найди: будильник»), над ней — счёт по всему сну (квиз 19.11, «Звук, свечение, цель»): раньше
+      // в углу стояло одно слово, и игрок не понимал, что с ним делать (плейтест партнёра 19.11).
       const lines = s.memories
         .filter((m) => m.state !== 'hidden')
-        .map((m) => ({ text: t(`mem.${m.def.id}.task`) + (m.state === 'active' && this.mapHint?.memory === m.def.id ? ` · ${t(`room.${this.mapHint.room}`)}` : ''), done: m.state === 'done' }));
-      this.hud.setGoals('', lines, lines.length > 0);
+        .map((m) => {
+          const what = t(`mem.${m.def.id}.task`) + (m.state === 'active' && this.mapHint?.memory === m.def.id ? ` · ${t(`room.${this.mapHint.room}`)}` : '');
+          return { text: m.state === 'active' ? t('goal.find', { what }) : what, done: m.state === 'done' };
+        });
+      const whole = this.scenes && !this.testLevel;
+      const total = whole ? SCENES : s.memories.length;
+      const done = Math.min(total, whole ? this.sceneDone : s.doneCount);
+      this.hud.setGoals(lines.length > 0 ? t('goal.count', { n: done, total }) : '', lines, lines.length > 0);
       // Рамка — на том, во что игрок всматривается: искомая вещь или любая «неустойчивая».
       const act = s.active;
       const focus = g.things.focus;

@@ -42,6 +42,8 @@ export interface AudioWorld {
   staticLevel: number;
   /** Кривая ощущений за сессию (systems/feel.ts): hum — насколько густеет гул места, 0..1. Нет поля — гул как есть. */
   feelNow?: { hum: number };
+  /** Где искомая вещь, когда её зов слышен (game.ts, memoryCall); null или нет поля — зова нет. */
+  memoryCall?: Vec3 | null;
   listener(): { pos: Vec3; yaw: number };
   consumeFootstep(): boolean;
 }
@@ -55,6 +57,8 @@ const MUSIC = 'music_menu';
  * с расстоянием (движок звука), поэтому чуть громче рассеянной Осыпи рядом, но не как охота.
  */
 export const TRACE_SAND = 0.8;
+/** Громкость зова искомой вещи (still_tone из её места; затухание по расстоянию — у движка). */
+const MEMORY_CALL = 0.7;
 
 /** Что грузить раньше остального: первые секунды вылазки и экран задания. */
 export const LOAD_FIRST: readonly string[] = ['ui_click', 'ui_start', 'hatch', 'lift', 'amb_bunker', 'amb_office', 'amb_yellow', 'amb_station', 'still_tone', 'breath_calm', 'step_concrete', 'step_carpet', 'flash_click', 'flash_die', 'flash_rattle', 'flash_spark', 'music_menu'];
@@ -286,7 +290,12 @@ export class GameAudio {
     const fl = !over && place === 'station' ? (game.flow ?? null) : null;
     const moving = fl ? fl.f : 1;
     a.loop('amb_station', place === 'station' ? live * (0.2 + 0.8 * moving) : 0);
-    a.loop('still_tone', fl ? live * (1 - moving) * (1 - 0.45 * fl.strain * (0.5 + 0.5 * Math.sin(this.clock * 21))) : 0);
+    // Искомая вещь зовёт (плейтест партнёра 19.11: «куда идти»; квиз — «Звук, свечение, цель»): тот же ровный тон (запись
+    // партнёра) звучит из её места — издалека тихо и глухо, на подходе громче, с той стороны, где она. В зале ожидания тон
+    // значит «стой», и там он — прежний, без места.
+    const call = !over && !fl ? (game.memoryCall ?? null) : null;
+    if (fl) a.loop('still_tone', live * (1 - moving) * (1 - 0.45 * fl.strain * (0.5 + 0.5 * Math.sin(this.clock * 21))));
+    else a.loop('still_tone', call ? live * MEMORY_CALL : 0, call ?? undefined);
     if (fl && fl.trains !== this.trains) {
       if (fl.trains > this.trains && active) a.play('train_pass', { volume: 0.9 });
       this.trains = fl.trains;

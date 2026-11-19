@@ -125,6 +125,8 @@ export class SwarmAI {
   private path: number[] = [];
   private repath = 0;
   private burn = 0;
+  /** Явление: сколько секунд свет его ещё не берёт (appear, grace). */
+  private grace = 0;
   private timer = 0;
 
   constructor(
@@ -181,14 +183,18 @@ export class SwarmAI {
     if (this.mode === 'roam') this.mode = 'stalk';
   }
 
-  /** Явление без охоты: собранная фигура стоит в узле и рассыпается, едва на неё посветили. */
-  appear(node: number, seconds: number): void {
+  /**
+   * Явление без охоты: собранная фигура стоит в узле и рассыпается, едва на неё посветили. grace — сколько секунд свет её
+   * ещё не берёт: первое явление должно успеть показаться (плейтест партнёра 19.11).
+   */
+  appear(node: number, seconds: number, grace = 0): void {
     if (!this.nav[node]) return;
     this.place(node);
     this.mode = 'apparition';
     this.cohesion = 0.6;
     this.timer = seconds;
     this.burn = 0;
+    this.grace = grace;
   }
 
   /**
@@ -259,6 +265,12 @@ export class SwarmAI {
   }
 
   /** Узел на расстоянии от lo до hi переходов от игрока; из подходящих — случайный. */
+  /** Все узлы в lo–hi клетках пути от from, куда ей можно (сцена — кусок места). */
+  nodesAround(from: number, lo: number, hi: number): number[] {
+    const all = nodesInRange(this.nav, from, lo, hi);
+    return this.allowed ? all.filter((id) => this.allowed!.has(id)) : all;
+  }
+
   nodeAround(from: number, lo: number, hi: number): number {
     const all = nodesInRange(this.nav, from, lo, hi);
     const ok = this.allowed ? all.filter((id) => this.allowed!.has(id)) : all;
@@ -320,7 +332,8 @@ export class SwarmAI {
     if (this.mode === 'apparition') {
       this.cohesion = Math.min(1, this.cohesion + dt * 2);
       this.timer -= dt;
-      this.burn = inp.beamOnSwarm ? this.burn + dt : Math.max(0, this.burn - dt);
+      this.grace = Math.max(0, this.grace - dt);
+      this.burn = inp.beamOnSwarm && this.grace <= 0 ? this.burn + dt : Math.max(0, this.burn - dt);
       if (this.burn > 0.35 || toPlayer < 5 || this.timer <= 0) {
         this.mode = 'dormant';
         this.cohesion = 0;

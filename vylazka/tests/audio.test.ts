@@ -580,6 +580,26 @@ describe('привязка звуков к игре', () => {
     expect(heard({ world: 'yellow' })).toEqual(['amb_yellow']);
   });
 
+  it('искомая вещь зовёт: ровный тон из её места, пока она есть; в зале ожидания тон — прежний «стой», без места (плейтест 19.11)', () => {
+    const r = new Recorder();
+    const a = new GameAudio(r);
+    a.setScene('play');
+    const w = world({ world: 'shelter' });
+    a.frame(w, 0.016, true);
+    expect(r.loops.get('still_tone')).toBe(0);
+    Object.assign(w, { memoryCall: [6, 0.4, -3] as Vec3 });
+    a.frame(w, 0.016, true);
+    expect(r.loops.get('still_tone')!).toBeGreaterThan(0.3);
+    // В кармане и в лимбо вещь осталась в месте — её не слышно.
+    Object.assign(w, { where: 'pocket', pocket: { kind: 'meadow' } });
+    a.frame(w, 0.016, true);
+    expect(r.loops.get('still_tone')).toBe(0);
+    // Зал ожидания: тон значит «стой» — на ходу его нет, и зов вещи его не включает.
+    Object.assign(w, { where: 'main', pocket: null, world: 'station', flow: { f: 1, strain: 0, train: 0, trains: 0 } });
+    a.frame(w, 0.016, true);
+    expect(r.loops.get('still_tone')).toBe(0);
+  });
+
   it('следы людей: пока спокойно, за стеной тихо разговаривают; чем ближе Осыпь и сильнее паника — тем тише разговор и громче шёпот', () => {
     const r = new Recorder();
     const a = new GameAudio(r);

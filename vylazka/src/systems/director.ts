@@ -40,6 +40,13 @@ export interface DirectorConfig {
   glimpseAt: number;
   /** Когда рой выходит на охоту, с (или раньше — по глубине и целям). */
   releaseAt: number;
+  /**
+   * Охота — после стольких вспомненных вещей, но не раньше первого явления (плейтест партнёра 19.11 и квиз: «показать в
+   * первые моменты, но не сталкивать»; охота — «после первой вещи»). Не задано — только по времени и глубине.
+   */
+  releaseAfterGoals?: number;
+  /** Через сколько секунд после glimpseAt — первое явление (не задано — через 8–22 с). */
+  firstGlimpse?: number;
   /** Пауза между пугалками, от и до, с. */
   scareGap: [number, number];
   /** Глубина и взятые цели торопят рой (спуск на нижний ярус выпускает его сразу). false — только время. */
@@ -53,6 +60,9 @@ export interface DirectorConfig {
   traceAt?: number;
   traceGap?: [number, number];
 }
+
+/** Сколько секунд охота «после вещи» ждёт первого явления, если его всё не удаётся поставить. */
+export const GLIMPSE_WAIT = 30;
 
 export const DEFAULT_DIRECTOR: DirectorConfig = { glimpseAt: 75, releaseAt: 210, scareGap: [28, 55], byDepth: true };
 
@@ -71,6 +81,10 @@ export class Director {
   private last: ScareId | null = null;
   private released = false;
   private nextTrace: number;
+  /** Сколько явлений удалось показать: охота по найденным вещам ждёт первого (releaseAfterGoals). */
+  private glimpses = 0;
+  /** Когда начались явления (фаза 1). */
+  private glimpseFrom = Infinity;
 
   constructor(
     private readonly rng: Rng,
@@ -88,6 +102,20 @@ export class Director {
     if (released) this.phase = 2;
   }
 
+  /**
+   * Явление не удалось поставить (нет узла на виду): не считать его и попробовать снова через пару секунд — первое
+   * явление должно случиться в первую минуту, а не через полминуты-минуту.
+   */
+  missedGlimpse(time: number): void {
+    this.glimpses = Math.max(0, this.glimpses - 1);
+    this.nextGlimpse = time + 2;
+  }
+
+  /** Явления, которые игра показала. */
+  get glimpsed(): number {
+    return this.glimpses;
+  }
+
   /** Рой уже выходил на охоту в этой вылазке. */
   get wasReleased(): boolean {
     return this.released;
@@ -99,20 +127,27 @@ export class Director {
     const deep = inp.tier >= 1;
     if (this.phase === 0 && (inp.time >= c.glimpseAt || (deep && c.byDepth))) {
       this.phase = 1;
-      this.nextGlimpse = inp.time + 8 + this.rng() * 14;
+      this.glimpseFrom = inp.time;
+      this.nextGlimpse = inp.time + (c.firstGlimpse ?? 8 + this.rng() * 14);
     }
-    // На охоту рой выходит по времени, по глубине или когда игрок, спустившись, взял первую цель.
-    if (this.phase === 1 && (inp.time >= c.releaseAt || (c.byDepth && (inp.tier >= Math.max(1, inp.tiers - 1) || (deep && inp.goalsDone >= 1))))) this.phase = 2;
+    // На охоту рой выходит по времени, по глубине или когда игрок, спустившись, взял первую цель; с releaseAfterGoals —
+    // когда вспомнено столько вещей и Осыпь уже показалась (а если показать её негде — игрок стоит в тесной комнате, —
+    // не дольше GLIMPSE_WAIT после начала явлений: иначе охота не началась бы вовсе).
+    const shown = this.glimpses > 0 || inp.time - this.glimpseFrom >= GLIMPSE_WAIT;
+    const byGoals = c.releaseAfterGoals !== undefined && inp.goalsDone >= c.releaseAfterGoals && shown;
+    if (this.phase === 1 && (inp.time >= c.releaseAt || byGoals || (c.byDepth && (inp.tier >= Math.max(1, inp.tiers - 1) || (deep && inp.goalsDone >= 1))))) this.phase = 2;
 
     if (this.phase === 1 && inp.time >= this.nextGlimpse && !inp.swarmBusy) {
       ev.push({ type: 'apparition' });
+      this.glimpses += 1;
       this.nextGlimpse = inp.time + 35 + this.rng() * 30;
     }
     if (this.phase === 2 && !this.released && !inp.swarmBusy) {
       this.released = true;
       ev.push({ type: 'release' });
     }
-    if (this.phase === 0 && inp.time >= this.nextTrace && !inp.swarmBusy) {
+    // Приметы — и между явлениями, пока Осыпь не охотится (на ступенях 1–2 она теперь и видна, и оставляет следы).
+    if (this.phase <= 1 && inp.time >= this.nextTrace && !inp.swarmBusy) {
       ev.push({ type: 'trace' });
       const [lo, hi] = this.cfg.traceGap ?? [90, 140];
       this.nextTrace = inp.time + lo + this.rng() * (hi - lo);

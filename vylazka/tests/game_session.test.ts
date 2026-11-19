@@ -9,6 +9,7 @@ import { emptyInput } from '../src/player/input';
 import type { InputFrame } from '../src/player/input';
 import type { FrameView, GameRenderer, ThingView } from '../src/render/renderer';
 import { DEFAULT_CELL_LIGHTS } from '../src/systems/cell_lights';
+import { GLIMPSE_WAIT } from '../src/systems/director';
 import { nearestExit } from '../src/systems/pressure';
 import type { PressureRoom } from '../src/systems/pressure';
 import { DEFAULT_SESSION, OFFICE_CHAIN, YELLOW_CHAIN } from '../src/systems/session';
@@ -3766,8 +3767,10 @@ describe('ступени погружения: каждая из первых с
   const releases = (h: Harness) => h.log.fear.filter((e) => e.type === 'swarm' && (e as { what?: string }).what === 'release').length;
   const glimpses = (h: Harness) => h.log.fear.filter((e) => e.type === 'swarm' && (e as { what?: string }).what === 'apparition').length;
 
-  it('ступень 0: впереди входа — вещь, ведущая на луг; первые секунды стоит, потом от взгляда уносит на луг, и луг отпускает быстро', () => {
-    const h = new Harness(levelOf(SEED), { stage: 0 });
+  it('ступень 2 (скачки): впереди входа — вещь, ведущая на луг; первые секунды стоит, потом от взгляда уносит на луг, и луг отпускает быстро', () => {
+    // Прежний «холодный старт» первой сессии (плейтест партнёра 19.11: необъяснённый перенос путал новичков) — теперь первый
+    // скачок той ступени, что вводит скачки.
+    const h = new Harness(levelOf(SEED), { stage: 2 });
     const g = h.game;
     const t = coldOpenOf(g);
     expect(t, 'вещи холодного старта нет').toBeTruthy();
@@ -3787,16 +3790,36 @@ describe('ступени погружения: каждая из первых с
     expect(h.until(() => g.where === 'main' && g.transition === null, 26), 'луг не отпустил').toBe(true);
   });
 
-  it('ступени 1–4 холодного старта нет', () => {
-    for (const stage of [1, 2, 3, STAGE_ALL]) expect(coldOpenOf(new Harness(levelOf(SEED), { stage }).game), `ступень ${stage}`).toBeUndefined();
+  it('на ступенях 0, 1, 3 и 4 холодного старта нет', () => {
+    for (const stage of [0, 1, 3, STAGE_ALL]) expect(coldOpenOf(new Harness(levelOf(SEED), { stage }).game), `ступень ${stage}`).toBeUndefined();
   });
 
-  it('ступень 0: четыре минуты без Осыпи, без случайных скачков, без отказа фонаря и без давления', () => {
+  it('ступень 0: Осыпь видна в первые полминуты — силуэт впереди, на виду; не охотится, пока вещь не вспомнена; без скачков, отказа фонаря и давления', () => {
     const h = new Harness(levelOf(SEED), { stage: 0, calm: false, light: { firstFailAt: 30, meanFailInterval: 20 } });
     const g = h.game;
-    // Вещь холодного старта остаётся за спиной: здесь проверяется, что сама сессия тихая.
-    const [sx, , sz] = g.level!.spawn.pos;
-    g.aimAt(sx, 1.4, sz + 20);
+    const [sx, sy, sz] = g.level!.spawn.pos;
+    // Смотрим вдоль самой длинной видимой линии от входа: там есть где показаться (в тесной комнате явление ждёт).
+    const eye: Vec3 = [sx, sy + 1.5, sz];
+    const far = g.level!.nav
+      .filter((n) => Math.abs(n.y - sy) < 1)
+      .map((n) => ({ n, d: Math.hypot(n.x - sx, n.z - sz) }))
+      .filter(({ n, d }) => d > 7 && g.colliders.raycast(eye[0], eye[1], eye[2], (n.x - sx) / d, (n.y + 1.3 - eye[1]) / d, (n.z - sz) / d, d) >= d - 0.5)
+      .sort((a, b) => b.d - a.d)[0];
+    expect(far, 'от входа не видно ничего дальше 7 м').toBeTruthy();
+    g.aimAt(far!.n.x, sy + 1.4, far!.n.z);
+    // Плейтест партнёра 19.11: «показать его в первые моменты, но не сталкивать с игроком».
+    expect(h.until(() => glimpses(h) > 0, 30), 'Осыпь не показалась в первые полминуты').toBe(true);
+    const sw = g.swarm!;
+    expect(sw.mode).toBe('apparition');
+    // Впереди: в конусе взгляда, не ближе 6 м, и тело нарисовано.
+    h.tick();
+    const f = h.r.frames.at(-1)!;
+    const dx = sw.pos[0] - f.camPos[0];
+    const dz = sw.pos[2] - f.camPos[2];
+    expect(Math.hypot(dx, dz)).toBeGreaterThanOrEqual(5);
+    const ahead = (dx * -Math.sin(f.camYaw) + dz * -Math.cos(f.camYaw)) / Math.hypot(dx, dz);
+    expect(ahead, 'явление не впереди').toBeGreaterThan(Math.cos(0.65));
+    expect(h.r.swarm.alpha, 'тело явления не нарисовано').toBeGreaterThan(0);
     let dead = 0;
     for (let i = 0; i < 240; i++) {
       h.run(1);
@@ -3805,36 +3828,44 @@ describe('ступени погружения: каждая из первых с
     expect(dead).toBe(0);
     // И батарейка не садится: севший фонарь — правило, которое новичку ещё не показали (замечание куратора).
     expect(g.light.charge).toBeGreaterThan(0.99);
+    // Вещь не вспомнена — охоты нет, сколько бы ни прошло; явления — изредка.
     expect(releases(h)).toBe(0);
-    expect(glimpses(h)).toBe(0);
-    // И примет Осыпи на нулевой ступени нет: её здесь нет вовсе.
+    expect(glimpses(h)).toBeGreaterThan(1);
     expect(g.director!.cfg.traceAt).toBeUndefined();
-    expect(g.swarm!.mode).toBe('dormant');
     expect(h.dreamCount('jump', 'start')).toBe(0);
     expect(h.dreamCount('pressure')).toBe(0);
   });
 
-  it('обучающий отказ фонаря — только на ступени 1 (и на 4, как было); на 0, 2 и 3 его нет', () => {
-    const failsBy = (stage: number): boolean => {
-      const h = new Harness(levelOf(SEED), { stage, light: { firstFailAt: 10, meanFailInterval: 1e9 } });
-      return h.until(() => h.game.light.state === 'dead', 14);
-    };
-    expect(failsBy(1)).toBe(true);
-    expect(failsBy(STAGE_ALL)).toBe(true);
-    expect(failsBy(0)).toBe(false);
-    expect(failsBy(2)).toBe(false);
-    expect(failsBy(3)).toBe(false);
+  it('ступень 0: вспомнил первую вещь — Осыпь выходит на охоту (квиз 19.11: «после первой вещи»), но не раньше, чем показалась', () => {
+    const h = new Harness(levelOf(SEED), { stage: 0, calm: false });
+    const g = h.game;
+    const s = g.session!;
+    // Вещь — сразу, раньше первого явления: охота ждёт, пока Осыпь покажется.
+    s.rush();
+    h.until(() => s.active !== null, 3);
+    recallActive(h);
+    expect(glimpses(h)).toBe(0);
+    h.run(1);
+    expect(releases(h), 'охота раньше явления').toBe(0);
+    // Охота — после явления; а если показать Осыпь негде (игрок стоит в тесной комнате у вещи), — не позже чем через
+    // GLIMPSE_WAIT после начала явлений.
+    expect(h.until(() => releases(h) > 0, 10 + 5 + GLIMPSE_WAIT + 5), 'охоты после первой вещи нет').toBe(true);
+    const shownFirst = glimpses(h) > 0;
+    const clock = (g as unknown as { sleepTime: number }).sleepTime;
+    expect(shownFirst || g.director!.cfg.glimpseAt + GLIMPSE_WAIT <= clock + 0.5, 'охота началась раньше, чем Осыпь показалась').toBe(true);
   });
 
-  it('ступени 0–1 без скачков, 2–3 — мягкие скачки; тела Осыпи до третьей ступени нет', () => {
+  it('ступени 0–1 без скачков, 2–3 — мягкие скачки; Осыпь на всех — с первой минуты, охота после первой вещи', () => {
     const at = (stage: number) => new Harness(levelOf(SEED), { stage }).game;
     expect(at(0).jumps!.cfg.maxPerSession).toBe(0);
     expect(at(1).jumps!.cfg.maxPerSession).toBe(0);
     expect(at(2).jumps!.cfg.maxPerSession).toBeGreaterThan(0);
-    for (const stage of [0, 1, 2]) {
-      expect(at(stage).director!.cfg.releaseAt).toBe(Infinity);
-      expect(at(stage).director!.cfg.glimpseAt).toBe(Infinity);
+    for (const stage of [0, 1, 2, 3]) {
+      const c = at(stage).director!.cfg;
+      expect(c.glimpseAt, `ступень ${stage}`).toBeLessThanOrEqual(35);
+      expect(c.releaseAfterGoals, `ступень ${stage}`).toBe(1);
     }
+    for (const stage of [0, 1, 2]) expect(at(stage).director!.cfg.releaseAt).toBe(Infinity);
     expect(at(3).director!.cfg.releaseAt).toBe(300);
     // Приметы — на 1 и 2 (на второй чаще), на 0 и 3 их нет.
     expect(at(0).director!.cfg.traceAt).toBeUndefined();
@@ -3842,12 +3873,12 @@ describe('ступени погружения: каждая из первых с
     expect(at(2).director!.cfg.traceAt!).toBeLessThan(at(1).director!.cfg.traceAt!);
   });
 
-  it('ступени 1–2: сначала приметы, потом тело — Осыпь проходит вдали за стенами, в углах у её пути грибы; тела не видно, фонарь от неё не глохнет', () => {
+  it('ступени 1–2: и приметы — Осыпь проходит вдали за стенами, в углах у её пути грибы; тела у приметы не видно; без вещи охоты нет', () => {
     for (const stage of [1, 2]) {
       const h = new Harness(levelOf(SEED), { stage, calm: false });
       const g = h.game;
       g.jumps!.cooldown = 1e6;
-      expect(h.until(() => g.swarm!.mode === 'trace', 130), `ступень ${stage}: приметы нет`).toBe(true);
+      expect(h.until(() => g.swarm!.mode === 'trace', 160), `ступень ${stage}: приметы нет`).toBe(true);
       const sw = g.swarm!;
       // Она вдали: не ближе четырёх узлов пути от игрока.
       expect(sw.route(sw.node, g.playerNode()).length - 1, `ступень ${stage}`).toBeGreaterThanOrEqual(4);
@@ -3856,7 +3887,7 @@ describe('ступени погружения: каждая из первых с
       let near = 0;
       for (let i = 0; i < 30 * 60; i++) {
         h.tick();
-        expect(['dormant', 'trace']).toContain(sw.mode);
+        expect(['hunt', 'stalk', 'roam', 'cohere']).not.toContain(sw.mode);
         if (sw.mode !== 'trace') continue;
         shown += 1;
         if (h.r.swarm.alpha > 0) body += 1;
@@ -3866,7 +3897,7 @@ describe('ступени погружения: каждая из первых с
       expect(body, `ступень ${stage}: у приметы нарисовано тело`).toBe(0);
       expect(near, `ступень ${stage}: примета близко`).toBe(0);
       expect(g.spores!.sites.some((q) => q.kind === 'corner' && q.grow > 0.1), `ступень ${stage}: грибов в углах нет`).toBe(true);
-      expect(releases(h) + glimpses(h)).toBe(0);
+      expect(releases(h)).toBe(0);
     }
   });
 

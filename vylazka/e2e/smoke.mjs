@@ -1859,7 +1859,8 @@ async function scenarioSession(browser, baseUrl) {
     const flash = revealed.flash;
     const rows = await page.$$eval('.vz-hud__goal', (els) => els.map((e) => ({ text: e.textContent, done: e.classList.contains('is-done') })));
     const flashOk = !!active && flash.on && flash.text === memText(RU, active.id, 'flash');
-    const rowsOk = rows.length === k + 1 && rows.at(-1).text === memText(RU, active?.id, 'task') && !rows.at(-1).done;
+    // Искомое — полной фразой «Найди: …» (плейтест партнёра 19.11), вспомненное — одним словом, зачёркнутым.
+    const rowsOk = rows.length === k + 1 && rows.at(-1).text === RU['goal.find'].replace('{what}', memText(RU, active?.id, 'task')) && !rows.at(-1).done;
     if (!(mem && flashOk && rowsOk)) progress = false;
     check(`воспоминание ${k + 1}: на экране вспышка с текстом «${active ? memText(RU, active.id, 'flash') : '?'}», в списке слева появилась строка`, !!mem && flashOk && rowsOk, JSON.stringify({ mem, flash, rows: rows.length }));
     if (wantShots && k === 0) {
@@ -2079,13 +2080,14 @@ async function scenarioScenes(browser, baseUrl) {
 
 /** Вещи под взглядом и скачки в карманные пространства. */
 /**
- * Ступени погружения (предложения 17.11, партнёр: «Далее делай предложенные рекомендации по гемплею»): на нулевой ступени
+ * Ступени погружения (предложения 17.11, партнёр: «Далее делай предложенные рекомендации по гемплею»): на ступени скачков (2)
  * впереди входа стоит вещь, ведущая на луг; первые секунды она только стоит, потом от взгляда уносит на луг, и луг
- * отпускает быстро. Ступень задаётся адресом (?stage=0), как и #stage0 в ссылке у партнёра.
+ * отпускает быстро. Раньше это было на нулевой ступени — необъяснённый перенос в первую минуту путал новичков (плейтест
+ * партнёра 19.11). Ступень задаётся адресом (?stage=2), как и #stage2 в ссылке у партнёра.
  */
 async function scenarioStages(browser, baseUrl) {
-  section('Ступени погружения: холодный старт на нулевой ступени');
-  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&stage=0');
+  section('Ступени погружения: холодный старт на ступени скачков');
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&stage=2');
   await page.click('.vz-overlay');
   await sleep(300);
   await vz(page, () => window.__vz.freeze(true));
@@ -2098,7 +2100,7 @@ async function scenarioStages(browser, baseUrl) {
     check('первый сон: убежище, одна сцена с тремя вещами, следующая сцена не собирается', world === 'shelter' && first.scenes.on && first.session.memories.length === 3 && !first.scenes.queued, JSON.stringify({ world, scenes: first.scenes, n: first.session.memories.length }));
   }
   const cold = (await vz(page, () => window.__vz.things())).find((t) => t.fate === 'jump' && t.still);
-  check('нулевая ступень: впереди входа стоит вещь, ведущая на луг, и пока только стоит', !!cold && st.where === 'main', JSON.stringify(cold ?? null));
+  check('ступень скачков: впереди входа стоит вещь, ведущая на луг, и пока только стоит', !!cold && st.where === 'main', JSON.stringify(cold ?? null));
   if (cold) {
     const near = await vz(page, (id) => window.__vz.gotoThing(id, 3), cold.id);
     st = await vz(page, () => window.__vz.step(10 * 60));
@@ -2329,7 +2331,8 @@ async function scenarioPockets(browser, baseUrl) {
   check('кукольный домик с искомым: строка при входе про огонёк на столе', !!mem && r.flash.on && r.flash.text === RU['pocket.dollhouse.enter'], JSON.stringify(r.flash));
   const map = await lookUntilDone('pocket', 'focus');
   const row = map.rows.at(-1) ?? '';
-  const roomName = row.startsWith(`${task} · `) ? row.slice(task.length + 3) : null;
+  const lead = RU['goal.find'].replace('{what}', `${task} · `);
+  const roomName = row.startsWith(lead) ? row.slice(lead.length) : null;
   const roomType = Object.keys(RU).find((k) => k.startsWith('room.') && RU[k] === roomName)?.slice(5);
   const expectMap = RU['pocket.dollhouse.map'].replace('{what}', task).replace('{room}', roomName ?? '?').replace('{tier}', tierName(mem?.pos[1] ?? 0));
   check('макет: на экране «что: помещение, ярус» — помещение настоящее, ярус — ярус вещи', map.done === true && map.flash.on && map.flash.text === expectMap && !!roomType && level.rooms.some((x) => x.type === roomType && x.tier === tier), JSON.stringify({ flash: map.flash.text, expectMap, roomType, tier }));
