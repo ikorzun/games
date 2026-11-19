@@ -47,7 +47,7 @@ import { placeable, placedProblems, PLACED_OPEN, removedProblems, swapFits } fro
 import type { Aabb } from '../../src/world/colliders';
 import type { LevelObject } from '../../src/world/objects';
 import type { PlacedOpen, PlacedSpec, RemovedSpec } from '../../src/world/placed';
-import { doorsAt, fitMoved, fitThing, gameNth, moveSpot, NEVER, placedSeed, placeThings, rests, restTop, roomDoors, roomIndex, roomNear, rotOf, throatBox } from '../../src/world/placed_place';
+import { doorsAt, fitMoved, fitThing, gameNth, moveSpot, NEVER, placedSeed, placeThings, rests, restTop, roomDoors, roomIndex, roomNear, rotOf, throatBox, worldBox } from '../../src/world/placed_place';
 import type { Box, PlacedSpot } from '../../src/world/placed_place';
 import { placeFigures } from '../../src/world/figure_place';
 import type { Turn } from '../../src/world/placed_place';
@@ -1589,15 +1589,27 @@ function supportTops(sp: LiftSpan, self = 0): number[] {
     // Грани, смотрящие вверх, прямо под серединой: столешница, тарелка, хлебница, сиденье — каждая своей высотой.
     tops.push(...(pw.surfaces?.(o.id, cx, cz, floorY + 0.03, hi) ?? [o.max[1]]));
   }
-  for (const m of edits.moved) {
-    if (m.box && !(cur?.kind === 'thing' && m.spec.id === cur.spec.id) && inside(m.box.minX, m.box.maxX, m.box.minZ, m.box.maxZ)) tops.push(m.box.maxY);
-  }
-  for (const g of ghosts.children) {
-    if (!savedThings.has(g.userData.ghost as string)) continue;
-    const bb = new THREE.Box3().setFromObject(g);
-    if (inside(bb.min.x, bb.max.x, bb.min.z, bb.max.z)) tops.push(bb.max.y);
-  }
+  // Свои и передвинутые вещи здесь — тоже по граням (лучом по их призракам).
+  tops.push(...ghostTops(cx, cz, cur?.spec.id ?? '').filter((t) => t > floorY + 0.03 && t <= hi));
   return [...new Set(tops.map((t) => Math.round(t * 1000) / 1000))].sort((a, b) => a - b);
+}
+
+/**
+ * Верхние грани своих и передвинутых вещей этого помещения (их призраков) прямо под точкой (x, z): луч сверху, грани лицом вверх.
+ * Вещи уровня конструктор собирает без записей партнёра — в его сетке их нет (в игре они — объекты уровня, restTop их видит).
+ */
+const downRay = new THREE.Raycaster();
+function ghostTops(x: number, z: number, self: string): number[] {
+  ghosts.updateMatrixWorld(true);
+  downRay.set(new THREE.Vector3(x, ceilY + 1, z), new THREE.Vector3(0, -1, 0));
+  const out: number[] = [];
+  for (const h of downRay.intersectObjects(ghosts.children, false)) {
+    const id = h.object.userData.ghost as string;
+    if (!h.face || id === self || savedFigs.has(id)) continue;
+    if (h.face.normal.clone().transformDirection(h.object.matrixWorld).y < 0.5) continue;
+    out.push(h.point.y);
+  }
+  return out;
 }
 
 /**
@@ -1610,7 +1622,12 @@ function restCur(): string {
   const p = ALL_PROPS[c.spec.prop]!;
   if (c.spec.hang) return `Висит в воздухе: ${fmtM(c.at[1] - floorY)} над полом.`;
   if (!rests(c.spec, p)) return liftText();
-  const r = restTop(p, c.at, c.rot, floorY, pw);
+  // Свои и передвинутые вещи — тоже опора (грани призраков под серединой; середина — как у restTop).
+  const b = worldBox(p, c.at, c.rot);
+  const cx = (b.minX + b.maxX) / 2;
+  const cz = (b.minZ + b.maxZ) / 2;
+  const own = ghostTops(cx, cz, c.spec.id).map((y) => ({ minX: cx - 0.05, maxX: cx + 0.05, minZ: cz - 0.05, maxZ: cz + 0.05, minY: y - 0.01, maxY: y }));
+  const r = restTop(p, c.at, c.rot, floorY, pw, own);
   if (Math.abs(r.y - c.at[1]) > 1e-4) {
     c.at = [c.at[0], r.y, c.at[2]];
     derive(c);
@@ -1618,7 +1635,7 @@ function restCur(): string {
     syncPanel();
   }
   if (r.y - floorY < 0.005) return 'Под ней ничего нет — стоит на полу. Чтобы висела в воздухе, отметь «Висит в воздухе».';
-  return `Лежит на «${ruShort(r.under?.name ?? '')}»: ${fmtM(r.y - floorY)} над полом.`;
+  return r.under ? `Лежит на «${ruShort(r.under.name)}»: ${fmtM(r.y - floorY)} над полом.` : `Лежит на твоей вещи: ${fmtM(r.y - floorY)} над полом.`;
 }
 
 /** Поставить выбранное на высоту raw (at[1]): прилипание к опоре, шаг, пол, 2,6 м и потолок. */
