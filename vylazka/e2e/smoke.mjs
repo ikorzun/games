@@ -159,6 +159,22 @@ async function openPage(browser, baseUrl, query, ctxOpts = {}, onConsole = null,
 
 const vz = (page, fn, arg) => page.evaluate(fn, arg);
 const state = (page) => page.evaluate(() => window.__vz.state());
+/**
+ * Настройки — под шестерёнкой справа вверху, выпадающим списком (слова партнёра 19.11). Открыть список (если закрыт),
+ * закрыть его, прочитать выбранный вариант сегмент-контрола, выбрать вариант. p — страница или кадр iframe.
+ */
+const openSettings = async (p) => {
+  if (!(await p.isVisible('.vz-settings'))) await p.click('.vz-overlay__gear');
+  await p.waitForSelector('.vz-settings', { state: 'visible', timeout: 5000 });
+};
+const closeSettings = async (p) => {
+  if (await p.isVisible('.vz-settings')) await p.click('.vz-overlay__gear');
+};
+const segOn = (p, name) => p.textContent(`.vz-seg--${name} .vz-seg__opt.is-on`).then((x) => x?.trim());
+const segPick = async (p, name, value) => {
+  await openSettings(p);
+  await p.click(`.vz-seg--${name} .vz-seg__opt[data-v="${value}"]`);
+};
 const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
 
 /**
@@ -203,24 +219,69 @@ async function scenarioPlay(browser, baseUrl) {
   if (plainBuild) {
     const t = await openPage(browser, baseUrl, '?q=low&fail=0&touch=0&level=test', { locale: 'ru-RU' });
     const tp = t.page;
-    const opt = (name) => tp.textContent(`.vz-overlay__opt--${name}`).then((x) => x?.trim());
-    check('без ?lang заставка английская, даже если язык браузера русский', (await tp.textContent('.vz-overlay__title')) === 'UNTITLED SESSION' && (await tp.textContent('.vz-overlay__prompt')) === 'Click to begin' && (await tp.evaluate(() => document.documentElement.lang)) === 'en');
     const lines = await tp.$$eval('.vz-overlay__line', (els) => els.map((e) => e.textContent));
-    check('на заставке есть как играть и предупреждение о вспышках', lines.includes(EN['title.how']) && lines.includes(EN['title.warn']) && /flashing/i.test(EN['title.warn']), JSON.stringify(lines));
-    check('на заставке видны кнопки «Вспышки» и «Язык» (и звук, качество)', (await Promise.all(['flash', 'lang', 'sound', 'quality'].map((n) => tp.isVisible(`.vz-overlay__opt--${n}`)))).every(Boolean) && (await opt('flash')) === 'Flashing: full' && (await opt('lang')) === 'Language: English');
-    await tp.click('.vz-overlay__opt--flash');
-    await tp.click('.vz-overlay__opt--lang');
+    check('без ?lang заставка английская, даже если язык браузера русский', (await tp.textContent('.vz-overlay__title')) === 'UNTITLED SESSION' && (await tp.textContent('.vz-overlay__prompt')) === 'Click to begin' && (await tp.evaluate(() => document.documentElement.lang)) === 'en');
+    // Слова партнёра 19.11: «Оставляем название и сразу под ним про сон и начать играть».
+    check('на заставке — название, под ним строка про сон и «начать»; подзаголовка и строк о вспышках и счёте нет', lines.length === 1 && lines[0] === EN['title.how'] && (await tp.textContent('.vz-overlay__sub')) === '', JSON.stringify(lines));
+    const look = await tp.evaluate(() => {
+      const title = getComputedStyle(document.querySelector('.vz-overlay__title'));
+      const how = getComputedStyle(document.querySelector('.vz-overlay__line--plain'));
+      return { title: title.fontFamily, tw: title.fontWeight, how: Number(how.fontWeight), dm: document.fonts.check('300 40px "DM Mono"', 'UNTITLED'), thin: document.fonts.check('200 16px "JetBrains Mono"', 'Ag') };
+    });
+    check('название — DM Mono Light, строка про сон — тонкая (шрифты в сборке, загружены)', /DM Mono/.test(look.title) && look.tw === '300' && look.how <= 300 && look.dm && look.thin, JSON.stringify(look));
+    // Светлячки: точки на холсте за карточкой — есть, но еле заметные.
+    await sleep(1500);
+    const flies = await tp.evaluate(() => {
+      const c = document.querySelector('.vz-fireflies');
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let lit = 0;
+      let top = 0;
+      for (let i = 3; i < d.length; i += 4) {
+        if (d[i] > 8) lit += 1;
+        top = Math.max(top, d[i]);
+      }
+      return { lit, top, share: lit / (c.width * c.height) };
+    });
+    check('на фоне заставки светлячки из точек: они есть, их мало, самая яркая точка — не ярче трети белого', flies.lit > 0 && flies.share < 0.01 && flies.top <= 100, JSON.stringify(flies));
+    check('настройки спрятаны под шестерёнкой справа вверху; список закрыт', (await tp.isVisible('.vz-overlay__gear')) && !(await tp.isVisible('.vz-settings')) && (await tp.evaluate(() => { const r = document.querySelector('.vz-overlay__gear').getBoundingClientRect(); return r.right > innerWidth - 80 && r.top < 80; })));
+    // Предупреждение о вспышках — тихой строкой у нижнего края (куратор, пачка 50, 308): видно до первой вспышки.
+    const note = await tp.evaluate(() => {
+      const el = document.querySelector('.vz-overlay__note');
+      const r = el.getBoundingClientRect();
+      return { text: el.textContent, bottom: r.bottom, h: innerHeight, title: document.querySelector('.vz-overlay__title').getBoundingClientRect().bottom };
+    });
+    check('предупреждение о вспышках — тихой строкой у нижнего края заставки, ниже названия', note.text === EN['title.warn'] && note.bottom > note.h * 0.8 && note.bottom <= note.h && note.title < note.h * 0.7, JSON.stringify(note));
+    await openSettings(tp);
+    const info = await tp.$$eval('.vz-settings__note', (els) => els.map((e) => e.textContent));
+    check(
+      'в списке — сегменты звука, качества, обзора, яркости, вспышек и языка (у языка — глобус); вспышки: мягкие или почти незаметные (полных нет)',
+      (await Promise.all(['sound', 'quality', 'sens', 'bright', 'flash', 'lang'].map((n) => tp.isVisible(`.vz-seg--${n}`)))).every(Boolean) &&
+        (await tp.$$eval('.vz-seg--flash .vz-seg__opt', (els) => els.map((e) => e.dataset.v).join())) === 'soft,faint' &&
+        (await segOn(tp, 'flash')) === EN['ui.flash.soft'] &&
+        (await segOn(tp, 'lang')) === 'English' &&
+        (await tp.isVisible('.vz-settings__row--lang .vz-settings__globe')) &&
+        info.length === 0,
+      JSON.stringify({ flash: await segOn(tp, 'flash'), lang: await segOn(tp, 'lang'), info }),
+    );
+    await segPick(tp, 'flash', 'faint');
+    await segPick(tp, 'lang', 'ru');
     await sleep(200);
     const s0 = await state(tp);
-    check('нажатие на настройки не начинает игру; подписи сменились (вспышки мягкие, язык русский)', s0.screen === 'title' && s0.overlay === 'start' && (await opt('flash')) === 'Вспышки: мягкие' && (await opt('lang')) === 'Язык: Русский' && (await tp.textContent('.vz-overlay__prompt')) === 'Нажмите, чтобы начать' && (await tp.evaluate(() => document.documentElement.lang)) === 'ru', JSON.stringify({ screen: s0.screen, flash: await opt('flash'), lang: await opt('lang') }));
+    check('нажатия в списке не начинают игру; выбор сменился (вспышки почти незаметные, язык русский)', s0.screen === 'title' && s0.overlay === 'start' && (await segOn(tp, 'flash')) === 'почти незаметные' && (await segOn(tp, 'lang')) === 'Русский' && (await tp.textContent('.vz-overlay__prompt')) === 'Нажмите, чтобы начать' && (await tp.evaluate(() => document.documentElement.lang)) === 'ru', JSON.stringify({ screen: s0.screen, flash: await segOn(tp, 'flash'), lang: await segOn(tp, 'lang') }));
+    // Нажатие мимо открытого списка его закрывает и игру не начинает.
+    await tp.click('.vz-overlay', { position: { x: 20, y: 200 } });
+    await sleep(150);
+    const s1 = await state(tp);
+    check('нажатие мимо списка закрывает его и не начинает игру', !(await tp.isVisible('.vz-settings')) && s1.screen === 'title' && s1.overlay === 'start', JSON.stringify({ open: await tp.isVisible('.vz-settings'), screen: s1.screen }));
     await sleep(300);
     await tp.reload({ waitUntil: 'load' });
     await tp.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
-    check('после перезагрузки выбор запомнен: вспышки мягкие, язык русский', (await opt('flash')) === 'Вспышки: мягкие' && (await opt('lang')) === 'Язык: Русский' && (await tp.evaluate(() => document.documentElement.lang)) === 'ru');
-    await tp.click('.vz-overlay__opt--lang');
-    await tp.click('.vz-overlay__opt--flash');
+    await openSettings(tp);
+    check('после перезагрузки выбор запомнен: вспышки почти незаметные, язык русский', (await segOn(tp, 'flash')) === 'почти незаметные' && (await segOn(tp, 'lang')) === 'Русский' && (await tp.evaluate(() => document.documentElement.lang)) === 'ru');
+    await segPick(tp, 'lang', 'en');
+    await segPick(tp, 'flash', 'soft');
     await sleep(200);
-    check('кнопки работают в обе стороны: снова английский и полные вспышки', (await opt('lang')) === 'Language: English' && (await opt('flash')) === 'Flashing: full');
+    check('переключатели работают в обе стороны: снова английский и мягкие вспышки', (await segOn(tp, 'lang')) === 'English' && (await segOn(tp, 'flash')) === EN['ui.flash.soft']);
     // Титры: авторы моделей мебели (полка Sand3D, CC BY 4.0) — простым текстом, без ссылок; нажатие возвращает на заставку.
     await tp.click('.vz-overlay__opt--credits');
     await sleep(150);
@@ -530,7 +591,8 @@ async function scenarioWorlds(browser, baseUrl) {
     const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113');
     const place = () => page.textContent('.vz-overlay__opt--place').then((x) => x?.trim());
     const world = async () => (await vz(page, () => window.__vz.level())).world;
-    check('на заставке кнопка «Место», по умолчанию — убежище', (await page.isVisible('.vz-overlay__opt--place')) && (await place()) === RU['ui.place.shelter'] && (await world()) === 'shelter', `«${await place()}», мир ${await world()}`);
+    await openSettings(page);
+    check('на заставке кнопка «Место» (в списке настроек), по умолчанию — убежище', (await page.isVisible('.vz-overlay__opt--place')) && (await place()) === RU['ui.place.shelter'] && (await world()) === 'shelter', `«${await place()}», мир ${await world()}`);
     await page.click('.vz-overlay__opt--place');
     let lvl = await vz(page, () => window.__vz.level());
     let st = await state(page);
@@ -547,6 +609,7 @@ async function scenarioWorlds(browser, baseUrl) {
     await page.reload({ waitUntil: 'load' });
     await page.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
     check('после перезагрузки место запомнено', (await place()) === RU['ui.place.yellow'] && (await world()) === 'yellow', `«${await place()}», мир ${await world()}`);
+    await openSettings(page);
     await page.click('.vz-overlay__opt--place');
     {
       // Зал ожидания — локация основной модели (docs/vylazka/station.md): время идёт, только пока идёшь.
@@ -558,13 +621,16 @@ async function scenarioWorlds(browser, baseUrl) {
     await page.click('.vz-overlay__opt--place');
     check('по кругу — снова убежище', (await place()) === RU['ui.place.shelter'] && (await world()) === 'shelter', `«${await place()}», мир ${await world()}`);
     // На паузе места не сменить: кнопки нет. Ждём не по сроку, а по делу: после смены места уровень
-    // пересобирается, и на медленной машине игра начинается позже.
+    // пересобирается, и на медленной машине игра начинается позже. Открытый список сначала закрывается.
+    await closeSettings(page);
     await page.click('.vz-overlay');
     await page.waitForFunction(() => window.__vz.state().overlay === 'hidden' && window.__vz.state().paused === false, null, { timeout: 20000 }).catch(() => {});
     await page.keyboard.press('KeyP');
     await page.waitForFunction(() => window.__vz.state().paused === true, null, { timeout: 10000 }).catch(() => {});
     st = await state(page);
-    check('посреди вылазки место не сменить: на паузе кнопки «Место» нет', st.paused === true && !(await page.isVisible('.vz-overlay__opt--place')), `пауза ${st.paused}`);
+    await openSettings(page);
+    check('посреди вылазки место не сменить: на паузе в списке настроек кнопки «Место» нет', st.paused === true && (await page.isVisible('.vz-settings')) && !(await page.isVisible('.vz-overlay__opt--place')), `пауза ${st.paused}`);
+    await closeSettings(page);
     check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
     await context.close();
   }
@@ -1698,10 +1764,9 @@ async function scenarioRooms(browser, baseUrl) {
   const wc = { red: await redInDark() };
   check('помещение с сеткой: красного в кадре больше, чем в обычном; фонарь светит', wireRoom && st.roomFx === 'wire' && st.fx.wire > 0.3 && wc.red > normRed + 0.01 && st.fx.light > 0.9 && Math.max(...wg) > 60, `красного ${wc.red.toFixed(4)} против ${normRed.toFixed(4)}, сетка ${st.fx.wire.toFixed(2)}`);
 
-  // Строб: вспышки не чаще трёх в секунду; с настройкой «мягкие вспышки» резких скачков нет.
-  // Частоту считаем по состоянию игры на каждом шаге (сила вспышки — число, его не надо читать с
-  // экрана), а картинку подтверждаем несколькими кадрами: чтение пикселей в программном рендере
-  // медленное, и сотни чтений подряд растягивали проверку на минуты.
+  // Строб: вспышки всегда мягкие (слова партнёра 19.11: «вспышки всегда мягкие или почти незаметные, настрйку Полные убери»):
+  // сила света плывёт без скачков; «почти незаметные» — ещё тише. Силу считаем по состоянию игры на каждом шаге (её не
+  // надо читать с экрана), а картинку подтверждаем несколькими кадрами: чтение пикселей в программном рендере медленное.
   const series = () =>
     vz(page, () => {
       const out = [];
@@ -1710,60 +1775,36 @@ async function scenarioRooms(browser, baseUrl) {
     });
   const rises = (s, d) => s.flatMap((x, i) => (i > 0 && x - s[i - 1] > d ? [i] : []));
   const jumpMax = (s) => Math.max(...s.slice(1).map((x, i) => Math.abs(x - s[i])));
-  /**
-   * Средняя яркость кадра в момент, когда сила вспышки подходит под условие. Ждём до 150 шагов:
-   * вспышка идёт раз в 23 шага, и пятая часть ударов пропускается, так что пауза в 46 шагов — обычное дело.
-   */
-  const frameWhen = async (want) => {
-    for (let i = 0; i < 150; i++) {
-      const s = await vz(page, () => window.__vz.step(1));
-      if (want(s.fx.strobe)) return mean(await vz(page, () => window.__vz.probe()));
-    }
-    return null;
-  };
-  const measure = async (softFlash) => {
+  const measure = async (faint) => {
     await vz(page, (id) => window.__vz.gotoRoom(id), plain[0]);
     await vz(page, () => window.__vz.step(300));
     const there = await vz(page, () => window.__vz.gotoFx('strobe'));
-    await vz(page, (c) => window.__vz.calmFlash(c), softFlash);
+    await vz(page, (c) => window.__vz.faintFlash(c), faint);
     const s0 = await vz(page, () => window.__vz.step(30));
     return { there: there && s0.roomFx === 'strobe', s: await series() };
   };
-  const softRun = await measure(true);
-  const hardRun = await measure(false);
+  const faintRun = await measure(true);
+  const softRun = await measure(false);
   const soft = softRun.s;
-  const hard = hardRun.s;
-  const strobeRoom = softRun.there && hardRun.there;
-  const flashes = rises(hard, 0.5);
-  const gaps = flashes.slice(1).map((x, i) => (x - flashes[i]) / 60);
-  check('строб: вспышек за 4 секунды не больше 12 и не чаще трёх в секунду', strobeRoom && flashes.length >= 3 && flashes.length <= 12 && Math.min(...gaps) >= 1 / 3 - 0.01, `вспышек ${flashes.length}, наименьший промежуток ${Math.min(...gaps).toFixed(2)} с`);
-  // Картинка: кадр со вспышкой заметно светлее промежутка (три пары, чтобы не попасть на случайность).
-  // Промежуток теперь не чёрный: без света место держится в памяти и тянет след (длинная выдержка),
-  // поэтому вспышка не обрывается, а гаснет. Снимаем три кадра: вспышка, сразу после неё и через
-  // четверть секунды (если следующая вспышка ещё не началась).
-  // Фонарь на это время выключен: след бывает только без света (при свете длинной выдержки нет), а луч между
-  // вспышками держит кадр ровным — в CI при горящем фонаре сразу после вспышки 38, через четверть секунды 37.
-  // Раньше к этому месту фонарь мог заглохнуть сам; в режиме проверок (?fail=0) случайных отказов больше нет.
-  const lit = (await state(page)).light.state === 'on';
-  if (lit) await vz(page, () => window.__vz.toggleLight());
-  await vz(page, () => window.__vz.step(30));
-  const pairs = [];
-  for (let i = 0; i < 3; i++) {
-    const on = await frameWhen((v) => v > 0.5);
-    const early = await frameWhen((v) => v < 0.5);
-    const s = await vz(page, () => window.__vz.step(14));
-    const late = s.fx.strobe < 0.5 ? mean(await vz(page, () => window.__vz.probe())) : null;
-    if (late === null) {
-      i -= 1;
-      continue;
+  const faint = faintRun.s;
+  check('строб-комната нашлась', softRun.there && faintRun.there);
+  // Мягко — значит медленно, а не темно (куратор, пачка 50): удары есть, но набухают и гаснут, не чаще раза в секунду.
+  const pulses = rises(soft.map((x) => (x > 0.25 ? 1 : 0)), 0.5).length;
+  check('мягкий строб: комната дышит светом — удары есть, плавные (без ступеней), не чаще раза в секунду', pulses >= 2 && pulses <= 5 && jumpMax(soft) < 0.08 && Math.max(...soft) <= 0.52, `ударов ${pulses} за 4 с, наибольший шаг ${jumpMax(soft).toFixed(3)}, сила ${Math.max(...soft).toFixed(2)}`);
+  check('почти незаметные: удары впятеро тише мягких и тоже без ступеней', jumpMax(faint) < 0.02 && Math.max(...faint) <= 0.11, `сила ${Math.max(...faint).toFixed(3)}, шаг ${jumpMax(faint).toFixed(3)}`);
+  // Картинка: в ударе кадр светлее, чем между ударами, но не выбелен.
+  if ((await state(page)).light.state !== 'on') await vz(page, () => window.__vz.toggleLight());
+  await vz(page, () => window.__vz.faintFlash(false));
+  const frameAt = async (want) => {
+    for (let i = 0; i < 200; i++) {
+      const st = await vz(page, () => window.__vz.step(1));
+      if (want(st.fx.strobe)) return mean(await vz(page, () => window.__vz.probe()));
     }
-    pairs.push([on, early, late]);
-  }
-  if (lit) await vz(page, () => window.__vz.toggleLight());
-  const show = pairs.map(([on, early, late]) => `${on?.toFixed(1)} / ${early?.toFixed(1)} / ${late?.toFixed(1)}`).join('; ');
-  check('строб: во вспышке кадр светлеет целиком', pairs.every(([on, , late]) => on !== null && late !== null && on > late * 1.2 && on - late > 12), show);
-  check('строб: вспышка не обрывается, а гаснет — сразу после неё кадр ярче, чем через четверть секунды', pairs.every(([on, early, late]) => early !== null && late !== null && early > late * 1.1 && early <= on * 1.02), show);
-  check('мягкие вспышки: сила света плывёт без скачков', rises(soft, 0.02).length === 0 && jumpMax(soft) < 0.02 && Math.max(...soft) < 0.2, `наибольший скачок ${jumpMax(soft).toFixed(3)}, предел ${Math.max(...soft).toFixed(2)}`);
+    return null;
+  };
+  const peakF = await frameAt((v) => v > 0.42);
+  const lowF = await frameAt((v) => v < 0.01);
+  check('строб-комната: в ударе кадр светлее, но не выбелен', peakF !== null && lowF !== null && peakF > lowF + 1 && peakF < 230, `удар ${peakF?.toFixed(1)}, между ударами ${lowF?.toFixed(1)}`);
   check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
   await context.close();
 }
@@ -1779,7 +1820,7 @@ async function scenarioSession(browser, baseUrl) {
   let st = await state(page);
   const lv1 = await vz(page, () => window.__vz.level());
   const lines0 = await page.$$eval('.vz-overlay__line', (els) => els.map((e) => e.textContent));
-  check('заставка: как играть и предупреждение, заданий и счётчиков нет', st.screen === 'title' && lines0.length === 2 && lines0[0] === RU['title.how'] && lines0[1] === RU['title.warn'], JSON.stringify(lines0));
+  check('заставка: только строка про сон, предупреждение — тихо внизу, заданий и счётчиков нет', st.screen === 'title' && lines0.length === 1 && lines0[0] === RU['title.how'] && (await page.textContent('.vz-overlay__note')) === RU['title.warn'] && (await page.$$eval('.vz-settings__note', (els) => els.length)) === 0, JSON.stringify(lines0));
   await page.click('.vz-overlay');
   await sleep(300);
   await vz(page, () => window.__vz.freeze(true));
@@ -1925,8 +1966,8 @@ async function scenarioSession(browser, baseUrl) {
   await sleep(400);
   await page.reload({ waitUntil: 'load' });
   await page.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
-  const cnt = await page.$$eval('.vz-overlay__line', (els) => els.map((e) => e.textContent));
-  check('после перезагрузки на заставке: закрыто сессий — 1, сохранено воспоминаний — 5', cnt.some((l) => /закрыто сессий: 1 · сохранено воспоминаний: 5 из \d+/.test(l)), JSON.stringify(cnt));
+  const cnt = await page.$$eval('.vz-settings__note', (els) => els.map((e) => e.textContent));
+  check('после перезагрузки в списке настроек: закрыто сессий — 1, сохранено воспоминаний — 5', cnt.some((l) => /закрыто сессий: 1 · сохранено воспоминаний: 5 из \d+/.test(l)), JSON.stringify(cnt));
   if (lap) {
     const lv3 = await vz(page, () => window.__vz.level());
     check('после перезагрузки место то же и стёрто так же: петля записана в профиле', lv3.seed === lap.seed && lv3.wear >= lap.wear - 1e-6 && lv3.wear < lap.wear + 0.05, JSON.stringify({ seed: [lap.seed, lv3.seed], wear: [lap.wear, lv3.wear] }));
@@ -1987,7 +2028,9 @@ async function scenarioScenes(browser, baseUrl) {
     }, profile);
   const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&rank=1', {}, null, prepare);
   let st = await state(page);
-  check('заставка: кнопки «Место» нет — место выбирает сон', st.scenes.on && !(await page.isVisible('.vz-overlay__opt--place')), JSON.stringify(st.scenes));
+  await openSettings(page);
+  check('заставка: кнопки «Место» нет и в списке настроек — место выбирает сон', st.scenes.on && (await page.isVisible('.vz-settings')) && !(await page.isVisible('.vz-overlay__opt--place')), JSON.stringify(st.scenes));
+  await closeSettings(page);
   await page.click('.vz-overlay');
   await sleep(300);
   await vz(page, () => window.__vz.freeze(true));
@@ -2657,8 +2700,15 @@ async function scenarioTouchSession(browser, baseUrl) {
   ]) {
     const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&rank=1&loop=1', { viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
     let bad = await page.evaluate(layoutProbe);
-    const lines = await page.$$eval('.vz-overlay__line', (els) => els.map((e) => e.textContent));
-    check(`${name}: заставка с предупреждением и настройками помещается на экране`, bad.length === 0 && lines.includes(RU['title.warn']) && (await page.isVisible('.vz-overlay__opt--flash')) && (await page.isVisible('.vz-overlay__opt--lang')), bad.join('; '));
+    await page.tap('.vz-overlay__gear');
+    await page.waitForSelector('.vz-settings', { state: 'visible', timeout: 5000 });
+    const listBad = await page.evaluate(layoutProbe);
+    check(`${name}: заставка (с тихим предупреждением о вспышках внизу) и открытый список настроек помещаются на экране`, bad.length === 0 && listBad.length === 0 && (await page.textContent('.vz-overlay__note')) === RU['title.warn'] && (await page.isVisible('.vz-overlay__note')) && (await page.isVisible('.vz-seg--flash')) && (await page.isVisible('.vz-seg--lang')), [...bad, ...listBad].join('; '));
+    if (wantShots) {
+      mkdirSync(OUT, { recursive: true });
+      await saveShot(page, `touch_settings_${width}x${height}.png`);
+    }
+    await page.tap('.vz-overlay__gear');
     await page.tap('.vz-overlay');
     await sleep(300);
     await vz(page, () => window.__vz.freeze(true));
@@ -2724,8 +2774,11 @@ const layoutProbe = () => {
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) continue;
     const name = el.tagName + '.' + String(el.className).split(' ')[0];
+    // Список настроек прокручивается внутри себя (data-scroll): строка ниже его края — не выход за экран, если сам список
+    // целиком на экране (его проверяет этот же цикл).
+    const scroller = el.parentElement?.closest('[data-scroll]');
     if (r.left < -1 || r.right > vw + 1) bad.push(`x-out ${name} ${Math.round(r.left)}..${Math.round(r.right)} из ${vw}`);
-    if (r.top < -1 || r.bottom > vh + 1) bad.push(`y-out ${name} ${Math.round(r.top)}..${Math.round(r.bottom)} из ${vh}`);
+    if ((r.top < -1 || r.bottom > vh + 1) && !scroller) bad.push(`y-out ${name} ${Math.round(r.top)}..${Math.round(r.bottom)} из ${vh}`);
     if (el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0 && !/auto|scroll|hidden/.test(cs.overflowX) && ['BUTTON', 'SPAN', 'DIV'].includes(el.tagName) && el.children.length === 0) bad.push(`clip-x ${name} ${el.scrollWidth}>${el.clientWidth}`);
   }
   // Надписи записи не наезжают друг на друга и на кнопку паузы.
@@ -2782,6 +2835,11 @@ async function scenarioMatrix(browser, baseUrl) {
         return bad.length === 0;
       };
       let ok = await probe('start');
+      // Список настроек под шестерёнкой (слова партнёра 19.11) — на каждом размере и языке.
+      await page.click('.vz-overlay__gear');
+      await page.waitForSelector('.vz-settings', { state: 'visible', timeout: 5000 });
+      ok = (await probe('settings')) && ok;
+      await page.click('.vz-overlay__gear');
       await page.click('.vz-overlay', { position: { x: 5, y: 5 } });
       await sleep(250);
       await vz(page, () => window.__vz.freeze(true));
@@ -2960,7 +3018,7 @@ async function scenarioAudio(browser, baseUrl) {
   check('до первого нажатия звук заперт, а набор уже загружен целиком', au.state === 'locked' && au.known === au.total && au.total >= 50 && au.loaded === au.total && au.missing === 0, JSON.stringify({ state: au.state, known: au.known, total: au.total, loaded: au.loaded, missing: au.missing }));
   // Порядок — loadFirst('shelter') (17.11, «звук не срабатывает сразу»): нажатие «старт», гул своего места, люк.
   check('каждый файл запрошен один раз, первыми — нужные в начале вылазки: старт, гул убежища, люк', asked.length === au.total && new Set(asked).size === au.total && asked.slice(0, 3).join() === 'ui_start_1.mp3,amb_bunker_1.mp3,hatch_1.mp3', `${asked.length} запросов, первые: ${asked.slice(0, 3).join(', ')}`);
-  check('на карточке задания есть кнопка звука', (await page.textContent('.vz-overlay__opt--sound'))?.trim() === 'Звук: вкл');
+  check('на заставке в списке настроек есть звук (включён)', (await segOn(page, 'sound')) === 'вкл');
 
   await page.click('.vz-overlay');
   await sleep(300);
@@ -3022,11 +3080,13 @@ async function scenarioAudio(browser, baseUrl) {
   await sleep(250);
   au = await vz(page, () => window.__vz.audio());
   check('на паузе звук остановлен целиком', au.state === 'suspended', au.state);
-  check('на экране паузы тоже есть кнопка звука', (await page.isVisible('.vz-overlay__opt--sound')) === true);
-  await page.click('.vz-overlay__opt--sound');
+  await openSettings(page);
+  check('на экране паузы тоже есть звук (в списке под шестерёнкой)', (await page.isVisible('.vz-seg--sound')) === true);
+  await segPick(page, 'sound', 'off');
   au = await vz(page, () => window.__vz.audio());
   st = await state(page);
-  check('кнопка звука выключает звук и не снимает паузу', au.muted === true && st.paused === true && (await page.textContent('.vz-overlay__opt--sound'))?.trim() === 'Звук: выкл');
+  check('переключатель звука выключает звук и не снимает паузу', au.muted === true && st.paused === true && (await segOn(page, 'sound')) === 'выкл');
+  await closeSettings(page);
   await page.click('.vz-overlay');
   await sleep(300);
   au = await vz(page, () => window.__vz.audio());
@@ -3043,14 +3103,15 @@ async function scenarioAudio(browser, baseUrl) {
   await page.reload({ waitUntil: 'load' });
   await page.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
   au = await vz(page, () => window.__vz.audio());
-  check('после перезагрузки звук остаётся выключенным', au.muted === true && (await page.textContent('.vz-overlay__opt--sound'))?.trim() === 'Звук: выкл');
-  await page.click('.vz-overlay__opt--sound');
+  check('после перезагрузки звук остаётся выключенным', au.muted === true && (await segOn(page, 'sound')) === 'выкл');
+  await segPick(page, 'sound', 'on');
   await sleep(600);
   au = await vz(page, () => window.__vz.audio());
   st = await state(page);
   check('на карточке задания играет музыка меню, вылазка не началась', st.overlay === 'start' && au.muted === false && au.state === 'running' && au.loops.includes('music_menu'), JSON.stringify({ overlay: st.overlay, state: au.state, loops: au.loops }));
 
   // Сессия: вспышка воспоминания, «вспомнил», скачок, лимбо, начало следующей сессии.
+  await closeSettings(page);
   await page.click('.vz-overlay');
   await sleep(300);
   await vz(page, () => window.__vz.freeze(true));
@@ -3184,10 +3245,11 @@ async function scenarioFrame(browser, baseUrl) {
   await frame2.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 }).catch(() => {
     ready2 = false;
   });
-  check('в песочнице без ?lang заставка английская, предупреждение о вспышках и настройки на месте', ready2 && (await frame2.textContent('.vz-overlay__title')) === 'UNTITLED SESSION' && (await frame2.textContent('.vz-overlay__prompt')) === 'Click to begin' && (await frame2.evaluate(() => document.documentElement.lang)) === 'en' && (await frame2.$$eval('.vz-overlay__line', (els) => els.map((e) => e.textContent))).includes(EN['title.warn']) && (await frame2.isVisible('.vz-overlay__opt--flash')) && (await frame2.isVisible('.vz-overlay__opt--lang')));
+  if (ready2) await openSettings(frame2);
+  check('в песочнице без ?lang заставка английская, предупреждение о вспышках и настройки на месте', ready2 && (await frame2.textContent('.vz-overlay__title')) === 'UNTITLED SESSION' && (await frame2.textContent('.vz-overlay__prompt')) === 'Click to begin' && (await frame2.evaluate(() => document.documentElement.lang)) === 'en' && (await frame2.textContent('.vz-overlay__note')) === EN['title.warn'] && (await frame2.isVisible('.vz-seg--flash')) && (await frame2.isVisible('.vz-seg--lang')));
   if (ready2) {
     // Выбор в песочнице действует до конца страницы, хотя сохранить его некуда.
-    await frame2.click('.vz-overlay__opt--lang');
+    await segPick(frame2, 'lang', 'ru');
     check('смена языка работает и без хранилища', (await frame2.textContent('.vz-overlay__prompt')) === 'Нажмите, чтобы начать' && (await frame2.evaluate(() => document.documentElement.lang)) === 'ru');
   }
 

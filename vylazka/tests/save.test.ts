@@ -20,7 +20,7 @@ describe('сохранение', () => {
   it('профиль: мусор заменяется значениями по умолчанию, архив без повторов', () => {
     expect(parseProfile(null, 7)).toEqual(defaultProfile(7));
     expect(parseProfile({ v: 2 }, 7)).toEqual(defaultProfile(7));
-    expect(parseProfile({ v: 1, sorties: 3.7, successes: -2, archive: ['a', 'a', 5, 'b'], baseSeed: 42 }, 7)).toEqual({ v: 1, sorties: 3, successes: 0, archive: ['a', 'b'], baseSeed: 42, muted: false, sens: 1, bright: 1, calm: false, lang: null, place: 'shelter', memories: {} });
+    expect(parseProfile({ v: 1, sorties: 3.7, successes: -2, archive: ['a', 'a', 5, 'b'], baseSeed: 42 }, 7)).toEqual({ v: 1, sorties: 3, successes: 0, archive: ['a', 'b'], baseSeed: 42, muted: false, sens: 1, bright: 1, flash: 'soft', lang: null, place: 'shelter', memories: {} });
     // Чувствительность и яркость: только 0, 1, 2; всё прочее — середина.
     expect(parseProfile({ v: 1, sens: 2, bright: 0 }, 7)).toMatchObject({ sens: 2, bright: 0 });
     expect(parseProfile({ v: 1, sens: 5, bright: 'x' }, 7)).toMatchObject({ sens: 1, bright: 1 });
@@ -34,22 +34,25 @@ describe('сохранение', () => {
   });
 
   it('«вспышки помягче» и язык: запоминаются; всё непонятное — по умолчанию (обычные вспышки, язык не выбран)', () => {
-    expect(defaultProfile(1)).toMatchObject({ calm: false, lang: null });
-    expect(parseProfile({ v: 1, calm: true, lang: 'ru' }, 7)).toMatchObject({ calm: true, lang: 'ru' });
-    expect(parseProfile({ v: 1, calm: 'yes', lang: 5 }, 7)).toMatchObject({ calm: false, lang: null });
-    expect(parseProfile({ v: 1 }, 7)).toMatchObject({ calm: false, lang: null });
+    expect(defaultProfile(1)).toMatchObject({ flash: 'soft', lang: null });
+    expect(parseProfile({ v: 1, flash: 'faint', lang: 'ru' }, 7)).toMatchObject({ flash: 'faint', lang: 'ru' });
+    expect(parseProfile({ v: 1, flash: 'full', lang: 5 }, 7)).toMatchObject({ flash: 'soft', lang: null });
+    expect(parseProfile({ v: 1 }, 7)).toMatchObject({ flash: 'soft', lang: null });
+    // Старое поле calm (полные или мягкие вспышки) не читается: полных больше нет, и те и другие — мягкие.
+    expect(parseProfile({ v: 1, calm: false }, 7)).toMatchObject({ flash: 'soft' });
+    expect(parseProfile({ v: 1, calm: true }, 7)).toMatchObject({ flash: 'soft' });
   });
 
   it('старое сохранение с вылазкой читается: профиль цел, вылазку игра не знает', async () => {
-    const m = memory({ profile: { v: 1, sorties: 4, successes: 2, archive: ['kettle'], baseSeed: 9, calm: true, lang: 'es' }, run: { v: 1, seed: 5 } });
+    const m = memory({ profile: { v: 1, sorties: 4, successes: 2, archive: ['kettle'], baseSeed: 9, flash: 'faint', lang: 'es' }, run: { v: 1, seed: 5 } });
     const save = await loadSave(m.platform, 1);
     expect(save).not.toHaveProperty('run');
-    expect(save.profile).toMatchObject({ sorties: 4, successes: 2, archive: ['kettle'], baseSeed: 9, calm: true, lang: 'es' });
+    expect(save.profile).toMatchObject({ sorties: 4, successes: 2, archive: ['kettle'], baseSeed: 9, flash: 'faint', lang: 'es' });
   });
 
   it('профиль записывается и читается обратно; пишется только он', async () => {
     const m = memory();
-    const p = { ...defaultProfile(3), sorties: 2, archive: ['iron', 'phone'], calm: true, lang: 'ru' };
+    const p = { ...defaultProfile(3), sorties: 2, archive: ['iron', 'phone'], flash: 'faint' as const, lang: 'ru' };
     await writeProfile(m.platform, p);
     expect(m.saves).toEqual([['profile']]);
     expect((await loadSave(m.platform, 3)).profile).toEqual(p);

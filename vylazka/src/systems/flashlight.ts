@@ -67,7 +67,7 @@ export const DEFAULT_FLASHLIGHT: FlashlightConfig = {
   crankRate: 0.35,
   crankMin: 0.6,
   flashTime: 1,
-  flashPeak: 2.6,
+  flashPeak: 1.6,
 };
 
 /** Шум зарядки, 0..1: палец на кнопке трещит динамо — это слышит Осыпь, как тряску. */
@@ -94,7 +94,20 @@ export interface FlashlightEnv {
    * в темноту с мёртвым фонарём и не знает, когда тот погас. Не задано — нужен.
    */
   needed?: boolean;
+  /**
+   * Вспышки «почти незаметные» (настройка заставки): мерцание мельче и медленнее, искры и вспышка заряда едва видны.
+   * Не задано — мягкие (полных нет: слова партнёра 19.11, 15:59).
+   */
+  faint?: boolean;
 }
+
+/**
+ * Мягкость света (слова партнёра 19.11: «вспышки всегда мягкие или почти незаметные»; правило куратора, пачка 50: «мягко —
+ * значит медленно, а не темно»): провал мерцания держится не меньше hold секунд — значит, не больше трёх провалов в секунду, —
+ * и наступает плавно, за tau; искра — набухает и гаснет, не чаще раза в sparkGap; вспышка полного заряда набухает и спадает
+ * за flashTime, в середине — в flashPeak раз ярче («почти незаметные» — faintPeak).
+ */
+export const SOFT_LIGHT = { hold: 0.17, tau: 0.07, faintTau: 0.12, faintDepth: 0.45, sparkPeak: 0.35, faintSpark: 0.12, sparkGap: 0.34, faintPeak: 1.15 } as const;
 
 export const CALM_ENV: FlashlightEnv = { panic: 0, wet: 0, swarm: 0, shake: 0 };
 
@@ -135,10 +148,16 @@ export class Flashlight {
   private need = 1;
   private work = 0;
   private sparkLeft = 0;
+  /** Сколько длится нынешняя искра, с, и сколько ещё ждать следующей. */
+  private sparkLen = 0.15;
+  private sparkCool = 0;
   /** > 0 — нестабильное мерцание сразу после оживления. */
   private unstable = 0;
   private flickerValue = 1;
+  private flickerTarget = 1;
   private flickerHold = 0;
+  /** Вспышка полного заряда сейчас: 0..1 по набуханию (для кадра — game.ts). */
+  swell = 0;
   /** Палец на кнопке фонаря (телефон). */
   private holding = false;
   /** Сколько держат палец в этом нажатии, с. */
@@ -275,8 +294,8 @@ export class Flashlight {
       this.dying = 0;
       this.charge = Math.min(1, this.charge + this.cfg.crankRate * dt);
       ev.rattle = CRANK_NOISE;
-      if (this.state !== 'on' && this.sparkLeft <= 0 && this.rng() < 5 * dt) {
-        this.sparkLeft = 0.03 + this.rng() * 0.05;
+      if (this.state !== 'on' && this.sparkCool <= 0 && this.rng() < 5 * dt) {
+        this.spark();
         ev.spark = true;
       }
       if (this.charge >= 1 && this.crankT >= this.cfg.crankMin) {
@@ -329,8 +348,8 @@ export class Flashlight {
         ev.rattle = env.shake;
         // Вялая тряска почти не помогает: вклад растёт быстрее уровня.
         if (can) this.work += Math.pow(env.shake, 1.3) * dt;
-        if (can && this.sparkLeft <= 0 && this.rng() < env.shake * 9 * dt) {
-          this.sparkLeft = 0.04 + this.rng() * 0.07;
+        if (can && this.sparkCool <= 0 && this.rng() < env.shake * 9 * dt) {
+          this.spark();
           ev.spark = true;
         }
       }
@@ -348,32 +367,48 @@ export class Flashlight {
     return ev;
   }
 
+  /** Искра: набухает и гаснет за 0,12–0,2 с; следующая — не раньше чем через SOFT_LIGHT.sparkGap после начала этой. */
+  private spark(): void {
+    this.sparkLen = 0.12 + this.rng() * 0.08;
+    this.sparkLeft = this.sparkLen;
+    this.sparkCool = Math.max(this.sparkLen, SOFT_LIGHT.sparkGap);
+  }
+
   private updateIntensity(dt: number, env: FlashlightEnv): void {
     this.sparkLeft = Math.max(0, this.sparkLeft - dt);
+    this.sparkCool = Math.max(0, this.sparkCool - dt);
     this.unstable = Math.max(0, this.unstable - dt);
     // Вспышка начинается с полного шага: первый кадр после заряда — самый яркий.
     const flash = this.flash;
     this.flashLeft = Math.max(0, this.flashLeft - dt);
+    this.swell = 0;
     if (this.state === 'off') {
       this.intensity = 0;
       return;
     }
     if (this.state === 'dead') {
-      this.intensity = this.sparkLeft > 0 ? 0.25 + 0.5 * this.rng() : 0;
+      // Искра: свет набухает и гаснет, а не дёргается по кадрам.
+      const peak = env.faint ? SOFT_LIGHT.faintSpark : SOFT_LIGHT.sparkPeak;
+      this.intensity = this.sparkLeft > 0 ? peak * Math.sin(Math.PI * (1 - this.sparkLeft / this.sparkLen)) : 0;
       return;
     }
     // Садящаяся батарейка: свет тускнеет на последней четверти заряда.
     const base = 0.3 + 0.7 * smoothstep(0, 0.25, this.charge);
-    // Мерцание: ступенчатый шум, удерживаемый несколько сотых секунды. Перед отказом и после оживления — сильное.
+    // Мерцание: перед отказом и после оживления — глубокое, рядом с Осыпью и в панике — заметнее. Провал держится не меньше
+    // SOFT_LIGHT.hold (не больше трёх в секунду) и наступает плавно: раньше это были ступени по сотым секунды — до десяти
+    // резких провалов в секунду (куратор, пачка 50, противоречие 316).
     this.flickerHold -= dt;
     if (this.flickerHold <= 0) {
       const strong = this.dying > 0 || this.unstable > 0;
-      const depth = strong ? 0.85 : 0.04 + 0.5 * env.swarm + 0.12 * env.panic;
+      const depth = (strong ? 0.85 : 0.04 + 0.5 * env.swarm + 0.12 * env.panic) * (env.faint ? SOFT_LIGHT.faintDepth : 1);
       const chance = strong ? 0.55 : 0.08 + 0.5 * env.swarm;
-      this.flickerValue = this.rng() < chance ? 1 - depth * this.rng() : 1;
-      this.flickerHold = 0.02 + this.rng() * (strong ? 0.07 : 0.12);
+      this.flickerTarget = this.rng() < chance ? 1 - depth * this.rng() : 1;
+      this.flickerHold = SOFT_LIGHT.hold + this.rng() * (strong ? 0.2 : 0.3);
     }
-    // Вспышка полного заряда: в первый миг луч в flashPeak раз ярче и за секунду спадает к обычному.
-    this.intensity = base * this.flickerValue * (1 + (this.cfg.flashPeak - 1) * flash * flash);
+    this.flickerValue += (this.flickerTarget - this.flickerValue) * (1 - Math.exp(-dt / (env.faint ? SOFT_LIGHT.faintTau : SOFT_LIGHT.tau)));
+    // Вспышка полного заряда: луч набухает и за секунду спадает к обычному; в середине — в flashPeak раз ярче.
+    this.swell = flash > 0 ? Math.sin(Math.PI * (1 - flash)) : 0;
+    const peak = env.faint ? SOFT_LIGHT.faintPeak : this.cfg.flashPeak;
+    this.intensity = base * this.flickerValue * (1 + (peak - 1) * this.swell);
   }
 }

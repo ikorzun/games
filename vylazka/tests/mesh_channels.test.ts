@@ -8,7 +8,7 @@ import type { MeshData } from '../src/world/kit';
 import { MeshBuilder } from '../src/world/kit';
 import { buildLevel } from '../src/world/level_build';
 import { MAT } from '../src/world/materials';
-import { mushroomCluster } from '../src/world/mushrooms';
+import { FORMS, SPECIES, mushroomForm } from '../src/world/mushrooms';
 import { buildPocket, POCKET_KINDS } from '../src/world/pockets';
 import { ALL_PROPS } from '../src/world/props_all';
 import { POSES } from '../src/world/props_people';
@@ -88,7 +88,7 @@ describe('каналы вершин сходятся с числом верши�
 
   it('вещи, грибы, птица, фигуры', () => {
     for (const kind of Object.keys(ALL_PROPS)) expect(problems(thingMesh(kind, 5).mesh), kind).toEqual([]);
-    expect(problems(mushroomCluster())).toEqual([]);
+    for (let f = 0; f < SPECIES.length * FORMS; f++) expect(problems(mushroomForm(f)), `гриб, форма ${f}`).toEqual([]);
     expect(problems(birdMesh())).toEqual([]);
     for (const material of FIGURE_MATERIALS) {
       for (const pose of Object.keys(POSES) as (keyof typeof POSES)[]) {

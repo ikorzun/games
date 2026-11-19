@@ -3722,7 +3722,8 @@ describe('телефон: тап — выключатель, палец на к�
     expect(g.light.state).toBe('on');
     h.tick({ ...emptyInput(), light: true });
     expect(g.light.state).toBe('off');
-    // Палец на кнопке: заряд растёт, свет — только на полном, со вспышкой в луче и в кадре.
+    // Палец на кнопке: заряд растёт, свет — только на полном, со вспышкой в луче. Вспышки мягкие (партнёр 19.11): луч не
+    // прыгает, а набухает и спадает, в середине — в полтора раза ярче; кадр светлеет чуть-чуть.
     g.light.charge = 0.5;
     let charged = -1;
     let cranking = 0;
@@ -3734,9 +3735,23 @@ describe('телефон: тап — выключатель, палец на к�
     expect(charged).toBeGreaterThan(0);
     expect(cranking).toBeGreaterThan(Math.round(1 / STEP));
     expect(g.light.state).toBe('on');
-    const flashView = h.r.frames.at(-1)!;
-    expect(flashView.lightIntensity).toBeGreaterThan(2);
-    expect(flashView.flash).toBeGreaterThan(0.2);
+    let peak = 0;
+    let white = 0;
+    let jump = 0;
+    let prev = h.r.frames.at(-1)!.lightIntensity;
+    for (let i = 0; i < Math.round(0.9 / STEP); i++) {
+      h.tick({ ...emptyInput(), crank: true });
+      const f = h.r.frames.at(-1)!;
+      peak = Math.max(peak, f.lightIntensity);
+      white = Math.max(white, f.flash);
+      jump = Math.max(jump, f.lightIntensity - prev);
+      prev = f.lightIntensity;
+    }
+    expect(peak).toBeGreaterThan(1.4);
+    expect(peak).toBeLessThanOrEqual(1.61);
+    expect(jump).toBeLessThan(0.05);
+    expect(white).toBeGreaterThan(0.05);
+    expect(white).toBeLessThanOrEqual(0.12);
     // Секунду спустя — обычный свет, кадр не выбелен.
     h.run(1.1, { ...emptyInput(), crank: true });
     const after = h.r.frames.at(-1)!;
@@ -3757,23 +3772,37 @@ describe('телефон: тап — выключатель, палец на к�
     expect(g.light.state).toBe('on');
   });
 
-  it('без вспышек (настройка заставки): луч ярче обычного не больше чем на треть, кадр не выбеливается', () => {
-    const h = new Harness(levelOf(SEED), { light: { meanFailInterval: 1e9 } });
-    const g = h.game;
-    g.calmFlash = true;
-    h.run(0.5);
-    h.tick({ ...emptyInput(), light: true });
-    let top = 0;
-    let white = 0;
-    for (let i = 0; i < Math.round(2 / STEP); i++) {
-      h.tick({ ...emptyInput(), crank: true });
-      top = Math.max(top, h.r.frames.at(-1)!.lightIntensity);
-      white = Math.max(white, h.r.frames.at(-1)!.flash);
+  it('вспышки всегда мягкие (партнёр 19.11): вспышка заряда набухает плавно, кадр светлеет чуть-чуть; «почти незаметные» — едва', () => {
+    for (const [faint, cap, whiteCap] of [
+      [false, 1.61, 0.12],
+      [true, 1.16, 0],
+    ] as const) {
+      const h = new Harness(levelOf(SEED), { light: { meanFailInterval: 1e9 } });
+      const g = h.game;
+      g.faintFlash = faint;
+      h.run(0.5);
+      h.tick({ ...emptyInput(), light: true });
+      let top = 0;
+      let white = 0;
+      let jump = 0;
+      let prev = h.r.frames.at(-1)!.lightIntensity;
+      for (let i = 0; i < Math.round(2.5 / STEP); i++) {
+        h.tick({ ...emptyInput(), crank: true });
+        const f = h.r.frames.at(-1)!;
+        top = Math.max(top, f.lightIntensity);
+        white = Math.max(white, f.flash);
+        // Само включение (с нуля до света) — не вспышка: меряем, только пока свет горит.
+        if (prev > 0.5) jump = Math.max(jump, f.lightIntensity - prev);
+        prev = f.lightIntensity;
+      }
+      expect(g.light.state).toBe('on');
+      expect(top).toBeLessThanOrEqual(cap);
+      expect(white).toBeLessThanOrEqual(whiteCap);
+      expect(jump).toBeLessThan(0.05);
     }
-    expect(g.light.state).toBe('on');
-    expect(top).toBeLessThanOrEqual(1.3);
-    expect(white).toBe(0);
   });
+
+
 });
 
 describe('ступени погружения: каждая из первых сессий открывает одно правило (предложения 17.11; партнёр: «Далее делай…»)', () => {
@@ -3943,7 +3972,7 @@ describe('ступени погружения: каждая из первых с
     expect(h.until(() => releases(h) > 0, 30), 'охоты нет').toBe(true);
   });
 
-  it('вспомнил — свет памяти вспыхивает на всю комнату и гаснет вместе с вещью', () => {
+  it('вспомнил — свет памяти вспыхивает на всю комнату (мягко) и гаснет вместе с вещью', () => {
     const h = new Harness(levelOf(SEED));
     const { id } = h.reveal();
     expect(h.standBefore(id)).toBe(true);
@@ -3960,7 +3989,8 @@ describe('ступени погружения: каждая из первых с
       h.tick();
       peak = Math.max(peak, h.r.memLight?.strength ?? 0);
     }
-    expect(peak).toBeGreaterThan(base * 2);
+    // Вспышки мягкие (партнёр 19.11): в пике свет памяти в полтора раза ярче, а не в три с половиной.
+    expect(peak).toBeGreaterThan(base * 1.4);
     // Через несколько секунд вспышка прошла и свет у вспомненной вещи погас (у следующей искомой вещи он может гореть).
     h.run(6);
     const now = h.r.memLight;

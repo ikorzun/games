@@ -4,7 +4,8 @@ import { DEFAULT_SPORES, Spores, sporeSites } from '../src/systems/spores';
 import type { SporeSource } from '../src/systems/spores';
 import type { NavNode } from '../src/world/level';
 import { buildLevel } from '../src/world/level_build';
-import { mushroomCluster } from '../src/world/mushrooms';
+import { FORMS, SPECIES, mushroomForm, speciesBend } from '../src/world/mushrooms';
+import { CORNER_FLORA, FIELD_FLORA, SPORE_STRIDE } from '../src/systems/spores';
 
 const DT = 1 / 30;
 const C = DEFAULT_SPORES;
@@ -137,41 +138,85 @@ describe('грибы: рост', () => {
     expect(nearest(sorry).grow).toBeGreaterThan(0);
   });
 
-  it('рендеру уходят ближайшие проросшие места: по шесть чисел, не больше заказанного', () => {
+  it('рендеру уходят ближайшие проросшие места: по SPORE_STRIDE чисел, с формой грозди, не больше заказанного', () => {
+    const S = SPORE_STRIDE;
     const s = new Spores(room(), 7);
     run(s, 6, at(3, 1.5, { cohesion: 1, hunting: true }));
-    const buf = new Float32Array(5 * 6);
+    const buf = new Float32Array(5 * S);
     const n = s.visible([3, 0, 1.5], 5, buf);
     expect(n).toBe(5);
     let prev = 0;
     for (let i = 0; i < n; i++) {
-      const d = Math.hypot(buf[i * 6]! - 3, buf[i * 6 + 2]! - 1.5);
+      const d = Math.hypot(buf[i * S]! - 3, buf[i * S + 2]! - 1.5);
       expect(d).toBeGreaterThanOrEqual(prev - 1e-6);
       prev = d;
-      expect(buf[i * 6 + 4]!).toBeGreaterThan(0);
-      expect([0, 1]).toContain(buf[i * 6 + 5]!);
+      expect(buf[i * S + 4]!).toBeGreaterThan(0);
+      expect([0, 1]).toContain(buf[i * S + 5]!);
+      expect(Number.isInteger(buf[i * S + 6]!)).toBe(true);
+      expect(buf[i * S + 6]!).toBeLessThan(SPECIES.length * FORMS);
     }
     // С другого яруса не видно ничего.
     expect(s.visible([3, -4.5, 1.5], 5, buf)).toBe(0);
   });
+
 });
 
-describe('грибы: сетка грозди', () => {
-  it('шесть грибов из одной точки: низ на полу, самый высокий — около 35 см, гроздь не шире двух ладоней', () => {
-    const m = mushroomCluster();
+describe('грибы: виды по ядовитым (партнёр 19.11)', () => {
+  const each = SPECIES.flatMap((sp, i) => Array.from({ length: FORMS }, (_, v) => ({ id: sp.id, form: i * FORMS + v })));
+  it.each(each)('$id (форма $form): низ на полу, гроздь в ладонях, высокая — до полуметра, без мусора в числах', ({ form }) => {
+    const m = mushroomForm(form);
     let minY = Infinity;
     let maxY = -Infinity;
     let r = 0;
     for (let i = 0; i < m.position.length; i += 3) {
+      expect(Number.isFinite(m.position[i]!) && Number.isFinite(m.position[i + 1]!) && Number.isFinite(m.position[i + 2]!)).toBe(true);
       minY = Math.min(minY, m.position[i + 1]!);
       maxY = Math.max(maxY, m.position[i + 1]!);
       r = Math.max(r, Math.hypot(m.position[i]!, m.position[i + 2]!));
-      expect(Number.isFinite(m.position[i]!)).toBe(true);
     }
-    expect(minY).toBeCloseTo(0, 5);
-    expect(maxY).toBeGreaterThan(0.33);
-    expect(maxY).toBeLessThan(0.42);
+    for (let i = 0; i < m.normal.length; i += 3) expect(Math.hypot(m.normal[i]!, m.normal[i + 1]!, m.normal[i + 2]!)).toBeCloseTo(1, 3);
+    expect(minY).toBeGreaterThanOrEqual(-1e-6);
+    expect(minY).toBeLessThan(0.005);
+    // Неестественно крупные — знак читается с края луча, — но не выше колена.
+    expect(maxY).toBeGreaterThan(0.1);
+    expect(maxY).toBeLessThan(0.5);
     expect(r).toBeLessThan(0.36);
-    expect(m.index.length / 3).toBeLessThan(260);
+    // Грибов до 220 на экране: гроздь — не больше 1500 треугольников.
+    expect(m.index.length / 3).toBeLessThan(1500);
+  });
+
+  it('видов десять, у каждого две грозди — и они разные', () => {
+    expect(SPECIES).toHaveLength(10);
+    for (let i = 0; i < SPECIES.length; i++) expect(mushroomForm(i * FORMS).position).not.toEqual(mushroomForm(i * FORMS + 1).position);
+  });
+
+  it('ножки не только прямые: у пучков на древесине и у коноцибе — дуга, у бледной поганки и сатанинского гриба — почти прямые', () => {
+    for (const id of ['sulphur_tuft', 'jack_o_lantern', 'deadly_conocybe']) expect(speciesBend(id), id).toBeGreaterThan(35);
+    for (const id of ['destroying_angel', 'fire_coral', 'fools_funnel']) expect(speciesBend(id), id).toBeGreaterThan(10);
+    for (const id of ['death_cap', 'satan_bolete', 'false_morel']) expect(speciesBend(id), id).toBeLessThan(15);
+  });
+
+  it('у омфалота пластинки светятся (материал свечения); у остальных — нет', () => {
+    const glows = (form: number): boolean => Array.from(mushroomForm(form).mat).includes(14);
+    expect(glows(SPECIES.findIndex((s) => s.id === 'jack_o_lantern') * FORMS)).toBe(true);
+    for (const [i, sp] of SPECIES.entries()) if (sp.id !== 'jack_o_lantern') expect(glows(i * FORMS), sp.id).toBe(false);
+  });
+
+  it('у каждого места свои грибы в углах, на полу вокруг Осыпи — одни на все; все виды где-то растут', () => {
+    const ids = new Set(SPECIES.map((s) => s.id));
+    for (const list of [...Object.values(CORNER_FLORA), FIELD_FLORA]) for (const id of list) expect(ids.has(id), id).toBe(true);
+    const used = new Set([...Object.values(CORNER_FLORA).flat(), ...FIELD_FLORA]);
+    expect(used.size).toBe(SPECIES.length);
+    // В углах места — его виды; в клетке углы одного вида (пятна, а не салат).
+    for (const place of ['shelter', 'office', 'yellow', 'station']) {
+      const sites = sporeSites(room(), 7, C, place);
+      const allowed = new Set(CORNER_FLORA[place]!.map((id) => SPECIES.findIndex((s) => s.id === id)));
+      for (const s of sites.filter((q) => q.kind === 'corner')) expect(allowed.has(Math.floor(s.form / FORMS)), place).toBe(true);
+      const byNode = new Map<number, Set<number>>();
+      for (const s of sites.filter((q) => q.kind === 'corner')) byNode.set(s.node, (byNode.get(s.node) ?? new Set()).add(Math.floor(s.form / FORMS)));
+      for (const set of byNode.values()) expect(set.size).toBe(1);
+    }
+    const field = new Set(FIELD_FLORA.map((id) => SPECIES.findIndex((s) => s.id === id)));
+    for (const s of sporeSites(room(), 7, C, 'office').filter((q) => q.kind === 'floor')) expect(field.has(Math.floor(s.form / FORMS))).toBe(true);
   });
 });

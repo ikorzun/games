@@ -19,6 +19,7 @@ import type { Quality } from '../render/renderer';
 import { FIGURE_MATERIALS } from '../world/figures';
 import type { FigureMaterial, FigureSpec } from '../world/figures';
 import { POSES } from '../world/props_people';
+import { FORMS, SPECIES_ID } from '../world/mushrooms';
 import type { Pose } from '../world/props_people';
 
 export interface VzDebugApi {
@@ -51,7 +52,7 @@ export interface VzDebugApi {
   /** Пыль тронутых вещей: сколько облаков живо и сколько в них точек. */
   dust(): { clouds: number; points: number };
   /** Проросшие грибы: место, род и насколько выросли (systems/spores.ts). */
-  spores(): { pos: number[]; kind: string; grow: number }[];
+  spores(): { pos: number[]; kind: string; grow: number; species: string }[];
   /** Стирание места: стёртость сейчас, с какой начат круг и все кривые (systems/decay.ts). */
   wear(): { wear: number; base: number; decay: Decay; forms: Record<string, number> };
   /** Ход времени в зале ожидания (systems/flow.ts); null — в этом мире время обычное. */
@@ -126,8 +127,8 @@ export interface VzDebugApi {
   gotoFx(fx: RoomFx): boolean;
   /** Считать всё вспомненным: место рассыплется, игрок попадёт в лимбо. */
   finish(): void;
-  /** Вспышки помягче (как в настройке игрока). */
-  calmFlash(on: boolean): void;
+  /** Вспышки «почти незаметные» (как в настройке игрока); false — мягкие (по умолчанию: полных больше нет). */
+  faintFlash(on: boolean): void;
   /** Зоны среды и обвалы уровня. */
   hazards(): Record<string, unknown>;
   /** Миг: место будто стёрто до конца — часы встают на 00:00:00, кадр и звук обрываются (для снимков и проверок). */
@@ -281,7 +282,7 @@ export function installDebug(app: App): void {
     info: () => ({ ...game().renderer.info(), fps: app.fps }),
     cloudUsage: () => game().renderer.cloudUsage(),
     dust: () => game().renderer.dustInfo(),
-    spores: () => (game().spores?.sites ?? []).filter((q) => q.grow > 0.03).map((q) => ({ pos: [...q.pos], kind: q.kind, grow: +q.grow.toFixed(3) })),
+    spores: () => (game().spores?.sites ?? []).filter((q) => q.grow > 0.03).map((q) => ({ pos: [...q.pos], kind: q.kind, grow: +q.grow.toFixed(3), species: SPECIES_ID[Math.floor(q.form / FORMS)] ?? '' })),
     birds: () => {
       const g = game();
       const t = g.flow ? g.flow.viewT : 0;
@@ -568,8 +569,8 @@ export function installDebug(app: App): void {
       return false;
     },
     finish: () => game().debugFinish(),
-    calmFlash: (on) => {
-      game().calmFlash = on;
+    faintFlash: (on) => {
+      game().faintFlash = on;
     },
     hazards: () => ({
       zones: app.level.zones.map((z) => ({ kind: z.kind, tier: z.tier, center: [(z.minX + z.maxX) / 2, z.maxY, (z.minZ + z.maxZ) / 2] })),

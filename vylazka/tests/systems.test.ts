@@ -243,14 +243,17 @@ describe('фонарь', () => {
       expect(f.state).toBe('on');
       expect(f.charge).toBeGreaterThan(0.999);
       expect(f.cranking).toBe(false);
-      // Вспышка: в первый миг луч в flashPeak раз ярче, за секунду — обычный.
-      expect(run[at]!.light).toBeGreaterThan(DEFAULT_FLASHLIGHT.flashPeak * 0.9);
+      // Вспышка мягкая (партнёр 19.11; куратор, пачка 50: «мягко — значит медленно»): луч не прыгает, а набухает к середине
+      // секунды до flashPeak и за секунду спадает к обычному.
       const after = hold(f, DEFAULT_FLASHLIGHT.flashTime + 0.1);
+      const top = Math.max(...after.map((x) => x.light));
+      expect(top).toBeGreaterThan(DEFAULT_FLASHLIGHT.flashPeak * 0.9);
+      expect(after.findIndex((x) => x.light === top) * DT).toBeGreaterThan(0.3);
       expect(after.at(-1)!.light).toBeLessThan(1.05);
       expect(after.at(-1)!.light).toBeGreaterThan(0.85);
       expect(after.every((x) => !x.ev.charged)).toBe(true);
-      // Вспышка гаснет плавно, не рывком.
-      for (let i = 1; i < after.length; i++) expect(after[i]!.light).toBeLessThan(after[i - 1]!.light + 0.2);
+      // Ни набухание, ни спад — не рывок.
+      for (let i = 1; i < after.length; i++) expect(Math.abs(after[i]!.light - after[i - 1]!.light)).toBeLessThan(0.06);
     });
 
     it('отпустил раньше — фонарь как был, а набранный заряд остался', () => {
@@ -293,7 +296,8 @@ describe('фонарь', () => {
       expect(at * DT).toBeGreaterThan(DEFAULT_FLASHLIGHT.crankMin - 2 * DT);
       expect(f.state).toBe('on');
       expect(run.some((x) => x.ev.revived)).toBe(false);
-      expect(run[at]!.light).toBeGreaterThan(2);
+      const after = hold(f, DEFAULT_FLASHLIGHT.flashTime);
+      expect(Math.max(...after.map((x) => x.light))).toBeGreaterThan(1.4);
     });
 
     it('горящий фонарь под пальцем не гаснет и подзаряжается; полный и горящий — касание ничего не делает', () => {
@@ -338,6 +342,38 @@ describe('фонарь', () => {
       expect(run.some((x) => x.ev.charged)).toBe(true);
       expect(f.state).toBe('on');
       expect(f.exhausted).toBe(false);
+    });
+
+    it('мерцание мягкое (партнёр 19.11; куратор, пачка 50): провалы не чаще трёх в секунду и без ступеней; искры — плавные и редкие', () => {
+      // Перед отказом и после оживления мерцание самое глубокое: держим фонарь «нестабильным» и считаем провалы.
+      const f = new Flashlight(mulberry32(21), { ...DEFAULT_FLASHLIGHT, meanFailInterval: 1e9 });
+      f.update(DT);
+      const light: number[] = [];
+      for (let i = 0; i < Math.round(6 / DT); i++) {
+        f.stutter(1);
+        f.update(DT, { panic: 0, wet: 0, swarm: 0, shake: 0 });
+        light.push(f.intensity);
+      }
+      let dips = 0;
+      for (let i = 1; i < light.length; i++) if (light[i - 1]! >= 0.8 && light[i]! < 0.8) dips += 1;
+      const step = Math.max(...light.slice(1).map((x, i) => Math.abs(x - light[i]!)));
+      expect(dips / 6).toBeLessThanOrEqual(3);
+      expect(dips).toBeGreaterThan(2);
+      expect(step).toBeLessThan(0.3);
+      // Искры заглохшего фонаря под пальцем: не чаще трёх в секунду, свет каждой набухает и гаснет.
+      const g = new Flashlight(mulberry32(22), QUIET);
+      g.charge = 0.1;
+      g.forceFail();
+      g.update(DT);
+      // Пока не дозаряжен: дальше он загорится, и это уже вспышка заряда.
+      const secs = Math.min(3, 0.8 / RATE);
+      const run = hold(g, secs);
+      expect(g.state).toBe('dead');
+      const sparks = run.filter((x) => x.ev.spark).length;
+      expect(sparks).toBeGreaterThan(0);
+      expect(sparks / secs).toBeLessThanOrEqual(3);
+      expect(Math.max(...run.map((x) => x.light))).toBeLessThanOrEqual(0.36);
+      for (let i = 1; i < run.length; i++) expect(Math.abs(run[i]!.light - run[i - 1]!.light)).toBeLessThan(0.15);
     });
 
     it('зарядка трещит — её слышит Осыпь; не горящий фонарь под пальцем искрит; мерцание перед отказом обрывается', () => {

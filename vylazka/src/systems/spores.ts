@@ -19,6 +19,23 @@
 import { hash01 } from '../core/rng';
 import type { Vec3 } from '../core/types';
 import type { NavNode } from '../world/level';
+import { FORMS, speciesIndex } from '../world/mushrooms';
+
+/**
+ * Какие грибы где растут (виды — по ядовитым грибам, world/mushrooms.ts). В углах — знак приближения, и у каждого места свой:
+ * в сыром убежище — пучки на гнилой древесине, бледные поганки, нитяные коноцибе и светящийся омфалот; в стерильном офисе —
+ * белые поганки и белые воронки; в жёлтых комнатах — серно-жёлтые пучки. На полу вокруг Осыпи — одно на все места: она не
+ * житель места, а тревога, и прорастает странным — красными «пальцами», «мозгом» строчка, мухоморами, сатанинским грибом.
+ */
+export const CORNER_FLORA: Readonly<Record<string, readonly string[]>> = {
+  shelter: ['sulphur_tuft', 'death_cap', 'deadly_conocybe', 'jack_o_lantern'],
+  office: ['destroying_angel', 'fools_funnel', 'deadly_conocybe'],
+  yellow: ['sulphur_tuft', 'fools_funnel', 'destroying_angel'],
+  station: ['death_cap', 'jack_o_lantern', 'fly_agaric', 'sulphur_tuft'],
+};
+export const FIELD_FLORA: readonly string[] = ['fire_coral', 'false_morel', 'fly_agaric', 'satan_bolete', 'death_cap', 'deadly_conocybe'];
+/** Чисел на место в списке для рендера: x, y, z, поворот, размер, род (0 — угол, 1 — пол), форма грозди. */
+export const SPORE_STRIDE = 7;
 
 export interface SporeSite {
   pos: Vec3;
@@ -33,6 +50,8 @@ export interface SporeSite {
   size: number;
   /** Узел графа, которому принадлежит место. */
   node: number;
+  /** Форма грозди: вид × FORMS + вариант (world/mushrooms.ts). */
+  form: number;
 }
 
 export interface SporesConfig {
@@ -76,7 +95,11 @@ const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
  * Места для грибов по графу уровня. Угол есть там, где у клетки нет соседа ни по одной, ни по другой
  * оси (значит, там сходятся две стены). Места на полу — несколько в каждой клетке, вразброс.
  */
-export function sporeSites(nav: readonly NavNode[], seed: number, cfg: SporesConfig = DEFAULT_SPORES): SporeSite[] {
+export function sporeSites(nav: readonly NavNode[], seed: number, cfg: SporesConfig = DEFAULT_SPORES, place = 'shelter'): SporeSite[] {
+  const corners = CORNER_FLORA[place] ?? CORNER_FLORA.shelter!;
+  // Вид — один на углы клетки и два на её пол (пятна, а не салат); вариант грозди — у каждого места свой.
+  const pick = (list: readonly string[], h: number): number => speciesIndex(list[Math.min(list.length - 1, Math.floor(h * list.length))]!);
+  const form = (species: number, h: number): number => species * FORMS + Math.min(FORMS - 1, Math.floor(h * FORMS));
   const at = new Map<string, NavNode>();
   for (const n of nav) at.set(`${n.tier},${n.cx},${n.cz}`, n);
   const out: SporeSite[] = [];
@@ -88,13 +111,15 @@ export function sporeSites(nav: readonly NavNode[], seed: number, cfg: SporesCon
     };
     // На лестнице (узел не на уровне яруса) грибов нет.
     if (n.links.some((l) => Math.abs(nav[l]!.y - n.y) > 0.3)) continue;
+    const cornerSp = pick(corners, hash01(n.id, 0x5c, seed ^ 0x5b0e5));
+    const fieldSp = [pick(FIELD_FLORA, hash01(n.id, 0x5d, seed ^ 0x5b0e5)), pick(FIELD_FLORA, hash01(n.id, 0x5e, seed ^ 0x5b0e5))] as const;
     let k = 0;
     for (const sx of [-1, 1]) {
       for (const sz of [-1, 1]) {
         k += 1;
         if (open(sx, 0) || open(0, sz)) continue;
         const h = hash01(n.id * 7 + k, 0x51, seed ^ 0x5b0e5);
-        out.push({ pos: [n.x + sx * (half - cfg.inset), n.y, n.z + sz * (half - cfg.inset)], kind: 'corner', grow: 0, trace: 0, yaw: h * Math.PI * 2, size: 0.75 + 0.5 * hash01(n.id * 11 + k, 0x52, seed), node: n.id });
+        out.push({ pos: [n.x + sx * (half - cfg.inset), n.y, n.z + sz * (half - cfg.inset)], kind: 'corner', grow: 0, trace: 0, yaw: h * Math.PI * 2, size: 0.75 + 0.5 * hash01(n.id * 11 + k, 0x52, seed), node: n.id, form: form(cornerSp, hash01(n.id * 37 + k, 0x53, seed)) });
       }
     }
     // Подножие стены — тоже угол (стена и пол): не у каждой стены, вразброс вдоль неё. Так знак виден
@@ -107,13 +132,14 @@ export function sporeSites(nav: readonly NavNode[], seed: number, cfg: SporesCon
       if (h > cfg.wallShare) continue;
       const along = (hash01(n.id * 29 + w, 0x72, seed ^ 0x5b0e5) - 0.5) * (cfg.cell - 0.9);
       const off = half - cfg.inset * 0.75;
-      out.push({ pos: [n.x + dx * off + (dx === 0 ? along : 0), n.y, n.z + dz * off + (dz === 0 ? along : 0)], kind: 'corner', grow: 0, trace: 0, yaw: h * 40, size: 0.55 + 0.45 * hash01(n.id * 31 + w, 0x73, seed), node: n.id });
+      out.push({ pos: [n.x + dx * off + (dx === 0 ? along : 0), n.y, n.z + dz * off + (dz === 0 ? along : 0)], kind: 'corner', grow: 0, trace: 0, yaw: h * 40, size: 0.55 + 0.45 * hash01(n.id * 31 + w, 0x73, seed), node: n.id, form: form(cornerSp, hash01(n.id * 41 + w, 0x74, seed)) });
     }
     for (let i = 0; i < cfg.perCell; i++) {
       const a = hash01(n.id * 13 + i, 0x61, seed ^ 0x5b0e5);
       const b = hash01(n.id * 17 + i, 0x62, seed ^ 0x5b0e5);
       const c = hash01(n.id * 19 + i, 0x63, seed ^ 0x5b0e5);
-      out.push({ pos: [n.x + (a - 0.5) * (cfg.cell - 0.7), n.y, n.z + (b - 0.5) * (cfg.cell - 0.7)], kind: 'floor', grow: 0, trace: 0, yaw: c * Math.PI * 2, size: 0.55 + 0.6 * c, node: n.id });
+      const sp = fieldSp[hash01(n.id * 43 + i, 0x64, seed) < 0.5 ? 0 : 1]!;
+      out.push({ pos: [n.x + (a - 0.5) * (cfg.cell - 0.7), n.y, n.z + (b - 0.5) * (cfg.cell - 0.7)], kind: 'floor', grow: 0, trace: 0, yaw: c * Math.PI * 2, size: 0.55 + 0.6 * c, node: n.id, form: form(sp, hash01(n.id * 47 + i, 0x65, seed)) });
     }
   }
   return out;
@@ -126,8 +152,9 @@ export class Spores {
     nav: readonly NavNode[],
     seed: number,
     readonly cfg: SporesConfig = DEFAULT_SPORES,
+    place = 'shelter',
   ) {
-    this.sites = sporeSites(nav, seed, cfg);
+    this.sites = sporeSites(nav, seed, cfg, place);
   }
 
   /**
@@ -164,8 +191,8 @@ export class Spores {
   }
 
   /**
-   * Что рисовать: до max ближайших к точке from проросших мест, по шесть чисел на место — x, y, z,
-   * поворот, размер (уже с ростом), род (0 — угол, 1 — пол). Возвращает число мест, записанных в out.
+   * Что рисовать: до max ближайших к точке from проросших мест, по SPORE_STRIDE чисел на место — x, y, z, поворот, размер (уже
+   * с ростом), род (0 — угол, 1 — пол), форма грозди. Возвращает число мест, записанных в out.
    */
   visible(from: Vec3, max: number, out: Float32Array): number {
     const near: { s: SporeSite; d: number }[] = [];
@@ -175,16 +202,18 @@ export class Spores {
       if (d < 26) near.push({ s, d });
     }
     near.sort((a, b) => a.d - b.d);
-    const n = Math.min(max, near.length, Math.floor(out.length / 6));
+    const S = SPORE_STRIDE;
+    const n = Math.min(max, near.length, Math.floor(out.length / S));
     for (let i = 0; i < n; i++) {
       const s = near[i]!.s;
-      out[i * 6] = s.pos[0];
-      out[i * 6 + 1] = s.pos[1];
-      out[i * 6 + 2] = s.pos[2];
-      out[i * 6 + 3] = s.yaw;
+      out[i * S] = s.pos[0];
+      out[i * S + 1] = s.pos[1];
+      out[i * S + 2] = s.pos[2];
+      out[i * S + 3] = s.yaw;
       // Гриб выходит из пола не «увеличиваясь», а вырастая: сначала быстро, под конец медленно.
-      out[i * 6 + 4] = s.size * (1 - (1 - s.grow) ** 2);
-      out[i * 6 + 5] = s.kind === 'corner' ? 0 : 1;
+      out[i * S + 4] = s.size * (1 - (1 - s.grow) ** 2);
+      out[i * S + 5] = s.kind === 'corner' ? 0 : 1;
+      out[i * S + 6] = s.form;
     }
     return n;
   }

@@ -18,7 +18,7 @@ function rig(over: Partial<PlayContext> = {}) {
   const calls: Call[] = [];
   const lifecycle = new Lifecycle();
   let now = 0;
-  const ctx: PlayContext = { world: 'station', laps: 2, stage: 1, n: 3, scenes: false, test: false, quality: 'high', settings: { sound: true, lang: 'auto', sens: 1, bright: 1, flash: 'full', place: 'shelter' }, ...over };
+  const ctx: PlayContext = { world: 'station', laps: 2, stage: 1, n: 3, scenes: false, test: false, quality: 'high', settings: { sound: true, lang: 'auto', sens: 1, bright: 1, flash: 'soft', place: 'shelter' }, ...over };
   const a = new Analytics({ track: (e, d) => void calls.push([e, d]) }, lifecycle, () => ctx, () => now);
   return {
     a,
@@ -185,7 +185,7 @@ describe('аналитика Playgama: план событий через под
     r.a.sessionStarted();
     r.a.onStep(step({ session: [{ type: 'recall', memory: memory(ALL_MEMORIES[1]!.id) }], fear: [{ type: 'swarm', what: 'caught' }], dream: [jump('thin', 'void'), { type: 'pocket', kind: 'void', what: 'next' }] }));
     r.a.hint('swarm');
-    r.ctx.settings = { ...r.ctx.settings, flash: 'reduced' };
+    r.ctx.settings = { ...r.ctx.settings, flash: 'faint' };
     r.a.saved();
     r.a.placeErased();
     r.a.webgl('lost');

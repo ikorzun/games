@@ -44,7 +44,7 @@ import { Pressure } from './systems/pressure';
 import { FEEL_NEUTRAL, SessionFeel } from './systems/feel';
 import type { FeelView } from './systems/feel';
 import type { PressureKind, PressureRoom } from './systems/pressure';
-import { Spores } from './systems/spores';
+import { DEFAULT_SPORES, SPORE_STRIDE, Spores } from './systems/spores';
 import type { Comeback, ComebackOptions, Form, Mount } from './systems/illusions';
 import { Figures } from './systems/figures';
 import type { FigureLive } from './systems/figures';
@@ -404,8 +404,18 @@ const COLD_OPEN_STAGE = 2;
  * неё отпускает через stay секунд — дальше сессия идёт своим чередом.
  */
 const COLD_OPEN = { at: 16, stay: 20, near: 4.5, far: 9, cone: 0.5 } as const;
-/** Вспышка света памяти, когда вещь вспомнили: во сколько раз ярче и шире в пике и за сколько секунд гаснет. */
-const BLOOM = { strength: 3.5, radius: 1.6, fade: 3.2, calm: 1.6 } as const;
+/**
+ * Вспышка света памяти, когда вещь вспомнили: во сколько раз ярче в пике (мягкие вспышки и «почти незаметные»), во сколько
+ * шире и за сколько секунд гаснет.
+ */
+const BLOOM = { soft: 1.6, faint: 1.2, radius: 1.6, fade: 3.2 } as const;
+/**
+ * Строб-комната (мягко): ударов в секунду, доля ударов (остальные пропущены), длина удара в долях такта (0,45 — около
+ * 0,4 с: набухает и гаснет), сила удара у мягких и у «почти незаметных».
+ */
+const STROBE = { rate: 1.1, hit: 0.75, width: 0.45, soft: 0.5, faint: 0.1 } as const;
+/** Мягкое выбеливание: кадр плавно набирает молочный свет, но не до чистого белого. */
+const SOFT_WHITE = 0.82;
 /** Конус взгляда по умолчанию, градусы: [край, середина] — как у луча фонаря (render/renderer.ts, FrameView.gazeCone). */
 const GAZE_CONE: readonly [number, number] = [52, 25];
 /** Конус взгляда, сжатый или раскрытый кривой ощущений. */
@@ -511,8 +521,13 @@ export class Game {
   readonly roomFx = new Map<number, RoomFx>();
   /** Правила сессии: сколько воспоминаний, паузы между ними (тесты подменяют на короткие). */
   sessionCfg: SessionConfig = DEFAULT_SESSION;
-  /** Игрок просил поменьше вспышек: строб становится плавным, белые вспышки — затемнением. */
-  calmFlash = false;
+  /**
+   * Вспышки всегда мягкие (слова партнёра 19.11, 15:59: «вспышки всегда мягкие или почти незаметные, настрйку Полные убери»):
+   * строб — плавное мерцание, белых вспышек нет — кадр затемняется, свет памяти и луч на полном заряде вспыхивают сдержанно.
+   * faintFlash — «почти незаметные» (настройка заставки): мерцание и свет памяти ещё тише, дрожь строк и разлёт цветов слабее,
+   * сбой кадра вдвое слабее, луч на полном заряде — едва ярче.
+   */
+  faintFlash = false;
   /** Что игрок вспомнил за всё время (id воспоминаний): эти вещи копятся в лимбо. */
   archive: string[] = [];
   swarm: SwarmAI | null = null;
@@ -720,7 +735,7 @@ export class Game {
   wearGain = 0;
   /** Грибы: проросшее рядом с Осыпью и её следы в углах (systems/spores.ts). */
   spores: Spores | null = null;
-  private readonly sporeBuf = new Float32Array(SPORES_SHOWN * 6);
+  private readonly sporeBuf = new Float32Array(SPORES_SHOWN * SPORE_STRIDE);
   /** Бумажные цветы: насколько каждый расцвёл (0 — тусклый, 1 — яркий) и сколько уже держится расцветшим, с. */
   private readonly blooms = new Map<number, { k: number; hold: number }>();
   /** Номер экрана-проёма, в который вошли и который ещё не унёс (ждёт конца идущего перехода); 0 — нет. */
@@ -859,7 +874,7 @@ export class Game {
     if (dream) {
       this.dreamSeed = dream.seed;
       this.swarm = new SwarmAI(level.nav, this.rng);
-      this.spores = new Spores(level.nav, dream.seed);
+      this.spores = new Spores(level.nav, dream.seed, DEFAULT_SPORES, level.world ?? 'shelter');
       const stage = this.stage;
       // Сон из сцен: режиссёр страха — один на весь сон, его часы — часы сна (sleepTime), а не сцены: сцена идёт минуту, и
       // с новыми часами в каждой Осыпь не доживала бы до своего выхода (куратор, пачка 39, противоречие 218). Если она уже
@@ -2746,7 +2761,7 @@ export class Game {
     if (toggled) this.light.toggle();
     this.light.crank(input.crank && this.hasLight);
     const level = this.shake.update(dt);
-    const ev = this.light.update(dt, { panic: this.panic, wet: s?.inWater ? 1 : 0, swarm: this.swarmNear, shake: level, needed: this.ambientHere <= SELF_LIT });
+    const ev = this.light.update(dt, { panic: this.panic, wet: s?.inWater ? 1 : 0, swarm: this.swarmNear, shake: level, needed: this.ambientHere <= SELF_LIT, faint: this.faintFlash });
     const strokes = this.shake.strokes - this.lastStrokes;
     this.lastStrokes = this.shake.strokes;
 
@@ -3071,7 +3086,7 @@ export class Game {
     const life = memLightMod(lit.def.mod, this.time);
     // Вспышка «вспомнил»: в пике свет в BLOOM.strength раз ярче и в BLOOM.radius раз шире, потом гаснет.
     const b = bloomOn ? this.memBloom * this.memBloom : 0;
-    this.renderer.setMemLight({ pos: t.pos, yaw: t.yaw, kind: MEM_LIGHT_KIND[lit.def.kind], color: lit.def.color, strength: lit.def.strength * this.memLitK * life * (1 + ((this.calmFlash ? BLOOM.calm : BLOOM.strength) - 1) * b), height: lit.def.height * s, radius: lit.def.radius * Math.max(1, s) * (1 + (BLOOM.radius - 1) * b) });
+    this.renderer.setMemLight({ pos: t.pos, yaw: t.yaw, kind: MEM_LIGHT_KIND[lit.def.kind], color: lit.def.color, strength: lit.def.strength * this.memLitK * life * (1 + ((this.faintFlash ? BLOOM.faint : BLOOM.soft) - 1) * b), height: lit.def.height * s, radius: lit.def.radius * Math.max(1, s) * (1 + (BLOOM.radius - 1) * b) });
   }
 
   /** Фосфорные надписи: вспышка и темнота по событию; рядом с охотящимся роем гаснут. */
@@ -3175,14 +3190,17 @@ export class Game {
     this.fxWire = approach(this.fxWire, fx === 'dark' ? 0.85 : fx === 'wire' ? 0.5 : 0, 0.5, dt);
     let lightScale = this.env.light * this.fxLight;
     let wire = this.fxWire;
-    // Стробоскоп: короткие вспышки не чаще трёх в секунду (вразнобой, часть пропущена). По просьбе
-    // игрока «поменьше вспышек» — ровное медленное мерцание.
+    // Строб мягко (слова партнёра 19.11; куратор, пачка 50: «мягко — значит медленно, а не темно»): удар света набухает за
+    // четверть секунды и гаснет, не чаще раза в секунду, часть ударов пропущена — комната дышит светом, а не бьёт им.
+    // «Почти незаметные» — едва дышит. Раньше: короткие удары во весь кадр до трёх в секунду.
     let strobe = 0;
     this.strobeNow = 0;
     if (fx === 'strobe') {
-      const beat = this.time * 2.6;
+      const beat = this.time * STROBE.rate;
       const k = Math.floor(beat);
-      strobe = this.calmFlash ? 0.06 + 0.04 * Math.sin(this.time * 2.2) : hash01(k, 3, this.dreamSeed) < 0.8 && beat - k < 0.17 ? 1 : 0;
+      const ph = beat - k;
+      const bump = hash01(k, 3, this.dreamSeed) < STROBE.hit && ph < STROBE.width ? Math.sin((Math.PI * ph) / STROBE.width) ** 2 : 0;
+      strobe = (this.faintFlash ? STROBE.faint : STROBE.soft) * bump;
       this.strobeNow = strobe;
     }
 
@@ -3200,10 +3218,14 @@ export class Game {
     if (tr) {
       const k = tr.switched ? 1 - clamp((tr.t - tr.out) / tr.back, 0, 1) : clamp(tr.t / Math.max(tr.out, 1e-3), 0, 1);
       const style = tr.plan.style;
-      // Поймала: в тёмном месте кадр выгорает добела — свет разъел; в светлом тонет в черноте — поглотила.
+      // Поймала: в тёмном месте кадр выгорает добела — свет разъел; в светлом тонет в черноте — поглотила. Выгорание — мягкое:
+      // набухает плавно и не до конца белым; при «почти незаметных» — только чернота.
       if (tr.plan.cause === 'caught' && this.swarmCaught) {
-        if (this.polar > 0.5 || this.calmFlash) fadeMul = Math.min(fadeMul, 1 - k);
-        else flash = Math.max(flash, k);
+        if (this.polar > 0.5 || this.faintFlash) fadeMul = Math.min(fadeMul, 1 - k);
+        else {
+          fadeMul = Math.min(fadeMul, 1 - k);
+          flash = Math.max(flash, SOFT_WHITE * smoothstep(0, 1, k));
+        }
       }
       if (style === 'cut') this.glitch = Math.max(this.glitch, 0.9 * k);
       else if (style === 'dissolve') {
@@ -3218,12 +3240,16 @@ export class Game {
       } else if (style === 'blackout') {
         lightScale *= 1 - k;
         fadeMul = 1 - k;
-      } else if (this.calmFlash) fadeMul = 1 - k;
-      else flash = k;
+      } else {
+        // Выбеливание — мягко: место гаснет, а кадр плавно набирает молочный свет (не до чистого белого); «почти
+        // незаметные» — только гаснет.
+        fadeMul = 1 - k;
+        if (!this.faintFlash) flash = Math.max(flash, SOFT_WHITE * smoothstep(0, 1, k));
+      }
     }
 
-    // Вспышка полного заряда: кадр на миг выбеливается и за секунду возвращается (без вспышек — не выбеливается).
-    if (!this.calmFlash && this.light.flash > 0) flash = Math.max(flash, 0.28 * this.light.flash * this.light.flash);
+    // Вспышка полного заряда: кадр слегка светлеет вместе с набуханием луча (при «почти незаметных» — нет).
+    if (!this.faintFlash) flash = Math.max(flash, 0.12 * this.light.swell);
 
     const [lx, ly, lz] = rig.lightPos;
     this.beamDist = this.colliders.raycast(lx, ly, lz, rig.lightDir[0], rig.lightDir[1], rig.lightDir[2], 30);
@@ -3416,7 +3442,7 @@ export class Game {
     // Кинескоп заметнее на ходу, под взглядом на вещь, рядом с искомым и в момент скачка; к концу сессии строки дрожат.
     const speed = Math.hypot(b.vx, b.vz);
     const hold = this.session?.hold ?? 0;
-    const crt = clamp(0.1 + 0.2 * (speed / RUN_SPEED) + 0.5 * Math.max(focus?.gaze ?? 0, hold) + 0.3 * Math.max(0, memNear) + (tr ? 0.45 : 0) + 0.35 * fv.rattle * (this.calmFlash ? 0.4 : 1), 0, 1);
+    const crt = clamp(0.1 + 0.2 * (speed / RUN_SPEED) + 0.5 * Math.max(focus?.gaze ?? 0, hold) + 0.3 * Math.max(0, memNear) + (tr ? 0.45 : 0) + 0.35 * fv.rattle * (this.faintFlash ? 0.4 : 1), 0, 1);
 
     // Глубина 0…1: от входа до нижнего яруса.
     const depth = clamp(-(rig.camPos[1] - 1.42) / 9, 0, 1);
@@ -3441,13 +3467,13 @@ export class Game {
       camRoll: rig.camRoll + rattle * 0.5 * Math.sin(this.time * 43.1 + 2.2),
       lightPos: rig.lightPos,
       lightDir: rig.lightDir,
-      // Вспышка полного заряда: без вспышек (настройка заставки) луч ярче обычного не больше чем на треть.
-      lightIntensity: this.calmFlash ? Math.min(this.light.intensity, 1.3) : this.light.intensity,
+      // Вспышка полного заряда — набухание самого фонаря (systems/flashlight.ts, SOFT_LIGHT): мягко, без скачка.
+      lightIntensity: this.light.intensity,
       lightWarmth: 0,
       beamDist: this.beamDist,
       gain,
       noise: this.exposure.noise(),
-      glitch: (this.staticLevel = Math.max(this.glitch, static_)),
+      glitch: (this.staticLevel = Math.max(this.glitch, static_)) * (this.faintFlash ? 0.5 : 1),
       // Края кадра темнеют от паники и к концу сессии (кривая ощущений) — берётся сильнейшее, не сумма.
       tunnel: clamp(Math.max(this.panic * 0.6, fv.tunnel), 0, 0.95),
       gas: this.gasView,
@@ -3492,8 +3518,8 @@ export class Game {
       ...(fl || fv.gaze !== 1 ? { gazeCone: gazeConeOf(fl ? fl.gaze() : GAZE_CONE, fv.gaze) } : {}),
       beamCone: fv.beam,
       // Кадр плывёт: разлёт цветов медленно дышит (период около 7,5 с) — кадр, а не голова: камеру не качаем.
-      // С настройкой «меньше вспышек» цвета плывут и строки дрожат слабее.
-      drift: fv.drift * (this.calmFlash ? 0.4 : 1) * (0.55 + 0.45 * Math.sin(this.time * 0.83)),
+      // Дрожь и разлёт цветов — не вспышки, а ощущения (дребезжание): мягкие вспышки их не трогают, «почти незаметные» — тише.
+      drift: fv.drift * (this.faintFlash ? 0.4 : 1) * (0.55 + 0.45 * Math.sin(this.time * 0.83)),
       lens,
       scanRange: fl ? fl.scan() : (this.env.scan ?? [4, 15]),
       // Тени прямого света — в квадрате вокруг игрока, сдвинутом вперёд по взгляду: позади они не нужны.

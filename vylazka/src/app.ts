@@ -11,8 +11,7 @@ import { mulberry32 } from './core/rng';
 import { loadSave, memoryFor, rankFor, writeProfile } from './core/save';
 import type { PlaceMemory } from './core/save';
 import { erased, WEAR } from './systems/decay';
-import type { Level3, Profile } from './core/save';
-import { LANGS } from './core/types';
+import type { FlashLevel, Level3, Profile } from './core/save';
 import type { Lang } from './core/types';
 import { Game, STAGE_ALL, STEP } from './game';
 import type { StepEvents } from './game';
@@ -37,7 +36,7 @@ import type { SessionConfig } from './systems/session';
 import { wornLine } from './systems/worn_text';
 import { Hud } from './ui/hud';
 import { Overlay } from './ui/overlay';
-import type { Card, CardLine } from './ui/overlay';
+import type { CardLine } from './ui/overlay';
 import { TouchControls } from './ui/touch_controls';
 import { ColliderSet } from './world/colliders';
 import type { BuiltLevel } from './world/level';
@@ -67,7 +66,13 @@ const isQuality = (v: string | null): v is Quality => v === 'low' || v === 'med'
  * Числа выбраны расчётом и на настоящих видеокартах не проверены. Они нарочно не строгие: ошибку в
  * сторону «включили зря» ловит игра (качество вернётся само), а ошибку «не включили» не ловит никто.
  */
-const PROBE = { highMs: 5, fineMs: 11, minMs: 0.3, settleMs: 700, fpsFloor: 45, slowFor: 2.5 } as const;
+const PROBE = { highMs: 6.5, fineMs: 11, minMs: 0.3, settleMs: 700, fpsFloor: 45, slowFor: 2.5 } as const;
+/**
+ * Ступени мелкости «ультра», от самой мелкой, что даёт экран, к 1,25 (партнёр 19.11: визуал «ультра» — большему числу машин):
+ * замер берёт первую, что укладывается в кадр, а игра на медленной машине мельчит зерно не так сильно, прежде чем уступить
+ * высокому качеству.
+ */
+const fineSteps = (top: number): number[] => [...new Set([top, 1.5, 1.25].filter((f) => f <= top + 1e-6).map((f) => Math.round(f * 4) / 4))].sort((a, b) => b - a);
 /** Множители обзора и яркости для уровней «ниже / средне / выше». */
 const SENS = [0.6, 1, 1.6] as const;
 /**
@@ -255,7 +260,7 @@ export class App {
       scenes: this.scenes,
       test: this.testLevel,
       quality: this.game?.renderer.quality ?? '',
-      settings: p ? { sound: !p.muted, lang: p.lang ?? 'auto', sens: p.sens, bright: p.bright, flash: p.calm ? 'reduced' : 'full', place: p.place } : {},
+      settings: p ? { sound: !p.muted, lang: p.lang ?? 'auto', sens: p.sens, bright: p.bright, flash: p.flash, place: p.place } : {},
     };
   }
 
@@ -291,20 +296,22 @@ export class App {
       onStart: () => this.start(),
       onResume: () => this.resumePlay(),
       onNext: () => undefined,
-      onFlash: () => this.setCalm(!this.profile.calm),
+      onFlash: (level) => this.setFlash(level),
       onPlace: () => this.setPlace(WORLD_KINDS[(WORLD_KINDS.indexOf(this.world) + 1) % WORLD_KINDS.length]!),
       onRestartPlace: () => this.restartPlace(),
-      onLang: () => this.cycleLang(),
+      onLang: (lang) => this.pickLang(lang),
       onDiag: () => this.toggleDiag(),
       onQuality: (q) => {
         this.qualityManual = true;
+        // «Ультра», выбранная рукой, начинает с самой мелкой ступени, что даёт экран (дальше игра подстроит её сама).
+        if (q === 'ultra') this.game.renderer.setFineCap(2);
         this.setQuality(q);
         this.audio.ui('ui_click');
       },
       onMotion: () => void this.enableMotion(),
-      onSound: () => this.setMuted(!this.profile.muted),
-      onSens: () => this.setLevels(((this.profile.sens + 1) % 3) as Level3, this.profile.bright),
-      onBright: () => this.setLevels(this.profile.sens, ((this.profile.bright + 1) % 3) as Level3),
+      onSound: (on) => this.setMuted(!on),
+      onSens: (level) => this.setLevels(level, this.profile.bright),
+      onBright: (level) => this.setLevels(this.profile.sens, level),
     });
     // Браузер даёт звук только после жеста: будим его первым же нажатием, где бы оно ни было.
     const wake = (): void => this.sound.unlock();
@@ -324,8 +331,9 @@ export class App {
       if (ok) this.overlay.setCredits(sand3dCredits());
       return ok;
     });
-    // Шрифт интерфейса: ждём недолго, чтобы первый экран не мигнул системным.
-    await Promise.race([document.fonts?.load?.('16px "JetBrains Mono"', 'Убежище Ag').catch(() => undefined) ?? Promise.resolve(), new Promise((r) => setTimeout(r, 1500))]);
+    // Шрифты интерфейса и названия: ждём недолго, чтобы первый экран не мигнул системным.
+    const font = (spec: string, text: string): Promise<unknown> => document.fonts?.load?.(spec, text).catch(() => undefined) ?? Promise.resolve();
+    await Promise.race([Promise.all([font('16px "JetBrains Mono"', 'Убежище Ag'), font('200 16px "JetBrains Mono"', 'Ты спишь Ag'), font('300 40px "DM Mono"', 'UNTITLED SESSION')]), new Promise((r) => setTimeout(r, 1500))]);
 
     const qParam = p.get('q');
     const quality: Quality = isQuality(qParam) ? qParam : this.touchMode ? 'med' : 'high';
@@ -406,7 +414,7 @@ export class App {
     this.sound.setMuted(this.profile.muted);
     this.overlay.setSound(!this.profile.muted);
     this.overlay.setLevels(this.profile.sens, this.profile.bright);
-    this.overlay.setFlash(this.profile.calm);
+    this.overlay.setFlash(this.profile.flash);
     // Место вылазки: из адреса (?world=office); в сне из сцен — первая сессия в убежище, дальше то, куда сон ушёл в прошлый
     // раз (onLimbo); в петле одного места — то, что выбрано кнопкой «Место».
     const asked = p.get('world');
@@ -436,7 +444,7 @@ export class App {
       // скорость машины.
       ...(p.get('fail') === '0' ? { drainSeconds: Infinity, meanFailInterval: Infinity } : {}),
     });
-    this.game.calmFlash = this.profile.calm;
+    this.game.faintFlash = this.profile.flash === 'faint';
     // Режиссёр давления (провал, сжатие) сам событий не начинает там, где нужен ровный ход: адрес
     // с fail=0 — проверки. press=1 включает его и там, press=0 выключает везде.
     this.game.pressureAuto = (p.get('press') ?? (p.get('fail') === '0' ? '0' : '1')) !== '0';
@@ -466,7 +474,9 @@ export class App {
     const resize = (): void => {
       renderer.resize(this.root.clientWidth, this.root.clientHeight);
       // Ступень «ультра» в кнопке качества — только на компьютере и только там, где экран даёт зерно мельче.
-      this.overlay.setFineStep(!this.touchMode && renderer.fineFor('ultra') >= 1.25);
+      // «Ультра» — везде, где экран даёт зерно мельче хотя бы на четверть, и на телефоне тоже (рукой; сама игра на телефоне
+      // её не включает): ступени мелкости подстраиваются под машину (fineSteps).
+      this.overlay.setFineStep(renderer.fineFor('ultra') >= 1.25);
       this.redraw();
     };
     // На телефоне адресная строка Safari прячется и выезжает плавно — размер меняется десятки раз подряд, а
@@ -606,18 +616,19 @@ export class App {
     this.screen = 'title';
     this.audio.setScene('menu');
     this.syncAudio();
-    this.overlay.setCard(this.titleCard());
+    this.titleScreen();
     this.updateHud();
   }
 
-  /** Заставка: название, чем это объясняется, предупреждение о вспышках. */
-  private titleCard(): Card {
-    const lines: CardLine[] = [
-      { text: t('title.how'), kind: 'plain' },
-      { text: t('title.warn'), kind: 'dim' },
-    ];
-    if (this.profile.successes > 0) lines.push({ text: t('title.count', { n: this.profile.successes, k: this.profile.archive.filter((id) => ALL_MEMORIES.some((m) => m.id === id)).length, total: ALL_MEMORIES.length }), kind: 'dim' });
-    return { title: t('ui.title'), sub: t('ui.subtitle'), lines, prompt: t(`ui.start${this.touchMode ? '.touch' : ''}`) };
+  /**
+   * Заставка (слова партнёра 19.11: «Оставляем название и сразу под ним про сон и начать играть»): название, строка про сон и
+   * «начать». Предупреждение о вспышках — тихой строкой у нижнего края, счёт сессий — внизу списка под шестерёнкой.
+   */
+  private titleScreen(): void {
+    this.overlay.setNote(t('title.warn'));
+    this.overlay.setInfo(this.profile.successes > 0 ? [t('title.count', { n: this.profile.successes, k: this.profile.archive.filter((id) => ALL_MEMORIES.some((m) => m.id === id)).length, total: ALL_MEMORIES.length })] : []);
+    const lines: CardLine[] = [{ text: t('title.how'), kind: 'plain' }];
+    this.overlay.setCard({ title: t('ui.title'), sub: '', lines, prompt: t(`ui.start${this.touchMode ? '.touch' : ''}`) });
   }
 
   /** Номер сессии, как имя несохранённого файла. */
@@ -962,18 +973,17 @@ export class App {
     }
   }
 
-  /** Вспышки: полные или мягкие. */
-  setCalm(calm: boolean): void {
-    this.profile.calm = calm;
-    this.game.calmFlash = calm;
-    this.overlay.setFlash(calm);
+  /** Вспышки: мягкие или почти незаметные (полных нет — слова партнёра 19.11). */
+  setFlash(level: FlashLevel): void {
+    this.profile.flash = level;
+    this.game.faintFlash = level === 'faint';
+    this.overlay.setFlash(level);
     this.audio.ui('ui_click');
     this.saveProfile();
   }
 
-  /** Следующий язык по кругу; выбор запоминается. */
-  private cycleLang(): void {
-    const lang = LANGS[(LANGS.indexOf(i18n.lang) + 1) % LANGS.length]!;
+  /** Язык из списка настроек; выбор запоминается. */
+  private pickLang(lang: Lang): void {
     this.profile.lang = lang;
     this.setLang(lang);
     this.audio.ui('ui_click');
@@ -1002,6 +1012,7 @@ export class App {
       this.touch?.release();
       this.touch?.setVisible(false);
       this.game.shake.reset();
+      this.overlay.setInfo([t('title.warn')]);
       this.overlay.show('paused');
       this.saveProfile();
     } else {
@@ -1059,7 +1070,7 @@ export class App {
     this.touch.setVisible(this.screen === 'play' && !this.lifecycle.paused);
     this.overlay.setTouch(true);
     this.refreshMotionButton();
-    if (this.screen === 'title') this.overlay.setCard(this.titleCard());
+    if (this.screen === 'title') this.titleScreen();
     if (this.screen === 'play' && !MotionSensor.needsPermission()) void this.enableMotion();
   }
 
@@ -1104,16 +1115,24 @@ export class App {
    */
   private probeFine(): void {
     const r = this.game.renderer;
-    if (this.qualityManual || this.touchMode || r.quality !== 'high' || r.fineFor('ultra') < 1.5) return;
+    if (this.qualityManual || this.touchMode || r.quality !== 'high') return;
+    const top = r.fineFor('ultra');
+    if (top < 1.25) return;
     const draw = (): void => this.redraw();
     const ok = (ms: number, max: number): boolean => ms >= PROBE.minMs && ms <= max;
     if (!ok(r.measure(draw, 2, PROBE.highMs * 4), PROBE.highMs)) return;
     this.setQuality('ultra');
-    // Досев точек: пока облако редкое, кадр легче настоящего, и замер обманул бы. Ждём, пока досеется.
-    const t0 = performance.now();
-    do r.measure(draw, 1, PROBE.settleMs);
-    while (r.sowing && performance.now() - t0 < PROBE.settleMs);
-    if (!ok(r.measure(draw, 4, PROBE.fineMs * 6), PROBE.fineMs)) this.setQuality('high');
+    // Ступени мелкости: первая, что укладывается в кадр, остаётся. Раньше было «всё или ничего» — мелкость 2 или высокое.
+    for (const cap of fineSteps(top)) {
+      r.setFineCap(cap);
+      // Досев точек: пока облако редкое, кадр легче настоящего, и замер обманул бы. Ждём, пока досеется.
+      const t0 = performance.now();
+      do r.measure(draw, 1, PROBE.settleMs);
+      while (r.sowing && performance.now() - t0 < PROBE.settleMs);
+      if (ok(r.measure(draw, 4, PROBE.fineMs * 6), PROBE.fineMs)) return;
+    }
+    r.setFineCap(2);
+    this.setQuality('high');
   }
 
   setLang(lang: Lang, initial = false): void {
@@ -1122,8 +1141,11 @@ export class App {
     if (initial) return;
     this.hud.relabel();
     this.touch?.relabel();
-    if (this.screen === 'title') this.overlay.setCard(this.titleCard());
-    else this.overlay.refresh();
+    if (this.screen === 'title') this.titleScreen();
+    else {
+      if (this.screen === 'play') this.overlay.setInfo([t('title.warn')]);
+      this.overlay.refresh();
+    }
     this.refreshMotionButton();
     this.updateHud();
   }
@@ -1616,17 +1638,28 @@ export class App {
    * держится строже остальных: оно — роскошь, и ради него игра не должна идти рывками.
    */
   private autoQuality(dt: number): void {
-    if (this.qualityManual) return;
+    const r = this.game.renderer;
+    const q = r.quality;
+    const fine = q === 'ultra';
+    // Выбор игрока не трогаем — кроме ступени мелкости «ультра»: её игра подстраивает и тогда, качество остаётся «ультра».
+    if (this.qualityManual && !fine) return;
     this.playTime += dt;
     if (this.playTime < 10) return;
-    const q = this.game.renderer.quality;
-    const fine = q === 'ultra';
     this.slowTime = this.fps < (fine ? PROBE.fpsFloor : 27) ? this.slowTime + dt : Math.max(0, this.slowTime - dt * 2);
     if (this.slowTime < (fine ? PROBE.slowFor : 4)) return;
     this.slowTime = 0;
     this.playTime = 4;
-    if (fine) this.setQuality('high');
-    else if (q === 'high') this.setQuality('med');
+    if (fine) {
+      // Сначала — ступенью крупнее, и только с самой крупной (1,25) — на высокое.
+      if (r.fine > 1.25) {
+        r.setFineCap(r.fine - 0.25);
+        this.redraw();
+        return;
+      }
+      if (this.qualityManual) return;
+      r.setFineCap(2);
+      this.setQuality('high');
+    } else if (q === 'high') this.setQuality('med');
     else if (q === 'med') this.setQuality('low');
   }
 }

@@ -767,7 +767,7 @@ export type HomeItem = readonly [name: string, dx?: number, y?: number];
  * — сначала туда, где нет дверей; в тесных комнатах допускается и у двери, если не глубже 0,75 м.
  * Настенные предметы (ковёр, окно, батарея) вешаются над низкой мебелью на тот же участок.
  */
-export function homeStack(ctx: RoomCtx, items: readonly HomeItem[], score?: SlotScore): Stacked | null {
+export function homeStack(ctx: RoomCtx, items: readonly HomeItem[], score?: SlotScore, perSlot?: (s: Slot) => readonly (readonly HomeItem[])[]): Stacked | null {
   const specs = items.map(([n]) => ALL_PROPS[n]);
   if (specs.some((p) => !p)) return null;
   const { depth, half } = extent(items, specs as PropSpec[]);
@@ -788,18 +788,23 @@ export function homeStack(ctx: RoomCtx, items: readonly HomeItem[], score?: Slot
   };
   for (let s = next(); s; s = next()) {
     tried.add(s);
-    const r = stackAt(ctx, s, items, specs as PropSpec[], half, depth);
-    if (r) return r;
+    // perSlot — стопки, зависящие от участка, по очереди (у кухонного ряда — холодильник у угла, потом у другого конца); габарит у
+    // них тот же.
+    for (const its of perSlot ? perSlot(s) : [items]) {
+      const r = stackAt(ctx, s, its, perSlot ? (its.map(([n]) => ALL_PROPS[n]) as PropSpec[]) : (specs as PropSpec[]), half, depth);
+      if (r) return r;
+    }
   }
   return null;
 }
 
-/** Что встало: участок, сдвиг вдоль него, сиды вещей стопки и какие из них встали. */
+/** Что встало: участок, сдвиг вдоль него, сиды вещей стопки, какие из них встали и какая это была стопка. */
 export interface Stacked {
   s: Slot;
   x: number;
   seeds: number[];
   stood: boolean[];
+  items: readonly HomeItem[];
 }
 
 /** Глубина стопки (без настенного) и половина её ширины вдоль стены. */
@@ -849,7 +854,7 @@ function stackAt(ctx: RoomCtx, s: Slot, items: readonly HomeItem[], specs: reado
       for (let i = 0; i < items.length; i++) stood.push(i === 0 || stood[0] === true ? buildAt(i, x) : false);
       if (stood[0] && (!whole || stood.every(Boolean))) {
         s.used = true;
-        return { s, x, seeds, stood };
+        return { s, x, seeds, stood, items };
       }
       if (mark) rewindBuild(s.xf, mark);
       ctx.flats.length = flats;
@@ -866,7 +871,19 @@ function stackAt(ctx: RoomCtx, s: Slot, items: readonly HomeItem[], specs: reado
     const seed = seeds[i]!;
     const at = s.xf.child(x + dx, p.mount === 'wall' ? (y ?? p.y ?? 1.2) : 0, 0);
     if (p.mount === 'floor' && isFlat(ctx, s, name, i)) {
-      // Картонка: стоит там же, где стоял бы настоящий предмет, но это лист — и преграды у неё нет.
+      // Картонка: стоит там же, где стоял бы настоящий предмет, но это лист — и преграды у неё нет. Поэтому и проверка «не
+      // врастать» её не видела: лист вставал внутрь соседней вещи (картонный холодильник — в кухонный стол, 19.11). Сначала —
+      // пробный настоящий предмет: не встал бы он — не встаёт и картонка; встал — откатываем его и ставим лист.
+      const probe = markBuild(s.xf);
+      if (probe) {
+        const flats0 = ctx.flats.length;
+        const hook0 = swapState();
+        const real = (s.deep ? p.build(at, seed) : withOpenness(0, () => p.build(at, seed))) !== false;
+        rewindBuild(s.xf, probe);
+        ctx.flats.length = flats0;
+        restoreSwap(hook0);
+        if (!real) return false;
+      }
       const sheet = new Xf(at.mb, null, at.ox, at.oy, at.oz, at.rot, at.sl);
       let r = { w: p.w, h: p.h, plane: 0 };
       let built = false;
@@ -1120,13 +1137,22 @@ function kitchen(ctx: RoomCtx): void {
   // мойка — плита» короткий, как на настоящей кухне.
   // Холодильник — первым в стопке: он есть в каждой кухне (его передвигает партнёр — правка ссылается на первый холодильник
   // кухни), даже если мойка с плитой рядом не встали; тогда они ищут место ближе к нему.
-  const flip = ctx.rng() < 0.5 ? -1 : 1;
+  // Холодильник — к углу: на тот конец ряда, где у стены угол (партнёр уводил холодильник в угол во всех кухнях — его правка
+  // стала правилом генератора: куратор, пачка 50, противоречие 299). Участок — тот, что выберет ряд; углов два или нет —
+  // как выпадет (жребий тянется всегда: иначе сдвинулись бы вещи дальше в комнате, а правки партнёра ссылаются на них).
+  const coin = ctx.rng() < 0.5 ? -1 : 1;
   const sinkHalf = ALL_PROPS.sink_cabinet!.w / 2;
   const fx = sinkHalf + ALL_PROPS.fridge!.w / 2 + 0.02;
   const sx = sinkHalf + ALL_PROPS.stove!.w / 2 + 0.02;
-  const line = homeStack(ctx, [['fridge', -flip * fx], ['sink_cabinet'], ['stove', flip * sx]], k.side);
+  // f = 1 — холодильник на конце −x участка (угол cornerL), −1 — на конце +x (cornerR). На каждом участке, который пробует ряд, —
+  // сначала холодильник у угла, потом у другого конца: «угол» бывает и дверью, и у двери холодильнику не встать.
+  const lineOf = (f: number): HomeItem[] => [['fridge', -f * fx], ['sink_cabinet'], ['stove', f * sx]];
+  const line = homeStack(ctx, lineOf(coin), k.side, (q) => {
+    const f = q.cornerL !== q.cornerR ? (q.cornerL ? 1 : -1) : coin;
+    return [lineOf(f), lineOf(-f)];
+  });
   if (line) {
-    const f = line.s.xf.pt(line.x - flip * fx, 0, 0);
+    const f = line.s.xf.pt(line.x + (line.items[0]![1] ?? 0), 0, 0);
     if (!line.stood[1]) homeStack(ctx, [['sink_cabinet']], k.near(f[0], f[2]));
     if (!line.stood[2]) homeStack(ctx, [['stove']], k.near(f[0], f[2]));
   }

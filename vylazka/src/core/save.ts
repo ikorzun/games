@@ -22,8 +22,11 @@ export interface Profile {
   /** Чувствительность обзора и яркость картинки: 0 — ниже, 1 — как задумано, 2 — выше. */
   sens: Level3;
   bright: Level3;
-  /** Игрок просил поменьше вспышек: стробоскоп становится плавным, белые вспышки — затемнением. */
-  calm: boolean;
+  /**
+   * Вспышки: мягкие (по умолчанию) или «почти незаметные». Полных больше нет (слова партнёра 19.11, 15:59): прежнее поле
+   * calm (полные или мягкие) не читается — и те, и другие становятся мягкими.
+   */
+  flash: FlashLevel;
   /** Язык, выбранный игроком (null — по умолчанию, английский). */
   lang: string | null;
   /** Место вылазки, выбранное на заставке: убежище, офис или жёлтые комнаты. */
@@ -53,6 +56,8 @@ export interface PlaceMemory {
 }
 
 export type Level3 = 0 | 1 | 2;
+/** Вспышки: мягкие или «почти незаметные». */
+export type FlashLevel = 'soft' | 'faint';
 const level3 = (v: unknown): Level3 => (v === 0 || v === 2 ? v : 1);
 
 const KEYS = ['profile'];
@@ -61,7 +66,7 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
 export function defaultProfile(baseSeed: number): Profile {
-  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1, calm: false, lang: null, place: 'shelter', memories: {} };
+  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1, flash: 'soft', lang: null, place: 'shelter', memories: {} };
 }
 
 /** Разобрать профиль из хранилища; всё непонятное заменяется значениями по умолчанию. */
@@ -78,7 +83,7 @@ export function parseProfile(raw: unknown, baseSeed: number): Profile {
     muted: o.muted === true,
     sens: level3(o.sens),
     bright: level3(o.bright),
-    calm: o.calm === true,
+    flash: o.flash === 'faint' ? 'faint' : 'soft',
     lang: typeof o.lang === 'string' ? o.lang : null,
     place: o.place === 'office' || o.place === 'yellow' || o.place === 'station' ? o.place : 'shelter',
     memories: parseMemories(o.memories),

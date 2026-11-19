@@ -8,7 +8,7 @@ import type { Vec3 } from '../core/types';
 import type { MeshData } from '../world/kit';
 import type { LevelChunk, StairLink } from '../world/level';
 import { birdMesh } from '../world/bird';
-import { mushroomCluster } from '../world/mushrooms';
+import { mushroomForm } from '../world/mushrooms';
 import { BIRD_STRIDE, BIRDS_MAX } from '../systems/birds';
 import { MAT_COUNT, MAT_DEFS } from '../world/materials';
 import { bakeDetail } from './detail';
@@ -403,6 +403,10 @@ const SLIDE = { washFrom: 0.012, washTo: 0.11, gain: 0.085 } as const;
 const SONAR_SCAN = 1.2;
 /** Сколько гроздей грибов рисуется разом. */
 export const SPORES_MAX = 240;
+/** На низком качестве — не больше стольких гроздей (ближайших): у видов теперь по 600–1200 треугольников. */
+const SPORES_LOW = 120;
+/** Чисел на гроздь (systems/spores.ts, SPORE_STRIDE): x, y, z, поворот, размер, род, форма. */
+const SPORE_STRIDE = 7;
 
 /**
  * Сторона текстуры состояний объектов уровня: 64 × 64 = 4096 объектов (world/objects.ts, MAX_OBJECTS).
@@ -546,8 +550,10 @@ export class GameRenderer {
   private chunkTris: (Map<number, number[]> | null)[] = [];
   /** Во сколько раз пыль реже полной плотности (по качеству). */
   private grainDensity = 1;
-  /** Грибы (systems/spores.ts): одна гроздь, поставленная много раз. */
-  private sporeMesh: THREE.InstancedMesh | null = null;
+  /** Грибы (systems/spores.ts): по сетке на форму грозди (вид × вариант, world/mushrooms.ts), каждая поставлена много раз. */
+  private readonly sporeMeshes = new Map<number, THREE.InstancedMesh>();
+  private sporeMat: THREE.ShaderMaterial | null = null;
+  private readonly sporeUsed = new Map<number, number>();
   /** Стекло крыши зала ожидания: один лист над переплётом (GLASS_FRAG). */
   private glass!: THREE.Mesh;
   private glassMat!: THREE.ShaderMaterial;
@@ -1192,8 +1198,31 @@ export class GameRenderer {
     return rt;
   }
 
+  /**
+   * Предел мелкости «ультра» (слова партнёра 19.11: «проверь производительность на Ультра – мне нравится визуал, хочется
+   * сделать его доступным для большего количества браузеров и железа»). Ультра — не «всё или ничего»: мелкость зерна и точек
+   * ступенями по четверти от 1,25 до 2, по силам машины. Буфер — в cap² раз больше высокого, точек — во столько же, тень —
+   * 1024 × cap. Ставит приложение: по замеру под заставкой загрузки и по частоте кадров в игре (app.ts).
+   */
+  fineCap = 2;
+
+  setFineCap(cap: number): void {
+    const c = Math.max(1, Math.min(2, Math.round(cap * 4) / 4));
+    if (c === this.fineCap) return;
+    this.fineCap = c;
+    if (QUALITY[this.quality].fine > 1) this.applyQuality();
+  }
+
+  /** Качество с пределом мелкости (для «ультра»; у остальных — как в таблице). */
+  private specOf(q: Quality): QualitySpec {
+    const s = QUALITY[q];
+    if (!(s.fine > 1) || this.fineCap >= s.fine) return s;
+    const f = Math.max(1, this.fineCap);
+    return { ...s, pixels: s.pixels * (f / s.fine) ** 2, fine: f, shadow: Math.round((1024 * f) / 256) * 256 };
+  }
+
   private applyQuality(): void {
-    const q = QUALITY[this.quality];
+    const q = this.specOf(this.quality);
     this.shadowRT?.dispose();
     this.shadowRT = null;
     if (q.shadow > 0) {
@@ -1268,8 +1297,9 @@ export class GameRenderer {
     this.cssW = Math.max(1, cssW);
     this.cssH = Math.max(1, cssH);
     const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
-    const [w, h] = internalSize(this.cssW, this.cssH, QUALITY[this.quality].pixels, dpr);
-    const fine = fineOf(this.cssW, this.cssH, QUALITY[this.quality], dpr);
+    const spec = this.specOf(this.quality);
+    const [w, h] = internalSize(this.cssW, this.cssH, spec.pixels, dpr);
+    const fine = fineOf(this.cssW, this.cssH, spec, dpr);
     if (w === this.width && h === this.height && fine === this.fine) return;
     this.width = w;
     this.height = h;
@@ -1340,7 +1370,7 @@ export class GameRenderer {
 
   /** Насколько мелким вышло бы зерно на этом экране при таком качестве (сейчас — поле fine). */
   fineFor(q: Quality): number {
-    return fineOf(this.cssW, this.cssH, QUALITY[q], typeof devicePixelRatio === 'number' ? devicePixelRatio : 1);
+    return fineOf(this.cssW, this.cssH, this.specOf(q), typeof devicePixelRatio === 'number' ? devicePixelRatio : 1);
   }
 
   /**
@@ -1552,34 +1582,45 @@ export class GameRenderer {
   }
 
   /**
-   * Грибы: count мест по шесть чисел — x, y, z, поворот, размер, род (0 — угол: гроздь крупнее; 1 — пол).
-   * Тени они не дают и точками не рассыпаются: это не вещь места, а то, что проросло сквозь него.
+   * Грибы: count мест по SPORE_STRIDE чисел — x, y, z, поворот, размер, род (0 — угол: гроздь крупнее; 1 — пол), форма грозди.
+   * Места уже упорядочены от ближнего: на низком качестве берутся первые SPORES_LOW. Тени грибы не дают и точками не
+   * рассыпаются: это не вещь места, а то, что проросло сквозь него.
    */
   setSpores(data: Float32Array, count: number): void {
-    if (!this.sporeMesh) {
-      if (count === 0) return;
-      const src = this.makeMesh(mushroomCluster(), 0, 0);
-      const mat = this.worldLike();
-      mat.uniforms.uThing = { value: new THREE.Vector4(0, 0, 2, 0) };
-      mat.defines = { ...this.worldMat.defines };
-      this.sporeMesh = new THREE.InstancedMesh(src.geometry, mat, SPORES_MAX);
-      this.sporeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      this.sporeMesh.frustumCulled = false;
-      this.sporeMesh.matrixAutoUpdate = false;
-      this.sporeMesh.layers.set(1);
-      this.scene.add(this.sporeMesh);
-    }
-    const n = Math.min(count, SPORES_MAX);
+    const S = SPORE_STRIDE;
+    const n = Math.min(count, this.quality === 'low' ? SPORES_LOW : SPORES_MAX);
     const up = this.sporeP.set(0, 1, 0);
+    this.sporeUsed.clear();
     for (let i = 0; i < n; i++) {
-      const k = data[i * 6 + 4]! * (data[i * 6 + 5]! < 0.5 ? 1.5 : 1);
-      this.sporeQ.setFromAxisAngle(up, data[i * 6 + 3]!);
-      this.sporeM.compose(this.tmpV.set(data[i * 6]!, data[i * 6 + 1]!, data[i * 6 + 2]!), this.sporeQ, this.sporeS.set(k, k, k));
-      this.sporeMesh.setMatrixAt(i, this.sporeM);
+      const form = data[i * S + 6]!;
+      let mesh = this.sporeMeshes.get(form);
+      if (!mesh) {
+        if (!this.sporeMat) {
+          this.sporeMat = this.worldLike();
+          this.sporeMat.uniforms.uThing = { value: new THREE.Vector4(0, 0, 2, 0) };
+          this.sporeMat.defines = { ...this.worldMat.defines };
+        }
+        mesh = new THREE.InstancedMesh(this.makeMesh(mushroomForm(form), 0, 0).geometry, this.sporeMat, SPORES_MAX);
+        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        mesh.frustumCulled = false;
+        mesh.matrixAutoUpdate = false;
+        mesh.layers.set(1);
+        this.scene.add(mesh);
+        this.sporeMeshes.set(form, mesh);
+      }
+      const c = this.sporeUsed.get(form) ?? 0;
+      const k = data[i * S + 4]! * (data[i * S + 5]! < 0.5 ? 1.5 : 1);
+      this.sporeQ.setFromAxisAngle(up, data[i * S + 3]!);
+      this.sporeM.compose(this.tmpV.set(data[i * S]!, data[i * S + 1]!, data[i * S + 2]!), this.sporeQ, this.sporeS.set(k, k, k));
+      mesh.setMatrixAt(c, this.sporeM);
+      this.sporeUsed.set(form, c + 1);
     }
-    this.sporeMesh.count = n;
-    this.sporeMesh.visible = n > 0;
-    this.sporeMesh.instanceMatrix.needsUpdate = true;
+    for (const [form, mesh] of this.sporeMeshes) {
+      const c = this.sporeUsed.get(form) ?? 0;
+      mesh.count = c;
+      mesh.visible = c > 0;
+      if (c > 0) mesh.instanceMatrix.needsUpdate = true;
+    }
   }
 
   /**
