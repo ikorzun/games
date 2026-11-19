@@ -36,7 +36,7 @@ import { EdgeBuilder } from './edges';
 import { placeFigures } from './figure_place';
 import type { FigureSpec } from './figures';
 import { FIGURES } from './figures_data';
-import { fitMoved, NEVER, placedSeed, placeThings, roomIndex } from './placed_place';
+import { fitMoved, NEVER, placedSeed, placeThings, rests, roomIndex } from './placed_place';
 import type { PlacedSpot } from './placed_place';
 import type { PlacedSpec, RemovedSpec } from './placed';
 import { swapFits } from './placed';
@@ -915,7 +915,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     // Вещи партнёра (world/placed_place.ts): после фигур и всей обстановки — не врастают ни во что, проходы
     // оставляют свободными. Строятся как обычная обстановка: в сетку своего помещения, с преградами, объектом
     // уровня (растворяется от касания и возвращается, как всё).
-    for (const p of placeThings(opts.placed ?? PLACED, placeWorld, ALL_PROPS, (sp, r) => inVariant(slotFor(sp.slot, sp.rule.rooms), pick(r)))) {
+    const buildPlaced = (p: PlacedSpot): void => {
       const room = layout.rooms[p.room]!;
       const gx = Math.round(p.at[0] / CELL) + GRID / 2;
       const gz = Math.round(p.at[2] / CELL) + GRID / 2;
@@ -926,7 +926,19 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       withOpenMode(p.open, () => spec.build(xf, placedSeed(layout.seed, p.k, p.id)), share(p.room));
       if (p.tilt) applyTilt(xf, mk, p.tilt, spec.mount);
       placed.push(p);
-    }
+    };
+    // Два прохода (квиз 19.11, «Ложится на то, что под ней»): сначала то, что стоит само, — на полу, на стене, «висит»; потом
+    // поднятое, что ложится. Тогда оно ложится и на вещь партнёра — по её граням, как в конструкторе, — в каком бы порядке ни шли
+    // записи (в файле они — по времени сохранения). Вещи первого прохода к тому часу собраны с преградами: врастание в них ловят
+    // преграды, а не их грубые коробки (у стола с хлебницей коробка накрыла бы клеёнку, на которой лежит чашка).
+    const specs = opts.placed ?? PLACED;
+    const roomOk = (sp: PlacedSpec, r: GenRoom): boolean => inVariant(slotFor(sp.slot, sp.rule.rooms), pick(r));
+    const lies = (sp: PlacedSpec): boolean => {
+      const p = ALL_PROPS[sp.prop];
+      return !!p && rests(sp, p);
+    };
+    for (const p of placeThings(specs.filter((sp) => !lies(sp)), placeWorld, ALL_PROPS, roomOk)) buildPlaced(p);
+    for (const p of placeThings(specs.filter(lies), placeWorld, ALL_PROPS, roomOk)) buildPlaced(p);
   }));
   // Места для вещей внутри преград — прочь: вся обстановка уже стоит, и вещи партнёра тоже (furnish.ts, dropBuried).
   dropBuried(spots, col);

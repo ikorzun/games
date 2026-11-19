@@ -545,6 +545,62 @@ describe('поднятая вещь ложится на то, что под не
     expect(t!.max[1] - floor).toBeGreaterThan(0.85);
   });
 
+  it('своя вещь — тоже опора, в каком бы порядке ни шли записи: табуретка над своим кухонным столом ложится на его клеёнку', () => {
+    const build = (placed: readonly PlacedSpec[]) => buildLevel(generateLayout(20041113, 2, 'shelter'), { wear: 0, placed, figures: [], keepPlaceWorld: true });
+    const table = spec({ id: 'pl_table', prop: 'kitchen_table', offset: [0, 0], near: [0.5, 0.5] }, { worlds: ['shelter'], rooms: ['kitchen'], anchor: 'middle', count: 1 });
+    // Где встал стол и где у него клеёнка (не хлебница и не табуретка при нём).
+    const l1 = build([table]);
+    const ts = l1.placed!.find((p) => p.id === 'pl_table')!;
+    expect(ts).toBeDefined();
+    const pw = l1.placeWorld!;
+    const tObj = l1.objects!.find((o) => o.name === 'kitchen_table' && Math.hypot(o.at[0] - ts.at[0], o.at[2] - ts.at[2]) < 1e-3)!;
+    expect(tObj).toBeDefined();
+    // Точка, где под всем следом табуретки — клеёнка (хлебница, тарелка и край стола — мимо): там она встанет без «врастает».
+    const sb = worldBox(stool, [0, 0, 0], ts.rot);
+    const hx = (sb.maxX - sb.minX) / 2 + 0.03;
+    const hz = (sb.maxZ - sb.minZ) / 2 + 0.03;
+    const cloth = (x: number, z: number): boolean => {
+      const hs = pw.surfaces!(tObj.id, x, z, ts.at[1] + 0.3, ts.at[1] + 1.2) ?? [];
+      const top = hs.length ? Math.max(...hs) - ts.at[1] : 0;
+      return top > 0.735 && top < 0.745;
+    };
+    let pt: [number, number] | null = null;
+    let best = Infinity;
+    const mx = (tObj.min[0] + tObj.max[0]) / 2;
+    const mz = (tObj.min[2] + tObj.max[2]) / 2;
+    for (let i = 1; i < 30; i++) {
+      for (let j = 1; j < 30; j++) {
+        const x = tObj.min[0] + ((tObj.max[0] - tObj.min[0]) * i) / 30;
+        const z = tObj.min[2] + ((tObj.max[2] - tObj.min[2]) * j) / 30;
+        const clear = [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1], [-1, 0], [1, 0]].every(([u, v]) => cloth(x + u! * hx, z + v! * hz));
+        const d = Math.hypot(x - mx, z - mz);
+        if (clear && d < best) {
+          best = d;
+          pt = [x, z];
+        }
+      }
+    }
+    expect(pt).not.toBeNull();
+    // Сдвиг табуретки в рамке того же края, чтобы её середина пришлась на эту точку клеёнки.
+    const room = l1.layout!.rooms[ts.room]!;
+    const a = anchorSpots(room, 'middle', pw).find((q) => Math.abs(q.x - ts.at[0]) < 1e-6 && Math.abs(q.z - ts.at[2]) < 1e-6)!;
+    expect(a).toBeDefined();
+    const dx = pt![0] - (sb.minX + sb.maxX) / 2 - a.x;
+    const dz = pt![1] - (sb.minZ + sb.maxZ) / 2 - a.z;
+    const c = Math.cos(a.phi);
+    const sn = Math.sin(a.phi);
+    const up = spec({ id: 'pl_up', prop: 'kk_stool', offset: [c * dx - sn * dz, sn * dx + c * dz], near: [0.5, 0.5] }, { worlds: ['shelter'], rooms: ['kitchen'], anchor: 'middle', lift: 0.9, count: 1 });
+    // Записи — в обоих порядках (в файле они по времени сохранения): табуретка ложится на клеёнку своего стола.
+    for (const order of [[up, table], [table, up]]) {
+      const lvl = build(order);
+      const s = lvl.placed!.find((p) => p.id === 'pl_up')!;
+      expect(s, JSON.stringify(order.map((o) => o.id))).toBeDefined();
+      expect(Math.abs(s.at[0] - (a.x + (c * (c * dx - sn * dz) + sn * (sn * dx + c * dz))))).toBeLessThan(1e-6);
+      expect(s.at[1] - ts.at[1]).toBeGreaterThan(0.735);
+      expect(s.at[1] - ts.at[1]).toBeLessThan(0.745);
+    }
+  });
+
   it('на уровне: поднятая стоит на верхе того, что под её серединой, или на полу; помеченная «висит» — на своей высоте', () => {
     const build = (placed: readonly PlacedSpec[]) => buildLevel(generateLayout(20041113, 2, 'shelter'), { wear: 0, placed, figures: [], keepPlaceWorld: true });
     const lifted = spec({ id: 'pl_up', prop: 'kk_stool' }, { worlds: ['shelter'], anchor: 'middle', lift: 0.9, count: 3 });
