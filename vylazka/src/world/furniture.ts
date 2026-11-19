@@ -321,6 +321,12 @@ export const FURNITURE_FROM: Readonly<Record<string, readonly string[]>> = {
   tv_stand: ['s3_buffet_louvered'],
   reception_desk: ['s3_reception_desk'],
   kitchenette: ['s3_kitchenette'],
+  // Квиз 19.11 («Заменить собранное кодом»).
+  fridge: ['s3_fridge_old'],
+  stove: ['s3_gas_stove'],
+  bathtub: ['s3_bathtub'],
+  washing_machine: ['s3_washer'],
+  toilet_home: ['s3_toilet'],
 };
 
 /** Высота столешницы (или крышки), м: на неё ставится машинка, терминал, тарелка, лампа. */

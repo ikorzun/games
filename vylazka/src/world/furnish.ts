@@ -1121,9 +1121,12 @@ function kitchen(ctx: RoomCtx): void {
   // Холодильник — первым в стопке: он есть в каждой кухне (его передвигает партнёр — правка ссылается на первый холодильник
   // кухни), даже если мойка с плитой рядом не встали; тогда они ищут место ближе к нему.
   const flip = ctx.rng() < 0.5 ? -1 : 1;
-  const line = homeStack(ctx, [['fridge', -flip * 0.74], ['sink_cabinet'], ['stove', flip * 0.7]], k.side);
+  const sinkHalf = ALL_PROPS.sink_cabinet!.w / 2;
+  const fx = sinkHalf + ALL_PROPS.fridge!.w / 2 + 0.02;
+  const sx = sinkHalf + ALL_PROPS.stove!.w / 2 + 0.02;
+  const line = homeStack(ctx, [['fridge', -flip * fx], ['sink_cabinet'], ['stove', flip * sx]], k.side);
   if (line) {
-    const f = line.s.xf.pt(line.x - flip * 0.74, 0, 0);
+    const f = line.s.xf.pt(line.x - flip * fx, 0, 0);
     if (!line.stood[1]) homeStack(ctx, [['sink_cabinet']], k.near(f[0], f[2]));
     if (!line.stood[2]) homeStack(ctx, [['stove']], k.near(f[0], f[2]));
   }
@@ -1278,10 +1281,16 @@ function bathroom(ctx: RoomCtx): void {
   const k = roles(ctx);
   // Ванна со шторкой — у дальней стены (её видно с порога), стиральная машина — рядом с ней.
   const flip = ctx.rng() < 0.5 ? -1 : 1;
-  const tub = homeStack(ctx, [['bathtub', -flip * 0.45], ['washing_machine', flip * 0.95]], k.hero);
-  if (tub) landmark(ctx, 'bathroom', tub.s.xf, tub.x - flip * 0.45, 0.6, 0.4);
-  // Раковина (полка Sand3D) с зеркалом над ней и унитаз рядом — у боковой стены.
-  homeStack(ctx, [['s3_sink_pedestal', flip * 0.45], ['mirror', flip * 0.45, 1.0], ['toilet_home', -flip * 0.55]], k.side);
+  // Ванна и машина бок о бок: общий охват — по ширине обеих, ванна — к одному краю участка.
+  const tubW = ALL_PROPS.bathtub!.w;
+  const wmW = ALL_PROPS.washing_machine!.w;
+  const tx = -flip * (wmW + 0.02) / 2;
+  const wx = flip * (tubW + 0.02) / 2;
+  const tub = homeStack(ctx, [['bathtub', tx], ['washing_machine', wx]], k.hero);
+  if (tub) landmark(ctx, 'bathroom', tub.s.xf, tub.x + tx, 0.6, 0.4);
+  // Раковина (полка Sand3D) с зеркалом над ней и унитаз рядом — у боковой стены. Ванна не встала (тесно) — примета на раковине.
+  const sink = homeStack(ctx, [['s3_sink_pedestal', flip * 0.45], ['mirror', flip * 0.45, 1.0], ['toilet_home', -flip * 0.55]], tub ? k.side : k.hero);
+  if (!tub && sink) landmark(ctx, 'bathroom', sink.s.xf, sink.x + flip * 0.45, 0.6, 0.3);
   // Сушилка с бельём — только где есть место: в тесной ванной её нет.
   if (ctx.cells.length > 1) homeStack(ctx, [['clothes_dryer']], k.side);
   floorSpots(ctx, 2);

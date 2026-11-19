@@ -46,3 +46,8 @@ s3_kitchenette — Kitchenette: NVIDIA SimReady assets: "facilitySystem_kitchene
 s3_safe_old — Safe: "Old safe" by Fayruso, https://sketchfab.com/3d-models/a35cfc0346624133bbc7c4124e444548, CC-BY-4.0; modified: rewritten as a sand3d program
 s3_coffee_table — Table: "DT71HP" by Interiors3D, https://sketchfab.com/3d-models/2bbbcfac3b5348f69a5a8a004b1245f2, CC-BY-4.0; modified: rewritten as a sand3d program
 s3_sink_pedestal — Pedestal sink: "50s Sink Lowpoly" by sskjellestad, https://sketchfab.com/3d-models/32e1808fd32d44a1b3ff6236d5916738, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_fridge_old — Cabinet: "Fridge" by Messerhawke, https://sketchfab.com/3d-models/7bd62539798e4ec1bc99e12d6cca9fa1, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_gas_stove — Gas range: Articraft Data, Matt Zhou et al., record rec_conventional_oven_with_dropdown_door_0002, CC BY 4.0; modified: rewritten as a sand3d program
+s3_bathtub — Bathtub: "Corner bath" by LuthBird1, https://sketchfab.com/3d-models/88ccb2eabad3434e81c98f4008759cb5, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_toilet — Toilet: "Toilet" by aterallis, https://sketchfab.com/3d-models/4c016736d01d4718a82af036d08090ba, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_washer — Builtin undercounter washing machine: Articraft Data, Matt Zhou et al., record rec_frontload_washing_machine_52b94a9988454debb281bd4533b853e3, CC BY 4.0; modified: rewritten as a sand3d program

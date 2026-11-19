@@ -114,47 +114,7 @@ function tvStand(xf: Xf, seed: number): void {
   xf.collider([-0.42, 0, 0.01], [0.42, y + 0.45, TV_FRONT]);
 }
 
-/** Холодильник 0,62 × 0,62 × 1,7: две двери, ручки, магниты, записка. */
-function fridge(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const body: Vec3 = dim([1.05, 1.05, 1.0], 0.92 + rnd() * 0.1);
-  for (const x of [-0.26, 0.2]) bx(xf, [x, 0, 0.06], [x + 0.06, 0.05, 0.5], MAT.rubber);
-  bx(xf, [-0.31, 0.04, 0.02], [0.31, 1.7, 0.58], MAT.enamel, dim(body, 0.9), { aoBottom: 0.6 });
-  bx(xf, [-0.31, 0.06, 0.58], [0.31, 1.23, 0.62], MAT.enamel, body);
-  bx(xf, [-0.31, 1.27, 0.58], [0.31, 1.7, 0.62], MAT.enamel, body);
-  // Ручки: тёмные вертикальные скобы.
-  bx(xf, [0.2, 0.92, 0.62], [0.25, 1.2, 0.67], MAT.bakelite, [1.3, 1.3, 1.3]);
-  bx(xf, [0.2, 1.3, 0.62], [0.25, 1.55, 0.67], MAT.bakelite, [1.3, 1.3, 1.3]);
-  // Записка и магниты: самое яркое на двери.
-  face(xf, -0.17, 0.6, 0.05, 0.84, 0.621, MAT.paper, [1.4, 1.35, 1.1]);
-  for (const y of [0.64, 0.7, 0.76]) face(xf, -0.13, y, 0.01, y + 0.025, 0.622, MAT.bakelite);
-  bx(xf, [-0.22, 0.8, 0.62], [-0.12, 0.9, 0.64], MAT.paintRed, [1.5, 1.2, 1.2]);
-  bx(xf, [0.0, 0.5, 0.62], [0.1, 0.6, 0.64], MAT.paintBlue, [1.3, 1.4, 1.5]);
-  bx(xf, [-0.05, 1.4, 0.62], [0.05, 1.5, 0.64], MAT.paintOchre, [1.5, 1.3, 0.9]);
-  xf.collider([-0.31, 0, 0.02], [0.31, 1.7, 0.62]);
-}
 
-/** Газовая плита 0,55 × 0,58 × 0,9: конфорки, духовка, кастрюля. */
-function stove(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const body: Vec3 = dim([1.05, 1.05, 1.0], 0.92 + rnd() * 0.1);
-  bx(xf, [-0.26, 0, 0.05], [-0.2, 0.04, 0.12], MAT.rubber);
-  bx(xf, [0.2, 0, 0.05], [0.26, 0.04, 0.12], MAT.rubber);
-  bx(xf, [-0.275, 0.04, 0.02], [0.275, 0.78, 0.55], MAT.enamel, dim(body, 0.9), { aoBottom: 0.6 });
-  bx(xf, [-0.275, 0.78, 0.02], [0.275, 0.8, 0.58], MAT.bakelite, [1.4, 1.4, 1.4]);
-  // Духовка: дверца со стеклом и ручкой, над ней ряд ручек конфорок.
-  bx(xf, [-0.23, 0.1, 0.55], [0.23, 0.56, 0.58], MAT.enamel, body);
-  bx(xf, [-0.15, 0.2, 0.58], [0.15, 0.46, 0.59], MAT.glass, [1.2, 1.2, 1.2]);
-  bx(xf, [-0.2, 0.585, 0.58], [0.2, 0.615, 0.62], MAT.steel, [1.4, 1.4, 1.4]);
-  for (const x of [-0.18, -0.06, 0.06, 0.18]) xf.cyl([x, 0.68, 0.55], 'z', 0.045, 0.027, MAT.bakelite, { segments: 6, tint: [1.4, 1.4, 1.4] });
-  // Конфорки.
-  for (const x of [-0.12, 0.12]) for (const z of [0.17, 0.42]) xf.cyl([x, 0.8, z], 'y', 0.015, 0.08, MAT.castIron, { segments: 8, tint: [0.7, 0.7, 0.7] });
-  // Кастрюля на дальней левой конфорке: эмаль, крышка, шишка.
-  xf.cyl([-0.12, 0.815, 0.17], 'y', 0.075, 0.105, MAT.paintRed, { segments: 8, tint: [1.4, 1.2, 1.1] });
-  xf.cyl([-0.12, 0.89, 0.17], 'y', 0.006, 0.11, MAT.steel, { segments: 8, tint: [1.4, 1.4, 1.4] });
-  xf.cyl([-0.12, 0.896, 0.17], 'y', 0.004, 0.02, MAT.bakelite, { segments: 5 });
-  xf.collider([-0.275, 0, 0.02], [0.275, 0.8, 0.58]);
-}
 
 /**
  * Кухонный стол полки (точёные ножки) под клеёнкой в красную клетку — клеёнка свисает по краям; табуретка полки наполовину
@@ -426,75 +386,8 @@ function mirror(xf: Xf, seed: number): void {
   sheet(xf, [0.0, 0.3, 0.032], [0.04, 0.3, 0.032], [0.15, 0.7, 0.032], [0.11, 0.7, 0.032], FRONT, MAT.enamel, [0.7, 0.75, 0.7]);
 }
 
-/** Ванна на ножках 1,6 × 0,72 × 1,9: смеситель, штанга с полуотдёрнутой шторкой. */
-function bathtub(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const curt: Vec3 = [1.45, 1.4, 1.2];
-  const cm = MAT.paper;
-  const dots: Vec3 = rnd() < 0.5 ? [1.5, 1.1, 1.0] : [1.5, 1.35, 0.8];
-  // Ножки-лапы.
-  for (const x of [-0.74, 0.66]) for (const z of [0.06, 0.58]) bx(xf, [x, 0, z], [x + 0.08, 0.18, z + 0.08], MAT.castIron, [1.0, 1.0, 1.0], { aoBottom: 0.6 });
-  // Корпус: дно, борта, торцы. Внутри чуть темнее.
-  bx(xf, [-0.8, 0.18, 0], [0.8, 0.26, 0.72], MAT.enamel, [1.0, 1.0, 0.95]);
-  bx(xf, [-0.8, 0.26, 0.64], [0.8, 0.6, 0.72], MAT.enamel, [1.1, 1.1, 1.05]);
-  bx(xf, [-0.8, 0.26, 0], [0.8, 0.6, 0.08], MAT.enamel, [1.1, 1.1, 1.05]);
-  bx(xf, [-0.8, 0.26, 0.08], [-0.72, 0.6, 0.64], MAT.enamel, [1.1, 1.1, 1.05]);
-  bx(xf, [0.72, 0.26, 0.08], [0.8, 0.6, 0.64], MAT.enamel, [1.1, 1.1, 1.05]);
-  flat(xf, -0.72, 0.08, 0.72, 0.64, 0.262, MAT.enamel, [0.65, 0.7, 0.7]);
-  // Смеситель на дальнем борту: корпус, носик над ванной и два красно-синих вентиля.
-  bx(xf, [-0.62, 0.6, 0.0], [-0.42, 0.7, 0.07], MAT.steel, [1.5, 1.5, 1.5]);
-  beam(xf, [-0.52, 0.68, 0.04], [-0.52, 0.68, 0.24], 0.05, 0.05, MAT.steel, [1.5, 1.5, 1.5]);
-  bx(xf, [-0.66, 0.7, 0.0], [-0.6, 0.77, 0.06], MAT.paintRed, [1.5, 1.2, 1.2]);
-  bx(xf, [-0.44, 0.7, 0.0], [-0.38, 0.77, 0.06], MAT.paintBlue, [1.3, 1.4, 1.5]);
-  // Рама под шторку: две стойки по краям и штанга.
-  for (const x of [-0.8, 0.76]) bx(xf, [x, 0.55, 0.62], [x + 0.04, 1.9, 0.66], MAT.steel, [1.4, 1.4, 1.4]);
-  bx(xf, [-0.8, 1.85, 0.62], [0.8, 1.9, 0.66], MAT.steel, [1.4, 1.4, 1.4]);
-  // Шторка: складки сдвинуты вправо, зигзаг по z.
-  for (let i = 0; i < 5; i++) {
-    const x = 0.0 + i * 0.16;
-    const z = i % 2 === 0 ? 0.665 : 0.7;
-    bx(xf, [x, 0.55, z], [x + 0.16, 1.85, z + 0.02], cm, curt);
-    if (i % 2 === 0) bx(xf, [x + 0.03, 0.9, z + 0.02], [x + 0.13, 1.0, z + 0.025], MAT.paintRed, dots);
-    else bx(xf, [x + 0.03, 1.3, z + 0.02], [x + 0.13, 1.4, z + 0.025], MAT.paintRed, dots);
-  }
-  xf.collider([-0.8, 0, 0], [0.8, 0.6, 0.72]);
-}
 
-/** Стиральная машина 0,6 × 0,56 × 0,86: круглый люк, панель с ручкой. */
-function washingMachine(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const body: Vec3 = dim([1.05, 1.05, 1.0], 0.92 + rnd() * 0.1);
-  for (const x of [-0.26, 0.2]) bx(xf, [x, 0, 0.06], [x + 0.06, 0.04, 0.12], MAT.rubber);
-  bx(xf, [-0.3, 0.03, 0], [0.3, 0.86, 0.5], MAT.enamel, dim(body, 0.9), { aoBottom: 0.6 });
-  bx(xf, [-0.3, 0.03, 0.5], [0.3, 0.86, 0.52], MAT.enamel, body);
-  // Панель управления: ящик для порошка, ручка программ, красная кнопка.
-  bx(xf, [-0.26, 0.72, 0.52], [-0.04, 0.82, 0.54], MAT.bakelite, [1.5, 1.5, 1.5]);
-  xf.cyl([0.12, 0.77, 0.52], 'z', 0.03, 0.045, MAT.bakelite, { segments: 8, tint: [1.4, 1.4, 1.4] });
-  bx(xf, [0.115, 0.775, 0.549], [0.125, 0.815, 0.553], MAT.enamel, [1.4, 1.4, 1.4]);
-  bx(xf, [0.2, 0.74, 0.52], [0.26, 0.8, 0.54], MAT.paintRed, [1.5, 1.2, 1.2]);
-  // Люк: стальное кольцо, тёмное стекло, светлое бельё внутри.
-  xf.cyl([0, 0.4, 0.52], 'z', 0.035, 0.215, MAT.steel, { segments: 10, tint: [1.45, 1.45, 1.45] });
-  xf.cyl([0, 0.4, 0.555], 'z', 0.015, 0.16, MAT.glass, { segments: 10, tint: [1.1, 1.1, 1.1] });
-  xf.cyl([0.03, 0.37, 0.57], 'z', 0.004, 0.08, MAT.paintBlue, { segments: 6, tint: [1.2, 1.3, 1.5] });
-  xf.collider([-0.3, 0, 0], [0.3, 0.86, 0.55]);
-}
 
-/** Унитаз с бачком 0,42 × 0,68 × 0,82: поднятая крышка, сиденье, кнопка слива. */
-function toiletHome(xf: Xf, seed: number): void {
-  const rnd = rng(seed);
-  const seat: Vec3 = rnd() < 0.5 ? [1.3, 1.15, 0.95] : [1.0, 1.2, 1.4];
-  const sm = seat[2] > 1.3 ? MAT.paintBlue : MAT.wood;
-  bx(xf, [-0.19, 0.38, 0], [0.19, 0.8, 0.2], MAT.enamel, [1.1, 1.1, 1.05], { bevel: 0.015 });
-  bx(xf, [-0.21, 0.78, 0], [0.21, 0.82, 0.22], MAT.enamel, [1.2, 1.2, 1.15]);
-  bx(xf, [-0.13, 0, 0.2], [0.13, 0.28, 0.5], MAT.enamel, [1.0, 1.0, 0.95], { aoBottom: 0.6 });
-  bx(xf, [-0.2, 0.28, 0.18], [0.2, 0.42, 0.68], MAT.enamel, [1.1, 1.1, 1.05], { bevel: 0.02 });
-  // Сиденье с тёмной чашей; крышка стоит на бачке.
-  bx(xf, [-0.2, 0.42, 0.24], [0.2, 0.45, 0.68], sm, seat);
-  flat(xf, -0.1, 0.34, 0.1, 0.6, 0.452, MAT.bakelite);
-  bx(xf, [-0.18, 0.45, 0.22], [0.18, 0.78, 0.25], sm, dim(seat, 1.1));
-  bx(xf, [-0.04, 0.82, 0.07], [0.04, 0.85, 0.13], MAT.steel, [1.5, 1.5, 1.5]);
-  xf.collider([-0.2, 0, 0], [0.2, 0.82, 0.68]);
-}
 
 /** Напольная вешалка полки в прихожей; у стены рядом — сапоги, перед ними светлые кеды. */
 function coatRack(xf: Xf, seed: number): void {
@@ -1141,14 +1034,70 @@ function remote(xf: Xf): void {
   bx(xf, [-0.015, 0.0, 0.095], [0.015, 0.027, 0.11], MAT.glow, [10, 2, 1]);
 }
 
+// ─────────── кухня и ванная — моделями полки Sand3D (квиз 19.11, партнёр: «Заменить собранное кодом») ───────────
+// Холодильник, плита, ванна, унитаз и стиральная машина — модели полки (scripts/import_sand3d.py, третий подбор). Имена вещей
+// прежние: на них ссылаются правки партнёра (холодильник, батарея кухни), вещи сна и картонки. То, что рассказывало о
+// комнате у прежних, собранных кодом, — записка под магнитами, кастрюля на конфорке, шторка над ванной — накладками на модели.
+
+const FRIDGE = furnished('floor', ['s3_fridge_old'], 'холодильник: старый, округлый, хромированные ручки; на двери записка под магнитом');
+/** Передняя плоскость двери холодильника полки — по сетке модели (середина двери в 0,79 м от стены). */
+const FRIDGE_DOOR = 0.795;
+
+function fridgeS3(xf: Xf, seed: number): void {
+  FRIDGE.build(xf, seed);
+  // Записка и магниты — самое яркое на двери.
+  face(xf, 0.02, 0.98, 0.15, 1.2, FRIDGE_DOOR, MAT.paper, [1.4, 1.35, 1.1]);
+  for (const y of [1.02, 1.08, 1.14]) face(xf, 0.05, y, 0.12, y + 0.025, FRIDGE_DOOR + 0.001, MAT.bakelite);
+  bx(xf, [0.05, 1.19, FRIDGE_DOOR - 0.005], [0.12, 1.26, FRIDGE_DOOR + 0.015], MAT.paintRed, [1.5, 1.2, 1.2]);
+  bx(xf, [0.16, 0.78, FRIDGE_DOOR - 0.005], [0.23, 0.85, FRIDGE_DOOR + 0.015], MAT.paintBlue, [1.3, 1.4, 1.5]);
+  bx(xf, [-0.05, 1.42, FRIDGE_DOOR - 0.005], [0.02, 1.49, FRIDGE_DOOR + 0.015], MAT.paintOchre, [1.5, 1.3, 0.9]);
+}
+
+const STOVE = furnished('floor', ['s3_gas_stove'], 'газовая плита: четыре конфорки, духовка со стеклом; на конфорке кастрюля');
+/** Высота решёток над дальними конфорками плиты полки, м. */
+const STOVE_GRATE = 0.928;
+
+function stoveS3(xf: Xf, seed: number): void {
+  STOVE.build(xf, seed);
+  // Кастрюля на дальней левой конфорке: эмаль, крышка, шишка.
+  xf.cyl([-0.18, STOVE_GRATE, 0.2], 'y', 0.075, 0.105, MAT.paintRed, { segments: 8, tint: [1.4, 1.2, 1.1] });
+  xf.cyl([-0.18, STOVE_GRATE + 0.075, 0.2], 'y', 0.006, 0.11, MAT.steel, { segments: 8, tint: [1.4, 1.4, 1.4] });
+  xf.cyl([-0.18, STOVE_GRATE + 0.081, 0.2], 'y', 0.004, 0.02, MAT.bakelite, { segments: 5 });
+}
+
+const TUB = furnished('floor', ['s3_bathtub'], 'ванна: эмаль, смеситель с торца; над ней штанга со шторкой');
+/** Габарит ванны полки: передний борт — от стены, края — по длине, борт — по высоте (штанга и шторка встают по нему). */
+const TUB_BOX = s3Size('s3_bathtub');
+const TUB_FRONT = TUB_BOX.d - 0.05;
+const TUB_RIM = TUB_BOX.h - 0.06;
+
+function bathtubS3(xf: Xf, seed: number): void {
+  TUB.build(xf, seed);
+  const rnd = rng(seed);
+  const curt: Vec3 = [1.45, 1.4, 1.2];
+  const dots: Vec3 = rnd() < 0.5 ? [1.5, 1.1, 1.0] : [1.5, 1.35, 0.8];
+  // Рама под шторку над передним бортом: две стойки и штанга.
+  const half = TUB_BOX.w / 2;
+  for (const x of [-half, half - 0.04]) bx(xf, [x, TUB_RIM, TUB_FRONT], [x + 0.04, 1.9, TUB_FRONT + 0.04], MAT.steel, [1.4, 1.4, 1.4]);
+  bx(xf, [-half, 1.85, TUB_FRONT], [half, 1.9, TUB_FRONT + 0.04], MAT.steel, [1.4, 1.4, 1.4]);
+  // Шторка: складки сдвинуты к одному краю, зигзаг.
+  for (let i = 0; i < 5; i++) {
+    const x = half - 0.84 + i * 0.16;
+    const z = TUB_FRONT + (i % 2 === 0 ? 0.045 : 0.075);
+    bx(xf, [x, TUB_RIM, z], [x + 0.16, 1.85, z + 0.02], MAT.paper, curt);
+    const y = i % 2 === 0 ? 0.9 : 1.3;
+    bx(xf, [x + 0.03, y, z + 0.02], [x + 0.13, y + 0.1, z + 0.025], MAT.paintRed, dots);
+  }
+}
+
 // ───────────────────────────── реестр ─────────────────────────────
 
 export const HOME_PROPS: Record<string, PropSpec> = {
   sofa: furnished('floor', ['s3_sofa_olive', 's3_sofa_grey'], 'диван: старый, в оливковой обивке, или с деревянными подлокотниками', { pull: 0.03 }),
   armchair: furnished('floor', ['s3_armchair_round', 's3_armchair_sixties'], 'кресло: с круглой спинкой или шестидесятых, с деревянными подлокотниками', { turn: 0.07, pull: 0.05 }),
   tv_stand: { w: s3Size(TV_STAND).w, d: TV_FRONT, reach: Math.max(0, s3Size(TV_STAND, true).d - TV_FRONT), h: Math.ceil((S3_TOP[TV_STAND]! + TV_H) * 100) / 100, mount: 'floor', ru: 'тумба с кинескопным телевизором и видеомагнитофоном', build: tvStand },
-  fridge: { w: 0.62, d: 0.62, h: 1.7, mount: 'floor', ru: 'холодильник с магнитами и запиской', build: fridge },
-  stove: { w: 0.55, d: 0.58, h: 0.9, mount: 'floor', ru: 'газовая плита с кастрюлей', build: stove },
+  fridge: { ...FRIDGE, build: fridgeS3 },
+  stove: { ...STOVE, build: stoveS3 },
   kitchen_table: { w: 1.4, d: Math.ceil(kitchenDepth() * 100) / 100, h: 0.87, mount: 'floor', ru: 'кухонный стол на точёных ножках под клеёнкой, табуретка, тарелка, хлебница', build: kitchenTable },
   sink_cabinet: { w: 0.8, d: 0.58, h: 1.35, mount: 'floor', ru: 'мойка-тумба с краном и сушилкой для тарелок', build: sinkCabinet },
   // Дверцы светлого открыты по сиду (у серого они слиты с корпусом — он всегда закрыт), поэтому светлый — в двух случаях из трёх.
@@ -1160,9 +1109,9 @@ export const HOME_PROPS: Record<string, PropSpec> = {
   rug: { w: 2.0, d: 1.4, h: 0.02, mount: 'free', ru: 'ковёр на полу с орнаментом', build: (xf) => rug(xf) },
   floor_lamp: { w: 0.45, d: 0.45, h: 1.65, mount: 'floor', ru: 'торшер с абажуром', build: floorLamp },
   mirror: { w: 0.55, d: 0.05, h: 1.25, mount: 'wall', y: 0.45, ru: 'зеркало в золочёной раме', build: mirror },
-  bathtub: { w: 1.6, d: 0.72, h: 1.9, mount: 'floor', ru: 'ванна на ножках со шторкой на штанге', build: bathtub },
-  washing_machine: { w: 0.6, d: 0.56, h: 0.86, mount: 'floor', ru: 'стиральная машина с круглым люком', build: washingMachine },
-  toilet_home: { w: 0.42, d: 0.68, h: 0.82, mount: 'floor', ru: 'унитаз с бачком', build: toiletHome },
+  bathtub: { ...TUB, d: Math.max(TUB.d, TUB_FRONT + 0.12), h: 1.9, build: bathtubS3 },
+  washing_machine: furnished('floor', ['s3_washer'], 'стиральная машина с круглым люком', { open: true }),
+  toilet_home: furnished('floor', ['s3_toilet'], 'унитаз-компакт с бачком'),
   coat_rack: { w: 1.04, d: 0.65, h: 1.8, mount: 'floor', ru: 'напольная вешалка в прихожей, рядом сапоги и кеды', build: coatRack },
   desk_pc: { w: 1.04, d: 0.52, h: 1.2, mount: 'floor', ru: 'письменный стол с тумбой и ЭЛТ-монитором, системный блок под столом', build: deskPc },
   crib: furnished('floor', ['s3_crib'], 'детская кроватка', { turn: 0.03, pull: 0.04 }),
