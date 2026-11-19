@@ -117,14 +117,15 @@ describe('полка Sand3D: опись и авторство', () => {
 });
 
 describe('полка Sand3D: размеры и постановка', () => {
-  it('размеры как у настоящей мебели: от 0,3 до 2,5 м в плане, до 2,1 м в высоту', () => {
+  it('размеры как у настоящей мебели: от 0,3 до 2,5 м в плане, от 0,35 до 2,1 м в высоту', () => {
     for (const n of names) {
       const p = SAND3D_PROPS[n]!;
       expect(p.w, n).toBeGreaterThan(0.25);
       expect(p.w, n).toBeLessThan(2.5);
       expect(p.d, n).toBeGreaterThan(0.25);
       expect(p.d, n).toBeLessThan(2.5);
-      expect(p.h, n).toBeGreaterThan(0.4);
+      // Ниже всех — журнальный столик (0,39 м, как настоящий: 0,38–0,45); вещь каталога в полразмера была бы ниже.
+      expect(p.h, n).toBeGreaterThan(0.35);
       expect(p.h, n).toBeLessThan(2.1);
     }
   });

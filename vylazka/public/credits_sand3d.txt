@@ -44,3 +44,5 @@ s3_buffet_louvered — Cabinet: "Buffet-bois" by amigos3d, https://sketchfab.com
 s3_reception_desk — Reception front desk: Articraft Data, Matt Zhou et al., record rec_desk_with_drawer_ba4acc9c90a5440187cd1f98a3bfbabc, CC BY 4.0; modified: rewritten as a sand3d program
 s3_kitchenette — Kitchenette: NVIDIA SimReady assets: "facilitySystem_kitchenette_module_a01" by NVIDIA, https://huggingface.co/datasets/nvidia/simready-assets/tree/653d91e182011f357cf1644013cc94ddf194d349/facilitySystem_kitchenette_module_a01, CC BY 4.0; modified: rewritten as a sand3d program
 s3_safe_old — Safe: "Old safe" by Fayruso, https://sketchfab.com/3d-models/a35cfc0346624133bbc7c4124e444548, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_coffee_table — Table: "DT71HP" by Interiors3D, https://sketchfab.com/3d-models/2bbbcfac3b5348f69a5a8a004b1245f2, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_sink_pedestal — Pedestal sink: "50s Sink Lowpoly" by sskjellestad, https://sketchfab.com/3d-models/32e1808fd32d44a1b3ff6236d5916738, CC-BY-4.0; modified: rewritten as a sand3d program

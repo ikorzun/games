@@ -8,6 +8,7 @@
  */
 import type { Vec3 } from '../core/types';
 import type { RoomType } from '../gen/layout';
+import { roomThings } from './furnish';
 import type { RoomCtx, Slot } from './furnish';
 import { MAT } from './materials';
 import { poster } from './props_bunker';
@@ -32,14 +33,19 @@ const FLOOR: Partial<Record<RoomType, Weighted>> = {
   airlock: [['coat_hooks', 3], ['fire_shield', 2], ['boots_helmet', 2], ['gasmask_pile', 1]],
   entrance: [['coat_hooks', 2], ['fire_shield', 2], ['boots_helmet', 1]],
   collapsed: [['debris_heap', 4], ['brick_pile', 2], ['board_stack', 2]],
-  // Домашние комнаты: то, что остаётся на свободных стенах после основной мебели.
-  kitchen: [['radiator', 3], ['window_fake', 3], ['sink_cabinet', 1], ['houseplant', 1]],
-  living: [['floor_lamp', 3], ['wall_carpet', 3], ['bookshelf', 2], ['armchair', 2], ['houseplant', 2], ['christmas_tree', 0.3]],
-  bedroom: [['wall_carpet', 2], ['radiator', 2], ['window_fake', 2], ['floor_lamp', 2], ['mirror', 2], ['wardrobe', 1]],
-  bathroom: [['mirror', 2], ['clothes_dryer', 2], ['washing_machine', 1]],
-  nursery: [['toy_heap', 2], ['bookshelf', 2], ['window_fake', 2], ['crib', 0.5]],
-  hallway: [['coat_rack', 1], ['mirror', 3], ['door_leaf_lean', 1]],
+  // Домашние комнаты: изредка — то, чего в комнате ещё нет. Главное ставит раскладка по смыслу (партнёр 19.11, 14:33: «расставь
+  // по-новому и логично»); вторая батарея, третье зеркало и мойка вдали от плиты, которые добавлял этот проход, делали комнату
+  // нелогичной — разбор основной модели по плану сверху, а не слова партнёра. Пустая стена — тоже часть комнаты.
+  kitchen: [['houseplant', 1]],
+  living: [['houseplant', 2], ['floor_lamp', 1], ['armchair', 1]],
+  bedroom: [['floor_lamp', 1], ['houseplant', 1]],
+  bathroom: [['clothes_dryer', 1]],
+  nursery: [['toy_heap', 1], ['houseplant', 1]],
+  hallway: [['coat_rack', 1]],
 };
+
+/** Домашние комнаты: следы у стен редки и не повторяют того, что в комнате уже есть. */
+const HOME: ReadonlySet<RoomType> = new Set(['kitchen', 'living', 'bedroom', 'bathroom', 'nursery', 'hallway']);
 
 /** Что висит на свободной стене на уровне глаз: трафарет, табличка или плакат. */
 const SIGNS: Partial<Record<RoomType, Weighted>> = {
@@ -112,6 +118,8 @@ export function dressRoom(ctx: RoomCtx): void {
   const signList = SIGNS[type];
   const alongList = ALONG[type];
   const dark = tier === 2;
+  const home = HOME.has(type);
+  const has = home ? roomThings(ctx) : null;
 
   for (const s of ctx.slots) {
     const seed = Math.floor(rnd() * 1e6);
@@ -125,14 +133,16 @@ export function dressRoom(ctx: RoomCtx): void {
 
     // 1. Свободная стена: предмет на пол или на стену. Выбираем только из того, что сюда влезает:
     // в комнате у глухой стены можно поставить и глубокое, в коридоре — лишь то, что не мешает пройти.
-    if (!s.used && !s.hazard && floorList && rPlace < (corridor ? 0.36 + 0.1 * tier : 0.75)) {
+    if (!s.used && !s.hazard && floorList && rPlace < (corridor ? 0.36 + 0.1 * tier : home ? 0.3 : 0.75)) {
       const maxDepth = s.deep ? 1.25 : 0.6;
       const fitting = floorList.filter(([name]) => {
         const p = PROPS[name];
-        return p !== undefined && p.mount !== 'ceiling' && p.w <= 2.6 && (p.mount === 'wall' || p.d <= maxDepth);
+        return p !== undefined && p.mount !== 'ceiling' && p.w <= 2.6 && (p.mount === 'wall' || p.d <= maxDepth) && !has?.has(name);
       });
       if (fitting.length > 0) {
-        const p = PROPS[pick(fitting, rPick)]!;
+        const name = pick(fitting, rPick);
+        const p = PROPS[name]!;
+        has?.add(name);
         const x = along(s, p.w, p.d, corridor ? rX : 0.5 + (rX - 0.5) * 0.3);
         // Отдельно стоящий предмет описан от своего центра: придвигаем его спиной к стене.
         p.build(s.xf.child(x, p.mount === 'wall' ? (p.y ?? 1.2) : 0, p.mount === 'free' ? p.d / 2 + 0.03 : 0), seed);

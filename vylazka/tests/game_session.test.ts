@@ -1426,7 +1426,7 @@ describe('игра целиком: без света место не обяза�
   const dark = (h: Harness) => (h.game.snapshot() as { dark: { for: number; shifts: number } }).dark;
 
   /**
-   * Встать так, чтобы рядом (ближе 14 м, на том же ярусе) было хотя бы три мелкие вещи. Встаём не «в шаге
+   * Встать так, чтобы рядом (ближе 14 м, на том же ярусе; DARK_SHIFT.range) было хотя бы три мелкие вещи. Встаём не «в шаге
    * от вещи» (шаг может прийтись на яму или за стену — тогда герой окажется двумя ярусами ниже, и вещи
    * наверху его уже не касаются), а на ближайший узел проходимой сетки того же яруса: там точно пол.
    */
@@ -1437,7 +1437,8 @@ describe('игра целиком: без света место не обяза�
     // карманном пространстве — раньше, чем в темноте успеют сдвинуться детали; в яму он падает.
     const unsafe = (x: number, y: number, z: number): boolean => (h.game.level?.zones ?? []).some((g) => g.kind !== 'water' && x > g.minX - 0.5 && x < g.maxX + 0.5 && z > g.minZ - 0.5 && z < g.maxZ + 0.5 && y > g.minY - 0.5 && y < g.maxY + 0.5);
     for (const t of all) {
-      const near = all.filter((o) => Math.hypot(o.pos[0] - t.pos[0], o.pos[2] - t.pos[2]) < 9 && Math.abs(o.pos[1] - t.pos[1]) < 2);
+      // Узел — не дальше 4 м от вещи, а детали в темноте меняются в радиусе 14 м от героя (game.ts, DARK_SHIFT): 10 + 4.
+      const near = all.filter((o) => Math.hypot(o.pos[0] - t.pos[0], o.pos[2] - t.pos[2]) < 10 && Math.abs(o.pos[1] - t.pos[1]) < 2);
       if (near.length < 3) continue;
       const floor = Math.floor((t.pos[1] + 0.3) / 4.5) * 4.5;
       const node = nav
@@ -1454,9 +1455,25 @@ describe('игра целиком: без света место не обяза�
     throw new Error('на уровне нет трёх мелких вещей рядом');
   }
 
+  /**
+   * Игра, где три мелкие вещи лежат рядом, и герой среди них. Где лягут мелкие вещи, решает жребий сессии (вещи берут места
+   * по порядку перетасованного списка), а не раскладка мебели: на одном жребии все девять могут оказаться порознь — тогда
+   * следующий жребий.
+   */
+  function amongHarness(): { h: Harness; near: ReturnType<typeof smallOf> } {
+    for (let seed = 7; seed < 40; seed++) {
+      const h = new Harness(levelOf(SEED), { seed });
+      try {
+        return { h, near: standAmong(h) };
+      } catch {
+        continue;
+      }
+    }
+    throw new Error('ни на одном жребии нет трёх мелких вещей рядом');
+  }
+
   it('пока фонарь горит, вещи стоят где стояли', () => {
-    const h = new Harness(levelOf(SEED));
-    const near = standAmong(h);
+    const { h, near } = amongHarness();
     const before = places(near);
     const yaws = near.map((t) => t.yaw);
     h.run(12);
@@ -1467,8 +1484,7 @@ describe('игра целиком: без света место не обяза�
   });
 
   it('фонарь выключен: семь секунд всё на месте, потом мелкие вещи меняются местами и поворачиваются', () => {
-    const h = new Harness(levelOf(SEED));
-    const near = standAmong(h);
+    const { h, near } = amongHarness();
     const before = places(near);
     const yaws = near.map((t) => t.yaw);
     h.tick({ ...emptyInput(), light: true });
@@ -1495,8 +1511,7 @@ describe('игра целиком: без света место не обяза�
   });
 
   it('темнота затянулась — детали меняются снова, каждые девять секунд', () => {
-    const h = new Harness(levelOf(SEED));
-    standAmong(h);
+    const { h } = amongHarness();
     h.tick({ ...emptyInput(), light: true });
     h.run(7.5);
     const first = dark(h).shifts;
@@ -1529,8 +1544,7 @@ describe('игра целиком: без света место не обяза�
   });
 
   it('в карманном пространстве темноты нет: фонарь выключен, а вещи не меняются', () => {
-    const h = new Harness(levelOf(SEED));
-    standAmong(h);
+    const { h } = amongHarness();
     // Вещи убежища: у пространства появятся свои, они не в счёт.
     const mine = smallOf(h);
     const before = places(mine);

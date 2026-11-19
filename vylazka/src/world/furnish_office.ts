@@ -14,8 +14,8 @@
  * диваны, растения и картины — готовые модели (props_models.ts).
  */
 import { panelDead } from '../systems/cell_lights';
-import { floorSpots, free, homeCentre, homeStack, landmark, leanScreens, screenAt, spot, veils } from './furnish';
-import type { CellInfo, HomeItem, RoomCtx, Slot } from './furnish';
+import { bestSlots, floorSpots, free, homeCentre, homeStack, landmark, leanScreens, roles, screenAt, spot, stackOn, veils } from './furnish';
+import type { CellInfo, HomeItem, RoomCtx, Slot, SlotScore } from './furnish';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
 import { ceilingBreak, KITCHEN_SPOT, officeDeskTop } from './props_office';
@@ -38,6 +38,17 @@ function put(ctx: RoomCtx, name: string, xf: Xf): boolean {
 function wall(ctx: RoomCtx, ...items: HomeItem[]): { s: Slot; x: number; seeds: number[] } | null {
   return homeStack(ctx, items);
 }
+
+/** Предмет на лучший по оценке свободный участок стены (раскладка по смыслу: world/furnish.ts, roles). */
+function wallBy(ctx: RoomCtx, score: SlotScore, ...items: HomeItem[]): { s: Slot; x: number; seeds: number[] } | null {
+  return homeStack(ctx, items, score);
+}
+
+/** Кроме стены входа: на ней проход, и с порога её не видно. */
+const notNear = (ctx: RoomCtx, score: SlotScore): SlotScore => {
+  const plan = roles(ctx).plan;
+  return (s) => (plan.role(s) === 'near' ? -Infinity : score(s));
+};
 
 /** Отдельно стоящий предмет — в угол у свободной стены, спиной к ней. */
 function corner(ctx: RoomCtx, name: string): boolean {
@@ -123,15 +134,17 @@ function lift(ctx: RoomCtx): void {
 
 function reception(ctx: RoomCtx): void {
   panels(ctx);
-  const desk = wall(ctx, ['reception_desk']);
+  const k = roles(ctx);
+  // Стойка — напротив входа, лицом к нему: вошедший сразу видит, к кому идти.
+  const desk = wallBy(ctx, k.hero, ['reception_desk']);
   if (desk) {
     landmark(ctx, 'reception', desk.s.xf, desk.x, 1.0, 0.4);
     // Высокая столешница стойки (со стороны посетителя: полоса от лицевой стенки внутрь).
     spot(ctx, desk.s.xf, desk.x + 0.7, S3_TOP.s3_reception_desk! + 0.005, 0.73, 'table');
   }
-  // Напротив — стулья для тех, кто ждёт, и кактус между ними. Стул — модель полки Sand3D (world/furniture.ts): игрушечный из
+  // Сбоку — стулья для тех, кто ждёт, и кактус между ними. Стул — модель полки Sand3D (world/furniture.ts): игрушечный из
   // набора KayKit партнёру не понравился, а с 18.11 вся мебель игры — из полки.
-  wall(ctx, ['chair_bent', -0.75], ['chair_bent', 0.75], ['cactus_round', 0, 0]);
+  wallBy(ctx, k.side, ['chair_bent', -0.75], ['chair_bent', 0.75], ['cactus_round', 0, 0]);
   // Экран в приёмной: лес вместо окна.
   leanScreens(ctx, 1, 1, NATURE);
   floorSpots(ctx, 1);
@@ -139,6 +152,7 @@ function reception(ctx: RoomCtx): void {
 
 function department(ctx: RoomCtx): void {
   panels(ctx);
+  const k = roles(ctx);
   // Остров из четырёх столов посреди комнаты, которая для него слишком велика.
   const m = middle(ctx);
   if (put(ctx, 'desk_island', m.c.xf.child(m.dx, 0, m.dz))) {
@@ -150,10 +164,10 @@ function department(ctx: RoomCtx): void {
     spot(ctx, m.c.xf, m.dx, y, m.dz + 2.0, 'floor');
     spot(ctx, m.c.xf, m.dx, y, m.dz - 2.0, 'floor');
   }
-  // Стены почти пусты: часы, кулер и одна полка с папками — больше в отделе ничего нет.
-  wall(ctx, ['office_clock']);
-  wall(ctx, ['water_cooler']);
-  wall(ctx, ['binder_shelf']);
+  // Стены почти пусты: часы — напротив входа, кулер — у входа, одна полка с папками — сбоку; больше в отделе ничего нет.
+  wallBy(ctx, k.hero, ['office_clock']);
+  wallBy(ctx, k.door, ['water_cooler']);
+  wallBy(ctx, k.side, ['binder_shelf']);
   grove(ctx, m);
 }
 
@@ -230,31 +244,43 @@ function grove(ctx: RoomCtx, m: { c: CellInfo; dx: number; dz: number }): void {
 
 function cubicles(ctx: RoomCtx): void {
   panels(ctx);
+  const k = roles(ctx);
+  // Кабинки — рядом вдоль стен, по одной на участок, серединой участка: ровный ряд перегородок, стена входа свободна.
   let made = 0;
-  for (let i = 0; i < ctx.cells.length + 1; i++) {
-    const c = wall(ctx, ['cubicle']);
-    if (!c) break;
+  for (const s of bestSlots(ctx, false, notNear(ctx, k.hero))) {
+    if (made >= ctx.cells.length + 1) break;
+    const c = stackOn(ctx, s, [['cubicle']], 0);
+    if (!c) continue;
     made += 1;
     if (made === 1) landmark(ctx, 'cubicles', c.s.xf, c.x, 1.0, 0.8);
   }
-  wall(ctx, ['filing_cabinet', -0.3], ['filing_cabinet', 0.3]);
+  // Картотека и корзина — у входа.
+  wallBy(ctx, k.door, ['filing_cabinet', -0.3], ['filing_cabinet', 0.3]);
   corner(ctx, 'trash_bin');
   floorSpots(ctx, 3);
 }
 
 function meeting(ctx: RoomCtx): void {
   panels(ctx);
-  const c = homeCentre(ctx);
-  if (put(ctx, 'meeting_table', c.xf.child(0, 0, 0))) {
-    landmark(ctx, 'meeting', c.xf, 0, 0.8, 0);
+  const k = roles(ctx);
+  // Стол переговоров — посреди комнаты, длинной стороной вдоль оси входа: с порога виден весь ряд кресел, в торце — доска.
+  // Где стол перегородил бы проход (world/flow.ts) — в клетке поближе к середине.
+  const e = k.plan.entry;
+  const rot = (e ? (e.dir % 2 === 0 ? 0 : 1) : 0) as 0 | 1;
+  const m = middle(ctx);
+  const tries = [m.c.xf.child(m.dx, 0, m.dz, rot), ...ctx.cells.map((c) => c.xf.child(0, 0, 0, rot))];
+  for (const at of tries) {
+    if (!put(ctx, 'meeting_table', at)) continue;
+    landmark(ctx, 'meeting', at, 0, 0.8, 0);
     // На листах посреди стола переговоров (props_office.ts, meetingTable).
-    spot(ctx, c.xf, 0, S3_TOP.s3_table_meeting! + 0.006, 0, 'table');
+    spot(ctx, at, 0, S3_TOP.s3_table_meeting! + 0.006, 0, 'table');
+    break;
   }
-  wall(ctx, ['whiteboard']);
-  wall(ctx, ['office_clock']);
+  wallBy(ctx, k.hero, ['whiteboard']);
+  wallBy(ctx, k.door, ['office_clock']);
   corner(ctx, 'cactus_column');
-  // Экран для презентаций на свободной стене.
-  const scr = free(ctx, false)[0];
+  // Экран для презентаций — на боковой стене.
+  const scr = bestSlots(ctx, false, notNear(ctx, k.side))[0];
   if (scr) {
     scr.used = true;
     screenAt(ctx, scr.xf.child(0, 1.05, 0), 'wall', NATURE, scr.dir);
@@ -264,44 +290,72 @@ function meeting(ctx: RoomCtx): void {
 
 function breakroom(ctx: RoomCtx): void {
   panels(ctx);
-  const k = wall(ctx, ['kitchenette']);
-  if (k) {
-    landmark(ctx, 'breakroom', k.s.xf, k.x, 1.0, 0.4);
-    spot(ctx, k.s.xf, k.x + KITCHEN_SPOT.x, KITCHEN_SPOT.y, 0.3, 'table');
+  const k = roles(ctx);
+  // Мини-кухня — сбоку; автомат, кулер и корзина — у входа (за ними заходят на минуту); столик с двумя стульями — напротив
+  // входа, телевизор — на стене напротив столика.
+  const kn = wallBy(ctx, k.side, ['kitchenette']);
+  if (kn) {
+    landmark(ctx, 'breakroom', kn.s.xf, kn.x, 1.0, 0.4);
+    spot(ctx, kn.s.xf, kn.x + KITCHEN_SPOT.x, KITCHEN_SPOT.y, 0.3, 'table');
   }
-  wall(ctx, ['vending_machine']);
-  wall(ctx, ['water_cooler', -0.4], ['trash_bin', 0.35]);
-  // Столик у стены и два стула по бокам.
-  const t = wall(ctx, ['table_cafe'], ['chair_bent', -0.85], ['chair_bent', 0.85]);
+  wallBy(ctx, k.door, ['vending_machine']);
+  wallBy(ctx, k.door, ['water_cooler', -0.4], ['trash_bin', 0.35]);
+  const t = wallBy(ctx, k.hero, ['table_cafe'], ['chair_bent', -0.85], ['chair_bent', 0.85]);
   if (t) spot(ctx, t.s.xf, t.x, 0.745, 0.35, 'table');
   floorSpots(ctx, 2);
-  // Телевизор в комнате отдыха — единственный экран офиса, где не природа, а то, что смотрели все:
-  // студия телеигры, кадр мультфильма. Участок стены берётся первый свободный, без ГСЧ — остальная
-  // обстановка от экрана не сдвигается.
-  const tv = ctx.slots.find((sl) => !sl.used && !sl.hazard);
+  // Телевизор в комнате отдыха — единственный экран офиса, где не природа, а то, что смотрели все: студия телеигры, кадр
+  // мультфильма. Напротив столика (за ним и смотрели), иначе первый свободный участок — без ГСЧ: обстановка не сдвигается.
+  const o = t ? k.plan.opposite(t.s) : undefined;
+  const tv = o && !o.used && !o.hazard ? o : ctx.slots.find((sl) => !sl.used && !sl.hazard);
   if (tv) {
     tv.used = true;
     screenAt(ctx, tv.xf.child(0, 1.25, 0), 'wall', POP, tv.dir);
   }
 }
 
+/** Сколько места креслу между развёрнутым столом начальника и стеной за ним, м. */
+const BOSS_GAP = 1.0;
+
 function manager(ctx: RoomCtx): void {
   panels(ctx);
-  const d = wall(ctx, ['office_desk']);
-  if (d) {
-    const xf = d.s.xf;
-    // Стол — одна из моделей полки: что на него ставится, встаёт на его столешницу.
-    const top = officeDeskTop(d.seeds[0]!);
-    put(ctx, 'office_terminal', xf.child(d.x - 0.32, top, 0.33));
-    put(ctx, 'desk_phone', xf.child(d.x + 0.2, top, 0.2));
-    put(ctx, 'office_chair', xf.child(d.x - 0.1, 0, 1.02, 2));
-    landmark(ctx, 'manager', xf, d.x, 0.9, 0.4);
-    spot(ctx, xf, d.x + 0.28, top + 0.005, 0.48, 'table');
+  const k = roles(ctx);
+  // Стол начальника — лицом ко входу: развёрнут от стены, кресло между ним и стеной, на стене за креслом — картина; кресло для
+  // посетителя — перед столом. С порога видно стол и пустое кресло за ним. Не встал развёрнутым — у стены.
+  const D = ALL_PROPS.office_desk!;
+  let desk = false;
+  for (const s of bestSlots(ctx, false, notNear(ctx, k.hero))) {
+    const seed = seedOf(ctx);
+    const z = BOSS_GAP + D.d;
+    if (D.build(s.xf.child(0, 0, z, 2), seed) === false) continue;
+    s.used = true;
+    desk = true;
+    const top = officeDeskTop(seed);
+    put(ctx, 'office_terminal', s.xf.child(0.32, top, z - 0.33, 2));
+    put(ctx, 'desk_phone', s.xf.child(-0.2, top, z - 0.2, 2));
+    put(ctx, 'office_chair', s.xf.child(0.1, 0, BOSS_GAP / 2));
+    put(ctx, 'print_large', s.xf.child(0, 1.45, 0));
+    put(ctx, 'armchair_visitor', s.xf.child(0, 0, z + 0.95, 2));
+    landmark(ctx, 'manager', s.xf, 0, 0.9, z - 0.3);
+    spot(ctx, s.xf, -0.28, top + 0.005, BOSS_GAP + 0.16, 'table');
+    break;
   }
-  wall(ctx, ['armchair_visitor']);
-  wall(ctx, ['binder_shelf']);
-  wall(ctx, ['print_large']);
-  wall(ctx, ['floor_lamp_brass']);
+  if (!desk) {
+    const d = wallBy(ctx, k.hero, ['office_desk']);
+    if (d) {
+      const xf = d.s.xf;
+      // Стол — одна из моделей полки: что на него ставится, встаёт на его столешницу.
+      const top = officeDeskTop(d.seeds[0]!);
+      put(ctx, 'office_terminal', xf.child(d.x - 0.32, top, 0.33));
+      put(ctx, 'desk_phone', xf.child(d.x + 0.2, top, 0.2));
+      put(ctx, 'office_chair', xf.child(d.x - 0.1, 0, 1.02, 2));
+      landmark(ctx, 'manager', xf, d.x, 0.9, 0.4);
+      spot(ctx, xf, d.x + 0.28, top + 0.005, 0.48, 'table');
+    }
+    wallBy(ctx, k.side, ['armchair_visitor']);
+    wallBy(ctx, k.side, ['print_large']);
+  }
+  wallBy(ctx, k.side, ['binder_shelf']);
+  wallBy(ctx, k.door, ['floor_lamp_brass']);
   corner(ctx, 'cactus_column');
   put(ctx, 'rug_wool', homeCentre(ctx).xf.child(0, 0, 0));
   floorSpots(ctx, 2);
@@ -309,10 +363,12 @@ function manager(ctx: RoomCtx): void {
 
 function files(ctx: RoomCtx): void {
   panels(ctx);
+  const k = roles(ctx);
   let first = true;
+  // Шкафы с папками — рядами вдоль стен, начиная с дальних от входа; стена входа свободна.
   for (let i = 0; i < ctx.cells.length * 2; i++) {
     // Два стеллажа с папками — бок о бок, во всю стену: у стеллажей полки они шире прежних.
-    const row = ctx.rng() < 0.6 ? wall(ctx, ['filing_cabinet', -0.52], ['filing_cabinet', 0], ['filing_cabinet', 0.52]) : wall(ctx, ['binder_shelf', -0.69], ['binder_shelf', 0.69]);
+    const row = ctx.rng() < 0.6 ? wallBy(ctx, notNear(ctx, k.hero), ['filing_cabinet', -0.52], ['filing_cabinet', 0], ['filing_cabinet', 0.52]) : wallBy(ctx, notNear(ctx, k.hero), ['binder_shelf', -0.69], ['binder_shelf', 0.69]);
     if (!row) break;
     if (first) landmark(ctx, 'files', row.s.xf, row.x, 1.2, 0.4);
     first = false;
@@ -322,22 +378,25 @@ function files(ctx: RoomCtx): void {
 
 function copyroom(ctx: RoomCtx): void {
   panels(ctx);
-  const c = wall(ctx, ['copier']);
+  const k = roles(ctx);
+  const c = wallBy(ctx, k.hero, ['copier']);
   if (c) {
     landmark(ctx, 'copyroom', c.s.xf, c.x, 1.0, 0.4);
     // На крышке копира (её верх — 0,97 м): место висело в воздухе на десять сантиметров выше.
     spot(ctx, c.s.xf, c.x - 0.15, 0.975, 0.3, 'table');
   }
-  wall(ctx, ['binder_shelf', -0.55], ['paper_stack', 0.5]);
+  wallBy(ctx, k.side, ['binder_shelf', -0.55], ['paper_stack', 0.5]);
   corner(ctx, 'trash_bin');
   floorSpots(ctx, 2);
 }
 
 function server(ctx: RoomCtx): void {
   panels(ctx);
+  const k = roles(ctx);
   let first = true;
+  // Стойки — парами вдоль стен напротив входа и сбоку: с порога видна стена мигающих огоньков.
   for (let i = 0; i < ctx.cells.length + 1; i++) {
-    const r = wall(ctx, ['server_rack', -0.38], ['server_rack', 0.38]);
+    const r = wallBy(ctx, notNear(ctx, k.hero), ['server_rack', -0.38], ['server_rack', 0.38]);
     if (!r) break;
     if (first) landmark(ctx, 'server', r.s.xf, r.x, 1.3, 0.5);
     first = false;
@@ -347,9 +406,11 @@ function server(ctx: RoomCtx): void {
 
 function washroom(ctx: RoomCtx): void {
   panels(ctx);
-  const s = wall(ctx, ['sink_cabinet'], ['mirror', 0, 1.15]);
-  if (s) landmark(ctx, 'washroom', s.s.xf, s.x, 1.0, 0.3);
-  wall(ctx, ['toilet_home']);
+  const k = roles(ctx);
+  // Раковина с зеркалом — сбоку от входа, унитаз — дальше.
+  const w = wallBy(ctx, k.side, ['sink_cabinet'], ['mirror', 0, 1.15]);
+  if (w) landmark(ctx, 'washroom', w.s.xf, w.x, 1.0, 0.3);
+  wallBy(ctx, k.hero, ['toilet_home']);
   floorSpots(ctx, 2);
 }
 

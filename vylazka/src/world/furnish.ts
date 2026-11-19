@@ -5,9 +5,11 @@
  */
 import { hash01, hash2 } from '../core/rng';
 import type { Rng } from '../core/rng';
+import type { Vec3 } from '../core/types';
 import { dressRoom } from './dress';
 import { FLAT_EYE, standee, veil, VEIL_SCENES } from './flat';
 import type { FlatMark } from './flat';
+import { DX, DZ } from '../gen/layout';
 import type { GenRoom, WorldKind } from '../gen/layout';
 import { reservePapers } from './furnish_papers';
 import type { PaperHold, PaperState } from './furnish_papers';
@@ -27,6 +29,9 @@ import type { DisplayShape } from './props_screens';
 import { DOOR_IMAGE, DOOR_NAME, SCREEN_IMAGES, screenFor } from './screens';
 import type { ScreenKind } from './screens';
 import { CELL, WALL_T } from './shell';
+import { flowActive, flowDone, RoomFlow, withFlow } from './flow';
+import { planOf } from './room_plan';
+import type { RoomPlan, Side } from './room_plan';
 import { Xf } from './props';
 import {
   bucket,
@@ -76,6 +81,8 @@ export interface CellInfo {
   xf: Xf;
   /** Сколько сторон клетки заняты проходами (дверь или открытое ребро в другое помещение). */
   doors: number;
+  /** Что на каждой стороне клетки (0 — +x, 1 — +z, 2 — −x, 3 — −z): стена, дверь, открытое ребро в соседнее помещение, своя клетка. */
+  sides?: readonly Side[];
 }
 
 export interface RoomCtx {
@@ -86,6 +93,8 @@ export interface RoomCtx {
   seed: number;
   /** Клетка, с которой начинается вылазка: рядом с ней обманок не ставим. */
   start: { cx: number; cz: number; tier: number };
+  /** Сколько клеток от начала сна до клетки (cx, cz) этого яруса по проходам; Infinity — не дойти (world/room_plan.ts). */
+  dist?: (cx: number, cz: number) => number;
   rng: Rng;
   /** Высота потолка над полом. */
   h: number;
@@ -286,20 +295,26 @@ function corridor(ctx: RoomCtx): void {
 
 function entrance(ctx: RoomCtx): void {
   lamps(ctx);
-  // Лестница на поверхность — у стены напротив двери.
-  const s = take(ctx, false);
+  const k = roles(ctx);
+  // Лестница на поверхность — у стены напротив выхода: её видно, откуда ни посмотри.
+  const s = bestSlots(ctx, false, k.hero)[0];
   if (s) {
+    s.used = true;
     ladderShaft(s.xf, ctx.h);
     landmark(ctx, 'exit', s.xf, 0, 1.2, 0.3);
   }
-  const g = take(ctx, false);
-  if (g) gasMaskRow(g.xf.child(0, 1.7, 0), 6);
-  const b = take(ctx, false);
+  const g = bestSlots(ctx, false, k.side)[0];
+  if (g) {
+    g.used = true;
+    gasMaskRow(g.xf.child(0, 1.7, 0), 6);
+  }
+  const b = bestSlots(ctx, false, k.door)[0];
   if (b) {
+    b.used = true;
     // Скамья у входа — не предмет уровня, а часть места: с этой комнаты начинается вылазка, игрок встаёт рядом, и от первого
     // же шага она растворилась бы.
-    const k = b.cx * 7 + b.cz;
-    s3Put(b.xf, pickOf(BENCHES, k), { tint: jitter(k) });
+    const kk = b.cx * 7 + b.cz;
+    s3Put(b.xf, pickOf(BENCHES, kk), { tint: jitter(kk) });
     signPlate(b.xf.child(0, 2.2, 0), 0.7, 0.18);
   }
 }
@@ -315,37 +330,53 @@ function airlock(ctx: RoomCtx): void {
   if (b) poster(b.xf.child(0, 1.65, 0), 0.9, 0.8, 41);
 }
 
+/** Середина помещения (по охвату клеток) и клетки по удалению от неё — ближние первыми: под стол посреди комнаты. */
+function byMiddle(ctx: RoomCtx): CellInfo[] {
+  let x = 0;
+  let z = 0;
+  for (const c of ctx.cells) {
+    x += c.cx;
+    z += c.cz;
+  }
+  x /= ctx.cells.length;
+  z /= ctx.cells.length;
+  return ctx.cells.slice().sort((a, b) => Math.hypot(a.cx - x, a.cz - z) - Math.hypot(b.cx - x, b.cz - z) || a.cx - b.cx || a.cz - b.cz);
+}
+
 function dorm(ctx: RoomCtx): void {
   lamps(ctx, 2);
+  const k = roles(ctx);
+  // Нары — рядами вдоль стен, как в казарме: по одной на участок, серединой участка — ряд ровный, без сдвигов к углам. Сначала
+  // напротив входа и сбоку (с порога виден ряд нар); стена входа — под шкафчики. Нары у угла врастали в соседние (партнёр
+  // 18.11): не встали — эта стена остаётся другому.
   let beds = 0;
-  for (const s of free(ctx)) {
+  for (const s of bestSlots(ctx, false, (q) => (k.plan.role(q) === 'near' ? -Infinity : k.hero(q) + (q.deep ? 0.5 : 0)))) {
     if (beds >= 4) break;
-    // Нары стоят длинной стороной вдоль стены; вещь — на нижнем ярусе.
     const b = pickOf(BUNKS, s.cx * 31 + s.cz * 17 + beds);
-    const g = s3Size(b);
-    const x = fit(s, g.w, g.d);
-    // Нары у угла врастали в соседние (партнёр 18.11): не встали — эта стена остаётся другому.
-    if (!s3(s.xf.child(x, 0, 0), b)) continue;
-    spot(ctx, s.xf, x, S3_BED[b]! + 0.005, 0.42, 'table');
-    if (beds === 0) landmark(ctx, 'bunks', s.xf, x, 1.0, 0.75);
+    if (!s3(s.xf.child(0, 0, 0), b)) continue;
+    spot(ctx, s.xf, 0, S3_BED[b]! + 0.005, 0.42, 'table');
+    if (beds === 0) landmark(ctx, 'bunks', s.xf, 0, 1.0, 0.75);
     s.used = true;
     beds += 1;
   }
-  const l = take(ctx);
+  // Шкафчики — у входа: в них убирали вещи, входя. Три бок о бок; вещь — на полу перед средним, дальше открытой дверцы.
+  const l = bestSlots(ctx, false, k.door)[0];
   if (l) {
-    // Три шкафчика бок о бок; вещь — на полу перед средним, дальше, чем достаёт открытая дверца.
+    l.used = true;
     const w = s3Size('s3_locker_olive').w;
     const x0 = fit(l, w * 3, 0.56) - w;
     const stood = [0, 1, 2].map((i) => s3(l.xf.child(x0 + i * w, 0, 0), 's3_locker_olive'));
     if (stood[1]) spot(ctx, l.xf, x0 + w, 0.02, s3Size('s3_locker_olive', true).d + 0.12, 'floor');
   }
-  const mid = ctx.cells.find((c) => c.doors === 0);
-  const t = mid ? s3Near(mid.xf, 's3_table_work') : null;
-  if (t) {
-    // Табуреты задвинуты под стол наполовину: дальше от него — уже нары (партнёр 18.11: мебель не врастает в соседнюю).
+  // Стол с табуретами — посреди комнаты, в проходе между нарами; где перегородил бы путь (world/flow.ts) — в соседней клетке.
+  for (const c of byMiddle(ctx)) {
+    const t = s3Near(c.xf, 's3_table_work');
+    if (!t) continue;
+    // Табуреты задвинуты под стол наполовину.
     s3c(t.child(-0.3, 0, 0.45), 's3_stool_wood');
     s3c(t.child(0.38, 0, -0.45, 1), 's3_stool_wood');
     spot(ctx, t, 0, S3_TOP.s3_table_work! + 0.005, 0, 'table');
+    break;
   }
   const abandoned = ctx.room.tier === 2;
   for (const s of free(ctx, false).slice(0, 2)) {
@@ -354,44 +385,70 @@ function dorm(ctx: RoomCtx): void {
   }
 }
 
+/** Сколько места стулу между развёрнутым столом и стеной за ним, м. */
+const CHAIR_GAP = 0.85;
+
 function command(ctx: RoomCtx): void {
   lamps(ctx);
-  const d = take(ctx);
-  if (d) {
-    // Двухтумбовый стол с зелёным сукном, на нём радиостанция; стул полки придвинут к столу.
-    const D = 's3_desk_green';
-    const g = s3Size(D);
-    const x = fit(d, g.w, g.d);
-    const top = S3_TOP[D]!;
-    // Радиостанция стоит на столе: не встал стол — нет и её.
-    if (s3(d.xf.child(x, 0, 0), D)) {
-      radioSet(d.xf.child(x - 0.3, top, 0.3));
-      s3c(d.xf.child(x - 0.05, 0, g.d + 0.15, 2), pickOf(CHAIRS, d.cx * 5 + d.cz));
-      wallPhone(d.xf.child(x + 1.12 > 1.35 ? x - 1.12 : x + 1.12, 1.4, 0));
-      landmark(ctx, 'radio', d.xf, x - 0.3, top + 0.14, 0.3);
-      spot(ctx, d.xf, x + 0.4, top + 0.005, 0.35, 'table');
+  const k = roles(ctx);
+  // Стол командира — лицом ко входу: развёрнут от стены, стул между ним и стеной, над стулом — карта. С порога видно стол,
+  // пустой стул за ним и карту — главная вещь в створе входа. Не встал развёрнутым — у стены, как письменный.
+  const D = 's3_desk_green';
+  const g = s3Size(D);
+  const top = S3_TOP[D]!;
+  let desk = false;
+  for (const d of bestSlots(ctx, false, (q) => (k.plan.role(q) === 'near' ? -Infinity : k.hero(q) + (depthAt(ctx, q) >= CHAIR_GAP + g.d + 1.4 ? 1 : -2)))) {
+    if (!s3(d.xf.child(0, 0, CHAIR_GAP + g.d, 2), D)) continue;
+    d.used = true;
+    desk = true;
+    s3c(d.xf.child(0.05, 0, CHAIR_GAP - 0.3), pickOf(CHAIRS, d.cx * 5 + d.cz));
+    radioSet(d.xf.child(-0.45, top, CHAIR_GAP + g.d - 0.3, 2));
+    mapBoard(d.xf.child(0, 1.5, 0));
+    landmark(ctx, 'radio', d.xf, -0.45, top + 0.14, CHAIR_GAP + g.d - 0.3);
+    landmark(ctx, 'map', d.xf, 0, 1.5, 0.05);
+    spot(ctx, d.xf, 0.4, top + 0.005, CHAIR_GAP + 0.35, 'table');
+    break;
+  }
+  if (!desk) {
+    const d = bestSlots(ctx, true, k.hero)[0];
+    if (d) {
+      d.used = true;
+      const x = fit(d, g.w, g.d);
+      // Радиостанция стоит на столе: не встал стол — нет и её.
+      if (s3(d.xf.child(x, 0, 0), D)) {
+        radioSet(d.xf.child(x - 0.3, top, 0.3));
+        s3c(d.xf.child(x - 0.05, 0, g.d + 0.15, 2), pickOf(CHAIRS, d.cx * 5 + d.cz));
+        landmark(ctx, 'radio', d.xf, x - 0.3, top + 0.14, 0.3);
+        spot(ctx, d.xf, x + 0.4, top + 0.005, 0.35, 'table');
+      }
+    }
+    const m = bestSlots(ctx, false, k.hero)[0];
+    if (m) {
+      m.used = true;
+      mapBoard(m.xf.child(0, 1.5, 0));
+      landmark(ctx, 'map', m.xf, 0, 1.5, 0.05);
     }
   }
-  const m = take(ctx, false);
-  if (m) {
-    mapBoard(m.xf.child(0, 1.5, 0));
-    landmark(ctx, 'map', m.xf, 0, 1.5, 0.05);
-  }
-  const s = take(ctx);
+  // Сейф — у боковой стены; телефон — у входа.
+  const s = bestSlots(ctx, true, k.side)[0];
   if (s) {
-    const g = s3Size(SAFE);
-    const x = fit(s, g.w, g.d);
+    s.used = true;
+    const sg = s3Size(SAFE);
+    const x = fit(s, sg.w, sg.d);
     safe(s.xf.child(x, 0, 0), pointSeed(s.xf.child(x, 0, 0)));
     landmark(ctx, 'safe', s.xf, x, 0.4, 0.4);
     spot(ctx, s.xf, x, S3_TOP[SAFE]! + 0.005, 0.22, 'table');
   }
-  const mid = ctx.cells.find((c) => c.doors === 0);
-  const t = mid ? s3Near(mid.xf.child(0, 0, 0, 1), 's3_table_work') : null;
-  if (t) {
-    // Рабочий стол поперёк клетки и два стула по длинным сторонам, лицом к нему.
-    s3c(t.child(0, 0, 0.66, 2), pickOf(CHAIRS, mid!.cx + mid!.cz * 3));
-    s3c(t.child(0.2, 0, -0.66, 0), pickOf(CHAIRS, mid!.cx + mid!.cz * 3 + 1));
+  const ph = bestSlots(ctx, false, k.door)[0];
+  if (ph) wallPhone(ph.xf.child(0.9, 1.4, 0));
+  // Стол для совещаний — посреди комнаты, стулья по длинным сторонам; где перегородил бы путь — в соседней клетке.
+  for (const c of byMiddle(ctx)) {
+    const t = s3Near(c.xf.child(0, 0, 0, 1), 's3_table_work');
+    if (!t) continue;
+    s3c(t.child(0, 0, 0.66, 2), pickOf(CHAIRS, c.cx + c.cz * 3));
+    s3c(t.child(0.2, 0, -0.66, 0), pickOf(CHAIRS, c.cx + c.cz * 3 + 1));
     spot(ctx, t, 0, S3_TOP.s3_table_work! + 0.005, 0, 'table');
+    break;
   }
   for (const p of free(ctx, false).slice(0, 2)) {
     poster(p.xf.child(0, 1.65, 0), 0.8, 0.9, 7 + p.cx * 13 + p.cz);
@@ -401,20 +458,28 @@ function command(ctx: RoomCtx): void {
 
 function medical(ctx: RoomCtx): void {
   lamps(ctx);
+  const k = roles(ctx);
+  // Койки — в ряд вдоль одной стены, изголовьем в одну сторону, как в палате; ряд — напротив входа или сбоку.
   const B = 's3_bed_iron_white';
   const bed = s3Size(B);
+  const first = bestSlots(ctx, false, (q) => (k.plan.role(q) === 'near' ? -Infinity : k.hero(q) + (q.deep ? 0.5 : 0)));
   let beds = 0;
-  for (const s of free(ctx)) {
+  for (const s of first) {
     if (beds >= 2) break;
-    const x = fit(s, bed.w, bed.d);
-    // Вторая кровать у угла врастала в первую (партнёр 18.11): не встала — следующая стена.
-    if (!s3(s.xf.child(x, 0, 0), B)) continue;
-    spot(ctx, s.xf, x, S3_BED[B]! + 0.005, 0.42, 'table');
-    s.used = true;
-    beds += 1;
+    const row: (Slot | undefined)[] = [s, k.plan.beside(s, 1), k.plan.beside(s, -1)];
+    for (const q of row) {
+      if (beds >= 2 || !q || q.used || q.hazard) continue;
+      const x = fit(q, bed.w, bed.d);
+      if (!s3(q.xf.child(x, 0, 0), B)) continue;
+      spot(ctx, q.xf, x, S3_BED[B]! + 0.005, 0.42, 'table');
+      q.used = true;
+      beds += 1;
+    }
   }
-  const c = take(ctx);
+  // Шкаф с лекарствами и умывальник — у входа: с ними начинали и заканчивали обход.
+  const c = bestSlots(ctx, true, k.door)[0] ?? bestSlots(ctx, false, k.door)[0];
   if (c) {
+    c.used = true;
     const cab = s3Size('s3_cabinet_medical');
     const x = fit(c, cab.w, cab.d);
     if (s3(c.xf.child(x, 0, 0), 's3_cabinet_medical')) {
@@ -422,63 +487,105 @@ function medical(ctx: RoomCtx): void {
       spot(ctx, c.xf, x + (x > 0 ? -0.7 : 0.7), 0.02, 0.3, 'floor');
     }
   }
-  const w = take(ctx);
-  if (w) sinkRow(w.xf.child(fit(w, 0.62, 0.45), 0, 0), 1);
+  const w = bestSlots(ctx, false, k.door)[0];
+  if (w) {
+    w.used = true;
+    sinkRow(w.xf.child(fit(w, 0.62, 0.45), 0, 0), 1);
+  }
   for (const p of free(ctx, false).slice(0, 1)) {
     poster(p.xf.child(0, 1.65, 0), 0.7, 0.9, 99);
     p.used = true;
   }
 }
 
+/**
+ * Остров из двух стеллажей спиной к спине посреди клетки, вдоль оси входа: проходы между островами и стенами смотрят от входа
+ * вглубь — с порога видны коридоры между стеллажами, как на складе (и есть за чем спрятаться). Ответ — встал ли остров.
+ */
+function rackIsland(ctx: RoomCtx, c: CellInfo, load: 'boxes' | 'papers', hole: { shelf: number; x0: number; x1: number }, every: number): boolean {
+  const e = planOf(ctx).entry;
+  const rot = (e ? (e.dir % 2 === 0 ? 0 : 1) : ctx.rng() < 0.5 ? 0 : 1) as 0 | 1;
+  const mark = markBuild(c.xf);
+  const sides = [c.xf.child(0, 0, 0.01, rot), c.xf.child(0, 0, -0.01, (rot + 2) as 2 | 3)];
+  const at = sides.map((xf, i) => rack(xf, c.cx * 37 + c.cz * 11 + i, load, hole));
+  if (at.some((p) => !p)) {
+    if (mark) rewindBuild(c.xf, mark);
+    return false;
+  }
+  at.forEach((p, i) => {
+    if ((c.cx + c.cz + i) % every === 0) spot(ctx, sides[i]!, p!.x, p!.y, 0.3, 'shelf');
+  });
+  return true;
+}
+
 function storage(ctx: RoomCtx): void {
   lamps(ctx, 2);
-  let racks = 0;
-  for (const s of free(ctx)) {
-    if (racks >= 5) break;
-    const n = s.cornerL || s.cornerR ? 1 : 2;
-    const w = s3Size(RACK).w;
-    for (let i = 0; i < n; i++) {
-      const x = n === 1 ? fit(s, w, 0.52) : (i - 0.5) * w;
-      // Вещь — на средней полке справа: там пролёт высокий, её видно.
-      const at = rack(s.xf.child(x, 0, 0), s.cx * 31 + s.cz * 17 + i + racks * 7, 'boxes', { shelf: 5, x0: 0.15, x1: 0.45 });
-      if (at) spot(ctx, s.xf, x + at.x, at.y, 0.3, 'shelf');
+  const k = roles(ctx);
+  // Острова стеллажей посреди клеток — сначала дальние от входа; у стен — ещё стеллажи, кроме стены входа.
+  const e = k.plan.entry;
+  const cells = ctx.cells.slice().sort((a, b) => (e ? Math.hypot(b.xf.ox - e.x, b.xf.oz - e.z) - Math.hypot(a.xf.ox - e.x, a.xf.oz - e.z) : 0));
+  let islands = 0;
+  for (const c of ctx.cells.length >= 3 ? cells : []) {
+    if (islands >= ctx.cells.length - 2) break;
+    if (rackIsland(ctx, c, 'boxes', { shelf: 5, x0: 0.15, x1: 0.45 }, 1)) {
+      if (islands === 0) landmark(ctx, 'racks', c.xf, 0, 1.1, 0);
+      islands += 1;
     }
-    if (racks === 0) landmark(ctx, 'racks', s.xf, 0, 1.1, 0.5);
+  }
+  let racks = 0;
+  for (const s of bestSlots(ctx, true, (q) => (k.plan.role(q) === 'near' ? -Infinity : k.side(q)))) {
+    if (racks >= (islands > 0 ? 3 : 5)) break;
+    const x = fit(s, s3Size(RACK).w, 0.52);
+    // Вещь — на средней полке справа: там пролёт высокий, её видно.
+    const at = rack(s.xf.child(x, 0, 0), s.cx * 31 + s.cz * 17 + racks * 7, 'boxes', { shelf: 5, x0: 0.15, x1: 0.45 });
+    if (!at) continue;
+    spot(ctx, s.xf, x + at.x, at.y, 0.3, 'shelf');
+    if (islands === 0 && racks === 0) landmark(ctx, 'racks', s.xf, 0, 1.1, 0.5);
     s.used = true;
     racks += 1;
   }
-  for (const c of ctx.cells) {
-    if (c.doors > 0 || ctx.rng() < 0.4) continue;
-    crate(c.xf.child(-0.3, 0, 0.2), 0.7, 0.5, 0.5);
-    crate(c.xf.child(-0.25, 0.5, 0.22, 1), 0.45, 0.32, 0.4, [0.85, 0.85, 0.85]);
-    if (ctx.rng() < 0.6) barrel(c.xf.child(0.55, 0, -0.35), MAT.metalGreen);
-    spot(ctx, c.xf, 0.3, 0.02, 0.7, 'floor');
+  // Ящики и бочки — у стены входа и в углах: то, что не успели разобрать.
+  for (const s of bestSlots(ctx, false, k.door).slice(0, 2)) {
+    crate(s.xf.child(-0.4, 0, 0.3), 0.7, 0.5, 0.5);
+    crate(s.xf.child(-0.35, 0.5, 0.32, 1), 0.45, 0.32, 0.4, [0.85, 0.85, 0.85]);
+    if (ctx.rng() < 0.6) barrel(s.xf.child(0.5, 0, 0.36), MAT.metalGreen);
+    spot(ctx, s.xf, 0.3, 0.02, 0.8, 'floor');
+    s.used = true;
   }
 }
 
 function washroom(ctx: RoomCtx): void {
   lamps(ctx);
-  const a = take(ctx);
+  const k = roles(ctx);
+  // Умывальники в ряд — сбоку от входа; кабинки — на стене напротив них: между рядами проход.
+  const a = bestSlots(ctx, false, k.side)[0];
   if (a) {
+    a.used = true;
     sinkRow(a.xf.child(0, 0, 0), a.cornerL || a.cornerR ? 2 : 3);
     landmark(ctx, 'sinks', a.xf, 0, 1.1, 0.45);
   }
-  const b = take(ctx);
-  if (b && !b.cornerL && !b.cornerR) stalls(b.xf.child(0, 0, 0), 2);
-  else if (b) bucket(b.xf.child(0, 0, 0.4));
+  const o = a ? k.plan.opposite(a) : undefined;
+  const b = o && !o.used && !o.hazard && !o.cornerL && !o.cornerR ? o : bestSlots(ctx, true, k.hero).find((q) => !q.cornerL && !q.cornerR);
+  if (b) {
+    b.used = true;
+    stalls(b.xf.child(0, 0, 0), 2);
+  }
   for (const c of ctx.cells) puddle(c.xf.child(0.2, 0, 0.1), 1.2, 0.8);
-  const p = take(ctx, false);
+  const p = bestSlots(ctx, false, k.door)[0];
   if (p) {
     pipeRun(p.xf.child(-1.35, 0, 0), 2.7, 2.3, 0.04, MAT.rust);
     bucket(p.xf.child(0.6, 0, 0.35));
     spot(ctx, p.xf, -0.5, 0.02, 0.5, 'floor');
+    p.used = true;
   }
 }
 
 function fvu(ctx: RoomCtx): void {
   lamps(ctx, 2);
+  const k = roles(ctx);
+  // Фильтры — напротив входа и сбоку (главное в комнате видно с порога), вентилятор — рядом с ними, щит — у входа.
   let units = 0;
-  for (const s of free(ctx)) {
+  for (const s of bestSlots(ctx, true, k.hero)) {
     if (units >= 3) break;
     const x = fit(s, 1.5, 0.75);
     if (units < 2) {
@@ -491,8 +598,9 @@ function fvu(ctx: RoomCtx): void {
     s.used = true;
     units += 1;
   }
-  const p = take(ctx);
+  const p = bestSlots(ctx, true, k.door)[0] ?? bestSlots(ctx, false, k.door)[0];
   if (p) {
+    p.used = true;
     const x = fit(p, 0.9, 0.4);
     controlPanel(p.xf.child(x, 0, 0));
     landmark(ctx, 'panel', p.xf, x, 1.3, 0.4);
@@ -508,16 +616,22 @@ function fvu(ctx: RoomCtx): void {
 
 function diesel(ctx: RoomCtx): void {
   lamps(ctx, 2);
-  const g = free(ctx).find((s) => !s.cornerL && !s.cornerR) ?? take(ctx);
+  const k = roles(ctx);
+  // Дизель — напротив входа, во весь участок; бак — сбоку; щит управления — у входа, чтобы видеть машину, стоя у двери.
+  const g = bestSlots(ctx, true, (q) => (q.cornerL || q.cornerR ? 0 : 1) + k.hero(q))[0];
   if (g) {
     g.used = true;
     dieselGen(g.xf.child(0, 0, 0), ctx.h);
     landmark(ctx, 'diesel', g.xf, 0, 0.8, 0.9);
   }
-  const t = take(ctx);
-  if (t) fuelTank(t.xf.child(fit(t, 1.9, 0.95), 0, 0));
-  const p = take(ctx);
+  const t = bestSlots(ctx, true, k.side)[0];
+  if (t) {
+    t.used = true;
+    fuelTank(t.xf.child(fit(t, 1.9, 0.95), 0, 0));
+  }
+  const p = bestSlots(ctx, true, k.door)[0] ?? bestSlots(ctx, false, k.door)[0];
   if (p) {
+    p.used = true;
     const x = fit(p, 0.9, 0.4);
     controlPanel(p.xf.child(x, 0, 0));
     extinguisher(p.xf.child(x > 0 ? x - 0.75 : x + 0.75, 0.9, 0));
@@ -538,8 +652,10 @@ function diesel(ctx: RoomCtx): void {
 
 function tanks(ctx: RoomCtx): void {
   lamps(ctx, 2);
+  const k = roles(ctx);
+  // Баки — напротив входа и сбоку, рядом; трубы — по остальным стенам.
   let n = 0;
-  for (const s of free(ctx)) {
+  for (const s of bestSlots(ctx, true, k.hero)) {
     if (n >= 2 || s.cornerL || s.cornerR) continue;
     waterTank(s.xf.child(0, 0, 0));
     if (n === 0) landmark(ctx, 'tank', s.xf, 0, 1.2, 1.5);
@@ -562,8 +678,10 @@ function tanks(ctx: RoomCtx): void {
 
 function switchboard(ctx: RoomCtx): void {
   lamps(ctx);
+  const k = roles(ctx);
+  // Шкафы щитовой — рядами напротив входа и сбоку: стена из железа видна с порога.
   let n = 0;
-  for (const s of free(ctx)) {
+  for (const s of bestSlots(ctx, true, k.hero)) {
     if (n >= 3) break;
     const count = s.cornerL || s.cornerR ? 2 : 3;
     const x0 = fit(s, count * 0.74, 0.45) - ((count - 1) * 0.74) / 2;
@@ -582,37 +700,46 @@ function switchboard(ctx: RoomCtx): void {
 
 function archive(ctx: RoomCtx): void {
   lamps(ctx, 2);
-  let n = 0;
-  for (const s of free(ctx)) {
-    const count = s.cornerL || s.cornerR ? 1 : 2;
-    const w = s3Size(RACK).w;
-    for (let i = 0; i < count; i++) {
-      const x = count === 1 ? fit(s, w, 0.52) : (i - 0.5) * w;
-      // Промежуток в кипах на средней полке слева — под вещь (её кладут не в каждый стеллаж).
-      const at = rack(s.xf.child(x, 0, 0), s.cx * 37 + s.cz * 11 + i, 'papers', { shelf: 3, x0: -0.52, x1: -0.26 });
-      if (at && (n + i) % 2 === 0) spot(ctx, s.xf, x + at.x, at.y, 0.3, 'shelf');
+  const k = roles(ctx);
+  // Стол архивариуса — у входа, к нему подходят первым; стеллажи — островами посреди клеток и у стен, проходы смотрят вглубь.
+  const D = 's3_desk_green';
+  const g = s3Size(D);
+  const d = bestSlots(ctx, true, k.door)[0] ?? bestSlots(ctx, false, k.door)[0];
+  if (d) {
+    d.used = true;
+    const x = fit(d, g.w, g.d);
+    if (s3(d.xf.child(x, 0, 0), D)) {
+      s3c(d.xf.child(x - 0.1, 0, g.d + 0.15, 2), pickOf(CHAIRS, d.cx * 3 + d.cz));
+      spot(ctx, d.xf, x - 0.2, S3_TOP[D]! + 0.005, 0.35, 'table');
+      // Рассыпанные папки — у стола.
+      for (let i = 0; i < 5; i++) {
+        const px = x + (ctx.rng() - 0.5) * 2;
+        const pz = g.d + 0.5 + ctx.rng() * 0.7;
+        d.xf.box([px, 0.003, pz], [px + 0.22, 0.02 + ctx.rng() * 0.03, pz + 0.3], MAT.paper, { tint: [0.8 + ctx.rng() * 0.2, 0.8, 0.65] });
+      }
     }
-    if (n === 0) landmark(ctx, 'archive', s.xf, 0, 1.2, 0.5);
+  }
+  const e = k.plan.entry;
+  const cells = ctx.cells.slice().sort((a, b) => (e ? Math.hypot(b.xf.ox - e.x, b.xf.oz - e.z) - Math.hypot(a.xf.ox - e.x, a.xf.oz - e.z) : 0));
+  let islands = 0;
+  // Промежуток в кипах на средней полке слева — под вещь (её кладут не в каждый стеллаж).
+  for (const c of ctx.cells.length >= 3 ? cells : []) {
+    if (islands >= ctx.cells.length - 2) break;
+    if (rackIsland(ctx, c, 'papers', { shelf: 3, x0: -0.52, x1: -0.26 }, 2)) {
+      if (islands === 0) landmark(ctx, 'archive', c.xf, 0, 1.2, 0);
+      islands += 1;
+    }
+  }
+  let n = 0;
+  for (const s of bestSlots(ctx, true, (q) => (k.plan.role(q) === 'near' ? -Infinity : k.side(q)))) {
+    if (n >= 3) break;
+    const x = fit(s, s3Size(RACK).w, 0.52);
+    const at = rack(s.xf.child(x, 0, 0), s.cx * 37 + s.cz * 11 + n, 'papers', { shelf: 3, x0: -0.52, x1: -0.26 });
+    if (!at) continue;
+    if (n % 2 === 0) spot(ctx, s.xf, x + at.x, at.y, 0.3, 'shelf');
+    if (islands === 0 && n === 0) landmark(ctx, 'archive', s.xf, 0, 1.2, 0.5);
     s.used = true;
     n += 1;
-  }
-  const mid = ctx.cells.find((c) => c.doors === 0);
-  if (mid) {
-    // Стол архивариуса посреди клетки, стул придвинут.
-    // Между стеллажами у двух стен (1,66 м) стол в 1,84 м поперёк не встаёт — вдоль прохода в соседнюю клетку встаёт.
-    const D = 's3_desk_green';
-    const g = s3Size(D);
-    const t = s3Near(mid.xf, D);
-    if (t) {
-      s3c(t.child(-0.1, 0, g.d / 2 + 0.15, 2), pickOf(CHAIRS, mid.cx * 3 + mid.cz));
-      spot(ctx, t, -0.2, S3_TOP[D]! + 0.005, 0, 'table');
-    }
-    // Рассыпанные папки.
-    for (let i = 0; i < 5; i++) {
-      const x = (ctx.rng() - 0.5) * 2;
-      const z = 0.5 + ctx.rng() * 0.7;
-      mid.xf.box([x, 0.003, z], [x + 0.22, 0.02 + ctx.rng() * 0.03, z + 0.3], MAT.paper, { tint: [0.8 + ctx.rng() * 0.2, 0.8, 0.65] });
-    }
   }
 }
 
@@ -640,20 +767,21 @@ export type HomeItem = readonly [name: string, dx?: number, y?: number];
  * — сначала туда, где нет дверей; в тесных комнатах допускается и у двери, если не глубже 0,75 м.
  * Настенные предметы (ковёр, окно, батарея) вешаются над низкой мебелью на тот же участок.
  */
-export function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; x: number; seeds: number[] } | null {
+export function homeStack(ctx: RoomCtx, items: readonly HomeItem[], score?: SlotScore): Stacked | null {
   const specs = items.map(([n]) => ALL_PROPS[n]);
   if (specs.some((p) => !p)) return null;
-  let depth = 0;
-  let half = 0;
-  items.forEach(([, dx = 0], i) => {
-    const p = specs[i]!;
-    if (p.mount !== 'wall') depth = Math.max(depth, p.d);
-    half = Math.max(half, Math.abs(dx) + p.w / 2);
-  });
+  const { depth, half } = extent(items, specs as PropSpec[]);
   // Участки по порядку: глубокое (глубже 0,6 м) — сначала без дверей; в тесных комнатах — и у двери, если не глубже 0,75 м.
   // Главная вещь стопки (первая) врастала в соседнюю на этом участке (партнёр 18.11; world/clearance.ts) — следующий участок.
+  // С оценкой (раскладка по смыслу, партнёр 19.11) — лучший по оценке участок; глубокому можно и в клетку с проходом, если
+  // помещение держит проходы свободными (world/flow.ts): перегородить их вещь не даст правило.
   const tried = new Set<Slot>();
+  const loose = flowActive();
   const next = (): Slot | null => {
+    if (score) {
+      const ok = (k: Slot): boolean => !tried.has(k) && (k.deep || depth <= 0.75 || loose);
+      return bestSlots(ctx, false, (k) => (ok(k) ? score(k) + (k.deep ? 0.25 : 0) : -Infinity))[0] ?? null;
+    }
     const pool = depth > 0.6 ? free(ctx, true).filter((k) => !tried.has(k)) : [];
     const more = depth <= 0.75 && pool.length === 0 ? free(ctx, false).filter((k) => !tried.has(k)) : [];
     return pool[0] ?? more[0] ?? null;
@@ -666,13 +794,46 @@ export function homeStack(ctx: RoomCtx, items: readonly HomeItem[]): { s: Slot; 
   return null;
 }
 
+/** Что встало: участок, сдвиг вдоль него, сиды вещей стопки и какие из них встали. */
+export interface Stacked {
+  s: Slot;
+  x: number;
+  seeds: number[];
+  stood: boolean[];
+}
+
+/** Глубина стопки (без настенного) и половина её ширины вдоль стены. */
+function extent(items: readonly HomeItem[], specs: readonly PropSpec[]): { depth: number; half: number } {
+  let depth = 0;
+  let half = 0;
+  items.forEach(([, dx = 0], i) => {
+    const p = specs[i]!;
+    if (p.mount !== 'wall') depth = Math.max(depth, p.d);
+    half = Math.max(half, Math.abs(dx) + p.w / 2);
+  });
+  return { depth, half };
+}
+
+/**
+ * Стопка на заданном участке; at — где её середина вдоль стены (вещь напротив другой: телевизор по оси дивана), без него — как
+ * ставит fit. null — участок занят или главная вещь здесь не встала.
+ */
+export function stackOn(ctx: RoomCtx, s: Slot, items: readonly HomeItem[], at?: number): Stacked | null {
+  if (s.used || s.hazard) return null;
+  const specs = items.map(([n]) => ALL_PROPS[n]);
+  if (specs.some((p) => !p)) return null;
+  const { depth, half } = extent(items, specs as PropSpec[]);
+  return stackAt(ctx, s, items, specs as PropSpec[], half, depth, at);
+}
+
 /**
  * Стопка на участке s; null — главная вещь стопки здесь не встала (врастала в соседнюю), участок свободен. Сначала — где её
  * ставит fit; врастает — сдвиги вдоль той же стены, от угла (до 0,45 м, не дальше края стены), потом — другой участок.
  * Сиды тянутся один раз, по порядку вещей, как раньше: где ничего не врастает, раскладка та же до сантиметра.
  */
-function stackAt(ctx: RoomCtx, s: Slot, items: readonly HomeItem[], specs: readonly PropSpec[], half: number, depth: number): { s: Slot; x: number; seeds: number[] } | null {
-  const x0 = fit(s, half * 2, depth);
+function stackAt(ctx: RoomCtx, s: Slot, items: readonly HomeItem[], specs: readonly PropSpec[], half: number, depth: number, at?: number): Stacked | null {
+  const lim0 = Math.max(0, 1.35 - half);
+  const x0 = at === undefined ? fit(s, half * 2, depth) : Math.max(-lim0, Math.min(lim0, at));
   const seeds = items.map(() => Math.floor(ctx.rng() * 1e6));
   const lim = Math.max(0, 1.35 - half);
   const xs = [0, 0.15, -0.15, 0.3, -0.3, 0.45, -0.45].map((d) => x0 + d).filter((x, i) => i === 0 || Math.abs(x) <= lim + 1e-9);
@@ -688,7 +849,7 @@ function stackAt(ctx: RoomCtx, s: Slot, items: readonly HomeItem[], specs: reado
       for (let i = 0; i < items.length; i++) stood.push(i === 0 || stood[0] === true ? buildAt(i, x) : false);
       if (stood[0] && (!whole || stood.every(Boolean))) {
         s.used = true;
-        return { s, x, seeds };
+        return { s, x, seeds, stood };
       }
       if (mark) rewindBuild(s.xf, mark);
       ctx.flats.length = flats;
@@ -721,6 +882,65 @@ function stackAt(ctx: RoomCtx, s: Slot, items: readonly HomeItem[], specs: reado
     // У проёма (в клетке с дверью) — закрыто: выдвинутый ящик и распахнутая дверца не заходят в горло прохода.
     return (s.deep ? p.build(at, seed) : withOpenness(0, () => p.build(at, seed))) !== false;
   }
+}
+
+/** Имена вещей, уже стоящих в помещении (по журналу объектов уровня): чтобы не повторять того, что в комнате есть. */
+export function roomThings(ctx: RoomCtx): Set<string> {
+  const out = new Set<string>();
+  const c0 = ctx.cells[0];
+  const log = c0?.xf.mb.log;
+  if (!c0 || !log) return out;
+  const cells = new Set(ctx.cells.map((c) => `${c.cx},${c.cz}`));
+  const dx = c0.cx - c0.xf.ox / CELL;
+  const dz = c0.cz - c0.xf.oz / CELL;
+  for (const o of log.list) {
+    if (o.at[1] < c0.xf.oy - 0.1 || o.at[1] > c0.xf.oy + ctx.h + 0.1) continue;
+    if (cells.has(`${Math.round(o.at[0] / CELL + dx)},${Math.round(o.at[2] / CELL + dz)}`)) out.add(o.name);
+  }
+  return out;
+}
+
+// ───────────── раскладка по смыслу (партнёр 19.11, 14:33: «расставь мебель по-новому и логично») ─────────────
+
+/** Оценка участка стены для вещи: больше — лучше; −Infinity — сюда нельзя. */
+export type SlotScore = (s: Slot) => number;
+
+/** Свободные участки по оценке, лучшие первыми; при равной — в порядке сида (free тасует их по ГСЧ помещения). */
+export function bestSlots(ctx: RoomCtx, deep: boolean, score: SlotScore): Slot[] {
+  return free(ctx, deep)
+    .map((s, i) => ({ s, i, k: score(s) }))
+    .filter((e) => e.k > -Infinity)
+    .sort((a, b) => b.k - a.k || a.i - b.i)
+    .map((e) => e.s);
+}
+
+/** Координата вдоль участка s (его ось x, от середины) для точки мира (wx, wz). */
+export function xOn(s: Slot, wx: number, wz: number): number {
+  const a = s.xf.pt(1, 0, 0);
+  return (wx - s.xf.ox) * (a[0] - s.xf.ox) + (wz - s.xf.oz) * (a[2] - s.xf.oz);
+}
+
+/**
+ * Оценки участков стены относительно главного входа (world/room_plan.ts) — словарь раскладки:
+ *   hero — главная вещь комнаты: в створе входа, иначе напротив, иначе сбоку; на стене входа — в последнюю очередь;
+ *   side — вторая по важности: сбоку (с порога видна в профиль и не заслоняет главную), иначе напротив вне створа;
+ *   door — то, чем пользуются, входя и выходя (шкаф, вешалка, шкафчики): ближе ко входу;
+ *   near(x, z) — ближе к точке мира (вещь при другой вещи: кресло у дивана).
+ */
+export function roles(ctx: RoomCtx): { plan: RoomPlan; hero: SlotScore; side: SlotScore; door: SlotScore; near: (x: number, z: number) => SlotScore } {
+  const plan = planOf(ctx);
+  return {
+    plan,
+    hero: (s) => (plan.framed(s) ? 3 : plan.role(s) === 'far' ? 2 : plan.role(s) === 'side' ? 1 : 0),
+    side: (s) => (plan.role(s) === 'side' ? 2 : plan.role(s) === 'far' ? (plan.framed(s) ? 1 : 1.5) : 0),
+    door: (s) => -plan.toEntry(s) / 3 + (plan.role(s) === 'near' ? 0.5 : 0),
+    near: (x, z) => (s) => -Math.hypot(s.xf.ox - x, s.xf.oz - z),
+  };
+}
+
+/** Ковёр на полу (свободная вещь) серединой в точке xf. */
+function rugOn(ctx: RoomCtx, xf: Xf): void {
+  ALL_PROPS.rug!.build(xf, Math.floor(ctx.rng() * 1e6));
 }
 
 /**
@@ -843,11 +1063,6 @@ export function homeCentre(ctx: RoomCtx): CellInfo {
   return ctx.cells.find((c) => c.doors === 0) ?? ctx.cells[0]!;
 }
 
-/** Ковёр посреди клетки. */
-function rugAt(ctx: RoomCtx, c: CellInfo): void {
-  ALL_PROPS.rug!.build(c.xf.child(0, 0, 0), Math.floor(ctx.rng() * 1e6));
-}
-
 /** Места для вещей на полу: свободные точки у центров клеток, по кругу, чтобы не налезали друг на друга. */
 export function floorSpots(ctx: RoomCtx, n: number): void {
   const offsets: readonly (readonly [number, number])[] = [
@@ -887,19 +1102,67 @@ function blocked(xf: Xf, x: number, z: number): boolean {
   return xf.col.boxes.some((b) => p[0] > b.minX - m && p[0] < b.maxX + m && p[2] > b.minZ - m && p[2] < b.maxZ + m && b.minY < 0.5 && b.maxY > 0);
 }
 
+// Домашние комнаты расставлены по смыслу (партнёр 19.11, 14:33; docs/vylazka/design.md, §31): главная вещь — напротив входа,
+// вещи стоят группами по делу, проходы свободны (world/flow.ts), стены не заставлены сплошь — пустое место тоже часть комнаты.
+
 function kitchen(ctx: RoomCtx): void {
   lamps(ctx);
-  const table = homeStack(ctx, [['kitchen_table']]);
+  const k = roles(ctx);
+  // Стол — главная вещь кухни: напротив входа, под окном в никуда. С порога видно стол и светлое окно над ним — свет тянет
+  // взгляд в комнату. Вещь воспоминания — на клеёнке, слева от тарелки.
+  const table = homeStack(ctx, [['kitchen_table'], ['window_fake']], k.hero);
   if (table) {
     landmark(ctx, 'kitchen', table.s.xf, table.x, 0.7, 0.4);
     // Свободный край столешницы слева от тарелки — на клеёнке (props_home.ts, kitchenTable).
     spot(ctx, table.s.xf, table.x - 0.42, S3_TOP.s3_table_kitchen! + 0.006, 0.2, 'table');
   }
-  homeStack(ctx, [['fridge']]);
-  homeStack(ctx, [['stove']]);
-  homeStack(ctx, [['sink_cabinet']]);
-  homeStack(ctx, [['radiator', 0.2], ['window_fake', -0.3]]);
+  // Рабочая линия — одним рядом у боковой стены: мойка посередине, плита и холодильник по бокам — путь «холодильник —
+  // мойка — плита» короткий, как на настоящей кухне.
+  // Холодильник — первым в стопке: он есть в каждой кухне (его передвигает партнёр — правка ссылается на первый холодильник
+  // кухни), даже если мойка с плитой рядом не встали; тогда они ищут место ближе к нему.
+  const flip = ctx.rng() < 0.5 ? -1 : 1;
+  const line = homeStack(ctx, [['fridge', -flip * 0.74], ['sink_cabinet'], ['stove', flip * 0.7]], k.side);
+  if (line) {
+    const f = line.s.xf.pt(line.x - flip * 0.74, 0, 0);
+    if (!line.stood[1]) homeStack(ctx, [['sink_cabinet']], k.near(f[0], f[2]));
+    if (!line.stood[2]) homeStack(ctx, [['stove']], k.near(f[0], f[2]));
+  }
+  // Батарея — одна на кухню: её передвигает партнёр (правка ссылается на первую батарею кухни).
+  homeStack(ctx, [['radiator']], k.side);
   floorSpots(ctx, table ? 2 : 3);
+}
+
+/** Глубина помещения перед участком s: от его стены до противоположной, м (клетки подряд по нормали участка). */
+function depthAt(ctx: RoomCtx, s: Slot): number {
+  const has = new Set(ctx.cells.map((c) => `${c.cx},${c.cz}`));
+  const nx = -DX[s.dir]!;
+  const nz = -DZ[s.dir]!;
+  let n = 1;
+  while (has.has(`${s.cx + nx * n},${s.cz + nz * n}`)) n += 1;
+  return n * CELL - WALL_T;
+}
+
+/** Точка (x, z мира) внутри помещения не ближе m к его стенам. */
+function inRoom(ctx: RoomCtx, p: Vec3, m: number): boolean {
+  return ctx.cells.some((c) => {
+    const dx = p[0] - c.xf.ox;
+    const dz = p[2] - c.xf.oz;
+    const lim = (d: number): number => (c.sides?.[d] === 'inner' ? CELL / 2 : CELL / 2 - WALL_T / 2 - m);
+    return dx <= lim(0) && dz <= lim(1) && -dx <= lim(2) && -dz <= lim(3);
+  });
+}
+
+/** От дивана до экрана — не дальше этого (от стены до стены), м: иначе диван выходит на середину комнаты. */
+const SOFA_REACH = 3.6;
+/** Сколько между экраном и сиденьем дивана, вынесенного на середину комнаты, м. */
+const SOFA_VIEW = 2.2;
+
+/**
+ * Журнальный столик (полка Sand3D, третий подбор 19.11) серединой в xf, длинной стороной вдоль дивана: на нём место для вещи
+ * воспоминания (пульт, кружка). Где столик отрезал бы проход (world/flow.ts) — его нет.
+ */
+function coffeeTable(ctx: RoomCtx, xf: Xf): void {
+  if (s3c(xf, 's3_coffee_table')) spot(ctx, xf, 0.25, S3_TOP.s3_coffee_table! + 0.005, 0.05, 'table');
 }
 
 function living(ctx: RoomCtx): void {
@@ -910,62 +1173,152 @@ function living(ctx: RoomCtx): void {
     if (c === centre) hanging(c.xf, () => ALL_PROPS.chandelier!.build(c.xf.child(0, ctx.h, 0), 0));
     else if (i % 2 === 0) hanging(c.xf, () => cageLamp(c.xf.child(0, ctx.h, 0)));
   });
-  const sofa = homeStack(ctx, [['sofa'], ['wall_carpet']]);
-  if (sofa) landmark(ctx, 'living', sofa.s.xf, sofa.x, 0.6, 0.45);
-  homeStack(ctx, [['tv_stand']]);
-  if (ctx.rng() < 0.8) homeStack(ctx, [['armchair']]);
-  if (ctx.rng() < 0.8) homeStack(ctx, [['bookshelf']]);
-  if (ctx.rng() < 0.7) homeStack(ctx, [['floor_lamp']]);
-  if (ctx.rng() < 0.6) homeStack(ctx, [['houseplant']]);
+  const k = roles(ctx);
+  const plan = k.plan;
+  const sofaD = ALL_PROPS.sofa!.d;
+  const tvD = ALL_PROPS.tv_stand!.d;
+  const side = ctx.rng() < 0.5 ? -1 : 1;
+  // Пара «диван — телевизор» (диван смотрит на экран, ковёр между ними, кресло рядом). Узкая комната: диван у стены напротив
+  // входа, под ковром на стене, торшер сбоку; телевизор на стене напротив дивана, по его оси. Широкая (до противоположной стены
+  // дальше SOFA_REACH): телевизор у стены напротив входа, диван вынесен на середину комнаты лицом к нему — с порога видны
+  // спинка дивана и экран за ней (кто-то мог бы там сидеть).
+  const near = (s: Slot): boolean => {
+    const o = plan.opposite(s);
+    return o !== undefined && !o.used && !o.hazard && depthAt(ctx, s) <= SOFA_REACH;
+  };
+  const wide = bestSlots(ctx, false, (s) => (depthAt(ctx, s) >= tvD + SOFA_VIEW + sofaD + 1.0 ? k.hero(s) : -Infinity))[0];
+  const narrow = bestSlots(ctx, false, (s) => (near(s) ? k.hero(s) : -Infinity))[0];
+  let front: Vec3 | null = null;
+  let tvSlot: Slot | null = null;
+  if (narrow) {
+    const sofa = stackOn(ctx, narrow, [['sofa', -side * 0.24], ['wall_carpet', -side * 0.24], ['floor_lamp', side * 1.1]]);
+    if (sofa) {
+      const sx = sofa.x - side * 0.24;
+      landmark(ctx, 'living', sofa.s.xf, sx, 0.6, 0.45);
+      const at = sofa.s.xf.pt(sx, 0, 0);
+      front = sofa.s.xf.pt(sx, 0, 1.5);
+      const o = plan.opposite(sofa.s)!;
+      const tv = stackOn(ctx, o, [['tv_stand']], xOn(o, at[0], at[2]));
+      if (tv) tvSlot = tv.s;
+      const mid = (sofaD + depthAt(ctx, sofa.s) - tvD) / 2;
+      rugOn(ctx, sofa.s.xf.child(sx, 0, mid));
+      coffeeTable(ctx, sofa.s.xf.child(sx, 0, mid));
+    }
+  }
+  if (!front && wide) {
+    const tv = stackOn(ctx, wide, [['tv_stand']]);
+    if (tv) {
+      tvSlot = tv.s;
+      // Диван развёрнут к экрану: его спинка — на SOFA_VIEW + глубина дивана от экрана.
+      const back = tvD + SOFA_VIEW + sofaD;
+      const seed = Math.floor(ctx.rng() * 1e6);
+      if (ALL_PROPS.sofa!.build(tv.s.xf.child(tv.x, 0, back, 2), seed) !== false) {
+        landmark(ctx, 'living', tv.s.xf, tv.x, 0.6, back - sofaD / 2);
+        front = tv.s.xf.pt(tv.x, 0, tvD + SOFA_VIEW * 0.5);
+        const lampSeed = Math.floor(ctx.rng() * 1e6);
+        // Торшер у края дивана — с той стороны, где до стены помещения есть место.
+        for (const sd of [side, -side]) {
+          const at = tv.s.xf.child(tv.x + sd * (ALL_PROPS.sofa!.w / 2 + 0.35), 0, back, 2);
+          if (inRoom(ctx, at.pt(0, 0, 0.225), 0.3) && ALL_PROPS.floor_lamp!.build(at, lampSeed) !== false) break;
+        }
+        rugOn(ctx, tv.s.xf.child(tv.x, 0, tvD + SOFA_VIEW / 2 + 0.1));
+        coffeeTable(ctx, tv.s.xf.child(tv.x, 0, back - sofaD - 0.75));
+        homeStack(ctx, [['wall_carpet']], k.side);
+      }
+    }
+  }
+  if (front) {
+    const f = front;
+    // Кресло — у ближней к дивану стены, но не у экрана и не рядом с диваном на одной стене.
+    homeStack(ctx, [['armchair']], (s) => (s === tvSlot || s.dir === tvSlot?.dir ? -Infinity : k.near(f[0], f[2])(s)));
+  } else {
+    // Пары не вышло: диван — главная вещь у стены, телевизор — где встанет, но не рядом с диваном на одной стене.
+    const sofa = homeStack(ctx, [['sofa'], ['wall_carpet']], k.hero);
+    if (sofa) {
+      landmark(ctx, 'living', sofa.s.xf, sofa.x, 0.6, 0.45);
+      const f = sofa.s.xf.pt(sofa.x, 0, 1.5);
+      homeStack(ctx, [['tv_stand']], (s) => (s.dir === sofa.s.dir ? -Infinity : k.near(f[0], f[2])(s)));
+    }
+    rugOn(ctx, centre.xf.child(0, 0, 0));
+  }
+  // Книжный шкаф — сбоку; окно с батареей под ним — на свободной стене, лучше напротив входа.
+  if (ctx.rng() < 0.8) homeStack(ctx, [['bookshelf']], k.side);
+  if (ctx.rng() < 0.7) homeStack(ctx, [['radiator'], ['window_fake']], k.hero);
+  if (ctx.rng() < 0.6) homeStack(ctx, [['houseplant']], k.side);
   // Ёлка стоит не везде и не всегда: сон помнит праздник выборочно.
-  if (ctx.rng() < 0.15) homeStack(ctx, [['christmas_tree']]);
-  rugAt(ctx, centre);
+  if (ctx.rng() < 0.15) homeStack(ctx, [['christmas_tree']], k.side);
   floorSpots(ctx, 3);
 }
 
 function bedroom(ctx: RoomCtx): void {
   lamps(ctx);
-  const bed = homeStack(ctx, ctx.rng() < 0.6 ? [['bed_home'], ['wall_carpet']] : [['bed_home']]);
-  if (bed) landmark(ctx, 'bedroom', bed.s.xf, bed.x, 0.55, 0.5);
-  homeStack(ctx, [['wardrobe']]);
-  homeStack(ctx, [['mirror', 0.5], ['floor_lamp', -0.5]]);
-  homeStack(ctx, [['radiator', 0.2], ['window_fake', -0.3]]);
+  const k = roles(ctx);
+  // Кровать — главная вещь, напротив входа; тумбочка у изголовья — на ней место для вещи воспоминания (будильник, ночник).
+  // Изголовье с любой стороны: у железной кровати спинки одинаковые.
+  const head = ctx.rng() < 0.5 ? -1 : 1;
+  const items: HomeItem[] = [['bed_home', -head * 0.28], ['s3_nightstand', head * 1.06]];
+  if (ctx.rng() < 0.6) items.push(['wall_carpet', -head * 0.28]);
+  const bed = homeStack(ctx, items, k.hero);
+  if (bed) {
+    landmark(ctx, 'bedroom', bed.s.xf, bed.x - head * 0.28, 0.55, 0.5);
+    if (bed.stood[1]) spot(ctx, bed.s.xf, bed.x + head * 1.06, S3_TOP.s3_nightstand! + 0.005, 0.2, 'table');
+    // Коврик у кровати, со стороны, с которой встают.
+    rugOn(ctx, bed.s.xf.child(bed.x - head * 0.28, 0, 1.12 + 0.72));
+  }
+  // Платяной шкаф — у входа; комод с зеркалом над ним — сбоку; окно с батареей — на свободной стене, лучше напротив входа.
+  homeStack(ctx, [['wardrobe']], k.door);
+  homeStack(ctx, [['s3_dresser'], ['mirror', 0, 1.15]], k.side);
+  homeStack(ctx, [['radiator'], ['window_fake']], k.hero);
+  if (ctx.rng() < 0.5) homeStack(ctx, [['floor_lamp']], k.side);
   floorSpots(ctx, 3);
 }
 
 function bathroom(ctx: RoomCtx): void {
   lamps(ctx);
-  const tub = homeStack(ctx, [['bathtub']]);
-  if (tub) landmark(ctx, 'bathroom', tub.s.xf, tub.x, 0.6, 0.4);
-  // Зеркало вешается над унитазом и стиральной машиной, поэтому выше обычного.
-  homeStack(ctx, [['toilet_home', -0.55], ['washing_machine', 0.5], ['mirror', 0.5, 1.15]]);
-  homeStack(ctx, [['clothes_dryer']]);
+  const k = roles(ctx);
+  // Ванна со шторкой — у дальней стены (её видно с порога), стиральная машина — рядом с ней.
+  const flip = ctx.rng() < 0.5 ? -1 : 1;
+  const tub = homeStack(ctx, [['bathtub', -flip * 0.45], ['washing_machine', flip * 0.95]], k.hero);
+  if (tub) landmark(ctx, 'bathroom', tub.s.xf, tub.x - flip * 0.45, 0.6, 0.4);
+  // Раковина (полка Sand3D) с зеркалом над ней и унитаз рядом — у боковой стены.
+  homeStack(ctx, [['s3_sink_pedestal', flip * 0.45], ['mirror', flip * 0.45, 1.0], ['toilet_home', -flip * 0.55]], k.side);
+  // Сушилка с бельём — только где есть место: в тесной ванной её нет.
+  if (ctx.cells.length > 1) homeStack(ctx, [['clothes_dryer']], k.side);
   floorSpots(ctx, 2);
 }
 
 function nursery(ctx: RoomCtx): void {
   lamps(ctx);
-  const crib = homeStack(ctx, [['crib']]);
-  if (crib) landmark(ctx, 'nursery', crib.s.xf, crib.x, 0.6, 0.35);
-  const desk = homeStack(ctx, [['desk_pc']]);
-  // Справа от монитора столешница свободна.
+  const k = roles(ctx);
+  // Кроватка — главная вещь, с порога; игрушки — рядом с ней, у той же или соседней стены.
+  const crib = homeStack(ctx, [['crib']], k.hero);
+  if (crib) {
+    landmark(ctx, 'nursery', crib.s.xf, crib.x, 0.6, 0.35);
+    const c = crib.s.xf.pt(crib.x, 0, 0.5);
+    homeStack(ctx, [['toy_heap']], (s) => k.near(c[0], c[2])(s));
+  } else homeStack(ctx, [['toy_heap']], k.hero);
+  // Стол с компьютером — сбоку; справа от монитора столешница свободна.
+  const desk = homeStack(ctx, [['desk_pc']], k.side);
   if (desk) spot(ctx, desk.s.xf, desk.x + 0.42, S3_TOP.s3_desk_simple! + 0.004, 0.25, 'table');
-  homeStack(ctx, [['toy_heap']]);
-  homeStack(ctx, [['bookshelf']]);
-  homeStack(ctx, [['window_fake']]);
-  rugAt(ctx, homeCentre(ctx));
+  // Окно — на свободной стене, лучше напротив входа; книжный шкаф — у входа.
+  homeStack(ctx, [['window_fake']], k.hero);
+  homeStack(ctx, [['bookshelf']], k.door);
+  rugOn(ctx, homeCentre(ctx).xf.child(0, 0, 0));
   floorSpots(ctx, desk ? 2 : 3);
 }
 
 function hallway(ctx: RoomCtx): void {
   lamps(ctx);
-  const rack = homeStack(ctx, [['coat_rack']]);
+  const k = roles(ctx);
+  // Вешалка — у входа: первое, что в прихожей под рукой.
+  const rack = homeStack(ctx, [['coat_rack']], k.door);
   if (rack) landmark(ctx, 'hallway', rack.s.xf, rack.x, 1.1, 0.25);
-  // Зеркало висит выше гладильной доски, чтобы доска не вросла в раму.
+  // Зеркало — одно, сбоку; под ним иногда гладильная доска (зеркало выше, чтобы доска не вросла в раму).
   const wall: HomeItem[] = [['mirror', -0.3, 1.0]];
   if (ctx.rng() < 0.5) wall.push(['ironing_board', 0.45]);
-  homeStack(ctx, wall);
-  if (ctx.rng() < 0.6) homeStack(ctx, [['door_leaf_lean']]);
+  homeStack(ctx, wall, k.side);
+  // Сорванная створка прислонена у дальней стены: дверь отсюда вынесли — странность с причиной.
+  if (ctx.rng() < 0.6) homeStack(ctx, [['door_leaf_lean']], k.hero);
   floorSpots(ctx, ctx.cells.length > 1 ? 3 : 2);
 }
 
@@ -1000,7 +1353,10 @@ const FURNISH: Partial<Record<GenRoom['type'], (ctx: RoomCtx) => void>> = {
 
 /** Обставить помещение. Порядок вызовов и ГСЧ фиксированы: один сид — одна и та же обстановка. */
 export function furnishRoom(ctx: RoomCtx): void {
-  withOpenness(roomOpenness(ctx.world, ctx.seed, ctx.room.id), () => {
+  const flow = flowFor(ctx);
+  const log = ctx.cells[0]?.xf.mb.log;
+  if (flow) flow.from = log?.list.length ?? 0;
+  withOpenness(roomOpenness(ctx.world, ctx.seed, ctx.room.id), () => withFlow(flow, () => {
     // Стене лиц, карте и стене чемоданов нужна голая стена: их участки отводятся до мебели.
     reservePapers(ctx);
     // Офис стерилен, жёлтые комнаты пусты: у них своя обстановка и нет «следов людей» убежища.
@@ -1010,7 +1366,19 @@ export function furnishRoom(ctx: RoomCtx): void {
     FURNISH[ctx.room.type]?.(ctx);
     // Сначала — то, что положено помещению по назначению, потом — следы людей и времени.
     dressRoom(ctx);
-  });
+  }));
+  if (flow) {
+    flow.to = log?.list.length ?? 0;
+    flowDone(flow);
+  }
+}
+
+/** Где мебель держит проходы свободными (world/flow.ts): комнаты убежища и офиса; коридоры, марши и завалы — нет. */
+const FLOW_SKIP: ReadonlySet<string> = new Set(['corridor', 'stairwell', 'collapsed', 'lift', 'track']);
+function flowFor(ctx: RoomCtx): RoomFlow | null {
+  if (ctx.world !== 'shelter' && ctx.world !== 'office') return null;
+  if (FLOW_SKIP.has(ctx.room.type) || !ctx.cells.some((c) => c.sides)) return null;
+  return new RoomFlow(ctx);
 }
 
 /**

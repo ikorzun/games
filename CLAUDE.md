@@ -26,6 +26,7 @@ npm run dev      # dev-сервер с контентом из ../episodes и ..
 # Вторая игра — «Untitled Session» (первое лицо, фонарь, three.js): отдельный пакет, см. vylazka/README.md
 cd vylazka && npm install && npm run typecheck && npm test && npm run build && npm run smoke
 node e2e/shots.mjs   # скриншоты фиксированных ракурсов — смотреть картинку глазами
+node tools/plans/plans.mjs --png   # план сверху всех комнат: проходы, главный вход, мебель — проверка раскладки (design.md, §31)
 node tools/constructor/build.mjs <out.html>   # конструктор партнёра: вещи, манекены, мебель игры (двигать, убирать) и карточки-опросник (сохраняет в базу страницы)
 npm run constructor:app    # поставить на Mac партнёра программу «Конструктор»: своё окно, сама обновляется, «Залить в игру» — кнопкой (tools/constructor/README.md)
 npm run constructor        # тот же конструктор без программы: окно браузера, правки сразу в src/world/partner/*.json, поиск по каталогу Sand3D, заявки

@@ -29,8 +29,10 @@ import { ALL_PROPS, withSwap } from './props_all';
 import type { PropSwap, SwapTo } from './props_all';
 import { ObjectLog, withGrowthGuard } from './objects';
 import { grows } from './clearance';
+import { flowBlocks } from './flow';
+import type { Side } from './room_plan';
 import { DOOR_IMAGE, SCREEN_IMAGES } from './screens';
-import type { FreeSlot } from './objects';
+import type { FreeSlot, LevelObject } from './objects';
 import { buildShell, CELL, Shell, STYLE_CORRIDOR, WALL_T } from './shell';
 import { EdgeBuilder } from './edges';
 import { placeFigures } from './figure_place';
@@ -47,6 +49,8 @@ import { inVariant, slotFor, variantPicker } from './variants';
 const HALF = GRID / 2;
 /** Клетка сетки → координата её центра в мире. */
 export const cellToWorld = (c: number): number => (c - HALF) * CELL;
+/** Хук обстановки: вещь игры не врастает в соседнюю (world/clearance.ts) и не перегораживает проходы помещения (world/flow.ts). */
+const guard = (name: string, col: ColliderSet, c0: number, objects: readonly LevelObject[]): boolean => grows(name, col, c0, objects) || flowBlocks(col, c0);
 /** На сколько затяжка переплёта висит ниже верха крыши зала ожидания, м. */
 export const TIE_DROP = 0.84;
 export const tierFloor = (tier: number): number => -TIER_DROP * tier;
@@ -363,7 +367,7 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
   ]);
   const edits = editsFor(layout, placed, removed, pick);
   // Мебель не врастает в соседнюю (партнёр 18.11; world/clearance.ts): проверка — на всю обстановку уровня.
-  return withSwap(edits?.hook ?? null, () => withGrowthGuard(grows, () => buildLevelInner(layout, opts, edits, pick)));
+  return withSwap(edits?.hook ?? null, () => withGrowthGuard(guard, () => buildLevelInner(layout, opts, edits, pick)));
 }
 
 function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits | null, pick: (room: GenRoom) => string | null): BuiltLevel {
@@ -738,6 +742,35 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     const images = [shown[first]!, DOOR_IMAGE];
     (pool.length > 0 ? [pool[0]!, pool[pool.length - 1]!] : []).forEach((r, k) => screenQuota.set(r.id, [...(screenQuota.get(r.id) ?? []), images[k]!]));
   }
+  // Ход от начала сна: сколько клеток до каждой — по проходам и маршам, а не по прямой. По нему раскладка знает, через какой
+  // проход в помещение входят первым (world/room_plan.ts: главная вещь — напротив входа).
+  const walk = new Map<string, number>();
+  {
+    const queue: [number, number, number][] = [];
+    const reach = (t: number, x: number, z: number, d: number): void => {
+      const k = `${t},${x},${z}`;
+      if (walk.has(k) || !shells[t]?.get(x - HALF, z - HALF)) return;
+      walk.set(k, d);
+      queue.push([t, x, z]);
+    };
+    const down = new Map<string, [number, number, number]>();
+    for (const s of layout.stairs) {
+      const lo: [number, number, number] = [s.upperTier + 1, s.cx + DX[s.dir]! * (STAIR_CELLS + 1), s.cz + DZ[s.dir]! * (STAIR_CELLS + 1)];
+      down.set(`${s.upperTier},${s.cx},${s.cz}`, lo);
+      down.set(lo.join(','), [s.upperTier, s.cx, s.cz]);
+    }
+    reach(start.tier, start.cx, start.cz, 0);
+    for (let q = 0; q < queue.length; q++) {
+      const [t, x, z] = queue[q]!;
+      const d = walk.get(`${t},${x},${z}`)! + 1;
+      for (let k = 0; k < 4; k++) {
+        const e = shells[t]!.edge(x - HALF, z - HALF, k);
+        if (e === 'open' || e === 'door') reach(t, x + DX[k]!, z + DZ[k]!, d);
+      }
+      const other = down.get(`${t},${x},${z}`);
+      if (other) reach(other[0], other[1], other[2], d + STAIR_CELLS);
+    }
+  }
   /** Слоты и клетки помещения; геометрия идёт в mbFor (вещество и проекции), преграды — в colSet. */
   const roomCtx = (room: GenRoom, mbFor: (x: number, z: number) => { mb: MeshBuilder; sl: MeshBuilder }, colSet: ColliderSet, salt: number, outSpots: ItemSpot[], outMarks: Landmark[], outFlats: FlatMark[]): RoomCtx => {
     const sh = shells[room.tier]!;
@@ -752,7 +785,9 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       const neighbours = [0, 1, 2, 3].map((d) => sh.get(sx + DX[d]!, sz + DZ[d]!));
       // Проходом считается дверь или открытое ребро в другое помещение.
       const doors = kinds.filter((k, d) => k === 'door' || (k === 'open' && neighbours[d] !== undefined && neighbours[d]!.room !== room.id)).length;
-      cells.push({ cx: x, cz: z, xf: new Xf(mb, colSet, cellToWorld(x), y, cellToWorld(z), 0, sl), doors });
+      // Стороны клетки для раскладки (world/room_plan.ts): где стена, где проход и куда, где своя же клетка.
+      const sides = kinds.map((k, d): Side => (k === 'door' ? 'door' : k === 'open' ? (neighbours[d] !== undefined && neighbours[d]!.room !== room.id ? 'open' : 'inner') : 'wall'));
+      cells.push({ cx: x, cz: z, xf: new Xf(mb, colSet, cellToWorld(x), y, cellToWorld(z), 0, sl), doors, sides });
       const hazard = hazardCells.has(`${room.tier},${x},${z}`);
       for (let d = 0; d < 4; d++) {
         if (kinds[d] !== 'wall') continue;
@@ -768,7 +803,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       }
     }
     // Свой ГСЧ у каждого помещения: правка одной комнаты не сдвигает остальные.
-    return { room, world, seed: layout.seed, start, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d + salt)), h: ceilOf(room), slots, cells, spots: outSpots, landmarks: outMarks, flats: outFlats, decay, ...(screenQuota.has(room.id) ? { screens: screenQuota.get(room.id)! } : {}), ...(room === skyRoom ? { sky: true } : {}) };
+    return { room, world, seed: layout.seed, start, dist: (x: number, z: number) => walk.get(`${room.tier},${x},${z}`) ?? Infinity, rng: mulberry32(hash2(layout.seed, room.id, 0xf00d + salt)), h: ceilOf(room), slots, cells, spots: outSpots, landmarks: outMarks, flats: outFlats, decay, ...(screenQuota.has(room.id) ? { screens: screenQuota.get(room.id)! } : {}), ...(room === skyRoom ? { sky: true } : {}) };
   };
 
   // Карточка от руки «please use only when necessary»: одна на уровень, в помещении рядом с началом —
