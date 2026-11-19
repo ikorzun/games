@@ -23,6 +23,7 @@ import { REAL_PROPS } from './props_real';
 import { SAND3D_PROPS } from './props_sand3d';
 import { PEOPLE_PROPS } from './props_people';
 import { FOUND_PROPS } from './props_found';
+import { GREENHOUSE_PROPS } from './props_greenhouse';
 import { HOME_PROPS } from './props_home';
 import { LUGGAGE_PROPS } from './props_luggage';
 import { MODEL_PROPS } from './props_models';
@@ -154,7 +155,7 @@ function tracked(name: string, spec: PropSpec): PropSpec {
  */
 export const PROP_SETS: Readonly<Record<string, Record<string, PropSpec>>> = {
   PROPS, HOME_PROPS, OFFICE_PROPS, MODEL_PROPS, SCREEN_PROPS, CRAFT_PROPS, BIRD_PROPS, STATION_PROPS,
-  LUGGAGE_PROPS, PAPER_PROPS, FOUND_PROPS, SEATING_PROPS, REAL_PROPS, PEOPLE_PROPS, SAND3D_PROPS,
+  LUGGAGE_PROPS, PAPER_PROPS, FOUND_PROPS, SEATING_PROPS, REAL_PROPS, PEOPLE_PROPS, SAND3D_PROPS, GREENHOUSE_PROPS,
 };
 
 /** Реквизит без обёртки объекта — для замены (обёртку даёт tracked той вещи, что заменяется). */

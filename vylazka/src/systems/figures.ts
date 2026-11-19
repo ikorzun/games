@@ -157,7 +157,8 @@ export class Figures {
       const smoke = f.material === 'smoke';
       const hair = f.material === 'hair';
       f.t += dt;
-      if (smoke) f.bob = cfg.bobAmp * Math.sin((time * Math.PI * 2) / cfg.bobPeriod + f.phase);
+      // Дым покачивается только вверх от своего места: сидящая на скамье фигура не уходит в сиденье (куратор, пачка 52, 341).
+      if (smoke) f.bob = cfg.bobAmp * (0.5 + 0.5 * Math.sin((time * Math.PI * 2) / cfg.bobPeriod + f.phase));
       // Подошёл к стоящей или к той, что ещё собирается, — уходит (с того, что успело собраться).
       if (f.state === 'here' || f.state === 'coming') {
         if (d < this.near(f)) {

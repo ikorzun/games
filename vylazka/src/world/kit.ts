@@ -85,6 +85,8 @@ export interface MeshMark {
   v: number;
   i: number;
   s: number;
+  /** Сколько головок цветов было собрано к отметке (blooms). */
+  b?: number;
 }
 
 export class MeshBuilder {
@@ -109,6 +111,11 @@ export class MeshBuilder {
   obj = 0;
   /** Журнал объектов уровня: есть у сеток помещений, нет у отдельных вещей и карманных пространств. */
   log: ObjectLog | null = null;
+  /**
+   * Головки цветов оранжереи (world/flowers.ts, plant): стебли ложатся в эту сетку, а головки — сюда, с номером объекта, на
+   * котором цветок растёт. Есть у сеток помещений; нет — головки возвращаются только тому, кто сажал.
+   */
+  blooms: { pos: Vec3; dir: Vec3; form: number; size: number; spin: number; obj: number }[] | null = null;
 
   get vertexCount(): number {
     return this.pos.length / 3;
@@ -120,7 +127,7 @@ export class MeshBuilder {
 
   /** Отметка: до неё сетку можно откатить (вещь, которая не встала, — world/objects.ts). */
   mark(): MeshMark {
-    return { v: this.pos.length / 3, i: this.idx.length, s: this.sheets.length };
+    return { v: this.pos.length / 3, i: this.idx.length, s: this.sheets.length, b: this.blooms?.length ?? 0 };
   }
 
   /** Откатить сетку к отметке: всё, что собрано после неё, — вершины, треугольники, листы, — исчезает. */
@@ -134,6 +141,8 @@ export class MeshBuilder {
     this.uvs.length = m.v * 2;
     this.idx.length = m.i;
     this.sheets.length = m.s;
+    // Головки цветов, посаженных в откаченной вещи, уходят вместе с ней (вещь не встала — цветов нет).
+    if (this.blooms && m.b !== undefined) this.blooms.length = m.b;
   }
 
   /** Низкоуровневая вершина; возвращает её индекс. */

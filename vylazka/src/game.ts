@@ -45,6 +45,7 @@ import { FEEL_NEUTRAL, SessionFeel } from './systems/feel';
 import type { FeelView } from './systems/feel';
 import type { PressureKind, PressureRoom } from './systems/pressure';
 import { DEFAULT_SPORES, SPORE_STRIDE, Spores } from './systems/spores';
+import { FLOWER_STRIDE, Flowers } from './systems/flowers';
 import type { Comeback, ComebackOptions, Form, Mount } from './systems/illusions';
 import { Figures } from './systems/figures';
 import type { FigureLive } from './systems/figures';
@@ -218,6 +219,13 @@ const SWARM_GROWN = 4;
  * SPORES_MAX, SPORES_CAP).
  */
 const SPORES_SHOWN = 880;
+/**
+ * Головки цветов оранжереи (systems/flowers.ts): сколько ближайших отдавать рендеру (предел по качеству — в рендере). Луч, на
+ * который они поворачиваются, — конус FLOWER_BEAM (косинус половины раствора, дальность, м); в светлом месте — взгляд.
+ */
+const FLOWERS_SHOWN = 900;
+const FLOWER_BEAM = { cos: Math.cos(0.36), range: 11 } as const;
+const FLOWER_GAZE = { cos: Math.cos(0.42), range: 9 } as const;
 
 /**
  * Стоит ли на полу вещь в этой точке (для мест грибов, systems/spores.ts, settle): коробка вещи уровня или вещи сна (не стена,
@@ -757,6 +765,9 @@ export class Game {
   /** Грибы: проросшее рядом с Осыпью и её следы в углах (systems/spores.ts). */
   spores: Spores | null = null;
   private readonly sporeBuf = new Float32Array(SPORES_SHOWN * SPORE_STRIDE);
+  /** Оранжерея: головки цветов, что поворачиваются к свету героя и закрываются в темноте (systems/flowers.ts). */
+  flowers: Flowers | null = null;
+  private readonly flowerBuf = new Float32Array(FLOWERS_SHOWN * FLOWER_STRIDE);
   /** Бумажные цветы: насколько каждый расцвёл (0 — тусклый, 1 — яркий) и сколько уже держится расцветшим, с. */
   private readonly blooms = new Map<number, { k: number; hold: number }>();
   /** Номер экрана-проёма, в который вошли и который ещё не унёс (ждёт конца идущего перехода); 0 — нет. */
@@ -898,6 +909,7 @@ export class Game {
       this.spores = new Spores(level.nav, dream.seed, DEFAULT_SPORES, level.world ?? 'shelter');
       // Грибы не растут внутри вещей: места считаются по клеткам и мебели не знают (куратор, пачка 51, противоречие 322).
       this.spores.settle(solidFloorAt(this.colliders));
+      this.flowers = level.blooms?.length ? new Flowers(level.blooms, dream.seed) : null;
       const stage = this.stage;
       // Сон из сцен: режиссёр страха — один на весь сон, его часы — часы сна (sleepTime), а не сцены: сцена идёт минуту, и
       // с новыми часами в каждой Осыпь не доживала бы до своего выхода (куратор, пачка 39, противоречие 218). Если она уже
@@ -1766,6 +1778,8 @@ export class Game {
     // Комната под звёздным небом — тихое место: ни строба, ни темноты, ни сетки. (Снимается после
     // раздачи, а не до неё: остальным помещениям достаётся то же, что и раньше.)
     if (this.level?.skyRoom !== undefined) this.roomFx.delete(this.level.skyRoom);
+    // Оранжерея — тоже: цветы поворачиваются к свету героя, и строб с сеткой это бы съели (world/furnish_greenhouse.ts).
+    if (this.level?.greenRoom !== undefined) this.roomFx.delete(this.level.greenRoom);
   }
 
   /** Расставить вещи сна: мелочь по столам и полкам, крупное — посреди коридоров. */
@@ -3361,6 +3375,22 @@ export class Game {
       if (live) this.spores.update(fl?.frozen ? 0 : dt, sw ? { pos: sw.pos, active: sw.active && sw.mode !== 'scatter', cohesion: sw.cohesion, hunting: sw.mode === 'hunt' || sw.mode === 'cohere', faint: sw.mode === 'trace' } : null, this.regret);
       this.renderer.setSpores(this.sporeBuf, live ? this.spores.visible([x, y, z], SPORES_SHOWN, this.sporeBuf) : 0);
     } else this.renderer.setSpores(this.sporeBuf, 0);
+    if (this.flowers) {
+      const live = this.where === 'main';
+      if (live && rig) {
+        // В тёмном месте свет — луч фонаря (горит — головки на нём раскрываются и поворачиваются к фонарю); в светлом фонаря
+        // нет, светит взгляд (FlashlightEnv: light 0).
+        const byGaze = this.env.light <= 0;
+        const beamOn = !byGaze && this.light.intensity >= 0.3;
+        this.flowers.update(fl?.frozen ? 0 : dt, {
+          eye: rig.camPos,
+          beam: beamOn ? { origin: rig.lightPos, dir: rig.lightDir, cos: FLOWER_BEAM.cos, range: FLOWER_BEAM.range } : null,
+          gaze: byGaze ? { dir: rig.lightDir, cos: FLOWER_GAZE.cos, range: FLOWER_GAZE.range } : null,
+        });
+      }
+      // Грядка или горшок растворились от касания — их головок нет (world/objects.ts, systems/illusions.ts).
+      this.renderer.setFlowers(this.flowerBuf, live ? this.flowers.visible([x, y, z], FLOWERS_SHOWN, this.flowerBuf, (id) => this.illusions?.get(id)?.dis ?? 0) : 0);
+    } else this.renderer.setFlowers(this.flowerBuf, 0);
     // Примета без тела (trace) не рисуется: видны только грибы в углах у её пути.
     if (sw && sw.active && sw.mode !== 'trace' && this.where === 'main') {
       // Чем больше вспомнено и чем больше стёрто, тем выше и определённее фигура: она растёт из тронутого.

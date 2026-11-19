@@ -18,7 +18,7 @@
  */
 import type { Vec3 } from '../core/types';
 import { MAT } from './materials';
-import { paperHeight, PAPERS } from './papers';
+import { DREAM_PRINTS, DREAM_SCRAPS, paperHeight, PAPERS, paperUv } from './papers';
 import type { Xf } from './props';
 import { rng } from './props_more';
 import type { PropSpec } from './props_more';
@@ -137,6 +137,34 @@ const BONDS_LOW = ['bond_b', 'bond_c', 'bond_d', 'bond_e'] as const;
 
 const FACE_BIG = PAPERS.face_big!;
 
+/** Снимок больного сна на стене (design.md, §34): на одной кнопке сверху, в настоящую величину отпечатка — 20–28 см. */
+function dreamPrint(xf: Xf, id: string, seed: number): void {
+  const p = PAPERS[id]!;
+  const k = 0.85 + ((seed % 1000) / 1000) * 0.3;
+  const w = p.width * k;
+  const h = paperHeight(p, w);
+  xf.paper(id, 0, 0, w, [1, 1, 1], 0.004);
+  const cy = h - 0.016;
+  xf.box([-0.005, cy - 0.005, 0.004], [0.005, cy + 0.005, 0.011], MAT.steel, { tint: PIN, skip: ['nz'] });
+}
+
+/**
+ * Обрывок на полу (design.md, §34): лицом вверх, на 2 мм над полом, повёрнут как упал. Рваный край — из прозрачности слоя
+ * (шейдер не рисует прозрачное, render/shaders.ts, uPapers). Лежит в пятне 30 × 30 см у z = 0,2 от стены.
+ */
+function dreamScrap(xf: Xf, id: string, seed: number): void {
+  const p = PAPERS[id]!;
+  const w = p.width;
+  const d = paperHeight(p, w);
+  const a = ((seed % 3600) / 3600) * Math.PI * 2;
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  // 3 мм над полом: лежит, но с полом не мерцает.
+  const at = (x: number, z: number) => xf.pt(x * ca - z * sa, 0.003, 0.2 + x * sa + z * ca);
+  const uv = paperUv(id);
+  xf.mb.quadUv([at(-w / 2, d / 2), at(w / 2, d / 2), at(w / 2, -d / 2), at(-w / 2, -d / 2)], [uv.u0, uv.v0, uv.u1, uv.v1], MAT.print, [0.97, 0.96, 0.93], 1);
+}
+
 export const PAPER_PROPS: Record<string, PropSpec> = {
   faces_wall: {
     w: 2.4,
@@ -221,6 +249,15 @@ export const PAPER_PROPS: Record<string, PropSpec> = {
     ru: `в раме: ${FACE_BIG.ru}`,
     build: (xf, seed) => framed(xf, 'face_big', 0, FACE_BIG.width, seed % 3 === 0 ? 2 : 0),
   },
+  ...Object.fromEntries(
+    DREAM_PRINTS.map(([id, , , , ru]): [string, PropSpec] => [
+      id,
+      { w: 0.3, d: 0.012, h: 0.4, mount: 'wall', y: 1.25, ru: `снимок на кнопке: ${ru}`, build: (xf, seed) => dreamPrint(xf, id, seed) },
+    ]),
+  ),
+  ...Object.fromEntries(
+    DREAM_SCRAPS.map(([id, , , , ru]): [string, PropSpec] => [id, { w: 0.4, d: 0.4, h: 0.005, mount: 'floor', ru: `на полу: ${ru}`, build: (xf, seed) => dreamScrap(xf, id, seed) }]),
+  ),
   ceil_faces: {
     w: 1.1,
     d: 2.4,

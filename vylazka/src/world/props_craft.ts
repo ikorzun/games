@@ -12,6 +12,7 @@
 import type { Vec3 } from '../core/types';
 import { MeshBuilder } from './kit';
 import { MAT } from './materials';
+import { STICKER_TILES, stickerUv } from './papers';
 import { hung, rooted, Xf } from './props';
 import { rng } from './props_more';
 import type { PropSpec } from './props_more';
@@ -61,6 +62,28 @@ function tri(xf: Xf, a: V, b: V, c: V, out: V, mat: number, tint: V, ao: Ao3 = 1
   const i0 = xf.mb.vertex(pa, n, mat, tint, k[0]);
   const i1 = xf.mb.vertex(pb, n, mat, tint, k1);
   const i2 = xf.mb.vertex(pc, n, mat, tint, k2);
+  xf.mb.tri(i0, i1, i2);
+}
+
+/** Треугольник с явными uv (картинка из стопки бумаги, world/papers.ts) лицом в сторону out. */
+function triUv(xf: Xf, a: V, b: V, c: V, out: V, mat: number, tint: V, ua: readonly [number, number], ub: readonly [number, number], uc: readonly [number, number]): void {
+  const pa = xf.pt(a[0], a[1], a[2]);
+  let pb = xf.pt(b[0], b[1], b[2]);
+  let pc = xf.pt(c[0], c[1], c[2]);
+  let n = cross(sub(pb, pa), sub(pc, pa));
+  const l = len(n);
+  if (!(l > 1e-9)) return;
+  n = mul(n, 1 / l);
+  let tb = ub;
+  let tc = uc;
+  if (dot(n, xf.dir(out[0], out[1], out[2])) < 0) {
+    n = mul(n, -1);
+    [pb, pc] = [pc, pb];
+    [tb, tc] = [tc, tb];
+  }
+  const i0 = xf.mb.vertexUv(pa, n, mat, tint, 1, ua);
+  const i1 = xf.mb.vertexUv(pb, n, mat, tint, 1, tb);
+  const i2 = xf.mb.vertexUv(pc, n, mat, tint, 1, tc);
   xf.mb.tri(i0, i1, i2);
 }
 
@@ -803,33 +826,56 @@ function stickerPaint(rnd: Rnd): { mat: number; tint: V } {
   return { mat, tint: tn([0.12 + hue[0] * k, 0.12 + hue[1] * k, 0.12 + hue[2] * k]) };
 }
 
-/** Контур наклейки в плоскости: прямоугольник, круг (6–8 сторон), овал или звезда; повёрнут на al. */
-function outline(rnd: Rnd, size: number, al: number): { pts: [number, number][]; kind: 'rect' | 'circle' | 'oval' | 'star' } {
+/**
+ * Контур наклейки в плоскости: прямоугольник, круг (6–8 сторон), овал или звезда; повёрнут на al. raw — те же точки до поворота:
+ * по ним картинка ложится на наклейку и поворачивается вместе с ней.
+ */
+function outline(rnd: Rnd, size: number, al: number): { pts: [number, number][]; raw: [number, number][]; kind: 'rect' | 'circle' | 'oval' | 'star' } {
   const k = rnd();
-  const rot = (x: number, y: number): [number, number] => [x * Math.cos(al) - y * Math.sin(al), x * Math.sin(al) + y * Math.cos(al)];
+  const rot = (p: [number, number]): [number, number] => [p[0] * Math.cos(al) - p[1] * Math.sin(al), p[0] * Math.sin(al) + p[1] * Math.cos(al)];
+  const shape = (kind: 'rect' | 'circle' | 'oval' | 'star', raw: [number, number][]) => ({ kind, raw, pts: raw.map(rot) });
   if (k < 0.45) {
     const hw = (size / 2) * (0.8 + rnd() * 0.5);
     const hh = (size / 2) * (0.6 + rnd() * 0.5);
-    return { kind: 'rect', pts: [rot(-hw, -hh), rot(hw, -hh), rot(hw, hh), rot(-hw, hh)] };
+    return shape('rect', [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]);
   }
   if (k < 0.7) {
     const sides = 6 + Math.floor(rnd() * 3);
-    return { kind: 'circle', pts: Array.from({ length: sides }, (_, i) => rot((Math.cos((i / sides) * 6.2832) * size) / 2, (Math.sin((i / sides) * 6.2832) * size) / 2)) };
+    return shape('circle', Array.from({ length: sides }, (_, i): [number, number] => [(Math.cos((i / sides) * 6.2832) * size) / 2, (Math.sin((i / sides) * 6.2832) * size) / 2]));
   }
   if (k < 0.86) {
-    return { kind: 'oval', pts: Array.from({ length: 6 }, (_, i) => rot(Math.cos((i / 6) * 6.2832) * size * 0.5, Math.sin((i / 6) * 6.2832) * size * 0.31)) };
+    return shape('oval', Array.from({ length: 6 }, (_, i): [number, number] => [Math.cos((i / 6) * 6.2832) * size * 0.5, Math.sin((i / 6) * 6.2832) * size * 0.31]));
   }
-  return {
-    kind: 'star',
-    pts: Array.from({ length: 10 }, (_, i) => {
+  return shape(
+    'star',
+    Array.from({ length: 10 }, (_, i): [number, number] => {
       const r = i % 2 === 0 ? size / 2 : size * 0.22;
-      return rot(Math.cos((i / 10) * 6.2832 - 1.5708) * r, Math.sin((i / 10) * 6.2832 - 1.5708) * r);
+      return [Math.cos((i / 10) * 6.2832 - 1.5708) * r, Math.sin((i / 10) * 6.2832 - 1.5708) * r];
     }),
-  };
+  );
 }
 
-/** Одна наклейка: кайма (у каждой третьей), тело, тёмные «строки». Слой — выше всех, кого она накрывает. */
-function sticker(xf: Xf, rnd: Rnd, pl: Plane, i: number, u: number, v: number, size: number): void {
+/**
+ * Колода картинок наклеек на один предмет: все STICKER_TILES по разу в случайном порядке, а когда кончились — −1: остальные
+ * наклейки этой вещи прежние, без картинки (куратор, пачка 52, противоречие 328: одна и та же картинка на шкафчике не
+ * повторяется). Свой генератор от сида вещи — общий поток раскладки она не трогает.
+ */
+function stickerDeck(seed: number): () => number {
+  const r = rng(seed ^ 0x57c4);
+  const deck = Array.from({ length: STICKER_TILES }, (_, i) => i);
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(r() * (i + 1));
+    [deck[i], deck[j]] = [deck[j]!, deck[i]!];
+  }
+  return () => deck.pop() ?? -1;
+}
+
+/**
+ * Одна наклейка: кайма (у каждой третьей) и тело с картинкой (партнёр 19.11: «стикеры нужно оставить такими же, но сделать на
+ * них более детальное изображение»; картинки — слой stickers, world/papers.ts). Слой — выше всех, кого она накрывает. Без
+ * картинки (tile < 0) — прежняя: цветная, иногда с тёмными «строками».
+ */
+function sticker(xf: Xf, rnd: Rnd, pl: Plane, i: number, u: number, v: number, size: number, tile = -1): void {
   const al = rnd() * Math.PI * 2;
   const sh = outline(rnd, size, al);
   const border = i % 3 === 0;
@@ -855,8 +901,27 @@ function sticker(xf: Xf, rnd: Rnd, pl: Plane, i: number, u: number, v: number, s
     emit(grown, lvl, MAT.paper, wob(rnd, [1.4, 1.38, 1.3], 0.04));
   }
   const paint = stickerPaint(rnd);
-  emit(sh.pts, lvl + 1, paint.mat, wob(rnd, paint.tint, 0.06));
-  // Тёмные «строки» — 2–3 полоски без смысла; у звёзд их нет.
+  const bodyTint = wob(rnd, paint.tint, 0.06);
+  // Чисел из общего потока — столько же, сколько у прежней наклейки, с картинкой она или без: раскладка всего пятна и шкафчика
+  // остаётся той же, что была (куратор, пачка 52, противоречие 327: «оставить такими же»).
+  if (tile >= 0) {
+    // Картинка: квадрат плитки вписан в контур наклейки по большей стороне; веером от середины — для звезды и для остальных.
+    const t = stickerUv(tile);
+    const ext = Math.max(...sh.raw.map(([a, b]) => Math.max(Math.abs(a), Math.abs(b))), 1e-6);
+    const uvOf = ([a, b]: readonly [number, number]): [number, number] => [t.u0 + (a / ext / 2 + 0.5) * (t.u1 - t.u0), t.v0 + (b / ext / 2 + 0.5) * (t.v1 - t.v0)];
+    // Старая наклейка чуть выцвела: тон гуляет на несколько процентов (от номера наклейки, мимо общего потока).
+    const h = Math.abs(Math.sin(i * 12.9898 + u * 78.233 + v * 37.719) * 43758.5453) % 1;
+    const fade = 0.9 + h * 0.12;
+    const tint: V = [fade, fade, fade * (0.96 + h * 0.04)];
+    const c = planePt(pl, u, v, lvl + 1);
+    const mid = uvOf([0, 0]);
+    for (let k = 0; k < sh.pts.length; k++) {
+      const a = sh.pts[k]!;
+      const b = sh.pts[(k + 1) % sh.pts.length]!;
+      triUv(xf, c, planePt(pl, u + a[0], v + a[1], lvl + 1), planePt(pl, u + b[0], v + b[1], lvl + 1), pl.n, MAT.print, tint, mid, uvOf(sh.raw[k]!), uvOf(sh.raw[(k + 1) % sh.raw.length]!));
+    }
+  } else emit(sh.pts, lvl + 1, paint.mat, bodyTint);
+  // Тёмные «строки» — 2–3 полоски без смысла; у звёзд их нет, у наклейки с картинкой — тоже (числа на них всё равно берутся).
   if (!star && rnd() < 0.34) {
     const cnt = 2 + Math.floor(rnd() * 2);
     const hw = size * (0.18 + rnd() * 0.1);
@@ -864,8 +929,10 @@ function sticker(xf: Xf, rnd: Rnd, pl: Plane, i: number, u: number, v: number, s
       const off = (k - (cnt - 1) / 2) * 0.011;
       const w = hw * (0.6 + rnd() * 0.4);
       const R = (x: number, y: number): [number, number] => [x * Math.cos(al) - (y + off) * Math.sin(al), x * Math.sin(al) + (y + off) * Math.cos(al)];
+      const shade = tn([1, 1, 1], 0.9 + rnd() * 0.2);
+      if (tile >= 0) continue;
       const q = [R(-w, -0.0022), R(w, -0.0022), R(w, 0.0022), R(-w, 0.0022)].map(([a, b]) => planePt(pl, u + a, v + b, lvl + 2));
-      quad(xf, q[0]!, q[1]!, q[2]!, q[3]!, pl.n, MAT.rubber, tn([1, 1, 1], 0.9 + rnd() * 0.2));
+      quad(xf, q[0]!, q[1]!, q[2]!, q[3]!, pl.n, MAT.rubber, shade);
     }
   }
 }
@@ -956,6 +1023,7 @@ function stickerBox(xf: Xf, seed: number): void {
   ];
   const t0 = xf.mb.triangleCount;
   let i = 0;
+  const deck = stickerDeck(seed);
   // Сначала грани наклеек идут порознь по плоскостям, но очередь общая: бюджет не должен достаться одной стороне.
   const longest = Math.max(...jobs.map((j) => j.spots.length));
   for (let k = 0; k < longest; k++) {
@@ -969,7 +1037,7 @@ function stickerBox(xf: Xf, seed: number): void {
       const v = clamp(s[1], v0 + size * 0.35, v1 - size * 0.35);
       // Ручка остаётся на виду.
       if (j.pl === front && u > 0.17 && u < 0.27 && v > 0.33 && v < 0.6) continue;
-      sticker(xf, rnd, j.pl, i++, u, v, size);
+      sticker(xf, rnd, j.pl, i++, u, v, size, deck());
     }
   }
   const strokes = 3 + Math.floor(rnd() * 2);
@@ -982,6 +1050,7 @@ function stickerPatch(xf: Xf, seed: number): void {
   const n = 35 + Math.floor(rnd() * 16);
   const ph = rnd() * 6.28;
   const t0 = xf.mb.triangleCount;
+  const deck = stickerDeck(seed);
   for (let i = 0; i < n; i++) {
     if (xf.mb.triangleCount - t0 > 430) break;
     // Пятно неровное и гуще к середине: радиус берётся «в линию», а не «по площади».
@@ -991,10 +1060,10 @@ function stickerPatch(xf: Xf, seed: number): void {
     const size = stickerSize(rnd) * 1.6;
     const u = clamp(Math.cos(th) * rho * 0.34, -0.45 + size * 0.4, 0.45 - size * 0.4);
     const v = clamp(0.5 + Math.sin(th) * rho * 0.38, size * 0.4, 1 - size * 0.4);
-    sticker(xf, rnd, pl, i, u, v, size);
+    sticker(xf, rnd, pl, i, u, v, size, deck());
   }
   // Одна — у самого низа пятна: отклеилась и сползла.
-  sticker(xf, rnd, pl, n, (rnd() - 0.5) * 0.4, 0.045, 0.085);
+  sticker(xf, rnd, pl, n, (rnd() - 0.5) * 0.4, 0.045, 0.085, deck());
   const strokes = 2 + Math.floor(rnd() * 2);
   for (let s = 0; s < strokes; s++) marker(xf, rnd, pl, s);
 }

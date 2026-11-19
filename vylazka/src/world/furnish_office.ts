@@ -64,7 +64,7 @@ function corner(ctx: RoomCtx, name: string): boolean {
  * Потолочные панели: по одной на клетку. В жёлтых комнатах этаж обесточен: панели не светят, у каждой
  * шестой повис провод. Решает мир, а не вызывающий: забыть про это в одном из помещений нельзя.
  */
-function panels(ctx: RoomCtx): void {
+export function panels(ctx: RoomCtx): void {
   const off = ctx.world === 'yellow';
   for (const c of ctx.cells) {
     const name = !off ? 'ceiling_panel' : panelDead(ctx.seed, c.cx, c.cz) ? 'ceiling_panel_dead' : 'ceiling_panel_off';

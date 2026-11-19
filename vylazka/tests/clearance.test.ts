@@ -135,7 +135,14 @@ describe('записи партнёра и правило «не врастат�
         const b = bunks.find((o) => at(o.at[0], o.at[1], o.at[2])?.id === r.id);
         if (b) first.add(`${b.name}@${b.at.map((v) => v.toFixed(2)).join(',')}`);
       }
-      expect(census(lvl)).toEqual(census(plain).filter((k) => !first.has(k)));
+      // Нары бывают в два яруса — две вещи на одном месте с одним ключом: убрана одна, первая, а не обе.
+      const expected = census(plain);
+      for (const k of first) {
+        const i = expected.indexOf(k);
+        expect(i, k).toBeGreaterThanOrEqual(0);
+        expected.splice(i, 1);
+      }
+      expect(census(lvl)).toEqual(expected);
       return;
     }
     throw new Error('на этих планах нет спален с чёрными нарами');

@@ -3,7 +3,7 @@
  * Игра стартует, не дожидаясь их: пока слоя нет, на его месте чистая пожелтевшая бумага.
  * Откуда листы и как их пересоздать — assets/papers/README.md.
  */
-import { PAPER_H, PAPER_LAYERS, PAPER_W } from '../world/papers';
+import { PAPER_FACES, PAPER_H, PAPER_LAYERS, PAPER_W } from '../world/papers';
 
 const FILES = import.meta.glob<string>('../../assets/papers/*.webp', { eager: true, query: '?url', import: 'default' });
 
@@ -37,7 +37,9 @@ export async function loadPapers(): Promise<Record<string, HTMLImageElement>> {
 /**
  * Стопка слоёв для видеокарты: RGBA подряд, слой за слоем; строки идут снизу вверх (v растёт вверх).
  * Альфа у слоёв портретов — маска лиц: 255 — лица нет, 128 — середина лица (world/papers.ts). У
- * остальных слоёв и у чистого листа она 255.
+ * остальных слоёв это непрозрачность, и цвет в стопке умножен на неё (premultiply): тогда у края обрывка
+ * (слой dream_b) уменьшенные копии листа не темнеют от чёрного прозрачного, а шейдер возвращает цвет
+ * делением. У непрозрачного и у чистого листа альфа 255, и цвет тот же.
  */
 export interface PaperStack {
   data: Uint8Array;
@@ -82,6 +84,18 @@ export function drawPapers(images: Readonly<Record<string, CanvasImageSource>> =
       return;
     }
     for (let y = 0; y < height; y++) data.set(pixels.subarray(y * row, (y + 1) * row), base + (height - 1 - y) * row);
+    if (layer >= PAPER_FACES) premultiply(data.subarray(base, base + row * height));
   });
   return { data, width, height, depth };
+}
+
+/** Умножить цвет на альфу (RGBA подряд) — на месте. Непрозрачное не меняется. */
+export function premultiply(px: Uint8Array): void {
+  for (let i = 0; i < px.length; i += 4) {
+    const a = px[i + 3]!;
+    if (a === 255) continue;
+    px[i] = Math.round((px[i]! * a) / 255);
+    px[i + 1] = Math.round((px[i + 1]! * a) / 255);
+    px[i + 2] = Math.round((px[i + 2]! * a) / 255);
+  }
 }

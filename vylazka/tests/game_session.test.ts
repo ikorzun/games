@@ -111,6 +111,11 @@ class FakeRenderer {
   setSpores(_data: Float32Array, count: number): void {
     this.spores = count;
   }
+  /** Сколько головок цветов оранжереи в последнем кадре. */
+  flowers = 0;
+  setFlowers(_data: Float32Array, count: number): void {
+    this.flowers = count;
+  }
   setPocket(m: unknown): void {
     this.pocketShown = m !== null;
   }
@@ -1441,8 +1446,9 @@ describe('игра целиком: без света место не обяза�
       const near = all.filter((o) => Math.hypot(o.pos[0] - t.pos[0], o.pos[2] - t.pos[2]) < 10 && Math.abs(o.pos[1] - t.pos[1]) < 2);
       if (near.length < 3) continue;
       const floor = Math.floor((t.pos[1] + 0.3) / 4.5) * 4.5;
+      // И не на самой вещи: в центре клетки бывает место для вещи на полу, наступил — вещь растворяется и в темноте не меняется.
       const node = nav
-        .filter((n) => Math.abs(n.y - floor) < 0.5 && !unsafe(n.x, n.y + 1, n.z))
+        .filter((n) => Math.abs(n.y - floor) < 0.5 && !unsafe(n.x, n.y + 1, n.z) && !all.some((o) => Math.hypot(o.pos[0] - n.x, o.pos[2] - n.z) < 0.9))
         .sort((p, q) => Math.hypot(p.x - t.pos[0], p.z - t.pos[2]) - Math.hypot(q.x - t.pos[0], q.z - t.pos[2]))[0];
       if (!node || Math.hypot(node.x - t.pos[0], node.z - t.pos[2]) > 4) continue;
       h.game.teleport(node.x, node.y, node.z);
@@ -1450,6 +1456,16 @@ describe('игра целиком: без света место не обяза�
       // раньше, чем детали сдвинутся (когда именно — решает жребий паузы между скачками). Скачки отложены.
       if (h.game.jumps) h.game.jumps.cooldown = 1e6;
       h.run(0.2);
+      // В темноте вещь меняется только вне кадра (K-21): герой отворачивается так, чтобы ни одной из трёх не было видно.
+      const hidden = (): boolean => near.every((o) => !h.game.seen([o.pos[0], o.pos[1] + 0.1, o.pos[2]], 0.3));
+      let away = hidden();
+      for (let k = 0; k < 8 && !away; k++) {
+        const a = (k * Math.PI) / 4;
+        h.game.aimAt(node.x + Math.cos(a) * 3, node.y + 2.6, node.z + Math.sin(a) * 3);
+        h.run(0.1);
+        away = hidden();
+      }
+      if (!away) continue;
       return near;
     }
     throw new Error('на уровне нет трёх мелких вещей рядом');
@@ -2447,52 +2463,36 @@ describe('игра целиком: всё иллюзорно', () => {
   });
 
   it('вещь, стоявшая на предмете, растворяется вместе с ним', () => {
-    // Вещь на столе есть не на каждом уровне: берём первый из нескольких (на этих она есть — тест не пустой).
+    // Вещь на столе есть не на каждом уровне, и не к каждому такому предмету можно подойти (спиной к стене, за ним провал):
+    // перебираем пары «предмет и вещь на нём» на нескольких уровнях, пока в предмет не упрёмся — каждая проба в своей игре.
     let found: { h: Harness; id: number; thing: number } | null = null;
+    let pairs = 0;
     for (const seed of [5, 8, 15, 19, 22]) {
       const level = buildLevel(generateLayout(seed, 3, 'shelter'));
-      const h = new Harness(level, { seed: 3, cfg: NOTHING });
-      for (const t of h.game.things.list) {
-        if (t.still || t.collider >= 0) continue;
+      const probe = new Harness(level, { seed: 3, cfg: NOTHING });
+      const cands: { id: number; thing: number }[] = [];
+      for (const t of probe.game.things.list) {
+        // Не вещь воспоминания: её и её опору касание не трогает (партнёр 18.11, 16:02).
+        if (t.still || t.memory || t.collider >= 0) continue;
         const o = level.objects!.find((q) => q.solid && !q.flat && q.group === undefined && t.pos[0] > q.min[0] - 0.05 && t.pos[0] < q.max[0] + 0.05 && t.pos[2] > q.min[2] - 0.05 && t.pos[2] < q.max[2] + 0.05 && t.pos[1] > q.min[1] + 0.12 && t.pos[1] < q.max[1] + 0.15);
-        if (o) {
-          found = { h, id: o.id, thing: t.id };
+        if (o) cands.push({ id: o.id, thing: t.id });
+      }
+      pairs += cands.length;
+      for (const c of cands) {
+        const h = new Harness(level, { seed: 3, cfg: NOTHING });
+        if (h.game.things.list.find((x) => x.id === c.thing)?.state !== 'idle') continue;
+        if (pushInto(h, c.id) && stateOf(h, c.id) !== 'here') {
+          found = { h, ...c };
           break;
         }
       }
       if (found) break;
     }
-    expect(found, 'на уровнях нет вещи, стоящей на предмете').not.toBeNull();
+    expect(pairs, 'на уровнях нет вещи, стоящей на предмете').toBeGreaterThan(0);
+    expect(found, 'ни в один предмет с вещью на нём не упёрлись').not.toBeNull();
     if (!found) return;
     const { h, id } = found;
-    const g = h.game;
-    const o = g.level!.objects![id - 1]!;
-    const t = g.things.list.find((x) => x.id === found!.thing)!;
-    expect(t.state).toBe('idle');
-    // Касаемся самого предмета: встаём вплотную к его коробке — с той стороны, где можно стоять (спиной предмет бывает к стене:
-    // за ней соседняя клетка, а то и провал), и идём на него.
-    const box = g.colliders.boxes.find((b) => b.owner === id && !b.ghost)!;
-    const floor = floorOf(o);
-    const cx = (box.minX + box.maxX) / 2;
-    const cz = (box.minZ + box.maxZ) / 2;
-    const sides: [number, number][] = [
-      [box.minX - 0.4, cz],
-      [box.maxX + 0.4, cz],
-      [cx, box.minZ - 0.4],
-      [cx, box.maxZ + 0.4],
-    ];
-    for (const [sx, sz] of sides) {
-      // Стоять можно: под ногами пол, вокруг (радиус тела) — ни стены, ни мебели.
-      if (g.colliders.raycast(sx, floor + 1, sz, 0, -1, 0, 1.2) >= 1.1) continue;
-      const near: Parameters<ColliderSet['query']>[4] = [];
-      const R = DEFAULT_CONTROLLER.radius + 0.02;
-      g.colliders.query(sx - R, sz - R, sx + R, sz + R, near);
-      if (near.some((b) => !b.ghost && b.maxY > floor + 0.4 && b.minY < floor + 1.7 && b.minX < sx + R && b.maxX > sx - R && b.minZ < sz + R && b.maxZ > sz - R)) continue;
-      g.teleport(sx, floor, sz);
-      g.aimAt(cx, floor + 1, cz);
-      for (let i = 0; i < 90 && stateOf(h, id) === 'here'; i++) h.tick({ ...emptyInput(), moveZ: 1 });
-      if (stateOf(h, id) !== 'here') break;
-    }
+    const t = h.game.things.list.find((x) => x.id === found!.thing)!;
     expect(stateOf(h, id), 'в предмет не упёрлись').not.toBe('here');
     expect(['changing', 'gone']).toContain(t.state);
     expect(t.touched).toBe(true);

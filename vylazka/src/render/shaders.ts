@@ -903,7 +903,11 @@ void main() {
       vec3 gone = texture(uPapers, vec3(pu, lay), worn + 4.4 * nearP).rgb;
       pg = mix(soft.rgb, gone, smoothstep(0.06, 0.5, (1.0 - soft.a) * 2.0));
     } else {
-      pg = texture(uPapers, vec3(pu, lay), worn).rgb;
+      // Обрывки на полу (слой dream_b) лежат по рваному краю: прозрачное в слое не рисуется. У прочих слоёв альфа — 1.
+      // Цвет в стопке умножен на альфу (paper_images.ts): у рваного края в цвет не подмешивается чёрное прозрачного.
+      vec4 pc = texture(uPapers, vec3(pu, lay), worn);
+      if (pc.a < 0.5) discard;
+      pg = pc.rgb / pc.a;
     }
     ink = mix(pg, vec3(dot(pg, vec3(0.3, 0.59, 0.11))) * vec3(1.06, 1.0, 0.86) + 0.05, 0.6 * fadeP);
     uvw = pu * 5.0;

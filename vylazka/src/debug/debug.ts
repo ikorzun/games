@@ -103,6 +103,11 @@ export interface VzDebugApi {
   figure(material: string, pose?: string, distance?: number, lift?: number, turn?: number): number;
   /** Фигуры на уровне: ключ, материал, состояние, растворение частей и где стоят. */
   figures(): { id: string; material: string; state: string; dissolve: number[]; at: number[]; yaw: number }[];
+  /**
+   * Оранжерея (systems/flowers.ts): сколько головок на уровне, сколько раскрыто больше чем наполовину, на сколько градусов в
+   * среднем раскрытые отвернулись от покоя к свету; shown, far, culled — что нарисовал рендер в последнем кадре.
+   */
+  flowers(): { n: number; open: number; turn: number; lit: number; beam: boolean; gaze: boolean; shown: number; far: number; culled: number; eye?: number[]; from?: number[] | null; dir?: number[] | null; probe: number[][] };
   /** Почему вещь видна или не видна: расстояние, попадание в луч (dot против нужного need), путь луча до преграды. */
   sees(id: number): Record<string, number> | null;
   /** Искомое воспоминание: его id, вещь и где она (null — сейчас ничего не ищут). */
@@ -471,6 +476,16 @@ export function installDebug(app: App): void {
       return g.figures.list.length - 1;
     },
     figures: () => game().figures.list.map((f) => ({ id: f.id, material: f.material, state: f.state, dissolve: f.pieces.map((p) => p.dissolve), at: [...f.at], yaw: f.yaw })),
+    flowers: () => {
+      const sites = game().flowers?.sites ?? [];
+      const open = sites.filter((q) => q.open > 0.5);
+      const turn = open.length ? open.reduce((a, q) => a + Math.acos(Math.max(-1, Math.min(1, q.dir[0] * q.face[0] + q.dir[1] * q.face[1] + q.dir[2] * q.face[2]))), 0) / open.length : 0;
+      const fl = game().flowers;
+      const li = fl?.light;
+      const r3 = (v: readonly number[]) => v.map((q) => +q.toFixed(2));
+      const probe = sites.slice(0, 3).map((q) => r3(q.pos));
+      return { n: sites.length, open: open.length, turn: +((turn * 180) / Math.PI).toFixed(1), lit: fl?.litCount ?? 0, beam: !!li?.beam, gaze: !!li?.gaze, ...game().renderer.flowerStats, ...(li ? { eye: r3(li.eye), from: li.beam ? r3(li.beam.origin) : null, dir: li.beam ? r3(li.beam.dir) : li.gaze ? r3(li.gaze.dir) : null } : {}), probe };
+    },
     gotoThing: (id, distance = 2.2) => {
       const g = game();
       const t = g.things.list.find((x) => x.id === id);

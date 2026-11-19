@@ -1242,7 +1242,11 @@ async function scenarioIllusions(browser, baseUrl) {
 
     // Мелкая вещь сна без преграды.
     await lightOn(page);
-    const things = (await vz(page, () => window.__vz.things())).filter((t) => !t.memory && t.state === 'idle' && SMALL_THINGS.includes(t.kind));
+    // Только вещь в настоящем виде: задетая раньше (по дороге к предметам) вернулась на ступень хуже, а с последней ступени вещь
+    // после касания стирается совсем — и пропадает из списка (CI 19.11: «Cannot read properties of undefined (reading 'state')»).
+    const things = (await vz(page, () => window.__vz.things())).filter((t) => !t.memory && t.state === 'idle' && SMALL_THINGS.includes(t.kind) && (t.form ?? 0) === 0);
+    /** Вещь по номеру; стёрта совсем (её нет в списке) — с состоянием 'erased'. */
+    const thingNow = async (t) => (await vz(page, () => window.__vz.things())).find((x) => x.id === t.id) ?? { ...t, state: 'erased' };
     let thing = null;
     for (const t of things) {
       if (!(await vz(page, ([i]) => window.__vz.gotoThing(i, 2.2), [t.id]))) continue;
@@ -1250,9 +1254,9 @@ async function scenarioIllusions(browser, baseUrl) {
       // Взгляд в пол: иначе вещь растворится не от касания, а от долгого взгляда (у неё своя судьба), и вернуться ей незачем.
       await vz(page, () => window.__vz.look(window.__vz.state().aim[0], -1.3));
       let cur = t;
-      for (let i = 0; i < 40 && cur.state !== 'gone'; i++) {
+      for (let i = 0; i < 40 && cur.state !== 'gone' && cur.state !== 'erased'; i++) {
         await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
-        cur = (await vz(page, () => window.__vz.things())).find((x) => x.id === t.id);
+        cur = await thingNow(t);
       }
       if (cur.state === 'gone') {
         thing = { t, from };
@@ -1268,10 +1272,10 @@ async function scenarioIllusions(browser, baseUrl) {
       let cur = null;
       for (let i = 0; i < 24; i++) {
         await vz(page, () => window.__vz.step(30));
-        cur = (await vz(page, () => window.__vz.things())).find((x) => x.id === thing.t.id);
+        cur = await thingNow(thing.t);
         if (cur.state !== 'gone') break;
       }
-      check('после выкл/вкл фонаря вещь снова на месте или на другом (не «gone»)', cur.state !== 'gone', `${thing.t.kind}: ${cur.state}, было ${thing.t.pos.map((v) => v.toFixed(1))}, стало ${cur.pos.map((v) => v.toFixed(1))}, kind ${cur.kind}`);
+      check('после выкл/вкл фонаря вещь снова на месте или на другом (не «gone»)', cur.state !== 'gone' && cur.state !== 'erased', `${thing.t.kind}: ${cur.state}, было ${thing.t.pos.map((v) => v.toFixed(1))}, стало ${cur.pos.map((v) => v.toFixed(1))}, kind ${cur.kind}`);
     }
 
     // Картонка. Стоячая картонка редка, и на этом сиде её место зависит от расстановки бумаги: если на
@@ -3297,6 +3301,8 @@ try {
   if (wants('session')) await run('session', scenarioSession);
   // Только карманные пространства или только вещи сна (быстрый прогон; в полный session они уже входят).
   if (only?.includes('pockets')) await run('pockets', scenarioPockets);
+  // Только честный прогон первой вещи (быстро; в полный session он уже входит).
+  if (only?.includes('honest')) await run('honest', scenarioHonest);
   if (only?.includes('things')) await run('things', scenarioThings);
   if (wants('stages')) await run('stages', scenarioStages);
   if (wants('scenes')) await run('scenes', scenarioScenes);

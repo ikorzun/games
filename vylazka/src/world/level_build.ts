@@ -12,8 +12,9 @@ import { mossCushion } from './moss';
 import { ColliderSet } from './colliders';
 import type { FlatMark } from './flat';
 import { decayAt } from '../systems/decay';
-import { doorSign, dropBuried, furnishRoom, roomOpenness } from './furnish';
+import { doorSign, dropBuried, dropHidden, furnishRoom, roomOpenness } from './furnish';
 import { furnishExtras, GARDEN_H, NO_EXTRAS } from './furnish_extras';
+import { furnishGreenhouse, GREEN_PLAN } from './furnish_greenhouse';
 import { furnishPapers, newPaperState } from './furnish_papers';
 import { growWear } from './wear_growth';
 import { NOTE_ID, ROOM_LABEL, SIGN } from './signs';
@@ -376,6 +377,8 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   const chunks = new Map<string, ChunkBuild>();
   // Журнал объектов — один на уровень: у каждого предмета обстановки свой номер, где бы он ни стоял.
   const objects = new ObjectLog();
+  /** Головки цветов оранжереи (world/flowers.ts): сетки помещений складывают их сюда при посадке. */
+  const blooms: NonNullable<BuiltLevel['blooms']> = [];
   const freeSlots: FreeSlot[] = [];
   const T = WALL_T / 2;
 
@@ -398,6 +401,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       const well = room.type === 'stairwell';
       c = { mb: new MeshBuilder(), sl: new MeshBuilder(), tierMin: well ? room.tier - (lowerWells.has(room.id) ? 1 : 0) : room.tier, tierMax: well ? room.tier + (upperWells.has(room.id) ? 1 : 0) : room.tier };
       c.mb.log = objects;
+      c.mb.blooms = blooms;
       chunks.set(key, c);
     }
     return c;
@@ -437,7 +441,27 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   // помещение уровня — жилая комната убежища, кабинет офиса, зал жёлтых комнат; не сад и не комната
   // с цветами. В зале ожидания небо и так открыто: там звёзды проступают к вечеру.
   const SKY_TYPES: readonly RoomType[] = ['bedroom', 'nursery', 'living', 'hallway', 'kitchen', 'dorm', 'meeting', 'manager', 'files', 'copyroom', 'hall'];
-  const skyRoom = station ? undefined : rooms1.filter((r) => r !== gardenRoom && !flowerRooms.has(r.id) && r.cells.length >= 2 && SKY_TYPES.includes(r.type)).sort(order(7))[0];
+  // Оранжерея (партнёр 19.11, 18:04: «нужна комната полностью с цветами, словно оранжерея или теплица»; квиз: «Теплица внутри
+  // места»; world/furnish_greenhouse.ts): одно помещение уровня обставляется цветами. Не начало сна, не сад, не комнаты с
+  // бумажными цветами и не комната-аномалия; не те помещения, где партнёр ставит свои вещи и фигуры (кухня и архив убежища,
+  // буфет вокзала: world/partner/*.json). Убежище — чем глубже и просторнее, тем лучше (теплица под землёй); офис — холл,
+  // приёмная, комната отдыха или переговорная (зимний сад). Зал ожидания — перрон: клумбы вдоль стены вокзала между скамьями,
+  // поверх его обстановки (GREEN_PLAN.station.edge), край перрона свободен. Сам зал не годится: почти все его стены — проходы
+  // в кассу, камеры хранения, буфет и вестибюль, грядки их перегородили бы; касса и буфет остаются собой.
+  const GREEN_TYPES: Readonly<Partial<Record<WorldKind, readonly RoomType[]>>> = {
+    office: ['hall', 'reception', 'breakroom', 'meeting'],
+    station: ['platform'],
+  };
+  const PARTNER_ROOMS: readonly RoomType[] = station ? ['buffet'] : ['kitchen', 'archive'];
+  const startRoom0 = layout.rooms[layout.entranceRoom]!;
+  const greenRoom = GREEN_PLAN[layout.world]
+    ? rooms1
+        .filter((r) => r !== gardenRoom && !flowerRooms.has(r.id) && r !== variantRoom && r !== startRoom0 && r.cells.length >= 2 && !PARTNER_ROOMS.includes(r.type) && (GREEN_TYPES[layout.world]?.includes(r.type) ?? true))
+        .sort((a, b) => b.tier - a.tier || b.cells.length - a.cells.length || order(11)(a, b))[0]
+    : undefined;
+  /** Оранжерея вместо обстановки (убежище, офис) или кромкой поверх неё (зал ожидания). */
+  const greenEdge = GREEN_PLAN[layout.world]?.edge !== undefined;
+  const skyRoom = station ? undefined : rooms1.filter((r) => r !== gardenRoom && r !== greenRoom && !flowerRooms.has(r.id) && r.cells.length >= 2 && SKY_TYPES.includes(r.type)).sort(order(7))[0];
   /** Высота потолка помещения над полом. */
   const ceilOf = (room: GenRoom): number => (room === gardenRoom ? GARDEN_H : station ? (STATION_CEIL[room.type] ?? CEIL_H) : CEIL_H);
 
@@ -816,13 +840,15 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
 
   const furnished: { room: GenRoom; ctx: RoomCtx }[] = [];
   // Бумага и чемоданы считаются на уровень: одна стена лиц, одна стена чемоданов (world/furnish_papers.ts).
-  const paperState = newPaperState(world);
+  const paperState = newPaperState(world, layout.seed);
   for (const room of layout.rooms) {
     if (lowerWells.has(room.id)) continue;
     if (room !== variantRoom) {
       const ctx = roomCtx(room, (x, z) => chunkFor(room, x, z), col, 0, spots, landmarks, flats);
       ctx.paperState = paperState;
-      furnishRoom(ctx);
+      if (room === greenRoom && !greenEdge) furnishGreenhouse(ctx);
+      else furnishRoom(ctx);
+      if (room === greenRoom && greenEdge) furnishGreenhouse(ctx);
       if (room === noteRoom) {
         // На свободном участке стены, ближайшем к началу; нет свободного — на любом, сбоку от того, что там висит.
         const near = (s: Slot): number => Math.abs(s.cx - start.cx) + Math.abs(s.cz - start.cz);
@@ -885,7 +911,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     furnishExtras(ctx, { ...NO_EXTRAS, garden: room === gardenRoom, flowers: flowerRooms.has(room.id) ? 1 + (room.cells.length >= 4 ? 1 : 0) : 0 });
   }
   // Наклейки и завал: помещения перебираются по сиду, пока не встанет сколько нужно.
-  const ranked = (salt: number): { room: GenRoom; ctx: RoomCtx }[] => furnished.filter((f) => plain.includes(f.room) && f.room !== gardenRoom).sort((a, b) => order(salt)(a.room, b.room));
+  const ranked = (salt: number): { room: GenRoom; ctx: RoomCtx }[] => furnished.filter((f) => plain.includes(f.room) && f.room !== gardenRoom && (f.room !== greenRoom || greenEdge)).sort((a, b) => order(salt)(a.room, b.room));
   let stickersLeft = world === 'yellow' ? 2 : 4;
   for (const { ctx } of ranked(3)) {
     if (stickersLeft <= 0) break;
@@ -897,7 +923,8 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   }
   // Бумага и чемоданы (world/furnish_papers.ts): листы на щитах, в рамах и на потолке, стена чемоданов.
   // Последним проходом и своим сидом — номера и места прежних объектов от них не сдвигаются.
-  furnishPapers(paperState, furnished);
+  // Оранжерея — комната только с цветами: бумаге и чемоданам там не место.
+  furnishPapers(paperState, furnished.filter((f) => f.room !== greenRoom || greenEdge));
   // Своё стирание места (world/wear_growth.ts): рубец по стыку стены с потолком в убежище, щит с коконами
   // в кассе и буфете зала ожидания. Тоже последним проходом и своим сидом: обстановка от них не сдвигается.
   const growth = growWear(world, layout.seed, decay.wear, furnished, start);
@@ -981,6 +1008,8 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   }));
   // Места для вещей внутри преград — прочь: вся обстановка уже стоит, и вещи партнёра тоже (furnish.ts, dropBuried).
   dropBuried(spots, col);
+  // И места, которых не видно ни откуда, где можно встать: вещь воспоминания вспоминают взглядом (furnish.ts, dropHidden).
+  dropHidden(spots, col);
   // Мир расстановки остаётся у конструктора и тестов: от сеток ему — только верхние грани, сборщики не держать.
   if (opts.keepPlaceWorld) objects.freeze();
   // Свободные участки стен — в порядке помещений уровня: туда вещь может вернуться «в другом месте».
@@ -1054,6 +1083,8 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     ...(roof ? { roof } : {}),
     ...(perches.length > 0 ? { perches } : {}),
     ...(skyRoom ? { skyRoom: skyRoom.id } : {}),
+    ...(greenRoom ? { greenRoom: greenRoom.id } : {}),
+    ...(blooms.length > 0 ? { blooms } : {}),
     chunks: out,
     stairs,
     colliders: col,

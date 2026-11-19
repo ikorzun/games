@@ -4,6 +4,7 @@ import { ColliderSet } from '../src/world/colliders';
 import { MeshBuilder } from '../src/world/kit';
 import type { MeshData } from '../src/world/kit';
 import { MAT } from '../src/world/materials';
+import { PAPER_H, PAPER_LAYERS, PAPER_U0, PAPER_W, STICKER_CELL, STICKER_TILES } from '../src/world/papers';
 import { Xf } from '../src/world/props';
 import { CRAFT_PROPS } from '../src/world/props_craft';
 import type { PropSpec } from '../src/world/props_more';
@@ -39,6 +40,8 @@ const GLOW = new Set(['mound_small', 'mound', 'mound_big']);
 /** Опорные сиды и ещё двенадцать «случайных» (но своих, воспроизводимых). */
 const SEEDS = [1, 7, 1000, 1007, 20041113, 0, ...Array.from({ length: 12 }, (_, i) => (Math.imul(i + 3, 2654435761) >>> 0) % 1000000)];
 const allowedMat = (v: number): boolean => v <= MAT.castIron || v >= MAT.wallpaper;
+/** Наклейки с картинками: тело наклейки — MAT.print, картинка из слоя stickers стопки бумаги (world/papers.ts). */
+const PRINTED = new Set(['sticker_box', 'sticker_patch']);
 
 interface Built {
   mesh: MeshData;
@@ -138,7 +141,7 @@ describe.each(entries)('предмет %s', (name, p) => {
   it('материалы разрешены, оттенок в пределах, свечение — только у гор', () => {
     for (const seed of SEEDS) {
       const m = build(p, seed).mesh;
-      expect(m.mat.every((v) => Number.isInteger(v) && allowedMat(v)), `сид ${seed}`).toBe(true);
+      expect(m.mat.every((v) => Number.isInteger(v) && (allowedMat(v) || (PRINTED.has(name) && v === MAT.print))), `сид ${seed}`).toBe(true);
       for (let i = 0; i < m.color.length; i += 4) {
         const hi = m.mat[i / 4] === MAT.glow ? 14 : 1.5;
         for (let k = 0; k < 3; k++) {
@@ -258,6 +261,26 @@ describe('особые случаи', () => {
       expect(wood / 26, `сид ${seed}: жердей`).toBeLessThanOrEqual(22);
       const wraps = m.mat.filter((v) => v === MAT.paper).length / 12;
       expect(wraps, `сид ${seed}: обмоток`).toBeGreaterThanOrEqual(20);
+    }
+  });
+});
+
+describe('картинки наклеек (партнёр 19.11: «сделать на них более детальное изображение»)', () => {
+  const layer = PAPER_LAYERS.indexOf('stickers');
+  const tileOf = (u: number, v: number): number => Math.floor(((u - PAPER_U0 - layer) * PAPER_W) / STICKER_CELL) + 4 * Math.floor(((1 - v) * PAPER_H) / STICKER_CELL);
+  const tiles = (m: MeshData): number[] => {
+    const out = new Set<number>();
+    for (let i = 0; i < m.mat.length; i++) if (m.mat[i] === MAT.print) out.add(tileOf(m.uv[i * 2]!, m.uv[i * 2 + 1]!));
+    return [...out];
+  };
+
+  it('картинка — из слоя stickers; одна и та же не повторяется, пока не показаны другие', () => {
+    for (const seed of SEEDS) {
+      for (const [n, least] of [['sticker_patch', 15], ['sticker_box', 8]] as const) {
+        const t = tiles(build(CRAFT_PROPS[n]!, seed).mesh);
+        expect(t.every((k) => k >= 0 && k < STICKER_TILES), `${n}, сид ${seed}: ${t.join()}`).toBe(true);
+        expect(t.length, `${n}, сид ${seed}: разных картинок`).toBeGreaterThanOrEqual(least);
+      }
     }
   });
 });

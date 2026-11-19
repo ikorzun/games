@@ -9,7 +9,7 @@ import type { Vec3 } from '../core/types';
 import { dressRoom } from './dress';
 import { FLAT_EYE, standee, veil, VEIL_SCENES } from './flat';
 import type { FlatMark } from './flat';
-import { DX, DZ } from '../gen/layout';
+import { DX, DZ, TIER_DROP } from '../gen/layout';
 import type { GenRoom, WorldKind } from '../gen/layout';
 import { reservePapers } from './furnish_papers';
 import type { PaperHold, PaperState } from './furnish_papers';
@@ -174,6 +174,46 @@ export function dropBuried(spots: ItemSpot[], col: ColliderSet): void {
     const buried = col.query(s.x, s.z, s.x, s.z, near).some((b) => y > b.minY && y < b.maxY && Math.min(s.x - b.minX, b.maxX - s.x, s.z - b.minZ, b.maxZ - s.z) > limit);
     if (!buried) spots[keep++] = s;
   }
+  spots.length = keep;
+}
+
+/** Откуда смотрит герой на место для вещи: глаз над полом, м; на каком расстоянии пробовать встать и сколько сторон обойти. */
+const SEE = { eye: 1.42, rings: [1.1, 1.7, 2.2, 3] as const, around: 12, body: 0.3, slack: 0.45 };
+
+/**
+ * Убрать места для вещей, которых не видно ни с одной точки, где можно встать (CI 19.11, «честный прогон»: будильник —
+ * вещь воспоминания — лежал на тумбочке в углу спальни; за ней стена, сбоку изголовье кровати в 1,2 м и торшер, — и
+ * вспомнить его было нельзя: вспоминают взглядом). Видно — так, как требует игра: глаз героя в 1,1–3 м от вещи, тело там
+ * помещается и под ним есть пол, луч от глаза до вещи не упирается в преграду раньше, чем за SEE.slack до неё. Звать после
+ * dropBuried: вся обстановка уже стоит.
+ */
+export function dropHidden(spots: ItemSpot[], col: ColliderSet): void {
+  const near: Aabb[] = [];
+  const R = SEE.body;
+  const blocks = (b: Aabb): boolean => !b.off && !b.gone && !b.ghost;
+  const seen = (s: ItemSpot): boolean => {
+    const floor = -s.tier * TIER_DROP;
+    const ty = s.y + 0.12;
+    for (const r of SEE.rings) {
+      for (let i = 0; i < SEE.around; i++) {
+        const a = (i / SEE.around) * Math.PI * 2;
+        const px = s.x + Math.cos(a) * r;
+        const pz = s.z + Math.sin(a) * r;
+        // Встать: под ногами пол, вокруг (радиус тела) — ни стены, ни мебели.
+        if (col.raycast(px, floor + 1, pz, 0, -1, 0, 1.6) >= 1.6) continue;
+        if (col.query(px - R, pz - R, px + R, pz + R, near).some((b) => blocks(b) && b.maxY > floor + 0.08 && b.minY < floor + 1.7 && b.minX < px + R && b.maxX > px - R && b.minZ < pz + R && b.maxZ > pz - R)) continue;
+        const ey = floor + SEE.eye;
+        const dx = s.x - px;
+        const dy = ty - ey;
+        const dz = s.z - pz;
+        const d = Math.hypot(dx, dy, dz);
+        if (col.raycast(px, ey, pz, dx / d, dy / d, dz / d, d) >= d - SEE.slack) return true;
+      }
+    }
+    return false;
+  };
+  let keep = 0;
+  for (const s of spots) if (seen(s)) spots[keep++] = s;
   spots.length = keep;
 }
 
@@ -1090,33 +1130,43 @@ export function floorSpots(ctx: RoomCtx, n: number): void {
   ];
   const cells = ctx.cells;
   let made = 0;
+  /** Уже занятые точки: «клетка:точка». Две вещи в одной точке — одна в другой (и темнота, меняя их местами, не сдвинет ни одну). */
+  const taken = new Set<string>();
   for (let i = 0; made < n && i < n + cells.length * offsets.length; i++) {
-    const c = cells[i % cells.length]!;
+    const ci = i % cells.length;
+    const c = cells[ci]!;
     // Не под мебелью, не под выдвинутым ящиком и не в распахнутой дверце: из четырёх точек клетки — первая свободная от
-    // преград. Свободной нет (клетку занял стол переговорной, кабинка) — эту клетку пропустить: вещь внутри преграды не видна
-    // ни взгляду, ни лучу (CI 18.11).
+    // преград и не занятая. Свободной нет (клетку занял стол переговорной, кабинка) — эту клетку пропустить: вещь внутри преграды
+    // не видна ни взгляду, ни лучу (CI 18.11).
     const k0 = Math.floor(i / cells.length) % offsets.length;
     let k = -1;
     for (let j = 0; j < offsets.length; j++) {
-      const [x, z] = offsets[(k0 + j) % offsets.length]!;
-      if (!blocked(c.xf, x, z)) {
-        k = (k0 + j) % offsets.length;
+      const kk = (k0 + j) % offsets.length;
+      const [x, z] = offsets[kk]!;
+      if (!taken.has(`${ci}:${kk}`) && !blocked(c.xf, x, z)) {
+        k = kk;
         break;
       }
     }
     if (k < 0) continue;
+    taken.add(`${ci}:${k}`);
     const [ox, oz] = offsets[k]!;
     spot(ctx, c.xf, ox, 0.03, oz, 'floor');
     made += 1;
   }
 }
 
-/** Точка пола (x, z в клетке) под преградой или ближе 15 см к ней. */
+/**
+ * Точка пола (x, z в клетке) под преградой или ближе 15 см к ней. Высота — от пола этой клетки: на нижних ярусах пол ниже нуля
+ * (до 19.11 сравнивалось с нулём мира, и там проверка не видела ничего — места ложились в мебель, а потом их отбрасывала
+ * проверка «не закопано», dropBuried).
+ */
 function blocked(xf: Xf, x: number, z: number): boolean {
   if (!xf.col) return false;
   const p = xf.pt(x, 0.03, z);
   const m = 0.15;
-  return xf.col.boxes.some((b) => p[0] > b.minX - m && p[0] < b.maxX + m && p[2] > b.minZ - m && p[2] < b.maxZ + m && b.minY < 0.5 && b.maxY > 0);
+  const y = p[1];
+  return xf.col.boxes.some((b) => p[0] > b.minX - m && p[0] < b.maxX + m && p[2] > b.minZ - m && p[2] < b.maxZ + m && b.minY < y + 0.47 && b.maxY > y - 0.03);
 }
 
 // Домашние комнаты расставлены по смыслу (партнёр 19.11, 14:33; docs/vylazka/design.md, §31): главная вещь — напротив входа,

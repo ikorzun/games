@@ -119,10 +119,20 @@ describe('полка Sand3D: опись и авторство', () => {
   });
 });
 
+/** Вещи оранжереи из полки: горшки, парник, пергола, роза в рост человека. */
+const GARDEN = new Set(['s3_pot_terracotta', 's3_pot_clay', 's3_hotbed', 's3_pergola', 's3_rose_tall']);
+
 describe('полка Sand3D: размеры и постановка', () => {
   it('размеры как у настоящей мебели: от 0,3 до 2,5 м в плане, от 0,35 до 2,1 м в высоту', () => {
     for (const n of names) {
       const p = SAND3D_PROPS[n]!;
+      // Вещи оранжереи — не мебель: горшки меньше, парник и пергола больше (world/props_greenhouse.ts).
+      if (GARDEN.has(n)) {
+        expect(Math.max(p.w, p.d), n).toBeLessThan(3.2);
+        expect(p.h, n).toBeLessThan(2.6);
+        expect(Math.min(p.w, p.d, p.h), n).toBeGreaterThan(0.1);
+        continue;
+      }
       expect(p.w, n).toBeGreaterThan(0.25);
       expect(p.w, n).toBeLessThan(2.5);
       expect(p.d, n).toBeGreaterThan(0.25);

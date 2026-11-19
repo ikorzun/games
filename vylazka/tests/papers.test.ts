@@ -10,7 +10,9 @@ import { MeshBuilder } from '../src/world/kit';
 import type { MeshData } from '../src/world/kit';
 import { buildLevel } from '../src/world/level_build';
 import { MAT } from '../src/world/materials';
-import { PAPERS, PAPER_FACES, PAPER_H, PAPER_LAYERS, PAPER_LIST, PAPER_U0, PAPER_W, paperHeight, paperUv } from '../src/world/papers';
+import { premultiply } from '../src/render/paper_images';
+import { newPaperState } from '../src/world/furnish_papers';
+import { DREAM_PRINTS, DREAM_SCRAPS, PAPERS, PAPER_FACES, PAPER_H, PAPER_LAYERS, PAPER_LIST, PAPER_U0, PAPER_W, STICKER_CELL, STICKER_TILES, paperHeight, paperUv, stickerUv } from '../src/world/papers';
 import { Xf } from '../src/world/props';
 import { LUGGAGE_PROPS } from '../src/world/props_luggage';
 import { PAPER_PROPS } from '../src/world/props_papers';
@@ -87,7 +89,8 @@ describe('данные листов', () => {
   });
 
   it('каждый слой используется хотя бы одним листом, целиком или частью', () => {
-    for (const l of PAPER_LAYERS) expect(PAPER_LIST.some((p) => p.layer === l), l).toBe(true);
+    // Слой наклеек читают сами наклейки (stickerUv, world/props_craft.ts), а не листы.
+    for (const l of PAPER_LAYERS) expect(l === 'stickers' || PAPER_LIST.some((p) => p.layer === l), l).toBe(true);
   });
 
   it('портреты — первые PAPER_FACES слоёв, и только они: шейдер узнаёт их по номеру слоя', () => {
@@ -95,14 +98,15 @@ describe('данные листов', () => {
     for (const p of PAPER_LIST) expect(p.kind === 'faces' || p.kind === 'face', p.id).toBe(PAPER_LAYERS.indexOf(p.layer) < PAPER_FACES);
   });
 
-  it('у слоёв портретов в файле есть альфа-канал (маска лиц), у остальных его нет', () => {
+  it('альфа-канал в файле — у слоёв портретов (маска лиц) и у слоя с обрывками (рваный край); у остальных его нет', () => {
     // Заголовок WebP: RIFF…WEBP, затем блок VP8X с флагами; бит 0x10 — «есть альфа». Без VP8X альфы нет.
     for (const l of PAPER_LAYERS) {
       const buf = readFileSync(join(PAPERS_DIR, `${l}.webp`));
       expect(buf.toString('ascii', 0, 4)).toBe('RIFF');
       expect(buf.toString('ascii', 8, 12)).toBe('WEBP');
       const alpha = buf.toString('ascii', 12, 16) === 'VP8X' && (buf[20]! & 0x10) !== 0;
-      expect(alpha, l).toBe(l.startsWith('faces_'));
+      const torn = PAPER_LIST.some((p) => p.layer === l && p.kind === 'scrap');
+      expect(alpha, l).toBe(l.startsWith('faces_') || torn);
     }
   });
 
@@ -232,7 +236,8 @@ describe('Xf.paper и Xf.paperCeil', () => {
 describe('реестр бумаги', () => {
   it('в реестре только то, что где-то стоит: щиты, ряды рам, рама с портретом и лист над кроватью', () => {
     const names = Object.keys(PAPER_PROPS);
-    expect(names.sort()).toEqual(['ceil_faces', 'faces_wall', 'frame_face_big', 'frames_bonds', 'frames_faces', 'map_board', 'money_board', 'money_wall', 'notgeld_frame']);
+    const dream = [...DREAM_PRINTS.map((d) => d[0]), ...DREAM_SCRAPS.map((d) => d[0])];
+    expect(names.sort()).toEqual(['ceil_faces', 'faces_wall', 'frame_face_big', 'frames_bonds', 'frames_faces', 'map_board', 'money_board', 'money_wall', 'notgeld_frame', ...dream].sort());
     for (const n of names) expect(n, n).toMatch(/^[a-z0-9_]+$/);
   });
 });
@@ -422,6 +427,33 @@ describe('расстановка по мирам', () => {
     return out;
   };
 
+  // Снимки и обрывки больного сна: сколько самое большее на уровень (world/furnish_papers.ts) — и ни один дважды.
+  const DREAM_MAX: Record<WorldKind, [number, number]> = { shelter: [5, 3], office: [4, 3], yellow: [2, 1], station: [1, 0] } as Record<WorldKind, [number, number]>;
+  it.each(cases)('%s, сид %i, ранг %i: снимки сна и обрывки — каждый не больше раза и не больше положенного', (world, seed, rank) => {
+    const l = level(world, seed, rank);
+    const dream = l.objects.filter((o) => o.name.startsWith('dream_')).map((o) => o.name);
+    const scrap = l.objects.filter((o) => o.name.startsWith('scrap_')).map((o) => o.name);
+    expect(new Set(dream).size, dream.join()).toBe(dream.length);
+    expect(new Set(scrap).size, scrap.join()).toBe(scrap.length);
+    expect(dream.length).toBeLessThanOrEqual(DREAM_MAX[world][0]);
+    expect(scrap.length).toBeLessThanOrEqual(DREAM_MAX[world][1]);
+  });
+
+  it.each(WORLDS)('%s: снимки сна и обрывки на уровнях вообще встают', (world) => {
+    let dream = 0;
+    let scrap = 0;
+    for (const seed of LEVEL_SEEDS)
+      for (const rank of RANKS) {
+        const l = level(world, seed, rank);
+        dream += l.objects.filter((o) => o.name.startsWith('dream_')).length;
+        scrap += l.objects.filter((o) => o.name.startsWith('scrap_')).length;
+      }
+    expect(dream, 'снимков').toBeGreaterThan(0);
+    // В зале ожидания обрывков нет нарочно.
+    if (world === 'station') expect(scrap).toBe(0);
+    else expect(scrap, 'обрывков').toBeGreaterThan(0);
+  });
+
   it.each(cases)('%s, сид %i, ранг %i: предметы бумаги и багажа не пересекаются объёмом ни с одним другим объектом', (world, seed, rank) => {
     const bad = overlapPairs(level(world, seed, rank));
     expect(bad.map(([o, q]) => `${o.name} #${o.id} x ${q.name} #${q.id}`)).toEqual([]);
@@ -457,6 +489,76 @@ describe('расстановка по мирам', () => {
     expect(layout.rooms.find((r) => r.id === room)!.type).toBe('storage');
     const cases = l.objects.filter((o) => o.name === 'st_suitcase' && roomOf(o) === room);
     expect(cases.length, 'одиночных чемоданов в кладовой').toBe(0);
+  });
+});
+
+describe('больной сон и наклейки (партнёр 19.11)', () => {
+  const inLayer = (l: string) => PAPER_LIST.filter((p) => p.layer === l);
+  const cross = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }): boolean =>
+    a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+  it('снимки и обрывки в слоях dream_a и dream_b не накрывают друг друга', () => {
+    for (const l of ['dream_a', 'dream_b']) {
+      const list = inLayer(l);
+      expect(list.length, l).toBeGreaterThan(0);
+      for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) expect(cross(list[i]!, list[j]!), `${list[i]!.id} × ${list[j]!.id}`).toBe(false);
+    }
+  });
+
+  it('снимок — 3 : 4 и 24 см на стене; обрывок на полу — от 9 до 30 см', () => {
+    for (const [id] of DREAM_PRINTS) {
+      const p = PAPERS[id]!;
+      expect(p.kind, id).toBe('dream');
+      expect(p.w / p.h, id).toBeCloseTo(3 / 4, 6);
+      expect(p.width, id).toBeCloseTo(0.24, 6);
+    }
+    for (const [id] of DREAM_SCRAPS) {
+      const p = PAPERS[id]!;
+      expect(p.kind, id).toBe('scrap');
+      expect(p.layer, id).toBe('dream_b');
+      expect(p.width, id).toBeGreaterThanOrEqual(0.09);
+      expect(p.width, id).toBeLessThanOrEqual(0.3);
+    }
+  });
+
+  it(`наклейки: ${STICKER_TILES} клеток помещаются в слой stickers, uv — в его полосе, клетки не пересекаются, номер идёт по кругу`, () => {
+    const layer = PAPER_LAYERS.indexOf('stickers');
+    expect(layer).toBeGreaterThanOrEqual(PAPER_FACES);
+    expect(4 * STICKER_CELL).toBeLessThanOrEqual(PAPER_W);
+    expect(Math.ceil(STICKER_TILES / 4) * STICKER_CELL).toBeLessThanOrEqual(PAPER_H);
+    const all = Array.from({ length: STICKER_TILES }, (_, t) => stickerUv(t));
+    for (const t of all) {
+      expect(t.u0).toBeGreaterThan(PAPER_U0 + layer);
+      expect(t.u1).toBeLessThan(PAPER_U0 + layer + 1);
+      expect(t.u0).toBeLessThan(t.u1);
+      expect(t.v0).toBeGreaterThan(0);
+      expect(t.v1).toBeLessThan(1);
+      expect(t.v0).toBeLessThan(t.v1);
+    }
+    for (let i = 0; i < all.length; i++)
+      for (let j = i + 1; j < all.length; j++) {
+        const a = all[i]!;
+        const b = all[j]!;
+        expect(a.u0 < b.u1 && b.u0 < a.u1 && a.v0 < b.v1 && b.v0 < a.v1, `${i} × ${j}`).toBe(false);
+      }
+    expect(stickerUv(STICKER_TILES)).toEqual(stickerUv(0));
+    expect(stickerUv(-1)).toEqual(stickerUv(STICKER_TILES - 1));
+  });
+
+  it('колоды уровня: каждый снимок и обрывок по разу; тот же сид — тот же порядок, другой сид — другой', () => {
+    const a = newPaperState('shelter', 20041113);
+    expect([...a.decks.dream].sort()).toEqual(DREAM_PRINTS.map((d) => d[0]).sort());
+    expect(newPaperState('station', 7).decks.dream).not.toContain('dream_ticket');
+    expect([...a.decks.scrap].sort()).toEqual(DREAM_SCRAPS.map((d) => d[0]).sort());
+    expect(newPaperState('shelter', 20041113).decks).toEqual(a.decks);
+    const orders = new Set([1, 2, 3, 4, 5].map((seed) => newPaperState('office', seed).decks.dream.join()));
+    expect(orders.size).toBeGreaterThan(1);
+  });
+
+  it('стопка: цвет слоёв не-портретов умножен на альфу, непрозрачное не меняется', () => {
+    const px = new Uint8Array([200, 100, 50, 128, 10, 20, 30, 255, 90, 90, 90, 0]);
+    premultiply(px);
+    expect([...px]).toEqual([100, 50, 25, 128, 10, 20, 30, 255, 0, 0, 0, 0]);
   });
 });
 

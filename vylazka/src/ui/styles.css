@@ -490,7 +490,7 @@ body {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-/* Сегмент-контрол: рамка-дорожка, выбранное — тёплая плашка. */
+/* Сегмент-контрол: рамка-дорожка, выбранное — белая плашка с чёрным текстом (партнёр 19.11: «выбранные залиты белым, цвет черный»). */
 .vz-seg {
   display: flex;
   min-width: 0;
@@ -522,9 +522,13 @@ body {
   color: var(--vz-ink);
 }
 .vz-seg__opt.is-on {
-  color: var(--vz-warm);
-  background: rgba(243, 217, 138, 0.13);
-  box-shadow: inset 0 0 0 1px rgba(243, 217, 138, 0.22);
+  color: #000;
+  font-weight: 400;
+  background: #fff;
+  box-shadow: none;
+}
+.vz-seg__opt.is-on:hover {
+  color: #000;
 }
 .vz-settings__acts {
   display: flex;

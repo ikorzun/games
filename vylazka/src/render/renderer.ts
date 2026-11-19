@@ -9,6 +9,7 @@ import type { MeshData } from '../world/kit';
 import type { LevelChunk, StairLink } from '../world/level';
 import { birdMesh } from '../world/bird';
 import { mushroomForm } from '../world/mushrooms';
+import { headForm } from '../world/flowers';
 import { BIRD_STRIDE, BIRDS_MAX } from '../systems/birds';
 import { MAT_COUNT, MAT_DEFS } from '../world/materials';
 import { bakeDetail } from './detail';
@@ -422,6 +423,16 @@ const SPORE_CULL = { ball: 0.55, margin: 0.12 } as const;
 const SPORE_STRIDE = 7;
 
 /**
+ * Головки цветов оранжереи (systems/flowers.ts): сколько разом и по качеству — ближайшие столько (у головок 120–630
+ * треугольников). Дальше FLOWER_LOD_AT — упрощённой сеткой, вне кадра — не рисуются.
+ */
+export const FLOWERS_MAX = 900;
+const FLOWERS_CAP: Readonly<Record<Quality, number>> = { low: 200, med: 450, high: FLOWERS_MAX, ultra: FLOWERS_MAX };
+const FLOWER_LOD_AT = 3.5;
+/** Чисел на головку (systems/flowers.ts, FLOWER_STRIDE): x, y, z, кватернион, масштаб поперёк и вдоль, форма. */
+const FLOWER_STRIDE = 10;
+
+/**
  * Сторона текстуры состояний объектов уровня: 64 × 64 = 4096 объектов (world/objects.ts, MAX_OBJECTS).
  * То же число зашито в шейдере (objState: id & 63, id >> 6).
  */
@@ -584,6 +595,13 @@ export class GameRenderer {
   private sporeCount = 0;
   /** Сколько гроздей нарисовано в последнем кадре и сколько из них упрощённых (для проверки и замера). */
   readonly sporeStats = { shown: 0, far: 0, culled: 0 };
+  /** Головки цветов (systems/flowers.ts): по сетке на форму и подробность. */
+  private readonly flowerMeshes = new Map<number, THREE.InstancedMesh>();
+  private flowerMat: THREE.ShaderMaterial | null = null;
+  private readonly flowerUsed = new Map<number, number>();
+  private flowerData: Float32Array | null = null;
+  private flowerCount = 0;
+  readonly flowerStats = { shown: 0, far: 0, culled: 0 };
   /** Призрак Осыпи: то же тело, отражённое из-за спины вперёд. */
   private readonly ghostMat: THREE.ShaderMaterial;
   private readonly ghostPoints: THREE.Points;
@@ -1689,6 +1707,90 @@ export class GameRenderer {
   }
 
   /**
+   * Головки цветов оранжереи: count головок по FLOWER_STRIDE чисел (уже от ближнего). Как грибы: копии одной сетки на форму,
+   * дальние — упрощённой, вне кадра — не рисуются; свет, тень и правило взгляда — как у всего мира (вещь места).
+   */
+  setFlowers(data: Float32Array, count: number): void {
+    this.flowerData = data;
+    this.flowerCount = count;
+    if (count === 0) {
+      for (const mesh of this.flowerMeshes.values()) {
+        mesh.count = 0;
+        mesh.visible = false;
+      }
+    }
+  }
+
+  private layoutFlowers(): void {
+    const data = this.flowerData;
+    const count = this.flowerCount;
+    if (!data || count === 0) return;
+    const S = FLOWER_STRIDE;
+    const cap = FLOWERS_CAP[this.quality];
+    const cam = this.camera;
+    // Пирамида обзора уже посчитана грибами в этом кадре (layoutSpores) — но грибов может не быть: считаем сами.
+    this.sporeView.setFromProjectionMatrix(this.sporeVP.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+    const planes = this.sporeView.planes;
+    const slack = Math.sin(SPORE_CULL.margin);
+    const cx = cam.position.x;
+    const cy = cam.position.y;
+    const cz = cam.position.z;
+    this.flowerUsed.clear();
+    const st = this.flowerStats;
+    st.shown = 0;
+    st.far = 0;
+    st.culled = 0;
+    for (let i = 0; i < count && st.shown < cap; i++) {
+      const o = i * S;
+      const x = data[o]!;
+      const y = data[o + 1]!;
+      const z = data[o + 2]!;
+      const d = Math.hypot(x - cx, y - cy, z - cz);
+      const r = 0.12 * Math.max(data[o + 7]!, data[o + 8]!) + d * slack;
+      let inside = true;
+      for (let p = 0; p < 6 && inside; p++) {
+        const pl = planes[p]!;
+        if (pl.normal.x * x + pl.normal.y * y + pl.normal.z * z + pl.constant < -r) inside = false;
+      }
+      if (!inside) {
+        st.culled += 1;
+        continue;
+      }
+      const lod = d > FLOWER_LOD_AT ? 1 : 0;
+      const form = data[o + 9]!;
+      const key = form * 2 + lod;
+      let mesh = this.flowerMeshes.get(key);
+      if (!mesh) {
+        if (!this.flowerMat) {
+          this.flowerMat = this.worldLike();
+          this.flowerMat.uniforms.uThing = { value: new THREE.Vector4(0, 0, 1, 0) };
+          this.flowerMat.defines = { ...this.worldMat.defines };
+        }
+        mesh = new THREE.InstancedMesh(this.makeMesh(headForm(form, lod as 0 | 1), 0, 0).geometry, this.flowerMat, FLOWERS_MAX);
+        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        mesh.frustumCulled = false;
+        mesh.matrixAutoUpdate = false;
+        mesh.layers.set(1);
+        this.scene.add(mesh);
+        this.flowerMeshes.set(key, mesh);
+      }
+      const c = this.flowerUsed.get(key) ?? 0;
+      this.sporeQ.set(data[o + 3]!, data[o + 4]!, data[o + 5]!, data[o + 6]!);
+      this.sporeM.compose(this.tmpV.set(x, y, z), this.sporeQ, this.sporeS.set(data[o + 7]!, data[o + 8]!, data[o + 7]!));
+      mesh.setMatrixAt(c, this.sporeM);
+      this.flowerUsed.set(key, c + 1);
+      st.shown += 1;
+      st.far += lod;
+    }
+    for (const [key, mesh] of this.flowerMeshes) {
+      const c = this.flowerUsed.get(key) ?? 0;
+      mesh.count = c;
+      mesh.visible = c > 0;
+      if (c > 0) mesh.instanceMatrix.needsUpdate = true;
+    }
+  }
+
+  /**
    * Птицы (systems/birds.ts): count птиц по BIRD_STRIDE чисел — x, y, z, поворот, наклон носа, крен, фаза
    * взмаха, раскрытие крыльев, размер. Одна сетка, много копий; крыльями машет шейдер. Свет, тень и
    * правило взгляда у них те же, что у всего мира: птицу видно там, где место собрано.
@@ -2286,6 +2388,7 @@ export class GameRenderer {
     cam.rotation.set(v.camPitch, v.camYaw, v.camRoll);
     cam.updateMatrixWorld(true);
     this.layoutSpores();
+    this.layoutFlowers();
 
     // Отсечение чанков: дальше черты видимости всё равно чёрный туман, а чужой ярус виден только
     // с лестницы и от её площадок.
