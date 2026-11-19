@@ -210,15 +210,15 @@ const yawFor = (a: AnchorSpot, f: FigureFacing): number => (f === 'room' ? a.phi
  * Точка и поворот вещи по правилу у края a. Как в инструменте: край + сдвиг, повёрнутый по рамке края. С w поднятая вещь без
  * отметки «висит» ложится на верх того, что под ней (restTop; others — коробки уже поставленных вещей партнёра).
  */
-export function fitThing(spec: Pick<PlacedSpec, 'rule' | 'turn' | 'offset' | 'hang'>, a: AnchorSpot, p: PropSpec, w?: RestWorld, others: readonly Box[] = []): { at: Vec3; rot: Turn } {
+export function fitThing(spec: Pick<PlacedSpec, 'rule' | 'turn' | 'offset' | 'hang' | 'drop'>, a: AnchorSpot, p: PropSpec, w?: RestWorld, others: readonly Box[] = []): { at: Vec3; rot: Turn } {
   const c = Math.cos(a.phi);
   const s = Math.sin(a.phi);
   const [ox, oz] = spec.offset;
   const x = a.x + ox * c + oz * s;
   const z = a.z - ox * s + oz * c;
-  // Под потолком — верхом под самый потолок; иначе — на заданной высоте, но не выше потолка.
+  // Под потолком — верхом под самый потолок или на drop ниже него (противоречие 280); иначе — на заданной высоте, но не выше потолка.
   const top = a.ceil - 0.02 - p.h;
-  const y = spec.rule.anchor === 'ceiling' ? Math.max(a.floor, top) : Math.max(a.floor, Math.min(a.floor + spec.rule.lift, top));
+  const y = spec.rule.anchor === 'ceiling' ? Math.max(a.floor, top - (spec.drop ?? 0)) : Math.max(a.floor, Math.min(a.floor + spec.rule.lift, top));
   const rot = ((rotOf(yawFor(a, spec.rule.facing)) + spec.turn) % 4) as Turn;
   const at: Vec3 = [x, y, z];
   if (w && rests(spec, p)) at[1] = Math.min(top, restTop(p, at, rot, a.floor, w, others).y);

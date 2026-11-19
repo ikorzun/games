@@ -110,8 +110,16 @@ export interface PlacedSpec {
    * Висит в воздухе (квиз 19.11, «Ложится на то, что под ней»): высота — ровно rule.lift, как поставлена. Без отметки поднятая
    * вещь ложится на верх того, что под её серединой (стол, полка, тумба), а нет ничего — на пол (placed_place.ts, restTop): в
    * другом таком же помещении стол стоит иначе, и случайных парящих вещей там не будет. Настенных и подпотолочных не касается.
+   * У замены (replaces) rule.lift — высота над местом заменённой вещи игры (её низом): с отметкой замена висит над её местом,
+   * без отметки стоит там же, где стояла бы вещь игры (противоречие 281).
    */
   hang?: boolean;
+  /**
+   * Насколько ниже потолка, м — только у края «под потолком» (противоречие 280): ручка ↕ опускает такую вещь от потолка, а не
+   * уводит из-под него; уйти из-под потолка — только другим краем. В помещении с другим потолком вещь висит так же близко к
+   * нему. Нет поля — верхом под самый потолок (placed_place.ts, fitThing).
+   */
+  drop?: number;
   /** Кто и когда сохранил (из инструмента). */
   at?: string;
 }
@@ -208,6 +216,7 @@ export function placedProblems(x: unknown, props: Readonly<Record<string, PropSp
   if (f.slot !== undefined && !(typeof f.slot === 'string' && SLOT_RE.test(f.slot))) bad.push('вариант: «тип.номер»');
   if (f.open !== undefined && !PLACED_OPEN.includes(f.open as PlacedOpen)) bad.push('дверцы: как выпадет, закрыто или открыто');
   if (f.hang !== undefined && typeof f.hang !== 'boolean') bad.push('висит в воздухе: да или нет');
+  if (f.drop !== undefined && !within(f.drop, PLACED_LIFT)) bad.push('ниже потолка: от 0 до 2,6 м');
   bad.push(...tiltProblems(f.tilt));
   const off = f.offset as unknown;
   if (!Array.isArray(off) || off.length !== 2 || !off.every((v) => within(v, PLACED_OFFSET))) bad.push('сдвиг: не дальше 3 м от края');

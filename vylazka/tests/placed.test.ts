@@ -628,3 +628,56 @@ describe('поднятая вещь ложится на то, что под не
     }
   });
 });
+
+describe('ручка ↕: под потолком и замена (противоречия 280, 281)', () => {
+  const stool = ALL_PROPS.kk_stool!;
+  const a: AnchorSpot = { anchor: 'ceiling', x: 0, z: 0, floor: 0, ceil: 3, phi: 0, wall: 0, door: 0, entry: 0, room: 0, tier: 0, pit: false };
+
+  it('данные: «ниже потолка» — от 0 до 2,6 м', () => {
+    expect(placedProblems(spec({ drop: 0.3 }, { anchor: 'ceiling' }), ALL_PROPS, FIXED)).toEqual([]);
+    for (const bad of [-0.1, 2.7, Number.NaN, '0,3' as unknown as number]) {
+      expect(placedProblems(spec({ drop: bad }, { anchor: 'ceiling' }), ALL_PROPS, FIXED).join(), String(bad)).toContain('ниже потолка');
+    }
+  });
+
+  it('под потолком: вплотную или на drop ниже; ниже пола не уходит; у других краёв drop не действует', () => {
+    const top = a.ceil - 0.02 - stool.h;
+    const hung = spec({ prop: 'kk_stool', offset: [0, 0] }, { anchor: 'ceiling', lift: 0 });
+    expect(fitThing(hung, a, stool).at[1]).toBeCloseTo(top);
+    expect(fitThing({ ...hung, drop: 0.5 }, a, stool).at[1]).toBeCloseTo(top - 0.5);
+    // В низком помещении тот же отступ держится от его потолка, а глубже пола вещь не опускается.
+    expect(fitThing({ ...hung, drop: 0.5 }, { ...a, ceil: 2.4 }, stool).at[1]).toBeCloseTo(2.4 - 0.02 - stool.h - 0.5);
+    expect(fitThing({ ...hung, drop: 2.6 }, { ...a, ceil: 2.4 }, stool).at[1]).toBe(0);
+    // Под потолком вещь не ложится, сколько бы ни опустили: её держит потолок.
+    expect(fitThing({ ...hung, drop: 2 }, a, stool, { objects: [] }).at[1]).toBeCloseTo(top - 2);
+    const mid = spec({ prop: 'kk_stool', offset: [0, 0], drop: 0.5 }, { anchor: 'middle', lift: 0.9 });
+    expect(fitThing(mid, { ...a, anchor: 'middle' }, stool).at[1]).toBeCloseTo(0.9);
+  });
+
+  it('замена с «висит» висит над местом вещи игры на rule.lift; без отметки — там же, где вещь игры', () => {
+    const office = (placed: readonly PlacedSpec[]): BuiltLevel => buildLevel(generateLayout(20041113, 2, 'office'), { wear: 0, figures: [], placed });
+    const plain = office([]);
+    const count = new Map<string, number>();
+    for (const o of plain.objects ?? []) if (!o.flat) count.set(o.name, (count.get(o.name) ?? 0) + 1);
+    // Напольная вещь офиса с той же опорой, что у табурета: замена встаёт в её точку без сдвига.
+    const name = [...count.entries()]
+      .filter(([n]) => ALL_PROPS[n] && !FIXED.has(n) && ALL_PROPS[n]!.mount === stool.mount && ALL_PROPS[n]!.w >= 0.4 && ALL_PROPS[n]!.d >= 0.4)
+      .sort((x, y) => y[1] - x[1])[0]![0];
+    const olds = (plain.objects ?? []).filter((o) => o.name === name && !o.flat);
+    const plainStools = new Set((plain.objects ?? []).filter((o) => o.name === 'kk_stool').map((o) => o.id));
+    const fresh = (l: BuiltLevel): LevelObject[] => (l.objects ?? []).filter((o) => o.name === 'kk_stool' && !(plain.objects ?? []).some((p) => plainStools.has(p.id) && p.at.every((v, i) => Math.abs(v - o.at[i]!) < 1e-6)));
+    const swap = (over: Partial<PlacedSpec>): PlacedSpec => spec({ id: 'pl_swap_up', replaces: name, prop: 'kk_stool', ...over }, { count: 1, lift: 0.8 });
+    const upAbove = (l: BuiltLevel): number[] =>
+      fresh(l).map((s) => {
+        const o = olds.find((x) => Math.hypot(x.at[0] - s.at[0], x.at[2] - s.at[2]) < 1e-3);
+        expect(o, JSON.stringify(s.at)).toBeDefined();
+        return s.at[1] - o!.at[1];
+      });
+    const hung = upAbove(office([swap({ hang: true })]));
+    expect(hung.length).toBe(1);
+    expect(hung[0]).toBeCloseTo(0.8, 3);
+    const standing = upAbove(office([swap({})]));
+    expect(standing.length).toBe(1);
+    expect(standing[0]).toBeCloseTo(0, 3);
+  });
+});

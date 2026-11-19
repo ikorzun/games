@@ -70,6 +70,8 @@ export interface SwapTo {
   open?: PlacedOpen;
   /** Доворот по всем осям (world/tilt.ts): замена, повёрнутая партнёром. */
   tilt?: Tilt;
+  /** Висит выше места вещи игры на столько, м: замена с отметкой «висит» (placed.ts, PlacedSpec.hang; противоречие 281). */
+  lift?: number;
 }
 let swap: PropSwap | null = null;
 
@@ -129,10 +131,12 @@ function tracked(name: string, spec: PropSpec): PropSpec {
       const mode = typeof got === 'object' ? got.open : undefined;
       // Доворот по всем осям (world/tilt.ts): собранную замену сборка поворачивает вокруг её середины.
       const tilt = typeof got === 'object' ? got.tilt : undefined;
+      const lift = typeof got === 'object' ? (got.lift ?? 0) : 0;
       const other = sub !== name ? RAW[sub] : undefined;
       // Замену выбрал партнёр (её место — место вещи игры): проверку «не врастать» она не проходит, и её преграды проверка не
-      // видит — остальная обстановка встаёт, как при вещи игры.
-      const put = (at: Xf, n: string, sp: PropSpec): boolean => {
+      // видит — остальная обстановка встаёт, как при вещи игры. Висящая — над этим местом, на lift.
+      const put = (base: Xf, n: string, sp: PropSpec): boolean => {
+        const at = lift > 0 ? base.child(0, lift, 0) : base;
         const mk = tiltMark(at);
         const ok = asObject(at, n, () => withOpenMode(mode, () => sp.build(at, seed)), false, false, true);
         if (ok && tilt) applyTilt(at, mk, tilt, sp.mount);

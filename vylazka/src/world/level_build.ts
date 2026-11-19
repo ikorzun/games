@@ -319,8 +319,12 @@ function editsFor(layout: GenLayout, placed: readonly PlacedSpec[], removed: rea
       }
     }
     if (flat) return null;
-    // Дверцы по записи (квиз 18.11): закрыто или открыто всё; нет — как выпадет, с долей помещения.
-    const to = (s: PlacedSpec): string | SwapTo => (s.open || isTilted(s.tilt) ? { prop: s.prop, ...(s.open ? { open: s.open } : {}), ...(isTilted(s.tilt) ? { tilt: s.tilt } : {}) } : s.prop);
+    // Дверцы по записи (квиз 18.11): закрыто или открыто всё; нет — как выпадет, с долей помещения. С «висит» — над местом вещи
+    // игры на rule.lift (противоречие 281); без отметки — там же, где она.
+    const to = (s: PlacedSpec): string | SwapTo => {
+      const up = s.hang === true && s.rule.lift > 0 ? s.rule.lift : 0;
+      return s.open || isTilted(s.tilt) || up > 0 ? { prop: s.prop, ...(s.open ? { open: s.open } : {}), ...(isTilted(s.tilt) ? { tilt: s.tilt } : {}), ...(up > 0 ? { lift: up } : {}) } : s.prop;
+    };
     for (const s of swaps) {
       if (s.replaces !== name) continue;
       if (s.everywhere === true) return to(s);

@@ -31,7 +31,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { generateLayout } from '../../src/gen/layout';
 import type { GenRoom, WorldKind } from '../../src/gen/layout';
 import type { Vec3 } from '../../src/core/types';
-import { anchorSpots, fitSpot } from '../../src/world/figure_place';
+import { anchorSpots, CEILING_LIFT, fitSpot } from '../../src/world/figure_place';
 import type { AnchorSpot, PlaceWorld } from '../../src/world/figure_place';
 import { clonePose, handlePoint, HANDLES, solve } from '../../src/world/figure_ik';
 import type { Handle } from '../../src/world/figure_ik';
@@ -43,7 +43,7 @@ import { MeshBuilder } from '../../src/world/kit';
 import { buildLevel } from '../../src/world/level_build';
 import type { BuiltLevel } from '../../src/world/level';
 import { MAT_DEFS, hexToLinear } from '../../src/world/materials';
-import { placeable, placedProblems, PLACED_OPEN, removedProblems, swapFits } from '../../src/world/placed';
+import { placeable, placedProblems, PLACED_LIFT, PLACED_OPEN, removedProblems, swapFits } from '../../src/world/placed';
 import type { Aabb } from '../../src/world/colliders';
 import type { LevelObject } from '../../src/world/objects';
 import type { PlacedOpen, PlacedSpec, RemovedSpec } from '../../src/world/placed';
@@ -532,9 +532,13 @@ function nearest(list: readonly AnchorSpot[], x: number, z: number): { a: Anchor
   }
   return best ? { a: best, d: bd } : null;
 }
-/** У чего стоит точка: угол ближе 0,8 м, проём ближе 0,9 м, стена ближе 0,75 м от её края, иначе середина. */
-function anchorAt(x: number, z: number, lift: number, keepCeiling: boolean): { anchor: FigureAnchor; a: AnchorSpot } {
-  if (keepCeiling && lift > 1.4) {
+/**
+ * У чего стоит точка: угол ближе 0,8 м, проём ближе 0,9 м, стена ближе 0,75 м от её края, иначе середина. «Под потолком»
+ * остаётся под потолком на любой высоте (противоречие 280: раньше ниже 1,4 м край молча менялся навсегда) — уйти из-под
+ * потолка можно только другим краем справа.
+ */
+function anchorAt(x: number, z: number, keepCeiling: boolean): { anchor: FigureAnchor; a: AnchorSpot } {
+  if (keepCeiling) {
     const m = nearest(spotsOf('ceiling'), x, z);
     if (m) return { anchor: 'ceiling', a: m.a };
   }
@@ -553,12 +557,17 @@ function anchorAt(x: number, z: number, lift: number, keepCeiling: boolean): { a
 
 /** Записать в правило, где вещь (фигура) стоит сейчас в показанном помещении. */
 function derive(it: Item): void {
-  const lift = Math.max(0, it.at[1] - floorY);
-  const { anchor, a } = anchorAt(it.at[0], it.at[2], lift, it.spec.rule.anchor === 'ceiling');
+  // Высота — над полом; у замены — над местом вещи игры (её низом): так её ставит игра (props_all.ts, SwapTo.lift).
+  const lift = Math.max(0, it.at[1] - liftBase(it));
+  const { anchor, a } = anchorAt(it.at[0], it.at[2], it.spec.rule.anchor === 'ceiling');
   it.spec.rule.anchor = anchor;
   it.spec.offset = offsetFrom(a, it.at[0], it.at[2]);
-  it.spec.rule.lift = Math.round(Math.min(2.6, lift) * 100) / 100;
+  it.spec.rule.lift = Math.round(Math.min(PLACED_LIFT[1], lift) * 100) / 100;
   if (it.kind === 'thing') {
+    // Под потолком — отступ от потолка (противоречие 280): в помещении с другим потолком вещь висит так же близко к нему.
+    const drop = anchor === 'ceiling' && !it.spec.replaces ? Math.round(Math.min(PLACED_LIFT[1], Math.max(0, a.ceil - 0.02 - ALL_PROPS[it.spec.prop]!.h - it.at[1])) * 100) / 100 : 0;
+    if (drop > 0) it.spec.drop = drop;
+    else delete it.spec.drop;
     // У какого края помещения её отпустили — в долях его рамки: игра возьмёт ближайший такой край (PlacedSpec.near), а не
     // любой по жребию; в помещении другой формы — тот, что у того же его края.
     if (!it.spec.replaces) it.spec.near = roomNear(room, a.x, a.z);
@@ -635,10 +644,14 @@ function settle(it: Item): void {
 function placeInRoom(it: Item): void {
   if (it.kind === 'thing') delete it.obj;
   if (it.kind === 'thing' && it.spec.replaces) {
-    const o = swappable(it.spec.prop).find((x) => x.name === it.spec.replaces);
+    // Та же вещь игры, на месте которой стоит её призрак (computeEdits); нет — первая такая здесь.
+    const list = swappable(it.spec.prop).filter((x) => x.name === it.spec.replaces);
+    const own = edits.swapped.find((w) => w.spec.id === it.spec.id)?.o;
+    const o = own && list.includes(own) ? own : list[0];
     if (o) {
-      it.at = [o.at[0], o.at[1], o.at[2]];
-      it.rot = o.rot;
+      const f = swapSpot(it.spec, o);
+      it.at = f.at;
+      it.rot = f.rot;
       it.obj = o.id;
       return;
     }
@@ -653,6 +666,25 @@ function placeInRoom(it: Item): void {
     }
   }
   settle(it);
+}
+
+/**
+ * Где стоит замена на месте вещи игры o: там же и так же повёрнута (разные опоры — сдвиг на полглубины вдоль «лица», как при
+ * сборке уровня, world/props_all.ts, swapXf); с «висит» — выше на rule.lift (противоречие 281).
+ */
+function swapSpot(spec: PlacedSpec, o: LevelObject): { at: Vec3; rot: Turn } {
+  const p = ALL_PROPS[spec.prop]!;
+  const from = ALL_PROPS[o.name]!;
+  const f = ([[0, 1], [1, 0], [0, -1], [-1, 0]] as const)[o.rot]!;
+  const k = from.mount === 'floor' && p.mount === 'free' ? p.d / 2 : from.mount === 'free' && p.mount === 'floor' ? -from.d / 2 : 0;
+  const up = spec.hang === true ? spec.rule.lift : 0;
+  return { at: [o.at[0] + f[0] * k, o.at[1] + up, o.at[2] + f[1] * k], rot: o.rot as Turn };
+}
+
+/** От чего считается высота выбранного: у замены — от места вещи игры (её низа), у остального — от пола. */
+function liftBase(it: Item): number {
+  if (it.kind === 'thing' && it.spec.replaces && it.obj) return objById(it.obj)?.at[1] ?? floorY;
+  return floorY;
 }
 
 // ───────────────────────────── правки партнёра в показанном помещении ─────────────────────────────
@@ -670,7 +702,12 @@ interface MovedHere {
   /** Её коробка на новом месте (с местом для дверец, как у сборки уровня) — соседи в неё не врастают. */
   box?: Box;
 }
-let edits: { removed: RemovedHere[]; moved: MovedHere[] } = { removed: [], moved: [] };
+/** Сохранённая замена здесь: запись и вещь игры, на месте которой она стоит. */
+interface SwappedHere {
+  spec: PlacedSpec;
+  o: LevelObject;
+}
+let edits: { removed: RemovedHere[]; moved: MovedHere[]; swapped: SwappedHere[] } = { removed: [], moved: [], swapped: [] };
 const applies = (worlds: readonly WorldKind[], rooms: readonly string[]): boolean => worlds.includes(world) && (rooms.length === 0 || rooms.includes(roomType));
 
 /** Какие сохранённые записи о вещах игры касаются показанного помещения (как их применит сборка: сперва убранные). */
@@ -689,7 +726,26 @@ function computeEdits(): void {
     moved.push({ spec, o, spot: null });
   }
   moved.sort((a, b) => a.o.id - b.o.id);
-  edits = { removed, moved };
+  // Замены — на месте первых таких вещей игры здесь, как их ставит сборка (level_build.ts, editsFor): «здесь» раньше «везде»,
+  // «здесь» — не больше count; убранную и передвинутую не заменяют. Раньше призрак замены вставал по правилу у другой стены,
+  // а вещь игры под ним оставалась видна.
+  const swapped: SwappedHere[] = [];
+  const taken = new Set<number>([...removed.map((r) => r.o.id), ...moved.map((m) => m.o.id)]);
+  const swaps = ownFirst(
+    [...savedThings.values()].filter((t) => t.replaces && !t.moves && (t.everywhere === true || (applies(t.rule.worlds, t.rule.rooms) && mine(t.slot, t.rule.rooms)))),
+    (t) => slotFor(t.slot, t.rule.rooms),
+  ).sort((a, b) => Number(a.everywhere === true) - Number(b.everywhere === true));
+  for (const spec of swaps) {
+    let n = 0;
+    for (const o of swappable(spec.prop)) {
+      if (o.name !== spec.replaces || taken.has(o.id)) continue;
+      if (spec.everywhere !== true && n >= spec.rule.count) break;
+      taken.add(o.id);
+      swapped.push({ spec, o });
+      n++;
+    }
+  }
+  edits = { removed, moved, swapped };
 }
 
 /** Какие вещи игры сейчас не видны: заменённая, передвигаемая, убранные и передвинутые. */
@@ -704,6 +760,7 @@ function wantHidden(): Set<number> {
     }
   }
   for (const r of edits.removed) s.add(r.o.id);
+  for (const w of edits.swapped) s.add(w.o.id);
   // Передвинутая прячется, только если ей нашлось место по правилу: нет места — в игре стоит, где стояла.
   for (const m of edits.moved) if (m.spot) s.add(m.o.id);
   return s;
@@ -1164,7 +1221,7 @@ function renderGhosts(): void {
   frames.clear();
   for (const s of savedThings.values()) {
     if (cur && cur.kind === 'thing' && cur.spec.id === s.id) continue;
-    if (s.moves) continue;
+    if (s.moves || s.replaces) continue;
     if (!s.rule.worlds.includes(world) || (s.rule.rooms.length > 0 && !s.rule.rooms.includes(roomType)) || !mine(s.slot, s.rule.rooms)) continue;
     const p = ALL_PROPS[s.prop];
     if (!p) continue;
@@ -1174,6 +1231,16 @@ function renderGhosts(): void {
     mesh.position.set(it.at[0], it.at[1], it.at[2]);
     mesh.rotation.y = (it.rot * Math.PI) / 2;
     mesh.userData.ghost = s.id;
+    ghosts.add(mesh);
+  }
+  // Замены — на месте своей вещи игры (как ставит сборка уровня), с «висит» — выше.
+  for (const w of edits.swapped) {
+    if (cur && cur.kind === 'thing' && cur.spec.id === w.spec.id) continue;
+    const f = swapSpot(w.spec, w.o);
+    const mesh = new THREE.Mesh(thingGeo(w.spec), savedMat);
+    mesh.position.set(f.at[0], f.at[1], f.at[2]);
+    mesh.rotation.y = (f.rot * Math.PI) / 2;
+    mesh.userData.ghost = w.spec.id;
     ghosts.add(mesh);
   }
   for (const m of edits.moved) {
@@ -1613,6 +1680,18 @@ function ghostTops(x: number, z: number, self: string): number[] {
 }
 
 /**
+ * Передвинутая вещь игры стоит там же и так же, как её ставит игра здесь, — без «висит», дверец и наклона: правки нет
+ * (противоречие 281). Такая запись не сохраняется, а сохранённая удаляется (saveCur): иначе сантиметр вверх — вещь тут же
+ * ложится обратно — переставлял бы n-ю такую вещь во всех помещениях правила.
+ */
+function idleMove(c: ThingItem): boolean {
+  const m = c.spec.moves;
+  if (!m || c.spec.hang || c.spec.open !== undefined || isTilted(c.spec.tilt)) return false;
+  const o = findGame(lvl, room, m.thing, m.nth);
+  return !!o && o.rot === c.rot && Math.abs(o.at[0] - c.at[0]) < 0.005 && Math.abs(o.at[1] - c.at[1]) < 0.005 && Math.abs(o.at[2] - c.at[2]) < 0.005;
+}
+
+/**
  * Вещь без «висит» ложится на то, что под ней, — как в игре (квиз 19.11; placed_place.ts, restTop): отпустил в воздухе — легла на
  * стол, полку, тумбу или на пол. Ответ — для строки состояния.
  */
@@ -1620,6 +1699,19 @@ function restCur(): string {
   const c = cur;
   if (!c || c.kind !== 'thing') return liftText();
   const p = ALL_PROPS[c.spec.prop]!;
+  // Замена стоит на месте своей вещи игры; с «висит» — над ним (противоречие 281: подъём больше не снимает замену).
+  if (c.spec.replaces) {
+    const base = liftBase(c);
+    if (c.spec.hang) return c.at[1] - base > 0.005 ? `Висит в воздухе: ${fmtM(c.at[1] - base)} над местом вещи игры.` : 'Висит в воздухе: подними ручкой ↕.';
+    if (Math.abs(c.at[1] - base) < 1e-4) return liftText();
+    c.at = [c.at[0], base, c.at[2]];
+    derive(c);
+    dirty = true;
+    syncPanel();
+    return 'Замена стоит там же, где вещь игры. Чтобы висела выше, отметь «Висит в воздухе».';
+  }
+  // Под потолком — отступ от потолка (противоречие 280).
+  if (c.spec.rule.anchor === 'ceiling') return c.spec.drop ? `Под потолком: на ${fmtM(c.spec.drop)} ниже потолка.` : 'Под потолком: вплотную.';
   if (c.spec.hang) return `Висит в воздухе: ${fmtM(c.at[1] - floorY)} над полом.`;
   if (!rests(c.spec, p)) return liftText();
   // Свои и передвинутые вещи — тоже опора (грани призраков под серединой; середина — как у restTop).
@@ -1634,28 +1726,31 @@ function restCur(): string {
     dirty = true;
     syncPanel();
   }
+  if (idleMove(c)) return 'Легла обратно, где стояла: правки нет. Чтобы висела в воздухе, отметь «Висит в воздухе».';
   if (r.y - floorY < 0.005) return 'Под ней ничего нет — стоит на полу. Чтобы висела в воздухе, отметь «Висит в воздухе».';
   return r.under ? `Лежит на «${ruShort(r.under.name)}»: ${fmtM(r.y - floorY)} над полом.` : `Лежит на твоей вещи: ${fmtM(r.y - floorY)} над полом.`;
 }
 
-/** Поставить выбранное на высоту raw (at[1]): прилипание к опоре, шаг, пол, 2,6 м и потолок. */
+/**
+ * Поставить выбранное на высоту raw (at[1]): прилипание к опоре, шаг, пол, 2,6 м и потолок. Под потолком — не ниже 2,6 м от
+ * него, шаг от потолка: «вплотную» — ровно (противоречие 280). Замена — от места своей вещи игры и остаётся заменой (281).
+ */
 function setLift(raw: number, o: { free: boolean; tops: number[] | null; sp: LiftSpan }): void {
   const c = cur!;
-  const lo = floorY;
-  const hi = Math.max(lo, Math.min(floorY + LIFT_MAX, ceilY - 0.02 - o.sp.above));
+  const top = ceilY - 0.02 - o.sp.above;
+  const ceil = c.kind === 'thing' && c.spec.rule.anchor === 'ceiling' && !c.spec.replaces;
+  const base = liftBase(c);
+  const lo = ceil ? Math.max(floorY, top - PLACED_LIFT[1]) : c.kind === 'figure' && c.spec.rule.anchor === 'ceiling' ? Math.min(top, floorY + CEILING_LIFT) : base;
+  const hi = ceil ? Math.max(lo, top) : Math.max(lo, Math.min(base + LIFT_MAX, top));
   let y = Math.max(lo, Math.min(hi, raw));
   const stick = o.free || !o.tops ? undefined : o.tops.map((t) => t + o.sp.below).find((t) => Math.abs(t - y) < LIFT_STICK && t >= lo && t <= hi);
   if (stick !== undefined) y = stick;
   else {
     const step = o.free ? 0.01 : LIFT_STEP;
-    y = Math.max(lo, Math.min(hi, floorY + Math.round((y - floorY) / step) * step));
+    const from = ceil ? hi : base;
+    y = Math.max(lo, Math.min(hi, from + Math.round((y - from) / step) * step));
   }
   if (Math.abs(y - c.at[1]) < 1e-6) return;
-  if (c.kind === 'thing' && c.spec.replaces) {
-    delete c.spec.replaces;
-    delete c.obj;
-    setStatus('Уже не замена: вещь стоит сама по себе. Чтобы заменить снова — отпусти вещь с полки на вещь игры.');
-  }
   c.at = [c.at[0], y, c.at[2]];
   derive(c);
   dirty = true;
@@ -1711,9 +1806,12 @@ function endLift(): void {
 
 /** ⌘↑ / ⌘↓: выше или ниже на 5 см (⇧ — 25, ⌥ — 1). Серия нажатий подряд — один шаг отмены. */
 function liftKey(dir: 1 | -1, e: { shiftKey: boolean; altKey: boolean }): boolean {
+  // Вещь игры, которую только что взяли: её прячет лишь следующий кадр — к своему же верху она не липнет (как у ручки).
+  let self = 0;
   if (!cur && gameSel) {
     const o = objById(gameSel);
     if (!o || !gameOk(o)) return false;
+    self = o.id;
     beginGameDrag(o);
   } else if (!cur) return false;
   else if (performance.now() - liftKeyAt > 700) pushUndo();
@@ -1721,9 +1819,9 @@ function liftKey(dir: 1 | -1, e: { shiftKey: boolean; altKey: boolean }): boolea
   const c = cur!;
   const sp = curSpan();
   // Лежит (без «висит»): на следующую опору под ней — выше или ниже. Висит, манекен, настенная — на шаг.
-  if (c.kind === 'thing' && !c.spec.hang && ALL_PROPS[c.spec.prop]!.mount !== 'wall' && c.spec.rule.anchor !== 'ceiling') {
+  if (c.kind === 'thing' && !c.spec.hang && !c.spec.replaces && ALL_PROPS[c.spec.prop]!.mount !== 'wall' && c.spec.rule.anchor !== 'ceiling') {
     const hi = Math.min(floorY + LIFT_MAX, ceilY - 0.02 - sp.above);
-    const tops = supportTops(sp).map((t) => t + sp.below).filter((t) => t <= hi);
+    const tops = supportTops(sp, self).map((t) => t + sp.below).filter((t) => t <= hi);
     const y = c.at[1];
     const next = dir > 0 ? tops.find((t) => t > y + 0.005) : [...tops].reverse().find((t) => t < y - 0.005);
     if (next === undefined) {
@@ -1736,7 +1834,8 @@ function liftKey(dir: 1 | -1, e: { shiftKey: boolean; altKey: boolean }): boolea
   }
   const step = e.shiftKey ? 0.25 : e.altKey ? 0.01 : LIFT_STEP;
   setLift(c.at[1] + dir * step, { free: true, tops: null, sp });
-  setStatus(liftText());
+  // Висит, под потолком, настенная, манекен — строка про высоту; замена без «висит» встаёт обратно на место вещи игры.
+  setStatus(restCur());
   return true;
 }
 
@@ -1875,19 +1974,18 @@ function dropSwap(prop: string, o: LevelObject): void {
   pushUndo();
   const p = ALL_PROPS[prop]!;
   const from = ALL_PROPS[o.name]!;
-  // Разные опоры — сдвиг на полглубины вдоль «лица», как при сборке уровня (world/props_all.ts, swapXf).
-  const f: [number, number] = [[0, 1], [1, 0], [0, -1], [-1, 0]][o.rot] as [number, number];
-  const k = from.mount === 'floor' && p.mount === 'free' ? p.d / 2 : from.mount === 'free' && p.mount === 'floor' ? -from.d / 2 : 0;
   const it: ThingItem = {
     kind: 'thing',
     spec: { id: `pl_${stamp()}`, name: swapName(p.ru, from.ru), prop, rule: { worlds: [world], rooms: [roomType], anchor: 'wall', facing: 'room', lift: 0, count: 1 }, turn: 0, offset: [0, 0], replaces: o.name, slot: slotNow() },
-    at: [o.at[0] + f[0] * k, o.at[1], o.at[2] + f[1] * k],
-    rot: o.rot,
+    at: [0, 0, 0],
+    rot: o.rot as Turn,
+    // Номер вещи игры — до derive: высота замены считается от её места.
+    obj: o.id,
   };
+  // Разные опоры — сдвиг на полглубины вдоль «лица», как при сборке уровня (world/props_all.ts, swapXf).
+  it.at = swapSpot(it.spec, o).at;
   cur = it;
   derive(it);
-  it.spec.replaces = o.name;
-  it.obj = o.id;
   gameSel = 0;
   setStatus(`Вместо «${from.ru.split(',')[0]}» — «${p.ru.split(',')[0]}».`);
   pushStep({ t: 'rec', coll: 'things', add: true, spec: it.spec });
@@ -1912,7 +2010,7 @@ function drop(what: { prop: string } | { figure: true }, x: number, z: number): 
       rot: s.rot,
     };
     // Не у стены — лицом в комнату (от ближайшего проёма), как стоят вещи у края «посреди».
-    if (s.x === x && s.z === z) it.rot = rotOf(anchorAt(x, z, lift, false).a.phi);
+    if (s.x === x && s.z === z) it.rot = rotOf(anchorAt(x, z, false).a.phi);
     cur = it;
     derive(it);
     setStatus(`Поставлено: ${ruShort(what.prop)}.`);
@@ -1921,7 +2019,7 @@ function drop(what: { prop: string } | { figure: true }, x: number, z: number): 
       kind: 'figure',
       spec: { id: `fig_${stamp()}`, name: '', pose: clonePose(POSES.stand as Pose), material: 'wood', rule: { worlds: [world], rooms: [roomType], anchor: 'middle', facing: 'room', lift: 0, count: 1 }, yaw: 0, offset: [0, 0], slot: slotNow() },
       at: [x, floorY, z],
-      yaw: anchorAt(x, z, 0, false).a.phi,
+      yaw: anchorAt(x, z, false).a.phi,
     };
     cur = it;
     derive(it);
@@ -2551,7 +2649,7 @@ hangEl.addEventListener('change', () => {
 });
 liftEl.addEventListener('input', () => {
   if (!cur) return;
-  cur.at = [cur.at[0], floorY + Number(liftEl.value), cur.at[2]];
+  cur.at = [cur.at[0], liftBase(cur) + Number(liftEl.value), cur.at[2]];
   derive(cur);
   dirty = true;
   syncPanel();
@@ -2736,6 +2834,8 @@ function syncPanel(): void {
     change(() => {
       c.spec.rule.anchor = a;
       c.spec.offset = [0, c.kind === 'thing' && a === 'wall' ? -0.29 : 0];
+      // Под потолок — вплотную; из-под потолка — без отступа от него (противоречие 280).
+      if (c.kind === 'thing') delete c.spec.drop;
       settle(c);
     }),
   );
@@ -2779,11 +2879,13 @@ function syncPanel(): void {
   const rooms = c.spec.rule.rooms.length === 0 ? 'любые помещения' : c.spec.rule.rooms.map((r) => ROOM_RU[r] ?? r).join(', ');
   const TURN_RU = ['', ', и ещё на четверть вправо', ', и ещё задом наперёд', ', и ещё на четверть влево'];
   const turnTxt = c.kind === 'thing' ? TURN_RU[c.spec.turn]! : c.spec.yaw ? `, доворот ${c.spec.yaw}°` : '';
-  const lift = c.spec.rule.lift > 0 ? `${c.spec.rule.lift.toFixed(2)} м над полом · ` : '';
+  const drop = c.kind === 'thing' && c.spec.rule.anchor === 'ceiling' && !rp;
+  const lift = drop ? (c.kind === 'thing' && c.spec.drop ? `на ${c.spec.drop.toFixed(2)} м ниже потолка · ` : '') : c.spec.rule.lift > 0 ? `${c.spec.rule.lift.toFixed(2)} м над полом · ` : '';
+  const hangUp = c.kind === 'thing' && rp && c.spec.hang && c.spec.rule.lift > 0 ? `, висит на ${c.spec.rule.lift.toFixed(2)} м выше` : '';
   $('summary').textContent = rp
     ? all
-      ? `везде: вместо каждой «${ALL_PROPS[rp]?.ru.split(',')[0] ?? rp}» во всех местах и помещениях — там же и так же повёрнута`
-      : `${where} · ${rooms} · вместо «${ALL_PROPS[rp]?.ru.split(',')[0] ?? rp}» — там же и так же повёрнута · до ${c.spec.rule.count} шт. на место`
+      ? `везде: вместо каждой «${ALL_PROPS[rp]?.ru.split(',')[0] ?? rp}» во всех местах и помещениях — там же и так же повёрнута${hangUp}`
+      : `${where} · ${rooms} · вместо «${ALL_PROPS[rp]?.ru.split(',')[0] ?? rp}» — там же и так же повёрнута${hangUp} · до ${c.spec.rule.count} шт. на место`
     : mv
       ? `${where} · ${rooms} · ${mv.nth + 1}-я такая — ${ANCHOR_RU[c.spec.rule.anchor]}, ${FACING_RU[c.spec.rule.facing]}${turnTxt} · ${lift}в своём помещении`
       : `${where} · ${rooms} · ${ANCHOR_RU[c.spec.rule.anchor]}, ${FACING_RU[c.spec.rule.facing]}${turnTxt} · ${lift}${c.spec.rule.count} шт. на место`;
@@ -2948,11 +3050,14 @@ function editsChanged(): void {
 
 /** Положить запись в коллекцию (things — вещи и передвинутые, removed — убранные): сразу в память, потом в базу. */
 async function putRecord(coll: Coll3, spec: PlacedSpec | RemovedSpec | FigureSpec): Promise<boolean> {
+  const was = coll === 'things' ? savedThings.get(spec.id) : undefined;
   if (coll === 'things') savedThings.set(spec.id, spec as PlacedSpec);
   else if (coll === 'figures') savedFigs.set(spec.id, spec as FigureSpec);
   else savedRemoved.set(spec.id, spec as RemovedSpec);
-  // Убранная и передвинутая меняют, что видно из вещей игры, — помещение пересобирается; прочее — только список и призраки.
-  if (coll === 'removed' || (spec as PlacedSpec).moves) editsChanged();
+  // Убранная, передвинутая и замена (и бывшая замена) меняют, что видно из вещей игры, — помещение пересобирается; прочее —
+  // только список и призраки.
+  const p = spec as PlacedSpec;
+  if (coll === 'removed' || p.moves || p.replaces || was?.moves || was?.replaces) editsChanged();
   else {
     renderGhosts();
     renderSaved();
@@ -3299,6 +3404,12 @@ async function saveCur(): Promise<void> {
   saveTimer = 0;
   const c = cur;
   if (!c) return;
+  // Вещь игры легла, где стояла: правки нет — записи «передвинута» не будет, а сохранённую убрать (противоречие 281).
+  if (c.kind === 'thing' && idleMove(c)) {
+    if (savedThings.has(c.spec.id)) await dropRecord('things', c.spec);
+    if (cur === c && !saveTimer) setSave('saved');
+    return;
+  }
   if (!c.spec.name.trim()) c.spec.name = defaultName(c);
   const bad = curBad(c);
   if (bad.length > 0) {
@@ -3778,7 +3889,7 @@ const gameInfo = (o: LevelObject) => ({
     renderShelf();
     return shelfEl.childElementCount;
   },
-  edits: () => ({ removed: edits.removed.map((r) => ({ id: r.spec.id, obj: r.o.id })), moved: edits.moved.map((m) => ({ id: m.spec.id, obj: m.o.id, spot: m.spot })) }),
+  edits: () => ({ removed: edits.removed.map((r) => ({ id: r.spec.id, obj: r.o.id })), moved: edits.moved.map((m) => ({ id: m.spec.id, obj: m.o.id, spot: m.spot })), swapped: edits.swapped.map((w) => ({ id: w.spec.id, obj: w.o.id })) }),
   saved: () => ({ things: [...savedThings.values()], removed: [...savedRemoved.values()], figures: [...savedFigs.values()], marks: Object.fromEntries(marks) }),
   hidden: () => [...hidden],
   coverage: () => $('coverage').textContent,
