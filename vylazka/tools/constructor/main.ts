@@ -1056,6 +1056,12 @@ function refresh(): void {
   const so = gameSel ? objById(gameSel) : undefined;
   selHelper.visible = !!so;
   if (so) selHelper.box.copy(box3(so));
+  liftAnchor = null;
+  if (so && !cur && gameOk(so)) {
+    const b = box3(so);
+    liftAnchor = new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y, (b.min.z + b.max.z) / 2);
+    liftGameY = so.at[1];
+  }
   syncGizmo();
   if (!cur) {
     problems = [];
@@ -1079,6 +1085,7 @@ function refresh(): void {
     boxHelper.box.set(new THREE.Vector3(chk.box.minX, chk.box.minY, chk.box.minZ), new THREE.Vector3(chk.box.maxX, chk.box.maxY, chk.box.maxZ));
     (boxHelper.material as THREE.LineBasicMaterial).color.set(problems.length > 0 ? 0xdc7f73 : 0x86b98c);
     boxHelper.visible = true;
+    liftAnchor = new THREE.Vector3((chk.box.minX + chk.box.maxX) / 2, chk.box.maxY, (chk.box.minZ + chk.box.maxZ) / 2);
     const yaw = (cur.rot * Math.PI) / 2;
     arrow.position.set(cur.at[0], floorY + 0.02, cur.at[2]);
     arrow.setDirection(new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)));
@@ -1101,6 +1108,7 @@ function refresh(): void {
     const s = skeleton(cur.spec.pose);
     for (const h of HANDLES) grips.get(h)!.position.fromArray(handlePoint(s, h));
     grips.get('pelvis')!.position.fromArray(s.pelvis);
+    liftAnchor = new THREE.Vector3(cur.at[0], cur.at[1] + Math.max(...HANDLES.map((h) => handlePoint(s, h)[1])), cur.at[2]);
     figGroup.position.set(cur.at[0], cur.at[1], cur.at[2]);
     figGroup.rotation.y = cur.yaw;
     figGroup.visible = true;
@@ -1280,6 +1288,11 @@ renderer.domElement.addEventListener(
       const hit = ray.intersectObjects(holder.children, false)[0];
       if (hit) {
         take();
+        // С ⌥ — по вертикали (как таз манекена).
+        if (e.altKey) {
+          startLift(e);
+          return;
+        }
         pushUndo();
         drag = { what: 'thing' };
         return;
@@ -1324,6 +1337,10 @@ renderer.domElement.addEventListener(
 /** Вещь под мышью ищется раз в кадр: сетка помещения большая. */
 let hoverAt: { clientX: number; clientY: number } | null = null;
 renderer.domElement.addEventListener('pointermove', (e) => {
+  if (liftDrag) {
+    moveLift(e);
+    return;
+  }
   if (carry) {
     const q = floorHit(e);
     carryMesh.visible = !!q;
@@ -1339,6 +1356,11 @@ renderer.domElement.addEventListener('pointermove', (e) => {
     if (Math.hypot(e.clientX - press.x, e.clientY - press.y) < 5) return;
     const o = press.o;
     press = null;
+    // Вещь игры с ⌥ в «Двигать» — по вертикали.
+    if (e.altKey && tool === 'move') {
+      if (!startLift(e, o)) controls.enabled = true;
+      return;
+    }
     beginGameDrag(o);
     drag = { what: 'thing' };
   }
@@ -1403,6 +1425,10 @@ const endDrag = (): void => {
   syncPanel();
 };
 renderer.domElement.addEventListener('pointerup', (e) => {
+  if (liftDrag) {
+    endLift();
+    return;
+  }
   if (carry) {
     const q = floorHit(e);
     const what = carry;
@@ -1431,6 +1457,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
 renderer.domElement.addEventListener('pointercancel', () => {
   press = null;
   blank = null;
+  endLift();
   endDrag();
 });
 window.addEventListener('pointerup', () => {
@@ -1498,6 +1525,199 @@ function turn(dir: 1 | -1): void {
   syncPanel();
 }
 
+// ───────────────────────────── высота: ручка ↕ ─────────────────────────────
+
+/**
+ * Высота в «Двигать» (партнёр 19.11, 00:18: «в этом режиме нужно перемещение вещи по вертикали»). Над выбранной вещью — ручка ↕
+ * с высотой над полом: тянешь вверх-вниз — вещь поднимается и опускается. Шаг 5 см, с ⇧ — по сантиметру; у верха того, что
+ * под ней (стол, полка, тумба), и у пола — прилипает. То же — ⌥ и тянуть саму вещь (у манекена — шарик таза); ⌘↑ / ⌘↓
+ * (⇧ — 25 см, ⌥ — 1 см). Высота — та же, что ползунок «Над полом» (правило lift): от пола до 2,6 м и не выше потолка; в игре
+ * вещь встаёт на ту же высоту над полом (placed_place.ts, fitThing). Вещь игры от подъёма становится передвинутой, замена —
+ * отдельной вещью (как от сдвига по полу).
+ */
+const LIFT_MAX = 2.6;
+const LIFT_STEP = 0.05;
+const LIFT_STICK = 0.04;
+const liftHandle = document.getElementById('lifthandle') as HTMLButtonElement;
+const liftVal = document.getElementById('liftval') as HTMLElement;
+/** Верх середины выбранного — над ним ручка (считает refresh); null — ручки нет. И высота выбранной вещи игры. */
+let liftAnchor: THREE.Vector3 | null = null;
+let liftGameY = 0;
+/** Где выбранное по высоте: низ ниже at[1] на below, верх выше на above; след на полу. */
+interface LiftSpan {
+  below: number;
+  above: number;
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+/** Тянут по вертикали: вертикальная плоскость лицом к виду (null — вид почти сверху, тогда по пикселям), откуда начали. */
+let liftDrag: { plane: THREE.Plane | null; start: number; y0: number; startPx: number; mpp: number; tops: number[]; sp: LiftSpan } | null = null;
+let liftKeyAt = 0;
+const fmtM = (v: number): string => `${(Math.round(v * 100) / 100).toFixed(2).replace('.', ',')} м`;
+const liftText = (): string => (cur ? (cur.at[1] - floorY < 0.005 ? 'Высота: на полу.' : `Высота: ${fmtM(cur.at[1] - floorY)} над полом.`) : '');
+
+function curSpan(): LiftSpan {
+  const c = cur!;
+  if (c.kind === 'thing') {
+    const b = curCheck(c).box;
+    return { below: c.at[1] - b.minY, above: b.maxY - c.at[1], minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ };
+  }
+  const sk = skeleton(c.spec.pose);
+  const top = Math.max(...HANDLES.map((h) => handlePoint(sk, h)[1]));
+  return { below: 0, above: top, minX: c.at[0] - 0.25, maxX: c.at[0] + 0.25, minZ: c.at[2] - 0.25, maxZ: c.at[2] + 0.25 };
+}
+
+/**
+ * На что выбранное может лечь здесь: пол и верх того, что под его следом, — мебели игры, передвинутых и своих вещей. Верх — по
+ * рамке вещи, как её видно (преграды упрощены: у стола она ниже столешницы). self — вещь игры, которую только что взяли: к
+ * своему же верху она не липнет.
+ */
+function supportTops(sp: LiftSpan, self = 0): number[] {
+  const tops = [floorY];
+  const under = (b: { minX: number; maxX: number; minZ: number; maxZ: number }): boolean =>
+    b.maxX > sp.minX + 0.03 && b.minX < sp.maxX - 0.03 && b.maxZ > sp.minZ + 0.03 && b.minZ < sp.maxZ - 0.03;
+  for (const o of lvl.objects ?? []) {
+    if (o.id === self || o.flat || hidden.has(o.id)) continue;
+    const top = o.max[1];
+    if (top <= floorY + 0.03 || top >= ceilY - 0.3 || o.min[1] > floorY + LIFT_MAX) continue;
+    if (under({ minX: o.min[0], maxX: o.max[0], minZ: o.min[2], maxZ: o.max[2] }) && roomOfObj(lvl, o) === room) tops.push(top);
+  }
+  for (const m of edits.moved) {
+    if (m.box && !(cur?.kind === 'thing' && m.spec.id === cur.spec.id) && under(m.box)) tops.push(m.box.maxY);
+  }
+  for (const g of ghosts.children) {
+    if (!savedThings.has(g.userData.ghost as string)) continue;
+    const bb = new THREE.Box3().setFromObject(g);
+    if (under({ minX: bb.min.x, maxX: bb.max.x, minZ: bb.min.z, maxZ: bb.max.z })) tops.push(bb.max.y);
+  }
+  return tops;
+}
+
+/** Поставить выбранное на высоту raw (at[1]): прилипание к опоре, шаг, пол, 2,6 м и потолок. */
+function setLift(raw: number, o: { free: boolean; tops: number[] | null; sp: LiftSpan }): void {
+  const c = cur!;
+  const lo = floorY;
+  const hi = Math.max(lo, Math.min(floorY + LIFT_MAX, ceilY - 0.02 - o.sp.above));
+  let y = Math.max(lo, Math.min(hi, raw));
+  const stick = o.free || !o.tops ? undefined : o.tops.map((t) => t + o.sp.below).find((t) => Math.abs(t - y) < LIFT_STICK && t >= lo && t <= hi);
+  if (stick !== undefined) y = stick;
+  else {
+    const step = o.free ? 0.01 : LIFT_STEP;
+    y = Math.max(lo, Math.min(hi, floorY + Math.round((y - floorY) / step) * step));
+  }
+  if (Math.abs(y - c.at[1]) < 1e-6) return;
+  if (c.kind === 'thing' && c.spec.replaces) {
+    delete c.spec.replaces;
+    delete c.obj;
+    setStatus('Уже не замена: вещь стоит сама по себе. Чтобы заменить снова — отпусти вещь с полки на вещь игры.');
+  }
+  c.at = [c.at[0], y, c.at[2]];
+  derive(c);
+  dirty = true;
+  syncPanel();
+}
+
+/** Взять выбранное (или вещь игры game) по вертикали: false — нечего поднимать. Отмена — одним шагом на всё перетаскивание. */
+function startLift(e: { clientX: number; clientY: number }, game?: LevelObject): boolean {
+  const o = game ?? (!cur && gameSel ? objById(gameSel) : undefined);
+  if (o) {
+    if (!gameOk(o)) return false;
+    beginGameDrag(o);
+  } else if (!cur) return false;
+  else pushUndo();
+  const c = cur!;
+  const sp = curSpan();
+  const mid = new THREE.Vector3((sp.minX + sp.maxX) / 2, c.at[1], (sp.minZ + sp.maxZ) / 2);
+  const f = cam.getWorldDirection(new THREE.Vector3());
+  const n = new THREE.Vector3(f.x, 0, f.z);
+  // Взгляд почти сверху (круче ~66°): вертикальная плоскость к нему почти ребром — тогда высота по сдвигу мыши.
+  const plane = n.lengthSq() > 0.16 ? new THREE.Plane().setFromNormalAndCoplanarPoint(n.normalize(), mid) : null;
+  setNdc(e);
+  ray.setFromCamera(ndc, cam);
+  const q = plane ? ray.ray.intersectPlane(plane, new THREE.Vector3()) : null;
+  const mpp = (2 * cam.position.distanceTo(mid) * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2))) / Math.max(1, renderer.domElement.clientHeight);
+  liftDrag = { plane: q ? plane : null, start: q ? q.y : 0, y0: c.at[1], startPx: e.clientY, mpp, tops: supportTops(sp, o?.id ?? 0), sp };
+  controls.enabled = false;
+  document.body.classList.add('is-lifting');
+  return true;
+}
+function moveLift(e: PointerEvent): void {
+  if (!liftDrag || !cur) return;
+  let dy = (liftDrag.startPx - e.clientY) * liftDrag.mpp;
+  if (liftDrag.plane) {
+    setNdc(e);
+    ray.setFromCamera(ndc, cam);
+    const q = ray.ray.intersectPlane(liftDrag.plane, new THREE.Vector3());
+    if (q) dy = q.y - liftDrag.start;
+  }
+  setLift(liftDrag.y0 + dy, { free: e.shiftKey, tops: liftDrag.tops, sp: liftDrag.sp });
+}
+function endLift(): void {
+  if (!liftDrag) return;
+  liftDrag = null;
+  controls.enabled = true;
+  document.body.classList.remove('is-lifting');
+  scheduleSave();
+  setStatus(liftText());
+  dirty = true;
+  syncPanel();
+}
+
+/** ⌘↑ / ⌘↓: выше или ниже на 5 см (⇧ — 25, ⌥ — 1). Серия нажатий подряд — один шаг отмены. */
+function liftKey(dir: 1 | -1, e: { shiftKey: boolean; altKey: boolean }): boolean {
+  if (!cur && gameSel) {
+    const o = objById(gameSel);
+    if (!o || !gameOk(o)) return false;
+    beginGameDrag(o);
+  } else if (!cur) return false;
+  else if (performance.now() - liftKeyAt > 700) pushUndo();
+  liftKeyAt = performance.now();
+  const step = e.shiftKey ? 0.25 : e.altKey ? 0.01 : LIFT_STEP;
+  setLift(cur!.at[1] + dir * step, { free: true, tops: null, sp: curSpan() });
+  setStatus(liftText());
+  return true;
+}
+
+/** Ручка — над верхом выбранного, каждый кадр (вид крутят); только в «Двигать». */
+let liftShown = '';
+function placeLiftHandle(): void {
+  const show = tool === 'move' && !carry && !drag && liftAnchor !== null && (cur !== null || gameSel > 0);
+  if (!show) {
+    if (!liftHandle.hidden && !liftDrag) liftHandle.hidden = true;
+    return;
+  }
+  const v = liftAnchor!.clone().project(cam);
+  const w = renderer.domElement.clientWidth;
+  const h = renderer.domElement.clientHeight;
+  if (v.z > 1 || v.z < -1) {
+    liftHandle.hidden = true;
+    return;
+  }
+  const x = Math.max(44, Math.min(w - 44, ((v.x + 1) / 2) * w));
+  const y = Math.max(36, Math.min(h - 6, ((1 - v.y) / 2) * h - 12));
+  liftHandle.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -100%)`;
+  const text = fmtM(cur ? cur.at[1] - floorY : liftGameY - floorY);
+  if (text !== liftShown) {
+    liftShown = text;
+    liftVal.textContent = text;
+  }
+  liftHandle.hidden = false;
+}
+liftHandle.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (startLift(e)) liftHandle.setPointerCapture(e.pointerId);
+});
+liftHandle.addEventListener('pointermove', (e) => {
+  if (liftDrag) moveLift(e);
+});
+liftHandle.addEventListener('pointerup', endLift);
+liftHandle.addEventListener('pointercancel', endLift);
+liftHandle.addEventListener('lostpointercapture', endLift);
+
 /** Отменить последний шаг: правку или запись в базе (убранная, удалённая передвинутая). */
 function undoStep(): boolean {
   const s = undo.pop();
@@ -1549,6 +1769,10 @@ window.addEventListener('keydown', (e) => {
       e.preventDefault();
       void deleteSelected();
     }
+    return;
+  }
+  if ((e.metaKey || e.ctrlKey) && (e.code === 'ArrowUp' || e.code === 'ArrowDown')) {
+    if (liftKey(e.code === 'ArrowUp' ? 1 : -1, e)) e.preventDefault();
     return;
   }
   if (e.code === 'KeyQ') turn(-1);
@@ -1672,6 +1896,7 @@ function loop(): void {
   }
   controls.update();
   renderer.render(scene, cam);
+  placeLiftHandle();
   card.frame();
 }
 
@@ -3330,6 +3555,7 @@ function setupNative(): void {
         setStatus(OWN_NOTE());
       } else if (name === 'tool' && (arg === 'move' || arg === 'rotate')) setTool(arg);
       else if (name === 'undo') undoStep();
+      else if (name === 'lift' && (arg === 1 || arg === -1)) liftKey(arg, { shiftKey: false, altKey: false });
       else if (name === 'duplicate') duplicate();
       else if (name === 'delete') void deleteSelected();
       else if (name === 'deselect') deselect();
@@ -3417,6 +3643,7 @@ const gameInfo = (o: LevelObject) => ({
   },
   unmove: () => cur?.kind === 'thing' && cur.spec.moves && unmove(cur.spec),
   /** Стрелка: ax — вбок (+1 вправо), az — от себя (+1); shift/alt — шаг 50 / 2 см. */
+  liftTops: () => (cur ? supportTops(curSpan()).map((t) => Math.round((t - floorY) * 1000) / 1000) : null),
   nudge: (ax: number, az: number, shift = false, alt = false) => nudge(ax, az, { shiftKey: shift, altKey: alt }) && cur ? { at: cur.at, rot: cur.kind === 'thing' ? cur.rot : null } : null,
   save: () => saveCur(),
   fresh: () => deselect(),
