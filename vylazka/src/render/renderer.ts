@@ -401,10 +401,23 @@ const SCAN = { perLight: 24, max: 3.5, hold: 7, lodDist: 3.5, far: 28, sow: 45, 
 const SLIDE = { washFrom: 0.012, washTo: 0.11, gain: 0.085 } as const;
 /** Яркость скана сонара по целым стенам (WORLD_FRAG, uSonarTint): кольцо из точек, видное и в полной темноте. */
 const SONAR_SCAN = 1.2;
-/** Сколько гроздей грибов рисуется разом. */
-export const SPORES_MAX = 240;
-/** На низком качестве — не больше стольких гроздей (ближайших): у видов теперь по 600–1200 треугольников. */
-const SPORES_LOW = 120;
+/**
+ * Сколько гроздей грибов рисуется разом. Мест вчетверо с лишним больше прежнего (партнёр 19.11: «нужно увеличить плотность
+ * грибов минимум в 4 раза»): рядом с Осыпью на позднем круге их проросло до шестисот, на «высоком» видны все.
+ */
+export const SPORES_MAX = 880;
+/** Предел по качеству — ближайшие столько гроздей (места уже упорядочены от ближнего): у видов по 350–1150 треугольников. */
+const SPORES_CAP: Readonly<Record<Quality, number>> = { low: 240, med: 480, high: SPORES_MAX, ultra: SPORES_MAX };
+/**
+ * Дальше стольких метров от камеры гроздь рисуется упрощённой (world/mushrooms.ts, LOD_FAR): вдвое меньше треугольников,
+ * а на шести метрах гроздь — несколько десятков точек кадра, разницы не видно.
+ */
+const SPORE_LOD_AT = 6;
+/**
+ * Грибы вне кадра не рисуются: шар грозди (радиус ball × размер) проверяется по пирамиде обзора этого кадра (с запасом margin
+ * радиан — на дрожь камеры и край кадра) — копий меньше вдвое.
+ */
+const SPORE_CULL = { ball: 0.55, margin: 0.12 } as const;
 /** Чисел на гроздь (systems/spores.ts, SPORE_STRIDE): x, y, z, поворот, размер, род, форма. */
 const SPORE_STRIDE = 7;
 
@@ -564,6 +577,13 @@ export class GameRenderer {
   private readonly sporeQ = new THREE.Quaternion();
   private readonly sporeS = new THREE.Vector3();
   private readonly sporeP = new THREE.Vector3();
+  private readonly sporeView = new THREE.Frustum();
+  private readonly sporeVP = new THREE.Matrix4();
+  /** Что рисовать из грибов (setSpores): раскладка по сеткам — в render, когда камера кадра уже выставлена. */
+  private sporeData: Float32Array | null = null;
+  private sporeCount = 0;
+  /** Сколько гроздей нарисовано в последнем кадре и сколько из них упрощённых (для проверки и замера). */
+  readonly sporeStats = { shown: 0, far: 0, culled: 0 };
   /** Призрак Осыпи: то же тело, отражённое из-за спины вперёд. */
   private readonly ghostMat: THREE.ShaderMaterial;
   private readonly ghostPoints: THREE.Points;
@@ -1583,40 +1603,85 @@ export class GameRenderer {
 
   /**
    * Грибы: count мест по SPORE_STRIDE чисел — x, y, z, поворот, размер, род (0 — угол: гроздь крупнее; 1 — пол), форма грозди.
-   * Места уже упорядочены от ближнего: на низком качестве берутся первые SPORES_LOW. Тени грибы не дают и точками не
-   * рассыпаются: это не вещь места, а то, что проросло сквозь него.
+   * Места уже упорядочены от ближнего: берутся первые, сколько позволяет качество (SPORES_CAP), — из тех, что в кадре. Дальние
+   * (SPORE_LOD_AT) — упрощённой сеткой. Тени грибы не дают и точками не рассыпаются: это не вещь места, а то, что проросло
+   * сквозь него. Раскладываются в render (layoutSpores): «в кадре» — значит в кадре этого же кадра, и после скачка тоже.
    */
   setSpores(data: Float32Array, count: number): void {
+    this.sporeData = data;
+    this.sporeCount = count;
+    if (count === 0) {
+      for (const mesh of this.sporeMeshes.values()) {
+        mesh.count = 0;
+        mesh.visible = false;
+      }
+    }
+  }
+
+  private layoutSpores(): void {
+    const data = this.sporeData;
+    const count = this.sporeCount;
+    if (!data || count === 0) return;
     const S = SPORE_STRIDE;
-    const n = Math.min(count, this.quality === 'low' ? SPORES_LOW : SPORES_MAX);
+    const cap = SPORES_CAP[this.quality];
     const up = this.sporeP.set(0, 1, 0);
+    const cam = this.camera;
+    this.sporeView.setFromProjectionMatrix(this.sporeVP.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+    const planes = this.sporeView.planes;
+    const slack = Math.sin(SPORE_CULL.margin);
+    const cx = cam.position.x;
+    const cy = cam.position.y;
+    const cz = cam.position.z;
     this.sporeUsed.clear();
-    for (let i = 0; i < n; i++) {
+    const st = this.sporeStats;
+    st.shown = 0;
+    st.far = 0;
+    st.culled = 0;
+    for (let i = 0; i < count && st.shown < cap; i++) {
+      const x = data[i * S]!;
+      const y = data[i * S + 1]!;
+      const z = data[i * S + 2]!;
+      const k = data[i * S + 4]! * (data[i * S + 5]! < 0.5 ? 1.5 : 1);
+      const d = Math.hypot(x - cx, y - cy, z - cz);
+      // Шар грозди: центр — на высоте половины гриба, радиус с запасом на поворот взгляда (чем дальше, тем больше).
+      const r = SPORE_CULL.ball * k + d * slack;
+      let inside = true;
+      for (let p = 0; p < 6 && inside; p++) {
+        const pl = planes[p]!;
+        if (pl.normal.x * x + pl.normal.y * (y + 0.2 * k) + pl.normal.z * z + pl.constant < -r) inside = false;
+      }
+      if (!inside) {
+        st.culled += 1;
+        continue;
+      }
+      const lod = d > SPORE_LOD_AT ? 1 : 0;
       const form = data[i * S + 6]!;
-      let mesh = this.sporeMeshes.get(form);
+      const key = form * 2 + lod;
+      let mesh = this.sporeMeshes.get(key);
       if (!mesh) {
         if (!this.sporeMat) {
           this.sporeMat = this.worldLike();
           this.sporeMat.uniforms.uThing = { value: new THREE.Vector4(0, 0, 2, 0) };
           this.sporeMat.defines = { ...this.worldMat.defines };
         }
-        mesh = new THREE.InstancedMesh(this.makeMesh(mushroomForm(form), 0, 0).geometry, this.sporeMat, SPORES_MAX);
+        mesh = new THREE.InstancedMesh(this.makeMesh(mushroomForm(form, lod), 0, 0).geometry, this.sporeMat, SPORES_MAX);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.frustumCulled = false;
         mesh.matrixAutoUpdate = false;
         mesh.layers.set(1);
         this.scene.add(mesh);
-        this.sporeMeshes.set(form, mesh);
+        this.sporeMeshes.set(key, mesh);
       }
-      const c = this.sporeUsed.get(form) ?? 0;
-      const k = data[i * S + 4]! * (data[i * S + 5]! < 0.5 ? 1.5 : 1);
+      const c = this.sporeUsed.get(key) ?? 0;
       this.sporeQ.setFromAxisAngle(up, data[i * S + 3]!);
-      this.sporeM.compose(this.tmpV.set(data[i * S]!, data[i * S + 1]!, data[i * S + 2]!), this.sporeQ, this.sporeS.set(k, k, k));
+      this.sporeM.compose(this.tmpV.set(x, y, z), this.sporeQ, this.sporeS.set(k, k, k));
       mesh.setMatrixAt(c, this.sporeM);
-      this.sporeUsed.set(form, c + 1);
+      this.sporeUsed.set(key, c + 1);
+      st.shown += 1;
+      st.far += lod;
     }
-    for (const [form, mesh] of this.sporeMeshes) {
-      const c = this.sporeUsed.get(form) ?? 0;
+    for (const [key, mesh] of this.sporeMeshes) {
+      const c = this.sporeUsed.get(key) ?? 0;
       mesh.count = c;
       mesh.visible = c > 0;
       if (c > 0) mesh.instanceMatrix.needsUpdate = true;
@@ -2220,6 +2285,7 @@ export class GameRenderer {
     cam.position.set(v.camPos[0], v.camPos[1], v.camPos[2]);
     cam.rotation.set(v.camPitch, v.camYaw, v.camRoll);
     cam.updateMatrixWorld(true);
+    this.layoutSpores();
 
     // Отсечение чанков: дальше черты видимости всё равно чёрный туман, а чужой ярус виден только
     // с лестницы и от её площадок.
@@ -2731,8 +2797,8 @@ export class GameRenderer {
    * points — сколько точек-сплатов отдано видеокарте в прошлом кадре, clouds — у скольких сеток есть
    * облака точек, cells — сколько клеток с точками сейчас живо (у сеток рядом с игроком).
    */
-  info(): { calls: number; triangles: number; width: number; height: number; quality: Quality; fine: number; programs: number; chunks: number; visible: number; points: number; clouds: number; cells: number; slides: number } {
-    return { calls: this.lastCalls, triangles: this.lastTris, width: this.width, height: this.height, quality: this.quality, fine: this.fine, programs: this.renderer.info.programs?.length ?? 0, chunks: this.chunks.length, visible: this.chunks.filter((m) => m.visible).length, points: this.clouds.drawn, clouds: this.clouds.count, cells: this.clouds.cells, slides: this.chunks.filter((m) => m.userData.slide !== undefined).length };
+  info(): { calls: number; triangles: number; width: number; height: number; quality: Quality; fine: number; programs: number; chunks: number; visible: number; points: number; clouds: number; cells: number; slides: number; spores: { shown: number; far: number; culled: number } } {
+    return { calls: this.lastCalls, triangles: this.lastTris, width: this.width, height: this.height, quality: this.quality, fine: this.fine, programs: this.renderer.info.programs?.length ?? 0, chunks: this.chunks.length, visible: this.chunks.filter((m) => m.visible).length, points: this.clouds.drawn, clouds: this.clouds.count, cells: this.clouds.cells, slides: this.chunks.filter((m) => m.userData.slide !== undefined).length, spores: { ...this.sporeStats } };
   }
 
   /**

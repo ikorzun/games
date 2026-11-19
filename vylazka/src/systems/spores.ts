@@ -37,10 +37,20 @@ export const FIELD_FLORA: readonly string[] = ['fire_coral', 'false_morel', 'fly
 /** Чисел на место в списке для рендера: x, y, z, поворот, размер, род (0 — угол, 1 — пол), форма грозди. */
 export const SPORE_STRIDE = 7;
 
+/**
+ * Чем место служит знаку (куратор, пачка 51, противоречие 321): голова — гроздь в самом углу, знак «она идёт оттуда», видна
+ * издалека и одна держит след; спутники пятна (step — пара 1 или 2) и подножия стен прорастают, только когда она ближе, —
+ * пятно растёт к ней, а не стоит полосой вдоль всех стен; поле — пол вокруг неё самой.
+ */
+export type SporeRole = 'head' | 'patch' | 'foot' | 'field';
+
 export interface SporeSite {
   pos: Vec3;
   /** Угол (знак) или пол вокруг (поле). */
   kind: 'corner' | 'floor';
+  role: SporeRole;
+  /** Пара спутников пятна (1, 2); у остальных 0. */
+  step: number;
   /** Насколько выросло, 0..1. */
   grow: number;
   /** След: ниже этого угол уже не оседает (она здесь была). */
@@ -73,9 +83,19 @@ export interface SporesConfig {
   perCell: number;
   /** У какой доли стен грибы растут и у подножия (а не только в углах). */
   wallShare: number;
+  /** Сколько гроздей в пятне у угла (первая — в самом углу, остальные — вдоль двух стен) и у подножия одной стены. */
+  perCorner: number;
+  perWall: number;
 }
 
-export const DEFAULT_SPORES: SporesConfig = { cell: 3, inset: 0.24, cornerRange: 11, regretReach: 1.6, fieldRange: 3.4, fieldTime: 1.4, cornerTime: 3.5, fadeTime: 22, trace: 0.3, perCell: 5, wallShare: 0.5 };
+/**
+ * Грибов вчетверо с лишним гуще (партнёр 19.11: «нужно увеличить плотность грибов минимум в 4 раза»): у угла — пятно из пяти
+ * гроздей вместо одной; у подножия — каждая стена и по две грозди (было: половина стен по одной, вчетверо меньше); на полу
+ * вокруг Осыпи — двадцать пять мест на клетку (было пять). Всего мест — в 4,8–4,9 раза больше (design.md, §33).
+ * Спутники пятна и подножия прорастают ближе к ней, чем голова угла: lag — доля роста головы, с которой они начинают.
+ */
+export const PATCH_LAG = { pair: 0.2, foot: 0.5 } as const;
+export const DEFAULT_SPORES: SporesConfig = { cell: 3, inset: 0.24, cornerRange: 11, regretReach: 1.6, fieldRange: 3.4, fieldTime: 1.4, cornerTime: 3.5, fadeTime: 22, trace: 0.3, perCell: 25, wallShare: 1, perCorner: 5, perWall: 2 };
 
 /** Что известно об Осыпи в этом шаге. */
 export interface SporeSource {
@@ -119,7 +139,32 @@ export function sporeSites(nav: readonly NavNode[], seed: number, cfg: SporesCon
         k += 1;
         if (open(sx, 0) || open(0, sz)) continue;
         const h = hash01(n.id * 7 + k, 0x51, seed ^ 0x5b0e5);
-        out.push({ pos: [n.x + sx * (half - cfg.inset), n.y, n.z + sz * (half - cfg.inset)], kind: 'corner', grow: 0, trace: 0, yaw: h * Math.PI * 2, size: 0.75 + 0.5 * hash01(n.id * 11 + k, 0x52, seed), node: n.id, form: form(cornerSp, hash01(n.id * 37 + k, 0x53, seed)) });
+        const cx = n.x + sx * (half - cfg.inset);
+        const cz = n.z + sz * (half - cfg.inset);
+        const headForm = form(cornerSp, hash01(n.id * 37 + k, 0x53, seed));
+        out.push({ pos: [cx, n.y, cz], kind: 'corner', role: 'head', step: 0, grow: 0, trace: 0, yaw: h * Math.PI * 2, size: 0.75 + 0.5 * hash01(n.id * 11 + k, 0x52, seed), node: n.id, form: headForm });
+        // Пятно: ещё несколько гроздей поменьше — вдоль двух стен угла, прижавшись к ним: по очереди то к одной, то к другой
+        // (с какой начать — жребий угла, чтобы углы не повторяли друг друга), каждая следующая пара — дальше от угла и мельче.
+        const flip = hash01(n.id * 71 + k, 0x57, seed ^ 0x5b0e5) < 0.5;
+        for (let j = 1; j < cfg.perCorner; j++) {
+          const q = hash01(n.id * 53 + k * 7 + j, 0x54, seed ^ 0x5b0e5);
+          const step = Math.floor((j - 1) / 2);
+          const d = 0.42 + 0.44 * step + 0.14 * q;
+          const alongX = (j % 2 === 1) !== flip;
+          out.push({
+            pos: [alongX ? cx - sx * d : cx, n.y, alongX ? cz : cz - sz * d],
+            kind: 'corner',
+            role: 'patch',
+            step: step + 1,
+            grow: 0,
+            trace: 0,
+            yaw: hash01(n.id * 59 + k * 7 + j, 0x55, seed) * Math.PI * 2,
+            size: (0.45 + 0.4 * q) * (1 - 0.15 * step),
+            node: n.id,
+            // Первый в паре — другой вариант грозди, чем у головы: пятно не из пяти одинаковых (куратор, пачка 51, 326).
+            form: j % 2 === 1 ? headForm - (headForm % FORMS) + ((headForm % FORMS) + 1) % FORMS : form(cornerSp, hash01(n.id * 61 + k * 7 + j, 0x56, seed)),
+          });
+        }
       }
     }
     // Подножие стены — тоже угол (стена и пол): не у каждой стены, вразброс вдоль неё. Так знак виден
@@ -130,16 +175,23 @@ export function sporeSites(nav: readonly NavNode[], seed: number, cfg: SporesCon
       if (open(dx, dz)) continue;
       const h = hash01(n.id * 23 + w, 0x71, seed ^ 0x5b0e5);
       if (h > cfg.wallShare) continue;
-      const along = (hash01(n.id * 29 + w, 0x72, seed ^ 0x5b0e5) - 0.5) * (cfg.cell - 0.9);
       const off = half - cfg.inset * 0.75;
-      out.push({ pos: [n.x + dx * off + (dx === 0 ? along : 0), n.y, n.z + dz * off + (dz === 0 ? along : 0)], kind: 'corner', grow: 0, trace: 0, yaw: h * 40, size: 0.55 + 0.45 * hash01(n.id * 31 + w, 0x73, seed), node: n.id, form: form(cornerSp, hash01(n.id * 41 + w, 0x74, seed)) });
+      // Вдоль стены — по своей доле её длины каждая гроздь: не слипаются.
+      for (let j = 0; j < cfg.perWall; j++) {
+        const along = ((j + hash01(n.id * 29 + w * 5 + j, 0x72, seed ^ 0x5b0e5)) / cfg.perWall - 0.5) * (cfg.cell - 0.9);
+        out.push({ pos: [n.x + dx * off + (dx === 0 ? along : 0), n.y, n.z + dz * off + (dz === 0 ? along : 0)], kind: 'corner', role: 'foot', step: 0, grow: 0, trace: 0, yaw: hash01(n.id * 67 + w * 5 + j, 0x75, seed) * 40, size: 0.55 + 0.45 * hash01(n.id * 31 + w * 5 + j, 0x73, seed), node: n.id, form: form(cornerSp, hash01(n.id * 41 + w * 5 + j, 0x74, seed)) });
+      }
     }
+    // Пол: места по сетке с разбросом (в каждой ячейке сетки — одно, где угодно в её пределах) — ковром, а не кучками и проплешинами.
+    const g = Math.ceil(Math.sqrt(cfg.perCell));
     for (let i = 0; i < cfg.perCell; i++) {
       const a = hash01(n.id * 13 + i, 0x61, seed ^ 0x5b0e5);
       const b = hash01(n.id * 17 + i, 0x62, seed ^ 0x5b0e5);
       const c = hash01(n.id * 19 + i, 0x63, seed ^ 0x5b0e5);
       const sp = fieldSp[hash01(n.id * 43 + i, 0x64, seed) < 0.5 ? 0 : 1]!;
-      out.push({ pos: [n.x + (a - 0.5) * (cfg.cell - 0.7), n.y, n.z + (b - 0.5) * (cfg.cell - 0.7)], kind: 'floor', grow: 0, trace: 0, yaw: c * Math.PI * 2, size: 0.55 + 0.6 * c, node: n.id, form: form(sp, hash01(n.id * 47 + i, 0x65, seed)) });
+      const u = ((i % g) + a) / g;
+      const v = (Math.floor(i / g) + b) / Math.ceil(cfg.perCell / g);
+      out.push({ pos: [n.x + (u - 0.5) * (cfg.cell - 0.7), n.y, n.z + (v - 0.5) * (cfg.cell - 0.7)], kind: 'floor', role: 'field', step: 0, grow: 0, trace: 0, yaw: c * Math.PI * 2, size: 0.55 + 0.6 * c, node: n.id, form: form(sp, hash01(n.id * 47 + i, 0x65, seed)) });
     }
   }
   return out;
@@ -147,6 +199,8 @@ export function sporeSites(nav: readonly NavNode[], seed: number, cfg: SporesCon
 
 export class Spores {
   readonly sites: SporeSite[];
+  private readonly near: number[] = [];
+  private dist: Float32Array;
 
   constructor(
     nav: readonly NavNode[],
@@ -155,6 +209,44 @@ export class Spores {
     place = 'shelter',
   ) {
     this.sites = sporeSites(nav, seed, cfg, place);
+    this.dist = new Float32Array(this.sites.length);
+    this.nav = nav;
+  }
+
+  private readonly nav: readonly NavNode[];
+
+  /**
+   * Места внутри твёрдых вещей (куратор, пачка 51, противоречие 322: места грибов считаются по графу клеток и мебели не знают —
+   * в зале ожидания голова угла сидела внутри вещи в 29 % углов). blocked(x, z, y) — стоит ли там вещь на полу. Голова угла
+   * отступает к середине клетки, пока не выйдет из вещи (не дальше метра): знак остаётся у её подножия; прочие места внутри
+   * вещей отбрасываются. Один раз на уровень. Возвращает, сколько мест отброшено.
+   */
+  settle(blocked: (x: number, z: number, y: number) => boolean): number {
+    const keep: SporeSite[] = [];
+    for (const s of this.sites) {
+      if (!blocked(s.pos[0], s.pos[2], s.pos[1])) {
+        keep.push(s);
+        continue;
+      }
+      if (s.role !== 'head') continue;
+      const n = this.nav[s.node]!;
+      const dx = n.x - s.pos[0];
+      const dz = n.z - s.pos[2];
+      const l = Math.hypot(dx, dz) || 1;
+      for (let k = 1; k <= 7; k++) {
+        const x = s.pos[0] + (dx / l) * 0.15 * k;
+        const z = s.pos[2] + (dz / l) * 0.15 * k;
+        if (blocked(x, z, s.pos[1])) continue;
+        s.pos = [x, s.pos[1], z];
+        keep.push(s);
+        break;
+      }
+    }
+    const dropped = this.sites.length - keep.length;
+    this.sites.length = 0;
+    this.sites.push(...keep);
+    this.dist = new Float32Array(this.sites.length);
+    return dropped;
   }
 
   /**
@@ -172,14 +264,26 @@ export class Spores {
     for (const s of this.sites) {
       let target = 0;
       if (present) {
-        // Ярусы разнесены на 4,5 м: с другого яруса она не «чуется».
-        const dy = Math.abs(s.pos[1] - src.pos[1]);
-        const d = dy > 2 ? Infinity : Math.hypot(s.pos[0] - src.pos[0], s.pos[2] - src.pos[2]);
+        // Ярусы разнесены на 4,5 м: с другого яруса она не «чуется». Мест тысячи: дальше своего круга расстояние не считается.
+        const reach = s.kind === 'corner' ? cornerRange : fieldRange;
+        const dx = s.pos[0] - src.pos[0];
+        const dz = s.pos[2] - src.pos[2];
+        const far = Math.abs(s.pos[1] - src.pos[1]) > 2 || Math.abs(dx) > reach || Math.abs(dz) > reach;
+        if (far && s.grow === 0 && s.trace === 0) continue;
+        const d = far ? Infinity : Math.hypot(dx, dz);
         if (s.kind === 'corner') {
-          // Знак приближения: от нуля на краю слышимости до полного роста вплотную.
-          if (d < cornerRange) target = clamp01(1 - d / cornerRange) ** 0.7;
-          if (d < 2.5) s.trace = Math.max(s.trace, c.trace);
-          else if (d < cornerRange * 0.5 && !src.faint) s.trace = Math.max(s.trace, c.trace * 0.5);
+          // Знак приближения: от нуля на краю слышимости до полного роста вплотную. Голова угла — первой; спутники пятна и
+          // подножия — позже, когда она ближе: издалека знак — угол, вблизи прорастает всё.
+          if (d < cornerRange) {
+            const t = clamp01(1 - d / cornerRange) ** 0.7;
+            const lag = s.role === 'head' ? 0 : s.role === 'patch' ? PATCH_LAG.pair * s.step : PATCH_LAG.foot;
+            target = lag > 0 ? clamp01((t - lag) / (1 - lag)) : t;
+          }
+          // След держит только голова угла: «она здесь была» — угол, а не полоса вдоль всех стен.
+          if (s.role === 'head') {
+            if (d < 2.5) s.trace = Math.max(s.trace, c.trace);
+            else if (d < cornerRange * 0.5 && !src.faint) s.trace = Math.max(s.trace, c.trace * 0.5);
+          }
         } else if (formed && d < fieldRange) target = clamp01(1.15 - d / fieldRange);
       }
       target = Math.max(target, s.trace);
@@ -191,21 +295,31 @@ export class Spores {
   }
 
   /**
-   * Что рисовать: до max ближайших к точке from проросших мест, по SPORE_STRIDE чисел на место — x, y, z, поворот, размер (уже
-   * с ростом), род (0 — угол, 1 — пол), форма грозди. Возвращает число мест, записанных в out.
+   * Что рисовать: до max ближайших к точке from проросших мест (сначала головы углов, потом остальные — каждые от ближнего),
+   * по SPORE_STRIDE чисел на место — x, y, z, поворот, размер (уже с ростом), род (0 — угол, 1 — пол), форма грозди. Возвращает
+   * число мест, записанных в out.
    */
   visible(from: Vec3, max: number, out: Float32Array): number {
-    const near: { s: SporeSite; d: number }[] = [];
-    for (const s of this.sites) {
+    // Мест теперь тысячи: без новых объектов на каждый кадр — номера и расстояния в своих массивах.
+    const near = this.near;
+    const dist = this.dist;
+    near.length = 0;
+    for (let i = 0; i < this.sites.length; i++) {
+      const s = this.sites[i]!;
       if (s.grow <= 0.03 || Math.abs(s.pos[1] - from[1]) > 3) continue;
       const d = Math.hypot(s.pos[0] - from[0], s.pos[2] - from[2]);
-      if (d < 26) near.push({ s, d });
+      if (d < 26) {
+        // Головы углов — вперёд всех (их немного): под пределом качества густое поле у ног не должно вытеснить дальний знак
+        // «она идёт оттуда» (куратор, пачка 51).
+        dist[i] = s.role === 'head' ? d - 1000 : d;
+        near.push(i);
+      }
     }
-    near.sort((a, b) => a.d - b.d);
+    near.sort((a, b) => dist[a]! - dist[b]!);
     const S = SPORE_STRIDE;
     const n = Math.min(max, near.length, Math.floor(out.length / S));
     for (let i = 0; i < n; i++) {
-      const s = near[i]!.s;
+      const s = this.sites[near[i]!]!;
       out[i * S] = s.pos[0];
       out[i * S + 1] = s.pos[1];
       out[i * S + 2] = s.pos[2];

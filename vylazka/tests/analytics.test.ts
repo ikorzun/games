@@ -175,7 +175,20 @@ describe('аналитика Playgama: план событий через под
     r.at(t);
     r.a.sessionCompleted();
     expect(r.last('performance_sample')).toMatchObject({ webgl_context_loss_count: 1, quality: 'high', build_version: BUILD_VERSION, target_fps: 60 });
+    // Замера при запуске не было (в проверке — нет probeMs) — и поля нет.
+    expect(r.last('performance_sample')).not.toHaveProperty('probe_ms');
     expect(r.last('performance_sample')!.window_ms).toBeGreaterThan(14_000);
+  });
+
+  it('сводка кадров несёт время кадра замера при запуске (probe_ms, до десятой мс): так видно, что показывают настоящие телефоны', () => {
+    const r = rig({ probeMs: 12.345 });
+    r.a.ready();
+    r.a.sessionStarted();
+    let t = 0;
+    for (let i = 0; i <= 900; i++) r.a.frame((t += 1000 / 60));
+    r.at(t);
+    r.a.sessionCompleted();
+    expect(r.last('performance_sample')).toMatchObject({ probe_ms: 12.3, quality: 'high' });
   });
 
   it('все события — из плана: имена известны, значения — числа, флаги и короткие слова; ни сида, ни текста', () => {

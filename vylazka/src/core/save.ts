@@ -29,6 +29,11 @@ export interface Profile {
   flash: FlashLevel;
   /** Язык, выбранный игроком (null — по умолчанию, английский). */
   lang: string | null;
+  /**
+   * Качество, выбранное игроком рукой (null — не выбирал: решает замер при запуске). Помнится между запусками (куратор,
+   * пачка 51, противоречие 324: «ультра» включает только игрок — и не заново после каждой перезагрузки). Замер сюда не пишет.
+   */
+  quality: QualityPick;
   /** Место вылазки, выбранное на заставке: убежище, офис или жёлтые комнаты. */
   place: WorldKind;
   /**
@@ -56,6 +61,9 @@ export interface PlaceMemory {
 }
 
 export type Level3 = 0 | 1 | 2;
+/** Качество, выбранное рукой, или null — выбора не было. */
+export type QualityPick = 'low' | 'med' | 'high' | 'ultra' | null;
+const qualityPick = (v: unknown): QualityPick => (v === 'low' || v === 'med' || v === 'high' || v === 'ultra' ? v : null);
 /** Вспышки: мягкие или «почти незаметные». */
 export type FlashLevel = 'soft' | 'faint';
 const level3 = (v: unknown): Level3 => (v === 0 || v === 2 ? v : 1);
@@ -66,7 +74,7 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
 export function defaultProfile(baseSeed: number): Profile {
-  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1, flash: 'soft', lang: null, place: 'shelter', memories: {} };
+  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1, flash: 'soft', lang: null, quality: null, place: 'shelter', memories: {} };
 }
 
 /** Разобрать профиль из хранилища; всё непонятное заменяется значениями по умолчанию. */
@@ -85,6 +93,7 @@ export function parseProfile(raw: unknown, baseSeed: number): Profile {
     bright: level3(o.bright),
     flash: o.flash === 'faint' ? 'faint' : 'soft',
     lang: typeof o.lang === 'string' ? o.lang : null,
+    quality: qualityPick(o.quality),
     place: o.place === 'office' || o.place === 'yellow' || o.place === 'station' ? o.place : 'shelter',
     memories: parseMemories(o.memories),
   };

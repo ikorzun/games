@@ -212,8 +212,29 @@ const DARK_SHIFT = { first: 7, every: 9, range: 14 } as const;
 const SEEN_HALF = (70 * Math.PI) / 180;
 /** Сколько воспоминаний нужно, чтобы фигура Осыпи выросла в полный рост. */
 const SWARM_GROWN = 4;
-/** Сколько гроздей грибов показывается разом (ближайшие к игроку). */
-const SPORES_SHOWN = 220;
+/**
+ * Сколько гроздей грибов уходит рендеру разом (ближайшие к игроку): все проросшие и на позднем круге (до шестисот, мест
+ * вчетверо с лишним больше — партнёр 19.11). Сколько из них рисовать, решает рендер по качеству (render/renderer.ts,
+ * SPORES_MAX, SPORES_CAP).
+ */
+const SPORES_SHOWN = 880;
+
+/**
+ * Стоит ли на полу вещь в этой точке (для мест грибов, systems/spores.ts, settle): коробка вещи уровня или вещи сна (не стена,
+ * не датчик касания), от пола и выше 25 см — с запасом 8 см по краю, чтобы гроздь не торчала из бока.
+ */
+function solidFloorAt(colliders: ColliderSet): (x: number, z: number, y: number) => boolean {
+  const out: Aabb[] = [];
+  const pad = 0.08;
+  return (x, z, y) => {
+    for (const b of colliders.query(x - pad, z - pad, x + pad, z + pad, out)) {
+      if (!b.owner || b.ghost) continue;
+      if (b.minY > y + 0.1 || b.maxY < y + 0.25) continue;
+      if (x > b.minX - pad && x < b.maxX + pad && z > b.minZ - pad && z < b.maxZ + pad) return true;
+    }
+    return false;
+  };
+}
 /** Угол сетки уровня в мире (x, z): клетка 0 лежит в 8 клетках от начала координат, клетка — 3 м. */
 const CELL_ORIGIN: [number, number] = [-25.5, -25.5];
 /** С какого расстояния слышно Осыпь (от неё идут волны эха), м. */
@@ -875,6 +896,8 @@ export class Game {
       this.dreamSeed = dream.seed;
       this.swarm = new SwarmAI(level.nav, this.rng);
       this.spores = new Spores(level.nav, dream.seed, DEFAULT_SPORES, level.world ?? 'shelter');
+      // Грибы не растут внутри вещей: места считаются по клеткам и мебели не знают (куратор, пачка 51, противоречие 322).
+      this.spores.settle(solidFloorAt(this.colliders));
       const stage = this.stage;
       // Сон из сцен: режиссёр страха — один на весь сон, его часы — часы сна (sleepTime), а не сцены: сцена идёт минуту, и
       // с новыми часами в каждой Осыпь не доживала бы до своего выхода (куратор, пачка 39, противоречие 218). Если она уже

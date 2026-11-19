@@ -57,6 +57,8 @@ export interface PlayContext {
   test: boolean;
   /** Качество картинки: low | med | high | ultra. */
   quality: string;
+  /** Время кадра высокого качества в замере при запуске, мс (−1 или нет — замера не было: качество из адреса или выбор игрока). */
+  probeMs?: number;
   /** Настройки игрока из профиля; их смена — settings_changed. */
   settings: Readonly<Record<string, string | number | boolean>>;
 }
@@ -303,7 +305,10 @@ export class Analytics {
    * меняется только транспорт здесь, имя и поля остаются (руководство Playgama по телеметрии).
    */
   private sendPerf(sample: PerfSample): void {
-    this.send('performance_sample', { ...sample, build_version: BUILD_VERSION, quality: this.ctx().quality });
+    const c = this.ctx();
+    const data: TrackData = { ...sample, build_version: BUILD_VERSION, quality: c.quality };
+    if (c.probeMs !== undefined && c.probeMs >= 0) data.probe_ms = Math.round(c.probeMs * 10) / 10;
+    this.send('performance_sample', data);
   }
 
   private send(event: AnalyticsEvent, data: TrackData): void {

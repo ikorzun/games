@@ -56,23 +56,18 @@ const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimation
 const isQuality = (v: string | null): v is Quality => v === 'low' || v === 'med' || v === 'high' || v === 'ultra';
 
 /**
- * Замер видеокарты при запуске (App.probeFine). highMs — кадр обычного высокого качества должен
- * рисоваться быстрее этого, иначе мелкое зерно и пробовать незачем: оно вчетверо тяжелее. fineMs — кадр
- * мелкого качества на первом экране должен уложиться в это время: шестьдесят кадров в секунду — это 16,7 мс
- * на кадр, остальное — запас на места тяжелее первого. settleMs — сколько самое большее ждать досева
+ * Замер видеокарты при запуске (App.probeQuality). frameMs — кадр первого экрана должен рисоваться быстрее этого, чтобы
+ * качество осталось высоким (иначе — среднее, и так же — низкое): шестьдесят кадров в секунду — это 16,7 мс на кадр, а в
+ * местах тяжелее первого экрана кадр вдвое дороже — тогда как раз тридцать. settleMs — сколько самое большее ждать досева
  * точек перед замером (пока облако редкое, кадр легче настоящего). minMs — быстрее кадр не рисуется ни на чём: такой ответ
- * значит, что замер не удался (видеокарту не дождались), и ему не верим. fpsFloor, slowFor — если в игре кадров стало меньше
- * fpsFloor и так держится slowFor секунд, качество возвращается на обычное высокое.
- * Числа выбраны расчётом и на настоящих видеокартах не проверены. Они нарочно не строгие: ошибку в
- * сторону «включили зря» ловит игра (качество вернётся само), а ошибку «не включили» не ловит никто.
+ * значит, что замер не удался (видеокарту не дождались), и ему не верим — остаётся высокое. fpsFloor, slowFor — если на
+ * «ультра» (её включает только игрок) кадров стало меньше fpsFloor и так держится slowFor секунд, зерно становится на ступень
+ * крупнее. Числа выбраны расчётом и на настоящих видеокартах не проверены. Они нарочно не строгие: ошибку «оставили высокое
+ * зря» ловит игра (качество понизится само через десять секунд игры), а ошибку «понизили зря» не ловит никто.
  */
-const PROBE = { highMs: 6.5, fineMs: 11, minMs: 0.3, settleMs: 700, fpsFloor: 45, slowFor: 2.5 } as const;
-/**
- * Ступени мелкости «ультра», от самой мелкой, что даёт экран, к 1,25 (партнёр 19.11: визуал «ультра» — большему числу машин):
- * замер берёт первую, что укладывается в кадр, а игра на медленной машине мельчит зерно не так сильно, прежде чем уступить
- * высокому качеству.
- */
-const fineSteps = (top: number): number[] => [...new Set([top, 1.5, 1.25].filter((f) => f <= top + 1e-6).map((f) => Math.round(f * 4) / 4))].sort((a, b) => b - a);
+const PROBE = { frameMs: 16, minMs: 0.3, settleMs: 700, fpsFloor: 45, slowFor: 2.5 } as const;
+/** Сколько самое большее ждать перехода, чтобы понизить качество, решённое игрой, с. */
+const DROP_WAIT = 20;
 /** Множители обзора и яркости для уровней «ниже / средне / выше». */
 const SENS = [0.6, 1, 1.6] as const;
 /**
@@ -165,6 +160,14 @@ export class App {
   /** Щелчок фонаря, пришедший в кадр без шага игры, — до следующего кадра (player/input.ts, PressCarry). */
   private readonly lightPress = new PressCarry();
   private qualityManual = false;
+  /**
+   * Качество, на которое игра решила спуститься сама: применяется на ближайшем переходе (скачок, лимбо, новая сессия), где
+   * пересев точек и пересборка стопки бумаги не видны, — но не позже DROP_WAIT секунд (куратор, пачка 51, 323).
+   */
+  private dropTo: Quality | null = null;
+  private dropWait = 0;
+  /** Время кадра высокого качества в замере при запуске, мс (−1 — замера не было). */
+  private probeMs = -1;
   private playTime = 0;
   private slowTime = 0;
   private showFps = false;
@@ -260,6 +263,7 @@ export class App {
       scenes: this.scenes,
       test: this.testLevel,
       quality: this.game?.renderer.quality ?? '',
+      probeMs: this.probeMs,
       settings: p ? { sound: !p.muted, lang: p.lang ?? 'auto', sens: p.sens, bright: p.bright, flash: p.flash, place: p.place } : {},
     };
   }
@@ -303,9 +307,13 @@ export class App {
       onDiag: () => this.toggleDiag(),
       onQuality: (q) => {
         this.qualityManual = true;
+        this.dropTo = null;
         // «Ультра», выбранная рукой, начинает с самой мелкой ступени, что даёт экран (дальше игра подстроит её сама).
         if (q === 'ultra') this.game.renderer.setFineCap(2);
         this.setQuality(q);
+        // Выбор помнится между запусками (куратор, пачка 51, 324).
+        this.profile.quality = q;
+        this.saveProfile();
         this.audio.ui('ui_click');
       },
       onMotion: () => void this.enableMotion(),
@@ -336,7 +344,9 @@ export class App {
     await Promise.race([Promise.all([font('16px "JetBrains Mono"', 'Убежище Ag'), font('200 16px "JetBrains Mono"', 'Ты спишь Ag'), font('300 40px "DM Mono"', 'UNTITLED SESSION')]), new Promise((r) => setTimeout(r, 1500))]);
 
     const qParam = p.get('q');
-    const quality: Quality = isQuality(qParam) ? qParam : this.touchMode ? 'med' : 'high';
+    // По умолчанию — высокое, и на телефоне тоже (партнёр 19.11: «графика по умолчанию Высокая, если это позволяет устройство»):
+    // потянет ли, решает замер под заставкой (probeQuality).
+    const quality: Quality = isQuality(qParam) ? qParam : 'high';
     this.qualityManual = isQuality(qParam);
     let renderer: GameRenderer;
     try {
@@ -473,9 +483,9 @@ export class App {
 
     const resize = (): void => {
       renderer.resize(this.root.clientWidth, this.root.clientHeight);
-      // Ступень «ультра» в кнопке качества — только на компьютере и только там, где экран даёт зерно мельче.
-      // «Ультра» — везде, где экран даёт зерно мельче хотя бы на четверть, и на телефоне тоже (рукой; сама игра на телефоне
-      // её не включает): ступени мелкости подстраиваются под машину (fineSteps).
+      // Ступень «ультра» в кнопке качества — везде, где экран даёт зерно мельче хотя бы на четверть, и на телефоне тоже.
+      // Включает её только игрок (партнёр 19.11: «Ультра может включить только игрок»); ступень мелкости игра потом
+      // подстраивает под машину сама (autoQuality).
       this.overlay.setFineStep(renderer.fineFor('ultra') >= 1.25);
       this.redraw();
     };
@@ -508,7 +518,7 @@ export class App {
 
     await renderer.warmup();
     this.redraw();
-    this.probeFine();
+    this.pickQuality();
     await nextFrame();
 
     this.lifecycle.set('user', true);
@@ -1098,41 +1108,48 @@ export class App {
    * меньшей, иначе на слабом устройстве остались бы лежать 34 МБ текстуры полного размера.
    */
   private drawPaperStack(q: Quality): void {
-    const scale = q === 'low' ? 0.5 : q === 'med' ? 0.75 : 1;
+    // Телефону полный размер ни к чему и на высоком: 34 МБ в видеокарте против 19 (куратор, пачка 51, 323).
+    const scale = q === 'low' ? 0.5 : q === 'med' || this.touchMode ? 0.75 : 1;
     if (!this.paperImages || scale === this.paperScale) return;
     this.paperScale = scale;
     this.game.renderer.setPapers(drawPapers(this.paperImages, scale));
   }
 
   /**
-   * Сильный компьютер получает высокое качество «вдвое мельче» сам (слова партнёра: «на десктопе при
-   * хорошем железе на уровне hight нужно сделать зерно в 2 раза меньше, как и все растворяемые частицы»).
-   * «Сильный» здесь — измеренное, а не угаданное по названию видеокарты: кадр обычного высокого качества
-   * рисуется с большим запасом, а потом и кадр мелкого — быстрее, чем нужно для шестидесяти в секунду.
-   * Замер идёт под заставкой загрузки и на сильной машине занимает доли секунды; слабая отсеивается на
-   * первых двух кадрах. Телефон и качество, заданное в адресе, не трогаются; экран, где зерно вышло бы
-   * мельче меньше чем в полтора раза, — тоже.
+   * Качество при запуске. Выбранное игроком рукой помнится (профиль, Profile.quality) и берётся как есть: «ультра» — если экран
+   * даёт зерно мельче, иначе высокое. Не выбирал — по умолчанию высокое, если устройство его тянет (партнёр 19.11: «графика по
+   * умолчанию Высокая, если это позволяет устройства. Ультра может включить только игрок»). «Тянет» — измеренное, а не
+   * угаданное по названию видеокарты или по тому, телефон ли это: кадр первого экрана рисуется быстрее PROBE.frameMs. Нет —
+   * среднее, и с ним так же; не тянет и среднего — низкое. Замер идёт под заставкой загрузки и занимает доли секунды; слабая
+   * машина отсеивается на первых кадрах (замер обрывается). «Ультра» игра сама не включает никогда — раньше сильный компьютер
+   * получал её сам (слова партнёра о мелком зерне «на десктопе при хорошем железе»), теперь это выбор игрока. Качество из адреса
+   * не трогается. Время кадра замера уходит в сводку кадров (performance_sample, probe_ms): так видно, что показывают
+   * настоящие телефоны.
    */
-  private probeFine(): void {
+  private pickQuality(): void {
     const r = this.game.renderer;
-    if (this.qualityManual || this.touchMode || r.quality !== 'high') return;
-    const top = r.fineFor('ultra');
-    if (top < 1.25) return;
+    if (this.qualityManual) return;
+    const pick = this.profile.quality;
+    if (pick) {
+      this.qualityManual = true;
+      const q = pick === 'ultra' && r.fineFor('ultra') < 1.25 ? 'high' : pick;
+      if (q === 'ultra') r.setFineCap(2);
+      if (r.quality !== q) this.setQuality(q);
+      return;
+    }
     const draw = (): void => this.redraw();
-    const ok = (ms: number, max: number): boolean => ms >= PROBE.minMs && ms <= max;
-    if (!ok(r.measure(draw, 2, PROBE.highMs * 4), PROBE.highMs)) return;
-    this.setQuality('ultra');
-    // Ступени мелкости: первая, что укладывается в кадр, остаётся. Раньше было «всё или ничего» — мелкость 2 или высокое.
-    for (const cap of fineSteps(top)) {
-      r.setFineCap(cap);
+    for (const q of ['high', 'med'] as const) {
+      if (r.quality !== q) this.setQuality(q);
       // Досев точек: пока облако редкое, кадр легче настоящего, и замер обманул бы. Ждём, пока досеется.
       const t0 = performance.now();
       do r.measure(draw, 1, PROBE.settleMs);
       while (r.sowing && performance.now() - t0 < PROBE.settleMs);
-      if (ok(r.measure(draw, 4, PROBE.fineMs * 6), PROBE.fineMs)) return;
+      const ms = r.measure(draw, 3, PROBE.frameMs * 4);
+      if (q === 'high') this.probeMs = ms;
+      // Не дождались видеокарты — замеру не верим и оставляем, что есть: ошибку «оставили зря» поправит игра.
+      if (ms < PROBE.minMs || ms <= PROBE.frameMs) return;
     }
-    r.setFineCap(2);
-    this.setQuality('high');
+    this.setQuality('low');
   }
 
   setLang(lang: Lang, initial = false): void {
@@ -1231,6 +1248,8 @@ export class App {
       if (buzz && (e.type === 'scare' || e.what === 'cohered')) navigator.vibrate(e.type === 'scare' ? 25 : [40, 60, 40]);
     }
     for (const e of ev.dream) {
+      // Понижение качества, решённое игрой, — на переходе: пересев точек и пересборка стопки бумаги прячутся в нём.
+      if (this.dropTo && (e.type === 'limbo' || e.type === 'begin' || (e.type === 'jump' && e.phase === 'switch'))) this.applyDrop();
       if (e.type === 'limbo') this.onLimbo();
       else if (e.type === 'begin') this.onBegin(e.scene === true, e.recalled === true);
       // «Вещи не любят, когда на них долго смотрят» спорит с главным делом первого сна — вспомнить вещь взглядом (куратор, пачка 48):
@@ -1407,7 +1426,7 @@ export class App {
     }
     if (this.showFps) {
       const i = g.renderer.info();
-      this.hud.setFps(`${this.fps.toFixed(0)} fps · ${i.width}×${i.height} · ${i.calls} dc · ${(i.triangles / 1000).toFixed(1)}k`);
+      this.hud.setFps(`${this.fps.toFixed(0)} fps · ${i.quality}${i.quality === 'ultra' ? ` ${i.fine}` : ''} · ${i.width}×${i.height} · ${i.calls} dc · ${(i.triangles / 1000).toFixed(1)}k · грибы ${i.spores.shown}`);
     }
   }
 
@@ -1586,7 +1605,7 @@ export class App {
     };
     return [
       `${d.gpu} · ${d.webgl2 ? 'WebGL2' : 'WebGL1'} · highp ${d.highp}${this.variant ? ` · проба ${this.variant}` : ''}`,
-      `${g.world ?? '?'} · q ${i.quality} ${i.width}×${i.height} · ${this.fps.toFixed(0)} fps · усиление ${g.exposure.gain.toFixed(2)} · яркость ${r.brightness} · солнце ${r.keyShadowByFormula ? 'формулой' : 'картой'}`,
+      `${g.world ?? '?'} · q ${i.quality}${i.quality === 'ultra' ? ` ${i.fine}` : ''} ${i.width}×${i.height} · ${this.fps.toFixed(0)} fps · ${i.calls} dc · ${(i.triangles / 1000).toFixed(0)}k · грибы ${i.spores.shown} (дальн. ${i.spores.far}, вне кадра ${i.spores.culled})${this.probeMs >= 0 ? ` · замер ${this.probeMs.toFixed(1)} мс` : ''} · усиление ${g.exposure.gain.toFixed(2)} · яркость ${r.brightness} · солнце ${r.keyShadowByFormula ? 'формулой' : 'картой'}`,
       `ошибки WebGL: ${this.diagGl.count ? `${this.diagGl.count} раз, последняя ${this.diagGl.last}` : 'нет'}${this.diagErr ? ` · страница: ${this.diagErr}` : ''}`,
       `цп: скан ${u.scan.map((x) => x.toFixed(2)).join('/')} · угас ${u.fade.toFixed(2)} · даль ${u.range.map((x) => x.toFixed(0)).join('–')} · конус ${u.cone.map((x) => x.toFixed(0)).join('/')}° ×${u.tall.toFixed(2)} · солн.клетки ${u.keyCells.toFixed(2)} · сетка ${u.grid.map((x) => x.toFixed(1)).join(',')} · рассеян ${u.ambient.map((x) => x.toFixed(2)).join(',')}`,
       ...App.PROBE_PTS.map((_, k) => row(k)),
@@ -1634,32 +1653,61 @@ export class App {
   };
 
   /**
-   * Автопонижение качества: не раньше 10 с игры и только если кадров стабильно мало. Мелкое зерно
-   * держится строже остальных: оно — роскошь, и ради него игра не должна идти рывками.
+   * Автопонижение качества: не раньше 10 с игры и только если кадров стабильно мало. Повышать игра не повышает, и «ультра»
+   * сама не включает (её выбирает только игрок). Мелкое зерно «ультра» держится строже остальных: оно — роскошь, и ради него
+   * игра не должна идти рывками — ступень мелкости становится крупнее, а качество остаётся тем, что выбрал игрок. Если и на
+   * самой крупной ступени (1,25) кадров так мало, как не бывает и на высоком (меньше 27 четыре секунды подряд), — высокое, с
+   * тихой строкой почему, а выбор игрока снимается: качеством снова распоряжается игра (куратор, пачка 51, 325). Само решённое
+   * понижение ждёт ближайшего перехода (dropTo).
    */
   private autoQuality(dt: number): void {
     const r = this.game.renderer;
     const q = r.quality;
     const fine = q === 'ultra';
-    // Выбор игрока не трогаем — кроме ступени мелкости «ультра»: её игра подстраивает и тогда, качество остаётся «ультра».
+    // Выбор игрока не трогаем — кроме «ультра»: её ступени игра подстраивает, а совсем не успевающую — снимает.
     if (this.qualityManual && !fine) return;
+    if (this.dropTo) {
+      this.dropWait += dt;
+      if (this.dropWait >= DROP_WAIT) this.applyDrop();
+      return;
+    }
     this.playTime += dt;
     if (this.playTime < 10) return;
-    this.slowTime = this.fps < (fine ? PROBE.fpsFloor : 27) ? this.slowTime + dt : Math.max(0, this.slowTime - dt * 2);
-    if (this.slowTime < (fine ? PROBE.slowFor : 4)) return;
+    const steps = fine && r.fine > 1.25 + 1e-6;
+    this.slowTime = this.fps < (steps ? PROBE.fpsFloor : 27) ? this.slowTime + dt : Math.max(0, this.slowTime - dt * 2);
+    if (this.slowTime < (steps ? PROBE.slowFor : 4)) return;
     this.slowTime = 0;
     this.playTime = 4;
+    if (steps) {
+      r.setFineCap(r.fine - 0.25);
+      this.redraw();
+      return;
+    }
     if (fine) {
-      // Сначала — ступенью крупнее, и только с самой крупной (1,25) — на высокое.
-      if (r.fine > 1.25) {
-        r.setFineCap(r.fine - 0.25);
-        this.redraw();
-        return;
-      }
-      if (this.qualityManual) return;
+      // Выбор игрока снят: дальше качеством снова распоряжается игра (замер при следующем запуске, понижение, если и высокое
+      // не успевает); включить «ультру» снова можно рукой.
       r.setFineCap(2);
+      this.qualityManual = false;
+      this.profile.quality = null;
+      this.saveProfile();
       this.setQuality('high');
-    } else if (q === 'high') this.setQuality('med');
-    else if (q === 'med') this.setQuality('low');
+      this.hud.toast(t('toast.ultra'), 4200);
+      return;
+    }
+    const next = q === 'high' ? 'med' : q === 'med' ? 'low' : null;
+    if (!next) return;
+    this.dropTo = next;
+    this.dropWait = 0;
+  }
+
+  /** Понижение, решённое игрой, — сейчас (на переходе или когда ждать дольше нельзя). */
+  private applyDrop(): void {
+    const q = this.dropTo;
+    if (!q) return;
+    this.dropTo = null;
+    this.dropWait = 0;
+    this.slowTime = 0;
+    this.playTime = 4;
+    this.setQuality(q);
   }
 }

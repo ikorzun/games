@@ -100,12 +100,26 @@ function bez(p0: V, p1: V, p2: V, p3: V, t: number): V {
 /** Сколько градусов набирает ножка от основания до шляпки — у каждого вида, для проверок (самая изогнутая ножка вида). */
 const bends = new Map<string, number>();
 let current = '';
+/**
+ * Подробность сетки: 1 — ближняя гроздь, LOD_FAR — дальняя (дальше нескольких метров: граней меньше, раскладка та же —
+ * места, размеры и изгибы совпадают, поэтому смена ближней на дальнюю не видна). Грибов вчетверо гуще (партнёр 19.11:
+ * «нужно увеличить плотность грибов минимум в 4 раза») — без дальних сеток кадр бы это не потянул.
+ */
+let DETAIL = 1;
+const LOD_FAR = 0.6;
+/** Число граней по окружности при нынешней подробности. */
+const S = (n: number): number => Math.max(3, Math.round(n * DETAIL));
+/** Свой ГСЧ для мелочей, число которых зависит от подробности (хлопья, зубцы вольвы): общий поток тратит одно число. */
+const sub01 = (rnd: () => number): (() => number) => mulberry32(Math.floor(rnd() * 4294967296) >>> 0);
 
 /**
  * Ножка-трубка вдоль ломаной: радиус по точкам, тон снизу вверх, у земли — тень. Рамка кольца переносится вдоль кривой
  * (без перекрута). Возвращает верх и направление ножки у верха — от них встаёт шляпка.
  */
-function stem(mb: MeshBuilder, path: readonly V[], radius: (t: number) => number, seg: number, base: Base, tintAt: (t: number) => V): { top: V; dir: V } {
+function stem(mb: MeshBuilder, full: readonly V[], radius: (t: number) => number, segFull: number, base: Base, tintAt: (t: number) => V): { top: V; dir: V } {
+  // Дальняя сетка: точки ломаной через одну (первая и последняя — всегда), граней по окружности меньше.
+  const path = DETAIL < 1 ? full.filter((_, i) => i % 2 === 0 || i === full.length - 1) : full;
+  const seg = S(segFull);
   const n = path.length;
   const tang = path.map((_, i) => norm(sub(path[Math.min(n - 1, i + 1)]!, path[Math.max(0, i - 1)]!)));
   let [nx] = basis(tang[0]!);
@@ -135,7 +149,7 @@ function stem(mb: MeshBuilder, path: readonly V[], radius: (t: number) => number
     aos.push(0.55 + 0.45 * Math.min(1, u * 4));
   }
   sleeve(mb, rings, normals, MAT_OF[base], tints, aos);
-  bends.set(current, Math.max(bends.get(current) ?? 0, angle(tang[0]!, tang[n - 1]!)));
+  if (DETAIL === 1) bends.set(current, Math.max(bends.get(current) ?? 0, angle(tang[0]!, tang[n - 1]!)));
   return { top: path[n - 1]!, dir: tang[n - 1]! };
 }
 
@@ -189,7 +203,8 @@ interface CapSpec {
 }
 
 /** Шляпка — тело вращения профиля над верхом ножки; снизу — пластинки. Возвращает «точку и нормаль на шляпке» (k — от края к макушке). */
-function cap(mb: MeshBuilder, top: V, dir: V, c: CapSpec, phase = 0): (k: number, a: number) => { p: V; n: V } {
+function cap(mb: MeshBuilder, top: V, dir: V, spec: CapSpec, phase = 0): (k: number, a: number) => { p: V; n: V } {
+  const c: CapSpec = { ...spec, seg: S(spec.seg) };
   const axis = norm(mix(dir, UP, c.upright ?? 0.6));
   const [nx, bx] = basis(axis);
   const prof = c.profile;
@@ -253,7 +268,8 @@ function cap(mb: MeshBuilder, top: V, dir: V, c: CapSpec, phase = 0): (k: number
 }
 
 /** Юбка (кольцо) на ножке: висит вниз раструбом, с двух сторон. */
-function skirt(mb: MeshBuilder, at: V, axis: V, r0: number, r1: number, drop: number, seg: number, t: V): void {
+function skirt(mb: MeshBuilder, at: V, axis: V, r0: number, r1: number, drop: number, segFull: number, t: V): void {
+  const seg = S(segFull);
   const [nx, bx] = basis(axis);
   const ring = (c: V, r: number): V[] => Array.from({ length: seg }, (_, j) => add(c, add(mul(nx, Math.cos((j / seg) * Math.PI * 2) * r), mul(bx, Math.sin((j / seg) * Math.PI * 2) * r))));
   const low = sub(at, mul(axis, drop));
@@ -268,7 +284,9 @@ function skirt(mb: MeshBuilder, at: V, axis: V, r0: number, r1: number, drop: nu
 }
 
 /** Вольва — мешок у основания ножки с рваным краем, с двух сторон. */
-function volva(mb: MeshBuilder, base: V, r: number, h: number, seg: number, t: V, rnd: () => number): void {
+function volva(mb: MeshBuilder, base: V, r: number, h: number, segFull: number, t: V, rnd0: () => number): void {
+  const seg = S(segFull);
+  const rnd = sub01(rnd0);
   const pt = (y: number, rr: number, j: number): V => [base[0] + Math.cos((j / seg) * Math.PI * 2) * rr, base[1] + y, base[2] + Math.sin((j / seg) * Math.PI * 2) * rr];
   const tops = Array.from({ length: seg }, () => h * (0.75 + rnd() * 0.4));
   const rings = [Array.from({ length: seg }, (_, j) => pt(0, r * 0.82, j)), Array.from({ length: seg }, (_, j) => pt(h * 0.45, r, j)), Array.from({ length: seg }, (_, j) => pt(tops[j]!, r * 1.08, j))];
@@ -280,7 +298,9 @@ function volva(mb: MeshBuilder, base: V, r: number, h: number, seg: number, t: V
 }
 
 /** Бородавки мухомора: белые хлопья — низкие трёхгранные пирамидки на шляпке. */
-function warts(mb: MeshBuilder, on: (k: number, a: number) => { p: V; n: V }, count: number, size: number, t: V, rnd: () => number): void {
+function warts(mb: MeshBuilder, on: (k: number, a: number) => { p: V; n: V }, countFull: number, size: number, t: V, rnd0: () => number): void {
+  const rnd = sub01(rnd0);
+  const count = Math.max(1, Math.round(countFull * DETAIL));
   for (let i = 0; i < count; i++) {
     const k = 0.18 + rnd() * 0.72;
     const a = rnd() * Math.PI * 2;
@@ -294,7 +314,8 @@ function warts(mb: MeshBuilder, on: (k: number, a: number) => { p: V; n: V }, co
 }
 
 /** Бугорок-основание пучка: гнилая древесина и мох, из которых растёт гроздь. */
-function lump(mb: MeshBuilder, r: number, h: number, seg: number, t: V): void {
+function lump(mb: MeshBuilder, r: number, h: number, segFull: number, t: V): void {
+  const seg = S(segFull);
   const rings: V[][] = [];
   const normals: V[][] = [];
   for (const [rr, hh] of [
@@ -483,8 +504,8 @@ function falseMorel(mb: MeshBuilder, rnd: Rnd): void {
     const s = stem(mb, path, (u) => R * (0.42 - 0.08 * u), 7, 'paper', () => tone('#e8e2d4', 'paper'));
     // Шляпка: сфера с бороздами — радиус гуляет по долготе и широте; в бороздах темнее.
     const c = add(s.top, [0, R * 0.55, 0]);
-    const seg = 12;
-    const lat = 8;
+    const seg = S(12);
+    const lat = Math.max(5, Math.round(8 * DETAIL));
     const ph = rnd() * 6;
     const fold = (th: number, a: number): number => Math.sin(a * 5 + ph + 2.4 * Math.sin(th * 3)) * Math.cos(th * 4 - a * 2 + ph) * 0.5 + Math.sin(a * 9 + th * 7 + ph) * 0.25;
     const rings: V[][] = [];
@@ -531,12 +552,13 @@ function fireCoral(mb: MeshBuilder, rnd: Rnd): void {
     const s = stem(mb, path, (u) => r0 * (1 - 0.25 * u), 6, 'enamel', red);
     // Скруглённый кончик.
     const [nx, bx] = basis(s.dir);
-    const ring = Array.from({ length: 6 }, (_, j) => add(add(s.top, mul(s.dir, r0 * 0.3)), add(mul(nx, Math.cos((j / 6) * Math.PI * 2) * r0 * 0.55), mul(bx, Math.sin((j / 6) * Math.PI * 2) * r0 * 0.55))));
+    const tipN = S(6);
+    const ring = Array.from({ length: tipN }, (_, j) => add(add(s.top, mul(s.dir, r0 * 0.3)), add(mul(nx, Math.cos((j / tipN) * Math.PI * 2) * r0 * 0.55), mul(bx, Math.sin((j / tipN) * Math.PI * 2) * r0 * 0.55))));
     const rn = ring.map((p) => norm(sub(p, s.top)));
     fan(mb, ring, rn, add(s.top, mul(s.dir, r0 * 0.75)), s.dir, MAT.enamel, red(1), red(1));
     sleeve(
       mb,
-      [Array.from({ length: 6 }, (_, j) => add(s.top, add(mul(nx, Math.cos((j / 6) * Math.PI * 2) * r0 * 0.75), mul(bx, Math.sin((j / 6) * Math.PI * 2) * r0 * 0.75)))), ring],
+      [Array.from({ length: tipN }, (_, j) => add(s.top, add(mul(nx, Math.cos((j / tipN) * Math.PI * 2) * r0 * 0.75), mul(bx, Math.sin((j / tipN) * Math.PI * 2) * r0 * 0.75)))), ring],
       [rn, rn],
       MAT.enamel,
       [red(1), red(1)],
@@ -587,16 +609,25 @@ export const speciesIndex = (id: string): number => SPECIES_ID.indexOf(id);
 
 const cache = new Map<number, MeshData>();
 
-/** Сетка грозди: форма = вид × FORMS + вариант. Низ — y = 0, гроздь вокруг начала координат. */
-export function mushroomForm(form: number): MeshData {
-  const hit = cache.get(form);
+/**
+ * Сетка грозди: форма = вид × FORMS + вариант; lod 1 — дальняя (граней меньше, раскладка та же). Низ — y = 0, гроздь вокруг
+ * начала координат.
+ */
+export function mushroomForm(form: number, lod: 0 | 1 = 0): MeshData {
+  const key = form * 2 + lod;
+  const hit = cache.get(key);
   if (hit) return hit;
   const sp = SPECIES[Math.floor(form / FORMS) % SPECIES.length]!;
   const mb = new MeshBuilder();
   current = sp.id;
-  sp.build(mb, mulberry32(0x6d757368 ^ (form * 0x9e37)));
+  DETAIL = lod === 1 ? LOD_FAR : 1;
+  try {
+    sp.build(mb, mulberry32(0x6d757368 ^ (form * 0x9e37)));
+  } finally {
+    DETAIL = 1;
+  }
   const m = mb.build();
-  cache.set(form, m);
+  cache.set(key, m);
   return m;
 }
 

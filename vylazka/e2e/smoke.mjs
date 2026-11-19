@@ -2655,7 +2655,16 @@ async function scenarioTouch(browser, baseUrl) {
     check(`${name}: палец на кнопке — кольцо заряда больше, заряд растёт, а свет ещё не горит`, ring.held && ring.charging && ring.scale > 1.3 && st.light.charge > 0.6 && st.light.state === 'off', JSON.stringify({ ...ring, charge: st.light.charge, state: st.light.state }));
     for (let i = 0; i < 60 && st.light.state !== 'on'; i++) st = await vz(page, () => window.__vz.tick(3));
     ring = await lightBtn();
-    check(`${name}: заряд полный — вспышка (луч ярче обычного, кнопка светится) и свет`, st.light.state === 'on' && st.light.intensity > 1.6 && ring.flash, JSON.stringify({ state: st.light.state, intensity: st.light.intensity, flash: ring.flash }));
+    // Вспышка мягкая (партнёр 19.11: «вспышки всегда мягкие»): луч не прыгает, а набухает и за секунду спадает — в середине
+    // в 1,6 раза ярче. Ловим её вершину по ходу и то, что она прошла.
+    const flashOn = ring.flash;
+    let peak = st.light.intensity;
+    const startI = st.light.intensity;
+    for (let i = 0; i < 30; i++) {
+      st = await vz(page, () => window.__vz.tick(3));
+      peak = Math.max(peak, st.light.intensity);
+    }
+    check(`${name}: заряд полный — мягкая вспышка (луч плавно набухает ярче обычного и спадает, кнопка светится) и свет`, st.light.state === 'on' && startI < 1.2 && peak > 1.45 && st.light.intensity < 1.1 && flashOn, JSON.stringify({ state: st.light.state, start: startI, peak, end: st.light.intensity, flash: flashOn }));
     st = await vz(page, () => window.__vz.tick(70));
     check(`${name}: через секунду — обычный свет`, st.light.state === 'on' && st.light.intensity > 0.5 && st.light.intensity < 1.1, `яркость ${st.light.intensity.toFixed(2)}`);
     await finger(page, 'pointerup', 8, btn[0], btn[1]);

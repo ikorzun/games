@@ -20,7 +20,7 @@ describe('сохранение', () => {
   it('профиль: мусор заменяется значениями по умолчанию, архив без повторов', () => {
     expect(parseProfile(null, 7)).toEqual(defaultProfile(7));
     expect(parseProfile({ v: 2 }, 7)).toEqual(defaultProfile(7));
-    expect(parseProfile({ v: 1, sorties: 3.7, successes: -2, archive: ['a', 'a', 5, 'b'], baseSeed: 42 }, 7)).toEqual({ v: 1, sorties: 3, successes: 0, archive: ['a', 'b'], baseSeed: 42, muted: false, sens: 1, bright: 1, flash: 'soft', lang: null, place: 'shelter', memories: {} });
+    expect(parseProfile({ v: 1, sorties: 3.7, successes: -2, archive: ['a', 'a', 5, 'b'], baseSeed: 42 }, 7)).toEqual({ v: 1, sorties: 3, successes: 0, archive: ['a', 'b'], baseSeed: 42, muted: false, sens: 1, bright: 1, flash: 'soft', lang: null, quality: null, place: 'shelter', memories: {} });
     // Чувствительность и яркость: только 0, 1, 2; всё прочее — середина.
     expect(parseProfile({ v: 1, sens: 2, bright: 0 }, 7)).toMatchObject({ sens: 2, bright: 0 });
     expect(parseProfile({ v: 1, sens: 5, bright: 'x' }, 7)).toMatchObject({ sens: 1, bright: 1 });
@@ -41,6 +41,14 @@ describe('сохранение', () => {
     // Старое поле calm (полные или мягкие вспышки) не читается: полных больше нет, и те и другие — мягкие.
     expect(parseProfile({ v: 1, calm: false }, 7)).toMatchObject({ flash: 'soft' });
     expect(parseProfile({ v: 1, calm: true }, 7)).toMatchObject({ flash: 'soft' });
+  });
+
+  it('качество, выбранное рукой, помнится (куратор, пачка 51, 324); не выбирал или мусор — null: решает замер', () => {
+    expect(defaultProfile(1).quality).toBeNull();
+    for (const q of ['low', 'med', 'high', 'ultra'] as const) expect(parseProfile({ v: 1, quality: q }, 7).quality).toBe(q);
+    expect(parseProfile({ v: 1, quality: 'max' }, 7).quality).toBeNull();
+    expect(parseProfile({ v: 1, quality: 3 }, 7).quality).toBeNull();
+    expect(parseProfile({ v: 1 }, 7).quality).toBeNull();
   });
 
   it('старое сохранение с вылазкой читается: профиль цел, вылазку игра не знает', async () => {
