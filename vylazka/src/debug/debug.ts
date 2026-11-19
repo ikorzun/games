@@ -107,6 +107,11 @@ export interface VzDebugApi {
    * Оранжерея (systems/flowers.ts): сколько головок на уровне, сколько раскрыто больше чем наполовину, на сколько градусов в
    * среднем раскрытые отвернулись от покоя к свету; shown, far, culled — что нарисовал рендер в последнем кадре.
    */
+  /** Головки цветов уровня: где и какой формы (номер в world/flowers.ts, HEADS) — для кадров вплотную. */
+  flowerSites(): { pos: number[]; form: number }[];
+  /** Трава: плиток у места и у луга, помещение с травой, сколько нарисовано в последнем кадре (и дальних, и отсечённых). */
+  /** Трава: плиток у места и у кармана, помещение с травой, что в кадре (ближних, дальних, у горизонта, отсечено, треугольников, где кончается) и вытоптанные круги. */
+  grass(): { level: number; pocket: number; room: number | null; shown: number; far: number; horizon: number; culled: number; tris: number; end: number; clear: [number, number, number, number][] };
   flowers(): { n: number; open: number; turn: number; lit: number; beam: boolean; gaze: boolean; shown: number; far: number; culled: number; eye?: number[]; from?: number[] | null; dir?: number[] | null; probe: number[][] };
   /** Почему вещь видна или не видна: расстояние, попадание в луч (dot против нужного need), путь луча до преграды. */
   sees(id: number): Record<string, number> | null;
@@ -485,6 +490,11 @@ export function installDebug(app: App): void {
       const r3 = (v: readonly number[]) => v.map((q) => +q.toFixed(2));
       const probe = sites.slice(0, 3).map((q) => r3(q.pos));
       return { n: sites.length, open: open.length, turn: +((turn * 180) / Math.PI).toFixed(1), lit: fl?.litCount ?? 0, beam: !!li?.beam, gaze: !!li?.gaze, ...game().renderer.flowerStats, ...(li ? { eye: r3(li.eye), from: li.beam ? r3(li.beam.origin) : null, dir: li.beam ? r3(li.beam.dir) : li.gaze ? r3(li.gaze.dir) : null } : {}), probe };
+    },
+    flowerSites: () => (game().flowers?.sites ?? []).map((q) => ({ pos: [...q.pos], form: q.form })),
+    grass: () => {
+      const g = game();
+      return { level: g.levelGrass?.sites.length ?? 0, pocket: g.pocketGrass?.sites.length ?? 0, room: g.level?.grassRoom ?? null, ...g.renderer.grassStats, clear: (g.level?.grassClear ?? []).map((c) => [...c] as [number, number, number, number]) };
     },
     gotoThing: (id, distance = 2.2) => {
       const g = game();

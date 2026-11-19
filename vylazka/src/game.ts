@@ -46,6 +46,8 @@ import type { FeelView } from './systems/feel';
 import type { PressureKind, PressureRoom } from './systems/pressure';
 import { DEFAULT_SPORES, SPORE_STRIDE, Spores } from './systems/spores';
 import { FLOWER_STRIDE, Flowers } from './systems/flowers';
+import { GRASS_FAR, GRASS_SHOWN, GRASS_STRIDE, Grass } from './systems/grass';
+import type { GrassClearing } from './systems/grass';
 import type { Comeback, ComebackOptions, Form, Mount } from './systems/illusions';
 import { Figures } from './systems/figures';
 import type { FigureLive } from './systems/figures';
@@ -206,6 +208,8 @@ interface Transition {
  * место успевает раствориться — см. SCAN.hold в рендере), как часто повторяется и как далеко достаёт, м.
  */
 const DARK_SHIFT = { first: 7, every: 9, range: 14 } as const;
+/** Трава кармана (луг) кругов не знает: вокруг его вещей она не растёт (world/pocket_meadow.ts). */
+const NO_CLEARINGS: readonly GrassClearing[] = [];
 /**
  * «На виду» (правило «показывать следствие, а не событие», K-21; аудит 17.11): полуугол от оси камеры, рад — шире кадра
  * (по горизонтали 106°) с запасом на край экрана и наклон головы.
@@ -768,6 +772,15 @@ export class Game {
   /** Оранжерея: головки цветов, что поворачиваются к свету героя и закрываются в темноте (systems/flowers.ts). */
   flowers: Flowers | null = null;
   private readonly flowerBuf = new Float32Array(FLOWERS_SHOWN * FLOWER_STRIDE);
+  /**
+   * Трава (партнёр 19.11, 21:31: «И трава нужна красивая на лугу и иногда на весь пол в некоторые помещения»): своя у места
+   * (помещение, где она проросла сквозь пол) и у луга; рендеру — ближние плитки (systems/grass.ts, render: setGrass).
+   */
+  levelGrass: Grass | null = null;
+  pocketGrass: Grass | null = null;
+  private readonly grassBuf = new Float32Array(GRASS_SHOWN * GRASS_STRIDE);
+  /** Вытоптанные круги травы места в этом кадре (systems/grass.ts, clearings). */
+  readonly grassClear: GrassClearing[] = [];
   /** Бумажные цветы: насколько каждый расцвёл (0 — тусклый, 1 — яркий) и сколько уже держится расцветшим, с. */
   private readonly blooms = new Map<number, { k: number; hold: number }>();
   /** Номер экрана-проёма, в который вошли и который ещё не унёс (ждёт конца идущего перехода); 0 — нет. */
@@ -903,6 +916,8 @@ export class Game {
     this.wireSaid.clear();
     this.loads += 1;
     this.skySeed = (hash2(dream?.seed ?? level.layout?.seed ?? 1, this.loads, 0x5c7) >>> 0) || 1;
+    // Трава — обстановка места, а не сна: и у просмотра кармана (?level=pocket_meadow) она та же, что видит игрок.
+    this.levelGrass = level.grass?.length ? new Grass(level.grass) : null;
     if (dream) {
       this.dreamSeed = dream.seed;
       this.swarm = new SwarmAI(level.nav, this.rng);
@@ -1493,8 +1508,9 @@ export class Game {
     }
     const H = CELL / 2;
     for (const r of layout.rooms) {
-      // Под звёздным небом ничего не давит: потолка там нет, и место это тихое.
-      if (r.cells.length < 2 || r.id === startRoom || r.id === level.skyRoom || gas.has(r.id)) continue;
+      // Под звёздным небом ничего не давит: потолка там нет, и место это тихое. Где проросла трава — тоже: провал пола оставил бы
+      // поле висеть над дырой (куратор, противоречие 347).
+      if (r.cells.length < 2 || r.id === startRoom || r.id === level.skyRoom || r.id === level.grassRoom || gas.has(r.id)) continue;
       // «Сеточное» — своё правило (wireRooms): пол уходит, если в нём стоять; остальные особые помещения — без давления.
       const wire = this.roomFx.get(r.id) === 'wire' && !['corridor', 'stairwell', 'lift', 'entrance', 'airlock'].includes(r.type);
       if (!wire && (skip.includes(r.type) || this.roomFx.has(r.id))) continue;
@@ -1780,6 +1796,9 @@ export class Game {
     if (this.level?.skyRoom !== undefined) this.roomFx.delete(this.level.skyRoom);
     // Оранжерея — тоже: цветы поворачиваются к свету героя, и строб с сеткой это бы съели (world/furnish_greenhouse.ts).
     if (this.level?.greenRoom !== undefined) this.roomFx.delete(this.level.greenRoom);
+    // И помещение с травой (design.md, §36): одно чудо за раз, и «сеточный» пол, уходящий из-под ног, оставил бы поле висеть
+    // над дырой (куратор, противоречие 347).
+    if (this.level?.grassRoom !== undefined) this.roomFx.delete(this.level.grassRoom);
   }
 
   /** Расставить вещи сна: мелочь по столам и полкам, крупное — посреди коридоров. */
@@ -2164,6 +2183,17 @@ export class Game {
     for (const t of this.pocketThings) this.dropThing(t);
     this.pocketThings = [];
     this.pocket = null;
+    this.pocketGrass = null;
+  }
+
+  /** Игрок в помещении, где проросла трава (design.md, §36): шаги по траве (audio/game_audio.ts). */
+  get onGrass(): boolean {
+    return this.where === 'main' && this.level?.grassRoom !== undefined && this.room === this.level.grassRoom;
+  }
+
+  /** Вещи, что лежат сейчас (не ушедшие): вокруг них трава места примята (systems/grass.ts, clearings). */
+  private *grassItems(): Iterable<{ pos: Vec3; radius: number }> {
+    for (const t of this.things.list) if (t.state !== 'gone') yield t;
   }
 
   /** Что пространству надо знать об игре: план убежища, где лежит искомая вещь и откуда игрока унесло. */
@@ -2231,6 +2261,7 @@ export class Game {
     this.leavePocket();
     const p = buildPocket(kind, (this.dreamSeed + this.pocketGroup * 7919) >>> 0, POCKET_ORIGIN, this.pocketContext(limbo));
     this.pocket = p;
+    this.pocketGrass = p.grass?.length ? new Grass(p.grass) : null;
     this.pocketGroup += 1;
     const group = `pocket${this.pocketGroup}`;
     for (const b of p.colliders) this.colliders.add({ ...b, group });
@@ -3391,6 +3422,14 @@ export class Game {
       // Грядка или горшок растворились от касания — их головок нет (world/objects.ts, systems/illusions.ts).
       this.renderer.setFlowers(this.flowerBuf, live ? this.flowers.visible([x, y, z], FLOWERS_SHOWN, this.flowerBuf, (id) => this.illusions?.get(id)?.dis ?? 0) : 0);
     } else this.renderer.setFlowers(this.flowerBuf, 0);
+    // Трава места или луга: ближние плитки — рендеру (он отсекает по кадру и упрощает дальние). У травы места — вытоптанные круги:
+    // где вещь лежит на полу сейчас и у дверей (systems/grass.ts, clearings); луг их не знает — вокруг его вещей трава не растёт.
+    const grass = this.where === 'main' ? this.levelGrass : this.where === 'pocket' ? this.pocketGrass : null;
+    this.renderer.setGrass(this.grassBuf, grass ? grass.visible([x, y, z], GRASS_SHOWN, this.grassBuf, GRASS_FAR) : 0);
+    if (grass && this.where === 'main') {
+      grass.clearings(this.grassItems(), this.level?.grassClear ?? [], this.grassClear);
+      this.renderer.setGrassClear(this.grassClear);
+    } else if (grass) this.renderer.setGrassClear(NO_CLEARINGS);
     // Примета без тела (trace) не рисуется: видны только грибы в углах у её пути.
     if (sw && sw.active && sw.mode !== 'trace' && this.where === 'main') {
       // Чем больше вспомнено и чем больше стёрто, тем выше и определённее фигура: она растёт из тронутого.
@@ -3550,6 +3589,8 @@ export class Game {
       // Ветер: сквозняк убежища, вентиляция офиса, ветер зала; идущий поезд гонит воздух — всё висящее
       // качается втрое сильнее. Время ветра — время кадра: на снимке зала оно стоит.
       wind: this.windView(fl),
+      // Трава и цветы у ног расступаются: ноги героя и радиус (WIND_GLSL, uPush).
+      push: { at: [this.body.x, this.body.y, this.body.z], radius: 0.85 },
       roof: this.where === 'main' ? (this.level?.roof ?? null) : null,
       contact: this.where === 'main',
       caustic: this.caustic,

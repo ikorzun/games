@@ -590,7 +590,9 @@ export class App {
         const pocket = buildPocket(name.slice(7) as PocketKind, this.seed, [0, 0, 0]);
         const colliders = new ColliderSet();
         for (const b of pocket.colliders) colliders.add(b);
-        this.level = { chunks: pocket.meshes.map((mesh) => ({ mesh, tierMin: 0, tierMax: 0 })), stairs: [], colliders, spawn: pocket.spawn, exit: pocket.spawn.pos, spots: [], landmarks: [], zones: [], collapses: [], variants: [], nav: [], sheets: [], layout: null };
+        // Трава кармана — тоже (луг): просмотр показывает пространство таким, каким его видит игрок, и с него снят кадр
+        // экрана-проёма (assets/screens/meadow.webp).
+        this.level = { chunks: pocket.meshes.map((mesh) => ({ mesh, tierMin: 0, tierMax: 0 })), stairs: [], colliders, spawn: pocket.spawn, exit: pocket.spawn.pos, spots: [], landmarks: [], zones: [], collapses: [], variants: [], nav: [], sheets: [], layout: null, ...(pocket.grass?.length ? { grass: pocket.grass } : {}) };
         this.game.loadLevel(this.level, null);
         this.game.env = pocket.env;
         this.game.renderer.cullDistance = 400;

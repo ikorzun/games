@@ -10,11 +10,15 @@ import { CEIL_H, DX, DZ, GRID, STAIR_CELLS, TIER_DROP } from '../gen/layout';
 import type { GenLayout, GenRoom, RoomType, WorldKind } from '../gen/layout';
 import { mossCushion } from './moss';
 import { ColliderSet } from './colliders';
+import type { Aabb } from './colliders';
 import type { FlatMark } from './flat';
 import { decayAt } from '../systems/decay';
 import { doorSign, dropBuried, dropHidden, furnishRoom, roomOpenness } from './furnish';
 import { furnishExtras, GARDEN_H, NO_EXTRAS } from './furnish_extras';
 import { furnishGreenhouse, GREEN_PLAN } from './furnish_greenhouse';
+import { GRASS_VARIANTS, grassForm } from './grass';
+import { GRASS_CLEAR } from '../systems/grass';
+import type { GrassSite } from '../systems/grass';
 import { furnishPapers, newPaperState } from './furnish_papers';
 import { growWear } from './wear_growth';
 import { NOTE_ID, ROOM_LABEL, SIGN } from './signs';
@@ -222,6 +226,18 @@ export const PIT_HOLE = 1.3;
 const PIT_DEPTH = 1.6;
 /** Смещение навигационного узла от центра клетки с провалом — на середину карниза. */
 const PIT_LEDGE = 0.95;
+
+/**
+ * Помещение с травой на весь пол (партнёр 19.11, 21:31: «иногда на весь пол в некоторые помещения»). «Иногда» — не в каждом сне:
+ * на первом круге — в двух уровнях из пяти; чем чаще возвращаешься в то же место (стёртость wear, systems/decay.ts), тем вероятнее,
+ * что оно заросло, — к поздним кругам в четырёх из пяти (куратор, противоречие 342: «привязать к кругам, как берёзы»). Жребий один
+ * на сид: заросшее помещение на следующем круге не «зарастает обратно», а трава в нём только выше.
+ */
+export const grassChance = (wear: number): number => {
+  const t = Math.min(1, Math.max(0, (wear - 0.1) / 0.6));
+  return 0.4 + 0.42 * t * t * (3 - 2 * t);
+};
+export const grassRolled = (seed: number, wear: number): boolean => hash01(13, 0x6a55, seed ^ 0x51) < grassChance(wear);
 
 /** Как собирать уровень. */
 export interface BuildOptions {
@@ -462,6 +478,21 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   /** Оранжерея вместо обстановки (убежище, офис) или кромкой поверх неё (зал ожидания). */
   const greenEdge = GREEN_PLAN[layout.world]?.edge !== undefined;
   const skyRoom = station ? undefined : rooms1.filter((r) => r !== gardenRoom && r !== greenRoom && !flowerRooms.has(r.id) && r.cells.length >= 2 && SKY_TYPES.includes(r.type)).sort(order(7))[0];
+  // Трава на весь пол (партнёр 19.11, 21:31: «И трава нужна красивая на лугу и иногда на весь пол в некоторые помещения»;
+  // «Комнаты должны удивлять, завораживать и порой шокировать»; design.md, §36): иногда — в семи уровнях из десяти — одно
+  // помещение, где сквозь пол проросла бледная трава до колен, выросшая без солнца. Порог резкий: за одной дверью пол, за
+  // другой — трава. Домашняя комната убежища (спальня, гостиная, жилой отсек), в офисе — переговорная, кабинет, архив или отдел.
+  // Не сад, не оранжерея, не небо, не бумажные цветы, не комната-аномалия, не начало сна и не помещения партнёра. В зале ожидания
+  // и в жёлтых комнатах травы нет: зал — моё место со своим временем, жёлтые пусты нарочно.
+  const GRASS_TYPES: Readonly<Partial<Record<WorldKind, readonly RoomType[]>>> = {
+    shelter: ['bedroom', 'living', 'dorm', 'nursery', 'hallway'],
+    office: ['meeting', 'manager', 'files', 'department'],
+  };
+  const grassTypes = GRASS_TYPES[layout.world];
+  const grassRoom =
+    grassTypes && grassRolled(layout.seed, decay.wear)
+      ? plain.filter((r) => grassTypes.includes(r.type) && r !== gardenRoom && r !== greenRoom && r !== skyRoom && !flowerRooms.has(r.id) && r !== variantRoom && r !== startRoom0 && !PARTNER_ROOMS.includes(r.type) && r.cells.length >= 2).sort(order(13))[0]
+      : undefined;
   /** Высота потолка помещения над полом. */
   const ceilOf = (room: GenRoom): number => (room === gardenRoom ? GARDEN_H : station ? (STATION_CEIL[room.type] ?? CEIL_H) : CEIL_H);
 
@@ -1010,6 +1041,74 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   dropBuried(spots, col);
   // И места, которых не видно ни откуда, где можно встать: вещь воспоминания вспоминают взглядом (furnish.ts, dropHidden).
   dropHidden(spots, col);
+  // Трава на весь пол помещения grassRoom: плитки 1 × 1 м по три на сторону клетки (world/grass.ts) ровной сеткой и с поворотом
+  // четвертями — квадраты сходятся без плешей в углах и без двойной густоты внахлёст (куратор, противоречие 348). Где середина
+  // плитки под мебелью — травы нет: она проросла сквозь пол, а не сквозь шкаф. От каждой двери к середине помещения — тропа:
+  // там трава ниже, вытоптанная. У дверей — круги (grassClear): в середине травинок нет, к краю они лежат, отведённые наружу
+  // (шейдер, GRASS). Круги вокруг вещей на полу кладёт игра — там, где вещь лежит сейчас (systems/grass.ts, clearings): иначе
+  // трава до колен прятала бы ключи на полу (противоречие 346), а заранее вытоптанные места всех возможных вещей оставляли бы
+  // помещение лысым (кадры 19.11, ночь: мест на полу — по одному на клетку).
+  const grass: GrassSite[] = [];
+  const grassClear: [number, number, number, number][] = [];
+  if (grassRoom) {
+    const y0 = tierFloor(grassRoom.tier);
+    const H = CELL / 2;
+    const under: Aabb[] = [];
+    const mine = new Set(grassRoom.cells.map(([x, z]) => `${x},${z}`));
+    const exits: [number, number][] = [];
+    for (const e of layout.edges) {
+      if (e.tier !== grassRoom.tier) continue;
+      const a = mine.has(`${e.cx},${e.cz}`);
+      const b = mine.has(`${e.cx + (e.dir === 0 ? 1 : 0)},${e.cz + (e.dir === 1 ? 1 : 0)}`);
+      if (a !== b) exits.push([cellToWorld(e.cx) + (e.dir === 0 ? H : 0), cellToWorld(e.cz) + (e.dir === 1 ? H : 0)]);
+    }
+    const mx = grassRoom.cells.reduce((m, [x]) => m + cellToWorld(x), 0) / grassRoom.cells.length;
+    const mz = grassRoom.cells.reduce((m, [, z]) => m + cellToWorld(z), 0) / grassRoom.cells.length;
+    const toPath = (x: number, z: number): number => {
+      let best = Infinity;
+      for (const [ex, ez] of exits) {
+        const dx = mx - ex;
+        const dz = mz - ez;
+        const t = Math.max(0, Math.min(1, ((x - ex) * dx + (z - ez) * dz) / Math.max(1e-6, dx * dx + dz * dz)));
+        best = Math.min(best, Math.hypot(x - ex - dx * t, z - ez - dz * t));
+      }
+      return best;
+    };
+    // С кругами трава выше: место зарастает (как берёзы — systems/decay.ts).
+    const wt = Math.min(1, Math.max(0, (decay.wear - 0.1) / 0.7));
+    const tall = 0.92 + 0.3 * wt * wt * (3 - 2 * wt);
+    for (const [gx, gz] of grassRoom.cells) {
+      const wx = cellToWorld(gx);
+      const wz = cellToWorld(gz);
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          const k = gx * 97 + gz * 31 + i * 7 + j;
+          const x = wx + i;
+          const z = wz + j;
+          const solid = col.query(x - 0.2, z - 0.2, x + 0.2, z + 0.2, under).some((b) => !b.ghost && !b.off && b.minY < y0 + 0.4 && b.maxY > y0 + 0.03 && b.minX < x + 0.2 && b.maxX > x - 0.2 && b.minZ < z + 0.2 && b.maxZ > z - 0.2);
+          if (solid) continue;
+          const pd = toPath(x, z);
+          const trod = pd >= 1.5 ? 1 : 0.42 + 0.58 * Math.max(0, (pd - 0.3) / 1.2);
+          grass.push({
+            pos: [x, y0 - 0.01, z],
+            rot: Math.floor(hash01(k, 3, layout.seed ^ 0x9a55) * 4) * (Math.PI / 2),
+            s: 1.04 + 0.06 * hash01(k, 4, layout.seed ^ 0x9a55),
+            // К середине помещения — выше, у стен — ниже: как растёт в тени и на свету.
+            h: (0.85 + 0.35 * hash01(k, 5, layout.seed ^ 0x9a55) - (Math.abs(i) + Math.abs(j)) * 0.06) * trod * tall,
+            form: grassForm('pale', Math.floor(hash01(k, 6, layout.seed ^ 0x9a55) * GRASS_VARIANTS)),
+          });
+        }
+      }
+    }
+    // Круги у дверей: порог вытоптан, и край травы не встаёт ровной линией поперёк прохода (противоречие 348). Половина кругов
+    // шейдера — вещам на полу (systems/grass.ts, clearings).
+    for (const [ex, ez] of exits) if (grassClear.length < GRASS_CLEAR / 2) grassClear.push([ex, y0, ez, 0.95]);
+  }
+  // Примета помещения с травой — для проверок и отладки (gotoLandmark('grass')).
+  if (grassRoom && grass.length > 0) {
+    const [gx, gz] = grassRoom.cells[Math.floor(grassRoom.cells.length / 2)]!;
+    landmarks.push({ id: 'grass', x: cellToWorld(gx), y: tierFloor(grassRoom.tier) + 1, z: cellToWorld(gz), room: grassRoom.id, tier: grassRoom.tier });
+  }
   // Мир расстановки остаётся у конструктора и тестов: от сеток ему — только верхние грани, сборщики не держать.
   if (opts.keepPlaceWorld) objects.freeze();
   // Свободные участки стен — в порядке помещений уровня: туда вещь может вернуться «в другом месте».
@@ -1085,6 +1184,9 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     ...(skyRoom ? { skyRoom: skyRoom.id } : {}),
     ...(greenRoom ? { greenRoom: greenRoom.id } : {}),
     ...(blooms.length > 0 ? { blooms } : {}),
+    ...(grassRoom ? { grassRoom: grassRoom.id } : {}),
+    ...(grass.length > 0 ? { grass } : {}),
+    ...(grassClear.length > 0 ? { grassClear } : {}),
     chunks: out,
     stairs,
     colliders: col,

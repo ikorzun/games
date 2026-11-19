@@ -116,6 +116,18 @@ class FakeRenderer {
   setFlowers(_data: Float32Array, count: number): void {
     this.flowers = count;
   }
+  /** Сколько плиток травы в последнем кадре и первая из них (x, y, z, поворот, размеры, форма). */
+  grass = 0;
+  grassFirst: number[] = [];
+  setGrass(data: Float32Array, count: number): void {
+    this.grass = count;
+    this.grassFirst = count > 0 ? [...data.slice(0, 7)] : [];
+  }
+  /** Вытоптанные круги травы, отданные рендеру последними. */
+  grassClear: (readonly [number, number, number, number])[] = [];
+  setGrassClear(list: readonly (readonly [number, number, number, number])[]): void {
+    this.grassClear = [...list];
+  }
   setPocket(m: unknown): void {
     this.pocketShown = m !== null;
   }
@@ -3342,6 +3354,51 @@ describe('собрано только там, куда смотрит герой
         expect(g.roomFx.has(level.skyRoom), `${world}/${seed}`).toBe(false);
       }
     }
+  });
+
+  it('где проросла трава, ничего не давит и нет строба, темноты и сетки; рендер получил вытоптанные круги места', () => {
+    let seen = 0;
+    for (const world of ['shelter', 'office'] as const) {
+      for (const seed of [7, 11, 42, 20041113]) {
+        const level = buildLevel(generateLayout(seed, 2, world), { wear: 0.8 });
+        if (level.grassRoom === undefined) continue;
+        seen += 1;
+        const h = new Harness(level, { seed });
+        const g = h.game;
+        expect(g.pressureRooms.has(level.grassRoom), `${world}/${seed}`).toBe(false);
+        expect(g.wireRooms.has(level.grassRoom), `${world}/${seed}`).toBe(false);
+        expect(g.roomFx.has(level.grassRoom), `${world}/${seed}`).toBe(false);
+      }
+    }
+    expect(seen).toBeGreaterThanOrEqual(3);
+  });
+
+  it('трава примята там, где вещь лежит сейчас: вещь воспоминания на полу помещения с травой — круг вокруг неё; у дверей — круги всегда', () => {
+    let seen = 0;
+    for (const seed of [7, 11, 42, 20041113]) {
+      const level = buildLevel(generateLayout(seed, 2, 'shelter'), { wear: 0.8 });
+      if (level.grassRoom === undefined) continue;
+      const room = level.layout!.rooms.find((r) => r.id === level.grassRoom)!;
+      const y0 = tierFloor(room.tier);
+      const sp = level.spots.find((q) => q.room === room.id && q.kind === 'floor');
+      if (!sp) continue;
+      seen += 1;
+      const h = new Harness(level, { seed });
+      const t = placeMemory(h, sp);
+      h.run(0.2);
+      const clear = h.r.grassClear;
+      expect(clear.some((c) => Math.hypot(c[0] - t.pos[0], c[2] - t.pos[2]) < 1e-6 && Math.abs(c[1] - y0) < 0.05 && c[3] > 0.6), `сид ${seed}`).toBe(true);
+      for (const d of level.grassClear ?? []) expect(clear.some((c) => c[0] === d[0] && c[2] === d[2]), `сид ${seed}: дверь`).toBe(true);
+      // Вещь переложили на стол — круга у её прежнего места на полу больше нет.
+      const table = level.spots.find((q) => q.room === room.id && q.y > y0 + 0.6);
+      if (table) {
+        const was = [...t.pos];
+        t.pos = [table.x, table.y, table.z];
+        h.run(0.2);
+        expect(h.r.grassClear.some((c) => Math.hypot(c[0] - was[0]!, c[2] - was[2]!) < 1e-6), `сид ${seed}: круг остался`).toBe(false);
+      }
+    }
+    expect(seen).toBeGreaterThanOrEqual(2);
   });
 });
 

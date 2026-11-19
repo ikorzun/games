@@ -36,10 +36,14 @@ describe('оранжерея в местах (партнёр 19.11: «комна
     expect(room.type).not.toBe('kitchen');
     expect(['archive', 'buffet']).not.toContain(room.type);
     if (world === 'station') expect(room.type, 'в зале ожидания — клумбы на перроне').toBe('platform');
-    const blooms = l.blooms ?? [];
+    // С 19.11, 21:27 цветы есть и вне оранжереи — в банках на кухонных столах и герань в горшках по дому (props_home.ts,
+    // jar_flowers, houseplant): их головки — отдельно, проверяются ниже.
+    const objs = new Map((l.objects ?? []).map((o) => [o.id, o]));
+    const HOME = new Set(['jar_flowers', 'houseplant']);
+    const home = (b: { obj: number }): boolean => HOME.has(objs.get(b.obj)?.name ?? '');
+    const blooms = (l.blooms ?? []).filter((b) => !home(b));
     expect(blooms.length, 'головок').toBeGreaterThan(world === 'station' ? 20 : 30);
     // Головка — над полом помещения и внутри его клеток (с запасом на наклон стебля).
-    const objs = new Map((l.objects ?? []).map((o) => [o.id, o]));
     for (const b of blooms) {
       expect([...b.pos, ...b.dir].every(Number.isFinite)).toBe(true);
       expect(b.form).toBeGreaterThanOrEqual(0);

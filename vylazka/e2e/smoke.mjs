@@ -2192,6 +2192,8 @@ async function scenarioThings(browser, baseUrl) {
     const anchor = small.find((t) => small.some((o) => o.id !== t.id && close(o, t)));
     const where = (list) => new Map(list.map((t) => [t.id, t.pos.map((v) => v.toFixed(2)).join(',')]));
     const reached = anchor ? await vz(page, (id) => window.__vz.gotoThing(id, 2.4), anchor.id) : false;
+    // В темноте вещь меняется только вне кадра (K-21): подошёл — отвернулся и смотрит вверх, мелкие вещи рядом не на виду.
+    await vz(page, () => window.__vz.look(window.__vz.state().aim[0] + Math.PI, 0.9));
     await vz(page, () => window.__vz.step(30));
     const before = where(await vz(page, () => window.__vz.things()));
     await vz(page, () => window.__vz.toggleLight());

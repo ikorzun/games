@@ -192,14 +192,29 @@ uniform float uBuildOn;
 export const WIND_GLSL = /* glsl */ `
 attribute float aSway;
 uniform vec4 uWind;       // x — время ветра, с; y — размах свободного конца, м; zw — куда дует (x, z)
+uniform vec4 uPush;       // шаги героя: xz — где ноги, y — пол под ним; w — радиус, м (0 — никого)
 
 vec3 windSway(vec3 wp) {
-  if (aSway <= 0.0 || uWind.y <= 0.0) return wp;
-  float ph = dot(wp.xz, vec2(0.37, 0.29));
-  float t = uWind.x - aSway * 0.7;
-  float along = 0.55 * sin(t * 1.31 + ph) + 0.3 * sin(t * 2.17 + ph * 1.7 + 1.1) + 0.45 * sin(t * 0.43 + ph * 0.31 + 0.5);
-  float across = 0.4 * sin(t * 1.73 + ph * 1.3 + 1.9);
-  wp.xz += (uWind.zw * along + vec2(-uWind.w, uWind.z) * across) * (uWind.y * aSway);
+  if (aSway <= 0.0) return wp;
+  if (uWind.y > 0.0) {
+    float ph = dot(wp.xz, vec2(0.37, 0.29));
+    float t = uWind.x - aSway * 0.7;
+    float along = 0.55 * sin(t * 1.31 + ph) + 0.3 * sin(t * 2.17 + ph * 1.7 + 1.1) + 0.45 * sin(t * 0.43 + ph * 0.31 + 0.5);
+    float across = 0.4 * sin(t * 1.73 + ph * 1.3 + 1.9);
+    wp.xz += (uWind.zw * along + vec2(-uWind.w, uWind.z) * across) * (uWind.y * aSway);
+  }
+  // Трава и цветы у ног расступаются (партнёр 19.11, 21:31: трава — на лугу и на полу помещений): кончик уходит от героя и
+  // клонится к земле; висящее под потолком не трогается — только то, что ниже колен.
+  if (uPush.w > 0.0 && wp.y < uPush.y + 0.9) {
+    vec2 d = wp.xz - uPush.xz;
+    float r = length(d);
+    if (r < uPush.w && r > 1e-3) {
+      float k = 1.0 - r / uPush.w;
+      k *= k;
+      wp.xz += d / r * (0.32 * k * aSway);
+      wp.y -= 0.16 * k * aSway;
+    }
+  }
   return wp;
 }
 `;
@@ -220,6 +235,36 @@ varying vec2 vTone;
 varying float vSeed;      // чей узор кружева: номер предмета или сид вещи (0 — архитектура)
 ${CRUMBLE_GLSL}
 ${WIND_GLSL}
+#ifdef GRASS
+// Трава (world/grass.ts): uv вершины — корень её травинки в плитке, и травинку решает корень целиком. У мест, где лежат вещи, и
+// у дверей — вытоптанные круги (world/level_build.ts, grassClear): в середине круга травинки нет (она стягивается в точку корня
+// и не рисуется), ближе к краю — лежит, отведённая от середины, у края — встаёт. Иначе трава до колен прячет ключи на полу
+// (куратор, противоречие 346).
+uniform vec4 uClear[GRASS];   // xz — середина круга, y — пол под ним, w — радиус, м (0 — пусто)
+varying vec3 vRoot;
+vec3 grassTrample(vec3 wp, vec3 root) {
+  float k = 1.0;
+  vec2 away = vec2(1.0, 0.0);
+  for (int i = 0; i < GRASS; i++) {
+    vec4 c = uClear[i];
+    if (c.w <= 0.0 || abs(c.y - root.y) > 0.6) continue;
+    vec2 d = root.xz - c.xz;
+    float r = length(d);
+    float t = smoothstep(0.38 * c.w, c.w, r);
+    if (t < k) {
+      k = t;
+      if (r > 1e-3) away = d / r;
+    }
+  }
+  if (k >= 1.0) return wp;
+  if (k <= 0.0) return root;
+  float h = max(wp.y - root.y, 0.0);
+  float lie = 1.0 - k;
+  wp.y = root.y + h * mix(1.0, 0.1, lie);
+  wp.xz += away * (h * 0.85 * lie);
+  return wp;
+}
+#endif
 #ifdef BIRD
 // Птица (systems/birds.ts): много копий одной сетки. В канале качания у вершин крыла стоит не ветер, а
 // место на крыле — от плеча (0) к кончику (1) со знаком стороны; по нему крыло машет и складывается.
@@ -272,6 +317,11 @@ void main() {
   vShell = max(-aSway, 0.0);
   vec4 wp = modelMatrix * (im * vec4(position, 1.0));
   wp.xyz = windSway(wp.xyz);
+#ifdef GRASS
+  vec3 rootW = (modelMatrix * (im * vec4(uv.x, 0.0, uv.y, 1.0))).xyz;
+  wp.xyz = grassTrample(wp.xyz, rootW);
+  vRoot = rootW;
+#endif
   vec3 wn = normalize(mat3(modelMatrix) * (mat3(im) * normal));
 #endif
   // Подвешенное к потолку (светильник, короб, вывеска): часть потолка, своим номером вершин (HANG_OBJ).
@@ -370,6 +420,9 @@ varying float vDis;
 varying float vObj;
 varying float vLace;
 varying float vArch;
+#ifdef GRASS
+varying vec3 vRoot;   // корень травинки в мире (render: трава, GRASS)
+#endif
 varying vec2 vTone;       // x — предмет выцвел, y — светится своим цветом
 varying float vSeed;      // чей узор кружева (0 — архитектура: общий узор)
 varying float vShell;     // мох слоями: уровень слоя, 0 — не мох
@@ -788,6 +841,15 @@ void main() {
       laceK = 1.0;
     } else if (cellHash(floor(vWorld * 48.0) + 17.0) < gone) laceK = 1.0;
   }
+#ifdef GRASS
+  // Трава растёт из пола: стёрт пол под корнем (та же маска, что у пола в archGone) — травинки нет. Стёртый пол остаётся нитями,
+  // а на нитях трава не держится (куратор, противоречие 347: иначе поле висело бы над дырой).
+  if (uErase.z > 0.0) {
+    float gn = softNoise(vRoot * 0.9 + 3.1);
+    float gg = clamp((uErase.z * 1.14 - 0.06 - gn) / 0.08, 0.0, 1.0);
+    if (gg >= 1.0 || cellHash(floor(vWorld * 48.0) + 23.0) < gg) discard;
+  }
+#endif
   // Линия-нить по ребру (LACE_EDGE) — сама нить: сетка по граням к ней не относится.
 #ifndef LACE_EDGE
   if (laceK > 0.5) {

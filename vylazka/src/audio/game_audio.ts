@@ -30,6 +30,8 @@ export interface AudioWorld {
   world?: string;
   /** Карманное пространство, в котором сейчас игрок: по его роду выбирается тон места. */
   pocket?: { kind: string } | null;
+  /** Игрок в помещении, где сквозь пол проросла трава (design.md, §36): шаги — по траве. */
+  onGrass?: boolean;
   /** Стирание места (systems/decay.ts): насколько ещё слышны люди, 0..1. Нет поля — слышны как есть. */
   decay?: { voices: number };
   /**
@@ -254,12 +256,12 @@ export class GameAudio {
     const b = game.body;
     this.clock += dt;
 
-    // Шаги — по тому, что под ногами: бетон убежища, вода, ковролин офиса и жёлтых комнат, трава луга.
-    // В белом нигде, в домике и в лимбо шагов не слышно.
+    // Шаги — по тому, что под ногами: бетон убежища, вода, ковролин офиса и жёлтых комнат, трава луга и помещения, где она
+    // проросла сквозь пол. В белом нигде, в домике и в лимбо шагов не слышно.
     const place = game.world ?? 'shelter';
     const pocket = game.where === 'pocket' ? (game.pocket?.kind ?? '') : '';
     if (game.consumeFootstep() && active) {
-      const id = !over ? (s?.inWater ? 'step_water' : place === 'shelter' ? 'step_concrete' : 'step_carpet') : pocket === 'meadow' ? 'step_grass' : null;
+      const id = !over ? (s?.inWater ? 'step_water' : game.onGrass ? 'step_grass' : place === 'shelter' ? 'step_concrete' : 'step_carpet') : pocket === 'meadow' ? 'step_grass' : null;
       if (id) {
         const speed = Math.hypot(b.vx, b.vz);
         a.play(id, { rate: this.jitter(0.07), volume: 0.55 + Math.min(0.45, speed / 9) });

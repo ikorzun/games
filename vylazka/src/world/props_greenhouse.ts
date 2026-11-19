@@ -20,10 +20,13 @@ import type { PropSpec } from './props_more';
 
 type Palette = readonly (readonly [FlowerSpecies, number])[];
 /** Что растёт в грядке: вид и вес жребия. */
+// С 19.11, 21:27 (партнёр: «Больше разных цветов и растений в оранжерею») — и пионы, лилии, маки, ромашки, ирисы, подсолнух.
+// В подземной теплице — то, что несут к праздникам и к похоронам; у вокзала — весенние и полевые; в зимнем саду — зелень и одна
+// ботаническая ошибка: подсолнух, которому нечего искать под потолочными лампами.
 const PALETTES: Record<string, Palette> = {
-  mourn: [['carnation', 4], ['chrysanthemum', 4], ['calla', 2], ['fern', 1]],
-  spring: [['tulip', 5], ['carnation', 3], ['chrysanthemum', 1]],
-  green: [['fern', 2], ['geranium', 3], ['chrysanthemum', 2], ['violet', 2]],
+  mourn: [['carnation', 4], ['chrysanthemum', 3], ['calla', 2], ['lily', 2], ['peony', 2], ['fern', 1]],
+  spring: [['tulip', 4], ['carnation', 2], ['daisy', 2], ['poppy', 2], ['iris', 2], ['chrysanthemum', 1]],
+  green: [['fern', 2], ['geranium', 3], ['chrysanthemum', 2], ['violet', 2], ['iris', 1], ['sunflower', 1]],
 };
 function pick(p: Palette, r: number): FlowerSpecies {
   const total = p.reduce((s, [, w]) => s + w, 0);
@@ -35,7 +38,7 @@ function pick(p: Palette, r: number): FlowerSpecies {
   return p[p.length - 1]![0];
 }
 /** Сколько растений вида помещается на метр грядки в ряд: пышная зелень — реже. */
-const STEP: Partial<Record<FlowerSpecies, number>> = { fern: 0.55, geranium: 0.34, calla: 0.24, chrysanthemum: 0.22, carnation: 0.17, tulip: 0.15, violet: 0.2 };
+const STEP: Partial<Record<FlowerSpecies, number>> = { fern: 0.55, geranium: 0.34, calla: 0.24, chrysanthemum: 0.22, carnation: 0.17, tulip: 0.15, violet: 0.2, peony: 0.27, lily: 0.22, poppy: 0.16, daisy: 0.13, iris: 0.2, sunflower: 0.42 };
 
 const WOOD = [0.62, 0.5, 0.4] as const;
 const SOIL = [0.55, 0.45, 0.36] as const;
@@ -73,7 +76,8 @@ function bed(xf: Xf, seed: number, palette: Palette, W = 2.4): void {
       // Раскидистые — папоротник (до полуметра вокруг) и калла (листья на длинных черешках) — только в переднем ряду и не у
       // торцов: из заднего они проросли бы листьями в стену, у торца — свисали бы за ящик. Вместо них там — гвоздика или герань.
       const wide = s === 'fern' || s === 'calla';
-      const sp = wide && (ri < 2 || Math.abs(x) > W / 2 - 0.5) ? (s === 'fern' ? 'geranium' : 'carnation') : s;
+      // Подсолнух в рост человека — только у стены: впереди он закрыл бы всю грядку.
+      const sp = wide && (ri < 2 || Math.abs(x) > W / 2 - 0.5) ? (s === 'fern' ? 'geranium' : 'carnation') : s === 'sunflower' && ri > 0 ? 'geranium' : s;
       const step = STEP[sp] ?? 0.2;
       // Крупнее настоящих, как грибы: головка должна читаться с края луча, а грядка — быть зарослью, а не рядком.
       plant(xf, [x, soil, z + (r() - 0.5) * 0.06], sp, Math.floor(r() * 1e9), 1.6 - ri * 0.15 + (r() - 0.5) * 0.14, r() * 6.28);
@@ -103,7 +107,7 @@ function patch(xf: Xf, seed: number, palette: Palette): void {
     // Подсолнечная спираль: ровно, без проплешин и кучек; раскидистые — только в середине.
     const rr = Math.sqrt((k + 0.5) / n) * (R - 0.12);
     const a = k * 2.39996 + r() * 0.3;
-    const sp = (s === 'fern' || s === 'calla') && rr > R * 0.45 ? 'carnation' : s;
+    const sp = (s === 'fern' || s === 'calla' || s === 'sunflower') && rr > R * 0.45 ? 'carnation' : s;
     const y = rr < R * 0.7 ? 0.1 : 0.05;
     plant(xf, [Math.cos(a) * rr, y, Math.sin(a) * rr], sp, Math.floor(r() * 1e9), 1.5 - (rr / R) * 0.4 + (r() - 0.5) * 0.14, r() * 6.28);
   }

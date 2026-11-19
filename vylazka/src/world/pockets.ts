@@ -7,6 +7,7 @@
  * нет и даль чёрная; в белом нигде всё залито ровным светом и даль белая.
  */
 import type { Vec3 } from '../core/types';
+import type { GrassSite } from '../systems/grass';
 import type { WorldKind } from '../gen/layout';
 import type { Aabb } from './colliders';
 import { MeshBuilder } from './kit';
@@ -132,6 +133,8 @@ export interface PocketSpace {
   exit?: Vec3 | null;
   /** То, ради чего сюда попадают: точка, на которую надо посветить (макет убежища в кукольном домике). */
   focus?: Vec3 | null;
+  /** Трава плитками (луг): рисует рендер копиями одной сетки (systems/grass.ts). */
+  grass?: GrassSite[];
 }
 
 export type PocketBuilder = (seed: number, origin: Vec3, ctx?: PocketContext) => PocketSpace;

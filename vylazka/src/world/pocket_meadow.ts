@@ -18,6 +18,8 @@ import { MAT } from './materials';
 import { Xf } from './props';
 import { beam, sheet } from './props_more';
 import type { PocketBuilder, PocketSpace } from './pockets';
+import type { GrassSite } from '../systems/grass';
+import { GRASS_VARIANTS, grassForm } from './grass';
 
 const R_WALK = 27;
 const HALF = 48;
@@ -519,6 +521,7 @@ export const buildMeadow: PocketBuilder = (seed, origin): PocketSpace => {
     return { h: sc, ok: true };
   };
   const clumpCount = { n: 0 };
+  const grass: GrassSite[] = [];
   const sprinkle = (count: number, rMin: number, rMax: number, density: (r: number) => number): void => {
     for (let i = 0; i < count; i++) {
       const a = rnd() * Math.PI * 2;
@@ -534,9 +537,24 @@ export const buildMeadow: PocketBuilder = (seed, origin): PocketSpace => {
       clumpCount.n++;
     }
   };
-  sprinkle(1350, 0.6, 9, (r) => 1 - 0.3 * (r / 9));
-  sprinkle(1050, 9, 20, (r) => 0.8 - 0.55 * ((r - 9) / 11));
-  sprinkle(260, 20, 36, () => 0.7);
+  // Весь круг в 30 м — трава плитками (world/grass.ts, systems/grass.ts): густо, качается, расступается у ног, у горизонта —
+  // редкой сеткой, а не обрывом (куратор, противоречие 349). Плитки — почти ровной сеткой и с поворотом четвертями: квадраты
+  // сходятся без плешей в углах и без двойной густоты внахлёст (противоречие 348). За кругом — прежние пучки до полос холмов.
+  for (let gx = -30; gx <= 30; gx++) {
+    for (let gz = -30; gz <= 30; gz++) {
+      const x = gx + (hash2(gx, gz, ns + 7) - 0.5) * 0.16;
+      const z = gz + (hash2(gx, gz, ns + 8) - 0.5) * 0.16;
+      if (Math.hypot(x, z) > 30) continue;
+      const pd = pathDist(x, z);
+      const on = objNear(x, z);
+      if (pd < 0.45 || on < 0.7) continue;
+      // У тропы и у вещей — короче и реже, как вытоптано; пятнами — выше.
+      const sc = 0.5 + 0.5 * smooth((pd - 0.45) / 1.5) * smooth((on - 0.7) / 1.3);
+      const tall = 0.8 + 0.45 * noise(x * 0.35, z * 0.35, 51);
+      grass.push({ pos: [ox + x, oy + gy(x, z) - 0.02, oz + z], rot: Math.floor(hash2(gx, gz, ns + 9) * 4) * (Math.PI / 2), s: 1.08 + 0.1 * hash2(gx, gz, ns + 10), h: sc * tall, form: grassForm('meadow', Math.floor(hash2(gx, gz, ns + 11) * GRASS_VARIANTS)) });
+    }
+  }
+  sprinkle(260, 28.5, 36, (r) => 0.5 + 0.3 * smooth((r - 28.5) / 5));
   // Гуще у тропы и у предметов.
   for (let k = 0; k < 130; k++) {
     const z = range(PATH_Z1 + 0.4, PATH_Z0);
@@ -944,5 +962,6 @@ export const buildMeadow: PocketBuilder = (seed, origin): PocketSpace => {
     // Выход — дверная коробка посреди луга, прямо по ходу.
     exit: [ox, oy, oz - 12],
     spots: spotsXZ.map(([x, z]): Vec3 => [ox + x, oy, oz + z]),
+    grass,
   };
 };

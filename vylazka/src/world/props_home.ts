@@ -12,6 +12,7 @@
  */
 import type { Vec3 } from '../core/types';
 import type { BoxOpts } from './kit';
+import { plant } from './flowers';
 import { MAT } from './materials';
 import { hung } from './props';
 import type { Xf } from './props';
@@ -551,8 +552,54 @@ function windowFake(xf: Xf, seed: number): void {
   }
 }
 
-/** Фикус в кадке 0,5 × 0,5 × 1,3: ствол, ветки, крупные листья. */
+/**
+ * Комнатное растение 0,5 × 0,5 × 1,3 (партнёр 19.11, 21:27: «Больше разных цветов и растений… в другие помещения»): что стоит у
+ * стены, решает сид — фикус в кадке (как было), тёщин язык, алоэ, хлорофитум или монстера в горшке; зелень — кодом
+ * (world/flowers.ts, plant).
+ */
 function houseplant(xf: Xf, seed: number): void {
+  const kind = seed % 5;
+  if (kind === 0) return ficus(xf, seed);
+  const cz = 0.25;
+  // Горшок: обожжённая глина на поддоне, у сансевиерии — повыше и пошире (высокий куст в низком горшке валится).
+  const big = kind === 1;
+  const r0 = big ? 0.15 : 0.11;
+  const h = big ? 0.3 : 0.24;
+  const clay: Vec3 = [1.45, 0.82, 0.62];
+  xf.cyl([0, 0, cz], 'y', 0.02, r0 + 0.04, MAT.brick, { segments: 10, tint: dim(clay, 0.85) });
+  xf.cyl([0, 0.02, cz], 'y', h - 0.03, r0, MAT.plaster, { segments: 10, radiusEnd: r0 + 0.04, tint: clay, caps: false });
+  xf.cyl([0, h - 0.01, cz], 'y', 0.03, r0 + 0.05, MAT.plaster, { segments: 10, tint: dim(clay, 1.05), caps: false });
+  xf.cyl([0, h - 0.04, cz], 'y', 0.01, r0 + 0.035, MAT.dirt, { segments: 10, tint: [1.1, 1.05, 1.0] });
+  // Монстеры дома нет: её лист шире места горшка у стены (0,5 м) и тяжелее бюджета вещи — она живёт в оранжерее, в кадке.
+  // Вместо неё — герань, цветок советского подоконника; её головки, как в оранжерее, поворачиваются к свету.
+  const species = (['sansevieria', 'aloe', 'chlorophytum', 'geranium'] as const)[kind - 1]!;
+  const size = species === 'chlorophytum' ? 0.85 : species === 'geranium' ? 1.1 : 1.15;
+  plant(xf, [0, h - 0.03, cz], species, seed, size, rng(seed)() * 6.28);
+  xf.collider([-0.2, 0, cz - 0.2], [0.2, Math.min(1.0, h + 0.5), cz + 0.2]);
+}
+
+/**
+ * Банка с цветами 0,24 × 0,24 × 0,6 (середина — в начале координат, дно — на y = 0): стеклянная банка с водой и букет из того,
+ * что росло на даче и продавалось у метро, — ромашки, пионы, гвоздики, тюльпаны, маки. Головки — вещи рендера: поворачиваются
+ * к свету (world/flowers.ts, systems/flowers.ts).
+ */
+function jarFlowers(xf: Xf, seed: number): void {
+  const rnd = rng(seed);
+  const glass: Vec3 = [1.25, 1.35, 1.35];
+  xf.cyl([0, 0, 0], 'y', 0.13, 0.042, MAT.glass, { segments: 10, tint: glass, caps: false });
+  xf.cyl([0, 0.13, 0], 'y', 0.012, 0.036, MAT.glass, { segments: 10, tint: glass, caps: false });
+  xf.cyl([0, 0.003, 0], 'y', 0.085, 0.039, MAT.glass, { segments: 10, tint: [0.95, 1.1, 1.05] });
+  const kinds = [['daisy', 'daisy', 'poppy'], ['peony', 'peony', 'carnation'], ['carnation', 'carnation', 'tulip'], ['tulip', 'tulip', 'daisy'], ['daisy', 'carnation', 'poppy']] as const;
+  const set = kinds[Math.floor(rnd() * kinds.length)]!;
+  const n = 3 + Math.floor(rnd() * 3);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + rnd() * 0.6;
+    plant(xf, [Math.cos(a) * 0.012, 0.03, Math.sin(a) * 0.012], set[i % set.length]!, Math.floor(rnd() * 1e9), 0.62 + rnd() * 0.12, a);
+  }
+}
+
+/** Фикус в кадке: ствол, ветки, крупные листья. */
+function ficus(xf: Xf, seed: number): void {
   const rnd = rng(seed);
   const cx = 0;
   const cz = 0.25;
@@ -1120,7 +1167,8 @@ export const HOME_PROPS: Record<string, PropSpec> = {
   ironing_board: { w: 1.2, d: 0.4, h: 0.9, mount: 'floor', ru: 'гладильная доска с рубашкой', build: (xf) => ironingBoard(xf) },
   radiator: { w: 0.9, d: 0.14, h: 0.6, mount: 'wall', y: 0.12, ru: 'чугунная батарея', build: radiator },
   window_fake: { w: 1.3, d: 0.14, h: 1.45, mount: 'wall', y: 0.85, ru: 'окно в никуда: за стеклом ровное бледное свечение', build: windowFake },
-  houseplant: { w: 0.5, d: 0.5, h: 1.3, mount: 'floor', ru: 'фикус в кадке', build: houseplant },
+  jar_flowers: { w: 0.24, d: 0.24, h: 0.6, mount: 'free', ru: 'банка с цветами: ромашки, пионы, гвоздики, тюльпаны или маки', build: jarFlowers },
+  houseplant: { w: 0.5, d: 0.5, h: 1.3, mount: 'floor', ru: 'комнатное растение: фикус в кадке, тёщин язык, алоэ, хлорофитум или герань', build: houseplant },
   chandelier: { w: 0.7, d: 0.7, h: 0.55, mount: 'ceiling', ru: 'люстра с тремя плафонами', build: (xf) => hung(xf, 0.55, 0.25, () => chandelier(xf)) },
   christmas_tree: { w: 1.0, d: 1.0, h: 1.8, mount: 'floor', ru: 'ёлка с шарами, звездой и подарками', build: christmasTree },
   door_leaf_lean: { w: 0.95, d: 0.3, h: 2.05, mount: 'floor', ru: 'сорванная дверная створка, прислонена к стене', build: doorLean },

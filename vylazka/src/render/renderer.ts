@@ -10,6 +10,9 @@ import type { LevelChunk, StairLink } from '../world/level';
 import { birdMesh } from '../world/bird';
 import { mushroomForm } from '../world/mushrooms';
 import { headForm } from '../world/flowers';
+import { GRASS_KINDS, GRASS_LODS, GRASS_VARIANTS, grassTile, grassTris } from '../world/grass';
+import type { GrassLod } from '../world/grass';
+import { GRASS_CLEAR, GRASS_FAR, GRASS_STRIDE } from '../systems/grass';
 import { BIRD_STRIDE, BIRDS_MAX } from '../systems/birds';
 import { MAT_COUNT, MAT_DEFS } from '../world/materials';
 import { bakeDetail } from './detail';
@@ -151,6 +154,8 @@ export interface FrameView {
   press?: PressureView | null;
   /** Ветер: время (с; у места своё — в зале ожидания оно стоит вместе со снимком), размах свободного конца (м) и куда дует (x, z). Нет — штиль. */
   wind?: { t: number; amp: number; dir: readonly [number, number] };
+  /** Шаги героя для травы и цветов у ног (WIND_GLSL, uPush): где ноги и радиус; нет — никто не мнёт. */
+  push?: { at: Vec3; radius: number } | null;
   /** Зал ожидания: стеклянная крыша — её прямоугольник в мире (minX, minZ, maxX, maxZ) и высота переплёта, м. Нет — крыши нет. */
   roof?: { box: readonly [number, number, number, number]; y: number } | null;
   /**
@@ -433,6 +438,22 @@ const FLOWER_LOD_AT = 3.5;
 const FLOWER_STRIDE = 10;
 
 /**
+ * Трава (systems/grass.ts, world/grass.ts): плитки 1 × 1 м копиями одной сетки. Ближе GRASS_LOD_AT — все травинки плитки
+ * (1320 треугольников), но не больше GRASS_NEAR_CAP плиток; дальше — каждая третья одним треугольником (88), за GRASS_HORIZON_AT —
+ * каждая девятая (30), на тех же местах. Дальше GRASS_FAR и вне кадра — не рисуются. Предел плиток в кадре — по качеству; где
+ * трава кончается (дальность или предел), она за последние метры сходит на нет — уменьшается, а не обрывается кругом.
+ */
+const GRASS_MAX = 1600;
+const GRASS_CAP: Readonly<Record<Quality, number>> = { low: 700, med: 900, high: 1300, ultra: GRASS_MAX };
+const GRASS_NEAR_CAP: Readonly<Record<Quality, number>> = { low: 12, med: 24, high: 40, ultra: 64 };
+const GRASS_LOD_AT: Readonly<Record<Quality, number>> = { low: 2.6, med: 3.6, high: 4.6, ultra: 6 };
+const GRASS_HORIZON_AT: Readonly<Record<Quality, number>> = { low: 9, med: 10, high: 12, ultra: 15 };
+/** Сколько копий держит сетка каждой подробности: ближних мало по пределу, дальних и горизонта — сколько влезет в кадр. */
+const GRASS_ROOM: readonly number[] = [64, 1024, GRASS_MAX];
+/** Треугольников в плитке: форма × подробность (для счёта в кадре). */
+const grassTrisOf = (form: number, lod: GrassLod): number => grassTris(GRASS_KINDS[Math.floor(form / GRASS_VARIANTS)] ?? 'meadow', form % GRASS_VARIANTS, lod);
+
+/**
  * Сторона текстуры состояний объектов уровня: 64 × 64 = 4096 объектов (world/objects.ts, MAX_OBJECTS).
  * То же число зашито в шейдере (objState: id & 63, id >> 6).
  */
@@ -602,6 +623,17 @@ export class GameRenderer {
   private flowerData: Float32Array | null = null;
   private flowerCount = 0;
   readonly flowerStats = { shown: 0, far: 0, culled: 0 };
+  /** Трава (systems/grass.ts): по сетке на форму плитки и подробность. */
+  private readonly grassMeshes = new Map<number, THREE.InstancedMesh>();
+  private grassMat: THREE.ShaderMaterial | null = null;
+  private readonly grassUsed = new Map<number, number>();
+  private grassData: Float32Array | null = null;
+  private grassCount = 0;
+  /** Вытоптанные круги травы (systems/grass.ts, GRASS_CLEAR): xz — середина, y — пол, w — радиус; w = 0 — пусто. */
+  private readonly grassClear = Array.from({ length: GRASS_CLEAR }, () => new THREE.Vector4(0, 0, 0, 0));
+  /** Номера плиток кадра (первый проход раскладки). */
+  private readonly grassPick = new Int32Array(GRASS_MAX);
+  readonly grassStats = { shown: 0, far: 0, horizon: 0, culled: 0, tris: 0, end: 0 };
   /** Призрак Осыпи: то же тело, отражённое из-за спины вперёд. */
   private readonly ghostMat: THREE.ShaderMaterial;
   private readonly ghostPoints: THREE.Points;
@@ -802,6 +834,7 @@ export class GameRenderer {
         uPress: { value: new THREE.Vector4(0, 0, 0, 0) },
         uPressY: { value: new THREE.Vector3(0, 0, 0) },
         uWind: { value: new THREE.Vector4(0, 0, 1, 0) },
+        uPush: { value: new THREE.Vector4(0, 0, 0, 0) },
         uRoofBox: { value: new THREE.Vector4(0, 0, 0, 0) },
         uRoofY: { value: 0 },
         uKeyDirW: { value: new THREE.Vector3(0, 1, 0) },
@@ -820,7 +853,7 @@ export class GameRenderer {
         uMatBase: { value: Array.from({ length: MAT_SLOTS }, (_, i) => new THREE.Vector3(...(atlas.base[i] ?? [0.5, 0.5, 0.5]))) },
       },
     });
-    this.depthMat = new THREE.ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, side: THREE.BackSide, colorWrite: false, uniforms: { uObjState: { value: this.objTex }, uWind: this.worldMat.uniforms.uWind!, ...this.pieceU } });
+    this.depthMat = new THREE.ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, side: THREE.BackSide, colorWrite: false, uniforms: { uObjState: { value: this.objTex }, uWind: this.worldMat.uniforms.uWind!, uPush: this.worldMat.uniforms.uPush!, ...this.pieceU } });
     // Проекции: всё общее — теми же uniform-объектами, что у мира.
     this.slideMat = this.worldLike();
     this.laceEdgeMat = this.worldLike();
@@ -1707,6 +1740,138 @@ export class GameRenderer {
   }
 
   /**
+   * Трава: count плиток по GRASS_STRIDE чисел (уже от ближнего). Раскладка по сеткам — в render, когда камера кадра выставлена.
+   */
+  setGrass(data: Float32Array, count: number): void {
+    this.grassData = data;
+    this.grassCount = count;
+    if (count === 0) {
+      for (const mesh of this.grassMeshes.values()) {
+        mesh.count = 0;
+        mesh.visible = false;
+      }
+    }
+  }
+
+  /**
+   * Вытоптанные круги травы места (level_build.ts, grassClear): у мест вещей и у дверей травинки лежат, в середине их нет. По
+   * четыре числа: x, пол, z, радиус. Больше GRASS_CLEAR не держится; пусто — трава всюду стоит.
+   */
+  setGrassClear(list: readonly (readonly [number, number, number, number])[]): void {
+    for (let i = 0; i < GRASS_CLEAR; i++) {
+      const c = list[i];
+      if (c) this.grassClear[i]!.set(c[0], c[1], c[2], c[3]);
+      else this.grassClear[i]!.set(0, 0, 0, 0);
+    }
+  }
+
+  private layoutGrass(): void {
+    const data = this.grassData;
+    const count = this.grassCount;
+    if (!data || count === 0) return;
+    const S = GRASS_STRIDE;
+    const cap = GRASS_CAP[this.quality];
+    const nearCap = GRASS_NEAR_CAP[this.quality];
+    const lodAt = GRASS_LOD_AT[this.quality];
+    const horizonAt = GRASS_HORIZON_AT[this.quality];
+    const cam = this.camera;
+    this.sporeView.setFromProjectionMatrix(this.sporeVP.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+    const planes = this.sporeView.planes;
+    const cx = cam.position.x;
+    const cy = cam.position.y;
+    const cz = cam.position.z;
+    this.grassUsed.clear();
+    const st = this.grassStats;
+    st.shown = 0;
+    st.far = 0;
+    st.horizon = 0;
+    st.culled = 0;
+    st.tris = 0;
+    // Первый проход: какие плитки в кадре (уже от ближней) и где трава кончается — на дальности или на пределе по качеству.
+    const pick = this.grassPick;
+    let n = 0;
+    let end = GRASS_FAR;
+    for (let i = 0; i < count; i++) {
+      const o = i * S;
+      const x = data[o]!;
+      const y = data[o + 1]!;
+      const z = data[o + 2]!;
+      const d = Math.hypot(x - cx, y - cy, z - cz);
+      if (d > GRASS_FAR) break;
+      // Плитка — квадрат со стороной s и травой до полуметра: шар вокруг её середины.
+      const r = 0.75 * data[o + 4]! + 0.25 * data[o + 5]!;
+      let inside = true;
+      for (let p = 0; p < 6 && inside; p++) {
+        const pl = planes[p]!;
+        if (pl.normal.x * x + pl.normal.y * (y + 0.2) + pl.normal.z * z + pl.constant < -r) inside = false;
+      }
+      if (!inside) {
+        st.culled += 1;
+        continue;
+      }
+      if (n >= cap) {
+        end = d;
+        break;
+      }
+      pick[n++] = i;
+    }
+    st.end = end;
+    // Последние метры травы — ниже и ниже до нуля: край не читается кругом.
+    const fade = Math.min(5, 0.3 * end);
+    let near = 0;
+    for (let j = 0; j < n; j++) {
+      const o = pick[j]! * S;
+      const x = data[o]!;
+      const y = data[o + 1]!;
+      const z = data[o + 2]!;
+      const d = Math.hypot(x - cx, y - cy, z - cz);
+      const t = Math.min(1, Math.max(0, (end - d) / fade));
+      const grow = t * t * (3 - 2 * t);
+      if (grow < 0.03) continue;
+      const lod: GrassLod = d > horizonAt ? 2 : d > lodAt || near >= nearCap ? 1 : 0;
+      const form = data[o + 6]!;
+      const key = form * GRASS_LODS + lod;
+      let mesh = this.grassMeshes.get(key);
+      if (!mesh) {
+        if (!this.grassMat) {
+          this.grassMat = this.worldLike();
+          this.grassMat.uniforms.uThing = { value: new THREE.Vector4(0, 0, 1, 0) };
+          this.grassMat.uniforms.uClear = { value: this.grassClear };
+          // GRASS — травинку решает её корень: вытоптанные круги и стёртый пол (render/shaders.ts).
+          this.grassMat.defines = { ...this.worldMat.defines, GRASS: GRASS_CLEAR };
+        }
+        const kind = GRASS_KINDS[Math.floor(form / GRASS_VARIANTS)] ?? 'meadow';
+        mesh = new THREE.InstancedMesh(this.makeMesh(grassTile(kind, form % GRASS_VARIANTS, lod), 0, 0).geometry, this.grassMat, GRASS_ROOM[lod]!);
+        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        mesh.frustumCulled = false;
+        mesh.matrixAutoUpdate = false;
+        mesh.layers.set(1);
+        this.scene.add(mesh);
+        this.grassMeshes.set(key, mesh);
+      }
+      const c = this.grassUsed.get(key) ?? 0;
+      if (c >= mesh.instanceMatrix.count) continue;
+      if (lod === 0) near += 1;
+      this.sporeQ.setFromAxisAngle(this.grassAxis, data[o + 3]!);
+      this.sporeM.compose(this.tmpV.set(x, y, z), this.sporeQ, this.sporeS.set(data[o + 4]!, data[o + 5]! * grow, data[o + 4]!));
+      mesh.setMatrixAt(c, this.sporeM);
+      this.grassUsed.set(key, c + 1);
+      st.shown += 1;
+      if (lod === 1) st.far += 1;
+      if (lod === 2) st.horizon += 1;
+      st.tris += grassTrisOf(form, lod);
+    }
+    for (const [key, mesh] of this.grassMeshes) {
+      const c = this.grassUsed.get(key) ?? 0;
+      mesh.count = c;
+      mesh.visible = c > 0;
+      if (c > 0) mesh.instanceMatrix.needsUpdate = true;
+    }
+  }
+
+  private readonly grassAxis = new THREE.Vector3(0, 1, 0);
+
+  /**
    * Головки цветов оранжереи: count головок по FLOWER_STRIDE чисел (уже от ближнего). Как грибы: копии одной сетки на форму,
    * дальние — упрощённой, вне кадра — не рисуются; свет, тень и правило взгляда — как у всего мира (вещь места).
    */
@@ -2389,6 +2554,7 @@ export class GameRenderer {
     cam.updateMatrixWorld(true);
     this.layoutSpores();
     this.layoutFlowers();
+    this.layoutGrass();
 
     // Отсечение чанков: дальше черты видимости всё равно чёрный туман, а чужой ярус виден только
     // с лестницы и от её площадок.
@@ -2491,6 +2657,9 @@ export class GameRenderer {
     const wind = v.wind;
     if (wind) (wu.uWind!.value as THREE.Vector4).set(wind.t, wind.amp, wind.dir[0], wind.dir[1]);
     else (wu.uWind!.value as THREE.Vector4).y = 0;
+    const push = v.push ?? null;
+    if (push) (wu.uPush!.value as THREE.Vector4).set(push.at[0], push.at[1], push.at[2], push.radius);
+    else (wu.uPush!.value as THREE.Vector4).w = 0;
     const roof = v.roof ?? null;
     if (roof) (wu.uRoofBox!.value as THREE.Vector4).set(roof.box[0], roof.box[1], roof.box[2], roof.box[3]);
     // Стекло лежит на переплёте: лист во всю крышу чуть выше балок.

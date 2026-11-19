@@ -334,6 +334,94 @@ function callaHead(o: Out, hex: string, _rnd: () => number): void {
   tube(o, [[0, 0, 0], [0, 0.03, 0.002], [0, 0.058, 0.004]], (u) => lerp(0.0042, 0.0028, u), 6, MAT.paper, () => tone('#e8bd2a'));
 }
 
+// ── Новые виды (партнёр 19.11, 21:27: «Больше разных цветов и растений в оранжерею и в другие помещения») ──
+
+/** Пион: тяжёлый шар из чашевидных лепестков — внутри мельче и теснее, снаружи шире и отогнуты. */
+function peonyHead(o: Out, hex: string, rnd: () => number): void {
+  calyx(o, 0.01, 0.01, 0.014, tone('#4a6a35'));
+  const rings = DETAIL < 1 ? 3 : 4;
+  for (let k = 0; k < rings; k++) {
+    const f = k / (rings - 1);
+    const n = Math.round(lerp(6, 12, f) * (DETAIL < 1 ? 0.8 : 1));
+    const outer = k === rings - 1;
+    whorl(o, n, k * 0.53, lerp(0.002, 0.009, f), lerp(0.024, 0.002, f), lerp(0.25, 1.2, f), { len: lerp(0.026, 0.044, f), width: lerp(0.024, 0.036, f), prof: (u: number) => Math.pow(Math.sin(lerp(0.15, 1, u) * Math.PI), 0.55), cup: lerp(1.3, 0.9, f), bend: lerp(0.55, -0.15, f), nu: DETAIL < 1 ? 2 : 3, nv: outer ? 2 : 1 }, petalTint(hex, lerp(0.76, 0.9, f)), rnd, 0.25);
+  }
+}
+
+/** Мак: четыре тонких, как бумага, лепестка чашей; у основания — чёрное пятно; посередине коробочка и тёмные тычинки. */
+function poppyHead(o: Out, hex: string, rnd: () => number): void {
+  const base = tone(hex);
+  const blotch = tone('#1d1414');
+  const t = (u: number): V => (u < 0.2 ? blotch : shade(base, lerp(0.82, 1, u)));
+  const spec = { len: 0.05, width: 0.058, prof: (u: number) => Math.pow(Math.sin(lerp(0.22, 0.96, u) * Math.PI), 0.5), cup: 0.9, bend: 0.28, nu: S(4), nv: S(3) };
+  whorl(o, 2, 0, 0.004, 0, 0.75, spec, t, rnd, 0.1);
+  whorl(o, 2, Math.PI / 2, 0.003, 0.002, 0.62, { ...spec, width: 0.054 }, t, rnd, 0.1);
+  tube(o, [[0, 0, 0], [0, 0.011, 0], [0, 0.017, 0]], (u) => lerp(0.0058, 0.0052, u), 6, MAT.paper, () => tone('#6d8a55'));
+  whorl(o, DETAIL < 1 ? 8 : 14, 0.1, 0.0065, 0.004, 0.9, { len: 0.009, width: 0.0022, prof: () => 1, nu: 1, nv: 1 }, () => blotch, rnd, 0.3);
+}
+
+/** Ромашка: белые узкие язычки кругом и жёлтая середина бугорком. */
+function daisyHead(o: Out, hex: string, rnd: () => number): void {
+  calyx(o, 0.004, 0.006, 0.008, tone('#4d7a3a'));
+  const n = DETAIL < 1 ? 14 : 22;
+  whorl(o, n, 0, 0.007, 0.001, 1.45, { len: 0.026, width: 0.0065, prof: (u: number) => Math.pow(Math.sin(lerp(0.1, 0.9, u) * Math.PI), 0.5), bend: -0.15, nu: 2, nv: 1 }, petalTint(hex, 0.92), rnd, 0.12);
+  sheet(
+    o,
+    (u, v) => {
+      const th = v * Math.PI;
+      const r = 0.0088 * u;
+      return [Math.cos(th) * r, 0.0065 * (1 - u * u) + 0.001, Math.sin(th) * r];
+    },
+    S(3),
+    S(10),
+    MAT.paper,
+    (u) => shade(tone('#e8b820'), lerp(0.85, 1.05, u)),
+  );
+}
+
+/** Ирис: три лепестка вверх, три — вниз и наружу, с жёлтой «бородкой» у основания. */
+function irisHead(o: Out, hex: string, rnd: () => number): void {
+  calyx(o, 0.012, 0.005, 0.007, tone('#4f6f45'));
+  const falls = petalTint(hex, 0.62);
+  whorl(o, 3, 0, 0.004, 0.004, 1.35, { len: 0.055, width: 0.03, prof: (u: number) => Math.pow(Math.sin(lerp(0.12, 0.95, u) * Math.PI), 0.7), cup: -0.4, bend: -0.9, droop: 0.012, nu: S(5), nv: 2 }, falls, rnd, 0.08);
+  whorl(o, 3, Math.PI / 3, 0.003, 0.006, 0.32, { len: 0.05, width: 0.026, prof: (u: number) => Math.pow(Math.sin(lerp(0.12, 0.95, u) * Math.PI), 0.7), cup: 0.8, bend: 0.35, nu: S(4), nv: 2 }, petalTint(hex, 0.85), rnd, 0.08);
+  whorl(o, 3, 0.05, 0.005, 0.006, 1.1, { len: 0.016, width: 0.004, prof: () => 1, nu: 1, nv: 1 }, () => tone('#e9c23a'), rnd, 0.05);
+}
+
+/** Подсолнух: тёмный широкий диск и кольцо жёлтых язычков, за ними — зелёные прицветники. Он и правда поворачивается к свету. */
+function sunflowerHead(o: Out, hex: string, rnd: () => number): void {
+  sheet(
+    o,
+    (u, v) => {
+      const th = v * Math.PI;
+      const r = 0.05 * u;
+      return [Math.cos(th) * r, 0.009 * (1 - u * u), Math.sin(th) * r];
+    },
+    S(3),
+    S(14),
+    MAT.paper,
+    (u) => shade(tone('#4a2c14'), lerp(0.7, 1.15, u)),
+  );
+  whorl(o, DETAIL < 1 ? 16 : 24, 0, 0.048, 0.001, 1.5, { len: 0.045, width: 0.016, prof: (u: number) => Math.pow(Math.sin(lerp(0.1, 0.95, u) * Math.PI), 0.6), cup: 0.4, bend: -0.2, nu: 2, nv: 1 }, petalTint(hex, 0.85), rnd, 0.1);
+  whorl(o, DETAIL < 1 ? 8 : 12, 0.13, 0.04, -0.006, 1.8, { len: 0.02, width: 0.012, prof: () => 1, nu: 1, nv: 1 }, () => tone('#3d6a2e'), rnd, 0.2);
+}
+
+/** Лилия: шесть длинных лепестков трубой и резко назад, тычинки торчат наружу. */
+function lilyHead(o: Out, hex: string, rnd: () => number): void {
+  calyx(o, 0.008, 0.004, 0.006, tone('#5c7a4a'));
+  const spec = { len: 0.075, width: 0.022, prof: (u: number) => Math.pow(Math.sin(lerp(0.05, 1, u) * Math.PI), 0.6), cup: 0.7, bend: -1.4, droop: 0.008, nu: S(6), nv: 2 };
+  whorl(o, 3, 0, 0.004, 0, 0.45, spec, petalTint(hex, 0.8), rnd, 0.1);
+  whorl(o, 3, Math.PI / 3, 0.003, 0.002, 0.4, { ...spec, width: 0.02 }, petalTint(hex, 0.75), rnd, 0.1);
+  const n = DETAIL < 1 ? 3 : 6;
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * Math.PI * 2 + 0.3;
+    const c = Math.cos(a);
+    const z = Math.sin(a);
+    tube(o, [[0, 0, 0], [c * 0.006, 0.03, z * 0.006], [c * 0.014, 0.056, z * 0.014]], () => 0.0009, 3, MAT.paper, () => tone('#d8d0a0'));
+    tube(o, [[c * 0.014, 0.056, z * 0.014], [c * 0.017, 0.059, z * 0.017]], () => 0.0024, 3, MAT.paper, () => tone('#7a3a1a'));
+  }
+}
+
 /** Головки: вид и цвет. Номер в этом списке — форма головки для рендера (systems/flowers.ts, render: setFlowers). */
 export const HEADS = [
   { species: 'carnation', hex: '#a8162a', ru: 'гвоздика, красная' },
@@ -348,11 +436,40 @@ export const HEADS = [
   { species: 'geranium', hex: '#e2588a', ru: 'герань, розовая' },
   { species: 'violet', hex: '#673a98', ru: 'фиалка' },
   { species: 'calla', hex: '#f1ede2', ru: 'калла' },
+  // Новые (21:27) — в конце списка: номера прежних форм не меняются.
+  { species: 'peony', hex: '#e9a9bb', ru: 'пион, розовый' },
+  { species: 'peony', hex: '#8a1834', ru: 'пион, бордовый' },
+  { species: 'poppy', hex: '#d32a1e', ru: 'мак' },
+  { species: 'daisy', hex: '#f2efe6', ru: 'ромашка' },
+  { species: 'iris', hex: '#4d3f94', ru: 'ирис' },
+  { species: 'sunflower', hex: '#e7b417', ru: 'подсолнух' },
+  { species: 'lily', hex: '#f1ebdf', ru: 'лилия, белая' },
+  { species: 'lily', hex: '#e2712a', ru: 'лилия, оранжевая' },
 ] as const;
-export type FlowerSpecies = 'carnation' | 'chrysanthemum' | 'tulip' | 'geranium' | 'violet' | 'calla' | 'fern' | 'tradescantia' | 'monstera';
+export type FlowerSpecies =
+  | 'carnation'
+  | 'chrysanthemum'
+  | 'tulip'
+  | 'geranium'
+  | 'violet'
+  | 'calla'
+  | 'peony'
+  | 'poppy'
+  | 'daisy'
+  | 'iris'
+  | 'sunflower'
+  | 'lily'
+  | 'fern'
+  | 'tradescantia'
+  | 'monstera'
+  | 'sansevieria'
+  | 'aloe'
+  | 'chlorophytum';
 /** Виды с головкой — те, что поворачиваются к свету; зелень стоит как стоит. */
-export const BLOOMS: readonly FlowerSpecies[] = ['carnation', 'chrysanthemum', 'tulip', 'geranium', 'violet', 'calla'];
-export const FLOWER_SPECIES: readonly FlowerSpecies[] = [...BLOOMS, 'fern', 'tradescantia', 'monstera'];
+export const BLOOMS: readonly FlowerSpecies[] = ['carnation', 'chrysanthemum', 'tulip', 'geranium', 'violet', 'calla', 'peony', 'poppy', 'daisy', 'iris', 'sunflower', 'lily'];
+/** Комнатная зелень советского подоконника: тёщин язык, алоэ, хлорофитум (и монстера, традесканция — выше). */
+export const HOUSEPLANTS: readonly FlowerSpecies[] = ['sansevieria', 'aloe', 'chlorophytum'];
+export const FLOWER_SPECIES: readonly FlowerSpecies[] = [...BLOOMS, 'fern', 'tradescantia', 'monstera', ...HOUSEPLANTS];
 
 const HEAD_BUILD: Record<string, (o: Out, hex: string, rnd: () => number) => void> = {
   carnation: carnationHead,
@@ -361,6 +478,12 @@ const HEAD_BUILD: Record<string, (o: Out, hex: string, rnd: () => number) => voi
   geranium: geraniumHead,
   violet: violetHead,
   calla: callaHead,
+  peony: peonyHead,
+  poppy: poppyHead,
+  daisy: daisyHead,
+  iris: irisHead,
+  sunflower: sunflowerHead,
+  lily: lilyHead,
 };
 
 const headCache = new Map<number, MeshData>();
@@ -576,6 +699,116 @@ export function plant(xf: Xf, at: V, species: FlowerSpecies, seed: number, size 
       }
       break;
     }
+    case 'peony':
+    case 'lily': {
+      // Пион — куст с рассечёнными листьями и тяжёлой головой, стебель клонится; лилия — прямой стебель в мутовках узких листьев.
+      const peony = species === 'peony';
+      const h = (peony ? 0.46 + rnd() * 0.12 : 0.56 + rnd() * 0.14) * sc;
+      const path = stalk(h, rnd() * (peony ? 0.22 : 0.08), rnd() * 6.28, (rnd() - 0.5) * 0.06, 4);
+      tube(o, path, (t) => lerp(peony ? 0.0045 : 0.0048, 0.0032, t) * sc, 3, MAT.paper, () => GREEN.dark, (t) => 0.6 + 0.4 * t);
+      const nodes = peony ? [0.25, 0.5] : [0.3, 0.45, 0.6, 0.75];
+      nodes.forEach((t, k) => {
+        const i = Math.min(path.length - 2, Math.floor(t * (path.length - 1)));
+        const p = path[i]!;
+        const per = peony ? 3 : 2;
+        for (let q = 0; q < per; q++) {
+          const a = k * 2.1 + (q / per) * 6.28 + rnd() * 0.3;
+          const radial: V = [Math.cos(a), 0, Math.sin(a)];
+          leaf(o, { base: p, out: norm(add(mul(radial, 0.8), [0, peony ? 0.25 : 0.55, 0])), wide: [-Math.sin(a), 0, Math.cos(a)], len: (peony ? 0.09 : 0.07) * sc, width: (peony ? 0.03 : 0.012) * sc, prof: (u) => Math.pow(Math.sin(lerp(0.08, 0.95, u) * Math.PI), 0.7), cup: 0.4, bend: -0.4, droop: 0.008, nu: 3, nv: 1 }, MAT.paper, () => GREEN.dark);
+        }
+      });
+      bloom(path, pickForm(), peony ? 1.15 : 1);
+      break;
+    }
+    case 'poppy':
+    case 'daisy': {
+      // Полевые: тонкий стебель, у мака чуть изогнутый, у основания — розетка рассечённых листьев.
+      const poppy = species === 'poppy';
+      const h = (poppy ? 0.4 + rnd() * 0.14 : 0.3 + rnd() * 0.12) * sc;
+      const path = stalk(h, rnd() * 0.18, rnd() * 6.28, (rnd() - 0.5) * (poppy ? 0.14 : 0.06), 4);
+      tube(o, path, (t) => lerp(0.003, 0.0022, t) * sc, 3, MAT.paper, () => (poppy ? GREEN.grey : GREEN.fresh));
+      const n = poppy ? 3 : 4;
+      for (let q = 0; q < n; q++) {
+        const a = (q / n) * 6.28 + rnd() * 0.5;
+        const radial: V = [Math.cos(a), 0, Math.sin(a)];
+        leaf(o, { base: [0, 0.005, 0], out: norm(add(radial, [0, 0.45, 0])), wide: [-Math.sin(a), 0, Math.cos(a)], len: (poppy ? 0.1 : 0.06) * sc, width: (poppy ? 0.022 : 0.012) * sc, prof: (u) => (0.55 + 0.45 * Math.abs(Math.sin(u * Math.PI * 3))) * Math.sin(lerp(0.08, 0.95, u) * Math.PI), bend: -0.5, droop: 0.01, nu: 3, nv: 1 }, MAT.paper, () => (poppy ? GREEN.grey : GREEN.fresh));
+      }
+      bloom(path, pickForm(), poppy ? 1.1 : 0.95);
+      break;
+    }
+    case 'iris': {
+      // Мечевидные листья веером из одной точки и прямой стебель выше них.
+      const h = (0.5 + rnd() * 0.12) * sc;
+      const fan = 4 + Math.floor(rnd() * 2);
+      const a0 = rnd() * 6.28;
+      for (let q = 0; q < fan; q++) {
+        const a = a0 + ((q - (fan - 1) / 2) / fan) * 0.9;
+        const radial: V = [Math.cos(a), 0, Math.sin(a)];
+        leaf(o, { base: [0, 0.005, 0], out: norm(add(mul(radial, 0.22), [0, 1, 0])), wide: [-Math.sin(a), 0, Math.cos(a)], len: (0.36 + rnd() * 0.12) * sc, width: 0.026 * sc, prof: (u) => Math.pow(Math.sin(lerp(0.05, 0.98, u) * Math.PI), 0.4), bend: -0.25, droop: 0.01, nu: 4, nv: 1 }, MAT.paper, () => GREEN.grey);
+      }
+      const path = stalk(h, rnd() * 0.08, rnd() * 6.28, 0.01, 4);
+      tube(o, path, (t) => lerp(0.0045, 0.0035, t) * sc, 3, MAT.paper, () => GREEN.grey);
+      bloom(path, pickForm(), 1.05);
+      break;
+    }
+    case 'sunflower': {
+      // Толстый шершавый стебель, широкие листья сердцем вдоль него и огромная голова, наклонённая к свету.
+      const h = (0.62 + rnd() * 0.12) * sc;
+      const path = stalk(h, 0.05 + rnd() * 0.12, rnd() * 6.28, (rnd() - 0.5) * 0.05, 4);
+      tube(o, path, (t) => lerp(0.011, 0.007, t) * sc, 4, MAT.paper, () => GREEN.fresh, (t) => 0.65 + 0.35 * t);
+      [0.3, 0.5, 0.68].forEach((t, k) => {
+        const i = Math.min(path.length - 2, Math.floor(t * (path.length - 1)));
+        const a = k * 2.4 + rnd() * 0.4;
+        const radial: V = [Math.cos(a), 0, Math.sin(a)];
+        leaf(o, { base: path[i]!, out: norm(add(radial, [0, 0.15, 0])), wide: [-Math.sin(a), 0, Math.cos(a)], len: 0.13 * sc, width: 0.1 * sc, prof: (u) => (u < 0.3 ? lerp(0.35, 1, u / 0.3) : Math.sin(lerp(0.5, 1, (u - 0.3) / 0.7) * Math.PI) ** 0.8), cup: 0.3, bend: -0.5, droop: 0.02, nu: 3, nv: 2 }, MAT.paper, () => GREEN.fresh);
+      });
+      bloom(path, pickForm(), 2.2);
+      break;
+    }
+    case 'sansevieria': {
+      // Тёщин язык: прямые мечи из земли, полосатые поперёк, с жёлтой каймой.
+      const n = 6 + Math.floor(rnd() * 4);
+      for (let q = 0; q < n; q++) {
+        const a = (q / n) * 6.28 + rnd() * 0.6;
+        const radial: V = [Math.cos(a), 0, Math.sin(a)];
+        const off = mul(radial, 0.02 + rnd() * 0.05);
+        const band = rnd() * 9;
+        leaf(o, { base: [off[0], 0.005, off[2]], out: norm(add(mul(radial, 0.12 + rnd() * 0.12), [0, 1, 0])), wide: [-Math.sin(a), 0, Math.cos(a)], len: (0.42 + rnd() * 0.3) * sc, width: (0.05 + rnd() * 0.02) * sc, prof: (u) => Math.pow(Math.sin(lerp(0.08, 1, u) * Math.PI), 0.35), cup: 0.3, bend: -0.12, nu: 5, nv: 2 }, MAT.paper, (u) => (Math.sin((u * 14 + band) * 1.7) > 0.3 ? GREEN.dark : GREEN.silver), () => GREEN.grey);
+      }
+      break;
+    }
+    case 'aloe': {
+      // Алоэ: розетка толстых сизых листьев с зубчиками, наружные лежат, внутренние встают.
+      const n = 10 + Math.floor(rnd() * 4);
+      for (let q = 0; q < n; q++) {
+        const f = q / n;
+        const a = q * 2.39996 + rnd() * 0.2;
+        const radial: V = [Math.cos(a), 0, Math.sin(a)];
+        leaf(o, { base: mul(radial, 0.01), out: norm(add(mul(radial, lerp(1, 0.35, f)), [0, lerp(0.35, 1.2, f), 0])), wide: [-Math.sin(a), 0, Math.cos(a)], len: lerp(0.24, 0.14, f) * sc, width: lerp(0.045, 0.03, f) * sc, prof: (u) => Math.pow(1 - u, 0.6), cup: 0.9, bend: -0.25, fringe: 0.003 * sc, nu: 3, nv: 2 }, MAT.enamel, () => GREEN.glaucous);
+      }
+      break;
+    }
+    case 'chlorophytum': {
+      // Хлорофитум: пучок узких полосатых листьев дугой через край горшка и пара усов с детками.
+      const n = 14 + Math.floor(rnd() * 6);
+      for (let q = 0; q < n; q++) {
+        const a = (q / n) * 6.28 + rnd() * 0.4;
+        const radial: V = [Math.cos(a), 0, Math.sin(a)];
+        leaf(o, { base: mul(radial, 0.008), out: norm(add(mul(radial, 0.7), [0, 0.75, 0])), wide: [-Math.sin(a), 0, Math.cos(a)], len: (0.2 + rnd() * 0.12) * sc, width: 0.014 * sc, prof: (u) => Math.pow(Math.sin(lerp(0.05, 0.95, u) * Math.PI), 0.45), bend: -1.1, droop: 0.04 * sc, nu: 4, nv: 1 }, MAT.paper, (u) => (u > 0.05 && Math.abs(((u * 37) % 1) - 0.5) < 0.18 ? tone('#e8ecd0') : GREEN.fresh));
+      }
+      for (let q = 0; q < 2; q++) {
+        const a = rnd() * 6.28;
+        const radial: V = [Math.cos(a), 0, Math.sin(a)];
+        const run = bezier([0, 0.02, 0], add(mul(radial, 0.12 * sc), [0, 0.12 * sc, 0]), add(mul(radial, 0.24 * sc), [0, 0.04 * sc, 0]), add(mul(radial, 0.3 * sc), [0, -0.12 * sc, 0]), 4);
+        tube(o, run, () => 0.0015 * sc, 3, MAT.paper, () => tone('#c8c49a'));
+        const tip = run[run.length - 1]!;
+        for (let k = 0; k < 5; k++) {
+          const b = (k / 5) * 6.28;
+          leaf(o, { base: tip, out: norm([Math.cos(b), 0.6, Math.sin(b)]), wide: [-Math.sin(b), 0, Math.cos(b)], len: 0.05 * sc, width: 0.01 * sc, prof: (u) => Math.sin(lerp(0.1, 0.95, u) * Math.PI), bend: -0.5, nu: 2, nv: 1 }, MAT.paper, () => GREEN.fresh);
+        }
+      }
+      break;
+    }
     case 'monstera': {
       const n = 4 + Math.floor(rnd() * 3);
       for (let k = 0; k < n; k++) {
@@ -605,5 +838,65 @@ export function plant(xf: Xf, at: V, species: FlowerSpecies, seed: number, size 
   }
   // Сетка помещения собирает головки с номером объекта, на котором цветок растёт (грядка, горшок): растворится он — уйдут и они.
   if (xf.mb.blooms) for (const b of blooms) xf.mb.blooms.push({ ...b, obj: xf.mb.obj });
+  // Некому отдать (вещь сна, полка конструктора, витрина): головка ставится в сетку простой чашечкой своего цвета, раскрытой и
+  // неподвижной — растение читается цветущим, а вес вещи почти не растёт (полная головка — сотни треугольников).
+  else for (const b of blooms) cupHead(xf.mb, b);
   return blooms;
+}
+
+/** Размер головки формы: радиус поперёк и высота (по дальней сетке), м. */
+const cupDims = new Map<number, readonly [number, number]>();
+
+/** Чашечка вместо головки: усечённый конус по оси dir в цвет головки, 32 треугольника. */
+function cupHead(mb: MeshBuilder, b: Bloom): void {
+  let dims = cupDims.get(b.form);
+  if (!dims) {
+    const m = headForm(b.form, 1);
+    let r = 0;
+    let h = 0;
+    for (let i = 0; i < m.position.length; i += 3) {
+      r = Math.max(r, Math.hypot(m.position[i]!, m.position[i + 2]!));
+      h = Math.max(h, m.position[i + 1]!);
+    }
+    dims = [r, Math.max(h, r * 0.4)];
+    cupDims.set(b.form, dims);
+  }
+  const R = dims[0] * b.size;
+  const H = dims[1] * b.size;
+  const d = norm(b.dir);
+  const ref: V = Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  const u = norm(cross(ref, d));
+  const v = cross(d, u);
+  const col = tone(HEADS[b.form]?.hex ?? '#d8d0c0');
+  const N = 8;
+  const at = (rad: number, a: number, up: number): V => {
+    const c = Math.cos(a + b.spin);
+    const s = Math.sin(a + b.spin);
+    return [b.pos[0] + (u[0] * c + v[0] * s) * rad + d[0] * up, b.pos[1] + (u[1] * c + v[1] * s) * rad + d[1] * up, b.pos[2] + (u[2] * c + v[2] * s) * rad + d[2] * up];
+  };
+  const out = (a: number, k: number): V => {
+    const c = Math.cos(a + b.spin);
+    const s = Math.sin(a + b.spin);
+    return norm([(u[0] * c + v[0] * s) * k + d[0], (u[1] * c + v[1] * s) * k + d[1], (u[2] * c + v[2] * s) * k + d[2]]);
+  };
+  // Тон не темнее 0,12: красный мак в тени чашечки не уходит в чёрное (правило реквизита — тон приглушён, но не чернота).
+  const dim = (k: number): V => [Math.max(0.12, col[0] * k), Math.max(0.12, col[1] * k), Math.max(0.12, col[2] * k)];
+  const bottom = mb.vertex(b.pos, [-d[0], -d[1], -d[2]], MAT.paper, dim(0.6), 0.7);
+  const top = mb.vertex(at(0, 0, 0.55 * H), d, MAT.paper, dim(0.85), 0.8);
+  const low: number[] = [];
+  const rim: number[] = [];
+  const rimTop: number[] = [];
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    low.push(mb.vertex(at(0.55 * R, a, 0.35 * H), out(a, 1.4), MAT.paper, dim(0.75), 0.8));
+    rim.push(mb.vertex(at(R, a, H), out(a, 0.9), MAT.paper, dim(1), 1));
+    rimTop.push(mb.vertex(at(R, a, H), d, MAT.paper, dim(1), 1));
+  }
+  for (let i = 0; i < N; i++) {
+    const j = (i + 1) % N;
+    mb.tri(bottom, low[j]!, low[i]!);
+    mb.tri(low[i]!, low[j]!, rim[j]!);
+    mb.tri(low[i]!, rim[j]!, rim[i]!);
+    mb.tri(top, rimTop[i]!, rimTop[j]!);
+  }
 }

@@ -514,13 +514,13 @@ describe('привязка звуков к игре', () => {
     expect(r.plays.find((p) => p.id === 'swarm_cohere')!.pos).toEqual([5, 0, 0]);
   });
 
-  it('шаги — по тому, что под ногами: бетон и вода в убежище, ковролин в офисе и жёлтых комнатах, трава на лугу; в белом нигде и в лимбо их не слышно', () => {
+  it('шаги — по тому, что под ногами: бетон и вода в убежище, ковролин в офисе и жёлтых комнатах, трава на лугу и в помещении, где она проросла; в белом нигде и в лимбо их не слышно', () => {
     const r = new Recorder();
     const a = new GameAudio(r);
     a.setScene('play');
     const w = world();
     const stepIn = (over: Partial<AudioWorld>): void => {
-      Object.assign(w, { where: 'main', world: 'shelter', pocket: null }, over);
+      Object.assign(w, { where: 'main', world: 'shelter', pocket: null, onGrass: false }, over);
       w.steps = 1;
       a.frame(w, 0.016, true);
     };
@@ -534,10 +534,12 @@ describe('привязка звуков к игре', () => {
     stepIn({ where: 'pocket', pocket: { kind: 'void' } });
     stepIn({ where: 'pocket', pocket: { kind: 'dollhouse' } });
     stepIn({ where: 'limbo', pocket: { kind: 'void' } });
-    expect(r.ids_().filter((id) => id.startsWith('step_'))).toEqual(['step_concrete', 'step_water', 'step_carpet', 'step_carpet', 'step_grass']);
+    stepIn({ onGrass: true });
+    stepIn({ world: 'office', onGrass: true });
+    expect(r.ids_().filter((id) => id.startsWith('step_'))).toEqual(['step_concrete', 'step_water', 'step_carpet', 'step_carpet', 'step_grass', 'step_grass', 'step_grass']);
     // Шаг, которого не слышно, не копится: следующий в убежище — один.
     stepIn({});
-    expect(r.ids_().filter((id) => id.startsWith('step_')).length).toBe(6);
+    expect(r.ids_().filter((id) => id.startsWith('step_')).length).toBe(8);
   });
 
   it('начало вылазки: в убежище закрывается люк, в офисе и жёлтых комнатах привозит лифт; новая сессия начинается так же', () => {

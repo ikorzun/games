@@ -1,6 +1,7 @@
 /** Собранный уровень: геометрия чанками, коллайдеры и игровые точки. Общий тип для генератора и тестового уровня. */
 import type { GrowthStats } from './wear_growth';
 import type { Vec3 } from '../core/types';
+import type { GrassSite } from '../systems/grass';
 import type { GenLayout, WorldKind } from '../gen/layout';
 import type { Aabb, ColliderSet } from './colliders';
 import type { FlatMark } from './flat';
@@ -146,6 +147,15 @@ export interface BuiltLevel {
    * Головки её цветов (systems/flowers.ts): где, куда смотрят в покое, форма, размер, поворот вокруг оси и объект, на котором
    * растут (растворился — головки нет). Стебли и листья — в сетках помещений.
    */
+  /** Трава, проросшая сквозь пол одного помещения (systems/grass.ts): плитки по полу; нет — травы нет. */
+  grass?: GrassSite[];
+  /** Помещение, где проросла трава (design.md, §36). */
+  grassRoom?: number;
+  /**
+   * Вытоптанные круги в траве у дверей помещения с травой: x, пол, z, радиус (render: шейдер травы, GRASS). Круги вокруг вещей на
+   * полу игра добавляет сама — где вещь лежит сейчас (systems/grass.ts, clearings). Нет — травы нет.
+   */
+  grassClear?: [number, number, number, number][];
   blooms?: { pos: Vec3; dir: Vec3; form: number; size: number; spin: number; obj: number }[];
   /** Высота потолка каждого помещения над его полом, м (номер помещения → высота). */
   ceilings?: Record<number, number>;
