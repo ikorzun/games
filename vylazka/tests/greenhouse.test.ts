@@ -59,6 +59,12 @@ describe('оранжерея в местах (партнёр 19.11: «комна
     }
   });
 
+  // Вес оранжереи — не на одном сиде (куратор, пачка 53, противоречие 350): каждый кусок уровня в пределе помещения.
+  it.each(cases.filter(([w]) => w !== 'yellow'))('%s, сид %i, ранг %i: каждый кусок уровня с оранжереей — меньше 60 тысяч треугольников', (world, seed, rank) => {
+    const l = level(world, seed, rank);
+    for (const [i, ch] of l.chunks.entries()) expect(ch.mesh.index.length / 3, `кусок ${i}`).toBeLessThan(60000);
+  });
+
   it.each(cases.filter(([w]) => w !== 'yellow'))('%s, сид %i, ранг %i: тот же сид — те же головки', (world, seed, rank) => {
     const a = level(world, seed, rank).blooms ?? [];
     const b = buildLevel(generateLayout(seed, rank, world)).blooms ?? [];
