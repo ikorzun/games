@@ -30,6 +30,6 @@ if (at >= 0) {
 } else {
   const out = join(here, 'dist', 'index.html');
   mkdirSync(dirname(out), { recursive: true });
-  writeFileSync(out, `<!doctype html>\n<html lang="ru">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n<title>${title}</title>\n</head>\n<body>\n${body}</body>\n</html>\n`);
+  writeFileSync(out, `<!doctype html>\n<html lang="ru">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n<title>${title}</title>\n<style>:root{box-sizing:border-box;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}</style>\n</head>\n<body>\n${body}</body>\n</html>\n`);
   console.log('page →', out);
 }

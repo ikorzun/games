@@ -1,6 +1,7 @@
 // Смоук «Дежурной части» в Chromium: проходит смену целиком и проверяет итог.
 //   node test/smoke.mjs                 — телефон и широкий экран, верные решения, затем все неверные
-//   node test/smoke.mjs --shots DIR     — то же и скриншоты ключевых экранов в DIR
+//   node test/smoke.mjs --dist          — то же по собранному dist/index.html
+//   node test/smoke.mjs --shots DIR     — и скриншоты ключевых экранов в DIR
 // Нужен Playwright с Chromium (playwright или playwright-core из ../runtime).
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
@@ -24,7 +25,7 @@ let failed = 0;
 const check = (ok, what) => { if (!ok) { failed++; console.error('  FAIL', what); } };
 
 async function run(browser, name, viewport, mode) {
-  const ctx = await browser.newContext({ viewport, deviceScaleFactor: shots ? 2 : 1, reducedMotion: 'reduce' });
+  const ctx = await browser.newContext({ viewport, deviceScaleFactor: shots ? 2 : 1, reducedMotion: 'reduce', hasTouch: viewport.width < 800 });
   const page = await ctx.newPage();
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -33,44 +34,79 @@ async function run(browser, name, viewport, mode) {
   await page.evaluate(() => document.fonts.ready);
   const snap = async (tag) => { if (shots) await page.screenshot({ path: join(shots, `${name}-${tag}.png`) }); };
   const noOverflow = async (tag) => check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${name}: горизонтальная прокрутка (${tag})`);
+  const isPhoto = () => page.evaluate(() => document.querySelector('.dz-app').classList.contains('is-photo'));
+  const primaryInView = async (tag) => check(await page.evaluate(() => {
+    const b = document.querySelector('.dz-actions button'); if (!b) return false;
+    const r = b.getBoundingClientRect(); return r.top >= 0 && r.bottom <= window.innerHeight + 1;
+  }), `${name}: главное действие видно без прокрутки (${tag})`);
 
   const cases = await page.evaluate(() => window.DZ.cases.map((c) => ({ id: c.id, verdict: c.verdict, grounds: c.grounds, items: c.items.map((i) => ({ id: i.id, views: i.views.length })) })));
   await snap('00-intro');
   await noOverflow('intro');
+  await primaryInView('начало');
   await page.click('[data-act="start"]');
 
   for (let n = 0; n < cases.length; n++) {
     const c = cases[n];
-    check((await page.textContent('.dz-count')).trim() === `${n + 1} из ${cases.length}`, `${name}: счётчик на деле ${c.id}`);
-    if (n === 0) await snap('01-talk');
+    check((await page.textContent('.dz-bar-main')).trim() === `Задержанный ${n + 1} из ${cases.length}`, `${name}: шапка на деле ${c.id}`);
     if (n === 0) {
-      const hasPhoto = await page.evaluate(() => !!window.DZ.PHOTO_LOBBY);
-      if (hasPhoto) {
-        check(await page.evaluate(() => document.querySelector('.dz-app').classList.contains('is-photo')), `${name}: по умолчанию режим «фото»`);
+      await snap('01-talk');
+      await primaryInView('реплики');
+      if (await page.evaluate(() => !!window.DZ.PHOTO_LOBBY)) {
+        check(await isPhoto(), `${name}: по умолчанию графика «Фото»`);
         check(await page.evaluate(() => { const i = document.querySelector('.dz-photo-det'); return !!i.getAttribute('href') && i.getBBox().width > 0; }), `${name}: фото-кадр задержанного подставлен`);
-        await page.click('#dz-gfx');
-        check(await page.evaluate(() => !document.querySelector('.dz-app').classList.contains('is-photo')), `${name}: переключение на рисованную графику`);
+        await page.click('#dz-menu');
+        await snap('01a-settings');
+        await page.click('[data-act="pref"][data-id="photo"][data-value="0"]');
+        check(!(await isPhoto()), `${name}: настройка «Графика: рисованная»`);
+        await page.click('.dz-dialog [data-act="close"]');
         await snap('01b-drawn');
-        await page.click('#dz-gfx');
+        await page.click('#dz-menu');
+        await page.click('[data-act="pref"][data-id="photo"][data-value="1"]');
+        await page.keyboard.press('Escape');
+        check(await isPhoto(), `${name}: настройка «Графика: фото» вернулась`);
+        check(!(await page.isVisible('.dz-modal')), `${name}: Escape закрывает настройки`);
       }
     }
-    while (await page.isVisible('#dz-next')) await page.click('#dz-next');
+    while (await page.locator('[data-act="next"]').count()) await page.click('[data-act="next"]');
     check((await page.locator('.dz-item').count()) === c.items.length, `${name}: вещи в лотке, дело ${c.id}`);
-    if (n === 0 || n === 3) await snap(`02-tray-${c.id}`);
+    if (n === 0 || n === 3) { await snap(`02-tray-${c.id}`); await primaryInView(`осмотр ${c.id}`); }
     for (const it of c.items) {
       await page.click(`.dz-item[data-id="${it.id}"]`);
       check(await page.isVisible('.dz-sheet'), `${name}: вещь ${c.id}.${it.id} открылась`);
-      for (let v = 1; v < it.views; v++) await page.click('.dz-sheet [data-act="view"]');
-      if (await page.locator('.dz-sheet [data-act="ask"]').count()) await page.click('.dz-sheet [data-act="ask"]');
+      check(await page.evaluate(() => { const w = document.querySelector('.dz-window').getBoundingClientRect(); const s = document.querySelector('.dz-sheet-in').getBoundingClientRect(); return s.top >= w.bottom - 1 || s.left >= w.right - 1; }), `${name}: лист не закрывает окно (${c.id}.${it.id})`);
+      for (let v = 1; v < it.views; v++) await page.click(`.dz-sheet [data-act="view"][data-id="${v}"]`);
+      if (await page.locator('.dz-sheet [data-act="ask"]').count()) {
+        await page.click('.dz-sheet [data-act="ask"]');
+        check(await page.isVisible('.dz-sheet .dz-qa'), `${name}: ответ на вопрос в листе (${c.id}.${it.id})`);
+      }
       if (mode === 'bad' && (await page.locator('.dz-sheet [data-act="bribe"]').count())) await page.click('.dz-sheet [data-act="bribe"]');
       if ((n === 0 && it.id === 'passport') || (n === 1 && it.id === 'radio') || (n === 4 && it.id === 'wallet') || (n === 6 && it.id === 'passport')) await snap(`03-item-${c.id}-${it.id}`);
       await noOverflow(`${c.id}.${it.id}`);
       await page.click('.dz-sheet [data-act="close"]');
     }
     check((await page.locator('.dz-item.is-seen').count()) === c.items.length, `${name}: отметки «осмотрено», дело ${c.id}`);
+    check((await page.textContent('#dz-tray-note')).trim() === `Осмотрено ${c.items.length} из ${c.items.length}`, `${name}: счётчик осмотренного, дело ${c.id}`);
+    if (n === 0 && viewport.width < 800) {          // лист убирается жестом вниз за ручку, не только кнопкой
+      await page.click('.dz-paperbtn[data-id="memo"]');
+      const box = await page.locator('.dz-sheet-title').boundingBox();
+      await page.mouse.move(box.x + 20, box.y + 10);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 20, box.y + 140, { steps: 6 });
+      await page.mouse.up();
+      check(!(await page.isVisible('.dz-sheet')), `${name}: лист убирается жестом вниз`);
+    }
     for (const d of ['report', 'bulletin', 'memo']) {
-      await page.click(`.dz-docbtn[data-id="${d}"]`);
+      await page.click(`.dz-paperbtn[data-id="${d}"]`);
       if (n === 0) await snap(`04-doc-${d}`);
+      if (n === 0 && d === 'bulletin' && viewport.width < 800) {
+        const h0 = await page.evaluate(() => document.querySelector('.dz-sheet').getBoundingClientRect().height);
+        await page.click('.dz-sheet [data-act="size"]');
+        await page.waitForTimeout(50);
+        const h1 = await page.evaluate(() => document.querySelector('.dz-sheet').getBoundingClientRect().height);
+        check(h1 > h0 + 40, `${name}: ручка разворачивает лист (${Math.round(h0)} → ${Math.round(h1)})`);
+        await snap('04-doc-bulletin-large');
+      }
       await page.click('.dz-sheet [data-act="close"]');
     }
     if (n === 5) { await page.click('#dz-zoom'); await page.waitForTimeout(50); await snap('05-zoom'); await page.click('#dz-zoom'); }
@@ -82,28 +118,28 @@ async function run(browser, name, viewport, mode) {
       if (n === 1) await snap('06-grounds');
       await page.click(`[data-act="ground"][data-id="${guilty ? c.grounds[0] : 'weapon'}"]`);
     } else await page.click('#dz-home');
-    await page.waitForSelector('.dz-card--verdict');
+    await page.waitForSelector('.dz-verdict');
     const grade = await page.evaluate(() => window.DZ.state.results[window.DZ.state.results.length - 1].grade);
     check(grade === (mode === 'good' ? 'ok' : 'bad'), `${name}: оценка дела ${c.id} = ${grade}`);
-    check(!(await page.textContent('.dz-note')).includes('dz.'), `${name}: пояснение без сырого ключа, дело ${c.id}`);
-    if (n === 1 || n === 2) await snap(`07-verdict-${c.id}`);
+    check(!(await page.textContent('.dz-explain')).includes('dz.'), `${name}: пояснение без сырого ключа, дело ${c.id}`);
+    if (n === 1 || n === 2) { await snap(`07-verdict-${c.id}`); await primaryInView(`итог ${c.id}`); }
     await noOverflow(`verdict ${c.id}`);
     await page.click('[data-act="continue"]');
   }
 
-  await page.waitForSelector('.dz-card--end');
-  const score = (await page.textContent('.dz-score')).trim();
-  check(score.endsWith(mode === 'good' ? `${cases.length} из ${cases.length}` : `0 из ${cases.length}`), `${name}: итог «${score}»`);
-  check((await page.locator('.dz-ledger tbody tr').count()) === cases.length, `${name}: строк в книге учёта`);
+  await page.waitForSelector('.dz-ledger');
+  const score = (await page.textContent('.dz-score b')).trim();
+  check(score === (mode === 'good' ? `${cases.length} из ${cases.length}` : `0 из ${cases.length}`), `${name}: итог «${score}»`);
+  check((await page.locator('.dz-rows .dz-row').count()) === cases.length, `${name}: строк в книге учёта`);
   const raw = await page.evaluate(() => document.getElementById('dz').innerText.match(/dz\.[a-z0-9_.]+/g));
   check(!raw, `${name}: сырые ключи на экране: ${raw}`);
   await snap('08-end');
   await noOverflow('end');
   await page.click('[data-act="again"]');
-  check((await page.textContent('.dz-count')).trim() === `1 из ${cases.length}`, `${name}: смена начинается заново`);
+  check((await page.textContent('.dz-bar-main')).trim() === `Задержанный 1 из ${cases.length}`, `${name}: смена начинается заново`);
   check(errors.length === 0, `${name}: ошибки в консоли: ${errors.join(' | ')}`);
   await ctx.close();
-  console.log(`${name} (${mode}): пройдено дел ${cases.length}, итог «${score}»`);
+  console.log(`${name} (${mode}): пройдено дел ${cases.length}, верных решений ${score}`);
 }
 
 const browser = await chromium.launch();

@@ -414,13 +414,22 @@
     return `<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">${ITEMS[key] || ''}</svg>`;
   }
 
+  const ic = (body) => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
   const ICONS = {
-    gfx: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.5" cy="10" r="1.7" fill="currentColor"/><path d="M4.5,17.5 L10,12.5 L13,15 L16,11.5 L19.5,15.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
-    zoom: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15,15 L21,21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
-    sound_on: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4,9.5 H8 L13,5.5 V18.5 L8,14.5 H4 Z" fill="currentColor"/><path d="M16,9 q2.4,3 0,6 M18.6,6.6 q4.4,5.4 0,10.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
-    sound_off: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4,9.5 H8 L13,5.5 V18.5 L8,14.5 H4 Z" fill="currentColor"/><path d="M16.5,9.5 l5,5 M21.5,9.5 l-5,5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
-    home: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6,3 H16 V21 H6 Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="13.2" cy="12.4" r="1.2" fill="currentColor"/><path d="M19,9 l3,3 l-3,3 M22,12 H17.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    cell: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8,3 V21 M12,3 V21 M16,3 V21" stroke="currentColor" stroke-width="1.8"/></svg>',
+    zoom: ic('<circle cx="10.5" cy="10.5" r="6"/><path d="M15,15 L21,21"/>'),
+    gear: ic('<circle cx="12" cy="12" r="3"/><path d="M12,2.8 v2.6 M12,18.6 v2.6 M2.8,12 h2.6 M18.6,12 h2.6 M5.5,5.5 l1.9,1.9 M16.6,16.6 l1.9,1.9 M18.5,5.5 l-1.9,1.9 M7.4,16.6 l-1.9,1.9"/>'),
+    close: ic('<path d="M6,6 L18,18 M18,6 L6,18"/>'),
+    ask: ic('<path d="M4,5 H20 V16 H11 L6.5,20 V16 H4 Z"/><path d="M9.6,9.2 q2.4,-2.6 4.6,-.4 q1,1.6 -2.2,3 M12,13.6 v.2" stroke-width="1.8"/>'),
+    ok: ic('<circle cx="12" cy="12" r="9.2"/><path d="M7.6,12.4 L10.8,15.6 L16.6,8.8"/>'),
+    half: ic('<path d="M12,3.2 L21.6,20 H2.4 Z"/><path d="M12,9.4 v5.2 M12,17.2 v.2"/>'),
+    bad: ic('<circle cx="12" cy="12" r="9.2"/><path d="M8.4,8.4 L15.6,15.6 M15.6,8.4 L8.4,15.6"/>'),
+    home: ic('<path d="M5,3.5 H15 V20.5 H5 Z"/><path d="M12,12 v.2 M18,9 l3,3 l-3,3 M21,12 H16.4"/>'),
+    cell: ic('<rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/><path d="M8,3.5 V20.5 M12,3.5 V20.5 M16,3.5 V20.5"/>'),
+    report: ic('<rect x="5" y="4.5" width="14" height="16.5" rx="1.5"/><path d="M9,4.5 V3 H15 V4.5 M8.5,10 H15.5 M8.5,13.5 H15.5 M8.5,17 H12.5"/>'),
+    bulletin: ic('<path d="M4.5,4 H19.5 V20 H4.5 Z"/><path d="M7.6,8.4 v.2 M10.6,8.5 H16.6 M7.6,12 v.2 M10.6,12.1 H16.6 M7.6,15.6 v.2 M10.6,15.7 H16.6"/>'),
+    memo: ic('<path d="M5,3.5 H16 L19,6.5 V20.5 H5 Z"/><path d="M12,8 v6 M12,17 v.2"/>'),
+    tip: ic('<path d="M8.4,14.6 A6,6 0 1 1 15.6,14.6 V17 H8.4 Z M9.6,20.4 H14.4"/>'),
+    next: ic('<path d="M9,5.5 L15.5,12 L9,18.5"/>'),
   };
 
   DZ.art = { scene, actors, person, photo, item, has: (k) => !!ITEMS[k], icon: (k) => ICONS[k] || '' };

@@ -72,7 +72,7 @@
       if (!c) return;
       try { SOUNDS[name](c, c.currentTime + 0.01); } catch (e) { /* звук не обязателен */ }
     },
-    toggle() { on = !on; return on; },
+    set(value) { on = !!value; },
     isOn() { return on; },
   };
 })(typeof window !== 'undefined' ? window : globalThis);
