@@ -211,6 +211,11 @@ const DARK_SHIFT = { first: 7, every: 9, range: 14 } as const;
 /** Трава кармана (луг) кругов не знает: вокруг его вещей она не растёт (world/pocket_meadow.ts). */
 const NO_CLEARINGS: readonly GrassClearing[] = [];
 /**
+ * След лежавшего в траве (квиз партнёра, ночь на 20.11): сколько секунд на него надо смотреть, чтобы трава поднялась совсем. Пока
+ * не смотришь — лежит примятой, будто тут только что лежали.
+ */
+export const BODY_RISE = 20;
+/**
  * «На виду» (правило «показывать следствие, а не событие», K-21; аудит 17.11): полуугол от оси камеры, рад — шире кадра
  * (по горизонтали 106°) с запасом на край экрана и наклон головы.
  */
@@ -781,6 +786,8 @@ export class Game {
   private readonly grassBuf = new Float32Array(GRASS_SHOWN * GRASS_STRIDE);
   /** Вытоптанные круги травы места в этом кадре (systems/grass.ts, clearings). */
   readonly grassClear: GrassClearing[] = [];
+  /** Насколько примята трава следа лежавшего (1 — только что лежали, 0 — встала); нет следа — 0. */
+  bodyPress = 0;
   /** Бумажные цветы: насколько каждый расцвёл (0 — тусклый, 1 — яркий) и сколько уже держится расцветшим, с. */
   private readonly blooms = new Map<number, { k: number; hold: number }>();
   /** Номер экрана-проёма, в который вошли и который ещё не унёс (ждёт конца идущего перехода); 0 — нет. */
@@ -918,6 +925,7 @@ export class Game {
     this.skySeed = (hash2(dream?.seed ?? level.layout?.seed ?? 1, this.loads, 0x5c7) >>> 0) || 1;
     // Трава — обстановка места, а не сна: и у просмотра кармана (?level=pocket_meadow) она та же, что видит игрок.
     this.levelGrass = level.grass?.length ? new Grass(level.grass) : null;
+    this.bodyPress = level.grassBody ? 1 : 0;
     if (dream) {
       this.dreamSeed = dream.seed;
       this.swarm = new SwarmAI(level.nav, this.rng);
@@ -3430,6 +3438,12 @@ export class Game {
       grass.clearings(this.grassItems(), this.level?.grassClear ?? [], this.grassClear);
       this.renderer.setGrassClear(this.grassClear);
     } else if (grass) this.renderer.setGrassClear(NO_CLEARINGS);
+    // След лежавшего: пока на него смотрят, трава медленно поднимается — кто-то только что встал. Отвернулся — так и лежит.
+    const body = this.where === 'main' ? this.level?.grassBody : undefined;
+    if (body) {
+      if (this.bodyPress > 0 && !fl?.frozen && this.seen([body.at[0], body.floor + 0.15, body.at[1]], 0.9)) this.bodyPress = Math.max(0, this.bodyPress - dt / BODY_RISE);
+      this.renderer.setGrassBody(body.caps, body.floor, this.bodyPress);
+    } else this.renderer.setGrassBody(null);
     // Примета без тела (trace) не рисуется: видны только грибы в углах у её пути.
     if (sw && sw.active && sw.mode !== 'trace' && this.where === 'main') {
       // Чем больше вспомнено и чем больше стёрто, тем выше и определённее фигура: она растёт из тронутого.

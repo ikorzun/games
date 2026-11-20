@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { generateLayout } from '../src/gen/layout';
 import type { WorldKind } from '../src/gen/layout';
 import { Grass, GRASS_CLEAR, GRASS_STRIDE } from '../src/systems/grass';
-import { buildLevel, cellToWorld, grassChance, grassRolled, tierFloor } from '../src/world/level_build';
+import { BODY_CHANCE, bodyCapsules, bodyRolled, buildLevel, cellToWorld, grassChance, grassRolled, LAWN_CHANCE, lawnRolled, tierFloor } from '../src/world/level_build';
 import { GRASS_FORMS, GRASS_KINDS, GRASS_VARIANTS, grassForm, grassTile } from '../src/world/grass';
-import type { GrassLod } from '../src/world/grass';
+import type { GrassKind, GrassLod } from '../src/world/grass';
+import { mulberry32 } from '../src/core/rng';
 import { buildMeadow } from '../src/world/pocket_meadow';
 
 /** Корни травинок плитки: вершины на высоте 0 (у ближней сетки — по две на травинку). */
-const roots = (kind: 'meadow' | 'pale', v: number, lod: GrassLod): string[] => {
+const roots = (kind: GrassKind, v: number, lod: GrassLod): string[] => {
   const m = grassTile(kind, v, lod);
   const out: string[] = [];
   for (let i = 0; i < m.position.length; i += 3) if (Math.abs(m.position[i + 1]!) < 1e-6) out.push(`${m.position[i]!.toFixed(4)},${m.position[i + 2]!.toFixed(4)}`);
@@ -16,8 +17,8 @@ const roots = (kind: 'meadow' | 'pale', v: number, lod: GrassLod): string[] => {
 };
 
 describe('трава: плитка (world/grass.ts)', () => {
-  it('плитка 1 × 1 м: травинки внутри, корни на полу, кончики ниже 0,65 м; луговая — до 1400 / 100 / 40 треугольников, комнатная (гуще) — до 2200 / 150 / 50', () => {
-    const MAX = { meadow: [1400, 100, 40], pale: [2200, 150, 50] } as const;
+  it('плитка 1 × 1 м: травинки внутри, корни на полу, кончики ниже 0,65 м; луговая — до 1400 / 100 / 40 треугольников, комнатная (гуще) — до 2200 / 150 / 50, газон (с подложкой) — до 2000 / 230 / 80', () => {
+    const MAX = { meadow: [1400, 100, 40], pale: [2200, 150, 50], lawn: [2000, 230, 80] } as const;
     for (const kind of GRASS_KINDS) {
       for (let v = 0; v < GRASS_VARIANTS; v++) {
         const near = grassTile(kind, v, 0);
@@ -82,9 +83,10 @@ describe('трава: плитка (world/grass.ts)', () => {
   it('у каждой вершины травинки uv — её корень: шейдер решает травинку целиком (вытоптанный круг, стёртый пол)', () => {
     for (const lod of [0, 1, 2] as const) {
       const m = grassTile('pale', 2, lod);
-      // Все три вершины треугольника — одной травинки: uv у них один.
+      // Все три вершины треугольника — одной травинки: uv у них один (подложка газона — не травинка: у её вершин корень — они сами).
       for (let t = 0; t < m.index.length; t += 3) {
         const [a, b, c] = [m.index[t]!, m.index[t + 1]!, m.index[t + 2]!];
+        if ([a, b, c].every((i) => m.position[i * 3 + 1]! > 1e-6 && m.position[i * 3 + 1]! < 0.01)) continue;
         expect(m.uv[b * 2]).toBe(m.uv[a * 2]);
         expect(m.uv[c * 2 + 1]).toBe(m.uv[a * 2 + 1]);
       }
@@ -136,6 +138,20 @@ describe('трава: какие плитки отдать рендеру (syste
     expect(new Grass([]).clearings(many, doors, out)).toBe(1);
   });
 
+  it('на газоне вещь не вытаптывает круг — только свой след, в свой размер: газон остаётся нетронутым', () => {
+    const lawnForm = GRASS_KINDS.indexOf('lawn') * GRASS_VARIANTS;
+    const sites = [];
+    for (let x = 0; x < 4; x++) for (let z = 0; z < 4; z++) sites.push({ pos: [x, -0.005, z] as [number, number, number], rot: 0, s: 1, h: 1, form: lawnForm + ((x + z) % GRASS_VARIANTS) });
+    const g = new Grass(sites);
+    expect(g.field?.short).toBe(true);
+    const out: [number, number, number, number][] = [];
+    expect(g.clearings([{ pos: [1, 0, 1], radius: 0.1 }, { pos: [2, 0, 2], radius: 0.9 }], [], out)).toBe(2);
+    expect(out[0]![3]).toBeCloseTo(0.2, 5);
+    expect(out[1]![3]).toBeCloseTo(0.6, 5);
+    // Луг или трава помещения рядом с газоном — уже не газон.
+    expect(new Grass([...sites, { pos: [5, 0, 5], rot: 0, s: 1, h: 1, form: 3 }]).field?.short).toBe(false);
+  });
+
   it('ближние первыми, дальше предела (с метром на край плитки) — нет; глаз сдвинулся — порядок пересчитан', () => {
     const sites = Array.from({ length: 40 }, (_, i) => ({ pos: [i, 0, 0] as [number, number, number], rot: 0, s: 1, h: 1, form: i % 3 }));
     const g = new Grass(sites);
@@ -185,16 +201,21 @@ describe('трава на весь пол помещения', () => {
     for (let seed = 0; seed < 500; seed++) if (grassRolled(seed, 0.2)) expect(grassRolled(seed, 0.6)).toBe(true);
   });
 
-  it('в убежище и офисе — одно помещение, где выпал жребий; в зале ожидания и жёлтых комнатах — нет; плитки — сеткой клеток, поворот четвертями', () => {
+  it('в убежище и офисе — одно помещение, где выпал жребий; в зале ожидания — нет; плитки — сеткой клеток, поворот четвертями', () => {
     let rooms = 0;
     for (const world of ['shelter', 'office', 'station', 'yellow'] as WorldKind[]) {
       for (const seed of SEEDS) {
         for (const rank of RANKS) {
           const layout = generateLayout(seed, rank, world);
           const l = buildLevel(layout, { wear: 0.8 });
-          if (world === 'station' || world === 'yellow') {
+          if (world === 'station') {
             expect(l.grass ?? []).toEqual([]);
             expect(l.grassClear ?? []).toEqual([]);
+            continue;
+          }
+          // Жёлтые — только газон (ниже, отдельной проверкой); бледной травы там не бывает.
+          if (world === 'yellow') {
+            for (const g of l.grass ?? []) expect(Math.floor(g.form / GRASS_VARIANTS), 'в жёлтых — только газон').toBe(GRASS_KINDS.indexOf('lawn'));
             continue;
           }
           if (!grassRolled(seed, 0.8)) {
@@ -255,3 +276,111 @@ describe('трава на весь пол помещения', () => {
     }
   });
 });
+
+describe('газон в жёлтых комнатах (квиз партнёра, ночь на 20.11: «Идеальный газон, изредка»)', () => {
+  it('изредка — в трёх уровнях из десяти; в зале без экранов, не в начале сна; ровный: одна высота, сетка клеток, без порогов', () => {
+    let n = 0;
+    for (let seed = 0; seed < 4000; seed++) if (lawnRolled(seed * 7919 + 13)) n++;
+    expect(n / 4000).toBeGreaterThan(LAWN_CHANCE - 0.04);
+    expect(n / 4000).toBeLessThan(LAWN_CHANCE + 0.04);
+    let lawns = 0;
+    for (let seed = 1; seed < 60 && lawns < 4; seed++) {
+      if (!lawnRolled(seed)) continue;
+      const layout = generateLayout(seed, 2, 'yellow');
+      const l = buildLevel(layout);
+      if (l.grassRoom === undefined) continue;
+      lawns++;
+      const room = layout.rooms.find((r) => r.id === l.grassRoom)!;
+      expect(room.type).toBe('hall');
+      expect(room.id).not.toBe(layout.entranceRoom);
+      expect(l.skyRoom).not.toBe(room.id);
+      expect(l.grassClear ?? [], 'у газона порогов нет').toEqual([]);
+      expect(l.grassBody, 'на газоне следа нет').toBeUndefined();
+      const grass = l.grass ?? [];
+      expect(grass.length).toBeGreaterThan(room.cells.length * 6);
+      for (const g of grass) {
+        expect(Math.floor(g.form / GRASS_VARIANTS)).toBe(GRASS_KINDS.indexOf('lawn'));
+        expect(g.h).toBe(1);
+        // Над полом, а не в нём: подложка (3 мм над корнями) под полом не видна, и газона нет — одни кончики травинок.
+        expect(g.pos[1], 'газон над полом').toBeGreaterThan(tierFloor(room.tier));
+        expect(g.pos[1]).toBeLessThan(tierFloor(room.tier) + 0.01);
+        expect(room.cells.some(([x, z]) => Math.abs(g.pos[0] - cellToWorld(x)) <= 1.01 && Math.abs(g.pos[2] - cellToWorld(z)) <= 1.01)).toBe(true);
+      }
+    }
+    expect(lawns).toBeGreaterThan(1);
+  });
+
+  it('газон неподвижен — ни ветра, ни шагов (вес качания — ноль): у ложного нет времени; луговая и комнатная качаются', () => {
+    for (let v = 0; v < GRASS_VARIANTS; v++) {
+      for (const lod of [0, 1, 2] as const) {
+        const sway = grassTile('lawn', v, lod).sway;
+        expect(!sway || sway.every((w) => w === 0), `lawn/${v}/${lod}`).toBe(true);
+        expect(grassTile('meadow', v, lod).sway?.some((w) => w > 0)).toBe(true);
+        expect(grassTile('pale', v, lod).sway?.some((w) => w > 0)).toBe(true);
+      }
+    }
+  });
+
+  it('травинка газона короткая (до 10 см); под травинками — зелёная подложка во всю плитку на всех подробностях', () => {
+    const m = grassTile('lawn', 0, 0);
+    let top = 0;
+    for (let i = 1; i < m.position.length; i += 3) top = Math.max(top, m.position[i]!);
+    expect(top).toBeLessThan(0.1);
+    expect(top).toBeGreaterThan(0.05);
+    for (const lod of [0, 1, 2] as const) {
+      const t = grassTile('lawn', 1, lod);
+      // Четыре угла подложки — на высоте 3 мм, по углам квадрата 1 × 1 м.
+      const corners = new Set<string>();
+      for (let i = 0; i < t.position.length; i += 3) if (Math.abs(t.position[i + 1]! - 0.003) < 1e-6) corners.add(`${t.position[i]},${t.position[i + 2]}`);
+      expect([...corners].sort()).toEqual(['-0.5,-0.5', '-0.5,0.5', '0.5,-0.5', '0.5,0.5']);
+    }
+  });
+});
+
+describe('след лежавшего человека в траве (квиз партнёра, ночь на 20.11)', () => {
+  it('редко: в двух помещениях с травой из пяти; силуэт — шесть капсул ростом около 1,85 м', () => {
+    let n = 0;
+    for (let seed = 0; seed < 4000; seed++) if (bodyRolled(seed * 7919 + 13)) n++;
+    expect(n / 4000).toBeGreaterThan(BODY_CHANCE - 0.04);
+    expect(n / 4000).toBeLessThan(BODY_CHANCE + 0.04);
+    const caps = bodyCapsules(0, 0, 0, mulberry32(5));
+    expect(caps.length).toBe(6);
+    // От пяток до макушки: голова — u до 0,84 + 0,11, ноги — до −0,92 − 0,08.
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const [ax, , bx, , r] of caps) {
+      lo = Math.min(lo, ax - r, bx - r);
+      hi = Math.max(hi, ax + r, bx + r);
+    }
+    expect(hi - lo).toBeGreaterThan(1.7);
+    expect(hi - lo).toBeLessThan(2.2);
+  });
+
+  it('силуэт лежит на траве целиком: не под мебелью, не у порога, в клетках помещения; только в бледной траве убежища и офиса', () => {
+    let bodies = 0;
+    for (const world of ['shelter', 'office'] as WorldKind[]) {
+      for (let seed = 1; seed < 80 && bodies < 6; seed++) {
+        if (!bodyRolled(seed) || !grassRolled(seed, 0.8)) continue;
+        const layout = generateLayout(seed, 2, world);
+        const l = buildLevel(layout, { wear: 0.8 });
+        if (!l.grassBody) continue;
+        bodies++;
+        const room = layout.rooms.find((r) => r.id === l.grassRoom)!;
+        const y0 = tierFloor(room.tier);
+        expect(l.grassBody.floor).toBeCloseTo(y0, 5);
+        const doors = l.grassClear ?? [];
+        for (const [ax, az, bx, bz] of l.grassBody.caps) {
+          for (const [x, z] of [[ax, az], [bx, bz], [(ax + bx) / 2, (az + bz) / 2]] as const) {
+            expect(room.cells.some(([cx, cz]) => Math.abs(x - cellToWorld(cx)) <= 1.5 && Math.abs(z - cellToWorld(cz)) <= 1.5), `${world} ${seed}: вне помещения`).toBe(true);
+            expect((l.grass ?? []).some((g) => Math.abs(g.pos[0] - x) <= 0.55 && Math.abs(g.pos[2] - z) <= 0.55), `${world} ${seed}: не на траве`).toBe(true);
+            for (const d of doors) expect(Math.hypot(x - d[0], z - d[2]), `${world} ${seed}: у порога`).toBeGreaterThanOrEqual(1.0 - 1e-9);
+            const hit = l.colliders.boxes.some((b) => !b.ghost && b.minY < y0 + 0.5 && b.maxY > y0 + 0.03 && x > b.minX - 0.12 && x < b.maxX + 0.12 && z > b.minZ - 0.12 && z < b.maxZ + 0.12);
+            expect(hit, `${world} ${seed}: под мебелью`).toBe(false);
+          }
+        }
+      }
+    }
+    expect(bodies).toBeGreaterThan(2);
+  });
+});
+

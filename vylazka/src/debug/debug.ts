@@ -111,7 +111,7 @@ export interface VzDebugApi {
   flowerSites(): { pos: number[]; form: number }[];
   /** Трава: плиток у места и у луга, помещение с травой, сколько нарисовано в последнем кадре (и дальних, и отсечённых). */
   /** Трава: плиток у места и у кармана, помещение с травой, что в кадре (ближних, дальних, у горизонта, отсечено, треугольников, где кончается) и вытоптанные круги. */
-  grass(): { level: number; pocket: number; room: number | null; shown: number; far: number; horizon: number; culled: number; tris: number; end: number; clear: [number, number, number, number][] };
+  grass(): { level: number; pocket: number; room: number | null; shown: number; far: number; horizon: number; culled: number; tris: number; end: number; clear: [number, number, number, number][]; body: { at: [number, number]; floor: number; press: number } | null };
   flowers(): { n: number; open: number; turn: number; lit: number; beam: boolean; gaze: boolean; shown: number; far: number; culled: number; eye?: number[]; from?: number[] | null; dir?: number[] | null; probe: number[][] };
   /** Почему вещь видна или не видна: расстояние, попадание в луч (dot против нужного need), путь луча до преграды. */
   sees(id: number): Record<string, number> | null;
@@ -494,7 +494,8 @@ export function installDebug(app: App): void {
     flowerSites: () => (game().flowers?.sites ?? []).map((q) => ({ pos: [...q.pos], form: q.form })),
     grass: () => {
       const g = game();
-      return { level: g.levelGrass?.sites.length ?? 0, pocket: g.pocketGrass?.sites.length ?? 0, room: g.level?.grassRoom ?? null, ...g.renderer.grassStats, clear: (g.level?.grassClear ?? []).map((c) => [...c] as [number, number, number, number]) };
+      const b = g.level?.grassBody;
+      return { level: g.levelGrass?.sites.length ?? 0, pocket: g.pocketGrass?.sites.length ?? 0, room: g.level?.grassRoom ?? null, ...g.renderer.grassStats, clear: (g.level?.grassClear ?? []).map((c) => [...c] as [number, number, number, number]), body: b ? { at: [b.at[0], b.at[1]], floor: b.floor, press: g.bodyPress } : null };
     },
     gotoThing: (id, distance = 2.2) => {
       const g = game();

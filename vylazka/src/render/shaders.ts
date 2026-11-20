@@ -241,7 +241,33 @@ ${WIND_GLSL}
 // и не рисуется), ближе к краю — лежит, отведённая от середины, у края — встаёт. Иначе трава до колен прячет ключи на полу
 // (куратор, противоречие 346).
 uniform vec4 uClear[GRASS];   // xz — середина круга, y — пол под ним, w — радиус, м (0 — пусто)
+// След лежавшего человека (квиз партнёра, ночь на 20.11; world/level_build.ts, grassBody): шесть капсул силуэта — голова,
+// туловище, руки, ноги: (ax, az, bx, bz) и (радиус, …). uBodyK: x — пол под следом, y — насколько трава примята (1 — только что
+// лежали, 0 — встала; game.ts поднимает её, пока на след смотрят).
+uniform vec4 uBody[12];
+uniform vec2 uBodyK;
 varying vec3 vRoot;
+// Насколько примята эта травинка следом (для тёплого свечения во фрагменте): ставит grassTrample.
+varying float vPress;
+float gPress = 0.0;
+float bodyPress(vec3 root, out vec2 away) {
+  away = vec2(0.0);
+  if (uBodyK.y <= 0.0 || abs(root.y - uBodyK.x) > 0.6) return 0.0;
+  float best = 1e9;
+  for (int i = 0; i < 6; i++) {
+    vec4 s = uBody[i * 2];
+    float r = uBody[i * 2 + 1].x;
+    vec2 ab = s.zw - s.xy;
+    float t = clamp(dot(root.xz - s.xy, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0);
+    vec2 d = root.xz - (s.xy + ab * t);
+    float l = length(d);
+    if (l - r < best) {
+      best = l - r;
+      away = l > 1e-4 ? d / l : vec2(0.0);
+    }
+  }
+  return uBodyK.y * (1.0 - smoothstep(-0.03, 0.1, best));
+}
 vec3 grassTrample(vec3 wp, vec3 root) {
   float k = 1.0;
   vec2 away = vec2(1.0, 0.0);
@@ -256,10 +282,25 @@ vec3 grassTrample(vec3 wp, vec3 root) {
       if (r > 1e-3) away = d / r;
     }
   }
-  if (k >= 1.0) return wp;
   if (k <= 0.0) return root;
   float h = max(wp.y - root.y, 0.0);
   float lie = 1.0 - k;
+  // Силуэт лежавшего: травинка внутри него вдавлена почти в пол и отведена от оси тела недалеко — чтобы фигура читалась пятном
+  // примятого, а не пробором в траве (кадры 20.11, ночь): кто-то только что встал.
+  vec2 off;
+  float press = bodyPress(root, off);
+  gPress = press;
+  if (press > lie) {
+    // Лежит плашмя и «причёсана» вдоль тела — к ногам (капсула туловища: от шеи к тазу), с небольшим отводом от оси: так
+    // примятое читается ровной светлой гладью среди стоящей травы, как на настоящем лугу.
+    vec2 comb = uBody[2].zw - uBody[2].xy;
+    vec2 dir = length(comb) > 1e-4 ? normalize(comb) * 0.8 + off * 0.35 : off;
+    dir = length(dir) > 1e-4 ? normalize(dir) : vec2(1.0, 0.0);
+    wp.y = root.y + h * mix(1.0, 0.12, press);
+    wp.xz += dir * (h * 0.85 * press);
+    return wp;
+  }
+  if (lie <= 0.0) return wp;
   wp.y = root.y + h * mix(1.0, 0.1, lie);
   wp.xz += away * (h * 0.85 * lie);
   return wp;
@@ -321,6 +362,7 @@ void main() {
   vec3 rootW = (modelMatrix * (im * vec4(uv.x, 0.0, uv.y, 1.0))).xyz;
   wp.xyz = grassTrample(wp.xyz, rootW);
   vRoot = rootW;
+  vPress = gPress;
 #endif
   vec3 wn = normalize(mat3(modelMatrix) * (mat3(im) * normal));
 #endif
@@ -422,6 +464,7 @@ varying float vLace;
 varying float vArch;
 #ifdef GRASS
 varying vec3 vRoot;   // корень травинки в мире (render: трава, GRASS)
+varying float vPress; // насколько травинка примята следом лежавшего (0 — стоит)
 #endif
 varying vec2 vTone;       // x — предмет выцвел, y — светится своим цветом
 varying float vSeed;      // чей узор кружева (0 — архитектура: общий узор)
@@ -1353,6 +1396,11 @@ void main() {
   // Тон предмета: выцветший теряет цвет (остаётся бумага), расцветший светится своим цветом сам.
   if (vTone.x > 0.0) col = mix(col, vec3(dot(col, vec3(0.3, 0.59, 0.11))) * 0.92, vTone.x * 0.88);
   if (vTone.y > 0.0) col += uMatBase[mi] * vColor.rgb * (vTone.y * 0.38);
+#ifdef GRASS
+  // След лежавшего ещё тёплый: примятая трава светлее стоящей (лежит гладью и ловит свет) и чуть светится тёплым; встаёт
+  // трава — гаснет и свет (квиз партнёра, ночь на 20.11).
+  if (vPress > 0.0) col = col * (1.0 + 0.6 * vPress) + vec3(1.0, 0.58, 0.32) * (0.08 * vPress);
+#endif
   // Нить кружева — выцветшая: от цвета поверхности остаётся намёк, остальное — белёсая пряжа.
   if (laceK > 0.5) col = mix(vec3(dot(col, vec3(0.3, 0.59, 0.11))), col, 0.3) * 1.25 + vec3(0.004, 0.004, 0.005);
   // Краски уходят раньше формы (вариант A): с кругами место выцветает к серому. Та же кривая, что

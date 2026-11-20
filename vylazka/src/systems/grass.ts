@@ -6,6 +6,7 @@
  * Чистый TS.
  */
 import type { Vec3 } from '../core/types';
+import { GRASS_KINDS, GRASS_VARIANTS } from '../world/grass';
 
 /** Чисел на плитку в списке для рендера: x, y, z, поворот вокруг вертикали, размер поперёк, размер по высоте, форма. */
 export const GRASS_STRIDE = 7;
@@ -44,6 +45,11 @@ export interface GrassField {
   minZ: number;
   maxZ: number;
   floor: number;
+  /**
+   * Трава короткая — газон жёлтых комнат (world/grass.ts, lawn): по щиколотку вещь не прячется, и вокруг неё не вытаптывается
+   * круг — только её след, в её размер. Газон остаётся нетронутым, как ковёр (квиз партнёра, ночь на 20.11).
+   */
+  short: boolean;
 }
 
 export class Grass {
@@ -59,7 +65,8 @@ export class Grass {
     this.dist = new Float32Array(sites.length);
     if (sites.length === 0) this.field = null;
     else {
-      const f: GrassField = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity, floor: Infinity };
+      const lawn = GRASS_KINDS.indexOf('lawn');
+      const f: GrassField = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity, floor: Infinity, short: sites.every((s) => Math.floor(s.form / GRASS_VARIANTS) === lawn) };
       for (const s of sites) {
         const r = 0.5 * s.s + 0.4;
         f.minX = Math.min(f.minX, s.pos[0] - r);
@@ -86,7 +93,7 @@ export class Grass {
         if (n >= GRASS_CLEAR) break;
         const [x, y, z] = it.pos;
         if (x < f.minX || x > f.maxX || z < f.minZ || z > f.maxZ || y < f.floor - 0.3 || y > f.floor + 0.55) continue;
-        out[n++] = [x, f.floor, z, Math.min(1.2, 0.62 + 1.2 * it.radius)];
+        out[n++] = [x, f.floor, z, f.short ? Math.min(0.6, 0.1 + it.radius) : Math.min(1.2, 0.62 + 1.2 * it.radius)];
       }
     }
     for (const d of doors) {

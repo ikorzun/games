@@ -631,6 +631,9 @@ export class GameRenderer {
   private grassCount = 0;
   /** Вытоптанные круги травы (systems/grass.ts, GRASS_CLEAR): xz — середина, y — пол, w — радиус; w = 0 — пусто. */
   private readonly grassClear = Array.from({ length: GRASS_CLEAR }, () => new THREE.Vector4(0, 0, 0, 0));
+  /** След лежавшего в траве (шейдер, bodyPress): шесть капсул по два вектора и (пол, примятость). */
+  private readonly grassBody = Array.from({ length: 12 }, () => new THREE.Vector4(0, 0, 0, 0));
+  private readonly grassBodyK = new THREE.Vector2(0, 0);
   /** Номера плиток кадра (первый проход раскладки). */
   private readonly grassPick = new Int32Array(GRASS_MAX);
   readonly grassStats = { shown: 0, far: 0, horizon: 0, culled: 0, tris: 0, end: 0 };
@@ -1765,6 +1768,25 @@ export class GameRenderer {
     }
   }
 
+  /**
+   * След лежавшего человека в траве (world/level_build.ts, grassBody): капсулы силуэта (ax, az, bx, bz, радиус), пол под ним и
+   * насколько трава примята — 1 только что лежали, 0 встала. Нет следа — null.
+   */
+  setGrassBody(caps: readonly (readonly number[])[] | null, floor = 0, press = 0): void {
+    for (let i = 0; i < 6; i++) {
+      const c = caps?.[i];
+      if (c) {
+        this.grassBody[i * 2]!.set(c[0]!, c[1]!, c[2]!, c[3]!);
+        this.grassBody[i * 2 + 1]!.set(c[4]!, 0, 0, 0);
+      } else {
+        // Пустая капсула далеко от всего: в силуэт не попадает ни одна травинка.
+        this.grassBody[i * 2]!.set(1e6, 1e6, 1e6, 1e6);
+        this.grassBody[i * 2 + 1]!.set(0, 0, 0, 0);
+      }
+    }
+    this.grassBodyK.set(floor, caps ? Math.max(0, Math.min(1, press)) : 0);
+  }
+
   private layoutGrass(): void {
     const data = this.grassData;
     const count = this.grassCount;
@@ -1837,6 +1859,8 @@ export class GameRenderer {
           this.grassMat = this.worldLike();
           this.grassMat.uniforms.uThing = { value: new THREE.Vector4(0, 0, 1, 0) };
           this.grassMat.uniforms.uClear = { value: this.grassClear };
+          this.grassMat.uniforms.uBody = { value: this.grassBody };
+          this.grassMat.uniforms.uBodyK = { value: this.grassBodyK };
           // GRASS — травинку решает её корень: вытоптанные круги и стёртый пол (render/shaders.ts).
           this.grassMat.defines = { ...this.worldMat.defines, GRASS: GRASS_CLEAR };
         }

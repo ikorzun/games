@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { mulberry32 } from '../src/core/rng';
 import type { Vec3 } from '../src/core/types';
 import { generateLayout } from '../src/gen/layout';
-import { Game, SONAR_EVERY, SONAR_REACH, SONAR_SPEED, STAGE_ALL, STEP, WIRE_STILL } from '../src/game';
+import { BODY_RISE, Game, SONAR_EVERY, SONAR_REACH, SONAR_SPEED, STAGE_ALL, STEP, WIRE_STILL } from '../src/game';
 import type { DreamEvent, FearEvent, StepEvents } from '../src/game';
 import { DEFAULT_CONTROLLER } from '../src/player/controller';
 import { emptyInput } from '../src/player/input';
@@ -22,7 +22,7 @@ import { ColliderSet } from '../src/world/colliders';
 import type { FlatMark } from '../src/world/flat';
 import type { BuiltLevel, ItemSpot } from '../src/world/level';
 import type { LevelObject } from '../src/world/objects';
-import { buildLevel, cellToWorld, tierFloor } from '../src/world/level_build';
+import { bodyRolled, buildLevel, cellToWorld, grassRolled, tierFloor } from '../src/world/level_build';
 import { ENV_BUNKER, ENV_OFFICE, ENV_YELLOW } from '../src/world/pockets';
 import { ALL_PROPS } from '../src/world/props_all';
 import { DOOR_IMAGE, DOOR_NAME, SCREEN_IMAGES } from '../src/world/screens';
@@ -127,6 +127,11 @@ class FakeRenderer {
   grassClear: (readonly [number, number, number, number])[] = [];
   setGrassClear(list: readonly (readonly [number, number, number, number])[]): void {
     this.grassClear = [...list];
+  }
+  /** След лежавшего в траве: есть ли он у рендера и насколько примята трава. */
+  grassBody: { caps: number; press: number } | null = null;
+  setGrassBody(caps: readonly (readonly number[])[] | null, _floor = 0, press = 0): void {
+    this.grassBody = caps ? { caps: caps.length, press } : null;
   }
   setPocket(m: unknown): void {
     this.pocketShown = m !== null;
@@ -3371,6 +3376,39 @@ describe('собрано только там, куда смотрит герой
       }
     }
     expect(seen).toBeGreaterThanOrEqual(3);
+  });
+
+  it('след лежавшего в траве: пока на него смотрят, трава поднимается; отвернулся — так и лежит', () => {
+    let seen = 0;
+    for (let seed = 1; seed < 80 && seen < 2; seed++) {
+      if (!bodyRolled(seed) || !grassRolled(seed, 0.8)) continue;
+      const level = buildLevel(generateLayout(seed, 2, 'shelter'), { wear: 0.8 });
+      const body = level.grassBody;
+      if (!body) continue;
+      // Встать в своём помещении в паре метров от следа и посмотреть на него.
+      const node = level.nav
+        .filter((n) => n.room === level.grassRoom && Math.hypot(n.x - body.at[0], n.z - body.at[1]) >= 1.6)
+        .sort((a, b) => Math.hypot(a.x - body.at[0], a.z - body.at[1]) - Math.hypot(b.x - body.at[0], b.z - body.at[1]))[0];
+      if (!node) continue;
+      seen += 1;
+      const h = new Harness(level, { seed });
+      const g = h.game;
+      const face = Math.atan2(-(body.at[0] - node.x), -(body.at[1] - node.z));
+      // Отвернувшись — не поднимается.
+      g.teleport(node.x, node.y, node.z, face + Math.PI, -0.3);
+      h.run(4);
+      expect(g.bodyPress, `сид ${seed}: отвернулся`).toBe(1);
+      expect(h.r.grassBody?.caps).toBe(6);
+      // Смотрит — поднимается медленно: за 4 с — на пятую часть, не больше.
+      g.teleport(node.x, node.y, node.z, face, -0.45);
+      h.run(4);
+      expect(g.bodyPress, `сид ${seed}: смотрит`).toBeLessThan(0.95);
+      expect(g.bodyPress).toBeGreaterThan(0.7);
+      expect(h.r.grassBody?.press).toBeCloseTo(g.bodyPress, 5);
+      h.run(BODY_RISE);
+      expect(g.bodyPress).toBe(0);
+    }
+    expect(seen).toBeGreaterThanOrEqual(1);
   });
 
   it('трава примята там, где вещь лежит сейчас: вещь воспоминания на полу помещения с травой — круг вокруг неё; у дверей — круги всегда', () => {

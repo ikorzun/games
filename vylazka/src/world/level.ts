@@ -156,6 +156,12 @@ export interface BuiltLevel {
    * полу игра добавляет сама — где вещь лежит сейчас (systems/grass.ts, clearings). Нет — травы нет.
    */
   grassClear?: [number, number, number, number][];
+  /**
+   * След лежавшего человека в траве помещения (квиз партнёра, ночь на 20.11; design.md, §36): пол под ним, середина силуэта (x, z)
+   * и шесть капсул силуэта (ax, az, bx, bz, радиус) — голова, туловище, руки, ноги. Пока на него смотрят, трава поднимается
+   * (game.ts). Нет — следа в этом уровне нет.
+   */
+  grassBody?: { floor: number; at: [number, number]; caps: [number, number, number, number, number][] };
   blooms?: { pos: Vec3; dir: Vec3; form: number; size: number; spin: number; obj: number }[];
   /** Высота потолка каждого помещения над его полом, м (номер помещения → высота). */
   ceilings?: Record<number, number>;

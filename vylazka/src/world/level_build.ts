@@ -239,6 +239,45 @@ export const grassChance = (wear: number): number => {
 };
 export const grassRolled = (seed: number, wear: number): boolean => hash01(13, 0x6a55, seed ^ 0x51) < grassChance(wear);
 
+/**
+ * Идеальный газон в жёлтых комнатах (квиз партнёра, ночь на 20.11: «Идеальный газон, изредка»): изредка — в трёх уровнях из
+ * десяти — одна комната с ровным, как ковёр, газоном, пугающе чистым. Природа там, где её быть не может; пустота жёлтых остаётся
+ * правилом, газон — исключением.
+ */
+export const LAWN_CHANCE = 0.3;
+export const lawnRolled = (seed: number): boolean => hash01(17, 0x1a3e, seed ^ 0x7a) < LAWN_CHANCE;
+
+/**
+ * След лежавшего человека в траве помещения (квиз партнёра, ночь на 20.11): примятый силуэт, будто тут только что лежали. Редко —
+ * в двух помещениях с травой из пяти, то есть раз в несколько снов (game.ts поднимает траву, пока на след смотрят).
+ */
+export const BODY_CHANCE = 0.4;
+export const bodyRolled = (seed: number): boolean => hash01(19, 0xb0d1, seed ^ 0x11) < BODY_CHANCE;
+
+/**
+ * Силуэт лежащего на спине человека — шесть капсул (ax, az, bx, bz, радиус): голова, туловище, две руки, две ноги. Середина —
+ * (cx, cz), ось тела — угол yaw (от ног к голове); рост около 1,85 м. Руки и ноги чуть по-разному у каждого следа: одна рука
+ * бывает закинута за голову.
+ */
+export function bodyCapsules(cx: number, cz: number, yaw: number, rnd: () => number): [number, number, number, number, number][] {
+  const ux = Math.cos(yaw);
+  const uz = Math.sin(yaw);
+  const p = (u: number, v: number): [number, number] => [cx + ux * u - uz * v, cz + uz * u + ux * v];
+  const cap = (a: [number, number], b: [number, number], r: number): [number, number, number, number, number] => [a[0], a[1], b[0], b[1], r];
+  const spread = 0.08 * rnd();
+  const armUp = rnd() < 0.3;
+  const handL = 0.1 * rnd();
+  const footR = 0.1 * rnd();
+  return [
+    cap(p(0.78, 0), p(0.84, 0), 0.11),
+    cap(p(0.6, 0), p(0.02, 0), 0.18),
+    cap(p(0.52, 0.2), p(handL, 0.3 + spread), 0.055),
+    armUp ? cap(p(0.52, -0.2), p(1.02, -0.27), 0.055) : cap(p(0.52, -0.2), p(-0.02, -0.32 - spread), 0.055),
+    cap(p(-0.02, 0.09), p(-0.92, 0.1 + spread), 0.08),
+    cap(p(-0.02, -0.09), p(-0.9, -0.12 - footR), 0.08),
+  ];
+}
+
 /** Как собирать уровень. */
 export interface BuildOptions {
   /**
@@ -483,7 +522,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   // помещение, где сквозь пол проросла бледная трава до колен, выросшая без солнца. Порог резкий: за одной дверью пол, за
   // другой — трава. Домашняя комната убежища (спальня, гостиная, жилой отсек), в офисе — переговорная, кабинет, архив или отдел.
   // Не сад, не оранжерея, не небо, не бумажные цветы, не комната-аномалия, не начало сна и не помещения партнёра. В зале ожидания
-  // и в жёлтых комнатах травы нет: зал — моё место со своим временем, жёлтые пусты нарочно.
+  // травы нет: зал — моё место со своим временем. Жёлтые пусты нарочно — кроме изредка газона (ниже, lawnRoom).
   const GRASS_TYPES: Readonly<Partial<Record<WorldKind, readonly RoomType[]>>> = {
     shelter: ['bedroom', 'living', 'dorm', 'nursery', 'hallway'],
     office: ['meeting', 'manager', 'files', 'department'],
@@ -1041,29 +1080,39 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   dropBuried(spots, col);
   // И места, которых не видно ни откуда, где можно встать: вещь воспоминания вспоминают взглядом (furnish.ts, dropHidden).
   dropHidden(spots, col);
-  // Трава на весь пол помещения grassRoom: плитки 1 × 1 м по три на сторону клетки (world/grass.ts) ровной сеткой и с поворотом
+  // Газон в жёлтых комнатах (квиз партнёра, ночь на 20.11): изредка один зал без экранов — не начало сна и не небо.
+  const lawnRoom =
+    world === 'yellow' && lawnRolled(layout.seed)
+      ? layout.rooms.filter((r) => r.type === 'hall' && r.cells.length >= 2 && r !== startRoom0 && r !== skyRoom && r !== variantRoom && !screenQuota.has(r.id) && !lowerWells.has(r.id)).sort(order(17))[0]
+      : undefined;
+  /** Помещение, где на полу трава: проросшая сквозь пол (убежище, офис) или газон (жёлтые комнаты). */
+  const turfRoom = grassRoom ?? lawnRoom;
+  // Трава на весь пол помещения: плитки 1 × 1 м по три на сторону клетки (world/grass.ts) ровной сеткой и с поворотом
   // четвертями — квадраты сходятся без плешей в углах и без двойной густоты внахлёст (куратор, противоречие 348). Где середина
   // плитки под мебелью — травы нет: она проросла сквозь пол, а не сквозь шкаф. От каждой двери к середине помещения — тропа:
   // там трава ниже, вытоптанная. У дверей — круги (grassClear): в середине травинок нет, к краю они лежат, отведённые наружу
   // (шейдер, GRASS). Круги вокруг вещей на полу кладёт игра — там, где вещь лежит сейчас (systems/grass.ts, clearings): иначе
   // трава до колен прятала бы ключи на полу (противоречие 346), а заранее вытоптанные места всех возможных вещей оставляли бы
-  // помещение лысым (кадры 19.11, ночь: мест на полу — по одному на клетку).
+  // помещение лысым (кадры 19.11, ночь: мест на полу — по одному на клетку). Газон — наоборот, нетронутый: ни троп, ни порогов,
+  // один рост, ровный край по стенам и проёмам.
   const grass: GrassSite[] = [];
   const grassClear: [number, number, number, number][] = [];
-  if (grassRoom) {
-    const y0 = tierFloor(grassRoom.tier);
+  let grassBody: BuiltLevel['grassBody'];
+  if (turfRoom) {
+    const lawn = turfRoom === lawnRoom;
+    const y0 = tierFloor(turfRoom.tier);
     const H = CELL / 2;
     const under: Aabb[] = [];
-    const mine = new Set(grassRoom.cells.map(([x, z]) => `${x},${z}`));
+    const mine = new Set(turfRoom.cells.map(([x, z]) => `${x},${z}`));
     const exits: [number, number][] = [];
     for (const e of layout.edges) {
-      if (e.tier !== grassRoom.tier) continue;
+      if (e.tier !== turfRoom.tier) continue;
       const a = mine.has(`${e.cx},${e.cz}`);
       const b = mine.has(`${e.cx + (e.dir === 0 ? 1 : 0)},${e.cz + (e.dir === 1 ? 1 : 0)}`);
       if (a !== b) exits.push([cellToWorld(e.cx) + (e.dir === 0 ? H : 0), cellToWorld(e.cz) + (e.dir === 1 ? H : 0)]);
     }
-    const mx = grassRoom.cells.reduce((m, [x]) => m + cellToWorld(x), 0) / grassRoom.cells.length;
-    const mz = grassRoom.cells.reduce((m, [, z]) => m + cellToWorld(z), 0) / grassRoom.cells.length;
+    const mx = turfRoom.cells.reduce((m, [x]) => m + cellToWorld(x), 0) / turfRoom.cells.length;
+    const mz = turfRoom.cells.reduce((m, [, z]) => m + cellToWorld(z), 0) / turfRoom.cells.length;
     const toPath = (x: number, z: number): number => {
       let best = Infinity;
       for (const [ex, ez] of exits) {
@@ -1074,10 +1123,12 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       }
       return best;
     };
+    const blocked = (x: number, z: number, r: number, top: number): boolean =>
+      col.query(x - r, z - r, x + r, z + r, under).some((b) => !b.ghost && !b.off && b.minY < y0 + top && b.maxY > y0 + 0.03 && b.minX < x + r && b.maxX > x - r && b.minZ < z + r && b.maxZ > z - r);
     // С кругами трава выше: место зарастает (как берёзы — systems/decay.ts).
     const wt = Math.min(1, Math.max(0, (decay.wear - 0.1) / 0.7));
     const tall = 0.92 + 0.3 * wt * wt * (3 - 2 * wt);
-    for (const [gx, gz] of grassRoom.cells) {
+    for (const [gx, gz] of turfRoom.cells) {
       const wx = cellToWorld(gx);
       const wz = cellToWorld(gz);
       for (let i = -1; i <= 1; i++) {
@@ -1085,29 +1136,59 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
           const k = gx * 97 + gz * 31 + i * 7 + j;
           const x = wx + i;
           const z = wz + j;
-          const solid = col.query(x - 0.2, z - 0.2, x + 0.2, z + 0.2, under).some((b) => !b.ghost && !b.off && b.minY < y0 + 0.4 && b.maxY > y0 + 0.03 && b.minX < x + 0.2 && b.maxX > x - 0.2 && b.minZ < z + 0.2 && b.maxZ > z - 0.2);
-          if (solid) continue;
+          if (blocked(x, z, 0.2, 0.4)) continue;
+          const rot = Math.floor(hash01(k, 3, layout.seed ^ 0x9a55) * 4) * (Math.PI / 2);
+          const variant = Math.floor(hash01(k, 6, layout.seed ^ 0x9a55) * GRASS_VARIANTS);
+          if (lawn) {
+            // Встык: подложки соседних плиток не заходят друг на друга (без мерцания на стыке). Над полом, а не в нём: подложка
+            // (3 мм над корнями, world/grass.ts) иначе уходит под пол, и газона не видно — одни кончики травинок по ковролину.
+            grass.push({ pos: [x, y0 + 0.003, z], rot, s: 1, h: 1, form: grassForm('lawn', variant) });
+            continue;
+          }
           const pd = toPath(x, z);
           const trod = pd >= 1.5 ? 1 : 0.42 + 0.58 * Math.max(0, (pd - 0.3) / 1.2);
           grass.push({
             pos: [x, y0 - 0.01, z],
-            rot: Math.floor(hash01(k, 3, layout.seed ^ 0x9a55) * 4) * (Math.PI / 2),
+            rot,
             s: 1.04 + 0.06 * hash01(k, 4, layout.seed ^ 0x9a55),
             // К середине помещения — выше, у стен — ниже: как растёт в тени и на свету.
             h: (0.85 + 0.35 * hash01(k, 5, layout.seed ^ 0x9a55) - (Math.abs(i) + Math.abs(j)) * 0.06) * trod * tall,
-            form: grassForm('pale', Math.floor(hash01(k, 6, layout.seed ^ 0x9a55) * GRASS_VARIANTS)),
+            form: grassForm('pale', variant),
           });
         }
       }
     }
     // Круги у дверей: порог вытоптан, и край травы не встаёт ровной линией поперёк прохода (противоречие 348). Половина кругов
-    // шейдера — вещам на полу (systems/grass.ts, clearings).
-    for (const [ex, ez] of exits) if (grassClear.length < GRASS_CLEAR / 2) grassClear.push([ex, y0, ez, 0.95]);
+    // шейдера — вещам на полу (systems/grass.ts, clearings). У газона порогов нет: по нему не ходили.
+    if (!lawn) for (const [ex, ez] of exits) if (grassClear.length < GRASS_CLEAR / 2) grassClear.push([ex, y0, ez, 0.95]);
+    // След лежавшего: силуэт ложится на траву целиком — не под мебель, не к порогу (метр от проёма), не за стену.
+    if (!lawn && grass.length > 0 && bodyRolled(layout.seed)) {
+      const rnd = mulberry32(hash2(layout.seed, turfRoom.id, 0xb0d1) >>> 0);
+      const order2 = grass.map((_, i) => i);
+      for (let i = order2.length - 1; i > 0; i--) {
+        const j = Math.floor(rnd() * (i + 1));
+        [order2[i], order2[j]] = [order2[j]!, order2[i]!];
+      }
+      const onGrass = (x: number, z: number): boolean => grass.some((g) => Math.abs(g.pos[0] - x) <= 0.55 && Math.abs(g.pos[2] - z) <= 0.55);
+      const free = (x: number, z: number): boolean => onGrass(x, z) && !blocked(x, z, 0.12, 0.5) && exits.every(([ex, ez]) => Math.hypot(x - ex, z - ez) >= 1.0);
+      search: for (const idx of order2.slice(0, 40)) {
+        const g = grass[idx]!;
+        for (let q = 0; q < 4; q++) {
+          const yaw = q * (Math.PI / 2) + (rnd() - 0.5) * 0.6;
+          const caps = bodyCapsules(g.pos[0], g.pos[2], yaw, rnd);
+          const ok = caps.every(([ax, az, bx, bz]) => free(ax, az) && free(bx, bz) && free((ax + bx) / 2, (az + bz) / 2));
+          if (ok) {
+            grassBody = { floor: y0, at: [g.pos[0], g.pos[2]], caps };
+            break search;
+          }
+        }
+      }
+    }
   }
   // Примета помещения с травой — для проверок и отладки (gotoLandmark('grass')).
-  if (grassRoom && grass.length > 0) {
-    const [gx, gz] = grassRoom.cells[Math.floor(grassRoom.cells.length / 2)]!;
-    landmarks.push({ id: 'grass', x: cellToWorld(gx), y: tierFloor(grassRoom.tier) + 1, z: cellToWorld(gz), room: grassRoom.id, tier: grassRoom.tier });
+  if (turfRoom && grass.length > 0) {
+    const [gx, gz] = turfRoom.cells[Math.floor(turfRoom.cells.length / 2)]!;
+    landmarks.push({ id: 'grass', x: cellToWorld(gx), y: tierFloor(turfRoom.tier) + 1, z: cellToWorld(gz), room: turfRoom.id, tier: turfRoom.tier });
   }
   // Мир расстановки остаётся у конструктора и тестов: от сеток ему — только верхние грани, сборщики не держать.
   if (opts.keepPlaceWorld) objects.freeze();
@@ -1184,9 +1265,10 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     ...(skyRoom ? { skyRoom: skyRoom.id } : {}),
     ...(greenRoom ? { greenRoom: greenRoom.id } : {}),
     ...(blooms.length > 0 ? { blooms } : {}),
-    ...(grassRoom ? { grassRoom: grassRoom.id } : {}),
+    ...(turfRoom ? { grassRoom: turfRoom.id } : {}),
     ...(grass.length > 0 ? { grass } : {}),
     ...(grassClear.length > 0 ? { grassClear } : {}),
+    ...(grassBody ? { grassBody } : {}),
     chunks: out,
     stairs,
     colliders: col,
