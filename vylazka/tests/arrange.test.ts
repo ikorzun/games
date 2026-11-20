@@ -210,7 +210,7 @@ describe('раскладка по смыслу: группы', () => {
 describe('правки партнёра после перестановки (куратор, пачка 49: «тест-снимок»)', () => {
   it('каждая передвинутая им вещь находит свою вещь игры по имени и номеру; его фигуры где-то встают', () => {
     const worlds = [...new Set([...PLACED, ...FIGURES].flatMap((r) => r.rule.worlds))] as WorldKind[];
-    const moved = new Map<string, { rooms: number; found: number }>();
+    const moved = new Map<string, { rooms: number; has: number; found: number }>();
     const figs = new Map<string, number>();
     for (const world of worlds) {
       for (const seed of SEEDS) {
@@ -229,11 +229,12 @@ describe('правки партнёра после перестановки (к�
           for (const s of PLACED) {
             if (!s.moves || !here(s.rule.worlds)) continue;
             const slot = slotFor(s.slot, s.rule.rooms);
-            const m = moved.get(s.id) ?? { rooms: 0, found: 0 };
+            const m = moved.get(s.id) ?? { rooms: 0, has: 0, found: 0 };
             for (const room of layout.rooms) {
               if (!s.rule.rooms.includes(room.type) || pick(room) !== slot) continue;
               m.rooms += 1;
               const mine = objs.filter((o) => o.name === s.moves!.thing && roomAt(o.at[0], o.at[1], o.at[2]) === room);
+              if (mine.length > 0) m.has += 1;
               if (mine.some((o) => gameNth(objs, o, roomAt) === s.moves!.nth)) m.found += 1;
             }
             moved.set(s.id, m);
@@ -242,7 +243,13 @@ describe('правки партнёра после перестановки (к�
         }
       }
     }
-    for (const [id, m] of moved) if (m.rooms > 0) expect(m.found / m.rooms, `${id}: нашла свою вещь в ${m.found} из ${m.rooms}`).toBeGreaterThanOrEqual(0.75);
+    for (const [id, m] of moved) {
+      if (m.rooms === 0) continue;
+      // Вещь из жребия обстановки есть не в каждой такой комнате (ручной насос в баках — примерно в половине): там двигать
+      // нечего. Сломана правка, если вещи нет нигде (имя сменилось) или там, где она есть, номер указывает не на неё.
+      expect(m.has, `${id}: его вещи нет ни в одной из ${m.rooms} комнат`).toBeGreaterThan(0);
+      expect(m.found / m.has, `${id}: нашла свою вещь в ${m.found} из ${m.has} комнат, где она есть (всего ${m.rooms})`).toBeGreaterThanOrEqual(0.75);
+    }
     for (const [id, n] of figs) expect(n, `${id}: фигура не встала ни разу`).toBeGreaterThan(0);
   });
 });
