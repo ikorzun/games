@@ -576,3 +576,13 @@ describe('шейдер знает про бумагу', () => {
     expect(WORLD_FRAG).toContain('soft.a');
   });
 });
+
+describe('смоук знает все слои бумаги', () => {
+  it('список слоёв в e2e/smoke.mjs совпадает с PAPER_LAYERS (иначе проверка «листы загружены» устареет, как в CI 20.11)', () => {
+    const src = readFileSync(join(__dirname, '..', 'e2e', 'smoke.mjs'), 'utf8');
+    const m = src.match(/const PAPER_LAYERS = \[([^\]]*)\]/);
+    expect(m, 'в смоуке нет списка PAPER_LAYERS').not.toBeNull();
+    const ids = [...m![1]!.matchAll(/'([a-z0-9_]+)'/g)].map((x) => x[1]);
+    expect([...ids].sort()).toEqual([...PAPER_LAYERS].sort());
+  });
+});

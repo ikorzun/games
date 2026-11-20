@@ -688,6 +688,8 @@ export class GameRenderer {
   private debugScanOff = false;
   /** Перепад между ярусами уровня, м (для отсечения этажей). */
   tierDrop = 4.5;
+  /** Полоса высот видимых ярусов в этом кадре (render): что ниже или выше — грибы, цветы, трава — не рисуется. */
+  private readonly tierBand: [number, number] = [-Infinity, Infinity];
   /** Дальше этого расстояния чанки не рисуются: свет фонаря туда уже не достаёт. */
   cullDistance = 30;
   private stairs: readonly StairLink[] = [];
@@ -1695,6 +1697,10 @@ export class GameRenderer {
       const x = data[i * S]!;
       const y = data[i * S + 1]!;
       const z = data[i * S + 2]!;
+      if (y < this.tierBand[0] || y > this.tierBand[1]) {
+        st.culled += 1;
+        continue;
+      }
       const k = data[i * S + 4]! * (data[i * S + 5]! < 0.5 ? 1.5 : 1);
       const d = Math.hypot(x - cx, y - cy, z - cz);
       // Шар грозди: центр — на высоте половины гриба, радиус с запасом на поворот взгляда (чем дальше, тем больше).
@@ -1820,6 +1826,10 @@ export class GameRenderer {
       const z = data[o + 2]!;
       const d = Math.hypot(x - cx, y - cy, z - cz);
       if (d > GRASS_FAR) break;
+      if (y < this.tierBand[0] || y > this.tierBand[1]) {
+        st.culled += 1;
+        continue;
+      }
       // Плитка — квадрат со стороной s и травой до полуметра: шар вокруг её середины.
       const r = 0.75 * data[o + 4]! + 0.25 * data[o + 5]!;
       let inside = true;
@@ -1934,6 +1944,10 @@ export class GameRenderer {
       const x = data[o]!;
       const y = data[o + 1]!;
       const z = data[o + 2]!;
+      if (y < this.tierBand[0] || y > this.tierBand[1]) {
+        st.culled += 1;
+        continue;
+      }
       const d = Math.hypot(x - cx, y - cy, z - cz);
       const r = 0.12 * Math.max(data[o + 7]!, data[o + 8]!) + d * slack;
       let inside = true;
@@ -2576,9 +2590,6 @@ export class GameRenderer {
     cam.position.set(v.camPos[0], v.camPos[1], v.camPos[2]);
     cam.rotation.set(v.camPitch, v.camYaw, v.camRoll);
     cam.updateMatrixWorld(true);
-    this.layoutSpores();
-    this.layoutFlowers();
-    this.layoutGrass();
 
     // Отсечение чанков: дальше черты видимости всё равно чёрный туман, а чужой ярус виден только
     // с лестницы и от её площадок.
@@ -2593,6 +2604,16 @@ export class GameRenderer {
       if (s.upperTier === base && near(s.top)) hi = Math.max(hi, base + 1);
       if (s.upperTier + 1 === base && near(s.bottom)) lo = Math.min(lo, base - 1);
     }
+    // Грибы, цветы и трава чужого яруса тоже не рисуются (смоук CI, 20.11: у люка рисовались плитки травы и грозди грибов, которых
+    // отсюда не видно, — лишние вызовы). Полоса высот — от пола нижнего видимого яруса с запасом вниз (рельсы, ямы) до потолка
+    // верхнего, не доставая пола яруса над ним. В месте в один ярус (без лестниц: вокзал, жёлтые, карман) — без отсечения: там и
+    // своды выше полосы (зал вокзала — 6,3 м).
+    const tiers = this.stairs.length > 0;
+    this.tierBand[0] = tiers ? -hi * this.tierDrop - 2.5 : -Infinity;
+    this.tierBand[1] = tiers ? -lo * this.tierDrop + 4.4 : Infinity;
+    this.layoutSpores();
+    this.layoutFlowers();
+    this.layoutGrass();
     // Нити по рёбрам кружевных предметов: перестраиваются там, где сменился состав (раз на уровень).
     for (const c of this.laceDirty) this.buildLaceEdges(c);
     this.laceDirty.clear();

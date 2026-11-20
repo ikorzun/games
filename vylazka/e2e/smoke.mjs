@@ -1030,10 +1030,12 @@ async function scenarioFlats(browser, baseUrl) {
     await page.waitForFunction(() => window.__vz.screens().length >= 9, null, { timeout: 30000 }).catch(() => {});
     const loaded = await vz(page, () => window.__vz.screens());
     check('картинки экранов загружены: все девять (восемь картинок и луг для проёма)', loaded.length === 9 && loaded.includes('meadow'), loaded.join(', '));
-    // Листы бумаги (assets/papers): слои должны дойти и в обычной сборке, и вшитыми в одну страницу.
-    await page.waitForFunction(() => window.__vz.papers().length >= 7, null, { timeout: 30000 }).catch(() => {});
+    // Листы бумаги (assets/papers): слои должны дойти и в обычной сборке, и вшитыми в одну страницу. Список — как в
+    // src/world/papers.ts (PAPER_LAYERS): семь слоёв из фотографий партнёра, наклейки и два слоя снимков больного сна (19.11).
+    const PAPER_LAYERS = ['faces_a', 'faces_b', 'faces_c', 'money', 'notgeld', 'bonds', 'map_union', 'stickers', 'dream_a', 'dream_b'];
+    await page.waitForFunction((n) => window.__vz.papers().length >= n, PAPER_LAYERS.length, { timeout: 30000 }).catch(() => {});
     const papers = await vz(page, () => window.__vz.papers());
-    check('листы бумаги загружены: все семь слоёв', papers.length === 7, papers.join(', '));
+    check(`листы бумаги загружены: все ${PAPER_LAYERS.length} слоёв`, papers.length === PAPER_LAYERS.length && PAPER_LAYERS.every((id) => papers.includes(id)), papers.join(', '));
     const paperObjs = (await vz(page, () => window.__vz.objects())).filter((o) => o.name === 'frames_bonds' || o.name === 'money_board').map((o) => o.name);
     check('в офисе висят акции в рамах и щит с купюрами', paperObjs.includes('frames_bonds') && paperObjs.includes('money_board'), paperObjs.join(', '));
     await afterSec(3);
