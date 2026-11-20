@@ -17,6 +17,8 @@ python3 tools/export_script.py episodes/s1/<ep>.json --out docs/production/<ep>-
 
 cd runtime && npm install && npm run typecheck && npm test && npm run build   # рантайм (см. runtime/README.md)
 npm run dev      # dev-сервер с контентом из ../episodes и ../locales;  npm run smoke — Chromium-смоук сборки
+
+cd dezhurka && node build.mjs && node test/smoke.mjs   # отдельная мини-игра «Дежурная часть» (см. dezhurka/README.md)
 ```
 
 ## Конвенции
