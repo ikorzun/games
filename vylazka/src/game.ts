@@ -46,7 +46,7 @@ import type { FeelView } from './systems/feel';
 import type { PressureKind, PressureRoom } from './systems/pressure';
 import { DEFAULT_SPORES, SPORE_STRIDE, Spores } from './systems/spores';
 import { FLOWER_STRIDE, Flowers } from './systems/flowers';
-import { GRASS_FAR, GRASS_SHOWN, GRASS_STRIDE, Grass } from './systems/grass';
+import { GRASS_FAR, GRASS_SHOWN, GRASS_STRIDE, Grass, rustleGain } from './systems/grass';
 import type { GrassClearing } from './systems/grass';
 import type { Comeback, ComebackOptions, Form, Mount } from './systems/illusions';
 import { Figures } from './systems/figures';
@@ -796,6 +796,8 @@ export class Game {
   bodyPress = 0;
   /** Отладка: трава не тянется к свету (кадры «до и после», __vz.grassLean). */
   leanOff = false;
+  /** Шорох травы этого кадра (grassRustle). */
+  private readonly rustle: { gain: number; at: Vec3 } = { gain: 0, at: [0, 0, 0] };
   /** Бумажные цветы: насколько каждый расцвёл (0 — тусклый, 1 — яркий) и сколько уже держится расцветшим, с. */
   private readonly blooms = new Map<number, { k: number; hold: number }>();
   /** Номер экрана-проёма, в который вошли и который ещё не унёс (ждёт конца идущего перехода); 0 — нет. */
@@ -2202,6 +2204,11 @@ export class Game {
     this.pocketGrass = null;
   }
 
+  /** Шорох травы, что тянется к свету (systems/grass.ts, RUSTLE): громкость 0..1 и где трава движется (audio/game_audio.ts). */
+  get grassRustle(): { gain: number; at: Vec3 } {
+    return this.rustle;
+  }
+
   /** Игрок в помещении, где проросла трава (design.md, §36): шаги по траве (audio/game_audio.ts). */
   get onGrass(): boolean {
     return this.where === 'main' && this.level?.grassRoom !== undefined && this.room === this.level.grassRoom;
@@ -3449,7 +3456,13 @@ export class Game {
       const light = byGaze ? { from: rig.camPos, dir: rig.lightDir, cos: GRASS_GAZE.cos, range: GRASS_GAZE.range } : beamOn ? { from: rig.lightPos, dir: rig.lightDir, cos: GRASS_BEAM.cos, range: GRASS_BEAM.range } : null;
       const changed = grass.updateLean(light, fl?.frozen ? 0 : dt);
       this.renderer.setGrassLean(grass.lean, byGaze ? rig.camPos : rig.lightPos, this.leanOff ? 0 : 1, changed, rig.lightDir);
-    } else this.renderer.setGrassLean(null, null, 0, false);
+      // И шуршит, пока движется (RUSTLE): громкость — сколько её сейчас тянется и отпускает, звук — оттуда, где она движется.
+      this.rustle.gain = rustleGain(grass.rustle.rise, grass.rustle.fall);
+      this.rustle.at = grass.rustle.at;
+    } else {
+      this.renderer.setGrassLean(null, null, 0, false);
+      this.rustle.gain = 0;
+    }
     if (grass && this.where === 'main') {
       grass.clearings(this.grassItems(), this.level?.grassClear ?? [], this.grassClear);
       this.renderer.setGrassClear(this.grassClear);

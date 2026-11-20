@@ -27,6 +27,30 @@ export const GRASS_CLEAR = 16;
  */
 export const LEAN = { cell: 0.5, rise: 0.7, fall: 2.4 } as const;
 
+/**
+ * Шорох травы, что тянется к свету (партнёр 20.11: «сделай шорох травы»): громкость — от того, сколько травы сейчас движется,
+ * м² в секунду (клетка, дошедшая за секунду от 0 до 1, — это её площадь). Тянется — во всю силу, отпускает — едва (fall):
+ * распрямляется трава медленно, секунды, и иначе за каждым взглядом по лугу ещё долго тянулось бы шипение (замер в сборке 20.11).
+ * Луч лёг на траву в помещении — 2 м²/с, на лугу — 25–35; ведут взглядом по лугу — 14–20, идут — 6; луч стоит — движение гаснет,
+ * и шорох стихает за три-четыре секунды (ниже quiet — тишина). Кривая (curve < 1) — чтобы и немного травы в помещении было
+ * слышно, а на лугу «повёл» и «стоит» различались: помещение — 0,4, луг: идут — около 0,7, ведут — 0,8–0,9, свет лёг — 0,93.
+ */
+export const RUSTLE = { full: 5, curve: 0.6, quiet: 0.15, fall: 0.15, min: 0.04 } as const;
+
+/** Громкость шороха 0..1 по движению травы: rise — тянется, fall — отпускает, м² в секунду. */
+export function rustleGain(rise: number, fall: number): number {
+  const m = Math.max(0, rise + fall * RUSTLE.fall - RUSTLE.quiet) / RUSTLE.full;
+  const g = 1 - Math.exp(-Math.pow(m, RUSTLE.curve));
+  return g < RUSTLE.min ? 0 : g;
+}
+
+/** Сколько травы движется сейчас (м² в секунду: тянется и отпускает) и где — середина движения на высоте травы. */
+export interface GrassRustle {
+  rise: number;
+  fall: number;
+  at: Vec3;
+}
+
 /** Свет, к которому тянется трава: откуда (фонарь или глаза), куда, косинус половины раствора конуса и дальность, м. */
 export interface LeanLight {
   from: Vec3;
@@ -90,6 +114,12 @@ export class Grass {
   /** Есть ли в карте хоть что-то (иначе без света её можно не обходить) и в каких клетках (i0, i1, j0, j1). */
   private leanAny = false;
   private readonly leanBox: [number, number, number, number] = [Number.MAX_SAFE_INTEGER, -1, Number.MAX_SAFE_INTEGER, -1];
+  /** В каких клетках карты есть трава (прямоугольник поля шире: у луга — углы за кругом, тропа): шуршит только она. */
+  private readonly leanHas: Uint8Array | null;
+  /** Шорох последнего шага updateLean (RUSTLE). */
+  readonly rustle: GrassRustle = { rise: 0, fall: 0, at: [0, 0, 0] };
+  /** Откуда светили в последний раз — там и слушают (фонарь и глаза — у героя); свет погас — отпускающую слышно оттуда же. */
+  private readonly heardFrom: [number, number] = [0, 0];
 
   constructor(sites: readonly GrassSite[]) {
     this.sites = sites;
@@ -115,9 +145,21 @@ export class Grass {
       const h = Math.max(1, Math.ceil((f.maxZ - f.minZ) / LEAN.cell));
       this.lean = { data: new Uint8Array(w * h), w, h, minX: f.minX, minZ: f.minZ, cell: LEAN.cell };
       this.leanF = new Float32Array(w * h);
+      // Плитка повёрнута четвертями — её квадрат по осям и есть её место.
+      const has = new Uint8Array(w * h);
+      for (const s of sites) {
+        const r = 0.5 * s.s;
+        const i0 = Math.max(0, Math.floor((s.pos[0] - r - f.minX) / LEAN.cell));
+        const i1 = Math.min(w - 1, Math.floor((s.pos[0] + r - f.minX) / LEAN.cell));
+        const j0 = Math.max(0, Math.floor((s.pos[2] - r - f.minZ) / LEAN.cell));
+        const j1 = Math.min(h - 1, Math.floor((s.pos[2] + r - f.minZ) / LEAN.cell));
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) has[j * w + i] = 1;
+      }
+      this.leanHas = has;
     } else {
       this.lean = null;
       this.leanF = null;
+      this.leanHas = null;
     }
   }
 
@@ -130,7 +172,10 @@ export class Grass {
     const m = this.lean;
     const v = this.leanF;
     const f = this.field;
-    if (!m || !v || !f || dt <= 0 || (!light && !this.leanAny)) return false;
+    const has = this.leanHas;
+    this.rustle.rise = 0;
+    this.rustle.fall = 0;
+    if (!m || !v || !f || !has || dt <= 0 || (!light && !this.leanAny)) return false;
     const kIn = 1 - Math.exp(-dt / LEAN.rise);
     const kOut = 1 - Math.exp(-dt / LEAN.fall);
     const y = f.floor + 0.25;
@@ -147,6 +192,18 @@ export class Grass {
       j1 = Math.max(j1, Math.min(m.h - 1, Math.ceil((light.from[2] + light.range - m.minZ) / m.cell)));
     }
     let changed = false;
+    // Шорох: сколько травы сдвинулось за шаг (тянется и отпускает) и где её слышно — середина движения, где ближняя к герою
+    // трава весит больше (как её и слышно: затухание то же, что у звука, audio/engine.ts), а отпускающая — меньше.
+    if (light) {
+      this.heardFrom[0] = light.from[0];
+      this.heardFrom[1] = light.from[2];
+    }
+    const [hx, hz] = this.heardFrom;
+    let rise = 0;
+    let fall = 0;
+    let sw = 0;
+    let sx = 0;
+    let sz = 0;
     let bi0 = m.w;
     let bi1 = -1;
     let bj0 = m.h;
@@ -155,9 +212,10 @@ export class Grass {
       const z = m.minZ + (j + 0.5) * m.cell;
       for (let i = Math.max(0, i0); i <= Math.min(m.w - 1, i1); i++) {
         const k = j * m.w + i;
+        const x = m.minX + (i + 0.5) * m.cell;
         let target = 0;
         if (light) {
-          const dx = m.minX + (i + 0.5) * m.cell - light.from[0];
+          const dx = x - light.from[0];
           const dy = y - light.from[1];
           const dz = z - light.from[2];
           const dd = dx * dx + dy * dy + dz * dz;
@@ -176,6 +234,17 @@ export class Grass {
         const now = was + (target - was) * (target > was ? kIn : kOut);
         const val = now < 0.002 && target === 0 ? 0 : now;
         v[k] = val;
+        if (has[k]) {
+          const dv = val - was;
+          const ax = x - hx;
+          const az = z - hz;
+          const wgt = (dv > 0 ? dv : -dv * RUSTLE.fall) / (1 + (ax * ax + az * az) / 25);
+          if (dv > 0) rise += dv;
+          else fall -= dv;
+          sw += wgt;
+          sx += wgt * x;
+          sz += wgt * z;
+        }
         if (val > 0) {
           if (i < bi0) bi0 = i;
           if (i > bi1) bi1 = i;
@@ -194,6 +263,14 @@ export class Grass {
     this.leanBox[2] = bj0;
     this.leanBox[3] = bj1;
     this.leanAny = bi1 >= 0;
+    const area = m.cell * m.cell;
+    this.rustle.rise = (rise * area) / dt;
+    this.rustle.fall = (fall * area) / dt;
+    if (sw > 1e-6) {
+      this.rustle.at[0] = sx / sw;
+      this.rustle.at[1] = f.floor + 0.3;
+      this.rustle.at[2] = sz / sw;
+    }
     return changed;
   }
 

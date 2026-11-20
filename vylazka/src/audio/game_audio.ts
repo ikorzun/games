@@ -32,6 +32,11 @@ export interface AudioWorld {
   pocket?: { kind: string } | null;
   /** Игрок в помещении, где сквозь пол проросла трава (design.md, §36): шаги — по траве. */
   onGrass?: boolean;
+  /**
+   * Шорох травы, что тянется к свету (systems/grass.ts, RUSTLE): gain 0..1 — сколько её сейчас движется, at — где. Нет поля
+   * или gain 0 — тихо.
+   */
+  grassRustle?: { gain: number; at: Vec3 } | null;
   /** Стирание места (systems/decay.ts): насколько ещё слышны люди, 0..1. Нет поля — слышны как есть. */
   decay?: { voices: number };
   /**
@@ -303,6 +308,11 @@ export class GameAudio {
       this.trains = fl.trains;
     }
     a.loop('amb_meadow', pocket === 'meadow' ? 1 : 0);
+    // Трава тянется к лучу (в светлом месте — к взгляду) и шуршит, пока движется: свет лёг — всплеск, стоит — стихает за три-четыре
+    // секунды, ведут — шелест идёт за ним; распрямляется почти беззвучно. Звук — оттуда, где она движется (партнёр 20.11: «сделай
+    // шорох травы»). Трава — у помещения места и на лугу.
+    const rustle = game.grassRustle;
+    a.loop('grass_rustle', rustle && (!over || pocket === 'meadow') ? rustle.gain : 0, rustle?.at);
     a.loop('amb_void', over && pocket !== 'meadow' ? 1 : 0);
     a.loop('breath_calm', live * clamp01(1 - panic * 2.2));
     a.loop('breath_panic', live * clamp01((panic - 0.3) / 0.45));

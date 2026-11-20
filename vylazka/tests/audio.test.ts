@@ -11,14 +11,17 @@ import manifest from '../audio/manifest.json';
 class Recorder implements SoundSink {
   readonly plays: { id: string; pos?: Vec3; volume?: number }[] = [];
   readonly loops = new Map<string, number>();
+  /** Откуда слышна петля (нет — «в голове»). */
+  readonly loopAt = new Map<string, Vec3 | undefined>();
   private readonly ids = new Set(SOUNDS.map((s) => s.id));
   play(id: string, opts: { pos?: Vec3; volume?: number } = {}): void {
     if (!this.ids.has(id)) throw new Error(`нет такого звука: ${id}`);
     this.plays.push({ id, ...opts });
   }
-  loop(id: string, gain: number): void {
+  loop(id: string, gain: number, pos?: Vec3): void {
     if (!this.ids.has(id)) throw new Error(`нет такого звука: ${id}`);
     this.loops.set(id, gain);
+    this.loopAt.set(id, pos);
   }
   stopLoops(keep?: string): void {
     for (const id of [...this.loops.keys()]) if (id !== keep) this.loops.delete(id);
@@ -540,6 +543,26 @@ describe('привязка звуков к игре', () => {
     // Шаг, которого не слышно, не копится: следующий в убежище — один.
     stepIn({});
     expect(r.ids_().filter((id) => id.startsWith('step_')).length).toBe(8);
+  });
+
+  it('трава шуршит, пока тянется к свету (партнёр 20.11): громкость — сколько её движется, звук — оттуда, где она движется; в помещении места и на лугу, но не в белом нигде и не в лимбо', () => {
+    const r = new Recorder();
+    const a = new GameAudio(r);
+    a.setScene('play');
+    const at: Vec3 = [3, 0.3, -4];
+    const w = world({ grassRustle: { gain: 0.7, at } });
+    const heard = (over: Partial<AudioWorld>): number => {
+      Object.assign(w, over);
+      a.frame(w, 0.016, true);
+      return r.loops.get('grass_rustle') ?? -1;
+    };
+    expect(heard({})).toBeCloseTo(0.7, 5);
+    expect(r.loopAt.get('grass_rustle')).toEqual(at);
+    expect(heard({ where: 'pocket', pocket: { kind: 'meadow' } })).toBeCloseTo(0.7, 5);
+    expect(heard({ where: 'pocket', pocket: { kind: 'void' } })).toBe(0);
+    expect(heard({ where: 'limbo', pocket: null })).toBe(0);
+    expect(heard({ where: 'main', grassRustle: { gain: 0, at } })).toBe(0);
+    expect(heard({ grassRustle: null })).toBe(0);
   });
 
   it('начало вылазки: в убежище закрывается люк, в офисе и жёлтых комнатах привозит лифт; новая сессия начинается так же', () => {

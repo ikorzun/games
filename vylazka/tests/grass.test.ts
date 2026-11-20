@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateLayout } from '../src/gen/layout';
 import type { WorldKind } from '../src/gen/layout';
-import { Grass, GRASS_CLEAR, GRASS_STRIDE, LEAN } from '../src/systems/grass';
+import { Grass, GRASS_CLEAR, GRASS_STRIDE, LEAN, rustleGain } from '../src/systems/grass';
 import { BODY_CAPS, BODY_CHANCE, bodyCapsules, bodyRolled, buildLevel, cellToWorld, grassChance, grassRolled, LAWN_CHANCE, lawnRolled, tierFloor } from '../src/world/level_build';
 import { GRASS_FORMS, GRASS_KINDS, GRASS_PRESS_MAT, GRASS_PRESS_Y, GRASS_VARIANTS, grassForm, grassTile } from '../src/world/grass';
 import type { GrassKind, GrassLod } from '../src/world/grass';
@@ -466,5 +466,62 @@ describe('трава тянется к свету (партнёр 20.11: «Те�
     expect(lawn.lean).toBeNull();
     expect(lawn.updateLean(beam, 1)).toBe(false);
     expect(field(0).lean).not.toBeNull();
+  });
+
+  // Шорох (партнёр 20.11: «сделай шорох травы»): громкость — от того, сколько травы сейчас движется.
+  const gain = (g: Grass): number => rustleGain(g.rustle.rise, g.rustle.fall);
+  it('шорох: свет лёг — всплеск; луч стоит — стихает за несколько секунд; ведут лучом — не стихает', () => {
+    const g = field(3);
+    g.updateLean(beam, 1 / 30);
+    expect(gain(g)).toBeGreaterThan(0.8);
+    run(g, beam, 1);
+    const settling = gain(g);
+    expect(settling).toBeGreaterThan(0);
+    expect(settling).toBeLessThan(0.8);
+    run(g, beam, 3.5);
+    expect(gain(g)).toBe(0);
+    // Ведут лучом туда-сюда: трава всё время догоняет его — шелест держится.
+    const swept = (t: number): typeof beam => {
+      const a = 0.6 * Math.sin(t * 2.5);
+      return { ...beam, dir: [0.97 * Math.cos(a), -0.24, 0.97 * Math.sin(a)] };
+    };
+    let low = 1;
+    for (let t = 0; t < 3; t += 1 / 30) {
+      g.updateLean(swept(t), 1 / 30);
+      if (t > 1) low = Math.min(low, gain(g));
+    }
+    expect(low).toBeGreaterThan(0.15);
+  });
+
+  it('шорох: погас — трава отпускает тише, чем тянулась, и стихает совсем; ничего не движется — тихо', () => {
+    const g = field(3);
+    g.updateLean(beam, 1 / 30);
+    const burst = gain(g);
+    run(g, beam, 3);
+    g.updateLean(null, 1 / 30);
+    const sigh = gain(g);
+    expect(sigh).toBeGreaterThan(0);
+    expect(sigh).toBeLessThan(burst * 0.7);
+    run(g, null, 30);
+    expect(gain(g)).toBe(0);
+    g.updateLean(null, 1 / 30);
+    expect(g.rustle.rise + g.rustle.fall).toBe(0);
+  });
+
+  it('шорох: шуршит только трава — свет на голой земле поля молчит; звук — оттуда, где трава движется', () => {
+    // Поле из двух полос травы с голой землёй между ними: прямоугольник карты — общий.
+    const sites = [];
+    for (let x = -6; x <= 6; x++) for (const z of [-6, -5, 5, 6]) sites.push({ pos: [x, 0, z] as [number, number, number], rot: 0, s: 1, h: 1, form: 3 });
+    const g = new Grass(sites);
+    // Светит в голую середину — тихо.
+    const bare = { from: [-6, 1.3, 0] as [number, number, number], dir: [0.97, -0.24, 0] as [number, number, number], cos: Math.cos(0.15), range: 12 };
+    g.updateLean(bare, 1 / 30);
+    expect(gain(g)).toBe(0);
+    // На дальнюю полосу травы — шуршит оттуда.
+    const toStrip = { ...bare, dir: [0.6, -0.15, 0.78] as [number, number, number] };
+    g.updateLean(toStrip, 1 / 30);
+    expect(gain(g)).toBeGreaterThan(0);
+    expect(g.rustle.at[2]).toBeGreaterThan(4);
+    expect(g.rustle.at[1]).toBeCloseTo(0.3, 5);
   });
 });

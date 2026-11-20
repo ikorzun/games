@@ -3432,7 +3432,12 @@ describe('собрано только там, куда смотрит герой
       const g = h.game;
       // Встать в помещении с травой и светить под ноги, вперёд.
       g.teleport(node.x, node.y, node.z, 0, -0.6);
-      h.run(2);
+      // Луч лёг на траву — она шуршит (партнёр 20.11: «сделай шорох травы»), и шорох — из этого помещения.
+      h.run(0.15);
+      const burst = g.grassRustle.gain;
+      expect(burst, `сид ${seed}: трава не шуршит`).toBeGreaterThan(0.25);
+      expect(Math.hypot(g.grassRustle.at[0] - node.x, g.grassRustle.at[2] - node.z)).toBeLessThan(8);
+      h.run(1.85);
       const lean = h.r.grassLean;
       expect(lean.strength, `сид ${seed}`).toBe(1);
       expect(lean.from).not.toBeNull();
@@ -3440,9 +3445,11 @@ describe('собрано только там, куда смотрит герой
       expect(map, `сид ${seed}: карты нет`).not.toBeNull();
       const lit = map!.data.reduce((m, v) => Math.max(m, v), 0);
       expect(lit, `сид ${seed}: под лучом трава не тянется`).toBeGreaterThan(128);
-      // Погасить фонарь: трава распрямляется, медленно.
+      // Погасить фонарь: трава распрямляется, медленно, и шуршит тише, чем тянулась (в помещении её немного — почти молча).
       g.light.toggle();
-      h.run(0.5);
+      h.run(0.1);
+      expect(g.grassRustle.gain).toBeLessThan(burst);
+      h.run(0.4);
       const half = map!.data.reduce((m, v) => Math.max(m, v), 0);
       expect(half).toBeLessThan(lit);
       expect(half).toBeGreaterThan(lit * 0.5);

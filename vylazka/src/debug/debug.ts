@@ -115,7 +115,7 @@ export interface VzDebugApi {
   grassLean(on: boolean): void;
   /** Точка мира на экране (доли кадра, y вниз) и видна ли она — для проверок раскладки и кадров. */
   project(p: [number, number, number]): { x: number; y: number; visible: boolean };
-  grass(): { level: number; pocket: number; room: number | null; lean: number | null; shown: number; far: number; horizon: number; culled: number; tris: number; end: number; clear: [number, number, number, number][]; body: { at: [number, number]; floor: number; press: number; caps: number[][] } | null };
+  grass(): { level: number; pocket: number; room: number | null; lean: number | null; rustle: { gain: number; rise: number; fall: number; at: number[] } | null; shown: number; far: number; horizon: number; culled: number; tris: number; end: number; clear: [number, number, number, number][]; body: { at: [number, number]; floor: number; press: number; caps: number[][] } | null };
   flowers(): { n: number; open: number; turn: number; lit: number; beam: boolean; gaze: boolean; shown: number; far: number; culled: number; eye?: number[]; from?: number[] | null; dir?: number[] | null; probe: number[][] };
   /** Почему вещь видна или не видна: расстояние, попадание в луч (dot против нужного need), путь луча до преграды. */
   sees(id: number): Record<string, number> | null;
@@ -503,9 +503,13 @@ export function installDebug(app: App): void {
     grass: () => {
       const g = game();
       const b = g.level?.grassBody;
-      const lm = (g.where === 'pocket' ? g.pocketGrass : g.levelGrass)?.lean;
+      const here = g.where === 'pocket' ? g.pocketGrass : g.levelGrass;
+      const lm = here?.lean;
       const lean = lm ? lm.data.reduce((m, v) => Math.max(m, v), 0) / 255 : null;
-      return { level: g.levelGrass?.sites.length ?? 0, pocket: g.pocketGrass?.sites.length ?? 0, room: g.level?.grassRoom ?? null, lean, ...g.renderer.grassStats, clear: (g.level?.grassClear ?? []).map((c) => [...c] as [number, number, number, number]), body: b ? { at: [b.at[0], b.at[1]], floor: b.floor, press: g.bodyPress, caps: b.caps.map((c) => c.map((q) => +q.toFixed(3))) } : null };
+      // Шорох травы этого кадра (systems/grass.ts, RUSTLE): громкость, сколько травы тянется и отпускает (м²/с) и где.
+      const rs = here?.rustle;
+      const rustle = rs ? { gain: +g.grassRustle.gain.toFixed(3), rise: +rs.rise.toFixed(2), fall: +rs.fall.toFixed(2), at: rs.at.map((v) => +v.toFixed(2)) } : null;
+      return { level: g.levelGrass?.sites.length ?? 0, pocket: g.pocketGrass?.sites.length ?? 0, room: g.level?.grassRoom ?? null, lean, rustle, ...g.renderer.grassStats, clear: (g.level?.grassClear ?? []).map((c) => [...c] as [number, number, number, number]), body: b ? { at: [b.at[0], b.at[1]], floor: b.floor, press: g.bodyPress, caps: b.caps.map((c) => c.map((q) => +q.toFixed(3))) } : null };
     },
     gotoThing: (id, distance = 2.2) => {
       const g = game();
