@@ -1,11 +1,15 @@
 /* Дежурная часть — данные смены: семь задержанных одной ночи.
    Текста здесь нет: строки лежат в strings_<язык>.js под ключами dz.<id дела>.<id вещи>.*
    verdict: 'home' | 'cell'; grounds — основания, которые протокол примет (при verdict 'cell').
+   look — рисованный портрет из деталей; photo — черновой фото-кадр для режима «фото».
    Вид вещи (views[i]): act — подпись кнопки, которая к нему ведёт; art — рисунок; doc — показать текст как документ. */
 (function (root) {
   const DZ = (root.DZ = root.DZ || {});
 
   DZ.GROUNDS = ['nodocs', 'stolen', 'wanted', 'weapon'];
+
+  /* Черновые фото-кадры (img/draft/README.md): пустой вестибюль и по кадру на задержанного (поле photo). */
+  DZ.PHOTO_LOBBY = 'img/draft/lobby.webp';
 
   const passport = (extra) => Object.assign({
     id: 'passport', art: 'passport',
@@ -14,7 +18,7 @@
 
   DZ.cases = [
     {
-      id: 'c01', time: '00:10', verdict: 'home', grounds: [],
+      id: 'c01', photo: 'img/draft/c01.webp', time: '00:10', verdict: 'home', grounds: [],
       look: { jaw: 'narrow', skin: '#cfa98a', shade: '#a67f66', hair: '#6a4e33', hairStyle: 'shaggy', glasses: 'round',
         brows: 'worried', mouth: 'neutral', clothes: 'denim' },
       items: [
@@ -25,7 +29,7 @@
       ],
     },
     {
-      id: 'c02', time: '00:55', verdict: 'cell', grounds: ['stolen'],
+      id: 'c02', photo: 'img/draft/c02.webp', time: '00:55', verdict: 'cell', grounds: ['stolen'],
       look: { jaw: 'mid', skin: '#c2957a', shade: '#96705a', hair: '#3a2f27', hairStyle: 'cap', hat: '#34352f',
         stubble: true, brows: 'neutral', mouth: 'frown', wrinkles: true, clothes: 'vatnik' },
       items: [
@@ -36,7 +40,7 @@
       ],
     },
     {
-      id: 'c03', time: '01:40', verdict: 'home', grounds: [], gender: 'f',
+      id: 'c03', photo: 'img/draft/c03.webp', time: '01:40', verdict: 'home', grounds: [], gender: 'f',
       look: { jaw: 'mid', skin: '#d0ab92', shade: '#a8846e', hair: '#b9b6ad', hairStyle: 'kerchief', hat: '#7c3a3c',
         brows: 'worried', mouth: 'smile', wrinkles: true, clothes: 'oldcoat', scale: 0.92 },
       items: [
@@ -47,7 +51,7 @@
       ],
     },
     {
-      id: 'c04', time: '02:25', verdict: 'home', grounds: [],
+      id: 'c04', photo: 'img/draft/c04.webp', time: '02:25', verdict: 'home', grounds: [],
       look: { jaw: 'wide', skin: '#cda184', shade: '#a27a61', hair: '#8d8c85', hairStyle: 'balding', moustache: '#6f6d66',
         brows: 'neutral', mouth: 'flat', wrinkles: true, clothes: 'cook' },
       items: [
@@ -59,7 +63,7 @@
       ],
     },
     {
-      id: 'c05', time: '03:05', verdict: 'cell', grounds: ['stolen'],
+      id: 'c05', photo: 'img/draft/c05.webp', time: '03:05', verdict: 'cell', grounds: ['stolen'],
       look: { jaw: 'narrow', skin: '#d3ab90', shade: '#a9836b', hair: '#2f2a26', hairStyle: 'slick', glasses: 'rect',
         brows: 'raised', mouth: 'smirk', blush: true, lids: true, clothes: 'overcoat' },
       items: [
@@ -70,7 +74,7 @@
       ],
     },
     {
-      id: 'c06', time: '04:00', verdict: 'cell', grounds: ['wanted', 'nodocs'],
+      id: 'c06', photo: 'img/draft/c06.webp', time: '04:00', verdict: 'cell', grounds: ['wanted', 'nodocs'],
       look: { jaw: 'wide', skin: '#c3987b', shade: '#96705a', hair: '#27231f', hairStyle: 'crew', stubble: true,
         brows: 'angry', mouth: 'flat', scar: true, tattoo: true, clothes: 'leather' },
       items: [
@@ -81,7 +85,7 @@
       ],
     },
     {
-      id: 'c07', time: '04:55', verdict: 'cell', grounds: ['weapon'], bribe: 'passport',
+      id: 'c07', photo: 'img/draft/c07.webp', time: '04:55', verdict: 'cell', grounds: ['weapon'], bribe: 'passport',
       look: { jaw: 'wide', skin: '#d4a98b', shade: '#a9806a', hair: '#2b2521', hairStyle: 'short',
         brows: 'raised', mouth: 'smirk', clothes: 'blazer' },
       items: [

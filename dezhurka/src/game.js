@@ -21,6 +21,7 @@
     phase: 'intro', idx: 0, lines: [], line: 0, said: null,
     seen: new Set(), docs: new Set(), sheet: null, modal: { type: 'intro' },
     bribe: false, zoom: false, results: [],
+    photo: !!DZ.PHOTO_LOBBY,   // графика: фото-черновик (true) или рисованная (false)
   };
   let el = {};
   let timers = [];
@@ -47,6 +48,7 @@
         <span class="dz-count"></span>
         <span class="dz-hud-btns">
           <button type="button" class="dz-iconbtn" id="dz-zoom" data-act="zoom" aria-pressed="false">${DZ.art.icon('zoom')}</button>
+          <button type="button" class="dz-iconbtn" id="dz-gfx" data-act="gfx" aria-pressed="false">${DZ.art.icon('gfx')}</button>
           <button type="button" class="dz-iconbtn" id="dz-sound" data-act="sound">${DZ.art.icon('sound_on')}</button>
         </span>
       </div>
@@ -87,7 +89,9 @@
       tray: q('.dz-tray'), hint: q('.dz-hint'), home: q('#dz-home'), cell: q('#dz-cell'), sheet: q('.dz-sheet'), modal: q('.dz-modal'),
       main: q('.dz-desk-main'), stage: q('.dz-stage'), desk: q('.dz-desk'), clockH: q('.dz-clock-h'), clockM: q('.dz-clock-m'),
       docBtns: Array.from(mount.querySelectorAll('.dz-docbtn')),
+      gfxBtn: q('#dz-gfx'), photoLobby: q('.dz-photo-lobby'), photoDet: q('.dz-photo-det'),
     };
+    if (DZ.PHOTO_LOBBY) el.photoLobby.setAttribute('href', DZ.PHOTO_LOBBY);
     mount.addEventListener('click', onClick);
     doc.addEventListener('keydown', onKey);
   }
@@ -103,6 +107,7 @@
       case 'next': advance(); break;
       case 'zoom': toggleZoom(); break;
       case 'sound': toggleSound(); break;
+      case 'gfx': st.photo = !st.photo; DZ.sound.play('tick'); renderHud(); if (st.sheet) renderSheet(); break;
       case 'item': openItem(d.id, b); break;
       case 'doc': openDoc(d.id, b); break;
       case 'view': nextView(); break;
@@ -140,6 +145,7 @@
     for (let i = 1; has(`dz.${c.id}.det.${i}`); i++) st.lines.push({ kind: 'det', who: t(`dz.${c.id}.speaker`), text: t(`dz.${c.id}.det.${i}`) });
     el.app.dataset.actors = 'away';
     el.actors.innerHTML = DZ.art.actors(c.look, c.id);
+    if (c.photo) el.photoDet.setAttribute('href', c.photo); else el.photoDet.removeAttribute('href');
     setClock(c.time);
     void el.app.offsetWidth;
     root.requestAnimationFrame(() => root.requestAnimationFrame(() => { el.app.dataset.actors = 'in'; }));
@@ -315,6 +321,12 @@
     el.zoomBtn.setAttribute('aria-label', t(st.zoom ? 'dz.zoom.off' : 'dz.zoom.on'));
     el.zoomBtn.title = t(st.zoom ? 'dz.zoom.off' : 'dz.zoom.on');
     el.scene.disabled = !canZoom;
+    const photo = st.photo && !!DZ.PHOTO_LOBBY;
+    el.app.classList.toggle('is-photo', photo);
+    el.gfxBtn.hidden = !DZ.PHOTO_LOBBY;
+    el.gfxBtn.setAttribute('aria-pressed', photo ? 'true' : 'false');
+    el.gfxBtn.setAttribute('aria-label', t(photo ? 'dz.gfx.to_drawn' : 'dz.gfx.to_photo'));
+    el.gfxBtn.title = t(photo ? 'dz.gfx.to_drawn' : 'dz.gfx.to_photo');
     const on = DZ.sound.isOn();
     el.soundBtn.innerHTML = DZ.art.icon(on ? 'sound_on' : 'sound_off');
     el.soundBtn.setAttribute('aria-label', t(on ? 'dz.sound.on' : 'dz.sound.off'));
@@ -405,7 +417,7 @@
         let extra = '';
         if (it.bribe) extra = `<p class="dz-bribe ${st.bribe ? 'is-taken' : ''}"><span class="dz-bill" aria-hidden="true">100</span>${T(st.bribe ? 'dz.bribe.out' : 'dz.bribe.in')}</p>`;
         body = `<div class="dz-paper dz-paper--${v.doc}"><div class="dz-paper-head">${name}</div>
-          <div class="dz-paper-row">${v.photo ? `<div class="dz-photo">${DZ.art.photo(c.look, c.id)}</div>` : ''}<div class="dz-fields">${linesHtml(text, true)}</div></div>${extra}</div>`;
+          <div class="dz-paper-row">${v.photo ? (st.photo && c.photo ? `<div class="dz-photo dz-photo--real" style="background-image:url(${c.photo})"></div>` : `<div class="dz-photo">${DZ.art.photo(c.look, c.id)}</div>`) : ''}<div class="dz-fields">${linesHtml(text, true)}</div></div>${extra}</div>`;
       } else {
         body = `<div class="dz-hand"><div class="dz-hand-art">${DZ.art.item(v.art || it.art)}</div><div class="dz-hand-text">${linesHtml(text, false)}</div></div>`;
       }

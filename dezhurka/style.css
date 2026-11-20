@@ -55,11 +55,23 @@ body { margin: 0; background: var(--booth); color: var(--text); font-family: var
 .dz-svg { display: block; width: 100%; height: 100%; }
 .dz-zoom { transform-origin: 200px 150px; transition: transform .4s ease; }
 .dz-app.is-zoomed .dz-zoom { transform: scale(1.8); }
+/* присмотрелся: прутья решётки уходят из фокуса */
+.dz-bars { transition: opacity .4s ease; }
+.dz-app.is-zoomed .dz-bars { opacity: .22; }
 .dz-actor { transition: transform 1s cubic-bezier(.22, .8, .3, 1), opacity .55s ease; }
 .dz-app[data-actors="away"] .dz-actor { transform: translateX(210px); opacity: 0; transition: none; }
 .dz-app[data-actors="cell"] .dz-actor { transform: translateX(-240px); opacity: 0; }
 .dz-app[data-actors="home"] .dz-det { transform: translateX(220px); opacity: 0; }
 .dz-app[data-actors="home"] .dz-srg { transform: translateX(-30px); opacity: 0; transition-delay: .35s; }
+/* фото-черновик: кадр закрывает рисованный вестибюль, решётка и рама остаются поверх */
+.dz-photos { display: none; }
+.dz-app.is-photo .dz-photos { display: inline; }
+.dz-app.is-photo .dz-actors, .dz-app.is-photo .dz-light { display: none; }
+.dz-photo-det { opacity: 0; transition: opacity .7s ease; }
+.dz-app[data-actors="in"] .dz-photo-det { opacity: 1; }
+.dz-app[data-actors="away"] .dz-photo-det { transition: none; }
+.dz-app.is-photo .dz-zoom { transform-origin: 200px 190px; }
+.dz-app.is-photo.is-zoomed .dz-zoom { transform: scale(1.5); }
 .dz-breath { animation: dz-breath 4.2s ease-in-out infinite alternate; }
 .dz-breath--slow { animation-duration: 5.6s; }
 .dz-eyes { transform-box: fill-box; transform-origin: center; animation: dz-blink 5.6s infinite; }
@@ -70,7 +82,7 @@ body { margin: 0; background: var(--booth); color: var(--text); font-family: var
 @keyframes dz-flicker { 0%, 40%, 42%, 44%, 100% { opacity: 1; } 41% { opacity: .45; } 43% { opacity: .7; } }
 
 .dz-count { position: absolute; top: 9px; left: 11px; font: 12px/1 var(--font-doc); color: var(--text); background: rgba(8, 9, 9, .72); border: 1px solid var(--line); border-radius: 3px; padding: 6px 8px; font-variant-numeric: tabular-nums; }
-.dz-hud-btns { position: absolute; right: 11px; bottom: 9.5%; display: flex; gap: 6px; }
+.dz-hud-btns { position: absolute; right: 9px; bottom: 9.5%; display: flex; flex-direction: column; gap: 6px; }
 .dz-iconbtn { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; background: rgba(8, 9, 9, .72); border: 1px solid var(--line); border-radius: 3px; color: var(--text); }
 .dz-iconbtn svg { width: 18px; height: 18px; }
 .dz-iconbtn:hover { border-color: var(--muted); }
@@ -161,6 +173,7 @@ body { margin: 0; background: var(--booth); color: var(--text); font-family: var
 .dz-paper-row > .dz-fields:only-child { grid-column: 1 / -1; }
 .dz-photo { width: 58px; aspect-ratio: 4 / 5; overflow: hidden; background: #b3b0a4; border: 1px solid #5f5a4e; filter: grayscale(1) contrast(1.08); }
 .dz-photo svg { display: block; width: 100%; height: 100%; }
+.dz-photo--real { background-repeat: no-repeat; background-size: 250% auto; background-position: 50% 22%; }
 .dz-fields { display: grid; gap: 3px; min-width: 0; }
 .dz-f { display: grid; gap: 0; padding-bottom: 2px; border-bottom: 1px dotted rgba(38, 33, 25, .45); }
 .dz-f-k { font: 500 9.5px/1.3 var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--paper-muted); }

@@ -43,6 +43,17 @@ async function run(browser, name, viewport, mode) {
     const c = cases[n];
     check((await page.textContent('.dz-count')).trim() === `${n + 1} из ${cases.length}`, `${name}: счётчик на деле ${c.id}`);
     if (n === 0) await snap('01-talk');
+    if (n === 0) {
+      const hasPhoto = await page.evaluate(() => !!window.DZ.PHOTO_LOBBY);
+      if (hasPhoto) {
+        check(await page.evaluate(() => document.querySelector('.dz-app').classList.contains('is-photo')), `${name}: по умолчанию режим «фото»`);
+        check(await page.evaluate(() => { const i = document.querySelector('.dz-photo-det'); return !!i.getAttribute('href') && i.getBBox().width > 0; }), `${name}: фото-кадр задержанного подставлен`);
+        await page.click('#dz-gfx');
+        check(await page.evaluate(() => !document.querySelector('.dz-app').classList.contains('is-photo')), `${name}: переключение на рисованную графику`);
+        await snap('01b-drawn');
+        await page.click('#dz-gfx');
+      }
+    }
     while (await page.isVisible('#dz-next')) await page.click('#dz-next');
     check((await page.locator('.dz-item').count()) === c.items.length, `${name}: вещи в лотке, дело ${c.id}`);
     if (n === 0 || n === 3) await snap(`02-tray-${c.id}`);

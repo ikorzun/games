@@ -1,4 +1,4 @@
-// Сборка «Дежурной части» в один файл: стили, шрифты (data:) и скрипты вшиваются в HTML.
+// Сборка «Дежурной части» в один файл: стили, шрифты и картинки (data:) и скрипты вшиваются в HTML.
 //   node build.mjs                 → dist/index.html (самодостаточная страница, открывается с диска)
 //   node build.mjs --fragment FILE → FILE без <html>/<head>/<body> (для публикации страницей-артефактом)
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -15,7 +15,9 @@ if (!scripts.length) throw new Error('в index.html не найдено ни о�
 
 const css = read('style.css').replace(/url\((fonts\/[^)]+\.woff2)\)/g, (_, p) =>
   `url(data:font/woff2;base64,${readFileSync(join(here, p)).toString('base64')})`);
-const js = scripts.map((p) => read(p).replace(/<\/script/gi, '<\\/script')).join('\n');
+const js = scripts.map((p) => read(p).replace(/<\/script/gi, '<\\/script')).join('\n')
+  .replace(/'(img\/[a-z0-9_\/.]+\.(webp|png|jpg))'/g, (_, p, ext) =>
+    `'data:image/${ext === 'jpg' ? 'jpeg' : ext};base64,${readFileSync(join(here, p)).toString('base64')}'`);
 
 const body = `<style>\n${css}</style>\n<div class="dz" id="dz"></div>\n<script>\n${js}</script>\n`;
 

@@ -293,6 +293,7 @@
     <rect class="dz-tube" x="133" y="3.4" width="134" height="3.2" rx="1.6" fill="#f8fdf2"/>
   </g>
   <g class="dz-actors"></g>
+  <g class="dz-photos"><image class="dz-photo-lobby" x="0" y="-10" width="400" height="297" preserveAspectRatio="xMidYMid slice"/><image class="dz-photo-det" x="0" y="-10" width="400" height="297" preserveAspectRatio="xMidYMid slice"/></g>
   <rect class="dz-light" x="0" y="0" width="400" height="190" fill="url(#dzGlow)"/>
 </g>
 <g class="dz-front">
@@ -301,8 +302,8 @@
   <path d="M64,0 L112,0 L40,250 L-8,250 Z M128,0 L142,0 L70,250 L56,250 Z" fill="#fff" opacity=".035"/>
   <rect x="0" y="0" width="400" height="250" fill="url(#dzDeskLamp)"/>
   <g transform="translate(400,0) scale(-1,1)"><text x="200" y="22" text-anchor="middle" font-family="Oswald, 'Arial Narrow', sans-serif" font-size="11" letter-spacing="5" fill="#e6d7b0" opacity=".34">${glassText}</text></g>
-  ${bar(50)}${bar(150)}${bar(250)}${bar(350)}
-  <rect x="0" y="221" width="400" height="3.2" fill="#0f1213"/><rect x="0" y="221" width="400" height="1" fill="#3a4246"/>
+  <g class="dz-bars">${bar(50)}${bar(150)}${bar(250)}${bar(350)}
+  <rect x="0" y="221" width="400" height="3.2" fill="#0f1213"/><rect x="0" y="221" width="400" height="1" fill="#3a4246"/></g>
   <path fill-rule="evenodd" d="M0,0 H400 V250 H0 Z M7,7 V236 H393 V7 Z" fill="#0b0d0e"/>
   <rect x="7" y="7" width="386" height="229" fill="none" stroke="#343c3f" stroke-width="1"/>
   <rect x="0" y="236" width="400" height="14" fill="#181b1c"/><rect x="0" y="236" width="400" height="1" fill="#414a4d"/>
@@ -414,6 +415,7 @@
   }
 
   const ICONS = {
+    gfx: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.5" cy="10" r="1.7" fill="currentColor"/><path d="M4.5,17.5 L10,12.5 L13,15 L16,11.5 L19.5,15.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
     zoom: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15,15 L21,21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
     sound_on: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4,9.5 H8 L13,5.5 V18.5 L8,14.5 H4 Z" fill="currentColor"/><path d="M16,9 q2.4,3 0,6 M18.6,6.6 q4.4,5.4 0,10.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
     sound_off: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4,9.5 H8 L13,5.5 V18.5 L8,14.5 H4 Z" fill="currentColor"/><path d="M16.5,9.5 l5,5 M21.5,9.5 l-5,5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
