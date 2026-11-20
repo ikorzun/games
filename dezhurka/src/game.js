@@ -34,6 +34,15 @@
   const savePrefs = () => { try { root.localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) { /* не сохранилось — не страшно */ } };
   const canBuzz = () => !!(root.navigator && typeof root.navigator.vibrate === 'function');
   const buzz = (pattern) => { if (prefs.haptics && canBuzz()) { try { root.navigator.vibrate(pattern); } catch (e) { /* не обязательно */ } } };
+  // Ход смены тоже запоминается: после перезагрузки страницы игра продолжается со следующего задержанного.
+  const PROGRESS_KEY = 'dezhurka.shift.v1';
+  const saveProgress = () => {
+    try {
+      if (st.results.length) root.localStorage.setItem(PROGRESS_KEY, JSON.stringify({ results: st.results })); else root.localStorage.removeItem(PROGRESS_KEY);
+    } catch (e) { /* без хранилища смена живёт до перезагрузки */ }
+  };
+  const loadProgress = () => { try { return JSON.parse(root.localStorage.getItem(PROGRESS_KEY) || 'null'); } catch (e) { return null; } };
+
   function applyPrefs() {
     DZ.sound.set(prefs.sound);
     doc.documentElement.style.fontSize = TEXT_SCALE[prefs.text] + '%';
@@ -133,6 +142,7 @@
       case 'menu': openModal('menu', b); break;
       case 'pref': setPref(d.id, d.value); break;
       case 'restart': openModal('restart', returnFocus); break;
+      case 'help': openModal('help', returnFocus); break;
       case 'restart-yes': st.modal = null; startShift(); break;
       default: break;
     }
@@ -176,6 +186,7 @@
   function startShift() {
     clearTimers();
     st.idx = 0; st.results = []; st.modal = null; st.sheet = null;
+    saveProgress();
     enterCase();
   }
 
@@ -293,6 +304,7 @@
     const bribe = !!st.bribe;
     const grade = DZ.judge(c, decision, ground, bribe);
     st.results.push({ id: c.id, decision, ground: ground || null, grade, bribe, fb: DZ.feedbackKey(c, grade, ground, bribe, has) });
+    saveProgress();
     st.phase = 'leaving'; st.modal = null; st.sheet = null; st.zoom = false;
     st.said = { kind: 'srg', who: t('dz.speaker.srg'), text: t(`dz.srg.${decision}` + (c.gender === 'f' ? '.f' : '')) };
     el.app.dataset.actors = decision;
@@ -334,7 +346,7 @@
     st.modal = { type };
     returnFocus = from || returnFocus;
     renderModal();
-    focus(el.modal.querySelector(type === 'menu' ? '[data-act="close"]' : type === 'restart' ? '[data-cancel]' : '[data-act="ground"]'));
+    focus(el.modal.querySelector(type === 'grounds' ? '[data-act="ground"]' : type === 'restart' ? '[data-cancel]' : '[data-act="close"]'));
   }
 
   function closeModal() {
@@ -663,7 +675,12 @@
         ${canBuzz() ? sw('haptics', prefs.haptics, 'dz.menu.haptics') : ''}
         ${seg('text', 'dz.menu.text', TEXT_SCALE.map((p, i) => [i, p + '\u00a0%']), prefs.text)}
         ${DZ.PHOTO_LOBBY ? seg('photo', 'dz.menu.gfx', [[1, 'dz.menu.gfx.photo'], [0, 'dz.menu.gfx.drawn']], prefs.photo ? 1 : 0) + `<p class="dz-foot">${T('dz.menu.gfx.note')}</p>` : ''}
+        <button type="button" class="dz-btn dz-btn--plain dz-btn--row" data-act="help"><span>${T('dz.menu.help')}</span>${icon('next')}</button>
         ${inCase() ? `<button type="button" class="dz-btn dz-btn--danger" data-act="restart">${T('dz.menu.restart')}</button>` : ''}</div>`;
+    } else if (m.type === 'help') {
+      html = `<div class="dz-dialog" role="dialog" aria-modal="true" aria-labelledby="dz-h-title">${head('dz.menu.help', 'dz-h-title')}
+        <ol class="dz-steps">${[1, 2, 3].map((n) => `<li><span class="dz-step-n" aria-hidden="true">${n}</span><span>${T('dz.intro.step' + n)}</span></li>`).join('')}</ol>
+        <p class="dz-foot">${T('dz.intro.note')}</p></div>`;
     } else if (m.type === 'restart') {
       html = `<div class="dz-dialog dz-dialog--alert" role="alertdialog" aria-modal="true" aria-labelledby="dz-r-title" aria-describedby="dz-r-text">
         <h2 id="dz-r-title">${T('dz.restart.title')}</h2><p id="dz-r-text">${T('dz.restart.text')}</p>
@@ -681,8 +698,9 @@
     build();
     applyPrefs();
     setClock('00:00');
-    const saved = data && Array.isArray(data.results)
-      ? data.results.filter((r, i) => r && DZ.cases[i] && r.id === DZ.cases[i].id && DZ.POINTS[r.grade] != null).slice(0, N) : [];
+    const src = data && Array.isArray(data.results) && data.results.length ? data : loadProgress();
+    const saved = src && Array.isArray(src.results)
+      ? src.results.filter((r, i) => r && DZ.cases[i] && r.id === DZ.cases[i].id && DZ.POINTS[r.grade] != null).slice(0, N) : [];
     if (saved.length) {
       st.results = saved;
       st.idx = saved.length;

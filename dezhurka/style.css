@@ -187,6 +187,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .dz-btn--cell { color: var(--stamp); }
 .dz-btn--plain { min-height: 48px; justify-content: flex-start; padding: 10px 14px; background-color: var(--booth-3); border-color: var(--line); color: var(--text); font: 400 var(--t-callout)/1.3 var(--font-body); letter-spacing: 0; text-transform: none; text-align: left; text-wrap: wrap; }
 .dz-btn--ask svg { color: var(--lamp); }
+.dz-btn--row { justify-content: space-between; font-size: var(--t-body); }
+.dz-btn--row svg { color: var(--muted); }
 .dz-btn--danger { min-height: 48px; background-color: transparent; border-color: #c9695c; color: #f2aaa0; }
 .dz-btn--onpaper { min-height: 48px; background-color: transparent; border-color: var(--paper-ink); color: var(--paper-ink); }
 

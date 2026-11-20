@@ -114,7 +114,11 @@ async function audit(browser, label, viewport, textStep) {
       await closeSheet();
     }
     if (n === 0) for (const d of ['report', 'bulletin', 'memo']) { await click(`[data-act="doc"][data-id="${d}"]`); await shot(`бумага ${d}`); await closeSheet(); }
-    if (n === 0 && (await page.locator('[data-act="menu"]:visible').count())) { await click('[data-act="menu"]:visible'); await shot('настройки'); await closeSheet(); }
+    if (n === 0 && (await page.locator('[data-act="menu"]:visible').count())) {
+      await click('[data-act="menu"]:visible'); await shot('настройки');
+      await click('[data-act="help"]'); await shot('как играть'); await closeSheet();
+      await click('[data-act="menu"]:visible'); await click('[data-act="restart"]'); await shot('начать заново'); await closeSheet();
+    }
     if (c.verdict === 'cell') {
       await click('[data-act="cell"]');
       if (n === 1) await shot('основание');

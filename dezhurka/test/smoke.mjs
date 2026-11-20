@@ -137,6 +137,27 @@ async function run(browser, name, viewport, mode) {
   await noOverflow('end');
   await page.click('[data-act="again"]');
   check((await page.textContent('.dz-bar-main')).trim() === `Задержанный 1 из ${cases.length}`, `${name}: смена начинается заново`);
+  if (mode === 'good' && viewport.width < 800) {   // ход смены переживает перезагрузку страницы
+    while (await page.locator('[data-act="next"]').count()) await page.click('[data-act="next"]');
+    await page.click('#dz-home');
+    await page.waitForSelector('.dz-verdict');
+    await page.reload();
+    await page.waitForSelector('.dz-bar-main');
+    check((await page.textContent('.dz-bar-main')).trim() === `Задержанный 2 из ${cases.length}`, `${name}: после перезагрузки смена продолжается со второго задержанного`);
+    await page.click('#dz-menu');
+    await page.click('[data-act="help"]');
+    check((await page.locator('.dz-dialog .dz-steps li').count()) === 3, `${name}: справка «Как играть» в настройках`);
+    await snap('09-help');
+    await page.click('.dz-dialog [data-act="close"]');
+    await page.click('#dz-menu');
+    await page.click('[data-act="restart"]');
+    await snap('10-restart');
+    await page.click('[data-act="restart-yes"]');
+    check((await page.textContent('.dz-bar-main')).trim() === `Задержанный 1 из ${cases.length}`, `${name}: «Начать смену заново» после подтверждения`);
+    await page.reload();
+    await page.waitForSelector('[data-act="start"]');
+    check(true, `${name}: после сброса игра открывается с начала`);
+  }
   check(errors.length === 0, `${name}: ошибки в консоли: ${errors.join(' | ')}`);
   await ctx.close();
   console.log(`${name} (${mode}): пройдено дел ${cases.length}, верных решений ${score}`);

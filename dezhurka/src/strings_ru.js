@@ -122,6 +122,7 @@
     'dz.menu.gfx.photo': 'Фото',
     'dz.menu.gfx.drawn': 'Рисованная',
     'dz.menu.gfx.note': 'Фото — черновик низкого качества.',
+    'dz.menu.help': 'Как играть',
     'dz.menu.restart': 'Начать смену заново',
     'dz.restart.title': 'Начать смену заново?',
     'dz.restart.text': 'Решения этой смены не сохранятся.',
