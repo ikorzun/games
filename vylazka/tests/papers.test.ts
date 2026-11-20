@@ -31,14 +31,42 @@ function mesh(fn: (xf: Xf) => void): MeshData {
 }
 
 /** Листы бумаги в сетке: по четыре вершины подряд на лист, берём левый нижний угол uv. */
+/**
+ * Листы стопки бумаги в сетке: четырёхугольник — две грани на четырёх общих вершинах (props_papers.ts, quadUv); левый нижний
+ * угол картинки — по наименьшим uv. Наклейки с картинкой из той же стопки — отдельные треугольники по три вершины, их здесь
+ * нет. Раньше вершины брались четвёрками подряд, и лишний треугольник отклеенной наклейки (квиз 20.11) сдвигал счёт — лист
+ * «находился» дважды.
+ */
 function sheets(m: MeshData): { u: number; v: number }[] {
+  const paper = (i: number): boolean => m.mat[i] === MAT.print && m.uv[i * 2]! >= PAPER_U0;
+  const parent = new Map<number, number>();
+  const find = (x: number): number => {
+    let r = x;
+    while (parent.get(r) !== r) r = parent.get(r)!;
+    parent.set(x, r);
+    return r;
+  };
+  const join = (a: number, b: number): void => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(Math.max(ra, rb), Math.min(ra, rb));
+  };
+  for (let t = 0; t + 2 < m.index.length; t += 3) {
+    const tri = [m.index[t]!, m.index[t + 1]!, m.index[t + 2]!];
+    if (!tri.every(paper)) continue;
+    for (const v of tri) if (!parent.has(v)) parent.set(v, v);
+    join(tri[0]!, tri[1]!);
+    join(tri[0]!, tri[2]!);
+  }
+  const groups = new Map<number, number[]>();
+  for (const v of [...parent.keys()].sort((a, b) => a - b)) {
+    const r = find(v);
+    groups.set(r, [...(groups.get(r) ?? []), v]);
+  }
   const out: { u: number; v: number }[] = [];
-  const verts: number[] = [];
-  for (let i = 0; i < m.mat.length; i++) if (m.mat[i] === MAT.print && m.uv[i * 2]! >= PAPER_U0) verts.push(i);
-  for (let k = 0; k + 3 < verts.length; k += 4) {
-    const us = [0, 1, 2, 3].map((j) => m.uv[verts[k + j]! * 2]!);
-    const vs = [0, 1, 2, 3].map((j) => m.uv[verts[k + j]! * 2 + 1]!);
-    out.push({ u: Math.min(...us), v: Math.min(...vs) });
+  for (const g of groups.values()) {
+    if (g.length !== 4) continue;
+    out.push({ u: Math.min(...g.map((i) => m.uv[i * 2]!)), v: Math.min(...g.map((i) => m.uv[i * 2 + 1]!)) });
   }
   return out;
 }
