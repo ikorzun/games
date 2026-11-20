@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateLayout } from '../src/gen/layout';
 import type { WorldKind } from '../src/gen/layout';
-import { Grass, GRASS_CLEAR, GRASS_STRIDE } from '../src/systems/grass';
+import { Grass, GRASS_CLEAR, GRASS_STRIDE, LEAN } from '../src/systems/grass';
 import { BODY_CAPS, BODY_CHANCE, bodyCapsules, bodyRolled, buildLevel, cellToWorld, grassChance, grassRolled, LAWN_CHANCE, lawnRolled, tierFloor } from '../src/world/level_build';
 import { GRASS_FORMS, GRASS_KINDS, GRASS_PRESS_MAT, GRASS_PRESS_Y, GRASS_VARIANTS, grassForm, grassTile } from '../src/world/grass';
 import type { GrassKind, GrassLod } from '../src/world/grass';
@@ -418,3 +418,53 @@ describe('след лежавшего человека в траве (квиз �
   });
 });
 
+describe('трава тянется к свету (партнёр 20.11: «Теперь сделай, чтобы трава тянулась к лучу»)', () => {
+  const field = (form: number): Grass => {
+    const sites = [];
+    for (let x = -6; x <= 6; x++) for (let z = -6; z <= 6; z++) sites.push({ pos: [x, 0, z] as [number, number, number], rot: 0, s: 1, h: 1, form });
+    return new Grass(sites);
+  };
+  const at = (g: Grass, x: number, z: number): number => {
+    const m = g.lean!;
+    const i = Math.floor((x - m.minX) / m.cell);
+    const j = Math.floor((z - m.minZ) / m.cell);
+    return m.data[j * m.w + i]! / 255;
+  };
+  // Фонарь на высоте груди у края поля светит вдоль +x, чуть вниз.
+  const beam = { from: [-6, 1.3, 0] as [number, number, number], dir: [0.97, -0.24, 0] as [number, number, number], cos: Math.cos(0.4), range: 12 };
+  const run = (g: Grass, light: typeof beam | null, seconds: number): void => {
+    for (let t = 0; t < seconds; t += 1 / 30) g.updateLean(light, 1 / 30);
+  };
+
+  it('под лучом трава тянется (до 1), вне луча и за спиной — нет; карта — клетками по полметра над всем полем', () => {
+    const g = field(3);
+    expect(g.lean).not.toBeNull();
+    expect(g.lean!.cell).toBe(LEAN.cell);
+    run(g, beam, 3);
+    expect(at(g, -1, 0)).toBeGreaterThan(0.9);
+    expect(at(g, -1, 5)).toBe(0);
+    expect(at(g, 5.8, 5.8)).toBe(0);
+  });
+
+  it('тянется быстрее, чем отпускает: за секунду под лучом — почти до конца, за секунду без света — меньше половины назад', () => {
+    const g = field(3);
+    run(g, beam, 1);
+    const lit = at(g, -1, 0);
+    expect(lit).toBeGreaterThan(0.7);
+    run(g, null, 1);
+    const after = at(g, -1, 0);
+    expect(after).toBeGreaterThan(lit * 0.55);
+    expect(after).toBeLessThan(lit);
+    run(g, null, 20);
+    expect(at(g, -1, 0)).toBe(0);
+    // Всё распрямилось и света нет — карта больше не меняется (и её не обходят).
+    expect(g.updateLean(null, 1 / 30)).toBe(false);
+  });
+
+  it('газон не тянется: у него нет карты (у ложного нет времени)', () => {
+    const lawn = field(GRASS_KINDS.indexOf('lawn') * GRASS_VARIANTS);
+    expect(lawn.lean).toBeNull();
+    expect(lawn.updateLean(beam, 1)).toBe(false);
+    expect(field(0).lean).not.toBeNull();
+  });
+});

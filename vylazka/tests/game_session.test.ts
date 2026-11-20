@@ -133,6 +133,13 @@ class FakeRenderer {
   setGrassBody(caps: readonly (readonly number[])[] | null, _floor = 0, press = 0): void {
     this.grassBody = caps ? { caps: caps.length, press } : null;
   }
+  /** Трава тянется к свету: карта поля, откуда свет, сила и сколько раз карта менялась. */
+  grassLean: { map: unknown; from: number[] | null; strength: number } = { map: null, from: null, strength: 0 };
+  grassLeanChanges = 0;
+  setGrassLean(map: unknown, from: readonly number[] | null, strength: number, changed: boolean): void {
+    this.grassLean = { map, from: from ? [...from] : null, strength };
+    if (changed) this.grassLeanChanges += 1;
+  }
   setPocket(m: unknown): void {
     this.pocketShown = m !== null;
   }
@@ -3409,6 +3416,38 @@ describe('собрано только там, куда смотрит герой
       expect(g.bodyPress).toBe(0);
     }
     expect(seen).toBeGreaterThanOrEqual(1);
+  });
+
+  it('трава тянется к фонарю: луч на траве — рендер получает карту, где трава тянется, и откуда свет; погас — карта медленно гаснет', () => {
+    let seen = 0;
+    for (let seed = 1; seed < 80 && seen < 1; seed++) {
+      if (!grassRolled(seed, 0.8)) continue;
+      const level = buildLevel(generateLayout(seed, 2, 'shelter'), { wear: 0.8 });
+      if (level.grassRoom === undefined || !level.grass?.length) continue;
+      const room = level.layout?.rooms.find((r) => r.id === level.grassRoom);
+      const node = level.nav.find((n) => n.room === level.grassRoom);
+      if (!room || !node) continue;
+      seen += 1;
+      const h = new Harness(level, { seed });
+      const g = h.game;
+      // Встать в помещении с травой и светить под ноги, вперёд.
+      g.teleport(node.x, node.y, node.z, 0, -0.6);
+      h.run(2);
+      const lean = h.r.grassLean;
+      expect(lean.strength, `сид ${seed}`).toBe(1);
+      expect(lean.from).not.toBeNull();
+      const map = lean.map as { data: Uint8Array } | null;
+      expect(map, `сид ${seed}: карты нет`).not.toBeNull();
+      const lit = map!.data.reduce((m, v) => Math.max(m, v), 0);
+      expect(lit, `сид ${seed}: под лучом трава не тянется`).toBeGreaterThan(128);
+      // Погасить фонарь: трава распрямляется, медленно.
+      g.light.toggle();
+      h.run(0.5);
+      const half = map!.data.reduce((m, v) => Math.max(m, v), 0);
+      expect(half).toBeLessThan(lit);
+      expect(half).toBeGreaterThan(lit * 0.5);
+    }
+    expect(seen).toBe(1);
   });
 
   it('трава примята там, где вещь лежит сейчас: вещь воспоминания на полу помещения с травой — круг вокруг неё; у дверей — круги всегда', () => {

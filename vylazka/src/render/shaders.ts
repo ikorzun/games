@@ -282,6 +282,35 @@ varying float vPress;
 varying float vRim;
 float gPress = 0.0;
 float gRim = 0.0;
+// Трава тянется к свету (systems/grass.ts, LEAN): uLean — насколько тянется каждая клетка поля (сглажено во времени: к лучу —
+// за долю секунды, обратно — дольше), uLeanRect — где поле (minX, minZ) и обратные размеры карты, uLeanFrom — откуда свет
+// (фонарь или глаза) и сила (0 — не тянется), uLeanDir — куда он светит. Трава тянется к лучу, а не к фонарю: в пятне света
+// вытягивается вверх, с боков клонится к его оси — и за лучом, когда им ведут, идёт волной (к фонарю она клонилась бы прямо на
+// смотрящего, и из глаз героя этого почти не видно). Газон не тянется: у него нет веса качания (у ложного нет времени).
+uniform sampler2D uLean;
+uniform vec4 uLeanRect;
+uniform vec4 uLeanFrom;
+uniform vec4 uLeanDir;
+vec3 grassLean(vec3 wp, vec3 root, float k) {
+  if (uLeanFrom.w <= 0.0 || aSway <= 0.0 || k <= 0.0) return wp;
+  vec2 uv = (root.xz - uLeanRect.xy) * uLeanRect.zw;
+  if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return wp;
+  vec3 rel = root - uLeanFrom.xyz;
+  // У самых ног не тянется: там трава расступается от шагов (uPush).
+  float L = texture2D(uLean, uv).r * uLeanFrom.w * k * smoothstep(0.7, 1.5, length(rel.xz));
+  if (L <= 0.003) return wp;
+  float h = max(wp.y - root.y, 0.0);
+  // Ближняя к травинке точка оси луча — туда, вбок, она и клонится; на самой оси — только тянется вверх.
+  vec3 onAxis = uLeanFrom.xyz + uLeanDir.xyz * max(dot(rel, uLeanDir.xyz), 0.0);
+  vec2 to = onAxis.xz - root.xz;
+  float dl = length(to);
+  vec2 dir = dl > 1e-3 ? to / dl : vec2(0.0);
+  // Гнётся дугой, не дальше оси; длина травинки сохраняется (кончик чуть опускается), а сама она тянется вверх, к свету.
+  float bend = min(min(L * smoothstep(0.03, 0.4, dl) * h * h * 3.0, h * 0.75), dl);
+  wp.xz += dir * bend;
+  wp.y = root.y + h * (1.0 + 0.25 * L) - bend * bend / max(2.0 * h, 0.05);
+  return wp;
+}
 vec3 grassTrample(vec3 wp, vec3 root, vec3 nW) {
   // «Матрас» под следом (world/grass.ts, pressMat) — не травинка: лежит на своей высоте над полом при любом росте плитки, а где
   // его рисовать, решает пиксель.
@@ -334,13 +363,13 @@ vec3 grassTrample(vec3 wp, vec3 root, vec3 nW) {
       // трава до колена закрывает след от стоящего рядом: он лежит на полу (кадры 20.11, день).
       wp.y = root.y + h * mix(1.0, 0.25, rim);
       wp.xz += out_ * (h * 0.6 * rim);
-      return wp;
+      return grassLean(wp, root, 1.0 - rim);
     }
   }
-  if (lie <= 0.0) return wp;
+  if (lie <= 0.0) return grassLean(wp, root, 1.0);
   wp.y = root.y + h * mix(1.0, 0.1, lie);
   wp.xz += away * (h * 0.85 * lie);
-  return wp;
+  return grassLean(wp, root, 1.0 - lie);
 }
 #endif
 #ifdef BIRD

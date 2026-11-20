@@ -13,6 +13,7 @@ import { headForm } from '../world/flowers';
 import { GRASS_KINDS, GRASS_LODS, GRASS_VARIANTS, grassTile, grassTris } from '../world/grass';
 import type { GrassLod } from '../world/grass';
 import { GRASS_CLEAR, GRASS_FAR, GRASS_STRIDE } from '../systems/grass';
+import type { LeanMap } from '../systems/grass';
 import { BIRD_STRIDE, BIRDS_MAX } from '../systems/birds';
 import { MAT_COUNT, MAT_DEFS } from '../world/materials';
 import { bakeDetail } from './detail';
@@ -635,6 +636,11 @@ export class GameRenderer {
   private readonly grassBody = Array.from({ length: 8 }, () => new THREE.Vector4(1e6, 1e6, 1e6, 1e6));
   private readonly grassBodyR = [new THREE.Vector4(0, 0, 0, 0), new THREE.Vector4(0, 0, 0, 0)];
   private readonly grassBodyK = new THREE.Vector4(0, 0, 1, 0);
+  /** Трава тянется к свету (systems/grass.ts, LEAN): карта поля текстурой, где поле и откуда свет (w — сила, 0 — не тянется). */
+  private leanTex: THREE.DataTexture;
+  private readonly leanRect = new THREE.Vector4(0, 0, 1, 1);
+  private readonly leanFrom = new THREE.Vector4(0, 0, 0, 0);
+  private readonly leanDir = new THREE.Vector4(0, 0, -1, 0);
   /** Номера плиток кадра (первый проход раскладки). */
   private readonly grassPick = new Int32Array(GRASS_MAX);
   readonly grassStats = { shown: 0, far: 0, horizon: 0, culled: 0, tris: 0, end: 0 };
@@ -777,6 +783,8 @@ export class GameRenderer {
     this.cellTex.magFilter = THREE.NearestFilter;
     this.cellTex.minFilter = THREE.NearestFilter;
     this.cellTex.needsUpdate = true;
+    // Трава тянется к свету: пока поля нет — один пустой тексель.
+    this.leanTex = this.makeLeanTex(new Uint8Array(1), 1, 1);
     // Тени-пятна: пока уровень не дал карту — один пустой тексель.
     this.contactTex = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.contactTex.magFilter = THREE.LinearFilter;
@@ -1801,6 +1809,39 @@ export class GameRenderer {
     this.grassBodyK.set(floor, caps ? Math.max(0, Math.min(1, press)) : 0, ax / l, az / l);
   }
 
+  private makeLeanTex(data: Uint8Array, w: number, h: number): THREE.DataTexture {
+    const t = new THREE.DataTexture(data, w, h, THREE.RedFormat, THREE.UnsignedByteType);
+    t.magFilter = THREE.LinearFilter;
+    t.minFilter = THREE.LinearFilter;
+    t.wrapS = THREE.ClampToEdgeWrapping;
+    t.wrapT = THREE.ClampToEdgeWrapping;
+    // Строка карты — по байту на клетку: без выравнивания по 4 байта, иначе ширина не кратная четырём съезжает.
+    t.unpackAlignment = 1;
+    t.needsUpdate = true;
+    return t;
+  }
+
+  /**
+   * Трава тянется к свету (systems/grass.ts, LEAN): карта поля (null — травы, которая тянется, нет: газон или пусто), откуда свет
+   * и сила; changed — карта менялась в этом кадре (перезалить текстуру); dir — куда светят (к оси луча трава и клонится).
+   */
+  setGrassLean(map: LeanMap | null, from: readonly number[] | null, strength: number, changed: boolean, dir: readonly number[] = [0, 0, -1]): void {
+    if (!map || !from || strength <= 0) {
+      this.leanFrom.w = 0;
+      return;
+    }
+    const img = this.leanTex.image as { data: Uint8Array; width: number; height: number };
+    if (img.data !== map.data || img.width !== map.w || img.height !== map.h) {
+      // Другое поле (уровень, карман): своя карта — своя текстура.
+      this.leanTex.dispose();
+      this.leanTex = this.makeLeanTex(map.data, map.w, map.h);
+      if (this.grassMat) this.grassMat.uniforms.uLean!.value = this.leanTex;
+    } else if (changed) this.leanTex.needsUpdate = true;
+    this.leanRect.set(map.minX, map.minZ, 1 / (map.w * map.cell), 1 / (map.h * map.cell));
+    this.leanFrom.set(from[0]!, from[1]!, from[2]!, strength);
+    this.leanDir.set(dir[0]!, dir[1]!, dir[2]!, 0);
+  }
+
   private layoutGrass(): void {
     const data = this.grassData;
     const count = this.grassCount;
@@ -1880,6 +1921,10 @@ export class GameRenderer {
           this.grassMat.uniforms.uBody = { value: this.grassBody };
           this.grassMat.uniforms.uBodyR = { value: this.grassBodyR };
           this.grassMat.uniforms.uBodyK = { value: this.grassBodyK };
+          this.grassMat.uniforms.uLean = { value: this.leanTex };
+          this.grassMat.uniforms.uLeanRect = { value: this.leanRect };
+          this.grassMat.uniforms.uLeanFrom = { value: this.leanFrom };
+          this.grassMat.uniforms.uLeanDir = { value: this.leanDir };
           // GRASS — травинку решает её корень: вытоптанные круги и стёртый пол (render/shaders.ts).
           this.grassMat.defines = { ...this.worldMat.defines, GRASS: GRASS_CLEAR };
         }

@@ -19,6 +19,31 @@ export const GRASS_SHOWN = 3000;
 export const GRASS_FAR = 30;
 /** Сколько вытоптанных кругов держит трава места (render/shaders.ts, GRASS; level_build.ts, grassClear). */
 export const GRASS_CLEAR = 16;
+/**
+ * Трава тянется к свету (партнёр 20.11: «Теперь сделай, чтобы трава тянулась к лучу»; design.md §36, «заворожить»): где на
+ * траву лёг луч фонаря (в светлом месте — взгляд), она клонится к свету и чуть вытягивается. Не сразу: поворачивается за
+ * rise секунд и отпускает дольше — за fall: проведёшь лучом по полю, и за ним остаётся медленно распрямляющийся след. Карта —
+ * клетками по cell метров над всем полем травы; шейдер читает её по корню травинки (render/shaders.ts, uLean).
+ */
+export const LEAN = { cell: 0.5, rise: 0.7, fall: 2.4 } as const;
+
+/** Свет, к которому тянется трава: откуда (фонарь или глаза), куда, косинус половины раствора конуса и дальность, м. */
+export interface LeanLight {
+  from: Vec3;
+  dir: Vec3;
+  cos: number;
+  range: number;
+}
+
+/** Карта «насколько тянется» над полем травы: w × h клеток по cell метров от (minX, minZ), 0..255 — для текстуры. */
+export interface LeanMap {
+  data: Uint8Array;
+  w: number;
+  h: number;
+  minX: number;
+  minZ: number;
+  cell: number;
+}
 
 export interface GrassSite {
   /** Середина плитки на полу (корни травинок), м. */
@@ -59,6 +84,13 @@ export class Grass {
   private readonly dist: Float32Array;
   private sortedAt: Vec3 | null = null;
 
+  /** Карта «тянется к свету» (LEAN); у газона её нет — он неподвижен. */
+  readonly lean: LeanMap | null;
+  private readonly leanF: Float32Array | null;
+  /** Есть ли в карте хоть что-то (иначе без света её можно не обходить) и в каких клетках (i0, i1, j0, j1). */
+  private leanAny = false;
+  private readonly leanBox: [number, number, number, number] = [Number.MAX_SAFE_INTEGER, -1, Number.MAX_SAFE_INTEGER, -1];
+
   constructor(sites: readonly GrassSite[]) {
     this.sites = sites;
     this.order = sites.map((_, i) => i);
@@ -77,6 +109,92 @@ export class Grass {
       }
       this.field = f;
     }
+    const f = this.field;
+    if (f && !f.short) {
+      const w = Math.max(1, Math.ceil((f.maxX - f.minX) / LEAN.cell));
+      const h = Math.max(1, Math.ceil((f.maxZ - f.minZ) / LEAN.cell));
+      this.lean = { data: new Uint8Array(w * h), w, h, minX: f.minX, minZ: f.minZ, cell: LEAN.cell };
+      this.leanF = new Float32Array(w * h);
+    } else {
+      this.lean = null;
+      this.leanF = null;
+    }
+  }
+
+  /**
+   * Трава тянется к свету (LEAN): клетки, на которые светит, за rise секунд доходят до 1, остальные за fall — до нуля. Свет — по
+   * середине клетки на высоте травы; у края конуса — плавно. Без света и с пустой картой — ничего не делает. Возвращает, менялась
+   * ли карта (рендеру — перезалить текстуру).
+   */
+  updateLean(light: LeanLight | null, dt: number): boolean {
+    const m = this.lean;
+    const v = this.leanF;
+    const f = this.field;
+    if (!m || !v || !f || dt <= 0 || (!light && !this.leanAny)) return false;
+    const kIn = 1 - Math.exp(-dt / LEAN.rise);
+    const kOut = 1 - Math.exp(-dt / LEAN.fall);
+    const y = f.floor + 0.25;
+    const cosIn = light ? 1 - (1 - light.cos) * 0.3 : 1;
+    // Обходить не всё поле (на лугу — 120 × 120 клеток), а только то, куда достаёт свет, и то, что ещё не распрямилось.
+    let i0 = this.leanBox[0];
+    let i1 = this.leanBox[1];
+    let j0 = this.leanBox[2];
+    let j1 = this.leanBox[3];
+    if (light) {
+      i0 = Math.min(i0, Math.max(0, Math.floor((light.from[0] - light.range - m.minX) / m.cell)));
+      i1 = Math.max(i1, Math.min(m.w - 1, Math.ceil((light.from[0] + light.range - m.minX) / m.cell)));
+      j0 = Math.min(j0, Math.max(0, Math.floor((light.from[2] - light.range - m.minZ) / m.cell)));
+      j1 = Math.max(j1, Math.min(m.h - 1, Math.ceil((light.from[2] + light.range - m.minZ) / m.cell)));
+    }
+    let changed = false;
+    let bi0 = m.w;
+    let bi1 = -1;
+    let bj0 = m.h;
+    let bj1 = -1;
+    for (let j = Math.max(0, j0); j <= Math.min(m.h - 1, j1); j++) {
+      const z = m.minZ + (j + 0.5) * m.cell;
+      for (let i = Math.max(0, i0); i <= Math.min(m.w - 1, i1); i++) {
+        const k = j * m.w + i;
+        let target = 0;
+        if (light) {
+          const dx = m.minX + (i + 0.5) * m.cell - light.from[0];
+          const dy = y - light.from[1];
+          const dz = z - light.from[2];
+          const dd = dx * dx + dy * dy + dz * dz;
+          if (dd > 0.09 && dd < light.range * light.range) {
+            const d = Math.sqrt(dd);
+            const c = (dx * light.dir[0] + dy * light.dir[1] + dz * light.dir[2]) / d;
+            if (c > light.cos) {
+              const t = Math.min(1, (c - light.cos) / Math.max(1e-6, cosIn - light.cos));
+              const far = Math.min(1, Math.max(0, (d - light.range * 0.6) / (light.range * 0.4)));
+              target = t * t * (3 - 2 * t) * (1 - far * far * (3 - 2 * far));
+            }
+          }
+        }
+        const was = v[k]!;
+        if (was === 0 && target === 0) continue;
+        const now = was + (target - was) * (target > was ? kIn : kOut);
+        const val = now < 0.002 && target === 0 ? 0 : now;
+        v[k] = val;
+        if (val > 0) {
+          if (i < bi0) bi0 = i;
+          if (i > bi1) bi1 = i;
+          if (j < bj0) bj0 = j;
+          if (j > bj1) bj1 = j;
+        }
+        const b = Math.round(val * 255);
+        if (b !== m.data[k]) {
+          m.data[k] = b;
+          changed = true;
+        }
+      }
+    }
+    this.leanBox[0] = bi0;
+    this.leanBox[1] = bi1;
+    this.leanBox[2] = bj0;
+    this.leanBox[3] = bj1;
+    this.leanAny = bi1 >= 0;
+    return changed;
   }
 
   /**

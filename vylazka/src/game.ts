@@ -235,6 +235,12 @@ const SPORES_SHOWN = 880;
 const FLOWERS_SHOWN = 900;
 const FLOWER_BEAM = { cos: Math.cos(0.36), range: 11 } as const;
 const FLOWER_GAZE = { cos: Math.cos(0.42), range: 9 } as const;
+/**
+ * Трава тянется к свету (партнёр 20.11: «Теперь сделай, чтобы трава тянулась к лучу»; systems/grass.ts, LEAN): в тёмном месте —
+ * к фонарю, на который она попала лучом (конус GRASS_BEAM — чуть шире ядра луча); в светлом — к глазам, куда смотрят.
+ */
+export const GRASS_BEAM = { cos: Math.cos(0.4), range: 12 } as const;
+export const GRASS_GAZE = { cos: Math.cos(0.5), range: 9 } as const;
 
 /**
  * Стоит ли на полу вещь в этой точке (для мест грибов, systems/spores.ts, settle): коробка вещи уровня или вещи сна (не стена,
@@ -788,6 +794,8 @@ export class Game {
   readonly grassClear: GrassClearing[] = [];
   /** Насколько примята трава следа лежавшего (1 — только что лежали, 0 — встала); нет следа — 0. */
   bodyPress = 0;
+  /** Отладка: трава не тянется к свету (кадры «до и после», __vz.grassLean). */
+  leanOff = false;
   /** Бумажные цветы: насколько каждый расцвёл (0 — тусклый, 1 — яркий) и сколько уже держится расцветшим, с. */
   private readonly blooms = new Map<number, { k: number; hold: number }>();
   /** Номер экрана-проёма, в который вошли и который ещё не унёс (ждёт конца идущего перехода); 0 — нет. */
@@ -3434,6 +3442,14 @@ export class Game {
     // где вещь лежит на полу сейчас и у дверей (systems/grass.ts, clearings); луг их не знает — вокруг его вещей трава не растёт.
     const grass = this.where === 'main' ? this.levelGrass : this.where === 'pocket' ? this.pocketGrass : null;
     this.renderer.setGrass(this.grassBuf, grass ? grass.visible([x, y, z], GRASS_SHOWN, this.grassBuf, GRASS_FAR) : 0);
+    // Трава тянется к лучу фонаря, если он горит, в светлом месте — к взгляду. Погас — медленно распрямляется.
+    if (grass && rig) {
+      const byGaze = this.env.light <= 0;
+      const beamOn = !byGaze && this.light.intensity >= 0.3;
+      const light = byGaze ? { from: rig.camPos, dir: rig.lightDir, cos: GRASS_GAZE.cos, range: GRASS_GAZE.range } : beamOn ? { from: rig.lightPos, dir: rig.lightDir, cos: GRASS_BEAM.cos, range: GRASS_BEAM.range } : null;
+      const changed = grass.updateLean(light, fl?.frozen ? 0 : dt);
+      this.renderer.setGrassLean(grass.lean, byGaze ? rig.camPos : rig.lightPos, this.leanOff ? 0 : 1, changed, rig.lightDir);
+    } else this.renderer.setGrassLean(null, null, 0, false);
     if (grass && this.where === 'main') {
       grass.clearings(this.grassItems(), this.level?.grassClear ?? [], this.grassClear);
       this.renderer.setGrassClear(this.grassClear);
