@@ -109,7 +109,29 @@ async function run(browser, name, viewport, mode) {
       }
       await page.click('.dz-sheet [data-act="close"]');
     }
-    if (n === 5) { await page.click('#dz-zoom'); await page.waitForTimeout(50); await snap('05-zoom'); await page.click('#dz-zoom'); }
+    if (n === 5) {
+      const zoomed = () => page.evaluate(() => document.querySelector('.dz-app').classList.contains('is-zoomed'));
+      await page.click('#dz-zoom'); await page.waitForTimeout(50); await snap('05-zoom'); await page.click('#dz-zoom');
+      await page.click('.dz-scene');
+      await page.waitForTimeout(450);
+      check(!(await zoomed()), `${name}: одиночное касание окна ничего не приближает`);
+      await page.dblclick('.dz-scene');
+      check(await zoomed(), `${name}: двойное касание окна приближает`);
+      await page.waitForTimeout(450);
+      await page.dblclick('.dz-scene');
+      check(!(await zoomed()), `${name}: двойное касание окна отдаляет`);
+      await page.waitForTimeout(450);
+      const pinchBy = (from, to) => page.evaluate(([a, b]) => {
+        const sc = document.querySelector('.dz-scene'); const r = sc.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const fire = (type, id, x) => sc.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', clientX: x, clientY: cy, bubbles: true }));
+        fire('pointerdown', 11, cx - a); fire('pointerdown', 12, cx + a); fire('pointermove', 11, cx - b); fire('pointermove', 12, cx + b); fire('pointerup', 11, cx - b); fire('pointerup', 12, cx + b);
+      }, [from, to]);
+      await pinchBy(30, 70);
+      check(await zoomed(), `${name}: щипок наружу приближает`);
+      await pinchBy(70, 30);
+      check(!(await zoomed()), `${name}: щипок внутрь отдаляет`);
+      await page.waitForTimeout(450);
+    }
 
     const guilty = c.verdict === 'cell';
     const goCell = mode === 'good' ? guilty : !guilty;

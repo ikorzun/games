@@ -4,10 +4,6 @@
    Вид один, ночной: игра не подстраивается под светлую тему. */
 @font-face { font-family: 'Oswald'; font-weight: 500; font-display: swap; src: url(fonts/oswald-500-cyrillic.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: 'Oswald'; font-weight: 500; font-display: swap; src: url(fonts/oswald-500-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F, U+20AC, U+2212; }
-@font-face { font-family: 'PT Sans'; font-weight: 400; font-display: swap; src: url(fonts/ptsans-400-cyrillic.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: 'PT Sans'; font-weight: 400; font-display: swap; src: url(fonts/ptsans-400-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F, U+20AC, U+2212; }
-@font-face { font-family: 'PT Sans'; font-weight: 700; font-display: swap; src: url(fonts/ptsans-700-cyrillic.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: 'PT Sans'; font-weight: 700; font-display: swap; src: url(fonts/ptsans-700-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F, U+20AC, U+2212; }
 @font-face { font-family: 'PT Mono'; font-weight: 400; font-display: swap; src: url(fonts/ptmono-400-cyrillic.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: 'PT Mono'; font-weight: 400; font-display: swap; src: url(fonts/ptmono-400-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F, U+20AC, U+2212; }
 @font-face { font-family: 'Caveat'; font-weight: 500; font-display: swap; src: url(fonts/caveat-500-cyrillic.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
@@ -35,9 +31,9 @@
   --plate-gold: #e6cd90;
   --wood: #33241a;
   --wood-text: #dccdb2;
-  /* гарнитуры: вывески и кнопки, чтение, документы, подписи от руки */
+  /* гарнитуры: свои — для вывесок, кнопок, документов и подписей; основной текст — системным шрифтом устройства */
   --font-display: 'Oswald', 'Arial Narrow', 'Roboto Condensed', sans-serif;
-  --font-body: 'PT Sans', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', 'Noto Sans', Arial, sans-serif;   /* системный: так советует HIG для основного текста */
   --font-doc: 'PT Mono', 'Courier New', ui-monospace, monospace;
   --font-hand: 'Caveat', 'Segoe Script', 'Bradley Hand', cursive;
   /* кегли по стилям текста iOS: Title 1/2/3, Body, Callout, Subheadline, Footnote, Caption (в rem — растут с настройкой) */
@@ -84,9 +80,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 
 /* ——— окно в вестибюль */
 .dz-window { position: relative; aspect-ratio: 8 / 5; max-width: 100%; border-radius: 6px; overflow: hidden; background-color: #0b0d0e; box-shadow: 0 0 0 1px #000, 0 12px 28px rgba(0, 0, 0, .55); }
-.dz-scene { width: 100%; height: 100%; }
-.dz-app.can-zoom .dz-scene { cursor: zoom-in; }
-.dz-app.is-zoomed .dz-scene { cursor: zoom-out; }
+.dz-scene { width: 100%; height: 100%; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
 .dz-svg { display: block; width: 100%; height: 100%; }
 .dz-zoombtn { position: absolute; right: 9px; bottom: calc(5.6% + 9px); background-color: rgba(8, 9, 9, .8); }
 .dz-zoom { transform-origin: 200px 150px; transition: transform .4s ease; }
@@ -143,16 +137,16 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .dz-foot { font-size: var(--t-foot); line-height: 1.35; color: var(--muted); }
 .dz-desk .dz-foot { color: var(--wood-text); }
 
-.dz-tray { display: grid; grid-template-columns: repeat(auto-fit, minmax(3.6rem, 1fr)); gap: 6px; min-height: 6.25rem; padding: 6px; border-radius: 8px; background-color: #22282a; box-shadow: inset 0 3px 7px rgba(0, 0, 0, .6), 0 1px 0 rgba(255, 255, 255, .09); }
+.dz-tray { display: grid; grid-template-columns: repeat(auto-fit, minmax(3.75rem, 1fr)); gap: 4px; min-height: 6.25rem; padding: 4px; border-radius: 8px; background-color: #22282a; box-shadow: inset 0 3px 7px rgba(0, 0, 0, .6), 0 1px 0 rgba(255, 255, 255, .09); }
 .dz-tray.is-empty { place-items: center; grid-template-columns: 1fr; }
 .dz-tray-empty { padding: 0 12px; font-size: var(--t-sub); color: var(--muted); text-align: center; }
-.dz-item { position: relative; min-width: 0; min-height: 5.5rem; display: grid; justify-items: center; align-content: start; gap: 4px; padding: 7px 2px 6px; background: none; border: 1px solid transparent; border-radius: 8px; transition: transform .1s ease, box-shadow .1s ease; animation: dz-drop .45s cubic-bezier(.3, 1.3, .5, 1) backwards; animation-delay: calc(var(--i, 0) * 80ms); }
+.dz-item { position: relative; min-width: 0; min-height: 5.5rem; display: grid; justify-items: center; align-content: start; gap: 4px; padding: 8px 0 7px; background: none; border: 1px solid transparent; border-radius: 6px; transition: transform .1s ease, box-shadow .1s ease; animation: dz-drop .45s cubic-bezier(.3, 1.3, .5, 1) backwards; animation-delay: calc(var(--i, 0) * 80ms); }
 .dz-item:hover { background-color: rgba(255, 255, 255, .06); }
 .dz-item:active { transform: scale(.96); box-shadow: var(--press); }
 .dz-item.is-open { border-color: var(--lamp); background-color: rgba(233, 185, 73, .12); }
 .dz-item-art { display: block; width: 100%; max-width: 3.5rem; }
 .dz-item-art svg { display: block; width: 100%; height: auto; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .55)); }
-.dz-item-name { max-width: 100%; font-size: var(--t-foot); line-height: 1.15; text-align: center; overflow-wrap: anywhere; color: var(--text); }
+.dz-item-name { max-width: 100%; font-size: var(--t-cap); line-height: 1.2; letter-spacing: -.01em; text-align: center; overflow-wrap: anywhere; color: var(--text); }
 .dz-item-seen { position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; border-radius: 50%; background-color: #22282a; color: var(--lamp); opacity: 0; }
 .dz-item-seen svg { display: block; width: 100%; height: 100%; }
 .dz-item.is-seen .dz-item-seen { opacity: 1; }

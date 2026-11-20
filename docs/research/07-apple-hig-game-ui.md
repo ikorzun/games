@@ -1,6 +1,7 @@
 # 07. Apple HIG: правила интерфейса для игры на телефоне («дежурная часть»)
 
 Дата сбора: 2026-11-20. Источник: Apple Human Interface Guidelines (developer.apple.com/design/human-interface-guidelines).
+Дополнено: 2026-11-20, второй заход по корневому списку разделов (новые разделы 12–25).
 Страницы прочитаны целиком (markdown-вариант страницы `<url>.md`; тексты в редакции с копирайтом 2026).
 Цитаты и названия разделов — в оригинале. Пометка «не подтверждено» = в HIG не найдено.
 Здесь только материал; решений за дизайнера и макетов нет. Юридических/этических выводов нет.
@@ -37,7 +38,7 @@ URL: `.../designing-for-games`, `.../game-controls`, `.../menus#In-game-menus`
 | Ориентация | обе ориентации, если поддерживаются; запрета/требования ориентации для игр в HIG нет | "even if your app is locked to a certain orientation ... it's still important to ensure your interface resizes well" (Layout) |
 | Подсказка/обучение: ссылки | Onboarding, Loading, Launching | см. раздел 9 |
 
-Страница «Settings» (`.../settings`) отдельно не читалась: не подтверждено (только ссылка из Designing for games).
+Страница «Settings» (`.../settings`) в первом заходе не читалась; прочитана во втором — см. раздел 14.
 
 ---
 
@@ -100,7 +101,7 @@ URL: `.../typography`, `.../accessibility`
 | Иерархия | менять вес/размер/цвет; сохранять иерархию при смене размера | "Adjust font weight, size, and color as needed to emphasize important information" |
 | Что увеличивать при росте текста | важное; в игре — реплики персонажа важнее мелких всплывающих чисел | "in a game, people are often more interested in a character's dialog than in transient hit-damage values" |
 | Тест читаемости | на каждой платформе; при проблеме — крупнее, контрастнее, системный шрифт | "Test legibility in different contexts." |
-| Заглавные буквы | в HIG для кнопок: title-style capitalization с глагола; для alert: предложение — sentence-style, фрагмент — title-style | "Using title-style capitalization, consider starting the label with a verb" (Buttons). Отдельного правила «ALL CAPS» в прочитанных разделах не найдено: не подтверждено |
+| Заглавные буквы | в HIG для кнопок: title-style capitalization с глагола; для alert: предложение — sentence-style, фрагмент — title-style | "Using title-style capitalization, consider starting the label with a verb" (Buttons). Отдельного правила «ALL CAPS» в прочитанных разделах не найдено: не подтверждено (см. также Writing, раздел 13) |
 | 2D-текст | без глубины/3D | "prefer 2D text" |
 | Текст без подложки | делать полужирным, тени не добавлять (про visionOS-контекст; для iOS-игры не подтверждено) | см. Typography > visionOS |
 
@@ -322,28 +323,323 @@ URL: `.../materials`, `.../layout`, `.../color`, `.../buttons`, `.../tab-bars`, 
 | Концентрические углы | стандартные компоненты — скругление, концентричное углам панели | "ensure that its corner radius is also concentric with the bar's corners" (Toolbars) |
 | Тёмный/светлый | даже для одной темы — свои light и dark цвета для адаптивности стекла | "Even if your app ships in a single appearance mode, provide both light and dark colors" |
 | Движение стекла | реагирует на касание сильнее | "movement of Liquid Glass responds to direct touch interaction with greater emphasis" (Motion) |
-| Hierarchy / Harmony / Consistency | три принципа нового дизайна: Hierarchy — иерархия слоёв и группировка, а не декор; Harmony — согласованность с системой и концентрические углы; Consistency — единое поведение на размерах окон/платформах | Источник — только сниппет поиска к WWDC25 102 и 356 (страницы видео целиком не читались; в HIG-страницах слов «Hierarchy/Harmony/Consistency» как заголовков принципов не найдено): частично не подтверждено |
+| Hierarchy / Harmony / Consistency | три принципа нового дизайна: Hierarchy — иерархия слоёв и группировка, а не декор; Harmony — согласованность с системой и концентрические углы; Consistency — единое поведение на размерах окон/платформах | Источник — только сниппет поиска к WWDC25 102 и 356 (страницы видео целиком не читались; в HIG-страницах слов «Hierarchy/Harmony/Consistency» как заголовков принципов не найдено): частично не подтверждено. Уточнение во втором заходе — см. раздел 25 |
 
 Для веб-игры: Liquid Glass — системный материал Apple; применимость к вебу в HIG не обсуждается (не подтверждено).
+
+---
+
+## 12. Полный список разделов HIG (корневая страница) и что прочитано
+
+URL: `https://developer.apple.com/design/human-interface-guidelines` (корень), `.../getting-started`, `.../foundations`, `.../patterns`, `.../components`, `.../inputs`, `.../technologies`
+Отметки: [+] прочитано полностью (раздел отчёта указан), [ ] не читалось (не относится к игре или не требовалось).
+
+- Getting started: Design principles [+ 25]; Designing for iOS [+ 2]; Designing for games [+ 1]; Designing for iPadOS, macOS, tvOS, visionOS, watchOS, iPhone Duo [ ].
+- Foundations: Accessibility [+ 3, 5]; App icons [ ]; Branding [+ 23]; Color [+ 5]; Dark Mode [+ 5]; Icons [+ 23]; Images [ ]; Immersive experiences [ ]; Inclusion [+ 23]; Layout [+ 2]; Materials [+ 11]; Motion [+ 10]; Privacy [+ 24]; Right to left [ ]; SF Symbols [ ]; Spatial layout [ ]; Typography [+ 4]; Writing [+ 13].
+- Patterns: Charting data [ ]; Collaboration and sharing [ ]; Drag and drop [ ]; Entering data [+ 24]; Feedback [+ 9]; File management [ ]; Going full screen [+ 19]; Launching [+ 15]; Live-viewing apps [ ]; Loading [+ 15]; Managing accounts [ ]; Managing notifications [ ]; Modality [+ 7]; Multitasking [ ]; Offering help [+ 17]; Onboarding [+ 9]; Playing audio [+ 9]; Playing haptics [+ 9]; Playing video [ ]; Printing [ ]; Ratings and reviews [ ]; Searching [ ]; Settings [+ 14]; Undo and redo [+ 16]; Workouts [ ].
+- Components: на странице `.../components` только 8 подгрупп — Content, Layout and organization, Menus and actions, Navigation and search, Presentation, Selection and input, Status, System experiences; страницы подгрупп и их состав не открывались: не подтверждено. Прочитаны отдельные страницы компонентов: Buttons [+ 3, 6], Sheets, Alerts, Action sheets [+ 7], Segmented controls, Tab bars, Toolbars [+ 8], Menus (In-game menus) [+ 1], Toggles, Lists and tables, Labels [+ 20], Scroll views [+ 21], Popovers [+ 22], Progress indicators [+ 15].
+- Inputs: Action button [ ]; Apple Pencil and Scribble [ ]; Camera Control [ ]; Digital Crown [ ]; Eyes [ ]; Focus and selection [ ]; Game controls [+ 1]; Gestures [+ 18]; Gyroscope and accelerometer [ ]; Keyboards [ ]; Nearby interactions [ ]; Pointing devices [ ]; Remotes [ ].
+- Technologies (все [ ], кроме отмеченных): AirPlay, Always On, App Clips, Apple In-App Purchase, Apple Pay, Augmented reality, CareKit, CarPlay, Game Center, Generative AI, HealthKit, HomeKit, iCloud, ID Verifier, iMessage apps and stickers, Live Photos, Mac Catalyst, Machine learning, Maps, NFC, Photo editing, ResearchKit, SharePlay, ShazamKit, Sign in with Apple, Siri, Tap to Pay on iPhone, VoiceOver, Wallet. Для игры потенциально релевантны Game Center, iCloud (сохранение), VoiceOver — не читались.
+
+---
+
+## 13. Writing
+
+URL: `.../writing`
+
+| Правило | Число / деталь | Цитата |
+|---|---|---|
+| Голос и тон | у игры — «волнение и веселье»; тон меняется по ситуации (ошибка — прямо; успех — легко) | "the words in a game might convey excitement and fun" / "Match your tone to the context." |
+| Единые термины | составить список терминов и держаться его | "Create a list of common terms, and reference that list to keep your language consistent." |
+| Ясность и краткость | убрать лишние слова; читать вслух | "If you can use fewer words, do so. When in doubt, read your writing out loud." |
+| Простой язык | без жаргона и гендерных формулировок; учитывать локализацию | "Choose simple, plain language and write with accessibility and localization in mind" |
+| Порядок на экране | важное первым; несколько идей — на несколько экранов | "put the most important information first" |
+| Подписи кнопок | почти всегда глагол; без «умничанья» | "just saying \"Send\" often works better than \"Let's do it!\"" |
+| Шаги процесса | единое слово для перехода (Continue/Next), «Done» — завершение; «Get Started» — старт | "Begin with language like \"Get Started\" ... be consistent with what you choose." |
+| Регистр | выбрать правило для каждого типа элемента и не менять; title case — формально, sentence case — неформально | "Choose a style for each UI element type and use it consistently throughout your app" |
+| Притяжательные местоимения | редко; не использовать «we» | "Avoid using we altogether because it may be unclear who the \"we\" in question refers to." |
+| Жесты в тексте | «tap», не «click», на сенсорном устройстве | "not saying \"click\" for a touch device like iPhone or iPad where you mean \"tap.\"" |
+| Малый экран | телефон требует краткости | "their small screens require brevity" |
+| Пустые состояния | указать следующий шаг, кнопка/ссылка | "Provide clear next steps on any blank screens." |
+| Сообщения об ошибках | рядом с проблемой, без обвинения, сказать что делать; без «oops!» | "display it as close to the problem as possible, avoid blame, and be clear about what someone can do to fix it" |
+| Пример ошибки | вместо «That password is too short» — «Choose a password with at least 8 characters» | см. страницу |
+| Подписи настроек | просто и практично; описывать, что делает при включении | "Describe what it does when turned on, and people can infer the opposite." |
+| Отсылка к настройке | прямая ссылка/кнопка, а не описание пути | "provide a direct link or button, rather than trying to describe its location" |
+| Обращение к игроку (Inclusion) | «you/your»; не «the user/the player» | "It typically works well to use you and your to address people directly." (см. раздел 23) |
+
+Числа (число слов/символов для UI-текстов) в Writing не заданы: не подтверждено.
+
+---
+
+## 14. Settings
+
+URL: `.../settings`, `.../designing-for-games`
+
+| Правило | Число / деталь | Цитата |
+|---|---|---|
+| Умолчания | лучшие для большинства; не просить выбор после запуска | "Aim to provide default settings that give the best experience to the largest number of people." |
+| Количество | «минимум»; числа нет | "Minimize the number of settings you offer." |
+| Что выносить в настройки | общие и редко меняемые (в игре — сохранение, раскладка клавиш; аккаунт) | "Put general, infrequently changed settings in your custom settings area." |
+| Что не выносить | параметры конкретной задачи — на самом экране | "prefer letting people modify task-specific options without going to your settings area" |
+| Игры | игрок меняет подход внутри игры, а не через настройки | "In games, players tend to adjust their approach to a specific task as part of the gameplay, not as a settings option to change." |
+| Не дублировать системные | доступность, прокрутка и т.п. — системные; свои копии сбивают с толку | "Respect people's systemwide settings and avoid including redundant versions of them in your custom settings area." |
+| Не спрашивать то, что можно узнать | авто-определение контроллера, Dark Mode | "Avoid using settings to ask for setup information you can get in other ways." |
+| Как открывать | в играх — клавиша Esc (при клавиатуре); для телефона отдельно не указано | "in a game, players often use the Esc (Escape) key" |
+| Системные Settings | только самое редкое; кнопка, открывающая их | "consider providing a button that opens it directly from your interface" |
+| Где размещать кнопку настроек на телефоне | не найдено (в Game controls: второстепенные контролы/меню — вверху экрана) | "Place secondary controls, like menus, at the top of the screen." |
+| Подписи (Writing) | см. раздел 13 | — |
+
+---
+
+## 15. Launching, Loading, Progress indicators
+
+URL: `.../launching`, `.../loading`, `.../progress-indicators`, `.../onboarding`
+
+| Правило | Число / деталь | Цитата |
+|---|---|---|
+| Запуск | мгновенно; ожидание «пару секунд» уже много | "People want to start interacting with your app or game right away, and sometimes they don't want to wait more than a couple of seconds." |
+| Восстановление состояния | продолжить с того же места, включая мелкие детали | "Restore the previous state when your app restarts so people can continue where they left off." / "Restore granular details of the previous state as much as possible." |
+| Launch screen (iOS) | почти идентичен первому экрану; без текста, без рекламы, без логотипа; в текущей ориентации/теме | "Design a launch screen that's nearly identical to the first screen of your app or game." / "Avoid including text on your launch screen" |
+| Splash | в начале онбординга, если нужен | "consider displaying it at the beginning of your onboarding flow" |
+| Ориентация при старте | запускаться в текущей ориентации, если поддерживаются обе | "launch using the device's current orientation" |
+| Loading: показать что-то сразу | заглушки вместо пустоты | "Show something as soon as possible." |
+| Loading: фоновая загрузка | пока игрок занят меню/описанием уровня | "a game could load content in the background while players learn about the next level or view an in-game menu" |
+| Loading: долгие | подсказки по игре, советы | "give people something interesting to view while they wait" |
+| Loading: игры | свой экран загрузки допустим | "For games, consider creating a custom loading view." |
+| Progress: детерминированный | предпочитать; без застреваний, равномерный темп | "When possible, use a determinate progress indicator." / "Keep progress indicators moving" |
+| Progress: подпись | краткая, без «loading» | "Avoid vague terms like loading or authenticating because they seldom add value." |
+| Progress: отмена | дать остановить; при потере прогресса — alert | "When it's feasible, let people halt processing." |
+| Progress: место | одно и то же | "Display a progress indicator in a consistent location." |
+
+Чисел задержки (мс) в HIG нет: не подтверждено.
+
+---
+
+## 16. Undo and redo; подтверждение необратимого; случайные нажатия
+
+URL: `.../undo-and-redo`, `.../alerts`, `.../feedback`, `.../design-principles`
+
+| Правило | Число / деталь | Цитата |
+|---|---|---|
+| Принцип Agency | прощать ошибки: «отменить» дешевле, чем «подтвердить» | "Help people recover from mistakes." / "Recovering from the unexpected shouldn't cost people their time or work." (Design principles) |
+| Когда alert | только для необычного необратимого действия, которое могли нажать случайно | "when people take an uncommon destructive action that they can't undo, it's important to display an alert in case they initiated the action accidentally." (Alerts) |
+| Когда alert не нужен | частое отменяемое действие, даже деструктивное | "Avoid displaying alerts for common, undoable actions, even when they're destructive." (Alerts) |
+| Feedback: предупреждать о | неожиданной и необратимой потере | "Warn people when they initiate a task that can cause data loss that's unexpected and irreversible." |
+| Undo: предсказуемость | подписывать, что именно отменяется | "Help people predict the results of undo and redo as much as possible." |
+| Undo: показать результат | выделить, что изменилось (прокрутить к нему) | "Show the results of an undo or redo." |
+| Undo: сколько раз | без лишних лимитов | "Let people undo multiple times." |
+| Кнопки Undo/Redo | только при необходимости; стандартные символы; в toolbar | "Provide undo and redo buttons only when necessary." (символы: `arrow.uturn.backward` / `arrow.uturn.forward`, см. Icons) |
+| Жесты Undo iOS | не переопределять: тряска (shake), свайп тремя пальцами | "Avoid redefining standard gestures for undo and redo." |
+| Случайные нажатия | отдельного раздела нет; близкие правила: размер/отступ контролов (раздел 3), Cancel не default (раздел 6), опасное — вверху action sheet и красным (раздел 7), не показывать primary деструктивным | "people sometimes choose a primary button without reading it first" (Buttons) |
+| Двойное подтверждение | только в Assistive Access для трудно отменяемых действий | "Always ask for confirmation twice whenever people perform an action that's difficult to recover from" (Accessibility) |
+
+---
+
+## 17. Offering help
+
+URL: `.../offering-help`
+
+| Правило | Число / деталь | Цитата |
+|---|---|---|
+| Какую помощь давать | под задачу: простая — встроенная подпись; сложная — туториал | "you might help people perform simple, one- or two-step tasks by displaying an inline view that succinctly describes the task" |
+| Привязка к действию | помощь про текущее действие; легко отклонить | "directly relate the help you provide to the precise action or task people are doing right now and make it easy for people to dismiss or avoid the help" |
+| Единый язык и платформа | не «click» на телефоне | "don't write copy that tells people to click a button on an iPhone" |
+| Не объяснять стандартные элементы | только то, что уникально в приложении; графика/анимация вместо длинного текста | "Avoid bloating your help content by explaining how standard components or patterns work." |
+| Tips (подсказки) | короткие, 1–2 предложения; только для простых функций (не более трёх действий) | "Keep your tips to one or two sentences" / "If a feature requires more than three actions, it's probably too complicated for a tip." |
+| Типы tip | popover — не сдвигает контент; inline — не закрывает контент; annotation — указывает на элемент; hint — без привязки | "Display a popover tip when you want to preserve the content flow, or an inline tip when you want to ensure that surrounding information is visible." |
+| Показ по правилам | не показывать тем, кто уже использовал; частота, например раз в 24 часа | "set the display frequency so tips display at a reasonable cadence — for example, once every 24 hours" |
+| Реклама в tips | не допускается | "avoid including content that's promotional" |
+| Кнопка в справке | ведёт к настройкам/доп. материалам | "Use buttons to direct people to information or options." |
+| Tooltips (macOS/visionOS) | 60–75 символов — для курсора/взгляда; на телефоне не применимо | "limit tooltip content to a maximum of 60 to 75 characters" |
+| Где держать справку «как играть» | в HIG (Onboarding): туториал — в help, account или settings | "make sure it's easy to find ... in a help, account, or settings area" |
+
+---
+
+## 18. Gestures
+
+URL: `.../gestures`
+
+| Правило | Число / деталь | Цитата |
+|---|---|---|
+| Стандартные жесты (iOS) | Tap — активировать/выбрать; Swipe — показать действия, закрыть вид, прокрутка; Drag — переместить; Touch and hold — доп. контролы; Double tap — zoom in/out; Zoom (щипок) — масштаб; Rotate | таблица Standard gestures |
+| Не одним жестом | дать альтернативы (голос, клавиатура, Switch Control) | "Give people more than one way to interact with your app." |
+| Ожидаемое поведение | не использовать tap/swipe под уникальные действия; не изобретать жест вместо стандартного | "Avoid using a familiar gesture like tap or swipe to perform an action that's unique to your app" |
+| Отзывчивость | немедленная обратная связь, показывающая результат | "Handle gestures as responsively as possible." |
+| Недоступный жест | показать, почему не работает | "Indicate when a gesture isn't available." |
+| Свои жесты | только если нужно; заметные, простые, отличные от других, не единственный способ | "Not the only way to perform an important action in your app or game" |
+| Обучение свои жестам | дать моменты для обучения; если трудно описать — трудно выучить | "If you're finding it difficult to use simple language and graphics to describe a gesture, it may mean people will find the gesture difficult to learn" |
+| Жест + кнопка | жест-ускоритель дополняет кнопку (Back + свайп от края) | "Use shortcut gestures to supplement standard gestures, not replace them." |
+| Края экрана / системные жесты | не конфликтовать; в играх можно отложить системный жест | "avoid defining custom gestures that might conflict with these interactions" (подробнее — раздел 19) |
+| Одновременные жесты | допустимы в играх (джойстик + кнопки) | "a game might include multiple onscreen controls — such as a joystick and firing buttons — that people can operate at the same time" |
+| Системные жесты iOS | shake и 3-пальцевый свайп — undo/redo | таблица iOS, iPadOS |
+| Двойной тап: число задержки | не найдено | — |
+| Щипок/zoom: пределы | при поддержке zoom — задавать максимум и минимум масштаба (Scroll views) | см. раздел 21 |
+
+---
+
+## 19. Going full screen
+
+URL: `.../going-full-screen`
+
+| Правило | Число / деталь | Цитата |
+|---|---|---|
+| Когда предлагать | если опыт — игра, медиа или углублённая задача | "Consider offering a full-screen mode if your experience lets people play a game" |
+| Раскладка | подстраивать, но окно программно не менять; плавно, без «рывков» между режимами | "adjust your layout in full-screen mode, but don't programmatically resize your window" |
+| Основные контролы | остаются доступными без выхода | "Continue to provide access to essential features and controls so people can complete their task without exiting full-screen mode." |
+| Пауза при уходе | игра ставится на паузу, возврат — с того же места | "a game or a slideshow needs to pause automatically when people leave the experience" |
+| Выход | решает игрок, не автоматически | "Let people choose when to exit full-screen mode." |
+| Скрытие панелей | можно временно; вернуть привычным жестом (тап, свайп вниз) | "let people restore the hidden elements with a familiar gesture or action like tapping, swiping down" |
+| iOS: системные жесты | индикатор Home по умолчанию скрывается и появляется при касании низа экрана (один свайп — выход); при случайных выходах можно потребовать два свайпа | "If supporting this results in unexpected exits, you can enable two swipes rather than one to exit." |
+| macOS/iPadOS Dock | в играх можно игнорировать первый свайп снизу | "ask iPadOS to ignore an initial swipe up from the screen's bottom edge" |
+| macOS: вход | всегда выбирает игрок; в игре можно свой переключатель (toggle) | "In a game, you might also provide a custom toggle that turns full-screen mode on and off." |
+| Веб/PWA | в HIG про веб-полноэкранный режим не сказано: не подтверждено | — |
+
+---
+
+## 20. Toggles, Lists and tables, Labels
+
+URL: `.../toggles`, `.../lists-and-tables`, `.../labels`
+
+| Правило | Число / деталь | Цитата |
+|---|---|---|
+| Toggle: назначение | два противоположных состояния; для выбора из списка — другой компонент | "A toggle always lets people manage the state of something, so if you need to support other types of actions — such as choosing from a list of items — use a different component" |
+| Toggle: состояние очевидно | не только цветом | "Avoid relying solely on different colors to communicate state" |
+| Switch (iOS/iPadOS) | только в строке списка; подпись не нужна — контекст даёт строка | "Use the switch toggle style only in a list row." |
+| Switch: цвет | по умолчанию зелёный; свой — с достаточным контрастом | "Be sure to use a color that provides enough contrast with the uncolored appearance to be perceptible." |
+| Вне списка | кнопка, ведущая себя как toggle (смена фона) | "Outside of a list, use a button that behaves like a toggle, not a switch." |
+| Размеры switch (pt) / высота строки (pt) | не заданы в HIG: не подтверждено | — |
+| Lists: текст | короткий, без переносов; для длинного — заголовки + детальный вид | "Keep item text succinct so row content is comfortable to read." |
+| Lists: выбор | запись выбранной строки: кратко подсветить + галочка | "a table that lists options often highlights a row only briefly before adding an image — such as a checkmark" |
+| Lists: усечение | эллипсис в середине сохраняет начало и конец | "an ellipsis in the middle of text can make an item easier to distinguish" |
+| Lists: info-кнопка и шеврон | info — доп. сведения; шеврон — переход глубже | "Use an info button only to reveal more information about a row's content." |
+| Labels: назначение | небольшой нередактируемый текст | "Use a label to display a small amount of text that people don't need to edit." |
+| Labels: шрифт | системный; Dynamic Type по умолчанию | "Prefer system fonts." |
+| Labels: цвета важности | Label — основное; Secondary — подзаголовок; Tertiary — недоступное; Quaternary — водяной знак | таблица Labels |
+| Labels: полезный текст | разрешать выделить/скопировать (ошибки, адреса) | "Make useful label text selectable." |
+
+---
+
+## 21. Scroll views
+
+URL: `.../scroll-views`
+
+| Правило | Число / деталь | Цитата |
+|---|---|---|
+| Стандартный скролл | поддерживать; у кастомного — упругость | "Support default scrolling gestures and keyboard shortcuts." |
+| Видно, что есть прокрутка | показывать часть контента у края | "displaying partial content at the edge of a view indicates that there's more content in that direction" |
+| Вложенность | не вкладывать scroll того же направления | "Avoid putting a scroll view inside another scroll view with the same orientation." |
+| Постраничность | допустима; перекрытие на единицу контента (строка текста) | "you can define a unit of overlap, such as a line of text" |
+| Page control (iOS) | при постраничном режиме; без индикатора прокрутки по той же оси | "don't show the scrolling indicator on the same axis" |
+| Авто-прокрутка | только чтобы показать релевантное и минимально | "automatically scroll the content only as much as necessary to help people retain context" |
+| Zoom | задавать максимум и минимум масштаба | "If you support zoom, set appropriate maximum and minimum scale values." |
+| Scroll edge effect | только когда под плавающими элементами есть прокрутка; один на вид; предпочитать automatic | "Scroll edge effects aren't decorative." / "Apply one scroll edge effect per view." |
+
+---
+
+## 22. Popovers
+
+URL: `.../popovers`
+
+| Правило | Число / деталь | Цитата |
+|---|---|---|
+| Назначение | немного информации/функций; закрывается после действия | "Use a popover to expose a small amount of information or functionality." |
+| iPhone (compact) | не показывать popover в compact-видах; использовать sheet | "Avoid displaying popovers in compact views. ... for compact views, use all available screen space by presenting information in a full-screen modal view like a sheet instead." |
+| Один за раз | не каскадом; не накрывать другим видом (кроме alert) | "Show one popover at a time." / "Don't show another view over a popover." |
+| Закрытие | тап вне; Close/Cancel/Done — только для ясности; работу сохранять | "Always save work when automatically closing a nonmodal popover." |
+| Предупреждения | не в popover — их можно пропустить | "Avoid using a popover to show a warning." |
+| Размер/позиция | стрелка на источник; не закрывать источник; не больше нужного | "Avoid making a popover too big." |
+
+---
+
+## 23. Inclusion, Branding, Icons (применимое к игре)
+
+URL: `.../inclusion`, `.../branding`, `.../icons`
+
+| Правило | Число / деталь | Цитата |
+|---|---|---|
+| Обращение | «you/your»; не «the user/the player»; «we» — только для компании | "Referring to people indirectly as the user or the player can make your experience feel distant and unwelcoming." |
+| Тон | учесть разные точки зрения (академичность отпугивает) | "an academic tone can make an app or game seem like it welcomes only high levels of education" |
+| Термины, разговорные выражения, юмор | определять термины; простой язык вместо идиом; юмор — осторожно (трудно переводится) | "Replace colloquial expressions with plain language." / "Consider carefully before including humor." |
+| Гендер | избегать лишних упоминаний пола; нейтральные формулировки | "avoiding unnecessary references to specific genders" |
+| Стереотипы | не использовать стереотипные профессии/роли и «злодеев» с расовыми/гендерными клише | "avoid stereotypical representations ... that may perpetuate real-world racial or gender stereotypes" |
+| Цвет и локализация | у цвета разный смысл в культурах | "make sure your color choices communicate the same thing in each version of your software" |
+| Доступность | поддержка VoiceOver, субтитров, Switch Control; не предполагать, что у кого-то нет желания играть | "avoid assuming that any disability might prevent someone from wanting to enjoy the experience" |
+| Branding: голос | тон бренда — во всех текстах | "Use your brand's unique voice and tone in all the written communication you display." |
+| Branding: акцентный цвет | сдержанно; для главного действия/статуса; бренд-цвет можно в слое контента | "Using your brand color too broadly can overwhelm your interface and dilute its impact." |
+| Branding: свой шрифт | допустим; для заголовков — свой, для основного текста — системный; Dynamic Type/Bold Text | "use a custom font for headlines and subheadings while using system fonts for body copy and captions" |
+| Branding: знакомые компоненты | кастомизация без потери размера/места/поведения | "Express your brand with familiar components." |
+| Branding: не за счёт контента | логотип не повсюду | "Resist the temptation to display your logo throughout your app or game unless it's essential" |
+| Icons: единый стиль | одинаковые размер, детали, толщина штриха, перспектива | "all interface icons in your app need to use a consistent size, level of detail, stroke thickness (or weight), and perspective" |
+| Icons: вес как у текста | по умолчанию — такой же вес | "match the weights of interface icons and adjacent text" |
+| Icons: текст в иконке | только если необходим; локализовать | "Include text in your design only when it's essential for conveying meaning." |
+| Icons: формат и описание | вектор (PDF/SVG); альтернативный текст для VoiceOver | "use a vector format like PDF or SVG" / "Provide alternative text labels for custom interface icons." |
+| Icons: стандартные символы | Done/Save `checkmark`; Cancel/Close `xmark`; Delete `trash`; Undo `arrow.uturn.backward`; More `ellipsis`; Add `plus` | таблица Standard icons |
+
+---
+
+## 24. Privacy; Entering data
+
+URL: `.../privacy`, `.../entering-data`
+
+| Правило | Число / деталь | Цитата |
+|---|---|---|
+| Запрашивать только нужное | и только когда функция реально нужна, не при запуске | "Request permission only when your app clearly needs access to the data or resource." / "Avoid requesting permission at launch unless the data or resource is required for your app to function." |
+| Текст запроса | одно полное предложение, активный залог, sentence case, с точкой | "Aim for a brief, complete sentence that's straightforward, specific, and easy to understand." |
+| Экран перед системным запросом | одна кнопка («Continue»/«Next»), без Cancel/Close, не «Allow» | "Include only one button and make it clear that it opens the system alert." |
+| Открытость | какие данные собираются и зачем | "Be transparent about how your app collects and uses people's data." |
+| Entering data: не спрашивать лишнего | брать из системы/настроек | "Get information from the system whenever possible." |
+| Выбор вместо ввода | список, меню, picker вместо текста | "When possible, offer choices instead of requiring text entry." |
+| Валидация | сразу при вводе | "Dynamically validate field values." |
+| Обязательные поля | кнопка «Next/Continue» доступна после ввода | "make the button available only after people enter the data you require" |
+| Подсказки в полях | пример формата/описание | "use hint or placeholder text so people know how to format the information" (Writing) |
+
+---
+
+## 25. Design principles (уточнение к разделу 11)
+
+URL: `.../design-principles` (Change log: 8 июня 2026, «Reintroduced design principles»)
+
+Восемь принципов в HIG: Purpose, Agency, Responsibility, Familiarity, Flexibility, Simplicity, Craft, Delight. Названий «Hierarchy / Harmony / Consistency» в этой странице HIG нет (они из WWDC25, см. раздел 11).
+
+| Правило | Число / деталь | Цитата |
+|---|---|---|
+| Agency | дать свободу; управляемый поток — легко пропустить; прощать ошибки | "When a guided flow is necessary, make it easy to skip or escape so people can get to the main experience quickly." |
+| Familiarity | единые визуал и поведение; ясная обратная связь | "Once you establish a behavior or appearance for an element, apply it throughout your design." |
+| Flexibility | позиции контента и контролов предсказуемы при смене конфигурации; много способов ввода | "Keep content and controls in consistent, predictable positions" |
+| Simplicity | только необходимое; краткость; иерархия | "Include just what's necessary." / "Be concise." |
+| Delight | не путать радость с украшательством; эмоция игры — «thrill» | "Don't mistake delight for decoration." |
 
 ---
 
 ## Что не найдено / не подтверждено
 
 - Числовые поля (margins) для iPhone и ширина строки текста в Layout — нет (только tvOS 60/80 pt).
-- Правило ALL CAPS для текста в iOS-интерфейсе — не найдено.
-- Число кнопок в action sheet для iOS — не задано (только watchOS: ≤4).
-- Число вкладок tab bar на iPhone — числом не задано (на iPad при кастомизации — по умолчанию ≤5).
-- Пауза на сенсорном экране — отдельных правил нет (только «Menu = settings/pause» для контроллера).
-- Страница Settings не читалась.
+- Правило про ALL CAPS — не найдено (Writing даёт лишь выбор title/sentence case единообразно).
+- Число кнопок action sheet в iOS — не задано (только watchOS: ≤4).
+- Число вкладок tab bar на iPhone — числом не задано (на iPad при кастомизации ≤5).
+- Отдельные правила паузы на сенсорном экране — нет (только «Menu = settings/pause» для контроллера и «pause automatically» при уходе из полноэкранного режима).
 - Длительности/кривые анимаций в мс — нет.
-- Формулировки принципов Hierarchy / Harmony / Consistency — только через сниппет поиска к WWDC25 102/356.
-- Реальный минимум размера текста для веб-игры (CSS px vs pt) — HIG даёт pt; соответствие px требует проверки.
+- Числа для текстов интерфейса (максимум слов/символов) — нет (60–75 символов только для tooltips macOS/visionOS).
+- Размеры строк списка и переключателя в pt (Toggles, Lists) — не заданы.
+- Тайминги двойного тапа, пороги жестов — не заданы.
+- Веб/PWA-специфика (полноэкранный режим в браузере, перевод pt в CSS px, Liquid Glass для веба) — в HIG не обсуждается.
+- Где на телефоне размещать кнопку настроек — не указано (есть лишь «secondary controls ... at the top of the screen»).
+- Отдельного раздела про «случайные нажатия» нет; собраны косвенные правила (раздел 16).
+- Страницы-подгруппы Components (Content, Layout and organization, Menus and actions, Navigation and search, Presentation, Selection and input, Status, System experiences) и их состав не открывались; остальные страницы Inputs, Technologies, Patterns (см. раздел 12) не читались.
+- Формулировки Hierarchy / Harmony / Consistency — только через сниппет поиска к WWDC25 102/356; в актуальном HIG (design-principles, 2026) принципы другие.
 
 ---
 
 ## Источники
 
+- https://developer.apple.com/design/human-interface-guidelines (корневая страница)
+- https://developer.apple.com/design/human-interface-guidelines/getting-started
+- https://developer.apple.com/design/human-interface-guidelines/foundations
+- https://developer.apple.com/design/human-interface-guidelines/patterns
+- https://developer.apple.com/design/human-interface-guidelines/components
+- https://developer.apple.com/design/human-interface-guidelines/inputs
+- https://developer.apple.com/design/human-interface-guidelines/technologies
+- https://developer.apple.com/design/human-interface-guidelines/design-principles
 - https://developer.apple.com/design/human-interface-guidelines/designing-for-games
 - https://developer.apple.com/design/human-interface-guidelines/game-controls
 - https://developer.apple.com/design/human-interface-guidelines/layout
@@ -367,6 +663,25 @@ URL: `.../materials`, `.../layout`, `.../color`, `.../buttons`, `.../tab-bars`, 
 - https://developer.apple.com/design/human-interface-guidelines/playing-audio
 - https://developer.apple.com/design/human-interface-guidelines/motion
 - https://developer.apple.com/design/human-interface-guidelines/materials
+- https://developer.apple.com/design/human-interface-guidelines/writing
+- https://developer.apple.com/design/human-interface-guidelines/settings
+- https://developer.apple.com/design/human-interface-guidelines/launching
+- https://developer.apple.com/design/human-interface-guidelines/loading
+- https://developer.apple.com/design/human-interface-guidelines/progress-indicators
+- https://developer.apple.com/design/human-interface-guidelines/offering-help
+- https://developer.apple.com/design/human-interface-guidelines/undo-and-redo
+- https://developer.apple.com/design/human-interface-guidelines/gestures
+- https://developer.apple.com/design/human-interface-guidelines/going-full-screen
+- https://developer.apple.com/design/human-interface-guidelines/toggles
+- https://developer.apple.com/design/human-interface-guidelines/lists-and-tables
+- https://developer.apple.com/design/human-interface-guidelines/labels
+- https://developer.apple.com/design/human-interface-guidelines/scroll-views
+- https://developer.apple.com/design/human-interface-guidelines/popovers
+- https://developer.apple.com/design/human-interface-guidelines/branding
+- https://developer.apple.com/design/human-interface-guidelines/inclusion
+- https://developer.apple.com/design/human-interface-guidelines/icons
+- https://developer.apple.com/design/human-interface-guidelines/privacy
+- https://developer.apple.com/design/human-interface-guidelines/entering-data
 - https://developer.apple.com/videos/play/wwdc2025/356/ (только сниппет поиска)
 - https://developer.apple.com/videos/play/wwdc2025/102/ (только сниппет поиска)
 - https://developer.apple.com/videos/play/meet-with-apple/243/ (сниппет: 44 pt по умолчанию, 28 pt для менее важных; не читалась целиком)

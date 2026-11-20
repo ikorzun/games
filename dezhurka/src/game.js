@@ -89,7 +89,7 @@
   <div class="dz-body">
     <section class="dz-stage" aria-label="${T('dz.stage.label')}">
       <div class="dz-window">
-        <div class="dz-scene" data-act="zoom">${DZ.art.scene(T('dz.glass'), T('dz.exit'), T('dz.board'))}</div>
+        <div class="dz-scene">${DZ.art.scene(T('dz.glass'), T('dz.exit'), T('dz.board'))}</div>
         <button type="button" class="dz-iconbtn dz-zoombtn" id="dz-zoom" data-act="zoom" aria-pressed="false" hidden>${icon('zoom')}</button>
       </div>
     </section>
@@ -114,6 +114,8 @@
     doc.addEventListener('keydown', onKey);
     root.addEventListener('resize', placeSheet);
     el.sheet.addEventListener('pointerdown', dragStart);
+    const scene = q('.dz-scene');
+    for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) scene.addEventListener(type, sceneGesture);
   }
 
   // ————————————————————————————————————————————— события
@@ -151,6 +153,32 @@
   function onKey(e) {
     if (e.key !== 'Escape') return;
     if (st.modal) closeModal(); else if (st.sheet) closeSheet();
+  }
+
+  // Жесты окна — стандартные: двойное касание приближает и отдаляет, щипок — тоже. Кнопка-лупа делает то же самое.
+  const touches = new Map();
+  let pinch = null, lastTap = null, quietUntil = 0;
+  function sceneGesture(e) {
+    const span = () => { const p = Array.from(touches.values()); return Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y); };
+    if (e.type === 'pointerdown') {
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY });
+      if (touches.size === 2) { pinch = { start: span(), done: false }; lastTap = null; }
+      return;
+    }
+    const tp = touches.get(e.pointerId);
+    if (!tp) return;
+    if (e.type === 'pointermove') {
+      tp.x = e.clientX; tp.y = e.clientY;
+      if (pinch && !pinch.done && touches.size === 2) {
+        const k = span() / Math.max(pinch.start, 1);
+        if ((k > 1.22 && !st.zoom) || (k < 0.82 && st.zoom)) { pinch.done = true; toggleZoom(); }
+      }
+      return;
+    }
+    touches.delete(e.pointerId);
+    if (pinch) { if (touches.size === 0) { pinch = null; quietUntil = e.timeStamp + 350; } return; }
+    if (e.type === 'pointercancel' || e.timeStamp < quietUntil || Math.hypot(e.clientX - tp.x0, e.clientY - tp.y0) > 12) { lastTap = null; return; }
+    if (lastTap && e.timeStamp - lastTap.t < 380 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 36) { lastTap = null; toggleZoom(); } else lastTap = { t: e.timeStamp, x: e.clientX, y: e.clientY };
   }
 
   // Лист тянется за ручку: вниз — свернуть или убрать, вверх — развернуть. Кнопка «закрыть» остаётся всегда.

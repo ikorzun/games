@@ -2,7 +2,8 @@
 //   — область касания не меньше 44×44 pt;
 //   — текст не мельче 11 pt;
 //   — контраст текста с фоном не ниже 4,5:1 (для крупного текста от 18 pt или от 14 pt жирного — 3:1);
-//   — нет горизонтальной прокрутки, в том числе при размере текста 200 %.
+//   — нет горизонтальной прокрутки, в том числе при размере текста 200 %;
+//   — названия вещей в лотке не рвутся посреди слова.
 // Скрипт проходит экраны игры на телефоне и на широком экране и печатает нарушения.
 //   node test/hig_audit.mjs [--dist] [--report]     (--report: не падать, только список)
 import { createRequire } from 'node:module';
@@ -79,6 +80,12 @@ function collect({ MIN_TAP, MIN_TEXT }) {
     const need = large ? 3 : 4.5;
     if (ratio < need - 0.02) out.push(`контраст ${ratio.toFixed(2)}:1 (нужно ${need}): ${name(el)} ${cs.color} на rgb(${bg.map(Math.round).join(', ')})`);
   }
+  // название вещи под рисунком — одно слово: при обычном размере текста оно не должно рваться на две строки
+  if (parseFloat(getComputedStyle(document.documentElement).fontSize) <= 16) {
+    for (const el of document.querySelectorAll('#dz .dz-item-name')) {
+      if (visible(el) && el.getBoundingClientRect().height > parseFloat(getComputedStyle(el).lineHeight) * 1.5) out.push(`перенос названия вещи: ${name(el)}`);
+    }
+  }
   if (document.documentElement.scrollWidth > window.innerWidth) out.push('горизонтальная прокрутка страницы');
   return out;
 }
@@ -139,6 +146,7 @@ let all = [];
 try {
   all = all.concat(await audit(browser, 'телефон 390×760', { width: 390, height: 760 }));
   all = all.concat(await audit(browser, 'малый телефон 360×640', { width: 360, height: 640 }));
+  all = all.concat(await audit(browser, 'телефон 375×667', { width: 375, height: 667 }));
   all = all.concat(await audit(browser, 'широкий 1280×800', { width: 1280, height: 800 }));
   all = all.concat(await audit(browser, 'малый телефон, текст 200 %', { width: 360, height: 640 }, 3));
 } finally { await browser.close(); }
