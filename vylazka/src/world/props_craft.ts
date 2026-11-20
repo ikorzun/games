@@ -875,6 +875,13 @@ function stickerDeck(seed: number): () => number {
  * них более детальное изображение»; картинки — слой stickers, world/papers.ts). Слой — выше всех, кого она накрывает. Без
  * картинки (tile < 0) — прежняя: цветная, иногда с тёмными «строками».
  */
+/** Сколько стороны угла отгибается у отклеившейся наклейки. */
+const PEEL = 0.34;
+/** Отклеилась ли наклейка уголком: жребий от её номера и места (мимо общего потока), примерно каждая пятнадцатая. */
+export function stickerPeels(i: number, u: number, v: number): boolean {
+  return (Math.abs(Math.sin(i * 7.31 + u * 113.7 + v * 59.3) * 24634.6345) % 1) < 0.07;
+}
+
 function sticker(xf: Xf, rnd: Rnd, pl: Plane, i: number, u: number, v: number, size: number, tile = -1): void {
   const al = rnd() * Math.PI * 2;
   const sh = outline(rnd, size, al);
@@ -915,10 +922,41 @@ function sticker(xf: Xf, rnd: Rnd, pl: Plane, i: number, u: number, v: number, s
     const tint: V = [fade, fade, fade * (0.96 + h * 0.04)];
     const c = planePt(pl, u, v, lvl + 1);
     const mid = uvOf([0, 0]);
-    for (let k = 0; k < sh.pts.length; k++) {
-      const a = sh.pts[k]!;
-      const b = sh.pts[(k + 1) % sh.pts.length]!;
-      triUv(xf, c, planePt(pl, u + a[0], v + a[1], lvl + 1), planePt(pl, u + b[0], v + b[1], lvl + 1), pl.n, MAT.print, tint, mid, uvOf(sh.raw[k]!), uvOf(sh.raw[(k + 1) % sh.raw.length]!));
+    // Отклеившийся уголок (квиз партнёра 20.11: «Да, доделать материал»): у пары наклеек на гроздь самый дальний угол отогнут
+    // и лёг изнанкой наружу — белой бумагой, кончиком чуть от стены; под ним — след клея. Жребий — от номера и места наклейки,
+    // мимо общего потока: раскладка пятна не сдвигается.
+    let pts = sh.pts;
+    let raw = sh.raw;
+    if (!star && !border && stickerPeels(i, u, v)) {
+      let kp = 0;
+      for (let k = 1; k < pts.length; k++) if (Math.hypot(pts[k]![0], pts[k]![1]) > Math.hypot(pts[kp]![0], pts[kp]![1])) kp = k;
+      const n = pts.length;
+      const at = <T extends readonly [number, number]>(arr: readonly T[], k: number): T => arr[(k + n) % n]!;
+      const cut = (arr: readonly (readonly [number, number])[], toward: number): [number, number] => {
+        const p = at(arr, kp);
+        const q = at(arr, toward);
+        return [p[0] + (q[0] - p[0]) * PEEL, p[1] + (q[1] - p[1]) * PEEL];
+      };
+      const A = cut(pts, kp - 1);
+      const B = cut(pts, kp + 1);
+      const P = pts[kp]!;
+      pts = [...pts.slice(0, kp), A, B, ...pts.slice(kp + 1)];
+      raw = [...raw.slice(0, kp), cut(raw, kp - 1), cut(raw, kp + 1), ...raw.slice(kp + 1)];
+      // Уголок, перегнутый по линии AB: вершина отражена через неё и отходит от стены.
+      const dx = B[0] - A[0];
+      const dy = B[1] - A[1];
+      const t = ((P[0] - A[0]) * dx + (P[1] - A[1]) * dy) / Math.max(1e-9, dx * dx + dy * dy);
+      const F: [number, number] = [A[0] + dx * t, A[1] + dy * t];
+      const R: [number, number] = [2 * F[0] - P[0], 2 * F[1] - P[1]];
+      const curl = 0.003 + size * 0.04;
+      tri(xf, planePt(pl, u + A[0], v + A[1], lvl + 3), planePt(pl, u + B[0], v + B[1], lvl + 3), add(planePt(pl, u + R[0], v + R[1], lvl + 3), mul(pl.n, curl)), pl.n, MAT.paper, [1.3, 1.27, 1.18]);
+      // След клея там, где был уголок: пыльный, темнее стены.
+      tri(xf, planePt(pl, u + A[0], v + A[1], lvl), planePt(pl, u + P[0], v + P[1], lvl), planePt(pl, u + B[0], v + B[1], lvl), pl.n, MAT.paper, [0.52, 0.49, 0.42]);
+    }
+    for (let k = 0; k < pts.length; k++) {
+      const a = pts[k]!;
+      const b = pts[(k + 1) % pts.length]!;
+      triUv(xf, c, planePt(pl, u + a[0], v + a[1], lvl + 1), planePt(pl, u + b[0], v + b[1], lvl + 1), pl.n, MAT.print, tint, mid, uvOf(raw[k]!), uvOf(raw[(k + 1) % raw.length]!));
     }
   } else emit(sh.pts, lvl + 1, paint.mat, bodyTint);
   // Тёмные «строки» — 2–3 полоски без смысла; у звёзд их нет, у наклейки с картинкой — тоже (числа на них всё равно берутся).

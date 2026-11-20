@@ -10,6 +10,10 @@
 
 import { HANG_OBJ } from '../world/objects';
 import { GRASS_PRESS_MAT, GRASS_PRESS_Y } from '../world/grass';
+import { PAPER_LAYERS } from '../world/papers';
+
+/** Слой стопки бумаги с картинками наклеек: у них блик плёнки (квиз партнёра 20.11). */
+const STICKER_LAYER = PAPER_LAYERS.indexOf('stickers');
 
 /** Общая часть: профиль луча и затухание. Используется миром, пылью и роем. */
 /**
@@ -1080,12 +1084,15 @@ void main() {
   // Надписи и плакаты: uv указывает в атлас, а не в мир.
   vec3 ink = vec3(1.0);
   vec2 uvw = vUv;
+  // Наклейка — плёнка, а не бумага: под фонарём на ней блик (ниже, у света).
+  float film = 0.0;
   if (cls == 6 && vUv.x >= 2.0) {
     // Бумага (world/papers.ts): u сдвинуто на 2 + номер слоя. Каждый приход стирает — и на листе это
     // видно так же, как в памяти: чем сильнее стёрто место, тем более мелкая копия листа берётся. Лица
     // и буквы уходят первыми, пятна света и тени остаются, а сам лист выцветает к цвету бумаги.
     vec2 pu = vec2(fract(vUv.x), vUv.y);
     float lay = floor(vUv.x) - 2.0;
+    film = 1.0 - step(0.5, abs(lay - ${STICKER_LAYER}.0));
     float fadeP = smoothstep(0.0, 0.62, uErase.w);
     float worn = 4.5 * fadeP;
     vec3 pg;
@@ -1470,6 +1477,17 @@ void main() {
   // То же на просвет: солнце за листом, отсвет от стены позади него и свет потолка сквозь лепесток,
   // на который смотрят снизу.
   if (thin > 0.0) col += glowThrough * thin * (uKeyColor * (max(-dot(N, uKeyDirV), 0.0) * shadowKey) + uLightColor * bounceTint * (bounce0 * 0.65 * max(-dot(N, toB / max(db, 1e-3)), 0.0)) + amb * (0.9 * ao * lit * max(-up, 0.0)));
+
+  // Наклейка — плёнка (квиз партнёра 20.11: «Да, доделать материал»): под фонарём на ней узкий блик, а плёнка не гладкая —
+  // блик ломается по морщинам и пузырям и ползёт, пока идёшь. На бумажных листах и плакатах его нет.
+  if (film > 0.0) {
+    vec3 Tf = normalize(cross(N, abs(N.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+    vec3 Bf = cross(N, Tf);
+    vec2 wr = vec2(softNoise(vWorld * 34.0 + 1.7), softNoise(vWorld * 34.0 + 8.3)) - 0.5;
+    vec3 Nf = normalize(N + (Tf * wr.x + Bf * wr.y) * 0.22);
+    vec3 Hf = normalize(L + normalize(-vPosV));
+    col += uLightColor * (lb.w * shadow * facing * 0.3 * pow(max(dot(Nf, Hf), 0.0), 80.0));
+  }
 
   // Мокрый пол и плитка отражают освещённое пятно: блик тянется от дальней стены к ногам.
   float gloss = max(wet, mi == 12 ? 1.0 : (mi == 18 ? 0.5 : 0.0)) * step(0.5, up);

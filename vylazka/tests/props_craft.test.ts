@@ -6,7 +6,7 @@ import type { MeshData } from '../src/world/kit';
 import { MAT } from '../src/world/materials';
 import { PAPER_H, PAPER_LAYERS, PAPER_U0, PAPER_W, STICKER_CELL, STICKER_TILES } from '../src/world/papers';
 import { Xf } from '../src/world/props';
-import { CRAFT_PROPS } from '../src/world/props_craft';
+import { CRAFT_PROPS, stickerPeels } from '../src/world/props_craft';
 import type { PropSpec } from '../src/world/props_more';
 
 /** Допуск по габариту, м: мятость лепестков, торцы труб у пола, толщина слоёв наклеек. */
@@ -282,5 +282,38 @@ describe('картинки наклеек (партнёр 19.11: «сделат�
         expect(t.length, `${n}, сид ${seed}: разных картинок`).toBeGreaterThanOrEqual(least);
       }
     }
+  });
+});
+
+describe('наклейки — плёнка, уголки отклеиваются (квиз партнёра 20.11: «Да, доделать материал»)', () => {
+  it('уголок отклеен примерно у каждой пятнадцатой наклейки', () => {
+    let n = 0;
+    let peel = 0;
+    for (let i = 0; i < 300; i++) {
+      for (const u of [-0.31, 0.07, 0.22]) {
+        n += 1;
+        if (stickerPeels(i, u, 0.4 + i * 0.0013)) peel += 1;
+      }
+    }
+    expect(peel / n).toBeGreaterThan(0.03);
+    expect(peel / n).toBeLessThan(0.12);
+  });
+
+  it('в грозди на стене — пара отогнутых уголков: белая изнанка наружу, кончик отходит от стены', () => {
+    let withFlap = 0;
+    for (const seed of SEEDS) {
+      const m = build(CRAFT_PROPS.sticker_patch!, seed).mesh;
+      let flaps = 0;
+      for (let t = 0; t < m.index.length; t += 3) {
+        const a = m.index[t]!;
+        if (m.mat[a] !== MAT.paper || Math.abs(m.color[a * 4]! - 1.3) > 1e-4 || Math.abs(m.color[a * 4 + 1]! - 1.27) > 1e-4) continue;
+        const zs = [0, 1, 2].map((k) => m.position[m.index[t + k]! * 3 + 2]!);
+        expect(Math.max(...zs) - Math.min(...zs), `сид ${seed}: кончик уголка лежит на стене`).toBeGreaterThan(0.0025);
+        flaps += 1;
+      }
+      expect(flaps, `сид ${seed}: уголков`).toBeLessThan(7);
+      if (flaps > 0) withFlap += 1;
+    }
+    expect(withFlap / SEEDS.length).toBeGreaterThan(0.6);
   });
 });
