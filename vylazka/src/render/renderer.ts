@@ -2679,6 +2679,14 @@ export class GameRenderer {
       const slide = m.userData.slide as THREE.Mesh | undefined;
       if (slide) slide.visible = !this.debugSlidesOff;
     }
+    // Вещи и фигуры чужого яруса — как его чанки: не рисуются (смоук CI, 20.11: «Фигура 4» партнёра ярусом ниже рисовалась от
+    // самого люка — 14 частей в кадр и в тень, 129 вызовов вместо 101). Видимость вещей игра ставит каждый кадр (setThing), здесь
+    // она только гасится. Кроме вещи с сеткой: искомое в темноте видно сквозь стены — и сквозь пол, это подсказка, куда идти.
+    for (const t of this.things.values()) {
+      if (!t.mesh.visible || t.wire?.visible) continue;
+      const y = t.mesh.position.y;
+      if (y < this.tierBand[0] || y > this.tierBand[1]) t.mesh.visible = false;
+    }
     for (const m of this.pocket) m.visible = true;
 
     // Красная сетка на всём видимом. Линии строятся по мере надобности: то, что рядом с камерой, — сразу

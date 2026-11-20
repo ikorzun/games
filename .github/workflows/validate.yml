@@ -93,12 +93,30 @@ jobs:
       - run: npm test
       - name: Build (web-plain) + dist checks
         run: npm run build
-      - name: Build (Playgama) + dist checks
-        run: npm run build:playgama
       - name: Install Chromium for smoke
         run: npx playwright-core install --with-deps chromium
       - name: Smoke (web-plain build) + layout matrix
         run: npm run smoke:matrix -- --no-shots
+
+  # Смоук сборки Playgama — отдельным job'ом рядом с основным: каждый смоук в программной отрисовке идёт около 1 ч 40 мин, и
+  # подряд (3 ч 20 мин) прогон почти всегда отменял следующий пуш — с утра 20.11 ни один не дошёл до конца.
+  vylazka-playgama:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vylazka
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: vylazka/package-lock.json
+      - run: npm ci
+      - name: Build (Playgama) + dist checks
+        run: npm run build:playgama
+      - name: Install Chromium for smoke
+        run: npx playwright-core install --with-deps chromium
       - name: Smoke (Playgama build, mock platform)
         run: npm run smoke -- --dist dist-playgama
       - uses: actions/upload-artifact@v4
