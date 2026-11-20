@@ -22,7 +22,7 @@ import { ColliderSet } from '../src/world/colliders';
 import type { FlatMark } from '../src/world/flat';
 import type { BuiltLevel, ItemSpot } from '../src/world/level';
 import type { LevelObject } from '../src/world/objects';
-import { bodyRolled, buildLevel, cellToWorld, grassRolled, tierFloor } from '../src/world/level_build';
+import { BODY_CAPS, bodyRolled, buildLevel, cellToWorld, grassRolled, tierFloor } from '../src/world/level_build';
 import { ENV_BUNKER, ENV_OFFICE, ENV_YELLOW } from '../src/world/pockets';
 import { ALL_PROPS } from '../src/world/props_all';
 import { DOOR_IMAGE, DOOR_NAME, SCREEN_IMAGES } from '../src/world/screens';
@@ -3398,7 +3398,7 @@ describe('собрано только там, куда смотрит герой
       g.teleport(node.x, node.y, node.z, face + Math.PI, -0.3);
       h.run(4);
       expect(g.bodyPress, `сид ${seed}: отвернулся`).toBe(1);
-      expect(h.r.grassBody?.caps).toBe(6);
+      expect(h.r.grassBody?.caps).toBe(BODY_CAPS);
       // Смотрит — поднимается медленно: за 4 с — на пятую часть, не больше.
       g.teleport(node.x, node.y, node.z, face, -0.45);
       h.run(4);

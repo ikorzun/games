@@ -255,10 +255,13 @@ export const BODY_CHANCE = 0.4;
 export const bodyRolled = (seed: number): boolean => hash01(19, 0xb0d1, seed ^ 0x11) < BODY_CHANCE;
 
 /**
- * Силуэт лежащего на спине человека — шесть капсул (ax, az, bx, bz, радиус): голова, туловище, две руки, две ноги. Середина —
- * (cx, cz), ось тела — угол yaw (от ног к голове); рост около 1,85 м. Руки и ноги чуть по-разному у каждого следа: одна рука
- * бывает закинута за голову.
+ * Силуэт лежащего на спине человека — восемь капсул (ax, az, bx, bz, радиус): голова, плечи, туловище, таз, две руки, две ноги.
+ * Середина — (cx, cz), ось тела — угол yaw (от ног к голове); рост около 1,9 м с примятым по краю. Плечи и таз лежат поперёк
+ * оси: без них силуэт читался «колбасой» (кадры 20.11; партнёр: «Сделай контур следа чётче»), а голова над плечами и разведённые
+ * ноги — это уже человек. Туловище — третья капсула (от плеч к тазу): вдоль неё «причёсана» примятая трава (render, uBodyK).
+ * Руки и ноги чуть по-разному у каждого следа: одна рука бывает закинута за голову.
  */
+export const BODY_CAPS = 8;
 export function bodyCapsules(cx: number, cz: number, yaw: number, rnd: () => number): [number, number, number, number, number][] {
   const ux = Math.cos(yaw);
   const uz = Math.sin(yaw);
@@ -266,15 +269,17 @@ export function bodyCapsules(cx: number, cz: number, yaw: number, rnd: () => num
   const cap = (a: [number, number], b: [number, number], r: number): [number, number, number, number, number] => [a[0], a[1], b[0], b[1], r];
   const spread = 0.08 * rnd();
   const armUp = rnd() < 0.3;
-  const handL = 0.1 * rnd();
+  const handL = 0.05 + 0.1 * rnd();
   const footR = 0.1 * rnd();
   return [
-    cap(p(0.78, 0), p(0.84, 0), 0.11),
-    cap(p(0.6, 0), p(0.02, 0), 0.18),
-    cap(p(0.52, 0.2), p(handL, 0.3 + spread), 0.055),
-    armUp ? cap(p(0.52, -0.2), p(1.02, -0.27), 0.055) : cap(p(0.52, -0.2), p(-0.02, -0.32 - spread), 0.055),
-    cap(p(-0.02, 0.09), p(-0.92, 0.1 + spread), 0.08),
-    cap(p(-0.02, -0.09), p(-0.9, -0.12 - footR), 0.08),
+    cap(p(0.79, 0), p(0.83, 0), 0.12),
+    cap(p(0.56, -0.17), p(0.56, 0.17), 0.075),
+    cap(p(0.54, 0), p(0.14, 0), 0.155),
+    cap(p(0.05, -0.09), p(0.05, 0.09), 0.1),
+    cap(p(0.54, 0.21), p(handL, 0.31 + spread), 0.065),
+    armUp ? cap(p(0.54, -0.21), p(1.04, -0.28), 0.065) : cap(p(0.54, -0.21), p(-0.02, -0.33 - spread), 0.065),
+    cap(p(0, 0.09), p(-0.86, 0.12 + spread), 0.085),
+    cap(p(0, -0.09), p(-0.84, -0.13 - footR), 0.085),
   ];
 }
 

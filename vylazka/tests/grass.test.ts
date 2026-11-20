@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { generateLayout } from '../src/gen/layout';
 import type { WorldKind } from '../src/gen/layout';
 import { Grass, GRASS_CLEAR, GRASS_STRIDE } from '../src/systems/grass';
-import { BODY_CHANCE, bodyCapsules, bodyRolled, buildLevel, cellToWorld, grassChance, grassRolled, LAWN_CHANCE, lawnRolled, tierFloor } from '../src/world/level_build';
-import { GRASS_FORMS, GRASS_KINDS, GRASS_VARIANTS, grassForm, grassTile } from '../src/world/grass';
+import { BODY_CAPS, BODY_CHANCE, bodyCapsules, bodyRolled, buildLevel, cellToWorld, grassChance, grassRolled, LAWN_CHANCE, lawnRolled, tierFloor } from '../src/world/level_build';
+import { GRASS_FORMS, GRASS_KINDS, GRASS_PRESS_MAT, GRASS_PRESS_Y, GRASS_VARIANTS, grassForm, grassTile } from '../src/world/grass';
 import type { GrassKind, GrassLod } from '../src/world/grass';
 import { mulberry32 } from '../src/core/rng';
 import { buildMeadow } from '../src/world/pocket_meadow';
@@ -83,10 +83,11 @@ describe('трава: плитка (world/grass.ts)', () => {
   it('у каждой вершины травинки uv — её корень: шейдер решает травинку целиком (вытоптанный круг, стёртый пол)', () => {
     for (const lod of [0, 1, 2] as const) {
       const m = grassTile('pale', 2, lod);
-      // Все три вершины треугольника — одной травинки: uv у них один (подложка газона — не травинка: у её вершин корень — они сами).
+      // Все три вершины треугольника — одной травинки: uv у них один (подложка газона и «матрас» под следом — не травинки: у их
+      // вершин корень — они сами).
       for (let t = 0; t < m.index.length; t += 3) {
         const [a, b, c] = [m.index[t]!, m.index[t + 1]!, m.index[t + 2]!];
-        if ([a, b, c].every((i) => m.position[i * 3 + 1]! > 1e-6 && m.position[i * 3 + 1]! < 0.01)) continue;
+        if ([a, b, c].every((i) => m.mat[i] === GRASS_PRESS_MAT || (m.position[i * 3 + 1]! > 1e-6 && m.position[i * 3 + 1]! < 0.01))) continue;
         expect(m.uv[b * 2]).toBe(m.uv[a * 2]);
         expect(m.uv[c * 2 + 1]).toBe(m.uv[a * 2 + 1]);
       }
@@ -338,14 +339,47 @@ describe('газон в жёлтых комнатах (квиз партнёра
 });
 
 describe('след лежавшего человека в траве (квиз партнёра, ночь на 20.11)', () => {
-  it('редко: в двух помещениях с травой из пяти; силуэт — шесть капсул ростом около 1,85 м', () => {
+  it('«матрас» примятой травы — у комнатной травы на всех подробностях: квадрат плитки своим материалом над полом; у луга и газона его нет', () => {
+    for (let v = 0; v < GRASS_VARIANTS; v++) {
+      for (const lod of [0, 1, 2] as const) {
+        const m = grassTile('pale', v, lod);
+        const mat: number[] = [];
+        for (let i = 0; i < m.mat.length; i++) if (m.mat[i] === GRASS_PRESS_MAT) mat.push(i);
+        expect(mat.length, `pale/${v}/${lod}`).toBe(4);
+        const corners = new Set<string>();
+        for (const i of mat) {
+          expect(m.position[i * 3 + 1]).toBeCloseTo(GRASS_PRESS_Y, 6);
+          // uv — сама точка: шейдер решает «матрас» по пикселю, а не по корню травинки.
+          expect(m.uv[i * 2]).toBeCloseTo(m.position[i * 3]!, 6);
+          expect(m.uv[i * 2 + 1]).toBeCloseTo(m.position[i * 3 + 2]!, 6);
+          expect(m.normal[i * 3 + 1]).toBeCloseTo(1, 6);
+          corners.add(`${m.position[i * 3]},${m.position[i * 3 + 2]}`);
+        }
+        expect([...corners].sort()).toEqual(['-0.5,-0.5', '-0.5,0.5', '0.5,-0.5', '0.5,0.5']);
+        // Над полом: корни комнатной травы — на сантиметр ниже пола (level_build), «матрас» — выше него.
+        expect(GRASS_PRESS_Y - 0.01).toBeGreaterThan(0.004);
+      }
+      for (const kind of ['meadow', 'lawn'] as const) for (const lod of [0, 1, 2] as const) expect([...grassTile(kind, v, lod).mat].includes(GRASS_PRESS_MAT), kind).toBe(false);
+    }
+  });
+
+  it('редко: в двух помещениях с травой из пяти; силуэт — восемь капсул (голова, плечи, туловище, таз, руки, ноги) ростом около 1,9 м', () => {
     let n = 0;
     for (let seed = 0; seed < 4000; seed++) if (bodyRolled(seed * 7919 + 13)) n++;
     expect(n / 4000).toBeGreaterThan(BODY_CHANCE - 0.04);
     expect(n / 4000).toBeLessThan(BODY_CHANCE + 0.04);
     const caps = bodyCapsules(0, 0, 0, mulberry32(5));
-    expect(caps.length).toBe(6);
-    // От пяток до макушки: голова — u до 0,84 + 0,11, ноги — до −0,92 − 0,08.
+    expect(caps.length).toBe(BODY_CAPS);
+    expect(BODY_CAPS).toBe(8);
+    // Плечи и таз — поперёк оси тела (ось — x при yaw 0): иначе силуэт читается «колбасой» (кадры 20.11). Плечи шире таза.
+    const across = (c: readonly number[]): number => Math.abs(c[3]! - c[1]!) + 2 * c[4]!;
+    expect(Math.abs(caps[1]![2]! - caps[1]![0]!)).toBeLessThan(1e-9);
+    expect(Math.abs(caps[3]![2]! - caps[3]![0]!)).toBeLessThan(1e-9);
+    expect(across(caps[1]!)).toBeGreaterThan(across(caps[3]!));
+    expect(across(caps[1]!)).toBeGreaterThan(0.45);
+    // Туловище (третья капсула) идёт от плеч к ногам: по нему рендер «причёсывает» примятую траву.
+    expect(caps[2]![2]!).toBeLessThan(caps[2]![0]!);
+    // От пяток до макушки: голова — u до 0,83 + 0,12, ноги — до −0,86 − 0,085.
     let lo = Infinity;
     let hi = -Infinity;
     for (const [ax, , bx, , r] of caps) {

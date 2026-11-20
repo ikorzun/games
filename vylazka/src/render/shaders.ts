@@ -9,6 +9,7 @@
  */
 
 import { HANG_OBJ } from '../world/objects';
+import { GRASS_PRESS_MAT, GRASS_PRESS_Y } from '../world/grass';
 
 /** Общая часть: профиль луча и затухание. Используется миром, пылью и роем. */
 /**
@@ -219,6 +220,38 @@ vec3 windSway(vec3 wp) {
 }
 `;
 
+/**
+ * След лежавшего в траве (квиз партнёра, ночь на 20.11; world/level_build.ts, grassBody): восемь капсул силуэта — голова, плечи,
+ * туловище, таз, руки, ноги — (ax, az, bx, bz) в uBody, радиусы по четыре в uBodyR. uBodyK: x — пол под следом, y — насколько
+ * трава примята (1 — только что лежали, 0 — встала; game.ts поднимает её, пока на след смотрят), zw — ось тела к ногам: вдоль неё
+ * «причёсана» примятая трава. Общее для вершин (травинки) и пикселей («матрас» под следом: край — по пикселю).
+ */
+const BODY_GLSL = /* glsl */ `
+uniform vec4 uBody[8];
+uniform vec4 uBodyR[2];
+uniform vec4 uBodyK;
+// Расстояние от точки пола до края силуэта, м: внутри — меньше нуля. away — от оси ближней капсулы наружу.
+float bodySd(vec2 p, out vec2 away) {
+  float best = 1e9;
+  away = vec2(0.0);
+  for (int i = 0; i < 8; i++) {
+    vec4 s = uBody[i];
+    vec4 rr = uBodyR[i / 4];
+    int j = i - (i / 4) * 4;
+    float r = j == 0 ? rr.x : (j == 1 ? rr.y : (j == 2 ? rr.z : rr.w));
+    vec2 ab = s.zw - s.xy;
+    float t = clamp(dot(p - s.xy, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0);
+    vec2 d = p - (s.xy + ab * t);
+    float l = length(d);
+    if (l - r < best) {
+      best = l - r;
+      away = l > 1e-4 ? d / l : vec2(0.0);
+    }
+  }
+  return best;
+}
+`;
+
 export const WORLD_VERT = /* glsl */ `
 attribute vec4 aColor;
 attribute float aMat;
@@ -241,34 +274,21 @@ ${WIND_GLSL}
 // и не рисуется), ближе к краю — лежит, отведённая от середины, у края — встаёт. Иначе трава до колен прячет ключи на полу
 // (куратор, противоречие 346).
 uniform vec4 uClear[GRASS];   // xz — середина круга, y — пол под ним, w — радиус, м (0 — пусто)
-// След лежавшего человека (квиз партнёра, ночь на 20.11; world/level_build.ts, grassBody): шесть капсул силуэта — голова,
-// туловище, руки, ноги: (ax, az, bx, bz) и (радиус, …). uBodyK: x — пол под следом, y — насколько трава примята (1 — только что
-// лежали, 0 — встала; game.ts поднимает её, пока на след смотрят).
-uniform vec4 uBody[12];
-uniform vec2 uBodyK;
+${BODY_GLSL}
 varying vec3 vRoot;
-// Насколько примята эта травинка следом (для тёплого свечения во фрагменте): ставит grassTrample.
+// Насколько примята эта травинка следом (для тёплого света во фрагменте) и насколько она в кольце вокруг следа (тень): ставит
+// grassTrample.
 varying float vPress;
+varying float vRim;
 float gPress = 0.0;
-float bodyPress(vec3 root, out vec2 away) {
-  away = vec2(0.0);
-  if (uBodyK.y <= 0.0 || abs(root.y - uBodyK.x) > 0.6) return 0.0;
-  float best = 1e9;
-  for (int i = 0; i < 6; i++) {
-    vec4 s = uBody[i * 2];
-    float r = uBody[i * 2 + 1].x;
-    vec2 ab = s.zw - s.xy;
-    float t = clamp(dot(root.xz - s.xy, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0);
-    vec2 d = root.xz - (s.xy + ab * t);
-    float l = length(d);
-    if (l - r < best) {
-      best = l - r;
-      away = l > 1e-4 ? d / l : vec2(0.0);
-    }
+float gRim = 0.0;
+vec3 grassTrample(vec3 wp, vec3 root, vec3 nW) {
+  // «Матрас» под следом (world/grass.ts, pressMat) — не травинка: лежит на своей высоте над полом при любом росте плитки, а где
+  // его рисовать, решает пиксель.
+  if (int(aMat + 0.5) == ${GRASS_PRESS_MAT}) {
+    wp.y = root.y + ${GRASS_PRESS_Y.toFixed(3)};
+    return wp;
   }
-  return uBodyK.y * (1.0 - smoothstep(-0.03, 0.1, best));
-}
-vec3 grassTrample(vec3 wp, vec3 root) {
   float k = 1.0;
   vec2 away = vec2(1.0, 0.0);
   for (int i = 0; i < GRASS; i++) {
@@ -285,20 +305,37 @@ vec3 grassTrample(vec3 wp, vec3 root) {
   if (k <= 0.0) return root;
   float h = max(wp.y - root.y, 0.0);
   float lie = 1.0 - k;
-  // Силуэт лежавшего: травинка внутри него вдавлена почти в пол и отведена от оси тела недалеко — чтобы фигура читалась пятном
-  // примятого, а не пробором в траве (кадры 20.11, ночь): кто-то только что встал.
-  vec2 off;
-  float press = bodyPress(root, off);
-  gPress = press;
-  if (press > lie) {
-    // Лежит плашмя и «причёсана» вдоль тела — к ногам (капсула туловища: от шеи к тазу), с небольшим отводом от оси: так
-    // примятое читается ровной светлой гладью среди стоящей травы, как на настоящем лугу.
-    vec2 comb = uBody[2].zw - uBody[2].xy;
-    vec2 dir = length(comb) > 1e-4 ? normalize(comb) * 0.8 + off * 0.35 : off;
-    dir = length(dir) > 1e-4 ? normalize(dir) : vec2(1.0, 0.0);
-    wp.y = root.y + h * mix(1.0, 0.12, press);
-    wp.xz += dir * (h * 0.85 * press);
-    return wp;
+  // Силуэт лежавшего (партнёр 20.11: «Сделай контур следа чётче»). Край — резкий (полтора сантиметра). Внутри травинка лежит
+  // гладью, «причёсанная» вдоль тела к ногам, и не дальше края: кончик остаётся в силуэте, и контур не размыт свесившимися
+  // травинками. Вокруг — кольцо: трава ниже и отведена от тела — не ложится на след и не прячет его от стоящего рядом; в
+  // кольце она темнее (фрагмент, vRim) — контур читается и издали.
+  if (uBodyK.y > 0.0 && abs(root.y - uBodyK.x) < 0.6) {
+    vec2 out_;
+    float sd = bodySd(root.xz, out_);
+    float press = uBodyK.y * (1.0 - smoothstep(-0.012, 0.012, sd));
+    float rim = sd > 0.0 ? uBodyK.y * (1.0 - smoothstep(0.0, 0.6, sd)) : 0.0;
+    gPress = press;
+    gRim = rim;
+    if (press > 0.0 && press >= lie) {
+      vec2 dir = normalize(uBodyK.zw * 0.85 + out_ * 0.3 + vec2(1e-5, 0.0));
+      vec2 rel = wp.xz - root.xz;
+      // Ширина травинки — поперёк её лица (по нормали): её сохраняем, а наклон и ветер убираем — лежит ровной полосой.
+      vec2 across = vec2(-nW.z, nW.x);
+      float al = length(across);
+      float w = al > 0.05 ? dot(rel, across / al) : 0.0;
+      float reach = min(h * 0.9, max(0.0, -sd) + 0.01);
+      vec2 laid = root.xz + vec2(-dir.y, dir.x) * w + dir * reach;
+      wp.xz = mix(wp.xz, laid, press);
+      wp.y = root.y + mix(h, 0.02 + h * 0.04, press);
+      return wp;
+    }
+    if (rim > 0.0 && rim > lie) {
+      // Тот, кто лежал, ложился и вставал: вокруг трава притоптана — у края силуэта в четверть роста, к 60 см встаёт. Иначе
+      // трава до колена закрывает след от стоящего рядом: он лежит на полу (кадры 20.11, день).
+      wp.y = root.y + h * mix(1.0, 0.25, rim);
+      wp.xz += out_ * (h * 0.6 * rim);
+      return wp;
+    }
   }
   if (lie <= 0.0) return wp;
   wp.y = root.y + h * mix(1.0, 0.1, lie);
@@ -360,11 +397,16 @@ void main() {
   wp.xyz = windSway(wp.xyz);
 #ifdef GRASS
   vec3 rootW = (modelMatrix * (im * vec4(uv.x, 0.0, uv.y, 1.0))).xyz;
-  wp.xyz = grassTrample(wp.xyz, rootW);
+  wp.xyz = grassTrample(wp.xyz, rootW, normalize(mat3(modelMatrix) * (mat3(im) * normal)));
   vRoot = rootW;
   vPress = gPress;
+  vRim = gRim;
 #endif
   vec3 wn = normalize(mat3(modelMatrix) * (mat3(im) * normal));
+#ifdef GRASS
+  // Примятая лежит гладью — и свет ложится на неё, как на пол: ровная светлая гладь, а не тёмные иглы.
+  if (gPress > 0.0) wn = normalize(mix(wn, vec3(0.0, 1.0, 0.0), gPress));
+#endif
 #endif
   // Подвешенное к потолку (светильник, короб, вывеска): часть потолка, своим номером вершин (HANG_OBJ).
   bool hangV = abs(aObj - ${HANG_OBJ}.0) < 0.5;
@@ -463,8 +505,10 @@ varying float vObj;
 varying float vLace;
 varying float vArch;
 #ifdef GRASS
-varying vec3 vRoot;   // корень травинки в мире (render: трава, GRASS)
+varying vec3 vRoot;   // корень травинки в мире (render: трава, GRASS); у «матраса» под следом — сама точка пола
 varying float vPress; // насколько травинка примята следом лежавшего (0 — стоит)
+varying float vRim;   // насколько травинка в кольце вокруг следа (ниже, отведена от тела, в тени)
+${BODY_GLSL}
 #endif
 varying vec2 vTone;       // x — предмет выцвел, y — светится своим цветом
 varying float vSeed;      // чей узор кружева (0 — архитектура: общий узор)
@@ -885,6 +929,23 @@ void main() {
     } else if (cellHash(floor(vWorld * 48.0) + 17.0) < gone) laceK = 1.0;
   }
 #ifdef GRASS
+  // «Матрас» примятой травы (world/grass.ts, pressMat) — только внутри силуэта лежавшего, край — по пикселю; пока трава встаёт,
+  // он тает зерном (растр вместо прозрачности). По нему — полосы вдоль тела: трава легла в одну сторону.
+  float matStripe = -1.0;
+  // Травинки в глубине силуэта лежат «матрасом» — сами они не рисуются (тают зерном): след — чистая гладь с резким краем, а не
+  // рябь штрихов. Встаёт трава — травинки проступают тем же зерном, а матрас тает.
+  if (vPress > 0.5 && cellHash(floor(vWorld * 61.0) + 9.0) < smoothstep(0.5, 0.95, vPress)) discard;
+  if (int(vMat + 0.5) == ${GRASS_PRESS_MAT}) {
+    // Без следа (или не на его полу) — сразу прочь: матрас лежит под всей комнатной травой.
+    if (uBodyK.y <= 0.0 || abs(vRoot.y - uBodyK.x) > 0.6) discard;
+    vec2 aw;
+    float msd = bodySd(vRoot.xz, aw);
+    float mk = uBodyK.y * (1.0 - smoothstep(-0.006, 0.006, msd));
+    if (mk <= 0.0 || cellHash(floor(vWorld * 61.0) + 5.0) > mk) discard;
+    vec2 ax = uBodyK.zw;
+    // Волокна: частые и тонкие поперёк оси, длинные вдоль — свалявшаяся трава, а не доски паркета.
+    matStripe = softNoise(vec3(dot(vRoot.xz, vec2(-ax.y, ax.x)) * 110.0, dot(vRoot.xz, ax) * 7.0, 1.7));
+  }
   // Трава растёт из пола: стёрт пол под корнем (та же маска, что у пола в archGone) — травинки нет. Стёртый пол остаётся нитями,
   // а на нитях трава не держится (куратор, противоречие 347: иначе поле висело бы над дырой).
   if (uErase.z > 0.0) {
@@ -1399,7 +1460,15 @@ void main() {
 #ifdef GRASS
   // След лежавшего ещё тёплый: примятая трава светлее стоящей (лежит гладью и ловит свет) и чуть светится тёплым; встаёт
   // трава — гаснет и свет (квиз партнёра, ночь на 20.11).
-  if (vPress > 0.0) col = col * (1.0 + 0.6 * vPress) + vec3(1.0, 0.58, 0.32) * (0.08 * vPress);
+  // Примятая — того же соломенного цвета, что «матрас» под ней: силуэт читается одним светлым пятном, а не россыпью травинок;
+  // и чуть тёплая — тело ушло только что.
+  if (vPress > 0.0) col = mix(col, dot(col, vec3(0.3, 0.59, 0.11)) * vec3(1.35, 1.12, 0.42) * 1.2, vPress) + vec3(1.0, 0.58, 0.32) * (0.04 * vPress);
+  // Кольцо вокруг следа — в тени отведённой травы: темнее, и край силуэта читается контуром.
+  if (vRim > 0.0) col *= 1.0 - 0.3 * vRim;
+  // «Матрас» — своего соломенно-зелёного цвета при любом свете: тёплый луч иначе красит его под паркет, и силуэт сливается с
+  // полом (кадры 20.11, день). Яркость — от света, цвет — травы.
+  // И ещё тёплый: еле светится сам — и в темноте у края луча фигура читается; трава встаёт — тепло гаснет.
+  if (matStripe >= 0.0) col = dot(col, vec3(0.3, 0.59, 0.11)) * vec3(1.35, 1.12, 0.42) * (1.0 + 0.3 * matStripe) + vec3(1.0, 0.62, 0.36) * (0.06 * uBodyK.y);
 #endif
   // Нить кружева — выцветшая: от цвета поверхности остаётся намёк, остальное — белёсая пряжа.
   if (laceK > 0.5) col = mix(vec3(dot(col, vec3(0.3, 0.59, 0.11))), col, 0.3) * 1.25 + vec3(0.004, 0.004, 0.005);
