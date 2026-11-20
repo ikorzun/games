@@ -113,10 +113,6 @@ async function audit(browser, label, viewport, textStep) {
     for (const it of c.items) {
       await click(`[data-act="item"][data-id="${it.id}"]`);
       await shot(`${c.id}.${it.id}`);
-      for (let v = 1; v < it.views; v++) {
-        if (await page.locator(`[data-act="view"][data-id="${v}"]`).count()) await click(`[data-act="view"][data-id="${v}"]`); else await click('[data-act="view"]');
-        await shot(`${c.id}.${it.id} вид ${v}`);
-      }
       if (await page.locator('[data-act="ask"]:visible').count()) { await click('[data-act="ask"]:visible'); await shot(`${c.id}.${it.id} ответ`); }
       await closeSheet();
     }

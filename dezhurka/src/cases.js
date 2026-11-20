@@ -2,7 +2,8 @@
    Текста здесь нет: строки лежат в strings_<язык>.js под ключами dz.<id дела>.<id вещи>.*
    verdict: 'home' | 'cell'; grounds — основания, которые протокол примет (при verdict 'cell').
    look — рисованный портрет из деталей; photo — черновой фото-кадр для режима «фото».
-   Вид вещи (views[i]): tab — название вида в переключателе (dz.tab.*); art — рисунок; doc — показать текст как документ. */
+   Грани вещи (views): v0 — как вещь выглядит, v1 — что у неё внутри или на обороте. Лист показывает их сразу все;
+   рисунок (art) и вид документа (doc) берутся у последней грани. */
 (function (root) {
   const DZ = (root.DZ = root.DZ || {});
 
@@ -13,7 +14,7 @@
 
   const passport = (extra) => Object.assign({
     id: 'passport', art: 'passport',
-    views: [{ tab: 'cover' }, { tab: 'spread', doc: 'passport', photo: true }],
+    views: [{}, { doc: 'passport', photo: true }],
   }, extra || {});
 
   DZ.cases = [
@@ -23,8 +24,8 @@
         brows: 'worried', mouth: 'neutral', clothes: 'denim' },
       items: [
         passport(),
-        { id: 'student', art: 'student', views: [{ tab: 'cover' }, { tab: 'spread', doc: 'card', photo: true }] },
-        { id: 'bag', art: 'bag', views: [{ tab: 'outside' }, { tab: 'inside', art: 'bag_open' }] },
+        { id: 'student', art: 'student', views: [{}, { doc: 'card', photo: true }] },
+        { id: 'bag', art: 'bag', views: [{}, { art: 'bag_open' }] },
         { id: 'pass', art: 'pass', views: [{}] },
       ],
     },
@@ -34,7 +35,7 @@
         stubble: true, brows: 'neutral', mouth: 'frown', wrinkles: true, clothes: 'vatnik' },
       items: [
         passport(),
-        { id: 'radio', art: 'radio', views: [{ tab: 'front' }, { tab: 'back', art: 'radio_back' }] },
+        { id: 'radio', art: 'radio', views: [{}, { art: 'radio_back' }] },
         { id: 'screwdriver', art: 'screwdriver', views: [{}] },
         { id: 'keys', art: 'keys', views: [{}] },
       ],
@@ -44,7 +45,7 @@
       look: { jaw: 'mid', skin: '#d0ab92', shade: '#a8846e', hair: '#b9b6ad', hairStyle: 'kerchief', hat: '#7c3a3c',
         brows: 'worried', mouth: 'smile', wrinkles: true, clothes: 'oldcoat', scale: 0.92 },
       items: [
-        { id: 'pension', art: 'pension', views: [{ tab: 'cover' }, { tab: 'spread', doc: 'card', photo: true }] },
+        { id: 'pension', art: 'pension', views: [{}, { doc: 'card', photo: true }] },
         { id: 'seeds', art: 'seeds', views: [{}] },
         { id: 'coins', art: 'coins', views: [{}] },
         { id: 'ticket', art: 'ticket', views: [{ doc: 'slip' }] },
@@ -56,7 +57,7 @@
         brows: 'neutral', mouth: 'flat', wrinkles: true, clothes: 'cook' },
       items: [
         passport(),
-        { id: 'knives', art: 'knives', views: [{ tab: 'rolled' }, { tab: 'unrolled', art: 'knives_open' }] },
+        { id: 'knives', art: 'knives', views: [{}, { art: 'knives_open' }] },
         { id: 'apron', art: 'apron', views: [{}] },
         { id: 'workpass', art: 'workpass', views: [{ doc: 'card', photo: true }] },
         { id: 'jar', art: 'jar', views: [{}] },
@@ -68,8 +69,8 @@
         brows: 'raised', mouth: 'smirk', blush: true, lids: true, clothes: 'overcoat' },
       items: [
         passport(),
-        { id: 'wallet', art: 'wallet', views: [{ tab: 'outside' }, { tab: 'inside', art: 'wallet_open' }] },
-        { id: 'watch', art: 'watch', views: [{ tab: 'front' }, { tab: 'back', art: 'watch_back' }] },
+        { id: 'wallet', art: 'wallet', views: [{}, { art: 'wallet_open' }] },
+        { id: 'watch', art: 'watch', views: [{}, { art: 'watch_back' }] },
         { id: 'coin', art: 'coin', views: [{}] },
       ],
     },

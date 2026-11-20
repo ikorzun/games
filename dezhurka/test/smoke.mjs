@@ -75,7 +75,11 @@ async function run(browser, name, viewport, mode) {
       await page.click(`.dz-item[data-id="${it.id}"]`);
       check(await page.isVisible('.dz-sheet'), `${name}: вещь ${c.id}.${it.id} открылась`);
       check(await page.evaluate(() => { const w = document.querySelector('.dz-window').getBoundingClientRect(); const s = document.querySelector('.dz-sheet-in').getBoundingClientRect(); return s.top >= w.bottom - 1 || s.left >= w.right - 1; }), `${name}: лист не закрывает окно (${c.id}.${it.id})`);
-      for (let v = 1; v < it.views; v++) await page.click(`.dz-sheet [data-act="view"][data-id="${v}"]`);
+      check((await page.locator('.dz-sheet [data-act="view"]').count()) === 0, `${name}: у вещи нет переключателя видов (${c.id}.${it.id})`);
+      if (it.id === 'passport') check((await page.locator('.dz-sheet .dz-f').count()) >= 4, `${name}: паспорт открывается сразу с данными (${c.id})`);
+      if (c.id === 'c02' && it.id === 'radio') check((await page.textContent('.dz-sheet')).includes('0417'), `${name}: магнитола открывается сразу с заводским номером`);
+      if (c.id === 'c05' && it.id === 'wallet') check((await page.textContent('.dz-sheet')).includes('Сомова'), `${name}: бумажник открывается сразу с содержимым`);
+      if (c.id === 'c05' && it.id === 'watch') check((await page.textContent('.dz-sheet')).includes('от коллектива'), `${name}: часы открываются сразу с гравировкой`);
       if (await page.locator('.dz-sheet [data-act="ask"]').count()) {
         await page.click('.dz-sheet [data-act="ask"]');
         check(await page.isVisible('.dz-sheet .dz-qa'), `${name}: ответ на вопрос в листе (${c.id}.${it.id})`);

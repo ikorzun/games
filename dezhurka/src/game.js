@@ -54,7 +54,7 @@
   const st = {
     phase: 'intro', idx: 0, lines: [], line: 0, said: null,
     seen: new Set(), docs: new Set(), asked: new Set(),
-    sheet: null,      // { type: 'item' | 'doc', id, view, large }
+    sheet: null,      // { type: 'item' | 'doc', id, large }
     modal: null,      // { type: 'grounds' | 'menu' | 'restart' }
     bribe: false, zoom: false, results: [],
   };
@@ -131,7 +131,6 @@
       case 'zoom': toggleZoom(); break;
       case 'item': openSheet('item', d.id, b); break;
       case 'doc': openSheet('doc', d.id, b); break;
-      case 'view': setView(Number(d.id)); break;
       case 'size': if (!dragMoved) toggleSheetSize(); break;
       case 'ask': ask(); break;
       case 'bribe': toggleBribe(); break;
@@ -256,7 +255,7 @@
     if (st.phase !== 'inspect' && !(type === 'doc' && st.phase === 'talk')) return;
     if (st.sheet && st.sheet.type === type && st.sheet.id === id) { closeSheet(); return; }
     if (type === 'item') st.seen.add(id); else st.docs.add(id);
-    st.sheet = { type, id, view: 0, large: false };
+    st.sheet = { type, id, large: false };
     returnFocus = btn || null;
     DZ.sound.play('paper');
     if (!regular()) root.scrollTo(0, 0);
@@ -281,15 +280,6 @@
   function sheetItem() {
     if (!st.sheet || st.sheet.type !== 'item') return null;
     return cur().items.find((it) => it.id === st.sheet.id) || null;
-  }
-
-  function setView(i) {
-    const it = sheetItem();
-    if (!it || !it.views[i] || st.sheet.view === i) return;
-    st.sheet.view = i;
-    DZ.sound.play('paper');
-    renderSheet();
-    focus(el.sheet.querySelector('[data-act="view"][aria-checked="true"]'));
   }
 
   function ask() {
@@ -593,30 +583,29 @@
     }).join('');
   }
 
+  // Вещь открывается сразу раскрытой: паспорт — разворотом с данными, сумка — с содержимым, магнитола — с табличкой.
+  // Сначала идёт строка о том, как вещь выглядит, под ней — что у неё внутри; переключать ничего не нужно.
   function itemSheetHtml(c, it) {
-    const i = st.sheet.view;
-    const v = it.views[i];
     const name = esc(itemName(c, it));
-    const text = viewText(c, it, i);
+    const last = it.views[it.views.length - 1];
+    const texts = it.views.map((_, i) => viewText(c, it, i));
     const usePhoto = prefs.photo && !!c.photo;
     let body;
-    if (v.doc) {
-      body = `<div class="dz-paper dz-paper--${v.doc}"><p class="dz-paper-head">${name}</p>
-        <div class="dz-paper-row">${v.photo ? (usePhoto ? `<div class="dz-photo dz-photo--real" style="background-image:url(${c.photo})"></div>` : `<div class="dz-photo">${DZ.art.photo(c.look, c.id)}</div>`) : ''}<div class="dz-fields">${linesHtml(text, true)}</div></div>
+    if (last.doc) {
+      body = `${texts.length > 1 ? `<p class="dz-lead">${esc(texts[0])}</p>` : ''}<div class="dz-paper dz-paper--${last.doc}"><p class="dz-paper-head">${name}</p>
+        <div class="dz-paper-row">${last.photo ? (usePhoto ? `<div class="dz-photo dz-photo--real" style="background-image:url(${c.photo})"></div>` : `<div class="dz-photo">${DZ.art.photo(c.look, c.id)}</div>`) : ''}<div class="dz-fields">${linesHtml(texts[texts.length - 1], true)}</div></div>
         ${it.bribe ? `<p class="dz-bribe ${st.bribe ? 'is-taken' : ''}"><span class="dz-bill" aria-hidden="true">100</span><span>${T(st.bribe ? 'dz.bribe.out' : 'dz.bribe.in')}</span></p>` : ''}</div>`;
     } else {
-      body = `<div class="dz-hand"><div class="dz-hand-art">${DZ.art.item(v.art || it.art)}</div><div class="dz-hand-text">${linesHtml(text, false)}</div></div>`;
+      body = `<div class="dz-hand"><div class="dz-hand-art">${DZ.art.item(last.art || it.art)}</div><div class="dz-hand-text">${texts.map((tx) => linesHtml(tx, false)).join('')}</div></div>`;
     }
-    const tabs = it.views.length > 1
-      ? `<div class="dz-seg" role="radiogroup" aria-label="${T('dz.views.label')}">${it.views.map((vw, n) => `<button type="button" role="radio" aria-checked="${n === i}" data-act="view" data-id="${n}">${T('dz.tab.' + vw.tab)}</button>`).join('')}</div>` : '';
     let extra = '';
-    if (it.bribe && v.doc) extra += `<button type="button" class="dz-btn dz-btn--plain" data-act="bribe">${T(st.bribe ? 'dz.bribe.back' : 'dz.bribe.take')}</button>`;
+    if (it.bribe && last.doc) extra += `<button type="button" class="dz-btn dz-btn--plain" data-act="bribe">${T(st.bribe ? 'dz.bribe.back' : 'dz.bribe.take')}</button>`;
     if (has(`dz.${c.id}.${it.id}.q`)) {
       extra += st.asked.has(it.id)
         ? `<div class="dz-qa" tabindex="-1"><p><b>${T('dz.speaker.you')}:</b> ${T(`dz.${c.id}.${it.id}.q`)}</p><p><b>${T(`dz.${c.id}.speaker`)}:</b> ${T(`dz.${c.id}.${it.id}.a`)}</p></div>`
         : `<button type="button" class="dz-btn dz-btn--plain dz-btn--ask" data-act="ask">${icon('ask')}<span>${T('dz.ask')}: «${T(`dz.${c.id}.${it.id}.q`)}»</span></button>`;
     }
-    return { title: name, close: 'dz.sheet.put', html: `${tabs}<div class="dz-scroll">${body}${extra}</div>` };
+    return { title: name, close: 'dz.sheet.put', html: `<div class="dz-scroll">${body}${extra}</div>` };
   }
 
   function docSheetHtml(c, id) {
@@ -647,8 +636,8 @@
     const c = cur();
     const part = st.sheet.type === 'item' ? itemSheetHtml(c, sheetItem()) : docSheetHtml(c, st.sheet.id);
     const keep = el.sheet.querySelector('.dz-scroll');
-    const top = keep && el.sheet.dataset.key === st.sheet.type + ':' + st.sheet.id + ':' + st.sheet.view ? keep.scrollTop : 0;
-    el.sheet.dataset.key = st.sheet.type + ':' + st.sheet.id + ':' + st.sheet.view;
+    const top = keep && el.sheet.dataset.key === st.sheet.type + ':' + st.sheet.id ? keep.scrollTop : 0;
+    el.sheet.dataset.key = st.sheet.type + ':' + st.sheet.id;
     el.sheet.innerHTML = `<div class="dz-sheet-in" role="region" aria-label="${part.title}">
       <div class="dz-sheet-head">
         <button type="button" class="dz-grabber" data-act="size" aria-label="${T('dz.sheet.size')}"><span></span></button>

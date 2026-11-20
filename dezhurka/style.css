@@ -204,6 +204,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .dz-seg button { min-width: 0; min-height: var(--tap); padding: 6px 4px; overflow-wrap: anywhere; border: 0; border-radius: 9px; background-color: transparent; color: var(--text); font-size: var(--t-sub); line-height: 1.15; }
 .dz-seg button[aria-checked="true"] { background-color: var(--paper); color: var(--paper-ink); font-weight: 700; box-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
 .dz-seg button:active { box-shadow: var(--press); }
+.dz-lead { font-size: var(--t-callout); line-height: 1.38; }
 .dz-hand { display: grid; grid-template-columns: 6rem minmax(0, 1fr); align-items: start; gap: 14px; }
 .dz-hand-art svg { display: block; width: 100%; height: auto; filter: drop-shadow(0 6px 5px rgba(0, 0, 0, .6)); }
 .dz-hand-text { display: grid; gap: 6px; }
