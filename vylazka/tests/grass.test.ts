@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { generateLayout } from '../src/gen/layout';
 import type { WorldKind } from '../src/gen/layout';
 import { Grass, GRASS_CLEAR, GRASS_STRIDE, LEAN, rustleGain } from '../src/systems/grass';
+import type { LeanLight } from '../src/systems/grass';
 import { BODY_CAPS, BODY_CHANCE, bodyCapsules, bodyRolled, buildLevel, cellToWorld, grassChance, grassRolled, LAWN_CHANCE, lawnRolled, tierFloor } from '../src/world/level_build';
 import { GRASS_FORMS, GRASS_KINDS, GRASS_PRESS_MAT, GRASS_PRESS_Y, GRASS_VARIANTS, grassForm, grassTile } from '../src/world/grass';
 import type { GrassKind, GrassLod } from '../src/world/grass';
@@ -432,7 +433,7 @@ describe('трава тянется к свету (партнёр 20.11: «Те�
   };
   // Фонарь на высоте груди у края поля светит вдоль +x, чуть вниз.
   const beam = { from: [-6, 1.3, 0] as [number, number, number], dir: [0.97, -0.24, 0] as [number, number, number], cos: Math.cos(0.4), range: 12 };
-  const run = (g: Grass, light: typeof beam | null, seconds: number): void => {
+  const run = (g: Grass, light: LeanLight | null, seconds: number): void => {
     for (let t = 0; t < seconds; t += 1 / 30) g.updateLean(light, 1 / 30);
   };
 
@@ -506,6 +507,33 @@ describe('трава тянется к свету (партнёр 20.11: «Те�
     expect(gain(g)).toBe(0);
     g.updateLean(null, 1 / 30);
     expect(g.rustle.rise + g.rustle.fall).toBe(0);
+  });
+
+  it('рядом с Осыпью трава замирает: свет с k = 0 её не тянет и не шуршит; с k = 1 — как обычно', () => {
+    const g = field(3);
+    run(g, { ...beam, k: 0 }, 2);
+    expect(at(g, -1, 0)).toBe(0);
+    expect(gain(g)).toBe(0);
+    run(g, { ...beam, k: 1 }, 2);
+    expect(at(g, -1, 0)).toBeGreaterThan(0.9);
+    // Осыпь подошла, когда трава уже тянулась: отпускает — медленно, почти беззвучно.
+    g.updateLean({ ...beam, k: 0 }, 1 / 30);
+    expect(g.rustle.fall).toBeGreaterThan(0);
+    expect(gain(g)).toBeLessThan(0.5);
+  });
+
+  it('стёртый пол (поздние круги): трава на нём не шуршит — та же маска, что у травинок в шейдере; карта при этом тянется', () => {
+    const whole = field(3);
+    whole.updateLean(beam, 1 / 30, 0);
+    const g = field(3);
+    g.updateLean(beam, 1 / 30, 1);
+    expect(at(g, -1, 0)).toBeGreaterThan(0);
+    expect(gain(g)).toBe(0);
+    // Пол стёрт наполовину — шуршит часть травы.
+    const half = field(3);
+    half.updateLean(beam, 1 / 30, 0.5);
+    expect(half.rustle.rise).toBeGreaterThan(0);
+    expect(half.rustle.rise).toBeLessThan(whole.rustle.rise);
   });
 
   it('шорох: шуршит только трава — свет на голой земле поля молчит; звук — оттуда, где трава движется', () => {

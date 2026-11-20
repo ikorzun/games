@@ -563,6 +563,19 @@ describe('привязка звуков к игре', () => {
     expect(heard({ where: 'limbo', pocket: null })).toBe(0);
     expect(heard({ where: 'main', grassRustle: { gain: 0, at } })).toBe(0);
     expect(heard({ grassRustle: null })).toBe(0);
+    // Шорох не спорит с песком Осыпи: рядом с ней молчит, в сильной панике почти молчит.
+    expect(heard({ grassRustle: { gain: 0.7, at }, swarmNear: 0.6 })).toBe(0);
+    const scared = heard({ swarmNear: 0, session: { inWater: false, inGas: false, panic: 0.9, hold: 0 } });
+    expect(scared).toBeGreaterThan(0);
+    expect(scared).toBeLessThan(0.7 * 0.3);
+    // Ветер луга приседает под шорохом и возвращается, когда трава улеглась.
+    Object.assign(w, { session: { inWater: false, inGas: false, panic: 0, hold: 0 } });
+    heard({ where: 'pocket', pocket: { kind: 'meadow' }, grassRustle: { gain: 0.8, at } });
+    const ducked = r.loops.get('amb_meadow')!;
+    expect(ducked).toBeLessThan(0.8);
+    expect(ducked).toBeGreaterThan(0.5);
+    heard({ grassRustle: { gain: 0, at } });
+    expect(r.loops.get('amb_meadow')).toBe(1);
   });
 
   it('начало вылазки: в убежище закрывается люк, в офисе и жёлтых комнатах привозит лифт; новая сессия начинается так же', () => {

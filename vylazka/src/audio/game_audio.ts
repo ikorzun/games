@@ -64,6 +64,8 @@ const MUSIC = 'music_menu';
  * с расстоянием (движок звука), поэтому чуть громче рассеянной Осыпи рядом, но не как охота.
  */
 export const TRACE_SAND = 0.8;
+/** Насколько ветер луга приседает под полным шорохом травы. */
+export const RUSTLE_DUCK = 0.45;
 /** Громкость зова искомой вещи (still_tone из её места; затухание по расстоянию — у движка). */
 const MEMORY_CALL = 0.7;
 
@@ -307,12 +309,17 @@ export class GameAudio {
       if (fl.trains > this.trains && active) a.play('train_pass', { volume: 0.9 });
       this.trains = fl.trains;
     }
-    a.loop('amb_meadow', pocket === 'meadow' ? 1 : 0);
     // Трава тянется к лучу (в светлом месте — к взгляду) и шуршит, пока движется: свет лёг — всплеск, стоит — стихает за три-четыре
     // секунды, ведут — шелест идёт за ним; распрямляется почти беззвучно. Звук — оттуда, где она движется (партнёр 20.11: «сделай
-    // шорох травы»). Трава — у помещения места и на лугу.
+    // шорох травы»). Трава — у помещения места и на лугу. Шорох не спорит с песком Осыпи (разбор куратора 20.11): рядом с ней трава
+    // замирает (game.ts, GRASS_HUSH), а в панике, когда дрожит рука с фонарём, шорох уходит — слушать надо её.
     const rustle = game.grassRustle;
-    a.loop('grass_rustle', rustle && (!over || pocket === 'meadow') ? rustle.gain : 0, rustle?.at);
+    const grassHere = !over || pocket === 'meadow';
+    const hush = clamp01(1 - near * 2) * (1 - 0.8 * clamp01((panic - 0.3) / 0.5));
+    const heard = rustle && grassHere ? rustle.gain * hush : 0;
+    a.loop('grass_rustle', heard, rustle?.at);
+    // Ветер луга приседает под шорохом: трава отвечает свету, и мир на миг затихает (предложение куратора).
+    a.loop('amb_meadow', pocket === 'meadow' ? 1 - RUSTLE_DUCK * heard : 0);
     a.loop('amb_void', over && pocket !== 'meadow' ? 1 : 0);
     a.loop('breath_calm', live * clamp01(1 - panic * 2.2));
     a.loop('breath_panic', live * clamp01((panic - 0.3) / 0.45));

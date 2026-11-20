@@ -7,6 +7,7 @@
  */
 import type { Vec3 } from '../core/types';
 import { GRASS_KINDS, GRASS_VARIANTS } from '../world/grass';
+import { softNoise } from '../world/wall_gone';
 
 /** Чисел на плитку в списке для рендера: x, y, z, поворот вокруг вертикали, размер поперёк, размер по высоте, форма. */
 export const GRASS_STRIDE = 7;
@@ -57,6 +58,11 @@ export interface LeanLight {
   dir: Vec3;
   cos: number;
   range: number;
+  /**
+   * Насколько трава ещё отвечает свету, 0..1 (нет — 1): рядом с Осыпью она замирает — не тянется и не шуршит, и тишина травы —
+   * её знак без пугалки (разбор куратора 20.11: шорох и песок Осыпи — одно сухое шипение).
+   */
+  k?: number;
 }
 
 /** Карта «насколько тянется» над полем травы: w × h клеток по cell метров от (minX, minZ), 0..255 — для текстуры. */
@@ -120,6 +126,11 @@ export class Grass {
   readonly rustle: GrassRustle = { rise: 0, fall: 0, at: [0, 0, 0] };
   /** Откуда светили в последний раз — там и слушают (фонарь и глаза — у героя); свет погас — отпускающую слышно оттуда же. */
   private readonly heardFrom: [number, number] = [0, 0];
+  /**
+   * Шум стирания пола под корнем каждой клетки (как у шейдера: softNoise(корень × 0,9 + 3,1), render/shaders.ts): на поздних кругах
+   * пол уходит, и трава на нём пропадает — шуршать ей нечем.
+   */
+  private readonly leanGn: Float32Array | null;
 
   constructor(sites: readonly GrassSite[]) {
     this.sites = sites;
@@ -156,26 +167,36 @@ export class Grass {
         for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) has[j * w + i] = 1;
       }
       this.leanHas = has;
+      const gn = new Float32Array(w * h);
+      const gy = f.floor * 0.9 + 3.1;
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (has[j * w + i]) gn[j * w + i] = softNoise((f.minX + (i + 0.5) * LEAN.cell) * 0.9 + 3.1, gy, (f.minZ + (j + 0.5) * LEAN.cell) * 0.9 + 3.1);
+      this.leanGn = gn;
     } else {
       this.lean = null;
       this.leanF = null;
       this.leanHas = null;
+      this.leanGn = null;
     }
   }
 
   /**
    * Трава тянется к свету (LEAN): клетки, на которые светит, за rise секунд доходят до 1, остальные за fall — до нуля. Свет — по
    * середине клетки на высоте травы; у края конуса — плавно. Без света и с пустой картой — ничего не делает. Возвращает, менялась
-   * ли карта (рендеру — перезалить текстуру).
+   * ли карта (рендеру — перезалить текстуру). Заодно считает шорох (rustle): сколько травы сдвинулось и где; erase — насколько
+   * стёрт пол (decay.floor): трава на стёртом полу не шуршит.
    */
-  updateLean(light: LeanLight | null, dt: number): boolean {
+  updateLean(light: LeanLight | null, dt: number, erase = 0): boolean {
     const m = this.lean;
     const v = this.leanF;
     const f = this.field;
     const has = this.leanHas;
+    const gn = this.leanGn;
     this.rustle.rise = 0;
     this.rustle.fall = 0;
-    if (!m || !v || !f || !has || dt <= 0 || (!light && !this.leanAny)) return false;
+    if (!m || !v || !f || !has || !gn || dt <= 0 || (!light && !this.leanAny)) return false;
+    const lk = light ? Math.max(0, Math.min(1, light.k ?? 1)) : 0;
+    // Стёртый пол (decay.floor): та же маска, что у травинок в шейдере, — доля травы клетки, которая ещё есть.
+    const er = erase * 1.14 - 0.06;
     const kIn = 1 - Math.exp(-dt / LEAN.rise);
     const kOut = 1 - Math.exp(-dt / LEAN.fall);
     const y = f.floor + 0.25;
@@ -225,7 +246,7 @@ export class Grass {
             if (c > light.cos) {
               const t = Math.min(1, (c - light.cos) / Math.max(1e-6, cosIn - light.cos));
               const far = Math.min(1, Math.max(0, (d - light.range * 0.6) / (light.range * 0.4)));
-              target = t * t * (3 - 2 * t) * (1 - far * far * (3 - 2 * far));
+              target = t * t * (3 - 2 * t) * (1 - far * far * (3 - 2 * far)) * lk;
             }
           }
         }
@@ -235,7 +256,8 @@ export class Grass {
         const val = now < 0.002 && target === 0 ? 0 : now;
         v[k] = val;
         if (has[k]) {
-          const dv = val - was;
+          const gone = er > 0 ? Math.min(1, Math.max(0, (er - gn[k]!) / 0.08)) : 0;
+          const dv = (val - was) * (1 - gone);
           const ax = x - hx;
           const az = z - hz;
           const wgt = (dv > 0 ? dv : -dv * RUSTLE.fall) / (1 + (ax * ax + az * az) / 25);

@@ -237,10 +237,13 @@ const FLOWER_BEAM = { cos: Math.cos(0.36), range: 11 } as const;
 const FLOWER_GAZE = { cos: Math.cos(0.42), range: 9 } as const;
 /**
  * Трава тянется к свету (партнёр 20.11: «Теперь сделай, чтобы трава тянулась к лучу»; systems/grass.ts, LEAN): в тёмном месте —
- * к фонарю, на который она попала лучом (конус GRASS_BEAM — чуть шире ядра луча); в светлом — к глазам, куда смотрят.
+ * к фонарю, на который она попала лучом (конус GRASS_BEAM — чуть шире ядра луча); в светлом — к глазам, куда смотрят. Светлое
+ * для травы — и место, где фонарь едва светит (light ниже GRASS_GAZE.below): на лугу днём его луча почти не видно.
  */
 export const GRASS_BEAM = { cos: Math.cos(0.4), range: 12 } as const;
-export const GRASS_GAZE = { cos: Math.cos(0.5), range: 9 } as const;
+export const GRASS_GAZE = { cos: Math.cos(0.5), range: 9, below: 0.3 } as const;
+/** Осыпь рядом (swarmNear): с первого числа трава начинает замирать, ко второму — замерла совсем (не тянется и не шуршит). */
+export const GRASS_HUSH = [0.15, 0.45] as const;
 
 /**
  * Стоит ли на полу вещь в этой точке (для мест грибов, systems/spores.ts, settle): коробка вещи уровня или вещи сна (не стена,
@@ -3450,11 +3453,19 @@ export class Game {
     const grass = this.where === 'main' ? this.levelGrass : this.where === 'pocket' ? this.pocketGrass : null;
     this.renderer.setGrass(this.grassBuf, grass ? grass.visible([x, y, z], GRASS_SHOWN, this.grassBuf, GRASS_FAR) : 0);
     // Трава тянется к лучу фонаря, если он горит, в светлом месте — к взгляду. Погас — медленно распрямляется.
+    // На лугу фонарь днём едва светит (light 0,1) и почти не виден: трава там идёт за взглядом, иначе погасил или сел фонарь — и
+    // она замирает без видимой причины (разбор куратора 20.11). Трава уровня отвечает только тому, кто стоит в её помещении:
+    // свет не знает стен и ярусов, и луч в стену соседней комнаты или в пол над ней иначе шевелил бы (и шуршал) траву за стеной.
+    // Рядом с Осыпью трава замирает — не тянется и не шуршит: тишина травы — её знак без пугалки.
     if (grass && rig) {
-      const byGaze = this.env.light <= 0;
+      const byGaze = this.env.light < GRASS_GAZE.below;
       const beamOn = !byGaze && this.light.intensity >= 0.3;
-      const light = byGaze ? { from: rig.camPos, dir: rig.lightDir, cos: GRASS_GAZE.cos, range: GRASS_GAZE.range } : beamOn ? { from: rig.lightPos, dir: rig.lightDir, cos: GRASS_BEAM.cos, range: GRASS_BEAM.range } : null;
-      const changed = grass.updateLean(light, fl?.frozen ? 0 : dt);
+      // Своё помещение: на лугу (и в его просмотре, ?level=pocket_meadow, где луг — весь уровень) трава везде вокруг.
+      const here = this.where !== 'main' || this.level?.grassRoom === undefined || this.room === this.level.grassRoom;
+      const k = 1 - smoothstep(GRASS_HUSH[0], GRASS_HUSH[1], this.swarmNear);
+      const light = !here ? null : byGaze ? { from: rig.camPos, dir: rig.lightDir, cos: GRASS_GAZE.cos, range: GRASS_GAZE.range, k } : beamOn ? { from: rig.lightPos, dir: rig.lightDir, cos: GRASS_BEAM.cos, range: GRASS_BEAM.range, k } : null;
+      const erase = this.where === 'main' && this.level?.layout ? this.decay.floor : 0;
+      const changed = grass.updateLean(light, fl?.frozen ? 0 : dt, erase);
       this.renderer.setGrassLean(grass.lean, byGaze ? rig.camPos : rig.lightPos, this.leanOff ? 0 : 1, changed, rig.lightDir);
       // И шуршит, пока движется (RUSTLE): громкость — сколько её сейчас тянется и отпускает, звук — оттуда, где она движется.
       this.rustle.gain = rustleGain(grass.rustle.rise, grass.rustle.fall);

@@ -3430,6 +3430,15 @@ describe('собрано только там, куда смотрит герой
       seen += 1;
       const h = new Harness(level, { seed });
       const g = h.game;
+      // Из другого помещения трава не отвечает: свет не знает стен, и луч в стену соседней комнаты шевелил бы траву за ней.
+      const other = level.nav.find((n) => n.room !== level.grassRoom && n.tier === node.tier && Math.hypot(n.x - node.x, n.z - node.z) < 9);
+      if (other) {
+        g.teleport(other.x, other.y, other.z, Math.atan2(-(node.x - other.x), -(node.z - other.z)), -0.3);
+        h.run(1);
+        const map0 = h.r.grassLean.map as { data: Uint8Array } | null;
+        expect(map0 ? map0.data.reduce((m, v) => Math.max(m, v), 0) : 0, `сид ${seed}: трава тянется к свету из соседнего помещения`).toBe(0);
+        expect(g.grassRustle.gain).toBe(0);
+      }
       // Встать в помещении с травой и светить под ноги, вперёд.
       g.teleport(node.x, node.y, node.z, 0, -0.6);
       // Луч лёг на траву — она шуршит (партнёр 20.11: «сделай шорох травы»), и шорох — из этого помещения.
