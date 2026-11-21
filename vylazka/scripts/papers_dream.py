@@ -3,9 +3,8 @@
 
 Запуск:  python3 -I scripts/papers_dream.py <папка с картинками> [--check <лист.jpg>]
 
-Картинки сгенерированы GPT Image (через Higgsfield; по описанию сервиса — модель OpenAI) по промптам из
-assets/papers/dream_prompts.md;
-в репозиторий исходники не кладутся. В папке они должны называться так:
+Картинки сгенерированы GPT Image по промптам из assets/papers/dream_prompts.md: снимки — заново 21.11, «как с iPhone 4»,
+через ключ OpenAI партнёра; наклейки, обрывки и портрет — 19.11, через Higgsfield. В репозиторий исходники не кладутся. В папке они должны называться так:
     stickers_1.png, stickers_2.png          два листа наклеек, по 4 × 3 квадратика на белом;
     dream_<id>.png или <id>.png              снимки (id — из DREAM_PRINTS в src/world/papers.ts без «dream_»);
     scrap_<id>.png                           обрывки на прозрачном фоне;
@@ -26,7 +25,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageEnhance
 
 W, H = 720, 1280
 QUALITY = 82
@@ -40,9 +39,21 @@ DREAM_W, DREAM_H = 240, 320
 # Поле отпечатка, px слоя (8 из 240 — у снимка в 24 см около 8 мм), и его цвет — старая фотобумага.
 DREAM_EDGE = 8
 DREAM_PAPER = (226, 221, 208)
-# Снимки тёмные — ночь, зима, лампа: тени поднимаются кривой (показатель 0,7), иначе на стене при свете места это тёмные
-# прямоугольники, где видна одна лампа. Настроение остаётся: светлее средних тонов картинка не становится.
-DREAM_GAMMA = 0.7
+# Снимки тёмные — ночь, зима, лампа: тени поднимаются кривой, иначе на стене при свете места это тёмные прямоугольники, где
+# видна одна лампа. С кадрами «как с iPhone 4» (партнёр 21.11, 21:29) кривая мягче — 0,85 вместо 0,7: вспышка уже высвечивает
+# ближнее, а крутая кривая вытаскивает цветной шум тёмных кадров (куратор, V-58).
+DREAM_GAMMA = 0.85
+# Цвет приглушён, как у остальной бумаги («приглушённый цвет с одним тёплым пятном», design.md §34): у телефонных кадров он
+# вдвое сочнее, и на стене рядом с карточками они выглядели бы чужими.
+DREAM_SATURATION = 0.72
+# Какая часть снимка идёт в отпечаток (доли кадра x, y, w, h): у мелкой детали — ближе к ней, иначе на 24 см она не читается
+# (куратор, V-58: ртуть за шкалой, две вмятины, фигура в чайнике, пустой циферблат). Остальные — середина 3 : 4.
+DREAM_CROP = {
+    'thermo': (0.0, 0.2, 0.82, 0.73),
+    'bed': (0.1, 0.0, 0.84, 0.75),
+    'kettle': (0.3, 0.22, 0.7, 0.62),
+    'clock': (0.38, 0.28, 0.58, 0.52),
+}
 DREAM_A = ['thermo', 'window', 'phone', 'iron', 'milk', 'bed', 'corridor', 'frost', 'clock', 'ticket', 'drawing', 'xray']
 DREAM_B = [('stairs', 0, 0), ('kettle', 240, 0)]
 
@@ -111,16 +122,23 @@ def layer_stickers(src: Path) -> Image.Image:
     return out
 
 
-def print_card(path: Path) -> Image.Image:
-    """Снимок как отпечаток: картинка 3 : 4 по середине, вокруг — поле старой фотобумаги."""
+def print_card(path: Path, key: str = '') -> Image.Image:
+    """Снимок как отпечаток: картинка 3 : 4 (по середине или по DREAM_CROP), вокруг — поле старой фотобумаги."""
     im = Image.open(path).convert('RGB')
     w, h = im.size
+    crop = DREAM_CROP.get(key)
+    if crop:
+        x, y, cw, ch = crop
+        box = (round(x * w), round(y * h), round((x + cw) * w), round((y + ch) * h))
+        im = im.crop(box)
+        w, h = im.size
     if w / h > 3 / 4:
         cw = round(h * 3 / 4)
         im = im.crop(((w - cw) // 2, 0, (w - cw) // 2 + cw, h))
     else:
         ch = round(w * 4 / 3)
         im = im.crop((0, (h - ch) // 2, w, (h - ch) // 2 + ch))
+    im = ImageEnhance.Color(im).enhance(DREAM_SATURATION)
     lut = [round(255 * (v / 255) ** DREAM_GAMMA) for v in range(256)]
     im = im.resize((DREAM_W - 2 * DREAM_EDGE, DREAM_H - 2 * DREAM_EDGE), Image.LANCZOS).point(lut * 3)
     card = Image.new('RGB', (DREAM_W, DREAM_H), DREAM_PAPER)
@@ -146,14 +164,14 @@ def scrap_cell(path: Path) -> Image.Image:
 def layer_dream_a(src: Path) -> Image.Image:
     out = Image.new('RGBA', (W, H), (0, 0, 0, 255))
     for i, n in enumerate(DREAM_A):
-        out.paste(print_card(find(src, f'dream_{n}', n)), ((i % 3) * DREAM_W, (i // 3) * DREAM_H))
+        out.paste(print_card(find(src, f'dream_{n}', n), n), ((i % 3) * DREAM_W, (i // 3) * DREAM_H))
     return out
 
 
 def layer_dream_b(src: Path) -> Image.Image:
     out = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     for n, x, y in DREAM_B:
-        out.paste(print_card(find(src, f'dream_{n}', n)).convert('RGBA'), (x, y))
+        out.paste(print_card(find(src, f'dream_{n}', n), n).convert('RGBA'), (x, y))
     for n, x, y in SCRAPS:
         out.paste(scrap_cell(find(src, f'scrap_{n}')), (x, y))
     return out

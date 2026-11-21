@@ -8,11 +8,18 @@ import { PAPER_URLS } from '../render/paper_images';
 import type { Fragment } from '../systems/meta';
 import { DREAM_PRINTS } from '../world/papers';
 
-/** Размер слоя бумаги и снимка в нём, px (world/papers.ts: снимки 240 × 320 сеткой 3 × 4 в слое 720 × 1280). */
+/**
+ * Размер слоя бумаги и снимка в нём, px (world/papers.ts: снимки 240 × 320 сеткой 3 × 4 в слое 720 × 1280) и поле отпечатка
+ * (scripts/papers_dream.py, DREAM_EDGE): кусок снимка считается от картинки внутри поля — иначе в кадр карточки попадает полоска
+ * фотобумаги.
+ */
 const LAYER_W = 720;
 const LAYER_H = 1280;
 const PRINT_W = 240;
 const PRINT_H = 320;
+const PRINT_EDGE = 8;
+const IMG_W = PRINT_W - 2 * PRINT_EDGE;
+const IMG_H = PRINT_H - 2 * PRINT_EDGE;
 /** Запись: кадров в секунду при показе. */
 export const REEL_FPS = 6;
 
@@ -65,14 +72,16 @@ export function buildMetaCard(f: Fragment, frames: readonly HTMLCanvasElement[],
       const [cx, cy, cw, ch] = f.crop ?? [0, 0, 1, 1];
       // Кусок снимка во весь кадр карточки: слой масштабируется так, чтобы ширина куска стала шириной кадра; положение — доля
       // свободного хода фона (так считает background-position в процентах).
-      const sx = LAYER_W / (cw * PRINT_W);
-      const sy = LAYER_H / (ch * PRINT_H);
-      const px = (x0 + cx * PRINT_W) / (LAYER_W - cw * PRINT_W);
-      const py = (y0 + cy * PRINT_H) / (LAYER_H - ch * PRINT_H);
+      const w = cw * IMG_W;
+      const h = ch * IMG_H;
+      const sx = LAYER_W / w;
+      const sy = LAYER_H / h;
+      const px = (x0 + PRINT_EDGE + cx * IMG_W) / (LAYER_W - w);
+      const py = (y0 + PRINT_EDGE + cy * IMG_H) / (LAYER_H - h);
       img.style.backgroundImage = `url("${url}")`;
       img.style.backgroundSize = `${(sx * 100).toFixed(2)}% ${(sy * 100).toFixed(2)}%`;
       img.style.backgroundPosition = `${(px * 100).toFixed(2)}% ${(py * 100).toFixed(2)}%`;
-      img.style.aspectRatio = `${(cw * PRINT_W).toFixed(1)} / ${(ch * PRINT_H).toFixed(1)}`;
+      img.style.aspectRatio = `${w.toFixed(1)} / ${h.toFixed(1)}`;
     }
     print.append(img);
     card.append(print);
