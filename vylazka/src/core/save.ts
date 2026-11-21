@@ -42,6 +42,8 @@ export interface Profile {
    * стёрто сильнее. Стёрлось совсем — запись убирается, и место открывается другим воспоминанием.
    */
   memories: Partial<Record<WorldKind, PlaceMemory>>;
+  /** Метаслой (systems/meta.ts): id обрывков, которые игрок уже видел, — по одному за сон. */
+  meta: string[];
 }
 
 /** Воспоминание, которое проходится по кругу. */
@@ -74,7 +76,7 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
 export function defaultProfile(baseSeed: number): Profile {
-  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1, flash: 'soft', lang: null, quality: null, place: 'shelter', memories: {} };
+  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1, flash: 'soft', lang: null, quality: null, place: 'shelter', memories: {}, meta: [] };
 }
 
 /** Разобрать профиль из хранилища; всё непонятное заменяется значениями по умолчанию. */
@@ -96,6 +98,7 @@ export function parseProfile(raw: unknown, baseSeed: number): Profile {
     quality: qualityPick(o.quality),
     place: o.place === 'office' || o.place === 'yellow' || o.place === 'station' ? o.place : 'shelter',
     memories: parseMemories(o.memories),
+    meta: [...new Set(strArr(o.meta))],
   };
 }
 

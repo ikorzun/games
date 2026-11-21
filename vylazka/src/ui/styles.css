@@ -1136,3 +1136,157 @@ body {
 }
 
 
+
+/* ── Обрывок метаслоя (ui/meta_card.ts): в лимбо, посреди кадра, вместо его строк ── */
+.vz-hud.is-meta .vz-hud__limbo {
+  opacity: 0;
+}
+.vz-hud__meta {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  width: min(86%, 21em);
+  opacity: 0;
+  transition: opacity 1.2s ease-out;
+  pointer-events: none;
+  font-family: 'DM Mono', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+.vz-hud__meta.is-on {
+  opacity: 1;
+  transition: opacity 0.6s ease-in;
+}
+.vz-meta {
+  display: flex;
+  justify-content: center;
+}
+/* Экран телефона: тёмный, без рамок и значков — только то, что на нём осталось. */
+.vz-meta__phone {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 1.1em 1.1em 1.2em;
+  border-radius: 1.3em;
+  background: #0d0e10;
+  color: #e9e9e6;
+  font-size: clamp(13px, 0.9vmin + 9px, 16px);
+  line-height: 1.45;
+  box-shadow: 0 0.6em 2.4em rgba(0, 0, 0, 0.35);
+}
+.vz-meta__missed {
+  color: #d7655a;
+  letter-spacing: 0.04em;
+}
+.vz-meta__who {
+  margin-top: 0.5em;
+  font-size: 1.15em;
+}
+.vz-meta__times {
+  margin-top: 0.45em;
+  opacity: 0.55;
+  letter-spacing: 0.06em;
+}
+/* Имя не сохранилось — размытое пятно на его месте. */
+.vz-meta__head {
+  padding-bottom: 0.7em;
+  margin-bottom: 0.9em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center;
+}
+.vz-meta__name {
+  display: inline-block;
+  filter: blur(3.5px);
+  opacity: 0.7;
+  letter-spacing: 0.2em;
+}
+.vz-meta__msg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 0.55em;
+}
+.vz-meta__msg--me {
+  align-items: flex-end;
+}
+.vz-meta__bubble {
+  max-width: 85%;
+  padding: 0.5em 0.8em;
+  border-radius: 1em;
+  background: #23252a;
+}
+.vz-meta__msg--me .vz-meta__bubble {
+  background: #34373d;
+}
+.vz-meta__at {
+  margin-top: 0.25em;
+  font-size: 0.75em;
+  opacity: 0.45;
+}
+/* Записка: полоска бумаги, чуть наискось. */
+.vz-meta__note {
+  max-width: 100%;
+  padding: 1em 1.2em;
+  background: #ece6d8;
+  color: #23211d;
+  font-style: italic;
+  font-size: clamp(14px, 1vmin + 10px, 18px);
+  line-height: 1.5;
+  transform: rotate(-1.6deg);
+  box-shadow: 0 0.5em 1.8em rgba(0, 0, 0, 0.28);
+}
+/* Снимок: отпечаток с белым полем. */
+.vz-meta__print {
+  width: 78%;
+  padding: 0.55em 0.55em 1.4em;
+  background: #f1efe9;
+  transform: rotate(1.4deg);
+  box-shadow: 0 0.6em 2em rgba(0, 0, 0, 0.3);
+}
+.vz-meta__img {
+  width: 100%;
+  background-repeat: no-repeat;
+  background-color: #2a2b2a;
+}
+/* Запись с нагрудной камеры: кадр, REC, время. */
+.vz-meta__reel {
+  position: relative;
+  width: 100%;
+  background: #000;
+  box-shadow: 0 0.6em 2.4em rgba(0, 0, 0, 0.35);
+}
+.vz-meta__frame {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+.vz-meta__rec {
+  position: absolute;
+  left: 0.6em;
+  top: 0.45em;
+  color: #fff;
+  font-size: 0.8em;
+  letter-spacing: 0.08em;
+}
+.vz-meta__dot {
+  display: inline-block;
+  width: 0.55em;
+  height: 0.55em;
+  margin-right: 0.4em;
+  border-radius: 50%;
+  background: #e0473b;
+  animation: vz-blink 1.6s steps(1) infinite;
+}
+.vz-meta__tc {
+  position: absolute;
+  right: 0.6em;
+  bottom: 0.45em;
+  color: #fff;
+  font-size: 0.75em;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vz-meta__dot {
+    animation: none;
+  }
+}

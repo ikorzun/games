@@ -6,6 +6,8 @@
 import { t } from '../core/i18n';
 
 const pad = (n: number): string => String(n).padStart(2, '0');
+/** Сколько уходит обрывок метаслоя (transition у .vz-hud__meta в styles.css). */
+const META_FADE_MS = 1200;
 /** Сколько гаснет вспышка воспоминания (transition у .vz-hud__flash в styles.css). */
 const FLASH_FADE_MS = 1600;
 
@@ -71,6 +73,10 @@ export class Hud {
   private readonly toastEl: HTMLElement;
   private readonly flashEl: HTMLElement;
   private readonly limboEl: HTMLElement;
+  private readonly metaEl: HTMLElement;
+  private metaTimer: ReturnType<typeof setTimeout> | undefined;
+  private metaStop: (() => void) | null = null;
+  private metaDone: (() => void) | null = null;
   private flashTimer: ReturnType<typeof setTimeout> | undefined;
   private lastLimbo = '';
   private readonly mark: HTMLElement;
@@ -108,6 +114,8 @@ export class Hud {
       '<div class="vz-hud__toast"></div>' +
       '<div class="vz-hud__flash"></div>' +
       '<div class="vz-hud__limbo"></div>' +
+      // Обрывок метаслоя (ui/meta_card.ts): в лимбо, вместо его строк.
+      '<div class="vz-hud__meta"></div>' +
       '<div class="vz-hud__mark"></div>' +
       '<div class="vz-hud__prompt"><span class="vz-hud__prompt-text"></span><span class="vz-hud__bar"><i></i></span></div>' +
       '<div class="vz-hud__act"><span class="vz-hud__act-text"></span><span class="vz-hud__bar"><i></i></span></div>' +
@@ -141,6 +149,7 @@ export class Hud {
     this.actBar = q('.vz-hud__act .vz-hud__bar i');
     this.toastEl = q('.vz-hud__toast');
     this.flashEl = q('.vz-hud__flash');
+    this.metaEl = q('.vz-hud__meta');
     this.limboEl = q('.vz-hud__limbo');
     this.mark = q('.vz-hud__mark');
     this.relabel();
@@ -177,6 +186,11 @@ export class Hud {
   setLap(n: number | null): void {
     this.lapN = n;
     this.lapEl.textContent = n === null ? '' : t('hud.lap', { n });
+  }
+
+  /** Время на камере, как оно сейчас в углу кадра. */
+  clockText(): string {
+    return this.lastClock;
   }
 
   setTime(seconds: number): void {
@@ -333,6 +347,39 @@ export class Hud {
     this.flashEl.classList.add('is-on');
     if (this.flashTimer !== undefined) clearTimeout(this.flashTimer);
     this.flashTimer = setTimeout(() => this.flashEl.classList.remove('is-on'), ms);
+  }
+
+  /**
+   * Обрывок метаслоя посреди кадра на ms мс; строки лимбо на это время уходят. stop — остановить то, что карточка крутит сама
+   * (кадры записи); done — когда карточка ушла совсем.
+   */
+  meta(card: HTMLElement, ms: number, stop: () => void, done: () => void): void {
+    this.metaClear();
+    this.metaEl.replaceChildren(card);
+    this.el.classList.add('is-meta');
+    // Перезапуск появления.
+    void this.metaEl.offsetWidth;
+    this.metaEl.classList.add('is-on');
+    this.metaStop = stop;
+    this.metaDone = done;
+    this.metaTimer = setTimeout(() => {
+      this.metaEl.classList.remove('is-on');
+      this.metaTimer = setTimeout(() => this.metaClear(), META_FADE_MS);
+    }, ms);
+  }
+
+  /** Убрать обрывок (и сказать тому, кто ждал, что он ушёл). */
+  metaClear(): void {
+    if (this.metaTimer !== undefined) clearTimeout(this.metaTimer);
+    this.metaTimer = undefined;
+    this.metaStop?.();
+    this.metaStop = null;
+    this.metaEl.classList.remove('is-on');
+    this.metaEl.replaceChildren();
+    this.el.classList.remove('is-meta');
+    const done = this.metaDone;
+    this.metaDone = null;
+    done?.();
   }
 
   /** Показать вспышку из очереди через wait мс. */

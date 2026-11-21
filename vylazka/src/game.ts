@@ -152,6 +152,8 @@ export type DreamEvent =
   | { type: 'warp' }
   /** Сессия кончилась, игрок в лимбо: пора готовить следующую (queueSession). */
   | { type: 'limbo' }
+  /** Метаслой: экспонат в лимбо «вспомнил» обрывок (systems/meta.ts) — где он стоит. */
+  | { type: 'meta'; at: Vec3 }
   /** От игрока пошла волна сонара (вариант A): звук — тихий пинг (слова партнёра: «Сонар тихий пинг»). */
   | { type: 'sonar' }
   /**
@@ -319,6 +321,11 @@ const POCKET_ORIGIN: Vec3 = [400, 0, 0];
 /** Сколько самое меньшее длится лимбо, с. */
 const LIMBO_MIN = 7;
 /**
+ * Метаслой в лимбо (systems/meta.ts): через after секунд экспонат, на который смотрят gaze секунд, «вспоминает» обрывок; пока
+ * обрывок на экране, лимбо не уходит — не дольше holdMax; пока обрывок ждёт взгляда, лимбо длится на wait секунд дольше.
+ */
+const META = { after: 1.2, gaze: 0.8, holdMax: 14, wait: 4 } as const;
+/**
  * Тихий слой и сонар (вариант A; слова партнёра: «Тихий слой, это точки по ребрам и углам, иногда
  * пробегает сонар, чтобы игрок понимал хоть какой-то план»). Волна идёт от игрока со скоростью
  * SONAR_SPEED м/с до SONAR_REACH м; приходит раз в SONAR_EVERY с и вскоре после того, как игрок попал в место.
@@ -464,8 +471,14 @@ const ONE_HUNT_FADE = 1.2;
  * запирать новичка в темноте.
  */
 const LESSON = { delay: 1.5, wait: 8, near: 6.5, far: 16, revive: 12, stand: 30 } as const;
-/** Первый сон: особые помещения — на верхнем ярусе, в from–to узлах пути от входа, в таком порядке (assignFirstDream). */
-const FIRST_DREAM = { from: 3, to: 14, order: ['strobe', 'dark', 'wire'] as const satisfies readonly RoomFx[] };
+/** Контур урока — в рост (swarm/body.ts, growth): около двух метров, а не низкая куча начала сна. */
+const LESSON_GROWTH = 0.85;
+/**
+ * Первый сон: особые помещения — на верхнем ярусе, в from–to узлах пути от входа, в таком порядке (assignFirstDream). «Сеточного»
+ * нет: его правило «не стой» — давление, а давления до второй ступени нет, и в первом сне правило одно — темнота (куратор,
+ * замечание к Z-19).
+ */
+const FIRST_DREAM = { from: 3, to: 14, order: ['strobe', 'dark'] as const satisfies readonly RoomFx[] };
 /** Сколько секунд Осыпь-примета идёт по месту. */
 const TRACE_SECONDS = 26;
 /** Ступень 3: силуэт на краю луча с первой минуты, охота — после первой вещи или с пятой минуты (как прежняя мягкая первая сессия, слово партнёра 16.11 23:41). */
@@ -904,6 +917,13 @@ export class Game {
   private blanks: Thing[] = [];
   private limboTime = 0;
   private limboAsked = false;
+  /** Метаслой: приложение хочет обрывок в этом лимбо (ставит само, по колоде и ступени). */
+  metaWanted = false;
+  /** Обрывок на экране: лимбо ждёт, пока приложение не снимет (или не выйдет META.holdMax). */
+  metaHold = false;
+  private metaFired = false;
+  private metaGaze = 0;
+  private metaHoldT = 0;
   /** Следующая сессия, собранная за время лимбо. */
   private pending: { level: BuiltLevel; dream: DreamSeed } | null = null;
   /**
@@ -1925,8 +1945,8 @@ export class Game {
    * Первый сон новичка (ступень 0) — один на всех (сид первого сна у всех новичков один; Z-19, «первый сон ставить руками, как
    * уровень»): особые помещения не наугад по всему убежищу — наугад они ложились на нижний ярус, в сторону, и новичок не встречал
    * ни одного, — а на его пути: на верхнем ярусе, в FIRST_DREAM.from–to узлах от входа, ближние первыми. Строб (ему нужен
-   * простор), «тёмное», «сеточное». «Тонких» нет: на ступени 0 скачков нет, и «тонкое» молчало бы. false — разложить не удалось
-   * (тогда как обычно).
+   * простор) и «тёмное». «Тонких» нет: на ступени 0 скачков нет, и «тонкое» молчало бы; «сеточного» — тоже (FIRST_DREAM). false —
+   * разложить не удалось (тогда как обычно).
    */
   private assignFirstDream(pool: readonly GenRoom[]): boolean {
     const level = this.level;
@@ -2456,6 +2476,9 @@ export class Game {
     this.blanks = [];
     this.limboTime = 0;
     this.limboAsked = false;
+    this.metaFired = false;
+    this.metaGaze = 0;
+    this.metaHold = false;
     this.teleport(p.spawn.pos[0], p.spawn.pos[1], p.spawn.pos[2], p.spawn.yaw, p.spawn.pitch ?? 0);
     if (kind === 'void' && !limbo) {
       // Белое нигде посреди сессии: перед игроком дугой лежит то, что он уже вспомнил, а на месте
@@ -3383,7 +3406,8 @@ export class Game {
         this.limboAsked = true;
         dream.push({ type: 'limbo' });
       }
-      if (this.pending && this.limboTime > LIMBO_MIN) this.beginJump({ cause: 'begin', style: 'dissolve', to: 'session' }, dream);
+      this.stepMeta(dt, dream);
+      if (this.pending && this.limboTime > LIMBO_MIN + (this.metaWanted ? META.wait : 0) && !this.metaHold) this.beginJump({ cause: 'begin', style: 'dissolve', to: 'session' }, dream);
     }
 
     // Идущий скачок.
@@ -3890,10 +3914,11 @@ export class Game {
           this.swarmBody.snap(sw.pos, sw.cohesion);
         }
       } else {
-        // На снимке (зал ожидания, игрок стоит) Осыпь видна там, где была: тело за ней не тянется.
-        if (!fl?.frozen) this.swarmBody.update(dt, sw.pos, sw.cohesion, null, growth);
-        // Тёмный урок: её контур виден сквозь стены — красный, как сетка искомой вещи (знание, а не тело).
+        // Тёмный урок: её контур виден сквозь стены — красный, как сетка искомой вещи (знание, а не тело); и это фигура в рост, а
+        // не низкая куча, какой она бывает, пока ничего не вспомнено: контур должен читаться тем, кто стоит между тобой и вещью.
         const through = this.darkLesson?.phase === 'on' && sw.mode === 'apparition';
+        // На снимке (зал ожидания, игрок стоит) Осыпь видна там, где была: тело за ней не тянется.
+        if (!fl?.frozen) this.swarmBody.update(dt, sw.pos, sw.cohesion, null, through ? Math.max(growth, LESSON_GROWTH) : growth);
         this.renderer.setSwarm(this.swarmBody.heads, this.swarmBody.dirs, this.swarmBody.params, through ? 0.7 : 0.88, this.time, through);
       }
     } else this.renderer.setSwarm(this.swarmBody.heads, this.swarmBody.dirs, this.swarmBody.params, 0, this.time);
@@ -4103,6 +4128,29 @@ export class Game {
     if (present) this.renderer.render(view);
   }
 
+  /**
+   * Метаслой (systems/meta.ts): в лимбо экспонат, на который смотрят META.gaze секунд, «вспоминает» обрывок — раз за лимбо и
+   * только если приложение его хочет. Пока обрывок на экране, лимбо не уходит в следующий сон.
+   */
+  private stepMeta(dt: number, dream: DreamEvent[]): void {
+    if (this.metaHold) {
+      this.metaHoldT += dt;
+      if (this.metaHoldT > META.holdMax) this.metaHold = false;
+      return;
+    }
+    if (!this.metaWanted || this.metaFired || this.limboTime < META.after) return;
+    const seen = this.pocketThings.find((t) => t.still && t.state === 'idle' && t.gaze >= 1);
+    this.metaGaze = seen ? this.metaGaze + dt : Math.max(0, this.metaGaze - dt * 2);
+    if (!seen || this.metaGaze < META.gaze) return;
+    this.metaFired = true;
+    this.metaWanted = false;
+    this.metaHold = true;
+    this.metaHoldT = 0;
+    // Экспонат вспомнил: кадр на миг рвётся, как при вспышке воспоминания.
+    this.glitch = Math.max(this.glitch, 0.35);
+    dream.push({ type: 'meta', at: [seen.pos[0], seen.pos[1], seen.pos[2]] });
+  }
+
   /** Шаги в такт: где за спиной прозвучали шаги следом с прошлого вызова (для звука). */
   consumeFollowSteps(): Vec3[] {
     const out = this.followSteps;
@@ -4184,6 +4232,7 @@ export class Game {
       swarm: this.swarm ? { mode: this.swarm.mode, pos: [...this.swarm.pos], node: this.swarm.node, cohesion: this.swarm.cohesion, awareness: this.swarm.awareness, aggravation: this.swarm.aggravation, near: this.swarmNear, growth: Math.min(1, (this.session?.doneCount ?? 0) / SWARM_GROWN), flow: this.swarmFlow ? this.swarmFlow.t : null } : null,
       director: this.director ? { phase: this.director.phase, released: this.director.wasReleased, settled: this.director.isSettled, clock: this.sleepTime } : null,
       hush: this.hush,
+      meta: { wanted: this.metaWanted, hold: this.metaHold, fired: this.metaFired },
       lesson: this.darkLesson?.phase ?? null,
       follow: this.follower?.times ?? 0,
       anomalies: this.anomalies ? this.anomalies.state() : null,

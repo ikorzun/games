@@ -94,6 +94,11 @@ export interface VzDebugApi {
   dunes(): Record<string, unknown> | null;
   /** Встать снаружи чёрного проёма в `distance` м от него, лицом к нему. Нет проёма — false. */
   gotoDunes(distance?: number): boolean;
+  /**
+   * Метаслой (systems/meta.ts): показать обрывок колоды по id (или следующий) прямо сейчас, без лимбо; reel — снять перед этим
+   * запись мига «вспомнил», чтобы было что показать в обрывке-записи. Возвращает id показанного или null.
+   */
+  meta(id?: string, reel?: boolean): string | null;
   roomDoorView(roomId: number, back?: number, pitchDeg?: number): { door: [number, number]; center: [number, number]; at: [number, number, number] } | false;
   /** Вещи сна: что стоит, что с ним станет под взглядом, в каком оно состоянии. */
   things(): Array<Record<string, unknown>>;
@@ -714,6 +719,7 @@ export function installDebug(app: App): void {
       const inside = g.where === 'pocket' && p?.kind === 'dunes';
       return { door: { room: d.room, tier: d.tier, at: [...d.at], y: d.y, n: [...d.n], w: d.w }, inside, exit: inside && p?.exit ? [...p.exit] : null, field: g.colliders.fieldAt(d.at[0] - d.n[0] * 0.5, d.at[1] - d.n[1] * 0.5), ...(inside && p?.dunes ? { vertebrae: p.dunes.vertebrae.length, ribs: p.dunes.ribs.length, skull: p.dunes.skull } : {}) };
     },
+    meta: (id, reel = false) => app.debugMeta(id, reel),
     gotoDunes: (distance = 2.5) => {
       const g = game();
       const d = g.level?.duneDoor;

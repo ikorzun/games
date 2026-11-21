@@ -31,10 +31,13 @@ import { drawScreens, loadScreens } from './render/screen_images';
 import { drawSigns } from './render/signs_atlas';
 import type { Sheets } from './render/signs_atlas';
 import type { Quality } from './render/renderer';
+import { DECK, metaAllowed, nextFragment } from './systems/meta';
+import type { Fragment } from './systems/meta';
 import { ALL_MEMORIES, DEFAULT_SESSION, WORLD_MEMORIES } from './systems/session';
 import type { SessionConfig } from './systems/session';
 import { wornLine } from './systems/worn_text';
 import { Hud } from './ui/hud';
+import { buildMetaCard } from './ui/meta_card';
 import { Overlay } from './ui/overlay';
 import type { CardLine } from './ui/overlay';
 import { TouchControls } from './ui/touch_controls';
@@ -106,6 +109,12 @@ const FIRST_ITEM_AT = 16;
  */
 const FIRST_SLEEP: SessionConfig = { ...SCENE_SESSION, count: SCENES, firstDelay: FIRST_ITEM_AT, delay: 6, fallback: 3 };
 const BRIGHT = [0.78, 1, 1.35] as const;
+/**
+ * Запись для метаслоя (systems/meta.ts, «Видео — с камеры героя»): после мига — вспомнил или она показалась — игра снимает с
+ * кадра frames кадров по every мс шириной w px: несколько секунд нагрудной камеры самого игрока. Своя у каждого прохождения;
+ * не копится — следующий такой же миг сна заменяет прежний.
+ */
+const REEL = { frames: 12, every: 170, w: 200 } as const;
 
 type Screen = 'boot' | 'title' | 'play';
 
@@ -232,6 +241,10 @@ export class App {
   private paperScale = 0;
   /** О каких помещениях с красной сеткой уже сказали за этот сон (строка — раз за сон на каждый вид). */
   private readonly roomSaid = new Set<string>();
+  /** Запись этого сна для метаслоя: кадры мига, когда вспомнил, и мига, когда она показалась. */
+  private reel: { recall: HTMLCanvasElement[]; apparition: HTMLCanvasElement[] } = { recall: [], apparition: [] };
+  /** Идущая запись: какой миг, сколько кадров осталось, когда следующий (performance.now). */
+  private reelTake: { kind: 'recall' | 'apparition'; left: number; next: number } | null = null;
   /** Подсказка из кукольного домика: в каком помещении лежит искомая вещь (до тех пор, пока её не вспомнили или не «забыли»). */
   private mapHint: { memory: string; room: string } | null = null;
 
@@ -714,6 +727,8 @@ export class App {
   private onLimbo(): void {
     this.roomSaid.clear();
     this.profile.successes += 1;
+    // Метаслой: раз за сон, не в первом, экспонат в лимбо вспомнит обрывок — если ему есть что вспомнить (systems/meta.ts).
+    this.game.metaWanted = metaAllowed(this.profile.successes, this.testLevel) && nextFragment(this.profile.meta, this.reels()) !== null;
     // Сон из сцен: вещь последней сцены вспомнена — цепочка её места шагнула; круг места — пять его вещей. В первом сне
     // сцена одна, и вещей в ней три.
     this.wasErased = this.scenes ? this.keepSceneMemory(undefined, Math.max(1, this.game.session?.doneCount ?? 1)) : this.keepMemory(true);
@@ -921,6 +936,9 @@ export class App {
     }
     this.profile.sorties += 1;
     this.mapHint = null;
+    // Новый сон — новая запись: в лимбо экспонат вспоминает миги этого сна.
+    this.reel = { recall: [], apparition: [] };
+    this.reelTake = null;
     this.keepMemory();
     this.saveProfile();
     this.analytics.sessionStarted();
@@ -1223,6 +1241,8 @@ export class App {
         if (buzz) navigator.vibrate([30, 40, 30]);
       } else if (e.type === 'recall') {
         const id = e.memory.def.id;
+        // Миг, когда вспомнил, — в запись для метаслоя (REEL).
+        this.startReel('recall');
         this.hud.flash(wornLine(t(`mem.${id}.done`), this.game.wearBase));
         if (!this.profile.archive.includes(id)) this.profile.archive.push(id);
         this.saveProfile();
@@ -1248,6 +1268,8 @@ export class App {
       if (e.type === 'swarm' && e.what === 'cohered' && !this.game.hasLight) this.teach('swarm', t(this.game.flow ? 'teach.swarm.walk' : 'teach.swarm.gaze'), 6000);
       // Первый сон: Осыпь показалась — одна строка, что это (посреди кадра, как завязка); вышла на охоту — как от неё держаться
       // (плейтест партнёра 19.11: «не понимают… почему»; правило «понятный враг» — луч держит её, и это теперь сказано).
+      // Миг, когда она показалась, — в запись для метаслоя (REEL).
+      if (e.type === 'swarm' && e.what === 'apparition') this.startReel('apparition');
       if (e.type === 'swarm' && e.what === 'apparition' && this.firstSleep && !this.taught.has('glimpse')) {
         this.taught.add('glimpse');
         this.analytics.hint('glimpse');
@@ -1260,6 +1282,7 @@ export class App {
       // Понижение качества, решённое игрой, — на переходе: пересев точек и пересборка стопки бумаги прячутся в нём.
       if (this.dropTo && (e.type === 'limbo' || e.type === 'begin' || (e.type === 'jump' && e.phase === 'switch'))) this.applyDrop();
       if (e.type === 'limbo') this.onLimbo();
+      else if (e.type === 'meta') this.showMeta();
       else if (e.type === 'begin') this.onBegin(e.scene === true, e.recalled === true);
       // «Вещи не любят, когда на них долго смотрят» спорит с главным делом первого сна — вспомнить вещь взглядом (куратор, пачка 48):
       // в первом сне её нет.
@@ -1647,7 +1670,79 @@ export class App {
       input.light = false;
     }
     this.game.draw(alpha, dt, present);
+    if (present) this.takeReel();
     this.updateHud();
+  }
+
+  /** Какие кадры записи есть в этом сне. */
+  private reels(): { recall: boolean; apparition: boolean } {
+    return { recall: this.reel.recall.length > 0, apparition: this.reel.apparition.length > 0 };
+  }
+
+  /** Начать запись мига (REEL). Идущую не перебивает: миг уже снимается. */
+  private startReel(kind: 'recall' | 'apparition'): void {
+    if (this.reelTake || this.testLevel) return;
+    this.reelTake = { kind, left: REEL.frames, next: 0 };
+  }
+
+  /** Снять кадр записи с только что нарисованного кадра игры (тот же кадр, что на экране). */
+  private takeReel(): void {
+    const c = this.reelTake;
+    if (!c) return;
+    const now = performance.now();
+    if (now < c.next) return;
+    c.next = now + REEL.every;
+    const src = this.canvas;
+    if (src.width < 2 || src.height < 2) return;
+    const fr = document.createElement('canvas');
+    fr.width = REEL.w;
+    fr.height = Math.max(2, Math.round((REEL.w * src.height) / src.width));
+    const ctx = fr.getContext('2d');
+    try {
+      if (!ctx) throw new Error('2d');
+      ctx.drawImage(src, 0, 0, fr.width, fr.height);
+    } catch {
+      this.reelTake = null;
+      return;
+    }
+    const list = this.reel[c.kind];
+    // Новый такой же миг заменяет прежний.
+    if (c.left === REEL.frames) list.length = 0;
+    list.push(fr);
+    c.left -= 1;
+    if (c.left <= 0) this.reelTake = null;
+  }
+
+  /** Отладка: показать обрывок по id (или следующий) сразу; reel — сперва начать запись мига «вспомнил». */
+  debugMeta(id?: string, reel = false): string | null {
+    if (reel) this.startReel('recall');
+    const f = id ? (DECK.find((x) => x.id === id) ?? null) : nextFragment(this.profile.meta, this.reels());
+    if (!f) return null;
+    this.showMeta(f, false);
+    return f.id;
+  }
+
+  /**
+   * Экспонат в лимбо вспомнил: показать следующий обрывок колоды (или данный); когда он уйдёт — отпустить лимбо. keep — записать
+   * обрывок в профиль как увиденный.
+   */
+  private showMeta(given?: Fragment, keep = true): void {
+    const f: Fragment | null = given ?? nextFragment(this.profile.meta, this.reels());
+    if (!f) {
+      this.game.metaHold = false;
+      return;
+    }
+    const r = this.reel;
+    const frames = f.kind !== 'video' ? [] : f.moment === 'apparition' && r.apparition.length > 0 ? r.apparition : r.recall.length > 0 ? r.recall : r.apparition;
+    const { card, stop } = buildMetaCard(f, frames, () => this.hud.clockText());
+    if (keep) {
+      this.profile.meta.push(f.id);
+      this.saveProfile();
+      this.analytics.hint(`meta.${f.id}`);
+    }
+    this.hud.meta(card, f.hold * 1000, stop, () => {
+      this.game.metaHold = false;
+    });
   }
 
   private readonly loop = (now: number): void => {

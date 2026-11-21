@@ -4722,17 +4722,77 @@ describe('первый сон — один на всех (Z-19: «ставить
       rooms: 21,
       tiers: 2,
       types: 'entrance,airlock,corridor,stairwell,stairwell,dorm,living,command,kitchen,medical,hallway,washroom,storage,corridor,fvu,diesel,bedroom,tanks,bathroom,switchboard,storage',
-      fx: ['living:wire:0', 'command:dark:0', 'storage:strobe:0'],
+      fx: ['command:dark:0', 'storage:strobe:0'],
       white: 'switchboard:1',
       dunes: 'storage:1',
       sky: 'bedroom:1',
       green: 'fvu:1',
       grass: 'hallway:0',
     });
-    // На пути: строб, «тёмное» и «сеточное» — на верхнем ярусе; «тонких» нет (на ступени 0 они молчат).
-    for (const want of ['strobe', 'dark', 'wire']) {
+    // На пути: строб и «тёмное» — на верхнем ярусе; «тонких» (на ступени 0 они молчат) и «сеточных» (их «не стой» — давление,
+    // а его до второй ступени нет) нет.
+    for (const want of ['strobe', 'dark']) {
       expect([...fx.entries()].some(([room, f]) => f === want && layout.rooms[room]!.tier === top), want).toBe(true);
     }
     expect([...fx.values()]).not.toContain('thin');
+    expect([...fx.values()]).not.toContain('wire');
+  });
+});
+
+describe('метаслой: обрывок на экспонате в лимбо (партнёр 21.11, 19:09; квиз «Одна находка за сон»)', () => {
+  /** Пройти сессию до лимбо: все пять вещей вспомнены. */
+  function toLimbo(): Harness {
+    const h = new Harness(levelOf(SEED), { seed: 3 });
+    const g = h.game;
+    for (let i = 0; i < 5; i++) {
+      expect(h.until(() => g.session!.active !== null, 6)).toBe(true);
+      recallActive(h);
+    }
+    expect(h.until(() => h.dreamCount('limbo') > 0, 14)).toBe(true);
+    return h;
+  }
+
+  it('экспонат, на который посмотрели, вспоминает обрывок — один раз; пока обрывок на экране, лимбо не уходит в следующий сон', () => {
+    const h = toLimbo();
+    const g = h.game;
+    g.metaWanted = true;
+    g.queueSession(levelOf(SEED + 1, 2), { seed: 99, known: new Set(g.archive) });
+    // Смотрим на ближний экспонат.
+    const b = g.body;
+    const ex = g.things.list.filter((t) => t.still).sort((p, q) => Math.hypot(p.pos[0] - b.x, p.pos[2] - b.z) - Math.hypot(q.pos[0] - b.x, q.pos[2] - b.z))[0]!;
+    expect(ex).toBeTruthy();
+    expect(h.standBefore(ex.id)).toBe(true);
+    expect(h.until(() => h.dreamCount('meta') > 0, 6), 'обрывка нет').toBe(true);
+    expect(g.metaHold).toBe(true);
+    // Обрывок на экране: лимбо держится и после своих секунд.
+    h.run(14);
+    expect(g.where).toBe('limbo');
+    expect(h.dreamCount('begin')).toBe(0);
+    // Обрывок ушёл — лимбо отпускает; второго обрывка в этом лимбо нет.
+    g.metaHold = false;
+    expect(h.until(() => h.dreamCount('begin') > 0, 6)).toBe(true);
+    expect(h.dreamCount('meta')).toBe(1);
+  });
+
+  it('не хочет приложение — экспонаты молчат; не посмотрел — лимбо ждёт обрывка на несколько секунд дольше и уходит без него', () => {
+    const h = toLimbo();
+    const g = h.game;
+    g.queueSession(levelOf(SEED + 1, 2), { seed: 99, known: new Set(g.archive) });
+    // Часы игры с новой сессией идут заново — меряем шагами.
+    const t0 = h.log.all.length;
+    expect(h.until(() => h.dreamCount('begin') > 0, 16)).toBe(true);
+    expect(h.dreamCount('meta')).toBe(0);
+    const plain = (h.log.all.length - t0) * STEP;
+    // Тот же лимбо, но обрывок ждёт взгляда, а игрок смотрит в пустоту.
+    const h2 = toLimbo();
+    const g2 = h2.game;
+    g2.metaWanted = true;
+    g2.queueSession(levelOf(SEED + 1, 2), { seed: 99, known: new Set(g2.archive) });
+    const b = g2.body;
+    g2.aimAt(b.x, b.y + 30, b.z + 0.01);
+    const t1 = h2.log.all.length;
+    expect(h2.until(() => h2.dreamCount('begin') > 0, 20)).toBe(true);
+    expect(h2.dreamCount('meta')).toBe(0);
+    expect((h2.log.all.length - t1) * STEP).toBeGreaterThan(plain + 2);
   });
 });

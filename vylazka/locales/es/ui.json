@@ -393,5 +393,19 @@
   "mem.sh_coat.done": "no hay llaves en los bolsillos. la escotilla estaba abierta. todos bajaron a dormir.",
   "mem.of_ticket.flash": "un boleto de tren, archivado con los informes. solo de ida.",
   "mem.of_ticket.task": "el boleto",
-  "mem.of_ticket.done": "nunca fuiste. hablan de eso junto al dispensador de agua."
+  "mem.of_ticket.done": "nunca fuiste. hablan de eso junto al dispensador de agua.",
+  "meta.missed": "llamada perdida",
+  "meta.missed.n": "{n} llamadas perdidas",
+  "meta.ward": "hospital municipal n.º 4",
+  "meta.failed": "no entregado",
+  "meta.now": "ahora",
+  "meta.rec": "REC",
+  "meta.m02.0": "¿me traes mañana mis pantuflas?",
+  "meta.m02.1": "el piso de aquí está frío",
+  "meta.m04": "si en la mañana la fiebre no ha bajado, llama. el número está en el refrigerador.",
+  "meta.m05.0": "¿cómo estás?",
+  "meta.m05.1": "bien. duérmete. tú también tienes fiebre",
+  "meta.m09.0": "perdón. me quedé dormido. ya voy",
+  "meta.m10": "todavía pongo dos tazas.",
+  "meta.m14.0": "¿estás despierto?"
 }

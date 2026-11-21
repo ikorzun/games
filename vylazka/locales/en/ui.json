@@ -393,5 +393,19 @@
   "mem.sh_coat.done": "no keys in the pockets. the hatch was open. everyone went down to sleep.",
   "mem.of_ticket.flash": "a train ticket, filed with the reports. one way.",
   "mem.of_ticket.task": "the ticket",
-  "mem.of_ticket.done": "you never went. they are talking about it by the water cooler."
+  "mem.of_ticket.done": "you never went. they are talking about it by the water cooler.",
+  "meta.missed": "missed call",
+  "meta.missed.n": "{n} missed calls",
+  "meta.ward": "city hospital no. 4",
+  "meta.failed": "not delivered",
+  "meta.now": "now",
+  "meta.rec": "REC",
+  "meta.m02.0": "can you bring my slippers tomorrow",
+  "meta.m02.1": "the floor here is cold",
+  "meta.m04": "if the fever hasn't dropped by morning, call. the number is on the fridge.",
+  "meta.m05.0": "how are you",
+  "meta.m05.1": "fine. go to sleep. you have a fever too",
+  "meta.m09.0": "sorry. i fell asleep. i'm coming",
+  "meta.m10": "i still put out two cups.",
+  "meta.m14.0": "are you awake?"
 }
