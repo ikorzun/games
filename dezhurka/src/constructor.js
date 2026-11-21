@@ -1,7 +1,9 @@
-/* Страница конструктора задержанных: окно дежурки с персонажем, детали, очередь случайных и выгрузка.
-   Рисует всё DZ.chargen (src/chargen.js), тексты берёт по ключам dz.cg.* (src/chargen_strings_ru.js). */
+/* Страница конструктора задержанных: окно дежурки с персонажем, детали, картотека готовых кадров, случайные эскизы и выгрузка.
+   Готовые кадры (DZ.cast, src/cast.js) нарисованы генеративной моделью в выбранном стиле по описаниям конструктора;
+   персонаж, собранный из деталей на странице, показывается векторным эскизом (DZ.chargen, src/chargen.js), а его чистовой
+   кадр рисуется моделью по промпту из выгрузки. Тексты — по ключам dz.cg.* (src/chargen_strings_ru.js). */
 (function (root) {
-  const DZ = root.DZ, CG = DZ.chargen, RU = DZ.strings.ru;
+  const DZ = root.DZ, CG = DZ.chargen, RU = DZ.strings.ru, CAST = DZ.cast || [];
   const t = (k) => (RU[k] != null ? RU[k] : k);
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const KEY = 'dezhurka.constructor.v1';
@@ -12,7 +14,7 @@
     ['sec.body', ['build', 'clothes', 'tone', 'accent', 'mark']],
   ];
 
-  const st = { kind: 'all', spec: null, bars: true, lobby: true, tab: 'data', queue: [] };
+  const st = { kind: 'all', spec: null, shot: null, bars: true, lobby: true, tab: 'data', queue: [] };
   const el = {};
   let nextSeed = (Date.now() % 900000) + 1000;
   const newSeed = () => (nextSeed = (nextSeed * 1103515245 + 12345) % 2147483647);
@@ -23,7 +25,7 @@
     return CG.random(seed, speciesId || ids[seed % ids.length]);
   }
 
-  function save() { try { root.localStorage.setItem(KEY, JSON.stringify({ kind: st.kind, spec: st.spec, bars: st.bars, lobby: st.lobby })); } catch (e) { /* без хранилища */ } }
+  function save() { try { root.localStorage.setItem(KEY, JSON.stringify({ kind: st.kind, spec: st.spec, shot: st.shot, bars: st.bars, lobby: st.lobby })); } catch (e) { /* без хранилища */ } }
   function load() { try { return JSON.parse(root.localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
 
   function caption(s) { return [t('dz.cg.species.' + s.species), t('dz.cg.mood.' + s.mood).toLowerCase(), t('dz.cg.clothes.' + s.clothes).toLowerCase()].join(' · '); }
@@ -34,12 +36,13 @@
       `<main class="cg-main">` +
       `<section class="cg-stage" aria-label="${esc(t('dz.cg.sub'))}">` +
         `<div class="cg-window" id="cg-window"><div class="cg-frame" id="cg-frame"></div><div class="cg-bars" id="cg-bars" aria-hidden="true"></div></div>` +
-        `<p class="cg-who" id="cg-who" aria-live="polite"></p>` +
+        `<p class="cg-who" id="cg-who" aria-live="polite"></p><p class="cg-note cg-sketch" id="cg-sketch">${esc(t('dz.cg.sketch'))}</p>` +
         `<div class="cg-row"><button type="button" class="cg-btn cg-btn--main" id="cg-random" data-act="random">${esc(t('dz.cg.random'))}</button>` +
         `<button type="button" class="cg-btn" id="cg-same" data-act="same">${esc(t('dz.cg.same'))}</button></div>` +
         `<div class="cg-row cg-row--toggles"><label class="cg-check"><input type="checkbox" id="cg-bars-on" data-act="bars"><span>${esc(t('dz.cg.bars'))}</span></label>` +
         `<label class="cg-check"><input type="checkbox" id="cg-lobby-on" data-act="lobby"><span>${esc(t('dz.cg.lobby'))}</span></label></div>` +
       `</section>` +
+      `<section class="cg-queue cg-cast"><div class="cg-queue-head"><div><h2>${esc(t('dz.cg.cast'))}</h2><p>${esc(t('dz.cg.cast.note'))}</p></div></div><div class="cg-shots" id="cg-shots"></div></section>` +
       `<section class="cg-panel">` +
         `<p class="cg-lead">${esc(t('dz.cg.lead'))}</p>` +
         `<div class="cg-group"><h2>${esc(t('dz.cg.sec.who'))}</h2><div class="cg-seg" id="cg-kinds" role="group" aria-label="${esc(t('dz.cg.sec.who'))}"></div>` +
@@ -57,7 +60,7 @@
         ['data', 'prompt', 'svg'].map((k) => `<button type="button" data-act="tab" data-id="${k}">${esc(t('dz.cg.tab.' + k))}</button>`).join('') + `</div>` +
         `<p class="cg-note" id="cg-take-note"></p><textarea id="cg-out" class="cg-out" readonly rows="7" spellcheck="false" aria-label="${esc(t('dz.cg.take'))}"></textarea>` +
         `<button type="button" class="cg-btn" id="cg-copy" data-act="copy">${esc(t('dz.cg.copy'))}</button></section>`;
-    for (const id of ['window', 'frame', 'bars', 'who', 'kinds', 'species', 'moods', 'thumbs', 'out', 'take-note', 'copy', 'tabs', 'bars-on', 'lobby-on']) el[id] = rootEl.querySelector('#cg-' + id);
+    for (const id of ['window', 'frame', 'bars', 'who', 'sketch', 'shots', 'kinds', 'species', 'moods', 'thumbs', 'out', 'take-note', 'copy', 'tabs', 'bars-on', 'lobby-on']) el[id] = rootEl.querySelector('#cg-' + id);
     el.kinds.innerHTML = ['all'].concat(CG.KINDS).map((k) => `<button type="button" data-act="kind" data-id="${k}">${esc(t('dz.cg.kind.' + k))}</button>`).join('');
     el.moods.innerHTML = CG.OPTIONS.mood.map((m) => `<button type="button" data-act="mood" data-id="${m}">${esc(t('dz.cg.mood.' + m))}</button>`).join('');
 
@@ -65,12 +68,13 @@
       const b = e.target.closest('[data-act]');
       if (!b || b.tagName === 'INPUT') return;
       const act = b.dataset.act, id = b.dataset.id;
-      if (act === 'random') { st.spec = randomSpec(); render(); }
-      else if (act === 'same') { st.spec = randomSpec(st.spec.species); render(); }
-      else if (act === 'kind') { st.kind = id; if (id !== 'all' && CG.SPECIES[st.spec.species].kind !== id) st.spec = randomSpec(); fillQueue(); render(); }
-      else if (act === 'mood') { st.spec.mood = id; render(); }
+      if (act === 'random') { st.spec = randomSpec(); st.shot = null; render(); }
+      else if (act === 'same') { st.spec = randomSpec(st.spec.species); st.shot = null; render(); }
+      else if (act === 'kind') { st.kind = id; if (id !== 'all' && CG.SPECIES[st.spec.species].kind !== id) { st.spec = randomSpec(); st.shot = null; } fillQueue(); renderQueue(); render(); }
+      else if (act === 'mood') { st.spec.mood = id; st.shot = null; render(); }
+      else if (act === 'shot') { const c = CAST[Number(id)]; st.spec = Object.assign({}, c.spec); st.shot = c.id; render(); el.window.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
       else if (act === 'queue') { fillQueue(); renderQueue(); }
-      else if (act === 'thumb') { st.spec = Object.assign({}, st.queue[Number(id)]); render(); el.window.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+      else if (act === 'thumb') { st.spec = Object.assign({}, st.queue[Number(id)]); st.shot = null; render(); el.window.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
       else if (act === 'tab') { st.tab = id; renderTake(); }
       else if (act === 'copy') copy();
     });
@@ -80,6 +84,7 @@
       if (c.dataset.act === 'lobby') { st.lobby = c.checked; render(); return; }
       const part = c.dataset.part;
       if (!part) return;
+      st.shot = null;
       if (part === 'species') st.spec = CG.random(st.spec.seed, c.value);
       else st.spec[part] = part === 'eyen' ? Number(c.value) : c.value;
       render();
@@ -93,6 +98,11 @@
       CG.svg(s, { bg: 'lobby', uid: 'q' + i }) + `<span>${esc(t('dz.cg.species.' + s.species))}</span></button>`).join('');
   }
 
+  function renderShots() {
+    el.shots.innerHTML = CAST.map((c, i) => `<button type="button" class="cg-shot" data-act="shot" data-id="${i}" aria-label="${esc(caption(c.spec))}">` +
+      `<img src="${c.img}" alt=""><span>${esc(t('dz.cg.species.' + c.spec.species))}</span></button>`).join('');
+  }
+
   function renderTake() {
     const s = CG.normalize(st.spec);
     for (const b of el.tabs.children) b.setAttribute('aria-pressed', String(b.dataset.id === st.tab));
@@ -104,10 +114,14 @@
   function render() {
     st.spec = CG.normalize(st.spec);
     const s = st.spec;
-    el.frame.innerHTML = CG.svg(s, { bg: st.lobby ? 'lobby' : 'plain', uid: 'main' });
+    const shot = st.shot ? CAST.find((c) => c.id === st.shot) : null;      // готовый кадр показывается, пока детали не тронуты
+    el.window.classList.toggle('cg-window--shot', !!shot);
+    el.frame.innerHTML = shot ? `<img src="${shot.img}" alt="${esc(caption(s))}">` : CG.svg(s, { bg: st.lobby ? 'lobby' : 'plain', uid: 'main' });
     el.bars.hidden = !st.bars;
-    el['bars-on'].checked = st.bars; el['lobby-on'].checked = st.lobby;
-    el.who.textContent = caption(s) + '  ·  № ' + s.seed;
+    el.sketch.hidden = !!shot;
+    el['bars-on'].checked = st.bars; el['lobby-on'].checked = st.lobby; el['lobby-on'].disabled = !!shot;
+    for (const b of el.shots.children) b.setAttribute('aria-pressed', String(!!shot && CAST[Number(b.dataset.id)].id === shot.id));
+    el.who.textContent = caption(s) + '  ·  ' + (shot ? t('dz.cg.shot') + ' ' + shot.id : '№ ' + s.seed);
     for (const b of el.kinds.children) b.setAttribute('aria-pressed', String(b.dataset.id === st.kind));
     for (const b of el.moods.children) b.setAttribute('aria-pressed', String(b.dataset.id === s.mood));
     const ids = speciesOf(st.kind);
@@ -129,11 +143,12 @@
     const rootEl = document.getElementById('cg');
     build(rootEl);
     const saved = (data && data.spec ? data : null) || load();
-    if (saved && saved.spec) { st.kind = saved.kind || 'all'; st.spec = saved.spec; st.bars = saved.bars !== false; st.lobby = saved.lobby !== false; }
+    if (saved && saved.spec) { st.kind = saved.kind || 'all'; st.spec = saved.spec; st.shot = saved.shot || null; st.bars = saved.bars !== false; st.lobby = saved.lobby !== false; }
+    else if (CAST.length) { st.spec = Object.assign({}, CAST[0].spec); st.shot = CAST[0].id; }
     else st.spec = CG.random(1994, 'leshy');
-    fillQueue(); renderQueue(); render();
+    renderShots(); fillQueue(); renderQueue(); render();
     const hot = root.claude && root.claude.hot;
-    if (hot && hot.snapshot) hot.snapshot(() => ({ kind: st.kind, spec: st.spec, bars: st.bars, lobby: st.lobby }));
+    if (hot && hot.snapshot) hot.snapshot(() => ({ kind: st.kind, spec: st.spec, shot: st.shot, bars: st.bars, lobby: st.lobby }));
   }
 
   const hot = root.claude && root.claude.hot;

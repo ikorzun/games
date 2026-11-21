@@ -6,6 +6,7 @@
      DZ.chargen.normalize(spec)          → spec     дополняет пропущенные детали по виду и зерну
      DZ.chargen.svg(spec, opts?)         → строка   поясной кадр 320×360; opts: { bg: 'lobby' | 'plain' | 'none', uid }
      DZ.chargen.prompt(spec)             → строка   английское описание того же персонажа для генеративной модели
+     DZ.chargen.describe(spec)           → { who, state }   то же по частям, для листа из нескольких кадров (tools/cast_sheet.mjs)
    Списки деталей — DZ.chargen.OPTIONS, виды — DZ.chargen.SPECIES; подписи к ним — ключи dz.cg.* в chargen_strings_ru.js. */
 (function (root) {
   const DZ = (root.DZ = root.DZ || {});
@@ -509,7 +510,7 @@
   const EN = {
     species: { human: 'an ordinary person', grey: 'a small grey-skinned alien', squid: 'an alien with a squid-like face', insect: 'an insect-like alien', blob: 'a translucent jelly blob alien',
       reptile: 'a lizard-skinned alien', robot: 'a dented boxy robot', stalker: 'an alien with eyes on stalks', leshy: 'a forest spirit covered with moss and bark', vodyanoy: 'a fat wet water spirit',
-      domovoy: 'a tiny hairy house spirit', chert: 'a small-time devil', gorynych: 'a three-headed dragon standing upright like a man', koschei: 'a very thin, very old immortal king',
+      domovoy: 'a tiny hairy house spirit', chert: 'a small-time devil', gorynych: 'a three-headed dragon standing upright like a man, three small heads on long necks coming out of one coat collar, each head with its own expression', koschei: 'a very thin, very old immortal king',
       vampire: 'a pale vampire', volkolak: 'a werewolf', likho: 'a one-eyed creature of bad luck', kikimora: 'a thin swamp hag', minotaur: 'a bull-headed man', gorgon: 'a gorgon with snakes for hair' },
     head: { potato: 'a potato-shaped head', egg: 'an egg-shaped head', pear: 'a pear-shaped head with heavy jowls', brick: 'a brick-shaped head', bean: 'a wide bean-shaped head',
       bulb: 'a large bulb-shaped head with a narrow chin', dome: 'a tall domed head', skull: 'a skull-like head with sunken cheeks', box: 'a boxy head', drop: 'a drop-shaped body with no separate head' },
@@ -540,18 +541,26 @@
       umber: 'dark brown skin', bronze: 'bronze skin', plum: 'dusty plum skin', azure: 'dusty blue skin', coral: 'dull coral skin', mint: 'pale mint skin', mustard: 'mustard-yellow skin', rose: 'dusty pink skin',
       ash: 'ash-violet skin', copper: 'dull copper plating', enamel: 'chipped green enamel', bark: 'brown bark-like skin', ashfur: 'ash-grey fur' },
   };
-  function prompt(input) {
+  // описание персонажа словами: кто это (who) и в каком он состоянии (state)
+  function describe(input) {
     const s = normalize(input), bits = [];
     const add = (v) => { if (v) bits.push(v); };
     add(EN.build[s.build]); add(EN.head[s.head]); add(EN.skin[s.skin]);
-    add(s.eyen === 2 || s.eyes === 'stalk' ? EN.eyes[s.eyes] : `${['', 'one', 'two', 'three', 'four'][s.eyen]} ${s.eyes === 'dot' ? 'small round eye' + (s.eyen > 1 ? 's' : '') : EN.eyes[s.eyes]}`);
+    const one = { dot: 'one small round eye with a dot pupil', slit: 'one small yellow eye with a slit pupil', lamp: 'one lamp eye', almond: 'one big dark almond eye', compound: 'one faceted insect eye' };
+    add(s.eyes === 'stalk' || s.eyen === 2 ? EN.eyes[s.eyes] : s.eyen === 1 ? one[s.eyes] : `${['', '', '', 'three', 'four'][s.eyen]} ${EN.eyes[s.eyes]}`);
     add(EN.nose[s.nose]); add(EN.mouthx[s.mouthx]); add(EN.ears[s.ears]); add(EN.top[s.top]); add(EN.face[s.face]); add(EN.tex[s.tex]);
     if (s.glasses !== 'none' && s.eyes === 'dot' && s.eyen === 2) add(s.glasses === 'round' ? 'small round wire glasses, each eye inside its own lens' : 'small rectangular glasses, each eye inside its own lens');
     add(EN.mark[s.mark]);
-    return `One detainee seen from the waist up from the duty officer's window of an intergalactic militia station (a shabby Russian station lobby at night, 1994): ${EN.species[s.species]}, ${bits.join(', ')}, wearing ${EN.clothes[s.clothes].replace('{c}', EN.tone[s.tone] || EN.own[s.clothes] || '')}. The only saturated colour is one small ${EN.accent[s.accent]} accent (tie, scarf pattern or trim). ` +
-      `State, acted with the whole upper body: ${EN.mood[s.mood]}. Ordinary, tired, deadpan; nothing cute, heroic or scary. Match the art style of the attached reference sheet exactly: thin, even, slightly wobbly dark-brown contour, ` +
-      `flat muted earthy colours with one soft shadow tone, an oversized rounded head with small features in the centre of the face. No bars, no window frame, no text.`;
+    return { who: `${EN.species[s.species]}, ${bits.join(', ')}, wearing ${EN.clothes[s.clothes].replace('{c}', EN.tone[s.tone] || EN.own[s.clothes] || '')}; ` +
+      `the only saturated colour on this character is one small ${EN.accent[s.accent]} accent (tie, scarf pattern or trim)`.replace(/\b([Aa]) (?=[aeiou])/g, '$1n '), state: EN.mood[s.mood] };
+  }
+  // полный промпт одного кадра; для листа из нескольких кадров описания собирает tools/cast_sheet.mjs
+  function prompt(input) {
+    const d = describe(input);
+    return `One detainee seen from the waist up from the duty officer's window of an intergalactic militia station (a shabby Russian station lobby at night, 1994): ${d.who}. ` +
+      `State, acted with the whole upper body: ${d.state}. Ordinary, tired, deadpan; nothing cute, heroic or scary. Match the art style of the attached reference sheets exactly: thin, even, slightly wobbly dark-brown contour, ` +
+      `flat muted colours with one soft shadow tone, an oversized rounded head with small features in the centre of the face. No bars, no window frame, no text.`;
   }
 
-  DZ.chargen = { OPTIONS, PARTS, SPECIES, KINDS, random, normalize, svg, prompt, W, H };
+  DZ.chargen = { OPTIONS, PARTS, SPECIES, KINDS, random, normalize, svg, describe, prompt, W, H };
 })(typeof window !== 'undefined' ? window : globalThis);

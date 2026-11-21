@@ -2,11 +2,12 @@
 //   — у каждого вида, детали и варианта есть подпись dz.cg.*;
 //   — 60 случайных персонажей каждого вида и каждый вариант каждой детали рисуются без NaN и undefined;
 //   — одно зерно всегда даёт одного и того же персонажа; normalize не меняет уже полный spec;
+//   — у каждого кадра картотеки (src/cast.js) есть файл и полное описание; готовый кадр показывается в окне, пока детали не тронуты;
 //   — страница открывается на телефоне и на широком экране без ошибок и прокрутки вбок, области касания не меньше 44 pt,
 //     кнопки и списки меняют персонажа.
 //   node test/chargen.mjs [--dist]
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
@@ -17,7 +18,7 @@ const fail = (msg) => { console.error('ОШИБКА: ' + msg); process.exit(1); 
 
 const box = { console }; box.window = box; box.globalThis = box;
 vm.createContext(box);
-for (const f of ['src/chargen_strings_ru.js', 'src/chargen.js']) vm.runInContext(readFileSync(join(here, '..', f), 'utf8'), box, { filename: f });
+for (const f of ['src/chargen_strings_ru.js', 'src/chargen.js', 'src/cast.js']) vm.runInContext(readFileSync(join(here, '..', f), 'utf8'), box, { filename: f });
 const CG = box.DZ.chargen, RU = box.DZ.strings.ru;
 
 const missing = [];
@@ -42,6 +43,13 @@ for (const id in CG.SPECIES) {
   for (const p of CG.PARTS) for (const o of CG.OPTIONS[p]) { if (bad(CG.svg(Object.assign({}, base, { [p]: o }), { uid: 't' }))) fail(`кривой рисунок: ${id}, ${p}=${o}`); drawn++; }
 }
 
+const CAST = box.DZ.cast;
+if (!CAST.length) fail('картотека пуста');
+for (const c of CAST) {
+  if (!existsSync(join(here, '..', c.img))) fail(`нет файла кадра ${c.img}`);
+  if (JSON.stringify(CG.normalize(c.spec)) !== JSON.stringify(c.spec)) fail(`неполное описание кадра ${c.id}`);
+}
+
 let chromium;
 try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = require(join(here, '..', '..', 'runtime', 'node_modules', 'playwright-core'))); }
 const url = pathToFileURL(join(here, '..', process.argv.includes('--dist') ? 'dist/constructor.html' : 'constructor.html')).href;
@@ -55,6 +63,11 @@ try {
     await page.goto(url);
     await page.evaluate(() => document.fonts.ready);
     const who = () => page.textContent('#cg-who');
+    if (!(await page.locator('#cg-frame img').count())) fail(`${label}: страница не открывается готовым кадром`);
+    await page.click('[data-act="shot"][data-id="1"]');
+    if (!(await who()).includes(CAST[1].id) || !(await page.locator('#cg-frame img').count())) fail(`${label}: кадр из картотеки не открывается`);
+    await page.click('[data-act="mood"][data-id="calm"]');
+    if (!(await page.locator('#cg-frame svg').count())) fail(`${label}: после правки детали не показан эскиз`);
     const first = await who();
     await page.click('[data-act="random"]');
     if ((await who()) === first) fail(`${label}: «Случайный» не меняет персонажа`);
@@ -68,6 +81,7 @@ try {
     for (const tab of ['prompt', 'svg', 'data']) { await page.click(`[data-act="tab"][data-id="${tab}"]`); if ((await page.inputValue('#cg-out')).length < 100) fail(`${label}: пустая выгрузка «${tab}»`); }
     const report = await page.evaluate(() => {
       const out = [];
+      if (document.querySelectorAll('#cg-shots img').length !== window.DZ.cast.length) out.push('нет кадров картотеки');
       for (const el of document.querySelectorAll('#cg button, #cg select, #cg label.cg-check')) { const r = el.getBoundingClientRect(); if (r.width < 43.5 || r.height < 43.5) out.push(`касание ${Math.round(r.width)}×${Math.round(r.height)}: ${el.textContent.trim().slice(0, 20)}`); }
       if (document.documentElement.scrollWidth > window.innerWidth) out.push('горизонтальная прокрутка');
       if (/dz\.cg\./.test(document.getElementById('cg').innerText)) out.push('сырой ключ в тексте');
@@ -79,4 +93,4 @@ try {
     await page.close();
   }
 } finally { await browser.close(); }
-console.log(`Конструктор проверен: ${Object.keys(CG.SPECIES).length} видов, ${drawn} рисунков, страница на трёх экранах.`);
+console.log(`Конструктор проверен: ${Object.keys(CG.SPECIES).length} видов, ${drawn} эскизов, ${CAST.length} кадров в картотеке, страница на трёх экранах.`);
