@@ -25,7 +25,10 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageEnhance
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from print_look import old_photo, print_look  # noqa: E402
 
 W, H = 720, 1280
 QUALITY = 82
@@ -146,9 +149,43 @@ def print_card(path: Path, key: str = '') -> Image.Image:
     return card
 
 
-def scrap_cell(path: Path) -> Image.Image:
+def scrap_photo(path: Path, src: Path) -> Image.Image:
+    """Обрывок фотографии — из того же снимка «как с iPhone 4», что висит на стене (рука на замёрзшем стекле): прежняя картинка
+    нейросети снимала его другим «аппаратом» (куратор, V-58). Форма обрывка и рваный край с волокнами бумаги — прежние."""
+    old = Image.open(path).convert('RGBA')
+    a = old.split()[3]
+    ys, xs = np.nonzero(np.asarray(a) > 8)
+    x0, x1, y0, y1 = xs.min(), xs.max(), ys.min(), ys.max()
+    frost = Image.open(find(src, 'dream_frost', 'frost')).convert('RGB')
+    fw, fh = frost.size
+    # Середина снимка с ладонью — в рамку обрывка.
+    bw, bh = x1 - x0 + 1, y1 - y0 + 1
+    k = max(bw / fw, bh / (fh * 0.7))
+    sw, sh = round(fw * k), round(fh * k)
+    shot = frost.resize((sw, sh), Image.LANCZOS)
+    ox, oy = (sw - bw) // 2, round(sh * 0.15)
+    rgb = Image.new('RGB', old.size, (0, 0, 0))
+    rgb.paste(shot.crop((ox, oy, ox + bw, oy + bh)), (x0, y0))
+    rgb = ImageEnhance.Color(rgb).enhance(DREAM_SATURATION)
+    lut = [round(255 * (v / 255) ** DREAM_GAMMA) for v in range(256)]
+    rgb = rgb.point(lut * 3)
+    # Рваный край (полоса у прозрачного) — прежний: там волокна бумаги.
+    inner = a.filter(ImageFilter.MinFilter(15))
+    band = np.asarray(a).astype(np.int16) - np.asarray(inner).astype(np.int16) > 40
+    out = np.asarray(rgb).copy()
+    out[band] = np.asarray(old.convert('RGB'))[band]
+    im = Image.fromarray(out).convert('RGBA')
+    im.putalpha(a)
+    return im
+
+
+def scrap_cell(path: Path, src: Path | None = None) -> Image.Image:
     """Обрывок по его непрозрачной части — в клетку 360 × 400 с полем 4 px, с сохранением пропорций."""
-    im = Image.open(path).convert('RGBA')
+    if src is not None and path.stem == 'scrap_photo':
+        im = scrap_photo(path, src)
+    else:
+        # Бумажки (план, листок календаря, лента ЭКГ) — с настоящей печатью и зерном бумаги, без гладкости нейросети.
+        im = print_look(Image.open(path).convert('RGBA'), 'paper', seed=len(path.stem))
     a = np.asarray(im)[:, :, 3]
     ys, xs = np.nonzero(a > 8)
     if len(xs) == 0:
@@ -173,7 +210,7 @@ def layer_dream_b(src: Path) -> Image.Image:
     for n, x, y in DREAM_B:
         out.paste(print_card(find(src, f'dream_{n}', n), n).convert('RGBA'), (x, y))
     for n, x, y in SCRAPS:
-        out.paste(scrap_cell(find(src, f'scrap_{n}')), (x, y))
+        out.paste(scrap_cell(find(src, f'scrap_{n}'), src), (x, y))
     return out
 
 
@@ -181,7 +218,8 @@ def patch_portrait(src: Path) -> Image.Image:
     """faces_a с новым большим портретом; маска лиц в его прямоугольнике снята (кроме полосы у края)."""
     layer = Image.open(OUT / 'faces_a.webp').convert('RGBA')
     x, y, w, h = PORTRAIT
-    por = Image.open(find(src, 'portrait')).convert('RGB').resize((w, h), Image.LANCZOS)
+    # Старый отпечаток: серебряное зерно, мягкость, пыль — не гладкая картинка нейросети (квиз 21.11, ночь).
+    por = old_photo(Image.open(find(src, 'portrait')).convert('RGB')).resize((w, h), Image.LANCZOS)
     rgb = layer.convert('RGB')
     rgb.paste(por, (x, y))
     alpha = np.asarray(layer.split()[3]).copy()
@@ -197,7 +235,8 @@ def save(im: Image.Image, name: str) -> None:
     # alpha_quality 100: альфа без потерь (у faces_a это маска лиц, у dream_b — рваный край обрывков).
     if im.mode == 'RGBA' and np.asarray(im)[:, :, 3].min() == 255:
         im = im.convert('RGB')
-    im.save(path, 'WEBP', quality=QUALITY, method=6, alpha_quality=100)
+    # Наклейки печатные — с растром и сдвигом красок, мелочи много; 72 держит их в бюджете ядра сборки.
+    im.save(path, 'WEBP', quality=72 if name == 'stickers' else QUALITY, method=6, alpha_quality=100)
     print(f'{path.relative_to(OUT.parent.parent)}  {path.stat().st_size // 1024} КБ')
 
 

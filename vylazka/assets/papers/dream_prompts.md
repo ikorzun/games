@@ -101,3 +101,16 @@ photograph, unsettling, minimal. No text.*
 | `xray` | A chest X-ray film clipped to a glowing light box in a dark doctor's office: the ribs and spine look normal, but where the heart should be there is the dark shape of a moth with open wings. A quick phone snapshot of the light box, glare, slight moire. |
 | `stairs` | An empty stairwell of a prefab apartment block seen from the landing: pale green painted walls, a single bare light bulb, worn concrete steps going down into darkness much further than any building could, the metal railing disappearing into black. Flash photo; the flash reaches only the first few steps. |
 | `kettle` | A dark small kitchen at night: a chrome kettle on a gas stove with a small ring of blue flame; its curved polished surface reflects the kitchen behind the photographer and a blurred standing human figure, although the kitchen itself is empty. No flash, noisy, yellow cast. |
+
+## Наклейки заново — дешёвая печать (квиз 21.11, ночь: «Всё, и плакаты тоже»)
+
+GPT Image 2.6 через ключ партнёра, правкой по прежним листам (`stickers_1`, `stickers_2` — сюжеты и сетка 4 × 3 те же; палец с ниткой
+по-прежнему не берётся), качество medium, 1536 × 1024. Запрос, общий для двух листов:
+
+*Keep exactly the layout of the attached sheet: a plain pure white background with 12 square stickers in 4 columns and 3 rows,
+separated by even white gaps, each square sticker on its own coloured background, the same subject in the same square as in the attached
+sheet. Redraw every sticker as a cheap printed sticker from a 1990s street kiosk, not as a digital illustration: flat colours only, a
+limited palette of 4 to 5 printing inks per sticker, thick uneven black outline, simple naive drawing with few details, shading done
+with a coarse printed dot screen instead of soft gradients, slight colour misregistration where a colour is printed a little off its
+outline, matte paper, slightly faded colours. No glossy highlights, no 3D rendering, no soft airbrush, no photorealism, no text, no
+letters, no logos.* — плюс «Sticker sheet, the same twelve subjects as the attached sheet, in the same order».
