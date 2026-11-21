@@ -4448,3 +4448,69 @@ describe('белая комната: задел цепь — камеру пер
     expect(sites.filter((s) => inBox(s.pos)).length).toBe(0);
   });
 });
+
+describe('песчаный зал: шаг в чёрный проём — стоишь в проёме огромного зала тем же шагом; обратно — так же (партнёр 21.11, 19:13)', () => {
+  /** Уровень убежища с чёрным проёмом (жребий — dunesRolled). */
+  const withDunes = (): BuiltLevel => {
+    for (let s = 2000; s < 3600; s += 41) {
+      const l = buildLevel(generateLayout(s, 2));
+      if (l.duneDoor) return l;
+    }
+    throw new Error('нет уровня с чёрным проёмом');
+  };
+  const level = withDunes();
+  const d = level.duneDoor!;
+  const yawOf = (x: number, z: number): number => Math.atan2(-x, -z);
+  const turn = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+  const walkIn = (h: Harness): void => {
+    // Переход начала сессии должен кончиться: во время перехода шов не срабатывает.
+    h.run(2);
+    h.game.teleport(d.at[0] - d.n[0] * 1.6, d.y, d.at[1] - d.n[1] * 1.6, yawOf(d.n[0], d.n[1]), 0);
+    h.run(0.2);
+    for (let i = 0; i < Math.round(4 / STEP) && h.game.where === 'main'; i++) h.tick({ ...emptyInput(), moveZ: 1 });
+  };
+
+  it('вошёл — уже в зале: без перехода, вспышки и прыжка времени; смотрит в зал и шагает дальше', () => {
+    const h = new Harness(level);
+    walkIn(h);
+    expect(h.game.where).toBe('pocket');
+    expect(h.game.pocket?.kind).toBe('dunes');
+    expect(h.game.transition).toBeNull();
+    const jumps = h.log.dream.filter((e) => e.type === 'jump');
+    expect(jumps.length).toBeGreaterThan(0);
+    expect(jumps.every((e) => e.type === 'jump' && e.plan.style === 'seam')).toBe(true);
+    // Проём зала смотрит в −z: взгляд — туда, тело — за плоскостью проёма, на песке порога.
+    expect(Math.abs(turn(h.game.aimYaw))).toBeLessThan(0.06);
+    const ex = h.game.pocket!.exit!;
+    expect(h.game.body.z).toBeLessThan(ex[2] - 0.3);
+    expect(h.game.body.y).toBeGreaterThan(ex[1] + 0.1);
+    // Шаг не прервался: скорость сохранена и повёрнута в зал.
+    const z0 = h.game.body.z;
+    h.run(1, { ...emptyInput(), moveZ: 1 });
+    expect(h.game.body.z).toBeLessThan(z0 - 0.8);
+    expect(h.game.where).toBe('pocket');
+  });
+
+  it('обратно тем же проёмом — снаружи чёрного проёма, лицом от него, тоже без перехода', () => {
+    const h = new Harness(level);
+    walkIn(h);
+    expect(h.game.pocket?.kind).toBe('dunes');
+    const ex = h.game.pocket!.exit!;
+    h.run(1);
+    // Развернуться к проёму (+z) и шагнуть в черноту.
+    h.game.teleport(ex[0], h.game.body.y, ex[2] - 1.4, Math.PI, 0);
+    h.run(0.2);
+    for (let i = 0; i < Math.round(4 / STEP) && h.game.where !== 'main'; i++) h.tick({ ...emptyInput(), moveZ: 1 });
+    expect(h.game.where).toBe('main');
+    expect(h.game.transition).toBeNull();
+    const b = h.game.body;
+    const depth = (b.x - d.at[0]) * d.n[0] + (b.z - d.at[1]) * d.n[1];
+    expect(depth).toBeLessThan(-0.3);
+    expect(depth).toBeGreaterThan(-1.2);
+    // Лицом от проёма — наружу.
+    expect(Math.abs(turn(h.game.aimYaw - yawOf(-d.n[0], -d.n[1])))).toBeLessThan(0.06);
+    expect(h.log.dream.filter((e) => e.type === 'jump').every((e) => e.type === 'jump' && e.plan.style === 'seam')).toBe(true);
+    // Рельеф зала ушёл вместе с ним: остался только язык песка у проёма.
+    expect(h.game.colliders.fields.filter((f) => f.group?.startsWith('pocket')).length).toBe(0);
+  });
+});

@@ -88,6 +88,20 @@ const RULES: Record<WorldKind, readonly Rule[]> = {
   ],
 };
 
+/**
+ * Помещения, без которых вещь бумаги «одна на уровень» не встанет: единственное помещение своего типа (стена лиц в гостиной,
+ * рамки в прихожей…). Песчаный зал их не занимает: комната за его чёрным проёмом пуста (level_build.ts).
+ */
+export function paperOnly(world: WorldKind, rooms: readonly { id: number; type: RoomType }[]): Set<number> {
+  const out = new Set<number>();
+  for (const r of RULES[world] ?? []) {
+    if (r.max !== 1 || r.deck) continue;
+    const fit = rooms.filter((q) => r.types.includes(q.type));
+    if (fit.length === 1) out.add(fit[0]!.id);
+  }
+  return out;
+}
+
 /** Сколько предметов каждого правила ещё можно поставить на уровне. Одно на уровень, общее для всех помещений. */
 export interface PaperState {
   world: WorldKind;

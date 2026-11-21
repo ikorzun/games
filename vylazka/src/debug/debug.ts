@@ -86,6 +86,15 @@ export interface VzDebugApi {
   gotoLandmark(id: string, index?: number, distance?: number): boolean;
   /** Встать в центр клетки помещения. */
   gotoRoom(roomId: number, yawDeg?: number): boolean;
+  /**
+   * Встать снаружи помещения у его прохода, в `back` м от проёма, лицом к середине помещения (кадры комнат: промо, проверки
+   * глазами). Проход — пара соседних клеток навигации на одном полу, ближняя к середине. Нет прохода — false.
+   */
+  /** Песчаный зал: чёрный проём уровня, где стоит игрок (в зале ли), и что в зале (позвонки, рёбра, череп). Нет проёма — null. */
+  dunes(): Record<string, unknown> | null;
+  /** Встать снаружи чёрного проёма в `distance` м от него, лицом к нему. Нет проёма — false. */
+  gotoDunes(distance?: number): boolean;
+  roomDoorView(roomId: number, back?: number, pitchDeg?: number): { door: [number, number]; center: [number, number]; at: [number, number, number] } | false;
   /** Вещи сна: что стоит, что с ним станет под взглядом, в каком оно состоянии. */
   things(): Array<Record<string, unknown>>;
   /**
@@ -362,6 +371,9 @@ export function installDebug(app: App): void {
         spawn: [...l.spawn.pos],
         rooms: (l.layout?.rooms ?? []).map((r) => ({ id: r.id, type: r.type, tier: r.tier, cells: r.cells.length })),
         sky: l.skyRoom ?? null,
+        green: l.greenRoom ?? null,
+        grass: l.grassRoom ?? null,
+        white: l.whiteRoom?.room ?? null,
         landmarks: l.landmarks.map((m) => ({ id: m.id, room: m.room, tier: m.tier })),
         flats: (l.flats ?? []).map((f) => ({ kind: f.kind, what: f.what, room: f.room, tier: f.tier })),
       };
@@ -693,6 +705,47 @@ export function installDebug(app: App): void {
       game().debugHome();
       game().teleport(n.x, n.y, n.z, (yawDeg * Math.PI) / 180, 0);
       return true;
+    },
+    dunes: () => {
+      const g = game();
+      const d = g.level?.duneDoor;
+      if (!d) return null;
+      const p = g.pocket as (typeof g.pocket & { dunes?: { vertebrae: unknown[]; ribs: unknown[]; skull: unknown } }) | null;
+      const inside = g.where === 'pocket' && p?.kind === 'dunes';
+      return { door: { room: d.room, tier: d.tier, at: [...d.at], y: d.y, n: [...d.n], w: d.w }, inside, exit: inside && p?.exit ? [...p.exit] : null, field: g.colliders.fieldAt(d.at[0] - d.n[0] * 0.5, d.at[1] - d.n[1] * 0.5), ...(inside && p?.dunes ? { vertebrae: p.dunes.vertebrae.length, ribs: p.dunes.ribs.length, skull: p.dunes.skull } : {}) };
+    },
+    gotoDunes: (distance = 2.5) => {
+      const g = game();
+      const d = g.level?.duneDoor;
+      if (!d) return false;
+      g.debugHome();
+      const x = d.at[0] - d.n[0] * distance;
+      const z = d.at[1] - d.n[1] * distance;
+      g.teleport(x, Math.max(d.y, g.colliders.fieldAt(x, z)), z, Math.atan2(-d.n[0], -d.n[1]), 0);
+      return true;
+    },
+    roomDoorView: (roomId, back = 2.4, pitchDeg = -3) => {
+      const l = app.level;
+      const own = l.nav.filter((n) => n.room === roomId);
+      if (!own.length) return false;
+      const cx = own.reduce((a, n) => a + n.x, 0) / own.length;
+      const cz = own.reduce((a, n) => a + n.z, 0) / own.length;
+      let best: { n: (typeof own)[number]; o: (typeof own)[number]; d: number } | null = null;
+      for (const n of own)
+        for (const i of n.links) {
+          const o = l.nav[i]!;
+          if (o.room === roomId || o.tier !== n.tier || Math.abs(o.y - n.y) > 0.2) continue;
+          const d = Math.hypot((n.x + o.x) / 2 - cx, (n.z + o.z) / 2 - cz);
+          if (!best || d < best.d) best = { n, o, d };
+        }
+      if (!best) return false;
+      const { n, o } = best;
+      const len = Math.hypot(o.x - n.x, o.z - n.z) || 1;
+      const door: [number, number] = [(n.x + o.x) / 2, (n.z + o.z) / 2];
+      const at: [number, number, number] = [door[0] + ((o.x - n.x) / len) * back, o.y, door[1] + ((o.z - n.z) / len) * back];
+      game().debugHome();
+      game().teleport(at[0], at[1], at[2], Math.atan2(-(cx - at[0]), -(cz - at[2])), (pitchDeg * Math.PI) / 180);
+      return { door, center: [cx, cz], at };
     },
     shadows: (on) => {
       game().renderer.debugShadowsOff = !on;

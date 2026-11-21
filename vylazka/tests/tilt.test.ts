@@ -141,8 +141,10 @@ describe('доворот: в игре', () => {
     let n = 0;
     for (const ch of side.chunks) {
       const d = ch.mesh;
-      for (let i = 0; i < d.obj!.length; i++) {
-        if (d.obj![i] !== b.id) continue;
+      // Кусок без вещей (помещение за чёрным проёмом песчаного зала пусто) номеров объектов не несёт.
+      if (!d.obj) continue;
+      for (let i = 0; i < d.obj.length; i++) {
+        if (d.obj[i] !== b.id) continue;
         const len = Math.hypot(d.normal[i * 3]!, d.normal[i * 3 + 1]!, d.normal[i * 3 + 2]!);
         expect(len).toBeCloseTo(1, 3);
         n += 1;

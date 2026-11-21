@@ -240,6 +240,7 @@
   "pocket.void.enter": "esto es lo que guardaste. los que quedaron en blanco aún faltan.",
   "pocket.void.next": "viene en camino.",
   "pocket.meadow.enter": "fondo predeterminado. aquí nada te encuentra. la puerta te acerca.",
+  "pocket.dunes.enter": "por dentro era más grande.",
   "pocket.meadow.enter.idle": "fondo predeterminado. aquí nada te encuentra. la puerta te lleva de vuelta.",
   "pocket.dollhouse.enter": "las mismas habitaciones, más pequeñas. la luz marca dónde lo dejaste.",
   "pocket.dollhouse.enter.idle": "las mismas habitaciones, más pequeñas. todavía no falta nada.",

@@ -11,9 +11,10 @@ export type JumpCause = 'gaze' | 'thin' | 'light' | 'revive' | 'dark' | 'fall' |
 
 /**
  * Как выглядит переход: cut — рывок с помехами; dissolve — место рассыпается в пыль;
- * blackout — свет гаснет, потом ты уже не там; whiteout — кадр выбеливается.
+ * blackout — свет гаснет, потом ты уже не там; whiteout — кадр выбеливается; seam — шов без следа: шагнул в чёрный проём песчаного
+ * зала — и стоишь в его проёме, тем же шагом и тем же взглядом (game.ts, world/pocket_dunes.ts).
  */
-export type JumpStyle = 'cut' | 'dissolve' | 'blackout' | 'whiteout';
+export type JumpStyle = 'cut' | 'dissolve' | 'blackout' | 'whiteout' | 'seam';
 
 export type JumpTarget = PocketKind | 'elsewhere' | 'scene' | 'limbo' | 'session';
 
@@ -28,10 +29,10 @@ export interface JumpPlan {
   /**
    * Для возврата в убежище (to: 'elsewhere') — куда именно: back — туда, откуда унесло; thing — поближе
    * к искомой вещи (дверь на лугу); far — подальше; start — в начало, туда, где вылазка началась
-   * (так возвращает Осыпь). Не задано — решает случай; в сне из сцен такой скачок уносит в другое место
+   * (так возвращает Осыпь); door — обратно в чёрный проём песчаного зала, наружу, тем же шагом. Не задано — решает случай; в сне из сцен такой скачок уносит в другое место
    * (следующую сцену), если она готова (docs/vylazka/pressure.md, §4.7).
    */
-  dest?: 'back' | 'thing' | 'far' | 'start';
+  dest?: 'back' | 'thing' | 'far' | 'start' | 'door';
 }
 
 export interface JumpsConfig {

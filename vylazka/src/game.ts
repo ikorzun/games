@@ -304,7 +304,12 @@ function pointAlong(path: readonly Vec3[], s: number): Vec3 {
   return [...path[path.length - 1]!];
 }
 
-const TIMING: Record<JumpStyle, readonly [number, number]> = { cut: [0.18, 0.45], dissolve: [1.6, 1.2], blackout: [0.55, 0.9], whiteout: [0.4, 1.2] };
+const TIMING: Record<JumpStyle, readonly [number, number]> = { cut: [0.18, 0.45], dissolve: [1.6, 1.2], blackout: [0.55, 0.9], whiteout: [0.4, 1.2], seam: [0, 0] };
+/**
+ * Песчаный зал (world/pocket_dunes.ts): из чёрного проёма зал выпускает не раньше, чем через столько секунд после входа (чтобы
+ * шаг назад на пороге не выбрасывал обратно тем же кадром), и сам отпускает — рассыпаясь — через столько-то секунд.
+ */
+const DUNES_STAY = { exitAfter: 0.4, min: 120, spread: 30 } as const;
 /** Телефон: белая вспышка скачка вдвое короче — экран близко к глазам и часто в тёмной комнате (предложение 17.11, T-22). */
 const WHITEOUT_PHONE: readonly [number, number] = [0.3, 0.6];
 /** Где собираются карманные пространства: далеко в стороне от убежища. */
@@ -522,7 +527,11 @@ const BIG_FATES: readonly Fate[] = ['jump', 'grow', 'dust', 'jump', 'shrink', 'g
 /** Воспоминание → вещь-образ. */
 const MEMORY_THING: Readonly<Record<string, string>> = MEMORY_THINGS;
 /** Цвет дали там, куда ведёт скачок: уходящее место растворяется в этот цвет. */
-const DEST_FOG: Record<string, Vec3> = { void: [0.86, 0.86, 0.86], limbo: [0.86, 0.86, 0.86], meadow: [0.62, 0.74, 0.88], dollhouse: [0.03, 0.02, 0.03], elsewhere: [0, 0, 0], scene: [0, 0, 0], session: [0, 0, 0] };
+const DEST_FOG: Record<string, Vec3> = { void: [0.86, 0.86, 0.86], limbo: [0.86, 0.86, 0.86], meadow: [0.62, 0.74, 0.88], dollhouse: [0.03, 0.02, 0.03], dunes: [0, 0, 0], elsewhere: [0, 0, 0], scene: [0, 0, 0], session: [0, 0, 0] };
+/** Угол взгляда по направлению (x, z): yaw 0 смотрит в −z. */
+const yawOf = (x: number, z: number): number => Math.atan2(-x, -z);
+/** Повернуть вектор (x, z) так, как поворачивается взгляд при прибавке d к yaw. */
+const turnXZ = (x: number, z: number, d: number): [number, number] => [x * Math.cos(d) + z * Math.sin(d), -x * Math.sin(d) + z * Math.cos(d)];
 
 export class Game {
   readonly shake = new ShakeMeter();
@@ -738,6 +747,11 @@ export class Game {
   private coldOpen: Thing | null = null;
   /** Следующее карманное пространство отпустит быстро (после холодного старта). */
   private shortStay = false;
+  /**
+   * Шов песчаного зала: где игрок стоял относительно проёма, которым уходит (x, z от середины проёма), его скорость и взгляд —
+   * чтобы по ту сторону стоять так же (game.switchPlace). null — шва нет.
+   */
+  private seam: { rel: [number, number]; vel: [number, number]; yaw: number; pitch: number } | null = null;
   /** Вспышка света памяти при «вспомнил», 1 → 0, и вещь, у которой она горит. */
   private memBloom = 0;
   /** Кривая ощущений за сессию (systems/feel.ts, K-11): к концу мир сжимается и плывёт, вспомнил — выдох. */
@@ -2226,6 +2240,9 @@ export class Game {
   private leavePocket(): void {
     if (!this.pocket) return;
     this.colliders.setGroup(`pocket${this.pocketGroup}`, false);
+    // Рельеф кармана (барханы) уходит совсем: полей мало, и мёртвые не должны копиться за сон.
+    const fs = this.colliders.fields;
+    for (let i = fs.length - 1; i >= 0; i--) if (fs[i]!.group === `pocket${this.pocketGroup}`) fs.splice(i, 1);
     this.renderer.setPocket(null);
     for (const t of this.pocketThings) this.dropThing(t);
     this.pocketThings = [];
@@ -2317,13 +2334,14 @@ export class Game {
     this.pocketGroup += 1;
     const group = `pocket${this.pocketGroup}`;
     for (const b of p.colliders) this.colliders.add({ ...b, group });
+    for (const f of p.fields ?? []) this.colliders.addField({ ...f, group });
     this.renderer.setPocket(p.meshes);
     this.where = limbo ? 'limbo' : 'pocket';
     this.env = p.env;
     this.pocketAge = 0;
     const stayRoll = this.rng();
     // После холодного старта луг отпускает быстро: дальше сессия идёт своим чередом.
-    this.pocketStay = this.shortStay ? COLD_OPEN.stay : 46 + stayRoll * 14;
+    this.pocketStay = kind === 'dunes' ? DUNES_STAY.min + stayRoll * DUNES_STAY.spread : this.shortStay ? COLD_OPEN.stay : 46 + stayRoll * 14;
     this.shortStay = false;
     this.pocketDone = false;
     this.focusGaze = 0;
@@ -2448,7 +2466,12 @@ export class Game {
       this.env = this.worldEnv;
       // После скачка план показывает волна: где я теперь.
       this.sonarAt = Math.min(this.sonarAt, this.time + 1.2);
-      if (plan.dest === 'start') {
+      const dd = this.level?.duneDoor;
+      if (plan.dest === 'door' && dd && this.seam) {
+        // Из песчаного зала его проёмом: снаружи чёрного проёма уровня, лицом туда же, куда шёл.
+        const cs = this.colliders;
+        this.crossSeam([0, 1], dd.at, [-dd.n[0], -dd.n[1]], (x, z) => Math.max(dd.y, cs.fieldAt(x, z)));
+      } else if (plan.dest === 'start') {
         // Осыпь возвращает в начало: игрок снова там, где вылазка началась, лицом туда же. Искомая вещь
         // остаётся, где была, — до неё надо дойти заново. Сама Осыпь остаётся там, где дотянулась, и
         // теряет игрока; если это было ближе шести клеток пути от начала — отходит, чтобы не поймать тут же снова.
@@ -2489,6 +2512,13 @@ export class Game {
     } else {
       if (this.where === 'main') this.returnNode = this.playerNode();
       this.enterPocket(to, false);
+      // Песчаный зал: шов — по ту сторону стоишь так же, как стоял у чёрного проёма (наружная сторона проёма зала — +z).
+      const dd = this.level?.duneDoor;
+      if (to === 'dunes' && plan.style === 'seam' && dd && this.pocket?.exit) {
+        const ex = this.pocket.exit;
+        const cs = this.colliders;
+        this.crossSeam(dd.n, [ex[0], ex[2]], [0, -1], (x, z) => Math.max(ex[1], cs.fieldAt(x, z)));
+      }
       dream.push({ type: 'pocket', kind: to, what: 'enter', ...(this.session?.active ? { memory: this.session.active.def.id } : {}) });
     }
     this.observed = true;
@@ -2541,6 +2571,46 @@ export class Game {
   }
 
   /** Белая комната: насколько герой внутри, касание цепи и ход перекрута. */
+  /**
+   * Чёрный проём песчаного зала: тело подошло к плоскости проёма вплотную (или оказалось в помещении за ним — через осыпавшуюся
+   * стену) — шов в зал. Где стоял относительно проёма, куда шёл и куда смотрел — запоминается: по ту сторону всё так же.
+   */
+  private stepDuneDoor(dream: DreamEvent[]): void {
+    const d = this.level?.duneDoor;
+    const s = this.session;
+    if (!d || this.where !== 'main' || this.transition || !s || s.over) return;
+    const b = this.body;
+    if (Math.abs(b.y - d.y) > 0.8) return;
+    const rx = b.x - d.at[0];
+    const rz = b.z - d.at[1];
+    const depth = rx * d.n[0] + rz * d.n[1];
+    const lat = rx * -d.n[1] + rz * d.n[0];
+    const atDoor = depth > -0.32 && depth < 1.6 && Math.abs(lat) < d.w / 2 - 0.08;
+    if (!atDoor && this.room !== d.room) return;
+    this.seam = { rel: [rx, rz], vel: [b.vx, b.vz], yaw: this.aimYaw, pitch: this.aimPitch };
+    this.beginJump({ cause: 'door', style: 'seam', to: 'dunes' }, dream);
+  }
+
+  /** Перенести игрока через шов: из проёма (середина at, наружная… внутренняя нормаль nFrom) в проём (to, nTo), сохранив шаг и взгляд. */
+  private crossSeam(nFrom: [number, number], to: [number, number], nTo: [number, number], y: (x: number, z: number) => number): void {
+    const sm = this.seam;
+    this.seam = null;
+    if (!sm) return;
+    const d = yawOf(nTo[0], nTo[1]) - yawOf(nFrom[0], nFrom[1]);
+    let [rx, rz] = turnXZ(sm.rel[0], sm.rel[1], d);
+    // Вбок — не шире проёма зала; вглубь — за плоскость проёма, чтобы камера была уже по ту сторону черноты.
+    const lat = clamp(rx * -nTo[1] + rz * nTo[0], -0.3, 0.3);
+    const depth = Math.max(0.42, rx * nTo[0] + rz * nTo[1] + 0.55);
+    rx = -nTo[1] * lat + nTo[0] * depth;
+    rz = nTo[0] * lat + nTo[1] * depth;
+    const x = to[0] + rx;
+    const z = to[1] + rz;
+    this.teleport(x, y(x, z), z, sm.yaw + d, sm.pitch);
+    const [vx, vz] = turnXZ(sm.vel[0], sm.vel[1], d);
+    this.body.vx = vx;
+    this.body.vz = vz;
+  }
+
   private stepWhite(dt: number, dream: DreamEvent[]): void {
     const wr = this.where === 'main' ? this.level?.whiteRoom : undefined;
     const b = this.body;
@@ -3066,6 +3136,10 @@ export class Game {
     // Свет снова горит: поиск в темноте кончился.
     if (this.light.state === 'on' && !xraySeen) this.darkSearch = false;
 
+    // Песчаный зал (world/furnish_dunes.ts, pocket_dunes.ts): шагнул в чёрный проём — стоишь в проёме зала. Раньше края сцены:
+    // помещение за проёмом может лежать за краем куска, а шаг в черноту ведёт в зал, а не в обрыв.
+    this.stepDuneDoor(dream);
+
     // Сцена — кусок места (world/piece.ts): шаг за край памяти обрывает сцену — уносит в другое место, как скачок без цели
     // (следующей сцены ещё нет — в другую точку того же куска). У края, глядя в обрыв, — раз за сцену событие edge: строку
     // говорит приложение. Не правило страха, а устройство сна: работает и в мягком режиме.
@@ -3102,11 +3176,17 @@ export class Game {
       // Выход — проём, обведённый красным: войти в него. Смотреть на проём можно сколько угодно —
       // взгляд никуда не уносит, иначе игрока выбрасывало бы, пока он просто стоит и осматривается.
       // Первые полторы секунды проём не действует.
-      const through = !!p.exit && this.pocketAge > 1.5 && Math.abs(b.x - p.exit[0]) < 0.5 && Math.abs(b.z - p.exit[2]) < 0.4 && Math.abs(b.y - p.exit[1]) < 1;
+      const dunes = p.kind === 'dunes';
+      const through = !dunes && !!p.exit && this.pocketAge > 1.5 && Math.abs(b.x - p.exit[0]) < 0.5 && Math.abs(b.z - p.exit[2]) < 0.4 && Math.abs(b.y - p.exit[1]) < 1;
+      // Песчаный зал: его проём — чёрный, наружу (+z). Подошёл к плоскости вплотную — шов обратно, в чёрный проём уровня.
+      const back = dunes && !!p.exit && this.pocketAge > DUNES_STAY.exitAfter && b.z - p.exit[2] > -0.32 && Math.abs(b.x - p.exit[0]) < 0.42 && Math.abs(b.y - p.exit[1]) < 1.2;
       this.pocketPurpose(dt, look, los, dream);
       // Дверь на лугу выводит поближе к искомой вещи; остальные проёмы — туда, откуда унесло.
       const door = p.kind === 'meadow' && this.session?.active ? 'thing' : 'back';
-      if (through) this.beginJump({ cause: 'return', style: 'whiteout', to: 'elsewhere', dest: door }, dream);
+      if (back && p.exit) {
+        this.seam = { rel: [b.x - p.exit[0], b.z - p.exit[2]], vel: [b.vx, b.vz], yaw: this.aimYaw, pitch: this.aimPitch };
+        this.beginJump({ cause: 'door', style: 'seam', to: 'elsewhere', dest: this.level?.duneDoor ? 'door' : 'back' }, dream);
+      } else if (through) this.beginJump({ cause: 'return', style: 'whiteout', to: 'elsewhere', dest: door }, dream);
       else if (far) this.beginJump({ cause: 'return', style: 'cut', to: 'elsewhere' }, dream);
       else if (this.pocketAge > this.pocketStay) this.beginJump({ cause: 'return', style: 'dissolve', to: 'elsewhere' }, dream);
     }

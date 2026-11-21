@@ -48,6 +48,23 @@ export interface Shadow {
   key?: string;
 }
 
+/**
+ * Пол-рельеф: высота поверхности над точкой (барханы песчаного зала, язык песка у его проёма; world/pocket_dunes.ts). Опорой он
+ * служит, как верх коробки: контроллер встаёт на него, если он не выше шага от ног; горизонтально не выталкивает — по рельефу
+ * ходят, а не упираются в него. Лучи на нём останавливаются (свет фонаря и взгляд не проходят сквозь бархан).
+ */
+export interface HeightField {
+  minX: number;
+  minZ: number;
+  maxX: number;
+  maxZ: number;
+  /** Высота поверхности над точкой (x, z), мир, м. */
+  at: (x: number, z: number) => number;
+  /** Группа: поле включается и выключается вместе с коробками группы (карман). */
+  group?: string;
+  off?: boolean;
+}
+
 const CELL = 2;
 
 export class ColliderSet {
@@ -58,6 +75,8 @@ export class ColliderSet {
   partner = false;
   /** Тени убранных, передвинутых и заменённых партнёром вещей игры (Shadow). */
   readonly shadows: Shadow[] = [];
+  /** Полы-рельефы (HeightField): их мало, перебираются все. */
+  readonly fields: HeightField[] = [];
   private readonly grid = new Map<number, number[]>();
   private stamp = 0;
   private readonly seen: number[] = [];
@@ -115,6 +134,21 @@ export class ColliderSet {
     }
   }
 
+  addField(f: HeightField): void {
+    this.fields.push(f);
+  }
+
+  /** Высота рельефа под точкой: наибольшая из включённых полей, что накрывают её; −∞ — рельефа здесь нет. */
+  fieldAt(x: number, z: number): number {
+    let best = -Infinity;
+    for (const f of this.fields) {
+      if (f.off || x < f.minX || x > f.maxX || z < f.minZ || z > f.maxZ) continue;
+      const h = f.at(x, z);
+      if (h > best) best = h;
+    }
+    return best;
+  }
+
   addBox(minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number): number {
     return this.add({ minX, minY, minZ, maxX, maxY, maxZ });
   }
@@ -145,6 +179,7 @@ export class ColliderSet {
   /** Включить или выключить все коробки группы. */
   setGroup(group: string, on: boolean): void {
     for (const b of this.boxes) if (b.group === group) b.off = !on;
+    for (const f of this.fields) if (f.group === group) f.off = !on;
   }
 
   /**
@@ -162,7 +197,34 @@ export class ColliderSet {
       const t = rayBox(ox, oy, oz, dx, dy, dz, b);
       if (t >= 0 && t < best) best = t;
     }
+    // Рельеф: шагом в четверть метра — до первой точки под поверхностью (уточняется делением шага пополам).
+    if (this.fields.length > 0 && this.fieldsCross(Math.min(ox, ex), Math.min(oz, ez), Math.max(ox, ex), Math.max(oz, ez))) {
+      const STEP = 0.25;
+      let prev = 0;
+      for (let t = STEP; t <= best; t += STEP) {
+        const x = ox + dx * t;
+        const z = oz + dz * t;
+        if (oy + dy * t <= this.fieldAt(x, z)) {
+          let lo = prev;
+          let hi = t;
+          for (let i = 0; i < 5; i++) {
+            const m = (lo + hi) / 2;
+            if (oy + dy * m <= this.fieldAt(ox + dx * m, oz + dz * m)) hi = m;
+            else lo = m;
+          }
+          best = Math.min(best, hi);
+          break;
+        }
+        prev = t;
+      }
+    }
     return best;
+  }
+
+  /** Задевает ли прямоугольник XZ хоть одно включённое поле рельефа. */
+  private fieldsCross(minX: number, minZ: number, maxX: number, maxZ: number): boolean {
+    for (const f of this.fields) if (!f.off && f.maxX >= minX && f.minX <= maxX && f.maxZ >= minZ && f.minZ <= maxZ) return true;
+    return false;
   }
 
   private readonly rayScratch: Aabb[] = [];

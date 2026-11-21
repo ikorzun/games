@@ -211,7 +211,8 @@ describe('места с мебелью полки собираются', () => {
         }
         checked++;
       }
-      expect(checked, w).toBeGreaterThan(20);
+      // Жёлтые комнаты пусты нарочно, а в части уровней ещё одно помещение пусто за чёрным проёмом песчаного зала.
+      expect(checked, w).toBeGreaterThan(w === 'yellow' ? 12 : 20);
     }
   });
 

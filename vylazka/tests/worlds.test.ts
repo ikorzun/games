@@ -179,7 +179,7 @@ describe('миры: сборка уровня', () => {
       const level = buildLevel(layout);
       // В комнате под звёздным небом потолка нет, и панелей в ней нет (tests/sky.test.ts).
       // И в белой комнате (design.md, §37): её потолок светится сам, панелей там нет.
-      return { level, cells: layout.rooms.reduce((n, r) => n + (r.id === level.skyRoom || r.id === level.whiteRoom?.room ? 0 : r.cells.length), 0), calls };
+      return { level, cells: layout.rooms.reduce((n, r) => n + (r.id === level.skyRoom || r.id === level.whiteRoom?.room || r.id === level.duneDoor?.room ? 0 : r.cells.length), 0), calls };
     } finally {
       names.forEach((n, i) => (ALL_PROPS[n] = saved[i]!));
     }

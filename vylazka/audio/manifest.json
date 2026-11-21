@@ -302,6 +302,16 @@
       "ru": "шаг по траве на лугу"
     },
     {
+      "id": "step_sand",
+      "bus": "sfx",
+      "variants": 4,
+      "loop": false,
+      "seconds": 0.5,
+      "volume": 0.5,
+      "prompt": "Single footstep in deep dry sand, soft crunch and slide of sand grains under a boot, close-mic, full recording level, no music, no voice",
+      "ru": "шаг по песку песчаного зала (партнёр 21.11, 19:13). Модель Sound Effects v3: в каждом варианте по два-три шага — взят первый, вырезан с запасом и коротким спадом"
+    },
+    {
       "id": "grass_rustle",
       "bus": "sfx",
       "variants": 1,
@@ -395,6 +405,17 @@
       "xfade": 2.0,
       "prompt": "Quiet summer meadow: light wind moving through tall grass, a few distant birds, soft and warm, no insects close by, no voices, no music, seamless loop",
       "ru": "луг: ветер в траве и далёкие птицы"
+    },
+    {
+      "id": "amb_dunes",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 30,
+      "volume": 0.32,
+      "xfade": 2.0,
+      "prompt": "Room tone of a vast empty hall at night half buried in sand: hollow low wind high above, faint dry hiss of drifting sand, deep distant resonance, still and sparse, full recording level, no voices, no music",
+      "ru": "песчаный зал: низкий полый ветер под высоким потолком и далёкий гул. Модель Sound Effects v3, из двух вариантов взят более полный; выше 6 кГц почти ничего нет — с песком Осыпи (9–10 кГц) не спорит, да её в зале и нет"
     },
     {
       "id": "amb_void",

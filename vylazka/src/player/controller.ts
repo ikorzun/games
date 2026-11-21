@@ -75,6 +75,14 @@ export function groundHeight(colliders: ColliderSet, x: number, z: number, feetY
       owner = b.owner ?? 0;
     }
   }
+  // Рельеф (барханы песчаного зала): опора, если не выше шага от ног.
+  if (colliders.fields.length > 0) {
+    const h = colliders.fieldAt(x, z);
+    if (h <= limit && h > best) {
+      best = h;
+      owner = 0;
+    }
+  }
   // Стоит на ней, а не просто над ней.
   if (touched && owner !== 0 && Math.abs(best - feetY) < 0.02) touched.add(owner);
   return best;

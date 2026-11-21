@@ -284,6 +284,8 @@ describe('сборка уровня из плана', () => {
       const level = buildLevel(generateLayout(seed, 3));
       for (const r of level.layout!.rooms) {
         if (!HOME_ROOMS.has(r.type)) continue;
+        // Пустые помещения — белая комната и комната за чёрным проёмом песчаного зала: обстановки и мест для вещей там нет нарочно.
+        if (r.id === level.whiteRoom?.room || r.id === level.duneDoor?.room) continue;
         homes += 1;
         const mine = level.spots.filter((p) => p.room === r.id);
         expect(mine.length, `сид ${seed}: ${r.type} (${r.id})`).toBeGreaterThanOrEqual(2);

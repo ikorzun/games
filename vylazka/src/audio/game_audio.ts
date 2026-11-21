@@ -211,7 +211,8 @@ export class GameAudio {
       // Скачок: кадр выбеливается — нарастающий шум; рывок — искра в момент, когда место сменилось.
       // Новая сессия начинается, как первая: люком или лифтом.
       if (e.type === 'jump' && e.phase === 'start' && e.plan.style === 'whiteout') a.play('whiteout');
-      else if (e.type === 'jump' && e.phase === 'switch' && e.plan.style !== 'whiteout') a.play('flash_spark', { rate: 0.7, volume: 0.8 });
+      // Шов песчаного зала — без следа: ни искры, ни щелчка; зал слышно сразу своим гулом.
+      else if (e.type === 'jump' && e.phase === 'switch' && e.plan.style !== 'whiteout' && e.plan.style !== 'seam') a.play('flash_spark', { rate: 0.7, volume: 0.8 });
       else if (e.type === 'limbo') {
         a.play('ui_report');
         this.wake(game.listener(), 7);
@@ -270,11 +271,11 @@ export class GameAudio {
     this.clock += dt;
 
     // Шаги — по тому, что под ногами: бетон убежища, вода, ковролин офиса и жёлтых комнат, трава луга и помещения, где она
-    // проросла сквозь пол. В белом нигде, в домике и в лимбо шагов не слышно.
+    // проросла сквозь пол, песок песчаного зала. В белом нигде, в домике и в лимбо шагов не слышно.
     const place = game.world ?? 'shelter';
     const pocket = game.where === 'pocket' ? (game.pocket?.kind ?? '') : '';
     if (game.consumeFootstep() && active) {
-      const id = !over ? (s?.inWater ? 'step_water' : game.onGrass ? 'step_grass' : place === 'shelter' ? 'step_concrete' : 'step_carpet') : pocket === 'meadow' ? 'step_grass' : null;
+      const id = !over ? (s?.inWater ? 'step_water' : game.onGrass ? 'step_grass' : place === 'shelter' ? 'step_concrete' : 'step_carpet') : pocket === 'meadow' ? 'step_grass' : pocket === 'dunes' ? 'step_sand' : null;
       if (id) {
         const speed = Math.hypot(b.vx, b.vz);
         a.play(id, { rate: this.jitter(0.07), volume: 0.55 + Math.min(0.45, speed / 9) });
@@ -326,7 +327,9 @@ export class GameAudio {
     a.loop('grass_rustle', heard, rustle?.at);
     // Ветер луга приседает под шорохом: трава отвечает свету, и мир на миг затихает (предложение куратора).
     a.loop('amb_meadow', pocket === 'meadow' ? 1 - RUSTLE_DUCK * heard : 0);
-    a.loop('amb_void', over && pocket !== 'meadow' ? 1 : 0);
+    // Песчаный зал: низкий полый ветер под высоким потолком — свой гул вместо тона белого нигде.
+    a.loop('amb_dunes', pocket === 'dunes' ? 1 : 0);
+    a.loop('amb_void', over && pocket !== 'meadow' && pocket !== 'dunes' ? 1 : 0);
     a.loop('breath_calm', live * clamp01(1 - panic * 2.2));
     a.loop('breath_panic', live * clamp01((panic - 0.3) / 0.45));
     a.loop('heartbeat', live * clamp01(Math.max((panic - 0.35) / 0.5, near * 1.2)));

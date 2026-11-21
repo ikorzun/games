@@ -240,6 +240,7 @@
   "pocket.void.enter": "this is what you kept. the blank ones are still missing.",
   "pocket.void.next": "it is on its way.",
   "pocket.meadow.enter": "default background. nothing finds you here. the door leads closer.",
+  "pocket.dunes.enter": "it was bigger inside.",
   "pocket.meadow.enter.idle": "default background. nothing finds you here. the door leads back.",
   "pocket.dollhouse.enter": "the same rooms, smaller. the light marks where you left it.",
   "pocket.dollhouse.enter.idle": "the same rooms, smaller. nothing is missing yet.",

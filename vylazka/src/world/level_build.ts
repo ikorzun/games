@@ -7,7 +7,7 @@ import type { Perch } from '../systems/birds';
 import { hash01, hash2, mulberry32 } from '../core/rng';
 import type { Vec3 } from '../core/types';
 import { CEIL_H, DX, DZ, GRID, STAIR_CELLS, TIER_DROP } from '../gen/layout';
-import type { GenLayout, GenRoom, RoomType, WorldKind } from '../gen/layout';
+import type { GenEdge, GenLayout, GenRoom, RoomType, WorldKind } from '../gen/layout';
 import { mossCushion } from './moss';
 import { ColliderSet } from './colliders';
 import type { Aabb } from './colliders';
@@ -18,10 +18,12 @@ import { furnishExtras, GARDEN_H, NO_EXTRAS } from './furnish_extras';
 import { furnishGreenhouse, GREEN_PLAN } from './furnish_greenhouse';
 import { furnishWhite } from './furnish_white';
 import type { WhiteRoom } from './furnish_white';
+import { duneDoorway, furnishDuneHost } from './furnish_dunes';
+import type { DuneDoor } from './furnish_dunes';
 import { GRASS_VARIANTS, grassForm } from './grass';
 import { GRASS_CLEAR } from '../systems/grass';
 import type { GrassSite } from '../systems/grass';
-import { furnishPapers, newPaperState } from './furnish_papers';
+import { furnishPapers, newPaperState, paperOnly } from './furnish_papers';
 import { growWear } from './wear_growth';
 import { NOTE_ID, ROOM_LABEL, SIGN } from './signs';
 import type { CellInfo, RoomCtx, Slot } from './furnish';
@@ -40,7 +42,7 @@ import { flowBlocks } from './flow';
 import type { Side } from './room_plan';
 import { DOOR_IMAGE, SCREEN_IMAGES } from './screens';
 import type { FreeSlot, LevelObject } from './objects';
-import { buildShell, CELL, Shell, STYLE_CORRIDOR, WALL_T } from './shell';
+import { buildShell, CELL, DOOR_H, DOOR_W, Shell, STYLE_CORRIDOR, WALL_T } from './shell';
 import { EdgeBuilder } from './edges';
 import { placeFigures } from './figure_place';
 import type { FigureSpec } from './figures';
@@ -255,6 +257,12 @@ export const lawnRolled = (seed: number): boolean => hash01(17, 0x1a3e, seed ^ 0
  */
 export const WHITE_CHANCE = 0.5;
 export const whiteRolled = (seed: number): boolean => hash01(19, 0x3b17, seed ^ 0x7e) < WHITE_CHANCE;
+/**
+ * Песчаный зал (партнёр 21.11, 19:13; world/pocket_dunes.ts, furnish_dunes.ts): в части уровней проём одного тупикового помещения
+ * чёрен, из него высыпался песок, а за ним — огромный зал. Жребий — по сиду уровня, отдельно от белой комнаты.
+ */
+export const DUNES_CHANCE = 0.4;
+export const dunesRolled = (seed: number): boolean => hash01(23, 0x5a1d, seed ^ 0x3c) < DUNES_CHANCE;
 
 /** Типы помещений, где партнёр ставит, двигает или убирает вещи и фигуры в этом месте: туда белая комната не встаёт. */
 function partnerRoomTypes(world: WorldKind, opts: BuildOptions): Set<string> {
@@ -572,6 +580,64 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
           .filter((r) => r !== gardenRoom && r !== greenRoom && r !== skyRoom && r !== grassRoom && !flowerRooms.has(r.id) && r !== variantRoom && r !== startRoom0 && !PARTNER_ROOMS.includes(r.type) && !partnerTypes.has(r.type) && r.cells.length >= 2 && r.cells.length <= 4 && isRect(r))
           .sort(order(19))[0]
       : undefined;
+  // Песчаный зал: проём тупикового помещения с единственным проходом (дверью или сквозным проёмом, не гермодверью) — за ним ничего
+  // нет, кроме зала, и насквозь его не видно: чернота закрывает проход целиком. Не начало сна, не особые помещения, не помещения партнёра; перед дверью снаружи — не опасная клетка
+  // (там ляжет язык песка). В зале ожидания зала нет: его странность — время, а не комнаты.
+  // Чёрный проём естественнее всего в двери подсобки в конце коридора: кладовая, щитовая, санузел, копировальная, серверная.
+  // Такие — первыми; нет их — любое тупиковое помещение.
+  const HOST_PREFER: readonly RoomType[] = ['storage', 'switchboard', 'washroom', 'bathroom', 'tanks', 'copyroom', 'server'];
+  const hostRank = (r: GenRoom): number => (HOST_PREFER.includes(r.type) ? 0 : 1);
+  const partnerStatic = partnerRoomTypes(layout.world, {});
+  const paperKeep = paperOnly(layout.world, layout.rooms);
+  const roomEdges = new Map<number, GenEdge[]>();
+  for (const e of layout.edges) {
+    const ra = cellRoom.get(`${e.tier},${e.cx},${e.cz}`);
+    const rb = cellRoom.get(`${e.tier},${e.cx + (e.dir === 0 ? 1 : 0)},${e.cz + (e.dir === 1 ? 1 : 0)}`);
+    if (ra === rb) continue;
+    for (const r of [ra, rb]) if (r !== undefined) roomEdges.set(r, [...(roomEdges.get(r) ?? []), e]);
+  }
+  const hazardCell = new Set([...hz.pits, ...hz.water, ...hz.collapses].map((c) => `${c.tier},${c.x},${c.z}`));
+  const outsideCell = (r: GenRoom, e: GenEdge): [number, number] => {
+    const b: [number, number] = [e.cx + (e.dir === 0 ? 1 : 0), e.cz + (e.dir === 1 ? 1 : 0)];
+    return r.cells.some(([x, z]) => x === e.cx && z === e.cz) ? b : [e.cx, e.cz];
+  };
+  const duneHost =
+    !station && dunesRolled(layout.seed)
+      ? rooms1
+          .filter((r) => {
+            if (r === gardenRoom || r === greenRoom || r === skyRoom || r === grassRoom || r === whiteRoom || flowerRooms.has(r.id) || r === variantRoom || r === startRoom0) return false;
+            // Типы с правилами партнёра — по его данным, а не по правкам сборки: иначе проём уходил бы в другое помещение от любой
+            // правки, и вместе с ним сдвигалась бы остальная обстановка (tests/placed.test.ts).
+            if (PARTNER_ROOMS.includes(r.type) || partnerStatic.has(r.type) || paperKeep.has(r.id)) return false;
+            const es = roomEdges.get(r.id) ?? [];
+            if (es.length !== 1 || es[0]!.kind === 'hermo') return false;
+            const [ox2, oz2] = outsideCell(r, es[0]!);
+            return !hazardCell.has(`${r.tier},${ox2},${oz2}`);
+          })
+          .sort((a, b) => hostRank(a) - hostRank(b) || order(23)(a, b))[0]
+      : undefined;
+  const duneEdge = duneHost ? roomEdges.get(duneHost.id)![0]! : undefined;
+  /** Проём зала: середина на плоскости стены, нормаль внутрь помещения-хозяина. */
+  const duneDoor: DuneDoor | undefined =
+    duneHost && duneEdge
+      ? (() => {
+          const inA = duneHost.cells.some(([x, z]) => x === duneEdge.cx && z === duneEdge.cz);
+          const dx = duneEdge.dir === 0 ? 1 : 0;
+          const dz = duneEdge.dir === 1 ? 1 : 0;
+          return {
+            room: duneHost.id,
+            tier: duneHost.tier,
+            at: [cellToWorld(duneEdge.cx) + dx * (CELL / 2), cellToWorld(duneEdge.cz) + dz * (CELL / 2)] as [number, number],
+            y: tierFloor(duneHost.tier),
+            n: (inA ? [-dx, -dz] : [dx, dz]) as [number, number],
+            // Дверь — проём в свету; сквозной проём (жёлтые комнаты) — во всю стену и до потолка: чернота встаёт стеной.
+            w: duneEdge.kind === 'open' ? CELL : DOOR_W,
+            h: duneEdge.kind === 'open' ? CEIL_H : DOOR_H,
+          };
+        })()
+      : undefined;
+  /** Помещения без обстановки и без лишнего поверх: белая комната и комната за чёрным проёмом. */
+  const blank = new Set<GenRoom>([...(whiteRoom ? [whiteRoom] : []), ...(duneHost ? [duneHost] : [])]);
   /** Высота потолка помещения над полом. */
   const ceilOf = (room: GenRoom): number => (room === gardenRoom ? GARDEN_H : station ? (STATION_CEIL[room.type] ?? CEIL_H) : CEIL_H);
 
@@ -658,7 +724,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       const plain = a.type === 'stairwell' || b.type === 'stairwell' || hazardCells.has(`${e.tier},${hostCell[0]},${hostCell[1]}`) || hazardCells.has(`${e.tier},${e.cx},${e.cz}`) || hazardCells.has(`${e.tier},${bx},${bz}`);
       const roll = plain ? 0.35 : hash01(e.cx * 64 + e.cz, e.dir + 2 * e.tier, layout.seed ^ 0xd00d);
       // В белую комнату створку не вешают и не роняют: там пусто, остаётся одна коробка, белая, как стены.
-      const h = host === whiteRoom ? 0 : office ? roll * 0.64 : roll;
+      const h = host === whiteRoom || e === duneEdge ? 0 : office ? roll * 0.64 : roll;
       const seed = Math.floor(hash01(e.cz * 64 + e.cx, e.tier, layout.seed ^ 0xbeef) * 1e6);
       let lean = h >= 0.65 && h < 0.85;
       let side: 1 | -1 = hash2(e.cx, e.cz, layout.seed ^ e.dir) & 1 ? 1 : -1;
@@ -706,6 +772,12 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       outer.sign('attention', -1.05, 1.66, 0.44, [0.6, 0.11, 0.08]);
       outer.sign('door_sector', -1.05, 1.52, 0.66, [0.6, 0.11, 0.08]);
     }
+  }
+  // Проём песчаного зала: чернота в проёме и язык песка в коридор (world/furnish_dunes.ts) — в сетке куска снаружи.
+  if (duneDoor && duneHost && duneEdge) {
+    const [ox2, oz2] = outsideCell(duneHost, duneEdge);
+    const outside = roomById(cellRoom.get(`${duneHost.tier},${ox2},${oz2}`)!);
+    duneDoorway(chunkFor(outside, ox2, oz2).mb, col, duneDoor);
   }
 
   // ── Опасности среды ──
@@ -866,7 +938,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   const screenQuota = new Map<number, number[]>();
   if (world === 'yellow') {
     const far = (r: GenRoom): number => Math.min(...r.cells.map(([x, z]) => Math.abs(x - start.cx) + Math.abs(z - start.cz)));
-    const rooms = layout.rooms.filter((r) => !lowerWells.has(r.id) && r.type !== 'stairwell' && r.type !== 'lift' && r !== whiteRoom);
+    const rooms = layout.rooms.filter((r) => !lowerWells.has(r.id) && r.type !== 'stairwell' && r.type !== 'lift' && !blank.has(r));
     const halls = rooms.filter((r) => r.type === 'hall');
     const open = rooms.filter((r) => r.type !== 'corridor');
     const pool = (halls.length > 0 ? halls : open.length > 0 ? open : rooms).slice().sort((a, b) => far(a) - far(b) || a.id - b.id);
@@ -945,7 +1017,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   // не в самом начале, куда возвращает Осыпь (там она читалась бы укором), а на шаг дальше.
   const notes: SheetMark[] = [];
   const noteRoom = layout.rooms
-    .filter((r) => r !== startRoom && r !== variantRoom && r !== whiteRoom && !lowerWells.has(r.id) && r.tier === startRoom.tier && r.type !== 'stairwell' && r.type !== 'lift' && r.type !== 'track')
+    .filter((r) => r !== startRoom && r !== variantRoom && !blank.has(r) && !lowerWells.has(r.id) && r.tier === startRoom.tier && r.type !== 'stairwell' && r.type !== 'lift' && r.type !== 'track')
     .map((r) => ({ r, d: Math.min(...r.cells.map(([x, z]) => Math.abs(x - start.cx) + Math.abs(z - start.cz))) }))
     .sort((a, b) => a.d - b.d || a.r.id - b.r.id)[0]?.r;
 
@@ -960,6 +1032,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       const ctx = roomCtx(room, (x, z) => chunkFor(room, x, z), col, 0, spots, landmarks, flats);
       ctx.paperState = paperState;
       if (room === whiteRoom) white = furnishWhite(ctx);
+      else if (room === duneHost && duneDoor) furnishDuneHost(ctx, duneDoor);
       else if (room === greenRoom && !greenEdge) furnishGreenhouse(ctx);
       else furnishRoom(ctx);
       if (room === greenRoom && greenEdge) furnishGreenhouse(ctx);
@@ -1016,7 +1089,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   let moundLeft = decay.mound;
   for (const { room, ctx } of furnished.slice().sort((a, b) => fromStart(a.room) - fromStart(b.room) || a.room.id - b.room.id)) {
     if (moundLeft === 0) break;
-    if (room === startRoom || room === whiteRoom || room.tier !== startRoom.tier || room.type === 'corridor' || room.type === 'stairwell' || room.type === 'lift' || room.type === 'track') continue;
+    if (room === startRoom || blank.has(room) || room.tier !== startRoom.tier || room.type === 'corridor' || room.type === 'stairwell' || room.type === 'lift' || room.type === 'track') continue;
     if (furnishExtras(ctx, { ...NO_EXTRAS, mound: moundLeft }).mound) moundLeft = 0;
   }
   // Цветы: сад под высоким потолком и ещё два помещения.
@@ -1025,7 +1098,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     furnishExtras(ctx, { ...NO_EXTRAS, garden: room === gardenRoom, flowers: flowerRooms.has(room.id) ? 1 + (room.cells.length >= 4 ? 1 : 0) : 0 });
   }
   // Наклейки и завал: помещения перебираются по сиду, пока не встанет сколько нужно.
-  const ranked = (salt: number): { room: GenRoom; ctx: RoomCtx }[] => furnished.filter((f) => plain.includes(f.room) && f.room !== gardenRoom && f.room !== whiteRoom && (f.room !== greenRoom || greenEdge)).sort((a, b) => order(salt)(a.room, b.room));
+  const ranked = (salt: number): { room: GenRoom; ctx: RoomCtx }[] => furnished.filter((f) => plain.includes(f.room) && f.room !== gardenRoom && !blank.has(f.room) && (f.room !== greenRoom || greenEdge)).sort((a, b) => order(salt)(a.room, b.room));
   let stickersLeft = world === 'yellow' ? 2 : 4;
   for (const { ctx } of ranked(3)) {
     if (stickersLeft <= 0) break;
@@ -1038,10 +1111,10 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   // Бумага и чемоданы (world/furnish_papers.ts): листы на щитах, в рамах и на потолке, стена чемоданов.
   // Последним проходом и своим сидом — номера и места прежних объектов от них не сдвигаются.
   // Оранжерея — комната только с цветами: бумаге и чемоданам там не место.
-  furnishPapers(paperState, furnished.filter((f) => (f.room !== greenRoom || greenEdge) && f.room !== whiteRoom));
+  furnishPapers(paperState, furnished.filter((f) => (f.room !== greenRoom || greenEdge) && !blank.has(f.room)));
   // Своё стирание места (world/wear_growth.ts): рубец по стыку стены с потолком в убежище, щит с коконами
   // в кассе и буфете зала ожидания. Тоже последним проходом и своим сидом: обстановка от них не сдвигается.
-  const growth = growWear(world, layout.seed, decay.wear, furnished.filter((f) => f.room !== whiteRoom), start);
+  const growth = growWear(world, layout.seed, decay.wear, furnished.filter((f) => !blank.has(f.room)), start);
   // Фигуры партнёра (world/figure_place.ts): последними, по уже стоящей обстановке — чтобы не врасти в
   // мебель. Сеток в уровень не добавляют: фигура — отдельная вещь рендера (game.ts).
   const ent0 = layout.rooms[layout.entranceRoom]!;
@@ -1049,7 +1122,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     layout,
     shells,
     col,
-    skip: new Set([...lowerWells, ...(variantRoom ? [variantRoom.id] : []), ...(whiteRoom ? [whiteRoom.id] : [])]),
+    skip: new Set([...lowerWells, ...(variantRoom ? [variantRoom.id] : []), ...[...blank].map((r) => r.id)]),
     spawn: [cellToWorld(ent0.cells[0]![0]), tierFloor(ent0.tier), cellToWorld(ent0.cells[0]![1]) + 0.4] as Vec3,
     spawnTier: ent0.tier,
     // Вся обстановка уже стоит: поднятая вещь партнёра ложится на её верх (placed_place.ts, restTop) — на грань под серединой.
@@ -1127,7 +1200,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   // Газон в жёлтых комнатах (квиз партнёра, ночь на 20.11): изредка один зал без экранов — не начало сна и не небо.
   const lawnRoom =
     world === 'yellow' && lawnRolled(layout.seed)
-      ? layout.rooms.filter((r) => r.type === 'hall' && r.cells.length >= 2 && r !== startRoom0 && r !== skyRoom && r !== variantRoom && r !== whiteRoom && !screenQuota.has(r.id) && !lowerWells.has(r.id)).sort(order(17))[0]
+      ? layout.rooms.filter((r) => r.type === 'hall' && r.cells.length >= 2 && r !== startRoom0 && r !== skyRoom && r !== variantRoom && !blank.has(r) && !screenQuota.has(r.id) && !lowerWells.has(r.id)).sort(order(17))[0]
       : undefined;
   /** Помещение, где на полу трава: проросшая сквозь пол (убежище, офис) или газон (жёлтые комнаты). */
   const turfRoom = grassRoom ?? lawnRoom;
@@ -1309,6 +1382,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     ...(skyRoom ? { skyRoom: skyRoom.id } : {}),
     ...(greenRoom ? { greenRoom: greenRoom.id } : {}),
     ...(white ? { whiteRoom: white } : {}),
+    ...(duneDoor ? { duneDoor } : {}),
     ...(blooms.length > 0 ? { blooms } : {}),
     ...(turfRoom ? { grassRoom: turfRoom.id } : {}),
     ...(grass.length > 0 ? { grass } : {}),

@@ -593,6 +593,7 @@ export class App {
         const pocket = buildPocket(name.slice(7) as PocketKind, this.seed, [0, 0, 0]);
         const colliders = new ColliderSet();
         for (const b of pocket.colliders) colliders.add(b);
+        for (const f of pocket.fields ?? []) colliders.addField(f);
         // Трава кармана — тоже (луг): просмотр показывает пространство таким, каким его видит игрок, и с него снят кадр
         // экрана-проёма (assets/screens/meadow.webp).
         this.level = { chunks: pocket.meshes.map((mesh) => ({ mesh, tierMin: 0, tierMax: 0 })), stairs: [], colliders, spawn: pocket.spawn, exit: pocket.spawn.pos, spots: [], landmarks: [], zones: [], collapses: [], variants: [], nav: [], sheets: [], layout: null, ...(pocket.grass?.length ? { grass: pocket.grass } : {}) };
@@ -1260,7 +1261,9 @@ export class App {
       // «Вещи не любят, когда на них долго смотрят» спорит с главным делом первого сна — вспомнить вещь взглядом (куратор, пачка 48):
       // в первом сне её нет.
       else if (e.type === 'thing' && e.what === 'changing' && e.thing.fate !== 'dust' && !this.firstSleep) this.teach('thing', t('teach.thing'));
-      else if (e.type === 'jump' && e.phase === 'switch') {
+      else if (e.type === 'jump' && e.phase === 'switch' && e.plan.style === 'seam') {
+        // Шов песчаного зала — без следа: ни дрожи, ни прыжка времени на камере; шагнул — и уже там.
+      } else if (e.type === 'jump' && e.phase === 'switch') {
         // Осыпь вернула в начало: об этом говорит строка, иначе непонятно, почему место другое.
         if (e.plan.cause === 'caught') this.hud.toast(t('toast.caught'), 3400);
         if (buzz) navigator.vibrate(35);
@@ -1288,7 +1291,13 @@ export class App {
   /** Карманное пространство говорит, зачем оно: строка при входе и строка, когда оно сделало своё дело. */
   private onPocket(e: Extract<StepEvents['dream'][number], { type: 'pocket' }>): void {
     const task = e.memory ? t(`mem.${e.memory}.task`) : '';
-    if (e.what === 'enter') {
+    if (e.what === 'enter' && e.kind === 'dunes') {
+      // Песчаный зал: одна тихая строка за сон — с первого раза; дальше зал говорит сам.
+      if (!this.roomSaid.has('dunes')) {
+        this.roomSaid.add('dunes');
+        this.hud.toast(t('pocket.dunes.enter'), 4600);
+      }
+    } else if (e.what === 'enter') {
       // В кукольном домике и на лугу строка зависит от того, ищет ли игрок что-нибудь прямо сейчас: дверь луга ведёт
       // к искомой вещи, а когда искать нечего (холодный старт) — обратно.
       const idle = !e.memory && (e.kind === 'dollhouse' || e.kind === 'meadow') ? '.idle' : '';

@@ -1,0 +1,52 @@
+# Промо Untitled Session: обложки и иконки
+
+Партнёр 21.11, 19:24: «Еще нужен подход к промо материалам: обложка, иконка, гемплейное видео. Обложку и иконку сделай 3 разных
+варианта». В 20:29 партнёр дал свой ключ OpenAI («чтобы ты генерировал через него картинки, а не через хиггсфилд»). Картинки
+сделаны моделью OpenAI GPT Image 2.6 (`gpt-image-2.6-sunburst`, качество high) через этот ключ. Ключ хранится в секретах
+облачного окружения (`api.openai.com`); в чат и в репозиторий он не попадает.
+
+**Как.** Каждая картинка — правка по кадрам самой игры (скриншоты без интерфейса, `e2e/out/promo_scout.mjs`,
+`e2e/out/dunes_list.mjs`, `e2e/out/door_shots.mjs`). Модель держится вида игры: мир — облако точек, которое собирается только в
+луче фонаря и осыпается к краям; за лучом — почти чёрное; зерно нагрудной камеры. На странице площадки (вики Playgama) сказано,
+что картинки, сгенерированные с нуля, просаживают метрики больше чем вдвое; поэтому взято то, что в игре есть на самом деле:
+белая комната с цепью, песчаный зал со скелетом, красная сетка, чёрный проём с песком.
+
+**Размеры (кабинет Playgama).** Обложка горизонтальная — 1920 × 1080; квадрат — 800 × 800 (иконки); jpeg, до 10 МБ каждая.
+Вертикальная 1080 × 1920 пока не сделана: её делать из выбранной обложки.
+
+| Файл | Что | Референсы |
+|---|---|---|
+| `cover_white.jpg` | Тёмный коридор убежища с облупленной зелёной краской; в конце — белый проём, в белой комнате висит цепь знаком бесконечности. Название — слева внизу | коридор с белым проёмом, белая комната, жилой отсек |
+| `cover_dunes.jpg` | Огромный тёмный зал в барханах, лунный свет из высоких окон, свод рёбер, хребет и рогатый череп. Название — внизу посередине | кадры песчаного зала: от проёма, свод под окнами, под рёбрами |
+| `cover_grid.jpg` | Комната, от которой осталась красная сетка; в луче проступает кусок убежища — дверь с зелёной краской (на ней трафарет «ОТСЕК», русский, как надписи в самой игре). Название — справа внизу | зал жёлтых комнат в сетке, коридор в сетке, жилой отсек |
+| `icon_white_800.jpg`, `_512` | Белый светящийся квадрат-проём в черноте, внутри — цепь ∞ | белая комната |
+| `icon_skull_800.jpg`, `_512` | В круге фонаря — рогатый череп с тремя парами глазниц, наполовину в песке | череп песчаного зала, свод рёбер |
+| `icon_door_800.jpg`, `_512` | Чёрный проём в зелёной облупленной стене, из него высыпался песок | чёрный проём на уровне (две точки съёмки) |
+
+Название на обложках — «UNTITLED SESSION», тонким моноширинным шрифтом вразрядку, как на заставке игры (DM Mono). Людей, крови,
+марок и знаков нет.
+
+**Промпты** (английский — инструкция модели; общий хвост стиля добавлялся к каждому):
+
+- общий хвост: *Faithful to the attached in-game screenshots of the first-person psychological horror game "Untitled Session":
+  the world is a 3D point-cloud scan that only assembles where the flashlight beam points and crumbles into fine drifting dots at
+  the edges of light; everything outside the beam falls to near-black; bodycam footage feel with fine sensor grain and a slight
+  barrel distortion. Muted, real palette. Keep the game's look: do not repaint it as a glossy illustration. No people, no figures,
+  no hands, no blood, no brands, no logos, no interface, no watermark.* — держаться вида игры, без людей, крови, марок и
+  интерфейса;
+- `cover_white`: *A long dark Soviet bunker corridor seen from a bodycam, mint-green oil paint peeling off the walls where the
+  flashlight touches them. At the far end an open doorway glows with pure, even white light: inside is an empty, perfectly white
+  room, and in its middle hangs an infinity sign (∞) made of steel chain links, held from the ceiling by a single thin chain…* —
+  коридор и белая комната с цепью;
+- `cover_dunes`: *An enormous dark hall half buried in sand dunes at night. High up on the left wall a row of tall narrow windows
+  lets in cold moonlight that rakes across the dune crests… the half-buried skeleton of a gigantic strange beast…* — песчаный зал;
+- `cover_grid`: *A dark room that has stopped pretending: its walls, floor and ceiling exist only as thin glowing red wireframe
+  lines on black… one real fragment of a Soviet bunker room assembles from points…* — красная сетка;
+- иконки: *Square game icon, centered, readable at 64 pixels…* + что в центре; у чёрного проёма второй заход — *a clean,
+  perfectly flat, matte black rectangle… with crisp straight edges and no colored fringes* (в первом по краю черноты шла цветная
+  кайма).
+
+Полные тексты — в `e2e/out/` не хранятся (рабочая папка); сюда записаны их начала, этого хватит повторить.
+
+**Видео** — после всех изменений пачки (слово партнёра): лучшие моменты, давящая атмосфера страха и потерянности; не
+сгенерированное, а записанное из игры.

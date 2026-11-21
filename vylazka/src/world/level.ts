@@ -1,5 +1,6 @@
 /** Собранный уровень: геометрия чанками, коллайдеры и игровые точки. Общий тип для генератора и тестового уровня. */
 import type { WhiteRoom } from './furnish_white';
+import type { DuneDoor } from './furnish_dunes';
 import type { GrowthStats } from './wear_growth';
 import type { Vec3 } from '../core/types';
 import type { GrassSite } from '../systems/grass';
@@ -149,6 +150,11 @@ export interface BuiltLevel {
    * бесконечности посередине. Нет поля — на уровне её нет.
    */
   whiteRoom?: WhiteRoom;
+  /**
+   * Чёрный проём песчаного зала (партнёр 21.11, 19:13; world/furnish_dunes.ts, pocket_dunes.ts; design.md, §38): помещение за ним,
+   * середина проёма, пол и нормаль внутрь. Шагнул в черноту — стоишь в проёме огромного зала. Нет поля — на уровне его нет.
+   */
+  duneDoor?: DuneDoor;
   /**
    * Головки её цветов (systems/flowers.ts): где, куда смотрят в покое, форма, размер, поворот вокруг оси и объект, на котором
    * растут (растворился — головки нет). Стебли и листья — в сетках помещений.

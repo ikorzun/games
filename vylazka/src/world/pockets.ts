@@ -9,11 +9,12 @@
 import type { Vec3 } from '../core/types';
 import type { GrassSite } from '../systems/grass';
 import type { WorldKind } from '../gen/layout';
-import type { Aabb } from './colliders';
+import type { Aabb, HeightField } from './colliders';
 import { MeshBuilder } from './kit';
 import type { MeshData } from './kit';
 import { MAT } from './materials';
 import { buildDollhouse } from './pocket_dollhouse';
+import { buildDunes } from './pocket_dunes';
 import { buildMeadow } from './pocket_meadow';
 
 export interface Env {
@@ -87,8 +88,12 @@ export const ENV_STATION: Env = { ambient: [0.46, 0.44, 0.4], fog: [0.62, 0.6, 0
 /** Окружение каждого мира вылазки. */
 export const WORLD_ENV: Record<WorldKind, Env> = { shelter: ENV_BUNKER, office: ENV_OFFICE, yellow: ENV_YELLOW, station: ENV_STATION };
 
-export type PocketKind = 'void' | 'meadow' | 'dollhouse';
-export const POCKET_KINDS: readonly PocketKind[] = ['void', 'meadow', 'dollhouse'];
+/**
+ * Виды карманов. Песчаный зал (dunes) — не скачок, а комната за чёрным проёмом места (world/pocket_dunes.ts): случайные скачки
+ * туда не уносят (systems/jumps.ts), в него входят через проём.
+ */
+export type PocketKind = 'void' | 'meadow' | 'dollhouse' | 'dunes';
+export const POCKET_KINDS: readonly PocketKind[] = ['void', 'meadow', 'dollhouse', 'dunes'];
 
 /** Клетка убежища на макете в кукольном домике: координаты сетки уровня, ярус, род помещения. */
 export interface ModelCell {
@@ -135,6 +140,8 @@ export interface PocketSpace {
   focus?: Vec3 | null;
   /** Трава плитками (луг): рисует рендер копиями одной сетки (systems/grass.ts). */
   grass?: GrassSite[];
+  /** Пол-рельеф (барханы песчаного зала): опора по высоте поверхности, а не коробками (world/colliders.ts, HeightField). */
+  fields?: HeightField[];
 }
 
 export type PocketBuilder = (seed: number, origin: Vec3, ctx?: PocketContext) => PocketSpace;
@@ -214,7 +221,7 @@ export function buildVoid(_seed: number, origin: Vec3, ctx?: PocketContext): Poc
   };
 }
 
-const BUILDERS: Partial<Record<PocketKind, PocketBuilder>> = { void: buildVoid, meadow: buildMeadow, dollhouse: buildDollhouse };
+const BUILDERS: Partial<Record<PocketKind, PocketBuilder>> = { void: buildVoid, meadow: buildMeadow, dollhouse: buildDollhouse, dunes: buildDunes };
 
 /** Подключить строителя пространства (луг и кукольный домик лежат в своих файлах). */
 export function registerPocket(kind: PocketKind, builder: PocketBuilder): void {
