@@ -1,0 +1,11 @@
+[
+ { "id": "c0101", "seed": 101, "species": "vodyanoy", "head": "bean", "skin": "azure", "top": "bald", "face": "longmoustache", "tex": "spots", "clothes": "telnyashka", "build": "huge", "mood": "smug", "accent": "teal", "mark": "none" },
+ { "id": "c0102", "seed": 102, "species": "chert", "head": "pear", "skin": "plum", "eyes": "dot", "mouthx": "fangs", "face": "none", "tex": "none", "clothes": "tracksuit", "tone": "wine", "build": "narrow", "mood": "caught", "accent": "mustard", "mark": "none" },
+ { "id": "c0103", "seed": 103, "species": "grey", "skin": "mint", "top": "ushanka", "nose": "slits", "clothes": "vatnik", "tone": "sand", "build": "tiny", "mood": "scared", "accent": "orange", "mark": "none" },
+ { "id": "c0104", "seed": 104, "species": "squid", "head": "dome", "skin": "coral", "eyes": "dot", "top": "hat", "tex": "none", "clothes": "trench", "tone": "slate", "build": "narrow", "mood": "calm", "accent": "blue", "mark": "none" },
+ { "id": "c0105", "seed": 105, "species": "kikimora", "head": "egg", "skin": "olive", "top": "scarf", "ears": "pointed", "tex": "wrinkles", "clothes": "coat", "tone": "plum", "build": "narrow", "mood": "irritated", "accent": "crimson", "mark": "none" },
+ { "id": "c0106", "seed": 106, "species": "robot", "skin": "copper", "eyen": 1, "top": "flatcap", "clothes": "vatnik", "tone": "olive", "build": "wide", "mood": "sullen", "accent": "green", "mark": "none" },
+ { "id": "c0107", "seed": 107, "species": "gorynych", "head": "egg", "skin": "mustard", "eyes": "slit", "mouthx": "none", "top": "crest", "clothes": "overcoat", "tone": "ink", "build": "wide", "mood": "irritated", "accent": "plum", "mark": "none" },
+ { "id": "c0108", "seed": 108, "species": "human", "head": "pear", "skin": "umber", "nose": "potato", "top": "buzz", "hair": "black", "face": "moustache", "tex": "none", "glasses": "none", "clothes": "blazer", "tone": "teal", "build": "wide", "mood": "smug", "accent": "mustard", "mark": "none" },
+ { "id": "c0109", "seed": 109, "species": "blob", "skin": "rose", "eyen": 3, "top": "flatcap", "tex": "spots", "mood": "calm", "accent": "blue", "mark": "none" }
+]
