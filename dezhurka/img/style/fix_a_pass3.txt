@@ -1,0 +1,10 @@
+Make a corrected copy of the attached style sheet, at the same size. Keep the layout, the art style, the palette, every character, every pose, every piece of clothing, every prop and the whole background exactly as they are. Change only the details listed below.
+
+CORRECTIONS
+1. The man in the long overcoat (fifth in the line-up): delete his current glasses completely, that is the two large rectangles, the rings around his eyes and the pale piece between the eyes. Draw new small rectangular glasses of the same size as the student's glasses: two small rectangles with slightly rounded corners, each just large enough to hold one eye with a little space around it, each eye exactly in the centre of its rectangle, one short dark bridge line between the two rectangles, thin temple lines going from the outer corners to the ears. His eyes are two plain white circles with black dot pupils, with a single outline each.
+2. The keyframe: shift the vertical window bars sideways so that no bar crosses a face. The sergeant's whole face and the detainee's whole face are each seen in a gap between two bars. The number and thickness of the bars stay the same.
+3. The sergeant's face in the keyframe: two plain round eyes side by side under the visor, each a white circle with a black dot pupil, the same as the detainee's eyes. Nothing else near the eyes: no extra circle, no ring, no glasses.
+4. The old woman and the factory worker in the line-up: their two eyes are two plain white circles with black dot pupils that sit side by side, the same as the cook's eyes. Erase the short line that joins the two eyes; nothing connects them.
+5. In the keyframe, the sergeant's fist grips a plain fold of the black leather sleeve; erase the small tan patch under the fist.
+
+No text anywhere: no letters, no captions, no labels, no numbers, no logos, no watermark, no signature. Do not add or remove anything else.

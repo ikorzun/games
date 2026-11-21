@@ -1,0 +1,11 @@
+Make a corrected copy of the attached style sheet, at the same size. Keep the layout, the art style, the palette, every character, every pose, every piece of clothing, every prop and the whole background exactly as they are. Change only the small details listed below.
+
+CORRECTIONS
+1. The student's glasses: redraw them as small round wire glasses in proportion to his small eyes. Two small round lenses, each only a little larger than the eye it frames; each eye sits exactly in the centre of its own lens; the two lenses are joined by one short plain bridge line. Between the eyes there is nothing else: no nose pads, no extra small ring, no extra circle.
+2. The glasses of the man in the long overcoat: the same rule with small rectangular frames. Two small rectangular lenses, each only a little larger than the eye, each eye exactly in the centre of its own lens, one short plain bridge line, nothing else between the eyes.
+3. The sergeant in the keyframe: he has exactly two eyes and no glasses. Remove the extra small circle next to his eye; between and beside his eyes there is only bare skin.
+4. The factory worker in the flat cap: move his two eyes slightly apart, so that there is a clear gap of bare skin between them, about one eye wide. Nothing connects the eyes.
+5. In the keyframe, remove the brown smudge on the detainee's sleeve under the sergeant's fist: the fist simply grips a fold of the black leather sleeve.
+6. Remove the small squiggle under the student's ear.
+
+Every character on the sheet has exactly two eyes: two separate white circles with black dot pupils and a short thin eyebrow stroke above each. No text anywhere: no letters, no captions, no labels, no numbers, no logos, no watermark, no signature. Do not add or remove anything else.
