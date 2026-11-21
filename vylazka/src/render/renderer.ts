@@ -2527,12 +2527,14 @@ export class GameRenderer {
 
   /**
    * Передать Осыпи (рою) позиции на кадр. heads, dirs, params — массивы тела; alpha — плотность
-   * (0 — её нет). Сколько прядей и точек в пряди рисовать, решает качество.
+   * (0 — её нет). Сколько прядей и точек в пряди рисовать, решает качество. through — видна сквозь стены красным
+   * контуром, как призрак, но на своём месте (тёмный урок первого сна).
    */
-  setSwarm(heads: Float32Array, dirs: Float32Array, params: Float32Array, alpha: number, time: number): void {
+  setSwarm(heads: Float32Array, dirs: Float32Array, params: Float32Array, alpha: number, time: number, through = false): void {
     const on = alpha > 0.01;
     this.swarmPoints.visible = on;
     this.swarmMat.uniforms.uAlpha!.value = on ? alpha : 0;
+    (this.swarmMat.uniforms.uGhost!.value as THREE.Vector4).w = through ? 2 : 0;
     if (!on) return;
     // Середина тела: вокруг неё место темнеет или выгорает (WORLD_FRAG, voidTouch).
     let cx = 0;

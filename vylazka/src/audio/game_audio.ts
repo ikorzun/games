@@ -51,6 +51,10 @@ export interface AudioWorld {
   feelNow?: { hum: number };
   /** Где искомая вещь, когда её зов слышен (game.ts, memoryCall); null или нет поля — зова нет. */
   memoryCall?: Vec3 | null;
+  /** Тишина перед Осыпью (systems/hush.ts): насколько звук места проседает, 0..1. Нет поля — не проседает. */
+  hush?: number;
+  /** Шаги в такт (systems/follower.ts): где за спиной прозвучали шаги следом с прошлого вызова. Нет поля — никто не идёт. */
+  consumeFollowSteps?(): readonly Vec3[];
   listener(): { pos: Vec3; yaw: number };
   consumeFootstep(): boolean;
 }
@@ -68,6 +72,14 @@ export const TRACE_SAND = 0.8;
 export const RUSTLE_DUCK = 0.45;
 /** Громкость зова искомой вещи (still_tone из её места; затухание по расстоянию — у движка). */
 const MEMORY_CALL = 0.7;
+/**
+ * Тишина перед Осыпью (systems/hush.ts): насколько глубоко проседает гул места при полной тишине. Не до нуля: совсем пустой
+ * звук читался бы поломкой (S-06); капли не проседают почти вовсе — их хвост и держит «это тишина, а не сбой».
+ */
+export const HUSH_DEPTH = 0.94;
+/** Шаги в такт: тот же клип, что у игрока, — тише и ниже (тяжелее). */
+export const FOLLOW_VOLUME = 0.42;
+export const FOLLOW_RATE = 0.86;
 
 /** Что грузить раньше остального: первые секунды вылазки и экран задания. */
 export const LOAD_FIRST: readonly string[] = ['ui_click', 'ui_start', 'hatch', 'lift', 'amb_bunker', 'amb_office', 'amb_yellow', 'amb_station', 'still_tone', 'breath_calm', 'step_concrete', 'step_carpet', 'flash_click', 'flash_die', 'flash_rattle', 'flash_spark', 'music_menu'];
@@ -274,13 +286,12 @@ export class GameAudio {
     // проросла сквозь пол, песок песчаного зала. В белом нигде, в домике и в лимбо шагов не слышно.
     const place = game.world ?? 'shelter';
     const pocket = game.where === 'pocket' ? (game.pocket?.kind ?? '') : '';
-    if (game.consumeFootstep() && active) {
-      const id = !over ? (s?.inWater ? 'step_water' : game.onGrass ? 'step_grass' : place === 'shelter' ? 'step_concrete' : 'step_carpet') : pocket === 'meadow' ? 'step_grass' : pocket === 'dunes' ? 'step_sand' : null;
-      if (id) {
-        const speed = Math.hypot(b.vx, b.vz);
-        a.play(id, { rate: this.jitter(0.07), volume: 0.55 + Math.min(0.45, speed / 9) });
-      }
-    }
+    const stepId = !over ? (s?.inWater ? 'step_water' : game.onGrass ? 'step_grass' : place === 'shelter' ? 'step_concrete' : 'step_carpet') : pocket === 'meadow' ? 'step_grass' : pocket === 'dunes' ? 'step_sand' : null;
+    const speed = Math.hypot(b.vx, b.vz);
+    if (game.consumeFootstep() && active && stepId) a.play(stepId, { rate: this.jitter(0.07), volume: 0.55 + Math.min(0.45, speed / 9) });
+    // Шаги в такт: за спиной, там, где игрок сам прошёл несколько шагов назад, — тот же шаг тише и ниже.
+    const behind = game.consumeFollowSteps?.() ?? [];
+    if (active && !over && stepId) for (const p of behind) a.play(stepId, { pos: p, rate: this.jitter(0.05) * FOLLOW_RATE, volume: FOLLOW_VOLUME * (0.55 + Math.min(0.45, speed / 9)) });
 
     // Игрок всматривается в искомую вещь: камера наводится.
     const holding = !over && (s?.hold ?? 0) > 0;
@@ -291,8 +302,12 @@ export class GameAudio {
     const depth = clamp01(-b.y / 9);
     const panic = s?.panic ?? 0;
     const near = game.swarmNear;
+    // Тишина перед Осыпью: гул места, зов вещи, разговор за стеной и шорох травы проседают почти в ноль; далёкие голоса и явь
+    // ждут; капли — почти нет (хвост: это тишина, а не сбой звука). Дыхание и сердце — свои, они не стихают.
+    const hush = over ? 0 : clamp01(game.hush ?? 0);
+    const quiet = 1 - HUSH_DEPTH * hush;
     // Вне убежища его звуки стихают; помехи остаются.
-    const live = over ? 0 : 1;
+    const live = over ? 0 : quiet;
     // Тон места: у каждого мира и у каждого пространства свой.
     // Кривая ощущений (K-11): к концу сессии гул места густеет — в убежище в него вплетается нижний, давящий.
     const hum = over ? 0 : (game.feelNow?.hum ?? 0);
@@ -322,18 +337,19 @@ export class GameAudio {
     // замирает (game.ts, GRASS_HUSH), а в панике, когда дрожит рука с фонарём, шорох уходит — слушать надо её.
     const rustle = game.grassRustle;
     const grassHere = !over || pocket === 'meadow';
-    const hush = clamp01(1 - near * 2) * (1 - 0.8 * clamp01((panic - 0.3) / 0.5));
-    const heard = rustle && grassHere ? rustle.gain * hush : 0;
+    const grassHush = clamp01(1 - near * 2) * (1 - 0.8 * clamp01((panic - 0.3) / 0.5));
+    const heard = rustle && grassHere ? rustle.gain * grassHush * quiet : 0;
     a.loop('grass_rustle', heard, rustle?.at);
     // Ветер луга приседает под шорохом: трава отвечает свету, и мир на миг затихает (предложение куратора).
     a.loop('amb_meadow', pocket === 'meadow' ? 1 - RUSTLE_DUCK * heard : 0);
     // Песчаный зал: низкий полый ветер под высоким потолком — свой гул вместо тона белого нигде.
     a.loop('amb_dunes', pocket === 'dunes' ? 1 : 0);
     a.loop('amb_void', over && pocket !== 'meadow' && pocket !== 'dunes' ? 1 : 0);
-    a.loop('breath_calm', live * clamp01(1 - panic * 2.2));
-    a.loop('breath_panic', live * clamp01((panic - 0.3) / 0.45));
-    a.loop('heartbeat', live * clamp01(Math.max((panic - 0.35) / 0.5, near * 1.2)));
-    a.loop('gas_hiss', s?.inGas ? live : 0);
+    const body = over ? 0 : 1;
+    a.loop('breath_calm', body * clamp01(1 - panic * 2.2));
+    a.loop('breath_panic', body * clamp01((panic - 0.3) / 0.45));
+    a.loop('heartbeat', body * clamp01(Math.max((panic - 0.35) / 0.5, near * 1.2)));
+    a.loop('gas_hiss', s?.inGas ? body : 0);
     a.loop('signal_static', clamp01(game.staticLevel * 1.4));
     const sw = game.swarm;
     // Примета без тела — громче, чем рассеянная Осыпь рядом: её слышно только издалека (затухание по расстоянию даёт
@@ -349,13 +365,13 @@ export class GameAudio {
     this.voiceAngle += dt * 0.05;
     const behindWall: Vec3 = [ears.pos[0] + Math.cos(this.voiceAngle) * 7, ears.pos[1], ears.pos[2] + Math.sin(this.voiceAngle) * 7];
     a.loop('voices_murmur', live * (MURMUR[place] ?? 0.5) * calm, behindWall);
-    a.loop('voices_whisper', live * clamp01(near * 1.6 + Math.max(0, panic - 0.45) * 1.2));
+    a.loop('voices_whisper', body * clamp01(near * 1.6 + Math.max(0, panic - 0.45) * 1.2));
     // Смех, напев, оклик, чужой телефон: изредка и издалека, только пока спокойно.
     if (active && this.clock >= this.voiceAt) {
       const list = VOICES[over ? pocket : place] ?? [];
       const rare = place === 'yellow' && !over ? 1.8 : 1;
       this.voiceAt = this.clock + (22 + 20 * (this.jitter(0.5) - 1)) * rare;
-      if (list.length > 0 && calm > 0.6) {
+      if (list.length > 0 && calm > 0.6 && hush < 0.2) {
         const angle = this.jitter(0.5) * Math.PI * 4;
         const r = 9.5 + 5 * (this.jitter(0.5) - 1);
         a.play(list[this.pick(list.length)]!, { pos: [ears.pos[0] + Math.cos(angle) * r, ears.pos[1], ears.pos[2] + Math.sin(angle) * r], rate: this.jitter(0.04) });
@@ -367,7 +383,7 @@ export class GameAudio {
       const thin = 1 - clamp01(game.decay?.voices ?? 1);
       this.wakeAt = this.clock + (WAKE_EVERY + 80 * (this.jitter(0.5) - 1)) * (1 - 0.5 * thin);
       // Явь — не память места: стёртость её не глушит (людей нет, а улица слышна); глушат паника и Осыпь.
-      if (settled > 0.6) this.wake(ears, 11);
+      if (settled > 0.6 && hush < 0.2) this.wake(ears, 11);
     }
 
     // Капли: в убежище — редкий одиночный звук откуда-то из темноты; глубже — чаще.
@@ -377,7 +393,7 @@ export class GameAudio {
       const angle = this.jitter(0.5) * Math.PI * 4;
       const r = 4 + 6 * (this.jitter(0.5) - 0.5);
       const pos: Vec3 = [ears.pos[0] + Math.cos(angle) * r, ears.pos[1] - 1.2, ears.pos[2] + Math.sin(angle) * r];
-      a.play('drip', { pos, rate: this.jitter(0.12) });
+      a.play('drip', { pos, rate: this.jitter(0.12), volume: 1 - 0.35 * hush });
     }
   }
 }

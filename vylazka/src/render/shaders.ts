@@ -1703,7 +1703,7 @@ uniform float uProj;        // пикселей буфера на метр на 
 uniform float uMaxPx;
 uniform float uAlpha;       // 0 — Осыпи нет
 uniform float uDarkGain;    // яркость свечения в темноте (не растёт вместе с усилением камеры)
-uniform vec4 uGhost;        // призрак из-за спины: xyz — взгляд по горизонтали (мир), w — 1, если это он
+uniform vec4 uGhost;        // призрак из-за спины: xyz — взгляд по горизонтали (мир), w — 1, если это он; 2 — контур сквозь стены на своём месте
 uniform float uPolar;       // 0 — место тёмное, и она — свет; 1 — место светлое, и она — темнота
 uniform vec3 uLightPosV;
 uniform vec3 uLightDirV;
@@ -1752,8 +1752,9 @@ void main() {
 
   // Призрак: Осыпь позади, и её тело отражено вперёд — как в зеркале, стоящем поперёк взгляда.
   // Он виден сквозь стены, дрожит и разбит на строки: это не она, а знание о том, что она за спиной.
+  // Контур (w = 2, тёмный урок первого сна) — то же знание, но там, где она стоит, и неподвижно: без зеркала и дрожи.
   bool ghost = uGhost.w > 0.5;
-  if (ghost) {
+  if (ghost && uGhost.w < 1.5) {
     float back = dot(p - cameraPosition, uGhost.xyz);
     if (back > -0.3) return;
     p -= 2.0 * back * uGhost.xyz;

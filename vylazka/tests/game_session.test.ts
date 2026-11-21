@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { mulberry32 } from '../src/core/rng';
+import { defaultProfile, memoryFor } from '../src/core/save';
 import type { Vec3 } from '../src/core/types';
 import { generateLayout } from '../src/gen/layout';
 import { BODY_RISE, Game, SONAR_EVERY, SONAR_REACH, SONAR_SPEED, STAGE_ALL, STEP, WIRE_STILL } from '../src/game';
@@ -55,9 +56,9 @@ class FakeRenderer {
   setMemLight(v: { pos: readonly [number, number, number]; kind: number; strength: number } | null): void {
     this.memLight = v && v.strength > 0 ? { pos: [...v.pos], kind: v.kind, strength: v.strength } : null;
   }
-  /** Осыпь в последнем кадре: плотность и середина тела. */
-  swarm = { alpha: 0, center: [0, 0, 0] as Vec3 };
-  setSwarm(heads: Float32Array, _dirs: Float32Array, _params: Float32Array, alpha: number): void {
+  /** Осыпь в последнем кадре: плотность, середина тела и виден ли её контур сквозь стены (тёмный урок). */
+  swarm = { alpha: 0, center: [0, 0, 0] as Vec3, through: false };
+  setSwarm(heads: Float32Array, _dirs: Float32Array, _params: Float32Array, alpha: number, _time = 0, through = false): void {
     const c: Vec3 = [0, 0, 0];
     const n = heads.length / 3;
     for (let i = 0; i < n; i++) {
@@ -65,7 +66,7 @@ class FakeRenderer {
       c[1] += heads[i * 3 + 1]! / n;
       c[2] += heads[i * 3 + 2]! / n;
     }
-    this.swarm = { alpha, center: c };
+    this.swarm = { alpha, center: c, through };
   }
   setChunkVisible(): void {}
   /** Маска куска места (сцена — кусок места): последняя отданная; null — помнится всё. */
@@ -3987,7 +3988,7 @@ describe('ступени погружения: каждая из первых с
     for (const stage of [0, 1, 3, STAGE_ALL]) expect(coldOpenOf(new Harness(levelOf(SEED), { stage }).game), `ступень ${stage}`).toBeUndefined();
   });
 
-  it('ступень 0: Осыпь видна в первые полминуты — силуэт впереди, на виду; не охотится, пока вещь не вспомнена; без скачков, отказа фонаря и давления', () => {
+  it('ступень 0: Осыпь видна в первые полминуты — силуэт впереди, на виду; не охотится, пока вещь не вспомнена; без скачков, давления и случайных отказов фонаря (сам он глохнет только в тёмном уроке)', () => {
     const h = new Harness(levelOf(SEED), { stage: 0, calm: false, light: { firstFailAt: 30, meanFailInterval: 20 } });
     const g = h.game;
     const [sx, sy, sz] = g.level!.spawn.pos;
@@ -4512,5 +4513,226 @@ describe('песчаный зал: шаг в чёрный проём — сто�
     expect(h.log.dream.filter((e) => e.type === 'jump').every((e) => e.type === 'jump' && e.plan.style === 'seam')).toBe(true);
     // Рельеф зала ушёл вместе с ним: остался только язык песка у проёма.
     expect(h.game.colliders.fields.filter((f) => f.group?.startsWith('pocket')).length).toBe(0);
+  });
+});
+
+describe('первые минуты страшнее (Z-19: пятёрка приёмов куратора, квиз «Да, всё»)', () => {
+  const swarmEvents = (h: Harness, what: string) => h.log.fear.filter((e) => e.type === 'swarm' && (e as { what?: string }).what === what).length;
+  const HUNTING = ['hunt', 'stalk', 'roam', 'cohere'];
+
+  /** Ступень 0, первая вещь пришла; игрок — в 11–18 м от неё (тёмному уроку нужна даль). */
+  function lessonSetup(): { h: Harness; item: Vec3 } {
+    const h = new Harness(levelOf(SEED), { stage: 0, calm: false });
+    const g = h.game;
+    const s = g.session!;
+    s.rush();
+    expect(h.until(() => s.active !== null, 3)).toBe(true);
+    h.tick();
+    const t = g.things.list.find((x) => x.memory)!;
+    const item: Vec3 = [t.pos[0], t.pos[1], t.pos[2]];
+    const far = g.level!.nav
+      .filter((n) => Math.abs(n.y - item[1]) < 1.5 && n.links.length > 0)
+      .map((n) => ({ n, d: Math.hypot(n.x - item[0], n.z - item[2]) }))
+      .filter(({ d }) => d > 11 && d < 18)
+      .sort((a, b) => a.d - b.d)[0];
+    expect(far, 'нет узла в 11–18 м от вещи').toBeTruthy();
+    g.teleport(far!.n.x, far!.n.y, far!.n.z);
+    return { h, item };
+  }
+
+  it('тёмный урок: пришла первая вещь — фонарь глохнет сам; между игроком и вещью её контур сквозь стены; ожил свет — пусто', () => {
+    const { h, item } = lessonSetup();
+    const g = h.game;
+    expect(h.until(() => g.darkLesson?.phase === 'on', 4), 'урок не начался').toBe(true);
+    expect(g.light.state).toBe('dead');
+    const sw = g.swarm!;
+    expect(sw.mode).toBe('apparition');
+    // Между: дальше от игрока, чем в шаге, и не над самой вещью.
+    const b = g.body;
+    const toPlayer = Math.hypot(sw.pos[0] - b.x, sw.pos[2] - b.z);
+    expect(toPlayer).toBeGreaterThan(6);
+    expect(toPlayer).toBeLessThan(17);
+    expect(Math.hypot(sw.pos[0] - item[0], sw.pos[2] - item[2])).toBeGreaterThan(2);
+    h.tick();
+    expect(h.r.swarm.through, 'контур не виден сквозь стены').toBe(true);
+    expect(h.r.swarm.alpha).toBeGreaterThan(0);
+    // Это не явление режиссёра: ни строки «оно не даёт проснуться», ни тишины.
+    expect(swarmEvents(h, 'apparition')).toBe(0);
+    // Не оживил сам — свет возвращается через несколько секунд; контура больше нет.
+    const revivedBefore = h.log.all.filter((e) => e.lightRevived).length;
+    expect(h.until(() => g.light.state === 'on', 14), 'фонарь не ожил').toBe(true);
+    h.tick();
+    expect(g.darkLesson!.phase).toBe('done');
+    expect(sw.active).toBe(false);
+    expect(h.r.swarm.through).toBe(false);
+    expect(h.log.all.filter((e) => e.lightRevived).length).toBeGreaterThan(revivedBefore);
+    // Урок — один: больше фонарь сам не глохнет.
+    let dead = 0;
+    for (let i = 0; i < 60; i++) {
+      h.run(1);
+      if (g.light.state === 'dead') dead += 1;
+    }
+    expect(dead).toBe(0);
+  });
+
+  it('тёмный урок не нужен, если вещь нашли сразу: рядом с ней фонарь не глохнет, вспомнил — урока нет', () => {
+    const h = new Harness(levelOf(SEED), { stage: 0, calm: false });
+    const g = h.game;
+    const s = g.session!;
+    s.rush();
+    h.until(() => s.active !== null, 3);
+    recallActive(h);
+    h.run(3);
+    expect(g.darkLesson!.phase).toBe('skip');
+    expect(g.light.state).not.toBe('dead');
+  });
+
+  it('урок — только в первом сне (ступень 0)', () => {
+    for (const stage of [1, 2, 3, STAGE_ALL]) expect(new Harness(levelOf(SEED), { stage }).game.darkLesson, `ступень ${stage}`).toBeNull();
+    expect(new Harness(levelOf(SEED), { stage: 0 }).game.darkLesson?.phase).toBe('wait');
+  });
+
+  it('одна охота: луч рассыпал Осыпь — до конца сна только приметы, ни новой охоты, ни явлений', () => {
+    const h = new Harness(levelOf(SEED), { stage: 0, calm: false });
+    const g = h.game;
+    const s = g.session!;
+    s.rush();
+    h.until(() => s.active !== null, 3);
+    recallActive(h);
+    expect(h.until(() => swarmEvents(h, 'release') > 0, 10 + 5 + GLIMPSE_WAIT + 5), 'охоты нет').toBe(true);
+    // Охотится рядом; игрок держит на ней луч.
+    const sw = g.swarm!;
+    let scattered = false;
+    for (const node of nodesInRange(g.level!.nav, g.playerNode(), 2, 4)) {
+      sw.activate(node);
+      sw.mode = 'hunt';
+      sw.cohesion = 1;
+      sw.awareness = 1;
+      const before = swarmEvents(h, 'scattered');
+      for (let i = 0; i < Math.round(3 / STEP) && !scattered; i++) {
+        g.aimAt(sw.pos[0], sw.pos[1] + 1.1, sw.pos[2]);
+        h.tick();
+        scattered = swarmEvents(h, 'scattered') > before;
+      }
+      if (scattered) break;
+    }
+    expect(scattered, 'Осыпь не удалось рассыпать лучом').toBe(true);
+    expect(g.director!.isSettled).toBe(true);
+    h.run(2);
+    expect(sw.active, 'рассыпанная не затихла').toBe(false);
+    const glimpsed = swarmEvents(h, 'apparition');
+    let traced = false;
+    for (let i = 0; i < Math.round(150 / STEP); i++) {
+      h.tick();
+      expect(HUNTING).not.toContain(sw.mode);
+      if (sw.mode === 'trace') traced = true;
+    }
+    expect(traced, 'приметы нет').toBe(true);
+    expect(swarmEvents(h, 'release')).toBe(1);
+    expect(swarmEvents(h, 'apparition')).toBe(glimpsed);
+  });
+
+  it('одна охота: поймала — после возврата в начало она не выходит снова', () => {
+    const h = new Harness(levelOf(SEED), { stage: 0, calm: false });
+    const g = h.game;
+    const s = g.session!;
+    s.rush();
+    h.until(() => s.active !== null, 3);
+    recallActive(h);
+    expect(h.until(() => swarmEvents(h, 'release') > 0, 10 + 5 + GLIMPSE_WAIT + 5), 'охоты нет').toBe(true);
+    const sw = g.swarm!;
+    const b = g.body;
+    sw.activate(sw.nodeAround(g.playerNode(), 3, 4));
+    sw.mode = 'hunt';
+    sw.cohesion = 1;
+    sw.awareness = 1;
+    g.aimAt(2 * b.x - sw.pos[0], b.y + 1.4, 2 * b.z - sw.pos[2]);
+    expect(h.until(() => swarmEvents(h, 'caught') > 0, 25), 'Осыпь не поймала').toBe(true);
+    expect(h.until(() => g.transition === null, 6)).toBe(true);
+    expect(g.director!.isSettled).toBe(true);
+    for (let i = 0; i < Math.round(80 / STEP); i++) {
+      h.tick();
+      expect(HUNTING).not.toContain(sw.mode);
+    }
+  });
+
+  it('тишина как знак: за полторы-две секунды до первого явления звук места проседает почти в ноль, потом возвращается', () => {
+    const h = new Harness(levelOf(SEED), { stage: 0, calm: false, cfg: { ...QUICK, firstDelay: 999, fallback: 999 } });
+    const g = h.game;
+    const [sx, sy, sz] = g.level!.spawn.pos;
+    const eye: Vec3 = [sx, sy + 1.5, sz];
+    const far = g.level!.nav
+      .filter((n) => Math.abs(n.y - sy) < 1)
+      .map((n) => ({ n, d: Math.hypot(n.x - sx, n.z - sz) }))
+      .filter(({ n, d }) => d > 7 && g.colliders.raycast(eye[0], eye[1], eye[2], (n.x - sx) / d, (n.y + 1.3 - eye[1]) / d, (n.z - sz) / d, d) >= d - 0.5)
+      .sort((a, b) => b.d - a.d)[0];
+    expect(far).toBeTruthy();
+    g.aimAt(far!.n.x, sy + 1.4, far!.n.z);
+    const levels: number[] = [];
+    let at = -1;
+    for (let i = 0; i < Math.round(40 / STEP); i++) {
+      h.tick();
+      levels.push(g.hush);
+      if (at < 0 && swarmEvents(h, 'apparition') > 0) at = i;
+    }
+    expect(at, 'явления не было').toBeGreaterThan(0);
+    // Задолго до явления — звук как есть.
+    expect(levels[Math.max(0, at - Math.round(4 / STEP))]).toBe(0);
+    // К явлению — почти тишина.
+    expect(levels[at - 1]!).toBeGreaterThan(0.85);
+    // Через несколько секунд — звук вернулся.
+    expect(levels[at + Math.round(7 / STEP)]!).toBeLessThan(0.05);
+  });
+});
+
+describe('первый сон — один на всех (Z-19: «ставить руками, как уровень», тест-сторож)', () => {
+  /** Первый сон новичка: сид из свежего профиля, ранг 1, убежище, без стирания — как его собирает приложение (app.ts, prepare). */
+  function firstDream(): { h: Harness; seed: number } {
+    const profile = defaultProfile(20041113);
+    const mem = memoryFor(profile, 'shelter');
+    const level = buildLevel(generateLayout(mem.seed, mem.rank, 'shelter'), { wear: mem.wear });
+    const h = new Harness(level, { stage: 0, seed: mem.seed });
+    return { h, seed: mem.seed };
+  }
+
+  it('сид и состав первого сна не меняются молча: особые помещения — на пути новичка, на верхнем ярусе', () => {
+    const { h, seed } = firstDream();
+    expect(seed).toBe(1621708126);
+    const g = h.game;
+    const level = g.level!;
+    const layout = level.layout!;
+    const fx = (g as unknown as { roomFx: Map<number, string> }).roomFx;
+    const nav = level.nav;
+    const top = nav[g.playerNodeAtSpawn()]!.tier;
+    const sig = {
+      rooms: layout.rooms.length,
+      tiers: layout.tierCount,
+      types: layout.rooms.map((r) => r.type).join(','),
+      fx: [...fx.entries()].sort((a, b) => a[0] - b[0]).map(([room, f]) => `${layout.rooms[room]!.type}:${f}:${layout.rooms[room]!.tier}`),
+      // Чудеса места — где (тип помещения и ярус) или нет.
+      white: level.whiteRoom ? `${layout.rooms[level.whiteRoom.room]!.type}:${layout.rooms[level.whiteRoom.room]!.tier}` : null,
+      dunes: level.duneDoor ? `${layout.rooms[level.duneDoor.room]!.type}:${layout.rooms[level.duneDoor.room]!.tier}` : null,
+      sky: level.skyRoom !== undefined ? `${layout.rooms[level.skyRoom]!.type}:${layout.rooms[level.skyRoom]!.tier}` : null,
+      green: level.greenRoom !== undefined ? `${layout.rooms[level.greenRoom]!.type}:${layout.rooms[level.greenRoom]!.tier}` : null,
+      grass: level.grassRoom !== undefined ? `${layout.rooms[level.grassRoom]!.type}:${layout.rooms[level.grassRoom]!.tier}` : null,
+    };
+    // Правка генератора, раздачи или чудес меняет начало всем новичкам — пусть это будет решение, а не случайность: тогда
+    // поправить и этот снимок (и пройти первый сон глазами).
+    expect(sig).toEqual({
+      rooms: 21,
+      tiers: 2,
+      types: 'entrance,airlock,corridor,stairwell,stairwell,dorm,living,command,kitchen,medical,hallway,washroom,storage,corridor,fvu,diesel,bedroom,tanks,bathroom,switchboard,storage',
+      fx: ['living:wire:0', 'command:dark:0', 'storage:strobe:0'],
+      white: 'switchboard:1',
+      dunes: 'storage:1',
+      sky: 'bedroom:1',
+      green: 'fvu:1',
+      grass: 'hallway:0',
+    });
+    // На пути: строб, «тёмное» и «сеточное» — на верхнем ярусе; «тонких» нет (на ступени 0 они молчат).
+    for (const want of ['strobe', 'dark', 'wire']) {
+      expect([...fx.entries()].some(([room, f]) => f === want && layout.rooms[room]!.tier === top), want).toBe(true);
+    }
+    expect([...fx.values()]).not.toContain('thin');
   });
 });

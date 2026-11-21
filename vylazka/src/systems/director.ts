@@ -59,6 +59,12 @@ export interface DirectorConfig {
    */
   traceAt?: number;
   traceGap?: [number, number];
+  /**
+   * Одна охота за сон (Z-19, приём 5 «Одна охота, потом передышка»): когда охота кончилась (луч рассыпал Осыпь, она поймала
+   * или ходит слишком долго), до конца сна — только приметы, с такой паузой, от и до, с; первая — через первую паузу. Ни
+   * явлений, ни новой охоты. Не задано — охота идёт, как шла.
+   */
+  oneHunt?: [number, number];
 }
 
 /** Сколько секунд охота «после вещи» ждёт первого явления, если его всё не удаётся поставить. */
@@ -85,6 +91,8 @@ export class Director {
   private glimpses = 0;
   /** Когда начались явления (фаза 1). */
   private glimpseFrom = Infinity;
+  /** Охота кончилась насовсем (oneHunt): дальше только приметы. */
+  private settled = false;
 
   constructor(
     private readonly rng: Rng,
@@ -121,6 +129,24 @@ export class Director {
     return this.released;
   }
 
+  /** Охота кончилась насовсем (oneHunt): до конца сна только приметы. */
+  get isSettled(): boolean {
+    return this.settled;
+  }
+
+  /** Через сколько секунд назначенное явление; Infinity — явлений сейчас не будет (не та фаза или охота кончилась). */
+  glimpseIn(time: number): number {
+    return this.phase === 1 && !this.settled ? this.nextGlimpse - time : Infinity;
+  }
+
+  /** Охота кончилась (игра решила: рассыпал, поймала, долго ходит); с oneHunt — насовсем, дальше только приметы. */
+  settle(time: number): void {
+    const gap = this.cfg.oneHunt;
+    if (!gap || this.settled) return;
+    this.settled = true;
+    this.nextTrace = time + gap[0];
+  }
+
   update(inp: DirectorInput): DirectorEvent[] {
     const ev: DirectorEvent[] = [];
     const c = this.cfg;
@@ -137,7 +163,7 @@ export class Director {
     const byGoals = c.releaseAfterGoals !== undefined && inp.goalsDone >= c.releaseAfterGoals && shown;
     if (this.phase === 1 && (inp.time >= c.releaseAt || byGoals || (c.byDepth && (inp.tier >= Math.max(1, inp.tiers - 1) || (deep && inp.goalsDone >= 1))))) this.phase = 2;
 
-    if (this.phase === 1 && inp.time >= this.nextGlimpse && !inp.swarmBusy) {
+    if (this.phase === 1 && !this.settled && inp.time >= this.nextGlimpse && !inp.swarmBusy) {
       ev.push({ type: 'apparition' });
       this.glimpses += 1;
       this.nextGlimpse = inp.time + 35 + this.rng() * 30;
@@ -146,10 +172,11 @@ export class Director {
       this.released = true;
       ev.push({ type: 'release' });
     }
-    // Приметы — и между явлениями, пока Осыпь не охотится (на ступенях 1–2 она теперь и видна, и оставляет следы).
-    if (this.phase <= 1 && inp.time >= this.nextTrace && !inp.swarmBusy) {
+    // Приметы — и между явлениями, пока Осыпь не охотится (на ступенях 1–2 она теперь и видна, и оставляет следы); после
+    // единственной охоты сна (oneHunt) — только они.
+    if ((this.phase <= 1 || this.settled) && inp.time >= this.nextTrace && !inp.swarmBusy) {
       ev.push({ type: 'trace' });
-      const [lo, hi] = this.cfg.traceGap ?? [90, 140];
+      const [lo, hi] = (this.settled ? this.cfg.oneHunt : undefined) ?? this.cfg.traceGap ?? [90, 140];
       this.nextTrace = inp.time + lo + this.rng() * (hi - lo);
     }
     if (inp.time >= this.nextScare) {

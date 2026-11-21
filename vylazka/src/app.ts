@@ -88,10 +88,12 @@ const MOMENT_MS = 3200;
  */
 const SCENE_SESSION: SessionConfig = { ...DEFAULT_SESSION, count: 1, firstDelay: 10, fallback: 18, minLength: 0 };
 /**
- * Первый сон начинается с завязки (квиз 19.11, «Выбираемся из сна»): две строки посреди кадра — когда (с от начала игры).
- * Потом показывается Осыпь (game.ts, ONBOARD_DIRECTOR, ~12 с), потом приходит первая вещь (FIRST_ITEM_AT).
+ * Первый сон начинается с завязки (квиз 19.11, «Выбираемся из сна»): одна строка посреди кадра — цель, на этой секунде от начала
+ * игры. Строка «ты спишь…» повторяла заставку, и её больше нет (Z-19, приём 1: страху нужно пустое место — восемь строк за двадцать
+ * секунд делали из первого явления подпись к тексту). Потом показывается Осыпь (game.ts, ONBOARD_DIRECTOR, ~12 с), потом приходит
+ * первая вещь (FIRST_ITEM_AT); её вспышка ждёт, пока догорит строка Осыпи (ui/hud.ts, flash с очередью).
  */
-const INTRO_AT = [0.6, 5.6] as const;
+const INTRO_AT = 1;
 const INTRO_MS = 4400;
 /**
  * Когда в первом сне приходит первая вещь, с: после завязки и Осыпи. Следующая — через несколько секунд после «вспомнил»
@@ -181,8 +183,8 @@ export class App {
   /** Какое воспоминание сейчас ищут и с какого момента (для подсказки «погаси свет»). */
   private seeking = '';
   private seekingSince = 0;
-  /** Сколько строк завязки первого сна уже показано (INTRO_AT). */
-  private introStep = 0;
+  /** Строка завязки первого сна уже показана (INTRO_AT). */
+  private introShown = false;
   /** Первый сон: игрок уже гасил фонарь при искомой вещи — обязательный момент «погаси фонарь» пройден. */
   private darkTaught = false;
   /** Следующая сессия, собранная за время лимбо. */
@@ -657,7 +659,7 @@ export class App {
     if (!this.game || this.screen !== 'title') return;
     this.screen = 'play';
     // Завязка — с начала сна; продолжение сохранённого посреди сна её не повторяет.
-    this.introStep = this.game.time > 3 ? INTRO_AT.length : 0;
+    this.introShown = this.game.time > 3;
     this.darkTaught = false;
     this.sound.unlock();
     this.audio.setScene('play');
@@ -1216,7 +1218,8 @@ export class App {
     }
     for (const e of ev.session) {
       if (e.type === 'reveal') {
-        this.hud.flash(wornLine(t(`mem.${e.memory.def.id}.flash`), this.game.wearBase));
+        // Вещь пришла — её строка ждёт, пока догорит горящая (строка Осыпи, «вспомнил» прошлой вещи): свет и звук вещи — сразу.
+        this.hud.flash(wornLine(t(`mem.${e.memory.def.id}.flash`), this.game.wearBase), undefined, true);
         if (buzz) navigator.vibrate([30, 40, 30]);
       } else if (e.type === 'recall') {
         const id = e.memory.def.id;
@@ -1335,10 +1338,10 @@ export class App {
     const g = this.game;
     const s = g.session;
     const light = g.light;
-    // Первый сон начинается с завязки: две строки посреди кадра, потом — Осыпь и первая вещь (квиз 19.11).
-    if (this.firstSleep && this.screen === 'play' && g.where === 'main' && this.introStep < INTRO_AT.length && g.time >= INTRO_AT[this.introStep]!) {
-      this.hud.flash(t(`intro.${this.introStep}`), INTRO_MS);
-      this.introStep += 1;
+    // Первый сон начинается с завязки: строка посреди кадра, потом — Осыпь и первая вещь (квиз 19.11).
+    if (this.firstSleep && this.screen === 'play' && g.where === 'main' && !this.introShown && g.time >= INTRO_AT) {
+      this.hud.flash(t('intro.goal'), INTRO_MS);
+      this.introShown = true;
     }
     this.hud.setTime(g.time + this.clockStart() + this.clockSkew);
     const dead = light.state === 'dead';
@@ -1358,7 +1361,8 @@ export class App {
       const what = g.hasLight ? 'move' : 'look';
       if (g.time < 7) hint = t(this.dragMode ? `hint.${what}.desktop_drag` : `hint.${what}.${base}`);
       else if (g.time < 12 && g.hasLight) hint = t(`hint.light.${base}`);
-      else if (g.time < 16 && !this.touchMode) hint = t('hint.pause.desktop');
+      // Про паузу — не в первом сне: его первые секунды — тише (Z-19, приём 1); пауза находится и сама — Esc отпускает мышь.
+      else if (g.time < 16 && !this.touchMode && !this.firstSleep) hint = t('hint.pause.desktop');
     }
     // Первый сон: искомая вещь в луче — как её вспомнить: подержать в луче (плейтест 19.11; куратор, пачка 48: это нигде не
     // сказано). Только до первой вспомненной вещи.
@@ -1367,7 +1371,15 @@ export class App {
     // Первый сон: как искать — обязательный момент (квиз 19.11, «Звук, свечение, цель»): пока игрок ни разу не погасил фонарь
     // при искомой вещи, внизу — «погасите фонарь: в темноте искомое видно сквозь стены»; погасил — «вот она».
     if (this.firstSleep && this.screen === 'play' && g.where === 'main' && g.hasLight && s?.active && !this.darkTaught) {
-      if (light.state === 'off') {
+      const lesson = g.darkLesson;
+      if (lesson && lesson.phase !== 'skip') {
+        // Тёмный урок учит событием (Z-19, приём 4): фонарь глохнет сам, и искомое проступает сквозь стены — строки «погасите
+        // фонарь» больше нет; внизу — только подсказка оживить фонарь.
+        if (lesson.phase === 'on' || lesson.phase === 'done') {
+          this.darkTaught = true;
+          this.analytics.hint('dark.lesson');
+        }
+      } else if (light.state === 'off') {
         this.darkTaught = true;
         this.analytics.hint('dark.first');
         this.hud.toast(t('teach.dark.seen'), 5200);

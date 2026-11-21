@@ -42,6 +42,8 @@ import type { Perch } from './systems/birds';
 import { Flow } from './systems/flow';
 import { Pressure } from './systems/pressure';
 import { FEEL_NEUTRAL, SessionFeel } from './systems/feel';
+import { Follower } from './systems/follower';
+import { HUSH, Hush } from './systems/hush';
 import type { FeelView } from './systems/feel';
 import type { PressureKind, PressureRoom } from './systems/pressure';
 import { DEFAULT_SPORES, SPORE_STRIDE, Spores } from './systems/spores';
@@ -64,7 +66,7 @@ import { DOOR_NAME } from './world/screens';
 import type { LevelObject } from './world/objects';
 import { ALL_PROPS } from './world/props_all';
 import { CEIL_H, DX, DZ } from './gen/layout';
-import type { WorldKind } from './gen/layout';
+import type { GenRoom, WorldKind } from './gen/layout';
 import type { BuiltLevel, ItemSpot } from './world/level';
 import { figureMesh } from './world/figure_mesh';
 import type { FigureMaterial, FigureSpec } from './world/figures';
@@ -437,12 +439,33 @@ export const STAGE_ALL = 4;
  * Ступень 0: Осыпь показывается в первую минуту — явление через ~12 с (после завязки, app.ts) и потом изредка; охотится после первой вспомненной
  * вещи; ложные события редкие и не в первую минуту.
  */
-const ONBOARD_DIRECTOR: DirectorConfig = { glimpseAt: 8, firstGlimpse: 4, releaseAt: Infinity, releaseAfterGoals: 1, scareGap: [45, 90], byDepth: false, firstScare: 70 };
-/** Ступени 1–2: как на нулевой, и ещё приметы — на первой реже, на второй чаще. */
+const ONBOARD_BASE: DirectorConfig = { glimpseAt: 8, firstGlimpse: 4, releaseAt: Infinity, releaseAfterGoals: 1, scareGap: [45, 90], byDepth: false, firstScare: 70 };
+/**
+ * И охота на ступени 0 одна (Z-19, приём 5 «Одна охота, потом передышка»): луч рассыпал Осыпь, она поймала или ходит дольше
+ * ONE_HUNT_MAX — до конца сна только приметы, раз в 40–70 с. Горки, а не «бочка со скалы»: охота при неглохнущем фонаре была
+ * игрой, а не страхом.
+ */
+const ONBOARD_DIRECTOR: DirectorConfig = { ...ONBOARD_BASE, oneHunt: [40, 70] };
+/** Ступени 1–2: как на нулевой (охот сколько выйдет), и ещё приметы — на первой реже, на второй чаще. */
 const SIGNS_DIRECTOR: readonly [DirectorConfig, DirectorConfig] = [
-  { ...ONBOARD_DIRECTOR, traceAt: 100, traceGap: [120, 170] },
-  { ...ONBOARD_DIRECTOR, traceAt: 60, traceGap: [75, 115] },
+  { ...ONBOARD_BASE, traceAt: 100, traceGap: [120, 170] },
+  { ...ONBOARD_BASE, traceAt: 60, traceGap: [75, 115] },
 ];
+/** Одна охота: дольше стольких секунд Осыпь не ходит — уходит, если не гонится прямо сейчас. */
+const ONE_HUNT_MAX = 100;
+/** Рассыпанная лучом в единственной охоте, Осыпь затихает через столько секунд: успевает рассыпаться на глазах. */
+const ONE_HUNT_FADE = 1.2;
+/**
+ * Тёмный урок сквозь стены (Z-19, приём 4): в первом сне, когда пришла первая вещь, фонарь через delay секунд глохнет сам — сквозь
+ * стены видна вещь, а между игроком и ней — её контур, неподвижный и красный, как сетка (знание, а не тело); ожил свет — пусто.
+ * Правило, которое игра только что показала (темнота показывает искомое), показывает и того, кто ищет тебя; строки «погасите
+ * фонарь» больше нет. Первое явление ещё стоит — урок ждёт, пока оно уйдёт, не дольше wait секунд; контур — на пути к вещи, от
+ * near до far метров от игрока; стоит не дольше stand секунд. Не оживил фонарь за revive секунд — оживает сам: урок не должен
+ * запирать новичка в темноте.
+ */
+const LESSON = { delay: 1.5, wait: 8, near: 6.5, far: 16, revive: 12, stand: 30 } as const;
+/** Первый сон: особые помещения — на верхнем ярусе, в from–to узлах пути от входа, в таком порядке (assignFirstDream). */
+const FIRST_DREAM = { from: 3, to: 14, order: ['strobe', 'dark', 'wire'] as const satisfies readonly RoomFx[] };
 /** Сколько секунд Осыпь-примета идёт по месту. */
 const TRACE_SECONDS = 26;
 /** Ступень 3: силуэт на краю луча с первой минуты, охота — после первой вещи или с пятой минуты (как прежняя мягкая первая сессия, слово партнёра 16.11 23:41). */
@@ -785,6 +808,24 @@ export class Game {
   phone = false;
   /** Когда затихшая после поимки Осыпь выйдет снова, с игрового времени; 0 — не ждёт. */
   private swarmWakeAt = 0;
+  /** Тишина перед Осыпью (systems/hush.ts): насколько звук места сейчас проседает, 0..1. Читает звук. */
+  hush = 0;
+  private hushLogic: Hush | null = null;
+  /** Шаги в такт (systems/follower.ts) и шаги следом, которые ещё не отдали звуку. */
+  private follower: Follower | null = null;
+  private followSteps: Vec3[] = [];
+  /**
+   * Тёмный урок (LESSON): wait — ждёт первой вещи; armed — фонарь заглохнет не раньше at (часы игры); on — темно, контур стоит
+   * (at — когда началось); done — прошёл; skip — не понадобился (вещь вспомнили раньше: игрок нашёл её и так). null — урока нет
+   * (не первый сон).
+   */
+  darkLesson: { phase: 'wait' | 'armed' | 'on' | 'done' | 'skip'; at: number } | null = null;
+  /** Фонарь ожил сам по уроку: шаг сообщит об этом, как об ожившем от тряски (звук щелчка). */
+  private lessonRevived = false;
+  /** Одна охота: когда Осыпь вышла (часы сна); −1 — не выходила. */
+  private huntFrom = -1;
+  /** Рассыпанная лучом в единственной охоте Осыпь затихнет в эту секунду (часы игры); 0 — не ждёт. */
+  private settleAt = 0;
   /** Сколько раз первое явление не нашло места впереди (apparitionNode). */
   private glimpseTries = 0;
   /**
@@ -992,10 +1033,19 @@ export class Game {
       // охотилась, в новом месте выходит снова — не сразу, через SCENE_SWARM_BACK секунд (она не житель места, а тревога:
       // pressure.md §4.4).
       const keep = this.loadingScene && this.director !== null;
-      const hunted = keep && this.director!.wasReleased;
+      // Охота кончилась насовсем (одна охота за сон) — и в новом месте она не выходит.
+      const hunted = keep && this.director!.wasReleased && !this.director!.isSettled;
       if (!keep) {
         this.director = new Director(this.rng, stage === 0 ? ONBOARD_DIRECTOR : stage <= 2 ? SIGNS_DIRECTOR[stage - 1]! : stage === 3 ? FIRST_HUNT_DIRECTOR : this.gentle ? GENTLE.director : DEFAULT_DIRECTOR);
         this.glimpseTries = 0;
+        // Тишина, шаги следом и урок — на весь сон, как режиссёр; разброс — из сида сна, а не из ГСЧ игры.
+        this.hushLogic = new Hush(hash01(dream.seed, 0x4057));
+        this.follower = new Follower(hash2(dream.seed, 0xf011, 3));
+        this.followSteps = [];
+        this.hush = 0;
+        this.huntFrom = -1;
+        this.settleAt = 0;
+        this.darkLesson = stage === 0 ? { phase: 'wait', at: Infinity } : null;
       }
       this.swarmWakeAt = hunted ? SCENE_SWARM_BACK : 0;
       // Скачков (кроме поставленного холодного старта и вынужденных) на ступенях 0–1 нет; на 2–3 — мягкие.
@@ -1014,6 +1064,11 @@ export class Game {
       this.swarm = null;
       this.spores = null;
       this.director = null;
+      this.hushLogic = null;
+      this.follower = null;
+      this.followSteps = [];
+      this.hush = 0;
+      this.darkLesson = null;
       this.anomalies = null;
       this.jumps = null;
       this.transition = null;
@@ -1850,7 +1905,7 @@ export class Game {
     // В зале ожидания особенных помещений нет: его странность — время, а не комнаты.
     const share = this.level?.world === 'station' ? 0 : this.level?.world === 'office' ? 0.3 : 0.45;
     const n = Math.min(order.length, Math.ceil(pool.length * share));
-    for (let i = 0; i < n; i++) this.roomFx.set(pool[i]!.id, order[i]!);
+    if (!(this.stage === 0 && share > 0 && this.assignFirstDream(pool))) for (let i = 0; i < n; i++) this.roomFx.set(pool[i]!.id, order[i]!);
     for (const r of rooms) if (r.type === 'collapsed') this.roomFx.set(r.id, 'wire');
     // Комната под звёздным небом — тихое место: ни строба, ни темноты, ни сетки. (Снимается после
     // раздачи, а не до неё: остальным помещениям достаётся то же, что и раньше.)
@@ -1860,6 +1915,56 @@ export class Game {
     // И помещение с травой (design.md, §36): одно чудо за раз, и «сеточный» пол, уходящий из-под ног, оставил бы поле висеть
     // над дырой (куратор, противоречие 347).
     if (this.level?.grassRoom !== undefined) this.roomFx.delete(this.level.grassRoom);
+    // Белая комната светит сама (furnish_white.ts), а за дверью песчаного зала — пустое помещение с чёрным проёмом: и там одно
+    // чудо за раз.
+    if (this.level?.whiteRoom) this.roomFx.delete(this.level.whiteRoom.room);
+    if (this.level?.duneDoor) this.roomFx.delete(this.level.duneDoor.room);
+  }
+
+  /**
+   * Первый сон новичка (ступень 0) — один на всех (сид первого сна у всех новичков один; Z-19, «первый сон ставить руками, как
+   * уровень»): особые помещения не наугад по всему убежищу — наугад они ложились на нижний ярус, в сторону, и новичок не встречал
+   * ни одного, — а на его пути: на верхнем ярусе, в FIRST_DREAM.from–to узлах от входа, ближние первыми. Строб (ему нужен
+   * простор), «тёмное», «сеточное». «Тонких» нет: на ступени 0 скачков нет, и «тонкое» молчало бы. false — разложить не удалось
+   * (тогда как обычно).
+   */
+  private assignFirstDream(pool: readonly GenRoom[]): boolean {
+    const level = this.level;
+    if (!level) return false;
+    const nav = level.nav;
+    const from = this.playerNodeAt(level.spawn.pos);
+    if (from < 0) return false;
+    const dist = new Int32Array(nav.length).fill(-1);
+    dist[from] = 0;
+    const queue = [from];
+    for (let i = 0; i < queue.length; i++) {
+      const n = queue[i]!;
+      for (const l of nav[n]!.links) {
+        if (dist[l]! >= 0) continue;
+        dist[l] = dist[n]! + 1;
+        queue.push(l);
+      }
+    }
+    const top = nav[from]!.tier;
+    const near = new Map<number, number>();
+    for (let i = 0; i < nav.length; i++) {
+      const n = nav[i]!;
+      if (n.tier !== top || dist[i]! < 0) continue;
+      const was = near.get(n.room);
+      if (was === undefined || dist[i]! < was) near.set(n.room, dist[i]!);
+    }
+    const quiet = new Set([level.skyRoom, level.greenRoom, level.grassRoom, level.whiteRoom?.room, level.duneDoor?.room]);
+    const cand = pool
+      .filter((r) => !quiet.has(r.id) && r.type !== 'collapsed' && (near.get(r.id) ?? -1) >= FIRST_DREAM.from && (near.get(r.id) ?? Infinity) <= FIRST_DREAM.to)
+      .sort((a, b) => near.get(a.id)! - near.get(b.id)!);
+    const used = new Set<number>();
+    for (const fx of FIRST_DREAM.order) {
+      const r = cand.find((x) => !used.has(x.id) && (fx !== 'strobe' || x.cells.length >= 2)) ?? cand.find((x) => !used.has(x.id));
+      if (!r) break;
+      used.add(r.id);
+      this.roomFx.set(r.id, fx);
+    }
+    return used.size > 0;
   }
 
   /** Расставить вещи сна: мелочь по столам и полкам, крупное — посреди коридоров. */
@@ -2483,7 +2588,10 @@ export class Game {
           // если поймала она: «проснулся» от провала пола или края перрона её не будит и не усыпляет.
           sw.rest();
           this.swarmBody.snap(sw.pos, 0);
-          this.swarmWakeAt = this.time + (this.gentle ? GENTLE.rest : SWARM_REST_LATER);
+          // Одна охота за сон: поймав, она не выходит больше — до конца сна только приметы.
+          const once = this.director?.cfg.oneHunt !== undefined;
+          if (once) this.director!.settle(this.sleepTime);
+          this.swarmWakeAt = once ? 0 : this.time + (this.gentle ? GENTLE.rest : SWARM_REST_LATER);
         } else if (sw && sw.mode === 'trace') {
           // Примета без тела (ступени 1–2) не переселяется выпуском: иначе она стала бы настоящей Осыпью раньше срока.
           sw.rest();
@@ -2765,6 +2873,80 @@ export class Game {
    * в первые моменты», плейтест партнёра 19.11); нет такого — любой на виду (ahead — нет: тогда −1, и режиссёр попробует снова
    * через пару секунд).
    */
+  /**
+   * Тёмный урок (LESSON): первая вещь пришла — фонарь глохнет сам; между игроком и вещью встаёт её контур, виден сквозь стены;
+   * ожил свет — пусто. Не оживил за LESSON.revive секунд — свет возвращается сам.
+   */
+  private stepLesson(node: number): void {
+    const ls = this.darkLesson;
+    const sw = this.swarm;
+    if (!ls || !sw || ls.phase === 'wait' || ls.phase === 'done' || ls.phase === 'skip') return;
+    if (ls.phase === 'armed') {
+      if (this.time < ls.at) return;
+      const target = this.memoryThing;
+      if (!target || target.state === 'gone' || this.where !== 'main') {
+        ls.phase = 'skip';
+        return;
+      }
+      // Вещь рядом — темнота ей не нужна: урок ждёт, пока игрок отойдёт; вспомнит её раньше — урока не будет.
+      const b = this.body;
+      if (Math.hypot(target.pos[0] - b.x, target.pos[2] - b.z) < LESSON.near + 1.5) return;
+      // Первое явление ещё стоит (или идёт охота) — урок ждёт, пока она уйдёт.
+      if (sw.active && this.time < ls.at + LESSON.wait) return;
+      this.light.forceFail();
+      ls.phase = 'on';
+      ls.at = this.time;
+      if (!sw.active) {
+        const n = this.lessonNode(node, target.pos);
+        if (n >= 0) {
+          // Свет её не берёт (света и нет), подойти — рассыплется, как всякое явление.
+          sw.appear(n, LESSON.stand, LESSON.stand);
+          this.swarmBody.snap(sw.pos, sw.cohesion);
+        }
+      }
+      return;
+    }
+    // Ожил свет — пусто.
+    if (this.light.state === 'on') {
+      ls.phase = 'done';
+      if (sw.mode === 'apparition') {
+        sw.rest();
+        this.swarmBody.snap(sw.pos, 0);
+      }
+      return;
+    }
+    if (this.light.state === 'dead' && this.time - ls.at > LESSON.revive) {
+      this.light.replaceBattery();
+      this.lessonRevived = true;
+    }
+  }
+
+  /** Где встанет контур урока: узел на пути от игрока к вещи, от LESSON.near до LESSON.far метров от игрока; −1 — негде. */
+  private lessonNode(from: number, at: Vec3): number {
+    const sw = this.swarm;
+    const nav = this.level?.nav;
+    if (!sw || !nav || from < 0) return -1;
+    const to = this.playerNodeAt(at);
+    if (to < 0) return -1;
+    const b = this.body;
+    const path = sw.route(from, to);
+    let best = -1;
+    let bestMiss = Infinity;
+    // Середина отрезка, но не у самой вещи: контур стоит между, а не над ней.
+    const mid = (LESSON.near + LESSON.far) / 2;
+    for (let i = 1; i < path.length - 1; i++) {
+      const n = nav[path[i]!]!;
+      const d = Math.hypot(n.x - b.x, n.z - b.z);
+      if (d < LESSON.near || d > LESSON.far || Math.hypot(n.x - at[0], n.z - at[2]) < 2.5) continue;
+      const miss = Math.abs(d - mid);
+      if (miss < bestMiss) {
+        bestMiss = miss;
+        best = path[i]!;
+      }
+    }
+    return best;
+  }
+
   private apparitionNode(from: number, ahead = false): number {
     const sw = this.swarm;
     const rig = this.lastRig;
@@ -3083,7 +3265,10 @@ export class Game {
 
     const quiet = this.where !== 'main' || this.transition !== null;
     if (s && !s.over && !this.calm && !quiet) this.stepFear(wdt, input, level, fear, dream);
-    else this.swarmNear = this.calm ? 0 : approach(this.swarmNear, 0, 0.5, dt);
+    else {
+      this.swarmNear = this.calm ? 0 : approach(this.swarmNear, 0, 0.5, dt);
+      this.hush = Math.max(0, this.hush - dt / HUSH.release);
+    }
 
     // Давление помимо Осыпи: пол рассыпается, потолок опускается; не успел — проснулся в начале.
     this.stepPressure(wdt, quiet, dream);
@@ -3221,7 +3406,9 @@ export class Game {
     }
 
     this.stepGlow(dt);
-    return { lightFailed: ev.failed, lightRevived: ev.revived, lightToggled: toggled, lightKnock: knock, lightCharged: ev.charged, crank: this.light.cranking ? this.light.charge : -1, spark: ev.spark, strokes, fellOut: res.fellOut, session: out, fear, dream };
+    const byLesson = this.lessonRevived;
+    this.lessonRevived = false;
+    return { lightFailed: ev.failed, lightRevived: ev.revived || byLesson, lightToggled: toggled, lightKnock: knock, lightCharged: ev.charged, crank: this.light.cranking ? this.light.charge : -1, spark: ev.spark, strokes, fellOut: res.fellOut, session: out, fear, dream };
   }
 
   /** Рой, режиссёр и аномалии за шаг. */
@@ -3236,6 +3423,7 @@ export class Game {
     // Зарядка удержанием трещит, как тряска: Осыпь её слышит.
     const noise = Math.max(input.run && moving > 3 ? 0.6 : moving > 1 ? 0.12 : 0, this.light.state === 'dead' ? shakeLevel * 0.9 : shakeLevel * 0.4, this.light.cranking ? CRANK_NOISE : 0, s.panic > 0.6 ? 0.35 : 0, s.inWater && moving > 0.5 ? 0.5 : 0);
 
+    const dir = this.director;
     if (sw && this.swarmWakeAt > 0 && this.time >= this.swarmWakeAt && !sw.active) {
       // Затихшая после поимки Осыпь выходит снова — подальше от игрока — и ищет его заново.
       this.swarmWakeAt = 0;
@@ -3254,6 +3442,11 @@ export class Game {
         // Проявленная до конца, Осыпь рассыпается и несколько секунд течёт в сторону искомой вещи:
         // она знает, где лежит то, что ещё не вспомнили.
         this.swarmFlow = this.flowToMemory();
+        // Одна охота за сон (oneHunt): луч рассыпал охотящуюся — она затихает насовсем, до конца сна только приметы.
+        if (sw.mode === 'scatter' && dir?.cfg.oneHunt && dir.wasReleased && !dir.isSettled) {
+          dir.settle(this.sleepTime);
+          this.settleAt = this.time + ONE_HUNT_FADE;
+        }
       }
       if (res.caught && this.jumps) {
         // Осыпь не убивает: она гасит всё и возвращает в начало — туда, где вылазка началась. Искомая
@@ -3265,9 +3458,23 @@ export class Game {
         if (this.beginJump(this.jumps.forced('caught'), dream)) this.swarmCaught = true;
       }
       this.swarmNear = sw.proximity(pos);
+      // Рассыпанная в единственной охоте — затихает, успев рассыпаться на глазах. И слишком долгая охота кончается сама:
+      // Осыпь уходит, если не гонится прямо сейчас.
+      if (this.settleAt > 0 && this.time >= this.settleAt) {
+        this.settleAt = 0;
+        if (sw.mode !== 'trace') {
+          sw.rest();
+          this.swarmBody.snap(sw.pos, 0);
+        }
+      }
+      if (dir?.cfg.oneHunt && dir.wasReleased && !dir.isSettled && this.huntFrom >= 0 && this.sleepTime - this.huntFrom > ONE_HUNT_MAX && sw.mode !== 'hunt' && sw.mode !== 'cohere' && sw.mode !== 'scatter') {
+        dir.settle(this.sleepTime);
+        sw.rest();
+        this.swarmBody.snap(sw.pos, 0);
+      }
     }
 
-    const dir = this.director;
+    let appeared = false;
     if (dir) {
       const tiers = this.level?.layout?.tierCount ?? 1;
       for (const e of dir.update({ time: this.sleepTime, tier: Math.max(0, Math.round(-b.y / 4.5)), goalsDone: s.doneCount, swarmBusy: sw?.active ?? true, tiers })) {
@@ -3284,6 +3491,7 @@ export class Game {
             sw.appear(n, 6, dir.glimpsed <= 1 ? FIRST_GLIMPSE_GRACE : 0);
             this.swarmBody.snap(sw.pos, sw.cohesion);
             fear.push({ type: 'swarm', what: 'apparition' });
+            appeared = true;
           } else dir.missedGlimpse(this.sleepTime);
         } else if (e.type === 'trace' && sw) {
           // Примета: Осыпь проходит вдали, за стенами; тела не видно.
@@ -3298,8 +3506,18 @@ export class Game {
           sw.activate(n >= 0 ? n : sw.nodeAround(node, 4, 30));
           this.swarmBody.snap(sw.pos, 0);
           fear.push({ type: 'swarm', what: 'release' });
+          this.huntFrom = this.sleepTime;
         }
       }
+    }
+
+    this.stepLesson(node);
+    // Тишина перед явлением: режиссёр знает его миг заранее; ложная — в покое, без неё (systems/hush.ts).
+    const hl = this.hushLogic;
+    if (hl && dir) {
+      const glimpseIn = sw && !sw.active ? dir.glimpseIn(this.sleepTime) : Infinity;
+      const still = !(sw?.active ?? false) && this.darkLesson?.phase !== 'on';
+      this.hush = hl.update({ time: this.sleepTime, dt, glimpseIn, appeared, calm: still });
     }
 
     if (this.anomalies) this.applyAnomalies(this.anomalies.update(pos, node >= 0 ? this.level!.nav[node]!.room : -1, this.swarmNear > 0.2, (room) => this.roomSeen(room)));
@@ -3364,6 +3582,12 @@ export class Game {
       if (this.memoryThing.collider >= 0) this.colliders.boxes[this.memoryThing.collider]!.clear = true;
       // Вспышка воспоминания: кадр на миг рвётся.
       this.glitch = Math.max(this.glitch, 0.5);
+      // Первый сон: пришла первая вещь — через миг фонарь заглохнет сам (тёмный урок, LESSON).
+      const ls = this.darkLesson;
+      if (ls?.phase === 'wait') {
+        ls.phase = 'armed';
+        ls.at = this.time + LESSON.delay;
+      }
     } else if (e.type === 'recall') {
       // Вспомнил — свет вернулся: батарейка фонаря снова полная.
       this.light.recharge();
@@ -3431,6 +3655,14 @@ export class Game {
       this.stepped = true;
       // Шаг слышен: от ступней расходится волна эха, от бега — сильнее.
       if (this.where === 'main') this.echo.emit([x, y + 0.05, z], ECHO_STEP, clamp(Math.hypot(b.vx, b.vz) / RUN_SPEED, 0.35, 1));
+    }
+    // Шаги в такт: на долгом пути за спиной кто-то идёт следом (systems/follower.ts). Только в покое: ни Осыпи, ни скачка.
+    const fol = this.follower;
+    if (fol) {
+      const s0 = this.session;
+      const still = this.where === 'main' && !this.transition && !this.calm && !!s0 && !s0.over && !(this.swarm?.active ?? false) && this.darkLesson?.phase !== 'on';
+      for (const p of fol.update({ time: this.sleepTime, dt, footstep: rig.footstep, feet: [x, y, z], ears: rig.camPos, yaw: rig.camYaw, calm: still })) this.followSteps.push(p);
+      if (this.followSteps.length > 8) this.followSteps.splice(0, this.followSteps.length - 8);
     }
 
     // Особенности помещения: в «тёмном» фонарь не проходит и проступает сетка; в «сеточном» — только сетка.
@@ -3660,7 +3892,9 @@ export class Game {
       } else {
         // На снимке (зал ожидания, игрок стоит) Осыпь видна там, где была: тело за ней не тянется.
         if (!fl?.frozen) this.swarmBody.update(dt, sw.pos, sw.cohesion, null, growth);
-        this.renderer.setSwarm(this.swarmBody.heads, this.swarmBody.dirs, this.swarmBody.params, 0.88, this.time);
+        // Тёмный урок: её контур виден сквозь стены — красный, как сетка искомой вещи (знание, а не тело).
+        const through = this.darkLesson?.phase === 'on' && sw.mode === 'apparition';
+        this.renderer.setSwarm(this.swarmBody.heads, this.swarmBody.dirs, this.swarmBody.params, through ? 0.7 : 0.88, this.time, through);
       }
     } else this.renderer.setSwarm(this.swarmBody.heads, this.swarmBody.dirs, this.swarmBody.params, 0, this.time);
     // Эхо. Осыпь слышно: пока она рядом, от неё расходятся волны — чаще, когда она тянется к игроку.
@@ -3869,6 +4103,13 @@ export class Game {
     if (present) this.renderer.render(view);
   }
 
+  /** Шаги в такт: где за спиной прозвучали шаги следом с прошлого вызова (для звука). */
+  consumeFollowSteps(): Vec3[] {
+    const out = this.followSteps;
+    this.followSteps = [];
+    return out;
+  }
+
   /** Был ли шаг с прошлого вызова (для звука шагов). */
   consumeFootstep(): boolean {
     const s = this.stepped;
@@ -3941,7 +4182,10 @@ export class Game {
       jumps: this.jumps ? { count: this.jumps.count, cooldown: this.jumps.cooldown } : null,
       archive: [...this.archive],
       swarm: this.swarm ? { mode: this.swarm.mode, pos: [...this.swarm.pos], node: this.swarm.node, cohesion: this.swarm.cohesion, awareness: this.swarm.awareness, aggravation: this.swarm.aggravation, near: this.swarmNear, growth: Math.min(1, (this.session?.doneCount ?? 0) / SWARM_GROWN), flow: this.swarmFlow ? this.swarmFlow.t : null } : null,
-      director: this.director ? { phase: this.director.phase, released: this.director.wasReleased, clock: this.sleepTime } : null,
+      director: this.director ? { phase: this.director.phase, released: this.director.wasReleased, settled: this.director.isSettled, clock: this.sleepTime } : null,
+      hush: this.hush,
+      lesson: this.darkLesson?.phase ?? null,
+      follow: this.follower?.times ?? 0,
       anomalies: this.anomalies ? this.anomalies.state() : null,
       node: this.playerNode(),
     };

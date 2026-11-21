@@ -86,6 +86,9 @@ export class Hud {
   private toastPending: { text: string; ms: number } | null = null;
   /** До какого времени (Date.now) горит или гаснет вспышка. */
   private flashUntil = 0;
+  /** Вспышка, поставленная в очередь: ждёт, пока догорит нынешняя (flash(…, queue)). */
+  private flashPending: { text: string; ms: number } | null = null;
+  private flashWait: ReturnType<typeof setTimeout> | undefined;
   /** Миг: до какого времени (Date.now) кадр чёрный и часы стоят на 00:00:00. */
   private cutUntil = 0;
   private cutTimers: ReturnType<typeof setTimeout>[] = [];
@@ -304,11 +307,22 @@ export class Hud {
     this.toastTimer = setTimeout(() => this.toastEl.classList.remove('is-on'), ms);
   }
 
-  /** Вспышка воспоминания: строка посреди кадра, появляется рывком и медленно гаснет. */
-  flash(text: string, ms = 5200): void {
+  /**
+   * Вспышка воспоминания: строка посреди кадра, появляется рывком и медленно гаснет. queue — не гасить горящую вспышку, а
+   * дождаться, пока она догорит (первый сон: вещь приходит, пока горит строка Осыпи, и гасила её на полуслове — Z-19, приём 1).
+   */
+  flash(text: string, ms = 5200, queue = false): void {
+    const wait = this.flashUntil - Date.now();
+    if (queue && wait > 0) {
+      this.flashPending = { text, ms };
+      this.armFlashWait(wait);
+      return;
+    }
     // Вспышка важнее прочих сообщений: они стоят почти там же и легли бы строкой на строку. Горящее
     // сообщение гаснет, ждущее — ждёт дальше (до конца новой вспышки и её угасания, 1,6 с в стилях).
     this.flashUntil = Date.now() + ms + FLASH_FADE_MS;
+    // Вспышка из очереди ждёт и эту, новую.
+    if (this.flashPending) this.armFlashWait(ms + FLASH_FADE_MS);
     const pending = this.toastPending;
     if (pending) this.toast(pending.text, pending.ms);
     this.toastEl.classList.remove('is-on');
@@ -321,6 +335,17 @@ export class Hud {
     this.flashTimer = setTimeout(() => this.flashEl.classList.remove('is-on'), ms);
   }
 
+  /** Показать вспышку из очереди через wait мс. */
+  private armFlashWait(wait: number): void {
+    if (this.flashWait !== undefined) clearTimeout(this.flashWait);
+    this.flashWait = setTimeout(() => {
+      this.flashWait = undefined;
+      const p = this.flashPending;
+      this.flashPending = null;
+      if (p) this.flash(p.text, p.ms, true);
+    }, wait);
+  }
+
   /** Строки лимбо посреди кадра; пустой список — убрать. */
   setLimbo(lines: readonly string[]): void {
     const key = lines.join('\n');
@@ -330,6 +355,7 @@ export class Hud {
     if (lines.length > 0) {
       this.flashEl.classList.remove('is-on');
       this.toastEl.classList.remove('is-on');
+      this.flashPending = null;
     }
     this.limboEl.replaceChildren();
     for (const l of lines) {
