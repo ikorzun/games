@@ -2970,6 +2970,11 @@ export class Game {
     return best;
   }
 
+  /** Узел явления впереди, в луче, — как у первого явления сна (для отладки и записи видео). −1 — места впереди нет. */
+  apparitionAhead(): number {
+    return this.apparitionNode(this.playerNode(), true);
+  }
+
   private apparitionNode(from: number, ahead = false): number {
     const sw = this.swarm;
     const rig = this.lastRig;

@@ -170,9 +170,10 @@ export interface VzDebugApi {
   moment(): void;
   /**
    * Выпустить рой в hops клетках от игрока (сразу настороже), показать его фигурой без охоты либо пустить приметой
-   * без тела (trace: вдали, за стеной — грибы в углах у её пути и далёкий песок; hops не нужен).
+   * без тела (trace: вдали, за стеной — грибы в углах у её пути и далёкий песок; hops не нужен). glimpse — фигурой впереди, в луче,
+   * как первое явление сна (hops не нужен); false — места впереди нет.
    */
-  swarm(cmd: 'release' | 'appear' | 'sleep' | 'trace', hops?: number): boolean;
+  swarm(cmd: 'release' | 'appear' | 'sleep' | 'trace' | 'glimpse', hops?: number): boolean;
   /** Поставить фазу режиссёра страха: 0 — ложные события, 1 — рой мелькает, 2 — охотится. */
   phase(n: 0 | 1 | 2): void;
   /** Лестницы уровня и комнаты-аномалии. */
@@ -661,6 +662,13 @@ export function installDebug(app: App): void {
         if (t < 0) return false;
         sw.trace(t, 26);
         g.swarmBody.snap(sw.pos, 0);
+        return true;
+      }
+      if (cmd === 'glimpse') {
+        const a = g.apparitionAhead();
+        if (a < 0) return false;
+        sw.appear(a, 8);
+        g.swarmBody.snap(sw.pos, sw.cohesion);
         return true;
       }
       const n = sw.nodeAround(g.playerNode(), hops, hops);

@@ -6,6 +6,8 @@ e2e/out/
 dist-props/
 # одна страница для ссылки: npm run build:single
 dist-single/
+# сборка для записи геймплейного видео (e2e/out/gameplay.mjs, DIST=dist-rec)
+dist-rec/
 tools/constructor/work/.cache/
 tools/constructor/work/app.log
 tools/constructor/work/app-build.log
