@@ -456,6 +456,8 @@ export class App {
       ...(p.get('fail') === '0' ? { drainSeconds: Infinity, meanFailInterval: Infinity } : {}),
     });
     this.game.faintFlash = this.profile.flash === 'faint';
+    // Меньше движения (системная настройка): перекрут белой комнаты — без оборота камеры (systems/warp.ts).
+    this.game.calmMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     // Режиссёр давления (провал, сжатие) сам событий не начинает там, где нужен ровный ход: адрес
     // с fail=0 — проверки. press=1 включает его и там, press=0 выключает везде.
     this.game.pressureAuto = (p.get('press') ?? (p.get('fail') === '0' ? '0' : '1')) !== '0';

@@ -52,6 +52,9 @@ import type { Comeback, ComebackOptions, Form, Mount } from './systems/illusions
 import { Figures } from './systems/figures';
 import type { FigureLive } from './systems/figures';
 import { looksAt, Things } from './systems/things';
+import { warpAt, warpOn } from './systems/warp';
+import type { WarpFrame } from './systems/warp';
+import { touchesChain } from './world/furnish_white';
 import type { Fate, Look, Thing } from './systems/things';
 import { bakeContact } from './world/contact';
 import { ColliderSet } from './world/colliders';
@@ -140,6 +143,11 @@ export type DreamEvent =
    * сцену; строку говорит приложение (раз за сон).
    */
   | { type: 'edge' }
+  /**
+   * Белая комната (world/furnish_white.ts): герой задел цепь — камеру перекручивает, мир становится широкоугольным
+   * (systems/warp.ts). Звук и строку — приложению.
+   */
+  | { type: 'warp' }
   /** Сессия кончилась, игрок в лимбо: пора готовить следующую (queueSession). */
   | { type: 'limbo' }
   /** От игрока пошла волна сонара (вариант A): звук — тихий пинг (слова партнёра: «Сонар тихий пинг»). */
@@ -463,6 +471,8 @@ const BLOOM = { soft: 1.6, faint: 1.2, radius: 1.6, fade: 3.2 } as const;
 const STROBE = { rate: 1.1, hit: 0.75, width: 0.45, soft: 0.5, faint: 0.1 } as const;
 /** Мягкое выбеливание: кадр плавно набирает молочный свет, но не до чистого белого. */
 const SOFT_WHITE = 0.82;
+/** Даль белой комнаты (world/furnish_white.ts): белая, чуть ниже потолка яркости, чтобы стены не сливались с ней в одно. */
+const WHITE_FOG = 0.8;
 /** Конус взгляда по умолчанию, градусы: [край, середина] — как у луча фонаря (render/renderer.ts, FrameView.gazeCone). */
 const GAZE_CONE: readonly [number, number] = [52, 25];
 /** Конус взгляда, сжатый или раскрытый кривой ощущений. */
@@ -575,6 +585,19 @@ export class Game {
    * сбой кадра вдвое слабее, луч на полном заряде — едва ярче.
    */
   faintFlash = false;
+  /**
+   * Меньше движения (системная настройка «prefers-reduced-motion» — app.ts): перекрут в белой комнате без оборота камеры и
+   * вполовину шире (systems/warp.ts, тихий режим). «Почти незаметные» вспышки делают то же.
+   */
+  calmMotion = false;
+  /** Сколько секунд прошло с касания цепи белой комнаты; −1 — перекрута нет (systems/warp.ts). */
+  private warpT = -1;
+  /** В какую сторону крутит этот перекрут: каждый следующий — в другую. */
+  private warpDir: 1 | -1 = -1;
+  /** Цепь снова «заряжена»: герой отошёл от неё после прошлого касания. */
+  private warpArmed = true;
+  /** Насколько герой в белой комнате, 0..1 (плавно): даль белеет, место собирается взглядом. */
+  private whiteIn = 0;
   /** Что игрок вспомнил за всё время (id воспоминаний): эти вещи копятся в лимбо. */
   archive: string[] = [];
   swarm: SwarmAI | null = null;
@@ -944,7 +967,10 @@ export class Game {
       this.swarm = new SwarmAI(level.nav, this.rng);
       this.spores = new Spores(level.nav, dream.seed, DEFAULT_SPORES, level.world ?? 'shelter');
       // Грибы не растут внутри вещей: места считаются по клеткам и мебели не знают (куратор, пачка 51, противоречие 322).
-      this.spores.settle(solidFloorAt(this.colliders));
+      // И в белой комнате их нет: там пусто и бело (world/furnish_white.ts).
+      const solid = solidFloorAt(this.colliders);
+      const wr = level.whiteRoom;
+      this.spores.settle((x, z, y) => (!!wr && x > wr.box[0] - 0.05 && x < wr.box[2] + 0.05 && z > wr.box[1] - 0.05 && z < wr.box[3] + 0.05 && y > wr.y[0] - 0.5 && y < wr.y[1]) || solid(x, z, y));
       this.flowers = level.blooms?.length ? new Flowers(level.blooms, dream.seed) : null;
       const stage = this.stage;
       // Сон из сцен: режиссёр страха — один на весь сон, его часы — часы сна (sleepTime), а не сцены: сцена идёт минуту, и
@@ -2514,6 +2540,50 @@ export class Game {
     this.respawn();
   }
 
+  /** Белая комната: насколько герой внутри, касание цепи и ход перекрута. */
+  private stepWhite(dt: number, dream: DreamEvent[]): void {
+    const wr = this.where === 'main' ? this.level?.whiteRoom : undefined;
+    const b = this.body;
+    const inside = !!wr && b.x > wr.box[0] && b.x < wr.box[2] && b.z > wr.box[1] && b.z < wr.box[3] && b.y > wr.y[0] - 0.6 && b.y < wr.y[1];
+    this.whiteIn = approach(this.whiteIn, inside ? 1 : 0, 0.35, dt);
+    if (this.warpT >= 0) {
+      this.warpT += dt;
+      if (!warpOn(this.warpT)) this.warpT = -1;
+    }
+    if (!wr || !inside) {
+      this.warpArmed = true;
+      return;
+    }
+    const touching = touchesChain(wr.chain, b.x, b.y, b.z, DEFAULT_CONTROLLER.radius);
+    if (!touching) {
+      this.warpArmed = true;
+      return;
+    }
+    if (this.warpT < 0 && this.warpArmed && !this.transition) {
+      this.warpT = 0;
+      this.warpArmed = false;
+      this.warpDir = this.warpDir === 1 ? -1 : 1;
+      dream.push({ type: 'warp' });
+    }
+  }
+
+  /** Начать перекрут, как от касания цепи (отладка: кадры и проверки). */
+  forceWarp(): void {
+    this.warpT = 0;
+    this.warpArmed = false;
+    this.warpDir = this.warpDir === 1 ? -1 : 1;
+  }
+
+  /** Перекрут сейчас (systems/warp.ts): для кадра и для проверок. */
+  warpNow(): WarpFrame {
+    return warpAt(this.warpT, this.calmMotion || this.faintFlash, this.warpDir);
+  }
+
+  /** Насколько герой в белой комнате, 0..1. */
+  get whiteness(): number {
+    return this.whiteIn;
+  }
+
   /** Игрок на краю куска и смотрит туда, где память обрывается: сосед снаружи — в пределах взгляда. */
   private facesVoid(node: number, piece: ScenePiece): boolean {
     const nav = this.level?.nav ?? [];
@@ -3009,6 +3079,11 @@ export class Game {
       }
     }
 
+    // Белая комната (партнёр 21.11, 19:06; world/furnish_white.ts): задел цепь — камеру перекручивает, мир широкоугольный пять
+    // секунд (systems/warp.ts). Пока перекрут идёт, второе касание его не начинает заново; после — цепь снова «заряжена», когда
+    // герой от неё отошёл. Внутри комнаты даль белеет, и место собирается взглядом, как в светлом месте (frame: whiteIn).
+    this.stepWhite(dt, dream);
+
     // Всё вспомнено: чуть погодя место рассыпается, игрок попадает в лимбо.
     if (this.endIn >= 0 && !this.transition) {
       this.endIn -= dt;
@@ -3309,6 +3384,9 @@ export class Game {
     // Даль зала — светлое небо; в тёмном переходе даль тёмная: множитель — свет клетки, где стоит игрок.
     const sky = sun ? sun.ambient * (0.18 + 0.82 * this.ambientLocal) : 1;
     let fog = sun ? ([this.env.fog[0] * sky, this.env.fog[1] * sky, this.env.fog[2] * sky] as Vec3) : this.env.fog;
+    // В белой комнате даль белая: всё за её стенами уходит в белое, а не в черноту.
+    const wIn = this.where === 'main' ? this.whiteIn : 0;
+    if (wIn > 0) fog = [lerp(fog[0], WHITE_FOG, wIn), lerp(fog[1], WHITE_FOG, wIn), lerp(fog[2], WHITE_FOG, wIn)];
     if (tr) {
       const k = tr.switched ? 1 - clamp((tr.t - tr.out) / tr.back, 0, 1) : clamp(tr.t / Math.max(tr.out, 1e-3), 0, 1);
       const style = tr.plan.style;
@@ -3606,11 +3684,12 @@ export class Game {
     else if (pr && pr.active?.kind === 'squeeze' && sink > 0) lens -= 2.4 * Math.min(1, sink / 0.7);
     const wake = this.transition;
     if (wake && wake.plan.cause === 'caught' && !wake.switched) lens += 2.2 * (1 - Math.min(1, wake.t / Math.max(1e-3, wake.out)));
+    const warp = this.where === 'main' ? this.warpNow() : warpAt(-1, false);
     const view: FrameView = {
       camPos: rig.camPos,
       camYaw: rig.camYaw + rattle * Math.sin(this.time * 71.3) * Math.sin(this.time * 13.7 + 1.1),
       camPitch: rig.camPitch + rattle * 0.7 * Math.sin(this.time * 57.9 + 0.6),
-      camRoll: rig.camRoll + rattle * 0.5 * Math.sin(this.time * 43.1 + 2.2),
+      camRoll: rig.camRoll + rattle * 0.5 * Math.sin(this.time * 43.1 + 2.2) + warp.roll,
       lightPos: rig.lightPos,
       lightDir: rig.lightDir,
       // Вспышка полного заряда — набухание самого фонаря (systems/flashlight.ts, SOFT_LIGHT): мягко, без скачка.
@@ -3633,7 +3712,7 @@ export class Game {
       frame: this.frame,
       ambient: strobe > 0 ? [this.env.ambient[0] + 0.42 * strobe, this.env.ambient[1] + 0.45 * strobe, this.env.ambient[2] + 0.5 * strobe] : this.env.ambient,
       fogColor: fog,
-      fogDensity: this.env.fogDensity,
+      fogDensity: lerp(this.env.fogDensity, 0.012, this.where === 'main' ? this.whiteIn : 0),
       lightScale,
       scanFade: this.pocketFade,
       keyDir: sun ? sun.dir : (this.env.key?.dir ?? [0, 1, 0]),
@@ -3668,7 +3747,12 @@ export class Game {
       // Кадр плывёт: разлёт цветов медленно дышит (период около 7,5 с) — кадр, а не голова: камеру не качаем.
       // Дрожь и разлёт цветов — не вспышки, а ощущения (дребезжание): мягкие вспышки их не трогают, «почти незаметные» — тише.
       drift: fv.drift * (this.faintFlash ? 0.4 : 1) * (0.55 + 0.45 * Math.sin(this.time * 0.83)),
-      lens,
+      lens: lens + warp.lens,
+      // Перекрут белой комнаты: мир становится широкоугольным (systems/warp.ts).
+      fov: warp.fov,
+      // Белая комната светится сама — коробкой по её границам (render: uWhiteBox); внутри неё место собирается взглядом.
+      white: this.where === 'main' && this.level?.whiteRoom ? { box: this.level.whiteRoom.box, y: this.level.whiteRoom.y } : null,
+      whiteIn: this.where === 'main' ? this.whiteIn : 0,
       scanRange: fl ? fl.scan() : (this.env.scan ?? [4, 15]),
       // Тени прямого света — в квадрате вокруг игрока, сдвинутом вперёд по взгляду: позади они не нужны.
       keyBox:

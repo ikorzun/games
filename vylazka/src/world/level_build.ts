@@ -16,6 +16,8 @@ import { decayAt } from '../systems/decay';
 import { doorSign, dropBuried, dropHidden, furnishRoom, roomOpenness } from './furnish';
 import { furnishExtras, GARDEN_H, NO_EXTRAS } from './furnish_extras';
 import { furnishGreenhouse, GREEN_PLAN } from './furnish_greenhouse';
+import { furnishWhite } from './furnish_white';
+import type { WhiteRoom } from './furnish_white';
 import { GRASS_VARIANTS, grassForm } from './grass';
 import { GRASS_CLEAR } from '../systems/grass';
 import type { GrassSite } from '../systems/grass';
@@ -246,6 +248,21 @@ export const grassRolled = (seed: number, wear: number): boolean => hash01(13, 0
  */
 export const LAWN_CHANCE = 0.3;
 export const lawnRolled = (seed: number): boolean => hash01(17, 0x1a3e, seed ^ 0x7a) < LAWN_CHANCE;
+
+/**
+ * Белая комната (партнёр 21.11, 19:06; world/furnish_white.ts): в половине уровней убежища, офиса и жёлтых комнат. Жребий — на
+ * сид: на следующем круге того же места комната та же.
+ */
+export const WHITE_CHANCE = 0.5;
+export const whiteRolled = (seed: number): boolean => hash01(19, 0x3b17, seed ^ 0x7e) < WHITE_CHANCE;
+
+/** Типы помещений, где партнёр ставит, двигает или убирает вещи и фигуры в этом месте: туда белая комната не встаёт. */
+function partnerRoomTypes(world: WorldKind, opts: BuildOptions): Set<string> {
+  const out = new Set<string>();
+  for (const s of [...(opts.placed ?? PLACED), ...(opts.figures ?? FIGURES)]) if (s.rule.worlds.includes(world)) for (const r of s.rule.rooms) out.add(r);
+  for (const r of opts.removed ?? REMOVED) if (r.worlds.includes(world)) for (const t of r.rooms) out.add(t);
+  return out;
+}
 
 /**
  * След лежавшего человека в траве помещения (квиз партнёра, ночь на 20.11): примятый силуэт, будто тут только что лежали. Редко —
@@ -537,6 +554,24 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     grassTypes && grassRolled(layout.seed, decay.wear)
       ? plain.filter((r) => grassTypes.includes(r.type) && r !== gardenRoom && r !== greenRoom && r !== skyRoom && !flowerRooms.has(r.id) && r !== variantRoom && r !== startRoom0 && !PARTNER_ROOMS.includes(r.type) && r.cells.length >= 2).sort(order(13))[0]
       : undefined;
+  // Белая комната (партнёр 21.11, 19:06: «абсолютно белая яркая комната с висящим металической цепью в форме знака
+  // бесконечности, задевая который камеру игрока перекручивает и весь мир становится широкоугольными на 5 секунд»;
+  // design.md, §37; world/furnish_white.ts): в половине уровней одно помещение пусто и бело, а посередине висит цепь знаком
+  // бесконечности. Прямоугольное — свет комнаты в шейдере идёт коробкой по её границам, — от двух до четырёх клеток. Не начало
+  // сна, не сад, не оранжерея, не небо, не трава, не бумажные цветы, не комната-аномалия и не те помещения, где партнёр ставит
+  // свои вещи и фигуры. В зале ожидания белой комнаты нет: его странность — время, а не комнаты.
+  const partnerTypes = partnerRoomTypes(layout.world, opts);
+  const isRect = (r: GenRoom): boolean => {
+    const xs = r.cells.map((c) => c[0]);
+    const zs = r.cells.map((c) => c[1]);
+    return (Math.max(...xs) - Math.min(...xs) + 1) * (Math.max(...zs) - Math.min(...zs) + 1) === r.cells.length;
+  };
+  const whiteRoom =
+    !station && whiteRolled(layout.seed)
+      ? rooms1
+          .filter((r) => r !== gardenRoom && r !== greenRoom && r !== skyRoom && r !== grassRoom && !flowerRooms.has(r.id) && r !== variantRoom && r !== startRoom0 && !PARTNER_ROOMS.includes(r.type) && !partnerTypes.has(r.type) && r.cells.length >= 2 && r.cells.length <= 4 && isRect(r))
+          .sort(order(19))[0]
+      : undefined;
   /** Высота потолка помещения над полом. */
   const ceilOf = (room: GenRoom): number => (room === gardenRoom ? GARDEN_H : station ? (STATION_CEIL[room.type] ?? CEIL_H) : CEIL_H);
 
@@ -622,7 +657,8 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       // Шахта лестницы и клетки с опасностями остаются как есть: створка распахнута.
       const plain = a.type === 'stairwell' || b.type === 'stairwell' || hazardCells.has(`${e.tier},${hostCell[0]},${hostCell[1]}`) || hazardCells.has(`${e.tier},${e.cx},${e.cz}`) || hazardCells.has(`${e.tier},${bx},${bz}`);
       const roll = plain ? 0.35 : hash01(e.cx * 64 + e.cz, e.dir + 2 * e.tier, layout.seed ^ 0xd00d);
-      const h = office ? roll * 0.64 : roll;
+      // В белую комнату створку не вешают и не роняют: там пусто, остаётся одна коробка, белая, как стены.
+      const h = host === whiteRoom ? 0 : office ? roll * 0.64 : roll;
       const seed = Math.floor(hash01(e.cz * 64 + e.cx, e.tier, layout.seed ^ 0xbeef) * 1e6);
       let lean = h >= 0.65 && h < 0.85;
       let side: 1 | -1 = hash2(e.cx, e.cz, layout.seed ^ e.dir) & 1 ? 1 : -1;
@@ -830,7 +866,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   const screenQuota = new Map<number, number[]>();
   if (world === 'yellow') {
     const far = (r: GenRoom): number => Math.min(...r.cells.map(([x, z]) => Math.abs(x - start.cx) + Math.abs(z - start.cz)));
-    const rooms = layout.rooms.filter((r) => !lowerWells.has(r.id) && r.type !== 'stairwell' && r.type !== 'lift');
+    const rooms = layout.rooms.filter((r) => !lowerWells.has(r.id) && r.type !== 'stairwell' && r.type !== 'lift' && r !== whiteRoom);
     const halls = rooms.filter((r) => r.type === 'hall');
     const open = rooms.filter((r) => r.type !== 'corridor');
     const pool = (halls.length > 0 ? halls : open.length > 0 ? open : rooms).slice().sort((a, b) => far(a) - far(b) || a.id - b.id);
@@ -909,11 +945,13 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   // не в самом начале, куда возвращает Осыпь (там она читалась бы укором), а на шаг дальше.
   const notes: SheetMark[] = [];
   const noteRoom = layout.rooms
-    .filter((r) => r !== startRoom && r !== variantRoom && !lowerWells.has(r.id) && r.tier === startRoom.tier && r.type !== 'stairwell' && r.type !== 'lift' && r.type !== 'track')
+    .filter((r) => r !== startRoom && r !== variantRoom && r !== whiteRoom && !lowerWells.has(r.id) && r.tier === startRoom.tier && r.type !== 'stairwell' && r.type !== 'lift' && r.type !== 'track')
     .map((r) => ({ r, d: Math.min(...r.cells.map(([x, z]) => Math.abs(x - start.cx) + Math.abs(z - start.cz))) }))
     .sort((a, b) => a.d - b.d || a.r.id - b.r.id)[0]?.r;
 
   const furnished: { room: GenRoom; ctx: RoomCtx }[] = [];
+  /** Белая комната, как она встала (world/furnish_white.ts); null — на уровне её нет. */
+  let white: WhiteRoom | null = null;
   // Бумага и чемоданы считаются на уровень: одна стена лиц, одна стена чемоданов (world/furnish_papers.ts).
   const paperState = newPaperState(world, layout.seed);
   for (const room of layout.rooms) {
@@ -921,7 +959,8 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     if (room !== variantRoom) {
       const ctx = roomCtx(room, (x, z) => chunkFor(room, x, z), col, 0, spots, landmarks, flats);
       ctx.paperState = paperState;
-      if (room === greenRoom && !greenEdge) furnishGreenhouse(ctx);
+      if (room === whiteRoom) white = furnishWhite(ctx);
+      else if (room === greenRoom && !greenEdge) furnishGreenhouse(ctx);
       else furnishRoom(ctx);
       if (room === greenRoom && greenEdge) furnishGreenhouse(ctx);
       if (room === noteRoom) {
@@ -977,7 +1016,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   let moundLeft = decay.mound;
   for (const { room, ctx } of furnished.slice().sort((a, b) => fromStart(a.room) - fromStart(b.room) || a.room.id - b.room.id)) {
     if (moundLeft === 0) break;
-    if (room === startRoom || room.tier !== startRoom.tier || room.type === 'corridor' || room.type === 'stairwell' || room.type === 'lift' || room.type === 'track') continue;
+    if (room === startRoom || room === whiteRoom || room.tier !== startRoom.tier || room.type === 'corridor' || room.type === 'stairwell' || room.type === 'lift' || room.type === 'track') continue;
     if (furnishExtras(ctx, { ...NO_EXTRAS, mound: moundLeft }).mound) moundLeft = 0;
   }
   // Цветы: сад под высоким потолком и ещё два помещения.
@@ -986,7 +1025,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     furnishExtras(ctx, { ...NO_EXTRAS, garden: room === gardenRoom, flowers: flowerRooms.has(room.id) ? 1 + (room.cells.length >= 4 ? 1 : 0) : 0 });
   }
   // Наклейки и завал: помещения перебираются по сиду, пока не встанет сколько нужно.
-  const ranked = (salt: number): { room: GenRoom; ctx: RoomCtx }[] => furnished.filter((f) => plain.includes(f.room) && f.room !== gardenRoom && (f.room !== greenRoom || greenEdge)).sort((a, b) => order(salt)(a.room, b.room));
+  const ranked = (salt: number): { room: GenRoom; ctx: RoomCtx }[] => furnished.filter((f) => plain.includes(f.room) && f.room !== gardenRoom && f.room !== whiteRoom && (f.room !== greenRoom || greenEdge)).sort((a, b) => order(salt)(a.room, b.room));
   let stickersLeft = world === 'yellow' ? 2 : 4;
   for (const { ctx } of ranked(3)) {
     if (stickersLeft <= 0) break;
@@ -999,10 +1038,10 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   // Бумага и чемоданы (world/furnish_papers.ts): листы на щитах, в рамах и на потолке, стена чемоданов.
   // Последним проходом и своим сидом — номера и места прежних объектов от них не сдвигаются.
   // Оранжерея — комната только с цветами: бумаге и чемоданам там не место.
-  furnishPapers(paperState, furnished.filter((f) => f.room !== greenRoom || greenEdge));
+  furnishPapers(paperState, furnished.filter((f) => (f.room !== greenRoom || greenEdge) && f.room !== whiteRoom));
   // Своё стирание места (world/wear_growth.ts): рубец по стыку стены с потолком в убежище, щит с коконами
   // в кассе и буфете зала ожидания. Тоже последним проходом и своим сидом: обстановка от них не сдвигается.
-  const growth = growWear(world, layout.seed, decay.wear, furnished, start);
+  const growth = growWear(world, layout.seed, decay.wear, furnished.filter((f) => f.room !== whiteRoom), start);
   // Фигуры партнёра (world/figure_place.ts): последними, по уже стоящей обстановке — чтобы не врасти в
   // мебель. Сеток в уровень не добавляют: фигура — отдельная вещь рендера (game.ts).
   const ent0 = layout.rooms[layout.entranceRoom]!;
@@ -1010,7 +1049,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     layout,
     shells,
     col,
-    skip: new Set([...lowerWells, ...(variantRoom ? [variantRoom.id] : [])]),
+    skip: new Set([...lowerWells, ...(variantRoom ? [variantRoom.id] : []), ...(whiteRoom ? [whiteRoom.id] : [])]),
     spawn: [cellToWorld(ent0.cells[0]![0]), tierFloor(ent0.tier), cellToWorld(ent0.cells[0]![1]) + 0.4] as Vec3,
     spawnTier: ent0.tier,
     // Вся обстановка уже стоит: поднятая вещь партнёра ложится на её верх (placed_place.ts, restTop) — на грань под серединой.
@@ -1088,7 +1127,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   // Газон в жёлтых комнатах (квиз партнёра, ночь на 20.11): изредка один зал без экранов — не начало сна и не небо.
   const lawnRoom =
     world === 'yellow' && lawnRolled(layout.seed)
-      ? layout.rooms.filter((r) => r.type === 'hall' && r.cells.length >= 2 && r !== startRoom0 && r !== skyRoom && r !== variantRoom && !screenQuota.has(r.id) && !lowerWells.has(r.id)).sort(order(17))[0]
+      ? layout.rooms.filter((r) => r.type === 'hall' && r.cells.length >= 2 && r !== startRoom0 && r !== skyRoom && r !== variantRoom && r !== whiteRoom && !screenQuota.has(r.id) && !lowerWells.has(r.id)).sort(order(17))[0]
       : undefined;
   /** Помещение, где на полу трава: проросшая сквозь пол (убежище, офис) или газон (жёлтые комнаты). */
   const turfRoom = grassRoom ?? lawnRoom;
@@ -1269,6 +1308,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     ...(perches.length > 0 ? { perches } : {}),
     ...(skyRoom ? { skyRoom: skyRoom.id } : {}),
     ...(greenRoom ? { greenRoom: greenRoom.id } : {}),
+    ...(white ? { whiteRoom: white } : {}),
     ...(blooms.length > 0 ? { blooms } : {}),
     ...(turfRoom ? { grassRoom: turfRoom.id } : {}),
     ...(grass.length > 0 ? { grass } : {}),

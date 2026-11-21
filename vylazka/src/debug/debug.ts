@@ -75,6 +75,13 @@ export interface VzDebugApi {
    * забытое, и куда этот ход (центр соседней клетки); null — помнится всё место.
    */
   piece(): { rooms: number; cells: number; edge: { at: [number, number, number]; to: [number, number, number] }[] } | null;
+  /**
+   * Белая комната (world/furnish_white.ts): помещение, коробка, цепь, насколько герой в ней (0..1) и перекрут сейчас
+   * (systems/warp.ts); null — на уровне её нет.
+   */
+  white(): { room: number; box: number[]; y: number[]; door: number[] | null; chain: { at: number[]; face: number[]; a: number; top: number }; inside: number; warp: { roll: number; fov: number; lens: number; open: number } } | null;
+  /** Перекрут, как от касания цепи белой комнаты: для кадров и проверок. */
+  warp(): void;
   /** Встать в помещении рядом с приметой (по её id и номеру среди одноимённых) лицом к ней. false — такой нет. */
   gotoLandmark(id: string, index?: number, distance?: number): boolean;
   /** Встать в центр клетки помещения. */
@@ -375,6 +382,13 @@ export function installDebug(app: App): void {
       }
       return { rooms: p.count, cells: p.nodes.size, edge };
     },
+    white: () => {
+      const g = game();
+      const w = g.level?.whiteRoom;
+      if (!w) return null;
+      return { room: w.room, box: [...w.box], y: [...w.y], door: w.door ? [...w.door] : null, chain: { at: [...w.chain.at], face: [...w.chain.face], a: w.chain.a, top: w.chain.top }, inside: g.whiteness, warp: g.warpNow() };
+    },
+    warp: () => game().forceWarp(),
     flats: () => (app.level.flats ?? []).map((f) => ({ ...f, at: [...f.at], n: [...f.n] })),
     gotoFlat: (index, distance = 3, side = 0) => {
       const f = (app.level.flats ?? [])[index];

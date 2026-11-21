@@ -4373,3 +4373,78 @@ describe('выключатель по заглохшему фонарю (17.11 1
     expect(g.game.light.state).toBe('off');
   });
 });
+
+describe('белая комната: задел цепь — камеру перекручивает, мир широкоугольный пять секунд (партнёр 21.11, 19:06)', () => {
+  /** Сид убежища, где белая комната есть (жребий — whiteRolled). */
+  const withWhite = (): BuiltLevel => {
+    for (let s = 1000; s < 1400; s += 37) {
+      const l = buildLevel(generateLayout(s, 2));
+      if (l.whiteRoom) return l;
+    }
+    throw new Error('нет уровня с белой комнатой');
+  };
+  const level = withWhite();
+  const w = level.whiteRoom!;
+  const ahead = (d: number): [number, number] => [w.chain.at[0] + w.chain.face[0] * d, w.chain.at[2] + w.chain.face[1] * d];
+  const yawTo = (fx: number, fz: number): number => Math.atan2(-fx, -fz);
+
+  it('в комнате — даль белеет и место собирается взглядом; за дверью — нет', () => {
+    const h = new Harness(level);
+    const [x, z] = ahead(1.2);
+    h.game.teleport(x, w.y[0] + 0.05, z, yawTo(-w.chain.face[0], -w.chain.face[1]), 0);
+    h.run(2);
+    expect(h.game.whiteness).toBeGreaterThan(0.95);
+    const f = h.r.frames.at(-1)!;
+    expect(f.white?.box).toEqual(w.box);
+    expect(f.whiteIn).toBeGreaterThan(0.95);
+    expect(f.fogColor[0]).toBeGreaterThan(0.7);
+    // Никакого перекрута, пока цепи не касались.
+    expect(f.fov ?? 1).toBe(1);
+    expect(h.dreamCount('warp')).toBe(0);
+  });
+
+  it('шаг в цепь — перекрут: оборот камеры за 1,4 с, обзор шире полутора секунд до пятой, потом сходится', () => {
+    const h = new Harness(level);
+    const [x, z] = ahead(1.2);
+    const yaw = yawTo(-w.chain.face[0], -w.chain.face[1]);
+    // Переход начала сессии (1,6 с) должен кончиться: во время перехода цепь не срабатывает.
+    h.run(2);
+    h.game.teleport(x, w.y[0] + 0.05, z, yaw, 0);
+    h.run(0.3);
+    // Идти вперёд, пока не заденет.
+    for (let i = 0; i < Math.round(6 / STEP) && h.dreamCount('warp') === 0; i++) h.tick({ ...emptyInput(), moveZ: 1 });
+    expect(h.dreamCount('warp')).toBe(1);
+    const f0 = h.game.warpNow();
+    expect(f0.open).toBeLessThan(0.5);
+    h.run(1.5);
+    const f1 = h.game.warpNow();
+    expect(Math.abs(Math.abs(f1.roll) - Math.PI * 2)).toBeLessThan(0.05);
+    expect(f1.fov).toBeGreaterThan(1.45);
+    expect(h.r.frames.at(-1)!.fov).toBeGreaterThan(1.45);
+    h.run(2.5);
+    expect(h.game.warpNow().fov).toBeGreaterThan(1.45);
+    h.run(2.2);
+    expect(h.game.warpNow().fov).toBe(1);
+    // Перекрут был один, хоть герой и стоял в цепи.
+    expect(h.dreamCount('warp')).toBe(1);
+  });
+
+  it('тихий режим (меньше движения): без оборота, обзор вполовину шире', () => {
+    const h = new Harness(level);
+    h.game.calmMotion = true;
+    h.game.forceWarp();
+    h.run(1);
+    const f = h.game.warpNow();
+    expect(Math.abs(f.roll)).toBeLessThan(0.13);
+    expect(f.fov).toBeGreaterThan(1.2);
+    expect(f.fov).toBeLessThan(1.3);
+  });
+
+  it('грибов Осыпи в белой комнате нет', () => {
+    const h = new Harness(level);
+    const inBox = (p: readonly number[]): boolean => p[0]! > w.box[0] && p[0]! < w.box[2] && p[2]! > w.box[1] && p[2]! < w.box[3] && p[1]! > w.y[0] - 0.5 && p[1]! < w.y[1];
+    const sites = (h.game as unknown as { spores: { sites: { pos: number[] }[] } | null }).spores?.sites ?? [];
+    expect(sites.length).toBeGreaterThan(0);
+    expect(sites.filter((s) => inBox(s.pos)).length).toBe(0);
+  });
+});

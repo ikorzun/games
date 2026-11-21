@@ -333,6 +333,16 @@
       "ru": "кадр выбеливается: скачок в другое место"
     },
     {
+      "id": "chain_clink",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 3.5,
+      "volume": 0.7,
+      "prompt": "A steel chain brushed by a passing body: metal links clinking and rattling against each other, the chain swings and the clinks slowly settle with a bright resonant ring, close-mic, full recording level, dry small room, no music, no voice, no footsteps",
+      "ru": "цепь белой комнаты (партнёр 21.11, 19:06): герой задел её — звенья звякают, цепь раскачивается и затихает; звучит вместе с перекрутом камеры. Модель Sound Effects v3, из четырёх вариантов взяты два: с ранним ударом и долгим звоном и короткий"
+    },
+    {
       "id": "dissolve",
       "bus": "sfx",
       "variants": 3,

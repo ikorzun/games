@@ -557,6 +557,8 @@ uniform vec4 uErase;      // стирание места (systems/decay.ts): x �
 uniform float uCeilTile;  // шаг плиток подвесного потолка, м (офис, жёлтые комнаты); 0 — потолок цельный
 uniform vec3 uBurnTint;   // цвет кромки распада: красный системы в тёмных местах, тёплый белый в светлых
 uniform vec4 uRoofBox;    // зал ожидания: прямоугольник стеклянной крыши в мире (minX, minZ, maxX, maxZ)
+uniform vec4 uWhiteBox;   // белая комната (world/furnish_white.ts): её коробка по полу (minX, minZ, maxX, maxZ)
+uniform vec4 uWhiteY;     // её пол и потолок; z — есть ли она на уровне
 uniform float uRoofY;     // высота её переплёта, м; 0 — крыши нет
 uniform vec3 uKeyDirW;    // направление на прямой свет в мире
 uniform vec4 uRecallPos;     // свет памяти (world/memory_light.ts): xyz — где искомая вещь (мир), w — сила; 0 — света нет
@@ -657,6 +659,26 @@ float cellLight(vec2 xz) {
   float lz = abs(tz.g - t0.g) < 0.002 ? tz.r : t0.r;
   float ld = abs(td.g - t0.g) < 0.002 ? td.r : 0.5 * (lx + lz);
   return mix(mix(t0.r, lx, w.x), mix(lz, ld, w.x), w.y);
+}
+
+/**
+ * Белая комната (партнёр 21.11, 19:06: «абсолютно белая яркая комната»; world/furnish_white.ts): насколько точка внутри неё
+ * (0..1) и — в shell — насколько это её стена, пол или потолок. Внутренние грани стен стоят в 0,15 м от края коробки (полстены),
+ * дверные коробки выступают чуть дальше; пол и потолок — ровно на своих высотах. Наружная сторона стены (в коридоре) — уже вне
+ * коробки: снаружи стены остаются своими.
+ */
+float whiteIn(vec3 p, out float shell) {
+  shell = 0.0;
+  if (uWhiteY.z < 0.5) return 0.0;
+  vec2 lo = p.xz - uWhiteBox.xy;
+  vec2 hi = uWhiteBox.zw - p.xz;
+  float wall = min(min(lo.x, lo.y), min(hi.x, hi.y));
+  float floorD = p.y - uWhiteY.x;
+  float ceilD = uWhiteY.y - p.y;
+  float inside = smoothstep(-0.02, 0.02, wall) * smoothstep(-0.06, -0.02, floorD) * smoothstep(-0.06, -0.02, ceilD);
+  if (inside <= 0.0) return 0.0;
+  shell = inside * max(1.0 - smoothstep(0.34, 0.42, wall), max(1.0 - smoothstep(0.03, 0.06, floorD), 1.0 - smoothstep(0.03, 0.06, ceilD)));
+  return inside;
 }
 
 /**
@@ -1172,6 +1194,11 @@ void main() {
   // Зал ожидания: солнце светит через стеклянную крышу зала и на перрон; в комнатах под потолком его нет.
   if (uKeyCells > 0.0) shadowKey *= smoothstep(0.7, 0.95, cell / uKeyCells);
   vec3 amb = uAmbient * cell;
+  // Белая комната светится сама: всё, что в ней, освещено ровным белым светом (и цепь посередине — тоже). Её стены, пол и
+  // потолок — ниже, перед туманом: белые без фактуры и грязи.
+  float wShell;
+  float wIn = whiteIn(vWorld, wShell);
+  amb += vec3(0.9, 0.91, 0.93) * wIn;
   float eAmb = dot(amb, vec3(0.3333));
   // Свет памяти у искомой вещи: сколько его здесь (с наклоном поверхности) — для сборки точек.
   vec4 ml = memLight();
@@ -1523,6 +1550,9 @@ void main() {
   // decayAt().paint — smooth(0,08; 0,7) от стёртости.
   float paintK = smoothstep(0.08, 0.7, uErase.w);
   if (paintK > 0.0) col = mix(col, vec3(dot(col, vec3(0.3, 0.59, 0.11))), paintK * 0.7);
+  // Стены, пол и потолок белой комнаты: белые, светятся сами — ни фактуры, ни грязи, ни пятна фонаря; углы чуть темнее, чтобы
+  // пол читался полом.
+  if (wShell > 0.0) col = mix(col, vec3(0.92) * mix(1.0, ao, 0.55), wShell);
   voidTouch(col, hOut);
   col = mix(uFogColor, col, exp(-uFog * distV));
   col += uSonarTint.rgb * (sonarK * mix(1.0, exp(-uFog * distV), 0.5));

@@ -217,6 +217,12 @@ export class GameAudio {
         this.wake(game.listener(), 7);
       }
       else if (e.type === 'begin') a.play((game.world ?? 'shelter') === 'shelter' ? 'hatch' : 'lift', { volume: 0.8 });
+      // Белая комната: задел цепь — звенья звякают и раскачиваются; мир уходит в широкий угол с тем же светлым шумом, что
+      // выбеливание кадра, только тише и ниже.
+      else if (e.type === 'warp') {
+        a.play('chain_clink', { rate: this.jitter(0.06) });
+        a.play('whiteout', { rate: 0.72, volume: 0.45 });
+      }
       // Волна сонара — тихий пинг от самого игрока (слова партнёра: «Сонар тихий пинг»).
       else if (e.type === 'sonar') a.play('sonar_ping', { rate: this.jitter(0.03) });
       // Всё иллюзорно: тронутая вещь рассыпается в пыль, после темноты собирается из неё.

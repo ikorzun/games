@@ -1,4 +1,5 @@
 /** Собранный уровень: геометрия чанками, коллайдеры и игровые точки. Общий тип для генератора и тестового уровня. */
+import type { WhiteRoom } from './furnish_white';
 import type { GrowthStats } from './wear_growth';
 import type { Vec3 } from '../core/types';
 import type { GrassSite } from '../systems/grass';
@@ -143,6 +144,11 @@ export interface BuiltLevel {
   skyRoom?: number;
   /** Оранжерея (world/furnish_greenhouse.ts): номер помещения; нет поля — в этом месте её нет. */
   greenRoom?: number;
+  /**
+   * Белая комната (партнёр 21.11, 19:06; world/furnish_white.ts; design.md, §37): помещение, его коробка и цепь знаком
+   * бесконечности посередине. Нет поля — на уровне её нет.
+   */
+  whiteRoom?: WhiteRoom;
   /**
    * Головки её цветов (systems/flowers.ts): где, куда смотрят в покое, форма, размер, поворот вокруг оси и объект, на котором
    * растут (растворился — головки нет). Стебли и листья — в сетках помещений.

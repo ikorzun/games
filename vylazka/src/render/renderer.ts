@@ -184,6 +184,15 @@ export interface FrameView {
   piece?: boolean;
   /** Множитель «бочки» объектива: больше единицы — кадр растянут по краям, меньше — сжат. */
   lens?: number;
+  /** Во сколько раз шире обзор (перекрут белой комнаты, systems/warp.ts). Нет поля — как есть. */
+  fov?: number;
+  /**
+   * Белая комната (world/furnish_white.ts): коробка помещения — minX, minZ, maxX, maxZ — и пол с потолком. Её стены, пол и
+   * потолок белые и светятся сами; то, что висит внутри, освещено этим светом. Нет — комнаты нет.
+   */
+  white?: { box: readonly [number, number, number, number]; y: readonly [number, number] } | null;
+  /** Насколько герой в белой комнате, 0..1: там место собирается взглядом, как в светлом месте. */
+  whiteIn?: number;
   /** Множитель углов луча фонаря (кривая ощущений, systems/feel.ts): меньше единицы — луч уже. Нет поля — как есть. */
   beamCone?: number;
   /** 0..1: кадр плывёт — цвета расходятся сильнее обычного (кривая ощущений; волну во времени накладывает игра). */
@@ -681,6 +690,10 @@ export class GameRenderer {
   brightness = 1;
   /** Множитель углов луча, с которым сейчас стоит uCone (меняется только когда кривая ощущений его сдвинула). */
   private beamConeNow = 1;
+  /** Обзор кадра без перекрута (по вертикали, градусы): его задаёт размер кадра. */
+  private baseFov = 70;
+  /** Обзор, под который сейчас посчитан размер сплатов (uProj). */
+  private lastFov = 70;
   /** Отладка: временно выключить тень, не меняя качество (сравнение «тень вкл/выкл»). */
   debugShadowsOff = false;
   /**
@@ -850,6 +863,9 @@ export class GameRenderer {
         uWind: { value: new THREE.Vector4(0, 0, 1, 0) },
         uPush: { value: new THREE.Vector4(0, 0, 0, 0) },
         uRoofBox: { value: new THREE.Vector4(0, 0, 0, 0) },
+        // Белая комната: коробка по полу и пол, потолок, есть ли она (world/furnish_white.ts).
+        uWhiteBox: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uWhiteY: { value: new THREE.Vector4(0, 0, 0, 0) },
         uRoofY: { value: 0 },
         uKeyDirW: { value: new THREE.Vector3(0, 1, 0) },
         uRecallPos: { value: new THREE.Vector4(0, 0, 0, 0) },
@@ -1415,7 +1431,8 @@ export class GameRenderer {
     }
     const aspect = w / h;
     this.camera.aspect = aspect;
-    this.camera.fov = verticalFov(aspect);
+    this.baseFov = verticalFov(aspect);
+    this.camera.fov = this.baseFov;
     this.camera.updateProjectionMatrix();
     const tanY = Math.tan((this.camera.fov * Math.PI) / 360);
     this.hazeMat.uniforms.uTan!.value.set(tanY * aspect, tanY);
@@ -1440,6 +1457,7 @@ export class GameRenderer {
     const su = this.splatMat.uniforms;
     const points = q.points * f2;
     su.uProj!.value = h / (2 * tanY);
+    this.lastFov = this.camera.fov;
     su.uMaxPx!.value = Math.max(5, (h * SCAN.maxPx) / fine);
     su.uSize!.value = SCAN.size / Math.sqrt(points);
     (su.uNearFar!.value as THREE.Vector2).set(this.camera.near, this.camera.far);
@@ -2651,7 +2669,24 @@ export class GameRenderer {
     const cam = this.camera;
     cam.position.set(v.camPos[0], v.camPos[1], v.camPos[2]);
     cam.rotation.set(v.camPitch, v.camYaw, v.camRoll);
+    // Перекрут белой комнаты: мир становится широкоугольным — обзор шире, и всё, что считается от обзора, — вслед за ним.
+    const fovWant = Math.min(140, this.baseFov * (v.fov ?? 1));
+    if (Math.abs(cam.fov - fovWant) > 1e-3) {
+      cam.fov = fovWant;
+      cam.updateProjectionMatrix();
+      const tanY = Math.tan((fovWant * Math.PI) / 360);
+      this.hazeMat.uniforms.uTan!.value.set(tanY * cam.aspect, tanY);
+      const h = (this.splatMat.uniforms.uProj!.value as number) * 2 * Math.tan((this.lastFov * Math.PI) / 360);
+      this.splatMat.uniforms.uProj!.value = h / (2 * tanY);
+      this.lastFov = fovWant;
+    }
     cam.updateMatrixWorld(true);
+    const wb = this.worldMat.uniforms.uWhiteBox!.value as THREE.Vector4;
+    const wy = this.worldMat.uniforms.uWhiteY!.value as THREE.Vector4;
+    if (v.white) {
+      wb.set(v.white.box[0], v.white.box[1], v.white.box[2], v.white.box[3]);
+      wy.set(v.white.y[0], v.white.y[1], 1, 0);
+    } else wy.z = 0;
 
     // Отсечение чанков: дальше черты видимости всё равно чёрный туман, а чужой ярус виден только
     // с лестницы и от её площадок.
@@ -2855,7 +2890,8 @@ export class GameRenderer {
     pu0.uMemGain!.value = memGain;
     this.composeMat.uniforms.uMemGain!.value = memGain;
     // В пространствах с рассеянным светом точки собираются и без фонаря: «сканирует» сам свет.
-    pu0.uAmbientScan!.value = Math.min(1, ((v.ambient[0] + v.ambient[1] + v.ambient[2]) / 3) * v.ambientLocal * 8);
+    // В белой комнате место собирается взглядом, как в светлом: свет даёт сама комната.
+    pu0.uAmbientScan!.value = Math.max(v.whiteIn ?? 0, Math.min(1, ((v.ambient[0] + v.ambient[1] + v.ambient[2]) / 3) * v.ambientLocal * 8));
 
     // Отсвет от пятна: точка попадания луча и сила, убывающая с расстоянием до стены.
     const hitDist = Math.min(v.beamDist, 30);
