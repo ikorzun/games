@@ -110,3 +110,21 @@
   снегом. Экран тогда работает как «окно» в соседнюю вылазку.
 - Подписи на экранах — строками самой игры (тем же голосом, что вспышки воспоминаний): экран как
   носитель слоя «сеть».
+
+## Снимки как с iPhone 4 (партнёр 21.11, 21:29)
+
+Слова партнёра: «Картинки в воспоминаниях сейчас слишком нейронные. Давай поправим стиль, словно они сняты на iphone4». Восемь
+картинок экранов сделаны заново — те же сюжеты, но как кадры с телефона: косуля в подъезде со вспышкой, затопленная комната
+с порога против окна, мультфильм — снимок экрана старого телевизора, со строками развёртки и бликом лампы. Модель — GPT Image 2.6
+через ключ OpenAI партнёра, качество medium, 1024 × 1536; для экранов — середина 9 : 16 (720 × 1280, `master/`), в игру — середина
+3 : 5 (384 × 640). Кадр луга (`meadow.webp`) — по-прежнему кадр самой игры.
+
+Общий хвост — тот же, что у снимков больного сна (`vylazka/assets/papers/dream_prompts.md`, глава про iPhone 4). Сюжеты:
+- `roots`: *A cut bank in a forest seen straight on and filling most of the frame: a cross-section of red-brown clay soil with pale twisting tree roots running down through it from the top, small ferns and seedlings clinging to the earth, a strip of forest floor with leaves at the top. Grey overcast day, slightly overexposed, soft detail.*
+- `moss`: *A huge fallen tree trunk covered in thick green moss in an old spruce forest, tangled roots and grey lichen, a few orange leaves caught in the moss, tall dark trunks behind. Grey wet day, taken low and close to the trunk, a raindrop smear on the lens in one corner.*
+- `lichen`: *A bare concrete wall in an abandoned building that is being overgrown: round colonies of lichen in unnaturally saturated colours — orange, turquoise, magenta, sulphur yellow — spreading in concentric rings, small wild flowers and moss growing straight out of the concrete. Taken straight on with the flash in a dim corridor, hot spot in the middle.*
+- `flooded`: *An ordinary 1980s apartment living room flooded ankle-deep with perfectly clear still water: a patterned carpet visible under the water, white water lilies and green lily pads floating between a sofa and an armchair, floral wallpaper, a floor lamp. Taken from the doorway, daylight from the window blown out, a bit tilted.*
+- `birches`: *An empty open-plan office where young birch trees grow straight up through the grey carpet and through the suspended ceiling tiles: white trunks between rows of desks with old beige computer monitors, fallen yellow leaves on desks and floor, fluorescent ceiling panels still on. Greenish fluorescent cast, slightly blurred.*
+- `deer`: *A wild roe deer standing calmly on the concrete landing of a staircase inside an old panel apartment block: lower walls painted green, a row of metal mailboxes, a frosted glass window, worn concrete steps going up. The deer looks straight at the camera; taken with the flash, its eyes glow back from the flash, the stairwell behind falls into darkness.*
+- `gameshow`: *An empty 1990s television game show studio with the lights still on, taken from the empty audience seats: a big prize wheel with plain coloured segments, a glitter curtain, three contestant podiums, a shiny floor, coloured spotlights blown out into flares. Nobody there. No letters, no numbers, no logos anywhere.*
+- `cartoon`: *A photo of an old CRT television screen in a dark room, taken at a slight angle: on the screen a frame of a hand-drawn children's cartoon from the 1980s — a round fluffy blue creature with big eyes and tiny legs stands on a green hill and waves, a small red house, a crooked tree and a big pale sun behind it. Visible scan lines and moire, the curved glass reflecting a lamp glare. The character is original and not based on any existing cartoon. No text, no logos.*

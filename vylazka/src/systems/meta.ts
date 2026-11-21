@@ -53,7 +53,7 @@ export const DECK: readonly Fragment[] = [
       { who: 'her', key: 'meta.m02.1', at: '21:41' },
     ],
   },
-  { id: 'm03', kind: 'photo', hold: 5, print: 'dream_phone', crop: [0.18, 0.28, 0.64, 0.64] },
+  { id: 'm03', kind: 'photo', hold: 5, print: 'dream_phone', crop: [0, 0.18, 0.75, 0.8] },
   { id: 'm04', kind: 'note', hold: 6, note: 'meta.m04' },
   {
     id: 'm05',

@@ -73,3 +73,30 @@ photograph, unsettling, minimal. No text.*
 перегенерить через жпт»). Первый вариант был в вышитой народной блузе — заменён на тёмное платье с кружевным воротничком:
 народный костюм с изуродованным лицом читался бы высказыванием о народе (куратор, пачка 52, противоречие 331). Лицо смазано на самой карточке, как на долгой выдержке, — её не
 узнать и издали; размывать лицо шейдером здесь больше не нужно, маска лиц под портретом снята.
+
+## Снимки как с iPhone 4 (партнёр 21.11, 21:29)
+
+Слова партнёра: «Картинки в воспоминаниях сейчас слишком нейронные. Давай поправим стиль, словно они сняты на iphone4». Все 14
+снимков сделаны заново — те же сюжеты, но как случайные кадры с телефона: вспышка бьёт в ближнее и проваливается в темноту, шум
+в тенях, жёлто-зелёный тон ламп, кривой горизонт, ничего не выстроено. Модель — GPT Image 2.6 (`gpt-image-2.6-sunburst`) через
+ключ OpenAI партнёра (секрет облачного окружения), качество medium, 1024 × 1536; в слой идёт середина 3 : 4, как и прежде
+(`scripts/papers_dream.py`). Обрывки, наклейки и портрет — прежние: это бумажные вещи, а не снимки.
+
+Общий хвост (по-английски — инструкция модели): *Shot on an iPhone 4 around 2011 and never edited: a casual, slightly careless phone snapshot in portrait orientation, from an old phone's camera roll. Tiny 5-megapixel sensor look: soft corners, smeared fine detail, visible luminance noise and blotchy colour noise in the shadows, mild JPEG blockiness, slightly crooked horizon, imperfect off-centre framing, nothing staged or composed. Indoors at night the small harsh LED flash lights only the nearest things with hot glare and falls off steeply into murky darkness; without flash there is a muddy yellow-green tungsten cast and hand-shake smear. Flat and unflattering: no cinematic lighting, no colour grading, no film grain, no bokeh, no shallow depth of field, no HDR. Ordinary, mundane, accidental. No people unless described, no readable text, no logos, no brand names.*
+
+| Файл | Начало промпта |
+|---|---|
+| `thermo` | A glass mercury thermometer lying on a white saucer on a cluttered bedside table next to a half-empty glass of water and a folded wet washcloth; the silver mercury line has crept past the end of the scale. Taken with the flash, close, from above at an angle. |
+| `window` | Night, taken through a dark apartment window across a snowy courtyard: the facade of an identical Soviet prefab apartment block, a grid of dark windows, only one lit with warm light, and in it a motionless dark silhouette standing and looking back. Low light, noisy, a little blurred from hand shake, the room faintly reflected in the glass. |
+| `phone` | A narrow apartment hallway with old patterned wallpaper; a cream rotary telephone on a small wall shelf, its receiver off the hook, hanging by the coiled cord almost to the floor. Flash photo: the shelf and the phone overexposed, the hallway beyond falling into darkness. |
+| `iron` | An electric clothes iron standing upright on an ironing board in a small kitchen at dawn, a thin thread of smoke rising from it; on the white shirt underneath, a brown scorched iron-shaped mark. Dim grey window light, no flash, noisy. |
+| `milk` | A glass milk bottle tipped over on a kitchen table covered with a worn patterned oilcloth; the milk has spilled into a white puddle that drips off the table edge. Flash photo from above, nobody in the room. |
+| `bed` | An unmade narrow single bed photographed from directly above with the flash: on the white sheet two shallow imprints of lying bodies side by side, although the bed is far too narrow for two; a crumpled pillow with two dents. |
+| `corridor` | A long hospital corridor at night with worn green linoleum and pale green painted walls, flickering fluorescent tubes, an empty gurney with a folded grey blanket far at the end, a door ajar with warm light spilling onto the floor. Taken quickly from the hip, tilted, noisy, no flash. |
+| `frost` | A frosted window pane in a dark room at dusk: in the frost one single handprint melted from the outside of the glass, although the window is high up in a prefab apartment block; far below, a snowy blue courtyard with one street lamp. Phone photo with a blue cast, noisy. |
+| `clock` | A small wind-up alarm clock with no hands on its face, on a bedside table at night beside a glass of water and a pair of folded reading glasses, lit only by the phone's flash; deep black behind. |
+| `ticket` | A paper train ticket torn in half lying on the wet tiled floor of an empty railway station waiting hall at night, flat fluorescent light, reflections in a shallow puddle, a row of empty wooden benches out of focus behind. The printing on the ticket is too blurred to read. |
+| `drawing` | A child's crayon drawing pinned to faded floral wallpaper with one pushpin: a tall apartment block with many small square windows, all coloured yellow except one solid black window; blue snowflakes drawn around it. Taken straight on with the flash, which leaves a glare spot on the paper. |
+| `xray` | A chest X-ray film clipped to a glowing light box in a dark doctor's office: the ribs and spine look normal, but where the heart should be there is the dark shape of a moth with open wings. A quick phone snapshot of the light box, glare, slight moire. |
+| `stairs` | An empty stairwell of a prefab apartment block seen from the landing: pale green painted walls, a single bare light bulb, worn concrete steps going down into darkness much further than any building could, the metal railing disappearing into black. Flash photo; the flash reaches only the first few steps. |
+| `kettle` | A dark small kitchen at night: a chrome kettle on a gas stove with a small ring of blue flame; its curved polished surface reflects the kitchen behind the photographer and a blurred standing human figure, although the kitchen itself is empty. No flash, noisy, yellow cast. |
