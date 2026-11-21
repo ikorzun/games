@@ -37,6 +37,7 @@
 | `tools/vnexpr.py` | грамматика условий `when` (парсер + вычислитель, без eval) |
 | `tools/merge_drafts.py`, `tools/export_script.py` | слияние черновиков сцен от агентов (с режимом самопроверки `--check`) и экспорт читаемого режиссёрского сценария |
 | `.github/workflows/validate.yml` | CI: схемы, линтер всех эпизодов, самотест грамматики |
+| `vylazka/` | **вторая игра, отдельный пакет**: «Untitled Session» — исследование от первого лица с фонарём, сессии из воспоминаний (three.js); с новеллой не связана. Состояние и команды — `vylazka/README.md`; замысел — `docs/vylazka/untitled_session.md`, план восьми вылазок — `docs/vylazka/sorties.md`, что дальше и что ждёт решения владельца — `docs/vylazka/plan.md`; петля, стирание и распад вещей — `docs/vylazka/decay.md`; связка вылазок и сюжет — `docs/vylazka/story.md`; давление на игрока и перемещения между местами — `docs/vylazka/pressure.md`; сводка источников о снах и памяти — `docs/vylazka/dreams.md`; ощущения по местам и что значит «полная локация» — `docs/vylazka/sensations.md`; зал ожидания, локация основной модели — `docs/vylazka/station.md` |
 
 ## Быстрый старт
 

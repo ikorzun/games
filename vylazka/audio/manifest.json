@@ -1,0 +1,601 @@
+{
+  "note": "Звуки игры. prompt — инструкция генеративной модели (по-английски), ru — что это и где звучит. Файлы: public/audio/<id>_<n>.mp3, n от 1 до variants. xfade — сколько секунд конец петли перетекает в её начало: шумовым петлям побольше, ритмичным (дыхание, сердце) — только чтобы не щёлкало. Шина voices — следы людей: шёпот, смех, разговор за стеной (просьба партнёра от 15.11). rate — частота, в которой звук разбирается в память (по умолчанию 44100): 22050 — у гулов, в записи которых выше 10 кГц ничего нет (замер 17.11: на 40–77 дБ тише остального), вдвое меньше памяти телефона.",
+  "sounds": [
+    {
+      "id": "step_concrete",
+      "bus": "sfx",
+      "variants": 4,
+      "loop": false,
+      "seconds": 0.5,
+      "volume": 0.5,
+      "prompt": "Single footstep of a heavy boot on a dusty concrete floor in an empty underground corridor, close perspective, short dry reverb, no music, no voice",
+      "ru": "шаг сапога по бетону в пустом подземном коридоре"
+    },
+    {
+      "id": "step_water",
+      "bus": "sfx",
+      "variants": 3,
+      "loop": false,
+      "seconds": 0.7,
+      "volume": 0.55,
+      "prompt": "Single footstep splashing in shallow standing water on a concrete floor in a flooded underground tunnel, close perspective, short echo, no music",
+      "ru": "шаг по мелкой воде на затопленном участке"
+    },
+    {
+      "id": "breath_calm",
+      "bus": "body",
+      "variants": 1,
+      "loop": true,
+      "seconds": 6,
+      "xfade": 0.15,
+      "volume": 0.22,
+      "prompt": "Calm steady breathing of a man through the nose, heard from a chest-mounted camera microphone, slightly muffled, quiet room tone, seamless loop, no music, no words",
+      "ru": "спокойное дыхание, слышное нагрудной камере"
+    },
+    {
+      "id": "breath_panic",
+      "bus": "body",
+      "variants": 1,
+      "loop": true,
+      "seconds": 5,
+      "xfade": 0.12,
+      "volume": 0.4,
+      "prompt": "Fast shaky frightened breathing of a man trying to stay quiet, heard from a chest-mounted camera microphone, close and muffled, seamless loop, no music, no words",
+      "ru": "частое испуганное дыхание при панике"
+    },
+    {
+      "id": "heartbeat",
+      "bus": "body",
+      "variants": 1,
+      "loop": true,
+      "seconds": 4,
+      "xfade": 0.04,
+      "volume": 0.35,
+      "prompt": "Slow heavy heartbeat heard from inside the chest, deep muffled thuds, no other sound, seamless loop",
+      "ru": "глухое сердцебиение при панике и рядом с роем"
+    },
+    {
+      "id": "cough",
+      "bus": "body",
+      "variants": 2,
+      "loop": false,
+      "seconds": 1.2,
+      "volume": 0.5,
+      "prompt": "A man's short dry choking cough, close microphone, slightly muffled, small concrete room reverb, no words",
+      "ru": "кашель в газу"
+    },
+    {
+      "id": "fall",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 1.0,
+      "volume": 0.7,
+      "prompt": "A body in heavy clothing falling hard onto a concrete floor with a grunt-free dull thud and gear rattle, underground echo",
+      "ru": "падение и ушиб"
+    },
+    {
+      "id": "flash_click",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 0.3,
+      "volume": 0.5,
+      "prompt": "Click of a metal flashlight slide switch, very close, dry",
+      "ru": "щелчок выключателя фонаря"
+    },
+    {
+      "id": "flash_rattle",
+      "bus": "sfx",
+      "variants": 3,
+      "loop": false,
+      "seconds": 0.5,
+      "volume": 0.55,
+      "prompt": "Shaking an old metal flashlight: batteries and loose contacts rattling inside the metal tube, one quick shake, very close, dry",
+      "ru": "дребезг батареек при тряске фонаря"
+    },
+    {
+      "id": "flash_spark",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 0.3,
+      "volume": 0.4,
+      "prompt": "Tiny electrical crackle and tick of a loose contact in a flashlight bulb flickering on for an instant, very close",
+      "ru": "искра контакта, когда фонарь на миг вспыхивает"
+    },
+    {
+      "id": "flash_die",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 0.8,
+      "volume": 0.45,
+      "prompt": "A flashlight bulb filament buzzing faintly then cutting out with a soft electrical tick, very close, dry",
+      "ru": "фонарь глохнет"
+    },
+    {
+      "id": "camera_beep",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 0.5,
+      "volume": 0.4,
+      "prompt": "Body camera confirmation: two short high electronic beeps of a small digital recorder marking a clip",
+      "ru": "сигнал камеры: примета снята"
+    },
+    {
+      "id": "camera_hold",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 1.6,
+      "volume": 0.25,
+      "prompt": "Faint electronic autofocus whirr and ticking of a small digital camera recording, steady, very quiet, 1.6 seconds",
+      "ru": "камера наводится, пока удерживают съёмку"
+    },
+    {
+      "id": "hatch",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 2.5,
+      "volume": 0.6,
+      "prompt": "Heavy steel hatch closing above with a dull boom in a concrete shaft, then silence, long underground echo",
+      "ru": "люк закрывается над головой в начале вылазки в убежище"
+    },
+    {
+      "id": "amb_bunker",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 30,
+      "xfade": 2.0,
+      "rate": 22050,
+      "volume": 0.3,
+      "prompt": "Deep hollow drone of air moving through long underground concrete tunnels, low rumbling resonance like wind inside a huge pipe, constant and loud, close microphone, no events, no drips, no voices, no music, seamless loop",
+      "ru": "тишина заброшенного убежища: гул воздуха"
+    },
+    {
+      "id": "amb_deep",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 30,
+      "xfade": 2.0,
+      "rate": 22050,
+      "volume": 0.35,
+      "prompt": "Deep underground room tone: oppressive low rumble, faint metallic resonance in pipes, slow distant drips, claustrophobic, no music, seamless loop",
+      "ru": "нижние ярусы: давящий низкий гул и резонанс труб"
+    },
+    {
+      "id": "drip",
+      "bus": "sfx",
+      "variants": 4,
+      "loop": false,
+      "seconds": 1.0,
+      "volume": 0.3,
+      "prompt": "A single water drop falling into a small puddle on concrete in a silent underground room, long natural echo",
+      "ru": "одиночная капля в тишине"
+    },
+    {
+      "id": "gas_hiss",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 6,
+      "xfade": 0.5,
+      "volume": 0.3,
+      "prompt": "Faint continuous hiss of gas leaking from a corroded pipe in a small concrete room, steady, seamless loop",
+      "ru": "шипение газа в загазованном помещении"
+    },
+    {
+      "id": "collapse",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 3.5,
+      "volume": 0.9,
+      "prompt": "A concrete ceiling slab collapsing in an underground corridor: sharp crack, heavy rubble crashing down, debris settling, dust, long echo",
+      "ru": "обвал перекрытия за спиной"
+    },
+    {
+      "id": "scare_steps",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 2.5,
+      "volume": 0.45,
+      "prompt": "Three slow footsteps on concrete somewhere behind in an empty underground corridor, then they stop, distant, reverberant, no voice",
+      "ru": "шаги за спиной, которые останавливаются"
+    },
+    {
+      "id": "scare_knock",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 1.5,
+      "volume": 0.5,
+      "prompt": "Three dull knocks from inside a closed metal locker, hollow sheet-metal resonance, close, small room",
+      "ru": "стук изнутри металлического шкафчика"
+    },
+    {
+      "id": "scare_radio",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 1.8,
+      "volume": 0.45,
+      "prompt": "Burst of radio static from a small handheld receiver with a brief unintelligible distorted fragment underneath, then cut off",
+      "ru": "треск рации с обрывком неразборчивого сигнала"
+    },
+    {
+      "id": "swarm_loop",
+      "bus": "swarm",
+      "variants": 1,
+      "loop": true,
+      "seconds": 8,
+      "xfade": 0.8,
+      "volume": 0.5,
+      "prompt": "A slowly shifting mass of dry sand and fine dust: continuous soft granular hiss with a faint low hum and occasional dry crackle, close, quiet and unsettling, seamless loop, no music",
+      "ru": "Осыпь рядом: сухой шорох песка и пыли, которые не лежат на месте"
+    },
+    {
+      "id": "swarm_cohere",
+      "bus": "swarm",
+      "variants": 1,
+      "loop": false,
+      "seconds": 1.8,
+      "volume": 0.7,
+      "prompt": "Dry sand and dust rapidly pulled together into one mass: rising granular rush like a slow inhale, ending in a low soft thud, no music",
+      "ru": "Осыпь собирается в фигуру"
+    },
+    {
+      "id": "swarm_scatter",
+      "bus": "swarm",
+      "variants": 1,
+      "loop": false,
+      "seconds": 1.4,
+      "volume": 0.6,
+      "prompt": "A column of dry sand suddenly collapsing and scattering across a hard floor: sharp dry hiss spreading outward and fading",
+      "ru": "Осыпь рассыпается под лучом"
+    },
+    {
+      "id": "swarm_catch",
+      "bus": "swarm",
+      "variants": 1,
+      "loop": false,
+      "seconds": 2.8,
+      "volume": 0.9,
+      "prompt": "Dry sand and dust engulfing a microphone: overwhelming close granular roar, then digital signal breakup, a static burst and abrupt silence",
+      "ru": "Осыпь накрывает камеру, сигнал рвётся"
+    },
+    {
+      "id": "signal_static",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 3,
+      "xfade": 0.3,
+      "volume": 0.3,
+      "prompt": "Digital video signal interference: harsh buzzing static with glitchy dropouts of a body camera feed, seamless loop",
+      "ru": "помехи сигнала камеры рядом с роем"
+    },
+    {
+      "id": "step_carpet",
+      "bus": "sfx",
+      "variants": 4,
+      "loop": false,
+      "seconds": 0.5,
+      "volume": 0.42,
+      "prompt": "Single soft footstep of a shoe on thin office carpet, muffled, close perspective, dry quiet room, no music, no voice",
+      "ru": "шаг по ковролину офиса и жёлтых комнат"
+    },
+    {
+      "id": "step_grass",
+      "bus": "sfx",
+      "variants": 3,
+      "loop": false,
+      "seconds": 0.6,
+      "volume": 0.42,
+      "prompt": "Single footstep on dry grass, clear short rustle and crunch of grass under a boot, close microphone, full recording level, no music, no voice",
+      "ru": "шаг по траве на лугу"
+    },
+    {
+      "id": "grass_rustle",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": true,
+      "seconds": 8,
+      "volume": 0.6,
+      "xfade": 1.5,
+      "prompt": "Dense tall grass slowly bending and brushing together, soft continuous silky rustle and swish of thin blades, close-mic, full recording level, no wind rumble, no footsteps, no birds, no insects",
+      "ru": "шорох травы, которая тянется к лучу (слова партнёра: «сделай шорох травы»): громкость — сколько травы сейчас движется, звук — оттуда, где она движется; тихим его делает игра. Модель Sound Effects v3, петля 8 с: из четырёх вариантов взят самый ровный; низы ниже 150 Гц и верхи выше 7 кГц срезаны — середина спектра около 5,5 кГц, чтобы шорох не путался с песком Осыпи (у того 9–10 кГц); громкость петли выровнена до ±1,5 дБ — волны даёт игра, а не запись (разбор куратора 20.11)"
+    },
+    {
+      "id": "lift",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 2.8,
+      "volume": 0.55,
+      "prompt": "An old office elevator arriving: mechanical hum stopping, one mellow ding, doors sliding shut with a dull thud, empty lobby, short reverb",
+      "ru": "лифт привёз и закрыл двери: начало вылазки в офисе и жёлтых комнатах"
+    },
+    {
+      "id": "whiteout",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 2.2,
+      "volume": 0.5,
+      "prompt": "Soft airy shimmer swelling into bright white noise and fading away, like a picture overexposing, gentle, no impact, no music",
+      "ru": "кадр выбеливается: скачок в другое место"
+    },
+    {
+      "id": "dissolve",
+      "bus": "sfx",
+      "variants": 3,
+      "loop": false,
+      "seconds": 1.2,
+      "volume": 0.5,
+      "prompt": "A small object crumbling into dry sand and fine dust that pours and scatters softly, close, quiet, no impact, no music",
+      "ru": "вещь рассыпается в пыль от касания"
+    },
+    {
+      "id": "assemble",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 1.2,
+      "volume": 0.45,
+      "prompt": "Fine dry sand grains rushing together and settling into place, soft granular whoosh ending in a faint tick, close, quiet, no music",
+      "ru": "вещь собирается из пыли, когда свет вернулся"
+    },
+    {
+      "id": "amb_office",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 30,
+      "volume": 0.3,
+      "xfade": 2.0,
+      "prompt": "Room tone of an empty open-plan office at night recorded at high gain: steady fluorescent light buzz, air conditioning hiss and a computer fan whirr, constant, full recording level, no events, no voices, no music, seamless loop",
+      "ru": "тон пустого офиса: гул ламп и вентиляции"
+    },
+    {
+      "id": "amb_yellow",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 20,
+      "volume": 0.3,
+      "xfade": 2.0,
+      "rate": 22050,
+      "prompt": "Low steady electrical transformer hum inside the walls of a huge empty carpeted room, dull 50 Hz drone with a thin high whine and muffled air pressure, close microphone, full recording level, completely static, no events, no voices, no music, seamless loop",
+      "ru": "тон жёлтых комнат: почти тишина и слабое электрическое гудение"
+    },
+    {
+      "id": "amb_meadow",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 30,
+      "volume": 0.35,
+      "xfade": 2.0,
+      "prompt": "Quiet summer meadow: light wind moving through tall grass, a few distant birds, soft and warm, no insects close by, no voices, no music, seamless loop",
+      "ru": "луг: ветер в траве и далёкие птицы"
+    },
+    {
+      "id": "amb_void",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 20,
+      "volume": 0.25,
+      "xfade": 1.5,
+      "prompt": "Soft airy high room tone of a pure white empty space, faint glassy shimmer, weightless and calm, no events, no music, seamless loop",
+      "ru": "белое нигде, лимбо и кукольный домик: лёгкий высокий тон пустоты"
+    },
+    {
+      "id": "voices_murmur",
+      "bus": "voices",
+      "variants": 1,
+      "loop": true,
+      "seconds": 20,
+      "volume": 0.22,
+      "xfade": 1.5,
+      "rate": 22050,
+      "prompt": "Indistinct conversation of several people in the next room heard through a wall: steady calm murmur of men and women talking, muffled and dull, no intelligible words, clearly audible, full recording level, no music, seamless loop",
+      "ru": "тихий неразборчивый разговор за стеной"
+    },
+    {
+      "id": "voices_whisper",
+      "bus": "voices",
+      "variants": 1,
+      "loop": true,
+      "seconds": 12,
+      "volume": 0.2,
+      "xfade": 1.0,
+      "prompt": "Faint overlapping whispers of several people, close but unintelligible, breathy, no words can be made out, no music, seamless loop",
+      "ru": "шёпот нескольких голосов, слов не разобрать"
+    },
+    {
+      "id": "voices_laugh",
+      "bus": "voices",
+      "variants": 2,
+      "loop": false,
+      "seconds": 3.0,
+      "volume": 0.3,
+      "prompt": "Distant soft laughter of two or three people, muffled through a wall, warm and brief, no words, quiet room tone",
+      "ru": "далёкий мягкий смех нескольких человек за стеной"
+    },
+    {
+      "id": "voices_giggle",
+      "bus": "voices",
+      "variants": 2,
+      "loop": false,
+      "seconds": 2.0,
+      "volume": 0.28,
+      "prompt": "A small child's short giggle far away down a long empty corridor, faint and reverberant, no words",
+      "ru": "детский смешок далеко в коридоре"
+    },
+    {
+      "id": "voices_hum",
+      "bus": "voices",
+      "variants": 2,
+      "loop": false,
+      "seconds": 5.0,
+      "volume": 0.26,
+      "prompt": "Someone humming a simple slow tune to themselves in another room, muffled through a wall, clearly audible, full recording level, no words, no instruments",
+      "ru": "кто-то напевает себе под нос в соседней комнате"
+    },
+    {
+      "id": "voices_call",
+      "bus": "voices",
+      "variants": 2,
+      "loop": false,
+      "seconds": 2.0,
+      "volume": 0.26,
+      "prompt": "A distant voice calling out once from far away, a name that cannot be made out, muffled and reverberant, no clear words",
+      "ru": "далёкий оклик: зовут кого-то, имени не разобрать"
+    },
+    {
+      "id": "phone_far",
+      "bus": "voices",
+      "variants": 2,
+      "loop": false,
+      "seconds": 4.0,
+      "volume": 0.3,
+      "prompt": "An old landline telephone ringing twice in a distant room, muffled through walls, then silence",
+      "ru": "в дальней комнате дважды звонит телефон: звонят не тебе"
+    },
+    {
+      "id": "ui_click",
+      "bus": "ui",
+      "variants": 1,
+      "loop": false,
+      "seconds": 0.15,
+      "volume": 0.35,
+      "prompt": "Soft low mechanical button click of an old tape recorder key",
+      "ru": "нажатие в меню"
+    },
+    {
+      "id": "ui_start",
+      "bus": "ui",
+      "variants": 1,
+      "loop": false,
+      "seconds": 1.2,
+      "volume": 0.5,
+      "prompt": "A small digital body camera starting to record: short power-up chirp followed by a single record beep",
+      "ru": "старт записи: вылазка началась"
+    },
+    {
+      "id": "ui_report",
+      "bus": "ui",
+      "variants": 1,
+      "loop": false,
+      "seconds": 1.5,
+      "volume": 0.5,
+      "prompt": "A body camera recording stopping: descending two-tone beep followed by a short tape-stop whirr",
+      "ru": "конец записи: экран отчёта"
+    },
+    {
+      "id": "music_menu",
+      "bus": "music",
+      "variants": 1,
+      "loop": true,
+      "seconds": 30,
+      "xfade": 3.0,
+      "volume": 0.35,
+      "prompt": "Quiet dark ambient drone: slow evolving soft synth pad, distant bowed glass, sparse low pulses, cold and empty with a little warmth underneath, no melody, no drums, seamless loop",
+      "ru": "музыка заставки: тёмный тихий эмбиент"
+    },
+    {
+      "id": "amb_station",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 22,
+      "volume": 0.3,
+      "xfade": 2.0,
+      "rate": 22050,
+      "prompt": "Ambience of a huge empty railway station waiting hall recorded at high gain: vast reverberant stone room, steady low air rumble, distant ventilation, far echoing footsteps and a faint metallic clank now and then, constant, full recording level, no announcements, no voices, no music, seamless loop",
+      "ru": "тон зала ожидания: гулкий пустой зал"
+    },
+    {
+      "id": "train_pass",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 7,
+      "volume": 0.6,
+      "prompt": "A heavy train passing close outside a station building, heard from inside the waiting hall: deep rolling rumble of wheels on rails rising then fading, windows rattling, loud and full, full recording level, no horn, no brakes, no voices, no music",
+      "ru": "поезд проходит за окнами зала ожидания"
+    },
+    {
+      "id": "still_tone",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 27,
+      "volume": 0.34,
+      "xfade": 2.0,
+      "source": "partner",
+      "prompt": "Not generated: a field recording supplied by the project partner - a steady two-tone hum with low thumps; used as the held tone of stopped time in the waiting hall",
+      "ru": "тон остановившегося времени в зале ожидания: запись партнёра (не сгенерирована)"
+    },
+    {
+      "id": "wake_pass",
+      "bus": "amb",
+      "variants": 1,
+      "loop": false,
+      "seconds": 12,
+      "volume": 0.8,
+      "source": "partner",
+      "prompt": "Not generated: a field recording supplied by the project partner - a low engine rumble with rhythmic thumps that swells as something passes and fades away; soft fades added on import",
+      "ru": "явь: низкий мотор проходит мимо — запись партнёра (не сгенерирована); изредка и глухо сквозь сон, в лимбо — каждый раз"
+    },
+    {
+      "id": "wake_street",
+      "bus": "amb",
+      "variants": 1,
+      "loop": false,
+      "seconds": 15.1,
+      "volume": 1.0,
+      "source": "partner",
+      "prompt": "Not generated: a field recording supplied by the project partner - a quiet narrow street with a distant tune; soft fades added on import",
+      "ru": "явь: тихая узкая улица и далёкий напев — запись партнёра (не сгенерирована); изредка и глухо сквозь сон, в лимбо — каждый раз"
+    },
+    {
+      "id": "sonar_ping",
+      "bus": "sfx",
+      "variants": 2,
+      "loop": false,
+      "seconds": 2.0,
+      "volume": 0.3,
+      "prompt": "Single clean sonar ping recorded at full level: one clear bell-like sine tone with a soft attack, a long shimmering decay and one faint distant echo, like a pulse travelling through an empty building. Dry and close, no music, no voice, no background noise.",
+      "ru": "сонар: тихий пинг, когда от игрока расходится волна по тихому слою (слова партнёра: «Сонар тихий пинг»); тихим его делает игра — громкость 0,3"
+    },
+    {
+      "id": "bird_wings",
+      "bus": "sfx",
+      "variants": 3,
+      "loop": false,
+      "seconds": 2.2,
+      "volume": 0.5,
+      "prompt": "Several pigeons suddenly taking off inside a large empty train station hall, rapid loud wing flapping and wing clapping, close perspective, full recording level, long hall reverb tail, no cooing, no music, no voices",
+      "ru": "птица сорвалась с места: хлопки крыльев под крышей зала ожидания и в комнате под небом"
+    },
+    {
+      "id": "bird_coo",
+      "bus": "sfx",
+      "variants": 3,
+      "loop": false,
+      "seconds": 3.5,
+      "volume": 0.26,
+      "prompt": "A single pigeon cooing under the roof of a large empty train station hall, clear recording at full level, natural hall reverb, three or four coos, no wing sounds, no music, no voices",
+      "ru": "воркование голубя под крышей зала ожидания, изредка, пока время идёт"
+    }
+  ]
+}

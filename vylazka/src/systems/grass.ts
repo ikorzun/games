@@ -1,0 +1,355 @@
+/**
+ * Трава: где лежат плитки (world/grass.ts) и какие из них отдать рендеру в этом кадре. Плитки ставит место — луг
+ * (world/pocket_meadow.ts) или помещение уровня, где трава проросла сквозь пол (world/level_build.ts, grassRoom); здесь только
+ * ближние первыми, без выделения памяти в кадре. Отсечение по кадру и подробность по расстоянию — у рендера (setGrass).
+ *
+ * Чистый TS.
+ */
+import type { Vec3 } from '../core/types';
+import { GRASS_KINDS, GRASS_VARIANTS } from '../world/grass';
+import { softNoise } from '../world/wall_gone';
+
+/** Чисел на плитку в списке для рендера: x, y, z, поворот вокруг вертикали, размер поперёк, размер по высоте, форма. */
+export const GRASS_STRIDE = 7;
+/**
+ * Сколько ближних плиток отдавать рендеру (предел в кадре по качеству — у рендера) и дальше скольких метров травы не видно. Луг —
+ * круг в 30 м, и трава на нём тянется до края, а не обрывается кругом у глаза (куратор, противоречие 349): у горизонта плитка —
+ * каждая девятая травинка (world/grass.ts), и вся она обходится дешевле прежних восемнадцати метров.
+ */
+export const GRASS_SHOWN = 3000;
+export const GRASS_FAR = 30;
+/** Сколько вытоптанных кругов держит трава места (render/shaders.ts, GRASS; level_build.ts, grassClear). */
+export const GRASS_CLEAR = 16;
+/**
+ * Трава тянется к свету (партнёр 20.11: «Теперь сделай, чтобы трава тянулась к лучу»; design.md §36, «заворожить»): где на
+ * траву лёг луч фонаря (в светлом месте — взгляд), она клонится к свету и чуть вытягивается. Не сразу: поворачивается за
+ * rise секунд и отпускает дольше — за fall: проведёшь лучом по полю, и за ним остаётся медленно распрямляющийся след. Карта —
+ * клетками по cell метров над всем полем травы; шейдер читает её по корню травинки (render/shaders.ts, uLean).
+ */
+export const LEAN = { cell: 0.5, rise: 0.7, fall: 2.4 } as const;
+
+/**
+ * Шорох травы, что тянется к свету (партнёр 20.11: «сделай шорох травы»): громкость — от того, сколько травы сейчас движется,
+ * м² в секунду (клетка, дошедшая за секунду от 0 до 1, — это её площадь). Тянется — во всю силу, отпускает — едва (fall):
+ * распрямляется трава медленно, секунды, и иначе за каждым взглядом по лугу ещё долго тянулось бы шипение (замер в сборке 20.11).
+ * Луч лёг на траву в помещении — 2 м²/с, на лугу — 25–35; ведут взглядом по лугу — 14–20, идут — 6; луч стоит — движение гаснет,
+ * и шорох стихает за три-четыре секунды (ниже quiet — тишина). Кривая (curve < 1) — чтобы и немного травы в помещении было
+ * слышно, а на лугу «повёл» и «стоит» различались: помещение — 0,4, луг: идут — около 0,7, ведут — 0,8–0,9, свет лёг — 0,93.
+ */
+export const RUSTLE = { full: 5, curve: 0.6, quiet: 0.15, fall: 0.15, min: 0.04 } as const;
+
+/** Громкость шороха 0..1 по движению травы: rise — тянется, fall — отпускает, м² в секунду. */
+export function rustleGain(rise: number, fall: number): number {
+  const m = Math.max(0, rise + fall * RUSTLE.fall - RUSTLE.quiet) / RUSTLE.full;
+  const g = 1 - Math.exp(-Math.pow(m, RUSTLE.curve));
+  return g < RUSTLE.min ? 0 : g;
+}
+
+/** Сколько травы движется сейчас (м² в секунду: тянется и отпускает) и где — середина движения на высоте травы. */
+export interface GrassRustle {
+  rise: number;
+  fall: number;
+  at: Vec3;
+}
+
+/** Свет, к которому тянется трава: откуда (фонарь или глаза), куда, косинус половины раствора конуса и дальность, м. */
+export interface LeanLight {
+  from: Vec3;
+  dir: Vec3;
+  cos: number;
+  range: number;
+  /**
+   * Насколько трава ещё отвечает свету, 0..1 (нет — 1): рядом с Осыпью она замирает — не тянется и не шуршит, и тишина травы —
+   * её знак без пугалки (разбор куратора 20.11: шорох и песок Осыпи — одно сухое шипение).
+   */
+  k?: number;
+}
+
+/** Карта «насколько тянется» над полем травы: w × h клеток по cell метров от (minX, minZ), 0..255 — для текстуры. */
+export interface LeanMap {
+  data: Uint8Array;
+  w: number;
+  h: number;
+  minX: number;
+  minZ: number;
+  cell: number;
+}
+
+export interface GrassSite {
+  /** Середина плитки на полу (корни травинок), м. */
+  pos: Vec3;
+  /** Поворот вокруг вертикали, рад. */
+  rot: number;
+  /** Размер поперёк (1 — плитка 1 × 1 м) и по высоте (1 — трава своего вида). */
+  s: number;
+  h: number;
+  /** Форма сетки: world/grass.ts, grassForm. */
+  form: number;
+}
+
+/** Пересортировать, когда глаз ушёл дальше этого от прошлой сортировки, м. */
+const RESORT = 0.6;
+
+/** Вытоптанный круг: x, пол, z, радиус, м. */
+export type GrassClearing = [number, number, number, number];
+
+/** Где лежит трава: прямоугольник плиток (с запасом на свес травинок) и пол под ней. */
+export interface GrassField {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  floor: number;
+  /**
+   * Трава короткая — газон жёлтых комнат (world/grass.ts, lawn): по щиколотку вещь не прячется, и вокруг неё не вытаптывается
+   * круг — только её след, в её размер. Газон остаётся нетронутым, как ковёр (квиз партнёра, ночь на 20.11).
+   */
+  short: boolean;
+}
+
+export class Grass {
+  readonly sites: readonly GrassSite[];
+  readonly field: GrassField | null;
+  private readonly order: number[];
+  private readonly dist: Float32Array;
+  private sortedAt: Vec3 | null = null;
+
+  /** Карта «тянется к свету» (LEAN); у газона её нет — он неподвижен. */
+  readonly lean: LeanMap | null;
+  private readonly leanF: Float32Array | null;
+  /** Есть ли в карте хоть что-то (иначе без света её можно не обходить) и в каких клетках (i0, i1, j0, j1). */
+  private leanAny = false;
+  private readonly leanBox: [number, number, number, number] = [Number.MAX_SAFE_INTEGER, -1, Number.MAX_SAFE_INTEGER, -1];
+  /** В каких клетках карты есть трава (прямоугольник поля шире: у луга — углы за кругом, тропа): шуршит только она. */
+  private readonly leanHas: Uint8Array | null;
+  /** Шорох последнего шага updateLean (RUSTLE). */
+  readonly rustle: GrassRustle = { rise: 0, fall: 0, at: [0, 0, 0] };
+  /** Откуда светили в последний раз — там и слушают (фонарь и глаза — у героя); свет погас — отпускающую слышно оттуда же. */
+  private readonly heardFrom: [number, number] = [0, 0];
+  /**
+   * Шум стирания пола под корнем каждой клетки (как у шейдера: softNoise(корень × 0,9 + 3,1), render/shaders.ts): на поздних кругах
+   * пол уходит, и трава на нём пропадает — шуршать ей нечем.
+   */
+  private readonly leanGn: Float32Array | null;
+
+  constructor(sites: readonly GrassSite[]) {
+    this.sites = sites;
+    this.order = sites.map((_, i) => i);
+    this.dist = new Float32Array(sites.length);
+    if (sites.length === 0) this.field = null;
+    else {
+      const lawn = GRASS_KINDS.indexOf('lawn');
+      const f: GrassField = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity, floor: Infinity, short: sites.every((s) => Math.floor(s.form / GRASS_VARIANTS) === lawn) };
+      for (const s of sites) {
+        const r = 0.5 * s.s + 0.4;
+        f.minX = Math.min(f.minX, s.pos[0] - r);
+        f.maxX = Math.max(f.maxX, s.pos[0] + r);
+        f.minZ = Math.min(f.minZ, s.pos[2] - r);
+        f.maxZ = Math.max(f.maxZ, s.pos[2] + r);
+        f.floor = Math.min(f.floor, s.pos[1]);
+      }
+      this.field = f;
+    }
+    const f = this.field;
+    if (f && !f.short) {
+      const w = Math.max(1, Math.ceil((f.maxX - f.minX) / LEAN.cell));
+      const h = Math.max(1, Math.ceil((f.maxZ - f.minZ) / LEAN.cell));
+      this.lean = { data: new Uint8Array(w * h), w, h, minX: f.minX, minZ: f.minZ, cell: LEAN.cell };
+      this.leanF = new Float32Array(w * h);
+      // Плитка повёрнута четвертями — её квадрат по осям и есть её место.
+      const has = new Uint8Array(w * h);
+      for (const s of sites) {
+        const r = 0.5 * s.s;
+        const i0 = Math.max(0, Math.floor((s.pos[0] - r - f.minX) / LEAN.cell));
+        const i1 = Math.min(w - 1, Math.floor((s.pos[0] + r - f.minX) / LEAN.cell));
+        const j0 = Math.max(0, Math.floor((s.pos[2] - r - f.minZ) / LEAN.cell));
+        const j1 = Math.min(h - 1, Math.floor((s.pos[2] + r - f.minZ) / LEAN.cell));
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) has[j * w + i] = 1;
+      }
+      this.leanHas = has;
+      const gn = new Float32Array(w * h);
+      const gy = f.floor * 0.9 + 3.1;
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (has[j * w + i]) gn[j * w + i] = softNoise((f.minX + (i + 0.5) * LEAN.cell) * 0.9 + 3.1, gy, (f.minZ + (j + 0.5) * LEAN.cell) * 0.9 + 3.1);
+      this.leanGn = gn;
+    } else {
+      this.lean = null;
+      this.leanF = null;
+      this.leanHas = null;
+      this.leanGn = null;
+    }
+  }
+
+  /**
+   * Трава тянется к свету (LEAN): клетки, на которые светит, за rise секунд доходят до 1, остальные за fall — до нуля. Свет — по
+   * середине клетки на высоте травы; у края конуса — плавно. Без света и с пустой картой — ничего не делает. Возвращает, менялась
+   * ли карта (рендеру — перезалить текстуру). Заодно считает шорох (rustle): сколько травы сдвинулось и где; erase — насколько
+   * стёрт пол (decay.floor): трава на стёртом полу не шуршит.
+   */
+  updateLean(light: LeanLight | null, dt: number, erase = 0): boolean {
+    const m = this.lean;
+    const v = this.leanF;
+    const f = this.field;
+    const has = this.leanHas;
+    const gn = this.leanGn;
+    this.rustle.rise = 0;
+    this.rustle.fall = 0;
+    if (!m || !v || !f || !has || !gn || dt <= 0 || (!light && !this.leanAny)) return false;
+    const lk = light ? Math.max(0, Math.min(1, light.k ?? 1)) : 0;
+    // Стёртый пол (decay.floor): та же маска, что у травинок в шейдере, — доля травы клетки, которая ещё есть.
+    const er = erase * 1.14 - 0.06;
+    const kIn = 1 - Math.exp(-dt / LEAN.rise);
+    const kOut = 1 - Math.exp(-dt / LEAN.fall);
+    const y = f.floor + 0.25;
+    const cosIn = light ? 1 - (1 - light.cos) * 0.3 : 1;
+    // Обходить не всё поле (на лугу — 120 × 120 клеток), а только то, куда достаёт свет, и то, что ещё не распрямилось.
+    let i0 = this.leanBox[0];
+    let i1 = this.leanBox[1];
+    let j0 = this.leanBox[2];
+    let j1 = this.leanBox[3];
+    if (light) {
+      i0 = Math.min(i0, Math.max(0, Math.floor((light.from[0] - light.range - m.minX) / m.cell)));
+      i1 = Math.max(i1, Math.min(m.w - 1, Math.ceil((light.from[0] + light.range - m.minX) / m.cell)));
+      j0 = Math.min(j0, Math.max(0, Math.floor((light.from[2] - light.range - m.minZ) / m.cell)));
+      j1 = Math.max(j1, Math.min(m.h - 1, Math.ceil((light.from[2] + light.range - m.minZ) / m.cell)));
+    }
+    let changed = false;
+    // Шорох: сколько травы сдвинулось за шаг (тянется и отпускает) и где её слышно — середина движения, где ближняя к герою
+    // трава весит больше (как её и слышно: затухание то же, что у звука, audio/engine.ts), а отпускающая — меньше.
+    if (light) {
+      this.heardFrom[0] = light.from[0];
+      this.heardFrom[1] = light.from[2];
+    }
+    const [hx, hz] = this.heardFrom;
+    let rise = 0;
+    let fall = 0;
+    let sw = 0;
+    let sx = 0;
+    let sz = 0;
+    let bi0 = m.w;
+    let bi1 = -1;
+    let bj0 = m.h;
+    let bj1 = -1;
+    for (let j = Math.max(0, j0); j <= Math.min(m.h - 1, j1); j++) {
+      const z = m.minZ + (j + 0.5) * m.cell;
+      for (let i = Math.max(0, i0); i <= Math.min(m.w - 1, i1); i++) {
+        const k = j * m.w + i;
+        const x = m.minX + (i + 0.5) * m.cell;
+        let target = 0;
+        if (light) {
+          const dx = x - light.from[0];
+          const dy = y - light.from[1];
+          const dz = z - light.from[2];
+          const dd = dx * dx + dy * dy + dz * dz;
+          if (dd > 0.09 && dd < light.range * light.range) {
+            const d = Math.sqrt(dd);
+            const c = (dx * light.dir[0] + dy * light.dir[1] + dz * light.dir[2]) / d;
+            if (c > light.cos) {
+              const t = Math.min(1, (c - light.cos) / Math.max(1e-6, cosIn - light.cos));
+              const far = Math.min(1, Math.max(0, (d - light.range * 0.6) / (light.range * 0.4)));
+              target = t * t * (3 - 2 * t) * (1 - far * far * (3 - 2 * far)) * lk;
+            }
+          }
+        }
+        const was = v[k]!;
+        if (was === 0 && target === 0) continue;
+        const now = was + (target - was) * (target > was ? kIn : kOut);
+        const val = now < 0.002 && target === 0 ? 0 : now;
+        v[k] = val;
+        if (has[k]) {
+          const gone = er > 0 ? Math.min(1, Math.max(0, (er - gn[k]!) / 0.08)) : 0;
+          const dv = (val - was) * (1 - gone);
+          const ax = x - hx;
+          const az = z - hz;
+          const wgt = (dv > 0 ? dv : -dv * RUSTLE.fall) / (1 + (ax * ax + az * az) / 25);
+          if (dv > 0) rise += dv;
+          else fall -= dv;
+          sw += wgt;
+          sx += wgt * x;
+          sz += wgt * z;
+        }
+        if (val > 0) {
+          if (i < bi0) bi0 = i;
+          if (i > bi1) bi1 = i;
+          if (j < bj0) bj0 = j;
+          if (j > bj1) bj1 = j;
+        }
+        const b = Math.round(val * 255);
+        if (b !== m.data[k]) {
+          m.data[k] = b;
+          changed = true;
+        }
+      }
+    }
+    this.leanBox[0] = bi0;
+    this.leanBox[1] = bi1;
+    this.leanBox[2] = bj0;
+    this.leanBox[3] = bj1;
+    this.leanAny = bi1 >= 0;
+    const area = m.cell * m.cell;
+    this.rustle.rise = (rise * area) / dt;
+    this.rustle.fall = (fall * area) / dt;
+    if (sw > 1e-6) {
+      this.rustle.at[0] = sx / sw;
+      this.rustle.at[1] = f.floor + 0.3;
+      this.rustle.at[2] = sz / sw;
+    }
+    return changed;
+  }
+
+  /**
+   * Вытоптанные круги сейчас (render: шейдер травы, GRASS): сперва вокруг вещей, что лежат на полу этой травы (вещь примяла её
+   * собой — кругом в свой размер), потом у дверей места (doors, world/level_build.ts, grassClear). Не больше GRASS_CLEAR — в out;
+   * возвращает, сколько записано. Трава не прячет ключи на полу (куратор, противоречие 346), а заросшим остаётся весь пол, где
+   * ничего не лежит.
+   */
+  clearings(items: Iterable<{ pos: Vec3; radius: number }>, doors: readonly GrassClearing[], out: GrassClearing[]): number {
+    const f = this.field;
+    let n = 0;
+    if (f) {
+      for (const it of items) {
+        if (n >= GRASS_CLEAR) break;
+        const [x, y, z] = it.pos;
+        if (x < f.minX || x > f.maxX || z < f.minZ || z > f.maxZ || y < f.floor - 0.3 || y > f.floor + 0.55) continue;
+        out[n++] = [x, f.floor, z, f.short ? Math.min(0.6, 0.1 + it.radius) : Math.min(1.2, 0.62 + 1.2 * it.radius)];
+      }
+    }
+    for (const d of doors) {
+      if (n >= GRASS_CLEAR) break;
+      out[n++] = [d[0], d[1], d[2], d[3]];
+    }
+    out.length = n;
+    return n;
+  }
+
+  /** Ближайшие к глазу плитки не дальше far, не больше max — в out по GRASS_STRIDE чисел. Возвращает, сколько записано. */
+  visible(eye: Vec3, max: number, out: Float32Array, far = Infinity): number {
+    const n = this.sites.length;
+    const last = this.sortedAt;
+    if (!last || Math.hypot(eye[0] - last[0], eye[1] - last[1], eye[2] - last[2]) > RESORT) {
+      for (let i = 0; i < n; i++) {
+        const p = this.sites[i]!.pos;
+        this.dist[i] = Math.hypot(p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]);
+      }
+      this.order.sort((a, b) => this.dist[a]! - this.dist[b]!);
+      this.sortedAt = [eye[0], eye[1], eye[2]];
+    }
+    const S = GRASS_STRIDE;
+    const room = Math.min(max, Math.floor(out.length / S));
+    let k = 0;
+    for (let j = 0; j < n && k < room; j++) {
+      const s = this.sites[this.order[j]!]!;
+      const p = s.pos;
+      if (Math.hypot(p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]) > far + 1) break;
+      const o = k * S;
+      out[o] = p[0];
+      out[o + 1] = p[1];
+      out[o + 2] = p[2];
+      out[o + 3] = s.rot;
+      out[o + 4] = s.s;
+      out[o + 5] = s.h;
+      out[o + 6] = s.form;
+      k++;
+    }
+    return k;
+  }
+}

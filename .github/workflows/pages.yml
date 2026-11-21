@@ -1,17 +1,23 @@
 name: pages
 
-# Публикация сборки рантайма (web-plain) на GitHub Pages: https://ikorzun.github.io/games/
+# Публикация сборок (web-plain) на GitHub Pages одним сайтом:
+#   новелла  — https://ikorzun.github.io/games/
+#   «Вылазка» — https://ikorzun.github.io/games/vylazka/
+# Обе игры собираются с относительными путями (base './'), поэтому живут в любой подпапке.
 # Pages нужно один раз включить вручную: Settings → Pages → Source: GitHub Actions (токен workflow не может
 # создать сайт — не хватает прав администратора; попытка всё равно делается и причина отказа печатается в лог).
 # Дальше публикация идёт при каждом push в ветку.
 on:
   push:
-    branches: [main, claude/magical-thompson-ore6eh]
+    # claude/cool-clarke-gdi2gp — рабочая ветка «Вылазки»: владелец проверяет игру по ссылке до слияния.
+    # Новелла в этой ветке та же, что в основной; после слияния строку с веткой можно убрать.
+    branches: [main, claude/magical-thompson-ore6eh, claude/cool-clarke-gdi2gp]
     paths:
       - "runtime/**"
       - "episodes/**"
       - "locales/**"
       - "assets/**"
+      - "vylazka/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -19,6 +25,8 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  # Прочитать, каким веткам окружение github-pages разрешает публикацию (см. шаг «May this branch deploy?»).
+  actions: read
 
 concurrency:
   group: pages
@@ -32,6 +40,7 @@ jobs:
         working-directory: runtime
     outputs:
       pages_enabled: ${{ steps.pages.outputs.enabled }}
+      branch_allowed: ${{ steps.branch.outputs.allowed }}
     steps:
       - uses: actions/checkout@v4
       - name: Is GitHub Pages enabled? (if not — try to enable it with Source = GitHub Actions)
@@ -49,22 +58,64 @@ jobs:
             echo "Ответ API на попытку включить Pages: ${out}"
             echo "::notice::GitHub Pages не включён, а включить его отсюда нельзя: токену workflow не хватает прав администратора репозитория. Один раз вручную: Settings → Pages → Source: GitHub Actions — шаг публикации пропущен"
           fi
+      - name: May this branch deploy to the github-pages environment?
+        id: branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Окружение github-pages пускает к публикации не все ветки. Если этой ветки в списке нет, шаг
+          # публикации упал бы без единой строки в логе и красил бы PR; вместо этого пропускаем его
+          # и пишем, где ветку добавить. Не удалось прочитать правила — пробуем публиковать как раньше.
+          allowed=true
+          if env_json=$(gh api "repos/${GITHUB_REPOSITORY}/environments/github-pages" 2>/dev/null); then
+            if [ "$(jq -r '.deployment_branch_policy.custom_branch_policies // false' <<<"$env_json")" = "true" ]; then
+              if names=$(gh api "repos/${GITHUB_REPOSITORY}/environments/github-pages/deployment-branch-policies" --jq '.branch_policies[].name' 2>/dev/null); then
+                allowed=false
+                while IFS= read -r pattern; do
+                  [ -n "$pattern" ] || continue
+                  # shellcheck disable=SC2254
+                  case "$GITHUB_REF_NAME" in $pattern) allowed=true ;; esac
+                done <<<"$names"
+              fi
+            fi
+          fi
+          echo "allowed=${allowed}" >> "$GITHUB_OUTPUT"
+          if [ "$allowed" = "false" ]; then
+            echo "::notice::Ветке ${GITHUB_REF_NAME} не разрешена публикация на GitHub Pages. Один раз вручную: Settings → Environments → github-pages → Deployment branches and tags → Add deployment branch or tag rule → ${GITHUB_REF_NAME}. Сборка сайта прошла, шаг публикации пропущен."
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: runtime/package-lock.json
-      - run: npm ci
-      - run: npm run build
+          cache-dependency-path: |
+            runtime/package-lock.json
+            vylazka/package-lock.json
+      - name: Build the novel
+        run: npm ci && npm run build
+      - name: Build «Вылазка»
+        working-directory: vylazka
+        run: npm ci && npm run build
+      - name: Assemble the site (novel at the root, «Вылазка» in /vylazka/)
+        working-directory: .
+        run: |
+          set -e
+          rm -rf site
+          mkdir -p site/vylazka
+          cp -a runtime/dist/. site/
+          # Папка второй игры не должна затереть файлы новеллы и наоборот.
+          if [ -n "$(ls -A site/vylazka)" ]; then echo "::error::в сборке новеллы уже есть папка vylazka/"; exit 1; fi
+          cp -a vylazka/dist/. site/vylazka/
+          test -f site/index.html && test -f site/vylazka/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: runtime/dist
+          path: site
 
   deploy:
     needs: build
     # Публикуем только когда Pages включён в настройках репозитория: иначе деплой падает по внешней
     # причине (404 «Ensure GitHub Pages has been enabled») и красил бы PR.
-    if: needs.build.outputs.pages_enabled == 'true'
+    # И только из ветки, которой окружение github-pages разрешает публикацию.
+    if: needs.build.outputs.pages_enabled == 'true' && needs.build.outputs.branch_allowed != 'false'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

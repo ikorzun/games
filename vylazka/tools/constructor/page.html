@@ -1,0 +1,464 @@
+<title>Конструктор</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Конструктор: слева полка вещей, посередине настоящее помещение места, справа — карточка вещи, вещь игры и правило, по
+   которому вещь встанет в игре. Тёмная мастерская, как у инструмента фигур. */
+:root {
+  --bg: #121417;
+  --panel: #191c20;
+  --raise: #20242a;
+  --line: #2c3138;
+  --fg: #e8e6e0;
+  --muted: #9aa1a9;
+  --accent: #e3b25e;
+  --warn: #dc7f73;
+  --ok: #86b98c;
+  --v-keep: #86b98c;
+  --v-real: #e3b25e;
+  --v-replace: #7eaedb;
+  --v-remove: #dc7f73;
+  --toy: #c97cc0;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 14px 24px;
+}
+/* Всё во всю высоту окна (партнёр 18.11, 22:36: «явно можно слева тянуть до конца вниз, как и справа»): страница не
+   прокручивается, полка, сцена и правая панель тянутся до низа, внутри — своя прокрутка. На узком окне — как раньше. */
+body { margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+body > header, body > .places { flex: none; }
+body.is-carrying, body.is-carrying * { cursor: grabbing !important; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin-bottom: 10px; }
+h1 { font: 600 22px/1.2 var(--font-body); margin: 0; letter-spacing: 0.01em; }
+.lead { color: var(--muted); margin: 0; max-width: 100ch; flex: 1 1 420px; min-width: 0; font-size: 14px; }
+.places { display: grid; gap: 6px; margin-bottom: 10px; }
+.layout { display: grid; grid-template-columns: minmax(0, 270px) minmax(0, 1fr) minmax(0, 360px); grid-template-rows: minmax(0, 1fr); gap: 14px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
+#view { position: relative; min-height: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #0e1012; touch-action: none; }
+#view canvas { display: block; width: 100%; height: 100%; }
+/* Ручка высоты над выбранной вещью в «Двигать» (партнёр 19.11: «нужно перемещение вещи по вертикали»): тянуть вверх-вниз. */
+.lifthandle { position: absolute; left: 0; top: 0; z-index: 4; display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px 4px 7px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: 600 12px/1 system-ui, sans-serif; white-space: nowrap; cursor: ns-resize; user-select: none; -webkit-user-select: none; touch-action: none; box-shadow: 0 2px 10px rgb(0 0 0 / .35); }
+.lifthandle[hidden] { display: none; }
+.check { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--fg); cursor: pointer; }
+.check[hidden] { display: none; }
+.lifthandle svg { flex: none; }
+.lifthandle:hover, body.is-lifting .lifthandle { border-color: var(--accent); color: var(--accent); }
+body.is-lifting, body.is-lifting * { cursor: ns-resize !important; }
+.hint { position: absolute; left: 12px; bottom: 10px; right: 12px; font: 12px/1.45 var(--font-mono); color: var(--muted); pointer-events: none; text-shadow: 0 1px 2px #000; }
+.hint b { color: var(--accent); font-weight: 600; }
+.shelf { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.shelf > * { flex: none; }
+.kinds { display: flex; flex-wrap: wrap; gap: 4px; }
+.kinds .chip { padding: 2px 8px; font-size: 12.5px; }
+#shelf { display: grid; gap: 4px; align-content: start; flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 4px; }
+.shelf__item { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; align-items: center; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; color: var(--fg); font: 13px/1.25 var(--font-body); cursor: grab; touch-action: none; user-select: none; }
+.shelf__item:hover { border-color: var(--accent); }
+.shelf__item.is-current { border-color: var(--accent); background: var(--raise); }
+.shelf__item--card { cursor: pointer; }
+.shelf__item--fig { border-color: #4a4130; }
+.shelf__thumb { width: 56px; height: 56px; border-radius: 6px; background: #16191d; display: block; object-fit: cover; }
+.shelf__thumb--fig { display: grid; place-items: center; font-size: 26px; color: var(--accent); }
+.shelf__text { display: grid; min-width: 0; gap: 1px; }
+.shelf__text b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.shelf__text small { color: var(--muted); font-size: 11.5px; }
+.tags { display: flex; flex-wrap: wrap; gap: 3px; }
+.tag { font: 10.5px/1.3 var(--font-mono); padding: 0 5px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.tag--card { border-style: dashed; }
+.tag--toy { color: var(--toy); border-color: color-mix(in srgb, var(--toy) 45%, transparent); }
+.tag--s3 { color: var(--accent); border-style: dotted; border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.tag--v-good { color: var(--v-keep); border-color: currentColor; }
+.tag--v-fix { color: var(--v-replace); border-color: currentColor; }
+.tag--v-drop { color: var(--v-remove); border-color: currentColor; }
+.tag--mem { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.tag--advice { border-style: dashed; white-space: normal; }
+.tag--v-keep { color: var(--v-keep); border-color: currentColor; }
+.tag--v-redo1, .tag--v-detail1, .tag--v-swap { color: var(--v-real); border-color: currentColor; }
+.tag--v-redo2, .tag--v-detail2, .tag--v-swapfix { color: var(--v-replace); border-color: currentColor; }
+.tag--v-remove { color: var(--v-remove); border-color: currentColor; }
+#panel { display: grid; gap: 10px; min-width: 0; min-height: 0; overflow: auto; align-content: start; }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
+.box h2 { margin: 0; font: 600 12px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.box__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.box__head h2 { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.box__head .row { flex-wrap: nowrap; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px; font: 13px/1.3 var(--font-body); cursor: pointer; }
+.chip.is-on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); background: var(--raise); }
+.chip:focus-visible, .btn:focus-visible, input:focus-visible, textarea:focus-visible, .shelf__item:focus-visible, .verdict:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn { background: var(--raise); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font: 500 14px var(--font-body); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+.btn:disabled { opacity: 0.55; cursor: default; }
+.btn--main { background: var(--accent); color: #1a1408; border-color: var(--accent); }
+.btn--warn { color: var(--warn); }
+.btn--small { padding: 3px 9px; font-size: 13px; }
+.btn--x { padding: 0 8px; font-size: 18px; line-height: 26px; }
+input[type="text"], input[type="search"] { width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--fg); border-radius: 8px; padding: 7px 10px; font: 14px var(--font-body); }
+label.slider { display: grid; grid-template-columns: 8.5em minmax(0, 1fr) 4.2em; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+label.slider output { font: 12px var(--font-mono); color: var(--fg); text-align: right; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.note { margin: 0; font-size: 13px; color: var(--muted); }
+.note b { color: var(--fg); font-weight: 500; }
+#what { font-weight: 500; }
+#summary { font: 12.5px/1.45 var(--font-mono); color: var(--accent); }
+#coverage, #gcover { font: 12.5px/1.45 var(--font-mono); color: var(--ok); }
+#coverage.is-bad, #gcover.is-bad { color: var(--warn); }
+#problems { margin: 0; padding-left: 18px; color: var(--warn); font-size: 13px; }
+#problems:empty { display: none; }
+#status { font: 12px/1.45 var(--font-mono); color: var(--muted); min-height: 1.45em; }
+#saved { display: flex; flex-wrap: wrap; gap: 6px; }
+#saved:empty::after { content: "Пока ничего не сохранено."; color: var(--muted); font-size: 13px; }
+.sand { border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; color: var(--muted); }
+/* Вещь игры: выбранная в помещении. */
+#gamebox { border-color: #4a4130; }
+#gname { font-weight: 500; }
+#gnth { font: 12.5px/1.45 var(--font-mono); color: var(--accent); }
+#gstate { font-size: 13px; }
+#gstate.is-gone { color: var(--warn); }
+#movenote { font-size: 13px; color: var(--accent); }
+/* Карточка вещи (бывший «Опросник мебели»). */
+#card .card__body { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.card__look, .card__info, .card__mark { display: grid; gap: 6px; min-width: 0; }
+#card.is-folded .card__body { display: none; }
+#c-title { text-transform: none; letter-spacing: 0; color: var(--fg); font: 500 13px var(--font-body); }
+#card:not(.is-folded) #c-title { display: none; }
+#cardview { width: 100%; height: 180px; border-radius: 8px; overflow: hidden; background: #121417; touch-action: none; }
+#cardview canvas { display: block; width: 100%; height: 100%; }
+.card__hint { font: 11.5px var(--font-mono); color: var(--muted); margin: 0; }
+#c-ru { margin: 0; font: 600 15px/1.3 var(--font-body); overflow-wrap: anywhere; }
+.code { font: 12px var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+#card dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 10px; margin: 0; font-size: 13px; }
+#card dt { color: var(--muted); }
+#card dd { margin: 0; overflow-wrap: anywhere; }
+#c-advice { margin: 0; color: var(--muted); font-size: 13px; }
+#c-advice:empty { display: none; }
+#c-ask { font: 600 12px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 2px 0 0; }
+#c-verdicts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.verdict { display: grid; gap: 1px; align-content: start; text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; color: var(--fg); cursor: pointer; font: 500 13px/1.3 var(--font-body); }
+.verdict small { font: 11px/1.3 var(--font-body); color: var(--muted); }
+.verdict:disabled { opacity: 0.55; cursor: default; }
+.verdict--keep.is-on, .verdict--good.is-on { border-color: var(--v-keep); box-shadow: inset 3px 0 0 var(--v-keep); }
+.verdict--redo1.is-on, .verdict--detail1.is-on, .verdict--swap.is-on { border-color: var(--v-real); box-shadow: inset 3px 0 0 var(--v-real); }
+.verdict--redo2.is-on, .verdict--detail2.is-on, .verdict--swapfix.is-on, .verdict--fix.is-on { border-color: var(--v-replace); box-shadow: inset 3px 0 0 var(--v-replace); }
+.verdict--remove.is-on, .verdict--drop.is-on { border-color: var(--v-remove); box-shadow: inset 3px 0 0 var(--v-remove); }
+#c-note { width: 100%; min-height: 48px; resize: vertical; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: 13.5px/1.45 var(--font-body); }
+/* Панель инструментов над сценой — как в простых 3D-редакторах: двигать, крутить, отменить, копия, клавиши. */
+.tools { position: absolute; left: 10px; top: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; z-index: 2; }
+.tool { background: color-mix(in srgb, var(--panel) 92%, transparent); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; font: 500 13px/1.2 var(--font-body); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.tool kbd { font: 11px var(--font-mono); color: var(--muted); }
+.tool.is-on { border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+.tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.help { position: absolute; left: 10px; top: 52px; z-index: 3; max-width: min(420px, calc(100% - 20px)); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 12.5px/1.6 var(--font-mono); color: var(--muted); }
+.help b { color: var(--fg); font-weight: 600; }
+.save { font: 12px var(--font-mono); color: var(--ok); padding: 2px 8px; border-radius: 6px; border: 1px solid transparent; white-space: nowrap; }
+.save[data-state="pending"] { color: var(--muted); }
+.save[data-state="local"] { color: var(--accent); }
+.save[data-state="bad"] { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); white-space: normal; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-bottom: 10px; }
+/* «Залить в игру» — только в программе на своём компьютере (сборка local): кнопка справа вверху и окошко под ней. */
+.btn--push { margin-left: auto; background: color-mix(in srgb, var(--accent) 20%, var(--raise)); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.btn--push:disabled { opacity: .6; cursor: progress; }
+.pushbox { position: fixed; top: 52px; right: 16px; z-index: 20; width: min(440px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; box-shadow: 0 12px 32px rgb(0 0 0 / .45); font-size: 14px; }
+.pushbox[data-state="ok"] { border-color: color-mix(in srgb, var(--ok) 55%, transparent); }
+.pushbox[data-state="bad"] { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.pushbox__msg { margin: 0 0 8px; line-height: 1.45; }
+.pushbox[data-state="ok"] .pushbox__msg { color: var(--ok); }
+.pushbox[data-state="bad"] .pushbox__msg { color: var(--warn); }
+.pushbox__list { margin: 0 0 8px; padding-left: 18px; color: var(--muted); font-size: 13px; line-height: 1.5; max-height: 40vh; overflow: auto; }
+.pushbox__detail { margin: 0 0 8px; font: 12px/1.45 var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+.pushbox__token p { margin: 0 0 8px; color: var(--muted); line-height: 1.5; font-size: 13px; }
+.pushbox__token .row { margin-bottom: 8px; flex-wrap: nowrap; }
+.pushbox__token input { flex: 1; min-width: 0; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font: 13px var(--font-mono); }
+.pushbox__foot { justify-content: flex-end; }
+.top h1 { font-size: 18px; }
+.count { margin: 0; font: 12px var(--font-mono); color: var(--muted); }
+.tiltrow { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)) auto; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.tiltrow input { width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--fg); border-radius: 6px; padding: 4px 6px; font: 13px var(--font-mono); }
+details.box > summary { cursor: pointer; list-style: none; font: 600 12px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+details.box > summary::-webkit-details-marker { display: none; }
+details.box > summary::before { content: "▸ "; }
+details.box[open] > summary::before { content: "▾ "; }
+body.is-replacing .shelf__item { border-color: var(--v-replace); }
+.shelf__item--cat { cursor: default; }
+.shelf__item--cat .btn { justify-self: start; margin-top: 4px; }
+.shelf__item--cat .shelf__thumb { cursor: zoom-in; background: #fff; }
+.btn.is-on { border-color: var(--accent); color: var(--accent); }
+/* ─────────── Программа «Конструктор» на Mac (html.native) — по Apple HIG ───────────
+   Партнёр 18.11, 22:36: «Перестрой весь интерфейс конструктора следуя четким правилам Apple HIG и на нативных элементах
+   macos». Место, помещение, вариант, инструменты, «Отменить / Копия / Удалить» и «Залить в игру» — в настоящей панели окна
+   (mac/main.swift); здесь — полка слева, сцена и инспектор справа во всю высоту. Шрифт и цвета системные (светлая и тёмная
+   тема, цвет акцента — как в настройках Mac), кнопки, поля, поиск и ползунки рисует сам Mac (appearance: auto), полка —
+   прозрачная: под ней полупрозрачный фон боковой панели macOS. Цвета -apple-system-* есть только в WebKit на Mac; для
+   проверок в другом браузере — обычные значения. */
+html.native {
+  color-scheme: light dark;
+  --n-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --fg: #1d1d1f; --muted: #6e6e73; --line: rgb(0 0 0 / .11); --accent: #0a7aff; --warn: #d70015; --ok: #248a3d;
+  --side: #e6e6e8; --insp: #f6f6f6; --pop: #ffffff; --hover: rgb(0 0 0 / .05); --recessed: rgb(0 0 0 / .09); --fill: rgb(0 0 0 / .06);
+  --sel: var(--accent); --sel-fg: #fff; --thumb: rgb(0 0 0 / .06); --seg-on: #ffffff;
+  --bg: var(--insp); --panel: var(--insp); --raise: var(--fill);
+}
+@media (prefers-color-scheme: dark) {
+  html.native {
+    --fg: #f5f5f7; --muted: #98989d; --line: rgb(255 255 255 / .1); --accent: #0a84ff; --warn: #ff453a; --ok: #32d74b;
+    --side: #2a2a2c; --insp: #232325; --pop: #2c2c2e; --hover: rgb(255 255 255 / .06); --recessed: rgb(255 255 255 / .12); --fill: rgb(255 255 255 / .08);
+    --thumb: rgb(255 255 255 / .07); --seg-on: rgb(255 255 255 / .2);
+  }
+}
+@supports (color: -apple-system-label) {
+  html.native {
+    --fg: -apple-system-label; --muted: -apple-system-secondary-label; --line: -apple-system-separator; --accent: -apple-system-control-accent;
+    --warn: -apple-system-red; --ok: -apple-system-green; --side: transparent;
+    --sel: -apple-system-selected-content-background; --sel-fg: -apple-system-alternate-selected-text;
+  }
+}
+html.native body { padding: 0; background: transparent; color: var(--fg); font: 13px/1.35 var(--n-font); -webkit-user-select: none; user-select: none; cursor: default; }
+html.native header.top, html.native .places, html.native .tools, html.native #push { display: none !important; }
+html.native .layout { gap: 0; grid-template-columns: 264px minmax(0, 1fr) 304px; }
+html.native.no-lib .layout { grid-template-columns: 0 minmax(0, 1fr) 304px; }
+html.native.no-insp .layout { grid-template-columns: 264px minmax(0, 1fr) 0; }
+html.native.no-lib.no-insp .layout { grid-template-columns: 0 minmax(0, 1fr) 0; }
+html.native.no-lib .shelf, html.native.no-insp #panel { display: none; }
+html.native .shelf { grid-column: 1; background: var(--side); border-right: 1px solid var(--line); padding-top: 10px; gap: 8px; }
+html.native #view { grid-column: 2; border: 0; border-radius: 0; }
+html.native #panel { grid-column: 3; background: var(--insp); border-left: 1px solid var(--line); gap: 0; }
+html.native input, html.native textarea, html.native [contenteditable] { -webkit-user-select: text; user-select: text; cursor: auto; }
+/* Полка — боковая панель-библиотека: поиск, полоса фильтров (как в Finder и Почте), список. */
+/* Шапка полки, как в программах Mac: сегменты «Полка / Каталог / Заявки» и всплывающее меню фильтра (рисует сам Mac,
+   открывается настоящим меню). Чипы фильтра — только в браузере. */
+.seg, .kindsel { display: none; }
+html.native .kinds { display: none; }
+html.native .seg { display: flex; margin: 0 10px; padding: 2px; gap: 2px; border-radius: 8px; background: var(--fill); }
+html.native .seg button { all: unset; flex: 1; min-width: 0; text-align: center; font: 500 12px/1 var(--n-font); padding: 5px 4px; border-radius: 6px; color: var(--fg); cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html.native .seg button.is-on { background: var(--seg-on); box-shadow: 0 .5px 1.5px rgb(0 0 0 / .2), 0 0 0 .5px rgb(0 0 0 / .05); font-weight: 600; }
+html.native .seg button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); }
+html.native .kindsel { all: revert; display: block; box-sizing: border-box; margin: 0 10px; max-width: calc(100% - 20px); font: 12px var(--n-font); }
+html.native .kindsel[hidden] { display: none; }
+html.native #search { all: revert; display: block; box-sizing: border-box; width: calc(100% - 20px); margin: 0 10px; font: 13px var(--n-font); }
+html.native .kinds { margin: 0 8px; gap: 2px; }
+html.native .kinds .chip { all: unset; font: 500 11px/1 var(--n-font); padding: 4px 7px; border-radius: 5px; color: var(--muted); }
+html.native .kinds .chip:hover { background: var(--hover); }
+html.native .kinds .chip.is-on { background: var(--recessed); color: var(--fg); font-weight: 600; }
+html.native .count { margin: 0 12px; font: 11px var(--n-font); color: var(--muted); }
+html.native #shelf { gap: 1px; padding: 0 6px 10px; }
+html.native .shelf__item { background: transparent; border: 0; border-radius: 6px; padding: 4px 6px; grid-template-columns: 36px minmax(0, 1fr); gap: 9px; font: 13px/1.25 var(--n-font); color: var(--fg); cursor: default; }
+html.native .shelf__item:hover { border: 0; background: var(--hover); }
+html.native .shelf__item.is-current, html.native .shelf__item.is-current:hover { background: var(--sel); color: var(--sel-fg); }
+html.native .shelf__item.is-current small, html.native .shelf__item.is-current .tag { color: inherit; opacity: .85; }
+html.native .shelf__item--fig { border: 0; }
+html.native .shelf__thumb { width: 36px; height: 36px; border-radius: 6px; background: var(--thumb); }
+html.native .shelf__thumb--fig { font-size: 20px; color: var(--accent); }
+html.native .shelf__text b { font-weight: 400; }
+html.native .shelf__text small { font-size: 11px; color: var(--muted); }
+html.native .tag { border: 0; padding: 0; margin-right: 4px; font: 10px/1.3 var(--n-font); }
+html.native .tag--card { font-style: italic; }
+html.native body.is-replacing .shelf__item { box-shadow: inset 0 0 0 1px var(--accent); }
+/* Инспектор — разделы с заголовками, системные кнопки и поля. */
+html.native #status { padding: 10px 14px 0; font: 11px/1.4 var(--n-font); color: var(--muted); }
+html.native #status:empty { display: none; }
+html.native .box { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 12px 14px 14px; gap: 8px; }
+html.native .box h2, html.native details.box > summary, html.native #c-ask { font: 600 13px/1.3 var(--n-font); letter-spacing: 0; text-transform: none; color: var(--fg); }
+html.native details.box > summary::before { color: var(--muted); font-size: 10px; }
+html.native .box__head h2 { white-space: nowrap; }
+html.native #gamebox { border-color: var(--line); }
+html.native .note, html.native .card__hint, html.native #c-advice { font: 11px/1.4 var(--n-font); color: var(--muted); }
+html.native #gnth, html.native #summary, html.native #coverage, html.native #gcover, html.native .code { font: 11px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
+html.native #gnth, html.native #summary { color: var(--muted); }
+html.native .btn { all: revert; font: 13px var(--n-font); margin: 0; }
+html.native .btn--small, html.native .btn--x { font-size: 11px; }
+html.native .btn--warn { color: var(--warn); }
+html.native a.btn { color: var(--accent); text-decoration: none; cursor: pointer; }
+html.native a.btn:hover { text-decoration: underline; }
+html.native .chip, html.native .verdict { all: unset; box-sizing: border-box; font: 12px/1.25 var(--n-font); padding: 4px 9px; border-radius: 6px; background: var(--fill); color: var(--fg); }
+html.native .chip:hover, html.native .verdict:hover { background: var(--recessed); }
+html.native .chip.is-on, html.native .verdict.is-on { background: var(--accent); color: #fff; box-shadow: none; }
+html.native .verdict { display: grid; gap: 1px; }
+html.native .verdict small { font-size: 10.5px; color: inherit; opacity: .75; }
+html.native .chip:focus-visible, html.native .verdict:focus-visible, html.native .shelf__item:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 0; }
+html.native input[type="text"], html.native input[type="number"], html.native input[type="password"], html.native input[type="range"], html.native textarea { all: revert; box-sizing: border-box; font: 13px var(--n-font); }
+html.native input[type="text"], html.native textarea { width: 100%; }
+html.native textarea { min-height: 52px; resize: vertical; }
+html.native .tiltrow { font: 11px var(--n-font); color: var(--muted); }
+html.native .tiltrow input { width: 100%; font: 12px var(--n-font); }
+html.native label.slider { font: 12px var(--n-font); color: var(--muted); }
+html.native label.slider output { font: 11px var(--n-font); color: var(--fg); }
+html.native #problems { font-size: 12px; color: var(--warn); }
+html.native #saved { flex-direction: column; flex-wrap: nowrap; gap: 0; }
+html.native #saved .chip { background: transparent; border-radius: 6px; padding: 5px 8px; }
+html.native #saved .chip:hover { background: var(--hover); }
+html.native #saved .chip.is-on { background: var(--sel); color: var(--sel-fg); }
+html.native #saved:empty::after { font-size: 12px; }
+html.native #card dl { font-size: 12px; }
+html.native #c-ru { font: 600 13px/1.3 var(--n-font); }
+html.native #cardview { border-radius: 6px; }
+/* Окошки поверх — как поповеры Mac. */
+html.native .pushbox { top: 8px; right: 10px; width: min(380px, calc(100vw - 20px)); background: var(--pop); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 12px; box-shadow: 0 10px 34px rgb(0 0 0 / .28); font: 13px/1.4 var(--n-font); }
+html.native .pushbox__token p, html.native .pushbox__list { font-size: 12px; }
+html.native .pushbox__token input { all: revert; flex: 1; min-width: 0; font: 13px var(--n-font); }
+html.native .help { top: 10px; background: var(--pop); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 34px rgb(0 0 0 / .28); font: 12px/1.7 var(--n-font); color: var(--muted); }
+html.native .help b { color: var(--fg); }
+html.native .check { font: 13px var(--n-font); cursor: default; }
+html.native .check input { all: revert; margin: 0; }
+html.native .lifthandle { background: var(--pop); border-color: var(--line); font: 600 11px/1 var(--n-font); box-shadow: 0 1px 2px rgb(0 0 0 / .18), 0 4px 14px rgb(0 0 0 / .22); }
+@media (max-width: 1180px) {
+  html:not(.native) body { display: block; height: auto; overflow: visible; }
+  html:not(.native) .layout { grid-template-columns: minmax(0, 240px) minmax(0, 1fr); grid-template-rows: none; align-items: start; }
+  html:not(.native) #view { height: min(76vh, 760px); }
+  html:not(.native) #shelf { max-height: min(62vh, 620px); }
+  html:not(.native) #panel { overflow: visible; }
+  html:not(.native) #panel { grid-column: 1 / -1; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); grid-auto-flow: row dense; align-items: start; }
+  html:not(.native) #panel > #status, html:not(.native) #panel > #card { grid-column: 1 / -1; }
+  html:not(.native) #card .card__body { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); }
+  html:not(.native) .card__look { grid-row: span 2; }
+  html:not(.native) #cardview { height: 230px; }
+
+}
+@media (max-width: 760px) {
+  html:not(.native) .layout { grid-template-columns: minmax(0, 1fr); }
+  html:not(.native) #view { height: 58vh; }
+  html:not(.native) #shelf { max-height: 34vh; }
+  html:not(.native) #card .card__body { grid-template-columns: minmax(0, 1fr); }
+  html:not(.native) .card__look { grid-row: auto; }
+  html:not(.native) #cardview { height: 200px; }
+
+}
+</style>
+<header class="top">
+  <h1>Конструктор</h1>
+  <div class="row" id="worldpick"></div>
+  <span class="save" id="savestate" data-state="saved" role="status">сохранено</span>
+  <button class="btn btn--push" id="push" type="button" hidden title="Проверить правилами игры и отправить сделанное в игру (на GitHub)">Залить в игру</button>
+</header>
+<div class="pushbox" id="pushbox" hidden role="dialog" aria-label="Залить в игру" aria-live="polite">
+  <p class="pushbox__msg" id="pushmsg"></p>
+  <ul class="pushbox__list" id="pushlist" hidden></ul>
+  <p class="pushbox__detail" id="pushdetail" hidden></p>
+  <form class="pushbox__token" id="tokenform" hidden>
+    <p>Один раз: войти в GitHub. «Сделать токен» откроет GitHub — нужная галочка там уже стоит. В поле <b>Expiration</b> выбери <b>No expiration</b>, тогда входить больше не придётся. Внизу — «Generate token»; скопируй строку <b>ghp_…</b> и вставь сюда. Её хранит связка ключей Mac — только для этого проекта, больше она никуда не уходит.</p>
+    <div class="row"><a class="btn btn--small" id="tokenlink" href="https://github.com/settings/tokens/new?scopes=repo&amp;description=%D0%9A%D0%BE%D0%BD%D1%81%D1%82%D1%80%D1%83%D0%BA%D1%82%D0%BE%D1%80%20Untitled%20Session" target="_blank" rel="noopener">Сделать токен ↗</a></div>
+    <div class="row"><input type="password" id="tokenin" placeholder="ghp_…" autocomplete="off" spellcheck="false" aria-label="Токен GitHub"><button class="btn" type="submit">Войти и залить</button></div>
+  </form>
+  <div class="row pushbox__foot"><button class="btn btn--small" id="pushclose" type="button">Закрыть</button></div>
+</div>
+<div class="places">
+  <div class="row"><span class="row" id="roompick"></span><button class="btn" id="nextroom" title="Другое помещение того же типа — у него своя расстановка">Другое такое <span id="roomnum"></span></button></div>
+</div>
+<div class="layout">
+  <aside class="shelf">
+    <div class="seg" id="seg" role="tablist" aria-label="Что показать на полке"></div>
+    <input type="search" id="search" placeholder="Найти: стул, часы, чемодан…" aria-label="Найти вещь">
+    <select class="kindsel" id="kindsel" aria-label="Какие вещи показывать"></select>
+    <div class="kinds" id="kinds" role="group" aria-label="Какие вещи показывать"></div>
+    <p class="count"><span id="shelfcount"></span> · отмечено <span id="marked"></span></p>
+    <div id="shelf"></div>
+  </aside>
+  <div id="view">
+    <button class="lifthandle" id="lifthandle" type="button" tabindex="-1" hidden title="Выше или ниже: тяни вверх или вниз. Шаг 5 см, с ⇧ — по сантиметру; у стола и полки прилипает. Клавиши ⌘↑ / ⌘↓"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M8 1.5 4.5 5H7v6H4.5L8 14.5 11.5 11H9V5h2.5z" fill="currentColor"/></svg><span id="liftval"></span></button>
+    <div class="tools" role="toolbar" aria-label="Инструменты">
+      <button class="tool is-on" id="tool-move" type="button" title="Двигать: тяни вещь по полу; выше или ниже — ручка ↕ над ней">Двигать <kbd>G</kbd></button>
+      <button class="tool" id="tool-rotate" type="button" title="Крутить по всем осям: кольца вокруг вещи; ⇧ — без щелчков по 15°">Крутить <kbd>R</kbd></button>
+      <button class="tool" id="tool-dup" type="button" title="Копия выбранного">Копия <kbd>⌘D</kbd></button>
+      <button class="tool" id="tool-undo" type="button" title="Отменить">Отменить <kbd>⌘Z</kbd></button>
+      <button class="tool" id="tool-help" type="button" aria-label="Клавиши" title="Клавиши">?</button>
+    </div>
+    <div class="help" id="help" hidden>
+      <b>щелчок</b> — выбрать · <b>по пустому</b> — снять выбор · <b>тяни пустое</b> — крутить вид<br>
+      <b>с полки</b> — добавить · <b>с полки с ⌥</b> на вещь игры — заменить<br>
+      <b>G</b> — двигать · <b>R</b> — крутить (кольца, ⇧ — свободно) · <b>Q / E</b> — на четверть<br>
+      <b>стрелки</b> — сдвиг 10 см (⇧ 50, ⌥ 2) · <b>⌘D</b> — копия · <b>Delete</b> — удалить · <b>⌘Z</b> — отмена · <b>Esc</b> — снять выбор<br>
+      <b>↕ над вещью</b> или <b>⌥ + тянуть</b> — выше / ниже (шаг 5 см, ⇧ — 1 см); отпустил — ложится на то, что под ней · <b>⌘↑ / ⌘↓</b> — на опору выше / ниже<br>
+      у человека <b>шарики</b> — гнуть, таз с <b>⌥</b> — вверх · красное у проёмов — проход
+    </div>
+  </div>
+  <div id="panel">
+    <div id="status" role="status"></div>
+    <div class="box" id="gamebox" hidden>
+      <h2>Вещь игры</h2>
+      <div id="gname"></div>
+      <div id="gnth"></div>
+      <div id="gstate"></div>
+      <div id="gcover"></div>
+      <div class="row">
+        <button class="btn btn--warn" id="gremove" type="button">Убрать</button>
+        <button class="btn" id="grestore" type="button">Вернуть</button>
+        <button class="btn" id="greplace" type="button" title="Потом щёлкни вещь на полке">Заменить…</button>
+        <button class="btn" id="gedit" type="button">Править правило</button>
+        <button class="btn" id="gunmove" type="button">Вернуть на место игры</button>
+        <button class="btn btn--small" id="gcard" type="button">Карточка</button>
+      </div>
+      <p class="note" id="ghint">Тяни — передвинешь. Так будет во всех таких помещениях этого варианта.</p>
+    </div>
+    <div class="box" id="card" hidden>
+      <div class="box__head"><h2>Карточка вещи <span id="c-title"></span></h2><span class="row"><button class="btn btn--small" id="c-fold" type="button" aria-expanded="true">свернуть</button><button class="btn btn--x" id="c-close" type="button" aria-label="Закрыть карточку">×</button></span></div>
+      <div class="card__body">
+        <div class="card__look">
+          <div id="cardview"></div>
+          <p class="card__hint">тянуть — повернуть · колесо — ближе · силуэт — 1,75 м</p>
+        </div>
+        <div class="card__info">
+          <h3 id="c-ru"></h3>
+          <div class="code" id="c-name"></div>
+          <dl>
+            <dt>Размер</dt><dd id="c-size"></dd>
+            <dt>Сделана</dt><dd id="c-source"></dd>
+            <dt>На уровне</dt><dd id="c-where"></dd>
+            <dt id="c-rooms-dt">Где чаще</dt><dd id="c-rooms"></dd>
+          </dl>
+          <p id="c-advice"></p>
+        </div>
+        <div class="card__mark">
+          <h3 id="c-ask">Что с ней делать</h3>
+          <div id="c-verdicts"></div>
+          <textarea id="c-note" placeholder="Что не так и какой она должна быть" aria-label="Заметка к вещи"></textarea>
+          <div class="row"><button class="btn btn--small" id="c-savenote" type="button">Сохранить заметку</button><a class="btn btn--small" id="c-game" href="#" target="_blank" rel="noopener">Посмотреть в игре ↗</a></div>
+        </div>
+      </div>
+    </div>
+    <div class="box">
+      <h2>Выбрано</h2>
+      <div class="row"><span id="what"></span><button class="btn btn--small" id="curcard" type="button" hidden>Карточка</button></div>
+      <input type="text" id="name" maxlength="80" placeholder="Название (можно не трогать)">
+      <label class="check" id="hangrow" hidden title="Без отметки поднятая вещь ложится на то, что под ней: стол, полку, тумбу, а нет ничего — на пол. В другом таком же помещении стол может стоять иначе — она ляжет на то, что есть там."><input type="checkbox" id="hang"> Висит в воздухе</label>
+      <div class="row" id="turns"><button class="btn" id="turnl" title="На четверть влево">⟲ Q</button><button class="btn" id="turnr" title="На четверть вправо">E ⟳</button><button class="btn btn--warn" id="drop" type="button" title="Delete">Удалить</button></div>
+      <div class="tiltrow" id="tiltrow" hidden><span>Наклон°</span><input type="number" id="tilt-x" min="-180" max="180" step="5" aria-label="Наклон вокруг X, градусы" title="x — вперёд-назад"><input type="number" id="tilt-y" min="-180" max="180" step="5" aria-label="Поворот вокруг Y, градусы" title="y — вокруг вертикали"><input type="number" id="tilt-z" min="-180" max="180" step="5" aria-label="Наклон вокруг Z, градусы" title="z — на бок"><button class="btn btn--small" id="tilt-0" type="button" title="Поставить прямо">Прямо</button></div>
+      <div class="row" id="doors" hidden title="Дверцы и ящики этой вещи в игре. Как выпадет — как у вещей игры в том же помещении."></div>
+      <p class="note" id="doorsnote" hidden></p>
+      <ul id="problems"></ul>
+      <p class="note" id="spotnote" hidden>Здесь не встанет; в других таких помещениях — у такого же края.</p>
+    </div>
+    <div class="box" id="figbox" hidden>
+      <h2>Манекен</h2>
+      <div class="row" id="poses"></div>
+      <div class="row" id="mats"></div>
+      <p class="note" id="matnote"></p>
+    </div>
+    <details class="box" id="rule" hidden>
+      <summary>В игре — правило</summary>
+      <div id="summary"></div>
+      <div id="coverage"></div>
+      <div class="row" id="replace" hidden><span id="replacetext"></span><button class="btn" id="unreplace" type="button">Не заменять</button></div>
+      <div class="row" id="swapscope" hidden title="Только здесь — в помещениях правила, не больше «сколько в месте». Везде — каждую такую вещь игры во всех местах и помещениях."></div>
+      <div class="row" id="moved" hidden><span id="movenote"></span><button class="btn" id="unmove" type="button">Вернуть на место игры</button></div>
+      <div class="row" id="worlds"></div>
+      <div class="row" id="rooms"></div>
+      <div class="row" id="anchors"></div>
+      <div class="row" id="facings"></div>
+      <label class="slider">Над полом<input type="range" id="lift" min="0" max="2.6" step="0.05"><output id="liftv"></output></label>
+      <label class="slider" id="countrow">Сколько в месте<input type="range" id="count" min="1" max="3" step="1"><output id="countv"></output></label>
+    </details>
+    <div class="box">
+      <h2>Поставлено</h2>
+      <div id="saved"></div>
+    </div>
+  </div>
+</div>
+<!--SCRIPT-->

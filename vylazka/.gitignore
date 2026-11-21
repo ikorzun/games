@@ -1,0 +1,12 @@
+# dist/ и node_modules/ игнорируются корневым .gitignore
+dist-playgama/
+# Скриншоты смоук-теста
+e2e/out/
+# временная сборка для витрины реквизита
+dist-props/
+# одна страница для ссылки: npm run build:single
+dist-single/
+tools/constructor/work/.cache/
+tools/constructor/work/app.log
+tools/constructor/work/app-build.log
+tools/constructor/work/.installing
