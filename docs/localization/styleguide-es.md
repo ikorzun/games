@@ -112,7 +112,8 @@ python3 tools/loc_sync.py stats episodes/<путь>.json     # ожидаем: 1
 - **Строки воспоминаний `mem.*.flash` и `mem.*.done` игра укорачивает с каждым кругом** — с конца, целыми фразами, потом по словам
   до паузы (`src/systems/worn_text.ts`). Короткие фразы, главное — первым; каждая фраза кончается своим знаком; вопрос — с парными
   ¿ ? внутри одной фразы (у оборванного вопроса игра снимает и «¿»).
-- **Не переводить**: «UNTITLED SESSION», «untitled session {n}», REC, CAM-NN, клавиши в [ ], подстановки {…}.
+- **Не переводить**: «UNTITLED SESSION», «untitled session {n}», REC, CAM-NN, клавиши в [ ], подстановки {…}; строку круга 6
+  `loop.lap.6` («please use only when necessary.») — это цитата карточки в мире, она по-английски во всех языках (квиз партнёра 21.11).
 - **Длина**: подписи настроек и HUD — коротко; переключатели стоят в колонке около 280 px (телефон лёжа), колонка подписей —
   под самую длинную подпись («SENSIBILIDAD», 12 знаков); длиннее — проверить кадром.
 
@@ -124,5 +125,6 @@ yellow rooms — *habitaciones amarillas*; waiting room — *sala de espera*; fl
 Calidad (baja/media/alta/ultra), Sensibilidad, Brillo (menos/medio/más), Destellos (suaves/casi invisibles), Idioma.
 
 Спорное — носителю: *escotilla* и *incursión* (тон); *diez para las seis* (оборот Латинской Америки, в Испании — *las seis menos
-diez*); *pantuflas*; *sala* и *recibidor* для комнат дома; *fondo predeterminado* (шутка про обои рабочего стола); *por favor,
-usar solo si es necesario* (табличка в мире — по-английски); *¿omitir intro?*.
+diez*); *pantuflas*; *sala* и *recibidor* для комнат дома; *fondo predeterminado* (шутка про обои рабочего стола); *¿omitir intro?*.
+Проверка носителем — по квизу партнёра 21.11 («Носитель, потом Playgama»): партнёр покажет спорное носителю; после вычитки
+испанский заявляется в кабинете Playgama.
