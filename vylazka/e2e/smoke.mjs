@@ -2106,6 +2106,15 @@ async function scenarioScenes(browser, baseUrl) {
   // включает его сразу: страница своя, после закрытия прошлой (две разом программная отрисовка не тянет).
   {
     const pp = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&piece=1');
+    // Журнал показанных строк (hud.toast пишет текст, только когда строка загорается). Строка края ждёт конца вспышки
+    // начала сессии и горит 4,2 с настоящего времени, а проверка смотрела на неё по кадрам страницы: на медленной машине CI
+    // кадры программной отрисовки длинные, и окно проскакивало между ними. Так упал CI на 1c63096 (сборка Playgama): строка
+    // была показана — её текст висел погасшим, — а проверка её не застала. Журнал ловит строку в любой момент.
+    await vz(pp.page, () => {
+      const el = document.querySelector('.vz-hud__toast');
+      window.__toasts = [];
+      if (el) new MutationObserver((recs) => { for (const r of recs) for (const n of r.addedNodes) if (n.nodeType === 3) window.__toasts.push(n.data); }).observe(el, { childList: true });
+    });
     await pp.page.click('.vz-overlay');
     await sleep(300);
     await vz(pp.page, () => window.__vz.freeze(true));
@@ -2115,15 +2124,18 @@ async function scenarioScenes(browser, baseUrl) {
     const piece = await vz(pp.page, () => window.__vz.piece());
     check('сцена — кусок места: помнится от одной до шести комнат и есть край, за которым память обрывается', !!piece && piece.rooms >= 1 && piece.rooms <= 6 && piece.cells > 4 && piece.edge.length > 0, JSON.stringify(piece && { rooms: piece.rooms, cells: piece.cells, edge: piece.edge.length }));
     if (piece && piece.edge.length > 0) {
-      // Встать на край лицом к обрыву: строка «дальше не помню».
+      // Встать на край лицом к обрыву: строка «дальше не помню». Сказана ли она раньше (если сон начался лицом к обрыву) —
+      // в подробностях проверки.
+      const edgeLine = RU['toast.edge'];
+      const atStart = await vz(pp.page, (w) => window.__toasts.includes(w), edgeLine);
       const e = piece.edge[0];
       const yaw = Math.atan2(-(e.to[0] - e.at[0]), -(e.to[2] - e.at[2]));
       await vz(pp.page, ([p, y]) => window.__vz.teleport(p[0], p[1], p[2], y, -0.1), [e.at, yaw]);
       await vz(pp.page, () => window.__vz.step(30));
       // Строка ждёт, пока горит вспышка начала сессии (hud.toast): ждём её по условию, а не по времени.
-      const said = await pp.page.waitForFunction((want) => document.querySelector('.vz-hud__toast.is-on')?.textContent === want, RU['toast.edge'], { timeout: 12000 }).then(() => true, () => false);
-      const toast = await pp.page.$eval('.vz-hud__toast', (el) => el.textContent ?? '').catch(() => '');
-      check('у края, глядя в обрыв, — строка «…дальше не помню»', said, toast);
+      const said = await pp.page.waitForFunction((w) => window.__toasts.includes(w), edgeLine, { timeout: 12000, polling: 200 }).then(() => true, () => false);
+      const toasts = await vz(pp.page, () => window.__toasts.slice(-6));
+      check('у края, глядя в обрыв, — строка «…дальше не помню»', said, JSON.stringify({ atStart, toasts }));
       // Шаг за край обрывает сцену: следующей сцены в первом сне нет — память возвращает в кусок.
       await vz(pp.page, ([p]) => window.__vz.teleport(p[0], p[1], p[2]), [e.to]);
       const after = await stepUntil(pp.page, (x) => x.where === 'main' && x.jump === null, 20, 30);
