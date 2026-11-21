@@ -328,7 +328,7 @@ describe('миры: окружение и воспоминания', () => {
     expect(ENV_YELLOW.fog).toEqual([0, 0, 0]);
   });
 
-  it('у каждого мира свои пять вещей по порядку; у каждой есть вещь в реестре и тексты на двух языках', async () => {
+  it('у каждого мира свои пять вещей по порядку; у каждой есть вещь в реестре и тексты на всех языках', async () => {
     setThingRegistry(ALL_PROPS);
     expect(WORLD_MEMORIES.shelter).toBe(SHELTER_CHAIN);
     expect(WORLD_MEMORIES.office).toBe(OFFICE_CHAIN);
@@ -336,6 +336,7 @@ describe('миры: окружение и воспоминания', () => {
     expect(WORLD_MEMORIES.station).toBe(STATION_MEMORIES);
     const en = (await import('../locales/en/ui.json')).default as Record<string, string>;
     const ru = (await import('../locales/ru/ui.json')).default as Record<string, string>;
+    const es = (await import('../locales/es/ui.json')).default as Record<string, string>;
     for (const pool of [SHELTER_CHAIN, OFFICE_CHAIN, YELLOW_CHAIN, STATION_MEMORIES]) {
       expect(pool.length).toBe(DEFAULT_SESSION.count);
       expect(new Set(pool.map((m) => m.id)).size).toBe(pool.length);
@@ -344,6 +345,7 @@ describe('миры: окружение и воспоминания', () => {
         for (const part of ['flash', 'task', 'done']) {
           expect(en[`mem.${m.id}.${part}`], `en mem.${m.id}.${part}`).toBeTruthy();
           expect(ru[`mem.${m.id}.${part}`], `ru mem.${m.id}.${part}`).toBeTruthy();
+          expect(es[`mem.${m.id}.${part}`], `es mem.${m.id}.${part}`).toBeTruthy();
         }
       }
     }
@@ -362,16 +364,13 @@ describe('миры: окружение и воспоминания', () => {
     }
   });
 
-  it('названия новых помещений есть на обоих языках', async () => {
+  it('названия новых помещений есть на всех языках', async () => {
     const en = (await import('../locales/en/ui.json')).default as Record<string, string>;
     const ru = (await import('../locales/ru/ui.json')).default as Record<string, string>;
-    for (const t of ['lift', 'reception', 'department', 'cubicles', 'meeting', 'breakroom', 'manager', 'files', 'copyroom', 'server', 'hall']) {
-      expect(en[`room.${t}`]).toBeTruthy();
-      expect(ru[`room.${t}`]).toBeTruthy();
-    }
-    for (const w of WORLD_KINDS) {
-      expect(en[`ui.place.${w}`]).toBeTruthy();
-      expect(ru[`ui.place.${w}`]).toBeTruthy();
+    const es = (await import('../locales/es/ui.json')).default as Record<string, string>;
+    for (const d of [en, ru, es]) {
+      for (const t of ['lift', 'reception', 'department', 'cubicles', 'meeting', 'breakroom', 'manager', 'files', 'copyroom', 'server', 'hall']) expect(d[`room.${t}`]).toBeTruthy();
+      for (const w of WORLD_KINDS) expect(d[`ui.place.${w}`]).toBeTruthy();
     }
   });
 });

@@ -61,6 +61,11 @@ export interface PlayContext {
   probeMs?: number;
   /** Настройки игрока из профиля; их смена — settings_changed. */
   settings: Readonly<Record<string, string | number | boolean>>;
+  /**
+   * Язык, который игрок видит (ru | en | es), — и выбранный рукой, и взятый у площадки. В настройках у большинства «auto»,
+   * и по ним не узнать, сколько играет по-испански (куратор, 21.11).
+   */
+  lang?: string;
 }
 
 export type InputKind = 'mouse' | 'touch' | 'pen' | 'key';
@@ -138,7 +143,8 @@ export class Analytics {
     this.inputSeen = true;
     this.dropInput?.();
     this.dropInput = null;
-    this.send('first_input', { ms: cap(Math.round((this.now() - this.readyAt) / 100) * 100, 600_000), input: kind });
+    const lang = this.ctx().lang;
+    this.send('first_input', { ms: cap(Math.round((this.now() - this.readyAt) / 100) * 100, 600_000), input: kind, ...(lang ? { lang } : {}) });
   }
 
   /** Началась сессия (заставка → игра или лимбо → следующая). */

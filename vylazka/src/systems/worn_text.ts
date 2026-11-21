@@ -19,6 +19,21 @@ export function wornShare(wear: number): number {
 }
 
 const words = (s: string): string[] => s.trim().split(/\s+/).filter((w) => w.length > 0);
+/**
+ * Испанский: у оборванного вопроса или восклицания уходит и открывающий знак — иначе от «¿dónde está el control?»
+ * остаётся «¿dónde está.». Знак без пары после него в обрывке снимается; в en и ru таких знаков нет.
+ */
+function openMarks(s: string): string {
+  let out = s;
+  for (const [open, close] of [
+    ['¿', '?'],
+    ['¡', '!'],
+  ] as const) {
+    const i = out.lastIndexOf(open);
+    if (i >= 0 && out.indexOf(close, i) < 0) out = out.slice(0, i) + out.slice(i + 1);
+  }
+  return out;
+}
 
 /** Знак паузы внутри фразы: на нём фразу можно оборвать, и она останется фразой. */
 const PAUSE = /[,:;]$/;
@@ -56,7 +71,7 @@ export function wornLine(text: string, wear: number): string {
     }
     // Первая фраза без паузы режется просто по словам: от строки должно что-то остаться.
     if (cut <= 0 && out.length === 0) cut = left;
-    if (cut > 0) out.push(`${sw.slice(0, cut).join(' ').replace(/[\s,:;—–-]+$/u, '')}.`);
+    if (cut > 0) out.push(`${openMarks(sw.slice(0, cut).join(' ').replace(/[\s,:;—–-]+$/u, ''))}.`);
     break;
   }
   return out.join(' ');

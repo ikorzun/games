@@ -4,12 +4,14 @@ import { i18n } from './core/i18n';
 import { installDebug } from './debug/debug';
 import { createPlatform } from './platform';
 import en from '../locales/en/ui.json';
+import es from '../locales/es/ui.json';
 import ru from '../locales/ru/ui.json';
 import './ui/styles.css';
 
 async function main(): Promise<void> {
   i18n.addStrings('ru', ru);
   i18n.addStrings('en', en);
+  i18n.addStrings('es', es);
   const root = document.getElementById('app');
   if (!root) throw new Error('нет #app');
   const platform = await createPlatform();

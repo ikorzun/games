@@ -123,6 +123,15 @@ describe('аналитика Playgama: план событий через под
     expect(r.calls).toEqual([['first_input', { ms: 3400, input: 'touch' }]]);
   });
 
+  it('первое нажатие несёт язык, который видит игрок: в настройках у большинства «auto», а язык площадки нужен для решений о переводе', () => {
+    const r = rig({ lang: 'es' });
+    r.at(1000);
+    r.a.ready();
+    r.at(1500);
+    r.a.input('mouse');
+    expect(r.calls).toEqual([['first_input', { ms: 500, input: 'mouse', lang: 'es' }]]);
+  });
+
   it('настройки: события только о том, что игрок поменял после game_ready; качество — с пометкой «само»', () => {
     const r = rig();
     r.a.saved();

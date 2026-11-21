@@ -265,6 +265,7 @@ export class App {
       quality: this.game?.renderer.quality ?? '',
       probeMs: this.probeMs,
       settings: p ? { sound: !p.muted, lang: p.lang ?? 'auto', sens: p.sens, bright: p.bright, flash: p.flash, place: p.place } : {},
+      lang: i18n.lang,
     };
   }
 

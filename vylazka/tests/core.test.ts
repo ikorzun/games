@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { fallbackChain, I18n, interpolate, normalizeLang, parseSupportedLang } from '../src/core/i18n';
+import { fallbackChain, I18n, interpolate, normalizeLang, parseSupportedLang, pseudoloc } from '../src/core/i18n';
 import { angleDelta, approach, linearToSrgb8, smoothstep } from '../src/core/math';
 import { hash01, hash2, mulberry32, randInt } from '../src/core/rng';
 import en from '../locales/en/ui.json';
+import es from '../locales/es/ui.json';
 import ru from '../locales/ru/ui.json';
 
 describe('rng', () => {
@@ -81,9 +82,38 @@ describe('i18n', () => {
     expect(interpolate('{x} и {y}', { x: 1 })).toBe('1 и {y}');
   });
 
-  it('в ru и en одинаковый набор ключей, пустых строк нет', () => {
-    expect(Object.keys(en).sort()).toEqual(Object.keys(ru).sort());
-    for (const [k, v] of [...Object.entries(ru), ...Object.entries(en)]) expect(v.trim(), k).not.toBe('');
+  it('испанский: любой вариант кода площадки (es-419, es_MX, ES-es) — es; запасные — en, потом ru', () => {
+    expect(parseSupportedLang('es')).toBe('es');
+    expect(parseSupportedLang('es-419')).toBe('es');
+    expect(parseSupportedLang('es_MX')).toBe('es');
+    expect(normalizeLang('ES-es')).toBe('es');
+    expect(fallbackChain('es')).toEqual(['es', 'en', 'ru']);
+  });
+
+  it('в ru, en и es одинаковый набор ключей, пустых строк нет', () => {
+    for (const d of [ru, es]) expect(Object.keys(d).sort()).toEqual(Object.keys(en).sort());
+    for (const [k, v] of [...Object.entries(ru), ...Object.entries(en), ...Object.entries(es)]) expect(v.trim(), k).not.toBe('');
+  });
+
+  it('подстановки ({n}, {name}…) в ru и es — те же, что в en', () => {
+    const marks = (s: string | undefined): string[] => (s?.match(/\{[a-z_][a-z0-9_]*\}/gi) ?? []).sort();
+    const dicts: [string, Record<string, string>][] = [
+      ['ru', ru],
+      ['es', es],
+    ];
+    for (const [k, v] of Object.entries(en)) for (const [name, d] of dicts) expect(marks(d[k]), `${name} ${k}`).toEqual(marks(v));
+  });
+
+  it('испанская строка не длиннее английской в псевдолокализации: матрица раскладки гоняет её (+35 %) — значит, покрывает и испанский', () => {
+    for (const [k, v] of Object.entries(en)) expect((es as Record<string, string>)[k]!.length, `es ${k}`).toBeLessThanOrEqual(pseudoloc(v).length);
+  });
+
+  it('испанский: вопросы и восклицания с парными знаками ¿ ? и ¡ !', () => {
+    const count = (s: string, c: string): number => s.split(c).length - 1;
+    for (const [k, v] of Object.entries(es)) {
+      expect(count(v, '¿'), `es ${k}: ${v}`).toBe(count(v, '?'));
+      expect(count(v, '¡'), `es ${k}: ${v}`).toBe(count(v, '!'));
+    }
   });
 
   it('ключи — только [a-z0-9_.]', () => {

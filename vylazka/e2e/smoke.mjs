@@ -7,7 +7,7 @@
  *   npm run smoke:matrix                                             # + раскладка по матрице размеров, скриншоты в e2e/out/
  *   npm run smoke -- --url https://…                                 # опубликованная ссылка
  *
- * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en, --no-shots, --shell, --only play,gen,worlds,flats,illusions,session,pockets,fear,audio,frame,touch,bridge,matrix.
+ * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en(,es), --sizes 640x360,…, --no-shots, --shell, --only play,gen,worlds,flats,illusions,session,pockets,fear,audio,frame,touch,bridge,matrix.
  * Симуляция в тестах заморожена и шагается через window.__vz: проверяется логика и вёрстка, а не
  * частота кадров (SwiftShader даёт 5–10 к/с). Качество задаётся параметром адреса, иначе по строке
  * видеокарты выбралось бы «низкое» и тень осталась бы непроверенной.
@@ -42,6 +42,8 @@ const wantShots = !flag('no-shots');
 const only = opt('only', null)?.split(',').map((x) => x.trim());
 const wants = (name) => !only || only.includes(name);
 const matrixLangs = opt('langs', 'ru,en').split(',').map((s) => s.trim()).filter(Boolean);
+/** Только эти размеры матрицы (--sizes 640x360,915x412) — для прицельной проверки; по умолчанию все. */
+const matrixSizes = opt('sizes', null)?.split(',').map((s) => s.trim()).filter(Boolean) ?? null;
 
 let passed = 0;
 const failures = [];
@@ -61,6 +63,7 @@ const R = Math.PI / 180;
 /** Словари интерфейса: ожидаемые тексты берём из locales/, а не пишем в проверки второй раз. */
 const RU = JSON.parse(readFileSync(join(ROOT, 'locales', 'ru', 'ui.json'), 'utf8'));
 const EN = JSON.parse(readFileSync(join(ROOT, 'locales', 'en', 'ui.json'), 'utf8'));
+const ES = JSON.parse(readFileSync(join(ROOT, 'locales', 'es', 'ui.json'), 'utf8'));
 
 async function startServer() {
   if (remoteUrl) return { url: remoteUrl, close: async () => undefined };
@@ -257,12 +260,17 @@ async function scenarioPlay(browser, baseUrl) {
       'в списке — сегменты звука, качества, обзора, яркости, вспышек и языка (у языка — глобус); вспышки: мягкие или почти незаметные (полных нет)',
       (await Promise.all(['sound', 'quality', 'sens', 'bright', 'flash', 'lang'].map((n) => tp.isVisible(`.vz-seg--${n}`)))).every(Boolean) &&
         (await tp.$$eval('.vz-seg--flash .vz-seg__opt', (els) => els.map((e) => e.dataset.v).join())) === 'soft,faint' &&
+        (await tp.$$eval('.vz-seg--lang .vz-seg__opt', (els) => els.map((e) => e.dataset.v).join())) === 'ru,en,es' &&
         (await segOn(tp, 'flash')) === EN['ui.flash.soft'] &&
         (await segOn(tp, 'lang')) === 'English' &&
         (await tp.isVisible('.vz-settings__row--lang .vz-settings__globe')) &&
         info.length === 0,
       JSON.stringify({ flash: await segOn(tp, 'flash'), lang: await segOn(tp, 'lang'), info }),
     );
+    // Испанский (слова партнёра 21.11): третий язык в том же сегменте; выбор сразу меняет заставку и язык документа.
+    await segPick(tp, 'lang', 'es');
+    await sleep(200);
+    check('испанский: в сегменте языка — Español; заставка и язык документа испанские', (await segOn(tp, 'lang')) === 'Español' && (await tp.textContent('.vz-overlay__prompt')) === ES['ui.start'] && (await tp.textContent('.vz-overlay__note')) === ES['title.warn'] && (await tp.evaluate(() => document.documentElement.lang)) === 'es', JSON.stringify({ lang: await segOn(tp, 'lang'), prompt: await tp.textContent('.vz-overlay__prompt') }));
     await segPick(tp, 'flash', 'faint');
     await segPick(tp, 'lang', 'ru');
     await sleep(200);
@@ -2833,6 +2841,8 @@ const MATRIX = [
   ['360x640', 360, 640, 2, true],
   ['390x844', 390, 844, 3, true],
   ['915x412', 915, 412, 2.6, true],
+  // Телефон лёжа поуже: настройки в две колонки, у сегмента языка (три названия) меньше всего места (испанский, 21.11).
+  ['640x360', 640, 360, 2, true],
   ['800x800', 800, 800, 1, false],
   ['1280x720', 1280, 720, 1, false],
   ['2560x1440', 2560, 1440, 1, false],
@@ -2842,7 +2852,7 @@ async function scenarioMatrix(browser, baseUrl) {
   section(`Матрица раскладки: ${MATRIX.map((m) => m[0]).join(', ')} × ${matrixLangs.join(', ')} (псевдолокализация +35 %)`);
   if (wantShots) mkdirSync(OUT, { recursive: true });
   for (const lang of matrixLangs) {
-    for (const [name, width, height, dpr, mobile] of MATRIX) {
+    for (const [name, width, height, dpr, mobile] of MATRIX.filter((m) => !matrixSizes || matrixSizes.includes(m[0]))) {
       const { page, context, log } = await openPage(browser, baseUrl, `?lang=${lang}&pseudo=1&q=low&fail=0&rank=1&touch=${mobile ? 1 : 0}`, { viewport: { width, height }, deviceScaleFactor: dpr, isMobile: mobile, hasTouch: mobile, locale: lang });
       const screens = [];
       const probe = async (screen) => {
@@ -2856,6 +2866,18 @@ async function scenarioMatrix(browser, baseUrl) {
       await page.click('.vz-overlay__gear');
       await page.waitForSelector('.vz-settings', { state: 'visible', timeout: 5000 });
       ok = (await probe('settings')) && ok;
+      // Названия языков не переносятся посреди слова: перенос — не выход за экран, probe его не видит (куратор, 21.11).
+      const langWrap = await page.evaluate(() =>
+        [...document.querySelectorAll('.vz-seg--lang .vz-seg__opt')]
+          .filter((b) => {
+            const r = document.createRange();
+            r.selectNodeContents(b);
+            return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size > 1;
+          })
+          .map((b) => b.textContent),
+      );
+      if (langWrap.length) screens.push(`settings: названия языков в две строки — ${langWrap.join(', ')}`);
+      ok = langWrap.length === 0 && ok;
       await page.click('.vz-overlay__gear');
       await page.click('.vz-overlay', { position: { x: 5, y: 5 } });
       await sleep(250);
@@ -2924,8 +2946,9 @@ async function scenarioBridge(browser, baseUrl) {
   const gets = sdk.filter((c) => /\[storage\] get\(\)$/.test(c.text));
   check('хранилище читается одним вызовом, ключ один — профиль', gets.length === 1 && JSON.stringify(gets[0].vals[0]) === JSON.stringify(['profile']), JSON.stringify(gets.map((g) => g.vals[0])));
   const platformLang = await page.evaluate(() => window.bridge.platform.language);
-  const want = platformLang === 'ru' ? 'ru' : 'en';
-  const dict = want === 'ru' ? RU : EN;
+  // Языки игры — ru, en, es (испанский с 21.11); любой другой язык площадки — английский.
+  const want = ['ru', 'es'].includes(platformLang) ? platformLang : 'en';
+  const dict = { ru: RU, en: EN, es: ES }[want];
   check(
     `язык заставки — язык площадки (bridge.platform.language = ${platformLang} → ${want})`,
     (await page.textContent('.vz-overlay__title')) === dict['ui.title'] && (await page.textContent('.vz-overlay__prompt')) === dict['ui.start'] && (await page.evaluate(() => document.documentElement.lang)) === want,

@@ -472,9 +472,13 @@ body {
   display: grid;
   gap: 10px;
 }
+/* Колонка подписей — одна ширина на все строки: самая длинная подпись («SENSIBILIDAD», 12 знаков) в неё входит,
+   и переключатели стоят ровно друг под другом (иначе длинная подпись сдвигала свой). Ширина постоянная, а не «по
+   подписи»: подпись длиннее переносится внутри колонки и не отнимает место у переключателя — три названия языка
+   рядом с удлинённой на треть подписью (псевдолокализация матрицы) иначе ломались посреди слова. */
 .vz-settings__row {
   display: grid;
-  grid-template-columns: minmax(6.5em, auto) minmax(0, 1fr);
+  grid-template-columns: 7.6em minmax(0, 1fr);
   align-items: center;
   gap: 4px 12px;
   min-width: 0;
@@ -607,6 +611,11 @@ body {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     column-gap: 22px;
     gap: 8px 22px;
+  }
+  /* Подпись над переключателем: в колонке шириной около 280 px три названия языка рядом с подписью не помещались
+     и ломались посреди слова («Españo-l»), а длинная подпись сдвигала свой переключатель. */
+  .vz-settings__row {
+    grid-template-columns: minmax(0, 1fr);
   }
   .vz-settings__acts {
     margin-top: 10px;
@@ -1058,6 +1067,14 @@ body {
   100% {
     opacity: 0.96;
     transform: translate(-50%, -50%);
+  }
+}
+/* Телефон лёжа: внизу справа — кнопка фонаря (90 px), и широкие строки посреди кадра на неё наезжали (640 × 360:
+   подсказка «трясите» и строки лимбо; размер в матрице смоука с 21.11). Здесь строки уже — между боковыми кнопками. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .vz-root.is-touch .vz-hud__prompt,
+  .vz-root.is-touch .vz-hud__limbo {
+    width: min(88%, 34em, calc(100% - 2 * (102px + max(26px, env(safe-area-inset-right) + 14px))));
   }
 }
 /* ── Лимбо: тёмные строки на белом ── */

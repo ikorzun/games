@@ -3,6 +3,8 @@
 Для переводчиков и редакторов `es`; входит в системный промпт машинного черновика (`../architecture/05-localization.md` §3) и служит чеклистом редактора-носителя.
 Читать вместе с `05-localization.md` §4–6, `../architecture/07-narrator-styleguide.md` и `glossary.md` (приоритет у глоссария). Примеры — из `locales/es/ep01_murylev.json`. Статус: черновик без проверки носителями.
 
+**Вторая игра, Untitled Session (`vylazka/locales/es`), — со своими правилами: раздел в конце файла.** Там другой источник (en), к игроку — на *tú* и без форм по полу игрока; правила новеллы про *usted* к ней не применяются.
+
 ## 1. Вариант языка и аудитория
 
 - **Нейтральный латиноамериканский испанский (ориентир es-419).** Крупнейшая аудитория порталов — Мексика и Латинская Америка; текст не должен «звучать» как одна страна. Переводим с `ru`, `en` — опора; расхождение смысла выносим вопросом сценаристу, не угадываем.
@@ -93,3 +95,34 @@
 python3 tools/validate_episode.py episodes/<путь>.json   # ожидаем: ошибок 0, предупреждений 0
 python3 tools/loc_sync.py stats episodes/<путь>.json     # ожидаем: 100 % по вашему языку (только полнота, не качество)
 ```
+
+## Untitled Session (`vylazka/locales/es/ui.json`)
+
+Вторая игра репозитория — сон от первого лица: человек спит и не может проснуться, ищет вещи-воспоминания. Испанский — с 21.11
+(слова партнёра: «Добавь испанский язык в игру»); черновик агента `translator`, проверен основной моделью, носителем — нет.
+
+- **Источник — en** (`vylazka/locales/en/ui.json`; игра пишется сначала по-английски), ru — сверка смысла. Вариант и типографика —
+  как §1 и §5 (es-419, без регионализмов и voseo, ¿ ¡ парные, кавычки “ ”).
+- **К игроку — *tú* везде**, и в инструкциях, и на кнопках (*Apaga la linterna*, *Toca para empezar*): это голос сна, а не
+  справочник. *Usted*, *vos*, *vosotros* не использовать — правило §2 про *usted* для инструкций относится только к новелле.
+- **Пол игрока неизвестен**: никаких прилагательных и причастий, согласованных с игроком (*dormido/a, quieto/a, seguro/a, solo/a*).
+  Через глагол или безлично: *Duermes y no puedes despertar*, *no te detengas*, *¿Confirmas?*, *durmiendo aún*,
+  *tercer lugar desde la izquierda*.
+- **Регистр — как в en, не sentence case**: строки сна и воспоминаний строчными (*la tetera. la dejaste encendida.*), капс — где он в en.
+- **Строки воспоминаний `mem.*.flash` и `mem.*.done` игра укорачивает с каждым кругом** — с конца, целыми фразами, потом по словам
+  до паузы (`src/systems/worn_text.ts`). Короткие фразы, главное — первым; каждая фраза кончается своим знаком; вопрос — с парными
+  ¿ ? внутри одной фразы (у оборванного вопроса игра снимает и «¿»).
+- **Не переводить**: «UNTITLED SESSION», «untitled session {n}», REC, CAM-NN, клавиши в [ ], подстановки {…}.
+- **Длина**: подписи настроек и HUD — коротко; переключатели стоят в колонке около 280 px (телефон лёжа), колонка подписей —
+  под самую длинную подпись («SENSIBILIDAD», 12 знаков); длиннее — проверить кадром.
+
+Глоссарий игры: session — *sesión*; memory — *recuerdo*; thing — *cosa*; place — *lugar*; shelter — *refugio*; office — *oficina*;
+yellow rooms — *habitaciones amarillas*; waiting room — *sala de espera*; flashlight — *linterna*; beam — *haz*; lap — *vuelta*
+(HUD: VUELTA); phone — *celular* (дисковый и рабочий — *teléfono*); kettle — *tetera*; remote — *control remoto*; slippers —
+*pantuflas*; ticket — *boleto*; locker — *casillero*; water cooler — *dispensador de agua*; department — *la sección*; hallway —
+*recibidor*; corridor — *pasillo*. Существо в тексте не названо (en «that thing», «it») — *eso*, *lo*. Настройки: Sonido (sí/no),
+Calidad (baja/media/alta/ultra), Sensibilidad, Brillo (menos/medio/más), Destellos (suaves/casi invisibles), Idioma.
+
+Спорное — носителю: *escotilla* и *incursión* (тон); *diez para las seis* (оборот Латинской Америки, в Испании — *las seis menos
+diez*); *pantuflas*; *sala* и *recibidor* для комнат дома; *fondo predeterminado* (шутка про обои рабочего стола); *por favor,
+usar solo si es necesario* (табличка в мире — по-английски); *¿omitir intro?*.

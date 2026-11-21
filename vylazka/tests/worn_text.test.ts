@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import en from '../locales/en/ui.json';
+import es from '../locales/es/ui.json';
 import ru from '../locales/ru/ui.json';
 import { WEAR } from '../src/systems/decay';
 import { ALL_MEMORIES } from '../src/systems/session';
@@ -27,8 +28,28 @@ describe('строки вещей с каждым кругом короче', ()
     expect(wornLine(line, 1)).toBe('it rang.');
   });
 
-  it('все строки воспоминаний на обоих языках: не длиннее, чем были, не пустые, кончаются точкой и не растут от круга к кругу', () => {
-    for (const dict of [en, ru] as Record<string, string>[]) {
+  it('испанский: от оборванного вопроса не остаётся непарного «¿»', () => {
+    const line = '¿dónde está el control remoto? el canal no cambia.';
+    expect(wornLine(line, 0.56)).toBe('¿dónde está el control remoto?');
+    expect(wornLine(line, 1)).toBe('dónde está el.');
+    expect(wornLine('la plancha. ¿la desenchufaste?', 1)).toBe('la plancha.');
+    expect(wornLine('¡no la apagues, por favor!', 0.56)).toBe('no la apagues.');
+    const count = (s: string, c: string): number => s.split(c).length - 1;
+    for (const m of ALL_MEMORIES) {
+      for (const part of ['flash', 'done']) {
+        for (const w of LAPS) {
+          const out = wornLine((es as Record<string, string>)[`mem.${m.id}.${part}`]!, w);
+          expect(count(out, '¿'), out).toBe(count(out, '?'));
+          expect(count(out, '¡'), out).toBe(count(out, '!'));
+        }
+      }
+    }
+  });
+
+  it('все строки воспоминаний на всех языках: не длиннее, чем были, не пустые, кончаются точкой и не растут от круга к кругу', () => {
+    // Испанский: обрывок вопроса теряет и «¿» — сравниваем без открывающих знаков.
+    const bare = (s: string): string => s.replace(/[¿¡]/g, '');
+    for (const dict of [en, ru, es] as Record<string, string>[]) {
       for (const m of ALL_MEMORIES) {
         for (const part of ['flash', 'done']) {
           const text = dict[`mem.${m.id}.${part}`];
@@ -37,7 +58,7 @@ describe('строки вещей с каждым кругом короче', ()
           for (const w of LAPS) {
             const out = wornLine(text!, w);
             expect(out.length).toBeGreaterThan(0);
-            expect(text!.startsWith(out.replace(/\.$/, ''))).toBe(true);
+            expect(bare(text!).startsWith(bare(out).replace(/\.$/, ''))).toBe(true);
             expect(/[.!?…]$/.test(out)).toBe(true);
             expect(words(out)).toBeLessThanOrEqual(prev);
             prev = words(out);
