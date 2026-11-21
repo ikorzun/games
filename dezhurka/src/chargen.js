@@ -33,8 +33,13 @@
   const tint = (c, t) => mix(c, '#efe6d2', t == null ? 0.25 : t);
 
   const SKIN = { peach: '#e2b48e', tan: '#d3a077', ruddy: '#cf9272', pale: '#d6cfbd', grey: '#a7ab9f', olive: '#93a070', teal: '#7f9d92',
-    lilac: '#a094ad', ochre: '#c9a35c', moss: '#8a8c5c', bone: '#d2c8ae', brick: '#9a5d4d', steel: '#8e9492', jelly: '#9fc0a8', fur: '#8a7461' };
-  const HAIR = { dark: '#4a3a2e', brown: '#6b4a33', ginger: '#9a5a34', grey: '#8d877b', white: '#d9d3c3', black: '#2e2925', moss: '#6f7a45' };
+    lilac: '#a094ad', ochre: '#c9a35c', moss: '#8a8c5c', bone: '#d2c8ae', brick: '#9a5d4d', steel: '#8e9492', jelly: '#9fc0a8', fur: '#8a7461',
+    umber: '#9c6b4a', bronze: '#b98458', plum: '#8a6a86', azure: '#7d93b0', coral: '#c9806a', mint: '#9fbfa6', mustard: '#c9b05a', rose: '#c69a9a', ash: '#9a96a3',
+    copper: '#a07c5f', enamel: '#7f9484', bark: '#8a6f55', ashfur: '#8d8a84' };
+  const HAIR = { dark: '#4a3a2e', brown: '#6b4a33', ginger: '#9a5a34', grey: '#8d877b', white: '#d9d3c3', black: '#2e2925', moss: '#6f7a45', blond: '#c9a868', bluegrey: '#6f7a86' };
+  // приглушённые тона одежды и один насыщенный акцент на персонажа (галстук, узор платка, отделка)
+  const TONE = { slate: '#5f6f7d', ink: '#3a4354', olive: '#666b4c', sand: '#a39a7e', rust: '#8f5a3c', wine: '#7a3038', plum: '#6b4a66', sage: '#7d8c72', teal: '#4f7673', mustard: '#b0903f' };
+  const ACCENT = { crimson: '#9b2f2a', mustard: '#c9a23f', teal: '#3f7a78', blue: '#3d5c8a', plum: '#7a4370', green: '#5d7a4e', orange: '#c2703a' };
 
   // ————————————————————————————————————————————— детали и виды
 
@@ -53,65 +58,67 @@
     tex: ['none', 'wrinkles', 'scales', 'spots', 'cracks', 'rivets', 'fur'],
     clothes: ['denim', 'vatnik', 'coat', 'overcoat', 'leather', 'blazer', 'chef', 'uniform', 'tracksuit', 'telnyashka', 'rubakha', 'trench',
       'suit', 'sweater', 'cape', 'spacesuit', 'none'],
+    tone: ['own'].concat(Object.keys(TONE)),
+    accent: Object.keys(ACCENT),
     build: ['tiny', 'narrow', 'medium', 'wide', 'huge'],
     glasses: ['none', 'round', 'rect'],
     mark: ['none', 'scar', 'tattoo', 'both'],
     mood: ['calm', 'irritated', 'caught', 'smug', 'scared', 'sullen'],
   };
-  const PARTS = ['head', 'skin', 'eyes', 'eyen', 'nose', 'mouthx', 'ears', 'top', 'hair', 'face', 'tex', 'clothes', 'build', 'glasses', 'mark', 'mood'];
+  const PARTS = ['head', 'skin', 'eyes', 'eyen', 'nose', 'mouthx', 'ears', 'top', 'hair', 'face', 'tex', 'clothes', 'tone', 'accent', 'build', 'glasses', 'mark', 'mood'];
 
   const HUMAN_TOPS = ['bald', 'buzz', 'short', 'curly', 'sidehair', 'bun', 'flatcap', 'ushanka', 'scarf', 'hat'];
   const SPECIES = {
-    human: { kind: 'human', head: ['potato', 'egg', 'pear', 'brick', 'bean'], skin: ['peach', 'tan', 'ruddy', 'pale'], eyes: ['dot'], eyen: [2],
-      nose: ['bump', 'bump', 'potato'], mouthx: ['none'], ears: ['round'], top: HUMAN_TOPS, hair: ['dark', 'brown', 'ginger', 'grey', 'black'],
+    human: { kind: 'human', head: ['potato', 'egg', 'pear', 'brick', 'bean'], skin: ['peach', 'tan', 'ruddy', 'pale', 'umber', 'bronze'], eyes: ['dot'], eyen: [2],
+      nose: ['bump', 'bump', 'potato'], mouthx: ['none'], ears: ['round'], top: HUMAN_TOPS, hair: ['dark', 'brown', 'ginger', 'grey', 'black', 'blond'],
       face: ['none', 'none', 'stubble', 'moustache', 'beard'], tex: ['none', 'none', 'wrinkles'],
       clothes: ['denim', 'vatnik', 'coat', 'overcoat', 'leather', 'blazer', 'chef', 'tracksuit', 'sweater', 'trench', 'suit'],
       build: ['narrow', 'medium', 'wide', 'huge'], glasses: ['none', 'none', 'none', 'round', 'rect'] },
     // пришельцы
-    grey: { kind: 'alien', head: ['bulb'], skin: ['grey'], eyes: ['almond'], eyen: [2], nose: ['slits', 'none'], mouthx: ['none'], ears: ['none'],
+    grey: { kind: 'alien', head: ['bulb'], skin: ['grey', 'grey', 'ash', 'mint'], eyes: ['almond'], eyen: [2], nose: ['slits', 'none'], mouthx: ['none'], ears: ['none'],
       top: ['bald', 'bald', 'flatcap', 'ushanka', 'hat', 'helmet'], face: ['none'], tex: ['none'],
       clothes: ['vatnik', 'trench', 'sweater', 'spacesuit', 'coat', 'tracksuit'], build: ['tiny', 'narrow'] },
-    squid: { kind: 'alien', head: ['dome', 'egg'], skin: ['lilac', 'teal', 'ochre'], eyes: ['dot', 'slit'], eyen: [2], nose: ['none'], mouthx: ['tentacles'],
+    squid: { kind: 'alien', head: ['dome', 'egg'], skin: ['lilac', 'teal', 'ochre', 'plum', 'coral', 'azure'], eyes: ['dot', 'slit'], eyen: [2], nose: ['none'], mouthx: ['tentacles'],
       ears: ['none'], top: ['bald', 'hat', 'flatcap', 'crest'], face: ['none'], tex: ['spots', 'none'],
       clothes: ['trench', 'overcoat', 'suit', 'leather'], build: ['narrow', 'medium'] },
-    insect: { kind: 'alien', head: ['egg', 'bean'], skin: ['ochre', 'olive', 'brick'], eyes: ['compound'], eyen: [2], nose: ['none'], mouthx: ['mandibles'],
+    insect: { kind: 'alien', head: ['egg', 'bean'], skin: ['ochre', 'olive', 'brick', 'mustard', 'coral'], eyes: ['compound'], eyen: [2], nose: ['none'], mouthx: ['mandibles'],
       ears: ['none'], top: ['antennae'], face: ['none'], tex: ['none', 'spots'], clothes: ['tracksuit', 'leather', 'vatnik', 'denim'], build: ['narrow', 'medium'] },
-    blob: { kind: 'alien', head: ['drop'], skin: ['jelly', 'lilac', 'ochre'], eyes: ['dot'], eyen: [3, 3, 4, 1], nose: ['none'], mouthx: ['none'], ears: ['none'],
+    blob: { kind: 'alien', head: ['drop'], skin: ['jelly', 'lilac', 'ochre', 'rose', 'azure', 'mint'], eyes: ['dot'], eyen: [3, 3, 4, 1], nose: ['none'], mouthx: ['none'], ears: ['none'],
       top: ['bald', 'flatcap', 'hat', 'ushanka'], face: ['none'], tex: ['spots'], clothes: ['none'], build: ['wide'] },
-    reptile: { kind: 'alien', head: ['bean', 'brick', 'pear'], skin: ['olive', 'teal', 'ochre'], eyes: ['slit'], eyen: [2], nose: ['slits'], mouthx: ['none', 'fangs'],
+    reptile: { kind: 'alien', head: ['bean', 'brick', 'pear'], skin: ['olive', 'teal', 'ochre', 'mustard', 'azure', 'coral'], eyes: ['slit'], eyen: [2], nose: ['slits'], mouthx: ['none', 'fangs'],
       ears: ['none'], top: ['bald', 'crest', 'flatcap', 'hat'], face: ['none'], tex: ['scales'],
       clothes: ['blazer', 'leather', 'tracksuit', 'suit', 'overcoat'], build: ['medium', 'wide', 'huge'] },
-    robot: { kind: 'alien', head: ['box'], skin: ['steel'], eyes: ['lamp'], eyen: [1, 2], nose: ['none'], mouthx: ['grille'], ears: ['none'],
+    robot: { kind: 'alien', head: ['box'], skin: ['steel', 'steel', 'copper', 'enamel'], eyes: ['lamp'], eyen: [1, 2], nose: ['none'], mouthx: ['grille'], ears: ['none'],
       top: ['antenna', 'ushanka', 'flatcap', 'antenna'], face: ['none'], tex: ['rivets'], clothes: ['none', 'vatnik', 'overcoat', 'uniform'], build: ['medium', 'wide'] },
-    stalker: { kind: 'alien', head: ['bean', 'potato'], skin: ['ochre', 'lilac', 'teal'], eyes: ['stalk'], eyen: [2, 3], nose: ['none', 'slits'], mouthx: ['none'],
+    stalker: { kind: 'alien', head: ['bean', 'potato'], skin: ['ochre', 'lilac', 'teal', 'rose', 'azure', 'mint'], eyes: ['stalk'], eyen: [2, 3], nose: ['none', 'slits'], mouthx: ['none'],
       ears: ['none'], top: ['bald'], face: ['none'], tex: ['spots', 'none'], clothes: ['sweater', 'denim', 'coat', 'telnyashka'], build: ['medium', 'wide'] },
     // нечисть
-    leshy: { kind: 'myth', head: ['potato', 'pear'], skin: ['moss'], eyes: ['dot'], eyen: [2], nose: ['potato', 'hook'], mouthx: ['none'], ears: ['pointed', 'none'],
+    leshy: { kind: 'myth', head: ['potato', 'pear'], skin: ['moss', 'moss', 'bark'], eyes: ['dot'], eyen: [2], nose: ['potato', 'hook'], mouthx: ['none'], ears: ['pointed', 'none'],
       top: ['moss'], hair: ['moss'], face: ['mossbeard'], tex: ['cracks'], clothes: ['vatnik', 'rubakha', 'coat'], build: ['medium', 'wide'] },
-    vodyanoy: { kind: 'myth', head: ['bean', 'pear'], skin: ['teal', 'olive'], eyes: ['dot'], eyen: [2], nose: ['potato', 'bump'], mouthx: ['none'], ears: ['fin'],
+    vodyanoy: { kind: 'myth', head: ['bean', 'pear'], skin: ['teal', 'olive', 'azure', 'mint'], eyes: ['dot'], eyen: [2], nose: ['potato', 'bump'], mouthx: ['none'], ears: ['fin'],
       top: ['bald', 'sidehair'], hair: ['grey', 'moss'], face: ['longmoustache'], tex: ['spots', 'scales'], clothes: ['telnyashka', 'sweater'], build: ['wide', 'huge'] },
     domovoy: { kind: 'myth', head: ['potato', 'bean'], skin: ['ruddy', 'tan'], eyes: ['dot'], eyen: [2], nose: ['potato'], mouthx: ['none'], ears: ['round', 'pointed'],
       top: ['curly', 'short', 'ushanka'], hair: ['grey', 'white', 'brown'], face: ['hugebeard'], tex: ['none'], clothes: ['rubakha'], build: ['tiny'] },
-    chert: { kind: 'myth', head: ['pear', 'potato', 'egg'], skin: ['brick'], eyes: ['dot', 'slit'], eyen: [2], nose: ['snout'], mouthx: ['none', 'fangs'],
+    chert: { kind: 'myth', head: ['pear', 'potato', 'egg'], skin: ['brick', 'brick', 'plum', 'umber'], eyes: ['dot', 'slit'], eyen: [2], nose: ['snout'], mouthx: ['none', 'fangs'],
       ears: ['pointed'], top: ['horns'], hair: ['black', 'dark'], face: ['none', 'beard', 'stubble'], tex: ['fur', 'none'],
       clothes: ['leather', 'tracksuit', 'blazer'], build: ['narrow', 'medium'] },
-    gorynych: { kind: 'myth', heads: 3, head: ['egg', 'potato'], skin: ['olive', 'teal'], eyes: ['slit', 'dot'], eyen: [2], nose: ['slits'], mouthx: ['none', 'fangs'],
+    gorynych: { kind: 'myth', heads: 3, head: ['egg', 'potato'], skin: ['olive', 'teal', 'mustard', 'azure', 'plum'], eyes: ['slit', 'dot'], eyen: [2], nose: ['slits'], mouthx: ['none', 'fangs'],
       ears: ['none'], top: ['crest', 'bald'], face: ['none'], tex: ['scales'], clothes: ['overcoat', 'trench', 'coat'], build: ['wide', 'huge'] },
-    koschei: { kind: 'myth', head: ['skull'], skin: ['bone'], eyes: ['dot'], eyen: [2], nose: ['slits', 'none'], mouthx: ['none'], ears: ['none', 'round'],
+    koschei: { kind: 'myth', head: ['skull'], skin: ['bone', 'bone', 'ash'], eyes: ['dot'], eyen: [2], nose: ['slits', 'none'], mouthx: ['none'], ears: ['none', 'round'],
       top: ['crown', 'bald'], face: ['none'], tex: ['wrinkles', 'cracks'], clothes: ['suit', 'cape', 'overcoat'], build: ['narrow'] },
-    vampire: { kind: 'myth', head: ['egg', 'brick'], skin: ['pale'], eyes: ['dot', 'slit'], eyen: [2], nose: ['bump', 'hook'], mouthx: ['fangs'], ears: ['pointed'],
+    vampire: { kind: 'myth', head: ['egg', 'brick'], skin: ['pale', 'ash', 'rose'], eyes: ['dot', 'slit'], eyen: [2], nose: ['bump', 'hook'], mouthx: ['fangs'], ears: ['pointed'],
       top: ['widow'], hair: ['black'], face: ['none'], tex: ['none'], clothes: ['cape', 'suit', 'overcoat'], build: ['narrow', 'medium'] },
-    volkolak: { kind: 'myth', head: ['potato', 'pear', 'brick'], skin: ['fur'], eyes: ['slit', 'dot'], eyen: [2], nose: ['snout'], mouthx: ['fangs'], ears: ['animal'],
+    volkolak: { kind: 'myth', head: ['potato', 'pear', 'brick'], skin: ['fur', 'ashfur', 'umber'], eyes: ['slit', 'dot'], eyen: [2], nose: ['snout'], mouthx: ['fangs'], ears: ['animal'],
       top: ['bald'], face: ['none'], tex: ['fur'], clothes: ['vatnik', 'denim', 'leather', 'tracksuit'], build: ['wide', 'huge', 'medium'] },
     likho: { kind: 'myth', head: ['potato', 'egg', 'pear'], skin: ['pale', 'tan', 'olive'], eyes: ['dot'], eyen: [1], nose: ['bump', 'potato', 'hook'], mouthx: ['none'],
       ears: ['round'], top: ['long', 'scarf', 'bald', 'sidehair'], hair: ['grey', 'dark'], face: ['none', 'stubble'], tex: ['wrinkles', 'none'],
       clothes: ['coat', 'vatnik', 'sweater'], build: ['narrow', 'medium', 'wide'] },
-    kikimora: { kind: 'myth', head: ['egg', 'pear'], skin: ['olive', 'pale'], eyes: ['dot'], eyen: [2], nose: ['hook'], mouthx: ['none'], ears: ['pointed', 'none'],
-      top: ['long', 'scarf', 'bun'], hair: ['moss', 'grey', 'dark'], face: ['none'], tex: ['wrinkles', 'spots'], clothes: ['coat', 'sweater', 'rubakha'], build: ['narrow', 'tiny'] },
+    kikimora: { kind: 'myth', head: ['egg', 'pear'], skin: ['olive', 'pale', 'mint', 'plum'], eyes: ['dot'], eyen: [2], nose: ['hook'], mouthx: ['none'], ears: ['pointed', 'none'],
+      top: ['long', 'scarf', 'bun'], hair: ['moss', 'grey', 'dark', 'bluegrey'], face: ['none'], tex: ['wrinkles', 'spots'], clothes: ['coat', 'sweater', 'rubakha'], build: ['narrow', 'tiny'] },
     minotaur: { kind: 'myth', head: ['brick', 'bean', 'pear'], skin: ['tan', 'ruddy', 'fur'], eyes: ['dot'], eyen: [2], nose: ['snout'], mouthx: ['none'],
       ears: ['animal', 'round'], top: ['bullhorns'], face: ['none', 'stubble'], tex: ['fur', 'none'],
       clothes: ['chef', 'leather', 'tracksuit', 'uniform', 'blazer'], build: ['huge', 'wide'] },
-    gorgon: { kind: 'myth', head: ['egg', 'pear', 'potato'], skin: ['olive', 'pale', 'teal'], eyes: ['slit', 'dot'], eyen: [2], nose: ['bump', 'slits'], mouthx: ['none', 'fangs'],
+    gorgon: { kind: 'myth', head: ['egg', 'pear', 'potato'], skin: ['olive', 'pale', 'teal', 'plum', 'mint', 'coral'], eyes: ['slit', 'dot'], eyen: [2], nose: ['bump', 'slits'], mouthx: ['none', 'fangs'],
       ears: ['none'], top: ['snakes'], face: ['none'], tex: ['scales', 'none'], clothes: ['coat', 'blazer', 'sweater', 'trench'], build: ['narrow', 'medium'] },
   };
   const KINDS = ['human', 'alien', 'myth'];
@@ -127,6 +134,8 @@
       else if (p === 'mark') spec.mark = r() < 0.16 ? pick(r, ['scar', 'tattoo', 'both']) : 'none';
       else if (p === 'hair') spec.hair = pick(r, sp.hair || OPTIONS.hair);
       else if (p === 'glasses') spec.glasses = pick(r, sp.glasses || ['none']);
+      else if (p === 'tone') spec.tone = pick(r, (CLOTHES[spec.clothes] || {}).tones || ['own']);
+      else if (p === 'accent') spec.accent = pick(r, OPTIONS.accent);
       else spec[p] = pick(r, sp[p]);
     }
     return spec;
@@ -194,29 +203,30 @@
   // ————————————————————————————————————————————— туловище и одежда
 
   const CLOTHES = {
-    denim: { fill: '#71849a', inner: 'plaid', lapel: 'collar', close: 'buttons', det: ['pockets'] },
-    vatnik: { fill: '#6c675d', inner: 'sweater', lapel: 'collar', close: 'open', det: ['quilt'] },
-    coat: { fill: '#6a5848', inner: 'none', lapel: 'round', close: 'buttons' },
-    overcoat: { fill: '#62664b', inner: 'tie', lapel: 'wide', close: 'open' },
-    leather: { fill: '#3b3933', inner: 'sweater', lapel: 'wide', close: 'zip' },
-    blazer: { fill: '#7d3035', inner: 'turtle', lapel: 'wide', close: 'open', det: ['chain'] },
+    denim: { tones: ['own', 'own', 'slate', 'ink'], fill: '#71849a', inner: 'plaid', lapel: 'collar', close: 'buttons', det: ['pockets'] },
+    vatnik: { tones: ['own', 'own', 'olive', 'slate', 'sand'], fill: '#6c675d', inner: 'sweater', lapel: 'collar', close: 'open', det: ['quilt'] },
+    coat: { tones: ['own', 'plum', 'sage', 'rust', 'slate', 'wine'], fill: '#6a5848', inner: 'none', lapel: 'round', close: 'buttons' },
+    overcoat: { tones: ['own', 'sand', 'slate', 'rust', 'ink'], fill: '#62664b', inner: 'tie', lapel: 'wide', close: 'open' },
+    leather: { tones: ['own', 'own', 'rust', 'wine'], fill: '#3b3933', inner: 'sweater', lapel: 'wide', close: 'zip' },
+    blazer: { tones: ['own', 'own', 'plum', 'teal', 'mustard', 'ink'], fill: '#7d3035', inner: 'turtle', lapel: 'wide', close: 'open', det: ['chain'] },
     chef: { fill: '#e2dbcc', inner: 'none', lapel: 'stand', close: 'double' },
     uniform: { fill: '#5e6c79', inner: 'tie', lapel: 'small', close: 'buttons', det: ['boards', 'pockets'] },
-    tracksuit: { fill: '#3f5d6e', inner: 'tee', lapel: 'stand', close: 'zip', det: ['stripes'] },
+    tracksuit: { tones: ['own', 'wine', 'ink', 'sage', 'plum', 'teal'], fill: '#3f5d6e', inner: 'tee', lapel: 'stand', close: 'zip', det: ['stripes'] },
     telnyashka: { fill: '#ddd6c6', inner: 'none', lapel: 'none', close: 'none', det: ['hstripes'] },
     rubakha: { fill: '#d8cdb6', inner: 'none', lapel: 'none', close: 'placket', det: ['belt'] },
-    trench: { fill: '#8c8775', inner: 'tie', lapel: 'wide', close: 'open', det: ['belt'] },
-    suit: { fill: '#77756f', inner: 'tie', lapel: 'wide', close: 'open', det: ['ribbons'] },
-    sweater: { fill: '#5a5148', inner: 'none', lapel: 'none', close: 'none', det: ['rib'] },
-    cape: { fill: '#2f2b2b', inner: 'shirt', lapel: 'high', close: 'open' },
-    spacesuit: { fill: '#c5bfae', inner: 'none', lapel: 'ring', close: 'none', det: ['quilt', 'panel'] },
+    trench: { tones: ['own', 'sand', 'olive', 'slate'], fill: '#8c8775', inner: 'tie', lapel: 'wide', close: 'open', det: ['belt'] },
+    suit: { tones: ['own', 'ink', 'sand', 'plum', 'olive'], fill: '#77756f', inner: 'tie', lapel: 'wide', close: 'open', det: ['ribbons'] },
+    sweater: { tones: ['own', 'rust', 'mustard', 'sage', 'teal', 'wine', 'plum'], fill: '#5a5148', inner: 'none', lapel: 'none', close: 'none', det: ['rib'] },
+    cape: { tones: ['own', 'own', 'wine', 'plum'], fill: '#2f2b2b', inner: 'shirt', lapel: 'high', close: 'open' },
+    spacesuit: { tones: ['own', 'mustard', 'teal', 'sand'], fill: '#c5bfae', inner: 'none', lapel: 'ring', close: 'none', det: ['quilt', 'panel'] },
   };
   const BUILD = { tiny: 150, narrow: 172, medium: 206, wide: 242, huge: 280 };
 
   function torso(spec, m, uid, skin) {
     const sw = BUILD[spec.build] || 206, sy = 238 - m.sh, x0 = CX - sw / 2, x1 = CX + sw / 2;
     const d = `M${x0},${H + 6} L${x0},${sy + 48} Q${x0},${sy + 6} ${x0 + 40},${sy} L${CX - 26},${sy - 10} L${CX + 26},${sy - 10} L${x1 - 40},${sy} Q${x1},${sy + 6} ${x1},${sy + 48} L${x1},${H + 6} Z`;
-    const cl = CLOTHES[spec.clothes];
+    const own = CLOTHES[spec.clothes], acc = ACCENT[spec.accent] || ACCENT.crimson;
+    const cl = own && Object.assign({}, own, TONE[spec.tone] ? { fill: TONE[spec.tone] } : null);
     let s = '';
     if (!cl) {                                    // без одежды: робот — корпус с панелью, остальные — голое тело
       const metal = spec.species === 'robot';
@@ -229,7 +239,7 @@
       return { svg: s, sy };
     }
     s += lit(d, cl.fill, uid + 'b', -8, -8);
-    const inner = { plaid: '#8a5a4c', sweater: '#3f3a34', tie: '#d9d0bd', turtle: '#2c2927', tee: '#cfc8b8', shirt: '#e6e0d2' }[cl.inner];
+    const inner = { plaid: mix('#8a5a4c', acc, 0.45), sweater: '#3f3a34', tie: '#d9d0bd', turtle: '#2c2927', tee: '#cfc8b8', shirt: '#e6e0d2' }[cl.inner];
     const open = cl.close === 'open', vy = open ? H + 6 : sy + 62, vw = open ? 34 : 0;
     const clip = `clip-path="url(#${uid}b)"`;
     if (inner) {
@@ -237,7 +247,7 @@
       if (cl.inner === 'plaid') for (let i = 0; i < 5; i++) s += `<path d="M${CX - 30},${sy + i * 22} L${CX + 30},${sy + i * 22}" stroke="${shade(inner, 0.35)}" stroke-width="1.6" fill="none"/>`;
       if (cl.inner === 'plaid') s += `<path d="M${CX - 8},${sy - 12} L${CX - 8},${H} M${CX + 8},${sy - 12} L${CX + 8},${H}" stroke="${shade(inner, 0.35)}" stroke-width="1.6" fill="none"/>`;
       if (cl.inner === 'sweater' || cl.inner === 'turtle') s += P(`M${CX - 26},${sy + 2} Q${CX},${sy + 14} ${CX + 26},${sy + 2}`, 'none', 2);
-      if (cl.inner === 'tie') s += P(`M${CX - 6},${sy - 4} L${CX + 6},${sy - 4} L${CX + 4},${sy + 8} L${CX + 10},${sy + 74} L${CX},${sy + 88} L${CX - 9},${sy + 74} L${CX - 4},${sy + 8} Z`, '#6b3038', 2);
+      if (cl.inner === 'tie') s += P(`M${CX - 6},${sy - 4} L${CX + 6},${sy - 4} L${CX + 4},${sy + 8} L${CX + 10},${sy + 74} L${CX},${sy + 88} L${CX - 9},${sy + 74} L${CX - 4},${sy + 8} Z`, shade(acc, 0.22), 2);
       if (cl.inner === 'shirt') s += P(`M${CX},${sy - 6} L${CX},${H}`, 'none', 1.6);
       s += '</g>';
     }
@@ -253,7 +263,7 @@
     if (cl.close === 'buttons') { let b = P(`M${CX},${sy + 30} L${CX},${H}`, 'none', 1.8); for (let i = 0; i < 3; i++) b += E(CX + 7, sy + 48 + i * 30, 3.4, 3.4, shade(cl.fill, 0.3), 1.6); s += g(b); }
     if (cl.close === 'zip') s += g(P(`M${CX},${sy + 60} L${CX},${H}`, 'none', 2) + `<path d="M${CX},${sy + 60} L${CX},${H}" stroke="#b9a66a" stroke-width="1.2" stroke-dasharray="2 3" fill="none"/>`);
     if (cl.close === 'double') { let b = ''; for (let i = 0; i < 4; i++) b += E(CX - 20, sy + 42 + i * 24, 3.6, 3.6, '#f1ecdf', 1.6) + E(CX + 20, sy + 42 + i * 24, 3.6, 3.6, '#f1ecdf', 1.6); s += g(b); }
-    if (cl.close === 'placket') s += g(P(`M${CX - 16},${sy - 8} L${CX + 16},${sy - 8} L${CX + 9},${sy + 44} L${CX - 9},${sy + 44} Z`, '#b9483f', 2) + `<path d="M${CX},${sy - 4} L${CX},${sy + 40}" stroke="#efe6d2" stroke-width="2" stroke-dasharray="3 4" fill="none"/>`);
+    if (cl.close === 'placket') s += g(P(`M${CX - 16},${sy - 8} L${CX + 16},${sy - 8} L${CX + 9},${sy + 44} L${CX - 9},${sy + 44} Z`, acc, 2) + `<path d="M${CX},${sy - 4} L${CX},${sy + 40}" stroke="#efe6d2" stroke-width="2" stroke-dasharray="3 4" fill="none"/>`);
     for (const k of cl.det || []) {
       if (k === 'quilt') { let q = ''; for (let x = x0 + 16; x < x1; x += 20) if (Math.abs(x - CX) > (open ? 40 : 6)) q += `<path d="M${f(x)},${sy + 10} L${f(x)},${H}" stroke="${shade(cl.fill, 0.42)}" stroke-width="1.5" fill="none"/>`; s += g(q); }
       if (k === 'pockets') s += g(P(`M${CX - 66},${sy + 54} h28 v20 h-28 Z`, shade(cl.fill, 0.08), 1.8) + P(`M${CX + 38},${sy + 54} h28 v20 h-28 Z`, shade(cl.fill, 0.08), 1.8));
@@ -284,8 +294,10 @@
   }
 
   // back — то, что рисуется за головой; front — поверх головы (clip — id обрезки по контуру головы)
-  function top(kind, hd, cy, hair, skin, r, clip) {
+  function top(kind, hd, cy, hair, skin, r, clip, spec) {
     const ty = cy - hd.h / 2, hw = hd.w * (1 - hd.k * 0.6), o = { back: '', front: '' };
+    const v = (spec.seed >>> 3) % 4, acc = ACCENT[spec.accent] || ACCENT.crimson;
+    const capc = ['#5a4f44', '#4f5560', '#6b5a3e', '#55604f'][v], hatc = ['#5c5347', '#3f3d3b', '#6f6450', '#4d5560'][v];
     const cap = (depth, col) => `<g clip-path="url(#${clip})">` + P(`M${CX - hw},${ty - 20} L${CX + hw},${ty - 20} L${CX + hw},${ty + depth} Q${CX},${ty + depth - 12} ${CX - hw},${ty + depth} Z`, col, 2) + '</g>';
     const scallop = (x0, x1, y, n, rad, col) => { let s = ''; for (let i = 0; i < n; i++) s += E(x0 + (x1 - x0) * (i / (n - 1)) + (r() - 0.5) * 6, y + (r() - 0.5) * 8, rad, rad, col, 2); return s; };
     if (kind === 'buzz') o.front = cap(30, mix(skin, hair, 0.55));
@@ -295,16 +307,16 @@
     if (kind === 'sidehair') o.back = scallop(CX - hd.w / 2 - 6, CX - hd.w / 2 + 6, cy - 22, 3, 15, hair) + scallop(CX + hd.w / 2 - 6, CX + hd.w / 2 + 6, cy - 22, 3, 15, hair);
     if (kind === 'long') { o.back = P(`M${CX - hd.w / 2 - 12},${cy + 96} Q${CX - hd.w / 2 - 30},${ty + 10} ${CX},${ty - 12} Q${CX + hd.w / 2 + 30},${ty + 10} ${CX + hd.w / 2 + 12},${cy + 96} Z`, hair); o.front = cap(26, hair); }
     if (kind === 'bun') { o.back = E(CX, ty - 6, 24, 20, hair) + E(CX, ty + 30, hw / 2 + 4, 42, hair); o.front = cap(28, hair); }
-    if (kind === 'flatcap') o.front = P(`M${CX - hw / 2 - 6},${ty + 30} Q${CX - hw / 2 - 4},${ty - 26} ${CX + 6},${ty - 22} Q${CX + hw / 2 + 16},${ty - 18} ${CX + hw / 2 + 12},${ty + 28} Q${CX + hw / 2 + 22},${ty + 42} ${CX + 28},${ty + 40} Q${CX - 30},${ty + 26} ${CX - hw / 2 - 6},${ty + 30} Z`, '#5a4f44') +
-      P(`M${CX + 28},${ty + 40} Q${CX - 30},${ty + 26} ${CX - hw / 2 - 6},${ty + 30}`, 'none', 2) + E(CX, ty - 20, 5, 3, '#5a4f44', 1.8);
-    if (kind === 'ushanka') { const fc = '#7a6652'; o.back = P(`M${CX - hd.w / 2 - 16},${ty + 26} q-16,42 6,78 l22,-8 l-2,-66 Z`, fc) + P(`M${CX + hd.w / 2 + 16},${ty + 26} q16,42 -6,78 l-22,-8 l2,-66 Z`, fc);
+    if (kind === 'flatcap') o.front = P(`M${CX - hw / 2 - 6},${ty + 30} Q${CX - hw / 2 - 4},${ty - 26} ${CX + 6},${ty - 22} Q${CX + hw / 2 + 16},${ty - 18} ${CX + hw / 2 + 12},${ty + 28} Q${CX + hw / 2 + 22},${ty + 42} ${CX + 28},${ty + 40} Q${CX - 30},${ty + 26} ${CX - hw / 2 - 6},${ty + 30} Z`, capc) +
+      P(`M${CX + 28},${ty + 40} Q${CX - 30},${ty + 26} ${CX - hw / 2 - 6},${ty + 30}`, 'none', 2) + E(CX, ty - 20, 5, 3, capc, 1.8);
+    if (kind === 'ushanka') { const fc = ['#7a6652', '#5c5650', '#8a7a5c', '#6b5d57'][v]; o.back = P(`M${CX - hd.w / 2 - 16},${ty + 26} q-16,42 6,78 l22,-8 l-2,-66 Z`, fc) + P(`M${CX + hd.w / 2 + 16},${ty + 26} q16,42 -6,78 l-22,-8 l2,-66 Z`, fc);
       o.front = P(`M${CX - hw / 2 - 16},${ty + 40} Q${CX - hw / 2 - 20},${ty - 34} ${CX},${ty - 36} Q${CX + hw / 2 + 20},${ty - 34} ${CX + hw / 2 + 16},${ty + 40} Q${CX},${ty + 26} ${CX - hw / 2 - 16},${ty + 40} Z`, fc) +
         P(`M${CX - 44},${ty + 30} Q${CX - 46},${ty - 2} ${CX},${ty - 4} Q${CX + 46},${ty - 2} ${CX + 44},${ty + 30}`, shade(fc, 0.16), 2); }
-    if (kind === 'hat') o.front = E(CX, ty + 26, hw / 2 + 34, 13, '#5c5347') + P(`M${CX - hw / 2 + 6},${ty + 24} Q${CX - hw / 2 + 10},${ty - 40} ${CX},${ty - 38} Q${CX + hw / 2 - 10},${ty - 40} ${CX + hw / 2 - 6},${ty + 24} Q${CX},${ty + 36} ${CX - hw / 2 + 6},${ty + 24} Z`, '#5c5347') +
+    if (kind === 'hat') o.front = E(CX, ty + 26, hw / 2 + 34, 13, hatc) + P(`M${CX - hw / 2 + 6},${ty + 24} Q${CX - hw / 2 + 10},${ty - 40} ${CX},${ty - 38} Q${CX + hw / 2 - 10},${ty - 40} ${CX + hw / 2 - 6},${ty + 24} Q${CX},${ty + 36} ${CX - hw / 2 + 6},${ty + 24} Z`, hatc) +
       P(`M${CX - hw / 2 + 6},${ty + 10} Q${CX},${ty + 24} ${CX + hw / 2 - 6},${ty + 10}`, 'none', 5, 'opacity=".55"');
-    if (kind === 'scarf') { const sc = '#b9a877', x0 = CX - hd.w / 2 - 14, x1 = CX + hd.w / 2 + 14;
+    if (kind === 'scarf') { const sc = ['#b9a877', '#a9b5a0', '#c2a59a', '#a3adba'][v], x0 = CX - hd.w / 2 - 14, x1 = CX + hd.w / 2 + 14;
       o.back = P(`M${x0 + 4},${cy + hd.h / 2 + 6} Q${x0 - 14},${ty - 4} ${CX},${ty - 18} Q${x1 + 14},${ty - 4} ${x1 - 4},${cy + hd.h / 2 + 6} Z`, sc);
-      let spots = ''; for (let i = 0; i < 9; i++) spots += E(CX + (r() - 0.5) * hd.w * 0.9, ty + 6 + r() * 26, 6, 4, '#a8463b', 0.01, 'stroke="none"');
+      let spots = ''; for (let i = 0; i < 9; i++) spots += E(CX + (r() - 0.5) * hd.w * 0.9, ty + 6 + r() * 26, 6, 4, acc, 0.01, 'stroke="none"');
       o.front = `<g clip-path="url(#${clip})">` + P(`M${CX - hw},${ty - 24} L${CX + hw},${ty - 24} L${CX + hw},${ty + 46} Q${CX},${ty + 8} ${CX - hw},${ty + 46} Z`, sc, 2) + spots + '</g>' +
         P(`M${CX - 12},${cy + hd.h / 2 - 2} q12,-10 24,0 q-2,12 -12,12 q-10,0 -12,-12 Z`, sc) + P(`M${CX - 8},${cy + hd.h / 2 + 8} l-22,34 l26,-6 Z`, sc) + P(`M${CX + 8},${cy + hd.h / 2 + 8} l22,34 l-26,-6 Z`, shade(sc, 0.1)); }
     if (kind === 'peaked') o.front = P(`M${CX - hw / 2 - 26},${ty + 8} Q${CX},${ty - 52} ${CX + hw / 2 + 26},${ty + 8} Q${CX},${ty - 4} ${CX - hw / 2 - 26},${ty + 8} Z`, '#5e6c79') +
@@ -318,7 +330,7 @@
         scallop(CX - hw / 2 - 4, CX + hw / 2 + 4, ty + 12, 8, 19, mc);
       o.front = scallop(CX - hw / 2 + 12, CX + hw / 2 - 12, ty + 12, 6, 14, shade(mc, 0.06)) + P(`M${CX + 4},${ty - 6} l0,-18`, 'none', 5) + P(`M${CX - 14},${ty - 22} q18,-22 36,0 q-18,8 -36,0 Z`, '#a8463b') + dot(CX - 2, ty - 27, 2.4, '#efe6d2') + dot(CX + 11, ty - 25, 2, '#efe6d2'); }
     if (kind === 'antennae') o.back = P(`M${CX - 26},${ty + 16} Q${CX - 34},${ty - 50} ${CX - 76},${ty - 60}`, 'none', 3) + P(`M${CX + 26},${ty + 16} Q${CX + 34},${ty - 50} ${CX + 76},${ty - 60}`, 'none', 3) + E(CX - 78, ty - 60, 5, 5, skin) + E(CX + 78, ty - 60, 5, 5, skin);
-    if (kind === 'antenna') o.back = P(`M${CX + 30},${ty + 12} L${CX + 40},${ty - 46}`, 'none', 3.2) + E(CX + 41, ty - 50, 6.5, 6.5, '#b9483f');
+    if (kind === 'antenna') o.back = P(`M${CX + 30},${ty + 12} L${CX + 40},${ty - 46}`, 'none', 3.2) + E(CX + 41, ty - 50, 6.5, 6.5, acc);
     if (kind === 'snakes') { let s = ''; for (let i = 0; i < 7; i++) { const x = CX - hw / 2 + 10 + (hw - 20) * (i / 6), a = (i - 3) * 9 + (r() - 0.5) * 8, len = 40 + r() * 22;
       const ex = x + Math.sin(a * Math.PI / 180) * len * 1.4, ey = ty + 14 - len;
       s += `<path d="M${f(x)},${ty + 22} Q${f(x + (i % 2 ? 16 : -16))},${f(ty - len / 3)} ${f(ex)},${f(ey)}" stroke="${LINE}" stroke-width="12" fill="none" stroke-linecap="round"/><path d="M${f(x)},${ty + 22} Q${f(x + (i % 2 ? 16 : -16))},${f(ty - len / 3)} ${f(ex)},${f(ey)}" stroke="${shade(skin, 0.14)}" stroke-width="7.6" fill="none" stroke-linecap="round"/>` + dot(ex - 2, ey - 1, 1.3) + dot(ex + 2, ey - 1, 1.3); }
@@ -434,7 +446,7 @@
     const hd = HEADS[spec.head] || HEADS.potato, skin = SKIN[spec.skin] || SKIN.peach, hair = HAIR[spec.hair] || HAIR.dark;
     const cy = cy0 != null ? cy0 : (spec.head === 'drop' ? 262 : 230 - hd.h / 2) + m.dy;
     const d = headPath(hd, CX, cy, r);
-    const t = top(spec.top, hd, cy, hair, skin, r, uid + 'h');
+    const t = top(spec.top, hd, cy, hair, skin, r, uid + 'h', spec);
     const fc = face(spec, hd, cy, skin, hair, m, r, uid);
     const jelly = spec.skin === 'jelly' || spec.species === 'blob';
     let s = t.back + ears(spec.ears, hd, cy, skin);
@@ -511,16 +523,22 @@
       crest: 'a spiny crest', helmet: 'a glass dome helmet' },
     face: { none: '', stubble: 'stubble', moustache: 'a thick moustache', longmoustache: 'a long drooping moustache', beard: 'a beard', hugebeard: 'a huge beard down to the belt', mossbeard: 'a beard of moss' },
     tex: { none: '', wrinkles: 'deep wrinkles', scales: 'scaly skin', spots: 'spotted skin', cracks: 'cracked bark-like skin', rivets: 'rivets and dents', fur: 'shaggy fur' },
-    clothes: { denim: 'a denim jacket over a plaid shirt', vatnik: 'a grey quilted padded work jacket', coat: 'an old brown coat', overcoat: 'a long unbuttoned overcoat with a crooked tie', leather: 'a black leather jacket',
-      blazer: 'a crimson blazer with a thick gold chain', chef: 'a white chef jacket', uniform: 'a grey-blue militia uniform', tracksuit: 'a 1990s tracksuit with side stripes', telnyashka: 'a striped sailor vest',
-      rubakha: 'a long peasant shirt with a rope belt', trench: 'a belted grey trench coat', suit: 'a worn grey suit with medal ribbons', sweater: 'a plain dark sweater', cape: 'a black cape with a high collar',
-      spacesuit: 'a worn quilted spacesuit', none: 'no clothes' },
+    clothes: { denim: 'a {c} denim jacket over a plaid shirt', vatnik: 'a {c} quilted padded work jacket', coat: 'an old {c} coat', overcoat: 'a long unbuttoned {c} overcoat with a crooked tie', leather: 'a {c} leather jacket',
+      blazer: 'a {c} blazer with a thick gold chain', chef: 'a {c} chef jacket', uniform: 'a {c} militia uniform', tracksuit: 'a {c} 1990s tracksuit with side stripes', telnyashka: 'a striped sailor vest',
+      rubakha: 'a long {c} peasant shirt with a rope belt', trench: 'a belted {c} trench coat', suit: 'a worn {c} suit with medal ribbons', sweater: 'a plain {c} sweater', cape: 'a {c} cape with a high collar',
+      spacesuit: 'a worn {c} quilted spacesuit', none: 'no clothes' },
+    own: { denim: 'faded blue', vatnik: 'grey', coat: 'brown', overcoat: 'olive', leather: 'black', blazer: 'crimson', chef: 'white', uniform: 'grey-blue', tracksuit: 'dark teal', rubakha: 'unbleached',
+      trench: 'grey-beige', suit: 'grey', sweater: 'dark brown', cape: 'black', spacesuit: 'off-white' },
+    tone: { slate: 'slate-blue', ink: 'dark ink-blue', olive: 'olive', sand: 'sand-coloured', rust: 'rust-brown', wine: 'wine-red', plum: 'dusty plum', sage: 'sage-green', teal: 'muted teal', mustard: 'mustard' },
+    accent: { crimson: 'crimson', mustard: 'yellow', teal: 'turquoise', blue: 'blue', plum: 'purple', green: 'green', orange: 'orange' },
     build: { tiny: 'half the height of a man', narrow: 'thin', medium: 'of average build', wide: 'stout', huge: 'huge and broad' },
     mood: { calm: 'calm and heavy, looking straight at us', irritated: 'irritated, head turned a little away, eyes aside', caught: 'caught out: head pulled back, brows raised, a drop of sweat on the temple',
       smug: 'smug, head tilted, one eyebrow raised, a one-sided smile', scared: 'frightened, shoulders up, mouth open', sullen: 'sullen, head lowered, looking at the floor' },
     mark: { none: '', scar: 'one straight scar through the left eyebrow', tattoo: 'a small anchor tattoo on the side of the neck', both: 'one straight scar through the left eyebrow and a small anchor tattoo on the side of the neck' },
     skin: { peach: '', tan: '', ruddy: 'ruddy skin', pale: 'pale skin', grey: 'grey skin', olive: 'olive-green skin', teal: 'grey-green skin', lilac: 'dull lilac skin', ochre: 'ochre skin', moss: 'mossy green-brown skin',
-      bone: 'bone-white skin', brick: 'dark brick-red skin', steel: 'dull steel plating', jelly: 'translucent pale green jelly', fur: 'grey-brown fur' },
+      bone: 'bone-white skin', brick: 'dark brick-red skin', steel: 'dull steel plating', jelly: 'translucent pale green jelly', fur: 'grey-brown fur',
+      umber: 'dark brown skin', bronze: 'bronze skin', plum: 'dusty plum skin', azure: 'dusty blue skin', coral: 'dull coral skin', mint: 'pale mint skin', mustard: 'mustard-yellow skin', rose: 'dusty pink skin',
+      ash: 'ash-violet skin', copper: 'dull copper plating', enamel: 'chipped green enamel', bark: 'brown bark-like skin', ashfur: 'ash-grey fur' },
   };
   function prompt(input) {
     const s = normalize(input), bits = [];
@@ -530,7 +548,7 @@
     add(EN.nose[s.nose]); add(EN.mouthx[s.mouthx]); add(EN.ears[s.ears]); add(EN.top[s.top]); add(EN.face[s.face]); add(EN.tex[s.tex]);
     if (s.glasses !== 'none' && s.eyes === 'dot' && s.eyen === 2) add(s.glasses === 'round' ? 'small round wire glasses, each eye inside its own lens' : 'small rectangular glasses, each eye inside its own lens');
     add(EN.mark[s.mark]);
-    return `One detainee seen from the waist up from the duty officer's window of an intergalactic militia station (a shabby Russian station lobby at night, 1994): ${EN.species[s.species]}, ${bits.join(', ')}, wearing ${EN.clothes[s.clothes]}. ` +
+    return `One detainee seen from the waist up from the duty officer's window of an intergalactic militia station (a shabby Russian station lobby at night, 1994): ${EN.species[s.species]}, ${bits.join(', ')}, wearing ${EN.clothes[s.clothes].replace('{c}', EN.tone[s.tone] || EN.own[s.clothes] || '')}. The only saturated colour is one small ${EN.accent[s.accent]} accent (tie, scarf pattern or trim). ` +
       `State, acted with the whole upper body: ${EN.mood[s.mood]}. Ordinary, tired, deadpan; nothing cute, heroic or scary. Match the art style of the attached reference sheet exactly: thin, even, slightly wobbly dark-brown contour, ` +
       `flat muted earthy colours with one soft shadow tone, an oversized rounded head with small features in the centre of the face. No bars, no window frame, no text.`;
   }

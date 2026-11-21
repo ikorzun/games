@@ -9,7 +9,7 @@
   const GROUPS = [
     ['sec.head', ['head', 'skin', 'top', 'hair', 'ears', 'tex']],
     ['sec.face', ['eyes', 'eyen', 'nose', 'mouthx', 'face', 'glasses']],
-    ['sec.body', ['build', 'clothes', 'mark']],
+    ['sec.body', ['build', 'clothes', 'tone', 'accent', 'mark']],
   ];
 
   const st = { kind: 'all', spec: null, bars: true, lobby: true, tab: 'data', queue: [] };

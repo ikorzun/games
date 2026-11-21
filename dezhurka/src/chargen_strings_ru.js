@@ -21,11 +21,12 @@
     leshy: 'Леший', vodyanoy: 'Водяной', domovoy: 'Домовой', chert: 'Чёрт', gorynych: 'Змей Горыныч', koschei: 'Кощей', vampire: 'Упырь', volkolak: 'Волколак',
     likho: 'Лихо одноглазое', kikimora: 'Кикимора', minotaur: 'Минотавр', gorgon: 'Горгона' });
   add('dz.cg.part.', { species: 'Вид', head: 'Форма головы', skin: 'Кожа', eyes: 'Глаза', eyen: 'Сколько глаз', nose: 'Нос', mouthx: 'У рта', ears: 'Уши', top: 'На голове',
-    hair: 'Цвет волос', face: 'Усы и борода', tex: 'Фактура', clothes: 'Одежда', build: 'Сложение', glasses: 'Очки', mark: 'Приметы', mood: 'Состояние' });
+    hair: 'Цвет волос', face: 'Усы и борода', tex: 'Фактура', clothes: 'Одежда', tone: 'Цвет одежды', accent: 'Цветной акцент', build: 'Сложение', glasses: 'Очки', mark: 'Приметы', mood: 'Состояние' });
 
   add('dz.cg.head.', { potato: 'Картошка', egg: 'Яйцо', pear: 'Груша', brick: 'Кирпич', bean: 'Боб', bulb: 'Луковица', dome: 'Купол', skull: 'Череп', box: 'Коробка', drop: 'Капля' });
   add('dz.cg.skin.', { peach: 'Светлая', tan: 'Смуглая', ruddy: 'Румяная', pale: 'Бледная', grey: 'Серая', olive: 'Болотная', teal: 'Сизая', lilac: 'Сиреневая', ochre: 'Охристая',
-    moss: 'Мшистая', bone: 'Костяная', brick: 'Кирпичная', steel: 'Железо', jelly: 'Студень', fur: 'Шерсть' });
+    moss: 'Мшистая', bone: 'Костяная', brick: 'Кирпичная', steel: 'Железо', jelly: 'Студень', fur: 'Шерсть', umber: 'Тёмная', bronze: 'Бронзовая', plum: 'Сливовая', azure: 'Голубая',
+    coral: 'Коралловая', mint: 'Мятная', mustard: 'Горчичная', rose: 'Розовая', ash: 'Пепельная', copper: 'Медь', enamel: 'Зелёная эмаль', bark: 'Кора', ashfur: 'Серая шерсть' });
   add('dz.cg.eyes.', { dot: 'Обычные', almond: 'Миндалины', compound: 'Фасеточные', slit: 'Змеиные', lamp: 'Лампы', stalk: 'На стебельках' });
   add('dz.cg.eyen.', { 1: 'Один', 2: 'Два', 3: 'Три', 4: 'Четыре' });
   add('dz.cg.nose.', { none: 'Нет', bump: 'Маленький', potato: 'Картошкой', hook: 'Крючком', snout: 'Пятачок', slits: 'Щёлки' });
@@ -34,7 +35,9 @@
   add('dz.cg.top.', { bald: 'Лысина', buzz: 'Ёжик', short: 'Короткие волосы', curly: 'Кудри', sidehair: 'Лысина с боками', long: 'Длинные волосы', bun: 'Пучок', widow: 'Зализанные',
     flatcap: 'Кепка', ushanka: 'Ушанка', hat: 'Шляпа', scarf: 'Платок', peaked: 'Фуражка', crown: 'Корона', horns: 'Рожки', bullhorns: 'Бычьи рога', moss: 'Мох и гриб',
     antennae: 'Усики', antenna: 'Антенна', snakes: 'Змеи', crest: 'Гребень', helmet: 'Шлем' });
-  add('dz.cg.hair.', { dark: 'Тёмные', brown: 'Каштановые', ginger: 'Рыжие', grey: 'Седые', white: 'Белые', black: 'Чёрные', moss: 'Зелёные' });
+  add('dz.cg.hair.', { dark: 'Тёмные', brown: 'Каштановые', ginger: 'Рыжие', grey: 'Седые', white: 'Белые', black: 'Чёрные', moss: 'Зелёные', blond: 'Русые', bluegrey: 'Сизые' });
+  add('dz.cg.tone.', { own: 'Обычный', slate: 'Сизый', ink: 'Чернильный', olive: 'Оливковый', sand: 'Песочный', rust: 'Ржавый', wine: 'Винный', plum: 'Сливовый', sage: 'Шалфейный', teal: 'Морской', mustard: 'Горчичный' });
+  add('dz.cg.accent.', { crimson: 'Красный', mustard: 'Жёлтый', teal: 'Бирюзовый', blue: 'Синий', plum: 'Лиловый', green: 'Зелёный', orange: 'Оранжевый' });
   add('dz.cg.face.', { none: 'Нет', stubble: 'Щетина', moustache: 'Усы', longmoustache: 'Висячие усы', beard: 'Борода', hugebeard: 'Борода до пояса', mossbeard: 'Борода из мха' });
   add('dz.cg.tex.', { none: 'Гладкая', wrinkles: 'Морщины', scales: 'Чешуя', spots: 'Пятна', cracks: 'Трещины', rivets: 'Заклёпки', fur: 'Шерсть' });
   add('dz.cg.clothes.', { denim: 'Джинсовка', vatnik: 'Ватник', coat: 'Старое пальто', overcoat: 'Пальто и галстук', leather: 'Кожанка', blazer: 'Малиновый пиджак', chef: 'Китель повара',
