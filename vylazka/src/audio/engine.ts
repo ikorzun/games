@@ -199,7 +199,7 @@ export class AudioEngine {
    * Сколько файлов уже загружено и сколько должно быть; сколько разобрано и сколько это занимает памяти (МБ, по
    * четыре байта на отсчёт).
    */
-  status(): { loaded: number; total: number; known: number; missing: number; decoded: number; mb: number; resident: string[]; state: string; muted: boolean; enabled: boolean; loops: string[]; asked: Record<string, number>; played: Record<string, number> } {
+  status(): { loaded: number; total: number; known: number; missing: number; decoded: number; mb: number; resident: string[]; state: string; muted: boolean; enabled: boolean; loops: string[]; audible: string[]; asked: Record<string, number>; played: Record<string, number> } {
     let bytes = 0;
     for (const b of this.buffers.values()) bytes += (b.length ?? 0) * (b.numberOfChannels ?? 1) * 4;
     /** Большие петли, которые сейчас разобраны (остальные лежат сжатыми). */
@@ -216,6 +216,9 @@ export class AudioEngine {
       muted: this.muted,
       enabled: this.enabled,
       loops: this.activeLoops(),
+      // Петли, от которых игра сейчас хочет звука (громкость-цель выше нуля). Затихающая остаётся в loops, пока не отзвучит по
+      // часам звука, — а часы на загруженной машине (CI, программная отрисовка) идут как придётся; «стихло» проверяют по цели.
+      audible: [...this.loops].filter(([, v]) => v.target > 0).map(([id]) => id),
       asked: Object.fromEntries(this.asked),
       played: Object.fromEntries(this.played),
     };

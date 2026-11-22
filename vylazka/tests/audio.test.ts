@@ -390,6 +390,31 @@ describe('звук и память телефона (критика курато
     expect(c.times('amb_bunker_1.mp3')).toEqual({ fetched: 1, decoded: 1 });
   });
 
+  it('слышимое — по цели: стихшая петля сразу уходит из audible, а из loops — только когда отзвучит по часам звука (CI 9a1a6da)', async () => {
+    const c = fakeMemoryAudio();
+    const e = new AudioEngine('./audio/', ['ui_start_1.mp3', 'amb_bunker_1.mp3', 'hatch_1.mp3', 'ui_click_1.mp3']);
+    e.preload(loadFirst('shelter'));
+    await wait(5);
+    e.unlock();
+    e.loop('amb_bunker', 1);
+    expect(e.status().audible).toEqual(['amb_bunker']);
+    // Карман: гул стих — его не слышно сразу, хотя узел ещё доигрывает спад.
+    e.loop('amb_bunker', 0);
+    expect(e.status().audible).toEqual([]);
+    expect(e.status().loops).toEqual(['amb_bunker']);
+    // Часы звука стоят (загруженная машина): узел так и висит, слышимого по-прежнему нет.
+    for (let i = 0; i < 5; i++) e.loop('amb_bunker', 0);
+    expect(e.status().loops).toEqual(['amb_bunker']);
+    expect(e.status().audible).toEqual([]);
+    // Часы пошли — петля отзвучала и остановлена.
+    c.clock.t += 2000;
+    e.loop('amb_bunker', 0);
+    expect(e.status().loops).toEqual([]);
+    // Вернулись — снова слышно.
+    e.loop('amb_bunker', 1);
+    expect(e.status().audible).toEqual(['amb_bunker']);
+  });
+
   it('гул места следующей сцены (want) разбирается заранее и держится минуту; не понадобился — выгружен', async () => {
     const c = fakeMemoryAudio();
     const e = new AudioEngine('./audio/', ['ui_start_1.mp3', 'amb_bunker_1.mp3', 'hatch_1.mp3', 'ui_click_1.mp3', 'amb_office_1.mp3']);

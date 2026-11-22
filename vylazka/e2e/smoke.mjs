@@ -1261,8 +1261,14 @@ async function scenarioIllusions(browser, baseUrl) {
     for (const t of things) {
       if (!(await vz(page, ([i]) => window.__vz.gotoThing(i, 2.2), [t.id]))) continue;
       const from = (await state(page)).pos;
+      // Только вещь на полу (на неё и наступают). Лежащая на столе или полке растворяется вместе с опорой, которую задеваешь по
+      // дороге, и опора, вернувшись другой, её уже не держит — вещь стирается совсем (applyComeback: «снимку стола чашку не
+      // удержать»; CI 9a1a6da: пульт на 0,7 м).
+      if (t.pos[1] - from[1] > 0.25) continue;
       // Взгляд в пол: иначе вещь растворится не от касания, а от долгого взгляда (у неё своя судьба), и вернуться ей незачем.
-      await vz(page, () => window.__vz.look(window.__vz.state().aim[0], -1.3));
+      // look — приращение (Game.look прибавляет к прицелу), а не угол: прежнее look(aim[0], −1.3) разворачивало игрока от вещи,
+      // и шаг доходил до неё, только когда курс случайно был около нуля (CI 9a1a6da; проба: 4 вещи на полу — ни одной).
+      await vz(page, () => window.__vz.look(0, -1.3));
       let cur = t;
       for (let i = 0; i < 40 && cur.state !== 'gone' && cur.state !== 'erased'; i++) {
         await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
@@ -1888,13 +1894,36 @@ async function scenarioSession(browser, baseUrl) {
   // Вызвать воспоминание и тем же обращением к странице прочитать вспышку. Она горит 5,2 с настоящего
   // времени, а между вызовом и чтением у теста бывают десятки обращений: на медленной машине (CI)
   // вспышка успевала погаснуть раньше, чем её читали.
-  const revealNow = () =>
-    vz(page, () => {
+  const revealNow = async () => {
+    const r = await vz(page, () => {
       window.__vz.reveal();
       const s = window.__vz.step(5);
       const el = document.querySelector('.vz-hud__flash');
       return { st: s, flash: { on: el.classList.contains('is-on'), text: el.textContent } };
     });
+    // Строка пришедшей вещи ждёт, пока догорит горящая — «вспомнил» прошлой вещи (hud.flash, queue; Z-19, приём 1): ждём её
+    // в самой странице, по настоящему времени, — до 5,2 с горения и 1,6 с угасания прошлой строки (CI 9a1a6da).
+    const active = r.st.session?.memories.find((m) => m.state === 'active');
+    const want = active ? memText(RU, active.id, 'flash') : null;
+    if (want && !(r.flash.on && r.flash.text === want)) {
+      const seen = await page
+        .waitForFunction(
+          (w) => {
+            const el = document.querySelector('.vz-hud__flash');
+            return el.classList.contains('is-on') && el.textContent === w ? { on: true, text: el.textContent } : false;
+          },
+          want,
+          { timeout: 12000, polling: 50 },
+        )
+        .then((h) => h.jsonValue())
+        .catch(() => null);
+      r.flash = seen ?? (await page.evaluate(() => {
+        const el = document.querySelector('.vz-hud__flash');
+        return { on: el.classList.contains('is-on'), text: el.textContent };
+      }));
+    }
+    return r;
+  };
   let revealed = await revealNow();
   st = revealed.st;
   b0 = brief(st);
@@ -2215,7 +2244,8 @@ async function scenarioThings(browser, baseUrl) {
     const where = (list) => new Map(list.map((t) => [t.id, t.pos.map((v) => v.toFixed(2)).join(',')]));
     const reached = anchor ? await vz(page, (id) => window.__vz.gotoThing(id, 2.4), anchor.id) : false;
     // В темноте вещь меняется только вне кадра (K-21): подошёл — отвернулся и смотрит вверх, мелкие вещи рядом не на виду.
-    await vz(page, () => window.__vz.look(window.__vz.state().aim[0] + Math.PI, 0.9));
+    // look — приращение: развернуться — π, а не «курс + π» (тот разворачивал куда придётся; вещи прятал только взгляд вверх).
+    await vz(page, () => window.__vz.look(Math.PI, 0.9));
     await vz(page, () => window.__vz.step(30));
     const before = where(await vz(page, () => window.__vz.things()));
     await vz(page, () => window.__vz.toggleLight());
@@ -3187,25 +3217,29 @@ async function scenarioAudio(browser, baseUrl) {
   const spark2 = au.played.flash_spark ?? 0;
   check('скачок звучит: искра в момент смены места', st.where === 'pocket' && spark2 === spark1 + 1, `${spark1} → ${spark2}`);
   await stepUntil(page, (s) => s.jump === null, 20, 30);
-  au = await audioUntil(page, (a) => !a.loops.includes('amb_bunker') && !a.loops.includes('breath_calm'));
-  check('вне убежища его гул и дыхание стихают', !au.loops.includes('amb_bunker') && !au.loops.includes('breath_calm'), au.loops.join(', '));
+  // «Стихают» — по громкости, которой игра хочет от петли (audible), а не по её узлам: затихшая петля отпускается по часам
+  // звука, а они на CI под программной отрисовкой стояли — в web-plain 9a1a6da гул «звучал» в кармане и в лимбо, в Playgama
+  // тот же код прошёл. Состояние AudioContext — в сообщении.
+  const ears = (a) => `слышно: ${a.audible.join(', ') || '—'}; узлы: ${a.loops.join(', ')}; ${a.state}`;
+  au = await audioUntil(page, (a) => !a.audible.includes('amb_bunker') && !a.audible.includes('breath_calm'));
+  check('вне убежища его гул и дыхание стихают', !au.audible.includes('amb_bunker') && !au.audible.includes('breath_calm'), ears(au));
   await vz(page, () => window.__vz.jump('elsewhere', 'cut'));
   await stepUntil(page, (s) => s.where === 'main' && s.jump === null, 20, 30);
-  au = await audioUntil(page, (a) => a.loops.includes('amb_bunker'));
-  check('вернулись в убежище — гул вернулся', au.loops.includes('amb_bunker'), JSON.stringify({ loops: au.loops, state: au.state, where: (await state(page)).where, paused: (await state(page)).paused }));
+  au = await audioUntil(page, (a) => a.audible.includes('amb_bunker'));
+  check('вернулись в убежище — гул вернулся', au.audible.includes('amb_bunker'), JSON.stringify({ ears: ears(au), where: (await state(page)).where, paused: (await state(page)).paused }));
 
   await vz(page, () => window.__vz.finish());
   st = await stepUntil(page, (s) => s.where === 'limbo', 20, 40);
   st = await vz(page, () => window.__vz.step(120));
-  au = await audioUntil(page, (a) => !a.loops.includes('amb_bunker'));
-  check('лимбо: звучит сообщение системы, гул убежища стих, музыки меню нет', st.where === 'limbo' && (au.played.ui_report ?? 0) === at0.report + 1 && !au.loops.includes('amb_bunker') && !au.loops.includes('music_menu'), JSON.stringify({ where: st.where, report: au.played.ui_report, loops: au.loops }));
+  au = await audioUntil(page, (a) => !a.audible.includes('amb_bunker'));
+  check('лимбо: звучит сообщение системы, гул убежища стих, музыки меню нет', st.where === 'limbo' && (au.played.ui_report ?? 0) === at0.report + 1 && !au.audible.includes('amb_bunker') && !au.audible.includes('music_menu'), JSON.stringify({ where: st.where, report: au.played.ui_report, ears: ears(au) }));
   for (let i = 0; i < 50 && st.profile.sorties <= sorties0; i++) {
     st = await vz(page, () => window.__vz.step(60));
     await sleep(150);
   }
   st = await vz(page, () => window.__vz.step(30));
-  au = await audioUntil(page, (a) => a.loops.includes('amb_bunker'));
-  check('началась следующая сессия: люк звучит снова, гул убежища вернулся', st.where === 'main' && st.profile.sorties === sorties0 + 1 && (au.played.hatch ?? 0) === at0.hatch + 1 && au.loops.includes('amb_bunker'), JSON.stringify({ where: st.where, hatch: au.played.hatch, loops: au.loops }));
+  au = await audioUntil(page, (a) => a.audible.includes('amb_bunker'));
+  check('началась следующая сессия: люк звучит снова, гул убежища вернулся', st.where === 'main' && st.profile.sorties === sorties0 + 1 && (au.played.hatch ?? 0) === at0.hatch + 1 && au.audible.includes('amb_bunker'), JSON.stringify({ where: st.where, hatch: au.played.hatch, ears: ears(au) }));
 
   check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0);
   check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
