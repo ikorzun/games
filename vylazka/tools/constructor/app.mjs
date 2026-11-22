@@ -12,6 +12,7 @@
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -85,6 +86,35 @@ async function update() {
 }
 
 /** Где npm: рядом с node (так ставят nodejs.org, Homebrew и nvm); иначе — какой найдётся. */
+/**
+ * Общая память Claude Code на этом Mac (~/.claude/CLAUDE.md; квиз партнёра 22.11 — «Через Конструктор»): правила партнёра для
+ * всех проектов. Блок между метками заменяется целиком, остальное в файле не трогается; текст — claude_memory.md рядом.
+ */
+const MEM_START = '<!-- constructor:rules -->';
+const MEM_END = '<!-- /constructor:rules -->';
+export function mergeMemory(old, rules) {
+  const block = `${MEM_START}\n${rules.trim()}\n${MEM_END}`;
+  const a = old.indexOf(MEM_START);
+  const b = old.indexOf(MEM_END);
+  if (a >= 0 && b > a) return old.slice(0, a) + block + old.slice(b + MEM_END.length);
+  return old.trim() ? `${old.replace(/\s*$/, '')}\n\n${block}\n` : `${block}\n`;
+}
+function memory() {
+  try {
+    const src = join(ROOT, 'tools/constructor/claude_memory.md');
+    if (!existsSync(src)) return;
+    const file = join(homedir(), '.claude', 'CLAUDE.md');
+    const old = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    const next = mergeMemory(old, readFileSync(src, 'utf8'));
+    if (next === old) return;
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, next);
+    log('память Claude Code: правила партнёра записаны');
+  } catch (e) {
+    log(`память Claude Code: ${String(e?.message ?? e)}`);
+  }
+}
+
 function npm() {
   const cli = join(dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js');
   return existsSync(cli) ? [process.execPath, [cli]] : ['npm', []];
@@ -147,6 +177,7 @@ async function main() {
   say('STATUS', 'Забираю свежее с GitHub…');
   const note = await update();
   if (note) log(note);
+  memory();
   if (!(await packages(before))) return;
   say('STATUS', 'Собираю конструктор…');
   const { startServer } = await import('./serve.mjs');
