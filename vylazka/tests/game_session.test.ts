@@ -2591,12 +2591,15 @@ describe('игра целиком: всё иллюзорно', () => {
   });
 
   it('крупная вещь, которую ищут, держит, как всё настоящее: сквозь неё не пройти; взгляд и свет её преграда пропускает (куратор, 258)', () => {
-    // Офис: первая вещь цепочки — терминал (выше 0,4 м).
-    const h = new Harness(buildLevel(generateLayout(SEED, 2, 'office')), { seed: 3, cfg: { ...QUICK, delay: 500 } });
+    // Офис: кулер (выше 0,5 м — крупная вещь; терминал с 24.11 мелочь и парит над столом).
+    const office = buildLevel(generateLayout(SEED, 2, 'office'));
+    const h = new Harness(office, { seed: 3, cfg: { ...QUICK, delay: 500 } });
     const g = h.game;
+    g.loadLevel(office, { seed: 3, known: new Set(), chainAt: OFFICE_CHAIN.findIndex((m) => m.thing === 'water_cooler') });
     const { id } = h.reveal();
     const t = g.things.list.find((x) => x.id === id)!;
-    expect((ALL_PROPS[t.kind]?.h ?? 0) > 0.4, t.kind).toBe(true);
+    expect(t.kind).toBe('water_cooler');
+    expect((ALL_PROPS[t.kind]?.h ?? 0) > 0.5, t.kind).toBe(true);
     expect(t.collider).toBeGreaterThanOrEqual(0);
     const box = g.colliders.boxes[t.collider]!;
     expect(box.ghost).toBeFalsy();
@@ -4807,5 +4810,52 @@ describe('метаслой: обрывок на экспонате в лимбо
     expect(h2.until(() => h2.dreamCount('begin') > 0, 20)).toBe(true);
     expect(h2.dreamCount('meta')).toBe(0);
     expect((h2.log.all.length - t1) * STEP).toBeGreaterThan(plain + 2);
+  });
+});
+
+describe('крупная искомая вещь не врастает в обстановку (партнёр 24.11: «проверить, что все вещи, которые стоит найти, не конфликтуют с другими предметами»)', () => {
+  /** Задевает ли след вещи (круг по полу, от щиколотки до верха) чужую преграду — мебель, стену, другую вещь. */
+  const hits = (g: Game, t: Thing): string[] => {
+    const spec = ALL_PROPS[t.kind]!;
+    // Вещь стоит по сторонам света (поворот — четверть оборота с поправкой меньше 0,05 рад): след — её прямоугольник.
+    const turned = Math.abs(Math.sin(t.yaw)) > 0.5;
+    const hx = (turned ? spec.d : spec.w) / 2;
+    const hz = (turned ? spec.w : spec.d) / 2;
+    const [x, y, z] = t.pos;
+    const out: string[] = [];
+    for (const b of g.colliders.boxes) {
+      if (b.off || b.gone || b.owner === -t.id) continue;
+      if (b.maxY <= y + 0.06 || b.minY >= y + spec.h) continue;
+      if (b.maxX <= x - hx || b.minX >= x + hx || b.maxZ <= z - hz || b.minZ >= z + hz) continue;
+      out.push(`[${b.minX.toFixed(2)},${b.minY.toFixed(2)},${b.minZ.toFixed(2)}..${b.maxX.toFixed(2)},${b.maxY.toFixed(2)},${b.maxZ.toFixed(2)}]`);
+    }
+    return out;
+  };
+  const cases: [string, 'office' | 'yellow', number][] = [];
+  OFFICE_CHAIN.forEach((m, i) => {
+    if ((ALL_PROPS[m.thing]?.h ?? 0) > 0.5) cases.push([m.thing, 'office', i]);
+  });
+  YELLOW_CHAIN.forEach((m, i) => {
+    if ((ALL_PROPS[m.thing]?.h ?? 0) > 0.5) cases.push([m.thing, 'yellow', i]);
+  });
+
+  it('в цепочках офиса и жёлтых комнат крупные вещи есть (иначе проверять нечего)', () => {
+    expect(cases.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(cases)('%s (%s): на полу и мимо мебели и стен — на восьми сидах', (_thing, world, chainAt) => {
+    const bad: string[] = [];
+    for (const seed of [3, 5, 7, 11, 13, 17, 19, 23]) {
+      const level = buildLevel(generateLayout(SEED + seed, 2, world), { wear: 0 });
+      const h = new Harness(levelOf(SEED), { seed, cfg: QUICK });
+      h.game.loadLevel(level, { seed, known: new Set(), chainAt });
+      h.reveal();
+      const t = h.game.things.list.find((x) => x.memory)!;
+      const sp = h.game.session!.active!.spot!;
+      if (sp.kind !== 'floor') bad.push(`сид ${seed}: место «${sp.kind}»`);
+      const hit = hits(h.game, t);
+      if (hit.length > 0) bad.push(`сид ${seed}: задевает ${hit.length}: ${hit.slice(0, 2).join(' ')}`);
+    }
+    expect(bad).toEqual([]);
   });
 });

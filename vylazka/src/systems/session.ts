@@ -335,14 +335,15 @@ export class Session {
    * хуже (берётся, только если лучших нет), Infinity — нельзя. Вещь, которую ищут, не растворяется и не лежит на том, что
    * растворилось или растворяется (партнёр 18.11, 16:02): опора под ней должна быть на месте, а пол — не уходить.
    */
-  private spotRank: (() => (s: ItemSpot) => number) | null = null;
+  private spotRank: (() => (s: ItemSpot, thing?: string) => number) | null = null;
 
-  setSpotRank(fn: (() => (s: ItemSpot) => number) | null): void {
+  /** thing — вид вещи, для которой ищут место: крупной (кулер, кресло) нужен пол, а не стол или полка. */
+  setSpotRank(fn: (() => (s: ItemSpot, thing?: string) => number) | null): void {
     this.spotRank = fn;
   }
 
   /** Место для вещи: в стольких клетках пути от игрока, чтобы за ней пришлось идти, но не через весь объект. */
-  private pickSpot(from: number, rooms?: readonly RoomType[], seen?: (p: Vec3) => boolean): ItemSpot | null {
+  private pickSpot(from: number, rooms?: readonly RoomType[], seen?: (p: Vec3) => boolean, thing?: string): ItemSpot | null {
     const dist = this.distances(from);
     const c = this.cfg;
     const region = this.region;
@@ -350,7 +351,7 @@ export class Session {
     const rank = this.spotRank?.();
     if (rank) {
       // Сначала — лучшие из годных; негодных не берём совсем, даже если других нет: вещь подождёт.
-      const r = new Map(all.map((s) => [s, rank(s)] as const));
+      const r = new Map(all.map((s) => [s, rank(s, thing)] as const));
       const best = Math.min(...r.values());
       all = Number.isFinite(best) ? all.filter((s) => r.get(s) === best) : [];
     }
@@ -477,7 +478,7 @@ export class Session {
       // Последнее воспоминание ждёт minLength: сессия не кончается раньше, как бы быстро ни шёл игрок.
       const early = hidden.length === 1 && !this.rushed && this.time < this.cfg.minLength;
       if (next && !early && this.since >= wait && (inp.observed || this.since >= wait + this.cfg.fallback)) {
-        const spot = this.pickSpot(inp.node, next.def.rooms, inp.seen);
+        const spot = this.pickSpot(inp.node, next.def.rooms, inp.seen, next.def.thing);
         if (spot) {
           next.state = 'active';
           next.spot = spot;
@@ -516,7 +517,7 @@ export class Session {
   forget(from: number): SessionEvent | null {
     const act = this.active;
     if (!act) return null;
-    const spot = this.pickSpot(from);
+    const spot = this.pickSpot(from, undefined, undefined, act.def.thing);
     if (!spot) return null;
     act.spot = spot;
     this.hold = 0;

@@ -488,6 +488,11 @@ const FIRST_DREAM = { from: 3, to: 14, order: ['strobe', 'dark'] as const satisf
 /** На сколько поднять на вид вещь в белом нигде, м: мелочь — выше, крупное — на ладонь над полом. */
 const voidLift = (radius: number): number => Math.max(0.3, Math.min(0.6, 0.85 - radius));
 
+/** Крупная вещь (кулер, кресло, табличка): её ставят на пол, она держит игрока, в пузыре не парит. Терминал (0,42 м) — мелочь: парит над столом. */
+const bigThing = (kind: string): boolean => (ALL_PROPS[kind]?.h ?? 0) > 0.5;
+/** Как далеко от выбранного места искать свободный пол под крупную вещь, м. */
+const BIG_SEEK = 2.6;
+
 const FLOAT = { floor: 1.05, table: 0.55, shelf: 0.32, bob: 0.035, bobHz: 1.1, bubble: 1.2, min: 0.2 } as const;
 /**
  * Подсветка искомой вещи при приближении: с from метров свет памяти разгорается, с full — в полную силу: ярче на strength и
@@ -1406,15 +1411,68 @@ export class Game {
    * (holdsMemory), а тронутую не вернуть. «Сеточное» помещение — только если другого места нет: там пол уходит из-под
    * стоящего, а вещь разглядывают стоя.
    */
-  private spotRanker(): (s: ItemSpot) => number {
+  private spotRanker(): (s: ItemSpot, thing?: string) => number {
     const off = (this.illusions?.list ?? []).filter((i) => i.state !== 'here').map((i) => i.obj);
     const a = this.pressure?.active;
     const sinking = a && a.kind === 'collapse' ? a.room.id : -1;
-    return (s) => {
+    return (s, thing) => {
       const p: Vec3 = [s.x, s.y, s.z];
       if (s.room === sinking || off.some((o) => this.restsOn(p, o))) return Infinity;
-      return this.wireRooms.has(s.room) ? 1 : 0;
+      // Крупной вещи (кулер, кресло, табличка) — пол: на столе или полке она срасталась бы с тем, что там стоит (партнёр 24.11:
+      // «проверить, что все вещи, которые стоит найти, не конфликтуют с другими предметами»). Стол — только если пола нет совсем.
+      const table = thing !== undefined && bigThing(thing) && s.kind !== 'floor' ? 2 : 0;
+      return (this.wireRooms.has(s.room) ? 1 : 0) + table;
     };
+  }
+
+  /**
+   * Свободно ли место под крупную вещь: прямоугольник ±hx × ±hz на полу (y) не задевает ни одной преграды — мебели, стены,
+   * другой вещи — от щиколотки до верха вещи (h). Своя преграда переезжающей вещи — не помеха.
+   */
+  private floorFree(x: number, y: number, z: number, hx: number, hz: number, h: number): boolean {
+    const own = this.memoryThing ? -this.memoryThing.id : 0;
+    for (const b of this.colliders.boxes) {
+      if (b.off || b.gone || (own !== 0 && b.owner === own)) continue;
+      if (b.maxY <= y + 0.06 || b.minY >= y + h) continue;
+      if (b.maxX <= x - hx || b.minX >= x + hx || b.maxZ <= z - hz || b.minZ >= z + hz) continue;
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Место для крупной искомой вещи: ближайшая к выбранному точка пола той же комнаты, где вещь, повёрнутая как угодно, не
+   * задевает обстановку и стены. Ищет кольцами до BIG_SEEK м; не нашлось — вещь остаётся, где выбрана (такое бывает в тесном
+   * чулане, и тест это ловит).
+   */
+  private placeBig(sp: ItemSpot, thing: string, yaw: number, turn = true): { spot: ItemSpot; yaw: number } {
+    const spec = ALL_PROPS[thing];
+    if (!spec) return { spot: sp, yaw };
+    const node = this.level?.nav[this.playerNodeAt([sp.x, sp.y, sp.z])];
+    const floor = sp.kind === 'floor' || !node ? sp.y : node.y;
+    const h = Math.max(0.3, spec.h);
+    // Вещь стоит ровно по сторонам света (с поправкой меньше 0,05 рад — её покрывает запас 4 см): так ей нужен прямоугольник,
+    // а не круг по диагонали. Пробуются обе ориентации, начиная с той, что выпала.
+    const q0 = Math.round(yaw / (Math.PI / 2));
+    const tilt = Math.max(-0.05, Math.min(0.05, yaw - q0 * (Math.PI / 2)));
+    for (let ring = 0; ring <= BIG_SEEK / 0.15; ring++) {
+      const d = ring * 0.15;
+      const n = ring === 0 ? 1 : Math.max(6, Math.round((Math.PI * 2 * d) / 0.15));
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2 + ring * 0.37;
+        const x = sp.x + Math.cos(a) * d;
+        const z = sp.z + Math.sin(a) * d;
+        const at = this.level?.nav[this.playerNodeAt([x, floor, z])];
+        if (!at || at.room !== sp.room || Math.abs(at.y - floor) > 0.3) continue;
+        for (const q of turn ? [q0, q0 + 1] : [q0]) {
+          const turned = Math.abs(Math.sin(q * (Math.PI / 2))) > 0.5;
+          const hx = (turned ? spec.d : spec.w) / 2 + 0.04;
+          const hz = (turned ? spec.w : spec.d) / 2 + 0.04;
+          if (this.floorFree(x, floor, z, hx, hz, h)) return { spot: { ...sp, x, y: floor, z, kind: 'floor' }, yaw: q * (Math.PI / 2) + tilt };
+        }
+      }
+    }
+    return { spot: sp, yaw };
   }
 
   /** Игрок коснулся предмета обстановки: тот растворяется, и всё, что на нём лежало, — вместе с ним. */
@@ -3704,14 +3762,18 @@ export class Game {
       const sp = e.memory.spot!;
       // Крупная вещь (кресло, кулер, пальто, табличка) держит, как держит всё настоящее: она не растворяется (партнёр 18.11,
       // 16:02), значит, сквозь неё не пройти. Взгляд её преграда пропускает (Aabb.clear): вспоминают её глазами.
-      const big = (ALL_PROPS[e.memory.def.thing]?.h ?? 0) > 0.4;
+      const big = bigThing(e.memory.def.thing);
+      // Крупная встаёт на свободный пол той же комнаты: не в мебель и не в стену.
+      const yaw0 = this.rng() * Math.PI * 2;
+      const placed = big ? this.placeBig(sp, e.memory.def.thing, yaw0) : null;
+      if (placed) e.memory.spot = placed.spot;
       // Мелкая искомая вещь парит в пузыре над своим местом (партнёр 24.11): на столе и полке она срасталась бы с тем, что там
       // уже стоит. Крупная (кресло, кулер, табличка) стоит на полу, как стояла.
       this.memFloat = !big;
       // Поднимается само место вещи в сессии: взгляд, зов и тесты ищут её там же, где она видна.
       if (this.memFloat) e.memory.spot = { ...sp, y: sp.y + this.floatLift(sp.kind) };
       const at = e.memory.spot!;
-      this.memoryThing = this.addThing(e.memory.def.thing, [at.x, at.y, at.z], this.rng() * Math.PI * 2, 'dust', true, big);
+      this.memoryThing = this.addThing(e.memory.def.thing, [at.x, at.y, at.z], placed ? placed.yaw : yaw0, 'dust', true, big);
       if (this.memoryThing.collider >= 0) this.colliders.boxes[this.memoryThing.collider]!.clear = true;
       // Вспышка воспоминания: кадр на миг рвётся.
       this.glitch = Math.max(this.glitch, 0.5);
@@ -3748,10 +3810,14 @@ export class Game {
       // виден сквозь стены (аудит K-21, 17.11). Без скачка — сразу.
       const sp = e.memory.spot!;
       if (this.memoryThing) {
-        const y = sp.y + this.floatLift(sp.kind);
+        // Крупная и на новом месте встаёт на свободный пол, не в мебель.
+        // Поворот у переезжающей вещи прежний: её преграда переезжает как есть (moveMemory).
+        const big = !this.memFloat ? this.placeBig(sp, this.memoryThing.kind, this.memoryThing.yaw, false).spot : sp;
+        if (!this.memFloat) e.memory.spot = big;
+        const y = big.y + this.floatLift(big.kind);
         if (this.memFloat) e.memory.spot = { ...sp, y };
-        if (this.transition && !this.transition.switched) this.forgotTo = [sp.x, y, sp.z];
-        else this.moveMemory([sp.x, y, sp.z]);
+        if (this.transition && !this.transition.switched) this.forgotTo = [big.x, y, big.z];
+        else this.moveMemory([big.x, y, big.z]);
       }
     } else if (e.type === 'all-done') this.endIn = 3.5;
     else if (e.type === 'collapse') {
