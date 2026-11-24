@@ -354,7 +354,7 @@
   "mem.sh_alarm.done": "it rang. nobody got up. in the kitchen, the kettle was already on.",
   "mem.sh_kettle.flash": "the kettle. you left it on.",
   "mem.sh_kettle.task": "the kettle",
-  "mem.sh_kettle.done": "two cups. one went to the living room and never came back.",
+  "mem.sh_kettle.done": "two cups. the second one is still in the living room.",
   "mem.sh_remote.flash": "where is the remote? the channel will not change.",
   "mem.sh_remote.task": "the remote",
   "mem.sh_remote.done": "every channel shows the hallway. someone is standing by the door.",

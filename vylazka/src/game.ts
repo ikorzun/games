@@ -1781,6 +1781,8 @@ export class Game {
    */
   private stepBirds(wdt: number, dream: DreamEvent[]): void {
     const b = this.body;
+    // В замершем месте птицы сидят как сидели: не срываются и не перелетают (сюжет, остановка живого).
+    if (this.sterileK > 0.6) return;
     for (const l of this.leavers) {
       if (l.state === 'gone' || l.state === 'moved') continue;
       const d = l.state === 'sits' ? (this.birdLit >= 1 ? 0 : Math.hypot(l.perch.pos[0] - b.x, l.perch.pos[2] - b.z)) : 99;

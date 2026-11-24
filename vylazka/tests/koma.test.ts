@@ -616,6 +616,41 @@ describe('сюжет на экране: акты II–V и эпилог', () => 
     expect(story.has('STORY_ENDING')).toBe(true);
   });
 
+  it('пауза игры: всё, чему пришло время, ждёт возврата и идёт дальше с того же места', () => {
+    const story = new Narrative();
+    const h = fakeHost(story);
+    const flow = new KomaFlow(h.host, story);
+    flow.onDream(true);
+    flow.onRecall('sh_alarm', true);
+    vi.advanceTimersByTime(600);
+    flow.hold(true);
+    const before = h.values.length;
+    vi.advanceTimersByTime(60000);
+    // Реплики заглушка экрана договорила, но «уточнить» на бирке сюжет без игрока не пишет.
+    expect(h.values.slice(before)).not.toContain('уточнить');
+    flow.hold(false);
+    vi.advanceTimersByTime(5000);
+    expect(h.values).toContain('уточнить');
+  });
+
+  it('обрыв смены под охотой: кадр не гаснет — вслепую от Осыпи не уйти', () => {
+    const story = new Narrative();
+    for (const id of EVENT_ORDER) {
+      if (id === 'A3_E03') break;
+      story.play(id);
+    }
+    const h = fakeHost(story);
+    const flow = new KomaFlow(h.host, story);
+    flow.onDream(false);
+    h.veils.length = 0;
+    h.game.hunted = true;
+    expect(flow.onRecall('sh_coat', false)).toBe(true);
+    vi.advanceTimersByTime(20000);
+    expect(h.veils.filter((v) => v !== null)).toEqual([]);
+    expect(h.sounds).toEqual(['fall', 'koma_ward']);
+    expect(story.has('STORY_COMA_REVEALED')).toBe(true);
+  });
+
   it('тот, кто всегда стоит до конца записи, финал не получает — но и не заперт: оставить можно любую следующую вещь', () => {
     const story = new Narrative();
     for (const id of EVENT_ORDER) {

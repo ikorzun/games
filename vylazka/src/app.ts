@@ -1110,6 +1110,9 @@ export class App {
   }
 
   private onPauseChange(paused: boolean): void {
+    // Сюжет ждёт вместе с игрой: реплики, карточки и запись не проходят мимо, пока игрок их не видит.
+    this.hud.hold(paused);
+    this.komaFlow?.hold(paused);
     if (this.screen !== 'play') return;
     if (paused) {
       // Возврат в игру — всегда по нажатию: браузер не даст захватить мышь без жеста.

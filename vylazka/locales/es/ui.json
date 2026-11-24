@@ -354,7 +354,7 @@
   "mem.sh_alarm.done": "sonó. nadie se levantó. en la cocina, la tetera ya estaba encendida.",
   "mem.sh_kettle.flash": "la tetera. la dejaste encendida.",
   "mem.sh_kettle.task": "la tetera",
-  "mem.sh_kettle.done": "dos tazas. una fue a la sala y nunca volvió.",
+  "mem.sh_kettle.done": "dos tazas. la segunda sigue en la sala.",
   "mem.sh_remote.flash": "¿dónde está el control remoto? el canal no cambia.",
   "mem.sh_remote.task": "el control remoto",
   "mem.sh_remote.done": "todos los canales muestran el recibidor. alguien está junto a la puerta.",
