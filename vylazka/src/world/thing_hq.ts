@@ -19,6 +19,9 @@ export interface ThingHq {
 /** Где лежат файлы вещей в сборке (относительно страницы игры). */
 export const THING_HQ_DIR = 'assets/things/';
 
+/** Цвет и яркость экрана подробной вещи (оттенок вершины светящегося материала): зелёный люминофор терминала. */
+const SCREEN_GLOW = [2.4, 7, 3.6] as const;
+
 let enabled = true;
 const ready = new Map<string, ThingHq | null>();
 const pending = new Map<string, Promise<ThingHq | null>>();
@@ -73,6 +76,15 @@ export function decodeThingHq(buf: ArrayBuffer): MeshData {
     normal[i * 3] = x / l;
     normal[i * 3 + 1] = y / l;
     normal[i * 3 + 2] = z / l;
+    // Признак вершины: под стеклом (циферблат, снимок) — материал «стекло», шейдер кладёт на него блик фонаря; экран —
+    // «свечение», оттенок вершины — его цвет и яркость (как у экранов мира), картинка берётся из карты цвета.
+    const tag = dv.getUint8(off + i * 4 + 3);
+    if (tag >= 128) {
+      mat[i] = MAT.glow;
+      color[i * 4] = SCREEN_GLOW[0];
+      color[i * 4 + 1] = SCREEN_GLOW[1];
+      color[i * 4 + 2] = SCREEN_GLOW[2];
+    } else if (tag > 0) mat[i] = MAT.glass;
   }
   off += nv * 4;
   off += (4 - (off % 4)) % 4;

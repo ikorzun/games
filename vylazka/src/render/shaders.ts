@@ -1225,6 +1225,10 @@ void main() {
   // свет собирает пол дальше, чем стены.
   float floorK = smoothstep(0.5, 0.9, up);
   float back = mix(mix(0.6, 0.92, floorK), 1.0, smoothstep(0.03, 0.4, toCam)) * (mi == 24 ? 0.35 : (mi == 7 || mi == 23 ? 0.6 : (mi == 12 ? 0.78 : (mi == 30 || mi == 15 ? 1.8 : 1.0))));
+#ifdef THING_TEX
+  // У подробной вещи «стекло» — это циферблат или снимок под стеклом: собирается, как обычная поверхность.
+  if (mi == ${MAT.glass}) back *= 2.857;
+#endif
   // Прямой свет пространства тоже «сканирует»: освещённая сторона плотнее теневой.
   float keyLit = (max(dot(Ng, uKeyDirV), 0.0) + thin * 0.7 * max(-dot(Ng, uKeyDirV), 0.0)) * dot(uKeyColor, vec3(0.3333)) * shadowKey;
   float hLit = (eLight + bounce0 * 1.2) * uScan.y * back;
@@ -1561,6 +1565,15 @@ void main() {
     col += uLightColor * (lb.w * shadow * facing * 0.3 * pow(max(dot(Nf, Hf), 0.0), 80.0));
   }
 
+#ifdef THING_TEX
+  // Стекло подробной вещи (будильник, часы, рамка): самого стекла в сетке нет — у вещи один непрозрачный проход, — а блик
+  // есть: узкий и ровный, ползёт по циферблату, пока идёшь.
+  if (mi == ${MAT.glass}) {
+    vec3 Hg = normalize(L + normalize(-vPosV));
+    col += uLightColor * (lb.w * shadow * facing * (0.4 * pow(max(dot(Ng, Hg), 0.0), 220.0) + 0.03 * pow(max(dot(Ng, Hg), 0.0), 24.0)));
+  }
+#endif
+
   // Мокрый пол и плитка отражают освещённое пятно: блик тянется от дальней стены к ногам.
   float gloss = max(wet, mi == 12 ? 1.0 : (mi == 18 ? 0.5 : 0.0)) * step(0.5, up);
   vec3 R = reflect(normalize(vPosV), N);
@@ -1569,7 +1582,12 @@ void main() {
   // Свечение. У фосфорных табличек (оттенок до 1) цвет даёт основа материала; у экранов, окон и неба
   // оттенок вершины больше единицы — он и есть цвет, помноженный на яркость (основа тогда серая).
   vec3 glowBase = maxc > 1.5 ? vec3(0.55) : uMatBase[mi];
+#ifdef THING_TEX
+  // Экран подробной вещи: светится картинкой из карты цвета (строки и курсор), а не ровным пятном.
+  col += glowBase * ma.y * vColor.rgb * glowK * (mi == ${MAT.glow} ? tC.rgb * 5.0 + 0.04 : vec3(1.0));
+#else
   col += glowBase * ma.y * vColor.rgb * glowK;
+#endif
   col += uBurnTint * burn;
   // Вещь из точек чуть светится своим цветом: облако видно и на краю луча, и оно не похоже на твёрдое.
   if (dotGlow > 0.0) col += uMatBase[mi] * vColor.rgb * (0.22 * dotGlow);
