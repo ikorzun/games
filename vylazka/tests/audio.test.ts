@@ -488,6 +488,15 @@ describe('привязка звуков к игре', () => {
     expect(r.ids_()).toEqual(['flash_rattle']);
   });
 
+  it('в светлом месте фонаря нет — нет и его звуков: ни щелчка, ни тряски, ни треска (партнёр 24.11)', () => {
+    const r = new Recorder();
+    const a = new GameAudio(r);
+    a.setScene('play');
+    const w = world({ hasLight: false });
+    a.onStep({ ...quiet(), lightToggled: true, lightKnock: true, lightFailed: true, lightRevived: true, spark: true, crank: 0.5, lightCharged: true, strokes: 3 }, w);
+    expect(r.ids_()).toEqual([]);
+  });
+
   it('события сессии, сна и страха находят свой звук', () => {
     const r = new Recorder();
     const a = new GameAudio(r);
