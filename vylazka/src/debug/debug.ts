@@ -2,6 +2,7 @@
  * Отладочный API window.__vz. Ставится и в боевой сборке: смоук в Chromium гоняет именно её.
  * Симуляцию можно заморозить и шагать вручную — так тесты не зависят от скорости машины.
  */
+import { thingHqReady } from '../world/thing_hq';
 import { wallGaps } from '../world/wall_gone';
 import type { Decay } from '../systems/decay';
 import type { RoomFx } from '../game';
@@ -116,7 +117,9 @@ export interface VzDebugApi {
    * Поставить вещь прямо перед камерой на полу (на distance метров) с заданной судьбой; вернуть её номер.
    * facing — повернуть вещь лицом к игроку (иначе она смотрит вдоль +z мира).
    */
-  spawnThing(kind: string, fate: 'shrink' | 'dust' | 'grow' | 'jump', distance?: number, facing?: boolean): number;
+  /** Подробная модель вещи памяти уже загружена (world/thing_hq.ts): для кадров — ждать её, а не снимать болванку. */
+  hqReady(kind: string): boolean;
+  spawnThing(kind: string, fate: 'shrink' | 'dust' | 'grow' | 'jump', distance?: number, facing?: boolean, lift?: number, turn?: number): number;
   /**
    * Поставить фигуру перед игроком (как партнёр ставит в инструменте): материал, поза-заготовка, на
    * сколько впереди, на какой высоте, повернуть (град; 0 — лицом к игроку). Вернёт номер фигуры в списке.
@@ -491,13 +494,15 @@ export function installDebug(app: App): void {
       return { level: f.level, breath: f.breath, view: { ...game().feelNow } };
     },
     things: () => game().things.list.map((t) => ({ id: t.id, kind: t.kind, state: t.state, fate: t.fate, memory: t.memory, still: t.still, gaze: t.gaze, scale: t.scale, dissolve: t.dissolve, form: t.form, pos: [...t.pos] })),
-    spawnThing: (kind, fate, distance = 2.5, facing = false) => {
+    hqReady: (kind) => thingHqReady(kind) !== null,
+    spawnThing: (kind, fate, distance = 2.5, facing = false, lift = 0, turn = 0) => {
       const g = game();
       const st = g.snapshot() as { pos: number[]; aim: number[] };
       const yaw = st.aim[0]!;
       const x = st.pos[0]! - Math.sin(yaw) * distance;
       const z = st.pos[2]! - Math.cos(yaw) * distance;
-      return g.addThing(kind, [x, st.pos[1]!, z], facing ? yaw : 0, fate).id;
+      // lift — поднять над полом (кадры вплотную: вещь на уровне глаз), turn — довернуть, град.
+      return g.addThing(kind, [x, st.pos[1]! + lift, z], (facing ? yaw : 0) + (turn * Math.PI) / 180, fate).id;
     },
     figure: (material, pose = 'stand', distance = 2.5, lift = 0, turn = 0) => {
       const g = game();

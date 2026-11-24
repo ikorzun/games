@@ -52,6 +52,8 @@ import { ALL_PROPS } from './world/props_all';
 import { buildShowcase } from './world/showcase';
 import { buildTestLevel } from './world/test_level';
 import { setThingRegistry } from './world/thing_mesh';
+import { setThingHq } from './world/thing_hq';
+import { THING_HQ } from './world/thing_hq_meta';
 import { loadSand3d, sand3dCredits } from './world/sand3d';
 import { guardTouch, RESIZE_SETTLE_MS, ScreenAwake } from './platform/mobile_guard';
 import { AdBreaks } from './platform/ads';
@@ -356,7 +358,8 @@ export class App {
     // с серыми коробками габарита мебели, чем висеть на загрузке; следующее место соберётся уже с моделями.
     // Титры — когда бы кусок ни пришёл.
     const furniture = loadSand3d().then((ok) => {
-      if (ok) this.overlay.setCredits(sand3dCredits());
+      // В титрах — и авторы подробных вещей памяти (world/thing_hq_meta.ts): у вещей Sand3D подпись обязательна (CC BY 4.0).
+      if (ok) this.overlay.setCredits([...sand3dCredits(), ...Object.values(THING_HQ).map((m) => m.credit)]);
       return ok;
     });
     // Шрифты интерфейса и названия: ждём недолго, чтобы первый экран не мигнул системным.
@@ -461,6 +464,8 @@ export class App {
     renderer.beamBuild = p.get('build') === '1' || (typeof location !== 'undefined' && location.hash === '#build') || this.variant === 'build';
     // Пробная сборка: одна часть сборки места отключена, чтобы на телефоне найти, какая ломает пол.
     setThingRegistry(ALL_PROPS);
+    // ?hq=0 — без подробных вещей памяти (кадры «до» и замеры): стоят прежние болванки.
+    if (p.get('hq') === '0') setThingHq(false);
     // level=test — коридор технического среза, level=show — витрина реквизита.
     this.testLevel = p.get('level') === 'test' || p.get('level') === 'show' || (p.get('level') ?? '').startsWith('pocket_') || this.showParam() !== null;
     const failAt = Number(p.get('fail') ?? '');

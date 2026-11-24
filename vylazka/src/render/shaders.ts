@@ -11,6 +11,7 @@
 import { HANG_OBJ } from '../world/objects';
 import { GRASS_PRESS_MAT, GRASS_PRESS_Y } from '../world/grass';
 import { PAPER_LAYERS } from '../world/papers';
+import { MAT } from '../world/materials';
 
 /** Слой стопки бумаги с картинками наклеек: у них блик плёнки (квиз партнёра 20.11). */
 const STICKER_LAYER = PAPER_LAYERS.indexOf('stickers');
@@ -517,6 +518,11 @@ uniform vec4 uSlide;      // проекции: x, y — при каком све
 uniform sampler2D uScreens; // атлас картинок выставочных экранов (world/screens.ts)
 uniform sampler2DArray uPapers; // листы бумаги (world/papers.ts): портреты, деньги, карты — слой на файл
 uniform float uDots;      // 0..1: выросшая вещь — одни точки (объявлен и в CRUMBLE_GLSL вершинного шейдера; во фрагментном нужен свой)
+#ifdef THING_TEX
+// Подробная вещь памяти (world/thing_hq.ts): свои карты по своей развёртке.
+uniform sampler2D uThingC;   // rgb — цвет, a — затенение щелей
+uniform sampler2D uThingN;   // rg — нормаль в касательном пространстве (+Y вверх, как в glTF), b — шероховатость, a — металл
+#endif
 // Материалов может быть до 48 (атлас шаров 8 × ATLAS_ROWS); сколько их на деле — знает world/materials.ts.
 #ifndef ATLAS_ROWS
 #define ATLAS_ROWS 4
@@ -1454,11 +1460,47 @@ void main() {
     N = Ng;
   }
 
+#ifdef THING_TEX
+  // Подробная вещь памяти: фактур мира (пестрота, рельеф слоя, облезлость, плесень) на ней нет — у неё свои карты. Нормаль
+  // наклоняет карта нормалей: касательные — по экранным производным развёртки, без касательных в вершинах (как perturb).
+  vec4 tC = texture2D(uThingC, vUv);
+  vec4 tN = texture2D(uThingN, vUv);
+  alb = 1.0;
+  k = 0.0;
+  wet = 0.0;
+  shade = 1.0;
+  stain = vec3(1.0);
+  dirt = mix(1.0, dirt, 0.3);
+  ao *= tC.a;
+  {
+    vec3 q0 = dFdx(vPosV);
+    vec3 q1 = dFdy(vPosV);
+    vec2 s0 = dFdx(vUv);
+    vec2 s1 = dFdy(vUv);
+    vec3 q1p = cross(q1, Ng);
+    vec3 q0p = cross(Ng, q0);
+    vec3 Tt = q1p * s0.x + q0p * s1.x;
+    vec3 Bt = q1p * s0.y + q0p * s1.y;
+    float dm = max(dot(Tt, Tt), dot(Bt, Bt));
+    float sm = dm == 0.0 ? 0.0 : inversesqrt(dm);
+    // v развёртки glTF идёт вниз, а карта записана с +Y вверх: знак второй оси обратный.
+    vec2 nxy = (tN.xy * 2.0 - 1.0) * vec2(1.0, -1.0);
+    N = normalize(Tt * (nxy.x * sm) + Bt * (nxy.y * sm) + Ng * sqrt(max(0.0, 1.0 - dot(nxy, nxy))));
+  }
+#endif
+
   // Matcap по направлению на фонарь.
   vec3 bx = normalize(vec3(L.z, 0.0, -L.x) + vec3(1e-5, 0.0, 0.0));
   vec3 by = cross(L, bx);
   vec3 mc = matcap(mi, N, bx, by);
   vec3 base = uMatBase[mi];
+#ifdef THING_TEX
+  // Материал — по картам, в каждой точке свой: матовое берёт шар бумаги, гладкое — эмали, металл — стали; цвет — из карты
+  // (делится на основу шара, как цвет вершины готовой модели: на шаре выходит собственный цвет вещи).
+  float tGloss = 1.0 - smoothstep(0.22, 0.8, tN.b);
+  mc = mix(mix(matcap(${MAT.paper}, N, bx, by), matcap(${MAT.enamel}, N, bx, by), tGloss), matcap(${MAT.steel}, N, bx, by), tN.a);
+  base = mix(mix(uMatBase[${MAT.paper}], uMatBase[${MAT.enamel}], tGloss), uMatBase[${MAT.steel}], tN.a);
+#endif
   vec3 mc2 = matcap(mj, N, bx, by);
   // Сырой бетон становится мокрым бетоном. Сырой кирпич остаётся кирпичом: он темнеет и лоснится, но
   // кладка сквозь пятно видна — иначе на стене не сырость, а серая заплата.
@@ -1476,6 +1518,9 @@ void main() {
   // У светящегося материала оттенок вершины — множитель яркости свечения (до сотен): в освещение он
   // идёт приведённым к единице, иначе рассеянный свет выбелил бы небо и экраны.
   vec3 vc = vColor.rgb;
+#ifdef THING_TEX
+  vc *= clamp(tC.rgb / max(base, vec3(0.02)), 0.0, 4.0);
+#endif
   float lit = 1.0;
   if (mi == 14 || mi == 37) {
     vc /= max(1.0, max(vc.r, max(vc.g, vc.b)));

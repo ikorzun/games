@@ -277,6 +277,16 @@ interface Thing {
   dis: number;
   /** Кружевная вещь: материал её нитей по рёбрам (LACE_EDGE); у остальных — null. */
   edgeMat: THREE.ShaderMaterial | null;
+  /** Подробная вещь памяти: у неё свои карты цвета и нормалей (THING_TEX в шейдере мира). */
+  maps: boolean;
+}
+
+/** Карты подробной вещи памяти (world/thing_hq.ts): адреса файлов. */
+export interface ThingMaps {
+  /** Цвет (RGB, sRGB) и затенение щелей (A). */
+  color: string;
+  /** Нормали (RG), шероховатость (B), металл (A). */
+  normal: string;
 }
 
 /** Пыль кружева — цвета нитей, а не того, чем вещь была. */
@@ -673,6 +683,8 @@ export class GameRenderer {
   /** Геометрия карманного пространства (белое нигде, луг…): рисуется всегда, пока оно активно. */
   private readonly pocket: THREE.Mesh[] = [];
   private readonly things = new Map<number, Thing>();
+  /** Карты подробных вещей памяти по адресу файла. */
+  private readonly thingMaps = new Map<string, THREE.Texture>();
   private nextThing = 1;
   private readonly wireMat: THREE.ShaderMaterial;
   private readonly clearColor = new THREE.Color(0, 0, 0);
@@ -1341,7 +1353,7 @@ export class GameRenderer {
     this.laceEdgeMat.defines = { ...this.worldMat.defines, LACE_EDGE: '' };
     this.laceEdgeMat.needsUpdate = true;
     for (const t of this.things.values()) {
-      t.mat.defines = { ...this.worldMat.defines };
+      t.mat.defines = { ...this.worldMat.defines, ...(t.maps ? { THING_TEX: '' } : {}) };
       t.mat.needsUpdate = true;
       if (t.edgeMat) {
         t.edgeMat.defines = { ...this.worldMat.defines, LACE_EDGE: '' };
@@ -2420,13 +2432,20 @@ export class GameRenderer {
    * look — из чего она: из вещества (как всё), из света (проекция: светится сама, свет её смывает; тени
    * и точек у неё нет) или из нитей (кружево: поверхности нет, одни рёбра).
    */
-  addThing(data: MeshData, seed = 0, look: ThingLook = 'matter'): number {
+  addThing(data: MeshData, seed = 0, look: ThingLook = 'matter', maps: ThingMaps | null = null): number {
     // Всё общее — теми же uniform-объектами, что у мира: свет, туман, фактуры обновляются разом.
     const mat = this.worldLike();
     // y — вещь из кружева: поверхности нет, одни нити (тот же узор, что у стёртых стен); z — это вещь, а не архитектура.
     mat.uniforms.uThing = { value: new THREE.Vector4(0, look === 'lace' ? 1 : 0, 1, (seed % 97) * 1.37) };
     mat.uniforms.uDots = { value: 0 };
     mat.defines = look === 'light' ? { ...this.slideMat.defines } : { ...this.worldMat.defines };
+    // Подробная вещь памяти: цвет, рельеф, шероховатость и металл — из её карт (партнёр 24.11: «материал лучше»).
+    const hq = maps !== null && look === 'matter';
+    if (hq) {
+      mat.defines.THING_TEX = '';
+      mat.uniforms.uThingC = { value: this.thingMap(maps.color, true) };
+      mat.uniforms.uThingN = { value: this.thingMap(maps.normal, false) };
+    }
     const mesh = this.makeMesh(data, 0, 0);
     mesh.material = mat;
     mesh.matrixAutoUpdate = true;
@@ -2447,8 +2466,25 @@ export class GameRenderer {
       mesh.userData.laceEdges = lines;
     }
     const id = this.nextThing++;
-    this.things.set(id, { mesh, mat, wire: null, wireMat: null, radius: mesh.geometry.boundingSphere?.radius ?? 0.5, data, seed, look, dis: 0, edgeMat });
+    this.things.set(id, { mesh, mat, wire: null, wireMat: null, radius: mesh.geometry.boundingSphere?.radius ?? 0.5, data, seed, look, dis: 0, edgeMat, maps: hq });
     return id;
+  }
+
+  /**
+   * Карта подробной вещи: одна на адрес, живёт до конца игры (видов вещей памяти — шестнадцать). Развёртка — как в glTF
+   * (начало вверху слева), поэтому картинка не переворачивается; у карты цвета — sRGB, у карты нормалей — числа как есть.
+   */
+  private thingMap(url: string, srgb: boolean): THREE.Texture {
+    let tex = this.thingMaps.get(url);
+    if (!tex) {
+      tex = new THREE.TextureLoader().load(url);
+      tex.flipY = false;
+      tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy());
+      this.thingMaps.set(url, tex);
+    }
+    return tex;
   }
 
   setThing(id: number, v: ThingView): void {
