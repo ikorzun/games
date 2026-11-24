@@ -25,7 +25,8 @@ npm run dev      # dev-сервер с контентом из ../episodes и ..
 
 # Вторая игра — «Untitled Session» (первое лицо, фонарь, three.js): отдельный пакет, см. vylazka/README.md
 cd vylazka && npm install && npm run typecheck && npm test && npm run build && npm run smoke
-node e2e/smoke.mjs --dist dist --only koma   # сюжет «Невостребованное»: срез канона в сборке (docs/vylazka/koma)
+node e2e/smoke.mjs --dist dist --only koma   # сюжет «Невостребованное» в сборке: первый сон, лимбо, «оставить» (docs/vylazka/koma)
+python3 tools/koma/memory_things.py          # пересобрать список вещей памяти: docs/vylazka/koma/memory_things.md
 node e2e/shots.mjs   # скриншоты фиксированных ракурсов — смотреть картинку глазами
 node tools/plans/plans.mjs --png   # план сверху всех комнат: проходы, главный вход, мебель — проверка раскладки (design.md, §31)
 node tools/constructor/build.mjs <out.html>   # конструктор партнёра: вещи, манекены, мебель игры (двигать, убирать) и карточки-опросник (сохраняет в базу страницы)

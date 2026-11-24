@@ -121,6 +121,7 @@ export class Hud {
       '<div class="vz-hud__flash"></div>' +
       '<div class="vz-hud__limbo"></div>' +
       // Сюжет «Невостребованное» (koma_flow.ts): реплики под серединой кадра и бирка вещи.
+      '<div class="vz-hud__veil"></div>' +
       '<div class="vz-hud__say"></div>' +
       '<div class="vz-hud__tag"><div class="vz-hud__tag-head"></div><div class="vz-hud__tag-name"></div><div class="vz-hud__tag-row"><span class="vz-hud__tag-key"></span><span class="vz-hud__tag-val"></span></div><div class="vz-hud__tag-stamp"></div></div>' +
       // Обрывок метаслоя (ui/meta_card.ts): в лимбо, вместо его строк.
@@ -377,6 +378,15 @@ export class Hud {
       this.metaEl.classList.remove('is-on');
       this.metaTimer = setTimeout(() => this.metaClear(), META_FADE_MS);
     }, ms);
+  }
+
+  /**
+   * Пелена во весь кадр (сюжет): black — кадр гаснет на миг (обрыв смены), white — уходит в свет (эпилог); null — снять.
+   * Реплики, бирка и карточки остаются поверх неё.
+   */
+  veil(kind: 'black' | 'white' | null): void {
+    this.el.classList.toggle('is-veil-black', kind === 'black');
+    this.el.classList.toggle('is-veil-white', kind === 'white');
   }
 
   /** Карточка сюжета тем же местом: заголовок и строки (запись, «известно точно»). done — когда ушла совсем. */

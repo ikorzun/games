@@ -241,6 +241,8 @@ export interface VzDebugApi {
   audio(): ReturnType<import('../audio/engine').AudioEngine['status']>;
   /** Состояние сюжета «Невостребованное» (systems/koma.ts). */
   koma(): unknown;
+  /** Довести сюжет до сцены upTo включительно (проверки поздних актов без десятка снов). */
+  komaSkip(upTo: string, leave?: number): unknown;
   mute(on: boolean): void;
 }
 
@@ -812,6 +814,7 @@ export function installDebug(app: App): void {
     },
     audio: () => app.sound.status(),
     koma: () => app.komaState(),
+    komaSkip: (upTo, leave) => app.komaSkip(upTo, leave),
     showcase: () => showcaseItems(app.params.get('props')?.split(',') ?? null),
     mute: (on) => app.setMuted(on),
   };

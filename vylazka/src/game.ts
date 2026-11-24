@@ -936,6 +936,14 @@ export class Game {
    * сюжета она выходит, когда место замерло и разговор кончился, а не после первой вещи (квиз 24.11: реплики не читают на бегу).
    */
   huntHold = false;
+  /**
+   * Сюжет, «оставить» (акты IV–V): следующая вспомненная вещь не уходит в пыль, а остаётся стоять (keptThing) — пока на неё
+   * смотрят, Смотритель дописывает владельца; отвёл взгляд — вещь оставлена своему месту. Чем кончилось — releaseKept().
+   */
+  keepRecalled = false;
+  keptThing: Thing | null = null;
+  /** Сюжет: Смотритель сейчас пишет (звук пера по бирке). */
+  penOn = false;
   sterileK = 0;
   private sterileAligned = false;
   /** Следующая сессия, собранная за время лимбо. */
@@ -1020,6 +1028,7 @@ export class Game {
     this.shortStay = false;
     this.memBloom = 0;
     this.bloomThing = null;
+    this.keptThing = null;
     // Каждая сессия игрока начинается с мира, который почти не дышит; карман, возврат в то же место и следующая сцена
     // сна из сцен её не сбрасывают.
     if (dream && !this.loadingScene) {
@@ -2243,7 +2252,8 @@ export class Game {
   /** Шаг фигур: подошёл — ушли; отошёл (дым) или свет погас и зажёгся (остальные) — вернулись. */
   private stepFigures(dt: number, eye: Vec3, dream: DreamEvent[]): void {
     if (this.figures.list.length === 0) return;
-    const ev = this.figures.update(dt, eye, this.time, (f) => this.lightAt(this.playerNodeAt(f.at)));
+    // В замершем месте фигуры стоят как поставлены: не оборачиваются и не рассеиваются (сюжет, остановка живого).
+    const ev = this.figures.update(dt * (1 - this.sterileK), eye, this.time, (f) => this.lightAt(this.playerNodeAt(f.at)));
     for (const e of ev) dream.push({ type: 'figure', id: e.figure.id, material: e.figure.material, what: e.what, at: e.figure.core });
   }
 
@@ -3648,7 +3658,11 @@ export class Game {
         this.feel.exhale();
         this.feelDone += 1;
         this.bloomThing = t;
-        if (this.things.change(t, 'dust')) dream.push({ type: 'thing', thing: t, what: 'changing' });
+        if (this.keepRecalled) {
+          // Сюжет: вещь остаётся на месте, как экспонат — на неё можно смотреть, и она не меняется.
+          t.still = true;
+          this.keptThing = t;
+        } else if (this.things.change(t, 'dust')) dream.push({ type: 'thing', thing: t, what: 'changing' });
       }
       if (!this.archive.includes(e.memory.def.id)) this.archive.push(e.memory.def.id);
     } else if (e.type === 'forgot') {
@@ -3874,7 +3888,7 @@ export class Game {
         // нет, светит взгляд (FlashlightEnv: light 0).
         const byGaze = this.env.light <= 0;
         const beamOn = !byGaze && this.light.intensity >= 0.3;
-        this.flowers.update(fl?.frozen ? 0 : dt, {
+        this.flowers.update(fl?.frozen ? 0 : dt * (1 - this.sterileK), {
           eye: rig.camPos,
           beam: beamOn ? { origin: rig.lightPos, dir: rig.lightDir, cos: FLOWER_BEAM.cos, range: FLOWER_BEAM.range } : null,
           gaze: byGaze ? { dir: rig.lightDir, cos: FLOWER_GAZE.cos, range: FLOWER_GAZE.range } : null,
@@ -4194,6 +4208,21 @@ export class Game {
     this.metaHoldT = 0;
   }
 
+  /** Смотрит ли игрок на вещь, оставшуюся после «вспомнил» (сюжет, keptThing). */
+  get worldLook(): boolean {
+    const t = this.keptThing;
+    return !!t && this.where === 'main' && t.state === 'idle' && t.gaze > 0.5;
+  }
+
+  /** Сюжет решил судьбу оставшейся вещи: taken — её записали, и она уходит, как все; иначе — стоит где стояла. */
+  releaseKept(taken: boolean): void {
+    const t = this.keptThing;
+    this.keptThing = null;
+    if (!t || !taken || this.where !== 'main') return;
+    t.still = false;
+    this.things.change(t, 'dust');
+  }
+
   /**
    * Стерильность (сюжет): плавно к заданной; перешла за середину — мелкие вещи, которых не видно, развёрнуты в одну сторону
    * (Смотритель выравнивает предметы — и только вне кадра, как всё, что меняется в этом сне).
@@ -4292,6 +4321,8 @@ export class Game {
       director: this.director ? { phase: this.director.phase, released: this.director.wasReleased, settled: this.director.isSettled, clock: this.sleepTime } : null,
       hush: this.hush,
       sterile: this.sterileK,
+      kept: this.keptThing ? this.keptThing.id : null,
+      worldLook: this.worldLook,
       limboLook: this.limboLook,
       meta: { wanted: this.metaWanted, hold: this.metaHold, fired: this.metaFired },
       lesson: this.darkLesson?.phase ?? null,

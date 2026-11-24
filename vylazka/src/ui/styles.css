@@ -1475,3 +1475,31 @@ body {
     animation: none;
   }
 }
+
+/* Сюжет: пелена во весь кадр. Чёрная — обрыв смены (быстро), белая — эпилог (медленно). Реплики и карточки — поверх. */
+.vz-hud__veil {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: #000;
+  pointer-events: none;
+  transition: opacity 0.35s linear;
+  z-index: 4;
+}
+.vz-hud.is-veil-black .vz-hud__veil {
+  opacity: 1;
+}
+.vz-hud.is-veil-white .vz-hud__veil {
+  opacity: 0.94;
+  background: #efece4;
+  transition: opacity 4.5s ease-in;
+}
+.vz-hud__say,
+.vz-hud__tag,
+.vz-hud__meta {
+  z-index: 5;
+}
+.vz-hud.is-veil-white .vz-hud__say {
+  color: #2a2620;
+  text-shadow: none;
+}

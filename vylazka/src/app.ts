@@ -31,7 +31,7 @@ import { drawScreens, loadScreens } from './render/screen_images';
 import { drawSigns } from './render/signs_atlas';
 import type { Sheets } from './render/signs_atlas';
 import type { Quality } from './render/renderer';
-import { Narrative } from './systems/koma';
+import { EVENT_ORDER, Narrative } from './systems/koma';
 import { DECK, metaAllowed, nextFragment } from './systems/meta';
 import { KomaFlow } from './ui/koma_flow';
 import type { Fragment } from './systems/meta';
@@ -803,6 +803,7 @@ export class App {
           return true;
         },
         hint: (id) => this.analytics.hint(id),
+        sound: (id) => this.sound.play(id),
       },
       new Narrative(this.profile.koma),
     );
@@ -811,6 +812,26 @@ export class App {
 
   /** Состояние сюжета (отладка, проверки). */
   komaState(): unknown {
+    return this.profile.koma;
+  }
+
+  /**
+   * Проверки: довести сюжет до сцены upTo включительно, по порядку канона, как если бы её сыграли (в игре до актов IV–V —
+   * несколько снов). Нынешнему сну сразу говорится, оставлять ли вспомненную вещь на месте.
+   */
+  komaSkip(upTo: string, leave = 0): unknown {
+    const story = new Narrative(this.profile.koma);
+    // leave — сколько вещей считать уже оставленными (финал открывают три).
+    for (const art of ['LP01', 'LP02', 'LP04'].slice(0, leave)) {
+      story.discover(art);
+      story.release(art);
+    }
+    for (const id of EVENT_ORDER) {
+      story.play(id);
+      if (id === upTo) break;
+    }
+    this.saveProfile();
+    if (this.komaOn) this.game.keepRecalled = story.has('STORY_CARETAKER_REFLECTION') && !story.has('STORY_UNFINISHED_RECORD');
     return this.profile.koma;
   }
 

@@ -3345,7 +3345,8 @@ async function scenarioKoma(browser, baseUrl) {
   check('Рита записана как знакомая; сестры, стука и обещания «проснёшься» в строках нет', koma.flags.includes('STORY_RITA_INTRODUCED') && !Object.entries(RU).some(([k, v]) => (k.startsWith('koma.') || k === 'intro.goal' || k === 'title.how') && /сестр|стук|просн/i.test(v)));
 
   // Следующий сон и перезагрузка.
-  for (let i = 0; i < 60 && st.where !== 'main'; i++) {
+  // Карточка записи держится до 16 с настоящего времени, и только потом лимбо отпускает.
+  for (let i = 0; i < 160 && st.where !== 'main'; i++) {
     st = await vz(page, () => window.__vz.step(60));
     await sleep(150);
   }
@@ -3355,6 +3356,31 @@ async function scenarioKoma(browser, baseUrl) {
   await page.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
   const kept = await vz(page, () => window.__vz.koma());
   check('после перезагрузки сюжет на месте: флаги, фазы вещей, сыгранные события', kept.schemaVersion === 3 && kept.flags.includes('STORY_RITA_INTRODUCED') && kept.artifacts.LP01?.phase === 'uncertain' && kept.seenEvents.includes('A2_E02') && kept.currentAct === 'ACT_02', JSON.stringify(kept));
+  // Акты IV–V в настоящей сборке: вещь можно не забирать. Сюжет доводится до узнавания (A4_E03) отладкой — в игре это шесть снов.
+  section('Сюжет: «оставить» — вещь остаётся на месте, отвёл взгляд — оставлено');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  await vz(page, () => window.__vz.step(30));
+  koma = await vz(page, () => window.__vz.komaSkip('A4_E03'));
+  st = await recall();
+  tg = await tag();
+  const keptThing = (await vz(page, () => window.__vz.things())).find((t) => t.id === st.kept);
+  check('вспомненная вещь не ушла в пыль: стоит где стояла, на ней бирка с пустым владельцем', koma.flags.includes('STORY_CARETAKER_REFLECTION') && st.session.done >= 1 && st.kept !== null && keptThing?.state === 'idle' && tg.on && tg.value.length < 6 && tg.stamp === '', JSON.stringify({ done: st.session.done, kept: st.kept, thing: keptThing?.state, tg }));
+  check('«можно не забирать.» — «смотри сюда. я допишу.»', (await heard('koma.a4_e04.player_00', 8000)) && (await heard('koma.limbo.caretaker_write', 8000)));
+  await page.waitForFunction(() => document.querySelector('.vz-hud__tag-val').textContent.length >= 3, null, { timeout: 60000 }).catch(() => undefined);
+  st = await vz(page, () => window.__vz.step(2));
+  check('пока на вещь смотрят, Смотритель пишет владельца', st.worldLook === true && (await tag()).value.length >= 3, JSON.stringify({ look: st.worldLook, tg: await tag() }));
+  // Взгляд с вещи сходит за четверть секунды игры: шагов нужно больше, чем в лимбо.
+  await vz(page, () => { window.__vz.look(Math.PI, 0); window.__vz.step(30); });
+  await page.waitForFunction(() => document.querySelector('.vz-hud__tag-stamp').textContent !== '', null, { timeout: 60000 }).catch(() => undefined);
+  tg = await tag();
+  koma = await vz(page, () => window.__vz.koma());
+  st = await vz(page, () => window.__vz.step(2));
+  const stays = (await vz(page, () => window.__vz.things())).find((t) => t.id === keptThing?.id);
+  check('отвёл взгляд — «оставлено»: вещь записана как оставленная и стоит на месте; владельца у неё нет', tg.stamp === RU['koma.tag.left'] && tg.value === '' && koma.releasedArtifactIds.length === 1 && koma.flags.includes('STORY_RELEASE_1') && koma.flags.includes('STORY_FIRST_UNCLAIMED') && st.kept === null && stays?.state === 'idle', JSON.stringify({ tg, released: koma.releasedArtifactIds, flags: koma.flags.slice(-3), kept: st.kept, thing: stays?.state }));
+  check('«и что написать?» — «ничего.» … «ладно. пока так.»', (await heard('koma.a4_e04.caretaker_01', 12000)) && (await heard('koma.a4_e04.caretaker_03', 20000)));
   check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0, (await vz(page, () => window.__vz.missingKeys())).join(', '));
   check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
   await context.close();

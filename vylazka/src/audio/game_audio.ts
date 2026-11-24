@@ -55,6 +55,8 @@ export interface AudioWorld {
   hush?: number;
   /** Стерильность места (сюжет, game.sterileK): людей не слышно, капель нет — остаётся ровный гул. Нет поля — 0. */
   sterileK?: number;
+  /** Сюжет: Смотритель пишет на бирке (game.penOn). Нет поля — не пишет. */
+  penOn?: boolean;
   /** Шаги в такт (systems/follower.ts): где за спиной прозвучали шаги следом с прошлого вызова. Нет поля — никто не идёт. */
   consumeFollowSteps?(): readonly Vec3[];
   listener(): { pos: Vec3; yaw: number };
@@ -311,7 +313,9 @@ export class GameAudio {
     const hush = over ? 0 : clamp01(game.hush ?? 0);
     const quiet = 1 - HUSH_DEPTH * hush;
     // Вне убежища его звуки стихают; помехи остаются.
-    const live = over ? 0 : quiet;
+    // Замершее место (сюжет): тон места проседает под мёртвым воздухом — живого в нём остаётся треть.
+    const dead = over ? 0 : clamp01(game.sterileK ?? 0);
+    const live = over ? 0 : quiet * (1 - 0.65 * dead);
     // Тон места: у каждого мира и у каждого пространства свой.
     // Кривая ощущений (K-11): к концу сессии гул места густеет — в убежище в него вплетается нижний, давящий.
     const hum = over ? 0 : (game.feelNow?.hum ?? 0);
@@ -366,6 +370,9 @@ export class GameAudio {
     // Следы людей слышны в покое — и только пока место помнится: в стёртом месте никого не остаётся.
     const settled = clamp01(1 - panic * 1.5) * clamp01(1 - near * 2.5);
     const sterile = over ? 0 : clamp01(game.sterileK ?? 0);
+    // Мёртвый воздух замершего места: ровный гул ламп, в котором ничего не меняется. Чем место стерильнее, тем он громче.
+    a.loop('sterile_air', over ? 0 : quiet * sterile);
+    a.loop('koma_pen', game.penOn ? 1 : 0);
     const calm = settled * (game.decay?.voices ?? 1) * (1 - sterile);
     this.voiceAngle += dt * 0.05;
     const behindWall: Vec3 = [ears.pos[0] + Math.cos(this.voiceAngle) * 7, ears.pos[1], ears.pos[2] + Math.sin(this.voiceAngle) * 7];

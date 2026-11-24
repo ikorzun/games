@@ -81,7 +81,8 @@ describe('манифест звуков', () => {
   });
 
   it('каждый звук из манифеста где-то играется: лишнего не генерируем', () => {
-    const code = readFileSync(new URL('../src/audio/game_audio.ts', import.meta.url), 'utf8') + readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
+    // Звуки игры — в game_audio.ts; разовые звуки сюжета (палата, у кровати) играет сам сюжет.
+    const code = readFileSync(new URL('../src/audio/game_audio.ts', import.meta.url), 'utf8') + readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8') + readFileSync(new URL('../src/ui/koma_flow.ts', import.meta.url), 'utf8');
     const unused = manifest.sounds.map((s) => s.id).filter((id) => !code.includes(`'${id}'`) && !(id.startsWith('scare_') && code.includes('`scare_${')));
     expect(unused).toEqual([]);
   });

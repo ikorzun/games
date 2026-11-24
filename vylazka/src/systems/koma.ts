@@ -99,10 +99,11 @@ const p = (key: string): Line => ({ key, who: 'player' });
 const e = (key: string): Line => ({ key, who: 'echo' });
 const r = (key: string): Line => ({ key, who: 'rita' });
 const m = (key: string): Line => ({ key, who: 'memory' });
+const s = (key: string): Line => ({ key, who: 'staff' });
 
 /**
- * События канона по порядку. Строки есть у вертикального среза (пролог, акт I, тизер Риты); у остальных — только условия и
- * флаги: по ним уже проверяется, что обязательная цепочка проходима без необязательных вещей (tests/koma.test.ts).
+ * События канона по порядку, все со строками (F_E01 — без слов: это звук). По условиям проверяется, что обязательная цепочка
+ * проходима без необязательных вещей (tests/koma.test.ts).
  */
 const LIST: readonly KomaEvent[] = [
   // Пролог — приёмка.
@@ -131,7 +132,7 @@ const LIST: readonly KomaEvent[] = [
   { id: 'A1_E03', act: 'ACT_01', requires: ['STORY_INVENTORY_INTRO'], once: true, lines: [p('koma.a1_e03.player_01'), c('koma.a1_e03.caretaker_01')], sets: [] },
   { id: 'A1_E04', act: 'ACT_01', requires: ['STORY_INVENTORY_INTRO'], once: true, lines: [], sets: ['STORY_UNCERTAIN_EVIDENCE_UNLOCKED'] },
   // Акт II — бюро находок.
-  { id: 'A2_E01', act: 'ACT_02', requires: ['STORY_FIRST_CONTRADICTION'], once: true, lines: [], sets: [] },
+  { id: 'A2_E01', act: 'ACT_02', requires: ['STORY_FIRST_CONTRADICTION'], once: true, lines: [p('koma.a2_e01.player_01'), c('koma.a2_e01.caretaker_01'), p('koma.a2_e01.player_02'), c('koma.a2_e01.caretaker_02')], sets: [] },
   {
     id: 'A2_E02',
     act: 'ACT_02',
@@ -140,25 +141,34 @@ const LIST: readonly KomaEvent[] = [
     lines: [r('koma.a2_e02.rita_01'), m('koma.a2_e02.player_memory_01'), r('koma.a2_e02.rita_02'), m('koma.a2_e02.player_memory_02'), r('koma.a2_e02.rita_03')],
     sets: ['STORY_RITA_INTRODUCED'],
   },
-  { id: 'A2_E03', act: 'ACT_02', requires: ['STORY_RITA_INTRODUCED'], once: true, lines: [], sets: ['STORY_STORIES_NOT_FACTS'] },
+  { id: 'A2_E03', act: 'ACT_02', requires: ['STORY_RITA_INTRODUCED'], once: true, lines: [e('koma.a2_e03.visitor_01'), m('koma.a2_e03.player_memory_01'), e('koma.a2_e03.visitor_02')], sets: ['STORY_STORIES_NOT_FACTS'] },
   // Раскрытие бюро: журнал или бейдж предъявляет сама сцена — необязательная улика его не запирает.
-  { id: 'A2_E04', act: 'ACT_02', requires: ['STORY_FIRST_CONTRADICTION', 'STORY_STORIES_NOT_FACTS'], once: true, lines: [], sets: ['STORY_ROLE_REVEALED'] },
+  { id: 'A2_E04', act: 'ACT_02', requires: ['STORY_FIRST_CONTRADICTION', 'STORY_STORIES_NOT_FACTS'], once: true, lines: [p('koma.a2_e04.player_01'), c('koma.a2_e04.caretaker_01'), p('koma.a2_e04.player_02'), c('koma.a2_e04.caretaker_02'), p('koma.a2_e04.player_03'), c('koma.a2_e04.caretaker_03')], sets: ['STORY_ROLE_REVEALED'] },
   // Акт III — поступление без владельца.
-  { id: 'A3_E01', act: 'ACT_03', requires: ['STORY_ROLE_REVEALED'], once: true, lines: [], sets: ['STORY_PERSONAL_EFFECTS'] },
-  { id: 'A3_E02', act: 'ACT_03', requires: ['STORY_PERSONAL_EFFECTS'], once: true, lines: [], sets: [] },
-  { id: 'A3_E03', act: 'ACT_03', requires: ['STORY_PERSONAL_EFFECTS'], after: ['A3_E02'], once: true, lines: [], sets: ['STORY_COMA_REVEALED'] },
-  { id: 'A3_E04', act: 'ACT_03', requires: ['STORY_COMA_REVEALED'], once: true, lines: [], sets: ['STORY_SELF_MISFILED'] },
+  { id: 'A3_E01', act: 'ACT_03', requires: ['STORY_ROLE_REVEALED'], once: true, lines: [p('koma.a3_e01.player_01'), c('koma.a3_e01.caretaker_01'), p('koma.a3_e01.player_02'), c('koma.a3_e01.caretaker_02')], sets: ['STORY_PERSONAL_EFFECTS'] },
+  { id: 'A3_E02', act: 'ACT_03', requires: ['STORY_PERSONAL_EFFECTS'], once: true, lines: [r('koma.a3_e02.rita_01'), m('koma.a3_e02.player_memory_01'), r('koma.a3_e02.rita_02'), m('koma.a3_e02.player_memory_02'), r('koma.a3_e02.rita_03')], sets: [] },
+  // Обрыв смены: реплики персонала дописаны (канон даёт только рамку: осторожно, неполно, без диагноза).
+  { id: 'A3_E03', act: 'ACT_03', requires: ['STORY_PERSONAL_EFFECTS'], after: ['A3_E02'], once: true, lines: [s('koma.a3_e03.staff_01'), s('koma.a3_e03.staff_02'), s('koma.a3_e03.staff_03')], sets: ['STORY_COMA_REVEALED'] },
+  { id: 'A3_E04', act: 'ACT_03', requires: ['STORY_COMA_REVEALED'], once: true, lines: [p('koma.a3_e04.player_01'), c('koma.a3_e04.caretaker_01'), p('koma.a3_e04.player_02'), c('koma.a3_e04.caretaker_02'), p('koma.a3_e04.player_03')], sets: ['STORY_SELF_MISFILED'] },
   // Акт IV — полная картотека.
-  { id: 'A4_E01', act: 'ACT_04', requires: ['STORY_SELF_MISFILED'], once: true, lines: [], sets: ['STORY_PERFECT_ARCHIVE'] },
-  { id: 'A4_E02', act: 'ACT_04', requires: ['STORY_PERFECT_ARCHIVE'], once: true, lines: [], sets: [] },
-  { id: 'A4_E03', act: 'ACT_04', requires: ['STORY_SELF_MISFILED'], after: ['A4_E02'], once: true, lines: [], sets: ['STORY_CARETAKER_REFLECTION'] },
-  { id: 'A4_E04', act: 'ACT_04', requires: ['STORY_CARETAKER_REFLECTION'], once: true, lines: [], sets: ['STORY_FIRST_UNCLAIMED'] },
+  { id: 'A4_E01', act: 'ACT_04', requires: ['STORY_SELF_MISFILED'], once: true, lines: [c('koma.a4_e01.caretaker_01'), p('koma.a4_e01.player_01'), c('koma.a4_e01.caretaker_02')], sets: ['STORY_PERFECT_ARCHIVE'] },
+  { id: 'A4_E02', act: 'ACT_04', requires: ['STORY_PERFECT_ARCHIVE'], once: true, lines: [c('koma.a4_e02.caretaker_01'), p('koma.a4_e02.player_01'), c('koma.a4_e02.caretaker_02'), p('koma.a4_e02.player_02'), c('koma.a4_e02.caretaker_03')], sets: [] },
+  { id: 'A4_E03', act: 'ACT_04', requires: ['STORY_SELF_MISFILED'], after: ['A4_E02'], once: true, lines: [p('koma.a4_e03.player_01'), c('koma.a4_e03.caretaker_01')], sets: ['STORY_CARETAKER_REFLECTION'] },
+  // «Оставить»: строки звучат после первого отказа забрать вещь.
+  { id: 'A4_E04', act: 'ACT_04', requires: ['STORY_CARETAKER_REFLECTION'], once: true, lines: [c('koma.a4_e04.caretaker_01'), p('koma.a4_e04.player_01'), c('koma.a4_e04.caretaker_02'), c('koma.a4_e04.caretaker_03')], sets: ['STORY_FIRST_UNCLAIMED'] },
   // Акт V — невостребованное. Три «оставленных» ставит release(); здесь — билет и запись.
-  { id: 'A5_E02', act: 'ACT_05', requires: ['STORY_RELEASE_1', 'STORY_RELEASE_2', 'STORY_RELEASE_3'], once: true, lines: [], sets: ['STORY_PERSONAL_TICKET'] },
-  { id: 'A5_E03', act: 'ACT_05', requires: ['STORY_RELEASE_1', 'STORY_RELEASE_2', 'STORY_RELEASE_3', 'STORY_PERSONAL_TICKET'], once: true, lines: [], sets: ['STORY_UNFINISHED_RECORD', 'STORY_CARETAKER_INTEGRATED'] },
+  { id: 'A5_E02', act: 'ACT_05', requires: ['STORY_RELEASE_1', 'STORY_RELEASE_2', 'STORY_RELEASE_3'], once: true, lines: [p('koma.a5_e02.player_01'), c('koma.a5_e02.caretaker_01'), p('koma.a5_e02.player_02'), c('koma.a5_e02.caretaker_02'), p('koma.a5_e02.player_03'), c('koma.a5_e02.caretaker_03')], sets: ['STORY_PERSONAL_TICKET'] },
+  {
+    id: 'A5_E03',
+    act: 'ACT_05',
+    requires: ['STORY_RELEASE_1', 'STORY_RELEASE_2', 'STORY_RELEASE_3', 'STORY_PERSONAL_TICKET'],
+    once: true,
+    lines: [p('koma.a5_e03.player_01'), c('koma.a5_e03.caretaker_01'), p('koma.a5_e03.player_02')],
+    sets: ['STORY_UNFINISHED_RECORD', 'STORY_CARETAKER_INTEGRATED'],
+  },
   // Эпилог.
   { id: 'F_E01', act: 'ACT_06', requires: ['STORY_UNFINISHED_RECORD'], once: true, lines: [], sets: [] },
-  { id: 'F_E02', act: 'ACT_06', requires: ['STORY_UNFINISHED_RECORD'], after: ['F_E01'], once: true, lines: [], sets: ['STORY_ENDING'] },
+  { id: 'F_E02', act: 'ACT_06', requires: ['STORY_UNFINISHED_RECORD'], after: ['F_E01'], once: true, lines: [s('koma.f_e02.staff_01')], sets: ['STORY_ENDING'] },
 ];
 export const EVENTS: Readonly<Record<string, KomaEvent>> = Object.fromEntries(LIST.map((x) => [x.id, x]));
 export const EVENT_ORDER: readonly string[] = LIST.map((x) => x.id);
@@ -323,6 +333,16 @@ export class Narrative {
     const found = Object.values(this.state.artifacts).filter((a) => a.discovered);
     if (found.length === 0) return 0;
     return found.filter((a) => a.labelled === true).length / found.length;
+  }
+
+  /**
+   * Насколько место замерло, 0…1. До полной картотеки (акт IV) — доля дописанного; с неё — всё стоит, и движение возвращает
+   * только «оставленное»: три оставленные вещи — и место снова живое. После финальной записи — живое.
+   */
+  stillness(share: number): number {
+    if (this.has('STORY_UNFINISHED_RECORD')) return 0;
+    if (this.has('STORY_PERFECT_ARCHIVE')) return Math.max(0, 1 - this.state.releasedArtifactIds.length / 3);
+    return this.sterility() * share;
   }
 
   /** Вещи, которым в лимбо ещё можно дописать историю или отказать в ней. */

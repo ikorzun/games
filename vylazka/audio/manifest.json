@@ -627,6 +627,48 @@
       "volume": 0.26,
       "prompt": "A single pigeon cooing under the roof of a large empty train station hall, clear recording at full level, natural hall reverb, three or four coos, no wing sounds, no music, no voices",
       "ru": "воркование голубя под крышей зала ожидания, изредка, пока время идёт"
+    },
+    {
+      "id": "sterile_air",
+      "bus": "amb",
+      "variants": 1,
+      "loop": true,
+      "seconds": 12,
+      "volume": 0.5,
+      "xfade": 1.5,
+      "prompt": "Dead air of a sealed archive room: a steady flat electrical hum of fluorescent tube lights and a small transformer, completely constant and unchanging, lifeless and static, no modulation, no movement, no footsteps, no voices, no wind, no dripping, clearly audible at full recording level, seamless loop",
+      "ru": "мёртвый воздух замершего места (сюжет KOMA, слова партнёра 24.11: «мёртвый звук замершего места»): ровный гул ламп и трансформатора, в котором ничего не меняется; громкость — стерильность места (game.sterileK), остальной звук места под ним проседает. Модель Sound Effects v3, петля 12 с; из двух вариантов взят более ровный и громкий (разброс полусекундных уровней 0,3 дБ)"
+    },
+    {
+      "id": "koma_pen",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": true,
+      "seconds": 5,
+      "volume": 0.35,
+      "xfade": 0.4,
+      "prompt": "Ballpoint pen writing slowly and neatly on a stiff cardboard luggage tag, close-mic dry scratch of the pen on card, steady continuous handwriting, full recording level, no voice, no room noise, no page turning, seamless loop",
+      "ru": "перо по бирке (сюжет KOMA): Смотритель дописывает владельца — звучит, пока запись идёт, то есть пока на вещь смотрят; мотив канона «шорох бумаги и ярлыков». Из двух вариантов взят более ровный"
+    },
+    {
+      "id": "koma_ward",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 12,
+      "volume": 0.6,
+      "prompt": "Ordinary hospital ward heard from a bed, recorded at full level: unhurried soft footsteps on linoleum, a trolley with small wheels rolling past, a slow steady heart monitor beep, a man and a woman speaking low and calm a few steps away with no intelligible words, routine and unremarkable, no alarm, no music, no drama",
+      "ru": "палата (сюжет KOMA, акт III, A3_E03, слот LP12): после обрыва обычной смены сквозь чёрный кадр — шаги по линолеуму, тележка, монитор, двое говорят вполголоса; обыденно, без тревоги. Звучит один раз за игру"
+    },
+    {
+      "id": "koma_bedside",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 10,
+      "volume": 0.7,
+      "prompt": "Close and ordinary bedside sounds recorded at full level: bed sheets rustling as someone shifts slightly, slow calm breathing of one person, a light plastic cup being set down on a bedside table, a chair creaking once, a plain daytime room, no music, no beeping, no voices",
+      "ru": "у кровати (сюжет KOMA, эпилог, F_E01): шорох простыни, дыхание, кто-то ставит пластиковый стакан — звук становится обыденным. Звучит один раз, в финале"
     }
   ]
 }
