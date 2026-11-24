@@ -273,39 +273,40 @@ def paint():
     wob = noise(rnd, W, 180).point(lambda v: 120 + v // 16)
     height = ImageChops.add(height, wob, 2, -64)
 
-    # Нормали из высоты (OpenGL: +Y вверх, а v листа идёт вниз).
-    k = 3.0
+    return (col, *maps(height, rough, metal))
+
+
+def maps(height, rough, metal, k=3.0):
+    """Карта нормалей из высоты (OpenGL: +Y вверх, а v листа идёт вниз) и карта «затенение, шероховатость, металл»."""
+    W = height.size[0]
     hx = ImageChops.subtract(ImageChops.offset(height, 1, 0), ImageChops.offset(height, -1, 0), 1.0 / k, 128)
     hy = ImageChops.subtract(ImageChops.offset(height, 0, -1), ImageChops.offset(height, 0, 1), 1.0 / k, 128)
     nmap = Image.merge('RGB', (hx, hy, Image.new('L', (W, W), 255)))
     orm = Image.merge('RGB', (Image.new('L', (W, W), 255), rough, metal))
-    return col, nmap, orm
+    return nmap, orm
 
 
-def main():
-    if len(sys.argv) < 2:
-        sys.exit(__doc__)
-    out = os.path.join(sys.argv[1], 'kettle')
+def write(root, name, col, nmap, orm):
+    """Записать собранную сетку и карты исходником для импорта: <root>/<name>/<name>.gltf, .bin и три картинки."""
+    out = os.path.join(root, name)
     os.makedirs(out, exist_ok=True)
-    build_mesh()
-    col, nmap, orm = paint()
-    col.save(os.path.join(out, 'kettle_diff.png'))
-    nmap.save(os.path.join(out, 'kettle_nor.png'))
-    orm.save(os.path.join(out, 'kettle_arm.png'))
+    col.save(os.path.join(out, f'{name}_diff.png'))
+    nmap.save(os.path.join(out, f'{name}_nor.png'))
+    orm.save(os.path.join(out, f'{name}_arm.png'))
     blob = b''.join(struct.pack('<3f', *p) for p in pos) + b''.join(struct.pack('<3f', *n) for n in nrm) + b''.join(struct.pack('<2f', *u) for u in uvs) + struct.pack('<%dI' % len(idx), *idx)
     nv = len(pos)
-    with open(os.path.join(out, 'kettle.bin'), 'wb') as f:
+    with open(os.path.join(out, f'{name}.bin'), 'wb') as f:
         f.write(blob)
     doc = {
-        'asset': {'version': '2.0', 'generator': 'tools/things_hq/make_kettle.py'},
+        'asset': {'version': '2.0', 'generator': 'vylazka/tools/things_hq'},
         'scene': 0,
         'scenes': [{'nodes': [0]}],
-        'nodes': [{'mesh': 0, 'name': 'kettle'}],
+        'nodes': [{'mesh': 0, 'name': name}],
         'meshes': [{'primitives': [{'attributes': {'POSITION': 0, 'NORMAL': 1, 'TEXCOORD_0': 2}, 'indices': 3, 'material': 0}]}],
-        'materials': [{'name': 'kettle', 'pbrMetallicRoughness': {'baseColorTexture': {'index': 0}, 'metallicRoughnessTexture': {'index': 2}}, 'normalTexture': {'index': 1}, 'occlusionTexture': {'index': 2}}],
+        'materials': [{'name': name, 'pbrMetallicRoughness': {'baseColorTexture': {'index': 0}, 'metallicRoughnessTexture': {'index': 2}}, 'normalTexture': {'index': 1}, 'occlusionTexture': {'index': 2}}],
         'textures': [{'source': 0}, {'source': 1}, {'source': 2}],
-        'images': [{'uri': 'kettle_diff.png'}, {'uri': 'kettle_nor.png'}, {'uri': 'kettle_arm.png'}],
-        'buffers': [{'uri': 'kettle.bin', 'byteLength': len(blob)}],
+        'images': [{'uri': f'{name}_diff.png'}, {'uri': f'{name}_nor.png'}, {'uri': f'{name}_arm.png'}],
+        'buffers': [{'uri': f'{name}.bin', 'byteLength': len(blob)}],
         'bufferViews': [
             {'buffer': 0, 'byteOffset': 0, 'byteLength': nv * 12},
             {'buffer': 0, 'byteOffset': nv * 12, 'byteLength': nv * 12},
@@ -319,9 +320,22 @@ def main():
             {'bufferView': 3, 'componentType': 5125, 'count': len(idx), 'type': 'SCALAR'},
         ],
     }
-    with open(os.path.join(out, 'kettle.gltf'), 'w', encoding='utf-8') as f:
+    with open(os.path.join(out, f'{name}.gltf'), 'w', encoding='utf-8') as f:
         json.dump(doc, f)
-    print(f'kettle: {len(idx) // 3} треугольников, {nv} вершин → {out}')
+    print(f'{name}: {len(idx) // 3} треугольников, {nv} вершин → {out}')
+
+
+def reset():
+    """Начать новую вещь: сетка пустая."""
+    for a in (pos, nrm, uvs, idx):
+        a.clear()
+
+
+def main():
+    if len(sys.argv) < 2:
+        sys.exit(__doc__)
+    build_mesh()
+    write(sys.argv[1], 'kettle', *paint())
 
 
 if __name__ == '__main__':

@@ -28,7 +28,7 @@ cd vylazka && npm install && npm run typecheck && npm test && npm run build && n
 node e2e/smoke.mjs --dist dist --only koma   # сюжет «Невостребованное» в сборке: первый сон, лимбо, «оставить» (docs/vylazka/koma)
 python3 tools/koma/memory_things.py          # пересобрать список вещей памяти: docs/vylazka/koma/memory_things.md
 python3 -I scripts/import_thing_hq.py <каталог исходников>   # подробные вещи памяти (glTF/.glb → public/assets/things): docs/vylazka/things_hq.md
-python3 -I tools/things_hq/make_kettle.py <каталог исходников>   # чайник памяти, собранный программой (glTF и карты для импорта выше)
+python3 -I tools/things_hq/make_kettle.py <каталог исходников>   # чайник памяти, собранный программой (glTF и карты для импорта выше); make_small.py — билет, записка, ключ, тапочки, пальто
 node tools/things_hq/shots.mjs               # вещи памяти под лучом: «до» (?hq=0) и «после»;  perf.mjs — замер нагрузки, audit.ts — треугольники
 node e2e/shots.mjs   # скриншоты фиксированных ракурсов — смотреть картинку глазами
 node tools/plans/plans.mjs --png   # план сверху всех комнат: проходы, главный вход, мебель — проверка раскладки (design.md, §31)

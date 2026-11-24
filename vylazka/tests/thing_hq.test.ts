@@ -41,11 +41,12 @@ describe('подробные вещи памяти', () => {
       expect(Math.abs(meta.min[1])).toBeLessThan(0.002);
       expect(Math.abs(meta.min[0] + meta.max[0])).toBeLessThan(0.004);
       expect(Math.abs(meta.min[2] + meta.max[2])).toBeLessThan(0.004);
-      // Размер — того же порядка, что у болванки: преграда и радиус взгляда остаются её.
+      // Наибольший размер — того же порядка, что у болванки: преграда и радиус взгляда остаются её.
       const spec = ALL_PROPS[kind]!;
-      const h = meta.max[1] - meta.min[1];
-      expect(h).toBeGreaterThan(spec.h * 0.6);
-      expect(h).toBeLessThan(spec.h * 1.5);
+      const big = Math.max(meta.max[0] - meta.min[0], meta.max[1] - meta.min[1], meta.max[2] - meta.min[2]);
+      const was = Math.max(spec.w, spec.h, spec.d);
+      expect(big).toBeGreaterThan(was * 0.6);
+      expect(big).toBeLessThan(was * 1.5);
       // Нормали единичные, развёртка в листе.
       for (let i = 0; i < mesh.normal.length; i += 3) expect(Math.hypot(mesh.normal[i]!, mesh.normal[i + 1]!, mesh.normal[i + 2]!)).toBeCloseTo(1, 3);
       for (const u of mesh.uv) {

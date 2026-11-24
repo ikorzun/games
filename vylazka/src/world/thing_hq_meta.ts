@@ -35,6 +35,11 @@ export const THING_HQ: Readonly<Record<string, ThingHqMeta>> = {
   desk_phone: { file: 'desk_phone', tris: 12000, verts: 8766, tex: 256, min: [-0.0942, 0.0000, -0.1200], max: [0.0942, 0.0999, 0.1200], credit: "\"Office Phone\" by maxdragon, https://sketchfab.com/3d-models/4176a01b6d0b4d13ad165c0df278a6b5, CC-BY-4.0; modified: rewritten as a sand3d program" },
   st_cup: { file: 'st_cup', tris: 7721, verts: 4577, tex: 256, min: [-0.0519, 0.0000, -0.0519], max: [0.0519, 0.1400, 0.0519], credit: "\"Coffee Paper-cup\" by DenPennicus, https://sketchfab.com/3d-models/70d51490fb8e4de0a132d9f543859a35, CC-BY-4.0; modified: rewritten as a sand3d program" },
   kettle: { file: 'kettle', tris: 5192, verts: 3032, tex: 1024, min: [-0.1415, 0.0000, -0.1120], max: [0.1415, 0.3335, 0.1120], credit: "Kettle: made for Untitled Session (tools/things_hq/make_kettle.py)" },
+  st_ticket: { file: 'st_ticket', tris: 1344, verts: 850, tex: 512, min: [-0.0600, 0.0000, -0.0300], max: [0.0600, 0.0082, 0.0300], credit: "Ticket: made for Untitled Session (tools/things_hq/make_small.py)" },
+  st_note: { file: 'st_note', tris: 1024, verts: 748, tex: 512, min: [-0.0800, 0.0000, -0.0275], max: [0.0800, 0.0188, 0.0275], credit: "Note: made for Untitled Session (tools/things_hq/make_small.py)" },
+  st_key: { file: 'st_key', tris: 2000, verts: 1320, tex: 512, min: [-0.0678, 0.0000, -0.0200], max: [0.0678, 0.0080, 0.0200], credit: "Key with a tag: made for Untitled Session (tools/things_hq/make_small.py)" },
+  slippers: { file: 'slippers', tris: 2976, verts: 1808, tex: 512, min: [-0.1206, 0.0000, -0.1398], max: [0.1206, 0.0576, 0.1398], credit: "Slippers: made for Untitled Session (tools/things_hq/make_small.py)" },
+  st_coat: { file: 'st_coat', tris: 11232, verts: 5984, tex: 512, min: [-0.3172, 0.0000, -0.2680], max: [0.3172, 0.4080, 0.2680], credit: "Coat: made for Untitled Session (tools/things_hq/make_small.py)" },
   photo_frame: { file: 'photo_frame', tris: 1632, verts: 1422, tex: 1024, min: [-0.1206, 0.0000, -0.0602], max: [0.1206, 0.3000, 0.0602], credit: "Standing Picture Frame 01 by James Ray Cock, Poly Haven (polyhaven.com), CC0" },
 };
 // </generated>

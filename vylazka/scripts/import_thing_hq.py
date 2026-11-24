@@ -62,6 +62,12 @@ SOURCES = {
     'st_cup': dict(src=('st_cup', 'model.glb'), klass='small', turn=0, height=0.14, tex=256, credit='"Coffee Paper-cup" by DenPennicus, https://sketchfab.com/3d-models/70d51490fb8e4de0a132d9f543859a35, CC-BY-4.0; modified: rewritten as a sand3d program'),
     # Чайник собран программой (tools/things_hq/make_kettle.py): в каталогах нет эмалированного, на плите.
     'kettle': dict(src=('kettle', 'kettle.gltf'), klass='medium', turn=0, height=None, credit='Kettle: made for Untitled Session (tools/things_hq/make_kettle.py)'),
+    # Пять вещей, собранных программой (tools/things_hq/make_small.py): в каталогах их нет.
+    'st_ticket': dict(src=('st_ticket', 'st_ticket.gltf'), klass='small', turn=0, height=None, credit='Ticket: made for Untitled Session (tools/things_hq/make_small.py)'),
+    'st_note': dict(src=('st_note', 'st_note.gltf'), klass='small', turn=0, height=None, credit='Note: made for Untitled Session (tools/things_hq/make_small.py)'),
+    'st_key': dict(src=('st_key', 'st_key.gltf'), klass='small', turn=0, height=None, credit='Key with a tag: made for Untitled Session (tools/things_hq/make_small.py)'),
+    'slippers': dict(src=('slippers', 'slippers.gltf'), klass='small', turn=1, height=None, credit='Slippers: made for Untitled Session (tools/things_hq/make_small.py)'),
+    'st_coat': dict(src=('st_coat', 'st_coat.gltf'), klass='medium', turn=0, height=None, tex=512, credit='Coat: made for Untitled Session (tools/things_hq/make_small.py)'),
     'photo_frame': dict(src=('standing_picture_frame_01', 'standing_picture_frame_01.gltf'), klass='small', turn=3, height=0.3, tex=1024, art='standing_picture_frame_01_artwork', credit='Standing Picture Frame 01 by James Ray Cock, Poly Haven (polyhaven.com), CC0'),
 }
 # Насыщенность карты цвета у всех подробных вещей (квиз 24.11: «цвет ярче»): вещь памяти должна находиться взглядом.

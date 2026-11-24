@@ -59,7 +59,7 @@ async function shot(kind, hq) {
     // Луч — в середину вещи.
     v.teleport(st.pos[0], st.pos[1], st.pos[2], st.aim[0], Math.atan2(lift + h / 2 - 1.42, d));
     v.step(4);
-  }, [kind, dist, kind === 'water_cooler' ? 1.35 : kind === 'office_chair' ? 1.02 : kind === 'office_terminal' ? 0.42 : kind === 'remote' || kind === 'desk_phone' ? 0.05 : size, opt('fate', 'dust'), Number(opt('lift', '0'))]);
+  }, [kind, dist, kind === 'water_cooler' ? 1.35 : kind === 'office_chair' ? 1.02 : kind === 'office_terminal' ? 0.42 : ['remote', 'desk_phone', 'st_ticket', 'st_note', 'st_key', 'slippers'].includes(kind) ? 0.03 : size, opt('fate', 'dust'), Number(opt('lift', '0'))]);
   if (hq === 1) await page.waitForFunction((k) => window.__vz.hqReady(k), kind, { timeout: 15000 }).catch(() => console.log(`  ${kind}: подробной модели нет или не пришла`));
   await page.waitForTimeout(700);
   const info = await page.evaluate((STEPS) => {
