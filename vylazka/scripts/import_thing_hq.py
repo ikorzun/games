@@ -22,8 +22,9 @@
 карт сеткой (развёртка каждой детали сжимается в свою клетку) — поэтому у деталей развёртка должна лежать в квадрате 0…1.
 
 Формат .bin (little-endian): 'VZT1', u32 вершин, u32 индексов, f32×3 min, f32×3 max (габарит, м), f32×2 uvMin, f32×2 uvMax,
-затем позиции u16×3 (доля габарита), развёртка u16×2 (доля uvMin…uvMax), нормали i8×3 + 1 байт выравнивания,
-индексы u16 (вершин ≤ 65535) или u32.
+затем позиции u16×3 (доля габарита), развёртка u16×2 (доля uvMin…uvMax), нормали i8×3 + 1 байт признака,
+индексы u16 (вершин ≤ 65535) или u32. Байт после нормали — признак вершины: 0 — обычная, 1…127 — под стеклом (блик
+фонаря), 128…255 — светится (экран).
 """
 import json
 import math
@@ -47,15 +48,17 @@ BUDGET = {'small': (12000, 512), 'medium': (25000, 1024), 'large': (40000, 1024)
 #   src — (папка, файл); klass — класс бюджета; turn — четверти оборота вокруг вертикали (лицом к +z); height — высота в игре, м
 #   (None — как есть); credit — строка авторства; tex — сторона листа карт, если не по классу;
 #   patches — что закрасить на карте цвета: (материал, u0, v0, u1, v1) в долях его карты — цветом вокруг (марка на циферблате);
-#   art — материал, чью картинку заменить нашей (снимок в рамке); hue — (от, до, в какой тон), градусы: перекрасить краску.
+#   art — материал, чью картинку заменить нашей (снимок в рамке); hue — (от, до, в какой тон), градусы: перекрасить краску;
+#   recolor — {материал: цвет sRGB}: перекрасить деталь без карты; screen — материал экрана: он светится, на нём строки и курсор;
+#   glass_uv — прямоугольники листа, glass_mat — материал: то, что под стеклом (циферблат, снимок) — на нём блик фонаря.
 SOURCES = {
     # Квиз 24.11: «Всегда подробная, цвет ярче» — бирюзовая краска будильника перекрашена в красный болванки.
-    'alarm_clock': dict(src=('alarm_clock_01', 'alarm_clock_01.gltf'), klass='small', turn=0, height=0.2, hue=(120, 215, 4), credit='Alarm Clock 01 by James Ray Cock and Yann Kervran, Poly Haven (polyhaven.com), CC0'),
+    'alarm_clock': dict(src=('alarm_clock_01', 'alarm_clock_01.gltf'), glass_uv=[(0.0, 0.6, 0.41, 1.0)], klass='small', turn=0, height=0.2, hue=(120, 215, 4), credit='Alarm Clock 01 by James Ray Cock and Yann Kervran, Poly Haven (polyhaven.com), CC0'),
     'wet_floor_sign': dict(src=('WetFloorSign_01', 'WetFloorSign_01.gltf'), klass='small', turn=0, height=None, credit='Wet Floor Sign 01 by Fran Calvente, Poly Haven (polyhaven.com), CC0'),
-    'office_clock': dict(src=('wall_clock', 'wall_clock.gltf'), klass='small', turn=0, height=0.34, patches=[('wall_clock', 0.232, 0.592, 0.308, 0.652)], credit='Wall Clock by PierreB3D, Poly Haven (polyhaven.com), CC0'),
+    'office_clock': dict(src=('wall_clock', 'wall_clock.gltf'), glass_uv=[(0.0, 0.46, 0.55, 1.0)], klass='small', turn=0, height=0.34, patches=[('wall_clock', 0.232, 0.592, 0.308, 0.652)], credit='Wall Clock by PierreB3D, Poly Haven (polyhaven.com), CC0'),
     # Sand3D (CC-BY-4.0): форма подробная, карт нет — у каждой детали свой цвет, шероховатость и металл клеткой листа.
-    'remote': dict(src=('remote', 'model.glb'), klass='small', turn=0, height=None, fit=0.22, tex=256, credit='"Remote Control" by budakbina, https://sketchfab.com/3d-models/c7ec86e7feb746489b30b4a01c2510af, CC-BY-4.0; modified: rewritten as a sand3d program'),
-    'office_terminal': dict(src=('office_terminal', 'model.glb'), klass='medium', turn=2, height=None, fit=0.52, tex=256, credit='"Vic-30" by fisherw, https://sketchfab.com/3d-models/98869ceaacdc4b1ebfca60caad424c09, CC-BY-4.0; modified: rewritten as a sand3d program'),
+    'remote': dict(src=('remote', 'model.glb'), klass='small', turn=0, height=None, fit=0.22, tex=256, recolor={'plastic #838383': (22, 22, 26), 'plastic #c5c5c5': (226, 226, 220), 'plastic #b2b2b2': (40, 150, 236)}, credit='"Remote Control" by budakbina, https://sketchfab.com/3d-models/c7ec86e7feb746489b30b4a01c2510af, CC-BY-4.0; modified: rewritten as a sand3d program'),
+    'office_terminal': dict(src=('office_terminal', 'model.glb'), screen='glass #5d5d5d roughness=0.5', klass='medium', turn=2, height=None, fit=0.52, tex=512, credit='"Vic-30" by fisherw, https://sketchfab.com/3d-models/98869ceaacdc4b1ebfca60caad424c09, CC-BY-4.0; modified: rewritten as a sand3d program'),
     'office_chair': dict(src=('office_chair', 'model.gltf'), klass='large', turn=0, height=1.02, tex=256, credit='"Silla DISGRAF 8 B" by jacavision, https://sketchfab.com/3d-models/2ef40e2a05f74110bb90c3072fa3c2cd, CC-BY-4.0; modified: rewritten as a sand3d program'),
     'water_cooler': dict(src=('water_cooler', 'model.glb'), klass='large', turn=0, height=1.35, tex=256, credit='NVIDIA SimReady assets: "water_cooler_a01" by NVIDIA, https://huggingface.co/datasets/nvidia/simready-assets/tree/653d91e182011f357cf1644013cc94ddf194d349/water_cooler_a01, CC BY 4.0; modified: rewritten as a sand3d program'),
     'desk_phone': dict(src=('desk_phone', 'model.glb'), klass='small', turn=0, height=None, fit=0.24, tex=256, credit='"Office Phone" by maxdragon, https://sketchfab.com/3d-models/4176a01b6d0b4d13ad165c0df278a6b5, CC-BY-4.0; modified: rewritten as a sand3d program'),
@@ -69,7 +72,7 @@ SOURCES = {
     'slippers': dict(src=('slippers', 'slippers.gltf'), klass='small', turn=1, height=None, credit='Slippers: made for Untitled Session (tools/things_hq/make_small.py)'),
     # Шляпа стоит вместо пальто (партнёр 24.11); имя модели прежнее — на него ссылаются цепочки и сохранения.
     'st_coat': dict(src=('st_coat', 'st_coat.gltf'), klass='small', turn=0, height=None, credit='Hat: made for Untitled Session (tools/things_hq/make_small.py)'),
-    'photo_frame': dict(src=('standing_picture_frame_01', 'standing_picture_frame_01.gltf'), klass='small', turn=3, height=0.3, tex=1024, art='standing_picture_frame_01_artwork', credit='Standing Picture Frame 01 by James Ray Cock, Poly Haven (polyhaven.com), CC0'),
+    'photo_frame': dict(src=('standing_picture_frame_01', 'standing_picture_frame_01.gltf'), klass='small', turn=3, height=0.3, tex=1024, art='standing_picture_frame_01_artwork', glass_mat='standing_picture_frame_01_artwork', credit='Standing Picture Frame 01 by James Ray Cock, Poly Haven (polyhaven.com), CC0'),
 }
 # Насыщенность карты цвета у всех подробных вещей (квиз 24.11: «цвет ярче»): вещь памяти должна находиться взглядом.
 SATURATION = 1.4
@@ -103,6 +106,32 @@ def group_photo(size):
             r, gg, bb = px[x, y]
             px[x, y] = (max(0, min(255, r + g)), max(0, min(255, gg + g)), max(0, min(255, bb + g)))
     return img
+
+
+def screen_image(size):
+    """Экран терминала: «включён. курсор мигает» — тёмно-зелёный, строки штрихами (букв нет) и прямоугольник курсора."""
+    import random
+
+    from PIL import ImageDraw, ImageFilter
+
+    rnd = random.Random(8)
+    img = Image.new('RGB', (size, size), (4, 22, 12))
+    d = ImageDraw.Draw(img)
+    row = size // 14
+    y = row * 2
+    for line in range(9):
+        x = size // 9
+        words = rnd.randint(2, 6) if line < 8 else 1
+        for _ in range(words):
+            w = rnd.randint(size // 22, size // 7)
+            if x + w > size * 0.88:
+                break
+            d.rectangle((x, y, x + w, y + row // 3), fill=(110, 255, 150))
+            x += w + size // 28
+        if line == 8:
+            d.rectangle((x, y - row // 4, x + size // 20, y + row // 2), fill=(190, 255, 210))
+        y += row
+    return img.filter(ImageFilter.GaussianBlur(max(0.6, size / 300)))
 
 
 def grade(img, hue):
@@ -240,7 +269,7 @@ def collect(doc, bufs):
     return parts
 
 
-def bake_maps(doc, bufs, base, mats, size, patches, art, hue):
+def bake_maps(doc, bufs, base, mats, size, patches, art, hue, recolor=None, screen=None):
     """Карты всех материалов — в один лист сеткой. Возвращает (цвет+AO, нормали+шероховатость+металл, {материал: клетка})."""
     n = max(1, len(mats))
     grid = 1
@@ -261,7 +290,14 @@ def bake_maps(doc, bufs, base, mats, size, patches, art, hue):
         ao_img = image_of(doc, bufs, base, m.get('occlusionTexture', {}).get('index'))
         n_img = image_of(doc, bufs, base, m.get('normalTexture', {}).get('index'))
         box = (cell, cell)
-        if art and m.get('name') == art:
+        if screen and m.get('name') == screen:
+            c = screen_image(cell)
+            n_img = None
+            orm_img = None
+            pbr = {'roughnessFactor': 0.2, 'metallicFactor': 0.0}
+        elif recolor and m.get('name') in recolor:
+            c = Image.new('RGB', box, recolor[m.get('name')])
+        elif art and m.get('name') == art:
             c = group_photo(cell)
             n_img = None
             orm_img = None
@@ -333,16 +369,48 @@ def build(name, src_root):
     for p in parts:
         if p[0] not in mats:
             mats.append(p[0])
-    col, nmap, cells = bake_maps(doc, bufs, base, mats, tex, src.get('patches', []), src.get('art'), src.get('hue'))
+    col, nmap, cells = bake_maps(doc, bufs, base, mats, tex, src.get('patches', []), src.get('art'), src.get('hue'), src.get('recolor'), src.get('screen'))
     pos, nrm, uv, idx = [], [], [], []
+    # Признак вершины: 0 — обычная, 1 — под стеклом (блик фонаря), 2 — светится (экран).
+    flag = []
+    mname = lambda mi: doc['materials'][mi].get('name') if mi is not None else None
     for mi, wp, wn, wuv, widx in parts:
         cx, cy, cs = cells[mi]
         first = len(pos)
         pos += wp
         nrm += wn
+        if src.get('screen') and mname(mi) == src['screen']:
+            # У экрана своей развёртки нет: кладём его плоскость в клетку листа целиком (ширина — u, высота — v сверху вниз).
+            blo = [min(p[k] for p in wp) for k in range(3)]
+            bhi = [max(p[k] for p in wp) for k in range(3)]
+            ax = 0 if bhi[0] - blo[0] >= bhi[2] - blo[2] else 2
+            wuv = [((p[ax] - blo[ax]) / ((bhi[ax] - blo[ax]) or 1.0) * 0.98 + 0.01, (1 - (p[1] - blo[1]) / ((bhi[1] - blo[1]) or 1.0)) * 0.98 + 0.01) for p in wp]
+            flag += [2] * len(wp)
+        elif src.get('glass_mat') and mname(mi) == src['glass_mat']:
+            flag += [1] * len(wp)
+        else:
+            flag += [0] * len(wp)
         # Развёртка детали — в свою клетку листа (у одной детали клетка — весь лист).
         uv += [(cx + (u % 1.0 if not 0.0 <= u <= 1.0 else u) * cs, cy + (v % 1.0 if not 0.0 <= v <= 1.0 else v) * cs) for u, v in wuv] if len(mats) > 1 else list(wuv)
         idx += [first + i for i in widx]
+    # Под стеклом — треугольники, целиком лежащие в заданных прямоугольниках листа (циферблат). Вершины на границе
+    # раздваиваются: материал в игре один на треугольник, общая вершина размазала бы его по соседям.
+    rects = src.get('glass_uv', [])
+    if rects:
+        inside = lambda u: any(r[0] <= u[0] <= r[2] and r[1] <= u[1] <= r[3] for r in rects)
+        twin = {}
+        for t in range(0, len(idx), 3):
+            tri = idx[t : t + 3]
+            if not all(inside(uv[v]) for v in tri):
+                continue
+            for k, v in enumerate(tri):
+                if v not in twin:
+                    twin[v] = len(pos)
+                    pos.append(pos[v])
+                    nrm.append(nrm[v])
+                    uv.append(uv[v])
+                    flag.append(1)
+                idx[t + k] = twin[v]
     # Четверти оборота вокруг вертикали: лицом вещь должна смотреть в +z.
     for _ in range(turn % 4):
         pos = [(z, y, -x) for x, y, z in pos]
@@ -358,7 +426,10 @@ def build(name, src_root):
     pos = [((x - cx) * s, (y - lo[1]) * s, (z - cz) * s) for x, y, z in pos]
     src_tris = len(idx) // 3
     if src_tris > max_tris:
+        if any(flag):
+            sys.exit(f'{name}: вещь с признаками вершин (стекло, экран) упрощать нельзя — признаки потеряются')
         pos, nrm, uv, idx = simplify(pos, nrm, uv, idx, max_tris)
+        flag = [0] * len(pos)
     lo = [min(p[k] for p in pos) for k in range(3)]
     hi = [max(p[k] for p in pos) for k in range(3)]
     ulo = [min(u[k] for u in uv) for k in range(2)]
@@ -368,7 +439,7 @@ def build(name, src_root):
     blob = b'VZT1' + struct.pack('<II', nv, len(idx)) + struct.pack('<3f3f2f2f', *lo, *hi, *ulo, *uhi)
     blob += b''.join(struct.pack('<3H', *(q(p[k], lo[k], hi[k]) for k in range(3))) for p in pos)
     blob += b''.join(struct.pack('<2H', *(q(u[k], ulo[k], uhi[k]) for k in range(2))) for u in uv)
-    blob += b''.join(struct.pack('<3bx', *(max(-127, min(127, int(round(c * 127)))) for c in n)) for n in nrm)
+    blob += b''.join(struct.pack('<3bB', *(max(-127, min(127, int(round(c * 127)))) for c in n), (0, 64, 255)[flag[i]]) for i, n in enumerate(nrm))
     while len(blob) % 4:
         blob += b'\0'
     blob += struct.pack('<%d%s' % (len(idx), 'H' if nv <= 65535 else 'I'), *idx)
