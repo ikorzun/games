@@ -482,6 +482,11 @@ const LESSON_GROWTH = 0.85;
  */
 const FIRST_DREAM = { from: 3, to: 14, order: ['strobe', 'dark'] as const satisfies readonly RoomFx[] };
 /**
+ * Парящая искомая вещь (партнёр 24.11: «сделать эти вещи парящими в пространстве в слабом условно мыльном пузыре»): подъём над
+ * полом, столом и полкой, м; bob — размах и частота покачивания; пузырь — во сколько раз шире вещи и не уже min метров.
+ */
+const FLOAT = { floor: 1.05, table: 0.55, shelf: 0.32, bob: 0.035, bobHz: 1.1, bubble: 1.2, min: 0.2 } as const;
+/**
  * Подсветка искомой вещи при приближении: с from метров свет памяти разгорается, с full — в полную силу: ярче на strength и
  * шире на radius (доли), дышит с частотой breath; rate — как быстро разгорается и гаснет (1/с).
  */
@@ -1360,6 +1365,15 @@ export class Game {
   private holdsMemory(o: LevelObject): boolean {
     const t = this.memoryThing;
     return t !== null && t.state !== 'gone' && this.restsOn(t.pos, o);
+  }
+
+  /** Искомая вещь парит в пузыре (мелкая); крупная стоит на полу. */
+  private memFloat = false;
+
+  /** На сколько метров мелкая искомая вещь поднята над своим местом: над столом и полкой — выше того, что на них стоит. */
+  private floatLift(kind: 'table' | 'shelf' | 'floor'): number {
+    if (!this.memFloat) return 0;
+    return kind === 'floor' ? FLOAT.floor : kind === 'table' ? FLOAT.table : FLOAT.shelf;
   }
 
   /** Вещь, которую ищут, переехала («забылась»): преграда крупной едет с ней — на старом месте пусто, на новом держит. */
@@ -3618,6 +3632,11 @@ export class Game {
    * вещь осталась в месте.
    */
   private stepMemLight(dt: number): void {
+    const mt = this.memoryThing;
+    if (mt && this.memFloat && this.where === 'main' && mt.state !== 'gone') {
+      const r = Math.max(FLOAT.min, mt.radius * FLOAT.bubble) * mt.scale;
+      this.renderer.setBubble({ pos: [mt.pos[0], mt.pos[1] + FLOAT.bob * Math.sin(this.time * FLOAT.bobHz) + mt.radius * 0.6 * mt.scale, mt.pos[2]], radius: r, k: 1 - mt.dissolve, time: this.time });
+    } else this.renderer.setBubble(null);
     const want = this.memLightDebug ?? this.memoryThing;
     const def = want ? memoryLightOf(want.kind) : undefined;
     if (want && def && this.memLit?.t !== want) {
@@ -3673,7 +3692,13 @@ export class Game {
       // Крупная вещь (кресло, кулер, пальто, табличка) держит, как держит всё настоящее: она не растворяется (партнёр 18.11,
       // 16:02), значит, сквозь неё не пройти. Взгляд её преграда пропускает (Aabb.clear): вспоминают её глазами.
       const big = (ALL_PROPS[e.memory.def.thing]?.h ?? 0) > 0.4;
-      this.memoryThing = this.addThing(e.memory.def.thing, [sp.x, sp.y, sp.z], this.rng() * Math.PI * 2, 'dust', true, big);
+      // Мелкая искомая вещь парит в пузыре над своим местом (партнёр 24.11): на столе и полке она срасталась бы с тем, что там
+      // уже стоит. Крупная (кресло, кулер, табличка) стоит на полу, как стояла.
+      this.memFloat = !big;
+      // Поднимается само место вещи в сессии: взгляд, зов и тесты ищут её там же, где она видна.
+      if (this.memFloat) e.memory.spot = { ...sp, y: sp.y + this.floatLift(sp.kind) };
+      const at = e.memory.spot!;
+      this.memoryThing = this.addThing(e.memory.def.thing, [at.x, at.y, at.z], this.rng() * Math.PI * 2, 'dust', true, big);
       if (this.memoryThing.collider >= 0) this.colliders.boxes[this.memoryThing.collider]!.clear = true;
       // Вспышка воспоминания: кадр на миг рвётся.
       this.glitch = Math.max(this.glitch, 0.5);
@@ -3710,8 +3735,10 @@ export class Game {
       // виден сквозь стены (аудит K-21, 17.11). Без скачка — сразу.
       const sp = e.memory.spot!;
       if (this.memoryThing) {
-        if (this.transition && !this.transition.switched) this.forgotTo = [sp.x, sp.y, sp.z];
-        else this.moveMemory([sp.x, sp.y, sp.z]);
+        const y = sp.y + this.floatLift(sp.kind);
+        if (this.memFloat) e.memory.spot = { ...sp, y };
+        if (this.transition && !this.transition.switched) this.forgotTo = [sp.x, y, sp.z];
+        else this.moveMemory([sp.x, y, sp.z]);
       }
     } else if (e.type === 'all-done') this.endIn = 3.5;
     else if (e.type === 'collapse') {
@@ -4059,7 +4086,8 @@ export class Game {
           xray = true;
         }
       }
-      this.renderer.setThing(id, { x: t.pos[0], y: t.pos[1], z: t.pos[2], yaw: t.yaw, scale: t.scale, dissolve: t.dissolve, wire: w, xray, visible: t.state !== 'gone' && (d < 40 || xray), dots: Things.dots(t) });
+      const hover = t === this.memoryThing && this.memFloat ? FLOAT.bob * Math.sin(this.time * FLOAT.bobHz) : 0;
+      this.renderer.setThing(id, { x: t.pos[0], y: t.pos[1] + hover, z: t.pos[2], yaw: t.yaw, scale: t.scale, dissolve: t.dissolve, wire: w, xray, visible: t.state !== 'gone' && (d < 40 || xray), dots: Things.dots(t) });
     }
     this.stepMemLight(dt);
     // Фигуры партнёра: части растворяются каждая в свой черёд; дымная из редких точек и медленно ходит вверх-вниз.
@@ -4376,6 +4404,7 @@ export class Game {
       sterile: this.sterileK,
       kept: this.keptThing ? this.keptThing.id : null,
       memNear: +this.memNearK.toFixed(3),
+      memFloat: this.memFloat,
       worldLook: this.worldLook,
       keptDist: Number.isFinite(this.keptDist) ? +this.keptDist.toFixed(2) : null,
       limboLook: this.limboLook,

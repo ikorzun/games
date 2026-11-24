@@ -53,6 +53,10 @@ class FakeRenderer {
   setGlow(): void {}
   /** Свет памяти в последнем кадре (world/memory_light.ts): где, какого рода и насколько разгорелся; null — нет. */
   memLight: { pos: number[]; kind: number; strength: number } | null = null;
+  bubble: { pos: number[]; radius: number; k: number } | null = null;
+  setBubble(v: { pos: readonly [number, number, number]; radius: number; k: number } | null): void {
+    this.bubble = v && v.k > 0.01 ? { pos: [...v.pos], radius: v.radius, k: v.k } : null;
+  }
   setMemLight(v: { pos: readonly [number, number, number]; kind: number; strength: number } | null): void {
     this.memLight = v && v.strength > 0 ? { pos: [...v.pos], kind: v.kind, strength: v.strength } : null;
   }
@@ -566,7 +570,8 @@ describe('игра целиком: цикл сессии', () => {
     const { id } = h.reveal();
     const t = g.things.list.find((x) => x.id === id)!;
     const nav = g.level!.nav;
-    const near = nav.filter((n) => Math.abs(n.y - t.pos[1]) < 1 && Math.hypot(n.x - t.pos[0], n.z - t.pos[2]) > 4 && Math.hypot(n.x - t.pos[0], n.z - t.pos[2]) < 12)[0]!;
+    // Вещь парит над полом (до 1,05 м), узел пути — на полу: ищем узел того же яруса.
+    const near = nav.filter((n) => Math.abs(n.y - t.pos[1]) < 2 && Math.hypot(n.x - t.pos[0], n.z - t.pos[2]) > 4 && Math.hypot(n.x - t.pos[0], n.z - t.pos[2]) < 12)[0]!;
     g.teleport(near.x, near.y, near.z);
     // Смотреть от вещи: её собственный свет не должен считаться светом.
     g.aimAt(near.x - (t.pos[0] - near.x), near.y + 1.5, near.z - (t.pos[2] - near.z));

@@ -621,6 +621,8 @@ export class GameRenderer {
   private readonly sporeUsed = new Map<number, number>();
   /** Стекло крыши зала ожидания: один лист над переплётом (GLASS_FRAG). */
   private glass!: THREE.Mesh;
+  private bubble!: THREE.Mesh;
+  private bubbleMat!: THREE.ShaderMaterial;
   private glassMat!: THREE.ShaderMaterial;
   private birdMesh: THREE.InstancedMesh | null = null;
   private birdFlap: THREE.InstancedBufferAttribute | null = null;
@@ -948,6 +950,27 @@ export class GameRenderer {
       this.glass.visible = false;
       this.scene.add(this.glass);
     }
+    // Пузырь искомой вещи: вещь парит в слабом «мыльном» пузыре — так она ни с чем не срастается и видна издалека
+    // (партнёр 24.11). Тонкая плёнка: по краю видна, в середине почти прозрачна; смешивается, как стекло крыши.
+    this.bubbleMat = new THREE.ShaderMaterial({
+      vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+      fragmentShader:
+        'precision highp float; varying vec3 vN; varying vec3 vV; uniform float uK; uniform float uT; void main(){ float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.4); vec3 c = mix(vec3(0.72, 0.9, 1.0), vec3(1.0, 0.8, 0.94), 0.5 + 0.5 * sin(f * 8.0 + uT * 0.9 + vN.y * 3.0)); float a = uK * (0.008 + 0.36 * f); gl_FragColor = vec4(c * a, a); }',
+      uniforms: { uK: { value: 0 }, uT: { value: 0 } },
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneMinusSrcAlphaFactor,
+      blendSrcAlpha: THREE.ZeroFactor,
+      blendDstAlpha: THREE.OneFactor,
+      transparent: true,
+      depthWrite: false,
+    });
+    this.bubble = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 24), this.bubbleMat);
+    this.bubble.frustumCulled = false;
+    this.bubble.layers.set(1);
+    this.bubble.visible = false;
+    this.scene.add(this.bubble);
     // Звёздное небо: дальние звёзды (с полосой погуще — млечный путь), ближние (они и дают глубину:
     // смещаются относительно дальних, когда игрок идёт) и три падающие с хвостами из точек.
     this.starMat = new THREE.ShaderMaterial({
@@ -2643,6 +2666,17 @@ export class GameRenderer {
   setChunkVisible(id: string, on: boolean): void {
     if (on) this.hiddenIds.delete(id);
     else this.hiddenIds.add(id);
+  }
+
+  /** Пузырь вокруг искомой вещи: центр, радиус, сила 0…1 и время (переливы); null — нет пузыря. */
+  setBubble(v: { pos: readonly [number, number, number]; radius: number; k: number; time: number } | null): void {
+    this.bubble.visible = v !== null && v.k > 0.01;
+    if (!v) return;
+    this.bubble.position.set(v.pos[0], v.pos[1], v.pos[2]);
+    this.bubble.scale.setScalar(v.radius);
+    this.bubble.updateMatrixWorld();
+    this.bubbleMat.uniforms.uK!.value = v.k;
+    this.bubbleMat.uniforms.uT!.value = v.time;
   }
 
   /**
