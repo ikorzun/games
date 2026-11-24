@@ -4,7 +4,7 @@ import { i18n } from '../src/core/i18n';
 import { defaultProfile, parseProfile } from '../src/core/save';
 import { EVENT_ORDER, EVENTS, FLAGS, Narrative, SLOT_OF, SLOTS, actOf, caretakerOf, emptyNarrative, parseNarrative } from '../src/systems/koma';
 import { MEMORY_THINGS } from '../src/systems/session';
-import { AWAY_S, KomaFlow, WRITE_S, lineMs } from '../src/ui/koma_flow';
+import { AWAY_S, HUNT_S, KomaFlow, WRITE_S, lineMs } from '../src/ui/koma_flow';
 
 const locale = (lang: string): Record<string, string> => JSON.parse(readFileSync(new URL(`../locales/${lang}/ui.json`, import.meta.url), 'utf8')) as Record<string, string>;
 const RU = locale('ru');
@@ -163,7 +163,7 @@ describe('сюжет «Невостребованное»: состояние и
 });
 
 /** Экран-заглушка: записывает, что сюжет ему говорит. */
-function fakeHost(story: Narrative): { host: ConstructorParameters<typeof KomaFlow>[0]; said: string[]; tags: Array<Record<string, unknown> | null>; values: string[]; stamps: string[]; cards: string[][]; saves: () => number; game: { sterile: number; extended: number; limboLook: string | null; metaHold: boolean; kept: number; metaKeep(): void; extendEnd(s: number): void }; decks: () => number } {
+function fakeHost(story: Narrative): { host: ConstructorParameters<typeof KomaFlow>[0]; said: string[]; tags: Array<Record<string, unknown> | null>; values: string[]; stamps: string[]; cards: string[][]; saves: () => number; game: { sterile: number; huntHold: boolean; extended: number; limboLook: string | null; metaHold: boolean; kept: number; metaKeep(): void; extendEnd(s: number): void }; decks: () => number } {
   const said: string[] = [];
   const tags: Array<Record<string, unknown> | null> = [];
   const values: string[] = [];
@@ -173,6 +173,7 @@ function fakeHost(story: Narrative): { host: ConstructorParameters<typeof KomaFl
   let decks = 0;
   const game = {
     sterile: 0,
+    huntHold: false,
     extended: 0,
     extendEnd(s: number): void {
       this.extended += s;
@@ -234,6 +235,8 @@ describe('сюжет на экране: первый сон и бирка в л�
     const flow = new KomaFlow(h.host, story);
     flow.onDream(true);
     expect(h.game.sterile).toBe(0);
+    // Первый сон сюжета: охоту держит он (квиз 24.11) — после первой вещи Осыпь не выходит.
+    expect(h.game.huntHold).toBe(true);
 
     expect(flow.onRecall('sh_alarm', true)).toBe(true);
     expect(h.tags.at(-1)).toMatchObject({ head: 'найдено', name: RU['mem.sh_alarm.task'], key: 'владелец', value: '—' });
@@ -252,20 +255,51 @@ describe('сюжет на экране: первый сон и бирка в л�
     expect(h.game.sterile).toBe(0);
     // До третьей вещи конец сна никто не отодвигал.
     expect(h.game.extended).toBe(0);
+    expect(h.game.huntHold).toBe(true);
 
     h.said.length = 0;
     expect(flow.onRecall('sh_remote', true)).toBe(true);
     vi.advanceTimersByTime(15000);
     // Вторая версия сказана, «уточнить» вписано — место замерло раньше, чем прозвучало «не сходится».
     expect(h.game.sterile).toBe(1);
+    // Разговор ещё идёт — охоты нет.
+    expect(h.game.huntHold).toBe(true);
+    const room = h.game.extended;
     vi.advanceTimersByTime(20000);
     expect(h.said).toEqual(['echo: нет, это мой чайник. детей в доме не было.', 'caretaker: можно выбрать более ясную.', 'player: выбрать?', 'caretaker: чтобы потом не путаться.', 'player: не сходится.', 'caretaker: пока нет.', 'player: здесь было больше людей.', 'caretaker: теперь всё на месте.']);
     expect(story.has('STORY_FIRST_CONTRADICTION')).toBe(true);
     expect(h.saves()).toBeGreaterThan(3);
     // Реплики укладываются в отведённое месту время.
     const ms = h.said.reduce((n, l) => n + lineMs(l.split(': ')[1]!) + 320, 0);
-    expect(h.game.extended).toBeGreaterThan(10);
-    expect(ms / 1000).toBeLessThan(h.game.extended + 3.5);
+    expect(room).toBeGreaterThan(10);
+    expect(ms / 1000).toBeLessThan(room + 3.5);
+    // Разговор кончился — Осыпь отпущена, и место стоит ещё HUNT_S секунд, чтобы она дошла.
+    vi.advanceTimersByTime(10000);
+    expect(h.game.huntHold).toBe(false);
+    expect(h.game.extended).toBe(room + HUNT_S);
+  });
+
+  it('охота: сюжет держит её только в первом сне и только пока ведёт его сам', () => {
+    const story = new Narrative();
+    const h = fakeHost(story);
+    const flow = new KomaFlow(h.host, story);
+    // Не первый сон — охота идёт своим правилом.
+    flow.onDream(false);
+    expect(h.game.huntHold).toBe(false);
+    // Первый сон, но вещи пришли не в том порядке, в каком идёт сцена: сюжет сон не ведёт и охоту отпускает сразу.
+    flow.onDream(true);
+    expect(h.game.huntHold).toBe(true);
+    expect(flow.onRecall('sh_remote', true)).toBe(false);
+    expect(h.game.huntHold).toBe(false);
+    expect(h.game.extended).toBe(0);
+    // Сюжет уже начат (первый сон оборвали и начали заново) — держать нечего.
+    const story2 = new Narrative();
+    const h2 = fakeHost(story2);
+    const flow2 = new KomaFlow(h2.host, story2);
+    flow2.onDream(true);
+    flow2.onRecall('sh_alarm', true);
+    flow2.onDream(true);
+    expect(h2.game.huntHold).toBe(false);
   });
 
   it('сон кончился раньше разговора — недосказанное считается сыгранным: флаги не теряются', () => {

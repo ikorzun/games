@@ -931,6 +931,11 @@ export class Game {
    * нет, кадр не плывёт, людей не слышно, мелочь развёрнута в одну сторону. Это не наказание, а цена законченного вымысла.
    */
   sterile = 0;
+  /**
+   * Сюжет держит охоту: пока true, найденные вещи Осыпь на охоту не выпускают (явления и приметы идут как шли). В первом сне
+   * сюжета она выходит, когда место замерло и разговор кончился, а не после первой вещи (квиз 24.11: реплики не читают на бегу).
+   */
+  huntHold = false;
   sterileK = 0;
   private sterileAligned = false;
   /** Следующая сессия, собранная за время лимбо. */
@@ -3517,7 +3522,7 @@ export class Game {
     let appeared = false;
     if (dir) {
       const tiers = this.level?.layout?.tierCount ?? 1;
-      for (const e of dir.update({ time: this.sleepTime, tier: Math.max(0, Math.round(-b.y / 4.5)), goalsDone: s.doneCount, swarmBusy: sw?.active ?? true, tiers })) {
+      for (const e of dir.update({ time: this.sleepTime, tier: Math.max(0, Math.round(-b.y / 4.5)), goalsDone: this.huntHold ? 0 : s.doneCount, swarmBusy: sw?.active ?? true, tiers })) {
         if (e.type === 'scare') {
           this.applyScare(e.id);
           const src = this.scareSource(e.id, node);

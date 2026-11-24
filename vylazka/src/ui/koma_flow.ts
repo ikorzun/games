@@ -19,7 +19,7 @@ import type { Hud } from './hud';
 /** Что нужно сюжету от игры и приложения. */
 export interface KomaHost {
   hud: Hud;
-  game: { sterile: number; limboLook: string | null; metaHold: boolean; metaKeep(): void; extendEnd(seconds: number): void };
+  game: { sterile: number; huntHold: boolean; limboLook: string | null; metaHold: boolean; metaKeep(): void; extendEnd(seconds: number): void };
   /** Записать профиль. */
   save(): void;
   /** Показать следующий обрывок метаслоя, если он положен; false — нечего. Лимбо отпускает сам обрывок. */
@@ -28,16 +28,21 @@ export interface KomaHost {
   hint(id: string): void;
 }
 
-type Step = { say: readonly string[] } | { clarify: true } | { sterile: number };
+type Step = { say: readonly string[] } | { clarify: true } | { sterile: number } | { hunt: true };
 
 /** Первый сон: что ведёт каждая из трёх вещей убежища (пролог и акт I канона). */
 const BEATS: Readonly<Record<string, readonly Step[]>> = {
   sh_alarm: [{ say: ['A0_E01', 'A0_E02'] }, { clarify: true }, { say: ['A0_E03'] }],
   sh_kettle: [{ say: ['A1_E01A'] }, { clarify: true }],
-  sh_remote: [{ say: ['A1_E01B'] }, { clarify: true }, { sterile: 1 }, { say: ['A1_E02', 'A1_E03'] }],
+  sh_remote: [{ say: ['A1_E01B'] }, { clarify: true }, { sterile: 1 }, { say: ['A1_E02', 'A1_E03'] }, { hunt: true }],
 };
 /** На сколько дольше стоит место после третьей вещи первого сна: идёт сцена рассортированной комнаты. */
 const SORTED_ROOM_S = 19;
+/**
+ * Охота первого сна (квиз 24.11, «охота после третьей вещи»): Осыпь выходит, когда место замерло и разговор кончился, — и место
+ * стоит ещё столько секунд, чтобы она успела дойти. До того — только явления и приметы.
+ */
+export const HUNT_S = 24;
 /** Вещи, у которых Смотритель знает, что дописать; остальным — общая строка. */
 const OWNERS: readonly string[] = ['LP01', 'LP05', 'LP10'];
 /** Лимбо: за сколько секунд взгляда Смотритель дописывает владельца; сколько секунд без взгляда — и запись оборвана. */
@@ -105,6 +110,8 @@ export class KomaFlow {
     this.stop();
     this.settle();
     this.host.game.sterile = first ? 0 : this.story.sterility() * STERILE_SHARE;
+    // Первый сон, сюжет ещё не начат: охоту выпускает он сам, после сцены замершей комнаты.
+    this.host.game.huntHold = first && this.story.canPlay('A0_E01');
   }
 
   /**
@@ -122,7 +129,8 @@ export class KomaFlow {
     const steps = first ? BEATS[memId] : undefined;
     const lead = steps?.[0];
     if (!steps || !lead || !('say' in lead) || !this.story.canPlay(lead.say[0]!)) {
-      // Вещь без своей сцены: Смотритель молча ставит «уточнить».
+      // Вещь без своей сцены: Смотритель молча ставит «уточнить». Сюжет этот сон не ведёт — охота идёт своим правилом.
+      this.host.game.huntHold = false;
       if (fresh) this.later(1200, () => this.clarify(() => this.later(3200, () => hud.tag(null))));
       else this.later(3200, () => hud.tag(null));
       this.host.save();
@@ -149,8 +157,12 @@ export class KomaFlow {
       if (lines.length === 0) next();
       else this.say(lines, i === 0 ? 500 : 250, next);
     } else if ('clarify' in s) this.clarify(next);
-    else {
+    else if ('sterile' in s) {
       this.host.game.sterile = s.sterile;
+      next();
+    } else {
+      this.host.game.huntHold = false;
+      this.host.game.extendEnd(HUNT_S);
       next();
     }
   }

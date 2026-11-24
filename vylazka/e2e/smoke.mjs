@@ -3314,7 +3314,7 @@ async function scenarioKoma(browser, baseUrl) {
   check('«здесь было больше людей.» — «теперь всё на месте.»', await heard('koma.a1_e03.caretaker_01'));
 
   // Лимбо: бирка взглядом.
-  st = await stepUntil(page, (s) => s.where === 'limbo', 30, 80);
+  st = await stepUntil(page, (s) => s.where === 'limbo', 30, 130);
   st = await vz(page, () => window.__vz.step(100));
   koma = await vz(page, () => window.__vz.koma());
   check('сон кончился лимбо; первое противоречие записано, у сюжета здесь есть дело', st.where === 'limbo' && koma.flags.includes('STORY_FIRST_CONTRADICTION') && st.meta.wanted === true, JSON.stringify({ where: st.where, flags: koma.flags, meta: st.meta }));
