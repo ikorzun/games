@@ -43,7 +43,8 @@ const WANT: Record<string, Want> = {
   st_key: { mount: 'free', w: 0.14, d: 0.06, h: 0.02, solid: false, tris: 300 },
   st_ticket: { mount: 'free', w: 0.12, d: 0.06, h: 0.01, solid: false, tris: 120 },
   st_cup: { mount: 'free', w: 0.09, d: 0.09, h: 0.2, solid: false, tris: 250 },
-  st_coat: { mount: 'free', w: 0.55, d: 0.5, h: 0.5, solid: false, tris: 230 },
+  // Шляпа: с 24.11 стоит вместо пальто (имя вещи прежнее).
+  st_coat: { mount: 'free', w: 0.34, d: 0.29, h: 0.15, solid: false, tris: 230 },
 };
 
 const SEEDS = [0, 1, 7, 1000, 20041113, 4294967295];

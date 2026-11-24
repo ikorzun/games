@@ -92,7 +92,7 @@ describe('свет памяти', () => {
     expect(memLightStep(0.5, 0.4, 1)).toBe(0.4);
   });
 
-  it('у чайника горит газ (свет из самого предмета), у пальто лежит снег', () => {
+  it('у чайника горит газ (свет из самого предмета), у шляпы (вещь st_coat) лежит снег', () => {
     const mats = (kind: string): Set<number> => new Set(thingMesh(kind, 7).mesh.mat);
     expect(mats('kettle').has(MAT.glow)).toBe(true);
     expect(mats('st_coat').has(MAT.paper)).toBe(true);
