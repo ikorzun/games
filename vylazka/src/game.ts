@@ -917,6 +917,10 @@ export class Game {
     const t = this.memoryThing;
     return t && this.where === 'main' && this.session?.active ? t.pos : null;
   }
+  /** Что это за вещь зовёт (вид вещи): у знакомых вещей — свой звук, чайник посвистывает (партнёр 24.11). */
+  get memoryCallKind(): string | null {
+    return this.memoryCall ? (this.memoryThing?.kind ?? null) : null;
+  }
   private pocketGroup = 0;
   private pocketAge = 0;
   private pocketStay = 40;

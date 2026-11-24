@@ -27,7 +27,9 @@ export type ScreenKind =
    * Проём: на экране — другое место игры, каким его видишь, когда в нём оказываешься. Это не картинка:
    * вошёл в экран — оказался там. Все остальные экраны научили, что это картинка.
    */
-  | 'door';
+  | 'door'
+  /** Витрина торгового автомата: не экран, а то, что за стеклом. На выставочные экраны не попадает. */
+  | 'shelf';
 
 export interface ScreenImage {
   id: string;
@@ -49,10 +51,13 @@ export const SCREEN_IMAGES: readonly ScreenImage[] = [
   { id: 'gameshow', kind: 'pop', ru: 'пустая студия телеигры девяностых' },
   { id: 'cartoon', kind: 'pop', ru: 'кадр рисованного мультфильма: круглый зверь на холме' },
   { id: 'meadow', kind: 'door', ru: 'луг самой игры с точки появления: тропа к дверной раме — проём' },
+  { id: 'books', kind: 'shelf', ru: 'витрина автомата: полки с книгами в странных обложках (партнёр 24.11)' },
 ];
 
 /** Картинка-проём: экран с ней ведёт на луг (карманное пространство). Снимок сделан в самой игре. */
 export const DOOR_IMAGE = SCREEN_IMAGES.findIndex((s) => s.kind === 'door');
+/** Картинка витрины торгового автомата (world/props_office.ts). */
+export const BOOKS_IMAGE = SCREEN_IMAGES.findIndex((s) => s.id === 'books');
 /** Имя объекта уровня у экрана-проёма (у обычных экранов — display_lean, display_stand, display_wall). */
 export const DOOR_NAME = 'display_door';
 
@@ -84,7 +89,7 @@ export function screenUv(index: number, band = 1): { u0: number; v0: number; u1:
 /** Что показывает экран: выбор по сиду предмета из картинок нужных родов (пусто — из всех). */
 export function screenFor(seed: number, kinds: readonly ScreenKind[] = []): number {
   // Проём сам собой на экран не попадает: его ставит сборка уровня, по одному и в своё место.
-  const all = SCREEN_IMAGES.map((s, i) => [s, i] as const).filter(([s]) => s.kind !== 'door');
+  const all = SCREEN_IMAGES.map((s, i) => [s, i] as const).filter(([s]) => s.kind !== 'door' && s.kind !== 'shelf');
   const pool = all.filter(([s]) => kinds.length === 0 || kinds.includes(s.kind));
   const list = pool.length > 0 ? pool : all;
   // Сид предмета — целое до миллиона; множитель разводит соседние сиды по разным картинкам.

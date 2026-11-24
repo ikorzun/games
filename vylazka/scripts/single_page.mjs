@@ -44,7 +44,7 @@ const js = readFileSync(jsPath, 'utf8')
 // Вшитый код не знает, откуда он загружен: любая оставшаяся ссылка «рядом с кодом» не откроется.
 if (js.includes('import.meta.url')) throw new Error('в коде остались ссылки на файлы рядом со сборкой (import.meta.url): страница одним файлом их не найдёт');
 
-const page = `<title>Untitled Session</title>
+const page = `<title>DEPRIVATIO</title>
 <meta name="theme-color" content="#000000">
 <style>
 :root { color-scheme: dark; }

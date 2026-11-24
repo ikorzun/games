@@ -223,7 +223,7 @@ async function scenarioPlay(browser, baseUrl) {
     const t = await openPage(browser, baseUrl, '?q=low&fail=0&touch=0&level=test', { locale: 'ru-RU' });
     const tp = t.page;
     const lines = await tp.$$eval('.vz-overlay__line', (els) => els.map((e) => e.textContent));
-    check('без ?lang заставка английская, даже если язык браузера русский', (await tp.textContent('.vz-overlay__title')) === 'UNTITLED SESSION' && (await tp.textContent('.vz-overlay__prompt')) === 'Click to begin' && (await tp.evaluate(() => document.documentElement.lang)) === 'en');
+    check('без ?lang заставка английская, даже если язык браузера русский', (await tp.textContent('.vz-overlay__title')) === 'DEPRIVATIO' && (await tp.textContent('.vz-overlay__prompt')) === 'Click to begin' && (await tp.evaluate(() => document.documentElement.lang)) === 'en');
     // Слова партнёра 19.11: «Оставляем название и сразу под ним про сон и начать играть».
     check('на заставке — название, под ним строка про сон и «начать»; подзаголовка и строк о вспышках и счёте нет', lines.length === 1 && lines[0] === EN['title.how'] && (await tp.textContent('.vz-overlay__sub')) === '', JSON.stringify(lines));
     const look = await tp.evaluate(() => {
@@ -300,7 +300,7 @@ async function scenarioPlay(browser, baseUrl) {
     await tp.click('.vz-overlay__prompt');
     await sleep(150);
     const sb = await state(tp);
-    check('титры: нажатие возвращает на заставку', sb.screen === 'title' && sb.overlay === 'start' && (await tp.textContent('.vz-overlay__title')) === 'UNTITLED SESSION', JSON.stringify({ screen: sb.screen, overlay: sb.overlay }));
+    check('титры: нажатие возвращает на заставку', sb.screen === 'title' && sb.overlay === 'start' && (await tp.textContent('.vz-overlay__title')) === 'DEPRIVATIO', JSON.stringify({ screen: sb.screen, overlay: sb.overlay }));
     check('заставка: нет ошибок в консоли', t.log.errors.length === 0, t.log.errors.join(' | ').slice(0, 300));
     await t.context.close();
   }
@@ -3463,7 +3463,7 @@ async function scenarioFrame(browser, baseUrl) {
     ready2 = false;
   });
   if (ready2) await openSettings(frame2);
-  check('в песочнице без ?lang заставка английская, предупреждение о вспышках и настройки на месте', ready2 && (await frame2.textContent('.vz-overlay__title')) === 'UNTITLED SESSION' && (await frame2.textContent('.vz-overlay__prompt')) === 'Click to begin' && (await frame2.evaluate(() => document.documentElement.lang)) === 'en' && (await frame2.textContent('.vz-overlay__note')) === EN['title.warn'] && (await frame2.isVisible('.vz-seg--flash')) && (await frame2.isVisible('.vz-seg--lang')));
+  check('в песочнице без ?lang заставка английская, предупреждение о вспышках и настройки на месте', ready2 && (await frame2.textContent('.vz-overlay__title')) === 'DEPRIVATIO' && (await frame2.textContent('.vz-overlay__prompt')) === 'Click to begin' && (await frame2.evaluate(() => document.documentElement.lang)) === 'en' && (await frame2.textContent('.vz-overlay__note')) === EN['title.warn'] && (await frame2.isVisible('.vz-seg--flash')) && (await frame2.isVisible('.vz-seg--lang')));
   if (ready2) {
     // Выбор в песочнице действует до конца страницы, хотя сохранить его некуда.
     await segPick(frame2, 'lang', 'ru');

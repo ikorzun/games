@@ -17,6 +17,7 @@ import type { Xf } from './props';
 import { beam, rng, sheet, WHITE } from './props_more';
 import type { PropSpec } from './props_more';
 import { lathe } from './props_real';
+import { BOOKS_IMAGE, screenUv } from './screens';
 import { fillShelves, furnished, jitter, openOf, pickOf, s3As, s3Put, s3Reach, s3Size, spanOf, S3_SHELVES, S3_TOP, S3_WORKTOP, turnOf } from './furniture';
 
 /** Мебель отдела с полки Sand3D: столы (у отдела — одной модели), кресло, шкафы для папок. */
@@ -317,30 +318,53 @@ function officeClock(xf: Xf, seed: number): void {
 
 // ───────────────────────────── стойки, автоматы, мебель ─────────────────────────────
 
-/** Автомат с напитками 0,95 × 0,8 × 1,83: тёмный корпус, подсвеченная витрина с рядами товара, панель с монетоприёмником, лоток. */
+/**
+ * Книжный автомат 0,95 × 0,8 × 1,83 (партнёр 24.11: «вендинговый аппарат нужно переделать, слишком мало деталей. Пусть он продает
+ * книги с очень странными обложками, которые нужно сгенерировать в выбранной нами стилистике (как картинки для экранов)»): тёмный
+ * корпус на ножках, витрина — картинка из атласа экранов (полки с книгами за стеклом), панель с монетоприёмником, купюроприёмником
+ * и кнопками, лоток выдачи, решётка, замок. Без слоя картинок (xf.sl) — прежние полки с коробками.
+ */
 function vendingMachine(xf: Xf, seed: number): void {
   const rnd = rng(seed);
-  bx(xf, [-0.475, 0, 0], [0.475, 1.83, 0.78], MAT.bakelite, [1.35, 1.4, 1.5], { bevel: 0.01, aoBottom: 0.6 });
-  // Подсвеченная витрина: засветка, рамка, полки и товар.
-  bx(xf, [-0.42, 0.6, 0.78], [0.14, 1.7, 0.79], MAT.glow, [5, 6, 7]);
-  bx(xf, [-0.44, 0.58, 0.78], [-0.42, 1.72, 0.805], MAT.metalGrey, METAL);
-  bx(xf, [0.14, 0.58, 0.78], [0.16, 1.72, 0.805], MAT.metalGrey, METAL);
-  bx(xf, [-0.44, 1.7, 0.78], [0.16, 1.72, 0.805], MAT.metalGrey, METAL);
-  bx(xf, [-0.44, 0.58, 0.78], [0.16, 0.6, 0.805], MAT.metalGrey, METAL);
-  const prod: [number, Vec3][] = [
-    [MAT.paintRed, [1.3, 0.7, 0.6]],
-    [MAT.paintBlue, [0.7, 0.95, 1.4]],
-    [MAT.paintGreen, [0.6, 1.2, 0.9]],
-    [MAT.paintOchre, [1.4, 1.2, 0.5]],
-  ];
-  for (let r = 0; r < 4; r++) {
-    const y = 0.64 + r * 0.265;
-    bx(xf, [-0.42, y, 0.78], [0.14, y + 0.025, 0.8], MAT.metalGrey, METAL_DK);
-    for (let c = 0; c < 4; c++) {
-      if (rnd() < 0.15) continue;
-      const [mat, tint] = prod[(r + c + Math.floor(rnd() * 2)) % 4]!;
-      const x = -0.4 + c * 0.13;
-      bx(xf, [x, y + 0.025, 0.78], [x + 0.09, y + 0.15 + rnd() * 0.06, 0.8], mat, tint);
+  // Ножки и цоколь.
+  for (const [x, z] of [[-0.42, 0.06], [0.36, 0.06], [-0.42, 0.66], [0.36, 0.66]] as const) bx(xf, [x, 0, z], [x + 0.06, 0.05, z + 0.06], MAT.rubber, [0.6, 0.6, 0.6]);
+  bx(xf, [-0.475, 0.05, 0], [0.475, 1.83, 0.78], MAT.bakelite, [1.35, 1.4, 1.5], { bevel: 0.01, aoBottom: 0.6 });
+  bx(xf, [-0.475, 0.05, 0.78], [0.475, 0.09, 0.79], MAT.metalGrey, METAL_DK);
+  // Решётка охлаждения сбоку и замок с ручкой на двери.
+  for (let i = 0; i < 7; i++) bx(xf, [0.475, 0.3 + i * 0.045, 0.2], [0.479, 0.32 + i * 0.045, 0.6], MAT.metalGrey, METAL_DK);
+  xf.cyl([0.455, 1.0, 0.79], 'z', 0.012, 0.014, MAT.steel, { tint: [0.9, 0.9, 0.9], segments: 8 });
+  bx(xf, [0.445, 0.86, 0.79], [0.465, 0.96, 0.812], MAT.steel, [0.75, 0.75, 0.75], { bevel: 0.004 });
+  // Витрина: рамка и стекло с книгами.
+  const X0 = -0.43;
+  const X1 = 0.17;
+  const Y0 = 0.66;
+  const Y1 = 1.66;
+  bx(xf, [X0 - 0.02, Y0 - 0.02, 0.78], [X0, Y1 + 0.02, 0.805], MAT.metalGrey, METAL);
+  bx(xf, [X1, Y0 - 0.02, 0.78], [X1 + 0.02, Y1 + 0.02, 0.805], MAT.metalGrey, METAL);
+  bx(xf, [X0 - 0.02, Y1, 0.78], [X1 + 0.02, Y1 + 0.02, 0.805], MAT.metalGrey, METAL);
+  bx(xf, [X0 - 0.02, Y0 - 0.02, 0.78], [X1 + 0.02, Y0, 0.805], MAT.metalGrey, METAL);
+  if (xf.sl) {
+    const r = screenUv(BOOKS_IMAGE);
+    const z = 0.7925;
+    xf.sl.quadUv([xf.pt(X0, Y0, z), xf.pt(X1, Y0, z), xf.pt(X1, Y1, z), xf.pt(X0, Y1, z)], [r.u0, r.v0, r.u1, r.v1], MAT.print, WHITE, 1);
+    bx(xf, [X0, Y0, 0.78], [X1, Y1, 0.791], MAT.glow, [0.03, 0.03, 0.04]);
+  } else {
+    bx(xf, [X0, Y0, 0.78], [X1, Y1, 0.79], MAT.glow, [5, 6, 7]);
+    const prod: [number, Vec3][] = [
+      [MAT.paintRed, [1.3, 0.7, 0.6]],
+      [MAT.paintBlue, [0.7, 0.95, 1.4]],
+      [MAT.paintGreen, [0.6, 1.2, 0.9]],
+      [MAT.paintOchre, [1.4, 1.2, 0.5]],
+    ];
+    for (let r = 0; r < 4; r++) {
+      const y = Y0 + 0.02 + r * 0.245;
+      bx(xf, [X0, y, 0.78], [X1, y + 0.02, 0.8], MAT.metalGrey, METAL_DK);
+      for (let c = 0; c < 4; c++) {
+        if (rnd() < 0.15) continue;
+        const [mat, tint] = prod[(r + c + Math.floor(rnd() * 2)) % 4]!;
+        const x = X0 + 0.03 + c * 0.14;
+        bx(xf, [x, y + 0.02, 0.78], [x + 0.1, y + 0.17 + rnd() * 0.04, 0.8], mat, tint);
+      }
     }
   }
   // Заголовок витрины: светящаяся полоса.
@@ -351,9 +375,14 @@ function vendingMachine(xf: Xf, seed: number): void {
   for (let i = 0; i < 6; i++) bx(xf, [0.24 + (i % 2) * 0.09, 1.08 + Math.floor(i / 2) * 0.1, 0.795], [0.31 + (i % 2) * 0.09, 1.15 + Math.floor(i / 2) * 0.1, 0.81], MAT.steel, [0.85, 0.85, 0.85]);
   bx(xf, [0.26, 0.82, 0.795], [0.38, 0.96, 0.805], MAT.steel, [0.7, 0.7, 0.7]);
   bx(xf, [0.31, 0.86, 0.805], [0.33, 0.93, 0.81], MAT.bakelite, [0.6, 0.6, 0.6]);
-  // Откидная створка выдачи.
-  bx(xf, [-0.42, 0.1, 0.78], [0.14, 0.45, 0.8], MAT.bakelite, [0.7, 0.75, 0.8]);
-  bx(xf, [-0.3, 0.38, 0.8], [0.02, 0.41, 0.81], MAT.steel, [0.7, 0.7, 0.7]);
+  // Купюроприёмник с зелёной полоской и окошко возврата монет.
+  bx(xf, [0.25, 0.66, 0.795], [0.39, 0.74, 0.808], MAT.bakelite, [0.5, 0.5, 0.55], { bevel: 0.004 });
+  bx(xf, [0.27, 0.695, 0.808], [0.37, 0.705, 0.81], MAT.glow, [1.5, 6, 2.5]);
+  bx(xf, [0.28, 0.5, 0.795], [0.36, 0.57, 0.8], MAT.steel, [0.6, 0.6, 0.6]);
+  // Откидная створка выдачи: широкая, под книгу.
+  bx(xf, [-0.42, 0.14, 0.78], [0.14, 0.5, 0.8], MAT.bakelite, [0.7, 0.75, 0.8]);
+  bx(xf, [-0.4, 0.16, 0.8], [0.12, 0.2, 0.806], MAT.steel, [0.55, 0.55, 0.55]);
+  bx(xf, [-0.3, 0.43, 0.8], [0.02, 0.46, 0.81], MAT.steel, [0.7, 0.7, 0.7]);
   xf.collider([-0.475, 0, 0], [0.475, 1.83, 0.8]);
 }
 
@@ -721,7 +750,7 @@ export const OFFICE_PROPS: Record<string, PropSpec> = {
   ceiling_vent: { w: 0.6, d: 0.6, h: 0.05, mount: 'ceiling', ru: 'потолочный вентиляционный диффузор', build: ceilingVent },
   whiteboard: { w: 1.8, d: 0.06, h: 1.0, mount: 'wall', y: 0.9, ru: 'белая доска с маркерными схемами', build: whiteboard },
   office_clock: { w: 0.34, d: 0.06, h: 0.34, mount: 'wall', y: 2.05, ru: 'настенные часы', build: officeClock },
-  vending_machine: { w: 0.95, d: 0.8, h: 1.83, mount: 'floor', ru: 'торговый автомат с подсвеченной витриной', build: vendingMachine },
+  vending_machine: { w: 0.95, d: 0.8, h: 1.83, mount: 'floor', ru: 'книжный автомат с подсвеченной витриной', build: vendingMachine },
   trash_bin: { w: 0.28, d: 0.28, h: 0.32, mount: 'free', ru: 'урна офисная', build: trashBin },
   // Высота — по монитору терминала: он выглядывает над высокой столешницей, как у всех ресепшенов.
   reception_desk: { w: s3Size(RECEPTION).w, d: RECEPTION_FACE + 0.02, h: Math.ceil((S3_WORKTOP[RECEPTION]! + 0.41) * 100) / 100, mount: 'floor', ru: 'стойка ресепшена с бирюзовой полосой и терминалом', build: receptionDesk },

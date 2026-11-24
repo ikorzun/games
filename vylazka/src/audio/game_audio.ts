@@ -51,6 +51,8 @@ export interface AudioWorld {
   feelNow?: { hum: number };
   /** Где искомая вещь, когда её зов слышен (game.ts, memoryCall); null или нет поля — зова нет. */
   memoryCall?: Vec3 | null;
+  /** Вид искомой вещи, когда она зовёт: у знакомых вещей вместо ровного тона — свой звук (CALL_SOUND). */
+  memoryCallKind?: string | null;
   /** Тишина перед Осыпью (systems/hush.ts): насколько звук места проседает, 0..1. Нет поля — не проседает. */
   hush?: number;
   /** Стерильность места (сюжет, game.sterileK): людей не слышно, капель нет — остаётся ровный гул. Нет поля — 0. */
@@ -78,6 +80,9 @@ export const TRACE_SAND = 0.8;
 export const RUSTLE_DUCK = 0.45;
 /** Громкость зова искомой вещи (still_tone из её места; затухание по расстоянию — у движка). */
 const MEMORY_CALL = 0.7;
+/** Свой звук искомой вещи по её виду; вещь без знакомого звука (ключ, билет, шляпа) зовёт ровным тоном. */
+export const CALL_SOUND: Readonly<Record<string, string>> = { kettle: 'call_kettle', alarm_clock: 'call_clock', office_clock: 'call_clock', desk_phone: 'call_phone', water_cooler: 'call_cooler', office_terminal: 'call_terminal' };
+const CALL_IDS: readonly string[] = [...new Set(Object.values(CALL_SOUND))];
 /**
  * Тишина перед Осыпью (systems/hush.ts): насколько глубоко проседает гул места при полной тишине. Не до нуля: совсем пустой
  * звук читался бы поломкой (S-06); капли не проседают почти вовсе — их хвост и держит «это тишина, а не сбой».
@@ -339,7 +344,13 @@ export class GameAudio {
     // значит «стой», и там он — прежний, без места.
     const call = !over && !fl ? (game.memoryCall ?? null) : null;
     if (fl) a.loop('still_tone', live * (1 - moving) * (1 - 0.45 * fl.strain * (0.5 + 0.5 * Math.sin(this.clock * 21))));
-    else a.loop('still_tone', call ? live * MEMORY_CALL : 0, call ?? undefined);
+    else {
+      // Знакомая вещь зовёт своим звуком (партнёр 24.11: «если нужно найти чайник, пусть появится его звук посвистывания. Так и
+      // с остальными главными предметами, которые могут издавать знакомые звуки»); у остальных — прежний ровный тон.
+      const own = call ? (CALL_SOUND[game.memoryCallKind ?? ''] ?? null) : null;
+      a.loop('still_tone', call && !own ? live * MEMORY_CALL : 0, call ?? undefined);
+      for (const id of CALL_IDS) a.loop(id, call && own === id ? live * MEMORY_CALL : 0, call ?? undefined);
+    }
     if (fl && fl.trains !== this.trains) {
       if (fl.trains > this.trains && active) a.play('train_pass', { volume: 0.9 });
       this.trains = fl.trains;

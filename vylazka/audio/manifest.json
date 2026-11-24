@@ -669,6 +669,61 @@
       "volume": 0.7,
       "prompt": "Close and ordinary bedside sounds recorded at full level: bed sheets rustling as someone shifts slightly, slow calm breathing of one person, a light plastic cup being set down on a bedside table, a chair creaking once, a plain daytime room, no music, no beeping, no voices",
       "ru": "у кровати (сюжет KOMA, эпилог, F_E01): шорох простыни, дыхание, кто-то ставит пластиковый стакан — звук становится обыденным. Звучит один раз, в финале"
+    },
+    {
+      "id": "call_kettle",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": true,
+      "seconds": 2,
+      "volume": 0.6,
+      "prompt": "A stovetop kettle whistling steadily on a gas stove, recorded close at full level: a continuous high steam whistle that wavers slightly, soft hiss of steam underneath, a plain kitchen, no music, no voices, steady from start to end, seamless loop",
+      "ru": "чайник посвистывает: зов искомой вещи вместо ровного тона (партнёр 24.11); звучит из места вещи, пока её ищут",
+      "xfade": 0.15
+    },
+    {
+      "id": "call_clock",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": true,
+      "seconds": 2,
+      "volume": 0.9,
+      "prompt": "A mechanical wind-up alarm clock ticking loudly, recorded very close at full level: crisp even metallic tick-tock at a steady pace, a faint spring resonance, a quiet room, no ringing, no music, no voices, steady from start to end, seamless loop",
+      "ru": "будильник и офисные часы тикают: зов искомой вещи",
+      "xfade": 0.15
+    },
+    {
+      "id": "call_phone",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": true,
+      "seconds": 7,
+      "volume": 0.7,
+      "prompt": "An old office desk telephone ringing in an empty office, recorded close at full level: an electronic two-tone trill ring, a pause, the ring again, repeating at an even pace, slight room echo of an open-plan office, no voices, no music, seamless loop",
+      "ru": "офисный телефон звонит: зов искомой вещи",
+      "xfade": 0.15
+    },
+    {
+      "id": "call_cooler",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": true,
+      "seconds": 2,
+      "volume": 0.9,
+      "prompt": "An office water cooler with a big plastic bottle, recorded close at full level: large air bubbles rising through the bottle with deep hollow glugs every second or two, a low compressor hum underneath, an empty office, no voices, no music, seamless loop",
+      "ru": "кулер булькает: зов искомой вещи",
+      "xfade": 0.15
+    },
+    {
+      "id": "call_terminal",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": true,
+      "seconds": 2,
+      "volume": 0.9,
+      "prompt": "An old beige desktop computer terminal left running in an empty office, recorded close at full level: a steady cooling fan whirr, a hard disk chattering and clicking in short bursts, a soft CRT monitor whine, no beeps, no voices, no music, seamless loop",
+      "ru": "терминал гудит и стрекочет диском: зов искомой вещи",
+      "xfade": 0.15
     }
   ]
 }
