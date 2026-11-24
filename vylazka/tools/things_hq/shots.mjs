@@ -50,16 +50,16 @@ async function shot(kind, hq) {
     v.step(20);
     return v.info();
   });
-  await page.evaluate(([k, d, h, FATE, LIFT]) => {
+  await page.evaluate(([k, d, h, FATE, LIFT, TURN]) => {
     const v = window.__vz;
     const st = v.state();
     const lift = LIFT < 0 ? Math.max(0, 1.36 - h / 2) : LIFT;
     v.teleport(st.pos[0], st.pos[1], st.pos[2], st.aim[0], 0);
-    v.spawnThing(k, FATE, d, true, lift, 28);
+    v.spawnThing(k, FATE, d, true, lift, TURN);
     // Луч — в середину вещи.
     v.teleport(st.pos[0], st.pos[1], st.pos[2], st.aim[0], Math.atan2(lift + h / 2 - 1.42, d));
     v.step(4);
-  }, [kind, dist, kind === 'water_cooler' ? 1.35 : kind === 'office_chair' ? 1.02 : kind === 'office_terminal' ? 0.42 : ['remote', 'desk_phone', 'st_ticket', 'st_note', 'st_key', 'slippers', 'st_coat'].includes(kind) ? 0.03 : size, opt('fate', 'dust'), Number(opt('lift', '0'))]);
+  }, [kind, dist, kind === 'water_cooler' ? 1.35 : kind === 'office_chair' ? 1.02 : kind === 'office_terminal' ? 0.42 : ['remote', 'desk_phone', 'st_ticket', 'st_note', 'st_key', 'slippers', 'st_coat'].includes(kind) ? 0.03 : size, opt('fate', 'dust'), Number(opt('lift', '0')), Number(opt('turn', '28'))]);
   if (hq === 1) await page.waitForFunction((k) => window.__vz.hqReady(k), kind, { timeout: 15000 }).catch(() => console.log(`  ${kind}: подробной модели нет или не пришла`));
   await page.waitForTimeout(700);
   const info = await page.evaluate((STEPS) => {
