@@ -27,8 +27,9 @@ export const LETHE = { half: 5, h: 5.2, wall: 0.4, gapHalf: 1.3, gapH: 3.6, eye:
 
 const RED: Vec3 = [1.5, 0.1, 0.08];
 const RED_DK: Vec3 = [1.05, 0.06, 0.05];
-const MARBLE: Vec3 = [1.32, 1.3, 1.24];
-const MARBLE_SH: Vec3 = [1.12, 1.1, 1.06];
+// Оттенки поверх материала «мрамор» (world/materials.ts): у него свой шар блеска и своя фактура с прожилками.
+const MARBLE: Vec3 = [1.14, 1.13, 1.1];
+const MARBLE_SH: Vec3 = [0.98, 0.97, 0.94];
 
 const sh = (c: Vec3, k: number): Vec3 => [c[0] * k, c[1] * k, c[2] * k];
 
@@ -37,12 +38,12 @@ function statue(xf: Xf): void {
   const mb = xf.mb;
   const y0 = LETHE.plinth;
   // Постамент: две ступени.
-  lathe(xf, 0, 0, [[0.78, 0], [0.78, 0.16], [0.6, 0.18], [0.6, y0 - 0.03], [0.56, y0], [0.0005, y0]], 40, MAT.enamel, () => MARBLE_SH);
+  lathe(xf, 0, 0, [[0.78, 0], [0.78, 0.16], [0.6, 0.18], [0.6, y0 - 0.03], [0.56, y0], [0.0005, y0]], 40, MAT.marble, () => MARBLE_SH);
   // Тело в хитоне: складки глубже к подолу, выше пояса сходят на нет. Потом сплющено по z — человек, а не колонна.
   const from = mb.vertexCount;
   const folds = (th: number, t: number): number => 1 + 0.06 * Math.pow(Math.max(0, 1 - t * 1.25), 1.1) * Math.cos(th * 17 + 1.4 * Math.sin(th * 3)) + 0.012 * Math.cos(th * 5 + 0.7);
   const body: [number, number][] = [[0.3, 0], [0.315, 0.03], [0.29, 0.22], [0.25, 0.6], [0.225, 0.95], [0.21, 1.08], [0.18, 1.22], [0.19, 1.34], [0.215, 1.45], [0.22, 1.54], [0.17, 1.62], [0.075, 1.67], [0.066, 1.74]];
-  lathe(xf, 0, 0, body.map(([r, y]): [number, number] => [r, y0 + y]), 56, MAT.enamel, (t, th) => sh(MARBLE, 0.62 + 0.38 * Math.min(1, Math.max(0, (folds(th, t) - 0.955) / 0.09))), folds, (t) => 0.82 + 0.18 * t);
+  lathe(xf, 0, 0, body.map(([r, y]): [number, number] => [r, y0 + y]), 56, MAT.marble, (t, th) => sh(MARBLE, 0.62 + 0.38 * Math.min(1, Math.max(0, (folds(th, t) - 0.955) / 0.09))), folds, (t) => 0.82 + 0.18 * t);
   const o = xf.pt(0, 0, 0);
   mb.transformFrom(from, mb.sheets.length, (p) => [p[0], p[1], o[2] + (p[2] - o[2]) * 0.72], (n) => {
     const l = Math.hypot(n[0], n[1], n[2] / 0.72) || 1;
@@ -56,10 +57,10 @@ function statue(xf: Xf): void {
     const a = (i / 10) * Math.PI;
     head.push([Math.max(0.0005, 0.108 * Math.sin(a)), hy - 0.13 * Math.cos(a)]);
   }
-  lathe(xf, 0, 0, head, 24, MAT.enamel, () => MARBLE_SH);
+  lathe(xf, 0, 0, head, 24, MAT.marble, () => MARBLE_SH);
   const veilFold = (th: number, t: number): number => 1 + 0.045 * t * Math.cos(th * 9 + 0.6 * Math.sin(th * 2));
   const veil: [number, number][] = [[0.0005, 0.155], [0.07, 0.143], [0.118, 0.09], [0.132, 0.0], [0.128, -0.1], [0.15, -0.2], [0.21, -0.33], [0.25, -0.48], [0.262, -0.66]];
-  lathe(xf, 0, 0, veil.map(([r, y]): [number, number] => [r, hy + y]), 40, MAT.enamel, (t, th) => sh(MARBLE, 0.66 + 0.34 * Math.min(1, Math.max(0, (veilFold(th, t) - 0.96) / 0.08))), veilFold, (t) => 1 - 0.15 * t);
+  lathe(xf, 0, 0, veil.map(([r, y]): [number, number] => [r, hy + y]), 40, MAT.marble, (t, th) => sh(MARBLE, 0.66 + 0.34 * Math.min(1, Math.max(0, (veilFold(th, t) - 0.96) / 0.08))), veilFold, (t) => 1 - 0.15 * t);
   const neck = xf.pt(0, y0 + 1.68, 0);
   const tilt = 0.24;
   const ct = Math.cos(tilt);
@@ -79,11 +80,11 @@ function statue(xf: Xf): void {
   }, rot);
   // Руки: от локтей под покрывалом к чаше перед грудью.
   for (const sx of [-1, 1]) {
-    tube(xf, [[sx * 0.21, y0 + 1.3, -0.02], [sx * 0.2, y0 + 1.14, -0.12], [sx * 0.1, y0 + 1.1, -0.27]], 0.042, MAT.enamel, MARBLE, 10);
+    tube(xf, [[sx * 0.21, y0 + 1.3, -0.02], [sx * 0.2, y0 + 1.14, -0.12], [sx * 0.1, y0 + 1.1, -0.27]], 0.042, MAT.marble, MARBLE, 10);
   }
   // Чаша (фиала): плоская, тёмная внутри.
   const by = y0 + 1.1;
-  lathe(xf, 0, -0.3, [[0.03, by], [0.1, by + 0.012], [0.135, by + 0.05], [0.14, by + 0.062], [0.13, by + 0.058], [0.09, by + 0.03], [0.0005, by + 0.022]], 28, MAT.enamel, (t) => (t > 0.55 ? [0.5, 0.48, 0.46] : MARBLE));
+  lathe(xf, 0, -0.3, [[0.03, by], [0.1, by + 0.012], [0.135, by + 0.05], [0.14, by + 0.062], [0.13, by + 0.058], [0.09, by + 0.03], [0.0005, by + 0.022]], 28, MAT.marble, (t) => (t > 0.55 ? [0.5, 0.48, 0.46] : MARBLE));
   xf.collider([-0.78, 0, -0.78], [0.78, y0 + LETHE.figure, 0.78]);
 }
 

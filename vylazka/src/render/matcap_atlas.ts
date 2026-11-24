@@ -15,7 +15,7 @@ import { hexToLinear, MAT_COUNT } from '../world/materials';
 import type { MatDef } from '../world/materials';
 
 export const ATLAS_COLS = 8;
-export const ATLAS_ROWS = 5;
+export const ATLAS_ROWS = 6;
 
 /** Блик GGX под соосным светом: полувектор совпадает с направлением на фонарь. */
 function ggx(z: number, alpha: number): number {

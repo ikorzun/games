@@ -39,9 +39,11 @@ export const DETAIL = {
   veneer: 20,
   /** Обивка: крупное плетение, букле. */
   upholstery: 21,
+  /** Мрамор: облачный белый камень с серыми прожилками двух масштабов. */
+  marble: 22,
 } as const;
 
-export const DETAIL_LAYERS = 22;
+export const DETAIL_LAYERS = 23;
 
 type Texel = [number, number, number, number];
 
@@ -453,6 +455,22 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const h = 0.3 + loop * (0.4 + id * 0.15) + weave * 0.1 + (at(hi, x, y) - 0.5) * 0.1;
     const g = 0.5 + (id - 0.5) * 0.28 * loop + (weave - 0.5) * 0.1 - crev * 0.18 + (at(lo, x, y) - 0.5) * 0.12 + (at(mid, x, y) - 0.5) * 0.06;
     return px(h, g, 0.04 + loop * 0.1, loop);
+  };
+
+  // 22. Мрамор: облака тёплого и холодного белого, по ним — прожилки. Прожилка идёт там, где плавный шум проходит через
+  // середину; координаты шума увело вторым шумом, поэтому она вьётся и ветвится, а не лежит ровной линией. Крупные жилы
+  // редкие и тёмные, мелкие — частые и бледные. Поверхность полированная: рельефа почти нет, жилы чуть утоплены.
+  layers[DETAIL.marble] = (x, y) => {
+    const wx = Math.round((at(mid, x, y, 1, 1, 21, 77) - 0.5) * 46);
+    const wy = Math.round((at(mid, x, y, 1, 1, 90, 13) - 0.5) * 46);
+    const big = 1 - sstep(0, 0.022, Math.abs(at(lo, x + wx, y + wy, 1, 1, 31, 5) - 0.5));
+    const thin = 1 - sstep(0, 0.03, Math.abs(at(lo, x + wy, y - wx, 2, 2, 140, 60) - 0.47));
+    const hair = (1 - sstep(0, 0.05, Math.abs(at(mid, x + wx, y, 1, 1, 9, 200) - 0.5))) * sstep(0.45, 0.6, at(lo, x, y, 1, 1, 60, 60));
+    const cloud = at(lo, x, y, 1, 1, 200, 120) - 0.5;
+    const vein = Math.max(big, thin * 0.6, hair * 0.3);
+    const g = 0.6 + cloud * 0.16 + (at(hi, x, y) - 0.5) * 0.03 - big * 0.42 - thin * 0.24 - hair * 0.1;
+    const h = 0.5 - vein * 0.25 + (at(hi, x, y) - 0.5) * 0.04;
+    return px(h, g, clamp01(0.97 - vein * 0.3), vein);
   };
 
   const data = new Uint8Array(N * N * 4 * DETAIL_LAYERS);
