@@ -339,15 +339,18 @@ export const SONAR_EVERY: readonly [number, number] = [24, 40];
 export const QUIET = 0.3;
 /** Мелочь, которой сон засоряет столы и полки, и крупные вещи посреди коридоров. */
 const SMALL_THINGS = ['mug', 'slippers', 'ball', 'teddy', 'alarm_clock', 'remote', 'photo_frame', 'night_light', 'school_bag', 'goldfish_bowl', 'keys', 'phone'];
+// Куда уносят крупные вещи сна. В красную комнату забвения ('dollhouse') — то, рядом с чем засыпают и забывают: кресло,
+// кровать, картотека. Кроватка и игрушки туда не ведут (разбор куратора, противоречие 423): рядом с «ребёнок, шесть лет» у
+// чайника это складывалось в историю о потерянном ребёнке, а канон KOMA её запрещает.
 const BIG_THINGS: readonly (readonly [string, PocketKind | null])[] = [
-  ['armchair', null],
+  ['armchair', 'dollhouse'],
   ['tv_stand', 'void'],
   ['floor_lamp', null],
   ['houseplant', 'meadow'],
-  ['toy_heap', 'dollhouse'],
+  ['toy_heap', 'meadow'],
   ['washing_machine', null],
   ['fridge', null],
-  ['crib', 'dollhouse'],
+  ['crib', 'void'],
   ['christmas_tree', 'meadow'],
 ];
 /**
@@ -492,8 +495,10 @@ const voidLift = (radius: number): number => Math.max(0.3, Math.min(0.6, 0.85 - 
 const bigThing = (kind: string): boolean => (ALL_PROPS[kind]?.h ?? 0) > 0.5;
 /** Как далеко от выбранного места искать свободный пол под крупную вещь, м. */
 const BIG_SEEK = 2.6;
+/** Вещи памяти, которые зовут не своим звуком, а ровным тоном: свой звук спорил бы с их строкой. */
+const QUIET_CALL: ReadonlySet<string> = new Set(['ye_kettle']);
 
-const FLOAT = { floor: 1.05, table: 0.55, shelf: 0.32, bob: 0.035, bobHz: 1.1, bubble: 1.2, min: 0.2 } as const;
+const FLOAT = { floor: 1.05, table: 0.55, shelf: 0.32, inside: 0.06, gap: 0.08, bob: 0.035, bobHz: 1.1, bubble: 1.2, min: 0.2 } as const;
 /**
  * Подсветка искомой вещи при приближении: с from метров свет памяти разгорается, с full — в полную силу: ярче на strength и
  * шире на radius (доли), дышит с частотой breath; rate — как быстро разгорается и гаснет (1/с).
@@ -559,8 +564,8 @@ const WORLD_THINGS: Record<WorldKind, { small: readonly string[]; big: readonly 
       ['office_chair', null],
       ['armchair_visitor', 'void'],
       ['houseplant', 'meadow'],
-      ['filing_cabinet', null],
-      ['toy_heap', 'dollhouse'],
+      ['filing_cabinet', 'dollhouse'],
+      ['toy_heap', 'meadow'],
       ['water_cooler', null],
       ['partition', null],
     ],
@@ -571,7 +576,7 @@ const WORLD_THINGS: Record<WorldKind, { small: readonly string[]; big: readonly 
       ['office_chair', null],
       ['sofa', 'void'],
       ['christmas_tree', 'meadow'],
-      ['crib', 'dollhouse'],
+      ['crib', 'void'],
       ['fridge', null],
       ['bed_home', 'dollhouse'],
       ['houseplant', 'meadow'],
@@ -924,7 +929,10 @@ export class Game {
   }
   /** Что это за вещь зовёт (вид вещи): у знакомых вещей — свой звук, чайник посвистывает (партнёр 24.11). */
   get memoryCallKind(): string | null {
-    return this.memoryCall ? (this.memoryThing?.kind ?? null) : null;
+    if (!this.memoryCall) return null;
+    // Чайник жёлтых комнат холодный («it was cold. it was always cold.») — он не свистит, зовёт ровным тоном (противоречие 420).
+    if (QUIET_CALL.has(this.session?.active?.def.id ?? '')) return null;
+    return this.memoryThing?.kind ?? null;
   }
   private pocketGroup = 0;
   private pocketAge = 0;
@@ -1384,10 +1392,18 @@ export class Game {
   /** Вещи белого нигде, что парят над полом (партнёр 24.11): на сколько каждая поднята на вид, м. */
   private readonly voidFloat = new Map<number, number>();
 
-  /** На сколько метров мелкая искомая вещь поднята над своим местом: над столом и полкой — выше того, что на них стоит. */
-  private floatLift(kind: 'table' | 'shelf' | 'floor'): number {
+  /**
+   * На сколько метров мелкая искомая вещь поднята над своим местом: над столом и полкой — выше того, что на них стоит. Но не в то,
+   * что над ней (разбор куратора, 426): луч вверх от места до первой преграды — навесного шкафа, столешницы над полом; вещь с
+   * зазором ниже. Место внутри мебели (полка в шкафу) — следующая полка рядом: там вещь едва приподнята.
+   */
+  private floatLift(sp: ItemSpot, kind: string): number {
     if (!this.memFloat) return 0;
-    return kind === 'floor' ? FLOAT.floor : kind === 'table' ? FLOAT.table : FLOAT.shelf;
+    const want = sp.kind === 'floor' ? FLOAT.floor : sp.kind === 'table' ? FLOAT.table : FLOAT.shelf;
+    const h = ALL_PROPS[kind]?.h ?? 0.25;
+    const up = this.colliders.raycast(sp.x, sp.y + 0.02, sp.z, 0, 1, 0, want + h + 0.2);
+    if (up < 0.01) return Math.min(want, FLOAT.inside);
+    return Math.min(want, Math.max(FLOAT.inside, up + 0.02 - h - FLOAT.gap));
   }
 
   /** Вещь, которую ищут, переехала («забылась»): преграда крупной едет с ней — на старом месте пусто, на новом держит. */
@@ -3771,7 +3787,7 @@ export class Game {
       // уже стоит. Крупная (кресло, кулер, табличка) стоит на полу, как стояла.
       this.memFloat = !big;
       // Поднимается само место вещи в сессии: взгляд, зов и тесты ищут её там же, где она видна.
-      if (this.memFloat) e.memory.spot = { ...sp, y: sp.y + this.floatLift(sp.kind) };
+      if (this.memFloat) e.memory.spot = { ...sp, y: sp.y + this.floatLift(sp, e.memory.def.thing) };
       const at = e.memory.spot!;
       this.memoryThing = this.addThing(e.memory.def.thing, [at.x, at.y, at.z], placed ? placed.yaw : yaw0, 'dust', true, big);
       if (this.memoryThing.collider >= 0) this.colliders.boxes[this.memoryThing.collider]!.clear = true;
@@ -3814,7 +3830,7 @@ export class Game {
         // Поворот у переезжающей вещи прежний: её преграда переезжает как есть (moveMemory).
         const big = !this.memFloat ? this.placeBig(sp, this.memoryThing.kind, this.memoryThing.yaw, false).spot : sp;
         if (!this.memFloat) e.memory.spot = big;
-        const y = big.y + this.floatLift(big.kind);
+        const y = big.y + this.floatLift(big, this.memoryThing.kind);
         if (this.memFloat) e.memory.spot = { ...sp, y };
         if (this.transition && !this.transition.switched) this.forgotTo = [big.x, y, big.z];
         else this.moveMemory([big.x, y, big.z]);

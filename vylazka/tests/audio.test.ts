@@ -673,6 +673,30 @@ describe('привязка звуков к игре', () => {
     expect(r.loops.get('still_tone')).toBe(0);
   });
 
+  it('знакомая вещь зовёт своим звуком; телефон звонит один раз за поиск и дальше зовёт ровным тоном (канон KOMA, §8: не повторяющийся звонок)', () => {
+    const r = new Recorder();
+    const a = new GameAudio(r);
+    a.setScene('play');
+    const w = world({ world: 'office' });
+    Object.assign(w, { memoryCall: [6, 0.4, -3] as Vec3, memoryCallKind: 'kettle' });
+    a.frame(w, 0.016, true);
+    expect(r.loops.get('call_kettle')!).toBeGreaterThan(0.3);
+    expect(r.loops.get('still_tone')).toBe(0);
+    Object.assign(w, { memoryCall: [2, 0.8, 1] as Vec3, memoryCallKind: 'desk_phone' });
+    a.frame(w, 0.016, true);
+    expect(r.plays.filter((p) => p.id === 'call_phone')).toHaveLength(1);
+    expect(r.loops.get('call_kettle')).toBe(0);
+    expect(r.loops.get('still_tone')).toBe(0);
+    for (let i = 0; i < 400; i++) a.frame(w, 0.016, true);
+    expect(r.plays.filter((p) => p.id === 'call_phone')).toHaveLength(1);
+    expect(r.loops.get('still_tone')!).toBeGreaterThan(0.3);
+    // Холодный чайник жёлтых комнат (вид вещи не назван) — ровный тон.
+    Object.assign(w, { memoryCall: [6, 0.4, -3] as Vec3, memoryCallKind: null });
+    a.frame(w, 0.016, true);
+    expect(r.loops.get('call_kettle')).toBe(0);
+    expect(r.loops.get('still_tone')!).toBeGreaterThan(0.3);
+  });
+
   it('следы людей: пока спокойно, за стеной тихо разговаривают; чем ближе Осыпь и сильнее паника — тем тише разговор и громче шёпот', () => {
     const r = new Recorder();
     const a = new GameAudio(r);

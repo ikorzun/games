@@ -81,8 +81,14 @@ export const RUSTLE_DUCK = 0.45;
 /** Громкость зова искомой вещи (still_tone из её места; затухание по расстоянию — у движка). */
 const MEMORY_CALL = 0.7;
 /** Свой звук искомой вещи по её виду; вещь без знакомого звука (ключ, билет, шляпа) зовёт ровным тоном. */
-export const CALL_SOUND: Readonly<Record<string, string>> = { kettle: 'call_kettle', alarm_clock: 'call_clock', office_clock: 'call_clock', desk_phone: 'call_phone', water_cooler: 'call_cooler', office_terminal: 'call_terminal' };
+export const CALL_SOUND: Readonly<Record<string, string>> = { kettle: 'call_kettle', alarm_clock: 'call_clock', office_clock: 'call_clock', water_cooler: 'call_cooler', office_terminal: 'call_terminal' };
 const CALL_IDS: readonly string[] = [...new Set(Object.values(CALL_SOUND))];
+/**
+ * Телефон звонит один раз за поиск, дальше зовёт ровным тоном: канон KOMA (§8) запрещает повторяющийся звонок как подсказку
+ * (разбор куратора, противоречие 419). Сколько секунд после звонка ровный тон ещё молчит — пока звучит сам звонок.
+ */
+export const CALL_ONCE: Readonly<Record<string, string>> = { desk_phone: 'call_phone' };
+const CALL_ONCE_HUSH = 5.5;
 /**
  * Тишина перед Осыпью (systems/hush.ts): насколько глубоко проседает гул места при полной тишине. Не до нуля: совсем пустой
  * звук читался бы поломкой (S-06); капли не проседают почти вовсе — их хвост и держит «это тишина, а не сбой».
@@ -153,6 +159,9 @@ export class GameAudio {
   private count = 0;
   private clock = 0;
   private holding = false;
+  /** Какой поиск уже отзвонил (вид вещи и её место) и когда. */
+  private rang: string | null = null;
+  private rangAt = -99;
 
   constructor(readonly engine: SoundSink) {}
 
@@ -348,7 +357,17 @@ export class GameAudio {
       // Знакомая вещь зовёт своим звуком (партнёр 24.11: «если нужно найти чайник, пусть появится его звук посвистывания. Так и
       // с остальными главными предметами, которые могут издавать знакомые звуки»); у остальных — прежний ровный тон.
       const own = call ? (CALL_SOUND[game.memoryCallKind ?? ''] ?? null) : null;
-      a.loop('still_tone', call && !own ? live * MEMORY_CALL : 0, call ?? undefined);
+      const once = call ? (CALL_ONCE[game.memoryCallKind ?? ''] ?? null) : null;
+      if (call && once) {
+        const key = `${game.memoryCallKind}:${call.map((v) => v.toFixed(1)).join(',')}`;
+        if (this.rang !== key && live > 0) {
+          a.play(once, { pos: call, volume: MEMORY_CALL });
+          this.rang = key;
+          this.rangAt = this.clock;
+        }
+      }
+      const ringing = once !== null && this.clock - this.rangAt < CALL_ONCE_HUSH;
+      a.loop('still_tone', call && !own && !ringing ? live * MEMORY_CALL : 0, call ?? undefined);
       for (const id of CALL_IDS) a.loop(id, call && own === id ? live * MEMORY_CALL : 0, call ?? undefined);
     }
     if (fl && fl.trains !== this.trains) {

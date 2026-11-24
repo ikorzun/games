@@ -13,7 +13,7 @@ import { DEFAULT_CELL_LIGHTS } from '../src/systems/cell_lights';
 import { GLIMPSE_WAIT } from '../src/systems/director';
 import { nearestExit } from '../src/systems/pressure';
 import type { PressureRoom } from '../src/systems/pressure';
-import { DEFAULT_SESSION, OFFICE_CHAIN, YELLOW_CHAIN } from '../src/systems/session';
+import { DEFAULT_SESSION, OFFICE_CHAIN, SHELTER_CHAIN, YELLOW_CHAIN } from '../src/systems/session';
 import type { SessionEvent } from '../src/systems/session';
 import { DEFAULT_THINGS, looksAt, Things } from '../src/systems/things';
 import type { Thing } from '../src/systems/things';
@@ -4855,6 +4855,36 @@ describe('крупная искомая вещь не врастает в обс
       if (sp.kind !== 'floor') bad.push(`сид ${seed}: место «${sp.kind}»`);
       const hit = hits(h.game, t);
       if (hit.length > 0) bad.push(`сид ${seed}: задевает ${hit.length}: ${hit.slice(0, 2).join(' ')}`);
+    }
+    expect(bad).toEqual([]);
+  });
+});
+
+describe('мелкая искомая вещь парит, но не в то, что над ней (разбор куратора, 426: навесной шкаф, следующая полка)', () => {
+  const small: [string, 'office' | 'yellow' | 'shelter', number][] = [];
+  SHELTER_CHAIN.forEach((m, i) => {
+    if ((ALL_PROPS[m.thing]?.h ?? 0) <= 0.5) small.push([m.thing, 'shelter', i]);
+  });
+  OFFICE_CHAIN.forEach((m, i) => {
+    if ((ALL_PROPS[m.thing]?.h ?? 0) <= 0.5) small.push([m.thing, 'office', i]);
+  });
+  YELLOW_CHAIN.forEach((m, i) => {
+    if ((ALL_PROPS[m.thing]?.h ?? 0) <= 0.5) small.push([m.thing, 'yellow', i]);
+  });
+
+  it.each(small)('%s (%s): над вещью до первой преграды не меньше её высоты — на двенадцати сидах', (_thing, world, chainAt) => {
+    const bad: string[] = [];
+    for (const seed of [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41]) {
+      const level = buildLevel(generateLayout(SEED + seed, 2, world), { wear: 0 });
+      const h = new Harness(levelOf(SEED), { seed, cfg: QUICK });
+      h.game.loadLevel(level, { seed, known: new Set(), chainAt });
+      h.reveal();
+      const t = h.game.things.list.find((x) => x.memory)!;
+      const ht = ALL_PROPS[t.kind]?.h ?? 0.25;
+      const [x, y, z] = t.pos;
+      const up = h.game.colliders.raycast(x, y + 0.02, z, 0, 1, 0, 3);
+      // Внутри мебели (полка в шкафу) луч упирается сразу: там вещь лишь чуть приподнята, это проверяет floatLift.
+      if (up >= 0.01 && up < ht - 0.02) bad.push(`сид ${seed}: над вещью ${up.toFixed(2)} м при высоте ${ht.toFixed(2)}`);
     }
     expect(bad).toEqual([]);
   });

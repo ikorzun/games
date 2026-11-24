@@ -136,6 +136,11 @@ export interface PocketSpace {
    * Войти в него — вернуться в убежище; смотреть на него можно сколько угодно. Нет выхода только в лимбо.
    */
   exit?: Vec3 | null;
+  /**
+   * Свет обводки выхода, если не красный. Красной комнате забвения нужен белый: красный контур в красном тонет (разбор куратора,
+   * противоречие 422).
+   */
+  exitGlow?: Vec3;
   /** То, ради чего сюда попадают: точка, на которую надо посветить (макет убежища в кукольном домике). */
   focus?: Vec3 | null;
   /** Трава плитками (луг): рисует рендер копиями одной сетки (systems/grass.ts). */
@@ -156,15 +161,15 @@ const EXIT_GLOW: Vec3 = [190, 15, 7];
  * Обводка выхода: тонкие светящиеся красным рейки по контуру проёма. Плоскость проёма — поперёк оси z.
  * Знак один на все пространства: красный контур — край нарисованной сцены, за ним убежище.
  */
-export function exitOutline(mb: MeshBuilder, at: Vec3): void {
+export function exitOutline(mb: MeshBuilder, at: Vec3, glow: Vec3 = EXIT_GLOW): void {
   const [x, y, z] = at;
   const hw = EXIT_W / 2;
   const t = 0.022;
   const d = 0.03;
-  mb.box([x - hw, y, z - d], [x - hw + t, y + EXIT_H, z + d], MAT.glow, { tint: EXIT_GLOW });
-  mb.box([x + hw - t, y, z - d], [x + hw, y + EXIT_H, z + d], MAT.glow, { tint: EXIT_GLOW });
-  mb.box([x - hw, y + EXIT_H - t, z - d], [x + hw, y + EXIT_H, z + d], MAT.glow, { tint: EXIT_GLOW });
-  mb.box([x - hw, y + 0.004, z - d], [x + hw, y + 0.004 + t, z + d], MAT.glow, { tint: EXIT_GLOW });
+  mb.box([x - hw, y, z - d], [x - hw + t, y + EXIT_H, z + d], MAT.glow, { tint: glow });
+  mb.box([x + hw - t, y, z - d], [x + hw, y + EXIT_H, z + d], MAT.glow, { tint: glow });
+  mb.box([x - hw, y + EXIT_H - t, z - d], [x + hw, y + EXIT_H, z + d], MAT.glow, { tint: glow });
+  mb.box([x - hw, y + 0.004, z - d], [x + hw, y + 0.004 + t, z + d], MAT.glow, { tint: glow });
 }
 
 /** Дверная коробка без двери: два косяка и перемычка. Плоскость — поперёк оси z. */
@@ -238,7 +243,7 @@ export function buildPocket(kind: PocketKind, seed: number, origin: Vec3, ctx?: 
   const exit = p.exit ?? null;
   if (exit) {
     const mb = new MeshBuilder();
-    exitOutline(mb, exit);
+    exitOutline(mb, exit, p.exitGlow);
     p.meshes.push(mb.build());
   }
   return { ...p, exit, focus: p.focus ?? null };
