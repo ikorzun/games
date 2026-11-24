@@ -437,10 +437,10 @@ describe('экспозиция', () => {
 describe('запечённые текстуры', () => {
   const atlas = bakeMatcapAtlas(MAT_DEFS, 32);
 
-  it('атлас детерминирован и нужного размера: 8×5 шаров', () => {
+  it('атлас детерминирован и нужного размера: 8×6 шаров', () => {
     expect(atlas.width).toBe(256);
-    expect(atlas.height).toBe(160);
-    expect(atlas.data.length).toBe(256 * 160 * 4);
+    expect(atlas.height).toBe(192);
+    expect(atlas.data.length).toBe(256 * 192 * 4);
     expect(bakeMatcapAtlas(MAT_DEFS, 32).data).toEqual(atlas.data);
     expect(MAT_DEFS.length).toBe(MAT_COUNT);
     expect(ATLAS_COLS * ATLAS_ROWS).toBeGreaterThanOrEqual(MAT_COUNT);
