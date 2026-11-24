@@ -52,6 +52,7 @@ import { ALL_PROPS } from './world/props_all';
 import { buildShowcase } from './world/showcase';
 import { buildTestLevel } from './world/test_level';
 import { setThingRegistry } from './world/thing_mesh';
+import { setThingHq } from './world/thing_hq';
 import { loadSand3d, sand3dCredits } from './world/sand3d';
 import { guardTouch, RESIZE_SETTLE_MS, ScreenAwake } from './platform/mobile_guard';
 import { AdBreaks } from './platform/ads';
@@ -461,6 +462,8 @@ export class App {
     renderer.beamBuild = p.get('build') === '1' || (typeof location !== 'undefined' && location.hash === '#build') || this.variant === 'build';
     // Пробная сборка: одна часть сборки места отключена, чтобы на телефоне найти, какая ломает пол.
     setThingRegistry(ALL_PROPS);
+    // ?hq=0 — без подробных вещей памяти (кадры «до» и замеры): стоят прежние болванки.
+    if (p.get('hq') === '0') setThingHq(false);
     // level=test — коридор технического среза, level=show — витрина реквизита.
     this.testLevel = p.get('level') === 'test' || p.get('level') === 'show' || (p.get('level') ?? '').startsWith('pocket_') || this.showParam() !== null;
     const failAt = Number(p.get('fail') ?? '');

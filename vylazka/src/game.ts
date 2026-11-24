@@ -77,6 +77,8 @@ import { buildPocket, ENV_BUNKER, WORLD_ENV } from './world/pockets';
 import type { Env, ModelCell, PocketContext, PocketKind, PocketSpace } from './world/pockets';
 import { formMesh } from './world/forms';
 import { thingMesh } from './world/thing_mesh';
+import { hasThingHq, loadThingHq, thingHqReady } from './world/thing_hq';
+import type { ThingHq } from './world/thing_hq';
 import { MEM_LIGHT_KIND, memLightMod, memLightStep, memoryLightOf } from './world/memory_light';
 import type { MemLightDef } from './world/memory_light';
 import { pieceMask, scenePiece } from './world/piece';
@@ -2192,7 +2194,28 @@ export class Game {
     t.form = form;
     this.thingRender.set(t.id, this.renderer.addThing(tm.mesh, t.id, tm.look));
     if (solid) t.collider = this.thingBox(t, tm.w, tm.d, tm.h, form !== FORM_REAL);
+    this.detailThing(t);
     return t;
+  }
+
+  /**
+   * Подробная модель вещи памяти (партнёр 24.11: «полигонов должно быть больше, материал лучше»; world/thing_hq.ts): если у
+   * вида вещи она есть, сетка-болванка меняется на неё — сразу, когда файлы уже пришли, или как только придут. Меняется
+   * только вид: место, преграда и радиус взгляда остаются от вещи игры. Картонка, проекция и кружево (ступени доверия) —
+   * прежние: у них своя сетка. Вещь, которая уже начала меняться, не трогаем — она дорассыплется болванкой.
+   */
+  private detailThing(t: Thing): void {
+    if (t.form !== FORM_REAL || !hasThingHq(t.kind)) return;
+    const was = this.thingRender.get(t.id);
+    const swap = (hq: ThingHq | null): void => {
+      if (!hq || this.thingRender.get(t.id) !== was || was === undefined) return;
+      if (t.form !== FORM_REAL || t.state !== 'idle' || !this.things.list.includes(t)) return;
+      this.renderer.removeThing(was);
+      this.thingRender.set(t.id, this.renderer.addThing(hq.mesh, t.id, 'matter', hq.maps));
+    };
+    const hq = thingHqReady(t.kind);
+    if (hq) swap(hq);
+    else void loadThingHq(t.kind).then(swap);
   }
 
   private dropThing(t: Thing): void {
@@ -2517,6 +2540,7 @@ export class Game {
         const tm = thingMesh(done ? m.def.thing : 'blank', 7);
         const t = this.things.add(done ? m.def.thing : 'blank', at, done ? a + 0.4 : 0, 'dust', tm.radius, false, true);
         this.thingRender.set(t.id, this.renderer.addThing(tm.mesh, t.id));
+        this.detailThing(t);
         this.pocketThings.push(t);
         if (!done) this.blanks.push(t);
       });

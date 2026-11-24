@@ -27,6 +27,8 @@ npm run dev      # dev-сервер с контентом из ../episodes и ..
 cd vylazka && npm install && npm run typecheck && npm test && npm run build && npm run smoke
 node e2e/smoke.mjs --dist dist --only koma   # сюжет «Невостребованное» в сборке: первый сон, лимбо, «оставить» (docs/vylazka/koma)
 python3 tools/koma/memory_things.py          # пересобрать список вещей памяти: docs/vylazka/koma/memory_things.md
+python3 -I scripts/import_thing_hq.py <каталог исходников>   # подробные вещи памяти (glTF/.glb → public/assets/things): docs/vylazka/things_hq.md
+node tools/things_hq/shots.mjs               # вещи памяти под лучом: «до» (?hq=0) и «после»;  perf.mjs — замер нагрузки, audit.ts — треугольники
 node e2e/shots.mjs   # скриншоты фиксированных ракурсов — смотреть картинку глазами
 node tools/plans/plans.mjs --png   # план сверху всех комнат: проходы, главный вход, мебель — проверка раскладки (design.md, §31)
 node tools/constructor/build.mjs <out.html>   # конструктор партнёра: вещи, манекены, мебель игры (двигать, убирать) и карточки-опросник (сохраняет в базу страницы)

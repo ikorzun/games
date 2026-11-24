@@ -1,0 +1,6 @@
+Untitled Session — detailed models of memory things
+
+Changes made for the game: scale and origin, texture maps resized and repacked, meshes simplified where noted in docs.
+
+Alarm Clock 01 by James Ray Cock and Yann Kervran, Poly Haven (polyhaven.com), CC0
+Wet Floor Sign 01 by Fran Calvente, Poly Haven (polyhaven.com), CC0
