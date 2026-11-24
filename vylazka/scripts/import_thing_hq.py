@@ -67,7 +67,8 @@ SOURCES = {
     'st_note': dict(src=('st_note', 'st_note.gltf'), klass='small', turn=0, height=None, credit='Note: made for Untitled Session (tools/things_hq/make_small.py)'),
     'st_key': dict(src=('st_key', 'st_key.gltf'), klass='small', turn=0, height=None, credit='Key with a tag: made for Untitled Session (tools/things_hq/make_small.py)'),
     'slippers': dict(src=('slippers', 'slippers.gltf'), klass='small', turn=1, height=None, credit='Slippers: made for Untitled Session (tools/things_hq/make_small.py)'),
-    'st_coat': dict(src=('st_coat', 'st_coat.gltf'), klass='medium', turn=0, height=None, tex=512, credit='Coat: made for Untitled Session (tools/things_hq/make_small.py)'),
+    # Шляпа стоит вместо пальто (партнёр 24.11); имя модели прежнее — на него ссылаются цепочки и сохранения.
+    'st_coat': dict(src=('st_coat', 'st_coat.gltf'), klass='small', turn=0, height=None, credit='Hat: made for Untitled Session (tools/things_hq/make_small.py)'),
     'photo_frame': dict(src=('standing_picture_frame_01', 'standing_picture_frame_01.gltf'), klass='small', turn=3, height=0.3, tex=1024, art='standing_picture_frame_01_artwork', credit='Standing Picture Frame 01 by James Ray Cock, Poly Haven (polyhaven.com), CC0'),
 }
 # Насыщенность карты цвета у всех подробных вещей (квиз 24.11: «цвет ярче»): вещь памяти должна находиться взглядом.

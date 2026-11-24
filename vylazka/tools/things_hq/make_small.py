@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Вещи памяти, которых нет в свободных каталогах, собранные программой (партнёр 24.11: «я не буду делать чайник сам, я не 3д
-моделер»; «делай оставшиеся пять вещей»): билет, записка, ключ с биркой, тапочки и пальто. Помощники сетки и запись glTF — из
+моделер»; «делай оставшиеся пять вещей»): билет, записка, ключ с биркой, тапочки и шляпа (она стоит вместо пальто, имя модели — st_coat). Помощники сетки и запись glTF — из
 make_kettle.py. Пишет исходники для scripts/import_thing_hq.py:
     python3 -I tools/things_hq/make_small.py <каталог исходников> [имя,имя]
     python3 -I scripts/import_thing_hq.py <каталог исходников> st_ticket,st_note,st_key,slippers,st_coat
@@ -336,94 +336,86 @@ def slippers(root):
     k.write(root, 'slippers', col, *k.maps(height, rough, metal, 2.0))
 
 
-# ── Пальто: «пальто. одна пуговица пришита другой ниткой. карманы пусты.» — брошено комом, рукав в сторону ─────────────────────
-def coat(root):
+# ── Шляпа: стоит вместо пальто (партнёр 24.11: «поменяй пальто на более простой объект»; квиз — «Шляпа»). Имя модели в игре
+# прежнее, st_coat: на него ссылаются цепочки и сохранения. Фетровая, с лентой и бантом, тулья с заломом ───────────────────────
+def hat(root):
     k.reset()
-    rnd = random.Random(19)
-    R_CLOTH, R_LINING, R_SLEEVE = (0.0, 0.0, 1.0, 0.6), (0.0, 0.6, 0.5, 1.0), (0.5, 0.6, 1.0, 1.0)
-    SX, SZ, H = 0.56, 0.48, 0.33
-    # Складки: несколько гребней случайного направления поверх общего холма; у краёв ткань ложится на пол волной.
-    ridges = [(rnd.uniform(0, math.pi), rnd.uniform(7, 15), rnd.uniform(0, 6.28), rnd.uniform(0.012, 0.03)) for _ in range(7)]
+    rnd = random.Random(31)
+    R_FELT, R_IN, R_BAND = (0.0, 0.0, 1.0, 0.55), (0.0, 0.55, 1.0, 0.85), (0.0, 0.85, 1.0, 1.0)
+    A, B = 0.17, 0.145  # полуоси полей: шляпа овальная, длиннее вдоль головы
+    CA, CB, CH = 0.098, 0.082, 0.125  # тулья: полуоси у ленты и высота
 
-    def heap(u, v):
-        x, z = (u - 0.5) * SX, (v - 0.5) * SZ
-        # Холм: пальто перекинуто через спинку невидимого сиденья — гребень по z = −0,06, пола свисает вперёд.
-        ru = (2 * u - 1)
-        rv = (2 * v - 1)
-        edge = max(0.0, 1 - ru ** 6) * max(0.0, 1 - rv ** 6)
-        crest = math.exp(-((z + 0.07) / 0.12) ** 2) * (0.82 + 0.18 * math.cos(ru * 2.2))
-        apron = 0.42 * math.exp(-((z - 0.1) / 0.16) ** 2)
-        y = H * edge * min(1.0, max(crest, apron))
-        fold = sum(a * math.sin((x * math.cos(t) + z * math.sin(t)) * f * 6.28 + ph) for t, f, ph, a in ridges)
-        y += fold * edge * (0.35 + 0.65 * min(1.0, y / (H * 0.5)))
-        # Подол — волной по краю.
-        y += 0.012 * (1 - edge) * (1 + math.sin(u * 23 + v * 17))
-        return (x, max(0.004, y), z)
+    def profile(v, ang):
+        """Точка образующей: v от края полей (0) через перегиб у ленты (0,45) к макушке (1). Возвращает (доля радиуса, высота)."""
+        if v < 0.45:
+            f = v / 0.45
+            # Поля: край чуть загнут вверх, спереди опущен.
+            lift = 0.012 * (1 - f) ** 2 - 0.008 * (1 - f) * max(0.0, math.cos(ang))
+            return (1.0 - f * (1 - CA / A), 0.006 + lift)
+        f = (v - 0.45) / 0.55
+        if f < 0.62:
+            g = f / 0.62
+            return ((CA / A) * (1 - 0.1 * g), 0.006 + CH * g)
+        g = (f - 0.62) / 0.38
+        # Макушка: скругление и продольный залом посередине; спереди два защипа.
+        r = (CA / A) * 0.9 * math.cos(g * math.pi / 2) ** 0.7
+        dent = 0.03 * g * (0.55 + 0.45 * math.cos(2 * ang))
+        return (r, 0.006 + CH + 0.012 * math.sin(g * math.pi / 2) - dent)
 
-    surface(heap, 72, 64, R_CLOTH)
-    # Дно закрыто подкладкой: вещь не просвечивает снизу при росте и распаде.
-    surface(lambda u, v: ((u - 0.5) * SX * 0.98, 0.002, (v - 0.5) * SZ * 0.98), 8, 8, R_LINING, flip=True)
-    # Рукав лежит отдельно, согнут в локте; манжета открыта — видна подкладка.
-    sleeve = k.arc((-0.12, 0.2, 0.06), (-0.34, 0.2, 0.2), (-0.3, 0.035, 0.24), 20)
-    k.tube(sleeve, lambda f: 0.062 - 0.012 * f + 0.006 * math.sin(f * 14), R_SLEEVE, seg=18)
-    # Воротник: валик на гребне.
-    collar = k.arc((-0.1, H * 0.93, -0.1), (0.02, H * 1.06, -0.13), (0.14, H * 0.9, -0.08), 16)
-    k.tube(collar, lambda f: 0.03 * math.sin(max(0.08, f) * math.pi) ** 0.5 + 0.006, R_SLEEVE, seg=14)
-    # Пуговицы на поле (диски): три, средняя пришита другой ниткой — на карте.
-    btn_uv = [(0.5, 0.74), (0.5, 0.83), (0.5, 0.92)]
-    R_BTN = [(0.0 + 0.1 * i, 0.6, 0.1 + 0.1 * i, 0.7) for i in range(3)]
-    for (u, v), r in zip(btn_uv, R_BTN):
-        c = heap(u, v)
-        first = len(k.pos)
-        k.lathe([(0.0, 0.0), (0.011, 0.0), (0.012, 0.002), (0.0105, 0.0045), (0.0, 0.0035)], (r[0], r[1], r[0] + 0.02, r[3]), seg=20)
-        # Крышка пуговицы — отдельной поверхностью, чтобы дырочки легли кругом.
-        surface(lambda a, b: (math.cos(a * 6.283) * 0.0105 * b, 0.0046, math.sin(a * 6.283) * 0.0105 * b), 20, 2, (r[0] + 0.02, r[1], r[2], r[3]), flip=True)
-        tilt = math.radians(38)
-        for i in range(first, len(k.pos)):
-            x, y, z = k.pos[i]
-            nx, ny, nz = k.nrm[i]
-            k.pos[i] = (c[0] + x, c[1] + 0.001 + y * math.cos(tilt) - z * math.sin(tilt), c[2] + y * math.sin(tilt) + z * math.cos(tilt))
-            k.nrm[i] = (nx, ny * math.cos(tilt) - nz * math.sin(tilt), ny * math.sin(tilt) + nz * math.cos(tilt))
-    col, rough, metal, height = blank((40, 52, 86), 245)
+    def shell(u, v, off=0.0):
+        ang = u * 2 * math.pi
+        r, y = profile(v, ang)
+        pinch = 1.0
+        if v > 0.6:
+            # Защипы спереди (ang ≈ ±35°): тулья там уже.
+            pinch = 1 - 0.14 * math.exp(-((abs(((ang + math.pi) % (2 * math.pi)) - math.pi) - 0.6) / 0.3) ** 2) * min(1.0, (v - 0.6) / 0.2)
+        ax = A if v < 0.45 else A
+        bz = B if v < 0.45 else A * CB / CA
+        return (math.cos(ang) * r * ax * pinch, y + off, math.sin(ang) * r * bz * pinch)
+
+    # v идёт от края к макушке: чтобы лицо смотрело наружу, обходим угол в обратную сторону.
+    surface(lambda u, v: shell(1 - u, v), 64, 40, R_FELT)
+    # Изнанка: низ полей и нутро тульи — чуть утоплена, чтобы у шляпы была толщина.
+    surface(lambda u, v: shell(1 - u, v * 0.985, -0.004), 64, 24, R_IN, flip=True)
+    # Лента вокруг тульи и бант сбоку.
+    def band(u, v):
+        ang = (1 - u) * 2 * math.pi
+        r = (CA / A) * (1 - 0.1 * (0.02 + 0.2 * v) / 0.62) * 1.012
+        return (math.cos(ang) * r * A, 0.008 + CH * (0.02 + 0.2 * v) / 0.62 * 0.62, math.sin(ang) * r * A * CB / CA)
+
+    surface(band, 64, 2, R_BAND)
+    bow = band(0.25, 0.5)
+    k.box((bow[0] - 0.022, bow[1] - 0.012, bow[2] - 0.004), (bow[0] + 0.022, bow[1] + 0.012, bow[2] + 0.006), R_BAND)
+    col, rough, metal, height = blank((196, 172, 132), 245)
     d = ImageDraw.Draw(col)
-    # Шерсть «в ёлочку»: синее пальто (ярче настоящего чёрного — вещь должна находиться взглядом).
-    weave = Image.new('L', (W, W), 0)
-    dwv = ImageDraw.Draw(weave)
-    for y in range(0, W, 6):
-        for x in range(0, W, 24):
-            up_ = (x // 24) % 2 == 0
-            dwv.line((x, y + (0 if up_ else 6), x + 24, y + (6 if up_ else 0)), fill=255, width=2)
-    col.paste(Image.new('RGB', (W, W), (70, 88, 132)), (0, 0), weave)
-    height.paste(Image.new('L', (W, W), 150), (0, 0), weave)
+    # Фетр: светлый песочный (на тёмном полу читается), к краю полей и на заломе вытерт; изнанка темнее, с кожаной лентой внутри.
+    fx = box_px(R_FELT)
+    d.rectangle(fx, fill=(204, 178, 134))
+    wear = Image.new('L', (W, W), 0)
+    dw = ImageDraw.Draw(wear)
+    dw.rectangle((fx[0], fx[1], fx[2], fx[1] + int((fx[3] - fx[1]) * 0.05)), fill=200)
+    dw.rectangle((fx[0], fx[3] - int((fx[3] - fx[1]) * 0.12), fx[2], fx[3]), fill=140)
+    col.paste(Image.new('RGB', (W, W), (226, 206, 170)), (0, 0), wear.filter(ImageFilter.GaussianBlur(10)))
+    # Тёмное пятно от дождя на полях.
+    spot = Image.new('L', (W, W), 0)
+    ImageDraw.Draw(spot).ellipse((fx[0] + 300, fx[1] + 40, fx[0] + 520, fx[1] + 170), fill=110)
+    col.paste(Image.new('RGB', (W, W), (150, 126, 92)), (0, 0), spot.filter(ImageFilter.GaussianBlur(18)))
     d = ImageDraw.Draw(col)
-    # Подкладка — серо-золотистый атлас; рукав и воротник — та же шерсть, темнее.
-    d.rectangle(box_px(R_LINING), fill=(150, 138, 110))
-    ImageDraw.Draw(rough).rectangle(box_px(R_LINING), fill=110)
-    sl = box_px(R_SLEEVE)
-    dark = Image.new('L', (W, W), 0)
-    ImageDraw.Draw(dark).rectangle(sl, fill=70)
-    col.paste(Image.new('RGB', (W, W), (22, 28, 50)), (0, 0), dark)
-    # Манжета (конец трубки — низ прямоугольника): полоска подкладки.
-    ImageDraw.Draw(col).rectangle((sl[0], sl[3] - 26, sl[2], sl[3]), fill=(150, 138, 110))
-    # Пуговицы: тёмный рог, четыре дырочки; у средней нитка рыжая, у остальных чёрная.
-    d = ImageDraw.Draw(col)
-    for i, r in enumerate(R_BTN):
-        bx = box_px(r)
-        d.rectangle(bx, fill=(30, 26, 24))
-        ImageDraw.Draw(rough).rectangle(bx, fill=70)
-        cx, cy = bx[0] + int((bx[2] - bx[0]) * 0.6), (bx[1] + bx[3]) // 2
-        thread = (214, 120, 40) if i == 1 else (12, 12, 14)
-        # Крышка — в полярной развёртке: дырочки и нитка — полосой у середины (низ прямоугольника крышки).
-        d.rectangle((bx[0] + int((bx[2] - bx[0]) * 0.2), bx[3] - 34, bx[2], bx[3]), fill=thread)
-        del cx, cy
-    felt = fibre(rnd, 2, 210, 255)
-    big = fibre(rnd, 120, 200, 255)
+    ix = box_px(R_IN)
+    d.rectangle(ix, fill=(120, 100, 74))
+    d.rectangle((ix[0], ix[1] + int((ix[3] - ix[1]) * 0.42), ix[2], ix[1] + int((ix[3] - ix[1]) * 0.6)), fill=(70, 44, 30))
+    bx = box_px(R_BAND)
+    d.rectangle(bx, fill=(36, 60, 132))
+    d.line((bx[0], bx[1] + 10, bx[2], bx[1] + 10), fill=(70, 96, 170), width=3)
+    ImageDraw.Draw(rough).rectangle(bx, fill=150)
+    felt = fibre(rnd, 2, 220, 255)
+    big = fibre(rnd, 150, 224, 255)
     col = ImageChops.multiply(ImageChops.multiply(col, Image.merge('RGB', (felt, felt, felt))), Image.merge('RGB', (big, big, big)))
-    height = ImageChops.add(height, fibre(rnd, 3, 100, 150), 2, 0)
-    k.write(root, 'st_coat', col, *k.maps(height, rough, metal, 2.5))
+    height = fibre(rnd, 3, 112, 144)
+    k.write(root, 'st_coat', col, *k.maps(height, rough, metal, 2.0))
 
 
-MAKERS = {'st_ticket': ticket, 'st_note': note, 'st_key': key, 'slippers': slippers, 'st_coat': coat}
+MAKERS = {'st_ticket': ticket, 'st_note': note, 'st_key': key, 'slippers': slippers, 'st_coat': hat}
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:

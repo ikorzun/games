@@ -39,7 +39,7 @@ export const THING_HQ: Readonly<Record<string, ThingHqMeta>> = {
   st_note: { file: 'st_note', tris: 1024, verts: 748, tex: 512, min: [-0.0800, 0.0000, -0.0275], max: [0.0800, 0.0188, 0.0275], credit: "Note: made for Untitled Session (tools/things_hq/make_small.py)" },
   st_key: { file: 'st_key', tris: 2000, verts: 1320, tex: 512, min: [-0.0678, 0.0000, -0.0200], max: [0.0678, 0.0080, 0.0200], credit: "Key with a tag: made for Untitled Session (tools/things_hq/make_small.py)" },
   slippers: { file: 'slippers', tris: 2976, verts: 1808, tex: 512, min: [-0.1206, 0.0000, -0.1398], max: [0.1206, 0.0576, 0.1398], credit: "Slippers: made for Untitled Session (tools/things_hq/make_small.py)" },
-  st_coat: { file: 'st_coat', tris: 11232, verts: 5984, tex: 512, min: [-0.3172, 0.0000, -0.2680], max: [0.3172, 0.4080, 0.2680], credit: "Coat: made for Untitled Session (tools/things_hq/make_small.py)" },
+  st_coat: { file: 'st_coat', tris: 8460, verts: 4509, tex: 512, min: [-0.1700, 0.0000, -0.1450], max: [0.1700, 0.1395, 0.1450], credit: "Hat: made for Untitled Session (tools/things_hq/make_small.py)" },
   photo_frame: { file: 'photo_frame', tris: 1632, verts: 1422, tex: 1024, min: [-0.1206, 0.0000, -0.0602], max: [0.1206, 0.3000, 0.0602], credit: "Standing Picture Frame 01 by James Ray Cock, Poly Haven (polyhaven.com), CC0" },
 };
 // </generated>
