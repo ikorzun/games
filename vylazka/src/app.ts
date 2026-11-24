@@ -359,7 +359,7 @@ export class App {
     // Титры — когда бы кусок ни пришёл.
     const furniture = loadSand3d().then((ok) => {
       // В титрах — и авторы подробных вещей памяти (world/thing_hq_meta.ts): у вещей Sand3D подпись обязательна (CC BY 4.0).
-      if (ok) this.overlay.setCredits([...sand3dCredits(), ...Object.values(THING_HQ).map((m) => m.credit)]);
+      if (ok) this.overlay.setCredits({ furniture: sand3dCredits(), things: Object.values(THING_HQ).map((m) => m.credit) });
       return ok;
     });
     // Шрифты интерфейса и названия: ждём недолго, чтобы первый экран не мигнул системным.

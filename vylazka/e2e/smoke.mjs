@@ -223,7 +223,7 @@ async function scenarioPlay(browser, baseUrl) {
     const t = await openPage(browser, baseUrl, '?q=low&fail=0&touch=0&level=test', { locale: 'ru-RU' });
     const tp = t.page;
     const lines = await tp.$$eval('.vz-overlay__line', (els) => els.map((e) => e.textContent));
-    check('без ?lang заставка английская, даже если язык браузера русский', (await tp.textContent('.vz-overlay__title')) === 'DEPRIVATIO' && (await tp.textContent('.vz-overlay__prompt')) === 'Click to begin' && (await tp.evaluate(() => document.documentElement.lang)) === 'en');
+    check('без ?lang заставка английская, даже если язык браузера русский', (await tp.textContent('.vz-overlay__title')) === 'DEPRIVATIO' && (await tp.textContent('.vz-overlay__prompt')) === 'Begin' && (await tp.evaluate(() => document.documentElement.lang)) === 'en');
     // Слова партнёра 19.11: «Оставляем название и сразу под ним про сон и начать играть».
     check('на заставке — название, под ним строка про сон и «начать»; подзаголовка и строк о вспышках и счёте нет', lines.length === 1 && lines[0] === EN['title.how'] && (await tp.textContent('.vz-overlay__sub')) === '', JSON.stringify(lines));
     const look = await tp.evaluate(() => {
@@ -245,7 +245,7 @@ async function scenarioPlay(browser, baseUrl) {
       }
       return { lit, top, share: lit / (c.width * c.height) };
     });
-    check('на фоне заставки светлячки из точек: они есть, их мало, самая яркая точка — не ярче трети белого', flies.lit > 0 && flies.share < 0.01 && flies.top <= 100, JSON.stringify(flies));
+    check('на фоне заставки пыль из точек: она есть, фона не закрывает, самая яркая точка — не ярче 0,6 белого', flies.lit > 0 && flies.share < 0.04 && flies.top <= 150, JSON.stringify(flies));
     check('настройки спрятаны под шестерёнкой справа вверху; список закрыт', (await tp.isVisible('.vz-overlay__gear')) && !(await tp.isVisible('.vz-settings')) && (await tp.evaluate(() => { const r = document.querySelector('.vz-overlay__gear').getBoundingClientRect(); return r.right > innerWidth - 80 && r.top < 80; })));
     // Предупреждение о вспышках — тихой строкой у нижнего края (куратор, пачка 50, 308): видно до первой вспышки.
     const note = await tp.evaluate(() => {
@@ -293,10 +293,11 @@ async function scenarioPlay(browser, baseUrl) {
     // Титры: авторы моделей мебели (полка Sand3D, CC BY 4.0) — простым текстом, без ссылок; нажатие возвращает на заставку.
     await tp.click('.vz-overlay__opt--credits');
     await sleep(150);
-    const credits = await tp.$$eval('.vz-overlay__line', (els) => els.map((e) => e.textContent ?? ''));
+    const credits = await tp.$$eval('.vz-credits__row', (els) => els.map((e) => e.textContent ?? ''));
+    const legal = await tp.$$eval('.vz-credits__legal-line', (els) => els.map((e) => e.textContent ?? ''));
     const links = await tp.$$eval('.vz-overlay a', (els) => els.length);
     const sc = await state(tp);
-    check('титры: кнопка на заставке, авторы всех моделей полки, ссылок нет, игра не началась', sc.screen === 'title' && credits.length >= 30 && credits.every((x) => /CC-BY|CC BY/.test(x)) && links === 0 && (await tp.textContent('.vz-overlay__title')) === EN['ui.credits'], JSON.stringify({ n: credits.length, links, screen: sc.screen }));
+    check('титры лентой: кнопка на заставке, строки «что — чьё», лицензии мелким блоком в конце, ссылок нет, игра не началась', sc.screen === 'title' && credits.length >= 30 && legal.length >= 30 && legal.filter((x) => /CC-BY|CC BY|CC0/.test(x)).length >= 30 && links === 0 && (await tp.textContent('.vz-credits__name')) === EN['ui.title'], JSON.stringify({ n: credits.length, links, screen: sc.screen }));
     await tp.click('.vz-overlay__prompt');
     await sleep(150);
     const sb = await state(tp);
@@ -3463,7 +3464,7 @@ async function scenarioFrame(browser, baseUrl) {
     ready2 = false;
   });
   if (ready2) await openSettings(frame2);
-  check('в песочнице без ?lang заставка английская, предупреждение о вспышках и настройки на месте', ready2 && (await frame2.textContent('.vz-overlay__title')) === 'DEPRIVATIO' && (await frame2.textContent('.vz-overlay__prompt')) === 'Click to begin' && (await frame2.evaluate(() => document.documentElement.lang)) === 'en' && (await frame2.textContent('.vz-overlay__note')) === EN['title.warn'] && (await frame2.isVisible('.vz-seg--flash')) && (await frame2.isVisible('.vz-seg--lang')));
+  check('в песочнице без ?lang заставка английская, предупреждение о вспышках и настройки на месте', ready2 && (await frame2.textContent('.vz-overlay__title')) === 'DEPRIVATIO' && (await frame2.textContent('.vz-overlay__prompt')) === 'Begin' && (await frame2.evaluate(() => document.documentElement.lang)) === 'en' && (await frame2.textContent('.vz-overlay__note')) === EN['title.warn'] && (await frame2.isVisible('.vz-seg--flash')) && (await frame2.isVisible('.vz-seg--lang')));
   if (ready2) {
     // Выбор в песочнице действует до конца страницы, хотя сохранить его некуда.
     await segPick(frame2, 'lang', 'ru');

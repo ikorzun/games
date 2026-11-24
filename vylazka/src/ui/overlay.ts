@@ -15,6 +15,70 @@ import type { Lang } from '../core/types';
 import type { Quality } from '../render/renderer';
 import { Fireflies } from './fireflies';
 
+/** Строки авторства для титров: мебель полки и вещи памяти (как в их файлах авторства, целиком). */
+export interface Credits {
+  furniture: readonly string[];
+  things: readonly string[];
+}
+
+/** Из строки авторства — что это и чьё: «"Название" by Автор, …» или «Название by Автор, …»; сделанное для игры — own. */
+export function creditParts(line: string): { work: string; by: string; own: boolean } {
+  const own = /^([^:]+): made for /.exec(line);
+  if (own) return { work: own[1]!.trim(), by: '', own: true };
+  const m = /^(?:[^"]*?:\s*)?"([^"]+)"\s+by\s+([^,;]+)/.exec(line) ?? /^(.+?)\s+by\s+([^,;]+)/.exec(line);
+  if (m) return { work: m[1]!.trim(), by: m[2]!.trim(), own: false };
+  const [a, b] = line.split(',');
+  return { work: (a ?? line).trim(), by: (b ?? '').trim(), own: false };
+}
+
+/**
+ * Титры лентой, как в кино (партнёр 24.11: «какое-то месиво, посмотри как собирают титры в фильмах… и сделай так же»): лента
+ * медленно идёт снизу вверх; раздел — мелкой разрядкой; в строке слева, прижато к середине, — что это, справа — чьё; между
+ * разделами воздух. Ссылки и лицензии — не в строках, а мелким блоком в самом конце, как юридическая строка фильма.
+ */
+function creditsRoll(c: Credits): HTMLElement {
+  const el = (cls: string, text = ''): HTMLDivElement => {
+    const d = document.createElement('div');
+    d.className = cls;
+    d.textContent = text;
+    return d;
+  };
+  const wrap = el('vz-credits');
+  const roll = el('vz-credits__roll');
+  wrap.append(roll);
+  roll.append(el('vz-credits__name', t('ui.title')));
+  let rows = 0;
+  const section = (head: string, pairs: readonly (readonly [string, string])[]): void => {
+    if (pairs.length === 0) return;
+    roll.append(el('vz-credits__head', head));
+    for (const [what, who] of pairs) {
+      const row = el('vz-credits__row');
+      row.append(el('vz-credits__what', what), el('vz-credits__who', who));
+      roll.append(row);
+      rows += 1;
+    }
+  };
+  const parts = (lines: readonly string[]): ReturnType<typeof creditParts>[] => lines.map(creditParts);
+  const things = parts(c.things);
+  section(t('credits.furniture'), parts(c.furniture).map((p) => [p.work, p.by] as const));
+  section(t('credits.things'), things.filter((p) => !p.own).map((p) => [p.work, p.by] as const));
+  const own = things.filter((p) => p.own).map((p) => p.work);
+  if (own.length > 0) {
+    roll.append(el('vz-credits__head', t('credits.own')), el('vz-credits__list', own.join(' · ')));
+    rows += 2;
+  }
+  section(t('credits.sound'), [['', t('credits.sound.who')]]);
+  section(t('credits.engine'), [['', t('credits.engine.who')]]);
+  section(t('credits.type'), [['', t('credits.type.who')]]);
+  const legal = el('vz-credits__legal');
+  legal.append(el('vz-credits__legal-head', t('credits.legal')));
+  for (const line of [...c.furniture, ...c.things.filter((x) => !/: made for /.test(x))]) legal.append(el('vz-credits__legal-line', line));
+  roll.append(legal, el('vz-credits__name vz-credits__name--end', t('ui.title')));
+  // Скорость ленты — как в кино: около двух строк в секунду чтения не требует, а раздел успевает прочитаться.
+  roll.style.setProperty('--vz-roll', `${Math.round(24 + rows * 1.15 + (c.furniture.length + c.things.length) * 0.5)}s`);
+  return wrap;
+}
+
 export type OverlayMode = 'hidden' | 'loading' | 'start' | 'paused' | 'report' | 'error' | 'credits';
 
 export interface OverlayHandlers {
@@ -165,7 +229,7 @@ export class Overlay {
   private readonly fireflies: Fireflies;
   private open = false;
   /** Строки авторства моделей (полка Sand3D, CC-BY 4.0): что показывают титры. Пусто — кнопки нет. */
-  private credits: readonly string[] = [];
+  private credits: Credits = { furniture: [], things: [] };
   /** Нижние строки выпадающего списка (счёт сессий) и тихая строка у нижнего края заставки (предупреждение). */
   private infoLines: readonly string[] = [];
   private noteText = '';
@@ -414,7 +478,7 @@ export class Overlay {
   }
 
   /** Строки авторства для титров (приходят с куском моделей полки, world/sand3d.ts). */
-  setCredits(lines: readonly string[]): void {
+  setCredits(lines: Credits): void {
     this.credits = lines;
     this.refresh();
   }
@@ -450,10 +514,11 @@ export class Overlay {
     this.el.classList.toggle('is-on', m !== 'hidden');
     this.el.dataset.mode = m;
     this.fireflies.setOn(m === 'start');
-    this.title.textContent = card ? card.title : m === 'paused' ? t('ui.paused') : m === 'credits' ? t('ui.credits') : t('ui.title');
-    this.sub.textContent = card ? card.sub : m === 'paused' ? '' : m === 'credits' ? t('ui.credits.sub') : t('ui.subtitle');
+    this.title.textContent = card ? card.title : m === 'paused' ? t('ui.paused') : m === 'credits' ? '' : t('ui.title');
+    this.sub.textContent = card ? card.sub : m === 'paused' || m === 'credits' ? '' : t('ui.subtitle');
     this.body.replaceChildren();
-    const lines: readonly CardLine[] = m === 'credits' ? this.credits.map((text) => ({ text, kind: 'dim' as const })) : (card?.lines ?? []);
+    const lines: readonly CardLine[] = card?.lines ?? [];
+    if (m === 'credits') this.body.append(creditsRoll(this.credits));
     for (const line of lines) {
       const row = document.createElement('div');
       row.className = `vz-overlay__line vz-overlay__line--${line.kind ?? 'plain'}`;
@@ -510,7 +575,7 @@ export class Overlay {
     this.restartBtn.classList.toggle('is-armed', armed);
     this.restartBtn.hidden = m !== 'start' || !this.canRestart;
     this.creditsBtn.textContent = t('ui.credits');
-    this.creditsBtn.hidden = (m !== 'start' && m !== 'paused') || this.credits.length === 0;
+    this.creditsBtn.hidden = (m !== 'start' && m !== 'paused') || this.credits.furniture.length + this.credits.things.length === 0;
     this.info.replaceChildren(
       ...this.infoLines.map((text) => {
         const d = document.createElement('div');

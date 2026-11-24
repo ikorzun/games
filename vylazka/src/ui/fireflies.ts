@@ -10,9 +10,10 @@
  */
 
 /** Сколько светлячков на миллион пикселей экрана (CSS) и пределы. */
-const DENSITY = 34;
-const MIN_COUNT = 10;
-const MAX_COUNT = 70;
+// Партнёр 24.11: «частицы пыли на фоне сделай более заметнее и увеличь их количество» — втрое больше и в полтора раза ярче.
+const DENSITY = 110;
+const MIN_COUNT = 28;
+const MAX_COUNT = 220;
 /** Жизнь светлячка, с: проступает (доля RISE), светит, рассыпается. */
 const LIFE: readonly [number, number] = [1.4, 3.6];
 const RISE = 0.18;
@@ -20,7 +21,7 @@ const RISE = 0.18;
 const SPARKS: readonly [number, number] = [3, 6];
 const SPARK_LIFE: readonly [number, number] = [0.5, 1.2];
 /** Самая яркая точка (доля белого) и цвет — тёплый, как луч. */
-const PEAK = 0.26;
+const PEAK = 0.4;
 const COLOR = '243, 226, 180';
 
 interface Fly {
@@ -135,7 +136,7 @@ export class Fireflies {
       vy: Math.sin(a) * speed,
       age: midLife ? this.rnd() * life : 0,
       life,
-      r: 0.6 + this.rnd() * 0.9,
+      r: 0.8 + this.rnd() * 1.2,
       phase: this.rnd() * Math.PI * 2,
       burst: false,
       spark: false,

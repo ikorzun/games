@@ -1606,3 +1606,145 @@ body {
     animation: none;
   }
 }
+
+/* ── Настройки не сжаты (партнёр 24.11: «На экране полно места, чтобы так не сжимать настройки») ── */
+.vz-settings {
+  width: min(600px, calc(100% - 20px));
+  padding: 20px 22px 16px;
+  font-size: 14px;
+}
+.vz-settings__rows {
+  gap: 14px;
+}
+.vz-settings__row {
+  grid-template-columns: 9em minmax(0, 1fr);
+  gap: 4px 18px;
+}
+.vz-settings__label {
+  font-size: 11px;
+}
+.vz-seg__opt {
+  min-height: 36px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+@media (min-width: 520px) {
+  .vz-seg__opt {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+}
+.vz-overlay__opt {
+  min-height: 38px;
+  font-size: 13px;
+}
+@media (max-width: 440px) {
+  .vz-settings__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── Титры лентой, как в кино (ui/overlay.ts, creditsRoll) ── */
+.vz-credits {
+  position: relative;
+  /* Лента шире колонки заставки: выходит из неё по середине экрана. */
+  width: min(92vw, 46em);
+  left: 50%;
+  transform: translateX(-50%);
+  height: min(72vh, 44em);
+  overflow: hidden;
+  font-family: 'DM Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 300;
+  font-size: clamp(13px, 0.6vmin + 10px, 17px);
+  line-height: 1.5;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16%, #000 84%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16%, #000 84%, transparent 100%);
+}
+.vz-credits__roll {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  animation: vz-roll var(--vz-roll, 90s) linear infinite;
+  will-change: transform;
+}
+@keyframes vz-roll {
+  to {
+    transform: translateY(calc(-100% - min(72vh, 44em)));
+  }
+}
+.vz-credits__name {
+  font-size: 2.2em;
+  letter-spacing: 0.42em;
+  margin-right: -0.42em;
+  text-align: center;
+  color: var(--vz-ink);
+  margin-bottom: 5em;
+}
+.vz-credits__name--end {
+  margin: 7em 0 0;
+  font-size: 1.2em;
+  opacity: 0.6;
+}
+.vz-credits__head {
+  margin: 4.2em 0 1.3em;
+  text-align: center;
+  font-size: 0.72em;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--vz-faint);
+}
+.vz-credits__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 1.6em;
+  margin: 0.34em 0;
+}
+.vz-credits__what {
+  text-align: right;
+  color: var(--vz-dim);
+  overflow-wrap: anywhere;
+}
+.vz-credits__who {
+  text-align: left;
+  color: var(--vz-ink);
+  overflow-wrap: anywhere;
+}
+/* Строка без «что»: одно имя посередине. */
+.vz-credits__what:empty {
+  display: none;
+}
+.vz-credits__what:empty + .vz-credits__who {
+  grid-column: 1 / -1;
+  text-align: center;
+}
+.vz-credits__list {
+  text-align: center;
+  color: var(--vz-ink);
+  padding: 0 8%;
+}
+.vz-credits__legal {
+  margin: 7em 6% 0;
+  font-size: 0.6em;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--vz-faint);
+  overflow-wrap: anywhere;
+}
+.vz-credits__legal-head {
+  margin-bottom: 1em;
+}
+.vz-credits__legal-line {
+  margin-top: 0.35em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vz-credits {
+    overflow-y: auto;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .vz-credits__roll {
+    position: static;
+    animation: none;
+  }
+}
