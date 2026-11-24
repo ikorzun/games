@@ -4,7 +4,7 @@ import type { Rng } from '../src/core/rng';
 import { DEFAULT_JUMPS, Jumps } from '../src/systems/jumps';
 import type { JumpPlan } from '../src/systems/jumps';
 
-const POCKETS = ['void', 'meadow', 'dollhouse'];
+const POCKETS = ['void', 'meadow', 'dollhouse', 'sunfield'];
 
 /** ГСЧ по сценарию: сначала отдаёт заданные числа, потом — rest. */
 function script(values: number[], rest = 0.5): Rng {
@@ -105,7 +105,7 @@ describe('скачки: когда', () => {
 });
 
 describe('скачки: куда', () => {
-  it('nextPocket не повторяет прошлое пространство и со временем выдаёт все три', () => {
+  it('nextPocket не повторяет прошлое пространство и со временем выдаёт все четыре', () => {
     for (const seed of [1, 2, 3]) {
       const j = new Jumps(mulberry32(seed));
       let prev = '';
@@ -117,7 +117,7 @@ describe('скачки: куда', () => {
         prev = p;
         seen.add(p);
       }
-      expect(seen.size).toBe(3);
+      expect(seen.size).toBe(4);
     }
   });
 

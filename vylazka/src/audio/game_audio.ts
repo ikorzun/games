@@ -311,7 +311,7 @@ export class GameAudio {
     // проросла сквозь пол, песок песчаного зала. В белом нигде, в домике и в лимбо шагов не слышно.
     const place = game.world ?? 'shelter';
     const pocket = game.where === 'pocket' ? (game.pocket?.kind ?? '') : '';
-    const stepId = !over ? (s?.inWater ? 'step_water' : game.onGrass ? 'step_grass' : place === 'shelter' ? 'step_concrete' : 'step_carpet') : pocket === 'meadow' ? 'step_grass' : pocket === 'dunes' ? 'step_sand' : null;
+    const stepId = !over ? (s?.inWater ? 'step_water' : game.onGrass ? 'step_grass' : place === 'shelter' ? 'step_concrete' : 'step_carpet') : pocket === 'meadow' || pocket === 'sunfield' ? 'step_grass' : pocket === 'dunes' ? 'step_sand' : null;
     const speed = Math.hypot(b.vx, b.vz);
     if (game.consumeFootstep() && active && stepId) a.play(stepId, { rate: this.jitter(0.07), volume: 0.55 + Math.min(0.45, speed / 9) });
     // Шаги в такт: за спиной, там, где игрок сам прошёл несколько шагов назад, — тот же шаг тише и ниже.
@@ -379,15 +379,15 @@ export class GameAudio {
     // шорох травы»). Трава — у помещения места и на лугу. Шорох не спорит с песком Осыпи (разбор куратора 20.11): рядом с ней трава
     // замирает (game.ts, GRASS_HUSH), а в панике, когда дрожит рука с фонарём, шорох уходит — слушать надо её.
     const rustle = game.grassRustle;
-    const grassHere = !over || pocket === 'meadow';
+    const grassHere = !over || pocket === 'meadow' || pocket === 'sunfield';
     const grassHush = clamp01(1 - near * 2) * (1 - 0.8 * clamp01((panic - 0.3) / 0.5));
     const heard = rustle && grassHere ? rustle.gain * grassHush * quiet : 0;
     a.loop('grass_rustle', heard, rustle?.at);
     // Ветер луга приседает под шорохом: трава отвечает свету, и мир на миг затихает (предложение куратора).
-    a.loop('amb_meadow', pocket === 'meadow' ? 1 - RUSTLE_DUCK * heard : 0);
+    a.loop('amb_meadow', pocket === 'meadow' || pocket === 'sunfield' ? 1 - RUSTLE_DUCK * heard : 0);
     // Песчаный зал: низкий полый ветер под высоким потолком — свой гул вместо тона белого нигде.
     a.loop('amb_dunes', pocket === 'dunes' ? 1 : 0);
-    a.loop('amb_void', over && pocket !== 'meadow' && pocket !== 'dunes' ? 1 : 0);
+    a.loop('amb_void', over && pocket !== 'meadow' && pocket !== 'sunfield' && pocket !== 'dunes' ? 1 : 0);
     const body = over ? 0 : 1;
     a.loop('breath_calm', body * clamp01(1 - panic * 2.2));
     a.loop('breath_panic', body * clamp01((panic - 0.3) / 0.45));

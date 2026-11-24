@@ -1,6 +1,6 @@
 /**
  * Карманные пространства: маленькие отдельные сцены, в которые игрок проваливается из убежища, —
- * белое нигде, луг, красная комната забвения (вид 'dollhouse': прежде здесь был кукольный домик, имя вида осталось). Каждое собирается кодом вдали от уровня (origin), со своими
+ * белое нигде, луг, поле подсолнухов (world/pocket_sunfield.ts), красная комната забвения (вид 'dollhouse': прежде здесь был кукольный домик, имя вида осталось). Каждое собирается кодом вдали от уровня (origin), со своими
  * преградами и своим окружением: светом, туманом, небом.
  *
  * Окружение (Env) — то, чем пространства отличаются для рендера. В убежище рассеянного света почти
@@ -16,6 +16,7 @@ import { MAT } from './materials';
 import { buildLethe } from './pocket_lethe';
 import { buildDunes } from './pocket_dunes';
 import { buildMeadow } from './pocket_meadow';
+import { buildSunfield } from './pocket_sunfield';
 
 export interface Env {
   /** Рассеянный свет (линейный цвет): 0 — светит только фонарь. */
@@ -92,8 +93,8 @@ export const WORLD_ENV: Record<WorldKind, Env> = { shelter: ENV_BUNKER, office: 
  * Виды карманов. Песчаный зал (dunes) — не скачок, а комната за чёрным проёмом места (world/pocket_dunes.ts): случайные скачки
  * туда не уносят (systems/jumps.ts), в него входят через проём.
  */
-export type PocketKind = 'void' | 'meadow' | 'dollhouse' | 'dunes';
-export const POCKET_KINDS: readonly PocketKind[] = ['void', 'meadow', 'dollhouse', 'dunes'];
+export type PocketKind = 'void' | 'meadow' | 'dollhouse' | 'dunes' | 'sunfield';
+export const POCKET_KINDS: readonly PocketKind[] = ['void', 'meadow', 'dollhouse', 'dunes', 'sunfield'];
 
 /** Клетка убежища на макете в кукольном домике: координаты сетки уровня, ярус, род помещения. */
 export interface ModelCell {
@@ -227,7 +228,7 @@ export function buildVoid(_seed: number, origin: Vec3, ctx?: PocketContext): Poc
   };
 }
 
-const BUILDERS: Partial<Record<PocketKind, PocketBuilder>> = { void: buildVoid, meadow: buildMeadow, dollhouse: buildLethe, dunes: buildDunes };
+const BUILDERS: Partial<Record<PocketKind, PocketBuilder>> = { void: buildVoid, meadow: buildMeadow, dollhouse: buildLethe, dunes: buildDunes, sunfield: buildSunfield };
 
 /** Подключить строителя пространства (луг и кукольный домик лежат в своих файлах). */
 export function registerPocket(kind: PocketKind, builder: PocketBuilder): void {
