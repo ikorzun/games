@@ -331,7 +331,7 @@ function vendingMachine(xf: Xf, seed: number): void {
   bx(xf, [-0.475, 0.05, 0], [0.475, 1.83, 0.78], MAT.bakelite, [1.35, 1.4, 1.5], { bevel: 0.01, aoBottom: 0.6 });
   bx(xf, [-0.475, 0.05, 0.78], [0.475, 0.09, 0.79], MAT.metalGrey, METAL_DK);
   // Решётка охлаждения сбоку и замок с ручкой на двери.
-  for (let i = 0; i < 7; i++) bx(xf, [0.475, 0.3 + i * 0.045, 0.2], [0.479, 0.32 + i * 0.045, 0.6], MAT.metalGrey, METAL_DK);
+  for (let i = 0; i < 4; i++) bx(xf, [0.475, 0.3 + i * 0.06, 0.2], [0.479, 0.33 + i * 0.06, 0.6], MAT.metalGrey, METAL_DK);
   xf.cyl([0.455, 1.0, 0.79], 'z', 0.012, 0.014, MAT.steel, { tint: [0.9, 0.9, 0.9], segments: 8 });
   bx(xf, [0.445, 0.86, 0.79], [0.465, 0.96, 0.812], MAT.steel, [0.75, 0.75, 0.75], { bevel: 0.004 });
   // Витрина: рамка и стекло с книгами.
@@ -349,21 +349,25 @@ function vendingMachine(xf: Xf, seed: number): void {
     xf.sl.quadUv([xf.pt(X0, Y0, z), xf.pt(X1, Y0, z), xf.pt(X1, Y1, z), xf.pt(X0, Y1, z)], [r.u0, r.v0, r.u1, r.v1], MAT.print, WHITE, 1);
     bx(xf, [X0, Y0, 0.78], [X1, Y1, 0.791], MAT.glow, [0.03, 0.03, 0.04]);
   } else {
-    bx(xf, [X0, Y0, 0.78], [X1, Y1, 0.79], MAT.glow, [5, 6, 7]);
-    const prod: [number, Vec3][] = [
-      [MAT.paintRed, [1.3, 0.7, 0.6]],
-      [MAT.paintBlue, [0.7, 0.95, 1.4]],
-      [MAT.paintGreen, [0.6, 1.2, 0.9]],
-      [MAT.paintOchre, [1.4, 1.2, 0.5]],
+    // Без слоя картинок (плоская «картонка» автомата): за стеклом те же книги — по три лицом наружу на каждой из четырёх полок,
+    // в приглушённых обложках.
+    bx(xf, [X0, Y0, 0.78], [X1, Y1, 0.79], MAT.glow, [1.6, 1.7, 1.6]);
+    const covers: Vec3[] = [
+      [0.72, 0.66, 0.5],
+      [0.45, 0.52, 0.5],
+      [0.62, 0.42, 0.36],
+      [0.38, 0.4, 0.44],
+      [0.7, 0.7, 0.62],
+      [0.5, 0.56, 0.4],
     ];
     for (let r = 0; r < 4; r++) {
       const y = Y0 + 0.02 + r * 0.245;
-      bx(xf, [X0, y, 0.78], [X1, y + 0.02, 0.8], MAT.metalGrey, METAL_DK);
-      for (let c = 0; c < 4; c++) {
-        if (rnd() < 0.15) continue;
-        const [mat, tint] = prod[(r + c + Math.floor(rnd() * 2)) % 4]!;
-        const x = X0 + 0.03 + c * 0.14;
-        bx(xf, [x, y + 0.02, 0.78], [x + 0.1, y + 0.17 + rnd() * 0.04, 0.8], mat, tint);
+      bx(xf, [X0, y, 0.78], [X1, y + 0.016, 0.8], MAT.metalGrey, METAL_DK);
+      for (let c = 0; c < 3; c++) {
+        if (rnd() < 0.1) continue;
+        const x = X0 + 0.035 + c * 0.185;
+        const tint = covers[Math.floor(rnd() * covers.length)]!;
+        bx(xf, [x, y + 0.02, 0.784], [x + 0.15, y + 0.19 + rnd() * 0.03, 0.796], MAT.paper, tint);
       }
     }
   }
@@ -412,6 +416,100 @@ function trashBin(xf: Xf, seed: number): void {
     const z = Math.sin(a) * 0.03;
     bx(xf, [x - 0.035, 0.028, z - 0.03], [x + 0.035, 0.085, z + 0.03], MAT.paper, [1.1, 1.08, 1.0], { bevel: 0.018 });
   }
+}
+
+// ───────────────────────────── офисный санузел ─────────────────────────────
+
+const LAMINATE: Vec3 = [0.74, 0.77, 0.8];
+const LAMINATE_DOOR: Vec3 = [0.66, 0.69, 0.72];
+const CHROME: Vec3 = [1.25, 1.25, 1.3];
+const PORCELAIN: Vec3 = [1.42, 1.42, 1.45];
+
+/**
+ * Кабинка офисного санузла 0,95 × 1,55 × 2,0 (партнёр 24.11: «Пройдись по устройству офиса, перестрой его логично, как строят
+ * офисы» — домашний унитаз посреди плитки читался квартирой): две боковые перегородки из пластика на стальных ножках, не до пола
+ * и не до потолка; спереди — узкие стойки, поверху — хромированная штанга, дверь. Внутри у стены — унитаз и держатель
+ * бумаги; унитаз подвесной, без бачка, с клавишей смыва на стене. У каждой третьей кабинки дверь закрыта и горит красный «занято»; у остальных распахнута внутрь вдоль перегородки.
+ * Спиной к стене (z = 0), дверью в комнату (+z).
+ */
+function toiletStall(xf: Xf, seed: number): void {
+  const rnd = rng(seed);
+  const W = 0.95;
+  const D = 1.55;
+  const H = 2.0;
+  const T = 0.028;
+  const LIFT = 0.16;
+  const POST = 0.14;
+  for (const sx of [-1, 1]) {
+    const x = sx * (W / 2);
+    bx(xf, [x - T / 2, LIFT, 0.02], [x + T / 2, H, D - T], MAT.enamel, LAMINATE);
+    for (const z of [0.3, D - 0.09]) bx(xf, [x - 0.012, 0, z], [x + 0.012, LIFT, z + 0.03], MAT.steel, CHROME);
+    xf.collider([x - T / 2, 0, 0.02], [x + T / 2, H, D - T]);
+  }
+  // Стойки по краям проёма и штанга поверху.
+  bx(xf, [-W / 2 - T / 2, LIFT, D - T], [-W / 2 + POST, H, D], MAT.enamel, LAMINATE);
+  bx(xf, [W / 2 - POST, LIFT, D - T], [W / 2 + T / 2, H, D], MAT.enamel, LAMINATE);
+  xf.collider([-W / 2 - T / 2, 0, D - T], [-W / 2 + POST, H, D]);
+  xf.collider([W / 2 - POST, 0, D - T], [W / 2 + T / 2, H, D]);
+  bx(xf, [-W / 2 - T / 2, H - 0.03, D - T - 0.012], [W / 2 + T / 2, H, D + 0.004], MAT.steel, CHROME);
+  const g0 = -W / 2 + POST;
+  const g1 = W / 2 - POST;
+  if (rnd() < 0.33) {
+    // Закрыта: дверь в проёме, на ней — красный «занято».
+    bx(xf, [g0 + 0.006, LIFT + 0.02, D - T + 0.004], [g1 - 0.006, H - 0.05, D - 0.004], MAT.enamel, LAMINATE_DOOR);
+    bx(xf, [g1 - 0.09, 1.0, D - 0.004], [g1 - 0.04, 1.03, D + 0.008], MAT.glow, [6, 0.5, 0.35]);
+    xf.collider([g0, 0, D - T], [g1, H, D]);
+  } else {
+    // Распахнута внутрь, вдоль левой перегородки.
+    const len = g1 - g0 - 0.012;
+    bx(xf, [g0 + 0.004, LIFT + 0.02, D - T - len], [g0 + 0.004 + T, H - 0.05, D - T], MAT.enamel, LAMINATE_DOOR);
+    bx(xf, [g1 - 0.09, 1.0, D - 0.004], [g1 - 0.04, 1.03, D + 0.008], MAT.glow, [0.5, 5, 1.2]);
+  }
+  // Подвесной унитаз без бачка, как в офисах: чаша на крепёжном блоке у стены, крышка, над ним на стене — клавиша смыва.
+  bx(xf, [-0.11, 0.24, 0.02], [0.11, 0.4, 0.2], MAT.enamel, PORCELAIN);
+  lathe(xf, 0, 0.36, [[0.07, 0.25], [0.165, 0.33], [0.18, 0.4]], 10, MAT.enamel, () => PORCELAIN);
+  xf.cyl([0, 0.4, 0.36], 'y', 0.022, 0.185, MAT.enamel, { tint: [1.3, 1.3, 1.32], segments: 10 });
+  xf.collider([-0.19, 0, 0.02], [0.19, 0.43, 0.56]);
+  bx(xf, [-0.12, 0.95, 0.02], [0.12, 1.1, 0.034], MAT.steel, CHROME);
+  bx(xf, [-0.1, 0.97, 0.034], [-0.005, 1.08, 0.04], MAT.steel, [1.05, 1.05, 1.1]);
+  bx(xf, [0.005, 0.97, 0.034], [0.1, 1.08, 0.04], MAT.steel, [1.05, 1.05, 1.1]);
+  // Держатель бумаги — на правой перегородке, у руки сидящего.
+  bx(xf, [W / 2 - T / 2 - 0.035, 0.64, 0.66], [W / 2 - T / 2, 0.78, 0.82], MAT.steel, CHROME);
+}
+
+/** Сколько над полом столешница раковин, м. */
+export const BASIN_TOP = 0.84;
+
+/**
+ * Две раковины на общей столешнице 1,5 × 0,55, длинное зеркало без рамы на стене над ними, хромированные краны, дозаторы мыла,
+ * сифоны под столешницей. Так моют руки в офисе; кухонная мойка с сушилкой для тарелок и зеркало в золочёной раме, что стояли
+ * здесь раньше, — квартира.
+ */
+function washBasins(xf: Xf): void {
+  const W = 1.5;
+  const D = 0.55;
+  const TOP = BASIN_TOP;
+  bx(xf, [-W / 2, TOP - 0.04, 0], [W / 2, TOP, D], MAT.enamel, [1.05, 1.04, 1.0], { bevel: 0.006 });
+  bx(xf, [-W / 2, TOP - 0.16, D - 0.03], [W / 2, TOP - 0.04, D], MAT.enamel, [0.95, 0.94, 0.9]);
+  // Столешница на двух хромированных ножках у переднего края и на кронштейнах у стены.
+  for (const x of [-W / 2 + 0.06, W / 2 - 0.06]) xf.cyl([x, 0, D - 0.07], 'y', TOP - 0.04, 0.018, MAT.steel, { tint: CHROME, segments: 6 });
+  for (const x of [-W / 2 + 0.06, W / 2 - 0.06]) bx(xf, [x - 0.02, TOP - 0.3, 0], [x + 0.02, TOP - 0.04, D * 0.5], MAT.steel, CHROME);
+  for (const c of [-0.36, 0.36]) {
+    lathe(xf, c, D * 0.52, [[0.09, TOP], [0.175, TOP + 0.1], [0.165, TOP + 0.11], [0.0005, TOP + 0.03]], 10, MAT.enamel, () => PORCELAIN);
+    xf.cyl([c, TOP, 0.08], 'y', 0.2, 0.017, MAT.steel, { tint: CHROME, segments: 6 });
+    bx(xf, [c - 0.012, TOP + 0.18, 0.08], [c + 0.012, TOP + 0.204, 0.2], MAT.steel, CHROME);
+    xf.cyl([c, TOP - 0.3, D * 0.52], 'y', 0.26, 0.02, MAT.steel, { tint: CHROME, segments: 5, caps: false });
+    bx(xf, [c + 0.2, TOP, 0.05], [c + 0.26, TOP + 0.16, 0.12], MAT.bakelite, [1.4, 1.4, 1.4]);
+  }
+  bx(xf, [-W / 2 + 0.02, TOP + 0.24, 0], [W / 2 - 0.02, TOP + 1.14, 0.012], MAT.glass, [1.3, 1.35, 1.4]);
+  xf.collider([-W / 2, 0, 0], [W / 2, TOP, D]);
+}
+
+/** Электросушилка для рук на стене: белый корпус со скруглёнными краями, хромированное сопло снизу. Начало — низ сопла. */
+function handDryer(xf: Xf): void {
+  bx(xf, [-0.13, 0.02, 0], [0.13, 0.32, 0.2], MAT.enamel, [1.4, 1.4, 1.4], { bevel: 0.035 });
+  bx(xf, [-0.05, 0, 0.11], [0.05, 0.02, 0.17], MAT.steel, CHROME, { bevel: 0.005 });
+  bx(xf, [-0.03, 0.23, 0.2], [0.03, 0.25, 0.205], MAT.glow, [0.5, 3, 5]);
 }
 
 const RECEPTION = 's3_reception_desk';
@@ -763,4 +861,7 @@ export const OFFICE_PROPS: Record<string, PropSpec> = {
   desk_phone: { w: 0.22, d: 0.2, h: 0.1, mount: 'free', ru: 'офисный телефон', build: deskPhone },
   paper_stack: { w: 0.32, d: 0.24, h: 0.14, mount: 'free', ru: 'стопка бумаг и папка', build: paperStack },
   binder_shelf: { ...spanOf(BINDER_SHELVES), mount: 'floor', ru: 'шкаф или стеллаж с папками-корешками', build: binderShelf },
+  toilet_stall: { w: 1.0, d: 1.55, h: 2.0, mount: 'floor', ru: 'кабинка санузла: перегородки на ножках, дверь, унитаз внутри', build: toiletStall },
+  wash_basins: { w: 1.5, d: 0.55, h: BASIN_TOP + 1.14, mount: 'floor', ru: 'две раковины на столешнице, длинное зеркало над ними', build: (xf) => washBasins(xf) },
+  hand_dryer: { w: 0.26, d: 0.21, h: 0.32, mount: 'wall', y: 0.98, ru: 'электросушилка для рук', build: (xf) => handDryer(xf) },
 };

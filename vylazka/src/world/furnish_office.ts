@@ -18,7 +18,7 @@ import { bestSlots, floorSpots, free, homeCentre, homeStack, landmark, leanScree
 import type { CellInfo, HomeItem, RoomCtx, Slot, SlotScore } from './furnish';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
-import { ceilingBreak, KITCHEN_SPOT, officeDeskTop } from './props_office';
+import { BASIN_TOP, ceilingBreak, KITCHEN_SPOT, officeDeskTop } from './props_office';
 import { S3_TOP } from './furniture';
 import { hanging } from './objects';
 import type { Xf } from './props';
@@ -407,10 +407,15 @@ function server(ctx: RoomCtx): void {
 function washroom(ctx: RoomCtx): void {
   panels(ctx);
   const k = roles(ctx);
-  // Раковина с зеркалом — сбоку от входа, унитаз — дальше.
-  const w = wallBy(ctx, k.side, ['sink_cabinet'], ['mirror', 0, 1.15]);
-  if (w) landmark(ctx, 'washroom', w.s.xf, w.x, 1.0, 0.3);
-  wallBy(ctx, k.hero, ['toilet_home']);
+  // Офисный санузел, а не квартирная ванная (партнёр 24.11: «перестрой его логично, как строят офисы»): кабинки рядом у дальней
+  // стены, дверями к входу; сбоку — две раковины на столешнице под длинным зеркалом; у входа — сушилка для рук и корзина.
+  // Кабинок не больше двух: у унитаза полки тысяча треугольников, а этаж держит бюджет (tests/worlds.test.ts).
+  const stalls = wallBy(ctx, k.hero, ['toilet_stall', -0.5], ['toilet_stall', 0.5]) ?? wallBy(ctx, k.hero, ['toilet_stall']);
+  if (stalls) landmark(ctx, 'washroom', stalls.s.xf, stalls.x, 1.0, 0.8);
+  const w = wallBy(ctx, k.side, ['wash_basins']);
+  // На столешнице между раковинами — место для вещи.
+  if (w) spot(ctx, w.s.xf, w.x, BASIN_TOP + 0.005, 0.38, 'table');
+  wallBy(ctx, k.door, ['hand_dryer', 0, ALL_PROPS.hand_dryer?.y ?? 0.98], ['trash_bin', 0.45]);
   floorSpots(ctx, 2);
 }
 
