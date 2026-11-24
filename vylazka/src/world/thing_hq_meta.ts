@@ -34,6 +34,7 @@ export const THING_HQ: Readonly<Record<string, ThingHqMeta>> = {
   water_cooler: { file: 'water_cooler', tris: 11380, verts: 9580, tex: 256, min: [-0.1948, 0.0000, -0.1628], max: [0.1948, 1.3500, 0.1628], credit: "NVIDIA SimReady assets: \"water_cooler_a01\" by NVIDIA, https://huggingface.co/datasets/nvidia/simready-assets/tree/653d91e182011f357cf1644013cc94ddf194d349/water_cooler_a01, CC BY 4.0; modified: rewritten as a sand3d program" },
   desk_phone: { file: 'desk_phone', tris: 12000, verts: 8766, tex: 256, min: [-0.0942, 0.0000, -0.1200], max: [0.0942, 0.0999, 0.1200], credit: "\"Office Phone\" by maxdragon, https://sketchfab.com/3d-models/4176a01b6d0b4d13ad165c0df278a6b5, CC-BY-4.0; modified: rewritten as a sand3d program" },
   st_cup: { file: 'st_cup', tris: 7721, verts: 4577, tex: 256, min: [-0.0519, 0.0000, -0.0519], max: [0.0519, 0.1400, 0.0519], credit: "\"Coffee Paper-cup\" by DenPennicus, https://sketchfab.com/3d-models/70d51490fb8e4de0a132d9f543859a35, CC-BY-4.0; modified: rewritten as a sand3d program" },
+  kettle: { file: 'kettle', tris: 5192, verts: 3032, tex: 1024, min: [-0.1415, 0.0000, -0.1120], max: [0.1415, 0.3335, 0.1120], credit: "Kettle: made for Untitled Session (tools/things_hq/make_kettle.py)" },
   photo_frame: { file: 'photo_frame', tris: 1632, verts: 1422, tex: 1024, min: [-0.1206, 0.0000, -0.0602], max: [0.1206, 0.3000, 0.0602], credit: "Standing Picture Frame 01 by James Ray Cock, Poly Haven (polyhaven.com), CC0" },
 };
 // </generated>

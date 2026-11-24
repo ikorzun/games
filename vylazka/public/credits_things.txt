@@ -11,4 +11,5 @@ Wall Clock by PierreB3D, Poly Haven (polyhaven.com), CC0
 NVIDIA SimReady assets: "water_cooler_a01" by NVIDIA, https://huggingface.co/datasets/nvidia/simready-assets/tree/653d91e182011f357cf1644013cc94ddf194d349/water_cooler_a01, CC BY 4.0; modified: rewritten as a sand3d program
 "Office Phone" by maxdragon, https://sketchfab.com/3d-models/4176a01b6d0b4d13ad165c0df278a6b5, CC-BY-4.0; modified: rewritten as a sand3d program
 "Coffee Paper-cup" by DenPennicus, https://sketchfab.com/3d-models/70d51490fb8e4de0a132d9f543859a35, CC-BY-4.0; modified: rewritten as a sand3d program
+Kettle: made for Untitled Session (tools/things_hq/make_kettle.py)
 Standing Picture Frame 01 by James Ray Cock, Poly Haven (polyhaven.com), CC0

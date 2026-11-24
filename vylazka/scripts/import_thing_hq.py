@@ -60,6 +60,8 @@ SOURCES = {
     'water_cooler': dict(src=('water_cooler', 'model.glb'), klass='large', turn=0, height=1.35, tex=256, credit='NVIDIA SimReady assets: "water_cooler_a01" by NVIDIA, https://huggingface.co/datasets/nvidia/simready-assets/tree/653d91e182011f357cf1644013cc94ddf194d349/water_cooler_a01, CC BY 4.0; modified: rewritten as a sand3d program'),
     'desk_phone': dict(src=('desk_phone', 'model.glb'), klass='small', turn=0, height=None, fit=0.24, tex=256, credit='"Office Phone" by maxdragon, https://sketchfab.com/3d-models/4176a01b6d0b4d13ad165c0df278a6b5, CC-BY-4.0; modified: rewritten as a sand3d program'),
     'st_cup': dict(src=('st_cup', 'model.glb'), klass='small', turn=0, height=0.14, tex=256, credit='"Coffee Paper-cup" by DenPennicus, https://sketchfab.com/3d-models/70d51490fb8e4de0a132d9f543859a35, CC-BY-4.0; modified: rewritten as a sand3d program'),
+    # Чайник собран программой (tools/things_hq/make_kettle.py): в каталогах нет эмалированного, на плите.
+    'kettle': dict(src=('kettle', 'kettle.gltf'), klass='medium', turn=0, height=None, credit='Kettle: made for Untitled Session (tools/things_hq/make_kettle.py)'),
     'photo_frame': dict(src=('standing_picture_frame_01', 'standing_picture_frame_01.gltf'), klass='small', turn=3, height=0.3, tex=1024, art='standing_picture_frame_01_artwork', credit='Standing Picture Frame 01 by James Ray Cock, Poly Haven (polyhaven.com), CC0'),
 }
 # Насыщенность карты цвета у всех подробных вещей (квиз 24.11: «цвет ярче»): вещь памяти должна находиться взглядом.
