@@ -43,12 +43,65 @@ OUT_CREDITS = os.path.join(ROOT, 'public', 'credits_things.txt')
 # Бюджеты (docs/vylazka/things_hq.md, §3): треугольников и сторона карт по классу вещи.
 BUDGET = {'small': (12000, 512), 'medium': (25000, 1024), 'large': (40000, 1024)}
 
-# имя в игре → (папка исходника, файл, класс, четверти оборота вокруг вертикали, высота в игре или None — как есть,
-#               строка авторства, что закрасить на карте цвета [(u0, v0, u1, v1, (r, g, b))])
+# имя в игре → исходник и что с ним сделать:
+#   src — (папка, файл); klass — класс бюджета; turn — четверти оборота вокруг вертикали (лицом к +z); height — высота в игре, м
+#   (None — как есть); credit — строка авторства; tex — сторона листа карт, если не по классу;
+#   patches — что закрасить на карте цвета: (материал, u0, v0, u1, v1) в долях его карты — цветом вокруг (марка на циферблате);
+#   art — материал, чью картинку заменить нашей (снимок в рамке); hue — (от, до, в какой тон), градусы: перекрасить краску.
 SOURCES = {
-    'alarm_clock': ('alarm_clock_01', 'alarm_clock_01.gltf', 'small', 0, 0.2, 'Alarm Clock 01 by James Ray Cock and Yann Kervran, Poly Haven (polyhaven.com), CC0', []),
-    'wet_floor_sign': ('WetFloorSign_01', 'WetFloorSign_01.gltf', 'small', 0, None, 'Wet Floor Sign 01 by Fran Calvente, Poly Haven (polyhaven.com), CC0', []),
+    # Квиз 24.11: «Всегда подробная, цвет ярче» — бирюзовая краска будильника перекрашена в красный болванки.
+    'alarm_clock': dict(src=('alarm_clock_01', 'alarm_clock_01.gltf'), klass='small', turn=0, height=0.2, hue=(120, 215, 4), credit='Alarm Clock 01 by James Ray Cock and Yann Kervran, Poly Haven (polyhaven.com), CC0'),
+    'wet_floor_sign': dict(src=('WetFloorSign_01', 'WetFloorSign_01.gltf'), klass='small', turn=0, height=None, credit='Wet Floor Sign 01 by Fran Calvente, Poly Haven (polyhaven.com), CC0'),
+    'office_clock': dict(src=('wall_clock', 'wall_clock.gltf'), klass='small', turn=0, height=0.34, patches=[('wall_clock', 0.232, 0.592, 0.308, 0.652)], credit='Wall Clock by PierreB3D, Poly Haven (polyhaven.com), CC0'),
+    'photo_frame': dict(src=('standing_picture_frame_01', 'standing_picture_frame_01.gltf'), klass='small', turn=3, height=0.3, tex=1024, art='standing_picture_frame_01_artwork', credit='Standing Picture Frame 01 by James Ray Cock, Poly Haven (polyhaven.com), CC0'),
 }
+# Насыщенность карты цвета у всех подробных вещей (квиз 24.11: «цвет ярче»): вещь памяти должна находиться взглядом.
+SATURATION = 1.4
+
+
+def group_photo(size):
+    """Снимок в рамке: «фотография. пятеро. лиц не разобрать» — пять фигур, вместо лиц светлые пятна. Рисуется здесь, без чужих картинок."""
+    import random
+
+    from PIL import ImageDraw, ImageFilter
+
+    rnd = random.Random(5)
+    w = h = size
+    img = Image.new('RGB', (w, h), (168, 150, 118))
+    d = ImageDraw.Draw(img)
+    for y in range(h):
+        t = y / h
+        d.line([(0, y), (w, y)], fill=(int(190 - 70 * t), int(172 - 68 * t), int(138 - 62 * t)))
+    for i in range(5):
+        cx = w * (0.16 + 0.17 * i) + rnd.uniform(-0.01, 0.01) * w
+        top = h * (0.3 + (0.05 if i % 2 else 0.0) + rnd.uniform(-0.02, 0.02))
+        bw = w * 0.085
+        tone = rnd.randint(38, 70)
+        d.ellipse([cx - bw, top + h * 0.1, cx + bw, h * 1.1], fill=(tone, tone - 6, tone - 14))
+        d.ellipse([cx - bw * 0.62, top - h * 0.03, cx + bw * 0.62, top + h * 0.13], fill=(236, 226, 200))
+    img = img.filter(ImageFilter.GaussianBlur(size / 90))
+    px = img.load()
+    for y in range(h):
+        for x in range(w):
+            g = rnd.randint(-9, 9)
+            r, gg, bb = px[x, y]
+            px[x, y] = (max(0, min(255, r + g)), max(0, min(255, gg + g)), max(0, min(255, bb + g)))
+    return img
+
+
+def grade(img, hue):
+    """Насыщенность и (если задано) перекраска: тон из полосы hue[0]…hue[1] градусов уходит в hue[2]."""
+    h, s, v = img.convert('HSV').split()
+    s = s.point(lambda x: min(255, int(x * SATURATION)))
+    if hue:
+        lo, hi, to = (int(x / 360 * 255) for x in hue)
+        # Перекрашенное — гуще и чуть темнее: красная краска болванки была плотнее выцветшей бирюзы оригинала.
+        mask = Image.composite(h.point(lambda x: 255 if lo <= x <= hi else 0), Image.new('L', h.size, 0), s.point(lambda x: 255 if x > 28 else 0))
+        h = Image.composite(Image.new('L', h.size, to), h, mask)
+        s = Image.composite(s.point(lambda x: min(255, int(x * 2.1 + 70))), s, mask)
+        v = Image.composite(v.point(lambda x: int(x * 0.86)), v, mask)
+    return Image.merge('HSV', (h, s, v)).convert('RGB')
+
 
 COMPONENTS = {5120: ('b', 1), 5121: ('B', 1), 5122: ('h', 2), 5123: ('H', 2), 5125: ('I', 4), 5126: ('f', 4)}
 WIDTH = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4, 'MAT4': 16}
@@ -171,7 +224,7 @@ def collect(doc, bufs):
     return parts
 
 
-def bake_maps(doc, bufs, base, mats, size, patches):
+def bake_maps(doc, bufs, base, mats, size, patches, art, hue):
     """Карты всех материалов — в один лист сеткой. Возвращает (цвет+AO, нормали+шероховатость+металл, {материал: клетка})."""
     n = max(1, len(mats))
     grid = 1
@@ -192,8 +245,22 @@ def bake_maps(doc, bufs, base, mats, size, patches):
         ao_img = image_of(doc, bufs, base, m.get('occlusionTexture', {}).get('index'))
         n_img = image_of(doc, bufs, base, m.get('normalTexture', {}).get('index'))
         box = (cell, cell)
-        if base_img is not None:
-            c = base_img.convert('RGB').resize(box, Image.LANCZOS)
+        if art and m.get('name') == art:
+            c = group_photo(cell)
+            n_img = None
+            orm_img = None
+            pbr = {'roughnessFactor': 0.45, 'metallicFactor': 0.0}
+        elif base_img is not None:
+            c = base_img.convert('RGB')
+            # Закрасить то, чему в игре не место (марка на циферблате), цветом вокруг — до уменьшения, по карте материала.
+            for name, u0, v0, u1, v1 in patches:
+                if name != m.get('name'):
+                    continue
+                W, H = c.size
+                bx = (int(u0 * W), int(v0 * H), int(u1 * W), int(v1 * H))
+                ring = c.crop((bx[0] - 8, bx[1] - 8, bx[2] + 8, bx[1])).resize((1, 1), Image.BOX).getpixel((0, 0))
+                c.paste(ring, bx)
+            c = grade(c.resize(box, Image.LANCZOS), hue)
         else:
             # Цвет без карты: множитель материала (линейный) → sRGB.
             c = Image.new('RGB', box, tuple(int(round(255 * (x ** (1 / 2.2)))) for x in f[:3]))
@@ -214,13 +281,6 @@ def bake_maps(doc, bufs, base, mats, size, patches):
             nr, ng = Image.new('L', box, 128), Image.new('L', box, 128)
         col.paste(Image.merge('RGBA', (*c.split(), ao_ch)), (cx * cell, cy * cell))
         nrm.paste(Image.merge('RGBA', (nr, ng, rough, metal)), (cx * cell, cy * cell))
-    # Закрасить то, чему в игре не место (марка на циферблате): прямоугольник в долях листа, цвет sRGB.
-    for u0, v0, u1, v1, rgb in patches:
-        box = (int(u0 * size), int(v0 * size), int(u1 * size), int(v1 * size))
-        a = col.crop(box).split()[3]
-        fill = Image.new('RGBA', (box[2] - box[0], box[3] - box[1]), (*rgb, 255))
-        fill.putalpha(a)
-        col.paste(fill, box)
     return col, nrm, cells
 
 
@@ -244,15 +304,18 @@ def simplify(pos, nrm, uv, idx, target):
 
 
 def build(name, src_root):
-    folder, fname, klass, turn, height, credit, patches = SOURCES[name]
-    max_tris, tex = BUDGET[klass]
+    src = SOURCES[name]
+    folder, fname = src['src']
+    turn, height, credit = src['turn'], src['height'], src['credit']
+    max_tris, tex = BUDGET[src['klass']]
+    tex = src.get('tex', tex)
     doc, bufs, base = load_gltf(os.path.join(src_root, folder, fname))
     parts = collect(doc, bufs)
     mats = []
     for p in parts:
         if p[0] not in mats:
             mats.append(p[0])
-    col, nmap, cells = bake_maps(doc, bufs, base, mats, tex, patches)
+    col, nmap, cells = bake_maps(doc, bufs, base, mats, tex, src.get('patches', []), src.get('art'), src.get('hue'))
     pos, nrm, uv, idx = [], [], [], []
     for mi, wp, wn, wuv, widx in parts:
         cx, cy, cs = cells[mi]

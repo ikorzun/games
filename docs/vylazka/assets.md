@@ -165,7 +165,8 @@ MCP-сервер (MIT) к каталогу Sand3D: поиск по смыслу 
 ## Poly Haven: подробные вещи памяти (24.11)
 
 Poly Haven (polyhaven.com) — модели с картами цвета, нормалей, шероховатости и металла, всё CC0. Из него взяты будильник
-(`alarm_clock_01`, James Ray Cock и Yann Kervran) и знак «мокрый пол» (`WetFloorSign_01`, Fran Calvente): `scripts/import_thing_hq.py`
+(`alarm_clock_01`, James Ray Cock и Yann Kervran), знак «мокрый пол» (`WetFloorSign_01`, Fran Calvente), настенные часы
+(`wall_clock`, PierreB3D) и фоторамка (`standing_picture_frame_01`, James Ray Cock): `scripts/import_thing_hq.py`
 переводит glTF в сетку и две карты в `vylazka/public/assets/things`, подписи — в `public/credits_things.txt`. Исходники в
 репозиторий не кладутся. Бюджеты, подбор по всем шестнадцати вещам и инструкция для Blender — `things_hq.md`.
 

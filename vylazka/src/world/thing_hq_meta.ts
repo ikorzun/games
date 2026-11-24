@@ -27,5 +27,7 @@ export interface ThingHqMeta {
 export const THING_HQ: Readonly<Record<string, ThingHqMeta>> = {
   alarm_clock: { file: 'alarm_clock', tris: 8265, verts: 6818, tex: 512, min: [-0.0756, 0.0000, -0.0357], max: [0.0756, 0.2000, 0.0357], credit: "Alarm Clock 01 by James Ray Cock and Yann Kervran, Poly Haven (polyhaven.com), CC0" },
   wet_floor_sign: { file: 'wet_floor_sign', tris: 228, verts: 254, tex: 512, min: [-0.1500, 0.0000, -0.1793], max: [0.1500, 0.6295, 0.1793], credit: "Wet Floor Sign 01 by Fran Calvente, Poly Haven (polyhaven.com), CC0" },
+  office_clock: { file: 'office_clock', tris: 3130, verts: 3139, tex: 512, min: [-0.1700, 0.0000, -0.0188], max: [0.1700, 0.3400, 0.0188], credit: "Wall Clock by PierreB3D, Poly Haven (polyhaven.com), CC0" },
+  photo_frame: { file: 'photo_frame', tris: 1632, verts: 1422, tex: 1024, min: [-0.1206, 0.0000, -0.0602], max: [0.1206, 0.3000, 0.0602], credit: "Standing Picture Frame 01 by James Ray Cock, Poly Haven (polyhaven.com), CC0" },
 };
 // </generated>
