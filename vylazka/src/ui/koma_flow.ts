@@ -138,9 +138,23 @@ export class KomaFlow {
     const run = this.run;
     this.timers.push(
       setTimeout(() => {
-        if (run === this.run) fn();
+        if (run !== this.run) return;
+        if (this.held) this.heldFns.push({ run, fn });
+        else fn();
       }, ms),
     );
+  }
+
+  private held = false;
+  private heldFns: Array<{ run: number; fn: () => void }> = [];
+
+  /** Пауза игры (меню, свёрнутая вкладка, реклама): всё, чему пришло время, ждёт возврата и идёт дальше с того же места. */
+  hold(on: boolean): void {
+    this.held = on;
+    if (on) return;
+    const fns = this.heldFns;
+    this.heldFns = [];
+    for (const h of fns) if (h.run === this.run) h.fn();
   }
 
   private cancel(): void {
@@ -326,9 +340,12 @@ export class KomaFlow {
       // Обрыв: глухой звук, кадр гаснет на миг — и сквозь него слышно палату. Без аварии и без объяснений.
       hud.tag(null);
       this.host.sound('fall');
-      hud.veil('black');
+      // Под охотой кадр не гасим: вслепую от Осыпи не уйти (куратор, 410) — остаются звук и голоса.
+      if (!g.hunted) {
+        hud.veil('black');
+        this.later(2400, () => hud.veil(null));
+      }
       this.later(700, () => this.host.sound('koma_ward'));
-      this.later(2400, () => hud.veil(null));
       this.say(lines, 2800);
     } else speak(600);
   }

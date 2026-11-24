@@ -374,10 +374,17 @@ export class Hud {
     this.metaEl.classList.add('is-on');
     this.metaStop = stop;
     this.metaDone = done;
-    this.metaTimer = setTimeout(() => {
-      this.metaEl.classList.remove('is-on');
-      this.metaTimer = setTimeout(() => this.metaClear(), META_FADE_MS);
-    }, ms);
+    const shown = this.metaEl.firstChild;
+    this.metaTimer = setTimeout(
+      () =>
+        this.live(() => {
+          // Пока стояла пауза, карточку могли сменить или убрать — тогда уходить нечему.
+          if (this.metaEl.firstChild !== shown) return;
+          this.metaEl.classList.remove('is-on');
+          this.metaTimer = setTimeout(() => this.metaClear(), META_FADE_MS);
+        }),
+      ms,
+    );
   }
 
   /**
@@ -457,17 +464,40 @@ export class Hud {
       this.sayEl.textContent = l.text;
       void this.sayEl.offsetWidth;
       this.sayEl.classList.add('is-on');
-      this.sayTimer = setTimeout(() => {
-        this.sayEl.classList.remove('is-on');
-        this.sayTimer = setTimeout(() => step(i + 1), SAY_GAP_MS);
-      }, l.ms);
+      this.sayTimer = setTimeout(
+        () =>
+          this.live(() => {
+            if (run !== this.sayRun) return;
+            this.sayEl.classList.remove('is-on');
+            this.sayTimer = setTimeout(() => step(i + 1), SAY_GAP_MS);
+          }),
+        l.ms,
+      );
     };
     if (lines.length === 0) {
       this.sayEl.classList.remove('is-on');
       this.sayTimer = undefined;
       return;
     }
-    this.sayTimer = setTimeout(() => step(0), delay);
+    this.sayTimer = setTimeout(() => this.live(() => step(0)), delay);
+  }
+
+  private held = false;
+  private heldFns: Array<() => void> = [];
+
+  /** Сделать сейчас, а на паузе — когда игра вернётся: реплика и карточка не уходят, пока игрок их не видит. */
+  private live(fn: () => void): void {
+    if (this.held) this.heldFns.push(fn);
+    else fn();
+  }
+
+  /** Пауза игры (меню, свёрнутая вкладка, реклама): разговор и карточки сюжета ждут вместе с ней. */
+  hold(on: boolean): void {
+    this.held = on;
+    if (on) return;
+    const fns = this.heldFns;
+    this.heldFns = [];
+    for (const fn of fns) fn();
   }
 
   /** Идёт ли разговор. */
