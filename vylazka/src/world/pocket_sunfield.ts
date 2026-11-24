@@ -43,7 +43,7 @@ const norm = (a: Vec3): Vec3 => {
  * Подсолнух: корень base (мир), рост h, головка смотрит в точку look. Стебель чуть выгнут и у головки клонится к ней;
  * листья — парами сердечек на черешках; головка — тёмный выпуклый диск, два ряда язычков, сзади — зелёная чашка.
  */
-function sunflower(mb: MeshBuilder, base: Vec3, h: number, look: Vec3, rnd: () => number): void {
+function sunflower(mb: MeshBuilder, base: Vec3, h: number, look: Vec3, rnd: () => number, eye = false): void {
   const size = 0.82 + rnd() * 0.4;
   const lean = rnd() * 6.283;
   const off = 0.05 + rnd() * 0.07;
@@ -122,22 +122,50 @@ function sunflower(mb: MeshBuilder, base: Vec3, h: number, look: Vec3, rnd: () =
   const v = cross(d, u);
   const R = 0.105 * size;
   const at = (a: number, r: number, f: number): Vec3 => add(head, add(add(mul(u, Math.cos(a) * r), mul(v, Math.sin(a) * r)), mul(d, f)));
-  // Диск семян: выпуклый, темнее к середине.
   const SEG = 12;
-  const c = mb.vertex(at(0, 0, 0.03 * size), d, MAT.paper, SEED_IN, 1);
-  const midRing: number[] = [];
-  const rim: number[] = [];
-  for (let k = 0; k < SEG; k++) {
-    const a = (k / SEG) * Math.PI * 2;
-    const nr = norm(add(d, add(mul(u, Math.cos(a) * 0.5), mul(v, Math.sin(a) * 0.5))));
-    midRing.push(mb.vertex(at(a, R * 0.55, 0.026 * size), norm(add(d, mul(sub(nr, d), 0.5))), MAT.paper, SEED, 1));
-    rim.push(mb.vertex(at(a, R, 0.008 * size), nr, MAT.paper, mul(SEED, 1.5), 0.9));
-  }
-  for (let k = 0; k < SEG; k++) {
-    const k1 = (k + 1) % SEG;
-    mb.tri(c, midRing[k]!, midRing[k1]!);
-    mb.tri(midRing[k]!, rim[k]!, rim[k1]!);
-    mb.tri(midRing[k]!, rim[k1]!, midRing[k1]!);
+  if (eye) {
+    // Глаз вместо семечек (партнёр 24.11): одно большое яблоко во весь диск. Радужку и зрачок рисует шейдер (MAT.eye) —
+    // зрачок там, где шар обращён к смотрящему. Середина шара утоплена в чашку: наружу — чуть больше полушария.
+    const er = R * 1.08;
+    const ec = add(head, mul(d, -er * 0.22));
+    const ES = 16;
+    const lats = [0, 0.26, 0.52, 0.8, 1.08, 1.36];
+    const ring: number[][] = lats.map((th, li) => {
+      const row: number[] = [];
+      for (let k = 0; k < (li === 0 ? 1 : ES); k++) {
+        const a = (k / ES) * Math.PI * 2;
+        const nr = norm(add(mul(d, Math.cos(th)), add(mul(u, Math.cos(a) * Math.sin(th)), mul(v, Math.sin(a) * Math.sin(th)))));
+        // К краю белок розовеет — как у века.
+        const rim = Math.max(0, (th - 0.8) / 0.56);
+        row.push(mb.vertexUv(add(ec, mul(nr, er)), nr, MAT.eye, [1.25, 1.22 - 0.3 * rim, 1.18 - 0.34 * rim], 1 - 0.3 * rim, [er, 0]));
+      }
+      return row;
+    });
+    for (let k = 0; k < ES; k++) mb.tri(ring[0]![0]!, ring[1]![k]!, ring[1]![(k + 1) % ES]!);
+    for (let i = 1; i + 1 < ring.length; i++) {
+      for (let k = 0; k < ES; k++) {
+        const k1 = (k + 1) % ES;
+        mb.tri(ring[i]![k]!, ring[i + 1]![k]!, ring[i + 1]![k1]!);
+        mb.tri(ring[i]![k]!, ring[i + 1]![k1]!, ring[i]![k1]!);
+      }
+    }
+  } else {
+    // Диск семян: выпуклый, темнее к середине.
+    const c = mb.vertex(at(0, 0, 0.03 * size), d, MAT.paper, SEED_IN, 1);
+    const midRing: number[] = [];
+    const rim: number[] = [];
+    for (let k = 0; k < SEG; k++) {
+      const a = (k / SEG) * Math.PI * 2;
+      const nr = norm(add(d, add(mul(u, Math.cos(a) * 0.5), mul(v, Math.sin(a) * 0.5))));
+      midRing.push(mb.vertex(at(a, R * 0.55, 0.026 * size), norm(add(d, mul(sub(nr, d), 0.5))), MAT.paper, SEED, 1));
+      rim.push(mb.vertex(at(a, R, 0.008 * size), nr, MAT.paper, mul(SEED, 1.5), 0.9));
+    }
+    for (let k = 0; k < SEG; k++) {
+      const k1 = (k + 1) % SEG;
+      mb.tri(c, midRing[k]!, midRing[k1]!);
+      mb.tri(midRing[k]!, rim[k]!, rim[k1]!);
+      mb.tri(midRing[k]!, rim[k1]!, midRing[k1]!);
+    }
   }
   // Язычки: два ряда, задний шире и темнее, вперемежку с передним; у каждого своя длина и наклон.
   const spin = rnd() * 6.283;
@@ -257,7 +285,8 @@ export const buildSunfield: PocketBuilder = (seed: number, origin: Vec3): Pocket
       const r = Math.hypot(x, z);
       if (r < G + 0.3 || r > F || onPath(x * 0.86, z)) continue;
       const far = (r - G) / (F - G);
-      sunflower(mb, [ox + x, oy, oz + z], 1.4 + far * 0.6 + hh * 0.35, look, rnd);
+      // Каждый шестой-седьмой — с глазом; у самой поляны чаще: их видно первыми.
+      sunflower(mb, [ox + x, oy, oz + z], 1.4 + far * 0.6 + hh * 0.35, look, rnd, rnd() < (far < 0.25 ? 0.34 : 0.16));
     }
   }
   const spots: Vec3[] = [

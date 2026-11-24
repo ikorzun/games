@@ -54,10 +54,13 @@ export const MAT = {
   marble: 40,
   // Кость (партнёр 24.11: «на всё накинуть маткап костей») — скелет зверя в песчаном зале, world/pocket_dunes.ts.
   bone: 41,
+  // Глазное яблоко (партнёр 24.11: «у некоторых подсолнухов в центре не семечки, а глазное яблоко… следит за тобой зрачком»):
+  // радужку и зрачок рисует шейдер мира — там, где шар обращён к камере; u развёртки — радиус яблока, м. world/pocket_sunfield.ts.
+  eye: 42,
 } as const;
 
 export type MatId = (typeof MAT)[keyof typeof MAT];
-export const MAT_COUNT = 42;
+export const MAT_COUNT = 43;
 
 /** Номера слоёв фактур; совпадают с DETAIL в render/detail.ts (тест следит). */
 /**
@@ -174,6 +177,8 @@ export const MAT_DEFS: readonly MatDef[] = [
   // Старая кость: матовая, желтоватая, с едва заметным восковым отливом по краю; тонкие места (край глазницы, лопасть
   // позвонка) чуть просвечивают. Фактура — волокна вдоль кости, поры и трещины (слой bone).
   { name: 'bone', color: '#d9cca8', rough: 0.72, spec: 0.4, sheen: 0.22, grime: 0.45, thin: 0.1, layer: L.bone, tile: 0.55, bump: 0.005, decay: DECAY.organic },
+  // Глазное яблоко: влажное, гладкое, с резким бликом; не стареет и не пачкается.
+  { name: 'eye', color: '#f1eee6', rough: 0.1, spec: 0.9, coat: 1.0, grime: 0, layer: L.smooth, tile: 0.5, bump: 0, decay: DECAY.none },
 ];
 
 /** sRGB-hex → линейный цвет. */

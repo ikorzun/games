@@ -1526,6 +1526,18 @@ void main() {
   // У светящегося материала оттенок вершины — множитель яркости свечения (до сотен): в освещение он
   // идёт приведённым к единице, иначе рассеянный свет выбелил бы небо и экраны.
   vec3 vc = vColor.rgb;
+  if (mi == ${MAT.eye}) {
+    // Глаз: середина яблока — на радиус (u развёртки) вглубь от поверхности; зрачок там, где шар обращён к камере. Он следит.
+    vec3 nE = normalize(vNrmV);
+    float gE = dot(nE, normalize(nE * vUv.x - vPosV));
+    float aE = acos(clamp(gE, -1.0, 1.0));
+    // Радужка — зеленовато-карая, темнее к краю, с лучами; зрачок чёрный.
+    float ray = 0.82 + 0.18 * sin(atan(nE.y, nE.x) * 23.0 + aE * 40.0);
+    vec3 irisE = mix(vec3(0.55, 0.36, 0.08), vec3(0.16, 0.3, 0.1), smoothstep(0.3, 0.62, aE)) * ray;
+    irisE *= 1.0 - 0.8 * smoothstep(0.56, 0.66, aE);
+    vc = mix(irisE, vc, smoothstep(0.64, 0.67, aE));
+    vc = mix(vec3(0.002), vc, smoothstep(0.27, 0.3, aE));
+  }
 #ifdef THING_TEX
   vc *= clamp(tC.rgb / max(base, vec3(0.02)), 0.0, 4.0);
 #endif
