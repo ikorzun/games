@@ -4214,6 +4214,19 @@ export class Game {
     return !!t && this.where === 'main' && t.state === 'idle' && t.gaze > 0.5;
   }
 
+  /** Сколько метров от игрока до оставшейся вещи (сюжет: «оставить» — уйти от неё); нет вещи или не то место — бесконечность. */
+  get keptDist(): number {
+    const t = this.keptThing;
+    if (!t || this.where !== 'main' || t.state !== 'idle') return Infinity;
+    return Math.hypot(this.body.x - t.pos[0], this.body.z - t.pos[2]);
+  }
+
+  /** Осыпь сейчас гонится: в такие секунды сюжет ничего не решает за игрока. */
+  get hunted(): boolean {
+    const m = this.swarm?.mode;
+    return m === 'hunt' || m === 'cohere';
+  }
+
   /** Сюжет решил судьбу оставшейся вещи: taken — её записали, и она уходит, как все; иначе — стоит где стояла. */
   releaseKept(taken: boolean): void {
     const t = this.keptThing;
@@ -4323,6 +4336,7 @@ export class Game {
       sterile: this.sterileK,
       kept: this.keptThing ? this.keptThing.id : null,
       worldLook: this.worldLook,
+      keptDist: Number.isFinite(this.keptDist) ? +this.keptDist.toFixed(2) : null,
       limboLook: this.limboLook,
       meta: { wanted: this.metaWanted, hold: this.metaHold, fired: this.metaFired },
       lesson: this.darkLesson?.phase ?? null,

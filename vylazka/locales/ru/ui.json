@@ -540,7 +540,7 @@
   "koma.a5_e03.caretaker_01": "не знаю.",
   "koma.a5_e03.player_02": "я тоже.",
   "koma.f_e02.staff_01": "вы меня слышите?",
-  "koma.hero.name": "н. а. сомов",
+  "koma.hero.name": "н. а. с—",
   "koma.ticket.route": "до тутаева. туда.",
   "koma.record.head": "запись",
   "koma.record.owner": "владелец",
@@ -549,5 +549,8 @@
   "koma.record.history_text": "бюро находок. помнил вещи. купил билет.",
   "koma.final.head": "личные вещи",
   "koma.final.line_01": "прозрачный пакет. у кровати.",
-  "koma.final.line_02": "билет. не использован."
+  "koma.final.line_02": "билет. не использован.",
+  "koma.end.head": "untitled session",
+  "koma.end.line": "запись окончена.",
+  "koma.end.next": "дальше — сны без бирок. нажмите."
 }

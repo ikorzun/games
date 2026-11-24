@@ -29,7 +29,8 @@ export interface KomaHost {
     huntHold: boolean;
     keepRecalled: boolean;
     penOn: boolean;
-    readonly worldLook: boolean;
+    readonly keptDist: number;
+    readonly hunted: boolean;
     limboLook: string | null;
     metaHold: boolean;
     metaKeep(): void;
@@ -44,6 +45,8 @@ export interface KomaHost {
   hint(id: string): void;
   /** Разовый звук сюжета (палата, у кровати, глухой удар). */
   sound(id: string): void;
+  /** Экран конца: позвать done, когда игрок нажал что-нибудь. */
+  press(done: () => void): void;
 }
 
 type Step = { say: readonly string[] } | { clarify: true } | { sterile: number } | { hunt: true };
@@ -75,11 +78,18 @@ const OWNERS: readonly string[] = ['LP01', 'LP02', 'LP03', 'LP04', 'LP05', 'LP06
 /** За сколько секунд взгляда Смотритель дописывает владельца; сколько секунд без взгляда — и запись оборвана. */
 export const WRITE_S = 5;
 export const AWAY_S = 1.4;
+/** Во сне Смотритель пишет дольше: у игрока должно быть время уйти. */
+export const WORLD_WRITE_S = 9;
 const WRITE_MAX_S = 12;
-/** «Оставить» во сне: первые секунды отведённый взгляд не считается — игроку ещё говорят, что вещь можно не забирать. */
-export const GRACE_S = 2.5;
+/**
+ * «Оставить» во сне — уходом (квиз 24.11: отвести взгляд можно нечаянно, убегая от Осыпи; уйти — решение телом). Запись идёт,
+ * пока игрок ближе стольких метров к вещи; отошёл дальше — оставлено. Пока Осыпь гонится, не считается ни то ни другое.
+ */
+export const LEAVE_M = 4.5;
 /** Доля записанного в стерильности следующих снов: совсем неподвижным сон делает только полная картотека (акт IV). */
 const STERILE_SHARE = 0.7;
+/** Экран конца держится, пока игрок не нажмёт, но не дольше (мс): лимбо не должно висеть вечно. */
+const END_HOLD_MS = 90000;
 /** Полная картотека (A4_E01): через сколько мс после начала сна Смотритель её показывает. */
 const ARCHIVE_AT_MS = 6000;
 
@@ -228,6 +238,11 @@ export class KomaFlow {
     this.cancel();
     const hud = this.host.hud;
     const g = this.host.game;
+    // После финала — сны без бирок: Смотритель молчит, вещь вспоминается как раньше.
+    if (this.story.has('STORY_ENDING')) {
+      this.host.save();
+      return false;
+    }
     // Игра оставила эту вещь стоять, если ей так велели до находки; следующей — по тому, где сюжет сейчас.
     const kept = g.keepRecalled && this.offering();
     g.keepRecalled = this.offering();
@@ -319,13 +334,13 @@ export class KomaFlow {
   }
 
   /**
-   * «Оставить» (акты IV–V). Вспомненная вещь осталась стоять; Смотритель дописывает ей владельца, пока на неё смотрят. Досмотрел —
-   * записано, вещь уходит на полку. Отвёл взгляд — оставлено: вещь стоит где стояла, владельца у неё нет, и месту возвращается
+   * «Оставить» (акты IV–V). Вспомненная вещь осталась стоять; Смотритель дописывает ей владельца, пока игрок рядом. Достоял —
+   * записано, вещь уходит на полку. Ушёл — оставлено: вещь стоит где стояла, владельца у неё нет, и месту возвращается
    * движение. Тот же глагол, что у полки, только теперь отказ — не «не знаю», а «не моё».
    */
   private offer(art: string): void {
     this.writing = { art, where: 'world', kind: '', text: ownerText(art), progress: 0, away: 0, age: 0 };
-    this.host.game.extendEnd(WRITE_MAX_S + 10);
+    this.host.game.extendEnd(WORLD_WRITE_S + 14);
     this.host.hint('koma.offer');
     const intro: Line[] = this.story.seen('A4_E04') ? [] : [pl('koma.a4_e04.player_00')];
     this.say([...intro, cl('koma.limbo.caretaker_write')], 300);
@@ -379,12 +394,27 @@ export class KomaFlow {
     if (this.busy) g.metaKeep();
     const w = this.writing;
     if (!w) return;
+    if (w.where === 'world') {
+      // Во сне: рядом с вещью — пишет, ушёл — оставлено; под охотой запись стоит.
+      if (g.hunted) {
+        g.penOn = false;
+        return;
+      }
+      w.age += dt;
+      const near = g.keptDist <= LEAVE_M;
+      if (near) w.progress = Math.min(1, w.progress + dt / WORLD_WRITE_S);
+      g.penOn = near;
+      this.host.hud.tagValue(w.text.slice(0, Math.floor(w.progress * w.text.length)));
+      if (w.progress >= 1) this.finish(true);
+      else if (!near) this.finish(false);
+      return;
+    }
     w.age += dt;
-    const look = w.where === 'world' ? g.worldLook : g.limboLook === w.kind;
+    const look = g.limboLook === w.kind;
     if (look) {
       w.progress = Math.min(1, w.progress + dt / WRITE_S);
       w.away = 0;
-    } else if (w.where === 'limbo' || w.age > GRACE_S) w.away += dt;
+    } else w.away += dt;
     g.penOn = look;
     this.host.hud.tagValue(w.text.slice(0, Math.floor(w.progress * w.text.length)));
     if (w.progress >= 1) this.finish(true);
@@ -601,11 +631,29 @@ export class KomaFlow {
             ],
             3000,
             () => {
-              hud.veil(null);
               this.story.play(id);
               this.host.save();
               this.host.hint('koma.ending');
-              next();
+              // Экран конца: название и одна строка, пока игрок не нажмёт. Дальше — сны без бирок.
+              const run = this.run;
+              let closed = false;
+              const close = (): void => {
+                if (closed || run !== this.run) return;
+                closed = true;
+                hud.metaClear();
+                hud.veil(null);
+                next();
+              };
+              this.host.hud.card(
+                t('koma.end.head'),
+                [
+                  { text: t('koma.end.line'), who: 'memory' },
+                  { text: t('koma.end.next'), who: 'caretaker' },
+                ],
+                END_HOLD_MS,
+                close,
+              );
+              this.later(1500, () => this.host.press(close));
             },
           ),
         ),

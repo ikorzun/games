@@ -540,7 +540,7 @@
   "koma.a5_e03.caretaker_01": "no sé.",
   "koma.a5_e03.player_02": "yo tampoco.",
   "koma.f_e02.staff_01": "¿me escucha?",
-  "koma.hero.name": "n. a. sómov",
+  "koma.hero.name": "n. a. s—",
   "koma.ticket.route": "a tutáyev. solo ida.",
   "koma.record.head": "registro",
   "koma.record.owner": "dueño",
@@ -549,5 +549,8 @@
   "koma.record.history_text": "oficina de objetos perdidos. recordaba las cosas. compró un boleto.",
   "koma.final.head": "efectos personales",
   "koma.final.line_01": "una bolsa transparente. junto a la cama.",
-  "koma.final.line_02": "un boleto. sin usar."
+  "koma.final.line_02": "un boleto. sin usar.",
+  "koma.end.head": "untitled session",
+  "koma.end.line": "fin de la grabación.",
+  "koma.end.next": "después — sueños sin etiquetas. pulsa."
 }

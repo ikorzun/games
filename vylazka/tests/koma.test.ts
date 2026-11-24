@@ -4,7 +4,7 @@ import { i18n } from '../src/core/i18n';
 import { defaultProfile, parseProfile } from '../src/core/save';
 import { EVENT_ORDER, EVENTS, FLAGS, Narrative, SLOT_OF, SLOTS, actOf, caretakerOf, emptyNarrative, parseNarrative } from '../src/systems/koma';
 import { MEMORY_THINGS } from '../src/systems/session';
-import { AWAY_S, GRACE_S, HUNT_S, KomaFlow, LIMBO, WORLD, WRITE_S, lineMs } from '../src/ui/koma_flow';
+import { AWAY_S, HUNT_S, KomaFlow, LEAVE_M, LIMBO, WORLD, WORLD_WRITE_S, WRITE_S, lineMs } from '../src/ui/koma_flow';
 
 const locale = (lang: string): Record<string, string> => JSON.parse(readFileSync(new URL(`../locales/${lang}/ui.json`, import.meta.url), 'utf8')) as Record<string, string>;
 const RU = locale('ru');
@@ -163,7 +163,7 @@ describe('сюжет «Невостребованное»: состояние и
 });
 
 /** Экран-заглушка: записывает, что сюжет ему говорит. */
-function fakeHost(story: Narrative): { host: ConstructorParameters<typeof KomaFlow>[0]; said: string[]; tags: Array<Record<string, unknown> | null>; values: string[]; stamps: string[]; cards: string[][]; saves: () => number; sounds: string[]; veils: Array<string | null>; game: { sterile: number; huntHold: boolean; keepRecalled: boolean; penOn: boolean; worldLook: boolean; released: boolean[]; releaseKept(taken: boolean): void; extended: number; limboLook: string | null; metaHold: boolean; kept: number; metaKeep(): void; extendEnd(s: number): void }; decks: () => number } {
+function fakeHost(story: Narrative): { host: ConstructorParameters<typeof KomaFlow>[0]; said: string[]; tags: Array<Record<string, unknown> | null>; values: string[]; stamps: string[]; cards: string[][]; saves: () => number; sounds: string[]; veils: Array<string | null>; game: { sterile: number; huntHold: boolean; keepRecalled: boolean; penOn: boolean; keptDist: number; hunted: boolean; released: boolean[]; releaseKept(taken: boolean): void; extended: number; limboLook: string | null; metaHold: boolean; kept: number; metaKeep(): void; extendEnd(s: number): void }; decks: () => number } {
   const said: string[] = [];
   const tags: Array<Record<string, unknown> | null> = [];
   const values: string[] = [];
@@ -178,7 +178,8 @@ function fakeHost(story: Narrative): { host: ConstructorParameters<typeof KomaFl
     huntHold: false,
     keepRecalled: false,
     penOn: false,
-    worldLook: false,
+    keptDist: Infinity,
+    hunted: false,
     released: [] as boolean[],
     releaseKept(taken: boolean): void {
       this.released.push(taken);
@@ -212,6 +213,7 @@ function fakeHost(story: Narrative): { host: ConstructorParameters<typeof KomaFl
     veil(kind: string | null): void {
       veils.push(kind);
     },
+    metaClear(): void {},
     card(head: string, rows: readonly { text: string; who: string }[], ms: number, done: () => void): void {
       cards.push([head, ...rows.map((r) => r.text)]);
       setTimeout(done, ms);
@@ -219,7 +221,7 @@ function fakeHost(story: Narrative): { host: ConstructorParameters<typeof KomaFl
   };
   void story;
   return {
-    host: { hud: hud as never, game, save: () => void (saves += 1), deck: () => ((decks += 1), false), hint: () => {}, sound: (id: string) => void sounds.push(id) },
+    host: { hud: hud as never, game, save: () => void (saves += 1), deck: () => ((decks += 1), false), hint: () => {}, sound: (id: string) => void sounds.push(id), press: (done: () => void) => void setTimeout(done, 100) },
     said,
     tags,
     values,
@@ -496,15 +498,20 @@ describe('сюжет на экране: акты II–V и эпилог', () => 
     expect(h.game.keepRecalled).toBe(true);
     const leave = (memId: string): void => {
       h.said.length = 0;
-      h.game.worldLook = true;
+      h.game.keptDist = 1;
       expect(flow.onRecall(memId, false)).toBe(true);
       flow.frame(1);
-      h.game.worldLook = false;
-      // Первые секунды отведённый взгляд не считается.
-      flow.frame(GRACE_S - 1.2);
+      // Осыпь гонится — уход от вещи ничего не решает.
+      h.game.hunted = true;
+      h.game.keptDist = LEAVE_M + 6;
+      flow.frame(3);
       expect(story.artifact(SLOT_OF[memId] ?? memId).phase).not.toBe('released');
+      // Вернулся, охота кончилась — и ушёл сам.
+      h.game.hunted = false;
+      h.game.keptDist = 1;
       flow.frame(0.5);
-      flow.frame(AWAY_S + 0.1);
+      h.game.keptDist = LEAVE_M + 0.5;
+      flow.frame(0.1);
       expect(story.artifact(SLOT_OF[memId] ?? memId).phase).toBe('released');
       vi.advanceTimersByTime(30000);
     };
@@ -516,9 +523,10 @@ describe('сюжет на экране: акты II–V и эпилог', () => 
     // Оставленное возвращает месту движение.
     expect(h.game.sterile).toBeCloseTo(2 / 3);
     // Досмотрел — записано: вещь уходит, финал не приближается.
-    h.game.worldLook = true;
+    // Достоял рядом — записано: вещь уходит, финал не приближается.
+    h.game.keptDist = 1;
     flow.onRecall('st_key', false);
-    for (let i = 0; i < 21; i++) flow.frame(WRITE_S / 20);
+    for (let i = 0; i < 21; i++) flow.frame(WORLD_WRITE_S / 20);
     expect(story.artifact('LP07').labelled).toBe(true);
     expect(h.game.released.at(-1)).toBe(true);
     expect(story.has('STORY_RELEASE_2')).toBe(false);
@@ -546,7 +554,11 @@ describe('сюжет на экране: акты II–V и эпилог', () => 
     expect(h.sounds).toEqual(['koma_bedside']);
     expect(h.veils.filter((v) => v !== null)).toEqual(['white']);
     expect(h.veils.at(-1)).toBe(null);
-    expect(h.cards.at(-1)).toEqual([RU['koma.final.head'], RU['koma.final.line_01'], RU['koma.final.line_02']]);
+    expect(h.cards.at(-2)).toEqual([RU['koma.final.head'], RU['koma.final.line_01'], RU['koma.final.line_02']]);
+    // Экран конца: название и строка, пока игрок не нажмёт.
+    expect(h.cards.at(-1)).toEqual([RU['koma.end.head'], RU['koma.end.line'], RU['koma.end.next']]);
+    // Имя на билете стёрто (квиз 24.11): только инициалы.
+    expect(RU['koma.hero.name']).toBe('н. а. с—');
     // Все флаги канона, кроме одного: «не подтверждено» — выбор игрока у полки, и финал от него не зависит.
     for (const f of FLAGS) expect(story.has(f), f).toBe(f !== 'STORY_UNCERTAIN_EVIDENCE_UNLOCKED');
 
@@ -604,7 +616,7 @@ describe('сюжет на экране: акты II–V и эпилог', () => 
     expect(story.has('STORY_ENDING')).toBe(true);
   });
 
-  it('тот, кто всегда досматривает, финал не получает — но и не заперт: оставить можно любую следующую вещь', () => {
+  it('тот, кто всегда стоит до конца записи, финал не получает — но и не заперт: оставить можно любую следующую вещь', () => {
     const story = new Narrative();
     for (const id of EVENT_ORDER) {
       if (id === 'A4_E04') break;
@@ -613,10 +625,10 @@ describe('сюжет на экране: акты II–V и эпилог', () => 
     const h = fakeHost(story);
     const flow = new KomaFlow(h.host, story);
     flow.onDream(false);
-    h.game.worldLook = true;
+    h.game.keptDist = 1;
     for (const memId of ['sh_alarm', 'sh_kettle', 'sh_remote', 'sh_coat']) {
       flow.onRecall(memId, false);
-      for (let i = 0; i < 21; i++) flow.frame(WRITE_S / 20);
+      for (let i = 0; i < 21; i++) flow.frame(WORLD_WRITE_S / 20);
       vi.advanceTimersByTime(10000);
     }
     expect(story.state.releasedArtifactIds.length).toBe(0);
@@ -624,10 +636,11 @@ describe('сюжет на экране: акты II–V и эпилог', () => 
     // Те же вещи приходят снова (цепочки мест идут по кругу) — и записанную можно оставить.
     flow.onDream(false);
     for (const memId of ['sh_alarm', 'sh_kettle', 'sh_remote']) {
-      h.game.worldLook = false;
+      h.game.keptDist = 1;
       flow.onRecall(memId, false);
-      flow.frame(GRACE_S + 0.1);
-      flow.frame(AWAY_S + 0.1);
+      flow.frame(0.5);
+      h.game.keptDist = LEAVE_M + 1;
+      flow.frame(0.1);
       vi.advanceTimersByTime(20000);
     }
     expect(story.has('STORY_RELEASE_3')).toBe(true);

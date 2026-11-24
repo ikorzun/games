@@ -540,7 +540,7 @@
   "koma.a5_e03.caretaker_01": "i do not know.",
   "koma.a5_e03.player_02": "neither do i.",
   "koma.f_e02.staff_01": "can you hear me?",
-  "koma.hero.name": "n. a. somov",
+  "koma.hero.name": "n. a. s—",
   "koma.ticket.route": "to tutayev. one way.",
   "koma.record.head": "record",
   "koma.record.owner": "owner",
@@ -549,5 +549,8 @@
   "koma.record.history_text": "lost property office. remembered things. bought a ticket.",
   "koma.final.head": "personal effects",
   "koma.final.line_01": "a clear plastic bag. by the bed.",
-  "koma.final.line_02": "a ticket. unused."
+  "koma.final.line_02": "a ticket. unused.",
+  "koma.end.head": "untitled session",
+  "koma.end.line": "end of recording.",
+  "koma.end.next": "after this — dreams without tags. press."
 }

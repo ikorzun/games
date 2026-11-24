@@ -804,6 +804,15 @@ export class App {
         },
         hint: (id) => this.analytics.hint(id),
         sound: (id) => this.sound.play(id),
+        press: (done) => {
+          const once = (): void => {
+            window.removeEventListener('pointerdown', once);
+            window.removeEventListener('keydown', once);
+            done();
+          };
+          window.addEventListener('pointerdown', once);
+          window.addEventListener('keydown', once);
+        },
       },
       new Narrative(this.profile.koma),
     );
