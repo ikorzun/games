@@ -100,12 +100,19 @@ const POP: readonly ScreenKind[] = ['pop'];
 
 function corridor(ctx: RoomCtx): void {
   panels(ctx);
-  // Стены пусты. Изредка — то, что бывает в любом офисном коридоре; ничто не мешает пройти.
+  // Стены пусты. Изредка — то, что бывает в любом офисном коридоре; ничто не мешает пройти. Кулер — не больше одного на коридор
+  // (партнёр 24.11: кулер — «один из главных объектов»; россыпь одинаковых кулеров по коридорам обесценивала искомый). Жребий тянется
+  // как прежде, чтобы остальная обстановка не сдвинулась.
+  let cooler = false;
   for (const s of ctx.slots) {
     if (s.used) continue;
     const r = ctx.rng();
     const x = (ctx.rng() - 0.5) * 1.4;
-    if (r < 0.05) put(ctx, 'water_cooler', s.xf.child(x, 0, 0));
+    if (r < 0.05) {
+      if (cooler) continue;
+      put(ctx, 'water_cooler', s.xf.child(x, 0, 0));
+      cooler = true;
+    }
     else if (r < 0.1) put(ctx, 'office_clock', s.xf.child(x, ALL_PROPS.office_clock?.y ?? 2.05, 0));
     else if (r < 0.15) put(ctx, 'print_medium', s.xf.child(x, 1.4, 0));
     else if (r < 0.19) put(ctx, 'trash_bin', s.xf.child(x, 0, 0.2));
