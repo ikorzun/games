@@ -43,25 +43,26 @@ describe('белая комната на уровне', () => {
       else if (l.whiteRoom) have++;
     }
     const want = SEEDS.slice(0, 16).filter((s) => whiteRolled(s)).length;
-    expect(have).toBeGreaterThanOrEqual(Math.ceil(want * 0.75));
+    // Квадратных помещений без вещей партнёра в офисе мало: там комната выпадает реже (партнёр 24.11: только квадратная).
+    expect(have).toBeGreaterThanOrEqual(Math.ceil(want * (world === 'office' ? 0.3 : 0.75)));
   });
 
   it('в зале ожидания белой комнаты нет', () => {
     for (const s of rolled.slice(0, 4)) expect(level('station', s).whiteRoom).toBeUndefined();
   });
 
-  it.each(['shelter', 'office', 'yellow'] as const)('%s: прямоугольная, 2–4 клетки, не особое помещение и не помещение партнёра', (world) => {
+  it.each(['shelter', 'office', 'yellow'] as const)('%s: квадратная, сторона в две-три клетки, не особое помещение и не помещение партнёра', (world) => {
     const pt = partnerTypes(world);
     for (const s of rolled.slice(0, 6)) {
       const l = level(world, s);
       const w = l.whiteRoom;
       if (!w) continue;
       const room = l.layout.rooms[w.room]!;
-      expect(room.cells.length).toBeGreaterThanOrEqual(2);
-      expect(room.cells.length).toBeLessThanOrEqual(4);
+      expect([4, 9]).toContain(room.cells.length);
       const xs = room.cells.map((c) => c[0]);
       const zs = room.cells.map((c) => c[1]);
       expect((Math.max(...xs) - Math.min(...xs) + 1) * (Math.max(...zs) - Math.min(...zs) + 1)).toBe(room.cells.length);
+      expect(Math.max(...xs) - Math.min(...xs)).toBe(Math.max(...zs) - Math.min(...zs));
       expect(w.room).not.toBe(l.layout.entranceRoom);
       expect([l.greenRoom, l.skyRoom, l.grassRoom]).not.toContain(w.room);
       expect(['corridor', 'department', 'collapsed', 'stairwell', 'lift']).not.toContain(room.type);
@@ -84,7 +85,7 @@ describe('белая комната на уровне', () => {
     }
   });
 
-  it.each(['shelter', 'office', 'yellow'] as const)('%s: цепь посередине на уровне глаз, лицом к проходу, цепочка до потолка', (world) => {
+  it.each(['shelter', 'office', 'yellow'] as const)('%s: цепь посередине на уровне глаз, лицом к проходу, без цепочки к потолку', (world) => {
     for (const s of rolled.slice(0, 6)) {
       const l = level(world, s);
       const w = l.whiteRoom;

@@ -4735,8 +4735,9 @@ describe('первый сон — один на всех (Z-19: «ставить
       tiers: 2,
       types: 'entrance,airlock,corridor,stairwell,stairwell,dorm,living,command,kitchen,medical,hallway,washroom,storage,corridor,fvu,diesel,bedroom,tanks,bathroom,switchboard,storage',
       fx: ['command:dark:0', 'storage:strobe:0'],
-      white: 'switchboard:1',
-      dunes: 'storage:1',
+      // 24.11: белая комната — только квадратная (партнёр), поэтому она переехала в дизельную, а песчаный зал — в щитовую.
+      white: 'diesel:1',
+      dunes: 'switchboard:1',
       sky: 'bedroom:1',
       green: 'fvu:1',
       grass: 'hallway:0',

@@ -574,11 +574,18 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     const zs = r.cells.map((c) => c[1]);
     return (Math.max(...xs) - Math.min(...xs) + 1) * (Math.max(...zs) - Math.min(...zs) + 1) === r.cells.length;
   };
+  // Партнёр 24.11: «комната с цепями и бесконечностью должна быть квадратной и в 2 раза больше» — только квадрат со стороной в
+  // две-три клетки (6 × 6 или 9 × 9 м; прежде чаще всего 3 × 6), крупнейший из подходящих.
+  const isSquare = (r: GenRoom): boolean => {
+    const xs = r.cells.map((c) => c[0]);
+    const side = Math.max(...xs) - Math.min(...xs) + 1;
+    return isRect(r) && side * side === r.cells.length && side >= 2 && side <= 3;
+  };
   const whiteRoom =
     !station && whiteRolled(layout.seed)
       ? rooms1
-          .filter((r) => r !== gardenRoom && r !== greenRoom && r !== skyRoom && r !== grassRoom && !flowerRooms.has(r.id) && r !== variantRoom && r !== startRoom0 && !PARTNER_ROOMS.includes(r.type) && !partnerTypes.has(r.type) && r.cells.length >= 2 && r.cells.length <= 4 && isRect(r))
-          .sort(order(19))[0]
+          .filter((r) => r !== gardenRoom && r !== greenRoom && r !== skyRoom && r !== grassRoom && !flowerRooms.has(r.id) && r !== variantRoom && r !== startRoom0 && !PARTNER_ROOMS.includes(r.type) && !partnerTypes.has(r.type) && isSquare(r) && r.type !== 'department')
+          .sort((a, b) => b.cells.length - a.cells.length || order(19)(a, b))[0]
       : undefined;
   // Песчаный зал: проём тупикового помещения с единственным проходом (дверью или сквозным проёмом, не гермодверью) — за ним ничего
   // нет, кроме зала, и насквозь его не видно: чернота закрывает проход целиком. Не начало сна, не особые помещения, не помещения партнёра; перед дверью снаружи — не опасная клетка

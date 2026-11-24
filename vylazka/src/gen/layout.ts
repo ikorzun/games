@@ -9,7 +9,7 @@
 import { hash2, mulberry32 } from '../core/rng';
 import type { Rng } from '../core/rng';
 
-export const GEN_VERSION = 2;
+export const GEN_VERSION = 3;
 /** Клеток по стороне яруса. */
 export const GRID = 16;
 /** Перепад между ярусами, м. */
@@ -450,10 +450,15 @@ function placeStairs(b: Build, corridor: GenRoom, entry: [number, number]): { st
 }
 
 /** Поставить помещение w×h клеток к коридору. Возвращает его или null, если места нет. */
-function placeRoom(b: Build, corridor: GenRoom, type: RoomType, sizes: readonly (readonly [number, number])[], way?: EdgeKind): GenRoom | null {
+function placeRoom(b: Build, corridor: GenRoom, type: RoomType, sizes: readonly (readonly [number, number])[], way?: EdgeKind, prefer?: (x: number, z: number) => number): GenRoom | null {
   const tier = corridor.tier;
   const grid = b.grids[tier]!;
-  const cells = shuffle(b.rng, corridor.cells.slice());
+  let cells = shuffle(b.rng, corridor.cells.slice());
+  if (prefer) {
+    // Зона помещения: сначала коридорные клетки, которые ему подходят (меньше — лучше), с небольшим разбросом.
+    const key = new Map(cells.map((c) => [c, prefer(c[0], c[1]) + b.rng() * 0.22] as const));
+    cells = cells.slice().sort((p, q) => key.get(p)! - key.get(q)!);
+  }
   // Самым большим комнатам размеры пробуются по порядку — от главного к запасному: отдел должен быть велик.
   const sizeOrder = sizes === SIZES_HUGE ? sizes.slice() : shuffle(b.rng, sizes.slice());
   for (const [w, h] of sizeOrder) {
@@ -503,6 +508,20 @@ function secondDoor(b: Build, corridor: GenRoom, room: GenRoom, way: EdgeKind = 
     }
   }
   return false;
+}
+
+/** Где по глубине этажа (0 — у приёмной, 1 — дальний конец коридоров) стоять помещению офиса. */
+export const OFFICE_DEPTH: Partial<Record<RoomType, number>> = { meeting: 0.12, cubicles: 0.4, department: 0.45, breakroom: 0.5, washroom: 0.68, copyroom: 0.75, files: 0.8, server: 0.88, manager: 1 };
+
+function officeZone(grid: TierGrid, corridorId: number, sx: number, sz: number): (type: RoomType) => ((x: number, z: number) => number) | undefined {
+  const dist = corridorDistances(grid, corridorId, sx, sz);
+  let far = 1;
+  for (const d of dist) if (d > far) far = d;
+  return (type) => {
+    const want = OFFICE_DEPTH[type];
+    if (want === undefined) return undefined;
+    return (x, z) => Math.abs(Math.max(0, dist[z * GRID + x]!) / far - want);
+  };
 }
 
 function buildAttempt(seed: number, attempt: number, rank: 1 | 2 | 3, world: WorldKind): GenLayout {
@@ -571,8 +590,12 @@ function buildAttempt(seed: number, attempt: number, rank: 1 | 2 | 3, world: Wor
     // Помещения по квоте яруса (в офисе и жёлтых комнатах — по квоте мира).
     let placed = 0;
     const quota = shelter ? QUOTAS[Math.min(t, QUOTAS.length - 1)]! : world === 'office' ? OFFICE_QUOTA : YELLOW_QUOTA;
+    // Офис строится, как строят офисы (партнёр 24.11: «Пройдись по устройству офиса, перестрой его логично»): от приёмной
+    // вглубь — переговорные у входа (туда водят гостей), открытые отделы и комната отдыха посередине, санузел и подсобки
+    // (копировальная, серверная, архив) дальше по коридору, кабинет руководителя — в самой глубине.
+    const zone = world === 'office' ? officeZone(grid, corridor.id, entry[0], entry[1]) : null;
     for (const [type, sizes] of quota) {
-      const room = placeRoom(b, corridor, type, sizes, world === 'yellow' ? 'open' : undefined);
+      const room = placeRoom(b, corridor, type, sizes, world === 'yellow' ? 'open' : undefined, zone ? zone(type) : undefined);
       if (!room) continue;
       placed += 1;
       // В жёлтых комнатах вторые проёмы почти у каждого зала: место без стен, которые что-то значат.

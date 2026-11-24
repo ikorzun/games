@@ -485,6 +485,9 @@ const FIRST_DREAM = { from: 3, to: 14, order: ['strobe', 'dark'] as const satisf
  * Парящая искомая вещь (партнёр 24.11: «сделать эти вещи парящими в пространстве в слабом условно мыльном пузыре»): подъём над
  * полом, столом и полкой, м; bob — размах и частота покачивания; пузырь — во сколько раз шире вещи и не уже min метров.
  */
+/** На сколько поднять на вид вещь в белом нигде, м: мелочь — выше, крупное — на ладонь над полом. */
+const voidLift = (radius: number): number => Math.max(0.3, Math.min(0.6, 0.85 - radius));
+
 const FLOAT = { floor: 1.05, table: 0.55, shelf: 0.32, bob: 0.035, bobHz: 1.1, bubble: 1.2, min: 0.2 } as const;
 /**
  * Подсветка искомой вещи при приближении: с from метров свет памяти разгорается, с full — в полную силу: ярче на strength и
@@ -1369,6 +1372,8 @@ export class Game {
 
   /** Искомая вещь парит в пузыре (мелкая); крупная стоит на полу. */
   private memFloat = false;
+  /** Вещи белого нигде, что парят над полом (партнёр 24.11): на сколько каждая поднята на вид, м. */
+  private readonly voidFloat = new Map<number, number>();
 
   /** На сколько метров мелкая искомая вещь поднята над своим местом: над столом и полкой — выше того, что на них стоит. */
   private floatLift(kind: 'table' | 'shelf' | 'floor'): number {
@@ -2542,6 +2547,7 @@ export class Game {
     this.holdT = 0;
     this.heard.clear();
     this.blanks = [];
+    this.voidFloat.clear();
     this.limboTime = 0;
     this.limboAsked = false;
     this.metaFired = false;
@@ -2556,12 +2562,13 @@ export class Game {
       const [sx, sy, sz] = p.spawn.pos;
       mem.forEach((m, i) => {
         const a = ((i - (mem.length - 1) / 2) * 24 * Math.PI) / 180;
-        const at: Vec3 = [sx + Math.sin(a) * 3.4, sy, sz - Math.cos(a) * 3.4];
         const done = m.state === 'done';
         const tm = thingMesh(done ? m.def.thing : 'blank', 7);
+        const at: Vec3 = [sx + Math.sin(a) * 3.4, sy, sz - Math.cos(a) * 3.4];
         const t = this.things.add(done ? m.def.thing : 'blank', at, done ? a + 0.4 : 0, 'dust', tm.radius, false, true);
         this.thingRender.set(t.id, this.renderer.addThing(tm.mesh, t.id));
         this.detailThing(t);
+        this.voidFloat.set(t.id, voidLift(tm.radius));
         this.pocketThings.push(t);
         if (!done) this.blanks.push(t);
       });
@@ -2576,6 +2583,8 @@ export class Game {
       const sp = p.spots[i]!;
       const t = this.addThing(kind, sp, this.rng() * Math.PI * 2, limbo ? 'dust' : SMALL_FATES[i % SMALL_FATES.length]!);
       t.still = limbo;
+      // В белом нигде вещи парят над полом (партнёр 24.11) — только на вид: лежит вещь по-прежнему на полу.
+      if (p.kind === 'void') this.voidFloat.set(t.id, voidLift(t.radius));
       this.pocketThings.push(t);
     });
   }
@@ -4076,7 +4085,9 @@ export class Game {
       // Красная сетка — знак системы: она на вещи, которую «измеряет» взгляд. Тронутая вещь уходит и
       // возвращается без неё — одними точками («память — пыль»).
       // Сетка гаснет вместе с растворением и быстрее его: у вещи, что рассыпается, клетка не висит в воздухе.
-      let w = t.state === 'changing' && !t.touched ? 0.8 * (1 - t.dissolve) * (1 - t.dissolve) : t.state === 'idle' ? t.gaze * (0.45 + 0.35 * Math.sin(this.time * 23)) : 0;
+      // На вещи, которая растёт, сетки нет (партнёр 24.11): она быстро вырастает и рассыпается в мелкую пыль.
+      const grows = t.fate === 'grow' || t.fate === 'jump';
+      let w = t.state === 'changing' && !t.touched && !grows ? 0.8 * (1 - t.dissolve) * (1 - t.dissolve) : t.state === 'idle' ? t.gaze * (0.45 + 0.35 * Math.sin(this.time * 23)) : 0;
       let xray = false;
       if (t.memory) {
         memNear = Math.max(memNear, 1 - d / 8);
@@ -4086,7 +4097,7 @@ export class Game {
           xray = true;
         }
       }
-      const hover = t === this.memoryThing && this.memFloat ? FLOAT.bob * Math.sin(this.time * FLOAT.bobHz) : 0;
+      const hover = t === this.memoryThing && this.memFloat ? FLOAT.bob * Math.sin(this.time * FLOAT.bobHz) : (this.voidFloat.get(t.id) ?? 0) + (this.voidFloat.has(t.id) ? 0.03 * Math.sin(this.time * 0.7 + t.id * 1.7) : 0);
       this.renderer.setThing(id, { x: t.pos[0], y: t.pos[1] + hover, z: t.pos[2], yaw: t.yaw, scale: t.scale, dissolve: t.dissolve, wire: w, xray, visible: t.state !== 'gone' && (d < 40 || xray), dots: Things.dots(t) });
     }
     this.stepMemLight(dt);

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Vec3 } from '../src/core/types';
 import { MAT, MAT_COUNT } from '../src/world/materials';
 import { buildPocket, POCKET_KINDS } from '../src/world/pockets';
-import type { ModelCell, PocketContext, PocketKind, PocketSpace } from '../src/world/pockets';
+import type { PocketKind, PocketSpace } from '../src/world/pockets';
 
 const ORIGIN: Vec3 = [1000, 40, -500];
 const SHIFTED: Vec3 = [-300, 12.5, 777];
@@ -152,41 +152,30 @@ describe('лимбо: белое нигде в конце сессии', () => {
   });
 });
 
-describe('кукольный домик: стол с макетом', () => {
-  const cells: ModelCell[] = [
-    { x: 3, z: 4, tier: 1, type: 'kitchen', room: 1 },
-    { x: 4, z: 4, tier: 1, type: 'kitchen', room: 1 },
-    { x: 5, z: 4, tier: 1, type: 'corridor', room: 2 },
-    { x: 5, z: 5, tier: 1, type: 'bedroom', room: 3 },
-    { x: 0, z: 0, tier: 0, type: 'entrance', room: 0 },
-  ];
-  const ctx: PocketContext = { cells, target: { x: 4, z: 4, tier: 1 }, here: { x: 5, z: 5, tier: 1 } };
-
-  it('есть главный предмет (focus); точка появления смотрит на стол (yaw π, взгляд вниз) и дальше 0,8 м от выхода', () => {
-    const s = buildPocket('dollhouse', 7, ORIGIN, ctx);
+describe('красная комната забвения (вид dollhouse): фигура посередине', () => {
+  it('есть главный предмет (focus) — фигура в середине комнаты; игрок появляется снаружи лицом к ней, выход — за фигурой', () => {
+    const s = buildPocket('dollhouse', 7, ORIGIN);
     expect(s.focus).toBeTruthy();
+    expect(Math.hypot(s.focus![0] - s.center[0], s.focus![2] - s.center[2])).toBeLessThan(1);
     expect(s.spawn.yaw).toBeCloseTo(Math.PI, 5);
-    expect(s.spawn.pitch).toBeCloseTo(-0.3, 5);
-    // Взгляд yaw π идёт в +z: стол должен лежать впереди, а не за спиной.
-    expect(s.focus![2]).toBeGreaterThan(s.spawn.pos[2]);
-    const e = s.exit!;
-    expect(Math.hypot(s.spawn.pos[0] - e[0], s.spawn.pos[2] - e[2])).toBeGreaterThan(0.8);
+    // Взгляд yaw π идёт в +z: фигура впереди, выход — ещё дальше, за ней.
+    expect(s.focus![2]).toBeGreaterThan(s.spawn.pos[2] + 10);
+    expect(s.exit![2]).toBeGreaterThan(s.focus![2] + 3);
   });
 
-  it('с планом убежища макет добавляет геометрию', () => {
-    const bare = buildPocket('dollhouse', 7, ORIGIN);
-    const full = buildPocket('dollhouse', 7, ORIGIN, ctx);
-    expect(triangles(full)).toBeGreaterThan(triangles(bare));
-    // Макет — часть дома: сама сцена не меняется ни по выходу, ни по точке появления.
-    expect(full.exit).toEqual(bare.exit);
-    expect(full.focus).toEqual(bare.focus);
-    expect(full.spawn).toEqual(bare.spawn);
-  });
-
-  it('искомая вещь и «ты здесь» добавляют метки: без target и here геометрии меньше', () => {
-    const plain = buildPocket('dollhouse', 7, ORIGIN, { cells });
-    const marked = buildPocket('dollhouse', 7, ORIGIN, ctx);
-    expect(triangles(marked)).toBeGreaterThan(triangles(plain));
+  it('комната вся красная, фигура — светлый мрамор: других цветов нет', () => {
+    const s = buildPocket('dollhouse', 7, ORIGIN);
+    const m = s.meshes[0]!;
+    let red = 0;
+    let pale = 0;
+    for (let i = 0; i < m.color.length; i += 4) {
+      const [r, g, b] = [m.color[i]!, m.color[i + 1]!, m.color[i + 2]!];
+      if (r > 0.9 && g < 0.2 && b < 0.2) red++;
+      else if (Math.abs(r - g) < 0.12 && Math.abs(g - b) < 0.12) pale++;
+      else throw new Error(`чужой цвет: ${r}, ${g}, ${b}`);
+    }
+    expect(red).toBeGreaterThan(100);
+    expect(pale).toBeGreaterThan(1000);
   });
 
   it('другие виды focus не имеют', () => {

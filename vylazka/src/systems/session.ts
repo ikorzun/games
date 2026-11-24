@@ -220,6 +220,9 @@ export type SessionEvent =
 
 const inZone = (z: Zone, p: Vec3): boolean => p[0] >= z.minX && p[0] <= z.maxX && p[2] >= z.minZ && p[2] <= z.maxZ && p[1] >= z.minY && p[1] <= z.maxY;
 
+/** Помещения, куда вещь памяти без своего места не кладут. */
+const WET_ROOMS: readonly RoomType[] = ['washroom', 'bathroom'];
+
 export class Session {
   readonly memories: Memory[];
   panic = 0;
@@ -368,10 +371,14 @@ export class Session {
         return s;
       }
     }
-    let pool = free.filter((s) => d(s) >= c.minCells && d(s) <= c.maxCells);
+    // Своего помещения нет (сцена — кусок места) — вещь ложится где придётся, но не в санузел (партнёр 24.11: «кулер, в данном
+    // случае один из главных объектов, не должен быть в туалете»): туда — только если больше некуда.
+    const dry = this.level.layout ? free.filter((s) => !WET_ROOMS.includes(this.level.layout!.rooms[s.room]?.type as RoomType)) : free;
+    const open = dry.length > 0 ? dry : free;
+    let pool = open.filter((s) => d(s) >= c.minCells && d(s) <= c.maxCells);
     if (pool.length === 0) {
       // Объект маленький или игрок в углу: берём самое далёкое из достижимого.
-      const reach = free.filter((s) => d(s) >= 0).sort((a, b) => d(b) - d(a));
+      const reach = open.filter((s) => d(s) >= 0).sort((a, b) => d(b) - d(a));
       pool = reach.slice(0, Math.max(1, Math.ceil(reach.length / 4)));
     }
     if (pool.length === 0) return null;

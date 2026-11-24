@@ -117,12 +117,12 @@ describe('вещи: судьбы', () => {
     expect(t.scale).toBeLessThan(DEFAULT_THINGS.growScale - 1);
     expect(t.dissolve).toBe(0);
     // Выросла до конца — миг стоит огромной, целая: рост должен успеть прочитаться.
-    run(th, DEFAULT_THINGS.growTime / 2 + DEFAULT_THINGS.giantHold * 0.8, away());
+    run(th, DEFAULT_THINGS.growTime / 2 + DEFAULT_THINGS.giantHold * 0.4, away());
     expect(t.state).toBe('changing');
     expect(t.scale).toBeCloseTo(DEFAULT_THINGS.growScale, 5);
     expect(t.dissolve).toBe(0);
     // И рассыпается: огромная, а растворение идёт (слова партнёра 17.11 08:19).
-    expect(kinds(run(th, DEFAULT_THINGS.giantHold * 0.2 + DEFAULT_THINGS.giantDustTime / 2, away()))).toEqual([]);
+    expect(kinds(run(th, DEFAULT_THINGS.giantHold * 0.6 + DEFAULT_THINGS.giantDustTime / 2, away()))).toEqual([]);
     expect(t.state).toBe('changing');
     expect(t.scale).toBeCloseTo(DEFAULT_THINGS.growScale, 5);
     expect(t.dissolve).toBeGreaterThan(0.3);
@@ -153,7 +153,7 @@ describe('вещи: судьбы', () => {
     // Растущая навстречу (jump) накрывает — она остаётся плотной.
     const j = make('jump');
     run(j.th, DEFAULT_THINGS.gazeTime + 0.05, onThing(j.t));
-    run(j.th, DEFAULT_THINGS.growTime / 2, away());
+    run(j.th, DEFAULT_THINGS.jumpTime / 2, away());
     expect(Things.dots(j.t)).toBe(0);
   });
 
@@ -169,7 +169,7 @@ describe('вещи: судьбы', () => {
 
     const farAway = make('jump');
     run(farAway.th, DEFAULT_THINGS.gazeTime + 0.05, onThing(farAway.t));
-    run(farAway.th, DEFAULT_THINGS.growTime - 0.3, away(), FAR);
+    run(farAway.th, DEFAULT_THINGS.jumpTime - 0.3, away(), FAR);
     expect(farAway.t.state).toBe('changing');
     const ev2 = run(farAway.th, 0.5, away(), FAR);
     expect(kinds(ev2)).toEqual(['engulf', 'settled']);

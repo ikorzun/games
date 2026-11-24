@@ -81,6 +81,8 @@ export interface ThingsConfig {
   shrinkTime: number;
   dustTime: number;
   growTime: number;
+  /** За сколько вырастает вещь, что растёт навстречу и накрывает ('jump'), с: у игрока есть время отойти. */
+  jumpTime: number;
   /** Во сколько раз вырастает вещь. */
   growScale: number;
   /**
@@ -95,7 +97,7 @@ export interface ThingsConfig {
   comeTime: number;
 }
 
-export const DEFAULT_THINGS: ThingsConfig = { range: 7, gazeTime: 2.4, shrinkTime: 1.1, dustTime: 1.5, growTime: 2.6, growScale: 7, giantDustTime: 2.4, giantHold: 0.6, touchTime: 0.9, comeTime: 0.9 };
+export const DEFAULT_THINGS: ThingsConfig = { range: 7, gazeTime: 2.4, shrinkTime: 1.1, dustTime: 1.5, growTime: 1.1, jumpTime: 2.6, growScale: 7, giantDustTime: 1.6, giantHold: 0.15, touchTime: 0.9, comeTime: 0.9 };
 
 const ease = (t: number): number => t * t * (3 - 2 * t);
 
@@ -225,7 +227,8 @@ export class Things {
         t.dissolve = k;
         if (k >= 1) this.settle(t, 'gone', ev);
       } else {
-        const k = Math.min(1, t.t / c.growTime);
+        // Вещь под взглядом вырастает быстро и рассыпается в мелкую пыль (партнёр 24.11); та, что накрывает, — медленнее.
+        const k = Math.min(1, t.t / (t.fate === 'jump' ? c.jumpTime : c.growTime));
         t.scale = 1 + (c.growScale - 1) * ease(k);
         if (t.fate === 'jump') {
           // Вещь растёт навстречу: как только она дотянулась до игрока — накрывает.

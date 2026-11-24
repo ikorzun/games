@@ -1,6 +1,6 @@
 /**
  * Карманные пространства: маленькие отдельные сцены, в которые игрок проваливается из убежища, —
- * белое нигде, луг, кукольный домик. Каждое собирается кодом вдали от уровня (origin), со своими
+ * белое нигде, луг, красная комната забвения (вид 'dollhouse': прежде здесь был кукольный домик, имя вида осталось). Каждое собирается кодом вдали от уровня (origin), со своими
  * преградами и своим окружением: светом, туманом, небом.
  *
  * Окружение (Env) — то, чем пространства отличаются для рендера. В убежище рассеянного света почти
@@ -13,7 +13,7 @@ import type { Aabb, HeightField } from './colliders';
 import { MeshBuilder } from './kit';
 import type { MeshData } from './kit';
 import { MAT } from './materials';
-import { buildDollhouse } from './pocket_dollhouse';
+import { buildLethe } from './pocket_lethe';
 import { buildDunes } from './pocket_dunes';
 import { buildMeadow } from './pocket_meadow';
 
@@ -190,10 +190,11 @@ export function buildVoid(_seed: number, origin: Vec3, ctx?: PocketContext): Poc
   if (exit) doorFrame(mb, exit, [0.5, 0.5, 0.52]);
   const R = 44;
   mb.box([ox - R, oy - 0.5, oz - R], [ox + R, oy, oz + R], MAT.plaster, { tint: [1.25, 1.25, 1.25], skip: ['ny', 'px', 'nx', 'pz', 'nz'] });
-  const ink: Vec3 = [0.55, 0.55, 0.56];
-  const STEP = 2;
-  for (let i = -14; i <= 14; i++) {
-    for (let j = -14; j <= 14; j++) {
+  // Спокойнее и чище (партнёр 24.11): крестики реже и бледнее, пол без фактуры (env.plain), взвеси нет.
+  const ink: Vec3 = [0.86, 0.86, 0.87];
+  const STEP = 4;
+  for (let i = -7; i <= 7; i++) {
+    for (let j = -7; j <= 7; j++) {
       const x = ox + i * STEP;
       const z = oz + j * STEP;
       const y = oy + 0.003;
@@ -213,7 +214,7 @@ export function buildVoid(_seed: number, origin: Vec3, ctx?: PocketContext): Poc
     meshes: [mb.build()],
     colliders: [{ minX: ox - R, minY: oy - 0.5, minZ: oz - R, maxX: ox + R, maxY: oy, maxZ: oz + R }],
     spawn: { pos: [ox, oy, oz], yaw: 0 },
-    env: { ambient: [0.62, 0.62, 0.62], fog: [0.86, 0.86, 0.86], fogDensity: 0.06, light: 0.12, decay: 0, haze: 0 },
+    env: { ambient: [0.62, 0.62, 0.62], fog: [0.86, 0.86, 0.86], fogDensity: 0.06, light: 0.12, decay: 0, haze: 0, plain: true },
     center: [ox, oy, oz],
     radius: 30,
     spots,
@@ -221,7 +222,7 @@ export function buildVoid(_seed: number, origin: Vec3, ctx?: PocketContext): Poc
   };
 }
 
-const BUILDERS: Partial<Record<PocketKind, PocketBuilder>> = { void: buildVoid, meadow: buildMeadow, dollhouse: buildDollhouse, dunes: buildDunes };
+const BUILDERS: Partial<Record<PocketKind, PocketBuilder>> = { void: buildVoid, meadow: buildMeadow, dollhouse: buildLethe, dunes: buildDunes };
 
 /** Подключить строителя пространства (луг и кукольный домик лежат в своих файлах). */
 export function registerPocket(kind: PocketKind, builder: PocketBuilder): void {

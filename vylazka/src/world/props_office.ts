@@ -16,6 +16,7 @@ import { MAT } from './materials';
 import type { Xf } from './props';
 import { beam, rng, sheet, WHITE } from './props_more';
 import type { PropSpec } from './props_more';
+import { lathe } from './props_real';
 import { fillShelves, furnished, jitter, openOf, pickOf, s3As, s3Put, s3Reach, s3Size, spanOf, S3_SHELVES, S3_TOP, S3_WORKTOP, turnOf } from './furniture';
 
 /** Мебель отдела с полки Sand3D: столы (у отдела — одной модели), кресло, шкафы для папок. */
@@ -357,10 +358,31 @@ function vendingMachine(xf: Xf, seed: number): void {
 }
 
 /** Урна 0,28 × 0,28 × 0,32: тёмное слегка коническое ведро с ободком. */
+/**
+ * Офисная корзина для бумаг (партнёр 24.11: «мусорные ведра в офисе замени, сейчас это забитые корзины и не похожи»): открытое
+ * ведро со стенкой в толщину, тёмным нутром и закатанным краем; у части — белый пакет, отвёрнутый через край, у части на дне
+ * скомканный лист. Сверху видно, что оно пустое, — этим ведро и отличается от «забитой корзины».
+ */
 function trashBin(xf: Xf, seed: number): void {
-  const k = 0.85 + rng(seed)() * 0.3;
-  xf.cyl([0, 0, 0], 'y', 0.3, 0.1, MAT.bakelite, { tint: [k, k, k], segments: 10, radiusEnd: 0.13 });
-  xf.cyl([0, 0.3, 0], 'y', 0.02, 0.14, MAT.metalGrey, { tint: METAL_DK, segments: 10 });
+  const rnd = rng(seed);
+  const k = 0.5 + rnd() * 0.35;
+  const body: Vec3 = [k, k, k * 1.03];
+  const H = 0.31;
+  // Снаружи вверх, закатанный край, внутри вниз до дна: нутро темнее.
+  const prof: [number, number][] = [[0.1, 0], [0.132, H - 0.02], [0.139, H - 0.01], [0.134, H], [0.126, H - 0.006], [0.097, 0.02], [0.0005, 0.018]];
+  lathe(xf, 0, 0, prof, 10, MAT.bakelite, (t) => (t > 0.7 ? [body[0] * 0.5, body[1] * 0.5, body[2] * 0.5] : body), () => 1, (t) => (t > 0.7 ? 0.45 : 1));
+  if (rnd() < 0.6) {
+    // Пакет: полоса снаружи под краем, складки по кругу, внутри — до самого дна.
+    const ph = rnd() * 6.28;
+    const bag: [number, number][] = [[0.127, H - 0.1], [0.137, H - 0.02], [0.144, H - 0.004], [0.134, H + 0.005], [0.123, H - 0.01], [0.095, 0.026]];
+    lathe(xf, 0, 0, bag, 10, MAT.paper, (t) => (t > 0.6 ? [0.62, 0.62, 0.64] : [1.25, 1.25, 1.28]), (th, t) => 1 + (t < 0.2 ? 0.02 : 0.008) * Math.cos(th * 7 + ph), (t) => (t > 0.6 ? 0.55 : 1));
+  }
+  if (rnd() < 0.45) {
+    const a = rnd() * 6.28;
+    const x = Math.cos(a) * 0.03;
+    const z = Math.sin(a) * 0.03;
+    bx(xf, [x - 0.035, 0.028, z - 0.03], [x + 0.035, 0.085, z + 0.03], MAT.paper, [1.1, 1.08, 1.0], { bevel: 0.018 });
+  }
 }
 
 const RECEPTION = 's3_reception_desk';

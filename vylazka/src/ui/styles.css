@@ -1503,3 +1503,106 @@ body {
   color: #2a2620;
   text-shadow: none;
 }
+
+/* ── Без плашек (партнёр 24.11: «Все элементы интерфейса должны быть текстом в пространстве, словно это отражение на сетчатке
+   глаза. Никаких плашек, никаких интерфейсов. Либо совсем что-то полупрозрачное и эфемерное») ──
+   Бирка, карточка «известно точно», обрывки метаслоя — только буквы: без фона, рамки, тени и наклона. Буквы светятся, как
+   послесвечение, и едва дышат; снимок и запись — полупрозрачные, с краями, уходящими в ничто. */
+.vz-hud__tag,
+.vz-meta.vz-meta--tape,
+.vz-meta__phone,
+.vz-meta__note,
+.vz-meta__bubble,
+.vz-meta__msg--me .vz-meta__bubble,
+.vz-meta__print,
+.vz-meta__reel {
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+.vz-hud__tag,
+.vz-meta.vz-meta--tape,
+.vz-meta__phone,
+.vz-meta__note {
+  color: rgba(246, 242, 232, 0.9);
+  text-shadow:
+    0 0 0.35em rgba(255, 255, 255, 0.42),
+    0.05em 0 0 rgba(255, 70, 50, 0.22),
+    -0.05em 0 0 rgba(70, 170, 255, 0.2);
+  animation: vz-afterimage 5.5s ease-in-out infinite;
+}
+.vz-hud__tag {
+  padding-left: 0.9em;
+  transform: translateY(-6px);
+}
+.vz-hud__tag::before {
+  display: none;
+}
+.vz-hud__tag.is-on {
+  opacity: 0.92;
+  transform: none;
+}
+.vz-hud__tag.is-big {
+  transform: translate(-50%, -50%);
+}
+.vz-hud__tag-row {
+  border-top: 0;
+}
+.vz-hud__tag-stamp {
+  padding: 0;
+  border: 0;
+  transform: none;
+  color: #ff7a6b;
+}
+.vz-meta__note {
+  transform: none;
+}
+.vz-meta__bubble {
+  padding: 0.12em 0;
+}
+.vz-meta__head {
+  border-bottom: 0;
+}
+.vz-meta__print {
+  padding: 0;
+  transform: none;
+}
+.vz-meta__print .vz-meta__img,
+.vz-meta__frame {
+  opacity: 0.6;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 42%, transparent 76%);
+  mask-image: radial-gradient(ellipse at center, #000 42%, transparent 76%);
+}
+.vz-meta__img {
+  background-color: transparent;
+}
+/* В светлом пространстве буквы тёмные со светлым ореолом — как остальные строки. */
+.vz-hud.is-bright .vz-hud__tag,
+.vz-hud.is-bright .vz-meta.vz-meta--tape,
+.vz-hud.is-bright .vz-meta__phone,
+.vz-hud.is-bright .vz-meta__note {
+  color: rgba(22, 22, 22, 0.88);
+  text-shadow:
+    0 0 0.3em rgba(255, 255, 255, 0.85),
+    0 0 0.8em rgba(255, 255, 255, 0.5);
+}
+.vz-hud.is-bright .vz-hud__tag-stamp {
+  color: #a3261b;
+}
+@keyframes vz-afterimage {
+  0%,
+  100% {
+    filter: blur(0);
+  }
+  50% {
+    filter: blur(0.45px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vz-hud__tag,
+  .vz-meta.vz-meta--tape,
+  .vz-meta__phone,
+  .vz-meta__note {
+    animation: none;
+  }
+}

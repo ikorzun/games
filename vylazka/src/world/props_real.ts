@@ -22,7 +22,7 @@ const shade = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
  * Тело вращения по профилю [радиус, высота] снизу вверх; ribs(θ, t) — множитель радиуса (рёбра кактуса,
  * неровность горшка), t — доля высоты 0..1. Верх и низ закрываются, если радиус там не ноль.
  */
-function lathe(xf: Xf, cx: number, cz: number, profile: readonly [number, number][], seg: number, mat: number, tintAt: (t: number, th: number) => Vec3, ribs: (th: number, t: number) => number = () => 1, aoAt: (t: number) => number = () => 1): void {
+export function lathe(xf: Xf, cx: number, cz: number, profile: readonly [number, number][], seg: number, mat: number, tintAt: (t: number, th: number) => Vec3, ribs: (th: number, t: number) => number = () => 1, aoAt: (t: number) => number = () => 1): void {
   const mb = xf.mb;
   const n = profile.length;
   const rows: number[][] = [];
