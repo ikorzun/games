@@ -479,6 +479,11 @@ const LESSON_GROWTH = 0.85;
  * замечание к Z-19).
  */
 const FIRST_DREAM = { from: 3, to: 14, order: ['strobe', 'dark'] as const satisfies readonly RoomFx[] };
+/**
+ * Подсветка искомой вещи при приближении: с from метров свет памяти разгорается, с full — в полную силу: ярче на strength и
+ * шире на radius (доли), дышит с частотой breath; rate — как быстро разгорается и гаснет (1/с).
+ */
+const NEAR_GLOW = { from: 9, full: 2.5, strength: 1.4, radius: 0.45, breath: 2.6, rate: 1.6 } as const;
 /** Сколько секунд Осыпь-примета идёт по месту. */
 const TRACE_SECONDS = 26;
 /** Ступень 3: силуэт на краю луча с первой минуты, охота — после первой вещи или с пятой минуты (как прежняя мягкая первая сессия, слово партнёра 16.11 23:41). */
@@ -3580,6 +3585,9 @@ export class Game {
     if (this.anomalies) this.applyAnomalies(this.anomalies.update(pos, node >= 0 ? this.level!.nav[node]!.room : -1, this.swarmNear > 0.2, (room) => this.roomSeen(room)));
   }
 
+  /** Насколько искомая вещь подсвечена близостью игрока, 0…1 (сглажено). */
+  memNearK = 0;
+
   /**
    * Свет памяти: искомая вещь приносит свет, в котором её запомнили (world/memory_light.ts). Разгорается,
    * когда вещь появилась, гаснет, когда её вспомнили (вместе с её распадом); в карманах и лимбо его нет —
@@ -3610,7 +3618,13 @@ export class Game {
     const life = memLightMod(lit.def.mod, this.time);
     // Вспышка «вспомнил»: в пике свет в BLOOM.strength раз ярче и в BLOOM.radius раз шире, потом гаснет.
     const b = bloomOn ? this.memBloom * this.memBloom : 0;
-    this.renderer.setMemLight({ pos: t.pos, yaw: t.yaw, kind: MEM_LIGHT_KIND[lit.def.kind], color: lit.def.color, strength: lit.def.strength * this.memLitK * life * (1 + ((this.faintFlash ? BLOOM.faint : BLOOM.soft) - 1) * b), height: lit.def.height * s, radius: lit.def.radius * Math.max(1, s) * (1 + (BLOOM.radius - 1) * b) });
+    // Подсветка при приближении (партнёр 24.11: «вещи, которые должен найти герой, должны подсвечиваться при приближении к
+    // ним»): с NEAR_GLOW.from метров свет вещи разгорается и у самой вещи вдвое с лишним ярче и шире, с медленным дыханием.
+    const dist = Math.hypot(this.body.x - t.pos[0], this.body.z - t.pos[2]);
+    const nearTo = lit.t === want && !bloomOn ? clamp((NEAR_GLOW.from - dist) / (NEAR_GLOW.from - NEAR_GLOW.full), 0, 1) : 0;
+    this.memNearK = approach(this.memNearK, nearTo, NEAR_GLOW.rate, dt);
+    const near = this.memNearK * (0.88 + 0.12 * Math.sin(this.time * NEAR_GLOW.breath));
+    this.renderer.setMemLight({ pos: t.pos, yaw: t.yaw, kind: MEM_LIGHT_KIND[lit.def.kind], color: lit.def.color, strength: lit.def.strength * (1 + NEAR_GLOW.strength * near) * this.memLitK * life * (1 + ((this.faintFlash ? BLOOM.faint : BLOOM.soft) - 1) * b), height: lit.def.height * s, radius: lit.def.radius * Math.max(1, s) * (1 + NEAR_GLOW.radius * near) * (1 + (BLOOM.radius - 1) * b) });
   }
 
   /** Фосфорные надписи: вспышка и темнота по событию; рядом с охотящимся роем гаснут. */
@@ -4337,6 +4351,7 @@ export class Game {
       hush: this.hush,
       sterile: this.sterileK,
       kept: this.keptThing ? this.keptThing.id : null,
+      memNear: +this.memNearK.toFixed(3),
       worldLook: this.worldLook,
       keptDist: Number.isFinite(this.keptDist) ? +this.keptDist.toFixed(2) : null,
       limboLook: this.limboLook,

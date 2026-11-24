@@ -647,8 +647,15 @@ describe('игра целиком: цикл сессии', () => {
     expect(h.until(() => (h.r.memLight?.strength ?? 0) > MEMORY_LIGHT.office_chair!.strength * 0.95, 4)).toBe(true);
     expect(h.r.memLight!.kind).toBe(MEM_LIGHT_KIND.window);
     expect(h.r.memLight!.pos).toEqual([...t.pos]);
-    // Вспомнил — свет уходит вместе с вещью, не мгновенно, но за пару секунд.
+    // Издалека свет ровный; подошёл к вещи — она подсвечивается сильнее (партнёр 24.11).
+    const far = h.r.memLight!.strength;
+    expect(g.memNearK).toBeLessThan(0.05);
     expect(h.standBefore(t.id)).toBe(true);
+    // Проба встаёт в шести метрах от вещи: подсветка уже заметна, в полную силу — с двух с половиной.
+    h.run(0.8);
+    expect(g.memNearK).toBeGreaterThan(0.3);
+    expect(h.r.memLight!.strength).toBeGreaterThan(far * 1.3);
+    // Вспомнил — свет уходит вместе с вещью, не мгновенно, но за пару секунд.
     expect(h.until(() => h.count('recall') > 0, 4)).toBe(true);
     expect(h.until(() => h.r.memLight === null, 3)).toBe(true);
   });
