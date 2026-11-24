@@ -53,6 +53,8 @@ export interface AudioWorld {
   memoryCall?: Vec3 | null;
   /** Тишина перед Осыпью (systems/hush.ts): насколько звук места проседает, 0..1. Нет поля — не проседает. */
   hush?: number;
+  /** Стерильность места (сюжет, game.sterileK): людей не слышно, капель нет — остаётся ровный гул. Нет поля — 0. */
+  sterileK?: number;
   /** Шаги в такт (systems/follower.ts): где за спиной прозвучали шаги следом с прошлого вызова. Нет поля — никто не идёт. */
   consumeFollowSteps?(): readonly Vec3[];
   listener(): { pos: Vec3; yaw: number };
@@ -363,7 +365,8 @@ export class GameAudio {
     // тем он тише — и тем громче шёпот: тревога заглушает память о людях и говорит вместо неё.
     // Следы людей слышны в покое — и только пока место помнится: в стёртом месте никого не остаётся.
     const settled = clamp01(1 - panic * 1.5) * clamp01(1 - near * 2.5);
-    const calm = settled * (game.decay?.voices ?? 1);
+    const sterile = over ? 0 : clamp01(game.sterileK ?? 0);
+    const calm = settled * (game.decay?.voices ?? 1) * (1 - sterile);
     this.voiceAngle += dt * 0.05;
     const behindWall: Vec3 = [ears.pos[0] + Math.cos(this.voiceAngle) * 7, ears.pos[1], ears.pos[2] + Math.sin(this.voiceAngle) * 7];
     a.loop('voices_murmur', live * (MURMUR[place] ?? 0.5) * calm, behindWall);
@@ -389,7 +392,7 @@ export class GameAudio {
     }
 
     // Капли: в убежище — редкий одиночный звук откуда-то из темноты; глубже — чаще.
-    if (active && !over && place === 'shelter' && this.clock >= this.dripAt) {
+    if (active && !over && place === 'shelter' && sterile < 0.5 && this.clock >= this.dripAt) {
       const k = this.jitter(0.5);
       this.dripAt = this.clock + (5 + 9 * (k - 0.5)) * (1 - depth * 0.4);
       const angle = this.jitter(0.5) * Math.PI * 4;

@@ -153,7 +153,7 @@ export type DreamEvent =
   /** Сессия кончилась, игрок в лимбо: пора готовить следующую (queueSession). */
   | { type: 'limbo' }
   /** Метаслой: экспонат в лимбо «вспомнил» обрывок (systems/meta.ts) — где он стоит. */
-  | { type: 'meta'; at: Vec3 }
+  | { type: 'meta'; at: Vec3; thing: string }
   /** От игрока пошла волна сонара (вариант A): звук — тихий пинг (слова партнёра: «Сонар тихий пинг»). */
   | { type: 'sonar' }
   /**
@@ -924,6 +924,15 @@ export class Game {
   private metaFired = false;
   private metaGaze = 0;
   private metaHoldT = 0;
+  /** Лимбо: на какой экспонат сейчас смотрит игрок (вид вещи) — для бирки сюжета (koma_flow.ts). null — ни на какой. */
+  limboLook: string | null = null;
+  /**
+   * Сюжет «Невостребованное»: стерильность места 0…1 (ставит приложение). Каталог заполнен — мир собран целиком и замер: ветра
+   * нет, кадр не плывёт, людей не слышно, мелочь развёрнута в одну сторону. Это не наказание, а цена законченного вымысла.
+   */
+  sterile = 0;
+  sterileK = 0;
+  private sterileAligned = false;
   /** Следующая сессия, собранная за время лимбо. */
   private pending: { level: BuiltLevel; dream: DreamSeed } | null = null;
   /**
@@ -1806,7 +1815,7 @@ export class Game {
     const t = fl ? 100 + fl.viewT : this.time;
     if (this.where !== 'main') return { t, amp: this.pocket?.kind === 'meadow' ? 0.085 : 0.02, dir: [0.8, 0.6] };
     if (fl) return { t, amp: 0.035 * (1 + 2.2 * fl.train), dir: [0.3, 0.954] };
-    return { t, amp: WIND[this.world], dir: [0.8, 0.6] };
+    return { t, amp: WIND[this.world] * (1 - 0.92 * this.sterileK), dir: [0.8, 0.6] };
   }
 
   private get openSky(): boolean {
@@ -2479,6 +2488,7 @@ export class Game {
     this.metaFired = false;
     this.metaGaze = 0;
     this.metaHold = false;
+    this.limboLook = null;
     this.teleport(p.spawn.pos[0], p.spawn.pos[1], p.spawn.pos[2], p.spawn.yaw, p.spawn.pitch ?? 0);
     if (kind === 'void' && !limbo) {
       // Белое нигде посреди сессии: перед игроком дугой лежит то, что он уже вспомнил, а на месте
@@ -3370,6 +3380,7 @@ export class Game {
     // секунд (systems/warp.ts). Пока перекрут идёт, второе касание его не начинает заново; после — цепь снова «заряжена», когда
     // герой от неё отошёл. Внутри комнаты даль белеет, и место собирается взглядом, как в светлом месте (frame: whiteIn).
     this.stepWhite(dt, dream);
+    this.stepSterile(dt);
 
     // Всё вспомнено: чуть погодя место рассыпается, игрок попадает в лимбо.
     if (this.endIn >= 0 && !this.transition) {
@@ -4054,7 +4065,11 @@ export class Game {
       // На снимке время стоит: точки не дрожат, взвесь висит.
       time: fl ? 100 + fl.viewT : this.time,
       frame: this.frame,
-      ambient: strobe > 0 ? [this.env.ambient[0] + 0.42 * strobe, this.env.ambient[1] + 0.45 * strobe, this.env.ambient[2] + 0.5 * strobe] : this.env.ambient,
+      // Стерильное место (сюжет) освещено ровно и холодно, как витрина: луч в нём больше ничего не открывает.
+      ambient:
+        strobe > 0 || this.sterileK > 0.001
+          ? [this.env.ambient[0] + 0.42 * strobe + 0.13 * this.sterileK, this.env.ambient[1] + 0.45 * strobe + 0.145 * this.sterileK, this.env.ambient[2] + 0.5 * strobe + 0.16 * this.sterileK]
+          : this.env.ambient,
       fogColor: fog,
       fogDensity: lerp(this.env.fogDensity, 0.012, this.where === 'main' ? this.whiteIn : 0),
       lightScale,
@@ -4083,14 +4098,15 @@ export class Game {
       skySeed: this.skySeed,
       piece: this.piece !== null && this.where === 'main',
       // Собрано только там, куда смотрит герой, — в светлых местах тоже. Вспышка строба показывает всё.
-      gaze: 1 - clamp(strobe, 0, 1),
+      // Стерильное место (сюжет) собрано целиком и без взгляда: каталог заполнен, смотреть больше не на что.
+      gaze: (1 - clamp(strobe, 0, 1)) * (1 - 0.8 * this.sterileK),
       // В зале ожидания взгляд стоящего раскрывается, идущего — узок, как луч. К концу сессии конус взгляда у
       // любого места сжимается, на выдохе после воспоминания — раскрывается (кривая ощущений).
       ...(fl || fv.gaze !== 1 ? { gazeCone: gazeConeOf(fl ? fl.gaze() : GAZE_CONE, fv.gaze) } : {}),
       beamCone: fv.beam,
       // Кадр плывёт: разлёт цветов медленно дышит (период около 7,5 с) — кадр, а не голова: камеру не качаем.
       // Дрожь и разлёт цветов — не вспышки, а ощущения (дребезжание): мягкие вспышки их не трогают, «почти незаметные» — тише.
-      drift: fv.drift * (this.faintFlash ? 0.4 : 1) * (0.55 + 0.45 * Math.sin(this.time * 0.83)),
+      drift: fv.drift * (this.faintFlash ? 0.4 : 1) * (0.55 + 0.45 * Math.sin(this.time * 0.83)) * (1 - this.sterileK),
       lens: lens + warp.lens,
       // Перекрут белой комнаты: мир становится широкоугольным (systems/warp.ts).
       fov: warp.fov,
@@ -4141,10 +4157,13 @@ export class Game {
     if (this.metaHold) {
       this.metaHoldT += dt;
       if (this.metaHoldT > META.holdMax) this.metaHold = false;
+      const look = this.pocketThings.find((t) => t.still && t.state === 'idle' && t.gaze >= 1);
+      this.limboLook = look ? look.kind : null;
       return;
     }
-    if (!this.metaWanted || this.metaFired || this.limboTime < META.after) return;
     const seen = this.pocketThings.find((t) => t.still && t.state === 'idle' && t.gaze >= 1);
+    this.limboLook = seen ? seen.kind : null;
+    if (!this.metaWanted || this.metaFired || this.limboTime < META.after) return;
     this.metaGaze = seen ? this.metaGaze + dt : Math.max(0, this.metaGaze - dt * 2);
     if (!seen || this.metaGaze < META.gaze) return;
     this.metaFired = true;
@@ -4153,7 +4172,37 @@ export class Game {
     this.metaHoldT = 0;
     // Экспонат вспомнил: кадр на миг рвётся, как при вспышке воспоминания.
     this.glitch = Math.max(this.glitch, 0.35);
-    dream.push({ type: 'meta', at: [seen.pos[0], seen.pos[1], seen.pos[2]] });
+    dream.push({ type: 'meta', at: [seen.pos[0], seen.pos[1], seen.pos[2]], thing: seen.kind });
+  }
+
+  /**
+   * Сюжет: место стоит дольше после последней вещи сна — пока идёт сцена «рассортированной комнаты». Действует, только если
+   * конец сна уже назначен и ещё не начался.
+   */
+  extendEnd(seconds: number): void {
+    if (this.endIn >= 0 && !this.transition) this.endIn += Math.max(0, seconds);
+  }
+
+  /** Лимбо держится дальше: счёт удержания начинается заново (сюжет показывает вторую карточку подряд). */
+  metaKeep(): void {
+    this.metaHold = true;
+    this.metaHoldT = 0;
+  }
+
+  /**
+   * Стерильность (сюжет): плавно к заданной; перешла за середину — мелкие вещи, которых не видно, развёрнуты в одну сторону
+   * (Смотритель выравнивает предметы — и только вне кадра, как всё, что меняется в этом сне).
+   */
+  private stepSterile(dt: number): void {
+    this.sterileK = approach(this.sterileK, this.where === 'main' ? clamp(this.sterile, 0, 1) : 0, 0.3, dt);
+    if (this.sterileK < 0.3) this.sterileAligned = false;
+    if (this.sterileK <= 0.6 || this.sterileAligned || this.where !== 'main') return;
+    this.sterileAligned = true;
+    for (const t of this.things.list) {
+      if (t.state !== 'idle' || t.memory || t.still || t.collider >= 0) continue;
+      if (this.seen([t.pos[0], t.pos[1] + t.radius * 0.6, t.pos[2]], t.radius)) continue;
+      t.yaw = 0;
+    }
   }
 
   /** Шаги в такт: где за спиной прозвучали шаги следом с прошлого вызова (для звука). */
@@ -4237,6 +4286,8 @@ export class Game {
       swarm: this.swarm ? { mode: this.swarm.mode, pos: [...this.swarm.pos], node: this.swarm.node, cohesion: this.swarm.cohesion, awareness: this.swarm.awareness, aggravation: this.swarm.aggravation, near: this.swarmNear, growth: Math.min(1, (this.session?.doneCount ?? 0) / SWARM_GROWN), flow: this.swarmFlow ? this.swarmFlow.t : null } : null,
       director: this.director ? { phase: this.director.phase, released: this.director.wasReleased, settled: this.director.isSettled, clock: this.sleepTime } : null,
       hush: this.hush,
+      sterile: this.sterileK,
+      limboLook: this.limboLook,
       meta: { wanted: this.metaWanted, hold: this.metaHold, fired: this.metaFired },
       lesson: this.darkLesson?.phase ?? null,
       follow: this.follower?.times ?? 0,

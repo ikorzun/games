@@ -7,7 +7,7 @@
  *   npm run smoke:matrix                                             # + раскладка по матрице размеров, скриншоты в e2e/out/
  *   npm run smoke -- --url https://…                                 # опубликованная ссылка
  *
- * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en(,es), --sizes 640x360,…, --no-shots, --shell, --only play,gen,worlds,flats,illusions,session,pockets,fear,audio,frame,touch,bridge,matrix.
+ * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en(,es), --sizes 640x360,…, --no-shots, --shell, --only play,gen,worlds,flats,illusions,session,pockets,koma,fear,audio,frame,touch,bridge,matrix.
  * Симуляция в тестах заморожена и шагается через window.__vz: проверяется логика и вёрстка, а не
  * частота кадров (SwiftShader даёт 5–10 к/с). Качество задаётся параметром адреса, иначе по строке
  * видеокарты выбралось бы «низкое» и тень осталась бы непроверенной.
@@ -3258,6 +3258,109 @@ async function scenarioAudio(browser, baseUrl) {
 }
 
 /**
+ * Сюжет «Невостребованное» (docs/vylazka/koma): вертикальный срез канона v3 в настоящей сборке. Первый сон — бирка на первой
+ * вещи и разговор со Смотрителем; после третьей вещи место замирает (стерильность: кадр светлее и ровнее); в лимбо отвёл взгляд
+ * от экспоната, пока дописывают владельца, — «не подтверждено»; старая запись с Ритой; после перезагрузки сюжет на месте.
+ * Реплики идут по настоящему времени, поэтому сценарий ждёт их в самой странице.
+ */
+async function scenarioKoma(browser, baseUrl) {
+  section('Сюжет «Невостребованное»: бирка, разговор, замершая комната, «не подтверждено» взглядом, запись');
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  await vz(page, () => window.__vz.step(30));
+  const tag = () =>
+    page.evaluate(() => {
+      const e = document.querySelector('.vz-hud__tag');
+      const q = (c) => e.querySelector(c).textContent;
+      return { on: e.classList.contains('is-on'), big: e.classList.contains('is-big'), head: q('.vz-hud__tag-head'), name: q('.vz-hud__tag-name'), key: q('.vz-hud__tag-key'), value: q('.vz-hud__tag-val'), stamp: q('.vz-hud__tag-stamp') };
+    });
+  /** Дождаться реплики (по настоящему времени); false — не дождались. */
+  const heard = (key, ms = 45000) =>
+    page
+      .waitForFunction((w) => { const e = document.querySelector('.vz-hud__say'); return e.classList.contains('is-on') && e.textContent === w; }, RU[key], { timeout: ms, polling: 100 })
+      .then(() => true)
+      .catch(() => false);
+  const recall = async () => {
+    await vz(page, () => { window.__vz.reveal(); window.__vz.step(5); });
+    await vz(page, () => window.__vz.gotoMemory());
+    return vz(page, () => window.__vz.step(170));
+  };
+
+  // Вещь первая: приёмка.
+  let st = await recall();
+  let tg = await tag();
+  check('первая вещь вспомнена — на неё заведена бирка: «найдено», имя, «владелец: —»', st.session.done === 1 && tg.on && !tg.big && tg.head === RU['koma.tag.found'] && tg.name === RU['mem.sh_alarm.task'] && tg.key === RU['koma.tag.owner'] && tg.value === '—', JSON.stringify({ done: st.session.done, tg }));
+  check('чужой голос, потом Смотритель: «подожди. сначала запишем.»', (await heard('koma.a0_e01.echo_01', 8000)) && (await heard('koma.a0_e02.caretaker_01', 12000)));
+  check('он не обещает выхода и вписывает «уточнить»; «так можно?» — «временно.»', (await heard('koma.a0_e03.caretaker_01')) && (await tag()).value === RU['koma.tag.clarify'], JSON.stringify(await tag()));
+  let koma = await vz(page, () => window.__vz.koma());
+  check('пролог записан: вещь найдена, флаги приёмки стоят', koma.flags.includes('STORY_FIRST_ITEM') && koma.flags.includes('STORY_INVENTORY_INTRO') && koma.artifacts.LP05?.phase === 'association', JSON.stringify(koma));
+
+  // Вещь вторая кажется своей; третья спорит с ней — и место замирает.
+  await recall();
+  check('вторая вещь кажется своей: «руки маленькие. кажется, мои.»', await heard('koma.a1_e01.player_01', 15000));
+  await vz(page, () => { window.__vz.reveal(); window.__vz.step(5); });
+  await vz(page, () => window.__vz.gotoMemory());
+  await vz(page, () => window.__vz.step(20));
+  const before = frameMean(await vz(page, () => window.__vz.probe()));
+  st = await vz(page, () => window.__vz.step(170));
+  check('третья вещь говорит о второй другим голосом; Смотритель: «можно выбрать более ясную.»', st.session.done === 3 && (await heard('koma.a1_e01.echo_02', 8000)) && (await heard('koma.a1_e01.caretaker_01', 12000)));
+  check('«не сходится.» — «пока нет.»', await heard('koma.a1_e02.caretaker_01'));
+  st = await vz(page, () => window.__vz.step(240));
+  const after = frameMean(await vz(page, () => window.__vz.probe()));
+  check('место, где всё записано, замерло: оно ещё стоит, собрано целиком и освещено ровно — кадр заметно светлее', st.where === 'main' && st.sterile > 0.9 && after > before + 6, `стерильность ${st.sterile?.toFixed(2)}, где ${st.where}, яркость ${before.toFixed(1)} → ${after.toFixed(1)}`);
+  check('«здесь было больше людей.» — «теперь всё на месте.»', await heard('koma.a1_e03.caretaker_01'));
+
+  // Лимбо: бирка взглядом.
+  st = await stepUntil(page, (s) => s.where === 'limbo', 30, 80);
+  st = await vz(page, () => window.__vz.step(100));
+  koma = await vz(page, () => window.__vz.koma());
+  check('сон кончился лимбо; первое противоречие записано, у сюжета здесь есть дело', st.where === 'limbo' && koma.flags.includes('STORY_FIRST_CONTRADICTION') && st.meta.wanted === true, JSON.stringify({ where: st.where, flags: koma.flags, meta: st.meta }));
+  const kettle = (await vz(page, () => window.__vz.things())).find((t) => t.kind === 'kettle');
+  const reached = kettle ? await vz(page, (id) => window.__vz.gotoThing(id, 2.4), kettle.id) : false;
+  st = await vz(page, () => window.__vz.step(130));
+  tg = await tag();
+  check('посмотрел на экспонат — бирка во весь кадр, лимбо ждёт; Смотритель: «смотри сюда. я допишу.»', reached && st.limboLook === 'kettle' && st.meta.hold === true && tg.on && tg.big && tg.name === RU['mem.sh_kettle.task'] && (await heard('koma.limbo.caretaker_write', 8000)), JSON.stringify({ reached, look: st.limboLook, meta: st.meta, tg }));
+  // Пока смотрят — он пишет.
+  await page.waitForFunction(() => document.querySelector('.vz-hud__tag-val').textContent.length >= 4, null, { timeout: 60000 }).catch(() => undefined);
+  const part = (await tag()).value;
+  check('пока на вещь смотрят, он дописывает владельца по букве', part.length >= 4 && RU['koma.owner.lp01'].startsWith(part), part);
+  // Отвёл взгляд.
+  await vz(page, () => { window.__vz.look(Math.PI, 0); window.__vz.step(6); });
+  await page.waitForFunction(() => document.querySelector('.vz-hud__tag').classList.contains('is-stamped'), null, { timeout: 60000 }).catch(() => undefined);
+  tg = await tag();
+  koma = await vz(page, () => window.__vz.koma());
+  check('отвёл взгляд — запись оборвана, штамп «не подтверждено»; это записано как полноценное действие', tg.stamp === RU['koma.tag.unconfirmed'] && tg.value.endsWith('…') && tg.value.length < RU['koma.owner.lp01'].length && koma.artifacts.LP01?.phase === 'uncertain' && koma.flags.includes('STORY_UNCERTAIN_EVIDENCE_UNLOCKED'), JSON.stringify({ tg, art: koma.artifacts.LP01, flags: koma.flags }));
+  check('«я не знаю, чьё это.» — «…оставим до выяснения.»', await heard('koma.limbo.caretaker_later', 15000));
+  // Старая запись.
+  const tape = await page
+    .waitForFunction(() => { const c = document.querySelector('.vz-hud__meta.is-on .vz-meta--tape'); return c ? [...c.querySelectorAll('.vz-meta__tape-line')].map((e) => e.textContent) : false; }, null, { timeout: 20000, polling: 100 })
+    .then((h) => h.jsonValue())
+    .catch(() => []);
+  const box = await page.evaluate(() => { const c = document.querySelector('.vz-meta--tape'); if (!c) return null; const r = c.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: innerWidth, h: innerHeight }; });
+  check('обрывок старой записи: Рита и он сам, пять строк по канону, карточка в кадре', tape.length === 5 && tape[0] === RU['koma.a2_e02.rita_01'] && tape[4] === RU['koma.a2_e02.rita_03'] && !!box && box.l >= 0 && box.r <= box.w && box.t >= 0 && box.b <= box.h, JSON.stringify({ tape, box }));
+  koma = await vz(page, () => window.__vz.koma());
+  check('Рита записана как знакомая; сестры, стука и обещания «проснёшься» в строках нет', koma.flags.includes('STORY_RITA_INTRODUCED') && !Object.entries(RU).some(([k, v]) => (k.startsWith('koma.') || k === 'intro.goal' || k === 'title.how') && /сестр|стук|просн/i.test(v)));
+
+  // Следующий сон и перезагрузка.
+  for (let i = 0; i < 60 && st.where !== 'main'; i++) {
+    st = await vz(page, () => window.__vz.step(60));
+    await sleep(150);
+  }
+  check('лимбо отпустило: следующий сон начался', st.where === 'main' && st.profile.sorties === 2, JSON.stringify({ where: st.where, sorties: st.profile.sorties }));
+  await sleep(400);
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
+  const kept = await vz(page, () => window.__vz.koma());
+  check('после перезагрузки сюжет на месте: флаги, фазы вещей, сыгранные события', kept.schemaVersion === 3 && kept.flags.includes('STORY_RITA_INTRODUCED') && kept.artifacts.LP01?.phase === 'uncertain' && kept.seenEvents.includes('A2_E02') && kept.currentAct === 'ACT_02', JSON.stringify(kept));
+  check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0, (await vz(page, () => window.__vz.missingKeys())).join(', '));
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  await context.close();
+}
+
+/**
  * Игра внутри iframe с песочницей без allow-pointer-lock и без allow-same-origin: так её может встроить
  * портал или просмотрщик файлов. Мышь не захватывается, хранилище недоступно — игра обязана идти.
  */
@@ -3379,6 +3482,7 @@ try {
   if (only?.includes('things')) await run('things', scenarioThings);
   if (wants('stages')) await run('stages', scenarioStages);
   if (wants('scenes')) await run('scenes', scenarioScenes);
+  if (wants('koma')) await run('koma', scenarioKoma);
   if (wants('fear')) await run('fear', scenarioFear);
   if (wants('audio')) await run('audio', scenarioAudio);
   if (wants('frame')) await run('frame', scenarioFrame);

@@ -6,6 +6,7 @@
 import type { WorldKind } from '../gen/layout';
 import type { IPlatform } from '../platform/types';
 import { hash2 } from './rng';
+import { emptyNarrative, parseNarrative, type NarrativeSaveV3 } from '../systems/koma';
 
 export interface Profile {
   v: 1;
@@ -44,6 +45,8 @@ export interface Profile {
   memories: Partial<Record<WorldKind, PlaceMemory>>;
   /** Метаслой (systems/meta.ts): id обрывков, которые игрок уже видел, — по одному за сон. */
   meta: string[];
+  /** Сюжет «Невостребованное» (systems/koma.ts): флаги, фазы вещей, сыгранные события. */
+  koma: NarrativeSaveV3;
 }
 
 /** Воспоминание, которое проходится по кругу. */
@@ -76,7 +79,7 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
 export function defaultProfile(baseSeed: number): Profile {
-  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1, flash: 'soft', lang: null, quality: null, place: 'shelter', memories: {}, meta: [] };
+  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1, flash: 'soft', lang: null, quality: null, place: 'shelter', memories: {}, meta: [], koma: emptyNarrative() };
 }
 
 /** Разобрать профиль из хранилища; всё непонятное заменяется значениями по умолчанию. */
@@ -99,6 +102,7 @@ export function parseProfile(raw: unknown, baseSeed: number): Profile {
     place: o.place === 'office' || o.place === 'yellow' || o.place === 'station' ? o.place : 'shelter',
     memories: parseMemories(o.memories),
     meta: [...new Set(strArr(o.meta))],
+    koma: parseNarrative(o.koma),
   };
 }
 

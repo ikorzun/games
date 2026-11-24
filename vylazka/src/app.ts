@@ -31,7 +31,9 @@ import { drawScreens, loadScreens } from './render/screen_images';
 import { drawSigns } from './render/signs_atlas';
 import type { Sheets } from './render/signs_atlas';
 import type { Quality } from './render/renderer';
+import { Narrative } from './systems/koma';
 import { DECK, metaAllowed, nextFragment } from './systems/meta';
+import { KomaFlow } from './ui/koma_flow';
 import type { Fragment } from './systems/meta';
 import { ALL_MEMORIES, DEFAULT_SESSION, WORLD_MEMORIES } from './systems/session';
 import type { SessionConfig } from './systems/session';
@@ -188,6 +190,8 @@ export class App {
   private diagText: HTMLElement | null = null;
   private diagAt = 0;
   private testLevel = false;
+  /** Сюжет «Невостребованное» (systems/koma.ts, ui/koma_flow.ts): заводится при первом обращении, когда есть игра и профиль. */
+  private komaFlow: KomaFlow | null = null;
   private saving: Promise<void> = Promise.resolve();
   /** Какое воспоминание сейчас ищут и с какого момента (для подсказки «погаси свет»). */
   private seeking = '';
@@ -623,6 +627,7 @@ export class App {
       this.level = buildLevel(generateLayout(this.seed, this.rank, this.world), { wear });
       if (this.scenes) {
         this.game.sessionCfg = this.firstSleep ? FIRST_SLEEP : SCENE_SESSION;
+        if (this.komaOn) this.koma.onDream(this.firstSleep);
         // Кривая ощущений идёт через все сцены сессии: три вещи, около трёх минут.
         this.game.sessionThings = SCENES;
         this.game.sessionSpan = SCENES * 70;
@@ -728,7 +733,9 @@ export class App {
     this.roomSaid.clear();
     this.profile.successes += 1;
     // Метаслой: раз за сон, не в первом, экспонат в лимбо вспомнит обрывок — если ему есть что вспомнить (systems/meta.ts).
-    this.game.metaWanted = metaAllowed(this.profile.successes, this.testLevel) && nextFragment(this.profile.meta, this.reels()) !== null;
+    // Сюжет: экспонату, на который посмотрят, Смотритель допишет владельца (ui/koma_flow.ts) — тогда лимбо тоже ждёт взгляда.
+    const koma = this.komaOn && this.koma.onLimbo();
+    this.game.metaWanted = koma || this.deckReady();
     // Сон из сцен: вещь последней сцены вспомнена — цепочка её места шагнула; круг места — пять его вещей. В первом сне
     // сцена одна, и вещей в ней три.
     this.wasErased = this.scenes ? this.keepSceneMemory(undefined, Math.max(1, this.game.session?.doneCount ?? 1)) : this.keepMemory(true);
@@ -777,6 +784,39 @@ export class App {
     // Круг шагает, когда цепочка перешла через своё начало (первый сон вспоминает три вещи за одну сцену).
     const wrapped = m !== null && Math.floor((was + steps) / len) > Math.floor(was / len);
     return this.keepMemory(true, steps / len, wrapped, gain);
+  }
+
+  /** Сюжет идёт в основном режиме игры — во сне из сцен; на пробных уровнях и в прежней петле (?loop=1) его нет. */
+  private get komaOn(): boolean {
+    return this.scenes && !this.testLevel;
+  }
+
+  private get koma(): KomaFlow {
+    this.komaFlow ??= new KomaFlow(
+      {
+        hud: this.hud,
+        game: this.game,
+        save: () => this.saveProfile(),
+        deck: () => {
+          if (!this.deckReady()) return false;
+          this.showMeta();
+          return true;
+        },
+        hint: (id) => this.analytics.hint(id),
+      },
+      new Narrative(this.profile.koma),
+    );
+    return this.komaFlow;
+  }
+
+  /** Состояние сюжета (отладка, проверки). */
+  komaState(): unknown {
+    return this.profile.koma;
+  }
+
+  /** Обрывок метаслоя положен: не в первом сне, не на пробном уровне, и колода не кончилась. */
+  private deckReady(): boolean {
+    return metaAllowed(this.profile.successes, this.testLevel) && nextFragment(this.profile.meta, this.reels()) !== null;
   }
 
   /** Первый сон игрока: одна сцена убежища с тремя вещами, без смены мест. */
@@ -936,6 +976,7 @@ export class App {
     }
     this.profile.sorties += 1;
     this.mapHint = null;
+    if (this.komaOn) this.koma.onDream(this.firstSleep);
     // Новый сон — новая запись: в лимбо экспонат вспоминает миги этого сна.
     this.reel = { recall: [], apparition: [] };
     this.reelTake = null;
@@ -1243,7 +1284,9 @@ export class App {
         const id = e.memory.def.id;
         // Миг, когда вспомнил, — в запись для метаслоя (REEL).
         this.startReel('recall');
-        this.hud.flash(wornLine(t(`mem.${id}.done`), this.game.wearBase));
+        // Сюжет: на вещь заводится бирка; в первом сне о ней говорят Смотритель и чужие голоса — тогда строки «вспомнил» нет.
+        const told = this.komaOn && this.koma.onRecall(id, this.firstSleep);
+        if (!told) this.hud.flash(wornLine(t(`mem.${id}.done`), this.game.wearBase));
         if (!this.profile.archive.includes(id)) this.profile.archive.push(id);
         this.saveProfile();
         // Сон из сцен: последняя вещь сна вспомнена — следующей сцены нет, после этой — лимбо.
@@ -1282,7 +1325,12 @@ export class App {
       // Понижение качества, решённое игрой, — на переходе: пересев точек и пересборка стопки бумаги прячутся в нём.
       if (this.dropTo && (e.type === 'limbo' || e.type === 'begin' || (e.type === 'jump' && e.phase === 'switch'))) this.applyDrop();
       if (e.type === 'limbo') this.onLimbo();
-      else if (e.type === 'meta') this.showMeta();
+      else if (e.type === 'meta') {
+        if (this.komaOn && this.koma.onMeta(e.thing)) {
+          // Бирка или запись сюжета заняли это лимбо.
+        } else if (this.deckReady()) this.showMeta();
+        else this.game.metaHold = false;
+      }
       else if (e.type === 'begin') this.onBegin(e.scene === true, e.recalled === true);
       // «Вещи не любят, когда на них долго смотрят» спорит с главным делом первого сна — вспомнить вещь взглядом (куратор, пачка 48):
       // в первом сне её нет.
@@ -1751,6 +1799,8 @@ export class App {
     this.last = now;
     // Звук считается и на паузе: в меню игра стоит, а музыка идёт.
     if (this.game) this.audio.frame(this.game, dt, !this.lifecycle.paused);
+    // Сюжет: в лимбо Смотритель пишет, пока на вещь смотрят (настоящее время: при отладочной заморозке — тоже).
+    if (this.komaFlow && this.screen === 'play' && !this.lifecycle.paused) this.komaFlow.frame(dt);
     // Пока идёт игра, экран не гаснет: игрок может долго стоять в темноте и слушать.
     this.awake.want(this.screen === 'play' && !this.lifecycle.paused);
     if (this.frozen || this.lifecycle.paused) return;

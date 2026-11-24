@@ -1069,6 +1069,191 @@ body {
     transform: translate(-50%, -50%);
   }
 }
+/* Сюжет «Невостребованное»: реплики. Под серединой кадра, без дрожи вспышки: это разговор, а не память. Смотритель говорит
+   шрифтом бирок (DM Mono), перед строкой — бирка; герой — обычной строкой; чужие голоса и память — курсивом. */
+.vz-hud__say {
+  position: absolute;
+  left: 50%;
+  top: 60%;
+  transform: translate(-50%, -50%);
+  max-width: min(84%, 28em);
+  text-align: center;
+  text-wrap: balance;
+  font-size: clamp(15px, 1.3vmin + 10px, 22px);
+  line-height: 1.35;
+  color: #fff;
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.95), 0 1px 2px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  transition: opacity 0.28s ease-out;
+  pointer-events: none;
+}
+.vz-hud__say.is-on {
+  opacity: 0.97;
+}
+.vz-hud__say.is-caretaker {
+  font-family: 'DM Mono', ui-monospace, monospace;
+  font-weight: 300;
+  letter-spacing: 0.01em;
+  color: #f1ead6;
+}
+.vz-hud__say.is-caretaker::before {
+  content: '';
+  display: inline-block;
+  width: 0.62em;
+  height: 0.42em;
+  margin-right: 0.55em;
+  border: 1px solid currentColor;
+  border-radius: 1px;
+  vertical-align: 0.12em;
+  opacity: 0.8;
+}
+.vz-hud__say.is-echo,
+.vz-hud__say.is-rita,
+.vz-hud__say.is-memory,
+.vz-hud__say.is-staff {
+  font-style: italic;
+  opacity: 0;
+}
+.vz-hud__say.is-echo.is-on,
+.vz-hud__say.is-rita.is-on,
+.vz-hud__say.is-memory.is-on,
+.vz-hud__say.is-staff.is-on {
+  opacity: 0.86;
+}
+/* Бирка вещи: картонка с отверстием, поля от руки Смотрителя. Сбоку кадра; в лимбо — посреди (is-big). */
+.vz-hud__tag {
+  position: absolute;
+  right: max(3.5%, env(safe-area-inset-right, 0px));
+  top: 24%;
+  width: min(15.5em, 46%);
+  padding: 0.7em 0.9em 0.75em 1.7em;
+  font-family: 'DM Mono', ui-monospace, monospace;
+  font-weight: 300;
+  font-size: clamp(11px, 0.9vmin + 7px, 15px);
+  line-height: 1.4;
+  color: #2a2620;
+  background: #e9dfc6;
+  border-radius: 2px;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+  transform: rotate(-1.4deg) translateY(-6px);
+  opacity: 0;
+  transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+  pointer-events: none;
+}
+.vz-hud__tag::before {
+  content: '';
+  position: absolute;
+  left: 0.6em;
+  top: 50%;
+  width: 0.5em;
+  height: 0.5em;
+  margin-top: -0.25em;
+  border-radius: 50%;
+  background: #0b0b0b;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.vz-hud__tag.is-on {
+  opacity: 0.96;
+  transform: rotate(-1.4deg);
+}
+.vz-hud__tag.is-big {
+  right: auto;
+  left: 50%;
+  top: 34%;
+  width: min(19em, 78%);
+  font-size: clamp(13px, 1.2vmin + 9px, 19px);
+  transform: translate(-50%, -50%) rotate(-1.2deg);
+}
+.vz-hud__tag-head {
+  font-size: 0.72em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+.vz-hud__tag-name {
+  font-size: 1.12em;
+  font-weight: 400;
+  margin-bottom: 0.3em;
+}
+.vz-hud__tag-row {
+  display: flex;
+  gap: 0.5em;
+  align-items: baseline;
+  border-top: 1px dotted rgba(0, 0, 0, 0.35);
+  padding-top: 0.3em;
+}
+.vz-hud__tag-key {
+  flex: none;
+  font-size: 0.72em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+.vz-hud__tag-val {
+  min-width: 0;
+  min-height: 1.4em;
+  overflow-wrap: anywhere;
+}
+.vz-hud__tag-stamp {
+  display: none;
+  margin-top: 0.45em;
+  padding: 0.12em 0.45em;
+  width: fit-content;
+  font-size: 0.74em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8f2018;
+  border: 1.5px solid #8f2018;
+  border-radius: 2px;
+  transform: rotate(-2.5deg);
+  opacity: 0.88;
+}
+.vz-hud__tag.is-stamped .vz-hud__tag-stamp {
+  display: block;
+}
+/* Обрывок старой записи (сюжет, акт II): полоса расшифровки — кто говорит, видно по отступу и курсиву. */
+.vz-meta.vz-meta--tape {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 1em 1.2em 1.1em;
+  font-family: 'DM Mono', ui-monospace, monospace;
+  font-weight: 300;
+  font-size: clamp(13px, 1.1vmin + 9px, 18px);
+  line-height: 1.45;
+  color: #e8e4da;
+  background: rgba(14, 14, 15, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+  text-align: left;
+}
+.vz-meta__tape-head {
+  margin-bottom: 0.7em;
+  font-size: 0.72em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+.vz-meta__tape-line {
+  margin-top: 0.4em;
+}
+.vz-meta__tape-line.is-memory {
+  padding-left: 1.6em;
+  font-style: italic;
+  opacity: 0.78;
+}
+/* В лимбо, пока на экране бирка, его строки уходят — как при обрывке метаслоя. */
+.vz-hud.is-koma .vz-hud__limbo {
+  opacity: 0;
+}
+/* Телефон стоя: бирка сбоку — под верхней строкой, уже. */
+@media (orientation: portrait) {
+  .vz-hud__tag:not(.is-big) {
+    top: 15%;
+    width: min(13.5em, 58%);
+  }
+}
+
 /* Телефон лёжа: внизу справа — кнопка фонаря (90 px), и широкие строки посреди кадра на неё наезжали (640 × 360:
    подсказка «трясите» и строки лимбо; размер в матрице смоука с 21.11). Здесь строки уже — между боковыми кнопками. */
 @media (orientation: landscape) and (max-height: 520px) {

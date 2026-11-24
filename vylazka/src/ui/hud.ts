@@ -9,6 +9,8 @@ const pad = (n: number): string => String(n).padStart(2, '0');
 /** Сколько уходит обрывок метаслоя (transition у .vz-hud__meta в styles.css). */
 const META_FADE_MS = 1200;
 /** Сколько гаснет вспышка воспоминания (transition у .vz-hud__flash в styles.css). */
+/** Пауза между репликами разговора, мс. */
+const SAY_GAP_MS = 320;
 const FLASH_FADE_MS = 1600;
 
 /** Дата и время записи: старт 13 ноября 2004, 23:41:07, дальше идут игровые секунды. */
@@ -73,6 +75,10 @@ export class Hud {
   private readonly toastEl: HTMLElement;
   private readonly flashEl: HTMLElement;
   private readonly limboEl: HTMLElement;
+  private readonly sayEl: HTMLElement;
+  private readonly tagEl: HTMLElement;
+  private sayTimer: ReturnType<typeof setTimeout> | undefined;
+  private sayRun = 0;
   private readonly metaEl: HTMLElement;
   private metaTimer: ReturnType<typeof setTimeout> | undefined;
   private metaStop: (() => void) | null = null;
@@ -114,6 +120,9 @@ export class Hud {
       '<div class="vz-hud__toast"></div>' +
       '<div class="vz-hud__flash"></div>' +
       '<div class="vz-hud__limbo"></div>' +
+      // Сюжет «Невостребованное» (koma_flow.ts): реплики под серединой кадра и бирка вещи.
+      '<div class="vz-hud__say"></div>' +
+      '<div class="vz-hud__tag"><div class="vz-hud__tag-head"></div><div class="vz-hud__tag-name"></div><div class="vz-hud__tag-row"><span class="vz-hud__tag-key"></span><span class="vz-hud__tag-val"></span></div><div class="vz-hud__tag-stamp"></div></div>' +
       // Обрывок метаслоя (ui/meta_card.ts): в лимбо, вместо его строк.
       '<div class="vz-hud__meta"></div>' +
       '<div class="vz-hud__mark"></div>' +
@@ -151,6 +160,8 @@ export class Hud {
     this.flashEl = q('.vz-hud__flash');
     this.metaEl = q('.vz-hud__meta');
     this.limboEl = q('.vz-hud__limbo');
+    this.sayEl = q('.vz-hud__say');
+    this.tagEl = q('.vz-hud__tag');
     this.mark = q('.vz-hud__mark');
     this.relabel();
   }
@@ -368,6 +379,23 @@ export class Hud {
     }, ms);
   }
 
+  /** Карточка сюжета тем же местом: заголовок и строки (запись, «известно точно»). done — когда ушла совсем. */
+  card(head: string, rows: readonly { text: string; who: string }[], ms: number, done: () => void): void {
+    const card = document.createElement('div');
+    card.className = 'vz-meta vz-meta--tape';
+    const top = document.createElement('div');
+    top.className = 'vz-meta__tape-head';
+    top.textContent = head;
+    card.append(top);
+    for (const r of rows) {
+      const row = document.createElement('div');
+      row.className = `vz-meta__tape-line is-${r.who}`;
+      row.textContent = r.text;
+      card.append(row);
+    }
+    this.meta(card, ms, () => {}, done);
+  }
+
   /** Убрать обрывок (и сказать тому, кто ждал, что он ушёл). */
   metaClear(): void {
     if (this.metaTimer !== undefined) clearTimeout(this.metaTimer);
@@ -391,6 +419,83 @@ export class Hud {
       this.flashPending = null;
       if (p) this.flash(p.text, p.ms, true);
     }, wait);
+  }
+
+  /**
+   * Реплики сюжета по одной, под серединой кадра: who — чей голос (стиль строки), ms — сколько держится. Новый разговор обрывает
+   * прежний. Вспышка из очереди (строка пришедшей вещи) ждёт конца разговора: две строки разом не читаются. done — когда
+   * разговор кончился сам (не оборван).
+   */
+  say(lines: readonly { text: string; who: string; ms: number }[], delay = 0, done?: () => void): void {
+    const run = ++this.sayRun;
+    if (this.sayTimer !== undefined) clearTimeout(this.sayTimer);
+    const total = delay + lines.reduce((n, l) => n + l.ms + SAY_GAP_MS, 0);
+    if (lines.length > 0) {
+      this.flashUntil = Math.max(this.flashUntil, Date.now() + total);
+      if (this.flashPending) this.armFlashWait(this.flashUntil - Date.now());
+    }
+    const step = (i: number): void => {
+      if (run !== this.sayRun) return;
+      const l = lines[i];
+      if (!l) {
+        this.sayEl.classList.remove('is-on');
+        this.sayTimer = undefined;
+        done?.();
+        return;
+      }
+      this.sayEl.className = `vz-hud__say is-${l.who}`;
+      this.sayEl.textContent = l.text;
+      void this.sayEl.offsetWidth;
+      this.sayEl.classList.add('is-on');
+      this.sayTimer = setTimeout(() => {
+        this.sayEl.classList.remove('is-on');
+        this.sayTimer = setTimeout(() => step(i + 1), SAY_GAP_MS);
+      }, l.ms);
+    };
+    if (lines.length === 0) {
+      this.sayEl.classList.remove('is-on');
+      this.sayTimer = undefined;
+      return;
+    }
+    this.sayTimer = setTimeout(() => step(0), delay);
+  }
+
+  /** Идёт ли разговор. */
+  get saying(): boolean {
+    return this.sayTimer !== undefined;
+  }
+
+  /**
+   * Бирка вещи: заголовок («найдено»), имя вещи, поле (ключ и значение — «владелец: —»), штамп («не подтверждено»). null —
+   * убрать. big — посреди кадра (лимбо), иначе — сбоку. Значение поля меняется отдельно (tagValue): Смотритель пишет по буквам.
+   */
+  tag(v: { head: string; name: string; key: string; value: string; stamp?: string; big?: boolean } | null): void {
+    if (!v) {
+      this.tagEl.classList.remove('is-on');
+      return;
+    }
+    this.tagEl.querySelector('.vz-hud__tag-head')!.textContent = v.head;
+    this.tagEl.querySelector('.vz-hud__tag-name')!.textContent = v.name;
+    this.tagEl.querySelector('.vz-hud__tag-key')!.textContent = v.key;
+    this.tagEl.querySelector('.vz-hud__tag-val')!.textContent = v.value;
+    this.tagEl.querySelector('.vz-hud__tag-stamp')!.textContent = v.stamp ?? '';
+    this.tagEl.classList.toggle('is-stamped', !!v.stamp);
+    this.tagEl.classList.toggle('is-big', v.big === true);
+    this.tagEl.classList.add('is-on');
+  }
+
+  /** Лимбо: бирка сюжета на экране — строки лимбо уходят, как при обрывке метаслоя. */
+  setKoma(on: boolean): void {
+    this.el.classList.toggle('is-koma', on);
+  }
+
+  /** Значение поля бирки (пишется по буквам) и, если есть, штамп. */
+  tagValue(value: string, stamp?: string): void {
+    this.tagEl.querySelector('.vz-hud__tag-val')!.textContent = value;
+    if (stamp !== undefined) {
+      this.tagEl.querySelector('.vz-hud__tag-stamp')!.textContent = stamp;
+      this.tagEl.classList.toggle('is-stamped', stamp !== '');
+    }
   }
 
   /** Строки лимбо посреди кадра; пустой список — убрать. */

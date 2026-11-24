@@ -239,6 +239,8 @@ export interface VzDebugApi {
   /** Предметы витрины (?level=show) по порядку расстановки: имя, крепление, высота. */
   showcase(): { name: string; mount: string; h: number; y: number }[];
   audio(): ReturnType<import('../audio/engine').AudioEngine['status']>;
+  /** Состояние сюжета «Невостребованное» (systems/koma.ts). */
+  koma(): unknown;
   mute(on: boolean): void;
 }
 
@@ -809,6 +811,7 @@ export function installDebug(app: App): void {
       return true;
     },
     audio: () => app.sound.status(),
+    koma: () => app.komaState(),
     showcase: () => showcaseItems(app.params.get('props')?.split(',') ?? null),
     mute: (on) => app.setMuted(on),
   };
