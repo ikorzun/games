@@ -1570,7 +1570,7 @@ void main() {
   // есть: узкий и ровный, ползёт по циферблату, пока идёшь.
   if (mi == ${MAT.glass}) {
     vec3 Hg = normalize(L + normalize(-vPosV));
-    col += uLightColor * (lb.w * shadow * facing * (0.4 * pow(max(dot(Ng, Hg), 0.0), 220.0) + 0.03 * pow(max(dot(Ng, Hg), 0.0), 24.0)));
+    col += uLightColor * (lb.w * shadow * facing * (0.75 * pow(max(dot(Ng, Hg), 0.0), 140.0) + 0.05 * pow(max(dot(Ng, Hg), 0.0), 18.0)));
   }
 #endif
 
@@ -1584,7 +1584,10 @@ void main() {
   vec3 glowBase = maxc > 1.5 ? vec3(0.55) : uMatBase[mi];
 #ifdef THING_TEX
   // Экран подробной вещи: светится картинкой из карты цвета (строки и курсор), а не ровным пятном.
-  col += glowBase * ma.y * vColor.rgb * glowK * (mi == ${MAT.glow} ? tC.rgb * 5.0 + 0.04 : vec3(1.0));
+  // Курсор — самое светлое на экране (он почти белый, строки зелёные): он мигает, около секунды на цикл; гаснет до фона.
+  vec3 scr = tC.rgb;
+  if (mi == ${MAT.glow} && tC.r > 0.2 && fract(uSlide.w * 0.9) > 0.55) scr = vec3(0.0003, 0.008, 0.003);
+  col += glowBase * ma.y * vColor.rgb * glowK * (mi == ${MAT.glow} ? scr * 5.0 + 0.04 : vec3(1.0));
 #else
   col += glowBase * ma.y * vColor.rgb * glowK;
 #endif

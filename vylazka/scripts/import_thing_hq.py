@@ -126,10 +126,11 @@ def screen_image(size):
             w = rnd.randint(size // 22, size // 7)
             if x + w > size * 0.88:
                 break
-            d.rectangle((x, y, x + w, y + row // 3), fill=(110, 255, 150))
+            d.rectangle((x, y, x + w, y + row // 3), fill=(60, 255, 130))
             x += w + size // 28
         if line == 8:
-            d.rectangle((x, y - row // 4, x + size // 20, y + row // 2), fill=(190, 255, 210))
+            # Курсор — крупный и почти белый: по красному каналу шейдер отличает его от зелёных строк и мигает им.
+            d.rectangle((x, y - row // 3, x + size // 11, y + row * 2 // 3), fill=(240, 255, 240))
         y += row
     return img.filter(ImageFilter.GaussianBlur(max(0.6, size / 300)))
 
@@ -384,7 +385,9 @@ def build(name, src_root):
             blo = [min(p[k] for p in wp) for k in range(3)]
             bhi = [max(p[k] for p in wp) for k in range(3)]
             ax = 0 if bhi[0] - blo[0] >= bhi[2] - blo[2] else 2
-            wuv = [((p[ax] - blo[ax]) / ((bhi[ax] - blo[ax]) or 1.0) * 0.98 + 0.01, (1 - (p[1] - blo[1]) / ((bhi[1] - blo[1]) or 1.0)) * 0.98 + 0.01) for p in wp]
+            # После разворота вещи лицом к +z ось экрана идёт справа налево: u зеркалим, чтобы строки начинались слева.
+            mirror = src['turn'] % 4 in (2, 3)
+            wuv = [((lambda f: 1 - f if mirror else f)((p[ax] - blo[ax]) / ((bhi[ax] - blo[ax]) or 1.0)) * 0.98 + 0.01, (1 - (p[1] - blo[1]) / ((bhi[1] - blo[1]) or 1.0)) * 0.98 + 0.01) for p in wp]
             flag += [2] * len(wp)
         elif src.get('glass_mat') and mname(mi) == src['glass_mat']:
             flag += [1] * len(wp)
