@@ -53,6 +53,13 @@ SOURCES = {
     'alarm_clock': dict(src=('alarm_clock_01', 'alarm_clock_01.gltf'), klass='small', turn=0, height=0.2, hue=(120, 215, 4), credit='Alarm Clock 01 by James Ray Cock and Yann Kervran, Poly Haven (polyhaven.com), CC0'),
     'wet_floor_sign': dict(src=('WetFloorSign_01', 'WetFloorSign_01.gltf'), klass='small', turn=0, height=None, credit='Wet Floor Sign 01 by Fran Calvente, Poly Haven (polyhaven.com), CC0'),
     'office_clock': dict(src=('wall_clock', 'wall_clock.gltf'), klass='small', turn=0, height=0.34, patches=[('wall_clock', 0.232, 0.592, 0.308, 0.652)], credit='Wall Clock by PierreB3D, Poly Haven (polyhaven.com), CC0'),
+    # Sand3D (CC-BY-4.0): форма подробная, карт нет — у каждой детали свой цвет, шероховатость и металл клеткой листа.
+    'remote': dict(src=('remote', 'model.glb'), klass='small', turn=0, height=None, fit=0.22, tex=256, credit='"Remote Control" by budakbina, https://sketchfab.com/3d-models/c7ec86e7feb746489b30b4a01c2510af, CC-BY-4.0; modified: rewritten as a sand3d program'),
+    'office_terminal': dict(src=('office_terminal', 'model.glb'), klass='medium', turn=2, height=None, fit=0.52, tex=256, credit='"Vic-30" by fisherw, https://sketchfab.com/3d-models/98869ceaacdc4b1ebfca60caad424c09, CC-BY-4.0; modified: rewritten as a sand3d program'),
+    'office_chair': dict(src=('office_chair', 'model.gltf'), klass='large', turn=0, height=1.02, tex=256, credit='"Silla DISGRAF 8 B" by jacavision, https://sketchfab.com/3d-models/2ef40e2a05f74110bb90c3072fa3c2cd, CC-BY-4.0; modified: rewritten as a sand3d program'),
+    'water_cooler': dict(src=('water_cooler', 'model.glb'), klass='large', turn=0, height=1.35, tex=256, credit='NVIDIA SimReady assets: "water_cooler_a01" by NVIDIA, https://huggingface.co/datasets/nvidia/simready-assets/tree/653d91e182011f357cf1644013cc94ddf194d349/water_cooler_a01, CC BY 4.0; modified: rewritten as a sand3d program'),
+    'desk_phone': dict(src=('desk_phone', 'model.glb'), klass='small', turn=0, height=None, fit=0.24, tex=256, credit='"Office Phone" by maxdragon, https://sketchfab.com/3d-models/4176a01b6d0b4d13ad165c0df278a6b5, CC-BY-4.0; modified: rewritten as a sand3d program'),
+    'st_cup': dict(src=('st_cup', 'model.glb'), klass='small', turn=0, height=0.14, tex=256, credit='"Coffee Paper-cup" by DenPennicus, https://sketchfab.com/3d-models/70d51490fb8e4de0a132d9f543859a35, CC-BY-4.0; modified: rewritten as a sand3d program'),
     'photo_frame': dict(src=('standing_picture_frame_01', 'standing_picture_frame_01.gltf'), klass='small', turn=3, height=0.3, tex=1024, art='standing_picture_frame_01_artwork', credit='Standing Picture Frame 01 by James Ray Cock, Poly Haven (polyhaven.com), CC0'),
 }
 # Насыщенность карты цвета у всех подробных вещей (квиз 24.11: «цвет ярче»): вещь памяти должна находиться взглядом.
@@ -263,15 +270,17 @@ def bake_maps(doc, bufs, base, mats, size, patches, art, hue):
             c = grade(c.resize(box, Image.LANCZOS), hue)
         else:
             # Цвет без карты: множитель материала (линейный) → sRGB.
-            c = Image.new('RGB', box, tuple(int(round(255 * (x ** (1 / 2.2)))) for x in f[:3]))
+            c = grade(Image.new('RGB', box, tuple(int(round(255 * (x ** (1 / 2.2)))) for x in f[:3])), hue)
         if orm_img is not None:
             o = orm_img.convert('RGB').resize(box, Image.LANCZOS)
             ao_ch, rough, metal = o.split()
             if ao_img is None:
                 ao_ch = Image.new('L', box, 255)
         else:
-            rough = Image.new('L', box, int(round(255 * pbr.get('roughnessFactor', 1.0))))
-            metal = Image.new('L', box, int(round(255 * pbr.get('metallicFactor', 1.0 if orm_img is not None else 0.0))))
+            # По правилам glTF шероховатость и металл без значения — единица; None пишет выгрузка sand3d у стали.
+            rf, mf = pbr.get('roughnessFactor'), pbr.get('metallicFactor')
+            rough = Image.new('L', box, int(round(255 * (1.0 if rf is None else rf))))
+            metal = Image.new('L', box, int(round(255 * (1.0 if mf is None else mf))))
             ao_ch = Image.new('L', box, 255)
         if ao_img is not None:
             ao_ch = ao_img.convert('RGB').resize(box, Image.LANCZOS).split()[0]
@@ -332,6 +341,9 @@ def build(name, src_root):
     lo = [min(p[k] for p in pos) for k in range(3)]
     hi = [max(p[k] for p in pos) for k in range(3)]
     s = (height / (hi[1] - lo[1])) if height else 1.0
+    # fit — наибольший размер вещи, м (для лежащих: пульт, телефон).
+    if src.get('fit'):
+        s = src['fit'] / max(hi[k] - lo[k] for k in range(3))
     cx, cz = (lo[0] + hi[0]) / 2, (lo[2] + hi[2]) / 2
     # Начало координат вещи — середина основания: так стоит и болванка игры (world/thing_mesh.ts).
     pos = [((x - cx) * s, (y - lo[1]) * s, (z - cz) * s) for x, y, z in pos]
@@ -367,7 +379,17 @@ def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
     rows, credits = [], []
+    only = sys.argv[2].split(',') if len(sys.argv) > 2 else None
     for name in SOURCES:
+        if only and name not in only:
+            # Не пересобирать: строка описи остаётся прежней.
+            import re
+
+            old = re.search(r'^  %s: \{.*$' % name, open(OUT_META, encoding='utf-8').read(), re.M)
+            if old:
+                rows.append(old.group(0))
+                credits.append(SOURCES[name]['credit'])
+                continue
         row, credit = build(name, sys.argv[1])
         rows.append(row)
         credits.append(credit)

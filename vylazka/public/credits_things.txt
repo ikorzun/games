@@ -5,4 +5,10 @@ Changes made for the game: scale and origin, texture maps resized and repacked, 
 Alarm Clock 01 by James Ray Cock and Yann Kervran, Poly Haven (polyhaven.com), CC0
 Wet Floor Sign 01 by Fran Calvente, Poly Haven (polyhaven.com), CC0
 Wall Clock by PierreB3D, Poly Haven (polyhaven.com), CC0
+"Remote Control" by budakbina, https://sketchfab.com/3d-models/c7ec86e7feb746489b30b4a01c2510af, CC-BY-4.0; modified: rewritten as a sand3d program
+"Vic-30" by fisherw, https://sketchfab.com/3d-models/98869ceaacdc4b1ebfca60caad424c09, CC-BY-4.0; modified: rewritten as a sand3d program
+"Silla DISGRAF 8 B" by jacavision, https://sketchfab.com/3d-models/2ef40e2a05f74110bb90c3072fa3c2cd, CC-BY-4.0; modified: rewritten as a sand3d program
+NVIDIA SimReady assets: "water_cooler_a01" by NVIDIA, https://huggingface.co/datasets/nvidia/simready-assets/tree/653d91e182011f357cf1644013cc94ddf194d349/water_cooler_a01, CC BY 4.0; modified: rewritten as a sand3d program
+"Office Phone" by maxdragon, https://sketchfab.com/3d-models/4176a01b6d0b4d13ad165c0df278a6b5, CC-BY-4.0; modified: rewritten as a sand3d program
+"Coffee Paper-cup" by DenPennicus, https://sketchfab.com/3d-models/70d51490fb8e4de0a132d9f543859a35, CC-BY-4.0; modified: rewritten as a sand3d program
 Standing Picture Frame 01 by James Ray Cock, Poly Haven (polyhaven.com), CC0
