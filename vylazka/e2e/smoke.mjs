@@ -275,7 +275,7 @@ async function scenarioPlay(browser, baseUrl) {
     await segPick(tp, 'lang', 'ru');
     await sleep(200);
     const s0 = await state(tp);
-    check('нажатия в списке не начинают игру; выбор сменился (вспышки почти незаметные, язык русский)', s0.screen === 'title' && s0.overlay === 'start' && (await segOn(tp, 'flash')) === 'почти незаметные' && (await segOn(tp, 'lang')) === 'Русский' && (await tp.textContent('.vz-overlay__prompt')) === 'Нажмите, чтобы начать' && (await tp.evaluate(() => document.documentElement.lang)) === 'ru', JSON.stringify({ screen: s0.screen, flash: await segOn(tp, 'flash'), lang: await segOn(tp, 'lang') }));
+    check('нажатия в списке не начинают игру; выбор сменился (вспышки почти незаметные, язык русский)', s0.screen === 'title' && s0.overlay === 'start' && (await segOn(tp, 'flash')) === 'почти незаметные' && (await segOn(tp, 'lang')) === 'Русский' && (await tp.textContent('.vz-overlay__prompt')) === RU['ui.start'] && (await tp.evaluate(() => document.documentElement.lang)) === 'ru', JSON.stringify({ screen: s0.screen, flash: await segOn(tp, 'flash'), lang: await segOn(tp, 'lang'), prompt: await tp.textContent('.vz-overlay__prompt') }));
     // Нажатие мимо открытого списка его закрывает и игру не начинает.
     await tp.click('.vz-overlay', { position: { x: 20, y: 200 } });
     await sleep(150);
@@ -1731,7 +1731,8 @@ async function scenarioRooms(browser, baseUrl) {
   st = await stepUntil(page, (s) => s.jump !== null, 10, 60);
   check('тонкое помещение рассыпается, если в нём постоять: скачок dissolve в карман', thin && st.jump?.cause === 'thin' && st.jump.style === 'dissolve', JSON.stringify({ thin, jump: st.jump, fx: st.roomFx }));
   st = await stepUntil(page, (s) => s.where === 'pocket', 20, 30);
-  check('и игрок оказывается в карманном пространстве', st.where === 'pocket' && ['void', 'meadow', 'dollhouse'].includes(st.pocket), `${st.where}/${st.pocket}`);
+  // Карман — любой из тех, куда уносит случайный скачок (поле подсолнухов — с PR #10); песчаный зал — только через чёрный проём.
+  check('и игрок оказывается в карманном пространстве', st.where === 'pocket' && ['void', 'meadow', 'dollhouse', 'sunfield'].includes(st.pocket), `${st.where}/${st.pocket}`);
   await vz(page, () => window.__vz.jump('elsewhere', 'cut'));
   st = await stepUntil(page, (s) => s.where === 'main' && s.jump === null, 20, 30);
   await vz(page, () => window.__vz.calm(true));
