@@ -41,9 +41,11 @@ export const DETAIL = {
   upholstery: 21,
   /** Мрамор: облачный белый камень с серыми прожилками двух масштабов. */
   marble: 22,
+  /** Кость: волокна вдоль, поры, продольные трещины, пятна желтизны. */
+  bone: 23,
 } as const;
 
-export const DETAIL_LAYERS = 23;
+export const DETAIL_LAYERS = 24;
 
 type Texel = [number, number, number, number];
 
@@ -471,6 +473,21 @@ export function bakeDetail(size = 256, seed = 11): DetailStack {
     const g = 0.6 + cloud * 0.16 + (at(hi, x, y) - 0.5) * 0.03 - big * 0.42 - thin * 0.24 - hair * 0.1;
     const h = 0.5 - vein * 0.25 + (at(hi, x, y) - 0.5) * 0.04;
     return px(h, g, clamp01(0.97 - vein * 0.3), vein);
+  };
+
+  // 23. Кость: волокно идёт вдоль V (вдоль кости — так развёрнуты трубки костей), по нему мелкие поры-точки; редкие
+  // продольные трещины с тёмным дном; большие пятна желтизны и выветренные белёсые участки.
+  layers[DETAIL.bone] = (x, y) => {
+    const fibre = at(grainV, x, y, 1, 1, 11, 37);
+    const fine = at(grainV, x, y, 2, 1, 90, 5);
+    const pore = sstep(0.8, 0.9, at(hi, x, y, 1, 1, 13, 71)) * sstep(0.4, 0.6, at(mid, x, y, 1, 1, 40, 9));
+    const wob = Math.round((at(mid, x, y, 1, 1, 3, 150) - 0.5) * 14);
+    const crack = (1 - sstep(0, 0.018, Math.abs(at(lo, x + wob, y, 3, 1, 70, 22) - 0.5))) * sstep(0.5, 0.62, at(lo, x, y, 1, 1, 160, 90));
+    const stain = at(lo, x, y, 1, 1, 33, 200) - 0.5;
+    const chalk = sstep(0.62, 0.78, at(lo, x, y, 2, 2, 120, 15));
+    const g = 0.56 + (fibre - 0.5) * 0.2 + (fine - 0.5) * 0.08 + stain * 0.22 + chalk * 0.1 - pore * 0.22 - crack * 0.42;
+    const h = 0.52 + (fibre - 0.5) * 0.36 + (fine - 0.5) * 0.12 - pore * 0.45 - crack * 0.5;
+    return px(h, g, clamp01(0.9 - pore * 0.5 - crack * 0.6), Math.max(pore, crack));
   };
 
   const data = new Uint8Array(N * N * 4 * DETAIL_LAYERS);

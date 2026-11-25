@@ -52,7 +52,7 @@ export interface JumpsConfig {
 
 export const DEFAULT_JUMPS: JumpsConfig = { firstAfter: 50, gapMin: 45, gapMax: 80, maxPerSession: 6, lightChance: 0.3, reviveChance: 0.35, darkIdle: 7 };
 
-const POCKETS: readonly PocketKind[] = ['void', 'meadow', 'dollhouse'];
+const POCKETS: readonly PocketKind[] = ['void', 'meadow', 'dollhouse', 'sunfield'];
 
 export class Jumps {
   /** Сколько секунд осталось до того, как случайный скачок снова возможен. */

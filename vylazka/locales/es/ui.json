@@ -245,6 +245,7 @@
   "pocket.dollhouse.enter.idle": "una habitación roja. todavía no hay nada tuyo olvidado.",
   "pocket.dollhouse.map": "olvidado: {what}. {room}, {tier}.",
   "pocket.dollhouse.map.idle": "todavía no hay nada tuyo aquí.",
+  "pocket.sunfield.enter": "un campo de girasoles. el cielo está despejado.",
   "pocket.hint.exit": "El umbral rojo lleva de vuelta",
   "pocket.hint.fading": "Este lugar se desvanece. Te dejará ir",
   "tier.0": "nivel superior",

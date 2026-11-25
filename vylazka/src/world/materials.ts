@@ -52,10 +52,15 @@ export const MAT = {
   ceilTile: 39,
   // Мрамор (партнёр 24.11: «добавь на неё маткап и текстуру мрамора») — статуя красной комнаты, world/pocket_lethe.ts.
   marble: 40,
+  // Кость (партнёр 24.11: «на всё накинуть маткап костей») — скелет зверя в песчаном зале, world/pocket_dunes.ts.
+  bone: 41,
+  // Глазное яблоко (партнёр 24.11: «у некоторых подсолнухов в центре не семечки, а глазное яблоко… следит за тобой зрачком»):
+  // радужку и зрачок рисует шейдер мира — там, где шар обращён к камере; u развёртки — радиус яблока, м. world/pocket_sunfield.ts.
+  eye: 42,
 } as const;
 
 export type MatId = (typeof MAT)[keyof typeof MAT];
-export const MAT_COUNT = 41;
+export const MAT_COUNT = 43;
 
 /** Номера слоёв фактур; совпадают с DETAIL в render/detail.ts (тест следит). */
 /**
@@ -65,7 +70,7 @@ export const MAT_COUNT = 41;
  */
 export const CEIL_TILE = 0.6;
 
-const L = { concrete: 0, plaster: 1, paint: 2, rust: 3, metal: 4, wood: 5, fabric: 6, tile: 7, floor: 8, plastic: 9, paper: 10, brick: 11, dirt: 12, lagging: 13, zinc: 14, smooth: 15, wallpaper: 17, parquet: 18, linoleum: 19, veneer: 20, upholstery: 21, marble: 22 } as const;
+const L = { concrete: 0, plaster: 1, paint: 2, rust: 3, metal: 4, wood: 5, fabric: 6, tile: 7, floor: 8, plastic: 9, paper: 10, brick: 11, dirt: 12, lagging: 13, zinc: 14, smooth: 15, wallpaper: 17, parquet: 18, linoleum: 19, veneer: 20, upholstery: 21, marble: 22, bone: 23 } as const;
 
 /** Род запустения: что шейдер делает с поверхностью со временем. */
 export const DECAY = {
@@ -169,6 +174,11 @@ export const MAT_DEFS: readonly MatDef[] = [
   // Полированный мрамор: мягкий широкий блик под тонким слоем полировки, тёплый белый; чуть просвечивает на тонких местах
   // (край покрывала против света). Фактура — прожилки (слой marble). Не стареет: это камень памяти, а не обстановка.
   { name: 'marble', color: '#e6e1d4', rough: 0.2, spec: 0.75, coat: 0.6, sheen: 0.08, grime: 0.15, thin: 0.12, layer: L.marble, tile: 1.1, bump: 0.0009, decay: DECAY.none },
+  // Старая кость: матовая, желтоватая, с едва заметным восковым отливом по краю; тонкие места (край глазницы, лопасть
+  // позвонка) чуть просвечивают. Фактура — волокна вдоль кости, поры и трещины (слой bone).
+  { name: 'bone', color: '#d9cca8', rough: 0.72, spec: 0.4, sheen: 0.22, grime: 0.45, thin: 0.1, layer: L.bone, tile: 0.55, bump: 0.005, decay: DECAY.organic },
+  // Глазное яблоко: влажное, гладкое, с резким бликом; не стареет и не пачкается.
+  { name: 'eye', color: '#f1eee6', rough: 0.1, spec: 0.9, coat: 1.0, grime: 0, layer: L.smooth, tile: 0.5, bump: 0, decay: DECAY.none },
 ];
 
 /** sRGB-hex → линейный цвет. */
