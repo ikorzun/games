@@ -17,7 +17,7 @@ import { MAT } from './materials';
 import { asObject, hanging } from './objects';
 import { ALL_PROPS } from './props_all';
 import type { CellInfo, RoomCtx, Slot } from './furnish';
-import { landmark } from './furnish';
+import { fit, landmark } from './furnish';
 
 export interface Extras {
   /** Гора слипшегося: 0 — нет, 1 — кучка, 2 — гора, 3 — гора и кучка рядом. */
@@ -93,7 +93,9 @@ export function furnishExtras(ctx: RoomCtx, x: Extras): { mound: boolean; sticke
   }
   if (x.thicket) {
     const s = freeSlot(ctx, true);
-    if (s && stand(ctx, 'thicket', s, 0, 0.1)) {
+    // 2,4 м вдоль стены — у угла сдвинуть от соседней стены (fit), а не впритык к ней: иначе жерди уходили в косяк (аудит 25.11).
+    const t = ALL_PROPS.thicket;
+    if (s && t && stand(ctx, 'thicket', s, fit(s, t.w, t.d + 0.1), 0.1)) {
       thicket = true;
       landmark(ctx, 'thicket', s.xf, 0, 1.2, 0.8);
     }

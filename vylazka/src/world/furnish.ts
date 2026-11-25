@@ -792,7 +792,11 @@ function collapsed(ctx: RoomCtx): void {
   // Поворот, при котором локальная ось +z завала смотрит на дверь.
   const rot = ([1, 0, 3, 2] as const)[door]!;
   const pile = c.xf.child(0, 0, 0, rot);
+  // Массив завала — не стена: в него ничего не ставится (world/colliders.ts, mass; аудит расстановки 25.11).
+  const col = pile.col;
+  const c0 = col ? col.boxes.length : 0;
   collapse(pile, ctx.h, c.cx * 53 + c.cz * 29);
+  if (col) for (let i = c0; i < col.boxes.length; i++) col.boxes[i]!.mass = true;
   landmark(ctx, 'collapse', pile, 0, 1.2, 0.2);
   spot(ctx, pile, 0, 0.02, 1.0, 'floor');
 }

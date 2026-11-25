@@ -200,7 +200,10 @@ export class RoomFlow {
       }
     }
     const before = this.inside.slice();
-    this.fill(before, this.around(col, new Set(col.boxes.slice(c0))));
+    // Тени вещей игры, которые партнёр убрал или передвинул (world/colliders.ts, Shadow): для остальной обстановки они стоят, где
+    // стояли, — и для проходов тоже. Иначе на месте убранной вещи открывался «карман», и соседняя вещь будто отрезала его от
+    // комнаты: убранная первая картотека роняла ряд у соседней стены из трёх до одной (placed.test.ts, 25.11).
+    this.fill(before, [...this.around(col, new Set(col.boxes.slice(c0))), ...col.shadows.map((s) => s.box).filter((b) => this.stops(b))]);
     const was = this.pieces(before);
     const after = before.slice();
     this.fill(after, mine);
