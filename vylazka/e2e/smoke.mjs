@@ -2812,17 +2812,32 @@ async function scenarioTouchSession(browser, baseUrl) {
     check(`${name}: кнопки действия и списка заданий нет вовсе; фонарь и пауза на месте`, await page.evaluate(() => !document.querySelector('.vz-touch__btn--act') && !document.querySelector('.vz-touch__btn--goals') && !!document.querySelector('.vz-touch__btn--light') && !!document.querySelector('.vz-touch__btn--pause')));
     check(`${name}: в первые секунды заданий нет`, st.session.memories.every((m) => m.state === 'hidden') && (await page.evaluate(() => !document.querySelector('.vz-hud__goals').classList.contains('is-on'))));
 
-    // Вспышка воспоминания.
+    // Вспышка воспоминания. Она гаснет по часам страницы (5,2 с), а пять кадров после появления вещи без видеокарты могут
+    // идти секунды (сборка шейдеров): поэтому «загорелась» ловится наблюдателем в миг загорания, а не тем, что ещё горит.
+    await page.evaluate(() => {
+      const el = document.querySelector('.vz-hud__flash');
+      window.__flashLit = null;
+      const seen = () => {
+        if (el.classList.contains('is-on') && !window.__flashLit) window.__flashLit = { text: el.textContent, at: performance.now() };
+      };
+      window.__flashObs?.disconnect();
+      window.__flashObs = new MutationObserver(seen);
+      window.__flashObs.observe(el, { attributes: true, attributeFilter: ['class'], childList: true, characterData: true, subtree: true });
+    });
+    const shownAt = await page.evaluate(() => performance.now());
     await vz(page, () => window.__vz.reveal());
     st = await vz(page, () => window.__vz.step(5));
     await sleep(350);
     const active = st.session.memories.find((m) => m.state === 'active');
-    const flash = await page.evaluate(() => {
+    const flash = await page.evaluate((t0) => {
       const el = document.querySelector('.vz-hud__flash');
       const r = el.getBoundingClientRect();
-      return { on: el.classList.contains('is-on'), text: el.textContent, left: r.left, right: r.right, top: r.top, bottom: r.bottom, w: innerWidth, h: innerHeight };
-    });
-    check(`${name}: вспышка воспоминания видна, с текстом, и целиком в кадре`, !!active && flash.on && flash.text === memText(RU, active.id, 'flash') && flash.left >= 0 && flash.right <= flash.w && flash.top >= 0 && flash.bottom <= flash.h, JSON.stringify(flash));
+      window.__flashObs?.disconnect();
+      const lit = window.__flashLit;
+      return { on: el.classList.contains('is-on'), lit: lit?.text ?? null, ms: Math.round(performance.now() - t0), text: el.textContent, left: r.left, right: r.right, top: r.top, bottom: r.bottom, w: innerWidth, h: innerHeight };
+    }, shownAt);
+    const want = active ? memText(RU, active.id, 'flash') : null;
+    check(`${name}: вспышка воспоминания видна, с текстом, и целиком в кадре`, !!active && (flash.on || flash.lit === want) && flash.text === want && flash.left >= 0 && flash.right <= flash.w && flash.top >= 0 && flash.bottom <= flash.h, JSON.stringify(flash));
     bad = await page.evaluate(layoutProbe);
     check(`${name}: вспышка, список слева и кнопки не наезжают друг на друга`, bad.length === 0, bad.join('; '));
     if (wantShots) {
