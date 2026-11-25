@@ -65,6 +65,16 @@ function put(ctx: RoomCtx, name: string, xf: Xf, dx: number, off = 0.1): boolean
   return p.build(xf.child(dx, p.mount === 'wall' ? (p.y ?? 1.2) : 0, z), seedOf(ctx)) !== false;
 }
 
+/**
+ * Вещь посреди клетки — там, где она не встаёт на дорожку перед грядками (FRONT в world/clearance.ts): сначала в середине, потом
+ * со сдвигом от грядок к свободной стороне. try — поставить со сдвигом (dx, dz), true — встала.
+ */
+const SHIFTS: readonly (readonly [number, number])[] = [[0, 0], ...[0.3, 0.5, 0.65].flatMap((d) => [[d, 0], [-d, 0], [0, d], [0, -d], [d, d], [-d, d], [d, -d], [-d, -d]] as const)];
+function shifted(put: (dx: number, dz: number) => boolean): boolean {
+  for (const [dx, dz] of SHIFTS) if (put(dx, dz)) return true;
+  return false;
+}
+
 /** Обставить помещение оранжереей. false — у этого места оранжереи нет (жёлтые комнаты). */
 export function furnishGreenhouse(ctx: RoomCtx): boolean {
   const plan = GREEN_PLAN[ctx.world];
@@ -123,7 +133,7 @@ export function furnishGreenhouse(ctx: RoomCtx): boolean {
       while (i < centre.length) {
         const p = ALL_PROPS[centre[i++]!];
         if (!p) continue;
-        if (p.build(c.xf.child(0, 0, 0, (i % 2) as 0 | 1), seedOf(ctx)) !== false) {
+        if (shifted((dx, dz) => p.build(c.xf.child(dx, 0, dz, (i % 2) as 0 | 1), seedOf(ctx)) !== false)) {
           stood++;
           taken.add(c);
           break;
@@ -136,7 +146,8 @@ export function furnishGreenhouse(ctx: RoomCtx): boolean {
   if (plan.edge === undefined) {
     for (const c of ctx.cells) {
       if (c.doors > 0 || taken.has(c)) continue;
-      ALL_PROPS[plan.patch]?.build(c.xf.child(0, 0, 0), seedOf(ctx));
+      const patch = ALL_PROPS[plan.patch];
+      if (patch) shifted((dx, dz) => patch.build(c.xf.child(dx, 0, dz), seedOf(ctx)) !== false);
     }
   }
   // Места для вещей — на полу в проходе: вещь воспоминания может лежать и среди цветов (у перрона места — свои, от его обстановки).

@@ -72,6 +72,24 @@ describe('оранжерея в местах (партнёр 19.11: «комна
     expect(b.map((q) => q.pos)).toEqual(a.map((q) => q.pos));
   });
 
+  // Партнёр 25.11, «делай»: клумбы и цветы налезали на грядки. Посередине — клумба, стол, кадка, роза, парник: не на дорожке
+  // перед грядкой или стеллажом (FRONT, 0,55 м) и листьями поверх грядки не больше 15 см (world/clearance.ts, MIDDLE_LEAF).
+  it.each(cases.filter(([w]) => w !== 'yellow'))('%s, сид %i, ранг %i: посередине оранжереи — дорожка к грядкам, клумбы на них не налезают', (world, seed, rank) => {
+    const l = level(world, seed, rank);
+    const objs = l.objects ?? [];
+    const rows = objs.filter((o) => /^gh_(bed|rack)/.test(o.name));
+    const bad: string[] = [];
+    for (const m of objs.filter((o) => /^(gh_patch|gh_table|gh_tub|s3_rose_tall|s3_pergola)/.test(o.name))) {
+      for (const r of rows) {
+        const ox = Math.min(m.max[0], r.max[0]) - Math.max(m.min[0], r.min[0]) - 0.1;
+        const oz = Math.min(m.max[2], r.max[2]) - Math.max(m.min[2], r.min[2]) - 0.1;
+        const oy = Math.min(m.max[1], r.max[1]) - Math.max(m.min[1], r.min[1]);
+        if (oy > 0.05 && Math.min(ox, oz) > 0.15 + 1e-6) bad.push(`${m.name}#${m.id} над ${r.name}#${r.id} на ${Math.min(ox, oz).toFixed(2)} м`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
   it('сводка для глаз: помещение и число головок', () => {
     const rows: string[] = [];
     for (const [w, s, r] of cases) {

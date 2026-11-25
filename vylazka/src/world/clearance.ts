@@ -102,6 +102,15 @@ export const FRONT: Readonly<Record<string, number>> = {
   s3_bunk_black: 0.6,
   s3_bunk_mattress: 0.6,
   s3_bed_iron_white: 0.6,
+  // Грядки оранжереи: перед ними дорожка, как в теплице (партнёр 25.11, «делай»: клумба посреди пола вставала в 10 см от грядки,
+  // и цветы двух грядок сплетались в одну). Растения друг в друга листьями заходят (leafHit), но не стоят на дорожке.
+  gh_bed_mourn: 0.55,
+  gh_bed_mourn_s: 0.55,
+  gh_bed_spring: 0.55,
+  gh_bed_spring_s: 0.55,
+  gh_bed_green: 0.55,
+  gh_bed_green_s: 0.55,
+  gh_rack: 0.55,
 };
 
 /** Полоса пола перед лицом только что собранной вещи (её преграды — в col с номера c0; лицо — локальная +z при повороте rot). */
@@ -192,13 +201,34 @@ const PLANT = /^(gh_|paper_flower(?!_hang)|s3_rose|thicket)/;
 /** Насколько листья могут уйти в стену, м: лист у стены прижат, а не проткнул её. */
 const LEAF_WALL = 0.15;
 
+/**
+ * Вещь посреди оранжереи (клумба, стол с рассадой, кадка, роза, парник) и грядка или стеллаж у стены: листья друг над другом —
+ * не больше этого, м. Иначе посредине встаёт вплотную к грядке, и цветы двух сливаются в одну (план 25.11: кадка монстеры
+ * накрывала листьями две грядки в углу).
+ */
+const MIDDLE = /^(gh_patch|gh_table|gh_tub|s3_rose_tall|s3_pergola)/;
+const ROW = /^gh_(bed|rack)/;
+const MIDDLE_LEAF = 0.15;
+
 /** Видимое растение (габариты сетки lo–hi) заходит в мебель или в стену. */
 export function leafHit(name: string, look: [Vec3, Vec3] | null | undefined, col: ColliderSet, c0: number, objects: readonly LevelObject[]): boolean {
-  if (!look || !PLANT.test(name)) return false;
+  if (!look || !(PLANT.test(name) || MIDDLE.test(name))) return false;
   const [lo, hi] = look;
   const e = 0.05;
   const box: Aabb = { minX: lo[0] + e, maxX: hi[0] - e, minY: lo[1] + 0.05, maxY: hi[1], minZ: lo[2] + e, maxZ: hi[2] - e };
   if (box.minX >= box.maxX || box.minZ >= box.maxZ) return false;
+  if (MIDDLE.test(name)) {
+    for (const o of objects) {
+      if (!ROW.test(o.name)) continue;
+      const other: Aabb = { minX: o.min[0], maxX: o.max[0], minY: o.min[1], maxY: o.max[1], minZ: o.min[2], maxZ: o.max[2] };
+      const depth = growth(box, other);
+      if (depth > MIDDLE_LEAF) {
+        watcher?.(name, `leaf over ${o.name}`, depth, box, other);
+        return true;
+      }
+    }
+    if (!PLANT.test(name)) return false;
+  }
   const own = col.boxes[c0]?.owner;
   const near: Aabb[] = [];
   for (const b of col.query(box.minX, box.minZ, box.maxX, box.maxZ, near)) {
