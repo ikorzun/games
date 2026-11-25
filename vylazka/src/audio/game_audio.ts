@@ -81,12 +81,10 @@ export type AudioScene = 'silent' | 'menu' | 'play';
 
 const MUSIC = 'music_menu';
 /**
- * Аккорд баяна странной комнаты (K-31) — пока тем же тёмным тоном заставки, тихо: своего клипа нет.
- * TODO(звук): клип `bayan_chord` (ElevenLabs Sound Effects): «old Russian bayan button accordion, a single sustained minor chord on
- * a slow bellows exhale, about 5 seconds, warm and close, recorded at full level, no melody, no room noise» — и играть его вместо
- * music_menu разово на касании.
+ * Аккорд баяна странной комнаты (K-31): клип `bayan_chord` (ElevenLabs, 25.11 — ми минор с септимой на одном выдохе мехов, 5 с,
+ * нарастает и гаснет сам) играет один раз, когда коснулись баяна: громкость поверх манифеста.
  */
-export const BAYAN_CHORD = 0.5;
+export const BAYAN_CHORD = 1;
 /** Тихие помехи телевизора странной комнаты (K-32) — не рёв: громкость петли signal_static в полную силу дрожи. */
 export const TV_HUM = 0.32;
 /** Тон невесомости под шариком (K-33) — тот же, что в белом нигде, тише. */
@@ -170,6 +168,8 @@ export const WAKE_EVERY = 170;
 export class GameAudio {
   /** Сколько поездов уже слышали (зал ожидания). */
   private trains = 0;
+  /** Аккорд баяна в прошлом кадре: новый выдох — когда он снова пошёл с нуля. */
+  private chordWas = 0;
   private scene: AudioScene = 'silent';
   private rattleAt = 0;
   private crankAt = 0;
@@ -321,9 +321,12 @@ export class GameAudio {
       a.loop(MUSIC, 1);
       return;
     }
-    // Баян странной комнаты тянет аккорд, пока комната выдыхает (BAYAN_CHORD).
+    // Баян странной комнаты: на касании — один выдох мехов, аккорд (BAYAN_CHORD); музыки заставки в игре нет.
     const odd = this.scene === 'play' && game.where === 'main' ? (game.oddSound ?? null) : null;
-    a.loop(MUSIC, odd ? BAYAN_CHORD * odd.chord : 0);
+    a.loop(MUSIC, 0);
+    const chord = odd ? odd.chord : 0;
+    if (chord > 0 && this.chordWas <= 0 && active) a.play('bayan_chord', { volume: BAYAN_CHORD, late: 1.5 });
+    this.chordWas = chord;
     // Аквариум: весь звук глохнет, как под водой.
     a.muffle?.(odd ? odd.muffle : 0);
     if (this.scene !== 'play') return;

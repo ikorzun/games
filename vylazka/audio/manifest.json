@@ -565,6 +565,16 @@
       "ru": "поезд проходит за окнами зала ожидания"
     },
     {
+      "id": "bayan_chord",
+      "bus": "sfx",
+      "variants": 1,
+      "loop": false,
+      "seconds": 5,
+      "volume": 0.5,
+      "prompt": "Old Russian bayan button accordion playing a single sustained minor chord on one slow bellows exhale, about 5 seconds, warm and close-miked, recorded at full level, soft attack and gentle swell, a faint reedy breath of the bellows, no melody, no rhythm, no room noise, no music besides the chord",
+      "ru": "аккорд баяна странной комнаты: один выдох мехов, когда коснулись баяна"
+    },
+    {
       "id": "still_tone",
       "bus": "amb",
       "variants": 1,
