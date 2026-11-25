@@ -156,7 +156,7 @@ export class ObjectLog {
       }
     }
     // Не врастать в соседнюю мебель (партнёр 18.11): врастает — как не собирали.
-    if (guard && growthGuard && xf.col && growthGuard(name, xf.col, c0, this.list, xf.rot)) {
+    if (guard && growthGuard && xf.col && growthGuard(name, xf.col, c0, this.list, xf.rot, xf.mb.bounds(v0))) {
       xf.mb.rewind(m0);
       if (xf.sl && ms) xf.sl.rewind(ms);
       xf.col.rewind(c0);
@@ -227,7 +227,7 @@ export function withFlatHook<T>(fn: FlatHook | null, body: () => T): T {
  * преградам, которые вещь только что получила (с номера c0), и журналу стоящих. true — врастает, вещь не ставится. Ставит
  * сборка уровня на время обстановки (world/level_build.ts); вещам партнёра и фигурам — нет: их место проверено своё.
  */
-export type GrowthGuard = (name: string, col: ColliderSet, c0: number, objects: readonly LevelObject[], rot?: number) => boolean;
+export type GrowthGuard = (name: string, col: ColliderSet, c0: number, objects: readonly LevelObject[], rot?: number, look?: [Vec3, Vec3] | null) => boolean;
 let growthGuard: GrowthGuard | null = null;
 
 /** Выполнить body с проверкой «не врастать» (null — без неё). */

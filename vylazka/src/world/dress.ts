@@ -144,11 +144,15 @@ export function dressRoom(ctx: RoomCtx): void {
         const p = PROPS[name]!;
         has?.add(name);
         const x = along(s, p.w, p.d, corridor ? rX : 0.5 + (rX - 0.5) * 0.3);
-        // Отдельно стоящий предмет описан от своего центра: придвигаем его спиной к стене.
-        p.build(s.xf.child(x, p.mount === 'wall' ? (p.y ?? 1.2) : 0, p.mount === 'free' ? p.d / 2 + 0.03 : 0), seed);
-        s.used = true;
-        // Низкое или узкое оставляет стену над собой свободной для надписи.
-        wallTaken = p.mount === 'wall' || p.h > 1.3;
+        // Отдельно стоящий предмет описан от своего центра: придвигаем его спиной к стене. Не встал (врастал или стоял бы перед
+        // лицом шкафа — world/clearance.ts) — у другого конца той же стены; не встал и там — участок свободен (25.11: стол с
+        // машинкой в архиве пропадал вместе с участком).
+        const at = (ax: number): boolean => p.build(s.xf.child(ax, p.mount === 'wall' ? (p.y ?? 1.2) : 0, p.mount === 'free' ? p.d / 2 + 0.03 : 0), seed) !== false;
+        if (at(x) || (Math.abs(x) > 0.05 && at(-x))) {
+          s.used = true;
+          // Низкое или узкое оставляет стену над собой свободной для надписи.
+          wallTaken = p.mount === 'wall' || p.h > 1.3;
+        } else has?.delete(name);
       }
     }
 

@@ -13,6 +13,7 @@
  */
 import type { Aabb, ColliderSet } from './colliders';
 import type { LevelObject } from './objects';
+import type { Vec3 } from '../core/types';
 
 /** Насколько коробки соседних вещей могут зайти друг в друга, м: преграды — габариты, у самих моделей по краям есть воздух. */
 export const GROW_TOL = 0.05;
@@ -181,6 +182,45 @@ function atEnd(zone: Aabb, zrot: number, b: Aabb, brot: number | undefined, othe
 
 /** Варианты расстановки одной комнаты (world/variants.ts) друг с другом не стоят. */
 const otherVariant = (a: Aabb, b: Aabb): boolean => a.group !== undefined && b.group !== undefined && a.group !== b.group;
+
+/**
+ * Растения и бумажные цветы (оранжерея, клумбы): преграда у них — только кадка или кочка, а листья и головки шире (ревизия планов
+ * 25.11: клумба заходила в прилавок буфета на 22 см, высокий цветок — в стол начальника на 20). Их проверяем по видимым габаритам
+ * (вершины сетки) — против мебели и стен; друг с другом растения сплетаются, это можно.
+ */
+const PLANT = /^(gh_|paper_flower(?!_hang)|s3_rose|thicket)/;
+/** Насколько листья могут уйти в стену, м: лист у стены прижат, а не проткнул её. */
+const LEAF_WALL = 0.15;
+
+/** Видимое растение (габариты сетки lo–hi) заходит в мебель или в стену. */
+export function leafHit(name: string, look: [Vec3, Vec3] | null | undefined, col: ColliderSet, c0: number, objects: readonly LevelObject[]): boolean {
+  if (!look || !PLANT.test(name)) return false;
+  const [lo, hi] = look;
+  const e = 0.05;
+  const box: Aabb = { minX: lo[0] + e, maxX: hi[0] - e, minY: lo[1] + 0.05, maxY: hi[1], minZ: lo[2] + e, maxZ: hi[2] - e };
+  if (box.minX >= box.maxX || box.minZ >= box.maxZ) return false;
+  const own = col.boxes[c0]?.owner;
+  const near: Aabb[] = [];
+  for (const b of col.query(box.minX, box.minZ, box.maxX, box.maxZ, near)) {
+    if (b.ghost || b.partner || b.cut || b.off) continue;
+    if (b.owner === undefined) {
+      if (b.maxY - b.minY >= 1.2 && crossing(box, b) > LEAF_WALL) {
+        watcher?.(name, 'leaf wall', crossing(box, b), box, b);
+        return true;
+      }
+      continue;
+    }
+    if (b.owner <= 0 || b.owner === own) continue;
+    const o = objects[b.owner - 1];
+    if (!o || PLANT.test(o.name)) continue;
+    const depth = crossing(box, b);
+    if (depth > GROW_TOL) {
+      watcher?.(name, `leaf ${o.name}`, depth, box, b);
+      return true;
+    }
+  }
+  return false;
+}
 
 /** Кто не встал и во что упёрся — для разбора и тестов (null — никому не говорить). */
 type Watcher = (name: string, other: string, depth: number, mine: Aabb, theirs: Aabb) => void;
