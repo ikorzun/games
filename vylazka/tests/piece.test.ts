@@ -57,6 +57,26 @@ describe('сцена — кусок места (квиз 17.11: «Сцена —
     }
   });
 
+  it('прошедшее место — одна комната: сама комната целиком и не дальше клетки прохода у её двери (pressure.md, §4.6 п. 4)', () => {
+    for (const world of ['shelter', 'office', 'yellow'] as const) {
+      const l = level(world, 777);
+      const rooms = l.layout!.rooms;
+      const start = l.nav.find((n) => !PASSAGES.includes(rooms[n.room]!.type as RoomType) && rooms[n.room]!.cells.length >= 2)!;
+      const p = scenePiece(l.nav, l.layout!, start.id, 5, 1);
+      expect(p.count, world).toBe(1);
+      const own = l.nav.filter((n) => n.room === start.room).map((n) => n.id);
+      for (const id of own) expect(p.nodes.has(id), 'комната целиком').toBe(true);
+      // Кроме комнаты — только клетки проходов вплотную к ней.
+      for (const id of p.nodes) {
+        const n = l.nav[id]!;
+        if (n.room === start.room) continue;
+        expect(PASSAGES).toContain(rooms[n.room]!.type);
+        expect(n.links.some((x) => l.nav[x]!.room === start.room), 'проход — у двери комнаты').toBe(true);
+      }
+      expect(p.edge.length).toBeGreaterThan(0);
+    }
+  });
+
   it('тот же жребий — тот же кусок; сколько комнат — по жребию сцены, от трёх до шести', () => {
     const l = level('shelter', 20041113);
     const entrance = l.nav.find((n) => n.room === l.layout!.entranceRoom)!.id;

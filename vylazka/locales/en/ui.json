@@ -158,6 +158,7 @@
   "title.count": "sessions closed: {n} · memories kept: {k} of {total}",
   "session.begin": "untitled session {n}",
   "session.erased": "this place is gone. another one opens.",
+  "scene.faded": "this place is gone. one room stayed.",
   "loop.lap.2": "this place again.",
   "loop.lap.3": "it was fuller last time.",
   "loop.lap.4": "every visit takes something.",

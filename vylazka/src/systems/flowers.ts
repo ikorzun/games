@@ -27,6 +27,14 @@ export interface FlowerSite extends Bloom {
   delay: number;
   /** Объект уровня, на котором растёт (грядка, горшок): растворился — головки нет. 0 — ни на чём. */
   obj: number;
+  /** Увяла: 0 — живая, 1 — сухая (головка поникла, сжалась, не раскрывается). Рядом с Осыпью вянет, потом медленно отходит. */
+  wilt: number;
+}
+
+/** Где Осыпь и насколько она плотна (0..1): рядом с ней цветы вянут. */
+export interface FlowerBlight {
+  pos: Vec3;
+  k: number;
 }
 
 export interface FlowerLight {
@@ -53,6 +61,15 @@ export const FLOWER_CFG = {
   closeDelay: [0.5, 2.6] as const,
   /** Бутон: насколько сжата головка поперёк своей оси. */
   bud: 0.34,
+  /**
+   * Увядание у Осыпи (design.md, §35; Осыпь — сожаление): в blightRadius метрах от неё головка вянет со скоростью wiltRate в
+   * секунду (у самой Осыпи; к краю слабее), а без неё отходит на recover в секунду — след увядших цветов держится почти минуту и
+   * показывает, где она прошла. Увядшая головка никнет вниз до droop радиан, сжимается и раскрывается не больше чем на 1 − wilt.
+   */
+  blightRadius: 3.2,
+  wiltRate: 0.9,
+  recover: 0.018,
+  droop: 1.15,
 };
 
 type V = Vec3;
@@ -84,7 +101,7 @@ export class Flowers {
 
   constructor(blooms: readonly (Bloom & { obj?: number })[], seed: number) {
     const [lo, hi] = FLOWER_CFG.closeDelay;
-    this.sites = blooms.map((b, i) => ({ ...b, face: norm(b.dir), open: 0, dark: 0, delay: lo + (hi - lo) * hash01(i, 0x71c, seed), obj: b.obj ?? 0 }));
+    this.sites = blooms.map((b, i) => ({ ...b, face: norm(b.dir), open: 0, dark: 0, delay: lo + (hi - lo) * hash01(i, 0x71c, seed), obj: b.obj ?? 0, wilt: 0 }));
     this.near = this.sites.map((_, i) => i);
     this.dist = new Float32Array(this.sites.length);
   }
@@ -110,31 +127,53 @@ export class Flowers {
   light: FlowerLight | null = null;
   /** Сколько головок было на свету в последнем шаге. */
   litCount = 0;
+  /**
+   * Сухоцвет поздних кругов: ниже этого головка не отходит (0 — отходит до живой). Ставит игра по стёртости места: чем дальше
+   * петля, тем больше в оранжерее сухого (game.ts, FLOWER_DRY).
+   */
+  dry = 0;
 
-  /** Шаг: раскрыть и повернуть то, на что светят; закрыть и вернуть в покой остальное. light = null — света нет нигде. */
-  update(dt: number, light: FlowerLight | null): void {
+  /** Покой головки с учётом увядания: исходное направление, поникшее вниз. */
+  static rest(s: FlowerSite): V {
+    return s.wilt > 0 ? turnToward(s.dir, [0, -1, 0], FLOWER_CFG.droop * s.wilt) : s.dir;
+  }
+
+  /**
+   * Шаг: раскрыть и повернуть то, на что светят; закрыть и вернуть в покой остальное. light = null — света нет нигде.
+   * blight — где Осыпь: рядом с ней головки вянут (null — её нет или она рассеяна).
+   */
+  update(dt: number, light: FlowerLight | null, blight: FlowerBlight | null = null): void {
     this.light = light;
     if (dt <= 0) return;
     this.litCount = 0;
     const C = FLOWER_CFG;
     const eye = light?.eye;
     for (const s of this.sites) {
+      // Увядание — у любой головки, даже вдали от героя: след Осыпи остаётся там, где она прошла.
+      const bd = blight ? Math.hypot(s.pos[0] - blight.pos[0], s.pos[1] - blight.pos[1], s.pos[2] - blight.pos[2]) : Infinity;
+      const near = blight && bd < C.blightRadius ? blight.k * (1 - bd / C.blightRadius) : 0;
+      if (near > 0) s.wilt = Math.min(1, s.wilt + near * C.wiltRate * dt);
+      else s.wilt = s.wilt > this.dry ? Math.max(this.dry, s.wilt - C.recover * dt) : this.dry;
       if (eye && Math.hypot(s.pos[0] - eye[0], s.pos[1] - eye[1], s.pos[2] - eye[2]) > C.reach) continue;
+      const rest = Flowers.rest(s);
+      const turn = C.maxTurn * (1 - s.wilt);
       const on = light ? Flowers.lit(s.pos, light) : false;
-      if (on) {
+      if (on && s.wilt < 0.98) {
         this.litCount++;
         s.dark = 0;
-        s.open = Math.min(1, s.open + dt / C.openTime);
-        // К глазу, но не дальше, чем гнётся стебель.
-        const want = turnToward(s.dir, norm([eye![0] - s.pos[0], eye![1] - s.pos[1], eye![2] - s.pos[2]]), C.maxTurn);
+        s.open = Math.min(1 - s.wilt, s.open + dt / C.openTime);
+        // К глазу, но не дальше, чем гнётся стебель; увядший гнётся меньше.
+        const want = turnToward(rest, norm([eye![0] - s.pos[0], eye![1] - s.pos[1], eye![2] - s.pos[2]]), turn);
         s.face = turnToward(s.face, want, C.turnRate * dt);
       } else {
         s.dark += dt;
         if (s.dark > s.delay) s.open = Math.max(0, s.open - dt / C.closeTime);
-        s.face = turnToward(s.face, s.dir, C.backRate * dt);
+        s.face = turnToward(s.face, rest, C.backRate * dt * (1 + 2 * s.wilt));
       }
+      // Увядшая закрывается сама, свет её не держит.
+      if (s.open > 1 - s.wilt) s.open = Math.max(0, s.open - dt / C.closeTime);
       // Не дальше предела — даже если покой и свет по разные стороны.
-      if (angleOf(s.dir, s.face) > C.maxTurn + 1e-4) s.face = turnToward(s.dir, s.face, C.maxTurn);
+      if (angleOf(rest, s.face) > turn + 1e-4) s.face = turnToward(rest, s.face, turn);
     }
   }
 
@@ -158,8 +197,9 @@ export class Flowers {
       const g = s.obj && gone ? gone(s.obj) : 0;
       if (g > 0.5) continue;
       const q = quatOf(s.face, s.spin);
-      const across = s.size * (FLOWER_CFG.bud + (1 - FLOWER_CFG.bud) * s.open) * (1 - g);
-      const along = s.size * (1.08 - 0.08 * s.open) * (1 - g);
+      // Сухая головка сжимается: поперёк — на треть, вдоль — на пятую часть.
+      const across = s.size * (FLOWER_CFG.bud + (1 - FLOWER_CFG.bud) * s.open) * (1 - g) * (1 - 0.35 * s.wilt);
+      const along = s.size * (1.08 - 0.08 * s.open) * (1 - g) * (1 - 0.2 * s.wilt);
       const o = k * S;
       out[o] = s.pos[0];
       out[o + 1] = s.pos[1];

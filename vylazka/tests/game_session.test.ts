@@ -30,7 +30,7 @@ import { DOOR_IMAGE, DOOR_NAME, SCREEN_IMAGES } from '../src/world/screens';
 import { setThingRegistry } from '../src/world/thing_mesh';
 import { MEM_LIGHT_KIND, MEMORY_LIGHT } from '../src/world/memory_light';
 import type { FlashlightConfig } from '../src/systems/flashlight';
-import { PIECE_MAX_ROOMS } from '../src/world/piece';
+import { PASSAGES, PIECE_MAX_ROOMS } from '../src/world/piece';
 import type { PieceMask } from '../src/world/piece';
 
 const SEED = 20041113;
@@ -452,6 +452,39 @@ describe('игра целиком: цикл сессии', () => {
     // В новой сцене — свой кусок, вокруг её начала.
     expect(g.piece).not.toBeNull();
     expect(g.piece!.nodes.has(g.playerNodeAtSpawn())).toBe(true);
+  });
+
+  it('прошедшее место — одна комната без вещи и без Осыпи; шаг за порог уносит в следующую сцену (pressure.md, §4.6 п. 4)', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 }, piece: true });
+    const g = h.game;
+    const cross = (): void => {
+      const p = g.piece!;
+      const nav = g.level!.nav;
+      const edge = p.edge.find((e) => nav[e]!.links.some((l) => !p.nodes.has(l) && nav[l]!.tier === nav[e]!.tier && Math.abs(nav[l]!.y - nav[e]!.y) < 0.2))!;
+      const beyond = nav[nav[edge]!.links.find((l) => !p.nodes.has(l) && nav[l]!.tier === nav[edge]!.tier)!]!;
+      g.teleport(beyond.x, beyond.y, beyond.z);
+    };
+    const faded = buildLevel(generateLayout(SEED + 5, 1, 'office'), { wear: 0.8 });
+    g.queueScene(faded, { seed: 11, known: new Set(), piece: true, faded: true });
+    h.run(2);
+    cross();
+    expect(h.until(() => g.level === faded && g.transition === null, 6)).toBe(true);
+    h.run(0.5);
+    expect(g.fadedScene).toBe(true);
+    expect(g.session, 'искать нечего').toBeNull();
+    expect(g.swarm, 'Осыпи нет').toBeNull();
+    expect(g.piece!.count, 'одна комната').toBe(1);
+    const home = g.level!.nav[g.playerNodeAtSpawn()]!;
+    expect(PASSAGES).not.toContain(g.level!.layout!.rooms[home.room]!.type);
+    // Дальше сон идёт своим чередом: следующая сцена — обычная.
+    const next = buildLevel(generateLayout(SEED + 9, 1, 'yellow'), { wear: 0 });
+    g.queueScene(next, { seed: 12, known: new Set(), piece: true });
+    const begins = h.dreamCount('begin');
+    cross();
+    expect(h.until(() => h.dreamCount('begin') > begins, 6)).toBe(true);
+    expect(g.level).toBe(next);
+    expect(g.fadedScene).toBe(false);
+    expect(g.session).not.toBeNull();
   });
 
   it('сцена — кусок места: следующей сцены нет — шаг за край возвращает в кусок; у края, глядя в обрыв, — событие edge, раз', () => {

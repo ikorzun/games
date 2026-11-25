@@ -83,6 +83,11 @@ const SENS = [0.6, 1, 1.6] as const;
  * «куда-нибудь» уносит в другое место, не дав вспомнить вещь (docs/vylazka/pressure.md, §4.7).
  */
 const SCENES = 3;
+/**
+ * Прошедшее место (pressure.md, §4.6 п. 4): стёртое до конца воспоминание изредка всплывает в чужом сне одной комнатой. chance —
+ * доля следующих сцен, которые оно забирает (если такое место есть и сцена не сама такая); wear — насколько та комната стёрта.
+ */
+export const FADED_SCENE = { chance: 0.25, wear: 0.8 } as const;
 /** Через сколько секунд поисков без вещи в луче игрок считается застрявшим: тогда — одна подсказка, как искать. */
 const STUCK_AFTER = 45;
 /** На сколько секунд позже начинается запись стёртого почти до конца места: 23:41:07 + 16:00 = 23:57:07. */
@@ -223,7 +228,7 @@ export class App {
   /** Кнопка «Место» на заставке: только для проверок (знак #place, ?place=1 или петля одного места). */
   private placePick = false;
   /** Следующая сцена, уже собранная: место, уровень и его воспоминание. */
-  private sceneNext: { world: WorldKind; level: BuiltLevel; memory: PlaceMemory } | null = null;
+  private sceneNext: { world: WorldKind; level: BuiltLevel; memory: PlaceMemory; faded?: boolean } | null = null;
   private sceneTimer: ReturnType<typeof setTimeout> | undefined;
   /** Когда место снилось в последний раз (номер сцены сна): сон тянет то, что давно не снилось. */
   private readonly dreamt: Partial<Record<WorldKind, number>> = {};
@@ -735,7 +740,11 @@ export class App {
     const gone = erased(m.wear);
     if (this.pinned) {
       if (gone) this.pinned = { ...this.pinned, wear: 0, laps: 0 };
-    } else if (gone) delete this.profile.memories[this.world];
+    } else if (gone) {
+      // Стёрлось до конца — место откроется другим воспоминанием, а это остаётся прошедшим: изредка снится одной комнатой.
+      this.profile.faded[this.world] = { seed: m.seed, rank: m.rank };
+      delete this.profile.memories[this.world];
+    }
     else this.profile.memories[this.world] = { ...m };
     return gone;
   }
@@ -877,6 +886,19 @@ export class App {
     return this.scenes && !this.testLevel && (asked || !this.firstSleep);
   }
 
+  /**
+   * Прошедшее место для следующей сцены — или null. Только со второго сна (первый — одна сцена убежища), не подряд, не то место,
+   * где стоишь, и не зал ожидания (он — сцена целиком, своим законом). Жребий — из сида сна и номера сцены: повторяем.
+   */
+  private fadedWorld(): WorldKind | null {
+    if (this.game.fadedScene || this.firstSleep) return null;
+    const pool = WORLD_KINDS.filter((w) => w !== this.world && w !== 'station' && this.profile.faded[w] !== undefined);
+    if (pool.length === 0) return null;
+    const rnd = mulberry32((this.seed ^ Math.imul(this.sceneIndex + 7, 0x2c1b3c6d) ^ 0xfade) >>> 0);
+    if (rnd() >= FADED_SCENE.chance) return null;
+    return pool[Math.floor(rnd() * pool.length)] ?? null;
+  }
+
   /** Сон из сцен: отметить, что место снилось сейчас. */
   private markDreamt(world: WorldKind): void {
     this.dreamtCount += 1;
@@ -920,12 +942,22 @@ export class App {
       this.game.queueScene(null);
       return;
     }
-    const world = this.sceneWorld();
+    const faded = this.fadedWorld();
+    const world = faded ?? this.sceneWorld();
     this.hearPlace(world);
     // Сборка — с паузой: сцена уже идёт, и игрок не заметит, что следующая собирается.
     this.sceneTimer = setTimeout(() => {
       this.sceneTimer = undefined;
       if (this.sceneDone >= SCENES) return;
+      const past = faded ? this.profile.faded[faded] : undefined;
+      if (faded && past) {
+        // Прошедшее место: тот же план, что был у стёртого воспоминания, стёртый почти до конца; в профиль ничего не пишется.
+        const memory: PlaceMemory = { seed: past.seed, rank: past.rank, wear: FADED_SCENE.wear, laps: 0 };
+        const level = buildLevel(generateLayout(past.seed, past.rank, faded), { wear: FADED_SCENE.wear });
+        this.sceneNext = { world: faded, level, memory, faded: true };
+        this.game.queueScene(level, { seed: past.seed, known: new Set(this.profile.archive), piece: true, faded: true });
+        return;
+      }
       const memory = memoryFor(this.profile, world);
       const level = buildLevel(generateLayout(memory.seed, memory.rank, world), { wear: this.wearParam() ?? memory.wear });
       this.sceneNext = { world, level, memory };
@@ -948,7 +980,8 @@ export class App {
       this.level = n.level;
       this.seed = n.memory.seed >>> 0;
       this.rank = n.memory.rank;
-      this.memory = n.memory;
+      // Прошедшее место в профиль не пишется: его воспоминания больше нет, оно только снится.
+      this.memory = n.faded ? null : n.memory;
       this.sceneNext = null;
     }
     this.sceneIndex += 1;
@@ -958,6 +991,7 @@ export class App {
     // Прежнее место стёрто до конца — об этом строка, как после лимбо; иначе — номер круга нового места. Строка круга —
     // только когда сцену сменило «вспомнил»: скачки уносят часто, и фраза на каждый была бы болтовнёй; номер — всегда.
     if (gone) this.hud.flash(t('session.erased'), 6200);
+    else if (n?.faded) this.hud.flash(t('scene.faded'), 6200);
     else this.sayLap(!recalled);
     // Камера переключилась (куратор, связка 39): у каждого места свой номер камеры, и несколько секунд рядом с ним — имя места.
     // Не заголовок уровня (места — не уровни, Z-12), а подпись записи: где ты, видно, а сон переход не объявляет.

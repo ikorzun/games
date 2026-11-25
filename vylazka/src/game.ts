@@ -66,7 +66,7 @@ import { DOOR_NAME } from './world/screens';
 import type { LevelObject } from './world/objects';
 import { ALL_PROPS } from './world/props_all';
 import { CEIL_H, DX, DZ } from './gen/layout';
-import type { GenRoom, WorldKind } from './gen/layout';
+import type { GenRoom, RoomType, WorldKind } from './gen/layout';
 import type { BuiltLevel, ItemSpot } from './world/level';
 import { figureMesh } from './world/figure_mesh';
 import type { FigureMaterial, FigureSpec } from './world/figures';
@@ -81,7 +81,7 @@ import { hasThingHq, loadThingHq, thingHqReady } from './world/thing_hq';
 import type { ThingHq } from './world/thing_hq';
 import { MEM_LIGHT_KIND, memLightMod, memLightStep, memoryLightOf } from './world/memory_light';
 import type { MemLightDef } from './world/memory_light';
-import { pieceMask, scenePiece } from './world/piece';
+import { PASSAGES, pieceMask, scenePiece } from './world/piece';
 import type { ScenePiece } from './world/piece';
 
 export const STEP = 1 / 60;
@@ -205,6 +205,11 @@ export interface DreamSeed {
    * 3–6 комнат и проходы между ними, дальше память обрывается. Нет — помнится всё место (первый сон, зал ожидания, проверки).
    */
   piece?: boolean;
+  /**
+   * Прошедшее место (pressure.md, §4.6 п. 4): стёртое до конца воспоминание всплывает в чужом сне одной комнатой — без вещи,
+   * без Осыпи, без задания. Шаг за порог уносит дальше. Требует piece.
+   */
+  faded?: boolean;
 }
 
 interface Transition {
@@ -249,6 +254,11 @@ const SPORES_SHOWN = 880;
 const FLOWERS_SHOWN = 900;
 const FLOWER_BEAM = { cos: Math.cos(0.36), range: 11 } as const;
 const FLOWER_GAZE = { cos: Math.cos(0.42), range: 9 } as const;
+/**
+ * Сухоцвет поздних кругов (design.md, §35): с какой стёртости места в оранжерее появляется сухое и сколько его самое большее
+ * (доля увядания, ниже которой головки уже не отходят).
+ */
+export const FLOWER_DRY = { from: 0.45, full: 0.9, max: 0.7 } as const;
 /**
  * Трава тянется к свету (партнёр 20.11: «Теперь сделай, чтобы трава тянулась к лучу»; systems/grass.ts, LEAN): в тёмном месте —
  * к фонарю, на который она попала лучом (конус GRASS_BEAM — чуть шире ядра луча); в светлом — к глазам, куда смотрят. Светлое
@@ -998,6 +1008,8 @@ export class Game {
   piece: ScenePiece | null = null;
   /** Помнить ли кусок, а не всё место (DreamSeed.piece этой загрузки). */
   private pieceWanted = false;
+  /** Сцена — прошедшее место одной комнатой (DreamSeed.faded). */
+  fadedScene = false;
   /** Игрок дошёл до края куска в этой сцене (событие edge — раз). */
   private edgeMet = false;
   /**
@@ -1081,7 +1093,9 @@ export class Game {
       this.sleepFlow = null;
     }
     const rank = level.layout?.rank ?? 1;
-    this.session = dream ? new Session(level, dream.seed, dream.known, this.sessionCfg, dream.chainAt ?? 0) : null;
+    // Прошедшее место вещи не прячет: искать в нём нечего.
+    this.session = dream && !dream.faded ? new Session(level, dream.seed, dream.known, this.sessionCfg, dream.chainAt ?? 0) : null;
+    this.fadedScene = dream?.faded === true;
     this.session?.setSpotRank(() => this.spotRanker());
     this.pieceWanted = dream?.piece === true;
     // Новая сцена или сессия: прежняя очередь сцен не в счёт — следующую поставит приложение.
@@ -1104,7 +1118,8 @@ export class Game {
     this.bodyPress = level.grassBody ? 1 : 0;
     if (dream) {
       this.dreamSeed = dream.seed;
-      this.swarm = new SwarmAI(level.nav, this.rng);
+      // В прошедшем месте Осыпи нет: оно уже стёрто, ей здесь нечего забирать.
+      this.swarm = dream.faded ? null : new SwarmAI(level.nav, this.rng);
       this.spores = new Spores(level.nav, dream.seed, DEFAULT_SPORES, level.world ?? 'shelter');
       // Грибы не растут внутри вещей: места считаются по клеткам и мебели не знают (куратор, пачка 51, противоречие 322).
       // И в белой комнате их нет: там пусто и бело (world/furnish_white.ts).
@@ -1232,7 +1247,7 @@ export class Game {
     this.piece = null;
     this.edgeMet = false;
     const start = level?.layout && this.pieceWanted && this.world !== 'station' ? this.playerNodeAt(this.spawn.pos) : -1;
-    if (level?.layout && start >= 0) this.piece = scenePiece(level.nav, level.layout, start, (this.dreamSeed ^ Math.imul(this.loads, 0x9e3779b1)) >>> 0);
+    if (level?.layout && start >= 0) this.piece = scenePiece(level.nav, level.layout, start, (this.dreamSeed ^ Math.imul(this.loads, 0x9e3779b1)) >>> 0, this.fadedScene ? 1 : undefined);
     this.session?.setRegion(this.piece ? this.piece.nodes : null);
     if (this.swarm) this.swarm.allowed = this.piece ? this.piece.nodes : null;
     this.renderer.setPiece(level?.layout && this.piece ? pieceMask(level.nav, level.layout, this.piece) : null);
@@ -2869,7 +2884,10 @@ export class Game {
       return !zones.some((z) => n.x >= z.minX - 1.5 && n.x <= z.maxX + 1.5 && n.z >= z.minZ - 1.5 && n.z <= z.maxZ + 1.5 && Math.abs(n.y - z.minY) < 3);
     };
     const far = home >= 0 ? nodesInRange(nav, home, 5, 40).filter(ok) : [];
-    const pool = far.length > 0 ? far : nav.map((n) => n.id).filter(ok);
+    const all = far.length > 0 ? far : nav.map((n) => n.id).filter(ok);
+    // Прошедшее место помнится одной комнатой — сон роняет в комнату, а не в коридор.
+    const roomy = this.fadedScene ? all.filter((id) => !PASSAGES.includes(this.level?.layout?.rooms[nav[id]!.room]?.type as RoomType)) : all;
+    const pool = roomy.length > 0 ? roomy : all;
     if (pool.length === 0) return;
     const n = nav[pool[Math.floor(this.rng() * pool.length)]!]!;
     const l = nav[n.links[Math.floor(this.rng() * n.links.length)]!]!;
@@ -3545,7 +3563,7 @@ export class Game {
     // (следующей сцены ещё нет — в другую точку того же куска). У края, глядя в обрыв, — раз за сцену событие edge: строку
     // говорит приложение. Не правило страха, а устройство сна: работает и в мягком режиме.
     const piece = this.piece;
-    if (piece && this.where === 'main' && !this.transition && s && !s.over) {
+    if (piece && this.where === 'main' && !this.transition && (s ? !s.over : this.fadedScene)) {
       const node = this.playerNode();
       if (node >= 0 && !piece.nodes.has(node)) this.beginJump({ cause: 'edge', style: 'dissolve', to: 'elsewhere' }, dream);
       else if (node >= 0 && !this.edgeMet && this.facesVoid(node, piece)) {
@@ -4081,11 +4099,19 @@ export class Game {
         // нет, светит взгляд (FlashlightEnv: light 0).
         const byGaze = this.env.light <= 0;
         const beamOn = !byGaze && this.light.intensity >= 0.3;
-        this.flowers.update(fl?.frozen ? 0 : dt * (1 - this.sterileK), {
-          eye: rig.camPos,
-          beam: beamOn ? { origin: rig.lightPos, dir: rig.lightDir, cos: FLOWER_BEAM.cos, range: FLOWER_BEAM.range } : null,
-          gaze: byGaze ? { dir: rig.lightDir, cos: FLOWER_GAZE.cos, range: FLOWER_GAZE.range } : null,
-        });
+        // Сухоцвет: чем дальше петля стирает место, тем больше в оранжерее сухого.
+        this.flowers.dry = FLOWER_DRY.max * smoothstep(FLOWER_DRY.from, FLOWER_DRY.full, this.wear);
+        // Осыпь — сожаление: там, где она прошла собранной, цветы вянут, и след держится почти минуту (systems/flowers.ts).
+        const blight = sw && sw.active && sw.mode !== 'scatter' && sw.mode !== 'trace' ? { pos: sw.pos, k: 0.4 + 0.6 * sw.cohesion } : null;
+        this.flowers.update(
+          fl?.frozen ? 0 : dt * (1 - this.sterileK),
+          {
+            eye: rig.camPos,
+            beam: beamOn ? { origin: rig.lightPos, dir: rig.lightDir, cos: FLOWER_BEAM.cos, range: FLOWER_BEAM.range } : null,
+            gaze: byGaze ? { dir: rig.lightDir, cos: FLOWER_GAZE.cos, range: FLOWER_GAZE.range } : null,
+          },
+          blight,
+        );
       }
       // Грядка или горшок растворились от касания — их головок нет (world/objects.ts, systems/illusions.ts).
       this.renderer.setFlowers(this.flowerBuf, live ? this.flowers.visible([x, y, z], FLOWERS_SHOWN, this.flowerBuf, (id) => this.illusions?.get(id)?.dis ?? 0) : 0);

@@ -43,10 +43,21 @@ export interface Profile {
    * стёрто сильнее. Стёрлось совсем — запись убирается, и место открывается другим воспоминанием.
    */
   memories: Partial<Record<WorldKind, PlaceMemory>>;
+  /**
+   * Прошедшие места (pressure.md, §4.6 п. 4: «прошедшее место домом не бывает»): у каждого места — последнее стёртое до конца
+   * воспоминание, его сид и размер. Сцен с вещами оно больше не открывает, но изредка всплывает в чужом сне одной комнатой.
+   */
+  faded: Partial<Record<WorldKind, FadedPlace>>;
   /** Метаслой (systems/meta.ts): id обрывков, которые игрок уже видел, — по одному за сон. */
   meta: string[];
   /** Сюжет «Невостребованное» (systems/koma.ts): флаги, фазы вещей, сыгранные события. */
   koma: NarrativeSaveV3;
+}
+
+/** Прошедшее место: план того воспоминания, что стёрлось до конца. */
+export interface FadedPlace {
+  seed: number;
+  rank: 1 | 2 | 3;
 }
 
 /** Воспоминание, которое проходится по кругу. */
@@ -79,7 +90,7 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
 export function defaultProfile(baseSeed: number): Profile {
-  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1, flash: 'soft', lang: null, quality: null, place: 'shelter', memories: {}, meta: [], koma: emptyNarrative() };
+  return { v: 1, sorties: 0, successes: 0, archive: [], baseSeed, muted: false, sens: 1, bright: 1, flash: 'soft', lang: null, quality: null, place: 'shelter', memories: {}, faded: {}, meta: [], koma: emptyNarrative() };
 }
 
 /** Разобрать профиль из хранилища; всё непонятное заменяется значениями по умолчанию. */
@@ -101,6 +112,7 @@ export function parseProfile(raw: unknown, baseSeed: number): Profile {
     quality: qualityPick(o.quality),
     place: o.place === 'office' || o.place === 'yellow' || o.place === 'station' ? o.place : 'shelter',
     memories: parseMemories(o.memories),
+    faded: parseFaded(o.faded),
     meta: [...new Set(strArr(o.meta))],
     koma: parseNarrative(o.koma),
   };
@@ -121,6 +133,18 @@ function parseMemories(raw: unknown): Partial<Record<WorldKind, PlaceMemory>> {
     // Стёртое до конца воспоминание не хранится: место откроется другим.
     if (wear >= 1) continue;
     out[w] = { seed: m.seed >>> 0, rank, wear, laps: isNum(m.laps) ? Math.max(0, Math.floor(m.laps)) : 0, ...(isNum(m.chain) && m.chain > 0 ? { chain: Math.floor(m.chain) } : {}) };
+  }
+  return out;
+}
+
+function parseFaded(raw: unknown): Partial<Record<WorldKind, FadedPlace>> {
+  const out: Partial<Record<WorldKind, FadedPlace>> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  const o = raw as Record<string, unknown>;
+  for (const w of WORLDS) {
+    const m = o[w] as Record<string, unknown> | undefined;
+    if (!m || typeof m !== 'object' || !isNum(m.seed)) continue;
+    out[w] = { seed: m.seed >>> 0, rank: m.rank === 2 || m.rank === 3 ? m.rank : 1 };
   }
   return out;
 }

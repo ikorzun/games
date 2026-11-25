@@ -158,6 +158,7 @@
   "title.count": "sesiones cerradas: {n} · recuerdos conservados: {k} de {total}",
   "session.begin": "untitled session {n}",
   "session.erased": "este lugar ya no existe. se abre otro.",
+  "scene.faded": "este lugar ya no existe. quedó una habitación.",
   "loop.lap.2": "este lugar otra vez.",
   "loop.lap.3": "la vez pasada estaba más lleno.",
   "loop.lap.4": "cada visita se lleva algo.",

@@ -4,6 +4,7 @@ import type { WorldKind } from '../src/gen/layout';
 import { CELL } from '../src/world/shell';
 import { buildLevel, cellToWorld } from '../src/world/level_build';
 import { Flowers, FLOWER_CFG, FLOWER_STRIDE, quatOf, turnToward } from '../src/systems/flowers';
+import type { FlowerSite } from '../src/systems/flowers';
 import { HEADS } from '../src/world/flowers';
 
 const WORLDS: WorldKind[] = ['shelter', 'office', 'station', 'yellow'];
@@ -84,6 +85,50 @@ describe('оранжерея в местах (партнёр 19.11: «комна
 
 describe('цветы поворачиваются за светом', () => {
   const make = () => new Flowers([{ pos: [0, 1, 0], dir: [0, 1, 0], form: 0, size: 1, spin: 0 }], 1);
+
+  it('у Осыпи вянут: никнут, сжимаются, не раскрываются; след держится почти минуту; дальние — живые (design.md, §35)', () => {
+    const f = new Flowers(
+      [
+        { pos: [0, 1, 0], dir: [0, 1, 0], form: 0, size: 1, spin: 0 },
+        { pos: [8, 1, 0], dir: [0, 1, 0], form: 0, size: 1, spin: 0 },
+      ],
+      1,
+    );
+    const eye: [number, number, number] = [2, 2.5, 0];
+    const beam = (to: [number, number, number]) => {
+      const d = [to[0] - eye[0], to[1] - eye[1], to[2] - eye[2]];
+      const l = Math.hypot(d[0]!, d[1]!, d[2]!);
+      return { eye, beam: { origin: eye, dir: [d[0]! / l, d[1]! / l, d[2]! / l] as [number, number, number], cos: Math.cos(0.3), range: 12 }, gaze: null };
+    };
+    const blight = { pos: [0.5, 1, 0] as [number, number, number], k: 1 };
+    for (let i = 0; i < 150; i++) f.update(1 / 30, beam([0, 1, 0]), blight);
+    const [near, far] = f.sites as [FlowerSite, FlowerSite];
+    expect(near.wilt, 'рядом с Осыпью увяла').toBeGreaterThan(0.9);
+    expect(far.wilt, 'дальняя жива').toBe(0);
+    expect(near.open, 'увядшая не раскрывается и под лучом').toBeLessThan(0.15);
+    // Поникла: головка смотрит ниже горизонта.
+    expect(near.face[1]).toBeLessThan(0.5);
+    // Сухая головка в выдаче — меньше живой.
+    const out = new Float32Array(FLOWER_STRIDE * 2);
+    f.visible(eye, 2, out);
+    const sizes = [out[7]!, out[FLOWER_STRIDE + 7]!];
+    expect(Math.min(...sizes)).toBeLessThan(Math.max(...sizes));
+    // Осыпь ушла: через 10 с всё ещё сухая, через минуту отошла.
+    for (let i = 0; i < 300; i++) f.update(1 / 30, beam([0, 1, 0]), null);
+    expect(near.wilt).toBeGreaterThan(0.6);
+    for (let i = 0; i < 1800; i++) f.update(1 / 30, beam([0, 1, 0]), null);
+    expect(near.wilt).toBe(0);
+    expect(near.open, 'живая снова раскрылась под лучом').toBeGreaterThan(0.9);
+  });
+
+  it('сухоцвет поздних кругов: ниже dry головка не отходит', () => {
+    const f = make();
+    f.dry = 0.5;
+    f.update(1 / 30, null);
+    expect(f.sites[0]!.wilt).toBeCloseTo(0.5, 5);
+    for (let i = 0; i < 600; i++) f.update(1 / 30, null);
+    expect(f.sites[0]!.wilt).toBeCloseTo(0.5, 5);
+  });
 
   it('луч на головке — раскрывается и поворачивается к фонарю, но не дальше предела', () => {
     const f = make();

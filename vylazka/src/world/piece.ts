@@ -64,10 +64,11 @@ function distances(nav: readonly NavNode[], from: number): Int32Array {
  * взятая комната (и на клетку дальше: коридор перед последней дверью тоже помнится). Комнаты на пути к взятой ближе неё,
  * поэтому взяты раньше: кусок связен.
  */
-export function scenePiece(nav: readonly NavNode[], layout: Pick<GenLayout, 'rooms'>, start: number, seed: number): ScenePiece {
+export function scenePiece(nav: readonly NavNode[], layout: Pick<GenLayout, 'rooms'>, start: number, seed: number, roomCount?: number): ScenePiece {
   const dist = distances(nav, start);
   const passage = (room: number): boolean => PASSAGES.includes(layout.rooms[room]?.type as RoomType);
-  const target = PIECE_MIN_ROOMS + ((hash2(seed >>> 0, start, 0x9e1) >>> 0) % (PIECE_MAX_ROOMS - PIECE_MIN_ROOMS + 1));
+  // roomCount — сколько комнат помнить, если не по жребию: прошедшее место всплывает одной комнатой (pressure.md, §4.6 п. 4).
+  const target = roomCount ?? PIECE_MIN_ROOMS + ((hash2(seed >>> 0, start, 0x9e1) >>> 0) % (PIECE_MAX_ROOMS - PIECE_MIN_ROOMS + 1));
   // Как близко до каждой комнаты: первая её клетка по пути.
   const first = new Map<number, number>();
   for (const n of nav) {
@@ -80,7 +81,8 @@ export function scenePiece(nav: readonly NavNode[], layout: Pick<GenLayout, 'roo
   const taken = new Set<number>();
   const home = nav[start];
   if (home && !passage(home.room)) taken.add(home.room);
-  let reach = PIECE_MIN_REACH;
+  // Одна комната — без своего запаса проходов: помнится только она и клетка коридора у её двери.
+  let reach = roomCount === 1 ? 0 : PIECE_MIN_REACH;
   for (const [room, d] of order) {
     if (taken.size >= target || d > PIECE_REACH) break;
     taken.add(room);
