@@ -1687,6 +1687,9 @@ body {
   animation: vz-roll var(--vz-roll, 90s) linear infinite;
   will-change: transform;
 }
+.vz-credits.is-held .vz-credits__roll {
+  animation-play-state: paused;
+}
 @keyframes vz-roll {
   to {
     transform: translateY(calc(-100% - min(72vh, 44em)));

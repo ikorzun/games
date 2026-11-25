@@ -219,7 +219,9 @@ export function buildVoid(_seed: number, origin: Vec3, ctx?: PocketContext): Poc
     meshes: [mb.build()],
     colliders: [{ minX: ox - R, minY: oy - 0.5, minZ: oz - R, maxX: ox + R, maxY: oy, maxZ: oz + R }],
     spawn: { pos: [ox, oy, oz], yaw: 0 },
-    env: { ambient: [0.62, 0.62, 0.62], fog: [0.86, 0.86, 0.86], fogDensity: 0.06, light: 0.12, decay: 0, haze: 0, plain: true },
+    // Фонаря нет (разбор куратора 431, слово партнёра «в светлых локациях… нет фонарика»): белое нигде и лимбо — самые светлые
+    // места игры; взгляд здесь идёт от света места, как в офисе, щелчков и тряски нет. Луг фонарь оставляет: трава тянется к лучу.
+    env: { ambient: [0.62, 0.62, 0.62], fog: [0.86, 0.86, 0.86], fogDensity: 0.06, light: 0, decay: 0, haze: 0, plain: true },
     center: [ox, oy, oz],
     radius: 30,
     spots,

@@ -76,6 +76,22 @@ function creditsRoll(c: Credits): HTMLElement {
   roll.append(legal, el('vz-credits__name vz-credits__name--end', t('ui.title')));
   // Скорость ленты — как в кино: около двух строк в секунду чтения не требует, а раздел успевает прочитаться.
   roll.style.setProperty('--vz-roll', `${Math.round(24 + rows * 1.15 + (c.furniture.length + c.things.length) * 0.5)}s`);
+  // Держишь палец или кнопку — лента стоит: строки авторства и лицензий можно прочесть (разбор куратора, 432). Сколько держали —
+  // в data-held: долгое нажатие титры не закрывает (overlay, клик по экрану).
+  let downAt = 0;
+  const release = (): void => {
+    if (!wrap.classList.contains('is-held')) return;
+    wrap.classList.remove('is-held');
+    wrap.dataset.held = String(Math.round(performance.now() - downAt));
+  };
+  wrap.addEventListener('pointerdown', () => {
+    downAt = performance.now();
+    wrap.dataset.held = '0';
+    wrap.classList.add('is-held');
+  });
+  wrap.addEventListener('pointerup', release);
+  wrap.addEventListener('pointercancel', release);
+  wrap.addEventListener('pointerleave', release);
   return wrap;
 }
 
@@ -393,7 +409,15 @@ export class Overlay {
       else if (this.mode === 'paused') this.handlers.onResume();
       // Отчёт нельзя пролистнуть случайным нажатием сразу после конца вылазки.
       else if (this.mode === 'report' && performance.now() - this.shownAt > 900) this.handlers.onNext();
-      else if (this.mode === 'credits') this.show(this.beforeCredits);
+      else if (this.mode === 'credits') {
+        // Долгое нажатие было паузой ленты, а не «назад».
+        const roll = this.body.querySelector<HTMLElement>('.vz-credits');
+        if (roll && Number(roll.dataset.held ?? 0) > 350) {
+          roll.dataset.held = '0';
+          return;
+        }
+        this.show(this.beforeCredits);
+      }
     });
   }
 
