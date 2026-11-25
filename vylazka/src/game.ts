@@ -74,7 +74,7 @@ import { CEIL_H, DX, DZ, twinLayout } from './gen/layout';
 import type { GenRoom, RoomType, WorldKind } from './gen/layout';
 import type { BuiltLevel, ItemSpot } from './world/level';
 import { figureMesh } from './world/figure_mesh';
-import { CARETAKER_BODY, caretakerMesh, caretakerSpot, gesture, TAG_AT } from './world/caretaker_body';
+import { CARETAKER_BODY, CARETAKER_SHED, caretakerMesh, caretakerSpot, gesture, TAG_AT } from './world/caretaker_body';
 import type { MeshData } from './world/kit';
 import type { FigureMaterial, FigureSpec } from './world/figures';
 import { FIGURES } from './world/figures_data';
@@ -1049,7 +1049,7 @@ export class Game {
   penOn = false;
   /** Тело Смотрителя (сюжет, A4_E03 в лимбо; systems/caretaker_body.ts) и номера его частей в рендере. */
   readonly caretakerBody = new CaretakerBody();
-  private caretakerParts: { body: number; arm: number[]; table: number; tag: number; dots: number; material: FigureMaterial; heard: boolean } | null = null;
+  private caretakerParts: { body: number; arm: number[]; table: number; tag: number; dots: number; shed: number; material: FigureMaterial; heard: boolean } | null = null;
   sterileK = 0;
   private sterileAligned = false;
   /** Следующая сессия, собранная за время лимбо. */
@@ -2554,7 +2554,7 @@ export class Game {
       this.renderer.setThing(id, { x: spot.at[0], y: spot.at[1], z: spot.at[2], yaw: spot.yaw, scale: 1, dissolve: 1, wire: 0, xray: false, visible: false });
       return id;
     };
-    this.caretakerParts = { body: add(m.body, 0), arm: m.arm.map((d, i) => add(d, 4 + i)), table: add(m.table, 1), tag: add(m.tag, 2), dots: m.dots, material: m.figure.material, heard: false };
+    this.caretakerParts = { body: add(m.body, 0), arm: m.arm.map((d, i) => add(d, 4 + i)), table: add(m.table, 1), tag: add(m.tag, 2), dots: m.dots, shed: m.figure.source === 'default' ? CARETAKER_SHED : 0, material: m.figure.material, heard: false };
     return true;
   }
 
@@ -2590,8 +2590,10 @@ export class Game {
     const k = Math.min(p.arm.length - 1, Math.floor(cb.u * p.arm.length));
     const dots = p.dots > 0 ? p.dots + (1 - p.dots) * cb.dissolve : 0;
     const at = { x: cb.at[0], y: cb.at[1], z: cb.at[2], yaw: cb.yaw, scale: 1, wire: 0, xray: false };
-    this.renderer.setThing(p.body, { ...at, dissolve: cb.dissolve, visible: on && cb.dissolve < 0.999, dots });
-    for (let i = 0; i < p.arm.length; i++) this.renderer.setThing(p.arm[i]!, { ...at, dissolve: cb.dissolve, visible: on && i === k && cb.dissolve < 0.999, dots });
+    // Смотритель из частиц (квиз 25.11) всё время чуть осыпается: частицы висят вокруг фигуры (CARETAKER_SHED).
+    const shed = Math.max(cb.dissolve, p.shed);
+    this.renderer.setThing(p.body, { ...at, dissolve: shed, visible: on && cb.dissolve < 0.999, dots });
+    for (let i = 0; i < p.arm.length; i++) this.renderer.setThing(p.arm[i]!, { ...at, dissolve: shed, visible: on && i === k && cb.dissolve < 0.999, dots });
     this.renderer.setThing(p.table, { ...at, dissolve: cb.rest, visible: on && cb.rest < 0.999 });
     const c = Math.cos(cb.yaw);
     const s = Math.sin(cb.yaw);

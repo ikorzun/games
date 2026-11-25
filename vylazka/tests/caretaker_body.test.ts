@@ -175,9 +175,8 @@ describe('тело Смотрителя: фигура, стол, жест', () =
       prev = g;
     }
     expect(maxYaw).toBeGreaterThan(0.1);
-    // Круг — 2–3 секунды, как жест человека, а не мигание.
-    expect(GESTURE_S).toBeGreaterThanOrEqual(2);
-    expect(GESTURE_S).toBeLessThanOrEqual(3);
+    // Круг — 5 секунд, как герой дописывает бирку взглядом (квиз 25.11), а не мигание.
+    expect(GESTURE_S).toBe(5);
   });
 
   it('сетки: тело, правая рука по кадрам жеста, стол и бирка; дымная — из редких точек', () => {

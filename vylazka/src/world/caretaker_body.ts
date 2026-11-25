@@ -73,9 +73,20 @@ const TAG_W = 0.095;
 /** Где лежат кончики пальцев левой руки: на краю стола, придерживает. */
 const LEFT_REST: Vec3 = [0.16, TABLE.h + 0.012, 0.44];
 
-/** Жест — по кругу: столько секунд один круг, столько кадров руки на круг. */
-export const GESTURE_S = 2.8;
-export const GESTURE_FRAMES = 24;
+/**
+ * Жест — по кругу: столько секунд один круг, столько кадров руки на круг. 5 с — как герой сам дописывает бирку взглядом в
+ * лимбо (koma_flow, WRITE_S; квиз 25.11: «5 с, как запись взглядом»): узнаёт себя по ритму.
+ */
+export const GESTURE_S = 5;
+export const GESTURE_FRAMES = 30;
+/**
+ * Смотритель по умолчанию — из частиц (квиз 25.11: «создай его сам из частиц»): манекен, от поверхности которого остались
+ * точки графита, как карандаш на бирке, — в белом лимбо они читаются; пока он стоит, фигура всё время чуть осыпается
+ * (CARETAKER_SHED): частицы висят вокруг, будто он из них соткан. Не дым фигур мест — тот рассеивается угрозой.
+ */
+export const CARETAKER_DOTS = 0.8;
+export const CARETAKER_SHED = 0.16;
+const PARTICLE_PAINT = { body: { mat: MAT.plaster, tint: [0.5, 0.5, 0.53] as Vec3 }, joint: { mat: MAT.plaster, tint: [0.44, 0.44, 0.47] as Vec3 } };
 /** Насколько бирку утаскивает рука, пока разглаживает, — потом он её выравнивает, рад. */
 const SKEW = (8 * Math.PI) / 180;
 
@@ -230,7 +241,8 @@ function tagMesh(): MeshData {
 /** Собрать тело Смотрителя: фигура, правая рука по кадрам жеста, стол и бирка. seed — разброс тона манекена. */
 export function caretakerMesh(spec: CaretakerBodySpec, figures: readonly FigureSpec[], seed: number, frames = GESTURE_FRAMES): CaretakerMesh {
   const figure = caretakerFigure(spec, figures);
-  const paint = figure.material === 'wood' ? undefined : FIGURE_PAINT[figure.material];
+  const own = figure.source === 'default';
+  const paint = own ? PARTICLE_PAINT : figure.material === 'wood' ? undefined : FIGURE_PAINT[figure.material];
   const fur = (d: MeshData): MeshData => (figure.material === 'hair' ? furred(d) : d);
   const rest = restPose(figure);
   const sink = new Xf(new MeshBuilder(), null, 0, 0, 0, 0);
@@ -245,7 +257,7 @@ export function caretakerMesh(spec: CaretakerBodySpec, figures: readonly FigureS
     arm.push(fur(mb.build()));
   }
   const top = Math.max(...skeletonPoints(s).map((p) => p[1]));
-  return { figure, body: fur(bodyMb.build()), arm, table: tableMesh(), tag: tagMesh(), dots: figure.material === 'smoke' ? SMOKE_DOTS : 0, core: [s.waist[0], s.waist[1], s.waist[2]], top };
+  return { figure, body: fur(bodyMb.build()), arm, table: tableMesh(), tag: tagMesh(), dots: own ? CARETAKER_DOTS : figure.material === 'smoke' ? SMOKE_DOTS : 0, core: [s.waist[0], s.waist[1], s.waist[2]], top };
 }
 
 /**

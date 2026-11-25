@@ -98,8 +98,8 @@ const ARCHIVE_AT_MS = 6000;
  * Отражение без зеркала (A4_E03): тело Смотрителя сначала собирается из дыма и работает молча — столько мс до первой реплики;
  * договорили — стоит ещё столько, потом рассеивается; глава кончается, когда дым ушёл.
  */
-export const BODY_LEAD_MS = 3200;
-export const BODY_AFTER_MS = 1800;
+export const BODY_LEAD_MS = 5200;
+export const BODY_AFTER_MS = 2400;
 const BODY_GO_MS = 1500;
 
 const artOf = (memId: string): string => SLOT_OF[memId] ?? memId;
