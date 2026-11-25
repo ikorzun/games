@@ -15,7 +15,8 @@
  *     предупреждение (грузить игру станет долго), общий лимит архива 300 МБ — жёсткий.
  *     Файлы бандла Vite лежат в assets/ плоско (assets/index-<хеш>.js) и входят в ядро — кроме кусков с данными:
  *     модели полки Sand3D (assets/sand3d_data-<хеш>.js) — это данные, а не код игры (из них собрана вся мебель); они
- *     грузятся отдельным куском при старте, параллельно со шрифтом и сохранением, и считаются ассетом, как звук.
+ *     грузятся отдельным куском при старте, параллельно со шрифтом и сохранением, и считаются ассетом, как звук. Картинки,
+ *     которые Vite кладёт туда же плоско (assets/<id>-<хеш>.webp и т. п.), — тоже ассет (FLAT_IMAGE).
  * Выход: код 0 — всё в порядке (предупреждения не мешают), 1 — есть нарушения (перечислены в stderr).
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -31,7 +32,12 @@ const CONTENT_DIRS = [];
 /** Куски с данными, которые игра грузит отдельно от кода (world/sand3d.ts): модели полки Sand3D. */
 const LAZY_CHUNK = /^assets\/sand3d_data-[\w-]+\.js$/;
 /** Игровой ассет: assets/<папка>/…, звук audio/… и куски по нужде; остальные плоские assets/<файл> — бандл Vite, это ядро. */
-const isGameAsset = (rel) => rel.startsWith('audio/') || LAZY_CHUNK.test(rel) || (rel.startsWith('assets/') && rel.indexOf('/', 'assets/'.length) > 0);
+/**
+ * Картинки (плакаты, бумага, экраны, фактуры): Vite кладёт их в assets/ плоско, рядом с кодом, но это графика — игровой ассет,
+ * как звук, а не ядро (CI 452deac: ядро Playgama 5,01 МБ при бюджете 5,00 — из них 2,4 МБ картинок).
+ */
+const FLAT_IMAGE = /^assets\/[^/]+\.(webp|png|jpe?g|avif)$/;
+const isGameAsset = (rel) => rel.startsWith('audio/') || LAZY_CHUNK.test(rel) || FLAT_IMAGE.test(rel) || (rel.startsWith('assets/') && rel.indexOf('/', 'assets/'.length) > 0);
 
 /** Какие звуковые файлы обязаны быть в сборке: из audio/manifest.json. */
 function expectedAudio() {
