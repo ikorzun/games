@@ -524,6 +524,36 @@ export class Hud {
     this.tagEl.classList.add('is-on');
   }
 
+  /** Бирка на экране. */
+  get tagOn(): boolean {
+    return this.tagEl.classList.contains('is-on');
+  }
+
+  /**
+   * Бирка — бумажный ярлык на нитке у вещи (квиз 24.11, ночь: «Ярлык у вещи»; канон KOMA — «разглаживают одну и ту же бирку»):
+   * висит над точкой мира, спроецированной в кадр (x, y — доли кадра), и мельчает с расстоянием d, м. Точка за кадром — ярлык
+   * гаснет. null — бирка не привязана ни к чему (своя бирка героя): буквы посреди кадра, как прежде.
+   */
+  tagAt(p: { x: number; y: number; visible: boolean; d: number } | null): void {
+    this.tagEl.classList.toggle('is-pinned', p !== null);
+    if (!p) {
+      // Не у вещи — на своём месте из стилей: сбоку или посреди кадра.
+      if (this.tagEl.style.left !== '') {
+        this.tagEl.style.left = '';
+        this.tagEl.style.top = '';
+      }
+      return;
+    }
+    this.tagEl.classList.toggle('is-away', !p.visible);
+    if (!p.visible) return;
+    // Бирку лимбо читают, пока Смотритель пишет: она крупнее и мельчает меньше.
+    const big = this.tagEl.classList.contains('is-big');
+    const s = big ? Math.max(0.75, Math.min(1.4, 2.6 / Math.max(0.4, p.d))) : Math.max(0.5, Math.min(1.25, 1.8 / Math.max(0.4, p.d)));
+    this.tagEl.style.left = `${(p.x * 100).toFixed(2)}%`;
+    this.tagEl.style.top = `${(p.y * 100).toFixed(2)}%`;
+    this.tagEl.style.setProperty('--s', s.toFixed(3));
+  }
+
   /** Лимбо: бирка сюжета на экране — строки лимбо уходят, как при обрывке метаслоя. */
   setKoma(on: boolean): void {
     this.el.classList.toggle('is-koma', on);

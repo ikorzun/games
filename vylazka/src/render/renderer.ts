@@ -2705,9 +2705,10 @@ export class GameRenderer {
   }
 
   /** Точка мира на экране: x, y в долях кадра (0..1, y вниз); visible — перед камерой и в кадре. */
-  project(p: readonly [number, number, number]): { x: number; y: number; visible: boolean } {
-    const v = this.tmpV.set(p[0], p[1], p[2]).project(this.camera);
-    return { x: v.x * 0.5 + 0.5, y: 0.5 - v.y * 0.5, visible: v.z > -1 && v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1 };
+  project(p: readonly [number, number, number]): { x: number; y: number; visible: boolean; d: number } {
+    const d = this.camera.position.distanceTo(this.tmpV.set(p[0], p[1], p[2]));
+    const v = this.tmpV.project(this.camera);
+    return { x: v.x * 0.5 + 0.5, y: 0.5 - v.y * 0.5, visible: v.z > -1 && v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1, d };
   }
 
   /** Заранее собрать шейдеры, чтобы первый кадр не подвисал. */

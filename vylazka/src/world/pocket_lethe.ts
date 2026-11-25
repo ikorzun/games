@@ -20,6 +20,8 @@ import { MAT } from './materials';
 import { Xf } from './props';
 import { lathe } from './props_real';
 import { tube } from './props_seating';
+import type { MeshData } from './kit';
+import { letheStatue } from './lethe_statue';
 import type { PocketBuilder, PocketSpace } from './pockets';
 
 /** Комната: полуширина, высота, толщина стен, полуширина и высота проёма, полуширина окна в потолке, м. */
@@ -88,6 +90,25 @@ function statue(xf: Xf): void {
   xf.collider([-0.78, 0, -0.78], [0.78, y0 + LETHE.figure, 0.78]);
 }
 
+/** Высота круглого постамента под сканом, м: у коры своё ступенчатое подножие, высокий постамент сделал бы её колонной. */
+const SCAN_PLINTH = 0.26;
+
+/**
+ * Скан коры (world/lethe_statue.ts) на низком круглом постаменте посреди комнаты — отдельной сеткой: своя сетка у скана уже
+ * собрана, в MeshBuilder её не перекладываем. Лицом в −z, к входящему.
+ */
+function scanStatue(xf: Xf, scan: MeshData, ox: number, oy: number, oz: number): MeshData {
+  lathe(xf, 0, 0, [[0.62, 0], [0.62, SCAN_PLINTH - 0.04], [0.58, SCAN_PLINTH], [0.0005, SCAN_PLINTH]], 40, MAT.marble, () => MARBLE_SH);
+  xf.collider([-0.62, 0, -0.62], [0.62, SCAN_PLINTH + 2.05, 0.62]);
+  const position = new Float32Array(scan.position.length);
+  for (let i = 0; i < position.length; i += 3) {
+    position[i] = ox + scan.position[i]!;
+    position[i + 1] = oy + SCAN_PLINTH + scan.position[i + 1]!;
+    position[i + 2] = oz + scan.position[i + 2]!;
+  }
+  return { ...scan, position };
+}
+
 export const buildLethe: PocketBuilder = (_seed: number, origin: Vec3): PocketSpace => {
   const [ox, oy, oz] = origin;
   const mb = new MeshBuilder();
@@ -110,7 +131,10 @@ export const buildLethe: PocketBuilder = (_seed: number, origin: Vec3): PocketSp
   xf.box([-R - T, H, E], [R + T, H + T, R + T], MAT.plaster, { tint: RED_DK });
   xf.box([-R - T, H, -E], [-E, H + T, E], MAT.plaster, { tint: RED_DK });
   xf.box([E, H, -E], [R + T, H + T, E], MAT.plaster, { tint: RED_DK });
-  statue(xf);
+  // Фигура: скан коры, если он уже пришёл (квиз 24.11, ночь: «Готовая модель»), иначе — собранная программой.
+  const scan = letheStatue();
+  const figure = scan ? scanStatue(xf, scan, ox, oy, oz) : null;
+  if (!figure) statue(xf);
   // Выход — в проёме дальней стены, за фигурой (красную обводку добавит buildPocket).
   const exit: Vec3 = [ox, oy, oz + R + T / 2];
   const spots: Vec3[] = [
@@ -123,7 +147,7 @@ export const buildLethe: PocketBuilder = (_seed: number, origin: Vec3): PocketSp
   ].map(([x, y, z]): Vec3 => [ox + x!, oy + y!, oz + z!]);
   return {
     kind: 'dollhouse',
-    meshes: [mb.build()],
+    meshes: figure ? [mb.build(), figure] : [mb.build()],
     colliders: cs.boxes.map((b) => ({ ...b })),
     // Снаружи, в двенадцати метрах от комнаты: сначала видно пространство и комнату в нём, потом — фигуру в проёме.
     spawn: { pos: [ox, oy, oz - R - 12], yaw: Math.PI, pitch: 0 },

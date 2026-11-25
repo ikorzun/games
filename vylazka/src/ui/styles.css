@@ -1643,6 +1643,25 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* Низкий широкий экран (телефон лёжа): широкие настройки выше перебивали его раскладку — две колонки с подписью сбоку оставляли
+   сегменту по 30 px, и подписи вылезали из кнопок (смоук 6009ed5, 915×412). Здесь — как было: подпись над переключателем, мельче,
+   с переносом. */
+@media (max-height: 520px) and (min-width: 640px) {
+  .vz-settings {
+    width: min(720px, calc(100% - 20px));
+    padding: 12px 16px 10px;
+  }
+  .vz-settings__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .vz-seg__opt {
+    min-height: 30px;
+    padding: 4px 6px;
+    font-size: 12px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
 
 /* ── Титры лентой, как в кино (ui/overlay.ts, creditsRoll) ── */
 .vz-credits {
@@ -1746,5 +1765,67 @@ body {
   .vz-credits__roll {
     position: static;
     animation: none;
+  }
+}
+
+/* ── Бирка — бумажный ярлык на нитке у вещи (квиз 24.11, ночь: «Ярлык у вещи»; канон KOMA: «разглаживают одну и ту же бирку») ──
+   Бирку вспомненной вещи и экспоната лимбо hud.tagAt вешает над точкой мира: бумага, дырочка, нитка вниз к вещи, ярлык
+   мельчает с расстоянием (--s). Это вещь мира, а не плашка интерфейса: «без плашек» по-прежнему для всего остального — и для
+   своей бирки героя (посреди кадра, без вещи). */
+.vz-hud__tag.is-pinned {
+  right: auto;
+  width: 12.5em;
+  font-size: clamp(11px, 0.9vmin + 7px, 15px);
+  padding: 0.55em 0.8em 0.6em 1.6em;
+  color: #2a2620;
+  background: linear-gradient(176deg, #e4dac2, #d3c8ac);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+  text-shadow: none;
+  animation: none;
+  transform-origin: 50% 100%;
+  transform: translate(-50%, calc(-100% - 2.4em)) rotate(-2.5deg) scale(var(--s, 1));
+  transition: opacity 0.5s ease-out;
+}
+.vz-hud__tag.is-pinned.is-big {
+  width: 13.5em;
+  font-size: clamp(12px, 1vmin + 8px, 17px);
+  transform: translate(-50%, calc(-100% - 2.4em)) rotate(-1.8deg) scale(var(--s, 1));
+}
+.vz-hud__tag.is-pinned::before {
+  display: block;
+  background: #0b0b0b;
+}
+/* Нитка: от низа ярлыка вниз, к вещи. */
+.vz-hud__tag.is-pinned::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 1px;
+  height: 2.4em;
+  background: linear-gradient(rgba(214, 203, 176, 0.85), rgba(214, 203, 176, 0.15));
+}
+.vz-hud__tag.is-pinned.is-on {
+  opacity: 0.95;
+}
+.vz-hud__tag.is-pinned.is-away {
+  opacity: 0;
+}
+.vz-hud__tag.is-pinned .vz-hud__tag-row {
+  border-top: 1px dotted rgba(0, 0, 0, 0.35);
+}
+.vz-hud__tag.is-pinned .vz-hud__tag-stamp {
+  padding: 0.12em 0.45em;
+  border: 1.5px solid #8f2018;
+  color: #8f2018;
+  transform: rotate(-2.5deg);
+}
+.vz-hud.is-bright .vz-hud__tag.is-pinned {
+  color: #2a2620;
+  text-shadow: none;
+}
+@media (orientation: portrait) {
+  .vz-hud__tag.is-pinned:not(.is-big) {
+    width: 11em;
   }
 }

@@ -2,6 +2,7 @@
  * Приложение: заставка → сессии одна за другой через лимбо; пауза, ввод с устройств, профиль
  * и главный цикл. Игровая логика — в game.ts и systems/.
  */
+import { LETHE_STATUE_CREDIT, letheStatue, loadLetheStatue } from './world/lethe_statue';
 import { Analytics } from './analytics/events';
 import type { PlayContext } from './analytics/events';
 import { allSoundFiles, AudioEngine } from './audio/engine';
@@ -194,6 +195,8 @@ export class App {
   private testLevel = false;
   /** Сюжет «Невостребованное» (systems/koma.ts, ui/koma_flow.ts): заводится при первом обращении, когда есть игра и профиль. */
   private komaFlow: KomaFlow | null = null;
+  /** Над какой точкой мира висит бирка-ярлык (место вспомненной вещи, экспонат лимбо); null — бирка не у вещи. */
+  private tagAnchor: [number, number, number] | null = null;
   private saving: Promise<void> = Promise.resolve();
   /** Какое воспоминание сейчас ищут и с какого момента (для подсказки «погаси свет»). */
   private seeking = '';
@@ -359,7 +362,7 @@ export class App {
     // Титры — когда бы кусок ни пришёл.
     const furniture = loadSand3d().then((ok) => {
       // В титрах — и авторы подробных вещей памяти (world/thing_hq_meta.ts): у вещей Sand3D подпись обязательна (CC BY 4.0).
-      if (ok) this.overlay.setCredits({ furniture: sand3dCredits(), things: Object.values(THING_HQ).map((m) => m.credit) });
+      if (ok) this.overlay.setCredits({ furniture: sand3dCredits(), things: [...Object.values(THING_HQ).map((m) => m.credit), LETHE_STATUE_CREDIT] });
       return ok;
     });
     // Шрифты интерфейса и названия: ждём недолго, чтобы первый экран не мигнул системным.
@@ -469,6 +472,8 @@ export class App {
     // level=test — коридор технического среза, level=show — витрина реквизита.
     this.testLevel = p.get('level') === 'test' || p.get('level') === 'show' || (p.get('level') ?? '').startsWith('pocket_') || this.showParam() !== null;
     const failAt = Number(p.get('fail') ?? '');
+    // Скан статуи красной комнаты забвения качается сразу, в фоне: к первому карману он уже будет (world/lethe_statue.ts).
+    void loadLetheStatue();
     this.game = new Game(renderer, mulberry32(baseSeed), {
       // Первый отказ фонаря — принудительный и скорый: игрок должен сразу узнать, что фонарь надо трясти.
       firstFailAt: Number.isFinite(failAt) && p.get('fail') !== null ? failAt : this.testLevel ? 12 : 40,
@@ -624,6 +629,8 @@ export class App {
         this.game.loadLevel(this.level, null);
         this.game.env = pocket.env;
         this.game.renderer.cullDistance = 400;
+        // Красная комната: скан статуи приходит после запуска — пришёл, когда просмотр уже собран, — собрать ещё раз.
+        if (name === 'pocket_dollhouse' && !letheStatue()) void loadLetheStatue().then((m) => m && this.prepare());
       } else {
         this.level = name === 'show' ? buildShowcase(shown !== null ? [shown] : (this.params.get('props')?.split(',') ?? null), this.params.get('flat') === '1') : buildTestLevel();
         this.game.loadLevel(this.level, null);
@@ -1320,6 +1327,9 @@ export class App {
         if (buzz) navigator.vibrate([30, 40, 30]);
       } else if (e.type === 'recall') {
         const id = e.memory.def.id;
+        // Бирка повиснет ярлыком над местом вещи (квиз 24.11, ночь): сама вещь сейчас рассыплется, место останется.
+        const sp = e.memory.spot;
+        this.tagAnchor = sp ? [sp.x, sp.y + 0.35, sp.z] : null;
         // Миг, когда вспомнил, — в запись для метаслоя (REEL).
         this.startReel('recall');
         // Сюжет: на вещь заводится бирка; в первом сне о ней говорят Смотритель и чужие голоса — тогда строки «вспомнил» нет.
@@ -1364,6 +1374,9 @@ export class App {
       if (this.dropTo && (e.type === 'limbo' || e.type === 'begin' || (e.type === 'jump' && e.phase === 'switch'))) this.applyDrop();
       if (e.type === 'limbo') this.onLimbo();
       else if (e.type === 'meta') {
+        // Экспонат лимбо, на который смотрят: бирка сюжета повиснет над ним (экспонаты парят — выше их места).
+        const ex = this.game.things.focus ?? this.game.things.list.find((x) => x.still && x.kind === e.thing);
+        this.tagAnchor = ex ? [ex.pos[0], ex.pos[1] + 0.95, ex.pos[2]] : null;
         if (this.komaOn && this.koma.onMeta(e.thing)) {
           // Бирка или запись сюжета заняли это лимбо.
         } else if (this.deckReady()) this.showMeta();
@@ -1553,6 +1566,9 @@ export class App {
       const k = s ? s.doneCount : 0;
       this.hud.setLimbo([t('limbo.done', { n: this.sessionNumber(), k }), t(`limbo.line.${(this.profile.successes + this.profile.archive.length) % 6}`), t('limbo.wait')]);
     } else this.hud.setLimbo([]);
+    // Бирка — ярлык у вещи: следует за точкой в кадре; бирки нет — привязка забыта (следующая бирка без вещи — посреди кадра).
+    if (!this.hud.tagOn) this.tagAnchor = null;
+    this.hud.tagAt(this.tagAnchor ? g.renderer.project(this.tagAnchor) : null);
     if (this.diagText) this.probeTick();
     if (this.diagText && performance.now() - this.diagAt > 500) {
       this.diagAt = performance.now();
