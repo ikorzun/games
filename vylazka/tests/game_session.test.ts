@@ -490,20 +490,25 @@ describe('игра целиком: цикл сессии', () => {
   it('сцена — кусок места: все его места заняты мелочью и тёмными комнатами — вещь всё равно приходит, на место мелочи (CI b5e96a7)', () => {
     const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 }, piece: true });
     const g = h.game;
-    h.run(2);
+    h.run(0.5);
     const p = g.piece!;
     const nav = g.level!.nav;
-    const near = (x: number, y: number, z: number): number => {
+    // Узел места — той же меркой, что у сессии (systems/session.ts, spotNode): ярус и комната, а не высота — иначе полка над
+    // столиком (места на 0,55 м выше) уходила в другой узел, оставалась свободной, и вещь ложилась туда.
+    const near = (s: { x: number; z: number; tier: number; room: number }): number => {
       let best = -1;
       let bd = Infinity;
       for (const n of nav) {
-        const d = Math.hypot(n.x - x, n.z - z) + Math.abs(n.y - y) * 4;
+        if (n.tier !== s.tier) continue;
+        const d = Math.hypot(n.x - s.x, n.z - s.z) + (n.room === s.room ? 0 : 6);
         if (d < bd) (bd = d), (best = n.id);
       }
       return best;
     };
-    const mine = g.level!.spots.filter((s) => p.nodes.has(near(s.x, s.y, s.z)));
+    const mine = g.level!.spots.filter((s) => p.nodes.has(near(s)));
     expect(mine.length).toBeGreaterThan(1);
+    // Вещь ещё не пришла: места занимаются до неё (25.11: на 2 с, с новой расстановкой, она успевала прийти раньше занятия).
+    expect(g.session!.memories[0]!.state).toBe('hidden');
     // Половина мест куска — мелочь, остальные — тёмные комнаты.
     mine.forEach((s, i) => g.session!.reserve(s, i % 2 === 0 ? 1 : 2));
     g.session!.rush();
@@ -513,7 +518,13 @@ describe('игра целиком: цикл сессии', () => {
     const at = mine.indexOf(g.session!.memories[0]!.spot! as never);
     // Место мелочи — раньше тёмного (поднятое место вещи — то же место, только выше: сравниваем по плану).
     const base = mine.find((s) => Math.hypot(s.x - m.spot!.x, s.z - m.spot!.z) < 0.01)!;
-    expect(at === -1 ? mine.indexOf(base) % 2 : at % 2, 'сперва место мелочи').toBe(0);
+    // Тёмное место — только если ни одно место мелочи вещи не годится (ранжир мест игры: game.ts, spotRanker).
+    const parity = at === -1 ? mine.indexOf(base) % 2 : at % 2;
+    if (parity === 1) {
+      const rank = (g.session as unknown as { spotRank: (() => (s: unknown, thing?: string) => number) | null }).spotRank?.();
+      const fits = mine.filter((_, i) => i % 2 === 0).filter((s) => rank && Number.isFinite(rank(s, m.def.thing)));
+      expect(fits, 'сперва место мелочи: годное место мелочи было').toEqual([]);
+    }
   });
 
   it('сцена — кусок места из одних тёмных комнат: вещь ложится в тёмную, и там загорается свет (иначе её не разглядеть)', () => {

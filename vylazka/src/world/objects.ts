@@ -156,7 +156,7 @@ export class ObjectLog {
       }
     }
     // Не врастать в соседнюю мебель (партнёр 18.11): врастает — как не собирали.
-    if (guard && growthGuard && xf.col && growthGuard(name, xf.col, c0, this.list)) {
+    if (guard && growthGuard && xf.col && growthGuard(name, xf.col, c0, this.list, xf.rot)) {
       xf.mb.rewind(m0);
       if (xf.sl && ms) xf.sl.rewind(ms);
       xf.col.rewind(c0);
@@ -227,7 +227,7 @@ export function withFlatHook<T>(fn: FlatHook | null, body: () => T): T {
  * преградам, которые вещь только что получила (с номера c0), и журналу стоящих. true — врастает, вещь не ставится. Ставит
  * сборка уровня на время обстановки (world/level_build.ts); вещам партнёра и фигурам — нет: их место проверено своё.
  */
-export type GrowthGuard = (name: string, col: ColliderSet, c0: number, objects: readonly LevelObject[]) => boolean;
+export type GrowthGuard = (name: string, col: ColliderSet, c0: number, objects: readonly LevelObject[], rot?: number) => boolean;
 let growthGuard: GrowthGuard | null = null;
 
 /** Выполнить body с проверкой «не врастать» (null — без неё). */
@@ -247,6 +247,7 @@ export interface BuildMark {
   sl: MeshMark | null;
   col: number;
   shadows: number;
+  keeps: number;
   objects: number;
 }
 
@@ -254,7 +255,7 @@ export interface BuildMark {
 export function markBuild(xf: Xf): BuildMark | null {
   const log = xf.mb.log;
   if (!log) return null;
-  return { mb: xf.mb.mark(), sl: xf.sl ? xf.sl.mark() : null, col: xf.col ? xf.col.boxes.length : 0, shadows: xf.col ? xf.col.shadows.length : 0, objects: log.list.length };
+  return { mb: xf.mb.mark(), sl: xf.sl ? xf.sl.mark() : null, col: xf.col ? xf.col.boxes.length : 0, shadows: xf.col ? xf.col.shadows.length : 0, keeps: xf.col ? xf.col.keeps.length : 0, objects: log.list.length };
 }
 
 /** Откатить всё, что собрано в сетку, проекции, преграды и журнал xf после отметки m (группа встала не целиком). */
@@ -264,6 +265,7 @@ export function rewindBuild(xf: Xf, m: BuildMark): void {
   if (xf.col) {
     xf.col.rewind(m.col);
     xf.col.shadows.length = m.shadows;
+    xf.col.keeps.length = m.keeps;
   }
   if (xf.mb.log) xf.mb.log.list.length = m.objects;
 }

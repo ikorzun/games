@@ -37,7 +37,7 @@ import { doorFrame, doorLeaf, collapse, pit, warningSign, waterSheet } from './p
 import { ALL_PROPS, withSwap } from './props_all';
 import type { PropSwap, SwapTo } from './props_all';
 import { ObjectLog, withGrowthGuard } from './objects';
-import { grows } from './clearance';
+import { grows, keepFront } from './clearance';
 import { flowBlocks } from './flow';
 import type { Side } from './room_plan';
 import { DOOR_IMAGE, SCREEN_IMAGES } from './screens';
@@ -59,7 +59,12 @@ const HALF = GRID / 2;
 /** Клетка сетки → координата её центра в мире. */
 export const cellToWorld = (c: number): number => (c - HALF) * CELL;
 /** Хук обстановки: вещь игры не врастает в соседнюю (world/clearance.ts) и не перегораживает проходы помещения (world/flow.ts). */
-const guard = (name: string, col: ColliderSet, c0: number, objects: readonly LevelObject[]): boolean => grows(name, col, c0, objects) || flowBlocks(col, c0);
+const guard = (name: string, col: ColliderSet, c0: number, objects: readonly LevelObject[], rot?: number): boolean => {
+  if (grows(name, col, c0, objects, rot) || flowBlocks(col, c0)) return true;
+  // Встала: поле перед её лицом другие вещи не займут (world/clearance.ts, FRONT).
+  keepFront(name, col, c0, rot);
+  return false;
+};
 /** На сколько затяжка переплёта висит ниже верха крыши зала ожидания, м. */
 export const TIE_DROP = 0.84;
 export const tierFloor = (tier: number): number => -TIER_DROP * tier;

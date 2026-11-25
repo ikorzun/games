@@ -80,6 +80,11 @@ export class ColliderSet {
   partner = false;
   /** Тени убранных, передвинутых и заменённых партнёром вещей игры (Shadow). */
   readonly shadows: Shadow[] = [];
+  /**
+   * Поле перед лицом вещи (world/clearance.ts, FRONT): полоса пола, куда другие вещи игры не встают — перед шкафом, плитой, окном
+   * кассы. Не преграда: игрок ходит, в поиск не входит. Хозяин — номер объекта журнала.
+   */
+  readonly keeps: { box: Aabb; owner: number; name: string; rot: number }[] = [];
   /** Полы-рельефы (HeightField): их мало, перебираются все. */
   readonly fields: HeightField[] = [];
   private readonly grid = new Map<number, number[]>();

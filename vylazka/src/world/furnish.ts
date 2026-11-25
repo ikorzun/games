@@ -29,6 +29,7 @@ import type { DisplayShape } from './props_screens';
 import { DOOR_IMAGE, DOOR_NAME, SCREEN_IMAGES, screenFor } from './screens';
 import type { ScreenKind } from './screens';
 import { CELL, WALL_T } from './shell';
+import { withoutFront } from './clearance';
 import { flowActive, flowDone, RoomFlow, withFlow } from './flow';
 import { planOf } from './room_plan';
 import type { RoomPlan, Side } from './room_plan';
@@ -271,6 +272,15 @@ function s3Near(xf: Xf, name: string): Xf | null {
     for (const dx of [0, 0.15, -0.15, 0.3, -0.3]) {
       const at = xf.child(0, 0, 0, rot).child(dx, 0, 0);
       if (s3c(at, name)) return at;
+    }
+  }
+  // Не встал у середины клетки (поле перед нарами, шкафом — world/clearance.ts, FRONT): шаг подальше, к середине комнаты тоже.
+  for (const rot of [0, 1] as const) {
+    for (const dz of [0.45, -0.45, 0.9, -0.9]) {
+      for (const dx of [0, 0.45, -0.45, 0.9, -0.9]) {
+        const at = xf.child(0, 0, 0, rot).child(dx, 0, dz);
+        if (s3c(at, name)) return at;
+      }
     }
   }
   return null;
@@ -604,8 +614,11 @@ function washroom(ctx: RoomCtx): void {
     sinkRow(a.xf.child(0, 0, 0), a.cornerL || a.cornerR ? 2 : 3);
     landmark(ctx, 'sinks', a.xf, 0, 1.1, 0.45);
   }
+  // Напротив раковин — и в углу тоже (ревизия планов 25.11: в санузле в одну-две клетки все участки угловые, и кабинок не было):
+  // стена напротив параллельна ряду раковин, с ним кабинки не сходятся.
   const o = a ? k.plan.opposite(a) : undefined;
-  const b = o && !o.used && !o.hazard && !o.cornerL && !o.cornerR ? o : bestSlots(ctx, true, k.hero).find((q) => !q.cornerL && !q.cornerR);
+  // Кабинки встроены и проверку проходов не проходят: у двери (клетка с проёмом, не deep) — нет (tests/level.test.ts).
+  const b = o && !o.used && !o.hazard && (o.deep || (!o.cornerL && !o.cornerR)) ? o : (bestSlots(ctx, true, k.hero).find((q) => !q.cornerL && !q.cornerR) ?? bestSlots(ctx, true, k.hero).find((q) => !q.hazard));
   if (b) {
     b.used = true;
     stalls(b.xf.child(0, 0, 0), 2);
@@ -701,6 +714,13 @@ function tanks(ctx: RoomCtx): void {
     if (n === 0) landmark(ctx, 'tank', s.xf, 0, 1.2, 1.5);
     s.used = true;
     n += 1;
+  }
+  // В комнате, где все участки угловые (2 × 2 клетки), — хотя бы один бак, в угловом (ревизия планов 25.11: баков не было вовсе).
+  const t = n === 0 ? bestSlots(ctx, true, k.hero).find((q) => !q.hazard) : undefined;
+  if (t) {
+    waterTank(t.xf.child(0, 0, 0));
+    landmark(ctx, 'tank', t.xf, 0, 1.2, 1.5);
+    t.used = true;
   }
   for (const s of free(ctx, false).slice(0, 3)) {
     pipeRun(s.xf.child(-1.5, 0, 0), 3.0, 0.6, 0.07, MAT.paintBlue, [0.8, 0.85, 0.85]);
@@ -1179,17 +1199,6 @@ function blocked(xf: Xf, x: number, z: number): boolean {
 function kitchen(ctx: RoomCtx): void {
   lamps(ctx);
   const k = roles(ctx);
-  // Стол — главная вещь кухни: напротив входа, под окном в никуда. С порога видно стол и светлое окно над ним — свет тянет
-  // взгляд в комнату. Вещь воспоминания — на клеёнке, слева от тарелки.
-  const table = homeStack(ctx, [['kitchen_table'], ['window_fake']], k.hero);
-  if (table) {
-    landmark(ctx, 'kitchen', table.s.xf, table.x, 0.7, 0.4);
-    // Свободный край столешницы слева от тарелки — на клеёнке (props_home.ts, kitchenTable).
-    spot(ctx, table.s.xf, table.x - 0.42, S3_TOP.s3_table_kitchen! + 0.006, 0.2, 'table');
-    // У стены, под окном — банка с цветами (партнёр 19.11, 21:27: цветы «и в другие помещения»): головки поворачиваются к свету,
-    // как в оранжерее. Сид — от места, а не от ГСЧ помещения: остальная обстановка кухни от неё не сдвигается.
-    ALL_PROPS.jar_flowers?.build(table.s.xf.child(table.x + 0.06, S3_TOP.s3_table_kitchen! + 0.006, 0.13), hash2(ctx.seed, ctx.room.id, 0x3a1f) >>> 0);
-  }
   // Рабочая линия — одним рядом у боковой стены: мойка посередине, плита и холодильник по бокам — путь «холодильник —
   // мойка — плита» короткий, как на настоящей кухне.
   // Холодильник — первым в стопке: он есть в каждой кухне (его передвигает партнёр — правка ссылается на первый холодильник
@@ -1212,6 +1221,20 @@ function kitchen(ctx: RoomCtx): void {
     const f = line.s.xf.pt(line.x + (line.items[0]![1] ?? 0), 0, 0);
     if (!line.stood[1]) homeStack(ctx, [['sink_cabinet']], k.near(f[0], f[2]));
     if (!line.stood[2]) homeStack(ctx, [['stove']], k.near(f[0], f[2]));
+  }
+  // Стол — после рабочей линии (ревизия планов 25.11: стол стоял у дверцы холодильника и у фронта плиты): поле перед ними
+  // (world/clearance.ts, FRONT) уже есть, и стол встаёт вне его.
+  // Стол — главная вещь кухни: напротив входа, под окном в никуда. С порога видно стол и светлое окно над ним — свет тянет
+  // взгляд в комнату. Вещь воспоминания — на клеёнке, слева от тарелки.
+  // Стол — главная вещь кухни и примета: не нашлось места вне поля перед рядом (тесная кухня) — встаёт и в поле, как в жизни.
+  const table = homeStack(ctx, [['kitchen_table'], ['window_fake']], k.hero) ?? withoutFront(() => homeStack(ctx, [['kitchen_table'], ['window_fake']], k.hero));
+  if (table) {
+    landmark(ctx, 'kitchen', table.s.xf, table.x, 0.7, 0.4);
+    // Свободный край столешницы слева от тарелки — на клеёнке (props_home.ts, kitchenTable).
+    spot(ctx, table.s.xf, table.x - 0.42, S3_TOP.s3_table_kitchen! + 0.006, 0.2, 'table');
+    // У стены, под окном — банка с цветами (партнёр 19.11, 21:27: цветы «и в другие помещения»): головки поворачиваются к свету,
+    // как в оранжерее. Сид — от места, а не от ГСЧ помещения: остальная обстановка кухни от неё не сдвигается.
+    ALL_PROPS.jar_flowers?.build(table.s.xf.child(table.x + 0.06, S3_TOP.s3_table_kitchen! + 0.006, 0.13), hash2(ctx.seed, ctx.room.id, 0x3a1f) >>> 0);
   }
   // Батарея — одна на кухню: её передвигает партнёр (правка ссылается на первую батарею кухни).
   homeStack(ctx, [['radiator']], k.side);
@@ -1468,7 +1491,9 @@ export function furnishRoom(ctx: RoomCtx): void {
 /** Где мебель держит проходы свободными (world/flow.ts): комнаты убежища и офиса; коридоры, марши и завалы — нет. */
 const FLOW_SKIP: ReadonlySet<string> = new Set(['corridor', 'stairwell', 'collapsed', 'lift', 'track']);
 function flowFor(ctx: RoomCtx): RoomFlow | null {
-  if (ctx.world !== 'shelter' && ctx.world !== 'office') return null;
+  // Санузел — в любом месте (перепись комнат 25.11: в жёлтых комнатах кабинки не вставали в половине санузлов — без правила
+  // проходов глубокой вещи нет места в клетке с дверью, а у санузла в одну клетку дверь всегда в ней).
+  if (ctx.world !== 'shelter' && ctx.world !== 'office' && ctx.room.type !== 'washroom') return null;
   if (FLOW_SKIP.has(ctx.room.type) || !ctx.cells.some((c) => c.sides)) return null;
   return new RoomFlow(ctx);
 }

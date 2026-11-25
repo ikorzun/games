@@ -68,7 +68,8 @@ describe('мебель не врастает в соседнюю', () => {
     } finally {
       watchGrowth(null);
     }
-    expect([...seen].some((k) => /^s3_bunk_\w+ ← s3_bunk_/.test(k) || /^s3_locker_olive ← s3_bunk_/.test(k)), [...seen].join('; ')).toBe(true);
+    // С 25.11 у коек и шкафчиков поле перед лицом (FRONT): чаще отказ приходит раньше, от поля, — «front …» тоже отказ.
+    expect([...seen].some((k) => /^s3_bunk_\w+ ← (front (of )?)?s3_bunk_/.test(k) || /^s3_locker_olive ← (front (of )?)?s3_bunk_/.test(k)), [...seen].join('; ')).toBe(true);
   });
 });
 

@@ -15,7 +15,7 @@
  */
 import { panelDead } from '../systems/cell_lights';
 import { bestSlots, floorSpots, free, homeCentre, homeStack, landmark, leanScreens, roles, screenAt, spot, stackOn, veils } from './furnish';
-import type { CellInfo, HomeItem, RoomCtx, Slot, SlotScore } from './furnish';
+import type { CellInfo, HomeItem, RoomCtx, Slot, SlotScore, Stacked } from './furnish';
 import { MAT } from './materials';
 import { ALL_PROPS } from './props_all';
 import { BASIN_TOP, ceilingBreak, KITCHEN_SPOT, officeDeskTop } from './props_office';
@@ -40,7 +40,7 @@ function wall(ctx: RoomCtx, ...items: HomeItem[]): { s: Slot; x: number; seeds: 
 }
 
 /** Предмет на лучший по оценке свободный участок стены (раскладка по смыслу: world/furnish.ts, roles). */
-function wallBy(ctx: RoomCtx, score: SlotScore, ...items: HomeItem[]): { s: Slot; x: number; seeds: number[] } | null {
+function wallBy(ctx: RoomCtx, score: SlotScore, ...items: HomeItem[]): Stacked | null {
   return homeStack(ctx, items, score);
 }
 
@@ -143,7 +143,16 @@ function reception(ctx: RoomCtx): void {
   panels(ctx);
   const k = roles(ctx);
   // Стойка — напротив входа, лицом к нему: вошедший сразу видит, к кому идти.
+  // Напротив входа стены нет (приёмная проходная) — к боковой, сдвинув от угла: запас угла под соседнюю стену стойке в 2,1 м не
+  // оставлял места (ревизия планов 25.11: стойки не было ни в одной приёмной).
+  // Стойку (2,1 м) проходная приёмная не вмещает: она перегородила бы проход (world/flow.ts) — стол дежурного поменьше; стульев для
+  // ждущих тогда нет — у проходной приёмной всего две стены, вторая — экрану (ревизия планов 25.11: стойки не было ни в одной).
   const desk = wallBy(ctx, k.hero, ['reception_desk']);
+  const duty = desk ? null : wallBy(ctx, k.hero, ['office_desk']);
+  if (duty) {
+    landmark(ctx, 'reception', duty.s.xf, duty.x, 1.0, 0.4);
+    spot(ctx, duty.s.xf, duty.x, officeDeskTop(duty.seeds[0]!) + 0.005, 0.35, 'table');
+  }
   if (desk) {
     landmark(ctx, 'reception', desk.s.xf, desk.x, 1.0, 0.4);
     // Высокая столешница стойки (со стороны посетителя: полоса от лицевой стенки внутрь).
@@ -151,7 +160,7 @@ function reception(ctx: RoomCtx): void {
   }
   // Сбоку — стулья для тех, кто ждёт, и кактус между ними. Стул — модель полки Sand3D (world/furniture.ts): игрушечный из
   // набора KayKit партнёру не понравился, а с 18.11 вся мебель игры — из полки.
-  wallBy(ctx, k.side, ['chair_bent', -0.75], ['chair_bent', 0.75], ['cactus_round', 0, 0]);
+  if (!duty) wallBy(ctx, k.side, ['chair_bent', -0.75], ['chair_bent', 0.75], ['cactus_round', 0, 0]);
   // Экран в приёмной: лес вместо окна.
   leanScreens(ctx, 1, 1, NATURE);
   floorSpots(ctx, 1);
@@ -275,13 +284,29 @@ function meeting(ctx: RoomCtx): void {
   const e = k.plan.entry;
   const rot = (e ? (e.dir % 2 === 0 ? 0 : 1) : 0) as 0 | 1;
   const m = middle(ctx);
-  const tries = [m.c.xf.child(m.dx, 0, m.dz, rot), ...ctx.cells.map((c) => c.xf.child(0, 0, 0, rot))];
+  // Большой стол с шестью креслами (2,6 × 2,4 м) — только туда, где за креслами остаётся проход: комната шире одной клетки по
+  // обеим сторонам (ревизия планов 25.11: в комнате шириной 3 м до стен оставалось 9–23 см). В узкой — столик на двоих у дальней
+  // стены, доска на торце.
+  const xs = ctx.cells.map((c) => c.cx);
+  const zs = ctx.cells.map((c) => c.cz);
+  const wide = Math.max(...xs) > Math.min(...xs) && Math.max(...zs) > Math.min(...zs);
+  const tries = wide ? [m.c.xf.child(m.dx, 0, m.dz, rot), ...ctx.cells.map((c) => c.xf.child(0, 0, 0, rot))] : [];
+  let big = false;
   for (const at of tries) {
     if (!put(ctx, 'meeting_table', at)) continue;
     landmark(ctx, 'meeting', at, 0, 0.8, 0);
     // На листах посреди стола переговоров (props_office.ts, meetingTable).
     spot(ctx, at, 0, S3_TOP.s3_table_meeting! + 0.006, 0, 'table');
+    big = true;
     break;
+  }
+  if (!big) {
+    const t = wallBy(ctx, notNear(ctx, k.side), ['table_cafe']);
+    if (t) {
+      seatsAt(ctx, t.s, t.x);
+      landmark(ctx, 'meeting', t.s.xf, t.x, 0.8, 0.35);
+      spot(ctx, t.s.xf, t.x, 0.745, 0.35, 'table');
+    }
   }
   wallBy(ctx, k.hero, ['whiteboard']);
   wallBy(ctx, k.door, ['office_clock']);
@@ -307,8 +332,11 @@ function breakroom(ctx: RoomCtx): void {
   }
   wallBy(ctx, k.door, ['vending_machine']);
   wallBy(ctx, k.door, ['water_cooler', -0.4], ['trash_bin', 0.35]);
-  const t = wallBy(ctx, k.hero, ['table_cafe'], ['chair_bent', -0.85], ['chair_bent', 0.85]);
-  if (t) spot(ctx, t.s.xf, t.x, 0.745, 0.35, 'table');
+  const t = wallBy(ctx, k.hero, ['table_cafe']);
+  if (t) {
+    seatsAt(ctx, t.s, t.x);
+    spot(ctx, t.s.xf, t.x, 0.745, 0.35, 'table');
+  }
   floorSpots(ctx, 2);
   // Телевизор в комнате отдыха — единственный экран офиса, где не природа, а то, что смотрели все: студия телеигры, кадр
   // мультфильма. Напротив столика (за ним и смотрели), иначе первый свободный участок — без ГСЧ: обстановка не сдвигается.
@@ -318,6 +346,16 @@ function breakroom(ctx: RoomCtx): void {
     tv.used = true;
     screenAt(ctx, tv.xf.child(0, 1.25, 0), 'wall', POP, tv.dir);
   }
+}
+
+/**
+ * Два стула у столика, приставленного к стене: по торцам, лицом к столу и чуть задвинуты (ревизия планов 25.11: стулья стояли
+ * рядом со столом вдоль стены лицом в комнату). Столик — 0,7 × 0,72 м, середина в x вдоль участка.
+ */
+function seatsAt(ctx: RoomCtx, s: Slot, x: number): void {
+  const z = 0.36;
+  put(ctx, 'chair_bent', s.xf.child(x - 0.72, 0, z, 1));
+  put(ctx, 'chair_bent', s.xf.child(x + 0.72, 0, z, 3));
 }
 
 /** Сколько места креслу между развёрнутым столом начальника и стеной за ним, м. */

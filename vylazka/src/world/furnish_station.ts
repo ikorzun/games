@@ -8,9 +8,10 @@
  * Предметы — из реестра ALL_PROPS (props_station.ts). Места для вещей-воспоминаний раскладываются
  * здесь же: у каждой вещи зала своё помещение (systems/session.ts, STATION_MEMORIES).
  */
-import { floorSpots, free, homeStack, landmark, spot } from './furnish';
+import { floorSpots, free, homeStack, landmark, roles, spot } from './furnish';
 import type { CellInfo, HomeItem, RoomCtx, Slot } from './furnish';
 import { ALL_PROPS } from './props_all';
+import { BASIN_TOP } from './props_office';
 import { benchSeat } from './props_station';
 import { hanging } from './objects';
 import type { Xf } from './props';
@@ -121,12 +122,19 @@ function concourse(ctx: RoomCtx): void {
 
 /** Касса: два окошка и стойка с лентой перед ними. */
 function tickets(ctx: RoomCtx): void {
+  let first: { s: Slot; x: number } | null = null;
   for (let i = 0; i < 2; i++) {
     const r = wall(ctx, ['st_ticket_window']);
+    first ??= r;
     // На прилавке окошка (верх — 0,99 м): место висело над ним на семь сантиметров.
     if (r) spot(ctx, r.s.xf, r.x + 0.25, 0.995, 0.32, 'table');
   }
-  put(ctx, 'st_barrier', ctx.cells[0]!.xf.child(0, 0, 0.5));
+  // Ограждение очереди — поперёк стены, у края окошка: ведёт очередь к окну, а не перегораживает его (ревизия планов 25.11:
+  // лента шла в 18 см перед окном по всей ширине). У ограждения нет преград — правило поля перед лицом его не видит.
+  if (first) {
+    const side = first.x > 0 ? -1 : 1;
+    put(ctx, 'st_barrier', first.s.xf.child(first.x + side * 0.95, 0, 0.95, 1));
+  }
   wall(ctx, ['st_clock']);
   floorSpots(ctx, 1);
 }
@@ -157,7 +165,7 @@ function buffet(ctx: RoomCtx): void {
     const r = wall(ctx, ['st_seats']);
     if (r) spot(ctx, r.s.xf, r.x + 0.55, benchSeat('st_seats', r.seeds[0]!), SEAT_Z, 'table');
   }
-  put(ctx, 'st_bin', ctx.cells[0]!.xf.child(-0.9, 0, 0.9));
+  binByWall(ctx);
   floorSpots(ctx, 1);
 }
 
@@ -222,9 +230,29 @@ function store(ctx: RoomCtx): void {
   floorSpots(ctx, 1);
 }
 
+/**
+ * Санузел вокзала (перепись комнат 25.11: в нём стояла одна урна посреди пола). Как строят общественные: кабинки рядом у дальней
+ * стены, раковины сбоку, ближе ко входу, под длинным зеркалом; у двери — сушилка и урна, спиной к стене.
+ */
 function washroom(ctx: RoomCtx): void {
-  put(ctx, 'st_bin', ctx.cells[0]!.xf.child(0.9, 0, 0.9));
+  const k = roles(ctx);
+  const stalls = homeStack(ctx, [['toilet_stall', -0.5], ['toilet_stall', 0.5]], k.hero) ?? homeStack(ctx, [['toilet_stall']], k.hero);
+  if (stalls) landmark(ctx, 'washroom', stalls.s.xf, stalls.x, 1.0, 0.8);
+  const w = homeStack(ctx, [['wash_basins']], k.side);
+  if (w) spot(ctx, w.s.xf, w.x, BASIN_TOP + 0.005, 0.38, 'table');
+  const d = homeStack(ctx, [['hand_dryer', 0, ALL_PROPS.hand_dryer?.y ?? 0.98]], k.door);
+  if (!d || put(ctx, 'st_bin', d.s.xf.child(d.x + (d.x > 0 ? -0.5 : 0.5), 0, 0.26)) === null) binByWall(ctx);
   floorSpots(ctx, 1);
+}
+
+/**
+ * Урна — спиной к стене, у свободного участка ближе к углу (перепись комнат 25.11: урна буфета и санузла стояла посреди пола).
+ * Участок не занимает: урна мала, а ставится последней.
+ */
+function binByWall(ctx: RoomCtx): void {
+  for (const s of free(ctx, false)) {
+    for (const x of s.cornerL ? [-1.05, 1.05] : [1.05, -1.05]) if (put(ctx, 'st_bin', s.xf.child(x, 0, 0.26)) !== null) return;
+  }
 }
 
 /** Обставить помещение зала ожидания. Порядок вызовов и ГСЧ фиксированы: один сид — одна обстановка. */

@@ -159,7 +159,8 @@ describe('миры: сборка уровня', () => {
         // Офис — до 120 тысяч: с 19.11 в нём зимний сад (оранжерея, design.md §35) — до 55 тысяч в одном помещении; без него офис
         // укладывался в 90. Рисуется то, что в кадре, и помещение целиком держит свой предел (tests/furniture.test.ts, 60 тысяч).
         // 24.11 — 122: санузел стал офисным (две кабинки, раковины под зеркалом, сушилка), это около тысячи на офис.
-        expect(tris, `${world} ${seed}`).toBeLessThan(world === 'office' ? 122000 : 45000);
+        // 25.11 — 124: стол дежурного в приёмной и стулья у столиков (перепись комнат, design.md §31.2).
+        expect(tris, `${world} ${seed}`).toBeLessThan(world === 'office' ? 124000 : 45000);
         expect(level.zones).toHaveLength(0);
         expect(level.collapses).toHaveLength(0);
         expect(level.variants).toHaveLength(0);

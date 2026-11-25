@@ -354,18 +354,20 @@ export class Session {
     const c = this.cfg;
     const region = this.region;
     const inRegion = (s: ItemSpot): boolean => !region || region.has(this.spotNode.get(s) ?? -1);
-    let all = this.level.spots.filter((s) => !this.usedSpots.has(s) && !this.softSpots.has(s) && inRegion(s));
-    // В куске свободных нет — мягко занятые: сперва места мелочи, потом тёмные.
+    const rank = this.spotRank?.();
+    // Сначала — лучшие из годных; негодных не берём совсем, даже если других нет: вещь подождёт.
+    const fit = (list: ItemSpot[]): ItemSpot[] => {
+      if (!rank) return list;
+      const r = new Map(list.map((s) => [s, rank(s, thing)] as const));
+      const best = Math.min(...r.values());
+      return Number.isFinite(best) ? list.filter((s) => r.get(s) === best) : [];
+    };
+    let all = fit(this.level.spots.filter((s) => !this.usedSpots.has(s) && !this.softSpots.has(s) && inRegion(s)));
+    // В куске годных свободных нет — мягко занятые: сперва места мелочи, потом тёмные (годные — на своей ступени: негодное место
+    // мелочи не загораживает годное тёмное).
     for (const level of [1, 2] as const) {
       if (all.length > 0 || !region) break;
-      all = this.level.spots.filter((s) => !this.usedSpots.has(s) && (this.softSpots.get(s) ?? 0) === level && inRegion(s));
-    }
-    const rank = this.spotRank?.();
-    if (rank) {
-      // Сначала — лучшие из годных; негодных не берём совсем, даже если других нет: вещь подождёт.
-      const r = new Map(all.map((s) => [s, rank(s, thing)] as const));
-      const best = Math.min(...r.values());
-      all = Number.isFinite(best) ? all.filter((s) => r.get(s) === best) : [];
+      all = fit(this.level.spots.filter((s) => !this.usedSpots.has(s) && (this.softSpots.get(s) ?? 0) === level && inRegion(s)));
     }
     // Сначала — места не на виду; если таких нет, любое (вещь всё равно нужна).
     const out = seen ? all.filter((s) => !seen([s.x, s.y + 0.3, s.z])) : all;
