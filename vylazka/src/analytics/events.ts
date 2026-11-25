@@ -72,7 +72,7 @@ export type InputKind = 'mouse' | 'touch' | 'pen' | 'key';
 export type WebglStatus = 'unavailable' | 'lost' | 'restored';
 
 /** Скачки, которые событием jump не считаются: смена сессий — это progression_*, поимка — caught. */
-const NOT_JUMPS: ReadonlySet<string> = new Set(['end', 'begin', 'caught']);
+const NOT_JUMPS: ReadonlySet<string> = new Set(['end', 'begin', 'caught', 'seam']);
 /** Номер сессии, круг: ограничены, чтобы значения оставались конечным списком. */
 const cap = (x: number, max = 99): number => Math.max(0, Math.min(max, Math.floor(x)));
 

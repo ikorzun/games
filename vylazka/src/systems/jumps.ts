@@ -7,16 +7,18 @@
 import type { Rng } from '../core/rng';
 import type { PocketKind } from '../world/pockets';
 
-export type JumpCause = 'gaze' | 'thin' | 'light' | 'revive' | 'dark' | 'fall' | 'faint' | 'caught' | 'door' | 'return' | 'end' | 'begin' | 'edge';
+export type JumpCause = 'gaze' | 'thin' | 'light' | 'revive' | 'dark' | 'fall' | 'faint' | 'caught' | 'door' | 'return' | 'end' | 'begin' | 'edge' | 'seam';
 
 /**
  * Как выглядит переход: cut — рывок с помехами; dissolve — место рассыпается в пыль;
  * blackout — свет гаснет, потом ты уже не там; whiteout — кадр выбеливается; seam — шов без следа: шагнул в чёрный проём песчаного
- * зала — и стоишь в его проёме, тем же шагом и тем же взглядом (game.ts, world/pocket_dunes.ts).
+ * зала — и стоишь в его проёме, тем же шагом и тем же взглядом (game.ts, world/pocket_dunes.ts); или свет погас у шва офиса и
+ * зажёгся — вокруг его жёлтая версия, а стоишь там же (world/seams.ts).
  */
 export type JumpStyle = 'cut' | 'dissolve' | 'blackout' | 'whiteout' | 'seam';
 
-export type JumpTarget = PocketKind | 'elsewhere' | 'scene' | 'limbo' | 'session';
+/** twin — другая версия того же места на том же плане (шов офис ↔ жёлтые, world/seams.ts). */
+export type JumpTarget = PocketKind | 'elsewhere' | 'scene' | 'limbo' | 'session' | 'twin';
 
 export interface JumpPlan {
   cause: JumpCause;

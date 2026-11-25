@@ -254,8 +254,15 @@ export class Session {
   private readonly spotNode = new Map<ItemSpot, number>();
   private readonly collapseState = new Map<string, 'idle' | 'primed' | 'done'>();
 
+  /** Уровень, по местам которого раскладываются вещи (шов меняет его на другую версию места — useLevel). */
+  private lv: BuiltLevel;
+
+  get level(): BuiltLevel {
+    return this.lv;
+  }
+
   constructor(
-    readonly level: BuiltLevel,
+    level: BuiltLevel,
     seed: number,
     /** Что уже вспоминалось в прошлых сессиях: новое идёт первым. */
     known: ReadonlySet<string> = new Set(),
@@ -266,6 +273,7 @@ export class Session {
      */
     start = 0,
   ) {
+    this.lv = level;
     this.rng = mulberry32(hash2(seed, 0x5e55, 0x10ad));
     const world = level.world ?? 'shelter';
     const base = WORLD_MEMORIES[world];
@@ -280,6 +288,13 @@ export class Session {
     }
     this.memories = pool.slice(0, cfg.count).map((def, index) => ({ def, index, state: 'hidden', spot: null }));
     for (const c of level.collapses) this.collapseState.set(c.id, 'idle');
+    this.indexSpots();
+  }
+
+  /** Узел навигации у каждого места уровня. */
+  private indexSpots(): void {
+    const level = this.lv;
+    this.spotNode.clear();
     for (const s of level.spots) {
       let best = -1;
       let bestD = Infinity;
@@ -293,6 +308,18 @@ export class Session {
       }
       this.spotNode.set(s, best);
     }
+  }
+
+  /**
+   * Шов (world/seams.ts; pressure.md, §4.1): та же сессия идёт дальше в другой версии места — на том же плане (те же помещения,
+   * клетки и граф), но с другой обстановкой. Вещи сессии теперь ложатся на места этой версии; найденная вещь остаётся, где была
+   * (её место — у воспоминания). Мягкие резервы мелочи и тёмных помещений прежней версии к этой не относятся.
+   */
+  useLevel(level: BuiltLevel): void {
+    if (level === this.lv) return;
+    this.lv = level;
+    this.softSpots.clear();
+    this.indexSpots();
   }
 
   get active(): Memory | null {

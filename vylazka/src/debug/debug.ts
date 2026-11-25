@@ -106,6 +106,16 @@ export interface VzDebugApi {
   /** Встать снаружи чёрного проёма в `distance` м от него, лицом к нему. Нет проёма — false. */
   gotoDunes(distance?: number): boolean;
   /**
+   * Швы офис ↔ жёлтые (world/seams.ts; pressure.md, §4.1): швы этого уровня (нитка на полу: концы, ось, что на концах), у какого
+   * стоит игрок, сколько темно у шва, собрана ли другая версия места и за сколько миллисекунд, сколько раз прошли швом. Нет
+   * швов — null.
+   */
+  seam(): Record<string, unknown> | null;
+  /** Встать у шва i (по умолчанию первого) в `distance` м от нитки, лицом вдоль неё к середине помещения. Нет шва — false. */
+  gotoSeam(i?: number, distance?: number): boolean;
+  /** Пройти швом сейчас, где бы ни стоял: другая версия места на том же месте (собирается, если её нет). false — у места её нет. */
+  crossSeam(): boolean;
+  /**
    * Метаслой (systems/meta.ts): показать обрывок колоды по id (или следующий) прямо сейчас, без лимбо; reel — снять перед этим
    * запись мига «вспомнил», чтобы было что показать в обрывке-записи. Возвращает id показанного или null.
    */
@@ -792,6 +802,31 @@ export function installDebug(app: App): void {
       return { door: { room: d.room, tier: d.tier, at: [...d.at], y: d.y, n: [...d.n], w: d.w }, inside, exit: inside && p?.exit ? [...p.exit] : null, field: g.colliders.fieldAt(d.at[0] - d.n[0] * 0.5, d.at[1] - d.n[1] * 0.5), ...(inside && p?.dunes ? { vertebrae: p.dunes.vertebrae.length, ribs: p.dunes.ribs.length, skull: p.dunes.skull } : {}) };
     },
     meta: (id, reel = false) => app.debugMeta(id, reel),
+    seam: () => {
+      const g = game();
+      const sites = g.level?.seams;
+      if (!sites) return null;
+      const sn = g.snapshot() as { seam: Record<string, unknown> };
+      return {
+        world: g.world,
+        twinOf: g.level?.layout?.twinOf ?? null,
+        ...sn.seam,
+        seams: sites.map((st) => ({ room: st.room, tier: st.tier, axis: st.axis, a: [...st.a], b: [...st.b], y: st.y, ends: [...st.ends], cells: st.cells.map((c) => [...c]) })),
+      };
+    },
+    gotoSeam: (i = 0, distance = 1.2) => {
+      const g = game();
+      const st = g.level?.seams?.[i];
+      if (!st) return false;
+      g.debugHome();
+      // Середина нитки; отступ — поперёк неё (вдоль коридора), лицом к нитке.
+      const mx = (st.a[0] + st.b[0]) / 2;
+      const mz = (st.a[1] + st.b[1]) / 2;
+      const [ox, oz] = st.axis === 0 ? [0, distance] : [distance, 0];
+      g.teleport(mx + ox, st.y, mz + oz, Math.atan2(ox, oz), 0);
+      return true;
+    },
+    crossSeam: () => game().forceSeam(),
     gotoDunes: (distance = 2.5) => {
       const g = game();
       const d = g.level?.duneDoor;

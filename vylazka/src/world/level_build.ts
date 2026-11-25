@@ -29,6 +29,7 @@ import { GRASS_CLEAR } from '../systems/grass';
 import type { GrassSite } from '../systems/grass';
 import { furnishPapers, newPaperState, paperOnly } from './furnish_papers';
 import { growWear } from './wear_growth';
+import { buildSeam, seamSites } from './seams';
 import { NOTE_ID, ROOM_LABEL, SIGN } from './signs';
 import type { CellInfo, RoomCtx, Slot } from './furnish';
 import { opennessNow, withOpenMode } from './furniture';
@@ -228,6 +229,9 @@ interface ChunkBuild {
   id?: string;
   hidden?: boolean;
 }
+
+/** Дверная коробка в жёлтой версии офиса: в цвет обоев (YELLOW_STYLE), чуть темнее стены. */
+const TWIN_FRAME: Vec3 = [1.18, 1.02, 0.5];
 
 /** Помещения нижнего яруса, которые могут «меняться за спиной». */
 const VARIANT_ROOMS: ReadonlySet<RoomType> = new Set<RoomType>(['dorm', 'storage', 'archive', 'washroom']);
@@ -766,6 +770,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   // ── Двери ──
   // В игре двери не открывают: проём либо пуст (коробка осталась), либо створка распахнута, либо
   // сорвана — прислонена к стене рядом или лежит на полу за проёмом.
+  const twin = layout.twinOf !== undefined;
   const hazardCells = new Set([...hz.pits, ...hz.water, ...hz.collapses].map((c) => `${c.tier},${c.x},${c.z}`));
   /** Участки стен у дверей, занятые прислонённой створкой: обстановка их пропускает. */
   const blockedSlots = new Set<string>();
@@ -789,7 +794,12 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     const y = tierFloor(e.tier);
     const xf = new Xf(chunkFor(host, hostCell[0], hostCell[1]).mb, col, wx, y, wz, ROT_FACING[toward]!);
     if (e.kind === 'hermo') hermoDoor(xf);
-    else {
+    else if (twin) {
+      // Жёлтая версия офиса (швы, pressure.md §4.1): проёмы там же, где были двери, но назначение ушло — створок нет, коробка
+      // в цвет обоев, ни табличек, ни трафаретов.
+      doorFrame(xf, TWIN_FRAME, MAT.enamel);
+      continue;
+    } else {
       // В офисе коробки и створки белые, и ни одна дверь не сорвана: либо пустой проём, либо створка распахнута.
       const office = world === 'office';
       const tint: Vec3 = office ? [0.92, 0.94, 0.97] : host.type === 'medical' ? [1.5, 1.5, 1.45] : [0.9 + ((host.id * 7) % 5) * 0.05, 0.85, 0.8];
@@ -853,6 +863,15 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     const [ox2, oz2] = outsideCell(duneHost, duneEdge);
     const outside = roomById(cellRoom.get(`${duneHost.tier},${ox2},${oz2}`)!);
     duneDoorway(chunkFor(outside, ox2, oz2).mb, col, duneDoor);
+  }
+
+  // ── Швы (world/seams.ts; pressure.md, §4.1) ──
+  // Офис и его жёлтая версия сшиты: нитка кружевом по полу и стенам. Швы — по плану и стёртости, у обеих версий одни и те же.
+  const seams = world === 'office' || layout.twinOf === 'office' ? seamSites(layout, decay.wear) : [];
+  for (const s of seams) {
+    const room = roomById(s.room);
+    const [cx, cz] = s.cells[Math.floor(s.cells.length / 2)]!;
+    buildSeam(chunkFor(room, cx, cz).mb, s, ceilOf(room));
   }
 
   // ── Опасности среды ──
@@ -1463,6 +1482,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     ...(white ? { whiteRoom: white } : {}),
     ...(odd ? { oddRoom: odd } : {}),
     ...(duneDoor ? { duneDoor } : {}),
+    ...(seams.length > 0 ? { seams } : {}),
     ...(blooms.length > 0 ? { blooms } : {}),
     ...(turfRoom ? { grassRoom: turfRoom.id } : {}),
     ...(grass.length > 0 ? { grass } : {}),

@@ -36,6 +36,10 @@ import { PASSAGES, PIECE_MAX_ROOMS } from '../src/world/piece';
 import type { PieceMask } from '../src/world/piece';
 import { ODD_COOLDOWN, ODD_KINDS, ODD_TIMING } from '../src/systems/odd';
 import type { OddKind } from '../src/systems/odd';
+import { twinLayout } from '../src/gen/layout';
+import { SEAM_DARK } from '../src/game';
+import { SEAM, seamDistance } from '../src/world/seams';
+import type { SeamSite } from '../src/world/seams';
 
 const SEED = 20041113;
 
@@ -4819,6 +4823,197 @@ describe('песчаный зал: шаг в чёрный проём — сто�
     expect(h.log.dream.filter((e) => e.type === 'jump').every((e) => e.type === 'jump' && e.plan.style === 'seam')).toBe(true);
     // Рельеф зала ушёл вместе с ним: остался только язык песка у проёма.
     expect(h.game.colliders.fields.filter((f) => f.group?.startsWith('pocket')).length).toBe(0);
+  });
+});
+
+describe('швы офис ↔ жёлтые: свет погас у шва и зажёгся — вокруг другая версия места, стоишь там же (pressure.md, §4.1)', () => {
+  const office = buildLevel(generateLayout(SEED, 2, 'office'));
+  const site = office.seams![0]!;
+  const mid = (st: SeamSite): [number, number] => [(st.a[0] + st.b[0]) / 2, (st.a[1] + st.b[1]) / 2];
+  /** Взгляд вдоль коридора — поперёк нитки. */
+  const along = (st: SeamSite): number => (st.axis === 0 ? 0 : Math.PI / 2);
+  const turn = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+  const fresh = (opts: { seams?: boolean } = {}): Harness => {
+    // Каждый раз — своя сборка: швом уровень меняется на месте (коллайдеры, места вещей), а общий кэш делили бы тесты.
+    const h = new Harness(buildLevel(generateLayout(SEED, 2, 'office')));
+    h.game.seams = opts.seams ?? true;
+    h.run(2);
+    // Вещи сна под долгим взглядом растут и уносят в карман — здесь стоят долго: пусть стоят экспонатами.
+    for (const t of h.game.things.list) if (!t.memory) t.still = true;
+    return h;
+  };
+  /** Встать в точку лицом по yaw; датчики офиса видят пришедшего: счёт неподвижности — с нуля. */
+  const standAt = (h: Harness, x: number, z: number, yaw: number): void => {
+    h.game.teleport(x, site.y, z, yaw, 0);
+    h.tick({ ...emptyInput(), lookYaw: 1e-7 });
+    h.run(0.3);
+  };
+  const seams = (h: Harness): DreamEvent[] => h.log.dream.filter((e) => e.type === 'jump' && e.plan.to === 'twin');
+  /** Офис: стоять, пока датчики не потеряют, и ещё немного в темноте; потом шагнуть. */
+  const stillThenStep = (h: Harness, still = 7): void => {
+    h.run(still);
+    for (let i = 0; i < Math.round(0.5 / STEP); i++) h.tick({ ...emptyInput(), moveZ: 1 });
+  };
+
+  it('замер у шва, панели погасли, пошевелился — жёлтые комнаты: тот же план, то же место и взгляд, без перехода', () => {
+    const h = fresh();
+    const g = h.game;
+    const [x, z] = mid(site);
+    standAt(h, x, z, along(site));
+    expect(g.seamHere()).toBe(0);
+    expect(g.world).toBe('office');
+    const session = g.session;
+    h.run(7);
+    // Темно: датчики уснули; переход ждёт света.
+    expect(g.ambientHere).toBeLessThan(0.08);
+    expect(g.world).toBe('office');
+    expect(g.twinReady).toBe(true);
+    const before = { x: g.body.x, z: g.body.z, yaw: g.aimYaw };
+    let at = -1;
+    for (let i = 0; i < 30 && at < 0; i++) {
+      h.tick({ ...emptyInput(), moveZ: 1 });
+      if (g.world === 'yellow') at = i;
+    }
+    // Свет вернулся в первый же шаг — и это уже жёлтая версия: стены там же, тот же граф, своя обстановка.
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect(at).toBeLessThan(3);
+    expect(g.level!.layout!.twinOf).toBe('office');
+    expect(g.level!.nav.map((n) => [n.cx, n.cz, n.room])).toEqual(office.nav.map((n) => [n.cx, n.cz, n.room]));
+    expect(Math.hypot(g.body.x - before.x, g.body.z - before.z)).toBeLessThan(0.15);
+    expect(Math.abs(turn(g.aimYaw - before.yaw))).toBeLessThan(1e-6);
+    // Шов — не скачок: без перехода (ни растворения, ни вспышки), без новой сцены; та же сессия.
+    expect(g.transition).toBeNull();
+    expect(seams(h)).toHaveLength(2);
+    expect(seams(h).every((e) => e.type === 'jump' && e.plan.style === 'seam')).toBe(true);
+    expect(h.log.dream.filter((e) => e.type === 'begin')).toHaveLength(0);
+    expect(g.session).toBe(session);
+    // Свет вернулся фонарём: в жёлтых комнатах этаж обесточен.
+    expect(g.hasLight).toBe(true);
+    expect(g.light.state).toBe('on');
+    h.run(0.2);
+    expect(g.light.intensity).toBeGreaterThan(0.6);
+    // Нитка шва — и здесь, на том же месте.
+    expect(g.level!.seams).toEqual(office.seams);
+    expect(g.seamCrossings).toBe(1);
+  });
+
+  it('обратно так же: фонарь погас у шва, зажёгся — снова офис, панели над головой уже горят', () => {
+    const h = fresh();
+    const g = h.game;
+    const [x, z] = mid(site);
+    standAt(h, x, z, along(site));
+    stillThenStep(h);
+    expect(g.world).toBe('yellow');
+    h.run(0.5);
+    const yellow = g.level;
+    // Выключил фонарь, постоял в темноте у шва, включил.
+    h.tick({ ...emptyInput(), light: true });
+    expect(g.light.state).toBe('off');
+    h.run(SEAM_DARK.hold + 0.5);
+    expect(g.world).toBe('yellow');
+    const before = { x: g.body.x, z: g.body.z, yaw: g.aimYaw };
+    h.tick({ ...emptyInput(), light: true });
+    expect(g.world).toBe('office');
+    expect(g.level).toBe(h.game.level);
+    expect(g.level!.layout!.twinOf).toBeUndefined();
+    expect(Math.hypot(g.body.x - before.x, g.body.z - before.z)).toBeLessThan(0.05);
+    expect(Math.abs(turn(g.aimYaw - before.yaw))).toBeLessThan(1e-6);
+    expect(g.ambientLocal).toBeGreaterThan(0.9);
+    h.tick();
+    expect(g.ambientHere).toBeGreaterThan(0.3);
+    // И снова в жёлтые — та же собранная версия, не новая.
+    stillThenStep(h);
+    expect(g.world).toBe('yellow');
+    expect(g.level).toBe(yellow);
+    expect(g.seamCrossings).toBe(3);
+  });
+
+  it('без темноты шва нет: ходил у шва, щёлкал фонарём слишком быстро — место то же', () => {
+    const h = fresh();
+    const g = h.game;
+    const [x, z] = mid(site);
+    standAt(h, x, z, along(site));
+    // Ходит взад-вперёд: датчики его не теряют.
+    for (let k = 0; k < 6; k++) {
+      h.run(0.5, { ...emptyInput(), moveZ: 1 });
+      h.run(0.5, { ...emptyInput(), moveZ: -1 });
+    }
+    // Стоял, но меньше, чем нужно датчикам, — и пошёл.
+    standAt(h, x, z, along(site));
+    stillThenStep(h, 2.5);
+    expect(g.world).toBe('office');
+    expect(seams(h)).toHaveLength(0);
+    // В жёлтых: фонарь выключен на миг — мало.
+    g.forceSeam();
+    expect(g.world).toBe('yellow');
+    standAt(h, x, z, along(site));
+    h.tick({ ...emptyInput(), light: true });
+    h.run(SEAM_DARK.hold * 0.4);
+    h.tick({ ...emptyInput(), light: true });
+    h.run(0.5);
+    expect(g.world).toBe('yellow');
+  });
+
+  it('вдали от шва темнота никуда не ведёт; и без включённых швов — тоже', () => {
+    const h = fresh();
+    const g = h.game;
+    // Узел подальше от шва, не в его помещении.
+    const far = office.nav.find((n) => n.links.length > 0 && n.room !== site.room && seamDistance(site, n.x, n.z) > SEAM.near + 3)!;
+    standAt(h, far.x, far.z, 0);
+    expect(g.seamHere()).toBe(-1);
+    stillThenStep(h);
+    expect(g.world).toBe('office');
+    const off = fresh({ seams: false });
+    const [x, z] = mid(site);
+    standAt(off, x, z, along(site));
+    stillThenStep(off);
+    expect(off.game.world).toBe('office');
+    expect(off.game.twinReady).toBe(false);
+  });
+
+  it('искомая вещь переходит со сценой: та же, на том же месте, и её можно вспомнить по ту сторону шва', () => {
+    const h = fresh();
+    const g = h.game;
+    const { memoryId } = h.reveal();
+    const thing = g.things.list.find((t) => t.memory)!;
+    const pos = [...thing.pos];
+    // Мелочь сна — той версии, где лежала.
+    expect(g.things.list.filter((t) => !t.memory).length).toBeGreaterThan(0);
+    expect(g.forceSeam()).toBe(true);
+    expect(g.world).toBe('yellow');
+    expect(g.things.list.filter((t) => !t.memory)).toHaveLength(0);
+    expect(g.things.list.find((t) => t.memory)).toBe(thing);
+    expect(thing.pos).toEqual(pos);
+    expect(g.session!.active!.def.id).toBe(memoryId);
+    expect(h.standBefore(thing.id)).toBe(true);
+    const before = h.count('recall');
+    expect(h.until(() => h.count('recall') > before, 4)).toBe(true);
+  });
+
+  it('другая версия собирается заранее или в темноте у шва; время сборки замерено', () => {
+    const h = fresh();
+    const g = h.game;
+    expect(g.hasTwin).toBe(true);
+    expect(g.twinReady).toBe(false);
+    const [x, z] = mid(site);
+    standAt(h, x, z, along(site));
+    // Ещё светло — не собирает; стемнело у шва — собрала.
+    h.run(3);
+    expect(g.twinReady).toBe(false);
+    h.run(3.5);
+    expect(g.twinReady).toBe(true);
+    expect(g.twinBuildMs).toBeGreaterThan(0);
+    // Заранее — по просьбе приложения.
+    const other = fresh();
+    expect(other.game.prepareTwin()).toBe(true);
+    expect(other.game.twinReady).toBe(true);
+    // У других мест другой версии нет.
+    const shelter = new Harness(levelOf(SEED));
+    expect(shelter.game.hasTwin).toBe(false);
+    expect(shelter.game.prepareTwin()).toBe(false);
+    const own = new Harness(buildLevel(generateLayout(SEED, 2, 'yellow')));
+    expect(own.game.hasTwin).toBe(false);
+    void twinLayout;
   });
 });
 

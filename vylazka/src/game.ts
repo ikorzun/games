@@ -23,7 +23,7 @@ import { nodesInRange, SwarmAI } from './swarm/ai';
 import { SwarmBody } from './swarm/body';
 import { Anomalies } from './systems/anomalies';
 import type { AnomalyEvent, AnomalyState } from './systems/anomalies';
-import { CellLights } from './systems/cell_lights';
+import { CellLights, DEFAULT_CELL_LIGHTS } from './systems/cell_lights';
 import { DEFAULT_DIRECTOR, Director, FIRST_DIRECTOR } from './systems/director';
 import type { DirectorConfig } from './systems/director';
 import { behindness, Echo, ECHO_DRIFT, ECHO_STEP } from './systems/echo';
@@ -67,9 +67,10 @@ import { ColliderSet } from './world/colliders';
 import { WallCuts } from './world/wall_gone';
 import type { Aabb } from './world/colliders';
 import { DOOR_NAME } from './world/screens';
+import { SEAM_OBJ } from './world/objects';
 import type { LevelObject } from './world/objects';
 import { ALL_PROPS } from './world/props_all';
-import { CEIL_H, DX, DZ } from './gen/layout';
+import { CEIL_H, DX, DZ, twinLayout } from './gen/layout';
 import type { GenRoom, RoomType, WorldKind } from './gen/layout';
 import type { BuiltLevel, ItemSpot } from './world/level';
 import { figureMesh } from './world/figure_mesh';
@@ -77,7 +78,8 @@ import { CARETAKER_BODY, caretakerMesh, caretakerSpot, gesture, TAG_AT } from '.
 import type { MeshData } from './world/kit';
 import type { FigureMaterial, FigureSpec } from './world/figures';
 import { FIGURES } from './world/figures_data';
-import { ceilTileOf, cellToWorld, STAIR_RISE, STAIR_RUN, STAIR_STEPS, tierFloor } from './world/level_build';
+import { buildLevel, ceilTileOf, cellToWorld, STAIR_RISE, STAIR_RUN, STAIR_STEPS, tierFloor } from './world/level_build';
+import { seamNear } from './world/seams';
 import { CELL } from './world/shell';
 import { buildPocket, ENV_BUNKER, WORLD_ENV } from './world/pockets';
 import type { Env, ModelCell, PocketContext, PocketKind, PocketSpace } from './world/pockets';
@@ -337,6 +339,12 @@ const TIMING: Record<JumpStyle, readonly [number, number]> = { cut: [0.18, 0.45]
  * шаг назад на пороге не выбрасывал обратно тем же кадром), и сам отпускает — рассыпаясь — через столько-то секунд.
  */
 const DUNES_STAY = { exitAfter: 0.4, min: 120, spread: 30 } as const;
+/**
+ * Шов офис ↔ жёлтые (world/seams.ts; pressure.md, §4.1): сколько секунд должно быть темно рядом со швом, чтобы зажёгшийся свет
+ * застал другую версию места (hold: место успевает уйти из глаз — в офисе панели гаснут, фонарь щёлкнул), и через сколько секунд
+ * темноты у шва другую версию собирать, если её ещё нет (prep: на телефоне заминка сборки прячется в темноте).
+ */
+export const SEAM_DARK = { hold: 1, prep: 0.25 } as const;
 /** Телефон: белая вспышка скачка вдвое короче — экран близко к глазам и часто в тёмной комнате (предложение 17.11, T-22). */
 const WHITEOUT_PHONE: readonly [number, number] = [0.3, 0.6];
 /** Где собираются карманные пространства: далеко в стороне от убежища. */
@@ -965,6 +973,25 @@ export class Game {
   private readonly blooms = new Map<number, { k: number; hold: number }>();
   /** Номер экрана-проёма, в который вошли и который ещё не унёс (ждёт конца идущего перехода); 0 — нет. */
   private doorway = 0;
+  /**
+   * Швы офис ↔ жёлтые (world/seams.ts; pressure.md, §4.1): работают ли они. Ставит приложение; тесты, которым переход не нужен,
+   * его не включают.
+   */
+  seams = false;
+  /** Другая версия нынешнего места, уже собранная (офис ↔ его жёлтая версия на том же плане); null — не собрана или её нет. */
+  private twin: BuiltLevel | null = null;
+  /** Как собрать другую версию места (null — у места её нет или она уже собрана). */
+  private twinBuild: (() => BuiltLevel) | null = null;
+  /** Сколько миллисекунд собиралась последняя другая версия места (−1 — не собиралась): отладка и замер заминки. */
+  twinBuildMs = -1;
+  /** Сколько секунд темно рядом со швом (SEAM_DARK). */
+  private seamDark = 0;
+  /** Сколько раз в этой сцене прошли швом. */
+  seamCrossings = 0;
+  /** Отладка прошла швом между шагами (forceSeam): событие перехода — со следующим шагом. */
+  private seamForced = false;
+  /** Прорехи стёртых стен у каждой версии места: преграды у версий свои. */
+  private readonly cutsOf = new WeakMap<BuiltLevel, WallCuts>();
 
   /** Где искомая вещь, когда её можно услышать (её зов — audio/game_audio.ts): она есть и игрок в месте, а не в кармане. */
   get memoryCall(): Vec3 | null {
@@ -1217,8 +1244,6 @@ export class Game {
     this.world = level.world ?? 'shelter';
     this.worldEnv = WORLD_ENV[this.world];
     this.env = this.worldEnv;
-    // Свет панелей: в офисе его включают датчики, в жёлтых комнатах он гудит сам. «Тёмные» помещения — без света.
-    this.cellLights = this.worldEnv.cells ? new CellLights(level.nav, this.worldEnv.cells, level.layout?.seed ?? 0) : null;
     // Зал ожидания: день места идёт через весь сон — вернувшись в зал в том же сне, игрок застаёт его в тот же час, а не снова
     // в полдень (куратор, противоречие 158). Новая сессия игрока начинает день заново.
     const flowSeed = level.layout?.seed ?? 0;
@@ -1228,17 +1253,7 @@ export class Game {
       this.sleepFlow = { seed: flowSeed, flow: this.flow };
     } else this.flow = null;
     this.lastTear = 0;
-    if (this.cellLights) {
-      for (const r of level.layout?.rooms ?? []) {
-        if (r.type === 'corridor') this.cellLights.corridorRooms.add(r.id);
-        if (this.roomFx.get(r.id) === 'dark') this.cellLights.offRooms.add(r.id);
-        // Дневной свет зала ожидания: зал и перрон — под открытым небом, комнаты темнее, переходы темны.
-        if (this.flow) this.cellLights.roomBase.set(r.id, STATION_LIGHT[r.type] ?? 0.55);
-        // Пути в граф не входят (по ним не ходят), но свет им нужен: иначе за краем перрона ничего не видно.
-        if (this.flow && r.type === 'track') for (const [cx, cz] of r.cells) this.cellLights.extra.push({ cx, cz, room: r.id });
-      }
-      this.cellLights.settle();
-    }
+    this.setupCellLights(level);
     this.ambientLocal = 1;
     this.pending = null;
     this.endIn = -1;
@@ -1276,6 +1291,65 @@ export class Game {
     this.shake.reset();
     this.setupPiece();
     this.respawn();
+    this.setupTwin(level, dream);
+  }
+
+  /** Свет панелей по клеткам: в офисе его включают датчики, в зале ожидания — день. «Тёмные» помещения — без света. */
+  private setupCellLights(level: BuiltLevel): void {
+    this.cellLights = this.worldEnv.cells ? new CellLights(level.nav, this.worldEnv.cells, level.layout?.seed ?? 0) : null;
+    if (!this.cellLights) return;
+    for (const r of level.layout?.rooms ?? []) {
+      if (r.type === 'corridor') this.cellLights.corridorRooms.add(r.id);
+      if (this.roomFx.get(r.id) === 'dark') this.cellLights.offRooms.add(r.id);
+      // Дневной свет зала ожидания: зал и перрон — под открытым небом, комнаты темнее, переходы темны.
+      if (this.flow) this.cellLights.roomBase.set(r.id, STATION_LIGHT[r.type] ?? 0.55);
+      // Пути в граф не входят (по ним не ходят), но свет им нужен: иначе за краем перрона ничего не видно.
+      if (this.flow && r.type === 'track') for (const [cx, cz] of r.cells) this.cellLights.extra.push({ cx, cz, room: r.id });
+    }
+    this.cellLights.settle();
+  }
+
+  /**
+   * Швы (world/seams.ts; pressure.md, §4.1): у офиса есть вторая, пустая версия — жёлтые комнаты на том же плане. Её не собирают
+   * здесь (заминка загрузки удвоилась бы): приложение собирает её в свободную секунду (prepareTwin), а если не успело — игра
+   * собирает её сама, когда у шва стемнело (заминка прячется в темноте). Прошедшее место швов не открывает: оно только снится.
+   */
+  private setupTwin(level: BuiltLevel, dream: DreamSeed | null): void {
+    this.twin = null;
+    this.twinBuild = null;
+    this.seamDark = 0;
+    this.seamCrossings = 0;
+    this.seamForced = false;
+    const lay = level.layout;
+    if (level.seams?.length) this.renderer.setObjectLace(SEAM_OBJ, true);
+    if (!lay || lay.world !== 'office' || !level.seams?.length || dream?.faded) return;
+    const wear = level.wear ?? 0;
+    this.twinBuild = () => buildLevel(twinLayout(lay), { wear });
+  }
+
+  /**
+   * Собрать другую версию места заранее (приложение — в свободную секунду после начала сцены; игра — в темноте у шва). true —
+   * она готова (или уже была); false — у места её нет.
+   */
+  prepareTwin(): boolean {
+    if (this.twin) return true;
+    const build = this.twinBuild;
+    if (!build) return false;
+    const t0 = performance.now();
+    this.twin = build();
+    this.twinBuildMs = performance.now() - t0;
+    this.twinBuild = null;
+    return true;
+  }
+
+  /** Есть ли у нынешнего места другая версия (собранная или нет). */
+  get hasTwin(): boolean {
+    return this.twin !== null || this.twinBuild !== null;
+  }
+
+  /** Другая версия места уже собрана (проверки и отладка). */
+  get twinReady(): boolean {
+    return this.twin !== null;
   }
 
   /**
@@ -2883,6 +2957,11 @@ export class Game {
       this.forgotTo = null;
     }
     const to = plan.to;
+    if (to === 'twin') {
+      this.crossTwin();
+      dream.push({ type: 'jump', plan, phase: 'switch' });
+      return;
+    }
     // Сон из сцен: скачок «куда-нибудь» — без цели, которую обещал проём или Осыпь, — уносит в другое место, в следующую
     // сцену (слова партнёра 16.11: «перемешивать пространства при каждом скачке»). Проём кармана, который обещал «назад»
     // или «к вещи», и пробуждение в начале сцены ведут куда обещали.
@@ -3010,7 +3089,20 @@ export class Game {
     const all = far.length > 0 ? far : nav.map((n) => n.id).filter(ok);
     // Прошедшее место помнится одной комнатой — сон роняет в комнату, а не в коридор.
     const roomy = this.fadedScene ? all.filter((id) => !PASSAGES.includes(this.level?.layout?.rooms[nav[id]!.room]?.type as RoomType)) : all;
-    const pool = roomy.length > 0 ? roomy : all;
+    let pool = roomy.length > 0 ? roomy : all;
+    // Швы (world/seams.ts): в офисе сон роняет в двух-пяти клетках пути от шва. Кусок места — 3–6 комнат вокруг начала сцены, и
+    // без этого он часто не помнил бы шва, а на первом круге шов один. Нет такого узла — как обычно.
+    const sites = this.seams && this.hasTwin ? (this.level?.seams ?? []) : [];
+    if (sites.length > 0) {
+      const near = new Set<number>();
+      for (const st of sites)
+        for (const [cx, cz] of st.cells) {
+          const id = this.nodeAt.get(`${st.tier},${cx},${cz}`);
+          if (id !== undefined) for (const n of nodesInRange(nav, id, 2, 5)) near.add(n);
+        }
+      const close = pool.filter((id) => near.has(id));
+      if (close.length > 0) pool = close;
+    }
     if (pool.length === 0) return;
     const n = nav[pool[Math.floor(this.rng() * pool.length)]!]!;
     const l = nav[n.links[Math.floor(this.rng() * n.links.length)]!]!;
@@ -3018,6 +3110,135 @@ export class Game {
     this.spawn = { pos: [fx, n.y, fz], yaw: Math.atan2(-(l.x - fx), -(l.z - fz)) };
     this.setupPiece();
     this.respawn();
+  }
+
+  /**
+   * Шов (world/seams.ts; pressure.md, §4.1): свет погас рядом со швом и зажёгся — и игрок в другой версии места, там же и лицом
+   * туда же. «Погас» — там, где свет приносит фонарь, фонарь не горит (заглох или выключен); в офисе — панели потеряли замершего
+   * (датчики уснули, DEFAULT_CELL_LIGHTS.sleep). Темно должно быть не меньше SEAM_DARK.hold рядом со швом; ушёл от шва в темноте —
+   * счёт заново. «Зажёгся» — фонарь снова горит; в офисе — игрок пошевелился (панели загорелись бы над ним). Шов — не скачок:
+   * без вспышки, звука перехода и прыжка времени. true — переход начат.
+   */
+  private stepSeam(dt: number, dream: DreamEvent[]): boolean {
+    const sites = this.level?.seams;
+    const s = this.session;
+    if (!this.seams || !sites || !this.hasTwin || this.where !== 'main' || this.transition || (s && s.over) || this.pressure?.active) {
+      this.seamDark = 0;
+      return false;
+    }
+    const near = this.seamHere();
+    const lit = this.hasLight ? this.light.state === 'on' : !(this.stillFor >= DEFAULT_CELL_LIGHTS.sleep && this.ambientHere < 0.08);
+    if (!lit) {
+      this.seamDark = near >= 0 ? this.seamDark + dt : 0;
+      // Темно у шва: другую версию собрать сейчас, если приложение ещё не собрало, — заминка сборки прячется в темноте.
+      if (this.seamDark >= SEAM_DARK.prep) this.prepareTwin();
+      return false;
+    }
+    const ready = near >= 0 && this.seamDark >= SEAM_DARK.hold;
+    this.seamDark = 0;
+    if (!ready || !this.prepareTwin()) return false;
+    return this.beginJump({ cause: 'seam', style: 'seam', to: 'twin' }, dream);
+  }
+
+  /** Шов, рядом с которым стоит игрок (номер в level.seams), или −1. Шов за краем куска места не помнится — его нет. */
+  seamHere(): number {
+    const sites = this.level?.seams;
+    if (!sites) return -1;
+    const b = this.body;
+    const piece = this.piece;
+    return seamNear(sites, b.x, b.y, b.z, (x) => !piece || x.cells.some(([cx, cz]) => piece.nodes.has(this.nodeAt.get(`${x.tier},${cx},${cz}`) ?? -1)));
+  }
+
+  /**
+   * Отладка и проверки: пройти швом сейчас, где бы ни стоял (другая версия собирается, если её нет). Событие перехода уйдёт
+   * приложению со следующим шагом. false — у места другой версии нет.
+   */
+  forceSeam(): boolean {
+    if (this.where !== 'main' || this.transition || !this.prepareTwin()) return false;
+    this.crossTwin();
+    this.seamForced = true;
+    return true;
+  }
+
+  /**
+   * Пройти швом: та же сцена идёт дальше в другой версии места (офис ↔ его жёлтая версия на том же плане). Игрок стоит там же и
+   * смотрит туда же. Сессия (и её искомая вещь — на том же месте), Осыпь, кусок места, особенности помещений, стёртость и часы —
+   * те же: это то же воспоминание. Меняется вид и всё, что держится за обстановку: свет (панели офиса ↔ фонарь), растворённое
+   * возвращается (свет погас и зажёгся — закон игры), а мелочь сна остаётся в той версии, где лежала (жёлтая пуста).
+   */
+  private crossTwin(): void {
+    const from = this.level;
+    const to = this.twin;
+    if (!from || !to) return;
+    const b = this.body;
+    // Вещи сна — той версии, где лежали; искомая и оставленная сюжетом остаются, где были.
+    for (const t of [...this.things.list]) if (t !== this.memoryThing && t !== this.keptThing && !this.pocketThings.includes(t)) this.dropThing(t);
+    this.coldOpen = null;
+    const held = [this.memoryThing, this.keptThing].filter((t): t is Thing => t !== null && t.collider >= 0);
+    const boxes = held.map((t) => {
+      const old = this.colliders.boxes[t.collider]!;
+      const keep = { ...old };
+      old.off = true;
+      return keep;
+    });
+    this.cutsOf.set(from, this.wallCuts);
+    this.level = to;
+    this.twin = from;
+    this.twinBuild = null;
+    this.colliders = to.colliders;
+    this.wallCuts = this.cutsOf.get(to) ?? new WallCuts();
+    // Счёт тронутого — за круг, а не за версию места: из него сделана Осыпь (regret).
+    const counts = [this.touchCount, this.returnCount, this.erasedCount] as const;
+    this.setupIllusions(to);
+    [this.touchCount, this.returnCount, this.erasedCount] = counts;
+    this.contactGone.clear();
+    this.bakeContact();
+    this.setupFigures(to);
+    this.renderer.setWorld(to.chunks, to.stairs);
+    this.renderer.setEdges(to.edges ?? null);
+    if (to.seams?.length) this.renderer.setObjectLace(SEAM_OBJ, true);
+    this.applyWear(to);
+    held.forEach((t, i) => {
+      const id = this.colliders.add({ ...boxes[i]!, off: false });
+      t.collider = id;
+    });
+    this.session?.useLevel(to);
+    this.nodeAt.clear();
+    for (const n of to.nav) this.nodeAt.set(`${n.tier},${n.cx},${n.cz}`, n.id);
+    this.world = to.world ?? 'shelter';
+    this.worldEnv = WORLD_ENV[this.world];
+    this.env = this.worldEnv;
+    // Особенности помещений — те же (то же воспоминание), но тихие места этой версии тихие и здесь (assignRooms).
+    for (const r of [to.skyRoom, to.greenRoom, to.grassRoom, to.whiteRoom?.room, to.duneDoor?.room]) if (r !== undefined) this.roomFx.delete(r);
+    this.setupCellLights(to);
+    // Помещения давления — свои у версии (по её обстановке), а счёт событий и паузы между ними — сцены: шов их не обнуляет.
+    const pressure = this.pressure;
+    this.setupPressure(to);
+    if (pressure && this.pressure) this.pressure = pressure;
+    this.setupBirds(to, this.dreamSeed);
+    this.levelGrass = to.grass?.length ? new Grass(to.grass) : null;
+    this.bodyPress = to.grassBody ? 1 : 0;
+    this.flowers = this.session && to.blooms?.length ? new Flowers(to.blooms, this.dreamSeed) : null;
+    if (this.anomalies) this.anomalies = new Anomalies(null, { run: STAIR_RUN, rise: STAIR_RISE, steps: STAIR_STEPS }, to.variants, 2);
+    this.renderer.setPiece(to.layout && this.piece ? pieceMask(to.nav, to.layout, this.piece) : null);
+    // Стена там же; мебель — своя: встал в неё — шаг в сторону, к свободному месту (камеру не дёргает).
+    const [fx, fz] = this.freeSpot(b.x, b.y, b.z);
+    if (fx !== b.x || fz !== b.z) this.shiftPlayer(fx - b.x, 0, fz - b.z);
+    const [sx, sz] = this.freeSpot(this.spawn.pos[0], this.spawn.pos[1], this.spawn.pos[2]);
+    this.spawn = { pos: [sx, this.spawn.pos[1], sz], yaw: this.spawn.yaw };
+    // Свет вернулся: там, где его приносит фонарь, фонарь горит; в офисе панели над игроком уже горят — без вспышки и разгона.
+    this.stillFor = 0;
+    if (this.hasLight) this.light.relight();
+    const cl = this.cellLights;
+    if (cl) {
+      const node = this.playerNode();
+      cl.update(0.6, { playerNode: node, driftNode: -1, time: this.time, idle: 0 });
+      this.ambientLocal = cl.at(node);
+    } else this.ambientLocal = 1;
+    this.darkFor = 0;
+    this.darkShifts = 0;
+    this.seamDark = 0;
+    this.seamCrossings += 1;
   }
 
   /** Белая комната: насколько герой внутри, касание цепи и ход перекрута. */
@@ -3606,6 +3827,10 @@ export class Game {
       this.sonarFresh = false;
       dream.push({ type: 'sonar' });
     }
+    if (this.seamForced) {
+      this.seamForced = false;
+      dream.push({ type: 'jump', plan: { cause: 'seam', style: 'seam', to: 'twin' }, phase: 'switch' });
+    }
     const eye: Vec3 = this.lastRig ? this.lastRig.camPos : [b.x, b.y + 1.42, b.z];
     const aim: Vec3 = this.lastRig ? this.lastRig.lightDir : dirFromAngles(this.aimYaw, this.aimPitch);
     const los = (from: Vec3, to: Vec3): number => {
@@ -3712,9 +3937,12 @@ export class Game {
     const mt = this.memoryThing;
     const xraySeen = mt !== null && mt.state !== 'gone' && look.light < 0.15 && this.ambientHere < 0.08 && Math.hypot(mt.pos[0] - b.x, mt.pos[1] - b.y, mt.pos[2] - b.z) < 45;
     if (xraySeen) this.darkSearch = true;
+    // Шов (world/seams.ts; pressure.md, §4.1): свет погас рядом со швом и зажёгся — вокруг другая версия места. Раньше поводов для
+    // скачка: зажжённый у шва свет уносит не в другое место, а сюда же, только другим.
+    const seamed = this.stepSeam(dt, dream);
     // Поводы для скачка: простые действия и наблюдения.
     const jumps = this.jumps;
-    if (jumps && s && !s.over && !this.calm && !quiet) {
+    if (jumps && s && !s.over && !this.calm && !quiet && !seamed) {
       jumps.update(wdt);
       let plan: JumpPlan | null = null;
       // Свет зажёгся после того, как его гасили: щелчком (компьютер) или зарядкой удержанием (телефон).
@@ -4745,6 +4973,7 @@ export class Game {
       echo: this.echo.snapshot(),
       ghost: this.ghost,
       world: this.world,
+      seam: { here: this.seamHere(), dark: this.seamDark, twin: this.hasTwin, ready: this.twin !== null, buildMs: this.twinBuildMs, crossed: this.seamCrossings },
       ambientLocal: this.ambientLocal,
       lights: this.cellLights ? { lit: [...this.cellLights.level].filter((v) => v > 0.5).length, total: this.cellLights.level.length } : null,
       room: this.room,

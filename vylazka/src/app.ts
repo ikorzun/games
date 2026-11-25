@@ -93,6 +93,12 @@ const SCENES = 3;
  * доля следующих сцен, которые оно забирает (если такое место есть и сцена не сама такая); wear — насколько та комната стёрта.
  */
 export const FADED_SCENE = { chance: 0.25, wear: 0.8 } as const;
+/**
+ * Шов офис ↔ жёлтые (world/seams.ts): через сколько миллисекунд после начала сцены в офисе собирать его жёлтую версию заранее.
+ * Позже следующей сцены (она собирается через 0,7 с): две сборки подряд — одна заминка вдвое дольше. На телефоне посреди игры
+ * заранее не собираем: там версия собирается в темноте у шва, где заминки не видно (game.ts, stepSeam).
+ */
+const TWIN_AFTER_MS = 2500;
 /** Через сколько секунд поисков без вещи в луче игрок считается застрявшим: тогда — одна подсказка, как искать. */
 const STUCK_AFTER = 45;
 /** На сколько секунд позже начинается запись стёртого почти до конца места: 23:41:07 + 16:00 = 23:57:07. */
@@ -243,6 +249,8 @@ export class App {
   /** Следующая сцена, уже собранная: место, уровень и его воспоминание. */
   private sceneNext: { world: WorldKind; level: BuiltLevel; memory: PlaceMemory; faded?: boolean } | null = null;
   private sceneTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Таймер заранее собираемой жёлтой версии офиса (TWIN_AFTER_MS). */
+  private twinTimer: ReturnType<typeof setTimeout> | undefined;
   /** Когда место снилось в последний раз (номер сцены сна): сон тянет то, что давно не снилось. */
   private readonly dreamt: Partial<Record<WorldKind, number>> = {};
   private dreamtCount = 0;
@@ -510,6 +518,8 @@ export class App {
     // с fail=0 — проверки. press=1 включает его и там, press=0 выключает везде.
     this.game.pressureAuto = (p.get('press') ?? (p.get('fail') === '0' ? '0' : '1')) !== '0';
     this.game.archive = [...this.profile.archive];
+    // Швы офис ↔ жёлтые (world/seams.ts): в игре — всегда; ?seams=0 — без них (проверки, которым переход мешает).
+    this.game.seams = !this.testLevel && p.get('seams') !== '0';
     this.motion = new MotionSensor(this.game.shake);
     this.desktop = new DesktopInput(this.canvas, this.game.shake, this.lifecycle);
     if (this.touchMode) this.enableTouch();
@@ -670,6 +680,8 @@ export class App {
       this.game.gentle = this.profile.successes === 0 || this.game.stage === 3;
       this.clockSkew = 0;
       this.game.loadLevel(this.level, { seed: this.seed, known: new Set(this.profile.archive), ...(this.scenes ? { chainAt: mem.chain ?? 0, piece: this.pieces } : {}) });
+      // Заставка — свободная минута и на телефоне: жёлтая версия офиса собирается сразу, пока ничего не движется.
+      this.queueTwin(true);
       if (this.scenes) {
         // Сон начинается с места заставки.
         for (const w of WORLD_KINDS) delete this.dreamt[w];
@@ -1021,6 +1033,26 @@ export class App {
     // Не заголовок уровня (места — не уровни, Z-12), а подпись записи: где ты, видно, а сон переход не объявляет.
     this.hud.setCamera(this.world, true);
     this.queueNextScene();
+    this.queueTwin();
+  }
+
+  /**
+   * Шов офис ↔ жёлтые (world/seams.ts): собрать жёлтую версию офиса заранее, в свободную секунду после начала сцены, — чтобы
+   * переход в темноте у шва не ждал сборки. idle — сейчас ничего не движется (заставка): собрать сразу и на телефоне. Посреди игры
+   * на телефоне заранее не собираем: там игра соберёт её сама в темноте у шва, где заминки не видно. Время сборки — в журнал
+   * консоли ([seam]) и в __vz.seam().
+   */
+  private queueTwin(idle = false): void {
+    if (this.twinTimer !== undefined) clearTimeout(this.twinTimer);
+    this.twinTimer = undefined;
+    if (!this.game.seams || !this.game.hasTwin || this.game.twinReady) return;
+    const build = (): void => {
+      this.twinTimer = undefined;
+      if (!this.game.hasTwin || this.game.twinReady || !this.game.prepareTwin()) return;
+      console.info(`[seam] жёлтая версия офиса собрана за ${Math.round(this.game.twinBuildMs)} мс`);
+    };
+    if (idle) build();
+    else if (!this.game.phone) this.twinTimer = setTimeout(build, TWIN_AFTER_MS);
   }
 
   /** Лимбо отпустило: началась следующая сессия (scene — нет: следующая сцена того же сна). */
@@ -1096,6 +1128,7 @@ export class App {
       this.markDreamt(this.world);
       this.queueNextScene();
     }
+    this.queueTwin();
   }
 
   /**
@@ -1445,7 +1478,12 @@ export class App {
       // в первом сне её нет.
       else if (e.type === 'thing' && e.what === 'changing' && e.thing.fate !== 'dust' && !this.firstSleep) this.teach('thing', t('teach.thing'));
       else if (e.type === 'jump' && e.phase === 'switch' && e.plan.style === 'seam') {
-        // Шов песчаного зала — без следа: ни дрожи, ни прыжка времени на камере; шагнул — и уже там.
+        // Шов — без следа: ни дрожи, ни прыжка времени на камере; шагнул (песчаный зал) или свет вернулся (офис ↔ жёлтые) — и уже
+        // там. У шва офиса камера та же запись, только другая версия места: номер меняется молча, без имени места (КАМ-12 ↔ КАМ-12Б).
+        if (e.plan.to === 'twin' && this.game.level) {
+          this.level = this.game.level;
+          this.hud.setCamera(this.game.world, false);
+        }
       } else if (e.type === 'jump' && e.phase === 'switch') {
         // Осыпь вернула в начало: об этом говорит строка, иначе непонятно, почему место другое.
         if (e.plan.cause === 'caught') this.hud.toast(t('toast.caught'), 3400);

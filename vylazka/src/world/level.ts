@@ -2,6 +2,7 @@
 import type { WhiteRoom } from './furnish_white';
 import type { OddRoom } from './furnish_odd';
 import type { DuneDoor } from './furnish_dunes';
+import type { SeamSite } from './seams';
 import type { GrowthStats } from './wear_growth';
 import type { Vec3 } from '../core/types';
 import type { GrassSite } from '../systems/grass';
@@ -167,6 +168,11 @@ export interface BuiltLevel {
    * середина проёма, пол и нормаль внутрь. Шагнул в черноту — стоишь в проёме огромного зала. Нет поля — на уровне его нет.
    */
   duneDoor?: DuneDoor;
+  /**
+   * Швы (world/seams.ts; pressure.md, §4.1): где офис сшит со своей жёлтой версией — нитки кружевом по полу и стенам. Свет погас
+   * рядом со швом и зажёгся — вокруг другая версия места (game.ts). Нет поля — швов нет (не офис и не его двойник).
+   */
+  seams?: SeamSite[];
   /**
    * Головки её цветов (systems/flowers.ts): где, куда смотрят в покое, форма, размер, поворот вокруг оси и объект, на котором
    * растут (растворился — головки нет). Стебли и листья — в сетках помещений.

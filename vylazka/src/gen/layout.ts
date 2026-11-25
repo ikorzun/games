@@ -149,6 +149,11 @@ export interface GenLayout {
   /** Сколько циклов замкнуто на каждом ярусе (петли коридоров и вторые двери помещений). */
   loops: number[];
   hazards: GenHazards;
+  /**
+   * План взят у другого места (pressure.md, §4.1, швы): жёлтые комнаты на плане офиса того же сида — его вторая, пустая версия.
+   * Нет поля — у места свой план.
+   */
+  twinOf?: WorldKind;
 }
 
 /** Квоты помещений по ярусам: [тип, варианты размера в клетках (вдоль стены коридора × вглубь)]. */
@@ -789,6 +794,34 @@ function planHazards(b: Build, rank: 1 | 2 | 3): GenHazards {
     }
   }
   return hz;
+}
+
+/**
+ * Чем становится помещение офиса в его жёлтой версии: назначение ушло — остались пустые залы. Отдел (остров столов стоит как
+ * стоял), комната отдыха и санузел — те же, что в жёлтых комнатах со своим планом; лифт, приёмная и коридор — проходы.
+ */
+const TWIN_ROOM: Partial<Record<RoomType, RoomType>> = { corridor: 'corridor', lift: 'lift', reception: 'reception', department: 'department', breakroom: 'breakroom', washroom: 'washroom' };
+
+/**
+ * Жёлтые комнаты на плане офиса (pressure.md, §4.1: «если при одном сиде сделать им общий план, переход будет на месте»). Те же
+ * помещения, клетки, проходы и стены — другое только назначение помещений (пустые залы) и мир, по которому их обставляют. Проходы
+ * остаются дверными проёмами: стены стоят там же, где стояли, из проёмов ушли только створки (world/level_build.ts).
+ *
+ * Свой план у жёлтых комнат остаётся (generateLayout(seed, rank, 'yellow')): так они снятся сами, сценой сна. Двойник офиса —
+ * только по ту сторону шва.
+ */
+export function twinLayout(office: GenLayout): GenLayout {
+  if (office.world !== 'office') throw new Error('двойник есть только у офиса');
+  return {
+    ...office,
+    world: 'yellow',
+    twinOf: 'office',
+    rooms: office.rooms.map((r) => ({ ...r, type: TWIN_ROOM[r.type] ?? 'hall', cells: r.cells.map(([x, z]) => [x, z] as [number, number]) })),
+    edges: office.edges.map((e) => ({ ...e })),
+    stairs: office.stairs.map((s) => ({ ...s })),
+    loops: [...office.loops],
+    hazards: { pits: [...office.hazards.pits], water: [...office.hazards.water], gasRooms: [...office.hazards.gasRooms], collapses: [...office.hazards.collapses] },
+  };
 }
 
 /** Сгенерировать план по сиду, рангу объекта и миру. Детерминирован: один сид — один уровень. */

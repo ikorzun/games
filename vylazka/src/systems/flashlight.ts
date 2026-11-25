@@ -215,6 +215,25 @@ export class Flashlight {
     this.reviveProgress = 0;
   }
 
+  /**
+   * Свет вернулся сам (шов, game.ts): по ту сторону шва фонарь горит, как горел до темноты, — без щелчка, без мерцания и без
+   * вспышки. Батарейку не заряжает: севшая отдаёт хоть немного света, иначе вернувшийся свет тут же заглох бы.
+   */
+  relight(): void {
+    this.state = 'on';
+    this.dying = 0;
+    this.unstable = 0;
+    this.work = 0;
+    this.reviveProgress = 0;
+    this.sinceRevive = 0;
+    this.flickerValue = 1;
+    this.flickerTarget = 1;
+    if (this.charge < REVIVE_MIN) {
+      this.charge = REVIVE_MIN;
+      this.flat = false;
+    }
+  }
+
   /** Заставить фонарь мигать заданное время, не гася его (пугалка). */
   stutter(seconds: number): void {
     if (this.state === 'on') this.unstable = Math.max(this.unstable, seconds);

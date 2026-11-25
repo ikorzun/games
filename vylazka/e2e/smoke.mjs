@@ -7,7 +7,7 @@
  *   npm run smoke:matrix                                             # + раскладка по матрице размеров, скриншоты в e2e/out/
  *   npm run smoke -- --url https://…                                 # опубликованная ссылка
  *
- * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en(,es), --sizes 640x360,…, --no-shots, --shell, --only play,gen,worlds,flats,illusions,session,pockets,koma,fear,audio,frame,touch,bridge,matrix.
+ * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en(,es), --sizes 640x360,…, --no-shots, --shell, --only play,gen,worlds,seam,flats,illusions,session,pockets,koma,fear,audio,frame,touch,bridge,matrix.
  * Симуляция в тестах заморожена и шагается через window.__vz: проверяется логика и вёрстка, а не
  * частота кадров (SwiftShader даёт 5–10 к/с). Качество задаётся параметром адреса, иначе по строке
  * видеокарты выбралось бы «низкое» и тень осталась бы непроверенной.
@@ -3499,6 +3499,48 @@ async function scenarioFrame(browser, baseUrl) {
   await context.close();
 }
 
+/**
+ * Шов офис ↔ жёлтые комнаты (docs/vylazka/pressure.md, §4.1): замер у шва — панели гаснут; пошевелился — жёлтая версия офиса,
+ * там же и так же, без перехода; фонарь погас у шва и зажёгся — снова офис.
+ */
+async function scenarioSeam(browser, baseUrl) {
+  section('Шов: офис ↔ жёлтые комнаты через темноту');
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113&rank=2&world=office');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  for (let i = 0; i < 20; i++) await vz(page, () => window.__vz.step(6, { lookYaw: 0.0005 }));
+  const info = await vz(page, () => window.__vz.seam());
+  check('в офисе есть шов; его жёлтая версия собрана заранее, на заставке', !!info && info.seams.length >= 1 && info.ready === true && info.buildMs > 0, JSON.stringify({ seams: info?.seams.length, ready: info?.ready, ms: info?.buildMs }));
+  await vz(page, () => window.__vz.gotoSeam(0, 0.8));
+  await vz(page, () => window.__vz.step(6, { lookYaw: 0.0005 }));
+  // Замер: датчики теряют неподвижного (3,2 + 1 + 0,5 с), ещё секунда темноты у шва.
+  for (let i = 0; i < 70; i++) await vz(page, () => window.__vz.step(6));
+  let st = await state(page);
+  check('замер у шва: панели погасли, вокруг ещё офис', st.world === 'office' && st.ambientLocal < 0.1 && st.seam.here === 0 && st.seam.dark > 1, JSON.stringify({ world: st.world, amb: st.ambientLocal, seam: st.seam }));
+  const before = st;
+  await vz(page, () => window.__vz.step(1, { lookYaw: 0.0005 }));
+  st = await vz(page, () => window.__vz.step(30));
+  const cam = (await page.textContent('.vz-hud__cam'))?.trim();
+  const moved = Math.hypot(st.pos[0] - before.pos[0], st.pos[2] - before.pos[2]);
+  check(
+    'пошевелился — жёлтые комнаты: та же точка и взгляд, фонарь горит, без перехода; камера молча — КАМ-12Б',
+    st.world === 'yellow' && moved < 0.05 && Math.abs(st.aim[0] - before.aim[0]) < 0.01 && st.light.state === 'on' && st.jump === null && st.seam.crossed === 1 && cam === RU['hud.cam.yellow'],
+    JSON.stringify({ world: st.world, moved: +moved.toFixed(3), light: st.light.state, jump: st.jump, cam }),
+  );
+  if (wantShots) await saveShot(page, 'seam_yellow.png');
+  // Обратно: фонарь выключен у шва, постоял, включил.
+  await vz(page, () => window.__vz.toggleLight());
+  for (let i = 0; i < 25; i++) await vz(page, () => window.__vz.step(6));
+  await vz(page, () => window.__vz.toggleLight());
+  st = await vz(page, () => window.__vz.step(6, { lookYaw: 0.0005 }));
+  check('фонарь погас у шва и зажёгся — снова офис, панель над головой горит', st.world === 'office' && st.ambientLocal > 0.9 && st.seam.crossed === 2 && (await page.textContent('.vz-hud__cam'))?.trim() === RU['hud.cam.office'], JSON.stringify({ world: st.world, amb: st.ambientLocal, seam: st.seam }));
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+  if (wantShots) await saveShot(page, 'seam_office.png');
+  await context.close();
+}
+
 // ───────────────────────────── запуск ─────────────────────────────
 
 const server = await startServer();
@@ -3523,6 +3565,7 @@ try {
   if (wants('play')) await run('play', scenarioPlay);
   if (wants('gen')) await run('gen', scenarioGen);
   if (wants('worlds')) await run('worlds', scenarioWorlds);
+  if (wants('seam')) await run('seam', scenarioSeam);
   if (wants('flats')) await run('flats', scenarioFlats);
   if (wants('illusions')) await run('illusions', scenarioIllusions);
   if (wants('session')) await run('session', scenarioSession);
