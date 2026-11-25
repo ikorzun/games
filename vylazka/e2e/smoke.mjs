@@ -239,13 +239,27 @@ async function scenarioPlay(browser, baseUrl) {
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
       let lit = 0;
       let top = 0;
+      const hist = new Uint32Array(256);
       for (let i = 3; i < d.length; i += 4) {
-        if (d[i] > 8) lit += 1;
+        if (d[i] > 8) {
+          lit += 1;
+          hist[d[i]] += 1;
+        }
         top = Math.max(top, d[i]);
       }
-      return { lit, top, share: lit / (c.width * c.height) };
+      // Яркость пыли — по 99,5-му перцентилю светлых пикселей: пыль случайная, и одна-две точки, легшие друг на друга, не в счёт
+      // (смоук CI da419b6: пик 0,62 при задуманных 0,4 — наложение). Сама пыль — не ярче 0,6 белого, наложения — не ярче 0,8.
+      let p995 = 0;
+      for (let v = 255, seen = 0; v > 8; v--) {
+        seen += hist[v];
+        if (seen > lit * 0.005) {
+          p995 = v;
+          break;
+        }
+      }
+      return { lit, top, p995, share: lit / (c.width * c.height) };
     });
-    check('на фоне заставки пыль из точек: она есть, фона не закрывает, самая яркая точка — не ярче 0,6 белого', flies.lit > 0 && flies.share < 0.04 && flies.top <= 150, JSON.stringify(flies));
+    check('на фоне заставки пыль из точек: она есть, фона не закрывает, яркость — не больше 0,6 белого (наложения — 0,8)', flies.lit > 0 && flies.share < 0.04 && flies.p995 <= 150 && flies.top <= 205, JSON.stringify(flies));
     check('настройки спрятаны под шестерёнкой справа вверху; список закрыт', (await tp.isVisible('.vz-overlay__gear')) && !(await tp.isVisible('.vz-settings')) && (await tp.evaluate(() => { const r = document.querySelector('.vz-overlay__gear').getBoundingClientRect(); return r.right > innerWidth - 80 && r.top < 80; })));
     // Предупреждение о вспышках — тихой строкой у нижнего края (куратор, пачка 50, 308): видно до первой вспышки.
     const note = await tp.evaluate(() => {
