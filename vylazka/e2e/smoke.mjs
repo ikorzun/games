@@ -488,7 +488,12 @@ async function scenarioPlay(browser, baseUrl) {
   await vz(page, () => window.__vz.quality('ultra'));
   const same = await vz(page, () => window.__vz.info());
   await page.setViewportSize({ width: 1600, height: 900 });
-  await sleep(400);
+  // Новый размер приходит с ResizeObserver, а тот — с кадром: под программной отрисовкой (и с тяжёлым кадром) 400 мс не всегда
+  // хватает (смоук 25.11 вечером: буфер остался 1280×720). Ждём, пока размер дойдёт, — до 6 с.
+  for (let t = 0; t < 6000; t += 200) {
+    await sleep(200);
+    if ((await vz(page, () => window.__vz.info())).width === 1600) break;
+  }
   await vz(page, () => window.__vz.step(20));
   const fine = await vz(page, () => window.__vz.info());
   const fineGrid = await vz(page, () => window.__vz.probe());
