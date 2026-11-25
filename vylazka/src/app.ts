@@ -394,7 +394,7 @@ export class App {
     });
     // Шрифты интерфейса и названия: ждём недолго, чтобы первый экран не мигнул системным.
     const font = (spec: string, text: string): Promise<unknown> => document.fonts?.load?.(spec, text).catch(() => undefined) ?? Promise.resolve();
-    await Promise.race([Promise.all([font('16px "JetBrains Mono"', 'Убежище Ag'), font('200 16px "JetBrains Mono"', 'Ты спишь Ag'), font('300 40px "DM Mono"', 'DEPRIVATIO')]), new Promise((r) => setTimeout(r, 1500))]);
+    await Promise.race([Promise.all([font('16px "JetBrains Mono"', 'Убежище Ag'), font('200 16px "JetBrains Mono"', 'Ты спишь Ag'), font('200 40px "Geologica"', 'DEPRIVATIO'), font('300 16px "Geologica"', 'бюро находок')]), new Promise((r) => setTimeout(r, 1500))]);
 
     const qParam = p.get('q');
     // По умолчанию — высокое, и на телефоне тоже (партнёр 19.11: «графика по умолчанию Высокая, если это позволяет устройство»):

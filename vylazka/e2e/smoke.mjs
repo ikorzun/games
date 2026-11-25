@@ -229,9 +229,9 @@ async function scenarioPlay(browser, baseUrl) {
     const look = await tp.evaluate(() => {
       const title = getComputedStyle(document.querySelector('.vz-overlay__title'));
       const how = getComputedStyle(document.querySelector('.vz-overlay__line--plain'));
-      return { title: title.fontFamily, tw: title.fontWeight, how: Number(how.fontWeight), dm: document.fonts.check('300 40px "DM Mono"', 'UNTITLED'), thin: document.fonts.check('200 16px "JetBrains Mono"', 'Ag') };
+      return { title: title.fontFamily, tw: title.fontWeight, how: Number(how.fontWeight), dm: document.fonts.check('200 40px "Geologica"', 'UNTITLED') && document.fonts.check('300 16px "Geologica"', 'бюро'), thin: document.fonts.check('200 16px "JetBrains Mono"', 'Ag') };
     });
-    check('название — DM Mono Light, строка про сон — тонкая (шрифты в сборке, загружены)', /DM Mono/.test(look.title) && look.tw === '300' && look.how <= 300 && look.dm && look.thin, JSON.stringify(look));
+    check('название — Geologica 200 (выбор партнёра 25.11), строка про сон — тонкая (шрифты в сборке, загружены, кириллица тоже)', /Geologica/.test(look.title) && look.tw === '200' && look.how <= 300 && look.dm && look.thin, JSON.stringify(look));
     // Светлячки: точки на холсте за карточкой — есть, но еле заметные.
     await sleep(1500);
     const flies = await tp.evaluate(() => {

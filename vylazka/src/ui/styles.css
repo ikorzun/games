@@ -15,14 +15,22 @@
   src: url(./fonts/JetBrainsMono-400-latin.woff2) format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
-/* Название — DM Mono Light (слова партнёра 19.11: «название шрифтом DM Mono»). Кириллицы в нём нет: «ПАУЗА» и «ТИТРЫ»
-   берут буквы у JetBrains Mono того же веса. */
+/* Название, бирки, реплики Смотрителя, записки, титры — Geologica (выбор партнёра 25.11 из тонких шрифтов с кириллицей; до
+   того — DM Mono, у которого кириллицы нет). Файл переменный: веса 200–300 из одного файла на набор знаков. */
 @font-face {
-  font-family: 'DM Mono';
+  font-family: 'Geologica';
   font-style: normal;
-  font-weight: 300;
+  font-weight: 200 300;
   font-display: swap;
-  src: url(./fonts/DMMono-300-latin.woff2) format('woff2');
+  src: url(./fonts/Geologica-cyrillic.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Geologica';
+  font-style: normal;
+  font-weight: 200 300;
+  font-display: swap;
+  src: url(./fonts/Geologica-latin.woff2) format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
@@ -229,7 +237,7 @@ body {
 /* ── Заставка, пауза, отчёт, титры ──
    Слова партнёра 19.11: название и сразу под ним сон и «начать»; на фоне еле заметные светлячки из точек; все настройки —
    под шестерёнкой справа вверху, выпадающим списком, переключаемое — сегмент-контролами; шрифты тонкие, почти
-   эфемерные; название — DM Mono. */
+   эфемерные; название — Geologica (до 25.11 — DM Mono). */
 .vz-overlay {
   --vz-ink: #ece8dd;
   --vz-dim: rgba(236, 232, 221, 0.6);
@@ -303,8 +311,8 @@ body {
   display: none;
 }
 .vz-overlay__title {
-  font-family: 'DM Mono', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  font-weight: 300;
+  font-family: 'Geologica', system-ui, sans-serif;
+  font-weight: 200;
   font-size: clamp(24px, 5.8vmin, 62px);
   letter-spacing: 0.32em;
   /* Разрядка добавляет пробел после последней буквы — уравновешиваем его слева, чтобы слово стояло по центру. */
@@ -1092,7 +1100,7 @@ body {
   }
 }
 /* Сюжет «Невостребованное»: реплики. Под серединой кадра, без дрожи вспышки: это разговор, а не память. Смотритель говорит
-   шрифтом бирок (DM Mono), перед строкой — бирка; герой — обычной строкой; чужие голоса и память — курсивом. */
+   шрифтом бирок (Geologica), перед строкой — бирка; герой — обычной строкой; чужие голоса и память — курсивом. */
 .vz-hud__say {
   position: absolute;
   left: 50%;
@@ -1113,7 +1121,7 @@ body {
   opacity: 0.97;
 }
 .vz-hud__say.is-caretaker {
-  font-family: 'DM Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-family: 'Geologica', system-ui, sans-serif;
   font-weight: 300;
   letter-spacing: 0.01em;
   color: #f1ead6;
@@ -1149,7 +1157,7 @@ body {
   top: 24%;
   width: min(15.5em, 46%);
   padding: 0.7em 0.9em 0.75em 1.7em;
-  font-family: 'DM Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-family: 'Geologica', system-ui, sans-serif;
   font-weight: 300;
   font-size: clamp(11px, 0.9vmin + 7px, 15px);
   line-height: 1.4;
@@ -1239,7 +1247,7 @@ body {
   box-sizing: border-box;
   width: 100%;
   padding: 1em 1.2em 1.1em;
-  font-family: 'DM Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-family: 'Geologica', system-ui, sans-serif;
   font-weight: 300;
   font-size: clamp(13px, 1.1vmin + 9px, 18px);
   line-height: 1.45;
@@ -1357,7 +1365,7 @@ body {
   opacity: 0;
   transition: opacity 1.2s ease-out;
   pointer-events: none;
-  font-family: 'DM Mono', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-family: 'Geologica', system-ui, sans-serif;
 }
 .vz-hud__meta.is-on {
   opacity: 1;
@@ -1697,7 +1705,7 @@ body {
   transform: translateX(-50%);
   height: min(72vh, 44em);
   overflow: hidden;
-  font-family: 'DM Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-family: 'Geologica', system-ui, sans-serif;
   font-weight: 300;
   font-size: clamp(13px, 0.6vmin + 10px, 17px);
   line-height: 1.5;
