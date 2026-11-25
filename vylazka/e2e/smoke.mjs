@@ -3559,6 +3559,31 @@ async function scenarioSeam(browser, baseUrl) {
   check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
   if (wantShots) await saveShot(page, 'seam_office.png');
   await context.close();
+
+  // Вещь по ту сторону шва (pressure.md, §4.4; квиз 25.11): здесь — кружевной след, за швом — вещь.
+  const aw = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113&rank=2&world=office&away=1');
+  await aw.page.click('.vz-overlay');
+  await sleep(300);
+  await vz(aw.page, () => window.__vz.freeze(true));
+  await vz(aw.page, () => window.__vz.calm(true));
+  await vz(aw.page, () => window.__vz.reveal());
+  await vz(aw.page, () => window.__vz.step(6));
+  const near = await vz(aw.page, () => window.__vz.gotoMemory());
+  let as = await vz(aw.page, () => window.__vz.step(90));
+  const toast = (await aw.page.textContent('.vz-hud__toast'))?.trim();
+  check(
+    'вещь по ту сторону шва: здесь от неё след — не вспоминается, игрок слышит строку',
+    near && as.seam.away === true && as.world === 'office' && as.session.memories.every((m) => m.state !== 'done') && toast === RU['toast.seam.away'],
+    JSON.stringify({ near, away: as.seam.away, world: as.world, toast }),
+  );
+  if (wantShots) await saveShot(aw.page, 'seam_away_trace.png');
+  await vz(aw.page, () => window.__vz.crossSeam());
+  await vz(aw.page, () => window.__vz.gotoMemory());
+  as = await vz(aw.page, () => window.__vz.step(150));
+  check('прошёл швом — та же вещь настоящая и вспоминается', as.world === 'yellow' && as.seam.away === false && as.session.memories.some((m) => m.state === 'done'), JSON.stringify({ world: as.world, away: as.seam.away, mem: as.session.memories.map((m) => m.state) }));
+  if (wantShots) await saveShot(aw.page, 'seam_away_thing.png');
+  check('нет ошибок в консоли (вещь за швом)', aw.log.errors.length === 0, aw.log.errors.join(' | ').slice(0, 300));
+  await aw.context.close();
 }
 
 // ───────────────────────────── запуск ─────────────────────────────

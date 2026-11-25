@@ -37,7 +37,7 @@ import type { PieceMask } from '../src/world/piece';
 import { ODD_COOLDOWN, ODD_KINDS, ODD_TIMING } from '../src/systems/odd';
 import type { OddKind } from '../src/systems/odd';
 import { twinLayout } from '../src/gen/layout';
-import { SEAM_DARK } from '../src/game';
+import { SEAM_AWAY, SEAM_DARK } from '../src/game';
 import { SEAM, seamDistance } from '../src/world/seams';
 import type { SeamSite } from '../src/world/seams';
 
@@ -5017,6 +5017,99 @@ describe('швы офис ↔ жёлтые: свет погас у шва и з�
     const own = new Harness(buildLevel(generateLayout(SEED, 2, 'yellow')));
     expect(own.game.hasTwin).toBe(false);
     void twinLayout;
+  });
+});
+
+describe('вещь по ту сторону шва (pressure.md, §4.4; квиз 25.11 «Да, изредка, со следом»): здесь — кружевной след, за швом — вещь', () => {
+  const fresh = (away: number | null, rank: 1 | 2 | 3 = 2): Harness => {
+    const h = new Harness(buildLevel(generateLayout(SEED, rank, 'office')));
+    h.game.seams = true;
+    h.game.seamAway = away;
+    h.run(2);
+    for (const t of h.game.things.list) if (!t.memory) t.still = true;
+    return h;
+  };
+  /** Вид искомой вещи в рендере: последний setThing у вещи на её месте. */
+  const viewOf = (h: Harness): ThingView | undefined => {
+    const t = h.game.things.list.find((x) => x.memory)!;
+    return [...h.r.things.values()].find((v) => v && Math.abs(v.x - t.pos[0]) < 1e-6 && Math.abs(v.z - t.pos[2]) < 1e-6) ?? undefined;
+  };
+
+  it('здесь — след: нитями, не зовёт, не вспоминается, строка раз; прошёл швом — вещь, вспоминается; обратно — снова след', () => {
+    const h = fresh(1);
+    const g = h.game;
+    h.reveal();
+    expect(g.memAway).toBe(true);
+    const thing = g.things.list.find((t) => t.memory)!;
+    h.tick();
+    expect(viewOf(h)?.lace).toBe(1);
+    expect(viewOf(h)?.wire).toBe(0);
+    expect(g.memoryCall).toBeNull();
+    if (thing.collider >= 0) expect(g.colliders.boxes[thing.collider]!.off).toBe(true);
+    expect(h.standBefore(thing.id)).toBe(true);
+    const before = h.count('recall');
+    expect(h.until(() => h.count('recall') > before, 3)).toBe(false);
+    expect(g.session!.hold).toBe(0);
+    expect(h.log.dream.filter((e) => e.type === 'away')).toHaveLength(1);
+    // Через шов — та же вещь на том же месте, настоящая.
+    expect(g.forceSeam()).toBe(true);
+    expect(g.world).toBe('yellow');
+    expect(g.memAway).toBe(false);
+    h.tick();
+    expect(viewOf(h)?.lace).toBe(0);
+    expect(g.memoryCall).not.toBeNull();
+    if (thing.collider >= 0) expect(g.colliders.boxes[thing.collider]!.off).toBe(false);
+    // Обратно — снова след, вспомнить нельзя.
+    expect(g.forceSeam()).toBe(true);
+    expect(g.world).toBe('office');
+    expect(g.memAway).toBe(true);
+    if (thing.collider >= 0) expect(g.colliders.boxes[thing.collider]!.off).toBe(true);
+    expect(h.standBefore(thing.id)).toBe(true);
+    expect(h.until(() => h.count('recall') > before, 2)).toBe(false);
+    // Строка о следе — раз на вещь.
+    expect(h.log.dream.filter((e) => e.type === 'away')).toHaveLength(1);
+    // И снова за шов — вспоминается.
+    expect(g.forceSeam()).toBe(true);
+    expect(h.standBefore(thing.id)).toBe(true);
+    expect(h.until(() => h.count('recall') > before, 4)).toBe(true);
+    expect(g.memAway).toBe(false);
+  });
+
+  it('не бывает: на первом круге места, без швов, в убежище; жребий выключен — вещь в обеих', () => {
+    const first = fresh(1, 1);
+    first.reveal();
+    expect(first.game.memAway).toBe(false);
+    const never = fresh(0);
+    never.reveal();
+    expect(never.game.memAway).toBe(false);
+    const noSeams = new Harness(buildLevel(generateLayout(SEED, 2, 'office')));
+    noSeams.game.seams = false;
+    noSeams.game.seamAway = 1;
+    noSeams.run(2);
+    noSeams.reveal();
+    expect(noSeams.game.memAway).toBe(false);
+    const shelter = new Harness(levelOf(SEED, 2));
+    shelter.game.seamAway = 1;
+    shelter.run(1);
+    shelter.reveal();
+    expect(shelter.game.memAway).toBe(false);
+  });
+
+  it('в игре — изредка: около трети сцен с вещью за швом (SEAM_AWAY.chance)', () => {
+    let away = 0;
+    let all = 0;
+    for (let seed = 1; seed <= 24; seed++) {
+      const h = new Harness(buildLevel(generateLayout(seed, 2, 'office')));
+      h.game.seams = true;
+      h.run(1);
+      if (!h.game.hasTwin) continue;
+      h.reveal();
+      all += 1;
+      if (h.game.memAway) away += 1;
+    }
+    expect(all).toBeGreaterThan(12);
+    expect(away / all).toBeGreaterThan(SEAM_AWAY.chance * 0.3);
+    expect(away / all).toBeLessThan(Math.min(0.75, SEAM_AWAY.chance * 2));
   });
 });
 

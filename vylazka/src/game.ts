@@ -156,6 +156,11 @@ export type DreamEvent =
    */
   | { type: 'edge' }
   /**
+   * Игрок увидел вблизи кружевной след искомой вещи — она по ту сторону шва (SEAM_AWAY): «здесь было — но не при этом свете».
+   * Раз на вещь; строку говорит приложение (раз за сон).
+   */
+  | { type: 'away' }
+  /**
    * Белая комната (world/furnish_white.ts): герой задел цепь — камеру перекручивает, мир становится широкоугольным
    * (systems/warp.ts). Звук и строку — приложению.
    */
@@ -349,6 +354,13 @@ const ODD_POWER = [1, 0.6, 0.35, 0.2] as const;
 /** Разброс тона манекена Смотрителя: одна фигура на игру. */
 const CARETAKER_SEED = 0x5317;
 export const SEAM_DARK = { hold: 1, prep: 0.25 } as const;
+/**
+ * Вещь в другой версии места (pressure.md, §4.4; квиз 25.11 «Да, изредка, со следом»): со второго круга места (from), если в куске
+ * сцены есть шов, в части сцен (chance) искомая вещь живёт только в одной версии — в той, что за швом. Здесь на её месте кружевной
+ * след: поверхности нет, одни нити, сквозь него проходят, вспомнить его нельзя, зов и свет памяти молчат. Прошёл швом — вещь
+ * настоящая. sayRange — с какой дали, увидев след, игрок слышит строку (раз за сон).
+ */
+export const SEAM_AWAY = { chance: 0.35, from: 2, sayRange: 5 } as const;
 /** Телефон: белая вспышка скачка вдвое короче — экран близко к глазам и часто в тёмной комнате (предложение 17.11, T-22). */
 const WHITEOUT_PHONE: readonly [number, number] = [0.3, 0.6];
 /** Где собираются карманные пространства: далеко в стороне от убежища. */
@@ -858,6 +870,12 @@ export class Game {
   /** Вещи, живущие только в текущем карманном пространстве. */
   private pocketThings: Thing[] = [];
   private memoryThing: Thing | null = null;
+  /** В какой версии места живёт искомая вещь, если только в одной (SEAM_AWAY); null — в обеих. */
+  private memWorld: WorldKind | null = null;
+  /** Строка о следе сказана (раз на вещь). */
+  private awaySaid = false;
+  /** Тесты и отладка: доля сцен с вещью в другой версии вместо SEAM_AWAY.chance (0 — никогда, 1 — всегда); null — как в игре. */
+  seamAway: number | null = null;
   /** Принудительный первый отказ фонаря уже был в этой игре: в следующих сессиях и сценах его нет. */
   private failTaught = false;
   /**
@@ -1005,10 +1023,34 @@ export class Game {
   /** Прорехи стёртых стен у каждой версии места: преграды у версий свои. */
   private readonly cutsOf = new WeakMap<BuiltLevel, WallCuts>();
 
-  /** Где искомая вещь, когда её можно услышать (её зов — audio/game_audio.ts): она есть и игрок в месте, а не в кармане. */
+  /**
+   * Где искомая вещь, когда её можно услышать (её зов — audio/game_audio.ts): она есть и игрок в месте, а не в кармане. Вещь по ту
+   * сторону шва (memAway) не зовёт: здесь от неё один след.
+   */
   get memoryCall(): Vec3 | null {
     const t = this.memoryThing;
-    return t && this.where === 'main' && this.session?.active ? t.pos : null;
+    return t && this.where === 'main' && this.session?.active && !this.memAway ? t.pos : null;
+  }
+
+  /** Искомая вещь — в другой версии места (SEAM_AWAY): здесь от неё кружевной след, вспомнить её нельзя. */
+  get memAway(): boolean {
+    return this.memoryThing !== null && this.memWorld !== null && this.memWorld !== this.world;
+  }
+
+  /**
+   * Где будет жить новая искомая вещь (SEAM_AWAY): в другой версии места — её мир, иначе null (в обеих). Только в месте с другой
+   * версией, со второго его круга и если кусок сцены помнит шов; жребий — от сида сна и плана места, номера сцены и номера вещи.
+   */
+  private awayWorld(index: number): WorldKind | null {
+    const lay = this.level?.layout;
+    if (!this.seams || !this.hasTwin || !lay || !this.session || this.where !== 'main') return null;
+    if ((lay.rank ?? 1) < SEAM_AWAY.from) return null;
+    const sites = this.level?.seams ?? [];
+    const piece = this.piece;
+    if (!sites.some((_, i) => !piece || (this.seamNodes[i] ?? []).some((n) => piece.nodes.has(n)))) return null;
+    const chance = this.seamAway ?? SEAM_AWAY.chance;
+    if (hash01((this.dreamSeed ^ Math.imul(lay.seed | 0, 0x2545f491)) | 0, this.loads * 31 + index, 0x5ea3) >= chance) return null;
+    return this.world === 'office' ? 'yellow' : 'office';
   }
   /** Что это за вещь зовёт (вид вещи): у знакомых вещей — свой звук, чайник посвистывает (партнёр 24.11). */
   get memoryCallKind(): string | null {
@@ -1275,6 +1317,7 @@ export class Game {
     this.pending = null;
     this.endIn = -1;
     this.memoryThing = null;
+    this.memWorld = null;
     this.observed = false;
     this.fxLight = 1;
     this.fxWire = 0;
@@ -3177,6 +3220,16 @@ export class Game {
     return this.beginJump({ cause: 'seam', style: 'seam', to: 'twin' }, dream);
   }
 
+  /** След вещи по ту сторону шва (SEAM_AWAY): увидел его вблизи — строка, раз на вещь. */
+  private stepAway(dream: DreamEvent[]): void {
+    const t = this.memoryThing;
+    if (!t || this.awaySaid || !this.memAway || this.where !== 'main' || this.transition) return;
+    const b = this.body;
+    if (Math.hypot(t.pos[0] - b.x, t.pos[2] - b.z) > SEAM_AWAY.sayRange || !this.seen(t.pos, 0.4)) return;
+    this.awaySaid = true;
+    dream.push({ type: 'away' });
+  }
+
   /** Шов, рядом с которым стоит игрок (номер в level.seams), или −1. Шов за краем куска места не помнится — его нет. */
   seamHere(): number {
     const sites = this.level?.seams;
@@ -3251,6 +3304,9 @@ export class Game {
     this.world = to.world ?? 'shelter';
     this.worldEnv = WORLD_ENV[this.world];
     this.env = this.worldEnv;
+    // Вещь, что живёт только в одной версии (SEAM_AWAY): здесь она держит или пропускает сквозь свой след.
+    const mt = this.memoryThing;
+    if (mt && mt.collider >= 0) this.colliders.boxes[mt.collider]!.off = this.memAway;
     // Особенности помещений — те же (то же воспоминание), но тихие места этой версии тихие и здесь (assignRooms).
     for (const r of [to.skyRoom, to.greenRoom, to.grassRoom, to.whiteRoom?.room, to.duneDoor?.room]) if (r !== undefined) this.roomFx.delete(r);
     this.setupCellLights(to);
@@ -3919,7 +3975,10 @@ export class Game {
     // Холодный старт: вещь у входа начинает отзываться на взгляд через COLD_OPEN.at секунд сессии.
     const co = this.coldOpen;
     if (co && co.still && s && s.time >= COLD_OPEN.at) co.still = false;
-    for (const e of this.things.update(wdt, look, [b.x, b.y, b.z], los)) {
+    const thingEvents = this.things.update(wdt, look, [b.x, b.y, b.z], los);
+    // След вещи по ту сторону шва взгляд не «измеряет»: ни рамки, ни сетки на нём (SEAM_AWAY).
+    if (this.memAway && this.memoryThing) this.memoryThing.gaze = 0;
+    for (const e of thingEvents) {
       const t = e.thing;
       if (e.type === 'noticed') this.observed = true;
       else if (e.type === 'changing') {
@@ -3936,7 +3995,7 @@ export class Game {
     if (s && this.where !== 'limbo') {
       // В зале ожидания вспомнить можно только стоя, на снимке: взгляд держит вещь настоящее время, пока игрок стоит.
       const hold = fl ? { holdDt: fl.frozen ? dt : 0 } : {};
-      out.push(...s.update(wdt, { pos: [b.x, b.y, b.z], eye, aim, light: look.light, node, swarm: this.swarmNear, observed: this.observed, landed: res.landed, hidden: this.memoryThing !== null && this.memoryThing.state !== 'idle', seen: (p) => this.seen(p, 0.4), ...hold }, los));
+      out.push(...s.update(wdt, { pos: [b.x, b.y, b.z], eye, aim, light: look.light, node, swarm: this.swarmNear, observed: this.observed, landed: res.landed, hidden: this.memoryThing !== null && (this.memoryThing.state !== 'idle' || this.memAway), seen: (p) => this.seen(p, 0.4), ...hold }, los));
       this.sleepTime += wdt;
       this.observed = false;
     }
@@ -3992,6 +4051,7 @@ export class Game {
     // Шов (world/seams.ts; pressure.md, §4.1): свет погас рядом со швом и зажёгся — вокруг другая версия места. Раньше поводов для
     // скачка: зажжённый у шва свет уносит не в другое место, а сюда же, только другим.
     const seamed = this.stepSeam(dt, dream);
+    this.stepAway(dream);
     // Поводы для скачка: простые действия и наблюдения.
     const jumps = this.jumps;
     if (jumps && s && !s.over && !this.calm && !quiet && !seamed) {
@@ -4233,11 +4293,12 @@ export class Game {
    */
   private stepMemLight(dt: number): void {
     const mt = this.memoryThing;
-    if (mt && this.memFloat && this.where === 'main' && mt.state !== 'gone') {
+    if (mt && this.memFloat && this.where === 'main' && mt.state !== 'gone' && !this.memAway) {
       const r = Math.max(FLOAT.min, mt.radius * FLOAT.bubble) * mt.scale;
       this.renderer.setBubble({ pos: [mt.pos[0], mt.pos[1] + FLOAT.bob * Math.sin(this.time * FLOAT.bobHz) + mt.radius * 0.6 * mt.scale, mt.pos[2]], radius: r, k: 1 - mt.dissolve, time: this.time });
     } else this.renderer.setBubble(null);
-    const want = this.memLightDebug ?? this.memoryThing;
+    // Вещь по ту сторону шва не светит: здесь от неё один след (SEAM_AWAY).
+    const want = this.memLightDebug ?? (this.memAway ? null : this.memoryThing);
     const def = want ? memoryLightOf(want.kind) : undefined;
     if (want && def && this.memLit?.t !== want) {
       this.memLit = { t: want, def };
@@ -4312,6 +4373,10 @@ export class Game {
       for (const t of [...this.things.list]) if (!t.memory && t.collider < 0 && Math.hypot(t.pos[0] - sp.x, t.pos[2] - sp.z) < 0.45 && Math.abs(t.pos[1] - sp.y) < 0.6) this.dropThing(t);
       this.memoryThing = this.addThing(e.memory.def.thing, [at.x, at.y, at.z], placed ? placed.yaw : yaw0, 'dust', true, big);
       if (this.memoryThing.collider >= 0) this.colliders.boxes[this.memoryThing.collider]!.clear = true;
+      // Изредка вещь — только по ту сторону шва (SEAM_AWAY): здесь от неё кружевной след, сквозь который проходят.
+      this.memWorld = this.awayWorld(e.memory.index);
+      this.awaySaid = false;
+      if (this.memAway && this.memoryThing.collider >= 0) this.colliders.boxes[this.memoryThing.collider]!.off = true;
       // Вспышка воспоминания: кадр на миг рвётся.
       this.glitch = Math.max(this.glitch, 0.5);
       // Первый сон: пришла первая вещь — через миг фонарь заглохнет сам (тёмный урок, LESSON).
@@ -4720,8 +4785,14 @@ export class Game {
           xray = true;
         }
       }
+      // Искомая вещь по ту сторону шва: здесь от неё одни нити (SEAM_AWAY) — без сетки и без контура сквозь стены.
+      const away = t === this.memoryThing && this.memAway;
+      if (away) {
+        w = 0;
+        xray = false;
+      }
       const hover = t === this.memoryThing && this.memFloat ? FLOAT.bob * Math.sin(this.time * FLOAT.bobHz) : (this.voidFloat.get(t.id) ?? 0) + (this.voidFloat.has(t.id) ? 0.03 * Math.sin(this.time * 0.7 + t.id * 1.7) : 0);
-      this.renderer.setThing(id, { x: t.pos[0], y: t.pos[1] + hover, z: t.pos[2], yaw: t.yaw, scale: t.scale, dissolve: t.dissolve, wire: w, xray, visible: t.state !== 'gone' && (d < 40 || xray), dots: Things.dots(t) });
+      this.renderer.setThing(id, { x: t.pos[0], y: t.pos[1] + hover, z: t.pos[2], yaw: t.yaw, scale: t.scale, dissolve: t.dissolve, wire: w, xray, visible: t.state !== 'gone' && (d < 40 || xray), dots: Things.dots(t), lace: away ? 1 : 0 });
     }
     this.stepMemLight(dt);
     // Фигуры партнёра: части растворяются каждая в свой черёд; дымная из редких точек и медленно ходит вверх-вниз.
@@ -5025,7 +5096,7 @@ export class Game {
       echo: this.echo.snapshot(),
       ghost: this.ghost,
       world: this.world,
-      seam: { here: this.seamHere(), dark: this.seamDark, twin: this.hasTwin, ready: this.twin !== null, buildMs: this.twinBuildMs, crossed: this.seamCrossings },
+      seam: { here: this.seamHere(), dark: this.seamDark, twin: this.hasTwin, ready: this.twin !== null, buildMs: this.twinBuildMs, crossed: this.seamCrossings, away: this.memAway },
       ambientLocal: this.ambientLocal,
       lights: this.cellLights ? { lit: [...this.cellLights.level].filter((v) => v > 0.5).length, total: this.cellLights.level.length } : null,
       room: this.room,

@@ -520,6 +520,9 @@ export class App {
     this.game.archive = [...this.profile.archive];
     // Швы офис ↔ жёлтые (world/seams.ts): в игре — всегда; ?seams=0 — без них (проверки, которым переход мешает).
     this.game.seams = !this.testLevel && p.get('seams') !== '0';
+    // Вещь по ту сторону шва (game.ts, SEAM_AWAY): ?away=1 — в каждой сцене, где это возможно; ?away=0 — никогда (проверки).
+    const away = p.get('away');
+    this.game.seamAway = away === '1' ? 1 : away === '0' ? 0 : null;
     this.motion = new MotionSensor(this.game.shake);
     this.desktop = new DesktopInput(this.canvas, this.game.shake, this.lifecycle);
     if (this.touchMode) this.enableTouch();
@@ -1502,6 +1505,11 @@ export class App {
       else if (e.type === 'edge' && !this.roomSaid.has('edge')) {
         this.roomSaid.add('edge');
         this.hud.toast(t('toast.edge'), 4200);
+      }
+      // Искомая вещь по ту сторону шва: на её месте один кружевной след (SEAM_AWAY) — раз за сон.
+      else if (e.type === 'away' && !this.roomSaid.has('away')) {
+        this.roomSaid.add('away');
+        this.hud.toast(t('toast.seam.away'), 4800);
       }
       // Первое касание: вещь рассыпалась — сказать, что это правило, и как её вернуть. Только после настоящего касания:
       // обвал пола и бумажный цветок рассыпают вещи сами, и строка «здесь ничего нельзя потрогать» там лишняя (аудит 17.11).

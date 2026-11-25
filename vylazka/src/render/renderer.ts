@@ -2678,7 +2678,10 @@ export class GameRenderer {
     t.mesh.position.set(v.x, v.y, v.z);
     t.mesh.rotation.set(0, v.yaw, 0);
     t.mesh.scale.setScalar(v.scale);
-    (t.mat.uniforms.uThing!.value as THREE.Vector4).x = v.dissolve;
+    const u = t.mat.uniforms.uThing!.value as THREE.Vector4;
+    u.x = v.dissolve;
+    // Кружево: вещь из нитей от рождения (look) или на время (lace — искомая вещь в другой версии места, след).
+    u.y = t.look === 'lace' || (v.lace ?? 0) > 0.5 ? 1 : 0;
     const dots = v.dots ?? 0;
     t.mat.uniforms.uDots!.value = dots;
     this.clouds.setSparse(t.mesh, dots);
