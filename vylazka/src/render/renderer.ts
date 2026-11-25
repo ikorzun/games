@@ -545,7 +545,7 @@ const grassTrisOf = (form: number, lod: GrassLod): number => grassTris(GRASS_KIN
  */
 const OBJ_TEX = 64;
 
-/** Сколько материалов помещается в массивы шейдера мира (uMatA, uMatB, uMatBase). */
+/** Сколько материалов помещается в текстуру свойств шейдера мира (uMatTex). */
 const MAT_SLOTS = 48;
 /** Сторона текстуры света по клеткам: столько клеток по стороне у сетки генератора. */
 const CELL_TEX = 16;
@@ -754,6 +754,8 @@ export class GameRenderer {
   private echoRT: THREE.WebGLRenderTarget;
   /** Свет по клеткам уровня: маленькая текстура, которую игра обновляет каждый кадр. */
   private readonly cellTex: THREE.DataTexture;
+  /** Свойства материалов для шейдера мира: MAT_SLOTS × 3 (см. uMatTex). */
+  private readonly matTex: THREE.DataTexture;
   private readonly swarmHead: THREE.InstancedBufferAttribute;
   private readonly swarmDir: THREE.InstancedBufferAttribute;
   private readonly swarmParam: THREE.InstancedBufferAttribute;
@@ -885,9 +887,22 @@ export class GameRenderer {
       uRings: { value: RINGS_DEFAULT },
     };
     const defOf = (i: number): (typeof MAT_DEFS)[number] => MAT_DEFS[i] ?? MAT_DEFS[0]!;
-    // Массивы в шейдере — на MAT_SLOTS мест: three.js заливает их целиком, поэтому хвост заполняется нулями.
-    const matA = Array.from({ length: MAT_SLOTS }, (_, i) => (i < MAT_COUNT ? new THREE.Vector4(defOf(i).grime, defOf(i).glow ?? 0, defOf(i).layer, 1 / defOf(i).tile) : new THREE.Vector4(0, 0, 0, 1)));
-    const matB = Array.from({ length: MAT_SLOTS }, (_, i) => (i < MAT_COUNT ? new THREE.Vector4(defOf(i).bump, defOf(i).decay, defOf(i).alt ?? i, defOf(i).thin ?? 0) : new THREE.Vector4(0, 0, i, 0)));
+    // Свойства материалов — текстура MAT_SLOTS × 3 (WORLD_FRAG, uMatTex): строка 0 — грязь, свечение, слой фактуры, повторов на
+    // метр; строка 1 — рельеф, род запустения, проступающий материал, просвет; строка 2 — цвет. Хвост за MAT_COUNT — нули.
+    const matData = new Float32Array(MAT_SLOTS * 3 * 4);
+    for (let i = 0; i < MAT_SLOTS; i++) {
+      const d = defOf(i);
+      const used = i < MAT_COUNT;
+      const base = atlas.base[i] ?? [0.5, 0.5, 0.5];
+      matData.set(used ? [d.grime, d.glow ?? 0, d.layer, 1 / d.tile] : [0, 0, 0, 1], i * 4);
+      matData.set(used ? [d.bump, d.decay, d.alt ?? i, d.thin ?? 0] : [0, 0, i, 0], (MAT_SLOTS + i) * 4);
+      matData.set([base[0]!, base[1]!, base[2]!, 0], (MAT_SLOTS * 2 + i) * 4);
+    }
+    this.matTex = new THREE.DataTexture(matData, MAT_SLOTS, 3, THREE.RGBAFormat, THREE.FloatType);
+    this.matTex.magFilter = THREE.NearestFilter;
+    this.matTex.minFilter = THREE.NearestFilter;
+    this.matTex.generateMipmaps = false;
+    this.matTex.needsUpdate = true;
 
     this.cellTex = new THREE.DataTexture(new Uint8Array(CELL_TEX * CELL_TEX * 4).fill(255), CELL_TEX, CELL_TEX, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.cellTex.magFilter = THREE.NearestFilter;
@@ -987,9 +1002,8 @@ export class GameRenderer {
         uVoidK: { value: new THREE.Vector2(0, 0) },
         uSonarW: { value: new THREE.Vector4(0, 0, 0, -100) },
         uSonarTint: { value: new THREE.Vector4(0, 0, 0, 0) },
-        uMatA: { value: matA },
-        uMatB: { value: matB },
-        uMatBase: { value: Array.from({ length: MAT_SLOTS }, (_, i) => new THREE.Vector3(...(atlas.base[i] ?? [0.5, 0.5, 0.5]))) },
+        uMatTex: { value: this.matTex },
+        uMatGlow: { value: 1 },
       },
     });
     this.depthMat = new THREE.ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, side: THREE.BackSide, colorWrite: false, uniforms: { uObjState: { value: this.objTex }, uWind: this.worldMat.uniforms.uWind!, uPush: this.worldMat.uniforms.uPush!, ...this.pieceU } });
@@ -2924,10 +2938,7 @@ export class GameRenderer {
   setGlow(k: number): void {
     this.lampGlow = k;
     this.lampColor();
-    const params = this.worldMat.uniforms.uMatA!.value as THREE.Vector4[];
-    params.forEach((p, i) => {
-      p.y = (MAT_DEFS[i]?.glow ?? 0) * k;
-    });
+    this.worldMat.uniforms.uMatGlow!.value = k;
   }
 
   /** Точка мира на экране: x, y в долях кадра (0..1, y вниз); visible — перед камерой и в кадре. */

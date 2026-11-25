@@ -556,9 +556,15 @@ uniform sampler2D uThingN;   // rg — нормаль в касательном 
 #ifndef ATLAS_ROWS
 #define ATLAS_ROWS 4
 #endif
-uniform vec4 uMatA[48];   // грязь, свечение, слой фактуры, повторов фактуры на метр
-uniform vec4 uMatB[48];   // рельеф (м), род запустения, проступающий материал, просвет (тонкое светится, когда свет за ним)
-uniform vec3 uMatBase[48];
+// Свойства материалов — строками маленькой текстуры (48 × 3), а не массивами униформ: три массива по 48 занимали 144 слота из
+// 256, что есть у фрагментного шейдера на старых Adreno, и шейдер мира подходил к пределу (перепроверка 25.11).
+// Строка 0: грязь, свечение, слой фактуры, повторов фактуры на метр. Строка 1: рельеф (м), род запустения, проступающий
+// материал, просвет (тонкое светится, когда свет за ним). Строка 2: цвет материала.
+uniform highp sampler2D uMatTex;
+uniform float uMatGlow;   // яркость фосфорных надписей (setGlow): множитель свечения из строки 0
+#define MAT_A(i) texelFetch(uMatTex, ivec2((i), 0), 0)
+#define MAT_B(i) texelFetch(uMatTex, ivec2((i), 1), 0)
+#define MAT_BASE(i) texelFetch(uMatTex, ivec2((i), 2), 0).rgb
 
 varying vec3 vPosV;
 varying vec3 vNrmV;
@@ -1309,8 +1315,9 @@ void main() {
   }
 #endif
   int mi = int(vMat + 0.5);
-  vec4 ma = uMatA[mi];
-  vec4 mb = uMatB[mi];
+  vec4 ma = MAT_A(mi);
+  ma.y *= uMatGlow;
+  vec4 mb = MAT_B(mi);
   int cls = int(mb.y + 0.5);
   int mj = int(mb.z + 0.5);
   float ao = vColor.a;
@@ -1526,7 +1533,7 @@ void main() {
   }
   // Туда, где света почти нет, фактуры не нужны: поверхность — просто цвет материала.
   if (hLit < 0.1 && eGlow < 0.004 && eAmb < 0.02 && eMem < 0.004) {
-    vec3 flat_ = uMatBase[mi] * vColor.rgb * ao;
+    vec3 flat_ = MAT_BASE(mi) * vColor.rgb * ao;
     vec3 colG = flat_ * (amb * (0.66 + 0.34 * up) + uLightColor * (eLight * 0.45 + bounce0 * bounceTint));
     colG += uBurnTint * burn;
     voidTouch(colG, hOut);
@@ -1591,7 +1598,7 @@ void main() {
   // облезшая краска и ржавчина остаются, пропадают только рельеф и мелкая пестрота.
 #ifdef DETAIL
   vec4 g2 = texture2D(uGrime, uvw * 1.31 + 0.37 - warp.yx * 0.05);
-  vec4 d1 = texture(uDetail, vec3(uvw * uMatA[mj].w, uMatA[mj].z));
+  vec4 d1 = texture(uDetail, vec3(uvw * MAT_A(mj).w, MAT_A(mj).z));
 #else
   vec4 g2 = g1.brga;
   vec4 d1 = d0;
@@ -1665,7 +1672,7 @@ void main() {
   shade *= 1.0 - wall * smoothstep(0.55, 0.9, g1.b) * max(0.22 + 0.3 * uDecay, 0.0) * grimeK;
   alb = mix(alb, 0.55 + 0.9 * d1.g, k);
 #ifdef DETAIL
-  H = mix(H, d1.r * uMatB[mj].x - 0.002, k);
+  H = mix(H, d1.r * MAT_B(mj).x - 0.002, k);
 #ifdef LACE_EDGE
   // На линии экранные производные вырождены: рельефа у нити нет.
   vec3 N = Ng;
@@ -1723,20 +1730,20 @@ void main() {
   vec3 bx = normalize(vec3(L.z, 0.0, -L.x) + vec3(1e-5, 0.0, 0.0));
   vec3 by = cross(L, bx);
   vec3 mc = matcap(mi, N, bx, by);
-  vec3 base = uMatBase[mi];
+  vec3 base = MAT_BASE(mi);
 #ifdef THING_TEX
   // Материал — по картам, в каждой точке свой: матовое берёт шар бумаги, гладкое — эмали, металл — стали; цвет — из карты
   // (делится на основу шара, как цвет вершины готовой модели: на шаре выходит собственный цвет вещи).
   float tGloss = 1.0 - smoothstep(0.22, 0.8, tN.b);
   mc = mix(mix(matcap(${MAT.paper}, N, bx, by), matcap(${MAT.enamel}, N, bx, by), tGloss), matcap(${MAT.steel}, N, bx, by), tN.a);
-  base = mix(mix(uMatBase[${MAT.paper}], uMatBase[${MAT.enamel}], tGloss), uMatBase[${MAT.steel}], tN.a);
+  base = mix(mix(MAT_BASE(${MAT.paper}), MAT_BASE(${MAT.enamel}), tGloss), MAT_BASE(${MAT.steel}), tN.a);
 #endif
   vec3 mc2 = matcap(mj, N, bx, by);
   // Сырой бетон становится мокрым бетоном. Сырой кирпич остаётся кирпичом: он темнеет и лоснится, но
   // кладка сквозь пятно видна — иначе на стене не сырость, а серая заплата.
   float swap = max(k, wet * (mi == 19 ? 0.22 : 0.85));
   mc = mix(mc, mc2, swap);
-  base = mix(base, uMatBase[mj], swap);
+  base = mix(base, MAT_BASE(mj), swap);
 #ifdef DETAIL
   // Рельеф под лучом: чем сильнее свет скользит по поверхности, тем резче тени пор и кромок.
   float ngl = dot(Ng, L);
@@ -1827,7 +1834,7 @@ void main() {
 
   // Свечение. У фосфорных табличек (оттенок до 1) цвет даёт основа материала; у экранов, окон и неба
   // оттенок вершины больше единицы — он и есть цвет, помноженный на яркость (основа тогда серая).
-  vec3 glowBase = maxc > 1.5 ? vec3(0.55) : uMatBase[mi];
+  vec3 glowBase = maxc > 1.5 ? vec3(0.55) : MAT_BASE(mi);
 #ifdef THING_TEX
   // Экран подробной вещи: светится картинкой из карты цвета (строки и курсор), а не ровным пятном.
   // Курсор — самое светлое на экране (он почти белый, строки зелёные): он мигает, около секунды на цикл; гаснет до фона.
@@ -1839,10 +1846,10 @@ void main() {
 #endif
   col += uBurnTint * burn;
   // Вещь из точек чуть светится своим цветом: облако видно и на краю луча, и оно не похоже на твёрдое.
-  if (dotGlow > 0.0) col += uMatBase[mi] * vColor.rgb * (0.22 * dotGlow);
+  if (dotGlow > 0.0) col += MAT_BASE(mi) * vColor.rgb * (0.22 * dotGlow);
   // Тон предмета: выцветший теряет цвет (остаётся бумага), расцветший светится своим цветом сам.
   if (vTone.x > 0.0) col = mix(col, vec3(dot(col, vec3(0.3, 0.59, 0.11))) * 0.92, vTone.x * 0.88);
-  if (vTone.y > 0.0) col += uMatBase[mi] * vColor.rgb * (vTone.y * 0.38);
+  if (vTone.y > 0.0) col += MAT_BASE(mi) * vColor.rgb * (vTone.y * 0.38);
 #ifdef GRASS
   // След лежавшего ещё тёплый: примятая трава светлее стоящей (лежит гладью и ловит свет) и чуть светится тёплым; встаёт
   // трава — гаснет и свет (квиз партнёра, ночь на 20.11).
