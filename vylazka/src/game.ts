@@ -1686,7 +1686,7 @@ export class Game {
         const sp = spots[Math.floor(pick * spots.length)];
         if (sp) {
           t.pos = [sp.x, sp.y, sp.z];
-          this.session?.reserve(sp);
+          this.session?.reserve(sp, 1);
           moved = true;
         }
       }
@@ -2158,7 +2158,7 @@ export class Game {
     }
     // В «тёмных» помещениях фонарь не светит — рассмотреть там ничего нельзя: вещам там не место.
     const lit = spots.filter((sp) => this.roomFx.get(sp.room) !== 'dark');
-    for (const sp of spots) if (this.roomFx.get(sp.room) === 'dark') s.reserve(sp);
+    for (const sp of spots) if (this.roomFx.get(sp.room) === 'dark') s.reserve(sp, 2);
     spots.length = 0;
     spots.push(...lit);
     const kinds = WORLD_THINGS[level.world ?? 'shelter'];
@@ -2166,7 +2166,7 @@ export class Game {
     const small = Math.min(9, Math.floor(spots.length / 3));
     for (let i = 0; i < small; i++) {
       const sp = spots[i]!;
-      s.reserve(sp);
+      s.reserve(sp, 1);
       const yaw = rng() * Math.PI * 2;
       // Чем сильнее стёрто место, тем меньше в нём мелочей (место при этом остаётся занятым: воспоминания ложатся как прежде).
       if (!keepsClutter(i, seed, this.wearBase)) continue;
@@ -3838,6 +3838,14 @@ export class Game {
       // Поднимается само место вещи в сессии: взгляд, зов и тесты ищут её там же, где она видна.
       if (this.memFloat) e.memory.spot = { ...sp, y: sp.y + this.floatLift(sp, e.memory.def.thing) };
       const at = e.memory.spot!;
+      // Вещь легла в тёмное помещение (в маленьком куске места больше некуда, session.ts, softSpots) — там загорается свет: в тёмном
+      // ни фонарь не светит, ни панели, и вещь было бы не разглядеть (CI b5e96a7: офисная сцена из трёх тёмных комнат).
+      if (this.roomFx.get(sp.room) === 'dark') {
+        this.roomFx.delete(sp.room);
+        this.cellLights?.offRooms.delete(sp.room);
+      }
+      // Вещь легла на место мелочи (в маленьком куске места свободных не было, session.ts, softSpots) — мелочь оттуда уходит молча.
+      for (const t of [...this.things.list]) if (!t.memory && t.collider < 0 && Math.hypot(t.pos[0] - sp.x, t.pos[2] - sp.z) < 0.45 && Math.abs(t.pos[1] - sp.y) < 0.6) this.dropThing(t);
       this.memoryThing = this.addThing(e.memory.def.thing, [at.x, at.y, at.z], placed ? placed.yaw : yaw0, 'dust', true, big);
       if (this.memoryThing.collider >= 0) this.colliders.boxes[this.memoryThing.collider]!.clear = true;
       // Вспышка воспоминания: кадр на миг рвётся.

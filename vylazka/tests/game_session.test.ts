@@ -487,6 +487,53 @@ describe('игра целиком: цикл сессии', () => {
     expect(g.session).not.toBeNull();
   });
 
+  it('сцена — кусок места: все его места заняты мелочью и тёмными комнатами — вещь всё равно приходит, на место мелочи (CI b5e96a7)', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 }, piece: true });
+    const g = h.game;
+    h.run(2);
+    const p = g.piece!;
+    const nav = g.level!.nav;
+    const near = (x: number, y: number, z: number): number => {
+      let best = -1;
+      let bd = Infinity;
+      for (const n of nav) {
+        const d = Math.hypot(n.x - x, n.z - z) + Math.abs(n.y - y) * 4;
+        if (d < bd) (bd = d), (best = n.id);
+      }
+      return best;
+    };
+    const mine = g.level!.spots.filter((s) => p.nodes.has(near(s.x, s.y, s.z)));
+    expect(mine.length).toBeGreaterThan(1);
+    // Половина мест куска — мелочь, остальные — тёмные комнаты.
+    mine.forEach((s, i) => g.session!.reserve(s, i % 2 === 0 ? 1 : 2));
+    g.session!.rush();
+    h.run(1);
+    const m = g.session!.memories[0]!;
+    expect(m.state, 'вещь пришла').toBe('active');
+    const at = mine.indexOf(g.session!.memories[0]!.spot! as never);
+    // Место мелочи — раньше тёмного (поднятое место вещи — то же место, только выше: сравниваем по плану).
+    const base = mine.find((s) => Math.hypot(s.x - m.spot!.x, s.z - m.spot!.z) < 0.01)!;
+    expect(at === -1 ? mine.indexOf(base) % 2 : at % 2, 'сперва место мелочи').toBe(0);
+  });
+
+  it('сцена — кусок места из одних тёмных комнат: вещь ложится в тёмную, и там загорается свет (иначе её не разглядеть)', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1, firstDelay: 1e5 }, piece: true });
+    const g = h.game;
+    h.run(2);
+    expect(g.session!.memories[0]!.state, 'вещь ещё не пришла').toBe('hidden');
+    const p = g.piece!;
+    const fx = (g as unknown as { roomFx: Map<number, string> }).roomFx;
+    for (const r of p.rooms) fx.set(r, 'dark');
+    const nav = g.level!.nav;
+    const inPiece = (x: number, z: number, y: number): boolean => [...p.nodes].some((id) => Math.hypot(nav[id]!.x - x, nav[id]!.z - z) < 1.6 && Math.abs(nav[id]!.y - y) < 1);
+    for (const s of g.level!.spots) if (inPiece(s.x, s.z, s.y)) g.session!.reserve(s, 2);
+    g.session!.rush();
+    h.run(1);
+    const m = g.session!.memories[0]!;
+    expect(m.state).toBe('active');
+    expect(fx.get(m.spot!.room), 'в комнате вещи свет').toBeUndefined();
+  });
+
   it('сцена — кусок места: следующей сцены нет — шаг за край возвращает в кусок; у края, глядя в обрыв, — событие edge, раз', () => {
     const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 }, piece: true });
     const g = h.game;

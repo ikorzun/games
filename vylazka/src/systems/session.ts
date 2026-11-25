@@ -244,6 +244,12 @@ export class Session {
   private rushed = false;
   private readonly rng: Rng;
   private readonly usedSpots = new Set<ItemSpot>();
+  /**
+   * Мягко занятые места: мелочь сна (1) и тёмные помещения (2). Вещь воспоминания туда не ляжет, пока есть свободные; но если в
+   * куске места (setRegion) свободных не осталось — ляжет сюда, сперва на место мелочи, в тёмное — в последнюю очередь. Иначе в
+   * маленьком куске вещи было некуда лечь, и сцену нельзя было пройти (CI b5e96a7, смоук «сон из сцен»).
+   */
+  private readonly softSpots = new Map<ItemSpot, 1 | 2>();
   /** Узел навигации, ближайший к каждому месту (−1 — места вне графа). */
   private readonly spotNode = new Map<ItemSpot, number>();
   private readonly collapseState = new Map<string, 'idle' | 'primed' | 'done'>();
@@ -347,7 +353,13 @@ export class Session {
     const dist = this.distances(from);
     const c = this.cfg;
     const region = this.region;
-    let all = this.level.spots.filter((s) => !this.usedSpots.has(s) && (!region || region.has(this.spotNode.get(s) ?? -1)));
+    const inRegion = (s: ItemSpot): boolean => !region || region.has(this.spotNode.get(s) ?? -1);
+    let all = this.level.spots.filter((s) => !this.usedSpots.has(s) && !this.softSpots.has(s) && inRegion(s));
+    // В куске свободных нет — мягко занятые: сперва места мелочи, потом тёмные.
+    for (const level of [1, 2] as const) {
+      if (all.length > 0 || !region) break;
+      all = this.level.spots.filter((s) => !this.usedSpots.has(s) && (this.softSpots.get(s) ?? 0) === level && inRegion(s));
+    }
     const rank = this.spotRank?.();
     if (rank) {
       // Сначала — лучшие из годных; негодных не берём совсем, даже если других нет: вещь подождёт.
@@ -369,6 +381,7 @@ export class Session {
       if (own.length > 0) {
         const s = own[Math.floor(this.rng() * own.length)]!;
         this.usedSpots.add(s);
+        this.softSpots.delete(s);
         return s;
       }
     }
@@ -385,6 +398,7 @@ export class Session {
     if (pool.length === 0) return null;
     const s = pool[Math.floor(this.rng() * pool.length)]!;
     this.usedSpots.add(s);
+    this.softSpots.delete(s);
     return s;
   }
 
@@ -508,9 +522,18 @@ export class Session {
     return true;
   }
 
-  /** Занять место: там уже лежит что-то другое, вещь воспоминания туда не попадёт. */
-  reserve(spot: ItemSpot): void {
+  /**
+   * Занять место: там уже лежит что-то другое, вещь воспоминания туда не попадёт. soft — занято мелочью (1) или тёмным помещением
+   * (2): в маленьком куске места, где свободных не осталось, вещь воспоминания всё же ляжет сюда (softSpots).
+   */
+  reserve(spot: ItemSpot, soft?: 1 | 2): void {
+    if (soft) {
+      const was = this.softSpots.get(spot);
+      if (!this.usedSpots.has(spot)) this.softSpots.set(spot, was === undefined ? soft : (Math.min(was, soft) as 1 | 2));
+      return;
+    }
     this.usedSpots.add(spot);
+    this.softSpots.delete(spot);
   }
 
   /** Вещь «забылась»: её унесло в другое место (поймал рой, провалился). from — узел, откуда считать путь. */
