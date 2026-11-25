@@ -222,17 +222,19 @@ export function seamDistance(s: SeamSite, x: number, z: number): number {
 }
 
 /** Шов, рядом с которым стоит точка (номер в списке), или −1. ok — какие швы считать (кусок места: за краем памяти шва нет). */
-export function seamNear(sites: readonly SeamSite[], x: number, y: number, z: number, ok: (s: SeamSite) => boolean = () => true): number {
+export function seamNear(sites: readonly SeamSite[], x: number, y: number, z: number, ok?: (s: SeamSite, i: number) => boolean): number {
   let best = -1;
   let bestD: number = SEAM.near;
-  sites.forEach((s, i) => {
-    if (Math.abs(y - s.y) > 1.2 || !ok(s)) return;
+  for (let i = 0; i < sites.length; i++) {
+    const s = sites[i]!;
+    if (Math.abs(y - s.y) > 1.2) continue;
     const d = seamDistance(s, x, z);
-    if (d < bestD) {
+    // Дальше лучшего — проверять «в куске ли» незачем.
+    if (d < bestD && (!ok || ok(s, i))) {
       bestD = d;
       best = i;
     }
-  });
+  }
   return best;
 }
 

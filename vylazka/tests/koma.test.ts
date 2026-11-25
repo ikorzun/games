@@ -163,7 +163,7 @@ describe('сюжет «Невостребованное»: состояние и
 });
 
 /** Экран-заглушка: записывает, что сюжет ему говорит. */
-function fakeHost(story: Narrative): { host: ConstructorParameters<typeof KomaFlow>[0]; said: string[]; tags: Array<Record<string, unknown> | null>; values: string[]; stamps: string[]; cards: string[][]; saves: () => number; sounds: string[]; veils: Array<string | null>; game: { sterile: number; huntHold: boolean; keepRecalled: boolean; penOn: boolean; keptDist: number; hunted: boolean; released: boolean[]; releaseKept(taken: boolean): void; extended: number; limboLook: string | null; metaHold: boolean; kept: number; metaKeep(): void; extendEnd(s: number): void; body: boolean; bodies: number; bodyLines: string[]; caretaker(cmd: 'come' | 'go'): boolean }; decks: () => number } {
+function fakeHost(story: Narrative): { host: ConstructorParameters<typeof KomaFlow>[0]; said: string[]; tags: Array<Record<string, unknown> | null>; values: string[]; stamps: string[]; cards: string[][]; saves: () => number; sounds: string[]; veils: Array<string | null>; game: { sterile: number; huntHold: boolean; keepRecalled: boolean; penOn: boolean; keptDist: number; hunted: boolean; released: boolean[]; releaseKept(taken: boolean): void; extended: number; limboLook: string | null; metaHold: boolean; kept: number; metaKeep(): void; extendEnd(s: number): void; body: boolean; bodies: number; prepared: number; bodyLines: string[]; caretaker(cmd: 'prepare' | 'come' | 'go'): boolean }; decks: () => number } {
   const said: string[] = [];
   const tags: Array<Record<string, unknown> | null> = [];
   const values: string[] = [];
@@ -198,8 +198,14 @@ function fakeHost(story: Narrative): { host: ConstructorParameters<typeof KomaFl
     /** Тело Смотрителя: стоит ли сейчас, сколько раз вставало за игру и какие реплики прозвучали, пока оно стояло. */
     body: false,
     bodies: 0,
+    /** Сколько раз тело начинали собирать заранее и было ли это до выхода. */
+    prepared: 0,
     bodyLines: [] as string[],
-    caretaker(cmd: 'come' | 'go'): boolean {
+    caretaker(cmd: 'prepare' | 'come' | 'go'): boolean {
+      if (cmd === 'prepare') {
+        if (this.bodies === 0) this.prepared += 1;
+        return true;
+      }
       if (cmd === 'go') {
         const was = this.body;
         this.body = false;
@@ -508,8 +514,9 @@ describe('сюжет на экране: акты II–V и эпилог', () => 
     limbo(flow, h);
     expect(h.said.slice(-3)).toEqual(['caretaker: да.', 'player: я тоже всегда так делал.', 'caretaker: да.']);
     expect(story.has('STORY_CARETAKER_REFLECTION')).toBe(true);
-    // Тело — один раз, на узнавании, и к концу главы его уже нет.
+    // Тело — один раз, на узнавании, и к концу главы его уже нет. Собирать его начали заранее, на пустой бирке (A4_E02).
     expect(h.game.bodies).toBe(1);
+    expect(h.game.prepared).toBe(1);
     expect(h.game.body).toBe(false);
     expect(h.game.bodyLines).toEqual(['player: я тоже всегда так делал.', 'caretaker: да.']);
 

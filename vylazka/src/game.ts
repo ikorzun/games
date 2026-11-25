@@ -74,7 +74,7 @@ import { CEIL_H, DX, DZ, twinLayout } from './gen/layout';
 import type { GenRoom, RoomType, WorldKind } from './gen/layout';
 import type { BuiltLevel, ItemSpot } from './world/level';
 import { figureMesh } from './world/figure_mesh';
-import { CARETAKER_BODY, CARETAKER_SHED, caretakerMesh, caretakerSpot, gesture, TAG_AT } from './world/caretaker_body';
+import { CARETAKER_BODY, CARETAKER_SHED, caretakerMeshSteps, caretakerSpot, finish, gesture, TAG_AT, type CaretakerMesh } from './world/caretaker_body';
 import type { MeshData } from './world/kit';
 import type { FigureMaterial, FigureSpec } from './world/figures';
 import { FIGURES } from './world/figures_data';
@@ -346,6 +346,8 @@ const DUNES_STAY = { exitAfter: 0.4, min: 120, spread: 30 } as const;
  */
 /** Сила ощущения странной комнаты по касаниям за уровень (куратор, 458): со второго — слабее. */
 const ODD_POWER = [1, 0.6, 0.35, 0.2] as const;
+/** Разброс тона манекена Смотрителя: одна фигура на игру. */
+const CARETAKER_SEED = 0x5317;
 export const SEAM_DARK = { hold: 1, prep: 0.25 } as const;
 /** Телефон: белая вспышка скачка вдвое короче — экран близко к глазам и часто в тёмной комнате (предложение 17.11, T-22). */
 const WHITEOUT_PHONE: readonly [number, number] = [0.3, 0.6];
@@ -835,6 +837,8 @@ export class Game {
   private forgotTo: Vec3 | null = null;
   /** Клетка «ярус,x,z» → узел навигации. */
   private readonly nodeAt = new Map<string, number>();
+  /** Узлы навигации под клетками каждого шва (level.seams): считаются при загрузке места, а не в каждом кадре. */
+  private seamNodes: number[][] = [];
   private prevX = 0;
   private prevY = 0;
   private prevZ = 0;
@@ -1057,6 +1061,9 @@ export class Game {
   penOn = false;
   /** Тело Смотрителя (сюжет, A4_E03 в лимбо; systems/caretaker_body.ts) и номера его частей в рендере. */
   readonly caretakerBody = new CaretakerBody();
+  /** Тело Смотрителя, собираемое заранее по шагу за кадр ('prepare'), и готовое — до выхода 'come'. */
+  private caretakerPrep: Generator<void, CaretakerMesh, void> | null = null;
+  private caretakerReady: CaretakerMesh | null = null;
   private caretakerParts: { body: number; arm: number[]; table: number; tag: number; dots: number; shed: number; material: FigureMaterial; heard: boolean } | null = null;
   sterileK = 0;
   private sterileAligned = false;
@@ -1175,8 +1182,7 @@ export class Game {
     // Новая сцена или сессия: прежняя очередь сцен не в счёт — следующую поставит приложение.
     this.sceneNext = null;
     this.sleepEnds = false;
-    this.nodeAt.clear();
-    for (const n of level.nav) this.nodeAt.set(`${n.tier},${n.cx},${n.cz}`, n.id);
+    this.indexNav(level);
     this.wearBase = Math.max(0, Math.min(1, level.wear ?? 0));
     this.wearGain = 0;
     this.applyWear(level);
@@ -2546,15 +2552,24 @@ export class Game {
    * лимбо и один раз за игру; ушедшее не возвращается (systems/caretaker_body.ts). Чья фигура и как стоит — запись
    * CARETAKER_BODY (world/caretaker_body.ts). true — команда принята.
    */
-  caretaker(cmd: 'come' | 'go'): boolean {
+  caretaker(cmd: 'prepare' | 'come' | 'go'): boolean {
     const cb = this.caretakerBody;
     if (cmd === 'go') {
       cb.go('end');
       return cb.state === 'going';
     }
+    if (cmd === 'prepare') {
+      // Собрать тело заранее, по шагу за кадр (stepCaretaker): выход 'come' тогда не ждёт сборки.
+      if (cb.state !== 'none') return false;
+      if (!this.caretakerReady && !this.caretakerPrep) this.caretakerPrep = caretakerMeshSteps(CARETAKER_BODY, FIGURES, CARETAKER_SEED);
+      return true;
+    }
     if (this.where !== 'limbo' || cb.state !== 'none') return false;
-    const seed = 0x5317;
-    const m = caretakerMesh(CARETAKER_BODY, FIGURES, seed);
+    const seed = CARETAKER_SEED;
+    // Не успело собраться заранее (или 'prepare' не звали) — достроить сейчас.
+    const m = this.caretakerReady ?? finish(this.caretakerPrep ?? caretakerMeshSteps(CARETAKER_BODY, FIGURES, seed));
+    this.caretakerReady = null;
+    this.caretakerPrep = null;
     const b = this.body;
     const eye: Vec3 = this.lastRig ? this.lastRig.camPos : [b.x, b.y + 1.42, b.z];
     const yaw = this.lastRig ? this.lastRig.camYaw : this.aimYaw;
@@ -2581,6 +2596,13 @@ export class Game {
 
   /** Шаг тела Смотрителя: собирается, работает, рассеивается (договорили или подошли). Звук — как у дымных фигур. */
   private stepCaretaker(dt: number, eye: Vec3, dream: DreamEvent[]): void {
+    if (this.caretakerPrep) {
+      const r = this.caretakerPrep.next();
+      if (r.done) {
+        this.caretakerReady = r.value;
+        this.caretakerPrep = null;
+      }
+    }
     const cb = this.caretakerBody;
     const p = this.caretakerParts;
     if (!cb.shown || !p) return;
@@ -3161,7 +3183,14 @@ export class Game {
     if (!sites) return -1;
     const b = this.body;
     const piece = this.piece;
-    return seamNear(sites, b.x, b.y, b.z, (x) => !piece || x.cells.some(([cx, cz]) => piece.nodes.has(this.nodeAt.get(`${x.tier},${cx},${cz}`) ?? -1)));
+    return seamNear(sites, b.x, b.y, b.z, piece ? (_, i) => (this.seamNodes[i] ?? []).some((n) => piece.nodes.has(n)) : undefined);
+  }
+
+  /** Узлы навигации места: клетка → узел и узлы под швами. Звать при смене места (загрузка, шов). */
+  private indexNav(level: BuiltLevel): void {
+    this.nodeAt.clear();
+    for (const n of level.nav) this.nodeAt.set(`${n.tier},${n.cx},${n.cz}`, n.id);
+    this.seamNodes = (level.seams ?? []).map((x) => x.cells.map(([cx, cz]) => this.nodeAt.get(`${x.tier},${cx},${cz}`) ?? -1));
   }
 
   /**
@@ -3218,8 +3247,7 @@ export class Game {
       t.collider = id;
     });
     this.session?.useLevel(to);
-    this.nodeAt.clear();
-    for (const n of to.nav) this.nodeAt.set(`${n.tier},${n.cx},${n.cz}`, n.id);
+    this.indexNav(to);
     this.world = to.world ?? 'shelter';
     this.worldEnv = WORLD_ENV[this.world];
     this.env = this.worldEnv;

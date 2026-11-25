@@ -273,7 +273,7 @@ export interface VzDebugApi {
   /** Довести сюжет до сцены upTo включительно (проверки поздних актов без десятка снов). */
   komaSkip(upTo: string, leave?: number): unknown;
   /** Тело Смотрителя (A4_E03): 'come' — встать у стола перед взглядом (только в лимбо, один раз), 'go' — рассеяться; без команды — состояние. */
-  caretaker(cmd?: 'come' | 'go'): { ok: boolean; state: string; why: string | null; at: number[]; core: number[] };
+  caretaker(cmd?: 'prepare' | 'come' | 'go'): { ok: boolean; state: string; why: string | null; at: number[]; core: number[] };
   mute(on: boolean): void;
 }
 

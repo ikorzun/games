@@ -5355,6 +5355,32 @@ describe('тело Смотрителя в игре (A4_E03, квиз 24.11: «�
     expect(g.caretaker('come')).toBe(false);
   });
 
+  it('собирается заранее, по шагу за кадр (A4_E02): к выходу готово; не успело — достраивается на месте', () => {
+    const h = limbo(8);
+    const g = h.game;
+    const inner = g as unknown as { caretakerPrep: unknown; caretakerReady: unknown };
+    expect(g.caretaker('prepare')).toBe(true);
+    expect(inner.caretakerPrep).not.toBeNull();
+    // Тело, затем по кадру руки за шаг: GESTURE_FRAMES + 1 шаг до готовности.
+    h.run((GESTURE_FRAMES + 4) * STEP);
+    expect(inner.caretakerPrep).toBeNull();
+    expect(inner.caretakerReady).not.toBeNull();
+    const before = new Set(h.r.things.keys());
+    expect(g.caretaker('come')).toBe(true);
+    expect(inner.caretakerReady).toBeNull();
+    expect([...h.r.things.keys()].filter((id) => !before.has(id)).length).toBe(GESTURE_FRAMES + 3);
+    // Вышел — заранее больше не собирают.
+    expect(g.caretaker('prepare')).toBe(false);
+    // Не успело: 'come' сразу после 'prepare' достраивает остальное на месте.
+    const h2 = limbo(9);
+    const g2 = h2.game;
+    expect(g2.caretaker('prepare')).toBe(true);
+    h2.run(3 * STEP);
+    const before2 = new Set(h2.r.things.keys());
+    expect(g2.caretaker('come')).toBe(true);
+    expect([...h2.r.things.keys()].filter((id) => !before2.has(id)).length).toBe(GESTURE_FRAMES + 3);
+  });
+
   it('договорили — рассеивается; лимбо кончилось раньше — в следующем сне тела нет', () => {
     const h = limbo(6);
     const g = h.game;

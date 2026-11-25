@@ -36,8 +36,11 @@ export interface KomaHost {
     metaKeep(): void;
     extendEnd(seconds: number): void;
     releaseKept(taken: boolean): void;
-    /** Тело Смотрителя (A4_E03, один раз за игру): 'come' — встаёт у стола в лимбо, 'go' — рассеивается. */
-    caretaker(cmd: 'come' | 'go'): boolean;
+    /**
+     * Тело Смотрителя (A4_E03, один раз за игру): 'prepare' — начать собирать заранее, по шагу за кадр (A4_E02), 'come' —
+     * встаёт у стола в лимбо, 'go' — рассеивается.
+     */
+    caretaker(cmd: 'prepare' | 'come' | 'go'): boolean;
   };
   /** Записать профиль. */
   save(): void;
@@ -606,8 +609,9 @@ export class KomaFlow {
         }),
       );
     } else if (id === 'A4_E02') {
-      // Последняя пустая бирка — его собственная.
+      // Последняя пустая бирка — его собственная. Следом (CHAIN) встаёт тело Смотрителя: собрать его, пока идут эти строки.
       big('koma.tag.unknown', 'koma.tag.effects', 'koma.tag.owner', '');
+      this.host.game.caretaker('prepare');
       this.talk(id, 900, next);
     } else if (id === 'A4_E03') {
       // Ранняя сцена сортировки с другого ракурса (канон: «отражение без зеркала»). Его бирка уходит из кадра на стол; у стола —

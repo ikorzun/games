@@ -238,8 +238,12 @@ function tagMesh(): MeshData {
   return mb.build();
 }
 
-/** Собрать тело Смотрителя: фигура, правая рука по кадрам жеста, стол и бирка. seed — разброс тона манекена. */
-export function caretakerMesh(spec: CaretakerBodySpec, figures: readonly FigureSpec[], seed: number, frames = GESTURE_FRAMES): CaretakerMesh {
+/**
+ * Собрать тело Смотрителя: фигура, правая рука по кадрам жеста, стол и бирка. seed — разброс тона манекена.
+ * По шагам: тело, затем по кадру руки за шаг. Шаг — пара миллисекунд; игра растягивает сборку на кадры сцены перед выходом
+ * Смотрителя (game.caretaker('prepare')), чтобы его появление не подвисало на телефоне. Целиком — caretakerMesh.
+ */
+export function* caretakerMeshSteps(spec: CaretakerBodySpec, figures: readonly FigureSpec[], seed: number, frames = GESTURE_FRAMES): Generator<void, CaretakerMesh, void> {
   const figure = caretakerFigure(spec, figures);
   const own = figure.source === 'default';
   const paint = own ? PARTICLE_PAINT : figure.material === 'wood' ? undefined : FIGURE_PAINT[figure.material];
@@ -249,15 +253,31 @@ export function caretakerMesh(spec: CaretakerBodySpec, figures: readonly FigureS
   const bodyMb = new MeshBuilder();
   const bodyXf = new Xf(bodyMb, null, 0, 0, 0, 0);
   const s = mannequin((part) => (ARM.includes(part) ? sink : bodyXf), rest, seed, 1, paint);
+  const body = fur(bodyMb.build());
+  yield;
   const arm: MeshData[] = [];
   for (let i = 0; i < frames; i++) {
     const mb = new MeshBuilder();
     const xf = new Xf(mb, null, 0, 0, 0, 0);
     mannequin((part) => (ARM.includes(part) ? xf : sink), gesturePose(rest, i / frames), seed, 1, paint);
     arm.push(fur(mb.build()));
+    yield;
   }
   const top = Math.max(...skeletonPoints(s).map((p) => p[1]));
-  return { figure, body: fur(bodyMb.build()), arm, table: tableMesh(), tag: tagMesh(), dots: own ? CARETAKER_DOTS : figure.material === 'smoke' ? SMOKE_DOTS : 0, core: [s.waist[0], s.waist[1], s.waist[2]], top };
+  return { figure, body, arm, table: tableMesh(), tag: tagMesh(), dots: own ? CARETAKER_DOTS : figure.material === 'smoke' ? SMOKE_DOTS : 0, core: [s.waist[0], s.waist[1], s.waist[2]], top };
+}
+
+/** Тело Смотрителя целиком, за один вызов (см. caretakerMeshSteps). */
+export function caretakerMesh(spec: CaretakerBodySpec, figures: readonly FigureSpec[], seed: number, frames = GESTURE_FRAMES): CaretakerMesh {
+  return finish(caretakerMeshSteps(spec, figures, seed, frames));
+}
+
+/** Довести пошаговую сборку до конца. */
+export function finish<T>(it: Generator<void, T, void>): T {
+  for (;;) {
+    const r = it.next();
+    if (r.done) return r.value;
+  }
 }
 
 /**
