@@ -975,9 +975,10 @@ async function scenarioFlats(browser, baseUrl) {
   section('Плоские вещи: картонки, проекции, выставочные экраны (экраны растворяются от касания)');
 
   // Убежище: проекция поперёк коридора и картонка у стены. Картонка — редкая находка, не на каждом
-  // уровне: на этом сиде она есть в ранге 3 (с тех пор как бумага убежища заняла свои участки стен).
+  // уровне: на этом сиде она есть в ранге 2 (с 25.11, когда растения перестали заходить в мебель, в ранге 3
+  // её больше нет; в ранге 1 — шкаф, это запасной вариант сценария ниже).
   {
-    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=3');
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=2');
     await page.click('.vz-overlay');
     await sleep(300);
     await vz(page, () => window.__vz.freeze(true));
@@ -1023,11 +1024,13 @@ async function scenarioFlats(browser, baseUrl) {
     check('с изнанки проекции нет: там темно', back < shown * 0.4, `с лица ${shown.toFixed(1)}, с изнанки ${back.toFixed(1)}`);
     await vz(page, () => window.__vz.toggleLight());
 
-    // Картонка: сквозь неё проходишь до самой стены.
-    await vz(page, (i) => window.__vz.gotoFlat(i, 1.5), stand);
-    await afterSec(2.5, { moveZ: 1 });
-    st = await state(page);
-    check('картонка не мешает пройти: игрок прошёл сквозь лист', side(st, flats[stand]) < -0.05, `${flats[stand].what}: ${side(st, flats[stand]).toFixed(2)} м от листа`);
+    // Картонка: сквозь неё проходишь до самой стены (без картонки проверка выше уже провалена — здесь не падаем).
+    if (stand >= 0) {
+      await vz(page, (i) => window.__vz.gotoFlat(i, 1.5), stand);
+      await afterSec(2.5, { moveZ: 1 });
+      st = await state(page);
+      check('картонка не мешает пройти: игрок прошёл сквозь лист', side(st, flats[stand]) < -0.05, `${flats[stand].what}: ${side(st, flats[stand]).toFixed(2)} м от листа`);
+    }
     check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
     if (wantShots) {
       mkdirSync(OUT, { recursive: true });
@@ -1309,8 +1312,8 @@ async function scenarioIllusions(browser, baseUrl) {
       check('после выкл/вкл фонаря вещь снова на месте или на другом (не «gone»)', cur.state !== 'gone' && cur.state !== 'erased', `${thing.t.kind}: ${cur.state}, было ${thing.t.pos.map((v) => v.toFixed(1))}, стало ${cur.pos.map((v) => v.toFixed(1))}, kind ${cur.kind}`);
     }
 
-    // Картонка. Стоячая картонка редка, и на этом сиде её место зависит от расстановки бумаги: если на
-    // ранге 2 её нет, та же проверка идёт на ранге 3 (как в сценарии картонок).
+    // Картонка. Стоячая картонка редка, и на этом сиде её место зависит от расстановки бумаги и растений:
+    // если на ранге 2 её нет, та же проверка идёт на ранге 1 (на ранге 3 её с 25.11 нет).
     await lightOn(page);
     let cp = page;
     let extra = null;
@@ -1323,7 +1326,7 @@ async function scenarioIllusions(browser, baseUrl) {
     if (stand < 0) {
       firstErrs = { errors: [...log.errors], warnings: [...log.warnings] };
       await context.close();
-      extra = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=3');
+      extra = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=1');
       cp = extra.page;
       await cp.click('.vz-overlay');
       await sleep(300);
