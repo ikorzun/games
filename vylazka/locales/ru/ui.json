@@ -245,6 +245,7 @@
   "pocket.dollhouse.enter.idle": "красная комната. твоего здесь пока нет.",
   "pocket.dollhouse.map": "забыто: {what}. {room}, {tier}.",
   "pocket.dollhouse.map.idle": "твоего здесь пока нет.",
+  "pocket.sunfield.enter": "поле подсолнухов. небо чистое.",
   "pocket.hint.exit": "Красный проём ведёт назад",
   "pocket.hint.fading": "Это место редеет. Оно отпустит само",
   "tier.0": "верхний ярус",

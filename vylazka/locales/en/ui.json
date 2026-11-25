@@ -245,6 +245,7 @@
   "pocket.dollhouse.enter.idle": "a red room. nothing of yours is forgotten yet.",
   "pocket.dollhouse.map": "forgotten: {what}. {room}, {tier}.",
   "pocket.dollhouse.map.idle": "nothing of yours is here yet.",
+  "pocket.sunfield.enter": "a field of sunflowers. the sky is clear.",
   "pocket.hint.exit": "The red doorway leads back",
   "pocket.hint.fading": "This place is fading. It will let you go",
   "tier.0": "upper level",

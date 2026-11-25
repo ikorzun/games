@@ -588,7 +588,7 @@ const BIG_FATES: readonly Fate[] = ['jump', 'grow', 'dust', 'jump', 'shrink', 'g
 /** Воспоминание → вещь-образ. */
 const MEMORY_THING: Readonly<Record<string, string>> = MEMORY_THINGS;
 /** Цвет дали там, куда ведёт скачок: уходящее место растворяется в этот цвет. */
-const DEST_FOG: Record<string, Vec3> = { void: [0.86, 0.86, 0.86], limbo: [0.86, 0.86, 0.86], meadow: [0.62, 0.74, 0.88], dollhouse: [0.03, 0.02, 0.03], dunes: [0, 0, 0], elsewhere: [0, 0, 0], scene: [0, 0, 0], session: [0, 0, 0] };
+const DEST_FOG: Record<string, Vec3> = { void: [0.86, 0.86, 0.86], limbo: [0.86, 0.86, 0.86], meadow: [0.62, 0.74, 0.88], dollhouse: [0.03, 0.02, 0.03], dunes: [0, 0, 0], sunfield: [0.62, 0.74, 0.88], elsewhere: [0, 0, 0], scene: [0, 0, 0], session: [0, 0, 0] };
 /** Угол взгляда по направлению (x, z): yaw 0 смотрит в −z. */
 const yawOf = (x: number, z: number): number => Math.atan2(-x, -z);
 /** Повернуть вектор (x, z) так, как поворачивается взгляд при прибавке d к yaw. */

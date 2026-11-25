@@ -32,8 +32,8 @@ export const DUNES = { w: 48, l: 66, wallH: 17, cell: 0.75, doorW: 0.9, doorH: 2
 
 /** Цвет песка: бледный, тёплый; гребни светлее впадин. */
 const SAND: Vec3 = [1.18, 0.98, 0.7];
-/** Кость: старая, желтоватая. */
-const BONE: Vec3 = [0.9, 0.84, 0.7];
+/** Кость: оттенок поверх материала «кость» (world/materials.ts) — у него свой шар блеска и своя фактура. */
+const BONE: Vec3 = [1.0, 0.97, 0.9];
 /** Глазницы — тёмные провалы. */
 const HOLE: Vec3 = [0.035, 0.03, 0.03];
 
@@ -94,7 +94,7 @@ const UP: Vec3 = [0, 1, 0];
  * Кость трубкой по ломаной: кольца с параллельным переносом рамки (без скручивания), радиус по доле длины, торцы закрыты.
  * Обход колец — наружу (как у MeshBuilder.cylinder).
  */
-export function boneTube(mb: MeshBuilder, pts: readonly Vec3[], rad: (t: number) => number, tint: Vec3, sides = 6): void {
+export function boneTube(mb: MeshBuilder, pts: readonly Vec3[], rad: (t: number) => number, tint: Vec3, sides = 6, mat: number = MAT.plaster): void {
   const n = pts.length;
   if (n < 2) return;
   const T = pts.map((_, i) => norm(sub(pts[Math.min(n - 1, i + 1)]!, pts[Math.max(0, i - 1)]!)));
@@ -102,19 +102,23 @@ export function boneTube(mb: MeshBuilder, pts: readonly Vec3[], rad: (t: number)
   let N = norm(Math.abs(t0[1]) < 0.9 ? cross(t0, UP) : cross(t0, [1, 0, 0]));
   const rings: number[][] = [];
   const at: Vec3[][] = [];
+  // Развёртка: u — по окружности, v — вдоль кости, в метрах: фактура материала (волокно кости) ложится вдоль неё.
+  let along = 0;
   for (let i = 0; i < n; i++) {
+    if (i > 0) along += Math.hypot(pts[i]![0] - pts[i - 1]![0], pts[i]![1] - pts[i - 1]![1], pts[i]![2] - pts[i - 1]![2]);
     const t = T[i]!;
     if (i > 0) N = norm(sub(N, mul(t, dot(N, t))));
     const B = cross(t, N);
     const r = Math.max(0.004, rad(i / (n - 1)));
     const ring: number[] = [];
     const ringAt: Vec3[] = [];
-    for (let k = 0; k < sides; k++) {
+    // Вершин в кольце на одну больше, чем граней: первая повторена в конце со своей развёрткой — шов фактуры не тянется.
+    for (let k = 0; k <= sides; k++) {
       const a = (k / sides) * Math.PI * 2;
       const d = comb([N, Math.cos(a)], [B, Math.sin(a)]);
       const p = add(pts[i]!, mul(d, r));
-      ring.push(mb.vertex(p, d, MAT.plaster, tint, 1));
-      ringAt.push(p);
+      ring.push(mb.vertexUv(p, d, mat, tint, 1, [(k / sides) * Math.PI * 2 * r, along]));
+      if (k < sides) ringAt.push(p);
     }
     rings.push(ring);
     at.push(ringAt);
@@ -123,7 +127,7 @@ export function boneTube(mb: MeshBuilder, pts: readonly Vec3[], rad: (t: number)
     const a = rings[i]!;
     const b = rings[i + 1]!;
     for (let k = 0; k < sides; k++) {
-      const j = (k + 1) % sides;
+      const j = k + 1;
       mb.tri(a[k]!, a[j]!, b[j]!);
       mb.tri(a[k]!, b[j]!, b[k]!);
     }
@@ -134,8 +138,8 @@ export function boneTube(mb: MeshBuilder, pts: readonly Vec3[], rad: (t: number)
     [n - 1, 1],
   ] as const) {
     const nn = mul(T[end]!, s);
-    const c = mb.vertex(pts[end]!, nn, MAT.plaster, tint, 1);
-    const ids = at[end]!.map((p) => mb.vertex(p, nn, MAT.plaster, tint, 1));
+    const c = mb.vertexUv(pts[end]!, nn, mat, tint, 1, [0, 0]);
+    const ids = at[end]!.map((p) => mb.vertexUv(p, nn, mat, tint, 1, [p[0] - pts[end]![0] + p[1] - pts[end]![1], p[2] - pts[end]![2]]));
     for (let k = 0; k < sides; k++) {
       const j = (k + 1) % sides;
       if (s < 0) mb.tri(c, ids[j]!, ids[k]!);
@@ -148,29 +152,51 @@ export function boneTube(mb: MeshBuilder, pts: readonly Vec3[], rad: (t: number)
  * Эллипсоид в рамке (F, S, U — правая тройка: F × S = U) с полуосями r: черепная коробка, тело позвонка, глазница. Обход —
  * наружу.
  */
-export function blob(mb: MeshBuilder, c: Vec3, F: Vec3, S: Vec3, U: Vec3, r: Vec3, tint: Vec3, seg = 8, rings = 6): void {
+export function blob(mb: MeshBuilder, c: Vec3, F: Vec3, S: Vec3, U: Vec3, r: Vec3, tint: Vec3, seg = 8, rings = 6, mat: number = MAT.plaster): void {
   const ids: number[][] = [];
   for (let i = 0; i <= rings; i++) {
     const th = (i / rings) * Math.PI;
     const row: number[] = [];
-    for (let k = 0; k < seg; k++) {
+    for (let k = 0; k <= seg; k++) {
       const ph = (k / seg) * Math.PI * 2;
       const lx = Math.sin(th) * Math.cos(ph);
       const ly = Math.sin(th) * Math.sin(ph);
       const lz = Math.cos(th);
       const p = comb([c, 1], [F, r[0] * lx], [S, r[1] * ly], [U, r[2] * lz]);
       const n = norm(comb([F, lx / r[0]], [S, ly / r[1]], [U, lz / r[2]]));
-      row.push(mb.vertex(p, n, MAT.plaster, tint, 1));
+      row.push(mb.vertexUv(p, n, mat, tint, 1, [(k / seg) * Math.PI * 2 * Math.max(r[0], r[1]), (i / rings) * Math.PI * r[2]]));
     }
     ids.push(row);
   }
   for (let i = 0; i < rings; i++) {
     for (let k = 0; k < seg; k++) {
-      const j = (k + 1) % seg;
+      const j = k + 1;
       mb.tri(ids[i]![k]!, ids[i + 1]![k]!, ids[i + 1]![j]!);
       mb.tri(ids[i]![k]!, ids[i + 1]![j]!, ids[i]![j]!);
     }
   }
+}
+
+/** Кости зверя — на материале «кость» (партнёр 24.11: «на всё накинуть маткап костей»). */
+const bone = (mb: MeshBuilder, pts: readonly Vec3[], rad: (t: number) => number, tint: Vec3, sides = 6): void => boneTube(mb, pts, rad, tint, sides, MAT.bone);
+const lump = (mb: MeshBuilder, c: Vec3, F: Vec3, S: Vec3, U: Vec3, r: Vec3, tint: Vec3, seg = 8, rings = 6): void => blob(mb, c, F, S, U, r, tint, seg, rings, MAT.bone);
+
+/** Плавная кривая через опорные точки (Катмулл — Ром), по per отрезков между соседними: кость гнётся дугой, а не ломаной. */
+function curve(pts: readonly Vec3[], per: number): Vec3[] {
+  const out: Vec3[] = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)]!;
+    const p1 = pts[i]!;
+    const p2 = pts[i + 1]!;
+    const p3 = pts[Math.min(pts.length - 1, i + 2)]!;
+    for (let k = 0; k < per; k++) {
+      const t = k / per;
+      const f = (a: number, b: number, c: number, d: number): number => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t);
+      out.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1]), f(p0[2], p1[2], p2[2], p3[2])]);
+    }
+  }
+  out.push(pts[pts.length - 1]!);
+  return out;
 }
 
 /** Рамка по направлению вперёд: F, S = U0 × F, U = F × S (правая тройка, U — ближе всего к верху). */
@@ -379,7 +405,7 @@ export const buildDunes: PocketBuilder = (seed, origin): DunesSpace => {
     const chest = smoothstep(0.3, 0.4, s) * (1 - smoothstep(0.66, 0.76, s));
     info.vertebrae.push({ at: P, r });
     // Тело позвонка: короткое вдоль хребта.
-    blob(mb, P, F, S, U, [0.55 * r, r, 0.9 * r], tint, 8, 5);
+    lump(mb, P, F, S, U, [0.55 * r, r, 0.9 * r], tint, 8, 5);
     // Остистые отростки: на груди — парные, разведённые, как у существа, которого не было (странный зверь); к хвосту — один.
     const tall = r * (1.5 + 1.4 * chest);
     const pair = chest > 0.3;
@@ -387,13 +413,13 @@ export const buildDunes: PocketBuilder = (seed, origin): DunesSpace => {
       const base = comb([P, 1], [U, 0.75 * r], [S, side * 0.32 * r]);
       const tip = comb([base, 1], [U, tall], [F, -0.4 * tall], [S, side * 0.35 * tall]);
       const mid = comb([base, 0.5], [tip, 0.5], [F, -0.08 * tall]);
-      boneTube(mb, [base, mid, tip], (t) => (0.26 - 0.18 * t) * r, tint, 4);
+      bone(mb, [base, mid, tip], (t) => (0.26 - 0.18 * t) * r, tint, 4);
     }
     // Поперечные отростки.
     for (const side of [-1, 1]) {
       const a = comb([P, 1], [S, side * 0.7 * r]);
       const b = comb([a, 1], [S, side * 1.05 * r], [U, -0.25 * r], [F, -0.15 * r]);
-      boneTube(mb, [a, b], (t) => (0.2 - 0.12 * t) * r, tint, 4);
+      bone(mb, [a, b], (t) => (0.2 - 0.12 * t) * r, tint, 4);
     }
     // Хвост и шея лежат у песка: о них спотыкаются.
     const lift = P[1] - ground(P[0], P[2]);
@@ -420,7 +446,7 @@ export const buildDunes: PocketBuilder = (seed, origin): DunesSpace => {
           pts.push(comb([A, 1], [L, span * Math.sin(th)], [UP, b * (Math.cos(th) - 1)], [F, -0.55 * Math.sin(th)]));
         }
         const rt = boneTint();
-        boneTube(mb, pts, (t) => 0.17 - 0.07 * t, rt, 6);
+        bone(mb, pts, (t) => 0.17 - 0.07 * t, rt, 6);
         info.ribs.push(pts);
         // Низ ребра — преграда: сквозь кость у песка не пройти.
         const low = pts.filter((q) => q[1] < ground(q[0], q[2]) + 2.2);
@@ -447,37 +473,65 @@ export const buildDunes: PocketBuilder = (seed, origin): DunesSpace => {
     const [F, S, U] = frame(comb([fwd, 1], [UP, -0.08]));
     const tint = boneTint();
     info.skull = { at: C, face: [fwd[0], fwd[2]] };
-    blob(mb, C, F, S, U, [1.5, 1.05, 0.95], tint, 10, 7);
-    // Морда.
+    // Подробный череп (партнёр 24.11: «череп существа… детализировать, как остальные объекты»): гладкие кривые вместо
+    // ломаных, глазницы с костяными валиками и надбровьями, скуловые дуги, ноздри, затылочный бугор, рога в кольцах,
+    // зубы разной длины с изгибом.
+    lump(mb, C, F, S, U, [1.5, 1.05, 0.95], tint, 30, 18);
+    // Затылочный бугор и виски: коробка не яйцо.
+    lump(mb, comb([C, 1], [F, -1.22], [U, 0.1]), F, S, U, [0.5, 0.62, 0.55], tint, 18, 10);
+    for (const side of [-1, 1]) lump(mb, comb([C, 1], [F, -0.3], [S, side * 0.86], [U, -0.2]), F, S, U, [0.7, 0.3, 0.42], tint, 16, 8);
+    // Морда: длинная, с горбинкой переносицы и расширением у ноздрей.
+    const snoutAt = (t: number): Vec3 => comb([C, 1], [F, 1.0 + 3.0 * t], [U, -0.1 - 0.4 * t * t + 0.07 * Math.sin(Math.PI * Math.min(1, t * 1.6))]);
+    const snoutR = (t: number): number => 0.64 - 0.44 * t + 0.05 * Math.exp(-(((t - 0.86) / 0.09) ** 2));
     const snout: Vec3[] = [];
-    for (let k = 0; k <= 5; k++) {
-      const t = k / 5;
-      snout.push(comb([C, 1], [F, 1.0 + 3.0 * t], [U, -0.1 - 0.4 * t * t]));
-    }
-    boneTube(mb, snout, (t) => 0.64 - 0.44 * t, tint, 7);
-    boneTube(mb, [snout[5]!, comb([snout[5]!, 1], [F, 0.35], [U, -0.25]), comb([snout[5]!, 1], [F, 0.42], [U, -0.6])], (t) => 0.2 - 0.15 * t, tint, 5);
-    // Гребень по темени.
-    boneTube(mb, [comb([C, 1], [U, 0.86], [F, -1.25]), comb([C, 1], [U, 1.02]), comb([C, 1], [U, 0.82], [F, 1.25])], () => 0.12, tint, 5);
-    // Глазницы: три пары, тёмные провалы.
+    for (let k = 0; k <= 5; k++) snout.push(snoutAt(k / 5));
+    const snoutFine: Vec3[] = [];
+    for (let k = 0; k <= 20; k++) snoutFine.push(snoutAt(k / 20));
+    bone(mb, snoutFine, snoutR, tint, 20);
+    // Клюв-крюк на конце морды.
+    bone(mb, curve([snout[5]!, comb([snout[5]!, 1], [F, 0.35], [U, -0.25]), comb([snout[5]!, 1], [F, 0.42], [U, -0.6])], 5), (t) => 0.2 - 0.15 * t, tint, 10);
+    // Ноздри: два тёмных провала сверху у конца морды.
+    for (const side of [-1, 1]) lump(mb, comb([snoutAt(0.84), 1], [U, 0.16], [S, side * 0.1]), F, S, U, [0.16, 0.06, 0.07], HOLE, 10, 6);
+    // Гребень по темени: зубчатый, сходит на переносицу.
+    bone(mb, curve([comb([C, 1], [U, 0.8], [F, -1.3]), comb([C, 1], [U, 1.0], [F, -0.6]), comb([C, 1], [U, 1.03]), comb([C, 1], [U, 0.9], [F, 0.8]), comb([C, 1], [U, 0.56], [F, 1.5])], 6), (t) => 0.11 + 0.03 * Math.abs(Math.sin(t * 22)) - 0.05 * t, tint, 8);
+    // Глазницы: три пары. Тёмный провал, вокруг — костяной валик, сверху — надбровная дуга.
     for (let k = 0; k < 3; k++) {
       for (const side of [-1, 1]) {
         const at = comb([C, 1], [F, 0.78 - 0.5 * k], [U, 0.3 + 0.07 * k], [S, side * (0.84 - 0.05 * k)]);
-        blob(mb, at, F, S, U, [0.31 - 0.03 * k, 0.2, 0.24 - 0.02 * k], HOLE, 7, 4);
+        const ra = 0.31 - 0.03 * k;
+        const rb = 0.24 - 0.02 * k;
+        lump(mb, at, F, S, U, [ra, 0.2, rb], HOLE, 14, 8);
+        const rim: Vec3[] = [];
+        for (let q = 0; q <= 16; q++) {
+          const a = (q / 16) * Math.PI * 2;
+          rim.push(comb([at, 1], [F, Math.cos(a) * ra * 1.08], [U, Math.sin(a) * rb * 1.08], [S, side * 0.1]));
+        }
+        bone(mb, rim, () => 0.045, tint, 6);
+        bone(mb, curve([comb([at, 1], [F, -ra * 1.2], [U, rb * 0.9], [S, side * 0.1]), comb([at, 1], [U, rb * 1.5], [S, side * 0.2]), comb([at, 1], [F, ra * 1.25], [U, rb * 0.8], [S, side * 0.1])], 5), (t) => 0.07 * Math.sin(Math.PI * Math.max(0.12, Math.min(0.88, t))), tint, 7);
       }
     }
-    // Рога назад и вниз.
+    // Скуловые дуги: от висков к середине морды, выгнуты наружу; под ними просвет.
+    for (const side of [-1, 1]) {
+      bone(mb, curve([comb([C, 1], [F, -0.7], [S, side * 0.95], [U, -0.25]), comb([C, 1], [F, 0.3], [S, side * 1.28], [U, -0.42]), comb([C, 1], [F, 1.3], [S, side * 0.92], [U, -0.5]), comb([C, 1], [F, 2.0], [S, side * 0.42], [U, -0.5])], 6), (t) => 0.1 + 0.05 * Math.sin(Math.PI * t), tint, 9);
+    }
+    // Рога назад и вниз: в годовых кольцах, остриё гладкое.
     for (const side of [-1, 1]) {
       const b0 = comb([C, 1], [U, 0.62], [F, -0.6], [S, side * 0.55]);
-      const horn: Vec3[] = [b0, comb([b0, 1], [F, -0.8], [U, 0.62], [S, side * 0.3]), comb([b0, 1], [F, -1.9], [U, 0.72], [S, side * 0.72]), comb([b0, 1], [F, -2.65], [U, 0.18], [S, side * 1.02]), comb([b0, 1], [F, -2.85], [U, -0.35], [S, side * 1.12])];
-      boneTube(mb, horn, (t) => 0.22 - 0.18 * t, tint, 6);
+      const horn = curve([b0, comb([b0, 1], [F, -0.8], [U, 0.62], [S, side * 0.3]), comb([b0, 1], [F, -1.9], [U, 0.72], [S, side * 0.72]), comb([b0, 1], [F, -2.65], [U, 0.18], [S, side * 1.02]), comb([b0, 1], [F, -2.85], [U, -0.35], [S, side * 1.12])], 7);
+      bone(mb, horn, (t) => (0.24 - 0.2 * t) * (1 + 0.07 * Math.sin(t * 60) * (1 - t)), tint, 14);
+      // Розетка у основания рога.
+      lump(mb, b0, F, S, U, [0.3, 0.3, 0.2], tint, 14, 7);
     }
-    // Зубы вдоль нижнего края морды.
-    for (let k = 0; k < 9; k++) {
-      const t = 0.12 + k * 0.095;
-      const r = 0.64 - 0.44 * t;
+    // Зубы вдоль нижнего края морды: чередуются длинные и короткие, загнуты назад; два клыка у конца.
+    for (let k = 0; k < 15; k++) {
+      const t = 0.1 + k * 0.058;
+      const r = snoutR(t);
+      const long = k % 3 === 0 ? 1.35 : k % 2 === 0 ? 1 : 0.7;
+      const fang = k >= 13 ? 1.7 : 1;
       for (const side of [-1, 1]) {
-        const base = comb([C, 1], [F, 1.0 + 3.0 * t], [U, -0.1 - 0.4 * t * t - 0.62 * r], [S, side * 0.55 * r]);
-        boneTube(mb, [base, comb([base, 1], [U, -0.3 + 0.08 * t], [F, 0.05])], (q) => 0.065 * (1 - q) + 0.004, [1.2, 1.15, 1.0], 4);
+        const base = comb([snoutAt(t), 1], [U, -0.6 * r], [S, side * 0.55 * r]);
+        const len = (0.3 - 0.08 * t) * long * fang;
+        bone(mb, curve([base, comb([base, 1], [U, -len * 0.55], [F, 0.04]), comb([base, 1], [U, -len], [F, -0.05 * fang])], 3), (q) => (0.07 * fang) * (1 - q) ** 0.8 + 0.004, [1.16, 1.12, 1.0], 7);
       }
     }
     colliders.push({ minX: C[0] - 1.6, minY: oy - 0.5, minZ: C[2] - 1.6, maxX: C[0] + 1.6, maxY: C[1] + 1.0, maxZ: C[2] + 1.6 });
@@ -493,7 +547,13 @@ export const buildDunes: PocketBuilder = (seed, origin): DunesSpace => {
         const p = comb([jApex, 1], [arm, -k * 0.75]);
         pts.push([p[0], ground(p[0], p[2]) + 0.12 - 0.05 * k, p[2]]);
       }
-      boneTube(mb, pts, (t) => 0.22 - 0.06 * t, tint, 6);
+      const jaw = curve(pts, 4);
+      bone(mb, jaw, (t) => 0.22 - 0.06 * t + 0.06 * Math.exp(-(((t - 0.96) / 0.06) ** 2)), tint, 12);
+      // Зубы нижней челюсти: торчат из песка рядком у развилки.
+      for (let q = 2; q < 9; q++) {
+        const b = jaw[q]!;
+        bone(mb, [comb([b, 1], [UP, 0.16]), comb([b, 1], [UP, 0.34 + (q % 2) * 0.08])], (v) => 0.05 * (1 - v) + 0.004, [1.16, 1.12, 1.0], 6);
+      }
     }
     colliders.push({ minX: jApex[0] - 2.4, minY: oy - 0.5, minZ: jApex[2] - 2.4, maxX: jApex[0] + 2.4, maxY: ground(jApex[0], jApex[2]) + 0.4, maxZ: jApex[2] + 2.4 });
   }
@@ -505,7 +565,7 @@ export const buildDunes: PocketBuilder = (seed, origin): DunesSpace => {
     const d = norm(dir);
     const pts: Vec3[] = [];
     for (let k = 0; k <= 8; k++) pts.push(comb([base, 1], [d, (len * k) / 8], [[d[2], 0, -d[0]], 0.18 * Math.sin((Math.PI * k) / 8)]));
-    boneTube(mb, pts, (t) => rad * (0.82 + 0.5 * Math.max(0, 1 - t / 0.14) + (broken ? 0 : 0.6 * smoothstep(0.84, 1, t))), boneTint(), 7);
+    bone(mb, pts, (t) => rad * (0.82 + 0.5 * Math.max(0, 1 - t / 0.14) + (broken ? 0 : 0.6 * smoothstep(0.84, 1, t))), boneTint(), 7);
     const top = pts.filter((q) => q[1] < W(u, v, g)[1] + 2.4);
     const xs = top.map((q) => q[0]);
     const zs = top.map((q) => q[2]);
@@ -518,7 +578,7 @@ export const buildDunes: PocketBuilder = (seed, origin): DunesSpace => {
     const cv = 25.5;
     const palm = W(cu, cv, H(cu, cv) + 0.12);
     const [F, S, U] = frame([0.6, 0, -0.8]);
-    blob(mb, palm, F, S, U, [0.9, 0.75, 0.3], boneTint(), 8, 5);
+    lump(mb, palm, F, S, U, [0.9, 0.75, 0.3], boneTint(), 8, 5);
     for (let f = 0; f < 6; f++) {
       const a = -1.05 + (f * 2.1) / 5;
       const d = norm(comb([F, Math.cos(a)], [S, Math.sin(a)]));
@@ -529,7 +589,7 @@ export const buildDunes: PocketBuilder = (seed, origin): DunesSpace => {
         // Палец лежит на песке, коготь загибается и уходит в него.
         pts.push([p[0], h + 0.1 + 0.06 * Math.sin(k * 1.3) - (k === 7 ? 0.35 : 0), p[2]]);
       }
-      boneTube(mb, pts, (t) => (t < 0.8 ? 0.11 + 0.03 * Math.sin(t * 18) : 0.12 * (1 - (t - 0.8) / 0.2) + 0.01), boneTint(), 5);
+      bone(mb, pts, (t) => (t < 0.8 ? 0.11 + 0.03 * Math.sin(t * 18) : 0.12 * (1 - (t - 0.8) / 0.2) + 0.01), boneTint(), 5);
     }
     colliders.push({ minX: palm[0] - 3.2, minY: oy - 0.5, minZ: palm[2] - 3.2, maxX: palm[0] + 3.2, maxY: palm[1] + 0.3, maxZ: palm[2] + 3.2 });
   }
@@ -547,8 +607,8 @@ export const buildDunes: PocketBuilder = (seed, origin): DunesSpace => {
     const [F, S, U] = frame([rnd() - 0.5, 0.25, rnd() - 0.5]);
     const r = 0.25 + rnd() * 0.2;
     const tint = boneTint();
-    blob(mb, at, F, S, U, [0.55 * r, r, 0.9 * r], tint, 7, 4);
-    boneTube(mb, [comb([at, 1], [U, 0.7 * r]), comb([at, 1], [U, 2.2 * r], [F, -0.6 * r])], (t) => (0.26 - 0.18 * t) * r, tint, 4);
+    lump(mb, at, F, S, U, [0.55 * r, r, 0.9 * r], tint, 7, 4);
+    bone(mb, [comb([at, 1], [U, 0.7 * r]), comb([at, 1], [U, 2.2 * r], [F, -0.6 * r])], (t) => (0.26 - 0.18 * t) * r, tint, 4);
   }
   for (let k = 0; k < 4; k++) {
     const u = (rnd() - 0.5) * (w - 10);
@@ -562,7 +622,7 @@ export const buildDunes: PocketBuilder = (seed, origin): DunesSpace => {
       const th = (q / 8) * 0.8 * Math.PI;
       pts.push(comb([W(u, v, g - 0.4), 1], [d, span * Math.sin(th)], [UP, 1.6 * Math.sin(th * 0.9)]));
     }
-    boneTube(mb, pts, (t) => 0.15 - 0.06 * t, boneTint(), 6);
+    bone(mb, pts, (t) => 0.15 - 0.06 * t, boneTint(), 6);
   }
 
   const spots: Vec3[] = (
