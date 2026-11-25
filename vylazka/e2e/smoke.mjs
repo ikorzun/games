@@ -3561,7 +3561,7 @@ async function scenarioSeam(browser, baseUrl) {
   await context.close();
 
   // Вещь по ту сторону шва (pressure.md, §4.4; квиз 25.11): здесь — кружевной след, за швом — вещь.
-  const aw = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113&rank=2&world=office&away=1');
+  const aw = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113&rank=2&wear=0.14&world=office&away=1');
   await aw.page.click('.vz-overlay');
   await sleep(300);
   await vz(aw.page, () => window.__vz.freeze(true));
@@ -3570,6 +3570,8 @@ async function scenarioSeam(browser, baseUrl) {
   await vz(aw.page, () => window.__vz.step(6));
   const near = await vz(aw.page, () => window.__vz.gotoMemory());
   let as = await vz(aw.page, () => window.__vz.step(90));
+  // Строка ждёт в очереди, пока догорит название сессии (по часам страницы): ждём её до 10 с.
+  await aw.page.waitForFunction((want) => document.querySelector('.vz-hud__toast')?.textContent?.trim() === want, RU['toast.seam.away'], { timeout: 10000 }).catch(() => {});
   const toast = (await aw.page.textContent('.vz-hud__toast'))?.trim();
   check(
     'вещь по ту сторону шва: здесь от неё след — не вспоминается, игрок слышит строку',

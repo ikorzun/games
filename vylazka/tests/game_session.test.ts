@@ -38,6 +38,7 @@ import { ODD_COOLDOWN, ODD_KINDS, ODD_TIMING } from '../src/systems/odd';
 import type { OddKind } from '../src/systems/odd';
 import { twinLayout } from '../src/gen/layout';
 import { SEAM_AWAY, SEAM_DARK } from '../src/game';
+import { WEAR } from '../src/systems/decay';
 import { SEAM, seamDistance } from '../src/world/seams';
 import type { SeamSite } from '../src/world/seams';
 
@@ -5021,8 +5022,9 @@ describe('швы офис ↔ жёлтые: свет погас у шва и з�
 });
 
 describe('вещь по ту сторону шва (pressure.md, §4.4; квиз 25.11 «Да, изредка, со следом»): здесь — кружевной след, за швом — вещь', () => {
-  const fresh = (away: number | null, rank: 1 | 2 | 3 = 2): Harness => {
-    const h = new Harness(buildLevel(generateLayout(SEED, rank, 'office')));
+  /** Второй круг места — стёртость в один круг (WEAR.lap); первый — нетронутое место. */
+  const fresh = (away: number | null, lap: 1 | 2 = 2): Harness => {
+    const h = new Harness(buildLevel(generateLayout(SEED, 2, 'office'), { wear: lap === 2 ? WEAR.lap : 0 }));
     h.game.seams = true;
     h.game.seamAway = away;
     h.run(2);
@@ -5075,20 +5077,20 @@ describe('вещь по ту сторону шва (pressure.md, §4.4; квиз
     expect(g.memAway).toBe(false);
   });
 
-  it('не бывает: на первом круге места, без швов, в убежище; жребий выключен — вещь в обеих', () => {
+  it('не бывает: на первом круге места (стёртость меньше круга), без швов, в убежище; жребий выключен — вещь в обеих', () => {
     const first = fresh(1, 1);
     first.reveal();
     expect(first.game.memAway).toBe(false);
     const never = fresh(0);
     never.reveal();
     expect(never.game.memAway).toBe(false);
-    const noSeams = new Harness(buildLevel(generateLayout(SEED, 2, 'office')));
+    const noSeams = new Harness(buildLevel(generateLayout(SEED, 2, 'office'), { wear: WEAR.lap }));
     noSeams.game.seams = false;
     noSeams.game.seamAway = 1;
     noSeams.run(2);
     noSeams.reveal();
     expect(noSeams.game.memAway).toBe(false);
-    const shelter = new Harness(levelOf(SEED, 2));
+    const shelter = new Harness(buildLevel(generateLayout(SEED, 2), { wear: WEAR.lap }));
     shelter.game.seamAway = 1;
     shelter.run(1);
     shelter.reveal();
@@ -5099,7 +5101,7 @@ describe('вещь по ту сторону шва (pressure.md, §4.4; квиз
     let away = 0;
     let all = 0;
     for (let seed = 1; seed <= 24; seed++) {
-      const h = new Harness(buildLevel(generateLayout(seed, 2, 'office')));
+      const h = new Harness(buildLevel(generateLayout(seed, 2, 'office'), { wear: WEAR.lap }));
       h.game.seams = true;
       h.run(1);
       if (!h.game.hasTwin) continue;

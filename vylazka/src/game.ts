@@ -1044,7 +1044,8 @@ export class Game {
   private awayWorld(index: number): WorldKind | null {
     const lay = this.level?.layout;
     if (!this.seams || !this.hasTwin || !lay || !this.session || this.where !== 'main') return null;
-    if ((lay.rank ?? 1) < SEAM_AWAY.from) return null;
+    // Круг места — по его стёртости, как у давления (stepPressure): ранг плана здесь ни при чём.
+    if (1 + Math.floor(this.wearBase / WEAR.lap + 1e-6) < SEAM_AWAY.from) return null;
     const sites = this.level?.seams ?? [];
     const piece = this.piece;
     if (!sites.some((_, i) => !piece || (this.seamNodes[i] ?? []).some((n) => piece.nodes.has(n)))) return null;
