@@ -79,6 +79,24 @@ const isQuality = (v: string | null): v is Quality => v === 'low' || v === 'med'
  * зря» ловит игра (качество понизится само через десять секунд игры), а ошибку «понизили зря» не ловит никто.
  */
 const PROBE = { frameMs: 16, minMs: 0.3, settleMs: 700, fpsFloor: 45, slowFor: 2.5 } as const;
+
+/**
+ * Рисует ли браузер программно (SwiftShader, llvmpipe, «Microsoft Basic Render»): видеокарты нет, кадр считает процессор.
+ * Имя берётся из пробного контекста, который тут же отпускается. Не вышло спросить — считаем, что видеокарта есть.
+ */
+function softwareGl(): boolean {
+  try {
+    const c = document.createElement('canvas');
+    const gl = c.getContext('webgl2') ?? c.getContext('webgl');
+    if (!gl) return false;
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const name = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return /swiftshader|llvmpipe|softpipe|software rasterizer|basic render driver/i.test(name);
+  } catch {
+    return false;
+  }
+}
 /** Сколько самое большее ждать перехода, чтобы понизить качество, решённое игрой, с. */
 const DROP_WAIT = 20;
 /** Множители обзора и яркости для уровней «ниже / средне / выше». */
@@ -192,6 +210,8 @@ export class App {
   /** Щелчок фонаря, пришедший в кадр без шага игры, — до следующего кадра (player/input.ts, PressCarry). */
   private readonly lightPress = new PressCarry();
   private qualityManual = false;
+  /** Браузер рисует программно (softwareGl): качество — низкое, замера нет. */
+  private softGl = false;
   /**
    * Качество, на которое игра решила спуститься сама: применяется на ближайшем переходе (скачок, лимбо, новая сессия), где
    * пересев точек и пересборка стопки бумаги не видны, — но не позже DROP_WAIT секунд (куратор, пачка 51, 323).
@@ -398,8 +418,11 @@ export class App {
 
     const qParam = p.get('q');
     // По умолчанию — высокое, и на телефоне тоже (партнёр 19.11: «графика по умолчанию Высокая, если это позволяет устройство»):
-    // потянет ли, решает замер под заставкой (probeQuality).
-    const quality: Quality = isQuality(qParam) ? qParam : 'high';
+    // потянет ли, решает замер под заставкой (probeQuality). Программная видеокарта (SwiftShader, llvmpipe — так рисуют
+    // проверки площадок и машины без драйвера) не тянет и среднего: ей сразу низкое, без замера — замер там шёл больше
+    // минуты (каждая смена качества заново собирает шейдеры), и площадка не дождалась game_ready (Playgama, GAME_NOT_READY).
+    this.softGl = !isQuality(qParam) && softwareGl();
+    const quality: Quality = isQuality(qParam) ? qParam : this.softGl ? 'low' : 'high';
     this.qualityManual = isQuality(qParam);
     let renderer: GameRenderer;
     try {
@@ -1343,6 +1366,7 @@ export class App {
       if (r.quality !== q) this.setQuality(q);
       return;
     }
+    if (this.softGl) return;
     const draw = (): void => this.redraw();
     for (const q of ['high', 'med'] as const) {
       if (r.quality !== q) this.setQuality(q);
