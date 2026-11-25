@@ -4,8 +4,7 @@ import type { RoomType } from '../src/gen/layout';
 
 /**
  * Офис строится от приёмной вглубь (партнёр 24.11: «Пройдись по устройству офиса, перестрой его логично, как строят офисы»):
- * переговорные и санузел — у входа (санузел — у ядра с лифтом, куратор 430), отделы и комната отдыха — посередине, подсобки —
- * дальше, кабинет руководителя — в глубине.
+ * переговорные — у входа, отделы и комната отдыха — посередине, санузел и подсобки — дальше, кабинет руководителя — в глубине.
  */
 describe('офис: зоны по глубине этажа', () => {
   const depth = (seed: number): Map<RoomType, number[]> => {
@@ -25,12 +24,12 @@ describe('офис: зоны по глубине этажа', () => {
     return all.reduce((a, b) => a + b, 0) / Math.max(1, all.length);
   };
 
-  it('переговорные и санузел ближе к входу, чем отделы; кабинет руководителя и подсобки — дальше', () => {
+  it('переговорные ближе к входу, чем отделы; кабинет руководителя и подсобки — дальше отделов', () => {
     const meeting = mean('meeting');
     const cubicles = mean('cubicles');
     expect(meeting).toBeLessThan(cubicles);
     expect(mean('manager')).toBeGreaterThan(cubicles);
     expect(mean('server')).toBeGreaterThan(meeting);
-    expect(mean('washroom')).toBeLessThan(cubicles);
+    expect(mean('washroom')).toBeGreaterThan(meeting);
   });
 });

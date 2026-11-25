@@ -511,10 +511,11 @@ function secondDoor(b: Build, corridor: GenRoom, room: GenRoom, way: EdgeKind = 
 }
 
 /**
- * Где по глубине этажа (0 — у приёмной, 1 — дальний конец коридоров) стоять помещению офиса. Санузел — у ядра, рядом с лифтом
- * и приёмной, как в настоящих офисах (куратор, 430: стояки и шахты идут вместе); подсобки отделов — дальше, где отделы.
+ * Где по глубине этажа (0 — у приёмной, 1 — дальний конец коридоров) стоять помещению офиса. Санузел у ядра с лифтом (куратор,
+ * 430) отложен: перенос меняет раскладку офиса и вскрыл ошибку конструктора — на новой раскладке убранная партнёром картотека
+ * роняет соседний ряд из трёх до одной (placed.test.ts, 25.11). Сначала — починить её.
  */
-export const OFFICE_DEPTH: Partial<Record<RoomType, number>> = { meeting: 0.12, washroom: 0.2, cubicles: 0.4, department: 0.45, breakroom: 0.5, copyroom: 0.75, files: 0.8, server: 0.88, manager: 1 };
+export const OFFICE_DEPTH: Partial<Record<RoomType, number>> = { meeting: 0.12, cubicles: 0.4, department: 0.45, breakroom: 0.5, washroom: 0.68, copyroom: 0.75, files: 0.8, server: 0.88, manager: 1 };
 
 function officeZone(grid: TierGrid, corridorId: number, sx: number, sz: number): (type: RoomType) => ((x: number, z: number) => number) | undefined {
   const dist = corridorDistances(grid, corridorId, sx, sz);
@@ -594,8 +595,8 @@ function buildAttempt(seed: number, attempt: number, rank: 1 | 2 | 3, world: Wor
     let placed = 0;
     const quota = shelter ? QUOTAS[Math.min(t, QUOTAS.length - 1)]! : world === 'office' ? OFFICE_QUOTA : YELLOW_QUOTA;
     // Офис строится, как строят офисы (партнёр 24.11: «Пройдись по устройству офиса, перестрой его логично»): от приёмной
-    // вглубь — переговорные у входа (туда водят гостей) и санузел у ядра с лифтом, открытые отделы и комната отдыха
-    // посередине, подсобки (копировальная, серверная, архив) дальше по коридору, кабинет руководителя — в самой глубине.
+    // вглубь — переговорные у входа (туда водят гостей), открытые отделы и комната отдыха посередине, санузел и подсобки
+    // (копировальная, серверная, архив) дальше по коридору, кабинет руководителя — в самой глубине.
     const zone = world === 'office' ? officeZone(grid, corridor.id, entry[0], entry[1]) : null;
     for (const [type, sizes] of quota) {
       const room = placeRoom(b, corridor, type, sizes, world === 'yellow' ? 'open' : undefined, zone ? zone(type) : undefined);

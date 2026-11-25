@@ -80,8 +80,8 @@ const MUSIC = 'music_menu';
 export const TRACE_SAND = 0.8;
 /** Насколько ветер луга приседает под полным шорохом травы. */
 export const RUSTLE_DUCK = 0.45;
-/** Капель оранжереи: средняя пауза, с; на каком расстоянии, м; во сколько выше тон (капли мельче); громкость. */
-export const GREEN_DRIP = { every: 2.4, near: 2.6, rate: 1.25, volume: 0.7 } as const;
+/** Капель оранжереи: средняя пауза, с; на каком расстоянии в среднем, м (разброс ±1,25 — от 1,5 до 4); во сколько выше тон; громкость. */
+export const GREEN_DRIP = { every: 2.4, near: 2.75, rate: 1.25, volume: 0.7 } as const;
 /** Громкость зова искомой вещи (still_tone из её места; затухание по расстоянию — у движка). */
 const MEMORY_CALL = 0.7;
 /** Свой звук искомой вещи по её виду; вещь без знакомого звука (ключ, билет, шляпа) зовёт ровным тоном. */
@@ -444,7 +444,7 @@ export class GameAudio {
       const k = this.jitter(0.5);
       this.dripAt = this.clock + (wet ? GREEN_DRIP.every * (0.6 + 0.8 * (k - 0.5)) : (5 + 9 * (k - 0.5)) * (1 - depth * 0.4));
       const angle = this.jitter(0.5) * Math.PI * 4;
-      const r = wet ? GREEN_DRIP.near + 2.5 * (this.jitter(0.5) - 0.5) : 4 + 6 * (this.jitter(0.5) - 0.5);
+      const r = wet ? GREEN_DRIP.near + 2.5 * (this.jitter(0.5) - 1) : 4 + 6 * (this.jitter(0.5) - 0.5);
       const pos: Vec3 = [ears.pos[0] + Math.cos(angle) * r, ears.pos[1] - 1.2, ears.pos[2] + Math.sin(angle) * r];
       a.play('drip', { pos, rate: this.jitter(0.12) * (wet ? GREEN_DRIP.rate : 1), volume: (1 - 0.35 * hush) * (wet ? GREEN_DRIP.volume : 1) });
     }

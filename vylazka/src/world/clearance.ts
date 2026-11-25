@@ -61,8 +61,10 @@ export function grows(name: string, col: ColliderSet, c0: number, objects: reado
       if (b.owner === undefined || b.owner <= 0 || b.owner === a.owner || b.partner || b.ghost) continue;
       if (hit(a, b, objects[b.owner - 1]?.name ?? '')) return true;
     }
-    // Тени вещей игры, которые партнёр убрал, передвинул или заменил: для обстановки они стоят, где стояли.
-    for (const sh of col.shadows) if (hit(a, sh.box, sh.name)) return true;
+    // Тени вещей игры, которые партнёр убрал, передвинул или заменил: для обстановки они стоят, где стояли, — и так же, как
+    // стоящая вещь: её призрачные преграды (выдвинутый ящик, распахнутая дверца) соседей не держат. Без этого убранная первая
+    // картотека держала ящиками вторую тройку у соседней стены, и та не вставала вовсе (CI 31be006, placed.test.ts).
+    for (const sh of col.shadows) if (!sh.box.ghost && !sh.box.partner && hit(a, sh.box, sh.name)) return true;
   }
   return false;
 }

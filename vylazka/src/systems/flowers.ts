@@ -133,9 +133,14 @@ export class Flowers {
    */
   dry = 0;
 
-  /** Покой головки с учётом увядания: исходное направление, поникшее вниз. */
+  /**
+   * Покой головки с учётом увядания: исходное направление, поникшее вниз и вбок — в сторону её разворота (spin). Строго вниз
+   * нельзя: у головки, смотрящей строго вверх, поворот к противоположному направлению не определён, и она не никла бы.
+   */
   static rest(s: FlowerSite): V {
-    return s.wilt > 0 ? turnToward(s.dir, [0, -1, 0], FLOWER_CFG.droop * s.wilt) : s.dir;
+    if (s.wilt <= 0) return s.dir;
+    const down = norm([Math.sin(s.spin) * 0.7, -1, Math.cos(s.spin) * 0.7]);
+    return turnToward(s.dir, down, FLOWER_CFG.droop * s.wilt);
   }
 
   /**
