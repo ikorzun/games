@@ -1,5 +1,6 @@
 /** Собранный уровень: геометрия чанками, коллайдеры и игровые точки. Общий тип для генератора и тестового уровня. */
 import type { WhiteRoom } from './furnish_white';
+import type { OddRoom } from './furnish_odd';
 import type { DuneDoor } from './furnish_dunes';
 import type { GrowthStats } from './wear_growth';
 import type { Vec3 } from '../core/types';
@@ -156,6 +157,11 @@ export interface BuiltLevel {
    * бесконечности посередине. Нет поля — на уровне её нет.
    */
   whiteRoom?: WhiteRoom;
+  /**
+   * Странная комната (world/furnish_odd.ts; design.md, §37.1): баян, аквариум, телевизор или шарик — помещение, коробка, вещь
+   * посередине и чего касаться. Нет поля — на уровне её нет (жребий общий с белой комнатой: чудо одно).
+   */
+  oddRoom?: OddRoom;
   /**
    * Чёрный проём песчаного зала (партнёр 21.11, 19:13; world/furnish_dunes.ts, pocket_dunes.ts; design.md, §38): помещение за ним,
    * середина проёма, пол и нормаль внутрь. Шагнул в черноту — стоишь в проёме огромного зала. Нет поля — на уровне его нет.

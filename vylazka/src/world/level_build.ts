@@ -18,6 +18,10 @@ import { furnishExtras, GARDEN_H, NO_EXTRAS } from './furnish_extras';
 import { furnishGreenhouse, GREEN_PLAN } from './furnish_greenhouse';
 import { furnishWhite } from './furnish_white';
 import type { WhiteRoom } from './furnish_white';
+import { furnishOdd } from './furnish_odd';
+import type { OddRoom } from './furnish_odd';
+import { ODD_KINDS } from '../systems/odd';
+import type { OddKind } from '../systems/odd';
 import { duneDoorway, furnishDuneHost } from './furnish_dunes';
 import type { DuneDoor } from './furnish_dunes';
 import { GRASS_VARIANTS, grassForm } from './grass';
@@ -257,17 +261,32 @@ export const LAWN_CHANCE = 0.3;
 export const lawnRolled = (seed: number): boolean => hash01(17, 0x1a3e, seed ^ 0x7a) < LAWN_CHANCE;
 
 /**
- * Белая комната (партнёр 21.11, 19:06; world/furnish_white.ts): в половине уровней убежища, офиса и жёлтых комнат. Жребий — на
+ * Жребий чуда (куратор 25.11: «одно чудо на уровень»): белая комната и четыре странные комнаты тянут один жребий на сид уровня —
+ * на уровне не больше одной из них. Число 0..1: ниже WHITE_CHANCE — белая комната (как и было до странных комнат: её частота не
+ * изменилась), следующие четыре доли по ODD_SHARE — баян, аквариум, телевизор, шарик (systems/odd.ts), выше — чуда нет. Жребий на
  * сид: на следующем круге того же места комната та же.
  */
+export const poolRoll = (seed: number): number => hash01(19, 0x3b17, seed ^ 0x7e);
+/**
+ * Белая комната (партнёр 21.11, 19:06; world/furnish_white.ts): в половине уровней убежища, офиса и жёлтых комнат.
+ */
 export const WHITE_CHANCE = 0.5;
-export const whiteRolled = (seed: number): boolean => hash01(19, 0x3b17, seed ^ 0x7e) < WHITE_CHANCE;
+export const whiteRolled = (seed: number): boolean => poolRoll(seed) < WHITE_CHANCE;
+/** Доля жребия у каждой странной комнаты: по одному уровню из двадцати, все четыре — один из пяти (design.md, §37.1). */
+export const ODD_SHARE = 0.05;
+/** Какая странная комната выпала уровню (world/furnish_odd.ts); null — никакая. */
+export function oddRolled(seed: number): OddKind | null {
+  const u = poolRoll(seed) - WHITE_CHANCE;
+  if (u < 0) return null;
+  return ODD_KINDS[Math.floor(u / ODD_SHARE)] ?? null;
+}
 /**
  * Песчаный зал (партнёр 21.11, 19:13; world/pocket_dunes.ts, furnish_dunes.ts): в части уровней проём одного тупикового помещения
- * чёрен, из него высыпался песок, а за ним — огромный зал. Жребий — по сиду уровня, отдельно от белой комнаты.
+ * чёрен, из него высыпался песок, а за ним — огромный зал. Жребий — по сиду уровня, отдельно от белой комнаты; но не там, где
+ * выпала странная комната (куратор 25.11: два чуда на уровень — уже аттракцион). Так зал — примерно в трёх уровнях из десяти.
  */
 export const DUNES_CHANCE = 0.4;
-export const dunesRolled = (seed: number): boolean => hash01(23, 0x5a1d, seed ^ 0x3c) < DUNES_CHANCE;
+export const dunesRolled = (seed: number): boolean => hash01(23, 0x5a1d, seed ^ 0x3c) < DUNES_CHANCE && oddRolled(seed) === null;
 
 /** Типы помещений, где партнёр ставит, двигает или убирает вещи и фигуры в этом месте: туда белая комната не встаёт. */
 function partnerRoomTypes(world: WorldKind, opts: BuildOptions): Set<string> {
@@ -333,6 +352,12 @@ export interface BuildOptions {
    * при пересылке теряет методы.
    */
   keepPlaceWorld?: boolean;
+  /**
+   * Странная комната (world/furnish_odd.ts): 'none' — ни её, ни белой комнаты (первый сон игрока: куратор 25.11, «не в первом
+   * сне»); вид — поставить именно её, мимо жребия, вместо белой комнаты и песчаного зала (отладка: ?odd=bayan). Не задано — по
+   * жребию.
+   */
+  odd?: OddKind | 'none';
 }
 
 /** Передвинутая вещь игры, которую сборка не поставила, где собиралась: запись, помещение, точка и сид той вещи. */
@@ -598,11 +623,38 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     return isRect(r) && side * side === r.cells.length && side >= 2 && side <= 3;
   };
   const whiteRoom =
-    !station && whiteRolled(layout.seed)
+    !station && opts.odd === undefined && whiteRolled(layout.seed)
       ? rooms1
           .filter((r) => r !== gardenRoom && r !== greenRoom && r !== skyRoom && r !== grassRoom && !flowerRooms.has(r.id) && r !== variantRoom && r !== startRoom0 && !PARTNER_ROOMS.includes(r.type) && !partnerTypes.has(r.type) && isSquare(r) && r.type !== 'department')
           .sort((a, b) => b.cells.length - a.cells.length || order(19)(a, b))[0]
       : undefined;
+  // Странные комнаты (партнёр 21.11, 19:06: «еще придумай 5 комнат с подобных подходом»; строить — 25.11; design.md, §37.1;
+  // world/furnish_odd.ts): баян, аквариум, телевизор, шарик. Жребий — общий с белой комнатой (poolRoll): на уровне не больше
+  // одного чуда. Помещение — прямоугольное, в две или четыре клетки: вещь посередине стоит на полу, и в комнате в три клетки
+  // вряд она встала бы на узел пути. Не начало сна и не те же помещения, что белой комнате нельзя. Шарику нужен высокий
+  // потолок (куратор, K-33): только верхний ярус — над ним ничего нет, и потолок там поднимают, как в саду.
+  const oddKind: OddKind | null = station || opts.odd === 'none' ? null : (opts.odd ?? oddRolled(layout.seed));
+  const oddHost = oddKind
+    ? rooms1
+        .filter(
+          (r) =>
+            r !== gardenRoom &&
+            r !== greenRoom &&
+            r !== skyRoom &&
+            r !== grassRoom &&
+            r !== whiteRoom &&
+            !flowerRooms.has(r.id) &&
+            r !== variantRoom &&
+            r !== startRoom0 &&
+            !PARTNER_ROOMS.includes(r.type) &&
+            !partnerTypes.has(r.type) &&
+            r.type !== 'department' &&
+            isRect(r) &&
+            (r.cells.length === 2 || r.cells.length === 4) &&
+            (oddKind !== 'balloon' || r.tier === entrance.tier),
+        )
+        .sort((a, b) => b.cells.length - a.cells.length || order(29)(a, b))[0]
+    : undefined;
   // Песчаный зал: проём тупикового помещения с единственным проходом (дверью или сквозным проёмом, не гермодверью) — за ним ничего
   // нет, кроме зала, и насквозь его не видно: чернота закрывает проход целиком. Не начало сна, не особые помещения, не помещения партнёра; перед дверью снаружи — не опасная клетка
   // (там ляжет язык песка). В зале ожидания зала нет: его странность — время, а не комнаты.
@@ -625,10 +677,10 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     return r.cells.some(([x, z]) => x === e.cx && z === e.cz) ? b : [e.cx, e.cz];
   };
   const duneHost =
-    !station && dunesRolled(layout.seed)
+    !station && (opts.odd === undefined || opts.odd === 'none') && dunesRolled(layout.seed)
       ? rooms1
           .filter((r) => {
-            if (r === gardenRoom || r === greenRoom || r === skyRoom || r === grassRoom || r === whiteRoom || flowerRooms.has(r.id) || r === variantRoom || r === startRoom0) return false;
+            if (r === gardenRoom || r === greenRoom || r === skyRoom || r === grassRoom || r === whiteRoom || r === oddHost || flowerRooms.has(r.id) || r === variantRoom || r === startRoom0) return false;
             // Типы с правилами партнёра — по его данным, а не по правкам сборки: иначе проём уходил бы в другое помещение от любой
             // правки, и вместе с ним сдвигалась бы остальная обстановка (tests/placed.test.ts).
             if (PARTNER_ROOMS.includes(r.type) || partnerStatic.has(r.type) || paperKeep.has(r.id)) return false;
@@ -659,10 +711,10 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
           };
         })()
       : undefined;
-  /** Помещения без обстановки и без лишнего поверх: белая комната и комната за чёрным проёмом. */
-  const blank = new Set<GenRoom>([...(whiteRoom ? [whiteRoom] : []), ...(duneHost ? [duneHost] : [])]);
-  /** Высота потолка помещения над полом. */
-  const ceilOf = (room: GenRoom): number => (room === gardenRoom ? GARDEN_H : station ? (STATION_CEIL[room.type] ?? CEIL_H) : CEIL_H);
+  /** Помещения без обстановки и без лишнего поверх: белая комната, странная комната и комната за чёрным проёмом. */
+  const blank = new Set<GenRoom>([...(whiteRoom ? [whiteRoom] : []), ...(oddHost ? [oddHost] : []), ...(duneHost ? [duneHost] : [])]);
+  /** Высота потолка помещения над полом: в саду и в комнате шарика (простор вверх — K-33) выше. */
+  const ceilOf = (room: GenRoom): number => (room === gardenRoom || (room === oddHost && oddKind === 'balloon') ? GARDEN_H : station ? (STATION_CEIL[room.type] ?? CEIL_H) : CEIL_H);
 
   // ── Скорлупа по ярусам ──
   const shells: Shell[] = [];
@@ -747,7 +799,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       const plain = a.type === 'stairwell' || b.type === 'stairwell' || hazardCells.has(`${e.tier},${hostCell[0]},${hostCell[1]}`) || hazardCells.has(`${e.tier},${e.cx},${e.cz}`) || hazardCells.has(`${e.tier},${bx},${bz}`);
       const roll = plain ? 0.35 : hash01(e.cx * 64 + e.cz, e.dir + 2 * e.tier, layout.seed ^ 0xd00d);
       // В белую комнату створку не вешают и не роняют: там пусто, остаётся одна коробка, белая, как стены.
-      const h = host === whiteRoom || e === duneEdge ? 0 : office ? roll * 0.64 : roll;
+      const h = host === whiteRoom || host === oddHost || e === duneEdge ? 0 : office ? roll * 0.64 : roll;
       const seed = Math.floor(hash01(e.cz * 64 + e.cx, e.tier, layout.seed ^ 0xbeef) * 1e6);
       let lean = h >= 0.65 && h < 0.85;
       let side: 1 | -1 = hash2(e.cx, e.cz, layout.seed ^ e.dir) & 1 ? 1 : -1;
@@ -1047,6 +1099,8 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   const furnished: { room: GenRoom; ctx: RoomCtx }[] = [];
   /** Белая комната, как она встала (world/furnish_white.ts); null — на уровне её нет. */
   let white: WhiteRoom | null = null;
+  /** Странная комната, как она встала (world/furnish_odd.ts); null — на уровне её нет. */
+  let odd: OddRoom | null = null;
   // Бумага и чемоданы считаются на уровень: одна стена лиц, одна стена чемоданов (world/furnish_papers.ts).
   const paperState = newPaperState(world, layout.seed);
   for (const room of layout.rooms) {
@@ -1055,6 +1109,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       const ctx = roomCtx(room, (x, z) => chunkFor(room, x, z), col, 0, spots, landmarks, flats);
       ctx.paperState = paperState;
       if (room === whiteRoom) white = furnishWhite(ctx);
+      else if (room === oddHost && oddKind) odd = furnishOdd(ctx, oddKind);
       else if (room === duneHost && duneDoor) furnishDuneHost(ctx, duneDoor);
       else if (room === greenRoom && !greenEdge) furnishGreenhouse(ctx);
       else furnishRoom(ctx);
@@ -1406,6 +1461,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     ...(greenRoom ? { greenRoom: greenRoom.id } : {}),
     ...(greenRoom && lamps.length > 0 ? { lamps: lampsOf(greenRoom, lamps, ceilOf(greenRoom)) } : {}),
     ...(white ? { whiteRoom: white } : {}),
+    ...(odd ? { oddRoom: odd } : {}),
     ...(duneDoor ? { duneDoor } : {}),
     ...(blooms.length > 0 ? { blooms } : {}),
     ...(turfRoom ? { grassRoom: turfRoom.id } : {}),

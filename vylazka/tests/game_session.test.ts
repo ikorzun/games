@@ -34,6 +34,8 @@ import { MEM_LIGHT_KIND, MEMORY_LIGHT } from '../src/world/memory_light';
 import type { FlashlightConfig } from '../src/systems/flashlight';
 import { PASSAGES, PIECE_MAX_ROOMS } from '../src/world/piece';
 import type { PieceMask } from '../src/world/piece';
+import { ODD_COOLDOWN, ODD_KINDS, ODD_TIMING } from '../src/systems/odd';
+import type { OddKind } from '../src/systems/odd';
 
 const SEED = 20041113;
 
@@ -4583,6 +4585,174 @@ describe('белая комната: задел цепь — камеру пер
     const sites = (h.game as unknown as { spores: { sites: { pos: number[] }[] } | null }).spores?.sites ?? [];
     expect(sites.length).toBeGreaterThan(0);
     expect(sites.filter((s) => inBox(s.pos)).length).toBe(0);
+  });
+});
+
+describe('странные комнаты: тронул вещь — пять секунд другого ощущения, вещь не растворяется и отзывается снова (design.md, §37.1)', () => {
+  const built = new Map<OddKind, BuiltLevel>();
+  /** Уровень убежища, где стоит нужная странная комната (мимо жребия, как адрес ?odd=…). */
+  const withOdd = (kind: OddKind): BuiltLevel => {
+    let l = built.get(kind);
+    if (!l) {
+      l = buildLevel(generateLayout(1066, 2), { odd: kind });
+      built.set(kind, l);
+    }
+    return l;
+  };
+  const yawTo = (fx: number, fz: number): number => Math.atan2(-fx, -fz);
+  /** Встать в d м от вещи со стороны прохода, лицом к ней. */
+  const stand = (h: Harness, kind: OddKind, d: number): void => {
+    const o = withOdd(kind).oddRoom!;
+    h.game.teleport(o.at[0] + o.face[0] * d, o.y[0] + 0.05, o.at[2] + o.face[1] * d, yawTo(-o.face[0], -o.face[1]), 0);
+    h.run(0.3);
+  };
+  /** Идти вперёд, пока событий касания не станет want (не дольше max секунд). */
+  const walkIn = (h: Harness, want: number, max = 6): void => {
+    for (let i = 0; i < Math.round(max / STEP) && h.dreamCount('odd') < want; i++) h.tick({ ...emptyInput(), moveZ: 1 });
+  };
+  /** Начать: переход начала сессии позади (во время перехода вещь не отзывается), герой у вещи и задел её. */
+  const touched = (kind: OddKind, setup?: (h: Harness) => void): Harness => {
+    const h = new Harness(withOdd(kind));
+    setup?.(h);
+    h.run(2);
+    stand(h, kind, 1.4);
+    walkIn(h, 1);
+    return h;
+  };
+
+  it.each(ODD_KINDS)('%s: в комнате — её коробка и свет в кадре, место собирается взглядом; пока не тронул — тихо', (kind) => {
+    const l = withOdd(kind);
+    const o = l.oddRoom!;
+    const h = new Harness(l);
+    h.run(2);
+    stand(h, kind, 1.6);
+    h.run(1.5);
+    expect(h.game.oddness).toBeGreaterThan(0.9);
+    const f = h.r.frames.at(-1)!;
+    expect(f.odd?.kind).toBe(kind);
+    expect(f.odd?.box).toEqual(o.box);
+    expect(f.oddIn).toBeGreaterThan(0.9);
+    expect(f.odd?.squeeze).toBe(0);
+    expect(f.odd?.rise).toBe(0);
+    expect(f.fov ?? 1).toBe(1);
+    expect(h.dreamCount('odd')).toBe(0);
+    // Вещь молчит до касания: ни звука, ни света памяти, ни пузыря — она не читается искомой (пузырь и свет — у искомой вещи
+    // сна, и не здесь).
+    expect(h.game.oddSound).toBeNull();
+    const inRoom = (p: readonly number[] | undefined): boolean => !!p && p[0]! > o.box[0] && p[0]! < o.box[2] && p[2]! > o.box[1] && p[2]! < o.box[3];
+    expect(inRoom(h.r.bubble?.pos)).toBe(false);
+    expect(inRoom(h.r.memLight?.pos)).toBe(false);
+    expect(f.odd?.screen !== null).toBe(kind === 'tv');
+  });
+
+  it.each(ODD_KINDS)('%s: шаг в вещь — одно ощущение на пять секунд; вещь цела; в перерыве молчит, после — отзывается снова', (kind) => {
+    const h = touched(kind);
+    const o = withOdd(kind).oddRoom!;
+    expect(h.dreamCount('odd')).toBe(1);
+    h.run(2.5);
+    expect(h.game.oddNow().k).toBeCloseTo(1, 3);
+    h.run(ODD_TIMING[kind].hold + ODD_TIMING[kind].out - 2.5 + 0.2);
+    expect(h.game.oddNow().k).toBe(0);
+    // Стоял у вещи всё это время — второго ощущения не было.
+    expect(h.dreamCount('odd')).toBe(1);
+    expect(h.game.oddCooldown).toBeGreaterThan(ODD_COOLDOWN - 0.5);
+    // Вещь цела: преграда (у коробочных) на месте.
+    if ('box' in o.trigger) expect(h.game.colliders.boxes.some((b) => b.minX < o.at[0] && b.maxX > o.at[0] && b.minZ < o.at[2] && b.maxZ > o.at[2])).toBe(true);
+    // Перерыв: отошёл и снова задел — молчит.
+    stand(h, kind, 1.4);
+    walkIn(h, 2, 1.5);
+    expect(h.dreamCount('odd')).toBe(1);
+    // Перерыв прошёл — снова.
+    stand(h, kind, 1.4);
+    h.run(ODD_COOLDOWN);
+    walkIn(h, 2);
+    expect(h.dreamCount('odd')).toBe(2);
+  });
+
+  it('баян: стены сходятся к герою, кадр сужается, слышно сердце и аккорд; через пять секунд вдох', () => {
+    const h = touched('bayan');
+    h.run(2);
+    const f = h.r.frames.at(-1)!;
+    expect(f.odd?.squeeze).toBeGreaterThan(0.15);
+    expect(f.fov).toBeLessThan(0.85);
+    expect(Math.hypot(f.odd!.hero[0] - h.game.body.x, f.odd!.hero[1] - h.game.body.z)).toBeLessThan(0.1);
+    expect(h.game.oddSound?.heart).toBeGreaterThan(0.9);
+    expect(h.game.oddSound?.chord).toBeGreaterThan(0.9);
+    // Потолок не провисает: это знак давления, его здесь нет.
+    expect(f.odd?.rise).toBe(0);
+    expect(f.press ?? null).toBeNull();
+    h.run(5);
+    expect(h.r.frames.at(-1)!.fov ?? 1).toBe(1);
+  });
+
+  it('баян, «меньше движения»: стены сходятся вполовину', () => {
+    const h = touched('bayan', (x) => (x.game.calmMotion = true));
+    h.run(2);
+    expect(h.r.frames.at(-1)!.odd?.squeeze).toBeLessThan(0.11);
+  });
+
+  it('аквариум: шаг втрое тяжелее, весь звук глохнет, за движением след; потом вдох — шаг прежний', () => {
+    const h = touched('aquarium');
+    const o = withOdd('aquarium').oddRoom!;
+    h.run(1.5);
+    const walk = (): number => {
+      // Вбок от аквариума, вдоль его лица.
+      h.game.teleport(o.at[0] + o.face[0] * 1.2, o.y[0] + 0.05, o.at[2] + o.face[1] * 1.2, yawTo(o.face[1], -o.face[0]), 0);
+      h.run(0.3, { ...emptyInput(), moveZ: 1 });
+      return Math.hypot(h.game.body.vx, h.game.body.vz);
+    };
+    const heavy = walk();
+    expect(heavy).toBeGreaterThan(0.5);
+    expect(heavy).toBeLessThan(1.0);
+    expect(h.game.oddSound?.muffle).toBeGreaterThan(0.5);
+    expect(h.r.frames.at(-1)!.trail).toBeGreaterThan(0.5);
+    h.run(5);
+    expect(h.game.oddNow().k).toBe(0);
+    expect(walk()).toBeGreaterThan(2);
+    expect(h.r.frames.at(-1)!.trail ?? 0).toBe(0);
+  });
+
+  it('телевизор: кадр мелко дрожит, без крена; в «почти незаметных» — ни дрожи', () => {
+    const spread = (h: Harness): number => {
+      const ys = h.r.frames.slice(-30).map((f) => f.camYaw);
+      return Math.max(...ys) - Math.min(...ys);
+    };
+    const h = touched('tv');
+    h.run(1.5);
+    expect(spread(h)).toBeGreaterThan(0.006);
+    expect(Math.abs(h.r.frames.at(-1)!.camRoll)).toBeLessThan(0.01);
+    expect(h.game.oddSound?.hum).toBeGreaterThan(0.9);
+    // Тихо: остаётся лишь то, как камера сама успокаивается после шага, — на порядок меньше дрожи.
+    const q = touched('tv', (x) => (x.game.faintFlash = true));
+    expect(q.dreamCount('odd')).toBe(1);
+    q.run(1.5);
+    expect(q.game.oddNow().jitter).toBe(0);
+    expect(spread(q)).toBeLessThan(0.0015);
+  });
+
+  it('шарик: героя мягко поднимает, обзор чуть шире, потолок уходит вверх; камера ровная; потом опускает', () => {
+    const h = touched('balloon');
+    const y0 = h.r.frames.at(-1)!.camPos[1];
+    h.run(2.5);
+    const f = h.r.frames.at(-1)!;
+    expect(f.camPos[1] - y0).toBeGreaterThan(0.3);
+    expect(f.fov).toBeGreaterThan(1.1);
+    expect(f.odd?.rise).toBeGreaterThan(0.9);
+    expect(Math.abs(f.camRoll)).toBeLessThan(0.01);
+    expect(h.game.oddSound?.float).toBeGreaterThan(0.9);
+    h.run(5);
+    expect(Math.abs(h.r.frames.at(-1)!.camPos[1] - y0)).toBeLessThan(0.05);
+  });
+
+  it('грибов Осыпи в странной комнате нет', () => {
+    for (const kind of ['bayan', 'balloon'] as const) {
+      const o = withOdd(kind).oddRoom!;
+      const h = new Harness(withOdd(kind));
+      const inBox = (p: readonly number[]): boolean => p[0]! > o.box[0] && p[0]! < o.box[2] && p[2]! > o.box[1] && p[2]! < o.box[3] && p[1]! > o.y[0] - 0.5 && p[1]! < o.y[1];
+      const sites = (h.game as unknown as { spores: { sites: { pos: number[] }[] } | null }).spores?.sites ?? [];
+      expect(sites.length).toBeGreaterThan(0);
+      expect(sites.filter((x) => inBox(x.pos)).length).toBe(0);
+    }
   });
 });
 

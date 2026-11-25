@@ -146,6 +146,9 @@ export class AudioEngine {
   readonly missing = new Set<string>();
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  /** Общий срез верхов после громкости: весь звук глохнет, как под водой (muffle). */
+  private lowpass: BiquadFilterNode | null = null;
+  private muffled = 0;
   /** Разобранные файлы: то, что сейчас занимает память. */
   private readonly buffers = new Map<string, AudioBuffer>();
   /** Сжатые байты больших петель: из них петлю разбирают снова после выгрузки. */
@@ -339,7 +342,14 @@ export class AudioEngine {
       this.ctx = new Ctor();
       this.ctx.onstatechange = () => this.flush();
       this.master = this.ctx.createGain();
-      this.master.connect(this.ctx.destination);
+      // Срез верхов на всём звуке (аквариум странной комнаты): обычно открыт — ничего не слышно.
+      this.lowpass = typeof this.ctx.createBiquadFilter === 'function' ? this.ctx.createBiquadFilter() : null;
+      if (this.lowpass) {
+        this.lowpass.type = 'lowpass';
+        this.lowpass.frequency.value = 20000;
+        this.master.connect(this.lowpass);
+        this.lowpass.connect(this.ctx.destination);
+      } else this.master.connect(this.ctx.destination);
       this.applyMaster();
       this.beginLoad();
     }
@@ -478,6 +488,19 @@ export class AudioEngine {
     m.gain.cancelScheduledValues(now);
     m.gain.setValueAtTime(0, now);
     m.gain.setTargetAtTime(this.muted || !this.enabled ? 0 : 1, now + seconds, 0.35);
+  }
+
+  /**
+   * Весь звук глохнет, как под водой: k = 0 — открыт (20 кГц), 1 — срез у 380 Гц. Ведётся плавно (постоянная 0,15 с) и только
+   * когда k заметно поменялся.
+   */
+  muffle(k: number): void {
+    const ctx = this.ctx;
+    const lp = this.lowpass;
+    const want = Math.max(0, Math.min(1, k));
+    if (!ctx || !lp || Math.abs(want - this.muffled) < 0.01) return;
+    this.muffled = want;
+    lp.frequency.setTargetAtTime(20000 * Math.pow(380 / 20000, want), ctx.currentTime, 0.15);
   }
 
   /** Выключатель звука игрока. */

@@ -257,6 +257,29 @@ float bodySd(vec2 p, out vec2 away) {
 }
 `;
 
+/**
+ * Странная комната (world/furnish_odd.ts; design.md, §37.1): что ощущение делает с её стенами — общее для вершин мира и точек
+ * облака (иначе точки остались бы на старых стенах). uOddBox — коробка по полу (minX, minZ, maxX, maxZ); uOddY — пол, потолок,
+ * род (0 — комнаты нет); uOddFx — где герой (x, z), какую долю расстояния до него стены прошли (баян) и на сколько метров ушёл
+ * вверх потолок (шарик). Сводятся только стены у границ коробки — вещь посередине стоит; потолок не провисает (это знак
+ * давления, K-31). У шарика тянется верх комнаты: всё выше 1,6 м уходит вверх вслед за потолком.
+ */
+const ODD_MOVE_GLSL = /* glsl */ `
+uniform vec4 uOddBox;
+uniform vec4 uOddY;
+uniform vec4 uOddFx;
+vec3 oddMove(vec3 p, vec3 n) {
+  if (uOddY.z < 0.5 || (uOddFx.z <= 0.0 && uOddFx.w <= 0.0)) return p;
+  vec2 lo = p.xz - uOddBox.xy;
+  vec2 hi = uOddBox.zw - p.xz;
+  float wall = min(min(lo.x, lo.y), min(hi.x, hi.y));
+  if (wall < -0.01 || p.y < uOddY.x - 0.05 || p.y > uOddY.y + 0.05) return p;
+  if (uOddFx.z > 0.0 && abs(n.y) < 0.5 && wall < 0.45) p.xz = uOddFx.xy + (p.xz - uOddFx.xy) * (1.0 - uOddFx.z);
+  if (uOddFx.w > 0.0) p.y += uOddFx.w * smoothstep(1.6, uOddY.y - uOddY.x, p.y - uOddY.x);
+  return p;
+}
+`;
+
 export const WORLD_VERT = /* glsl */ `
 attribute vec4 aColor;
 attribute float aMat;
@@ -264,6 +287,8 @@ uniform mat4 uShadowMatrix;
 uniform float uTierDrop;
 uniform vec4 uPressBox;   // давление: прямоугольник помещения (minX, minZ, maxX, maxZ)
 uniform vec3 uPressY;     // x — пол помещения, y — его потолок, z — на сколько метров потолок провис
+${ODD_MOVE_GLSL}
+varying vec3 vOddP;       // точка до сдвига странной комнаты: по ней фрагмент узнаёт её стены, пол и потолок
 varying vec3 vWorld;
 varying float vDis;
 varying float vObj;
@@ -442,6 +467,9 @@ void main() {
   if (gPress > 0.0) wn = normalize(mix(wn, vec3(0.0, 1.0, 0.0), gPress));
 #endif
 #endif
+  // Странная комната (world/furnish_odd.ts): облик считается по точке до сдвига; баян сводит стены к герою, шарик поднимает потолок.
+  vOddP = wp.xyz;
+  if (uThing.z < 0.5) wp.xyz = oddMove(wp.xyz, wn);
   // Подвешенное к потолку (светильник, короб, вывеска): часть потолка, своим номером вершин (HANG_OBJ).
   bool hangV = abs(aObj - ${HANG_OBJ}.0) < 0.5;
   // Давление: потолок помещения провисает, как брюхо (systems/pressure.ts). У стен он остаётся на месте —
@@ -566,6 +594,12 @@ uniform vec3 uBurnTint;   // цвет кромки распада: красны�
 uniform vec4 uRoofBox;    // зал ожидания: прямоугольник стеклянной крыши в мире (minX, minZ, maxX, maxZ)
 uniform vec4 uWhiteBox;   // белая комната (world/furnish_white.ts): её коробка по полу (minX, minZ, maxX, maxZ)
 uniform vec4 uWhiteY;     // её пол и потолок; z — есть ли она на уровне
+uniform vec4 uOddBox;     // странная комната (world/furnish_odd.ts): коробка по полу (minX, minZ, maxX, maxZ)
+uniform vec4 uOddY;       // её пол, потолок, род (1 баян, 2 аквариум, 3 телевизор, 4 шарик; 0 — нет); w — время, с
+uniform vec4 uOddFx;      // xy — где герой, z — насколько стены сошлись к нему, w — на сколько поднялся потолок, м
+uniform vec4 uOddAt;      // xyz — середина экрана кинескопа (телевизор) или вещи; w — 0
+uniform vec4 uOddFace;    // xy — куда смотрит вещь (x, z)
+varying vec3 vOddP;
 uniform float uRoofY;     // высота её переплёта, м; 0 — крыши нет
 uniform vec3 uKeyDirW;    // направление на прямой свет в мире
 uniform vec4 uRecallPos;     // свет памяти (world/memory_light.ts): xyz — где искомая вещь (мир), w — сила; 0 — света нет
@@ -690,6 +724,151 @@ float whiteIn(vec3 p, out float shell) {
   if (inside <= 0.0) return 0.0;
   shell = inside * max(1.0 - smoothstep(0.34, 0.42, wall), max(1.0 - smoothstep(0.03, 0.06, floorD), 1.0 - smoothstep(0.03, 0.06, ceilD)));
   return inside;
+}
+
+/**
+ * Странная комната (world/furnish_odd.ts; design.md, §37.1): насколько точка внутри неё (0..1), в shell — насколько это её
+ * стена, пол или потолок, в wall — до ближней стены, м. Считается по точке до сдвига стен (vOddP): сошедшиеся к герою стены
+ * остаются её стенами. Потолок шарика поднят — его граница выше на uOddFx.w.
+ */
+float oddIn(vec3 p, out float shell) {
+  shell = 0.0;
+  if (uOddY.z < 0.5) return 0.0;
+  vec2 lo = p.xz - uOddBox.xy;
+  vec2 hi = uOddBox.zw - p.xz;
+  float wall = min(min(lo.x, lo.y), min(hi.x, hi.y));
+  float floorD = p.y - uOddY.x;
+  float ceilD = uOddY.y - p.y;
+  float inside = smoothstep(-0.02, 0.02, wall) * smoothstep(-0.06, -0.02, floorD) * smoothstep(-0.06, -0.02, ceilD);
+  if (inside <= 0.0) return 0.0;
+  shell = inside * max(1.0 - smoothstep(0.34, 0.42, wall), max(1.0 - smoothstep(0.03, 0.06, floorD), 1.0 - smoothstep(0.03, 0.06, ceilD)));
+  return inside;
+}
+
+/**
+ * Свет странной комнаты в точке p (без наклона поверхности) — рассеянный: по нему её место собирается взглядом, как светлое.
+ * Баян — тёплый янтарь, не красный (красное — язык системы, K-31). Аквариум — тёмная вода и зелёные блики, ползущие по всему
+ * (K-29). Телевизор — почти темно, только ровный холодный свет экрана: без мерцания (K-32, «без скачков яркости»). Шарик —
+ * сумеречная синь, светлее кверху: простор уходит вверх (K-33).
+ */
+/** Сеть бегущих бликов воды (как caustic у луча на воде, ниже по файлу): яркие линии, между ними темно. */
+float oddRipple(vec2 p, float t) {
+  vec2 q = p * 3.1;
+  float a = sin(q.x * 1.3 + t * 1.1 + sin(q.y * 0.7 + t * 0.6) * 1.5);
+  float b = sin(q.y * 1.7 - t * 0.9 + sin(q.x * 0.9 - t * 0.5) * 1.5);
+  float c = sin((q.x + q.y) * 1.1 + t * 0.7);
+  float v = 1.0 - abs((a + b + c) * 0.3333);
+  v *= v;
+  return v * v * v * 2.5;
+}
+
+vec3 oddLight(vec3 p, vec3 n) {
+  float kind = uOddY.z;
+  float h = p.y - uOddY.x;
+  if (kind < 1.5) return vec3(0.25, 0.145, 0.052) * (0.86 + 0.14 * smoothstep(0.3, 1.6, h));
+  if (kind < 2.5) {
+    // Блики воды: на стене — по её плоскости, на полу и потолке — сверху; медленно ползут.
+    vec2 q = abs(n.y) > 0.5 ? p.xz : vec2(p.x + p.z, p.y);
+    float c = oddRipple(q * 0.55, uOddY.w * 0.7) * 0.6 + oddRipple(q * 0.31 + 4.7, uOddY.w * 0.45) * 0.4;
+    return vec3(0.026, 0.07, 0.058) + vec3(0.05, 0.19, 0.11) * c;
+  }
+  if (kind < 3.5) {
+    vec3 d = p - uOddAt.xyz;
+    float r = length(d);
+    float front = dot(d.xz / max(r, 1e-3), uOddFace.xy);
+    return vec3(0.01, 0.013, 0.02) + vec3(0.16, 0.22, 0.34) * ((0.3 + 0.7 * smoothstep(-0.3, 0.6, front)) / (1.0 + 0.55 * r * r));
+  }
+  return vec3(0.07, 0.1, 0.19) * (0.72 + 0.5 * smoothstep(0.0, uOddY.y - uOddY.x, h));
+}
+
+/**
+ * Облик стен, пола и потолка странной комнаты — цвет поверхности (как тон вершины). Узоры — от коробки и мира, без
+ * повторяющейся плитки фактуры: стёганые ромбы с пуговицами пятнами выцветают, плитка — у каждой свой оттенок, ковёр — по
+ * размеру комнаты (правило «без стыков и повторов»).
+ */
+vec3 oddLook(vec3 p, vec3 n) {
+  float kind = uOddY.z;
+  float h = p.y - uOddY.x;
+  vec2 mid = (uOddBox.xy + uOddBox.zw) * 0.5;
+  vec2 half_ = (uOddBox.zw - uOddBox.xy) * 0.5;
+  float fade = softNoise(p * 0.7 + 2.3);
+  bool wallS = abs(n.y) < 0.5;
+  float along = abs(n.x) > abs(n.z) ? p.z : p.x;
+  if (kind < 1.5) {
+    if (wallS) {
+      // Обивка, как у дивана: ромбы стёжки с пуговицами на пересечениях; внизу — деревянный плинтус.
+      if (h < 0.11) return vec3(0.42, 0.27, 0.16);
+      vec2 q = vec2(along, h - 0.11) / 0.27;
+      vec2 d = vec2(q.x + q.y, q.x - q.y) * 0.5;
+      vec2 f = fract(d);
+      vec2 e2 = min(f, 1.0 - f);
+      float e = min(e2.x, e2.y);
+      float puff = 0.6 + 0.48 * smoothstep(0.0, 0.32, e);
+      float btn = 1.0 - smoothstep(0.06, 0.1, length(e2));
+      vec3 cloth = mix(vec3(0.8, 0.56, 0.31), vec3(0.66, 0.5, 0.33), fade) * (0.9 + 0.2 * cellHash(vec3(floor(d), 3.0)));
+      return mix(cloth * puff, vec3(0.2, 0.12, 0.07), btn * 0.85);
+    }
+    if (n.y > 0.5) {
+      // Ковёр по размеру комнаты, вокруг — паркет.
+      vec2 c = abs(p.xz - mid);
+      vec2 r = half_ - 0.42;
+      float edge = min(r.x - c.x, r.y - c.y);
+      if (edge < 0.0) {
+        float plank = fract(p.x / 0.09);
+        return vec3(0.46, 0.3, 0.18) * (0.85 + 0.15 * cellHash(vec3(floor(p.x / 0.09), floor(p.z / 0.6), 5.0))) * (0.8 + 0.2 * smoothstep(0.0, 0.08, min(plank, 1.0 - plank)));
+      }
+      vec2 u = c / max(r, vec2(0.5));
+      float band = step(edge, 0.3);
+      float zig = step(0.5, fract((band > 0.5 ? (c.x < r.x - 0.3 ? p.x : p.z) : 0.0) / 0.16 + edge * 3.0));
+      float medal = abs(u.x + u.y - 0.42);
+      float ring = 1.0 - smoothstep(0.02, 0.05, min(medal, abs(u.x + u.y - 0.62)));
+      float rose = 1.0 - smoothstep(0.05, 0.08, length(fract(p.xz / 0.38) - 0.5));
+      vec3 field = vec3(0.36, 0.17, 0.1);
+      vec3 ink = vec3(0.13, 0.07, 0.05);
+      vec3 gold = vec3(0.78, 0.56, 0.28);
+      vec3 col = band > 0.5 ? mix(ink, gold, zig) : mix(field, gold, max(ring, rose * 0.6));
+      if (edge < 0.05) col = ink;
+      return col * (0.88 + 0.24 * fade);
+    }
+    return vec3(0.82, 0.72, 0.58) * (0.94 + 0.12 * fade);
+  }
+  if (kind < 2.5) {
+    // Кафель: у каждой плитки свой оттенок, редкая выбита; выше двух метров — побелка.
+    if (wallS && h > 2.02) return vec3(0.58, 0.64, 0.58) * (0.9 + 0.2 * fade);
+    float s = wallS ? 0.15 : (n.y > 0.5 ? 0.1 : 0.0);
+    if (s <= 0.0) return vec3(0.55, 0.6, 0.56) * (0.92 + 0.16 * fade);
+    vec2 q = (wallS ? vec2(along, h) : p.xz) / s;
+    vec2 f = fract(q);
+    float grout = 1.0 - smoothstep(0.03, 0.06, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)));
+    float id = cellHash(vec3(floor(q), wallS ? 7.0 : 9.0));
+    vec3 tile = (wallS ? vec3(0.72, 0.85, 0.8) : vec3(0.5, 0.56, 0.53)) * (0.86 + 0.24 * id) * (0.9 + 0.15 * fade);
+    if (id > 0.965) tile = vec3(0.3, 0.3, 0.28);
+    return mix(tile, vec3(0.36, 0.4, 0.37), grout);
+  }
+  if (kind < 3.5) {
+    // Старые обои в полоску с мелким рисунком, ниже метра — крашеная панель; пол — доски.
+    if (wallS) {
+      if (h < 0.95) return vec3(0.3, 0.33, 0.36) * (0.9 + 0.2 * fade);
+      float st = step(0.5, fract(along / 0.24));
+      float dot_ = 1.0 - smoothstep(0.012, 0.02, length(fract(vec2(along, h) / vec2(0.12, 0.16)) - 0.5));
+      return mix(vec3(0.6, 0.56, 0.46), vec3(0.5, 0.47, 0.4), st) * (1.0 - 0.18 * dot_) * (0.86 + 0.24 * fade);
+    }
+    if (n.y > 0.5) {
+      float pl = fract(p.z / 0.14);
+      return vec3(0.37, 0.27, 0.18) * (0.84 + 0.2 * cellHash(vec3(floor(p.z / 0.14), floor(p.x / 0.9 + 0.5 * floor(p.z / 0.14)), 11.0))) * (0.8 + 0.2 * smoothstep(0.0, 0.07, min(pl, 1.0 - pl)));
+    }
+    return vec3(0.6, 0.6, 0.58);
+  }
+  // Шарик: бледная крашеная штукатурка в разводах, под потолком — карниз; пол — крашеные доски.
+  if (wallS) {
+    float rail = 1.0 - smoothstep(0.0, 0.02, abs(h - 2.6) - 0.025);
+    return mix(vec3(0.76, 0.79, 0.84) * (0.88 + 0.2 * fade), vec3(0.6, 0.62, 0.66), rail);
+  }
+  if (n.y > 0.5) {
+    float pl = fract(p.x / 0.13);
+    return vec3(0.52, 0.54, 0.6) * (0.88 + 0.14 * cellHash(vec3(floor(p.x / 0.13), floor(p.z / 1.1), 13.0))) * (0.82 + 0.18 * smoothstep(0.0, 0.07, min(pl, 1.0 - pl)));
+  }
+  return vec3(0.82, 0.85, 0.9) * (0.94 + 0.1 * fade);
 }
 
 /**
@@ -1244,6 +1423,10 @@ void main() {
   float wShell;
   float wIn = whiteIn(vWorld, wShell);
   amb += vec3(0.9, 0.91, 0.93) * wIn;
+  // Странная комната светит своим светом (oddLight): по нему её место собирается взглядом.
+  float oShell;
+  float oIn = oddIn(vOddP, oShell);
+  if (oIn > 0.0) amb += oddLight(vWorld, transpose(mat3(viewMatrix)) * Ng) * oIn;
   float eAmb = dot(amb, vec3(0.3333));
   // Свет памяти у искомой вещи: сколько его здесь (с наклоном поверхности) — для сборки точек.
   vec4 ml = memLight();
@@ -1586,6 +1769,11 @@ void main() {
     lit = 0.0;
   }
   vec3 tint = vc * ink * stain * (dirt * alb * mix(1.0, 0.55, wet) * mix(1.0, 0.62 + 0.2 * g1.r, k * step(0.5, 1.5 - abs(float(cls) - 1.0))));
+  // Стены, пол и потолок странной комнаты — свой облик (oddLook): цвет поверхности вместо краски, обоев и бетона.
+  if (oShell > 0.0) {
+    tint = mix(tint, oddLook(vOddP, transpose(mat3(viewMatrix)) * Ng) * mix(1.0, dirt, 0.35), oShell);
+    base = mix(base, vec3(0.8), oShell);
+  }
   vec3 surf = mc * tint * shade;
   // Пыль на всём, что лежит выше пола и смотрит вверх.
   float dust = smoothstep(0.6, 0.95, up) * smoothstep(0.06, 0.2, hgt) * (0.35 + 0.4 * g1.g) * (1.0 - wet) * damp;
@@ -1774,8 +1962,11 @@ uniform vec3 uCamPos;
 uniform float uPointScale;
 uniform float uBoost;     // 0..1: мир рассыпается — пыль видна и без луча, летит вверх
 uniform float uPollen;    // 0..1: в оранжерее пыль — пыльца: медленнее, часть пылинок крупнее, чуть видна и без луча
+uniform vec4 uFluffBox;   // комната шарика (world/furnish_odd.ts): коробка по полу — в ней часть пыли становится пухом
+uniform vec4 uFluffY;     // её пол и потолок; z — сила пуха 0..1 (0 — его нет); w — невесомость: пух закручивается и всплывает
 varying float vLight;
 varying float vPollen;
+varying float vFluff;
 
 ${BEAM_GLSL}
 
@@ -1787,13 +1978,21 @@ void main() {
   p += vec3(sin(uTime * 0.11 * drift + aSeed.y * 40.0), uTime * (0.02 * drift + 0.9 * uBoost) + cos(uTime * 0.07 * drift + aSeed.x * 31.0) * 0.3, cos(uTime * 0.09 * drift + aSeed.z * 23.0)) * 0.25;
   // Облако бесконечно: точки заворачиваются вокруг камеры.
   p = mod(p - uCamPos + box * 0.5, box) - box * 0.5 + uCamPos;
+  // Пух в комнате шарика: висит, чуть всплывает и опускается, виден и без луча; в невесомости закручивается и поднимается.
+  vFluff = 0.0;
+  if (uFluffY.z > 0.0 && p.x > uFluffBox.x && p.x < uFluffBox.z && p.z > uFluffBox.y && p.z < uFluffBox.w && p.y > uFluffY.x && p.y < uFluffY.y) {
+    vFluff = uFluffY.z * step(0.55, fract(aSeed.z * 61.7));
+    float ph = aSeed.x * 47.0 + aSeed.y * 13.0;
+    p += vec3(sin(uTime * 0.23 + ph), 0.6 * sin(uTime * 0.17 + ph * 1.3), cos(uTime * 0.19 + ph * 0.7)) * (0.06 + 0.22 * uFluffY.w) * vFluff;
+    p.y += 0.35 * uFluffY.w * vFluff * (0.5 + 0.5 * sin(ph));
+  }
   vec4 mv = viewMatrix * vec4(p, 1.0);
   float dist = -mv.z;
-  vLight = max(max(beamAt(mv.xyz).w, uBoost * 0.35), uPollen * 0.2) * smoothstep(0.25, 0.9, dist) * (0.4 + 0.6 * fract(aSeed.x * 91.7));
+  vLight = max(max(max(beamAt(mv.xyz).w, uBoost * 0.35), uPollen * 0.2), vFluff * 0.3) * smoothstep(0.25, 0.9, dist) * (0.4 + 0.6 * fract(aSeed.x * 91.7));
   // Каждая пятая пылинка пыльцы — комочек крупнее: в луче видно, что это не пыль.
   float clump = uPollen * step(0.8, fract(aSeed.y * 73.1));
   vPollen = uPollen;
-  gl_PointSize = clamp(uPointScale * (0.6 + fract(aSeed.z * 57.3)) * (1.0 + 0.8 * clump) / max(dist, 0.2), 1.0, 5.0 + 2.0 * clump);
+  gl_PointSize = clamp(uPointScale * (0.6 + fract(aSeed.z * 57.3)) * (1.0 + 0.8 * clump) * (1.0 + 1.4 * vFluff) / max(dist, 0.2), 1.0, 5.0 + 2.0 * clump + 4.0 * vFluff);
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -1804,14 +2003,16 @@ uniform vec3 uLightColor;
 uniform highp float uBoost;
 varying float vLight;
 varying float vPollen;
+varying float vFluff;
 
 void main() {
   vec2 c = gl_PointCoord - 0.5;
-  float a = smoothstep(0.5, 0.1, length(c));
-  // Пыльца золотистая и ярче пыли: свет на ней тёплый, даже холодный луч.
-  vec3 tint = mix(vec3(1.0), vec3(1.25, 1.0, 0.45), vPollen);
-  vec3 lit = max(uLightColor, vec3(uBoost + 0.35 * vPollen));
-  gl_FragColor = vec4(lit * tint * vLight * a * (0.16 + 0.1 * vPollen), 1.0);
+  // Пух мягче пыли: пятнышко без края.
+  float a = smoothstep(0.5, mix(0.1, 0.0, vFluff), length(c));
+  // Пыльца золотистая и ярче пыли: свет на ней тёплый, даже холодный луч. Пух — белёсый, в синеву сумерек.
+  vec3 tint = mix(mix(vec3(1.0), vec3(1.25, 1.0, 0.45), vPollen), vec3(0.95, 1.0, 1.12), vFluff);
+  vec3 lit = max(uLightColor, vec3(uBoost + 0.35 * vPollen + 0.3 * vFluff));
+  gl_FragColor = vec4(lit * tint * vLight * a * (0.16 + 0.1 * vPollen + 0.1 * vFluff), 1.0);
 }
 `;
 
@@ -2228,6 +2429,7 @@ uniform vec3 uEdl;          // объём для точек: xy — шаг вы�
 uniform float uBuild;       // проба «свет приносит точки»: точки прилетают вдоль луча и оседают
 varying vec4 vCol;          // rgb — цвет, a — непрозрачность
 ${PIECE_GLSL}
+${ODD_MOVE_GLSL}
 varying vec3 vShape;        // xy — ось сжатия на экране, z — во сколько раз диск сжат вдоль неё
 
 vec3 cellJitter(vec3 p) {
@@ -2262,6 +2464,8 @@ void main() {
   // там уже порвалась (шейдер мира), и память обрывается в точки.
   if (uPieceOn.x > 0.5 && pieceKeep(wp.xyz) < aSeed.x * 0.85 + 0.08) return;
   vec3 wn = normalize(mat3(modelMatrix) * aNrm.xyz);
+  // Странная комната: точки стен идут вместе со стенами (баян сводит их, шарик поднимает потолок).
+  wp.xyz = oddMove(wp.xyz, wn);
   vec3 home = crumble(wp.xyz, uDissolve);
   vec4 hv = viewMatrix * vec4(home, 1.0);
   float dist = length(hv.xyz);
@@ -2634,6 +2838,44 @@ void main() {
   }
   float lit = texture2D(tScene, vUv).a;
   gl_FragColor = vec4(col * (uGainInv * (1.0 - smoothstep(0.06, 0.4, lit))), 1.0);
+}
+`;
+
+/**
+ * Экран кинескопа странной комнаты (world/furnish_odd.ts; K-32 «две секунды назад»): кадр, который герой видел две секунды
+ * назад (кольцо копий кадра, render/renderer.ts), под тихим снегом и строками развёртки; углы скруглены, к краю стекло темнее.
+ * Пока кольцо не набралось — один снег. Снег мелкий, тусклый и без вспышек (куратор: «без скачков яркости»); в тихом режиме он
+ * меняется реже и ещё тише. Альфа — непрозрачность слоя: экран ложится на кадр поверх лица корпуса (render/renderer.ts, tvMat).
+ */
+export const TV_FRAG = /* glsl */ `
+precision highp float;
+uniform sampler2D tPast;
+uniform float uHas;
+uniform float uTime;
+uniform float uQuiet;
+uniform float uFog;
+uniform vec3 uFogColor;
+varying vec2 vUv;
+varying vec3 vW;
+
+float tvHash(vec2 p) {
+  vec2 q = mod(floor(p), 289.0);
+  return fract(sin(dot(q, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+void main() {
+  vec2 c = abs(vUv - 0.5) * 2.0;
+  float corner = length(max(c - vec2(0.8, 0.76), 0.0) / vec2(0.2, 0.24));
+  float mask = 1.0 - smoothstep(0.86, 1.0, corner);
+  float edge = 1.0 - 0.45 * smoothstep(0.5, 1.15, length(c * vec2(0.9, 1.0)));
+  vec3 past = texture2D(tPast, vUv).rgb * uHas;
+  float rate = mix(24.0, 8.0, uQuiet);
+  float n = tvHash(floor(vUv * vec2(150.0, 112.0)) + vec2(floor(uTime * rate) * 37.0, 0.0));
+  float scan = 0.88 + 0.12 * sin(vUv.y * 470.0);
+  vec3 snow = vec3(0.016, 0.018, 0.022) * (0.35 + 0.65 * n) * mix(1.0, 0.6, uQuiet);
+  vec3 col = (past * 1.7 * vec3(0.9, 1.0, 1.12) + snow * mix(1.0, 0.45, uHas)) * scan * edge * mask;
+  col = mix(uFogColor, col, exp(-uFog * length(vW - cameraPosition)));
+  gl_FragColor = vec4(col, 1.0);
 }
 `;
 

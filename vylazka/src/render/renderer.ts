@@ -23,7 +23,9 @@ import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from './matcap_atlas';
 import { MAX_WORMS } from '../swarm/body';
 import type { EdgePoints } from '../world/edges';
 import type { PieceMask } from '../world/piece';
-import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, ECHO_FRAG, EDGE_FRAG, EDGE_VERT, GRAIN_VERT, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, ENTITY_VERT, GLASS_FRAG, GLASS_VERT, SPOT_FRAG, STAR_FRAG, STAR_VERT, TRAIL_FRAG, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
+import type { OddScreen } from '../world/furnish_odd';
+import type { OddKind } from '../systems/odd';
+import { COMPOSE_FRAG, DEPTH_FRAG, DEPTH_VERT, DUST_FRAG, DUST_VERT, ECHO_FRAG, EDGE_FRAG, EDGE_VERT, GRAIN_VERT, HAZE_FRAG, MEMORY_FRAG, POST_FRAG, POST_VERT, SPLAT_FRAG, SPLAT_VERT, ENTITY_VERT, GLASS_FRAG, GLASS_VERT, SPOT_FRAG, STAR_FRAG, STAR_VERT, TRAIL_FRAG, TV_FRAG, WIRE_FRAG, WIRE_VERT, WORLD_FRAG, WORLD_VERT } from './shaders';
 import { newGrainLife, objectTriangles, sowGrains, steerGrains, stepGrains } from './grains';
 import { GRADE_DEFAULT, RINGS_DEFAULT } from './grade';
 import type { Grade } from './grade';
@@ -207,6 +209,16 @@ export interface FrameView {
    * тёплым светом (WORLD_FRAG, lampLight); в шейдер идут LAMP.max ближних к камере. Нет — ламп нет.
    */
   lamps?: { pos: readonly Vec3[]; box: readonly [number, number, number, number]; y: readonly [number, number] } | null;
+  /**
+   * Странная комната (world/furnish_odd.ts; design.md, §37.1): род, коробка по полу, пол и потолок, где вещь и куда смотрит, где
+   * герой (к нему баян сводит стены), squeeze — какую долю расстояния до героя стены прошли, rise — на сколько метров ушёл вверх
+   * потолок (шарик), экран кинескопа (телевизор). Её облик и свет — в шейдере мира по коробке. Нет — комнаты нет.
+   */
+  odd?: OddView | null;
+  /** Насколько герой в странной комнате, 0..1: там место собирается взглядом, как в светлом месте. */
+  oddIn?: number;
+  /** 0..1: след длинной выдержки и при свете (тяжесть в аквариуме, systems/odd.ts). Нет поля — как обычно. */
+  trail?: number;
   /** Множитель углов луча фонаря (кривая ощущений, systems/feel.ts): меньше единицы — луч уже. Нет поля — как есть. */
   beamCone?: number;
   /** 0..1: кадр плывёт — цвета расходятся сильнее обычного (кривая ощущений; волну во времени накладывает игра). */
@@ -258,6 +270,35 @@ export interface FrameView {
   /** Сколько рассеянного света там, где стоит игрок, 0..1 (без света по клеткам — 1). */
   ambientLocal: number;
 }
+
+/** Странная комната для кадра (FrameView.odd). */
+export interface OddView {
+  kind: OddKind;
+  box: readonly [number, number, number, number];
+  y: readonly [number, number];
+  at: Vec3;
+  face: readonly [number, number];
+  hero: readonly [number, number];
+  squeeze: number;
+  rise: number;
+  /** Насколько ощущение сейчас здесь, 0..1 (под шариком пух закручивается). */
+  k: number;
+  /** Тихий режим: снег на экране кинескопа реже и тише. */
+  quiet: boolean;
+  screen: OddScreen | null;
+}
+
+/**
+ * Кинескоп странной комнаты (K-32: «две секунды назад»): кольцо маленьких копий готового кадра — 60 кадров 128 × 72, по копии
+ * каждые 1/30 с, — экран показывает самую старую: то, что герой видел две секунды назад. Около 2,2 МБ видеопамяти, и только
+ * пока на уровне есть телевизор.
+ */
+const TV_RING = { frames: 60, every: 2 / 60, w: 128, h: 72 } as const;
+/** Сила следа длинной выдержки в аквариуме: за сколько секунд гаснет след, когда тяжесть в полную силу (FrameView.trail). */
+const TRAIL_HEAVY = 0.42;
+
+/** Номер рода странной комнаты в шейдере (uOddY.z): 0 — комнаты нет. */
+export const ODD_SHADER_KIND: Readonly<Record<OddKind, number>> = { bayan: 1, aquarium: 2, tv: 3, balloon: 4 };
 
 /** Состояние «вещи» — отдельного предмета, который можно двигать, растить и рассыпать. */
 export interface ThingView {
@@ -616,6 +657,16 @@ export class GameRenderer {
   private hazeRT: THREE.WebGLRenderTarget | null = null;
   private readonly postScene = new THREE.Scene();
   private readonly postCam = new THREE.Camera();
+  /** Кинескоп странной комнаты (world/furnish_odd.ts): экран, его кольцо задержанных кадров и копировщик кадра. */
+  private tvScreen: THREE.Mesh | null = null;
+  private tvSpec: OddScreen | null = null;
+  private tvMat!: THREE.ShaderMaterial;
+  private tvRing: THREE.WebGLRenderTarget[] = [];
+  private tvHead = 0;
+  private tvFilled = 0;
+  private tvLast = -Infinity;
+  private readonly copyScene = new THREE.Scene();
+  private copyMat!: THREE.ShaderMaterial;
   private dust: THREE.Points | null = null;
   /** Звёздное небо над уровнем: видно там, где нет потолка (STAR_VERT). */
   private readonly stars: THREE.Points;
@@ -913,6 +964,12 @@ export class GameRenderer {
         // Белая комната: коробка по полу и пол, потолок, есть ли она (world/furnish_white.ts).
         uWhiteBox: { value: new THREE.Vector4(0, 0, 0, 0) },
         uWhiteY: { value: new THREE.Vector4(0, 0, 0, 0) },
+        // Странная комната (world/furnish_odd.ts): коробка, пол, потолок, род и время; герой и ощущение; вещь и куда она смотрит.
+        uOddBox: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uOddY: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uOddFx: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uOddAt: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uOddFace: { value: new THREE.Vector4(0, 1, 0, 0) },
         uRoofY: { value: 0 },
         uKeyDirW: { value: new THREE.Vector3(0, 1, 0) },
         uRecallPos: { value: new THREE.Vector4(0, 0, 0, 0) },
@@ -959,7 +1016,7 @@ export class GameRenderer {
     this.dustMat = new THREE.ShaderMaterial({
       vertexShader: DUST_VERT,
       fragmentShader: DUST_FRAG,
-      uniforms: { ...this.lightU, uTime: { value: 0 }, uCamPos: { value: new THREE.Vector3() }, uPointScale: { value: 4 }, uBoost: { value: 0 }, uPollen: { value: 0 } },
+      uniforms: { ...this.lightU, uTime: { value: 0 }, uCamPos: { value: new THREE.Vector3() }, uPointScale: { value: 4 }, uBoost: { value: 0 }, uPollen: { value: 0 }, uFluffBox: { value: new THREE.Vector4(0, 0, 0, 0) }, uFluffY: { value: new THREE.Vector4(0, 0, 0, 0) } },
       blending: THREE.AdditiveBlending,
       transparent: true,
       depthWrite: false,
@@ -1119,6 +1176,35 @@ export class GameRenderer {
     const postMesh = new THREE.Mesh(tri, this.postMat);
     postMesh.frustumCulled = false;
     this.postScene.add(postMesh);
+    // Копия готового кадра в маленький буфер кольца кинескопа (на среднем и высоком качестве — с мип-уровня кадра, без ряби).
+    this.copyMat = new THREE.ShaderMaterial({
+      vertexShader: POST_VERT,
+      fragmentShader: 'precision mediump float; uniform sampler2D tSrc; varying vec2 vUv; void main(){ gl_FragColor = vec4(texture2D(tSrc, vUv).rgb, 1.0); }',
+      uniforms: { tSrc: { value: null } },
+      depthTest: false,
+      depthWrite: false,
+    });
+    const copyMesh = new THREE.Mesh(tri, this.copyMat);
+    copyMesh.frustumCulled = false;
+    this.copyScene.add(copyMesh);
+    // Экран кинескопа: кадр двухсекундной давности, тихий снег и строки — только на стекле (K-32, переделка куратора: снега на
+    // стенах нет). Яркость ровная: снег мелкий и тусклый, кадр не мигает.
+    this.tvMat = new THREE.ShaderMaterial({
+      vertexShader: 'varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+      fragmentShader: TV_FRAG,
+      uniforms: { tPast: { value: null }, uHas: { value: 0 }, uTime: { value: 0 }, uQuiet: { value: 0 }, uFog: this.worldMat.uniforms.uFog!, uFogColor: this.worldMat.uniforms.uFogColor! },
+      // Ложится на кадр, как стекло крыши и пузырь: цвет — свой, а альфа кадра (число замеров) — лица корпуса под ним: экран
+      // собирается взглядом вместе с телевизором, а не горит сквозь закон взгляда. (Непрозрачным проходом в смоуке на
+      // SwiftShader страница падала чаще — не доказано, но так спокойнее.)
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneMinusSrcAlphaFactor,
+      blendSrcAlpha: THREE.ZeroFactor,
+      blendDstAlpha: THREE.OneFactor,
+      transparent: true,
+      depthWrite: false,
+    });
 
     this.spotMat = new THREE.ShaderMaterial({
       vertexShader: POST_VERT,
@@ -1187,6 +1273,10 @@ export class GameRenderer {
         uMemGain: { value: 1 },
         uAmbientScan: { value: 0 },
         uFogColor: this.worldMat.uniforms.uFogColor!,
+        // Точки стен странной комнаты идут вместе со стенами: те же uniform-объекты, что у мира.
+        uOddBox: this.worldMat.uniforms.uOddBox!,
+        uOddY: this.worldMat.uniforms.uOddY!,
+        uOddFx: this.worldMat.uniforms.uOddFx!,
         uHMax: { value: SCAN.max },
         uCone: this.lightU.uCone!,
         uDissolve: this.worldMat.uniforms.uDissolve!,
@@ -2711,6 +2801,59 @@ export class GameRenderer {
   }
 
   /** Пузырь вокруг искомой вещи: центр, радиус, сила 0…1 и время (переливы); null — нет пузыря. */
+  /**
+   * Экран кинескопа странной комнаты: собрать выпуклое стекло по месту и завести кольцо кадров; null — убрать и отдать память.
+   * Сетка экрана — 10 × 8 клеток, стекло выгнуто к зрителю на spec.bulge в середине.
+   */
+  private setOddScreen(spec: OddScreen | null): void {
+    if (spec === this.tvSpec) return;
+    this.tvSpec = spec;
+    if (this.tvScreen) {
+      this.scene.remove(this.tvScreen);
+      this.tvScreen.geometry.dispose();
+      this.tvScreen = null;
+    }
+    for (const rt of this.tvRing) rt.dispose();
+    this.tvRing = [];
+    this.tvHead = 0;
+    this.tvFilled = 0;
+    this.tvLast = -Infinity;
+    if (!spec) return;
+    const nx = 10;
+    const ny = 8;
+    const pos: number[] = [];
+    const uvs: number[] = [];
+    const idx: number[] = [];
+    for (let j = 0; j <= ny; j++) {
+      for (let i = 0; i <= nx; i++) {
+        const u = i / nx - 0.5;
+        const w = j / ny - 0.5;
+        const bulge = spec.bulge * (1 - (2 * u) ** 2) * (1 - (2 * w) ** 2);
+        for (let k = 0; k < 3; k++) pos.push(spec.at[k]! + spec.u[k]! * u * spec.w + spec.v[k]! * w * spec.h + spec.n[k]! * bulge);
+        uvs.push(i / nx, j / ny);
+      }
+    }
+    for (let j = 0; j < ny; j++) {
+      for (let i = 0; i < nx; i++) {
+        const a = j * (nx + 1) + i;
+        idx.push(a, a + 1, a + nx + 2, a, a + nx + 2, a + nx + 1);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+    g.setIndex(idx);
+    this.tvScreen = new THREE.Mesh(g, this.tvMat);
+    this.tvScreen.frustumCulled = false;
+    this.tvScreen.layers.set(1);
+    this.scene.add(this.tvScreen);
+    for (let i = 0; i < TV_RING.frames; i++) {
+      const rt = new THREE.WebGLRenderTarget(TV_RING.w, TV_RING.h, { depthBuffer: false, stencilBuffer: false, type: THREE.UnsignedByteType, magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter, generateMipmaps: false });
+      rt.texture.colorSpace = THREE.SRGBColorSpace;
+      this.tvRing.push(rt);
+    }
+  }
+
   setBubble(v: { pos: readonly [number, number, number]; radius: number; k: number; time: number } | null): void {
     this.bubble.visible = v !== null && v.k > 0.01;
     if (!v) return;
@@ -2842,6 +2985,38 @@ export class GameRenderer {
       wy.set(v.white.y[0], v.white.y[1], 1, 0);
     } else wy.z = 0;
     this.setLamps(v.lamps ?? null, v.camPos);
+    // Странная комната: облик и свет по коробке (шейдер мира), сдвиг стен (мир и точки), пух (пыль), экран кинескопа.
+    {
+      const wu0 = this.worldMat.uniforms;
+      const oy = wu0.uOddY!.value as THREE.Vector4;
+      const fy = this.dustMat.uniforms.uFluffY!.value as THREE.Vector4;
+      const o = v.odd ?? null;
+      if (o) {
+        (wu0.uOddBox!.value as THREE.Vector4).set(o.box[0], o.box[1], o.box[2], o.box[3]);
+        oy.set(o.y[0], o.y[1], ODD_SHADER_KIND[o.kind], v.time);
+        (wu0.uOddFx!.value as THREE.Vector4).set(o.hero[0], o.hero[1], o.squeeze, o.rise);
+        const at = o.screen ? o.screen.at : o.at;
+        (wu0.uOddAt!.value as THREE.Vector4).set(at[0], at[1], at[2], 0);
+        (wu0.uOddFace!.value as THREE.Vector4).set(o.face[0], o.face[1], 0, 0);
+        if (o.kind === 'balloon') {
+          (this.dustMat.uniforms.uFluffBox!.value as THREE.Vector4).set(o.box[0], o.box[1], o.box[2], o.box[3]);
+          fy.set(o.y[0], o.y[1] + o.rise, 1, o.k);
+        } else fy.z = 0;
+      } else {
+        oy.z = 0;
+        (wu0.uOddFx!.value as THREE.Vector4).set(0, 0, 0, 0);
+        fy.z = 0;
+      }
+      this.setOddScreen(o?.screen ?? null);
+      if (this.tvScreen) {
+        const tu0 = this.tvMat.uniforms;
+        tu0.uTime!.value = v.time;
+        tu0.uQuiet!.value = o?.quiet ? 1 : 0;
+        // Самая старая копия кольца — та, что сейчас будет перезаписана: две секунды назад.
+        tu0.tPast!.value = this.tvRing[this.tvHead]?.texture ?? null;
+        tu0.uHas!.value = this.tvFilled >= TV_RING.frames ? 1 : 0;
+      }
+    }
 
     // Отсечение чанков: дальше черты видимости всё равно чёрный туман, а чужой ярус виден только
     // с лестницы и от её площадок.
@@ -3047,7 +3222,8 @@ export class GameRenderer {
     this.composeMat.uniforms.uMemGain!.value = memGain;
     // В пространствах с рассеянным светом точки собираются и без фонаря: «сканирует» сам свет.
     // В белой комнате место собирается взглядом, как в светлом: свет даёт сама комната.
-    pu0.uAmbientScan!.value = Math.max(v.whiteIn ?? 0, Math.min(1, ((v.ambient[0] + v.ambient[1] + v.ambient[2]) / 3) * v.ambientLocal * 8));
+    // И в странной комнате: её свет даёт сама комната (шейдер мира, oddLight).
+    pu0.uAmbientScan!.value = Math.max(v.whiteIn ?? 0, v.oddIn ?? 0, Math.min(1, ((v.ambient[0] + v.ambient[1] + v.ambient[2]) / 3) * v.ambientLocal * 8));
 
     // Отсвет от пятна: точка попадания луча и сила, убывающая с расстоянием до стены.
     const hitDist = Math.min(v.beamDist, 30);
@@ -3289,7 +3465,8 @@ export class GameRenderer {
     // тем дольше след; при свете и там, где светло само пространство, выдержки нет. Гаснет след по
     // игровому времени: на паузе кадр стоит как есть.
     const dark = (1 - smoothstep(0.05, 0.5, v.lightIntensity * v.lightScale)) * (1 - (pu0.uAmbientScan!.value as number));
-    const tau = SCAN.smear * dark;
+    // Тяжесть в аквариуме (systems/odd.ts): след тянется и при свете.
+    const tau = Math.max(SCAN.smear * dark, TRAIL_HEAVY * (v.trail ?? 0));
     const prevFrame = this.compRT;
     this.compRT = this.compPrevRT;
     this.compPrevRT = prevFrame;
@@ -3313,6 +3490,22 @@ export class GameRenderer {
     this.trailGain = gainNow;
     r.setRenderTarget(this.compRT);
     r.render(this.trailScene, this.postCam);
+    // Кинескоп странной комнаты: копия готового кадра в кольцо — раз в 1/30 с игрового времени.
+    if (this.tvScreen && this.tvRing.length > 0 && !probe) {
+      if (v.time < this.tvLast) {
+        this.tvFilled = 0;
+        this.tvLast = -Infinity;
+      }
+      // Допуск на округление: при 60 кадрах в секунду копия — ровно через кадр, а не через два.
+      if (v.time - this.tvLast >= TV_RING.every - 1e-4) {
+        this.copyMat.uniforms.tSrc!.value = this.compRT.texture;
+        r.setRenderTarget(this.tvRing[this.tvHead]!);
+        r.render(this.copyScene, this.postCam);
+        this.tvHead = (this.tvHead + 1) % TV_RING.frames;
+        this.tvFilled = Math.min(TV_RING.frames, this.tvFilled + 1);
+        this.tvLast = v.time;
+      }
+    }
 
     // Дымка в луче: маленький буфер, по глубине готового кадра.
     if (this.hazeRT) {
@@ -3377,8 +3570,8 @@ export class GameRenderer {
    * points — сколько точек-сплатов отдано видеокарте в прошлом кадре, clouds — у скольких сеток есть
    * облака точек, cells — сколько клеток с точками сейчас живо (у сеток рядом с игроком).
    */
-  info(): { calls: number; triangles: number; width: number; height: number; quality: Quality; fine: number; programs: number; chunks: number; visible: number; points: number; clouds: number; cells: number; slides: number; spores: { shown: number; far: number; culled: number } } {
-    return { calls: this.lastCalls, triangles: this.lastTris, width: this.width, height: this.height, quality: this.quality, fine: this.fine, programs: this.renderer.info.programs?.length ?? 0, chunks: this.chunks.length, visible: this.chunks.filter((m) => m.visible).length, points: this.clouds.drawn, clouds: this.clouds.count, cells: this.clouds.cells, slides: this.chunks.filter((m) => m.userData.slide !== undefined).length, spores: { ...this.sporeStats } };
+  info(): { calls: number; triangles: number; width: number; height: number; quality: Quality; fine: number; programs: number; chunks: number; visible: number; points: number; clouds: number; cells: number; slides: number; spores: { shown: number; far: number; culled: number }; tv: number } {
+    return { calls: this.lastCalls, triangles: this.lastTris, width: this.width, height: this.height, quality: this.quality, fine: this.fine, programs: this.renderer.info.programs?.length ?? 0, chunks: this.chunks.length, visible: this.chunks.filter((m) => m.visible).length, points: this.clouds.drawn, clouds: this.clouds.count, cells: this.clouds.cells, slides: this.chunks.filter((m) => m.userData.slide !== undefined).length, spores: { ...this.sporeStats }, tv: this.tvScreen ? this.tvFilled : -1 };
   }
 
   /**

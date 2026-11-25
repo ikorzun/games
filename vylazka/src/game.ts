@@ -58,6 +58,9 @@ import { looksAt, Things } from './systems/things';
 import { warpAt, warpOn } from './systems/warp';
 import type { WarpFrame } from './systems/warp';
 import { touchesChain } from './world/furnish_white';
+import { ODD_COOLDOWN, ODD_NONE, oddAt, oddJitter, oddOn } from './systems/odd';
+import type { OddFrame, OddKind } from './systems/odd';
+import { touchesOdd } from './world/furnish_odd';
 import type { Fate, Look, Thing } from './systems/things';
 import { bakeContact } from './world/contact';
 import { ColliderSet } from './world/colliders';
@@ -155,6 +158,11 @@ export type DreamEvent =
    * (systems/warp.ts). Звук и строку — приложению.
    */
   | { type: 'warp' }
+  /**
+   * Странная комната (world/furnish_odd.ts): герой тронул её вещь — пять секунд другого ощущения (systems/odd.ts). Звук —
+   * приложению.
+   */
+  | { type: 'odd'; kind: OddKind }
   /** Сессия кончилась, игрок в лимбо: пора готовить следующую (queueSession). */
   | { type: 'limbo' }
   /** Метаслой: экспонат в лимбо «вспомнил» обрывок (systems/meta.ts) — где он стоит. */
@@ -557,6 +565,16 @@ const STROBE = { rate: 1.1, hit: 0.75, width: 0.45, soft: 0.5, faint: 0.1 } as c
 const SOFT_WHITE = 0.82;
 /** Даль белой комнаты (world/furnish_white.ts): белая, чуть ниже потолка яркости, чтобы стены не сливались с ней в одно. */
 const WHITE_FOG = 0.8;
+/**
+ * Даль странных комнат (world/furnish_odd.ts): уходит в свет комнаты, а не в черноту — тёплый янтарь баяна, тёмная зелень
+ * аквариума, почти чёрный холод телевизора, сумеречная синь шарика. Цвет — до усиления камеры.
+ */
+const ODD_FOG: Readonly<Record<OddKind, Vec3>> = {
+  bayan: [0.05, 0.03, 0.012],
+  aquarium: [0.008, 0.03, 0.026],
+  tv: [0.003, 0.004, 0.007],
+  balloon: [0.04, 0.056, 0.11],
+};
 /** Конус взгляда по умолчанию, градусы: [край, середина] — как у луча фонаря (render/renderer.ts, FrameView.gazeCone). */
 const GAZE_CONE: readonly [number, number] = [52, 25];
 /** Конус взгляда, сжатый или раскрытый кривой ощущений. */
@@ -686,6 +704,14 @@ export class Game {
   private warpArmed = true;
   /** Насколько герой в белой комнате, 0..1 (плавно): даль белеет, место собирается взглядом. */
   private whiteIn = 0;
+  /** Сколько секунд прошло с касания вещи странной комнаты; −1 — ощущения нет (systems/odd.ts). */
+  private oddT = -1;
+  /** Вещь странной комнаты снова отзывается: герой отошёл от неё после прошлого касания. */
+  private oddArmed = true;
+  /** Сколько ещё секунд вещь молчит после того, как ощущение ушло (ODD_COOLDOWN). */
+  private oddCool = 0;
+  /** Насколько герой в странной комнате, 0..1 (плавно): её свет и даль, место собирается взглядом. */
+  private oddIn = 0;
   /** Что игрок вспомнил за всё время (id воспоминаний): эти вещи копятся в лимбо. */
   archive: string[] = [];
   swarm: SwarmAI | null = null;
@@ -1062,6 +1088,10 @@ export class Game {
     this.leavePocket();
     this.clearThings();
     this.level = level;
+    // Ощущение странной комнаты принадлежит её месту: в новом месте его нет.
+    this.oddT = -1;
+    this.oddCool = 0;
+    this.oddArmed = true;
     this.setupFigures(level);
     this.colliders = level.colliders;
     this.wallCuts = new WallCuts();
@@ -1131,7 +1161,11 @@ export class Game {
       // И в белой комнате их нет: там пусто и бело (world/furnish_white.ts).
       const solid = solidFloorAt(this.colliders);
       const wr = level.whiteRoom;
-      this.spores.settle((x, z, y) => (!!wr && x > wr.box[0] - 0.05 && x < wr.box[2] + 0.05 && z > wr.box[1] - 0.05 && z < wr.box[3] + 0.05 && y > wr.y[0] - 0.5 && y < wr.y[1]) || solid(x, z, y));
+      // И в странной комнате: там одно чудо, и грибы спорили бы с её светом (world/furnish_odd.ts).
+      const od = level.oddRoom;
+      const inBox = (b: { box: readonly number[]; y: readonly number[] } | undefined, x: number, z: number, y: number): boolean =>
+        !!b && x > b.box[0]! - 0.05 && x < b.box[2]! + 0.05 && z > b.box[1]! - 0.05 && z < b.box[3]! + 0.05 && y > b.y[0]! - 0.5 && y < b.y[1]!;
+      this.spores.settle((x, z, y) => inBox(wr, x, z, y) || inBox(od, x, z, y) || solid(x, z, y));
       this.flowers = level.blooms?.length ? new Flowers(level.blooms, dream.seed) : null;
       const stage = this.stage;
       // Сон из сцен: режиссёр страха — один на весь сон, его часы — часы сна (sleepTime), а не сцены: сцена идёт минуту, и
@@ -1807,7 +1841,8 @@ export class Game {
     for (const r of layout.rooms) {
       // Под звёздным небом ничего не давит: потолка там нет, и место это тихое. Где проросла трава — тоже: провал пола оставил бы
       // поле висеть над дырой (куратор, противоречие 347).
-      if (r.cells.length < 2 || r.id === startRoom || r.id === level.skyRoom || r.id === level.grassRoom || gas.has(r.id)) continue;
+      // В странной комнате тоже: её сжатие — безвредное, и провисающий потолок давления там спорил бы с ним (куратор, K-31).
+      if (r.cells.length < 2 || r.id === startRoom || r.id === level.skyRoom || r.id === level.grassRoom || r.id === level.oddRoom?.room || gas.has(r.id)) continue;
       // «Сеточное» — своё правило (wireRooms): пол уходит, если в нём стоять; остальные особые помещения — без давления.
       const wire = this.roomFx.get(r.id) === 'wire' && !['corridor', 'stairwell', 'lift', 'entrance', 'airlock'].includes(r.type);
       if (!wire && (skip.includes(r.type) || this.roomFx.has(r.id))) continue;
@@ -2101,6 +2136,7 @@ export class Game {
     // Белая комната светит сама (furnish_white.ts), а за дверью песчаного зала — пустое помещение с чёрным проёмом: и там одно
     // чудо за раз.
     if (this.level?.whiteRoom) this.roomFx.delete(this.level.whiteRoom.room);
+    if (this.level?.oddRoom) this.roomFx.delete(this.level.oddRoom.room);
     if (this.level?.duneDoor) this.roomFx.delete(this.level.duneDoor.room);
   }
 
@@ -2136,7 +2172,7 @@ export class Game {
       const was = near.get(n.room);
       if (was === undefined || dist[i]! < was) near.set(n.room, dist[i]!);
     }
-    const quiet = new Set([level.skyRoom, level.greenRoom, level.grassRoom, level.whiteRoom?.room, level.duneDoor?.room]);
+    const quiet = new Set([level.skyRoom, level.greenRoom, level.grassRoom, level.whiteRoom?.room, level.oddRoom?.room, level.duneDoor?.room]);
     const cand = pool
       .filter((r) => !quiet.has(r.id) && r.type !== 'collapsed' && (near.get(r.id) ?? -1) >= FIRST_DREAM.from && (near.get(r.id) ?? Infinity) <= FIRST_DREAM.to)
       .sort((a, b) => near.get(a.id)! - near.get(b.id)!);
@@ -3051,6 +3087,61 @@ export class Game {
     }
   }
 
+  private stepOdd(dt: number, dream: DreamEvent[]): void {
+    const o = this.where === 'main' ? this.level?.oddRoom : undefined;
+    const b = this.body;
+    const inside = !!o && b.x > o.box[0] && b.x < o.box[2] && b.z > o.box[1] && b.z < o.box[3] && b.y > o.y[0] - 0.6 && b.y < o.y[1];
+    this.oddIn = approach(this.oddIn, inside ? 1 : 0, 0.35, dt);
+    if (this.oddT >= 0) {
+      this.oddT += dt;
+      if (!o || !oddOn(o.kind, this.oddT)) {
+        this.oddT = -1;
+        this.oddCool = ODD_COOLDOWN;
+      }
+    } else if (this.oddCool > 0) this.oddCool = Math.max(0, this.oddCool - dt);
+    if (!o || !inside || !touchesOdd(o, b.x, b.y, b.z, DEFAULT_CONTROLLER.radius)) {
+      this.oddArmed = true;
+      return;
+    }
+    if (this.oddT < 0 && this.oddCool <= 0 && this.oddArmed && !this.transition) {
+      this.oddT = 0;
+      this.oddArmed = false;
+      dream.push({ type: 'odd', kind: o.kind });
+    }
+  }
+
+  /** Начать ощущение странной комнаты, как от касания её вещи (отладка: кадры и проверки). false — комнаты на уровне нет. */
+  forceOdd(): boolean {
+    if (!this.level?.oddRoom) return false;
+    this.oddT = 0;
+    this.oddArmed = false;
+    this.oddCool = 0;
+    return true;
+  }
+
+  /** Ощущение странной комнаты сейчас (systems/odd.ts): для шага, кадра, звука и проверок. Тихий режим — как у перекрута. */
+  oddNow(): OddFrame {
+    const o = this.level?.oddRoom;
+    if (!o || this.where !== 'main' || this.oddT < 0) return ODD_NONE;
+    return oddAt(o.kind, this.oddT, this.calmMotion || this.faintFlash);
+  }
+
+  /** Звук ощущения странной комнаты (audio/game_audio.ts): до касания вещь молчит. */
+  get oddSound(): { heart: number; chord: number; hum: number; float: number; muffle: number } | null {
+    const f = this.oddNow();
+    return f.k > 0 ? { heart: f.heart, chord: f.chord, hum: f.hum, float: f.float, muffle: f.muffle } : null;
+  }
+
+  /** Насколько герой в странной комнате, 0..1. */
+  get oddness(): number {
+    return this.oddIn;
+  }
+
+  /** Сколько секунд вещь странной комнаты ещё молчит после прошлого ощущения (0 — отзывается). */
+  get oddCooldown(): number {
+    return this.oddCool;
+  }
+
   /** Начать перекрут, как от касания цепи (отладка: кадры и проверки). */
   forceWarp(): void {
     this.warpT = 0;
@@ -3447,9 +3538,11 @@ export class Game {
     const cos = Math.cos(this.aimYaw);
     const wishX = cos * input.moveX - sin * input.moveZ;
     const wishZ = -sin * input.moveX - cos * input.moveZ;
-    const speed = (input.run ? RUN_SPEED : WALK_SPEED) * (s?.inWater ? WATER_SPEED : 1);
+    // Странная комната (systems/odd.ts): в аквариуме шаг втрое тяжелее; под шариком ход — скольжение (долгий разгон и торможение).
+    const of = this.oddNow();
+    const speed = (input.run ? RUN_SPEED : WALK_SPEED) * (s?.inWater ? WATER_SPEED : 1) * of.speed;
     this.touched.clear();
-    const res = stepPlayer(b, wishX, wishZ, speed, dt, this.colliders, DEFAULT_CONTROLLER, this.touched);
+    const res = stepPlayer(b, wishX, wishZ, speed, dt, this.colliders, of.glide > DEFAULT_CONTROLLER.accelTau ? { ...DEFAULT_CONTROLLER, accelTau: of.glide } : DEFAULT_CONTROLLER, this.touched);
     // Выпал из мира (ушёл за край пространства) — возвращаем на место появления.
     if (res.fellOut) {
       if (this.pocket) this.teleport(this.pocket.spawn.pos[0], this.pocket.spawn.pos[1], this.pocket.spawn.pos[2], this.aimYaw, 0);
@@ -3664,6 +3757,9 @@ export class Game {
     // секунд (systems/warp.ts). Пока перекрут идёт, второе касание его не начинает заново; после — цепь снова «заряжена», когда
     // герой от неё отошёл. Внутри комнаты даль белеет, и место собирается взглядом, как в светлом месте (frame: whiteIn).
     this.stepWhite(dt, dream);
+    // Странная комната (world/furnish_odd.ts): тронул её вещь — пять секунд другого ощущения (systems/odd.ts); вещь не
+    // растворяется и после перерыва отзывается снова.
+    this.stepOdd(dt, dream);
     this.stepSterile(dt);
 
     // Всё вспомнено: чуть погодя место рассыпается, игрок попадает в лимбо.
@@ -4012,11 +4108,14 @@ export class Game {
     const dead = this.light.state === 'dead';
     // Под опускающимся потолком камера пригибается сама; в падении летит вниз.
     const sink = this.where === 'main' && this.pressure ? this.pressure.camDrop([x, z]) : 0;
+    // Шарик (systems/odd.ts): героя мягко поднимает — камера и фонарь выше, шаг не качает голову и не звучит.
+    const odd = this.oddNow();
     const rig = this.rig.update(
-      { x, y: y - sink, z, aimYaw: this.aimYaw, aimPitch: this.aimPitch, speed: Math.hypot(b.vx, b.vz), onGround: b.onGround, panic: this.panic, shake: Math.max(dead ? this.shake.level : this.shake.level * 0.35, this.quake) },
+      { x, y: y - sink + odd.lift, z, aimYaw: this.aimYaw, aimPitch: this.aimPitch, speed: Math.hypot(b.vx, b.vz) * (1 - odd.float), onGround: b.onGround, panic: this.panic, shake: Math.max(dead ? this.shake.level : this.shake.level * 0.35, this.quake) },
       dt,
     );
     this.lastRig = rig;
+    if (rig.footstep && odd.float > 0.3) rig.footstep = false;
     if (rig.footstep) {
       this.stepped = true;
       // Шаг слышен: от ступней расходится волна эха, от бега — сильнее.
@@ -4065,6 +4164,13 @@ export class Game {
     // В белой комнате даль белая: всё за её стенами уходит в белое, а не в черноту.
     const wIn = this.where === 'main' ? this.whiteIn : 0;
     if (wIn > 0) fog = [lerp(fog[0], WHITE_FOG, wIn), lerp(fog[1], WHITE_FOG, wIn), lerp(fog[2], WHITE_FOG, wIn)];
+    // В странной комнате даль уходит в её свет.
+    const oRoom = this.where === 'main' ? this.level?.oddRoom : undefined;
+    const oIn = oRoom ? this.oddIn : 0;
+    if (oRoom && oIn > 0) {
+      const of = ODD_FOG[oRoom.kind];
+      fog = [lerp(fog[0], of[0], oIn), lerp(fog[1], of[1], oIn), lerp(fog[2], of[2], oIn)];
+    }
     if (tr) {
       const k = tr.switched ? 1 - clamp((tr.t - tr.out) / tr.back, 0, 1) : clamp(tr.t / Math.max(tr.out, 1e-3), 0, 1);
       const style = tr.plan.style;
@@ -4378,10 +4484,12 @@ export class Game {
     const wake = this.transition;
     if (wake && wake.plan.cause === 'caught' && !wake.switched) lens += 2.2 * (1 - Math.min(1, wake.t / Math.max(1e-3, wake.out)));
     const warp = this.where === 'main' ? this.warpNow() : warpAt(-1, false);
+    // Телевизор (systems/odd.ts): кадр мелко дрожит — взгляд, а не свет; без крена.
+    const [jy, jp] = oddJitter(this.time, odd.jitter);
     const view: FrameView = {
       camPos: rig.camPos,
-      camYaw: rig.camYaw + rattle * Math.sin(this.time * 71.3) * Math.sin(this.time * 13.7 + 1.1),
-      camPitch: rig.camPitch + rattle * 0.7 * Math.sin(this.time * 57.9 + 0.6),
+      camYaw: rig.camYaw + rattle * Math.sin(this.time * 71.3) * Math.sin(this.time * 13.7 + 1.1) + jy,
+      camPitch: rig.camPitch + rattle * 0.7 * Math.sin(this.time * 57.9 + 0.6) + jp,
       camRoll: rig.camRoll + rattle * 0.5 * Math.sin(this.time * 43.1 + 2.2) + warp.roll,
       lightPos: rig.lightPos,
       lightDir: rig.lightDir,
@@ -4446,13 +4554,19 @@ export class Game {
       // Дрожь и разлёт цветов — не вспышки, а ощущения (дребезжание): мягкие вспышки их не трогают, «почти незаметные» — тише.
       drift: fv.drift * (this.faintFlash ? 0.4 : 1) * (0.55 + 0.45 * Math.sin(this.time * 0.83)) * (1 - this.sterileK),
       lens: lens + warp.lens,
-      // Перекрут белой комнаты: мир становится широкоугольным (systems/warp.ts).
-      fov: warp.fov,
+      // Перекрут белой комнаты: мир становится широкоугольным (systems/warp.ts). Баян сужает кадр (телевик), шарик чуть раскрывает.
+      fov: warp.fov * odd.fov,
       // Белая комната светится сама — коробкой по её границам (render: uWhiteBox); внутри неё место собирается взглядом.
       white: this.where === 'main' && this.level?.whiteRoom ? { box: this.level.whiteRoom.box, y: this.level.whiteRoom.y } : null,
       whiteIn: this.where === 'main' ? this.whiteIn : 0,
       // Натриевые лампы оранжереи красят собранное рядом тёплым светом (render: lampLight); сами место не собирают.
       lamps: this.where === 'main' ? (this.level?.lamps ?? null) : null,
+      // Странная комната: её коробка, род и что сейчас с её стенами (баян сводит их к герою, шарик поднимает потолок); экран
+      // кинескопа. Внутри неё место собирается взглядом, как в светлом месте.
+      odd: oRoom ? { kind: oRoom.kind, box: oRoom.box, y: oRoom.y, at: oRoom.at, face: oRoom.face, hero: [x, z], squeeze: odd.squeeze, rise: odd.rise, k: odd.k, quiet: this.calmMotion || this.faintFlash, screen: oRoom.screen ?? null } : null,
+      oddIn: oIn,
+      // Аквариум: за движением тянется след длинной выдержки.
+      trail: odd.trail,
       scanRange: fl ? fl.scan() : (this.env.scan ?? [4, 15]),
       // Тени прямого света — в квадрате вокруг игрока, сдвинутом вперёд по взгляду: позади они не нужны.
       keyBox:

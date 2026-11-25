@@ -49,6 +49,9 @@ import { TouchControls } from './ui/touch_controls';
 import { ColliderSet } from './world/colliders';
 import type { BuiltLevel } from './world/level';
 import { buildLevel } from './world/level_build';
+import type { BuildOptions } from './world/level_build';
+import { ODD_KINDS } from './systems/odd';
+import type { OddKind } from './systems/odd';
 import { buildPocket } from './world/pockets';
 import type { PocketKind } from './world/pockets';
 import { ALL_PROPS } from './world/props_all';
@@ -652,7 +655,7 @@ export class App {
         this.game.loadLevel(this.level, null);
       }
     } else {
-      this.level = buildLevel(generateLayout(this.seed, this.rank, this.world), { wear });
+      this.level = buildLevel(generateLayout(this.seed, this.rank, this.world), { wear, ...this.oddOpt() });
       if (this.scenes) {
         this.game.sessionCfg = this.firstSleep ? FIRST_SLEEP : SCENE_SESSION;
         if (this.komaOn) this.koma.onDream(this.firstSleep);
@@ -793,7 +796,7 @@ export class App {
     setTimeout(() => {
       const mem = this.place();
       this.memory = mem;
-      const level = buildLevel(generateLayout(mem.seed, mem.rank, this.world), { wear: this.wearParam() ?? mem.wear });
+      const level = buildLevel(generateLayout(mem.seed, mem.rank, this.world), { wear: this.wearParam() ?? mem.wear, ...this.oddOpt() });
       this.next = { level, seed: mem.seed, rank: mem.rank };
       this.game.stage = this.stageFor();
       this.game.gentle = this.profile.successes === 0 || this.game.stage === 3;
@@ -879,6 +882,16 @@ export class App {
   /** Обрывок метаслоя положен: не в первом сне, не на пробном уровне, и колода не кончилась. */
   private deckReady(): boolean {
     return metaAllowed(this.profile.successes, this.testLevel) && nextFragment(this.profile.meta, this.reels()) !== null;
+  }
+
+  /**
+   * Странная и белая комнаты (world/furnish_odd.ts): адрес ?odd=bayan | aquarium | tv | balloon ставит нужную мимо жребия (отладка
+   * и кадры); в первом сне игрока — ни одной (куратор 25.11: чудо — не в первом сне). Сид, закреплённый адресом, — как есть.
+   */
+  private oddOpt(): Pick<BuildOptions, 'odd'> {
+    const q = this.params.get('odd');
+    if (q && (ODD_KINDS as readonly string[]).includes(q)) return { odd: q as OddKind };
+    return this.firstSleep && !this.pinned ? { odd: 'none' } : {};
   }
 
   /** Первый сон игрока: одна сцена убежища с тремя вещами, без смены мест. */

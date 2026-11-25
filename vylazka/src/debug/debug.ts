@@ -83,6 +83,16 @@ export interface VzDebugApi {
   white(): { room: number; box: number[]; y: number[]; door: number[] | null; chain: { at: number[]; face: number[]; a: number; top: number }; inside: number; warp: { roll: number; fov: number; lens: number; open: number } } | null;
   /** Перекрут, как от касания цепи белой комнаты: для кадров и проверок. */
   warp(): void;
+  /**
+   * Странная комната (world/furnish_odd.ts; design.md, §37.1): род, помещение, коробка, где вещь и куда смотрит, чего касаться,
+   * насколько герой в ней (0..1), ощущение сейчас (systems/odd.ts) и сколько ещё молчит вещь; null — на уровне её нет. Поставить
+   * нужную на уровень — адресом ?odd=bayan | aquarium | tv | balloon (мимо жребия).
+   */
+  odd(): { kind: string; room: number; box: number[]; y: number[]; door: number[] | null; at: number[]; face: number[]; trigger: Record<string, unknown>; screen: Record<string, unknown> | null; inside: number; fx: Record<string, number>; cooldown: number } | null;
+  /** Ощущение странной комнаты, как от касания её вещи: для кадров и проверок. false — комнаты нет. */
+  oddFx(): boolean;
+  /** Встать в странной комнате в distance м от вещи, лицом к ней (со стороны прохода). false — комнаты нет. */
+  gotoOdd(distance?: number): boolean;
   /** Встать в помещении рядом с приметой (по её id и номеру среди одноимённых) лицом к ней. false — такой нет. */
   gotoLandmark(id: string, index?: number, distance?: number): boolean;
   /** Встать в центр клетки помещения. */
@@ -396,6 +406,7 @@ export function installDebug(app: App): void {
         lamps: l.lamps ? { pos: l.lamps.pos.map((p) => [...p]), box: [...l.lamps.box], y: [...l.lamps.y] } : null,
         grass: l.grassRoom ?? null,
         white: l.whiteRoom?.room ?? null,
+        odd: l.oddRoom ? { kind: l.oddRoom.kind, room: l.oddRoom.room } : null,
         landmarks: l.landmarks.map((m) => ({ id: m.id, room: m.room, tier: m.tier })),
         flats: (l.flats ?? []).map((f) => ({ kind: f.kind, what: f.what, room: f.room, tier: f.tier })),
       };
@@ -423,6 +434,41 @@ export function installDebug(app: App): void {
       return { room: w.room, box: [...w.box], y: [...w.y], door: w.door ? [...w.door] : null, chain: { at: [...w.chain.at], face: [...w.chain.face], a: w.chain.a, top: w.chain.top }, inside: g.whiteness, warp: g.warpNow() };
     },
     warp: () => game().forceWarp(),
+    odd: () => {
+      const g = game();
+      const o = g.level?.oddRoom;
+      if (!o) return null;
+      const t = o.trigger;
+      const trigger = 'box' in t ? { box: [[...t.box[0]], [...t.box[1]]] } : { line: [[...t.line[0]], [...t.line[1]]], r: t.r };
+      const fx = g.oddNow();
+      return {
+        kind: o.kind,
+        room: o.room,
+        box: [...o.box],
+        y: [...o.y],
+        door: o.door ? [...o.door] : null,
+        at: [...o.at],
+        face: [...o.face],
+        trigger,
+        screen: o.screen ? { at: [...o.screen.at], n: [...o.screen.n], w: o.screen.w, h: o.screen.h } : null,
+        inside: g.oddness,
+        fx: { ...fx },
+        cooldown: g.oddCooldown,
+      };
+    },
+    oddFx: () => game().forceOdd(),
+    gotoOdd: (distance = 2.2) => {
+      const g = game();
+      const o = g.level?.oddRoom;
+      if (!o) return false;
+      // Отступить от вещи к проходу (лицо вещи смотрит туда), но не дальше стены.
+      const back = (o.face[0] !== 0 ? o.box[2] - o.box[0] : o.box[3] - o.box[1]) / 2 - 0.45;
+      const d = Math.max(0.9, Math.min(distance, back));
+      const x = o.at[0] + o.face[0] * d;
+      const z = o.at[2] + o.face[1] * d;
+      g.teleport(x, o.y[0] + 0.02, z, Math.atan2(o.face[0], o.face[1]), 0);
+      return true;
+    },
     flats: () => (app.level.flats ?? []).map((f) => ({ ...f, at: [...f.at], n: [...f.n] })),
     gotoFlat: (index, distance = 3, side = 0) => {
       const f = (app.level.flats ?? [])[index];

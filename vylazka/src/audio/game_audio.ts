@@ -16,6 +16,8 @@ export interface SoundSink {
   loop(id: string, gain: number, pos?: Vec3): void;
   stopLoops(keep?: string): void;
   setListener(pos: Vec3, yaw: number): void;
+  /** Весь звук глохнет, как под водой: 0 — как есть, 1 — глуше всего (аквариум странной комнаты). Нет метода — не глохнет. */
+  muffle?(k: number): void;
 }
 
 /** Что звуку нужно знать об игре (Game подходит как есть). */
@@ -63,6 +65,11 @@ export interface AudioWorld {
   hasLight?: boolean;
   /** Сюжет: Смотритель пишет на бирке (game.penOn). Нет поля — не пишет. */
   penOn?: boolean;
+  /**
+   * Странная комната (systems/odd.ts): что сейчас звучит от касания её вещи — сердце, аккорд баяна, тихие помехи телевизора, тон
+   * невесомости под шариком (0..1) и насколько глохнет весь звук. До касания вещь молчит. Нет поля — ничего.
+   */
+  oddSound?: { heart: number; chord: number; hum: number; float: number; muffle: number } | null;
   /** Шаги в такт (systems/follower.ts): где за спиной прозвучали шаги следом с прошлого вызова. Нет поля — никто не идёт. */
   consumeFollowSteps?(): readonly Vec3[];
   listener(): { pos: Vec3; yaw: number };
@@ -73,6 +80,17 @@ export interface AudioWorld {
 export type AudioScene = 'silent' | 'menu' | 'play';
 
 const MUSIC = 'music_menu';
+/**
+ * Аккорд баяна странной комнаты (K-31) — пока тем же тёмным тоном заставки, тихо: своего клипа нет.
+ * TODO(звук): клип `bayan_chord` (ElevenLabs Sound Effects): «old Russian bayan button accordion, a single sustained minor chord on
+ * a slow bellows exhale, about 5 seconds, warm and close, recorded at full level, no melody, no room noise» — и играть его вместо
+ * music_menu разово на касании.
+ */
+export const BAYAN_CHORD = 0.5;
+/** Тихие помехи телевизора странной комнаты (K-32) — не рёв: громкость петли signal_static в полную силу дрожи. */
+export const TV_HUM = 0.32;
+/** Тон невесомости под шариком (K-33) — тот же, что в белом нигде, тише. */
+export const FLOAT_TONE = 0.45;
 /**
  * Громкость песка Осыпи, пока она — примета без тела (ступени 1–2, K-18): слышна только издалека — затихает и глохнет
  * с расстоянием (движок звука), поэтому чуть громче рассеянной Осыпи рядом, но не как охота.
@@ -263,6 +281,9 @@ export class GameAudio {
         a.play('chain_clink', { rate: this.jitter(0.06) });
         a.play('whiteout', { rate: 0.72, volume: 0.45 });
       }
+      // Странная комната: тронул стекло аквариума — одна тяжёлая капля, низко; остальное (сердце, аккорд, помехи, тон, глухота) —
+      // петлями по ходу ощущения (frame).
+      else if (e.type === 'odd' && e.kind === 'aquarium') a.play('drip', { rate: 0.55, volume: 0.9 });
       // Волна сонара — тихий пинг от самого игрока (слова партнёра: «Сонар тихий пинг»).
       else if (e.type === 'sonar') a.play('sonar_ping', { rate: this.jitter(0.03) });
       // Экспонат в лимбо вспомнил обрывок (метаслой): тот же нарастающий тон камеры, что у вспышки воспоминания, ниже.
@@ -300,7 +321,11 @@ export class GameAudio {
       a.loop(MUSIC, 1);
       return;
     }
-    a.loop(MUSIC, 0);
+    // Баян странной комнаты тянет аккорд, пока комната выдыхает (BAYAN_CHORD).
+    const odd = this.scene === 'play' && game.where === 'main' ? (game.oddSound ?? null) : null;
+    a.loop(MUSIC, odd ? BAYAN_CHORD * odd.chord : 0);
+    // Аквариум: весь звук глохнет, как под водой.
+    a.muffle?.(odd ? odd.muffle : 0);
     if (this.scene !== 'play') return;
 
     const ears = game.listener();
@@ -391,13 +416,14 @@ export class GameAudio {
     a.loop('amb_meadow', pocket === 'meadow' || pocket === 'sunfield' ? 1 - RUSTLE_DUCK * heard : 0);
     // Песчаный зал: низкий полый ветер под высоким потолком — свой гул вместо тона белого нигде.
     a.loop('amb_dunes', pocket === 'dunes' ? 1 : 0);
-    a.loop('amb_void', over && pocket !== 'meadow' && pocket !== 'sunfield' && pocket !== 'dunes' ? 1 : 0);
+    // Под шариком, пока невесомость, слышен тот же тон пустоты, что в белом нигде, — тише.
+    a.loop('amb_void', over && pocket !== 'meadow' && pocket !== 'sunfield' && pocket !== 'dunes' ? 1 : odd ? FLOAT_TONE * odd.float : 0);
     const body = over ? 0 : 1;
     a.loop('breath_calm', body * clamp01(1 - panic * 2.2));
     a.loop('breath_panic', body * clamp01((panic - 0.3) / 0.45));
-    a.loop('heartbeat', body * clamp01(Math.max((panic - 0.35) / 0.5, near * 1.2)));
+    a.loop('heartbeat', body * clamp01(Math.max((panic - 0.35) / 0.5, near * 1.2, odd ? odd.heart : 0)));
     a.loop('gas_hiss', s?.inGas ? body : 0);
-    a.loop('signal_static', clamp01(game.staticLevel * 1.4));
+    a.loop('signal_static', clamp01(Math.max(game.staticLevel * 1.4, odd ? TV_HUM * odd.hum : 0)));
     const sw = game.swarm;
     // Примета без тела — громче, чем рассеянная Осыпь рядом: её слышно только издалека (затухание по расстоянию даёт
     // звук), и это единственное, что от неё есть, кроме грибов в углах.
