@@ -20,6 +20,7 @@ import { panels } from './furnish_office';
 import { hanging } from './objects';
 import { ALL_PROPS } from './props_all';
 import type { Xf } from './props';
+import type { Aabb } from './colliders';
 
 /** Что ставить в оранжерее этого места. */
 interface GreenPlan {
@@ -67,11 +68,35 @@ function put(ctx: RoomCtx, name: string, xf: Xf, dx: number, off = 0.1): boolean
 
 /**
  * Вещь посреди клетки — там, где она не встаёт на дорожку перед грядками (FRONT в world/clearance.ts): сначала в середине, потом
- * со сдвигом от грядок к свободной стороне. try — поставить со сдвигом (dx, dz), true — встала.
+ * со сдвигом от грядок к свободной стороне. Сдвиги сперва отбираются дёшево — квадратом полуширины half против дорожек и преград
+ * (без сборки сетки: клумба — два десятка растений, и перебор сборкой замедлял уровень на две трети), собирается вещь только на
+ * тех, где ей есть место. put — поставить со сдвигом (dx, dz), true — встала.
  */
 const SHIFTS: readonly (readonly [number, number])[] = [[0, 0], ...[0.3, 0.5, 0.65].flatMap((d) => [[d, 0], [-d, 0], [0, d], [0, -d], [d, d], [-d, d], [d, -d], [-d, -d]] as const)];
-function shifted(put: (dx: number, dz: number) => boolean): boolean {
-  for (const [dx, dz] of SHIFTS) if (put(dx, dz)) return true;
+const SHIFT_TRIES = 4;
+function shifted(c: CellInfo, half: number, put: (dx: number, dz: number) => boolean): boolean {
+  const col = c.xf.col;
+  const near: Aabb[] = [];
+  let tries = 0;
+  for (const [dx, dz] of SHIFTS) {
+    if (col) {
+      const [x, , z] = c.xf.pt(dx, 0, dz);
+      const box = { minX: x - half, maxX: x + half, minY: 0.05, maxY: 1.2, minZ: z - half, maxZ: z + half };
+      const hit = (b: Aabb): boolean => Math.min(box.maxX, b.maxX) - Math.max(box.minX, b.minX) > 0.05 && Math.min(box.maxZ, b.maxZ) - Math.max(box.minZ, b.minZ) > 0.05;
+      if (col.keeps.some((k) => hit(k.box))) continue;
+      let blocked = false;
+      for (const b of col.query(box.minX, box.minZ, box.maxX, box.maxZ, near)) {
+        if (b.ghost || b.cut || b.off || b.maxY < c.xf.oy + 0.05 || b.minY > c.xf.oy + 1.2) continue;
+        if (hit(b)) {
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) continue;
+    }
+    if (put(dx, dz)) return true;
+    if (++tries >= SHIFT_TRIES) return false;
+  }
   return false;
 }
 
@@ -133,7 +158,7 @@ export function furnishGreenhouse(ctx: RoomCtx): boolean {
       while (i < centre.length) {
         const p = ALL_PROPS[centre[i++]!];
         if (!p) continue;
-        if (shifted((dx, dz) => p.build(c.xf.child(dx, 0, dz, (i % 2) as 0 | 1), seedOf(ctx)) !== false)) {
+        if (shifted(c, 0.36, (dx, dz) => p.build(c.xf.child(dx, 0, dz, (i % 2) as 0 | 1), seedOf(ctx)) !== false)) {
           stood++;
           taken.add(c);
           break;
@@ -147,7 +172,7 @@ export function furnishGreenhouse(ctx: RoomCtx): boolean {
     for (const c of ctx.cells) {
       if (c.doors > 0 || taken.has(c)) continue;
       const patch = ALL_PROPS[plan.patch];
-      if (patch) shifted((dx, dz) => patch.build(c.xf.child(dx, 0, dz), seedOf(ctx)) !== false);
+      if (patch) shifted(c, 0.66, (dx, dz) => patch.build(c.xf.child(dx, 0, dz), seedOf(ctx)) !== false);
     }
   }
   // Места для вещей — на полу в проходе: вещь воспоминания может лежать и среди цветов (у перрона места — свои, от его обстановки).

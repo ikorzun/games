@@ -1602,12 +1602,14 @@ async function scenarioGen(browser, baseUrl) {
  * CI затухание, идущее по кадрам, не продвигалось, и «гул стих» не дожидался (d32368f, df6bc8e, 4cb927b).
  */
 async function audioUntil(page, cond, ms = 9000) {
-  let au = await vz(page, () => window.__vz.audio());
+  // audio(true): желание игры от петель пересчитывается при каждом опросе, а не только в цикле отрисовки — тот под программной
+  // отрисовкой CI иногда почти стоит (смоук Playgama fa44320: в убежище вернулись, а гул «не вернулся» за 9 с).
+  let au = await vz(page, () => window.__vz.audio(true));
   for (let t = 0; t < ms && !cond(au); t += 200) {
     await sleep(200);
     au = await vz(page, () => {
       window.__vz.step(3);
-      return window.__vz.audio();
+      return window.__vz.audio(true);
     });
   }
   return au;

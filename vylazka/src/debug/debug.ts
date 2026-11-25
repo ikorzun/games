@@ -241,7 +241,11 @@ export interface VzDebugApi {
   /** Состояние звука: загружено, что просили и что прозвучало, какие петли идут. */
   /** Предметы витрины (?level=show) по порядку расстановки: имя, крепление, высота. */
   showcase(): { name: string; mount: string; h: number; y: number }[];
-  audio(): ReturnType<import('../audio/engine').AudioEngine['status']>;
+  /**
+   * Состояние звука. fresh — сначала пересчитать, чего игра хочет от петель (без хода часов звука): иначе это делает только
+   * цикл отрисовки, а он под программной отрисовкой CI иногда почти стоит (смоук Playgama fa44320: «гул вернулся» не дождался).
+   */
+  audio(fresh?: boolean): ReturnType<import('../audio/engine').AudioEngine['status']>;
   /** Состояние сюжета «Невостребованное» (systems/koma.ts). */
   koma(): unknown;
   /** Довести сюжет до сцены upTo включительно (проверки поздних актов без десятка снов). */
@@ -819,7 +823,11 @@ export function installDebug(app: App): void {
       app.advance(emptyInput(), 2, 1, STEP);
       return true;
     },
-    audio: () => app.sound.status(),
+    audio: (fresh) => {
+      const g = app.game;
+      if (fresh && g) app.audio.frame(g, 0, !app.lifecycle.paused);
+      return app.sound.status();
+    },
     koma: () => app.komaState(),
     komaSkip: (upTo, leave) => app.komaSkip(upTo, leave),
     caretaker: (cmd) => {
