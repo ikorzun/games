@@ -504,6 +504,11 @@ const FLOAT = { floor: 1.05, table: 0.55, shelf: 0.32, inside: 0.06, gap: 0.08, 
  * шире на radius (доли), дышит с частотой breath; rate — как быстро разгорается и гаснет (1/с).
  */
 const NEAR_GLOW = { from: 9, full: 2.5, strength: 1.4, radius: 0.45, breath: 2.6, rate: 1.6 } as const;
+/**
+ * Запотевший объектив (оранжерея, design.md §35): вошёл в тёплую сырую теплицу — стекло в испарине, она сходит от середины к
+ * краям за clear секунд. Снова запотевает, только если пробыл снаружи не меньше away секунд: на пороге туда-обратно не мигает.
+ */
+export const MIST = { clear: 5.5, away: 8 } as const;
 /** Сколько секунд Осыпь-примета идёт по месту. */
 const TRACE_SECONDS = 26;
 /** Ступень 3: силуэт на краю луча с первой минуты, охота — после первой вещи или с пятой минуты (как прежняя мягкая первая сессия, слово партнёра 16.11 23:41). */
@@ -1018,6 +1023,11 @@ export class Game {
   /** Сила вспышки стробоскопа в последнем кадре, 0..1 (для проверок). */
   private strobeNow = 0;
   private room = -1;
+  /** Запотевший объектив, 0..1, и сколько секунд герой вне оранжереи (MIST). */
+  private mist = 0;
+  private outGreen = Infinity;
+  /** Пыльца в воздухе оранжереи, 0..1: пыль там золотистая и медленная (render: uPollen). */
+  private pollen = 0;
   private nextGlitch = 12;
   private dreamSeed = 0;
 
@@ -1182,6 +1192,9 @@ export class Game {
     this.fxLight = 1;
     this.fxWire = 0;
     this.room = -1;
+    this.mist = 0;
+    this.outGreen = Infinity;
+    this.pollen = 0;
     this.swarmNear = 0;
     this.darkFor = 0;
     this.darkShifts = 0;
@@ -2531,6 +2544,14 @@ export class Game {
     return this.rustle;
   }
 
+  /**
+   * Игрок в тёплой сырой оранжерее — теплица убежища или зимний сад офиса (не перрон с клумбами): капель там чаще и ближе —
+   * полив и испарина на стекле (audio/game_audio.ts).
+   */
+  get inGreenhouse(): boolean {
+    return this.where === 'main' && this.world !== 'station' && this.level?.greenRoom !== undefined && this.room === this.level.greenRoom;
+  }
+
   /** Игрок в помещении, где проросла трава (design.md, §36): шаги по траве (audio/game_audio.ts). */
   get onGrass(): boolean {
     return this.where === 'main' && this.level?.grassRoom !== undefined && this.room === this.level.grassRoom;
@@ -3399,6 +3420,16 @@ export class Game {
     const look: Look = { eye, aim, light: this.seeing };
     const node = this.where === 'main' ? this.playerNode() : -1;
     this.room = node >= 0 ? this.level!.nav[node]!.room : -1;
+    // Оранжерея убежища и зимний сад офиса — тёплые и сырые: вошёл — объектив запотел. Клумбы зала ожидания стоят на перроне,
+    // под открытым небом: там стекло не потеет.
+    const green = this.level?.greenRoom;
+    const amongFlowers = this.where === 'main' && green !== undefined && this.room === green;
+    const inGreen = amongFlowers && this.world !== 'station';
+    if (inGreen && this.outGreen >= MIST.away) this.mist = 1;
+    this.outGreen = inGreen ? 0 : this.outGreen + wdt;
+    this.mist = Math.max(0, this.mist - wdt / MIST.clear);
+    // Среди цветов — и на перроне с клумбами тоже — пыль в луче становится пыльцой: золотистой, медленной.
+    this.pollen = approach(this.pollen, amongFlowers ? 1 : 0, 0.6, wdt);
     // Вошёл в помещение с красной сеткой — сказать, что это (раз на помещение за сессию; в переходе — нет).
     const fxHere = this.room >= 0 && !this.transition ? this.roomFx.get(this.room) : undefined;
     if ((fxHere === 'dark' || fxHere === 'wire') && !this.wireSaid.has(this.room)) {
@@ -4163,7 +4194,6 @@ export class Game {
 
     // Вещи: положение, рост, распад и красная сетка. Цель воспоминания в темноте светится сеткой сквозь стены.
     const focus = this.things.focus;
-    let memNear = 0;
     for (const t of this.things.list) {
       const id = this.thingRender.get(t.id);
       if (id === undefined) continue;
@@ -4176,7 +4206,6 @@ export class Game {
       let w = t.state === 'changing' && !t.touched && !grows ? 0.8 * (1 - t.dissolve) * (1 - t.dissolve) : t.state === 'idle' ? t.gaze * (0.45 + 0.35 * Math.sin(this.time * 23)) : 0;
       let xray = false;
       if (t.memory) {
-        memNear = Math.max(memNear, 1 - d / 8);
         // Без света — значит темно на самом деле: под горящей панелью офиса сетки сквозь стены нет.
         if (lit < 0.15 && amb < 0.08 && d < 45) {
           w = Math.max(w, 0.6);
@@ -4202,10 +4231,12 @@ export class Game {
     const feelAmp = this.stage <= 1 ? 0.5 : this.stage <= 3 ? 0.75 : 1;
     const fv = this.where === 'main' && this.session ? this.feel.view(this.wear, feelAmp) : FEEL_NEUTRAL;
     this.feelNow = fv;
-    // Кинескоп заметнее на ходу, под взглядом на вещь, рядом с искомым и в момент скачка; к концу сессии строки дрожат.
+    // Кинескоп заметнее на ходу, под взглядом на вещь и в момент скачка; к концу сессии строки дрожат. Рядом с искомым он больше не
+    // крепнет (куратор, 425): к вещи и так ведут её звук, свет памяти, пузырь, сетка сквозь стены и строка цели — шестой знак
+    // превращал охоту в разметку, и «тихо — она рядом» тонуло.
     const speed = Math.hypot(b.vx, b.vz);
     const hold = this.session?.hold ?? 0;
-    const crt = clamp(0.1 + 0.2 * (speed / RUN_SPEED) + 0.5 * Math.max(focus?.gaze ?? 0, hold) + 0.3 * Math.max(0, memNear) + (tr ? 0.45 : 0) + 0.35 * fv.rattle * (this.faintFlash ? 0.4 : 1), 0, 1);
+    const crt = clamp(0.1 + 0.2 * (speed / RUN_SPEED) + 0.5 * Math.max(focus?.gaze ?? 0, hold) + (tr ? 0.45 : 0) + 0.35 * fv.rattle * (this.faintFlash ? 0.4 : 1), 0, 1);
 
     // Глубина 0…1: от входа до нижнего яруса.
     const depth = clamp(-(rig.camPos[1] - 1.42) / 9, 0, 1);
@@ -4310,6 +4341,8 @@ export class Game {
       wire,
       crt,
       flash,
+      mist: this.where === 'main' ? this.mist : 0,
+      pollen: this.where === 'main' ? this.pollen : 0,
       echo: this.where === 'main' && this.echo.count > 0 ? this.echo.data : null,
       ghost: this.ghost,
       sonar: this.sonarView(),
@@ -4501,6 +4534,7 @@ export class Game {
       sterile: this.sterileK,
       kept: this.keptThing ? this.keptThing.id : null,
       memNear: +this.memNearK.toFixed(3),
+      mist: +this.mist.toFixed(3),
       memFloat: this.memFloat,
       worldLook: this.worldLook,
       keptDist: Number.isFinite(this.keptDist) ? +this.keptDist.toFixed(2) : null,

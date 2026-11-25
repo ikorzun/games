@@ -3,7 +3,7 @@ import { mulberry32 } from '../src/core/rng';
 import { defaultProfile, memoryFor } from '../src/core/save';
 import type { Vec3 } from '../src/core/types';
 import { generateLayout } from '../src/gen/layout';
-import { BODY_RISE, Game, SONAR_EVERY, SONAR_REACH, SONAR_SPEED, STAGE_ALL, STEP, WIRE_STILL } from '../src/game';
+import { BODY_RISE, Game, MIST, SONAR_EVERY, SONAR_REACH, SONAR_SPEED, STAGE_ALL, STEP, WIRE_STILL } from '../src/game';
 import type { DreamEvent, FearEvent, StepEvents } from '../src/game';
 import { DEFAULT_CONTROLLER } from '../src/player/controller';
 import { emptyInput } from '../src/player/input';
@@ -607,6 +607,34 @@ describe('игра целиком: цикл сессии', () => {
     expect(h.until(() => h.dreamCount('begin') > 0, 4)).toBe(true);
     expect(g.level).toBe(office);
     expect(g.where).toBe('main');
+  });
+
+  it('вошёл в оранжерею — объектив запотел и расчистился за несколько секунд; на пороге туда-обратно не потеет снова (MIST)', () => {
+    const h = new Harness(levelOf(SEED), { seed: 3, cfg: { ...QUICK, count: 1 } });
+    const g = h.game;
+    h.run(2);
+    const green = g.level!.greenRoom;
+    expect(green, 'в убежище есть оранжерея').toBeDefined();
+    const mist = (): number => g.snapshot().mist as number;
+    expect(mist()).toBe(0);
+    const inside = g.level!.nav.find((q) => q.room === green)!;
+    const outside = g.level!.nav.find((q) => q.room >= 0 && q.room !== green && Math.hypot(q.x - inside.x, q.z - inside.z) > 6)!;
+    const go = (n: { x: number; y: number; z: number }): void => g.teleport(n.x, n.y, n.z, 0, 0);
+    go(inside);
+    h.run(0.2);
+    expect(mist(), 'вошёл — запотел').toBeGreaterThan(0.9);
+    h.run(MIST.clear);
+    expect(mist(), 'расчистился').toBe(0);
+    go(outside);
+    h.run(1);
+    go(inside);
+    h.run(0.2);
+    expect(mist(), 'вышел на миг и вернулся — сухой').toBe(0);
+    go(outside);
+    h.run(MIST.away + 0.5);
+    go(inside);
+    h.run(0.2);
+    expect(mist(), 'побыл снаружи — запотел снова').toBeGreaterThan(0.9);
   });
 
   it('вернувшись из кармана в клетку, где лежит вещь, игрок встаёт рядом, а не в неё: вещь не растворяется (CI, «после двери луга»)', () => {

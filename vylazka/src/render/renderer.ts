@@ -77,6 +77,14 @@ export const QUALITY: Record<Quality, QualitySpec> = {
   ultra: { pixels: 4 * 1280 * 720, shadow: 2048, chroma: true, detail: true, dust: 520, worms: MAX_WORMS, strand: 110, haze: 14, hazeDiv: 2, hazeShadow: true, points: 1100, edl: true, hex: true, fine: 2 },
 };
 
+/** Решётка пыли выросшей вещи: клеток на метр — при кадре в 720 строк и выше и самое меньшее. */
+export const DOT_GRID = { max: 22, min: 9, rows: 720 } as const;
+
+/** Клеток пыли на метр при такой высоте кадра (в строках обычного зерна): мельче пикселя на трёх метрах пылинка не бывает. */
+export function dotGrid(rows: number): number {
+  return Math.min(DOT_GRID.max, Math.max(DOT_GRID.min, (DOT_GRID.max * rows) / DOT_GRID.rows));
+}
+
 /** Сколько точек в пряди Осыпи заведено всего: высокое качество при самом мелком зерне. */
 const STRAND_MAX = 440;
 /**
@@ -205,6 +213,10 @@ export interface FrameView {
   crt: number;
   /** 0..1: кадр выбелен (скачок между пространствами). */
   flash: number;
+  /** 0..1: объектив запотел (вошёл с холода в тёплую сырую оранжерею); расчищается от середины к краям. Нет поля — сухой. */
+  mist?: number;
+  /** 0..1: пыль в воздухе — пыльца оранжереи: золотистая, медленная, едва видна и без луча. Нет поля — обычная пыль. */
+  pollen?: number;
   /**
    * Эхо: волны от шагов и от Осыпи, по ECHO_STRIDE чисел на волну (x, y, z, радиус, сила, хвост, род, —);
    * у пустых мест сила — ноль. null — эха нет вовсе.
@@ -855,6 +867,7 @@ export class GameRenderer {
         uDissolve: { value: 0 },
         uThing: { value: new THREE.Vector4(0, 0, 0, 0) },
         uDots: { value: 0 },
+        uDotGrid: { value: DOT_GRID.max },
         uScan: { value: new THREE.Vector4(0, SCAN.perLight, SCAN.max, 0) },
         uScanFade: { value: 1 },
         uBuild: { value: 0 },
@@ -921,7 +934,7 @@ export class GameRenderer {
     this.dustMat = new THREE.ShaderMaterial({
       vertexShader: DUST_VERT,
       fragmentShader: DUST_FRAG,
-      uniforms: { ...this.lightU, uTime: { value: 0 }, uCamPos: { value: new THREE.Vector3() }, uPointScale: { value: 4 }, uBoost: { value: 0 } },
+      uniforms: { ...this.lightU, uTime: { value: 0 }, uCamPos: { value: new THREE.Vector3() }, uPointScale: { value: 4 }, uBoost: { value: 0 }, uPollen: { value: 0 } },
       blending: THREE.AdditiveBlending,
       transparent: true,
       depthWrite: false,
@@ -1065,6 +1078,7 @@ export class GameRenderer {
         uBloom: { value: 0.1 },
         uCrt: { value: 0 },
         uFlash: { value: 0 },
+        uMist: { value: 0 },
         tEcho: { value: null },
         uEcho: { value: 0 },
         uFmt: { value: 1 },
@@ -1483,6 +1497,9 @@ export class GameRenderer {
     // срыва, ореол, звёзды), на экране остаётся прежним.
     const f2 = fine * fine;
     this.dustMat.uniforms.uPointScale!.value = h / 160 / fine;
+    // Пыль выросшей вещи (куратор, 429): шаг решётки — по высоте кадра. В кадре 720 строк пылинка 4,5 см; в низком
+    // кадре (360 строк) она была бы мельче пикселя уже в трёх метрах и мерцала бы — там она крупнее, до 11 см.
+    this.worldMat.uniforms.uDotGrid!.value = dotGrid(h / fine);
     const dustN = Math.round(q.dust * f2);
     if (dustN !== this.dustCount) this.rebuildDust(dustN);
     this.starMat.uniforms.uPx!.value = h / 720;
@@ -2843,6 +2860,7 @@ export class GameRenderer {
     const bt = v.burnTint ?? [0.9, 0.07, 0.03];
     (wuEnv.uBurnTint!.value as THREE.Vector3).set(bt[0], bt[1], bt[2]);
     this.dustMat.uniforms.uBoost!.value = v.dissolve;
+    this.dustMat.uniforms.uPollen!.value = v.pollen ?? 0;
     this.clearColor.setRGB(v.fogColor[0], v.fogColor[1], v.fogColor[2]);
 
     // Фонарь в пространстве камеры.
@@ -3261,6 +3279,7 @@ export class GameRenderer {
     (pu.uBeam!.value as THREE.Vector3).set(ndc.x * 0.5 + 0.5, ndc.y * 0.5 + 0.5, visible ? 0.018 * v.lightIntensity * v.lightScale : 0);
     pu.uCrt!.value = v.crt;
     pu.uFlash!.value = v.flash;
+    pu.uMist!.value = v.mist ?? 0;
     const gr = v.grade ?? GRADE_DEFAULT;
     (pu.uGradeLo!.value as THREE.Vector4).set(gr.lo[0], gr.lo[1], gr.lo[2], gr.sat);
     (pu.uGradeHi!.value as THREE.Vector3).set(gr.hi[0], gr.hi[1], gr.hi[2]);

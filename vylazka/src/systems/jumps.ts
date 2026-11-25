@@ -53,6 +53,12 @@ export interface JumpsConfig {
 export const DEFAULT_JUMPS: JumpsConfig = { firstAfter: 50, gapMin: 45, gapMax: 80, maxPerSession: 6, lightChance: 0.3, reviveChance: 0.35, darkIdle: 7 };
 
 const POCKETS: readonly PocketKind[] = ['void', 'meadow', 'dollhouse', 'sunfield'];
+/**
+ * Вес кармана в случайном скачке. Красная комната забвения — единственный карман с делом (подсказывает, где забытое), и с
+ * полем подсолнухов её доля упала бы с трети до четверти (куратор, 437): у неё двойной вес — после другого кармана она
+ * выпадает в двух случаях из четырёх, после себя не выпадает, в итоге — снова треть скачков. Прочие — места без дела, поровну.
+ */
+export const POCKET_WEIGHT: Readonly<Partial<Record<PocketKind, number>>> = { dollhouse: 2 };
 
 export class Jumps {
   /** Сколько секунд осталось до того, как случайный скачок снова возможен. */
@@ -79,7 +85,16 @@ export class Jumps {
   /** Следующее карманное пространство: не то же, что в прошлый раз. */
   nextPocket(): PocketKind {
     const pool = POCKETS.filter((p) => p !== this.lastPocket);
-    const p = pool[Math.floor(this.rng() * pool.length)] ?? 'void';
+    const w = (p: PocketKind): number => POCKET_WEIGHT[p] ?? 1;
+    let r = this.rng() * pool.reduce((sum, p) => sum + w(p), 0);
+    let p: PocketKind = pool[pool.length - 1] ?? 'void';
+    for (const q of pool) {
+      r -= w(q);
+      if (r < 0) {
+        p = q;
+        break;
+      }
+    }
     this.lastPocket = p;
     return p;
   }

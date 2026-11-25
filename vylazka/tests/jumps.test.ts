@@ -121,6 +121,21 @@ describe('скачки: куда', () => {
     }
   });
 
+  it('красная комната — карман с делом — выпадает чаще прочих (куратор, 437)', () => {
+    const j = new Jumps(mulberry32(11));
+    const n: Record<string, number> = {};
+    const N = 6000;
+    for (let i = 0; i < N; i++) {
+      const p = j.nextPocket();
+      n[p] = (n[p] ?? 0) + 1;
+    }
+    // Двойной вес и без повтора: после другого кармана красная — в половине случаев, после себя — никогда; в итоге
+    // треть скачков (как было, пока карманов было три), по 2/9 — каждый другой карман. Поровну было бы по четверти.
+    expect(n.dollhouse! / N).toBeGreaterThan(0.3);
+    expect(n.dollhouse! / N).toBeLessThan(0.37);
+    for (const p of ['void', 'meadow', 'sunfield']) expect(n[p]! / N).toBeGreaterThan(0.19);
+  });
+
   it('обязательные скачки тоже учитывают прошлое пространство: падение подряд — не в одно и то же', () => {
     const j = new Jumps(mulberry32(5));
     let prev = '';

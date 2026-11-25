@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { allSoundFiles, AudioEngine, FULL_RATE, SOUNDS, spatialize, unloadable } from '../src/audio/engine';
-import { GameAudio, LOAD_FIRST, loadFirst, PLACE_TONE, TRACE_SAND, WAKE_FIRST, WAKING } from '../src/audio/game_audio';
+import { GameAudio, GREEN_DRIP, LOAD_FIRST, loadFirst, PLACE_TONE, TRACE_SAND, WAKE_FIRST, WAKING } from '../src/audio/game_audio';
 import type { AudioWorld, SoundSink } from '../src/audio/game_audio';
 import type { Vec3 } from '../src/core/types';
 import type { StepEvents } from '../src/game';
@@ -930,6 +930,30 @@ describe('привязка звуков к игре', () => {
     expect(drips.length).toBeGreaterThanOrEqual(4);
     expect(drips.length).toBeLessThanOrEqual(14);
     for (const d of drips) expect(Math.hypot(d.pos![0], d.pos![2])).toBeGreaterThan(0.9);
+  });
+
+  it('в оранжерее капель чаще, ближе и мельче — и в офисном зимнем саду тоже, где в темноте убежища капель нет (GREEN_DRIP)', () => {
+    const count = (over: Partial<AudioWorld>): { n: number; far: number; rate: number } => {
+      const r = new Recorder();
+      const a = new GameAudio(r);
+      a.setScene('play');
+      a.sortieStart(true);
+      const w = world(over);
+      for (let i = 0; i < 60 * 60; i++) a.frame(w, 1 / 60, true);
+      const drips = r.plays.filter((p) => p.id === 'drip');
+      const far = Math.max(0, ...drips.map((d) => Math.hypot(d.pos![0], d.pos![2])));
+      const rate = drips.reduce((sum, d) => sum + ((d as { rate?: number }).rate ?? 1), 0) / Math.max(1, drips.length);
+      return { n: drips.length, far, rate };
+    };
+    const dark = count({});
+    const green = count({ inGreenhouse: true });
+    const office = count({ world: 'office' });
+    const garden = count({ world: 'office', inGreenhouse: true });
+    expect(green.n).toBeGreaterThan(dark.n * 2);
+    expect(green.far).toBeLessThan(GREEN_DRIP.near + 1.5);
+    expect(green.rate).toBeGreaterThan(dark.rate);
+    expect(office.n, 'в офисе капель нет').toBe(0);
+    expect(garden.n, 'в зимнем саду офиса — есть').toBeGreaterThan(10);
   });
 });
 

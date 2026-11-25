@@ -32,6 +32,8 @@ export interface AudioWorld {
   pocket?: { kind: string } | null;
   /** Игрок в помещении, где сквозь пол проросла трава (design.md, §36): шаги — по траве. */
   onGrass?: boolean;
+  /** Игрок в тёплой сырой оранжерее (game.inGreenhouse): капель чаще и ближе — полив и испарина. Нет поля — нет. */
+  inGreenhouse?: boolean;
   /**
    * Шорох травы, что тянется к свету (systems/grass.ts, RUSTLE): gain 0..1 — сколько её сейчас движется, at — где. Нет поля
    * или gain 0 — тихо.
@@ -78,6 +80,8 @@ const MUSIC = 'music_menu';
 export const TRACE_SAND = 0.8;
 /** Насколько ветер луга приседает под полным шорохом травы. */
 export const RUSTLE_DUCK = 0.45;
+/** Капель оранжереи: средняя пауза, с; на каком расстоянии, м; во сколько выше тон (капли мельче); громкость. */
+export const GREEN_DRIP = { every: 2.4, near: 2.6, rate: 1.25, volume: 0.7 } as const;
 /** Громкость зова искомой вещи (still_tone из её места; затухание по расстоянию — у движка). */
 const MEMORY_CALL = 0.7;
 /** Свой звук искомой вещи по её виду; вещь без знакомого звука (ключ, билет, шляпа) зовёт ровным тоном. */
@@ -433,14 +437,16 @@ export class GameAudio {
       if (settled > 0.6 && hush < 0.2) this.wake(ears, 11);
     }
 
-    // Капли: в убежище — редкий одиночный звук откуда-то из темноты; глубже — чаще.
-    if (active && !over && place === 'shelter' && sterile < 0.5 && this.clock >= this.dripAt) {
+    // Капли: в убежище — редкий одиночный звук откуда-то из темноты; глубже — чаще. В оранжерее (убежища и офиса) — капель
+    // с листьев и стекла: втрое чаще и рядом, капли мельче (выше тоном).
+    const wet = !over && game.inGreenhouse === true;
+    if (active && !over && (place === 'shelter' || wet) && sterile < 0.5 && this.clock >= this.dripAt) {
       const k = this.jitter(0.5);
-      this.dripAt = this.clock + (5 + 9 * (k - 0.5)) * (1 - depth * 0.4);
+      this.dripAt = this.clock + (wet ? GREEN_DRIP.every * (0.6 + 0.8 * (k - 0.5)) : (5 + 9 * (k - 0.5)) * (1 - depth * 0.4));
       const angle = this.jitter(0.5) * Math.PI * 4;
-      const r = 4 + 6 * (this.jitter(0.5) - 0.5);
+      const r = wet ? GREEN_DRIP.near + 2.5 * (this.jitter(0.5) - 0.5) : 4 + 6 * (this.jitter(0.5) - 0.5);
       const pos: Vec3 = [ears.pos[0] + Math.cos(angle) * r, ears.pos[1] - 1.2, ears.pos[2] + Math.sin(angle) * r];
-      a.play('drip', { pos, rate: this.jitter(0.12), volume: 1 - 0.35 * hush });
+      a.play('drip', { pos, rate: this.jitter(0.12) * (wet ? GREEN_DRIP.rate : 1), volume: (1 - 0.35 * hush) * (wet ? GREEN_DRIP.volume : 1) });
     }
   }
 }

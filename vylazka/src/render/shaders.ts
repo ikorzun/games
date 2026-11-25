@@ -518,6 +518,7 @@ uniform vec4 uSlide;      // проекции: x, y — при каком све
 uniform sampler2D uScreens; // атлас картинок выставочных экранов (world/screens.ts)
 uniform sampler2DArray uPapers; // листы бумаги (world/papers.ts): портреты, деньги, карты — слой на файл
 uniform float uDots;      // 0..1: выросшая вещь — одни точки (объявлен и в CRUMBLE_GLSL вершинного шейдера; во фрагментном нужен свой)
+uniform float uDotGrid;   // клеток пыли на метр: 22 в кадре 720 строк, в низком кадре реже (render/renderer.ts, dotGrid)
 #ifdef THING_TEX
 // Подробная вещь памяти (world/thing_hq.ts): свои карты по своей развёртке.
 uniform sampler2D uThingC;   // rgb — цвет, a — затенение щелей
@@ -962,10 +963,11 @@ void main() {
   }
   // Вещь, выросшая под взглядом, — облако точек: «словно из точек, чтобы было понятно, что её можно
   // пройти насквозь» (слова партнёра). Клетка ~4,5 см в мире: мелкая пыль (партнёр 24.11: «быстро
-  // увеличивается и превращается в мелкую пыль»); чем больше выросла, тем реже пылинки.
+  // увеличивается и превращается в мелкую пыль»); чем больше выросла, тем реже пылинки. В низком кадре
+  // клетка крупнее (uDotGrid): пылинка мельче пикселя мерцает и пропадает, и вещь исчезала бы без пыли.
   float dotGlow = 0.0;
   if (uDots > 0.0) {
-    vec3 dp = vWorld * 22.0;
+    vec3 dp = vWorld * uDotGrid;
     vec3 dc = floor(dp);
     vec3 centre = 0.3 + 0.4 * vec3(cellHash(dc + 3.1), cellHash(dc + 5.7), cellHash(dc + 9.3));
     if (length(fract(dp) - centre) > mix(0.9, 0.3, uDots)) discard;
@@ -1731,20 +1733,27 @@ uniform float uTime;
 uniform vec3 uCamPos;
 uniform float uPointScale;
 uniform float uBoost;     // 0..1: мир рассыпается — пыль видна и без луча, летит вверх
+uniform float uPollen;    // 0..1: в оранжерее пыль — пыльца: медленнее, часть пылинок крупнее, чуть видна и без луча
 varying float vLight;
+varying float vPollen;
 
 ${BEAM_GLSL}
 
 void main() {
   const vec3 box = vec3(7.0, 3.2, 7.0);
   vec3 p = aSeed * box;
-  p += vec3(sin(uTime * 0.11 + aSeed.y * 40.0), uTime * (0.02 + 0.9 * uBoost) + cos(uTime * 0.07 + aSeed.x * 31.0) * 0.3, cos(uTime * 0.09 + aSeed.z * 23.0)) * 0.25;
+  // Пыльца плывёт медленнее пыли и почти не поднимается: тёплый влажный воздух стоит.
+  float drift = 1.0 - 0.55 * uPollen;
+  p += vec3(sin(uTime * 0.11 * drift + aSeed.y * 40.0), uTime * (0.02 * drift + 0.9 * uBoost) + cos(uTime * 0.07 * drift + aSeed.x * 31.0) * 0.3, cos(uTime * 0.09 * drift + aSeed.z * 23.0)) * 0.25;
   // Облако бесконечно: точки заворачиваются вокруг камеры.
   p = mod(p - uCamPos + box * 0.5, box) - box * 0.5 + uCamPos;
   vec4 mv = viewMatrix * vec4(p, 1.0);
   float dist = -mv.z;
-  vLight = max(beamAt(mv.xyz).w, uBoost * 0.35) * smoothstep(0.25, 0.9, dist) * (0.4 + 0.6 * fract(aSeed.x * 91.7));
-  gl_PointSize = clamp(uPointScale * (0.6 + fract(aSeed.z * 57.3)) / max(dist, 0.2), 1.0, 5.0);
+  vLight = max(max(beamAt(mv.xyz).w, uBoost * 0.35), uPollen * 0.2) * smoothstep(0.25, 0.9, dist) * (0.4 + 0.6 * fract(aSeed.x * 91.7));
+  // Каждая пятая пылинка пыльцы — комочек крупнее: в луче видно, что это не пыль.
+  float clump = uPollen * step(0.8, fract(aSeed.y * 73.1));
+  vPollen = uPollen;
+  gl_PointSize = clamp(uPointScale * (0.6 + fract(aSeed.z * 57.3)) * (1.0 + 0.8 * clump) / max(dist, 0.2), 1.0, 5.0 + 2.0 * clump);
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -1754,11 +1763,15 @@ precision mediump float;
 uniform vec3 uLightColor;
 uniform highp float uBoost;
 varying float vLight;
+varying float vPollen;
 
 void main() {
   vec2 c = gl_PointCoord - 0.5;
   float a = smoothstep(0.5, 0.1, length(c));
-  gl_FragColor = vec4(max(uLightColor, vec3(uBoost)) * vLight * a * 0.16, 1.0);
+  // Пыльца золотистая и ярче пыли: свет на ней тёплый, даже холодный луч.
+  vec3 tint = mix(vec3(1.0), vec3(1.25, 1.0, 0.45), vPollen);
+  vec3 lit = max(uLightColor, vec3(uBoost + 0.35 * vPollen));
+  gl_FragColor = vec4(lit * tint * vLight * a * (0.16 + 0.1 * vPollen), 1.0);
 }
 `;
 
@@ -2620,6 +2633,7 @@ uniform vec2 uHazeTexel;
 uniform float uBloom;
 uniform float uCrt;       // 0..1: насколько «кинескоп» заметен — строки, маска, дрожь строк, бегущая полоса
 uniform float uFlash;     // 0..1: кадр выбеливается (скачок между пространствами)
+uniform float uMist;      // 0..1: объектив запотел (вход в оранжерею): муть и размыв, расчищается от середины к краям
 uniform sampler2D tEcho;  // эхо: линии пространства, проступающие под волной (свой слой: выдержка их не смазывает)
 uniform float uEcho;      // 1 — слой эха есть в этом кадре
 // Мелкое зерно (сильный компьютер, QUALITY.ultra): буфер крупнее, шум сенсора и точки мельче. А то, что
@@ -2709,6 +2723,26 @@ void main() {
 
   vec2 c = vUv * 2.0 - 1.0;
   c.x *= uAspect;
+
+  // Запотевший объектив: вошёл с холода в тёплую сырую оранжерею — на стекле испарина. Кадр размыт кольцом выборок и подёрнут
+  // молочной мутью, свет в ней расплывается. Испарина сходит от середины к краям; край неровный — по пятнам грязи на стекле,
+  // у краёв капли держатся дольше. Только пока uMist > 0: обычный кадр этих выборок не делает.
+  if (uMist > 0.0) {
+    vec2 mv = distort(uv, uBarrel);
+    vec2 rad = vec2(0.022 / uAspect, 0.022);
+    vec3 blur = sampleScene(mv) * 0.2;
+    for (int k = 0; k < 8; k++) {
+      float a = float(k) * 0.7853982 + 0.39;
+      blur += sampleScene(mv + vec2(cos(a), sin(a)) * rad * (k % 2 == 0 ? 1.0 : 0.55)) * 0.1;
+    }
+    float ml = dot(blur, vec3(0.299, 0.587, 0.114));
+    vec3 veil = mix(blur, vec3(ml), 0.45) * 1.12 + vec3(0.010, 0.011, 0.010);
+    float rr = length(c) / length(vec2(max(uAspect, 1.0), 1.0));
+    float drops = texture2D(uGrime, vUv * vec2(uAspect, 1.0) * 1.7 + 0.31).r;
+    float clearR = (1.0 - uMist) * 1.45 - 0.2;
+    float m = smoothstep(clearR - 0.2, clearR + 0.18, rr + (drops - 0.5) * 0.4) * min(1.0, uMist * 1.8);
+    col = mix(col, veil, 0.92 * m);
+  }
 
   vec2 bc = uBeam.xy * 2.0 - 1.0;
   bc.x *= uAspect;
