@@ -41,6 +41,8 @@ import type { SessionConfig } from './systems/session';
 import { wornLine } from './systems/worn_text';
 import { Hud } from './ui/hud';
 import { buildMetaCard } from './ui/meta_card';
+import { FrameMeter, MEASURE } from './ui/measure';
+import type { MeasureResult } from './ui/measure';
 import { Overlay } from './ui/overlay';
 import type { CardLine } from './ui/overlay';
 import { TouchControls } from './ui/touch_controls';
@@ -192,6 +194,14 @@ export class App {
   private playTime = 0;
   private slowTime = 0;
   private showFps = false;
+  /**
+   * Замер 30 с из настроек (ui/measure.ts; телефон партнёра: адрес #fps до игры не доходит): счётчик, итог прошлого замера строкой
+   * и до какого времени (performance.now) строка итога стоит в углу HUD. Итог помнится до перезагрузки и никуда не пишется.
+   */
+  private readonly meter = new FrameMeter(MEASURE.span);
+  private measureLine = '';
+  private measureUntil = 0;
+  private measureLoadAt = 0;
   /** Пробная сборка для телефона (страница с __vzVariant): 'probe' — строка проверки включена с самого начала. */
   private variant = '';
   /** Проверка на устройстве (#diag): строка с видеокартой и тем, что в кадре на полу, и кнопка «сплошь». */
@@ -333,6 +343,7 @@ export class App {
       onFlash: (level) => this.setFlash(level),
       onPlace: () => this.setPlace(WORLD_KINDS[(WORLD_KINDS.indexOf(this.world) + 1) % WORLD_KINDS.length]!),
       onRestartPlace: () => this.restartPlace(),
+      onMeasure: () => this.startMeasure(),
       onLang: (lang) => this.pickLang(lang),
       onDiag: () => this.toggleDiag(),
       onQuality: (q) => {
@@ -1609,10 +1620,53 @@ export class App {
       this.diagText.textContent = this.diagLines();
       this.placeDiagMarks();
     }
-    if (this.showFps) {
+    // Угол HUD: идёт замер — сколько осталось; кончился — итог ~20 с; иначе — счётчик кадров (#fps) или ничего.
+    const measure = this.measureText();
+    if (measure) this.hud.setFps(measure);
+    else if (this.showFps) {
       const i = g.renderer.info();
       this.hud.setFps(`${this.fps.toFixed(0)} fps · ${i.quality}${i.quality === 'ultra' ? ` ${i.fine}` : ''} · ${i.width}×${i.height} · ${i.calls} dc · ${(i.triangles / 1000).toFixed(1)}k · грибы ${i.spores.shown}`);
+    } else this.hud.setFps('');
+  }
+
+  /** Замер 30 с (пункт настроек): начать заново и пустить игру — с заставки или из паузы. */
+  private startMeasure(): void {
+    this.meter.start();
+    this.measureUntil = 0;
+    this.measureLoadAt = 0;
+    this.audio.ui('ui_click');
+    if (this.screen === 'title') this.start();
+    else this.resumePlay();
+  }
+
+  /** Кадр игры длиной ms для замера; раз в полсекунды — нагрузка кадра. Кончился — итог в угол HUD, в консоль и под пункт. */
+  private measureTick(ms: number): void {
+    const now = performance.now();
+    if (now - this.measureLoadAt > 500) {
+      this.measureLoadAt = now;
+      const i = this.game.renderer.info();
+      this.meter.load(i.calls, i.triangles);
     }
+    const r = this.meter.frame(ms);
+    if (r) this.measureDone(r);
+  }
+
+  /** Итог замера строкой: качество и кадр — какие сейчас, частоты и нагрузка — за 30 с замера. */
+  private measureDone(r: MeasureResult): void {
+    const i = this.game.renderer.info();
+    const quality = `${t(`ui.quality.${i.quality}`)}${i.quality === 'ultra' ? ` ${i.fine}` : ''}`;
+    // Меньше десяти кадров в секунду — с десятой: «0 fps» читалось бы поломкой замера.
+    const fps = (x: number): string => (x < 10 ? x.toFixed(1) : String(Math.round(x)));
+    this.measureLine = t('ui.measure.line', { fps: fps(r.avg), low: fps(r.low1), quality, size: `${i.width}×${i.height}`, dc: Math.round(r.calls), tri: Math.round(r.triangles / 1000) });
+    this.measureUntil = performance.now() + MEASURE.show * 1000;
+    this.overlay.setMeasure(this.measureLine);
+    console.info(`[vylazka] ${this.measureLine}`, { ...r, quality: i.quality, fine: i.fine, width: i.width, height: i.height, world: this.game.world, touch: this.touchMode });
+  }
+
+  /** Строка замера для угла HUD: идёт — сколько секунд осталось; кончился недавно — итог; иначе пусто. */
+  private measureText(): string {
+    if (this.meter.running) return t('ui.measure.run', { s: Math.ceil(this.meter.left) });
+    return this.measureLine && performance.now() < this.measureUntil ? this.measureLine : '';
   }
 
   /**
@@ -1883,7 +1937,8 @@ export class App {
 
   private readonly loop = (now: number): void => {
     requestAnimationFrame(this.loop);
-    const dt = Math.min(0.1, Math.max(0, (now - this.last) / 1000));
+    const prev = this.last;
+    const dt = Math.min(0.1, Math.max(0, (now - prev) / 1000));
     this.last = now;
     // Звук считается и на паузе: в меню игра стоит, а музыка идёт.
     if (this.game) this.audio.frame(this.game, dt, !this.lifecycle.paused);
@@ -1893,6 +1948,8 @@ export class App {
     this.awake.want(this.screen === 'play' && !this.lifecycle.paused);
     if (this.frozen || this.lifecycle.paused) return;
     if (dt > 0) this.fps += (1 / dt - this.fps) * 0.08;
+    // Замер — по настоящему времени кадра (dt выше обрезан до 0,1 с): пауза сюда не доходит, остановку страницы отсекает счётчик.
+    if (this.meter.running && this.screen === 'play') this.measureTick(now - prev);
 
     const input = this.pollInput();
     if (input.pause && this.screen === 'play') {

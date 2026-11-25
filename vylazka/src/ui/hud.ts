@@ -597,8 +597,9 @@ export class Hud {
     this.mark.style.top = `${(y * 100).toFixed(2)}%`;
   }
 
+  /** Строка счётчика кадров или замера в правом верхнем углу (пусто — нет строки). Тот же текст не переписывается. */
   setFps(text: string): void {
-    this.fps.textContent = text;
+    if (this.fps.textContent !== text) this.fps.textContent = text;
   }
 
   setVisible(on: boolean): void {

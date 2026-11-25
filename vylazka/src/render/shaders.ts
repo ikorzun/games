@@ -571,6 +571,10 @@ uniform vec3 uKeyDirW;    // направление на прямой свет �
 uniform vec4 uRecallPos;     // свет памяти (world/memory_light.ts): xyz — где искомая вещь (мир), w — сила; 0 — света нет
 uniform vec4 uRecallColor;   // rgb — его цвет, w — род: 0 пламя у пола, 1 окно перед вещью, 2 лампа сверху, 3 зимний свет сверху, 4 ровная точка (циферблат)
 uniform vec4 uRecallDir;     // xz — куда смотрит вещь (мир), y — высота источника над вещью, м, w — докуда светит, м
+uniform vec4 uLamp[8];       // натриевые лампы оранжереи (lampLight): xyz — середина трубок (мир); ближние к камере первыми
+uniform vec4 uLampBox;       // коробка их помещения по полу (minX, minZ, maxX, maxZ): сквозь стены свет не идёт
+uniform vec4 uLampY;         // x, y — пол и потолок помещения; z — докуда светит лампа вбок, м; w — сколько ламп (0 — света нет)
+uniform vec3 uLampColor;     // цвет и сила их света
 uniform sampler2D uContact;   // тени-пятна под обстановкой (render/contact.ts): по каналу на ярус, 1 — темно
 uniform vec3 uContactGrid;    // xy — угол карты в мире (x, z), z — её сторона, м; 0 — карты нет
 uniform float uTierDrop;
@@ -760,6 +764,39 @@ vec4 memLight() {
     if (!lampK) k *= 0.6 + 0.4 * softNoise(vWorld * 2.7 + 1.3);
   }
   return vec4(normalize(mat3(viewMatrix) * Lw), k * uRecallPos.w);
+}
+
+/**
+ * Натриевые лампы оранжереи (design.md, §35): тёплый рассеянный свет над грядками. Возвращает его цвет и силу в точке с
+ * нормалью Nw (мир) — без собранности: свет ламп КРАСИТ, но не СОБИРАЕТ. В число замеров он не входит, а в цвет идёт помноженным
+ * на собранность (ниже, у света памяти): где луч или взгляд собрали место, грядки и пол под лампой тёплые, где не собрали — темно,
+ * как без ламп (правило партнёра «собрано только там, куда смотрит герой»). Теней нет; за коробку помещения свет не выходит.
+ * Вниз лампа светит дальше, чем вбок: у трубок отражатель, и пол под ней тоже тёплый. Ушла лампа вместе с потолком (archGone,
+ * висящее у потолка) — ушёл и её свет.
+ */
+vec3 lampLight(vec3 Nw) {
+  vec3 p = vWorld;
+  if (p.x < uLampBox.x || p.x > uLampBox.z || p.z < uLampBox.y || p.z > uLampBox.w || p.y < uLampY.x - 0.05 || p.y > uLampY.y + 0.05) return vec3(0.0);
+  float R = uLampY.z;
+  float sum = 0.0;
+  for (int i = 0; i < 8; i++) {
+    if (float(i) >= uLampY.w) break;
+    vec3 c = uLamp[i].xyz;
+    vec3 toL = c - p;
+    float d = length(vec3(toL.x, toL.y * (toL.y > 0.0 ? 0.62 : 1.0), toL.z));
+    if (d >= R) continue;
+    float fall = 1.0 - d / R;
+    float dl = max(length(toL), 0.05);
+    // Полуобёрнутый свет: сторона, отвёрнутая от лампы, освещена чуть-чуть — лампы длинные, и свет от них мягкий.
+    float nl = max(dot(Nw, toL / dl) * 0.8 + 0.2, 0.0);
+    float gone = 0.0;
+    if (uErase.x > 0.0) {
+      vec2 cc = floor(c.xz / 3.0 + 0.5) * 3.0;
+      gone = step(0.0, uErase.x * 1.14 - 0.06 - ceilNoise(vec3(cc.x, floor((c.y + 0.2) / uTierDrop) * uTierDrop + 2.7, cc.y)));
+    }
+    sum += fall * fall * nl * (1.0 - gone);
+  }
+  return uLampColor * sum;
 }
 
 #ifdef HEXTILE
@@ -1568,6 +1605,9 @@ void main() {
   col += base * tint * ao * (skyLit * lit + uLightColor * bounceTint * bounce);
   // Свет памяти — как рассеянный, но со своей стороны и своего цвета (на экранах и табличках его нет).
   if (ml.w > 0.0) col += base * tint * ao * uRecallColor.rgb * (ml.w * max(dot(N, ml.xyz), 0.0) * lit);
+  // Натриевые лампы оранжереи красят только собранное: множитель — та же доля, с которой сведение показывает поверхность
+  // (COMPOSE_FRAG), чуть раньше. Где замеров мало, поверхности нет — нет и тепла: россыпь точек в темноте не рыжеет.
+  if (uLampY.w > 0.5) col += base * tint * ao * lampLight(N * mat3(viewMatrix)) * (lit * smoothstep(0.16, 0.7, hOut));
   // То же на просвет: солнце за листом, отсвет от стены позади него и свет потолка сквозь лепесток,
   // на который смотрят снизу.
   if (thin > 0.0) col += glowThrough * thin * (uKeyColor * (max(-dot(N, uKeyDirV), 0.0) * shadowKey) + uLightColor * bounceTint * (bounce0 * 0.65 * max(-dot(N, toB / max(db, 1e-3)), 0.0)) + amb * (0.9 * ao * lit * max(-up, 0.0)));

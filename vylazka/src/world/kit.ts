@@ -87,6 +87,8 @@ export interface MeshMark {
   s: number;
   /** Сколько головок цветов было собрано к отметке (blooms). */
   b?: number;
+  /** Сколько ламп оранжереи было повешено к отметке (lamps). */
+  l?: number;
 }
 
 export class MeshBuilder {
@@ -116,6 +118,11 @@ export class MeshBuilder {
    * котором цветок растёт. Есть у сеток помещений; нет — головки возвращаются только тому, кто сажал.
    */
   blooms: { pos: Vec3; dir: Vec3; form: number; size: number; spin: number; obj: number }[] | null = null;
+  /**
+   * Где светятся натриевые лампы оранжереи (world/props_greenhouse.ts, gh_lamp): точка посередине трубок, в мире. Есть у сеток
+   * помещений; рендер красит этим светом то, что собрано рядом (design.md, §35). Нет — лампы только светятся сами.
+   */
+  lamps: Vec3[] | null = null;
 
   get vertexCount(): number {
     return this.pos.length / 3;
@@ -127,7 +134,7 @@ export class MeshBuilder {
 
   /** Отметка: до неё сетку можно откатить (вещь, которая не встала, — world/objects.ts). */
   mark(): MeshMark {
-    return { v: this.pos.length / 3, i: this.idx.length, s: this.sheets.length, b: this.blooms?.length ?? 0 };
+    return { v: this.pos.length / 3, i: this.idx.length, s: this.sheets.length, b: this.blooms?.length ?? 0, l: this.lamps?.length ?? 0 };
   }
 
   /** Откатить сетку к отметке: всё, что собрано после неё, — вершины, треугольники, листы, — исчезает. */
@@ -143,6 +150,8 @@ export class MeshBuilder {
     this.sheets.length = m.s;
     // Головки цветов, посаженных в откаченной вещи, уходят вместе с ней (вещь не встала — цветов нет).
     if (this.blooms && m.b !== undefined) this.blooms.length = m.b;
+    // И лампа, которая не встала, не светит.
+    if (this.lamps && m.l !== undefined) this.lamps.length = m.l;
   }
 
   /** Низкоуровневая вершина; возвращает её индекс. */

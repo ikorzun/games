@@ -189,6 +189,8 @@ export interface VzDebugApi {
   wallGaps(): { at: [number, number, number]; normal: [number, number]; width: number }[];
   /** Включить или выключить тень фонаря (для сравнения кадров). */
   shadows(on: boolean): void;
+  /** Свет натриевых ламп оранжереи вкл/выкл (для сравнения кадров «до» и «после»; трубки светятся всегда); gain — его сила. */
+  lampLight(on: boolean, gain?: number): void;
   /** Облако точек вкл/выкл: выкл — мир рисуется сплошными поверхностями (для сравнения кадров). */
   scan(on: boolean): void;
   /** Проверка «как в Safari»: у каждой сетки на сценах хватает каждого канала на все вершины (пусто — всё в порядке). */
@@ -391,6 +393,7 @@ export function installDebug(app: App): void {
         rooms: (l.layout?.rooms ?? []).map((r) => ({ id: r.id, type: r.type, tier: r.tier, cells: r.cells.length })),
         sky: l.skyRoom ?? null,
         green: l.greenRoom ?? null,
+        lamps: l.lamps ? { pos: l.lamps.pos.map((p) => [...p]), box: [...l.lamps.box], y: [...l.lamps.y] } : null,
         grass: l.grassRoom ?? null,
         white: l.whiteRoom?.room ?? null,
         landmarks: l.landmarks.map((m) => ({ id: m.id, room: m.room, tier: m.tier })),
@@ -778,6 +781,10 @@ export function installDebug(app: App): void {
     },
     shadows: (on) => {
       game().renderer.debugShadowsOff = !on;
+    },
+    lampLight: (on, gain) => {
+      game().renderer.debugLampsOff = !on;
+      if (gain !== undefined) game().renderer.setLampGain(gain);
     },
     scan: (on) => game().renderer.debugScan(on),
     geometryAudit: () => game().renderer.geometryAudit(),

@@ -219,13 +219,26 @@ function hangingTray(xf: Xf, seed: number): void {
   plant(xf, [0, -drop - 0.03, z], 'tradescantia', seed ^ 0x3c, 1.1, rng(seed)() * 6.28);
 }
 
-/** Лампы теплицы: две трубки натриевого света — тёплого, оранжевого — на подвесах (подземная теплица в убежище). */
+/** Тон натриевого света: им светятся трубки и им же рендер красит то, что под лампой (render/renderer.ts, LAMP). */
+export const SODIUM_GLOW: readonly [number, number, number] = [1.46, 0.66, 0.28];
+/**
+ * Во сколько раз ярче тона светятся сами трубки. У светящегося материала оттенок вершины больше 1,5 — это цвет, помноженный на
+ * яркость (render/shaders.ts, glowBase); оттенок 1,46 шейдер читал фосфорной табличкой: бледно-зелёным и почти без свечения — в
+ * темноте трубок не было видно вовсе (кадры 25.11). Теперь они светятся оранжевым сами, как контур выхода, и в темноте видны.
+ */
+const TUBE_GLOW = 20;
+
+/**
+ * Лампы теплицы: две трубки натриевого света — тёплого, оранжевого — на подвесах (подземная теплица в убежище). Середина трубок
+ * уходит в список ламп сетки помещения (MeshBuilder.lamps): по нему рендер красит грядки и пол под лампой (design.md, §35).
+ */
 function lamps(xf: Xf, _seed: number): void {
-  const glow: [number, number, number] = [1.46, 0.66, 0.28];
+  const glow: [number, number, number] = [SODIUM_GLOW[0] * TUBE_GLOW, SODIUM_GLOW[1] * TUBE_GLOW, SODIUM_GLOW[2] * TUBE_GLOW];
   for (const z of [0.12, 0.38]) {
     for (const x of [-0.52, 0.52]) xf.box([x - 0.004, -0.33, z - 0.004], [x + 0.004, 0, z + 0.004], MAT.steel, { tint: [0.4, 0.4, 0.42] });
     xf.box([-0.6, -0.36, z - 0.018], [0.6, -0.33, z + 0.018], MAT.glow, { tint: glow });
   }
+  xf.mb.lamps?.push(xf.pt(0, -0.345, 0.25));
 }
 
 export const GREENHOUSE_PROPS: Record<string, PropSpec> = {

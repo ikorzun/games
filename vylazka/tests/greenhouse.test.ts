@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { generateLayout } from '../src/gen/layout';
 import type { WorldKind } from '../src/gen/layout';
 import { CELL } from '../src/world/shell';
-import { buildLevel, cellToWorld } from '../src/world/level_build';
+import { buildLevel, cellToWorld, tierFloor } from '../src/world/level_build';
+import { MeshBuilder } from '../src/world/kit';
+import { Xf } from '../src/world/props';
+import { ALL_PROPS } from '../src/world/props_all';
 import { Flowers, FLOWER_CFG, FLOWER_STRIDE, quatOf, turnToward } from '../src/systems/flowers';
 import type { FlowerSite } from '../src/systems/flowers';
 import { HEADS } from '../src/world/flowers';
@@ -98,6 +101,50 @@ describe('оранжерея в местах (партнёр 19.11: «комна
       rows.push(`${w} ${s} r${r}: ${room ? `${room.type} ×${room.cells.length}, ярус ${room.tier}` : '—'}, головок ${(l.blooms ?? []).length}, объектов ${(l.objects ?? []).filter((o) => o.name.startsWith('gh_')).length}`);
     }
     console.log(rows.join('\n'));
+  });
+});
+
+describe('натриевые лампы оранжереи светят (design.md, §35)', () => {
+  it.each(cases.filter(([w]) => w !== 'yellow'))('%s, сид %i, ранг %i: лампы собраны при сборке — только под землёй и внутри оранжереи', (world, seed, rank) => {
+    const l = level(world, seed, rank);
+    if (world !== 'shelter') {
+      expect(l.lamps, 'над грядками зимнего сада и перрона ламп нет').toBeUndefined();
+      return;
+    }
+    const lamps = l.lamps!;
+    expect(lamps, 'лампы подземной теплицы').toBeDefined();
+    expect(lamps.pos.length).toBeGreaterThan(0);
+    // Коробка — клетки оранжереи, по высоте — её пол и потолок.
+    const room = l.layout.rooms.find((r) => r.id === l.greenRoom)!;
+    const xs = room.cells.map(([x]) => cellToWorld(x));
+    const zs = room.cells.map(([, z]) => cellToWorld(z));
+    expect(lamps.box).toEqual([Math.min(...xs) - CELL / 2, Math.min(...zs) - CELL / 2, Math.max(...xs) + CELL / 2, Math.max(...zs) + CELL / 2]);
+    expect(lamps.y[0]).toBeCloseTo(tierFloor(room.tier), 6);
+    expect(lamps.y[1] - lamps.y[0]).toBeGreaterThan(2.4);
+    for (const p of lamps.pos) {
+      expect(p.every(Number.isFinite)).toBe(true);
+      // Висит под потолком, над грядкой у стены: внутри коробки, не дальше метра от её края.
+      expect(p[1], 'под потолком').toBeCloseTo(lamps.y[1] - 0.345, 3);
+      expect(p[0]).toBeGreaterThan(lamps.box[0]);
+      expect(p[0]).toBeLessThan(lamps.box[2]);
+      expect(p[2]).toBeGreaterThan(lamps.box[1]);
+      expect(p[2]).toBeLessThan(lamps.box[3]);
+      const edge = Math.min(p[0] - lamps.box[0], lamps.box[2] - p[0], p[2] - lamps.box[1], lamps.box[3] - p[2]);
+      expect(edge, 'у стены').toBeLessThan(1);
+    }
+    // Тот же сид — те же лампы.
+    expect(buildLevel(generateLayout(seed, rank, world)).lamps).toEqual(lamps);
+  });
+
+  it('лампа, которая не встала (сетку откатили), не светит', () => {
+    const mb = new MeshBuilder();
+    mb.lamps = [];
+    const xf = new Xf(mb, null, 0, 2.7, 0);
+    const mark = mb.mark();
+    ALL_PROPS.gh_lamp!.build(xf, 1);
+    expect(mb.lamps).toEqual([[0, 2.7 - 0.345, 0.25]]);
+    mb.rewind(mark);
+    expect(mb.lamps).toEqual([]);
   });
 });
 

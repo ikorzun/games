@@ -169,6 +169,10 @@ body {
 .vz-hud__fps {
   font-size: 0.8em;
   opacity: 0.75;
+  /* Строка замера длинная: на узком телефоне переносится, прижатая к правому краю, а не уходит за левый. */
+  max-width: calc(100vw - 24px);
+  white-space: normal;
+  text-align: right;
 }
 .vz-hud__hint {
   position: absolute;
@@ -567,6 +571,24 @@ body {
   border-color: rgba(240, 169, 140, 0.45);
 }
 .vz-overlay__opt[hidden] {
+  display: none;
+}
+/* Замер 30 с: под подписью — итог прошлого замера, мелко и тише; цифры — ровной шириной. */
+.vz-overlay__opt--measure {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+.vz-overlay__opt-sub {
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+  color: var(--vz-faint);
+  font-variant-numeric: tabular-nums;
+}
+.vz-overlay__opt-sub:empty {
   display: none;
 }
 .vz-settings__info {

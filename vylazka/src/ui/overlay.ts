@@ -120,6 +120,8 @@ export interface OverlayHandlers {
   onPlace?(): void;
   /** Начать место заново: стёртость и круги места — с нуля, план тот же (только на заставке). */
   onRestartPlace?(): void;
+  /** Замер 30 с (ui/measure.ts): список закрывается, игра идёт дальше, а кадры считаются. */
+  onMeasure?(): void;
 }
 
 /** Строка карточки: обычная, выполненная цель или подзаголовок. */
@@ -242,6 +244,9 @@ export class Overlay {
   private readonly placeBtn: HTMLButtonElement;
   private readonly restartBtn: HTMLButtonElement;
   private readonly creditsBtn: HTMLButtonElement;
+  private readonly measureBtn: HTMLButtonElement;
+  /** Итог прошлого замера (строка как в углу HUD); пусто — замера ещё не было. */
+  private measureLast = '';
   private readonly fireflies: Fireflies;
   private open = false;
   /** Строки авторства моделей (полка Sand3D, CC-BY 4.0): что показывают титры. Пусто — кнопки нет. */
@@ -286,6 +291,8 @@ export class Overlay {
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--place"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--restart"></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--credits"></button>' +
+      // Замер 30 с: под подписью — итог прошлого замера (на телефоне партнёра адрес #fps до игры не доходит).
+      '<button type="button" class="vz-overlay__opt vz-overlay__opt--measure"><span class="vz-overlay__opt-label"></span><span class="vz-overlay__opt-sub"></span></button>' +
       '<button type="button" class="vz-overlay__opt vz-overlay__opt--motion"></button></div>' +
       '<div class="vz-settings__info"></div></div>';
     parent.append(this.el);
@@ -359,6 +366,13 @@ export class Overlay {
       if (this.mode !== 'credits') this.beforeCredits = this.mode;
       this.setOpen(false);
       this.show('credits');
+    });
+
+    this.measureBtn = q('.vz-overlay__opt--measure') as HTMLButtonElement;
+    this.measureBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.setOpen(false);
+      this.handlers.onMeasure?.();
     });
 
     // Подержать качество полторы секунды — строка проверки (во встроенном просмотре Claude адрес страницы с #diag до игры
@@ -507,6 +521,12 @@ export class Overlay {
     this.refresh();
   }
 
+  /** Итог прошлого замера под подписью пункта «Замер 30 с» (пусто — замера не было). */
+  setMeasure(line: string): void {
+    this.measureLast = line;
+    this.refresh();
+  }
+
   /** Нижние строки списка настроек: счёт сессий и воспоминаний. */
   setInfo(lines: readonly string[]): void {
     this.infoLines = lines;
@@ -600,6 +620,10 @@ export class Overlay {
     this.restartBtn.hidden = m !== 'start' || !this.canRestart;
     this.creditsBtn.textContent = t('ui.credits');
     this.creditsBtn.hidden = (m !== 'start' && m !== 'paused') || this.credits.furniture.length + this.credits.things.length === 0;
+    // Замер — из заставки и из паузы: нажал — игра пошла (или продолжилась), кадры считаются.
+    this.measureBtn.hidden = (m !== 'start' && m !== 'paused') || !this.handlers.onMeasure;
+    (this.measureBtn.firstElementChild as HTMLElement).textContent = t('ui.measure');
+    (this.measureBtn.lastElementChild as HTMLElement).textContent = this.measureLast;
     this.info.replaceChildren(
       ...this.infoLines.map((text) => {
         const d = document.createElement('div');

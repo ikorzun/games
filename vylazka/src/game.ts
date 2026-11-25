@@ -4451,6 +4451,8 @@ export class Game {
       // Белая комната светится сама — коробкой по её границам (render: uWhiteBox); внутри неё место собирается взглядом.
       white: this.where === 'main' && this.level?.whiteRoom ? { box: this.level.whiteRoom.box, y: this.level.whiteRoom.y } : null,
       whiteIn: this.where === 'main' ? this.whiteIn : 0,
+      // Натриевые лампы оранжереи красят собранное рядом тёплым светом (render: lampLight); сами место не собирают.
+      lamps: this.where === 'main' ? (this.level?.lamps ?? null) : null,
       scanRange: fl ? fl.scan() : (this.env.scan ?? [4, 15]),
       // Тени прямого света — в квадрате вокруг игрока, сдвинутом вперёд по взгляду: позади они не нужны.
       keyBox:

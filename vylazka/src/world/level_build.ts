@@ -461,6 +461,14 @@ export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLev
   return withSwap(edits?.hook ?? null, () => withGrowthGuard(guard, () => buildLevelInner(layout, opts, edits, pick)));
 }
 
+/** Лампы оранжереи и коробка её помещения по клеткам (BuiltLevel.lamps): свет ламп за неё не выходит. */
+function lampsOf(room: GenRoom, pos: Vec3[], ceil: number): NonNullable<BuiltLevel['lamps']> {
+  const xs = room.cells.map(([x]) => cellToWorld(x));
+  const zs = room.cells.map(([, z]) => cellToWorld(z));
+  const floor = tierFloor(room.tier);
+  return { pos, box: [Math.min(...xs) - CELL / 2, Math.min(...zs) - CELL / 2, Math.max(...xs) + CELL / 2, Math.max(...zs) + CELL / 2], y: [floor, floor + ceil] };
+}
+
 function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits | null, pick: (room: GenRoom) => string | null): BuiltLevel {
   const decay = decayAt(opts.wear ?? 0);
   const col = new ColliderSet();
@@ -469,6 +477,8 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
   const objects = new ObjectLog();
   /** Головки цветов оранжереи (world/flowers.ts): сетки помещений складывают их сюда при посадке. */
   const blooms: NonNullable<BuiltLevel['blooms']> = [];
+  /** Натриевые лампы оранжереи (world/props_greenhouse.ts): лампа, повешенная в сетку помещения, кладёт сюда свою середину. */
+  const lamps: Vec3[] = [];
   const freeSlots: FreeSlot[] = [];
   const T = WALL_T / 2;
 
@@ -492,6 +502,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
       c = { mb: new MeshBuilder(), sl: new MeshBuilder(), tierMin: well ? room.tier - (lowerWells.has(room.id) ? 1 : 0) : room.tier, tierMax: well ? room.tier + (upperWells.has(room.id) ? 1 : 0) : room.tier };
       c.mb.log = objects;
       c.mb.blooms = blooms;
+      c.mb.lamps = lamps;
       chunks.set(key, c);
     }
     return c;
@@ -1393,6 +1404,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     ...(perches.length > 0 ? { perches } : {}),
     ...(skyRoom ? { skyRoom: skyRoom.id } : {}),
     ...(greenRoom ? { greenRoom: greenRoom.id } : {}),
+    ...(greenRoom && lamps.length > 0 ? { lamps: lampsOf(greenRoom, lamps, ceilOf(greenRoom)) } : {}),
     ...(white ? { whiteRoom: white } : {}),
     ...(duneDoor ? { duneDoor } : {}),
     ...(blooms.length > 0 ? { blooms } : {}),

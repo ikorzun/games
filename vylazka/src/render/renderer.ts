@@ -16,6 +16,7 @@ import { GRASS_CLEAR, GRASS_FAR, GRASS_STRIDE } from '../systems/grass';
 import type { LeanMap } from '../systems/grass';
 import { BIRD_STRIDE, BIRDS_MAX } from '../systems/birds';
 import { MAT_COUNT, MAT_DEFS } from '../world/materials';
+import { SODIUM_GLOW } from '../world/props_greenhouse';
 import { bakeDetail } from './detail';
 import { bakeGrime } from './grime';
 import { ATLAS_COLS, ATLAS_ROWS, bakeMatcapAtlas } from './matcap_atlas';
@@ -201,6 +202,11 @@ export interface FrameView {
   white?: { box: readonly [number, number, number, number]; y: readonly [number, number] } | null;
   /** Насколько герой в белой комнате, 0..1: там место собирается взглядом, как в светлом месте. */
   whiteIn?: number;
+  /**
+   * Натриевые лампы оранжереи (world/level.ts, BuiltLevel.lamps): середины трубок и коробка помещения. Красят собранное рядом
+   * тёплым светом (WORLD_FRAG, lampLight); в шейдер идут LAMP.max ближних к камере. Нет — ламп нет.
+   */
+  lamps?: { pos: readonly Vec3[]; box: readonly [number, number, number, number]; y: readonly [number, number] } | null;
   /** Множитель углов луча фонаря (кривая ощущений, systems/feel.ts): меньше единицы — луч уже. Нет поля — как есть. */
   beamCone?: number;
   /** 0..1: кадр плывёт — цвета расходятся сильнее обычного (кривая ощущений; волну во времени накладывает игра). */
@@ -437,6 +443,13 @@ const SCAN = { perLight: 24, max: 3.5, hold: 7, lodDist: 3.5, far: 28, sow: 45, 
  * трёх метрах около 0,6, в ореоле — 0,1, в дальнем разливе — 0,015); gain — её яркость.
  */
 const SLIDE = { washFrom: 0.012, washTo: 0.11, gain: 0.085 } as const;
+/**
+ * Натриевые лампы оранжереи (WORLD_FRAG, lampLight; design.md, §35): сколько самое большее в шейдере, докуда светит лампа вбок, м
+ * (вниз — в 1,6 раза дальше: у трубок отражатель), и сила их света против свечения трубок. Сила подобрана по кадрам (25.11): при
+ * 0,4 тепло тонуло в белом пятне фонаря, при 1,5 едва читалось; при 2,2 грядка и пол под лампой в ореоле луча оранжевые, а середина
+ * пятна — тёплая белая.
+ */
+const LAMP = { max: 8, radius: 2.8, gain: 2.2 } as const;
 /** Яркость скана сонара по целым стенам (WORLD_FRAG, uSonarTint): кольцо из точек, видное и в полной темноте. */
 const SONAR_SCAN = 1.2;
 /**
@@ -722,6 +735,8 @@ export class GameRenderer {
   private lastFov = 70;
   /** Отладка: временно выключить тень, не меняя качество (сравнение «тень вкл/выкл»). */
   debugShadowsOff = false;
+  /** Свет натриевых ламп оранжереи выключен (отладка: кадры «до» и «после»). */
+  debugLampsOff = false;
   /**
    * Отладка: тень прямого света (солнце зала ожидания, луга, лампа домика) — формулой, а не картой, как на
    * низком качестве (roofShade). С 16.11 днём так было на всех сенсорных устройствах: пустой пол зала на
@@ -736,6 +751,11 @@ export class GameRenderer {
   tierDrop = 4.5;
   /** Полоса высот видимых ярусов в этом кадре (render): что ниже или выше — грибы, цветы, трава — не рисуется. */
   private readonly tierBand: [number, number] = [-Infinity, Infinity];
+  /** Лампы оранжереи по удалению от камеры (setLamps): один массив на всё время, без выделений в кадре. */
+  private readonly lampOrder: Vec3[] = [];
+  /** Сила света ламп (LAMP.gain; отладка меняет) и яркость свечения, за которой он следует (setGlow). */
+  private lampGain: number = LAMP.gain;
+  private lampGlow = 1;
   /** Дальше этого расстояния чанки не рисуются: свет фонаря туда уже не достаёт. */
   cullDistance = 30;
   private stairs: readonly StairLink[] = [];
@@ -898,6 +918,11 @@ export class GameRenderer {
         uRecallPos: { value: new THREE.Vector4(0, 0, 0, 0) },
         uRecallColor: { value: new THREE.Vector4(1, 1, 1, 0) },
         uRecallDir: { value: new THREE.Vector4(0, 1, 1, 1) },
+        // Натриевые лампы оранжереи (setLamps): ближние к камере, коробка их помещения, пол, потолок, дальность и сколько их.
+        uLamp: { value: Array.from({ length: LAMP.max }, () => new THREE.Vector4()) },
+        uLampBox: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uLampY: { value: new THREE.Vector4(0, 0, LAMP.radius, 0) },
+        uLampColor: { value: new THREE.Vector3().fromArray(SODIUM_GLOW).multiplyScalar(LAMP.gain) },
         uContact: { value: this.contactTex },
         uContactGrid: { value: new THREE.Vector3(0, 0, 0) },
         uCaustic: { value: 0 },
@@ -2713,8 +2738,47 @@ export class GameRenderer {
     (u.uRecallDir!.value as THREE.Vector4).set(Math.sin(v.yaw), v.height, Math.cos(v.yaw), v.radius);
   }
 
+  /**
+   * Натриевые лампы оранжереи в шейдер мира: не больше LAMP.max, ближние к камере первыми (их в оранжерее от двух до девяти). На
+   * низком качестве их света нет: трубки светятся, пол под ними тёмный — как было до 25.11.
+   */
+  private setLamps(l: FrameView['lamps'], cam: Vec3): void {
+    const u = this.worldMat.uniforms;
+    const y = u.uLampY!.value as THREE.Vector4;
+    if (!l || l.pos.length === 0 || this.quality === 'low' || this.debugLampsOff) {
+      y.w = 0;
+      return;
+    }
+    const d2 = (p: Vec3): number => (p[0] - cam[0]) ** 2 + (p[1] - cam[1]) ** 2 + (p[2] - cam[2]) ** 2;
+    const near = this.lampOrder;
+    near.length = 0;
+    for (const p of l.pos) near.push(p);
+    if (near.length > LAMP.max) near.sort((a, b) => d2(a) - d2(b));
+    const n = Math.min(LAMP.max, near.length);
+    const arr = u.uLamp!.value as THREE.Vector4[];
+    for (let i = 0; i < n; i++) arr[i]!.set(near[i]![0], near[i]![1], near[i]![2], 1);
+    (u.uLampBox!.value as THREE.Vector4).set(l.box[0], l.box[1], l.box[2], l.box[3]);
+    y.set(l.y[0], l.y[1], LAMP.radius, n);
+  }
+
+  /** Сила света ламп оранжереи (отладка: подбор на глаз; по умолчанию LAMP.gain). */
+  setLampGain(k: number): void {
+    this.lampGain = k;
+    this.lampColor();
+  }
+
+  /**
+   * Цвет света ламп: тон натрия × сила × яркость свечения. Трубки — светящийся материал: гаснут, когда гаснут фосфорные надписи
+   * (охотится Осыпь), — гаснет и их свет; во вспышку он ярче, но не больше чем вдвое.
+   */
+  private lampColor(): void {
+    (this.worldMat.uniforms.uLampColor!.value as THREE.Vector3).fromArray(SODIUM_GLOW).multiplyScalar(this.lampGain * Math.min(this.lampGlow, 2));
+  }
+
   /** Яркость фосфорных надписей: 1 — обычная, 0 — погасли, больше — вспышка. */
   setGlow(k: number): void {
+    this.lampGlow = k;
+    this.lampColor();
     const params = this.worldMat.uniforms.uMatA!.value as THREE.Vector4[];
     params.forEach((p, i) => {
       p.y = (MAT_DEFS[i]?.glow ?? 0) * k;
@@ -2777,6 +2841,7 @@ export class GameRenderer {
       wb.set(v.white.box[0], v.white.box[1], v.white.box[2], v.white.box[3]);
       wy.set(v.white.y[0], v.white.y[1], 1, 0);
     } else wy.z = 0;
+    this.setLamps(v.lamps ?? null, v.camPos);
 
     // Отсечение чанков: дальше черты видимости всё равно чёрный туман, а чужой ярус виден только
     // с лестницы и от её площадок.

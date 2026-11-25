@@ -146,6 +146,12 @@ export interface BuiltLevel {
   /** Оранжерея (world/furnish_greenhouse.ts): номер помещения; нет поля — в этом месте её нет. */
   greenRoom?: number;
   /**
+   * Натриевые лампы оранжереи (world/props_greenhouse.ts, gh_lamp; design.md, §35): середины трубок в мире и коробка их помещения —
+   * по полу (minX, minZ, maxX, maxZ) и по высоте (пол, потолок). Свет ламп за неё не выходит: сквозь стены он не идёт. Нет поля —
+   * ламп на уровне нет.
+   */
+  lamps?: { pos: Vec3[]; box: [number, number, number, number]; y: [number, number] };
+  /**
    * Белая комната (партнёр 21.11, 19:06; world/furnish_white.ts; design.md, §37): помещение, его коробка и цепь знаком
    * бесконечности посередине. Нет поля — на уровне её нет.
    */
