@@ -81,6 +81,27 @@ describe('жёлтая версия офиса: тот же план', () => {
   });
 });
 
+describe('особые комнаты — только у офиса (ревью 25.11)', () => {
+  it('двойник без белой, странной комнаты и песчаного зала; швы у обеих версий одни и те же и не в особых комнатах офиса', () => {
+    let specials = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const layout = generateLayout(seed, 2, 'office');
+      const wear = lap(6);
+      const office = buildLevel(layout, { wear });
+      const skip = [office.whiteRoom?.room, office.oddRoom?.room, office.duneDoor?.room].filter((r): r is number => r !== undefined);
+      specials += skip.length;
+      const twin = buildLevel(twinLayout(layout), { wear, odd: 'none', dunes: false, seamSkip: skip });
+      expect(twin.whiteRoom, `сид ${seed}`).toBeUndefined();
+      expect(twin.oddRoom, `сид ${seed}`).toBeUndefined();
+      expect(twin.duneDoor, `сид ${seed}`).toBeUndefined();
+      const rooms = (l: BuiltLevel): number[] => (l.seams ?? []).map((s) => s.room);
+      expect(rooms(twin), `сид ${seed}`).toEqual(rooms(office));
+      for (const r of rooms(office)) expect(skip, `сид ${seed}: шов в особой комнате ${r}`).not.toContain(r);
+    }
+    expect(specials, 'на 40 сидах есть особые комнаты — проверка не пустая').toBeGreaterThan(5);
+  });
+});
+
 describe('швы: сколько и где', () => {
   it('на первом круге шов один; к шестому — в каждом втором помещении; дальше не растёт', () => {
     expect(seamCount(0, 13)).toBe(1);

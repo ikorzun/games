@@ -2418,6 +2418,8 @@ export class GameRenderer {
 
   /** Заменить геометрию мира. stairs — лестницы между ярусами: рядом с ними виден соседний ярус. */
   setWorld(chunks: readonly LevelChunk[], stairs: readonly StairLink[] = []): void {
+    // Новый уровень — кинескоп прежнего снимается вместе с кольцом кадров.
+    this.setOddScreen(null);
     // Другое место — другая память: прежняя к нему не относится.
     this.memLive = false;
     // И другие предметы: все на месте.
@@ -3007,7 +3009,10 @@ export class GameRenderer {
         (wu0.uOddFx!.value as THREE.Vector4).set(0, 0, 0, 0);
         fy.z = 0;
       }
-      this.setOddScreen(o?.screen ?? null);
+      // Кинескоп и его кольцо кадров живут, пока жив уровень (ревью 25.11: уход в карман или лимбо пересоздавал 60 буферов):
+      // вне главного места экран прячется, а снимается — со сменой уровня (setWorld).
+      if (o?.screen) this.setOddScreen(o.screen);
+      if (this.tvScreen) this.tvScreen.visible = !!o?.screen;
       if (this.tvScreen) {
         const tu0 = this.tvMat.uniforms;
         tu0.uTime!.value = v.time;
@@ -3491,7 +3496,8 @@ export class GameRenderer {
     r.setRenderTarget(this.compRT);
     r.render(this.trailScene, this.postCam);
     // Кинескоп странной комнаты: копия готового кадра в кольцо — раз в 1/30 с игрового времени.
-    if (this.tvScreen && this.tvRing.length > 0 && !probe) {
+    // Копирует, только пока игрок в странной комнате (oddIn): дальше от неё лишний проход по буферу — лишняя работа телефону.
+    if (this.tvScreen && this.tvScreen.visible && this.tvRing.length > 0 && !probe && (v.oddIn ?? 0) > 0.01) {
       if (v.time < this.tvLast) {
         this.tvFilled = 0;
         this.tvLast = -Infinity;

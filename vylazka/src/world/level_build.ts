@@ -362,6 +362,13 @@ export interface BuildOptions {
    * жребию.
    */
   odd?: OddKind | 'none';
+  /** false — без песчаного зала (жёлтый двойник офиса: его особые комнаты — только у офиса, ревью 25.11). */
+  dunes?: false;
+  /**
+   * Помещения, где швов нет: особые комнаты офиса (белая, странная, проём песчаного зала). Двойник получает их от офиса, чтобы
+   * швы у обеих версий совпали; не задано — свои особые комнаты (ревью 25.11: шов в особой комнате менял комнату вокруг игрока).
+   */
+  seamSkip?: readonly number[];
 }
 
 /** Передвинутая вещь игры, которую сборка не поставила, где собиралась: запись, помещение, точка и сид той вещи. */
@@ -681,7 +688,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     return r.cells.some(([x, z]) => x === e.cx && z === e.cz) ? b : [e.cx, e.cz];
   };
   const duneHost =
-    !station && (opts.odd === undefined || opts.odd === 'none') && dunesRolled(layout.seed)
+    !station && opts.dunes !== false && (opts.odd === undefined || opts.odd === 'none') && dunesRolled(layout.seed)
       ? rooms1
           .filter((r) => {
             if (r === gardenRoom || r === greenRoom || r === skyRoom || r === grassRoom || r === whiteRoom || r === oddHost || flowerRooms.has(r.id) || r === variantRoom || r === startRoom0) return false;
@@ -867,7 +874,8 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
 
   // ── Швы (world/seams.ts; pressure.md, §4.1) ──
   // Офис и его жёлтая версия сшиты: нитка кружевом по полу и стенам. Швы — по плану и стёртости, у обеих версий одни и те же.
-  const seams = world === 'office' || layout.twinOf === 'office' ? seamSites(layout, decay.wear) : [];
+  const seamSkip = opts.seamSkip ?? [whiteRoom, oddHost, duneHost].filter((r): r is GenRoom => !!r).map((r) => r.id);
+  const seams = world === 'office' || layout.twinOf === 'office' ? seamSites(layout, decay.wear, seamSkip) : [];
   for (const s of seams) {
     const room = roomById(s.room);
     const [cx, cz] = s.cells[Math.floor(s.cells.length / 2)]!;

@@ -1115,8 +1115,9 @@ export class Game {
     this.leavePocket();
     this.clearThings();
     this.level = level;
-    // Ощущение странной комнаты принадлежит её месту: в новом месте его нет.
+    // Ощущение странной комнаты принадлежит её месту: в новом месте его нет (и тумана с собранностью взглядом от старой комнаты).
     this.oddT = -1;
+    this.oddIn = 0;
     this.oddCool = 0;
     this.oddArmed = true;
     this.setupFigures(level);
@@ -1324,7 +1325,9 @@ export class Game {
     if (level.seams?.length) this.renderer.setObjectLace(SEAM_OBJ, true);
     if (!lay || lay.world !== 'office' || !level.seams?.length || dream?.faded) return;
     const wear = level.wear ?? 0;
-    this.twinBuild = () => buildLevel(twinLayout(lay), { wear });
+    // Особые комнаты — только у офиса: у двойника их нет, и швы обходят их в обеих версиях (ревью 25.11).
+    const seamSkip = [level.whiteRoom?.room, level.oddRoom?.room, level.duneDoor?.room].filter((r): r is number => r !== undefined);
+    this.twinBuild = () => buildLevel(twinLayout(lay), { wear, odd: 'none', dunes: false, seamSkip });
   }
 
   /**
@@ -3317,7 +3320,8 @@ export class Game {
     this.oddIn = approach(this.oddIn, inside ? 1 : 0, 0.35, dt);
     if (this.oddT >= 0) {
       this.oddT += dt;
-      if (!o || !oddOn(o.kind, this.oddT)) {
+      // Ушёл из комнаты, и ощущение погасло вместе с ним (oddNow) — оно кончилось.
+      if (!o || !oddOn(o.kind, this.oddT) || (!inside && this.oddIn < 0.02)) {
         this.oddT = -1;
         this.oddCool = ODD_COOLDOWN;
       }
@@ -3346,7 +3350,13 @@ export class Game {
   oddNow(): OddFrame {
     const o = this.level?.oddRoom;
     if (!o || this.where !== 'main' || this.oddT < 0) return ODD_NONE;
-    return oddAt(o.kind, this.oddT, this.calmMotion || this.faintFlash);
+    const f = oddAt(o.kind, this.oddT, this.calmMotion || this.faintFlash);
+    // Вышел из комнаты — ощущение гаснет вместе с ним, а не тянет стены к герою в коридоре и не держит его в воздухе (ревью 25.11).
+    const w = this.oddIn;
+    if (w >= 0.999) return f;
+    const out = { ...f };
+    for (const key of Object.keys(f) as (keyof OddFrame)[]) out[key] = ODD_NONE[key] + (f[key] - ODD_NONE[key]) * w;
+    return out;
   }
 
   /** Звук ощущения странной комнаты (audio/game_audio.ts): до касания вещь молчит. */

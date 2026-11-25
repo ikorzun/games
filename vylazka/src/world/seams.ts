@@ -191,9 +191,10 @@ function roomSite(layout: GenLayout, room: GenRoom, plan: ReturnType<typeof plan
  * Швы места при стёртости wear: первый — в коридоре, дальше — по помещению на шов в порядке жребия сида. Только по плану:
  * у офиса и его жёлтой версии (одни клетки, одни проходы) швы одни и те же.
  */
-export function seamSites(layout: GenLayout, wear: number): SeamSite[] {
+export function seamSites(layout: GenLayout, wear: number, skip: readonly number[] = []): SeamSite[] {
   const plan = planOf(layout);
-  const pool = seamRooms(layout);
+  // Особые комнаты офиса (белая, странная, проём песчаного зала) — без швов: у двойника их нет, и переход менял бы комнату.
+  const pool = seamRooms(layout).filter((r) => !skip.includes(r.id));
   const n = seamCount(wear, pool.length);
   const out: SeamSite[] = [];
   const corridor = pool.find((r) => r.type === 'corridor' && r.tier === 0);
