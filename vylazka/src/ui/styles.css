@@ -1643,6 +1643,25 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* Низкий широкий экран (телефон лёжа): широкие настройки выше перебивали его раскладку — две колонки с подписью сбоку оставляли
+   сегменту по 30 px, и подписи вылезали из кнопок (смоук 6009ed5, 915×412). Здесь — как было: подпись над переключателем, мельче,
+   с переносом. */
+@media (max-height: 520px) and (min-width: 640px) {
+  .vz-settings {
+    width: min(720px, calc(100% - 20px));
+    padding: 12px 16px 10px;
+  }
+  .vz-settings__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .vz-seg__opt {
+    min-height: 30px;
+    padding: 4px 6px;
+    font-size: 12px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
 
 /* ── Титры лентой, как в кино (ui/overlay.ts, creditsRoll) ── */
 .vz-credits {

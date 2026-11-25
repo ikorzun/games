@@ -312,7 +312,7 @@ async function scenarioPlay(browser, baseUrl) {
   const { page, context, log } = await openPage(browser, baseUrl, '?q=high&fail=0&lang=ru&touch=0&level=test');
   let st = await state(page);
   check('первый кадр показан, игра ждёт на стартовом экране', st.overlay === 'start' && st.paused === true, JSON.stringify({ overlay: st.overlay, paused: st.paused }));
-  check('стартовый экран виден и подписан по-русски', (await page.textContent('.vz-overlay__prompt'))?.includes('Нажмите') === true);
+  check('стартовый экран виден и подписан по-русски', (await page.textContent('.vz-overlay__prompt')) === RU['ui.start']);
   check('язык документа — ru', (await page.evaluate(() => document.documentElement.lang)) === 'ru');
 
   await page.click('.vz-overlay');
@@ -1036,9 +1036,9 @@ async function scenarioFlats(browser, baseUrl) {
       for (let i = 0; i < Math.round(seconds * 10); i++) await vz(page, (inp) => window.__vz.step(6, inp ?? undefined), input ?? null);
       return vz(page, () => window.__vz.probe());
     };
-    await page.waitForFunction(() => window.__vz.screens().length >= 9, null, { timeout: 30000 }).catch(() => {});
+    await page.waitForFunction(() => window.__vz.screens().length >= 10, null, { timeout: 30000 }).catch(() => {});
     const loaded = await vz(page, () => window.__vz.screens());
-    check('картинки экранов загружены: все девять (восемь картинок и луг для проёма)', loaded.length === 9 && loaded.includes('meadow'), loaded.join(', '));
+    check('картинки экранов загружены: все десять (восемь картинок, витрина книжного автомата и луг для проёма)', loaded.length === 10 && loaded.includes('meadow') && loaded.includes('books'), loaded.join(', '));
     // Листы бумаги (assets/papers): слои должны дойти и в обычной сборке, и вшитыми в одну страницу. Список — как в
     // src/world/papers.ts (PAPER_LAYERS): семь слоёв из фотографий партнёра, наклейки и два слоя снимков больного сна (19.11).
     const PAPER_LAYERS = ['faces_a', 'faces_b', 'faces_c', 'money', 'notgeld', 'bonds', 'map_union', 'stickers', 'dream_a', 'dream_b'];
@@ -2292,7 +2292,9 @@ async function scenarioThings(browser, baseUrl) {
   st = await vz(page, () => window.__vz.step(165));
   cur = now(st, w.t);
   check(`вещь «${w.t.kind}» под долгим взглядом растёт`, w.near && cur.state === 'changing' && cur.scale > 1.1, JSON.stringify(cur));
-  st = await vz(page, () => window.__vz.step(230));
+  // С 24.11 вещь растёт быстро и сразу в мелкую пыль (партнёр: «он быстро увеличивается и превращается в мелкую пыль»): смотрим
+  // раньше, пока пыль ещё уходит.
+  st = await vz(page, () => window.__vz.step(100));
   cur = now(st, w.t);
   // Выросшая вещь не остаётся: огромная, она рассыпается в пыль и растворяется частицами (слова партнёра 17.11).
   check('выросла — и рассыпается в пыль: огромная, а частицы уже уходят', cur.state === 'changing' && cur.scale > 6.5 && cur.dissolve > 0.1 && cur.dissolve < 1 && st.where === 'main', JSON.stringify(cur));
@@ -2584,7 +2586,7 @@ async function scenarioTouch(browser, baseUrl) {
     const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&level=test', { viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
     let st = await state(page);
     check(`${name}: схема управления — тач`, st.touch === true);
-    check(`${name}: стартовый экран зовёт коснуться`, (await page.textContent('.vz-overlay__prompt'))?.includes('Коснитесь') === true);
+    check(`${name}: стартовый экран зовёт начать`, (await page.textContent('.vz-overlay__prompt')) === RU['ui.start.touch']);
     await page.tap('.vz-overlay');
     await sleep(300);
     st = await state(page);
@@ -3468,7 +3470,7 @@ async function scenarioFrame(browser, baseUrl) {
   if (ready2) {
     // Выбор в песочнице действует до конца страницы, хотя сохранить его некуда.
     await segPick(frame2, 'lang', 'ru');
-    check('смена языка работает и без хранилища', (await frame2.textContent('.vz-overlay__prompt')) === 'Нажмите, чтобы начать' && (await frame2.evaluate(() => document.documentElement.lang)) === 'ru');
+    check('смена языка работает и без хранилища', (await frame2.textContent('.vz-overlay__prompt')) === RU['ui.start'] && (await frame2.evaluate(() => document.documentElement.lang)) === 'ru');
   }
 
   // Браузер сам пишет в консоль, что захват мыши в песочнице запрещён, — это не ошибка игры.
