@@ -4666,11 +4666,14 @@ describe('странные комнаты: тронул вещь — пять с
     stand(h, kind, 1.4);
     walkIn(h, 2, 1.5);
     expect(h.dreamCount('odd')).toBe(1);
-    // Перерыв прошёл — снова.
+    // Перерыв прошёл — снова, но слабее (куратор, 458: со второго касания отклик слабеет — не аттракцион).
     stand(h, kind, 1.4);
     h.run(ODD_COOLDOWN);
     walkIn(h, 2);
     expect(h.dreamCount('odd')).toBe(2);
+    h.run(1.5);
+    expect(h.game.oddNow().k).toBeGreaterThan(0.4);
+    expect(h.game.oddNow().k).toBeLessThan(0.7);
   });
 
   it('баян: стены сходятся к герою, кадр сужается, слышно сердце и аккорд; через пять секунд вдох', () => {

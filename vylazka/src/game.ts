@@ -344,6 +344,8 @@ const DUNES_STAY = { exitAfter: 0.4, min: 120, spread: 30 } as const;
  * застал другую версию места (hold: место успевает уйти из глаз — в офисе панели гаснут, фонарь щёлкнул), и через сколько секунд
  * темноты у шва другую версию собирать, если её ещё нет (prep: на телефоне заминка сборки прячется в темноте).
  */
+/** Сила ощущения странной комнаты по касаниям за уровень (куратор, 458): со второго — слабее. */
+const ODD_POWER = [1, 0.6, 0.35, 0.2] as const;
 export const SEAM_DARK = { hold: 1, prep: 0.25 } as const;
 /** Телефон: белая вспышка скачка вдвое короче — экран близко к глазам и часто в тёмной комнате (предложение 17.11, T-22). */
 const WHITEOUT_PHONE: readonly [number, number] = [0.3, 0.6];
@@ -720,6 +722,12 @@ export class Game {
   private oddCool = 0;
   /** Насколько герой в странной комнате, 0..1 (плавно): её свет и даль, место собирается взглядом. */
   private oddIn = 0;
+  /**
+   * Сколько раз за уровень коснулись вещи странной комнаты и с какой силой ответит следующее касание (куратор, 458: отклик снова
+   * через 8 с превращал комнату в аттракцион) — со второго касания ощущение слабеет: 1, 0,6, 0,35, дальше 0,2.
+   */
+  private oddTouches = 0;
+  private oddPower = 1;
   /** Что игрок вспомнил за всё время (id воспоминаний): эти вещи копятся в лимбо. */
   archive: string[] = [];
   swarm: SwarmAI | null = null;
@@ -1118,6 +1126,8 @@ export class Game {
     // Ощущение странной комнаты принадлежит её месту: в новом месте его нет (и тумана с собранностью взглядом от старой комнаты).
     this.oddT = -1;
     this.oddIn = 0;
+    this.oddTouches = 0;
+    this.oddPower = 1;
     this.oddCool = 0;
     this.oddArmed = true;
     this.setupFigures(level);
@@ -3333,6 +3343,8 @@ export class Game {
     if (this.oddT < 0 && this.oddCool <= 0 && this.oddArmed && !this.transition) {
       this.oddT = 0;
       this.oddArmed = false;
+      this.oddPower = ODD_POWER[Math.min(this.oddTouches, ODD_POWER.length - 1)]!;
+      this.oddTouches++;
       dream.push({ type: 'odd', kind: o.kind });
     }
   }
@@ -3352,7 +3364,7 @@ export class Game {
     if (!o || this.where !== 'main' || this.oddT < 0) return ODD_NONE;
     const f = oddAt(o.kind, this.oddT, this.calmMotion || this.faintFlash);
     // Вышел из комнаты — ощущение гаснет вместе с ним, а не тянет стены к герою в коридоре и не держит его в воздухе (ревью 25.11).
-    const w = this.oddIn;
+    const w = this.oddIn * this.oddPower;
     if (w >= 0.999) return f;
     const out = { ...f };
     for (const key of Object.keys(f) as (keyof OddFrame)[]) out[key] = ODD_NONE[key] + (f[key] - ODD_NONE[key]) * w;
