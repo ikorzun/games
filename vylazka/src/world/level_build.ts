@@ -46,7 +46,7 @@ import { buildShell, CELL, DOOR_H, DOOR_W, Shell, STYLE_CORRIDOR, WALL_T } from 
 import { EdgeBuilder } from './edges';
 import { placeFigures } from './figure_place';
 import type { FigureSpec } from './figures';
-import { FIGURES } from './figures_data';
+import { PLACED_FIGURES } from './figures_data';
 import { fitMoved, NEVER, placedSeed, placeThings, rests, roomIndex } from './placed_place';
 import type { PlacedSpot } from './placed_place';
 import type { PlacedSpec, RemovedSpec } from './placed';
@@ -272,7 +272,7 @@ export const dunesRolled = (seed: number): boolean => hash01(23, 0x5a1d, seed ^ 
 /** Типы помещений, где партнёр ставит, двигает или убирает вещи и фигуры в этом месте: туда белая комната не встаёт. */
 function partnerRoomTypes(world: WorldKind, opts: BuildOptions): Set<string> {
   const out = new Set<string>();
-  for (const s of [...(opts.placed ?? PLACED), ...(opts.figures ?? FIGURES)]) if (s.rule.worlds.includes(world)) for (const r of s.rule.rooms) out.add(r);
+  for (const s of [...(opts.placed ?? PLACED), ...(opts.figures ?? PLACED_FIGURES)]) if (s.rule.worlds.includes(world)) for (const r of s.rule.rooms) out.add(r);
   for (const r of opts.removed ?? REMOVED) if (r.worlds.includes(world)) for (const t of r.rooms) out.add(t);
   return out;
 }
@@ -448,7 +448,7 @@ function editsFor(layout: GenLayout, placed: readonly PlacedSpec[], removed: rea
 export function buildLevel(layout: GenLayout, opts: BuildOptions = {}): BuiltLevel {
   const placed = opts.placed ?? PLACED;
   const removed = opts.removed ?? REMOVED;
-  const figures = opts.figures ?? FIGURES;
+  const figures = opts.figures ?? PLACED_FIGURES;
   // Варианты расстановки (world/variants.ts): какой из вариантов партнёра достался каждому помещению этого уровня.
   const here = (worlds: readonly WorldKind[]): boolean => worlds.includes(layout.world);
   const pick = variantPicker(layout, [
@@ -1141,7 +1141,7 @@ function buildLevelInner(layout: GenLayout, opts: BuildOptions, edits: GameEdits
     objects: objects.list,
     surfaces: (id: number, x: number, z: number, lo: number, hi: number) => objects.surfaces(id, x, z, lo, hi),
   };
-  const figures = placeFigures(opts.figures ?? FIGURES, placeWorld, (f, r) => inVariant(slotFor(f.slot, f.rule.rooms), pick(r)));
+  const figures = placeFigures(opts.figures ?? PLACED_FIGURES, placeWorld, (f, r) => inVariant(slotFor(f.slot, f.rule.rooms), pick(r)));
   // Дальше строятся вещи по записям партнёра — мимо хука: они не вещи игры, считать и трогать их ему нечего.
   const placed: PlacedSpot[] = [];
   // Вещи партнёра и передвинутые — без проверки «не врастать»: их место проверено по правилу записи (placed_place.ts).

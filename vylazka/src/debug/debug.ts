@@ -246,6 +246,8 @@ export interface VzDebugApi {
   koma(): unknown;
   /** Довести сюжет до сцены upTo включительно (проверки поздних актов без десятка снов). */
   komaSkip(upTo: string, leave?: number): unknown;
+  /** Тело Смотрителя (A4_E03): 'come' — встать у стола перед взглядом (только в лимбо, один раз), 'go' — рассеяться; без команды — состояние. */
+  caretaker(cmd?: 'come' | 'go'): { ok: boolean; state: string; why: string | null; at: number[]; core: number[] };
   mute(on: boolean): void;
 }
 
@@ -820,6 +822,12 @@ export function installDebug(app: App): void {
     audio: () => app.sound.status(),
     koma: () => app.komaState(),
     komaSkip: (upTo, leave) => app.komaSkip(upTo, leave),
+    caretaker: (cmd) => {
+      const g = game();
+      const ok = cmd ? g.caretaker(cmd) : true;
+      const cb = g.caretakerBody;
+      return { ok, state: cb.state, why: cb.why, at: [...cb.at], core: [...cb.core] };
+    },
     showcase: () => showcaseItems(app.params.get('props')?.split(',') ?? null),
     mute: (on) => app.setMuted(on),
   };

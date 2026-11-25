@@ -36,6 +36,8 @@ export interface KomaHost {
     metaKeep(): void;
     extendEnd(seconds: number): void;
     releaseKept(taken: boolean): void;
+    /** Тело Смотрителя (A4_E03, один раз за игру): 'come' — встаёт у стола в лимбо, 'go' — рассеивается. */
+    caretaker(cmd: 'come' | 'go'): boolean;
   };
   /** Записать профиль. */
   save(): void;
@@ -92,6 +94,13 @@ const STERILE_SHARE = 0.7;
 const END_HOLD_MS = 90000;
 /** Полная картотека (A4_E01): через сколько мс после начала сна Смотритель её показывает. */
 const ARCHIVE_AT_MS = 6000;
+/**
+ * Отражение без зеркала (A4_E03): тело Смотрителя сначала собирается из дыма и работает молча — столько мс до первой реплики;
+ * договорили — стоит ещё столько, потом рассеивается; глава кончается, когда дым ушёл.
+ */
+export const BODY_LEAD_MS = 3200;
+export const BODY_AFTER_MS = 1800;
+const BODY_GO_MS = 1500;
 
 const artOf = (memId: string): string => SLOT_OF[memId] ?? memId;
 /** Вид вещи → её записи в сюжете (один чайник бывает вещью разных мест). */
@@ -165,9 +174,10 @@ export class KomaFlow {
     this.host.game.penOn = false;
   }
 
-  /** Оборвать всё, что идёт (новый сон, лимбо, пауза в меню): таймеры, бирку, разговор. */
+  /** Оборвать всё, что идёт (новый сон, лимбо, пауза в меню): таймеры, бирку, разговор; тело Смотрителя, если стоит, рассеивается. */
   stop(): void {
     this.cancel();
+    this.host.game.caretaker('go');
     this.busy = false;
     this.host.hud.say([]);
     this.host.hud.tag(null);
@@ -600,7 +610,19 @@ export class KomaFlow {
       big('koma.tag.unknown', 'koma.tag.effects', 'koma.tag.owner', '');
       this.talk(id, 900, next);
     } else if (id === 'A4_E03') {
-      this.talk(id, 700, next);
+      // Ранняя сцена сортировки с другого ракурса (канон: «отражение без зеркала»). Его бирка уходит из кадра на стол; у стола —
+      // тело Смотрителя, один раз за игру: вполоборота, голова опущена, рука разглаживает бирку и выравнивает её — теми же
+      // движениями, что у героя. Без лица, без «я — это ты». Договорили — дым рассеивается (game.caretaker).
+      // Строки лимбо по-прежнему убраны: кадр — его.
+      hud.tag(null);
+      hud.setKoma(true);
+      this.host.game.caretaker('come');
+      this.talk(id, BODY_LEAD_MS, () =>
+        this.later(BODY_AFTER_MS, () => {
+          this.host.game.caretaker('go');
+          this.later(BODY_GO_MS, next);
+        }),
+      );
     } else if (id === 'A5_E02') {
       // Настоящий билет: имя на нём есть — и это всё, что он обещает.
       big('koma.tag.ticket', 'koma.ticket.route', 'koma.tag.passenger', '');

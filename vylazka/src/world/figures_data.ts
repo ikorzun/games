@@ -6,6 +6,9 @@
  * фигур основная модель сюда не добавляет. Посмотреть, как фигура живёт в игре: __vz.figure(…) (debug/debug.ts).
  */
 import type { FigureSpec } from './figures';
+import { isCaretakerFigure } from './figures';
 import ROWS from './partner/figures.json';
 
 export const FIGURES: readonly FigureSpec[] = ROWS as unknown as FigureSpec[];
+/** Фигуры, что стоят в местах: все, кроме назначенной телом Смотрителя, — та встаёт один раз, в лимбо (world/caretaker_body.ts). */
+export const PLACED_FIGURES: readonly FigureSpec[] = FIGURES.filter((f) => !isCaretakerFigure(f));

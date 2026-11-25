@@ -53,6 +53,7 @@ import type { GrassClearing } from './systems/grass';
 import type { Comeback, ComebackOptions, Form, Mount } from './systems/illusions';
 import { Figures } from './systems/figures';
 import type { FigureLive } from './systems/figures';
+import { CaretakerBody } from './systems/caretaker_body';
 import { looksAt, Things } from './systems/things';
 import { warpAt, warpOn } from './systems/warp';
 import type { WarpFrame } from './systems/warp';
@@ -69,6 +70,8 @@ import { CEIL_H, DX, DZ } from './gen/layout';
 import type { GenRoom, RoomType, WorldKind } from './gen/layout';
 import type { BuiltLevel, ItemSpot } from './world/level';
 import { figureMesh } from './world/figure_mesh';
+import { CARETAKER_BODY, caretakerMesh, caretakerSpot, gesture, TAG_AT } from './world/caretaker_body';
+import type { MeshData } from './world/kit';
 import type { FigureMaterial, FigureSpec } from './world/figures';
 import { FIGURES } from './world/figures_data';
 import { ceilTileOf, cellToWorld, STAIR_RISE, STAIR_RUN, STAIR_STEPS, tierFloor } from './world/level_build';
@@ -991,6 +994,9 @@ export class Game {
   keptThing: Thing | null = null;
   /** Сюжет: Смотритель сейчас пишет (звук пера по бирке). */
   penOn = false;
+  /** Тело Смотрителя (сюжет, A4_E03 в лимбо; systems/caretaker_body.ts) и номера его частей в рендере. */
+  readonly caretakerBody = new CaretakerBody();
+  private caretakerParts: { body: number; arm: number[]; table: number; tag: number; dots: number; material: FigureMaterial; heard: boolean } | null = null;
   sterileK = 0;
   private sterileAligned = false;
   /** Следующая сессия, собранная за время лимбо. */
@@ -2412,6 +2418,84 @@ export class Game {
     for (const e of ev) dream.push({ type: 'figure', id: e.figure.id, material: e.figure.material, what: e.what, at: e.figure.core });
   }
 
+  /**
+   * Сюжет (A4_E03): тело Смотрителя встаёт у стола перед взглядом игрока ('come') или рассеивается ('go'). Встаёт только в
+   * лимбо и один раз за игру; ушедшее не возвращается (systems/caretaker_body.ts). Чья фигура и как стоит — запись
+   * CARETAKER_BODY (world/caretaker_body.ts). true — команда принята.
+   */
+  caretaker(cmd: 'come' | 'go'): boolean {
+    const cb = this.caretakerBody;
+    if (cmd === 'go') {
+      cb.go('end');
+      return cb.state === 'going';
+    }
+    if (this.where !== 'limbo' || cb.state !== 'none') return false;
+    const seed = 0x5317;
+    const m = caretakerMesh(CARETAKER_BODY, FIGURES, seed);
+    const b = this.body;
+    const eye: Vec3 = this.lastRig ? this.lastRig.camPos : [b.x, b.y + 1.42, b.z];
+    const yaw = this.lastRig ? this.lastRig.camYaw : this.aimYaw;
+    // Не в экспонат: стол и фигура встают туда, где вещей лимбо нет.
+    const spot = caretakerSpot(CARETAKER_BODY, eye, yaw, b.y, this.pocketThings.filter((t) => t.state !== 'gone').map((t) => t.pos));
+    if (!cb.come(true, spot.at, spot.yaw, m.core)) return false;
+    // Части — отдельными вещами рендера. Сначала спрятаны и «рассыпаны»: дым собирается из пыли (как у дымных фигур мест).
+    const add = (d: MeshData, k: number): number => {
+      const id = this.renderer.addThing(d, (seed + k * 17) % 9973, 'matter');
+      this.renderer.setThing(id, { x: spot.at[0], y: spot.at[1], z: spot.at[2], yaw: spot.yaw, scale: 1, dissolve: 1, wire: 0, xray: false, visible: false });
+      return id;
+    };
+    this.caretakerParts = { body: add(m.body, 0), arm: m.arm.map((d, i) => add(d, 4 + i)), table: add(m.table, 1), tag: add(m.tag, 2), dots: m.dots, material: m.figure.material, heard: false };
+    return true;
+  }
+
+  /** Снять части тела Смотрителя с рендера. */
+  private dropCaretaker(): void {
+    const p = this.caretakerParts;
+    if (!p) return;
+    for (const id of [p.body, ...p.arm, p.table, p.tag]) this.renderer.removeThing(id);
+    this.caretakerParts = null;
+  }
+
+  /** Шаг тела Смотрителя: собирается, работает, рассеивается (договорили или подошли). Звук — как у дымных фигур. */
+  private stepCaretaker(dt: number, eye: Vec3, dream: DreamEvent[]): void {
+    const cb = this.caretakerBody;
+    const p = this.caretakerParts;
+    if (!cb.shown || !p) return;
+    if (!p.heard) {
+      p.heard = true;
+      dream.push({ type: 'figure', id: 'caretaker', material: p.material, what: 'back', at: cb.core });
+    }
+    const was = cb.state;
+    const done = cb.update(dt, eye);
+    if (was !== 'going' && cb.state === 'going') dream.push({ type: 'figure', id: 'caretaker', material: p.material, what: 'gone', at: cb.core });
+    if (done) this.dropCaretaker();
+  }
+
+  /** Кадр тела Смотрителя: тело и одна из рук по кругу жеста; стол и бирка уходят следом за дымом. Бирку поворачивает жест. */
+  private showCaretaker(): void {
+    const cb = this.caretakerBody;
+    const p = this.caretakerParts;
+    if (!p) return;
+    const on = cb.shown;
+    const k = Math.min(p.arm.length - 1, Math.floor(cb.u * p.arm.length));
+    const dots = p.dots > 0 ? p.dots + (1 - p.dots) * cb.dissolve : 0;
+    const at = { x: cb.at[0], y: cb.at[1], z: cb.at[2], yaw: cb.yaw, scale: 1, wire: 0, xray: false };
+    this.renderer.setThing(p.body, { ...at, dissolve: cb.dissolve, visible: on && cb.dissolve < 0.999, dots });
+    for (let i = 0; i < p.arm.length; i++) this.renderer.setThing(p.arm[i]!, { ...at, dissolve: cb.dissolve, visible: on && i === k && cb.dissolve < 0.999, dots });
+    this.renderer.setThing(p.table, { ...at, dissolve: cb.rest, visible: on && cb.rest < 0.999 });
+    const c = Math.cos(cb.yaw);
+    const s = Math.sin(cb.yaw);
+    this.renderer.setThing(p.tag, {
+      ...at,
+      x: cb.at[0] + TAG_AT[0] * c + TAG_AT[2] * s,
+      y: cb.at[1] + TAG_AT[1],
+      z: cb.at[2] - TAG_AT[0] * s + TAG_AT[2] * c,
+      yaw: cb.yaw + gesture(cb.u).tagYaw,
+      dissolve: cb.rest,
+      visible: on && cb.rest < 0.999,
+    });
+  }
+
   /** Следующая сессия готова: как только лимбо отпустит, игрок окажется в ней. */
   queueSession(level: BuiltLevel, dream: DreamSeed): void {
     this.pending = { level, dream };
@@ -2552,6 +2636,9 @@ export class Game {
     this.pocketThings = [];
     this.pocket = null;
     this.pocketGrass = null;
+    // Лимбо кончилось, пока тело Смотрителя стояло: в следующем месте его нет.
+    this.caretakerBody.drop();
+    this.dropCaretaker();
   }
 
   /** Шорох травы, что тянется к свету (systems/grass.ts, RUSTLE): громкость 0..1 и где трава движется (audio/game_audio.ts). */
@@ -3508,6 +3595,7 @@ export class Game {
     this.stepPressure(wdt, quiet, dream);
     if (this.where === 'main') this.stepBirds(wdt, dream);
     if (this.where === 'main' && !this.transition) this.stepFigures(dt, eye, dream);
+    this.stepCaretaker(dt, eye, dream);
 
     // Зал ожидания: за краем перрона ничего нет. Шагнул — проснулся в начале; искомая вещь остаётся на
     // месте. (Зоны падения сессии здесь не годятся: над путями нет узлов графа, и она их не проверяет.)
@@ -4259,6 +4347,7 @@ export class Game {
         this.renderer.setThing(ids[i]!, { x: f.at[0], y: f.at[1] + f.bob, z: f.at[2], yaw: f.yaw, scale: 1, dissolve: p.dissolve, wire: 0, xray: false, visible: show && p.dissolve < 0.999, dots: f.dots > 0 ? f.dots + (1 - f.dots) * p.dissolve : 0 });
       }
     }
+    this.showCaretaker();
     // Кривая ощущений за сессию (systems/feel.ts): только в своём месте; в кармане и в лимбо кадр её не знает.
     // Новичку кривая мягче (ступени 0–1 — вдвое, 2–3 — на четверть): ему и так трудно находить вещи (слова партнёра 16.11
     // 23:41, M-20 в реестре), а последнюю вещь сессии ищут, когда мир уже сжат.
@@ -4573,6 +4662,7 @@ export class Game {
       worldLook: this.worldLook,
       keptDist: Number.isFinite(this.keptDist) ? +this.keptDist.toFixed(2) : null,
       limboLook: this.limboLook,
+      caretaker: { state: this.caretakerBody.state, why: this.caretakerBody.why, u: +this.caretakerBody.u.toFixed(3), dissolve: +this.caretakerBody.dissolve.toFixed(3), at: [...this.caretakerBody.at], core: [...this.caretakerBody.core], yaw: this.caretakerBody.yaw },
       meta: { wanted: this.metaWanted, hold: this.metaHold, fired: this.metaFired },
       lesson: this.darkLesson?.phase ?? null,
       follow: this.follower?.times ?? 0,

@@ -10,6 +10,8 @@ import { emptyInput } from '../src/player/input';
 import type { InputFrame } from '../src/player/input';
 import type { FrameView, GameRenderer, ThingView } from '../src/render/renderer';
 import { DEFAULT_CELL_LIGHTS } from '../src/systems/cell_lights';
+import { CARETAKER } from '../src/systems/caretaker_body';
+import { GESTURE_FRAMES } from '../src/world/caretaker_body';
 import { GLIMPSE_WAIT } from '../src/systems/director';
 import { nearestExit } from '../src/systems/pressure';
 import type { PressureRoom } from '../src/systems/pressure';
@@ -4929,6 +4931,82 @@ describe('метаслой: обрывок на экспонате в лимбо
     expect(h2.until(() => h2.dreamCount('begin') > 0, 20)).toBe(true);
     expect(h2.dreamCount('meta')).toBe(0);
     expect((h2.log.all.length - t1) * STEP).toBeGreaterThan(plain + 2);
+  });
+});
+
+describe('тело Смотрителя в игре (A4_E03, квиз 24.11: «тело — один раз, ближе к финалу»): только в лимбо, один раз', () => {
+  /** Скачок в лимбо прямо из сна: экспонатов нет, игрок стоит посреди белого. */
+  function limbo(seed: number): Harness {
+    const h = new Harness(levelOf(SEED), { seed });
+    const g = h.game;
+    expect(h.until(() => g.transition === null, 5)).toBe(true);
+    // Во сне тела нет: оно встаёт только у полки.
+    expect(g.caretaker('come')).toBe(false);
+    expect(g.caretakerBody.state).toBe('none');
+    expect(g.beginJump({ cause: 'gaze', style: 'cut', to: 'limbo' }, [])).toBe(true);
+    expect(h.until(() => g.where === 'limbo' && g.transition === null, 6)).toBe(true);
+    return h;
+  }
+
+  it('встаёт перед взглядом, дым собирается, рука работает; подошёл ближе 1,2 м — рассеялось и больше не встаёт', () => {
+    const h = limbo(5);
+    const g = h.game;
+    const before = new Set(h.r.things.keys());
+    expect(g.caretaker('come')).toBe(true);
+    expect(g.caretaker('come')).toBe(false);
+    const mine = [...h.r.things.keys()].filter((id) => !before.has(id));
+    // Тело, стол, бирка и правая рука по кадрам жеста.
+    expect(mine.length).toBe(GESTURE_FRAMES + 3);
+    const shown = (): number => mine.filter((id) => h.r.things.get(id)?.visible === true).length;
+    h.run(CARETAKER.come + 0.2);
+    expect(g.caretakerBody.state).toBe('here');
+    expect(shown()).toBe(4);
+    // Перед игроком, на расстоянии из записи, и не ближе, чем на котором он рассеивается.
+    const st = g.snapshot() as { eye: Vec3; aim: [number, number] };
+    const cb = g.caretakerBody;
+    const ahead = (cb.at[0] - st.eye[0]) * -Math.sin(st.aim[0]) + (cb.at[2] - st.eye[2]) * -Math.cos(st.aim[0]);
+    expect(ahead).toBeGreaterThan(1.8);
+    const u0 = cb.u;
+    h.run(0.7);
+    expect(cb.u).not.toBe(u0);
+    expect(shown()).toBe(4);
+    // Подошёл вплотную — рассеивается.
+    g.teleport(cb.core[0] + 0.5, g.body.y, cb.core[2]);
+    h.run(0.1);
+    expect(cb.state).toBe('going');
+    expect(cb.why).toBe('near');
+    expect(h.until(() => cb.state === 'gone', 4)).toBe(true);
+    h.tick();
+    expect(mine.every((id) => !h.r.things.has(id))).toBe(true);
+    // Звук — как у дымных фигур: собралась, рассеялась.
+    expect(h.log.dream.filter((e) => e.type === 'figure' && e.id === 'caretaker').map((e) => (e as { what: string }).what)).toEqual(['back', 'gone']);
+    // Один раз за игру: отошёл и постоял — не собирается.
+    g.teleport(cb.core[0] + 9, g.body.y, cb.core[2]);
+    h.run(10);
+    expect(cb.state).toBe('gone');
+    expect(g.caretaker('come')).toBe(false);
+  });
+
+  it('договорили — рассеивается; лимбо кончилось раньше — в следующем сне тела нет', () => {
+    const h = limbo(6);
+    const g = h.game;
+    expect(g.caretaker('come')).toBe(true);
+    h.run(2.5);
+    expect(g.caretaker('go')).toBe(true);
+    expect(g.caretakerBody.why).toBe('end');
+    expect(h.until(() => g.caretakerBody.state === 'gone', 4)).toBe(true);
+    const h2 = limbo(7);
+    const g2 = h2.game;
+    const before = new Set(h2.r.things.keys());
+    expect(g2.caretaker('come')).toBe(true);
+    const mine = [...h2.r.things.keys()].filter((id) => !before.has(id));
+    expect(mine.length).toBe(GESTURE_FRAMES + 3);
+    g2.queueSession(levelOf(SEED + 1, 2), { seed: 99, known: new Set(g2.archive) });
+    expect(h2.until(() => h2.dreamCount('begin') > 0, 16)).toBe(true);
+    expect(g2.where).toBe('main');
+    expect(g2.caretakerBody.state).toBe('gone');
+    expect(mine.some((id) => h2.r.things.has(id))).toBe(false);
+    expect(g2.caretaker('come')).toBe(false);
   });
 });
 

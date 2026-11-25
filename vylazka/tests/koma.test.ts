@@ -4,7 +4,7 @@ import { i18n } from '../src/core/i18n';
 import { defaultProfile, parseProfile } from '../src/core/save';
 import { EVENT_ORDER, EVENTS, FLAGS, Narrative, SLOT_OF, SLOTS, actOf, caretakerOf, emptyNarrative, parseNarrative } from '../src/systems/koma';
 import { MEMORY_THINGS } from '../src/systems/session';
-import { AWAY_S, HUNT_S, KomaFlow, LEAVE_M, LIMBO, WORLD, WORLD_WRITE_S, WRITE_S, lineMs } from '../src/ui/koma_flow';
+import { AWAY_S, BODY_AFTER_MS, BODY_LEAD_MS, HUNT_S, KomaFlow, LEAVE_M, LIMBO, WORLD, WORLD_WRITE_S, WRITE_S, lineMs } from '../src/ui/koma_flow';
 
 const locale = (lang: string): Record<string, string> => JSON.parse(readFileSync(new URL(`../locales/${lang}/ui.json`, import.meta.url), 'utf8')) as Record<string, string>;
 const RU = locale('ru');
@@ -163,7 +163,7 @@ describe('сюжет «Невостребованное»: состояние и
 });
 
 /** Экран-заглушка: записывает, что сюжет ему говорит. */
-function fakeHost(story: Narrative): { host: ConstructorParameters<typeof KomaFlow>[0]; said: string[]; tags: Array<Record<string, unknown> | null>; values: string[]; stamps: string[]; cards: string[][]; saves: () => number; sounds: string[]; veils: Array<string | null>; game: { sterile: number; huntHold: boolean; keepRecalled: boolean; penOn: boolean; keptDist: number; hunted: boolean; released: boolean[]; releaseKept(taken: boolean): void; extended: number; limboLook: string | null; metaHold: boolean; kept: number; metaKeep(): void; extendEnd(s: number): void }; decks: () => number } {
+function fakeHost(story: Narrative): { host: ConstructorParameters<typeof KomaFlow>[0]; said: string[]; tags: Array<Record<string, unknown> | null>; values: string[]; stamps: string[]; cards: string[][]; saves: () => number; sounds: string[]; veils: Array<string | null>; game: { sterile: number; huntHold: boolean; keepRecalled: boolean; penOn: boolean; keptDist: number; hunted: boolean; released: boolean[]; releaseKept(taken: boolean): void; extended: number; limboLook: string | null; metaHold: boolean; kept: number; metaKeep(): void; extendEnd(s: number): void; body: boolean; bodies: number; bodyLines: string[]; caretaker(cmd: 'come' | 'go'): boolean }; decks: () => number } {
   const said: string[] = [];
   const tags: Array<Record<string, unknown> | null> = [];
   const values: string[] = [];
@@ -195,10 +195,25 @@ function fakeHost(story: Narrative): { host: ConstructorParameters<typeof KomaFl
       this.metaHold = true;
       this.kept += 1;
     },
+    /** Тело Смотрителя: стоит ли сейчас, сколько раз вставало за игру и какие реплики прозвучали, пока оно стояло. */
+    body: false,
+    bodies: 0,
+    bodyLines: [] as string[],
+    caretaker(cmd: 'come' | 'go'): boolean {
+      if (cmd === 'go') {
+        const was = this.body;
+        this.body = false;
+        return was;
+      }
+      this.body = true;
+      this.bodies += 1;
+      return true;
+    },
   };
   const hud = {
     say(lines: readonly { text: string; who: string; ms: number }[], delay = 0, done?: () => void): void {
       for (const l of lines) said.push(`${l.who}: ${l.text}`);
+      if (game.body) for (const l of lines) game.bodyLines.push(`${l.who}: ${l.text}`);
       const total = delay + lines.reduce((n, l) => n + l.ms + 320, 0);
       if (lines.length > 0) setTimeout(() => done?.(), total);
     },
@@ -487,10 +502,16 @@ describe('сюжет на экране: акты II–V и эпилог', () => 
     expect(h.said).toEqual(['caretaker: смотри. ничего не потеряно.', 'player: они перестали двигаться.', 'caretaker: зато мы знаем, где всё лежит.']);
     // «Оставить» ещё не предлагают: вещь уходит как раньше.
     expect(h.game.keepRecalled).toBe(false);
+    // Тела у Смотрителя до сих пор не было ни во сне, ни у полки (квиз 24.11: без тела до акта IV).
+    expect(h.game.bodies).toBe(0);
     // Лимбо 5 — последняя пустая бирка и узнавание: две сцены одной главой.
     limbo(flow, h);
     expect(h.said.slice(-3)).toEqual(['caretaker: да.', 'player: я тоже всегда так делал.', 'caretaker: да.']);
     expect(story.has('STORY_CARETAKER_REFLECTION')).toBe(true);
+    // Тело — один раз, на узнавании, и к концу главы его уже нет.
+    expect(h.game.bodies).toBe(1);
+    expect(h.game.body).toBe(false);
+    expect(h.game.bodyLines).toEqual(['player: я тоже всегда так делал.', 'caretaker: да.']);
 
     // Сон 6 — можно не забирать. Место всё ещё стоит; вещь остаётся на месте.
     flow.onDream(false);
@@ -562,12 +583,63 @@ describe('сюжет на экране: акты II–V и эпилог', () => 
     // Все флаги канона, кроме одного: «не подтверждено» — выбор игрока у полки, и финал от него не зависит.
     for (const f of FLAGS) expect(story.has(f), f).toBe(f !== 'STORY_UNCERTAIN_EVIDENCE_UNLOCKED');
 
+    // Акт V и эпилог тела не вызывали: оно было один раз.
+    expect(h.game.bodies).toBe(1);
+    expect(h.game.body).toBe(false);
+
     // После финала: место живое, вещи уходят как раньше, Смотритель молчит.
     flow.onDream(false);
     expect(h.game.sterile).toBe(0);
     expect(h.game.keepRecalled).toBe(false);
     expect(flow.onRecall('ye_sign', false)).toBe(false);
     expect(flow.onLimbo()).toBe(story.open().length > 0);
+  });
+
+  it('тело Смотрителя: встаёт только на узнавании (A4_E03), после последней пустой бирки; договорили — рассеялось, и только потом глава отпускает лимбо', () => {
+    const story = new Narrative();
+    for (const id of EVENT_ORDER) {
+      if (id === 'A4_E02') break;
+      story.play(id);
+    }
+    const h = fakeHost(story);
+    const flow = new KomaFlow(h.host, story);
+    expect(flow.onLimbo()).toBe(true);
+    expect(flow.onMeta('nothing_of_the_story')).toBe(true);
+    // Последняя пустая бирка (A4_E02) — разговор без тела, бирка во весь кадр.
+    expect(h.game.body).toBe(false);
+    expect(h.tags.at(-1)?.big).toBe(true);
+    let came = -1;
+    let left = -1;
+    let freed = -1;
+    for (let ms = 0; ms < 60000; ms += 50) {
+      vi.advanceTimersByTime(50);
+      if (came < 0 && h.game.body) {
+        came = ms;
+        // Бирка ушла из кадра на стол: её разглаживает он.
+        expect(h.tags.at(-1)).toBe(null);
+        expect(story.seen('A4_E03')).toBe(true);
+      }
+      if (came >= 0 && left < 0 && !h.game.body) left = ms;
+      if (!h.game.metaHold && freed < 0) {
+        freed = ms;
+        // Лимбо отпускает, только когда тела уже нет.
+        expect(h.game.body).toBe(false);
+      }
+    }
+    expect(came).toBeGreaterThan(0);
+    expect(h.game.bodies).toBe(1);
+    // Сначала молча работает, потом «я тоже всегда так делал.» — «да.», и ещё стоит; потом рассеивается.
+    const talk = BODY_LEAD_MS + lineMs(RU['koma.a4_e03.player_01']!) + lineMs(RU['koma.a4_e03.caretaker_01']!) + 2 * 320;
+    expect(left - came).toBeGreaterThanOrEqual(talk + BODY_AFTER_MS - 100);
+    expect(freed).toBeGreaterThan(left);
+    expect(h.game.bodyLines).toEqual(['player: я тоже всегда так делал.', 'caretaker: да.']);
+    // Следующие лимбо и сны тела не зовут.
+    flow.onDream(false);
+    expect(flow.onLimbo()).toBe(story.open().length > 0 || LIMBO.some((id) => story.canPlay(id)));
+    flow.onMeta('nothing_of_the_story');
+    vi.advanceTimersByTime(90000);
+    expect(h.game.bodies).toBe(1);
+    expect(h.game.body).toBe(false);
   });
 
   it('русла сюжета покрывают канон: каждая сцена актов II–V стоит в одном из них, и у каждой есть слова', () => {

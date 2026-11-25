@@ -148,5 +148,11 @@ export function figureProblems(x: unknown): string[] {
   return bad;
 }
 
+/**
+ * Фигура, которую партнёр назначил телом Смотрителя: названа «Смотритель» (или ключ caretaker). Она встаёт один раз, в лимбо
+ * на сцене A4_E03 (world/caretaker_body.ts), и в местах не стоит.
+ */
+export const isCaretakerFigure = (f: { id: string; name: string }): boolean => f.id === 'caretaker' || f.name.trim().toLowerCase() === 'смотритель';
+
 /** Ограничить число отрезком. */
 export const clampTo = (x: number, [a, b]: readonly [number, number]): number => Math.max(a, Math.min(b, x));
